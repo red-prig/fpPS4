@@ -1,5 +1,5 @@
 # fpPS4
-** PS4 compatibility layer (emulator) on Free Pascal**
+  PS4 compatibility layer (emulator) on Free Pascal
  
 This project is at the beginning and started for fun.
  
