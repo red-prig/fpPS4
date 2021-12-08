@@ -10,5 +10,5 @@ This project is at the beginning and started for fun.
 ### Minimum system requirements 
 
 - OS: Windows 7 x64 and higher 
-- CPU: x64, AVX1 support
+- CPU: x64, AVX2 support
 - GPU: Vulkan API support
