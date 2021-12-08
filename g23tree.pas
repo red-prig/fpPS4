@@ -3,8 +3,6 @@ unit g23tree;
 {$mode objfpc}{$H+}
 
 { Template implementation of 2-3 trie
-  Specific hash functions and collision resolution are outside the scope of
-   this implementation and can be implemented on top of it.
   Copyright (C) 2021 Red_prig
   This library is free software; you can redistribute it and/or modify it
   under the terms of the GNU Library General Public License as published by
