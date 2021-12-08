@@ -1,0 +1,97 @@
+#version 450
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (binding = 0) readonly buffer Host
+{
+ uint data[];
+} host;
+
+layout (binding = 1, rgba8) writeonly uniform image2D resultImage;
+
+layout (push_constant) uniform constants
+{
+ vec4  gamma;
+ ivec2 pitch;
+} cfg;     
+
+ const ivec2 sh02 = ivec2(0,2);
+ const ivec4 sh1212 = ivec4(1,2,1,2);
+ const ivec4 sh1345 = ivec4(1,3,4,5);
+
+ const ivec4 sh3456 = ivec4(3,4,5,6);
+ const ivec4 sh3455 = ivec4(3,4,5,5);
+ const ivec4 sh6789 = ivec4(6,7,8,9);
+
+ const ivec3 sh789 = ivec3(7,8,9);
+ const ivec3 sh654 = ivec3(6,5,4);
+ const ivec3 sh101112 = ivec3(10,11,12);
+
+ const ivec2 i2_1 = ivec2(1,1);
+ const ivec3 i3_1 = ivec3(1,1,1);
+ const ivec4 i4_1 = ivec4(1,1,1,1);
+
+int getElementIndex(ivec2 p) //[0..5]
+{
+ ivec2 t1=(p.xy & i2_1) << sh02;
+ ivec4 t2=((p.xxyy >> sh1212) & i4_1) << sh1345;
+
+ t1=t1 | t2.xy | t2.zw;
+ return t1.x | t1.y;
+}       
+
+int getPipeIndex(ivec2 p) //[6..9]
+{
+ ivec4 t=(((p.xxxx >> sh3456) ^ (p.yyyy >> sh3455) ^ ivec4(p.x>>4,0,0,0)) & i4_1) << sh6789;
+ 
+ ivec2 t2=t.xy | t.zw;
+ return t2.x | t2.y;
+}
+
+int getBankIndex(ivec2 p) //[10..12]
+{
+ ivec3 bank=(((p.xxx >> sh789) ^ (p.yyy >> sh654) ^ ivec3(0,p.y>>6,0)) & i3_1) << sh101112;
+ 
+ return bank.x | bank.y | bank.z;
+}
+
+void main()
+{   
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+
+    int element_index=getElementIndex(pixelCoords);    
+    int pipe=getPipeIndex(pixelCoords);
+    int bank=getBankIndex(pixelCoords);
+    
+    const ivec4 shmt = ivec4(7,7,7,3);
+    const ivec2 bmod = ivec2(1,2);
+    
+    ivec4 mt=(pixelCoords.xyxy >> shmt);
+    
+    ivec2 total_offset=((mt.xy*cfg.pitch) << i2_1)+(mt.zw % bmod);
+    
+    int offset = element_index | pipe | bank | ((total_offset.x+total_offset.y) << 13); 
+
+    uint pack=host.data[offset];
+    
+    ////const uvec4 shift = uvec4(16,8,0,24);
+    ////const uvec4 mask4 = uvec4(255,255,255,255);
+    
+    ////uvec4 pix_int=(uvec4(pack,pack,pack,pack) >> shift) & mask4;
+    
+    //0,8,16,24
+    //R,G, B,A
+    
+    //16,8,0,24
+    //BGRA
+
+    ////vec4 pixel = vec4(pix_int) / mask4;
+
+    vec4 pixel=unpackUnorm4x8(pack);
+
+    pixel=pixel.bgra;
+
+    pixel = pow(pixel, cfg.gamma);                        
+
+    imageStore(resultImage, pixelCoords, pixel);
+}

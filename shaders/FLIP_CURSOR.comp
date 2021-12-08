@@ -1,0 +1,60 @@
+#version 450
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (binding = 0) readonly buffer Host
+{
+ uint data[];
+} host;
+
+layout (binding = 1, rgba8) uniform image2D resultImage;
+
+layout (push_constant) uniform constants
+{
+ vec4  gamma;
+ ivec2 pos;
+} cfg;
+
+
+void main()
+{   
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+
+    int offset = (pixelCoords.y*64)+pixelCoords.x; 
+
+    uint pack=host.data[offset];
+    
+    ////const uvec4 shift = uvec4(16,8,0,24);
+    ////const uvec4 mask4 = uvec4(255,255,255,255);
+    
+    ////uvec4 pix_int=(uvec4(pack,pack,pack,pack) >> shift) & mask4;
+    
+    //24,16, 8, 0
+    //AA,RR,GG,BB
+    
+    //0,8,16,24
+    //R,G, B,A
+    
+    //16,8,0,24
+    //BGRA
+
+    //24,0,8,16 
+    //ARGB
+
+    ////vec4 pixel = vec4(pix_int) / mask4;
+
+    vec4 pixel=unpackUnorm4x8(pack);
+
+    pixel=pixel.bgra;
+
+    pixel = pow(pixel, cfg.gamma);                        
+
+    pixelCoords = pixelCoords + cfg.pos;
+
+    vec4 prev = imageLoad(resultImage, pixelCoords);   
+
+    pixel.rgb = mix(prev.rgb,pixel.rgb,pixel.a);
+
+    imageStore(resultImage, pixelCoords, pixel);
+}
+
