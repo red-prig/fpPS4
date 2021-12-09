@@ -4,8 +4,8 @@
 This project is at the beginning and started for fun.
  
 ### Building
-- Free pascal compiler: 3.0.0 and higher, x84_64 only. 
-- Lazarus: 2.0.0 and higher, x84_64 only. 
+- Free pascal compiler: 3.0.0 and higher, x86_64 only. 
+- Lazarus: 2.0.0 and higher, x86_64 only. 
 
 ### Minimum system requirements 
 
