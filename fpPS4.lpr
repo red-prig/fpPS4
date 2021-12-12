@@ -94,13 +94,6 @@ begin
   Goto promo;
  end;
 
- if not DirectoryExists(ps4_app.save_path) then
- begin
-  Writeln('Path not found:',ps4_app.save_path);
-  Writeln;
-  Goto promo;
- end;
-
  Result:=True;
 end;
 
