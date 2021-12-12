@@ -118,6 +118,7 @@
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
       <RelocatableUnit Value="True"/>
+      <TargetCPU Value="x86_64"/>
       <Optimizations>
         <OptimizationLevel Value="3"/>
       </Optimizations>
