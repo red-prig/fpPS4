@@ -14,6 +14,6 @@
 link.res
 lib/
 backup/
-shader_dump/
-spirv/
-savedata/
+shader_dump/*
+spirv/*
+savedata/*
