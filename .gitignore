@@ -11,9 +11,9 @@
 *.bat
 *.prx
 *.sprx
+*.dump
 link.res
 lib/
 backup/
-shader_dump/*
 spirv/*
 savedata/*

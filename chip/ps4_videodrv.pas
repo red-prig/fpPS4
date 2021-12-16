@@ -855,6 +855,17 @@ begin
                          ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
                          );
 
+   vkImageMemoryBarrier(
+        FCmdBuffer.cmdbuf,
+        ri.FImage.FHandle,
+        ord(VK_ACCESS_NONE_KHR),
+        ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+        ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+        SubresColor);
+
    FRenderCmd.FFramebuffer.AddImageView(ri.FImage.NewView);
 
    FRenderCmd.FRenderPass.AddColorRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount);
@@ -911,13 +922,13 @@ begin
  if (FVSShader=nil) then
  begin
   FVSShader:=TvShader.Create;
-  FVSShader.LoadFromFile('spirv\vs_78EF9008.spv');
+  FVSShader.LoadFromFile('shader_dump\simplet-single-triangle_debug_vs_78EF9008.spv');
  end;
 
  if (FPSShader=nil) then
  begin
   FPSShader:=TvShader.Create;
-  FPSShader.LoadFromFile('spirv\ps_FBCA196D.spv');
+  FPSShader.LoadFromFile('shader_dump\simplet-single-triangle_debug_ps_FBCA196D.spv');
  end;
 
  FRenderCmd.FPipeline.SetVSShader(FVSShader);
@@ -1138,8 +1149,9 @@ begin
 
 
  //need to moved submit_done
+ FCmdBuffer.FSignFence.Reset;
  FCmdBuffer.QueueSubmit;
- //FCmdBuffer.FSignFence.Wait(High(uint64));
+ FCmdBuffer.FSignFence.Wait(High(uint64));
  FCmdBuffer.ClearRenderList;
 
  vkQueueWaitIdle(RenderQueue);

@@ -554,15 +554,6 @@ begin
 end;
 
 Procedure TvFlip.Flip;
-const
- subresourceRange:TVkImageSubresourceRange=(
-  aspectMask:TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
-  baseMipLevel:0;
-  levelCount:1;
-  baseArrayLayer:0;
-  layerCount:1
- );
-
 var
  r:TVkResult;
  imageIndex:TVkUInt32;
@@ -658,7 +649,7 @@ begin
  begin
   FBuffer.buffer:=buf^.HostBuf.FHandle;
   FBuffer.offset:=0;
-  FBuffer.range :=buf^.SIZE;//High(Int64); //size is wrong, but it worked
+  FBuffer.range :=buf^.SIZE;
 
   FCurSet:=buf^.FSet;
 
@@ -672,9 +663,9 @@ begin
   	ord(VK_ACCESS_SHADER_WRITE_BIT),
   	VK_IMAGE_LAYOUT_UNDEFINED,
   	VK_IMAGE_LAYOUT_GENERAL,
+  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
   	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	subresourceRange);
+  	SubresColor);
 
   if (buf^.DstImgSRGB<>nil) then
   vkImageMemoryBarrier(
@@ -684,9 +675,9 @@ begin
   	ord(VK_ACCESS_SHADER_WRITE_BIT),
   	VK_IMAGE_LAYOUT_UNDEFINED,
   	VK_IMAGE_LAYOUT_GENERAL,
+  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
   	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	subresourceRange);
+  	SubresColor);
 
   vkCmdBindPipeline(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineFlip.FHandle);
 
@@ -712,6 +703,16 @@ begin
  end else
  begin
 
+  vkImageMemoryBarrier(
+        buf^.cmdbuf,
+        buf^.ur.FImage.FHandle,
+  	ord(VK_ACCESS_NONE_KHR),
+  	ord(VK_ACCESS_TRANSFER_READ_BIT),
+  	VK_IMAGE_LAYOUT_UNDEFINED,
+  	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+  	SubresColor);
 
   vkImageMemoryBarrier(
         buf^.cmdbuf,
@@ -720,9 +721,9 @@ begin
   	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
   	VK_IMAGE_LAYOUT_UNDEFINED,
   	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
   	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-  	subresourceRange);
+  	SubresColor);
 
   if (buf^.DstImgSRGB<>nil) then
   vkImageMemoryBarrier(
@@ -732,9 +733,9 @@ begin
   	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
   	VK_IMAGE_LAYOUT_UNDEFINED,
   	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
   	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-  	subresourceRange);
+  	SubresColor);
 
 
   img_reg:=Default(TVkImageCopy);
@@ -814,7 +815,7 @@ begin
     	VK_IMAGE_LAYOUT_GENERAL,
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	subresourceRange);
+    	SubresColor);
 
     if (buf^.DstImgSRGB<>nil) then
     vkImageMemoryBarrier(
@@ -826,7 +827,7 @@ begin
     	VK_IMAGE_LAYOUT_GENERAL,
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	subresourceRange);
+    	SubresColor);
 
     vkCmdPushConstants(buf^.cmdbuf,
                        FLayout.FHandle,
@@ -881,7 +882,7 @@ begin
     	VK_IMAGE_LAYOUT_GENERAL,
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	subresourceRange);
+    	SubresColor);
 
     if (buf^.DstImgSRGB<>nil) then
     vkImageMemoryBarrier(
@@ -893,7 +894,7 @@ begin
     	VK_IMAGE_LAYOUT_GENERAL,
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
     	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	subresourceRange);
+    	SubresColor);
 
     vkCmdPushConstants(buf^.cmdbuf,
                        FLayout.FHandle,
@@ -926,28 +927,24 @@ begin
  	buf^.cmdbuf,
  	buf^.DstImgNORM.FHandle,
         ord(VK_ACCESS_NONE_KHR),
- 	//ord(VK_ACCESS_SHADER_WRITE_BIT),
  	ord(VK_ACCESS_TRANSFER_READ_BIT),
         VK_IMAGE_LAYOUT_UNDEFINED,
- 	//VK_IMAGE_LAYOUT_GENERAL,
  	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	subresourceRange);
+ 	SubresColor);
 
  if (buf^.DstImgSRGB<>nil) then
  vkImageMemoryBarrier(
  	buf^.cmdbuf,
  	buf^.DstImgSRGB.FHandle,
         ord(VK_ACCESS_NONE_KHR),
- 	//ord(VK_ACCESS_SHADER_WRITE_BIT),
  	ord(VK_ACCESS_TRANSFER_READ_BIT),
         VK_IMAGE_LAYOUT_UNDEFINED,
- 	//VK_IMAGE_LAYOUT_GENERAL,
  	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	subresourceRange);
+ 	SubresColor);
 
  vkImageMemoryBarrier(
  	buf^.cmdbuf,
@@ -958,7 +955,7 @@ begin
  	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
  	ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	subresourceRange);
+ 	SubresColor);
 
  imgBlitRegion:=Default(TVkImageBlit);
  imgBlitRegion.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -999,7 +996,7 @@ begin
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
         ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
- 	subresourceRange);
+ 	SubresColor);
 
  vkEndCommandBuffer(buf^.cmdbuf);
 
