@@ -107,7 +107,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="ps4_libkerenel;vulkan;chip"/>
+      <OtherUnitFiles Value="ps4_libkernel;vulkan;chip"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
