@@ -160,7 +160,8 @@ end;
 procedure onEventWrite(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4CMDEVENTWRITE);
 begin
  Case Body^.eventType of
-  THREAD_TRACE_MARKER:;
+  THREAD_TRACE_MARKER,
+  FLUSH_AND_INV_CB_PIXEL_DATA,
   FLUSH_AND_INV_CB_META:
    begin
     Case Body^.EVENTINDEX of
@@ -177,7 +178,7 @@ begin
     end;
    end;
   else
-   Assert(False);
+   Assert(False,IntToStr(Body^.eventType));
  end;
 end;
 

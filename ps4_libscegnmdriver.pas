@@ -660,47 +660,113 @@ begin
 end;
 
 const
- kEmbeddedVsShaderFullScreen = 0;
- kNumEmbeddedVsShaders       = 1;
+ kEmbeddedVsShaderFullScreen  = 0;
+ kNumEmbeddedVsShaders        = 1;
 
+ kEmbeddedPsShaderDummy       = 0;
+ kEmbeddedPsShaderDummyG32R32 = 1;
+ kNumEmbeddedPsShaders        = 2;
 
-// if (shaderId != 0) {
-//   thunk_FUN_000001de(0,"sce::Gnm::setEmbeddedVsShader() error: Unknown shaderId %u passed.\n");
-//   return -0x7111ff01;
-// }
-// sceGnmSetVsShader(cmdBuffer,numDwords,EmbVsRegsPtr,shaderModifier);
+const
+ EmbPs0Shader:array[0..15] of DWORD=(
+  $beeb03ff,
+  3,
+  $7e000280,
+  $5e000100,
+  $bf800000,
+  $f8001c0f,
+  0,
+  0,
+  $bf810000,
+  $5362724f,
+  $7726468,
+  $2043,
+  0,
+  $b0a45b2b,
+  $1d39766d,
+  $72044b7b
+ );
 
-//EmbVsRegs
-//[0]                FE000F1h,           0h,       C0000h,           4h
-//[4]                      0h,           4h,           0h
+ EmbPs1Shader:array[0..15] of DWORD=(
+  $beeb03ff,
+  3,
+  $7e040280,
+  $f8001803,
+  $2020202,
+  $bf810000,
+  $302,
+  0,
+  $d81c987,
+  $5362724f,
+  $7726468,
+  $1841,
+  $4080002,
+  $98b9cb94,
+  0,
+  $6f130734
+ );
 
-//_fe000f100_EmbVsShader0 = 0xbeeb03ff;
-//uRam0000000fe000f104 = 7;
-//uRam0000000fe000f108 = 0x36020081;
-//uRam0000000fe000f10c = 0x34020281;
-//uRam0000000fe000f110 = 0x360000c2;
-//uRam0000000fe000f114 = 0x4a0202c1;
-//uRam0000000fe000f118 = 0x4a0000c1;
-//uRam0000000fe000f11c = 0x7e020b01;
-//_fe000f120_EmbVsShader1 = 0x7e000b00;
-//uRam0000000fe000f124 = 0x7e040280;
-//uRam0000000fe000f128 = 0x7e0602f2;
-//uRam0000000fe000f12c = 0xf80008cf;
-//uRam0000000fe000f130 = 0x3020001;
-//uRam0000000fe000f134 = 0xf800020f;
-//uRam0000000fe000f138 = 0x3030303;
-//_fe000f13c_EmbVsShader2 = 0xbf810000;
-//uRam0000000fe000f140 = 0x5362724f;
-//uRam0000000fe000f144 = 0x7726468;
-//uRam0000000fe000f148 = 0x4047;
-//uRam0000000fe000f14c = 0;
-//uRam0000000fe000f150 = 0x47f8c29f;
-//uRam0000000fe000f154 = 0x9b2da5cf;
-//uRam0000000fe000f158 = 0xff7c5b7d;
+ EmbVsShader:array[0..23] of DWORD=(
+  $beeb03ff,
+  7,
+  $36020081,
+  $34020281,
+  $360000c2,
+  $4a0202c1,
+  $4a0000c1,
+  $7e020b01,
+  $7e000b00,
+  $7e040280,
+  $7e0602f2,
+  $f80008cf,
+  $3020001,
+  $f800020f,
+  $3030303,
+  0,
+  $bf810000,
+  $5362724f,
+  $7726468,
+  $4047,
+  0,
+  $47f8c29f,
+  $9b2da5cf,
+  $ff7c5b7d
+ );
+
+type
+ PEmbShaders=^TEmbShaders;
+ TEmbShaders=packed record
+  EmbPsShader0:array[0..63] of DWORD;
+  EmbPsShader1:array[0..63] of DWORD;
+  EmbVsShader :array[0..63] of DWORD;
+  align       :array[0..63] of DWORD;
+ end;
+
+var
+ EmbShaders:TEmbShaders;
+
+ EmbPsShader0Ptr:Pointer;
+ EmbPsShader1Ptr:Pointer;
+ EmbVsShaderPtr :Pointer;
+
+procedure GnmInitEmbedded;
+var
+ s:PEmbShaders;
+begin
+ s:=Align(@EmbShaders,kAlignmentOfShaderInBytes);
+
+ Move(EmbPs0Shader,s^.EmbPsShader0,SizeOf(EmbPs0Shader));
+ Move(EmbPs1Shader,s^.EmbPsShader1,SizeOf(EmbPs1Shader));
+ Move(EmbVsShader ,s^.EmbVsShader ,SizeOf(EmbVsShader));
+
+ EmbPsShader0Ptr:=@s^.EmbPsShader0;
+ EmbPsShader1Ptr:=@s^.EmbPsShader1;
+ EmbVsShaderPtr :=@s^.EmbVsShader ;
+end;
 
 const
  EmbVsRegs:VsStageRegisters=(
-  m_spiShaderPgmLoVs   :$FE000F1;
+  m_spiShaderPgmLoVs   :0;
   m_spiShaderPgmHiVs   :0;
   m_spiShaderPgmRsrc1Vs:$C0000;
   m_spiShaderPgmRsrc2Vs:4;
@@ -709,59 +775,68 @@ const
   m_paClVsOutCntl      :0
  );
 
- EmbVsShader:array[0..22] of DWORD=(
-   $beeb03ff,
-   7,
-   $36020081,
-   $34020281,
-   $360000c2,
-   $4a0202c1,
-   $4a0000c1,
-   $7e020b01,
-   $7e000b00,
-   $7e040280,
-   $7e0602f2,
-   $f80008cf,
-   $3020001,
-   $f800020f,
-   $3030303,
-   $bf810000,
-
-   $5362724f,
-   $7726468,
-   $4047,
-   0,
-   $47f8c29f,
-   $9b2da5cf,
-   $ff7c5b7d
+ EmbPsRegs0:PsStageRegisters=(
+  m_spiShaderPgmLoPs   :0;
+  m_spiShaderPgmHiPs   :0;
+  m_spiShaderPgmRsrc1Ps:$C0000;
+  m_spiShaderPgmRsrc2Ps:4;
+  m_spiShaderZFormat   :0;
+  m_spiShaderColFormat :4;
+  m_spiPsInputEna      :2;
+  m_spiPsInputAddr     :2;
+  m_spiPsInControl     :0;
+  m_spiBarycCntl       :0;
+  m_dbShaderControl    :$10;
+  m_cbShaderMask       :$F;
  );
 
-var
- EmbVsShaderPtr:Pointer;
+ EmbPsRegs1:PsStageRegisters=(
+  m_spiShaderPgmLoPs   :0;
+  m_spiShaderPgmHiPs   :0;
+  m_spiShaderPgmRsrc1Ps:$200000;
+  m_spiShaderPgmRsrc2Ps:0;
+  m_spiShaderZFormat   :0;
+  m_spiShaderColFormat :2;
+  m_spiPsInputEna      :2;
+  m_spiPsInputAddr     :2;
+  m_spiPsInControl     :0;
+  m_spiBarycCntl       :0;
+  m_dbShaderControl    :$10;
+  m_cbShaderMask       :3;
+ );
 
 function ps4_sceGnmSetEmbeddedVsShader(cmdBuffer:PDWORD;numDwords:QWORD;shaderId,shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
 var
  VsRegs:VsStageRegisters;
- //F:THandle;
 begin
-
  Assert(shaderId=0,'error: Unknown shaderId passed.');
 
  VsRegs:=EmbVsRegs;
 
- if (EmbVsShaderPtr=nil) then
- begin
-  EmbVsShaderPtr:=AllocMem(kAlignmentOfShaderInBytes*2-1);
-  Move(EmbVsShader,Align(EmbVsShaderPtr,kAlignmentOfShaderInBytes)^,SizeOf(EmbVsShader));
- end;
-
- patchShaderGpuAddress(Align(EmbVsShaderPtr,kAlignmentOfShaderInBytes),VsRegs.m_spiShaderPgmHiVs,VsRegs.m_spiShaderPgmLoVs);
+ patchShaderGpuAddress(EmbVsShaderPtr,VsRegs.m_spiShaderPgmHiVs,VsRegs.m_spiShaderPgmLoVs);
 
  Result:=ps4_sceGnmSetVsShader(cmdBuffer,numDwords,@VsRegs,shaderModifier);
+end;
 
- //F:=FileCreate('EmbVsShader.bin');
- //FileWrite(F,EmbVsShader,SizeOf(EmbVsShader));
- //FileClose(F);
+function ps4_sceGnmSetEmbeddedPsShader(cmdBuffer:PDWORD;numDwords:QWORD;shaderId:DWORD):Integer; SysV_ABI_CDecl;
+var
+ PsRegs:PsStageRegisters;
+begin
+
+ Case shaderId of
+  0:begin
+     PsRegs:=EmbPsRegs0;
+     patchShaderGpuAddress(EmbPsShader0Ptr,PsRegs.m_spiShaderPgmHiPs,PsRegs.m_spiShaderPgmLoPs);
+    end;
+  1:begin
+     PsRegs:=EmbPsRegs1;
+     patchShaderGpuAddress(EmbPsShader1Ptr,PsRegs.m_spiShaderPgmHiPs,PsRegs.m_spiShaderPgmLoPs);
+    end;
+  else
+   Assert(false,'error: Unknown shaderId passed.');
+ end;
+
+ Result:=ps4_sceGnmSetPsShader350(cmdBuffer,numDwords,@PsRegs);
 end;
 
 function ps4_sceGnmUpdateVsShader(cmdBuffer:PDWORD;numDwords:QWORD;vsRegs:PVsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
@@ -1124,6 +1199,7 @@ begin
  lib^.set_proc($E6E14A7248896113,@ps4_sceGnmSetPsShader350);
 
  lib^.set_proc($F8016F3845EB2899,@ps4_sceGnmSetEmbeddedVsShader);
+ lib^.set_proc($5FD3A6C3D770BF93,@ps4_sceGnmSetEmbeddedPsShader);
 
  lib^.set_proc($577D55D3552249C6,@ps4_sceGnmUpdateVsShader);
  lib^.set_proc($E0C811C3F6D53505,@ps4_sceGnmUpdatePsShader);
@@ -1152,6 +1228,7 @@ begin
 end;
 
 initialization
+ GnmInitEmbedded;
  EopEvents.Init;
  ps4_app.RegistredPreLoad('libSceGnmDriver.prx',@Load_libSceGnmDriver);
  ps4_app.RegistredPreLoad('libSceGnmDriver_padebug.prx',@Load_libSceGnmDriver);
