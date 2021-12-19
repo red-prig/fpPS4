@@ -211,7 +211,27 @@ const
  S_TTRACEDATA    =$16;
 
  //SOPK
- S_CBRANCH_I_FORK=$11;
+ S_MOVK_I32        =$00;
+ S_MOVK_HI_I32     =$01;
+ S_CMOVK_I32       =$02;
+ S_CMPK_EQ_I32     =$03;
+ S_CMPK_LG_I32     =$04;
+ S_CMPK_GT_I32     =$05;
+ S_CMPK_GE_I32     =$06;
+ S_CMPK_LT_I32     =$07;
+ S_CMPK_LE_I32     =$08;
+ S_CMPK_EQ_U32     =$09;
+ S_CMPK_LG_U32     =$0A;
+ S_CMPK_GT_U32     =$0B;
+ S_CMPK_GE_U32     =$0C;
+ S_CMPK_LT_U32     =$0D;
+ S_CMPK_LE_U32     =$0E;
+ S_ADDK_I32        =$0F;
+ S_MULK_I32        =$10;
+ S_CBRANCH_I_FORK  =$11;
+ S_GETREG_B32      =$12;
+ S_SETREG_B32      =$13;
+ S_SETREG_IMM32_B32=$15;
 
  //VOP2
  V_CNDMASK_B32       =$00;
@@ -266,7 +286,7 @@ const
 
  //VOP3a
  V_MAD_LEGACY_F32 =$140;
- V_MAD_F32D       =$141;
+ V_MAD_F32        =$141;
  V_MAD_I32_I24    =$142;
  V_MAD_U32_U24    =$143;
  V_CUBEID_F32     =$144;
@@ -1056,7 +1076,8 @@ begin
  T:=H and LAST_9BIT;
  Case T of //9
   DW_SOP1:if (TSOP1(H).SSRC=$FF) then pack8(TSOP1(H).OP) else pack4(TSOP1(H).OP);
-  DW_SOPC:if (TSOPC(H).SSRC0=$FF) or (TSOPC(H).SSRC1=$FF) then pack8(TSOPC(H).OP) else pack4(TSOPC(H).OP);
+  DW_SOPC:if (TSOPC(H).SSRC0=$FF) or
+             (TSOPC(H).SSRC1=$FF) then pack8(TSOPC(H).OP) else pack4(TSOPC(H).OP);
   DW_SOPP:
     begin
      Case TSOPP(H).OP of
@@ -1115,13 +1136,16 @@ begin
              T:=H and LAST_2BIT;
              if (T=DW_SOP2) then //2
              begin
-              if (TSOP2(H).SSRC0=$FF) or (TSOP2(H).SSRC1=$FF) then pack8(TSOP2(H).OP) else pack4(TSOP2(H).OP);
+              if (TSOP2(H).SSRC0=$FF) or
+                 (TSOP2(H).SSRC1=$FF) then pack8(TSOP2(H).OP) else pack4(TSOP2(H).OP);
              end else
              begin
               T:=H and LAST_1BIT;
               if (T=DW_VOP2) then //1
               begin
-               if (TVOP2(H).SRC0=$FF) then pack8(TVOP2(H).OP) else pack4(TVOP2(H).OP);
+               if (TVOP2(H).OP=V_MADMK_F32) or
+                  (TVOP2(H).OP=V_MADAK_F32) or
+                  (TVOP2(H).SRC0=$FF) then pack8(TVOP2(H).OP) else pack4(TVOP2(H).OP);
               end else
                Result:=-1;
              end;
@@ -1204,7 +1228,7 @@ begin
   252:Write('EXECZ');
   253:Write('SCC');
   254:Write('LDS_DIRECT');
-  255:Write(HexStr(d2,8));
+  255:Write('#0x',HexStr(d2,8));
   else
       Write('?');
  end;
@@ -1269,7 +1293,7 @@ begin
   252:Write('EXECZ');
   253:Write('SCC');
   254:Write('LDS_DIRECT');
-  255:Write(HexStr(d2,8));
+  255:Write('#0x',HexStr(d2,8));
   256..511:
       Write('v',SSRC-256);
 
@@ -1419,7 +1443,7 @@ end;
 
 function _text_branch_offset(OFFSET_DW:DWORD;S:SmallInt):RawByteString;
 begin
- Result:=HexStr((OFFSET_DW+S+1)*4,8);
+ Result:='#0x'+HexStr((OFFSET_DW+S+1)*4,8);
 end;
 
 procedure _print_SOPP(Var SPI:TSPI);
@@ -1582,8 +1606,8 @@ begin
 
  With SPI.SMRD do
   Case IMM of
-   0:Write('s[',HexStr(OFFSET,2),']');
-   1:Write(HexStr(OFFSET,2));
+   0:Write('s[',OFFSET,']');
+   1:Write(OFFSET);
   end;
 
  Writeln;
@@ -1591,7 +1615,62 @@ end;
 
 procedure _print_SOPK(Var SPI:TSPI);
 begin
- Writeln('SOPK?',SPI.SOPK.OP);
+ Case SPI.SOPK.OP of
+
+  S_MOVK_I32        :Write('S_MOVK_I32');
+  S_MOVK_HI_I32     :Write('S_MOVK_HI_I32');
+  S_CMOVK_I32       :Write('S_CMOVK_I32');
+  S_CMPK_EQ_I32     :Write('S_CMPK_EQ_I32');
+  S_CMPK_LG_I32     :Write('S_CMPK_LG_I32');
+  S_CMPK_GT_I32     :Write('S_CMPK_GT_I32');
+  S_CMPK_GE_I32     :Write('S_CMPK_GE_I32');
+  S_CMPK_LT_I32     :Write('S_CMPK_LT_I32');
+  S_CMPK_LE_I32     :Write('S_CMPK_LE_I32');
+  S_CMPK_EQ_U32     :Write('S_CMPK_EQ_U32');
+  S_CMPK_LG_U32     :Write('S_CMPK_LG_U32');
+  S_CMPK_GT_U32     :Write('S_CMPK_GT_U32');
+  S_CMPK_GE_U32     :Write('S_CMPK_GE_U32');
+  S_CMPK_LT_U32     :Write('S_CMPK_LT_U32');
+  S_CMPK_LE_U32     :Write('S_CMPK_LE_U32');
+  S_ADDK_I32        :Write('S_ADDK_I32');
+  S_MULK_I32        :Write('S_MULK_I32');
+  S_CBRANCH_I_FORK  :Write('S_CBRANCH_I_FORK');
+  S_GETREG_B32      :Write('S_GETREG_B32');
+  S_SETREG_B32      :Write('S_SETREG_B32');
+  S_SETREG_IMM32_B32:Write('S_SETREG_IMM32_B32');
+
+  else
+      Write('SOPK?',SPI.SOPK.OP);
+ end;
+ Write(' ');
+ _print_sdst7(SPI.SOPK.SDST);
+ Write(' ');
+
+ Case SPI.SOPK.OP of
+  S_MOVK_I32   ,
+  S_MOVK_HI_I32,
+  S_CMOVK_I32  ,
+  S_CMPK_EQ_I32,
+  S_CMPK_LG_I32,
+  S_CMPK_GT_I32,
+  S_CMPK_GE_I32,
+  S_CMPK_LT_I32,
+  S_CMPK_LE_I32,
+  S_ADDK_I32   ,
+  S_MULK_I32   :Write(SmallInt(SPI.SOPK.SIMM));
+
+  S_CMPK_EQ_U32,
+  S_CMPK_LG_U32,
+  S_CMPK_GT_U32,
+  S_CMPK_GE_U32,
+  S_CMPK_LT_U32,
+  S_CMPK_LE_U32:Write(SPI.SOPK.SIMM);
+
+  else
+                Write('#0x',HexStr(SPI.SOPK.SIMM,8));
+ end;
+
+ Writeln;
 end;
 
 procedure _print_VOP3a(Var VOP3:TVOP3a);
@@ -1628,8 +1707,7 @@ begin
   256+V_XOR_B32           :Write('V_XOR_B32');
   256+V_BFM_B32           :Write('V_BFM_B32');
   256+V_MAC_F32           :Write('V_MAC_F32');
-  256+V_MADMK_F32         :Write('V_MADMK_F32');
-  256+V_MADAK_F32         :Write('V_MADAK_F32');
+
   256+V_BCNT_U32_B32      :Write('V_BCNT_U32_B32');
   256+V_MBCNT_LO_U32_B32  :Write('V_MBCNT_LO_U32_B32');
   256+V_MBCNT_HI_U32_B32  :Write('V_MBCNT_HI_U32_B32');
@@ -1643,7 +1721,7 @@ begin
   256+V_CVT_PK_I16_I32    :Write('V_CVT_PK_I16_I32');
 
   V_MAD_LEGACY_F32        :Write('V_MAD_LEGACY_F32');
-  V_MAD_F32D              :Write('V_MAD_F32D');
+  V_MAD_F32               :Write('V_MAD_F32');
   V_MAD_I32_I24           :Write('V_MAD_I32_I24');
   V_MAD_U32_U24           :Write('V_MAD_U32_U24');
   V_CUBEID_F32            :Write('V_CUBEID_F32');
@@ -2679,6 +2757,7 @@ var
 begin
  ShaderParser:=Default(TShaderParser);
  ShaderParser.Body:=Body;
+ SPI:=Default(TSPI);
  repeat
   if (size_dw<>0) then
   begin
