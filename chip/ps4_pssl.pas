@@ -214,131 +214,493 @@ const
  S_CBRANCH_I_FORK=$11;
 
  //VOP2
- V_CNDMASK_B32       = 0;
- V_READLANE_B32      = 1;
- V_ADD_F32           = 3;
- V_SUB_F32           = 4;
- V_SUBREV_F32        = 5;
- V_MAC_LEGACY_F32    = 6;
- V_MUL_LEGACY_F32    = 7;
- V_MUL_F32           = 8;
- V_MUL_I32_I24       = 9;
- V_MUL_HI_I32_I24    =10;
- V_MUL_U32_U24       =11;
- V_MUL_HI_U32_U24    =12;
- V_MIN_LEGACY_F32    =13;
- V_MAX_LEGACY_F32    =14;
- V_MIN_F32           =15;
- V_MAX_F32           =16;
- V_MIN_I32           =17;
- V_MAX_I32           =18;
- V_MIN_U32           =19;
- V_MAX_U32           =20;
- V_LSHR_B32          =21;
- V_LSHRREV_B32       =22;
- V_ASHR_I32          =23;
- V_ASHRREV_I32       =24;
- V_LSHL_B32          =25;
- V_LSHLREV_B32       =26;
- V_AND_B32           =27;
- V_OR_B32            =28;
- V_XOR_B32           =29;
- V_BFM_B32           =30;
- V_MAC_F32           =31;
- V_MADMK_F32         =32;
- V_MADAK_F32         =33;
- V_BCNT_U32_B32      =34;
- V_MBCNT_LO_U32_B32  =35;
- V_MBCNT_HI_U32_B32  =36;
- V_ADD_I32           =37;
- V_SUB_I32           =38;
- V_SUBREV_I32        =39;
- V_ADDC_U32          =40;
- V_SUBB_U32          =41;
- V_SUBBREV_U32       =42;
- V_LDEXP_F32         =43;
- V_CVT_PKACCUM_U8_F32=44;
- V_CVT_PKNORM_I16_F32=45;
- V_CVT_PKNORM_U16_F32=46;
- V_CVT_PKRTZ_F16_F32 =47;
- V_CVT_PK_U16_U32    =48;
- V_CVT_PK_I16_I32    =49;
+ V_CNDMASK_B32       =$00;
+ V_READLANE_B32      =$01;
+ V_ADD_F32           =$03;
+ V_SUB_F32           =$04;
+ V_SUBREV_F32        =$05;
+ V_MAC_LEGACY_F32    =$06;
+ V_MUL_LEGACY_F32    =$07;
+ V_MUL_F32           =$08;
+ V_MUL_I32_I24       =$09;
+ V_MUL_HI_I32_I24    =$0A;
+ V_MUL_U32_U24       =$0B;
+ V_MUL_HI_U32_U24    =$0C;
+ V_MIN_LEGACY_F32    =$0D;
+ V_MAX_LEGACY_F32    =$0E;
+ V_MIN_F32           =$0F;
+ V_MAX_F32           =$10;
+ V_MIN_I32           =$11;
+ V_MAX_I32           =$12;
+ V_MIN_U32           =$13;
+ V_MAX_U32           =$14;
+ V_LSHR_B32          =$15;
+ V_LSHRREV_B32       =$16;
+ V_ASHR_I32          =$17;
+ V_ASHRREV_I32       =$18;
+ V_LSHL_B32          =$19;
+ V_LSHLREV_B32       =$1A;
+ V_AND_B32           =$1B;
+ V_OR_B32            =$1C;
+ V_XOR_B32           =$1D;
+ V_BFM_B32           =$1E;
+ V_MAC_F32           =$1F;
+ V_MADMK_F32         =$20;
+ V_MADAK_F32         =$21;
+ V_BCNT_U32_B32      =$22;
+ V_MBCNT_LO_U32_B32  =$23;
+ V_MBCNT_HI_U32_B32  =$24;
+ V_ADD_I32           =$25;
+ V_SUB_I32           =$26;
+ V_SUBREV_I32        =$27;
+ V_ADDC_U32          =$28;
+ V_SUBB_U32          =$29;
+ V_SUBBREV_U32       =$2A;
+ V_LDEXP_F32         =$2B;
+ V_CVT_PKACCUM_U8_F32=$2C;
+ V_CVT_PKNORM_I16_F32=$2D;
+ V_CVT_PKNORM_U16_F32=$2E;
+ V_CVT_PKRTZ_F16_F32 =$2F;
+ V_CVT_PK_U16_U32    =$30;
+ V_CVT_PK_I16_I32    =$31;
 
  //VOP3a
- V_SAD_U32=349;
+ V_MAD_LEGACY_F32 =$140;
+ V_MAD_F32D       =$141;
+ V_MAD_I32_I24    =$142;
+ V_MAD_U32_U24    =$143;
+ V_CUBEID_F32     =$144;
+ V_CUBESC_F32     =$145;
+ V_CUBETC_F32     =$146;
+ V_CUBEMA_F32     =$147;
+ V_BFE_U32        =$148;
+ V_BFE_I32        =$149;
+ V_BFI_B32        =$14A;
+ V_FMA_F32        =$14B;
+ V_FMA_F64        =$14C;
+ V_LERP_U8        =$14D;
+ V_ALIGNBIT_B32   =$14E;
+ V_ALIGNBYTE_B32  =$14F;
+ V_MULLIT_F32     =$150;
+ V_MIN3_F32       =$151;
+ V_MIN3_I32       =$152;
+ V_MIN3_U32       =$153;
+ V_MAX3_F32       =$154;
+ V_MAX3_I32       =$155;
+ V_MAX3_U32       =$156;
+ V_MED3_F32       =$157;
+ V_MED3_I32       =$158;
+ V_MED3_U32       =$159;
+ V_SAD_U8         =$15A;
+ V_SAD_HI_U8      =$15B;
+ V_SAD_U16        =$15C;
+ V_SAD_U32        =$15D;
+ V_CVT_PK_U8_F32  =$15E;
+ V_DIV_FIXUP_F32  =$15F;
+ V_DIV_FIXUP_F64  =$160;
+ V_LSHL_B64       =$161;
+ V_LSHR_B64       =$162;
+ V_ASHR_I64       =$163;
+ V_ADD_F64        =$164;
+ V_MUL_F64        =$165;
+ V_MIN_F64        =$166;
+ V_MAX_F64        =$167;
+ V_LDEXP_F64      =$168;
+ V_MUL_LO_U32     =$169;
+ V_MUL_HI_U32     =$16A;
+ V_MUL_LO_I32     =$16B;
+ V_MUL_HI_I32     =$16C;
+
+ V_DIV_FMAS_F32   =$16F;
+ V_DIV_FMAS_F64   =$170;
+ V_MSAD_U8        =$171;
+ V_QSAD_PK_U16_U8 =$172;
+ V_MQSAD_PK_U16_U8=$173;
+ V_TRIG_PREOP_F64 =$174;
+ V_MQSAD_U32_U8   =$175;
+ V_MAD_U64_U32    =$176;
+ V_MAD_I64_I32    =$177;
 
  //VOP3b
- V_DIV_SCALE_F32 =365;
- V_DIV_SCALE_F64 =366;
+ V_DIV_SCALE_F32  =$16D;
+ V_DIV_SCALE_F64  =$16E;
 
  //SMRD
- S_LOAD_DWORD          =$0;
- S_LOAD_DWORDX2        =$1;
- S_LOAD_DWORDX4        =$2;
- S_LOAD_DWORDX8        =$3;
- S_LOAD_DWORDX16       =$4;
+ S_LOAD_DWORD          =$00;
+ S_LOAD_DWORDX2        =$01;
+ S_LOAD_DWORDX4        =$02;
+ S_LOAD_DWORDX8        =$03;
+ S_LOAD_DWORDX16       =$04;
 
- S_BUFFER_LOAD_DWORD   =$8;
- S_BUFFER_LOAD_DWORDX2 =$9;
- S_BUFFER_LOAD_DWORDX4 =$A;
- S_BUFFER_LOAD_DWORDX16=$C;
+ S_BUFFER_LOAD_DWORD   =$08;
+ S_BUFFER_LOAD_DWORDX2 =$09;
+ S_BUFFER_LOAD_DWORDX4 =$0A;
+ S_BUFFER_LOAD_DWORDX8 =$0B;
+ S_BUFFER_LOAD_DWORDX16=$0C;
 
  S_MEMTIME             =$1E;
  S_DCACHE_INV          =$1F;
 
  //VOPC
- V_CMP_F_U32   =$C0;
- V_CMP_LT_U32  =$C1;
- V_CMP_EQ_U32  =$C2;
- V_CMP_LE_U32  =$C3;
- V_CMP_GT_U32  =$C4;
- V_CMP_LG_U32  =$C5;
- V_CMP_GE_U32  =$C6;
- V_CMP_TRU_U32 =$C7;
 
- V_CMPX_F_U32  =$D0;
- V_CMPX_LT_U32 =$D1;
- V_CMPX_EQ_U32 =$D2;
- V_CMPX_LE_U32 =$D3;
- V_CMPX_GT_U32 =$D4;
- V_CMPX_LG_U32 =$D5;
- V_CMPX_GE_U32 =$D6;
- V_CMPX_TRU_U32=$D7;
+ {OP16}
+ //F   = 0
+ //LT  = 1
+ //EQ  = 2
+ //LE  = 3
+ //GT  = 4
+ //LG  = 5
+ //GE  = 6
+ //O   = 7
+ //U   = 8
+ //NGE = 9
+ //NLG = A
+ //NGT = B
+ //NLE = C
+ //NEQ = D
+ //NLT = E
+ //T   = F
+
+ {OP8}
+ //F   = 0;
+ //LT  = 1;
+ //EQ  = 2;
+ //LE  = 3;
+ //GT  = 4;
+ //LG  = 5;
+ //GE  = 6;
+ //T   = 7;
+
+ //V_CMP_{OP16}_F32   0x00
+ //V_CMPX_{OP16}_F32  0x10
+ //V_CMP_{OP16}_F64   0x20
+ //V_CMPX_{OP16}_F64  0x30
+ //V_CMPS_{OP16}_F32  0x40
+ //V_CMPSX_{OP16}_F32 0x50
+ //V_CMPS_{OP16}_F64  0x60
+ //V_CMPSX_{OP16}_F64 0x70
+
+ //V_CMP_{OP8}_I32    0x80
+ //V_CMPX_{OP8}_I32   0x90
+ //V_CMP_{OP8}_I64    0xA0
+ //V_CMPX_{OP8}_I64   0xB0
+ //V_CMP_{OP8}_U32    0xC0
+ //V_CMPX_{OP8}_U32   0xD0
+ //V_CMP_{OP8}_U64    0xE0
+ //V_CMPX_{OP8}_U64   0xF0
+
+ V_CMP_F_F32     =$00;
+ V_CMP_LT_F32    =$01;
+ V_CMP_EQ_F32    =$02;
+ V_CMP_LE_F32    =$03;
+ V_CMP_GT_F32    =$04;
+ V_CMP_LG_F32    =$05;
+ V_CMP_GE_F32    =$06;
+ V_CMP_O_F32     =$07;
+ V_CMP_U_F32     =$08;
+ V_CMP_NGE_F32   =$09;
+ V_CMP_NLG_F32   =$0A;
+ V_CMP_NGT_F32   =$0B;
+ V_CMP_NLE_F32   =$0C;
+ V_CMP_NEQ_F32   =$0D;
+ V_CMP_NLT_F32   =$0E;
+ V_CMP_T_F32     =$0F;
+
+ V_CMPX_F_F32    =$10;
+ V_CMPX_LT_F32   =$11;
+ V_CMPX_EQ_F32   =$12;
+ V_CMPX_LE_F32   =$13;
+ V_CMPX_GT_F32   =$14;
+ V_CMPX_LG_F32   =$15;
+ V_CMPX_GE_F32   =$16;
+ V_CMPX_O_F32    =$17;
+ V_CMPX_U_F32    =$18;
+ V_CMPX_NGE_F32  =$19;
+ V_CMPX_NLG_F32  =$1A;
+ V_CMPX_NGT_F32  =$1B;
+ V_CMPX_NLE_F32  =$1C;
+ V_CMPX_NEQ_F32  =$1D;
+ V_CMPX_NLT_F32  =$1E;
+ V_CMPX_T_F32    =$1F;
+
+ V_CMP_F_F64     =$20;
+ V_CMP_LT_F64    =$21;
+ V_CMP_EQ_F64    =$22;
+ V_CMP_LE_F64    =$23;
+ V_CMP_GT_F64    =$24;
+ V_CMP_LG_F64    =$25;
+ V_CMP_GE_F64    =$26;
+ V_CMP_O_F64     =$27;
+ V_CMP_U_F64     =$28;
+ V_CMP_NGE_F64   =$29;
+ V_CMP_NLG_F64   =$2A;
+ V_CMP_NGT_F64   =$2B;
+ V_CMP_NLE_F64   =$2C;
+ V_CMP_NEQ_F64   =$2D;
+ V_CMP_NLT_F64   =$2E;
+ V_CMP_T_F64     =$2F;
+
+ V_CMPX_F_F64    =$30;
+ V_CMPX_LT_F64   =$31;
+ V_CMPX_EQ_F64   =$32;
+ V_CMPX_LE_F64   =$33;
+ V_CMPX_GT_F64   =$34;
+ V_CMPX_LG_F64   =$35;
+ V_CMPX_GE_F64   =$36;
+ V_CMPX_O_F64    =$37;
+ V_CMPX_U_F64    =$38;
+ V_CMPX_NGE_F64  =$39;
+ V_CMPX_NLG_F64  =$3A;
+ V_CMPX_NGT_F64  =$3B;
+ V_CMPX_NLE_F64  =$3C;
+ V_CMPX_NEQ_F64  =$3D;
+ V_CMPX_NLT_F64  =$3E;
+ V_CMPX_T_F64    =$3F;
+
+
+ V_CMPS_F_F32    =$40;
+ V_CMPS_LT_F32   =$41;
+ V_CMPS_EQ_F32   =$42;
+ V_CMPS_LE_F32   =$43;
+ V_CMPS_GT_F32   =$44;
+ V_CMPS_LG_F32   =$45;
+ V_CMPS_GE_F32   =$46;
+ V_CMPS_O_F32    =$47;
+ V_CMPS_U_F32    =$48;
+ V_CMPS_NGE_F32  =$49;
+ V_CMPS_NLG_F32  =$4A;
+ V_CMPS_NGT_F32  =$4B;
+ V_CMPS_NLE_F32  =$4C;
+ V_CMPS_NEQ_F32  =$4D;
+ V_CMPS_NLT_F32  =$4E;
+ V_CMPS_T_F32    =$4F;
+
+ V_CMPSX_F_F32   =$50;
+ V_CMPSX_LT_F32  =$51;
+ V_CMPSX_EQ_F32  =$52;
+ V_CMPSX_LE_F32  =$53;
+ V_CMPSX_GT_F32  =$54;
+ V_CMPSX_LG_F32  =$55;
+ V_CMPSX_GE_F32  =$56;
+ V_CMPSX_O_F32   =$57;
+ V_CMPSX_U_F32   =$58;
+ V_CMPSX_NGE_F32 =$59;
+ V_CMPSX_NLG_F32 =$5A;
+ V_CMPSX_NGT_F32 =$5B;
+ V_CMPSX_NLE_F32 =$5C;
+ V_CMPSX_NEQ_F32 =$5D;
+ V_CMPSX_NLT_F32 =$5E;
+ V_CMPSX_T_F32   =$5F;
+
+ V_CMPS_F_F64    =$60;
+ V_CMPS_LT_F64   =$61;
+ V_CMPS_EQ_F64   =$62;
+ V_CMPS_LE_F64   =$63;
+ V_CMPS_GT_F64   =$64;
+ V_CMPS_LG_F64   =$65;
+ V_CMPS_GE_F64   =$66;
+ V_CMPS_O_F64    =$67;
+ V_CMPS_U_F64    =$68;
+ V_CMPS_NGE_F64  =$69;
+ V_CMPS_NLG_F64  =$6A;
+ V_CMPS_NGT_F64  =$6B;
+ V_CMPS_NLE_F64  =$6C;
+ V_CMPS_NEQ_F64  =$6D;
+ V_CMPS_NLT_F64  =$6E;
+ V_CMPS_T_F64    =$6F;
+
+ V_CMPSX_F_F64   =$70;
+ V_CMPSX_LT_F64  =$71;
+ V_CMPSX_EQ_F64  =$72;
+ V_CMPSX_LE_F64  =$73;
+ V_CMPSX_GT_F64  =$74;
+ V_CMPSX_LG_F64  =$75;
+ V_CMPSX_GE_F64  =$76;
+ V_CMPSX_O_F64   =$77;
+ V_CMPSX_U_F64   =$78;
+ V_CMPSX_NGE_F64 =$79;
+ V_CMPSX_NLG_F64 =$7A;
+ V_CMPSX_NGT_F64 =$7B;
+ V_CMPSX_NLE_F64 =$7C;
+ V_CMPSX_NEQ_F64 =$7D;
+ V_CMPSX_NLT_F64 =$7E;
+ V_CMPSX_T_F64   =$7F;
+
+ //
+
+ V_CMP_F_I32     =$80;
+ V_CMP_LT_I32    =$81;
+ V_CMP_EQ_I32    =$82;
+ V_CMP_LE_I32    =$83;
+ V_CMP_GT_I32    =$84;
+ V_CMP_LG_I32    =$85;
+ V_CMP_GE_I32    =$86;
+ V_CMP_T_I32     =$87;
+
+ V_CMPX_F_I32    =$90;
+ V_CMPX_LT_I32   =$91;
+ V_CMPX_EQ_I32   =$92;
+ V_CMPX_LE_I32   =$93;
+ V_CMPX_GT_I32   =$94;
+ V_CMPX_LG_I32   =$95;
+ V_CMPX_GE_I32   =$96;
+ V_CMPX_T_I32    =$97;
+
+ V_CMP_F_I64     =$A0;
+ V_CMP_LT_I64    =$A1;
+ V_CMP_EQ_I64    =$A2;
+ V_CMP_LE_I64    =$A3;
+ V_CMP_GT_I64    =$A4;
+ V_CMP_LG_I64    =$A5;
+ V_CMP_GE_I64    =$A6;
+ V_CMP_T_I64     =$A7;
+
+ V_CMPX_F_I64    =$B0;
+ V_CMPX_LT_I64   =$B1;
+ V_CMPX_EQ_I64   =$B2;
+ V_CMPX_LE_I64   =$B3;
+ V_CMPX_GT_I64   =$B4;
+ V_CMPX_LG_I64   =$B5;
+ V_CMPX_GE_I64   =$B6;
+ V_CMPX_T_I64    =$B7;
+
+ V_CMP_F_U32     =$C0;
+ V_CMP_LT_U32    =$C1;
+ V_CMP_EQ_U32    =$C2;
+ V_CMP_LE_U32    =$C3;
+ V_CMP_GT_U32    =$C4;
+ V_CMP_LG_U32    =$C5;
+ V_CMP_GE_U32    =$C6;
+ V_CMP_T_U32     =$C7;
+
+ V_CMPX_F_U32    =$D0;
+ V_CMPX_LT_U32   =$D1;
+ V_CMPX_EQ_U32   =$D2;
+ V_CMPX_LE_U32   =$D3;
+ V_CMPX_GT_U32   =$D4;
+ V_CMPX_LG_U32   =$D5;
+ V_CMPX_GE_U32   =$D6;
+ V_CMPX_T_U32    =$D7;
+
+ V_CMP_F_U64     =$E0;
+ V_CMP_LT_U64    =$E1;
+ V_CMP_EQ_U64    =$E2;
+ V_CMP_LE_U64    =$E3;
+ V_CMP_GT_U64    =$E4;
+ V_CMP_LG_U64    =$E5;
+ V_CMP_GE_U64    =$E6;
+ V_CMP_T_U64     =$E7;
+
+ V_CMPX_F_U64    =$F0;
+ V_CMPX_LT_U64   =$F1;
+ V_CMPX_EQ_U64   =$F2;
+ V_CMPX_LE_U64   =$F3;
+ V_CMPX_GT_U64   =$F4;
+ V_CMPX_LG_U64   =$F5;
+ V_CMPX_GE_U64   =$F6;
+ V_CMPX_T_U64    =$F7;
+
+ V_CMP_CLASS_F32 =$88;
+ V_CMPX_CLASS_F32=$98;
+ V_CMP_CLASS_F64 =$A8;
+ V_CMPX_CLASS_F64=$B8;
 
  //VOP1
- V_MOV_B32 = $1;
- V_CVT_F32_I32=$5;
+ V_NOP              =$00;
+ V_MOV_B32          =$01;
+ V_READFIRSTLANE_B32=$02;
+ V_CVT_I32_F64      =$03;
+ V_CVT_F64_I32      =$04;
+ V_CVT_F32_I32      =$05;
+ V_CVT_F32_U32      =$06;
+ V_CVT_U32_F32      =$07;
+ V_CVT_I32_F32      =$08;
+ V_MOV_FED_B32      =$09;
+ V_CVT_F16_F32      =$0A;
+ V_CVT_F32_F16      =$0B;
+ V_CVT_RPI_I32_F32  =$0C;
+ V_CVT_FLR_I32_F32  =$0D;
+ V_CVT_OFF_F32_I4   =$0E;
+ V_CVT_F32_F64      =$0F;
+ V_CVT_F64_F32      =$10;
+ V_CVT_F32_UBYTE0   =$11;
+ V_CVT_F32_UBYTE1   =$12;
+ V_CVT_F32_UBYTE2   =$13;
+ V_CVT_F32_UBYTE3   =$14;
+ V_CVT_U32_F64      =$15;
+ V_CVT_F64_U32      =$16;
+ V_TRUNC_F64        =$17;
+ V_CEIL_F64         =$18;
+ V_RNDNE_F64        =$19;
+ V_FLOOR_F64        =$1A;
+ V_FRACT_F32        =$20;
+ V_TRUNC_F32        =$21;
+ V_CEIL_F32         =$22;
+ V_RNDNE_F32        =$23;
+ V_FLOOR_F32        =$24;
+ V_EXP_F32          =$25;
+ V_LOG_CLAMP_F32    =$26;
+ V_LOG_F32          =$27;
+ V_RCP_CLAMP_F32    =$28;
+ V_RCP_LEGACY_F32   =$29;
+ V_RCP_F32          =$2A;
+ V_RCP_IFLAG_F32    =$2B;
+ V_RSQ_CLAMP_F32    =$2C;
+ V_RSQ_LEGACY_F32   =$2D;
+ V_RSQ_F32          =$2E;
+ V_RCP_F64          =$2F;
+ V_RCP_CLAMP_F64    =$30;
+ V_RSQ_F64          =$31;
+ V_RSQ_CLAMP_F64    =$32;
+ V_SQRT_F32         =$33;
+ V_SQRT_F64         =$34;
+ V_SIN_F32          =$35;
+ V_COS_F32          =$36;
+ V_NOT_B32          =$37;
+ V_BFREV_B32        =$38;
+ V_FFBH_U32         =$39;
+ V_FFBL_B32         =$3A;
+ V_FFBH_I32         =$3B;
+ V_FREXP_EXP_I32_F64=$3C;
+ V_FREXP_MANT_F64   =$3D;
+ V_FRACT_F64        =$3E;
+ V_FREXP_EXP_I32_F32=$3F;
+ V_FREXP_MANT_F32   =$40;
+ V_CLREXCP          =$41;
+ V_MOVRELD_B32      =$42;
+ V_MOVRELS_B32      =$43;
+ V_MOVRELSD_B32     =$44;
 
  //VINTRP
- V_INTERP_P1_F32=0;
- V_INTERP_P2_F32=1;
+ V_INTERP_P1_F32 =0;
+ V_INTERP_P2_F32 =1;
  V_INTERP_MOV_F32=2;
 
  //MUBUF
- BUFFER_LOAD_FORMAT_X    =$0;
- BUFFER_LOAD_FORMAT_XY   =$1;
- BUFFER_LOAD_FORMAT_XYZ  =$2;
- BUFFER_LOAD_FORMAT_XYZW =$3;
- BUFFER_STORE_FORMAT_X   =$4;
- BUFFER_STORE_FORMAT_XY  =$5;
- BUFFER_STORE_FORMAT_XYZ =$6;
- BUFFER_STORE_FORMAT_XYZW=$7;
+ BUFFER_LOAD_FORMAT_X    =$00;
+ BUFFER_LOAD_FORMAT_XY   =$01;
+ BUFFER_LOAD_FORMAT_XYZ  =$02;
+ BUFFER_LOAD_FORMAT_XYZW =$03;
+ BUFFER_STORE_FORMAT_X   =$04;
+ BUFFER_STORE_FORMAT_XY  =$05;
+ BUFFER_STORE_FORMAT_XYZ =$06;
+ BUFFER_STORE_FORMAT_XYZW=$07;
 
- BUFFER_LOAD_UBYTE  =$8;
- BUFFER_LOAD_SBYTE  =$9;
- BUFFER_LOAD_USHORT =$A;
- BUFFER_LOAD_SSHORT =$B;
- BUFFER_LOAD_DWORD  =$C;
- BUFFER_LOAD_DWORDX2=$D;
- BUFFER_LOAD_DWORDX4=$E;
- BUFFER_LOAD_DWORDX3=$F;
+ BUFFER_LOAD_UBYTE       =$08;
+ BUFFER_LOAD_SBYTE       =$09;
+ BUFFER_LOAD_USHORT      =$0A;
+ BUFFER_LOAD_SSHORT      =$0B;
+ BUFFER_LOAD_DWORD       =$0C;
+ BUFFER_LOAD_DWORDX2     =$0D;
+ BUFFER_LOAD_DWORDX4     =$0E;
+ BUFFER_LOAD_DWORDX3     =$0F;
 
- BUFFER_STORE_BYTE   =$18;
- BUFFER_STORE_SHORT  =$1A;
- BUFFER_STORE_DWORD  =$1C;
- BUFFER_STORE_DWORDX2=$1D;
- BUFFER_STORE_DWORDX4=$1E;
- BUFFER_STORE_DWORDX3=$1F;
+ BUFFER_STORE_BYTE       =$18;
+ BUFFER_STORE_SHORT      =$1A;
+ BUFFER_STORE_DWORD      =$1C;
+ BUFFER_STORE_DWORDX2    =$1D;
+ BUFFER_STORE_DWORDX4    =$1E;
+ BUFFER_STORE_DWORDX3    =$1F;
 
  //MIMG
  IMAGE_LOAD_MIP=1;
@@ -1128,6 +1490,12 @@ begin
      t:=4;
     end;
 
+   S_LOAD_DWORDX8:
+    begin
+     Write('S_LOAD_DWORDX8');
+     t:=8;
+    end;
+
   S_LOAD_DWORDX16:
     begin
      Write('S_LOAD_DWORDX16');
@@ -1152,6 +1520,12 @@ begin
     begin
      Write('S_BUFFER_LOAD_DWORDX4');
      t:=4;
+    end;
+
+  S_BUFFER_LOAD_DWORDX8:
+    begin
+     Write('S_BUFFER_LOAD_DWORDX8');
+     t:=8;
     end;
 
   S_BUFFER_LOAD_DWORDX16:
@@ -1192,6 +1566,10 @@ begin
   4:begin
      With SPI.SMRD do
       Write('s[',SDST,':',SDST+3,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+    end;
+  8:begin
+     With SPI.SMRD do
+      Write('s[',SDST,':',SDST+7,'], s[',SBASE*2,':',SBASE*2+7,'], ');
     end;
   16:
     begin
@@ -1255,12 +1633,7 @@ begin
   256+V_BCNT_U32_B32      :Write('V_BCNT_U32_B32');
   256+V_MBCNT_LO_U32_B32  :Write('V_MBCNT_LO_U32_B32');
   256+V_MBCNT_HI_U32_B32  :Write('V_MBCNT_HI_U32_B32');
-  256+V_ADD_I32           :Write('V_ADD_I32');
-  256+V_SUB_I32           :Write('V_SUB_I32');
-  256+V_SUBREV_I32        :Write('V_SUBREV_I32');
-  256+V_ADDC_U32          :Write('V_ADDC_U32');
-  256+V_SUBB_U32          :Write('V_SUBB_U32');
-  256+V_SUBBREV_U32       :Write('V_SUBBREV_U32');
+
   256+V_LDEXP_F32         :Write('V_LDEXP_F32');
   256+V_CVT_PKACCUM_U8_F32:Write('V_CVT_PKACCUM_U8_F32');
   256+V_CVT_PKNORM_I16_F32:Write('V_CVT_PKNORM_I16_F32');
@@ -1269,7 +1642,126 @@ begin
   256+V_CVT_PK_U16_U32    :Write('V_CVT_PK_U16_U32');
   256+V_CVT_PK_I16_I32    :Write('V_CVT_PK_I16_I32');
 
-  V_SAD_U32:Write('V_SAD_U32');
+  V_MAD_LEGACY_F32        :Write('V_MAD_LEGACY_F32');
+  V_MAD_F32D              :Write('V_MAD_F32D');
+  V_MAD_I32_I24           :Write('V_MAD_I32_I24');
+  V_MAD_U32_U24           :Write('V_MAD_U32_U24');
+  V_CUBEID_F32            :Write('V_CUBEID_F32');
+  V_CUBESC_F32            :Write('V_CUBESC_F32');
+  V_CUBETC_F32            :Write('V_CUBETC_F32');
+  V_CUBEMA_F32            :Write('V_CUBEMA_F32');
+  V_BFE_U32               :Write('V_BFE_U32');
+  V_BFE_I32               :Write('V_BFE_I32');
+  V_BFI_B32               :Write('V_BFI_B32');
+  V_FMA_F32               :Write('V_FMA_F32');
+  V_FMA_F64               :Write('V_FMA_F64');
+  V_LERP_U8               :Write('V_LERP_U8');
+  V_ALIGNBIT_B32          :Write('V_ALIGNBIT_B32');
+  V_ALIGNBYTE_B32         :Write('V_ALIGNBYTE_B32');
+  V_MULLIT_F32            :Write('V_MULLIT_F32');
+  V_MIN3_F32              :Write('V_MIN3_F32');
+  V_MIN3_I32              :Write('V_MIN3_I32');
+  V_MIN3_U32              :Write('V_MIN3_U32');
+  V_MAX3_F32              :Write('V_MAX3_F32');
+  V_MAX3_I32              :Write('V_MAX3_I32');
+  V_MAX3_U32              :Write('V_MAX3_U32');
+  V_MED3_F32              :Write('V_MED3_F32');
+  V_MED3_I32              :Write('V_MED3_I32');
+  V_MED3_U32              :Write('V_MED3_U32');
+  V_SAD_U8                :Write('V_SAD_U8');
+  V_SAD_HI_U8             :Write('V_SAD_HI_U8');
+  V_SAD_U16               :Write('V_SAD_U16');
+  V_SAD_U32               :Write('V_SAD_U32');
+  V_CVT_PK_U8_F32         :Write('V_CVT_PK_U8_F32');
+  V_DIV_FIXUP_F32         :Write('V_DIV_FIXUP_F32');
+  V_DIV_FIXUP_F64         :Write('V_DIV_FIXUP_F64');
+  V_LSHL_B64              :Write('V_LSHL_B64');
+  V_LSHR_B64              :Write('V_LSHR_B64');
+  V_ASHR_I64              :Write('V_ASHR_I64');
+  V_ADD_F64               :Write('V_ADD_F64');
+  V_MUL_F64               :Write('V_MUL_F64');
+  V_MIN_F64               :Write('V_MIN_F64');
+  V_MAX_F64               :Write('V_MAX_F64');
+  V_LDEXP_F64             :Write('V_LDEXP_F64');
+  V_MUL_LO_U32            :Write('V_MUL_LO_U32');
+  V_MUL_HI_U32            :Write('V_MUL_HI_U32');
+  V_MUL_LO_I32            :Write('V_MUL_LO_I32');
+  V_MUL_HI_I32            :Write('V_MUL_HI_I32');
+
+  V_DIV_FMAS_F32          :Write('V_DIV_FMAS_F32');
+  V_DIV_FMAS_F64          :Write('V_DIV_FMAS_F64');
+  V_MSAD_U8               :Write('V_MSAD_U8');
+  V_QSAD_PK_U16_U8        :Write('V_QSAD_PK_U16_U8');
+  V_MQSAD_PK_U16_U8       :Write('V_MQSAD_PK_U16_U8');
+  V_TRIG_PREOP_F64        :Write('V_TRIG_PREOP_F64');
+  V_MQSAD_U32_U8          :Write('V_MQSAD_U32_U8');
+  V_MAD_U64_U32           :Write('V_MAD_U64_U32');
+  V_MAD_I64_I32           :Write('V_MAD_I64_I32');
+
+  384+V_NOP               :Write('V_NOP');
+  384+V_MOV_B32           :Write('V_MOV_B32');
+  384+V_READFIRSTLANE_B32 :Write('V_READFIRSTLANE_B32');
+  384+V_CVT_I32_F64       :Write('V_CVT_I32_F64');
+  384+V_CVT_F64_I32       :Write('V_CVT_F64_I32');
+  384+V_CVT_F32_I32       :Write('V_CVT_F32_I32');
+  384+V_CVT_F32_U32       :Write('V_CVT_F32_U32');
+  384+V_CVT_U32_F32       :Write('V_CVT_U32_F32');
+  384+V_CVT_I32_F32       :Write('V_CVT_I32_F32');
+  384+V_MOV_FED_B32       :Write('V_MOV_FED_B32');
+  384+V_CVT_F16_F32       :Write('V_CVT_F16_F32');
+  384+V_CVT_F32_F16       :Write('V_CVT_F32_F16');
+  384+V_CVT_RPI_I32_F32   :Write('V_CVT_RPI_I32_F32');
+  384+V_CVT_FLR_I32_F32   :Write('V_CVT_FLR_I32_F32');
+  384+V_CVT_OFF_F32_I4    :Write('V_CVT_OFF_F32_I4');
+  384+V_CVT_F32_F64       :Write('V_CVT_F32_F64');
+  384+V_CVT_F64_F32       :Write('V_CVT_F64_F32');
+  384+V_CVT_F32_UBYTE0    :Write('V_CVT_F32_UBYTE0');
+  384+V_CVT_F32_UBYTE1    :Write('V_CVT_F32_UBYTE1');
+  384+V_CVT_F32_UBYTE2    :Write('V_CVT_F32_UBYTE2');
+  384+V_CVT_F32_UBYTE3    :Write('V_CVT_F32_UBYTE3');
+  384+V_CVT_U32_F64       :Write('V_CVT_U32_F64');
+  384+V_CVT_F64_U32       :Write('V_CVT_F64_U32');
+  384+V_TRUNC_F64         :Write('V_TRUNC_F64');
+  384+V_CEIL_F64          :Write('V_CEIL_F64');
+  384+V_RNDNE_F64         :Write('V_RNDNE_F64');
+  384+V_FLOOR_F64         :Write('V_FLOOR_F64');
+  384+V_FRACT_F32         :Write('V_FRACT_F32');
+  384+V_TRUNC_F32         :Write('V_TRUNC_F32');
+  384+V_CEIL_F32          :Write('V_CEIL_F32');
+  384+V_RNDNE_F32         :Write('V_RNDNE_F32');
+  384+V_FLOOR_F32         :Write('V_FLOOR_F32');
+  384+V_EXP_F32           :Write('V_EXP_F32');
+  384+V_LOG_CLAMP_F32     :Write('V_LOG_CLAMP_F32');
+  384+V_LOG_F32           :Write('V_LOG_F32');
+  384+V_RCP_CLAMP_F32     :Write('V_RCP_CLAMP_F32');
+  384+V_RCP_LEGACY_F32    :Write('V_RCP_LEGACY_F32');
+  384+V_RCP_F32           :Write('V_RCP_F32');
+  384+V_RCP_IFLAG_F32     :Write('V_RCP_IFLAG_F32');
+  384+V_RSQ_CLAMP_F32     :Write('V_RSQ_CLAMP_F32');
+  384+V_RSQ_LEGACY_F32    :Write('V_RSQ_LEGACY_F32');
+  384+V_RSQ_F32           :Write('V_RSQ_F32');
+  384+V_RCP_F64           :Write('V_RCP_F64');
+  384+V_RCP_CLAMP_F64     :Write('V_RCP_CLAMP_F64');
+  384+V_RSQ_F64           :Write('V_RSQ_F64');
+  384+V_RSQ_CLAMP_F64     :Write('V_RSQ_CLAMP_F64');
+  384+V_SQRT_F32          :Write('V_SQRT_F32');
+  384+V_SQRT_F64          :Write('V_SQRT_F64');
+  384+V_SIN_F32           :Write('V_SIN_F32');
+  384+V_COS_F32           :Write('V_COS_F32');
+  384+V_NOT_B32           :Write('V_NOT_B32');
+  384+V_BFREV_B32         :Write('V_BFREV_B32');
+  384+V_FFBH_U32          :Write('V_FFBH_U32');
+  384+V_FFBL_B32          :Write('V_FFBL_B32');
+  384+V_FFBH_I32          :Write('V_FFBH_I32');
+  384+V_FREXP_EXP_I32_F64 :Write('V_FREXP_EXP_I32_F64');
+  384+V_FREXP_MANT_F64    :Write('V_FREXP_MANT_F64');
+  384+V_FRACT_F64         :Write('V_FRACT_F64');
+  384+V_FREXP_EXP_I32_F32 :Write('V_FREXP_EXP_I32_F32');
+  384+V_FREXP_MANT_F32    :Write('V_FREXP_MANT_F32');
+  384+V_CLREXCP           :Write('V_CLREXCP');
+  384+V_MOVRELD_B32       :Write('V_MOVRELD_B32');
+  384+V_MOVRELS_B32       :Write('V_MOVRELS_B32');
+  384+V_MOVRELSD_B32      :Write('V_MOVRELSD_B32');
 
   else
       Write('VOP3a?',VOP3.OP);
@@ -1318,26 +1810,230 @@ procedure _print_VOP3b(Var VOP3:TVOP3b);
 begin
  Case VOP3.OP of
 
-  V_CMP_F_U32   :Write('V_CMP_F_U32');
-  V_CMP_LT_U32  :Write('V_CMP_LT_U32');
-  V_CMP_EQ_U32  :Write('V_CMP_EQ_U32');
-  V_CMP_LE_U32  :Write('V_CMP_LE_U32');
-  V_CMP_GT_U32  :Write('V_CMP_GT_U32');
-  V_CMP_LG_U32  :Write('V_CMP_LG_U32');
-  V_CMP_GE_U32  :Write('V_CMP_GE_U32');
-  V_CMP_TRU_U32 :Write('V_CMP_TRU_U32');
+  V_CMP_F_F32      :Write('V_CMP_F_F32');
+  V_CMP_LT_F32     :Write('V_CMP_LT_F32');
+  V_CMP_EQ_F32     :Write('V_CMP_EQ_F32');
+  V_CMP_LE_F32     :Write('V_CMP_LE_F32');
+  V_CMP_GT_F32     :Write('V_CMP_GT_F32');
+  V_CMP_LG_F32     :Write('V_CMP_LG_F32');
+  V_CMP_GE_F32     :Write('V_CMP_GE_F32');
+  V_CMP_O_F32      :Write('V_CMP_O_F32');
+  V_CMP_U_F32      :Write('V_CMP_U_F32');
+  V_CMP_NGE_F32    :Write('V_CMP_NGE_F32');
+  V_CMP_NLG_F32    :Write('V_CMP_NLG_F32');
+  V_CMP_NGT_F32    :Write('V_CMP_NGT_F32');
+  V_CMP_NLE_F32    :Write('V_CMP_NLE_F32');
+  V_CMP_NEQ_F32    :Write('V_CMP_NEQ_F32');
+  V_CMP_NLT_F32    :Write('V_CMP_NLT_F32');
+  V_CMP_T_F32      :Write('V_CMP_T_F32');
 
-  V_CMPX_F_U32  :Write('V_CMPX_F_U32');
-  V_CMPX_LT_U32 :Write('V_CMPX_LT_U32');
-  V_CMPX_EQ_U32 :Write('V_CMPX_EQ_U32');
-  V_CMPX_LE_U32 :Write('V_CMPX_LE_U32');
-  V_CMPX_GT_U32 :Write('V_CMPX_GT_U32');
-  V_CMPX_LG_U32 :Write('V_CMPX_LG_U32');
-  V_CMPX_GE_U32 :Write('V_CMPX_GE_U32');
-  V_CMPX_TRU_U32:Write('V_CMPX_TRU_U32');
+  V_CMPX_F_F32     :Write('V_CMPX_F_F32');
+  V_CMPX_LT_F32    :Write('V_CMPX_LT_F32');
+  V_CMPX_EQ_F32    :Write('V_CMPX_EQ_F32');
+  V_CMPX_LE_F32    :Write('V_CMPX_LE_F32');
+  V_CMPX_GT_F32    :Write('V_CMPX_GT_F32');
+  V_CMPX_LG_F32    :Write('V_CMPX_LG_F32');
+  V_CMPX_GE_F32    :Write('V_CMPX_GE_F32');
+  V_CMPX_O_F32     :Write('V_CMPX_O_F32');
+  V_CMPX_U_F32     :Write('V_CMPX_U_F32');
+  V_CMPX_NGE_F32   :Write('V_CMPX_NGE_F32');
+  V_CMPX_NLG_F32   :Write('V_CMPX_NLG_F32');
+  V_CMPX_NGT_F32   :Write('V_CMPX_NGT_F32');
+  V_CMPX_NLE_F32   :Write('V_CMPX_NLE_F32');
+  V_CMPX_NEQ_F32   :Write('V_CMPX_NEQ_F32');
+  V_CMPX_NLT_F32   :Write('V_CMPX_NLT_F32');
+  V_CMPX_T_F32     :Write('V_CMPX_T_F32');
 
-  V_DIV_SCALE_F32:Write('V_DIV_SCALE_F32');
-  V_DIV_SCALE_F64:Write('V_DIV_SCALE_F64');
+  V_CMP_F_F64      :Write('V_CMP_F_F64');
+  V_CMP_LT_F64     :Write('V_CMP_LT_F64');
+  V_CMP_EQ_F64     :Write('V_CMP_EQ_F64');
+  V_CMP_LE_F64     :Write('V_CMP_LE_F64');
+  V_CMP_GT_F64     :Write('V_CMP_GT_F64');
+  V_CMP_LG_F64     :Write('V_CMP_LG_F64');
+  V_CMP_GE_F64     :Write('V_CMP_GE_F64');
+  V_CMP_O_F64      :Write('V_CMP_O_F64');
+  V_CMP_U_F64      :Write('V_CMP_U_F64');
+  V_CMP_NGE_F64    :Write('V_CMP_NGE_F64');
+  V_CMP_NLG_F64    :Write('V_CMP_NLG_F64');
+  V_CMP_NGT_F64    :Write('V_CMP_NGT_F64');
+  V_CMP_NLE_F64    :Write('V_CMP_NLE_F64');
+  V_CMP_NEQ_F64    :Write('V_CMP_NEQ_F64');
+  V_CMP_NLT_F64    :Write('V_CMP_NLT_F64');
+  V_CMP_T_F64      :Write('V_CMP_T_F64');
+
+  V_CMPX_F_F64     :Write('V_CMPX_F_F64');
+  V_CMPX_LT_F64    :Write('V_CMPX_LT_F64');
+  V_CMPX_EQ_F64    :Write('V_CMPX_EQ_F64');
+  V_CMPX_LE_F64    :Write('V_CMPX_LE_F64');
+  V_CMPX_GT_F64    :Write('V_CMPX_GT_F64');
+  V_CMPX_LG_F64    :Write('V_CMPX_LG_F64');
+  V_CMPX_GE_F64    :Write('V_CMPX_GE_F64');
+  V_CMPX_O_F64     :Write('V_CMPX_O_F64');
+  V_CMPX_U_F64     :Write('V_CMPX_U_F64');
+  V_CMPX_NGE_F64   :Write('V_CMPX_NGE_F64');
+  V_CMPX_NLG_F64   :Write('V_CMPX_NLG_F64');
+  V_CMPX_NGT_F64   :Write('V_CMPX_NGT_F64');
+  V_CMPX_NLE_F64   :Write('V_CMPX_NLE_F64');
+  V_CMPX_NEQ_F64   :Write('V_CMPX_NEQ_F64');
+  V_CMPX_NLT_F64   :Write('V_CMPX_NLT_F64');
+  V_CMPX_T_F64     :Write('V_CMPX_T_F64');
+
+
+  V_CMPS_F_F32     :Write('V_CMPS_F_F32');
+  V_CMPS_LT_F32    :Write('V_CMPS_LT_F32');
+  V_CMPS_EQ_F32    :Write('V_CMPS_EQ_F32');
+  V_CMPS_LE_F32    :Write('V_CMPS_LE_F32');
+  V_CMPS_GT_F32    :Write('V_CMPS_GT_F32');
+  V_CMPS_LG_F32    :Write('V_CMPS_LG_F32');
+  V_CMPS_GE_F32    :Write('V_CMPS_GE_F32');
+  V_CMPS_O_F32     :Write('V_CMPS_O_F32');
+  V_CMPS_U_F32     :Write('V_CMPS_U_F32');
+  V_CMPS_NGE_F32   :Write('V_CMPS_NGE_F32');
+  V_CMPS_NLG_F32   :Write('V_CMPS_NLG_F32');
+  V_CMPS_NGT_F32   :Write('V_CMPS_NGT_F32');
+  V_CMPS_NLE_F32   :Write('V_CMPS_NLE_F32');
+  V_CMPS_NEQ_F32   :Write('V_CMPS_NEQ_F32');
+  V_CMPS_NLT_F32   :Write('V_CMPS_NLT_F32');
+  V_CMPS_T_F32     :Write('V_CMPS_T_F32');
+
+  V_CMPSX_F_F32    :Write('V_CMPSX_F_F32');
+  V_CMPSX_LT_F32   :Write('V_CMPSX_LT_F32');
+  V_CMPSX_EQ_F32   :Write('V_CMPSX_EQ_F32');
+  V_CMPSX_LE_F32   :Write('V_CMPSX_LE_F32');
+  V_CMPSX_GT_F32   :Write('V_CMPSX_GT_F32');
+  V_CMPSX_LG_F32   :Write('V_CMPSX_LG_F32');
+  V_CMPSX_GE_F32   :Write('V_CMPSX_GE_F32');
+  V_CMPSX_O_F32    :Write('V_CMPSX_O_F32');
+  V_CMPSX_U_F32    :Write('V_CMPSX_U_F32');
+  V_CMPSX_NGE_F32  :Write('V_CMPSX_NGE_F32');
+  V_CMPSX_NLG_F32  :Write('V_CMPSX_NLG_F32');
+  V_CMPSX_NGT_F32  :Write('V_CMPSX_NGT_F32');
+  V_CMPSX_NLE_F32  :Write('V_CMPSX_NLE_F32');
+  V_CMPSX_NEQ_F32  :Write('V_CMPSX_NEQ_F32');
+  V_CMPSX_NLT_F32  :Write('V_CMPSX_NLT_F32');
+  V_CMPSX_T_F32    :Write('V_CMPSX_T_F32');
+
+  V_CMPS_F_F64     :Write('V_CMPS_F_F64');
+  V_CMPS_LT_F64    :Write('V_CMPS_LT_F64');
+  V_CMPS_EQ_F64    :Write('V_CMPS_EQ_F64');
+  V_CMPS_LE_F64    :Write('V_CMPS_LE_F64');
+  V_CMPS_GT_F64    :Write('V_CMPS_GT_F64');
+  V_CMPS_LG_F64    :Write('V_CMPS_LG_F64');
+  V_CMPS_GE_F64    :Write('V_CMPS_GE_F64');
+  V_CMPS_O_F64     :Write('V_CMPS_O_F64');
+  V_CMPS_U_F64     :Write('V_CMPS_U_F64');
+  V_CMPS_NGE_F64   :Write('V_CMPS_NGE_F64');
+  V_CMPS_NLG_F64   :Write('V_CMPS_NLG_F64');
+  V_CMPS_NGT_F64   :Write('V_CMPS_NGT_F64');
+  V_CMPS_NLE_F64   :Write('V_CMPS_NLE_F64');
+  V_CMPS_NEQ_F64   :Write('V_CMPS_NEQ_F64');
+  V_CMPS_NLT_F64   :Write('V_CMPS_NLT_F64');
+  V_CMPS_T_F64     :Write('V_CMPS_T_F64');
+
+  V_CMPSX_F_F64    :Write('V_CMPSX_F_F64');
+  V_CMPSX_LT_F64   :Write('V_CMPSX_LT_F64');
+  V_CMPSX_EQ_F64   :Write('V_CMPSX_EQ_F64');
+  V_CMPSX_LE_F64   :Write('V_CMPSX_LE_F64');
+  V_CMPSX_GT_F64   :Write('V_CMPSX_GT_F64');
+  V_CMPSX_LG_F64   :Write('V_CMPSX_LG_F64');
+  V_CMPSX_GE_F64   :Write('V_CMPSX_GE_F64');
+  V_CMPSX_O_F64    :Write('V_CMPSX_O_F64');
+  V_CMPSX_U_F64    :Write('V_CMPSX_U_F64');
+  V_CMPSX_NGE_F64  :Write('V_CMPSX_NGE_F64');
+  V_CMPSX_NLG_F64  :Write('V_CMPSX_NLG_F64');
+  V_CMPSX_NGT_F64  :Write('V_CMPSX_NGT_F64');
+  V_CMPSX_NLE_F64  :Write('V_CMPSX_NLE_F64');
+  V_CMPSX_NEQ_F64  :Write('V_CMPSX_NEQ_F64');
+  V_CMPSX_NLT_F64  :Write('V_CMPSX_NLT_F64');
+  V_CMPSX_T_F64    :Write('V_CMPSX_T_F64');
+
+
+  V_CMP_F_I32      :Write('V_CMP_F_I32');
+  V_CMP_LT_I32     :Write('V_CMP_LT_I32');
+  V_CMP_EQ_I32     :Write('V_CMP_EQ_I32');
+  V_CMP_LE_I32     :Write('V_CMP_LE_I32');
+  V_CMP_GT_I32     :Write('V_CMP_GT_I32');
+  V_CMP_LG_I32     :Write('V_CMP_LG_I32');
+  V_CMP_GE_I32     :Write('V_CMP_GE_I32');
+  V_CMP_T_I32      :Write('V_CMP_T_I32');
+
+  V_CMPX_F_I32     :Write('V_CMPX_F_I32');
+  V_CMPX_LT_I32    :Write('V_CMPX_LT_I32');
+  V_CMPX_EQ_I32    :Write('V_CMPX_EQ_I32');
+  V_CMPX_LE_I32    :Write('V_CMPX_LE_I32');
+  V_CMPX_GT_I32    :Write('V_CMPX_GT_I32');
+  V_CMPX_LG_I32    :Write('V_CMPX_LG_I32');
+  V_CMPX_GE_I32    :Write('V_CMPX_GE_I32');
+  V_CMPX_T_I32     :Write('V_CMPX_T_I32');
+
+  V_CMP_F_I64      :Write('V_CMP_F_I64');
+  V_CMP_LT_I64     :Write('V_CMP_LT_I64');
+  V_CMP_EQ_I64     :Write('V_CMP_EQ_I64');
+  V_CMP_LE_I64     :Write('V_CMP_LE_I64');
+  V_CMP_GT_I64     :Write('V_CMP_GT_I64');
+  V_CMP_LG_I64     :Write('V_CMP_LG_I64');
+  V_CMP_GE_I64     :Write('V_CMP_GE_I64');
+  V_CMP_T_I64      :Write('V_CMP_T_I64');
+
+  V_CMPX_F_I64     :Write('V_CMPX_F_I64');
+  V_CMPX_LT_I64    :Write('V_CMPX_LT_I64');
+  V_CMPX_EQ_I64    :Write('V_CMPX_EQ_I64');
+  V_CMPX_LE_I64    :Write('V_CMPX_LE_I64');
+  V_CMPX_GT_I64    :Write('V_CMPX_GT_I64');
+  V_CMPX_LG_I64    :Write('V_CMPX_LG_I64');
+  V_CMPX_GE_I64    :Write('V_CMPX_GE_I64');
+  V_CMPX_T_I64     :Write('V_CMPX_T_I64');
+
+  V_CMP_F_U32      :Write('V_CMP_F_U32');
+  V_CMP_LT_U32     :Write('V_CMP_LT_U32');
+  V_CMP_EQ_U32     :Write('V_CMP_EQ_U32');
+  V_CMP_LE_U32     :Write('V_CMP_LE_U32');
+  V_CMP_GT_U32     :Write('V_CMP_GT_U32');
+  V_CMP_LG_U32     :Write('V_CMP_LG_U32');
+  V_CMP_GE_U32     :Write('V_CMP_GE_U32');
+  V_CMP_T_U32      :Write('V_CMP_T_U32');
+
+  V_CMPX_F_U32     :Write('V_CMPX_F_U32');
+  V_CMPX_LT_U32    :Write('V_CMPX_LT_U32');
+  V_CMPX_EQ_U32    :Write('V_CMPX_EQ_U32');
+  V_CMPX_LE_U32    :Write('V_CMPX_LE_U32');
+  V_CMPX_GT_U32    :Write('V_CMPX_GT_U32');
+  V_CMPX_LG_U32    :Write('V_CMPX_LG_U32');
+  V_CMPX_GE_U32    :Write('V_CMPX_GE_U32');
+  V_CMPX_T_U32     :Write('V_CMPX_T_U32');
+
+  V_CMP_F_U64      :Write('V_CMP_F_U64');
+  V_CMP_LT_U64     :Write('V_CMP_LT_U64');
+  V_CMP_EQ_U64     :Write('V_CMP_EQ_U64');
+  V_CMP_LE_U64     :Write('V_CMP_LE_U64');
+  V_CMP_GT_U64     :Write('V_CMP_GT_U64');
+  V_CMP_LG_U64     :Write('V_CMP_LG_U64');
+  V_CMP_GE_U64     :Write('V_CMP_GE_U64');
+  V_CMP_T_U64      :Write('V_CMP_T_U64');
+
+  V_CMPX_F_U64     :Write('V_CMPX_F_U64');
+  V_CMPX_LT_U64    :Write('V_CMPX_LT_U64');
+  V_CMPX_EQ_U64    :Write('V_CMPX_EQ_U64');
+  V_CMPX_LE_U64    :Write('V_CMPX_LE_U64');
+  V_CMPX_GT_U64    :Write('V_CMPX_GT_U64');
+  V_CMPX_LG_U64    :Write('V_CMPX_LG_U64');
+  V_CMPX_GE_U64    :Write('V_CMPX_GE_U64');
+  V_CMPX_T_U64     :Write('V_CMPX_T_U64');
+
+  V_CMP_CLASS_F32  :Write('V_CMP_CLASS_F32');
+  V_CMPX_CLASS_F32 :Write('V_CMPX_CLASS_F32');
+  V_CMP_CLASS_F64  :Write('V_CMP_CLASS_F64');
+  V_CMPX_CLASS_F64 :Write('V_CMPX_CLASS_F64');
+
+  256+V_ADD_I32    :Write('V_ADD_I32');
+  256+V_SUB_I32    :Write('V_SUB_I32');
+  256+V_SUBREV_I32 :Write('V_SUBREV_I32');
+  256+V_ADDC_U32   :Write('V_ADDC_U32');
+  256+V_SUBB_U32   :Write('V_SUBB_U32');
+  256+V_SUBBREV_U32:Write('V_SUBBREV_U32');
+
+  V_DIV_SCALE_F32  :Write('V_DIV_SCALE_F32');
+  V_DIV_SCALE_F64  :Write('V_DIV_SCALE_F64');
 
   else
       Write('VOP3b?',VOP3.OP);
@@ -1457,23 +2153,221 @@ procedure _print_VOPC(Var SPI:TSPI);
 begin
  Case SPI.VOPC.OP of
 
-  V_CMP_F_U32   :Write('V_CMP_F_U32');
-  V_CMP_LT_U32  :Write('V_CMP_LT_U32');
-  V_CMP_EQ_U32  :Write('V_CMP_EQ_U32');
-  V_CMP_LE_U32  :Write('V_CMP_LE_U32');
-  V_CMP_GT_U32  :Write('V_CMP_GT_U32');
-  V_CMP_LG_U32  :Write('V_CMP_LG_U32');
-  V_CMP_GE_U32  :Write('V_CMP_GE_U32');
-  V_CMP_TRU_U32 :Write('V_CMP_TRU_U32');
+  V_CMP_F_F32     :Write('V_CMP_F_F32');
+  V_CMP_LT_F32    :Write('V_CMP_LT_F32');
+  V_CMP_EQ_F32    :Write('V_CMP_EQ_F32');
+  V_CMP_LE_F32    :Write('V_CMP_LE_F32');
+  V_CMP_GT_F32    :Write('V_CMP_GT_F32');
+  V_CMP_LG_F32    :Write('V_CMP_LG_F32');
+  V_CMP_GE_F32    :Write('V_CMP_GE_F32');
+  V_CMP_O_F32     :Write('V_CMP_O_F32');
+  V_CMP_U_F32     :Write('V_CMP_U_F32');
+  V_CMP_NGE_F32   :Write('V_CMP_NGE_F32');
+  V_CMP_NLG_F32   :Write('V_CMP_NLG_F32');
+  V_CMP_NGT_F32   :Write('V_CMP_NGT_F32');
+  V_CMP_NLE_F32   :Write('V_CMP_NLE_F32');
+  V_CMP_NEQ_F32   :Write('V_CMP_NEQ_F32');
+  V_CMP_NLT_F32   :Write('V_CMP_NLT_F32');
+  V_CMP_T_F32     :Write('V_CMP_T_F32');
 
-  V_CMPX_F_U32  :Write('V_CMPX_F_U32');
-  V_CMPX_LT_U32 :Write('V_CMPX_LT_U32');
-  V_CMPX_EQ_U32 :Write('V_CMPX_EQ_U32');
-  V_CMPX_LE_U32 :Write('V_CMPX_LE_U32');
-  V_CMPX_GT_U32 :Write('V_CMPX_GT_U32');
-  V_CMPX_LG_U32 :Write('V_CMPX_LG_U32');
-  V_CMPX_GE_U32 :Write('V_CMPX_GE_U32');
-  V_CMPX_TRU_U32:Write('V_CMPX_TRU_U32');
+  V_CMPX_F_F32    :Write('V_CMPX_F_F32');
+  V_CMPX_LT_F32   :Write('V_CMPX_LT_F32');
+  V_CMPX_EQ_F32   :Write('V_CMPX_EQ_F32');
+  V_CMPX_LE_F32   :Write('V_CMPX_LE_F32');
+  V_CMPX_GT_F32   :Write('V_CMPX_GT_F32');
+  V_CMPX_LG_F32   :Write('V_CMPX_LG_F32');
+  V_CMPX_GE_F32   :Write('V_CMPX_GE_F32');
+  V_CMPX_O_F32    :Write('V_CMPX_O_F32');
+  V_CMPX_U_F32    :Write('V_CMPX_U_F32');
+  V_CMPX_NGE_F32  :Write('V_CMPX_NGE_F32');
+  V_CMPX_NLG_F32  :Write('V_CMPX_NLG_F32');
+  V_CMPX_NGT_F32  :Write('V_CMPX_NGT_F32');
+  V_CMPX_NLE_F32  :Write('V_CMPX_NLE_F32');
+  V_CMPX_NEQ_F32  :Write('V_CMPX_NEQ_F32');
+  V_CMPX_NLT_F32  :Write('V_CMPX_NLT_F32');
+  V_CMPX_T_F32    :Write('V_CMPX_T_F32');
+
+  V_CMP_F_F64     :Write('V_CMP_F_F64');
+  V_CMP_LT_F64    :Write('V_CMP_LT_F64');
+  V_CMP_EQ_F64    :Write('V_CMP_EQ_F64');
+  V_CMP_LE_F64    :Write('V_CMP_LE_F64');
+  V_CMP_GT_F64    :Write('V_CMP_GT_F64');
+  V_CMP_LG_F64    :Write('V_CMP_LG_F64');
+  V_CMP_GE_F64    :Write('V_CMP_GE_F64');
+  V_CMP_O_F64     :Write('V_CMP_O_F64');
+  V_CMP_U_F64     :Write('V_CMP_U_F64');
+  V_CMP_NGE_F64   :Write('V_CMP_NGE_F64');
+  V_CMP_NLG_F64   :Write('V_CMP_NLG_F64');
+  V_CMP_NGT_F64   :Write('V_CMP_NGT_F64');
+  V_CMP_NLE_F64   :Write('V_CMP_NLE_F64');
+  V_CMP_NEQ_F64   :Write('V_CMP_NEQ_F64');
+  V_CMP_NLT_F64   :Write('V_CMP_NLT_F64');
+  V_CMP_T_F64     :Write('V_CMP_T_F64');
+
+  V_CMPX_F_F64    :Write('V_CMPX_F_F64');
+  V_CMPX_LT_F64   :Write('V_CMPX_LT_F64');
+  V_CMPX_EQ_F64   :Write('V_CMPX_EQ_F64');
+  V_CMPX_LE_F64   :Write('V_CMPX_LE_F64');
+  V_CMPX_GT_F64   :Write('V_CMPX_GT_F64');
+  V_CMPX_LG_F64   :Write('V_CMPX_LG_F64');
+  V_CMPX_GE_F64   :Write('V_CMPX_GE_F64');
+  V_CMPX_O_F64    :Write('V_CMPX_O_F64');
+  V_CMPX_U_F64    :Write('V_CMPX_U_F64');
+  V_CMPX_NGE_F64  :Write('V_CMPX_NGE_F64');
+  V_CMPX_NLG_F64  :Write('V_CMPX_NLG_F64');
+  V_CMPX_NGT_F64  :Write('V_CMPX_NGT_F64');
+  V_CMPX_NLE_F64  :Write('V_CMPX_NLE_F64');
+  V_CMPX_NEQ_F64  :Write('V_CMPX_NEQ_F64');
+  V_CMPX_NLT_F64  :Write('V_CMPX_NLT_F64');
+  V_CMPX_T_F64    :Write('V_CMPX_T_F64');
+
+
+  V_CMPS_F_F32    :Write('V_CMPS_F_F32');
+  V_CMPS_LT_F32   :Write('V_CMPS_LT_F32');
+  V_CMPS_EQ_F32   :Write('V_CMPS_EQ_F32');
+  V_CMPS_LE_F32   :Write('V_CMPS_LE_F32');
+  V_CMPS_GT_F32   :Write('V_CMPS_GT_F32');
+  V_CMPS_LG_F32   :Write('V_CMPS_LG_F32');
+  V_CMPS_GE_F32   :Write('V_CMPS_GE_F32');
+  V_CMPS_O_F32    :Write('V_CMPS_O_F32');
+  V_CMPS_U_F32    :Write('V_CMPS_U_F32');
+  V_CMPS_NGE_F32  :Write('V_CMPS_NGE_F32');
+  V_CMPS_NLG_F32  :Write('V_CMPS_NLG_F32');
+  V_CMPS_NGT_F32  :Write('V_CMPS_NGT_F32');
+  V_CMPS_NLE_F32  :Write('V_CMPS_NLE_F32');
+  V_CMPS_NEQ_F32  :Write('V_CMPS_NEQ_F32');
+  V_CMPS_NLT_F32  :Write('V_CMPS_NLT_F32');
+  V_CMPS_T_F32    :Write('V_CMPS_T_F32');
+
+  V_CMPSX_F_F32   :Write('V_CMPSX_F_F32');
+  V_CMPSX_LT_F32  :Write('V_CMPSX_LT_F32');
+  V_CMPSX_EQ_F32  :Write('V_CMPSX_EQ_F32');
+  V_CMPSX_LE_F32  :Write('V_CMPSX_LE_F32');
+  V_CMPSX_GT_F32  :Write('V_CMPSX_GT_F32');
+  V_CMPSX_LG_F32  :Write('V_CMPSX_LG_F32');
+  V_CMPSX_GE_F32  :Write('V_CMPSX_GE_F32');
+  V_CMPSX_O_F32   :Write('V_CMPSX_O_F32');
+  V_CMPSX_U_F32   :Write('V_CMPSX_U_F32');
+  V_CMPSX_NGE_F32 :Write('V_CMPSX_NGE_F32');
+  V_CMPSX_NLG_F32 :Write('V_CMPSX_NLG_F32');
+  V_CMPSX_NGT_F32 :Write('V_CMPSX_NGT_F32');
+  V_CMPSX_NLE_F32 :Write('V_CMPSX_NLE_F32');
+  V_CMPSX_NEQ_F32 :Write('V_CMPSX_NEQ_F32');
+  V_CMPSX_NLT_F32 :Write('V_CMPSX_NLT_F32');
+  V_CMPSX_T_F32   :Write('V_CMPSX_T_F32');
+
+  V_CMPS_F_F64    :Write('V_CMPS_F_F64');
+  V_CMPS_LT_F64   :Write('V_CMPS_LT_F64');
+  V_CMPS_EQ_F64   :Write('V_CMPS_EQ_F64');
+  V_CMPS_LE_F64   :Write('V_CMPS_LE_F64');
+  V_CMPS_GT_F64   :Write('V_CMPS_GT_F64');
+  V_CMPS_LG_F64   :Write('V_CMPS_LG_F64');
+  V_CMPS_GE_F64   :Write('V_CMPS_GE_F64');
+  V_CMPS_O_F64    :Write('V_CMPS_O_F64');
+  V_CMPS_U_F64    :Write('V_CMPS_U_F64');
+  V_CMPS_NGE_F64  :Write('V_CMPS_NGE_F64');
+  V_CMPS_NLG_F64  :Write('V_CMPS_NLG_F64');
+  V_CMPS_NGT_F64  :Write('V_CMPS_NGT_F64');
+  V_CMPS_NLE_F64  :Write('V_CMPS_NLE_F64');
+  V_CMPS_NEQ_F64  :Write('V_CMPS_NEQ_F64');
+  V_CMPS_NLT_F64  :Write('V_CMPS_NLT_F64');
+  V_CMPS_T_F64    :Write('V_CMPS_T_F64');
+
+  V_CMPSX_F_F64   :Write('V_CMPSX_F_F64');
+  V_CMPSX_LT_F64  :Write('V_CMPSX_LT_F64');
+  V_CMPSX_EQ_F64  :Write('V_CMPSX_EQ_F64');
+  V_CMPSX_LE_F64  :Write('V_CMPSX_LE_F64');
+  V_CMPSX_GT_F64  :Write('V_CMPSX_GT_F64');
+  V_CMPSX_LG_F64  :Write('V_CMPSX_LG_F64');
+  V_CMPSX_GE_F64  :Write('V_CMPSX_GE_F64');
+  V_CMPSX_O_F64   :Write('V_CMPSX_O_F64');
+  V_CMPSX_U_F64   :Write('V_CMPSX_U_F64');
+  V_CMPSX_NGE_F64 :Write('V_CMPSX_NGE_F64');
+  V_CMPSX_NLG_F64 :Write('V_CMPSX_NLG_F64');
+  V_CMPSX_NGT_F64 :Write('V_CMPSX_NGT_F64');
+  V_CMPSX_NLE_F64 :Write('V_CMPSX_NLE_F64');
+  V_CMPSX_NEQ_F64 :Write('V_CMPSX_NEQ_F64');
+  V_CMPSX_NLT_F64 :Write('V_CMPSX_NLT_F64');
+  V_CMPSX_T_F64   :Write('V_CMPSX_T_F64');
+
+
+  V_CMP_F_I32     :Write('V_CMP_F_I32');
+  V_CMP_LT_I32    :Write('V_CMP_LT_I32');
+  V_CMP_EQ_I32    :Write('V_CMP_EQ_I32');
+  V_CMP_LE_I32    :Write('V_CMP_LE_I32');
+  V_CMP_GT_I32    :Write('V_CMP_GT_I32');
+  V_CMP_LG_I32    :Write('V_CMP_LG_I32');
+  V_CMP_GE_I32    :Write('V_CMP_GE_I32');
+  V_CMP_T_I32     :Write('V_CMP_T_I32');
+
+  V_CMPX_F_I32    :Write('V_CMPX_F_I32');
+  V_CMPX_LT_I32   :Write('V_CMPX_LT_I32');
+  V_CMPX_EQ_I32   :Write('V_CMPX_EQ_I32');
+  V_CMPX_LE_I32   :Write('V_CMPX_LE_I32');
+  V_CMPX_GT_I32   :Write('V_CMPX_GT_I32');
+  V_CMPX_LG_I32   :Write('V_CMPX_LG_I32');
+  V_CMPX_GE_I32   :Write('V_CMPX_GE_I32');
+  V_CMPX_T_I32    :Write('V_CMPX_T_I32');
+
+  V_CMP_F_I64     :Write('V_CMP_F_I64');
+  V_CMP_LT_I64    :Write('V_CMP_LT_I64');
+  V_CMP_EQ_I64    :Write('V_CMP_EQ_I64');
+  V_CMP_LE_I64    :Write('V_CMP_LE_I64');
+  V_CMP_GT_I64    :Write('V_CMP_GT_I64');
+  V_CMP_LG_I64    :Write('V_CMP_LG_I64');
+  V_CMP_GE_I64    :Write('V_CMP_GE_I64');
+  V_CMP_T_I64     :Write('V_CMP_T_I64');
+
+  V_CMPX_F_I64    :Write('V_CMPX_F_I64');
+  V_CMPX_LT_I64   :Write('V_CMPX_LT_I64');
+  V_CMPX_EQ_I64   :Write('V_CMPX_EQ_I64');
+  V_CMPX_LE_I64   :Write('V_CMPX_LE_I64');
+  V_CMPX_GT_I64   :Write('V_CMPX_GT_I64');
+  V_CMPX_LG_I64   :Write('V_CMPX_LG_I64');
+  V_CMPX_GE_I64   :Write('V_CMPX_GE_I64');
+  V_CMPX_T_I64    :Write('V_CMPX_T_I64');
+
+  V_CMP_F_U32     :Write('V_CMP_F_U32');
+  V_CMP_LT_U32    :Write('V_CMP_LT_U32');
+  V_CMP_EQ_U32    :Write('V_CMP_EQ_U32');
+  V_CMP_LE_U32    :Write('V_CMP_LE_U32');
+  V_CMP_GT_U32    :Write('V_CMP_GT_U32');
+  V_CMP_LG_U32    :Write('V_CMP_LG_U32');
+  V_CMP_GE_U32    :Write('V_CMP_GE_U32');
+  V_CMP_T_U32     :Write('V_CMP_T_U32');
+
+  V_CMPX_F_U32    :Write('V_CMPX_F_U32');
+  V_CMPX_LT_U32   :Write('V_CMPX_LT_U32');
+  V_CMPX_EQ_U32   :Write('V_CMPX_EQ_U32');
+  V_CMPX_LE_U32   :Write('V_CMPX_LE_U32');
+  V_CMPX_GT_U32   :Write('V_CMPX_GT_U32');
+  V_CMPX_LG_U32   :Write('V_CMPX_LG_U32');
+  V_CMPX_GE_U32   :Write('V_CMPX_GE_U32');
+  V_CMPX_T_U32    :Write('V_CMPX_T_U32');
+
+  V_CMP_F_U64     :Write('V_CMP_F_U64');
+  V_CMP_LT_U64    :Write('V_CMP_LT_U64');
+  V_CMP_EQ_U64    :Write('V_CMP_EQ_U64');
+  V_CMP_LE_U64    :Write('V_CMP_LE_U64');
+  V_CMP_GT_U64    :Write('V_CMP_GT_U64');
+  V_CMP_LG_U64    :Write('V_CMP_LG_U64');
+  V_CMP_GE_U64    :Write('V_CMP_GE_U64');
+  V_CMP_T_U64     :Write('V_CMP_T_U64');
+
+  V_CMPX_F_U64    :Write('V_CMPX_F_U64');
+  V_CMPX_LT_U64   :Write('V_CMPX_LT_U64');
+  V_CMPX_EQ_U64   :Write('V_CMPX_EQ_U64');
+  V_CMPX_LE_U64   :Write('V_CMPX_LE_U64');
+  V_CMPX_GT_U64   :Write('V_CMPX_GT_U64');
+  V_CMPX_LG_U64   :Write('V_CMPX_LG_U64');
+  V_CMPX_GE_U64   :Write('V_CMPX_GE_U64');
+  V_CMPX_T_U64    :Write('V_CMPX_T_U64');
+
+  V_CMP_CLASS_F32 :Write('V_CMP_CLASS_F32');
+  V_CMPX_CLASS_F32:Write('V_CMPX_CLASS_F32');
+  V_CMP_CLASS_F64 :Write('V_CMP_CLASS_F64');
+  V_CMPX_CLASS_F64:Write('V_CMPX_CLASS_F64');
+
   else
       Write('VOPC?',SPI.VOPC.OP);
  end;
@@ -1490,8 +2384,72 @@ procedure _print_VOP1(Var SPI:TSPI);
 begin
 
  Case SPI.VOP1.OP of
-  V_MOV_B32:Write('V_MOV_B32');
-  V_CVT_F32_I32:Write('V_CVT_F32_I32');
+
+  V_NOP              :Write('V_NOP');
+  V_MOV_B32          :Write('V_MOV_B32');
+  V_READFIRSTLANE_B32:Write('V_READFIRSTLANE_B32');
+  V_CVT_I32_F64      :Write('V_CVT_I32_F64');
+  V_CVT_F64_I32      :Write('V_CVT_F64_I32');
+  V_CVT_F32_I32      :Write('V_CVT_F32_I32');
+  V_CVT_F32_U32      :Write('V_CVT_F32_U32');
+  V_CVT_U32_F32      :Write('V_CVT_U32_F32');
+  V_CVT_I32_F32      :Write('V_CVT_I32_F32');
+  V_MOV_FED_B32      :Write('V_MOV_FED_B32');
+  V_CVT_F16_F32      :Write('V_CVT_F16_F32');
+  V_CVT_F32_F16      :Write('V_CVT_F32_F16');
+  V_CVT_RPI_I32_F32  :Write('V_CVT_RPI_I32_F32');
+  V_CVT_FLR_I32_F32  :Write('V_CVT_FLR_I32_F32');
+  V_CVT_OFF_F32_I4   :Write('V_CVT_OFF_F32_I4');
+  V_CVT_F32_F64      :Write('V_CVT_F32_F64');
+  V_CVT_F64_F32      :Write('V_CVT_F64_F32');
+  V_CVT_F32_UBYTE0   :Write('V_CVT_F32_UBYTE0');
+  V_CVT_F32_UBYTE1   :Write('V_CVT_F32_UBYTE1');
+  V_CVT_F32_UBYTE2   :Write('V_CVT_F32_UBYTE2');
+  V_CVT_F32_UBYTE3   :Write('V_CVT_F32_UBYTE3');
+  V_CVT_U32_F64      :Write('V_CVT_U32_F64');
+  V_CVT_F64_U32      :Write('V_CVT_F64_U32');
+  V_TRUNC_F64        :Write('V_TRUNC_F64');
+  V_CEIL_F64         :Write('V_CEIL_F64');
+  V_RNDNE_F64        :Write('V_RNDNE_F64');
+  V_FLOOR_F64        :Write('V_FLOOR_F64');
+  V_FRACT_F32        :Write('V_FRACT_F32');
+  V_TRUNC_F32        :Write('V_TRUNC_F32');
+  V_CEIL_F32         :Write('V_CEIL_F32');
+  V_RNDNE_F32        :Write('V_RNDNE_F32');
+  V_FLOOR_F32        :Write('V_FLOOR_F32');
+  V_EXP_F32          :Write('V_EXP_F32');
+  V_LOG_CLAMP_F32    :Write('V_LOG_CLAMP_F32');
+  V_LOG_F32          :Write('V_LOG_F32');
+  V_RCP_CLAMP_F32    :Write('V_RCP_CLAMP_F32');
+  V_RCP_LEGACY_F32   :Write('V_RCP_LEGACY_F32');
+  V_RCP_F32          :Write('V_RCP_F32');
+  V_RCP_IFLAG_F32    :Write('V_RCP_IFLAG_F32');
+  V_RSQ_CLAMP_F32    :Write('V_RSQ_CLAMP_F32');
+  V_RSQ_LEGACY_F32   :Write('V_RSQ_LEGACY_F32');
+  V_RSQ_F32          :Write('V_RSQ_F32');
+  V_RCP_F64          :Write('V_RCP_F64');
+  V_RCP_CLAMP_F64    :Write('V_RCP_CLAMP_F64');
+  V_RSQ_F64          :Write('V_RSQ_F64');
+  V_RSQ_CLAMP_F64    :Write('V_RSQ_CLAMP_F64');
+  V_SQRT_F32         :Write('V_SQRT_F32');
+  V_SQRT_F64         :Write('V_SQRT_F64');
+  V_SIN_F32          :Write('V_SIN_F32');
+  V_COS_F32          :Write('V_COS_F32');
+  V_NOT_B32          :Write('V_NOT_B32');
+  V_BFREV_B32        :Write('V_BFREV_B32');
+  V_FFBH_U32         :Write('V_FFBH_U32');
+  V_FFBL_B32         :Write('V_FFBL_B32');
+  V_FFBH_I32         :Write('V_FFBH_I32');
+  V_FREXP_EXP_I32_F64:Write('V_FREXP_EXP_I32_F64');
+  V_FREXP_MANT_F64   :Write('V_FREXP_MANT_F64');
+  V_FRACT_F64        :Write('V_FRACT_F64');
+  V_FREXP_EXP_I32_F32:Write('V_FREXP_EXP_I32_F32');
+  V_FREXP_MANT_F32   :Write('V_FREXP_MANT_F32');
+  V_CLREXCP          :Write('V_CLREXCP');
+  V_MOVRELD_B32      :Write('V_MOVRELD_B32');
+  V_MOVRELS_B32      :Write('V_MOVRELS_B32');
+  V_MOVRELSD_B32     :Write('V_MOVRELSD_B32');
+
   else
       Write('VOP1?',SPI.VOP1.OP);
  end;
@@ -1637,8 +2595,19 @@ begin
  if SPI.EXP.COMPR<>0 then
   Write(' compr');       //is half float compressed
 
- if SPI.EXP.vm<>0 then   //final valid mask for this target
+ if SPI.EXP.vm<>0 then
   Write(' vm');
+
+ {
+ Valid Mask. When set to 1, this indicates that the EXEC mask represents the valid-mask
+ for this wavefront. It can be sent multiple times per shader (the final value is used), but
+ must be sent at least once per pixel shader.
+ }
+
+ {
+ The EXEC mask is applied to all exports. Only pixels with the corresponding
+ if VM<>0 and EXEC<>0 = set pixel else discard pixel
+ }
 
  if SPI.EXP.DONE<>0 then //this is the last MRT
   Write(' done');
