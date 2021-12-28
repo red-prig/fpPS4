@@ -916,8 +916,8 @@ type
   SRC0:bit9;    //9
   SRC1:bit9;    //9
   SRC2:bit9;    //9
-  omod:bit2;    //2
-  neg:bit3;     //3
+  OMOD:bit2;    //2
+  NEG:bit3;     //3
  end;
 
  TMUBUF=bitpacked record
@@ -1762,9 +1762,250 @@ begin
  Writeln;
 end;
 
+procedure _print_VOP3a_cmp(Var VOP3:TVOP3a);
+begin
+ Case VOP3.OP of
+
+  V_CMP_F_F32     :Write('V_CMP_F_F32');
+  V_CMP_LT_F32    :Write('V_CMP_LT_F32');
+  V_CMP_EQ_F32    :Write('V_CMP_EQ_F32');
+  V_CMP_LE_F32    :Write('V_CMP_LE_F32');
+  V_CMP_GT_F32    :Write('V_CMP_GT_F32');
+  V_CMP_LG_F32    :Write('V_CMP_LG_F32');
+  V_CMP_GE_F32    :Write('V_CMP_GE_F32');
+  V_CMP_O_F32     :Write('V_CMP_O_F32');
+  V_CMP_U_F32     :Write('V_CMP_U_F32');
+  V_CMP_NGE_F32   :Write('V_CMP_NGE_F32');
+  V_CMP_NLG_F32   :Write('V_CMP_NLG_F32');
+  V_CMP_NGT_F32   :Write('V_CMP_NGT_F32');
+  V_CMP_NLE_F32   :Write('V_CMP_NLE_F32');
+  V_CMP_NEQ_F32   :Write('V_CMP_NEQ_F32');
+  V_CMP_NLT_F32   :Write('V_CMP_NLT_F32');
+  V_CMP_T_F32     :Write('V_CMP_T_F32');
+
+  V_CMPX_F_F32    :Write('V_CMPX_F_F32');
+  V_CMPX_LT_F32   :Write('V_CMPX_LT_F32');
+  V_CMPX_EQ_F32   :Write('V_CMPX_EQ_F32');
+  V_CMPX_LE_F32   :Write('V_CMPX_LE_F32');
+  V_CMPX_GT_F32   :Write('V_CMPX_GT_F32');
+  V_CMPX_LG_F32   :Write('V_CMPX_LG_F32');
+  V_CMPX_GE_F32   :Write('V_CMPX_GE_F32');
+  V_CMPX_O_F32    :Write('V_CMPX_O_F32');
+  V_CMPX_U_F32    :Write('V_CMPX_U_F32');
+  V_CMPX_NGE_F32  :Write('V_CMPX_NGE_F32');
+  V_CMPX_NLG_F32  :Write('V_CMPX_NLG_F32');
+  V_CMPX_NGT_F32  :Write('V_CMPX_NGT_F32');
+  V_CMPX_NLE_F32  :Write('V_CMPX_NLE_F32');
+  V_CMPX_NEQ_F32  :Write('V_CMPX_NEQ_F32');
+  V_CMPX_NLT_F32  :Write('V_CMPX_NLT_F32');
+  V_CMPX_T_F32    :Write('V_CMPX_T_F32');
+
+  V_CMP_F_F64     :Write('V_CMP_F_F64');
+  V_CMP_LT_F64    :Write('V_CMP_LT_F64');
+  V_CMP_EQ_F64    :Write('V_CMP_EQ_F64');
+  V_CMP_LE_F64    :Write('V_CMP_LE_F64');
+  V_CMP_GT_F64    :Write('V_CMP_GT_F64');
+  V_CMP_LG_F64    :Write('V_CMP_LG_F64');
+  V_CMP_GE_F64    :Write('V_CMP_GE_F64');
+  V_CMP_O_F64     :Write('V_CMP_O_F64');
+  V_CMP_U_F64     :Write('V_CMP_U_F64');
+  V_CMP_NGE_F64   :Write('V_CMP_NGE_F64');
+  V_CMP_NLG_F64   :Write('V_CMP_NLG_F64');
+  V_CMP_NGT_F64   :Write('V_CMP_NGT_F64');
+  V_CMP_NLE_F64   :Write('V_CMP_NLE_F64');
+  V_CMP_NEQ_F64   :Write('V_CMP_NEQ_F64');
+  V_CMP_NLT_F64   :Write('V_CMP_NLT_F64');
+  V_CMP_T_F64     :Write('V_CMP_T_F64');
+
+  V_CMPX_F_F64    :Write('V_CMPX_F_F64');
+  V_CMPX_LT_F64   :Write('V_CMPX_LT_F64');
+  V_CMPX_EQ_F64   :Write('V_CMPX_EQ_F64');
+  V_CMPX_LE_F64   :Write('V_CMPX_LE_F64');
+  V_CMPX_GT_F64   :Write('V_CMPX_GT_F64');
+  V_CMPX_LG_F64   :Write('V_CMPX_LG_F64');
+  V_CMPX_GE_F64   :Write('V_CMPX_GE_F64');
+  V_CMPX_O_F64    :Write('V_CMPX_O_F64');
+  V_CMPX_U_F64    :Write('V_CMPX_U_F64');
+  V_CMPX_NGE_F64  :Write('V_CMPX_NGE_F64');
+  V_CMPX_NLG_F64  :Write('V_CMPX_NLG_F64');
+  V_CMPX_NGT_F64  :Write('V_CMPX_NGT_F64');
+  V_CMPX_NLE_F64  :Write('V_CMPX_NLE_F64');
+  V_CMPX_NEQ_F64  :Write('V_CMPX_NEQ_F64');
+  V_CMPX_NLT_F64  :Write('V_CMPX_NLT_F64');
+  V_CMPX_T_F64    :Write('V_CMPX_T_F64');
+
+
+  V_CMPS_F_F32    :Write('V_CMPS_F_F32');
+  V_CMPS_LT_F32   :Write('V_CMPS_LT_F32');
+  V_CMPS_EQ_F32   :Write('V_CMPS_EQ_F32');
+  V_CMPS_LE_F32   :Write('V_CMPS_LE_F32');
+  V_CMPS_GT_F32   :Write('V_CMPS_GT_F32');
+  V_CMPS_LG_F32   :Write('V_CMPS_LG_F32');
+  V_CMPS_GE_F32   :Write('V_CMPS_GE_F32');
+  V_CMPS_O_F32    :Write('V_CMPS_O_F32');
+  V_CMPS_U_F32    :Write('V_CMPS_U_F32');
+  V_CMPS_NGE_F32  :Write('V_CMPS_NGE_F32');
+  V_CMPS_NLG_F32  :Write('V_CMPS_NLG_F32');
+  V_CMPS_NGT_F32  :Write('V_CMPS_NGT_F32');
+  V_CMPS_NLE_F32  :Write('V_CMPS_NLE_F32');
+  V_CMPS_NEQ_F32  :Write('V_CMPS_NEQ_F32');
+  V_CMPS_NLT_F32  :Write('V_CMPS_NLT_F32');
+  V_CMPS_T_F32    :Write('V_CMPS_T_F32');
+
+  V_CMPSX_F_F32   :Write('V_CMPSX_F_F32');
+  V_CMPSX_LT_F32  :Write('V_CMPSX_LT_F32');
+  V_CMPSX_EQ_F32  :Write('V_CMPSX_EQ_F32');
+  V_CMPSX_LE_F32  :Write('V_CMPSX_LE_F32');
+  V_CMPSX_GT_F32  :Write('V_CMPSX_GT_F32');
+  V_CMPSX_LG_F32  :Write('V_CMPSX_LG_F32');
+  V_CMPSX_GE_F32  :Write('V_CMPSX_GE_F32');
+  V_CMPSX_O_F32   :Write('V_CMPSX_O_F32');
+  V_CMPSX_U_F32   :Write('V_CMPSX_U_F32');
+  V_CMPSX_NGE_F32 :Write('V_CMPSX_NGE_F32');
+  V_CMPSX_NLG_F32 :Write('V_CMPSX_NLG_F32');
+  V_CMPSX_NGT_F32 :Write('V_CMPSX_NGT_F32');
+  V_CMPSX_NLE_F32 :Write('V_CMPSX_NLE_F32');
+  V_CMPSX_NEQ_F32 :Write('V_CMPSX_NEQ_F32');
+  V_CMPSX_NLT_F32 :Write('V_CMPSX_NLT_F32');
+  V_CMPSX_T_F32   :Write('V_CMPSX_T_F32');
+
+  V_CMPS_F_F64    :Write('V_CMPS_F_F64');
+  V_CMPS_LT_F64   :Write('V_CMPS_LT_F64');
+  V_CMPS_EQ_F64   :Write('V_CMPS_EQ_F64');
+  V_CMPS_LE_F64   :Write('V_CMPS_LE_F64');
+  V_CMPS_GT_F64   :Write('V_CMPS_GT_F64');
+  V_CMPS_LG_F64   :Write('V_CMPS_LG_F64');
+  V_CMPS_GE_F64   :Write('V_CMPS_GE_F64');
+  V_CMPS_O_F64    :Write('V_CMPS_O_F64');
+  V_CMPS_U_F64    :Write('V_CMPS_U_F64');
+  V_CMPS_NGE_F64  :Write('V_CMPS_NGE_F64');
+  V_CMPS_NLG_F64  :Write('V_CMPS_NLG_F64');
+  V_CMPS_NGT_F64  :Write('V_CMPS_NGT_F64');
+  V_CMPS_NLE_F64  :Write('V_CMPS_NLE_F64');
+  V_CMPS_NEQ_F64  :Write('V_CMPS_NEQ_F64');
+  V_CMPS_NLT_F64  :Write('V_CMPS_NLT_F64');
+  V_CMPS_T_F64    :Write('V_CMPS_T_F64');
+
+  V_CMPSX_F_F64   :Write('V_CMPSX_F_F64');
+  V_CMPSX_LT_F64  :Write('V_CMPSX_LT_F64');
+  V_CMPSX_EQ_F64  :Write('V_CMPSX_EQ_F64');
+  V_CMPSX_LE_F64  :Write('V_CMPSX_LE_F64');
+  V_CMPSX_GT_F64  :Write('V_CMPSX_GT_F64');
+  V_CMPSX_LG_F64  :Write('V_CMPSX_LG_F64');
+  V_CMPSX_GE_F64  :Write('V_CMPSX_GE_F64');
+  V_CMPSX_O_F64   :Write('V_CMPSX_O_F64');
+  V_CMPSX_U_F64   :Write('V_CMPSX_U_F64');
+  V_CMPSX_NGE_F64 :Write('V_CMPSX_NGE_F64');
+  V_CMPSX_NLG_F64 :Write('V_CMPSX_NLG_F64');
+  V_CMPSX_NGT_F64 :Write('V_CMPSX_NGT_F64');
+  V_CMPSX_NLE_F64 :Write('V_CMPSX_NLE_F64');
+  V_CMPSX_NEQ_F64 :Write('V_CMPSX_NEQ_F64');
+  V_CMPSX_NLT_F64 :Write('V_CMPSX_NLT_F64');
+  V_CMPSX_T_F64   :Write('V_CMPSX_T_F64');
+
+
+  V_CMP_F_I32     :Write('V_CMP_F_I32');
+  V_CMP_LT_I32    :Write('V_CMP_LT_I32');
+  V_CMP_EQ_I32    :Write('V_CMP_EQ_I32');
+  V_CMP_LE_I32    :Write('V_CMP_LE_I32');
+  V_CMP_GT_I32    :Write('V_CMP_GT_I32');
+  V_CMP_LG_I32    :Write('V_CMP_LG_I32');
+  V_CMP_GE_I32    :Write('V_CMP_GE_I32');
+  V_CMP_T_I32     :Write('V_CMP_T_I32');
+
+  V_CMPX_F_I32    :Write('V_CMPX_F_I32');
+  V_CMPX_LT_I32   :Write('V_CMPX_LT_I32');
+  V_CMPX_EQ_I32   :Write('V_CMPX_EQ_I32');
+  V_CMPX_LE_I32   :Write('V_CMPX_LE_I32');
+  V_CMPX_GT_I32   :Write('V_CMPX_GT_I32');
+  V_CMPX_LG_I32   :Write('V_CMPX_LG_I32');
+  V_CMPX_GE_I32   :Write('V_CMPX_GE_I32');
+  V_CMPX_T_I32    :Write('V_CMPX_T_I32');
+
+  V_CMP_F_I64     :Write('V_CMP_F_I64');
+  V_CMP_LT_I64    :Write('V_CMP_LT_I64');
+  V_CMP_EQ_I64    :Write('V_CMP_EQ_I64');
+  V_CMP_LE_I64    :Write('V_CMP_LE_I64');
+  V_CMP_GT_I64    :Write('V_CMP_GT_I64');
+  V_CMP_LG_I64    :Write('V_CMP_LG_I64');
+  V_CMP_GE_I64    :Write('V_CMP_GE_I64');
+  V_CMP_T_I64     :Write('V_CMP_T_I64');
+
+  V_CMPX_F_I64    :Write('V_CMPX_F_I64');
+  V_CMPX_LT_I64   :Write('V_CMPX_LT_I64');
+  V_CMPX_EQ_I64   :Write('V_CMPX_EQ_I64');
+  V_CMPX_LE_I64   :Write('V_CMPX_LE_I64');
+  V_CMPX_GT_I64   :Write('V_CMPX_GT_I64');
+  V_CMPX_LG_I64   :Write('V_CMPX_LG_I64');
+  V_CMPX_GE_I64   :Write('V_CMPX_GE_I64');
+  V_CMPX_T_I64    :Write('V_CMPX_T_I64');
+
+  V_CMP_F_U32     :Write('V_CMP_F_U32');
+  V_CMP_LT_U32    :Write('V_CMP_LT_U32');
+  V_CMP_EQ_U32    :Write('V_CMP_EQ_U32');
+  V_CMP_LE_U32    :Write('V_CMP_LE_U32');
+  V_CMP_GT_U32    :Write('V_CMP_GT_U32');
+  V_CMP_LG_U32    :Write('V_CMP_LG_U32');
+  V_CMP_GE_U32    :Write('V_CMP_GE_U32');
+  V_CMP_T_U32     :Write('V_CMP_T_U32');
+
+  V_CMPX_F_U32    :Write('V_CMPX_F_U32');
+  V_CMPX_LT_U32   :Write('V_CMPX_LT_U32');
+  V_CMPX_EQ_U32   :Write('V_CMPX_EQ_U32');
+  V_CMPX_LE_U32   :Write('V_CMPX_LE_U32');
+  V_CMPX_GT_U32   :Write('V_CMPX_GT_U32');
+  V_CMPX_LG_U32   :Write('V_CMPX_LG_U32');
+  V_CMPX_GE_U32   :Write('V_CMPX_GE_U32');
+  V_CMPX_T_U32    :Write('V_CMPX_T_U32');
+
+  V_CMP_F_U64     :Write('V_CMP_F_U64');
+  V_CMP_LT_U64    :Write('V_CMP_LT_U64');
+  V_CMP_EQ_U64    :Write('V_CMP_EQ_U64');
+  V_CMP_LE_U64    :Write('V_CMP_LE_U64');
+  V_CMP_GT_U64    :Write('V_CMP_GT_U64');
+  V_CMP_LG_U64    :Write('V_CMP_LG_U64');
+  V_CMP_GE_U64    :Write('V_CMP_GE_U64');
+  V_CMP_T_U64     :Write('V_CMP_T_U64');
+
+  V_CMPX_F_U64    :Write('V_CMPX_F_U64');
+  V_CMPX_LT_U64   :Write('V_CMPX_LT_U64');
+  V_CMPX_EQ_U64   :Write('V_CMPX_EQ_U64');
+  V_CMPX_LE_U64   :Write('V_CMPX_LE_U64');
+  V_CMPX_GT_U64   :Write('V_CMPX_GT_U64');
+  V_CMPX_LG_U64   :Write('V_CMPX_LG_U64');
+  V_CMPX_GE_U64   :Write('V_CMPX_GE_U64');
+  V_CMPX_T_U64    :Write('V_CMPX_T_U64');
+
+  V_CMP_CLASS_F32 :Write('V_CMP_CLASS_F32');
+  V_CMPX_CLASS_F32:Write('V_CMPX_CLASS_F32');
+  V_CMP_CLASS_F64 :Write('V_CMP_CLASS_F64');
+  V_CMPX_CLASS_F64:Write('V_CMPX_CLASS_F64');
+
+  else
+      Write('VOP3a_cmp?',VOP3.OP);
+ end;
+ Write(' ');
+
+ _print_sdst7(VOP3.VDST);
+
+ Write(', ');
+ if Byte(VOP3.NEG).TestBit(0) then Write('-');
+ if Byte(VOP3.ABS).TestBit(0) then Write('abs(');
+ _print_ssrc9(VOP3.SRC0);
+ if Byte(VOP3.ABS).TestBit(0) then Write(')');
+ Write(', ');
+ if Byte(VOP3.NEG).TestBit(1) then Write('-');
+ if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
+ _print_ssrc9(VOP3.SRC1);
+ if Byte(VOP3.ABS).TestBit(1) then Write(')');
+
+ Writeln;
+end;
+
 procedure _print_VOP3a(Var VOP3:TVOP3a);
 begin
  Case VOP3.OP of
+
   256+V_CNDMASK_B32       :Write('V_CNDMASK_B32');
   256+V_READLANE_B32      :Write('V_READLANE_B32');
   256+V_ADD_F32           :Write('V_ADD_F32');
@@ -1945,252 +2186,37 @@ begin
  end;
 
  Write(', ');
+ if Byte(VOP3.NEG).TestBit(0) then Write('-');
+ if Byte(VOP3.ABS).TestBit(0) then Write('abs(');
  _print_ssrc9(VOP3.SRC0);
+ if Byte(VOP3.ABS).TestBit(0) then Write(')');
  Write(', ');
+ if Byte(VOP3.NEG).TestBit(1) then Write('-');
+ if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
  _print_ssrc9(VOP3.SRC1);
- Write(', ');
- _print_ssrc9(VOP3.SRC2);
+ if Byte(VOP3.ABS).TestBit(1) then Write(')');
 
- if (VOP3.ABS<>0) then
-  Write(' abs('+BinStr(VOP3.ABS,3)+')');
+ Case VOP3.OP of
+  V_MAD_LEGACY_F32..V_DIV_FIXUP_F64,
+  V_DIV_FMAS_F32..V_MAD_I64_I32:
+    begin
+     Write(', ');
+     if Byte(VOP3.NEG).TestBit(2) then Write('-');
+     if Byte(VOP3.ABS).TestBit(2) then Write('abs(');
+     _print_ssrc9(VOP3.SRC2);
+     if Byte(VOP3.ABS).TestBit(2) then Write(')');
+    end;
+ end;
 
  if (VOP3.CLAMP<>0) then
   Write(' clamp');
 
- if (VOP3.NEG<>0) then
-  Write(' neg('+BinStr(VOP3.NEG,3)+')');
-
  Writeln;
-end;
-
-function VOP3b_3in2out(OP:Word):Boolean; inline;
-begin
- Case OP of
-  V_DIV_SCALE_F32,
-  V_DIV_SCALE_F64:Result:=True;
-  else
-   Result:=False;
- end;
 end;
 
 procedure _print_VOP3b(Var VOP3:TVOP3b);
 begin
  Case VOP3.OP of
-
-  V_CMP_F_F32      :Write('V_CMP_F_F32');
-  V_CMP_LT_F32     :Write('V_CMP_LT_F32');
-  V_CMP_EQ_F32     :Write('V_CMP_EQ_F32');
-  V_CMP_LE_F32     :Write('V_CMP_LE_F32');
-  V_CMP_GT_F32     :Write('V_CMP_GT_F32');
-  V_CMP_LG_F32     :Write('V_CMP_LG_F32');
-  V_CMP_GE_F32     :Write('V_CMP_GE_F32');
-  V_CMP_O_F32      :Write('V_CMP_O_F32');
-  V_CMP_U_F32      :Write('V_CMP_U_F32');
-  V_CMP_NGE_F32    :Write('V_CMP_NGE_F32');
-  V_CMP_NLG_F32    :Write('V_CMP_NLG_F32');
-  V_CMP_NGT_F32    :Write('V_CMP_NGT_F32');
-  V_CMP_NLE_F32    :Write('V_CMP_NLE_F32');
-  V_CMP_NEQ_F32    :Write('V_CMP_NEQ_F32');
-  V_CMP_NLT_F32    :Write('V_CMP_NLT_F32');
-  V_CMP_T_F32      :Write('V_CMP_T_F32');
-
-  V_CMPX_F_F32     :Write('V_CMPX_F_F32');
-  V_CMPX_LT_F32    :Write('V_CMPX_LT_F32');
-  V_CMPX_EQ_F32    :Write('V_CMPX_EQ_F32');
-  V_CMPX_LE_F32    :Write('V_CMPX_LE_F32');
-  V_CMPX_GT_F32    :Write('V_CMPX_GT_F32');
-  V_CMPX_LG_F32    :Write('V_CMPX_LG_F32');
-  V_CMPX_GE_F32    :Write('V_CMPX_GE_F32');
-  V_CMPX_O_F32     :Write('V_CMPX_O_F32');
-  V_CMPX_U_F32     :Write('V_CMPX_U_F32');
-  V_CMPX_NGE_F32   :Write('V_CMPX_NGE_F32');
-  V_CMPX_NLG_F32   :Write('V_CMPX_NLG_F32');
-  V_CMPX_NGT_F32   :Write('V_CMPX_NGT_F32');
-  V_CMPX_NLE_F32   :Write('V_CMPX_NLE_F32');
-  V_CMPX_NEQ_F32   :Write('V_CMPX_NEQ_F32');
-  V_CMPX_NLT_F32   :Write('V_CMPX_NLT_F32');
-  V_CMPX_T_F32     :Write('V_CMPX_T_F32');
-
-  V_CMP_F_F64      :Write('V_CMP_F_F64');
-  V_CMP_LT_F64     :Write('V_CMP_LT_F64');
-  V_CMP_EQ_F64     :Write('V_CMP_EQ_F64');
-  V_CMP_LE_F64     :Write('V_CMP_LE_F64');
-  V_CMP_GT_F64     :Write('V_CMP_GT_F64');
-  V_CMP_LG_F64     :Write('V_CMP_LG_F64');
-  V_CMP_GE_F64     :Write('V_CMP_GE_F64');
-  V_CMP_O_F64      :Write('V_CMP_O_F64');
-  V_CMP_U_F64      :Write('V_CMP_U_F64');
-  V_CMP_NGE_F64    :Write('V_CMP_NGE_F64');
-  V_CMP_NLG_F64    :Write('V_CMP_NLG_F64');
-  V_CMP_NGT_F64    :Write('V_CMP_NGT_F64');
-  V_CMP_NLE_F64    :Write('V_CMP_NLE_F64');
-  V_CMP_NEQ_F64    :Write('V_CMP_NEQ_F64');
-  V_CMP_NLT_F64    :Write('V_CMP_NLT_F64');
-  V_CMP_T_F64      :Write('V_CMP_T_F64');
-
-  V_CMPX_F_F64     :Write('V_CMPX_F_F64');
-  V_CMPX_LT_F64    :Write('V_CMPX_LT_F64');
-  V_CMPX_EQ_F64    :Write('V_CMPX_EQ_F64');
-  V_CMPX_LE_F64    :Write('V_CMPX_LE_F64');
-  V_CMPX_GT_F64    :Write('V_CMPX_GT_F64');
-  V_CMPX_LG_F64    :Write('V_CMPX_LG_F64');
-  V_CMPX_GE_F64    :Write('V_CMPX_GE_F64');
-  V_CMPX_O_F64     :Write('V_CMPX_O_F64');
-  V_CMPX_U_F64     :Write('V_CMPX_U_F64');
-  V_CMPX_NGE_F64   :Write('V_CMPX_NGE_F64');
-  V_CMPX_NLG_F64   :Write('V_CMPX_NLG_F64');
-  V_CMPX_NGT_F64   :Write('V_CMPX_NGT_F64');
-  V_CMPX_NLE_F64   :Write('V_CMPX_NLE_F64');
-  V_CMPX_NEQ_F64   :Write('V_CMPX_NEQ_F64');
-  V_CMPX_NLT_F64   :Write('V_CMPX_NLT_F64');
-  V_CMPX_T_F64     :Write('V_CMPX_T_F64');
-
-
-  V_CMPS_F_F32     :Write('V_CMPS_F_F32');
-  V_CMPS_LT_F32    :Write('V_CMPS_LT_F32');
-  V_CMPS_EQ_F32    :Write('V_CMPS_EQ_F32');
-  V_CMPS_LE_F32    :Write('V_CMPS_LE_F32');
-  V_CMPS_GT_F32    :Write('V_CMPS_GT_F32');
-  V_CMPS_LG_F32    :Write('V_CMPS_LG_F32');
-  V_CMPS_GE_F32    :Write('V_CMPS_GE_F32');
-  V_CMPS_O_F32     :Write('V_CMPS_O_F32');
-  V_CMPS_U_F32     :Write('V_CMPS_U_F32');
-  V_CMPS_NGE_F32   :Write('V_CMPS_NGE_F32');
-  V_CMPS_NLG_F32   :Write('V_CMPS_NLG_F32');
-  V_CMPS_NGT_F32   :Write('V_CMPS_NGT_F32');
-  V_CMPS_NLE_F32   :Write('V_CMPS_NLE_F32');
-  V_CMPS_NEQ_F32   :Write('V_CMPS_NEQ_F32');
-  V_CMPS_NLT_F32   :Write('V_CMPS_NLT_F32');
-  V_CMPS_T_F32     :Write('V_CMPS_T_F32');
-
-  V_CMPSX_F_F32    :Write('V_CMPSX_F_F32');
-  V_CMPSX_LT_F32   :Write('V_CMPSX_LT_F32');
-  V_CMPSX_EQ_F32   :Write('V_CMPSX_EQ_F32');
-  V_CMPSX_LE_F32   :Write('V_CMPSX_LE_F32');
-  V_CMPSX_GT_F32   :Write('V_CMPSX_GT_F32');
-  V_CMPSX_LG_F32   :Write('V_CMPSX_LG_F32');
-  V_CMPSX_GE_F32   :Write('V_CMPSX_GE_F32');
-  V_CMPSX_O_F32    :Write('V_CMPSX_O_F32');
-  V_CMPSX_U_F32    :Write('V_CMPSX_U_F32');
-  V_CMPSX_NGE_F32  :Write('V_CMPSX_NGE_F32');
-  V_CMPSX_NLG_F32  :Write('V_CMPSX_NLG_F32');
-  V_CMPSX_NGT_F32  :Write('V_CMPSX_NGT_F32');
-  V_CMPSX_NLE_F32  :Write('V_CMPSX_NLE_F32');
-  V_CMPSX_NEQ_F32  :Write('V_CMPSX_NEQ_F32');
-  V_CMPSX_NLT_F32  :Write('V_CMPSX_NLT_F32');
-  V_CMPSX_T_F32    :Write('V_CMPSX_T_F32');
-
-  V_CMPS_F_F64     :Write('V_CMPS_F_F64');
-  V_CMPS_LT_F64    :Write('V_CMPS_LT_F64');
-  V_CMPS_EQ_F64    :Write('V_CMPS_EQ_F64');
-  V_CMPS_LE_F64    :Write('V_CMPS_LE_F64');
-  V_CMPS_GT_F64    :Write('V_CMPS_GT_F64');
-  V_CMPS_LG_F64    :Write('V_CMPS_LG_F64');
-  V_CMPS_GE_F64    :Write('V_CMPS_GE_F64');
-  V_CMPS_O_F64     :Write('V_CMPS_O_F64');
-  V_CMPS_U_F64     :Write('V_CMPS_U_F64');
-  V_CMPS_NGE_F64   :Write('V_CMPS_NGE_F64');
-  V_CMPS_NLG_F64   :Write('V_CMPS_NLG_F64');
-  V_CMPS_NGT_F64   :Write('V_CMPS_NGT_F64');
-  V_CMPS_NLE_F64   :Write('V_CMPS_NLE_F64');
-  V_CMPS_NEQ_F64   :Write('V_CMPS_NEQ_F64');
-  V_CMPS_NLT_F64   :Write('V_CMPS_NLT_F64');
-  V_CMPS_T_F64     :Write('V_CMPS_T_F64');
-
-  V_CMPSX_F_F64    :Write('V_CMPSX_F_F64');
-  V_CMPSX_LT_F64   :Write('V_CMPSX_LT_F64');
-  V_CMPSX_EQ_F64   :Write('V_CMPSX_EQ_F64');
-  V_CMPSX_LE_F64   :Write('V_CMPSX_LE_F64');
-  V_CMPSX_GT_F64   :Write('V_CMPSX_GT_F64');
-  V_CMPSX_LG_F64   :Write('V_CMPSX_LG_F64');
-  V_CMPSX_GE_F64   :Write('V_CMPSX_GE_F64');
-  V_CMPSX_O_F64    :Write('V_CMPSX_O_F64');
-  V_CMPSX_U_F64    :Write('V_CMPSX_U_F64');
-  V_CMPSX_NGE_F64  :Write('V_CMPSX_NGE_F64');
-  V_CMPSX_NLG_F64  :Write('V_CMPSX_NLG_F64');
-  V_CMPSX_NGT_F64  :Write('V_CMPSX_NGT_F64');
-  V_CMPSX_NLE_F64  :Write('V_CMPSX_NLE_F64');
-  V_CMPSX_NEQ_F64  :Write('V_CMPSX_NEQ_F64');
-  V_CMPSX_NLT_F64  :Write('V_CMPSX_NLT_F64');
-  V_CMPSX_T_F64    :Write('V_CMPSX_T_F64');
-
-
-  V_CMP_F_I32      :Write('V_CMP_F_I32');
-  V_CMP_LT_I32     :Write('V_CMP_LT_I32');
-  V_CMP_EQ_I32     :Write('V_CMP_EQ_I32');
-  V_CMP_LE_I32     :Write('V_CMP_LE_I32');
-  V_CMP_GT_I32     :Write('V_CMP_GT_I32');
-  V_CMP_LG_I32     :Write('V_CMP_LG_I32');
-  V_CMP_GE_I32     :Write('V_CMP_GE_I32');
-  V_CMP_T_I32      :Write('V_CMP_T_I32');
-
-  V_CMPX_F_I32     :Write('V_CMPX_F_I32');
-  V_CMPX_LT_I32    :Write('V_CMPX_LT_I32');
-  V_CMPX_EQ_I32    :Write('V_CMPX_EQ_I32');
-  V_CMPX_LE_I32    :Write('V_CMPX_LE_I32');
-  V_CMPX_GT_I32    :Write('V_CMPX_GT_I32');
-  V_CMPX_LG_I32    :Write('V_CMPX_LG_I32');
-  V_CMPX_GE_I32    :Write('V_CMPX_GE_I32');
-  V_CMPX_T_I32     :Write('V_CMPX_T_I32');
-
-  V_CMP_F_I64      :Write('V_CMP_F_I64');
-  V_CMP_LT_I64     :Write('V_CMP_LT_I64');
-  V_CMP_EQ_I64     :Write('V_CMP_EQ_I64');
-  V_CMP_LE_I64     :Write('V_CMP_LE_I64');
-  V_CMP_GT_I64     :Write('V_CMP_GT_I64');
-  V_CMP_LG_I64     :Write('V_CMP_LG_I64');
-  V_CMP_GE_I64     :Write('V_CMP_GE_I64');
-  V_CMP_T_I64      :Write('V_CMP_T_I64');
-
-  V_CMPX_F_I64     :Write('V_CMPX_F_I64');
-  V_CMPX_LT_I64    :Write('V_CMPX_LT_I64');
-  V_CMPX_EQ_I64    :Write('V_CMPX_EQ_I64');
-  V_CMPX_LE_I64    :Write('V_CMPX_LE_I64');
-  V_CMPX_GT_I64    :Write('V_CMPX_GT_I64');
-  V_CMPX_LG_I64    :Write('V_CMPX_LG_I64');
-  V_CMPX_GE_I64    :Write('V_CMPX_GE_I64');
-  V_CMPX_T_I64     :Write('V_CMPX_T_I64');
-
-  V_CMP_F_U32      :Write('V_CMP_F_U32');
-  V_CMP_LT_U32     :Write('V_CMP_LT_U32');
-  V_CMP_EQ_U32     :Write('V_CMP_EQ_U32');
-  V_CMP_LE_U32     :Write('V_CMP_LE_U32');
-  V_CMP_GT_U32     :Write('V_CMP_GT_U32');
-  V_CMP_LG_U32     :Write('V_CMP_LG_U32');
-  V_CMP_GE_U32     :Write('V_CMP_GE_U32');
-  V_CMP_T_U32      :Write('V_CMP_T_U32');
-
-  V_CMPX_F_U32     :Write('V_CMPX_F_U32');
-  V_CMPX_LT_U32    :Write('V_CMPX_LT_U32');
-  V_CMPX_EQ_U32    :Write('V_CMPX_EQ_U32');
-  V_CMPX_LE_U32    :Write('V_CMPX_LE_U32');
-  V_CMPX_GT_U32    :Write('V_CMPX_GT_U32');
-  V_CMPX_LG_U32    :Write('V_CMPX_LG_U32');
-  V_CMPX_GE_U32    :Write('V_CMPX_GE_U32');
-  V_CMPX_T_U32     :Write('V_CMPX_T_U32');
-
-  V_CMP_F_U64      :Write('V_CMP_F_U64');
-  V_CMP_LT_U64     :Write('V_CMP_LT_U64');
-  V_CMP_EQ_U64     :Write('V_CMP_EQ_U64');
-  V_CMP_LE_U64     :Write('V_CMP_LE_U64');
-  V_CMP_GT_U64     :Write('V_CMP_GT_U64');
-  V_CMP_LG_U64     :Write('V_CMP_LG_U64');
-  V_CMP_GE_U64     :Write('V_CMP_GE_U64');
-  V_CMP_T_U64      :Write('V_CMP_T_U64');
-
-  V_CMPX_F_U64     :Write('V_CMPX_F_U64');
-  V_CMPX_LT_U64    :Write('V_CMPX_LT_U64');
-  V_CMPX_EQ_U64    :Write('V_CMPX_EQ_U64');
-  V_CMPX_LE_U64    :Write('V_CMPX_LE_U64');
-  V_CMPX_GT_U64    :Write('V_CMPX_GT_U64');
-  V_CMPX_LG_U64    :Write('V_CMPX_LG_U64');
-  V_CMPX_GE_U64    :Write('V_CMPX_GE_U64');
-  V_CMPX_T_U64     :Write('V_CMPX_T_U64');
-
-  V_CMP_CLASS_F32  :Write('V_CMP_CLASS_F32');
-  V_CMPX_CLASS_F32 :Write('V_CMPX_CLASS_F32');
-  V_CMP_CLASS_F64  :Write('V_CMP_CLASS_F64');
-  V_CMPX_CLASS_F64 :Write('V_CMPX_CLASS_F64');
 
   256+V_ADD_I32    :Write('V_ADD_I32');
   256+V_SUB_I32    :Write('V_SUB_I32');
@@ -2207,13 +2233,8 @@ begin
  end;
  Write(' ');
 
- _print_sdst7(VOP3.SDST);
-
- if VOP3b_3in2out(VOP3.OP) then
- begin
-  Write(', ');
-  _print_vdst8(VOP3.VDST);
- end;
+ _print_vdst8(VOP3.VDST);
+ Write(', ');
 
  Case VOP3.OMOD of
   0:;
@@ -2223,18 +2244,17 @@ begin
  end;
 
  Write(', ');
+ _print_sdst7(VOP3.SDST);
+
+ Write(', ');
+ if Byte(VOP3.NEG).TestBit(0) then Write('-');
  _print_ssrc9(VOP3.SRC0);
  Write(', ');
+ if Byte(VOP3.NEG).TestBit(1) then Write('-');
  _print_ssrc9(VOP3.SRC1);
-
- if VOP3b_3in2out(VOP3.OP) then
- begin
-  Write(', ');
-  _print_ssrc9(VOP3.SRC2);
- end;
-
- if (VOP3.NEG<>0) then
-  Write(' neg('+BinStr(VOP3.NEG,3)+')');
+ Write(', ');
+ if Byte(VOP3.NEG).TestBit(2) then Write('-');
+ _print_ssrc9(VOP3.SRC2);
 
  Writeln;
 end;
@@ -2242,7 +2262,7 @@ end;
 procedure _print_VOP3(Var SPI:TSPI);
 begin
  Case SPI.VOP3a.OP of
-    0..255,
+    0..255:_print_VOP3a_cmp(SPI.VOP3a);
   293..298,
   365..366:_print_VOP3b(SPI.VOP3b);
   else
@@ -2824,7 +2844,7 @@ begin
  Write('s[',SPI.MIMG.SRSRC*4,':',SPI.MIMG.SRSRC*4+7,']');
 
  Case SPI.MIMG.OP of
-  IMAGE_GATHER4..IMAGE_SAMPLE_C_CD_CL_O:
+  IMAGE_SAMPLE..IMAGE_SAMPLE_C_CD_CL_O:
    begin
     Write(', ');
     Write('s[',SPI.MIMG.SSAMP*4,':',SPI.MIMG.SSAMP*4+3,']');
@@ -2855,27 +2875,70 @@ begin
  //half 0=0000 3=0011 C=1100 F=1111
 
  f:=SPI.EXP.EN;
- if (SPI.EXP.COMPR<>0) and (f=$F) then f:=3;
 
- if (f and $1<>0) then
- begin
-  Write(', ');
-  _print_vdst8(SPI.EXP.VSRC0);
- end;
- if (f and $2<>0) then
- begin
-  Write(', ');
-  _print_vdst8(SPI.EXP.VSRC1);
- end;
- if (f and $4<>0) then
- begin
-  Write(', ');
-  _print_vdst8(SPI.EXP.VSRC2);
- end;
- if (f and $8<>0) then
- begin
-  Write(', ');
-  _print_vdst8(SPI.EXP.VSRC3);
+ Case SPI.EXP.COMPR of
+  0:
+    begin
+
+     Write(', ');
+     if (f and $1<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC0);
+     end else
+     begin
+      Write('off');
+     end;
+
+     Write(', ');
+     if (f and $2<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC1);
+     end else
+     begin
+      Write('off');
+     end;
+
+     Write(', ');
+     if (f and $4<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC2);
+     end else
+     begin
+      Write('off');
+     end;
+
+     Write(', ');
+     if (f and $8<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC3);
+     end else
+     begin
+      Write('off');
+     end;
+
+    end;
+  1: //is half16 compressed
+    begin
+
+     Write(', ');
+     if (f and $1<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC0);
+     end else
+     begin
+      Write('off');
+     end;
+
+     Write(', ');
+     if (f and $2<>0) then
+     begin
+      _print_vdst8(SPI.EXP.VSRC1);
+     end else
+     begin
+      Write('off');
+     end;
+
+    end;
  end;
 
  if SPI.EXP.COMPR<>0 then
