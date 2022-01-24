@@ -60,12 +60,22 @@ begin
 end;
 
 var
- Comment:RawByteString;
- LConstMeta:TStringList;
+ spirv:record
+  Comment:RawByteString;
+  LConstMeta:TStringList;
 
- LEnums:TStringList;
+  LEnums:TStringList;
 
- OpInfoSet:TOpInfoSet;
+  OpInfoSet:TOpInfoSet;
+ end;
+
+ glsl:record
+  Comment:RawByteString;
+
+  inst:TMapStr;
+
+  OpInfoSet:TOpInfoSet;
+ end;
 
 function _getComment(sComment:Tjson):RawByteString;
 var
@@ -152,11 +162,14 @@ procedure LoadOp(LGroup:TMapGroup);
 var
  IG:TMapGroup.TIterator;
 begin
- OpInfoSet:=TOpInfoSet.Create;
+ if (spirv.OpInfoSet=nil) then
+ begin
+  spirv.OpInfoSet:=TOpInfoSet.Create;
+ end;
  IG:=LGroup.Min;
  if Assigned(IG) then
  repeat
-  OpInfoSet.Insert(IG.Value,Default(TOpInfo));
+  spirv.OpInfoSet.Insert(IG.Value,Default(TOpInfo));
  until (not IG.Next);
  FreeAndNil(IG);
 end;
@@ -171,19 +184,19 @@ Var
 begin
  J:=Tjson.NewFromFile(fname);
 
- Comment:=_getComment(J.Path['spv.meta.Comment']);
+ spirv.Comment:=_getComment(J.Path['spv.meta.Comment']);
 
- LConstMeta:=TStringList.Create;
+ spirv.LConstMeta:=TStringList.Create;
  meta:=J.Path['spv.meta'];
  s:=meta.Count;
  if (s<>0) then
  For i:=0 to s-1 do
   if (meta.Name[i]<>'Comment') then
   begin
-   LConstMeta.Add(meta.Name[i]+' = '+meta.Item[i].AsStr);
+   spirv.LConstMeta.Add(meta.Name[i]+' = '+meta.Item[i].AsStr);
   end;
 
- LEnums:=TStringList.Create;
+ spirv.LEnums:=TStringList.Create;
  enum:=J.Path['spv.enum'];
  s:=enum.Count;
  if (s<>0) then
@@ -196,7 +209,7 @@ begin
    LGroup:=_getGroup(tmp.Path['Values'],_type);
    LGroup._type:=_type;
 
-   LEnums.AddObject(_name,LGroup);
+   spirv.LEnums.AddObject(_name,LGroup);
 
    if (_name='Op') then
     LoadOp(LGroup);
@@ -267,13 +280,63 @@ begin
    opname:=tmp.Path['opname'].AsStr;
    OpInfo:=_get_OpInfo(tmp.Path['operands']);
 
-   IT:=OpInfoSet.Find(opname);
+   IT:=spirv.OpInfoSet.Find(opname);
    if Assigned(IT) then
    begin
     IT.Value:=OpInfo;
     FreeAndNil(IT);
    end;
 
+  end;
+
+ J.Free;
+end;
+
+{
+extinst_glsl_std_450:record
+ Comment:RawByteString;
+
+ inst:TMapStr;
+
+ OpInfoSet:TOpInfoSet;
+end;
+}
+
+procedure loadGlslGrammarJson(Const fname:RawByteString);
+Var
+ J,inst,tmp:Tjson;
+ i,s:Integer;
+ opname,opcode:RawByteString;
+ OpInfo:TOpInfo;
+ IT:TOpInfoSet.TIterator;
+begin
+ J:=Tjson.NewFromFile(fname);
+
+ if (glsl.OpInfoSet=nil) then
+ begin
+  glsl.OpInfoSet:=TOpInfoSet.Create;
+ end;
+
+ if (glsl.inst=nil) then
+ begin
+  glsl.inst:=TMapStr.Create;
+ end;
+
+ glsl.Comment:=_getComment(J.Path['copyright']);
+
+ inst:=J.Path['instructions'];
+
+ s:=inst.Count;
+ if (s<>0) then
+ For i:=0 to s-1 do
+  begin
+   tmp:=inst.Item[i];
+   opname:=tmp.Path['opname'].AsStr;
+   opcode:=tmp.Path['opcode'].AsStr;
+   OpInfo:=_get_OpInfo(tmp.Path['operands']);
+
+   glsl.inst.Insert(opcode,opname);
+   glsl.OpInfoSet.Insert(opname,OpInfo);
   end;
 
  J.Free;
@@ -316,7 +379,12 @@ Const
             '   end;'#$0D#$0A+
             '  function GetInfo(w:Word):TOpInfo; static;'#$0D#$0A;
 
- LGetInfo_p='function Op.GetInfo(w:Word):TOpInfo; static;'#$0D#$0A+
+ LOpGetInfo_p='function Op.GetInfo(w:Word):TOpInfo; static;'#$0D#$0A+
+            'begin'#$0D#$0A+
+            ' Result:=Default(TOpInfo);'#$0D#$0A+
+            ' Case w of'#$0D#$0A;
+
+ LGlGetInfo_p='function GlslOp.GetInfo(w:Word):TOpInfo; static;'#$0D#$0A+
             'begin'#$0D#$0A+
             ' Result:=Default(TOpInfo);'#$0D#$0A+
             ' Case w of'#$0D#$0A;
@@ -344,29 +412,29 @@ Var
 
 begin
  F:=FileCreate(FName);
- FileWrite(F,PChar(Comment)^,Length(Comment));
+ FileWrite(F,PChar(spirv.Comment)^,Length(spirv.Comment));
  FileWrite(F,PChar(prologf)^,Length(prologf));
 
  FileWrite(F,PChar(LConst)^,Length(LConst));
- s:=LConstMeta.Count;
+ s:=spirv.LConstMeta.Count;
  if (s<>0) then
  begin
   For i:=0 to s-1 do
   begin
-   _name:=' '+LConstMeta.Strings[i]+';'+NL;
+   _name:=' '+spirv.LConstMeta.Strings[i]+';'+NL;
    FileWrite(F,PChar(_name)^,Length(_name));
   end;
   FileWrite(F,PChar(NL)^,Length(NL));
  end;
 
  FileWrite(F,PChar(LType)^,Length(LType));
- s:=LEnums.Count;
+ s:=spirv.LEnums.Count;
  if (s<>0) then
  begin
   For i:=0 to s-1 do
   begin
-   LGroup:=TMapGroup(LEnums.Objects[i]);
-   _name:=LEnums.Strings[i];
+   LGroup:=TMapGroup(spirv.LEnums.Objects[i]);
+   _name:=spirv.LEnums.Strings[i];
 
    _name:=' '+_name+'=object'+' //'+LGroup._type+NL+'  '+LConst;
    FileWrite(F,PChar(_name)^,Length(_name));
@@ -382,7 +450,7 @@ begin
    if (LGroup._type='Value') then
     FileWrite(F,PChar(LGetStr_i)^,Length(LGetStr_i));
 
-   if (LEnums.Strings[i]='Op') then
+   if (spirv.LEnums.Strings[i]='Op') then
     FileWrite(F,PChar(LGetInfo_i)^,Length(LGetInfo_i));
 
    FileWrite(F,PChar(LEnd)^,Length(LEnd));
@@ -390,15 +458,37 @@ begin
   end;
  end;
 
+ //glsl.inst
+
+ _name:=' GlslOp=object //extinst.glsl.std.450'+NL+'  '+LConst;
+ FileWrite(F,PChar(_name)^,Length(_name));
+
+ IG:=glsl.inst.Min;
+ if Assigned(IG) then
+ repeat
+  _name:='   '+GetPasLabel(IG.Value)+' = '+IG.Key+';'+NL;
+  FileWrite(F,PChar(_name)^,Length(_name));
+ until (not IG.Next);
+ FreeAndNil(IG);
+
+ FileWrite(F,PChar(LGetStr_i)^,Length(LGetStr_i));
+
+ FileWrite(F,PChar(LGetInfo_i)^,Length(LGetInfo_i));
+
+ FileWrite(F,PChar(LEnd)^,Length(LEnd));
+ FileWrite(F,PChar(NLNL)^,Length(NLNL));
+
+ //glsl.inst
+
  FileWrite(F,PChar(ep_impl)^,Length(ep_impl));
- s:=LEnums.Count;
+ s:=spirv.LEnums.Count;
  if (s<>0) then
  begin
   For i:=0 to s-1 do
   begin
-   LGroup:=TMapGroup(LEnums.Objects[i]);
+   LGroup:=TMapGroup(spirv.LEnums.Objects[i]);
    if (LGroup._type<>'Value') then Continue;
-   _name:=LEnums.Strings[i];
+   _name:=spirv.LEnums.Strings[i];
 
    _name:=LFunc+_name+LGetStr_p;
 
@@ -414,15 +504,15 @@ begin
 
    FileWrite(F,PChar(LGetStr_e)^,Length(LGetStr_e));
 
-   if (LEnums.Strings[i]='Op') then
+   if (spirv.LEnums.Strings[i]='Op') then
    begin
-    FileWrite(F,PChar(LGetInfo_p)^,Length(LGetInfo_p));
+    FileWrite(F,PChar(LOpGetInfo_p)^,Length(LOpGetInfo_p));
 
     IG:=LGroup.Min;
     if Assigned(IG) then
     repeat
 
-     IT:=OpInfoSet.Find(IG.Value);
+     IT:=spirv.OpInfoSet.Find(IG.Value);
      if Assigned(IT) then
      begin
       _name:='  '+GetPasLabel(IG.Value)+':QWORD(Result):=$'+HexStr(QWORD(IT.Value),16)+';'+NL;
@@ -439,6 +529,44 @@ begin
   end;
  end;
 
+ //LGroup:=glsl.inst;
+
+ _name:=LFunc+'GlslOp'+LGetStr_p;
+ FileWrite(F,PChar(_name)^,Length(_name));
+
+ IG:=glsl.inst.Min;
+ if Assigned(IG) then
+ repeat
+  _name:='  '+GetPasLabel(IG.Value)+':Result:='''+IG.Value+''';'+NL;
+  FileWrite(F,PChar(_name)^,Length(_name));
+ until (not IG.Next);
+ FreeAndNil(IG);
+
+ FileWrite(F,PChar(LGetStr_e)^,Length(LGetStr_e));
+
+ begin
+  FileWrite(F,PChar(LGlGetInfo_p)^,Length(LGlGetInfo_p));
+
+  IG:=glsl.inst.Min;
+  if Assigned(IG) then
+  repeat
+
+   IT:=glsl.OpInfoSet.Find(IG.Value);
+   if Assigned(IT) then
+   begin
+    _name:='  '+GetPasLabel(IG.Value)+':QWORD(Result):=$'+HexStr(QWORD(IT.Value),16)+';'+NL;
+    FileWrite(F,PChar(_name)^,Length(_name));
+    FreeAndNil(IT);
+   end;
+
+  until (not IG.Next);
+  FreeAndNil(IG);
+
+  FileWrite(F,PChar(LGetStr_e)^,Length(LGetStr_e));
+ end;
+
+ //
+
  FileWrite(F,PChar(ep_func)^,Length(ep_func));
  FileClose(F);
 end;
@@ -452,6 +580,7 @@ begin
 
  loadSpirvJson('spirv.json');
  loadSpirvGrammarJson('spirv.core.grammar.json');
+ loadGlslGrammarJson('extinst.glsl.std.450.grammar.json');
  Writeln('Load is Fin');
  SaveToPas('spirv.pas');
  Writeln('Save is Fin');

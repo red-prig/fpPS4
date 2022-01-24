@@ -26,8 +26,8 @@
   ],
   "magic_number" : "0x07230203",
   "major_version" : 1,
-  "minor_version" : 5,
-  "revision" : 4,
+  "minor_version" : 6,
+  "revision" : 1,
   "instruction_printing_class" : [
     {
       "tag"     : "@exclude"
@@ -394,9 +394,7 @@
       "opcode" : 30,
       "operands" : [
         { "kind" : "IdResult" },
-        { "kind" : "IdRef",
-          "quantifier" : "*",
-          "name" : "'Member 0 type', +\n'member 1 type', +\n..." }
+        { "kind" : "IdRef",    "quantifier" : "*", "name" : "'Member 0 type', +\n'member 1 type', +\n..." }
       ]
     },
     {
@@ -1737,7 +1735,8 @@
         { "kind" : "IdRef",        "name" : "'x'" },
         { "kind" : "IdRef",        "name" : "'y'" }
       ],
-      "capabilities" : [ "Kernel" ]
+      "capabilities" : [ "Kernel" ],
+      "lastVersion" : "1.5"
     },
     {
       "opname" : "OpOrdered",
@@ -4111,7 +4110,7 @@
         "SPV_KHR_terminate_invocation"
       ],
       "capabilities" : [ "Shader" ],
-      "version" : "None"
+      "version" : "1.6"
     },
     {
       "opname" : "OpSubgroupBallotKHR",
@@ -4263,6 +4262,20 @@
       "version" : "None"
     },
     {
+      "opname" : "OpSDot",
+      "class"  : "Arithmetic",
+      "opcode" : 4450,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
+    },
+    {
       "opname" : "OpSDotKHR",
       "class"  : "Arithmetic",
       "opcode" : 4450,
@@ -4274,7 +4287,22 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpUDot",
+      "class"  : "Arithmetic",
+      "opcode" : 4451,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpUDotKHR",
@@ -4288,7 +4316,22 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpSUDot",
+      "class"  : "Arithmetic",
+      "opcode" : 4452,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpSUDotKHR",
@@ -4302,7 +4345,23 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpSDotAccSat",
+      "class"  : "Arithmetic",
+      "opcode" : 4453,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "IdRef", "name" : "'Accumulator'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpSDotAccSatKHR",
@@ -4317,7 +4376,23 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpUDotAccSat",
+      "class"  : "Arithmetic",
+      "opcode" : 4454,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "IdRef", "name" : "'Accumulator'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpUDotAccSatKHR",
@@ -4332,7 +4407,23 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpSUDotAccSat",
+      "class"  : "Arithmetic",
+      "opcode" : 4455,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Vector 1'" },
+        { "kind" : "IdRef", "name" : "'Vector 2'" },
+        { "kind" : "IdRef", "name" : "'Accumulator'" },
+        { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
+      ],
+      "capabilities" : [ "DotProduct" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpSUDotAccSatKHR",
@@ -4347,7 +4438,8 @@
         { "kind" : "PackedVectorFormat", "name" : "'Packed Vector Format'", "quantifier" : "?" }
       ],
       "capabilities" : [ "DotProductKHR" ],
-      "version" : "None"
+      "extensions" : [ "SPV_KHR_integer_dot_product" ],
+      "version" : "1.6"
     },
     {
         "opname" : "OpTypeRayQueryKHR",
@@ -4927,12 +5019,18 @@
       "version" : "None"
     },
     {
-      "opname" : "OpDemoteToHelperInvocationEXT",
-      "class"  : "Reserved",
+      "opname" : "OpDemoteToHelperInvocation",
+      "class"  : "Control-Flow",
       "opcode" : 5380,
-      "capabilities" : [ "DemoteToHelperInvocationEXT" ],
-      "extensions" : [ "SPV_EXT_demote_to_helper_invocation" ],
-      "version" : "None"
+      "capabilities" : [ "DemoteToHelperInvocation" ],
+      "version" : "1.6"
+    },
+    {
+      "opname" : "OpDemoteToHelperInvocationEXT",
+      "class"  : "Control-Flow",
+      "opcode" : 5380,
+      "capabilities" : [ "DemoteToHelperInvocation" ],
+      "version" : "1.6"
     },
     {
       "opname" : "OpIsHelperInvocationEXT",
@@ -4944,6 +5042,88 @@
       ],
       "capabilities" : [ "DemoteToHelperInvocationEXT" ],
       "extensions" : [ "SPV_EXT_demote_to_helper_invocation" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertUToImageNV",
+      "class"  : "Reserved",
+      "opcode" : 5391,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertUToSamplerNV",
+      "class"  : "Reserved",
+      "opcode" : 5392,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertImageToUNV",
+      "class"  : "Reserved",
+      "opcode" : 5393,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertSamplerToUNV",
+      "class"  : "Reserved",
+      "opcode" : 5394,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertUToSampledImageNV",
+      "class"  : "Reserved",
+      "opcode" : 5395,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpConvertSampledImageToUNV",
+      "class"  : "Reserved",
+      "opcode" : 5396,
+      "operands" : [
+        { "kind" : "IdResultType" },
+        { "kind" : "IdResult" },
+        { "kind" : "IdRef", "name" : "'Operand'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
+      "version" : "None"
+    },
+    {
+      "opname" : "OpSamplerImageAddressingModeNV",
+      "class"  : "Reserved",
+      "opcode" : 5397,
+      "operands" : [
+        { "kind" : "LiteralInteger", "name" : "'Bit Width'" }
+      ],
+      "capabilities" : [ "BindlessTextureNV" ],
       "version" : "None"
     },
     {
@@ -5258,7 +5438,7 @@
       "version" : "None"
     },
     {
-      "opname" : "OpConstFunctionPointerINTEL",
+      "opname" : "OpConstantFunctionPointerINTEL",
       "class"  : "@exclude",
       "opcode" : 5600,
       "operands" : [
@@ -7679,24 +7859,6 @@
       "version" : "None"
     },
     {
-      "opname" : "OpArbitraryFloatPowNINTEL",
-      "class"  : "@exclude",
-      "opcode" : 5882,
-      "operands" : [
-        { "kind" : "IdResultType" },
-        { "kind" : "IdResult" },
-        { "kind" : "IdRef", "name" : "'A'" },
-        { "kind" : "LiteralInteger", "name" : "'M1'" },
-        { "kind" : "IdRef", "name" : "'B'" },
-        { "kind" : "LiteralInteger", "name" : "'Mout'" },
-        { "kind" : "LiteralInteger", "name" : "'EnableSubnormals'" },
-        { "kind" : "LiteralInteger", "name" : "'RoundingMode'" },
-        { "kind" : "LiteralInteger", "name" : "'RoundingAccuracy'" }
-      ],
-      "capabilities" : [ "ArbitraryPrecisionFloatingPointINTEL" ],
-      "version" : "None"
-    },
-    {
       "opname" : "OpLoopControlINTEL",
       "class"  : "Reserved",
       "opcode" : 5887,
@@ -8495,6 +8657,18 @@
           "enumerant" : "ZeroExtend",
           "value" : "0x2000",
           "version" : "1.4"
+        },
+        {
+          "enumerant" : "Nontemporal",
+          "value" : "0x4000",
+          "version" : "1.6"
+        },
+        {
+          "enumerant" : "Offsets",
+          "value" : "0x10000",
+          "parameters" : [
+            { "kind" : "IdRef" }
+          ]
         }
       ]
     },
@@ -8508,40 +8682,35 @@
         },
         {
           "enumerant" : "NotNaN",
-          "value" : "0x0001",
-          "capabilities" : [ "Kernel" ]
+          "value" : "0x0001"
         },
         {
           "enumerant" : "NotInf",
-          "value" : "0x0002",
-          "capabilities" : [ "Kernel" ]
+          "value" : "0x0002"
         },
         {
           "enumerant" : "NSZ",
-          "value" : "0x0004",
-          "capabilities" : [ "Kernel" ]
+          "value" : "0x0004"
         },
         {
           "enumerant" : "AllowRecip",
-          "value" : "0x0008",
-          "capabilities" : [ "Kernel" ]
+          "value" : "0x0008"
         },
         {
           "enumerant" : "Fast",
-          "value" : "0x0010",
-          "capabilities" : [ "Kernel" ]
+          "value" : "0x0010"
         },
         {
           "enumerant" : "AllowContractFastINTEL",
           "value" : "0x10000",
           "capabilities" : [ "FPFastMathModeINTEL" ],
-	  "version" : "None"
+          "version" : "None"
         },
         {
           "enumerant" : "AllowReassocINTEL",
           "value" : "0x20000",
           "capabilities" : [ "FPFastMathModeINTEL" ],
-	  "version" : "None"
+          "version" : "None"
         }
       ]
     },
@@ -10813,12 +10982,12 @@
         {
           "enumerant" : "Uniform",
           "value" : 26,
-          "capabilities" : [ "Shader" ]
+          "capabilities" : [ "Shader", "UniformDecoration" ]
         },
         {
           "enumerant" : "UniformId",
           "value" : 27,
-          "capabilities" : [ "Shader" ],
+          "capabilities" : [ "Shader", "UniformDecoration" ],
           "parameters" : [
             { "kind" : "IdScope",           "name" : "'Execution'" }
           ],
@@ -11051,10 +11220,17 @@
           "version" : "None"
         },
         {
+          "enumerant" : "PerVertexKHR",
+          "value" : 5285,
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
+          "version" : "None"
+        },
+        {
           "enumerant" : "PerVertexNV",
           "value" : 5285,
-          "capabilities" : [ "FragmentBarycentricNV" ],
-          "extensions" : [ "SPV_NV_fragment_shader_barycentric" ],
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
           "version" : "None"
         },
         {
@@ -11097,6 +11273,30 @@
           "capabilities" : [ "PhysicalStorageBufferAddresses" ],
           "extensions" : [ "SPV_EXT_physical_storage_buffer" ],
           "version" : "1.5"
+        },
+        {
+          "enumerant" : "BindlessSamplerNV",
+          "value" : 5398,
+          "capabilities" : [ "BindlessTextureNV" ],
+          "version" : "None"
+        },
+        {
+          "enumerant" : "BindlessImageNV",
+          "value" : 5399,
+          "capabilities" : [ "BindlessTextureNV" ],
+          "version" : "None"
+        },
+        {
+          "enumerant" : "BoundSamplerNV",
+          "value" : 5400,
+          "capabilities" : [ "BindlessTextureNV" ],
+          "version" : "None"
+        },
+        {
+          "enumerant" : "BoundImageNV",
+          "value" : 5401,
+          "capabilities" : [ "BindlessTextureNV" ],
+          "version" : "None"
         },
         {
           "enumerant" : "SIMTCallINTEL",
@@ -11416,6 +11616,12 @@
         {
           "enumerant" : "VectorComputeCallableFunctionINTEL",
           "value" : 6087,
+          "capabilities" : [ "VectorComputeINTEL" ],
+          "version" : "None"
+        },
+        {
+          "enumerant" : "MediaBlockIOINTEL",
+          "value" : 6140,
           "capabilities" : [ "VectorComputeINTEL" ],
           "version" : "None"
         }
@@ -11886,17 +12092,31 @@
           "version" : "None"
         },
         {
+          "enumerant" : "BaryCoordKHR",
+          "value" : 5286,
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
+          "version" : "None"
+        },
+        {
           "enumerant" : "BaryCoordNV",
           "value" : 5286,
-          "capabilities" : [ "FragmentBarycentricNV" ],
-          "extensions" : [ "SPV_NV_fragment_shader_barycentric" ],
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
+          "version" : "None"
+        },
+        {
+          "enumerant" : "BaryCoordNoPerspKHR",
+          "value" : 5287,
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
           "version" : "None"
         },
         {
           "enumerant" : "BaryCoordNoPerspNV",
           "value" : 5287,
-          "capabilities" : [ "FragmentBarycentricNV" ],
-          "extensions" : [ "SPV_NV_fragment_shader_barycentric" ],
+          "capabilities" : [ "FragmentBarycentricNV", "FragmentBarycentricKHR" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
           "version" : "None"
         },
         {
@@ -12622,6 +12842,11 @@
           "version" : "1.5"
         },
         {
+          "enumerant" : "UniformDecoration",
+          "value" : 71,
+          "version" : "1.6"
+        },
+        {
           "enumerant" : "FragmentShadingRateKHR",
           "value" : 4422,
           "capabilities" : [ "Shader" ],
@@ -12947,9 +13172,15 @@
           "version" : "None"
         },
         {
+          "enumerant" : "FragmentBarycentricKHR",
+          "value" : 5284,
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
+          "version" : "None"
+        },
+        {
           "enumerant" : "FragmentBarycentricNV",
           "value" : 5284,
-          "extensions" : [ "SPV_NV_fragment_shader_barycentric" ],
+          "extensions" : [ "SPV_NV_fragment_shader_barycentric", "SPV_KHR_fragment_shader_barycentric" ],
           "version" : "None"
         },
         {
@@ -13233,10 +13464,22 @@
           "version" : "None"
         },
         {
+          "enumerant" : "DemoteToHelperInvocation",
+          "value" : 5379,
+          "capabilities" : [ "Shader" ],
+          "version" : "1.6"
+        },
+        {
           "enumerant" : "DemoteToHelperInvocationEXT",
           "value" : 5379,
           "capabilities" : [ "Shader" ],
           "extensions" : [ "SPV_EXT_demote_to_helper_invocation" ],
+          "version" : "1.6"
+        },
+        {
+          "enumerant" : "BindlessTextureNV",
+          "value" : 5390,
+          "extensions" : [ "SPV_NV_bindless_texture" ],
           "version" : "None"
         },
         {
@@ -13471,29 +13714,50 @@
           "version" : "None"
         },
         {
+          "enumerant" : "DotProductInputAll",
+          "value" : 6016,
+          "version" : "1.6"
+        },
+        {
           "enumerant" : "DotProductInputAllKHR",
           "value" : 6016,
           "extensions" : [ "SPV_KHR_integer_dot_product" ],
-          "version" : "None"
+          "version" : "1.6"
+        },
+        {
+          "enumerant" : "DotProductInput4x8Bit",
+          "value" : 6017,
+          "capabilities" : [ "Int8" ],
+          "version" : "1.6"
         },
         {
           "enumerant" : "DotProductInput4x8BitKHR",
           "value" : 6017,
           "capabilities" : [ "Int8" ],
           "extensions" : [ "SPV_KHR_integer_dot_product" ],
-          "version" : "None"
+          "version" : "1.6"
+        },
+        {
+          "enumerant" : "DotProductInput4x8BitPacked",
+          "value" : 6018,
+          "version" : "1.6"
         },
         {
           "enumerant" : "DotProductInput4x8BitPackedKHR",
           "value" : 6018,
           "extensions" : [ "SPV_KHR_integer_dot_product" ],
-          "version" : "None"
+          "version" : "1.6"
+        },
+        {
+          "enumerant" : "DotProduct",
+          "value" : 6019,
+          "version" : "1.6"
         },
         {
           "enumerant" : "DotProductKHR",
           "value" : 6019,
           "extensions" : [ "SPV_KHR_integer_dot_product" ],
-          "version" : "None"
+          "version" : "1.6"
         },
         {
           "enumerant" : "BitInstructions",
@@ -13504,14 +13768,12 @@
         {
           "enumerant" : "AtomicFloat32AddEXT",
           "value" : 6033,
-          "capabilities" : [ "Shader" ],
           "extensions" : [ "SPV_EXT_shader_atomic_float_add" ],
           "version" : "None"
         },
         {
           "enumerant" : "AtomicFloat64AddEXT",
           "value" : 6034,
-          "capabilities" : [ "Shader" ],
           "extensions" : [ "SPV_EXT_shader_atomic_float_add" ],
           "version" : "None"
         },
@@ -13530,7 +13792,6 @@
         {
           "enumerant" : "AtomicFloat16AddEXT",
           "value" : 6095,
-          "capabilities" : [ "Shader" ],
           "extensions" : [ "SPV_EXT_shader_atomic_float16_add" ],
           "version" : "None"
         },
@@ -13607,10 +13868,15 @@
       "kind" : "PackedVectorFormat",
       "enumerants" : [
         {
+          "enumerant" : "PackedVectorFormat4x8Bit",
+          "value" : 0,
+          "version" : "1.6"
+        },
+        {
           "enumerant" : "PackedVectorFormat4x8BitKHR",
           "value" : 0,
           "extensions" : [ "SPV_KHR_integer_dot_product" ],
-          "version" : "None"
+          "version" : "1.6"
         }
       ]
     },
