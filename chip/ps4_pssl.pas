@@ -1682,7 +1682,7 @@ begin
     end;
   8:begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+7,'], s[',SBASE*2,':',SBASE*2+7,'], ');
+      Write('s[',SDST,':',SDST+7,'], s[',SBASE*2,':',SBASE*2+3,'], ');
     end;
   16:
     begin
@@ -1762,7 +1762,7 @@ begin
  Writeln;
 end;
 
-procedure _print_VOP3a_cmp(Var VOP3:TVOP3a);
+procedure _print_VOP3c(Var VOP3:TVOP3a);
 begin
  Case VOP3.OP of
 
@@ -2190,11 +2190,18 @@ begin
  if Byte(VOP3.ABS).TestBit(0) then Write('abs(');
  _print_ssrc9(VOP3.SRC0);
  if Byte(VOP3.ABS).TestBit(0) then Write(')');
- Write(', ');
- if Byte(VOP3.NEG).TestBit(1) then Write('-');
- if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
- _print_ssrc9(VOP3.SRC1);
- if Byte(VOP3.ABS).TestBit(1) then Write(')');
+
+ Case VOP3.OP of
+  384+V_NOP..384+V_MOVRELSD_B32:;
+  else
+   begin
+    Write(', ');
+    if Byte(VOP3.NEG).TestBit(1) then Write('-');
+    if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
+    _print_ssrc9(VOP3.SRC1);
+    if Byte(VOP3.ABS).TestBit(1) then Write(')');
+   end;
+ end;
 
  Case VOP3.OP of
   V_MAD_LEGACY_F32..V_DIV_FIXUP_F64,
@@ -2262,7 +2269,7 @@ end;
 procedure _print_VOP3(Var SPI:TSPI);
 begin
  Case SPI.VOP3a.OP of
-    0..255:_print_VOP3a_cmp(SPI.VOP3a);
+    0..255:_print_VOP3c(SPI.VOP3a);
   293..298,
   365..366:_print_VOP3b(SPI.VOP3b);
   else
