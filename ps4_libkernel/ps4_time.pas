@@ -421,5 +421,16 @@ begin
  Result:=0;
 end;
 
+Procedure Init;
+var
+ min,max,cur:ULONG;
+begin
+ NtQueryTimerResolution(@min,@max,@cur);
+ NtSetTimerResolution(max,True,@cur);
+end;
+
+initialization
+ Init;
+
 end.
 

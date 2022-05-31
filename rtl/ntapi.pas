@@ -81,6 +81,18 @@ function NtQueryPerformanceCounter(
           Frequency:PLARGE_INTEGER
          ):DWORD; stdcall; external 'ntdll';
 
+function NtQueryTimerResolution(
+          MinimumResolution:PULONG;
+          MaximumResolution:PULONG;
+          CurrentResolution:PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtSetTimerResolution(
+          DesiredResolution:ULONG;
+          SetResolution:BOOL;
+          CurrentResolution:PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
 implementation
 
 end.

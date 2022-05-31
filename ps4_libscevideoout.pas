@@ -995,6 +995,8 @@ var
 
  elap:QWORD;
  time:DWORD;
+
+ //t1,t2:QWORD;
 begin
  bufferIndex:=node^.u.bufferIndex;
  flipMode   :=node^.u.flipMode   ;
@@ -1094,16 +1096,22 @@ begin
    time:=0;
   end;
 
+  //SwSaveTime(t1);
+
   ps4_usleep(time);
   //Sleep(_usec2msec(time));
 
+  //t2:=SwTimePassedUnits(t1);
+  //t2:=(t2+9) div 10;
+  //Writeln('elap=',elap,' time=',time,' usleep=',t2);
+
   if (FGpuFlip<>nil) then
   begin
-   //FGpuFlip.IsComplite(FcurrentBuffer);
-   While (not FGpuFlip.IsComplite(FcurrentBuffer)) do
-   begin
-    ps4_usleep(150);
-   end;
+   FGpuFlip.IsComplite(FcurrentBuffer);
+   //While (not FGpuFlip.IsComplite(FcurrentBuffer)) do
+   //begin
+   // ps4_usleep(150);
+   //end;
   end;
 
  end;
