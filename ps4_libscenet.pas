@@ -6,7 +6,8 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 implementation
 
@@ -68,7 +69,7 @@ function ps4_sceNetCtlCheckCallback():Integer; SysV_ABI_CDecl;
 begin
  if (NetCtlCb.func<>nil) then
  begin
-  NetCtlCb.func(SCE_NET_CTL_EVENT_TYPE_DISCONNECTED,NetCtlCb.arg);
+  //NetCtlCb.func(SCE_NET_CTL_EVENT_TYPE_DISCONNECTED,NetCtlCb.arg);
  end;
  Result:=0;
 end;
@@ -80,6 +81,23 @@ function ps4_sceNetCtlGetResult(eventType:Integer;errorCode:PInteger):Integer; S
 begin
  if (errorCode=nil) then Exit(Integer(SCE_NET_CTL_ERROR_INVALID_ADDR));
  errorCode^:=Integer(SCE_NET_CTL_ERROR_ETHERNET_PLUGOUT);
+ Result:=0;
+end;
+
+function ps4_sceNetCtlRegisterCallbackForNpToolkit(func:SceNetCtlCallback;arg:Pointer;cid:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ NetCtlCb.func:=func;
+ NetCtlCb.arg:=arg;
+ if (cid<>nil) then cid^:=0;
+ Result:=0;
+end;
+
+function ps4_sceNetCtlCheckCallbackForNpToolkit():Integer; SysV_ABI_CDecl;
+begin
+ if (NetCtlCb.func<>nil) then
+ begin
+  //NetCtlCb.func(SCE_NET_CTL_EVENT_TYPE_DISCONNECTED,NetCtlCb.arg);
+ end;
  Result:=0;
 end;
 
@@ -106,6 +124,11 @@ begin
  lib^.set_proc($509F99ED0FB8724D,@ps4_sceNetCtlRegisterCallback);
  lib^.set_proc($890C378903E1BD44,@ps4_sceNetCtlCheckCallback);
  lib^.set_proc($D1C06076E3D147E3,@ps4_sceNetCtlGetResult);
+
+ lib:=Result._add_lib('libSceNetCtlForNpToolkit');
+
+ lib^.set_proc($C08B0ACBE4DF78BB,@ps4_sceNetCtlRegisterCallbackForNpToolkit);
+ lib^.set_proc($BB9A2AB6520FF85C,@ps4_sceNetCtlCheckCallbackForNpToolkit);
 end;
 
 initialization

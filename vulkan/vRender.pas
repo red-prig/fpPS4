@@ -7,7 +7,8 @@ interface
 uses
   Classes,
   SysUtils,
-  ps4_types,
+  RWLock,
+  sys_types,
   g23tree,
   ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
@@ -15,7 +16,9 @@ uses
   vDevice,
   vMemory,
   vShader,
+  vShaderExt,
   vPipeline,
+  //vSetsPools,
   vImage;
 
 type
@@ -32,16 +35,18 @@ type
   dependency:TVkSubpassDependency;
 
   Procedure  Clear;
-  Procedure  SetZorderStage(s:TVkPipelineStageFlagBits);
-  Procedure  AddColorRef(id:TVkUInt32);
-  Procedure  SetDepthStencilRef(id:TVkUInt32);
-  Procedure  AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean);
-  Procedure  AddDepthAt(format:TVkFormat;ClearDepth,DrawDepth,ClearStencil,DrawStencil:Boolean);
+  Procedure  SetZorderStage(s:TVkPipelineStageFlags);
+  Procedure  AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
+  Procedure  SetDepthStencilRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
+  Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
+  //Procedure  AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean;samples:TVkSampleCountFlagBits);
+  //Procedure  AddDepthAt(format:TVkFormat;ClearDepth,DrawDepth,ClearStencil,DrawStencil:Boolean);
+  Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
   Function   Compile:Boolean;
  end;
 
  TvGraphicsPipeline=class(TvPipeline)
-  FLayout:TvPipelineLayout;
+  //FLayout:TvPipelineLayout;
   FRenderPass:TvRenderPass;
 
   Viewports:array[0..15] of TVkViewport; //viewportState.viewportCount
@@ -49,7 +54,8 @@ type
 
   ColorBlends:array[0..7] of TVkPipelineColorBlendAttachmentState; //colorBlending.attachmentCount
 
-  FShaders:array[0..5] of TvShader;
+  //FShaders:array[0..5] of TvShader;
+  FShaderGroup:TvShaderGroup;
 
   dynamicStates:array[0..1] of TVkDynamicState; //dynamicState.dynamicStateCount
 
@@ -62,19 +68,19 @@ type
   DepthStencil:TVkPipelineDepthStencilStateCreateInfo;
   dynamicState:TVkPipelineDynamicStateCreateInfo;
 
-  emulate_primtype:TVkPrimitiveTopology;
+  emulate_primtype:Integer;
 
   Procedure SetPrimType(t:TVkPrimitiveTopology);
   Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
   Procedure AddBlend(const b:TVkPipelineColorBlendAttachmentState);
   Procedure Clear;
-  Procedure SetLSShader(Shader:TvShader);
-  Procedure SetHSShader(Shader:TvShader);
-  Procedure SetESShader(Shader:TvShader);
-  Procedure SetGSShader(Shader:TvShader);
-  Procedure SetVSShader(Shader:TvShader);
-  Procedure SetPSShader(Shader:TvShader);
-  procedure SetLayout(Layout:TvPipelineLayout);
+  //Procedure SetLSShader(Shader:TvShader);
+  //Procedure SetHSShader(Shader:TvShader);
+  //Procedure SetESShader(Shader:TvShader);
+  //Procedure SetGSShader(Shader:TvShader);
+  //Procedure SetVSShader(Shader:TvShader);
+  //Procedure SetPSShader(Shader:TvShader);
+  //procedure SetLayout(Layout:TvPipelineLayout);
   procedure SetRenderPass(RenderPass:TvRenderPass);
   function  Compile:Boolean;
  end;
@@ -87,244 +93,44 @@ type
   FClearValuesCount:TVkUInt32;
   FClearValues:array[0..8] of TVkClearValue;
   Procedure  AddClearColor(clr:TVkClearValue);
+  Function   GetInfo:TVkRenderPassBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
   Destructor Destroy; override;
+  Procedure  Release(Sender:TOBject);
  end;
 
  TvRenderTargetsSet=specialize T23treeSet<TvRenderTargets,TvRenderTargets>;
 
- TvCmdBuffer=class
-  cmdbuf:TVkCommandBuffer;
-
-  FRenderTargets:TvRenderTargets;
-  FRenderList:TvRenderTargetsSet;
-
-  FWaitSemaphore:TvSemaphore;
-  FSignSemaphore:TvSemaphore;
-  FSignFence:TvFence;
-
-  FCBState:Boolean;
-
-  function  BeginCmdBuffer:Boolean;
-  Procedure EndCmdBuffer;
-  function  BeginRenderPass(RT:TvRenderTargets):Boolean;
-  Procedure EndRenderPass;
-
-  Procedure QueueSubmit;
-  Procedure ClearRenderList;
-
-  Procedure DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
-  Procedure DrawIndexAuto(INDICES:DWORD;INDEX_TYPE:TVkIndexType);
- end;
-
- TUnionResource=class
-  Addr:Pointer;
-  host:TvPointer;
- end;
-
- TUnionResourceBuffer=class(TUnionResource)
-  FHostBuf:TvBuffer;
-  Foffset:TVkDeviceSize; //offset inside buffer
-  Destructor  Destroy; override;
- end;
-
- TUnionResourceImage=class(TUnionResource)
-  FImage:TvDeviceImage2D;
-  devc:TvPointer;
-  Destructor  Destroy; override;
- end;
-
-function FindHostBuffer(Addr:Pointer):TUnionResourceBuffer;
-function FetchHostBuffer(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TUnionResourceBuffer;
-
-function FindUnionImage2D(Addr:Pointer):TUnionResourceImage;
-function FetchUnionImage2D(Addr:Pointer;cformat:TVkFormat;extend:TVkExtent2D;usage:TVkFlags):TUnionResourceImage;
+Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 
 implementation
 
-//lock res TODO
-
-type
- TUnionResourceCompare=object
-  function c(const a,b:TUnionResource):Integer; static;
- end;
-
- TUnionResourceSet=specialize T23treeSet<TUnionResource,TUnionResourceCompare>;
-
-var
- FUnionBuffer:TUnionResourceSet;
- FUnionImages2D:TUnionResourceSet;
-
-function FindHostBuffer(Addr:Pointer):TUnionResourceBuffer;
-var
- i:TUnionResourceSet.Iterator;
- t:TUnionResourceBuffer;
-begin
- Result:=nil;
- t:=TUnionResourceBuffer.Create;
- t.Addr:=Addr;
- i:=FUnionBuffer.find(t);
- if (i.Item<>nil) then
- begin
-  Result:=TUnionResourceBuffer(i.Item^);
- end;
- FreeAndNil(t);
-end;
-
-function FetchHostBuffer(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TUnionResourceBuffer;
+{
 const
  buf_ext:TVkExternalMemoryBufferCreateInfo=(
   sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
   pNext:nil;
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
-var
- i:TUnionResourceSet.Iterator;
- t:TUnionResourceBuffer;
- host:TvPointer;
 
- procedure _init;
- var
-  mr:TVkMemoryRequirements;
-  p:TVkDeviceSize;
- begin
-  t.host:=host;
-  t.FHostBuf:=TvBuffer.Create(Size,usage,@buf_ext);
-  t.Foffset:=0;
-
-  mr:=t.FHostBuf.GetRequirements;
-
-  if IsAlign(host.FOffset,mr.alignment) then
-  begin
-   t.FHostBuf.BindMem(host);
-  end else
-  begin
-   p:=AlignDw(host.FOffset,mr.alignment);
-   t.Foffset:=(host.FOffset-p);
-
-   host.FOffset:=p;
-   Size:=Size+t.Foffset;
-
-   FreeAndNil(t.FHostBuf);
-   t.FHostBuf:=TvBuffer.Create(Size,usage,@buf_ext);
-
-   t.FHostBuf.BindMem(host);
-  end;
-
- end;
-
-begin
- Result:=nil;
- t:=TUnionResourceBuffer.Create;
- t.Addr:=Addr;
- i:=FUnionBuffer.find(t);
- if (i.Item=nil) then
- begin
-  if not TryGetHostPointerByAddr(addr,host) then
-  begin
-   FreeAndNil(t);
-   Exit;
-  end;
-  FUnionBuffer.Insert(t);
-  _init;
-  Result:=t;
- end else
- begin
-  FreeAndNil(t);
-  t:=TUnionResourceBuffer(i.Item^);
-  if not TryGetHostPointerByAddr(addr,host) then
-  begin
-   FUnionBuffer.delete(t);
-   FreeAndNil(t);
-   Exit;
-  end;
-  if (t.host.FHandle<>host.FHandle) or
-     (t.host.FOffset<>host.FOffset) or
-     (t.FHostBuf.FSize<>Size) or
-     (t.FHostBuf.FUsage<>usage) then
-  begin
-   FreeAndNil(t.FHostBuf);
-   _init;
-  end;
-  Result:=t;
- end;
-end;
-
-function FindUnionImage2D(Addr:Pointer):TUnionResourceImage;
-var
- i:TUnionResourceSet.Iterator;
- t:TUnionResourceImage;
-begin
- Result:=nil;
- t:=TUnionResourceImage.Create;
- t.Addr:=Addr;
- i:=FUnionImages2D.find(t);
- if (i.Item<>nil) then
- begin
-  Result:=TUnionResourceImage(i.Item^);
- end;
- FreeAndNil(t);
-end;
-
-function FetchUnionImage2D(Addr:Pointer;cformat:TVkFormat;extend:TVkExtent2D;usage:TVkFlags):TUnionResourceImage;
-var
- i:TUnionResourceSet.Iterator;
- t:TUnionResourceImage;
- host:TvPointer;
-
- procedure _init;
- begin
-  t.host:=host;
-  t.FImage:=TvDeviceImage2D.Create(cformat,TVkExtent3D.Create(extend.width,extend.height,1),usage);
-  t.devc:=MemManager.Alloc(
-    t.FImage.GetRequirements,
-    ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-  );
-  t.FImage.BindMem(t.devc);
- end;
-
-begin
- Result:=nil;
- t:=TUnionResourceImage.Create;
- t.Addr:=Addr;
- i:=FUnionImages2D.find(t);
- if (i.Item=nil) then
- begin
-  if not TryGetHostPointerByAddr(addr,host) then
-  begin
-   FreeAndNil(t);
-   Exit;
-  end;
-  FUnionImages2D.Insert(t);
-  _init;
-  Result:=t;
- end else
- begin
-  FreeAndNil(t);
-  t:=TUnionResourceImage(i.Item^);
-  if not TryGetHostPointerByAddr(addr,host) then
-  begin
-   FUnionImages2D.delete(t);
-   FreeAndNil(t);
-   Exit;
-  end;
-  if (t.host.FHandle<>host.FHandle) or
-     (t.host.FOffset<>host.FOffset) or
-     (t.FImage.FFormat<>cformat) or
-     (t.FImage.FUsage<>usage) or
-     (t.FImage.FExtent.width<>extend.width) or
-     (t.FImage.FExtent.height<>extend.height) then
-  begin
-   FreeAndNil(t.FImage);
-   MemManager.Free(t.devc);
-   _init;
-  end;
-  Result:=t;
- end;
-end;
+ img_ext:TVkExternalMemoryImageCreateInfo=(
+  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+  pNext:nil;
+  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
+ );
+}
 
 Procedure TvRenderPass.Clear;
 begin
+
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyRenderPass(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+
  AtCount:=0;
 
  FillChar(ColorAt,SizeOf(ColorAt),0);
@@ -358,44 +164,105 @@ begin
  dependency.dstAccessMask:=0{ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)};
 end;
 
-Procedure TvRenderPass.SetZorderStage(s:TVkPipelineStageFlagBits);
+Procedure TvRenderPass.SetZorderStage(s:TVkPipelineStageFlags);
 begin
- dependency.srcStageMask:=TVkPipelineStageFlags(ord(dependency.srcStageMask) or ord(s));
- dependency.dstStageMask:=TVkPipelineStageFlags(ord(dependency.dstStageMask) or ord(s));
+ dependency.srcStageMask:=dependency.srcStageMask or s;
+ dependency.dstStageMask:=dependency.dstStageMask or s;
 end;
 
-Procedure TvRenderPass.AddColorRef(id:TVkUInt32);
+Procedure TvRenderPass.AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
+var
+ am:TVkAccessFlags;
 begin
  if (subpass.colorAttachmentCount>7) then Exit;
  ColorRef[subpass.colorAttachmentCount].attachment:=id;
  ColorRef[subpass.colorAttachmentCount].layout    :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL{VK_IMAGE_LAYOUT_GENERAL};
  Inc(subpass.colorAttachmentCount);
 
- dependency.srcStageMask :=TVkPipelineStageFlags(ord(dependency.srcStageMask) or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
- dependency.dstStageMask :=TVkPipelineStageFlags(ord(dependency.dstStageMask) or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
- dependency.dstAccessMask:=TVkAccessFlags(ord(dependency.dstAccessMask) or ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT));
+ dependency.srcStageMask :=dependency.srcStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+ dependency.dstStageMask :=dependency.dstStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+ am:=GetColorAccessMask(IMAGE_USAGE);
+
+ dependency.srcAccessMask:=dependency.srcAccessMask or am;
+ dependency.dstAccessMask:=dependency.dstAccessMask or am;
 end;
 
-Procedure TvRenderPass.SetDepthStencilRef(id:TVkUInt32);
+Procedure TvRenderPass.SetDepthStencilRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
+var
+ am:TVkAccessFlags;
 begin
  subpass.pDepthStencilAttachment:=@pDepthStencilRef;
- pDepthStencilRef.attachment :=id;
- pDepthStencilRef.layout     :=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
- dependency.dstAccessMask:=TVkAccessFlags(ord(dependency.dstAccessMask) or ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT));
+ pDepthStencilRef.attachment :=id;
+ pDepthStencilRef.layout     :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+
+ am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
+
+ dependency.srcAccessMask:=dependency.srcAccessMask or am;
+ dependency.dstAccessMask:=dependency.dstAccessMask or am;
 end;
 
-Procedure TvRenderPass.AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean);
+Procedure TvRenderPass.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
 begin
  if (AtCount>8) then Exit;
 
  ColorAt[AtCount]:=Default(TVkAttachmentDescription);
  ColorAt[AtCount].format        :=format;
- ColorAt[AtCount].samples       :=VK_SAMPLE_COUNT_1_BIT;
+ ColorAt[AtCount].samples       :=samples{VK_SAMPLE_COUNT_1_BIT};
+
+ With ColorAt[AtCount] do
+  if (IMAGE_USAGE and TM_CLEAR<>0) then
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
+  end else
+  if (IMAGE_USAGE and TM_READ<>0) then
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
+  end else
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  end;
+
+ With ColorAt[AtCount] do
+  if (IMAGE_USAGE and TM_WRITE<>0) then
+  begin
+   storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
+  end else
+  begin
+   storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  end;
+
+ ColorAt[AtCount].stencilLoadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+ ColorAt[AtCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+ With ColorAt[AtCount] do
+  if (IMAGE_USAGE and TM_READ<>0) then
+  begin
+   initialLayout :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  end else
+  begin
+   initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+  end;
+
+ With ColorAt[AtCount] do
+  finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+ Inc(AtCount);
+end;
+
+{
+Procedure TvRenderPass.AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean;samples:TVkSampleCountFlagBits);
+begin
+ if (AtCount>8) then Exit;
+
+ ColorAt[AtCount]:=Default(TVkAttachmentDescription);
+ ColorAt[AtCount].format        :=format;
+ ColorAt[AtCount].samples       :=samples{VK_SAMPLE_COUNT_1_BIT};
 
  Case ClearColor of
   True :ColorAt[AtCount].loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
-  False:ColorAt[AtCount].loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  False:ColorAt[AtCount].loadOp:={VK_ATTACHMENT_LOAD_OP_DONT_CARE} VK_ATTACHMENT_LOAD_OP_LOAD;
  end;
 
  Case DrawColor of
@@ -406,15 +273,39 @@ begin
  ColorAt[AtCount].stencilLoadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
  ColorAt[AtCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
- ColorAt[AtCount].initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+ ColorAt[AtCount].initialLayout :={VK_IMAGE_LAYOUT_UNDEFINED} VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
  ColorAt[AtCount].finalLayout   :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
  {VK_IMAGE_LAYOUT_GENERAL}
  {VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL};
  Inc(AtCount);
 end;
+}
 
-Procedure TvRenderPass.AddDepthAt(format:TVkFormat;ClearDepth,DrawDepth,ClearStencil,DrawStencil:Boolean);
+Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+begin
+ if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+ end else
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+ end;
+end;
+
+Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+begin
+ Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord((DEPTH_USAGE or STENCIL_USAGE) and TM_READ <>0) ) or
+         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) );
+end;
+
+Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
+begin
+ Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord(IMAGE_USAGE and TM_READ<>0) ) or
+         (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord(IMAGE_USAGE and (TM_WRITE or TM_CLEAR)<>0) );
+end;
+
+Procedure TvRenderPass.AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
 begin
  if (AtCount>8) then Exit;
 
@@ -422,31 +313,62 @@ begin
  ColorAt[AtCount].format        :=format;
  ColorAt[AtCount].samples       :=VK_SAMPLE_COUNT_1_BIT;
 
- Case ClearDepth of
-  True :ColorAt[AtCount].loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
-  False:ColorAt[AtCount].loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
- end;
+ With ColorAt[AtCount] do
+  if (DEPTH_USAGE and TM_CLEAR<>0) then
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
+  end else
+  if (DEPTH_USAGE and TM_READ<>0) then
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
+  end else
+  begin
+   loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  end;
 
- Case DrawDepth of
-  True :ColorAt[AtCount].storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
-  False:ColorAt[AtCount].storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
- end;
+ With ColorAt[AtCount] do
+  if (DEPTH_USAGE and TM_WRITE<>0) then
+  begin
+   storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
+  end else
+  begin
+   storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  end;
 
- Case ClearStencil of
-  True :ColorAt[AtCount].stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
-  False:ColorAt[AtCount].stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
- end;
+ With ColorAt[AtCount] do
+  if (STENCIL_USAGE and TM_CLEAR<>0) then
+  begin
+   stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
+  end else
+  if (STENCIL_USAGE and TM_READ<>0) then
+  begin
+   stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
+  end else
+  begin
+   stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  end;
 
- Case DrawStencil of
-  True :ColorAt[AtCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_STORE;
-  False:ColorAt[AtCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
- end;
+ With ColorAt[AtCount] do
+  if (STENCIL_USAGE and TM_WRITE<>0) then
+  begin
+   stencilStoreOp:=VK_ATTACHMENT_STORE_OP_STORE;
+  end else
+  begin
+   stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  end;
 
- ColorAt[AtCount].initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
- ColorAt[AtCount].finalLayout   :=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+ With ColorAt[AtCount] do
+  if ((DEPTH_USAGE or STENCIL_USAGE) and TM_READ<>0) then
+  begin
+   initialLayout :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+  end else
+  begin
+   initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+  end;
 
- {VK_IMAGE_LAYOUT_GENERAL}
- {VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL};
+ With ColorAt[AtCount] do
+  finalLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+
  Inc(AtCount);
 end;
 
@@ -457,6 +379,8 @@ var
 begin
  Result:=False;
  if (AtCount=0) then Exit;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 
  info:=Default(TVkRenderPassCreateInfo);
  info.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -483,16 +407,23 @@ Procedure TvGraphicsPipeline.SetPrimType(t:TVkPrimitiveTopology);
 begin
  Case ord(t) of
   ord(VK_PRIMITIVE_TOPOLOGY_POINT_LIST)..ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY):
+  begin
    inputAssembly.topology:=t;
+   emulate_primtype:=0;
+  end;
 
-  DI_PT_RECTLIST ,
+  DI_PT_RECTLIST:
+   begin
+    inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    emulate_primtype:=Integer(t);
+   end;
   DI_PT_LINELOOP ,
   DI_PT_QUADLIST ,
   DI_PT_QUADSTRIP,
   DI_PT_POLYGON  :
   begin
-   inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-   emulate_primtype:=t;
+   inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+   emulate_primtype:=Integer(t);
   end;
 
  end;
@@ -516,18 +447,27 @@ end;
 
 Procedure TvGraphicsPipeline.Clear;
 begin
+
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyPipeline(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+
  vertexInputInfo:=Default(TVkPipelineVertexInputStateCreateInfo);
  vertexInputInfo.sType                          :=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
  inputAssembly:=Default(TVkPipelineInputAssemblyStateCreateInfo);
  inputAssembly.sType                 :=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
  inputAssembly.topology              :=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
- inputAssembly.primitiveRestartEnable:=VK_FALSE;
+ inputAssembly.primitiveRestartEnable:=VK_FALSE;  //VGT_MULTI_PRIM_IB_RESET_EN
 
  FillChar(Viewports  ,SizeOf(Viewports),0);
  FillChar(Scissors   ,SizeOf(Scissors) ,0);
  FillChar(ColorBlends,SizeOf(ColorBlends),0);
- FillChar(FShaders   ,SizeOf(FShaders),0);
+ //FillChar(FShaders   ,SizeOf(FShaders),0);
+
+ FShaderGroup:=nil;
 
  viewportState:=Default(TVkPipelineViewportStateCreateInfo);
  viewportState.sType        :=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -539,11 +479,11 @@ begin
  rasterizer:=Default(TVkPipelineRasterizationStateCreateInfo);
  rasterizer.sType           :=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
  rasterizer.depthClampEnable:=VK_FALSE;
- rasterizer.rasterizerDiscardEnable:=VK_FALSE;
- rasterizer.polygonMode     :=VK_POLYGON_MODE_FILL;
- rasterizer.lineWidth       :=1;
- rasterizer.cullMode        :=ord(VK_CULL_MODE_NONE);
- rasterizer.frontFace       :=VK_FRONT_FACE_COUNTER_CLOCKWISE;
+ rasterizer.rasterizerDiscardEnable:=VK_FALSE;      //DB_SHADER_CONTROL.KILL_ENABLE  DB_RENDER_CONTROL.FORCE_COLOR_KILL
+ rasterizer.polygonMode     :=VK_POLYGON_MODE_FILL; //PA_SU_SC_MODE_CNTL.POLY_MODE  POLYMODE_FRONT_PTYPE POLYMODE_BACK_PTYPE
+ rasterizer.lineWidth       :=1;                    //PA_SU_LINE_CNTL.WIDTH
+ rasterizer.cullMode        :=ord(VK_CULL_MODE_NONE);  //CULL_FRONT CULL_BACK
+ rasterizer.frontFace       :=VK_FRONT_FACE_COUNTER_CLOCKWISE; //FACE
  rasterizer.depthBiasEnable :=VK_FALSE;
  rasterizer.depthBiasConstantFactor:=0;
  rasterizer.depthBiasClamp         :=0;
@@ -615,56 +555,6 @@ end;
 //4 VS  VK_SHADER_STAGE_VERTEX_BIT
 //5 PS  VK_SHADER_STAGE_FRAGMENT_BIT
 
-Procedure TvGraphicsPipeline.SetLSShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_VERTEX_BIT) then
-  FShaders[0]:=Shader;
-end;
-
-Procedure TvGraphicsPipeline.SetHSShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) then
-  FShaders[1]:=Shader;
-end;
-
-Procedure TvGraphicsPipeline.SetESShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) then
-  FShaders[2]:=Shader;
-end;
-
-Procedure TvGraphicsPipeline.SetGSShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_GEOMETRY_BIT) then
-  FShaders[3]:=Shader;
-end;
-
-Procedure TvGraphicsPipeline.SetVSShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_VERTEX_BIT) then
-  FShaders[4]:=Shader;
-end;
-
-Procedure TvGraphicsPipeline.SetPSShader(Shader:TvShader);
-begin
- if (Shader=nil) then Exit;
- if (Shader.FStage=VK_SHADER_STAGE_FRAGMENT_BIT) then
-  FShaders[5]:=Shader;
-end;
-
-procedure TvGraphicsPipeline.SetLayout(Layout:TvPipelineLayout);
-begin
- if (FLayout<>Layout) then
- begin
-  FLayout:=Layout;
- end;
-end;
-
 procedure TvGraphicsPipeline.SetRenderPass(RenderPass:TvRenderPass);
 begin
  if (FRenderPass<>RenderPass) then
@@ -674,36 +564,34 @@ begin
 end;
 
 function TvGraphicsPipeline.Compile:Boolean;
+type
+ AVkPipelineShaderStageCreateInfo=array[0..6] of TVkPipelineShaderStageCreateInfo;
 var
  r:TVkResult;
- i:Integer;
- shaderStages:array[0..5] of TVkPipelineShaderStageCreateInfo; // info.stageCount
+ Stages:AVkPipelineShaderStageCreateInfo; // info.stageCount
  info:TVkGraphicsPipelineCreateInfo;
 begin
  Result:=False;
- if (FLayout=nil) then Exit;
+
+ if (FShaderGroup=nil) then Exit;
+ //if (FLayout=nil) then Exit;
  if (FRenderPass=nil) then Exit;
  if (viewportState.viewportCount=0) then Exit;
  if (viewportState.scissorCount=0) then Exit;
 
  info:=Default(TVkGraphicsPipelineCreateInfo);
- FillChar(shaderStages,SizeOf(shaderStages),0);
- For i:=0 to 5 do
-  if (FShaders[i]<>nil) then
-  begin
-   shaderStages[info.stageCount].sType :=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-   shaderStages[info.stageCount].stage :=FShaders[i].FStage;
-   shaderStages[info.stageCount].module:=FShaders[i].FHandle;
-   shaderStages[info.stageCount].pName :=PChar(FShaders[i].FEntry);
-   Inc(info.stageCount);
-  end;
+
+ Stages:=Default(AVkPipelineShaderStageCreateInfo);
+
+ FShaderGroup.ExportStages(@Stages,@info.stageCount);
+
  if (info.stageCount=0) then Exit;
 
- if (not FLayout.Compile) then Exit;
+ if (not FShaderGroup.Compile) then Exit;
  if (not FRenderPass.Compile) then Exit;
 
  info.sType              :=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
- info.pStages            :=@shaderStages;
+ info.pStages            :=@Stages;
  info.pVertexInputState  :=@vertexInputInfo;
  info.pInputAssemblyState:=@inputAssembly;
  info.pViewportState     :=@viewportState;
@@ -712,7 +600,7 @@ begin
  info.pDepthStencilState :=@DepthStencil;
  info.pColorBlendState   :=@colorBlending;
  info.pDynamicState      :=@dynamicState;
- info.layout             :=FLayout.FHandle;
+ info.layout             :=FShaderGroup.FLayout.FHandle;
  info.renderPass         :=FRenderPass.FHandle;
  info.subpass            :=0;
  info.basePipelineHandle :=VK_NULL_HANDLE;
@@ -737,6 +625,17 @@ begin
  Inc(FClearValuesCount);
 end;
 
+Function TvRenderTargets.GetInfo:TVkRenderPassBeginInfo;
+begin
+ Result:=Default(TVkRenderPassBeginInfo);
+ Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+ Result.renderPass     :=FRenderPass.FHandle;
+ Result.renderArea     :=FRenderArea;
+ Result.clearValueCount:=FClearValuesCount;
+ Result.pClearValues   :=FClearValues;
+ Result.framebuffer    :=FFramebuffer.FHandle;
+end;
+
 class function TvRenderTargets.c(const a,b:TvRenderTargets):Integer;
 begin
  Result:=CompareByte(a,b,SizeOf(Pointer));
@@ -750,233 +649,13 @@ begin
  inherited;
 end;
 
-///////////////
-
-function TvCmdBuffer.BeginCmdBuffer:Boolean;
-var
- r:TVkResult;
- Info:TVkCommandBufferBeginInfo;
+Procedure TvRenderTargets.Release(Sender:TOBject);
 begin
- Result:=False;
- if (Self=nil) then Exit;
- if FCBState then Exit(True);
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
- Info:=Default(TVkCommandBufferBeginInfo);
- Info.sType:=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
- Info.flags:=ord(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
- Info.pInheritanceInfo:=nil;
- r:=vkBeginCommandBuffer(cmdbuf,@Info);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln('vkBeginCommandBuffer:',r);
-  Exit;
- end;
- FCBState:=True;
- Result:=True;
+ Free; //fref todo
 end;
 
-Procedure TvCmdBuffer.EndCmdBuffer;
-var
- r:TVkResult;
-begin
- if (Self=nil) then Exit;
- if FCBState then
- begin
-  EndRenderPass;
-  r:=vkEndCommandBuffer(cmdbuf);
-  if (r<>VK_SUCCESS) then
-  begin
-   Writeln('vkEndCommandBuffer:',r);
-  end;
-  FCBState:=False;
- end;
-end;
+//////////////
 
-function TvCmdBuffer.BeginRenderPass(RT:TvRenderTargets):Boolean;
-var
- info:TVkRenderPassBeginInfo;
-begin
- Result:=False;
-
- if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
-
- if (RT=nil) then
- begin
-  EndRenderPass;
-  Exit(True);
- end;
-
- if (FRenderTargets=RT) then Exit(True);
- if (RT.FRenderPass=nil) then Exit;
- if (RT.FPipeline=nil) then Exit;
- if (RT.FFramebuffer=nil) then Exit;
-
- if (not RT.FRenderPass.Compile) then Exit;
- if (not RT.FPipeline.Compile) then Exit;
- if (not RT.FFramebuffer.Compile) then Exit;
-
- if (not BeginCmdBuffer) then Exit;
-
- EndRenderPass;
-
- info:=Default(TVkRenderPassBeginInfo);
- info.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
- info.renderPass     :=RT.FRenderPass.FHandle;
- info.renderArea     :=RT.FRenderArea;
- info.clearValueCount:=RT.FClearValuesCount;
- info.pClearValues   :=RT.FClearValues;
- info.framebuffer    :=RT.FFramebuffer.FHandle;
-
- vkCmdBeginRenderPass(cmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
- vkCmdBindPipeline   (cmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,RT.FPipeline.FHandle);
-
- FRenderTargets:=RT;
-
- Result:=True;
-end;
-
-Procedure TvCmdBuffer.EndRenderPass;
-begin
- if (Self=nil) then Exit;
- if (FRenderTargets<>nil) then
- begin
-  vkCmdEndRenderPass(cmdbuf);
-  FRenderList.Insert(FRenderTargets);
-  FRenderTargets:=nil;
- end;
-end;
-
-Procedure TvCmdBuffer.QueueSubmit;
-var
- r:TVkResult;
- info:TVkSubmitInfo;
- waitStages:TVkPipelineStageFlags;
- Fence:TVkFence;
-begin
- if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
- EndCmdBuffer;
-
- waitStages:=ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
-
- info:=Default(TVkSubmitInfo);
- info.sType           :=VK_STRUCTURE_TYPE_SUBMIT_INFO;
- info.commandBufferCount :=1;
- info.pCommandBuffers    :=@cmdbuf;
- info.pWaitDstStageMask :=@waitStages;
-
- if (FWaitSemaphore<>nil) then
- begin
-  info.waitSemaphoreCount:=1;
-  info.pWaitSemaphores   :=@FWaitSemaphore.FHandle;
- end;
-
- if (FSignSemaphore<>nil) then
- begin
-  info.signalSemaphoreCount:=1;
-  info.pSignalSemaphores   :=@FSignSemaphore.FHandle;
- end;
-
- Fence:=VK_NULL_HANDLE;
- if (FSignFence<>nil) then
- begin
-  Fence:=FSignFence.FHandle;
- end;
-
- r:=vkQueueSubmit(RenderQueue,1,@info,Fence);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln('vkQueueSubmit');
-  exit;
- end;
-end;
-
-Procedure TvCmdBuffer.ClearRenderList;
-var
- It:TvRenderTargetsSet.Iterator;
-begin
- if (Self=nil) then Exit;
- It:=FRenderList.cbegin;
- if (It.Item<>nil) then
- repeat
-  TvRenderTargets(It.Item^).Free;
- until not It.Next;
- FRenderList.Free;
- FreeAndNil(FRenderTargets);
-end;
-
-function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
-begin
- Case INDEX_TYPE of
-  VK_INDEX_TYPE_UINT16:Result:=16;
-  VK_INDEX_TYPE_UINT32:Result:=32;
-  VK_INDEX_TYPE_UINT8_EXT :Result:=8;
-  else         Result:=0;
- end;
-end;
-
-Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
-var
- rb:TUnionResourceBuffer;
- Size:TVkDeviceSize;
-begin
- if (Self=nil) then Exit;
- if (FRenderTargets=nil) then Exit;
-
- Size:=INDICES*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
- rb:=FetchHostBuffer(Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
- Assert(rb<>nil);
-
- vkCmdBindIndexBuffer(
-     cmdbuf,
-     rb.FHostBuf.FHandle,
-     rb.Foffset,
-     INDEX_TYPE);
-
- vkCmdDrawIndexed(
-     cmdbuf,
-     INDICES,
-     1,0,0,0);
-
-end;
-
-Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD;INDEX_TYPE:TVkIndexType);
-begin
- if (Self=nil) then Exit;
- if (FRenderTargets=nil) then Exit;
-
- vkCmdDraw(
-     cmdbuf,
-     INDICES,
-     1,0,0);
-
-end;
-
-
-//
-
-function TUnionResourceCompare.c(const a,b:TUnionResource):Integer;
-begin
- Result:=CompareByte(a.Addr,b.Addr,SizeOf(Pointer));
-end;
-
-//
-
-Destructor TUnionResourceBuffer.Destroy;
-begin
- FreeAndNil(FHostBuf);
- inherited;
-end;
-
-//
-
-Destructor TUnionResourceImage.Destroy;
-begin
- FreeAndNil(FImage);
- MemManager.Free(devc);
- inherited;
-end;
 
 
 end.

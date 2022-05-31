@@ -6,10 +6,12 @@ interface
 
 uses
   Windows,
-  Classes, SysUtils,
+  Classes,
+  SysUtils,
   RWLock,
   hamt,
-  ps4_types,
+  sys_types,
+  sys_kernel,
   ps4_handles;
 
 type
@@ -25,7 +27,10 @@ type
  T_set_proc_cb=function(lib:PLIBRARY;nid:QWORD;value:Pointer):Boolean;
  T_get_proc_cb=function(lib:PLIBRARY;nid:QWORD):Pointer;
 
+ TElf_node=class;
+
  TLIBRARY=packed object
+  parent:TElf_node;
   MapSymbol:THAMT;
   attr:DWORD;
   Import:Boolean;
@@ -46,6 +51,7 @@ type
    FPrepared:Boolean;
    FLoadImport:Boolean;
    FInitProt:Boolean;
+   FInitThread:Boolean;
    FInitCode:Boolean;
    aNeed:array of RawByteString;
    aMods:array of TMODULE;
@@ -61,6 +67,7 @@ type
   public
    pFileName:RawByteString;
    property   Handle:Integer read FHandle;
+   property   Next:TElf_node read pNext;
    function   _add_lib(const strName:RawByteString):PLIBRARY;
    function   ModuleNameFromId(id:WORD):RawByteString;
    function   LibraryNameFromId(id:WORD):RawByteString;
@@ -68,12 +75,17 @@ type
    Procedure  Clean; virtual;
    function   Prepare:Boolean; virtual;
    Procedure  LoadSymbolImport(cbs,data:Pointer); virtual;
-   Procedure  InitThread; virtual;
+   Procedure  ReLoadSymbolImport(cbs,data:Pointer); virtual;
+   Procedure  InitThread(is_static:QWORD); virtual;
    Procedure  FreeThread; virtual;
    Procedure  InitProt;   virtual;
    Procedure  InitCode;   virtual;
+   function   module_start(argc:size_t;argp:PPointer):Integer; virtual;
    function   GetCodeFrame:TMemChunk; virtual;
    function   GetEntryPoint:Pointer; virtual;
+   Function   GetModuleInfo:TKernelModuleInfo; virtual;
+   Function   get_proc(nid:QWORD):Pointer;
+   Function   get_proc_by_name(const name:RawByteString):Pointer;
  end;
 
  TOnElfLoadCb=function(Const name:RawByteString):TElf_node;
@@ -105,6 +117,8 @@ type
 
  Tps4_program=object
   public
+   resolve_cb:Pointer;
+   reload_cb:Pointer;
    prog:TElf_node;
    app_file:RawByteString;
    app_path:RawByteString;
@@ -120,7 +134,10 @@ type
    Procedure RegistredFile(node:TElf_node);
    Procedure RegistredMod(node:TElf_node;const strName:RawByteString);
   public
-   function  GetFile(const strName:RawByteString):TElf_node;
+   Procedure LockRd;
+   Procedure Unlock;
+   function  FirstFile:TElf_node;
+   function  AcqureFileByName(const strName:RawByteString):TElf_node;
    procedure PopupFile(node:TElf_node);
    Procedure SetLib(lib:PLIBRARY);
    function  GetLib(const strName:RawByteString):PLIBRARY;
@@ -129,12 +146,14 @@ type
    Procedure RegistredFinLoad(const strName:RawByteString;cb:TOnElfLoadCb);
    function  Loader(Const name:RawByteString):TElf_node;
    Procedure ResolveDepended(node:TElf_node);
-   Procedure LoadSymbolImport(cbs,data:Pointer);
+   Procedure LoadSymbolImport(data:Pointer);
+   Procedure ReLoadSymbolImport(data:Pointer);
    Procedure InitProt;
    Procedure InitCode;
-   Procedure InitThread;
+   Procedure InitThread(is_static:QWORD);
    Procedure FreeThread;
-   function  FindFileByCodeAdr(Adr:Pointer):TElf_node;
+   function  AcqureFileByCodeAdr(Adr:Pointer):TElf_node;
+   function  AcqureFileByHandle(handle:Integer):TElf_node;
  end;
 
 var
@@ -147,10 +166,7 @@ Function  UnMountPath(path:PChar):Integer;
 
 function  _parse_filename(filename:PChar):RawByteString;
 
-Function  safe_move(const src;var dst;count:QWORD):QWORD;
-procedure safe_move_ptr(const src;var dst);
-function  safe_str(P:PChar):shortstring;
-
+function  GetProcParam:Pointer;
 Function  get_dev_progname:RawByteString;
 
 implementation
@@ -184,7 +200,7 @@ Var
   Procedure _c; inline;
   begin
    Case (i-CF) of
-    2:if (PWORD(@Path[CF])^=$2E2E) then
+    2:if (PWORD(@Path[CF])^=$2E2E) then //..
       begin
        i:=i-PF+1;
        L:=L-i;
@@ -192,12 +208,12 @@ Var
        CF:=PF;
        i:=PF-1;
       end;
-    1:if (Path[CF]='.') then
+    1:if (Path[CF]='.') then //.
       begin
-       L:=L-1;
-       Delete(Path,CF,1);
-       CF:=PF;
-       i:=PF-1;
+       Delete(Path,1,CF);
+       L:=Length(Path);
+       CF:=1;
+       i:=1;
       end;
    end;
    PF:=CF;
@@ -410,6 +426,7 @@ var
  pp,fp:PChar;
 begin
  Result:='';
+ //Writeln(filename);
  if (filename=nil) then Exit;
  Path:=filename;
  DoFixRelative(Path);
@@ -692,6 +709,7 @@ begin
  plib:=aLibs[id];
  if (plib=nil) then plib:=AllocMem(SizeOf(TLIBRARY));
  plib^:=lib;
+ plib^.parent:=Self;
  aLibs[id]:=plib;
 end;
 
@@ -709,6 +727,7 @@ begin
  plib:=aLibs[u.id];
  if (plib=nil) then plib:=AllocMem(SizeOf(TLIBRARY));
  plib^.attr:=u.name_offset;
+ plib^.parent:=Self;
  aLibs[u.id]:=plib;
 end;
 
@@ -728,6 +747,7 @@ begin
  i:=Length(aLibs);
  SetLength(aLibs,i+1);
  Result:=AllocMem(SizeOf(TLIBRARY));
+ Result^.parent:=Self;
  Result^.strName:=strName;
  aLibs[i]:=Result;
 end;
@@ -768,9 +788,12 @@ begin
   For i:=0 to Length(aLibs)-1 do
   begin
    lib:=aLibs[i];
-   HAMT_destroy64(lib^.MapSymbol,@_free_map_cb,nil);
-   lib^.strName:='';
-   FreeMem(lib);
+   if (lib<>nil) then
+   begin
+    HAMT_destroy64(lib^.MapSymbol,@_free_map_cb,nil);
+    lib^.strName:='';
+    FreeMem(lib);
+   end;
   end;
  end;
  pFileName:='';
@@ -796,7 +819,12 @@ begin
  FLoadImport:=True;
 end;
 
-Procedure TElf_node.InitThread;
+Procedure TElf_node.ReLoadSymbolImport(cbs,data:Pointer);
+begin
+
+end;
+
+Procedure TElf_node.InitThread(is_static:QWORD);
 begin
 
 end;
@@ -816,6 +844,11 @@ begin
  FInitCode:=True;
 end;
 
+function TElf_node.module_start(argc:size_t;argp:PPointer):Integer;
+begin
+ Result:=0;
+end;
+
 function TElf_node.GetCodeFrame:TMemChunk;
 begin
  Result:=Default(TMemChunk);
@@ -826,22 +859,68 @@ begin
  Result:=nil;
 end;
 
+Function TElf_node.GetModuleInfo:TKernelModuleInfo;
+begin
+ Result:=Default(TKernelModuleInfo);
+ Result.size:=SizeOf(TKernelModuleInfo);
+
+ MoveChar0(PChar(pFileName)^,Result.name,SCE_DBG_MAX_NAME_LENGTH);
+
+//segmentInfo:array[0..SCE_DBG_MAX_SEGMENTS-1] of TKernelModuleSegmentInfo;
+//segmentCount:DWORD;
+//fingerprint:array[0..SCE_DBG_NUM_FINGERPRINT-1] of Byte;
+end;
+
+Function TElf_node.get_proc(nid:QWORD):Pointer;
+var
+ i:Integer;
+begin
+ Result:=nil;
+ if Length(aLibs)<>0 then
+ begin
+  For i:=0 to Length(aLibs)-1 do
+  if (aLibs[i]<>nil) then
+  if (not aLibs[i]^.Import) then
+  begin
+   Result:=aLibs[i]^.get_proc(nid);
+   if (Result<>nil) then Exit;
+  end;
+ end;
+end;
+
+Function TElf_node.get_proc_by_name(const name:RawByteString):Pointer;
+begin
+ Result:=get_proc(ps4_nid_hash(name));
+end;
+
 function TLIBRARY._set_proc(nid:QWORD;value:Pointer):Boolean;
 var
  data:PPointer;
  PP:PPointer;
 begin
  if (MapSymbol=nil) then MapSymbol:=HAMT_create64;
- data:=GetMem(SizeOf(Pointer)*2);
- data[0]:=value;
- data[1]:=Pointer(nid);
- PP:=HAMT_insert64(MapSymbol,nid,data);
- Assert(PP<>nil);
- Result:=(PP^=data);
- if not Result then
+
+ data:=nil;
+ PP:=HAMT_search64(MapSymbol,nid);
+ if (PP<>nil) then data:=PP^;
+
+ if (data=nil) then
  begin
-  FreeMem(data);
+  data:=GetMem(SizeOf(Pointer)*2);
+  data[0]:=value;
+  data[1]:=Pointer(nid);
+  PP:=HAMT_insert64(MapSymbol,nid,data);
+  Assert(PP<>nil);
+  Result:=(PP^=data);
+  if not Result then
+  begin
+   FreeMem(data);
+  end;
+ end else
+ begin
+  data[0]:=value;
  end;
+
 end;
 
 function TLIBRARY._get_proc(nid:QWORD):Pointer;
@@ -889,16 +968,36 @@ begin
  files.Unlock;
 end;
 
-function Tps4_program.GetFile(const strName:RawByteString):TElf_node;
+Procedure Tps4_program.LockRd;
+begin
+ files.LockRd;
+end;
+
+Procedure Tps4_program.Unlock;
+begin
+ files.Unlock;
+end;
+
+function Tps4_program.FirstFile:TElf_node;
+begin
+ Result:=files.pHead;
+end;
+
+function Tps4_program.AcqureFileByName(const strName:RawByteString):TElf_node;
 var
  nid:QWORD;
  PP:PPointer;
 begin
  Result:=nil;
  nid:=ps4_nid_hash(strName);
+
  files.LockRd;
+
  PP:=HAMT_search64(@files.hamt,nid);
  if (PP<>nil) then Result:=TElf_node(PP^);
+
+ if (Result<>nil) then Result.Acqure;
+
  files.Unlock;
 end;
 
@@ -1117,15 +1216,34 @@ begin
  end;
 
  Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'sce_module'+DirectorySeparator+name);
- if (Result<>nil) then //is default load app_path
+ if (Result<>nil) then //is default load app_path\sce_module
  begin
   Result.Prepare;
   ps4_app.RegistredElf(Result);
   Exit;
  end;
 
+ //
+ //Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'Media'+DirectorySeparator+'Modules'+DirectorySeparator+name);
+ //if (Result<>nil) then //is app_path\Media\Modules
+ //begin
+ // Result.Prepare;
+ // ps4_app.RegistredElf(Result);
+ // Exit;
+ //end;
+ //
+ //Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'Media'+DirectorySeparator+'Plugins'+DirectorySeparator+name);
+ //if (Result<>nil) then //is app_path\Media\Plugins
+ //begin
+ // Result.Prepare;
+ // ps4_app.RegistredElf(Result);
+ // Exit;
+ //end;
+
+ //
+
  Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(GetCurrentDir)+'sce_module'+DirectorySeparator+name);
- if (Result<>nil) then //is default load current dir
+ if (Result<>nil) then //is default load current_dir\sce_module
  begin
   Result.Prepare;
   ps4_app.RegistredElf(Result);
@@ -1180,7 +1298,7 @@ begin
  end;
 end;
 
-Procedure Tps4_program.LoadSymbolImport(cbs,data:Pointer);
+Procedure Tps4_program.LoadSymbolImport(data:Pointer);
 var
  Node:TElf_node;
 begin
@@ -1188,7 +1306,21 @@ begin
  Node:=files.pHead;
  While (Node<>nil) do
  begin
-  Node.LoadSymbolImport(cbs,data);
+  Node.LoadSymbolImport(resolve_cb,data);
+  Node:=Node.pNext;
+ end;
+ files.Unlock;
+end;
+
+Procedure Tps4_program.ReLoadSymbolImport(data:Pointer);
+var
+ Node:TElf_node;
+begin
+ files.LockRd;
+ Node:=files.pHead;
+ While (Node<>nil) do
+ begin
+  Node.ReLoadSymbolImport(reload_cb,data);
   Node:=Node.pNext;
  end;
  files.Unlock;
@@ -1214,16 +1346,18 @@ var
 begin
  Assert(ps4_app.prog<>nil);
  files.LockRd;
+
  Node:=files.pHead;
  While (Node<>nil) do
  begin
   Node.InitCode;
   Node:=Node.pNext;
  end;
+
  files.Unlock;
 end;
 
-Procedure Tps4_program.InitThread;
+Procedure Tps4_program.InitThread(is_static:QWORD);
 var
  Node:TElf_node;
 begin
@@ -1231,7 +1365,7 @@ begin
  Node:=files.pHead;
  While (Node<>nil) do
  begin
-  Node.InitThread;
+  Node.InitThread(is_static);
   Node:=Node.pNext;
  end;
  files.Unlock;
@@ -1252,7 +1386,7 @@ begin
  _free_tls_tcb_all;
 end;
 
-function Tps4_program.FindFileByCodeAdr(Adr:Pointer):TElf_node;
+function Tps4_program.AcqureFileByCodeAdr(Adr:Pointer):TElf_node;
 var
  tmp:TElfNodeList;
  Node:TElf_node;
@@ -1262,6 +1396,7 @@ begin
  tmp:=Default(TElfNodeList);
  if safe_move(files,tmp,SizeOf(TElfNodeList))<>SizeOf(TElfNodeList) then Exit;
  files.LockRd;
+
  Node:=tmp.pHead;
  While (Node<>nil) do
  begin
@@ -1271,13 +1406,21 @@ begin
    if (Adr>=Mem.pAddr) and (Adr<(Mem.pAddr+Mem.nSize)) then
    begin
     Result:=Node;
+    Result.Acqure;
+
     files.Unlock;
     Exit;
    end;
   end;
   safe_move_ptr(Node.pNext,Node);
  end;
+
  files.Unlock;
+end;
+
+function Tps4_program.AcqureFileByHandle(handle:Integer):TElf_node;
+begin
+ Result:=TElf_node(elfs.Acqure(handle));
 end;
 
 Procedure Thamt64locked.Init;
@@ -1301,29 +1444,15 @@ begin
  rwlock_unlock(lock);
 end;
 
-Function safe_move(const src;var dst;count:QWORD):QWORD;
-begin
- if not ReadProcessMemory(GetCurrentProcess,@src,@dst,count,Result) then Result:=0;
-end;
-
-procedure safe_move_ptr(const src;var dst);
-begin
- if safe_move(src,dst,SizeOf(Pointer))<>SizeOf(Pointer) then Pointer(dst):=nil;
-end;
-
-function safe_str(P:PChar):shortstring;
+function GetProcParam:Pointer;
 var
- ch:Char;
+ elf:Telf_file;
 begin
- Result:='';
- repeat
-  ch:=#0;
-  safe_move(P^,ch,SizeOf(Char));
-  if (ch=#0) then Exit;
-  Result:=Result+ch;
-  if (Result[0]=#255) then Exit;
-  Inc(P);
- until false;
+ Result:=nil;
+ elf:=Telf_file(ps4_program.ps4_app.prog);
+ if (elf=nil) then Exit;
+ if (elf.pProcParam=0) then Exit;
+ Result:=elf.mMap.pAddr+elf.pProcParam;
 end;
 
 Function get_dev_progname:RawByteString;

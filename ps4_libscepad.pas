@@ -7,7 +7,9 @@ interface
 uses
   windows,
   ps4_program,
-  Classes, SysUtils;
+  sys_signal,
+  Classes,
+  SysUtils;
 
 implementation
 
@@ -32,6 +34,11 @@ function ps4_scePadOpen(userID,_type,index:Integer;param:Pointer):Integer; SysV_
 begin
  //Writeln('scePadOpen:',userID);
  Result:=222;
+end;
+
+function ps4_scePadClose(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 const
@@ -70,7 +77,7 @@ type
  end;
  ScePadAnalogButtons=packed record
   l2,r2:Byte;
-  padding       :Word;
+  padding:Word;
  end;
 
  ScePadTouch=packed record
@@ -140,6 +147,8 @@ begin
  //Writeln(SizeOf(TPadData));  //184
  data^:=Default(ScePadData);
 
+ _sig_lock;
+
  //FillChar(data^,SizeOf(ScePadData),1);
 
  data^.connected:=True;
@@ -150,6 +159,8 @@ begin
  data^.leftStick.y:=$80;
  data^.rightStick.x:=$80;
  data^.rightStick.y:=$80;
+
+ //
 
  if GetAsyncKeyState(VK_W)<>0 then
   data^.leftStick.y:=0;
@@ -162,6 +173,22 @@ begin
 
  if GetAsyncKeyState(VK_D)<>0 then
   data^.leftStick.x:=$FF;
+
+ //
+
+ if GetAsyncKeyState(VK_I)<>0 then
+  data^.rightStick.y:=0;
+
+ if GetAsyncKeyState(VK_K)<>0 then
+  data^.rightStick.y:=$FF;
+
+ if GetAsyncKeyState(VK_J)<>0 then
+  data^.rightStick.x:=0;
+
+ if GetAsyncKeyState(VK_L)<>0 then
+  data^.rightStick.x:=$FF;
+
+ //
 
  if GetAsyncKeyState(VK_RETURN)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
@@ -191,6 +218,8 @@ begin
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
 
  //data^.buttons:=not data^.buttons;
+
+ _sig_unlock;
  Result:=0;
 end;
 
@@ -291,6 +320,7 @@ begin
  lib:=Result._add_lib('libScePad');
 
  lib^.set_proc($86FD65BA226BA903,@ps4_scePadInit);
+ lib^.set_proc($EA77207B9FA5E50B,@ps4_scePadClose);
  lib^.set_proc($C64D0071AACFDD5E,@ps4_scePadOpen);
  lib^.set_proc($6277605EA41557B7,@ps4_scePadReadState);
  lib^.set_proc($AB570735F1B270B2,@ps4_scePadRead);

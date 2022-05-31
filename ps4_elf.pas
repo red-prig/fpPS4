@@ -6,9 +6,9 @@ interface
 
 uses
   Windows,
-  hamt,
   sha1,
-  ps4_types,
+  sys_types,
+  sys_kernel,
   ps4libdoc,
   ps4_program,
   ps4_elf_tls,
@@ -173,9 +173,14 @@ type
    offset:QWORD;
 
    stub:TMemChunk;
-
-   //hTls:DWORD;
   end;
+
+  //pModule:packed record
+  // pStart:QWORD;
+  // pStop:QWORD;
+  //end;
+
+  dtInit:QWORD;
 
   pInit:packed record
    dt_preinit_array,
@@ -184,7 +189,7 @@ type
    dt_init_array_count:QWORD;
   end;
 
-  pFiniProc:Pointer;
+  dtFini:QWORD;
 
   pSceDynLib:TMemChunk;       //mElf
 
@@ -237,14 +242,22 @@ type
    function  SavePs4ElfToFile(Const name:RawByteString):Boolean;
    function  Prepare:Boolean; override;
    Procedure LoadSymbolImport(cbs,data:Pointer); override;
+   Procedure ReLoadSymbolImport(cbs,data:Pointer); override;
    function  DympSymbol(F:THandle):Boolean;
-   procedure InitThread; override;
+   procedure InitThread(is_static:QWORD); override;
    Procedure InitProt;   override;
    Procedure InitCode;   override;
+   function  module_start(argc:size_t;argp:PPointer):Integer; override;
    function  GetCodeFrame:TMemChunk;  override;
    function  GetEntryPoint:Pointer;  override;
+   Function  GetModuleInfo:TKernelModuleInfo; override;
    procedure mapCodeEntry;
  end;
+
+type
+ TinitProc   =function(argc:Integer;argv,environ:PPchar):Integer; SysV_ABI_CDecl; //preinit_array/init_array
+ TEntryPoint =procedure(pEnv:Pointer;pfnExitHandler:Pointer);     SysV_ABI_CDecl; //EntryPoint
+ TmoduleStart=function(argc:size_t;argp:Pointer):Integer;         SysV_ABI_CDecl; //module_start/module_stop
 
 function  LoadPs4ElfFromFile(Const name:RawByteString):TElf_node;
 
@@ -262,35 +275,41 @@ implementation
 type
  Ppatch_ld=^Tpatch_ld;
  Tpatch_ld=packed record
-  _movabs_rax:array[0..1] of Byte; // $48 $B8   //2
+  //_movabs_rax:array[0..1] of Byte; // $48 $B8   //2
   _addr:Pointer;                                //8
-  _jmp_rax:array[0..1] of Byte;    // $FF $E0   //2  = 14
+  //_jmp_rax:array[0..1] of Byte;    // $FF $E0   //2  = 14
  end;
 
  Ppatch_fs=^Tpatch_fs;
  Tpatch_fs=packed record
-  _push_rdx:Byte; // $52  //1
-  _push_rcx:Byte; // $51  //1
-  _call_32:Byte;  // $E8  //1
+  _call_rip:array[0..1] of Byte; //$ff $15
+  //_push_rdx:Byte; // $52  //1
+  //_push_rcx:Byte; // $51  //1
+  //_call_32:Byte;  // $E8  //1
   _ofs:Integer;           //4
-  _pop_rcx:Byte;  // $59  //1
-  _pop_rdx:Byte;  // $5a  //1 = 9
+  //_pop_rcx:Byte;  // $59  //1
+  //_pop_rdx:Byte;  // $5a  //1 = 9
+  _nop:array[0..2] of Byte; //$90 $90 $90
  end;
+
+//ff 15 [d3 ff ff ff]
 
 Const
  _patch_ld:Tpatch_ld=(
-  _movabs_rax:($48,$B8);
+  //_movabs_rax:($48,$B8);
   _addr:nil;
- _jmp_rax:($FF,$E0);
+  //_jmp_rax:($FF,$E0);
  );
 
  _patch_fs:Tpatch_fs=(
-  _push_rdx:$52;
-  _push_rcx:$51;
-  _call_32:$E8;
+  _call_rip:($ff,$15);
+  //_push_rcx:$51;
+  //_push_rdx:$52;
+  //_call_32:$E8;
   _ofs:0;
-  _pop_rcx:$59;
-  _pop_rdx:$5a;
+  //_pop_rdx:$5a;
+  //_pop_rcx:$59;
+  _nop:($90,$90,$90);
  );
 
 Procedure Telf_file.ClearElfFile;
@@ -677,7 +696,13 @@ begin
      begin
 
      end;
+    PT_GNU_EH_FRAME:
+     begin
 
+     end;
+
+    else
+     Writeln('PHDR:',HexStr(elf_phdr[i].p_type,16));
 
   end;
 
@@ -733,6 +758,7 @@ begin
 
   DT_INIT:
    begin
+    dtInit:=entry.d_un.d_ptr;
     Writeln('INIT addr:',entry.d_un.d_ptr);
    end;
   DT_INIT_ARRAY:
@@ -748,7 +774,7 @@ begin
 
   DT_FINI:
    begin
-    pFiniProc:=Pointer(entry.d_un.d_ptr);
+    dtFini:=entry.d_un.d_ptr;
     Writeln('FINI addr:',HexStr(entry.d_un.d_ptr,16));
    end;
   DT_SCE_SYMTAB:
@@ -1455,11 +1481,11 @@ begin
 
   if (Info.shndx<>SHN_UNDEF) then
   case Info.sType of
-   STT_NOTYPE :;
+   //STT_NOTYPE :;
    STT_OBJECT :cbs(Self,@Info,data);
    STT_FUN    :cbs(Self,@Info,data);
-   STT_SECTION:;
-   STT_FILE   :;
+   //STT_SECTION:;
+   //STT_FILE   :;
    STT_COMMON :cbs(Self,@Info,data);
    STT_TLS    :cbs(Self,@Info,data);
    else
@@ -1468,6 +1494,26 @@ begin
 
  end;
  Result:=True;
+end;
+
+function _on_module_start_stop(pName:PChar):Integer;
+begin
+ Result:=-1;
+ if (PQWORD(pName)^=$735F656C75646F6D) then //module_s
+ begin
+  Case PDWORD(@pName[8])^ of
+   $74726174: //tart
+    if (pName[$C]=#0) then
+    begin //module_start
+     Result:=0;
+    end;
+   $00706F74: //top0
+    begin //module_stop
+     Result:=1;
+    end;
+   else;
+  end;
+ end;
 end;
 
 Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
@@ -1492,6 +1538,31 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
  begin
   Import:=(Info^.shndx=SHN_UNDEF);  //
+
+  case _on_module_start_stop(Info^.pName) of
+   0:begin //module_start
+      nSymVal:=elf.mMap.pAddr+elf.dtInit;
+      _do_set(nSymVal);
+
+      //IInfo.nid:=ps4_nid_hash(Info^.pName);
+      //IInfo.lib:=elf._get_lib(0);
+      //IInfo.lib^.set_proc(IInfo.nid,nSymVal);
+
+      Exit;
+     end;
+   1:begin //module_stop
+      nSymVal:=elf.mMap.pAddr+elf.dtFini;
+      _do_set(nSymVal);
+
+      //IInfo.nid:=ps4_nid_hash(Info^.pName);
+      //IInfo.lib:=elf._get_lib(0);
+      //IInfo.lib^.set_proc(IInfo.nid,nSymVal);
+
+      Exit;
+     end;
+   else;
+  end;
+
   if Import then Exit;
 
   IInfo:=Default(TResolveImportInfo);
@@ -1613,6 +1684,20 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
  begin
   Import:=(Info^.shndx=SHN_UNDEF);  //
+
+  if (_on_module_start_stop(Info^.pName)<>-1) then Exit;
+
+  //case _on_module_start_stop(Info^.pName) of
+  // 0:begin //module_start
+  //    Writeln('module_start:',HexStr(PPointer(elf.mMap.pAddr+Info^.Offset)^));
+  //    Exit;
+  //   end;
+  // 1:begin //module_stop
+  //    Exit;
+  //   end;
+  // else;
+  //end;
+
   if not Import then Exit;
 
   IInfo:=Default(TResolveImportInfo);
@@ -1727,9 +1812,13 @@ const
   nModuleId,nLibraryId:Word;
 
   Import:Boolean;
+  mss:Integer;
 
  begin
   Import:=(Info^.shndx=SHN_UNDEF);
+
+  mss:=_on_module_start_stop(Info^.pName);
+  if (mss<>-1) then Import:=False;
 
   IInfo:=Default(TResolveImportInfo);
 
@@ -1758,7 +1847,7 @@ const
    Exit;
   end;
 
-  if (IInfo.lib^.Import<>Import) then
+  if (IInfo.lib^.Import<>Import) and (mss=-1) then
   begin
    FWriteln('Wrong library ref:'+IInfo.lib^.strName+':'+BoolToStr(IInfo._md^.Import)+'<>'+BoolToStr(Import));
    Exit;
@@ -1861,10 +1950,86 @@ begin
  FLoadImport:=True;
 end;
 
+Procedure Telf_file.ReLoadSymbolImport(cbs,data:Pointer);
+var
+ _data:array[0..1] of Pointer;
+begin
+ if (Self=nil) then Exit;
+ if not FLoadImport then Exit;
+ if (mMap.pAddr=nil) or (mMap.nSize=0) then Exit;
+ _data[0]:=cbs;
+ _data[1]:=data;
+ RelocateRelaEnum(@OnLoadRelaImport,@_data);
+ RelocatePltRelaEnum(@OnLoadRelaImport,@_data);
+ ParseSymbolsEnum(@OnLoadRelaImport,@_data);
+end;
+
+Procedure OnDumpInitProc(elf:Telf_file;F:THandle);
+const
+ NL=#13#10;
+
+ procedure FWrite(Const str:RawByteString); inline;
+ begin
+  FileWrite(F,PChar(str)^,Length(str))
+ end;
+
+ procedure FWriteln(Const str:RawByteString); inline;
+ begin
+  FWrite(str+NL);
+ end;
+
+var
+ i,c,o:SizeInt;
+ base:Pointer;
+ P:PPointer;
+
+begin
+ FWriteln('e_entry:' +HexStr(elf.pEntryPoint,16));
+
+ base:=elf.mMap.pAddr;
+
+ FWriteln('dtInit:'+HexStr(elf.dtInit,16));
+
+ c:=elf.pInit.dt_preinit_array_count;
+ if (c<>0) then
+  Case Int64(elf.pInit.dt_preinit_array) of
+   -1,0,1:;//skip
+   else
+    begin
+     P:=base+elf.pInit.dt_preinit_array;
+     dec(c);
+     For i:=0 to c do
+     begin
+      o:=SizeInt(P[i])-SizeInt(base);
+      FWriteln('dt_preinit['+IntToStr(i)+']:' +HexStr(o,16));
+     end;
+    end;
+  end;
+
+ c:=elf.pInit.dt_init_array_count;
+ if (c<>0) then
+  Case Int64(elf.pInit.dt_init_array) of
+   -1,0,1:;//skip
+   else
+    begin
+     P:=base+elf.pInit.dt_init_array;
+     dec(c);
+     For i:=0 to c do
+     begin
+      o:=SizeInt(P[i])-SizeInt(base);
+      FWriteln('dt_init['+IntToStr(i)+']:' +HexStr(o,16));
+     end;
+    end;
+  end;
+
+ FWriteln('dtFini:'+HexStr(elf.dtFini,16));
+end;
+
 function Telf_file.DympSymbol(F:THandle):Boolean;
 begin
  Result:=False;
  if (Self=nil) then Exit;
+ OnDumpInitProc(Self,F);
  Result:=RelocateRelaEnum(@OnDumpRela,Pointer(F));
  Result:=RelocatePltRelaEnum(@OnDumpRela,Pointer(F));
  Result:=ParseSymbolsEnum(@OnDumpRela,Pointer(F));
@@ -2071,7 +2236,7 @@ var
 
  procedure do_patch(p:PByte); inline;
  begin
-  _call._ofs:=Integer(PtrInt(Stub)-PtrInt(P)-PtrInt(@Tpatch_fs(nil^)._pop_rcx));
+  _call._ofs:=Integer(PtrInt(Stub)-PtrInt(P)-PtrInt(@Tpatch_fs(nil^).{_pop_rcx}_nop));
   Ppatch_fs(p)^:=_call;
  end;
 
@@ -2107,6 +2272,7 @@ begin
  Stub:=pTls.stub.pAddr;
 
  do_find(@Addr[0],Size-0);
+
  //Writeln('patch_tls_count=',c);
  //do_find(@Addr[1],Size-1);
  //Writeln('patch_tls_count=',c);
@@ -2138,7 +2304,7 @@ begin
   end;
 end;
 
-function _static_get_tls_adr:Pointer;
+function _static_get_tls_adr:Pointer; MS_ABI_Default;
 var
  elf:Telf_file;
 begin
@@ -2150,6 +2316,8 @@ end;
 
 function __static_get_tls_adr:Pointer; assembler; nostackframe;
 asm
+ push %rcx
+ push %rdx
  push %r8
  push %r9
  push %R10
@@ -2161,12 +2329,14 @@ asm
  pop %R10
  pop %r9
  pop %r8
+ pop %rdx
+ pop %rcx
 end;
 
-//R8, R9 R10
-//, and R12–R15
-
-//-not need:RCX,RAX,RBP,RSP
+//-not need:
+//-RAX:result
+////-RCX,RDX:Tpatch_fs
+//-other:win call save
 
 //The registers RAX, RCX, RDX,  R8,  R9, R10, R11               are considered volatile    (вызывающий сохраняет)
 //The registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, and R15 are considered nonvolatile (вызываемый сохраняет)
@@ -2213,12 +2383,42 @@ begin
  end;
 end;
 
-procedure Telf_file.InitThread;
+procedure Telf_file.InitThread(is_static:QWORD);
 begin
  if (Self=nil) then Exit;
+ if FInitThread then Exit;
  if (pTls.full_size=0) then Exit;
  if (_get_tls_tcb(Handle)<>nil) then Exit;
- _init_tls(1);
+ _init_tls(is_static);
+ FInitThread:=True;
+end;
+
+function __map_segment_prot(prot:Integer):DWORD;
+begin
+ Result:=0;
+ if (prot=0) then Exit(PAGE_NOACCESS);
+
+ if (prot and PF_X)<>0 then
+ begin
+  if (prot and PF_W)<>0 then
+  begin
+   Result:=PAGE_EXECUTE_READWRITE;
+  end else
+  if (prot and PF_R)<>0 then
+  begin
+   Result:=PAGE_EXECUTE_READ;
+  end else
+  begin
+   Result:=PAGE_EXECUTE;
+  end;
+ end else
+ if (prot and PF_W)<>0 then
+ begin
+  Result:=PAGE_READWRITE;
+ end else
+ begin
+  Result:=PAGE_READONLY;
+ end;
 end;
 
 procedure Telf_file.mapProt;
@@ -2240,7 +2440,8 @@ begin
    begin
     R:=VirtualProtect(ModuleInfo.segmentInfo[i].address,
                       ModuleInfo.segmentInfo[i].Size,
-                      PAGE_EXECUTE_READ,@dummy);
+                      __map_segment_prot(ModuleInfo.segmentInfo[i].prot),
+                      @dummy);
 
     FlushInstructionCache(GetCurrentProcess,
                           ModuleInfo.segmentInfo[i].address,
@@ -2258,8 +2459,15 @@ begin
   //extra tls stub
   if (pTls.stub.nSize=PHYSICAL_PAGE_SIZE) then
   begin
-   R:=VirtualProtect(pTls.stub.pAddr,pTls.stub.nSize,PAGE_EXECUTE_READ,@dummy);
-   FlushInstructionCache(GetCurrentProcess,pTls.stub.pAddr,pTls.stub.nSize);
+   R:=VirtualProtect(pTls.stub.pAddr,
+                     pTls.stub.nSize,
+                     {PAGE_EXECUTE_READ}PAGE_EXECUTE_READWRITE,
+                     @dummy);
+
+   FlushInstructionCache(GetCurrentProcess,
+                         pTls.stub.pAddr,
+                         pTls.stub.nSize);
+
    Writeln('STUB:',HexStr(pTls.stub.pAddr),'..',HexStr(pTls.stub.pAddr+pTls.stub.nSize),':',R);
   end else
   //inline stub
@@ -2270,8 +2478,6 @@ begin
 end;
 
 function call_dt_preinit_array(Params:PPS4StartupParams;Proc:Pointer):Integer;
-type
- TinitProc=function(argc:Integer;argv,environ:PPchar):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
  if (Proc<>nil) then
@@ -2282,8 +2488,6 @@ begin
 end;
 
 function call_dt_init_array(Params:PPS4StartupParams;Proc:Pointer):Integer;
-type
- TinitProc=function(argc:Integer;argv,environ:PPchar):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
  if (Proc<>nil) then
@@ -2305,13 +2509,19 @@ begin
  Prog:=Telf_file(ps4_app.prog);
  if (Prog=nil) then Exit;
 
- Writeln('pFileName:',Prog.pFileName);
+ Writeln('mapCodeInit:',pFileName);
 
  StartupParams:=Default(TPS4StartupParams);
  StartupParams.argc:=1;
  StartupParams.argv[0]:=PChar(Prog.pFileName);
 
  base:=mMap.pAddr;
+
+ //if (Prog<>Self) then
+ //begin
+ // //dt_Init
+ // TinitProc(base+dtInit)(StartupParams.argc,@StartupParams.argv,nil);
+ //end;
 
  c:=pInit.dt_preinit_array_count;
  if (c<>0) then
@@ -2347,7 +2557,7 @@ end;
 Procedure Telf_file.InitProt;
 begin
  if FInitProt then Exit;
- ClearElfFile;
+ //ClearElfFile;
  mapProt;
  FInitProt:=True;
 end;
@@ -2357,6 +2567,31 @@ begin
  if FInitCode then Exit;
  mapCodeInit;
  FInitCode:=True;
+end;
+
+function Telf_file.module_start(argc:size_t;argp:PPointer):Integer;
+var
+ P:TmoduleStart;
+begin
+ Result:=0;
+
+ Pointer(P):=Pointer(mMap.pAddr+dtInit);
+ Writeln('module_start');
+ Result:=P(argc,argp);
+
+ //Pointer(P):=Pointer(pModule.pStart);
+ //Case Int64(P) of
+ // -1,0,1:;//skip
+ // else
+ //  begin
+ //   Pointer(P):=Pointer(mMap.pAddr+QWORD(P));
+ //
+ //   Writeln('module_start');
+ //
+ //   Result:=P(argc,argp);
+ //
+ //  end;
+ //end;
 end;
 
 function Telf_file.GetCodeFrame:TMemChunk;
@@ -2376,11 +2611,18 @@ begin
  end;
 end;
 
+Function Telf_file.GetModuleInfo:TKernelModuleInfo;
+begin
+ if (ModuleInfo.name[0]=#0) then
+ begin
+  MoveChar0(PChar(pFileName)^,ModuleInfo.name,SCE_DBG_MAX_NAME_LENGTH);
+ end;
+ Result:=ModuleInfo;
+end;
+
 procedure Telf_file.mapCodeEntry;
-type
-  Ps4_EntryPoint=procedure(pEnv:Pointer;pfnExitHandler:Pointer); SysV_ABI_CDecl;
 var
- P:Ps4_EntryPoint;
+ P:TEntryPoint;
  StartupParams:TPS4StartupParams;
 
 begin

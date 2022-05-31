@@ -13,7 +13,10 @@ uses
   vMemory,
   vShader,
   vPipeline,
+  vBuffer,
   vImage,
+  vImageManager,
+  vCmdBuffer,
   vRender;
 
 type
@@ -44,8 +47,10 @@ type
 
   FSet:TvDescriptorSet;
 
-  cmdfence:TvFence; //
-  cmdbuf:TVkCommandBuffer; //
+  //cmdfence:TvFence; //
+  //cmdbuf:TVkCommandBuffer; //
+
+  cmdbuf:TvCustomCmdBuffer;
 
   Extent:TVkExtent3D;
 
@@ -57,12 +62,14 @@ type
   DevcMem:TvPointer; //
   ImgViewDst:TvImageView; //
 
+  Addr:Pointer;
   PtrBuf:TvPointer; //
   HostBuf:TvBuffer; //
 
   Cursors:array[0..SCE_VIDEO_OUT_CURSOR_NUM_MAX-1] of TvFlipBufferCursor;
 
-  ur:TUnionResourceImage;
+  //ur:TURDevcImage2D;
+  //ur:TvImage2;
 
   Procedure Init(Flip:TvFlip);
   Procedure Free(Flip:TvFlip);
@@ -91,13 +98,17 @@ type
 
   FSetsPool:TvSetsPool;
 
-  FCmdPool:TCmdPool;
+  FCmdPool:TvCmdPool;
   Fcfg:TFlipCfg;
 
   Fformat,Ftmode:DWORD;
-  Ffilp_shader:TvShader;
 
-  Fcursor_shader:TvShader;
+  cformat:TVkFormat;
+  sformat:TVkFormat;
+
+  Ffilp_shader:TvShaderCompute;
+
+  Fcursor_shader:TvShaderCompute;
 
   FimageAvailableSemaphore:array[0..2] of TvSemaphore; //
   FrenderFinishedSemaphore:array[0..2] of TvSemaphore; //
@@ -124,6 +135,7 @@ type
 
   procedure   recreateSwapChain;
   Procedure   FixCurrentFrame;
+  function    IsComplite(currentBuffer:Byte):Boolean;
   Procedure   Flip;
  end;
 
@@ -158,7 +170,7 @@ begin
  FSetLayout.Add(1,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ,ord(VK_SHADER_STAGE_COMPUTE_BIT));
 
  FLayout:=TvPipelineLayout.Create;
- FLayout.Add(FSetLayout);
+ FLayout.AddLayout(FSetLayout);
  FLayout.AddPushConst(0,SizeOf(TFlipCfg),ord(VK_SHADER_STAGE_COMPUTE_BIT));
 
  FPipelineFlip:=TvComputePipeline.Create;
@@ -167,7 +179,7 @@ begin
  FSetsPool:=TvSetsPool.Create;
  FSetsPool.AddLayout(FSetLayout,16+16*2);
 
- FCmdPool:=TCmdPool.Create(VulkanApp.FGFamily);
+ FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
 
  For i:=0 to 2 do
  begin
@@ -181,7 +193,7 @@ Destructor TvFlip.Destroy;
 var
  i:Byte;
 begin
- vkQueueWaitIdle(FlipQueue);
+ FlipQueue.QueueWaitIdle;
  FreeAndNil(Ffilp_shader);
 
  For i:=0 to 15 do
@@ -211,14 +223,20 @@ begin
  begin
   FSet:=Flip.FSetsPool.Alloc(Flip.FSetLayout);
  end;
- if (cmdbuf=VK_NULL_HANDLE) then
+
+ if (cmdbuf=nil) then
+ begin
+  cmdbuf:=TvCustomCmdBuffer.Create(Flip.FCmdPool,FlipQueue);
+ end;
+
+ {if (cmdbuf=VK_NULL_HANDLE) then
  begin
   cmdbuf:=Flip.FCmdPool.Alloc;
  end;
  if (cmdfence=nil) then
  begin
   cmdfence:=TvFence.Create(true);
- end;
+ end;}
 end;
 
 Procedure TvFlipBuffer.Free(Flip:TvFlip);
@@ -227,12 +245,16 @@ begin
  FreeAndNil(DstImgNORM);
  FreeAndNil(DstImgSRGB);
  FreeAndNil(HostBuf);
+
+ FreeAndNil(cmdbuf);
+ {
  FreeAndNil(cmdfence);
  if (cmdbuf<>VK_NULL_HANDLE) then
  begin
   Flip.FCmdPool.Free(cmdbuf);
   cmdbuf:=VK_NULL_HANDLE;
  end;
+ }
  MemManager.Free(DevcMem);
  DevcMem:=Default(TvPointer);
  Cursors[0].Free;
@@ -243,8 +265,9 @@ function TvFlipBuffer.IsPrepare:Boolean;
 begin
  Result:=False;
  if (FSet=nil) then Exit;
- if (cmdfence=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ //if (cmdfence=nil) then Exit;
+ //if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (cmdbuf=nil) then Exit;
  if (DstImgNORM=nil) then Exit;
  if (ImgViewDst=nil) then Exit;
  if (DevcMem.FHandle=VK_NULL_HANDLE) then Exit;
@@ -317,9 +340,22 @@ begin
  buf^.Init(Self);
 end;
 
+Const
+ SRGB_HACK=True;
+
 Procedure TvFlip.SetImageFormat(format,tmode:DWORD);
 begin
  if (Fformat=format) and (Ftmode=tmode) and (Ffilp_shader<>nil) then Exit;
+
+ Case format of
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB,
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB:
+    begin
+     cformat:=VK_FORMAT_R8G8B8A8_UNORM;
+     if SRGB_HACK then
+      sformat:=VK_FORMAT_R8G8B8A8_SRGB;
+    end;
+ end;
 
  Case tmode of
   SCE_VIDEO_OUT_TILING_MODE_LINEAR:
@@ -328,9 +364,13 @@ begin
        begin
         Fformat:=format;
         Ftmode:=tmode;
-        vkQueueWaitIdle(FlipQueue);
+        FlipQueue.QueueWaitIdle;
         FreeAndNil(Ffilp_shader);
-        Ffilp_shader:=TvShader.Create;
+        Ffilp_shader:=TvShaderCompute.Create;
+
+        //Ffilp_shader.FLocalSize.Create(64,64,1);
+        //Ffilp_shader.FLocalSize:=limits.maxComputeWorkGroupSize;
+
         Ffilp_shader.LoadFromFile('shaders\FLIP_LINE_A8R8G8B8_SRGB.spv');
         FPipelineFlip.SetShader(Ffilp_shader);
        end;
@@ -343,9 +383,22 @@ begin
        begin
         Fformat:=format;
         Ftmode:=tmode;
-        vkQueueWaitIdle(FlipQueue);
+        FlipQueue.QueueWaitIdle;
         FreeAndNil(Ffilp_shader);
-        Ffilp_shader:=TvShader.Create;
+        Ffilp_shader:=TvShaderCompute.Create;
+
+        //Ffilp_shader.FLocalSize.Create(64,64,1);
+
+        {Ffilp_shader.FLocalSize:=limits.maxComputeWorkGroupSize;
+        Ffilp_shader.FLocalSize.z:=1;
+
+        While (Ffilp_shader.FLocalSize.x*Ffilp_shader.FLocalSize.y>limits.maxComputeWorkGroupInvocations) do
+        begin
+         if (Ffilp_shader.FLocalSize.x>Ffilp_shader.FLocalSize.y) then
+          Ffilp_shader.FLocalSize.x:=Ffilp_shader.FLocalSize.x div 2
+         else
+          Ffilp_shader.FLocalSize.y:=Ffilp_shader.FLocalSize.y div 2;
+        end;}
 
         if FNeoMode then
         begin
@@ -354,6 +407,8 @@ begin
         begin
          Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8R8G8B8_SRGB.spv');
         end;
+
+        //Ffilp_shader.FLocalSize.Create(16,16,1);
 
         FPipelineFlip.SetShader(Ffilp_shader);
        end;
@@ -366,16 +421,11 @@ begin
 
 end;
 
-Const
- SRGB_HACK=True;
-
 Procedure TvFlip.SetImageSize(width,height:DWORD);
 var
  buf:PvFlipBuffer;
  //mt:TVkUInt32;
  memr:TVkMemoryRequirements;
- cformat:TVkFormat;
- sformat:TVkFormat;
 begin
  buf:=@FBuffers[FcurrentBuffer];
 
@@ -383,9 +433,6 @@ begin
  buf^.Extent.width :=width;
  buf^.Extent.height:=height;
  buf^.Extent.depth :=1;
-
- cformat:=VK_FORMAT_UNDEFINED;
- sformat:=VK_FORMAT_UNDEFINED;
 
  Case Ftmode of
   SCE_VIDEO_OUT_TILING_MODE_LINEAR:
@@ -395,9 +442,6 @@ begin
        begin
         buf^.PITCH:=width;
         buf^.SIZE :=width*height*4;
-        cformat:=VK_FORMAT_R8G8B8A8_UNORM;
-        if SRGB_HACK then
-         sformat:=VK_FORMAT_R8G8B8A8_SRGB;
        end;
     end;
   SCE_VIDEO_OUT_TILING_MODE_TILE:
@@ -414,9 +458,6 @@ begin
          buf^.PITCH:=(width+127) div 128;
          buf^.SIZE :=buf^.PITCH*128*((height+63) div 64)*64*4;
         end;
-        cformat:=VK_FORMAT_R8G8B8A8_UNORM;
-        if SRGB_HACK then
-         sformat:=VK_FORMAT_R8G8B8A8_SRGB;
        end;
     end;
  end;
@@ -468,13 +509,16 @@ const
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
 var
- r:TUnionResourceImage;
+ //r:TURDevcImage2D;
+ //r:TvImage2;
  hbuf:TvPointer;
  buf:PvFlipBuffer;
 begin
  buf:=@FBuffers[FcurrentBuffer];
 
- r:=FindUnionImage2D(Addr);
+ {
+ r:=FindImage(nil,Addr,cformat);
+ //r:=FindUnionImage2D(Addr);
  if (r<>nil) then
  begin
   FreeAndNil(buf^.HostBuf);
@@ -483,6 +527,7 @@ begin
  begin
   buf^.ur:=nil;
  end;
+ }
 
  hbuf:=Default(TvPointer);
  if not TryGetHostPointerByAddr(addr,hbuf) then Exit;
@@ -495,6 +540,8 @@ begin
                            ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
                            @buf_ext);
  buf^.HostBuf.BindMem(hbuf);
+
+ buf^.Addr:=Addr;
 end;
 
 Procedure TvFlip.SetGamma(gamma:Tgamma);
@@ -506,7 +553,6 @@ end;
 
 Procedure TvFlip.SetCursor(index:Integer;enable:Boolean;addr:Pointer;pending:PDWORD;pos:TVCursorPos);
 var
- i:Byte;
  hbuf:TvPointer;
 begin
  If (index<0) or (index>=Length(FCursors)) then Exit;
@@ -522,7 +568,7 @@ begin
 
      if (Fcursor_shader=nil) then
      begin
-      Fcursor_shader:=TvShader.Create;
+      Fcursor_shader:=TvShaderCompute.Create;
       Fcursor_shader.LoadFromFile('shaders\FLIP_CURSOR.spv');
       FPipelineCursor.SetShader(Fcursor_shader);
      end;
@@ -543,7 +589,7 @@ procedure TvFlip.recreateSwapChain;
 begin
  vkDeviceWaitIdle(Device.FHandle);
  FreeAndNil(FSwapChain);
- FSwapChain:=TSwapChain.Create(FSurface,1,ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+ FSwapChain:=TSwapChain.Create(FSurface,0{1},ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 end;
 
 Procedure TvFlip.FixCurrentFrame;
@@ -553,14 +599,44 @@ begin
  FcurrentFrame:=FcurrentFrame mod Length(FSwapChain.FImage);
 end;
 
+function TvFlip.IsComplite(currentBuffer:Byte):Boolean;
+var
+ buf:PvFlipBuffer;
+ r:TVkResult;
+begin
+ Result:=True;
+ if (Device=nil) then Exit;
+
+ buf:=@FBuffers[FcurrentBuffer];
+
+ if (buf^.cmdbuf=nil) then Exit;
+ if (buf^.cmdbuf.Fence=nil) then Exit;
+
+ r:=buf^.cmdbuf.Fence.Status;
+ Case r of
+  VK_SUCCESS  :;
+  VK_NOT_READY:Exit(False);
+  else
+   begin
+    Writeln('vkGetEventStatus:',r);
+    Exit;
+   end;
+ end;
+
+ buf^.cmdbuf.ReleaseResource;
+
+ buf^.Cursors[0].SetPending(nil);
+ buf^.Cursors[1].SetPending(nil);
+end;
+
 Procedure TvFlip.Flip;
 var
  r:TVkResult;
  imageIndex:TVkUInt32;
  SwapImage:TVkImage;
 
- imageAvailableSemaphore:TVkSemaphore;
- renderFinishedSemaphore:TVkSemaphore;
+ imageAvailableSemaphore:TvSemaphore;
+ renderFinishedSemaphore:TvSemaphore;
 
  buf:PvFlipBuffer;
 
@@ -568,20 +644,20 @@ var
 
  FCurSet:TvDescriptorSet;
 
- FBuffer:TVkDescriptorBufferInfo;
- beginInfo:TVkCommandBufferBeginInfo;
+ //beginInfo:TVkCommandBufferBeginInfo;
  imgBlitRegion:TVkImageBlit;
  FLocalSize:TVkOffset3D;
 
- submitInfo:TVkSubmitInfo;
- wstage:TVkPipelineStageFlags;
+ //submitInfo:TVkSubmitInfo;
+ //wstage:TVkPipelineStageFlags;
  prInfo:TVkPresentInfoKHR;
 
- tmp_reg:TVkBufferImageCopy;
- tmp_buf:TUnionResourceBuffer;
+ //tmp_reg:TVkBufferImageCopy;
+ //tmp_buf:TURDevcImage;
 
  img_reg:TVkImageCopy;
 
+ ur:TvImage2;
 begin
  if (Device=nil) then Exit;
 
@@ -605,13 +681,13 @@ begin
 
  repeat
   FixCurrentFrame;
-  imageAvailableSemaphore:=FimageAvailableSemaphore[FcurrentFrame].FHandle;
-  renderFinishedSemaphore:=FrenderFinishedSemaphore[FcurrentFrame].FHandle;
+  imageAvailableSemaphore:=FimageAvailableSemaphore[FcurrentFrame];
+  renderFinishedSemaphore:=FrenderFinishedSemaphore[FcurrentFrame];
 
   R:=vkAcquireNextImageKHR(Device.FHandle,
                            FSwapChain.FHandle,
                            High(uInt64),
-                           imageAvailableSemaphore,
+                           imageAvailableSemaphore.FHandle,
                            VK_NULL_HANDLE,
                            @imageIndex);
   Case R of
@@ -627,13 +703,17 @@ begin
  until false;
  SwapImage:=FSwapChain.FImage[imageIndex];
 
- buf^.cmdfence.Wait(High(uint64));
- buf^.cmdfence.Reset;
+ //buf^.cmdfence.Wait(High(uint64));
+ //buf^.cmdfence.Reset;
+
+ buf^.cmdbuf.Fence.Wait(High(uint64));
+ buf^.cmdbuf.Fence.Reset;
+ buf^.cmdbuf.ReleaseResource;
 
  buf^.Cursors[0].SetPending(nil);
  buf^.Cursors[1].SetPending(nil);
 
-
+ {
  beginInfo:=Default(TVkCommandBufferBeginInfo);
  beginInfo.sType:=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
  beginInfo.flags:=ord(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -644,120 +724,188 @@ begin
   Writeln('vkBeginCommandBuffer:',r);
   Exit;
  end;
+ }
+ if not buf^.cmdbuf.BeginCmdBuffer then Exit;
 
- if (buf^.ur=nil) then
+ ur:=FindImage(buf^.cmdbuf,buf^.Addr,cformat);
+
+ if (ur=nil) then
  begin
-  FBuffer.buffer:=buf^.HostBuf.FHandle;
-  FBuffer.offset:=0;
-  FBuffer.range :=buf^.SIZE;
-
   FCurSet:=buf^.FSet;
 
-  FCurSet.BindSB (0,0,FBuffer);
-  FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle);
+  FCurSet.BindBuf(0,0,
+                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                  buf^.HostBuf.FHandle,
+                  0,
+                  buf^.SIZE);
 
-  vkImageMemoryBarrier(
-        buf^.cmdbuf,
-  	buf^.DstImgNORM.FHandle,
-  	ord(VK_ACCESS_NONE_KHR),
-  	ord(VK_ACCESS_SHADER_WRITE_BIT),
-  	VK_IMAGE_LAYOUT_UNDEFINED,
-  	VK_IMAGE_LAYOUT_GENERAL,
-  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	SubresColor);
+  FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle,VK_IMAGE_LAYOUT_GENERAL);
+
+  //vkImageMemoryBarrier(
+  //    buf^.cmdbuf.cmdbuf,
+  //    buf^.DstImgNORM.FHandle,
+  //    ord(VK_ACCESS_NONE_KHR),
+  //    ord(VK_ACCESS_SHADER_WRITE_BIT),
+  //    VK_IMAGE_LAYOUT_UNDEFINED,
+  //    VK_IMAGE_LAYOUT_GENERAL,
+  //    ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+  //    ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+  //    SubresColor);
+
+  buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+                               SubresColor,
+                               ord(VK_ACCESS_SHADER_WRITE_BIT),
+                               VK_IMAGE_LAYOUT_GENERAL,
+                               ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
 
   if (buf^.DstImgSRGB<>nil) then
-  vkImageMemoryBarrier(
-        buf^.cmdbuf,
-  	buf^.DstImgSRGB.FHandle,
-  	ord(VK_ACCESS_NONE_KHR),
-  	ord(VK_ACCESS_SHADER_WRITE_BIT),
-  	VK_IMAGE_LAYOUT_UNDEFINED,
-  	VK_IMAGE_LAYOUT_GENERAL,
-  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-  	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-  	SubresColor);
+  begin
+   buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
+                                SubresColor,
+                                ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                VK_IMAGE_LAYOUT_GENERAL,
+                                ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+  end;
 
-  vkCmdBindPipeline(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineFlip.FHandle);
+  //vkImageMemoryBarrier(
+  //      buf^.cmdbuf.cmdbuf,
+  //	buf^.DstImgSRGB.FHandle,
+  //	ord(VK_ACCESS_NONE_KHR),
+  //	ord(VK_ACCESS_SHADER_WRITE_BIT),
+  //	VK_IMAGE_LAYOUT_UNDEFINED,
+  //	VK_IMAGE_LAYOUT_GENERAL,
+  //	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+  //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+  //	SubresColor);
+
+  //vkCmdBindPipeline(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineFlip.FHandle);
+  buf^.cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineFlip.FHandle);
+  buf^.cmdbuf.BindLayout(VK_PIPELINE_BIND_POINT_COMPUTE,FLayout);
 
   Fcfg.Width[0]:=1;
   Fcfg.Width[1]:=buf^.PITCH;
 
-  vkCmdPushConstants(buf^.cmdbuf,
-                     FLayout.FHandle,
-                     ord(VK_SHADER_STAGE_COMPUTE_BIT),
-                     0,
-                     SizeOf(TFlipCfg),
-                     @Fcfg);
+  //vkCmdPushConstants(buf^.cmdbuf.cmdbuf,
+  //                   FLayout.FHandle,
+  //                   ord(VK_SHADER_STAGE_COMPUTE_BIT),
+  //                   0,
+  //                   SizeOf(TFlipCfg),
+  //                   @Fcfg);
 
-  vkCmdBindDescriptorSets(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,
-                          FLayout.FHandle,0,1,
-                          @FCurSet.FHandle,0,nil);
+  buf^.cmdbuf.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
+                           ord(VK_SHADER_STAGE_COMPUTE_BIT),
+                           0,SizeOf(TFlipCfg),@Fcfg);
 
-  FLocalSize:=FPipelineFlip.FComputeShader.FLocalSize;
+  buf^.cmdbuf.BindSet(VK_PIPELINE_BIND_POINT_COMPUTE,0,FCurSet.FHandle);
+
+  //vkCmdBindDescriptorSets(buf^.cmdbuf.cmdbuf,
+  //                        VK_PIPELINE_BIND_POINT_COMPUTE,
+  //                        FLayout.FHandle,0,1,
+  //                        @FCurSet.FHandle,0,nil);
+
+  FLocalSize:=TvShaderCompute(FPipelineFlip.FComputeShader).FLocalSize;
+
   FLocalSize.x:=(buf^.DstImgNORM.FExtent.width +(FLocalSize.x-1)) div FLocalSize.x;
   FLocalSize.y:=(buf^.DstImgNORM.FExtent.height+(FLocalSize.y-1)) div FLocalSize.y;
 
-  vkCmdDispatch(buf^.cmdbuf,FLocalSize.x,FLocalSize.y,1);
+  //vkCmdDispatch(buf^.cmdbuf.cmdbuf,FLocalSize.x,FLocalSize.y,1);
+  buf^.cmdbuf.DispatchDirect(FLocalSize.x,FLocalSize.y,1);
  end else
  begin
 
-  vkImageMemoryBarrier(
-        buf^.cmdbuf,
-        buf^.ur.FImage.FHandle,
-  	ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
-  	ord(VK_ACCESS_TRANSFER_READ_BIT),
-  	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-  	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-  	ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
-  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-  	SubresColor);
+  buf^.cmdbuf.SetImageBarrier(ur.FHandle,SubresColor,
+                              ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
 
-  vkImageMemoryBarrier(
-        buf^.cmdbuf,
-  	buf^.DstImgNORM.FHandle,
-  	ord(VK_ACCESS_NONE_KHR),
-  	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-  	VK_IMAGE_LAYOUT_UNDEFINED,
-  	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-  	SubresColor);
+  buf^.cmdbuf.PushImageBarrier(ur.FHandle,SubresColor,
+                               ord(VK_ACCESS_TRANSFER_READ_BIT),
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
-  if (buf^.DstImgSRGB<>nil) then
-  vkImageMemoryBarrier(
-        buf^.cmdbuf,
-  	buf^.DstImgSRGB.FHandle,
-  	ord(VK_ACCESS_NONE_KHR),
-  	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-  	VK_IMAGE_LAYOUT_UNDEFINED,
-  	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-  	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-  	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-  	SubresColor);
+  //vkImageMemoryBarrier(
+  //      buf^.cmdbuf.cmdbuf,
+  //      {buf^.}ur{.FImage}.FHandle,
+  //	ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+  //	ord(VK_ACCESS_TRANSFER_READ_BIT),
+  //	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  //	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  //	ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+  //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+  //	SubresColor);
 
+  //vkImageMemoryBarrier(
+  //      buf^.cmdbuf.cmdbuf,
+  //	buf^.DstImgNORM.FHandle,
+  //	ord(VK_ACCESS_NONE_KHR),
+  //	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+  //	VK_IMAGE_LAYOUT_UNDEFINED,
+  //	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  //	ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+  //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+  //	SubresColor);
 
+  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
+  begin
+   buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
+                                SubresColor,
+                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  end else
+  begin
+   buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+                                SubresColor,
+                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  end;
+
+  imgBlitRegion:=Default(TVkImageBlit);
+  imgBlitRegion.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
+  imgBlitRegion.srcSubresource.layerCount:=1;
+  imgBlitRegion.dstSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
+  imgBlitRegion.dstSubresource.layerCount:=1;
+  imgBlitRegion.srcOffsets[1].x:=ur.key.params.extend.width;
+  imgBlitRegion.srcOffsets[1].y:=ur.key.params.extend.height;
+  imgBlitRegion.srcOffsets[1].z:=1;
+  imgBlitRegion.dstOffsets[1].x:=buf^.DstImgNORM.FExtent.width;
+  imgBlitRegion.dstOffsets[1].y:=buf^.DstImgNORM.FExtent.height;
+  imgBlitRegion.dstOffsets[1].z:=1;
+
+  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
+  begin
+   vkCmdBlitImage(
+          buf^.cmdbuf.cmdbuf,
+          ur.FHandle             ,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          buf^.DstImgSRGB.FHandle,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+          1,@imgBlitRegion,VK_FILTER_LINEAR);
+  end else
+  begin
+   vkCmdBlitImage(
+          buf^.cmdbuf.cmdbuf,
+          ur.FHandle             ,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          buf^.DstImgNORM.FHandle,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+          1,@imgBlitRegion,VK_FILTER_LINEAR);
+  end;
+
+  {
   img_reg:=Default(TVkImageCopy);
   img_reg.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
-  //img_reg.srcSubresource.mipLevel:TVkUInt32;
-  //img_reg.srcSubresource.baseArrayLayer:TVkUInt32;
   img_reg.srcSubresource.layerCount:=1;
-
   img_reg.dstSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
-  //img_reg.dstSubresource.mipLevel:TVkUInt32;
-  //img_reg.dstSubresource.baseArrayLayer:TVkUInt32;
   img_reg.dstSubresource.layerCount:=1;
 
-  //img_reg.srcOffset:TVkOffset3D;
-  //img_reg.dstOffset:TVkOffset3D;
-  img_reg.extent:=buf^.ur.FImage.FExtent;
+  img_reg.extent.Create(
+   ur.key.params.extend.width,
+   ur.key.params.extend.height,
+   1);
 
   if (buf^.DstImgSRGB<>nil) then
   begin
 
-   vkCmdCopyImage(buf^.cmdbuf,
-    buf^.ur.FImage.FHandle,
+   vkCmdCopyImage(buf^.cmdbuf.cmdbuf,
+    ur.FHandle,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     buf^.DstImgSRGB.FHandle,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -766,22 +914,24 @@ begin
   end else
   begin
 
-   vkCmdCopyImage(buf^.cmdbuf,
-    buf^.ur.FImage.FHandle,
+   vkCmdCopyImage(buf^.cmdbuf.cmdbuf,
+    ur.FHandle,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     buf^.DstImgNORM.FHandle,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     1,@img_reg);
 
   end;
+  }
 
  end;
 
  if (FCursors[0].enable or FCursors[1].enable) then
  begin
-  vkCmdBindPipeline(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineCursor.FHandle);
+  //vkCmdBindPipeline(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineCursor.FHandle);
+  buf^.cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineCursor.FHandle);
 
-  FLocalSize:=FPipelineCursor.FComputeShader.FLocalSize;
+  FLocalSize:=TvShaderCompute(FPipelineCursor.FComputeShader).FLocalSize;
 
   bufcur:=@buf^.Cursors[0];
 
@@ -799,48 +949,72 @@ begin
 
     bufcur^.SetPending(FCursors[0].pending);
 
-    FBuffer.buffer:=bufcur^.HostBuf.FHandle;
-    FBuffer.offset:=0;
-    FBuffer.range :=16384;
+    FCurSet.BindBuf(0,0,
+                    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    bufcur^.HostBuf.FHandle,
+                    0,
+                    16384);
 
-    FCurSet.BindSB (0,0,FBuffer);
-    FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle);
+    FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle,VK_IMAGE_LAYOUT_GENERAL);
 
-    vkImageMemoryBarrier(
-        buf^.cmdbuf,
-    	buf^.DstImgNORM.FHandle,
-    	ord(VK_ACCESS_NONE_KHR),
-    	ord(VK_ACCESS_SHADER_WRITE_BIT),
-    	VK_IMAGE_LAYOUT_UNDEFINED,
-    	VK_IMAGE_LAYOUT_GENERAL,
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	SubresColor);
+    //vkImageMemoryBarrier(
+    //    buf^.cmdbuf.cmdbuf,
+    //	buf^.DstImgNORM.FHandle,
+    //	ord(VK_ACCESS_NONE_KHR),
+    //	ord(VK_ACCESS_SHADER_WRITE_BIT),
+    //	VK_IMAGE_LAYOUT_UNDEFINED,
+    //	VK_IMAGE_LAYOUT_GENERAL,
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	SubresColor);
 
     if (buf^.DstImgSRGB<>nil) then
-    vkImageMemoryBarrier(
-        buf^.cmdbuf,
-    	buf^.DstImgSRGB.FHandle,
-    	ord(VK_ACCESS_NONE_KHR),
-    	ord(VK_ACCESS_SHADER_WRITE_BIT),
-    	VK_IMAGE_LAYOUT_UNDEFINED,
-    	VK_IMAGE_LAYOUT_GENERAL,
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	SubresColor);
+    begin
+     buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
+                                  SubresColor,
+                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                  VK_IMAGE_LAYOUT_GENERAL,
+                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+    end else
+    begin
+     buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+                                  SubresColor,
+                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                  VK_IMAGE_LAYOUT_GENERAL,
+                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+    end;
 
-    vkCmdPushConstants(buf^.cmdbuf,
-                       FLayout.FHandle,
-                       ord(VK_SHADER_STAGE_COMPUTE_BIT),
-                       0,
-                       SizeOf(TFlipCfg),
-                       @Fcfg);
+    //vkImageMemoryBarrier(
+    //    buf^.cmdbuf.cmdbuf,
+    //	buf^.DstImgSRGB.FHandle,
+    //	ord(VK_ACCESS_NONE_KHR),
+    //	ord(VK_ACCESS_SHADER_WRITE_BIT),
+    //	VK_IMAGE_LAYOUT_UNDEFINED,
+    //	VK_IMAGE_LAYOUT_GENERAL,
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	SubresColor);
 
-    vkCmdBindDescriptorSets(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,
-                            FLayout.FHandle,0,1,
-                            @FCurSet.FHandle,0,nil);
+    buf^.cmdbuf.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
+                             ord(VK_SHADER_STAGE_COMPUTE_BIT),
+                             0,SizeOf(TFlipCfg),@Fcfg);
 
-    vkCmdDispatch(buf^.cmdbuf,64 div FLocalSize.x,64 div FLocalSize.y,1);
+    //vkCmdPushConstants(buf^.cmdbuf.cmdbuf,
+    //                   FLayout.FHandle,
+    //                   ord(VK_SHADER_STAGE_COMPUTE_BIT),
+    //                   0,
+    //                   SizeOf(TFlipCfg),
+    //                   @Fcfg);
+
+    buf^.cmdbuf.BindSet(VK_PIPELINE_BIND_POINT_COMPUTE,0,FCurSet.FHandle);
+
+    //vkCmdBindDescriptorSets(buf^.cmdbuf.cmdbuf,
+    //                        VK_PIPELINE_BIND_POINT_COMPUTE,
+    //                        FLayout.FHandle,0,1,
+    //                        @FCurSet.FHandle,0,nil);
+
+    //vkCmdDispatch(buf^.cmdbuf.cmdbuf,64 div FLocalSize.x,64 div FLocalSize.y,1);
+    buf^.cmdbuf.DispatchDirect(64 div FLocalSize.x,64 div FLocalSize.y,1);
    end else
    begin
     bufcur^.Free;
@@ -866,48 +1040,72 @@ begin
 
     bufcur^.SetPending(FCursors[1].pending);
 
-    FBuffer.buffer:=bufcur^.HostBuf.FHandle;
-    FBuffer.offset:=0;
-    FBuffer.range :=16384;
+    FCurSet.BindBuf(0,0,
+                    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    bufcur^.HostBuf.FHandle,
+                    0,
+                    16384);
 
-    FCurSet.BindSB (0,0,FBuffer);
-    FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle);
+    FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle,VK_IMAGE_LAYOUT_GENERAL);
 
-    vkImageMemoryBarrier(
-        buf^.cmdbuf,
-    	buf^.DstImgNORM.FHandle,
-    	ord(VK_ACCESS_NONE_KHR),
-    	ord(VK_ACCESS_SHADER_WRITE_BIT),
-    	VK_IMAGE_LAYOUT_UNDEFINED,
-    	VK_IMAGE_LAYOUT_GENERAL,
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	SubresColor);
+    //vkImageMemoryBarrier(
+    //    buf^.cmdbuf.cmdbuf,
+    //	buf^.DstImgNORM.FHandle,
+    //	ord(VK_ACCESS_NONE_KHR),
+    //	ord(VK_ACCESS_SHADER_WRITE_BIT),
+    //	VK_IMAGE_LAYOUT_UNDEFINED,
+    //	VK_IMAGE_LAYOUT_GENERAL,
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	SubresColor);
 
     if (buf^.DstImgSRGB<>nil) then
-    vkImageMemoryBarrier(
-        buf^.cmdbuf,
-    	buf^.DstImgSRGB.FHandle,
-    	ord(VK_ACCESS_NONE_KHR),
-    	ord(VK_ACCESS_SHADER_WRITE_BIT),
-    	VK_IMAGE_LAYOUT_UNDEFINED,
-    	VK_IMAGE_LAYOUT_GENERAL,
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	SubresColor);
+    begin
+     buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
+                                  SubresColor,
+                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                  VK_IMAGE_LAYOUT_GENERAL,
+                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+    end else
+    begin
+     buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+                                  SubresColor,
+                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                  VK_IMAGE_LAYOUT_GENERAL,
+                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+    end;
 
-    vkCmdPushConstants(buf^.cmdbuf,
-                       FLayout.FHandle,
-                       ord(VK_SHADER_STAGE_COMPUTE_BIT),
-                       0,
-                       SizeOf(TFlipCfg),
-                       @Fcfg);
+    //vkImageMemoryBarrier(
+    //    buf^.cmdbuf.cmdbuf,
+    //	buf^.DstImgSRGB.FHandle,
+    //	ord(VK_ACCESS_NONE_KHR),
+    //	ord(VK_ACCESS_SHADER_WRITE_BIT),
+    //	VK_IMAGE_LAYOUT_UNDEFINED,
+    //	VK_IMAGE_LAYOUT_GENERAL,
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+    //	SubresColor);
 
-    vkCmdBindDescriptorSets(buf^.cmdbuf,VK_PIPELINE_BIND_POINT_COMPUTE,
-                            FLayout.FHandle,0,1,
-                            @FCurSet.FHandle,0,nil);
+    //vkCmdPushConstants(buf^.cmdbuf.cmdbuf,
+    //                   FLayout.FHandle,
+    //                   ord(VK_SHADER_STAGE_COMPUTE_BIT),
+    //                   0,
+    //                   SizeOf(TFlipCfg),
+    //                   @Fcfg);
 
-    vkCmdDispatch(buf^.cmdbuf,64 div FLocalSize.x,64 div FLocalSize.y,1);
+    buf^.cmdbuf.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
+                             ord(VK_SHADER_STAGE_COMPUTE_BIT),
+                             0,SizeOf(TFlipCfg),@Fcfg);
+
+    buf^.cmdbuf.BindSet(VK_PIPELINE_BIND_POINT_COMPUTE,0,FCurSet.FHandle);
+
+    //vkCmdBindDescriptorSets(buf^.cmdbuf.cmdbuf,
+    //                        VK_PIPELINE_BIND_POINT_COMPUTE,
+    //                        FLayout.FHandle,0,1,
+    //                        @FCurSet.FHandle,0,nil);
+
+    //vkCmdDispatch(buf^.cmdbuf.cmdbuf,64 div FLocalSize.x,64 div FLocalSize.y,1);
+    buf^.cmdbuf.DispatchDirect(64 div FLocalSize.x,64 div FLocalSize.y,1);
    end else
    begin
     bufcur^.Free;
@@ -923,39 +1121,60 @@ begin
   buf^.Cursors[1].Free;
  end;
 
- vkImageMemoryBarrier(
- 	buf^.cmdbuf,
- 	buf^.DstImgNORM.FHandle,
-        ord(VK_ACCESS_NONE_KHR),
- 	ord(VK_ACCESS_TRANSFER_READ_BIT),
-        VK_IMAGE_LAYOUT_UNDEFINED,
- 	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
- 	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
- 	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	SubresColor);
+ //vkImageMemoryBarrier(
+ //	buf^.cmdbuf.cmdbuf,
+ //	buf^.DstImgNORM.FHandle,
+ //       ord(VK_ACCESS_NONE_KHR),
+ //	ord(VK_ACCESS_TRANSFER_READ_BIT),
+ //       VK_IMAGE_LAYOUT_UNDEFINED,
+ //	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+ //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+ //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+ //	SubresColor);
 
  if (buf^.DstImgSRGB<>nil) then
- vkImageMemoryBarrier(
- 	buf^.cmdbuf,
- 	buf^.DstImgSRGB.FHandle,
-        ord(VK_ACCESS_NONE_KHR),
- 	ord(VK_ACCESS_TRANSFER_READ_BIT),
-        VK_IMAGE_LAYOUT_UNDEFINED,
- 	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
- 	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
- 	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	SubresColor);
+ begin
+  buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
+                               SubresColor,
+                               ord(VK_ACCESS_TRANSFER_READ_BIT),
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ end else
+ begin
+  buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+                               SubresColor,
+                               ord(VK_ACCESS_TRANSFER_READ_BIT),
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ end;
 
- vkImageMemoryBarrier(
- 	buf^.cmdbuf,
- 	SwapImage,
- 	ord(VK_ACCESS_NONE_KHR),
- 	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
- 	VK_IMAGE_LAYOUT_UNDEFINED,
- 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
- 	ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
- 	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- 	SubresColor);
+ //vkImageMemoryBarrier(
+ //	buf^.cmdbuf.cmdbuf,
+ //	buf^.DstImgSRGB.FHandle,
+ //       ord(VK_ACCESS_NONE_KHR),
+ //	ord(VK_ACCESS_TRANSFER_READ_BIT),
+ //       VK_IMAGE_LAYOUT_UNDEFINED,
+ //	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+ //	ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+ //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+ //	SubresColor);
+
+ buf^.cmdbuf.PushImageBarrier(SwapImage,
+                              SubresColor,
+                              ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ //vkImageMemoryBarrier(
+ //	buf^.cmdbuf.cmdbuf,
+ //	SwapImage,
+ //	ord(VK_ACCESS_NONE_KHR),
+ //	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+ //	VK_IMAGE_LAYOUT_UNDEFINED,
+ //	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+ //	ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+ //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+ //	SubresColor);
 
  imgBlitRegion:=Default(TVkImageBlit);
  imgBlitRegion.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -972,63 +1191,62 @@ begin
  if (buf^.DstImgSRGB<>nil) then
  begin
   vkCmdBlitImage(
-         buf^.cmdbuf,
-         buf^.DstImgSRGB.FHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-         SwapImage,       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+         buf^.cmdbuf.cmdbuf,
+         buf^.DstImgSRGB.FHandle,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+         SwapImage              ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
          1,@imgBlitRegion,VK_FILTER_LINEAR);
  end else
  begin
   vkCmdBlitImage(
-         buf^.cmdbuf,
-         buf^.DstImgNORM.FHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-         SwapImage,       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+         buf^.cmdbuf.cmdbuf,
+         buf^.DstImgNORM.FHandle,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+         SwapImage              ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
          1,@imgBlitRegion,VK_FILTER_LINEAR);
  end;
 
 
+ buf^.cmdbuf.PushImageBarrier(SwapImage,
+                              SubresColor,
+                              ord(VK_ACCESS_NONE_KHR),
+                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                              ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
 
- vkImageMemoryBarrier(
- 	buf^.cmdbuf,
- 	SwapImage,
- 	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-        ord(VK_ACCESS_NONE_KHR),
- 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
- 	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-        ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
- 	SubresColor);
+ //vkImageMemoryBarrier(
+ //	buf^.cmdbuf.cmdbuf,
+ //	SwapImage,
+ //	ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+ //       ord(VK_ACCESS_NONE_KHR),
+ //	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+ //       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+ //	ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
+ //       ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+ //	SubresColor);
 
- vkEndCommandBuffer(buf^.cmdbuf);
+ //vkEndCommandBuffer(buf^.cmdbuf);
+ buf^.cmdbuf.EndCmdBuffer;
 
- wstage:=ord(VK_PIPELINE_STAGE_TRANSFER_BIT);
+ buf^.cmdbuf.AddWaitSemaphore(imageAvailableSemaphore,ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ buf^.cmdbuf.SignalSemaphore:=renderFinishedSemaphore;
+ buf^.cmdbuf.QueueSubmit;
 
- submitInfo:=Default(TVkSubmitInfo);
- submitInfo.sType               :=VK_STRUCTURE_TYPE_SUBMIT_INFO;
- submitInfo.waitSemaphoreCount  :=1;
- submitInfo.pWaitSemaphores     :=@imageAvailableSemaphore;
- submitInfo.pWaitDstStageMask   :=@wstage;
- submitInfo.commandBufferCount  :=1;
- submitInfo.pCommandBuffers     :=@buf^.cmdbuf;
- submitInfo.signalSemaphoreCount:=1;
- submitInfo.pSignalSemaphores   :=@renderFinishedSemaphore;
-
- r:=vkQueueSubmit(FlipQueue,1,@submitInfo,buf^.cmdfence.FHandle);
+ {r:=vkQueueSubmit(FlipQueue,1,@submitInfo,buf^.cmdbuf.Fence.FHandle);
+ //r:=vkQueueSubmit(FlipQueue,1,@submitInfo,buf^.cmdfence.FHandle);
  if (r<>VK_SUCCESS) then
  begin
   Writeln('vkQueueSubmit:',r);
   exit;
- end;
+ end;}
 
  prInfo:=Default(TVkPresentInfoKHR);
  prInfo.sType             :=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
  prInfo.waitSemaphoreCount:=1;
- prInfo.pWaitSemaphores   :=@renderFinishedSemaphore;
+ prInfo.pWaitSemaphores   :=@renderFinishedSemaphore.FHandle;
  prInfo.swapchainCount    :=1;
  prInfo.pSwapchains       :=@FSwapChain.FHandle;
  prInfo.pImageIndices     :=@imageIndex;
  prInfo.pResults:=nil;
 
- R:=vkQueuePresentKHR(FlipQueue,@prInfo);
+ R:=FlipQueue.QueuePresentKHR(@prInfo);
  Case R of
   VK_SUCCESS:;
   VK_ERROR_OUT_OF_DATE_KHR,
@@ -1044,6 +1262,7 @@ begin
  FixCurrentFrame;
  //vkQueueWaitIdle(FlipQueue);
 end;
+
 
 
 end.

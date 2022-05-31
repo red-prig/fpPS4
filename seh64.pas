@@ -12,7 +12,8 @@ uses
   SysUtils,
   hamt,
   ps4libdoc,
-  ps4_types,
+  sys_types,
+  sys_kernel,
   ps4_program;
 
 function AddVectoredExceptionHandler(FirstHandler: DWORD; VectoredHandler: pointer): pointer; stdcall;
@@ -337,6 +338,7 @@ begin
  Report:=Report+#13#10;
  WriteErr(Report);
  print_adr;
+ if (node<>nil) then node.Release;
  top:=Pointer(ContextRecord^.Rbp);
  //if (top>StackBottom) and (top<StackTop) then
  begin
@@ -346,10 +348,11 @@ begin
    safe_move_ptr(rbp[0],rbp);
    if (ExceptAddr<>nil) then
    begin
-    node:=ps4_app.FindFileByCodeAdr(ExceptAddr);
+    node:=ps4_app.AcqureFileByCodeAdr(ExceptAddr);
     if (node<>nil) then
     begin
      print_adr;
+     node.Release;
     end else
     begin
      print_adr2;
@@ -371,7 +374,9 @@ begin
 
  if (p^.ExceptionRecord^.ExceptionCode=FPC_EXCEPTION_CODE) then Exit(EXCEPTION_CONTINUE_SEARCH);
 
- node:=ps4_app.FindFileByCodeAdr(p^.ExceptionRecord^.ExceptionAddress);
+ //DumpException(nil,0,p^.ExceptionRecord^.ExceptionAddress,P^.ContextRecord);
+
+ node:=ps4_app.AcqureFileByCodeAdr(p^.ExceptionRecord^.ExceptionAddress);
  if (node=nil) and
     (GetModuleByAdr(p^.ExceptionRecord^.ExceptionAddress)<>GetModuleByAdr(@ProcessException)) then
     Exit(EXCEPTION_CONTINUE_SEARCH);

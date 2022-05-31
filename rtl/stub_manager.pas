@@ -98,7 +98,7 @@ begin
  if (Stub_va<>nil) then
  begin
   Push(Stub_va);
-  VirtualProtect(Stub_va,VA_SIZE,PAGE_EXECUTE_READ,@dummy);
+  //VirtualProtect(Stub_va,VA_SIZE,PAGE_EXECUTE_READ,@dummy);
   FlushInstructionCache(GetCurrentProcess,Stub_va,VA_SIZE);
   Stub_va:=nil;
   Stub_pos:=0;
@@ -112,7 +112,7 @@ begin
 
  if (Stub_va=nil) then
  begin
-  Stub_va:=VirtualAlloc(nil,VA_SIZE,MEM_COMMIT or MEM_RESERVE,PAGE_READWRITE);
+  Stub_va:=VirtualAlloc(nil,VA_SIZE,MEM_COMMIT or MEM_RESERVE,{PAGE_READWRITE}PAGE_EXECUTE_READWRITE);
  end;
 
  Result:=Stub_va+Stub_pos;
@@ -178,7 +178,6 @@ begin
  nopstub._addr:=proc;
  Result:=NewStub(@nopstub,SizeOf(Tnopstub));
 end;
-
 
 end.
 

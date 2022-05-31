@@ -6,7 +6,9 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils,
+  ps4_libSceSaveData;
 
 implementation
 
@@ -42,9 +44,23 @@ end;
 
 function ps4_sceSaveDataDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceSaveDataDialogUpdateStatus');
+ //Writeln('sceSaveDataDialogUpdateStatus');
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 end;
+
+type
+ pSceSaveDataDialogResult=^SceSaveDataDialogResult;
+ SceSaveDataDialogResult=packed record
+  mode:Integer;//SceSaveDataDialogMode;         //Mode of function
+  result:Integer;                               //Result of executing function
+  buttonId:Integer;//SceSaveDataDialogButtonId; //Id of button user selected
+  _align:Integer;
+  dirName:pSceSaveDataDirName;        //savedata directory name
+  param:pSceSaveDataParam;            //Buffer to receive savedata information ( can be set NULL if you don't need it)
+  userData:Pointer;                   //Userdata specified at calling function
+  reserved:array[0..31] of Byte;      //Reserved range (must be filled by zero)
+ end;
+
 
 function ps4_sceSaveDataDialogProgressBarSetValue(target:Integer;rate:DWORD):Integer; SysV_ABI_CDecl;
 begin
@@ -55,6 +71,20 @@ end;
 function ps4_sceSaveDataDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSaveDataDialogTerminate');
+ Result:=0;
+end;
+
+const
+ SCE_COMMON_DIALOG_ERROR_NOT_FINISHED=-2135425019;//0x80B80005
+
+function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
+end;
+
+function ps4_sceMsgDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceMsgDialogInitialize');
  Result:=0;
 end;
 
@@ -104,6 +134,17 @@ begin
  lib^.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
  lib^.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);
  lib^.set_proc($62E1F6140EDACEA4,@ps4_sceSaveDataDialogTerminate);
+ lib^.set_proc($C84889FEAAABE828,@ps4_sceSaveDataDialogGetResult);
+end;
+
+function Load_libSceMsgDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceMsgDialog');
+ lib^.set_proc($943AB1698D546C4A,@ps4_sceMsgDialogInitialize);
 end;
 
 initialization
@@ -111,6 +152,7 @@ initialization
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx',@Load_libSceErrorDialog);
  ps4_app.RegistredPreLoad('libSceNpProfileDialog.prx',@Load_libSceNpProfileDialog);
  ps4_app.RegistredPreLoad('libSceSaveDataDialog.prx',@Load_libSceSaveDataDialog);
+ ps4_app.RegistredPreLoad('libSceMsgDialog.prx',@Load_libSceMsgDialog);
 
 end.
 

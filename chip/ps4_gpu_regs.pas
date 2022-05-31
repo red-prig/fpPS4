@@ -8,8 +8,10 @@ uses
  Classes,
  SysUtils,
  vulkan,
+ vImage,
  bittype,
  pm4defs,
+ ps4_shader,
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers;
@@ -62,16 +64,21 @@ type
  TSPI_USER_DATA=array[0..15] of DWORD;
 
  TRT_INFO=record
-  Addr:Pointer;
+  //Addr:Pointer;
 
-  extend:TVkExtent2D;
+  //extend:TVkExtent2D;
   padded:TVkExtent2D;
 
-  cformat:TVkFormat;
-  TILE_MODE_INDEX:DWORD;
+  //cformat:TVkFormat;
+  //TILE_MODE_INDEX:DWORD;
+
+  FImageInfo:TvImageKey;
+  FImageView:TvImageViewKey;
 
   COMP_SWAP :Byte;
-  FAST_CLEAR:Boolean;
+  //FAST_CLEAR:Boolean;
+
+  IMAGE_USAGE:Byte;
 
   CLEAR_COLOR:TVkClearColorValue;
 
@@ -86,14 +93,14 @@ type
   STENCIL_READ_ADDR:Pointer;
   STENCIL_WRITE_ADDR:Pointer;
 
-  extend:TVkExtent2D;
+  //extend:TVkExtent2D;
   padded:TVkExtent2D;
 
-  DEPTH_CLEAR   :Boolean;
-  STENCIL_CLEAR :Boolean;
+  //DEPTH_CLEAR   :Boolean;
+  //STENCIL_CLEAR :Boolean;
 
-  Z_READ_ONLY      :Boolean;
-  STENCIL_READ_ONLY:Boolean;
+  //Z_READ_ONLY      :Boolean;
+  //STENCIL_READ_ONLY:Boolean;
 
   CLEAR_VALUE:TVkClearValue;
 
@@ -109,12 +116,18 @@ type
   minDepthBounds:TVkFloat;
   maxDepthBounds:TVkFloat;
 
-  dformat:TVkFormat;
+  DEPTH_USAGE:Byte;
+  STENCIL_USAGE:Byte;
 
-  zorder_stage:TVkPipelineStageFlagBits;
+  FImageInfo:TvImageKey;
+
+  //dformat:TVkFormat;
+
+  zorder_stage:TVkPipelineStageFlags;
 
  end;
 
+ PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
   RENDER_TARGET:array[0..7] of TRENDER_TARGET;
   TARGET_MASK:TCB_TARGET_MASK;
@@ -164,6 +177,7 @@ type
   VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE;
   VGT_INDEX_TYPE    :TVGT_INDEX_TYPE    ;
   VGT_NUM_INSTANCES :TVGT_NUM_INSTANCES ;
+  GRBM_GFX_INDEX    :TGRBM_GFX_INDEX;
 
   VGT_DMA:packed record
    INDEX_TYPE:TVGT_DMA_INDEX_TYPE;
@@ -182,8 +196,7 @@ type
   SPI:packed record
 
    PS:packed record
-    INPUT_CNTL_0:TSPI_PS_INPUT_CNTL_0;
-    INPUT_CNTL_1:TSPI_PS_INPUT_CNTL_1;
+    INPUT_CNTL:array[0..31] of TSPI_PS_INPUT_CNTL_0;
 
     LO,HI:DWORD;
     RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
@@ -291,21 +304,43 @@ type
   Procedure ClearDMA;
  end;
 
+const
+ // Provided by VK_EXT_image_view_min_lod
+ VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT = 1000391001;
+
+type
+ PVkImageViewMinLodCreateInfoEXT=^TVkImageViewMinLodCreateInfoEXT;
+ TVkImageViewMinLodCreateInfoEXT=record
+  sType:TVkStructureType; //< Must be VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT
+  pNext:PVkVoid;
+  minLod:TVkFloat;
+ end;
+
+function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
+function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
+
+function _get_tsharp4_min_lod(PT:PTSharpResource4):TVkImageViewMinLodCreateInfoEXT;
+
+function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
+function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
+
+function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
+
 implementation
 
 Function TGPU_REGS._SHADER_MASK(i:Byte):Byte; inline; //0..7
 begin
- Result:=(DWORD(SPI.PS.SHADER_MASK) shr i) and 15;
+ Result:=(DWORD(SPI.PS.SHADER_MASK) shr (i shl 2)) and 15;
 end;
 
 Function TGPU_REGS._TARGET_MASK(i:Byte):Byte; inline; //0..7
 begin
- Result:=(DWORD(TARGET_MASK) shr i) and 15;
+ Result:=(DWORD(TARGET_MASK) shr (i shl 2)) and 15;
 end;
 
 Function TGPU_REGS._COMP_MASK(i:Byte):Byte; inline;  //0..7
 begin
- Result:=((DWORD(SPI.PS.SHADER_MASK) and DWORD(TARGET_MASK)) shr i) and 15;
+ Result:=((DWORD(SPI.PS.SHADER_MASK) and DWORD(TARGET_MASK)) shr (i shl 2)) and 15;
 end;
 
 Function TGPU_REGS.COMP_ENABLE:Boolean; inline;
@@ -624,13 +659,81 @@ begin
   Result.colorBlendOp:=GetBlendOp(CB_BLEND_CONTROL[i].COLOR_COMB_FCN);
   Result.alphaBlendOp:=GetBlendOp(CB_BLEND_CONTROL[i].ALPHA_COMB_FCN);
 
-  Assert(CB_BLEND_CONTROL[i].SEPARATE_ALPHA_BLEND=0);
+  //(CB_BLEND_CONTROL[i].SEPARATE_ALPHA_BLEND=0); //VkPhysicalDeviceFeatures.independentBlend
   Assert(CB_BLEND_CONTROL[i].DISABLE_ROP3        =0);
  end;
 
- //Assert(CB_COLOR_CONTROL.ROP3 = 204);
+ //CB_COLOR_CONTROL.MODE   //CB_DISABLE
+ //Assert(CB_COLOR_CONTROL.ROP3 = 204); //CB_DISABLE
+
+{
+ POSSIBLE VALUES:
+00 - 0x00: BLACKNESS
+05 - 0x05
+10 - 0x0A
+15 - 0x0F
+17 - 0x11: NOTSRCERASE
+34 - 0x22
+51 - 0x33: NOTSRCCOPY
+68 - 0x44: SRCERASE
+80 - 0x50
+85 - 0x55: DSTINVERT
+90 - 0x5A: PATINVERT
+95 - 0x5F
+102 - 0x66: SRCINVERT
+119 - 0x77
+136 - 0x88: SRCAND
+153 - 0x99
+160 - 0xA0
+165 - 0xA5
+170 - 0xAA
+175 - 0xAF
+187 - 0xBB: MERGEPAINT
+204 - 0xCC: SRCCOPY
+221 - 0xDD
+238 - 0xEE: SRCPAINT
+240 - 0xF0: PATCOPY
+245 - 0xF5
+250 - 0xFA
+255 - 0xFF: WHITENESS
+}
 
 end;
+
+const
+ // Depth modes (for depth buffers)
+ kTileModeDepth_2dThin_64                   = $00000000; ///< Recommended for depth targets with one fragment per pixel.
+ kTileModeDepth_2dThin_128                  = $00000001; ///< Recommended for depth targets with two or four fragments per pixel, or texture-readable.
+ kTileModeDepth_2dThin_256                  = $00000002; ///< Recommended for depth targets with eight fragments per pixel.
+ kTileModeDepth_2dThin_512                  = $00000003; ///< Recommended for depth targets with 512-byte tiles.
+ kTileModeDepth_2dThin_1K                   = $00000004; ///< Recommended for depth targets with 1024-byte tiled.
+ kTileModeDepth_1dThin                      = $00000005; ///< Not used; included only for completeness.
+ kTileModeDepth_2dThinPrt_256               = $00000006; ///< Recommended for partially-resident depth surfaces. Does not support aliasing multiple virtual texture pages to the same physical page.
+ kTileModeDepth_2dThinPrt_1K                = $00000007; ///< Not used; included only for completeness.
+ // Display modes
+ kTileModeDisplay_LinearAligned             = $00000008; ///< Recommended for any surface to be easily accessed on the CPU.
+ kTileModeDisplay_1dThin                    = $00000009; ///< Not used; included only for completeness.
+ kTileModeDisplay_2dThin                    = $0000000A; ///< Recommended mode for displayable render targets.
+ kTileModeDisplay_ThinPrt                   = $0000000B; ///< Supports aliasing multiple virtual texture pages to the same physical page.
+ kTileModeDisplay_2dThinPrt                 = $0000000C; ///< Does not support aliasing multiple virtual texture pages to the same physical page.
+ // Thin modes (for non-displayable 1D/2D/3D surfaces)
+ kTileModeThin_1dThin                       = $0000000D; ///< Recommended for read-only non-volume textures.
+ kTileModeThin_2dThin                       = $0000000E; ///< Recommended for non-displayable intermediate render targets and read/write non-volume textures.
+ kTileModeThin_3dThin                       = $0000000F; ///< Not used; included only for completeness.
+ kTileModeThin_ThinPrt                      = $00000010; ///< Recommended for partially-resident textures (PRTs). Supports aliasing multiple virtual texture pages to the same physical page.
+ kTileModeThin_2dThinPrt                    = $00000011; ///< Does not support aliasing multiple virtual texture pages to the same physical page.
+ kTileModeThin_3dThinPrt                    = $00000012; ///< Does not support aliasing multiple virtual texture pages to the same physical page.
+ // Thick modes (for 3D textures)
+ kTileModeThick_1dThick                     = $00000013; ///< Recommended for read-only volume textures.
+ kTileModeThick_2dThick                     = $00000014; ///< Recommended for volume textures to which pixel shaders will write.
+ kTileModeThick_3dThick                     = $00000015; ///< Not used; included only for completeness.
+ kTileModeThick_ThickPrt                    = $00000016; ///< Supports aliasing multiple virtual texture pages to the same physical page.
+ kTileModeThick_2dThickPrt                  = $00000017; ///< Does not support aliasing multiple virtual texture pages to the same physical page.
+ kTileModeThick_3dThickPrt                  = $00000018; ///< Does not support aliasing multiple virtual texture pages to the same physical page.
+ kTileModeThick_2dXThick                    = $00000019; ///< Recommended for volume textures to which pixel shaders will write.
+ kTileModeThick_3dXThick                    = $0000001A; ///< Not used; included only for completeness.
+ // Hugely inefficient linear display mode -- do not use!
+ kTileModeDisplay_LinearGeneral             = $0000001F; ///< Unsupported; do not use!
 
 Function TGPU_REGS.GET_RT_INFO(i:Byte):TRT_INFO; //0..7
 var
@@ -639,13 +742,25 @@ var
 begin
  Result:=Default(TRT_INFO);
 
+ {
  Result.Addr:=Pointer(QWORD(RENDER_TARGET[i].BASE) shl 8);
  if (RENDER_TARGET[i].INFO.LINEAR_GENERAL=1) then
  begin
   Result.Addr:=Pointer(QWORD(Result.Addr) or Byte(RENDER_TARGET[i].VIEW.SLICE_START));
  end;
+ }
 
- Result.extend:=GET_SCREEN_SIZE;
+ Result.FImageInfo.Addr:=Pointer(QWORD(RENDER_TARGET[i].BASE) shl 8);
+ if (RENDER_TARGET[i].INFO.LINEAR_GENERAL<>0) then
+ begin
+  Result.FImageInfo.Addr:=Pointer(QWORD(Result.FImageInfo.Addr) or Byte(RENDER_TARGET[i].VIEW.SLICE_START));
+ end;
+
+ //Result.extend:=GET_SCREEN_SIZE;
+
+ Result.FImageInfo.params.extend.width :=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_X);
+ Result.FImageInfo.params.extend.height:=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_Y);
+ Result.FImageInfo.params.extend.depth :=1;
 
  Result.padded.Width :=(RENDER_TARGET[i].PITCH.TILE_MAX+1)*8;
  Result.padded.Height:=(RENDER_TARGET[i].SLICE.TILE_MAX+1)*8 div (RENDER_TARGET[i].PITCH.TILE_MAX+1);
@@ -653,6 +768,7 @@ begin
  Assert(RENDER_TARGET[i].INFO.ENDIAN=ENDIAN_NONE);
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
 
+ {
  Case RENDER_TARGET[i].INFO.FORMAT of
   COLOR_8_8_8_8:
    Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
@@ -664,15 +780,57 @@ begin
   else
    Assert(false);
  end;
+ }
 
- Result.TILE_MODE_INDEX:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
- if (RENDER_TARGET[i].INFO.LINEAR_GENERAL=1) then Result.TILE_MODE_INDEX:=8;
+ Case RENDER_TARGET[i].INFO.FORMAT of
+  COLOR_8_8_8_8:
+   Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
+    NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
+    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
+    else
+     Assert(false);
+   end;
+  else
+   Assert(false);
+ end;
+
+ //Result.TILE_MODE_INDEX:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
+ //if (RENDER_TARGET[i].INFO.LINEAR_GENERAL=1) then Result.TILE_MODE_INDEX:=8;
+
+ if (RENDER_TARGET[i].INFO.LINEAR_GENERAL<>0) then
+  Result.FImageInfo.params.tiling_idx:=kTileModeDisplay_LinearGeneral
+ else
+  Result.FImageInfo.params.tiling_idx:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
+
+ Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
+ Result.FImageInfo.params.samples    :=1{ shl (RENDER_TARGET[i].ATTRIB.NUM_SAMPLES and 3)};
+ Result.FImageInfo.params.mipLevels  :=1;
+ Result.FImageInfo.params.arrayLayers:=1;
+
+ Result.FImageView.cformat   :=Result.FImageInfo.cformat;
+ Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
+ //Result.FImageView.dstSel:TvDstSel; TODO
+ //Result.FImageView.base_level:Byte;  //first mip level (0..15)
+ //Result.FImageView.last_level:Byte;  //last mip level (0..15)
+ //Result.FImageView.base_array:Word;  //first array index (0..16383)
+ //Result.FImageView.last_array:Word;  //texture height (0..16383)
+
+ Result.blend:=GET_RT_BLEND(i);
 
  Result.COMP_SWAP:=RENDER_TARGET[i].INFO.COMP_SWAP;
 
- if (RENDER_TARGET[i].INFO.FAST_CLEAR=1) then
+ Result.IMAGE_USAGE:=(TM_CLEAR*RENDER_TARGET[i].INFO.FAST_CLEAR);
+
+ if (Result.blend.blendEnable<>0) then
  begin
-  Result.FAST_CLEAR:=True;
+  Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_READ;
+ end;
+
+ Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_WRITE;
+
+ //if (RENDER_TARGET[i].INFO.FAST_CLEAR=1) then
+ //begin
+  //Result.FAST_CLEAR:=True;
 
   Case RENDER_TARGET[i].INFO.FORMAT of
    COLOR_8_8_8_8:
@@ -706,9 +864,7 @@ begin
     Assert(false);
   end;
 
- end;
-
- Result.blend:=GET_RT_BLEND(i);
+ //end;
 
 end;
 
@@ -728,17 +884,34 @@ Function TGPU_REGS.GET_DB_INFO:TDB_INFO;
 begin
  Result:=Default(TDB_INFO);
 
- Result.extend:=GET_SCREEN_SIZE;
+ //Result.extend:=GET_SCREEN_SIZE;
 
  Result.padded.width :=(DEPTH.DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
  Result.padded.height:=(DEPTH.DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
 
+ Result.DEPTH_USAGE  :=((TM_WRITE or TM_CLEAR)*DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE);
+ Result.STENCIL_USAGE:=((TM_WRITE or TM_CLEAR)*DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE);
 
- Result.DEPTH_CLEAR  :=DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0;
- Result.STENCIL_CLEAR:=DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE<>0;
+ if (Result.DEPTH_USAGE=0) then
+ begin
+  Result.DEPTH_USAGE:=Result.DEPTH_USAGE or TM_READ;
+ end;
 
- Result.Z_READ_ONLY      :=DEPTH.DEPTH_VIEW.Z_READ_ONLY<>0;
- Result.STENCIL_READ_ONLY:=DEPTH.DEPTH_VIEW.STENCIL_READ_ONLY<>0;
+ if (DEPTH.DEPTH_VIEW.Z_READ_ONLY=0) then
+ begin
+  Result.DEPTH_USAGE:=Result.DEPTH_USAGE or TM_WRITE;
+ end;
+
+ if (DEPTH.DEPTH_VIEW.STENCIL_READ_ONLY=0) then
+ begin
+  Result.STENCIL_USAGE:=Result.STENCIL_USAGE or TM_WRITE;
+ end;
+
+ //Result.DEPTH_CLEAR  :=DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0;
+ //Result.STENCIL_CLEAR:=DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE<>0;
+
+ //Result.Z_READ_ONLY      :=DEPTH.DEPTH_VIEW.Z_READ_ONLY<>0;
+ //Result.STENCIL_READ_ONLY:=DEPTH.DEPTH_VIEW.STENCIL_READ_ONLY<>0;
 
  Assert(DEPTH.RENDER_CONTROL.DEPTH_COPY=0);
  Assert(DEPTH.RENDER_CONTROL.STENCIL_COPY=0);
@@ -794,31 +967,31 @@ begin
   Z_INVALID :
    if (DEPTH.STENCIL_INFO.FORMAT=STENCIL_8) then
    begin
-    Result.dformat:=VK_FORMAT_S8_UINT;
+    Result.FImageInfo.cformat:=VK_FORMAT_S8_UINT;
    end;
   Z_16      :
    if (DEPTH.STENCIL_INFO.FORMAT=STENCIL_8) then
    begin
-    Result.dformat:=VK_FORMAT_D16_UNORM_S8_UINT;
+    Result.FImageInfo.cformat:=VK_FORMAT_D16_UNORM_S8_UINT;
    end else
    begin
-    Result.dformat:=VK_FORMAT_D16_UNORM;
+    Result.FImageInfo.cformat:=VK_FORMAT_D16_UNORM;
    end;
   Z_24      :
    if (DEPTH.STENCIL_INFO.FORMAT=STENCIL_8) then
    begin
-    Result.dformat:=VK_FORMAT_D24_UNORM_S8_UINT;
+    Result.FImageInfo.cformat:=VK_FORMAT_D24_UNORM_S8_UINT;
    end else
    begin
-    Result.dformat:=VK_FORMAT_X8_D24_UNORM_PACK32;
+    Result.FImageInfo.cformat:=VK_FORMAT_X8_D24_UNORM_PACK32;
    end;
   Z_32_FLOAT:
    if (DEPTH.STENCIL_INFO.FORMAT=STENCIL_8) then
    begin
-    Result.dformat:=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    Result.FImageInfo.cformat:=VK_FORMAT_D32_SFLOAT_S8_UINT;
    end else
    begin
-    Result.dformat:=VK_FORMAT_D32_SFLOAT;
+    Result.FImageInfo.cformat:=VK_FORMAT_D32_SFLOAT;
    end;
  end;
 
@@ -832,14 +1005,26 @@ begin
  Assert(SPI.PS.SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0);
 
  Case SPI.PS.SHADER_CONTROL.Z_ORDER of
-  LATE_Z             :Result.zorder_stage:=VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-  EARLY_Z_THEN_LATE_Z:Result.zorder_stage:=TVkPipelineStageFlagBits(
-                                            ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
-                                            ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT));
-  RE_Z               :Result.zorder_stage:=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-  EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+  LATE_Z,
+  RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+
+  EARLY_Z_THEN_LATE_Z,
+  EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
+                                           ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
  end;
 
+ Result.FImageInfo.Addr:=Result.Z_READ_ADDR;
+
+ Result.FImageInfo.params.extend.width :=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_X);
+ Result.FImageInfo.params.extend.height:=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_Y);
+ Result.FImageInfo.params.extend.depth :=1;
+
+ Result.FImageInfo.params.tiling_idx:=DEPTH.Z_INFO.TILE_MODE_INDEX;
+
+ Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
+ Result.FImageInfo.params.samples    :=1{ shl (DEPTH.Z_INFO.NUM_SAMPLES and 3)};
+ Result.FImageInfo.params.mipLevels  :=1;
+ Result.FImageInfo.params.arrayLayers:=1;
 end;
 
 function TGPU_REGS.GET_PRIM_TYPE:TVkPrimitiveTopology;
@@ -919,6 +1104,476 @@ end;
 Procedure TGPU_REGS.ClearDMA;
 begin
  FillChar(VGT_DMA,SizeOf(VGT_DMA),0);
+end;
+
+function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
+begin
+ Result:=Default(TVkFormat);
+ if (PV=nil) then Exit;
+
+ Case PV^.nfmt of
+
+  BUF_NUM_FORMAT_UNORM:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UNORM;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_SNORM:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SNORM;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_USCALED:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_USCALED;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_SSCALED:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SSCALED;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_UINT:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UINT;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UINT;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UINT;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UINT;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UINT;
+    BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_UINT;
+    BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_UINT;
+    BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_UINT;
+    BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_UINT;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_SINT:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
+    BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
+    BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SINT;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
+    BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
+    BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
+    BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SINT;
+    BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SINT;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  BUF_NUM_FORMAT_FLOAT:
+   case PV^.dfmt of
+    BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SFLOAT;
+    BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
+    BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
+    BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
+    else
+     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+   end;
+
+  else
+   Assert(false,_get_buf_nfmt_str(PV^.nfmt));
+ end;
+end;
+
+function _img_is_msaa(b:Byte):Boolean; inline;
+begin
+ Case b of
+  SQ_RSRC_IMG_2D_MSAA      ,
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:Result:=True;
+  else
+                            Result:=False;
+ end;
+end;
+
+function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
+begin
+ Result:=Default(TVkFormat);
+ if (PT=nil) then Exit;
+
+ Case PT^.nfmt of
+  IMG_NUM_FORMAT_UNORM  :
+    case PT^.dfmt of
+     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
+     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
+     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UNORM;
+     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
+     IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
+     else
+      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    end;
+
+  IMG_NUM_FORMAT_SRGB  :
+    case PT^.dfmt of
+     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SRGB;
+     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SRGB;
+     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SRGB;
+     else
+      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    end;
+
+  IMG_NUM_FORMAT_SNORM  :
+    case PT^.dfmt of
+     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
+     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
+     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SNORM;
+     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
+     else
+      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    end;
+
+  IMG_NUM_FORMAT_USCALED:
+    case PT^.dfmt of
+     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
+     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
+     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_USCALED;
+     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
+     else
+      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    end;
+
+
+  IMG_NUM_FORMAT_SSCALED:
+    case PT^.dfmt of
+     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
+     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
+     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SSCALED;
+     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
+     else
+      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    end;
+
+  IMG_NUM_FORMAT_UINT   :
+   case PT^.dfmt of
+    IMG_DATA_FORMAT_8           :Result:=VK_FORMAT_R8_UINT;
+    IMG_DATA_FORMAT_8_8         :Result:=VK_FORMAT_R8G8_UINT;
+    IMG_DATA_FORMAT_8_8_8_8     :Result:=VK_FORMAT_R8G8B8A8_UINT;
+    IMG_DATA_FORMAT_16_16       :Result:=VK_FORMAT_R16_UINT;
+    IMG_DATA_FORMAT_16_16_16_16 :Result:=VK_FORMAT_R16G16B16A16_UINT;
+    IMG_DATA_FORMAT_32          :Result:=VK_FORMAT_R32_UINT;
+    IMG_DATA_FORMAT_32_32       :Result:=VK_FORMAT_R32G32_UINT;
+    IMG_DATA_FORMAT_32_32_32    :Result:=VK_FORMAT_R32G32B32_UINT;
+    IMG_DATA_FORMAT_32_32_32_32 :Result:=VK_FORMAT_R32G32B32A32_UINT;
+    IMG_DATA_FORMAT_FMASK8_S8_F1:Result:=VK_FORMAT_R8_UINT;
+    else
+     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+   end;
+
+  IMG_NUM_FORMAT_SINT   :
+   case PT^.dfmt of
+    IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
+    IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
+    IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
+    IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SINT;
+    IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
+    IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
+    IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
+    IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SINT;
+    IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SINT;
+    else
+     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+   end;
+
+  IMG_NUM_FORMAT_FLOAT  :
+   case PT^.dfmt of
+    IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SFLOAT;
+    IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
+    IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
+    IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
+    else
+     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+   end;
+
+  else
+   Assert(false,_get_tex_nfmt_str(PT^.nfmt));
+ end;
+
+end;
+
+function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
+begin
+ Result:=Default(TvImageKey);
+ if (PT=nil) then Exit;
+
+ Result.Addr:=Pointer(PT^.base shl 8);
+ Result.cformat:=_get_tsharp4_cformat(PT);
+
+ Case PT^._type of
+  SQ_RSRC_IMG_1D           :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
+  SQ_RSRC_IMG_2D           :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_3D           :Result.params.itype:=ord(VK_IMAGE_TYPE_3D);
+  SQ_RSRC_IMG_CUBE         :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_1D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
+  SQ_RSRC_IMG_2D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  else;
+   Assert(false);
+ end;
+
+ Result.params.tiling_idx   :=PT^.tiling_idx;
+ Result.params.extend.width :=PT^.width+1;
+ Result.params.extend.height:=PT^.height+1;
+ Result.params.extend.depth :=1;
+
+ if _img_is_msaa(PT^._type) then
+ begin
+  Result.params.samples  :=PT^.last_level;
+  Result.params.mipLevels:=1;
+ end else
+ begin
+  Result.params.samples  :=1;
+  Result.params.mipLevels:=PT^.last_level-PT^.base_level+1;
+ end;
+
+ Assert(Result.params.mipLevels=1,'TODO');
+
+ Result.params.arrayLayers:=1;
+end;
+
+function _get_dst_sel_swizzle(b:Byte):Byte;
+begin
+ Case b of
+  0:Result:=ord(VK_COMPONENT_SWIZZLE_ZERO);
+  1:Result:=ord(VK_COMPONENT_SWIZZLE_ONE);
+  4:Result:=ord(VK_COMPONENT_SWIZZLE_R);
+  5:Result:=ord(VK_COMPONENT_SWIZZLE_G);
+  6:Result:=ord(VK_COMPONENT_SWIZZLE_B);
+  7:Result:=ord(VK_COMPONENT_SWIZZLE_A);
+  else
+    Result:=ord(VK_COMPONENT_SWIZZLE_IDENTITY);
+ end;
+end;
+
+function _get_lod(w:Word):TVkFloat; forward;
+
+function _get_tsharp4_min_lod(PT:PTSharpResource4):TVkImageViewMinLodCreateInfoEXT;
+begin
+ Result:=Default(TVkImageViewMinLodCreateInfoEXT);
+ if (PT=nil) then Exit;
+
+ ord(Result.sType):=VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT;
+ Result.minLod:=_get_lod(PT^.min_lod);
+end;
+
+//perf_mod:bit3;  //0=0/16, 1=2/16, 2=5/16, 3=7/16, 4=9/16, 5=11/16, 6=14/16, 7=16/16
+//interlaced:bit1;  //texture is interlaced
+//tiling_idx:bit5;  //index into lookup table of surface tiling settings
+//pow2pad:bit1;  //memory footprint is padded to power of 2 dimensions
+
+function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
+var
+ t:Byte;
+begin
+ Result:=Default(TvImageViewKey);
+ if (PT=nil) then Exit;
+
+ Result.cformat:=_get_tsharp4_cformat(PT);
+
+ Case PT^._type of
+  SQ_RSRC_IMG_1D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D);
+  SQ_RSRC_IMG_2D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
+  SQ_RSRC_IMG_3D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
+  SQ_RSRC_IMG_CUBE         :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
+  SQ_RSRC_IMG_1D_ARRAY     :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D_ARRAY);
+  SQ_RSRC_IMG_2D_ARRAY     :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+  SQ_RSRC_IMG_2D_MSAA      :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+  else;
+   Assert(false);
+ end;
+
+ Result.dstSel.r:=_get_dst_sel_swizzle(PT^.dst_sel_x);
+ Result.dstSel.g:=_get_dst_sel_swizzle(PT^.dst_sel_y);
+ Result.dstSel.b:=_get_dst_sel_swizzle(PT^.dst_sel_z);
+ Result.dstSel.a:=_get_dst_sel_swizzle(PT^.dst_sel_w);
+
+ Case Result.cformat of
+  VK_FORMAT_R5G6B5_UNORM_PACK16:
+   begin
+    t:=Result.dstSel.r;
+    Result.dstSel.r:=Result.dstSel.b;
+    Result.dstSel.b:=t;
+   end;
+  else;
+ end;
+
+
+ if not _img_is_msaa(PT^._type) then
+ begin
+  Result.base_level:=PT^.base_level;
+  Result.last_level:=PT^.last_level;
+ end;
+end;
+
+
+function _get_xy_filter(b:Byte):TVkFilter;
+begin
+ Case b of
+  TEX_XYFilter_Point      :Result:=VK_FILTER_NEAREST;
+  TEX_XYFilter_Linear     :Result:=VK_FILTER_LINEAR;
+  TEX_XYFilter_AnisoPoint :Result:=VK_FILTER_NEAREST;
+  TEX_XYFilter_AnisoLinear:Result:=VK_FILTER_LINEAR;
+  else
+    Result:=VK_FILTER_NEAREST;
+ end;
+end;
+
+function _get_mip_filter(b:Byte):TVkSamplerMipmapMode;
+begin
+ Case b of
+  TEX_MipFilter_None           :Result:=VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  TEX_MipFilter_Point          :Result:=VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  TEX_MipFilter_Linear         :Result:=VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  TEX_MipFilter_Point_Aniso_Adj:Result:=VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  else
+    Result:=VK_SAMPLER_MIPMAP_MODE_NEAREST;
+ end;
+end;
+
+function _get_clamp(b:Byte):TVkSamplerAddressMode;
+begin
+ Case b of
+  SQ_TEX_WRAP                   :Result:=VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  SQ_TEX_MIRROR                 :Result:=VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+  SQ_TEX_CLAMP_LAST_TEXEL       :Result:=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  SQ_TEX_MIRROR_ONCE_LAST_TEXEL :Result:=VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+  SQ_TEX_CLAMP_HALF_BORDER      :Result:=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+  SQ_TEX_MIRROR_ONCE_HALF_BORDER:Result:=VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+  SQ_TEX_CLAMP_BORDER           :Result:=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+  SQ_TEX_MIRROR_ONCE_BORDER     :Result:=VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+  else
+    Result:=VK_SAMPLER_ADDRESS_MODE_REPEAT;
+ end;
+end;
+
+function _get_lod_bias(bias:word;sec:Byte):TVkFloat;
+var
+ b,s:TVkFloat;
+begin
+ b:=(-1*Tlod_bias_bits(bias).sign)+Tlod_bias_bits(bias).int+(Tlod_bias_bits(bias).frac/256);
+ s:=(-1*Tlod_bias_sec_bits(sec).sign)+Tlod_bias_sec_bits(sec).int+(Tlod_bias_sec_bits(sec).frac/16);
+ Result:=b+s;
+end;
+
+function _is_aniso_enabled(mag_filter,min_filter:Byte):TVkBool32;
+begin
+ Result:=ord((mag_filter=TEX_XYFilter_AnisoPoint) or
+             (mag_filter=TEX_XYFilter_AnisoLinear) or
+             (min_filter=TEX_XYFilter_AnisoPoint) or
+             (min_filter=TEX_XYFilter_AnisoLinear));
+end;
+
+function _get_aniso_ratio(max_aniso_ratio:Byte):TVkFloat;
+begin
+ Case max_aniso_ratio of
+  SQ_TEX_ANISO_RATIO_1 :Result:=1;
+  SQ_TEX_ANISO_RATIO_2 :Result:=2;
+  SQ_TEX_ANISO_RATIO_4 :Result:=4;
+  SQ_TEX_ANISO_RATIO_8 :Result:=8;
+  SQ_TEX_ANISO_RATIO_16:Result:=16;
+  else
+    Result:=0;
+ end;
+end;
+
+function _get_lod(w:Word):TVkFloat;
+begin
+ Result:=Tlod_bits(w).int+(Tlod_bits(w).frac/256);
+end;
+
+
+//aniso_threshold:bit3;   //Threshold before sampling anisotropically (enum)
+//mc_coord_trunc:bit1;
+//force_degamma:bit1;   //Force de-gamma after filtering regardless of format
+//aniso_bias:bit6;   //Anisotropy bias factor; unsigned fixed point 1.5
+//trunc_coord:bit1;
+//disable_cube_wrap:bit1;   //Disable sampling/filtering across face boundaries
+//filter_mode:bit2;   //LERP, min, or max filter; default: LERP
+
+//perf_mip:bit4;   //Bri-linear factor
+//perf_z:bit4;
+
+//z_filter:bit2;   //Filter in Z coordinate direction for volume textures
+
+//border_color_ptr:bit12;  //Offset into global border color buffer
+
+//border_color_type:bit2;   //Opaque-black, transparent-black, white, or color ptr
+
+//VkSamplerCustomBorderColorCreateInfoEXT
+function _get_border_color(color_type:Byte):TVkBorderColor;
+begin
+ Case color_type of
+  TEX_BorderColor_TransparentBlack:Result:=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK; //VK_BORDER_COLOR_INT_TRANSPARENT_BLACK
+  TEX_BorderColor_OpaqueBlack     :Result:=VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;      //VK_BORDER_COLOR_INT_OPAQUE_BLACK
+  TEX_BorderColor_OpaqueWhite     :Result:=VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;      //VK_BORDER_COLOR_INT_OPAQUE_WHITE
+  TEX_BorderColor_Register        :Result:=VK_BORDER_COLOR_FLOAT_CUSTOM_EXT;        //VK_BORDER_COLOR_INT_CUSTOM_EXT
+  else
+                                   Result:=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+ end;
+end;
+
+function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
+begin
+ Result:=Default(TVkSamplerCreateInfo);
+ if (PS=nil) then Exit;
+
+ Result.sType:=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+ Result.magFilter:=_get_xy_filter(PS^.xy_mag_filter);
+ Result.minFilter:=_get_xy_filter(PS^.xy_min_filter);
+
+ Result.mipmapMode:=_get_mip_filter(PS^.mip_filter);
+
+ Result.addressModeU:=_get_clamp(PS^.clamp_x);
+ Result.addressModeV:=_get_clamp(PS^.clamp_y);
+ Result.addressModeW:=_get_clamp(PS^.clamp_z);
+
+ Result.mipLodBias:=_get_lod_bias(PS^.lod_bias,PS^.lod_bias_sec);
+
+ Result.anisotropyEnable:=_is_aniso_enabled(PS^.xy_mag_filter,PS^.xy_min_filter);
+
+ Result.maxAnisotropy:=_get_aniso_ratio(PS^.max_aniso_ratio);
+
+ Result.compareEnable:=ord(PS^.depth_compare_func<>SQ_TEX_DEPTH_COMPARE_NEVER);
+ Result.compareOp    :=TVkCompareOp(PS^.depth_compare_func); //1:1
+
+ Result.minLod:=_get_lod(PS^.min_lod);
+ Result.maxLod:=_get_lod(PS^.max_lod);
+
+ Result.borderColor:=_get_border_color(PS^.border_color_type);
+
+ Result.unnormalizedCoordinates:=PS^.force_unorm_coords;
 end;
 
 end.

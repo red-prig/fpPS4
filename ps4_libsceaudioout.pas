@@ -7,15 +7,18 @@ unit ps4_libSceAudioOut;
 interface
 
 uses
+  atomic,
+  spinlock,
   libportaudio,
   ps4_handles,
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 implementation
 
 uses
-  ps4_libkernel;
+ sys_signal;
 
 const
  SCE_AUDIO_OUT_ERROR_NOT_OPENED         =-2144993279; // 0x80260001
@@ -89,15 +92,19 @@ var
 function ps4_sceAudioOutInit():Integer; SysV_ABI_CDecl;
 begin
 
- if System.InterlockedExchange(_lazy_init,1)=0 then
+ if XCHG(_lazy_init,1)=0 then
  begin
+  _sig_lock;
   Result:=Pa_Initialize();
+  _sig_unlock;
   if (Result<>0) then Exit(SCE_AUDIO_OUT_ERROR_TRANS_EVENT);
+  _sig_lock;
   HAudioOuts:=TIntegerHandles.Create;
-  System.InterLockedExchangeAdd(_lazy_wait,1);
+  _sig_unlock;
+  fetch_add(_lazy_wait,1);
  end else
  begin
-  While (System.InterLockedExchangeAdd(_lazy_wait,0)=0) do System.ThreadSwitch;
+  wait_until_equal(_lazy_wait,0);
   Result:=SCE_AUDIO_OUT_ERROR_ALREADY_INIT;
  end;
 
@@ -147,8 +154,11 @@ type
 
 Destructor TAudioOutHandle.Destroy;
 begin
- Pa_StopStream(pstream);
- Pa_CloseStream(pstream);
+ if (pstream<>nil) then
+ begin
+  Pa_StopStream(pstream);
+  Pa_CloseStream(pstream);
+ end;
  FreeMem(buf);
  inherited;
 end;
@@ -244,22 +254,41 @@ begin
    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
  end;
 
+ _sig_lock;
  err:=Pa_OpenDefaultStream(@pstream,
                            0,
                            pnumOutputChannels,
                            psampleFormat,
                            freq,
                            paFramesPerBufferUnspecified,nil,nil);
+ _sig_unlock;
 
  if (err<>0) and (pnumOutputChannels>2) then
  begin
   pnumOutputChannels:=2;
+  _sig_lock;
   err:=Pa_OpenDefaultStream(@pstream,
                             0,
                             pnumOutputChannels,
                             psampleFormat,
                             freq,
                             paFramesPerBufferUnspecified,nil,nil);
+  _sig_unlock;
+ end;
+
+ if (err<>0) then
+ begin
+  Writeln('Pa_GetErrorText:',Pa_GetErrorText(err));
+  //Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+  pstream:=nil;
+ end;
+
+ err:=0;
+ if (pstream<>nil) then
+ begin
+  _sig_lock;
+  err:=Pa_StartStream(pstream);
+  _sig_unlock;
  end;
 
  if (err<>0) then
@@ -267,14 +296,10 @@ begin
   Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
  end;
 
- err:=Pa_StartStream(pstream);
-
- if (err<>0) then
- begin
-  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
- end;
-
+ _sig_lock;
  H:=TAudioOutHandle.Create;
+ _sig_unlock;
+
  H.userId:=userId;
  H._type :=_type ;
  H.index :=index ;
@@ -289,13 +314,18 @@ begin
  H.pnumOutputChannels:=pnumOutputChannels;
  H.psampleFormat     :=psampleFormat;
 
+ _sig_lock;
  if not HAudioOuts.New(H,Result) then Result:=SCE_AUDIO_OUT_ERROR_PORT_FULL;
+ _sig_unlock;
 
  Case QWORD(psampleFormat) of
   QWORD(paInt16  ):H.bufsize:=2*pnumOutputChannels*len;
   QWORD(paFloat32):H.bufsize:=4*pnumOutputChannels*len;
  end;
+
+ _sig_lock;
  H.buf:=GetMem(H.bufsize);
+ _sig_unlock;
 
  H.Release;
 
@@ -304,9 +334,11 @@ end;
 
 function ps4_sceAudioOutClose(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
- if not HAudioOuts.Delete(handle) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
  Result:=0;
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ _sig_lock;
+ if not HAudioOuts.Delete(handle) then Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
+ _sig_unlock;
 end;
 
 function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
@@ -322,7 +354,10 @@ begin
 
  {$ifdef silent}if (i>800) then i:=800;{$endif}
 
+ _sig_lock;
  H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
+ _sig_unlock;
+
  if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
 
  if (flag and SCE_AUDIO_VOLUME_FLAG_L_CH  <>0) then H.volume[0]:=i;
@@ -484,21 +519,29 @@ begin
  if (ptr=nil) then Exit(0);
 
  err:=0;
+ _sig_lock;
  H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
+ _sig_unlock;
+
  if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
 
  count:=H.len;
 
+ if (H.pstream<>nil) then
  case (H.param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO:
    begin
     _VecMulI16M(ptr,H.buf,count,H.volume[0]);
+    _sig_lock;
     err:=Pa_WriteStream(H.pstream,H.buf,count);
+    _sig_unlock;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO:
    begin
     _VecMulI16S(ptr,H.buf,count,@H.volume);
+    _sig_lock;
     err:=Pa_WriteStream(H.pstream,H.buf,count);
+    _sig_unlock;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
    begin
@@ -507,12 +550,16 @@ begin
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
    begin
     _VecMulF32M(ptr,H.buf,count,H.volume[0]);
+    _sig_lock;
     err:=Pa_WriteStream(H.pstream,H.buf,count);
+    _sig_unlock;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
    begin
     _VecMulF32S(ptr,H.buf,count,@H.volume);
+    _sig_lock;
     err:=Pa_WriteStream(H.pstream,H.buf,count);
+    _sig_unlock;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
    begin
@@ -520,7 +567,9 @@ begin
     if H.pnumOutputChannels=2 then
     begin
      _VecMulF32CH8ToS(ptr,H.buf,count,@H.volume);
+     _sig_lock;
      err:=Pa_WriteStream(H.pstream,H.buf,count);
+     _sig_unlock;
     end else
     begin
      Assert(false);
@@ -538,42 +587,15 @@ begin
  end;
 
 
- if err<>0 then
- case PaErrorCode(err) of
-   paNotInitialized                       :Writeln('paNotInitialized                       ');
-   paUnanticipatedHostError               :Writeln('paUnanticipatedHostError               ');
-   paInvalidChannelCount                  :Writeln('paInvalidChannelCount                  ');
-   paInvalidSampleRate                    :Writeln('paInvalidSampleRate                    ');
-   paInvalidDevice                        :Writeln('paInvalidDevice                        ');
-   paInvalidFlag                          :Writeln('paInvalidFlag                          ');
-   paSampleFormatNotSupported             :Writeln('paSampleFormatNotSupported             ');
-   paBadIODeviceCombination               :Writeln('paBadIODeviceCombination               ');
-   paInsufficientMemory                   :Writeln('paInsufficientMemory                   ');
-   paBufferTooBig                         :Writeln('paBufferTooBig                         ');
-   paBufferTooSmall                       :Writeln('paBufferTooSmall                       ');
-   paNullCallback                         :Writeln('paNullCallback                         ');
-   paBadStreamPtr                         :Writeln('paBadStreamPtr                         ');
-   paTimedOut                             :Writeln('paTimedOut                             ');
-   paInternalError                        :Writeln('paInternalError                        ');
-   paDeviceUnavailable                    :Writeln('paDeviceUnavailable                    ');
-   paIncompatibleHostApiSpecificStreamInfo:Writeln('paIncompatibleHostApiSpecificStreamInfo');
-   paStreamIsStopped                      :Writeln('paStreamIsStopped                      ');
-   paStreamIsNotStopped                   :Writeln('paStreamIsNotStopped                   ');
-   paInputOverflowed                      :Writeln('paInputOverflowed                      ');
-   paOutputUnderflowed                    :Writeln('paOutputUnderflowed                    ');
-   paHostApiNotFound                      :Writeln('paHostApiNotFound                      ');
-   paInvalidHostApi                       :Writeln('paInvalidHostApi                       ');
-   paCanNotReadFromACallbackStream        :Writeln('paCanNotReadFromACallbackStream        ');
-   paCanNotWriteToACallbackStream         :Writeln('paCanNotWriteToACallbackStream         ');
-   paCanNotReadFromAnOutputOnlyStream     :Writeln('paCanNotReadFromAnOutputOnlyStream     ');
-   paCanNotWriteToAnInputOnlyStream       :Writeln('paCanNotWriteToAnInputOnlyStream       ');
-   paIncompatibleStreamHostApi            :Writeln('paIncompatibleStreamHostApi            ');
-   paBadBufferPtr                         :Writeln('paBadBufferPtr                         ');
- end;
+ if (err<>0) then
+  Writeln('Pa_GetErrorText:',Pa_GetErrorText(err));
 
  //Writeln('sceAudioOutOutput:',handle,':',HexStr(ptr));
 
+ _sig_lock;
  H.Release;
+ _sig_unlock;
+
  Result:=0;
 end;
 

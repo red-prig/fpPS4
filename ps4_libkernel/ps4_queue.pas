@@ -6,7 +6,8 @@ interface
 
 uses
   windows,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 const
  EVFILT_READ                =(-1) ;
@@ -136,9 +137,11 @@ function  _trigger_kevent_node(node:PKEventNode;after:TKAfterEvent;data:Pointer)
 implementation
 
 uses
+ atomic,
  spinlock,
- ps4_time,
- ps4_libkernel;
+ sys_kernel,
+ sys_signal,
+ sys_time;
 
 const
  LIFE_EQ=$BAB1F00D;
@@ -148,7 +151,7 @@ function _alloc_kevent_node(eq:SceKernelEqueue;size:qword):Pointer;
 begin
  eq:=_acqure_equeue(eq);
  if (eq=nil) then Exit(Pointer(1));
- Result:=AllocMem(size);
+ Result:=SwAllocMem(size);
  if (Result=nil) then
  begin
   _release_equeue(eq);
@@ -164,7 +167,7 @@ begin
  _release_equeue(System.InterlockedExchange(node^.eq,nil));
  if System.InterlockedDecrement(node^.refs)=0 then
  begin
-  FreeMem(node);
+  SwFreeMem(node);
  end;
 end;
 
@@ -178,7 +181,7 @@ begin
  spin_unlock(node^.lock);
  if System.InterlockedDecrement(node^.refs)=0 then
  begin
-  FreeMem(node);
+  SwFreeMem(node);
   Exit;
  end;
  ev^:=tmp;
@@ -203,7 +206,7 @@ begin
    spin_unlock(node^.lock);
    if System.InterlockedDecrement(node^.refs)=0 then
    begin
-    FreeMem(node);
+    SwFreeMem(node);
     Exit;
    end;
   end;
@@ -218,12 +221,14 @@ begin
  Writeln('sceKernelCreateEqueue:',name);
  if (outEq=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
- data:=AllocMem(SizeOf(SceKernelEqueue_t));
+ data:=SwAllocMem(SizeOf(SceKernelEqueue_t));
  if (data=nil) then
  begin
   Exit(SCE_KERNEL_ERROR_ENOMEM);
  end;
+ _sig_lock;
  hIOCP:=CreateIoCompletionPort(INVALID_HANDLE_VALUE,0,0,High(Integer));
+ _sig_unlock;
  if (hIOCP=0) then
  begin
   Exit(SCE_KERNEL_ERROR_EMFILE);
@@ -243,7 +248,9 @@ begin
  Result:=False;
  if (eq=nil) then Exit;
  if (eq^.valid<>LIFE_EQ) then Exit;
+ _sig_lock;
  Result:=PostQueuedCompletionStatus(eq^.hIOCP,1,ULONG_PTR(cb),node);
+ _sig_unlock;
 end;
 
 function  _acqure_equeue(eq:SceKernelEqueue):SceKernelEqueue;
@@ -260,7 +267,7 @@ begin
  if (eq=nil) then Exit;
  if System.InterlockedDecrement(eq^.FRefs)=0 then
  begin
-  FreeMem(eq);
+  SwFreeMem(eq);
  end;
 end;
 
@@ -318,11 +325,15 @@ begin
  CTXProc:=nil;
  Repeat
   ulNum:=0;
+  _sig_lock;
   if (LTIME<>INFINITE) then QTIME:=Windows.GetTickCount;
   Q:=GetQueuedCompletionStatusEX(eq^.hIOCP,@OE,num,ulNum,LTIME,True);
+  _sig_unlock;
   if (LTIME<>INFINITE) then
   begin
+   _sig_lock;
    QTIME:=Windows.GetTickCount-QTIME;
+   _sig_unlock;
    if (QTIME>LTIME) then
     LTIME:=0
    else

@@ -6,7 +6,8 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 Const
  SCE_SAVE_DATA_TITLE_MAXSIZE   =128;
@@ -84,16 +85,21 @@ type
 implementation
 
 uses
- ps4_libkernel;
+ sys_signal;
 
-function ps4_sceSaveDataInitialize(params:Pointer):Integer; assembler; nostackframe;
-asm
- xor %rax,%rax
+function ps4_sceSaveDataInitialize(params:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
-function ps4_sceSaveDataInitialize3(params:Pointer):Integer; assembler; nostackframe;
-asm
- xor %rax,%rax
+function ps4_sceSaveDataInitialize3(params:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSaveDataTerminate:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory(userId:Integer;
@@ -135,12 +141,16 @@ const
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ _sig_lock;
  Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint);
+ _sig_unlock;
 end;
 
 function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=UnMountPath(PChar(mountPoint));
+ _sig_unlock;
 end;
 
 type
@@ -165,6 +175,7 @@ begin
 
  lib^.set_proc($664661B2408F5C5C,@ps4_sceSaveDataInitialize);
  lib^.set_proc($4F2C2B14A0A82C66,@ps4_sceSaveDataInitialize3);
+ lib^.set_proc($C8A0F2F12E722C0D,@ps4_sceSaveDataTerminate);
  lib^.set_proc($BFB00000CA342F3E,@ps4_sceSaveDataSetupSaveDataMemory);
  lib^.set_proc($EC1B79A410BF01CA,@ps4_sceSaveDataGetSaveDataMemory);
  lib^.set_proc($8776144735C64954,@ps4_sceSaveDataSetSaveDataMemory);

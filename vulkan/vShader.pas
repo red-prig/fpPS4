@@ -10,26 +10,36 @@ uses
 type
  TvSupportDescriptorType=array[0..1] of TVkDescriptorType;
 
- PvShaderBind=^TvShaderBind;
+ {PvShaderBind=^TvShaderBind;
  TvShaderBind=packed object
   FDVID:DWORD;
   FDSET:DWORD;
   FBIND:DWORD;
   FSCLS:DWORD;
   FTYPE:DWORD;
- end;
+ end;}
 
  TvShader=class
   FHandle:TVkShaderModule;
   FStage:TVkShaderStageFlagBits;
-  FLocalSize:TVkOffset3D;
   FEntry:RawByteString;
-  FBinds:array of TvShaderBind;
+  //FBinds:array of TvShaderBind;
   Destructor  Destroy; override;
+  procedure   ClearInfo; virtual;
   procedure   LoadFromMemory(data:Pointer;size:Ptruint);
   procedure   LoadFromStream(Stream:TStream);
   procedure   LoadFromFile(const FileName:RawByteString);
   procedure   Parse(data:Pointer;size:Ptruint);
+  procedure   OnEntryPoint(Stage:DWORD;P:PChar); virtual;
+  procedure   OnSourceExtension(P:PChar); virtual;
+  procedure   OnLocalSize(var x,y,z:DWORD); virtual;
+  procedure   OnBinding(var Target,id:DWORD); virtual;
+  procedure   OnDescriptorSet(var Target,id:DWORD); virtual;
+ end;
+
+ TvShaderCompute=class(TvShader)
+  FLocalSize:TVkOffset3D;
+  procedure   OnLocalSize(var x,y,z:DWORD); override;
  end;
 
 implementation
@@ -40,6 +50,13 @@ begin
   vkDestroyShaderModule(Device.FHandle,FHandle,nil);
 end;
 
+procedure TvShader.ClearInfo;
+begin
+ ord(FStage):=0;
+ FEntry:='';
+ //SetLength(FBinds,0);
+end;
+
 procedure TvShader.LoadFromMemory(data:Pointer;size:Ptruint);
 var
  cinfo:TVkShaderModuleCreateInfo;
@@ -48,10 +65,8 @@ begin
  if (FHandle<>VK_NULL_HANDLE) then
   vkDestroyShaderModule(Device.FHandle,FHandle,nil);
  FHandle:=VK_NULL_HANDLE;
- FStage:=Default(TVkShaderStageFlagBits);
- FLocalSize:=TVkOffset3D.Create(1,1,1);
- FEntry:='';
- SetLength(FBinds,0);
+ ClearInfo;
+ Parse(data,size);
  cinfo:=Default(TVkShaderModuleCreateInfo);
  cinfo.sType   :=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
  cinfo.codeSize:=size;
@@ -62,7 +77,6 @@ begin
   Writeln('vkCreateShaderModule:',r);
   Exit;
  end;
- Parse(data,size);
 end;
 
 procedure TvShader.LoadFromStream(Stream:TStream);
@@ -86,14 +100,30 @@ end;
 
 procedure TvShader.LoadFromFile(const FileName:RawByteString);
 Var
- S:TFileStream;
+ F:THandle;
+ data:Pointer;
+ size:Int64;
 begin
- S:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
- Try
-  LoadFromStream(S);
- finally
-  S.Free;
+ F:=FileOpen(FileName,fmOpenRead or fmShareDenyWrite);
+ if (F=feInvalidHandle) then Exit;
+ size:=FileSeek(F,0,fsFromEnd);
+ if (size<0) then
+ begin
+  FileClose(F);
+  Exit;
  end;
+ FileSeek(F,0,fsFromBeginning);
+ data:=AllocMem(size);
+ size:=FileRead(F,data^,size);
+ if (size<0) then
+ begin
+  FreeMem(data);
+  FileClose(F);
+  Exit;
+ end;
+ LoadFromMemory(data,size);
+ FreeMem(data);
+ FileClose(F);
 end;
 
 type
@@ -117,6 +147,7 @@ type
 Const
  MagicNumber = 119734787;
  //Operation
+ OpSourceExtension = 4;
  OpEntryPoint = 15;
  OpExecutionMode = 16;
  OpTypeVoid = 19;
@@ -170,15 +201,39 @@ Const
  MissKHR = 5317;
  CallableKHR = 5318;
 
+function GetStageFlag(FStage:DWORD):TVkShaderStageFlagBits;
+begin
+ case FStage of
+  Vertex                :Result:=VK_SHADER_STAGE_VERTEX_BIT;
+  TessellationControl   :Result:=VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+  TessellationEvaluation:Result:=VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+  Geometry              :Result:=VK_SHADER_STAGE_GEOMETRY_BIT;
+  Fragment              :Result:=VK_SHADER_STAGE_FRAGMENT_BIT;
+  GLCompute             :Result:=VK_SHADER_STAGE_COMPUTE_BIT;
+  Kernel                :Result:=VK_SHADER_STAGE_COMPUTE_BIT;
+  TaskNV                :Result:=VK_SHADER_STAGE_TASK_BIT_NV;
+  MeshNV                :Result:=VK_SHADER_STAGE_MESH_BIT_NV;
+  RayGenerationKHR      :Result:=VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+  IntersectionKHR       :Result:=VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+  AnyHitKHR             :Result:=VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+  ClosestHitKHR         :Result:=VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+  MissKHR               :Result:=VK_SHADER_STAGE_MISS_BIT_KHR;
+  CallableKHR           :Result:=VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+  else
+   ord(Result):=0;
+ end;
+end;
+
 procedure TvShader.Parse(data:Pointer;size:Ptruint);
 var
- orig_data:Pointer;
- orig_size:Ptruint;
+ //orig_data:Pointer;
+ //orig_size:Ptruint;
  I:TSPIRVInstruction;
  f:Ptruint;
- r:PvShaderBind;
+ //r:PvShaderBind;
  d:dword;
 
+ {
  function Fetch(ID:DWORD):PvShaderBind;
  var
   i:Integer;
@@ -194,29 +249,6 @@ var
   FBinds[i]:=Default(TvShaderBind);
   FBinds[i].FDVID:=ID;
   Result:=@FBinds[i];
- end;
-
- function GetStageFlag(FStage:DWORD):TVkShaderStageFlagBits;
- begin
-  case FStage of
-   Vertex                :Result:=VK_SHADER_STAGE_VERTEX_BIT;
-   TessellationControl   :Result:=VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-   TessellationEvaluation:Result:=VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-   Geometry              :Result:=VK_SHADER_STAGE_GEOMETRY_BIT;
-   Fragment              :Result:=VK_SHADER_STAGE_FRAGMENT_BIT;
-   GLCompute             :Result:=VK_SHADER_STAGE_COMPUTE_BIT;
-   Kernel                :Result:=VK_SHADER_STAGE_COMPUTE_BIT;
-   TaskNV                :Result:=VK_SHADER_STAGE_TASK_BIT_NV;
-   MeshNV                :Result:=VK_SHADER_STAGE_MESH_BIT_NV;
-   RayGenerationKHR      :Result:=VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-   IntersectionKHR       :Result:=VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-   AnyHitKHR             :Result:=VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-   ClosestHitKHR         :Result:=VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-   MissKHR               :Result:=VK_SHADER_STAGE_MISS_BIT_KHR;
-   CallableKHR           :Result:=VK_SHADER_STAGE_CALLABLE_BIT_KHR;
-   else
-     Result:=Default(TVkShaderStageFlagBits);
-  end;
  end;
 
  function find_pointer_type(data:Pointer;size:Ptruint;var id:DWORD):boolean;
@@ -284,6 +316,7 @@ var
    size:=size-f;
   until false;
  end;
+ }
 
 
 
@@ -293,15 +326,22 @@ begin
  data:=data+SizeOf(TSPIRVHeader);
  size:=size-SizeOf(TSPIRVHeader);
 
- orig_data:=data;
- orig_size:=size;
+ //orig_data:=data;
+ //orig_size:=size;
 
  repeat
   I:=PSPIRVInstruction(data)^;
   Case I.OP of
+   OpSourceExtension:
+    if (I.COUNT>=2) then
+    begin
+     OnSourceExtension(PChar(@PDWORD(data)[1]));
+    end;
    OpEntryPoint:
     if (I.COUNT>=4) then
     begin
+     OnEntryPoint(PDWORD(data)[1],PChar(@PDWORD(data)[3]));
+
      FStage:=GetStageFlag(PDWORD(data)[1]);
      FEntry:=PChar(@PDWORD(data)[3]);
     end;
@@ -313,9 +353,7 @@ begin
       LocalSize:
        if (I.COUNT>=6) then
        begin
-        FLocalSize.x:=PDWORD(data)[3];
-        FLocalSize.y:=PDWORD(data)[4];
-        FLocalSize.z:=PDWORD(data)[5];
+        OnLocalSize(PDWORD(data)[3],PDWORD(data)[4],PDWORD(data)[5]);
        end;
      end;
     end;
@@ -324,24 +362,26 @@ begin
     begin
      d:=PDWORD(data)[2];
      case d of
-      Sample:
+      {Sample:
        begin
         r:=Fetch(PDWORD(data)[1]);
         r^.FSCLS:=Sample shl 16;
-       end;
+       end;}
       Binding:
        begin
-        r:=Fetch(PDWORD(data)[1]);
-        r^.FBIND:=PDWORD(data)[3];
+        OnBinding(PDWORD(data)[1],PDWORD(data)[3]);
+        //r:=Fetch(PDWORD(data)[1]);
+        //r^.FBIND:=PDWORD(data)[3];
        end;
       DescriptorSet:
        begin
-        r:=Fetch(PDWORD(data)[1]);
-        r^.FDSET:=PDWORD(data)[3];
+        OnDescriptorSet(PDWORD(data)[1],PDWORD(data)[3]);
+        //r:=Fetch(PDWORD(data)[1]);
+        //r^.FDSET:=PDWORD(data)[3];
        end;
      end;
     end;
-   OpVariable:
+   {OpVariable:
     if (I.COUNT>=4) then
     begin
      d:=PDWORD(data)[3];
@@ -361,7 +401,7 @@ begin
         end;
        end;
      end;
-    end;
+    end;}
   end;
   if (I.COUNT=0) then I.COUNT:=1;
   f:=I.COUNT*SizeOf(DWORD);
@@ -369,6 +409,41 @@ begin
   data:=data+f;
   size:=size-f;
  until false;
+end;
+
+procedure TvShader.OnEntryPoint(Stage:DWORD;P:PChar);
+begin
+ FStage:=GetStageFlag(Stage);
+ FEntry:=P;
+end;
+
+procedure TvShader.OnSourceExtension(P:PChar);
+begin
+ //
+end;
+
+procedure TvShader.OnLocalSize(var x,y,z:DWORD);
+begin
+ //
+end;
+
+procedure TvShader.OnBinding(var Target,id:DWORD);
+begin
+ //
+end;
+
+procedure TvShader.OnDescriptorSet(var Target,id:DWORD);
+begin
+ //
+end;
+
+//
+
+procedure TvShaderCompute.OnLocalSize(var x,y,z:DWORD);
+begin
+ if (FLocalSize.x>0) then x:=FLocalSize.x else FLocalSize.x:=x;
+ if (FLocalSize.y>0) then y:=FLocalSize.y else FLocalSize.y:=y;
+ if (FLocalSize.z>0) then z:=FLocalSize.z else FLocalSize.z:=z;
 end;
 
 //  =0,

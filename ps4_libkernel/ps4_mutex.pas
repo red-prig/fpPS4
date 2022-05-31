@@ -7,10 +7,10 @@ interface
 uses
   Windows,
   sysutils,
-  ps4_types;
+  sys_types;
 
 type
- Ppthread_mutex_attr=^pthread_mutex_attr_t;
+ p_pthread_mutex_attr=^pthread_mutex_attr_t;
  pthread_mutex_attr_t=bitpacked record
   _type:0..7;           //3
   _shared:0..1;         //1
@@ -19,7 +19,7 @@ type
   _prioceiling:Integer; //32
  end;
 
- Ppthread_mutex=^pthread_mutex;
+ p_pthread_mutex=^pthread_mutex;
  pthread_mutex=^pthread_mutex_t;
  pthread_mutex_t=packed record
   valid:DWORD;
@@ -32,7 +32,7 @@ type
  end;
 
  ScePthreadMutex=pthread_mutex;
- PScePthreadMutex=Ppthread_mutex;
+ PScePthreadMutex=p_pthread_mutex;
 
 const
  SCE_PTHREAD_MUTEX_ERRORCHECK = 1; // Default POSIX mutex
@@ -57,34 +57,34 @@ const
  PTHREAD_MUTEX_INITIALIZER            =0;
  PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP=1;
 
-function ps4_pthread_mutexattr_init(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_destroy(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_gettype(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_settype(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_getpshared(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_setpshared(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_getprotocol(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_setprotocol(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_getprioceiling(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutexattr_setprioceiling(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_init(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_destroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_gettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_settype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getpshared(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setpshared(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 
-function ps4_pthread_mutex_lock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutex_timedlock(pMutex:Ppthread_mutex;ts:Ptimespec):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutex_trylock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutex_unlock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutex_init(pMutex:Ppthread_mutex;pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
-function ps4_pthread_mutex_destroy(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_lock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_timedlock(pMutex:p_pthread_mutex;ts:Ptimespec):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_trylock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_unlock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_init(pMutex:p_pthread_mutex;pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_destroy(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 
-function ps4_scePthreadMutexattrInit(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrDestroy(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrGettype(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrSettype(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrGetprotocol(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrSetprotocol(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrGetprioceiling(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
-function ps4_scePthreadMutexattrSetprioceiling(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrInit(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrDestroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSettype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGetprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSetprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGetprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSetprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 
-function ps4_scePthreadMutexInit(pMutex:PScePthreadMutex;pAttr:Ppthread_mutex_attr;str:PChar):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexInit(pMutex:PScePthreadMutex;pAttr:p_pthread_mutex_attr;str:PChar):Integer; SysV_ABI_CDecl;
 function ps4_scePthreadMutexLock(pMutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
 function ps4_scePthreadMutexTimedlock(pMutex:PScePthreadMutex;usec:DWORD):Integer; SysV_ABI_CDecl;
 function ps4_scePthreadMutexTrylock(pMutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
@@ -96,12 +96,14 @@ function ps4_scePthreadMutexDestroy(pMutex:PScePthreadMutex):Integer; SysV_ABI_C
 implementation
 
 Uses
- spinlock,
+ atomic,
+ sys_kernel,
+ sys_signal,
+ sys_time,
  ps4_sema,
- ps4_libkernel,
  ps4_time;
 
-function ps4_pthread_mutexattr_init(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_init(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  pAttr^:=Default(pthread_mutex_attr_t);
@@ -109,20 +111,20 @@ begin
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_destroy(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_destroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_gettype(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_gettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
  t^:=pAttr^._type;
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_settype(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_settype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  Case t of
@@ -137,14 +139,14 @@ begin
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_getpshared(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getpshared(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
  t^:=pAttr^._shared;
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_setpshared(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setpshared(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  Case t of
@@ -157,14 +159,14 @@ begin
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_getprotocol(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
  t^:=pAttr^._protocol;
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_setprotocol(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  Case t of
@@ -178,14 +180,14 @@ begin
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_getprioceiling(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_getprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
  t^:=pAttr^._prioceiling;
  Result:=0;
 end;
 
-function ps4_pthread_mutexattr_setprioceiling(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutexattr_setprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
  pAttr^._prioceiling:=t;
@@ -211,36 +213,11 @@ begin
  end;
 end;
 
-function CAS(Var addr:Pointer;Comp,New:Pointer):Boolean; inline;
-begin
- Result:=System.InterlockedCompareExchange(addr,New,Comp)=Comp;
-end;
-
-function CAS(Var addr:SizeUInt;Comp,New:SizeUInt):Boolean; inline;
-begin
- Result:=system.InterlockedCompareExchange(Pointer(addr),Pointer(New),Pointer(Comp))=Pointer(Comp);
-end;
-
-function CAS(Var addr:DWORD;Comp,New:DWORD):Boolean; inline;
-begin
- Result:=System.InterlockedCompareExchange(addr,New,Comp)=Comp;
-end;
-
-function XCHG(Var addr:Pointer;New:Pointer):Pointer; inline;
-begin
- Result:=System.InterLockedExchange(addr,New);
-end;
-
-function XCHG(Var addr:DWORD;New:DWORD):DWORD; inline;
-begin
- Result:=System.InterLockedExchange(addr,New);
-end;
-
-function mutex_impl_init(m:Ppthread_mutex;mi:pthread_mutex;_type:Integer):pthread_mutex;
+function mutex_impl_init(m:p_pthread_mutex;mi:pthread_mutex;_type:Integer):pthread_mutex;
 var
  new_mi:pthread_mutex;
 begin
- new_mi:=AllocMem(SizeOf(pthread_mutex_t));
+ new_mi:=SwAllocMem(SizeOf(pthread_mutex_t));
  if (new_mi=nil) then Exit(new_mi);
 
  new_mi^.valid:=LIFE_MUTEX;
@@ -253,12 +230,12 @@ begin
   Result:=new_mi;
  end else
  begin
-  FreeMem(new_mi);
+  SwFreeMem(new_mi);
   Result:=m^;
  end;
 end;
 
-function mutex_impl(m:Ppthread_mutex;var mi:pthread_mutex;default:Integer):Integer;
+function mutex_impl(m:p_pthread_mutex;var mi:pthread_mutex;default:Integer):Integer;
 begin
  if (m=nil) then Exit(EINVAL);
  mi:=m^;
@@ -267,11 +244,11 @@ begin
   PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP:mi:=mutex_impl_init(m,mi,PTHREAD_MUTEX_ADAPTIVE);
  end;
  if (mi=nil) then Exit(ENOMEM);
- if (mi^.valid<>LIFE_MUTEX) then Exit(EINVAL);
+ if not safe_test(mi^.valid,LIFE_MUTEX) then Exit(EINVAL);
  Result:=0;
 end;
 
-function pthread_mutex_lock_intern(m:Ppthread_mutex;timeout:DWORD;default:Integer):Integer;
+function pthread_mutex_lock_intern(m:p_pthread_mutex;pTimeout:PQWORD;default:Integer):Integer;
 var
  mi:pthread_mutex;
  old_state:DWORD;
@@ -315,7 +292,7 @@ begin
 
   While (XCHG(mi^.state,MS_Waiting)<>MS_Unlocked) do
   begin
-   Result:=do_sema_b_wait_intern(mi^.event,timeout);
+   Result:=do_sema_b_wait_intern(mi^.event,pTimeout);
    if (Result<>0) then Exit;
   end;
  end;
@@ -328,26 +305,32 @@ begin
  Result:=0;
 end;
 
-function ps4_pthread_mutex_lock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_lock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
- Result:=pthread_mutex_lock_intern(pMutex,INFINITE,PTHREAD_MUTEX_DEFAULT);
+ _sig_lock;
+ Result:=pthread_mutex_lock_intern(pMutex,nil,PTHREAD_MUTEX_DEFAULT);
+ _sig_unlock;
 end;
 
-function ps4_pthread_mutex_timedlock(pMutex:Ppthread_mutex;ts:Ptimespec):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_timedlock(pMutex:p_pthread_mutex;ts:Ptimespec):Integer; SysV_ABI_CDecl;
 var
- t:DWORD;
+ t:QWORD;
 begin
  if (ts=nil) then
  begin
-  t:=INFINITE;
+  _sig_lock;
+  Result:=pthread_mutex_lock_intern(pMutex,nil,PTHREAD_MUTEX_DEFAULT);
+  _sig_unlock;
  end else
  begin
-  t:=dwMilliSecs(_pthread_rel_time_in_ms(ts^));
+  t:=_pthread_rel_time_in_ns(ts^);
+  _sig_lock;
+  Result:=pthread_mutex_lock_intern(pMutex,@t,PTHREAD_MUTEX_DEFAULT);
+  _sig_unlock;
  end;
- Result:=pthread_mutex_lock_intern(pMutex,t,PTHREAD_MUTEX_DEFAULT);
 end;
 
-function pthread_mutex_unlock(m:Ppthread_mutex;default:Integer):Integer;
+function pthread_mutex_unlock(m:p_pthread_mutex;default:Integer):Integer;
 var
  mi:pthread_mutex;
 begin
@@ -369,18 +352,19 @@ begin
 
  if XCHG(mi^.state,MS_Unlocked)=MS_Waiting then
  begin
-  if not SetEvent(mi^.event) then Exit(EPERM);
+  _sig_lock;
+  if not SetEvent(mi^.event) then Result:=EPERM;
+  _sig_unlock;
  end;
 
- Result:=0;
 end;
 
-function ps4_pthread_mutex_unlock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_unlock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
  Result:=pthread_mutex_unlock(pMutex,PTHREAD_MUTEX_DEFAULT);
 end;
 
-function pthread_mutex_trylock(m:Ppthread_mutex;default:Integer):Integer;
+function pthread_mutex_trylock(m:p_pthread_mutex;default:Integer):Integer;
 var
  mi:pthread_mutex;
 begin
@@ -405,12 +389,12 @@ begin
  end;
 end;
 
-function ps4_pthread_mutex_trylock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_trylock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
  Result:=pthread_mutex_trylock(pMutex,PTHREAD_MUTEX_DEFAULT);
 end;
 
-function pthread_mutex_init(m:Ppthread_mutex;a:Ppthread_mutex_attr;str:PChar;default:Integer):Integer;
+function pthread_mutex_init(m:p_pthread_mutex;a:p_pthread_mutex_attr;str:PChar;default:Integer):Integer;
 var
  mi:pthread_mutex;
 begin
@@ -424,19 +408,19 @@ begin
   mi:=mutex_impl_init(m,mi,default);
  end;
  if (mi=nil) then Exit(ENOMEM);
- if (mi^.valid<>LIFE_MUTEX) then Exit(EINVAL);
+ if not safe_test(mi^.valid,LIFE_MUTEX) then Exit(EINVAL);
 
  if (str<>nil) then MoveChar0(str^,mi^.name,32);
 
  Result:=0;
 end;
 
-function ps4_pthread_mutex_init(pMutex:Ppthread_mutex;pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_init(pMutex:p_pthread_mutex;pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
  Result:=pthread_mutex_init(pMutex,pAttr,nil,PTHREAD_MUTEX_DEFAULT);
 end;
 
-function pthread_mutex_destroy(m:Ppthread_mutex):Integer;
+function pthread_mutex_destroy(m:p_pthread_mutex):Integer;
 var
  mi:pthread_mutex;
 begin
@@ -447,13 +431,15 @@ begin
   mi:=XCHG(m^,nil);
   if STATIC_INITIALIZER(mi) then Exit(0);
   if not CAS(mi^.valid,LIFE_MUTEX,DEAD_MUTEX) then Exit(EINVAL);
+  _sig_lock;
   if (mi^.event<>0) then CloseHandle(mi^.event);
   FreeMem(mi);
+  _sig_unlock;
  end;
  Result:=0;
 end;
 
-function ps4_pthread_mutex_destroy(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_pthread_mutex_destroy(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
  Result:=pthread_mutex_destroy(pMutex);
 end;
@@ -461,7 +447,7 @@ end;
 //---------------------------------------------------------
 //sce
 
-function ps4_scePthreadMutexattrInit(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrInit(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  pAttr^:=Default(pthread_mutex_attr_t);
@@ -469,20 +455,20 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrDestroy(pAttr:Ppthread_mutex_attr):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrDestroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrGettype(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  t^:=pAttr^._type;
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrSettype(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSettype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  Case t of
@@ -497,14 +483,14 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrGetprotocol(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGetprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  t^:=pAttr^._protocol;
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrSetprotocol(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSetprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  Case t of
@@ -518,14 +504,14 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrGetprioceiling(pAttr:Ppthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrGetprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  t^:=pAttr^._prioceiling;
  Result:=0;
 end;
 
-function ps4_scePthreadMutexattrSetprioceiling(pAttr:Ppthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexattrSetprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  pAttr^._prioceiling:=t;
@@ -534,42 +520,39 @@ end;
 
 //////////////
 
-function ps4_scePthreadMutexLock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexLock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
- //Writeln('scePthreadMutexLock:',HexStr(pMutex));
- Result:=px2sce(pthread_mutex_lock_intern(pMutex,INFINITE,SCE_PTHREAD_MUTEX_DEFAULT));
- //if (Result<>0) then Writeln('scePthreadMutexLock:',HexStr(pMutex),':',HexStr(Result,8));
+ _sig_lock;
+ Result:=px2sce(pthread_mutex_lock_intern(pMutex,nil,SCE_PTHREAD_MUTEX_DEFAULT));
+ _sig_unlock;
 end;
 
 function ps4_scePthreadMutexTimedlock(pMutex:PScePthreadMutex;usec:DWORD):Integer; SysV_ABI_CDecl;
+var
+ t:QWORD;
 begin
- //Writeln('scePthreadMutexTimedlock:',HexStr(pMutex));
- Result:=px2sce(pthread_mutex_lock_intern(pMutex,_usec2msec(usec),SCE_PTHREAD_MUTEX_DEFAULT));
- //if (Result<>0) then Writeln('scePthreadMutexTimedlock:',HexStr(pMutex),':',HexStr(Result,8));
+ t:=_usec2nsec(usec);
+ _sig_lock;
+ Result:=px2sce(pthread_mutex_lock_intern(pMutex,@t,SCE_PTHREAD_MUTEX_DEFAULT));
+ _sig_unlock;
 end;
 
-function ps4_scePthreadMutexUnlock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexUnlock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
- //Writeln('scePthreadMutexUnlock:',HexStr(pMutex));
  Result:=px2sce(pthread_mutex_unlock(pMutex,SCE_PTHREAD_MUTEX_DEFAULT));
- //if (Result<>0) then Writeln('scePthreadMutexUnlock:',HexStr(pMutex),':',pMutex^^.name,':',HexStr(Result,8));
 end;
 
-function ps4_scePthreadMutexTrylock(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexTrylock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
- //Writeln('scePthreadMutexTrylock:',HexStr(pMutex));
  Result:=px2sce(pthread_mutex_trylock(pMutex,SCE_PTHREAD_MUTEX_DEFAULT));
- //if (Result<>0) then Writeln('scePthreadMutexTrylock:',HexStr(pMutex),':',HexStr(Result,8));
 end;
 
-function ps4_scePthreadMutexInit(pMutex:PScePthreadMutex;pAttr:Ppthread_mutex_attr;str:PChar):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexInit(pMutex:PScePthreadMutex;pAttr:p_pthread_mutex_attr;str:PChar):Integer; SysV_ABI_CDecl;
 begin
- //if str='NP CVariable Mutex' then
- // writeln;
  Result:=px2sce(pthread_mutex_init(pMutex,pAttr,str,SCE_PTHREAD_MUTEX_DEFAULT));
 end;
 
-function ps4_scePthreadMutexDestroy(pMutex:Ppthread_mutex):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadMutexDestroy(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(pthread_mutex_destroy(pMutex));
 end;

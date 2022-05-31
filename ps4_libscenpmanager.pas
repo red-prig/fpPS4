@@ -6,9 +6,8 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
-
-implementation
+  Classes,
+  SysUtils;
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
@@ -36,17 +35,12 @@ type
   ageRestriction:SceNpAgeRestriction;
  end;
 
-function ps4_sceNpSetContentRestriction(pRestriction:PSceNpContentRestriction):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpSetContentRestriction:',HexStr(pRestriction));
- Result:=0;
-end;
-
 const
  SCE_NP_ONLINEID_MIN_LENGTH=3;
  SCE_NP_ONLINEID_MAX_LENGTH=16;
 
 type
+ pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
   data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
   term:AnsiChar;
@@ -59,14 +53,6 @@ type
   opt:array[0..7] of Byte;
   reserved:array[0..7] of Byte;
  end;
-
-
-function ps4_sceNpGetNpId(userId:Integer;npId:PSceNpId):Integer; SysV_ABI_CDecl;
-begin
- npId^:=Default(SceNpId);
- npId^.handle.data:='user';
- Result:=0;
-end;
 
 const
  SCE_NP_TITLE_ID_LEN=12;
@@ -84,22 +70,6 @@ const
 type
  PSceNpTitleSecret=^SceNpTitleSecret;
  SceNpTitleSecret=array[0..SCE_NP_TITLE_SECRET_SIZE-1] of Byte;
-
-function GetStr(p:Pointer;L:SizeUint):RawByteString; inline;
-begin
- SetString(Result,P,L);
-end;
-
-function ps4_sceNpSetNpTitleId(titleId:PSceNpTitleId;titleSecret:PSceNpTitleSecret):Integer; SysV_ABI_CDecl;
-begin
- Writeln(GetStr(@titleId^.id,StrLen(@titleId^.id)));
- Result:=0;
-end;
-
-function ps4_sceNpCheckCallback():Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
 
 const
  SCE_NP_STATE_UNKNOWN    =0;
@@ -119,6 +89,44 @@ const
  SCE_NP_ERROR_INVALID_ARGUMENT=$80550003;
  SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=$80550008;
 
+implementation
+
+function ps4_sceNpSetContentRestriction(pRestriction:PSceNpContentRestriction):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpSetContentRestriction:',HexStr(pRestriction));
+ Result:=0;
+end;
+
+function ps4_sceNpGetNpId(userId:Integer;npId:PSceNpId):Integer; SysV_ABI_CDecl;
+begin
+ npId^:=Default(SceNpId);
+ npId^.handle.data:='user';
+ Result:=0;
+end;
+
+function ps4_sceNpGetOnlineId(userId:Integer;onlineId:pSceNpOnlineId):Integer; SysV_ABI_CDecl;
+begin
+ onlineId^:=Default(SceNpOnlineId);
+ onlineId^.data:='user';
+ Result:=0;
+end;
+
+function GetStr(p:Pointer;L:SizeUint):RawByteString; inline;
+begin
+ SetString(Result,P,L);
+end;
+
+function ps4_sceNpSetNpTitleId(titleId:PSceNpTitleId;titleSecret:PSceNpTitleSecret):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(GetStr(@titleId^.id,StrLen(@titleId^.id)));
+ Result:=0;
+end;
+
+function ps4_sceNpCheckCallback():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 var
  Cb4Toolkit:packed record
   callback:SceNpStateCallbackA;
@@ -131,6 +139,8 @@ begin
  Cb4Toolkit.userdata:=userdata;
  Result:=0;
 end;
+
+//nop nid:libSceNpManager:55F45298F9A3F10F:sceNpRegisterStateCallback
 
 function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
 begin
@@ -150,6 +160,7 @@ begin
  lib:=Result._add_lib('libSceNpManager');
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
+ lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
 

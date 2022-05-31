@@ -55,10 +55,10 @@ const
  EMSGSIZE	=40		;// Message too long */
  EPROTOTYPE	=41		;// Protocol wrong type for socket */
  ENOPROTOOPT	=42		;// Protocol not available */
- EPROTONOSUPPORT	=43		;// Protocol not supported */
- ESOCKTNOSUPPORT	=44		;// Socket type not supported */
+ EPROTONOSUPPORT=43		;// Protocol not supported */
+ ESOCKTNOSUPPORT=44		;// Socket type not supported */
  EOPNOTSUPP	=45		;// Operation not supported */
- ENOTSUP		=EOPNOTSUPP	;// Operation not supported */
+ ENOTSUP	=EOPNOTSUPP	;// Operation not supported */
  EPFNOSUPPORT	=46		;// Protocol family not supported */
  EAFNOSUPPORT	=47		;// Address family not supported by protocol family */
  EADDRINUSE	=48		;// Address already in use */
@@ -70,8 +70,8 @@ const
  ENETRESET	=52		;// Network dropped connection on reset */
  ECONNABORTED	=53		;// Software caused connection abort */
  ECONNRESET	=54		;// Connection reset by peer */
- ENOBUFS		=55		;// No buffer space available */
- EISCONN		=56		;// Socket is already connected */
+ ENOBUFS        =55		;// No buffer space available */
+ EISCONN        =56		;// Socket is already connected */
  ENOTCONN	=57		;// Socket is not connected */
  ESHUTDOWN	=58		;// Can't send after socket shutdown */
  ETOOMANYREFS	=59		;// Too many references: can't splice */
@@ -134,7 +134,7 @@ const
 
  ELAST		=101		;// Must be equal largest errno */
 
- EADHOC		=160	;// adhoc mode */
+ EADHOC		=160		;// adhoc mode */
  // 161 reserved */
  // 162 reserved */
  EINACTIVEDISABLED	=163	;// IP address was changed */

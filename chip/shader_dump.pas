@@ -19,9 +19,9 @@ type
 
 Function  FastHash(data:PByte;len:DWORD):DWORD;
 Procedure DUMP_BLOCK(F:THandle;REG:WORD;P:Pointer;Size:DWORD);
-Procedure DumpCS(var GPU_REGS:TGPU_REGS);
-Procedure DumpPS(var GPU_REGS:TGPU_REGS);
-Procedure DumpVS(var GPU_REGS:TGPU_REGS);
+function  DumpCS(var GPU_REGS:TGPU_REGS):RawByteString;
+function  DumpPS(var GPU_REGS:TGPU_REGS):RawByteString;
+function  DumpVS(var GPU_REGS:TGPU_REGS):RawByteString;
 
 implementation
 
@@ -93,64 +93,109 @@ begin
  FileWrite(F,P^,System.Align(Size,4));
 end;
 
-function getCodeAddress(lo,hi:DWORD):Pointer;
-begin
- Result:=Pointer(((QWORD(hi) shl 40) or (QWORD(lo) shl 8)));
-end;
-
-function getFetchAddress(P:PDWORD):Pointer;
-begin
- Result:=Pointer(((QWORD(P[1]) shl 32) or (QWORD(P[0]) and (not 3))));
-end;
-
 type
  TUSER_DATA_USEAGE=array[0..15] of Byte;
 
-Procedure _calc_usage(info:PShaderBinaryInfo;var USER_DATA:TSPI_USER_DATA;var USEAGE_DATA:TUSER_DATA_USEAGE);
+function _calc_usage(info:PShaderBinaryInfo;USER_DATA:PDWORD):TUSER_DATA_USEAGE;
 var
  i:Integer;
  Slots:PInputUsageSlot;
  r:Byte;
 begin
- USEAGE_DATA:=Default(TUSER_DATA_USEAGE);
+ Result:=Default(TUSER_DATA_USEAGE);
  if (info<>nil) then
  begin
   Slots:=_calc_shader_slot(info);
   if (Slots<>nil) then
    For i:=0 to info^.numInputUsageSlots-1 do
-    if (Slots[i].m_usageType=kShaderInputUsageSubPtrFetchShader) then
-    begin
-     r:=Slots[i].m_startRegister;
-     Assert(r<15);
-     USEAGE_DATA[r]:=2;
-     USEAGE_DATA[r+1]:=1;
+    Case Slots[i].m_usageType of
+     kShaderInputUsageSubPtrFetchShader:
+      begin
+       r:=Slots[i].m_startRegister;
+       Assert(r<15);
+       Result[r]:=2;   //getFetchAddress
+       Result[r+1]:=1; //skip
+      end;
+     kShaderInputUsagePtrResourceTable,
+     kShaderInputUsagePtrInternalResourceTable,
+     kShaderInputUsagePtrSamplerTable,
+     kShaderInputUsagePtrConstBufferTable,
+     kShaderInputUsagePtrVertexBufferTable,
+     kShaderInputUsagePtrSoBufferTable,
+     kShaderInputUsagePtrRwResourceTable,
+     kShaderInputUsagePtrInternalGlobalTable,
+     kShaderInputUsagePtrExtendedUserData,
+     kShaderInputUsagePtrIndirectResourceTable,
+     kShaderInputUsagePtrIndirectInternalResourceTable,
+     kShaderInputUsagePtrIndirectRwResourceTable:
+      begin
+       r:=Slots[i].m_startRegister;
+       Assert(r<15);
+       Result[r]:=3;   //getBufferAddress
+       Result[r+1]:=1; //skip
+      end;
     end;
  end;
  For i:=0 to 15 do
-  if (USEAGE_DATA[i]=0) and (USER_DATA[i]=0) then
+  if (Result[i]=0) and (USER_DATA[i]=0) then
   begin
-   USEAGE_DATA[i]:=1;
+   Result[i]:=1;
   end;
 end;
 
-Procedure DumpCS(var GPU_REGS:TGPU_REGS);
+Procedure DUMP_USER_DATA(F:THandle;base:Pointer;REG:WORD;USER_DATA:PDWORD);
 var
  i:Integer;
- size,hash:DWORD;
- base,Fetch:Pointer;
- F:THandle;
- fname:RawByteString;
+ buf:Pointer;
+ size:DWORD;
  USEAGE_DATA:TUSER_DATA_USEAGE;
 begin
+ USEAGE_DATA:=_calc_usage(_calc_shader_info(base),USER_DATA);
+ For i:=0 to 15 do
+ begin
+  Case USEAGE_DATA[i] of
+   0:DUMP_BLOCK(F,REG+i,@USER_DATA[i],SizeOf(DWORD));
+   2:
+    begin
+     buf:=getFetchAddress(USER_DATA[i],USER_DATA[i+1]);
+     if (buf<>nil) then
+     begin
+      size:=_calc_shader_size(buf,0,True);
+      DUMP_BLOCK(F,REG+i,buf,size);
+     end;
+    end;
+   3:
+    begin
+     buf:=getBufferAddress(USER_DATA[i],USER_DATA[i+1]);
+     if (buf<>nil) then
+     begin
+      size:=256; //size is unknow
+      DUMP_BLOCK(F,REG+i,buf,size);
+     end;
+    end;
+
+  end;
+ end;
+end;
+
+function DumpCS(var GPU_REGS:TGPU_REGS):RawByteString;
+var
+ size,hash:DWORD;
+ base:Pointer;
+ F:THandle;
+ fname:RawByteString;
+begin
+ Result:='';
  base:=getCodeAddress(GPU_REGS.SPI.CS.LO,GPU_REGS.SPI.CS.HI);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  _calc_usage(_calc_shader_info(base),GPU_REGS.SPI.CS.USER_DATA,USEAGE_DATA);
-
   hash:=FastHash(base,size);
   fname:='shader_dump\'+get_dev_progname+'_cs_'+HexStr(hash,8)+'.dump';
+  Result:=fname;
+
+  if FileExists(fname) then Exit;
 
   CreateDir('shader_dump');
   F:=FileCreate(fname);
@@ -163,21 +208,7 @@ begin
   DUMP_BLOCK(F,mmCOMPUTE_NUM_THREAD_Y,@GPU_REGS.SPI.CS.NUM_THREAD_Y,SizeOf(DWORD));
   DUMP_BLOCK(F,mmCOMPUTE_NUM_THREAD_Z,@GPU_REGS.SPI.CS.NUM_THREAD_Z,SizeOf(DWORD));
 
-  For i:=0 to 15 do
-  begin
-   Case USEAGE_DATA[i] of
-    0:DUMP_BLOCK(F,mmCOMPUTE_USER_DATA_0+i,@GPU_REGS.SPI.CS.USER_DATA[i],SizeOf(DWORD));
-    2:
-     begin
-      Fetch:=getFetchAddress(@GPU_REGS.SPI.CS.USER_DATA[i]);
-      if (Fetch<>nil) then
-      begin
-       size:=_calc_shader_size(Fetch,0,True);
-       DUMP_BLOCK(F,mmCOMPUTE_USER_DATA_0+i,Fetch,size);
-      end;
-     end;
-   end;
-  end;
+  DUMP_USER_DATA(F,base,mmCOMPUTE_USER_DATA_0,@GPU_REGS.SPI.CS.USER_DATA);
 
   DUMP_BLOCK(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE0,@GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE0,SizeOf(DWORD));
   DUMP_BLOCK(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE1,@GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE1,SizeOf(DWORD));
@@ -188,24 +219,25 @@ begin
  end;
 end;
 
-Procedure DumpPS(var GPU_REGS:TGPU_REGS);
+function DumpPS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
  i:Integer;
  size,hash:DWORD;
- base,Fetch:Pointer;
+ base:Pointer;
  F:THandle;
  fname:RawByteString;
- USEAGE_DATA:TUSER_DATA_USEAGE;
 begin
+ Result:='';
  base:=getCodeAddress(GPU_REGS.SPI.PS.LO,GPU_REGS.SPI.PS.HI);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  _calc_usage(_calc_shader_info(base),GPU_REGS.SPI.PS.USER_DATA,USEAGE_DATA);
-
   hash:=FastHash(base,size);
   fname:='shader_dump\'+get_dev_progname+'_ps_'+HexStr(hash,8)+'.dump';
+  Result:=fname;
+
+  if FileExists(fname) then Exit;
 
   CreateDir('shader_dump');
   F:=FileCreate(fname);
@@ -227,48 +259,36 @@ begin
   DUMP_BLOCK(F,mmDB_SHADER_CONTROL      ,@GPU_REGS.SPI.PS.SHADER_CONTROL,SizeOf(DWORD));
   DUMP_BLOCK(F,mmCB_SHADER_MASK         ,@GPU_REGS.SPI.PS.SHADER_MASK   ,SizeOf(DWORD));
 
-  For i:=0 to 15 do
-  begin
-   Case USEAGE_DATA[i] of
-    0:DUMP_BLOCK(F,mmSPI_SHADER_USER_DATA_PS_0+i,@GPU_REGS.SPI.PS.USER_DATA[i],SizeOf(DWORD));
-    2:
-     begin
-      Fetch:=getFetchAddress(@GPU_REGS.SPI.PS.USER_DATA[i]);
-      if (Fetch<>nil) then
-      begin
-       size:=_calc_shader_size(Fetch,0,True);
-       DUMP_BLOCK(F,mmSPI_SHADER_USER_DATA_PS_0+i,Fetch,size);
-      end;
-     end;
-   end;
-  end;
+  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_PS_0,@GPU_REGS.SPI.PS.USER_DATA);
 
-  DUMP_BLOCK(F,mmSPI_PS_INPUT_CNTL_0,@GPU_REGS.SPI.PS.INPUT_CNTL_0,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_PS_INPUT_CNTL_1,@GPU_REGS.SPI.PS.INPUT_CNTL_1,SizeOf(DWORD));
+  For i:=0 to 31 do
+  begin
+   DUMP_BLOCK(F,mmSPI_PS_INPUT_CNTL_0+i,@GPU_REGS.SPI.PS.INPUT_CNTL[i],SizeOf(DWORD));
+  end;
 
   FileClose(F);
 
  end;
 end;
 
-Procedure DumpVS(var GPU_REGS:TGPU_REGS);
+function DumpVS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
- i:Integer;
  size,hash:DWORD;
- base,Fetch:Pointer;
+ base:Pointer;
  F:THandle;
  fname:RawByteString;
- USEAGE_DATA:TUSER_DATA_USEAGE;
 begin
+ Result:='';
  base:=getCodeAddress(GPU_REGS.SPI.VS.LO,GPU_REGS.SPI.VS.HI);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  _calc_usage(_calc_shader_info(base),GPU_REGS.SPI.VS.USER_DATA,USEAGE_DATA);
-
   hash:=FastHash(base,size);
   fname:='shader_dump\'+get_dev_progname+'_vs_'+HexStr(hash,8)+'.dump';
+  Result:=fname;
+
+  if FileExists(fname) then Exit;
 
   CreateDir('shader_dump');
   F:=FileCreate(fname);
@@ -282,21 +302,7 @@ begin
   DUMP_BLOCK(F,mmSPI_SHADER_POS_FORMAT,@GPU_REGS.SPI.VS.POS_FORMAT,SizeOf(DWORD));
   DUMP_BLOCK(F,mmPA_CL_VS_OUT_CNTL    ,@GPU_REGS.SPI.VS.OUT_CNTL  ,SizeOf(DWORD));
 
-  For i:=0 to 15 do
-  begin
-   Case USEAGE_DATA[i] of
-    0:DUMP_BLOCK(F,mmSPI_SHADER_USER_DATA_VS_0+i,@GPU_REGS.SPI.VS.USER_DATA[i],SizeOf(DWORD));
-    2:
-     begin
-      Fetch:=getFetchAddress(@GPU_REGS.SPI.VS.USER_DATA[i]);
-      if (Fetch<>nil) then
-      begin
-       size:=_calc_shader_size(Fetch,0,True);
-       DUMP_BLOCK(F,mmSPI_SHADER_USER_DATA_VS_0+i,Fetch,size);
-      end;
-     end;
-   end;
-  end;
+  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_VS_0,@GPU_REGS.SPI.VS.USER_DATA);
 
   DUMP_BLOCK(F,mmVGT_NUM_INSTANCES    ,@GPU_REGS.VGT_NUM_INSTANCES,SizeOf(DWORD));
 

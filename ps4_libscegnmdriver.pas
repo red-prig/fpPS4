@@ -5,7 +5,9 @@ unit ps4_libSceGnmDriver;
 interface
 
 uses
-  Classes, SysUtils, bittype, ps4_videodrv;
+  Classes,
+  SysUtils,
+  ps4_videodrv;
 
 procedure post_event_eop;
 
@@ -14,6 +16,8 @@ implementation
 uses
  hamt,
  ps4_program,
+ sys_signal,
+ sys_kernel,
  ps4_queue,
  ps4_libkernel,
  ps4_libSceVideoOut{, ps4_pssl};
@@ -376,12 +380,17 @@ var
 begin
  Result:=-1;
  if (numDwords<>7) then Exit;
+ //sceVideoOutGetBufferLabelAddress(videoOutHandle,&base);
+ //addr = base + (ulong)(uint)displayBufferIndex * 8;
+ _sig_lock;
  addr:=_VideoOutGetBufferAdr(videoOutHandle,displayBufferIndex);
+ _sig_unlock;
  if (addr=nil) then Exit;
- cmdBuffer[0]:=$c0053c00;
+
+ cmdBuffer[0]:=$c0053c00; //IT_WAIT_REG_MEM
  cmdBuffer[1]:=$13;
- cmdBuffer[2]:=QWORD(addr) and $fffffffc;
- cmdBuffer[3]:=(QWORD(addr) shr $20) and $ffff;
+ cmdBuffer[2]:=QWORD(addr);
+ cmdBuffer[3]:=(QWORD(addr) shr $20);
  cmdBuffer[4]:=0;
  cmdBuffer[5]:=$ffffffff;
  cmdBuffer[6]:=10;
@@ -390,11 +399,6 @@ end;
 
 const
  kAlignmentOfShaderInBytes=256;
-
-function getCodeAddress(PgmHi,PgmLo:DWORD):Pointer;
-begin
- Result:=Pointer(((QWORD(PgmHi) shl 40) or (QWORD(PgmLo) shl 8)));
-end;
 
 procedure patchShaderGpuAddress(gpuAddress:Pointer;var PgmHi,PgmLo:DWORD);
 begin
@@ -1041,7 +1045,9 @@ function ps4_sceGnmSubmitCommandBuffers(
 begin
  //exit(0);
 
+ _sig_lock;
  vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,nil);
+ _sig_unlock;
  Result:=0;
 end;
 
@@ -1065,7 +1071,9 @@ begin
  Flip.flipMode   :=flipMode;
  Flip.flipArg    :=flipArg;
 
+ _sig_lock;
  vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,@Flip);
+ _sig_unlock;
  Result:=0;
 end;
 
@@ -1075,7 +1083,9 @@ begin
  //exit(0);
 
  //Writeln('SubmitDone');
+ _sig_lock;
  vSubmitDone;
+ _sig_unlock;
  Result:=0;
 end;
 
@@ -1120,7 +1130,7 @@ const
 var
  EopEvents:Thamt64locked;
 
-function ps4_sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
+function _sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
 var
  P:PPointer;
  node:PKEventNode;
@@ -1157,6 +1167,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+  Result:=_sceGnmAddEqEvent(eq,id,udata);
+ _sig_unlock;
+end;
+
 procedure _on_trigger_eop(data,userdata:Pointer);
 var
  node:PKEventNode;
@@ -1168,9 +1185,11 @@ end;
 
 procedure post_event_eop;
 begin
+ _sig_lock;
  EopEvents.LockRd;
  HAMT_traverse64(@EopEvents.hamt,@_on_trigger_eop,nil);
  EopEvents.Unlock;
+ _sig_unlock;
 end;
 
 function Load_libSceGnmDriver(Const name:RawByteString):TElf_node;

@@ -6,28 +6,55 @@ interface
 
 uses
  g23tree,
- vulkan,vDevice,vShader;
+ vulkan,
+ vDevice,
+ vShader;
 
 type
+ AVkDescriptorSetLayoutBinding=array of TVkDescriptorSetLayoutBinding;
+
+ PvSetLayoutKey=^TvSetLayoutKey;
+ TvSetLayoutKey=record
+  FStage:TVkShaderStageFlags;
+  FFlags:TVkUInt32;
+  FBinds:AVkDescriptorSetLayoutBinding;
+ end;
+
  TvSetLayout=class
   FHandle:TVkDescriptorSetLayout;
   FEdit,FCompile:ptruint;
-  FBinds:array of TVkDescriptorSetLayoutBinding;
+  key:TvSetLayoutKey;
+  Procedure   SetUsePushDescriptor(b:Boolean);
+  function    GetUsePushDescriptor:Boolean;
   Destructor  Destroy; override;
   Procedure   Add(aBind:TVkUInt32;dType:TVkDescriptorType;Flags:TVkShaderStageFlags;count:TVkUInt32=1);
+  Procedure   SetBinds(const A:AVkDescriptorSetLayoutBinding);
+  Function    IsSpace:Boolean; inline;
   procedure   Clear;
   function    Compile:Boolean;
   function    IsEdit:Boolean;
  end;
 
+ AvSetLayout=array of TvSetLayout;
+ AvPushConstantRange=array of TVkPushConstantRange;
+
+ PvPipelineLayoutKey=^TvPipelineLayoutKey;
+ TvPipelineLayoutKey=record
+  FLayouts   :AvSetLayout;
+  FPushConsts:AvPushConstantRange;
+ end;
+
  TvPipelineLayout=class
   FHandle:TVkPipelineLayout;
   FEdit,FCompile:ptruint;
-  FLayouts:array of TvSetLayout;
-  FPushConsts:array of TVkPushConstantRange;
+  FBinds:ptruint;
+  key:TvPipelineLayoutKey;
   Destructor  Destroy; override;
-  Procedure   Add(F:TvSetLayout);
+  Procedure   AddLayout(F:TvSetLayout);
+  Procedure   SetLayouts(const A:AvSetLayout);
   Procedure   AddPushConst(offset,size:TVkUInt32;Flags:TVkShaderStageFlags);
+  Procedure   SetPushConst(const A:AvPushConstantRange);
+  Function    isSpace:Boolean;
   procedure   Clear;
   function    Compile:Boolean;
   function    IsEdit:Boolean;
@@ -62,11 +89,8 @@ type
   procedure  _AllocDesc;
   procedure  _FreeDesc;
   Destructor Destroy; override;
-  Procedure  BindUB (aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-  Procedure  BindSB (aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-  Procedure  BindUBD(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-  Procedure  BindSBD(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-  Procedure  BindSTI(aBind,aElem:TVkUInt32;const img:TVkImageView);
+  Procedure  BindBuf(aBind,aElem:TVkUInt32;dtype:TVkDescriptorType;buffer:TVkBuffer;offset,range:TVkDeviceSize);
+  Procedure  BindSTI(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
  end;
 
  _TvSetLayoutKey=object
@@ -83,6 +107,9 @@ type
 
  _TvDescriptorSetSet=specialize T23treeSet<TvDescriptorSet,_TvDescriptorSetCompare>;
 
+ TvCountsGroup=array[0..14] of TVkUInt32;
+ AvDescriptorPoolSize=array of TVkDescriptorPoolSize;
+
  TvSetsPool=class
   FHandle:TVkDescriptorPool;
   FEdit,FCompile:ptruint;
@@ -97,6 +124,50 @@ type
   function    Alloc(L:TvSetLayout):TvDescriptorSet;
   function    Compile:Boolean;
   function    IsEdit:Boolean;
+ end;
+
+///////
+
+ TvDescriptorSet2=object
+  FHandle:TVkDescriptorSet;
+  Function   IsValid:Boolean;
+  Procedure  BindBuf(aBind,aElem:TVkUInt32;dtype:TVkDescriptorType;buffer:TVkBuffer;offset,range:TVkDeviceSize);
+  Procedure  BindSTI(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+  Procedure  BindImg(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+  Procedure  BindSmp(aBind,aElem:TVkUInt32;smp:TVkSampler);
+ end;
+
+ AvDescriptorSet2=Array of TvDescriptorSet2;
+
+ TvDescriptorGroup=class
+  //lock:Ptruint;
+  FSets:AvDescriptorSet2;
+  //Procedure Release;
+ end;
+
+ AvDescriptorGroup=Array of TvDescriptorGroup;
+
+ //PvSetsPoolKey=^TvSetsPoolKey;
+ //TvSetsPoolKey=record
+ // FPipeline:TvPipelineLayout;
+ // FNumber  :PtrUint;
+ //end;
+
+ TvSetsPool2=class
+  FHandle:TVkDescriptorPool;
+  //key:TvSetsPoolKey;
+  FPipeline:TvPipelineLayout;
+  FmaxGroup:TVkUInt32;
+  FmaxSets :TVkUInt32;
+  FAlcGroup:TVkUInt32;
+  //FGroups  :AvDescriptorGroup;
+  Constructor Create(Pipeline:TvPipelineLayout;maxGroup:TVkUInt32);
+  Destructor  Destroy; override;
+  function    Compile:Boolean;
+  function    Alloc(L:TvSetLayout):TvDescriptorSet2;
+  //function    Alloc:TvDescriptorGroup;
+  function    IsFull:Boolean;
+  function    Alloc:AvDescriptorSet2;
  end;
 
 implementation
@@ -115,19 +186,31 @@ Procedure TvSetLayout.Add(aBind:TVkUInt32;dType:TVkDescriptorType;Flags:TVkShade
 var
  i:Integer;
 begin
- i:=Length(FBinds);
- SetLength(FBinds,i+1);
- FBinds[i]:=Default(TVkDescriptorSetLayoutBinding);
- FBinds[i].binding:=aBind;
- FBinds[i].descriptorType:=dType;
- FBinds[i].descriptorCount:=count;
- FBinds[i].stageFlags:=Flags;
+ i:=Length(key.FBinds);
+ SetLength(key.FBinds,i+1);
+ key.FBinds[i]:=Default(TVkDescriptorSetLayoutBinding);
+ key.FBinds[i].binding:=aBind;
+ key.FBinds[i].descriptorType:=dType;
+ key.FBinds[i].descriptorCount:=count;
+ key.FBinds[i].stageFlags:=Flags;
  Inc(FEdit);
+end;
+
+Procedure TvSetLayout.SetBinds(const A:AVkDescriptorSetLayoutBinding);
+begin
+ key.FBinds:=A;
+ Inc(FEdit);
+end;
+
+Function TvSetLayout.IsSpace:Boolean; inline;
+begin
+ Result:=Length(key.FBinds)=0;
 end;
 
 Procedure TvSetLayout.Clear;
 begin
- SetLength(FBinds,0);
+ SetLength(key.FBinds,0);
+ key.FFlags:=0;
  Inc(FEdit);
 end;
 
@@ -145,10 +228,11 @@ begin
  end;
  cinfo:=Default(TVkDescriptorSetLayoutCreateInfo);
  cinfo.sType:=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
- cinfo.bindingCount:=Length(FBinds);
+ cinfo.flags:=key.FFlags;
+ cinfo.bindingCount:=Length(key.FBinds);
  if (cinfo.bindingCount<>0) then
  begin
-  cinfo.pBindings:=@FBinds[0];
+  cinfo.pBindings:=@key.FBinds[0];
  end;
  r:=vkCreateDescriptorSetLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
@@ -171,20 +255,49 @@ begin
  Result:=FEdit<>FCompile;
 end;
 
+Procedure TvSetLayout.SetUsePushDescriptor(b:Boolean);
+begin
+ Case b of
+  True:
+   if (key.FFlags<>ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR)) then
+   begin
+    key.FFlags:=ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+    Inc(FEdit);
+   end;
+  False:
+   if (key.FFlags=ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR)) then
+   begin
+    key.FFlags:=0;
+    Inc(FEdit);
+   end;
+ end;
+end;
+
+function TvSetLayout.GetUsePushDescriptor:Boolean;
+begin
+ Result:=(key.FFlags=ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR));
+end;
+
 Destructor TvPipelineLayout.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
   vkDestroyPipelineLayout(Device.FHandle,FHandle,nil);
 end;
 
-Procedure TvPipelineLayout.Add(F:TvSetLayout);
+Procedure TvPipelineLayout.AddLayout(F:TvSetLayout);
 var
  i:Integer;
 begin
  if (F=nil) then Exit;
- i:=Length(FLayouts);
- SetLength(FLayouts,i+1);
- FLayouts[i]:=F;
+ i:=Length(key.FLayouts);
+ SetLength(key.FLayouts,i+1);
+ key.FLayouts[i]:=F;
+ Inc(FEdit);
+end;
+
+Procedure TvPipelineLayout.SetLayouts(const A:AvSetLayout);
+begin
+ key.FLayouts:=A;
  Inc(FEdit);
 end;
 
@@ -192,18 +305,30 @@ Procedure TvPipelineLayout.AddPushConst(offset,size:TVkUInt32;Flags:TVkShaderSta
 var
  i:Integer;
 begin
- i:=Length(FPushConsts);
- SetLength(FPushConsts,i+1);
- FPushConsts[i].stageFlags:=Flags;
- FPushConsts[i].offset    :=offset;
- FPushConsts[i].size      :=size;
+ i:=Length(key.FPushConsts);
+ SetLength(key.FPushConsts,i+1);
+ key.FPushConsts[i].stageFlags:=Flags;
+ key.FPushConsts[i].offset    :=offset;
+ key.FPushConsts[i].size      :=size;
  Inc(FEdit);
+end;
+
+Procedure TvPipelineLayout.SetPushConst(const A:AvPushConstantRange);
+begin
+ key.FPushConsts:=A;
+ Inc(FEdit);
+end;
+
+Function TvPipelineLayout.isSpace:Boolean;
+begin
+ Result:=FBinds=0;
 end;
 
 procedure TvPipelineLayout.Clear;
 begin
- SetLength(FLayouts,0);
- SetLength(FPushConsts,0);
+ SetLength(key.FLayouts,0);
+ SetLength(key.FPushConsts,0);
+ FBinds:=0;
  Inc(FEdit);
 end;
 
@@ -221,14 +346,16 @@ begin
   vkDestroyPipelineLayout(Device.FHandle,FHandle,nil);
   FHandle:=VK_NULL_HANDLE;
  end;
- if (Length(FLayouts)<>0) then
+ FBinds:=0;
+ if (Length(key.FLayouts)<>0) then
  begin
   _data_set:=nil;
-  SetLength(_data_set,Length(FLayouts));
-  For i:=0 to High(FLayouts) do
+  SetLength(_data_set,Length(key.FLayouts));
+  For i:=0 to High(key.FLayouts) do
   begin
-   if not FLayouts[i].Compile then Exit;
-   _data_set[i]:=FLayouts[i].FHandle;
+   if not key.FLayouts[i].Compile then Exit;
+   _data_set[i]:=key.FLayouts[i].FHandle;
+   FBinds:=FBinds+Length(key.FLayouts[i].key.FBinds);
   end;
  end;
  cinfo:=Default(TVkPipelineLayoutCreateInfo);
@@ -238,10 +365,10 @@ begin
  begin
   cinfo.pSetLayouts:=@_data_set[0];
  end;
- cinfo.pushConstantRangeCount:=Length(FPushConsts);
+ cinfo.pushConstantRangeCount:=Length(key.FPushConsts);
  if (cinfo.pushConstantRangeCount<>0) then
  begin
-  cinfo.pPushConstantRanges:=@FPushConsts[0];
+  cinfo.pPushConstantRanges:=@key.FPushConsts[0];
  end;
  r:=vkCreatePipelineLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
@@ -259,9 +386,9 @@ var
 begin
  Result:=FEdit<>FCompile;
  if not Result then
-  if (Length(FLayouts)<>0) then
-   For i:=0 to High(FLayouts) do
-    if FLayouts[i].IsEdit then Exit(true);
+  if (Length(key.FLayouts)<>0) then
+   For i:=0 to High(key.FLayouts) do
+    if key.FLayouts[i].IsEdit then Exit(true);
 end;
 
 Destructor TvPipeline.Destroy;
@@ -375,6 +502,7 @@ begin
   12:Result:=VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
   13:Result:=VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV ;
   14:Result:=VK_DESCRIPTOR_TYPE_MUTABLE_VALVE             ;
+  else;
  end;
 end;
 
@@ -397,6 +525,7 @@ begin
   VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:Result:=12;
   VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV :Result:=13;
   VK_DESCRIPTOR_TYPE_MUTABLE_VALVE             :Result:=14;
+  else;
  end;
 end;
 
@@ -406,28 +535,28 @@ var
  It:_TvSetLayoutSet.Iterator;
  Ik:_TvSetLayoutKey;
  Id:_TvDescriptorSetSet.Iterator;
- FCounts:array[0..14] of TVkUInt32;
- FSize:array of TVkDescriptorPoolSize;
+ FCounts:TvCountsGroup;
+ FSizes:AvDescriptorPoolSize;
  cinfo:TVkDescriptorPoolCreateInfo;
  r:TVkResult;
 begin
  Result:=False;
  if (FHandle<>VK_NULL_HANDLE) and (not IsEdit) then Exit(true);
  if (FLayouts.Size=0) then Exit;
- FSize:=nil;
+ FSizes:=Default(AvDescriptorPoolSize);
 
  FmaxSets:=0;
- FillChar(FCounts,SizeOf(FCounts),0);
+ FCounts:=Default(TvCountsGroup);
  It:=FLayouts.cbegin;
  repeat
   Ik:=It.Item^;
   if (Ik.Layout<>nil) and (Ik.fcount<>0) then
-  if (Length(Ik.Layout.FBinds)<>0) then
+  if (Length(Ik.Layout.key.FBinds)<>0) then
   begin
    FmaxSets:=FmaxSets+Ik.fcount;
    For i:=0 to Ik.fcount-1 do
-    For b:=0 to High(Ik.Layout.FBinds) do
-     with Ik.Layout.FBinds[b] do
+    For b:=0 to High(Ik.Layout.key.FBinds) do
+     with Ik.Layout.key.FBinds[b] do
      begin
       Inc(FCounts[_GetIdByType(descriptorType)],descriptorCount);
      end;
@@ -437,12 +566,12 @@ begin
  For i:=0 to 14 do
   if (FCounts[i]<>0) then
   begin
-   L:=Length(FSize);
-   SetLength(FSize,L+1);
-   FSize[L].type_:=_GetTypeById(i);
-   FSize[L].descriptorCount:=FCounts[i];
+   L:=Length(FSizes);
+   SetLength(FSizes,L+1);
+   FSizes[L].type_          :=_GetTypeById(i);
+   FSizes[L].descriptorCount:=FCounts[i];
   end;
- if (Length(FSize)=0) then Exit;
+ if (Length(FSizes)=0) then Exit;
 
  Id:=FSets.cbegin;
  if (Id.Item<>nil) then
@@ -467,8 +596,9 @@ begin
 
  cinfo:=Default(TVkDescriptorPoolCreateInfo);
  cinfo.sType        :=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
- cinfo.poolSizeCount:=Length(FSize);
- cinfo.pPoolSizes   :=@FSize[0];
+ cinfo.flags        :=ord(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+ cinfo.poolSizeCount:=Length(FSizes);
+ cinfo.pPoolSizes   :=@FSizes[0];
  cinfo.maxSets      :=FmaxSets;
 
  r:=vkCreateDescriptorPool(Device.FHandle,@cinfo,nil,@FHandle);
@@ -547,10 +677,10 @@ var
  i:Integer;
 begin
  if (L=nil) then Exit;
- if (Length(L.FLayouts)<>0) then
-  For i:=0 to High(L.FLayouts) do
+ if (Length(L.key.FLayouts)<>0) then
+  For i:=0 to High(L.key.FLayouts) do
   begin
-   AddLayout(L.FLayouts[i],count);
+   AddLayout(L.key.FLayouts[i],count);
   end;
 end;
 
@@ -564,7 +694,7 @@ begin
  if (L=nil) then Exit;
  if not _FindLayout(L) then Exit;
  if not Compile then Exit;
- if (FSets.Size>=FmaxSets) then Exit;
+ if (FSets.Size>=FmaxSets)  then Exit;
  ainfo:=Default(TVkDescriptorSetAllocateInfo);
  ainfo.sType             :=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
  ainfo.descriptorPool    :=FHandle;
@@ -633,75 +763,41 @@ begin
  inherited;
 end;
 
-Procedure TvDescriptorSet.BindUB(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
+//VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+//VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+//VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+//VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+
+Procedure TvDescriptorSet.BindBuf(aBind,aElem:TVkUInt32;dtype:TVkDescriptorType;buffer:TVkBuffer;offset,range:TVkDeviceSize);
 var
  dwrite:TVkWriteDescriptorSet;
+ buf:TVkDescriptorBufferInfo;
 begin
+ buf:=Default(TVkDescriptorBufferInfo);
+ buf.buffer:=buffer;
+ buf.offset:=offset;
+ buf.range :=range ;
+
  dwrite:=Default(TVkWriteDescriptorSet);
  dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
  dwrite.dstSet         :=FHandle;
  dwrite.dstBinding     :=aBind;
  dwrite.dstArrayElement:=aElem;
- dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+ dwrite.descriptorType :=dtype;
  dwrite.descriptorCount:=1;
  dwrite.pBufferInfo    :=@buf;
+
  vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
 end;
 
-
-Procedure TvDescriptorSet.BindSB(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-var
- dwrite:TVkWriteDescriptorSet;
-begin
- dwrite:=Default(TVkWriteDescriptorSet);
- dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
- dwrite.dstSet         :=FHandle;
- dwrite.dstBinding     :=aBind;
- dwrite.dstArrayElement:=aElem;
- dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
- dwrite.descriptorCount:=1;
- dwrite.pBufferInfo    :=@buf;
- vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
-end;
-
-Procedure TvDescriptorSet.BindUBD(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-var
- dwrite:TVkWriteDescriptorSet;
-begin
- dwrite:=Default(TVkWriteDescriptorSet);
- dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
- dwrite.dstSet         :=FHandle;
- dwrite.dstBinding     :=aBind;
- dwrite.dstArrayElement:=aElem;
- dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
- dwrite.descriptorCount:=1;
- dwrite.pBufferInfo    :=@buf;
- vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
-end;
-
-Procedure TvDescriptorSet.BindSBD(aBind,aElem:TVkUInt32;const buf:TVkDescriptorBufferInfo);
-var
- dwrite:TVkWriteDescriptorSet;
-begin
- dwrite:=Default(TVkWriteDescriptorSet);
- dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
- dwrite.dstSet         :=FHandle;
- dwrite.dstBinding     :=aBind;
- dwrite.dstArrayElement:=aElem;
- dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
- dwrite.descriptorCount:=1;
- dwrite.pBufferInfo    :=@buf;
- vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
-end;
-
-Procedure TvDescriptorSet.BindSTI(aBind,aElem:TVkUInt32;const img:TVkImageView);
+Procedure TvDescriptorSet.BindSTI(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
 var
  dwrite:TVkWriteDescriptorSet;
  dimg:TVkDescriptorImageInfo;
 begin
  dimg:=Default(TVkDescriptorImageInfo);
- dimg.imageView:=img;
- dimg.imageLayout:=VK_IMAGE_LAYOUT_GENERAL;
+ dimg.imageView  :=img;
+ dimg.imageLayout:=Layout;
  dwrite:=Default(TVkWriteDescriptorSet);
  dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
  dwrite.dstSet         :=FHandle;
@@ -712,6 +808,254 @@ begin
  dwrite.pImageInfo     :=@dimg;
  vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
 end;
+
+//
+
+Function TvDescriptorSet2.IsValid:Boolean;
+begin
+ Result:=FHandle<>VK_NULL_HANDLE;
+end;
+
+Procedure TvDescriptorSet2.BindBuf(aBind,aElem:TVkUInt32;dtype:TVkDescriptorType;buffer:TVkBuffer;offset,range:TVkDeviceSize);
+var
+ dwrite:TVkWriteDescriptorSet;
+ buf:TVkDescriptorBufferInfo;
+begin
+ buf:=Default(TVkDescriptorBufferInfo);
+ buf.buffer:=buffer;
+ buf.offset:=offset;
+ buf.range :=range ;
+
+ dwrite:=Default(TVkWriteDescriptorSet);
+ dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ dwrite.dstSet         :=FHandle;
+ dwrite.dstBinding     :=aBind;
+ dwrite.dstArrayElement:=aElem;
+ dwrite.descriptorType :=dtype;
+ dwrite.descriptorCount:=1;
+ dwrite.pBufferInfo    :=@buf;
+
+ vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
+end;
+
+Procedure TvDescriptorSet2.BindSTI(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+var
+ dwrite:TVkWriteDescriptorSet;
+ dimg:TVkDescriptorImageInfo;
+begin
+ dimg:=Default(TVkDescriptorImageInfo);
+ dimg.imageView  :=img;
+ dimg.imageLayout:=Layout;
+ dwrite:=Default(TVkWriteDescriptorSet);
+ dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ dwrite.dstSet         :=FHandle;
+ dwrite.dstBinding     :=aBind;
+ dwrite.dstArrayElement:=aElem;
+ dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+ dwrite.descriptorCount:=1;
+ dwrite.pImageInfo     :=@dimg;
+ vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
+end;
+
+Procedure TvDescriptorSet2.BindImg(aBind,aElem:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+var
+ dwrite:TVkWriteDescriptorSet;
+ dimg:TVkDescriptorImageInfo;
+begin
+ dimg:=Default(TVkDescriptorImageInfo);
+ dimg.imageView  :=img;
+ dimg.imageLayout:=Layout;
+ dwrite:=Default(TVkWriteDescriptorSet);
+ dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ dwrite.dstSet         :=FHandle;
+ dwrite.dstBinding     :=aBind;
+ dwrite.dstArrayElement:=aElem;
+ dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+ dwrite.descriptorCount:=1;
+ dwrite.pImageInfo     :=@dimg;
+ vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
+end;
+
+Procedure TvDescriptorSet2.BindSmp(aBind,aElem:TVkUInt32;smp:TVkSampler);
+var
+ dwrite:TVkWriteDescriptorSet;
+ dimg:TVkDescriptorImageInfo;
+begin
+ dimg:=Default(TVkDescriptorImageInfo);
+ dimg.sampler:=smp;
+ dwrite:=Default(TVkWriteDescriptorSet);
+ dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ dwrite.dstSet         :=FHandle;
+ dwrite.dstBinding     :=aBind;
+ dwrite.dstArrayElement:=aElem;
+ dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_SAMPLER;
+ dwrite.descriptorCount:=1;
+ dwrite.pImageInfo     :=@dimg;
+ vkUpdateDescriptorSets(Device.FHandle,1,@dwrite,0,nil);
+end;
+
+Constructor TvSetsPool2.Create(Pipeline:TvPipelineLayout;maxGroup:TVkUInt32);
+begin
+ FPipeline:=Pipeline;
+ FmaxGroup:=maxGroup;
+end;
+
+Destructor TvSetsPool2.Destroy;
+begin
+ if (FHandle<>VK_NULL_HANDLE) then
+  vkDestroyDescriptorPool(Device.FHandle,FHandle,nil);
+end;
+
+function TvSetsPool2.Compile:Boolean;
+var
+ i,b,L:Integer;
+ FCounts:TvCountsGroup;
+ FSizes:AvDescriptorPoolSize;
+ cinfo:TVkDescriptorPoolCreateInfo;
+ r:TVkResult;
+begin
+ Result:=False;
+ if (FHandle<>VK_NULL_HANDLE) then Exit(true);
+
+ if ({key.}FPipeline=nil) then Exit;
+ if (FmaxGroup=0) then Exit;
+
+ if (not {key.}FPipeline.Compile) then Exit;
+ FSizes:=Default(AvDescriptorPoolSize);
+
+ FmaxSets:=0;
+ FCounts:=Default(TvCountsGroup);
+
+ if Length({key.}FPipeline.key.FLayouts)<>0 then
+  For i:=0 to High({key.}FPipeline.key.FLayouts) do
+   With {key.}FPipeline.key.FLayouts[i] do
+    if (Length(key.FBinds)<>0) then
+    begin
+     Inc(FmaxSets,FmaxGroup);
+     For b:=0 to High(key.FBinds) do
+      with key.FBinds[b] do
+      begin
+       Inc(FCounts[_GetIdByType(descriptorType)],descriptorCount*FmaxGroup);
+      end;
+    end;
+
+ For i:=0 to 14 do
+  if (FCounts[i]<>0) then
+  begin
+   L:=Length(FSizes);
+   SetLength(FSizes,L+1);
+   FSizes[L].type_          :=_GetTypeById(i);
+   FSizes[L].descriptorCount:=FCounts[i];
+  end;
+ if (Length(FSizes)=0) then Exit;
+
+ cinfo:=Default(TVkDescriptorPoolCreateInfo);
+ cinfo.sType        :=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+ //cinfo.flags        :=ord(VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+ cinfo.poolSizeCount:=Length(FSizes);
+ cinfo.pPoolSizes   :=@FSizes[0];
+ cinfo.maxSets      :=FmaxSets;
+
+ r:=vkCreateDescriptorPool(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkCreateDescriptorPool:',r);
+  Exit;
+ end;
+
+ //FGroups:=Default(AvDescriptorGroup);
+ //SetLength(FGroups,FmaxGroup);
+
+ Result:=True;
+end;
+
+function TvSetsPool2.Alloc(L:TvSetLayout):TvDescriptorSet2;
+var
+ ainfo:TVkDescriptorSetAllocateInfo;
+ FResult:TVkDescriptorSet;
+ r:TVkResult;
+begin
+ Result:=Default(TvDescriptorSet2);
+
+ if (L=nil) then Exit;
+ if L.IsSpace then Exit;
+
+ if not Compile then Exit;
+
+ ainfo:=Default(TVkDescriptorSetAllocateInfo);
+ ainfo.sType             :=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+ ainfo.descriptorPool    :=FHandle;
+ ainfo.descriptorSetCount:=1;
+ ainfo.pSetLayouts:=@L.FHandle;
+ r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FResult);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkAllocateDescriptorSets:',r);
+  Exit;
+ end;
+
+ Result.FHandle:=FResult;
+end;
+
+{
+function TvSetsPool2.Alloc:TvDescriptorGroup;
+var
+ i,s:Integer;
+begin
+ Result:=nil;
+ if Length(FGroups)<>0 then
+  For i:=0 to High(FGroups) do
+  begin
+   if (FGroups[i]=nil) then
+   begin
+    Result:=TvDescriptorGroup.Create;
+    Result.lock:=1;
+    SetLength(Result.FSets,Length(key.FPipeline.key.FLayouts));
+
+    If (Length(Result.FSets)<>0) then
+     For s:=0 to High(Result.FSets) do
+      begin
+       Result.FSets[s]:=Alloc(key.FPipeline.key.FLayouts[s]);
+      end;
+
+    FGroups[i]:=Result;
+   end else
+   if (FGroups[i].lock=0) then
+   begin
+    Result:=FGroups[i];
+    Result.lock:=1;
+    Exit;
+   end;
+  end;
+end;
+}
+
+function TvSetsPool2.IsFull:Boolean;
+begin
+ Result:=(FAlcGroup>=FmaxGroup);
+end;
+
+function TvSetsPool2.Alloc:AvDescriptorSet2;
+var
+ i:Integer;
+begin
+ Result:=nil;
+ if IsFull then Exit;
+ SetLength(Result,Length(FPipeline.key.FLayouts));
+ If (Length(Result)<>0) then
+  For i:=0 to High(Result) do
+   begin
+    Result[i]:=Alloc(FPipeline.key.FLayouts[i]);
+   end;
+ Inc(FAlcGroup);
+end;
+
+{
+Procedure TvDescriptorGroup.Release;
+begin
+ lock:=0;
+end;
+}
 
 end.
 

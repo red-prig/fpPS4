@@ -24,73 +24,142 @@ type
 
  TvImageView=class
   FHandle:TVkImageView;
+  FRefs:ptruint;
+  Procedure   Acquire;
+  Procedure   Release;
   Destructor  Destroy; override;
  end;
 
- TvImage=class
+ TvCustomImage=class
   FHandle:TVkImage;
+  Destructor  Destroy; override;
+  function    GetImageInfo:TVkImageCreateInfo; virtual; abstract;
+  function    GetRequirements:TVkMemoryRequirements;
+  function    GetDedicatedAllocation:Boolean;
+  function    BindMem(P:TvPointer):TVkResult;
+  function    Compile(ext:Pointer):Boolean;
+ end;
+
+const
+ //useage image
+ TM_READ =1;
+ TM_WRITE=2;
+ TM_CLEAR=4;
+
+type
+ TvExtent3D=packed record
+  width:Word;  //(0..16383)
+  height:Word; //(0..16383)
+  depth:Word;  //(0..8192)
+ end;
+
+ TvDstSel=bitpacked record
+  r,g,b,a:0..15; //(0..6)
+ end;
+
+ PvImageKey=^TvImageKey;
+ TvImageKey=packed object
+  Addr:Pointer;
+  cformat:TVkFormat;
+  params:packed record
+   itype:Byte;         //TVkImageType 0..2
+   tiling_idx:Byte;    //0..31
+   extend:TvExtent3D;
+   samples:Byte;       //TVkSampleCountFlagBits 1..4
+   mipLevels:Byte;     //(0..15)
+   arrayLayers:Word;   //(0..16383)
+  end;
+ end;
+
+ PvImageViewKey=^TvImageViewKey;
+ TvImageViewKey=packed record
+  cformat:TVkFormat;
+  vtype:Word;       //TVkImageViewType 0..6
+  dstSel:TvDstSel;
+  base_level:Byte;  //first mip level (0..15)
+  last_level:Byte;  //last mip level (0..15)
+  base_array:Word;  //first array index (0..16383)
+  last_array:Word;  //texture height (0..16383)
+ end;
+
+ TvImage=class(TvCustomImage)
   FFormat:TVkFormat;
   FUsage:TVkFlags;
   FExtent:TVkExtent3D;
   Constructor Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
-  Destructor  Destroy; override;
-  function    GetRequirements:TVkMemoryRequirements;
-  function    GetDedicatedAllocation:Boolean;
-  function    BindMem(P:TvPointer):TVkResult;
-  function    GetCInfo:TVkImageCreateInfo; virtual; abstract;
-  function    GetIVCInfo:TVkImageViewCreateInfo; virtual; abstract;
+  function    GetImageInfo:TVkImageCreateInfo;    override;
+  function    GetViewInfo:TVkImageViewCreateInfo; virtual; abstract;
   function    NewView:TvImageView;
-  function    NewViewF(Format:TVkFormat):TvImageView;
+  //function    NewViewF(Format:TVkFormat):TvImageView;
+ end;
+
+ TvHostImage1D=class(TvImage)
+  function    GetImageInfo:TVkImageCreateInfo; override;
  end;
 
  TvHostImage2D=class(TvImage)
-  function    GetCInfo:TVkImageCreateInfo; override;
+  function    GetImageInfo:TVkImageCreateInfo; override;
+ end;
+
+ TvDeviceImage1D=class(TvImage)
+  function    GetViewInfo:TVkImageViewCreateInfo; override;
+  function    GetImageInfo:TVkImageCreateInfo;    override;
  end;
 
  TvDeviceImage2D=class(TvImage)
-  function    GetIVCInfo:TVkImageViewCreateInfo; override;
-  function    GetCInfo:TVkImageCreateInfo; override;
+  function    GetViewInfo:TVkImageViewCreateInfo; override;
+  function    GetImageInfo:TVkImageCreateInfo;    override;
  end;
 
- TvBuffer=class
-  FHandle:TVkBuffer;
-  FSize:TVkDeviceSize;
-  FUsage:TVkFlags;
-  Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
-  Destructor  Destroy; override;
-  function    GetRequirements:TVkMemoryRequirements;
-  function    GetDedicatedAllocation:Boolean;
-  function    BindMem(P:TvPointer):TVkResult;
- end;
+ //_TvImageViewCompare=object
+ // function c(const a,b:TvImageView):Integer; static;
+ //end;
 
- _TvImageViewCompare=object
-  function c(const a,b:TvImageView):Integer; static;
- end;
+ //_TvImageViewSet=specialize T23treeSet<TvImageView,_TvImageViewCompare>;
 
- _TvImageViewSet=specialize T23treeSet<TvImageView,_TvImageViewCompare>;
+ AvFramebufferImages=array[0..8] of TvImageView;
+ AvImageViews=array[0..8] of TVkImageView;
 
  TvFramebuffer=class
   FHandle:TVkFramebuffer;
   FEdit,FCompile:ptruint;
   FRenderPass:TvRenderPass;
   FSize:TVkExtent2D;
-  FImages:_TvImageViewSet;
+  //FImages:_TvImageViewSet;
+  FImages:AvFramebufferImages;
+  FImagesCount:ptruint;
   Procedure  SetRenderPass(r:TvRenderPass);
   Procedure  SetSize(Size:TVkExtent2D);
   Procedure  AddImageView(v:TvImageView);
-  Procedure  ClearImageViews;
   Procedure  FreeImageViews;
   function   IsEdit:Boolean;
   function   Compile:Boolean;
   Destructor Destroy; override;
  end;
 
+ PvImageBarrier=^TvImageBarrier;
+ TvImageBarrier=object
+  image:TVkImage;
+  range:TVkImageSubresourceRange;
+  //
+  AccessMask:TVkAccessFlags;
+  ImgLayout:TVkImageLayout;
+  StageMask:TVkPipelineStageFlags;
+  Procedure Init(_image:TVkImage;_sub:TVkImageSubresourceRange);
+  procedure Push(cmd:TVkCommandBuffer;
+                 dstAccessMask:TVkAccessFlags;
+  	         newImageLayout:TVkImageLayout;
+  	         dstStageMask:TVkPipelineStageFlags);
+ end;
+
+Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
+
 implementation
 
-function _TvImageViewCompare.c(const a,b:TvImageView):Integer;
-begin
- Result:=CompareByte(a,b,SizeOf(TvImageView));
-end;
+//function _TvImageViewCompare.c(const a,b:TvImageView):Integer;
+//begin
+// Result:=Integer(Pointer(a)>Pointer(b))-Integer(Pointer(a)<Pointer(b));
+//end;
 
 Procedure TvFramebuffer.SetRenderPass(r:TvRenderPass);
 begin
@@ -109,27 +178,36 @@ end;
 Procedure TvFramebuffer.AddImageView(v:TvImageView);
 begin
  if (v=nil) then Exit;
- if FImages.Contains(v) then Exit;
- FImages.Insert(v);
- Inc(FEdit);
-end;
-
-Procedure TvFramebuffer.ClearImageViews;
-begin
- FImages.Free;
+ if (FImagesCount>=Length(AvFramebufferImages)) then Exit;
+ FImages[FImagesCount]:=v;
+ Inc(FImagesCount);
+ v.Acquire;
+ //if FImages.Contains(v) then Exit;
+ //v.Acquire;
+ //FImages.Insert(v);
  Inc(FEdit);
 end;
 
 Procedure TvFramebuffer.FreeImageViews;
 var
- It:_TvImageViewSet.Iterator;
+// It:_TvImageViewSet.Iterator;
+ i:Integer;
 begin
- It:=FImages.cbegin;
- if (It.Item<>nil) then
- repeat
-  TvImageView(It.Item^).Free;
- until not It.Next;
- FImages.Free;
+ if (FImagesCount<>0) then
+ For i:=0 to FImagesCount-1 do
+ if (FImages[i]<>nil) then
+ begin
+  FImages[i].Release;
+  FImages[i]:=nil;
+ end;
+ FImagesCount:=0;
+
+ //It:=FImages.cbegin;
+ //if (It.Item<>nil) then
+ //repeat
+ // TvImageView(It.Item^).Release;
+ //until not It.Next;
+ //FImages.Free;
  Inc(FEdit);
 end;
 
@@ -141,26 +219,44 @@ end;
 function TvFramebuffer.Compile:Boolean;
 var
  i:TVkUInt32;
- It:_TvImageViewSet.Iterator;
- v:TvImageView;
+ //It:_TvImageViewSet.Iterator;
+ //v:TvImageView;
  r:TVkResult;
  info:TVkFramebufferCreateInfo;
+ FImageViews:AvImageViews;
 begin
  Result:=False;
- if (FHandle<>VK_NULL_HANDLE) and (not IsEdit) then Exit(true);
+ if (not IsEdit) then Exit(true);
  if (FRenderPass=nil) then Exit;
  if (FRenderPass.FHandle=VK_NULL_HANDLE) then Exit;
  if (FSize.width=0) or (FSize.height=0) then Exit;
+
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyFramebuffer(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+
  info:=Default(TVkFramebufferCreateInfo);
  info.sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
  info.renderPass     :=FRenderPass.FHandle;
- info.attachmentCount:=FImages.Size;
+ info.attachmentCount:={FImages.Size}FImagesCount;
  info.width :=FSize.width;
  info.height:=FSize.height;
  info.layers:=1;
 
  if (info.attachmentCount<>0) then
  begin
+  FImageViews:=Default(AvImageViews);
+
+  For i:=0 to FImagesCount-1 do
+  if (FImages[i]<>nil) then
+  begin
+   FImageViews[i]:=FImages[i].FHandle;
+  end;
+
+  info.pAttachments:=@FImageViews;
+  {
   info.pAttachments:=AllocMem(info.attachmentCount*SizeOf(TVkImageView));
   i:=0;
   It:=FImages.cbegin;
@@ -174,6 +270,7 @@ begin
    end;
   until not It.Next;
   info.attachmentCount:=i;
+  }
  end;
 
  if (info.attachmentCount=0) then
@@ -190,14 +287,15 @@ begin
   Writeln('vkCreateFramebuffer');
  end;
 
- if (info.pAttachments<>nil) then
-  FreeMem(info.pAttachments);
+ //if (info.pAttachments<>nil) then
+ // FreeMem(info.pAttachments);
 
  Result:=(r=VK_SUCCESS);
 end;
 
 Destructor TvFramebuffer.Destroy;
 begin
+ FreeImageViews;
  if (FHandle<>VK_NULL_HANDLE) then
   vkDestroyFramebuffer(Device.FHandle,FHandle,nil);
  inherited;
@@ -312,39 +410,20 @@ begin
  vkDestroySwapchainKHR(Device.FHandle,FHandle,nil);
 end;
 
-Constructor TvImage.Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
-var
- cinfo:TVkImageCreateInfo;
- r:TVkResult;
+Destructor TvCustomImage.Destroy;
 begin
- FFormat:=format;
- FUsage:=usage;
- FExtent:=extent;
- cinfo:=GetCInfo;
- cinfo.format:=format;
- cinfo.extent:=extent;
- cinfo.usage :=usage;
- cinfo.pNext:=ext;
- r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln('vkCreateImage:',r);
-  Exit;
- end;
+ if (FHandle<>VK_NULL_HANDLE) then
+  vkDestroyImage(Device.FHandle,FHandle,nil);
+ inherited;
 end;
 
-Destructor TvImage.Destroy;
-begin
- vkDestroyImage(Device.FHandle,FHandle,nil);
-end;
-
-function TvImage.GetRequirements:TVkMemoryRequirements;
+function TvCustomImage.GetRequirements:TVkMemoryRequirements;
 begin
  Result:=Default(TVkMemoryRequirements);
  vkGetImageMemoryRequirements(Device.FHandle,FHandle,@Result);
 end;
 
-function TvImage.GetDedicatedAllocation:Boolean;
+function TvCustomImage.GetDedicatedAllocation:Boolean;
 var
  info:TVkImageMemoryRequirementsInfo2;
  rmem:TVkMemoryRequirements2;
@@ -365,9 +444,49 @@ begin
          (rded.prefersDedicatedAllocation <>VK_FALSE);
 end;
 
-function TvImage.BindMem(P:TvPointer):TVkResult;
+function TvCustomImage.BindMem(P:TvPointer):TVkResult;
 begin
  Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FHandle,P.FOffset);
+end;
+
+function TvCustomImage.Compile(ext:Pointer):Boolean;
+var
+ cinfo:TVkImageCreateInfo;
+ r:TVkResult;
+begin
+ Result:=False;
+
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyImage(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+
+ cinfo:=GetImageInfo;
+ cinfo.pNext:=ext;
+ r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkCreateImage:',r);
+  Exit;
+ end;
+ Result:=True;
+end;
+
+Constructor TvImage.Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
+begin
+ FFormat:=format;
+ FUsage:=usage;
+ FExtent:=extent;
+ Compile(ext);
+end;
+
+function TvImage.GetImageInfo:TVkImageCreateInfo;
+begin
+ Result:=Default(TVkImageCreateInfo);
+ Result.format:=FFormat;
+ Result.extent:=FExtent;
+ Result.usage :=FUsage;
 end;
 
 function TvImage.NewView:TvImageView;
@@ -377,7 +496,7 @@ var
  r:TVkResult;
 begin
  Result:=nil;
- cinfo:=GetIVCInfo;
+ cinfo:=GetViewInfo;
  cinfo.image:=FHandle;
  FImg:=VK_NULL_HANDLE;
  r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FImg);
@@ -390,6 +509,7 @@ begin
  Result.FHandle:=FImg;
 end;
 
+{
 function TvImage.NewViewF(Format:TVkFormat):TvImageView;
 var
  cinfo:TVkImageViewCreateInfo;
@@ -397,7 +517,7 @@ var
  r:TVkResult;
 begin
  Result:=nil;
- cinfo:=GetIVCInfo;
+ cinfo:=GetViewInfo;
  cinfo.image :=FHandle;
  cinfo.format:=Format;
  FImg:=VK_NULL_HANDLE;
@@ -410,15 +530,42 @@ begin
  Result:=TvImageView.Create;
  Result.FHandle:=FImg;
 end;
+}
+
+Procedure TvImageView.Acquire;
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
+Procedure TvImageView.Release;
+begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
+end;
 
 Destructor TvImageView.Destroy;
 begin
- vkDestroyImageView(Device.FHandle,FHandle,nil);
+ if (FHandle<>VK_NULL_HANDLE) then
+  vkDestroyImageView(Device.FHandle,FHandle,nil);
 end;
 
-function TvHostImage2D.GetCInfo:TVkImageCreateInfo;
+function TvHostImage1D.GetImageInfo:TVkImageCreateInfo;
 begin
- Result:=Default(TVkImageCreateInfo);
+ Result:=inherited;
+ Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+ Result.imageType    :=VK_IMAGE_TYPE_1D;
+ Result.arrayLayers  :=1;
+ Result.mipLevels    :=1;
+ Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+ Result.samples      :=VK_SAMPLE_COUNT_1_BIT;
+ Result.tiling       :=VK_IMAGE_TILING_LINEAR;
+end;
+
+function TvHostImage2D.GetImageInfo:TVkImageCreateInfo;
+begin
+ Result:=inherited;
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
  Result.imageType    :=VK_IMAGE_TYPE_2D;
  Result.arrayLayers  :=1;
@@ -430,11 +577,11 @@ end;
 
 //
 
-function TvDeviceImage2D.GetCInfo:TVkImageCreateInfo;
+function TvDeviceImage1D.GetImageInfo:TVkImageCreateInfo;
 begin
- Result:=Default(TVkImageCreateInfo);
+ Result:=inherited;
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
- Result.imageType    :=VK_IMAGE_TYPE_2D;
+ Result.imageType    :=VK_IMAGE_TYPE_1D;
  Result.arrayLayers  :=1;
  Result.mipLevels    :=1;
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
@@ -442,11 +589,11 @@ begin
  Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
 end;
 
-function TvDeviceImage2D.GetIVCInfo:TVkImageViewCreateInfo;
+function TvDeviceImage1D.GetViewInfo:TVkImageViewCreateInfo;
 begin
  Result:=Default(TVkImageViewCreateInfo);
  Result.sType       :=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
- Result.viewType    :=VK_IMAGE_VIEW_TYPE_2D;
+ Result.viewType    :=VK_IMAGE_VIEW_TYPE_1D;
  Result.format      :=FFormat;
  Result.components.r:=VK_COMPONENT_SWIZZLE_IDENTITY;
  Result.components.g:=VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -477,62 +624,100 @@ begin
  Result.subresourceRange.layerCount    :=1;
 end;
 
-Constructor TvBuffer.Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
-var
- cinfo:TVkBufferCreateInfo;
- r:TVkResult;
+//
+
+function TvDeviceImage2D.GetImageInfo:TVkImageCreateInfo;
 begin
- FSize:=size;
- FUsage:=usage;
- cinfo:=Default(TVkBufferCreateInfo);
- cinfo.sType:=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
- cinfo.size :=size;
- cinfo.usage:=usage;
- cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
- cinfo.pNext:=ext;
- r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln('vkCreateBuffer:',r);
-  Exit;
+ Result:=inherited;
+ Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+ Result.imageType    :=VK_IMAGE_TYPE_2D;
+ Result.arrayLayers  :=1;
+ Result.mipLevels    :=1;
+ Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+ Result.samples      :=VK_SAMPLE_COUNT_1_BIT;
+ Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
+end;
+
+function TvDeviceImage2D.GetViewInfo:TVkImageViewCreateInfo;
+begin
+ Result:=Default(TVkImageViewCreateInfo);
+ Result.sType       :=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+ Result.viewType    :=VK_IMAGE_VIEW_TYPE_2D;
+ Result.format      :=FFormat;
+ Result.components.r:=VK_COMPONENT_SWIZZLE_IDENTITY;
+ Result.components.g:=VK_COMPONENT_SWIZZLE_IDENTITY;
+ Result.components.b:=VK_COMPONENT_SWIZZLE_IDENTITY;
+ Result.components.a:=VK_COMPONENT_SWIZZLE_IDENTITY;
+
+ Result.subresourceRange.aspectMask    :=GetAspectMaskByFormat(FFormat);
+ Result.subresourceRange.baseMipLevel  :=0;
+ Result.subresourceRange.levelCount    :=1;
+ Result.subresourceRange.baseArrayLayer:=0;
+ Result.subresourceRange.layerCount    :=1;
+end;
+
+Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
+begin
+ Case cformat of
+  VK_FORMAT_S8_UINT:
+   Result  :=ord(VK_IMAGE_ASPECT_STENCIL_BIT);
+
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT:
+   Result  :=ord(VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   Result  :=ord(VK_IMAGE_ASPECT_DEPTH_BIT) or ord(VK_IMAGE_ASPECT_STENCIL_BIT);
+
+  else
+   Result  :=ord(VK_IMAGE_ASPECT_COLOR_BIT);
  end;
 end;
 
-Destructor TvBuffer.Destroy;
+Procedure TvImageBarrier.Init(_image:TVkImage;_sub:TVkImageSubresourceRange);
 begin
- vkDestroyBuffer(Device.FHandle,FHandle,nil);
+ image     :=_image;
+ range     :=_sub;
+ AccessMask:=ord(VK_ACCESS_NONE_KHR);
+ ImgLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+ StageMask :=ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 end;
 
-function TvBuffer.GetRequirements:TVkMemoryRequirements;
-begin
- Result:=Default(TVkMemoryRequirements);
- vkGetBufferMemoryRequirements(Device.FHandle,FHandle,@Result);
-end;
-
-function TvBuffer.GetDedicatedAllocation:Boolean;
+procedure TvImageBarrier.Push(cmd:TVkCommandBuffer;
+                              dstAccessMask:TVkAccessFlags;
+	                      newImageLayout:TVkImageLayout;
+	                      dstStageMask:TVkPipelineStageFlags);
 var
- info:TVkBufferMemoryRequirementsInfo2;
- rmem:TVkMemoryRequirements2;
- rded:TVkMemoryDedicatedRequirements;
+ info:TVkImageMemoryBarrier;
 begin
- Result:=false;
- if Pointer(vkGetImageMemoryRequirements2)=nil then Exit;
- info:=Default(TVkBufferMemoryRequirementsInfo2);
- info.sType:=VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
- info.buffer:=FHandle;
- rmem:=Default(TVkMemoryRequirements2);
- rmem.sType:=VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
- rded:=Default(TVkMemoryDedicatedRequirements);
- rded.sType:=VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS;
- rmem.pNext:=@rded;
- vkGetBufferMemoryRequirements2(Device.FHandle,@info,@rmem);
- Result:=(rded.requiresDedicatedAllocation<>VK_FALSE) or
-         (rded.prefersDedicatedAllocation <>VK_FALSE);
-end;
+ info:=Default(TVkImageMemoryBarrier);
+ info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+ info.srcAccessMask   :=AccessMask;
+ info.dstAccessMask   :=dstAccessMask;
+ info.oldLayout       :=ImgLayout;
+ info.newLayout       :=newImageLayout;
+ info.image           :=image;
+ info.subresourceRange:=range;
 
-function TvBuffer.BindMem(P:TvPointer):TVkResult;
-begin
- Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FHandle,P.FOffset);
+ if (AccessMask<>dstAccessMask) or
+    (ImgLayout <>newImageLayout) or
+    (StageMask <>dstStageMask) then
+ begin
+  vkCmdPipelineBarrier(cmd,
+                       StageMask,
+                       dstStageMask,
+                       0,
+                       0, nil,
+                       0, nil,
+                       1, @info);
+
+  AccessMask:=dstAccessMask;
+  ImgLayout :=newImageLayout;
+  StageMask :=dstStageMask;
+ end;
 end;
 
 end.

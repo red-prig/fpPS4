@@ -1,0 +1,260 @@
+unit sys_kernel;
+
+{$mode ObjFPC}{$H+}
+
+interface
+
+Uses
+ Windows;
+
+{$I sce_errno.inc}
+{$I errno.inc}
+
+type
+ SceKernelModule=Integer;
+
+ PSceKernelLoadModuleOpt=^SceKernelLoadModuleOpt;
+ SceKernelLoadModuleOpt=packed record
+  size:size_t;
+ end;
+
+ atexit_func=function(param:Pointer):Integer;SysV_ABI_CDecl;
+ TKernelAtexitFunc=function(param:Integer):Integer;SysV_ABI_CDecl;
+ TKernelAtexitReportFunc=procedure(param:Integer);
+
+function  px2sce(e:Integer):Integer;
+function  sce2px(e:Integer):Integer;
+
+function  _set_errno(r:Integer):Integer;
+function  _error:Pointer;
+
+function  SwFreeMem(p:pointer):ptruint;
+function  SwAllocMem(Size:ptruint):pointer;
+
+Procedure SwYieldExecution; inline;
+function  SwDelayExecution(Alertable:Boolean;DelayInterval:PQWORD):DWORD;
+
+function  SwWaitForSingleObject(
+           ObjectHandle:THandle;
+           TimeOut:PQWORD;
+           Alertable:LONGBOOL):DWORD;
+
+function  SwWaitFor(Handle:THandle;pTimeout:PQWORD):Integer; //pTimeout in 100ns
+
+Function  safe_move(const src;var dst;count:QWORD):QWORD;
+procedure safe_move_ptr(const src;var dst);
+function  safe_test(var src:DWORD;value:DWORD):Boolean;
+function  safe_str(P:PChar):shortstring;
+
+implementation
+
+uses
+ ntapi,
+ sys_pthread,
+ sys_signal,
+ sys_time;
+
+function px2sce(e:Integer):Integer;
+begin
+ if (e=0) then
+  Result:=0
+ else
+  Result:=e-$7ffe0000;
+end;
+
+function sce2px(e:Integer):Integer;
+begin
+ if (e=0) then
+  Result:=0
+ else
+  Result:=e+$7ffe0000;
+end;
+
+function _set_errno(r:Integer):Integer;
+var
+ t:pthread;
+begin
+ if (r<>0) then
+ begin
+  t:=tcb_thread;
+  if (t<>nil) then t^.errno:=r;
+  Exit(-1);
+ end;
+ Result:=r;
+end;
+
+function _error:Pointer;
+var
+ t:pthread;
+begin
+ Result:=nil;
+ t:=tcb_thread;
+ if (t<>nil) then Result:=@t^.errno;
+end;
+
+function SwFreeMem(p:pointer):ptruint;
+begin
+ _sig_lock;
+ Result:=FreeMem(p);
+ _sig_unlock;
+end;
+
+function SwAllocMem(Size:ptruint):pointer;
+begin
+ _sig_lock;
+ Result:=AllocMem(Size);
+ _sig_unlock;
+end;
+
+Procedure SwYieldExecution; inline;
+begin
+ _sig_lock;
+ NtYieldExecution;
+ _sig_unlock;
+end;
+
+function SwDelayExecution(Alertable:Boolean;DelayInterval:PQWORD):DWORD;
+begin
+ _sig_lock(Alertable);
+ Result:=NtDelayExecution(Alertable,Pointer(DelayInterval));
+ _sig_unlock;
+end;
+
+
+function SwWaitForSingleObject(
+          ObjectHandle:THandle;
+          TimeOut:PQWORD;
+          Alertable:LONGBOOL):DWORD;
+begin
+ _sig_lock(Alertable);
+ Result:=NtWaitForSingleObject(ObjectHandle,Alertable,Pointer(TimeOut));
+ _sig_unlock;
+end;
+
+function SwWaitFor(Handle:THandle;pTimeout:PQWORD):Integer;
+var
+ timeout:Int64;
+ passed :Int64;
+ START:QWORD;
+ QTIME:QWORD;
+ res:DWORD;
+begin
+ Result:=0;
+
+ if (pTimeout<>nil) then
+ begin
+  timeout:=(pTimeout^ div 100);
+  SwSaveTime(START);
+ end else
+ begin
+  timeout:=NT_INFINITE;
+ end;
+
+ repeat
+
+  if (pTimeout<>nil) then
+  begin
+   if (timeout=0) then
+   begin
+    Result:=ETIMEDOUT;
+    Break;
+   end;
+
+   SwSaveTime(QTIME);
+
+   timeout:=-timeout;
+   _sig_lock(True);
+   res:=NtWaitForSingleObject(Handle,True,@timeout);
+   _sig_unlock;
+   timeout:=-timeout;
+
+   passed:=SwTimePassedUnits(QTIME);
+
+   if (passed>=timeout) then
+   begin
+    timeout:=0;
+   end else
+   begin
+    timeout:=timeout-passed;
+   end;
+
+  end else
+  begin
+   _sig_lock(True);
+   res:=NtWaitForSingleObject(Handle,True,@timeout);
+   _sig_unlock;
+  end;
+
+  case res of
+   STATUS_ALERTED,
+   STATUS_USER_APC:
+    begin
+     //continue
+    end;
+   STATUS_TIMEOUT:
+    begin
+     Result:=ETIMEDOUT;
+     Break;
+    end;
+   STATUS_ABANDONED:
+    begin
+     Result:=EPERM;
+     Break;
+    end;
+   STATUS_SUCCESS:
+    begin
+     Result:=0;
+     Break;
+    end;
+   else
+    begin
+     Result:=EINVAL;
+     Break;
+    end;
+  end;
+
+ until false;
+
+end;
+
+Function safe_move(const src;var dst;count:QWORD):QWORD;
+begin
+ _sig_lock;
+ if not ReadProcessMemory(GetCurrentProcess,@src,@dst,count,Result) then Result:=0;
+ _sig_unlock;
+end;
+
+procedure safe_move_ptr(const src;var dst);
+begin
+ if safe_move(src,dst,SizeOf(Pointer))<>SizeOf(Pointer) then Pointer(dst):=nil;
+end;
+
+function safe_test(var src:DWORD;value:DWORD):Boolean;
+var
+ t:DWORD;
+begin
+ Result:=False;
+ t:=0;
+ if (safe_move(src,t,SizeOf(DWORD))=SizeOf(DWORD)) then
+ begin
+  Result:=(t=value);
+ end;
+end;
+
+function safe_str(P:PChar):shortstring;
+var
+ ch:Char;
+begin
+ Result:='';
+ repeat
+  ch:=#0;
+  safe_move(P^,ch,SizeOf(Char));
+  if (ch=#0) then Exit;
+  Result:=Result+ch;
+  if (Result[0]=#255) then Exit;
+  Inc(P);
+ until false;
+end;
+
+end.
+

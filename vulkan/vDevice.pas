@@ -7,17 +7,25 @@ interface
 uses
   SysUtils,
   Math,
+  atomic,
+  spinlock,
   Vulkan;
 
 type
  TVulkanApp=class
   FInstance:TVkInstance;
   FPhysicalDevice:TVkPhysicalDevice;
+  //
   FGFamily:TVkUInt32;
   FCFamily:TVkUInt32;
   FTFamily:TVkUInt32;
+  //
+  FGFamilyCount:TVkUInt32;
+  FCFamilyCount:TVkUInt32;
+  FTFamilyCount:TVkUInt32;
+  //
   FDeviceFeature:TVkPhysicalDeviceFeatures;
-  Constructor Create(debug,validate:Boolean);
+  Constructor Create(debug,printf,validate:Boolean);
   Destructor  Destroy; override;
   Procedure   LoadFamily; virtual;
   function    InstanceLayersIsExist(P:PChar):Boolean;
@@ -32,10 +40,9 @@ type
   procedure   ReportCallback(flags:TVkDebugReportFlagsEXT;
                              objectType:TVkDebugReportObjectTypeEXT;
                              object_:TVkUInt64;
-                             location:TVkSize;
-                             messageCode:TVkInt32;
-                             const pLayerPrefix:PVkChar;
-                             const pMessage:PVkChar); virtual;
+                             location:DWORD;
+                             pLayerPrefix:PVkChar;
+                             pMessage:PVkChar); virtual;
  end;
 
  TvSurface=class
@@ -56,11 +63,19 @@ type
   pQueue:PVkQueue;
  end;
 
+ PAbstractFeature=^TAbstractFeature;
+ TAbstractFeature=record
+  sType:TVkStructureType;
+  pNext:PVkVoid;
+ end;
+
  TvDeviceQueues=class
   data:array of TSortQueueRec;
   exts:array of Pchar;
+  pFeature:PVkVoid;
   procedure   add_queue(Index:TVkUInt32;Queue:PVkQueue);
   procedure   add_ext(P:Pchar);
+  procedure   add_feature(P:PVkVoid);
  end;
 
  TvDevice=class
@@ -69,7 +84,15 @@ type
   Destructor  Destroy; override;
  end;
 
- TCmdPool=class
+ TvQueue=class
+  FHandle:TVkQueue;
+  FLock:Pointer;
+  function QueueSubmit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
+  function QueueWaitIdle:TVkResult;
+  function QueuePresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
+ end;
+
+ TvCmdPool=class
   FHandle:TVkCommandPool;
   Constructor Create(FFamily:TVkUInt32);
   Destructor  Destroy; override;
@@ -92,7 +115,15 @@ type
   Destructor  Destroy; override;
  end;
 
-procedure PrintPhysicalDeviceProperties(physicalDevice:TVkPhysicalDevice);
+ TvEvent=class
+  FHandle:TVkEvent;
+  Constructor Create;
+  Destructor  Destroy; override;
+  function    SetEvent:TVkResult;
+  function    ResetEvent:TVkResult;
+  function    Status:TVkResult;
+ end;
+
 procedure PrintInstanceExtension;
 procedure PrintDeviceExtension(physicalDevice:TVkPhysicalDevice);
 procedure PrintQueueFamily(physicalDevice:TVkPhysicalDevice);
@@ -126,30 +157,108 @@ procedure vkBufferMemoryBarrier(
 	   srcStageMask:TVkPipelineStageFlags;
 	   dstStageMask:TVkPipelineStageFlags);
 
+procedure vkMemoryBarrier(
+	   cmdbuffer:TVkCommandBuffer;
+	   srcAccessMask:TVkAccessFlags;
+	   dstAccessMask:TVkAccessFlags;
+	   srcStageMask:TVkPipelineStageFlags;
+	   dstStageMask:TVkPipelineStageFlags);
+
+procedure vkBarrier(
+	   cmdbuffer:TVkCommandBuffer;
+	   srcStageMask:TVkPipelineStageFlags;
+	   dstStageMask:TVkPipelineStageFlags);
+
 var
  VulkanApp:TVulkanApp;
  DebugReport:TVDebugReport;
  Device:TvDevice;
 
- FlipQueue:TVkQueue;
- RenderQueue:TVkQueue;
+ FlipQueue:TvQueue;
+ RenderQueue:TvQueue;
 
 Procedure InitVulkan;
 function  IsInitVulkan:Boolean;
+
+function  shaderStorageImageExtendedFormats:Boolean;
+function  shaderStorageImageReadWithoutFormat:Boolean;
+function  shaderStorageImageWriteWithoutFormat:Boolean;
+function  shaderInt64:Boolean;
+function  shaderInt16:Boolean;
+
+var
+ limits:record
+
+  VK_KHR_swapchain               :Boolean;
+  VK_EXT_external_memory_host    :Boolean;
+
+  VK_KHR_16bit_storage           :Boolean;
+  VK_KHR_8bit_storage            :Boolean;
+  VK_KHR_push_descriptor         :Boolean;
+  VK_KHR_shader_non_semantic_info:Boolean;
+  VK_EXT_index_type_uint8        :Boolean;
+  VK_EXT_scalar_block_layout     :Boolean;
+
+  VK_AMD_device_coherent_memory  :Boolean;
+
+  maxUniformBufferRange:TVkUInt32;
+  maxStorageBufferRange:TVkUInt32;
+  maxPushConstantsSize:TVkUInt32;
+  maxSamplerLodBias:TVkFloat;
+  maxSamplerAnisotropy:TVkFloat;
+
+  minMemoryMapAlignment:TVkSize;
+  minTexelBufferOffsetAlignment:TVkDeviceSize;
+  minUniformBufferOffsetAlignment:TVkDeviceSize;
+  minStorageBufferOffsetAlignment:TVkDeviceSize;
+
+  framebufferColorSampleCounts:TVkSampleCountFlags;
+  framebufferDepthSampleCounts:TVkSampleCountFlags;
+  framebufferStencilSampleCounts:TVkSampleCountFlags;
+
+  sampledImageColorSampleCounts:TVkSampleCountFlags;
+  sampledImageIntegerSampleCounts:TVkSampleCountFlags;
+  sampledImageDepthSampleCounts:TVkSampleCountFlags;
+  sampledImageStencilSampleCounts:TVkSampleCountFlags;
+  storageImageSampleCounts:TVkSampleCountFlags;
+
+  maxComputeWorkGroupInvocations:TVkUInt32;
+  maxComputeWorkGroupSize:TVkOffset3D;
+
+  minImportedHostPointerAlignment:TVkDeviceSize;
+ end;
 
 implementation
 
 uses
  vMemory;
 
-type
- TSortIndex=object
-  max:Integer;
-  data:array of TVkDeviceQueueCreateInfo;
-  procedure add(Index:TVkUInt32);
- end;
+function shaderStorageImageExtendedFormats:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.shaderStorageImageExtendedFormats);
+end;
 
-procedure PrintPhysicalDeviceProperties(physicalDevice:TVkPhysicalDevice);
+function shaderStorageImageReadWithoutFormat:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.shaderStorageImageReadWithoutFormat);
+end;
+
+function shaderStorageImageWriteWithoutFormat:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.shaderStorageImageWriteWithoutFormat);
+end;
+
+function shaderInt64:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.shaderInt64);
+end;
+
+function shaderInt16:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.shaderInt16);
+end;
+
+procedure FillDeviceProperties(physicalDevice:TVkPhysicalDevice);
 var
  prop:TVkPhysicalDeviceProperties2;
  memh:TVkPhysicalDeviceExternalMemoryHostPropertiesEXT;
@@ -163,9 +272,70 @@ begin
 
  vkGetPhysicalDeviceProperties2(physicalDevice,@prop);
 
- Writeln('minImportedHostPointerAlignment=',memh.minImportedHostPointerAlignment);
+ limits.maxUniformBufferRange          :=prop.properties.limits.maxUniformBufferRange;
+ limits.maxStorageBufferRange          :=prop.properties.limits.maxStorageBufferRange;
+ limits.maxPushConstantsSize           :=prop.properties.limits.maxPushConstantsSize;
+ limits.maxSamplerLodBias              :=prop.properties.limits.maxSamplerLodBias;
+ limits.maxSamplerAnisotropy           :=prop.properties.limits.maxSamplerAnisotropy;
 
+ limits.minMemoryMapAlignment          :=prop.properties.limits.minMemoryMapAlignment;
+ limits.minTexelBufferOffsetAlignment  :=prop.properties.limits.minTexelBufferOffsetAlignment;
+ limits.minUniformBufferOffsetAlignment:=prop.properties.limits.minUniformBufferOffsetAlignment;
+ limits.minStorageBufferOffsetAlignment:=prop.properties.limits.minStorageBufferOffsetAlignment;
+
+ limits.framebufferColorSampleCounts   :=prop.properties.limits.framebufferColorSampleCounts;
+ limits.framebufferDepthSampleCounts   :=prop.properties.limits.framebufferDepthSampleCounts;
+ limits.framebufferStencilSampleCounts :=prop.properties.limits.framebufferStencilSampleCounts;
+
+ limits.sampledImageColorSampleCounts  :=prop.properties.limits.sampledImageColorSampleCounts;
+ limits.sampledImageIntegerSampleCounts:=prop.properties.limits.sampledImageIntegerSampleCounts;
+ limits.sampledImageDepthSampleCounts  :=prop.properties.limits.sampledImageDepthSampleCounts;
+ limits.sampledImageStencilSampleCounts:=prop.properties.limits.sampledImageStencilSampleCounts;
+ limits.storageImageSampleCounts       :=prop.properties.limits.storageImageSampleCounts;
+
+ limits.maxComputeWorkGroupInvocations :=prop.properties.limits.maxComputeWorkGroupInvocations;
+ limits.maxComputeWorkGroupSize        :=TVkOffset3D(prop.properties.limits.maxComputeWorkGroupSize);
+
+ limits.minImportedHostPointerAlignment:=memh.minImportedHostPointerAlignment;
 end;
+
+procedure FillDeviceExtension(physicalDevice:TVkPhysicalDevice);
+var
+ i,count:TVkUInt32;
+ pProperties:PVkExtensionProperties;
+begin
+ Writeln;
+ count:=0;
+ vkEnumerateDeviceExtensionProperties(physicalDevice,nil,@count,nil);
+ if (count<>0) then
+ begin
+  pProperties:=GetMem(count*SizeOf(TVkExtensionProperties));
+  vkEnumerateDeviceExtensionProperties(physicalDevice,nil,@count,pProperties);
+  For i:=0 to count-1 do
+  begin
+   Case String(pProperties[i].extensionName) of
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME               :limits.VK_KHR_swapchain               :=True;
+    VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME    :limits.VK_EXT_external_memory_host    :=True;
+    VK_KHR_16BIT_STORAGE_EXTENSION_NAME           :limits.VK_KHR_16bit_storage           :=True;
+    VK_KHR_8BIT_STORAGE_EXTENSION_NAME            :limits.VK_KHR_8bit_storage            :=True;
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME         :limits.VK_KHR_push_descriptor         :=True;
+    VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME:limits.VK_KHR_shader_non_semantic_info:=True;
+    VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME        :limits.VK_EXT_index_type_uint8        :=True;
+    VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME     :limits.VK_EXT_scalar_block_layout     :=True;
+
+    VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME  :limits.VK_AMD_device_coherent_memory  :=True;
+   end;
+  end;
+  FreeMem(pProperties);
+ end;
+end;
+
+type
+ TSortIndex=object
+  max:Integer;
+  data:array of TVkDeviceQueueCreateInfo;
+  procedure add(Index:TVkUInt32);
+ end;
 
 procedure PrintInstanceExtension;
 var
@@ -257,7 +427,7 @@ function MyDebugReportCallback(flags:TVkDebugReportFlagsEXT;
                                pUserData:PVkVoid):TVkBool32; {$ifdef Windows}stdcall;{$else}{$ifdef Android}{$ifdef cpuarm}hardfloat;{$else}cdecl;{$endif}{$else}cdecl;{$endif}{$endif}
 begin
  TVDebugReport(pUserData).ReportCallback(
-   flags,objectType,object_,location,messageCode,pLayerPrefix,pMessage);
+   flags,objectType,object_,location,pLayerPrefix,pMessage);
  Result:=TVkBool32(False);
 end;
 
@@ -281,6 +451,9 @@ begin
                             ord(VK_DEBUG_REPORT_ERROR_BIT_EXT              ){ or
                             ord(VK_DEBUG_REPORT_DEBUG_BIT_EXT              )};
 
+
+
+
   cinfo.pfnCallback:=@MyDebugReportCallback;
   cinfo.pUserData:=Pointer(Self);
   r:=FCreateDebugReportCallback(VulkanApp.FInstance,@cinfo,nil,@FHandle);
@@ -303,13 +476,50 @@ end;
 procedure TVDebugReport.ReportCallback(flags:TVkDebugReportFlagsEXT;
                            objectType:TVkDebugReportObjectTypeEXT;
                            object_:TVkUInt64;
-                           location:TVkSize;
-                           messageCode:TVkInt32;
-                           const pLayerPrefix:PVkChar;
-                           const pMessage:PVkChar);
+                           location:DWORD;
+                           pLayerPrefix:PVkChar;
+                           pMessage:PVkChar);
+var
+ i:Integer;
 begin
- if Pos('which is greater than buffer size (4)',pMessage)=0 then
-  Writeln({objectType,':',pLayerPrefix,':',}pMessage);
+
+ Case objectType of
+
+  VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT:
+   Case DWORD(location) of
+    $0609A13B:
+     begin
+      if Pos('not consumed by fragment shader',pMessage)<>0 then Exit;
+      if Pos('fragment shader writes to output location 0 with no matching attachment',pMessage)<>0 then Exit;
+     end;
+   end;
+
+  VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT:
+   Case DWORD(location) of
+
+    $A7BB8DB6:if Pos('(Float16)',pMessage)<>0 then Exit;
+
+    $92394C89:
+     begin
+      i:=Pos('|',pMessage);
+      if (i<>0) then
+      begin
+       pMessage:=@pMessage[i];
+       i:=Pos('|',pMessage);
+       if (i<>0) then
+       begin
+        pMessage:=@pMessage[i-1];
+       end;
+      end;
+     end;
+
+    else;
+   end;
+  else;
+ end;
+
+ Writeln(pMessage);
+
 end;
 
 function vkGetPhysicalDevice4Type(pPhysicalDevices:PVkPhysicalDevice;count:TVkUInt32;deviceType:TVkPhysicalDeviceType):TVkPhysicalDevice;
@@ -347,6 +557,7 @@ begin
   Writeln('apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_PATCH(deviceProperties.apiVersion));
+  Writeln('-----------');
  end;
  Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
  if (Result=VK_NULL_HANDLE) then
@@ -358,9 +569,23 @@ begin
   Result:=pPhysicalDevices[0];
  end;
  FreeMem(pPhysicalDevices);
+
+ Writeln('Select GPU:');
+ deviceProperties:=Default(TVkPhysicalDeviceProperties);
+ vkGetPhysicalDeviceProperties(Result,@deviceProperties);
+ Writeln(deviceProperties.deviceName);
+ Writeln('apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
+                       VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
+                       VK_VERSION_PATCH(deviceProperties.apiVersion));
+
 end;
 
-Constructor TVulkanApp.Create(debug,validate:Boolean);
+function VK_MAKE_API_VERSION(const variant,major,minor,patch:longint):longint;
+begin
+ result:=(variant shl 29) or (major shl 22) or (minor shl 12) or (patch);
+end;
+
+Constructor TVulkanApp.Create(debug,printf,validate:Boolean);
 const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
@@ -368,6 +593,8 @@ var
  vkExtList:array[0..2] of PChar;
  vkLayer:array[0..0] of PChar;
  vkCInfo:TVkInstanceCreateInfo;
+ vkPrintf:TVkValidationFeaturesEXT;
+ vkFeature:TVkValidationFeatureEnableEXT;
  r:TVkResult;
 begin
  vkApp:=Default(TVkApplicationInfo);
@@ -376,7 +603,7 @@ begin
  vkApp.applicationVersion:=VK_MAKE_VERSION(1, 0, 0);
  vkApp.pEngineName       :=nil;
  vkApp.engineVersion     :=VK_MAKE_VERSION(1, 0, 0);
- vkApp.apiVersion        :=VK_API_VERSION_1_1;
+ vkApp.apiVersion        :={VK_API_VERSION_1_1;} VK_MAKE_API_VERSION(0, 1, 1, 0);
 
  vkExtList[0]:=VK_KHR_SURFACE_EXTENSION_NAME;
  vkExtList[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
@@ -399,6 +626,18 @@ begin
   vkCInfo.enabledExtensionCount:=Length(vkExtList)-1;
  end;
  vkCInfo.ppEnabledExtensionNames:=@vkExtList;
+
+ if debug and printf then
+ begin
+  vkFeature:=VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+
+  vkPrintf:=Default(TVkValidationFeaturesEXT);
+  vkPrintf.sType:=VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+  vkPrintf.enabledValidationFeatureCount:=1;
+  vkPrintf.pEnabledValidationFeatures:=@vkFeature;
+
+  vkCInfo.pNext:=@vkPrintf;;
+ end;
 
  r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
  if (r<>VK_SUCCESS) then
@@ -470,6 +709,7 @@ begin
    if not (gLoad in bLoaded) then
    begin
     FGFamily:=i;
+    FGFamilyCount:=pQueue[i].queueCount;
     bLoaded:=bLoaded+[gLoad];
    end;
   end else
@@ -478,6 +718,7 @@ begin
    if not (cLoad in bLoaded) then
    begin
     FCFamily:=i;
+    FCFamilyCount:=pQueue[i].queueCount;
     bLoaded:=bLoaded+[cLoad];
    end;
   end else
@@ -486,6 +727,7 @@ begin
    if not (tLoad in bLoaded) then
    begin
     FTFamily:=i;
+    FTFamilyCount:=pQueue[i].queueCount;
     bLoaded:=bLoaded+[tLoad];
    end;
   end;
@@ -496,6 +738,7 @@ begin
   if (pQueue[i].queueFlags and ord(VK_QUEUE_COMPUTE_BIT))<>0 then
   begin
    FCFamily:=i;
+   FCFamilyCount:=pQueue[i].queueCount;
    Break;
   end;
  end;
@@ -505,6 +748,7 @@ begin
   if (pQueue[i].queueFlags and ord(VK_QUEUE_TRANSFER_BIT))<>0 then
   begin
    FTFamily:=i;
+   FTFamilyCount:=pQueue[i].queueCount;
    Break;
   end;
  end;
@@ -686,6 +930,12 @@ begin
  exts[i]:=P;
 end;
 
+procedure TvDeviceQueues.add_feature(P:PVkVoid);
+begin
+ PAbstractFeature(P)^.pNext:=pFeature;
+ pFeature:=P;
+end;
+
 procedure TSortIndex.add(Index:TVkUInt32);
 var
  i,count:Integer;
@@ -722,6 +972,7 @@ begin
  DeviceInfo:=Default(TVkDeviceCreateInfo);
  DeviceInfo.sType:=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
  DeviceInfo.pEnabledFeatures:=@DeviceFeature;
+ DeviceInfo.pNext:=Queues.pFeature;
 
  DeviceInfo.enabledExtensionCount:=Length(Queues.exts);
  if (DeviceInfo.enabledExtensionCount<>0) then
@@ -770,7 +1021,30 @@ end;
 
 //
 
-Constructor TCmdPool.Create(FFamily:TVkUInt32);
+function TvQueue.QueueSubmit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
+begin
+ spin_lock(FLock);
+ Result:=vkQueueSubmit(FHandle,submitCount,pSubmits,fence);
+ spin_unlock(FLock);
+end;
+
+function TvQueue.QueueWaitIdle:TVkResult;
+begin
+ spin_lock(FLock);
+ Result:=vkQueueWaitIdle(FHandle);
+ spin_unlock(FLock);
+end;
+
+function TvQueue.QueuePresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
+begin
+ spin_lock(FLock);
+ Result:=vkQueuePresentKHR(FHandle,pPresentInfo);
+ spin_unlock(FLock);
+end;
+
+//
+
+Constructor TvCmdPool.Create(FFamily:TVkUInt32);
 var
  cinfo:TVkCommandPoolCreateInfo;
  r:TVkResult;
@@ -787,12 +1061,12 @@ begin
  end;
 end;
 
-Destructor TCmdPool.Destroy;
+Destructor TvCmdPool.Destroy;
 begin
  vkDestroyCommandPool(Device.FHandle,FHandle,nil);
 end;
 
-function TCmdPool.Alloc:TVkCommandBuffer;
+function TvCmdPool.Alloc:TVkCommandBuffer;
 var
  ainfo:TVkCommandBufferAllocateInfo;
  r:TVkResult;
@@ -811,10 +1085,12 @@ begin
  end;
 end;
 
-procedure TCmdPool.Free(cmd:TVkCommandBuffer);
+procedure TvCmdPool.Free(cmd:TVkCommandBuffer);
 begin
  vkFreeCommandBuffers(Device.FHandle,FHandle,1,@cmd);
 end;
+
+//
 
 Constructor TvFence.Create(signaled:Boolean);
 var
@@ -852,6 +1128,8 @@ begin
  Result:=vkGetFenceStatus(Device.FHandle,FHandle);
 end;
 
+//
+
 Constructor TvSemaphore.Create;
 var
  cinfo:TVkSemaphoreCreateInfo;
@@ -866,6 +1144,39 @@ begin
  vkDestroySemaphore(Device.FHandle,FHandle,nil);
 end;
 
+//
+
+Constructor TvEvent.Create;
+var
+ cinfo:TVkEventCreateInfo;
+begin
+ cinfo:=Default(TVkEventCreateInfo);
+ cinfo.sType:=VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
+ vkCreateEvent(Device.FHandle,@cinfo,nil,@FHandle);
+end;
+
+Destructor TvEvent.Destroy;
+begin
+ vkDestroyEvent(Device.FHandle,FHandle,nil);
+end;
+
+function TvEvent.SetEvent:TVkResult;
+begin
+ Result:=vkSetEvent(Device.FHandle,FHandle);
+end;
+
+function TvEvent.ResetEvent:TVkResult;
+begin
+ Result:=vkResetEvent(Device.FHandle,FHandle);
+end;
+
+function TvEvent.Status:TVkResult;
+begin
+ Result:=vkGetEventStatus(Device.FHandle,FHandle);
+end;
+
+//
+
 procedure vkImageMemoryBarrier(
 	   cmdbuffer:TVkCommandBuffer;
 	   image:TVkImage;
@@ -877,16 +1188,16 @@ procedure vkImageMemoryBarrier(
 	   dstStageMask:TVkPipelineStageFlags;
 	   subresourceRange:TVkImageSubresourceRange);
 var
- imageMemoryBarrier:TVkImageMemoryBarrier;
+ info:TVkImageMemoryBarrier;
 begin
- imageMemoryBarrier:=Default(TVkImageMemoryBarrier);
- imageMemoryBarrier.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
- imageMemoryBarrier.srcAccessMask   :=srcAccessMask;
- imageMemoryBarrier.dstAccessMask   :=dstAccessMask;
- imageMemoryBarrier.oldLayout       :=oldImageLayout;
- imageMemoryBarrier.newLayout       :=newImageLayout;
- imageMemoryBarrier.image           :=image;
- imageMemoryBarrier.subresourceRange:=subresourceRange;
+ info:=Default(TVkImageMemoryBarrier);
+ info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+ info.srcAccessMask   :=srcAccessMask;
+ info.dstAccessMask   :=dstAccessMask;
+ info.oldLayout       :=oldImageLayout;
+ info.newLayout       :=newImageLayout;
+ info.image           :=image;
+ info.subresourceRange:=subresourceRange;
 
  vkCmdPipelineBarrier(
  	cmdbuffer,
@@ -895,7 +1206,7 @@ begin
  	0,
  	0, nil,
  	0, nil,
- 	1, @imageMemoryBarrier);
+ 	1, @info);
 end;
 
 procedure vkBufferMemoryBarrier(
@@ -907,17 +1218,17 @@ procedure vkBufferMemoryBarrier(
 	   srcStageMask:TVkPipelineStageFlags;
 	   dstStageMask:TVkPipelineStageFlags);
 var
- MemoryBarrier:TVkBufferMemoryBarrier;
+ info:TVkBufferMemoryBarrier;
 begin
- MemoryBarrier:=Default(TVkBufferMemoryBarrier);
- MemoryBarrier.sType:=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
- MemoryBarrier.srcAccessMask:=srcAccessMask;
- MemoryBarrier.dstAccessMask:=dstAccessMask;
- //MemoryBarrier.srcQueueFamilyIndex:TVkUInt32;
- //MemoryBarrier.dstQueueFamilyIndex:TVkUInt32;
- MemoryBarrier.buffer:=buffer;
- MemoryBarrier.offset:=offset;
- MemoryBarrier.size:=size;
+ info:=Default(TVkBufferMemoryBarrier);
+ info.sType:=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+ info.srcAccessMask:=srcAccessMask;
+ info.dstAccessMask:=dstAccessMask;
+ //info.srcQueueFamilyIndex:TVkUInt32;
+ //info.dstQueueFamilyIndex:TVkUInt32;
+ info.buffer:=buffer;
+ info.offset:=offset;
+ info.size:=size;
 
  vkCmdPipelineBarrier(
  	cmdbuffer,
@@ -925,9 +1236,52 @@ begin
  	dstStageMask,
  	0,
         0, nil,
- 	1, @MemoryBarrier,
+ 	1, @info,
  	0, nil);
 
+end;
+
+procedure vkMemoryBarrier(
+	   cmdbuffer:TVkCommandBuffer;
+	   srcAccessMask:TVkAccessFlags;
+	   dstAccessMask:TVkAccessFlags;
+	   srcStageMask:TVkPipelineStageFlags;
+	   dstStageMask:TVkPipelineStageFlags);
+var
+ info:TVkMemoryBarrier;
+begin
+ info:=Default(TVkMemoryBarrier);
+ info.sType:=VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+ info.srcAccessMask:=dstAccessMask;
+ info.dstAccessMask:=dstAccessMask;
+
+ vkCmdPipelineBarrier(cmdbuffer,
+  srcStageMask,
+  dstStageMask,
+  0,
+  1,
+  @info,
+  0,
+  nil,
+  0,
+  nil);
+end;
+
+procedure vkBarrier(
+	   cmdbuffer:TVkCommandBuffer;
+	   srcStageMask:TVkPipelineStageFlags;
+	   dstStageMask:TVkPipelineStageFlags);
+begin
+ vkCmdPipelineBarrier(cmdbuffer,
+  srcStageMask,
+  dstStageMask,
+  0,
+  0,
+  nil,
+  0,
+  nil,
+  0,
+  nil);
 end;
 
 var
@@ -936,7 +1290,7 @@ var
 
 function IsInitVulkan:Boolean;
 begin
- Result:=(System.InterLockedExchangeAdd(_lazy_wait,0)<>0);
+ Result:=(load_acq_rel(_lazy_wait)<>0);
 end;
 
 Function TestFFF(F:TVkFormatFeatureFlags):RawByteString;
@@ -964,22 +1318,122 @@ Procedure InitVulkan;
 var
  DeviceQueues:TvDeviceQueues;
  //ImgProp:TVkFormatProperties;
+
+ features_Shader8 :TVkPhysicalDeviceShaderFloat16Int8Features;
+ features_Storage8:TVkPhysicalDevice8BitStorageFeaturesKHR;
+
+ features_Storage16:TVkPhysicalDevice16BitStorageFeatures;
+
+ features_Scalar:TVkPhysicalDeviceScalarBlockLayoutFeatures;
+
+ features_Coherent:TVkPhysicalDeviceCoherentMemoryFeaturesAMD;
+
 begin
- if System.InterlockedExchange(_lazy_init,1)=0 then
+ if XCHG(_lazy_init,1)=0 then
  begin
-  VulkanApp:=TVulkanApp.Create(true,true);
+  VulkanApp:=TVulkanApp.Create(true,true,true);
   DebugReport:=TVDebugReport.Create;
 
   MemManager:=TvMemManager.Create;
 
+  FillDeviceExtension(VulkanApp.FPhysicalDevice);
+  FillDeviceProperties(VulkanApp.FPhysicalDevice);
+
+  if not limits.VK_KHR_swapchain then
+  begin
+   raise Exception.Create('VK_KHR_swapchain not support!');
+  end;
+
+  if not limits.VK_EXT_external_memory_host then
+  begin
+   raise Exception.Create('VK_EXT_external_memory_host not support!');
+  end;
+
   DeviceQueues:=TvDeviceQueues.Create;
-  DeviceQueues.add_queue(VulkanApp.FGFamily,@FlipQueue);
-  DeviceQueues.add_queue(VulkanApp.FGFamily,@RenderQueue);
+
+  if (VulkanApp.FGFamilyCount>1) then
+  begin
+   FlipQueue  :=TvQueue.Create;
+   RenderQueue:=TvQueue.Create;
+   DeviceQueues.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
+   DeviceQueues.add_queue(VulkanApp.FGFamily,@RenderQueue.FHandle);
+  end else
+  begin
+   FlipQueue  :=TvQueue.Create;
+   RenderQueue:=FlipQueue;
+   DeviceQueues.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
+  end;
+
   DeviceQueues.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  DeviceQueues.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+
+  if limits.VK_AMD_device_coherent_memory then
+  begin
+   DeviceQueues.add_ext(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
+
+   features_Coherent:=Default(TVkPhysicalDeviceCoherentMemoryFeaturesAMD);
+   features_Coherent.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
+   features_Coherent.deviceCoherentMemory:=VK_TRUE;
+
+   DeviceQueues.add_feature(@features_Coherent);
+  end;
+
+  //if limits.VK_KHR_push_descriptor then
+  //begin
+  // DeviceQueues.add_ext(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+  //end;
+
+  if limits.VK_KHR_shader_non_semantic_info then
+  begin
+   DeviceQueues.add_ext(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
+  end;
+
+  if limits.VK_EXT_scalar_block_layout then
+  begin
+   DeviceQueues.add_ext(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+
+   features_Scalar:=Default(TVkPhysicalDeviceScalarBlockLayoutFeatures);
+   features_Scalar.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+   features_Scalar.scalarBlockLayout:=VK_TRUE;
+
+   DeviceQueues.add_feature(@features_Scalar);
+  end;
+
+  if limits.VK_KHR_8bit_storage then
+  begin
+   DeviceQueues.add_ext(VK_KHR_8BIT_STORAGE_EXTENSION_NAME);
+
+   features_Shader8:=Default(TVkPhysicalDeviceShaderFloat16Int8Features);
+   features_Shader8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+   features_Shader8.shaderInt8:=VK_TRUE;
+
+   features_Storage8:=Default(TVkPhysicalDevice8BitStorageFeaturesKHR);
+   features_Storage8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
+   features_Storage8.storageBuffer8BitAccess:=VK_TRUE;
+   features_Storage8.uniformAndStorageBuffer8BitAccess:=VK_TRUE;
+   //features_Storage8.storagePushConstant8:=VK_TRUE;
+
+   DeviceQueues.add_feature(@features_Shader8);
+   DeviceQueues.add_feature(@features_Storage8);
+  end;
+
+  if limits.VK_KHR_16bit_storage then
+  begin
+   DeviceQueues.add_ext(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
+
+   features_Storage16:=Default(TVkPhysicalDevice16BitStorageFeatures);
+   features_Storage16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+   features_Storage16.storageBuffer16BitAccess:=VK_TRUE;
+   features_Storage16.uniformAndStorageBuffer16BitAccess:=VK_TRUE;
+   //features_Storage16.storagePushConstant16:=VK_TRUE;
+
+   DeviceQueues.add_feature(@features_Storage16);
+  end;
 
   Device:=TvDevice.Create(DeviceQueues);
+  DeviceQueues.Free;
 
-  System.InterLockedExchangeAdd(_lazy_wait,1);
+  XCHG(_lazy_wait,1);
 
   //ImgProp:=Default(TVkFormatProperties);
   //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_R8G8B8A8_UNORM,@ImgProp);
@@ -1006,7 +1460,7 @@ begin
 
  end else
  begin
-  While (System.InterLockedExchangeAdd(_lazy_wait,0)=0) do System.ThreadSwitch;
+  wait_until_equal(_lazy_wait,0);
  end;
 end;
 

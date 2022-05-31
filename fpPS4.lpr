@@ -4,10 +4,15 @@ uses
  cmem,
  cthreads,
  {$ENDIF}
+ windows,
  seh64,
- Classes,sysutils,
+ Classes,
+ sysutils,
  stub_manager,
+ sys_types,
+ sys_pthread,
  ps4libdoc,
+ ps4_libSceAppContent,
  ps4_libSceNet,
  ps4_libSceHttp,
  ps4_libSceGnmDriver,
@@ -22,11 +27,12 @@ uses
  ps4_libSceVideoOut,
  ps4_libScePad,
  ps4_libkernel,
- ps4_types,
  ps4_elf,
  ps4_pthread,
  ps4_program,
- ps4_elf_tls;
+ ps4_elf_tls,
+
+ trace_manager;
 
 function ParseCmd:Boolean;
 var
@@ -129,10 +135,11 @@ asm
  xor %rax,%rax
 end;
 
-procedure print_stub(nid:QWORD;lib:PLIBRARY);
+procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
  Writeln('nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
- writeln;
+ DebugBreak;
+ Sleep(INFINITE);
  //readln;
  //Print_libs(ps4_app.GetFile('libc.prx'));
 end;
@@ -141,6 +148,47 @@ function ps4_sceSslInit(poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSslInit:',poolSize);
  Result:=3;
+end;
+
+function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
+ Result:=4;
+end;
+
+const
+ SCE_DISC_MAP_ERROR_INVALID_ARGUMENT=-2129657855; //0x81100001
+
+function ps4_sceDiscMapIsRequestOnHDD(param1:PChar;param2,param3:Int64;param4:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (param1=nil) or (param4=nil) then Exit(SCE_DISC_MAP_ERROR_INVALID_ARGUMENT);
+ param4^:=1;
+ Result:=0;
+end;
+
+function ps4_8A828CAEE7EDD5E9(param1:PChar;param2,param3:Int64;param4,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
+begin
+ param4^:=0;
+ param5^:=0;
+ param6^:=0;
+ Result:=0;
+end;
+
+function ps4_sceMoveInit:Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceMoveInit');
+ Result:=0;
+end;
+
+function ps4_sceScreenShotSetOverlayImageWithOrigin(
+          filePath:PChar;
+          marginX:Integer;
+          marginY:Integer;
+          origin:Integer //SceScreenShotOrigin
+         ):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceScreenShotSetOverlayImageWithOrigin:',filePath);
+ Result:=0;
 end;
 
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
@@ -163,17 +211,55 @@ begin
   Result:=lib^.get_proc(Info^.Nid);
  end;
 
+ //if (lib<>nil) then
+ //if (lib^.strName='mono-ps4') then
+ //begin
+ // Writeln(Info^.pName);
+ //
+ // if Info^.nid=$4FCEF2B219D790C5 then
+ // begin
+ //  writeln;
+ // end;
+ //
+ //end;
+
  if (Result=nil) then
  begin
   Case Info^.lib^.strName of
 
    'libSceSsl':
     Case Info^.nid of
-     $85DA551140C55B7B:Result:=@ps4_sceSslInit;
+     QWORD($85DA551140C55B7B):Result:=@ps4_sceSslInit;
+    end;
+
+   'libSceNpWebApi':
+    Case Info^.nid of
+     QWORD($1B70272CD7510631):Result:=@ps4_sceNpWebApiInitialize;
+    end;
+
+   'libSceDiscMap':
+    Case Info^.nid of
+     QWORD($95B40AAAC11186D1):Result:=@ps4_sceDiscMapIsRequestOnHDD;
+     QWORD($8A828CAEE7EDD5E9):Result:=@ps4_8A828CAEE7EDD5E9;
+    end;
+
+   'libSceMove':
+    Case Info^.nid of
+     QWORD($8F521313F1282661):Result:=@ps4_sceMoveInit;
+    end;
+
+    'libSceScreenShot':
+    Case Info^.nid of
+     QWORD($EF7590E098F49C92):Result:=@ps4_sceScreenShotSetOverlayImageWithOrigin;
     end;
 
   end;
  end;
+
+ //if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
+ //begin
+ // Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
+ //end;
 
  if (Result=nil) then
  begin
@@ -201,6 +287,38 @@ begin
  end;
 end;
 
+function ReloadImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
+var
+ node:Telf_file;
+ lib:PLIBRARY;
+begin
+ //prev
+ Result:=Info^.lib^.get_proc(Info^.nid);
+
+ node:=Telf_file(data);
+
+ lib:=ps4_app.GetLib(Info^.lib^.strName);
+ if (lib=nil) then Exit;
+
+ //if (lib^.strName='mono-ps4') then
+ //begin
+ // Writeln(Info^.pName);
+ //
+ // if Info^.nid=$4FCEF2B219D790C5 then
+ // begin
+ //  writeln;
+ // end;
+ //
+ //end;
+
+ if (lib^.parent<>node) then Exit;
+
+ Result:=lib^.get_proc(Info^.Nid);
+
+ //cache
+ Info^.lib^.set_proc(Info^.nid,Result);
+end;
+
 var
  elf:Telf_file;
  //i:Integer;
@@ -208,6 +326,8 @@ var
 
  main:pthread;
 
+//label
+// _lab;
 
 begin
  DefaultSystemCodePage:=CP_UTF8;
@@ -230,6 +350,15 @@ begin
  //ps4_app.app_path:='..\samples\tutorial_graphics_programming\basic_quad\';
  //ps4_app.app_file:='..\samples\tutorial_graphics_programming\basic_quad\basic_quad_debug.elf';
 
+ //ps4_app.app_path:='..\samples\tutorial_anti-aliasing\';
+ //ps4_app.app_file:='..\samples\tutorial_anti-aliasing\tutorial_anti-aliasing_debug.elf';
+
+ //ps4_app.app_path:='..\samples\tutorial_graphics_programming\basic-compute\';
+ //ps4_app.app_file:='..\samples\tutorial_graphics_programming\basic-compute\basic-compute_debug.elf';
+
+ //ps4_app.app_path:='..\samples\api_gnm';
+ //ps4_app.app_file:='..\samples\api_gnm\drawindirect-sample\drawindirect-sample_debug.elf';
+
  //ps4_app.app_file:='..\samples\api_video_out\videoout_cursor.elf';
  //ps4_app.app_file:='..\samples\api_video_out\videoout_flip.elf';
 
@@ -238,15 +367,41 @@ begin
  //ps4_app.app_file:='..\samples\api_video_out\videoout_basic3.elf';
  //ps4_app.app_file:='..\samples\api_video_out\videoout_basic5.elf';
 
+ //ps4_app.app_file:='..\samples\api_video_out\videoout_basic_1d.elf';
+
+ //ps4_app.app_path:='..\samples\http_get\';
+ //ps4_app.app_file:='..\samples\http_get\simple4.elf';
+
  //ps4_app.app_path:='G:\Games\MOMODORA\CUSA05694\';
  //ps4_app.app_file:='G:\Games\MOMODORA\CUSA05694\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\';
  //ps4_app.app_file:='G:\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\eboot.elf';
+ //ps4_app.app_file:='G:\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\eboot.bin';
 
- //Writeln(_parse_filename('/app0/data/system_ps4/flatShader_vv.sb'));
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\eboot.bin';
 
- //Writeln(_parse_filename('savedata0/11/../app.prf'));
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Organ.Trail.Complete.Edition\CUSA02791\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Organ.Trail.Complete.Edition\CUSA02791\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Organ.Trail.Complete.Edition\CUSA02791\';
+ //ps4_app.app_file:='G:\Games\Organ.Trail.Complete.Edition\CUSA02791\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Bloodborne Game of the Year Edition v1.09 [RUS]\';
+ //ps4_app.app_file:='G:\Games\Bloodborne Game of the Year Edition v1.09 [RUS]\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\BLAZING_CHROME\CUSA14656\';
+ //ps4_app.app_file:='G:\Games\BLAZING_CHROME\CUSA14656\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Sonic Mania\CUSA07023\';
+ //ps4_app.app_file:='G:\Games\Sonic Mania\CUSA07023\eboot.bin';
+
+ ps4_app.app_path:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\';
+ ps4_app.app_file:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
@@ -256,17 +411,20 @@ begin
  //FileClose(F);
  //FreeAndNil(elf);
 
+ ps4_app.resolve_cb:=@ResolveImport;
+ ps4_app.reload_cb :=@ReloadImport;
+
  elf:=Telf_file(LoadPs4ElfFromFile(ps4_app.app_file));
  elf.Prepare;
  ps4_app.prog:=elf;
  ps4_app.RegistredElf(elf);
  ps4_app.ResolveDepended(elf);
- ps4_app.LoadSymbolImport(@ResolveImport,nil);
+ ps4_app.LoadSymbolImport(nil);
 
 
  Stub.FinStub;
  ps4_app.InitProt;
- ps4_app.InitThread;
+ ps4_app.InitThread(1);
 
  _pthread_run_entry(@main);
 

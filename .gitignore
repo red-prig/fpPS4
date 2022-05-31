@@ -6,8 +6,8 @@
 *.o
 *.ini
 *.db
-*.txt
 *.rar
+*.tga
 *.bat
 *.prx
 *.sprx
@@ -15,5 +15,5 @@
 link.res
 lib/
 backup/
-spirv/*
+shader_dump/*
 savedata/*

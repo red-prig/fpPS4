@@ -5,7 +5,6 @@ unit vMemory;
 interface
 
 uses
- bittype,
  g23tree,
  vulkan,
  vDevice;
@@ -51,7 +50,7 @@ type
  TvMemManager=class
   FProperties:TVkPhysicalDeviceMemoryProperties;
   FHostVisibMt:TVkUInt32;
-  FHostCacheMt:TVkUInt32;
+  //FHostCacheMt:TVkUInt32;
 
   lock:Pointer;
 
@@ -96,6 +95,15 @@ uses
 //free:  [FmType]|[FSize]|[FBlockId]
 function TFreeCompare.c(const a,b:TDevNode):Integer;
 begin
+ //1 FmType
+ Result:=Integer(a.FmType>b.FmType)-Integer(a.FmType<b.FmType);
+ if (Result<>0) then Exit;
+ //2 FSize
+ Result:=Integer(a.FSize>b.FSize)-Integer(a.FSize<b.FSize);
+ if (Result<>0) then Exit;
+ //3 FBlockId
+ Result:=Integer(a.FBlockId>b.FBlockId)-Integer(a.FBlockId<b.FBlockId);
+ {
  if (a.FmType=b.FmType) then
  begin
   if (a.FSize=b.FSize) then
@@ -116,12 +124,18 @@ begin
  if (a.FmType<b.FmType) then
   Result:=-1
  else
-  Result:=1;
+  Result:=1;}
 end;
 
 //alloc: [FBlockId]|[FOffset]
 function TAllcCompare.c(const a,b:TDevNode):Integer;
 begin
+ //1 FBlockId
+ Result:=Integer(a.FBlockId>b.FBlockId)-Integer(a.FBlockId<b.FBlockId);
+ if (Result<>0) then Exit;
+ //2 FBlockId
+ Result:=Integer(a.FOffset>b.FOffset)-Integer(a.FOffset<b.FOffset);
+ {
  if (a.FBlockId=b.FBlockId) then
  begin
   if (a.FOffset=b.FOffset) then
@@ -135,31 +149,44 @@ begin
  if (a.FBlockId<b.FBlockId) then
   Result:=-1
  else
-  Result:=1;
+  Result:=1;}
 end;
 
 Constructor TvMemManager.Create;
 begin
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);
+
  FHostVisibMt:=findMemoryType($FFFFFFFF,
                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                              ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+                              ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) or
+                              ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+                             );
 
  if (FHostVisibMt=DWORD(-1)) then
  begin
   FHostVisibMt:=findMemoryType($FFFFFFFF,
-                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
+                               ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+                              );
  end;
 
- FHostCacheMt:=findMemoryType($FFFFFFFF,
-                              ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                              ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT));
 
- if (FHostCacheMt=DWORD(-1)) then
+ if (FHostVisibMt=DWORD(-1)) then
  begin
-  FHostCacheMt:=FHostVisibMt;
+  FHostVisibMt:=findMemoryType($FFFFFFFF,
+                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                              );
  end;
+
+ //FHostCacheMt:=findMemoryType($FFFFFFFF,
+ //                             ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
+ //                             ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT));
+
+ //if (FHostCacheMt=DWORD(-1)) then
+ //begin
+ // FHostCacheMt:=FHostVisibMt;
+ //end;
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
@@ -271,8 +298,12 @@ begin
  //shrink
  c:=Length(FDevBlocks);
  While (c<>0) do
+ begin
   if (FDevBlocks[c-1].FHandle=VK_NULL_HANDLE) then
-   Dec(c);
+   Dec(c)
+  else
+   Break;
+ end;
  SetLength(FDevBlocks,c);
 end;
 
@@ -497,19 +528,25 @@ end;
 function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
+ r:TVkResult;
 begin
  ainfo:=Default(TVkMemoryAllocateInfo);
  ainfo.sType          :=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
  ainfo.allocationSize :=Size;
  ainfo.memoryTypeIndex:=mtindex;
  Result:=VK_NULL_HANDLE;
- vkAllocateMemory(device,@ainfo,nil,@Result);
+ r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkAllocateMemory:',r);
+ end;
 end;
 
 function vkAllocHostPointer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
  import:TVkImportMemoryHostPointerInfoEXT;
+ r:TVkResult;
 begin
  ainfo:=Default(TVkMemoryAllocateInfo);
  ainfo.sType          :=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -521,13 +558,18 @@ begin
  import.handleType:=VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
  import.pHostPointer:=adr;
  Result:=VK_NULL_HANDLE;
- vkAllocateMemory(device,@ainfo,nil,@Result);
+ r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkAllocateMemory:',r);
+ end;
 end;
 
 function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
  dinfo:TVkMemoryDedicatedAllocateInfo;
+ r:TVkResult;
 begin
  ainfo:=Default(TVkMemoryAllocateInfo);
  ainfo.sType          :=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -538,13 +580,18 @@ begin
  dinfo.sType:=VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
  dinfo.image:=FHandle;
  Result:=VK_NULL_HANDLE;
- vkAllocateMemory(device,@ainfo,nil,@Result);
+  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkAllocateMemory:',r);
+ end;
 end;
 
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
  dinfo:TVkMemoryDedicatedAllocateInfo;
+ r:TVkResult;
 begin
  ainfo:=Default(TVkMemoryAllocateInfo);
  ainfo.sType          :=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -555,13 +602,17 @@ begin
  dinfo.sType:=VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
  dinfo.buffer:=FHandle;
  Result:=VK_NULL_HANDLE;
- vkAllocateMemory(device,@ainfo,nil,@Result);
+  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln('vkAllocateMemory:',r);
+ end;
 end;
 
 function OnGpuMemAlloc(addr:Pointer;len:size_t):TVkDeviceMemory;
 begin
  InitVulkan;
- Result:=vkAllocHostPointer(Device.FHandle,len,MemManager.FHostCacheMt,addr);
+ Result:=vkAllocHostPointer(Device.FHandle,len,MemManager.FHostVisibMt{FHostCacheMt},addr);
  Assert(Result<>VK_NULL_HANDLE);
 end;
 

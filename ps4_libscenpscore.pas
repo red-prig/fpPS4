@@ -6,11 +6,18 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils,
+  ps4_libSceNpManager;
 
 implementation
 
-function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:Integer;selfId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:Integer;selfNpId:PSceNpId):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpScoreCreateNpTitleCtxA(npServiceLabel:Integer;selfId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -138,6 +145,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNpScore');
  lib^.set_proc($2A7340D53120B412,@ps4_sceNpScoreCreateNpTitleCtx);
+ lib^.set_proc($1969D640D5D91F93,@ps4_sceNpScoreCreateNpTitleCtxA);
  lib^.set_proc($816F2ACA362B51B9,@ps4_sceNpScoreCreateRequest);
  lib^.set_proc($74AF3F4A061FEABE,@ps4_sceNpScoreDeleteRequest);
  lib^.set_proc($F24B88CD4C3ABAD4,@ps4_sceNpScoreGetFriendsRanking);

@@ -5,10 +5,7 @@ unit ps4_time;
 interface
 
 uses
-  spinlock,
-  windows,
-  ps4_types,
-  Classes, SysUtils;
+  sys_types;
 
 const
  CLOCK_REALTIME         =0;
@@ -30,60 +27,48 @@ const
  CLOCK_EXT_AD_NETWORK   =18;    // ORBIS only
  CLOCK_EXT_RAW_NETWORK  =19;    // ORBIS only
 
-function _usec2msec(usec:DWORD):DWORD;
-function _pthread_time_in_ms_from_timespec(const ts:timespec):QWORD; inline;
-function _pthread_time_in_ms:QWORD; inline;
-function _pthread_rel_time_in_ms(const ts:timespec):QWORD;
-function dwMilliSecs(ms:QWORD):DWORD; inline;
+function _pthread_time_in_ms:QWORD; //Milisecond
+function _pthread_rel_time_in_ms(const ts:timespec):QWORD; //Milisecond
+function _pthread_time_in_ns:QWORD; //Nanosecond
+function _pthread_rel_time_in_ns(const ts:timespec):QWORD; //Nanosecond
 
 function ps4_gettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
+function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelGetTscFrequency():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelReadTsc():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelClockGettime(clockId:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelGetProcessTime:QWORD; SysV_ABI_CDecl; //microseconds
 
 function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
-function ps4_usleep(usec:Integer):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl;
-
-Const
- FILETIME_1970        =116444736000000000;
- HECTONANOSEC_PER_SEC =10000000;
- DELTA_EPOCH_IN_100NS =116444736000000000;
- POW10_7              =10000000;
- POW10_9              =1000000000;
+function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl;          //microseconds
+function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
 
 implementation
 
 Uses
- ps4_libkernel;
+ Windows,
+ ntapi,
+ sys_kernel,
+ sys_signal,
+ sys_time;
 
-function _usec2msec(usec:DWORD):DWORD;
-begin
- Result:=(usec+999) div 1000;
-end;
-
-function _pthread_time_in_ms_from_timespec(const ts:timespec):QWORD; inline;
-begin
- Result:=QWORD(ts.tv_sec)*1000+QWORD(ts.tv_nsec+999999) div 1000000;
-end;
-
-function _pthread_time_in_ms:QWORD; inline;
+function _pthread_time_in_ms:QWORD; //Milisecond
 var
  ts:timespec;
 begin
  ts:=Default(timespec);
  ps4_clock_gettime(CLOCK_REALTIME,@ts);
- Result:=_pthread_time_in_ms_from_timespec(ts);
+ Result:=_time_in_ms_from_timespec(ts);
 end;
 
-function _pthread_rel_time_in_ms(const ts:timespec):QWORD;
+function _pthread_rel_time_in_ms(const ts:timespec):QWORD; //Milisecond
 var
  t1,t2:QWORD;
 begin
- t1:=_pthread_time_in_ms_from_timespec(ts);
+ t1:=_time_in_ms_from_timespec(ts);
  t2:=_pthread_time_in_ms;
  if (t1<t2) then
   Result:=0
@@ -91,96 +76,126 @@ begin
   Result:=t1-t2;
 end;
 
-function dwMilliSecs(ms:QWORD):DWORD; inline;
+function _pthread_time_in_ns:QWORD; //Nanosecond
+var
+ ts:timespec;
 begin
- if (ms>=$ffffffff) then
-  Result:=$ffffffff
+ ts:=Default(timespec);
+ ps4_clock_gettime(CLOCK_REALTIME,@ts);
+ Result:=_time_in_ms_from_timespec(ts);
+end;
+
+function _pthread_rel_time_in_ns(const ts:timespec):QWORD; //Nanosecond
+var
+ t1,t2:QWORD;
+begin
+ t1:=_time_in_ns_from_timespec(ts);
+ t2:=_pthread_time_in_ns;
+ if (t1<t2) then
+  Result:=0
  else
-  Result:=DWORD(ms);
-end;
-
-type
- TGetSystemTimeAsFileTime=procedure(var lpSystemTimeAsFileTime:TFILETIME); stdcall;
-
-var
- _GetSystemTimeAsFileTime:TGetSystemTimeAsFileTime;
-
-procedure GetSystemTimeAsFileTime(var lpSystemTimeAsFileTime:TFILETIME);
-var
- h:HMODULE;
-begin
- if (_GetSystemTimeAsFileTime=nil) then
- begin
-  h:=GetModuleHandle('kernel32.dll');
-  Pointer(_GetSystemTimeAsFileTime):=GetProcAddress(h,'GetSystemTimePreciseAsFileTime');
-  if (_GetSystemTimeAsFileTime=nil) then
-  begin
-   Pointer(_GetSystemTimeAsFileTime):=GetProcAddress(h,'GetSystemTimeAsFileTime');
-  end;
- end;
- _GetSystemTimeAsFileTime(lpSystemTimeAsFileTime);
-end;
-
-procedure gettimezone(z:Ptimezone);
-var
- TZInfo:TTimeZoneInformation;
- tzi:DWORD;
-begin
- if (z<>nil) then
- begin
-  tzi:=GetTimeZoneInformation(@TZInfo);
-  if (tzi<>TIME_ZONE_ID_INVALID) then
-  begin
-   z^.tz_minuteswest:=TZInfo.Bias;
-   if (tzi=TIME_ZONE_ID_DAYLIGHT) then
-    z^.tz_dsttime:=1
-   else
-    z^.tz_dsttime:=0;
-  end else
-  begin
-   z^.tz_minuteswest:=0;
-   z^.tz_dsttime    :=0;
-  end;
- end;
-end;
-
-function getntptimeofday(tp:Ptimespec;z:Ptimezone):Integer;
-var
- _now:TFILETIME;
-begin
- gettimezone(z);
- if (tp<>nil) then
- begin
-  GetSystemTimeAsFileTime(_now);
-  QWORD(_now):=QWORD(_now)-FILETIME_1970;
-  tp^.tv_sec :=QWORD(_now) div HECTONANOSEC_PER_SEC;
-  tp^.tv_nsec:=(QWORD(_now) mod HECTONANOSEC_PER_SEC)*100;
- end;
- Result:=0;
+  Result:=t1-t2;
 end;
 
 function ps4_gettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
 Var
  tp:timespec;
 begin
- Result:=getntptimeofday(@tp,tz);
- if (tv<>nil) then
+ Result:=_set_errno(Swgetntptimeofday(@tp,tz));
+ if (Result=0) and (tv<>nil) then
  begin
   tv^.tv_sec :=tp.tv_sec;
   tv^.tv_usec:=(tp.tv_nsec div 1000);
  end;
 end;
 
+function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
+Var
+ tp:timespec;
+begin
+ Result:=px2sce(Swgetntptimeofday(@tp,nil));
+ if (Result=0) and (tv<>nil) then
+ begin
+  tv^.tv_sec :=tp.tv_sec;
+  tv^.tv_usec:=(tp.tv_nsec div 1000);
+ end;
+end;
+
+function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 var
- FPerformanceFrequency:TLargeInteger=1;
+ pc,pf:QWORD;
+ TimeAdjustment,TimeIncrement:DWORD;
+ TimeAdjustmentDisabled:BOOL;
+begin
+ if (tp=nil) then Exit(_set_errno(EINVAL));
+ Result:=0;
+
+ case clock_id of
+  CLOCK_SECOND:
+  begin
+   tp^.tv_sec :=1;
+   tp^.tv_nsec:=0;
+  end;
+
+  CLOCK_PROCTIME,
+  CLOCK_THREAD_CPUTIME_ID,
+
+  CLOCK_REALTIME,
+  CLOCK_REALTIME_PRECISE,
+  CLOCK_REALTIME_FAST:
+   begin
+
+    TimeAdjustment:=0;
+    TimeIncrement:=0;
+    TimeAdjustmentDisabled:=false;
+
+    _sig_lock;
+    GetSystemTimeAdjustment(TimeAdjustment,TimeIncrement,TimeAdjustmentDisabled);
+    _sig_unlock;
+
+    tp^.tv_sec :=0;
+    tp^.tv_nsec:=TimeIncrement*100;
+
+    if (tp^.tv_nsec<1) then
+    begin
+     tp^.tv_nsec:=1;
+    end;
+
+   end;
+
+  CLOCK_MONOTONIC,
+  CLOCK_MONOTONIC_PRECISE,
+  CLOCK_MONOTONIC_FAST:
+   begin
+
+    SwQueryPerformanceCounter(pc,pf);
+
+    tp^.tv_sec :=0;
+    tp^.tv_nsec:=(POW10_9+(pf shr 1)) div pf;
+
+    if (tp^.tv_nsec<1) then
+    begin
+     tp^.tv_nsec:=1;
+    end;
+
+   end;
+
+  else
+   Result:=_set_errno(EINVAL);
+ end;
+
+end;
+
+//var
+// old_tp:timespec;
 
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 var
  ct,et,kt,ut:TFILETIME;
- pf,pc,tc:TLargeInteger;
+ pc,pf:QWORD;
 begin
 
- if (tp=nil) then Exit(-1);
+ if (tp=nil) then Exit(_set_errno(EINVAL));
  Result:=0;
 
  case clock_id of
@@ -208,12 +223,11 @@ begin
   CLOCK_MONOTONIC_FAST:
    begin
 
-    System.ThreadSwitch; //this stabilize timers, why? idk
-    System.ThreadSwitch;
+    //this stabilize timers, why? idk
+    //Int64(pc):=-100*100;
+    //SwDelayExecution(False,@pc); //100ms
 
-    pf:=FPerformanceFrequency;
-    pc:=0;
-    QueryPerformanceCounter(pc);
+    SwQueryPerformanceCounter(pc,pf);
 
     tp^.tv_sec :=pc div pf;
     tp^.tv_nsec:=((pc mod pf)*POW10_9+(pf shr 1)) div pf;
@@ -224,41 +238,74 @@ begin
      Dec(tp^.tv_nsec,POW10_9);
     end;
 
+    //tp^.tv_nsec:=(tp^.tv_nsec shr 8) shl 8;
+    //tp^.tv_nsec:=tp^.tv_nsec shr 2;
+
+    {
+    if (old_tp.tv_sec=tp^.tv_sec) then
+    begin
+     if (old_tp.tv_nsec>tp^.tv_nsec) then
+     begin
+      DebugBreak;
+     end;
+    end else
+    if (old_tp.tv_sec>tp^.tv_sec) then
+    begin
+     DebugBreak;
+    end;
+    old_tp:=tp^;
+    }
+
    end;
 
   CLOCK_PROCTIME:
    begin
-    if not GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then Exit(lc_set_errno(EINVAL));
-    QWORD(ct)  :=QWORD(kt)+QWORD(ut);
-    tp^.tv_sec :=QWORD(ct) div POW10_7;
-    tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+    _sig_lock;
+    if not GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then Result:=_set_errno(EINVAL);
+    _sig_unlock;
+    if (Result=0) then
+    begin
+     QWORD(ct)  :=QWORD(kt)+QWORD(ut);
+     tp^.tv_sec :=QWORD(ct) div POW10_7;
+     tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+    end;
    end;
 
   CLOCK_THREAD_CPUTIME_ID:
    begin
-    if not GetThreadTimes(GetCurrentProcess,ct,et,kt,ut) then Exit(lc_set_errno(EINVAL));
-    QWORD(ct)  :=QWORD(kt)+QWORD(ut);
-    tp^.tv_sec :=QWORD(ct) div POW10_7;
-    tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+    _sig_lock;
+    if not GetThreadTimes(GetCurrentProcess,ct,et,kt,ut) then Result:=_set_errno(EINVAL);
+    _sig_unlock;
+    if (Result=0) then
+    begin
+     QWORD(ct)  :=QWORD(kt)+QWORD(ut);
+     tp^.tv_sec :=QWORD(ct) div POW10_7;
+     tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+    end;
    end
 
   else
-   Result:=lc_set_errno(EINVAL);
+   Result:=_set_errno(EINVAL);
  end;
 
 end;
 
 function ps4_sceKernelGetTscFrequency():QWORD; SysV_ABI_CDecl;
+var
+ pc:QWORD;
 begin
- Result:=FPerformanceFrequency;
+ SwQueryPerformanceCounter(pc,Result);
 end;
 
 function ps4_sceKernelReadTsc():QWORD; SysV_ABI_CDecl;
+var
+ pf:QWORD;
 begin
- System.ThreadSwitch; //this stabilize timers, why? idk
- System.ThreadSwitch;
- Result:=0;
- QueryPerformanceCounter(TLargeInteger(Result));
+ //this stabilize timers, why? idk
+ //Int64(pf):=-100*100;
+ //SwDelayExecution(False,@pf); //100ms
+
+ SwQueryPerformanceCounter(Result,pf);
 end;
 
 function ps4_sceKernelClockGettime(clockId:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
@@ -270,14 +317,16 @@ function ps4_sceKernelGetProcessTime:QWORD; SysV_ABI_CDecl; //microseconds
 var
  ct,et,kt,ut:TFileTime;
 begin
+ _sig_lock;
  if GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then
  begin
   Result:=(QWORD(kt)+QWORD(ut)) div 10;
  end else
  begin
-  lc_set_errno(EINVAL);
+  _set_errno(EINVAL);
   Result:=0;
  end;
+ _sig_unlock;
 end;
 
 //1sec=10 000 000
@@ -287,51 +336,90 @@ end;
 
 function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
 var
- timer:THandle;
- ft:TLargeInteger;
+ timeout:Int64;
+ passed :Int64;
+ START:QWORD;
 begin
  if (req=nil) then Exit(EINVAL);
- ft:=req^.tv_nsec+req^.tv_sec*1000000000;
- ft:=-(ft div 100);
- timer:=CreateWaitableTimer(nil,True,nil);
- SetWaitableTimer(timer,ft,0,nil,nil,False);
- WaitForSingleObject(timer,INFINITE);
- CloseHandle(timer);
+
+ timeout:=_time_in_ns_from_timespec(req^);
+
+ //
+ //timeout:=((timeout+99999999) div 100000000)*100000000;
+ //
+
+ timeout:=-((timeout+99) div 100); //in 100ns
+
  if (rem<>nil) then
  begin
-  rem^:=Default(timespec);
+  SwSaveTime(START);
  end;
- Result:=0;
+
+ Case SwDelayExecution(True,@timeout) of
+  STATUS_USER_APC,
+  STATUS_KERNEL_APC,
+  STATUS_ALERTED:
+   begin
+    if (rem<>nil) then
+    begin
+     timeout:=-timeout;
+     passed:=SwTimePassedUnits(START);
+
+     if (passed>=timeout) then
+     begin
+      rem^:=Default(timespec);
+     end else
+     begin
+      timeout:=timeout-passed;
+      timeout:=timeout*100;  //100ns to ns
+      rem^.tv_sec :=timeout div POW10_9;
+      rem^.tv_nsec:=timeout mod POW10_9;
+     end;
+
+    end;
+    Result:=_set_errno(EINVAL);
+   end;
+  else
+   begin
+    if (rem<>nil) then
+    begin
+     rem^:=Default(timespec);
+    end;
+    Result:=0;
+   end;
+ end;
+
 end;
 
-function ps4_usleep(usec:Integer):Integer; SysV_ABI_CDecl;
+function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
 var
- timer:THandle;
  ft:TLargeInteger;
 begin
- ft:=-(10*usec);
- timer:=CreateWaitableTimer(nil,True,nil);
- SetWaitableTimer(timer,ft,0,nil,nil,False);
- WaitForSingleObject(timer,INFINITE);
- CloseHandle(timer);
- Result:=0;
+ //usec:=((usec+99999) div 100000)*100000;
+ //
+ ft:=-(10*usec); //in 100ns
+ Case SwDelayExecution(True,@ft) of
+  STATUS_USER_APC,
+  STATUS_KERNEL_APC,
+  STATUS_ALERTED:
+   begin
+    Result:=_set_errno(EINVAL);
+   end;
+  else
+   Result:=0;
+ end;
 end;
 
 function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl;
 var
- timer:THandle;
  ft:TLargeInteger;
 begin
- ft:=-(10*usec);
- timer:=CreateWaitableTimer(nil,True,nil);
- SetWaitableTimer(timer,ft,0,nil,nil,False);
- WaitForSingleObject(timer,INFINITE);
- CloseHandle(timer);
+ //usec:=((usec+99999) div 100000)*100000;
+ //
+ ft:=-(10*usec); //in 100ns
+ SwDelayExecution(False,@ft);
  Result:=0;
 end;
-
-initialization
- QueryPerformanceFrequency(FPerformanceFrequency);
 
 end.
 

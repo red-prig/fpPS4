@@ -320,6 +320,29 @@ type
   procedure getTiledElementByteOffset_2d_32(var outTiledByteOffset:QWORD;x,y,z:DWORD);
  end;
 
+ Tiler1d=object
+  m_minGpuMode:DWORD;
+  m_tileMode:DWORD;
+  m_arrayMode:DWORD;
+  m_linearWidth:DWORD;
+  m_linearHeight:DWORD;
+  m_linearDepth:DWORD;
+  m_paddedWidth:DWORD;
+  m_paddedHeight:DWORD;
+  m_paddedDepth:DWORD;
+  m_bitsPerElement:DWORD;
+  m_linearSizeBytes:DWORD;
+  m_tiledSizeBytes:DWORD;
+
+  m_microTileMode:DWORD;
+  m_tileThickness:DWORD;
+  m_tileBytes:DWORD;
+  m_tilesPerRow:DWORD;
+  m_tilesPerSlice:DWORD;
+
+  function  getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
+ end;
+
 {
  m_minGpuMode:1
  m_tileMode:10
@@ -355,6 +378,47 @@ type
  m_bankSwizzleMask:0
  m_pipeSwizzleMask:0
 }
+
+const
+ Texture2d_32:Tiler1d=(
+  m_minGpuMode:0       ;
+  m_tileMode:13        ;
+  m_arrayMode:2        ;
+  m_linearWidth:8      ;
+  m_linearHeight:8     ;
+  m_linearDepth:1      ;
+  m_paddedWidth:8      ;
+  m_paddedHeight:8     ;
+  m_paddedDepth:1      ;
+  m_bitsPerElement:32  ;
+  m_linearSizeBytes:256;
+  m_tiledSizeBytes:256 ;
+  m_microTileMode:1    ;
+  m_tileThickness:1    ;
+  m_tileBytes:256      ;
+  m_tilesPerRow:1      ;
+  m_tilesPerSlice:1    ;
+ );
+
+ Texture2d_8:Tiler1d=(
+  m_minGpuMode:0      ;
+  m_tileMode:13       ;
+  m_arrayMode:2       ;
+  m_linearWidth:8     ;
+  m_linearHeight:8    ;
+  m_linearDepth:1     ;
+  m_paddedWidth:32    ;
+  m_paddedHeight:8    ;
+  m_paddedDepth:1     ;
+  m_bitsPerElement:8  ;
+  m_linearSizeBytes:64;
+  m_tiledSizeBytes:256;
+  m_microTileMode:1   ;
+  m_tileThickness:1   ;
+  m_tileBytes:64      ;
+  m_tilesPerRow:4     ;
+  m_tilesPerSlice:4   ;
+ );
 
 const
  Tiler2d_1280_720_32:Tiler2d=(
@@ -1405,6 +1469,9 @@ const
  procedure detile32bppDisplaySse2(dst,src:Pointer;destPitch:DWORD); assembler; MS_ABI_CDecl;
  procedure detile32bppBuf(var T:Tiler2d;src,dst:Pointer);
 
+ function getMicroTileMode(outMicroTileMode:PByte;tmode:Byte):Integer;
+ Function computeSurfaceMacroTileMode(outMacroTileMode:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
+
 implementation
 
 function GetTiler2d(Width,m_bitsPerElement:DWORD):Tiler2d;
@@ -2128,6 +2195,62 @@ begin
  Result:=0;
 end;
 
+{
+int32_t sce::GpuAddress::TilingParameters::initFromTexture(const Gnm::Texture *texture, uint32_t mipLevel, uint32_t arraySlice)
+
+	SCE_GNM_ASSERT_MSG_RETURN(texture != 0, kStatusInvalidArgument, "texture must not be NULL.");
+	SCE_GNM_ASSERT_MSG_RETURN(mipLevel <= texture->getLastMipLevel(), kStatusInvalidArgument, "mipLevel (%u) is out of range for texture; last level is %u", mipLevel, texture->getLastMipLevel());
+	bool isCubemap = (texture->getTextureType() == Gnm::kTextureTypeCubemap);
+	bool isVolume = (texture->getTextureType() == Gnm::kTextureType3d);
+	// Building surface flags manually is error-prone, but we don't know exactly what type of texture this is.
+	m_surfaceFlags.m_value = 0;
+	Gnm::MicroTileMode microTileMode;
+	int32_t status = getMicroTileMode(&microTileMode, texture->getTileMode());
+	if (status != kStatusSuccess)
+		return status;
+	m_surfaceFlags.m_depthTarget   = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getZFormat()       != Gnm::kZFormatInvalid)) ? 1 : 0;
+	m_surfaceFlags.m_stencilTarget = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getStencilFormat() != Gnm::kStencilInvalid)) ? 1 : 0;
+	m_surfaceFlags.m_cube = isCubemap ? 1 : 0;
+	m_surfaceFlags.m_volume = isVolume ? 1 : 0;
+	m_surfaceFlags.m_pow2Pad = texture->isPaddedToPow2() ? 1 : 0;
+	if (texture->getMinimumGpuMode() == Gnm::kGpuModeNeo)
+	{
+		m_surfaceFlags.m_texCompatible = 1;
+	}
+	m_tileMode = texture->getTileMode(); // see below, though
+	m_minGpuMode = texture->getMinimumGpuMode();
+	Gnm::DataFormat dataFormat = texture->getDataFormat();
+	m_bitsPerFragment = dataFormat.getTotalBitsPerElement() / dataFormat.getTexelsPerElement();
+	m_isBlockCompressed = (dataFormat.getTexelsPerElement() > 1);
+	m_tileSwizzleMask = texture->getTileSwizzleMask();
+	m_linearWidth = std::max(texture->getWidth() >> mipLevel, 1U);
+	m_linearHeight = std::max(texture->getHeight() >> mipLevel, 1U);
+	m_linearDepth = m_surfaceFlags.m_volume ? std::max(texture->getDepth() >> mipLevel, 1U) : 1;
+	m_numFragmentsPerPixel = 1 << texture->getNumFragments();
+	m_baseTiledPitch = texture->getPitch();
+	m_mipLevel = mipLevel;
+	SCE_GNM_ASSERT_MSG_RETURN(arraySlice == 0 || !m_surfaceFlags.m_volume, kStatusInvalidArgument, "for volume textures, arraySlice must be 0."); // volume textures can't be arrays
+	uint32_t arraySliceCount = texture->getTotalArraySliceCount();
+	if (isCubemap)
+		arraySliceCount *= 6; // Cube maps store 6 faces per array slice
+	else if (isVolume)
+		arraySliceCount = 1;
+	if (texture->isPaddedToPow2())
+		arraySliceCount = nextPowerOfTwo(arraySliceCount); // array slice counts are padded to a power of two as well
+	SCE_GNM_ASSERT_MSG_RETURN(arraySlice < arraySliceCount, kStatusInvalidArgument, "arraySlice (%u) is out of range for texture (0x%p) with %u slices.", arraySlice, texture, arraySliceCount);
+	m_arraySlice = arraySlice;
+	// Use computeSurfaceInfo() to determine what array mode we REALLY need to use, since it's occasionally not the one the Texture uses.
+	// (e.g. for a 2D-tiled texture, the smaller mip levels will implicitly use a 1D array mode to cut down on wasted padding space)
+	SurfaceInfo surfInfoOut = {0};
+	status = computeSurfaceInfo(&surfInfoOut, this);
+	if (status != kStatusSuccess)
+		return status;
+	status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
+	if (status != kStatusSuccess)
+		return status;
+	return kStatusSuccess;
+}
+
 
 function TilingParameters.initFromRenderTarget(var target:TRENDER_TARGET;arraySlice:DWORD):Integer;
 var
@@ -2473,6 +2596,33 @@ begin
    Assert(false,'invalid num_banks (%u) -- must be 2, 4, 8, or 16.');
  end;
  Result:=bank;
+end;
+
+function Tiler1d.getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
+var
+ element_index:QWORD;
+ slice_offset:QWORD;
+ tile_row_index:QWORD;
+ tile_column_index:QWORD;
+ tile_offset:QWORD;
+ element_offset:QWORD;
+ final_offset:QWORD;
+begin
+ element_index := getElementIndex(x, y, z, m_bitsPerElement, m_microTileMode, m_arrayMode);
+
+ slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
+
+ tile_row_index := y div kMicroTileHeight;
+ tile_column_index := x div kMicroTileWidth;
+ tile_offset := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
+
+ element_offset := element_index * m_bitsPerElement;
+
+ final_offset := (slice_offset + tile_offset)*8 + element_offset;
+
+ outTiledBitOffset := final_offset;
+
+ Result:=0;
 end;
 
 function Tiler2d.init(var tp:TilingParameters):integer;

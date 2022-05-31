@@ -506,8 +506,6 @@ begin
  Result:=False;
  SI:=Default(TSplitInfo);
 
- //Writeln(k);
-
  if (pRoot=nil) then
  begin
   pRoot:=TStuff.new_Node;

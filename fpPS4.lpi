@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectOptions>
-    <Version Value="11"/>
+    <Version Value="12"/>
     <PathDelim Value="\"/>
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
         <MainUnitHasTitleStatement Value="False"/>
         <MainUnitHasScaledStatement Value="False"/>
+        <CompatibilityMode Value="True"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
-      <MainUnit Value="0"/>
       <Title Value="fpPS4"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
@@ -24,14 +24,13 @@
     </PublishOptions>
     <RunParams>
       <FormatVersion Value="2"/>
-      <Modes Count="0"/>
     </RunParams>
     <RequiredPackages Count="1">
       <Item1>
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="15">
+    <Units Count="35">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -97,6 +96,89 @@
         <Filename Value="vulkan\vRender.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit14>
+      <Unit15>
+        <Filename Value="ps4_libkernel\ps4_event_flag.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit15>
+      <Unit16>
+        <Filename Value="shaderext.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ShaderExt"/>
+      </Unit16>
+      <Unit17>
+        <Filename Value="vSetLayoutPool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit17>
+      <Unit18>
+        <Filename Value="vpipelinelayoutpool.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="vPipelineLayoutPool"/>
+      </Unit18>
+      <Unit19>
+        <Filename Value="vulkan\vSetsPool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit19>
+      <Unit20>
+        <Filename Value="vulkan\vCmdBuffer.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit20>
+      <Unit21>
+        <Filename Value="vulkan\vHostBufferPool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit21>
+      <Unit22>
+        <Filename Value="vulkan\vImagePool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit22>
+      <Unit23>
+        <Filename Value="vulkan\vBuffer.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit23>
+      <Unit24>
+        <Filename Value="vulkan\vSamplerPool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit24>
+      <Unit25>
+        <Filename Value="vulkan\vSampler.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit25>
+      <Unit26>
+        <Filename Value="vulkan\vShaderManager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit26>
+      <Unit27>
+        <Filename Value="vulkan\vImageTiling.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit27>
+      <Unit28>
+        <Filename Value="trace_manager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit28>
+      <Unit29>
+        <Filename Value="ps4_libkernel\ps4_signal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit29>
+      <Unit30>
+        <Filename Value="ps4_libkernel\regs_context.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit30>
+      <Unit31>
+        <Filename Value="ps4_libkernel\kernel.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit31>
+      <Unit32>
+        <Filename Value="ps4_libkernel\pthread.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="sys_pthread"/>
+      </Unit32>
+      <Unit33>
+        <Filename Value="ps4_libkernel\sys_signal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit33>
+      <Unit34>
+        <Filename Value="sys\sys_time.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit34>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -107,7 +189,8 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="ps4_libkernel;vulkan;chip"/>
+      <Libraries Value="static"/>
+      <OtherUnitFiles Value="rtl;sys;ps4_libkernel;vulkan;chip;spirv"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
@@ -119,13 +202,20 @@
       <SmartLinkUnit Value="True"/>
       <RelocatableUnit Value="True"/>
       <TargetCPU Value="x86_64"/>
-      <Optimizations>
-        <OptimizationLevel Value="3"/>
-      </Optimizations>
     </CodeGeneration>
     <Linking>
+      <Debugging>
+        <DebugInfoType Value="dsDwarf2Set"/>
+      </Debugging>
       <LinkSmart Value="True"/>
     </Linking>
+    <Other>
+      <CustomOptions Value="-dUSE_STATIC_PORTAUDIO
+-CfAVX
+-CpCOREAVX
+-OpCOREAVX
+-Sv"/>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions Count="3">

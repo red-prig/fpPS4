@@ -6,12 +6,13 @@ interface
 
 uses
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 implementation
 
 uses
- ps4_libkernel;
+ sys_kernel;
 
 const
  SCE_SYSTEM_SERVICE_PARAM_ID_LANG                =1;

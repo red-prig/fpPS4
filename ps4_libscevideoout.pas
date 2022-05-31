@@ -5,7 +5,8 @@ unit ps4_libSceVideoOut;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
+  SysUtils,
   Controls,
   ExtCtrls,
   Interfaces,
@@ -15,7 +16,7 @@ uses
 
   LFQueue,
   ps4_program,
-  ps4_types,
+  sys_types,
 
   ps4_queue,
   ps4_handles,
@@ -232,6 +233,8 @@ implementation
 
 uses
  vFlip,
+ sys_signal,
+ sys_time,
  ps4_time,
  spinlock,
  hamt;
@@ -245,6 +248,7 @@ type
   public
    lock:Pointer;
    Parent:TOnParent;
+   wait:SizeUint;
    u:record
     Case Byte of
      0:(bufferIndex:Integer;
@@ -505,6 +509,8 @@ var
  H:TVideoOut;
  node:PQNode;
 begin
+ _sig_lock;
+
  H:=TVideoOut.Create;
  node:=H.alloc_node;
 
@@ -518,12 +524,16 @@ begin
  H.Release;
 
  Writeln('sceVideoOutOpen:',userID,' ',busType);
+
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutClose(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
+ _sig_lock;
  if not FVideoOutMap.Delete(handle) then Result:=SCE_VIDEO_OUT_ERROR_INVALID_HANDLE;
+ _sig_unlock;
 end;
 
 procedure ps4_sceVideoOutSetBufferAttribute; assembler; nostackframe;
@@ -551,14 +561,14 @@ end;
 // udata:Pointer;   //udata
 //end;
 
-function ps4_sceVideoOutGetEventCount(ev:PSceKernelEvent):Integer;
+function ps4_sceVideoOutGetEventCount(ev:PSceKernelEvent):Integer; SysV_ABI_CDecl;
 begin
  if (ev=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if (ev^.filter<>SCE_KERNEL_EVFILT_VIDEO_OUT) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT);
  Result:=(ev^.data shr 12) and $F;
 end;
 
-function ps4_sceVideoOutGetEventData(ev:PSceKernelEvent;data:Pint64):Integer;
+function ps4_sceVideoOutGetEventData(ev:PSceKernelEvent;data:Pint64):Integer; SysV_ABI_CDecl;
 var
  ret:int64;
 begin
@@ -575,7 +585,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVideoOutGetEventId(ev:PSceKernelEvent):Integer;
+function ps4_sceVideoOutGetEventId(ev:PSceKernelEvent):Integer; SysV_ABI_CDecl;
 begin
  if (ev=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if (ev^.filter<>SCE_KERNEL_EVFILT_VIDEO_OUT) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT);
@@ -595,9 +605,14 @@ var
  node:PKEventNode;
 begin
  if (eq=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
+
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
+ _sig_lock;
  H.FlipEvents.LockWr;
  P:=HAMT_search64(@H.FlipEvents.hamt,QWORD(eq));
  if (P<>nil) then
@@ -611,6 +626,7 @@ begin
   begin
    H.FlipEvents.Unlock;
    H.Release;
+   _sig_unlock;
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
   node^.ev.ident :=SCE_VIDEO_OUT_EVENT_FLIP;
@@ -624,6 +640,7 @@ begin
  Result:=0;
 
  H.Release;
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutAddVblankEvent(eq:SceKernelEqueue;hVideo:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
@@ -633,9 +650,14 @@ var
  node:PKEventNode;
 begin
  if (eq=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
+
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
+ _sig_lock;
  H.VblankEvents.LockWr;
  P:=HAMT_search64(@H.VblankEvents.hamt,QWORD(eq));
  if (P<>nil) then
@@ -649,6 +671,7 @@ begin
   begin
    H.VblankEvents.Unlock;
    H.Release;
+   _sig_unlock;
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
   node^.ev.ident :=SCE_VIDEO_OUT_EVENT_VBLANK;
@@ -662,6 +685,52 @@ begin
  Result:=0;
 
  H.Release;
+ _sig_unlock;
+end;
+
+function __sceVideoOutRegisterBuffers(hVideo:Integer;
+                                    index:Integer;
+                                    addr:PPointer;
+                                    num:Integer;
+                                    attr:PSceVideoOutBufferAttribute
+                                   ):Integer;
+var
+ H:TVideoOut;
+ buf:TvPointer;
+ i,s:Integer;
+begin
+ For i:=0 to num-1 do
+  begin
+   if not TryGetHostPointerByAddr(addr[i],buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
+  end;
+
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ spin_lock(H.FBuffers.lock);
+
+ s:=index+num-1;
+ For i:=index to s do
+  begin
+   if (H.FBuffers.addr[i]<>nil) then
+   begin
+    spin_unlock(H.FBuffers.lock);
+    H.Release;
+    Exit(SCE_VIDEO_OUT_ERROR_SLOT_OCCUPIED);
+   end;
+  end;
+
+ For i:=index to s do
+  begin
+   H.FBuffers.addr[i]:=addr[i-index];
+   H.FBuffers.attr[i]:=attr^;
+  end;
+
+ spin_unlock(H.FBuffers.lock);
+
+ H.Release;
+
+ Result:=0;
 end;
 
 function ps4_sceVideoOutRegisterBuffers(hVideo:Integer;
@@ -670,10 +739,6 @@ function ps4_sceVideoOutRegisterBuffers(hVideo:Integer;
                                     num:Integer;
                                     attr:PSceVideoOutBufferAttribute
                                    ):Integer; SysV_ABI_CDecl;
-var
- H:TVideoOut;
- buf:TvPointer;
- i,s:Integer;
 begin
 
  if (addr=nil) or (attr=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
@@ -720,39 +785,13 @@ begin
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_OPTION);
  end;}
 
- For i:=0 to num-1 do
-  begin
-   //if not IsAlign(addr[i],16*1024) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
-   if not TryGetHostPointerByAddr(addr[i],buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
-  end;
-
- H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
- if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
-
- spin_lock(H.FBuffers.lock);
-
- s:=index+num-1;
- For i:=index to s do
-  begin
-   if (H.FBuffers.addr[i]<>nil) then
-   begin
-    spin_unlock(H.FBuffers.lock);
-    H.Release;
-    Exit(SCE_VIDEO_OUT_ERROR_SLOT_OCCUPIED);
-   end;
-  end;
-
- For i:=index to s do
-  begin
-   H.FBuffers.addr[i]:=addr[i-index];
-   H.FBuffers.attr[i]:=attr^;
-  end;
-
- spin_unlock(H.FBuffers.lock);
-
- H.Release;
-
- Result:=0;
+ _sig_lock;
+ Result:=__sceVideoOutRegisterBuffers(hVideo,
+                                    index,
+                                    addr,
+                                    num,
+                                    attr);
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutColorSettingsSetGamma_(P:PSceVideoOutColorSettings;
@@ -776,8 +815,6 @@ end;
 function ps4_sceVideoOutAdjustColor_(handle:Integer;
                                      pSettings:PSceVideoOutColorSettings;
                                      sizeOfSettings:DWORD):Integer; SysV_ABI_CDecl;
-const
- Single1:Single=1;
 var
  H:TVideoOut;
 begin
@@ -787,7 +824,10 @@ begin
 
  if (sizeOfSettings>3) then sizeOfSettings:=3;
 
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(handle));
+ _sig_unlock;
+
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
  Move(pSettings^.gamma,H.Fgamma,sizeOfSettings*SizeOf(Single));
@@ -796,7 +836,9 @@ begin
   H.FGpuFlip.SetGamma(H.Fgamma);
  end;
 
+ _sig_lock;
  H.Release;
+ _sig_unlock;
 
  //Writeln('AdjustColor:',handle,' ',HexStr(pSettings),' ',sizeOfSettings);
  Result:=0;
@@ -837,7 +879,9 @@ begin
  case rate of
   0..2:
     begin
+     _sig_lock;
      H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+     _sig_unlock;
      if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
      H.FlipRate:=rateTable[rate];
      H.Release;
@@ -853,7 +897,9 @@ function ps4_sceVideoOutGetFlipStatus(hVideo:Integer;status:PSceVideoOutFlipStat
 var
  H:TVideoOut;
 begin
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
  status^:=Default(SceVideoOutFlipStatus);
@@ -866,6 +912,20 @@ begin
  status^.flipPendingNum:=H.FflipPendingNum;
  status^.currentBuffer :=H.FcurrentBuffer ;
  Result:=0;
+
+ H.Release;
+end;
+
+function ps4_sceVideoOutIsFlipPending(hVideo:Integer):Integer; SysV_ABI_CDecl;
+var
+ H:TVideoOut;
+begin
+ _sig_lock;
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ Result:=H.FflipPendingNum;
 
  H.Release;
 end;
@@ -931,13 +991,18 @@ var
  addr:Pointer;
  attr:TSceVideoOutBufferAttribute;
 
- buf:TvPointer;
+ //buf:TvPointer;
+
+ elap:QWORD;
+ time:DWORD;
 begin
  bufferIndex:=node^.u.bufferIndex;
  flipMode   :=node^.u.flipMode   ;
  flipArg    :=node^.u.flipArg    ;
  _type      :=node^.u._type      ;
- free_node(node);
+
+ //node^.wait:=1;
+ //free_node(node);
 
  //Writeln('sceVideoOutSubmitFlip:',bufferIndex);
 
@@ -947,17 +1012,17 @@ begin
 
  FflipArg    :=flipArg;
 
- ps4_usleep(150);
+ //ps4_usleep(150);
 
  if (bufferIndex=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
  begin
-  ps4_usleep(150);
-  post_event_vblank(flipArg);
+  //ps4_usleep(150);
+  //post_event_vblank(flipArg);
  end else
  begin
   if (FGpuFlip=nil) then
   begin
-   ps4_usleep(150);
+   //ps4_usleep(150);
   end else
   begin
    spin_lock(FBuffers.lock);
@@ -994,8 +1059,8 @@ begin
 
 
   end;
-  post_event_vblank(flipArg);
-  post_event_flip(flipArg);
+  //post_event_vblank(flipArg);
+  //post_event_flip(flipArg);
  end;
 
  Case _type of
@@ -1007,6 +1072,51 @@ begin
      System.InterlockedDecrement(FflipPendingNum);
     end;
  end;
+
+ //FlipRate:=20;
+ if (flipMode=SCE_VIDEO_OUT_FLIP_MODE_VSYNC) then
+ if (FlipRate<>0) then
+ begin
+  time:=(1000000 div (FlipRate+5)); //+5 selected empirically
+  //time:=time-1300;
+  //time:=time-1300;
+
+  elap:=SwTimePassedUnits(Ftsc_flips);
+  elap:=(elap+9) div 10;
+
+  //elap:=elap+(elap div 100)*14;
+
+  if (elap<time) then
+  begin
+   time:=time-elap;
+  end else
+  begin
+   time:=0;
+  end;
+
+  ps4_usleep(time);
+  //Sleep(_usec2msec(time));
+
+  if (FGpuFlip<>nil) then
+  begin
+   //FGpuFlip.IsComplite(FcurrentBuffer);
+   While (not FGpuFlip.IsComplite(FcurrentBuffer)) do
+   begin
+    ps4_usleep(150);
+   end;
+  end;
+
+ end;
+
+ if (bufferIndex=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
+ begin
+  post_event_vblank(flipArg);
+ end else
+ begin
+  post_event_vblank(flipArg);
+  post_event_flip(flipArg);
+ end;
+
 
  Fcount_flips:=Fcount_flips+1;              //Number of flips completed after opening the port self
  FprocessTime:=ps4_sceKernelGetProcessTime; //Process time upon completion of the last flip
@@ -1027,6 +1137,9 @@ begin
   end;
  end;
 
+ node^.wait:=1;
+ free_node(node);
+
 end;
 
 function ps4_sceVideoOutSubmitFlip(hVideo:Integer;bufferIndex,flipMode:Integer;flipArg:Int64):Integer; SysV_ABI_CDecl;
@@ -1043,10 +1156,15 @@ begin
   Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
  end;
 
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
+ _sig_lock;
  node:=H.alloc_node;
+ _sig_unlock;
+
  if (node=nil) then
  begin
   H.Release;
@@ -1058,15 +1176,22 @@ begin
  node^.u.flipMode   :=flipMode;
  node^.u.flipArg    :=flipArg;
  node^.u._type      :=0;
+ node^.wait         :=0;
 
  System.InterlockedIncrement(H.FflipPendingNum);
 
  H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  //Writeln('submit_event_flip');
+ _sig_lock;
  Push2VideoOut(node);
 
+ wait_until_equal(node^.wait,0);
+
+ H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+
  H.Release;
+ _sig_unlock;
 end;
 
 function _qc_sceVideoOutSubmitFlip(Flip:PqcFlipInfo):Integer;
@@ -1099,6 +1224,7 @@ begin
  node^.u.flipMode   :=Flip^.flipMode;
  node^.u.flipArg    :=Flip^.flipArg;
  node^.u._type      :=1;
+ node^.wait         :=0;
 
  System.InterlockedIncrement(H.FgcQueueNum);
  System.InterlockedIncrement(H.FflipPendingNum);
@@ -1107,6 +1233,10 @@ begin
 
  //Writeln('submit_event_flip');
  Push2VideoOut(node);
+
+ wait_until_equal(node^.wait,0);
+
+ H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  H.Release;
 end;
@@ -1118,14 +1248,18 @@ var
 begin
  Result:=0;
  if (index<0) or (index>=SCE_VIDEO_OUT_CURSOR_NUM_MAX) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
  P.X:=posX; P.Y:=posY;
  System.InterlockedExchange64(QWORD(H.FCursors[index].Pos),QWORD(P));
+ _sig_lock;
  H.Release;
+ _sig_unlock;
 end;
 
-function ps4_sceVideoOutCursorEnable(hVideo:Integer;index:Integer;address:Pointer):Integer; SysV_ABI_CDecl;
+function __sceVideoOutCursorEnable(hVideo:Integer;index:Integer;address:Pointer):Integer;
 var
  H:TVideoOut;
  buf:TvPointer;
@@ -1147,7 +1281,14 @@ begin
  H.Release;
 end;
 
-function ps4_sceVideoOutCursorSetImageAddress(hVideo:Integer;index:Integer;address:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceVideoOutCursorEnable(hVideo:Integer;index:Integer;address:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=__sceVideoOutCursorEnable(hVideo,index,address);
+ _sig_unlock;
+end;
+
+function __sceVideoOutCursorSetImageAddress(hVideo:Integer;index:Integer;address:Pointer):Integer;
 var
  H:TVideoOut;
  buf:TvPointer;
@@ -1167,13 +1308,22 @@ begin
  H.Release;
 end;
 
+function ps4_sceVideoOutCursorSetImageAddress(hVideo:Integer;index:Integer;address:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=__sceVideoOutCursorSetImageAddress(hVideo,index,address);
+ _sig_unlock;
+end;
+
 function ps4_sceVideoOutCursorIsUpdatePending(hVideo:Integer;index:Integer;_type:DWORD):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
 begin
  Result:=0;
  if (index<0) or (index>=SCE_VIDEO_OUT_CURSOR_NUM_MAX) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
  Case _type of
@@ -1183,14 +1333,18 @@ begin
    Result:=SCE_VIDEO_OUT_ERROR_INVALID_VALUE;
  end;
 
+ _sig_lock;
  H.Release;
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutGetVblankStatus(hVideo:Integer;status:PSceVideoOutVblankStatus):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
 begin
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
  status^:=Default(SceVideoOutVblankStatus);
@@ -1200,7 +1354,9 @@ begin
  status^.flags         :=0;
  Result:=0;
 
+ _sig_lock;
  H.Release;
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutSetWindowModeMargins(hVideo:Integer;top,bottom:Integer):Integer; SysV_ABI_CDecl;
@@ -1230,6 +1386,7 @@ begin
  lib^.set_proc($EA43E78F9D53EB66,@ps4_sceVideoOutGetResolutionStatus);
  lib^.set_proc($0818AEE26084D430,@ps4_sceVideoOutSetFlipRate);
  lib^.set_proc($49B537770A7CD254,@ps4_sceVideoOutGetFlipStatus);
+ lib^.set_proc($CE05E27C74FD12B6,@ps4_sceVideoOutIsFlipPending);
  lib^.set_proc($538E8DC0E889A72B,@ps4_sceVideoOutSubmitFlip);
  lib^.set_proc($375EC02BCF0D743D,@ps4_sceVideoOutCursorSetPosition);
  lib^.set_proc($50F656087F2A4CCE,@ps4_sceVideoOutCursorEnable);

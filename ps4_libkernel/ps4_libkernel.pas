@@ -6,10 +6,11 @@ interface
 
 uses
   Windows,
-  ps4_map_mm,
   RWLock,
-  ps4_types,
+  sys_types,
+  ps4_map_mm,
   ps4_pthread,
+  ps4_signal,
   ps4_mutex,
   ps4_cond,
   ps4_sema,
@@ -17,147 +18,35 @@ uses
   ps4_time,
   ps4_kernel_file,
   ps4_queue,
+  ps4_event_flag,
   ps4_elf,
   ps4_program,
-  Classes, SysUtils;
 
-{$I sce_errno.inc}
-{$I errno.inc}
+  //trace_manager,
 
-function  px2sce(e:Integer):Integer;
-function  lc_set_errno(r:Integer):Integer;
+  Classes,
+  SysUtils;
 
 function  ps4_sceKernelIsNeoMode:Integer; SysV_ABI_CDecl;
 
 implementation
 
-function px2sce(e:Integer):Integer;
-begin
- case e of
-                0:Result:=0;
-  EPERM          :Result:=SCE_KERNEL_ERROR_EPERM          ;
-  ENOENT         :Result:=SCE_KERNEL_ERROR_ENOENT         ;
-  ESRCH          :Result:=SCE_KERNEL_ERROR_ESRCH          ;
-  EINTR          :Result:=SCE_KERNEL_ERROR_EINTR          ;
-  EIO            :Result:=SCE_KERNEL_ERROR_EIO            ;
-  ENXIO          :Result:=SCE_KERNEL_ERROR_ENXIO          ;
-  E2BIG          :Result:=SCE_KERNEL_ERROR_E2BIG          ;
-  ENOEXEC        :Result:=SCE_KERNEL_ERROR_ENOEXEC        ;
-  EBADF          :Result:=SCE_KERNEL_ERROR_EBADF          ;
-  ECHILD         :Result:=SCE_KERNEL_ERROR_ECHILD         ;
-  EDEADLK        :Result:=SCE_KERNEL_ERROR_EDEADLK        ;
-  ENOMEM         :Result:=SCE_KERNEL_ERROR_ENOMEM         ;
-  EACCES         :Result:=SCE_KERNEL_ERROR_EACCES         ;
-  EFAULT         :Result:=SCE_KERNEL_ERROR_EFAULT         ;
-  ENOTBLK        :Result:=SCE_KERNEL_ERROR_ENOTBLK        ;
-  EBUSY          :Result:=SCE_KERNEL_ERROR_EBUSY          ;
-  EEXIST         :Result:=SCE_KERNEL_ERROR_EEXIST         ;
-  EXDEV          :Result:=SCE_KERNEL_ERROR_EXDEV          ;
-  ENODEV         :Result:=SCE_KERNEL_ERROR_ENODEV         ;
-  ENOTDIR        :Result:=SCE_KERNEL_ERROR_ENOTDIR        ;
-  EISDIR         :Result:=SCE_KERNEL_ERROR_EISDIR         ;
-  EINVAL         :Result:=SCE_KERNEL_ERROR_EINVAL         ;
-  ENFILE         :Result:=SCE_KERNEL_ERROR_ENFILE         ;
-  EMFILE         :Result:=SCE_KERNEL_ERROR_EMFILE         ;
-  ENOTTY         :Result:=SCE_KERNEL_ERROR_ENOTTY         ;
-  ETXTBSY        :Result:=SCE_KERNEL_ERROR_ETXTBSY        ;
-  EFBIG          :Result:=SCE_KERNEL_ERROR_EFBIG          ;
-  ENOSPC         :Result:=SCE_KERNEL_ERROR_ENOSPC         ;
-  ESPIPE         :Result:=SCE_KERNEL_ERROR_ESPIPE         ;
-  EROFS          :Result:=SCE_KERNEL_ERROR_EROFS          ;
-  EMLINK         :Result:=SCE_KERNEL_ERROR_EMLINK         ;
-  EPIPE          :Result:=SCE_KERNEL_ERROR_EPIPE          ;
-  EDOM           :Result:=SCE_KERNEL_ERROR_EDOM           ;
-  ERANGE         :Result:=SCE_KERNEL_ERROR_ERANGE         ;
-  EAGAIN         :Result:=SCE_KERNEL_ERROR_EAGAIN         ;
-  EINPROGRESS    :Result:=SCE_KERNEL_ERROR_EINPROGRESS    ;
-  EALREADY       :Result:=SCE_KERNEL_ERROR_EALREADY       ;
-  ENOTSOCK       :Result:=SCE_KERNEL_ERROR_ENOTSOCK       ;
-  EDESTADDRREQ   :Result:=SCE_KERNEL_ERROR_EDESTADDRREQ   ;
-  EMSGSIZE       :Result:=SCE_KERNEL_ERROR_EMSGSIZE       ;
-  EPROTOTYPE     :Result:=SCE_KERNEL_ERROR_EPROTOTYPE     ;
-  ENOPROTOOPT    :Result:=SCE_KERNEL_ERROR_ENOPROTOOPT    ;
-  EPROTONOSUPPORT:Result:=SCE_KERNEL_ERROR_EPROTONOSUPPORT;
-  ESOCKTNOSUPPORT:Result:=SCE_KERNEL_ERROR_ESOCKTNOSUPPORT;
-  EOPNOTSUPP     :Result:=SCE_KERNEL_ERROR_EOPNOTSUPP     ;
-  EPFNOSUPPORT   :Result:=SCE_KERNEL_ERROR_EPFNOSUPPORT   ;
-  EAFNOSUPPORT   :Result:=SCE_KERNEL_ERROR_EAFNOSUPPORT   ;
-  EADDRINUSE     :Result:=SCE_KERNEL_ERROR_EADDRINUSE     ;
-  EADDRNOTAVAIL  :Result:=SCE_KERNEL_ERROR_EADDRNOTAVAIL  ;
-  ENETDOWN       :Result:=SCE_KERNEL_ERROR_ENETDOWN       ;
-  ENETUNREACH    :Result:=SCE_KERNEL_ERROR_ENETUNREACH    ;
-  ENETRESET      :Result:=SCE_KERNEL_ERROR_ENETRESET      ;
-  ECONNABORTED   :Result:=SCE_KERNEL_ERROR_ECONNABORTED   ;
-  ECONNRESET     :Result:=SCE_KERNEL_ERROR_ECONNRESET     ;
-  ENOBUFS        :Result:=SCE_KERNEL_ERROR_ENOBUFS        ;
-  EISCONN        :Result:=SCE_KERNEL_ERROR_EISCONN        ;
-  ENOTCONN       :Result:=SCE_KERNEL_ERROR_ENOTCONN       ;
-  ESHUTDOWN      :Result:=SCE_KERNEL_ERROR_ESHUTDOWN      ;
-  ETOOMANYREFS   :Result:=SCE_KERNEL_ERROR_ETOOMANYREFS   ;
-  ETIMEDOUT      :Result:=SCE_KERNEL_ERROR_ETIMEDOUT      ;
-  ECONNREFUSED   :Result:=SCE_KERNEL_ERROR_ECONNREFUSED   ;
-  ELOOP          :Result:=SCE_KERNEL_ERROR_ELOOP          ;
-  ENAMETOOLONG   :Result:=SCE_KERNEL_ERROR_ENAMETOOLONG   ;
-  EHOSTDOWN      :Result:=SCE_KERNEL_ERROR_EHOSTDOWN      ;
-  EHOSTUNREACH   :Result:=SCE_KERNEL_ERROR_EHOSTUNREACH   ;
-  ENOTEMPTY      :Result:=SCE_KERNEL_ERROR_ENOTEMPTY      ;
-  EPROCLIM       :Result:=SCE_KERNEL_ERROR_EPROCLIM       ;
-  EUSERS         :Result:=SCE_KERNEL_ERROR_EUSERS         ;
-  EDQUOT         :Result:=SCE_KERNEL_ERROR_EDQUOT         ;
-  ESTALE         :Result:=SCE_KERNEL_ERROR_ESTALE         ;
-  EREMOTE        :Result:=SCE_KERNEL_ERROR_EREMOTE        ;
-  EBADRPC        :Result:=SCE_KERNEL_ERROR_EBADRPC        ;
-  ERPCMISMATCH   :Result:=SCE_KERNEL_ERROR_ERPCMISMATCH   ;
-  EPROGUNAVAIL   :Result:=SCE_KERNEL_ERROR_EPROGUNAVAIL   ;
-  EPROGMISMATCH  :Result:=SCE_KERNEL_ERROR_EPROGMISMATCH  ;
-  EPROCUNAVAIL   :Result:=SCE_KERNEL_ERROR_EPROCUNAVAIL   ;
-  ENOLCK         :Result:=SCE_KERNEL_ERROR_ENOLCK         ;
-  ENOSYS         :Result:=SCE_KERNEL_ERROR_ENOSYS         ;
-  EFTYPE         :Result:=SCE_KERNEL_ERROR_EFTYPE         ;
-  EAUTH          :Result:=SCE_KERNEL_ERROR_EAUTH          ;
-  ENEEDAUTH      :Result:=SCE_KERNEL_ERROR_ENEEDAUTH      ;
-  EIDRM          :Result:=SCE_KERNEL_ERROR_EIDRM          ;
-  ENOMSG         :Result:=SCE_KERNEL_ERROR_ENOMSG         ;
-  EOVERFLOW      :Result:=SCE_KERNEL_ERROR_EOVERFLOW      ;
-  ECANCELED      :Result:=SCE_KERNEL_ERROR_ECANCELED      ;
-  EILSEQ         :Result:=SCE_KERNEL_ERROR_EILSEQ         ;
-  ENOATTR        :Result:=SCE_KERNEL_ERROR_ENOATTR        ;
-  EDOOFUS        :Result:=SCE_KERNEL_ERROR_EDOOFUS        ;
-  EBADMSG        :Result:=SCE_KERNEL_ERROR_EBADMSG        ;
-  EMULTIHOP      :Result:=SCE_KERNEL_ERROR_EMULTIHOP      ;
-  ENOLINK        :Result:=SCE_KERNEL_ERROR_ENOLINK        ;
-  EPROTO         :Result:=SCE_KERNEL_ERROR_EPROTO         ;
-  ENOTCAPABLE    :Result:=SCE_KERNEL_ERROR_ENOTCAPABLE    ;
-  ECAPMODE       :Result:=SCE_KERNEL_ERROR_ECAPMODE       ;
-  ENOBLK         :Result:=SCE_KERNEL_ERROR_ENOBLK         ;
-  EICV           :Result:=SCE_KERNEL_ERROR_EICV           ;
-  ENOPLAYGOENT   :Result:=SCE_KERNEL_ERROR_ENOPLAYGOENT   ;
-  EREVOKE        :Result:=SCE_KERNEL_ERROR_EREVOKE        ;
-  ESDKVERSION    :Result:=SCE_KERNEL_ERROR_ESDKVERSION    ;
-  ESTART         :Result:=SCE_KERNEL_ERROR_ESTART         ;
-  ESTOP          :Result:=SCE_KERNEL_ERROR_ESTOP          ;
- else
-  Result:=SCE_KERNEL_ERROR_UNKNOWN;
- end;
-end;
-
-var
- _error:QWORD;
-
-function lc_set_errno(r:Integer):Integer;
-begin
- if (r<>0) then
- begin
-  _error:=r;
-  Exit(-1);
- end;
- Result:=r;
-end;
+uses
+ sys_kernel,
+ sys_pthread,
+ sys_signal;
 
 function ps4___error:Pointer; SysV_ABI_CDecl;
 begin
- //Writeln('___error');
- Result:=@_error;
+ Result:=_error;
+end;
+
+function ps4_sceKernelError(i:Integer):Integer; SysV_ABI_CDecl;
+begin
+ if (i=0) then
+  Result:=0
+ else
+  Result:=i-$7ffe0000;
 end;
 
 Const
@@ -167,19 +56,32 @@ Const
 procedure ps4_stack_chk_fail; SysV_ABI_CDecl;
 begin
  Writeln('Stack overflow detected! Aborting program.');
+ DebugBreak;
 end;
 
 {$I StopNotificationReason.inc}
 
 // eStopNotificationReason
 procedure ps4_sceKernelDebugRaiseException(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
+var
+ t:pthread;
 begin
+ t:=_get_curthread;
+ if (t<>nil) then
+  Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
+ DebugBreak;
 end;
 
-procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode; assembler;
-asm
- xor %rax,%rax
+procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
+var
+ t:pthread;
+begin
+ t:=_get_curthread;
+ if (t<>nil) then
+  Writeln('RaiseThread=',t^.name);
+ Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
+ DebugBreak;
 end;
 
 //ps4 neo mode is support? (Ps4 Pro)
@@ -198,76 +100,41 @@ end;
 //   void *memblock
 //);
 
-const
- _SIG_WORDS     =4;
- _SIG_MAXSIG    =128;
- //_SIG_IDX(sig)	((sig) - 1)
- //_SIG_WORD(sig)	(_SIG_IDX(sig) >> 5)
- //_SIG_BIT(sig)	(1U << (_SIG_IDX(sig) & 31))
- //_SIG_VALID(sig)	((sig) <= _SIG_MAXSIG && (sig) > 0)
-
- SIG_BLOCK   =1;
- SIG_UNBLOCK =2;
- SIG_SETMASK =3;
-
- SIGPROCMASK_OLD         =$0001;
- SIGPROCMASK_PROC_LOCKED =$0002;
- SIGPROCMASK_PS_LOCKED   =$0004;
- SIGPROCMASK_FASTBLK     =$0008;
-
-type
- P__sigset_t=^__sigset_t;
- __sigset_t=packed record
-  __bits:array[0.._SIG_WORDS-1] of DWORD;
- end;
-
-//function sigfillset(_set:P__sigset_t):Integer;
-
-procedure ps4_sigfillset; assembler; nostackframe;
-label
- _end;
-asm
- xor %eax, %eax
- dec %eax
- test %rdi,%rdi
- je   _end
- xor %rax, %rax
- mov %rax,    (%rdi) //0+1
- mov %rax, 0x8(%rdi) //2+3
- _end:
-end;
-
-function ps4_sigprocmask(how:Integer;_set,oldset:P__sigset_t):Integer; SysV_ABI_CDecl;
-begin
- //Writeln('sigprocmask:',how);
- //if (_set<>nil) and (oldset<>nil) then oldset^:=_set^;
- Result:=0;
-end;
-
-function ps4__sigprocmask(how:QWORD;_set,oldset:P__sigset_t):Integer; cdecl; SysV_ABI_CDecl;
-begin
- //Writeln('_sigprocmask:',how);
- if (_set<>nil) and (oldset<>nil) then oldset^:=_set^;
- Result:=0;
-end;
-
-function ps4_is_signal_return(P:Pointer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('_is_signal_return:',HexStr(P));
- Result:=1;
-end;
-
-function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;P2:Integer;pOut:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;P2:Integer;info:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
 begin
- Writeln('GetModuleInfoFromAddr:',HexStr(Addr),':',P2,':',HexStr(pOut));
- node:=ps4_app.FindFileByCodeAdr(Addr);
- if (node=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if pOut<>nil then
+ if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+ _sig_lock;
+ Writeln('GetModuleInfoFromAddr:',HexStr(Addr),':',P2,':',HexStr(info));
+ node:=ps4_app.AcqureFileByCodeAdr(Addr);
+ if (node=nil) then
  begin
-  pOut^:=Telf_file(node).ModuleInfo;
+  _sig_unlock;
+  Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
+ info^:=node.GetModuleInfo;
+ node.Release;
+ _sig_unlock;
+ Result:=0;
+end;
+
+function ps4_sceKernelGetModuleInfo(handle:Integer;info:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+begin
+ if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+ _sig_lock;
+ Writeln('sceKernelGetModuleInfo:',handle,':',HexStr(info));
+ node:=ps4_app.AcqureFileByHandle(handle);
+ if (node=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+ info^:=node.GetModuleInfo;
+ node.Release;
+ _sig_unlock;
  Result:=0;
 end;
 
@@ -287,17 +154,9 @@ begin
 end;
 
 function ps4_sceKernelGetProcParam:Pointer; SysV_ABI_CDecl;
-var
- elf:Telf_file;
- Param:PSceProcParam;
 begin
- Result:=nil;
  Writeln('KernelGetProcParam');
- elf:=Telf_file(ps4_program.ps4_app.prog);
- if (elf=nil) then Exit;
- if (elf.pProcParam=0) then Exit;
- Param:=elf.mMap.pAddr+elf.pProcParam;
- Result:=Param;
+ Result:=GetProcParam;
 end;
 
 type
@@ -309,8 +168,8 @@ type
 procedure ps4_sceKernelRtldSetApplicationHeapAPI(heap_api:PAppHeapAPI); SysV_ABI_CDecl;
 begin
  Writeln('SetApplicationHeapAPI:',HexStr(heap_api));
- Writeln(HexStr(heap_api^._malloc)); //__malloc
- Writeln(HexStr(heap_api^._free)); //__free
+ Writeln(' __malloc:',HexStr(heap_api^._malloc)); //__malloc
+ Writeln('   __free:',HexStr(heap_api^._free));   //__free
 end;
 
 //registred destroy proc?
@@ -320,8 +179,11 @@ begin
  Result:=0;
 end;
 
-type
- TKernelAtexitFunc=function(param:Integer):Integer;
+function ps4___cxa_atexit(func:atexit_func;arg:Pointer;dso_handle:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('__cxa_atexit:',HexStr(func));
+ Result:=0;
+end;
 
 //registred thread atexit proc?
 function ps4_sceKernelSetThreadAtexitCount(proc:TKernelAtexitFunc):Integer; SysV_ABI_CDecl;
@@ -329,9 +191,6 @@ begin
  Writeln('sceKernelSetThreadAtexitCount:',HexStr(proc));
  Result:=0;
 end;
-
-type
- TKernelAtexitReportFunc=procedure(param:Integer);
 
 function ps4_sceKernelSetThreadAtexitReport(proc:TKernelAtexitReportFunc):Integer; SysV_ABI_CDecl;
 begin
@@ -361,46 +220,143 @@ begin
  Result:=nil;
 end;
 
-function ps4_sceKernelIsAddressSanitizerEnabled({name:Pchar}):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelIsAddressSanitizerEnabled():Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceKernelIsAddressSanitizerEnabled:'{,name});
+ Writeln('sceKernelIsAddressSanitizerEnabled');
  Result:=0;
 end;
 
-type
- SceKernelModule=Integer;
-
- PSceKernelLoadModuleOpt=^SceKernelLoadModuleOpt;
- SceKernelLoadModuleOpt=packed record
-  size:size_t;
- end;
+function ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (sdkVersion=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ sdkVersion^:=$FFFFFFFF;
+ Result:=0;
+end;
 
 //dynamic load????
 function ps4_sceKernelLoadStartModule(moduleFileName:Pchar;
                                       argc:size_t;
-                                      argp:PPchar;
+                                      argp:PPointer;
                                       flags:DWORD;
                                       pOpt:PSceKernelLoadModuleOpt;
                                       pRes:PInteger):SceKernelModule; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+ fn:RawByteString;
+ i:Integer;
 begin
+ Result:=0;
+ _sig_lock;
  Writeln('Load Lib:',moduleFileName);
- Result:=1;
+
+ fn:=_parse_filename(moduleFileName);
+
+ Writeln('Load File:',fn);
+
+ node:=LoadPs4ElfFromFile(fn);
+ if (node<>nil) then
+ begin
+  node.Acqure;
+
+  node.Prepare;
+  ps4_app.RegistredElf(node);
+  ps4_app.ResolveDepended(node);
+  ps4_app.LoadSymbolImport(nil);
+  ps4_app.ReLoadSymbolImport(Pointer(node));
+  ps4_app.InitProt;
+  ps4_app.InitThread(0);
+
+  Result:=node.Handle;
+
+  i:=node.module_start(argc,argp);
+  node.Release;
+
+  if (pRes<>nil) then pRes^:=i;
+
+  if (i<0) then Result:=SCE_KERNEL_ERROR_EINVAL;
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_ENOENT;
+ end;
+
+ _sig_unlock;
 end;
 
-function ps4_memset(ptr:Pointer;value:Integer;num:size_t):Pointer; assembler; nostackframe;
-asm
- //mov %rdx      , %rdx     //3->2
- mov %rsi      , %r8        //2->3
- mov %rdi      , %rcx       //1
- jmp FillByte
+Function ps4_sceKernelDlsym(handle:Integer;symbol:PChar;addrp:PPointer):Integer; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+ p:Pointer;
+begin
+ Result:=0;
+ if (addrp=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+
+ _sig_lock;
+
+ Writeln('sceKernelDlsym:',symbol);
+
+ node:=ps4_app.AcqureFileByHandle(handle);
+ if (node=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_KERNEL_ERROR_ESRCH);
+ end;
+
+ p:=node.get_proc_by_name(symbol);
+
+ if (p<>nil) then
+ begin
+  addrp^:=p;
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_EFAULT;
+ end;
+
+ node.Release;
+ _sig_unlock;
 end;
 
-function ps4_memcmp(buf1,buf2:Pointer;count:size_t):Integer; assembler; nostackframe;
-asm
- mov %rdx      , %r8        //3
- mov %rsi      , %rdx       //2
- mov %rdi      , %rcx       //1
- jmp  CompareByte
+Function ps4_sceKernelGetModuleList(list:PInteger;numArray:QWORD;actualNum:PQWORD):Integer; SysV_ABI_CDecl;
+var
+ i:QWORD;
+ node:TElf_node;
+begin
+ Result:=0;
+ if (list=nil) or (actualNum=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+
+ _sig_lock;
+ ps4_app.LockRd;
+
+ i:=0;
+ node:=ps4_app.FirstFile;
+ While (node<>nil) do
+ begin
+  if (i<numArray) then
+  begin
+   list[i]:=node.Handle;
+  end;
+
+  Inc(i);
+  node:=node.Next;
+ end;
+
+ ps4_app.Unlock;
+ _sig_unlock;
+
+ actualNum^:=i;
+ if (i>numArray) then Result:=SCE_KERNEL_ERROR_ENOMEM;
+
+ Writeln('sceKernelGetModuleList:',HexStr(list),' ',numArray,' ',i);
+end;
+
+function ps4_memset(ptr:Pointer;value:Integer;num:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ FillByte(ptr^,num,Byte(value));
+ Result:=ptr;
+end;
+
+function ps4_memcmp(buf1,buf2:Pointer;count:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=CompareByte(buf1^,buf2^,count);
 end;
 
 function ps4_memcpy_s(dst:Pointer;dstSize:size_t;src:Pointer;count:size_t):Integer; SysV_ABI_CDecl;
@@ -410,14 +366,14 @@ begin
  if (dst=nil) or (src=nil) then
  begin
   if (dst<>nil) then FillChar(dst^,dstSize,0);
-  lc_set_errno(EINVAL);
+  _set_errno(EINVAL);
   Exit(EINVAL);
  end;
 
  if (dstSize<count) then
  begin
   FillChar(dst^,dstSize,0);
-  lc_set_errno(ERANGE);
+  _set_errno(ERANGE);
   Exit(ERANGE);
  end;
 
@@ -432,7 +388,7 @@ begin
  if (dst=nil) or (src=nil) then
  begin
   if (dst<>nil) then dst[0]:=#0;
-  lc_set_errno(EINVAL);
+  _set_errno(EINVAL);
   Exit(EINVAL);
  end;
 
@@ -440,7 +396,7 @@ begin
  if (count>destSize) then
  begin
   dst[0]:=#0;
-  lc_set_errno(ERANGE);
+  _set_errno(ERANGE);
   Exit(ERANGE);
  end;
 
@@ -448,12 +404,10 @@ begin
  Result:=0;
 end;
 
-function ps4_memmove(dst,src:Pointer;len:size_t):Pointer; assembler; nostackframe;
-asm
- mov  %rdx, %r8  //3
- mov  %rsi, %rcx //2->1
- mov  %rdi, %rdx //1->2
- call Move
+function ps4_memcpy(dst,src:Pointer;len:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ Move(src^,dst^,len);
+ Result:=dst;
 end;
 
 const
@@ -477,22 +431,29 @@ begin
  if (capacity<=1440) then Exit;
 
  Writeln('sceLibcMspaceCreate:',name,':',HexStr(base),'..',HexStr(base+capacity));
- Result:=AllocMem(SizeOf(TSceLibcMspace));
+ Result:=SwAllocMem(SizeOf(TSceLibcMspace));
  Result^.base:=base;
  Result^.capacity:=capacity;
  Result^.count:=1440;
+
+ _sig_lock;
  rwlock_init(Result^.lock);
+ _sig_unlock;
 end;
 
 function ps4_sceLibcMspaceMalloc(msp:SceLibcMspace;size:size_t):Pointer; SysV_ABI_CDecl;
 begin
  Result:=nil;
  if (msp=nil) then Exit;
+ _sig_lock;
  rwlock_wrlock(msp^.lock);
- if (msp^.count+size)>msp^.capacity then Exit;
- Result:=msp^.base+msp^.count;
- msp^.count:=msp^.count+size;
+ if ((msp^.count+size)<=msp^.capacity) then
+ begin
+  Result:=msp^.base+msp^.count;
+  msp^.count:=msp^.count+size;
+ end;
  rwlock_unlock(msp^.lock);
+ _sig_unlock;
 end;
 
 function ps4_expf(x:Single):Single; SysV_ABI_CDecl;
@@ -541,7 +502,7 @@ begin
 end;
 
 const
- __progname:PChar='progname.elf';
+ __progname:PChar='eboot.bin'; //argv[0]
 
 Const
  Need_sceLibcInternal:QWORD=1;
@@ -550,6 +511,23 @@ Const
  _Stdout:QWORD=1;
  _Stderr:QWORD=2;
 
+function _get_proc_libSceLibcInternal(src:PLIBRARY;nid:QWORD):Pointer;
+var
+ lib:PLIBRARY;
+begin
+ Result:=nil;
+ lib:=ps4_app.GetLib('libc');
+ if (lib<>nil) then
+ begin
+  Result:=lib^.get_proc(Nid);
+ end;
+ if (Result=nil) then
+ begin
+  Result:=src^._get_proc(nid);
+ end;
+end;
+
+{
 function _get_proc_libSceLibcInternal(src:PLIBRARY;nid:QWORD):Pointer;
 var
  lib:PLIBRARY;
@@ -578,6 +556,22 @@ begin
      Result:=@ps4_expf;
     end;
    end;
+  $DC63E98D0740313C: //__cxa_guard_acquire
+   begin
+    lib:=ps4_app.GetLib('libc');
+    if (lib<>nil) then
+    begin
+     Result:=lib^.get_proc(Nid);
+    end;
+   end;
+  $F6B01E00D4F6B721: //__cxa_guard_release
+   begin
+    lib:=ps4_app.GetLib('libc');
+    if (lib<>nil) then
+    begin
+     Result:=lib^.get_proc(Nid);
+    end;
+   end;
   end;
   if (Result<>nil) then
   begin
@@ -585,6 +579,7 @@ begin
   end;
  end;
 end;
+}
 
 function Load_libSceLibcInternal(Const name:RawByteString):TElf_node;
 var
@@ -607,9 +602,11 @@ begin
  lib^.set_proc($0DF8AF3C0AE1B9C8,@ps4_memcmp);
  lib^.set_proc($3452ECF9D44918D8,@ps4_memcpy_s);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
- lib^.set_proc($437541C425E1507B,@ps4_memmove);//memcpy
+ lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($FE19F5B5C547AB94,@ps4_sceLibcMspaceCreate);
  lib^.set_proc($3898E6FD03881E52,@ps4_sceLibcMspaceMalloc);
+
+ lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
 
  lib:=Result._add_lib('libSceLibcInternalExt');
 
@@ -643,24 +640,33 @@ begin
 
  lib^.set_proc($763C713A65BAFDAC,@__progname);
  lib^.set_proc($F41703CA43E6A352,@ps4___error);
+ lib^.set_proc($0F8CA56B7BF1E2D6,@ps4_sceKernelError);
  lib^.set_proc($7FBB8EC58F663355,@ps4_stack_chk_guard);
  lib^.set_proc($3AEDE22F569BBE78,@ps4_stack_chk_fail);
  lib^.set_proc($91BC385071D2632D,@ps4_pthread_cxa_finalize);
+
+ //signal
+
  lib^.set_proc($38C0D128A019F08E,@ps4_sceKernelDebugRaiseException);
  lib^.set_proc($CC4FF05C86632E83,@ps4_sceKernelDebugRaiseExceptionOnReleaseMode);
 
  lib^.set_proc($5644C0B2B643709D,@ps4_sigfillset);
  lib^.set_proc($68F732A6D6CE899B,@ps4_sigprocmask);
- lib^.set_proc($EB1569CB415DABE2,@ps4__sigprocmask);
+ lib^.set_proc($EB1569CB415DABE2,@ps4_sigprocmask);
  lib^.set_proc($72B6F98FB9A49357,@ps4_is_signal_return);
+
+ //signal
 
  lib^.set_proc($93E017AAEDBF7817,@ps4_getpagesize);
  lib^.set_proc($04F13DB3DBD0417A,@ps4_mmap);
  lib^.set_proc($52A0C68D7039C943,@ps4_munmap);
  lib^.set_proc($B59638F9264D1610,@ps4_msync);
+ lib^.set_proc($61039FC4BE107DE5,@ps4_mprotect);
+
 
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
+ lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
  lib^.set_proc($F79F6AADACCF22B8,@ps4_sceKernelGetProcParam);
  lib^.set_proc($A7911C41E11E2401,@ps4_sceKernelRtldSetApplicationHeapAPI);
  lib^.set_proc($ACD856CFE96F38C5,@ps4_sceKernelSetThreadDtors);
@@ -668,8 +674,11 @@ begin
  lib^.set_proc($5A109CD70DC48522,@ps4_sceKernelSetThreadAtexitReport);
  lib^.set_proc($6E7671620005780D,@ps4_sceKernelGetSanitizerNewReplaceExternal);
  lib^.set_proc($8E1FBC5E22B82DE1,@ps4_sceKernelIsAddressSanitizerEnabled);
+ lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
+ lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
+ lib^.set_proc($2F01BC8379E2AB00,@ps4_sceKernelDlsym);
 
  //mutex
 
@@ -758,14 +767,29 @@ begin
 
  //cond
 
+ lib^.set_proc($98AA13C74DC74560,@ps4_pthread_condattr_init);
+ lib^.set_proc($74972E4159FAFC8C,@ps4_pthread_condattr_destroy);
+
+ lib^.set_proc($7130D8C5350D3E13,@ps4_pthread_condattr_getclock);
+ lib^.set_proc($123965680A803D9A,@ps4_pthread_condattr_setclock);
+ lib^.set_proc($874A94A92B8E982F,@ps4_pthread_condattr_getpshared);
+ lib^.set_proc($DC1A4FF39D21053E,@ps4_pthread_condattr_setpshared);
+
  lib^.set_proc($D13C959383122EDD,@ps4_pthread_cond_init);
  lib^.set_proc($9A4C767D584D32C8,@ps4_pthread_cond_broadcast);
+
+ lib^.set_proc($D8C3B2FAB51FBA14,@ps4_pthread_cond_signal);
+ lib^.set_proc($9A4C767D584D32C8,@ps4_pthread_cond_broadcast);
+
+ lib^.set_proc($3A9F130466392878,@ps4_pthread_cond_wait);
+ lib^.set_proc($DBB6C08222663A1D,@ps4_pthread_cond_timedwait);
 
  lib^.set_proc($9B9FF66EC35FBFBB,@ps4_scePthreadCondattrInit);
  lib^.set_proc($C1A3DCC58891DD60,@ps4_scePthreadCondattrDestroy);
 
  lib^.set_proc($D936FDDAABA9AE5D,@ps4_scePthreadCondInit);
  lib^.set_proc($83E3D977686269C8,@ps4_scePthreadCondDestroy);
+
  lib^.set_proc($90387F35FC6032D1,@ps4_scePthreadCondSignal);
  lib^.set_proc($58A0172785C13D0E,@ps4_scePthreadCondWait);
  lib^.set_proc($06632363199EC35C,@ps4_scePthreadCondTimedwait);
@@ -777,27 +801,71 @@ begin
 
  lib^.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit);
  lib^.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy);
+ lib^.set_proc($C2D92DFED791D6CA,@ps4_pthread_attr_init);
+ lib^.set_proc($CC772163C7EDE699,@ps4_pthread_attr_destroy);
  lib^.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize);
+ lib^.set_proc($D90D33EAB9C1AD31,@ps4_pthread_attr_setstacksize);
  lib^.set_proc($FD6ADEA6BB6ED10B,@ps4_scePthreadAttrSetdetachstate);
  lib^.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy);
  lib^.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam);
  lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
+ lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
  lib^.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
+ lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
+ lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
+ lib^.set_proc($FEAB8F6B8484254C,@ps4_scePthreadAttrGetstack);
+ lib^.set_proc($25A44CCBE41CA5E5,@ps4_scePthreadAttrGetdetachstate);
+ lib^.set_proc($5544F5652AC74F42,@ps4_pthread_attr_getdetachstate);
 
+ lib^.set_proc($C755FBE9AAD83315,@ps4_scePthreadAttrGet);
  lib^.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate);
+ lib^.set_proc($3B184807C2C1FCF4,@ps4_pthread_create);
  lib^.set_proc($E2A1AB47A7A83FD6,@ps4_scePthreadDetach);
+ lib^.set_proc($F94D51E16B57BE87,@ps4_pthread_detach);
  lib^.set_proc($A27358F41CA7FD6F,@ps4_scePthreadJoin);
+
+ lib^.set_proc($678428B15B80B00D,@ps4_pthread_once);
+ lib^.set_proc($D786CE00200D4C1A,@ps4_scePthreadOnce);
+
+ lib^.set_proc($DCFB55EA9DD0357E,@ps4_scePthreadEqual);
+ lib^.set_proc($ED7976E7B33854D2,@ps4_pthread_equal);
+
  lib^.set_proc($DE483BAD3D0D408B,@ps4_scePthreadExit);
+ lib^.set_proc($149AD3E4BB940405,@ps4_pthread_exit);
 
  lib^.set_proc($128B51F1ADC049FE,@ps4_pthread_self);
  lib^.set_proc($688F8E782CFCC6B4,@ps4_scePthreadSelf);
 
+ lib^.set_proc($1E82D558D6A70417,@ps4_getpid);
+
  lib^.set_proc($1E8C3B07C39EB7A9,@ps4_scePthreadGetname);
  lib^.set_proc($181518EF2C1D50B1,@ps4_scePthreadRename);
+
  lib^.set_proc($6EDDC24C12A61B22,@ps4_scePthreadSetaffinity);
+ lib^.set_proc($ADCAD5149B105916,@ps4_scePthreadGetaffinity);
+
+
  lib^.set_proc($D6D2B21BB465309A,@ps4_scePthreadGetprio);
  lib^.set_proc($5B41E99B65F4B8F1,@ps4_scePthreadSetprio);
+
+ lib^.set_proc($3F8D644D6512DC42,@ps4_scePthreadGetschedparam);
+ lib^.set_proc($A084454E3A082DB8,@ps4_scePthreadSetschedparam);
+
+ lib^.set_proc($08136D5CEA1E7FF1,@ps4_sched_get_priority_max);
+ lib^.set_proc($9B4892EA336C5DDB,@ps4_sched_get_priority_min);
+
  lib^.set_proc($4FBDA1CFA7DFAB4F,@ps4_scePthreadYield);
+ lib^.set_proc($0791A65432B0A67D,@ps4_pthread_yield);
+
+ lib^.set_proc($E1979959C32C015D,@ps4_pthread_cleanup_push);
+ lib^.set_proc($455C5BD12B1AE6DD,@ps4_pthread_cleanup_pop);
+ lib^.set_proc($D71BED515C75FD28,@ps4___pthread_cleanup_push_imp);
+ lib^.set_proc($896B0595831FDCAC,@ps4___pthread_cleanup_pop_imp);
+
+ lib^.set_proc($9AA50B35D8A64E7D,@ps4_pthread_key_create);
+ lib^.set_proc($E81A4466E0D3ED82,@ps4_pthread_key_delete);
+ lib^.set_proc($D3F297692EF4C72E,@ps4_pthread_getspecific);
+ lib^.set_proc($5AB38BBC7534C903,@ps4_pthread_setspecific);
 
  //thread
 
@@ -819,10 +887,21 @@ begin
 
  //queue
 
+ //event_flag
+
+ lib^.set_proc($0691686E8509A195,@ps4_sceKernelCreateEventFlag);
+ lib^.set_proc($253BC17E58586B34,@ps4_sceKernelWaitEventFlag);
+ lib^.set_proc($20E9D2BC7CEABBA0,@ps4_sceKernelSetEventFlag);
+ lib^.set_proc($EEE8411564404BAD,@ps4_sceKernelClearEventFlag);
+
+ //event_flag
+
  //time
 
  lib^.set_proc($9FCF2FC770B99D6F,@ps4_gettimeofday);
+ lib^.set_proc($B26223EDEAB3644F,@ps4_clock_getres);
  lib^.set_proc($94B313F6F240724D,@ps4_clock_gettime);
+ lib^.set_proc($7A37A471A35036AD,@ps4_sceKernelGettimeofday);
  lib^.set_proc($D63DD2DE7FED4D6E,@ps4_sceKernelGetTscFrequency);
  lib^.set_proc($FF62115023BFFCF3,@ps4_sceKernelReadTsc);
  lib^.set_proc($4018BB1C22B4DE1C,@ps4_sceKernelClockGettime);
@@ -842,18 +921,29 @@ begin
  lib^.set_proc($FABDEB305C08B55E,@ps4_sceKernelPread);
  lib^.set_proc($50AD939760D6527B,@ps4_sceKernelClose);
 
+ lib^.set_proc($C2E0ABA081A3B768,@ps4_open);
+ lib^.set_proc($6D8FCF3BA261CE14,@ps4_close);
  lib^.set_proc($171559A81000EE4B,@ps4_write);
  lib^.set_proc($0D1B81B76A6F2029,@ps4_read);
 
- lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);
+
+ lib^.set_proc($901C023EC617FE6E,@ps4_sceKernelFstat);
+ lib^.set_proc($9AA40C875CCF3D3F,@ps4_fstat);
+
+ lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
  lib^.set_proc($246322A3EDB52F87,@ps4_mkdir);
 
  //file
 
  px:=Result._add_lib('libScePosix');
  px^.MapSymbol:=lib^.MapSymbol;
+
+ lib:=Result._add_lib('libkernel_unity');
+
+ lib^.set_proc($5A4C0477737BC346,@ps4_sceKernelInstallExceptionHandler);
+ lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
 end;
 

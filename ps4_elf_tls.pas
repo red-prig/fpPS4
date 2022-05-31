@@ -5,7 +5,8 @@ unit ps4_elf_tls;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
+  SysUtils,
   Hamt;
 
 type

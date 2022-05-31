@@ -6,12 +6,13 @@ interface
 
 uses
   windows,
-  ps4_types,
+  sys_types,
   ps4_program,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 const
- NAME_MAX  =255; // max bytes in a file name
+ NAME_MAX  =255;  // max bytes in a file name
  PATH_MAX  =1024; // max bytes in pathname
  IOV_MAX   =1024; // max elements in i/o vector
  MAXNAMLEN =255;
@@ -35,24 +36,30 @@ const
  O_DIRECTORY =$00020000; // Fail if not directory
  O_EXEC      =$00040000; // Open for execute only
 
- S_IRWXU  =0000700;   // RWX mask for owner
- S_IRUSR  =0000400;   // R for owner
- S_IWUSR  =0000200;   // W for owner
- S_IXUSR  =0000100;   // X for owner
+ S_IRWXU  =&0000700;   // RWX mask for owner
+ S_IRUSR  =&0000400;   // R for owner
+ S_IWUSR  =&0000200;   // W for owner
+ S_IXUSR  =&0000100;   // X for owner
 
- S_IRWXG  =0000070;   // RWX mask for group
- S_IRGRP  =0000040;   // R for group
- S_IWGRP  =0000020;   // W for group
- S_IXGRP  =0000010;   // X for group
+ S_IRWXG  =&0000070;   // RWX mask for group
+ S_IRGRP  =&0000040;   // R for group
+ S_IWGRP  =&0000020;   // W for group
+ S_IXGRP  =&0000010;   // X for group
 
- S_IRWXO  =0000007;   // RWX mask for other
- S_IROTH  =0000004;   // R for other
- S_IWOTH  =0000002;   // W for other
- S_IXOTH  =0000001;   // X for other
+ S_IRWXO  =&0000007;   // RWX mask for other
+ S_IROTH  =&0000004;   // R for other
+ S_IWOTH  =&0000002;   // W for other
+ S_IXOTH  =&0000001;   // X for other
 
- S_IFMT   =0170000;  // type of file mask
- S_IFDIR  =0040000;  // directory
- S_IFREG  =0100000;  // regular
+ S_IFMT   =&0170000; // type of file mask
+ S_IFIFO  =&0010000; // named pipe (fifo)
+ S_IFCHR  =&0020000; // character special
+ S_IFDIR  =&0040000; // directory
+ S_IFBLK  =&0060000; // block special
+ S_IFREG  =&0100000; // regular
+ S_IFLNK  =&0120000; // symbolic link
+ S_IFSOCK =&0140000; // socket
+ S_ISVTX  =&0001000; // save swapped text even after use
 
  F_GETFL  =3;  // get file status flags
  F_SETFL  =4;  // set file status flags
@@ -109,7 +116,7 @@ const
  SCE_KERNEL_S_IRU           =(SCE_KERNEL_S_IRUSR);
 // 00555, R
 
- SCE_KERNEL_S_INONE         =0000000;
+ SCE_KERNEL_S_INONE         =&0000000;
 
  //SCE_KERNEL_S_ISDIR(m)      =S_ISDIR(m);
  //SCE_KERNEL_S_ISREG(m)      =S_ISREG(m);
@@ -145,48 +152,53 @@ const
  SCE_KERNEL_LWFS_ENABLE  =(1);
 
 type
- P_ps4_stat=^T_ps4_stat;
- T_ps4_stat=packed object
-   type
-    __dev_t=DWORD;
-    ino_t  =DWORD;
-    mode_t =Word;
-    nlink_t=Word;
-    uid_t  =DWORD;
-    gid_t  =DWORD;
-    off_t  =Int64;
-    blkcnt_t=Int64;
-    blksize_t=DWORD;
-    fflags_t =DWORD;
-   var
-    st_dev     :__dev_t   ;      // inode's device
-    st_ino     :ino_t	  ;      // inode's number
-    st_mode    :mode_t	  ;      // inode protection mode
-    st_nlink   :nlink_t	  ;      // number of hard links
-    st_uid     :uid_t	  ;      // user ID of the file's owner
-    st_gid     :gid_t	  ;      // group ID of the file's group
-    st_rdev    :__dev_t   ;      // device type
-    st_atim    :timespec  ;      // time of last access
-    st_mtim    :timespec  ;      // time of last data modification
-    st_ctim    :timespec  ;      // time of last file status change
-    st_size    :off_t	  ;      // file size, in bytes
-    st_blocks  :blkcnt_t  ;      // blocks allocated for file
-    st_blksize :blksize_t ;      // optimal blocksize for I/O
-    st_flags   :fflags_t  ;      // user defined flags for file
-    st_gen     :DWORD     ;      // file generation number
-    st_lspare  :DWORD     ;
-    st_birthtim:timespec  ;      // time of file creation
+ PSceKernelStat=^SceKernelStat;
+ SceKernelStat=packed object
+  type
+   __dev_t  =DWORD;
+   ino_t    =DWORD;
+   mode_t   =Word;
+   nlink_t  =Word;
+   uid_t    =DWORD;
+   gid_t    =DWORD;
+   off_t    =Int64;
+   blkcnt_t =Int64;
+   blksize_t=DWORD;
+   fflags_t =DWORD;
+  var
+   st_dev     :__dev_t   ;      // inode's device
+   st_ino     :ino_t     ;      // inode's number
+   st_mode    :mode_t    ;      // inode protection mode         S_IFMT.....
+   st_nlink   :nlink_t   ;      // number of hard links
+   st_uid     :uid_t     ;      // user ID of the file's owner   S_IRWXU....
+   st_gid     :gid_t     ;      // group ID of the file's group  S_IRWXG....
+   st_rdev    :__dev_t   ;      // device type
+   st_atim    :timespec  ;      // time of last access
+   st_mtim    :timespec  ;      // time of last data modification
+   st_ctim    :timespec  ;      // time of last file status change
+   st_size    :off_t     ;      // file size, in bytes
+   st_blocks  :blkcnt_t  ;      // blocks allocated for file
+   st_blksize :blksize_t ;      // optimal blocksize for I/O
+   st_flags   :fflags_t  ;      // user defined flags for file
+   st_gen     :DWORD     ;      // file generation number
+   st_lspare  :DWORD     ;
+   st_birthtim:timespec  ;      // time of file creation
  end;
 
+function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+function ps4_close(fd:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
 
-function ps4_stat(path:PChar;stat:P_ps4_stat):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelStat(path:PChar;stat:P_ps4_stat):Integer; SysV_ABI_CDecl;
+function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+
+function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
 function ps4_write(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
 function ps4_read(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
@@ -197,21 +209,71 @@ function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
 implementation
 
 uses
- ps4_libkernel;
+ sys_kernel,
+ sys_signal,
+ sys_time;
 
 function _open_osfhandle(h:THandle;flags:Integer):Integer; cdecl; external 'msvcrt';
 function _get_osfhandle(fd:Integer):THandle; cdecl; external 'msvcrt';
 function _close(fd:Integer):Integer; cdecl; external 'msvcrt';
 
+Function get_DesiredAccess(flags:Integer):DWORD;
+begin
+ Result:=0;
+ if (flags and SCE_KERNEL_O_RDWR)<>0 then
+ begin
+  Result:=GENERIC_READ or GENERIC_WRITE;
+ end else
+ if (flags and SCE_KERNEL_O_WRONLY)<>0 then
+ begin
+  Result:=GENERIC_WRITE;
+ end else
+ begin
+  Result:=GENERIC_READ;
+ end;
+
+ if (flags and SCE_KERNEL_O_APPEND)<>0 then
+ begin
+  Result:=Result or FILE_APPEND_DATA;
+ end;
+end;
+
+Function get_CreationDisposition(flags:Integer):DWORD;
+const
+ CREAT_EXCL=SCE_KERNEL_O_CREAT or SCE_KERNEL_O_EXCL;
+begin
+ Result:=0;
+ if (flags and CREAT_EXCL)=CREAT_EXCL then
+ begin
+  Result:=CREATE_NEW;
+ end else
+ if (flags and SCE_KERNEL_O_CREAT)<>0 then
+ begin
+  Result:=CREATE_ALWAYS;
+ end else
+ if (flags and SCE_KERNEL_O_TRUNC)<>0 then
+ begin
+  Result:=TRUNCATE_EXISTING;
+ end else
+ begin
+  Result:=OPEN_EXISTING;
+ end;
+end;
+
+function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(sce2px(ps4_sceKernelOpen(path,flags,mode)));
+end;
+
 function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 const
-    WR_RDWR=SCE_KERNEL_O_WRONLY or SCE_KERNEL_O_RDWR;
- CREAT_EXCL=SCE_KERNEL_O_CREAT or SCE_KERNEL_O_EXCL;
-      O_OFS=O_RDONLY or O_WRONLY or O_RDWR or O_APPEND;
+ WR_RDWR=SCE_KERNEL_O_WRONLY or SCE_KERNEL_O_RDWR;
+ O_OFS=O_RDONLY or O_WRONLY or O_RDWR or O_APPEND;
 
 var
  h:THandle;
 
+ err:DWORD;
  dwDesiredAccess:DWORD;
  dwCreationDisposition:DWORD;
 
@@ -228,43 +290,22 @@ begin
  end;
 
  if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+
+ _sig_lock;
  rp:=_parse_filename(path);
+ _sig_unlock;
+
  if (rp='') then Exit(SCE_KERNEL_ERROR_EACCES);
+
+ _sig_lock;
  wp:=UTF8Decode(rp);
+ _sig_unlock;
 
- if (flags and SCE_KERNEL_O_RDWR)<>0 then
- begin
-  dwDesiredAccess:=GENERIC_READ or GENERIC_WRITE;
- end else
- if (flags and SCE_KERNEL_O_WRONLY)<>0 then
- begin
-  dwDesiredAccess:=GENERIC_WRITE;
- end else
- begin
-  dwDesiredAccess:=GENERIC_READ;
- end;
 
- if (flags and SCE_KERNEL_O_APPEND)<>0 then
- begin
-  dwDesiredAccess:=dwDesiredAccess or FILE_APPEND_DATA;
- end;
+ dwDesiredAccess:=get_DesiredAccess(flags);
+ dwCreationDisposition:=get_CreationDisposition(flags);
 
- if (flags and CREAT_EXCL)=CREAT_EXCL then
- begin
-  dwCreationDisposition:=CREATE_NEW;
- end else
- if (flags and SCE_KERNEL_O_CREAT)<>0 then
- begin
-  dwCreationDisposition:=CREATE_ALWAYS;
- end else
- if (flags and SCE_KERNEL_O_TRUNC)<>0 then
- begin
-  dwCreationDisposition:=TRUNCATE_EXISTING;
- end else
- begin
-  dwCreationDisposition:=OPEN_EXISTING;
- end;
-
+ _sig_lock;
  h:=CreateFileW(
   PWideChar(wp),
   dwDesiredAccess,
@@ -274,22 +315,29 @@ begin
   FILE_ATTRIBUTE_NORMAL,
   0
  );
+ err:=GetLastError;
+ _sig_unlock;
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
-  Writeln(GetLastError);
-  Case GetLastError of
+  Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+  Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
-   ERROR_FILE_NOT_FOUND:Exit(SCE_KERNEL_ERROR_ENOENT);
-   ERROR_ACCESS_DENIED :Exit(SCE_KERNEL_ERROR_EACCES);
-   ERROR_FILE_EXISTS   :Exit(SCE_KERNEL_ERROR_EEXIST);
+   ERROR_FILE_NOT_FOUND   :Exit(SCE_KERNEL_ERROR_ENOENT);
+   ERROR_ACCESS_DENIED    :Exit(SCE_KERNEL_ERROR_EACCES);
+   ERROR_BUFFER_OVERFLOW  :Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+   ERROR_NOT_ENOUGH_MEMORY:Exit(SCE_KERNEL_ERROR_ENOMEM);
+   ERROR_FILE_EXISTS      :Exit(SCE_KERNEL_ERROR_EEXIST);
+   ERROR_DISK_FULL:        Exit(SCE_KERNEL_ERROR_ENOSPC);
    else
-                        Exit(SCE_KERNEL_ERROR_EIO);
+                           Exit(SCE_KERNEL_ERROR_EIO);
   end;
  end;
 
+ _sig_lock;
  Result:=_open_osfhandle(h,flags and O_OFS);
+ _sig_unlock;
 
  if (Result=-1) then
  begin
@@ -302,16 +350,21 @@ function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_
 var
  h:THandle;
 begin
+ _sig_lock;
  h:=_get_osfhandle(fd);
+ _sig_unlock;
+
  if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
 
+ _sig_lock;
  case whence of
   SCE_KERNEL_SEEK_SET:Result:=FileSeek(h,offset,fsFromBeginning);
   SCE_KERNEL_SEEK_CUR:Result:=FileSeek(h,offset,fsFromCurrent);
   SCE_KERNEL_SEEK_END:Result:=FileSeek(h,offset,fsFromEnd);
   else
-                      Exit(SCE_KERNEL_ERROR_EINVAL);
+                      Result:=SCE_KERNEL_ERROR_EINVAL;
  end;
+ _sig_unlock;
 
  if (Result=-1) then Result:=SCE_KERNEL_ERROR_EOVERFLOW;
 end;
@@ -321,20 +374,25 @@ var
  h:THandle;
  N:DWORD;
 begin
+ _sig_lock;
  h:=_get_osfhandle(fd);
+ _sig_unlock;
+
  if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
 
  if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  if (nbytes<0) or (nbytes>High(Integer)) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
  N:=0;
+ _sig_lock;
  if WriteFile(h,buf^,nbytes,N,nil) then
  begin
   Result:=N;
  end else
  begin
-  Exit(SCE_KERNEL_ERROR_EIO);
+  Result:=SCE_KERNEL_ERROR_EIO;
  end;
+ _sig_unlock;
 end;
 
 function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
@@ -342,20 +400,25 @@ var
  h:THandle;
  N:DWORD;
 begin
+ _sig_lock;
  h:=_get_osfhandle(fd);
+ _sig_unlock;
+
  if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
 
  if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  if (nbytes<0) or (nbytes>High(Integer)) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
  N:=0;
+ _sig_lock;
  if ReadFile(h,buf^,nbytes,N,nil) then
  begin
   Result:=N;
  end else
  begin
-  Exit(SCE_KERNEL_ERROR_EIO);
+  Result:=SCE_KERNEL_ERROR_EIO;
  end;
+ _sig_unlock;
 end;
 
 function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
@@ -367,103 +430,219 @@ begin
  if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  if (nbytes<0) or (nbytes>High(Integer)) or (offset<0) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ _sig_lock;
  h:=_get_osfhandle(fd);
+ _sig_unlock;
+
  if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
 
  O:=Default(TOVERLAPPED);
  PInt64(@O.Offset)^:=offset;
 
  N:=0;
+ _sig_lock;
  if ReadFile(h,buf^,nbytes,N,@O) then
  begin
   Result:=N;
  end else
  begin
-  Exit(SCE_KERNEL_ERROR_EIO);
+  Result:=SCE_KERNEL_ERROR_EIO;
  end;
+ _sig_unlock;
+end;
+
+function ps4_close(fd:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_close(fd);
+ _sig_unlock;
+ if (Result<>0) then Result:=_set_errno(EBADF);
 end;
 
 function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=_close(fd);
+ _sig_unlock;
  if (Result<>0) then Result:=SCE_KERNEL_ERROR_EBADF;
 end;
 
-type
- P_ms_stat64=^T_ms_stat64;
- T_ms_stat64=packed object
-   type
-    _dev_t=DWORD;
-    _ino_t=WORD;
-    __time64_t=QWORD;
-   var
-    st_dev:_dev_t;       //4
-    st_ino:_ino_t;       //2
-    st_mode:WORD;        //2 4
-    st_nlink:WORD;       //2
-    st_uid:WORD;         //2 4
-    st_gid:WORD;         //2
-    a1:Word;             //2 4
-    st_rdev:_dev_t;      //4
-    a2:DWORD;            //4
-    st_size:Int64;       //8
-    st_atime:__time64_t;
-    st_mtime:__time64_t;
-    st_ctime:__time64_t;
- end;
+function file_attr_to_st_mode(attr:DWORD):Word;
+begin
+ Result:=S_IRUSR;
+ if ((attr and FILE_ATTRIBUTE_DIRECTORY)<>0) then
+  Result:=Result or S_IFDIR
+ else
+  Result:=Result or S_IFREG;
 
-function _wstat64(path:PWideChar;stat:P_ms_stat64):Integer; cdecl; external 'msvcrt';
+ if ((attr and FILE_ATTRIBUTE_READONLY)=0) then
+  Result:=Result or S_IWUSR;
+end;
 
-function ps4_stat(path:PChar;stat:P_ps4_stat):Integer; SysV_ABI_CDecl;
+function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(sce2px(ps4_sceKernelStat(path,stat)));
+end;
+
+function GetFileAttributesU(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
 var
- stat_os:T_ms_stat64;
-
- rp:RawByteString;
  wp:WideString;
 begin
- //_wstat64(path:PWideChar;stat:P_ms_stat64)
-
- writeln('stat:',path);
-
- if (path=nil) then Exit(EINVAL);
- if (path[0]=#0) then Exit(ENOENT);
- rp:=_parse_filename(path);
- if (rp='') then Exit(EACCES);
- wp:=UTF8Decode(rp);
-
- stat_os:=Default(T_ms_stat64);
- Result:=_wstat64(PWideChar(wp),@stat_os);
- if (Result<>0) then
+ Result:=0;
+ _sig_lock;
+ wp:=UTF8Decode(lpFileName);
+ if not GetFileAttributesExW(PWideChar(wp),GetFileExInfoStandard,lpFileInformation) then
  begin
-  Writeln(GetLastError);
-  Case GetLastError of
-   ERROR_FILE_NOT_FOUND:Exit(SCE_KERNEL_ERROR_ENOENT);
-   ERROR_PATH_NOT_FOUND:Exit(SCE_KERNEL_ERROR_ENOTDIR);
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+var
+ rp:RawByteString;
+ hfi:WIN32_FILE_ATTRIBUTE_DATA;
+ err:DWORD;
+begin
+ if (path=nil) or (stat=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+
+ stat^:=Default(SceKernelStat);
+
+ _sig_lock;
+ rp:=_parse_filename(path);
+ _sig_unlock;
+
+ if (rp='') then Exit(SCE_KERNEL_ERROR_EACCES);
+
+ hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
+ err:=GetFileAttributesU(rp,@hfi);
+ if (err<>0) then
+ begin
+  Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+  Case err of
+   ERROR_ACCESS_DENIED,
+   ERROR_SHARING_VIOLATION,
+   ERROR_LOCK_VIOLATION,
+   ERROR_SHARING_BUFFER_EXCEEDED:
+     Exit(SCE_KERNEL_ERROR_EACCES);
+
+   ERROR_BUFFER_OVERFLOW:
+     Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+
+   ERROR_NOT_ENOUGH_MEMORY:
+     Exit(SCE_KERNEL_ERROR_ENOMEM);
+
    else
-                        Exit(SCE_KERNEL_ERROR_EIO);
+     Exit(SCE_KERNEL_ERROR_ENOENT);
   end;
  end;
 
- if (stat<>nil) then
- begin
-  stat^:=Default(T_ps4_stat);
-  stat^.st_dev        :=stat_os.st_dev;
-  stat^.st_ino        :=stat_os.st_ino;
-  stat^.st_mode       :=stat_os.st_mode;
-  stat^.st_nlink      :=stat_os.st_nlink;
-  stat^.st_uid        :=stat_os.st_uid;
-  stat^.st_gid        :=stat_os.st_gid;
-  stat^.st_rdev       :=stat_os.st_rdev;
-  stat^.st_atim.tv_sec:=stat_os.st_atime;
-  stat^.st_mtim.tv_sec:=stat_os.st_mtime;
-  stat^.st_ctim.tv_sec:=stat_os.st_ctime;
-  stat^.st_size       :=stat_os.st_size;
- end;
+ stat^.st_mode :=file_attr_to_st_mode(hfi.dwFileAttributes);
+ stat^.st_size :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
+
+ stat^.st_atim:=filetime_to_timespec(hfi.ftLastAccessTime);
+ stat^.st_mtim:=filetime_to_timespec(hfi.ftLastWriteTime);
+ stat^.st_ctim:=stat^.st_mtim;
+ stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
+
+ Result:=0;
 end;
 
-function ps4_sceKernelStat(path:PChar;stat:P_ps4_stat):Integer; SysV_ABI_CDecl;
+function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 begin
- Result:=px2sce(ps4_stat(path,stat));
+ Result:=_set_errno(sce2px(ps4_sceKernelFstat(fd,stat)));
+end;
+
+function _GetFileType(hFile:HANDLE):DWORD;
+begin
+ _sig_lock;
+ Result:=GetFileType(hFile);
+ _sig_unlock;
+end;
+
+function _GetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
+begin
+ Result:=0;
+ _sig_lock;
+ if not GetFileInformationByHandle(hFile,lpFileInformation) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+var
+ h:THandle;
+ hfi:TByHandleFileInformation;
+ err:DWORD;
+begin
+ if (stat=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ stat^:=Default(SceKernelStat);
+
+ _sig_lock;
+ h:=_get_osfhandle(fd);
+ _sig_unlock;
+
+ if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ Case _GetFileType(h) of
+  FILE_TYPE_PIPE:
+    begin
+     stat^.st_dev  :=fd;
+     stat^.st_rdev :=fd;
+     stat^.st_mode :=S_IFIFO;
+     stat^.st_nlink:=1;
+    end;
+  FILE_TYPE_CHAR:
+    begin
+     stat^.st_dev  :=fd;
+     stat^.st_rdev :=fd;
+     stat^.st_mode :=S_IFCHR;
+     stat^.st_nlink:=1;
+    end;
+  FILE_TYPE_DISK:
+    begin
+     err:=_GetFileInformationByHandle(h,@hfi);
+     if (err<>0) then
+     begin
+      Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+      Case err of
+       ERROR_ACCESS_DENIED,
+       ERROR_SHARING_VIOLATION,
+       ERROR_LOCK_VIOLATION,
+       ERROR_SHARING_BUFFER_EXCEEDED:
+         Exit(SCE_KERNEL_ERROR_EACCES);
+
+       ERROR_BUFFER_OVERFLOW:
+         Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+
+       ERROR_NOT_ENOUGH_MEMORY:
+         Exit(SCE_KERNEL_ERROR_ENOMEM);
+
+       else
+         Exit(SCE_KERNEL_ERROR_ENOENT);
+      end;
+     end;
+
+     stat^.st_mode :=file_attr_to_st_mode(hfi.dwFileAttributes);
+     stat^.st_size :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
+     stat^.st_nlink:=Word(hfi.nNumberOfLinks);
+     stat^.st_gen  :=hfi.nFileIndexLow;
+
+     stat^.st_atim:=filetime_to_timespec(hfi.ftLastAccessTime);
+     stat^.st_mtim:=filetime_to_timespec(hfi.ftLastWriteTime);
+     stat^.st_ctim:=stat^.st_mtim;
+     stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
+    end;
+
+  else
+   Exit(SCE_KERNEL_ERROR_EBADF);
+ end;
+
+ Result:=0;
 end;
 
 function GetStr(p:Pointer;L:SizeUint):RawByteString;
@@ -476,20 +655,25 @@ var
  h:THandle;
  N:DWORD;
 begin
- if (data=nil) then Exit(lc_set_errno(EFAULT));
- if (size>High(Integer)) then Exit(lc_set_errno(EINVAL));
+ if (data=nil) then Exit(_set_errno(EFAULT));
+ if (size>High(Integer)) then Exit(_set_errno(EINVAL));
 
+ _sig_lock;
  h:=_get_osfhandle(fd);
- if (h=INVALID_HANDLE_VALUE) then Exit(lc_set_errno(EBADF));
+ _sig_unlock;
+
+ if (h=INVALID_HANDLE_VALUE) then Exit(_set_errno(EBADF));
 
  N:=0;
+ _sig_lock;
  if WriteFile(h,data^,size,N,nil) then
  begin
   Result:=N;
  end else
  begin
-  Exit(lc_set_errno(EIO));
+  Result:=_set_errno(EIO);
  end;
+ _sig_unlock;
 end;
 
 function ps4_read(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
@@ -497,32 +681,86 @@ var
  h:THandle;
  N:DWORD;
 begin
- if (data=nil) then Exit(lc_set_errno(EFAULT));
- if (size>High(Integer)) then Exit(lc_set_errno(EINVAL));
+ if (data=nil) then Exit(_set_errno(EFAULT));
+ if (size>High(Integer)) then Exit(_set_errno(EINVAL));
 
+ _sig_lock;
  h:=_get_osfhandle(fd);
- if (h=INVALID_HANDLE_VALUE) then Exit(lc_set_errno(EBADF));
+ _sig_unlock;
+
+ if (h=INVALID_HANDLE_VALUE) then Exit(_set_errno(EBADF));
 
  N:=0;
+ _sig_lock;
  if ReadFile(h,data^,size,N,nil) then
  begin
   Result:=N;
  end else
  begin
-  Exit(lc_set_errno(EIO));
+  Result:=_set_errno(EIO);
  end;
+ _sig_unlock;
 end;
 
-// nop nid:libkernel:0D1B81B76A6F2029:_read ps4_write
+Function _CreateDir(Const NewDir:RawByteString):Boolean;
+var
+ err:DWORD;
+begin
+ _sig_lock;
+ Result:=CreateDir(NewDir);
+ err:=GetLastError;
+ _sig_unlock;
+ SetLastError(err);
+end;
 
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 var
  fn:RawByteString;
 begin
  Result:=0;
+
+ if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+
  Writeln('sceKernelMkdir:',path,'(',OctStr(mode,3),')');
+
+ _sig_lock;
  fn:=_parse_filename(path);
- if not CreateDir(fn) then Result:=-1;
+ _sig_unlock;
+
+ if (fn='') then Exit(SCE_KERNEL_ERROR_EACCES);
+
+ if not _CreateDir(fn) then
+ begin
+  Case GetLastError() of
+   ERROR_INVALID_DRIVE,
+   ERROR_PATH_NOT_FOUND,
+   ERROR_FILE_NOT_FOUND:
+     Exit(SCE_KERNEL_ERROR_ENOENT);
+
+   ERROR_ACCESS_DENIED,
+   ERROR_SHARING_VIOLATION,
+   ERROR_LOCK_VIOLATION,
+   ERROR_SHARING_BUFFER_EXCEEDED:
+     Exit(SCE_KERNEL_ERROR_EACCES);
+
+   ERROR_BUFFER_OVERFLOW:
+     Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+
+   ERROR_NOT_ENOUGH_MEMORY:
+     Exit(SCE_KERNEL_ERROR_ENOMEM);
+
+   ERROR_FILE_EXISTS:
+     Exit(SCE_KERNEL_ERROR_EEXIST);
+
+   ERROR_DISK_FULL:
+     Exit(SCE_KERNEL_ERROR_ENOSPC);
+
+   else
+     Exit(SCE_KERNEL_ERROR_EIO);
+  end;
+ end;
+
 end;
 
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
@@ -530,9 +768,49 @@ var
  fn:RawByteString;
 begin
  Result:=0;
+
+ if (path=nil) then Exit(_set_errno(EINVAL));
+ if (path[0]=#0) then Exit(_set_errno(ENOENT));
+
  Writeln('mkdir:',path);
+
+ _sig_lock;
  fn:=_parse_filename(path);
- if not CreateDir(fn) then Result:=-1;
+ _sig_unlock;
+
+ if (fn='') then Exit(_set_errno(EACCES));
+
+ if not _CreateDir(fn) then
+ begin
+  Case GetLastError() of
+   ERROR_INVALID_DRIVE,
+   ERROR_PATH_NOT_FOUND,
+   ERROR_FILE_NOT_FOUND:
+     Exit(_set_errno(ENOENT));
+
+   ERROR_ACCESS_DENIED,
+   ERROR_SHARING_VIOLATION,
+   ERROR_LOCK_VIOLATION,
+   ERROR_SHARING_BUFFER_EXCEEDED:
+     Exit(_set_errno(EACCES));
+
+   ERROR_BUFFER_OVERFLOW:
+     Exit(_set_errno(ENAMETOOLONG));
+
+   ERROR_NOT_ENOUGH_MEMORY:
+     Exit(_set_errno(ENOMEM));
+
+   ERROR_FILE_EXISTS:
+     Exit(_set_errno(EEXIST));
+
+   ERROR_DISK_FULL:
+     Exit(_set_errno(ENOSPC));
+
+   else
+     Exit(_set_errno(EIO));
+  end;
+ end;
+
 end;
 
 end.

@@ -8,8 +8,9 @@ uses
   Windows,
   g23tree,
   RWLock,
-  ps4_types,
-  Classes, SysUtils;
+  sys_types,
+  Classes,
+  SysUtils;
 
 Const
  SCE_KERNEL_MAIN_DMEM_SIZE=$180000000;
@@ -83,6 +84,7 @@ function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pP
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
 function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
+function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
 
 type
  TGpuMemAlloc=function(addr:Pointer;len:size_t):Pointer;
@@ -109,7 +111,8 @@ Procedure UnRegistredStack;
 implementation
 
 uses
- ps4_libkernel;
+ sys_kernel,
+ sys_signal;
 
 const
  INVALID_DIRECT=QWORD(-1);
@@ -160,6 +163,18 @@ type
   info:TnodeInfo;
  end;
 
+ PBlockBig=^TBlockBig;
+ TBlockBig=object(TBlock)
+  direct:QWORD;
+  Handle:Pointer;
+  prot:Byte;
+ end;
+
+ PBlock64k=^TBlock64k;
+ TBlock64k=object(TBlock)
+  nodes:array[0..3] of TdnodeAdr;
+ end;
+
 function IsPowerOfTwo(x:QWORD):Boolean; inline;
 begin
  Result:=(x and (x - 1))=0;
@@ -173,6 +188,8 @@ end;
 function __map_sce_prot_page(prot:LongInt):DWORD;
 begin
  Result:=0;
+ if (prot=0) then Exit(PAGE_NOACCESS);
+
  if (prot and SCE_KERNEL_PROT_CPU_EXEC)<>0 then
  begin
   if (prot and (SCE_KERNEL_PROT_CPU_WRITE or SCE_KERNEL_PROT_GPU_WRITE) )<>0 then
@@ -199,7 +216,7 @@ end;
 function __map_mmap_prot_page(prot:LongInt):DWORD;
 begin
  Result:=0;
- if (prot=PROT_NONE) then Exit;
+ if (prot=PROT_NONE) then Exit(PAGE_NOACCESS);
 
  if (prot and PROT_EXEC)<>0 then
  begin
@@ -222,6 +239,28 @@ begin
  begin
   Result:=PAGE_READONLY;
  end;
+end;
+
+function str_mem_type(memoryType:Integer):RawByteString;
+begin
+ Result:='';
+ Case memoryType of
+  SCE_KERNEL_WB_ONION :Result:='WB_ONION';
+  SCE_KERNEL_WC_GARLIC:Result:='WC_GARLIC';
+  SCE_KERNEL_WB_GARLIC:Result:='WB_GARLIC';
+  else
+                       Result:=IntToStr(memoryType);
+ end;
+end;
+
+function test_KP_flags(flags:Integer):RawByteString;
+begin
+ Result:='';
+ if (flags and SCE_KERNEL_PROT_CPU_READ) <>0 then Result:=Result+' CPU_READ';
+ if (flags and SCE_KERNEL_PROT_CPU_WRITE)<>0 then Result:=Result+' CPU_WRIT';
+ if (flags and SCE_KERNEL_PROT_CPU_EXEC) <>0 then Result:=Result+' CPU_EXEC';
+ if (flags and SCE_KERNEL_PROT_GPU_READ) <>0 then Result:=Result+' GPU_READ';
+ if (flags and SCE_KERNEL_PROT_GPU_WRITE)<>0 then Result:=Result+' GPU_WRIT';
 end;
 
 //
@@ -360,18 +399,6 @@ begin
 end;
 
 type
- PBlockBig=^TBlockBig;
- TBlockBig=object(TBlock)
-  direct:QWORD;
-  Handle:Pointer;
-  prot:Byte;
- end;
-
- PBlock64k=^TBlock64k;
- TBlock64k=object(TBlock)
-  nodes:array[0..3] of TdnodeAdr;
- end;
-
  TBlockCompare=object
   function c(const a,b:PBlock):Integer; static;
  end;
@@ -660,13 +687,85 @@ end;
 function TPageMM._TryGetMapBlockByAddr(addr:Pointer;var _pblock:PBlock):Boolean;
 var
  It:TBlockSet.Iterator;
+ i:Integer;
 begin
  Result:=False;
  It:=FMapBlockSet.find_le(@addr);
- if (It.Item=nil) then Exit;
+ //if (It.Item=nil) then Exit;
+
+ if (It.Item=nil) then
+ begin
+  Writeln('Memory dump:',HexStr(addr));
+  It:=FMapBlockSet.cbegin;
+  While (It.Item<>nil) do
+  begin
+   _pblock:=It.Item^;
+   if (_pblock<>nil) then
+   begin
+    Case _pblock^.bType of
+      BT_STACK:
+       begin
+        Writeln('[BT_STACK]');
+        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
+        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
+       end;
+      BT_DIRECT_BIG:
+       begin
+        Writeln('[BT_DIRECT_BIG]');
+        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
+        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
+        Writeln(' direct:',HexStr(PBlockBig(_pblock)^.direct,16));
+        Writeln(' Handle:',HexStr(PBlockBig(_pblock)^.Handle));
+        Writeln(' prot:',test_KP_flags(PBlockBig(_pblock)^.prot));
+       end;
+      BT_DIRECT_64K:
+       begin
+        Writeln('[BT_DIRECT_64K]');
+        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
+        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
+
+        For i:=0 to 3 do
+        begin
+         Writeln(' [node]:',i);
+         Writeln('  direct:'    ,HexStr(PBlock64k(_pblock)^.nodes[i].direct,16));
+         Writeln('  info.id:'   ,HexStr(PBlock64k(_pblock)^.nodes[i].info.id,2));
+         Writeln('  info.prot:' ,test_KP_flags(PBlock64k(_pblock)^.nodes[i].info.prot));
+         Writeln('  info.state:',PBlock64k(_pblock)^.nodes[i].info.state);
+         Writeln('  info.len:'  ,PBlock64k(_pblock)^.nodes[i].info.len);
+        end;
+
+       end;
+      BT_PHYSIC_BIG:
+       begin
+        Writeln('[BT_PHYSIC_BIG]');
+        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
+        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
+       end;
+      BT_PHYSIC_64K:
+       begin
+        Writeln('[BT_PHYSIC_64K]');
+        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
+        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
+       end;
+
+     else;
+    end;
+   end;
+
+   It.Next;
+  end;
+  Writeln('------------');
+  Assert(false);
+  Exit;
+ end;
+
  _pblock:=It.Item^;
  if (_pblock=nil) then Exit;
- if (_pblock^.pAddr>addr) or (_pblock^.pAddr+_pblock^.nSize<=addr) then Exit;
+ if (_pblock^.pAddr>addr) or (_pblock^.pAddr+_pblock^.nSize<=addr) then
+ begin
+  _pblock:=nil;
+  Exit;
+ end;
  Result:=True;
 end;
 
@@ -1066,18 +1165,6 @@ end;
 
 //function sceKernelReleaseDirectMemory(physicalAddr:Pointer;length:Int64):Int64; cdecl;
 
-function str_mem_type(memoryType:Integer):RawByteString;
-begin
- Result:='';
- Case memoryType of
-  SCE_KERNEL_WB_ONION :Result:='WB_ONION';
-  SCE_KERNEL_WC_GARLIC:Result:='WC_GARLIC';
-  SCE_KERNEL_WB_GARLIC:Result:='WB_GARLIC';
-  else
-                       Result:=IntToStr(memoryType);
- end;
-end;
-
 function ps4_sceKernelAllocateDirectMemory(
            searchStart:QWORD;
            searchEnd:QWORD;
@@ -1105,6 +1192,7 @@ begin
  Adr.bType:=memoryType;
 
  Result:=0;
+ _sig_lock;
  rwlock_wrlock(PageMM.FLock);
 
  repeat
@@ -1128,6 +1216,7 @@ begin
   if (Adr.pAddr>=Pointer(searchEnd)) then
   begin
    rwlock_unlock(PageMM.FLock);
+   _sig_unlock;
    Exit(SCE_KERNEL_ERROR_EAGAIN);
   end;
 
@@ -1136,20 +1225,11 @@ begin
  PageMM.FDirectAdrSet.Insert(Adr);
 
  rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
 
  physicalAddrDest^:=QWORD(Adr.pAddr);
 
  Result:=0;
-end;
-
-function test_KP_flags(flags:Integer):RawByteString;
-begin
- Result:='';
- if (flags and SCE_KERNEL_PROT_CPU_READ) <>0 then Result:=Result+' CPU_READ';
- if (flags and SCE_KERNEL_PROT_CPU_WRITE)<>0 then Result:=Result+' CPU_WRIT';
- if (flags and SCE_KERNEL_PROT_CPU_EXEC) <>0 then Result:=Result+' CPU_EXEC';
- if (flags and SCE_KERNEL_PROT_GPU_READ) <>0 then Result:=Result+' GPU_READ';
- if (flags and SCE_KERNEL_PROT_GPU_WRITE)<>0 then Result:=Result+' GPU_WRIT';
 end;
 
 {
@@ -1204,7 +1284,9 @@ begin
   R:=nil;
  end;
 
+ _sig_lock;
  R:=PageMM.mmap_d(R,length,alignment,physicalAddr,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
+ _sig_unlock;
  //Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
  virtualAddrDest^:=R;
 
@@ -1242,10 +1324,11 @@ begin
 
  //Writeln('AddrSrc:',HexStr(virtualAddrDest^));
 
- Writeln(length,' ',
+ Writeln('length:',HexStr(length,16),' ',
          test_KP_flags(protections),' ',
-         flags,' ',
-         name);
+         'flags:',flags);
+ Writeln('length:',HexStr(length,16),' ',
+         'name:',name);
 
  if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit;
  if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
@@ -1258,7 +1341,9 @@ begin
   R:=nil;
  end;
 
+ _sig_lock;
  R:=PageMM.mmap_d(R,length,0,INVALID_DIRECT,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
+ _sig_unlock;
 
  Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
  virtualAddrDest^:=R;
@@ -1292,9 +1377,10 @@ begin
 
  //Writeln('AddrSrc:',HexStr(virtualAddrDest^));
 
- Writeln(length,' ',
+ Writeln('length:',HexStr(length,16),' ',
          test_KP_flags(protections),' ',
-         flags);
+         'flags:',flags);
+ Writeln('length:',HexStr(length,16));
 
  if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit;
  if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
@@ -1307,7 +1393,10 @@ begin
   R:=nil;
  end;
 
+ _sig_lock;
  R:=PageMM.mmap_d(R,length,0,INVALID_DIRECT,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
+ _sig_unlock;
+
  //Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
  virtualAddrDest^:=R;
 
@@ -1343,7 +1432,9 @@ begin
  if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
  if not IsAlign(len,LOGICAL_PAGE_SIZE) then Exit;
 
+ _sig_lock;
  if PageMM.unmap(addr,len) then Result:=0;
+ _sig_unlock;
 end;
 
 //flex
@@ -1352,7 +1443,9 @@ begin
  Result:=SCE_KERNEL_ERROR_EACCES;
  //Writeln(HexStr(addr));
  //addr:=AlignDw(addr,LOGICAL_PAGE_SIZE);
+ _sig_lock;
  if PageMM.QueryProt(addr,pStart,pEnd,pProt) then Result:=0;
+ _sig_unlock;
 end;
 
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
@@ -1393,7 +1486,9 @@ begin
   Exit;
  end;
 
+ _sig_lock;
  map:=VirtualAlloc(addr,len,MEM_COMMIT or MEM_RESERVE,Protect);
+ _sig_unlock;
 
  if (map=nil) then
  begin
@@ -1414,24 +1509,30 @@ begin
  if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
 
  Info:=Default(TMemoryBasicInformation);
+ _sig_lock;
  if (VirtualQuery(addr,Info,len)=0) then
  begin
-  Writeln(GetLastError);
+  _sig_unlock;
+  Writeln('GetLastError:',GetLastError);
   Exit;
  end;
+ _sig_unlock;
  if (Info._Type=MEM_FREE) then
  begin
-  Writeln(GetLastError);
+  Writeln('GetLastError:',GetLastError);
   Exit;
  end;
 
  Assert((Info.BaseAddress=Info.AllocationBase) and (Info.RegionSize=len),'partial unmap not impliment!');
 
+ _sig_lock;
  if not VirtualFree(addr,0,MEM_RELEASE) then
  begin
-  Writeln(GetLastError);
+  _sig_unlock;
+  Writeln('GetLastError:',GetLastError);
   Exit;
  end;
+ _sig_unlock;
 
  Result:=0;
 end;
@@ -1440,6 +1541,27 @@ function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDec
 begin
  //Writeln('msync:',HexStr(addr));
  System.ReadWriteBarrier;
+ Result:=0;
+end;
+
+function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
+Var
+ newprotect,oldprotect:DWORD;
+begin
+
+ newprotect:=__map_mmap_prot_page(prot);
+ oldprotect:=0;
+
+ _sig_lock;
+ if not VirtualProtect(addr,len,newprotect,oldprotect) then
+ begin
+  _sig_unlock;
+  Writeln('GetLastError:',GetLastError);
+  Exit;
+ end;
+ _sig_unlock;
+
+
  Result:=0;
 end;
 
