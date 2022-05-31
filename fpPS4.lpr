@@ -375,6 +375,9 @@ begin
  //ps4_app.app_path:='G:\Games\MOMODORA\CUSA05694\';
  //ps4_app.app_file:='G:\Games\MOMODORA\CUSA05694\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\MOMODORA\CUSA05694\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\MOMODORA\CUSA05694\eboot.bin';
+
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\We.Are.Doomed.PS4-PRELUDE\CUSA02394\eboot.bin';
 

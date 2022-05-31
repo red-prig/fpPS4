@@ -786,7 +786,7 @@ begin
   COLOR_8_8_8_8:
    Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
     NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
-    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
+    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM{VK_FORMAT_R8G8B8A8_SRGB};
     else
      Assert(false,'TODO');
    end;
