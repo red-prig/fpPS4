@@ -421,7 +421,7 @@ begin
  r:=FQueue.QueueSubmit(1,@info,FFence);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkQueueSubmit');
+  Writeln('vkQueueSubmit:',r);
   exit;
  end;
 end;

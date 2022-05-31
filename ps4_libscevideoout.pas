@@ -1079,7 +1079,7 @@ begin
  if (flipMode=SCE_VIDEO_OUT_FLIP_MODE_VSYNC) then
  if (FlipRate<>0) then
  begin
-  time:=(1000000 div (FlipRate+5)); //+5 selected empirically
+  time:=(1000000 div (FlipRate+1)); //+5 selected empirically
   //time:=time-1300;
   //time:=time-1300;
 

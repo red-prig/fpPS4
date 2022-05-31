@@ -152,12 +152,59 @@ begin
   Result:=1;}
 end;
 
-Constructor TvMemManager.Create;
+const
+ buf_ext:TVkExternalMemoryBufferCreateInfo=(
+  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
+  pNext:nil;
+  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
+ );
+
+function GetHostMappedRequirements:TVkMemoryRequirements;
+var
+ cinfo:TVkBufferCreateInfo;
+ r:TVkResult;
+ FHandle:TVkBuffer;
 begin
+ Result:=Default(TVkMemoryRequirements);
+
+ cinfo:=Default(TVkBufferCreateInfo);
+ cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+ cinfo.size       :=4*1024;
+ cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+ cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
+ cinfo.pNext      :=@buf_ext;
+
+ r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r=VK_SUCCESS) then
+ begin
+  vkGetBufferMemoryRequirements(Device.FHandle,FHandle,@Result);
+  vkDestroyBuffer(Device.FHandle,FHandle,nil);
+ end;
+
+end;
+
+Constructor TvMemManager.Create;
+var
+ mr:TVkMemoryRequirements;
+ i:Byte;
+begin
+ mr:=GetHostMappedRequirements;
+
+ Writeln('[HostMappedRequirements]');
+ Writeln('  alignment=',mr.alignment);
+
+ Write('  memoryType=');
+ For i:=0 to 31 do
+ if ((1 shl i) and (mr.memoryTypeBits))<>0 then
+ begin
+  Write(i,',');
+ end;
+ Writeln;
+
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);
 
- FHostVisibMt:=findMemoryType($FFFFFFFF,
+ FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
                               ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) or
                               ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
@@ -165,7 +212,7 @@ begin
 
  if (FHostVisibMt=DWORD(-1)) then
  begin
-  FHostVisibMt:=findMemoryType($FFFFFFFF,
+  FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
                                ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
                                ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
                               );
@@ -174,12 +221,12 @@ begin
 
  if (FHostVisibMt=DWORD(-1)) then
  begin
-  FHostVisibMt:=findMemoryType($FFFFFFFF,
+  FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
                                ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
                               );
  end;
 
- //FHostCacheMt:=findMemoryType($FFFFFFFF,
+ //FHostCacheMt:=findMemoryType(mr.memoryTypeBits,
  //                             ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
  //                             ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT));
 

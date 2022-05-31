@@ -788,10 +788,10 @@ begin
     NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
     NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
     else
-     Assert(false);
+     Assert(false,'TODO');
    end;
   else
-   Assert(false);
+   Assert(false,'TODO');
  end;
 
  //Result.TILE_MODE_INDEX:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
@@ -809,7 +809,14 @@ begin
 
  Result.FImageView.cformat   :=Result.FImageInfo.cformat;
  Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
+
+ Result.FImageView.dstSel.r:=ord(VK_COMPONENT_SWIZZLE_R);
+ Result.FImageView.dstSel.g:=ord(VK_COMPONENT_SWIZZLE_G);
+ Result.FImageView.dstSel.b:=ord(VK_COMPONENT_SWIZZLE_B);
+ Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_A);
+
  //Result.FImageView.dstSel:TvDstSel; TODO
+
  //Result.FImageView.base_level:Byte;  //first mip level (0..15)
  //Result.FImageView.last_level:Byte;  //last mip level (0..15)
  //Result.FImageView.base_array:Word;  //first array index (0..16383)

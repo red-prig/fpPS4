@@ -852,6 +852,7 @@ begin
    end;
   until true;
   FreeMem(formats);
+  Writeln('VSurfaceFormat:',Fformat.format);
  end;
 end;
 
@@ -1334,8 +1335,6 @@ begin
   VulkanApp:=TVulkanApp.Create(true,true,true);
   DebugReport:=TVDebugReport.Create;
 
-  MemManager:=TvMemManager.Create;
-
   FillDeviceExtension(VulkanApp.FPhysicalDevice);
   FillDeviceProperties(VulkanApp.FPhysicalDevice);
 
@@ -1434,6 +1433,8 @@ begin
 
   Device:=TvDevice.Create(DeviceQueues);
   DeviceQueues.Free;
+
+  MemManager:=TvMemManager.Create;
 
   XCHG(_lazy_wait,1);
 
