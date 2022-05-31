@@ -32,9 +32,6 @@ unit libportaudio;
 interface
 
 uses
- {$if defined(USE_STATIC_PORTAUDIO) and defined(WINDOWS)}
- libaudio_static,
- {$ENDIF}
  CTypes;
 
 {$ifdef USE_STATIC_PORTAUDIO}
@@ -44,6 +41,11 @@ uses
   {$Linklib libpthread}
   {$Linklib libm}
   {$Linklib libc}
+ {$ENDIF}
+ {$IFDEF windows}
+  {$Linklib libkernel32}
+  {$Linklib libwinmm}
+  {$Linklib libmsvcrt}
  {$ENDIF}
 {$endif}
 
@@ -273,6 +275,28 @@ function Pa_GetSampleSize(format : PaSampleFormat):PaError ; cdecl; external {$i
 function Pa_Sleep(msec : CLong) : integer; cdecl; external {$ifndef USE_STATIC_PORTAUDIO} libname {$endif};
 
 implementation
+
+{$IFNDEF PA_NOT_chkstk_ms}
+procedure ___chkstk_ms; cdecl; export;
+begin
+end;
+{$ENDIF}
+
+{$IFNDEF PA_NOT_assert}
+procedure _assert(__assertion,__file,__line:PChar); cdecl; export;
+Var
+ lineno:longint;
+ Error:word;
+begin
+ if Assigned(AssertErrorProc) then
+ begin
+  lineno:=0;
+  Error:=0;
+  Val(__line,lineno,Error);
+  AssertErrorProc(__assertion,__file,lineno,get_caller_addr(get_frame));
+ end;
+end;
+{$ENDIF}
 
 end.
 
