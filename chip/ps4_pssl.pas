@@ -87,7 +87,7 @@ const
 
  W_VOP2  =H_VOP2 shl 15; //1
 
- //H_SOP1
+ //SOP1
  S_MOV_B32           =$03;
  S_MOV_B64           =$04;
  S_CMOV_B32          =$05;
@@ -139,7 +139,7 @@ const
  S_ABS_I32           =$34;
 
 
- //H_SOP2
+ //SOP2
  S_ADD_U32       =$00;
  S_SUB_U32       =$01;
  S_ADD_I32       =$02;
@@ -186,7 +186,7 @@ const
  S_ABSDIFF_I32   =$2C;
 
 
- //H_SOPP
+ //SOPP
  S_NOP           =$00;
  S_ENDPGM        =$01;
  S_BRANCH        =$02;
@@ -209,6 +209,25 @@ const
  S_INCPERFLEVEL  =$14;
  S_DECPERFLEVEL  =$15;
  S_TTRACEDATA    =$16;
+
+ //SOPC
+ S_CMP_EQ_I32 =$00;
+ S_CMP_LG_I32 =$01;
+ S_CMP_GT_I32 =$02;
+ S_CMP_GE_I32 =$03;
+ S_CMP_LT_I32 =$04;
+ S_CMP_LE_I32 =$05;
+ S_CMP_EQ_U32 =$06;
+ S_CMP_LG_U32 =$07;
+ S_CMP_GT_U32 =$08;
+ S_CMP_GE_U32 =$09;
+ S_CMP_LT_U32 =$0A;
+ S_CMP_LE_U32 =$0B;
+ S_BITCMP0_B32=$0C;
+ S_BITCMP1_B32=$0D;
+ S_BITCMP0_B64=$0E;
+ S_BITCMP1_B64=$0F;
+ S_SETVSKIP   =$10;
 
  //SOPK
  S_MOVK_I32        =$00;
@@ -722,6 +741,45 @@ const
  BUFFER_STORE_DWORDX4    =$1E;
  BUFFER_STORE_DWORDX3    =$1F;
 
+ //MTBUF
+ TBUFFER_LOAD_FORMAT_X    =$00;
+ TBUFFER_LOAD_FORMAT_XY   =$01;
+ TBUFFER_LOAD_FORMAT_XYZ  =$02;
+ TBUFFER_LOAD_FORMAT_XYZW =$03;
+
+ TBUFFER_STORE_FORMAT_X   =$04;
+ TBUFFER_STORE_FORMAT_XY  =$05;
+ TBUFFER_STORE_FORMAT_XYZ =$06;
+ TBUFFER_STORE_FORMAT_XYZW=$07;
+
+ // BUF_DATA_FORMAT
+ BUF_DATA_FORMAT_INVALID    =$00;
+ BUF_DATA_FORMAT_8          =$01;
+ BUF_DATA_FORMAT_16         =$02;
+ BUF_DATA_FORMAT_8_8        =$03;
+ BUF_DATA_FORMAT_32         =$04;
+ BUF_DATA_FORMAT_16_16      =$05;
+ BUF_DATA_FORMAT_10_11_11   =$06;
+ BUF_DATA_FORMAT_11_11_10   =$07;
+ BUF_DATA_FORMAT_10_10_10_2 =$08;
+ BUF_DATA_FORMAT_2_10_10_10 =$09;
+ BUF_DATA_FORMAT_8_8_8_8    =$0a;
+ BUF_DATA_FORMAT_32_32      =$0b;
+ BUF_DATA_FORMAT_16_16_16_16=$0c;
+ BUF_DATA_FORMAT_32_32_32   =$0d;
+ BUF_DATA_FORMAT_32_32_32_32=$0e;
+ BUF_DATA_FORMAT_RESERVED   =$0f;
+
+ // BUF_NUM_FORMAT
+ BUF_NUM_FORMAT_UNORM       =$00;
+ BUF_NUM_FORMAT_SNORM       =$01;
+ BUF_NUM_FORMAT_USCALED     =$02;
+ BUF_NUM_FORMAT_SSCALED     =$03;
+ BUF_NUM_FORMAT_UINT        =$04;
+ BUF_NUM_FORMAT_SINT        =$05;
+ BUF_NUM_FORMAT_SNORM_NZ    =$06;
+ BUF_NUM_FORMAT_FLOAT       =$07;
+
  //MIMG
  IMAGE_LOAD            =$00;
  IMAGE_LOAD_MIP        =$01;
@@ -1184,6 +1242,7 @@ begin
         begin
          if (OFFSET_DW>=MAX_BRANCH_DW) then Result:=1;
         end;
+      else;
      end;
      pack4(TSOPP(H).OP);
     end
@@ -1527,7 +1586,34 @@ end;
 
 procedure _print_SOPC(Var SPI:TSPI);
 begin
- Writeln('SOPC?',SPI.SOPC.OP);
+ Case SPI.SOPC.OP of
+  S_CMP_EQ_I32 :Write('S_CMP_EQ_I32');
+  S_CMP_LG_I32 :Write('S_CMP_LG_I32');
+  S_CMP_GT_I32 :Write('S_CMP_GT_I32');
+  S_CMP_GE_I32 :Write('S_CMP_GE_I32');
+  S_CMP_LT_I32 :Write('S_CMP_LT_I32');
+  S_CMP_LE_I32 :Write('S_CMP_LE_I32');
+  S_CMP_EQ_U32 :Write('S_CMP_EQ_U32');
+  S_CMP_LG_U32 :Write('S_CMP_LG_U32');
+  S_CMP_GT_U32 :Write('S_CMP_GT_U32');
+  S_CMP_GE_U32 :Write('S_CMP_GE_U32');
+  S_CMP_LT_U32 :Write('S_CMP_LT_U32');
+  S_CMP_LE_U32 :Write('S_CMP_LE_U32');
+  S_BITCMP0_B32:Write('S_BITCMP0_B32');
+  S_BITCMP1_B32:Write('S_BITCMP1_B32');
+  S_BITCMP0_B64:Write('S_BITCMP0_B64');
+  S_BITCMP1_B64:Write('S_BITCMP1_B64');
+  S_SETVSKIP   :Write('S_SETVSKIP');
+  else
+      Write('SOPC?',SPI.SOPC.OP);
+ end;
+ Write(' ');
+
+ _print_ssrc8(SPI.SOPC.SSRC0,SPI.INLINE32);
+ Write(', ');
+ _print_ssrc8(SPI.SOPC.SSRC1,SPI.INLINE32);
+
+ Writeln;
 end;
 
 function _text_branch_offset(OFFSET_DW:DWORD;S:SmallInt):RawByteString;
@@ -2213,6 +2299,7 @@ begin
      _print_ssrc9(VOP3.SRC2);
      if Byte(VOP3.ABS).TestBit(2) then Write(')');
     end;
+  else;
  end;
 
  if (VOP3.CLAMP<>0) then
@@ -2718,7 +2805,79 @@ end;
 
 procedure _print_MTBUF(Var SPI:TSPI);
 begin
- Writeln('MTBUF?',SPI.MTBUF.OP);
+ case SPI.MTBUF.OP of
+  TBUFFER_LOAD_FORMAT_X    :Write('TBUFFER_LOAD_FORMAT_X');
+  TBUFFER_LOAD_FORMAT_XY   :Write('TBUFFER_LOAD_FORMAT_XY');
+  TBUFFER_LOAD_FORMAT_XYZ  :Write('TBUFFER_LOAD_FORMAT_XYZ');
+  TBUFFER_LOAD_FORMAT_XYZW :Write('TBUFFER_LOAD_FORMAT_XYZ');
+
+  TBUFFER_STORE_FORMAT_X   :Write('TBUFFER_STORE_FORMAT_X');
+  TBUFFER_STORE_FORMAT_XY  :Write('TBUFFER_STORE_FORMAT_XY');
+  TBUFFER_STORE_FORMAT_XYZ :Write('TBUFFER_STORE_FORMAT_XYZ');
+  TBUFFER_STORE_FORMAT_XYZW:Write('TBUFFER_STORE_FORMAT_XYZW');
+ end;
+ Write(' ');
+
+ _print_vdst8(SPI.MTBUF.VDATA);
+ Write(', ');
+ _print_vdst8(SPI.MTBUF.VADDR);
+ Write(', ');
+ Write('s[',SPI.MTBUF.SRSRC*4,':',SPI.MTBUF.SRSRC*4+3,']');
+ Write(', ');
+ Write(SPI.MTBUF.OFFSET);
+ Write(', ');
+ Write('[');
+ _print_ssrc8(SPI.MTBUF.SOFFSET);
+ Write(']');
+
+ if SPI.MTBUF.OFFEN=1 then
+  Write(' OFFEN');
+ if SPI.MTBUF.IDXEN=1 then
+  Write(' IDXEN');
+ if SPI.MTBUF.GLC=1 then
+  Write(' GLC');
+ if SPI.MTBUF.SLC=1 then
+  Write(' SLC');
+ if SPI.MTBUF.TFE=1 then
+  Write(' TFE');
+
+ Write(' format:[');
+
+ Case SPI.MTBUF.DFMT of
+  BUF_DATA_FORMAT_INVALID    :Write('INVALID');
+  BUF_DATA_FORMAT_8          :Write('8');
+  BUF_DATA_FORMAT_16         :Write('16');
+  BUF_DATA_FORMAT_8_8        :Write('8_8');
+  BUF_DATA_FORMAT_32         :Write('32');
+  BUF_DATA_FORMAT_16_16      :Write('16_16');
+  BUF_DATA_FORMAT_10_11_11   :Write('10_11_11');
+  BUF_DATA_FORMAT_11_11_10   :Write('11_11_10 ');
+  BUF_DATA_FORMAT_10_10_10_2 :Write('10_10_10_2');
+  BUF_DATA_FORMAT_2_10_10_10 :Write('2_10_10_10');
+  BUF_DATA_FORMAT_8_8_8_8    :Write('8_8_8_8');
+  BUF_DATA_FORMAT_32_32      :Write('32_32');
+  BUF_DATA_FORMAT_16_16_16_16:Write('16_16_16_16');
+  BUF_DATA_FORMAT_32_32_32   :Write('32_32_32');
+  BUF_DATA_FORMAT_32_32_32_32:Write('32_32_32_32');
+  BUF_DATA_FORMAT_RESERVED   :Write('RESERVED');
+ end;
+
+ Write(',');
+
+ Case SPI.MTBUF.NFMT of
+  BUF_NUM_FORMAT_UNORM   :Write('UNORM');
+  BUF_NUM_FORMAT_SNORM   :Write('SNORM');
+  BUF_NUM_FORMAT_USCALED :Write('USCALED');
+  BUF_NUM_FORMAT_SSCALED :Write('SSCALED');
+  BUF_NUM_FORMAT_UINT    :Write('UINT');
+  BUF_NUM_FORMAT_SINT    :Write('SINT');
+  BUF_NUM_FORMAT_SNORM_NZ:Write('SNORM_NZ');
+  BUF_NUM_FORMAT_FLOAT   :Write('FLOAT');
+ end;
+
+ Write(']');
+
+ Writeln;
 end;
 
 procedure _print_MIMG(Var SPI:TSPI);
@@ -2856,6 +3015,7 @@ begin
     Write(', ');
     Write('s[',SPI.MIMG.SSAMP*4,':',SPI.MIMG.SSAMP*4+3,']');
    end;
+  else;
  end;
 
  Write(' dmask:0x',HexStr(SPI.MIMG.DMASK,1));
@@ -3080,6 +3240,7 @@ var
 begin
  ShaderParser:=Default(TShaderParser);
  ShaderParser.Body:=Body;
+ SPI:=Default(TSPI);
  repeat
   if (size_dw<>0) then
   begin
