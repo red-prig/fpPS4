@@ -62,11 +62,14 @@ void main()
     int pipe=getPipeIndex(pixelCoords);
     int bank=getBankIndex(pixelCoords);
     
-    const ivec4 shmt = ivec4(7,6,6,3);
-    const ivec2 bmod = ivec2(1,1);
+    //const ivec4 shmt = ivec4(7,6,6,3);
+    const ivec2 shmt = ivec2(7,6);
+    //const ivec2 bmod = ivec2(1,1);
     
-    ivec4 mt=(pixelCoords.xyxy >> shmt);
-    ivec2 total_offset=(mt.xy*cfg.pitch)+(mt.zw % bmod);
+    //ivec4 mt=(pixelCoords.xyxy >> shmt);
+    ivec2 mt=(pixelCoords.xy >> shmt);
+    ivec2 total_offset=(mt.xy*cfg.pitch);
+    //+(mt.zw % bmod);
     
     int offset = element_index | pipe | bank | ((total_offset.x+total_offset.y) << 13); 
 

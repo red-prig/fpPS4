@@ -25,10 +25,10 @@ void main()
 
     uint pack=host.data[offset];
     
-    const uvec4 shift = uvec4(16,8,0,24);
-    const uvec4 mask4 = uvec4(255,255,255,255);
+    //const uvec4 shift = uvec4(16,8,0,24);
+    //const uvec4 mask4 = uvec4(255,255,255,255);
     
-    uvec4 pix_int=(uvec4(pack,pack,pack,pack) >> shift) & mask4;
+    //uvec4 pix_int=(uvec4(pack,pack,pack,pack) >> shift) & mask4;
     
     //0,8,16,24
     //R,G, B,A
@@ -36,7 +36,11 @@ void main()
     //16,8,0,24
     //BGRA
 
-    vec4 pixel = vec4(pix_int) / mask4;
+    //vec4 pixel = vec4(pix_int) / mask4;
+
+    vec4 pixel=unpackUnorm4x8(pack);
+
+    pixel=pixel.bgra;
 
     pixel = pow(pixel, cfg.gamma);                        
 

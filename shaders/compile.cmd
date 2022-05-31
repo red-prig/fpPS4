@@ -1,19 +1,19 @@
 
+@echo off
+
 Set spirvgls=spirv\glslangValidator -g0 -V --target-env vulkan1.0 
 
 Set spirvopt=spirv\spirv-opt --eliminate-dead-branches --eliminate-local-multi-store --inline-entry-points-exhaustive --eliminate-dead-code-aggressive --scalar-replacement --simplify-instructions
 
-%spirvgls% FLIP_CURSOR.comp -o FLIP_CURSOR.spv
-%spirvopt% FLIP_CURSOR.spv -o FLIP_CURSOR.spv
+For /F %%a in ('dir /B') do if "%%~xa"==".comp" (call :compil %%a %%~na)
 
-%spirvgls% FLIP_TILE_A8R8G8B8_SRGB.comp -o FLIP_TILE_A8R8G8B8_SRGB.spv
-%spirvopt% FLIP_TILE_A8R8G8B8_SRGB.spv -o FLIP_TILE_A8R8G8B8_SRGB.spv
-
-%spirvgls% FLIP_LINE_A8R8G8B8_SRGB.comp -o FLIP_LINE_A8R8G8B8_SRGB.spv
-%spirvopt% FLIP_LINE_A8R8G8B8_SRGB.spv -o FLIP_LINE_A8R8G8B8_SRGB.spv
-
-
-%spirvgls% FLIP_TILE_A8R8G8B8_SRGB_NEO.comp -o FLIP_TILE_A8R8G8B8_SRGB_NEO.spv
-%spirvopt% FLIP_TILE_A8R8G8B8_SRGB_NEO.spv -o FLIP_TILE_A8R8G8B8_SRGB_NEO.spv
+For /F %%a in ('dir /B') do if "%%~xa"==".vert" (call :compil %%a %%~na)
 
 pause
+exit
+
+:compil
+ echo  %2
+ %spirvgls% %1      -o %2.spv
+ %spirvopt% %2.spv  -o %2.spv
+exit /b
