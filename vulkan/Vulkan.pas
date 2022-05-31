@@ -287,25 +287,19 @@ const VK_NULL_HANDLE=0;
 
       VK_NULL_INSTANCE=0;
 
-      VK_API_VERSION_VARIANT=(1 shl 22) or (0 shl 12) or (0 shl 0);
+      VK_API_VERSION_WITHOUT_PATCH_MASK=TVkUInt32($fffff000);
 
-      VK_API_VERSION_MAJOR=(1 shl 22) or (0 shl 12) or (0 shl 0);
+      VK_API_VERSION=(0 shl 29) or (1 shl 22) or (0 shl 12) or (0 shl 0);
 
-      VK_API_VERSION_MINOR=(1 shl 22) or (0 shl 12) or (0 shl 0);
+      VK_API_VERSION_1_0=(0 shl 29) or (1 shl 22) or (0 shl 12) or (0 shl 0);
 
-      VK_API_VERSION_PATCH=(1 shl 22) or (0 shl 12) or (0 shl 0);
+      VK_API_VERSION_1_1=(0 shl 29) or (1 shl 22) or (1 shl 12) or (0 shl 0);
 
-      VK_API_VERSION=(1 shl 22) or (0 shl 12) or (0 shl 0);
-
-      VK_API_VERSION_1_0=(0 shl 22) or (1 shl 12) or (0 shl 0);
-
-      VK_API_VERSION_1_1=(0 shl 22) or (1 shl 12) or (0 shl 0);
-
-      VK_API_VERSION_1_2=(0 shl 22) or (1 shl 12) or (0 shl 0);
+      VK_API_VERSION_1_2=(0 shl 29) or (1 shl 22) or (2 shl 12) or (0 shl 0);
 
       VK_HEADER_VERSION=185;
 
-      VK_HEADER_VERSION_COMPLETE=(0 shl 22) or (1 shl 12) or (VK_HEADER_VERSION shl 0);
+      VK_HEADER_VERSION_COMPLETE=(0 shl 29) or (1 shl 22) or (2 shl 12) or (VK_HEADER_VERSION shl 0);
 
       VK_MAX_PHYSICAL_DEVICE_NAME_SIZE=256;
       VK_UUID_SIZE=16;
@@ -24100,6 +24094,12 @@ function VK_VERSION_MAJOR(const Version:longint):longint; {$ifdef CAN_INLINE}inl
 function VK_VERSION_MINOR(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
 function VK_VERSION_PATCH(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
 
+function VK_MAKE_API_VERSION(const VersionVariant,VersionMajor,VersionMinor,VersionPatch:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+function VK_API_VERSION_VARIANT(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+function VK_API_VERSION_MAJOR(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+function VK_API_VERSION_MINOR(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+function VK_API_VERSION_PATCH(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+
 function vkLoadLibrary(const LibraryName:string):pointer; {$ifdef CAN_INLINE}inline;{$endif}
 function vkFreeLibrary(LibraryHandle:pointer):boolean; {$ifdef CAN_INLINE}inline;{$endif}
 function vkGetProcAddress(LibraryHandle:pointer;const ProcName:string):pointer; {$ifdef CAN_INLINE}inline;{$endif}
@@ -24129,6 +24129,31 @@ begin
 end;
 
 function VK_VERSION_PATCH(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+begin
+ result:=(Version shr 0) and $fff;
+end;
+
+function VK_MAKE_API_VERSION(const VersionVariant,VersionMajor,VersionMinor,VersionPatch:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+begin
+ result:=(VersionVariant shl 29) or (VersionMajor shl 22) or (VersionMinor shl 12) or (VersionPatch shl 0);
+end;
+
+function VK_API_VERSION_VARIANT(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+begin
+ result:=Version shr 29;
+end;
+
+function VK_API_VERSION_MAJOR(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+begin
+ result:=(Version shr 22) and $7f;
+end;
+
+function VK_API_VERSION_MINOR(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
+begin
+ result:=(Version shr 12) and $3ff;
+end;
+
+function VK_API_VERSION_PATCH(const Version:longint):longint; {$ifdef CAN_INLINE}inline;{$endif}
 begin
  result:=(Version shr 0) and $fff;
 end;
