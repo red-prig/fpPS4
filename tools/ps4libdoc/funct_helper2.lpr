@@ -228,10 +228,16 @@ begin
  UTF8CompareLocale:=CP_UTF8;
 
  MapSym:=TMapSym.Create;
+
  if FileExists('ps4libdoc.inl') then
   loadInlFile(MapSym,'ps4libdoc.inl');
- if FileExists('list.txt') then
-  loadTxtFile(MapSym,'list.txt');
+
+ if FileExists('list_from_sdk.txt') then
+  loadTxtFile(MapSym,'list_from_sdk.txt');
+
+ if FileExists('ps4_names.txt') then
+  loadTxtFile(MapSym,'ps4_names.txt');
+
  Writeln('Load is Fin');
  SaveToPas('ps4libdoc.pas');
  Writeln('Save is Fin');
