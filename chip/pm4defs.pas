@@ -126,9 +126,16 @@ const
 
  //OP_HINT_NOP=0;
 
- OP_HINT_1920_1080=$04380780;
- OP_HINT_1860_1080=$04380744;
- OP_HINT_320_240  =$00F00140;
+ OP_HINT_UPDATE_PS_DB_CONTROL                     = $c01e008f;
+ OP_HINT_UPDATE_VS_OUT_CNTL                       = $c01e01b1;
+ OP_HINT_UPDATE_PS_FORMAT                         = $c01e01b3;
+ OP_HINT_UPDATE_PS_INPUT                          = $c01e01b6;
+ OP_HINT_UPDATE_PS_IN_CONTROL                     = $c01e01b8;
+ OP_HINT_UPDATE_VS_OUT_CONFIG                     = $c01e01c3;
+ OP_HINT_UPDATE_PS_RSRC                           = $c01e01c4;
+ OP_HINT_UPDATE_PS_BARY_CNTL                      = $c01e0203;
+ OP_HINT_UPDATE_VS_RSRC                           = $c01e0207;
+ OP_HINT_UPDATE_VS_POS_FORMAT                     = $c00a1000;
 
  OP_HINT_WRITE_GPU_PREFETCH_INTO_L2               =$60000000;
  OP_HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER        =$68750000;
@@ -268,6 +275,23 @@ type
   cacheAction:DWORD;
  end;
 
+ // WRITE_DATA DST_SEL and ENGINE definitions
+const
+ WRITE_DATA_DST_SEL_REGISTER    =0;
+ WRITE_DATA_DST_SEL_MEMORY_SYNC =1;
+ WRITE_DATA_DST_SEL_TCL2        =2;
+ WRITE_DATA_DST_SEL_GDS         =3;
+ WRITE_DATA_DST_SEL_MEMORY_ASYNC=5;
+
+ WRITE_DATA_CACHE_POLICY_LRU    =0;
+ WRITE_DATA_CACHE_POLICY_STREAM =1;
+ WRITE_DATA_CACHE_POLICY_BYPASS =2;
+
+ WRITE_DATA_ENGINE_ME           =0;
+ WRITE_DATA_ENGINE_PFP          =1;
+ WRITE_DATA_ENGINE_CE           =2;
+
+type
  PTPM4CMDWRITEDATA=^TPM4CMDWRITEDATA;
  TPM4CMDWRITEDATA=packed record
   CONTROL:bitpacked record
@@ -289,6 +313,30 @@ type
   data:packed record end;
  end;
 
+const
+ kEventWriteSource32BitsImmediate     =$1; ///< Source is a 32-bit constant value provided as a separate function argument.
+ kEventWriteSource64BitsImmediate     =$2; ///< Source is a 64-bit constant value provided as a separate function argument.
+ kEventWriteSourceGlobalClockCounter  =$3; ///< Source is a 64-bit timestamp from the system’s 100Mhz global clock.
+ kEventWriteSourceGpuCoreClockCounter =$4; ///< Source is a 64-bit timestamp from the GPU’s 800Mhz clock.
+
+ // EVENT_WRITE_EOP packet definitions
+ EVENTWRITEEOP_DATA_SEL_DISCARD            =0;
+ EVENTWRITEEOP_DATA_SEL_SEND_DATA32        =1;
+ EVENTWRITEEOP_DATA_SEL_SEND_DATA64        =2;
+ EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     =3;
+
+ EVENTWRITEEOP_INT_SEL_NONE                =0;
+ EVENTWRITEEOP_INT_SEL_SEND_INT            =1;
+ EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM =2;
+ EVENTWRITEEOP_INT_SEL_SEND_DATA_ON_CONFIRM=3;
+
+ //event type
+ kEopFlushCbDbCaches              = $00000004;  //end of read CB/DB, wait fence, label .....EOP
+ kEopFlushAndInvalidateCbDbCaches = $00000014;
+ kEopCbDbReadsDone                = $00000028;  //end read CB/DB, label .....EOP
+ kEopCsDone                       = $00000028;  //wait cs shader, label .....EOP
+
+type
  PEVENTWRITEEOP=^TEVENTWRITEEOP;
  TEVENTWRITEEOP=packed record
   EVENT_CNTL:bitpacked record
@@ -313,15 +361,24 @@ type
   end;
   ADDRESS_LO:DWORD;  ///< low bits of address
   DATA_CNTL:bitpacked record
-   ADDRESS_HI:bit24;//24  ///< high bits of address
-   INT_SEL:bit2;    //2   ///< selects interrupt action for end-of-pipe
-   Reserved:bit3;   //3   ///< reserved
-   DATA_SEL:bit3;   //3   ///< selects source of data
+   addressHi:bit16; //16  ///< high bits of address
+   reserved6:bit8;  //24  ///< reserved (dstSelector & 1)
+   intSel:bit2;     //26  ///< selects interrupt action for end-of-pipe (25 bit is eop)
+   reserved7:bit3;  //29  ///< reserved
+   dataSel:bit3;    //32  ///< selects source of data (srcSelector)
   end;
   DATA_LO:DWORD;   ///< value that will be written to memory when event occurs
   DATA_HI:DWORD;   ///< value that will be written to memory when event occurs
  end;
 
+const
+ EVENT_WRITE_EOS_INDEX_CSDONE_PSDONE=6;
+
+ EVENT_WRITE_EOS_CMD_STORE_APPEND_COUNT_TO_MEMORY=0;
+ EVENT_WRITE_EOS_CMD_STORE_GDS_DATA_TO_MEMORY    =1;
+ EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY  =2;
+
+type
  PTPM4CMDEVENTWRITEEOS=^TPM4CMDEVENTWRITEEOS;
  TPM4CMDEVENTWRITEEOS=bitpacked record
   eventType  :bit6;    ///< event type written to VGT_EVENT_INITIATOR
@@ -341,6 +398,17 @@ type
    );
  end;
 
+const
+ EVENT_WRITE_INDEX_ANY_NON_TIMESTAMP     = 0;
+ EVENT_WRITE_INDEX_ZPASS_DONE            = 1;
+ EVENT_WRITE_INDEX_SAMPLE_PIPELINESTAT   = 2;
+ EVENT_WRITE_INDEX_SAMPLE_STREAMOUTSTATS = 3;
+ EVENT_WRITE_INDEX_VS_PS_PARTIAL_FLUSH   = 4;
+ EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP     = 5;
+ EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP     = 6;
+ EVENT_WRITE_INDEX_CACHE_FLUSH_EVENT     = 7;
+
+type
  PTPM4CMDEVENTWRITE=^TPM4CMDEVENTWRITE;
  TPM4CMDEVENTWRITE=bitpacked record
   eventType        :bit6;    ///< event type written to VGT_EVENT_INITIATOR
@@ -363,6 +431,27 @@ type
   offload_enable   :bit1;    ///< Offload queue until EOP queue goes empty, only works for MEC.                                                ///< Setting this bit on graphics/ME will do nothing/be masked out.
  end;
 
+const
+//DmaDataSrc
+ kDmaDataSrcMemory	        = $0; ///< Source is a GPU-visible memory address.
+ kDmaDataSrcGds	                = $1; ///< Source is an offset into Global Data Store (GDS).
+ kDmaDataSrcData	        = $2; ///< Source is a 32-bit data constant.
+ kDmaDataSrcMemoryUsingL2       = $3; ///< Source is a GPU-visible memory address, but should be read directly from the L2 cache.
+ kDmaDataSrcRegister	        = $4; ///< Source is a GPU register offset (auto-increment enabled for multi-register DMAs).
+ kDmaDataSrcRegisterNoIncrement = $C; ///< Source is a GPU register offset (auto-increment disabled for multi-register DMAs).
+
+const
+//DmaDataDst
+ kDmaDataDstMemory	        = $0; ///< Destination is a GPU-visible memory address.
+ kDmaDataDstGds	                = $1; ///< Destination is an offset into Global Data Store (GDS).
+ kDmaDataDstRegister	        = $4; ///< Destination is a GPU register offset (auto-increment enabled for multi-register DMAs).
+ kDmaDataDstRegisterNoIncrement = $C; ///< Destination is a GPU register offset (auto-increment disabled for multi-register DMAs).
+
+const
+ CP_DMA_ENGINE_ME  = 0;
+ CP_DMA_ENGINE_PFP = 1;
+
+type
  PTPM4DMADATA=^TPM4DMADATA;
  TPM4DMADATA=packed record
 
@@ -416,6 +505,62 @@ type
   reserved2      :bit8;
   pollInterval   :bit16;
   reserved3      :bit16;
+ end;
+
+const
+ // WAIT_REG_MEM space and function definitions
+ WAIT_REG_MEM_SPACE_REGISTER    =0;
+ WAIT_REG_MEM_SPACE_MEMORY      =1;
+ WAIT_REG_MEM_SPACE_TCL2__CI    =2;
+
+ WAIT_REG_MEM_FUNC_ALWAYS       =0;
+ WAIT_REG_MEM_FUNC_LESS         =1;
+ WAIT_REG_MEM_FUNC_LESS_EQUAL   =2;
+ WAIT_REG_MEM_FUNC_EQUAL        =3;
+ WAIT_REG_MEM_FUNC_NOT_EQUAL    =4;
+ WAIT_REG_MEM_FUNC_GREATER_EQUAL=5;
+ WAIT_REG_MEM_FUNC_GREATER      =6;
+
+ WAIT_REG_MEM_ENGINE_ME         =0;
+ WAIT_REG_MEM_ENGINE_PFP        =1;
+ WAIT_REG_MEM_ENGINE_CE         =2;
+
+{
+ StallCommandBufferParser:
+  e=1   (PFP)
+  op=00
+  ms=00  (0=reg 1=mem)
+  r=0
+  f=101 (WAIT_REG_MEM_FUNC_GREATER_EQUAL)
+}
+
+type
+ PPM4CMDWAITREGMEM=^TPM4CMDWAITREGMEM;
+ TPM4CMDWAITREGMEM=bitpacked record
+  compareFunc     :bit3;  ///< function. WAIT_REG_MEM_FUNC_XXXX
+  reserved1       :bit1;  ///< reserved
+  memSpace        :bit2;  ///< memory space (0 = register, 1 = memory, 2=TC/L2, 3 = reserved)
+  operation__CI   :bit2;  ///< operation:
+                          ///<    00: WAIT_REG_MEM - Wait on Masked Register/Memory value to equal reference value.
+                          ///<    01: WR_WAIT_WR_REG (PFP only)
+                          ///<            Writes REFERENCE value to POLL_ADDRESS_LO
+                          ///<            Waits for REFERENCE = POLL_ADDRESS_HI
+                          ///<            Write REFERENCE to POLL_ADDRESS_HI.
+  engine          :bit2;  ///< 0 = ME, 1 = PFP, 2 = CE
+  uncached__VI    :bit1;  ///< When set the memory read will always use MTYPE 3 (uncached)
+                          ///  Only applies when executed on MEC (ACE).
+                          ///  WAIT_REG_MEM on PFP or ME are always uncached.
+  reserved2       :bit13; ///< reserved
+  atc__CI         :bit1;  ///< ATC steting for MC read transactions
+  cachePolicy__CI :bit2;  ///< Reserved for future use of CACHE_POLICY
+  volatile__CI    :bit1;  ///< Reserved for future use of VOLATILE
+  reserved3       :bit4;  ///< reserved
+
+  pollAddressLo   :DWORD; ///< lower portion of Address to poll or register offset
+  pollAddressHi   :DWORD; ///< high portion of Address to poll, dont care for regs
+  reference       :DWORD; ///< reference value
+  mask            :DWORD; ///< mask for comparison
+  pollInterval    :DWORD; ///< interval to wait when issuing new poll requests
  end;
 
  TCONTEXTCONTROLENABLE=bitpacked record
