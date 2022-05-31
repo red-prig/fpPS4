@@ -400,8 +400,8 @@ begin
  //ps4_app.app_path:='G:\Games\Sonic Mania\CUSA07023\';
  //ps4_app.app_file:='G:\Games\Sonic Mania\CUSA07023\eboot.bin';
 
- ps4_app.app_path:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\';
- ps4_app.app_file:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\eboot.bin';
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

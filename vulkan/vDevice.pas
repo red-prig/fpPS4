@@ -1365,6 +1365,8 @@ begin
   end;
 
   DeviceQueues.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+  DeviceQueues.add_ext(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
   DeviceQueues.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 
   if limits.VK_AMD_device_coherent_memory then
