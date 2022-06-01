@@ -52,8 +52,24 @@ Const
 
  MAP_FAILED    =Pointer(-1);
 
+type
+ pSceKernelDirectMemoryQueryInfo=^SceKernelDirectMemoryQueryInfo;
+ SceKernelDirectMemoryQueryInfo=packed record
+  start:QWORD;
+  __end:QWORD;
+  memoryType:Integer;
+  __align:Integer;
+ end;
+
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelDirectMemoryQuery(
+            offset:QWORD;
+            flags:Integer;
+            info:pSceKernelDirectMemoryQueryInfo;
+            infoSize:QWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelAllocateDirectMemory(
            searchStart:QWORD;
            searchEnd:QWORD;
@@ -61,6 +77,7 @@ function ps4_sceKernelAllocateDirectMemory(
            alignment:QWORD;
            memoryType:Integer;
            physicalAddrDest:PQWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMapDirectMemory(
            virtualAddrDest:PPointer;
            length:QWORD;
@@ -68,17 +85,20 @@ function ps4_sceKernelMapDirectMemory(
            flags:Integer;
            physicalAddr:QWORD;
            alignment:QWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMapNamedFlexibleMemory(
            virtualAddrDest:PPointer;
            length:QWORD;
            protections:Integer;
            flags:Integer;
            name:PChar):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMapFlexibleMemory(
            virtualAddrDest:PPointer;
            length:Int64;
            protections:Integer;
            flags:Integer):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMunmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Integer; SysV_ABI_CDecl;
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
@@ -1246,6 +1266,58 @@ SCE_KERNEL_MAP_NO_COALESCE
  Instruct sceKernelVirtualQuery() not to merge neighboring areas
 
  }
+
+const
+ SCE_KERNEL_DMQ_FIND_NEXT=1;
+
+function ps4_sceKernelDirectMemoryQuery(
+            offset:QWORD;
+            flags:Integer;
+            info:pSceKernelDirectMemoryQueryInfo;
+            infoSize:QWORD):Integer; SysV_ABI_CDecl;
+var
+ It:TDirectAdrSet.Iterator;
+ Tmp:TBlock;
+begin
+ if (info=nil) or (infoSize<>SizeOf(SceKernelDirectMemoryQueryInfo)) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if not IsAlign(offset,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ info^:=Default(SceKernelDirectMemoryQueryInfo);
+
+ Tmp:=Default(TBlock);
+ Tmp.pAddr:=Pointer(offset);
+
+ Result:=0;
+
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock);
+
+ if (flags=SCE_KERNEL_DMQ_FIND_NEXT) then
+ begin
+  It:=PageMM.FDirectAdrSet.find_be(Tmp);
+ end else
+ begin
+  It:=PageMM.FDirectAdrSet.find(Tmp);
+ end;
+
+ if (It.Item=nil) then
+ begin
+  Result:=SCE_KERNEL_ERROR_EACCES;
+ end else
+ begin
+  Tmp:=It.Item^;
+
+  info^.start:=QWORD(Tmp.pAddr);
+  info^.__end:=QWORD(Tmp.pAddr)+Tmp.nSize;
+  info^.memoryType:=Integer(Tmp.bType);
+
+ end;
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+
+end;
 
 function ps4_sceKernelMapDirectMemory(
            virtualAddrDest:PPointer;

@@ -811,6 +811,7 @@ begin
  lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
  lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
  lib^.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
+ lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
  lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
  lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
  lib^.set_proc($FEAB8F6B8484254C,@ps4_scePthreadAttrGetstack);
@@ -871,13 +872,18 @@ begin
 
  lib^.set_proc($5AC95C2B51507062,@ps4_sceKernelIsNeoMode);
 
+ //mmap
+
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
+ lib^.set_proc($047A2E2D0CE1D17D,@ps4_sceKernelDirectMemoryQuery);
  lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
  lib^.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
  lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
  lib^.set_proc($71091EF54B8140E9,@ps4_sceKernelMunmap);
  lib^.set_proc($58571F2F697389DA,@ps4_sceKernelQueryMemoryProtection);
+
+ //mmap
 
  //queue
 

@@ -24,6 +24,7 @@ function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger)
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstack(pAttr:p_pthread_attr_t;stackAddr:PPointer;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
@@ -197,7 +198,7 @@ begin
    Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
 
- pAttr^^.detachstate:=detachstate;
+ pAttr^^.flags:=detachstate;
  Result:=0;
 end;
 
@@ -206,7 +207,7 @@ begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (pAttr=nil) then Exit;
  if (pAttr^=nil) then Exit;
- pAttr^^.policy:=policy;
+ pAttr^^.sched_policy:=policy;
  Result:=0;
 end;
 
@@ -215,7 +216,7 @@ begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (pAttr=nil) or (param=nil) then Exit;
  if (pAttr^=nil) then Exit;
- pAttr^^.sched_priority:=param^;
+ pAttr^^.prio:=param^;
  Result:=0;
 end;
 
@@ -239,6 +240,18 @@ end;
 
 function ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
 begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+ if (pAttr=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+ pAttr^^.sched_inherit:=inheritSched;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pAttr=nil) or (guardSize=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ guardSize^:=pAttr^^.guardsize_attr;
  Result:=0;
 end;
 
@@ -271,7 +284,7 @@ function ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pin
 begin
  if (pAttr=nil) or (detachstate=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- detachstate^:=pAttr^^.detachstate;
+ detachstate^:=pAttr^^.flags;
  Result:=0;
 end;
 
@@ -279,7 +292,7 @@ function ps4_pthread_attr_getdetachstate(pAttr:p_pthread_attr_t;detachstate:Pint
 begin
  if (pAttr=nil) or (detachstate=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- detachstate^:=pAttr^^.detachstate;
+ detachstate^:=pAttr^^.flags;
  Result:=0;
 end;
 
@@ -415,7 +428,7 @@ begin
   if (pAttr<>nil) and (pAttr^<>nil) then
   begin
    data^.Attr:=pAttr^^;
-   data^.detachstate:=pAttr^^.detachstate;
+   data^.detachstate:=pAttr^^.flags;
    ReadWriteBarrier;
 
    creationFlags:=0;
@@ -485,7 +498,7 @@ begin
  Writeln('scePthreadDetach:',_pthread^.name);
  if CAS(_pthread^.detachstate,PTHREAD_CREATE_JOINABLE,PTHREAD_CREATE_DETACHED) then
  begin
-  _pthread^.Attr.detachstate:=PTHREAD_CREATE_DETACHED;
+  _pthread^.Attr.flags:=PTHREAD_CREATE_DETACHED;
   Result:=0
  end else
  if CAS(_pthread^.detachstate,_PREPARE_JOIN,_PREPARE_FREE) then

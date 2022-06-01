@@ -64,18 +64,17 @@ type
  p_pthread_attr_t=^pthread_attr_t;
  pthread_attr_t=^tthread_attr_t;
  tthread_attr_t=packed record
-  policy:Integer;
-  sched_priority:Integer;
-  //prio          :Integer;
-  suspend       :Integer;
-  flags         :Integer;
+  sched_policy :Integer;
+  sched_inherit:Integer;
+  prio         :Integer;
+  suspend      :Integer;
+  flags        :Integer; //((*attr)->flags & PTHREAD_DETACHED)
   stackaddr_attr:Pointer;
-  stacksize_attr:size_t;
-  cpuset:QWORD;
-  //guardsize_attr:size_t;
-  //cpuset        :Pointer;//cpuset_t
-  //cpusetsize    :size_t;
-  detachstate:Integer;
+  stacksize_attr:QWORD;
+  guardsize_attr:QWORD;
+  cpuset:DWORD;
+  //cpuset_t *cpuset;
+  //size_t   cpusetsize;
  end;
 
  //struct pthread_attr {

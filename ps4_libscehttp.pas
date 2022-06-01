@@ -47,6 +47,19 @@ begin
  Writeln(name,': ',value);
 end;
 
+type
+ SceHttpsCallback=function(
+                   libsslCtxId:Integer;
+                   verifyErr:Integer;
+                   sslCert:Pointer; //SceSslCert
+                   certNum:Integer;
+                   userArg:Pointer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceHttpsSetSslCallback(id:Integer;cbfunc:SceHttpsCallback;userArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -59,6 +72,7 @@ begin
  lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetNonblock);
  lib^.set_proc($EB7F3575617EC6C4,@ps4_sceHttpCreateEpoll);
  lib^.set_proc($118DBC4F66E437B9,@ps4_sceHttpAddRequestHeader);
+ lib^.set_proc($86DC813A859E4B9F,@ps4_sceHttpsSetSslCallback);
 end;
 
 initialization

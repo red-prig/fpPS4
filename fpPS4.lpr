@@ -191,6 +191,29 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceQoSInit(
+          pMemBlock:Pointer;
+          memSize:DWORD;
+          appType:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_scePlayGoInitialize(
+          initParam:Pointer //ScePlayGoInitParams
+          ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_scePlayGoOpen(
+          outHandle:PInteger;
+          param:Pointer
+          ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=Integer($80B2000E);
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -252,6 +275,20 @@ begin
     Case Info^.nid of
      QWORD($EF7590E098F49C92):Result:=@ps4_sceScreenShotSetOverlayImageWithOrigin;
     end;
+
+    'libSceVoiceQoS':
+    Case Info^.nid of
+     QWORD($53C21F365EBF0ACB):Result:=@ps4_sceVoiceQoSInit;
+    end;
+
+    'libScePlayGo':
+    Case Info^.nid of
+     QWORD($B6CE8695938A46B1):Result:=@ps4_scePlayGoInitialize;
+     QWORD($3351A66B5A1CAC61):Result:=@ps4_scePlayGoOpen;
+    end;
+
+
+
 
   end;
  end;
@@ -405,6 +442,9 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Sonic Mania\CUSA07023\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Worms\CUSA04047\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Worms\CUSA04047\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

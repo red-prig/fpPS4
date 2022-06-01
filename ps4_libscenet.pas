@@ -30,7 +30,8 @@ begin
 end;
 
 const
- SCE_NET_CTL_ERROR_INVALID_ADDR=$80412107;
+ SCE_NET_CTL_ERROR_INVALID_ADDR=-2143215353; //0x80412107;
+ SCE_NET_CTL_ERROR_INVALID_SIZE=-2143215343; //0x80412111;
 
  SCE_NET_CTL_STATE_DISCONNECTED=0;
  SCE_NET_CTL_STATE_CONNECTING  =1;
@@ -43,7 +44,7 @@ const
 
 function ps4_sceNetCtlGetState(state:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (state=nil) then Exit(Integer(SCE_NET_CTL_ERROR_INVALID_ADDR));
+ if (state=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
  state^:=SCE_NET_CTL_STATE_DISCONNECTED;
  Result:=0;
 end;
@@ -79,10 +80,46 @@ Const
 
 function ps4_sceNetCtlGetResult(eventType:Integer;errorCode:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (errorCode=nil) then Exit(Integer(SCE_NET_CTL_ERROR_INVALID_ADDR));
+ if (errorCode=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
  errorCode^:=Integer(SCE_NET_CTL_ERROR_ETHERNET_PLUGOUT);
  Result:=0;
 end;
+
+type
+ SceNetInAddr_t=DWORD;
+ SceNetInAddr=packed record
+  s_addr:SceNetInAddr_t;
+ end;
+
+ pSceNetCtlNatInfo=^SceNetCtlNatInfo;
+ SceNetCtlNatInfo=packed record
+  size:Integer;
+  stunStatus:Integer;
+  natType:Integer;
+  mappedAddr:SceNetInAddr;
+ end;
+
+const
+ SCE_NET_CTL_NATINFO_STUN_UNCHECKED=0;
+ SCE_NET_CTL_NATINFO_STUN_FAILED   =1;
+ SCE_NET_CTL_NATINFO_STUN_OK       =2;
+
+ SCE_NET_CTL_NATINFO_NAT_TYPE_1    =1;
+ SCE_NET_CTL_NATINFO_NAT_TYPE_2    =2;
+ SCE_NET_CTL_NATINFO_NAT_TYPE_3    =3;
+
+
+function ps4_sceNetCtlGetNatInfo(natInfo:pSceNetCtlNatInfo):Integer; SysV_ABI_CDecl;
+begin
+ if (natInfo=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
+ if (natInfo^.size<>SizeOf(SceNetCtlNatInfo)) then Exit(SCE_NET_CTL_ERROR_INVALID_SIZE);
+
+ natInfo^.stunStatus:=SCE_NET_CTL_NATINFO_STUN_FAILED;
+ natInfo^.natType:=SCE_NET_CTL_NATINFO_NAT_TYPE_1;
+
+ Result:=0;
+end;
+
 
 function ps4_sceNetCtlRegisterCallbackForNpToolkit(func:SceNetCtlCallback;arg:Pointer;cid:PInteger):Integer; SysV_ABI_CDecl;
 begin
@@ -124,6 +161,7 @@ begin
  lib^.set_proc($509F99ED0FB8724D,@ps4_sceNetCtlRegisterCallback);
  lib^.set_proc($890C378903E1BD44,@ps4_sceNetCtlCheckCallback);
  lib^.set_proc($D1C06076E3D147E3,@ps4_sceNetCtlGetResult);
+ lib^.set_proc($24EE32B93B8CA0A2,@ps4_sceNetCtlGetNatInfo);
 
  lib:=Result._add_lib('libSceNetCtlForNpToolkit');
 
