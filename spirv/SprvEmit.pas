@@ -86,6 +86,7 @@ type
   FPrintAsm:Boolean;
   FUseVertexInput:Boolean;
   FUseTexelBuffer:Boolean;
+  FUseOutput16:Boolean;
 
   function  Alloc(Size:ptruint):Pointer;
 

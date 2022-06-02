@@ -25,6 +25,7 @@ var
   FPrintSpv:Boolean;
   FUseVertexInput:Boolean;
   FUseTexelBuffer:Boolean;
+  FUseOutput16:Boolean;
 
   BufferCfg:TsrBufferCfg;
  end;
@@ -446,6 +447,7 @@ begin
  SprvEmit.FPrintAsm      :=cfg.FPrintAsm;
  SprvEmit.FUseVertexInput:=cfg.FUseVertexInput;
  SprvEmit.FUseTexelBuffer:=cfg.FUseTexelBuffer;
+ SprvEmit.FUseOutput16   :=cfg.FUseOutput16;
 
  SprvEmit.FBuffers.cfg:=cfg.BufferCfg;
 
@@ -500,10 +502,15 @@ begin
        '-i':cfg.FPrintInfo:=True;
        '-a':cfg.FPrintAsm:=True;
        '-p':cfg.FPrintSpv:=True;
+
      '-eva':cfg.FUseVertexInput:=True;
      '-dva':cfg.FUseVertexInput:=False;
+
      '-etb':cfg.FUseTexelBuffer:=True;
      '-dtb':cfg.FUseTexelBuffer:=False;
+
+     '-eoh':cfg.FUseOutput16:=True;
+     '-doh':cfg.FUseOutput16:=False;
 
        '-b':n:=0;
 
@@ -593,7 +600,7 @@ begin
   //load_dump('shader_dump\simplet-simple-fs_debug\simplet-simple-fs_debug_ps_F327ABD1.dump');
 
   //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_vs_78EF9008.dump');
-  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_ps_FBCA196D.dump');
+  load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_ps_FBCA196D.dump');
 
   //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_ps_C342C7CD.dump');
   //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_vs_D216FEB8.dump');
@@ -613,7 +620,7 @@ begin
 
   //load_dump('shader_dump\SonicMania\SonicMania_ps_B4281DBF.dump');
 
-  load_dump('shader_dump\SonicMania\SonicMania_ps_11DF2A32.dump');
+  //load_dump('shader_dump\SonicMania\SonicMania_ps_11DF2A32.dump');
 
   //load_dump('shader_dump\SonicMania\SonicMania_ps_3CC22A00.dump'); //cfg
  end;

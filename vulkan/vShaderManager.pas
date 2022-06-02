@@ -162,6 +162,7 @@ begin
  SprvEmit.FPrintAsm      :=False;
  SprvEmit.FUseVertexInput:=True;
  SprvEmit.FUseTexelBuffer:=False;
+ SprvEmit.FUseOutput16   :=storageInputOutput16;
 
  SprvEmit.FBuffers.cfg.maxUniformBufferRange          :=0; // $FFFF
  SprvEmit.FBuffers.cfg.PushConstantsOffset            :=0; // 0

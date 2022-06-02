@@ -6,6 +6,7 @@ interface
 
 uses
   sysutils,
+  spirv,
   ps4_pssl,
   srNodes,
   srLabel,
@@ -34,6 +35,7 @@ Var
  dout:PsrVariable;
  dst:PsrRegNode;
  src:array[0..3] of PsrRegNode;
+ rsl:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
  f,i,p:Byte;
 
@@ -150,10 +152,36 @@ begin
     Assert(false);
   end;
 
-  dst:=emit_OpMakeVec(line,dtVec4h,4,@src);
-  dst^.mark_read;
+  if FUseOutput16 then
+  begin
+   dst:=emit_OpMakeVec(line,dtVec4h,4,@src);
+   dst^.mark_read;
 
-  dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),dtVec4h); //output in FSPI.EXP.TGT
+   rtype:=dtVec4h;
+  end else
+  begin
+   rsl[0]:=NewReg(dtFloat32);
+   rsl[1]:=NewReg(dtFloat32);
+   rsl[2]:=NewReg(dtFloat32);
+   rsl[3]:=NewReg(dtFloat32);
+
+   _emit_Op1(line,Op.OpFConvert,rsl[0],src[0]);
+   _emit_Op1(line,Op.OpFConvert,rsl[1],src[1]);
+   _emit_Op1(line,Op.OpFConvert,rsl[2],src[2]);
+   _emit_Op1(line,Op.OpFConvert,rsl[3],src[3]);
+
+   rsl[0]^.mark_read;
+   rsl[1]^.mark_read;
+   rsl[2]^.mark_read;
+   rsl[3]^.mark_read;
+
+   dst:=emit_OpMakeVec(line,dtVec4f,4,@rsl);
+   dst^.mark_read;
+
+   rtype:=dtVec4f;
+  end;
+
+  dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
   emit_OpStore(line,dout,dst);
  end;
 
