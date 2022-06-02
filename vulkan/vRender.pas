@@ -184,8 +184,8 @@ begin
 
  am:=GetColorAccessMask(IMAGE_USAGE);
 
- dependency.srcAccessMask:=dependency.srcAccessMask or (am and (not ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)));
- dependency.dstAccessMask:=dependency.dstAccessMask or (am and (not ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT )));
+ dependency.srcAccessMask:=dependency.srcAccessMask or am;
+ dependency.dstAccessMask:=dependency.dstAccessMask or am;
 end;
 
 Procedure TvRenderPass.SetDepthStencilRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
@@ -199,8 +199,8 @@ begin
 
  am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
 
- dependency.srcAccessMask:=dependency.srcAccessMask or (am and (not ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)));
- dependency.dstAccessMask:=dependency.dstAccessMask or (am and (not ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT )));
+ dependency.srcAccessMask:=dependency.srcAccessMask or am;
+ dependency.dstAccessMask:=dependency.dstAccessMask or am;
 end;
 
 Procedure TvRenderPass.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);

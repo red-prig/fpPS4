@@ -341,7 +341,7 @@ begin
 end;
 
 Const
- SRGB_HACK=False;//True;
+ SRGB_HACK=True;
 
 Procedure TvFlip.SetImageFormat(format,tmode:DWORD);
 begin
