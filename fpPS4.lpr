@@ -214,6 +214,21 @@ begin
  Result:=Integer($80B2000E);
 end;
 
+function ps4_sceImeKeyboardOpen(
+          userId:Integer;
+          param:Pointer //SceImeKeyboardParam
+          ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=Integer($80BC0004);
+end;
+
+function ps4_sceImeUpdate(
+          handler:Pointer //SceImeEventHandler
+          ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=Integer($80BC0004);
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -287,8 +302,11 @@ begin
      QWORD($3351A66B5A1CAC61):Result:=@ps4_scePlayGoOpen;
     end;
 
-
-
+    'libSceIme':
+    Case Info^.nid of
+     QWORD($79A1578DF26FDF1B):Result:=@ps4_sceImeKeyboardOpen;
+     QWORD($FF81827D874D175B):Result:=@ps4_sceImeUpdate;
+    end;
 
   end;
  end;
@@ -445,6 +463,9 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Worms\CUSA04047\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Worms\CUSA04047\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Worms\CUSA04047\';
+ //ps4_app.app_file:='G:\Games\Worms\CUSA04047\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

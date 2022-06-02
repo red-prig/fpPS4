@@ -109,6 +109,47 @@ begin
  Result:=0;
 end;
 
+type
+ pSceNpTrophyGameDetails=^SceNpTrophyGameDetails;
+ SceNpTrophyGameDetails=packed record
+  size:QWORD;
+  numGroups  :DWORD;
+  numTrophies:DWORD;
+  numPlatinum:DWORD;
+  numGold    :DWORD;
+  numSilver  :DWORD;
+  numBronze  :DWORD;
+  title:array[0..SCE_NP_TROPHY_GAME_TITLE_MAX_SIZE-1] of Byte;
+  description:array[0..SCE_NP_TROPHY_GAME_DESCR_MAX_SIZE-1] of Byte;
+ end;
+
+ pSceNpTrophyGameData=^SceNpTrophyGameData;
+ SceNpTrophyGameData=packed record
+  size:QWORD;
+  unlockedTrophies  :DWORD;
+  unlockedPlatinum  :DWORD;
+  unlockedGold      :DWORD;
+  unlockedSilver    :DWORD;
+  unlockedBronze    :DWORD;
+  progressPercentage:DWORD;
+ end;
+
+function ps4_sceNpTrophyGetGameInfo(context:Integer;
+                                    handle:Integer;
+                                    details:pSceNpTrophyGameDetails;
+                                    data:pSceNpTrophyGameData):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpTrophyGetGameIcon(context:Integer;
+                                    handle:Integer;
+                                    buffer:Pointer;
+                                    size:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceNpTrophy(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -122,6 +163,8 @@ begin
  lib^.set_proc($4C9080C6DA3D4845,@ps4_sceNpTrophyRegisterContext);
  lib^.set_proc($2C7B9298EDD22DDF,@ps4_sceNpTrophyGetTrophyUnlockState);
  lib^.set_proc($DBCC6645415AA3AF,@ps4_sceNpTrophyUnlockTrophy);
+ lib^.set_proc($6183F77F65B4F688,@ps4_sceNpTrophyGetGameInfo);
+ lib^.set_proc($1CBC33D5F448C9C0,@ps4_sceNpTrophyGetGameIcon);
 end;
 
 initialization

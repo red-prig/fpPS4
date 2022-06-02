@@ -320,7 +320,7 @@ begin
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
-  Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+  //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
   Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
@@ -484,7 +484,7 @@ begin
  Result:=_set_errno(sce2px(ps4_sceKernelStat(path,stat)));
 end;
 
-function GetFileAttributesU(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
+function SwGetFileAttributes(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
 var
  wp:WideString;
 begin
@@ -516,10 +516,10 @@ begin
  if (rp='') then Exit(SCE_KERNEL_ERROR_EACCES);
 
  hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
- err:=GetFileAttributesU(rp,@hfi);
+ err:=SwGetFileAttributes(rp,@hfi);
  if (err<>0) then
  begin
-  Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+  //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
   Case err of
    ERROR_ACCESS_DENIED,
    ERROR_SHARING_VIOLATION,
@@ -554,14 +554,14 @@ begin
  Result:=_set_errno(sce2px(ps4_sceKernelFstat(fd,stat)));
 end;
 
-function _GetFileType(hFile:HANDLE):DWORD;
+function SwGetFileType(hFile:HANDLE):DWORD;
 begin
  _sig_lock;
  Result:=GetFileType(hFile);
  _sig_unlock;
 end;
 
-function _GetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
+function SwGetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
 begin
  Result:=0;
  _sig_lock;
@@ -588,7 +588,7 @@ begin
 
  if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
 
- Case _GetFileType(h) of
+ Case SwGetFileType(h) of
   FILE_TYPE_PIPE:
     begin
      stat^.st_dev  :=fd;
@@ -605,10 +605,10 @@ begin
     end;
   FILE_TYPE_DISK:
     begin
-     err:=_GetFileInformationByHandle(h,@hfi);
+     err:=SwGetFileInformationByHandle(h,@hfi);
      if (err<>0) then
      begin
-      Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
+      //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
       Case err of
        ERROR_ACCESS_DENIED,
        ERROR_SHARING_VIOLATION,
@@ -702,7 +702,7 @@ begin
  _sig_unlock;
 end;
 
-Function _CreateDir(Const NewDir:RawByteString):Boolean;
+Function SwCreateDir(Const NewDir:RawByteString):Boolean;
 var
  err:DWORD;
 begin
@@ -730,7 +730,7 @@ begin
 
  if (fn='') then Exit(SCE_KERNEL_ERROR_EACCES);
 
- if not _CreateDir(fn) then
+ if not SwCreateDir(fn) then
  begin
   Case GetLastError() of
    ERROR_INVALID_DRIVE,
@@ -780,7 +780,7 @@ begin
 
  if (fn='') then Exit(_set_errno(EACCES));
 
- if not _CreateDir(fn) then
+ if not SwCreateDir(fn) then
  begin
   Case GetLastError() of
    ERROR_INVALID_DRIVE,

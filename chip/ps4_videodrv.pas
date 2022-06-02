@@ -304,6 +304,8 @@ begin
      kDmaDataDstRegister,
      kDmaDataDstRegisterNoIncrement:
       {$ifdef ww}Writeln('SetRegister:',HexStr(Body^.dstAddrLo shr 2,4),' count(DW):1'){$endif};
+     kDmaDataDstGds:
+      {$ifdef ww}Writeln('SetGds'){$endif};
      else
       Assert(False);
     end;

@@ -156,12 +156,31 @@ begin
  Result:=0;
 end;
 
+Const
+ SCE_NP_UTIL_ERROR_NOT_MATCH=$80550609;
+
+function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
+begin
+ if (npid1=nil) or (npid2=nil) then Exit(Integer(SCE_NP_ERROR_INVALID_ARGUMENT));
+
+ if (CompareChar0(npid1^.handle,npid2^.handle,SCE_NP_ONLINEID_MAX_LENGTH)=0) and
+    (QWORD(npid1^.opt)=QWORD(npid2^.opt)) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=Integer(SCE_NP_UTIL_ERROR_NOT_MATCH);
+ end;
+
+end;
+
 function Load_libSceNpManager(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
 begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
+
  lib:=Result._add_lib('libSceNpManager');
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
@@ -173,11 +192,22 @@ begin
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
  lib^.set_proc($2442C77F8C4FB9FA,@ps4_sceNpCheckCallbackForLib);
+end;
 
+function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+
+ lib:=Result._add_lib('libSceNpCommon');
+ lib^.set_proc($8BC5265D34AAECDE,@ps4_sceNpCmpNpId);
 end;
 
 initialization
  ps4_app.RegistredPreLoad('libSceNpManager.prx',@Load_libSceNpManager);
+ ps4_app.RegistredPreLoad('libSceNpCommon.prx',@Load_libSceNpCommon);
 
 end.
 

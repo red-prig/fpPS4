@@ -545,7 +545,7 @@ begin
   VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT:
    Case DWORD(location) of
 
-    //$A7BB8DB6:if Pos('(Float16)',pMessage)<>0 then Exit;
+    $A7BB8DB6:if Pos('(Float16)',pMessage)<>0 then Exit;
 
     $92394C89:
      begin
