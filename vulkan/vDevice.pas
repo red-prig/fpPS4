@@ -25,6 +25,10 @@ type
   FTFamilyCount:TVkUInt32;
   //
   FDeviceFeature:TVkPhysicalDeviceFeatures;
+  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
+  FSF_8:TVkPhysicalDevice8BitStorageFeatures;
+  FSF16:TVkPhysicalDevice16BitStorageFeatures;
+  //
   Constructor Create(debug,printf,validate:Boolean);
   Destructor  Destroy; override;
   Procedure   LoadFamily; virtual;
@@ -185,6 +189,13 @@ function  shaderStorageImageReadWithoutFormat:Boolean;
 function  shaderStorageImageWriteWithoutFormat:Boolean;
 function  shaderInt64:Boolean;
 function  shaderInt16:Boolean;
+function  shaderInt8:Boolean;
+function  shaderFloat16:Boolean;
+function  storageBuffer8Bit:Boolean;
+function  uniformBuffer8Bit:Boolean;
+function  storageBuffer16Bit:Boolean;
+function  uniformBuffer16Bit:Boolean;
+function  storageInputOutput16:Boolean;
 
 var
  limits:record
@@ -192,6 +203,7 @@ var
   VK_KHR_swapchain               :Boolean;
   VK_EXT_external_memory_host    :Boolean;
 
+  VK_KHR_shader_float16_int8     :Boolean;
   VK_KHR_16bit_storage           :Boolean;
   VK_KHR_8bit_storage            :Boolean;
   VK_KHR_push_descriptor         :Boolean;
@@ -203,27 +215,27 @@ var
 
   maxUniformBufferRange:TVkUInt32;
   maxStorageBufferRange:TVkUInt32;
-  maxPushConstantsSize:TVkUInt32;
-  maxSamplerLodBias:TVkFloat;
-  maxSamplerAnisotropy:TVkFloat;
+  maxPushConstantsSize :TVkUInt32;
+  maxSamplerLodBias    :TVkFloat;
+  maxSamplerAnisotropy :TVkFloat;
 
-  minMemoryMapAlignment:TVkSize;
-  minTexelBufferOffsetAlignment:TVkDeviceSize;
+  minMemoryMapAlignment          :TVkSize;
+  minTexelBufferOffsetAlignment  :TVkDeviceSize;
   minUniformBufferOffsetAlignment:TVkDeviceSize;
   minStorageBufferOffsetAlignment:TVkDeviceSize;
 
-  framebufferColorSampleCounts:TVkSampleCountFlags;
-  framebufferDepthSampleCounts:TVkSampleCountFlags;
+  framebufferColorSampleCounts  :TVkSampleCountFlags;
+  framebufferDepthSampleCounts  :TVkSampleCountFlags;
   framebufferStencilSampleCounts:TVkSampleCountFlags;
 
-  sampledImageColorSampleCounts:TVkSampleCountFlags;
+  sampledImageColorSampleCounts  :TVkSampleCountFlags;
   sampledImageIntegerSampleCounts:TVkSampleCountFlags;
-  sampledImageDepthSampleCounts:TVkSampleCountFlags;
+  sampledImageDepthSampleCounts  :TVkSampleCountFlags;
   sampledImageStencilSampleCounts:TVkSampleCountFlags;
-  storageImageSampleCounts:TVkSampleCountFlags;
+  storageImageSampleCounts       :TVkSampleCountFlags;
 
   maxComputeWorkGroupInvocations:TVkUInt32;
-  maxComputeWorkGroupSize:TVkOffset3D;
+  maxComputeWorkGroupSize       :TVkOffset3D;
 
   minImportedHostPointerAlignment:TVkDeviceSize;
  end;
@@ -256,6 +268,41 @@ end;
 function shaderInt16:Boolean;
 begin
  Result:=Boolean(VulkanApp.FDeviceFeature.shaderInt16);
+end;
+
+function shaderInt8:Boolean;
+begin
+ Result:=Boolean(VulkanApp.F16_8.shaderInt8);
+end;
+
+function shaderFloat16:Boolean;
+begin
+ Result:=Boolean(VulkanApp.F16_8.shaderFloat16);
+end;
+
+function storageBuffer8Bit:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FSF_8.storageBuffer8BitAccess);
+end;
+
+function uniformBuffer8Bit:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FSF_8.uniformAndStorageBuffer8BitAccess);
+end;
+
+function storageBuffer16Bit:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FSF16.storageBuffer16BitAccess);
+end;
+
+function uniformBuffer16Bit:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FSF16.uniformAndStorageBuffer16BitAccess);
+end;
+
+function storageInputOutput16:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FSF16.storageInputOutput16);
 end;
 
 procedure FillDeviceProperties(physicalDevice:TVkPhysicalDevice);
@@ -316,6 +363,7 @@ begin
    Case String(pProperties[i].extensionName) of
     VK_KHR_SWAPCHAIN_EXTENSION_NAME               :limits.VK_KHR_swapchain               :=True;
     VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME    :limits.VK_EXT_external_memory_host    :=True;
+    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME     :limits.VK_KHR_shader_float16_int8     :=True;
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME           :limits.VK_KHR_16bit_storage           :=True;
     VK_KHR_8BIT_STORAGE_EXTENSION_NAME            :limits.VK_KHR_8bit_storage            :=True;
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME         :limits.VK_KHR_push_descriptor         :=True;
@@ -497,7 +545,7 @@ begin
   VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT:
    Case DWORD(location) of
 
-    $A7BB8DB6:if Pos('(Float16)',pMessage)<>0 then Exit;
+    //$A7BB8DB6:if Pos('(Float16)',pMessage)<>0 then Exit;
 
     $92394C89:
      begin
@@ -580,34 +628,31 @@ begin
 
 end;
 
-function VK_MAKE_API_VERSION(const variant,major,minor,patch:longint):longint;
-begin
- result:=(variant shl 29) or (major shl 22) or (minor shl 12) or (patch);
-end;
-
 Constructor TVulkanApp.Create(debug,printf,validate:Boolean);
 const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
  vkApp:TVkApplicationInfo;
- vkExtList:array[0..2] of PChar;
+ vkExtList:array[0..3] of PChar;
  vkLayer:array[0..0] of PChar;
  vkCInfo:TVkInstanceCreateInfo;
  vkPrintf:TVkValidationFeaturesEXT;
  vkFeature:TVkValidationFeatureEnableEXT;
+ Features2:TVkPhysicalDeviceFeatures2;
  r:TVkResult;
 begin
  vkApp:=Default(TVkApplicationInfo);
  vkApp.sType             :=VK_STRUCTURE_TYPE_APPLICATION_INFO;
- vkApp.pApplicationName  :='VulkanApp';
- vkApp.applicationVersion:=VK_MAKE_VERSION(1, 0, 0);
+ vkApp.pApplicationName  :='fpPS4';
+ vkApp.applicationVersion:=VK_MAKE_VERSION(0, 0, 1);
  vkApp.pEngineName       :=nil;
- vkApp.engineVersion     :=VK_MAKE_VERSION(1, 0, 0);
- vkApp.apiVersion        :={VK_API_VERSION_1_1;} VK_MAKE_API_VERSION(0, 1, 1, 0);
+ vkApp.engineVersion     :=VK_MAKE_VERSION(0, 0, 1);
+ vkApp.apiVersion        :=VK_MAKE_API_VERSION(0, 1, 1, 0); //VK_API_VERSION_1_1
 
  vkExtList[0]:=VK_KHR_SURFACE_EXTENSION_NAME;
  vkExtList[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
- vkExtList[2]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+ vkExtList[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+ vkExtList[3]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 
  vkCInfo:=Default(TVkInstanceCreateInfo);
  vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -649,12 +694,39 @@ begin
  FPhysicalDevice:=vkGetPhysicalDevice(FInstance);
  if (FPhysicalDevice=VK_NULL_HANDLE) then
  begin
-  Writeln('failed to chouse vulkan GPU');
-  Exit;
+  Writeln('failed to choice vulkan GPU');
+  halt;
  end;
 
  FDeviceFeature:=Default(TVkPhysicalDeviceFeatures);
- vkGetPhysicalDeviceFeatures(FPhysicalDevice,@FDeviceFeature);
+ F16_8:=Default(TVkPhysicalDeviceShaderFloat16Int8Features);
+ FSF_8:=Default(TVkPhysicalDevice8BitStorageFeatures);
+ FSF16:=Default(TVkPhysicalDevice16BitStorageFeatures);
+
+ if (vkGetPhysicalDeviceFeatures2<>nil) then
+ begin
+  Features2:=Default(TVkPhysicalDeviceFeatures2);
+
+  Features2.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  Features2.pNext:=@F16_8;
+
+  F16_8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+  F16_8.pNext:=@FSF_8;
+
+  FSF_8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
+  FSF_8.pNext:=@FSF16;
+
+  FSF16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+
+  vkGetPhysicalDeviceFeatures2(FPhysicalDevice,@Features2);
+
+  FDeviceFeature:=Features2.features;
+
+ end else
+ begin
+  vkGetPhysicalDeviceFeatures(FPhysicalDevice,@FDeviceFeature);
+ end;
+
 
  LoadFamily;
 end;
@@ -817,7 +889,7 @@ var
  formats:PVkSurfaceFormatKHR;
  r:TVkResult;
 
- function TryFind(format:TVkFormat):Boolean;
+ function TryFind(format:TVkFormat;var Fformat:TVkSurfaceFormatKHR):Boolean;
  var
   i:TVkUInt32;
  begin
@@ -838,18 +910,23 @@ begin
  if (r=VK_SUCCESS) and (count<>0) then
  begin
   repeat
-   formats:=GetMem(count*SizeOf(TVkSurfaceFormatKHR));
+   formats:=AllocMem(count*SizeOf(TVkSurfaceFormatKHR));
    vkGetPhysicalDeviceSurfaceFormatsKHR(VulkanApp.FPhysicalDevice,FHandle,@count,formats);
-   if TryFind(VK_FORMAT_R8G8B8A8_SRGB)         then Break;
-   if TryFind(VK_FORMAT_B8G8R8A8_SRGB)         then Break;
-   if TryFind(VK_FORMAT_A8B8G8R8_SRGB_PACK32)  then Break;
-   if TryFind(VK_FORMAT_R8G8B8A8_UNORM)        then Break;
-   if TryFind(VK_FORMAT_B8G8R8A8_UNORM)        then Break;
-   if TryFind(VK_FORMAT_A8B8G8R8_UNORM_PACK32) then Break;
+
+   if TryFind(VK_FORMAT_B8G8R8A8_SRGB        ,Fformat) then Break;
+   if TryFind(VK_FORMAT_B8G8R8A8_UNORM       ,Fformat) then Break;
+
+   if TryFind(VK_FORMAT_R8G8B8A8_SRGB        ,Fformat) then Break;
+   if TryFind(VK_FORMAT_R8G8B8A8_UNORM       ,Fformat) then Break;
+
+   if TryFind(VK_FORMAT_A8B8G8R8_SRGB_PACK32 ,Fformat) then Break;
+   if TryFind(VK_FORMAT_A8B8G8R8_UNORM_PACK32,Fformat) then Break;
+
    if (Fformat.format=VK_FORMAT_UNDEFINED) then
    begin
     Fformat:=formats[0];
    end;
+
   until true;
   FreeMem(formats);
   Writeln('VSurfaceFormat:',Fformat.format);
@@ -1320,14 +1397,13 @@ var
  DeviceQueues:TvDeviceQueues;
  //ImgProp:TVkFormatProperties;
 
- features_Shader8 :TVkPhysicalDeviceShaderFloat16Int8Features;
- features_Storage8:TVkPhysicalDevice8BitStorageFeaturesKHR;
+ F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
+ FSF_8:TVkPhysicalDevice8BitStorageFeatures;
+ FSF16:TVkPhysicalDevice16BitStorageFeatures;
 
- features_Storage16:TVkPhysicalDevice16BitStorageFeatures;
+ FScalar:TVkPhysicalDeviceScalarBlockLayoutFeatures;
 
- features_Scalar:TVkPhysicalDeviceScalarBlockLayoutFeatures;
-
- features_Coherent:TVkPhysicalDeviceCoherentMemoryFeaturesAMD;
+ FCoherent:TVkPhysicalDeviceCoherentMemoryFeaturesAMD;
 
 begin
  if XCHG(_lazy_init,1)=0 then
@@ -1372,11 +1448,11 @@ begin
   begin
    DeviceQueues.add_ext(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
 
-   features_Coherent:=Default(TVkPhysicalDeviceCoherentMemoryFeaturesAMD);
-   features_Coherent.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
-   features_Coherent.deviceCoherentMemory:=VK_TRUE;
+   FCoherent:=Default(TVkPhysicalDeviceCoherentMemoryFeaturesAMD);
+   FCoherent.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
+   FCoherent.deviceCoherentMemory:=VK_TRUE;
 
-   DeviceQueues.add_feature(@features_Coherent);
+   DeviceQueues.add_feature(@FCoherent);
   end;
 
   //if limits.VK_KHR_push_descriptor then
@@ -1393,42 +1469,63 @@ begin
   begin
    DeviceQueues.add_ext(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
 
-   features_Scalar:=Default(TVkPhysicalDeviceScalarBlockLayoutFeatures);
-   features_Scalar.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
-   features_Scalar.scalarBlockLayout:=VK_TRUE;
+   FScalar:=Default(TVkPhysicalDeviceScalarBlockLayoutFeatures);
+   FScalar.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+   FScalar.scalarBlockLayout:=VK_TRUE;
 
-   DeviceQueues.add_feature(@features_Scalar);
+   DeviceQueues.add_feature(@FScalar);
+  end;
+
+  if limits.VK_KHR_shader_float16_int8 then
+  begin
+   DeviceQueues.add_ext(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+  end;
+
+  if (VulkanApp.F16_8.shaderInt8<>0) or
+     (VulkanApp.F16_8.shaderFloat16<>0) then
+  begin
+   F16_8:=Default(TVkPhysicalDeviceShaderFloat16Int8Features);
+   F16_8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+   F16_8.shaderFloat16:=VulkanApp.F16_8.shaderFloat16;
+   F16_8.shaderInt8   :=VulkanApp.F16_8.shaderInt8;
+
+   DeviceQueues.add_feature(@F16_8);
   end;
 
   if limits.VK_KHR_8bit_storage then
   begin
    DeviceQueues.add_ext(VK_KHR_8BIT_STORAGE_EXTENSION_NAME);
+  end;
 
-   features_Shader8:=Default(TVkPhysicalDeviceShaderFloat16Int8Features);
-   features_Shader8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
-   features_Shader8.shaderInt8:=VK_TRUE;
+  if (VulkanApp.FSF_8.storageBuffer8BitAccess<>0) or
+     (VulkanApp.FSF_8.uniformAndStorageBuffer8BitAccess<>0) then
+  begin
+   FSF_8:=Default(TVkPhysicalDevice8BitStorageFeaturesKHR);
+   FSF_8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
+   FSF_8.storageBuffer8BitAccess          :=VulkanApp.FSF_8.storageBuffer8BitAccess;
+   FSF_8.uniformAndStorageBuffer8BitAccess:=VulkanApp.FSF_8.uniformAndStorageBuffer8BitAccess;
+   //FSF_8.storagePushConstant8
 
-   features_Storage8:=Default(TVkPhysicalDevice8BitStorageFeaturesKHR);
-   features_Storage8.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
-   features_Storage8.storageBuffer8BitAccess:=VK_TRUE;
-   features_Storage8.uniformAndStorageBuffer8BitAccess:=VK_TRUE;
-   //features_Storage8.storagePushConstant8:=VK_TRUE;
-
-   DeviceQueues.add_feature(@features_Shader8);
-   DeviceQueues.add_feature(@features_Storage8);
+   DeviceQueues.add_feature(@FSF_8);
   end;
 
   if limits.VK_KHR_16bit_storage then
   begin
    DeviceQueues.add_ext(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
+  end;
 
-   features_Storage16:=Default(TVkPhysicalDevice16BitStorageFeatures);
-   features_Storage16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
-   features_Storage16.storageBuffer16BitAccess:=VK_TRUE;
-   features_Storage16.uniformAndStorageBuffer16BitAccess:=VK_TRUE;
-   //features_Storage16.storagePushConstant16:=VK_TRUE;
+  if (VulkanApp.FSF16.storageBuffer16BitAccess<>0) or
+     (VulkanApp.FSF16.uniformAndStorageBuffer16BitAccess<>0) or
+     (VulkanApp.FSF16.storageInputOutput16<>0) then
+  begin
+   FSF16:=Default(TVkPhysicalDevice16BitStorageFeatures);
+   FSF16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+   FSF16.storageBuffer16BitAccess          :=VulkanApp.FSF16.storageBuffer16BitAccess;
+   FSF16.uniformAndStorageBuffer16BitAccess:=VulkanApp.FSF16.uniformAndStorageBuffer16BitAccess;
+   //FSF16.storagePushConstant16
+   FSF16.storageInputOutput16              :=VulkanApp.FSF16.storageInputOutput16;
 
-   DeviceQueues.add_feature(@features_Storage16);
+   DeviceQueues.add_feature(@FSF16);
   end;
 
   Device:=TvDevice.Create(DeviceQueues);
