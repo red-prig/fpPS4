@@ -464,23 +464,23 @@ end;
 type
  PGetTraceInfo=^TGetTraceInfo;
  TGetTraceInfo=packed record
-  Size:QWORD;             //32
-  flag:DWORD;             //1
-  get_segment_info:DWORD; //0
-  Unknow4:Pointer;        //[2]
-  Unknow5:Pointer;        //[3]
+  Size:QWORD;                    //32
+  flag:DWORD;                    //1
+  get_segment_info:DWORD;        //0
+  mspace_atomic_id_mask:PQWORD;
+  mstate_table:PQWORD;
  end;
 
 var
- td1:Pointer=Pointer($101);
- td2:Pointer=Pointer($202);
+ g_mspace_atomic_id_mask:QWORD=0;
+ g_mstate_table:array[0..63] of QWORD;
 
 //mysterious function
 procedure ps4_sceLibcHeapGetTraceInfo(P:PGetTraceInfo); SysV_ABI_CDecl;
 begin
- P^.get_segment_info:=0;
- P^.Unknow4:=@td1;
- P^.Unknow5:=@td2;
+ P^.get_segment_info     :=0;
+ P^.mspace_atomic_id_mask:=@g_mspace_atomic_id_mask;
+ P^.mstate_table         :=@g_mstate_table;
 end;
 
 function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
@@ -875,6 +875,7 @@ begin
  //mmap
 
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
+ lib^.set_proc($0B47FB4C971B7DA7,@ps4_sceKernelAvailableDirectMemorySize);
  lib^.set_proc($047A2E2D0CE1D17D,@ps4_sceKernelDirectMemoryQuery);
  lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);

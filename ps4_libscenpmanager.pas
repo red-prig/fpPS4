@@ -140,7 +140,12 @@ begin
  Result:=0;
 end;
 
-//nop nid:libSceNpManager:55F45298F9A3F10F:sceNpRegisterStateCallback
+function ps4_sceNpRegisterStateCallback(callback:SceNpStateCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Cb4Toolkit.callback:=callback;
+ Cb4Toolkit.userdata:=userdata;
+ Result:=0;
+end;
 
 function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
 begin
@@ -163,6 +168,7 @@ begin
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
+ lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);

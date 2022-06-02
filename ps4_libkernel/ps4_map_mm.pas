@@ -78,6 +78,13 @@ function ps4_sceKernelAllocateDirectMemory(
            memoryType:Integer;
            physicalAddrDest:PQWORD):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelAvailableDirectMemorySize(
+           searchStart:QWORD;
+           searchEnd:QWORD;
+           alignment:QWORD;
+           physAddrOut:PQWORD;
+           sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMapDirectMemory(
            virtualAddrDest:PPointer;
            length:QWORD;
@@ -460,6 +467,7 @@ type
   var
    FLock:TRWLock;
 
+   FDirectSize:QWORD;
    FDirectAdrSet:TDirectAdrSet;
 
    FMapBlockSet:TBlockSet;
@@ -1200,7 +1208,10 @@ begin
  Writeln('srch:',HexStr(searchStart,16),'..',HexStr(searchEnd,16),' len:',HexStr(length,16));
  Writeln('align:',HexStr(alignment,16),' ','mType:',str_mem_type(memoryType));
 
- if (physicalAddrDest=nil) or (length=0) or (searchEnd<searchStart) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (physicalAddrDest=nil) or (length=0) or (searchEnd<=searchStart) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if (searchEnd>SCE_KERNEL_MAIN_DMEM_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
  if not IsAlign(length   ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(alignment,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsPowerOfTwo(alignment)              then Exit(SCE_KERNEL_ERROR_EINVAL);
@@ -1212,22 +1223,40 @@ begin
  Adr.bType:=memoryType;
 
  Result:=0;
+
  _sig_lock;
  rwlock_wrlock(PageMM.FLock);
 
+ if ((PageMM.FDirectSize+Adr.nSize)>SCE_KERNEL_MAIN_DMEM_SIZE) then
+ begin
+  rwlock_unlock(PageMM.FLock);
+  _sig_unlock;
+  Exit(SCE_KERNEL_ERROR_EAGAIN);
+ end;
+
  repeat
+
+  if ((QWORD(Adr.pAddr)+Adr.nSize)>SCE_KERNEL_MAIN_DMEM_SIZE) then
+  begin
+   Result:=SCE_KERNEL_ERROR_EAGAIN;
+   Break;
+  end;
 
   Tmp.pAddr:=Adr.pAddr+Adr.nSize-1;
   Tmp.nSize:=0;
   Tmp.bType:=0;
+
   It:=PageMM.FDirectAdrSet.find_le(Tmp);
   if (It.Item=nil) then Break;
+
   Tmp:=It.Item^;
   m1:=Tmp.pAddr+Tmp.nSize;
+
   if (Adr.pAddr>=m1) then Break;
 
   m1:=AlignUp(m1,alignment);
   m2:=Adr.pAddr+alignment;
+
   if (m1>m2) then
    Adr.pAddr:=m1
   else
@@ -1235,19 +1264,21 @@ begin
 
   if (Adr.pAddr>=Pointer(searchEnd)) then
   begin
-   rwlock_unlock(PageMM.FLock);
-   _sig_unlock;
-   Exit(SCE_KERNEL_ERROR_EAGAIN);
+   Result:=SCE_KERNEL_ERROR_EAGAIN;
+   Break;
   end;
 
  until false;
 
- PageMM.FDirectAdrSet.Insert(Adr);
+ if (Result=0) then
+ begin
+  PageMM.FDirectSize:=PageMM.FDirectSize+Adr.nSize;
+  PageMM.FDirectAdrSet.Insert(Adr);
+  physicalAddrDest^:=QWORD(Adr.pAddr);
+ end;
 
  rwlock_unlock(PageMM.FLock);
  _sig_unlock;
-
- physicalAddrDest^:=QWORD(Adr.pAddr);
 
  Result:=0;
 end;
@@ -1266,6 +1297,87 @@ SCE_KERNEL_MAP_NO_COALESCE
  Instruct sceKernelVirtualQuery() not to merge neighboring areas
 
  }
+
+function ps4_sceKernelAvailableDirectMemorySize(
+            searchStart:QWORD;
+            searchEnd:QWORD;
+            alignment:QWORD;
+            physAddrOut:PQWORD;
+            sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
+var
+ It:TDirectAdrSet.Iterator;
+ offset,size:QWORD;
+ Tmp:TBlock;
+begin
+ if (physAddrOut=nil) or (sizeOut=nil) or (searchEnd<=searchStart) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if (searchEnd>SCE_KERNEL_MAIN_DMEM_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if not IsAlign(searchStart,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if not IsAlign(searchEnd  ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if not IsAlign(alignment  ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if not IsPowerOfTwo(alignment)                then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
+
+ physAddrOut^:=0;
+ sizeOut^    :=0;
+
+ offset:=0;
+
+ Result:=0;
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock);
+
+ repeat
+
+  Tmp.pAddr:=AlignUp(Pointer(offset),alignment);
+  Tmp.nSize:=0;
+  Tmp.bType:=0;
+
+  It:=PageMM.FDirectAdrSet.find_be(Tmp);
+
+  if (It.Item=nil) then //nothing to be
+  begin
+   size:=searchEnd-offset;
+   if (size=0) then
+   begin
+    Result:=SCE_KERNEL_ERROR_EAGAIN;
+    Break;
+   end else
+   begin
+    physAddrOut^:=offset;
+    sizeOut^    :=size;
+    Break;
+   end;
+  end;
+
+  Tmp:=It.Item^;
+
+  size:=QWORD(Tmp.pAddr)-offset;
+
+  if (size<>0) then
+  begin
+   physAddrOut^:=offset;
+   sizeOut^    :=size;
+   Break;
+  end;
+
+  offset:=QWORD(Tmp.pAddr)+Tmp.nSize;
+
+  if (offset>=searchEnd) then
+  begin
+   Result:=SCE_KERNEL_ERROR_EAGAIN;
+   Break;
+  end;
+
+ until false;
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+
+ Result:=0;
+end;
 
 const
  SCE_KERNEL_DMQ_FIND_NEXT=1;
@@ -1316,7 +1428,6 @@ begin
 
  rwlock_unlock(PageMM.FLock);
  _sig_unlock;
-
 end;
 
 function ps4_sceKernelMapDirectMemory(
