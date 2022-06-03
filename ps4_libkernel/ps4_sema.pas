@@ -6,7 +6,8 @@ interface
 
 uses
  windows,
- sys_types;
+ sys_types,
+ spinlock;
 
 const
  SCE_KERNEL_SEMA_ATTR_TH_FIFO=$01;
@@ -31,7 +32,7 @@ type
   num:Integer;
   value:Integer;
   //vlock:pthread_mutex_t;
-  lock:Pointer;
+  lock:r_spin_lock;
   name:array[0..31] of AnsiChar;
  end;
 
@@ -71,7 +72,6 @@ implementation
 
 uses
  atomic,
- spinlock,
  sys_kernel,
  sys_signal,
  sys_time,
@@ -408,7 +408,7 @@ begin
 
  //if (sv^.name='SuspendSemaphore') or
  //   (sv^.name='ResumeSemaphore') then
- // Writeln('>sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+  //Writeln('>sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
 
  if (count>sv^.max) then
  begin
@@ -421,9 +421,15 @@ begin
  semh :=sv^.s;
  spin_unlock(sv^.lock);
 
- if (cur_v>=0) then Exit(0);
+ if (cur_v>=0) then
+ begin
+  //Writeln('<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+  Exit(0);
+ end;
 
  //pthread_cleanup_push (clean_wait_sem, (void *) &arg);
+
+ //Writeln('!sem_wait:',sv^.name,' count:',count,' cur_v:',cur_v);
 
  System.InterlockedIncrement(sv^.num);
  Result:=do_sema_b_wait_intern(semh,pTimeout);
@@ -431,7 +437,7 @@ begin
 
  //if (sv^.name='SuspendSemaphore') or
  //   (sv^.name='ResumeSemaphore') then
- // Writeln('<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+  //Writeln('<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
 
  //pthread_cleanup_pop (ret);
  if (Result=EINVAL) then Result:=0;
@@ -462,12 +468,20 @@ begin
 
  //if (sv^.name='SuspendSemaphore') or
  //   (sv^.name='ResumeSemaphore') then
- // Writeln('>sem_post:',sv^.name,' count:',count,' value:',sv^.value);
+  //Writeln('>sem_post:',sv^.name,' count:',count,' value:',sv^.value);
 
- if (count>sv^.max) or (sv^.value>(sv^.max-count)) then
+ if (count>sv^.max) {or (sv^.value>(sv^.max-count))} then
  begin
+  //Writeln('EINVAL sem_post:',sv^.name,' count:',count,' value:',sv^.value);
   spin_unlock(sv^.lock);
   Exit(EINVAL);
+ end;
+
+ if (sv^.value>(sv^.max-count)) then
+ begin
+  //Writeln('EOVERFLOW sem_post:',sv^.name,' count:',count,' value:',sv^.value);
+  spin_unlock(sv^.lock);
+  Exit(EOVERFLOW);
  end;
 
  waiters_count:=-sv^.value;
