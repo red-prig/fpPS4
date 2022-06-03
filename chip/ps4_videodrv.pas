@@ -70,7 +70,7 @@ Var
 
  FCmdBuffer:TvCmdBuffer;
 
- FLastSetContextReg:WORD;
+ FLastSetReg:WORD;
 
  //FSubmitFlip:TqcFlipInfo;
  //PSubmitFlip:PqcFlipInfo;
@@ -82,7 +82,7 @@ procedure onPrepareFlip();
 begin
  //
 
- //vSubmitDone;
+ vSubmitDone;
 
 end;
 
@@ -98,14 +98,14 @@ begin
  FFlipLabel:=adr;
  FFlipLData:=Body^.DATA;
 
- //vSubmitDone;
+ vSubmitDone;
 end;
 
 procedure onPrepareFlipWithEopInterrupt(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
 begin
  {$ifdef ww}writeln;{$endif}
 
- //vSubmitDone;
+ vSubmitDone;
 
  post_event_eop;
 end;
@@ -122,7 +122,7 @@ begin
  FFlipLabel:=adr;
  FFlipLData:=Body^.DATA;
 
- //vSubmitDone;
+ vSubmitDone;
 
  post_event_eop;
 end;
@@ -165,7 +165,7 @@ begin
   begin
    {$ifdef ww}Writeln('Interrupt');{$endif}
 
-   //vSubmitDone;
+   vSubmitDone;
 
    post_event_eop;
   end;
@@ -403,7 +403,7 @@ end;
 procedure onNop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PDWORD);
 begin
 
- Case FLastSetContextReg of
+ Case FLastSetReg of
   mmCB_COLOR0_FMASK_SLICE,
   mmCB_COLOR1_FMASK_SLICE,
   mmCB_COLOR2_FMASK_SLICE,
@@ -571,6 +571,196 @@ begin
  GPU_REGS.Clear;
 end;
 
+procedure onSetCommonReg(reg:WORD;value:DWORD);
+begin
+ FLastSetReg:=reg;
+
+ Case reg of
+
+  //onSetContextReg
+
+  mmCB_COLOR0_BASE..mmCB_COLOR7_DCC_BASE:
+  begin
+   PDWORD(@GPU_REGS.RENDER_TARGET)[reg-mmCB_COLOR0_BASE]:=value;
+  end;
+
+  mmCB_TARGET_MASK  :DWORD(GPU_REGS.TARGET_MASK)     :=value;
+  mmCB_COLOR_CONTROL:DWORD(GPU_REGS.CB_COLOR_CONTROL):=value;
+
+
+  mmCB_BLEND_RED..mmCB_BLEND_ALPHA:
+  begin
+   PDWORD(@GPU_REGS.CB_BLEND_RGBA)[reg-mmCB_BLEND_RED]:=value;
+  end;
+
+  mmCB_BLEND0_CONTROL..mmCB_BLEND7_CONTROL:
+  begin
+   PDWORD(@GPU_REGS.CB_BLEND_CONTROL)[reg-mmCB_BLEND0_CONTROL]:=value;
+  end;
+
+  mmCB_SHADER_MASK  :DWORD(GPU_REGS.SPI.PS.SHADER_MASK):=value;
+
+  mmPA_SC_MODE_CNTL_0:DWORD(GPU_REGS.SC_MODE_CNTL_0) :=value;
+  mmPA_SC_MODE_CNTL_1:DWORD(GPU_REGS.SC_MODE_CNTL_1) :=value;
+
+  mmPA_SC_GENERIC_SCISSOR_TL:DWORD(GPU_REGS.GENERIC_SCISSOR.TL) :=value;
+  mmPA_SC_GENERIC_SCISSOR_BR:DWORD(GPU_REGS.GENERIC_SCISSOR.BR) :=value;
+
+  mmPA_SC_VPORT_SCISSOR_0_TL..mmPA_SC_VPORT_SCISSOR_15_BR:
+  begin
+   PDWORD(@GPU_REGS.VPORT_SCISSOR)[reg-mmPA_SC_VPORT_SCISSOR_0_TL]:=value;
+  end;
+
+  mmPA_SC_VPORT_ZMIN_0..mmPA_SC_VPORT_ZMAX_15:
+  begin
+   PDWORD(@GPU_REGS.VPORT_ZMIN_MAX)[reg-mmPA_SC_VPORT_ZMIN_0]:=value;
+  end;
+
+  mmPA_CL_VPORT_XSCALE..mmPA_CL_VPORT_ZOFFSET_15:
+  begin
+   PDWORD(@GPU_REGS.VPORT_SCALE_OFFSET)[reg-mmPA_CL_VPORT_XSCALE]:=value;
+  end;
+
+  mmPA_CL_VTE_CNTL:DWORD(GPU_REGS.VTE_CNTL):=value;
+
+  mmPA_SC_SCREEN_SCISSOR_TL:DWORD(GPU_REGS.SCREEN_SCISSOR_TL):=value;
+  mmPA_SC_SCREEN_SCISSOR_BR:DWORD(GPU_REGS.SCREEN_SCISSOR_BR):=value;
+
+  mmPA_SC_AA_MASK_X0Y0_X1Y0:DWORD(GPU_REGS.SC_AA_MASK_X0Y0_X1Y0):=value;
+  mmPA_SC_AA_MASK_X0Y1_X1Y1:DWORD(GPU_REGS.SC_AA_MASK_X0Y1_X1Y1):=value;
+  mmPA_SC_AA_CONFIG        :DWORD(GPU_REGS.SC_AA_CONFIG):=value;
+
+  mmPA_SU_HARDWARE_SCREEN_OFFSET:DWORD(GPU_REGS.HARDWARE_SCREEN_OFFSET):=value;
+
+  mmPA_SU_VTX_CNTL:DWORD(GPU_REGS.VTX_CNTL):=value;
+
+  mmPA_SU_LINE_CNTL:DWORD(GPU_REGS.SU_LINE_CNTL)      :=value;
+  mmPA_SU_POINT_SIZE:DWORD(GPU_REGS.SU_POINT_SIZE)    :=value;
+  mmPA_SU_POINT_MINMAX:DWORD(GPU_REGS.SU_POINT_MINMAX):=value;
+
+  mmPA_CL_CLIP_CNTL:DWORD(GPU_REGS.CL_CLIP_CNTL)        :=value;
+  mmPA_SC_CLIPRECT_RULE:DWORD(GPU_REGS.SC_CLIPRECT_RULE):=value;
+
+  mmPA_CL_GB_VERT_CLIP_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_CLIP_ADJ)^:=value;
+  mmPA_CL_GB_VERT_DISC_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_DISC_ADJ)^:=value;
+  mmPA_CL_GB_HORZ_CLIP_ADJ:PDWORD(@GPU_REGS.GB_CLIP.HORZ_CLIP_ADJ)^:=value;
+  mmPA_CL_GB_HORZ_DISC_ADJ:PDWORD(@GPU_REGS.GB_CLIP.HORZ_DISC_ADJ)^:=value;
+
+  mmSPI_VS_OUT_CONFIG    :DWORD(GPU_REGS.SPI.VS.OUT_CONFIG):=value;
+  mmPA_CL_VS_OUT_CNTL    :DWORD(GPU_REGS.SPI.VS.OUT_CNTL):=value;
+
+  mmSPI_SHADER_POS_FORMAT:DWORD(GPU_REGS.SPI.VS.POS_FORMAT):=value;
+  mmSPI_SHADER_Z_FORMAT  :DWORD(GPU_REGS.SPI.PS.Z_FORMAT)  :=value;
+  mmSPI_SHADER_COL_FORMAT:DWORD(GPU_REGS.SPI.PS.COL_FORMAT):=value;
+  mmSPI_BARYC_CNTL       :DWORD(GPU_REGS.SPI.PS.BARYC_CNTL):=value;
+
+  mmSPI_PS_INPUT_ENA     :DWORD(GPU_REGS.SPI.PS.INPUT_ENA) :=value;
+  mmSPI_PS_INPUT_ADDR    :DWORD(GPU_REGS.SPI.PS.INPUT_ADDR):=value;
+  mmSPI_PS_IN_CONTROL    :DWORD(GPU_REGS.SPI.PS.IN_CONTROL):=value;
+
+  mmSPI_PS_INPUT_CNTL_0..mmSPI_PS_INPUT_CNTL_31:
+  begin
+   PDWORD(@GPU_REGS.SPI.PS.INPUT_CNTL)[reg-mmSPI_PS_INPUT_CNTL_0]:=value;
+  end;
+
+  mmDB_SHADER_CONTROL    :DWORD(GPU_REGS.SPI.PS.SHADER_CONTROL):=value;
+
+  mmDB_RENDER_CONTROL    :DWORD(GPU_REGS.DEPTH.RENDER_CONTROL):=value;
+  mmDB_DEPTH_CONTROL     :DWORD(GPU_REGS.DEPTH.DEPTH_CONTROL):=value;
+
+  mmDB_DEPTH_VIEW        :DWORD(GPU_REGS.DEPTH.DEPTH_VIEW        ):=value;
+  mmDB_HTILE_DATA_BASE   :DWORD(GPU_REGS.DEPTH.HTILE_DATA_BASE   ):=value;
+  mmDB_DEPTH_BOUNDS_MIN  :DWORD(GPU_REGS.DEPTH.DEPTH_BOUNDS_MIN  ):=value;
+  mmDB_DEPTH_BOUNDS_MAX  :DWORD(GPU_REGS.DEPTH.DEPTH_BOUNDS_MAX  ):=value;
+  mmDB_STENCIL_CLEAR     :DWORD(GPU_REGS.DEPTH.STENCIL_CLEAR     ):=value;
+  mmDB_DEPTH_CLEAR       :DWORD(GPU_REGS.DEPTH.DEPTH_CLEAR       ):=value;
+
+  mmDB_DEPTH_INFO        :DWORD(GPU_REGS.DEPTH.DEPTH_INFO        ):=value;
+  mmDB_Z_INFO            :DWORD(GPU_REGS.DEPTH.Z_INFO            ):=value;
+  mmDB_STENCIL_INFO      :DWORD(GPU_REGS.DEPTH.STENCIL_INFO      ):=value;
+  mmDB_Z_READ_BASE       :DWORD(GPU_REGS.DEPTH.Z_READ_BASE       ):=value;
+  mmDB_STENCIL_READ_BASE :DWORD(GPU_REGS.DEPTH.STENCIL_READ_BASE ):=value;
+  mmDB_Z_WRITE_BASE      :DWORD(GPU_REGS.DEPTH.Z_WRITE_BASE      ):=value;
+  mmDB_STENCIL_WRITE_BASE:DWORD(GPU_REGS.DEPTH.STENCIL_WRITE_BASE):=value;
+  mmDB_DEPTH_SIZE        :DWORD(GPU_REGS.DEPTH.DEPTH_SIZE        ):=value;
+  mmDB_DEPTH_SLICE       :DWORD(GPU_REGS.DEPTH.DEPTH_SLICE       ):=value;
+
+  mmDB_HTILE_SURFACE     :DWORD(GPU_REGS.DEPTH.HTILE_SURFACE     ):=value;
+
+  mmVGT_SHADER_STAGES_EN :DWORD(GPU_REGS.VGT_SHADER_STAGES_EN) :=value;
+  mmVGT_OUT_DEALLOC_CNTL :DWORD(GPU_REGS.VGT_OUT_DEALLOC_CNTL) :=value;
+
+  mmVGT_VTX_CNT_EN       :DWORD(GPU_REGS.VGT_VTX_INDX.CNT_EN):=value;
+
+  mmVGT_MIN_VTX_INDX     :DWORD(GPU_REGS.VGT_VTX_INDX.MIN_INDX):=value;
+  mmVGT_MAX_VTX_INDX     :DWORD(GPU_REGS.VGT_VTX_INDX.MAX_INDX):=value;
+
+  mmVGT_INDX_OFFSET      :DWORD(GPU_REGS.VGT_VTX_INDX.INDX_OFFSET):=value;
+
+  mmVGT_MULTI_PRIM_IB_RESET_INDX:DWORD(GPU_REGS.VGT_MULTI_PRIM_IB_RESET_INDX):=value;
+
+  mmVGT_OUTPUT_PATH_CNTL:DWORD(GPU_REGS.VGT_OUTPUT_PATH_CNTL):=value;
+
+  //mmVGT_GS_MODE:value:=value;
+
+  mmPA_SU_POLY_OFFSET_DB_FMT_CNTL:DWORD(GPU_REGS.PA_SU_POLY_OFFSET_DB_FMT_CNTL):=value;
+
+
+  //SetShReg
+
+  mmSPI_SHADER_PGM_LO_PS   :GPU_REGS.SPI.PS.LO:=value;
+  mmSPI_SHADER_PGM_HI_PS   :GPU_REGS.SPI.PS.HI:=value;
+  mmSPI_SHADER_PGM_RSRC1_PS:DWORD(GPU_REGS.SPI.PS.RSRC1):=value;
+  mmSPI_SHADER_PGM_RSRC2_PS:DWORD(GPU_REGS.SPI.PS.RSRC2):=value;
+  mmSPI_SHADER_PGM_RSRC3_PS:DWORD(GPU_REGS.SPI.PS.RSRC3):=value;
+
+  mmSPI_SHADER_USER_DATA_PS_0..mmSPI_SHADER_USER_DATA_PS_15:
+   PDWORD(@GPU_REGS.SPI.PS.USER_DATA)[reg-mmSPI_SHADER_USER_DATA_PS_0]:=value;
+
+  mmSPI_SHADER_PGM_LO_VS   :GPU_REGS.SPI.VS.LO:=value;
+  mmSPI_SHADER_PGM_HI_VS   :GPU_REGS.SPI.VS.HI:=value;
+  mmSPI_SHADER_PGM_RSRC1_VS:DWORD(GPU_REGS.SPI.VS.RSRC1):=value;
+  mmSPI_SHADER_PGM_RSRC2_VS:DWORD(GPU_REGS.SPI.VS.RSRC2):=value;
+  mmSPI_SHADER_PGM_RSRC3_VS:DWORD(GPU_REGS.SPI.VS.RSRC3):=value;
+
+  mmSPI_SHADER_USER_DATA_VS_0..mmSPI_SHADER_USER_DATA_VS_15:
+   PDWORD(@GPU_REGS.SPI.VS.USER_DATA)[reg-mmSPI_SHADER_USER_DATA_VS_0]:=value;
+
+  mmSPI_SHADER_LATE_ALLOC_VS:DWORD(GPU_REGS.SPI.VS.LATE_ALLOC):=value;
+
+  //mmSPI_SHADER_PGM_RSRC3_GS:value:=value;
+  //mmSPI_SHADER_PGM_RSRC3_ES:value:=value;
+  //mmSPI_SHADER_PGM_RSRC3_HS:value:=value;
+  //mmSPI_SHADER_PGM_RSRC3_LS:value:=value;
+
+  mmCOMPUTE_PGM_LO         :GPU_REGS.SPI.CS.LO:=value;
+  mmCOMPUTE_PGM_HI         :GPU_REGS.SPI.CS.HI:=value;
+  mmCOMPUTE_PGM_RSRC1      :DWORD(GPU_REGS.SPI.CS.RSRC1):=value;
+  mmCOMPUTE_PGM_RSRC2      :DWORD(GPU_REGS.SPI.CS.RSRC2):=value;
+
+  mmCOMPUTE_NUM_THREAD_X   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_X):=value;
+  mmCOMPUTE_NUM_THREAD_Y   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_Y):=value;
+  mmCOMPUTE_NUM_THREAD_Z   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_Z):=value;
+
+  mmCOMPUTE_USER_DATA_0..mmCOMPUTE_USER_DATA_15:
+   PDWORD(@GPU_REGS.SPI.CS.USER_DATA)[reg-mmCOMPUTE_USER_DATA_0]:=value;
+
+  mmCOMPUTE_STATIC_THREAD_MGMT_SE0:DWORD(GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE0):=value;
+  mmCOMPUTE_STATIC_THREAD_MGMT_SE1:DWORD(GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE1):=value;
+  mmCOMPUTE_RESOURCE_LIMITS       :DWORD(GPU_REGS.SPI.CS.RESOURCE_LIMITS):=value;
+
+  //SetUConfigReg
+
+  mmVGT_PRIMITIVE_TYPE:DWORD(GPU_REGS.VGT_PRIMITIVE_TYPE):=value;
+  mmVGT_INDEX_TYPE    :DWORD(GPU_REGS.VGT_INDEX_TYPE    ):=value;
+  mmVGT_NUM_INSTANCES :DWORD(GPU_REGS.VGT_NUM_INSTANCES ):=value;
+  mmGRBM_GFX_INDEX    :DWORD(GPU_REGS.GRBM_GFX_INDEX    ):=value;
+
+  {$ifdef ww}else
+   Writeln('onSetCommonReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
+ end;
+end;
+
 const
  CONTEXT_REG_BASE = $A000;
  CONTEXT_SPACE_START=$0000a000;
@@ -587,130 +777,10 @@ begin
   r:=CONTEXT_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  FLastSetContextReg:=r;
-  {$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  //{$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
-  Case r of
-   mmCB_COLOR0_BASE..mmCB_COLOR7_DCC_BASE:
-   begin
-    PDWORD(@GPU_REGS.RENDER_TARGET)[r-mmCB_COLOR0_BASE]:=v;
-   end;
-   mmCB_TARGET_MASK  :DWORD(GPU_REGS.TARGET_MASK)     :=v;
-   mmCB_COLOR_CONTROL:DWORD(GPU_REGS.CB_COLOR_CONTROL):=v;
-
-   mmCB_BLEND0_CONTROL..mmCB_BLEND7_CONTROL:
-   begin
-    PDWORD(@GPU_REGS.CB_BLEND_CONTROL)[r-mmCB_BLEND0_CONTROL]:=v;
-   end;
-
-   mmCB_SHADER_MASK  :DWORD(GPU_REGS.SPI.PS.SHADER_MASK):=v;
-
-   mmPA_SC_MODE_CNTL_0:DWORD(GPU_REGS.SC_MODE_CNTL_0) :=v;
-   mmPA_SC_MODE_CNTL_1:DWORD(GPU_REGS.SC_MODE_CNTL_1) :=v;
-
-   mmPA_SC_VPORT_SCISSOR_0_TL..mmPA_SC_VPORT_SCISSOR_15_BR:
-   begin
-    PDWORD(@GPU_REGS.VPORT_SCISSOR)[r-mmPA_SC_VPORT_SCISSOR_0_TL]:=v;
-   end;
-
-   mmPA_SC_VPORT_ZMIN_0..mmPA_SC_VPORT_ZMAX_15:
-   begin
-    PDWORD(@GPU_REGS.VPORT_ZMIN_MAX)[r-mmPA_SC_VPORT_ZMIN_0]:=v;
-   end;
-
-   mmPA_CL_VPORT_XSCALE..mmPA_CL_VPORT_ZOFFSET_15:
-   begin
-    PDWORD(@GPU_REGS.VPORT_SCALE_OFFSET)[r-mmPA_CL_VPORT_XSCALE]:=v;
-   end;
-
-   mmPA_CL_VTE_CNTL:DWORD(GPU_REGS.VTE_CNTL):=v;
-
-   mmPA_SC_SCREEN_SCISSOR_TL:DWORD(GPU_REGS.SCREEN_SCISSOR_TL):=v;
-   mmPA_SC_SCREEN_SCISSOR_BR:DWORD(GPU_REGS.SCREEN_SCISSOR_BR):=v;
-
-   mmPA_SC_AA_MASK_X0Y0_X1Y0:DWORD(GPU_REGS.SC_AA_MASK_X0Y0_X1Y0):=v;
-   mmPA_SC_AA_MASK_X0Y1_X1Y1:DWORD(GPU_REGS.SC_AA_MASK_X0Y1_X1Y1):=v;
-   mmPA_SC_AA_CONFIG        :DWORD(GPU_REGS.SC_AA_CONFIG):=v;
-
-   mmPA_SU_HARDWARE_SCREEN_OFFSET:DWORD(GPU_REGS.HARDWARE_SCREEN_OFFSET):=v;
-
-   mmPA_SU_VTX_CNTL:DWORD(GPU_REGS.VTX_CNTL):=v;
-
-   mmPA_SU_LINE_CNTL:DWORD(GPU_REGS.SU_LINE_CNTL)      :=v;
-   mmPA_SU_POINT_SIZE:DWORD(GPU_REGS.SU_POINT_SIZE)    :=v;
-   mmPA_SU_POINT_MINMAX:DWORD(GPU_REGS.SU_POINT_MINMAX):=v;
-
-   mmPA_CL_CLIP_CNTL:DWORD(GPU_REGS.CL_CLIP_CNTL)        :=v;
-   mmPA_SC_CLIPRECT_RULE:DWORD(GPU_REGS.SC_CLIPRECT_RULE):=v;
-
-   mmPA_CL_GB_VERT_CLIP_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_CLIP_ADJ)^:=v;
-   mmPA_CL_GB_VERT_DISC_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_DISC_ADJ)^:=v;
-   mmPA_CL_GB_HORZ_CLIP_ADJ:PDWORD(@GPU_REGS.GB_CLIP.HORZ_CLIP_ADJ)^:=v;
-   mmPA_CL_GB_HORZ_DISC_ADJ:PDWORD(@GPU_REGS.GB_CLIP.HORZ_DISC_ADJ)^:=v;
-
-   mmSPI_VS_OUT_CONFIG    :DWORD(GPU_REGS.SPI.VS.OUT_CONFIG):=v;
-   mmPA_CL_VS_OUT_CNTL    :DWORD(GPU_REGS.SPI.VS.OUT_CNTL):=v;
-
-   mmSPI_SHADER_POS_FORMAT:DWORD(GPU_REGS.SPI.VS.POS_FORMAT):=v;
-   mmSPI_SHADER_Z_FORMAT  :DWORD(GPU_REGS.SPI.PS.Z_FORMAT)  :=v;
-   mmSPI_SHADER_COL_FORMAT:DWORD(GPU_REGS.SPI.PS.COL_FORMAT):=v;
-   mmSPI_BARYC_CNTL       :DWORD(GPU_REGS.SPI.PS.BARYC_CNTL):=v;
-
-   mmSPI_PS_INPUT_ENA     :DWORD(GPU_REGS.SPI.PS.INPUT_ENA) :=v;
-   mmSPI_PS_INPUT_ADDR    :DWORD(GPU_REGS.SPI.PS.INPUT_ADDR):=v;
-   mmSPI_PS_IN_CONTROL    :DWORD(GPU_REGS.SPI.PS.IN_CONTROL):=v;
-
-   mmSPI_PS_INPUT_CNTL_0..mmSPI_PS_INPUT_CNTL_31:
-   begin
-    PDWORD(@GPU_REGS.SPI.PS.INPUT_CNTL)[r-mmSPI_PS_INPUT_CNTL_0]:=v;
-   end;
-
-   mmDB_SHADER_CONTROL    :DWORD(GPU_REGS.SPI.PS.SHADER_CONTROL):=v;
-
-   mmDB_RENDER_CONTROL    :DWORD(GPU_REGS.DEPTH.RENDER_CONTROL):=v;
-   mmDB_DEPTH_CONTROL     :DWORD(GPU_REGS.DEPTH.DEPTH_CONTROL):=v;
-
-   mmDB_DEPTH_VIEW        :DWORD(GPU_REGS.DEPTH.DEPTH_VIEW        ):=v;
-   mmDB_HTILE_DATA_BASE   :DWORD(GPU_REGS.DEPTH.HTILE_DATA_BASE   ):=v;
-   mmDB_DEPTH_BOUNDS_MIN  :DWORD(GPU_REGS.DEPTH.DEPTH_BOUNDS_MIN  ):=v;
-   mmDB_DEPTH_BOUNDS_MAX  :DWORD(GPU_REGS.DEPTH.DEPTH_BOUNDS_MAX  ):=v;
-   mmDB_STENCIL_CLEAR     :DWORD(GPU_REGS.DEPTH.STENCIL_CLEAR     ):=v;
-   mmDB_DEPTH_CLEAR       :DWORD(GPU_REGS.DEPTH.DEPTH_CLEAR       ):=v;
-
-   mmDB_DEPTH_INFO        :DWORD(GPU_REGS.DEPTH.DEPTH_INFO        ):=v;
-   mmDB_Z_INFO            :DWORD(GPU_REGS.DEPTH.Z_INFO            ):=v;
-   mmDB_STENCIL_INFO      :DWORD(GPU_REGS.DEPTH.STENCIL_INFO      ):=v;
-   mmDB_Z_READ_BASE       :DWORD(GPU_REGS.DEPTH.Z_READ_BASE       ):=v;
-   mmDB_STENCIL_READ_BASE :DWORD(GPU_REGS.DEPTH.STENCIL_READ_BASE ):=v;
-   mmDB_Z_WRITE_BASE      :DWORD(GPU_REGS.DEPTH.Z_WRITE_BASE      ):=v;
-   mmDB_STENCIL_WRITE_BASE:DWORD(GPU_REGS.DEPTH.STENCIL_WRITE_BASE):=v;
-   mmDB_DEPTH_SIZE        :DWORD(GPU_REGS.DEPTH.DEPTH_SIZE        ):=v;
-   mmDB_DEPTH_SLICE       :DWORD(GPU_REGS.DEPTH.DEPTH_SLICE       ):=v;
-
-   mmDB_HTILE_SURFACE     :DWORD(GPU_REGS.DEPTH.HTILE_SURFACE     ):=v;
-
-   mmVGT_SHADER_STAGES_EN :DWORD(GPU_REGS.VGT_SHADER_STAGES_EN) :=v;
-   mmVGT_OUT_DEALLOC_CNTL :DWORD(GPU_REGS.VGT_OUT_DEALLOC_CNTL) :=v;
-
-   mmVGT_VTX_CNT_EN       :DWORD(GPU_REGS.VGT_VTX_INDX.CNT_EN):=v;
-
-   mmVGT_MIN_VTX_INDX     :DWORD(GPU_REGS.VGT_VTX_INDX.MIN_INDX):=v;
-   mmVGT_MAX_VTX_INDX     :DWORD(GPU_REGS.VGT_VTX_INDX.MAX_INDX):=v;
-
-   mmVGT_INDX_OFFSET      :DWORD(GPU_REGS.VGT_VTX_INDX.INDX_OFFSET):=v;
-
-   mmVGT_MULTI_PRIM_IB_RESET_INDX:DWORD(GPU_REGS.VGT_MULTI_PRIM_IB_RESET_INDX):=v;
-
-   mmVGT_OUTPUT_PATH_CNTL:DWORD(GPU_REGS.VGT_OUTPUT_PATH_CNTL):=v;
-
-   //mmVGT_GS_MODE:v:=v;
-
-   mmPA_SU_POLY_OFFSET_DB_FMT_CNTL:DWORD(GPU_REGS.PA_SU_POLY_OFFSET_DB_FMT_CNTL):=v;
-
-   {$ifdef ww}else
-     Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
-  end;
+  onSetCommonReg(r,v);
 
  end;
 end;
@@ -730,55 +800,10 @@ begin
   r:=PERSISTENT_SPACE_START+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  {$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  //{$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
-  Case r of
-
-   mmSPI_SHADER_PGM_LO_PS   :GPU_REGS.SPI.PS.LO:=v;
-   mmSPI_SHADER_PGM_HI_PS   :GPU_REGS.SPI.PS.HI:=v;
-   mmSPI_SHADER_PGM_RSRC1_PS:DWORD(GPU_REGS.SPI.PS.RSRC1):=v;
-   mmSPI_SHADER_PGM_RSRC2_PS:DWORD(GPU_REGS.SPI.PS.RSRC2):=v;
-   mmSPI_SHADER_PGM_RSRC3_PS:DWORD(GPU_REGS.SPI.PS.RSRC3):=v;
-
-   mmSPI_SHADER_USER_DATA_PS_0..mmSPI_SHADER_USER_DATA_PS_15:
-    PDWORD(@GPU_REGS.SPI.PS.USER_DATA)[r-mmSPI_SHADER_USER_DATA_PS_0]:=v;
-
-   mmSPI_SHADER_PGM_LO_VS   :GPU_REGS.SPI.VS.LO:=v;
-   mmSPI_SHADER_PGM_HI_VS   :GPU_REGS.SPI.VS.HI:=v;
-   mmSPI_SHADER_PGM_RSRC1_VS:DWORD(GPU_REGS.SPI.VS.RSRC1):=v;
-   mmSPI_SHADER_PGM_RSRC2_VS:DWORD(GPU_REGS.SPI.VS.RSRC2):=v;
-   mmSPI_SHADER_PGM_RSRC3_VS:DWORD(GPU_REGS.SPI.VS.RSRC3):=v;
-
-   mmSPI_SHADER_USER_DATA_VS_0..mmSPI_SHADER_USER_DATA_VS_15:
-    PDWORD(@GPU_REGS.SPI.VS.USER_DATA)[r-mmSPI_SHADER_USER_DATA_VS_0]:=v;
-
-   mmSPI_SHADER_LATE_ALLOC_VS:DWORD(GPU_REGS.SPI.VS.LATE_ALLOC):=v;
-
-   //mmSPI_SHADER_PGM_RSRC3_GS:v:=v;
-   //mmSPI_SHADER_PGM_RSRC3_ES:v:=v;
-   //mmSPI_SHADER_PGM_RSRC3_HS:v:=v;
-   //mmSPI_SHADER_PGM_RSRC3_LS:v:=v;
-
-   mmCOMPUTE_PGM_LO         :GPU_REGS.SPI.CS.LO:=v;
-   mmCOMPUTE_PGM_HI         :GPU_REGS.SPI.CS.HI:=v;
-   mmCOMPUTE_PGM_RSRC1      :DWORD(GPU_REGS.SPI.CS.RSRC1):=v;
-   mmCOMPUTE_PGM_RSRC2      :DWORD(GPU_REGS.SPI.CS.RSRC2):=v;
-
-   mmCOMPUTE_NUM_THREAD_X   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_X):=v;
-   mmCOMPUTE_NUM_THREAD_Y   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_Y):=v;
-   mmCOMPUTE_NUM_THREAD_Z   :DWORD(GPU_REGS.SPI.CS.NUM_THREAD_Z):=v;
-
-   mmCOMPUTE_USER_DATA_0..mmCOMPUTE_USER_DATA_15:
-    PDWORD(@GPU_REGS.SPI.CS.USER_DATA)[r-mmCOMPUTE_USER_DATA_0]:=v;
-
-   mmCOMPUTE_STATIC_THREAD_MGMT_SE0:DWORD(GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE0):=v;
-   mmCOMPUTE_STATIC_THREAD_MGMT_SE1:DWORD(GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE1):=v;
-   mmCOMPUTE_RESOURCE_LIMITS       :DWORD(GPU_REGS.SPI.CS.RESOURCE_LIMITS):=v;
-
-   {$ifdef ww}else
-    Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
-  end;
+  onSetCommonReg(r,v);
 
  end;
 end;
@@ -811,14 +836,7 @@ begin
 
   //{$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
 
-  Case r of
-   mmVGT_PRIMITIVE_TYPE:DWORD(GPU_REGS.VGT_PRIMITIVE_TYPE):=v;
-   mmVGT_INDEX_TYPE    :DWORD(GPU_REGS.VGT_INDEX_TYPE    ):=v;
-   mmVGT_NUM_INSTANCES :DWORD(GPU_REGS.VGT_NUM_INSTANCES ):=v;
-   mmGRBM_GFX_INDEX    :DWORD(GPU_REGS.GRBM_GFX_INDEX    ):=v;
-   {$ifdef ww}else
-    Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
-  end;
+  onSetCommonReg(r,v);
 
  end;
 
@@ -1083,8 +1101,10 @@ begin
  FRenderCmd.FFramebuffer.SetSize(GPU_REGS.GET_SCREEN_SIZE);
 
  FRenderCmd.FPipeline.SetPrimType(GPU_REGS.GET_PRIM_TYPE);
+ FRenderCmd.FPipeline.SetBlendColors(@GPU_REGS.CB_BLEND_RGBA);
 
  FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+
 
  For i:=0 to 15 do
   if GPU_REGS.VP_ENABLE(i) then
@@ -1985,122 +2005,118 @@ begin
    token:=PDWORD(P)^;
 
    case PM4_TYPE(token) of
-    0:onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
-    3:case PM4_TYPE_3_HEADER(token).opcode of
-       IT_NOP:
-       begin
-        onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_EVENT_WRITE_EOP:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
-        onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_EVENT_WRITE_EOS:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
-        onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_DMA_DATA:
-       begin
-        {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
-        onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_ACQUIRE_MEM:
-       begin
-        {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
-        onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_CONTEXT_CONTROL:
-       begin
-        {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
-        onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_CLEAR_STATE:
-       begin
-        {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
-        onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_SET_CONTEXT_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
-        onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_SET_SH_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
-        onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_SET_UCONFIG_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
-        onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_INDEX_TYPE:
-       begin
-        {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
-        onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_DRAW_INDEX_2:
-       begin
-        {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
-        onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_DRAW_INDEX_AUTO:
-       begin
-        {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
-        onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-       IT_DISPATCH_DIRECT:
-       begin
-        {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
-        onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
+    0:begin
+       onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
+      end;
+    3:begin
+       case PM4_TYPE_3_HEADER(token).opcode of
+        IT_NOP:
+        begin
+         onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_EVENT_WRITE_EOP:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
+         onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_EVENT_WRITE_EOS:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
+         onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DMA_DATA:
+        begin
+         {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
+         onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_ACQUIRE_MEM:
+        begin
+         {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
+         onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_CONTEXT_CONTROL:
+        begin
+         {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
+         onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_CLEAR_STATE:
+        begin
+         {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
+         onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_CONTEXT_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
+         onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_SH_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
+         onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_UCONFIG_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
+         onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_INDEX_TYPE:
+        begin
+         {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
+         onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DRAW_INDEX_2:
+        begin
+         {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
+         onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DRAW_INDEX_AUTO:
+        begin
+         {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
+         onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DISPATCH_DIRECT:
+        begin
+         {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
+         onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_NUM_INSTANCES:
+        begin
+         {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
+         onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_WAIT_REG_MEM:
+        begin
+         {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
+         onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_WRITE_DATA:
+        begin
+         {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
+         onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+         //(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_EVENT_WRITE:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
+         onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        {$ifdef ww}else
+         Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));{$endif}
        end;
 
-       IT_NUM_INSTANCES:
-       begin
-        {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
-        onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
+       case PM4_TYPE_3_HEADER(token).opcode of
+        IT_SET_CONTEXT_REG:;
+        IT_SET_SH_REG     :;
+        IT_SET_UCONFIG_REG:;
+        else
+         FLastSetReg:=0;
        end;
 
-       IT_WAIT_REG_MEM:
-       begin
-        {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
-        onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-
-       IT_WRITE_DATA:
-       begin
-        {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
-        onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        //(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-
-       IT_EVENT_WRITE:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
-        onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        FLastSetContextReg:=0;
-       end;
-
-       {$ifdef ww}else
-        Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));{$endif}
       end;
 
     else
@@ -2136,7 +2152,7 @@ begin
   FCmdBuffer.ReleaseResource;
  end;
 
- RenderQueue.QueueWaitIdle;
+ //RenderQueue.QueueWaitIdle;
 
  if (FFlipLabel<>nil) then
  begin
