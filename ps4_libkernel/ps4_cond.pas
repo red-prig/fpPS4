@@ -153,12 +153,13 @@ Const
  LIFE_COND=$C0BAB1FD;
  DEAD_COND=$C0DEADBF;
 
-{type
- sCondWaitHelper=record
+type
+ psCondWaitHelper=^sCondWaitHelper;
+ sCondWaitHelper=packed record
   c:pthread_cond;
-  external_mutex:pthread_mutex;
+  external_mutex:p_pthread_mutex;
   r:Pinteger;
- end;}
+ end;
 
 var
  cond_locked:Pointer=nil;
@@ -299,27 +300,29 @@ begin
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
 
+ //Writeln('pthread_cond_signal:',_c^.name);
+
  SwEnterCriticalSection(_c^.waiters_count_lock_);
 
  //mingw implement is wrong
- if true {(_c^.waiters_count_unblock_<>0)} then
+ if {true} (_c^.waiters_count_unblock_<>0) then
  begin
   if (_c^.waiters_count_=0) then
   begin
    System.LeaveCriticalSection(_c^.waiters_count_lock_);
    Exit(0);
   end;
+
   Dec(_c^.waiters_count_);
   Inc(_c^.waiters_count_unblock_);
  end else
- if false {(_c^.waiters_count_>_c^.waiters_count_gone_)} then
+ if {false} (_c^.waiters_count_>_c^.waiters_count_gone_) then
  begin
 
   r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
 
   if (r<>0) then
   begin
-        //r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
    System.LeaveCriticalSection (_c^.waiters_count_lock_);
    Exit(r);
   end;
@@ -329,11 +332,9 @@ begin
    Dec(_c^.waiters_count_,_c^.waiters_count_gone_);
    _c^.waiters_count_gone_:=0;
   end;
+
   Dec(_c^.waiters_count_);
   _c^.waiters_count_unblock_:=1;
-
-  //System.LeaveCriticalSection(_c^.waiters_count_lock_);
-        //r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
 
  end else
  begin
@@ -361,10 +362,12 @@ begin
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
 
+ //Writeln('pthread_cond_broadcast:',_c^.name);
+
  SwEnterCriticalSection(_c^.waiters_count_lock_);
 
  //mingw implement is wrong
- if true {(_c^.waiters_count_unblock_<>0)} then
+ if {true} (_c^.waiters_count_unblock_<>0) then
  begin
   if (_c^.waiters_count_=0) then
   begin
@@ -375,28 +378,26 @@ begin
   _c^.waiters_count_:=0;
   Inc(_c^.waiters_count_unblock_,relCnt);
  end else
- if false {(_c^.waiters_count_>_c^.waiters_count_gone_)} then
+ if {false} (_c^.waiters_count_>_c^.waiters_count_gone_) then
  begin
 
   r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
 
   if (r<>0) then
   begin
-       //r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
    System.LeaveCriticalSection(_c^.waiters_count_lock_);
    Exit(r);
   end;
+
   if (_c^.waiters_count_gone_<>0) then
   begin
    Dec(_c^.waiters_count_,_c^.waiters_count_gone_);
    _c^.waiters_count_gone_:=0;
   end;
+
   relCnt:=_c^.waiters_count_;
   _c^.waiters_count_:=0;
   _c^.waiters_count_unblock_:=relCnt;
-
-  //System.LeaveCriticalSection(_c^.waiters_count_lock_);
-        //r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
 
  end else
  begin
@@ -409,9 +410,81 @@ begin
  Result:=do_sema_b_release(_c^.sema_q,relCnt,_c^.waiters_q_lock_,_c^.value_q);
 end;
 
+procedure cleanup_wait(arg:Pointer); SysV_ABI_CDecl;
+const
+ INT_MAX=High(Integer);
+var
+ n,r:Integer;
+ ch:psCondWaitHelper;
+ _c:pthread_cond;
+begin
+ if (arg=nil) then Exit;
+ ch:=psCondWaitHelper(arg);
+ _c:=ch^.c;
+
+ System.EnterCriticalSection(_c^.waiters_count_lock_);
+
+ n:=_c^.waiters_count_unblock_;
+ if (n<>0) then
+ begin
+  Dec(_c^.waiters_count_unblock_);
+ end else
+ if (((INT_MAX/2)-1)=_c^.waiters_count_gone_) then
+ begin
+
+  Inc(_c^.waiters_count_gone_);
+
+  r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
+
+  if (r<>0) then
+  begin
+   System.LeaveCriticalSection(_c^.waiters_count_lock_);
+   ch^.r^:=r;
+   Exit;
+  end;
+
+  Dec(_c^.waiters_count_,_c^.waiters_count_gone_);
+
+  r:=do_sema_b_release(_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
+
+  if (r<>0) then
+  begin
+   System.LeaveCriticalSection(_c^.waiters_count_lock_);
+   ch^.r^:=r;
+   Exit;
+  end;
+
+  _c^.waiters_count_gone_:=0;
+ end else
+ begin
+  Inc(_c^.waiters_count_gone_);
+ end;
+
+ System.LeaveCriticalSection(_c^.waiters_count_lock_);
+
+ if (n=1) then
+ begin
+  r:=do_sema_b_release(_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
+
+  if (r<>0) then
+  begin
+   ch^.r^:=r;
+   Exit;
+  end;
+
+ end;
+
+ r:=ps4_pthread_mutex_lock(ch^.external_mutex);
+
+ if (r<>0) then
+ begin
+  ch^.r^:=r;
+ end;
+end;
+
 function pthread_cond_wait(pCond:p_pthread_cond;pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 var
- //ch:sCondWaitHelper;
+ ch:sCondWaitHelper;
  r:Integer;
  _c:pthread_cond;
 Label
@@ -428,6 +501,8 @@ begin
  end else
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
+
+ //Writeln('pthread_cond_wait:',_c^.name);
 
  tryagain:
  r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -448,27 +523,26 @@ begin
  r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
  if (r<>0) then Exit(r);
 
- //ch.c = _c;
- //ch.r = &r;
- //ch.external_mutex = external_mutex;
+ ch.c:=_c;
+ ch.r:=@r;
+ ch.external_mutex:=pMutex;
  //pthread_cleanup_push(cleanup_wait, (void *) &ch);
 
  r:=ps4_pthread_mutex_unlock(pMutex);
- //Writeln('ps4_pthread_mutex_unlock:',HexStr(pMutex),':',HexStr(r,8));
+
  if (r=0) then
  begin
   r:=do_sema_b_wait(_c^.sema_q,nil,_c^.waiters_q_lock_,_c^.value_q);
  end;
 
- ps4_pthread_mutex_lock(pMutex); //WHY IT NO IN MINGW
-
+ cleanup_wait(@ch);
  //pthread_cleanup_pop(1);
  Result:=r;
 end;
 
 function pthread_cond_timedwait_impl(c:p_pthread_cond;m:p_pthread_mutex;pTimeout:PQWORD):Integer;
 var
- //ch:sCondWaitHelper;
+ ch:sCondWaitHelper;
  r:Integer;
  _c:pthread_cond;
 Label
@@ -485,6 +559,8 @@ begin
  end else
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
+
+ //Writeln('pthread_cond_timedwait_impl:',_c^.name);
 
  tryagain:
  r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -505,20 +581,19 @@ begin
  r:=do_sema_b_release(_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
  if (r<>0) then Exit(r);
 
- //ch.c = _c;
- //ch.r = &r;
- //ch.external_mutex = external_mutex;
+ ch.c:=_c;
+ ch.r:=@r;
+ ch.external_mutex:=m;
  //pthread_cleanup_push(cleanup_wait, (void *) &ch);
 
  r:=ps4_pthread_mutex_unlock(m);
- //Writeln('ps4_pthread_mutex_unlock:',HexStr(m),':',HexStr(r,8));
+
  if (r=0) then
  begin
   r:=do_sema_b_wait(_c^.sema_q,pTimeout,_c^.waiters_q_lock_,_c^.value_q);
  end;
 
- ps4_pthread_mutex_lock(m); //WHY IT NO IN MINGW
-
+ cleanup_wait(@ch);
  //pthread_cleanup_pop(1);
 
  Result:=r;
