@@ -1188,7 +1188,7 @@ begin
 
  System.InterlockedIncrement(H.FflipPendingNum);
 
- H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  //Writeln('submit_event_flip');
  _sig_lock;
@@ -1237,7 +1237,7 @@ begin
  System.InterlockedIncrement(H.FgcQueueNum);
  System.InterlockedIncrement(H.FflipPendingNum);
 
- H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  //Writeln('submit_event_flip');
  Push2VideoOut(node);

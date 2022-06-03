@@ -30,7 +30,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="35">
+    <Units Count="38">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -179,6 +179,21 @@
         <Filename Value="sys\sys_time.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit34>
+      <Unit35>
+        <Filename Value="ps4_libsceime.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceIme"/>
+      </Unit35>
+      <Unit36>
+        <Filename Value="ps4_libscediscmap.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDiscMap"/>
+      </Unit36>
+      <Unit37>
+        <Filename Value="ps4_libsceplaygo.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libScePlayGo"/>
+      </Unit37>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

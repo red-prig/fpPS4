@@ -12,6 +12,9 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
+ ps4_libSceIme,
+ ps4_libScePlayGo,
+ ps4_libSceDiscMap,
  ps4_libSceAppContent,
  ps4_libSceNet,
  ps4_libSceHttp,
@@ -156,24 +159,6 @@ begin
  Result:=4;
 end;
 
-const
- SCE_DISC_MAP_ERROR_INVALID_ARGUMENT=-2129657855; //0x81100001
-
-function ps4_sceDiscMapIsRequestOnHDD(param1:PChar;param2,param3:Int64;param4:PInteger):Integer; SysV_ABI_CDecl;
-begin
- if (param1=nil) or (param4=nil) then Exit(SCE_DISC_MAP_ERROR_INVALID_ARGUMENT);
- param4^:=1;
- Result:=0;
-end;
-
-function ps4_8A828CAEE7EDD5E9(param1:PChar;param2,param3:Int64;param4,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
-begin
- param4^:=0;
- param5^:=0;
- param6^:=0;
- Result:=0;
-end;
-
 function ps4_sceMoveInit:Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceMoveInit');
@@ -197,36 +182,6 @@ function ps4_sceVoiceQoSInit(
           appType:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
-end;
-
-function ps4_scePlayGoInitialize(
-          initParam:Pointer //ScePlayGoInitParams
-          ):Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
-function ps4_scePlayGoOpen(
-          outHandle:PInteger;
-          param:Pointer
-          ):Integer; SysV_ABI_CDecl;
-begin
- Result:=Integer($80B2000E);
-end;
-
-function ps4_sceImeKeyboardOpen(
-          userId:Integer;
-          param:Pointer //SceImeKeyboardParam
-          ):Integer; SysV_ABI_CDecl;
-begin
- Result:=Integer($80BC0004);
-end;
-
-function ps4_sceImeUpdate(
-          handler:Pointer //SceImeEventHandler
-          ):Integer; SysV_ABI_CDecl;
-begin
- Result:=Integer($80BC0004);
 end;
 
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
@@ -275,12 +230,6 @@ begin
      QWORD($1B70272CD7510631):Result:=@ps4_sceNpWebApiInitialize;
     end;
 
-   'libSceDiscMap':
-    Case Info^.nid of
-     QWORD($95B40AAAC11186D1):Result:=@ps4_sceDiscMapIsRequestOnHDD;
-     QWORD($8A828CAEE7EDD5E9):Result:=@ps4_8A828CAEE7EDD5E9;
-    end;
-
    'libSceMove':
     Case Info^.nid of
      QWORD($8F521313F1282661):Result:=@ps4_sceMoveInit;
@@ -294,18 +243,6 @@ begin
     'libSceVoiceQoS':
     Case Info^.nid of
      QWORD($53C21F365EBF0ACB):Result:=@ps4_sceVoiceQoSInit;
-    end;
-
-    'libScePlayGo':
-    Case Info^.nid of
-     QWORD($B6CE8695938A46B1):Result:=@ps4_scePlayGoInitialize;
-     QWORD($3351A66B5A1CAC61):Result:=@ps4_scePlayGoOpen;
-    end;
-
-    'libSceIme':
-    Case Info^.nid of
-     QWORD($79A1578DF26FDF1B):Result:=@ps4_sceImeKeyboardOpen;
-     QWORD($FF81827D874D175B):Result:=@ps4_sceImeUpdate;
     end;
 
   end;

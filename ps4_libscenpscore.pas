@@ -34,15 +34,20 @@ begin
  Result:=0;
 end;
 
-const
- SCE_NP_ONLINEID_MIN_LENGTH=3;
- SCE_NP_ONLINEID_MAX_LENGTH=16;
-
 type
- SceNpOnlineId=packed record
-  data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of Char;
-  term:Char;
-  dummy:array[0..2] of Char;
+ pSceNpScoreRankData=^SceNpScoreRankData;
+ SceNpScoreRankData=packed record
+  npId:SceNpId;
+  reserved:array[0..48] of Byte;
+  pad0:array[0..2] of Byte;
+  pcId:Integer;
+  serialRank:DWORD;
+  rank:DWORD;
+  highestRank:DWORD;
+  scoreValue:Int64;
+  hasGameData:Integer;
+  pad1:array[0..3] of Byte;
+  recordDate:QWORD;
  end;
 
  PSceNpScoreRankDataA=^SceNpScoreRankDataA;
@@ -91,19 +96,39 @@ type
  end;
 
 function ps4_sceNpScoreGetFriendsRanking(
-            reqId:Integer;                                                       //1
-            boardId:DWORD;                                                       //2
-            includeSelf:Integer;                                                 //3
-            rankArray:PSceNpScoreRankDataA;                                      //4
-            rankArraySize:size_t;                                                //5
-            commentArray:PSceNpScoreComment;                                     //6
-            commentArraySize:size_t;                                             //7
-            infoArray:PSceNpScoreGameInfo;                                       //8
-            infoArraySize:size_t;                                                //9
-            arrayNum:size_t;                                                     //10
-            lastSortDate:PQWORD;                                                 //11
-            totalRecord:PDWORD;                                                  //12
-            option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl; //13
+             reqId:Integer;
+             boardId:DWORD;
+             includeSelf:Integer;
+             rankArray:PSceNpScoreRankData;
+             rankArraySize:size_t;
+             commentArray:PSceNpScoreComment;
+             commentArraySize:size_t;
+             infoArray:PSceNpScoreGameInfo;
+             infoArraySize:size_t;
+             arrayNum:size_t;
+             lastSortDate:PQWORD;
+             totalRecord:PDWORD;
+             option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
+begin
+ //lastSortDate^:=0;
+ //totalRecord^:=0;
+ Result:=0;
+end;
+
+function ps4_sceNpScoreGetFriendsRankingA(
+             reqId:Integer;
+             boardId:DWORD;
+             includeSelf:Integer;
+             rankArray:PSceNpScoreRankDataA;
+             rankArraySize:size_t;
+             commentArray:PSceNpScoreComment;
+             commentArraySize:size_t;
+             infoArray:PSceNpScoreGameInfo;
+             infoArraySize:size_t;
+             arrayNum:size_t;
+             lastSortDate:PQWORD;
+             totalRecord:PDWORD;
+             option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
 begin
  //lastSortDate^:=0;
  //totalRecord^:=0;
@@ -118,7 +143,7 @@ type
   pad:array[0..3] of Byte;
  end;
 
- function ps4_sceNpScoreGetRankingByAccountIdPcId(
+function ps4_sceNpScoreGetRankingByAccountIdPcId(
              reqId:Integer;
              boardId:DWORD;
              idArray:PSceNpScoreAccountIdPcId;
@@ -134,6 +159,28 @@ type
              totalRecord:PDWORD;
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
+ //lastSortDate^:=0;
+ //totalRecord^:=0;
+ Result:=0;
+end;
+
+function ps4_sceNpScoreGetRankingByRange(
+             reqId:Integer;
+             boardId:DWORD;
+             startSerialRank:DWORD;
+             rankArray:pSceNpScoreRankData;
+             rankArraySize:QWORD;
+             commentArray:pSceNpScoreComment;
+             commentArraySize:QWORD;
+             infoArray:pSceNpScoreGameInfo;
+             infoArraySize:QWORD;
+             arrayNum:QWORD;
+             lastSortDate:PQWORD;
+             totalRecord:PDWORD;
+             option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ //lastSortDate^:=0;
+ //totalRecord^:=0;
  Result:=0;
 end;
 
@@ -149,7 +196,9 @@ begin
  lib^.set_proc($816F2ACA362B51B9,@ps4_sceNpScoreCreateRequest);
  lib^.set_proc($74AF3F4A061FEABE,@ps4_sceNpScoreDeleteRequest);
  lib^.set_proc($F24B88CD4C3ABAD4,@ps4_sceNpScoreGetFriendsRanking);
+ lib^.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
  lib^.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
+ lib^.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
 end;
 
 initialization

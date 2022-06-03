@@ -74,13 +74,7 @@ type
   Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
   Procedure AddBlend(const b:TVkPipelineColorBlendAttachmentState);
   Procedure Clear;
-  //Procedure SetLSShader(Shader:TvShader);
-  //Procedure SetHSShader(Shader:TvShader);
-  //Procedure SetESShader(Shader:TvShader);
-  //Procedure SetGSShader(Shader:TvShader);
-  //Procedure SetVSShader(Shader:TvShader);
-  //Procedure SetPSShader(Shader:TvShader);
-  //procedure SetLayout(Layout:TvPipelineLayout);
+  procedure SetBlendColors(P:PSingle);
   procedure SetRenderPass(RenderPass:TvRenderPass);
   function  Compile:Boolean;
  end;
@@ -527,33 +521,15 @@ begin
 
 end;
 
-//kShaderStageCs = 0x00000000,	///< Compute shader stage.
-//kShaderStagePs = 0x00000001,	///< Pixel shader stage.
-//kShaderStageVs = 0x00000002,	///< Vertex shader stage.
-//kShaderStageGs = 0x00000003,	///< Geometry shader stage.
-//kShaderStageEs = 0x00000004,	///< Export shader stage.
-//kShaderStageHs = 0x00000005,	///< Hull shader stage.
-//kShaderStageLs = 0x00000006,	///< LDS shader stage. = Vertex shader to share data
+type
+ PVec4f=^TVec4f;
+ TVec4f=array[0..3] of Single;
 
-//kActiveShaderStagesVsPs             = 0x00000000
-//kActiveShaderStagesEsGsVsPs         = 0x000000B0
-//kActiveShaderStagesLsHsVsPs         = 0x00000045
-//kActiveShaderStagesLsHsEsGsVsPs     = 0x000000AD
-//kActiveShaderStagesDispatchDrawVsPs = 0x00000200
-
-//Logical Pipeline ↓
-//VK_SHADER_STAGE_VERTEX_BIT                  Vertex             VS	LS	LS	ES
-//VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT    Hull               []	HS	HS	[]
-//VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT Domain             []	VS	ES	[]
-//VK_SHADER_STAGE_GEOMETRY_BIT                Geometry           []	[]	GS, VS	GS, VS
-//VK_SHADER_STAGE_FRAGMENT_BIT                Pixel              PS	PS	PS	PS
-
-//0 LS  VK_SHADER_STAGE_VERTEX_BIT
-//1 HS  VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-//2 ES  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-//3 GS  VK_SHADER_STAGE_GEOMETRY_BIT
-//4 VS  VK_SHADER_STAGE_VERTEX_BIT
-//5 PS  VK_SHADER_STAGE_FRAGMENT_BIT
+procedure TvGraphicsPipeline.SetBlendColors(P:PSingle);
+begin
+ if (P=nil) then Exit;
+ colorBlending.blendConstants:=PVec4f(P)^;
+end;
 
 procedure TvGraphicsPipeline.SetRenderPass(RenderPass:TvRenderPass);
 begin
