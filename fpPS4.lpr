@@ -141,7 +141,7 @@ end;
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
  Writeln('nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
- DebugBreak;
+ //DebugBreak;
  Sleep(INFINITE);
  //readln;
  //Print_libs(ps4_app.GetFile('libc.prx'));
@@ -248,10 +248,21 @@ begin
   end;
  end;
 
- //if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
- //begin
- // Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
- //end;
+ if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
+ begin
+
+  //Case Info^.lib^.strName of
+  // 'libc':;
+  // 'libkernel':;
+  // else
+  //  //if (Pos('Sem',ps4libdoc.GetFunctName(Info^.Nid))<>0) or
+  //  //   (Pos('Equeue',ps4libdoc.GetFunctName(Info^.Nid))<>0) then
+  //  begin
+  //   Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
+  //  end;
+  //end;
+
+ end;
 
  if (Result=nil) then
  begin

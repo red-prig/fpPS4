@@ -64,18 +64,21 @@ function ps4_sceNpTrophyCreateContext(context:PInteger;
                                       serviceLabel:DWORD;
                                       options:QWORD):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyCreateContext');
  context^:=543;
  Result:=0;
 end;
 
 function ps4_sceNpTrophyCreateHandle(handle:PInteger):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyCreateHandle');
  handle^:=3333;
  Result:=0;
 end;
 
 function ps4_sceNpTrophyDestroyHandle(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyDestroyHandle:',handle);
  Result:=0;
 end;
 
@@ -83,6 +86,7 @@ function ps4_sceNpTrophyRegisterContext(context:Integer;
                                         handle:Integer;
                                         options:QWORD):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyRegisterContext:',handle);
  Result:=0;
 end;
 
@@ -91,6 +95,7 @@ function ps4_sceNpTrophyGetTrophyUnlockState(context:Integer;
                                              flags:pSceNpTrophyFlagArray;
                                              count:PDWORD):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyGetTrophyUnlockState:',handle);
  Result:=0;
  flags^:=Default(SceNpTrophyFlagArray);
  count^:=0;
@@ -139,6 +144,20 @@ function ps4_sceNpTrophyGetGameInfo(context:Integer;
                                     details:pSceNpTrophyGameDetails;
                                     data:pSceNpTrophyGameData):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyGetGameInfo:',handle);
+
+ if (details<>nil) then
+ begin
+  details^.numGroups  :=0;
+  details^.numTrophies:=0;
+  details^.numPlatinum:=0;
+  details^.numGold    :=0;
+  details^.numSilver  :=0;
+  details^.numBronze  :=0;
+  FillChar(details^.title,SizeOf(details^.title),0);
+  FillChar(details^.description,SizeOf(details^.description),0);
+ end;
+
  Result:=0;
 end;
 
@@ -147,6 +166,8 @@ function ps4_sceNpTrophyGetGameIcon(context:Integer;
                                     buffer:Pointer;
                                     size:PQWORD):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpTrophyGetGameIcon:',handle);
+ size^:=0;
  Result:=0;
 end;
 

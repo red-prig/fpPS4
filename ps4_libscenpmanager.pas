@@ -79,11 +79,22 @@ const
 type
  SceUserServiceUserId=Integer;
 
- SceNpStateCallbackA=procedure(userId:SceUserServiceUserId;state:Integer;userdata:Pointer); SysV_ABI_CDecl;
+ SceNpStateCallback=procedure(userId:SceUserServiceUserId;
+                              state:Integer;
+                              npId:pSceNpId;
+                              userdata:Pointer); SysV_ABI_CDecl;
 
-//int sceNpRegisterStateCallbackA(
-//		SceNpStateCallbackA callback,
-//		void *userdata);
+ SceNpStateCallbackA=procedure(userId:SceUserServiceUserId;
+                               state:Integer;
+                               userdata:Pointer); SysV_ABI_CDecl;
+
+ SceNpGamePresenceCallback=procedure(pOnlineId:pSceNpOnlineId;
+                                     status:Integer;
+                                     userdata:Pointer); SysV_ABI_CDecl;
+
+ SceNpPlusEventCallback=procedure(userId:SceUserServiceUserId;
+                                  event:Integer;
+                                  userdata:Pointer); SysV_ABI_CDecl;
 
 const
  SCE_NP_ERROR_INVALID_ARGUMENT=$80550003;
@@ -129,21 +140,31 @@ end;
 
 var
  Cb4Toolkit:packed record
-  callback:SceNpStateCallbackA;
+  callback:SceNpStateCallback;
   userdata:Pointer;
  end;
 
-function ps4_sceNpRegisterStateCallbackForToolkit(callback:SceNpStateCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpRegisterStateCallbackForToolkit(callback:SceNpStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Cb4Toolkit.callback:=callback;
  Cb4Toolkit.userdata:=userdata;
  Result:=0;
 end;
 
-function ps4_sceNpRegisterStateCallback(callback:SceNpStateCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpRegisterStateCallback(callback:SceNpStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Cb4Toolkit.callback:=callback;
  Cb4Toolkit.userdata:=userdata;
+ Result:=0;
+end;
+
+function ps4_sceNpRegisterGamePresenceCallback(callback:SceNpGamePresenceCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpRegisterPlusEventCallback(callback:SceNpPlusEventCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
@@ -188,6 +209,8 @@ begin
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
+ lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
+ lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
