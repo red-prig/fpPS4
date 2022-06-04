@@ -139,8 +139,9 @@ type
  ScePadLightBarParam=ScePadColor;
  PScePadLightBarParam=^ScePadLightBarParam;
 
-
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
+var
+ mPoint:TPoint;
 begin
  Result:=SCE_PAD_ERROR_INVALID_ARG;
  if (data=nil) then Exit;
@@ -150,6 +151,14 @@ begin
  _sig_lock;
 
  //FillChar(data^,SizeOf(ScePadData),1);
+ //FillChar(data^.touchData,SizeOf(ScePadData.touchData),1);
+
+ data^.touchData.touchNum:=1;
+ data^.touchData.touch[0].id:=0;
+
+ GetCursorPos(mPoint);
+ data^.touchData.touch[0].x:=mPoint.X;
+ data^.touchData.touch[0].y:=mPoint.Y;
 
  data^.connected:=True;
  data^.timestamp:=Sysutils.GetTickCount64;
@@ -189,6 +198,9 @@ begin
   data^.rightStick.x:=$FF;
 
  //
+
+ if GetAsyncKeyState(VK_LBUTTON)<>0 then
+  data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
  if GetAsyncKeyState(VK_RETURN)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
