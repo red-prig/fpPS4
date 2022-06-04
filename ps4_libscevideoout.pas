@@ -361,15 +361,21 @@ type
   Ffps        :QWORD;
   Ftsc_prev   :QWORD;
 
-  Fcount_flips:QWORD; //Number of flips completed after opening the port
-  FprocessTime:QWORD; //Process time upon completion of the last flip
-  Ftsc_flips  :QWORD; //System timestamp counter value when the last flip completed
-  FsubmitTsc  :QWORD; //Timestamp counter value when the last completed flip is requested
-  FflipArg    :Int64;
-  FgcQueueNum :Longint; //Number of flips where execution is not yet complete for GPU commands issued when the flips were submitted using Gnm::submitAndFlipCommandBuffers() or Gnmx::GfxContext::submitAndFlip()
-  FflipPendingNum:Longint; //Total number of submitted flips that are not completed yet (including gcQueueNum)
+  VblankStatus:record
+   FprocessTime:QWORD;
+   FTsc        :QWORD;
+  end;
 
-  FcurrentBuffer:Longint;
+  FlipStatus:record
+   Fcount_flips   :QWORD;   //Number of flips completed after opening the port
+   FprocessTime   :QWORD;   //Process time upon completion of the last flip
+   Ftsc_flips     :QWORD;   //System timestamp counter value when the last flip completed
+   FsubmitTsc     :QWORD;   //Timestamp counter value when the last completed flip is requested
+   FflipArg       :Int64;
+   FgcQueueNum    :Longint; //Number of flips where execution is not yet complete for GPU commands issued when the flips were submitted using Gnm::submitAndFlipCommandBuffers() or Gnmx::GfxContext::submitAndFlip()
+   FflipPendingNum:Longint; //Total number of submitted flips that are not completed yet (including gcQueueNum)
+   FcurrentBuffer:Longint;
+  end;
 
   //(MAIN port: 1 to 16, AUX port: 1 to 8)
   FBuffers:record
@@ -471,6 +477,9 @@ end;
 procedure TVideoOut.sceVideoOutOpen(node:PQNode);
 begin
 
+ VblankStatus.FprocessTime:=ps4_sceKernelReadTsc;
+ VblankStatus.FTsc        :=ps4_sceKernelGetProcessTime;
+
  Writeln('sceVideoOutOpen:',HexStr(Pointer(Self)));
  FForm:=TMyForm.CreateNew(nil);
  FForm.ShowInTaskBar:=stAlways;
@@ -498,8 +507,8 @@ begin
  FlipEvents.Init;
  VblankEvents.Init;
 
- FflipArg:=SCE_VIDEO_OUT_BUFFER_INITIAL_FLIP_ARG;
- FcurrentBuffer:=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK;
+ FlipStatus.FflipArg:=SCE_VIDEO_OUT_BUFFER_INITIAL_FLIP_ARG;
+ FlipStatus.FcurrentBuffer:=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK;
 
  FillDWord(Fgamma,3,PDWORD(@Single1)^);
 end;
@@ -903,14 +912,14 @@ begin
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
  status^:=Default(SceVideoOutFlipStatus);
- status^.count         :=H.Fcount_flips   ;
- status^.processTime   :=H.FprocessTime   ;
- status^.tsc           :=H.Ftsc_flips     ;
- status^.submitTsc     :=H.FsubmitTsc     ;
- status^.flipArg       :=H.FflipArg       ;
- status^.gcQueueNum    :=H.FgcQueueNum    ;
- status^.flipPendingNum:=H.FflipPendingNum;
- status^.currentBuffer :=H.FcurrentBuffer ;
+ status^.count         :=H.FlipStatus.Fcount_flips   ;
+ status^.processTime   :=H.FlipStatus.FprocessTime   ;
+ status^.tsc           :=H.FlipStatus.Ftsc_flips     ;
+ status^.submitTsc     :=H.FlipStatus.FsubmitTsc     ;
+ status^.flipArg       :=H.FlipStatus.FflipArg       ;
+ status^.gcQueueNum    :=H.FlipStatus.FgcQueueNum    ;
+ status^.flipPendingNum:=H.FlipStatus.FflipPendingNum;
+ status^.currentBuffer :=H.FlipStatus.FcurrentBuffer ;
  Result:=0;
 
  H.Release;
@@ -925,7 +934,7 @@ begin
  _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- Result:=H.FflipPendingNum;
+ Result:=H.FlipStatus.FflipPendingNum;
 
  H.Release;
 end;
@@ -1010,9 +1019,9 @@ begin
 
  //First Set flip data, second post event !!!!!
 
- FcurrentBuffer:=bufferIndex;
+ FlipStatus.FcurrentBuffer:=bufferIndex;
 
- FflipArg    :=flipArg;
+ FlipStatus.FflipArg    :=flipArg;
 
  //ps4_usleep(150);
 
@@ -1032,7 +1041,7 @@ begin
    attr:=FBuffers.attr[bufferIndex];
    spin_unlock(FBuffers.lock);
 
-   FGpuFlip.SetCurrentBuffer(FcurrentBuffer);
+   FGpuFlip.SetCurrentBuffer(FlipStatus.FcurrentBuffer);
    FGpuFlip.SetImageFormat(attr.format,attr.tmode);
    FGpuFlip.SetImageSize(attr.width,attr.height);
    FGpuFlip.SetHostBuffer(addr);
@@ -1067,11 +1076,11 @@ begin
 
  Case _type of
   0:begin
-     System.InterlockedDecrement(FflipPendingNum);
+     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
     end;
   1:begin
-     System.InterlockedDecrement(FgcQueueNum);
-     System.InterlockedDecrement(FflipPendingNum);
+     System.InterlockedDecrement(FlipStatus.FgcQueueNum);
+     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
     end;
  end;
 
@@ -1083,7 +1092,7 @@ begin
   //time:=time-1300;
   //time:=time-1300;
 
-  elap:=SwTimePassedUnits(Ftsc_flips);
+  elap:=SwTimePassedUnits(FlipStatus.Ftsc_flips);
   elap:=(elap+9) div 10;
 
   //elap:=elap+(elap div 100)*14;
@@ -1107,7 +1116,7 @@ begin
 
   if (FGpuFlip<>nil) then
   begin
-   FGpuFlip.IsComplite(FcurrentBuffer);
+   FGpuFlip.IsComplite(FlipStatus.FcurrentBuffer);
    //While (not FGpuFlip.IsComplite(FcurrentBuffer)) do
    //begin
    // ps4_usleep(150);
@@ -1126,22 +1135,22 @@ begin
  end;
 
 
- Fcount_flips:=Fcount_flips+1;              //Number of flips completed after opening the port self
- FprocessTime:=ps4_sceKernelGetProcessTime; //Process time upon completion of the last flip
- Ftsc_flips  :=ps4_sceKernelReadTsc;        //System timestamp counter value when the last flip completed
+ FlipStatus.Fcount_flips:=FlipStatus.Fcount_flips+1;   //Number of flips completed after opening the port self
+ FlipStatus.FprocessTime:=ps4_sceKernelGetProcessTime; //Process time upon completion of the last flip
+ FlipStatus.Ftsc_flips  :=ps4_sceKernelReadTsc;        //System timestamp counter value when the last flip completed
 
  if (Ftsc_prev=0) then
  begin
-  Ftsc_prev:=Ftsc_flips;
+  Ftsc_prev:=FlipStatus.Ftsc_flips;
   Ffps:=1;
  end else
  begin
   Inc(Ffps);
-  if ((Ftsc_flips-Ftsc_prev) div ps4_sceKernelGetTscFrequency)>=1 then
+  if ((FlipStatus.Ftsc_flips-Ftsc_prev) div ps4_sceKernelGetTscFrequency)>=1 then
   begin
    FForm.Caption:='fpPS4 FPS:'+IntToStr(Ffps);
    Ffps:=0;
-   Ftsc_prev:=Ftsc_flips;
+   Ftsc_prev:=FlipStatus.Ftsc_flips;
   end;
  end;
 
@@ -1186,7 +1195,7 @@ begin
  node^.u._type      :=0;
  node^.wait         :=0;
 
- System.InterlockedIncrement(H.FflipPendingNum);
+ System.InterlockedIncrement(H.FlipStatus.FflipPendingNum);
 
  //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
@@ -1196,7 +1205,7 @@ begin
 
  wait_until_equal(node^.wait,0);
 
- H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  H.Release;
  _sig_unlock;
@@ -1234,8 +1243,8 @@ begin
  node^.u._type      :=1;
  node^.wait         :=0;
 
- System.InterlockedIncrement(H.FgcQueueNum);
- System.InterlockedIncrement(H.FflipPendingNum);
+ System.InterlockedIncrement(H.FlipStatus.FgcQueueNum);
+ System.InterlockedIncrement(H.FlipStatus.FflipPendingNum);
 
  //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
@@ -1244,7 +1253,7 @@ begin
 
  wait_until_equal(node^.wait,0);
 
- H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  H.Release;
 end;
@@ -1349,16 +1358,43 @@ end;
 function ps4_sceVideoOutGetVblankStatus(hVideo:Integer;status:PSceVideoOutVblankStatus):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
+
+ elap:QWORD;
+ pc,pf:QWORD;
+ proc:QWORD;
+ count:QWORD;
+ time:DWORD;
+ hz:Byte;
 begin
  _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
  _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
+ hz:=H.FlipRate;
+ if (hz=0) then hz:=60;
+
+ time:=(1000000 div hz);
+ elap:=SwTimePassedUnits(H.VblankStatus.FTsc);
+ elap:=(elap+9) div 10;
+
+ count:=elap div time;
+
+ proc:=ps4_sceKernelGetProcessTime;
+ proc:=proc-H.VblankStatus.FprocessTime;
+ proc:=AlignDw(proc,time);
+ proc:=proc+H.VblankStatus.FprocessTime;
+
+ SwQueryPerformanceCounter(pc,pf);
+ pc:=pc-H.VblankStatus.FTsc;
+ time:=(pf div hz);
+ pc:=AlignDw(pc,time);
+ pc:=pc+H.VblankStatus.FTsc;
+
  status^:=Default(SceVideoOutVblankStatus);
- status^.count         :=H.Fcount_flips   ;
- status^.processTime   :=H.FprocessTime   ;
- status^.tsc           :=H.Ftsc_flips     ;
+ status^.count         :=count;
+ status^.processTime   :=proc;
+ status^.tsc           :=pc;
  status^.flags         :=0;
  Result:=0;
 
