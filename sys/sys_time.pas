@@ -11,11 +11,11 @@ uses
  sys_kernel;
 
 function  _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
-function  _msec2usec(msec:QWORD):QWORD;  //Milisecond to Microsecond
+function  _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
 function  _usec2nsec(usec:QWORD):QWORD;  //Microsecond to Nanosecond
-function  _nsec2usec(nsec:QWORD):QWORD;  //Nanosecond to Microsecond
-function  _msec2nsec(msec:QWORD):QWORD;  //Milisecond to Nanosecond
-function  _nsec2msec(nsec:QWORD):QWORD;  //Nanosecond to Milisecond
+function  _nsec2usec(nsec:QWORD):QWORD;  //Nanosecond  to Microsecond
+function  _msec2nsec(msec:QWORD):QWORD;  //Milisecond  to Nanosecond
+function  _nsec2msec(nsec:QWORD):QWORD;  //Nanosecond  to Milisecond
 
 function  _time_in_ms_from_timespec(const ts:timespec):QWORD; inline; //Milisecond
 function  _time_in_ns_from_timespec(const ts:timespec):QWORD; inline; //Nanosecond
