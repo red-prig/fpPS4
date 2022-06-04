@@ -12,6 +12,7 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
+ ps4_libSceAjm,
  ps4_libSceIme,
  ps4_libScePlayGo,
  ps4_libSceDiscMap,
