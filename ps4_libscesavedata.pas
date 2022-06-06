@@ -10,6 +10,9 @@ uses
   SysUtils;
 
 Const
+ SCE_SAVE_DATA_TITLE_ID_DATA_SIZE=10;
+ SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE=65;
+
  SCE_SAVE_DATA_TITLE_MAXSIZE   =128;
  SCE_SAVE_DATA_SUBTITLE_MAXSIZE=128;
  SCE_SAVE_DATA_DETAIL_MAXSIZE  =1024;
@@ -60,6 +63,30 @@ type
 
  PSceSaveDataMountPoint=^SceSaveDataMountPoint;
  SceSaveDataMountPoint=array[0..SCE_SAVE_DATA_MOUNT_POINT_DATA_MAXSIZE-1] of Char;
+
+ pSceSaveDataTitleId=^SceSaveDataTitleId;
+ SceSaveDataTitleId=packed record
+  data:array[0..SCE_SAVE_DATA_TITLE_ID_DATA_SIZE-1] of Char;
+  padding:array[0..5] of Byte;
+ end;
+
+ pSceSaveDataFingerprint=^SceSaveDataFingerprint;
+ SceSaveDataFingerprint=packed record
+  data:array[0..SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1] of Byte;
+  padding:array[0..14] of Byte;
+ end;
+
+ pSceSaveDataMount=^SceSaveDataMount;
+ SceSaveDataMount=packed record
+  userId:Integer; //SceUserServiceUserId
+  align1:Integer;
+  titleId:pSceSaveDataTitleId;
+  dirName:PSceSaveDataDirName;
+  fingerprint:pSceSaveDataFingerprint;
+  blocks:QWORD;    //SceSaveDataBlocks
+  mountMode:DWORD; //SceSaveDataMountMode
+  reserved:array[0..31] of Byte;
+ end;
 
  PSceSaveDataMount2=^SceSaveDataMount2;
  SceSaveDataMount2=packed record
@@ -138,6 +165,14 @@ const
  SCE_SAVE_DATA_ERROR_MOUNT_FULL =-2137063412; // 0x809F000C
  SCE_SAVE_DATA_ERROR_NOT_MOUNTED=-2137063420; // 0x809F0004
 
+function ps4_sceSaveDataMount(mount:pSceSaveDataMount;mountResult:pSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+begin
+ if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ _sig_lock;
+ Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint);
+ _sig_unlock;
+end;
+
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
@@ -179,6 +214,7 @@ begin
  lib^.set_proc($BFB00000CA342F3E,@ps4_sceSaveDataSetupSaveDataMemory);
  lib^.set_proc($EC1B79A410BF01CA,@ps4_sceSaveDataGetSaveDataMemory);
  lib^.set_proc($8776144735C64954,@ps4_sceSaveDataSetSaveDataMemory);
+ lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);

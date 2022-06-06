@@ -12,17 +12,44 @@ uses
 
 implementation
 
-const
-//SceCommonDialogStatus
+Const
+ //SceCommonDialogStatus
  SCE_COMMON_DIALOG_STATUS_NONE        = 0;
  SCE_COMMON_DIALOG_STATUS_INITIALIZED = 1;
  SCE_COMMON_DIALOG_STATUS_RUNNING     = 2;
  SCE_COMMON_DIALOG_STATUS_FINISHED    = 3;
 
-//SceCommonDialogResult {
- SCE_COMMON_DIALOG_RESULT_OK            = 0;
- SCE_COMMON_DIALOG_RESULT_USER_CANCELED = 1;
+ //SceCommonDialogResult
+ SCE_COMMON_DIALOG_RESULT_OK           =0;
+ SCE_COMMON_DIALOG_RESULT_USER_CANCELED=1;
 
+ SCE_COMMON_DIALOG_MAGIC_NUMBER=$C0D1A109;
+
+ //SceMsgDialogMode
+ SCE_MSG_DIALOG_MODE_INVALID     =(0);
+ SCE_MSG_DIALOG_MODE_USER_MSG    =(1);
+ SCE_MSG_DIALOG_MODE_PROGRESS_BAR=(2);
+ SCE_MSG_DIALOG_MODE_SYSTEM_MSG  =(3);
+
+ //SceMsgDialogButtonType
+ SCE_MSG_DIALOG_BUTTON_TYPE_OK                    =(0);
+ SCE_MSG_DIALOG_BUTTON_TYPE_YESNO                 =(1);
+ SCE_MSG_DIALOG_BUTTON_TYPE_NONE                  =(2);
+ SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL             =(3);
+ SCE_MSG_DIALOG_BUTTON_TYPE_WAIT                  =(5);
+ SCE_MSG_DIALOG_BUTTON_TYPE_WAIT_CANCEL           =(6);
+ SCE_MSG_DIALOG_BUTTON_TYPE_YESNO_FOCUS_NO        =(7);
+ SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL_FOCUS_CANCEL=(8);
+ SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS              =(9);
+
+ //SceMsgDialogProgressBarType
+ SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE       =(0);
+ SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE_CANCEL=(1);
+
+ //SceMsgDialogSystemMessageType;
+ SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_EMPTY_STORE         =(0);
+ SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION=(1);
+ SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION =(2);
 
 function ps4_sceCommonDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
@@ -82,11 +109,92 @@ begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
 end;
 
+//
+
 function ps4_sceMsgDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceMsgDialogInitialize');
  Result:=0;
 end;
+
+type
+ SceCommonDialogBaseParam=packed record
+  size:QWORD;
+  reserved:array[0..31] of Byte;
+  magic:DWORD;
+  _align:Integer;
+ end; //__attribute__ ((__aligned__(8)));
+
+ pSceMsgDialogButtonsParam=^SceMsgDialogButtonsParam;
+ SceMsgDialogButtonsParam=packed record
+  msg1,msg2:Pchar;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceMsgDialogUserMessageParam=^SceMsgDialogUserMessageParam;
+ SceMsgDialogUserMessageParam=packed record
+  buttonType:Integer; //SceMsgDialogButtonType
+  _align:Integer;
+  msg:PChar;
+  buttonsParam:pSceMsgDialogButtonsParam;
+  reserved:array[0..23] of Byte;
+ end;
+
+ pSceMsgDialogProgressBarParam=^SceMsgDialogProgressBarParam;
+ SceMsgDialogProgressBarParam=packed record
+  barType:Integer; //SceMsgDialogProgressBarType
+  _align:Integer;
+  msg:PChar;
+  reserved:array[0..63] of Byte;
+ end;
+
+ pSceMsgDialogSystemMessageParam=^SceMsgDialogSystemMessageParam;
+ SceMsgDialogSystemMessageParam=packed record
+  sysMsgType:Integer; //SceMsgDialogSystemMessageType
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceMsgDialogParam=^SceMsgDialogParam;
+ SceMsgDialogParam=packed record
+  baseParam:SceCommonDialogBaseParam;
+  size:QWORD;
+  mode:Integer; //SceMsgDialogMode
+  _align1:Integer;
+  userMsgParam:pSceMsgDialogUserMessageParam;
+  progBarParam:pSceMsgDialogProgressBarParam;
+  sysMsgParam:pSceMsgDialogSystemMessageParam;
+  userId:Integer; //SceUserServiceUserId
+  reserved:array[0..39] of Byte;
+  _align2:Integer;
+ end;
+
+const
+ SCE_COMMON_DIALOG_ERROR_PARAM_INVALID=-2135425014; // 0x80B8000A
+ SCE_COMMON_DIALOG_ERROR_ARG_NULL     =-2135425011; // 0x80B8000D
+
+function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer; SysV_ABI_CDecl;
+begin
+ if (param=nil) then Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
+
+ Case param^.mode of
+   SCE_MSG_DIALOG_MODE_USER_MSG:
+    begin
+     if (param^.userMsgParam=nil) then Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+
+     Writeln(param^.userMsgParam^.msg);
+
+     //TODO
+    end;
+  else
+   Assert(false,'TODO');
+ end;
+
+ Result:=0;
+end;
+
+//nop nid:libSceMsgDialog:E9F202DD72ADDA4D:sceMsgDialogUpdateStatus
+
+//
 
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
@@ -145,6 +253,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceMsgDialog');
  lib^.set_proc($943AB1698D546C4A,@ps4_sceMsgDialogInitialize);
+ lib^.set_proc($6F4E878740CF11A1,@ps4_sceMsgDialogOpen);
 end;
 
 initialization

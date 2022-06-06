@@ -32,12 +32,12 @@ type
  pwef_node=^wef_node;
  wef_node=record
   pNext,pPrev:pwef_node;
-  pParent:Pointer;
   //
   thread:THandle;
   bitPattern:QWORD;
   ResultPat:QWORD;
   waitMode:DWORD;
+  ret:Integer;
  end;
 
  wef_list=object
@@ -51,11 +51,15 @@ type
  SceKernelEventFlag_t=packed record
   valid:DWORD;
   attr:DWORD;
-  bitPattern:QWORD;
+  refs:DWORD;
   lock_sing:r_spin_lock;
   lock_list:r_spin_lock;
+  bitPattern:QWORD;
   list:wef_list;
-  thread:THandle;
+  single:record
+   thread:THandle;
+   ret:Integer;
+  end;
   name:array[0..31] of AnsiChar;
  end;
 
@@ -75,6 +79,7 @@ function ps4_sceKernelWaitEventFlag(
 
 function ps4_sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelClearEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelDeleteEventFlag(ef:SceKernelEventFlag):Integer; SysV_ABI_CDecl;
 
 implementation
 
@@ -128,7 +133,13 @@ begin
 
  if (pName<>nil) then MoveChar0(pName^,data^.name,32);
 
- ef^:=data;
+ data^.refs:=1;
+
+ if not CAS(ef^,ef^,data) then
+ begin
+  FreeMem(data);
+ end;
+
  Result:=0;
 end;
 
@@ -227,6 +238,23 @@ begin
  Result:=(attr and SCE_KERNEL_EVF_ATTR_MULTI)=0;
 end;
 
+
+function ef_enter(ef:SceKernelEventFlag):Integer;
+begin
+ if (ef=nil) then Exit(SCE_KERNEL_ERROR_ESRCH);
+ if not safe_test(ef^.valid,LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EACCES);
+ System.InterlockedIncrement(ef^.refs);
+ Result:=0;
+end;
+
+procedure ef_leave(ef:SceKernelEventFlag);
+begin
+ if (System.InterlockedDecrement(ef^.refs)=0) then
+ begin
+  SwFreeMem(ef);
+ end;
+end;
+
 function ps4_sceKernelWaitEventFlag(
   ef:SceKernelEventFlag;
   bitPattern:QWORD;
@@ -242,11 +270,6 @@ var
  QTIME:QWORD;
  node:wef_node;
 begin
- Result:=0;
-
- if (ef=nil) then Exit(SCE_KERNEL_ERROR_ESRCH);
- if (ef^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EACCES);
-
  if (bitPattern=0) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
  Case (waitMode and WOP_MODES) of
@@ -258,6 +281,9 @@ begin
 
  t:=_get_curthread;
  if (t=nil) then Exit(SCE_KERNEL_ERROR_ESRCH);
+
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit;
 
  _sig_lock;
 
@@ -280,17 +306,19 @@ begin
     begin
      spin_unlock(ef^.lock_list);
      _sig_unlock;
+     ef_leave(ef);
      Exit(SCE_KERNEL_ERROR_EPERM);
     end;
-    ef^.thread:=t^.handle;
+    ef^.single.thread:=t^.handle;
+    ef^.single.ret:=1;
   spin_unlock(ef^.lock_list);
  end else
  begin
   node:=Default(wef_node);
-  node.pParent   :=ef;
   node.thread    :=t^.handle;
   node.bitPattern:=bitPattern;
   node.waitMode  :=waitMode;
+  node.ret       :=1;
 
   spin_lock(ef^.lock_list);
     ef^.list.Insert(@node);
@@ -309,12 +337,13 @@ begin
 
    end else
    begin
-    if (node.pParent=nil) then //is signaled
+    if (node.ret<>1) then //is signaled
     begin
      if (pResultPat<>nil) then
      begin
       pResultPat^:=node.ResultPat;
      end;
+     Result:=node.ret;
      Break;
     end;
 
@@ -376,7 +405,8 @@ begin
 
  if _is_single(attr) then
  begin
-  ef^.thread:=0;
+  ef^.single.thread:=0;
+  Result:=ef^.single.ret;
   spin_unlock(ef^.lock_sing);
  end else
  begin
@@ -388,6 +418,7 @@ begin
  Writeln('<sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  _sig_unlock;
+ ef_leave(ef);
 end;
 
 procedure _apc_null(dwParam:PTRUINT); stdcall;
@@ -402,8 +433,8 @@ var
  AllwaitMode:DWORD;
  attr:DWORD;
 begin
- if (ef=nil) then Exit(SCE_KERNEL_ERROR_ESRCH);
- if (ef^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_ESRCH);
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit;
 
  _sig_lock;
 
@@ -413,14 +444,15 @@ begin
  AllPattern:=0;
  AllwaitMode:=0;
 
- attr:=ef^.attr;
-
  spin_lock(ef^.lock_list);
+
+ attr:=ef^.attr;
 
  if _is_single(attr) then
  begin
   fetch_or(ef^.bitPattern,bitPattern);
-  NtQueueApcThread(ef^.thread,@_apc_null,0,nil,0);
+  ef^.single.ret:=0;
+  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
  end else
  begin
 
@@ -431,7 +463,7 @@ begin
   node:=ef^.list.pHead;
   While (node<>nil) do
   begin
-   if (node^.pParent<>nil) then
+   if (node^.ret=1) then
     if _test_by_mode(bits,node^.bitPattern,node^.waitMode) then
     begin
      AllPattern :=AllPattern  or node^.bitPattern;
@@ -451,11 +483,11 @@ begin
    node:=ef^.list.pHead;
    While (node<>nil) do
    begin
-    if (node^.pParent<>nil) then
+    if (node^.ret=1) then
      if _test_by_mode(prev,node^.bitPattern,node^.waitMode) then
      begin
       node^.ResultPat:=bits;
-      node^.pParent  :=nil;
+      node^.ret:=0;
       NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
      end;
     node:=node^.pNext;
@@ -471,38 +503,77 @@ begin
  spin_unlock(ef^.lock_list);
 
  _sig_unlock;
+ ef_leave(ef);
  Result:=0;
 end;
 
 function ps4_sceKernelClearEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
-var
- t:Int64;
- //pt:pthread;
 begin
- if (ef=nil) then Exit(SCE_KERNEL_ERROR_ESRCH);
- if (ef^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_ESRCH);
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit;
 
  Writeln('sceKernelClearEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
-
- //pt:=ps4_pthread_self;
- //if pt^.name='main' then
- //begin
- // DebugBreak;
- //end;
-
- //t:=-10000;
- //SwDelayExecution(False,@t); //100ms
 
  spin_lock(ef^.lock_list);
   fetch_and(ef^.bitPattern,bitPattern);
  spin_unlock(ef^.lock_list);
 
+ ef_leave(ef);
+ Result:=0;
+end;
+
+function ps4_sceKernelDeleteEventFlag(ef:SceKernelEventFlag):Integer; SysV_ABI_CDecl;
+var
+ node:pwef_node;
+ attr:DWORD;
+begin
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit(SCE_KERNEL_ERROR_ESRCH);
+
+ if not CAS(ef^.valid,LIFE_EQ,DEAD_EQ) then
+ begin
+  ef_leave(ef);
+  Exit(SCE_KERNEL_ERROR_ESRCH);
+ end;
+
+ _sig_lock;
+
+ Writeln('>sceKernelDeleteEventFlag:',HexStr(ef),':',ef^.name);
+
+ spin_lock(ef^.lock_list);
+
+ attr:=ef^.attr;
+
+ //cancel all
+ if _is_single(attr) then
+ begin
+  ef^.single.ret:=SCE_KERNEL_ERROR_EACCES;
+  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+ end else
+ begin
+  node:=ef^.list.pHead;
+  While (node<>nil) do
+  begin
+   if (node^.ret=1) then
+   begin
+    node^.ResultPat:=ef^.bitPattern;
+    node^.ret:=SCE_KERNEL_ERROR_EACCES;
+    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+   end;
+   node:=node^.pNext;
+  end;
+ end;
+
+ spin_unlock(ef^.lock_list);
+
+ _sig_unlock;
+
+ System.InterlockedDecrement(ef^.refs);
+ ef_leave(ef);
  Result:=0;
 end;
 
 {
-int sceKernelDeleteEventFlag(SceKernelEventFlag ef);
-
 int sceKernelPollEventFlag(SceKernelEventFlag ef, uint64_t bitPattern,
 			   uint32_t waitMode, uint64_t *pResultPat);
 int sceKernelCancelEventFlag(SceKernelEventFlag ef, uint64_t setPattern,
