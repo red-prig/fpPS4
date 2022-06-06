@@ -185,6 +185,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceUltInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -244,6 +249,11 @@ begin
     'libSceVoiceQoS':
     Case Info^.nid of
      QWORD($53C21F365EBF0ACB):Result:=@ps4_sceVoiceQoSInit;
+    end;
+
+    'libSceUlt':
+    Case Info^.nid of
+     QWORD($859220D44586B073):Result:=@ps4_sceUltInitialize;
     end;
 
   end;

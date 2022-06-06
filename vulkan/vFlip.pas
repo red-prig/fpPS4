@@ -697,9 +697,9 @@ begin
  until false;
  SwapImage:=FSwapChain.FImage[imageIndex];
 
- //Writeln('>Flip.Fence.Wait');
+ Writeln('>Flip.Fence.Wait');
  buf^.cmdbuf.Fence.Wait(High(uint64));
- //Writeln('<Flip.Fence.Wait');
+ Writeln('<Flip.Fence.Wait');
 
  buf^.cmdbuf.Fence.Reset;
  buf^.cmdbuf.ReleaseResource;
