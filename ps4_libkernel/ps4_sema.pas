@@ -18,6 +18,21 @@ const
  SEM_VALUE_MAX	=High(Integer);
 
 type
+ pwsem_node=^wsem_node;
+ wsem_node=record
+  pNext,pPrev:pwsem_node;
+  //
+  thread:THandle;
+  Count:Integer;
+  ret:Integer;
+ end;
+
+ wsem_list=object
+  pHead,pTail:pwsem_node;
+  procedure Insert(Node:pwsem_node);
+  procedure Remove(node:pwsem_node);
+ end;
+
  PSceKernelSemaOptParam=^TSceKernelSemaOptParam;
  TSceKernelSemaOptParam=packed record
   size:QWORD;
@@ -27,14 +42,16 @@ type
  SceKernelSema=^_sem_t;
  _sem_t=record
   valid:DWORD;
-  s:THandle;
-  init,max:Integer;
-  num:Integer;
+  init :Integer;
+  max  :Integer;
+  num  :Integer;
   value:Integer;
-  //vlock:pthread_mutex_t;
-  lock:r_spin_lock;
-  name:array[0..31] of AnsiChar;
+  refs :DWORD;
+  vlock:Pointer;
+  list :wsem_list;
+  name :array[0..31] of AnsiChar;
  end;
+
 
 function ps4_sem_init(sem:PSceKernelSema;value:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sem_destroy(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
@@ -54,10 +71,7 @@ function ps4_sceKernelDeleteSema(sem:SceKernelSema):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelWaitSema(sem:SceKernelSema;Count:Integer;pTimeout:PDWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelSignalSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelPollSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelCancelSema(sem:SceKernelSema;count:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
-
-//function do_sema_b_wait(sema:THandle;timeout:DWORD;var cs:TRTLCriticalSection;var val:Integer):Integer;
-//function do_sema_b_wait_intern(sema:THandle;timeout:DWORD):Integer;
+function ps4_sceKernelCancelSema(sem:SceKernelSema;setCount:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
 
 function do_sema_b_wait(sema:THandle;pTimeout:PQWORD;var cs:TRTLCriticalSection;var val:Integer):Integer;
 function do_sema_b_wait_intern(sema:THandle;pTimeout:PQWORD):Integer; inline;
@@ -71,8 +85,10 @@ implementation
 //int	 sem_unlink(const char *);
 
 uses
+ ntapi,
  atomic,
  sys_kernel,
+ sys_pthread,
  sys_signal,
  sys_time,
  ps4_time;
@@ -128,108 +144,6 @@ begin
  Result:=SwWaitFor(sema,pTimeout);
 end;
 
-{
-function do_sema_b_wait(sema:THandle;timeout:DWORD;var cs:TRTLCriticalSection;var val:Integer):Integer;
-var
- r:Integer;
- v:Integer;
-begin
- _sig_lock;
- SwEnterCriticalSection(cs);
- System.InterlockedDecrement(val);
- v:=val;
- System.LeaveCriticalSection(cs);
- if (v>=0) then
- begin
-  _sig_unlock;
-  Exit(0);
- end;
- r:=do_sema_b_wait_intern(sema,timeout);
- SwEnterCriticalSection(cs);
- if (r<>0) then
- begin
-  System.InterlockedIncrement(val);
- end;
- System.LeaveCriticalSection(cs);
- Result:=r;
- _sig_unlock;
-end;
-}
-
-{
-function do_sema_b_wait_intern(sema:THandle;timeout:DWORD):Integer;
-var
- r:Integer;
- res:DWORD;
- QTIME:DWORD;
-begin
-
- if (timeout<>INFINITE) then
- begin
-  _sig_lock;
-  QTIME:=Windows.GetTickCount;
-  _sig_unlock;
- end;
-
- repeat
-
-  _sig_lock(True);
-  res:=WaitForSingleObjectEx(sema,timeout,True);
-  _sig_unlock;
-
-  case res of
-   WAIT_IO_COMPLETION:
-    begin
-
-     if (timeout<>INFINITE) then
-     begin
-      _sig_lock;
-      QTIME:=Windows.GetTickCount-QTIME;
-      _sig_unlock;
-
-      if (QTIME>timeout) then
-       timeout:=0
-      else
-       timeout:=timeout-QTIME;
-
-      if (timeout=0) then
-      begin
-       r:=0;
-       Break;
-      end;
-     end;
-
-    end;
-   WAIT_TIMEOUT:
-    begin
-     r:=ETIMEDOUT;
-     Break;
-    end;
-   WAIT_ABANDONED:
-    begin
-     r:=EPERM;
-     Break;
-    end;
-   WAIT_OBJECT_0:
-    begin
-     r:=0;
-     Break;
-    end;
-   else
-    begin
-     r:=EINVAL;
-     Break;
-    end;
-  end;
-
- until false;
-
- //if (r<>0) and (r<>EINVAL) and (WaitForSingleObject(sema,0)=WAIT_OBJECT_0) then
- // r:=0;
- Result:=r;
-end;
-}
-
 function _rel_wait_count(waiters_count,count:Integer):Integer; inline;
 begin
  if (waiters_count<count) then
@@ -278,6 +192,45 @@ end;
 
 /////
 
+procedure wsem_list.Insert(Node:pwsem_node);
+begin
+ if (pTail=nil) then
+ begin
+  pHead:=node;
+  node^.pPrev:=nil;
+ end else
+ begin
+  pTail^.pNext:=node;
+  node^.pPrev:=pTail;
+ end;
+ node^.pNext:=nil;
+ pTail:=node;
+end;
+
+procedure wsem_list.Remove(node:pwsem_node);
+begin
+ if (node^.pPrev=nil) then
+ begin
+  if (pHead=node) then
+  begin
+   pHead:=node^.pNext;
+  end;
+ end else
+ begin
+  node^.pPrev^.pNext:=node^.pNext;
+ end;
+ if (node^.pNext=nil) then
+ begin
+  if (pTail=node) then
+  begin
+   pTail:=node^.pPrev;
+  end;
+ end else
+ begin
+  node^.pNext^.pPrev:=node^.pPrev;
+ end;
+end;
+
 function sem_impl_init(m,mi:PSceKernelSema;max,value:Integer):Integer;
 var
  new_mi:SceKernelSema;
@@ -285,19 +238,11 @@ begin
  new_mi:=AllocMem(SizeOf(_sem_t));
  if (new_mi=nil) then Exit(ENOMEM);
 
- new_mi^.init:=value;
- new_mi^.max:=max;
+ new_mi^.init :=value;
+ new_mi^.max  :=max;
  new_mi^.value:=value;
-
- new_mi^.s:=CreateSemaphore(nil,0,SEM_VALUE_MAX,nil);
-
- if (new_mi^.s=0) then
- begin
-  FreeMem(new_mi);
-  Exit(ENOSPC);
- end;
-
  new_mi^.valid:=LIFE_SEM;
+ new_mi^.refs :=1;
 
  if CAS(m^,mi^,new_mi) then
  begin
@@ -322,125 +267,210 @@ begin
  _sig_unlock;
 end;
 
-function _sem_destroy(sem:PSceKernelSema):Integer;
-var
- sv:SceKernelSema;
- bkoff:backoff_exp;
-begin
- if (sem=nil) then Exit(EINVAL);
- sv:=XCHG(sem^,nil);
- if (sv=nil) then Exit(EINVAL);
-
- if not safe_test(sv^.valid,LIFE_SEM) then Exit(EINVAL);
- spin_lock(sv^.lock);
-
- if not CloseHandle(sv^.s) then
- begin
-  spin_unlock(sv^.lock);
-  Exit(EINVAL);
- end;
-
- sv^.value:=SEM_VALUE_MAX;
-
- if CAS(sv^.valid,LIFE_SEM,DEAD_SEM) then
- begin
-  spin_unlock(sv^.lock);
-  bkoff.Reset;
-  While (sv^.num<>0) do bkoff.Wait;
-  FreeMem(sv);
-  Result:=0;
- end else
- begin
-  spin_unlock(sv^.lock);
-  Result:=EINVAL;
- end;
-end;
-
-function sem_std_enter(sem,svp:PSceKernelSema):Integer;
+function sem_enter(sem,svp:PSceKernelSema):Integer;
 var
  sv:SceKernelSema;
 begin
  if (sem=nil) then Exit(EINVAL);
  sv:=sem^;
  if (sv=nil) then Exit(EINVAL);
- if not safe_test(sv^.valid,LIFE_SEM) then Exit(EINVAL);
+ if not safe_test(sv^.valid,LIFE_SEM) then Exit(ESRCH);
 
- spin_lock(sv^.lock);
-
- if (sem^=nil) then
- begin
-  spin_unlock(sv^.lock);
-  Exit(EINVAL);
- end;
+ spin_lock(sv^.vlock);
+ System.InterlockedIncrement(sv^.refs);
 
  svp^:=sv;
  Result:=0;
 end;
 
-function _sem_trywait(sem:PSceKernelSema):Integer;
+procedure sem_leave(sv:SceKernelSema);
+begin
+ if (System.InterlockedDecrement(sv^.refs)=0) then
+ begin
+  SwFreeMem(sv);
+ end;
+end;
+
+procedure _apc_null(dwParam:PTRUINT); stdcall;
+begin
+end;
+
+function _sem_destroy(sem:PSceKernelSema):Integer;
+var
+ sv:SceKernelSema;
+ node:pwsem_node;
+begin
+ Result:=sem_enter(sem,@sv);
+ if (Result<>0) then Exit;
+
+ sv^.value:=SEM_VALUE_MAX;
+
+ if not CAS(sv^.valid,LIFE_SEM,DEAD_SEM) then
+ begin
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
+  Exit(EINVAL);
+ end;
+
+ //cancel all
+ sv^.value:=sv^.max;
+
+ node:=sv^.list.pHead;
+ While (node<>nil) do
+ begin
+  if (node^.ret=1) then
+   begin
+    node^.Count:=0;
+    node^.ret:=0;
+    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+   end;
+  node:=node^.pNext;
+ end;
+
+ spin_unlock(sv^.vlock);
+ System.InterlockedDecrement(sv^.refs);
+ sem_leave(sv);
+ Result:=0;
+end;
+
+
+function _sem_trywait(sem:PSceKernelSema;count:Integer):Integer;
 var
  sv:SceKernelSema;
 begin
- Result:=sem_std_enter(sem,@sv);
+ Result:=sem_enter(sem,@sv);
  if (Result<>0) then Exit;
 
- if (sv^.value<=0) then
+ if (count>sv^.max) then
  begin
-  spin_unlock(sv^.lock);
-  Exit(EAGAIN);
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
+  Exit(EINVAL);
  end;
 
- Dec(sv^.value);
- spin_unlock(sv^.lock);
+ if (sv^.value>=Count) then
+ begin
+  Dec(sv^.value,Count);
+  Result:=0;
+ end else
+ begin
+  Result:=EBUSY;
+ end;
 
- Result:=0;
+ spin_unlock(sv^.vlock);
+ sem_leave(sv);
 end;
 
 function _sem_wait(sem:PSceKernelSema;count:Integer;pTimeout:PQWORD):Integer;
 var
+ t:pthread;
  sv:SceKernelSema;
- cur_v:Integer;
- semh:THandle;
+ timeout:Int64;
+ passed :Int64;
+ START:QWORD;
+ QTIME:QWORD;
+ node:wsem_node;
 begin
  if (count<=0) then Exit(EINVAL);
- Result:=sem_std_enter(sem,@sv);
+
+ t:=_get_curthread;
+ if (t=nil) then Exit(ESRCH);
+
+ Result:=sem_enter(sem,@sv);
  if (Result<>0) then Exit;
 
- //if (sv^.name='SuspendSemaphore') or
- //   (sv^.name='ResumeSemaphore') then
-  //Writeln('>sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+ //Writeln(GetCurrentThreadId,':>sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
 
  if (count>sv^.max) then
  begin
-  spin_unlock(sv^.lock);
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
   Exit(EINVAL);
  end;
 
- Dec(sv^.value,count);
- cur_v:=sv^.value;
- semh :=sv^.s;
- spin_unlock(sv^.lock);
-
- if (cur_v>=0) then
+ if (sv^.value>=count) then
  begin
-  //Writeln('<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+  Dec(sv^.value,count);
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
   Exit(0);
  end;
 
- //pthread_cleanup_push (clean_wait_sem, (void *) &arg);
+ node:=Default(wsem_node);
+ node.thread:=t^.handle;
+ node.count :=count;
+ node.ret   :=1;
+ sv^.list.Insert(@node);
 
- //Writeln('!sem_wait:',sv^.name,' count:',count,' cur_v:',cur_v);
+ spin_unlock(sv^.vlock);
 
- System.InterlockedIncrement(sv^.num);
- Result:=do_sema_b_wait_intern(semh,pTimeout);
- System.InterlockedDecrement(sv^.num);
+ if (pTimeout<>nil) then
+ begin
+  timeout:=(pTimeout^ div 100);
+  SwSaveTime(START);
+ end else
+ begin
+  timeout:=NT_INFINITE;
+ end;
 
- //if (sv^.name='SuspendSemaphore') or
- //   (sv^.name='ResumeSemaphore') then
-  //Writeln('<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+ repeat
 
- //pthread_cleanup_pop (ret);
- if (Result=EINVAL) then Result:=0;
+  if (node.ret<>1) then //is signaled
+  begin
+   Result:=node.ret;
+   Break;
+  end;
+
+  if (pTimeout<>nil) then
+  begin
+   if (timeout=0) then
+   begin
+    Result:=ETIMEDOUT;
+    Break;
+   end;
+
+   SwSaveTime(QTIME);
+
+   timeout:=-timeout;
+   SwDelayExecution(True,@timeout);
+   timeout:=-timeout;
+
+   passed:=SwTimePassedUnits(QTIME);
+
+   if (passed>=timeout) then
+   begin
+    Result:=ETIMEDOUT;
+    Break;
+   end else
+   begin
+    timeout:=timeout-passed;
+   end;
+
+  end else
+  begin
+   SwDelayExecution(True,@timeout);
+  end;
+
+ until false;
+
+ if (pTimeout<>nil) then
+ begin
+  if (Result=ETIMEDOUT) then
+  begin
+   pTimeout^:=0;
+  end else
+  begin
+   passed:=SwTimePassedUnits(QTIME);
+   pTimeout^:=passed*100;
+  end;
+ end;
+
+ spin_lock(sv^.vlock);
+   sv^.list.Remove(@node);
+ spin_unlock(sv^.vlock);
+
+ //Writeln(GetCurrentThreadId,':<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
+ sem_leave(sv);
 end;
 
 function _sem_timedwait(sem:PSceKernelSema;ts:Ptimespec):Integer;
@@ -449,59 +479,76 @@ var
 begin
  if (ts=nil) then
  begin
+  _sig_lock;
   Result:=_sem_wait(sem,1,nil);
+  _sig_unlock;
  end else
  begin
   t:=_pthread_rel_time_in_ns(ts^);
+  _sig_lock;
   Result:=_sem_wait(sem,1,@t);
+  _sig_unlock;
  end;
 end;
 
 function _sem_post(sem:PSceKernelSema;count:Integer):Integer;
 var
  sv:SceKernelSema;
- waiters_count:Integer;
+ node:pwsem_node;
+ value:Integer;
 begin
  if (count<=0) then Exit(EINVAL);
- Result:=sem_std_enter(sem,@sv);
+ Result:=sem_enter(sem,@sv);
  if (Result<>0) then Exit;
 
- //if (sv^.name='SuspendSemaphore') or
- //   (sv^.name='ResumeSemaphore') then
-  //Writeln('>sem_post:',sv^.name,' count:',count,' value:',sv^.value);
+ //Writeln(GetCurrentThreadId,':>sem_post:',sv^.name,' count:',count,' value:',sv^.value);
 
- if (count>sv^.max) {or (sv^.value>(sv^.max-count))} then
+ if (count>sv^.max) then
  begin
-  //Writeln('EINVAL sem_post:',sv^.name,' count:',count,' value:',sv^.value);
-  spin_unlock(sv^.lock);
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
   Exit(EINVAL);
  end;
 
- if (sv^.value>(sv^.max-count)) then
+ value:=sv^.value+count;
+
+ node:=sv^.list.pHead;
+ While (node<>nil) do
  begin
-  //Writeln('EOVERFLOW sem_post:',sv^.name,' count:',count,' value:',sv^.value);
-  spin_unlock(sv^.lock);
-  Exit(EOVERFLOW);
+  if (node^.ret=1) then
+   begin
+    if (node^.Count>value) then
+    begin
+     Dec(node^.Count,value);
+     value:=0;
+     Break;
+    end else
+    if (node^.Count<=value) then
+    begin
+     Dec(value,node^.Count);
+     node^.Count:=0;
+     node^.ret:=0;
+     NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+     if (value=0) then Break;
+    end;
+   end;
+  node:=node^.pNext;
  end;
 
- waiters_count:=-sv^.value;
- Inc(sv^.value,count);
-
- if (waiters_count<=0) then
+ if (value>sv^.max) then
  begin
-  spin_unlock(sv^.lock);
-  Exit(0);
+  sv^.value:=sv^.max;
+  Result:=EOVERFLOW;
+ end else
+ begin
+  sv^.value:=value;
  end;
 
- if ReleaseSemaphore(sv^.s,_rel_wait_count(waiters_count,count),nil) then
- begin
-  spin_unlock(sv^.lock);
-  Exit(0);
- end;
+ spin_unlock(sv^.vlock);
 
- Dec(sv^.value,count);
- spin_unlock(sv^.lock);
- Result:=EINVAL;
+ //Writeln(GetCurrentThreadId,'<sem_post:',sv^.name,' count:',count,' value:',sv^.value);
+
+ sem_leave(sv);
 end;
 
 function _sem_getvalue(sem:PSceKernelSema;sval:PInteger):Integer;
@@ -509,10 +556,11 @@ var
  sv:SceKernelSema;
 begin
  if (sval=nil) then Exit(EINVAL);
- Result:=sem_std_enter(sem,@sv);
+ Result:=sem_enter(sem,@sv);
  if (Result<>0) then Exit;
  sval^:=sv^.value;
- spin_unlock(sv^.lock);
+ spin_unlock(sv^.vlock);
+ sem_leave(sv);
  Result:=0;
 end;
 
@@ -532,7 +580,9 @@ end;
 
 function ps4_sem_getvalue(sem:PSceKernelSema;sval:PInteger):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=_set_errno(_sem_getvalue(sem,sval));
+ _sig_unlock;
 end;
 
 function ps4_sem_post(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
@@ -549,12 +599,18 @@ end;
 
 function ps4_sem_trywait(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
 begin
- Result:=_set_errno(_sem_trywait(sem));
+ _sig_lock;
+ Result:=_sem_trywait(sem,1);
+ _sig_unlock;
+ if (Result=EBUSY) then Result:=EAGAIN;
+ Result:=_set_errno(Result);
 end;
 
 function ps4_sem_wait(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=_set_errno(_sem_wait(sem,1,nil));
+ _sig_unlock;
 end;
 
 ////
@@ -587,103 +643,79 @@ end;
 //typedef unsigned int SceKernelUseconds;
 function ps4_sceKernelWaitSema(sem:SceKernelSema;Count:Integer;pTimeout:PDWORD):Integer; SysV_ABI_CDecl;
 var
- q:QWORD;
  t:QWORD;
 begin
  if (pTimeout=nil) then
  begin
+  _sig_lock;
   Result:=px2sce(_sem_wait(@sem,Count,nil));
+  _sig_unlock;
  end else
  begin
   t:=_usec2nsec(pTimeout^);
-  q:=_pthread_time_in_ns;
+  _sig_lock;
   Result:=px2sce(_sem_wait(@sem,Count,@t));
- end;
-
- if (pTimeout<>nil) then
- begin
-  if (Result=SCE_KERNEL_ERROR_ETIMEDOUT) then
-  begin
-   pTimeout^:=0;
-  end else
-  begin
-   t:=_pthread_time_in_ns;
-   if (t>q) then
-   begin
-    q:=t-q;
-   end else
-   begin
-    q:=0;
-   end;
-   pTimeout^:=dwMilliSecs(_nsec2usec(q));
-  end;
+  _sig_unlock;
+  pTimeout^:=dwMilliSecs(_nsec2usec(t));
  end;
 end;
 
 function ps4_sceKernelSignalSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=px2sce(_sem_post(@sem,Count));
+ Result:=_sem_post(@sem,Count);
  _sig_unlock;
+ if (Result=EOVERFLOW) then Result:=EINVAL;
+ Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelPollSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
-var
- sv:SceKernelSema;
 begin
- if (Count<=0) then Exit(SCE_KERNEL_ERROR_EINVAL);
- Result:=px2sce(sem_std_enter(@sem,@sv));
- if (Result<>0) then Exit;
-
- if (Count>sv^.max) then
- begin
-  spin_unlock(sv^.lock);
-  Exit(SCE_KERNEL_ERROR_EINVAL);
- end;
-
- if (sv^.value>=Count) then
- begin
-  Dec(sv^.value,Count);
-  Result:=0;
- end else
- begin
-  Result:=SCE_KERNEL_ERROR_EBUSY;
- end;
- spin_unlock(sv^.lock);
+ _sig_lock;
+ Result:=px2sce(_sem_trywait(@sem,count));
+ _sig_unlock;
 end;
 
-function ps4_sceKernelCancelSema(sem:SceKernelSema;count:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelCancelSema(sem:SceKernelSema;setCount:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
 var
  sv:SceKernelSema;
- waiters_count:Integer;
+ node:pwsem_node;
+ reset:Integer;
 begin
- Result:=px2sce(sem_std_enter(@sem,@sv));
+ if (setCount<=0) then Exit(EINVAL);
+ Result:=sem_enter(@sem,@sv);
  if (Result<>0) then Exit;
 
- if (count>sv^.max) then
+ if (setCount>sv^.max) then
  begin
-  spin_unlock(sv^.lock);
+  spin_unlock(sv^.vlock);
+  sem_leave(sv);
   Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
 
- if (threads<>nil) then threads^:=sv^.num;
+ sv^.value:=setCount;
 
- waiters_count:=-sv^.value;
-
- if (waiters_count>0) then
+ reset:=0;
+ node:=sv^.list.pHead;
+ While (node<>nil) do
  begin
-  _sig_lock;
-  ReleaseSemaphore(sv^.s,waiters_count,nil);
-  _sig_unlock;
+  if (node^.ret=1) then
+   begin
+    Inc(reset);
+    node^.Count:=0;
+    node^.ret:=0;
+    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+   end;
+  node:=node^.pNext;
  end;
 
- if (count<0) then
-  sv^.value:=sv^.init
- else
-  sv^.value:=count;
+ if (threads<>nil) then
+ begin
+  threads^:=reset;
+ end;
 
- spin_unlock(sv^.lock);
- Result:=0;
+ spin_unlock(sv^.vlock);
+ sem_leave(sv);
 end;
 
 
