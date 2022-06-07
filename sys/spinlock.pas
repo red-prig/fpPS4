@@ -71,7 +71,8 @@ implementation
 
 Uses
  atomic,
- sys_kernel;
+ sys_kernel,
+ sys_signal;
 
 Procedure backoff_exp.Wait;
 Var
@@ -177,18 +178,20 @@ end;
 function spin_trylock(var t:r_spin_lock):Boolean;
 begin
  Result:=True;
- if spin_trylock(t._lock) then
- begin
-  t.count:=0;
-  t.owner:=GetCurrentThreadId;
- end else
- if (t.owner=GetCurrentThreadId) then
- begin
-  Inc(t.count);
- end else
- begin
-  Result:=False;
- end;
+ _sig_lock;
+  if spin_trylock(t._lock) then
+  begin
+   t.count:=0;
+   t.owner:=GetCurrentThreadId;
+  end else
+  if (t.owner=GetCurrentThreadId) then
+  begin
+   Inc(t.count);
+  end else
+  begin
+   Result:=False;
+  end;
+ _sig_unlock;
 end;
 
 procedure spin_lock(var t:r_spin_lock);
@@ -201,15 +204,16 @@ end;
 
 procedure spin_unlock(var t:r_spin_lock);
 begin
- if (t.count<=1) then
- begin
-  t.count:=0;
-  t.owner:=DWORD(-1);
-  spin_unlock(t._lock);
- end else
- begin
-  Dec(t.count);
- end;
+ _sig_lock;
+  if (t.count=0) then
+  begin
+   t.owner:=DWORD(-1);
+   spin_unlock(t._lock);
+  end else
+  begin
+   Dec(t.count);
+  end;
+ _sig_unlock;
 end;
 
 //
