@@ -1046,7 +1046,9 @@ begin
  //exit(0);
 
  _sig_lock;
+ //Writeln(GetCurrentThreadId,'>Submit');
  vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,nil);
+ //Writeln(GetCurrentThreadId,'<Submit');
  _sig_unlock;
  Result:=0;
 end;
@@ -1072,7 +1074,9 @@ begin
  Flip.flipArg    :=flipArg;
 
  _sig_lock;
+ //Writeln(GetCurrentThreadId,'>SubmitAndFlip');
  vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,@Flip);
+ //Writeln(GetCurrentThreadId,'<SubmitAndFlip');
  _sig_unlock;
  Result:=0;
 end;
@@ -1082,8 +1086,8 @@ function ps4_sceGnmSubmitDone:Integer; SysV_ABI_CDecl;
 begin
  //exit(0);
 
- //Writeln('SubmitDone');
  _sig_lock;
+ //Writeln(GetCurrentThreadId,':SubmitDone');
  vSubmitDone;
  _sig_unlock;
  Result:=0;
@@ -1185,6 +1189,7 @@ end;
 
 procedure post_event_eop;
 begin
+ //Writeln('post_event_eop');
  _sig_lock;
  EopEvents.LockRd;
  HAMT_traverse64(@EopEvents.hamt,@_on_trigger_eop,nil);

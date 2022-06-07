@@ -277,6 +277,18 @@ begin
  //tiler:=Default(Tiler2d);
  //tiler.init(tp);
 
+ Case image.key.cformat of
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK,
+  VK_FORMAT_BC1_RGB_SRGB_BLOCK,
+  VK_FORMAT_BC3_UNORM_BLOCK,
+  VK_FORMAT_BC3_SRGB_BLOCK:
+   begin
+    _Load_Linear(cmd,image);
+    Exit;
+   end;
+  else
+ end;
+
  tiler:=Texture2d_32;
 
  m_bitsPerElement:=getFormatSize(image.key.cformat)*8;

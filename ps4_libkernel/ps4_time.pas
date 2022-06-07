@@ -320,7 +320,7 @@ begin
  _sig_lock;
  if GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then
  begin
-  Result:=(QWORD(kt)+QWORD(ut)) div 10;
+  Result:=({QWORD(kt)+}QWORD(ut)) div 10;
  end else
  begin
   _set_errno(EINVAL);

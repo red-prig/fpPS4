@@ -44,6 +44,7 @@ begin
  if (outHandle=nil) then Exit(SCE_PLAYGO_ERROR_INVALID_ARGUMENT);
  outHandle^:=333;
  Result:=SCE_PLAYGO_ERROR_NOT_SUPPORT_PLAYGO;
+ Result:=0;
 end;
 
 const
@@ -72,10 +73,18 @@ begin
 
  For i:=0 to numberOfEntries-1 do
  begin
-  outLoci[i]:=SCE_PLAYGO_LOCUS_NOT_DOWNLOADED;
+  if (chunkIds[i]=0) then
+  begin
+   outLoci[i]:=SCE_PLAYGO_LOCUS_LOCAL_FAST;
+  end else
+  begin
+   outLoci[i]:=SCE_PLAYGO_LOCUS_NOT_DOWNLOADED;
+   Exit(SCE_PLAYGO_ERROR_BAD_CHUNK_ID);
+  end;
  end;
 
- Result:=SCE_PLAYGO_ERROR_NOT_SUPPORT_PLAYGO;
+ //Result:=SCE_PLAYGO_ERROR_NOT_SUPPORT_PLAYGO;
+ Result:=0;
 end;
 
 function Load_libScePlayGo(Const name:RawByteString):TElf_node;

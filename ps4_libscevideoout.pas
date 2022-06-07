@@ -532,7 +532,7 @@ begin
 
  H.Release;
 
- Writeln('sceVideoOutOpen:',userID,' ',busType);
+ Writeln('<sceVideoOutOpen:',userID,' ',busType);
 
  _sig_unlock;
 end;
@@ -976,6 +976,7 @@ end;
 
 procedure TVideoOut.post_event_flip(flipArg:Int64);
 begin
+ //Writeln('post_event_flip');
  FlipEvents.LockRd;
  HAMT_traverse64(@FlipEvents.hamt,@_on_trigger_flip,Pointer(flipArg));
  FlipEvents.Unlock;
@@ -983,6 +984,7 @@ end;
 
 procedure TVideoOut.post_event_vblank(flipArg:Int64);
 begin
+ //Writeln('post_event_vblank');
  VblankEvents.LockRd;
  HAMT_traverse64(@VblankEvents.hamt,@_on_trigger_flip,Pointer(flipArg));
  VblankEvents.Unlock;
@@ -1074,16 +1076,6 @@ begin
   //post_event_flip(flipArg);
  end;
 
- Case _type of
-  0:begin
-     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
-    end;
-  1:begin
-     System.InterlockedDecrement(FlipStatus.FgcQueueNum);
-     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
-    end;
- end;
-
  //FlipRate:=20;
  if (flipMode=SCE_VIDEO_OUT_FLIP_MODE_VSYNC) then
  if (FlipRate<>0) then
@@ -1134,6 +1126,15 @@ begin
   post_event_flip(flipArg);
  end;
 
+ Case _type of
+  0:begin
+     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
+    end;
+  1:begin
+     System.InterlockedDecrement(FlipStatus.FgcQueueNum);
+     System.InterlockedDecrement(FlipStatus.FflipPendingNum);
+    end;
+ end;
 
  FlipStatus.Fcount_flips:=FlipStatus.Fcount_flips+1;   //Number of flips completed after opening the port self
  FlipStatus.FprocessTime:=ps4_sceKernelGetProcessTime; //Process time upon completion of the last flip
@@ -1197,15 +1198,20 @@ begin
 
  System.InterlockedIncrement(H.FlipStatus.FflipPendingNum);
 
- //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  //Writeln('submit_event_flip');
  _sig_lock;
+
+ //Writeln('>sceVideoOutSubmitFlip:',bufferIndex);
+
  Push2VideoOut(node);
 
  wait_until_equal(node^.wait,0);
 
- H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ //Writeln('<sceVideoOutSubmitFlip:',bufferIndex);
+
+ //H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  H.Release;
  _sig_unlock;
@@ -1246,14 +1252,14 @@ begin
  System.InterlockedIncrement(H.FlipStatus.FgcQueueNum);
  System.InterlockedIncrement(H.FlipStatus.FflipPendingNum);
 
- //H.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  //Writeln('submit_event_flip');
  Push2VideoOut(node);
 
  wait_until_equal(node^.wait,0);
 
- H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
+ //H.FlipStatus.FsubmitTsc:=ps4_sceKernelReadTsc; //Timestamp counter value when the last completed flip is requested
 
  H.Release;
 end;

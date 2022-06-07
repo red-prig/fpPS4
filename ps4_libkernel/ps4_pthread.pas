@@ -804,6 +804,7 @@ end;
 
 procedure ps4_pthread_cleanup_pop(execute:Integer); SysV_ABI_CDecl;
 begin
+ Assert(execute=0);
  Writeln('pthread_cleanup_pop');
 end;
 
@@ -816,6 +817,7 @@ end;
 
 procedure ps4___pthread_cleanup_pop_imp(execute:Integer); SysV_ABI_CDecl;
 begin
+ Assert(execute=0);
  Writeln('__pthread_cleanup_pop_imp');
 end;
 

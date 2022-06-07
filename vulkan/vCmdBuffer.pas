@@ -73,6 +73,8 @@ type
   FQueue:TvQueue;
   cmdbuf:TVkCommandBuffer;
 
+  cmd_count:qword;
+
   FCurrPipeline:array[0..1] of TVkPipeline;
   FCurrLayout:array[0..1] of TVkPipelineLayout;
 
@@ -98,7 +100,7 @@ type
   Function    IsRenderPass:Boolean;
   Procedure   EndRenderPass;
 
-  Procedure   QueueSubmit;
+  function    QueueSubmit:Boolean;
 
   Procedure   ReleaseResource;
   function    AddDependence(cb:TvReleaseCb):Boolean;
@@ -295,6 +297,8 @@ begin
 
  if (not BeginCmdBuffer) then Exit;
 
+ Inc(cmd_count);
+
  vkCmdBindPipeline(cmdbuf,BindPoint,F);
  FCurrPipeline[ord(BindPoint)]:=F;
 end;
@@ -334,6 +338,8 @@ begin
  FCurrLayout  [0]:=RT.FPipeline.FShaderGroup.FLayout.FHandle;
  emulate_primtype:=RT.FPipeline.emulate_primtype;
 
+ Inc(cmd_count);
+
  vkCmdBeginRenderPass(cmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
  vkCmdBindPipeline   (cmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
 
@@ -357,12 +363,13 @@ begin
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass<>VK_NULL_HANDLE) then
  begin
+  Inc(cmd_count);
   vkCmdEndRenderPass(cmdbuf);
   FRenderPass:=VK_NULL_HANDLE;
  end;
 end;
 
-Procedure TvCustomCmdBuffer.QueueSubmit;
+function TvCustomCmdBuffer.QueueSubmit:Boolean;
 var
  r:TVkResult;
  info:TVkSubmitInfo;
@@ -375,8 +382,10 @@ var
  i:Integer;
  t:TvSemaphoreWaitSet.Iterator;
 begin
+ Result:=False;
  if (Self=nil) then Exit;
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
+
  EndCmdBuffer;
 
  info:=Default(TVkSubmitInfo);
@@ -419,11 +428,14 @@ begin
  end;
 
  r:=FQueue.QueueSubmit(1,@info,FFence);
+
  if (r<>VK_SUCCESS) then
  begin
   Writeln('vkQueueSubmit:',r);
   exit;
  end;
+
+ Result:=True;
 end;
 
 Procedure TvCustomCmdBuffer.ReleaseResource;
@@ -447,6 +459,8 @@ begin
 
  FWaitSemaphores.Free;
  FImageBarriers .Free;
+
+ cmd_count:=0;
 end;
 
 function TvCustomCmdBuffer.AddDependence(cb:TvReleaseCb):Boolean;
@@ -529,6 +543,7 @@ begin
   p:=i.Item;
  end;
 
+ Inc(cmd_count);
  P^.Push(cmdbuf,
          dstAccessMask,
          newImageLayout,
@@ -549,6 +564,8 @@ begin
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
 
+ Inc(cmd_count);
+
  vkCmdBindDescriptorSets(cmdbuf,
                          BindPoint,
                          FCurrLayout[ord(BindPoint)],
@@ -565,6 +582,8 @@ begin
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
 
+ Inc(cmd_count);
+
  vkCmdPushConstants(cmdbuf,
                     FCurrLayout[ord(BindPoint)],
                     stageFlags,
@@ -578,6 +597,8 @@ begin
  if (Self=nil) then Exit;
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[1]=VK_NULL_HANDLE) then Exit;
+
+ Inc(cmd_count);
 
  vkCmdDispatch(cmdbuf,X,Y,Z);
 end;
@@ -594,6 +615,8 @@ begin
  For i:=0 to High(F.FSets) do
   if F.FSets[i].IsValid then
   begin
+
+   Inc(cmd_count);
 
    vkCmdBindDescriptorSets(cmdbuf,
                            BindPoint,
@@ -640,6 +663,8 @@ begin
  dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
 
+ Inc(cmd_count);
+
  vkBufferMemoryBarrier(cmdbuf,
                        srcb.FHandle,
                        VK_ACCESS_ANY,
@@ -647,6 +672,8 @@ begin
                        srcb.Foffset,byteCount,
                        ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
                        ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ Inc(cmd_count);
 
  vkBufferMemoryBarrier(cmdbuf,
                        dstb.FHandle,
@@ -661,6 +688,8 @@ begin
  info.dstOffset:=dstb.Foffset;
  info.size     :=byteCount;
 
+ Inc(cmd_count);
+
  vkCmdCopyBuffer(cmdbuf,
                  srcb.FHandle,
                  dstb.FHandle,
@@ -668,6 +697,7 @@ begin
 
  if isBlocking then
  begin
+  Inc(cmd_count);
   vkBarrier(cmdbuf,
             ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
             ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
@@ -686,6 +716,8 @@ begin
  dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
 
+ Inc(cmd_count);
+
  vkBufferMemoryBarrier(cmdbuf,
                        dstb.FHandle,
                        VK_ACCESS_ANY,
@@ -694,6 +726,8 @@ begin
                        ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
                        ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
+ Inc(cmd_count);
+
  vkCmdFillBuffer(cmdbuf,
                  dstb.FHandle,
                  dstb.Foffset,
@@ -701,6 +735,7 @@ begin
 
  if isBlocking then
  begin
+  Inc(cmd_count);
   vkBarrier(cmdbuf,
             ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
             ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
@@ -719,12 +754,15 @@ begin
  Case eventType of
   CS_DONE:
    begin
+    Inc(cmd_count);
     vkBarrier(cmdbuf,
     	      ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
     	      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     rb:=FetchHostBuffer(Self,dst,4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
     Assert(rb<>nil);
+
+    Inc(cmd_count);
 
     vkCmdFillBuffer(cmdbuf,
                     rb.FHandle,
@@ -733,12 +771,15 @@ begin
    end;
   PS_DONE:
    begin
+    Inc(cmd_count);
     vkBarrier(cmdbuf,
     	      ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
     	      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     rb:=FetchHostBuffer(Self,dst,4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
     Assert(rb<>nil);
+
+    Inc(cmd_count);
 
     vkCmdFillBuffer(cmdbuf,
                     rb.FHandle,
@@ -762,33 +803,56 @@ end;
 
 Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 var
- //rb:TURHostBuffer;
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
+ i,h:DWORD;
 begin
  if (Self=nil) then Exit;
  if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
- if (emulate_primtype<>0) then Assert(false,'TODO');
-
  Size:=INDICES*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
 
  rb:=FetchHostBuffer(Self,Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
- //rb:=FetchHostBuffer(Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);
+
+ Inc(cmd_count);
 
  vkCmdBindIndexBuffer(
      cmdbuf,
-     rb{.FHostBuf}.FHandle,
+     rb.FHandle,
      rb.Foffset,
      INDEX_TYPE);
 
- vkCmdDrawIndexed(
-     cmdbuf,
-     INDICES,
-     1,0,0,0);
+ Inc(cmd_count);
+
+ Case emulate_primtype of
+  0:
+    begin
+     vkCmdDrawIndexed(
+         cmdbuf,
+         INDICES,
+         1,0,0,0);
+    end;
+  DI_PT_QUADLIST:
+    begin
+     h:=INDICES div 4;
+     if (h>0) then h:=h-1;
+     For i:=0 to h do
+     begin
+      vkCmdDrawIndexed(
+       cmdbuf,
+       4,
+       1,
+       i*4,
+       0,
+       0);
+     end;
+    end;
+  else
+   Assert(false,'TODO');
+ end;
 
 end;
 
@@ -822,6 +886,7 @@ begin
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
+      Inc(cmd_count);
       vkCmdDraw(
           cmdbuf,
           4,
@@ -837,6 +902,7 @@ begin
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
+      Inc(cmd_count);
       vkCmdDraw(
           cmdbuf,
           4,

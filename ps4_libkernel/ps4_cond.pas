@@ -304,8 +304,7 @@ begin
 
  SwEnterCriticalSection(_c^.waiters_count_lock_);
 
- //mingw implement is wrong
- if {true} (_c^.waiters_count_unblock_<>0) then
+ if (_c^.waiters_count_unblock_<>0) then
  begin
   if (_c^.waiters_count_=0) then
   begin
@@ -316,7 +315,7 @@ begin
   Dec(_c^.waiters_count_);
   Inc(_c^.waiters_count_unblock_);
  end else
- if {false} (_c^.waiters_count_>_c^.waiters_count_gone_) then
+ if (_c^.waiters_count_>_c^.waiters_count_gone_) then
  begin
 
   r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -362,23 +361,23 @@ begin
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
 
- //Writeln('pthread_cond_broadcast:',_c^.name);
+ //Writeln('>pthread_cond_broadcast:',HexStr(_c),':',_c^.name);
 
  SwEnterCriticalSection(_c^.waiters_count_lock_);
 
- //mingw implement is wrong
- if {true} (_c^.waiters_count_unblock_<>0) then
+ if (_c^.waiters_count_unblock_<>0) then
  begin
   if (_c^.waiters_count_=0) then
   begin
    System.LeaveCriticalSection (_c^.waiters_count_lock_);
+   //Writeln('<1_pthread_cond_broadcast:',HexStr(_c),':',_c^.name);
    Exit(0);
   end;
   relCnt:=_c^.waiters_count_;
   _c^.waiters_count_:=0;
   Inc(_c^.waiters_count_unblock_,relCnt);
  end else
- if {false} (_c^.waiters_count_>_c^.waiters_count_gone_) then
+ if (_c^.waiters_count_>_c^.waiters_count_gone_) then
  begin
 
   r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -386,6 +385,7 @@ begin
   if (r<>0) then
   begin
    System.LeaveCriticalSection(_c^.waiters_count_lock_);
+   //Writeln('<2_pthread_cond_broadcast:',HexStr(_c),':',_c^.name);
    Exit(r);
   end;
 
@@ -402,12 +402,15 @@ begin
  end else
  begin
   System.LeaveCriticalSection(_c^.waiters_count_lock_);
+  //Writeln('<3_pthread_cond_broadcast:',HexStr(_c),':',_c^.name);
   Exit(0);
  end;
 
  LeaveCriticalSection(_c^.waiters_count_lock_);
 
  Result:=do_sema_b_release(_c^.sema_q,relCnt,_c^.waiters_q_lock_,_c^.value_q);
+
+ //Writeln('<4_pthread_cond_broadcast:',HexStr(_c),':',_c^.name);
 end;
 
 procedure cleanup_wait(arg:Pointer); SysV_ABI_CDecl;
@@ -502,7 +505,7 @@ begin
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
 
- //Writeln('pthread_cond_wait:',_c^.name);
+ //Writeln('>pthread_cond_wait:',HexStr(_c),':',_c^.name);
 
  tryagain:
  r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -511,7 +514,11 @@ begin
  if (System.TryEnterCriticalSection(_c^.waiters_count_lock_)=0) then
  begin
   r:=do_sema_b_release(_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
-  if (r<>0) then Exit(r);
+  if (r<>0) then
+  begin
+   //Writeln('<1_pthread_cond_wait:',HexStr(_c),':',_c^.name);
+   Exit(r);
+  end;
   NtYieldExecution;
   goto tryagain;
  end;
@@ -521,7 +528,11 @@ begin
  LeaveCriticalSection(_c^.waiters_count_lock_);
 
  r:=do_sema_b_release (_c^.sema_b,1,_c^.waiters_b_lock_,_c^.value_b);
- if (r<>0) then Exit(r);
+ if (r<>0) then
+ begin
+  //Writeln('<2_pthread_cond_wait:',HexStr(_c),':',_c^.name);
+  Exit(r);
+ end;
 
  ch.c:=_c;
  ch.r:=@r;
@@ -537,6 +548,9 @@ begin
 
  cleanup_wait(@ch);
  //pthread_cleanup_pop(1);
+
+ //Writeln('<3_pthread_cond_wait:',HexStr(_c),':',_c^.name);
+
  Result:=r;
 end;
 
@@ -560,7 +574,7 @@ begin
  if not safe_test(_c^.valid,LIFE_COND) then
   Exit(EINVAL);
 
- //Writeln('pthread_cond_timedwait_impl:',_c^.name);
+ //Writeln('>pthread_cond_timedwait_impl:',HexStr(_c),':',_c^.name);
 
  tryagain:
  r:=do_sema_b_wait(_c^.sema_b,nil,_c^.waiters_b_lock_,_c^.value_b);
@@ -595,6 +609,8 @@ begin
 
  cleanup_wait(@ch);
  //pthread_cleanup_pop(1);
+
+ //Writeln('<pthread_cond_timedwait_impl:',HexStr(_c),':',_c^.name);
 
  Result:=r;
 end;
