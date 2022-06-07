@@ -196,23 +196,35 @@ begin
     begin
      if (pTimeout<>nil) then
      begin
-      pTimeout^:=timeout;
+      pTimeout^:=0;
      end;
      Result:=ETIMEDOUT;
      Break;
     end;
    STATUS_ABANDONED:
     begin
+     if (pTimeout<>nil) then
+     begin
+      pTimeout^:=timeout*100;
+     end;
      Result:=EPERM;
      Break;
     end;
    STATUS_SUCCESS:
     begin
+     if (pTimeout<>nil) then
+     begin
+      pTimeout^:=timeout*100;
+     end;
      Result:=0;
      Break;
     end;
    else
     begin
+     if (pTimeout<>nil) then
+     begin
+      pTimeout^:=timeout*100;
+     end;
      Result:=EINVAL;
      Break;
     end;
