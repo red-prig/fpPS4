@@ -428,9 +428,7 @@ end;
 function ps4_sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 var
  node:pwef_node;
- prev,bits,count:QWORD;
- AllPattern:QWORD;
- AllwaitMode:DWORD;
+ prev,bits:QWORD;
  attr:DWORD;
 begin
  Result:=ef_enter(ef);
@@ -439,10 +437,6 @@ begin
  _sig_lock;
 
  Writeln('>sceKernelSetEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
-
- count:=0;
- AllPattern:=0;
- AllwaitMode:=0;
 
  spin_lock(ef^.lock_list);
 
@@ -466,37 +460,18 @@ begin
    if (node^.ret=1) then
     if _test_by_mode(bits,node^.bitPattern,node^.waitMode) then
     begin
-     AllPattern :=AllPattern  or node^.bitPattern;
-     AllwaitMode:=AllwaitMode or node^.waitMode;
-     Inc(count);
+     if _change_by_mode(bits,node^.bitPattern,node^.waitMode) then
+     begin
+      store_seq_cst(ef^.bitPattern,bits);
+     end;
+     node^.ResultPat:=bits;
+     node^.ret:=0;
+     NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
     end;
    node:=node^.pNext;
   end;
 
-  if (count<>0) then
-  begin
-   prev:=bits;
-
-   _change_by_mode(bits,AllPattern,AllwaitMode);
-   store_seq_cst(ef^.bitPattern,bits);
-
-   node:=ef^.list.pHead;
-   While (node<>nil) do
-   begin
-    if (node^.ret=1) then
-     if _test_by_mode(prev,node^.bitPattern,node^.waitMode) then
-     begin
-      node^.ResultPat:=bits;
-      node^.ret:=0;
-      NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
-     end;
-    node:=node^.pNext;
-   end;
-
-  end else
-  begin
-   store_seq_cst(ef^.bitPattern,bits);
-  end;
+  store_seq_cst(ef^.bitPattern,bits);
 
  end;
 
