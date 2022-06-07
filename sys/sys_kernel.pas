@@ -156,6 +156,7 @@ begin
   begin
    if (timeout=0) then
    begin
+    pTimeout^:=0;
     Result:=ETIMEDOUT;
     Break;
    end;
@@ -193,6 +194,10 @@ begin
     end;
    STATUS_TIMEOUT:
     begin
+     if (pTimeout<>nil) then
+     begin
+      pTimeout^:=timeout;
+     end;
      Result:=ETIMEDOUT;
      Break;
     end;
