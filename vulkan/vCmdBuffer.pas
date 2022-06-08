@@ -121,6 +121,18 @@ type
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
   Procedure   PushConstant(BindPoint:TVkPipelineBindPoint;stageFlags:TVkShaderStageFlags;offset,size:TVkUInt32;const pValues:PVkVoid);
   Procedure   DispatchDirect(X,Y,Z:TVkUInt32);
+
+  Procedure   BindVertexBuffer(Binding:TVkUInt32;
+                               Buffer:TVkBuffer;
+                               Offset:TVkDeviceSize);
+
+  Procedure   ClearDepthStencilImage(
+                         image:TVkImage;
+                         imageLayout:TVkImageLayout;
+                         const pDepthStencil:PVkClearDepthStencilValue;
+                         rangeCount:TVkUInt32;
+                         const pRanges:PVkImageSubresourceRange);
+
  end;
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
@@ -292,7 +304,6 @@ end;
 Procedure TvCustomCmdBuffer.BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[ord(BindPoint)]=F) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
@@ -310,7 +321,6 @@ begin
  Result:=False;
 
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
 
  if (RT=nil) then
  begin
@@ -427,7 +437,7 @@ begin
   FFence:=Fence.FHandle;
  end;
 
- r:=FQueue.QueueSubmit(1,@info,FFence);
+ r:=FQueue.Submit(1,@info,FFence);
 
  if (r<>VK_SUCCESS) then
  begin
@@ -528,7 +538,8 @@ var
  p:PvImageBarrier;
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  t:=Default(TvImageBarrier);
  t.Init(image,range);
@@ -579,8 +590,9 @@ Procedure TvCustomCmdBuffer.PushConstant(BindPoint:TVkPipelineBindPoint;stageFla
 begin
  if (Self=nil) then Exit;
  if (pValues=nil) or (size=0) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
@@ -595,12 +607,51 @@ end;
 Procedure TvCustomCmdBuffer.DispatchDirect(X,Y,Z:TVkUInt32);
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[1]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
  vkCmdDispatch(cmdbuf,X,Y,Z);
+end;
+
+Procedure TvCustomCmdBuffer.BindVertexBuffer(Binding:TVkUInt32;
+                                             Buffer:TVkBuffer;
+                                             Offset:TVkDeviceSize);
+begin
+ if (Self=nil) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ vkCmdBindVertexBuffer(cmdbuf,
+                       binding,
+                       Buffer,
+                       Offset);
+end;
+
+Procedure TvCustomCmdBuffer.ClearDepthStencilImage(
+                       image:TVkImage;
+                       imageLayout:TVkImageLayout;
+                       const pDepthStencil:PVkClearDepthStencilValue;
+                       rangeCount:TVkUInt32;
+                       const pRanges:PVkImageSubresourceRange);
+begin
+ if (Self=nil) then Exit;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkCmdClearDepthStencilImage(
+   cmdbuf,
+   image,
+   imageLayout,
+   pDepthStencil,
+   rangeCount,
+   pRanges);
+
 end;
 
 Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
@@ -655,7 +706,7 @@ begin
  if (Self=nil) then Exit;
 
  EndRenderPass;
- BeginCmdBuffer;
+ if (not BeginCmdBuffer) then Exit;
 
  srcb:=FetchHostBuffer(Self,src,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
  Assert(srcb<>nil);
@@ -711,7 +762,7 @@ begin
  if (Self=nil) then Exit;
 
  EndRenderPass;
- BeginCmdBuffer;
+ if (not BeginCmdBuffer) then Exit;
 
  dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
@@ -749,7 +800,7 @@ begin
  if (Self=nil) then Exit;
 
  EndRenderPass;
- BeginCmdBuffer;
+ if (not BeginCmdBuffer) then Exit;
 
  Case eventType of
   CS_DONE:

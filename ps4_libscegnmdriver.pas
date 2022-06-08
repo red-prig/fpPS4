@@ -1042,12 +1042,21 @@ function ps4_sceGnmSubmitCommandBuffers(
           dcbSizesInBytes:PDWORD;          //3
           ccbGpuAddrs:PPointer;            //4
           ccbSizesInBytes:PDWORD):Integer; SysV_ABI_CDecl; //5
+var
+ Submit:TvSubmitInfo;
 begin
- //exit(0);
+ if (count=0) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ Submit:=Default(TvSubmitInfo);
+ Submit.count          :=count          ;
+ Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
+ Submit.dcbSizesInBytes:=dcbSizesInBytes;
+ Submit.ccbGpuAddrs    :=ccbGpuAddrs    ;
+ Submit.ccbSizesInBytes:=ccbSizesInBytes;
 
  _sig_lock;
  //Writeln(GetCurrentThreadId,'>Submit');
- vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,nil);
+ Result:=vSubmitCommandBuffers(@Submit,nil);
  //Writeln(GetCurrentThreadId,'<Submit');
  _sig_unlock;
  Result:=0;
@@ -1064,9 +1073,19 @@ function ps4_sceGnmSubmitAndFlipCommandBuffers(
           flipMode:Integer;                //8
           flipArg:QWORD):Integer; SysV_ABI_CDecl;    //9
 var
+ Submit:TvSubmitInfo;
  Flip:TqcFlipInfo;
 begin
- //exit(0);
+ if (count=0) or
+    (dcbGpuAddrs=nil) or
+    (dcbSizesInBytes=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ Submit:=Default(TvSubmitInfo);
+ Submit.count          :=count          ;
+ Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
+ Submit.dcbSizesInBytes:=dcbSizesInBytes;
+ Submit.ccbGpuAddrs    :=ccbGpuAddrs    ;
+ Submit.ccbSizesInBytes:=ccbSizesInBytes;
 
  Flip.hVideo     :=videoOutHandle;
  Flip.bufferIndex:=displayBufferIndex;
@@ -1075,7 +1094,7 @@ begin
 
  _sig_lock;
  //Writeln(GetCurrentThreadId,'>SubmitAndFlip');
- vSubmitCommandBuffers(count,dcbGpuAddrs,dcbSizesInBytes,ccbGpuAddrs,ccbSizesInBytes,@Flip);
+ Result:=vSubmitCommandBuffers(@Submit,@Flip);
  //Writeln(GetCurrentThreadId,'<SubmitAndFlip');
  _sig_unlock;
  Result:=0;

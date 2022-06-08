@@ -84,16 +84,18 @@ type
 
  TvDevice=class
   FHandle:TVkDevice;
+  FLock:Pointer;
   Constructor Create(Queues:TvDeviceQueues);
   Destructor  Destroy; override;
+  function    WaitIdle:TVkResult;
  end;
 
  TvQueue=class
   FHandle:TVkQueue;
   FLock:Pointer;
-  function QueueSubmit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
-  function QueueWaitIdle:TVkResult;
-  function QueuePresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
+  function Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
+  function WaitIdle:TVkResult;
+  function PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
  end;
 
  TvCmdPool=class
@@ -172,6 +174,29 @@ procedure vkBarrier(
 	   cmdbuffer:TVkCommandBuffer;
 	   srcStageMask:TVkPipelineStageFlags;
 	   dstStageMask:TVkPipelineStageFlags);
+
+Procedure vkCmdBindVertexBuffer(commandBuffer:TVkCommandBuffer;
+                                Binding:TVkUInt32;
+                                Buffer:TVkBuffer;
+                                Offset:TVkDeviceSize);
+
+Procedure vkCmdBindDescriptorBuffer(commandBuffer:TVkCommandBuffer;
+                                    Binding:TVkUInt32;
+                                    Buffer:TVkBuffer;
+                                    Offset:TVkDeviceSize);
+
+Procedure vkCmdBindSB(cmd:TVkCommandBuffer;
+                      point:TVkPipelineBindPoint;
+                      layout:TVkPipelineLayout;
+                      aSet,aBind,aElem:TVkUInt32;
+                      buffer:TVkBuffer;
+                      offset,range:TVkDeviceSize);
+
+procedure vkCmdWaitEvent(commandBuffer:TVkCommandBuffer;
+                         event:TVkEvent;
+                         srcStageMask:TVkPipelineStageFlags;
+                         dstStageMask:TVkPipelineStageFlags);
+
 
 var
  VulkanApp:TVulkanApp;
@@ -1097,23 +1122,30 @@ begin
  vkDestroyDevice(FHandle,nil);
 end;
 
+function TvDevice.WaitIdle:TVkResult;
+begin
+ spin_lock(FLock);
+ Result:=vkDeviceWaitIdle(FHandle);
+ spin_unlock(FLock);
+end;
+
 //
 
-function TvQueue.QueueSubmit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
+function TvQueue.Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
 begin
  spin_lock(FLock);
  Result:=vkQueueSubmit(FHandle,submitCount,pSubmits,fence);
  spin_unlock(FLock);
 end;
 
-function TvQueue.QueueWaitIdle:TVkResult;
+function TvQueue.WaitIdle:TVkResult;
 begin
  spin_lock(FLock);
  Result:=vkQueueWaitIdle(FHandle);
  spin_unlock(FLock);
 end;
 
-function TvQueue.QueuePresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
+function TvQueue.PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
 begin
  spin_lock(FLock);
  Result:=vkQueuePresentKHR(FHandle,pPresentInfo);
@@ -1354,6 +1386,77 @@ begin
   srcStageMask,
   dstStageMask,
   0,
+  0,
+  nil,
+  0,
+  nil,
+  0,
+  nil);
+end;
+
+Procedure vkCmdBindVertexBuffer(commandBuffer:TVkCommandBuffer;
+                                Binding:TVkUInt32;
+                                Buffer:TVkBuffer;
+                                Offset:TVkDeviceSize);
+begin
+ vkCmdBindVertexBuffers(commandBuffer,Binding,1,@Buffer,@Offset);
+end;
+
+Procedure vkCmdBindDescriptorBuffer(commandBuffer:TVkCommandBuffer;
+                                    Binding:TVkUInt32;
+                                    Buffer:TVkBuffer;
+                                    Offset:TVkDeviceSize);
+var
+ info:TVkWriteDescriptorSet;
+begin
+ info:=Default(TVkWriteDescriptorSet);
+ info.sType:=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+
+end;
+
+Procedure vkCmdBindSB(cmd:TVkCommandBuffer;
+                      point:TVkPipelineBindPoint;
+                      layout:TVkPipelineLayout;
+                      aSet,aBind,aElem:TVkUInt32;
+                      buffer:TVkBuffer;
+                      offset,range:TVkDeviceSize);
+var
+ dwrite:TVkWriteDescriptorSet;
+ buf:TVkDescriptorBufferInfo;
+begin
+ dwrite:=Default(TVkWriteDescriptorSet);
+ dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ dwrite.dstBinding     :=aBind;
+ dwrite.dstArrayElement:=aElem;
+ dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+ dwrite.descriptorCount:=1;
+ dwrite.pBufferInfo    :=@buf;
+
+ buf:=Default(TVkDescriptorBufferInfo);
+ buf.buffer:=buffer;
+ buf.offset:=offset;
+ buf.range :=range ;
+
+ if (vkCmdPushDescriptorSetKHR=nil) then
+ begin
+  TPFN_vkVoidFunction(vkCmdPushDescriptorSetKHR):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdPushDescriptorSetKHR');
+ end;
+
+ Assert(vkCmdPushDescriptorSetKHR<>nil);
+
+ vkCmdPushDescriptorSetKHR(cmd,point,layout,aSet,1,@dwrite);
+end;
+
+procedure vkCmdWaitEvent(commandBuffer:TVkCommandBuffer;
+                         event:TVkEvent;
+                         srcStageMask:TVkPipelineStageFlags;
+                         dstStageMask:TVkPipelineStageFlags);
+begin
+ vkCmdWaitEvents(commandBuffer,
+  1,
+  @event,
+  srcStageMask,
+  dstStageMask,
   0,
   nil,
   0,

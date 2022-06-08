@@ -10,9 +10,11 @@ interface
 uses
   Classes,
   SysUtils,
+  LFQueue,
   bittype,
 
   sys_types,
+  sys_kernel,
   ps4_libSceVideoOut,
   ps4_pssl,
   ps4_shader,
@@ -40,50 +42,518 @@ uses
 
   si_ci_vi_merged_offset,
   si_ci_vi_merged_enum,
-  si_ci_vi_merged_registers,
-
-  trace_manager
+  si_ci_vi_merged_registers
 
   ;
 
-procedure vSubmitCommandBuffers(
-          count:DWORD;
-          dcbGpuAddrs:PPointer;
-          dcbSizesInBytes:PDWORD;
-          ccbGpuAddrs:PPointer;
-          ccbSizesInBytes:PDWORD;
-          Flip:PqcFlipInfo);
+type
+ PvSubmitInfo=^TvSubmitInfo;
+ TvSubmitInfo=packed record
+  count:DWORD;
+  dcbGpuAddrs:PPointer;
+  dcbSizesInBytes:PDWORD;
+  ccbGpuAddrs:PPointer;
+  ccbSizesInBytes:PDWORD;
+ end;
+
+const
+ kIndirectBufferMaximumSizeInBytes=$3FFFFC;
+
+ function vSubmitCommandBuffers(
+            Submit:PvSubmitInfo;
+            Flip:PqcFlipInfo):Integer;
 
 procedure vSubmitDone;
 
 implementation
 
 Uses
+ ntapi,
+ atomic,
+ spinlock,
  ps4_libSceGnmDriver,
  ps4_gpu_regs,
  shader_dump;
 
-Var
+type
+ PvSubmitNode=^TvSubmitNode;
+ TvSubmitNode=record
+  next_:PvSubmitNode;
+  //
+  dcbAddr:Pointer;
+  ccbAddr:Pointer;
+  dcbSize:DWORD;
+  ccbSize:DWORD;
+  Flip:TqcFlipInfo;
+  IsFlip:Boolean;
+ end;
+
+ TvCmdRing=object
+  Queue:TIntrusiveMPSCQueue;
+  Current:PvSubmitNode;
+  CmdBuffer:TvCmdBuffer;
+  LastSetReg:WORD;
+  Procedure Init;
+  Function  Next:Boolean;
+  Procedure AllocCmdBuffer;
+ end;
+
+ pvMeFlipInfo=^TvMeFlipInfo;
+ TvMeFlipInfo=record
+  qcInfo:TqcFlipInfo;
+  FlipLData:DWORD;
+  FlipLabel:PDWORD;
+  IsFlip:Boolean;
+  Interrupt:Boolean;
+ end;
+
+ pvMeEopInfo=^TvMeEopInfo;
+ TvMeEopInfo=record
+  adr:Pointer;
+  data:QWORD;
+  dataSel:Byte;
+  Interrupt:Boolean;
+ end;
+
+ TvMicroEngineType=(metCmdBuffer,metFlip,metEop);
+
+ PvMicroEngineNode=^TvMicroEngineNode;
+ TvMicroEngineNode=record
+  next_:PvMicroEngineNode;
+  //
+  mode:TvMicroEngineType;
+
+  Case Byte of
+   0:(CmdBuffer:TvCmdBuffer);
+   1:(FlipInfo:TvMeFlipInfo);
+   2:(EopInfo:TvMeEopInfo);
+ end;
+
+ TvMicroEngine=object
+  Queue:TIntrusiveMPSCQueue;
+  Current:PvMicroEngineNode;
+  Procedure Init;
+  Function  Next:Boolean;
+  Procedure PushCmd(var Cmd:TvCmdBuffer);
+  Procedure PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;IsFlip,Interrupt:Boolean);
+  Procedure PushEop(adr:Pointer;data:QWORD;dataSel:Byte;Interrupt:Boolean);
+ end;
+
+var
+ _gfx_lazy_init:Integer=0;
+ _gfx_handle:Thandle=0;
+
+ GFXRing:TvCmdRing;
+ GFXMicroEngine:TvMicroEngine;
+
  GPU_REGS:TGPU_REGS;
 
  FCmdPool:TvCmdPool;
 
- FCmdBuffer:TvCmdBuffer;
+Procedure TvCmdRing.Init;
+begin
+ Queue.Create
+end;
 
- FLastSetReg:WORD;
+Function TvCmdRing.Next:Boolean;
+begin
+ Result:=False;
 
- //FSubmitFlip:TqcFlipInfo;
- //PSubmitFlip:PqcFlipInfo;
+ if (Current<>nil) then
+ begin
+  FreeMem(Current);
+  Current:=nil;
+ end;
+ LastSetReg:=0;
 
- FFlipLabel:PDWORD;
- FFlipLData:DWORD;
+ Result:=Queue.Pop(Current);
+end;
+
+Procedure TvCmdRing.AllocCmdBuffer;
+begin
+ InitVulkan;
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+ if (CmdBuffer=nil) then
+ begin
+  CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ end;
+end;
+
+Procedure TvMicroEngine.Init;
+begin
+ Queue.Create;
+end;
+
+Function TvMicroEngine.Next:Boolean;
+begin
+ Result:=False;
+
+ if (Current<>nil) then
+ begin
+  FreeMem(Current);
+  Current:=nil;
+ end;
+
+ Result:=Queue.Pop(Current);
+end;
+
+Procedure TvMicroEngine.PushCmd(var Cmd:TvCmdBuffer);
+var
+ node:PvMicroEngineNode;
+begin
+ if (Cmd=nil) then Exit;
+
+ node:=AllocMem(SizeOf(TvMicroEngineNode));
+ if (node=nil) then Exit;
+
+ node^.mode:=metCmdBuffer;
+ node^.CmdBuffer:=Cmd;
+
+ Queue.Push(node);
+
+ Cmd:=nil;
+end;
+
+Procedure TvMicroEngine.PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;IsFlip,Interrupt:Boolean);
+var
+ node:PvMicroEngineNode;
+begin
+ node:=AllocMem(SizeOf(TvMicroEngineNode));
+ if (node=nil) then Exit;
+
+ node^.mode              :=metFlip;
+ node^.FlipInfo.qcInfo   :=qcInfo;
+ node^.FlipInfo.FlipLData:=FlipLData;
+ node^.FlipInfo.FlipLabel:=FlipLabel;
+ node^.FlipInfo.IsFlip   :=IsFlip;
+ node^.FlipInfo.Interrupt:=Interrupt;
+
+ Queue.Push(node);
+end;
+
+Procedure TvMicroEngine.PushEop(adr:Pointer;data:QWORD;dataSel:Byte;Interrupt:Boolean);
+var
+ node:PvMicroEngineNode;
+begin
+ node:=AllocMem(SizeOf(TvMicroEngineNode));
+ if (node=nil) then Exit;
+
+ node^.mode             :=metEop;
+ node^.EopInfo.adr      :=adr;
+ node^.EopInfo.data     :=data;
+ node^.EopInfo.dataSel  :=dataSel;
+ node^.EopInfo.Interrupt:=Interrupt;
+
+ Queue.Push(node);
+end;
+
+procedure gfx_cp_parser(node:PvSubmitNode);          forward;
+function  gfx_submit(CmdBuffer:TvCmdBuffer):Boolean; forward;
+function  gfx_test(CmdBuffer:TvCmdBuffer):Boolean;   forward;
+
+Function me_flip(node:pvMeFlipInfo):Boolean;
+begin
+ Result:=True;
+ if (node=nil) then Exit;
+
+ if (node^.FlipLabel<>nil) then
+ begin
+  node^.FlipLabel^:=node^.FlipLData;
+ end;
+
+ if node^.IsFlip then
+ begin
+  _qc_sceVideoOutSubmitFlip(@node^.qcInfo);
+ end;
+
+ if node^.Interrupt then
+ begin
+  post_event_eop;
+ end;
+end;
+
+Function me_eop(node:pvMeEopInfo):Boolean;
+begin
+ Result:=True;
+ if (node=nil) then Exit;
+
+ Case node^.dataSel of
+  EVENTWRITEEOP_DATA_SEL_DISCARD      :;//nop
+  kEventWriteSource32BitsImmediate    :PDWORD(node^.adr)^:=PDWORD(@node^.data)^;
+  kEventWriteSource64BitsImmediate    :PQWORD(node^.adr)^:=PQWORD(@node^.data)^;
+  kEventWriteSourceGlobalClockCounter ,
+  kEventWriteSourceGpuCoreClockCounter:PQWORD(node^.adr)^:=GetTickCount64*1000;
+  else
+   Assert(False);
+ end;
+
+ if (node^.Interrupt) then
+ begin
+  post_event_eop;
+ end;
+end;
+
+Function me_node_test(node:PvMicroEngineNode):Boolean;
+begin
+ Result:=True;
+ if (node=nil) then Exit;
+
+ Case node^.mode of
+  metCmdBuffer:
+   begin
+    Result:=gfx_test(node^.CmdBuffer);
+   end;
+  else;
+ end;
+
+end;
+
+Function me_node_submit(node:PvMicroEngineNode):Boolean;
+begin
+ Result:=True;
+ if (node=nil) then Exit;
+
+ Case node^.mode of
+  metCmdBuffer:
+   begin
+    Result:=gfx_submit(node^.CmdBuffer);
+   end;
+  metFlip:
+   begin
+    Result:=me_flip(@node^.FlipInfo);
+   end;
+  metEop:
+   begin
+    Result:=me_eop(@node^.EopInfo);
+   end;
+ end;
+end;
+
+function GFX_thread(p:pointer):ptrint;
+var
+ time:Int64;
+ work_do:Boolean;
+begin
+ repeat
+  work_do:=False;
+
+  if GFXRing.Next then
+  begin
+   gfx_cp_parser(GFXRing.Current);
+   work_do:=True;
+  end;
+
+  if (GFXMicroEngine.Current<>nil) then
+  begin
+   if not me_node_test(GFXMicroEngine.Current) then
+   begin
+    time:=-1000000;
+    NtDelayExecution(True,@time);
+    Continue;
+   end;
+   work_do:=True;
+  end;
+
+  if GFXMicroEngine.Next then
+  begin
+   if not me_node_submit(GFXMicroEngine.Current) then Assert(false);
+   work_do:=True;
+  end;
+
+  if not work_do then
+  begin
+   time:=Int64(NT_INFINITE);
+   NtDelayExecution(True,@time);
+  end;
+
+ until false;
+end;
+
+procedure Init_gfx;
+var
+ t:Thandle;
+begin
+ if XCHG(_gfx_lazy_init,1)=0 then
+ begin
+
+  GFXRing.Init;
+  GFXMicroEngine.Init;
+
+  t:=BeginThread(@GFX_thread);
+
+  _gfx_handle:=t;
+ end else
+ begin
+  wait_until_equal(_gfx_handle,0);
+ end;
+end;
+
+procedure _apc_null(dwParam:PTRUINT); stdcall;
+begin
+end;
+
+function calc_submit_size(node:PvSubmitInfo;var dcbSize,ccbSize:DWORD):Integer;
+var
+ n:DWORD;
+begin
+ Result:=0;
+
+ dcbSize:=0;
+ ccbSize:=0;
+
+ if (node=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ n:=0;
+ While (n<node^.count) do
+ begin
+
+  if (node^.dcbGpuAddrs<>nil) and (node^.dcbSizesInBytes<>nil) then
+  begin
+   if (node^.dcbGpuAddrs[n]<>nil) and (node^.dcbSizesInBytes[n]<>0) then
+   if (node^.dcbSizesInBytes[n]<>0) then
+   begin
+    if (node^.dcbSizesInBytes[n]>kIndirectBufferMaximumSizeInBytes) then
+    begin
+     Exit(SCE_KERNEL_ERROR_EINVAL);
+    end;
+    dcbSize:=dcbSize+node^.dcbSizesInBytes[n];
+   end;
+  end;
+
+  if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
+  begin
+   if (node^.ccbGpuAddrs[n]<>nil) and (node^.ccbSizesInBytes[n]<>0) then
+   if (node^.ccbSizesInBytes[n]<>0) then
+   begin
+    if (node^.ccbSizesInBytes[n]>kIndirectBufferMaximumSizeInBytes) then
+    begin
+     Exit(SCE_KERNEL_ERROR_EINVAL);
+    end;
+    ccbSize:=ccbSize+node^.ccbSizesInBytes[n];
+   end;
+  end;
+
+  Inc(n);
+ end;
+end;
+
+procedure copy_submit_addr(node:PvSubmitInfo;dcbAddr,ccbAddr:Pointer);
+var
+ n:DWORD;
+ size,dcbSize,ccbSize:DWORD;
+begin
+ dcbSize:=0;
+ ccbSize:=0;
+
+ n:=0;
+ While (n<node^.count) do
+ begin
+
+  if (node^.dcbGpuAddrs<>nil) and (node^.dcbSizesInBytes<>nil) then
+  begin
+   if (node^.dcbGpuAddrs[n]<>nil) and (node^.dcbSizesInBytes[n]<>0) then
+   begin
+    size:=node^.dcbSizesInBytes[n];
+    if (size<>0) then
+    begin
+     Move(node^.dcbGpuAddrs[n]^,PByte(dcbAddr)[dcbSize],size);
+     dcbSize:=dcbSize+size;
+    end;
+   end;
+  end;
+
+  if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
+  begin
+   if (node^.ccbGpuAddrs[n]<>nil) and (node^.ccbSizesInBytes[n]<>0) then
+   begin
+    size:=node^.ccbSizesInBytes[n];
+    if (size<>0) then
+    begin
+     Move(node^.ccbGpuAddrs[n]^,PByte(ccbAddr)[ccbSize],size);
+     ccbSize:=ccbSize+size;
+    end;
+   end;
+  end;
+
+  Inc(n);
+ end;
+end;
+
+function vSubmitCommandBuffers(
+           Submit:PvSubmitInfo;
+           Flip:PqcFlipInfo):Integer;
+var
+ node:PvSubmitNode;
+ dcbAddr:Pointer;
+ ccbAddr:Pointer;
+ dcbSize:DWORD;
+ ccbSize:DWORD;
+begin
+ Result:=0;
+ if (Submit=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ dcbSize:=0;
+ ccbSize:=0;
+ Result:=calc_submit_size(Submit,dcbSize,ccbSize);
+ if (Result<>0) then Exit;
+
+ if (dcbSize=0) and (ccbSize=0) then
+ begin
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ if (dcbSize<>0) then
+ begin
+  dcbAddr:=AllocMem(dcbSize);
+  if (dcbAddr=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
+ end;
+ if (ccbSize<>0) then
+ begin
+  ccbAddr:=AllocMem(ccbSize);
+  if (ccbAddr=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
+ end;
+
+ copy_submit_addr(Submit,dcbAddr,ccbAddr);
+
+ node:=AllocMem(SizeOf(TvSubmitNode));
+ if (node=nil) then
+ begin
+  FreeMem(dcbAddr);
+  FreeMem(ccbAddr);
+  Exit(SCE_KERNEL_ERROR_ENOMEM);
+ end;
+
+ Init_gfx;
+
+ node^.dcbAddr:=dcbAddr;
+ node^.ccbAddr:=ccbAddr;
+ node^.dcbSize:=dcbSize;
+ node^.ccbSize:=ccbSize;
+
+ node^.IsFlip:=(Flip<>nil);
+
+ if (Flip<>nil) then
+ begin
+  node^.Flip:=Flip^;
+ end;
+
+ GFXRing.Queue.Push(node);
+ NtQueueApcThread(_gfx_handle,@_apc_null,0,nil,0);
+end;
+
+procedure vSubmitDone;
+begin
+ Device.WaitIdle;
+end;
+
 
 procedure onPrepareFlip();
 begin
- //
-
- vSubmitDone;
-
+ GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,GFXRing.Current^.IsFlip,False);
 end;
 
 procedure onPrepareFlipLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlip);
@@ -92,22 +562,17 @@ var
 begin
  QWORD(adr):=QWORD(Body^.ADDRES_LO) or (QWORD(Body^.ADDRES_HI) shl $20);
  {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
- //adr^:=Body^.DATA;
 
- Assert(FFlipLabel=nil);
- FFlipLabel:=adr;
- FFlipLData:=Body^.DATA;
-
- vSubmitDone;
+ GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,GFXRing.Current^.IsFlip,False);
 end;
 
 procedure onPrepareFlipWithEopInterrupt(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
 begin
  {$ifdef ww}writeln;{$endif}
 
- vSubmitDone;
-
- post_event_eop;
+ GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,GFXRing.Current^.IsFlip,True);
 end;
 
 procedure onPrepareFlipWithEopInterruptLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
@@ -116,15 +581,9 @@ var
 begin
  QWORD(adr):=QWORD(Body^.ADDRES_LO) or (QWORD(Body^.ADDRES_HI) shl $20);
  {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
- //adr^:=Body^.DATA;
 
- Assert(FFlipLabel=nil);
- FFlipLabel:=adr;
- FFlipLData:=Body^.DATA;
-
- vSubmitDone;
-
- post_event_eop;
+ GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,GFXRing.Current^.IsFlip,True);
 end;
 
 procedure onEventWriteEop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PEVENTWRITEEOP);
@@ -161,16 +620,10 @@ begin
   end;
   {$endif}
 
-  if (Body^.DATA_CNTL.intSel<>0) then
-  begin
-   {$ifdef ww}Writeln('Interrupt');{$endif}
+  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+  GFXMicroEngine.PushEop(adr,PQWORD(@Body^.DATA_LO)^,Body^.DATA_CNTL.dataSel,(Body^.DATA_CNTL.intSel<>0));
 
-   vSubmitDone;
-
-   post_event_eop;
-  end;
-
-
+  {
   Case Body^.DATA_CNTL.dataSel of
    EVENTWRITEEOP_DATA_SEL_DISCARD:;//nop
    kEventWriteSource32BitsImmediate    :PDWORD(adr)^:=Body^.DATA_LO;
@@ -180,6 +633,16 @@ begin
    else
     Assert(False);
   end;
+
+  if (Body^.DATA_CNTL.intSel<>0) then
+  begin
+   {$ifdef ww}Writeln('Interrupt');{$endif}
+
+   vSubmitDone;
+
+   post_event_eop;
+  end;
+  }
 
  end;
 
@@ -194,12 +657,6 @@ begin
  Case Body^.eventIndex of
   EVENT_WRITE_EOS_INDEX_CSDONE_PSDONE:
   begin
-   {Case Body^.eventType of
-    CS_DONE:{$ifdef ww}Writeln('kEosCsDone'){$endif};
-    PS_DONE:{$ifdef ww}Writeln('kEosPsDone'){$endif};
-    else
-     Assert(False);
-   end;}
    Case Body^.command of
     //EVENT_WRITE_EOS_CMD_STORE_APPEND_COUNT_TO_MEMORY:;
     //EVENT_WRITE_EOS_CMD_STORE_GDS_DATA_TO_MEMORY    :;
@@ -207,8 +664,8 @@ begin
     begin
      QWORD(adr):=QWORD(Body^.addressLo) or (QWORD(Body^.addressHi) shl $20);
      {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA){$endif};
-     //adr^:=Body^.DATA;
-     FCmdBuffer.writeAtEndOfShader(Body^.eventType,adr,Body^.DATA);
+     GFXRing.AllocCmdBuffer;
+     GFXRing.CmdBuffer.writeAtEndOfShader(Body^.eventType,adr,Body^.DATA);
     end;
     else
      Assert(False);
@@ -217,7 +674,7 @@ begin
   else
    Assert(False);
  end;
- //writeln;
+
 end;
 
 procedure onEventWrite(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4CMDEVENTWRITE);
@@ -268,8 +725,15 @@ begin
       begin
 
        Case Body^.Flags1.engine of
-        CP_DMA_ENGINE_ME :FCmdBuffer.dmaData(adrSrc,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
-        CP_DMA_ENGINE_PFP:Move(adrSrc^,adrDst^,Body^.Flags2.byteCount);
+        CP_DMA_ENGINE_ME:
+         begin
+          GFXRing.AllocCmdBuffer;
+          GFXRing.CmdBuffer.dmaData(adrSrc,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
+         end;
+        CP_DMA_ENGINE_PFP:
+         begin
+          Move(adrSrc^,adrDst^,Body^.Flags2.byteCount);
+         end;
        end;
 
       end;
@@ -296,8 +760,15 @@ begin
       begin
 
        Case Body^.Flags1.engine of
-        CP_DMA_ENGINE_ME :FCmdBuffer.dmaData(Body^.srcAddrLo,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
-        CP_DMA_ENGINE_PFP:FillDWORD(adrDst^,Body^.Flags2.byteCount div 4,Body^.srcAddrLo);
+        CP_DMA_ENGINE_ME:
+         begin
+          GFXRing.AllocCmdBuffer;
+          GFXRing.CmdBuffer.dmaData(Body^.srcAddrLo,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
+         end;
+        CP_DMA_ENGINE_PFP:
+         begin
+          FillDWORD(adrDst^,Body^.Flags2.byteCount div 4,Body^.srcAddrLo);
+         end;
        end;
 
       end;
@@ -337,7 +808,8 @@ begin
       Case Body^.CONTROL.engineSel of
        WRITE_DATA_ENGINE_ME:
         begin
-         FCmdBuffer.dmaData(@Body^.DATA,adr,count*SizeOf(DWORD),Boolean(Body^.CONTROL.wrConfirm));
+         GFXRing.AllocCmdBuffer;
+         GFXRing.CmdBuffer.dmaData(@Body^.DATA,adr,count*SizeOf(DWORD),Boolean(Body^.CONTROL.wrConfirm));
         end;
        WRITE_DATA_ENGINE_PFP:
         begin
@@ -403,7 +875,7 @@ end;
 procedure onNop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PDWORD);
 begin
 
- Case FLastSetReg of
+ Case GFXRing.LastSetReg of
   mmCB_COLOR0_FMASK_SLICE,
   mmCB_COLOR1_FMASK_SLICE,
   mmCB_COLOR2_FMASK_SLICE,
@@ -573,7 +1045,7 @@ end;
 
 procedure onSetCommonReg(reg:WORD;value:DWORD);
 begin
- FLastSetReg:=reg;
+ GFXRing.LastSetReg:=reg;
 
  Case reg of
 
@@ -866,88 +1338,10 @@ end;
 //SLICE.TILE_MAX = 15359, //(SLICE.TILE_MAX+1)/(PITCH.TILE_MAX+1)*8=768
 
 var
- //FCmdPool:TCmdPool;
-
- //FCmdBuffer:TvCmdBuffer;
-
- //FVSShader:TvShaderExt;
- //FPSShader:TvShaderExt;
-
  FAttrBuilder:TvAttrBuilder;
  FUniformBuilder:TvUniformBuilder;
 
  FShaderGroup:TvShaderGroup;
-
-Procedure vkCmdBindVertexBuffer(commandBuffer:TVkCommandBuffer;
-                                Binding:TVkUInt32;
-                                Buffer:TVkBuffer;
-                                Offset:TVkDeviceSize);
-begin
- vkCmdBindVertexBuffers(commandBuffer,Binding,1,@Buffer,@Offset);
-end;
-
-Procedure vkCmdBindDescriptorBuffer(commandBuffer:TVkCommandBuffer;
-                                    Binding:TVkUInt32;
-                                    Buffer:TVkBuffer;
-                                    Offset:TVkDeviceSize);
-var
- info:TVkWriteDescriptorSet;
-begin
- info:=Default(TVkWriteDescriptorSet);
- info.sType:=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-
-end;
-
-Procedure vkCmdBindSB(cmd:TVkCommandBuffer;
-                      point:TVkPipelineBindPoint;
-                      layout:TVkPipelineLayout;
-                      aSet,aBind,aElem:TVkUInt32;
-                      buffer:TVkBuffer;
-                      offset,range:TVkDeviceSize);
-var
- dwrite:TVkWriteDescriptorSet;
- buf:TVkDescriptorBufferInfo;
-begin
- dwrite:=Default(TVkWriteDescriptorSet);
- dwrite.sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
- dwrite.dstBinding     :=aBind;
- dwrite.dstArrayElement:=aElem;
- dwrite.descriptorType :=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
- dwrite.descriptorCount:=1;
- dwrite.pBufferInfo    :=@buf;
-
- buf:=Default(TVkDescriptorBufferInfo);
- buf.buffer:=buffer;
- buf.offset:=offset;
- buf.range :=range ;
-
- if (vkCmdPushDescriptorSetKHR=nil) then
- begin
-  TPFN_vkVoidFunction(vkCmdPushDescriptorSetKHR):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdPushDescriptorSetKHR');
- end;
-
- Assert(vkCmdPushDescriptorSetKHR<>nil);
-
- vkCmdPushDescriptorSetKHR(cmd,point,layout,aSet,1,@dwrite);
-end;
-
-procedure vkCmdWaitEvent(commandBuffer:TVkCommandBuffer;
-                         event:TVkEvent;
-                         srcStageMask:TVkPipelineStageFlags;
-                         dstStageMask:TVkPipelineStageFlags);
-begin
- vkCmdWaitEvents(commandBuffer,
-  1,
-  @event,
-  srcStageMask,
-  dstStageMask,
-  0,
-  nil,
-  0,
-  nil,
-  0,
-  nil);
-end;
 
 type
  TvEvent2=class(TvEvent)
@@ -958,9 +1352,6 @@ Procedure TvEvent2.Release(Sender:TObject);
 begin
  Free;
 end;
-
-//var
-// FRenderCmd:TvRenderTargets;
 
 procedure UpdateGpuRegsInfo;
 
@@ -973,7 +1364,7 @@ var
 
  RT_INFO:TRT_INFO;
  DB_INFO:TDB_INFO;
- //ri:TURDevcImage2D;
+
  ri:TvImage2;
  iv:TvImageView2;
 
@@ -988,21 +1379,12 @@ var
 
  fdump_ps,fdump_vs:RawByteString;
 
- //PB:PDWORD;
- //PV:PVSharpResource4;
-
- //buf:TURDevcImage1D;
-
  buf:TvHostBuffer;
 
  FDescriptorGroup:TvDescriptorGroup;
 
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
-
- //FShaderGroup:TvShaderGroup;
-
- Event:TvEvent2;
 
 begin
 
@@ -1014,70 +1396,11 @@ begin
  {$ifdef ww}Writeln(fdump_vs);{$endif}
  {$ifdef ww}Writeln(fdump_ps);{$endif}
 
- //if fdump_ps='shader_dump\WeAreDoomed_ps4_ps_BA60EAD7.dump' then Exit;
-
- //if fdump_ps='shader_dump\WeAreDoomed_ps4_ps_B9680888.dump' then
- //begin
- // exit;
- //end;
-
- {
- Writeln('paddedWidth[0]:',(GPU_REGS.RENDER_TARGET[0].PITCH.TILE_MAX+1)*8);
- Writeln('paddedHeigh[0]:',(GPU_REGS.RENDER_TARGET[0].SLICE.TILE_MAX+1)*8 div (GPU_REGS.RENDER_TARGET[0].PITCH.TILE_MAX+1));
-
-
- Writeln('ZMIN_ZMAX[0]:',GPU_REGS.VPORT_ZMIN_MAX[0].ZMIN:0:3,' ',GPU_REGS.VPORT_ZMIN_MAX[0].ZMAX:0:3);
-
- Writeln('VPORT_OFFSET[0]:',GPU_REGS.VPORT_SCALE_OFFSET[0].XOFFSET:0:3,':', //x=XOFFSET-XSCALE
-                            GPU_REGS.VPORT_SCALE_OFFSET[0].YOFFSET:0:3,':', //y=YOFFSET-YSCALE
-                            GPU_REGS.VPORT_SCALE_OFFSET[0].ZOFFSET:0:3);    //minDepth=ZOFFSET
-
- Writeln('VPORT_SCALE[0]:' ,GPU_REGS.VPORT_SCALE_OFFSET[0].XSCALE:0:3,':',  //width =XSCALE*2
-                            GPU_REGS.VPORT_SCALE_OFFSET[0].YSCALE:0:3,':',  //height=YSCALE*2
-                            GPU_REGS.VPORT_SCALE_OFFSET[0].ZSCALE:0:3);     //maxDepth=ZOFFSET+ZSCALE
-
- Writeln(
-  GPU_REGS.VPORT_SCALE_OFFSET[0].XOFFSET-GPU_REGS.VPORT_SCALE_OFFSET[0].XSCALE:0:3,' ',
-  GPU_REGS.VPORT_SCALE_OFFSET[0].YOFFSET-GPU_REGS.VPORT_SCALE_OFFSET[0].YSCALE:0:3,' ',
-  GPU_REGS.VPORT_SCALE_OFFSET[0].XSCALE*2:0:3,' ',
-  GPU_REGS.VPORT_SCALE_OFFSET[0].YSCALE*2:0:3,' ',
-  GPU_REGS.VPORT_SCALE_OFFSET[0].ZOFFSET:0:3,' ',
-  GPU_REGS.VPORT_SCALE_OFFSET[0].ZOFFSET+GPU_REGS.VPORT_SCALE_OFFSET[0].ZSCALE:0:3
- );
- }
-
-
- //Writeln((GPU_REGS.DEPTH.DEPTH_SIZE.PITCH_TILE_MAX+1)*8,'x',(GPU_REGS.DEPTH.DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8);
-
  //if not GPU_REGS.COMP_ENABLE then Exit;
 
  if not (GPU_REGS.COMP_ENABLE or GPU_REGS.DB_ENABLE) then Exit;
 
- InitVulkan;
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- if (FCmdBuffer=nil) then
- begin
-  FCmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
-
-  //FCmdBuffer.FWaitSemaphore:=TvSemaphore.Create;
-  //FCmdBuffer.FSignSemaphore:=TvSemaphore.Create;
- end;
-
-
- //if (FRenderCmd=nil) then
- //begin
- // FRenderCmd:=TvRenderTargets.Create;
- // FRenderCmd.FRenderPass:=TvRenderPass.Create;
- // FRenderCmd.FPipeline  :=TvGraphicsPipeline.Create;
- // FRenderCmd.FPipeline.FRenderPass:=FRenderCmd.FRenderPass;
- //
- // FRenderCmd.FFramebuffer:=TvFramebuffer.Create;
- // FRenderCmd.FFramebuffer.SetRenderPass(FRenderCmd.FRenderPass);
- //end;
+ GFXRing.AllocCmdBuffer;
 
  ///////////////////
 
@@ -1112,41 +1435,7 @@ begin
    FRenderCmd.FPipeline.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
   end;
 
- FCmdBuffer.EndRenderPass;
- FCmdBuffer.BeginCmdBuffer;
-
-
- //vkMemoryBarrier(FCmdBuffer.cmdbuf,
- //          {ord(VK_ACCESS_TRANSFER_WRITE_BIT) or} {ord(VK_ACCESS_HOST_WRITE_BIT) or} ord(VK_ACCESS_MEMORY_WRITE_BIT),
- //          {ord(VK_ACCESS_INDEX_READ_BIT) or} ord(VK_ACCESS_MEMORY_READ_BIT),
- //          ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
- //          ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
- //          );
-
- //vkCmdPipelineBarrier(FCmdBuffer.cmdbuf,
- // ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
- // ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
- // 0,
- // 0,
- // nil,
- // 0,
- // nil,
- // 0,
- // nil);
-
-
- Event:=nil;
- //Event:=TvEvent2.Create;
- //FCmdBuffer.AddDependence(@Event.Release);
-
-
- if (Event<>nil) then
- vkCmdSetEvent(FCmdBuffer.cmdbuf,
-               Event.FHandle,
-               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-
- //Writeln(Event.Status);
+ GFXRing.CmdBuffer.EndRenderPass;
 
  if GPU_REGS.COMP_ENABLE then
  For i:=0 to 7 do
@@ -1159,7 +1448,7 @@ begin
    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_READ);
 
-   ri:=FetchImage(FCmdBuffer,
+   ri:=FetchImage(GFXRing.CmdBuffer,
                   RT_INFO.FImageInfo,
                   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
                   ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
@@ -1170,7 +1459,7 @@ begin
 
    //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
 
-   iv:=ri.FetchView(FCmdBuffer,RT_INFO.FImageView);
+   iv:=ri.FetchView(GFXRing.CmdBuffer,RT_INFO.FImageView);
 
    //
 
@@ -1187,57 +1476,7 @@ begin
 
    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_CLEAR);
 
-
-   {
-   if (RT_INFO.IMAGE_USAGE and TM_CLEAR=0) then
-   begin
-
-    FCmdBuffer.PushImageBarrier(ri.FHandle,
-                                iv.GetSubresRange,
-                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-    buf:=FetchHostBuffer(FCmdBuffer,
-                         ri.key.Addr,
-                         ri.key.params.extend.width*ri.key.params.extend.height*4,
-                         ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-
-    vkBufferMemoryBarrier(FCmdBuffer.cmdbuf,
-                          buf.FHandle,
-                          ord(VK_ACCESS_SHADER_WRITE_BIT),
-                          ord(VK_ACCESS_MEMORY_READ_BIT),
-                          0,ri.key.params.extend.width*ri.key.params.extend.height*4,
-                          ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                          ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                          );
-
-    BufferImageCopy:=Default(TVkBufferImageCopy);
-
-    BufferImageCopy.bufferOffset:=buf.Foffset;
-    BufferImageCopy.bufferRowLength:=0;
-    BufferImageCopy.bufferImageHeight:=0;
-    BufferImageCopy.imageSubresource:=ri.GetSubresLayer;
-    //BufferImageCopy.imageOffset:TVkOffset3D; //0
-    BufferImageCopy.imageExtent.Create(ri.key.params.extend.width,
-                                       ri.key.params.extend.height,
-                                       ri.key.params.extend.depth);
-
-    vkCmdCopyBufferToImage(FCmdBuffer.cmdbuf,
-                           buf.FHandle,
-                           ri.FHandle,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           1,
-                           @BufferImageCopy);
-   end;
-   }
-
-   //
-
-   //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-   //VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
+   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                                iv.GetSubresRange,
                                GetColorAccessMask(RT_INFO.IMAGE_USAGE),
                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1280,7 +1519,7 @@ begin
   //DB_INFO.DEPTH_USAGE:={TM_CLEAR or} TM_READ or TM_WRITE;
 
 
-  ri:=FetchImage(FCmdBuffer,
+  ri:=FetchImage(GFXRing.CmdBuffer,
                  DB_INFO.FImageInfo,
                  ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) or
                  ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
@@ -1290,12 +1529,12 @@ begin
 
   //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
 
-  iv:=ri.FetchView(FCmdBuffer);
+  iv:=ri.FetchView(GFXRing.CmdBuffer);
 
 
   if not GPU_REGS.COMP_ENABLE then
   begin
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
+   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                                iv.GetSubresRange,
                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1304,53 +1543,15 @@ begin
    range:=iv.GetSubresRange;
    clr2:=DB_INFO.CLEAR_VALUE.depthStencil;
 
-   vkCmdClearDepthStencilImage(FCmdBuffer.cmdbuf,
-                               ri.FHandle,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               @clr2,
-                               1,@range);
+   GFXRing.CmdBuffer.ClearDepthStencilImage(ri.FHandle,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            @clr2,
+                                            1,@range);
 
    Exit;
   end;
 
-  //DB_INFO.DEPTH_CLEAR:=false;
-
-  {if not (DB_INFO.DEPTH_CLEAR or DB_INFO.STENCIL_CLEAR) then
-  begin
-
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-   buf:=FetchHostBuffer(FCmdBuffer,
-                        ri.key.Addr,
-                        ri.key.params.extend.width*ri.key.params.extend.height*4,
-                        ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-
-   BufferImageCopy:=Default(TVkBufferImageCopy);
-
-   BufferImageCopy.bufferOffset:=buf.Foffset;
-   BufferImageCopy.bufferRowLength:=0;
-   BufferImageCopy.bufferImageHeight:=0;
-   BufferImageCopy.imageSubresource:=ri.GetSubresLayer;
-   BufferImageCopy.imageSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_DEPTH_BIT);
-   //BufferImageCopy.imageOffset:TVkOffset3D; //0
-   BufferImageCopy.imageExtent.Create(ri.key.params.extend.width,
-                                      ri.key.params.extend.height,
-                                      ri.key.params.extend.depth);
-
-   vkCmdCopyBufferToImage(FCmdBuffer.cmdbuf,
-                          buf.FHandle,
-                          ri.FHandle,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          1,
-                          @BufferImageCopy);
-
-  end;}
-
-  FCmdBuffer.PushImageBarrier(ri.FHandle,
+  GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                               iv.GetSubresRange,
                               GetDepthStencilAccessMask(DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
                               GetDepthStencilLayout    (DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
@@ -1368,13 +1569,6 @@ begin
   // DB_INFO.DEPTH_CLEAR:=True;
   //end;
 
-  {FRenderCmd.FRenderPass.AddDepthAt(
-   DB_INFO.FImageInfo.cformat,
-   DB_INFO.DEPTH_CLEAR,
-   not DB_INFO.Z_READ_ONLY,
-   DB_INFO.STENCIL_CLEAR,
-   not DB_INFO.STENCIL_READ_ONLY);}
-
   FRenderCmd.FRenderPass.AddDepthAt(
    DB_INFO.FImageInfo.cformat,
    DB_INFO.DEPTH_USAGE,
@@ -1382,10 +1576,7 @@ begin
 
   FRenderCmd.FRenderPass.SetZorderStage(DB_INFO.zorder_stage);
 
-  //if DB_INFO.DEPTH_CLEAR or DB_INFO.STENCIL_CLEAR then
-  begin
-   FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
-  end;
+  FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
 
   FRenderCmd.FPipeline.DepthStencil.depthTestEnable      :=DB_INFO.depthTestEnable      ;
   FRenderCmd.FPipeline.DepthStencil.depthWriteEnable     :=DB_INFO.depthWriteEnable     ;
@@ -1456,7 +1647,7 @@ begin
 
  FRenderCmd.FPipeline.FShaderGroup:=FShaderGroup;
 
-  FDescriptorGroup:=FetchDescriptorGroup(FCmdBuffer,FShaderGroup.FLayout);
+  FDescriptorGroup:=FetchDescriptorGroup(GFXRing.CmdBuffer,FShaderGroup.FLayout);
 
 
   FUniformBuilder:=Default(TvUniformBuilder);
@@ -1472,7 +1663,7 @@ begin
   With FUniformBuilder.FImages[i] do
   begin
 
-   ri:=FetchImage(FCmdBuffer,
+   ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
                   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
@@ -1480,7 +1671,7 @@ begin
                   TM_READ
                   );
 
-   iv:=ri.FetchView(FCmdBuffer,FView);
+   iv:=ri.FetchView(GFXRing.CmdBuffer,FView);
 
    {
 
@@ -1534,7 +1725,7 @@ begin
 
    }
 
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
+   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                                iv.GetSubresRange,
                                ord(VK_ACCESS_SHADER_READ_BIT),
                                VK_IMAGE_LAYOUT_GENERAL,
@@ -1544,25 +1735,21 @@ begin
   end;
  end;
 
- if (Event<>nil) then
- vkCmdWaitEvent(FCmdBuffer.cmdbuf,Event.FHandle,
-                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-                 ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT)
-                );
-
- if not FCmdBuffer.BeginRenderPass(FRenderCmd) then
+ if not GFXRing.CmdBuffer.BeginRenderPass(FRenderCmd) then
+ begin
   Writeln('!BeginRenderPass');
+  Assert(false);
+ end;
 
  if (FVSShader.FPushConst.size<>0) then
  begin
   pData:=FVSShader.GetPushConstData(@GPU_REGS.SPI.VS.USER_DATA);
 
-  Assert(pData<>nil);
-
-  FCmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          ord(VK_SHADER_STAGE_VERTEX_BIT),
-                          0,FVSShader.FPushConst.size,
-                          pData);
+  if (pData<>nil) then
+  GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                 ord(VK_SHADER_STAGE_VERTEX_BIT),
+                                 0,FVSShader.FPushConst.size,
+                                 pData);
 
  end;
 
@@ -1571,13 +1758,11 @@ begin
  begin
   pData:=FPSShader.GetPushConstData(@GPU_REGS.SPI.PS.USER_DATA);
 
-  //Assert(pData<>nil);
-
   if (pData<>nil) then
-  FCmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          ord(VK_SHADER_STAGE_FRAGMENT_BIT),
-                          0,FPSShader.FPushConst.size,
-                          pData);
+  GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                 ord(VK_SHADER_STAGE_FRAGMENT_BIT),
+                                 0,FPSShader.FPushConst.size,
+                                 pData);
  end;
 
  if (Length(FAttrBuilder.FBindExt)<>0) then
@@ -1585,9 +1770,9 @@ begin
   For i:=0 to High(FAttrBuilder.FBindExt) do
   With FAttrBuilder.FBindExt[i] do
   begin
-   buf:=FetchHostBuffer(FCmdBuffer,min_addr,stride*count,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+   buf:=FetchHostBuffer(GFXRing.CmdBuffer,min_addr,stride*count,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
 
-   vkCmdBindVertexBuffer(FCmdBuffer.cmdbuf,
+   GFXRing.CmdBuffer.BindVertexBuffer(
                          binding,
                          buf.FHandle,
                          buf.Foffset);
@@ -1603,7 +1788,7 @@ begin
   With FUniformBuilder.FImages[i] do
   begin
 
-   ri:=FetchImage(FCmdBuffer,
+   ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
                   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
@@ -1611,7 +1796,7 @@ begin
                   TM_READ
                   );
 
-   iv:=ri.FetchView(FCmdBuffer,FView);
+   iv:=ri.FetchView(GFXRing.CmdBuffer,FView);
 
    ri.data_usage:=ri.data_usage and (not TM_READ); ////////
 
@@ -1629,7 +1814,7 @@ begin
   For i:=0 to High(FUniformBuilder.FSamplers) do
   With FUniformBuilder.FSamplers[i] do
   begin
-   sm:=FetchSampler(FCmdBuffer,PS);
+   sm:=FetchSampler(GFXRing.CmdBuffer,PS);
 
    FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
 
@@ -1643,26 +1828,7 @@ begin
   With FUniformBuilder.FBuffers[i] do
   begin
 
-   buf:=FetchHostBuffer(FCmdBuffer,addr,size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-
-   //Writeln('AlignDw:',addr-AlignDw(addr,256));
-
-   //pData:=AlignDw(addr,256)+AlignDw(buf.Foffset,$10)+4;
-
-   //For o:=0 to 3 do
-   //begin
-   // PSingle(pData)[o*8+0]:=PSingle(pData)[o*8+0];
-   // Write(PSingle(pData)[o*8+0]:0:4,' ');
-   // Write(PSingle(pData)[o*8+1]:0:4,' ');
-   // Write(PSingle(pData)[o*8+2]:0:4,' ');
-   // Write(PSingle(pData)[o*8+3]:0:4,' ');
-   // writeln;
-   //end;
-
-   //For o:=0 to 5 do
-   //begin
-   // Writeln(PSingle(addr)[o]);
-   //end;
+   buf:=FetchHostBuffer(GFXRing.CmdBuffer,addr,size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
    o:=buf.Foffset;
 
@@ -1671,8 +1837,6 @@ begin
    if (a<>offset) then Assert(false);
 
    o:=AlignDw(o,limits.minStorageBufferOffsetAlignment{ $10});    //minStorageBufferOffsetAlignment
-   //o:=o+$10;
-
 
    FDescriptorGroup.FSets[fset].BindBuf(bind,0,
                                         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1680,89 +1844,13 @@ begin
                                         o,
                                         VK_WHOLE_SIZE);
 
-   {
-   vkCmdBindSB(FCmdBuffer.cmdbuf,
-               VK_PIPELINE_BIND_POINT_GRAPHICS,
-               FRenderCmd.FPipeline.FLayout.FHandle,
-               fset,bind,0,
-               buf.FHostBuf.FHandle,
-               o,
-               size);
-   }
-
   end;
  end;
 
- FCmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_GRAPHICS,FDescriptorGroup);
-
- {
- FCmdBuffer.EndRenderPass;
-
- if GPU_REGS.COMP_ENABLE then
- For i:=0 to 7 do
- if GPU_REGS.RT_ENABLE(i) then
-  begin
-   RT_INFO:=GPU_REGS.GET_RT_INFO(i);
-
-   ri:=FetchImage(FCmdBuffer,
-                  RT_INFO.FImageInfo,
-                  ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                  ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-                  );
-
-   iv:=ri.FetchView(FCmdBuffer,RT_INFO.FImageView);
-
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_TRANSFER_READ_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-   buf:=FetchHostBuffer(FCmdBuffer,
-                        ri.key.Addr,
-                        ri.key.params.extend.width*ri.key.params.extend.height*4,
-                        ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
-
-   BufferImageCopy:=Default(TVkBufferImageCopy);
-
-   BufferImageCopy.bufferOffset:=buf.Foffset;
-   BufferImageCopy.bufferRowLength:=0;
-   BufferImageCopy.bufferImageHeight:=0;
-   BufferImageCopy.imageSubresource:=ri.GetSubresLayer;
-   //BufferImageCopy.imageOffset:TVkOffset3D; //0
-   BufferImageCopy.imageExtent.Create(ri.key.params.extend.width,
-                                      ri.key.params.extend.height,
-                                      ri.key.params.extend.depth);
-
-   vkCmdCopyImageToBuffer(FCmdBuffer.cmdbuf,
-                          ri.FHandle,
-                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                          buf.FHandle,
-                          1,
-                          @BufferImageCopy);
-
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
-                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
-                               ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
-
-  end;
-
- }
+ GFXRing.CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_GRAPHICS,FDescriptorGroup);
 
  //writeln;
 end;
-
-//var
- //FCSShader:TvShaderExt;
-
- //FComputePipeline:TvComputePipeline;
-
- //FShaderGroup2:TvShaderGroup;
 
 procedure UpdateGpuRegsInfoCompute;
 var
@@ -1785,26 +1873,7 @@ begin
 
  fdump_cs:=DumpCS(GPU_REGS);
 
- InitVulkan;
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- if (FCmdBuffer=nil) then
- begin
-  FCmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- end;
-
- FCmdBuffer.EndRenderPass;
- FCmdBuffer.BeginCmdBuffer;
-
- //if (FCSShader=nil) then
- //begin
- // FCSShader:=TvShaderExt.Create;
- // FCSShader.FDescSetId:=0;
- // FCSShader.LoadFromFile(ChangeFileExt(fdump_cs,'.spv'));
- //end;
+ GFXRing.AllocCmdBuffer;
 
  FCSShader:=FetchShader(vShaderStageCs,0,GPU_REGS);
  if (FCSShader=nil) then Exit;
@@ -1824,18 +1893,15 @@ begin
   FComputePipeline.SetShader(FCSShader);
   FComputePipeline.Compile;
 
- FCmdBuffer.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FComputePipeline.FHandle);
- FCmdBuffer.BindLayout(VK_PIPELINE_BIND_POINT_COMPUTE,FShaderGroup.FLayout);
+ GFXRing.CmdBuffer.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FComputePipeline.FHandle);
+ GFXRing.CmdBuffer.BindLayout(VK_PIPELINE_BIND_POINT_COMPUTE,FShaderGroup.FLayout);
 
  if (FCSShader.FPushConst.size<>0) then
  begin
   pData:=FCSShader.GetPushConstData(@GPU_REGS.SPI.CS.USER_DATA);
 
-  //PDWORD(pData)[1]:=$707F7070;
-
-  //Writeln(HexStr(PQWORD(pData)^,16));
-
-  FCmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
+  if (pData<>nil) then
+  GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
                           ord(VK_SHADER_STAGE_COMPUTE_BIT),
                           0,FCSShader.FPushConst.size,
                           pData);
@@ -1844,7 +1910,7 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  FCSShader.EnumUnifLayout(@FUniformBuilder.AddAttr,FCSShader.FDescSetId,@GPU_REGS.SPI.CS.USER_DATA);
 
- FDescriptorGroup:=FetchDescriptorGroup(FCmdBuffer,FShaderGroup.FLayout);
+ FDescriptorGroup:=FetchDescriptorGroup(GFXRing.CmdBuffer,FShaderGroup.FLayout);
 
  if (Length(FUniformBuilder.FBuffers)<>0) then
  begin
@@ -1852,7 +1918,7 @@ begin
   With FUniformBuilder.FBuffers[i] do
   begin
 
-   buf:=FetchHostBuffer(FCmdBuffer,addr,size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+   buf:=FetchHostBuffer(GFXRing.CmdBuffer,addr,size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
    {
    if (bind=0) then
@@ -1904,7 +1970,7 @@ begin
   end;
  end;
 
- FCmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_COMPUTE,FDescriptorGroup);
+ GFXRing.CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_COMPUTE,FDescriptorGroup);
 
  //
 end;
@@ -1926,7 +1992,7 @@ begin
 
  Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
 
- FCmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
+ GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
 
  {$ifdef ww}Writeln('DrawIndex:',Body^.indexCount);{$endif}
 end;
@@ -1937,7 +2003,7 @@ begin
 
  UpdateGpuRegsInfo;
 
- FCmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
+ GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
 
  {$ifdef ww}Writeln('onDrawIndexAuto:',Body^.indexCount);{$endif}
 end;
@@ -1947,7 +2013,7 @@ begin
 
  UpdateGpuRegsInfoCompute;
 
- FCmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
+ GFXRing.CmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
 
  {$ifdef ww}Writeln('onDispatchDirect:',Body^.dimX,':',Body^.dimY,':',Body^.dimZ);{$endif}
 end;
@@ -1961,209 +2027,185 @@ begin
  {$ifdef ww}Writeln('onNumInstances:',Body^);{$endif}
 end;
 
+procedure gfx_cp_parser(node:PvSubmitNode);
 var
- FSubmitFlip:TqcFlipInfo;
- PSubmitFlip:PqcFlipInfo;
-
-procedure vSubmitCommandBuffers(
-          count:DWORD;
-          dcbGpuAddrs:PPointer;
-          dcbSizesInBytes:PDWORD;
-          ccbGpuAddrs:PPointer;
-          ccbSizesInBytes:PDWORD;
-          Flip:PqcFlipInfo);
-var
- n,i,s:DWORD;
+ i,s:DWORD;
  token:DWORD;
  P:PByte;
 
 begin
+ if (node=nil) then Exit;
 
- //_set_trace_local_print(true);
-
- if (Flip<>nil) then
+ if (node^.ccbAddr<>nil) and (node^.ccbSize<>0) then
  begin
-  Assert(PSubmitFlip=nil);
-  FSubmitFlip:=Flip^;
-  PSubmitFlip:=@FSubmitFlip;
+  Assert(false,'TODO CCB');
  end;
 
- n:=0;
- While (n<count) do
+ if (node^.dcbAddr=nil) or (node^.dcbSize=0) then Exit;
+
+ i:=0;
+ s:=node^.dcbSize;
+ P:=node^.dcbAddr;
+ While (i<s) do
  begin
+  token:=PDWORD(P)^;
 
-  if (ccbGpuAddrs<>nil) and (ccbSizesInBytes<>nil) then
-  begin
-   Assert(ccbSizesInBytes[n]=0,'TODO CCB');
-  end;
-
-  i:=0;
-  s:=dcbSizesInBytes[n];
-  P:=PByte(dcbGpuAddrs[n]);
-  While (i<s) do
-  begin
-   token:=PDWORD(P)^;
-
-   case PM4_TYPE(token) of
-    0:begin
-       onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
-      end;
-    3:begin
-       case PM4_TYPE_3_HEADER(token).opcode of
-        IT_NOP:
-        begin
-         onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_EVENT_WRITE_EOP:
-        begin
-         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
-         onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_EVENT_WRITE_EOS:
-        begin
-         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
-         onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_DMA_DATA:
-        begin
-         {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
-         onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_ACQUIRE_MEM:
-        begin
-         {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
-         onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_CONTEXT_CONTROL:
-        begin
-         {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
-         onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_CLEAR_STATE:
-        begin
-         {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
-         onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_SET_CONTEXT_REG:
-        begin
-         {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
-         onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_SET_SH_REG:
-        begin
-         {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
-         onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_SET_UCONFIG_REG:
-        begin
-         {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
-         onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_INDEX_TYPE:
-        begin
-         {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
-         onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_DRAW_INDEX_2:
-        begin
-         {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
-         onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_DRAW_INDEX_AUTO:
-        begin
-         {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
-         onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-        IT_DISPATCH_DIRECT:
-        begin
-         {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
-         onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-
-        IT_NUM_INSTANCES:
-        begin
-         {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
-         onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-
-        IT_WAIT_REG_MEM:
-        begin
-         {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
-         onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-
-        IT_WRITE_DATA:
-        begin
-         {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
-         onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-         //(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-
-        IT_EVENT_WRITE:
-        begin
-         {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
-         onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-        end;
-
-        {$ifdef ww}else
-         Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));{$endif}
+  case PM4_TYPE(token) of
+   0:begin
+      onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
+     end;
+   3:begin
+      case PM4_TYPE_3_HEADER(token).opcode of
+       IT_NOP:
+       begin
+        onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_EVENT_WRITE_EOP:
+       begin
+        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
+        onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_EVENT_WRITE_EOS:
+       begin
+        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
+        onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_DMA_DATA:
+       begin
+        {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
+        onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_ACQUIRE_MEM:
+       begin
+        {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
+        onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_CONTEXT_CONTROL:
+       begin
+        {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
+        onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_CLEAR_STATE:
+       begin
+        {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
+        onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_SET_CONTEXT_REG:
+       begin
+        {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
+        onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_SET_SH_REG:
+       begin
+        {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
+        onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_SET_UCONFIG_REG:
+       begin
+        {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
+        onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_INDEX_TYPE:
+       begin
+        {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
+        onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_DRAW_INDEX_2:
+       begin
+        {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
+        onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_DRAW_INDEX_AUTO:
+       begin
+        {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
+        onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+       IT_DISPATCH_DIRECT:
+       begin
+        {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
+        onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
        end;
 
-       case PM4_TYPE_3_HEADER(token).opcode of
-        IT_SET_CONTEXT_REG:;
-        IT_SET_SH_REG     :;
-        IT_SET_UCONFIG_REG:;
-        else
-         FLastSetReg:=0;
+       IT_NUM_INSTANCES:
+       begin
+        {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
+        onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
        end;
 
+       IT_WAIT_REG_MEM:
+       begin
+        {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
+        onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+
+       IT_WRITE_DATA:
+       begin
+        {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
+        onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+
+       IT_EVENT_WRITE:
+       begin
+        {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
+        onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+       end;
+
+       else
+        begin
+         Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+         Assert(False);
+        end;
       end;
 
-    else
+      case PM4_TYPE_3_HEADER(token).opcode of
+       IT_SET_CONTEXT_REG:;
+       IT_SET_SH_REG     :;
+       IT_SET_UCONFIG_REG:;
+       else
+        GFXRing.LastSetReg:=0;
+      end;
+
+     end;
+
+   else
+    begin
+     Writeln('PM4_TYPE_',PM4_TYPE(token));
      Assert(False);
-    {
-    {$ifdef ww}else
-     Writeln('PM4_TYPE_',PM4_TYPE(token));{$endif}
-     }
-   end;
-
-
-   P:=P+PM4_LENGTH_DW(token)*sizeof(DWORD);
-   i:=i+PM4_LENGTH_DW(token)*sizeof(DWORD);
+    end;
   end;
-  Inc(n);
+
+
+  P:=P+PM4_LENGTH_DW(token)*sizeof(DWORD);
+  i:=i+PM4_LENGTH_DW(token)*sizeof(DWORD);
  end;
 
 end;
 
-procedure vSubmitDone;
+function gfx_submit(CmdBuffer:TvCmdBuffer):Boolean;
 begin
+ Result:=False;
+ if (CmdBuffer=nil) then Exit;
 
- FCmdBuffer.EndRenderPass;
+ CmdBuffer.EndRenderPass;
+ CmdBuffer.Fence.Reset;
 
- FCmdBuffer.BeginCmdBuffer;
-
- if (FCmdBuffer<>nil) then
+ if (CmdBuffer.cmd_count<>0) then
  begin
-  FCmdBuffer.Fence.Reset;
-  //FCmdBuffer.QueueSubmit(ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
-  FCmdBuffer.QueueSubmit({ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)});
-  FCmdBuffer.Fence.Wait(High(uint64));
-  FCmdBuffer.ReleaseResource;
+  Result:=CmdBuffer.QueueSubmit;
  end;
+end;
 
- //RenderQueue.QueueWaitIdle;
-
- if (FFlipLabel<>nil) then
+function gfx_test(CmdBuffer:TvCmdBuffer):Boolean;
+begin
+ Result:=True;
+ if (CmdBuffer=nil) then Exit;
+ Result:=(CmdBuffer.Fence.Status=VK_SUCCESS);
+ if Result then
  begin
-  FFlipLabel^:=FFlipLData;
-  FFlipLabel:=nil;
+  CmdBuffer.ReleaseResource;
+  CmdBuffer.Free;
+  GPU_REGS.ClearDMA;
  end;
-
- _qc_sceVideoOutSubmitFlip(PSubmitFlip);
- PSubmitFlip:=nil;
-
- GPU_REGS.ClearDMA;
 end;
 
 initialization

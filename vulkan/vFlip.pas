@@ -193,7 +193,7 @@ Destructor TvFlip.Destroy;
 var
  i:Byte;
 begin
- FlipQueue.QueueWaitIdle;
+ FlipQueue.WaitIdle;
  FreeAndNil(Ffilp_shader);
 
  For i:=0 to 15 do
@@ -364,7 +364,7 @@ begin
        begin
         Fformat:=format;
         Ftmode:=tmode;
-        FlipQueue.QueueWaitIdle;
+        FlipQueue.WaitIdle;
         FreeAndNil(Ffilp_shader);
         Ffilp_shader:=TvShaderCompute.Create;
 
@@ -383,7 +383,7 @@ begin
        begin
         Fformat:=format;
         Ftmode:=tmode;
-        FlipQueue.QueueWaitIdle;
+        FlipQueue.WaitIdle;
         FreeAndNil(Ffilp_shader);
         Ffilp_shader:=TvShaderCompute.Create;
 
@@ -587,7 +587,7 @@ end;
 
 procedure TvFlip.recreateSwapChain;
 begin
- vkDeviceWaitIdle(Device.FHandle);
+ Device.WaitIdle;
  FreeAndNil(FSwapChain);
  FSwapChain:=TSwapChain.Create(FSurface,0{1},ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 end;
@@ -697,9 +697,9 @@ begin
  until false;
  SwapImage:=FSwapChain.FImage[imageIndex];
 
- Writeln('>Flip.Fence.Wait');
+ //Writeln('>Flip.Fence.Wait');
  buf^.cmdbuf.Fence.Wait(High(uint64));
- Writeln('<Flip.Fence.Wait');
+ //Writeln('<Flip.Fence.Wait');
 
  buf^.cmdbuf.Fence.Reset;
  buf^.cmdbuf.ReleaseResource;
@@ -1047,7 +1047,7 @@ begin
  prInfo.pImageIndices     :=@imageIndex;
  prInfo.pResults:=nil;
 
- R:=FlipQueue.QueuePresentKHR(@prInfo);
+ R:=FlipQueue.PresentKHR(@prInfo);
  Case R of
   VK_SUCCESS:;
   VK_ERROR_OUT_OF_DATE_KHR,
