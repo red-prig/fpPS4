@@ -321,7 +321,7 @@ begin
   if (node^.ret=1) then
    begin
     node^.Count:=0;
-    node^.ret:=0;
+    node^.ret:=EACCES;
     NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
    end;
   node:=node^.pNext;
@@ -703,7 +703,7 @@ begin
    begin
     Inc(reset);
     node^.Count:=0;
-    node^.ret:=0;
+    node^.ret:=ECANCELED;
     NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
    end;
   node:=node^.pNext;
