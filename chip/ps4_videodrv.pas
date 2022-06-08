@@ -491,6 +491,8 @@ var
  ccbAddr:Pointer;
  dcbSize:DWORD;
  ccbSize:DWORD;
+ addr:Pointer;
+ size:DWORD;
 begin
  Result:=0;
  if (Submit=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
@@ -505,26 +507,27 @@ begin
   Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
 
+ size:=AlignUp(SizeOf(TvSubmitNode),4)+dcbSize+ccbSize;
+ node:=AllocMem(size);
+ if (node=nil) then
+ begin
+  Exit(SCE_KERNEL_ERROR_ENOMEM);
+ end;
+
+ addr:=AlignUp(Pointer(node)+SizeOf(TvSubmitNode),4);
+
  if (dcbSize<>0) then
  begin
-  dcbAddr:=AllocMem(dcbSize);
-  if (dcbAddr=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
+  dcbAddr:=addr;
+  addr:=addr+dcbSize;
  end;
  if (ccbSize<>0) then
  begin
-  ccbAddr:=AllocMem(ccbSize);
-  if (ccbAddr=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
+  ccbAddr:=addr;
+  addr:=addr+ccbSize;
  end;
 
  copy_submit_addr(Submit,dcbAddr,ccbAddr);
-
- node:=AllocMem(SizeOf(TvSubmitNode));
- if (node=nil) then
- begin
-  FreeMem(dcbAddr);
-  FreeMem(ccbAddr);
-  Exit(SCE_KERNEL_ERROR_ENOMEM);
- end;
 
  Init_gfx;
 
