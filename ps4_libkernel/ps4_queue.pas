@@ -100,6 +100,8 @@ type
  SceKernelEqueue_t=record
   valid:DWORD;
   FRefs:DWORD;
+  lock:DWORD;
+  wait:DWORD;
   hIOCP:Thandle;
   name:array[0..31] of AnsiChar;
  end;
@@ -108,6 +110,7 @@ type
  TKEventNode=object
   refs:DWORD;
   lock:DWORD;
+  wait:DWORD;
   eq:SceKernelEqueue;
   ev:SceKernelEvent;
  end;
@@ -127,7 +130,7 @@ type
 
 function  _acqure_equeue(eq:SceKernelEqueue):SceKernelEqueue;
 procedure _release_equeue(eq:SceKernelEqueue);
-function  _post_event(eq:SceKernelEqueue;node:Pointer;cb:TKFetchEvent):Boolean;
+function  _post_event(eq:SceKernelEqueue;node:PKEventNode;cb:TKFetchEvent):Boolean;
 
 function  _alloc_kevent_node(eq:SceKernelEqueue;size:qword):Pointer;
 procedure _free_kevent_node(node:PKEventNode);
@@ -164,7 +167,7 @@ end;
 procedure _free_kevent_node(node:PKEventNode);
 begin
  if (node=nil) then Exit;
- _release_equeue(System.InterlockedExchange(node^.eq,nil));
+ _release_equeue(XCHG(node^.eq,nil));
  if System.InterlockedDecrement(node^.refs)=0 then
  begin
   SwFreeMem(node);
@@ -178,11 +181,14 @@ begin
  Result:=false;
  if (node=nil) or (ev=nil) then Exit;
  tmp:=node^.ev;
- spin_unlock(node^.lock);
- if System.InterlockedDecrement(node^.refs)=0 then
+ if System.InterlockedDecrement(node^.wait)=0 then
  begin
-  SwFreeMem(node);
-  Exit;
+  spin_unlock(node^.lock);
+  if System.InterlockedDecrement(node^.refs)=0 then
+  begin
+   SwFreeMem(node);
+   Exit;
+  end;
  end;
  ev^:=tmp;
  Result:=True;
@@ -210,6 +216,9 @@ begin
     Exit;
    end;
   end;
+ end else
+ begin
+  //Assert(false);
  end;
 end;
 
@@ -218,7 +227,7 @@ var
  hIOCP:Thandle;
  data:SceKernelEqueue;
 begin
- Writeln('sceKernelCreateEqueue:',name);
+ //Writeln('sceKernelCreateEqueue:',name);
  if (outEq=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
  data:=SwAllocMem(SizeOf(SceKernelEqueue_t));
@@ -243,13 +252,39 @@ begin
  Result:=0;
 end;
 
-function _post_event(eq:SceKernelEqueue;node:Pointer;cb:TKFetchEvent):Boolean;
+function _post_event(eq:SceKernelEqueue;node:PKEventNode;cb:TKFetchEvent):Boolean;
+var
+ i,t,wait:DWORD;
 begin
  Result:=False;
  if (eq=nil) then Exit;
  if (eq^.valid<>LIFE_EQ) then Exit;
  _sig_lock;
- Result:=PostQueuedCompletionStatus(eq^.hIOCP,1,ULONG_PTR(cb),node);
+  spin_lock(eq^.lock);
+   wait:=load_acq_rel(eq^.wait);
+
+   if (wait=0) then wait:=1;
+
+   //Writeln(GetCurrentThreadId,':>post_event:',eq^.name,' wait:',wait);
+
+   //one shoot or all ????????
+   i:=wait;
+   repeat
+    System.InterlockedIncrement(node^.wait);
+    Result:=PostQueuedCompletionStatus(eq^.hIOCP,1,ULONG_PTR(cb),Pointer(node));
+    if (not Result) then
+    begin
+     System.InterlockedDecrement(node^.wait);
+     spin_unlock(eq^.lock);
+     _sig_unlock;
+     Exit;
+    end;
+    Dec(i);
+    t:=load_acq_rel(eq^.wait);
+    if (t<i) then i:=t;
+   until (i=0);
+
+  spin_unlock(eq^.lock);
  _sig_unlock;
 end;
 
@@ -299,6 +334,7 @@ Var
  OE:array[0..15] of TOVERLAPPED_ENTRY;
  i,ulNum,olNum:ULONG;
  CTXProc:TKFetchEvent;
+ err:DWORD;
  Q:Boolean;
 begin
  if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
@@ -306,7 +342,7 @@ begin
  if (ev=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  if (num<1)  then Exit(SCE_KERNEL_ERROR_EINVAL);
 
- //Writeln('>sceKernelWaitEqueue');
+ //Writeln('>sceKernelWaitEqueue:',eq^.name);
 
  if (timo<>nil) then
  begin
@@ -327,7 +363,24 @@ begin
   ulNum:=0;
   _sig_lock;
   if (LTIME<>INFINITE) then QTIME:=Windows.GetTickCount;
+
+  spin_lock(eq^.lock);
+   System.InterlockedIncrement(eq^.wait);
+   //Writeln(GetCurrentThreadId,':>sceKernelWaitEqueue:',eq^.name,':',eq^.wait);
+  spin_unlock(eq^.lock);
+
+  err:=0;
   Q:=GetQueuedCompletionStatusEX(eq^.hIOCP,@OE,num,ulNum,LTIME,True);
+
+  //spin_lock(eq^.lock);
+   System.InterlockedDecrement(eq^.wait);
+   //Writeln(GetCurrentThreadId,':<sceKernelWaitEqueue:',eq^.name,':',eq^.wait);
+  //spin_unlock(eq^.lock);
+
+  if not Q then
+  begin
+   err:=GetLastError;
+  end;
   _sig_unlock;
   if (LTIME<>INFINITE) then
   begin
@@ -341,7 +394,7 @@ begin
   end;
   if not Q then
   begin
-   Case GetLastError of
+   Case err of
     ERROR_INVALID_PARAMETER,
     ERROR_INVALID_HANDLE :Exit(SCE_KERNEL_ERROR_EBADF);
     WAIT_TIMEOUT         :Exit(SCE_KERNEL_ERROR_ETIMEDOUT);
@@ -356,14 +409,19 @@ begin
     if Assigned(CTXProc) then
     begin
      if CTXProc(PKEventNode(OE[i].lpOverlapped),@ev[olNum]) then Inc(olNum);
+    end else
+    begin
+     Assert(false);
     end;
    end;
    if (olNum<>0) then
    begin
     out_num^:=olNum;
-    //Writeln('<sceKernelWaitEqueue');
+    //Sleep(100);
+    //Writeln('<sceKernelWaitEqueue:',eq^.name,':',olNum);
     Exit(0);
    end;
+   Assert(false);
   end;
  Until false;
 end;

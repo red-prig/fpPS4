@@ -80,12 +80,8 @@ type
  TvSubmitNode=record
   next_:PvSubmitNode;
   //
-  dcbAddr:Pointer;
-  ccbAddr:Pointer;
-  dcbSize:DWORD;
-  ccbSize:DWORD;
+  Submit:TvSubmitInfo;
   Flip:TqcFlipInfo;
-  IsFlip:Boolean;
  end;
 
  TvCmdRing=object
@@ -103,7 +99,6 @@ type
   qcInfo:TqcFlipInfo;
   FlipLData:DWORD;
   FlipLabel:PDWORD;
-  IsFlip:Boolean;
   Interrupt:Boolean;
  end;
 
@@ -135,7 +130,7 @@ type
   Procedure Init;
   Function  Next:Boolean;
   Procedure PushCmd(var Cmd:TvCmdBuffer);
-  Procedure PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;IsFlip,Interrupt:Boolean);
+  Procedure PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;Interrupt:Boolean);
   Procedure PushEop(adr:Pointer;data:QWORD;dataSel:Byte;Interrupt:Boolean);
  end;
 
@@ -217,7 +212,7 @@ begin
  Cmd:=nil;
 end;
 
-Procedure TvMicroEngine.PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;IsFlip,Interrupt:Boolean);
+Procedure TvMicroEngine.PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;Interrupt:Boolean);
 var
  node:PvMicroEngineNode;
 begin
@@ -228,10 +223,11 @@ begin
  node^.FlipInfo.qcInfo   :=qcInfo;
  node^.FlipInfo.FlipLData:=FlipLData;
  node^.FlipInfo.FlipLabel:=FlipLabel;
- node^.FlipInfo.IsFlip   :=IsFlip;
  node^.FlipInfo.Interrupt:=Interrupt;
 
  Queue.Push(node);
+
+ qcInfo:=Default(TqcFlipInfo);
 end;
 
 Procedure TvMicroEngine.PushEop(adr:Pointer;data:QWORD;dataSel:Byte;Interrupt:Boolean);
@@ -250,7 +246,7 @@ begin
  Queue.Push(node);
 end;
 
-procedure gfx_cp_parser(node:PvSubmitNode);          forward;
+procedure gfx_cp_parser(node:PvSubmitInfo);          forward;
 function  gfx_submit(CmdBuffer:TvCmdBuffer):Boolean; forward;
 function  gfx_test(CmdBuffer:TvCmdBuffer):Boolean;   forward;
 
@@ -264,7 +260,7 @@ begin
   node^.FlipLabel^:=node^.FlipLData;
  end;
 
- if node^.IsFlip then
+ if (node^.qcInfo.hVideo<>0) then
  begin
   _qc_sceVideoOutSubmitFlip(@node^.qcInfo);
  end;
@@ -342,7 +338,7 @@ begin
 
   if GFXRing.Next then
   begin
-   gfx_cp_parser(GFXRing.Current);
+   gfx_cp_parser(@GFXRing.Current^.Submit);
    work_do:=True;
   end;
 
@@ -440,6 +436,7 @@ begin
  end;
 end;
 
+{
 procedure copy_submit_addr(node:PvSubmitInfo;dcbAddr,ccbAddr:Pointer);
 var
  n:DWORD;
@@ -481,14 +478,13 @@ begin
   Inc(n);
  end;
 end;
+}
 
 function vSubmitCommandBuffers(
            Submit:PvSubmitInfo;
            Flip:PqcFlipInfo):Integer;
 var
  node:PvSubmitNode;
- dcbAddr:Pointer;
- ccbAddr:Pointer;
  dcbSize:DWORD;
  ccbSize:DWORD;
  addr:Pointer;
@@ -507,36 +503,57 @@ begin
   Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
 
- size:=AlignUp(SizeOf(TvSubmitNode),4)+dcbSize+ccbSize;
+ //calc size
+
+ size:=SizeOf(TvSubmitNode);
+
+ if (Submit^.dcbGpuAddrs<>nil) and (Submit^.dcbSizesInBytes<>nil) then
+ begin
+  size:=size+Submit^.count*(SizeOf(Pointer)+SizeOf(DWORD));
+ end;
+
+ if (Submit^.ccbGpuAddrs<>nil) and (Submit^.ccbSizesInBytes<>nil) then
+ begin
+  size:=size+Submit^.count*(SizeOf(Pointer)+SizeOf(DWORD));
+ end;
+
+ //alloc
+
  node:=AllocMem(size);
  if (node=nil) then
  begin
   Exit(SCE_KERNEL_ERROR_ENOMEM);
  end;
 
- addr:=AlignUp(Pointer(node)+SizeOf(TvSubmitNode),4);
+ //distrib
 
- if (dcbSize<>0) then
+ addr:=Pointer(node)+SizeOf(TvSubmitNode);
+
+ if (Submit^.dcbGpuAddrs<>nil) and (Submit^.dcbSizesInBytes<>nil) then
  begin
-  dcbAddr:=addr;
-  addr:=addr+dcbSize;
- end;
- if (ccbSize<>0) then
- begin
-  ccbAddr:=addr;
-  addr:=addr+ccbSize;
+  node^.Submit.dcbGpuAddrs:=addr;
+  addr:=addr+Submit^.count*SizeOf(Pointer);
+  node^.Submit.dcbSizesInBytes:=addr;
+  addr:=addr+Submit^.count*SizeOf(DWORD);
+  //copy
+  Move(Submit^.dcbGpuAddrs^    ,node^.Submit.dcbGpuAddrs^    ,Submit^.count*SizeOf(Pointer));
+  Move(Submit^.dcbSizesInBytes^,node^.Submit.dcbSizesInBytes^,Submit^.count*SizeOf(DWORD));
  end;
 
- copy_submit_addr(Submit,dcbAddr,ccbAddr);
+ if (Submit^.ccbGpuAddrs<>nil) and (Submit^.ccbSizesInBytes<>nil) then
+ begin
+  node^.Submit.ccbGpuAddrs:=addr;
+  addr:=addr+Submit^.count*SizeOf(Pointer);
+  node^.Submit.ccbSizesInBytes:=addr;
+  addr:=addr+Submit^.count*SizeOf(DWORD);
+  //copy
+  Move(Submit^.ccbGpuAddrs^    ,node^.Submit.ccbGpuAddrs^    ,Submit^.count*SizeOf(Pointer));
+  Move(Submit^.ccbSizesInBytes^,node^.Submit.ccbSizesInBytes^,Submit^.count*SizeOf(DWORD));
+ end;
+
+ node^.Submit.count:=Submit^.count;
 
  Init_gfx;
-
- node^.dcbAddr:=dcbAddr;
- node^.ccbAddr:=ccbAddr;
- node^.dcbSize:=dcbSize;
- node^.ccbSize:=ccbSize;
-
- node^.IsFlip:=(Flip<>nil);
 
  if (Flip<>nil) then
  begin
@@ -556,7 +573,7 @@ end;
 procedure onPrepareFlip();
 begin
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,GFXRing.Current^.IsFlip,False);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,False);
 end;
 
 procedure onPrepareFlipLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlip);
@@ -567,7 +584,7 @@ begin
  {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,GFXRing.Current^.IsFlip,False);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,False);
 end;
 
 procedure onPrepareFlipWithEopInterrupt(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
@@ -575,7 +592,7 @@ begin
  {$ifdef ww}writeln;{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,GFXRing.Current^.IsFlip,True);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,True);
 end;
 
 procedure onPrepareFlipWithEopInterruptLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
@@ -586,7 +603,7 @@ begin
  {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,GFXRing.Current^.IsFlip,True);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,True);
 end;
 
 procedure onEventWriteEop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PEVENTWRITEEOP);
@@ -1340,12 +1357,6 @@ end;
 //PITCH.TILE_MAX = 159,   //(PITCH.TILE_MAX+1)*8=1280
 //SLICE.TILE_MAX = 15359, //(SLICE.TILE_MAX+1)/(PITCH.TILE_MAX+1)*8=768
 
-var
- FAttrBuilder:TvAttrBuilder;
- FUniformBuilder:TvUniformBuilder;
-
- FShaderGroup:TvShaderGroup;
-
 type
  TvEvent2=class(TvEvent)
   Procedure Release(Sender:TObject);
@@ -1356,10 +1367,14 @@ begin
  Free;
 end;
 
-procedure UpdateGpuRegsInfo;
-
-
 var
+ FShaderGroup:TvShaderGroup;
+
+procedure UpdateGpuRegsInfo;
+var
+ FAttrBuilder:TvAttrBuilder;
+ FUniformBuilder:TvUniformBuilder;
+
  i,o,a:DWORD;
  pData:Pointer;
 
@@ -1857,6 +1872,9 @@ end;
 
 procedure UpdateGpuRegsInfoCompute;
 var
+ FAttrBuilder:TvAttrBuilder;
+ FUniformBuilder:TvUniformBuilder;
+
  fdump_cs:RawByteString;
 
  i,o,a:Integer;
@@ -2030,156 +2048,159 @@ begin
  {$ifdef ww}Writeln('onNumInstances:',Body^);{$endif}
 end;
 
-procedure gfx_cp_parser(node:PvSubmitNode);
+procedure gfx_cp_parser(node:PvSubmitInfo);
 var
- i,s:DWORD;
+ n,i,s:DWORD;
  token:DWORD;
  P:PByte;
 
 begin
  if (node=nil) then Exit;
 
- if (node^.ccbAddr<>nil) and (node^.ccbSize<>0) then
+ if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
  begin
   Assert(false,'TODO CCB');
  end;
 
- if (node^.dcbAddr=nil) or (node^.dcbSize=0) then Exit;
-
- i:=0;
- s:=node^.dcbSize;
- P:=node^.dcbAddr;
- While (i<s) do
+ n:=0;
+ While (n<node^.count) do
  begin
-  token:=PDWORD(P)^;
+  i:=0;
+  s:=node^.dcbSizesInBytes[n];
+  P:=PByte(node^.dcbGpuAddrs[n]);
+  While (i<s) do
+  begin
+   token:=PDWORD(P)^;
 
-  case PM4_TYPE(token) of
-   0:begin
-      onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
-     end;
-   3:begin
-      case PM4_TYPE_3_HEADER(token).opcode of
-       IT_NOP:
-       begin
-        onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_EVENT_WRITE_EOP:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
-        onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_EVENT_WRITE_EOS:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
-        onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_DMA_DATA:
-       begin
-        {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
-        onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_ACQUIRE_MEM:
-       begin
-        {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
-        onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_CONTEXT_CONTROL:
-       begin
-        {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
-        onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_CLEAR_STATE:
-       begin
-        {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
-        onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_SET_CONTEXT_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
-        onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_SET_SH_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
-        onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_SET_UCONFIG_REG:
-       begin
-        {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
-        onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_INDEX_TYPE:
-       begin
-        {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
-        onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_DRAW_INDEX_2:
-       begin
-        {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
-        onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_DRAW_INDEX_AUTO:
-       begin
-        {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
-        onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-       IT_DISPATCH_DIRECT:
-       begin
-        {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
-        onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-
-       IT_NUM_INSTANCES:
-       begin
-        {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
-        onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-
-       IT_WAIT_REG_MEM:
-       begin
-        {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
-        onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-
-       IT_WRITE_DATA:
-       begin
-        {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
-        onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-
-       IT_EVENT_WRITE:
-       begin
-        {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
-        onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
-       end;
-
-       else
+   case PM4_TYPE(token) of
+    0:begin
+       onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
+      end;
+    3:begin
+       case PM4_TYPE_3_HEADER(token).opcode of
+        IT_NOP:
         begin
-         Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
-         Assert(False);
+         onNop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
+        IT_EVENT_WRITE_EOP:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOP');{$endif}
+         onEventWriteEop(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_EVENT_WRITE_EOS:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE_EOS');{$endif}
+         onEventWriteEos(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DMA_DATA:
+        begin
+         {$ifdef ww}Writeln('IT_DMA_DATA');{$endif}
+         onDMAData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_ACQUIRE_MEM:
+        begin
+         {$ifdef ww}Writeln('IT_ACQUIRE_MEM');{$endif}
+         onAcquireMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_CONTEXT_CONTROL:
+        begin
+         {$ifdef ww}Writeln('IT_CONTEXT_CONTROL');{$endif}
+         onContextControl(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_CLEAR_STATE:
+        begin
+         {$ifdef ww}Writeln('IT_CLEAR_STATE');{$endif}
+         onClearState(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_CONTEXT_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_CONTEXT_REG');{$endif}
+         onSetContextReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_SH_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_SH_REG');{$endif}
+         onSetShReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_SET_UCONFIG_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
+         onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_INDEX_TYPE:
+        begin
+         {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
+         onIndexType(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DRAW_INDEX_2:
+        begin
+         {$ifdef ww}Writeln('IT_DRAW_INDEX_2');{$endif}
+         onDrawIndex2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DRAW_INDEX_AUTO:
+        begin
+         {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
+         onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DISPATCH_DIRECT:
+        begin
+         {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
+         onDispatchDirect(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_NUM_INSTANCES:
+        begin
+         {$ifdef ww}Writeln('IT_NUM_INSTANCES');{$endif}
+         onNumInstances(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_WAIT_REG_MEM:
+        begin
+         {$ifdef ww}Writeln('IT_WAIT_REG_MEM');{$endif}
+         onWaitRegMem(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_WRITE_DATA:
+        begin
+         {$ifdef ww}Writeln('IT_WRITE_DATA');{$endif}
+         onWriteData(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_EVENT_WRITE:
+        begin
+         {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
+         onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        else
+         begin
+          Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+          Assert(False);
+         end;
+       end;
+
+       case PM4_TYPE_3_HEADER(token).opcode of
+        IT_SET_CONTEXT_REG:;
+        IT_SET_SH_REG     :;
+        IT_SET_UCONFIG_REG:;
+        else
+         GFXRing.LastSetReg:=0;
+       end;
+
       end;
 
-      case PM4_TYPE_3_HEADER(token).opcode of
-       IT_SET_CONTEXT_REG:;
-       IT_SET_SH_REG     :;
-       IT_SET_UCONFIG_REG:;
-       else
-        GFXRing.LastSetReg:=0;
-      end;
-
+    else
+     begin
+      Writeln('PM4_TYPE_',PM4_TYPE(token));
+      Assert(False);
      end;
+   end;
 
-   else
-    begin
-     Writeln('PM4_TYPE_',PM4_TYPE(token));
-     Assert(False);
-    end;
+
+   P:=P+PM4_LENGTH_DW(token)*sizeof(DWORD);
+   i:=i+PM4_LENGTH_DW(token)*sizeof(DWORD);
   end;
-
-
-  P:=P+PM4_LENGTH_DW(token)*sizeof(DWORD);
-  i:=i+PM4_LENGTH_DW(token)*sizeof(DWORD);
+  Inc(n);
  end;
 
 end;

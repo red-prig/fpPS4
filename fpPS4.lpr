@@ -262,18 +262,53 @@ begin
  if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
  begin
 
-  //Case Info^.lib^.strName of
-  // 'libc':;
-  // 'libkernel':;
-  // else
-  //  //if (Pos('Sem',ps4libdoc.GetFunctName(Info^.Nid))<>0) or
-  //  //   (Pos('Equeue',ps4libdoc.GetFunctName(Info^.Nid))<>0) then
-  //  begin
-  //   Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
-  //  end;
-  //end;
+ //Case Info^.lib^.strName of
+ // 'libc':;
+ // 'libSceLibcInternal':;
+ // else
+ //  Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
+ //   'scePthreadMutexInit':;
+ //   'scePthreadMutexattrInit':;
+ //   'scePthreadMutexattrDestroy':;
+ //   'scePthreadMutexattrSettype':;
+ //   'scePthreadMutexTrylock':;
+ //   'scePthreadMutexLock':;
+ //   'scePthreadMutexUnlock':;
+ //   'pthread_self':;
+ //   'scePthreadSelf':;
+ //   'scePthreadEqual':;
+ //   'sceKernelGettimeofday':;
+ //   'sceKernelClockGettime':;
+ //   'pthread_mutex_lock':;
+ //   'pthread_mutex_unlock':;
+ //   'sceKernelPread':;
+ //   'sceKernelClose':;
+ //   'sceDiscMapIsRequestOnHDD':;
+ //   'Unknow':;
+ //   'sceFiosIOFilterPsarcDearchiver':;
+ //   'sceFiosFHReadSync':;
+ //   'sceFiosFHTell':;
+ //   'sceNgs2VoiceGetState':;
+ //   'sceNgs2SystemRender':;
+ //   'sceAudioOutOutputs':;
+ //   '__tls_get_addr':;
+ //   'scePthreadRwlockRdlock':;
+ //   'scePthreadRwlockUnlock':;
+ //   'scePthreadCondBroadcast':;
+ //   'sceFiosFHCloseSync':;
+ //   'sceKernelStat':;
+ //   'sceFiosFHOpenSync':;
+ //   'sceFiosFHGetSize':;
+ //   'sceKernelOpen':;
+ //   else
+ //    begin
+ //     Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
+ //    end;
+ //  end;
+ //end;
 
  end;
+
 
  if (Result=nil) then
  begin
@@ -425,6 +460,9 @@ begin
 
  //ps4_app.app_path:='G:\Games\Worms\CUSA04047\';
  //ps4_app.app_file:='G:\Games\Worms\CUSA04047\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Super Meat Boy\';
+ //ps4_app.app_file:='G:\Games\Super Meat Boy\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
