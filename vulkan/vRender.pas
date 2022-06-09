@@ -86,10 +86,14 @@ type
   FRenderArea:TVkRect2D;
   FClearValuesCount:TVkUInt32;
   FClearValues:array[0..8] of TVkClearValue;
+  //
+  FRefs:ptruint;
+  //
   Procedure  AddClearColor(clr:TVkClearValue);
   Function   GetInfo:TVkRenderPassBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
   Destructor Destroy; override;
+  Procedure  Acquire(Sender:TObject);
   Procedure  Release(Sender:TOBject);
  end;
 
@@ -625,9 +629,17 @@ begin
  inherited;
 end;
 
+Procedure TvRenderTargets.Acquire(Sender:TObject);
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
 Procedure TvRenderTargets.Release(Sender:TOBject);
 begin
- Free; //fref todo
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
 end;
 
 //////////////

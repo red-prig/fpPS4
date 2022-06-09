@@ -612,15 +612,18 @@ begin
  if (buf^.cmdbuf=nil) then Exit;
  if (buf^.cmdbuf.Fence=nil) then Exit;
 
- r:=buf^.cmdbuf.Fence.Status;
- Case r of
-  VK_SUCCESS  :;
-  VK_NOT_READY:Exit(False);
-  else
-   begin
-    Writeln('vkGetEventStatus:',r);
-    Exit;
-   end;
+ if (buf^.cmdbuf.ret=0) then
+ begin
+  r:=buf^.cmdbuf.Fence.Status;
+  Case r of
+   VK_SUCCESS  :;
+   VK_NOT_READY:Exit(False);
+   else
+    begin
+     Writeln('vkGetEventStatus:',r);
+     Exit;
+    end;
+  end;
  end;
 
  buf^.cmdbuf.ReleaseResource;
@@ -649,7 +652,7 @@ var
 
  prInfo:TVkPresentInfoKHR;
 
- img_reg:TVkImageCopy;
+ //img_reg:TVkImageCopy;
 
  ur:TvImage2;
 begin
@@ -698,7 +701,10 @@ begin
  SwapImage:=FSwapChain.FImage[imageIndex];
 
  //Writeln('>Flip.Fence.Wait');
- buf^.cmdbuf.Fence.Wait(High(uint64));
+ if (buf^.cmdbuf.ret=0) then
+ begin
+  buf^.cmdbuf.Fence.Wait(High(uint64));
+ end;
  //Writeln('<Flip.Fence.Wait');
 
  buf^.cmdbuf.Fence.Reset;
@@ -1036,7 +1042,10 @@ begin
  buf^.cmdbuf.AddWaitSemaphore(imageAvailableSemaphore,ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
  buf^.cmdbuf.SignalSemaphore:=renderFinishedSemaphore;
 
- buf^.cmdbuf.QueueSubmit;
+ if not buf^.cmdbuf.QueueSubmit then
+ begin
+  //
+ end;
 
  prInfo:=Default(TVkPresentInfoKHR);
  prInfo.sType             :=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1046,6 +1055,12 @@ begin
  prInfo.pSwapchains       :=@FSwapChain.FHandle;
  prInfo.pImageIndices     :=@imageIndex;
  prInfo.pResults:=nil;
+
+ if (buf^.cmdbuf.ret<>0) then
+ begin
+  prInfo.waitSemaphoreCount:=0;
+  prInfo.pWaitSemaphores   :=nil;
+ end;
 
  R:=FlipQueue.PresentKHR(@prInfo);
  Case R of

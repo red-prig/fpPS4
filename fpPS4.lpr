@@ -464,6 +464,9 @@ begin
  //ps4_app.app_path:='G:\Games\Super Meat Boy\';
  //ps4_app.app_file:='G:\Games\Super Meat Boy\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Super Meat Boy\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Super Meat Boy\eboot.bin';
+
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
  //elf.SavePs4ElfToFile('libSceLibcInternal.prx');

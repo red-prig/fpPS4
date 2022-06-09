@@ -51,6 +51,10 @@ Const
  SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION=(1);
  SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION =(2);
 
+ //SceSaveDataDialogAnimation
+ SCE_SAVE_DATA_DIALOG_ANIMATION_ON  =(0);
+ SCE_SAVE_DATA_DIALOG_ANIMATION_OFF =(1);
+
 function ps4_sceCommonDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceCommonDialogInitialize');
@@ -66,6 +70,12 @@ end;
 function ps4_sceNpProfileDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpProfileDialogInitialize');
+ Result:=0;
+end;
+
+function ps4_sceSaveDataDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceSaveDataDialogInitialize');
  Result:=0;
 end;
 
@@ -107,6 +117,18 @@ const
 function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
+end;
+
+type
+ pSceSaveDataDialogCloseParam=^SceSaveDataDialogCloseParam;
+ SceSaveDataDialogCloseParam=packed record
+  anim:Integer;
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceSaveDataDialogClose(closeParam:pSceSaveDataDialogCloseParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 //
@@ -239,10 +261,12 @@ begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceSaveDataDialog');
+ lib^.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);
  lib^.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
  lib^.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);
  lib^.set_proc($62E1F6140EDACEA4,@ps4_sceSaveDataDialogTerminate);
  lib^.set_proc($C84889FEAAABE828,@ps4_sceSaveDataDialogGetResult);
+ lib^.set_proc($7C7E3A2DA83CF176,@ps4_sceSaveDataDialogClose);
 end;
 
 function Load_libSceMsgDialog(Const name:RawByteString):TElf_node;

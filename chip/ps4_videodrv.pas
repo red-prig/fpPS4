@@ -88,6 +88,8 @@ type
   Queue:TIntrusiveMPSCQueue;
   Current:PvSubmitNode;
   CmdBuffer:TvCmdBuffer;
+  SetShCount:ptruint;
+  SetCxCount:ptruint;
   LastSetReg:WORD;
   Procedure Init;
   Function  Next:Boolean;
@@ -333,6 +335,7 @@ var
  time:Int64;
  work_do:Boolean;
 begin
+ Result:=0;
  repeat
   work_do:=False;
 
@@ -355,7 +358,7 @@ begin
 
   if GFXMicroEngine.Next then
   begin
-   if not me_node_submit(GFXMicroEngine.Current) then Assert(false);
+   me_node_submit(GFXMicroEngine.Current);
    work_do:=True;
   end;
 
@@ -566,7 +569,8 @@ end;
 
 procedure vSubmitDone;
 begin
- Device.WaitIdle;
+ //Sleep(100);
+ //Device.WaitIdle;
 end;
 
 
@@ -701,22 +705,22 @@ procedure onEventWrite(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4CMDEVENTWRITE);
 begin
  {$ifdef ww}
  Case Body^.eventType of
-  THREAD_TRACE_MARKER        :Writeln('THREAD_TRACE_MARKER');
-  FLUSH_AND_INV_CB_PIXEL_DATA:Writeln('FLUSH_AND_INV_CB_PIXEL_DATA');
-  FLUSH_AND_INV_CB_META      :Writeln('FLUSH_AND_INV_CB_META');
+  THREAD_TRACE_MARKER        :Writeln(' THREAD_TRACE_MARKER');
+  FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' FLUSH_AND_INV_CB_PIXEL_DATA');
+  FLUSH_AND_INV_CB_META      :Writeln(' FLUSH_AND_INV_CB_META');
   else
    Assert(False,IntToStr(Body^.eventType));
  end;
 
  Case Body^.EVENTINDEX of
-  EVENT_WRITE_INDEX_ANY_NON_TIMESTAMP    :Writeln('ANY_NON_TIMESTAMP');
-  EVENT_WRITE_INDEX_ZPASS_DONE           :Writeln('ZPASS_DONE');
-  EVENT_WRITE_INDEX_SAMPLE_PIPELINESTAT  :Writeln('SAMPLE_PIPELINESTATS');
-  EVENT_WRITE_INDEX_SAMPLE_STREAMOUTSTATS:Writeln('SAMPLE_STREAMOUTSTAT[S|S1|S2|S3]');
-  EVENT_WRITE_INDEX_VS_PS_PARTIAL_FLUSH  :Writeln('[CS|VS|PS]_PARTIAL_FLUSH');
-  EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP    :Writeln('ANY_EOP_TIMESTAMP');
-  EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP    :Writeln('ANY_EOS_TIMESTAMP');
-  EVENT_WRITE_INDEX_CACHE_FLUSH_EVENT    :Writeln('CACHE_FLUSH, CACHE_FLUSH_AND_INV_EVENT');
+  EVENT_WRITE_INDEX_ANY_NON_TIMESTAMP    :Writeln(' ANY_NON_TIMESTAMP');
+  EVENT_WRITE_INDEX_ZPASS_DONE           :Writeln(' ZPASS_DONE');
+  EVENT_WRITE_INDEX_SAMPLE_PIPELINESTAT  :Writeln(' SAMPLE_PIPELINESTATS');
+  EVENT_WRITE_INDEX_SAMPLE_STREAMOUTSTATS:Writeln(' SAMPLE_STREAMOUTSTAT[S|S1|S2|S3]');
+  EVENT_WRITE_INDEX_VS_PS_PARTIAL_FLUSH  :Writeln(' [CS|VS|PS]_PARTIAL_FLUSH');
+  EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP    :Writeln(' ANY_EOP_TIMESTAMP');
+  EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP    :Writeln(' ANY_EOS_TIMESTAMP');
+  EVENT_WRITE_INDEX_CACHE_FLUSH_EVENT    :Writeln(' CACHE_FLUSH, CACHE_FLUSH_AND_INV_EVENT');
   else
    Assert(False);
  end;
@@ -857,17 +861,17 @@ procedure onWaitRegMem(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDWAITREGMEM);
 begin
   {$ifdef ww}
  Case Body^.engine of
-  0:
+  0: //ME
     Case Body^.memSpace of
-     0:Writeln('waitOnRegister');
-     1:Writeln('waitOnAddress');
+     0:Writeln(' waitOnRegister');
+     1:Writeln(' waitOnAddress');
      else
       Assert(false);
     end;
-  1:
+  1: //PFP
     Case Body^.memSpace of
-     0:Writeln('waitOnRegisterAndStall');
-     1:Writeln('waitOnAddressAndStall');
+     0:Writeln(' waitOnRegisterAndStall');
+     1:Writeln(' waitOnAddressAndStall');
      else
       Assert(false);
     end;
@@ -1272,6 +1276,8 @@ begin
   //{$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
+  Inc(GFXRing.SetCxCount);
+
   onSetCommonReg(r,v);
 
  end;
@@ -1294,6 +1300,8 @@ begin
 
   //{$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
+
+  Inc(GFXRing.SetShCount);
 
   onSetCommonReg(r,v);
 
@@ -1370,6 +1378,11 @@ end;
 var
  FShaderGroup:TvShaderGroup;
 
+ LastSetShCount:ptruint;
+ LastSetCxCount:ptruint;
+
+ LastRenderCmd:TvRenderTargets;
+
 procedure UpdateGpuRegsInfo;
 var
  FAttrBuilder:TvAttrBuilder;
@@ -1404,9 +1417,22 @@ var
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
 
+ ctx_change:Boolean;
+
 begin
 
  {$ifdef null_rt}Exit;{$endif}
+
+ if (LastSetShCount=GFXRing.SetShCount) and
+    (LastSetCxCount=GFXRing.SetCxCount) then
+ begin
+  Exit;
+ end;
+
+ ctx_change:=(LastSetCxCount<>GFXRing.SetCxCount);
+
+ LastSetShCount:=GFXRing.SetShCount;
+ LastSetCxCount:=GFXRing.SetCxCount;
 
  fdump_ps:=DumpPS(GPU_REGS);
  fdump_vs:=DumpVS(GPU_REGS);
@@ -1422,190 +1448,199 @@ begin
 
  ///////////////////
 
- FRenderCmd:=TvRenderTargets.Create;
+ if ctx_change then
+ begin
 
- FRenderCmd.FRenderPass:=TvRenderPass.Create;
- FRenderCmd.FPipeline  :=TvGraphicsPipeline.Create;
- /////FRenderCmd.FPipeline.FLayout:=TvPipelineLayout.Create;
- FRenderCmd.FPipeline.FRenderPass:=FRenderCmd.FRenderPass;
+  FRenderCmd:=TvRenderTargets.Create;
+  LastRenderCmd:=FRenderCmd;
 
- FRenderCmd.FFramebuffer:=TvFramebuffer.Create;
- FRenderCmd.FFramebuffer.SetRenderPass(FRenderCmd.FRenderPass);
+  FRenderCmd.FRenderPass:=TvRenderPass.Create;
+  FRenderCmd.FPipeline  :=TvGraphicsPipeline.Create;
+  /////FRenderCmd.FPipeline.FLayout:=TvPipelineLayout.Create;
+  FRenderCmd.FPipeline.FRenderPass:=FRenderCmd.FRenderPass;
 
- //////////////////
+  FRenderCmd.FFramebuffer:=TvFramebuffer.Create;
+  FRenderCmd.FFramebuffer.SetRenderPass(FRenderCmd.FRenderPass);
 
-
- FRenderCmd.FFramebuffer.FreeImageViews;
- FRenderCmd.FRenderPass.Clear;
- FRenderCmd.FPipeline.Clear;
-
- FRenderCmd.FFramebuffer.SetSize(GPU_REGS.GET_SCREEN_SIZE);
-
- FRenderCmd.FPipeline.SetPrimType(GPU_REGS.GET_PRIM_TYPE);
- FRenderCmd.FPipeline.SetBlendColors(@GPU_REGS.CB_BLEND_RGBA);
-
- FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+  //////////////////
 
 
- For i:=0 to 15 do
-  if GPU_REGS.VP_ENABLE(i) then
+  FRenderCmd.FFramebuffer.FreeImageViews;
+  FRenderCmd.FRenderPass.Clear;
+  FRenderCmd.FPipeline.Clear;
+
+  FRenderCmd.FFramebuffer.SetSize(GPU_REGS.GET_SCREEN_SIZE);
+
+  FRenderCmd.FPipeline.SetPrimType(GPU_REGS.GET_PRIM_TYPE);
+  FRenderCmd.FPipeline.SetBlendColors(@GPU_REGS.CB_BLEND_RGBA);
+
+  FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+
+
+  For i:=0 to 15 do
+   if GPU_REGS.VP_ENABLE(i) then
+   begin
+    FRenderCmd.FPipeline.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
+   end;
+
+  GFXRing.CmdBuffer.EndRenderPass;
+
+  if GPU_REGS.COMP_ENABLE then
+  For i:=0 to 7 do
+  if GPU_REGS.RT_ENABLE(i) then
+   begin
+    RT_INFO:=GPU_REGS.GET_RT_INFO(i);
+
+    {$ifdef ww}Writeln('RT:',i,' ',HexStr(RT_INFO.FImageInfo.Addr));{$endif}
+
+    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
+    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_READ);
+
+    ri:=FetchImage(GFXRing.CmdBuffer,
+                   RT_INFO.FImageInfo,
+                   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
+                   ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
+                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   RT_INFO.IMAGE_USAGE
+                   );
+
+    //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
+
+    iv:=ri.FetchView(GFXRing.CmdBuffer,RT_INFO.FImageView);
+
+    //
+
+    {$ifdef ww}
+    Writeln('TM_READ :',RT_INFO.IMAGE_USAGE and TM_READ <>0);
+    Writeln('TM_WRITE:',RT_INFO.IMAGE_USAGE and TM_WRITE<>0);
+    Writeln('TM_CLEAR:',RT_INFO.IMAGE_USAGE and TM_CLEAR<>0);
+    {$endif}
+
+    //Writeln(hexstr(PDWORD(RT_INFO.FImageInfo.Addr)[0],8));
+    //writeln;
+
+    //RT_INFO.IMAGE_USAGE:={TM_CLEAR or }TM_READ{ or TM_WRITE};
+
+    //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_CLEAR);
+
+    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
+                                iv.GetSubresRange,
+                                GetColorAccessMask(RT_INFO.IMAGE_USAGE),
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                                ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+
+    FRenderCmd.FFramebuffer.AddImageView(iv);
+
+    //Writeln('colorAttachmentCount:',FRenderCmd.FRenderPass.subpass.colorAttachmentCount);
+    //Writeln('AtCount:',FRenderCmd.FRenderPass.AtCount);
+
+    FRenderCmd.FRenderPass.AddColorRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount,RT_INFO.IMAGE_USAGE);
+
+    FRenderCmd.FRenderPass.AddColorAt(RT_INFO.FImageInfo.cformat,
+                                      RT_INFO.IMAGE_USAGE,
+                                      TVkSampleCountFlagBits(RT_INFO.FImageInfo.params.samples));
+
+
+    //RT_INFO.blend.blendEnable:=0;
+    FRenderCmd.FPipeline.AddBlend(RT_INFO.blend);
+
+    //if RT_INFO.FAST_CLEAR then
+    begin
+     FRenderCmd.AddClearColor(TVkClearValue(RT_INFO.CLEAR_COLOR));
+    end;
+
+   end;
+
+  if GPU_REGS.DB_ENABLE then
   begin
-   FRenderCmd.FPipeline.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
-  end;
+   DB_INFO:=GPU_REGS.GET_DB_INFO;
 
- GFXRing.CmdBuffer.EndRenderPass;
+   {$ifdef ww}
+   Writeln('DB');
+   Writeln('TM_READ :',DB_INFO.DEPTH_USAGE and TM_READ <>0);
+   Writeln('TM_WRITE:',DB_INFO.DEPTH_USAGE and TM_WRITE<>0);
+   Writeln('TM_CLEAR:',DB_INFO.DEPTH_USAGE and TM_CLEAR<>0);
+   {$endif}
 
- if GPU_REGS.COMP_ENABLE then
- For i:=0 to 7 do
- if GPU_REGS.RT_ENABLE(i) then
-  begin
-   RT_INFO:=GPU_REGS.GET_RT_INFO(i);
+   //DB_INFO.DEPTH_USAGE:={TM_CLEAR or} TM_READ or TM_WRITE;
 
-   {$ifdef ww}Writeln('RT:',i,' ',HexStr(RT_INFO.FImageInfo.Addr));{$endif}
-
-   //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
-   //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_READ);
 
    ri:=FetchImage(GFXRing.CmdBuffer,
-                  RT_INFO.FImageInfo,
-                  ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                  ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
+                  DB_INFO.FImageInfo,
+                  ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                  RT_INFO.IMAGE_USAGE
+                  {DB_INFO.DEPTH_USAGE}0
                   );
 
    //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
 
-   iv:=ri.FetchView(GFXRing.CmdBuffer,RT_INFO.FImageView);
+   iv:=ri.FetchView(GFXRing.CmdBuffer);
 
-   //
 
-   {$ifdef ww}
-   Writeln('TM_READ :',RT_INFO.IMAGE_USAGE and TM_READ <>0);
-   Writeln('TM_WRITE:',RT_INFO.IMAGE_USAGE and TM_WRITE<>0);
-   Writeln('TM_CLEAR:',RT_INFO.IMAGE_USAGE and TM_CLEAR<>0);
-   {$endif}
+   if not GPU_REGS.COMP_ENABLE then
+   begin
+    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
+                                iv.GetSubresRange,
+                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
-   //Writeln(hexstr(PDWORD(RT_INFO.FImageInfo.Addr)[0],8));
-   //writeln;
+    range:=iv.GetSubresRange;
+    clr2:=DB_INFO.CLEAR_VALUE.depthStencil;
 
-   //RT_INFO.IMAGE_USAGE:={TM_CLEAR or }TM_READ{ or TM_WRITE};
+    GFXRing.CmdBuffer.ClearDepthStencilImage(ri.FHandle,
+                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                             @clr2,
+                                             1,@range);
 
-   //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_CLEAR);
+    Exit;
+   end;
 
    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                                iv.GetSubresRange,
-                               GetColorAccessMask(RT_INFO.IMAGE_USAGE),
-                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                               ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+                               GetDepthStencilAccessMask(DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
+                               GetDepthStencilLayout    (DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
+                               DB_INFO.zorder_stage );
 
    FRenderCmd.FFramebuffer.AddImageView(iv);
 
    //Writeln('colorAttachmentCount:',FRenderCmd.FRenderPass.subpass.colorAttachmentCount);
    //Writeln('AtCount:',FRenderCmd.FRenderPass.AtCount);
 
-   FRenderCmd.FRenderPass.AddColorRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount,RT_INFO.IMAGE_USAGE);
+   FRenderCmd.FRenderPass.SetDepthStencilRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount,DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE);
 
-   FRenderCmd.FRenderPass.AddColorAt(RT_INFO.FImageInfo.cformat,
-                                     RT_INFO.IMAGE_USAGE,
-                                     TVkSampleCountFlagBits(RT_INFO.FImageInfo.params.samples));
+   //if not GPU_REGS.COMP_ENABLE then
+   //begin
+   // DB_INFO.DEPTH_CLEAR:=True;
+   //end;
 
+   FRenderCmd.FRenderPass.AddDepthAt(
+    DB_INFO.FImageInfo.cformat,
+    DB_INFO.DEPTH_USAGE,
+    DB_INFO.STENCIL_USAGE);
 
-   //RT_INFO.blend.blendEnable:=0;
-   FRenderCmd.FPipeline.AddBlend(RT_INFO.blend);
+   FRenderCmd.FRenderPass.SetZorderStage(DB_INFO.zorder_stage);
 
-   //if RT_INFO.FAST_CLEAR then
-   begin
-    FRenderCmd.AddClearColor(TVkClearValue(RT_INFO.CLEAR_COLOR));
-   end;
+   FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
+
+   FRenderCmd.FPipeline.DepthStencil.depthTestEnable      :=DB_INFO.depthTestEnable      ;
+   FRenderCmd.FPipeline.DepthStencil.depthWriteEnable     :=DB_INFO.depthWriteEnable     ;
+   FRenderCmd.FPipeline.DepthStencil.depthCompareOp       :=DB_INFO.depthCompareOp       ;
+   FRenderCmd.FPipeline.DepthStencil.depthBoundsTestEnable:=DB_INFO.depthBoundsTestEnable;
+   FRenderCmd.FPipeline.DepthStencil.stencilTestEnable    :=DB_INFO.stencilTestEnable    ;
+   FRenderCmd.FPipeline.DepthStencil.front                :=DB_INFO.front                ;
+   FRenderCmd.FPipeline.DepthStencil.back                 :=DB_INFO.back                 ;
+   FRenderCmd.FPipeline.DepthStencil.minDepthBounds       :=DB_INFO.minDepthBounds       ;
+   FRenderCmd.FPipeline.DepthStencil.maxDepthBounds       :=DB_INFO.maxDepthBounds       ;
 
   end;
 
- if GPU_REGS.DB_ENABLE then
+ end else //ctx_change
  begin
-  DB_INFO:=GPU_REGS.GET_DB_INFO;
-
-  {$ifdef ww}
-  Writeln('DB');
-  Writeln('TM_READ :',DB_INFO.DEPTH_USAGE and TM_READ <>0);
-  Writeln('TM_WRITE:',DB_INFO.DEPTH_USAGE and TM_WRITE<>0);
-  Writeln('TM_CLEAR:',DB_INFO.DEPTH_USAGE and TM_CLEAR<>0);
-  {$endif}
-
-  //DB_INFO.DEPTH_USAGE:={TM_CLEAR or} TM_READ or TM_WRITE;
-
-
-  ri:=FetchImage(GFXRing.CmdBuffer,
-                 DB_INFO.FImageInfo,
-                 ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) or
-                 ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                 ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                 {DB_INFO.DEPTH_USAGE}0
-                 );
-
-  //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
-
-  iv:=ri.FetchView(GFXRing.CmdBuffer);
-
-
-  if not GPU_REGS.COMP_ENABLE then
-  begin
-   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-   range:=iv.GetSubresRange;
-   clr2:=DB_INFO.CLEAR_VALUE.depthStencil;
-
-   GFXRing.CmdBuffer.ClearDepthStencilImage(ri.FHandle,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            @clr2,
-                                            1,@range);
-
-   Exit;
-  end;
-
-  GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                              iv.GetSubresRange,
-                              GetDepthStencilAccessMask(DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
-                              GetDepthStencilLayout    (DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
-                              DB_INFO.zorder_stage );
-
-  FRenderCmd.FFramebuffer.AddImageView(iv);
-
-  //Writeln('colorAttachmentCount:',FRenderCmd.FRenderPass.subpass.colorAttachmentCount);
-  //Writeln('AtCount:',FRenderCmd.FRenderPass.AtCount);
-
-  FRenderCmd.FRenderPass.SetDepthStencilRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount,DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE);
-
-  //if not GPU_REGS.COMP_ENABLE then
-  //begin
-  // DB_INFO.DEPTH_CLEAR:=True;
-  //end;
-
-  FRenderCmd.FRenderPass.AddDepthAt(
-   DB_INFO.FImageInfo.cformat,
-   DB_INFO.DEPTH_USAGE,
-   DB_INFO.STENCIL_USAGE);
-
-  FRenderCmd.FRenderPass.SetZorderStage(DB_INFO.zorder_stage);
-
-  FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
-
-  FRenderCmd.FPipeline.DepthStencil.depthTestEnable      :=DB_INFO.depthTestEnable      ;
-  FRenderCmd.FPipeline.DepthStencil.depthWriteEnable     :=DB_INFO.depthWriteEnable     ;
-  FRenderCmd.FPipeline.DepthStencil.depthCompareOp       :=DB_INFO.depthCompareOp       ;
-  FRenderCmd.FPipeline.DepthStencil.depthBoundsTestEnable:=DB_INFO.depthBoundsTestEnable;
-  FRenderCmd.FPipeline.DepthStencil.stencilTestEnable    :=DB_INFO.stencilTestEnable    ;
-  FRenderCmd.FPipeline.DepthStencil.front                :=DB_INFO.front                ;
-  FRenderCmd.FPipeline.DepthStencil.back                 :=DB_INFO.back                 ;
-  FRenderCmd.FPipeline.DepthStencil.minDepthBounds       :=DB_INFO.minDepthBounds       ;
-  FRenderCmd.FPipeline.DepthStencil.maxDepthBounds       :=DB_INFO.maxDepthBounds       ;
-
+  FRenderCmd:=LastRenderCmd;
  end;
 
  {$ifdef ww}Writeln('[FVSShader]');{$endif}
@@ -1743,6 +1778,7 @@ begin
 
    }
 
+   if ctx_change then
    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
                                iv.GetSubresRange,
                                ord(VK_ACCESS_SHADER_READ_BIT),
@@ -1753,11 +1789,16 @@ begin
   end;
  end;
 
- if not GFXRing.CmdBuffer.BeginRenderPass(FRenderCmd) then
+ if ctx_change then
  begin
-  Writeln('!BeginRenderPass');
-  Assert(false);
+  if not GFXRing.CmdBuffer.BeginRenderPass(FRenderCmd) then
+  begin
+   Writeln('!BeginRenderPass');
+   Assert(false);
+  end;
  end;
+
+ //
 
  if (FVSShader.FPushConst.size<>0) then
  begin
@@ -1892,6 +1933,15 @@ begin
 
  {$ifdef null_rt}Exit;{$endif}
 
+ if (LastSetShCount=GFXRing.SetShCount) and
+    (LastSetCxCount=GFXRing.SetCxCount) then
+ begin
+  Exit;
+ end;
+
+ LastSetShCount:=GFXRing.SetShCount;
+ LastSetCxCount:=GFXRing.SetCxCount;
+
  fdump_cs:=DumpCS(GPU_REGS);
 
  GFXRing.AllocCmdBuffer;
@@ -2016,6 +2066,8 @@ begin
  GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
 
  {$ifdef ww}Writeln('DrawIndex:',Body^.indexCount);{$endif}
+
+ //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
 
 procedure onDrawIndexAuto(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXAUTO);
@@ -2027,6 +2079,8 @@ begin
  GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
 
  {$ifdef ww}Writeln('onDrawIndexAuto:',Body^.indexCount);{$endif}
+
+ //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
 
 procedure onDispatchDirect(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDISPATCHDIRECT);
@@ -2037,6 +2091,8 @@ begin
  GFXRing.CmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
 
  {$ifdef ww}Writeln('onDispatchDirect:',Body^.dimX,':',Body^.dimY,':',Body^.dimZ);{$endif}
+
+ //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
 
 type
@@ -2057,14 +2113,15 @@ var
 begin
  if (node=nil) then Exit;
 
- if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
- begin
-  Assert(false,'TODO CCB');
- end;
-
  n:=0;
  While (n<node^.count) do
  begin
+
+  if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
+  begin
+   Assert(node^.ccbSizesInBytes[n]=0,'TODO CCB');
+  end;
+
   i:=0;
   s:=node^.dcbSizesInBytes[n];
   P:=PByte(node^.dcbGpuAddrs[n]);
@@ -2223,7 +2280,7 @@ function gfx_test(CmdBuffer:TvCmdBuffer):Boolean;
 begin
  Result:=True;
  if (CmdBuffer=nil) then Exit;
- Result:=(CmdBuffer.Fence.Status=VK_SUCCESS);
+ Result:=(CmdBuffer.ret<>0) or (CmdBuffer.Fence.Status=VK_SUCCESS);
  if Result then
  begin
   CmdBuffer.ReleaseResource;

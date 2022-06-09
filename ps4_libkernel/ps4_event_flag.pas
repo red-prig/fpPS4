@@ -287,7 +287,7 @@ begin
 
  _sig_lock;
 
- Writeln('>sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+ //Writeln('>sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  if (pTimeout<>nil) then
  begin
@@ -415,7 +415,7 @@ begin
   spin_unlock(ef^.lock_list);
  end;
 
- Writeln('<sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+ //Writeln('<sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  _sig_unlock;
  ef_leave(ef);
@@ -436,7 +436,7 @@ begin
 
  _sig_lock;
 
- Writeln('>sceKernelSetEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+ //Writeln('>sceKernelSetEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  spin_lock(ef^.lock_list);
 
@@ -450,7 +450,7 @@ begin
  end else
  begin
 
-  Writeln('!sceKernelSetEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+  //Writeln('!sceKernelSetEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
   bits:=load_acq_rel(ef^.bitPattern) or bitPattern;
 
@@ -487,7 +487,7 @@ begin
  Result:=ef_enter(ef);
  if (Result<>0) then Exit;
 
- Writeln('sceKernelClearEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+ //Writeln('sceKernelClearEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  spin_lock(ef^.lock_list);
   fetch_and(ef^.bitPattern,bitPattern);

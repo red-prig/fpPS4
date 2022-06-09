@@ -74,6 +74,7 @@ type
   cmdbuf:TVkCommandBuffer;
 
   cmd_count:qword;
+  ret:Integer;
 
   FCurrPipeline:array[0..1] of TVkPipeline;
   FCurrLayout:array[0..1] of TVkPipelineLayout;
@@ -353,7 +354,10 @@ begin
  vkCmdBeginRenderPass(cmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
  vkCmdBindPipeline   (cmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
 
- AddDependence(@RT.Release);
+ if AddDependence(@RT.Release) then
+ begin
+  RT.Acquire(Self);
+ end;
 
  FRenderPass:=info.renderPass;
 
@@ -439,6 +443,7 @@ begin
 
  r:=FQueue.Submit(1,@info,FFence);
 
+ ret:=Integer(r);
  if (r<>VK_SUCCESS) then
  begin
   Writeln('vkQueueSubmit:',r);
@@ -471,6 +476,7 @@ begin
  FImageBarriers .Free;
 
  cmd_count:=0;
+ ret:=0;
 end;
 
 function TvCustomCmdBuffer.AddDependence(cb:TvReleaseCb):Boolean;

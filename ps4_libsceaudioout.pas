@@ -587,7 +587,7 @@ begin
  end;
 
 
- if (err<>0) then
+ if (err<>0) and (err<>paOutputUnderflow) then
   Writeln('Pa_GetErrorText:',Pa_GetErrorText(err));
 
  //Writeln('sceAudioOutOutput:',handle,':',HexStr(ptr));

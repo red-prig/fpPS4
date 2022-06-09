@@ -72,6 +72,7 @@ type
  SceNpTitleSecret=array[0..SCE_NP_TITLE_SECRET_SIZE-1] of Byte;
 
 const
+ //SceNpState
  SCE_NP_STATE_UNKNOWN    =0;
  SCE_NP_STATE_SIGNED_OUT =1;
  SCE_NP_STATE_SIGNED_IN  =2;
@@ -119,6 +120,12 @@ function ps4_sceNpGetOnlineId(userId:Integer;onlineId:pSceNpOnlineId):Integer; S
 begin
  onlineId^:=Default(SceNpOnlineId);
  onlineId^.data:='user';
+ Result:=0;
+end;
+
+function ps4_sceNpGetState(userId:Integer;state:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (state<>nil) then state^:=SCE_NP_STATE_SIGNED_OUT;
  Result:=0;
 end;
 
@@ -206,6 +213,7 @@ begin
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
+ lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
