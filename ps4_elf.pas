@@ -175,11 +175,6 @@ type
    stub:TMemChunk;
   end;
 
-  //pModule:packed record
-  // pStart:QWORD;
-  // pStop:QWORD;
-  //end;
-
   dtInit:QWORD;
 
   pInit:packed record
@@ -2517,12 +2512,18 @@ begin
 
  base:=mMap.pAddr;
 
+ if (Prog<>Self) then
+ begin
+  module_start(0,nil);
+ end;
+
  //if (Prog<>Self) then
  //begin
  // //dt_Init
  // TinitProc(base+dtInit)(StartupParams.argc,@StartupParams.argv,nil);
  //end;
 
+ {
  c:=pInit.dt_preinit_array_count;
  if (c<>0) then
   Case Int64(pInit.dt_preinit_array) of
@@ -2552,6 +2553,7 @@ begin
      end;
     end;
   end;
+ }
 end;
 
 Procedure Telf_file.InitProt;
