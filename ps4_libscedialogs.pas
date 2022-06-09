@@ -218,6 +218,14 @@ end;
 
 //
 
+function ps4_sceNpCommerceDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpCommerceDialogInitialize');
+ Result:=0;
+end;
+
+//
+
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -280,12 +288,23 @@ begin
  lib^.set_proc($6F4E878740CF11A1,@ps4_sceMsgDialogOpen);
 end;
 
+function Load_libSceNpCommerce(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceNpCommerce');
+ lib^.set_proc($D1A4766969906A5E,@ps4_sceNpCommerceDialogInitialize);
+end;
+
 initialization
  ps4_app.RegistredPreLoad('libSceCommonDialog.prx',@Load_libSceCommonDialog);
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx',@Load_libSceErrorDialog);
  ps4_app.RegistredPreLoad('libSceNpProfileDialog.prx',@Load_libSceNpProfileDialog);
  ps4_app.RegistredPreLoad('libSceSaveDataDialog.prx',@Load_libSceSaveDataDialog);
  ps4_app.RegistredPreLoad('libSceMsgDialog.prx',@Load_libSceMsgDialog);
+ ps4_app.RegistredPreLoad('libSceNpCommerce.prx',@Load_libSceNpCommerce);
 
 end.
 

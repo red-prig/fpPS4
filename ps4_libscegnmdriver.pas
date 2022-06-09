@@ -23,6 +23,149 @@ uses
  ps4_libSceVideoOut{, ps4_pssl};
 
 const
+ InitDefault175_stub:array[0..128] of DWORD=(
+  $c0012800,
+  $80000000,
+  $80000000,
+  $c0001200,
+  $0,
+  $c0055800,
+  $2ec47fc0,
+  $ffffffff,
+  $0,
+  $0,
+  $0,
+  $10,
+  $c0017600,
+  $216,
+  $ffffffff,
+  $c0017600,
+  $217,
+  $ffffffff,
+  $c0017600,
+  $215,
+  $0,
+  $c0016900,
+  $2f9,
+  $2d,
+  $c0016900,
+  $282,
+  $8,
+  $c0016900,
+  $280,
+  $80008,
+  $c0016900,
+  $281,
+  $ffff0000,
+  $c0016900,
+  $204,
+  $0,
+  $c0016900,
+  $206,
+  $43f,
+  $c0016900,
+  $83,
+  $ffff,
+  $c0016900,
+  $317,
+  $10,
+  $c0016900,
+  $2fa,
+  $3f800000,
+  $c0016900,
+  $2fc,
+  $3f800000,
+  $c0016900,
+  $2fb,
+  $3f800000,
+  $c0016900,
+  $2fd,
+  $3f800000,
+  $c0016900,
+  $202,
+  $cc0010,
+  $c0016900,
+  $30e,
+  $ffffffff,
+  $c0016900,
+  $30f,
+  $ffffffff,
+  $c0002f00,
+  $1,
+  $c0017600,
+  $7,
+  $1ff,
+  $c0017600,
+  $46,
+  $1ff,
+  $c0017600,
+  $87,
+  $1ff,
+  $c0017600,
+  $199,
+  $1ff,
+  $c0017600,
+  $107,
+  $0,
+  $c0017600,
+  $147,
+  $1ff,
+  $c0016900,
+  $1b1,
+  $2,
+  $c0016900,
+  $101,
+  $0,
+  $c0016900,
+  $100,
+  $ffffffff,
+  $c0016900,
+  $103,
+  $0,
+  $c0016900,
+  $284,
+  $0,
+  $c0016900,
+  $290,
+  $0,
+  $c0016900,
+  $2ae,
+  $0,
+  $c0016900,
+  $292,
+  $0,
+  $c0016900,
+  $293,
+  $6020000,
+  $c0016900,
+  $2f8,
+  $0,
+  $c0016900,
+  $2de,
+  $1e9,
+  $c0036900,
+  $295,
+  $100,
+  $100,
+  $4,
+  $c0017900,
+  $200,
+  $e0000000,
+  $c07f1000,
+  $0
+ );
+
+function ps4_sceGnmDrawInitDefaultHardwareState175(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (numDwords>$FF) then
+ begin
+  Result:=$100;
+  Move(InitDefault175_stub,cmdBuffer^,SizeOf(InitDefault175_stub));
+ end;
+end;
+
+const
  InitDefault200_stub1:array[0..11] of DWORD=(
   $c0012800,
   $80000000,
@@ -160,7 +303,7 @@ const
  );
 
 
-function ps4__sceGnmDrawInitDefaultHardwareState200(cmdBuffer:PDWORD;numDwords:QWORD;param_3:Integer):DWORD; SysV_ABI_CDecl;
+function _sceGnmDrawInitDefaultHardwareState200(cmdBuffer:PDWORD;numDwords:DWORD;param_3:Integer):DWORD;
 var
  _cmdBuffer:PDWORD;
  count:QWORD;
@@ -187,9 +330,9 @@ begin
 
 end;
                    //sce:Gnm:Draw:initializeDefaultHardwareState
-function ps4_sceGnmDrawInitDefaultHardwareState200(cmdBuffer:PDWORD;numDwords:QWORD):DWORD; SysV_ABI_CDecl;
+function ps4_sceGnmDrawInitDefaultHardwareState200(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
 begin
- Result:=ps4__sceGnmDrawInitDefaultHardwareState200(cmdBuffer,numDwords,1);
+ Result:=_sceGnmDrawInitDefaultHardwareState200(cmdBuffer,numDwords,1);
 end;
 
 const
@@ -333,14 +476,14 @@ const
    $c0761000,
    0);
 
-function ps4_sceGnmDrawInitDefaultHardwareState350(cmdBuffer:PDWORD;numDwords:QWORD):DWORD; SysV_ABI_CDecl;
+function ps4_sceGnmDrawInitDefaultHardwareState350(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
 begin
  assert(numDwords>$100);
  Move(InitDefault350_stub,cmdBuffer^,SizeOf(InitDefault350_stub));
  Result:=$100;
 end;
 
-function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:QWORD;param:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar):Integer; SysV_ABI_CDecl;
 var
  cmdSize,len,len3,len4:DWORD;
 begin
@@ -361,7 +504,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmInsertPopMarker(cmdBuffer:PDWORD;numDwords:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmInsertPopMarker(cmdBuffer:PDWORD;numDwords:DWORD):Integer; SysV_ABI_CDecl;
 begin
  if (numDwords<>6) then Exit(-1);
  cmdBuffer[0]:=$c0041000; //NOP
@@ -374,7 +517,7 @@ begin
 end;
 
 // called in waitUntilSafeForRendering
-function ps4_sceGnmInsertWaitFlipDone(cmdBuffer:PDWORD;numDwords:QWORD;videoOutHandle,displayBufferIndex:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmInsertWaitFlipDone(cmdBuffer:PDWORD;numDwords:DWORD;videoOutHandle,displayBufferIndex:Integer):Integer; SysV_ABI_CDecl;
 var
  addr:Pointer;
 begin
@@ -422,7 +565,7 @@ type
    DWORD;
  end;
 
-function ps4_sceGnmSetCsShader(cmdBuffer:PDWORD;numDwords:QWORD;csRegs:PCsStageRegisters):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetCsShader(cmdBuffer:PDWORD;numDwords:DWORD;csRegs:PCsStageRegisters):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<25) or (csRegs=nil) then Exit;
@@ -444,7 +587,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmSetCsShaderWithModifier(cmdBuffer:PDWORD;numDwords:QWORD;csRegs:PCsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetCsShaderWithModifier(cmdBuffer:PDWORD;numDwords:DWORD;csRegs:PCsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<=24) or (csRegs=nil) or ((shaderModifier and $fffffc3f)<>0) then Exit;
@@ -489,7 +632,7 @@ type
 
  //EmbeddedVsShader=(kEmbeddedVsShaderFullScreen,kNumEmbeddedVsShaders);
 
-function ps4_sceGnmSetVsShader(cmdBuffer:PDWORD;numDwords:QWORD;vsRegs:PVsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetVsShader(cmdBuffer:PDWORD;numDwords:DWORD;vsRegs:PVsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
 var
  m:DWORD;
 begin
@@ -548,7 +691,7 @@ type
   m_cbShaderMask:DWORD;   //11  0..11 ??
  end;
 
-function ps4_sceGnmSetPsShader(cmdBuffer:PDWORD;numDwords:QWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetPsShader(cmdBuffer:PDWORD;numDwords:DWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<29) then Exit;
@@ -600,7 +743,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmSetPsShader350(cmdBuffer:PDWORD;numDwords:QWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetPsShader350(cmdBuffer:PDWORD;numDwords:DWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<29) then Exit;
@@ -809,7 +952,7 @@ const
   m_cbShaderMask       :3;
  );
 
-function ps4_sceGnmSetEmbeddedVsShader(cmdBuffer:PDWORD;numDwords:QWORD;shaderId,shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetEmbeddedVsShader(cmdBuffer:PDWORD;numDwords:DWORD;shaderId,shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
 var
  VsRegs:VsStageRegisters;
 begin
@@ -822,7 +965,7 @@ begin
  Result:=ps4_sceGnmSetVsShader(cmdBuffer,numDwords,@VsRegs,shaderModifier);
 end;
 
-function ps4_sceGnmSetEmbeddedPsShader(cmdBuffer:PDWORD;numDwords:QWORD;shaderId:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmSetEmbeddedPsShader(cmdBuffer:PDWORD;numDwords:DWORD;shaderId:DWORD):Integer; SysV_ABI_CDecl;
 var
  PsRegs:PsStageRegisters;
 begin
@@ -843,7 +986,7 @@ begin
  Result:=ps4_sceGnmSetPsShader350(cmdBuffer,numDwords,@PsRegs);
 end;
 
-function ps4_sceGnmUpdateVsShader(cmdBuffer:PDWORD;numDwords:QWORD;vsRegs:PVsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmUpdateVsShader(cmdBuffer:PDWORD;numDwords:DWORD;vsRegs:PVsStageRegisters;shaderModifier:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (vsRegs=nil) or (numDwords<29) or ((shaderModifier and $fcfffc3f)<>0) then Exit;
@@ -878,7 +1021,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmUpdatePsShader(cmdBuffer:PDWORD;numDwords:QWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmUpdatePsShader(cmdBuffer:PDWORD;numDwords:DWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<29) then Exit;
@@ -929,7 +1072,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmUpdatePsShader350(cmdBuffer:PDWORD;numDwords:QWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmUpdatePsShader350(cmdBuffer:PDWORD;numDwords:DWORD;psRegs:PPsStageRegisters):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<29) then Exit;
@@ -983,7 +1126,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmDispatchDirect(cmdBuffer:PDWORD;numDwords:QWORD;
+function ps4_sceGnmDispatchDirect(cmdBuffer:PDWORD;numDwords:DWORD;
           threadGroupX,threadGroupY,threadGroupZ,modifier:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
@@ -999,7 +1142,7 @@ begin
 end;
 
 //Draws a set of primitives using indices auto-generated by the VGT
-function ps4_sceGnmDrawIndexAuto(cmdBuffer:PDWORD;numDwords:QWORD;
+function ps4_sceGnmDrawIndexAuto(cmdBuffer:PDWORD;numDwords:DWORD;
           indexCount,modifier:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
@@ -1012,7 +1155,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmDrawIndex(cmdBuffer:PDWORD;numDwords:QWORD;
+function ps4_sceGnmDrawIndex(cmdBuffer:PDWORD;numDwords:DWORD;
           indexCount:DWORD;indexAddr:Pointer;modifier,inlineMode:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -1225,6 +1368,7 @@ begin
 
  lib:=Result._add_lib('libSceGnmDriver');
 
+ lib^.set_proc($4219F245EB5E2753,@ps4_sceGnmDrawInitDefaultHardwareState175);
  lib^.set_proc($D07DAF0586D32C72,@ps4_sceGnmDrawInitDefaultHardwareState200);
  lib^.set_proc($C9BD9C4616A00F52,@ps4_sceGnmDrawInitDefaultHardwareState350);
 
