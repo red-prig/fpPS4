@@ -14,24 +14,24 @@ implementation
 const
  SCE_DISC_MAP_ERROR_INVALID_ARGUMENT=-2129657855; //0x81100001
 
-function ps4_sceDiscMapIsRequestOnHDD(param1:PChar;param2,param3:Int64;param4:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceDiscMapIsRequestOnHDD(path:PChar;param2,param3:Int64;param4:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (param1=nil) or (param4=nil) then Exit(SCE_DISC_MAP_ERROR_INVALID_ARGUMENT);
+ if (path=nil) or (param4=nil) then Exit(SCE_DISC_MAP_ERROR_INVALID_ARGUMENT);
  param4^:=1;
  Result:=0;
 end;
 
-function ps4_8A828CAEE7EDD5E9(param1:PChar;param2,param3:Int64;param4,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
+function ps4_8A828CAEE7EDD5E9(path:PChar;param2,param3:Int64;pflags,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
 begin
- param4^:=0;
+ pflags^:=0;
  param5^:=0;
  param6^:=0;
  Result:=0;
 end;
 
-function ps4_7C980FFB0AA27E7A(param1:PChar;param2,param3:Int64;param4,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
+function ps4_7C980FFB0AA27E7A(path:PChar;param2,param3:Int64;pflags,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
 begin
- param4^:=0;
+ pflags^:=0;
  param5^:=0;
  param6^:=0;
  Result:=0;

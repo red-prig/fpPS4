@@ -1126,8 +1126,31 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGnmSetVgtControl(cmdBuffer:PDWORD;numDwords:DWORD;
+                                 primGroupSizeMinusOne:DWORD;
+                                 partialVsWaveMode    :DWORD;
+                                 wdSwitchOnlyOnEopMode:DWORD):Integer; SysV_ABI_CDecl;
+begin
+
+ Result:=-1;
+
+ if (cmdBuffer<>nil) and
+    (numDwords=3) and
+    (primGroupSizeMinusOne<$100) and
+    ((wdSwitchOnlyOnEopMode or partialVsWaveMode)<2) then
+ begin
+  Result:=0;
+  cmdBuffer[0]:=$c0016900;
+  cmdBuffer[1]:=$2aa;
+  cmdBuffer[2]:=((partialVsWaveMode and 1) shl $10) or (primGroupSizeMinusOne and $ffff);
+ end;
+end;
+
 function ps4_sceGnmDispatchDirect(cmdBuffer:PDWORD;numDwords:DWORD;
-          threadGroupX,threadGroupY,threadGroupZ,modifier:DWORD):Integer; SysV_ABI_CDecl;
+                                  threadGroupX,
+                                  threadGroupY,
+                                  threadGroupZ,
+                                  modifier:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
  if (cmdBuffer=nil) or (numDwords<9) or (integer(threadGroupY or threadGroupX or threadGroupZ)<=-1) then Exit;
@@ -1391,6 +1414,8 @@ begin
  lib^.set_proc($577D55D3552249C6,@ps4_sceGnmUpdateVsShader);
  lib^.set_proc($E0C811C3F6D53505,@ps4_sceGnmUpdatePsShader);
  lib^.set_proc($98B54BECDEC15418,@ps4_sceGnmUpdatePsShader350);
+
+ lib^.set_proc($7050A9D0D5FCC1FD,@ps4_sceGnmSetVgtControl);
 
  lib^.set_proc($D01CCB1A58DCC01A,@ps4_sceGnmDispatchDirect);
 

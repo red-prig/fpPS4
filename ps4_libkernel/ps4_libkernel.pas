@@ -799,7 +799,7 @@ begin
  lib^.set_proc($DC1A4FF39D21053E,@ps4_pthread_condattr_setpshared);
 
  lib^.set_proc($D13C959383122EDD,@ps4_pthread_cond_init);
- lib^.set_proc($9A4C767D584D32C8,@ps4_pthread_cond_broadcast);
+ lib^.set_proc($4575EA8B80AD17CC,@ps4_pthread_cond_destroy);
 
  lib^.set_proc($D8C3B2FAB51FBA14,@ps4_pthread_cond_signal);
  lib^.set_proc($9A4C767D584D32C8,@ps4_pthread_cond_broadcast);

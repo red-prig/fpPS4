@@ -1536,7 +1536,7 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   case _on_module_start_stop(Info^.pName) of
    0:begin //module_start
-      nSymVal:=elf.mMap.pAddr+elf.dtInit;
+      //nSymVal:=elf.mMap.pAddr+elf.dtInit;
       _do_set(nSymVal);
 
       //IInfo.nid:=ps4_nid_hash(Info^.pName);
@@ -1546,7 +1546,7 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
       Exit;
      end;
    1:begin //module_stop
-      nSymVal:=elf.mMap.pAddr+elf.dtFini;
+      //nSymVal:=elf.mMap.pAddr+elf.dtFini;
       _do_set(nSymVal);
 
       //IInfo.nid:=ps4_nid_hash(Info^.pName);
