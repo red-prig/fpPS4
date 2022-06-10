@@ -256,6 +256,7 @@ begin
  node:=LoadPs4ElfFromFile(fn);
  if (node<>nil) then
  begin
+  node.IsStatic:=False;
   node.Acqure;
 
   node.Prepare;
@@ -266,9 +267,13 @@ begin
   ps4_app.InitProt;
   ps4_app.InitThread(0);
 
-  Result:=node.Handle;
+  node.IsInit:=True; //mark exclude
+
+  ps4_app.InitCode;
 
   i:=node.module_start(argc,argp);
+
+  Result:=node.Handle;
   node.Release;
 
   if (pRes<>nil) then pRes^:=i;
@@ -346,6 +351,22 @@ begin
  if (i>numArray) then Result:=SCE_KERNEL_ERROR_ENOMEM;
 
  Writeln('sceKernelGetModuleList:',HexStr(list),' ',numArray,' ',i);
+end;
+
+const
+//
+//For CPU mode
+//  bit 0: 7/6 CPU mode flag 1: 7 CPU mode 0: 6 CPU mode
+//  bit 1: Reserved
+//  bit 2: CPU #6 flag 1: normal 0: low
+//
+ SCE_KERNEL_CPUMODE_6CPU       =0;
+ SCE_KERNEL_CPUMODE_7CPU_LOW   =1;
+ SCE_KERNEL_CPUMODE_7CPU_NORMAL=5;
+
+function ps4_sceKernelGetCpumode():Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_KERNEL_CPUMODE_7CPU_NORMAL;
 end;
 
 function ps4_memset(ptr:Pointer;value:Integer;num:size_t):Pointer; SysV_ABI_CDecl;
@@ -679,6 +700,8 @@ begin
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
  lib^.set_proc($2F01BC8379E2AB00,@ps4_sceKernelDlsym);
+
+ lib^.set_proc($54EC7C3469875D3B,@ps4_sceKernelGetCpumode);
 
  //mutex
 

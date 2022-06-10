@@ -2495,10 +2495,10 @@ end;
 procedure Telf_file.mapCodeInit;
 var
  Prog:Telf_file;
- i,c:SizeInt;
- StartupParams:TPS4StartupParams;
- base:Pointer;
- P:PPointer;
+ //i,c:SizeInt;
+ //StartupParams:TPS4StartupParams;
+ //base:Pointer;
+ //P:PPointer;
 begin
  if (Self=nil) then Exit;
  Prog:=Telf_file(ps4_app.prog);
@@ -2506,11 +2506,11 @@ begin
 
  Writeln('mapCodeInit:',pFileName);
 
- StartupParams:=Default(TPS4StartupParams);
- StartupParams.argc:=1;
- StartupParams.argv[0]:=PChar(Prog.pFileName);
+ //StartupParams:=Default(TPS4StartupParams);
+ //StartupParams.argc:=1;
+ //StartupParams.argv[0]:=PChar(Prog.pFileName);
 
- base:=mMap.pAddr;
+ //base:=mMap.pAddr;
 
  if (Prog<>Self) then
  begin

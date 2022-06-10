@@ -1414,6 +1414,139 @@ begin
  Result:=0;
 end;
 
+const
+//SceVideoOutDeviceCapability
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_YUV                        = 1;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_XVYCC                      = 1 shl 1;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_S3D_FRAME_PACKING_59_94HZ  = 1 shl 2;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_VR_VIEW_59_94HZ            = 1 shl 4;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_VR_VIEW_119_88HZ           = 1 shl 5;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_VR_VIEW_89_91HZ            = 1 shl 6;
+ SCE_VIDEO_OUT_DEVICE_CAPABILITY_BT2020_PQ                  = 1 shl 7;
+
+//SceVideoOutSignalEncoding
+ SCE_VIDEO_OUT_SIGNAL_ENCODING_UNKNOWN = 0;
+ SCE_VIDEO_OUT_SIGNAL_ENCODING_RGB444  = 1;
+ SCE_VIDEO_OUT_SIGNAL_ENCODING_YUV444  = 2;
+ SCE_VIDEO_OUT_SIGNAL_ENCODING_YUV422  = 3;
+
+ SCE_VIDEO_OUT_SIGNAL_ENCODING_ANY     = $FF;
+
+
+//SceVideoOutSignalRange
+ SCE_VIDEO_OUT_SIGNAL_RANGE_UNKNOWN = 0;
+ SCE_VIDEO_OUT_SIGNAL_RANGE_LIMITED = 1;
+ SCE_VIDEO_OUT_SIGNAL_RANGE_FULL    = 2;
+
+ SCE_VIDEO_OUT_SIGNAL_RANGE_ANY     = $FF;
+
+//SceVideoOutColorimetry
+ SCE_VIDEO_OUT_COLORIMETRY_UNKNOWN   = 0;
+ SCE_VIDEO_OUT_COLORIMETRY_SRGB      = 1;
+ SCE_VIDEO_OUT_COLORIMETRY_CERGB     = 2;
+ SCE_VIDEO_OUT_COLORIMETRY_YCBCR     = 3;
+ SCE_VIDEO_OUT_COLORIMETRY_YCBCR601  = 4;
+ SCE_VIDEO_OUT_COLORIMETRY_YCBCR709  = 5;
+ SCE_VIDEO_OUT_COLORIMETRY_XVYCC     = 6;
+ SCE_VIDEO_OUT_COLORIMETRY_XVYCC601  = 7;
+ SCE_VIDEO_OUT_COLORIMETRY_XVYCC709  = 8;
+
+ SCE_VIDEO_OUT_COLORIMETRY_BT2020       = 9 ; // RGB or YCbCr
+ SCE_VIDEO_OUT_COLORIMETRY_RGB2020      = 10;
+ SCE_VIDEO_OUT_COLORIMETRY_YCBCR2020    = 11;
+
+ SCE_VIDEO_OUT_COLORIMETRY_BT2020_PQ    = 12; // RGB or YCbCr
+ SCE_VIDEO_OUT_COLORIMETRY_RGB2020_PQ   = 13;
+ SCE_VIDEO_OUT_COLORIMETRY_YCBCR2020_PQ = 14;
+
+ SCE_VIDEO_OUT_COLORIMETRY_ANY          = $FF;
+
+//SceVideoOutColorDepth
+ SCE_VIDEO_OUT_COLOR_DEPTH_UNKNOWN = 0 ;
+ SCE_VIDEO_OUT_COLOR_DEPTH_24BPP   = 24;
+ SCE_VIDEO_OUT_COLOR_DEPTH_30BPP   = 30;
+ SCE_VIDEO_OUT_COLOR_DEPTH_36BPP   = 36;
+
+ SCE_VIDEO_OUT_COLOR_DEPTH_ANY     = $FF;
+
+
+//SceVideoOutResolution
+ SCE_VIDEO_OUT_RESOLUTION_UNKNOWN         =  0;
+
+ SCE_VIDEO_OUT_RESOLUTION_480I            =  1;
+ SCE_VIDEO_OUT_RESOLUTION_480I_WIDESCREEN =  2;
+ SCE_VIDEO_OUT_RESOLUTION_576I            =  3;
+ SCE_VIDEO_OUT_RESOLUTION_576I_WIDESCREEN =  4;
+
+ SCE_VIDEO_OUT_RESOLUTION_480P            =  5;
+ SCE_VIDEO_OUT_RESOLUTION_480P_WIDESCREEN =  6;
+ SCE_VIDEO_OUT_RESOLUTION_576P            =  7;
+ SCE_VIDEO_OUT_RESOLUTION_576P_WIDESCREEN =  8;
+
+ SCE_VIDEO_OUT_RESOLUTION_720P            =  9;
+ SCE_VIDEO_OUT_RESOLUTION_1080I           = 10;
+ SCE_VIDEO_OUT_RESOLUTION_1080P           = 11;
+
+ SCE_VIDEO_OUT_RESOLUTION_720P_S3D_FRAME_PACKING = $A0;
+
+ SCE_VIDEO_OUT_RESOLUTION_1080P_VR_VIEW  = $E1;
+
+ SCE_VIDEO_OUT_RESOLUTION_ANY_S3D       = $FFFFFFFF81FFFFFF;
+ SCE_VIDEO_OUT_RESOLUTION_ANY_VR_VIEW   = $FFFFFFFFC1FFFFFF;
+ SCE_VIDEO_OUT_RESOLUTION_ANY           = $FFFFFFFFFFFFFFFF;
+
+//SceVideoOutContentType
+ SCE_VIDEO_OUT_CONTENT_TYPE_UNKNOWN  = 0;
+ SCE_VIDEO_OUT_CONTENT_TYPE_GRAPHICS = 1;
+ SCE_VIDEO_OUT_CONTENT_TYPE_PHOTO    = 2;
+ SCE_VIDEO_OUT_CONTENT_TYPE_CINEMA   = 3;
+ SCE_VIDEO_OUT_CONTENT_TYPE_GAME     = 4;
+ SCE_VIDEO_OUT_CONTENT_TYPE_ANY      = $FF;
+
+
+type
+ pSceVideoOutMode=^SceVideoOutMode;
+ SceVideoOutMode=packed record
+  size:DWORD;          // sizeof(SceVideoOutMode)
+  signalEncoding:Byte; // SceVideoOutSignalEncoding
+  signalRange:Byte;    // SceVideoOutSignalRange
+  colorimetry:Byte;    // SceVideoOutColorimetry
+  depth:Byte;          // SceVideoOutColorDepth
+  refreshRate:QWORD;   // SceVideoOutRefreshRate
+  resolution:QWORD;    // SceVideoOutResolution
+  contentType:Byte;    // SceVideoOutContentType
+  _reserved0:array[0..2] of Byte;
+  _reserved:DWORD;
+ end;
+
+function ps4_sceVideoOutModeSetAny_(pMode:pSceVideoOutMode;sizeOfMode:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+type
+ SceVideoOutVrViewCropAdjustment=packed record
+  verticalOffset:Word;
+  reserved0:Word;
+  reserved1:array[0..2] of DWORD;
+ end;
+
+ SceVideoOutConfigureOptions=packed record
+  vrViewCropAdjustment:SceVideoOutVrViewCropAdjustment;
+ end;
+ pSceVideoOutConfigureOptions=^SceVideoOutConfigureOptions;
+
+
+function ps4_sceVideoOutConfigureOutputMode_(handle:Integer;
+                                             reserved:DWORD;
+                                             pMode:pSceVideoOutMode;
+                                             pOptions:pSceVideoOutConfigureOptions;
+                                             sizeOfMode:DWORD;
+                                             sizeOfOptions:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 function Load_libSceVideoOut(Const name:RawByteString):TElf_node;
@@ -1444,6 +1577,8 @@ begin
  lib^.set_proc($1E26CEB5ECF34FA3,@ps4_sceVideoOutCursorIsUpdatePending);
  lib^.set_proc($D456412B2F0778D5,@ps4_sceVideoOutGetVblankStatus);
  lib^.set_proc($313C71ACE09E4A28,@ps4_sceVideoOutSetWindowModeMargins);
+ lib^.set_proc($A63903B20C658BA7,@ps4_sceVideoOutModeSetAny_);
+ lib^.set_proc($3756C4A09E12470E,@ps4_sceVideoOutConfigureOutputMode_);
 end;
 
 initialization

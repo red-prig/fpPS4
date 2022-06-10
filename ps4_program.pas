@@ -48,6 +48,7 @@ type
    pPrev,pNext:TElf_node;
   protected
    FHandle:Integer;
+   FStatic:Boolean;
    FPrepared:Boolean;
    FLoadImport:Boolean;
    FInitProt:Boolean;
@@ -66,26 +67,29 @@ type
    function  _get_lib(id:Word):PLIBRARY; inline;
   public
    pFileName:RawByteString;
-   property   Handle:Integer read FHandle;
-   property   Next:TElf_node read pNext;
-   function   _add_lib(const strName:RawByteString):PLIBRARY;
-   function   ModuleNameFromId(id:WORD):RawByteString;
-   function   LibraryNameFromId(id:WORD):RawByteString;
-   destructor Destroy; override;
-   Procedure  Clean; virtual;
-   function   Prepare:Boolean; virtual;
-   Procedure  LoadSymbolImport(cbs,data:Pointer); virtual;
-   Procedure  ReLoadSymbolImport(cbs,data:Pointer); virtual;
-   Procedure  InitThread(is_static:QWORD); virtual;
-   Procedure  FreeThread; virtual;
-   Procedure  InitProt;   virtual;
-   Procedure  InitCode;   virtual;
-   function   module_start(argc:size_t;argp:PPointer):Integer; virtual;
-   function   GetCodeFrame:TMemChunk; virtual;
-   function   GetEntryPoint:Pointer; virtual;
-   Function   GetModuleInfo:TKernelModuleInfo; virtual;
-   Function   get_proc(nid:QWORD):Pointer;
-   Function   get_proc_by_name(const name:RawByteString):Pointer;
+   property    IsStatic:Boolean read FStatic write FStatic;
+   property    IsInit:Boolean read FInitCode write FInitCode;
+   property    Handle:Integer read FHandle;
+   property    Next:TElf_node read pNext;
+   function    _add_lib(const strName:RawByteString):PLIBRARY;
+   function    ModuleNameFromId(id:WORD):RawByteString;
+   function    LibraryNameFromId(id:WORD):RawByteString;
+   Constructor Create;
+   destructor  Destroy; override;
+   Procedure   Clean; virtual;
+   function    Prepare:Boolean; virtual;
+   Procedure   LoadSymbolImport(cbs,data:Pointer); virtual;
+   Procedure   ReLoadSymbolImport(cbs,data:Pointer); virtual;
+   Procedure   InitThread(is_static:QWORD); virtual;
+   Procedure   FreeThread; virtual;
+   Procedure   InitProt;   virtual;
+   Procedure   InitCode;   virtual;
+   function    module_start(argc:size_t;argp:PPointer):Integer; virtual;
+   function    GetCodeFrame:TMemChunk; virtual;
+   function    GetEntryPoint:Pointer; virtual;
+   Function    GetModuleInfo:TKernelModuleInfo; virtual;
+   Function    get_proc(nid:QWORD):Pointer;
+   Function    get_proc_by_name(const name:RawByteString):Pointer;
  end;
 
  TOnElfLoadCb=function(Const name:RawByteString):TElf_node;
@@ -800,6 +804,11 @@ begin
  SetLength(aNeed,0);
  SetLength(aMods,0);
  SetLength(aLibs,0);
+end;
+
+Constructor TElf_node.Create;
+begin
+ FStatic:=True;
 end;
 
 destructor TElf_node.Destroy;

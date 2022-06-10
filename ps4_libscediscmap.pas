@@ -29,6 +29,14 @@ begin
  Result:=0;
 end;
 
+function ps4_7C980FFB0AA27E7A(param1:PChar;param2,param3:Int64;param4,param5,param6:PInt64):Integer; SysV_ABI_CDecl;
+begin
+ param4^:=0;
+ param5^:=0;
+ param6^:=0;
+ Result:=0;
+end;
+
 function Load_libSceDiscMap(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -39,6 +47,7 @@ begin
  lib:=Result._add_lib('libSceDiscMap');
  lib^.set_proc($95B40AAAC11186D1,@ps4_sceDiscMapIsRequestOnHDD);
  lib^.set_proc($8A828CAEE7EDD5E9,@ps4_8A828CAEE7EDD5E9);
+ lib^.set_proc($7C980FFB0AA27E7A,@ps4_7C980FFB0AA27E7A);
 end;
 
 initialization

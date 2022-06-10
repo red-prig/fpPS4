@@ -324,6 +324,7 @@ end;
 function on_ps4_run_entry(arg:Pointer):Pointer; SysV_ABI_CDecl;
 begin
  Result:=nil;
+ ps4_app.InitThread(1);
  ps4_app.InitCode;
  Telf_file(ps4_app.prog).mapCodeEntry;
 end;
