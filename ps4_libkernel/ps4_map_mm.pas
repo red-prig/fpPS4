@@ -1097,6 +1097,7 @@ begin
 
  if _TryGetMapBlockByAddr(addr,_pblock) then
  begin
+  Result:=True;
   Case _pblock^.bType of
    BT_DIRECT_BIG,
    BT_PHYSIC_BIG:
