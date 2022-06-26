@@ -16,8 +16,7 @@ uses
   vBuffer,
   vImage,
   vImageManager,
-  vCmdBuffer,
-  vRender;
+  vCmdBuffer;
 
 type
  TFlipCfg=packed object
@@ -47,9 +46,6 @@ type
 
   FSet:TvDescriptorSet;
 
-  //cmdfence:TvFence; //
-  //cmdbuf:TVkCommandBuffer; //
-
   cmdbuf:TvCustomCmdBuffer;
 
   Extent:TVkExtent3D;
@@ -67,9 +63,6 @@ type
   HostBuf:TvBuffer; //
 
   Cursors:array[0..SCE_VIDEO_OUT_CURSOR_NUM_MAX-1] of TvFlipBufferCursor;
-
-  //ur:TURDevcImage2D;
-  //ur:TvImage2;
 
   Procedure Init(Flip:TvFlip);
   Procedure Free(Flip:TvFlip);
@@ -90,7 +83,7 @@ type
 
  TvFlip=class
   FSurface:TVSurface;
-  FSwapChain:TSwapChain;
+  FSwapChain:TvSwapChain;
   FSetLayout:TvSetLayout;
   FLayout:TvPipelineLayout;
   FPipelineFlip:TvComputePipeline;
@@ -152,7 +145,6 @@ end;
 Constructor TvFlip.Create(Handle:THandle);
 var
  i:Byte;
- //P1,P2,P3:TvPointer;
 begin
  InitVulkan;
 
@@ -228,15 +220,6 @@ begin
  begin
   cmdbuf:=TvCustomCmdBuffer.Create(Flip.FCmdPool,FlipQueue);
  end;
-
- {if (cmdbuf=VK_NULL_HANDLE) then
- begin
-  cmdbuf:=Flip.FCmdPool.Alloc;
- end;
- if (cmdfence=nil) then
- begin
-  cmdfence:=TvFence.Create(true);
- end;}
 end;
 
 Procedure TvFlipBuffer.Free(Flip:TvFlip);
@@ -247,14 +230,7 @@ begin
  FreeAndNil(HostBuf);
 
  FreeAndNil(cmdbuf);
- {
- FreeAndNil(cmdfence);
- if (cmdbuf<>VK_NULL_HANDLE) then
- begin
-  Flip.FCmdPool.Free(cmdbuf);
-  cmdbuf:=VK_NULL_HANDLE;
- end;
- }
+
  MemManager.Free(DevcMem);
  DevcMem:=Default(TvPointer);
  Cursors[0].Free;
@@ -265,8 +241,6 @@ function TvFlipBuffer.IsPrepare:Boolean;
 begin
  Result:=False;
  if (FSet=nil) then Exit;
- //if (cmdfence=nil) then Exit;
- //if (cmdbuf=VK_NULL_HANDLE) then Exit;
  if (cmdbuf=nil) then Exit;
  if (DstImgNORM=nil) then Exit;
  if (ImgViewDst=nil) then Exit;
@@ -424,7 +398,6 @@ end;
 Procedure TvFlip.SetImageSize(width,height:DWORD);
 var
  buf:PvFlipBuffer;
- //mt:TVkUInt32;
  memr:TVkMemoryRequirements;
 begin
  buf:=@FBuffers[FcurrentBuffer];
@@ -509,25 +482,10 @@ const
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
 var
- //r:TURDevcImage2D;
- //r:TvImage2;
  hbuf:TvPointer;
  buf:PvFlipBuffer;
 begin
  buf:=@FBuffers[FcurrentBuffer];
-
- {
- r:=FindImage(nil,Addr,cformat);
- //r:=FindUnionImage2D(Addr);
- if (r<>nil) then
- begin
-  FreeAndNil(buf^.HostBuf);
-  buf^.ur:=r;
- end else
- begin
-  buf^.ur:=nil;
- end;
- }
 
  hbuf:=Default(TvPointer);
  if not TryGetHostPointerByAddr(addr,hbuf) then Exit;
@@ -589,14 +547,14 @@ procedure TvFlip.recreateSwapChain;
 begin
  Device.WaitIdle;
  FreeAndNil(FSwapChain);
- FSwapChain:=TSwapChain.Create(FSurface,0{1},ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+ FSwapChain:=TvSwapChain.Create(FSurface,0{1},ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 end;
 
 Procedure TvFlip.FixCurrentFrame;
 begin
  if (FSwapChain=nil) then Exit;
- if (Length(FSwapChain.FImage)=0) then Exit;
- FcurrentFrame:=FcurrentFrame mod Length(FSwapChain.FImage);
+ if (Length(FSwapChain.FImages)=0) then Exit;
+ FcurrentFrame:=FcurrentFrame mod Length(FSwapChain.FImages);
 end;
 
 function TvFlip.IsComplite(currentBuffer:Byte):Boolean;
@@ -636,7 +594,7 @@ Procedure TvFlip.Flip;
 var
  r:TVkResult;
  imageIndex:TVkUInt32;
- SwapImage:TVkImage;
+ SwapImage:TvSwapChainImage;
 
  imageAvailableSemaphore:TvSemaphore;
  renderFinishedSemaphore:TvSemaphore;
@@ -652,7 +610,7 @@ var
 
  prInfo:TVkPresentInfoKHR;
 
- //img_reg:TVkImageCopy;
+ img_reg:TVkImageCopy;
 
  ur:TvImage2;
 begin
@@ -698,7 +656,7 @@ begin
     end;
   end;
  until false;
- SwapImage:=FSwapChain.FImage[imageIndex];
+ SwapImage:=FSwapChain.FImages[imageIndex];
 
  //Writeln('>Flip.Fence.Wait');
  if (buf^.cmdbuf.ret=0) then
@@ -729,19 +687,19 @@ begin
 
   FCurSet.BindSTI(1,0,buf^.ImgViewDst.FHandle,VK_IMAGE_LAYOUT_GENERAL);
 
-  buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
+  buf^.DstImgNORM.PushBarrier(buf^.cmdbuf.cmdbuf,
+                              SubresColor,
+                              ord(VK_ACCESS_SHADER_WRITE_BIT),
+                              VK_IMAGE_LAYOUT_GENERAL,
+                              ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+
+  if (buf^.DstImgSRGB<>nil) then
+  begin
+   buf^.DstImgSRGB.PushBarrier(buf^.cmdbuf.cmdbuf,
                                SubresColor,
                                ord(VK_ACCESS_SHADER_WRITE_BIT),
                                VK_IMAGE_LAYOUT_GENERAL,
                                ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
-
-  if (buf^.DstImgSRGB<>nil) then
-  begin
-   buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
-                                SubresColor,
-                                ord(VK_ACCESS_SHADER_WRITE_BIT),
-                                VK_IMAGE_LAYOUT_GENERAL,
-                                ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
   end;
 
   buf^.cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FPipelineFlip.FHandle);
@@ -765,61 +723,28 @@ begin
  end else
  begin
 
-  buf^.cmdbuf.SetImageBarrier(ur.FHandle,SubresColor,
-                              ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
-                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
+  ur.PushBarrier(buf^.cmdbuf,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
-  buf^.cmdbuf.PushImageBarrier(ur.FHandle,SubresColor,
-                               ord(VK_ACCESS_TRANSFER_READ_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
+  begin
+   buf^.DstImgSRGB.PushBarrier(buf^.cmdbuf.cmdbuf,
+                               SubresColor,
+                               ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
-  begin
-   buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
-                                SubresColor,
-                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
   end else
   begin
-   buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
-                                SubresColor,
-                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+   buf^.DstImgNORM.PushBarrier(buf^.cmdbuf.cmdbuf,
+                               SubresColor,
+                               ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
   end;
 
-  imgBlitRegion:=Default(TVkImageBlit);
-  imgBlitRegion.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
-  imgBlitRegion.srcSubresource.layerCount:=1;
-  imgBlitRegion.dstSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
-  imgBlitRegion.dstSubresource.layerCount:=1;
-  imgBlitRegion.srcOffsets[1].x:=ur.key.params.extend.width;
-  imgBlitRegion.srcOffsets[1].y:=ur.key.params.extend.height;
-  imgBlitRegion.srcOffsets[1].z:=1;
-  imgBlitRegion.dstOffsets[1].x:=buf^.DstImgNORM.FExtent.width;
-  imgBlitRegion.dstOffsets[1].y:=buf^.DstImgNORM.FExtent.height;
-  imgBlitRegion.dstOffsets[1].z:=1;
 
-  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
-  begin
-   vkCmdBlitImage(
-          buf^.cmdbuf.cmdbuf,
-          ur.FHandle             ,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-          buf^.DstImgSRGB.FHandle,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-          1,@imgBlitRegion,VK_FILTER_LINEAR);
-  end else
-  begin
-   vkCmdBlitImage(
-          buf^.cmdbuf.cmdbuf,
-          ur.FHandle             ,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-          buf^.DstImgNORM.FHandle,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-          1,@imgBlitRegion,VK_FILTER_LINEAR);
-  end;
-
-  {
   img_reg:=Default(TVkImageCopy);
   img_reg.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
   img_reg.srcSubresource.layerCount:=1;
@@ -831,7 +756,7 @@ begin
    ur.key.params.extend.height,
    1);
 
-  if (buf^.DstImgSRGB<>nil) then
+  if (buf^.DstImgSRGB<>nil) and (ur.key.cformat=VK_FORMAT_R8G8B8A8_SRGB) then
   begin
 
    vkCmdCopyImage(buf^.cmdbuf.cmdbuf,
@@ -852,7 +777,6 @@ begin
     1,@img_reg);
 
   end;
-  }
 
  end;
 
@@ -888,18 +812,18 @@ begin
 
     if (buf^.DstImgSRGB<>nil) then
     begin
-     buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
-                                  SubresColor,
-                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
-                                  VK_IMAGE_LAYOUT_GENERAL,
-                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+     buf^.DstImgSRGB.PushBarrier(buf^.cmdbuf.cmdbuf,
+                                 SubresColor,
+                                 ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                 VK_IMAGE_LAYOUT_GENERAL,
+                                 ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
     end else
     begin
-     buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
-                                  SubresColor,
-                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
-                                  VK_IMAGE_LAYOUT_GENERAL,
-                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+     buf^.DstImgNORM.PushBarrier(buf^.cmdbuf.cmdbuf,
+                                 SubresColor,
+                                 ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                 VK_IMAGE_LAYOUT_GENERAL,
+                                 ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
     end;
 
     buf^.cmdbuf.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -944,18 +868,18 @@ begin
 
     if (buf^.DstImgSRGB<>nil) then
     begin
-     buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
-                                  SubresColor,
-                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
-                                  VK_IMAGE_LAYOUT_GENERAL,
-                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+     buf^.DstImgSRGB.PushBarrier(buf^.cmdbuf.cmdbuf,
+                                 SubresColor,
+                                 ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                 VK_IMAGE_LAYOUT_GENERAL,
+                                 ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
     end else
     begin
-     buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
-                                  SubresColor,
-                                  ord(VK_ACCESS_SHADER_WRITE_BIT),
-                                  VK_IMAGE_LAYOUT_GENERAL,
-                                  ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
+     buf^.DstImgNORM.PushBarrier(buf^.cmdbuf.cmdbuf,
+                                 SubresColor,
+                                 ord(VK_ACCESS_SHADER_WRITE_BIT),
+                                 VK_IMAGE_LAYOUT_GENERAL,
+                                 ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT));
     end;
 
     buf^.cmdbuf.PushConstant(VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -982,25 +906,25 @@ begin
 
  if (buf^.DstImgSRGB<>nil) then
  begin
-  buf^.cmdbuf.PushImageBarrier(buf^.DstImgSRGB.FHandle,
-                               SubresColor,
-                               ord(VK_ACCESS_TRANSFER_READ_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  buf^.DstImgSRGB.PushBarrier(buf^.cmdbuf.cmdbuf,
+                              SubresColor,
+                              ord(VK_ACCESS_TRANSFER_READ_BIT),
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
  end else
  begin
-  buf^.cmdbuf.PushImageBarrier(buf^.DstImgNORM.FHandle,
-                               SubresColor,
-                               ord(VK_ACCESS_TRANSFER_READ_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  buf^.DstImgNORM.PushBarrier(buf^.cmdbuf.cmdbuf,
+                              SubresColor,
+                              ord(VK_ACCESS_TRANSFER_READ_BIT),
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
  end;
 
- buf^.cmdbuf.PushImageBarrier(SwapImage,
-                              SubresColor,
-                              ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                              ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ SwapImage.PushBarrier(buf^.cmdbuf.cmdbuf,
+                       SubresColor,
+                       ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  imgBlitRegion:=Default(TVkImageBlit);
  imgBlitRegion.srcSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1019,23 +943,23 @@ begin
   vkCmdBlitImage(
          buf^.cmdbuf.cmdbuf,
          buf^.DstImgSRGB.FHandle,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-         SwapImage              ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+         SwapImage.FHandle      ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
          1,@imgBlitRegion,VK_FILTER_LINEAR);
  end else
  begin
   vkCmdBlitImage(
          buf^.cmdbuf.cmdbuf,
          buf^.DstImgNORM.FHandle,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-         SwapImage              ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+         SwapImage.FHandle      ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
          1,@imgBlitRegion,VK_FILTER_LINEAR);
  end;
 
 
- buf^.cmdbuf.PushImageBarrier(SwapImage,
-                              SubresColor,
-                              ord(VK_ACCESS_NONE_KHR),
-                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                              ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
+ SwapImage.PushBarrier(buf^.cmdbuf.cmdbuf,
+                       SubresColor,
+                       ord(VK_ACCESS_NONE_KHR),
+                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                       ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
 
  buf^.cmdbuf.EndCmdBuffer;
 
@@ -1076,7 +1000,6 @@ begin
 
  FcurrentFrame:=FcurrentFrame+1;
  FixCurrentFrame;
- //vkQueueWaitIdle(FlipQueue);
 end;
 
 

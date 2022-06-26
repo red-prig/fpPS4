@@ -21,7 +21,6 @@ type
   Foffset:TVkDeviceSize; //offset inside buffer
   //
   FRefs:ptruint;
-  //FDeps:TObjectSetLock;
   Procedure Acquire(Sender:TObject);
   procedure Release(Sender:TObject);
  end;
@@ -42,8 +41,8 @@ type
   function c(a,b:PPointer):Integer; static;
  end;
 
- _TvHostBufferPool=specialize T23treeSet<PPointer,TvAddrCompare>;
- TvHostBufferPool=object(_TvHostBufferPool)
+ _TvHostBufferSet=specialize T23treeSet<PPointer,TvAddrCompare>;
+ TvHostBufferSet=object(_TvHostBufferSet)
   lock:TRWLock;
   Procedure Init;
   Procedure Lock_wr;
@@ -51,19 +50,19 @@ type
  end;
 
 var
- FHostBufferPool:TvHostBufferPool;
+ FHostBufferSet:TvHostBufferSet;
 
-Procedure TvHostBufferPool.Init;
+Procedure TvHostBufferSet.Init;
 begin
  rwlock_init(lock);
 end;
 
-Procedure TvHostBufferPool.Lock_wr;
+Procedure TvHostBufferSet.Lock_wr;
 begin
  rwlock_wrlock(lock);
 end;
 
-Procedure TvHostBufferPool.Unlock;
+Procedure TvHostBufferSet.Unlock;
 begin
  rwlock_unlock(lock);
 end;
@@ -75,10 +74,10 @@ end;
 
 function _Find(Addr:Pointer):TvHostBuffer;
 var
- i:TvHostBufferPool.Iterator;
+ i:TvHostBufferSet.Iterator;
 begin
  Result:=nil;
- i:=FHostBufferPool.find(@Addr);
+ i:=FHostBufferSet.find(@Addr);
  if (i.Item<>nil) then
  begin
   Result:=TvHostBuffer(ptruint(i.Item^)-ptruint(@TvHostBuffer(nil).FAddr));
@@ -108,7 +107,6 @@ begin
   FreeAndNil(t);
 
   t:=TvHostBuffer.Create(Size,usage,@buf_ext);
-  //t.FDeps.Init;
  end;
 
  t.Fhost:=host;
@@ -129,7 +127,7 @@ label
 begin
  Result:=nil;
 
- FHostBufferPool.Lock_wr;
+ FHostBufferSet.Lock_wr;
 
  t:=_Find(Addr);
 
@@ -139,21 +137,23 @@ begin
      ((t.FUsage and usage)<>usage) then
   begin
    usage:=usage or t.FUsage;
+   FHostBufferSet.delete(@t.FAddr);
+   t.Release(nil);
+   t:=nil;
   end;
-  FHostBufferPool.delete(@t.FAddr);
-  t.Release(nil);
-  t:=nil;
  end;
 
  if (t=nil) then
  begin
+  //Writeln('NewBuf:',HexStr(Addr));
   host:=Default(TvPointer);
   if not TryGetHostPointerByAddr(addr,host) then
   begin
    Goto _exit;
   end;
   t:=_New(host,Size,usage);
-  FHostBufferPool.Insert(@t.FAddr);
+  t.FAddr:=addr;
+  FHostBufferSet.Insert(@t.FAddr);
   t.Acquire(nil);
  end;
 
@@ -166,25 +166,17 @@ begin
  end;
 
  _exit:
- FHostBufferPool.Unlock;
+ FHostBufferSet.Unlock;
  Result:=t;
 end;
 
 Procedure TvHostBuffer.Acquire(Sender:TObject);
 begin
  System.InterlockedIncrement(Pointer(FRefs));
- //if (Sender<>nil) then
- //begin
- // FDeps.Insert(Sender);
- //end;
 end;
 
 procedure TvHostBuffer.Release(Sender:TObject);
 begin
- //if (Sender<>nil) then
- //begin
- // FDeps.delete(Sender);
- //end;
  if System.InterlockedDecrement(Pointer(FRefs))=nil then
  begin
   Free;
@@ -192,7 +184,7 @@ begin
 end;
 
 initialization
- FHostBufferPool.Init;
+ FHostBufferSet.Init;
 
 end.
 

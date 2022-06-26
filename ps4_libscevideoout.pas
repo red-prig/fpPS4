@@ -1122,8 +1122,8 @@ begin
   post_event_vblank(flipArg);
  end else
  begin
-  post_event_vblank(flipArg);
   post_event_flip(flipArg);
+  post_event_vblank(flipArg);
  end;
 
  Case _type of
@@ -1377,8 +1377,7 @@ begin
  _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- hz:=H.FlipRate;
- if (hz=0) then hz:=60;
+ hz:=60; //59.94
 
  time:=(1000000 div hz);
  elap:=SwTimePassedUnits(H.VblankStatus.FTsc);

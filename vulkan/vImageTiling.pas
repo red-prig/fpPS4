@@ -51,11 +51,10 @@ begin
        image.key.params.extend.depth*
        getFormatSize(image.key.cformat);
 
- cmd.PushImageBarrier(image.FHandle,
-                      image.GetSubresRange,
-                      ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  buf:=FetchHostBuffer(cmd,
                       image.key.Addr,
@@ -110,17 +109,15 @@ begin
 
  Assert(buf<>nil,'FetchHostImage');
 
- cmd.PushImageBarrier(image.FHandle,
-                      image.GetSubresRange,
-                      ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
- cmd.PushImageBarrier(buf.FHandle,
-                      image.GetSubresRange,
-                      ord(VK_ACCESS_TRANSFER_READ_BIT),
-                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ buf.PushBarrier(cmd,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
 
  ImageCopy:=Default(TVkImageCopy);
@@ -175,11 +172,10 @@ begin
        image.key.params.extend.depth*
        getFormatSize(image.key.cformat);
 
- cmd.PushImageBarrier(image.FHandle,
-                      image.GetSubresRange,
-                      ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  vkBufferMemoryBarrier(cmd.cmdbuf,
                        buf.FHandle,
@@ -280,6 +276,8 @@ begin
  Case image.key.cformat of
   VK_FORMAT_BC1_RGB_UNORM_BLOCK,
   VK_FORMAT_BC1_RGB_SRGB_BLOCK,
+  VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
+  VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
   VK_FORMAT_BC3_UNORM_BLOCK,
   VK_FORMAT_BC3_SRGB_BLOCK:
    begin

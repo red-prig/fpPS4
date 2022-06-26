@@ -917,18 +917,18 @@ begin
  Result:=False;
  if (FHandle<>VK_NULL_HANDLE) then Exit(true);
 
- if ({key.}FPipeline=nil) then Exit;
+ if (FPipeline=nil) then Exit;
  if (FmaxGroup=0) then Exit;
 
- if (not {key.}FPipeline.Compile) then Exit;
+ if (not FPipeline.Compile) then Exit;
  FSizes:=Default(AvDescriptorPoolSize);
 
  FmaxSets:=0;
  FCounts:=Default(TvCountsGroup);
 
- if Length({key.}FPipeline.key.FLayouts)<>0 then
-  For i:=0 to High({key.}FPipeline.key.FLayouts) do
-   With {key.}FPipeline.key.FLayouts[i] do
+ if Length(FPipeline.key.FLayouts)<>0 then
+  For i:=0 to High(FPipeline.key.FLayouts) do
+   With FPipeline.key.FLayouts[i] do
     if (Length(key.FBinds)<>0) then
     begin
      Inc(FmaxSets,FmaxGroup);
@@ -963,9 +963,6 @@ begin
   Exit;
  end;
 
- //FGroups:=Default(AvDescriptorGroup);
- //SetLength(FGroups,FmaxGroup);
-
  Result:=True;
 end;
 
@@ -996,39 +993,6 @@ begin
 
  Result.FHandle:=FResult;
 end;
-
-{
-function TvSetsPool2.Alloc:TvDescriptorGroup;
-var
- i,s:Integer;
-begin
- Result:=nil;
- if Length(FGroups)<>0 then
-  For i:=0 to High(FGroups) do
-  begin
-   if (FGroups[i]=nil) then
-   begin
-    Result:=TvDescriptorGroup.Create;
-    Result.lock:=1;
-    SetLength(Result.FSets,Length(key.FPipeline.key.FLayouts));
-
-    If (Length(Result.FSets)<>0) then
-     For s:=0 to High(Result.FSets) do
-      begin
-       Result.FSets[s]:=Alloc(key.FPipeline.key.FLayouts[s]);
-      end;
-
-    FGroups[i]:=Result;
-   end else
-   if (FGroups[i].lock=0) then
-   begin
-    Result:=FGroups[i];
-    Result.lock:=1;
-    Exit;
-   end;
-  end;
-end;
-}
 
 function TvSetsPool2.IsFull:Boolean;
 begin

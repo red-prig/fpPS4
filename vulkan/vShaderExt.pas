@@ -95,9 +95,9 @@ type
 
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
 
- TvShaderGroup=class
+ PvShadersKey=^TvShadersKey;
+ TvShadersKey=object
   FShaders:AvShaderStage;
-  FLayout:TvPipelineLayout;
   Procedure SetLSShader(Shader:TvShaderExt);
   Procedure SetHSShader(Shader:TvShaderExt);
   Procedure SetESShader(Shader:TvShaderExt);
@@ -105,9 +105,15 @@ type
   Procedure SetVSShader(Shader:TvShaderExt);
   Procedure SetPSShader(Shader:TvShaderExt);
   Procedure SetCSShader(Shader:TvShaderExt);
+  procedure ExportLayout(var A:AvSetLayout;var B:AvPushConstantRange);
+  Procedure ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
+ end;
+
+ TvShaderGroup=class
+  FKey:TvShadersKey;
+  FLayout:TvPipelineLayout;
   Procedure Clear;
   Function  Compile:Boolean;
-  Procedure ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
  end;
 
  TAttrBindExt=packed record
@@ -739,73 +745,61 @@ end;
 
 //
 
-Procedure TvShaderGroup.SetLSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetLSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_VERTEX_BIT) then
   FShaders[vShaderStageLs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetHSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetHSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) then
   FShaders[vShaderStageHs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetESShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetESShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) then
   FShaders[vShaderStageEs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetGSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetGSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_GEOMETRY_BIT) then
   FShaders[vShaderStageGs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetVSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetVSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_VERTEX_BIT) then
   FShaders[vShaderStageVs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetPSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetPSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_FRAGMENT_BIT) then
   FShaders[vShaderStagePs]:=Shader;
 end;
 
-Procedure TvShaderGroup.SetCSShader(Shader:TvShaderExt);
+Procedure TvShadersKey.SetCSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_COMPUTE_BIT) then
   FShaders[vShaderStageCs]:=Shader;
 end;
 
-Procedure TvShaderGroup.Clear;
-begin
- FShaders:=Default(AvShaderStage);
- FLayout:=nil;;
-end;
-
-Function TvShaderGroup.Compile:Boolean;
+procedure TvShadersKey.ExportLayout(var A:AvSetLayout;
+                                    var B:AvPushConstantRange);
 var
  i:TvShaderStage;
  c,p:Integer;
- A:AvSetLayout;
- B:AvPushConstantRange;
 begin
- if (FLayout<>nil) then Exit(True);
-
- A:=Default(AvSetLayout);
- B:=Default(AvPushConstantRange);
-
  c:=0;
  p:=0;
 
@@ -832,23 +826,47 @@ begin
 
   end;
  end;
-
- FLayout:=FetchPipelineLayout(A,B);
 end;
 
-Procedure TvShaderGroup.ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
+Procedure TvShadersKey.ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
 var
-  i:TvShaderStage;
+ i:TvShaderStage;
+ c:Integer;
 begin
+ c:=0;
  For i:=Low(TvShaderStage) to High(TvShaderStage) do
   if (FShaders[i]<>nil) then
   begin
-   Stages[stageCount^].sType :=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-   Stages[stageCount^].stage :=FShaders[i].FStage;
-   Stages[stageCount^].module:=FShaders[i].FHandle;
-   Stages[stageCount^].pName :=PChar(FShaders[i].FEntry);
-   Inc(stageCount^);
+   Stages[c].sType :=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+   Stages[c].stage :=FShaders[i].FStage;
+   Stages[c].module:=FShaders[i].FHandle;
+   Stages[c].pName :=PChar(FShaders[i].FEntry);
+   Inc(c);
   end;
+ stageCount^:=c;
+end;
+
+Procedure TvShaderGroup.Clear;
+begin
+ FKey:=Default(TvShadersKey);
+ FLayout:=nil;
+end;
+
+Function TvShaderGroup.Compile:Boolean;
+var
+ A:AvSetLayout;
+ B:AvPushConstantRange;
+begin
+ Result:=True;
+ if (FLayout<>nil) then Exit;
+
+ A:=Default(AvSetLayout);
+ B:=Default(AvPushConstantRange);
+
+ FKey.ExportLayout(A,B);
+
+ FLayout:=FetchPipelineLayout(A,B);
+ Result:=(FLayout<>nil);
 end;
 
 procedure TvBufOffsetChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);

@@ -40,6 +40,8 @@ uses
   vSampler,
   vSamplerManager,
 
+  vRenderPassManager,
+
   si_ci_vi_merged_offset,
   si_ci_vi_merged_enum,
   si_ci_vi_merged_registers
@@ -439,50 +441,6 @@ begin
  end;
 end;
 
-{
-procedure copy_submit_addr(node:PvSubmitInfo;dcbAddr,ccbAddr:Pointer);
-var
- n:DWORD;
- size,dcbSize,ccbSize:DWORD;
-begin
- dcbSize:=0;
- ccbSize:=0;
-
- n:=0;
- While (n<node^.count) do
- begin
-
-  if (node^.dcbGpuAddrs<>nil) and (node^.dcbSizesInBytes<>nil) then
-  begin
-   if (node^.dcbGpuAddrs[n]<>nil) and (node^.dcbSizesInBytes[n]<>0) then
-   begin
-    size:=node^.dcbSizesInBytes[n];
-    if (size<>0) then
-    begin
-     Move(node^.dcbGpuAddrs[n]^,PByte(dcbAddr)[dcbSize],size);
-     dcbSize:=dcbSize+size;
-    end;
-   end;
-  end;
-
-  if (node^.ccbGpuAddrs<>nil) and (node^.ccbSizesInBytes<>nil) then
-  begin
-   if (node^.ccbGpuAddrs[n]<>nil) and (node^.ccbSizesInBytes[n]<>0) then
-   begin
-    size:=node^.ccbSizesInBytes[n];
-    if (size<>0) then
-    begin
-     Move(node^.ccbGpuAddrs[n]^,PByte(ccbAddr)[ccbSize],size);
-     ccbSize:=ccbSize+size;
-    end;
-   end;
-  end;
-
-  Inc(n);
- end;
-end;
-}
-
 function vSubmitCommandBuffers(
            Submit:PvSubmitInfo;
            Flip:PqcFlipInfo):Integer;
@@ -570,7 +528,7 @@ end;
 procedure vSubmitDone;
 begin
  //Sleep(100);
- //Device.WaitIdle;
+ Device.WaitIdle;
 end;
 
 
@@ -753,6 +711,7 @@ begin
          begin
           GFXRing.AllocCmdBuffer;
           GFXRing.CmdBuffer.dmaData(adrSrc,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
+          //Move(adrSrc^,adrDst^,Body^.Flags2.byteCount);
          end;
         CP_DMA_ENGINE_PFP:
          begin
@@ -788,6 +747,7 @@ begin
          begin
           GFXRing.AllocCmdBuffer;
           GFXRing.CmdBuffer.dmaData(Body^.srcAddrLo,adrDst,Body^.Flags2.byteCount,Boolean(Body^.Flags1.cpSync));
+          //FillDWORD(adrDst^,Body^.Flags2.byteCount div 4,Body^.srcAddrLo);
          end;
         CP_DMA_ENGINE_PFP:
          begin
@@ -834,6 +794,7 @@ begin
         begin
          GFXRing.AllocCmdBuffer;
          GFXRing.CmdBuffer.dmaData(@Body^.DATA,adr,count*SizeOf(DWORD),Boolean(Body^.CONTROL.wrConfirm));
+         //Move(Body^.DATA,adr^,count*SizeOf(DWORD));
         end;
        WRITE_DATA_ENGINE_PFP:
         begin
@@ -1067,13 +1028,11 @@ begin
  GPU_REGS.Clear;
 end;
 
-procedure onSetCommonReg(reg:WORD;value:DWORD);
+procedure SetContextReg(reg:WORD;value:DWORD);
 begin
  GFXRing.LastSetReg:=reg;
 
  Case reg of
-
-  //onSetContextReg
 
   mmCB_COLOR0_BASE..mmCB_COLOR7_DCC_BASE:
   begin
@@ -1201,8 +1160,17 @@ begin
 
   mmPA_SU_POLY_OFFSET_DB_FMT_CNTL:DWORD(GPU_REGS.PA_SU_POLY_OFFSET_DB_FMT_CNTL):=value;
 
+  {$ifdef ww}else
+   Writeln('SetContextReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
+ end;
 
-  //SetShReg
+end;
+
+procedure SetShReg(reg:WORD;value:DWORD);
+begin
+ GFXRing.LastSetReg:=reg;
+
+ Case reg of
 
   mmSPI_SHADER_PGM_LO_PS   :GPU_REGS.SPI.PS.LO:=value;
   mmSPI_SHADER_PGM_HI_PS   :GPU_REGS.SPI.PS.HI:=value;
@@ -1245,7 +1213,16 @@ begin
   mmCOMPUTE_STATIC_THREAD_MGMT_SE1:DWORD(GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE1):=value;
   mmCOMPUTE_RESOURCE_LIMITS       :DWORD(GPU_REGS.SPI.CS.RESOURCE_LIMITS):=value;
 
-  //SetUConfigReg
+  {$ifdef ww}else
+   Writeln('onSetShReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
+ end;
+end;
+
+procedure SetUContextReg(reg:WORD;value:DWORD);
+begin
+ GFXRing.LastSetReg:=reg;
+
+ Case reg of
 
   mmVGT_PRIMITIVE_TYPE:DWORD(GPU_REGS.VGT_PRIMITIVE_TYPE):=value;
   mmVGT_INDEX_TYPE    :DWORD(GPU_REGS.VGT_INDEX_TYPE    ):=value;
@@ -1253,8 +1230,9 @@ begin
   mmGRBM_GFX_INDEX    :DWORD(GPU_REGS.GRBM_GFX_INDEX    ):=value;
 
   {$ifdef ww}else
-   Writeln('onSetCommonReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
+   Writeln('SetUContextReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
  end;
+
 end;
 
 const
@@ -1278,7 +1256,7 @@ begin
 
   Inc(GFXRing.SetCxCount);
 
-  onSetCommonReg(r,v);
+  SetContextReg(r,v);
 
  end;
 end;
@@ -1303,7 +1281,7 @@ begin
 
   Inc(GFXRing.SetShCount);
 
-  onSetCommonReg(r,v);
+  SetShReg(r,v);
 
  end;
 end;
@@ -1336,7 +1314,7 @@ begin
 
   //{$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
 
-  onSetCommonReg(r,v);
+  SetUContextReg(r,v);
 
  end;
 
@@ -1376,8 +1354,6 @@ begin
 end;
 
 var
- FShaderGroup:TvShaderGroup;
-
  LastSetShCount:ptruint;
  LastSetCxCount:ptruint;
 
@@ -1417,6 +1393,9 @@ var
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
 
+ FShadersKey:TvShadersKey;
+ FShaderGroup:TvShaderGroup;
+
  ctx_change:Boolean;
 
 begin
@@ -1430,6 +1409,7 @@ begin
  end;
 
  ctx_change:=(LastSetCxCount<>GFXRing.SetCxCount);
+ ctx_change:=True;
 
  LastSetShCount:=GFXRing.SetShCount;
  LastSetCxCount:=GFXRing.SetCxCount;
@@ -1456,7 +1436,6 @@ begin
 
   FRenderCmd.FRenderPass:=TvRenderPass.Create;
   FRenderCmd.FPipeline  :=TvGraphicsPipeline.Create;
-  /////FRenderCmd.FPipeline.FLayout:=TvPipelineLayout.Create;
   FRenderCmd.FPipeline.FRenderPass:=FRenderCmd.FRenderPass;
 
   FRenderCmd.FFramebuffer:=TvFramebuffer.Create;
@@ -1524,12 +1503,11 @@ begin
 
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_CLEAR);
 
-    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                                iv.GetSubresRange,
-                                GetColorAccessMask(RT_INFO.IMAGE_USAGE),
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                                ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+    ri.PushBarrier(GFXRing.CmdBuffer,
+                   GetColorAccessMask(RT_INFO.IMAGE_USAGE),
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
     FRenderCmd.FFramebuffer.AddImageView(iv);
 
@@ -1546,10 +1524,7 @@ begin
     //RT_INFO.blend.blendEnable:=0;
     FRenderCmd.FPipeline.AddBlend(RT_INFO.blend);
 
-    //if RT_INFO.FAST_CLEAR then
-    begin
-     FRenderCmd.AddClearColor(TVkClearValue(RT_INFO.CLEAR_COLOR));
-    end;
+    FRenderCmd.AddClearColor(TVkClearValue(RT_INFO.CLEAR_COLOR));
 
    end;
 
@@ -1582,11 +1557,10 @@ begin
 
    if not GPU_REGS.COMP_ENABLE then
    begin
-    GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                                iv.GetSubresRange,
-                                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+    ri.PushBarrier(GFXRing.CmdBuffer,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     range:=iv.GetSubresRange;
     clr2:=DB_INFO.CLEAR_VALUE.depthStencil;
@@ -1599,11 +1573,11 @@ begin
     Exit;
    end;
 
-   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               GetDepthStencilAccessMask(DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
-                               GetDepthStencilLayout    (DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
-                               DB_INFO.zorder_stage );
+   ri.PushBarrier(GFXRing.CmdBuffer,
+                  GetDepthStencilAccessMask(DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
+                  GetDepthStencilLayout    (DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE),
+                  DB_INFO.zorder_stage );
+
 
    FRenderCmd.FFramebuffer.AddImageView(iv);
 
@@ -1650,19 +1624,6 @@ begin
  FAttrBuilder:=Default(TvAttrBuilder);
  FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,@GPU_REGS.SPI.VS.USER_DATA);
 
- //if (FVSShader=nil) then
- //begin
- // FVSShader:=TvShaderExt.Create;
- // FVSShader.FDescSetId:=0;
- // FVSShader.LoadFromFile(ChangeFileExt(fdump_vs,'.spv'));
- //
- //
- // FAttrBuilder:=Default(TvAttrBuilder);
- //
- // FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,@GPU_REGS.SPI.VS.USER_DATA);
- //
- //end;
-
  if (Length(FAttrBuilder.FBindDescs)<>0) then
  begin
   With FRenderCmd.FPipeline.vertexInputInfo do
@@ -1678,25 +1639,12 @@ begin
  FPSShader:=FetchShader(vShaderStagePs,1,GPU_REGS);
  if (FPSShader=nil) then Exit;
 
- //if (FPSShader=nil) then
- //begin
- // FPSShader:=TvShaderExt.Create;
- // FPSShader.FDescSetId:=1;
- // FPSShader.LoadFromFile(ChangeFileExt(fdump_ps,'.spv'));
- //end;
+ FShadersKey:=Default(TvShadersKey);
+ FShadersKey.SetVSShader(FVSShader);
+ FShadersKey.SetPSShader(FPSShader);
 
- if (FShaderGroup=nil) then
- begin
-  FShaderGroup:=TvShaderGroup.Create;
- end;
-
-  FShaderGroup.Clear;
-
-  FShaderGroup.SetVSShader(FVSShader);
-  FShaderGroup.SetPSShader(FPSShader);
-
-  FShaderGroup.Compile;
- //end;
+ FShaderGroup:=FetchShaderGroup(@FShadersKey);
+ Assert(FShaderGroup<>nil);
 
  FRenderCmd.FPipeline.FShaderGroup:=FShaderGroup;
 
@@ -1726,65 +1674,14 @@ begin
 
    iv:=ri.FetchView(GFXRing.CmdBuffer,FView);
 
-   {
-
-   FCmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-   {//
-   range:=iv.GetSubresRange;
-   clr.float32[0]:=1;
-   clr.float32[1]:=1;
-   clr.float32[2]:=1;
-   clr.float32[3]:=1;
-
-   vkCmdClearColorImage(FCmdBuffer.cmdbuf,
-                        ri.FHandle,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        @clr,
-                        1,@range);
-   //}
-
-
-   //
-
-   buf:=FetchHostBuffer(FCmdBuffer,
-                        ri.key.Addr,
-                        ri.key.params.extend.width*ri.key.params.extend.height*4,
-                        ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-
-   BufferImageCopy:=Default(TVkBufferImageCopy);
-
-   BufferImageCopy.bufferOffset:=buf.Foffset;
-   BufferImageCopy.bufferRowLength:=0;
-   BufferImageCopy.bufferImageHeight:=0;
-   BufferImageCopy.imageSubresource:=ri.GetSubresLayer;
-   //BufferImageCopy.imageOffset:TVkOffset3D; //0
-   BufferImageCopy.imageExtent.Create(ri.key.params.extend.width,
-                                      ri.key.params.extend.height,
-                                      ri.key.params.extend.depth);
-
-   vkCmdCopyBufferToImage(FCmdBuffer.cmdbuf,
-                          buf.FHandle,
-                          ri.FHandle,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          1,
-                          @BufferImageCopy);
-
-   //
-
-   }
-
-   if ctx_change then
-   GFXRing.CmdBuffer.PushImageBarrier(ri.FHandle,
-                               iv.GetSubresRange,
-                               ord(VK_ACCESS_SHADER_READ_BIT),
-                               VK_IMAGE_LAYOUT_GENERAL,
-                               ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
-                               ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
+   //if not GFXRing.CmdBuffer.IsRenderPass then
+   begin
+    ri.PushBarrier(GFXRing.CmdBuffer,
+                   ord(VK_ACCESS_SHADER_READ_BIT),
+                   VK_IMAGE_LAYOUT_GENERAL,
+                   ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
+   end;
 
   end;
  end;
@@ -1913,7 +1810,6 @@ end;
 
 procedure UpdateGpuRegsInfoCompute;
 var
- FAttrBuilder:TvAttrBuilder;
  FUniformBuilder:TvUniformBuilder;
 
  fdump_cs:RawByteString;
@@ -1928,7 +1824,10 @@ var
 
  FCSShader:TvShaderExt;
 
- FComputePipeline:TvComputePipeline;
+ FShadersKey:TvShadersKey;
+ FShaderGroup:TvShaderGroup;
+
+ FComputePipeline:TvComputePipeline2;
 begin
 
  {$ifdef null_rt}Exit;{$endif}
@@ -1949,23 +1848,19 @@ begin
  FCSShader:=FetchShader(vShaderStageCs,0,GPU_REGS);
  if (FCSShader=nil) then Exit;
 
- if (FShaderGroup=nil) then
- begin
-  FShaderGroup:=TvShaderGroup.Create;
- end;
 
-  FShaderGroup.Clear;
-  FShaderGroup.SetCSShader(FCSShader);
-  FShaderGroup.Compile;
+ FShadersKey:=Default(TvShadersKey);
+ FShadersKey.SetCSShader(FCSShader);
 
+ FShaderGroup:=FetchShaderGroup(@FShadersKey);
+ Assert(FShaderGroup<>nil);
 
-  FComputePipeline:=TvComputePipeline.Create;
-  FComputePipeline.SetLayout(FShaderGroup.FLayout);
-  FComputePipeline.SetShader(FCSShader);
-  FComputePipeline.Compile;
+ FComputePipeline:=TvComputePipeline2.Create;
+ FComputePipeline.SetLayout(FShaderGroup.FLayout);
+ FComputePipeline.SetShader(FCSShader);
+ FComputePipeline.Compile;
 
- GFXRing.CmdBuffer.BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,FComputePipeline.FHandle);
- GFXRing.CmdBuffer.BindLayout(VK_PIPELINE_BIND_POINT_COMPUTE,FShaderGroup.FLayout);
+ GFXRing.CmdBuffer.BindCompute(FComputePipeline);
 
  if (FCSShader.FPushConst.size<>0) then
  begin
@@ -1990,38 +1885,6 @@ begin
   begin
 
    buf:=FetchHostBuffer(GFXRing.CmdBuffer,addr,size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-
-   {
-   if (bind=0) then
-   begin
-    Writeln(HexStr(PDWORD(addr)^,8));
-   end;
-   }
-
-   {
-   if (bind=1) then
-   begin
-    //FillDWORD(addr^,size div 4,$FFBBBBBB);
-    Writeln('CLEAR RT:',HexStr(addr));
-
-
-    vkBufferMemoryBarrier(FCmdBuffer.cmdbuf,
-                          buf.FHandle,
-                          ord(VK_ACCESS_NONE_KHR),
-                          ord(VK_ACCESS_SHADER_WRITE_BIT),
-                          0,size,
-                          ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-                          ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
-                          );
-
-   end;
-   }
-
-   //Writeln(PInteger(addr)[0]);
-   //Writeln(PByte(@PInteger(addr)[1])[0]);
-   //Writeln(PByte(@PInteger(addr)[1])[1]);
-   //Writeln(PByte(@PInteger(addr)[1])[2]);
-   //Writeln(PByte(@PInteger(addr)[1])[3]);
 
    o:=buf.Foffset;
 
@@ -2106,7 +1969,7 @@ end;
 
 procedure gfx_cp_parser(node:PvSubmitInfo);
 var
- n,i,s:DWORD;
+ n,i,s,t:DWORD;
  token:DWORD;
  P:PByte;
 
@@ -2253,9 +2116,9 @@ begin
      end;
    end;
 
-
-   P:=P+PM4_LENGTH_DW(token)*sizeof(DWORD);
-   i:=i+PM4_LENGTH_DW(token)*sizeof(DWORD);
+   t:=PM4_LENGTH_DW(token)*sizeof(DWORD);
+   P:=P+t;
+   i:=i+t;
   end;
   Inc(n);
  end;
@@ -2284,8 +2147,8 @@ begin
  if Result then
  begin
   CmdBuffer.ReleaseResource;
-  CmdBuffer.Free;
-  GPU_REGS.ClearDMA;
+  FreeAndNil(CmdBuffer);
+  //GPU_REGS.ClearDMA;
  end;
 end;
 

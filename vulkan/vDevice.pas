@@ -73,7 +73,7 @@ type
   pNext:PVkVoid;
  end;
 
- TvDeviceQueues=class
+ TvDeviceCreateInfo=class
   data:array of TSortQueueRec;
   exts:array of Pchar;
   pFeature:PVkVoid;
@@ -84,18 +84,20 @@ type
 
  TvDevice=class
   FHandle:TVkDevice;
-  FLock:Pointer;
-  Constructor Create(Queues:TvDeviceQueues);
+  FLock:System.TRTLCriticalSection;
+  Constructor Create(Queues:TvDeviceCreateInfo);
   Destructor  Destroy; override;
   function    WaitIdle:TVkResult;
  end;
 
  TvQueue=class
   FHandle:TVkQueue;
-  FLock:Pointer;
-  function Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
-  function WaitIdle:TVkResult;
-  function PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
+  FLock:System.TRTLCriticalSection;
+  Constructor Create;
+  Destructor  Destroy; override;
+  function    Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
+  function    WaitIdle:TVkResult;
+  function    PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
  end;
 
  TvCmdPool=class
@@ -994,7 +996,7 @@ begin
  Result:=Fcap.currentExtent;
 end;
 
-procedure TvDeviceQueues.add_queue(Index:TVkUInt32;Queue:PVkQueue);
+procedure TvDeviceCreateInfo.add_queue(Index:TVkUInt32;Queue:PVkQueue);
 var
  i,count:Integer;
  r:Boolean;
@@ -1024,7 +1026,7 @@ begin
  data[count].pQueue:=Queue;
 end;
 
-procedure TvDeviceQueues.add_ext(P:Pchar);
+procedure TvDeviceCreateInfo.add_ext(P:Pchar);
 var
  i:Integer;
 begin
@@ -1033,7 +1035,7 @@ begin
  exts[i]:=P;
 end;
 
-procedure TvDeviceQueues.add_feature(P:PVkVoid);
+procedure TvDeviceCreateInfo.add_feature(P:PVkVoid);
 begin
  PAbstractFeature(P)^.pNext:=pFeature;
  pFeature:=P;
@@ -1060,7 +1062,7 @@ begin
  if (max<1) then max:=1;
 end;
 
-Constructor TvDevice.Create(Queues:TvDeviceQueues);
+Constructor TvDevice.Create(Queues:TvDeviceCreateInfo);
 Var
  DeviceFeature:TVkPhysicalDeviceFeatures;
  SortIndex:TSortIndex;
@@ -1069,6 +1071,8 @@ Var
  r:TVkResult;
  i,p,w:Integer;
 begin
+ System.InitCriticalSection(FLock);
+
  DeviceFeature:=VulkanApp.FDeviceFeature;
  DeviceFeature.robustBufferAccess:=0;
 
@@ -1119,37 +1123,50 @@ end;
 
 Destructor TvDevice.Destroy;
 begin
+ System.DoneCriticalSection(FLock);
  vkDestroyDevice(FHandle,nil);
+ inherited;
 end;
 
 function TvDevice.WaitIdle:TVkResult;
 begin
- spin_lock(FLock);
+ System.EnterCriticalSection(FLock);
  Result:=vkDeviceWaitIdle(FHandle);
- spin_unlock(FLock);
+ System.LeaveCriticalSection(FLock);
 end;
 
 //
 
+Constructor TvQueue.Create;
+begin
+ System.InitCriticalSection(FLock);
+end;
+
+Destructor TvQueue.Destroy;
+begin
+ System.DoneCriticalSection(FLock);
+ inherited;
+end;
+
 function TvQueue.Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
 begin
- spin_lock(FLock);
+ System.EnterCriticalSection(FLock);
  Result:=vkQueueSubmit(FHandle,submitCount,pSubmits,fence);
- spin_unlock(FLock);
+ System.LeaveCriticalSection(FLock);
 end;
 
 function TvQueue.WaitIdle:TVkResult;
 begin
- spin_lock(FLock);
+ System.EnterCriticalSection(FLock);
  Result:=vkQueueWaitIdle(FHandle);
- spin_unlock(FLock);
+ System.LeaveCriticalSection(FLock);
 end;
 
 function TvQueue.PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
 begin
- spin_lock(FLock);
+ System.EnterCriticalSection(FLock);
  Result:=vkQueuePresentKHR(FHandle,pPresentInfo);
- spin_unlock(FLock);
+ System.LeaveCriticalSection(FLock);
 end;
 
 //
@@ -1497,7 +1514,7 @@ end;
 
 Procedure InitVulkan;
 var
- DeviceQueues:TvDeviceQueues;
+ DeviceInfo:TvDeviceCreateInfo;
  //ImgProp:TVkFormatProperties;
 
  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
@@ -1527,35 +1544,35 @@ begin
    raise Exception.Create('VK_EXT_external_memory_host not support!');
   end;
 
-  DeviceQueues:=TvDeviceQueues.Create;
+  DeviceInfo:=TvDeviceCreateInfo.Create;
 
   if (VulkanApp.FGFamilyCount>1) then
   begin
    FlipQueue  :=TvQueue.Create;
    RenderQueue:=TvQueue.Create;
-   DeviceQueues.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
-   DeviceQueues.add_queue(VulkanApp.FGFamily,@RenderQueue.FHandle);
+   DeviceInfo.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
+   DeviceInfo.add_queue(VulkanApp.FGFamily,@RenderQueue.FHandle);
   end else
   begin
    FlipQueue  :=TvQueue.Create;
    RenderQueue:=FlipQueue;
-   DeviceQueues.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
+   DeviceInfo.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
   end;
 
-  DeviceQueues.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  DeviceInfo.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
-  DeviceQueues.add_ext(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
-  DeviceQueues.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+  DeviceInfo.add_ext(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+  DeviceInfo.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 
   if limits.VK_AMD_device_coherent_memory then
   begin
-   DeviceQueues.add_ext(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
 
    FCoherent:=Default(TVkPhysicalDeviceCoherentMemoryFeaturesAMD);
    FCoherent.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COHERENT_MEMORY_FEATURES_AMD;
    FCoherent.deviceCoherentMemory:=VK_TRUE;
 
-   DeviceQueues.add_feature(@FCoherent);
+   DeviceInfo.add_feature(@FCoherent);
   end;
 
   //if limits.VK_KHR_push_descriptor then
@@ -1565,23 +1582,23 @@ begin
 
   if limits.VK_KHR_shader_non_semantic_info then
   begin
-   DeviceQueues.add_ext(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
   end;
 
   if limits.VK_EXT_scalar_block_layout then
   begin
-   DeviceQueues.add_ext(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
 
    FScalar:=Default(TVkPhysicalDeviceScalarBlockLayoutFeatures);
    FScalar.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
    FScalar.scalarBlockLayout:=VK_TRUE;
 
-   DeviceQueues.add_feature(@FScalar);
+   DeviceInfo.add_feature(@FScalar);
   end;
 
   if limits.VK_KHR_shader_float16_int8 then
   begin
-   DeviceQueues.add_ext(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
   end;
 
   if (VulkanApp.F16_8.shaderInt8<>0) or
@@ -1592,12 +1609,12 @@ begin
    F16_8.shaderFloat16:=VulkanApp.F16_8.shaderFloat16;
    F16_8.shaderInt8   :=VulkanApp.F16_8.shaderInt8;
 
-   DeviceQueues.add_feature(@F16_8);
+   DeviceInfo.add_feature(@F16_8);
   end;
 
   if limits.VK_KHR_8bit_storage then
   begin
-   DeviceQueues.add_ext(VK_KHR_8BIT_STORAGE_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_KHR_8BIT_STORAGE_EXTENSION_NAME);
   end;
 
   if (VulkanApp.FSF_8.storageBuffer8BitAccess<>0) or
@@ -1609,12 +1626,12 @@ begin
    FSF_8.uniformAndStorageBuffer8BitAccess:=VulkanApp.FSF_8.uniformAndStorageBuffer8BitAccess;
    //FSF_8.storagePushConstant8
 
-   DeviceQueues.add_feature(@FSF_8);
+   DeviceInfo.add_feature(@FSF_8);
   end;
 
   if limits.VK_KHR_16bit_storage then
   begin
-   DeviceQueues.add_ext(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
+   DeviceInfo.add_ext(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
   end;
 
   if (VulkanApp.FSF16.storageBuffer16BitAccess<>0) or
@@ -1628,11 +1645,11 @@ begin
    //FSF16.storagePushConstant16
    FSF16.storageInputOutput16              :=VulkanApp.FSF16.storageInputOutput16;
 
-   DeviceQueues.add_feature(@FSF16);
+   DeviceInfo.add_feature(@FSF16);
   end;
 
-  Device:=TvDevice.Create(DeviceQueues);
-  DeviceQueues.Free;
+  Device:=TvDevice.Create(DeviceInfo);
+  DeviceInfo.Free;
 
   MemManager:=TvMemManager.Create;
 

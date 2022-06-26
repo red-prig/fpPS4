@@ -22,6 +22,12 @@ uses
   vImage;
 
 type
+ TvComputePipeline2=class(TvComputePipeline)
+  FRefs:ptruint;
+  Procedure  Acquire(Sender:TObject);
+  Procedure  Release(Sender:TOBject);
+ end;
+
  TvRenderPass=class(vPipeline.TvRenderPass)
 
   AtCount:TVkUInt32;
@@ -39,14 +45,11 @@ type
   Procedure  AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
   Procedure  SetDepthStencilRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
   Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
-  //Procedure  AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean;samples:TVkSampleCountFlagBits);
-  //Procedure  AddDepthAt(format:TVkFormat;ClearDepth,DrawDepth,ClearStencil,DrawStencil:Boolean);
   Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
   Function   Compile:Boolean;
  end;
 
  TvGraphicsPipeline=class(TvPipeline)
-  //FLayout:TvPipelineLayout;
   FRenderPass:TvRenderPass;
 
   Viewports:array[0..15] of TVkViewport; //viewportState.viewportCount
@@ -54,7 +57,6 @@ type
 
   ColorBlends:array[0..7] of TVkPipelineColorBlendAttachmentState; //colorBlending.attachmentCount
 
-  //FShaders:array[0..5] of TvShader;
   FShaderGroup:TvShaderGroup;
 
   dynamicStates:array[0..1] of TVkDynamicState; //dynamicState.dynamicStateCount
@@ -249,37 +251,6 @@ begin
  Inc(AtCount);
 end;
 
-{
-Procedure TvRenderPass.AddColorAt(format:TVkFormat;ClearColor,DrawColor:Boolean;samples:TVkSampleCountFlagBits);
-begin
- if (AtCount>8) then Exit;
-
- ColorAt[AtCount]:=Default(TVkAttachmentDescription);
- ColorAt[AtCount].format        :=format;
- ColorAt[AtCount].samples       :=samples{VK_SAMPLE_COUNT_1_BIT};
-
- Case ClearColor of
-  True :ColorAt[AtCount].loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
-  False:ColorAt[AtCount].loadOp:={VK_ATTACHMENT_LOAD_OP_DONT_CARE} VK_ATTACHMENT_LOAD_OP_LOAD;
- end;
-
- Case DrawColor of
-  True :ColorAt[AtCount].storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
-  False:ColorAt[AtCount].storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
- end;
-
- ColorAt[AtCount].stencilLoadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
- ColorAt[AtCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
- ColorAt[AtCount].initialLayout :={VK_IMAGE_LAYOUT_UNDEFINED} VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
- ColorAt[AtCount].finalLayout   :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
- {VK_IMAGE_LAYOUT_GENERAL}
- {VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL};
- Inc(AtCount);
-end;
-}
-
 Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 begin
  if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
@@ -463,7 +434,6 @@ begin
  FillChar(Viewports  ,SizeOf(Viewports),0);
  FillChar(Scissors   ,SizeOf(Scissors) ,0);
  FillChar(ColorBlends,SizeOf(ColorBlends),0);
- //FillChar(FShaders   ,SizeOf(FShaders),0);
 
  FShaderGroup:=nil;
 
@@ -477,10 +447,10 @@ begin
  rasterizer:=Default(TVkPipelineRasterizationStateCreateInfo);
  rasterizer.sType           :=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
  rasterizer.depthClampEnable:=VK_FALSE;
- rasterizer.rasterizerDiscardEnable:=VK_FALSE;      //DB_SHADER_CONTROL.KILL_ENABLE  DB_RENDER_CONTROL.FORCE_COLOR_KILL
- rasterizer.polygonMode     :=VK_POLYGON_MODE_FILL; //PA_SU_SC_MODE_CNTL.POLY_MODE  POLYMODE_FRONT_PTYPE POLYMODE_BACK_PTYPE
- rasterizer.lineWidth       :=1;                    //PA_SU_LINE_CNTL.WIDTH
- rasterizer.cullMode        :=ord(VK_CULL_MODE_NONE);  //CULL_FRONT CULL_BACK
+ rasterizer.rasterizerDiscardEnable:=VK_FALSE;                 //DB_SHADER_CONTROL.KILL_ENABLE  DB_RENDER_CONTROL.FORCE_COLOR_KILL
+ rasterizer.polygonMode     :=VK_POLYGON_MODE_FILL;            //PA_SU_SC_MODE_CNTL.POLY_MODE  POLYMODE_FRONT_PTYPE POLYMODE_BACK_PTYPE
+ rasterizer.lineWidth       :=1;                               //PA_SU_LINE_CNTL.WIDTH
+ rasterizer.cullMode        :=ord(VK_CULL_MODE_NONE);          //CULL_FRONT CULL_BACK
  rasterizer.frontFace       :=VK_FRONT_FACE_COUNTER_CLOCKWISE; //FACE
  rasterizer.depthBiasEnable :=VK_FALSE;
  rasterizer.depthBiasConstantFactor:=0;
@@ -554,7 +524,6 @@ begin
  Result:=False;
 
  if (FShaderGroup=nil) then Exit;
- //if (FLayout=nil) then Exit;
  if (FRenderPass=nil) then Exit;
  if (viewportState.viewportCount=0) then Exit;
  if (viewportState.scissorCount=0) then Exit;
@@ -563,7 +532,7 @@ begin
 
  Stages:=Default(AVkPipelineShaderStageCreateInfo);
 
- FShaderGroup.ExportStages(@Stages,@info.stageCount);
+ FShaderGroup.FKey.ExportStages(@Stages,@info.stageCount);
 
  if (info.stageCount=0) then Exit;
 
@@ -635,6 +604,19 @@ begin
 end;
 
 Procedure TvRenderTargets.Release(Sender:TOBject);
+begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
+end;
+
+Procedure TvComputePipeline2.Acquire(Sender:TObject);
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
+Procedure TvComputePipeline2.Release(Sender:TOBject);
 begin
  if System.InterlockedDecrement(Pointer(FRefs))=nil then
  begin

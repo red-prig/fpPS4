@@ -278,7 +278,7 @@ begin
 
  if (err<>0) then
  begin
-  Writeln('Pa_GetErrorText:',Pa_GetErrorText(err));
+  Writeln('Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
   //Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
   pstream:=nil;
  end;
@@ -586,9 +586,12 @@ begin
    end;
  end;
 
-
- if (err<>0) and (err<>paOutputUnderflow) then
-  Writeln('Pa_GetErrorText:',Pa_GetErrorText(err));
+ Case err of
+  0:;
+  Integer(paOutputUnderflowed):;
+  else
+   Writeln('Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
+ end;
 
  //Writeln('sceAudioOutOutput:',handle,':',HexStr(ptr));
 

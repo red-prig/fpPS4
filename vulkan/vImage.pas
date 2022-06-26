@@ -5,19 +5,45 @@ unit vImage;
 interface
 
 uses
- g23tree,
  vulkan,
  vDevice,
  vPipeline,
  vMemory;
 
 type
- TSwapChain=class
+ PvImageBarrier=^TvImageBarrier;
+ TvImageBarrier=object
+  //image:TVkImage;
+  //range:TVkImageSubresourceRange;
+  //
+  AccessMask:TVkAccessFlags;
+  ImgLayout:TVkImageLayout;
+  StageMask:TVkPipelineStageFlags;
+  Procedure Init({_image:TVkImage;_sub:TVkImageSubresourceRange});
+  function  Push(cmd:TVkCommandBuffer;
+                 image:TVkImage;
+                 range:TVkImageSubresourceRange;
+                 dstAccessMask:TVkAccessFlags;
+  	         newImageLayout:TVkImageLayout;
+  	         dstStageMask:TVkPipelineStageFlags):Boolean;
+ end;
+
+ TvSwapChainImage=class
+  FHandle:TVkImage;
+  FView  :TVkImage;
+  Barrier:TvImageBarrier;
+  procedure   PushBarrier(cmd:TVkCommandBuffer;
+                          range:TVkImageSubresourceRange;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags);
+ end;
+
+ TvSwapChain=class
   FSurface:TvSurface;
   FSize:TVkExtent2D;
   FHandle:TVkSwapchainKHR;
-  FImage:array of TVkImage;
-  FViews:array of TVkImageView;
+  FImages:array of TvSwapChainImage;
   Constructor Create(Surface:TvSurface;mode:Integer;imageUsage:TVkImageUsageFlags);
   Destructor  Destroy; override;
  end;
@@ -86,11 +112,17 @@ type
   FFormat:TVkFormat;
   FUsage:TVkFlags;
   FExtent:TVkExtent3D;
+  Barrier:TvImageBarrier;
   Constructor Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
   function    GetImageInfo:TVkImageCreateInfo;    override;
   function    GetViewInfo:TVkImageViewCreateInfo; virtual; abstract;
   function    NewView:TvImageView;
   //function    NewViewF(Format:TVkFormat):TvImageView;
+  procedure   PushBarrier(cmd:TVkCommandBuffer;
+                          range:TVkImageSubresourceRange;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags);
  end;
 
  TvHostImage1D=class(TvImage)
@@ -111,12 +143,6 @@ type
   function    GetImageInfo:TVkImageCreateInfo;    override;
  end;
 
- //_TvImageViewCompare=object
- // function c(const a,b:TvImageView):Integer; static;
- //end;
-
- //_TvImageViewSet=specialize T23treeSet<TvImageView,_TvImageViewCompare>;
-
  AvFramebufferImages=array[0..8] of TvImageView;
  AvImageViews=array[0..8] of TVkImageView;
 
@@ -125,7 +151,6 @@ type
   FEdit,FCompile:ptruint;
   FRenderPass:TvRenderPass;
   FSize:TVkExtent2D;
-  //FImages:_TvImageViewSet;
   FImages:AvFramebufferImages;
   FImagesCount:ptruint;
   Procedure  SetRenderPass(r:TvRenderPass);
@@ -137,29 +162,9 @@ type
   Destructor Destroy; override;
  end;
 
- PvImageBarrier=^TvImageBarrier;
- TvImageBarrier=object
-  image:TVkImage;
-  range:TVkImageSubresourceRange;
-  //
-  AccessMask:TVkAccessFlags;
-  ImgLayout:TVkImageLayout;
-  StageMask:TVkPipelineStageFlags;
-  Procedure Init(_image:TVkImage;_sub:TVkImageSubresourceRange);
-  procedure Push(cmd:TVkCommandBuffer;
-                 dstAccessMask:TVkAccessFlags;
-  	         newImageLayout:TVkImageLayout;
-  	         dstStageMask:TVkPipelineStageFlags);
- end;
-
 Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
 
 implementation
-
-//function _TvImageViewCompare.c(const a,b:TvImageView):Integer;
-//begin
-// Result:=Integer(Pointer(a)>Pointer(b))-Integer(Pointer(a)<Pointer(b));
-//end;
 
 Procedure TvFramebuffer.SetRenderPass(r:TvRenderPass);
 begin
@@ -182,15 +187,11 @@ begin
  FImages[FImagesCount]:=v;
  Inc(FImagesCount);
  v.Acquire;
- //if FImages.Contains(v) then Exit;
- //v.Acquire;
- //FImages.Insert(v);
  Inc(FEdit);
 end;
 
 Procedure TvFramebuffer.FreeImageViews;
 var
-// It:_TvImageViewSet.Iterator;
  i:Integer;
 begin
  if (FImagesCount<>0) then
@@ -219,8 +220,6 @@ end;
 function TvFramebuffer.Compile:Boolean;
 var
  i:TVkUInt32;
- //It:_TvImageViewSet.Iterator;
- //v:TvImageView;
  r:TVkResult;
  info:TVkFramebufferCreateInfo;
  FImageViews:AvImageViews;
@@ -240,7 +239,7 @@ begin
  info:=Default(TVkFramebufferCreateInfo);
  info.sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
  info.renderPass     :=FRenderPass.FHandle;
- info.attachmentCount:={FImages.Size}FImagesCount;
+ info.attachmentCount:=FImagesCount;
  info.width :=FSize.width;
  info.height:=FSize.height;
  info.layers:=1;
@@ -256,21 +255,6 @@ begin
   end;
 
   info.pAttachments:=@FImageViews;
-  {
-  info.pAttachments:=AllocMem(info.attachmentCount*SizeOf(TVkImageView));
-  i:=0;
-  It:=FImages.cbegin;
-  if (It.Item<>nil) then
-  repeat
-   v:=It.Item^;
-   if (v<>nil) then
-   begin
-    info.pAttachments[i]:=v.FHandle;
-    Inc(i);
-   end;
-  until not It.Next;
-  info.attachmentCount:=i;
-  }
  end;
 
  if (info.attachmentCount=0) then
@@ -287,9 +271,6 @@ begin
   Writeln('vkCreateFramebuffer');
  end;
 
- //if (info.pAttachments<>nil) then
- // FreeMem(info.pAttachments);
-
  Result:=(r=VK_SUCCESS);
 end;
 
@@ -301,13 +282,15 @@ begin
  inherited;
 end;
 
-Constructor TSwapChain.Create(Surface:TvSurface;mode:Integer;imageUsage:TVkImageUsageFlags);
+Constructor TvSwapChain.Create(Surface:TvSurface;mode:Integer;imageUsage:TVkImageUsageFlags);
 var
  queueFamilyIndices:array[0..1] of TVkUInt32;
  cinfo:TVkSwapchainCreateInfoKHR;
  r:TVkResult;
  i,count:TVkUInt32;
  cimg:TVkImageViewCreateInfo;
+ FImage:array of TVkImage;
+ FView:TVkImageView;
 begin
  FSurface:=Surface;
 
@@ -364,7 +347,7 @@ begin
  end;
 
  SetLength(FImage,count);
- SetLength(FViews,count);
+ SetLength(FImages,count);
 
  r:=vkGetSwapchainImagesKHR(Device.FHandle,FHandle,@count,@FImage[0]);
  if (r<>VK_SUCCESS) then
@@ -390,22 +373,28 @@ begin
  For i:=0 to count-1 do
  begin
   cimg.image:=FImage[i];
-  r:=vkCreateImageView(Device.FHandle,@cimg,nil,@FViews[i]);
+  FView:=VK_NULL_HANDLE;
+  r:=vkCreateImageView(Device.FHandle,@cimg,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
    Writeln('vkCreateImageView:',r);
    Exit;
   end;
+  FImages[i]:=TvSwapChainImage.Create;
+  FImages[i].FHandle:=FImage[i];
+  FImages[i].FView  :=FView;
+  FImages[i].Barrier.Init;
  end;
 end;
 
-Destructor TSwapChain.Destroy;
+Destructor TvSwapChain.Destroy;
 var
  i:Integer;
 begin
- For i:=0 to High(FViews) do
+ For i:=0 to High(FImages) do
  begin
-  vkDestroyImageView(Device.FHandle,FViews[i],nil);
+  vkDestroyImageView(Device.FHandle,FImages[i].FView,nil);
+  FImages[i].Free;
  end;
  vkDestroySwapchainKHR(Device.FHandle,FHandle,nil);
 end;
@@ -478,6 +467,7 @@ begin
  FFormat:=format;
  FUsage:=usage;
  FExtent:=extent;
+ Barrier.Init;
  Compile(ext);
 end;
 
@@ -507,6 +497,38 @@ begin
  end;
  Result:=TvImageView.Create;
  Result.FHandle:=FImg;
+end;
+
+procedure TvSwapChainImage.PushBarrier(cmd:TVkCommandBuffer;
+                                       range:TVkImageSubresourceRange;
+                                       dstAccessMask:TVkAccessFlags;
+                                       newImageLayout:TVkImageLayout;
+                                       dstStageMask:TVkPipelineStageFlags);
+begin
+ if (cmd=VK_NULL_HANDLE) then Exit;
+
+ Barrier.Push(cmd,
+              FHandle,
+              range,
+              dstAccessMask,
+              newImageLayout,
+              dstStageMask);
+end;
+
+procedure TvImage.PushBarrier(cmd:TVkCommandBuffer;
+                              range:TVkImageSubresourceRange;
+                              dstAccessMask:TVkAccessFlags;
+                              newImageLayout:TVkImageLayout;
+                              dstStageMask:TVkPipelineStageFlags);
+begin
+ if (cmd=VK_NULL_HANDLE) then Exit;
+
+ Barrier.Push(cmd,
+              FHandle,
+              range,
+              dstAccessMask,
+              newImageLayout,
+              dstStageMask);
 end;
 
 {
@@ -677,35 +699,41 @@ begin
  end;
 end;
 
-Procedure TvImageBarrier.Init(_image:TVkImage;_sub:TVkImageSubresourceRange);
+Procedure TvImageBarrier.Init({_image:TVkImage;_sub:TVkImageSubresourceRange});
 begin
- image     :=_image;
- range     :=_sub;
+ //image     :=_image;
+ //range     :=_sub;
  AccessMask:=ord(VK_ACCESS_NONE_KHR);
  ImgLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
  StageMask :=ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 end;
 
-procedure TvImageBarrier.Push(cmd:TVkCommandBuffer;
+function TvImageBarrier.Push(cmd:TVkCommandBuffer;
+                              image:TVkImage;
+                              range:TVkImageSubresourceRange;
                               dstAccessMask:TVkAccessFlags;
 	                      newImageLayout:TVkImageLayout;
-	                      dstStageMask:TVkPipelineStageFlags);
+	                      dstStageMask:TVkPipelineStageFlags):Boolean;
 var
  info:TVkImageMemoryBarrier;
 begin
- info:=Default(TVkImageMemoryBarrier);
- info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
- info.srcAccessMask   :=AccessMask;
- info.dstAccessMask   :=dstAccessMask;
- info.oldLayout       :=ImgLayout;
- info.newLayout       :=newImageLayout;
- info.image           :=image;
- info.subresourceRange:=range;
+ Result:=False;
 
  if (AccessMask<>dstAccessMask) or
     (ImgLayout <>newImageLayout) or
     (StageMask <>dstStageMask) then
  begin
+  Result:=True;
+
+  info:=Default(TVkImageMemoryBarrier);
+  info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  info.srcAccessMask   :=AccessMask;
+  info.dstAccessMask   :=dstAccessMask;
+  info.oldLayout       :=ImgLayout;
+  info.newLayout       :=newImageLayout;
+  info.image           :=image;
+  info.subresourceRange:=range;
+
   vkCmdPipelineBarrier(cmd,
                        StageMask,
                        dstStageMask,

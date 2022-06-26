@@ -39,7 +39,7 @@ function  SwWaitForSingleObject(
            TimeOut:PQWORD;
            Alertable:LONGBOOL):DWORD;
 
-function  SwWaitFor(Handle:THandle;pTimeout:PQWORD):Integer; //pTimeout in 100ns
+function  SwWaitFor(Handle:THandle;pTimeout:PQWORD):Integer; //pTimeout in ns
 
 Function  safe_move(const src;var dst;count:QWORD):QWORD;
 procedure safe_move_ptr(const src;var dst);

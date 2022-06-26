@@ -30,7 +30,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="38">
+    <Units Count="39">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -194,6 +194,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libScePlayGo"/>
       </Unit37>
+      <Unit38>
+        <Filename Value="vulkan\vRenderPassManager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit38>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

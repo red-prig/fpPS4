@@ -20,27 +20,48 @@ type
   function c(a,b:PvImageViewKey):Integer; static;
  end;
 
+ TvImage2=class;
+
  TvImageView2=class(TvImageView)
+  Parent:TvImage2;
   key:TvImageViewKey;
-  procedure Release(Sender:TObject);
-  Function  GetSubresRange:TVkImageSubresourceRange;
-  Function  GetSubresLayer:TVkImageSubresourceLayers;
+  //
+  //Barrier:TvImageBarrier;
+  //
+  //Constructor Create;
+  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags);
+  procedure   Release(Sender:TObject);
+  Function    GetSubresRange:TVkImageSubresourceRange;
+  Function    GetSubresLayer:TVkImageSubresourceLayers;
  end;
 
  TvImageView2Set=specialize T23treeSet<PvImageViewKey,TvImageView2Compare>;
 
- TvImage2=class;
-
  TvHostImage2=class(TvCustomImage)
-  parent:TvImage2;
+  Parent:TvImage2;
   FUsage:TVkFlags;
-  function GetImageInfo:TVkImageCreateInfo; override;
+  //
+  Barrier:TvImageBarrier;
+  //
+  Constructor Create;
+  function    GetImageInfo:TVkImageCreateInfo; override;
+  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags);
  end;
 
  TvImage2=class(TvCustomImage)
   key:TvImageKey;
   FUsage:TVkFlags;
+  //
+  lock:TRWLock;
   FViews:TvImageView2Set;
+  //
+  Barrier:TvImageBarrier;
   //
   FHostImage:TvHostImage2;
   //
@@ -50,6 +71,7 @@ type
   FDeps:TObjectSetLock;
   //
   data_usage:Byte;
+  Constructor Create;
   Destructor  Destroy; override;
   function    GetImageInfo:TVkImageCreateInfo; override;
   Function    GetSubresRange:TVkImageSubresourceRange;
@@ -57,6 +79,10 @@ type
   function    FetchView(cmd:TvCustomCmdBuffer;var F:TvImageViewKey):TvImageView2;
   function    FetchView(cmd:TvCustomCmdBuffer):TvImageView2;
   function    FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
+  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags);
   Procedure   Acquire(Sender:TObject);
   procedure   Release(Sender:TObject);
  end;
@@ -121,6 +147,37 @@ begin
  Result:=CompareByte(a^,b^,SizeOf(TvImageViewKey));
 end;
 
+{
+Constructor TvImageView2.Create;
+begin
+ inherited;
+ Barrier.Init;
+end;
+}
+
+procedure TvImageView2.PushBarrier(cmd:TvCustomCmdBuffer;
+                                   dstAccessMask:TVkAccessFlags;
+                                   newImageLayout:TVkImageLayout;
+                                   dstStageMask:TVkPipelineStageFlags);
+begin
+ if (Parent=nil) then Exit;
+ Parent.PushBarrier(cmd,dstAccessMask,newImageLayout,dstStageMask);
+ {
+ if (cmd=nil) then Exit;
+ if (not cmd.BeginCmdBuffer) then Exit;
+
+ if Barrier.Push(cmd.cmdbuf,
+                 Parent.FHandle,
+                 GetSubresRange,
+                 dstAccessMask,
+                 newImageLayout,
+                 dstStageMask) then
+ begin
+  Inc(cmd.cmd_count);
+ end;
+ }
+end;
+
 procedure TvImageView2.Release(Sender:TObject);
 begin
  inherited Release;
@@ -143,6 +200,13 @@ begin
  Result.mipLevel      :=key.base_level;
  Result.baseArrayLayer:=key.base_array;
  Result.layerCount    :=key.last_array-key.base_array+1;
+end;
+
+Constructor TvImage2.Create;
+begin
+ inherited;
+ rwlock_init(lock);
+ Barrier.Init;
 end;
 
 Destructor TvImage2.Destroy;
@@ -180,9 +244,15 @@ begin
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 end;
 
+Constructor TvHostImage2.Create;
+begin
+ inherited;
+ Barrier.Init;
+end;
+
 function TvHostImage2.GetImageInfo:TVkImageCreateInfo;
 begin
- Result:=parent.GetImageInfo;
+ Result:=Parent.GetImageInfo;
  Result.tiling:=VK_IMAGE_TILING_LINEAR;
  Result.usage :=FUsage;
 end;
@@ -216,6 +286,8 @@ begin
  Result:=nil;
  if (FHandle=VK_NULL_HANDLE) then Exit;
 
+ rwlock_wrlock(lock);
+
  t:=nil;
  i:=FViews.find(@F);
  if (i.Item<>nil) then
@@ -243,12 +315,14 @@ begin
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
+   rwlock_unlock(lock);
    Writeln('vkCreateImageView:',r);
    Exit;
   end;
 
   t:=TvImageView2.Create;
   t.FHandle:=FView;
+  t.Parent :=Self;
   t.key    :=F;
 
   t.Acquire;
@@ -262,6 +336,8 @@ begin
    t.Acquire;
   end;
  end;
+
+ rwlock_unlock(lock);
 
  Result:=t;
 end;
@@ -317,7 +393,7 @@ begin
  end;
 
  t:=TvHostImage2.Create;
- t.parent:=Self;
+ t.Parent:=Self;
  t.FUsage:=usage;
 
  if not t.Compile(@img_ext) then
@@ -350,6 +426,44 @@ begin
   end;
  end;
 
+end;
+
+procedure TvImage2.PushBarrier(cmd:TvCustomCmdBuffer;
+                               dstAccessMask:TVkAccessFlags;
+                               newImageLayout:TVkImageLayout;
+                               dstStageMask:TVkPipelineStageFlags);
+begin
+ if (cmd=nil) then Exit;
+ if (not cmd.BeginCmdBuffer) then Exit;
+
+ if Barrier.Push(cmd.cmdbuf,
+                 FHandle,
+                 GetSubresRange,
+                 dstAccessMask,
+                 newImageLayout,
+                 dstStageMask) then
+ begin
+  Inc(cmd.cmd_count);
+ end;
+end;
+
+procedure TvHostImage2.PushBarrier(cmd:TvCustomCmdBuffer;
+                                   dstAccessMask:TVkAccessFlags;
+                                   newImageLayout:TVkImageLayout;
+                                   dstStageMask:TVkPipelineStageFlags);
+begin
+ if (cmd=nil) then Exit;
+ if (not cmd.BeginCmdBuffer) then Exit;
+
+ if Barrier.Push(cmd.cmdbuf,
+                 FHandle,
+                 Parent.GetSubresRange,
+                 dstAccessMask,
+                 newImageLayout,
+                 dstStageMask) then
+ begin
+  Inc(cmd.cmd_count);
+ end;
 end;
 
 Procedure TvImage2.Acquire(Sender:TObject);
@@ -495,64 +609,6 @@ begin
 
  FImage2Set.Unlock;
 end;
-
-{
-function _FetchImageView2D(cmd:TvCustomCmdBuffer;
-                           Addr:Pointer;
-                           tiling_idx:Byte;
-                           cformat:TVkFormat;
-                           extend:TVkExtent2D;
-                           usage:TVkFlags):TvImageView2;
-var
- FImageKey:TvImageKey;
- FImageViewKey:TvImageViewKey;
-
- Image:TvImage2;
-
-begin
- Result:=nil;
-
- FImageKey:=Default(TvImageKey);
- FImageKey.Addr:=Addr;
- FImageKey.cformat:=cformat;
- FImageKey.params.itype        :=ord(VK_IMAGE_TYPE_2D);
- FImageKey.params.tiling_idx   :=tiling_idx;
- FImageKey.params.extend.width :=extend.width;
- FImageKey.params.extend.height:=extend.height;
- FImageKey.params.extend.depth :=1;
- FImageKey.params.samples      :=1;
- FImageKey.params.mipLevels    :=1;
- FImageKey.params.arrayLayers  :=1;
-
- FImageViewKey:=Default(TvImageViewKey);
- FImageViewKey.cformat:=cformat;
- FImageViewKey.vtype  :=ord(VK_IMAGE_VIEW_TYPE_2D);
- //FImageViewKey.dstSel
- //FImageViewKey.base_level:Byte;
- //FImageViewKey.last_level:Byte;
- //FImageViewKey.base_array:Word;
- //FImageViewKey.last_array:Word;
-
- FImage2Set.Lock_wr;
-
- Image:=_FetchImage(FImageKey,usage);
-
- if (cmd<>nil) and (Image<>nil) then
- begin
-  if cmd.AddDependence(@Image.Release) then
-  begin
-   Image.Acquire(cmd);
-  end;
- end;
-
- if (Image<>nil) then
- begin
-  Result:=Image.FetchView(cmd,FImageViewKey);
- end;
-
- FImage2Set.Unlock;
-end;
-}
 
 initialization
  FImage2Set.Init;

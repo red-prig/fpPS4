@@ -62,12 +62,6 @@ type
 
  TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
 
- TvImageBarrierCompare=object
-  function c(a,b:TvImageBarrier):Integer; static;
- end;
-
- TvImageBarrierSet=specialize T23treeSet<TvImageBarrier,TvImageBarrierCompare>;
-
  TvCustomCmdBuffer=class
   parent:TvCmdPool;
   FQueue:TvQueue;
@@ -90,8 +84,6 @@ type
 
   FCBState:Boolean;
 
-  FImageBarriers:TvImageBarrierSet;
-
   Constructor Create(pool:TvCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
 
@@ -106,17 +98,6 @@ type
   Procedure   ReleaseResource;
   function    AddDependence(cb:TvReleaseCb):Boolean;
   Procedure   AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
-
-  Procedure   SetImageBarrier(image:TVkImage;
-                              range:TVkImageSubresourceRange;
-                              AccessMask:TVkAccessFlags;
-                              ImageLayout:TVkImageLayout;
-                              StageMask:TVkPipelineStageFlags);
-  Procedure   PushImageBarrier(image:TVkImage;
-                               range:TVkImageSubresourceRange;
-                               dstAccessMask:TVkAccessFlags;
-                               newImageLayout:TVkImageLayout;
-                               dstStageMask:TVkPipelineStageFlags);
 
   Procedure   BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -141,6 +122,8 @@ type
   emulate_primtype:Integer;
 
   function    BeginRenderPass(RT:TvRenderTargets):Boolean;
+
+  function    BindCompute(CP:TvComputePipeline2):Boolean;
 
   Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 
@@ -173,15 +156,6 @@ end;
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
  Result:=Integer(Pointer(a.FSemaphore)>Pointer(b.FSemaphore))-Integer(Pointer(a.FSemaphore)<Pointer(b.FSemaphore));
-end;
-
-function TvImageBarrierCompare.c(a,b:TvImageBarrier):Integer;
-begin
- //1 image
- Result:=Integer(a.image>b.image)-Integer(a.image<b.image);
- if (Result<>0) then Exit;
- //2 range
- Result:=CompareByte(a.range,b.range,SizeOf(TVkImageSubresourceRange));
 end;
 
 Procedure TObjectSetLock.Init;
@@ -246,12 +220,12 @@ end;
 
 Destructor  TvCustomCmdBuffer.Destroy;
 begin
+ ReleaseResource;
+ FreeAndNil(Fence);
  if (parent<>nil) and (cmdbuf<>VK_NULL_HANDLE) then
  begin
   parent.Free(cmdbuf);
  end;
- ReleaseResource;
- FreeAndNil(Fence);
  inherited;
 end;
 
@@ -383,6 +357,23 @@ begin
  end;
 end;
 
+function TvCmdBuffer.BindCompute(CP:TvComputePipeline2):Boolean;
+begin
+ Result:=False;
+
+ if (Self=nil) or (CP=nil) then Exit;
+
+ BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,CP.FHandle);
+ BindLayout  (VK_PIPELINE_BIND_POINT_COMPUTE,CP.FLayout);
+
+ if AddDependence(@CP.Release) then
+ begin
+  CP.Acquire(Self);
+ end;
+
+ Result:=True;
+end;
+
 function TvCustomCmdBuffer.QueueSubmit:Boolean;
 var
  r:TVkResult;
@@ -458,6 +449,7 @@ var
  It:TvRelease.Iterator;
 begin
  if (Self=nil) then Exit;
+
  It:=FDependence.cbegin;
  if (It.Item<>nil) then
  repeat
@@ -473,7 +465,6 @@ begin
  FDependence.Free;
 
  FWaitSemaphores.Free;
- FImageBarriers .Free;
 
  cmd_count:=0;
  ret:=0;
@@ -504,67 +495,6 @@ begin
  begin
   FWaitSemaphores.Insert(F);
  end;
-end;
-
-Procedure TvCustomCmdBuffer.SetImageBarrier(image:TVkImage;
-                                            range:TVkImageSubresourceRange;
-                                            AccessMask:TVkAccessFlags;
-  	                                    ImageLayout:TVkImageLayout;
-  	                                    StageMask:TVkPipelineStageFlags);
-var
- i:TvImageBarrierSet.Iterator;
- t:TvImageBarrier;
-begin
- if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
-
- t:=Default(TvImageBarrier);
- t.image     :=image;
- t.range     :=range;
- t.AccessMask:=AccessMask;
- t.ImgLayout :=ImageLayout;
- t.StageMask :=StageMask;
-
- i:=FImageBarriers.find(t);
-
- if (i.Item=nil) then
- begin
-  FImageBarriers.Insert(t);
- end;
-end;
-
-Procedure TvCustomCmdBuffer.PushImageBarrier(image:TVkImage;
-                                             range:TVkImageSubresourceRange;
-                                             dstAccessMask:TVkAccessFlags;
-  	                                     newImageLayout:TVkImageLayout;
-  	                                     dstStageMask:TVkPipelineStageFlags);
-var
- i:TvImageBarrierSet.Iterator;
- t:TvImageBarrier;
- p:PvImageBarrier;
-begin
- if (Self=nil) then Exit;
-
- if (not BeginCmdBuffer) then Exit;
-
- t:=Default(TvImageBarrier);
- t.Init(image,range);
-
- i:=FImageBarriers.find(t);
-
- p:=i.Item;
- if (p=nil) then
- begin
-  FImageBarriers.Insert(t);
-  i:=FImageBarriers.find(t);
-  p:=i.Item;
- end;
-
- Inc(cmd_count);
- P^.Push(cmdbuf,
-         dstAccessMask,
-         newImageLayout,
-         dstStageMask);
 end;
 
 Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);

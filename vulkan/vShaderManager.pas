@@ -32,10 +32,6 @@ type
   function c(var a,b:TShaderFunc):Integer;
  end;
 
-{
-
-}
-
  PShaderDataKey=^TShaderDataKey;
  TShaderDataKey=packed record
   FStage:TvShaderStage;
@@ -50,12 +46,17 @@ type
  end;
 
 function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
+function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
 
 implementation
 
 type
  TShaderCacheCompare=object
   function c(a,b:PShaderDataKey):Integer; static;
+ end;
+
+ TShadersKeyCompare=object
+  function c(a,b:PvShadersKey):Integer; static;
  end;
 
  _TShaderCacheSet=specialize T23treeSet<PShaderDataKey,TShaderCacheCompare>;
@@ -66,8 +67,17 @@ type
   Procedure Unlock;
  end;
 
+ _TShaderGroupSet=specialize T23treeSet<PvShadersKey,TShadersKeyCompare>;
+ TShaderGroupSet=object(_TShaderGroupSet)
+  lock:TRWLock;
+  Procedure Init;
+  Procedure Lock_wr;
+  Procedure Unlock;
+ end;
+
 var
  FShaderCacheSet:TShaderCacheSet;
+ FShaderGroupSet:TShaderGroupSet;
 
 Procedure TShaderCacheSet.Init;
 begin
@@ -80,6 +90,23 @@ begin
 end;
 
 Procedure TShaderCacheSet.Unlock;
+begin
+ rwlock_unlock(lock);
+end;
+
+//
+
+Procedure TShaderGroupSet.Init;
+begin
+ rwlock_init(lock);
+end;
+
+Procedure TShaderGroupSet.Lock_wr;
+begin
+ rwlock_wrlock(lock);
+end;
+
+Procedure TShaderGroupSet.Unlock;
 begin
  rwlock_unlock(lock);
 end;
@@ -103,6 +130,11 @@ begin
  Result:=CompareDWord(a^.pData^,b^.pData^,Max(a^.FLen,b^.FLen) div 4);
 end;
 
+function TShadersKeyCompare.c(a,b:PvShadersKey):Integer;
+begin
+ Result:=CompareByte(a^.FShaders,b^.FShaders,SizeOf(AvShaderStage));
+end;
+
 Destructor TShaderCache.Destroy;
 begin
  if (Key.pData<>nil) then FreeMem(Key.pData);
@@ -119,7 +151,7 @@ begin
  Result:=CompareDWord(a.pData^,b.pData^,Max(a.FLen,b.FLen) div 4);
 end;
 
-function _Find(var F:TShaderDataKey):TShaderCache;
+function _FindShaderCache(var F:TShaderDataKey):TShaderCache;
 var
  i:TShaderCacheSet.Iterator;
 begin
@@ -170,7 +202,7 @@ begin
  SprvEmit.FBuffers.cfg.minStorageBufferOffsetAlignment:=limits.minStorageBufferOffsetAlignment; // $10
  SprvEmit.FBuffers.cfg.minUniformBufferOffsetAlignment:=limits.minUniformBufferOffsetAlignment; // $100
 
- //SprvEmit.FBuffers.cfg.maxPushConstantsSize:=0;
+ SprvEmit.FBuffers.cfg.maxPushConstantsSize:=0;
  //SprvEmit.FUseVertexInput:=False;
 
  if (SprvEmit.Parse(pData)>1) then
@@ -191,7 +223,7 @@ begin
  SprvEmit.FAllocator.Free;
 end;
 
-function _Fetch(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
+function _FetchShader(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
 var
  F:TShaderDataKey;
 
@@ -212,7 +244,7 @@ begin
  F.FStage:=FStage;
  F.pData :=pData;
 
- t:=_Find(F);
+ t:=_FindShaderCache(F);
 
  if (t<>nil) then
  begin
@@ -320,13 +352,66 @@ begin
 
  FShaderCacheSet.Lock_wr;
 
- Result:=_Fetch(FStage,pData,FDescSetId,GPU_REGS);
+ Result:=_FetchShader(FStage,pData,FDescSetId,GPU_REGS);
 
  FShaderCacheSet.Unlock;
 end;
 
+//
+
+function _FindShaderGroup(F:PvShadersKey):TvShaderGroup;
+var
+ i:TShaderGroupSet.Iterator;
+begin
+ Result:=nil;
+ i:=FShaderGroupSet.find(F);
+ if (i.Item<>nil) then
+ begin
+  Result:=TvShaderGroup(ptruint(i.Item^)-ptruint(@TvShaderGroup(nil).FKey));
+ end;
+end;
+
+function _FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
+var
+ t:TvShaderGroup;
+begin
+ Result:=nil;
+
+ t:=_FindShaderGroup(F);
+
+ if (t=nil) then
+ begin
+
+  t:=TvShaderGroup.Create;
+  t.FKey:=F^;
+
+  if not t.Compile then
+  begin
+   FreeAndNil(t);
+  end else
+  begin
+   FShaderGroupSet.Insert(@t.FKey);
+  end;
+ end;
+
+ Result:=t;
+end;
+
+function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
+begin
+ Result:=nil;
+ if (F=nil) then Exit;
+
+ FShaderGroupSet.Lock_wr;
+
+ Result:=_FetchShaderGroup(F);
+
+ FShaderGroupSet.Unlock;
+end;
+
 initialization
  FShaderCacheSet.Init;
+ FShaderGroupSet.Init;
 
 end.
 

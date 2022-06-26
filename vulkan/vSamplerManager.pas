@@ -119,6 +119,7 @@ end;
 
 function FetchSampler(cmd:TvCustomCmdBuffer;PS:PSSharpResource4):TvSampler;
 begin
+ Result:=nil;
  if (PS=nil) then Exit;
 
  FSampler2Set.Lock_wr;

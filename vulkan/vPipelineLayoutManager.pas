@@ -21,8 +21,8 @@ type
   class function c(a,b:PvPipelineLayoutKey):Integer; static;
  end;
 
- _TvPipelineLayoutPool=specialize T23treeSet<PvPipelineLayoutKey,TvPipelineLayoutCompare>;
- TvPipelineLayoutPool=object(_TvPipelineLayoutPool)
+ _TvPipelineLayoutSet=specialize T23treeSet<PvPipelineLayoutKey,TvPipelineLayoutCompare>;
+ TvPipelineLayoutSet=object(_TvPipelineLayoutSet)
   lock:TRWLock;
   Procedure Init;
   Procedure Lock_wr;
@@ -30,54 +30,73 @@ type
  end;
 
 var
- FPipelineLayoutPool:TvPipelineLayoutPool;
+ FPipelineLayoutSet:TvPipelineLayoutSet;
 
-Procedure TvPipelineLayoutPool.Init;
+Procedure TvPipelineLayoutSet.Init;
 begin
  rwlock_init(lock);
 end;
 
-Procedure TvPipelineLayoutPool.Lock_wr;
+Procedure TvPipelineLayoutSet.Lock_wr;
 begin
  rwlock_wrlock(lock);
 end;
 
-Procedure TvPipelineLayoutPool.Unlock;
+Procedure TvPipelineLayoutSet.Unlock;
 begin
  rwlock_unlock(lock);
+end;
+
+function _Find(F:PvPipelineLayoutKey):TvPipelineLayout;
+var
+ i:TvPipelineLayoutSet.Iterator;
+begin
+ Result:=nil;
+ i:=FPipelineLayoutSet.find(F);
+ if (i.Item<>nil) then
+ begin
+  Result:=TvPipelineLayout(ptruint(i.Item^)-ptruint(@TvPipelineLayout(nil).key));
+ end;
+end;
+
+Function _Fetch(F:PvPipelineLayoutKey):TvPipelineLayout;
+var
+ t:TvPipelineLayout;
+begin
+ t:=_Find(F);
+
+ if (t=nil) then
+ begin
+  t:=TvPipelineLayout.Create;
+  t.key:=F^;
+
+  if not t.Compile then
+  begin
+   FreeAndNil(t);
+  end else
+  begin
+   FPipelineLayoutSet.Insert(@t.key);
+  end;
+
+ end;
+
+ Result:=t;
 end;
 
 Function FetchPipelineLayout(const A:AvSetLayout;
                              const B:AvPushConstantRange):TvPipelineLayout;
 var
  key:TvPipelineLayoutKey;
-
- t:TvPipelineLayout;
- i:TvPipelineLayoutPool.Iterator;
 begin
  key:=Default(TvPipelineLayoutKey);
  key.FLayouts   :=A;
  key.FPushConsts:=B;
 
- FPipelineLayoutPool.Lock_wr;
+ FPipelineLayoutSet.Lock_wr;
 
- i:=FPipelineLayoutPool.find(@key);
- if (i.Item=nil) then
- begin
-  t:=TvPipelineLayout.Create;
-  t.key:=key;
-  FPipelineLayoutPool.Insert(@t.key);
-  Result:=t;
- end else
- begin
-  t:=TvPipelineLayout(ptruint(i.Item^)-ptruint(@TvPipelineLayout(nil).key));
+ Result:=_Fetch(@key);
 
-  Result:=t;
- end;
-
- FPipelineLayoutPool.Unlock;
-
- t.Compile;
+ FPipelineLayoutSet.Unlock;
 end;
 
 function ComparePtruint(buf1,buf2:PPtruint;count:PtrUint):Integer;
@@ -134,7 +153,7 @@ begin
 end;
 
 initialization
- FPipelineLayoutPool.Init;
+ FPipelineLayoutSet.Init;
 
 end.
 
