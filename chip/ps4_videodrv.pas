@@ -114,7 +114,15 @@ type
   Interrupt:Boolean;
  end;
 
- TvMicroEngineType=(metCmdBuffer,metFlip,metEop);
+ PvMeWaitMemInfo=^TvMeWaitMemInfo;
+ TvMeWaitMemInfo=record
+  adr:Pointer;
+  ref:DWORD;
+  mask:DWORD;
+  cFunc:Byte;
+ end;
+
+ TvMicroEngineType=(metCmdBuffer,metFlip,metEop,metWaitMem);
 
  PvMicroEngineNode=^TvMicroEngineNode;
  TvMicroEngineNode=record
@@ -126,6 +134,7 @@ type
    0:(CmdBuffer:TvCmdBuffer);
    1:(FlipInfo:TvMeFlipInfo);
    2:(EopInfo:TvMeEopInfo);
+   3:(WaitMem:TvMeWaitMemInfo);
  end;
 
  TvMicroEngine=object
@@ -136,6 +145,7 @@ type
   Procedure PushCmd(var Cmd:TvCmdBuffer);
   Procedure PushFlip(var qcInfo:TqcFlipInfo;FlipLData:DWORD;FlipLabel:PDWORD;Interrupt:Boolean);
   Procedure PushEop(adr:Pointer;data:QWORD;dataSel:Byte;Interrupt:Boolean);
+  Procedure PushWaitMem(adr:Pointer;ref,mask:DWORD;cFunc:Byte);
  end;
 
 var
@@ -144,6 +154,8 @@ var
 
  GFXRing:TvCmdRing;
  GFXMicroEngine:TvMicroEngine;
+
+ FIdleEvent:PRTLEvent=nil;
 
  GPU_REGS:TGPU_REGS;
 
@@ -250,6 +262,22 @@ begin
  Queue.Push(node);
 end;
 
+Procedure TvMicroEngine.PushWaitMem(adr:Pointer;ref,mask:DWORD;cFunc:Byte);
+var
+ node:PvMicroEngineNode;
+begin
+ node:=AllocMem(SizeOf(TvMicroEngineNode));
+ if (node=nil) then Exit;
+
+ node^.mode         :=metWaitMem;
+ node^.WaitMem.adr  :=adr;
+ node^.WaitMem.ref  :=ref;
+ node^.WaitMem.mask :=mask;
+ node^.WaitMem.cFunc:=cFunc;
+
+ Queue.Push(node);
+end;
+
 procedure gfx_cp_parser(node:PvSubmitInfo);          forward;
 function  gfx_submit(CmdBuffer:TvCmdBuffer):Boolean; forward;
 function  gfx_test(CmdBuffer:TvCmdBuffer):Boolean;   forward;
@@ -296,6 +324,25 @@ begin
  end;
 end;
 
+Function me_test_mem(node:PvMeWaitMemInfo):Boolean;
+var
+ val,ref:DWORD;
+begin
+ val:=PDWORD(node^.adr)^ and node^.mask;
+ ref:=node^.ref;
+ Case node^.cFunc of
+  WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
+  WAIT_REG_MEM_FUNC_LESS         :Result:=(val<ref);
+  WAIT_REG_MEM_FUNC_LESS_EQUAL   :Result:=(val<=ref);
+  WAIT_REG_MEM_FUNC_EQUAL        :Result:=(val=ref);
+  WAIT_REG_MEM_FUNC_NOT_EQUAL    :Result:=(val<>ref);
+  WAIT_REG_MEM_FUNC_GREATER_EQUAL:Result:=(val>ref);
+  WAIT_REG_MEM_FUNC_GREATER      :Result:=(val>=ref);
+  else
+   Assert(false);
+ end;
+end;
+
 Function me_node_test(node:PvMicroEngineNode):Boolean;
 begin
  Result:=True;
@@ -306,7 +353,14 @@ begin
    begin
     Result:=gfx_test(node^.CmdBuffer);
    end;
-  else;
+  metFlip:Result:=True;
+  metEop :Result:=True;
+  metWaitMem:
+   begin
+    Result:=me_test_mem(@node^.WaitMem);
+   end;
+  else
+   Assert(false);
  end;
 
 end;
@@ -329,6 +383,9 @@ begin
    begin
     Result:=me_eop(@node^.EopInfo);
    end;
+  metWaitMem:;
+  else
+   Assert(false);
  end;
 end;
 
@@ -351,7 +408,7 @@ begin
   begin
    if not me_node_test(GFXMicroEngine.Current) then
    begin
-    time:=-1000000;
+    time:=-100000;
     NtDelayExecution(True,@time);
     Continue;
    end;
@@ -366,6 +423,7 @@ begin
 
   if not work_do then
   begin
+   RTLEventSetEvent(FIdleEvent);
    time:=Int64(NT_INFINITE);
    NtDelayExecution(True,@time);
   end;
@@ -382,6 +440,9 @@ begin
 
   GFXRing.Init;
   GFXMicroEngine.Init;
+
+  FIdleEvent:=RTLEventCreate;
+  RTLEventSetEvent(FIdleEvent);
 
   t:=BeginThread(@GFX_thread);
 
@@ -521,14 +582,19 @@ begin
   node^.Flip:=Flip^;
  end;
 
+ RTLEventResetEvent(FIdleEvent);
  GFXRing.Queue.Push(node);
  NtQueueApcThread(_gfx_handle,@_apc_null,0,nil,0);
 end;
 
 procedure vSubmitDone;
 begin
+ if (FIdleEvent<>nil) then
+ begin
+  RTLEventWaitFor(FIdleEvent);
+ end;
  //Sleep(100);
- Device.WaitIdle;
+ //Device.WaitIdle;
 end;
 
 
@@ -819,20 +885,22 @@ begin
 end;
 
 procedure onWaitRegMem(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDWAITREGMEM);
+var
+ adr:Pointer;
 begin
   {$ifdef ww}
  Case Body^.engine of
-  0: //ME
+  WAIT_REG_MEM_ENGINE_ME:
     Case Body^.memSpace of
-     0:Writeln(' waitOnRegister');
-     1:Writeln(' waitOnAddress');
+     WAIT_REG_MEM_SPACE_REGISTER:Writeln(' waitOnRegister');
+     WAIT_REG_MEM_SPACE_MEMORY  :Writeln(' waitOnAddress');
      else
       Assert(false);
     end;
-  1: //PFP
+  WAIT_REG_MEM_ENGINE_PFP:
     Case Body^.memSpace of
-     0:Writeln(' waitOnRegisterAndStall');
-     1:Writeln(' waitOnAddressAndStall');
+     WAIT_REG_MEM_SPACE_REGISTER:Writeln(' waitOnRegisterAndStall');
+     WAIT_REG_MEM_SPACE_MEMORY  :Writeln(' waitOnAddressAndStall');
      else
       Assert(false);
     end;
@@ -840,6 +908,26 @@ begin
    Assert(false);
  end;
  {$endif}
+
+ Case Body^.engine of
+  WAIT_REG_MEM_ENGINE_ME:
+    Case Body^.memSpace of
+     WAIT_REG_MEM_SPACE_MEMORY:
+       begin
+
+        QWORD(adr):=QWORD(Body^.pollAddressLo) or (QWORD(Body^.pollAddressHi) shl $20);
+
+        GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
+        GFXMicroEngine.PushWaitMem(adr,Body^.reference,Body^.mask,Body^.compareFunc);
+
+       end;
+     else
+      Assert(false);
+    end;
+  else
+   Assert(false);
+ end;
+
 end;
 
 procedure onPm40(pm4Hdr:PM4_TYPE_0_HEADER;Body:PDWORD);

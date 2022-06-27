@@ -519,16 +519,15 @@ end;
 // called in waitUntilSafeForRendering
 function ps4_sceGnmInsertWaitFlipDone(cmdBuffer:PDWORD;numDwords:DWORD;videoOutHandle,displayBufferIndex:Integer):Integer; SysV_ABI_CDecl;
 var
- addr:Pointer;
+ addr:PInt64;
 begin
  Result:=-1;
  if (numDwords<>7) then Exit;
- //sceVideoOutGetBufferLabelAddress(videoOutHandle,&base);
- //addr = base + (ulong)(uint)displayBufferIndex * 8;
- _sig_lock;
- addr:=_VideoOutGetBufferAdr(videoOutHandle,displayBufferIndex);
- _sig_unlock;
- if (addr=nil) then Exit;
+
+ Result:=ps4_sceVideoOutGetBufferLabelAddress(videoOutHandle,@addr);
+ if (Result<>0) then Exit(-1);
+
+ addr:=@addr[displayBufferIndex];
 
  cmdBuffer[0]:=$c0053c00; //IT_WAIT_REG_MEM
  cmdBuffer[1]:=$13;

@@ -214,7 +214,10 @@ const
  SCE_VIDEO_OUT_ERROR_UNKNOWN                          =-2144796418; // 0x802900FE */
  SCE_VIDEO_OUT_ERROR_ENOMEM                           =-2144792564; // 0x8029100C */
 
-function _VideoOutGetBufferAdr(hVideo:Integer;bufferIndex:Integer):Pointer;
+type
+ PPInt64=^PInt64;
+
+function ps4_sceVideoOutGetBufferLabelAddress(hVideo:Integer;ptr:PPInt64):Integer; SysV_ABI_CDecl;
 
 Procedure App_Run;
 
@@ -234,6 +237,7 @@ implementation
 uses
  vFlip,
  sys_signal,
+ sys_kernel,
  sys_time,
  ps4_time,
  spinlock,
@@ -377,6 +381,8 @@ type
    FcurrentBuffer:Longint;
   end;
 
+  FLabels:array[0..15] of Int64;
+
   //(MAIN port: 1 to 16, AUX port: 1 to 8)
   FBuffers:record
    lock:Pointer;
@@ -449,7 +455,7 @@ begin
    Acqure;
    Exit(n);
   end;
-  System.ThreadSwitch;
+  SwYieldExecution;
  until false;
 end;
 
@@ -939,20 +945,24 @@ begin
  H.Release;
 end;
 
-function _VideoOutGetBufferAdr(hVideo:Integer;bufferIndex:Integer):Pointer;
+function ps4_sceVideoOutGetBufferLabelAddress(hVideo:Integer;ptr:PPInt64):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
 begin
- Result:=nil;
+ if (ptr=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
+
+ _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
- if (H=nil) then Exit;
- if (bufferIndex>=0) and (bufferIndex<SCE_VIDEO_OUT_BUFFER_NUM_MAX) then
- begin
-  spin_lock(H.FBuffers.lock);
-  Result:=H.FBuffers.addr[bufferIndex];
-  spin_unlock(H.FBuffers.lock);
- end;
+ _sig_unlock;
+
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+ ptr^:=@H.FLabels;
+
+ _sig_lock;
  H.Release;
+ _sig_unlock;
+
+ Result:=0;
 end;
 
 function _on_after(node:PKEventNode;data:Pointer):Boolean;
@@ -1038,6 +1048,7 @@ begin
    //ps4_usleep(150);
   end else
   begin
+
    spin_lock(FBuffers.lock);
    addr:=FBuffers.addr[bufferIndex];
    attr:=FBuffers.attr[bufferIndex];
@@ -1076,18 +1087,17 @@ begin
   //post_event_flip(flipArg);
  end;
 
+ node^.wait:=1;
+ free_node(node);
+
  //FlipRate:=20;
  if (flipMode=SCE_VIDEO_OUT_FLIP_MODE_VSYNC) then
  if (FlipRate<>0) then
  begin
-  time:=(1000000 div (FlipRate+1)); //+5 selected empirically
-  //time:=time-1300;
-  //time:=time-1300;
+  time:=(1000000 div (FlipRate{+1}));
 
   elap:=SwTimePassedUnits(FlipStatus.Ftsc_flips);
-  elap:=(elap+9) div 10;
-
-  //elap:=elap+(elap div 100)*14;
+  elap:=((elap+9) div 10)+120;
 
   if (elap<time) then
   begin
@@ -1106,13 +1116,13 @@ begin
   //t2:=(t2+9) div 10;
   //Writeln('elap=',elap,' time=',time,' usleep=',t2);
 
-  if (FGpuFlip<>nil) then
+  if (FGpuFlip<>nil) and (bufferIndex<>SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
   begin
-   FGpuFlip.IsComplite(FlipStatus.FcurrentBuffer);
-   //While (not FGpuFlip.IsComplite(FcurrentBuffer)) do
-   //begin
-   // ps4_usleep(150);
-   //end;
+   //FGpuFlip.IsComplite(bufferIndex);
+   While (not FGpuFlip.IsComplite(bufferIndex)) do
+   begin
+    ps4_usleep(150);
+   end;
   end;
 
  end;
@@ -1122,6 +1132,8 @@ begin
   post_event_vblank(flipArg);
  end else
  begin
+  System.InterlockedDecrement64(FLabels[bufferIndex]);
+
   post_event_flip(flipArg);
   post_event_vblank(flipArg);
  end;
@@ -1155,8 +1167,8 @@ begin
   end;
  end;
 
- node^.wait:=1;
- free_node(node);
+ //node^.wait:=1;
+ //free_node(node);
 
 end;
 
@@ -1179,14 +1191,17 @@ begin
  _sig_unlock;
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- _sig_lock;
  node:=H.alloc_node;
- _sig_unlock;
 
  if (node=nil) then
  begin
   H.Release;
   Exit(SCE_VIDEO_OUT_ERROR_FLIP_QUEUE_FULL);
+ end;
+
+ if (bufferIndex<>SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
+ begin
+  System.InterlockedIncrement64(H.FLabels[bufferIndex]);
  end;
 
  node^.Parent:=@H.sceVideoOutSubmitFlip;
@@ -1240,6 +1255,11 @@ begin
  begin
   H.Release;
   Exit(SCE_VIDEO_OUT_ERROR_FLIP_QUEUE_FULL);
+ end;
+
+ if (Flip^.bufferIndex<>SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
+ begin
+  System.InterlockedIncrement64(H.FLabels[Flip^.bufferIndex]);
  end;
 
  node^.Parent:=@H.sceVideoOutSubmitFlip;

@@ -618,23 +618,35 @@ begin
 
  buf:=@FBuffers[FcurrentBuffer];
 
- if (Ffilp_shader=nil) then Exit;
-
- if not buf^.IsPrepare then Exit;
-
- if (FSwapChain=nil) then recreateSwapChain;
- if (FSwapChain.FHandle=VK_NULL_HANDLE) then
+ if (Ffilp_shader=nil) then
  begin
-  recreateSwapChain;
-  if (FSwapChain.FHandle=VK_NULL_HANDLE) then Exit;
+  buf^.cmdbuf.ret:=1;
+  Exit;
  end;
 
- if not FSetLayout.Compile then Exit;
- if not FLayout.Compile    then Exit;
- if not FPipelineFlip.Compile  then Exit;
- if not FSetsPool.Compile  then Exit;
+ if (not buf^.IsPrepare)        or
+    (not FSetLayout.Compile)    or
+    (not FLayout.Compile)       or
+    (not FPipelineFlip.Compile) or
+    (not FSetsPool.Compile) then
+ begin
+  buf^.cmdbuf.ret:=2;
+  Exit;
+ end;
 
  repeat
+
+  if (FSwapChain=nil) then recreateSwapChain;
+  if (FSwapChain.FHandle=VK_NULL_HANDLE) then
+  begin
+   recreateSwapChain;
+   if (FSwapChain.FHandle=VK_NULL_HANDLE) then
+   begin
+    buf^.cmdbuf.ret:=3;
+    Exit;
+   end;
+  end;
+
   FixCurrentFrame;
   imageAvailableSemaphore:=FimageAvailableSemaphore[FcurrentFrame];
   renderFinishedSemaphore:=FrenderFinishedSemaphore[FcurrentFrame];
@@ -655,6 +667,7 @@ begin
      Exit;
     end;
   end;
+
  until false;
  SwapImage:=FSwapChain.FImages[imageIndex];
 

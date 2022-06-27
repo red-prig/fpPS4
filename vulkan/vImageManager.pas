@@ -436,6 +436,8 @@ begin
  if (cmd=nil) then Exit;
  if (not cmd.BeginCmdBuffer) then Exit;
 
+ rwlock_wrlock(lock);
+
  if Barrier.Push(cmd.cmdbuf,
                  FHandle,
                  GetSubresRange,
@@ -445,6 +447,8 @@ begin
  begin
   Inc(cmd.cmd_count);
  end;
+
+ rwlock_unlock(lock);
 end;
 
 procedure TvHostImage2.PushBarrier(cmd:TvCustomCmdBuffer;
