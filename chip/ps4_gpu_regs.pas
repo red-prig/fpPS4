@@ -658,14 +658,21 @@ begin
 
   Result.srcColorBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].COLOR_SRCBLEND);
   Result.dstColorBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].COLOR_DESTBLEND);
-  Result.srcAlphaBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].ALPHA_SRCBLEND);
-  Result.dstAlphaBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].ALPHA_DESTBLEND);
+  Result.colorBlendOp       :=GetBlendOp(CB_BLEND_CONTROL[i].COLOR_COMB_FCN);
 
-  Result.colorBlendOp:=GetBlendOp(CB_BLEND_CONTROL[i].COLOR_COMB_FCN);
-  Result.alphaBlendOp:=GetBlendOp(CB_BLEND_CONTROL[i].ALPHA_COMB_FCN);
+  if (CB_BLEND_CONTROL[i].SEPARATE_ALPHA_BLEND=0) then
+  begin
+   Result.srcAlphaBlendFactor:=Result.srcColorBlendFactor;
+   Result.dstAlphaBlendFactor:=Result.dstColorBlendFactor;
+   Result.alphaBlendOp       :=Result.colorBlendOp;
+  end else //VkPhysicalDeviceFeatures.independentBlend
+  begin
+   Result.srcAlphaBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].ALPHA_SRCBLEND);
+   Result.dstAlphaBlendFactor:=GetBlendFactor(CB_BLEND_CONTROL[i].ALPHA_DESTBLEND);
+   Result.alphaBlendOp       :=GetBlendOp(CB_BLEND_CONTROL[i].ALPHA_COMB_FCN);
+  end;
 
-  //(CB_BLEND_CONTROL[i].SEPARATE_ALPHA_BLEND=0); //VkPhysicalDeviceFeatures.independentBlend
-  Assert(CB_BLEND_CONTROL[i].DISABLE_ROP3        =0);
+  Assert(CB_BLEND_CONTROL[i].DISABLE_ROP3=0);
  end;
 
  //CB_COLOR_CONTROL.MODE   //CB_DISABLE
