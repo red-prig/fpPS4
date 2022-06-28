@@ -948,9 +948,12 @@ begin
  lib^.set_proc($C755FBE9AAD83315,@ps4_scePthreadAttrGet);
  lib^.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate);
  lib^.set_proc($3B184807C2C1FCF4,@ps4_pthread_create);
+
  lib^.set_proc($E2A1AB47A7A83FD6,@ps4_scePthreadDetach);
  lib^.set_proc($F94D51E16B57BE87,@ps4_pthread_detach);
+
  lib^.set_proc($A27358F41CA7FD6F,@ps4_scePthreadJoin);
+ lib^.set_proc($87D09C3F7274A153,@ps4_pthread_join);
 
  lib^.set_proc($678428B15B80B00D,@ps4_pthread_once);
  lib^.set_proc($D786CE00200D4C1A,@ps4_scePthreadOnce);

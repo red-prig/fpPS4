@@ -401,23 +401,24 @@ end;
 
 Function TGPU_REGS.GET_SCISSOR(i:Byte):TVkRect2D; //0..15
 begin
- if (SC_MODE_CNTL_0.VPORT_SCISSOR_ENABLE=1) then
+ if (SC_MODE_CNTL_0.VPORT_SCISSOR_ENABLE<>0) and
+    ((DWORD(VPORT_SCISSOR[i].TL)<>0) or
+     (DWORD(VPORT_SCISSOR[i].BR)<>0)) then
  begin
   Result.offset.x     :=_fix_scissor_range(VPORT_SCISSOR[i].TL.TL_X);
   Result.offset.y     :=_fix_scissor_range(VPORT_SCISSOR[i].TL.TL_Y);
   Result.extent.width :=_fix_scissor_range(VPORT_SCISSOR[i].BR.BR_X);
   Result.extent.height:=_fix_scissor_range(VPORT_SCISSOR[i].BR.BR_Y);
-  Result.extent.width :=Result.extent.width -Result.offset.x;
-  Result.extent.height:=Result.extent.height-Result.offset.y;
  end else
  begin
   Result.offset.x     :=_fix_scissor_range(SCREEN_SCISSOR_TL.TL_X);
   Result.offset.y     :=_fix_scissor_range(SCREEN_SCISSOR_TL.TL_Y);
   Result.extent.width :=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_X);
   Result.extent.height:=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_Y);
-  Result.extent.width :=Result.extent.width -Result.offset.x;
-  Result.extent.height:=Result.extent.height-Result.offset.y;
  end;
+
+ Result.extent.width :=Result.extent.width -Result.offset.x;
+ Result.extent.height:=Result.extent.height-Result.offset.y;
 end;
 
 Function TGPU_REGS.GET_SCREEN:TVkRect2D;

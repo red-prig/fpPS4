@@ -37,6 +37,7 @@ function  ps4_pthread_create(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Poin
 function  ps4_scePthreadDetach(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_detach(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadJoin(_pthread:pthread;value:PPointer):Integer; SysV_ABI_CDecl;
+function  ps4_pthread_join(_pthread:pthread;value:PPointer):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_once(once_control:p_pthread_once_t;init_routine:t_init_routine_proc):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadOnce(once_control:p_pthread_once_t;init_routine:t_init_routine_proc):Integer; SysV_ABI_CDecl;
@@ -538,6 +539,11 @@ begin
  begin
   Result:=SCE_KERNEL_ERROR_EINVAL;
  end;
+end;
+
+function ps4_pthread_join(_pthread:pthread;value:PPointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=sce2px(ps4_scePthreadJoin(_pthread,value));
 end;
 
 function ps4_pthread_once(once_control:p_pthread_once_t;init_routine:t_init_routine_proc):Integer; SysV_ABI_CDecl;

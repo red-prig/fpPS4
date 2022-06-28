@@ -16,6 +16,12 @@ begin
  Result:=4;
 end;
 
+function ps4_sceHttpTerm(libhttpCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceHttpTerm:',libhttpCtxId);
+ Result:=0;
+end;
+
 function ps4_sceHttpCreateTemplate(
 	  libhttpCtxId:Integer;
 	  userAgent:PChar;
@@ -68,6 +74,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceHttp');
  lib^.set_proc($03D715314B44A786,@ps4_sceHttpInit);
+ lib^.set_proc($224FCAA4B4E57FB4,@ps4_sceHttpTerm);
  lib^.set_proc($D206233D347FE9C6,@ps4_sceHttpCreateTemplate);
  lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetNonblock);
  lib^.set_proc($EB7F3575617EC6C4,@ps4_sceHttpCreateEpoll);

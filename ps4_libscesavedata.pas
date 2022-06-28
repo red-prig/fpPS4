@@ -109,6 +109,13 @@ type
   align1:Integer;
  end;
 
+ pSceSaveDataMountInfo=^SceSaveDataMountInfo;
+ SceSaveDataMountInfo=packed record
+  blocks    :QWORD; //SceSaveDataBlocks
+  freeBlocks:QWORD; //SceSaveDataBlocks
+  reserved:array[0..31] of Byte;
+ end;
+
 implementation
 
 uses
@@ -188,6 +195,16 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceSaveDataGetMountInfo(mountPoint:PSceSaveDataMountPoint;
+                                     info:pSceSaveDataMountInfo):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (info<>nil) then
+ begin
+  info^:=Default(SceSaveDataMountInfo);
+ end;
+end;
+
 type
  SceSaveDataParamType=DWORD;
 
@@ -217,6 +234,7 @@ begin
  lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
+ lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
 end;
 

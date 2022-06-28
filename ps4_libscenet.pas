@@ -35,10 +35,21 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNetTerm:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNetPoolCreate(name:PChar;size,flags:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNetPoolCreate:',name,':',size,':',flags);
  Result:=2;
+end;
+
+function ps4_sceNetPoolDestroy(memid:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetPoolDestroy:',memid);
+ Result:=0;
 end;
 
 const
@@ -341,7 +352,9 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNet');
  lib^.set_proc($3657AFECB83C9370,@ps4_sceNetInit);
+ lib^.set_proc($7131A473AFD30652,@ps4_sceNetTerm);
  lib^.set_proc($76024169E2671A9A,@ps4_sceNetPoolCreate);
+ lib^.set_proc($2BB465AD3908FE6C,@ps4_sceNetPoolDestroy);
  lib^.set_proc($F0A729E5DFEAD54A,@ps4_sceNetInetPton);
  lib^.set_proc($BFA338B7179C0AEA,@ps4_sceNetEtherNtostr);
  lib^.set_proc($E8E7346CBB0861ED,@ps4_sceNetGetMacAddress);
