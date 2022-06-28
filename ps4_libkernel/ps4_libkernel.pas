@@ -247,9 +247,24 @@ var
 begin
  Result:=0;
  _sig_lock;
+
  Writeln('Load Lib:',moduleFileName);
 
  fn:=_parse_filename(moduleFileName);
+
+ node:=ps4_app.AcqureFileByName(ExtractFileName(fn));
+ if (node<>nil) then
+ begin
+  Writeln('File Loaded:',ExtractFileName(fn));
+
+  Result:=node.Handle;
+  node.Release;
+
+  if (pRes<>nil) then pRes^:=0;
+
+  _sig_unlock;
+  Exit;
+ end;
 
  Writeln('Load File:',fn);
 
