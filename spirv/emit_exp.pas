@@ -99,10 +99,11 @@ begin
   begin
 
    Case p of
-    0:Assert(false);
     2:rtype:=dtVec2f;
     3:rtype:=dtVec3f;
     4:rtype:=dtVec4f;
+    else
+      Assert(false,IntToStr(p));
    end;
 
    i:=0;
