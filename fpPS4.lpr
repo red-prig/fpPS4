@@ -47,6 +47,8 @@ begin
  if (ParamCount=0) then
  begin
   promo:
+  Writeln('fpPS4 '+{$I tag.inc});
+  Writeln('Copyright (c) 2021-2022 by Red_prig');
   Writeln('PS4 compatibility layer (emulator) on Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
   Writeln('  -e <name>  //decrypted elf or self file name');
@@ -475,6 +477,12 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Hue\CUSA05065\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Hue\CUSA05065\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\creeperdiver-ps4\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\creeperdiver-ps4\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\SPELUNKYCLASSIC\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\SPELUNKYCLASSIC\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

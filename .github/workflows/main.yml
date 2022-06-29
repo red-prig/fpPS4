@@ -1,0 +1,48 @@
+
+name: CI
+
+on:
+  push:
+    branches:
+      - '*'
+    tags:        
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+  workflow_dispatch:
+
+jobs:
+  build_windows:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Tag
+        shell: cmd
+        working-directory: ./
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo '%GITHUB_REF_NAME%' > tag.inc
+
+      - name: Compile
+        shell: cmd
+        working-directory: ./
+        run: lazbuild -B fpPS4.lpi
+
+      - name: Pack
+        shell: cmd
+        working-directory: ./
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          strip fpPS4.exe
+          mkdir sce_module
+          echo "put libSceNgs2.prx here" > sce_module/info.txt
+          zip -9 -qq -r "fpPS4_%GITHUB_REF_NAME%.zip" "fpPS4.exe" "shaders/*.spv" "sce_module/info.txt"
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ./fpPS4_${{ github.ref_name }}.zip
