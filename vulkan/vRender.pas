@@ -400,6 +400,8 @@ end;
 
 Procedure TvGraphicsPipeline.AddVPort(const V:TVkViewport;const S:TVkRect2D);
 begin
+ if (s.extent.width=0) or (s.extent.height=0) then Assert(false);
+
  if (viewportState.viewportCount>15) then Exit;
  Viewports[viewportState.viewportCount]:=V;
  Scissors [viewportState.viewportCount]:=S;

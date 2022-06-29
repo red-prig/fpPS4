@@ -28,6 +28,7 @@ type
   //
   function  OpConvert1(node:PSpirvOp):Integer;
   function  OnCompositeExtract1(node:PSpirvOp):Integer;
+  function  OnFDiv1(node:PSpirvOp):Integer;
   function  OnIAdd1(node:PSpirvOp):Integer;
   function  OnISub1(node:PSpirvOp):Integer;
   function  OnShr1(node:PSpirvOp):Integer;
@@ -77,6 +78,7 @@ begin
 
   Op.OpCompositeExtract :Result:=OnCompositeExtract1(node);
 
+  Op.OpFDiv             :Result:=OnFDiv1(node);
   Op.OpIAdd             :Result:=OnIAdd1(node);
   Op.OpISub             :Result:=OnISub1(node);
   Op.OpShiftRightLogical,
@@ -87,7 +89,7 @@ begin
   OpPackOfs             :Result:=OnPackOfs1(node);
   OpMakeCM              :Result:=OnMakeCM1(node);
 
-  Op.OpSelect           :Result:=Result+OnSelect1(node);
+  Op.OpSelect           :Result:=OnSelect1(node);
 
   Op.OpBitwiseAnd       :Result:=OnBitwiseAnd1(node);
   Op.OpLogicalAnd       :Result:=OnLogicalAnd1(node);
@@ -715,10 +717,13 @@ begin
  Inc(Result);
 end;
 
+function try_get_comp_bridge(var src:PsrRegNode):Integer; forward;
+
 function TEmitPostOp.OpConvert1(node:PSpirvOp):Integer;
 var
- dst,src:PsrRegNode;
+ dst,src,tmp:PsrRegNode;
  pc:PsrConst;
+ pLine:PspirvOp;
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
@@ -740,6 +745,15 @@ var
   Inc(Result);
  end;
 
+ procedure _SetReg(src:PsrRegNode);
+ begin
+  src^.mark_read;
+  dst^.pWriter.SetParam(ntReg,src);
+  node^.OpId:=OpLinks; //mark remove
+  node^.dst:=Default(TOpParamSingle);
+  Inc(Result);
+ end;
+
  function minz(i:Int64):QWORD;
  begin
   if (i>0) then Result:=i else Result:=0;
@@ -752,6 +766,23 @@ begin
  src:=RegDown(src);
  if (dst=nil) or (src=nil) then Exit;
 
+ tmp:=src;
+ While try_get_comp_bridge(tmp)<>0 do
+ begin
+  tmp:=RegDown(tmp);
+ end;
+
+ if (tmp<>src) then
+ begin
+  src:=node^.ParamNode(0)^.AsReg;
+  tmp^.mark_read;
+  node^.ParamNode(0)^.ntype:=ntReg;
+  node^.ParamNode(0)^.pData:=tmp;
+  src^.mark_unread;
+  src:=tmp;
+  Inc(Result);
+ end;
+
  if src^.is_const then
  begin
   pc:=src^.AsConst;
@@ -762,6 +793,11 @@ begin
       dtFloat32:
         case dst^.dtype of
          dtHalf16:_SetConst(dst^.dtype,WORD(THalf16(pc^.AsFloat32)));
+         else;
+        end;
+      dtHalf16:
+        case dst^.dtype of
+         dtFloat32:_SetConst(dst^.dtype,Single(pc^.AsHalf16));
          else;
         end;
       else;
@@ -800,7 +836,32 @@ begin
      end;
 
   end;
+ end else
+ begin
+  pLine:=src^.AsOp;
+  if (pLine=nil) then Exit;
+
+  Case pLine^.OpId of
+   Op.OpFConvert:
+     begin
+      tmp:=pLine^.ParamNode(0)^.AsReg;
+      tmp:=RegDown(tmp);
+
+      Case node^.OpId of
+       Op.OpFConvert:
+         if (tmp^.dtype=dst^.dtype) then
+         begin
+          _SetReg(tmp);
+         end;
+       else;
+      end;
+
+     end;
+   else;
+  end;
+
  end;
+
 end;
 
 function TEmitPostOp.OnCompositeExtract1(node:PSpirvOp):Integer;
@@ -892,6 +953,54 @@ begin
 
  Result:=Result+PrepTypeParam(node^.ParamNode(1),dst^.dtype);
  Result:=Result+PrepTypeParam(node^.ParamNode(2),dst^.dtype);
+end;
+
+function TEmitPostOp.OnFDiv1(node:PSpirvOp):Integer;
+var
+ dst:PsrRegNode;
+ src:array[0..1] of PsrRegNode;
+ pCon:array[0..1] of PsrConst;
+
+ procedure _SetConst(dtype:TsrDataType;value:Single);
+ begin
+  Case dtype of
+   dtFloat32:dst^.SetConst(FConsts.Fetchf(dtype,value));
+   else
+     Assert(false,'TODO');
+  end;
+  node^.OpId:=OpLinks; //mark remove
+  node^.dst:=Default(TOpParamSingle);
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node^.dst.AsReg;
+ src[0]:=node^.ParamNode(0)^.AsReg;
+ src[1]:=node^.ParamNode(1)^.AsReg;
+
+ src[0]:=RegDown(src[0]);
+ src[1]:=RegDown(src[1]);
+
+ if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
+
+ if (src[0]^.is_const) and (src[1]^.is_const) then
+ if (src[0]^.dtype=src[1]^.dtype) then
+ begin
+  //need a const calc
+
+  pCon[0]:=src[0]^.AsConst;
+  pCon[1]:=src[1]^.AsConst;
+
+  Case src[0]^.dtype of
+   dtFloat32:
+     begin
+      _SetConst(dst^.dtype,pCon[0]^.AsFloat32/pCon[1]^.AsFloat32);
+     end;
+   else;
+  end;
+
+ end;
 end;
 
 function TEmitPostOp.OnIAdd1(node:PSpirvOp):Integer;
@@ -1555,6 +1664,76 @@ begin
  Result:=True;
 end;
 
+function is_all_const(src:PPsrRegNode;count:byte):Boolean;
+var
+ i:Byte;
+begin
+ Result:=True;
+ For i:=0 to count-1 do
+  if not src[i]^.is_const then Exit(false);
+end;
+
+function is_all_in_one_comp(src:PPsrRegNode;rtype:TsrDataType;count:byte):Boolean;
+var
+ i:Byte;
+ pos:DWORD;
+ pLine:PspirvOp;
+ pReg,tmp:PsrRegNode;
+begin
+ pReg:=nil;
+ Result:=True;
+ For i:=0 to count-1 do
+ begin
+  pLine:=src[i]^.AsOp;
+  if (pLine=nil) then Exit(false);
+  if (pLine^.OpId<>Op.OpCompositeExtract) then Exit(false);
+
+  pos:=0;
+  if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
+  if (pos<>i) then Exit(false);
+
+  tmp:=pLine^.ParamNode(0)^.AsReg;
+  if (tmp=nil) then Exit(false);
+  if (tmp^.dtype<>rtype) then Exit(false);
+
+  if (i=0) then
+  begin
+   pReg:=tmp;
+  end else
+  begin
+   if (pReg<>tmp) then Exit(false);
+  end;
+
+ end;
+end;
+
+function try_get_comp_bridge(var src:PsrRegNode):Integer;
+var
+ pLine:PspirvOp;
+ pos:DWORD;
+ pReg:PsrRegNode;
+begin
+ Result:=0;
+ pLine:=src^.AsOp;
+ if (pLine=nil) then Exit;
+ if (pLine^.OpId<>Op.OpCompositeExtract) then Exit;
+
+ pos:=0;
+ if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
+
+ pReg:=pLine^.ParamNode(0)^.AsReg;
+ if (pReg=nil) then Exit;
+
+ pLine:=pReg^.AsOp;
+ if (pLine=nil) then Exit;
+ if (pLine^.OpId<>Op.OpCompositeConstruct) then Exit;
+
+ pReg:=pLine^.ParamNode(pos)^.AsReg;
+ if (pReg=nil) then Exit;
+ src:=pReg;
+ Result:=1;
+end;
+
 function TEmitPostOp.OnMakeCM1(node:PSpirvOp):Integer;
 var
  dst:PsrRegNode;
@@ -1660,96 +1839,6 @@ begin
 
  node^.OpId:=OpLinks; //mark remove
  node^.dst:=Default(TOpParamSingle);
- Result:=1;
-
- {
- For i:=0 to count-1 do
- begin
-  pOp[i]:=src[i]^.AsOp;
-
-  Case pOp[i]^.OpId of
-   OpCUBEID:Writeln('OpCUBEID');
-   OpCUBESC:Writeln('OpCUBESC');
-   OpCUBETC:Writeln('OpCUBETC');
-   OpCUBEMA:Writeln('OpCUBEMA');
-   else
-            Writeln(Op.GetStr(pOp[i]^.OpId));
-  end;
-
- end;
- }
-
-end;
-
-//
-
-function is_all_const(src:PPsrRegNode;count:byte):Boolean;
-var
- i:Byte;
-begin
- Result:=True;
- For i:=0 to count-1 do
-  if not src[i]^.is_const then Exit(false);
-end;
-
-function is_all_in_one_comp(src:PPsrRegNode;rtype:TsrDataType;count:byte):Boolean;
-var
- i:Byte;
- pos:DWORD;
- pLine:PspirvOp;
- pReg,tmp:PsrRegNode;
-begin
- pReg:=nil;
- Result:=True;
- For i:=0 to count-1 do
- begin
-  pLine:=src[i]^.AsOp;
-  if (pLine=nil) then Exit(false);
-  if (pLine^.OpId<>Op.OpCompositeExtract) then Exit(false);
-
-  pos:=0;
-  if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
-  if (pos<>i) then Exit(false);
-
-  tmp:=pLine^.ParamNode(0)^.AsReg;
-  if (tmp=nil) then Exit(false);
-  if (tmp^.dtype<>rtype) then Exit(false);
-
-  if (i=0) then
-  begin
-   pReg:=tmp;
-  end else
-  begin
-   if (pReg<>tmp) then Exit(false);
-  end;
-
- end;
-end;
-
-function try_get_comp_bridge(var src:PsrRegNode):Integer;
-var
- pLine:PspirvOp;
- pos:DWORD;
- pReg:PsrRegNode;
-begin
- Result:=0;
- pLine:=src^.AsOp;
- if (pLine=nil) then Exit;
- if (pLine^.OpId<>Op.OpCompositeExtract) then Exit;
-
- pos:=0;
- if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
-
- pReg:=pLine^.ParamNode(0)^.AsReg;
- if (pReg=nil) then Exit;
-
- pLine:=pReg^.AsOp;
- if (pLine=nil) then Exit;
- if (pLine^.OpId<>Op.OpCompositeConstruct) then Exit;
-
- pReg:=pLine^.ParamNode(pos)^.AsReg;
- if (pReg=nil) then Exit;
- src:=pReg;
  Result:=1;
 end;
 
