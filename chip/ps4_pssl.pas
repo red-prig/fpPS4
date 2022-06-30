@@ -874,6 +874,140 @@ const
  IMAGE_SAMPLE_C_CD_O   =$6E;
  IMAGE_SAMPLE_C_CD_CL_O=$6F;
 
+ //DS
+ DS_ADD_U32            =$00;
+ DS_SUB_U32            =$01;
+ DS_RSUB_U32           =$02;
+ DS_INC_U32            =$03;
+ DS_DEC_U32            =$04;
+ DS_MIN_I32            =$05;
+ DS_MAX_I32            =$06;
+ DS_MIN_U32            =$07;
+ DS_MAX_U32            =$08;
+ DS_AND_B32            =$09;
+ DS_OR_B32             =$0A;
+ DS_XOR_B32            =$0B;
+ DS_MSKOR_B32          =$0C;
+ DS_WRITE_B32          =$0D;
+ DS_WRITE2_B32         =$0E;
+ DS_WRITE2ST64_B32     =$0F;
+ DS_CMPST_B32          =$10;
+ DS_CMPST_F32          =$11;
+ DS_MIN_F32            =$12;
+ DS_MAX_F32            =$13;
+ DS_NOP                =$14;
+ DS_GWS_INIT           =$19;
+ DS_GWS_SEMA_V         =$1A;
+ DS_GWS_SEMA_BR        =$1B;
+ DS_GWS_SEMA_P         =$1C;
+ DS_GWS_BARRIER        =$1D;
+ DS_WRITE_B8           =$1E;
+ DS_WRITE_B16          =$1F;
+ DS_ADD_RTN_U32        =$20;
+ DS_SUB_RTN_U32        =$21;
+ DS_RSUB_RTN_U32       =$22;
+ DS_INC_RTN_U32        =$23;
+ DS_DEC_RTN_U32        =$24;
+ DS_MIN_RTN_I32        =$25;
+ DS_MAX_RTN_I32        =$26;
+ DS_MIN_RTN_U32        =$27;
+ DS_MAX_RTN_U32        =$28;
+ DS_AND_RTN_B32        =$29;
+ DS_OR_RTN_B32         =$2A;
+ DS_XOR_RTN_B32        =$2B;
+ DS_MSKOR_RTN_B32      =$2C;
+ DS_WRXCHG_RTN_B32     =$2D;
+ DS_WRXCHG2_RTN_B32    =$2E;
+ DS_WRXCHG2ST64_RTN_B32=$2F;
+ DS_CMPST_RTN_B32      =$30;
+ DS_CMPST_RTN_F32      =$31;
+ DS_MIN_RTN_F32        =$32;
+ DS_MAX_RTN_F32        =$33;
+ DS_WRAP_RTN_B32       =$34;
+ DS_SWIZZLE_B32        =$35;
+ DS_READ_B32           =$36;
+ DS_READ2_B32          =$37;
+ DS_READ2ST64_B32      =$38;
+ DS_READ_I8            =$39;
+ DS_READ_U8            =$3A;
+ DS_READ_I16           =$3B;
+ DS_READ_U16           =$3C;
+ DS_CONSUME            =$3D;
+ DS_APPEND             =$3E;
+ DS_ORDERED_COUNT      =$3F;
+ DS_ADD_U64            =$40;
+ DS_SUB_U64            =$41;
+ DS_RSUB_U64           =$42;
+ DS_INC_U64            =$43;
+ DS_DEC_U64            =$44;
+ DS_MIN_I64            =$45;
+ DS_MAX_I64            =$46;
+ DS_MIN_U64            =$47;
+ DS_MAX_U64            =$48;
+ DS_OR_B64             =$4A;
+ DS_XOR_B64            =$4B;
+ DS_MSKOR_B64          =$4C;
+ DS_WRITE_B64          =$4D;
+ DS_WRITE2_B64         =$4E;
+ DS_WRITE2ST64_B64     =$4F;
+ DS_CMPST_B64          =$50;
+ DS_CMPST_F64          =$51;
+ DS_MIN_F64            =$52;
+ DS_MAX_F64            =$53;
+ DS_ADD_RTN_U64        =$60;
+ DS_SUB_RTN_U64        =$61;
+ DS_RSUB_RTN_U64       =$62;
+ DS_INC_RTN_U64        =$63;
+ DS_DEC_RTN_U64        =$64;
+ DS_MIN_RTN_I64        =$65;
+ DS_MAX_RTN_I64        =$66;
+ DS_MIN_RTN_U64        =$67;
+ DS_MAX_RTN_U64        =$68;
+ DS_AND_RTN_B64        =$69;
+ DS_OR_RTN_B64         =$6A;
+ DS_XOR_RTN_B64        =$6B;
+ DS_MSKOR_RTN_B64      =$6C;
+ DS_WRXCHG_RTN_B64     =$6D;
+ DS_WRXCHG2_RTN_B64    =$6E;
+ DS_WRXCHG2ST64_RTN_B64=$6F;
+ DS_CMPST_RTN_B64      =$70;
+ DS_CMPST_RTN_F64      =$71;
+ DS_MIN_RTN_F64        =$72;
+ DS_MAX_RTN_F64        =$73;
+ DS_READ_B64           =$76;
+ DS_READ2_B64          =$77;
+ DS_READ2ST64_B64      =$78;
+ DS_CONDXCHG32_RTN_B64 =$7E;
+ DS_ADD_SRC2_U32       =$80;
+ DS_SUB_SRC2_U32       =$81;
+ DS_RSUB_SRC2_U32      =$82;
+ DS_INC_SRC2_U32B      =$83;
+ DS_DEC_SRC2_U32       =$84;
+ DS_MIN_SRC2_I32       =$85;
+ DS_MAX_SRC2_I32       =$86;
+ DS_MIN_SRC2_U32       =$87;
+ DS_MAX_SRC2_U32       =$88;
+ DS_AND_SRC2_B32B      =$89;
+ DS_OR_SRC2_B32        =$8A;
+ DS_XOR_SRC2_B32       =$8B;
+ DS_WRITE_SRC2_B32     =$8C;
+ DS_MIN_SRC2_F32       =$92;
+ DS_MAX_SRC2_F32       =$93;
+ DS_ADD_SRC2_U64       =$C0;
+ DS_SUB_SRC2_U64       =$C1;
+ DS_RSUB_SRC2_U64      =$C2;
+ DS_INC_SRC2_U64       =$C3;
+ DS_DEC_SRC2_U64       =$C4;
+ DS_MIN_SRC2_I64       =$C5;
+ DS_MAX_SRC2_I64       =$C6;
+ DS_MIN_SRC2_U64       =$C7;
+ DS_MAX_SRC2_U64       =$C8;
+ DS_AND_SRC2_B64       =$C9;
+ DS_OR_SRC2_B64        =$CA;
+ DS_XOR_SRC2_B64       =$CB;
+ DS_MIN_SRC2_F64       =$D2;
+ DS_MAX_SRC2_F64       =$D3;
+
 type
  TSOP2=bitpacked record
   SSRC0:Byte;  //8
@@ -1071,9 +1205,9 @@ type
   OP:Byte;
   ENCODING:bit6;
 
-  ADDR:Byte;
-  DATA0:Byte;
-  DATA1:Byte;
+  ADDR:Byte;  //(vbindex)
+  DATA0:Byte; //(vsrc0)
+  DATA1:Byte; //(vsrc1)
   VDST:Byte;
  end;
 
@@ -3160,7 +3294,168 @@ end;
 
 procedure _print_DS(Var SPI:TSPI);
 begin
- Writeln('DS?',SPI.DS.OP);
+ Case SPI.DS.OP of
+
+  DS_ADD_U32            :Write('DS_ADD_U32');
+  DS_SUB_U32            :Write('DS_SUB_U32');
+  DS_RSUB_U32           :Write('DS_RSUB_U32');
+  DS_INC_U32            :Write('DS_INC_U32');
+  DS_DEC_U32            :Write('DS_DEC_U32');
+  DS_MIN_I32            :Write('DS_MIN_I32');
+  DS_MAX_I32            :Write('DS_MAX_I32');
+  DS_MIN_U32            :Write('DS_MIN_U32');
+  DS_MAX_U32            :Write('DS_MAX_U32');
+  DS_AND_B32            :Write('DS_AND_B32');
+  DS_OR_B32             :Write('DS_OR_B32');
+  DS_XOR_B32            :Write('DS_XOR_B32');
+  DS_MSKOR_B32          :Write('DS_MSKOR_B32');
+  DS_WRITE_B32          :Write('DS_WRITE_B32');
+  DS_WRITE2_B32         :Write('DS_WRITE2_B32');
+  DS_WRITE2ST64_B32     :Write('DS_WRITE2ST64_B32');
+  DS_CMPST_B32          :Write('DS_CMPST_B32');
+  DS_CMPST_F32          :Write('DS_CMPST_F32');
+  DS_MIN_F32            :Write('DS_MIN_F32');
+  DS_MAX_F32            :Write('DS_MAX_F32');
+  DS_NOP                :Write('DS_NOP');
+  DS_GWS_INIT           :Write('DS_GWS_INIT');
+  DS_GWS_SEMA_V         :Write('DS_GWS_SEMA_V');
+  DS_GWS_SEMA_BR        :Write('DS_GWS_SEMA_BR');
+  DS_GWS_SEMA_P         :Write('DS_GWS_SEMA_P');
+  DS_GWS_BARRIER        :Write('DS_GWS_BARRIER');
+  DS_WRITE_B8           :Write('DS_WRITE_B8');
+  DS_WRITE_B16          :Write('DS_WRITE_B16');
+  DS_ADD_RTN_U32        :Write('DS_ADD_RTN_U32');
+  DS_SUB_RTN_U32        :Write('DS_SUB_RTN_U32');
+  DS_RSUB_RTN_U32       :Write('DS_RSUB_RTN_U32');
+  DS_INC_RTN_U32        :Write('DS_INC_RTN_U32');
+  DS_DEC_RTN_U32        :Write('DS_DEC_RTN_U32');
+  DS_MIN_RTN_I32        :Write('DS_MIN_RTN_I32');
+  DS_MAX_RTN_I32        :Write('DS_MAX_RTN_I32');
+  DS_MIN_RTN_U32        :Write('DS_MIN_RTN_U32');
+  DS_MAX_RTN_U32        :Write('DS_MAX_RTN_U32');
+  DS_AND_RTN_B32        :Write('DS_AND_RTN_B32');
+  DS_OR_RTN_B32         :Write('DS_OR_RTN_B32');
+  DS_XOR_RTN_B32        :Write('DS_XOR_RTN_B32');
+  DS_MSKOR_RTN_B32      :Write('DS_MSKOR_RTN_B32');
+  DS_WRXCHG_RTN_B32     :Write('DS_WRXCHG_RTN_B32');
+  DS_WRXCHG2_RTN_B32    :Write('DS_WRXCHG2_RTN_B32');
+  DS_WRXCHG2ST64_RTN_B32:Write('DS_WRXCHG2ST64_RTN_B32');
+  DS_CMPST_RTN_B32      :Write('DS_CMPST_RTN_B32');
+  DS_CMPST_RTN_F32      :Write('DS_CMPST_RTN_F32');
+  DS_MIN_RTN_F32        :Write('DS_MIN_RTN_F32');
+  DS_MAX_RTN_F32        :Write('DS_MAX_RTN_F32');
+  DS_WRAP_RTN_B32       :Write('DS_WRAP_RTN_B32');
+  DS_SWIZZLE_B32        :Write('DS_SWIZZLE_B32');
+  DS_READ_B32           :Write('DS_READ_B32');
+  DS_READ2_B32          :Write('DS_READ2_B32');
+  DS_READ2ST64_B32      :Write('DS_READ2ST64_B32');
+  DS_READ_I8            :Write('DS_READ_I8');
+  DS_READ_U8            :Write('DS_READ_U8');
+  DS_READ_I16           :Write('DS_READ_I16');
+  DS_READ_U16           :Write('DS_READ_U16');
+  DS_CONSUME            :Write('DS_CONSUME');
+  DS_APPEND             :Write('DS_APPEND');
+  DS_ORDERED_COUNT      :Write('DS_ORDERED_COUNT');
+  DS_ADD_U64            :Write('DS_ADD_U64');
+  DS_SUB_U64            :Write('DS_SUB_U64');
+  DS_RSUB_U64           :Write('DS_RSUB_U64');
+  DS_INC_U64            :Write('DS_INC_U64');
+  DS_DEC_U64            :Write('DS_DEC_U64');
+  DS_MIN_I64            :Write('DS_MIN_I64');
+  DS_MAX_I64            :Write('DS_MAX_I64');
+  DS_MIN_U64            :Write('DS_MIN_U64');
+  DS_MAX_U64            :Write('DS_MAX_U64');
+  DS_OR_B64             :Write('DS_OR_B64');
+  DS_XOR_B64            :Write('DS_XOR_B64');
+  DS_MSKOR_B64          :Write('DS_MSKOR_B64');
+  DS_WRITE_B64          :Write('DS_WRITE_B64');
+  DS_WRITE2_B64         :Write('DS_WRITE2_B64');
+  DS_WRITE2ST64_B64     :Write('DS_WRITE2ST64_B64');
+  DS_CMPST_B64          :Write('DS_CMPST_B64');
+  DS_CMPST_F64          :Write('DS_CMPST_F64');
+  DS_MIN_F64            :Write('DS_MIN_F64');
+  DS_MAX_F64            :Write('DS_MAX_F64');
+  DS_ADD_RTN_U64        :Write('DS_ADD_RTN_U64');
+  DS_SUB_RTN_U64        :Write('DS_SUB_RTN_U64');
+  DS_RSUB_RTN_U64       :Write('DS_RSUB_RTN_U64');
+  DS_INC_RTN_U64        :Write('DS_INC_RTN_U64');
+  DS_DEC_RTN_U64        :Write('DS_DEC_RTN_U64');
+  DS_MIN_RTN_I64        :Write('DS_MIN_RTN_I64');
+  DS_MAX_RTN_I64        :Write('DS_MAX_RTN_I64');
+  DS_MIN_RTN_U64        :Write('DS_MIN_RTN_U64');
+  DS_MAX_RTN_U64        :Write('DS_MAX_RTN_U64');
+  DS_AND_RTN_B64        :Write('DS_AND_RTN_B64');
+  DS_OR_RTN_B64         :Write('DS_OR_RTN_B64');
+  DS_XOR_RTN_B64        :Write('DS_XOR_RTN_B64');
+  DS_MSKOR_RTN_B64      :Write('DS_MSKOR_RTN_B64');
+  DS_WRXCHG_RTN_B64     :Write('DS_WRXCHG_RTN_B64');
+  DS_WRXCHG2_RTN_B64    :Write('DS_WRXCHG2_RTN_B64');
+  DS_WRXCHG2ST64_RTN_B64:Write('DS_WRXCHG2ST64_RTN_B64');
+  DS_CMPST_RTN_B64      :Write('DS_CMPST_RTN_B64');
+  DS_CMPST_RTN_F64      :Write('DS_CMPST_RTN_F64');
+  DS_MIN_RTN_F64        :Write('DS_MIN_RTN_F64');
+  DS_MAX_RTN_F64        :Write('DS_MAX_RTN_F64');
+  DS_READ_B64           :Write('DS_READ_B64');
+  DS_READ2_B64          :Write('DS_READ2_B64');
+  DS_READ2ST64_B64      :Write('DS_READ2ST64_B64');
+  DS_CONDXCHG32_RTN_B64 :Write('DS_CONDXCHG32_RTN_B64');
+  DS_ADD_SRC2_U32       :Write('DS_ADD_SRC2_U32');
+  DS_SUB_SRC2_U32       :Write('DS_SUB_SRC2_U32');
+  DS_RSUB_SRC2_U32      :Write('DS_RSUB_SRC2_U32');
+  DS_INC_SRC2_U32B      :Write('DS_INC_SRC2_U32B');
+  DS_DEC_SRC2_U32       :Write('DS_DEC_SRC2_U32');
+  DS_MIN_SRC2_I32       :Write('DS_MIN_SRC2_I32');
+  DS_MAX_SRC2_I32       :Write('DS_MAX_SRC2_I32');
+  DS_MIN_SRC2_U32       :Write('DS_MIN_SRC2_U32');
+  DS_MAX_SRC2_U32       :Write('DS_MAX_SRC2_U32');
+  DS_AND_SRC2_B32B      :Write('DS_AND_SRC2_B32B');
+  DS_OR_SRC2_B32        :Write('DS_OR_SRC2_B32');
+  DS_XOR_SRC2_B32       :Write('DS_XOR_SRC2_B32');
+  DS_WRITE_SRC2_B32     :Write('DS_WRITE_SRC2_B32');
+  DS_MIN_SRC2_F32       :Write('DS_MIN_SRC2_F32');
+  DS_MAX_SRC2_F32       :Write('DS_MAX_SRC2_F32');
+  DS_ADD_SRC2_U64       :Write('DS_ADD_SRC2_U64');
+  DS_SUB_SRC2_U64       :Write('DS_SUB_SRC2_U64');
+  DS_RSUB_SRC2_U64      :Write('DS_RSUB_SRC2_U64');
+  DS_INC_SRC2_U64       :Write('DS_INC_SRC2_U64');
+  DS_DEC_SRC2_U64       :Write('DS_DEC_SRC2_U64');
+  DS_MIN_SRC2_I64       :Write('DS_MIN_SRC2_I64');
+  DS_MAX_SRC2_I64       :Write('DS_MAX_SRC2_I64');
+  DS_MIN_SRC2_U64       :Write('DS_MIN_SRC2_U64');
+  DS_MAX_SRC2_U64       :Write('DS_MAX_SRC2_U64');
+  DS_AND_SRC2_B64       :Write('DS_AND_SRC2_B64');
+  DS_OR_SRC2_B64        :Write('DS_OR_SRC2_B64');
+  DS_XOR_SRC2_B64       :Write('DS_XOR_SRC2_B64');
+  DS_MIN_SRC2_F64       :Write('DS_MIN_SRC2_F64');
+  DS_MAX_SRC2_F64       :Write('DS_MAX_SRC2_F64');
+
+  else
+      Writeln('DS?',SPI.DS.OP);
+ end;
+ Write(' ');
+
+ //VDST vbindex vsrc0 vsrc1 OFFSET0 OFFSET1 GDS
+
+ _print_vdst8(SPI.DS.VDST);
+ Write(' ');
+
+ //vbindex
+ _print_vdst8(SPI.DS.ADDR);
+ Write(' ');
+
+ //vsrc0
+ _print_vdst8(SPI.DS.DATA0);
+ Write(' ');
+
+ //vsrc1
+ _print_vdst8(SPI.DS.DATA1);
+ Write(' ');
+
+ Write('OFFSET:0x',HexStr(SPI.DS.OFFSET1,2),HexStr(SPI.DS.OFFSET0,2),' ');
+
+ Write('GDS:',SPI.DS.GDS);
+
+ Writeln;
 end;
 
 
