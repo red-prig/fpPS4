@@ -2435,7 +2435,7 @@ begin
    begin
     R:=VirtualProtect(ModuleInfo.segmentInfo[i].address,
                       ModuleInfo.segmentInfo[i].Size,
-                      __map_segment_prot(ModuleInfo.segmentInfo[i].prot),
+                      {__map_segment_prot(ModuleInfo.segmentInfo[i].prot)} PAGE_EXECUTE_READWRITE,
                       @dummy);
 
     FlushInstructionCache(GetCurrentProcess,

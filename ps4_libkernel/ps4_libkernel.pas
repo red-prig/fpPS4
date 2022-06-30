@@ -983,6 +983,7 @@ begin
  lib^.set_proc($688F8E782CFCC6B4,@ps4_scePthreadSelf);
 
  lib^.set_proc($1E82D558D6A70417,@ps4_getpid);
+ lib^.set_proc($108FF9FE396AD9D1,@ps4_scePthreadGetthreadid);
 
  lib^.set_proc($1E8C3B07C39EB7A9,@ps4_scePthreadGetname);
  lib^.set_proc($181518EF2C1D50B1,@ps4_scePthreadRename);

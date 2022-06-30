@@ -8,6 +8,7 @@ implementation
 
 uses
   Windows,
+  ntapi,
   SysConst,
   SysUtils,
   hamt,
@@ -365,7 +366,73 @@ end;
 const
  FPC_EXCEPTION_CODE=$E0465043;
 
-function ProcessException(p: PExceptionPointers): longint; stdcall;
+{
+INSERTQ xmm1, xmm2, imm8,
+
+imm8 F2 0F 78 /r ib ib
+Insert field starting at bit 0 of xmm2 with the length
+specified by [5:0] of the first immediate byte. This
+field is inserted into xmm1 starting at the bit position
+specified by [5:0] of the second immediate byte.
+
+INSERTQ xmm1, xmm2 F2 0F 79 /r
+Insert field starting at bit 0 of xmm2 with the length
+specified by xmm2[69:64]. This field is inserted into
+xmm1 starting at the bit position specified by
+xmm2[77:72].
+}
+
+function Test_SIGILL(const rec:TExceptionRecord;ctx:PCONTEXT):longint;
+begin
+ case rec.ExceptionCode of
+  STATUS_ILLEGAL_INSTRUCTION:
+    begin
+     Case PDWORD(rec.ExceptionAddress)[0] of  //4 byte
+                 //00 11 22 33 44 55 66
+      $780f41f2: //f2 41 0f 78 e8 30 00           insertq $0x0,$0x30,%xmm8,%xmm5
+       begin
+        PBYTE(rec.ExceptionAddress)[0]:=$90;
+        PBYTE(rec.ExceptionAddress)[1]:=$90;
+        PBYTE(rec.ExceptionAddress)[2]:=$90;
+        PBYTE(rec.ExceptionAddress)[3]:=$90;
+        PBYTE(rec.ExceptionAddress)[4]:=$90;
+        PBYTE(rec.ExceptionAddress)[5]:=$90;
+        PBYTE(rec.ExceptionAddress)[6]:=$90;
+
+        ctx^.Rip:=ctx^.Rip+7;
+
+        NtContinue(ctx,False);
+       end;
+      else;
+     end;
+
+     Case (PDWORD(rec.ExceptionAddress)[0] and $FFFFFF) of  //3 byte
+                //00 11 22 33 44 55
+       $780FF2: //f2 0f 78 c1 30 00              insertq $0x0,$0x30,%xmm1,%xmm0
+       begin
+        PBYTE(rec.ExceptionAddress)[0]:=$90;
+        PBYTE(rec.ExceptionAddress)[1]:=$90;
+        PBYTE(rec.ExceptionAddress)[2]:=$90;
+        PBYTE(rec.ExceptionAddress)[3]:=$90;
+        PBYTE(rec.ExceptionAddress)[4]:=$90;
+        PBYTE(rec.ExceptionAddress)[5]:=$90;
+
+        ctx^.Rip:=ctx^.Rip+6;
+
+        NtContinue(ctx,False);
+       end;
+      else;
+     end;
+
+     Writeln(HexStr(PDWORD(rec.ExceptionAddress)[0],8)); //C1780FF2
+     Exit(EXCEPTION_EXECUTE_HANDLER); //Unknow
+    end;
+  else
+   Exit(EXCEPTION_CONTINUE_SEARCH); //Next
+ end;
+end;
+
+function ProcessException(p: PExceptionPointers):longint; stdcall;
 var
  code: Longint;
  node:TElf_node;
@@ -373,6 +440,8 @@ begin
  Result := 0;
 
  if (p^.ExceptionRecord^.ExceptionCode=FPC_EXCEPTION_CODE) then Exit(EXCEPTION_CONTINUE_SEARCH);
+
+ if (Test_SIGILL(p^.ExceptionRecord^,p^.ContextRecord)=EXCEPTION_CONTINUE_EXECUTION) then Exit(EXCEPTION_CONTINUE_EXECUTION);
 
  //DumpException(nil,0,p^.ExceptionRecord^.ExceptionAddress,P^.ContextRecord);
 

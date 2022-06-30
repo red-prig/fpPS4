@@ -126,6 +126,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSaveDataInitialize2(params:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceSaveDataInitialize3(params:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -226,6 +231,7 @@ begin
  lib:=Result._add_lib('libSceSaveData');
 
  lib^.set_proc($664661B2408F5C5C,@ps4_sceSaveDataInitialize);
+ lib^.set_proc($9753660DE0E93465,@ps4_sceSaveDataInitialize2);
  lib^.set_proc($4F2C2B14A0A82C66,@ps4_sceSaveDataInitialize3);
  lib^.set_proc($C8A0F2F12E722C0D,@ps4_sceSaveDataTerminate);
  lib^.set_proc($BFB00000CA342F3E,@ps4_sceSaveDataSetupSaveDataMemory);
