@@ -50,7 +50,7 @@ type
   procedure _emit_V_FMA_F32;
   procedure _emit_V_CUBE(OpId:DWORD);
   procedure _emit_V_MOV_B32;
-  procedure _emit_V_SQRT_F32;
+  procedure _emit_V_EXT_F32(OpId:DWORD);
   procedure _emit_V_RCP_F32;
  end;
 
@@ -681,7 +681,7 @@ begin
 
 end;
 
-procedure TEmit_VOP3._emit_V_SQRT_F32;
+procedure TEmit_VOP3._emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
@@ -693,7 +693,7 @@ begin
  _emit_src_abs_bit(@src,1);
  _emit_src_neg_bit(@src,1);
 
- emit_OpSqrt(dst,src);
+ emit_OpExt1(OpId,dtFloat32,dst,src);
 
  _emit_dst_omod_f(dst);
  _emit_dst_clamp_f(dst);
@@ -868,6 +868,8 @@ end;
 procedure TEmit_VOP3._emit_VOP3a;
 begin
 
+ //VOP2 analog
+
  Case FSPI.VOP3a.OP of
 
   256+V_CNDMASK_B32:
@@ -914,6 +916,8 @@ begin
     begin
      _emit_V_MAC_F32;
     end;
+
+  //VOP3 only
 
   V_MUL_LO_I32:
     begin
@@ -970,15 +974,29 @@ begin
   V_CUBETC_F32:_emit_V_CUBE(OpCUBETC);
   V_CUBEMA_F32:_emit_V_CUBE(OpCUBEMA);
 
+  //VOP1 analog
+
+  384+V_NOP:;
+
   384+V_MOV_B32:
    begin
     _emit_V_MOV_B32;
    end;
 
-  384+V_SQRT_F32:
-   begin
-    _emit_V_SQRT_F32;
-   end;
+  384+V_FRACT_F32: _emit_V_EXT_F32(GlslOp.Fract);
+  384+V_TRUNC_F32: _emit_V_EXT_F32(GlslOp.Trunc);
+  384+V_CEIL_F32 : _emit_V_EXT_F32(GlslOp.Ceil);
+
+  384+V_FLOOR_F32: _emit_V_EXT_F32(GlslOp.Floor);
+  384+V_EXP_F32  : _emit_V_EXT_F32(GlslOp.Exp2);
+  384+V_LOG_F32  : _emit_V_EXT_F32(GlslOp.Log2);
+
+  384+V_RSQ_F32  : _emit_V_EXT_F32(GlslOp.InverseSqrt);
+
+  384+V_SQRT_F32 : _emit_V_EXT_F32(GlslOp.Sqrt);
+
+  384+V_SIN_F32  : _emit_V_EXT_F32(GlslOp.Sin);
+  384+V_COS_F32  : _emit_V_EXT_F32(GlslOp.Cos);
 
   384+V_RCP_F32:
    begin

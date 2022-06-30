@@ -66,6 +66,7 @@ type
    procedure emit_OpFract(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpSqrt(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpInverseSqrt(dst:PsrRegSlot;src:PsrRegNode);
+   procedure emit_OpLog2(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpExp2(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpSin(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpFMin(dst:PsrRegSlot;src0,src1:PsrRegNode);
@@ -582,6 +583,11 @@ end;
 procedure TEmitOp.emit_OpInverseSqrt(dst:PsrRegSlot;src:PsrRegNode);
 begin
  emit_OpExt1(GlslOp.InverseSqrt,dtFloat32,dst,src);
+end;
+
+procedure TEmitOp.emit_OpLog2(dst:PsrRegSlot;src:PsrRegNode);
+begin
+ emit_OpExt1(GlslOp.Log2,dtFloat32,dst,src);
 end;
 
 procedure TEmitOp.emit_OpExp2(dst:PsrRegSlot;src:PsrRegNode);

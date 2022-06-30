@@ -200,7 +200,8 @@ uses
  emit_EXP,
  emit_VINTRP,
  emit_SMRD,
- emit_MIMG;
+ emit_MIMG,
+ emit_DS;
 
 function TSprvEmit.Alloc(Size:ptruint):Pointer;
 begin
@@ -1721,7 +1722,7 @@ begin
             else
                      TEmit_VOP3(Self)._emit_VOP3a;
            end;
-  W_DS    :_emit_DS;
+  W_DS    :TEmit_DS(Self)._emit_DS;
   W_MUBUF :TEmit_MUBUF(Self)._emit_MUBUF;
   W_MTBUF :TEmit_MTBUF(Self)._emit_MTBUF;
   W_EXP   :TEmit_EXP(Self)._emit_EXP;

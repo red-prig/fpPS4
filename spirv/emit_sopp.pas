@@ -25,7 +25,9 @@ type
   procedure _emit_S_BRANCH;
   function  IsBegLoop(Adr:TSrcAdr):Boolean;
   function  IsEndLoop(Adr:TSrcAdr):Boolean;
+  function  IsUnknow(Adr:TSrcAdr):Boolean;
   procedure emit_cond_block(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
+  procedure emit_block_unknow(adr:TSrcAdr);
   procedure UpBuildVol(last:PsrOpBlock);
   procedure emit_loop(adr:TSrcAdr);
  end;
@@ -209,6 +211,16 @@ begin
  end;
 end;
 
+function TEmit_SOPP.IsUnknow(Adr:TSrcAdr):Boolean;
+var
+ pLabel:PsrLabel;
+begin
+ pLabel:=FindLabel(Adr);
+ Assert(pLabel<>nil);
+
+ Result:=pLabel^.IsType(ltUnknow);
+end;
+
 procedure TEmit_SOPP._emit_S_BRANCH_COND(pSlot:PsrRegSlot;n:Boolean);
 var
  c_adr,b_adr:TSrcAdr;
@@ -245,6 +257,32 @@ begin
 
 end;
 
+procedure TEmit_SOPP.emit_block_unknow(adr:TSrcAdr);
+var
+ c_adr:TSrcAdr;
+ e_adr:TSrcAdr;
+ pOpChild:PsrOpBlock;
+ Info:TsrBlockInfo;
+begin
+ Info:=Default(TsrBlockInfo);
+
+ c_adr:=FCursor.Adr;                      //get current
+ SetPtr(adr.get_pc,btAdr);                //set new
+ e_adr:=FCursor.pCode^.FTop.pELabel^.Adr; //get end of code
+ SetPtr(c_adr.get_pc,btMain);             //ret current
+
+ Info.b_adr:=adr;
+ Info.e_adr:=e_adr;
+ Info.bType:=btAdr;
+
+ //down group
+ pOpChild:=AllocBlockOp;
+ pOpChild^.SetInfo(Info);
+ PushBlockOp(line,pOpChild,nil);
+
+ SetPtr(adr.get_pc,btAdr);
+end;
+
 procedure TEmit_SOPP._emit_S_BRANCH;
 var
  c_adr,b_adr:TSrcAdr;
@@ -254,7 +292,10 @@ begin
  b_adr:=c_adr;
  b_adr.Offdw:=get_branch_offset(FSPI);
 
-
+ if IsUnknow(b_adr) then
+ begin
+  emit_block_unknow(b_adr);
+ end else
  if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
  begin  //continue?
   if not IsBegLoop(b_adr) then Assert(false,'Unknow');
