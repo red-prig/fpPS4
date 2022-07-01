@@ -104,6 +104,9 @@ var
  buf:TvHostImage2;
  ImageCopy:TVkImageCopy;
 begin
+
+ if (image.key.params.samples>ord(VK_SAMPLE_COUNT_1_BIT)) then Exit;
+
  buf:=image.FetchHostImage(cmd,ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
                                ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 

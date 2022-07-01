@@ -594,7 +594,7 @@ end;
 
 procedure TEmit_MIMG._emit_image_load(Tgrp:PsrRegNode;info:PsrImageInfo);
 var
- dst,coord,lod:PsrRegNode;
+ dst,coord,lod,smp:PsrRegNode;
 
  roffset:DWORD;
 
@@ -611,12 +611,14 @@ begin
      coord:=_GatherCoord_u(roffset,info^.tinfo.Dim);
      node:=emit_OpImageFetch(line,Tgrp,dst,coord);
 
-     //fragid T# 2D MSAA
-     if (info^.tinfo.MS=1) then
+     if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
      begin
-      Assert(false,'TODO');
-     end;
+      smp:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
+      Inc(roffset);
 
+      node^.AddLiteral(ImageOperands.Sample,'Sample');
+      node^.AddParam(ntReg,smp);
+     end;
     end;
   IMAGE_LOAD_MIP: //All except MSAA
     begin
@@ -625,6 +627,7 @@ begin
 
      lod:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
      Inc(roffset);
+
      node^.AddLiteral(ImageOperands.Lod,'Lod');
      node^.AddParam(ntReg,lod);
     end;

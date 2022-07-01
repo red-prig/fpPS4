@@ -19,8 +19,10 @@ type
   procedure _emit_V_MOV_B32;
   procedure _emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure _emit_V_CVT_OFF_F32_I4;
+  procedure _emit_V_CVT_F32_UBYTE0;
   procedure _emit_V_EXT_F32(OpId:DWORD);
   procedure _emit_V_RCP_F32;
+  procedure _emit_V_FFBL_B32;
  end;
 
 implementation
@@ -81,6 +83,25 @@ begin
  emit_OpFDiv(dst,subf,num_16);
 end;
 
+procedure TEmit_VOP1._emit_V_CVT_F32_UBYTE0;
+Var
+ dst,tmp:PsrRegSlot;
+ src:PsrRegNode;
+ num_FF:PsrRegNode;
+
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ tmp:=@FRegsStory.FUnattach;
+ num_FF:=FetchReg(FConsts.Fetch(dtUInt32,$FF));
+
+ emit_OpBitwiseAnd(tmp,src,num_FF);
+ src:=MakeRead(tmp,dtUInt32);
+
+ emit_Op1(Op.OpConvertUToF,dtFloat32,dst,src);
+end;
+
 procedure TEmit_VOP1._emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
@@ -105,6 +126,18 @@ begin
  emit_OpFDiv(dst,one,src);
 end;
 
+procedure TEmit_VOP1._emit_V_FFBL_B32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtInt32);
+
+ emit_OpExt1(GlslOp.FindILsb,dtInt32,dst,src);
+end;
+
+
 procedure TEmit_VOP1._emit_VOP1;
 begin
 
@@ -127,6 +160,11 @@ begin
      _emit_V_CVT_OFF_F32_I4;
     end;
 
+  V_CVT_F32_UBYTE0:
+    begin
+     _emit_V_CVT_F32_UBYTE0;
+    end;
+
   V_FRACT_F32: _emit_V_EXT_F32(GlslOp.Fract);
   V_TRUNC_F32: _emit_V_EXT_F32(GlslOp.Trunc);
   V_CEIL_F32 : _emit_V_EXT_F32(GlslOp.Ceil);
@@ -145,6 +183,11 @@ begin
   V_RCP_F32:
     begin
      _emit_V_RCP_F32;
+    end;
+
+  V_FFBL_B32:
+    begin
+     _emit_V_FFBL_B32;
     end;
 
   else

@@ -30,6 +30,7 @@ type
   procedure emit_block_unknow(adr:TSrcAdr);
   procedure UpBuildVol(last:PsrOpBlock);
   procedure emit_loop(adr:TSrcAdr);
+  procedure emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
  end;
 
 implementation
@@ -187,6 +188,53 @@ begin
  end;
 end;
 
+procedure TEmit_SOPP.emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
+var
+ src:PsrRegNode;
+ node,pOpBlock:PsrOpBlock;
+ pOpLabel:array[0..1] of PspirvOp;
+ FVolMark:TsrVolMark;
+begin
+ src:=MakeRead(pSlot,dtBool);
+
+ node:=FMain^.pBlock;
+ pOpBlock:=node^.FindUpLoop;
+ Assert(pOpBlock<>nil,'not found');
+
+ pOpLabel[0]:=nil;
+
+ FVolMark:=vmNone;
+ if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is continue?
+ begin
+  pOpLabel[0]:=pOpBlock^.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
+  pOpBlock^.Cond.FUseCont:=True;
+  FVolMark:=vmCont;
+ end else
+ if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is break?
+ begin
+  pOpLabel[0]:=pOpBlock^.Labels.pEndOp;
+  FVolMark:=vmBreak;
+ end else
+ begin
+  Assert(false,'emit_loop');
+ end;
+
+ Assert(pOpLabel[0]<>nil);
+ pOpLabel[1]:=NewLabelOp;
+
+ UpBuildVol(pOpBlock);
+ node^.Regs.FVolMark:=FVolMark; //mark end of
+
+ emit_OpCondMerge(line,pOpLabel[1]);
+
+ Case n of
+  True :emit_OpBranchCond(line,pOpLabel[0],pOpLabel[1],src);
+  False:emit_OpBranchCond(line,pOpLabel[1],pOpLabel[0],src);
+ end;
+
+ AddSpirvOp(line,pOpLabel[1]);
+end;
+
 function TEmit_SOPP.IsBegLoop(Adr:TSrcAdr):Boolean;
 var
  node:PsrCFGBlock;
@@ -242,13 +290,13 @@ begin
  if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
  begin //continue?
   if not IsBegLoop(b_adr) then Assert(false,'Unknow');
-  Assert(false,'TODO');
+  emit_loop_cond(pSlot,n,b_adr);
  end else
  begin //down
   if FCursor.pBlock^.IsBigOf(b_adr) then
   begin //break?
    if not IsEndLoop(b_adr) then Assert(false,'Unknow');
-   Assert(false,'TODO');
+   emit_loop_cond(pSlot,n,b_adr);
   end else
   begin //cond
    emit_cond_block(pSlot,n,c_adr);

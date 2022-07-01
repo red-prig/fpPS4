@@ -37,6 +37,7 @@ type
   procedure _emit_V_MUL_LO_I32;
   procedure _emit_V_MUL_F32;
   procedure _emit_V_MUL_I32_I24;
+  procedure _emit_V_MUL_U32_U24;
   procedure _emit_V_MAC_F32;
 
   procedure _emit_V_BFE_U32;
@@ -362,6 +363,25 @@ begin
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+
+ //24bit mask TODO
+ emit_OpIMul(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP3._emit_V_MUL_U32_U24;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
 
  //24bit mask TODO
  emit_OpIMul(dst,src[0],src[1]);
@@ -910,6 +930,11 @@ begin
   256+V_MUL_I32_I24:
     begin
      _emit_V_MUL_I32_I24;
+    end;
+
+  256+V_MUL_U32_U24:
+    begin
+     _emit_V_MUL_U32_U24;
     end;
 
   256+V_MAC_F32:

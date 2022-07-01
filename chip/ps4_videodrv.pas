@@ -406,7 +406,13 @@ begin
 
   if (GFXMicroEngine.Current<>nil) then
   begin
-   if not me_node_test(GFXMicroEngine.Current) then
+   if me_node_test(GFXMicroEngine.Current) then
+   begin
+    if (GFXMicroEngine.Current^.mode=metCmdBuffer) then
+    begin
+     RTLEventSetEvent(FIdleEvent);
+    end;
+   end else
    begin
     time:=-100000;
     NtDelayExecution(True,@time);
@@ -731,6 +737,9 @@ begin
  Case Body^.eventType of
   THREAD_TRACE_MARKER        :Writeln(' THREAD_TRACE_MARKER');
   FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' FLUSH_AND_INV_CB_PIXEL_DATA');
+  FLUSH_AND_INV_DB_DATA_TS   :Writeln(' FLUSH_AND_INV_DB_DATA_TS');
+  FLUSH_AND_INV_DB_META      :Writeln(' FLUSH_AND_INV_DB_META');
+  FLUSH_AND_INV_CB_DATA_TS   :Writeln(' FLUSH_AND_INV_CB_DATA_TS');
   FLUSH_AND_INV_CB_META      :Writeln(' FLUSH_AND_INV_CB_META');
   else
    Assert(False,IntToStr(Body^.eventType));
@@ -2232,7 +2241,9 @@ function gfx_test(CmdBuffer:TvCmdBuffer):Boolean;
 begin
  Result:=True;
  if (CmdBuffer=nil) then Exit;
- Result:=(CmdBuffer.ret<>0) or (CmdBuffer.Fence.Status=VK_SUCCESS);
+ Result:=(CmdBuffer.ret<>0) or
+         (CmdBuffer.cmd_count=0) or
+         (CmdBuffer.Fence.Status=VK_SUCCESS);
  if Result then
  begin
   CmdBuffer.ReleaseResource;

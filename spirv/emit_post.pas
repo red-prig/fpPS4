@@ -400,7 +400,7 @@ begin
 
  if (old<>node) then //is change?
  begin
-  if (node^.dtype=dtUnknow) or CompareType(node^.dtype,old^.dtype) then
+  if (node^.dtype=dtUnknow) or (node^.dtype=old^.dtype) then
   begin
    node:=old; //set new
    Inc(Result);

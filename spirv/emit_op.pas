@@ -127,6 +127,7 @@ type
    procedure emit_OpNot(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpLogicalNot(dst:PsrRegSlot;src:PsrRegNode);
    procedure emit_OpBitwiseOr(dst:PsrRegSlot;src0,src1:PsrRegNode);
+   procedure emit_OpBitwiseXor(dst:PsrRegSlot;src0,src1:PsrRegNode);
    procedure emit_OpLogicalOr(dst:PsrRegSlot;src0,src1:PsrRegNode);
    procedure emit_OpBitwiseAnd(dst:PsrRegSlot;src0,src1:PsrRegNode);
    procedure emit_OpLogicalAnd(dst:PsrRegSlot;src0,src1:PsrRegNode);
@@ -239,6 +240,8 @@ procedure TEmitOp.emit_OpStore(pLine:PspirvOp;dst:PsrVariable;src:PsrRegNode);
 Var
  p:TOpParamSingle;
 begin
+ if (dst^.dtype<>src^.dtype) then Assert(false);
+
  dst^.mark_write;
  p.SetParam(ntVar,dst);
  emit_OpStore(pLine,p,src);
@@ -1131,6 +1134,11 @@ end;
 procedure TEmitOp.emit_OpBitwiseOr(dst:PsrRegSlot;src0,src1:PsrRegNode);
 begin
  emit_Op2(Op.OpBitwiseOr,dtUnknow{dtUint32},dst,src0,src1);
+end;
+
+procedure TEmitOp.emit_OpBitwiseXor(dst:PsrRegSlot;src0,src1:PsrRegNode);
+begin
+ emit_Op2(Op.OpBitwiseXor,{dtUnknow}dtUint32,dst,src0,src1);
 end;
 
 procedure TEmitOp.emit_OpLogicalOr(dst:PsrRegSlot;src0,src1:PsrRegNode);

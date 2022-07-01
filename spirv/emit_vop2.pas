@@ -19,6 +19,7 @@ type
   procedure _emit_V_CNDMASK_B32;
   procedure _emit_V_AND_B32;
   procedure _emit_V_OR_B32;
+  procedure _emit_V_XOR_B32;
   procedure _emit_V_LSHL_B32;
   procedure _emit_V_LSHLREV_B32;
   procedure _emit_V_LSHR_B32;
@@ -80,6 +81,19 @@ begin
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUnknow);
 
  emit_OpBitwiseOr(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP2._emit_V_XOR_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,{dtUnknow}dtUInt32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,{dtUnknow}dtUInt32);
+
+ emit_OpBitwiseXor(dst,src[0],src[1]);
 end;
 
 procedure TEmit_VOP2._emit_V_LSHL_B32;
@@ -400,6 +414,11 @@ begin
   V_OR_B32:
     begin
      _emit_V_OR_B32;
+    end;
+
+  V_XOR_B32:
+    begin
+     _emit_V_XOR_B32;
     end;
 
   V_LSHL_B32:

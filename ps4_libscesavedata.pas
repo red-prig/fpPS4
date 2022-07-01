@@ -116,6 +116,37 @@ type
   reserved:array[0..31] of Byte;
  end;
 
+ pSceSaveDataDirNameSearchCond=^SceSaveDataDirNameSearchCond;
+ SceSaveDataDirNameSearchCond=packed record
+  userId:Integer;
+  _align:Integer;
+  titleId:pSceSaveDataTitleId;
+  dirName:pSceSaveDataDirName;
+  key:DWORD;   //SceSaveDataSortKey
+  order:DWORD; //SceSaveDataSortOrder
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceSaveDataSearchInfo=^SceSaveDataSearchInfo;
+ SceSaveDataSearchInfo=packed record
+  blocks:QWORD;     //SceSaveDataBlocks
+  freeBlocks:QWORD; //SceSaveDataBlocks
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceSaveDataDirNameSearchResult=^SceSaveDataDirNameSearchResult;
+ SceSaveDataDirNameSearchResult=packed record
+  hitNum:DWORD;
+  _align:Integer;
+  dirNames:pSceSaveDataDirName;
+  dirNamesNum:DWORD;
+  setNum:DWORD;
+  params:pSceSaveDataParam;
+  infos:pSceSaveDataSearchInfo;
+  reserved:array[0..11] of Byte;
+  _align2:Integer;
+ end;
+
 implementation
 
 uses
@@ -210,6 +241,16 @@ begin
  end;
 end;
 
+function ps4_sceSaveDataDirNameSearch(cond:pSceSaveDataDirNameSearchCond;
+                                      sres:pSceSaveDataDirNameSearchResult):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (sres<>nil) then
+ begin
+  sres^:=Default(SceSaveDataDirNameSearchResult);
+ end;
+end;
+
 type
  SceSaveDataParamType=DWORD;
 
@@ -241,6 +282,7 @@ begin
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
  lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
+ lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
 end;
 

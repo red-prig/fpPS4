@@ -84,6 +84,11 @@ type
   pad1:array[0..6] of Byte;
  end;
 
+ pSceVideoOutDeviceCapabilityInfo=^SceVideoOutDeviceCapabilityInfo;
+ SceVideoOutDeviceCapabilityInfo=packed record
+  capability:QWORD; //SceVideoOutDeviceCapability
+ end;
+
 const
  //SceVideoOutBufferAttributeOption
  SCE_VIDEO_OUT_BUFFER_ATTRIBUTE_OPTION_NONE = 0;
@@ -1429,7 +1434,18 @@ begin
 end;
 
 function ps4_sceVideoOutSetWindowModeMargins(hVideo:Integer;top,bottom:Integer):Integer; SysV_ABI_CDecl;
+var
+ H:TVideoOut;
 begin
+ _sig_lock;
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ _sig_lock;
+ H.Release;
+ _sig_unlock;
+
  Result:=0;
 end;
 
@@ -1556,13 +1572,47 @@ type
  pSceVideoOutConfigureOptions=^SceVideoOutConfigureOptions;
 
 
-function ps4_sceVideoOutConfigureOutputMode_(handle:Integer;
+function ps4_sceVideoOutConfigureOutputMode_(hVideo:Integer;
                                              reserved:DWORD;
                                              pMode:pSceVideoOutMode;
                                              pOptions:pSceVideoOutConfigureOptions;
                                              sizeOfMode:DWORD;
                                              sizeOfOptions:DWORD):Integer; SysV_ABI_CDecl;
+var
+ H:TVideoOut;
 begin
+ _sig_lock;
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ _sig_lock;
+ H.Release;
+ _sig_unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceVideoOutGetDeviceCapabilityInfo_(hVideo:Integer;
+                                                 pInfo:pSceVideoOutDeviceCapabilityInfo;
+                                                 sizeOfInfo:QWORD):Integer; SysV_ABI_CDecl;
+var
+ H:TVideoOut;
+begin
+ if (pInfo=nil) or (sizeOfInfo<SizeOf(SceVideoOutDeviceCapabilityInfo)) then
+  Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+
+ _sig_lock;
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ _sig_lock;
+ H.Release;
+ _sig_unlock;
+
+ pInfo^.capability:=0;
+
  Result:=0;
 end;
 
@@ -1598,6 +1648,7 @@ begin
  lib^.set_proc($313C71ACE09E4A28,@ps4_sceVideoOutSetWindowModeMargins);
  lib^.set_proc($A63903B20C658BA7,@ps4_sceVideoOutModeSetAny_);
  lib^.set_proc($3756C4A09E12470E,@ps4_sceVideoOutConfigureOutputMode_);
+ lib^.set_proc($90654B73786D404F,@ps4_sceVideoOutGetDeviceCapabilityInfo_);
 end;
 
 initialization

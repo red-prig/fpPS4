@@ -430,7 +430,7 @@ begin
 
    Assert(pReg^.pWriter.ntype<>ntVolatile);}
 
-   TSprvEmit_post(Self).PrepTypeNode(pReg,rtype);
+   TSprvEmit_post(Self).PrepTypeNode(pReg,rtype,False);
 
    {if pLine^.Adr.Offdw*4=$AC then
    begin
