@@ -94,6 +94,7 @@ type
 
  TOnElfLoadCb=function(Const name:RawByteString):TElf_node;
 
+ Phamt64locked=^Thamt64locked;
  Thamt64locked=object
   lock:TRWLock;
   hamt:TSTUB_HAMT64;

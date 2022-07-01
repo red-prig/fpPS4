@@ -13,6 +13,7 @@ uses
  sys_pthread,
  ps4libdoc,
  ps4_libSceAjm,
+ ps4_libSceMouse,
  ps4_libSceIme,
  ps4_libScePlayGo,
  ps4_libSceDiscMap,
@@ -483,6 +484,15 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\SPELUNKYCLASSIC\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\SPELUNKYCLASSIC\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Cursed Castilla v1.00 (ASIA)\CUSA07773\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Cursed Castilla v1.00 (ASIA)\CUSA07773\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Undertale\CUSA09415\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Undertale\CUSA09415\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

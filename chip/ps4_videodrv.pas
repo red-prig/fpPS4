@@ -845,7 +845,8 @@ begin
  Assert(Body^.CONTROL.wrOneAddr=0);
 
  Case Body^.CONTROL.dstSel of
-  WRITE_DATA_DST_SEL_MEMORY_SYNC,
+  WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
+  WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
   WRITE_DATA_DST_SEL_MEMORY_ASYNC:
     begin
      count:=pm4Hdr.count;

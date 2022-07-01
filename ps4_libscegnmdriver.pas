@@ -160,8 +160,8 @@ begin
  Result:=0;
  if (numDwords>$FF) then
  begin
-  Result:=$100;
   Move(InitDefault175_stub,cmdBuffer^,SizeOf(InitDefault175_stub));
+  Result:=$100;
  end;
 end;
 
@@ -478,9 +478,44 @@ const
 
 function ps4_sceGnmDrawInitDefaultHardwareState350(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
 begin
- assert(numDwords>$100);
- Move(InitDefault350_stub,cmdBuffer^,SizeOf(InitDefault350_stub));
- Result:=$100;
+ Result:=0;
+ if (numDwords>$FF) then
+ begin
+  Move(InitDefault350_stub,cmdBuffer^,SizeOf(InitDefault350_stub));
+  Result:=$100;
+ end;
+end;
+
+const
+ DispatchInitDefaultState_stub:array[0..17] of DWORD=(
+  $C0017602,
+  $216,
+  $FFFFFFFF,
+  $C0017602,
+  $217,
+  $FFFFFFFF,
+  $C0017602,
+  $215,
+  $170,
+  $c0055800,
+  $28000000,
+  0,
+  0,
+  0,
+  0,
+  $0000000a,
+  $c0ee1000,
+  0
+ );
+
+function ps4_sceGnmDispatchInitDefaultHardwareState(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (numDwords>$FF) then
+ begin
+  Move(DispatchInitDefaultState_stub,cmdBuffer^,SizeOf(DispatchInitDefaultState_stub));
+  Result:=$100;
+ end;
 end;
 
 function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar):Integer; SysV_ABI_CDecl;
@@ -1295,13 +1330,35 @@ const
 
 function ps4_sceGnmValidateCommandBuffers:Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+ Result:=Integer(SCE_GNM_ERROR_VALIDATION_NOT_ENABLED);
 end;
 
 //A value of true is returned if submit/dingdong is allowed; otherwise false is returned.
 function ps4_sceGnmAreSubmitsAllowed:Boolean; SysV_ABI_CDecl;
 begin
  Result:=true;
+end;
+
+const
+ SCE_GNM_ERROR_FAILURE=$8eee00ff;
+
+function ps4_sceGnmRegisterOwner(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmRegisterOwner:',ownerName);
+ Result:=Integer(SCE_GNM_ERROR_FAILURE);
+end;
+
+function ps4_sceGnmRegisterResource(pResourceHandle:PInteger; //ResourceHandle
+                                    ownerHandle:Integer;      //OwnerHandle
+                                    pMemory:Pointer;
+                                    sizeInBytes:QWORD;
+                                    resourceName:Pchar;
+                                    resourceType:Integer;     //ResourceType
+                                    userData:Pointer
+                                    ):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmRegisterResource:',resourceName);
+ Result:=Integer(SCE_GNM_ERROR_FAILURE);
 end;
 
 const
@@ -1318,16 +1375,27 @@ const
 var
  EopEvents:Thamt64locked;
 
+ ComputeEvents:array[0..6] of Thamt64locked;
+
 function _sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
 var
+ pEvents:Phamt64locked;
  P:PPointer;
  node:PKEventNode;
 begin
  Writeln('sceGnmAddEqEvent:',id);
- if (id<>kEqEventGfxEop) then Assert(false);
 
- EopEvents.LockWr;
- P:=HAMT_search64(@EopEvents.hamt,QWORD(eq));
+ Case id of
+  kEqEventCompute0RelMem..kEqEventCompute6RelMem
+
+                        :pEvents:=@ComputeEvents[id];
+  kEqEventGfxEop        :pEvents:=@EopEvents;
+  else
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ pEvents^.LockWr;
+ P:=HAMT_search64(@pEvents^.hamt,QWORD(eq));
  if (P<>nil) then
  begin
   node:=P^;
@@ -1337,20 +1405,20 @@ begin
   node:=_alloc_kevent_node(eq,SizeOf(TKEventNode));
   if (node=Pointer(1)) then
   begin
-   EopEvents.Unlock;
+   pEvents^.Unlock;
    Exit(SCE_KERNEL_ERROR_EBADF);
   end;
   if (node=nil) then
   begin
-   EopEvents.Unlock;
+   pEvents^.Unlock;
    Exit(SCE_KERNEL_ERROR_ENOMEM);
   end;
   node^.ev.filter:=SCE_KERNEL_EVFILT_GNM;
   node^.ev.data  :=id;
   node^.ev.udata :=udata;
-  HAMT_insert64(@EopEvents.hamt,QWORD(eq),node);
+  HAMT_insert64(@pEvents^.hamt,QWORD(eq),node);
  end;
- EopEvents.Unlock;
+ pEvents^.Unlock;
 
  Result:=0;
 end;
@@ -1393,6 +1461,7 @@ begin
  lib^.set_proc($4219F245EB5E2753,@ps4_sceGnmDrawInitDefaultHardwareState175);
  lib^.set_proc($D07DAF0586D32C72,@ps4_sceGnmDrawInitDefaultHardwareState200);
  lib^.set_proc($C9BD9C4616A00F52,@ps4_sceGnmDrawInitDefaultHardwareState350);
+ lib^.set_proc($9C5E9B1515014405,@ps4_sceGnmDispatchInitDefaultHardwareState);
 
  lib^.set_proc($5B512D8FF8E55BB6,@ps4_sceGnmInsertPushMarker);
  lib^.set_proc($EEA65536012EF926,@ps4_sceGnmInsertPopMarker);
@@ -1434,13 +1503,25 @@ begin
 
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 
+ lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
+ lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
+
   //nop nid:libSceGnmDriver:DBDA0ABCA5F3119A:sceGnmMapComputeQueue
 
 end;
 
 initialization
  GnmInitEmbedded;
+
  EopEvents.Init;
+ ComputeEvents[0].Init;
+ ComputeEvents[1].Init;
+ ComputeEvents[2].Init;
+ ComputeEvents[3].Init;
+ ComputeEvents[4].Init;
+ ComputeEvents[5].Init;
+ ComputeEvents[6].Init;
+
  ps4_app.RegistredPreLoad('libSceGnmDriver.prx',@Load_libSceGnmDriver);
  ps4_app.RegistredPreLoad('libSceGnmDriver_padebug.prx',@Load_libSceGnmDriver);
 
