@@ -16,6 +16,7 @@ type
   function c(n1,n2:PSpirvCap):Integer; static;
  end;
 
+ PsrCapList=^TsrCapList;
  TsrCapList=object
   type
    TNodeFetch=specialize TNodeFetch<PSpirvCap,TSpirvCap>;

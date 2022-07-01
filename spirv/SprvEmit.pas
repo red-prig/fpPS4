@@ -1217,9 +1217,21 @@ begin
 
  if (ENA.ANCILLARY_ENA<>0) then
  begin
-  AddInput(@FRegsStory.VGRP[p],dtUint32,itAncillary);
+  SetConst(@FRegsStory.VGRP[p],dtUint32,2);
+  //AddInput(@FRegsStory.VGRP[p],dtUint32,itAncillary);
   p:=p+1;
-  //Render target array index[26:16], Iterated sample number[11:8], Primitive type[1:0]
+  //Render target array index[26:16], BuiltIn.Layer
+  //Iterated sample number[11:8],     BuiltIn.SampleId
+  //Primitive type[1:0]               0..3
+
+  //POINT 00
+  //LINE  01
+  //TRI   10
+  //RECT  11
+
+  //PID       ISID      RTAI
+  //01|234567|89AB|CDEF|0123456789A|
+  //10|000000|    |0000|00000000000|
  end;
 
  if (ENA.SAMPLE_COVERAGE_ENA<>0) then

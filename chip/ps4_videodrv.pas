@@ -706,7 +706,15 @@ procedure onEventWriteEos(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4CMDEVENTWRITEEOS);
 var
  adr:PDWORD;
 begin
- Assert(Body^.eventType=47);
+
+ {$ifdef ww}
+ Case Body^.eventType of
+  CS_DONE:Writeln(' CS_DONE');
+  PS_DONE:Writeln(' PS_DONE');
+  else
+   Assert(False,IntToStr(Body^.eventType));
+ end;
+ {$endif}
 
  Case Body^.eventIndex of
   EVENT_WRITE_EOS_INDEX_CSDONE_PSDONE:

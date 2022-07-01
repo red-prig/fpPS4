@@ -1180,6 +1180,18 @@ begin
  end;
 end;
 
+function ps4_sceGnmResetVgtControl(cmdBuffer:PDWORD;param:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=-1;
+ if (cmdBuffer<>nil) and (param=3) then
+ begin
+  Result:=0;
+  cmdBuffer[0]:=$c0016900;
+  cmdBuffer[1]:=$2aa;
+  cmdBuffer[2]:=$ff;
+ end;
+end;
+
 function ps4_sceGnmDispatchDirect(cmdBuffer:PDWORD;numDwords:DWORD;
                                   threadGroupX,
                                   threadGroupY,
@@ -1484,6 +1496,7 @@ begin
  lib^.set_proc($98B54BECDEC15418,@ps4_sceGnmUpdatePsShader350);
 
  lib^.set_proc($7050A9D0D5FCC1FD,@ps4_sceGnmSetVgtControl);
+ lib^.set_proc($31846D621A2329D0,@ps4_sceGnmResetVgtControl);
 
  lib^.set_proc($D01CCB1A58DCC01A,@ps4_sceGnmDispatchDirect);
 

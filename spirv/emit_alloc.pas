@@ -75,7 +75,7 @@ begin
  FInputs     .AllocBinding(@FDecorates);
  FOutputs    .AllocBinding(@FDecorates);
  FVertLayouts.AllocBinding(@FDecorates);
- FFragLayouts.AllocBinding(@FDecorates);
+ FFragLayouts.AllocBinding(@FDecorates,@FSpirvCaps);
 
  FBinding:=0;
  FUniforms.AllocBinding(FBinding,@FDecorates);

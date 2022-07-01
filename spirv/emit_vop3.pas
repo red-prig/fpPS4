@@ -41,6 +41,7 @@ type
   procedure _emit_V_MAC_F32;
 
   procedure _emit_V_BFE_U32;
+  procedure _emit_V_BFI_B32;
   procedure _emit_V_MAD_F32;
   procedure _emit_V_MAD_I32_I24;
   procedure _emit_V_MAD_U32_U24;
@@ -436,6 +437,36 @@ begin
  count:=MakeRead(tmp,dtUInt32);
 
  emit_OpBfeU(dst,src[0],offset,count);
+end;
+
+procedure TEmit_VOP3._emit_V_BFI_B32;
+Var
+ dst,tmp:PsrRegSlot;
+ bitmsk:PsrRegNode;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ bitmsk:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ emit_OpBitwiseAnd(tmp,src[0],bitmsk);
+ src[0]:=MakeRead(tmp,dtUInt32);
+
+ emit_OpNot(tmp,bitmsk);
+ bitmsk:=MakeRead(tmp,dtUInt32);
+
+ emit_OpBitwiseAnd(tmp,src[1],bitmsk);
+ src[1]:=MakeRead(tmp,dtUInt32);
+
+ emit_OpBitwiseOr(dst,src[0],src[1]);
 end;
 
 procedure TEmit_VOP3._emit_V_MAD_F32; //vdst = vsrc0.f * vsrc1.f + vadd.f
@@ -952,6 +983,11 @@ begin
   V_BFE_U32:
    begin
     _emit_V_BFE_U32;
+   end;
+
+  V_BFI_B32:
+   begin
+    _emit_V_BFI_B32;
    end;
 
   V_MAD_F32:

@@ -13,6 +13,7 @@ uses
   srLayout,
   srVariable,
   srInput,
+  srCap,
   srDecorate;
 
 type
@@ -45,7 +46,7 @@ type
   function  Fetch(itype:TpsslInputType;location:DWORD):PsrFragLayout;
   Function  First:PsrFragLayout;
   Function  Next(node:PsrFragLayout):PsrFragLayout;
-  procedure AllocBinding(Decorates:PsrDecorateList);
+  procedure AllocBinding(Decorates:PsrDecorateList;Cap:PsrCapList);
   procedure AllocEntryPoint(EntryPoint:PSpirvOp);
  end;
 
@@ -112,7 +113,7 @@ begin
  Result:=FNTree.Next(node);
 end;
 
-procedure TsrFragLayoutList.AllocBinding(Decorates:PsrDecorateList);
+procedure TsrFragLayoutList.AllocBinding(Decorates:PsrDecorateList;Cap:PsrCapList);
 var
  node:PsrFragLayout;
  pVar:PsrVariable;
@@ -130,6 +131,7 @@ begin
    case node^.itype of
     itPerspSample:    //Sample
       begin
+       Cap^.Add(Capability.SampleRateShading);
        Decorates^.emit_decorate(ntVar,pVar,Decoration.Sample,0);
       end;
     itPerspCenter:;   //default
