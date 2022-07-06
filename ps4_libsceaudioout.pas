@@ -84,6 +84,39 @@ const
  SCE_AUDIO_VOLUME_FLAG_LE_CH  =(1 shl 6);
  SCE_AUDIO_VOLUME_FLAG_RE_CH  =(1 shl 7);
 
+ SCE_AUDIO_OUT_STATE_OUTPUT_UNKNOWN             =$00;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY   =$01;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_SECONDARY =$02;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_TERTIARY  =$04;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_HEADPHONE =$40;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_EXTERNAL  =$80;
+
+ SCE_AUDIO_OUT_STATE_CHANNEL_UNKNOWN     =0;
+ SCE_AUDIO_OUT_STATE_CHANNEL_DISCONNECTED=0;
+ SCE_AUDIO_OUT_STATE_CHANNEL_1           =1;
+ SCE_AUDIO_OUT_STATE_CHANNEL_2           =2;
+ SCE_AUDIO_OUT_STATE_CHANNEL_6           =6;
+ SCE_AUDIO_OUT_STATE_CHANNEL_8           =8;
+
+type
+ pSceAudioOutPortState=^SceAudioOutPortState;
+ SceAudioOutPortState=packed record
+  output:Word;
+  channel:Byte;
+  reserved8_1:Byte;
+  volume:Word;
+  rerouteCounter:Word;
+  flag:QWord;
+  reserved64:array[0..1] of QWORD;
+ end;
+
+ PSceAudioOutOutputParam=^SceAudioOutOutputParam;
+ SceAudioOutOutputParam=packed record
+  handle:Integer;
+  align:Integer;
+  ptr:Pointer;
+ end;
+
 var
  _lazy_init:Integer=0;
  _lazy_wait:Integer=0;
@@ -339,6 +372,46 @@ begin
  _sig_lock;
  if not HAudioOuts.Delete(handle) then Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
  _sig_unlock;
+end;
+
+function ps4_sceAudioOutGetPortState(handle:Integer;state:pSceAudioOutPortState):Integer; SysV_ABI_CDecl;
+Var
+ H:TAudioOutHandle;
+begin
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+
+ if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+
+ _sig_lock;
+ H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
+ _sig_unlock;
+
+ if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+
+ state^:=Default(SceAudioOutPortState);
+
+ state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY;
+
+ case (H.param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO,
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
+   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_1;
+
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO,
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
+   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_2;
+
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH,
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH,
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD,
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
+   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_8;
+ end;
+
+ state^.volume:=127; //user volume 0..127 (-1)
+
+ H.Release;
+ Result:=0;
 end;
 
 function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
@@ -602,14 +675,6 @@ begin
  Result:=0;
 end;
 
-type
- PSceAudioOutOutputParam=^SceAudioOutOutputParam;
- SceAudioOutOutputParam=packed record
-  handle:Integer;
-  align:Integer;
-  ptr:Pointer;
- end;
-
 function ps4_sceAudioOutOutputs(param:PSceAudioOutOutputParam;num:DWORD):Integer;  SysV_ABI_CDecl;
 var
  i:DWORD;
@@ -635,6 +700,7 @@ begin
  lib^.set_proc($25F10F5D5C6116A0,@ps4_sceAudioOutInit);
  lib^.set_proc($7A436FB13DB6AEC6,@ps4_sceAudioOutOpen);
  lib^.set_proc($B35FFFB84F66045C,@ps4_sceAudioOutClose);
+ lib^.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
  lib^.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
  lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);

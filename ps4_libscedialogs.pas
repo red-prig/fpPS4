@@ -85,6 +85,11 @@ begin
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 end;
 
+function ps4_sceSaveDataDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+end;
+
 type
  pSceSaveDataDialogResult=^SceSaveDataDialogResult;
  SceSaveDataDialogResult=packed record
@@ -214,7 +219,15 @@ begin
  Result:=0;
 end;
 
-//nop nid:libSceMsgDialog:E9F202DD72ADDA4D:sceMsgDialogUpdateStatus
+function ps4_sceMsgDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+end;
+
+function ps4_sceMsgDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+end;
 
 //
 
@@ -271,6 +284,7 @@ begin
  lib:=Result._add_lib('libSceSaveDataDialog');
  lib^.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);
  lib^.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
+ lib^.set_proc($1112B392C6AE0090,@ps4_sceSaveDataDialogGetStatus);
  lib^.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);
  lib^.set_proc($62E1F6140EDACEA4,@ps4_sceSaveDataDialogTerminate);
  lib^.set_proc($C84889FEAAABE828,@ps4_sceSaveDataDialogGetResult);
@@ -286,6 +300,8 @@ begin
  lib:=Result._add_lib('libSceMsgDialog');
  lib^.set_proc($943AB1698D546C4A,@ps4_sceMsgDialogInitialize);
  lib^.set_proc($6F4E878740CF11A1,@ps4_sceMsgDialogOpen);
+ lib^.set_proc($E9F202DD72ADDA4D,@ps4_sceMsgDialogUpdateStatus);
+ lib^.set_proc($096556EFC41CDDF2,@ps4_sceMsgDialogGetStatus);
 end;
 
 function Load_libSceNpCommerce(Const name:RawByteString):TElf_node;

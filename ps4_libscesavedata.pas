@@ -262,6 +262,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSaveDataSaveIcon(mountPoint:PSceSaveDataMountPoint;
+                                 param:pSceSaveDataIcon):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceSaveData(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -284,6 +290,7 @@ begin
  lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
  lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
+ lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
 end;
 
 initialization

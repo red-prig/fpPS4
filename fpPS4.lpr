@@ -12,6 +12,7 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
+ ps4_libSceRemoteplay,
  ps4_libSceAjm,
  ps4_libSceMouse,
  ps4_libSceIme,
