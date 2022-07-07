@@ -217,35 +217,35 @@ begin
  if GetAsyncKeyState(VK_LEFT)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;
 
- if GetAsyncKeyState(VK_NUMPAD1)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD8)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
 
- if GetAsyncKeyState(VK_NUMPAD2)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD6)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
 
- if GetAsyncKeyState(VK_NUMPAD4)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD2)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
 
- if GetAsyncKeyState(VK_NUMPAD5)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD4)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
 
  if GetAsyncKeyState(VK_Q)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
 
- if GetAsyncKeyState(VK_E)<>0 then
+ if GetAsyncKeyState(VK_TAB)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;
 
- if GetAsyncKeyState(VK_NUMPAD6)<>0 then
+ if GetAsyncKeyState(VK_Z)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
 
 
- if GetAsyncKeyState(VK_U)<>0 then
+ if GetAsyncKeyState(VK_E)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
 
- if GetAsyncKeyState(VK_O)<>0 then
+ if GetAsyncKeyState(VK_R)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
 
- if GetAsyncKeyState(VK_NUMPAD3)<>0 then
+ if GetAsyncKeyState(VK_C)<>0 then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
 
 

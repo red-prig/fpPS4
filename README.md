@@ -15,3 +15,31 @@ This project is at the beginning and started for fun.
 - OS: Windows 7 SP1 x64 and higher 
 - CPU: x64, AVX2 support
 - GPU: Vulkan API support
+
+### Control layout
+
+PS4 Gamepad button              | Keyboard button
+:------------                   | :------------
+Left Stick Up                   |W
+Left Stick Left                 |A
+Left Stick Down                 |S
+Left Stick Right                |D
+Right Stick Up                  |I
+Right Stick Left                |J
+Right Stick Down                |K
+Right Stick Right               |L
+OPTIONS                   		  |Enter
+Dpad Up                   		  |Arrow Up
+Dpad Left                   	  |Arrow Left
+Dpad Down                   	  |Arrow Down
+Dpad Right                   	  |Arrow Right
+Triangle                   		  |Numpad 8
+Square                   		    |Numpad 4
+Cross                   		    |Numpad 2
+Circle                   		    |Numpad 6
+L1                   			      |Q
+L2                   			      |TAB
+L3                   			      |Z
+R1                   			      |E
+R2                   			      |R
+R3                   			      |C
