@@ -29,14 +29,23 @@ jobs:
       - name: Compile
         shell: cmd
         working-directory: ./
-        run: lazbuild -B fpPS4.lpi > nul
+        run: |
+          lazbuild -B fpPS4.lpi > nul
+          strip fpPS4.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: fpPS4
+          path: fpPS4.exe
+          if-no-files-found: warn
 
       - name: Pack
         shell: cmd
         working-directory: ./
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          strip fpPS4.exe
           mkdir sce_module
           echo "put libSceNgs2.prx here" > sce_module/info.txt
           zip -9 -qq -r "fpPS4_%GITHUB_REF_NAME%.zip" "fpPS4.exe" "shaders/*.spv" "sce_module/info.txt"
