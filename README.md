@@ -28,18 +28,18 @@ Right Stick Up                  |I
 Right Stick Left                |J
 Right Stick Down                |K
 Right Stick Right               |L
-OPTIONS                   		|Enter
-Dpad Up                   		|Arrow Up
-Dpad Left                   	|Arrow Left
-Dpad Down                   	|Arrow Down
-Dpad Right                   	|Arrow Right
-Triangle                   		|Numpad 8
-Square                   		|Numpad 4
-Cross                   		|Numpad 2
-Circle                   		|Numpad 6
-L1                   			|Q
-L2                   			|TAB
-L3                   			|Z
-R1                   			|E
-R2                   			|R
-R3                   			|C
+OPTIONS                   		  |Enter
+Dpad Up                   		  |Arrow Up
+Dpad Left                   	  |Arrow Left
+Dpad Down                   	  |Arrow Down
+Dpad Right                   	  |Arrow Right
+Triangle                   		  |Numpad 8
+Square                   		    |Numpad 4
+Cross                   		    |Numpad 2
+Circle                   		    |Numpad 6
+L1                   			      |Q
+L2                   			      |TAB
+L3                   			      |Z
+R1                   			      |E
+R2                   			      |R
+R3                   			      |C
