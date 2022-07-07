@@ -168,8 +168,6 @@ type
   procedure RegPrepType(node:PsrRegNode;rtype:TsrDataType);
 
   procedure _emit_spi;
-  procedure _emit_DS;
-  procedure _emit_SOPK;
  end;
 
 function  RegDown(node:PsrRegNode):PsrRegNode;
@@ -191,6 +189,7 @@ uses
  emit_SOP2,
  emit_SOPC,
  emit_SOPP,
+ emit_SOPK,
  emit_VOP1,
  emit_VOP2,
  emit_VOP3,
@@ -1741,22 +1740,12 @@ begin
   W_VINTRP:TEmit_VINTRP(Self)._emit_VINTRP;
   W_MIMG  :TEmit_MIMG(Self)._emit_MIMG;
   W_SMRD  :TEmit_SMRD(Self)._emit_SMRD;
-  W_SOPK  :_emit_SOPK;
+  W_SOPK  :TEmit_SOPK(Self)._emit_SOPK;
   W_SOP2  :TEmit_SOP2(Self)._emit_SOP2;
   W_VOP2  :TEmit_VOP2(Self)._emit_VOP2;
   else
    Assert(false);
  end;
-end;
-
-procedure TSprvEmit._emit_DS;
-begin
- Assert(false,'DS?'+IntToStr(FSPI.DS.OP));
-end;
-
-procedure TSprvEmit._emit_SOPK;
-begin
- Assert(false,'SOPK?'+IntToStr(FSPI.SOPK.OP));
 end;
 
 end.

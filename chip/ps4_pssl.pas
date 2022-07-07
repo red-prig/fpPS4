@@ -1953,7 +1953,7 @@ begin
  end;
  Write(' ');
  _print_sdst7(SPI.SOPK.SDST);
- Write(' ');
+ Write(', ');
 
  Case SPI.SOPK.OP of
   S_MOVK_I32   ,
@@ -2202,7 +2202,7 @@ begin
   V_CMPX_CLASS_F64:Write('V_CMPX_CLASS_F64');
 
   else
-      Write('VOP3a_cmp?',VOP3.OP);
+      Write('VOP3c?',VOP3.OP);
  end;
  Write(' ');
 

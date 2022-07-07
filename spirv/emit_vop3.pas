@@ -38,6 +38,7 @@ type
   procedure _emit_V_MUL_F32;
   procedure _emit_V_MUL_I32_I24;
   procedure _emit_V_MUL_U32_U24;
+  procedure _emit_V_MUL_HI_U32;
   procedure _emit_V_MAC_F32;
 
   procedure _emit_V_BFE_U32;
@@ -386,6 +387,31 @@ begin
 
  //24bit mask TODO
  emit_OpIMul(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP3._emit_V_MUL_HI_U32;
+Var
+ dst,tmp:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+ tmp_r,dst_r:PsrRegNode;
+begin
+ dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+
+ emit_Op2(Op.OpUMulExtended,dtStruct2u,tmp,src[0],src[1]);
+
+ tmp_r:=MakeRead(tmp,dtStruct2u);
+ dst_r:=dst^.New(line,dtUInt32);
+
+ emit_OpCompExtract(line,dst_r,tmp_r,1);
 end;
 
 procedure TEmit_VOP3._emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f  -> fma
@@ -978,6 +1004,11 @@ begin
   V_MUL_LO_I32:
     begin
      _emit_V_MUL_LO_I32;
+    end;
+
+  V_MUL_HI_U32:
+    begin
+     _emit_V_MUL_HI_U32;
     end;
 
   V_BFE_U32:

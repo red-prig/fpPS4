@@ -27,6 +27,7 @@ type
   procedure _emit_S_OR_B64;
   procedure _emit_S_NOR_B64;
   procedure _emit_S_CSELECT_B32;
+  procedure _emit_S_CSELECT_B64;
   procedure _emit_S_BFE_U32;
  end;
 
@@ -242,6 +243,24 @@ begin
  emit_OpSelect(dst,src[0],src[1],src[2]);
 end;
 
+procedure TEmit_SOP2._emit_S_CSELECT_B64; //sdst[2] = SCC ? ssrc0[2] : ssrc1[2]
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src0,src1:array[0..1] of PsrRegNode;
+ scc:PsrRegNode;
+begin
+ if not FRegsStory.get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
+
+ if not fetch_ssrc9_pair(@src0,FSPI.SOP2.SSRC0,dtUInt32) then Assert(False);
+ if not fetch_ssrc9_pair(@src1,FSPI.SOP2.SSRC1,dtUInt32) then Assert(False);
+
+ scc:=MakeRead(@FRegsStory.SCC,dtBool);
+ scc^.mark_read;
+
+ emit_OpSelect(dst[0],src0[0],src1[0],scc);
+ emit_OpSelect(dst[1],src0[1],src1[1],scc);
+end;
+
 //offset = ssrc1[4:0].u   and 31
 //width = ssrc1[22:16].u  shr 16
 procedure TEmit_SOP2._emit_S_BFE_U32; //sdst.u = bitFieldExtract(ssrc0); SCC = (sdst.u != 0)
@@ -328,6 +347,11 @@ begin
   S_CSELECT_B32:
     begin
      _emit_S_CSELECT_B32;
+    end;
+
+  S_CSELECT_B64:
+    begin
+     _emit_S_CSELECT_B64;
     end;
 
   S_BFE_U32:
