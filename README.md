@@ -1,4 +1,7 @@
 # fpPS4
+
+[![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions/workflows/main.yml)
+
   PS4 compatibility layer (emulator) on Free Pascal
  
 This project is at the beginning and started for fun.
