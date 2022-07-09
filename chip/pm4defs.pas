@@ -141,6 +141,7 @@ const
  OP_HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER        =$68750000;
  OP_HINT_PUSH_MARKER                              =$68750001;
  OP_HINT_POP_MARKER                               =$68750002;
+ OP_HINT_SET_MARKER                               =$68750003;
  OP_HINT_SET_VSHARP_IN_USER_DATA                  =$68750004;
  OP_HINT_SET_TSHARP_IN_USER_DATA                  =$68750005;
  OP_HINT_SET_SSHARP_IN_USER_DATA                  =$68750006;

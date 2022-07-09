@@ -959,6 +959,11 @@ begin
  {$ifdef ww}Writeln('\HINT_PUSH_MARKER:',Body);{$endif}
 end;
 
+procedure onSetMarker(Body:PChar);
+begin
+ {$ifdef ww}Writeln('\HINT_SET_MARKER:',Body);{$endif}
+end;
+
 procedure onWidthHeight(Body:PWORD);
 begin
  {$ifdef ww}Writeln('\HINT_',Body[0],'_',Body[1]);{$endif}
@@ -1010,10 +1015,14 @@ begin
 
   OP_HINT_WRITE_GPU_PREFETCH_INTO_L2               :Writeln('\HINT_WRITE_GPU_PREFETCH_INTO_L2');
   OP_HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER        :Writeln('\HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER');
-  OP_HINT_PUSH_MARKER                              ://Writeln('\HINT_PUSH_MARKER');
+  OP_HINT_PUSH_MARKER                              :
    onPushMarker(@Body[1]);
 
   OP_HINT_POP_MARKER                               :Writeln('\HINT_POP_MARKER');
+
+  OP_HINT_SET_MARKER:
+   onSetMarker(@Body[1]);
+
   OP_HINT_SET_VSHARP_IN_USER_DATA                  :Writeln('\HINT_SET_VSHARP_IN_USER_DATA');
   OP_HINT_SET_TSHARP_IN_USER_DATA                  :Writeln('\HINT_SET_TSHARP_IN_USER_DATA');
   OP_HINT_SET_SSHARP_IN_USER_DATA                  :Writeln('\HINT_SET_SSHARP_IN_USER_DATA');
@@ -2209,6 +2218,7 @@ begin
  fdump_cs:=DumpCS(GPU_REGS);
 
  GFXRing.AllocCmdBuffer;
+ GFXRing.CmdBuffer.EndRenderPass;
 
  FCSShader:=FetchShader(vShaderStageCs,0,GPU_REGS);
  if (FCSShader=nil) then Exit;

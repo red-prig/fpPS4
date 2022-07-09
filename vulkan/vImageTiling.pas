@@ -189,14 +189,24 @@ end;
 Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvImage2);
 var
  BufferImageCopy:TVkBufferImageCopy;
+ extend:TvExtent3D;
  size:Ptruint;
 begin
 
  cmd.AddDependence(@buf.Release);
 
- size:=image.key.params.extend.width*
-       image.key.params.extend.height*
-       image.key.params.extend.depth*
+ extend:=image.key.params.extend;
+
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  extend.width  :=(extend.width  +3) div 4;
+  extend.height :=(extend.height +3) div 4;
+  extend.depth  :=(extend.depth  +3) div 4;
+ end;
+
+ size:=extend.width*
+       extend.height*
+       extend.depth*
        getFormatSize(image.key.cformat);
 
  image.PushBarrier(cmd,

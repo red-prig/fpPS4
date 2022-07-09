@@ -522,19 +522,21 @@ function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar
 var
  cmdSize,len,len3,len4:DWORD;
 begin
+ if (cmdBuffer=nil) or (param=nil) then Exit(-1);
+
  len:=StrLen(param);
  len3:=(len + $c) shr 3;
  len4:=(len + $8) shr 2;
 
  cmdSize:=len4+len3*2;
- Assert(cmdSize+2=numDwords);
+ if ((cmdSize+2)<>numDwords) then Exit(-1);
 
  cmdBuffer[0]:=cmdSize*$10000 or $c0001000; //NOP
  cmdBuffer[1]:=$68750001;
 
  len3:=len+1;
  Move(param^,cmdBuffer[2],len3);
- FillChar(PByte(@cmdBuffer[2])[len3],numDwords*SizeOf(DWORD)-len3,0);
+ FillChar(PByte(@cmdBuffer[2])[len3],cmdSize*SizeOf(DWORD)-len3,0);
 
  Result:=0;
 end;
@@ -548,6 +550,29 @@ begin
  cmdBuffer[3]:=0;
  cmdBuffer[4]:=0;
  cmdBuffer[5]:=0;
+ Result:=0;
+end;
+
+function ps4_sceGnmInsertSetMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar):Integer; SysV_ABI_CDecl;
+var
+ cmdSize,len,len3,len4:DWORD;
+begin
+ if (cmdBuffer=nil) or (param=nil) then Exit(-1);
+
+ len:=StrLen(param);
+ len3:=(len + $c) shr 3;
+ len4:=(len + $8) shr 2;
+
+ cmdSize:=len4+len3*2;
+ if ((cmdSize+2)<>numDwords) then Exit(-1);
+
+ cmdBuffer[0]:=cmdSize*$10000 or $c0001000; //NOP
+ cmdBuffer[1]:=$68750003;
+
+ len3:=len+1;
+ Move(param^,cmdBuffer[2],len3);
+ FillChar(PByte(@cmdBuffer[2])[len3],cmdSize*SizeOf(DWORD)-len3,0);
+
  Result:=0;
 end;
 
@@ -1477,6 +1502,7 @@ begin
 
  lib^.set_proc($5B512D8FF8E55BB6,@ps4_sceGnmInsertPushMarker);
  lib^.set_proc($EEA65536012EF926,@ps4_sceGnmInsertPopMarker);
+ lib^.set_proc($8E222DCD2EBEDB68,@ps4_sceGnmInsertSetMarker);
 
  lib^.set_proc($D6A5CB1C8A5138F1,@ps4_sceGnmInsertWaitFlipDone);
  lib^.set_proc($29796D9C2C042474,@ps4_sceGnmSetCsShader);

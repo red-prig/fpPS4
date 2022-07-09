@@ -1480,6 +1480,15 @@ var
   Inc(Result);
  end;
 
+ procedure _SetReg(src:PsrRegNode);
+ begin
+  src^.mark_read;
+  dst^.pWriter.SetParam(ntReg,src);
+  node^.OpId:=OpLinks; //mark remove
+  node^.dst:=Default(TOpParamSingle);
+  Inc(Result);
+ end;
+
 begin
  Result:=0;
  dst:=node^.dst.AsReg;
@@ -1493,6 +1502,10 @@ begin
   data:=src^.AsConst^.GetData;
   data:=F_WQM_32(data);
   _SetConst(dst^.dtype,data);
+ end else
+ if (src^.dtype=dtBool) then
+ begin
+  _SetReg(src);
  end else
  begin
   Assert(false,'TODO')

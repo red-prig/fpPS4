@@ -170,6 +170,10 @@ begin
       begin
        Decorates^.emit_decorate(ntVar,pVar,Decoration.BuiltIn,BuiltIn.VertexIndex);
       end;
+    itFrontFace:
+      begin
+       Decorates^.emit_decorate(ntVar,pVar,Decoration.BuiltIn,BuiltIn.FrontFacing);
+      end;
     else
      Assert(false,'AllocBinding');
    end;

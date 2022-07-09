@@ -1210,7 +1210,7 @@ begin
 
  if (ENA.FRONT_FACE_ENA<>0) then
  begin
-  AddInput(@FRegsStory.VGRP[p],dtUint32,itFrontFace);
+  AddInput(@FRegsStory.VGRP[p],dtBool,itFrontFace);
   p:=p+1;
  end;
 
