@@ -395,10 +395,16 @@ begin
 
 end;
 
+function Max(a,b:TVkDeviceSize):TVkDeviceSize; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
 Procedure TvFlip.SetImageSize(width,height:DWORD);
 var
  buf:PvFlipBuffer;
  memr:TVkMemoryRequirements;
+ memr2:TVkMemoryRequirements;
 begin
  buf:=@FBuffers[FcurrentBuffer];
 
@@ -449,18 +455,28 @@ begin
   buf^.Extent,
   ord(VK_IMAGE_USAGE_STORAGE_BIT) or
   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+  ord(VK_IMAGE_CREATE_ALIAS_BIT)
  );
 
+ memr:=buf^.DstImgNORM.GetRequirements;
+
  if (sformat<>VK_FORMAT_UNDEFINED) then
+ begin
   buf^.DstImgSRGB:=TvDeviceImage2D.Create(
    sformat,
    buf^.Extent,
    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+   ord(VK_IMAGE_CREATE_ALIAS_BIT)
   );
 
- memr:=buf^.DstImgNORM.GetRequirements;
+  memr2:=buf^.DstImgSRGB.GetRequirements;
+
+  memr.size          :=Max(memr.size     ,memr2.size);
+  memr.alignment     :=Max(memr.alignment,memr2.alignment);
+  memr.memoryTypeBits:=memr.memoryTypeBits and memr2.memoryTypeBits;
+ end;
 
  //Writeln(buf^.DstImg.GetDedicatedAllocation);
 
@@ -735,6 +751,8 @@ begin
   buf^.cmdbuf.DispatchDirect(FLocalSize.x,FLocalSize.y,1);
  end else
  begin
+
+  ur.data_usage:=ur.data_usage and (not TM_READ); //reset read
 
   ur.PushBarrier(buf^.cmdbuf,
                  ord(VK_ACCESS_TRANSFER_READ_BIT),

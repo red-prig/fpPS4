@@ -24,18 +24,42 @@ implementation
 uses
  vImageManager;
 
-Function getFormatSize(cformat:TVkFormat):Byte;
+Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 begin
  Result:=0;
  Case cformat of
-  VK_FORMAT_R8G8B8A8_SRGB      :Result:=4;
-  VK_FORMAT_R8G8B8A8_UNORM     :Result:=4;
-  VK_FORMAT_R8G8_UNORM         :Result:=2;
-  VK_FORMAT_R8_UNORM           :Result:=1;
-  VK_FORMAT_R8_UINT            :Result:=4;
-  VK_FORMAT_R5G6B5_UNORM_PACK16:Result:=2;
+  //pixel size
+  VK_FORMAT_R8G8B8A8_SRGB       :Result:=4;
+  VK_FORMAT_R8G8B8A8_UNORM      :Result:=4;
+  VK_FORMAT_R8G8_UNORM          :Result:=2;
+  VK_FORMAT_R8_UNORM            :Result:=1;
+  VK_FORMAT_R8_UINT             :Result:=4;
+  VK_FORMAT_R5G6B5_UNORM_PACK16 :Result:=2;
+
+  //texel size
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
+  VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
+  VK_FORMAT_BC4_UNORM_BLOCK..
+  VK_FORMAT_BC4_SNORM_BLOCK     :Result:=8;
+
+  VK_FORMAT_BC2_UNORM_BLOCK..
+  VK_FORMAT_BC3_SRGB_BLOCK,
+  VK_FORMAT_BC5_UNORM_BLOCK..
+  VK_FORMAT_BC7_SRGB_BLOCK      :Result:=16;
+
   else
    Assert(false,'TODO');
+ end;
+end;
+
+function IsTexelFormat(cformat:TVkFormat):Boolean;
+begin
+ Case cformat of
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
+  VK_FORMAT_BC7_SRGB_BLOCK:
+   Result:=True;
+  else
+   Result:=False;
  end;
 end;
 
@@ -238,9 +262,12 @@ var
  //tp:TilingParameters;
  tiler:Tiler1d;
  //mtm:Byte;
- size,i,x,y:QWORD;
+ size,i,x,y,z:QWORD;
 
+ m_bytePerElement:Word;
  m_bitsPerElement:Word;
+
+ m_slice_size:DWORD;
 
  //m_macroTileWidth :DWORD;
  //m_macroTileHeight:DWORD;
@@ -276,23 +303,29 @@ begin
  //tiler:=Default(Tiler2d);
  //tiler.init(tp);
 
- Case image.key.cformat of
-  VK_FORMAT_BC1_RGB_UNORM_BLOCK,
-  VK_FORMAT_BC1_RGB_SRGB_BLOCK,
-  VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
-  VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
-  VK_FORMAT_BC3_UNORM_BLOCK,
-  VK_FORMAT_BC3_SRGB_BLOCK:
-   begin
-    _Load_Linear(cmd,image);
-    Exit;
-   end;
-  else
- end;
+ //[kDataFormatBc3UnormSrgb]
+ //m_minGpuMode:0
+ //m_tileMode:13
+ //m_arrayMode:2
+ //m_linearWidth:128
+ //m_linearHeight:128
+ //m_linearDepth:1
+ //m_paddedWidth:128
+ //m_paddedHeight:128
+ //m_paddedDepth:1
+ //m_bitsPerElement:128
+ //m_linearSizeBytes:262144
+ //m_tiledSizeBytes:262144
+ //m_microTileMode:1
+ //m_tileThickness:1
+ //m_tileBytes:1024
+ //m_tilesPerRow:16
+ //m_tilesPerSlice:256
 
  tiler:=Texture2d_32;
 
- m_bitsPerElement:=getFormatSize(image.key.cformat)*8;
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bitsPerElement:=m_bytePerElement*8;
 
  tiler.m_bitsPerElement:=m_bitsPerElement;
 
@@ -300,26 +333,41 @@ begin
  tiler.m_linearHeight:=image.key.params.extend.height;
  tiler.m_linearDepth :=image.key.params.extend.depth;
 
- tiler.m_linearSizeBytes:=tiler.m_linearWidth*tiler.m_linearHeight*tiler.m_linearDepth*(m_bitsPerElement div 8);
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  tiler.m_linearWidth :=(tiler.m_linearWidth +3) div 4;
+  tiler.m_linearHeight:=(tiler.m_linearHeight+3) div 4;
+  tiler.m_linearDepth :=(tiler.m_linearDepth +3) div 4;
+ end;
+
+ tiler.m_linearSizeBytes:=tiler.m_linearWidth*tiler.m_linearHeight*tiler.m_linearDepth*m_bytePerElement;
 
  tiler.m_tileBytes := (kMicroTileWidth * kMicroTileHeight * tiler.m_tileThickness * m_bitsPerElement + 7) div 8;
 
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  tiler.m_paddedWidth :=tiler.m_linearWidth ;
+  tiler.m_paddedHeight:=tiler.m_linearHeight;
+  tiler.m_paddedDepth :=tiler.m_linearDepth ;
+ end else
  Case m_bitsPerElement of
   32:begin
       tiler.m_paddedWidth :=((tiler.m_linearWidth +7) div 8)*8;
       tiler.m_paddedHeight:=((tiler.m_linearHeight+7) div 8)*8;
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
    8:begin
       tiler.m_paddedWidth :=((tiler.m_linearWidth +31) div 32)*32;
-      tiler.m_paddedHeight:=((tiler.m_linearHeight+7) div 8)*8;
+      tiler.m_paddedHeight:=((tiler.m_linearHeight+ 7) div  8)*8;
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
   else
    Assert(false);
  end;
 
- tiler.m_paddedDepth :=tiler.m_linearDepth;
 
- tiler.m_tiledSizeBytes:=tiler.m_paddedWidth*tiler.m_paddedHeight*tiler.m_paddedDepth*(m_bitsPerElement div 8);
+
+ tiler.m_tiledSizeBytes:=tiler.m_paddedWidth*tiler.m_paddedHeight*tiler.m_paddedDepth*m_bytePerElement;
 
  tiler.m_tilesPerRow:=tiler.m_paddedWidth div kMicroTileWidth;
 
@@ -332,8 +380,10 @@ begin
  //m_tilesPerRow = m_paddedWidth / kMicroTileWidth;
  //m_tilesPerSlice = std::max(m_tilesPerRow * (m_paddedHeight / kMicroTileHeight), 1U);
 
- size:=image.key.params.extend.width*
-       image.key.params.extend.height*(m_bitsPerElement div 8);
+ size:=tiler.m_linearWidth*
+       tiler.m_linearHeight*
+       tiler.m_linearDepth*
+       m_bytePerElement;
 
  buf:=TvTempBuffer.Create(size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
  buf.Fhost:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
@@ -349,20 +399,19 @@ begin
 
  //pData:=AllocMem(size);
 
- Assert(image.key.params.extend.depth=1);
+ m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
 
- For y:=0 to image.key.params.extend.height-1 do
-  For x:=0 to image.key.params.extend.width-1 do
-   begin
-    i:=0;
-    tiler.getTiledElementBitOffset(i,x,y,0);
-    i:=i div 8;
-    pSrc:=@PByte(image.key.Addr)[i];
-    pDst:=@PByte(pData)[(y*image.key.params.extend.width+x)*(m_bitsPerElement div 8)];
-    Move(pSrc^,pDst^,(m_bitsPerElement div 8));
-    //i:=i div 4;
-    //pData[y*image.key.params.extend.width+x]:={Random($FFFFFFFF);}PDWORD(image.key.Addr)[i];
-   end;
+ For z:=0 to tiler.m_linearDepth-1 do
+  For y:=0 to tiler.m_linearHeight-1 do
+   For x:=0 to tiler.m_linearWidth-1 do
+    begin
+     i:=0;
+     tiler.getTiledElementBitOffset(i,x,y,z);
+     i:=i div 8;
+     pSrc:=@PByte(image.key.Addr)[i];
+     pDst:=@PByte(pData)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     Move(pSrc^,pDst^,m_bytePerElement);
+    end;
 
  //Move(pData^,image.key.Addr^,size);
  //FreeMem(pData);

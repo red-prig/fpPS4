@@ -400,6 +400,12 @@ begin
  //ps4_app.app_path:='..\samples\api_gnm\simplet-simple-fs\';
  //ps4_app.app_file:='..\samples\api_gnm\simplet-simple-fs\simplet-simple-fs_debug.elf';
 
+ //ps4_app.app_path:='..\samples\api_gnm\';
+ //ps4_app.app_file:='..\samples\api_gnm\basic-sample\basic-sample_debug.elf';
+
+ //ps4_app.app_path:='..\samples\api_gnm\';
+ //ps4_app.app_file:='..\samples\api_gnm\anisotropy-sample\anisotropy-sample_debug.elf';
+
  //ps4_app.app_path:='..\samples\tutorial_graphics_programming\basic_quad\';
  //ps4_app.app_file:='..\samples\tutorial_graphics_programming\basic_quad\basic_quad_debug.elf';
 
@@ -494,6 +500,15 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\';
+ //ps4_app.app_file:='G:\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\ps4-homebrew\Blue Boi  Quickz\';
+ //ps4_app.app_file:='G:\Games\ps4-homebrew\Blue Boi  Quickz\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Shovel Knight\CUSA01867\';
+ //ps4_app.app_file:='G:\Games\Shovel Knight\CUSA01867\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

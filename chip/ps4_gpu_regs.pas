@@ -63,6 +63,62 @@ type
 
  TSPI_USER_DATA=array[0..15] of DWORD;
 
+ TPA_SC_AA_SAMPLE_LOCS_PIXEL_XY=bitpacked record
+   S0_X:bit4;
+   S0_Y:bit4;
+   S1_X:bit4;
+   S1_Y:bit4;
+   S2_X:bit4;
+   S2_Y:bit4;
+   S3_X:bit4;
+   S3_Y:bit4;
+   S4_X:bit4;
+   S4_Y:bit4;
+   S5_X:bit4;
+   S5_Y:bit4;
+   S6_X:bit4;
+   S6_Y:bit4;
+   S7_X:bit4;
+   S7_Y:bit4;
+   S8_X:bit4;
+   S8_Y:bit4;
+   S9_X:bit4;
+   S9_Y:bit4;
+  S10_X:bit4;
+  S10_Y:bit4;
+  S11_X:bit4;
+  S11_Y:bit4;
+  S12_X:bit4;
+  S12_Y:bit4;
+  S13_X:bit4;
+  S13_Y:bit4;
+  S14_X:bit4;
+  S14_Y:bit4;
+  S15_X:bit4;
+  S15_Y:bit4;
+ end;
+
+ TPA_SC_AA_SAMPLE_LOCS_PIXEL=bitpacked array[0..1,0..15] of bit4;
+
+ TPA_SC_CENTROID_PRIORITY=bitpacked record
+   DISTANCE_0:bit4;
+   DISTANCE_1:bit4;
+   DISTANCE_2:bit4;
+   DISTANCE_3:bit4;
+   DISTANCE_4:bit4;
+   DISTANCE_5:bit4;
+   DISTANCE_6:bit4;
+   DISTANCE_7:bit4;
+   DISTANCE_8:bit4;
+   DISTANCE_9:bit4;
+  DISTANCE_10:bit4;
+  DISTANCE_11:bit4;
+  DISTANCE_12:bit4;
+  DISTANCE_13:bit4;
+  DISTANCE_14:bit4;
+  DISTANCE_15:bit4;
+ end;
+
  TRT_INFO=record
   //Addr:Pointer;
 
@@ -151,6 +207,10 @@ type
   SC_AA_MASK_X0Y0_X1Y0:TPA_SC_AA_MASK_X0Y0_X1Y0;
   SC_AA_MASK_X0Y1_X1Y1:TPA_SC_AA_MASK_X0Y1_X1Y1;
 
+  SC_AA_SAMPLE_LOCS_PIXEL:array[0..1,0..1] of TPA_SC_AA_SAMPLE_LOCS_PIXEL_XY;
+
+  SC_CENTROID_PRIORITY:TPA_SC_CENTROID_PRIORITY;
+
   HARDWARE_SCREEN_OFFSET:TPA_SU_HARDWARE_SCREEN_OFFSET;
   SU_LINE_CNTL:TPA_SU_LINE_CNTL;
   SU_POINT_SIZE:TPA_SU_POINT_SIZE;
@@ -161,6 +221,8 @@ type
   GB_CLIP:TGB_CLIP;
   CL_CLIP_CNTL:TPA_CL_CLIP_CNTL;
   SC_CLIPRECT_RULE:TPA_SC_CLIPRECT_RULE;
+
+  SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL;
 
   VGT_SHADER_STAGES_EN:TVGT_SHADER_STAGES_EN;
   VGT_OUT_DEALLOC_CNTL:TVGT_OUT_DEALLOC_CNTL;
@@ -176,10 +238,18 @@ type
 
   VGT_OUTPUT_PATH_CNTL:TVGT_OUTPUT_PATH_CNTL;
 
+  VGT_GS_MODE:TVGT_GS_MODE;
+
+  VGT_GS_PER_ES:TVGT_GS_PER_ES;
+  VGT_ES_PER_GS:TVGT_ES_PER_GS;
+  VGT_GS_PER_VS:TVGT_GS_PER_VS;
+
   VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE;
   VGT_INDEX_TYPE    :TVGT_INDEX_TYPE    ;
   VGT_NUM_INSTANCES :TVGT_NUM_INSTANCES ;
   GRBM_GFX_INDEX    :TGRBM_GFX_INDEX;
+
+  IA_MULTI_VGT_PARAM:TIA_MULTI_VGT_PARAM;
 
   VGT_DMA:packed record
    INDEX_TYPE:TVGT_DMA_INDEX_TYPE;
@@ -275,6 +345,9 @@ type
 
    HTILE_SURFACE     :TDB_HTILE_SURFACE     ;
 
+   EQAA              :TDB_EQAA;
+
+   COUNT_CONTROL     :TDB_COUNT_CONTROL;
   end;
 
 
@@ -305,6 +378,7 @@ type
   function  GET_INDEX_TYPE_SIZE:Byte;
 
   Procedure Clear;
+  Procedure InitDefault;
   Procedure ClearDMA;
  end;
 
@@ -645,7 +719,7 @@ begin
 
  //BLEND_CLAMP
 
- if (RENDER_TARGET[i].INFO.BLEND_BYPASS=1) then
+ if (RENDER_TARGET[i].INFO.BLEND_BYPASS<>0) then
  begin
   Result.blendEnable:=VK_FALSE;
  end else
@@ -672,8 +746,18 @@ begin
    Result.alphaBlendOp       :=GetBlendOp(CB_BLEND_CONTROL[i].ALPHA_COMB_FCN);
   end;
 
+
   Assert(CB_BLEND_CONTROL[i].DISABLE_ROP3=0);
  end;
+
+ //Result.blendEnable:=VK_TRUE;
+ //Result.SRCCOLORBLENDFACTOR:=VK_BLEND_FACTOR_SRC_ALPHA;
+ //Result.DSTCOLORBLENDFACTOR:=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+ //Result.COLORBLENDOP       :=VK_BLEND_OP_ADD;
+ //Result.SRCALPHABLENDFACTOR:=VK_BLEND_FACTOR_SRC_ALPHA;
+ //Result.DSTALPHABLENDFACTOR:=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+ //Result.ALPHABLENDOP       :=VK_BLEND_OP_ADD;
+ //Result.COLORWRITEMASK     :=15;
 
  //CB_COLOR_CONTROL.MODE   //CB_DISABLE
  //Assert(CB_COLOR_CONTROL.ROP3 = 204); //CB_DISABLE
@@ -754,21 +838,11 @@ var
 begin
  Result:=Default(TRT_INFO);
 
- {
- Result.Addr:=Pointer(QWORD(RENDER_TARGET[i].BASE) shl 8);
- if (RENDER_TARGET[i].INFO.LINEAR_GENERAL=1) then
- begin
-  Result.Addr:=Pointer(QWORD(Result.Addr) or Byte(RENDER_TARGET[i].VIEW.SLICE_START));
- end;
- }
-
  Result.FImageInfo.Addr:=Pointer(QWORD(RENDER_TARGET[i].BASE) shl 8);
  if (RENDER_TARGET[i].INFO.LINEAR_GENERAL<>0) then
  begin
   Result.FImageInfo.Addr:=Pointer(QWORD(Result.FImageInfo.Addr) or Byte(RENDER_TARGET[i].VIEW.SLICE_START));
  end;
-
- //Result.extend:=GET_SCREEN_SIZE;
 
  Result.FImageInfo.params.extend.width :=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_X);
  Result.FImageInfo.params.extend.height:=_fix_scissor_range(SCREEN_SCISSOR_BR.BR_Y);
@@ -779,20 +853,6 @@ begin
 
  Assert(RENDER_TARGET[i].INFO.ENDIAN=ENDIAN_NONE);
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
-
- {
- Case RENDER_TARGET[i].INFO.FORMAT of
-  COLOR_8_8_8_8:
-   Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
-    NUMBER_UNORM:Result.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
-    NUMBER_SRGB :Result.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
-    else
-     Assert(false);
-   end;
-  else
-   Assert(false);
- end;
- }
 
  Case RENDER_TARGET[i].INFO.FORMAT of
   COLOR_8_8_8_8:
@@ -806,26 +866,23 @@ begin
    Assert(false,'TODO');
  end;
 
- //Result.TILE_MODE_INDEX:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
- //if (RENDER_TARGET[i].INFO.LINEAR_GENERAL=1) then Result.TILE_MODE_INDEX:=8;
-
  if (RENDER_TARGET[i].INFO.LINEAR_GENERAL<>0) then
   Result.FImageInfo.params.tiling_idx:=kTileModeDisplay_LinearGeneral
  else
   Result.FImageInfo.params.tiling_idx:=RENDER_TARGET[i].ATTRIB.TILE_MODE_INDEX;
 
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
- Result.FImageInfo.params.samples    :=1{ shl (RENDER_TARGET[i].ATTRIB.NUM_SAMPLES and 3)};
+ Result.FImageInfo.params.samples    :=1 shl (RENDER_TARGET[i].ATTRIB.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
 
  Result.FImageView.cformat   :=Result.FImageInfo.cformat;
  Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
 
- Result.FImageView.dstSel.r:=ord(VK_COMPONENT_SWIZZLE_R);
- Result.FImageView.dstSel.g:=ord(VK_COMPONENT_SWIZZLE_G);
- Result.FImageView.dstSel.b:=ord(VK_COMPONENT_SWIZZLE_B);
- Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_A);
+ //Result.FImageView.dstSel.r:=ord(VK_COMPONENT_SWIZZLE_R);
+ //Result.FImageView.dstSel.g:=ord(VK_COMPONENT_SWIZZLE_G);
+ //Result.FImageView.dstSel.b:=ord(VK_COMPONENT_SWIZZLE_B);
+ //Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_A);
 
  //Result.FImageView.dstSel:TvDstSel; TODO
 
@@ -846,10 +903,6 @@ begin
  end;
 
  Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_WRITE;
-
- //if (RENDER_TARGET[i].INFO.FAST_CLEAR=1) then
- //begin
-  //Result.FAST_CLEAR:=True;
 
   Case RENDER_TARGET[i].INFO.FORMAT of
    COLOR_8_8_8_8:
@@ -1041,7 +1094,7 @@ begin
  Result.FImageInfo.params.tiling_idx:=DEPTH.Z_INFO.TILE_MODE_INDEX;
 
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
- Result.FImageInfo.params.samples    :=1{ shl (DEPTH.Z_INFO.NUM_SAMPLES and 3)};
+ Result.FImageInfo.params.samples    :=1 shl (DEPTH.Z_INFO.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
 end;
@@ -1111,13 +1164,62 @@ begin
  end;
 end;
 
+
+
 Procedure TGPU_REGS.Clear;
 begin
  FillChar(Self,SizeOf(Self),0);
+end;
+
+Procedure TGPU_REGS.InitDefault;
+begin
+ Clear;
 
  DWORD(SPI.CS.STATIC_THREAD_MGMT_SE0):=$FFFFFFFF;
  DWORD(SPI.CS.STATIC_THREAD_MGMT_SE1):=$FFFFFFFF;
+ DWORD(SPI.CS.RESOURCE_LIMITS)       :=$00000170;
 
+ DWORD(SPI.PS.RSRC3)                 :=$001701FF;
+ DWORD(SPI.VS.RSRC3)                 :=$001701FD;
+ //mmSPI_SHADER_PGM_RSRC3_GS=001701FF
+ //mmSPI_SHADER_PGM_RSRC3_ES=001701FD
+ //mmSPI_SHADER_PGM_RSRC3_HS=00000017
+ //mmSPI_SHADER_PGM_RSRC3_LS=001701FD
+ DWORD(SPI.VS.LATE_ALLOC)            :=$0000001C;
+ DWORD(SPI.VS.OUT_CONFIG)            :=$00000002;
+
+ DWORD(VTX_CNTL)                     :=$0000002D;
+ DWORD(SU_LINE_CNTL)                 :=$00000008;
+ DWORD(SU_POINT_SIZE)                :=$00080008;
+ DWORD(SU_POINT_MINMAX)              :=$FFFF0000;
+ DWORD(VTE_CNTL)                     :=$0000043F;
+ DWORD(SC_CLIPRECT_RULE)             :=$0000FFFF;
+ DWORD(VGT_OUT_DEALLOC_CNTL)         :=$00000010;
+
+ PDWORD(@GB_CLIP.VERT_CLIP_ADJ)^     :=$3F800000;
+ PDWORD(@GB_CLIP.HORZ_CLIP_ADJ)^     :=$3F800000;
+ PDWORD(@GB_CLIP.VERT_DISC_ADJ)^     :=$3F800000;
+ PDWORD(@GB_CLIP.HORZ_DISC_ADJ)^     :=$3F800000;
+
+ DWORD(CB_COLOR_CONTROL)             :=$00CC0010;
+
+ DWORD(SC_AA_MASK_X0Y0_X1Y0)         :=$FFFFFFFF;
+ DWORD(SC_AA_MASK_X0Y1_X1Y1)         :=$FFFFFFFF;
+
+ DWORD(VGT_VTX_INDX.MAX_INDX)        :=$FFFFFFFF;
+
+ DWORD(SC_MODE_CNTL_1)               :=$06020000;
+
+ DWORD(PA_SU_POLY_OFFSET_DB_FMT_CNTL):=$000001E9;
+
+ DWORD(VGT_GS_PER_ES)                :=$00000100;
+ DWORD(VGT_ES_PER_GS)                :=$00000100;
+ DWORD(VGT_GS_PER_VS)                :=$00000004;
+
+ DWORD(GRBM_GFX_INDEX    )           :=$E0000000;
+ DWORD(IA_MULTI_VGT_PARAM)           :=$000000FF;
+
+ VGT_DMA.NUM_INSTANCES:=1;
 end;
 
 Procedure TGPU_REGS.ClearDMA;
@@ -1384,7 +1486,8 @@ begin
   Result.params.mipLevels:=PT^.last_level-PT^.base_level+1;
  end;
 
- Assert(Result.params.mipLevels=1,'TODO');
+ //Assert(Result.params.mipLevels=1,'TODO');
+ Result.params.mipLevels:=1; /////
 
  Result.params.arrayLayers:=1;
 end;
@@ -1462,6 +1565,10 @@ begin
   Result.base_level:=PT^.base_level;
   Result.last_level:=PT^.last_level;
  end;
+
+ Result.base_level:=0; /////
+ Result.last_level:=0; /////
+
 end;
 
 

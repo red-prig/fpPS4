@@ -436,7 +436,20 @@ begin
  Foffset:=0;
  While (pNode<>nil) do
  begin
-  Assert(pNode^.dtype<>dtUnknow,'WTF');
+
+  if (pNode^.dtype=dtUnknow) then
+  begin
+   Case pNode^.size of
+     1:pNode^.dtype:=dtUint8;
+     2:pNode^.dtype:=dtHalf16;
+     4:pNode^.dtype:=dtFloat32;
+     8:pNode^.dtype:=dtVec2f;
+    16:pNode^.dtype:=dtVec4f;
+    else
+     Assert(false);
+   end;
+  end;
+
   if (Foffset<pNode^.offset) then
   begin
    Fsize:=pNode^.offset-Foffset;

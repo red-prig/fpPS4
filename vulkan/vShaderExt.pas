@@ -470,7 +470,10 @@ var
 begin
  Result:=nil;
  if (Length(addr)=0) then Exit;
- pSharp:=nil;
+
+ pSharp:=pData;
+
+ if (Length(addr)>1) then
  For i:=High(addr)-1 downto 0 do
  begin
   pData:=pData+addr[i].offset;
@@ -498,7 +501,7 @@ begin
       pData:=Pointer(PTSharpResource4(pData)^.base shl 8);
      end;
    else
-    Exit;
+    Assert(false);
   end;
 
  end;
@@ -609,6 +612,7 @@ var
  b:TBufBindExt;
  i,stride:Integer;
 begin
+ Assert(PV<>nil);
  if (PV=nil) then Exit;
 
  //print_vsharp(PV);
@@ -634,6 +638,7 @@ var
  b:TBufBindExt;
  i:Integer;
 begin
+ Assert(P<>nil);
  if (P=nil) or (size=0) then Exit;
 
  b:=Default(TBufBindExt);
@@ -654,6 +659,7 @@ var
  b:TImageBindExt;
  i:Integer;
 begin
+ Assert(PT<>nil);
  if (PT=nil) then Exit;
 
  //print_tsharp4(PT);
@@ -675,6 +681,7 @@ var
  P:Pointer;
 begin
  P:=GetSharpByPatch(FData,b.addr);
+ Assert(P<>nil);
  if (P=nil) then Exit;
 
  Case TVkDescriptorType(b.dtype) of
@@ -729,6 +736,7 @@ var
  b:TSamplerBindExt;
  i:Integer;
 begin
+ Assert(PS<>nil);
  if (PS=nil) then Exit;
 
  //print_ssharp4(PS);

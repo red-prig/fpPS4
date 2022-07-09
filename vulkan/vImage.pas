@@ -110,14 +110,15 @@ type
 
  TvImage=class(TvCustomImage)
   FFormat:TVkFormat;
-  FUsage:TVkFlags;
   FExtent:TVkExtent3D;
+  FUsage:TVkFlags;
+  Fflags:TVkImageCreateFlags;
   Barrier:TvImageBarrier;
-  Constructor Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
+  Constructor Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;flags:TVkImageCreateFlags;ext:Pointer=nil);
   function    GetImageInfo:TVkImageCreateInfo;    override;
   function    GetViewInfo:TVkImageViewCreateInfo; virtual; abstract;
   function    NewView:TvImageView;
-  //function    NewViewF(Format:TVkFormat):TvImageView;
+  function    NewViewF(Format:TVkFormat):TvImageView;
   procedure   PushBarrier(cmd:TVkCommandBuffer;
                           range:TVkImageSubresourceRange;
                           dstAccessMask:TVkAccessFlags;
@@ -462,11 +463,12 @@ begin
  Result:=True;
 end;
 
-Constructor TvImage.Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;ext:Pointer=nil);
+Constructor TvImage.Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;flags:TVkImageCreateFlags;ext:Pointer=nil);
 begin
  FFormat:=format;
- FUsage:=usage;
  FExtent:=extent;
+ FUsage:=usage;
+ Fflags:=flags;
  Barrier.Init;
  Compile(ext);
 end;
@@ -477,9 +479,15 @@ begin
  Result.format:=FFormat;
  Result.extent:=FExtent;
  Result.usage :=FUsage;
+ Result.flags :=Fflags;
 end;
 
 function TvImage.NewView:TvImageView;
+begin
+ Result:=NewViewF(FFormat);
+end;
+
+function TvImage.NewViewF(Format:TVkFormat):TvImageView;
 var
  cinfo:TVkImageViewCreateInfo;
  FImg:TVkImageView;
@@ -487,7 +495,8 @@ var
 begin
  Result:=nil;
  cinfo:=GetViewInfo;
- cinfo.image:=FHandle;
+ cinfo.image :=FHandle;
+ cinfo.format:=Format;
  FImg:=VK_NULL_HANDLE;
  r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FImg);
  if (r<>VK_SUCCESS) then
@@ -530,29 +539,6 @@ begin
               newImageLayout,
               dstStageMask);
 end;
-
-{
-function TvImage.NewViewF(Format:TVkFormat):TvImageView;
-var
- cinfo:TVkImageViewCreateInfo;
- FImg:TVkImageView;
- r:TVkResult;
-begin
- Result:=nil;
- cinfo:=GetViewInfo;
- cinfo.image :=FHandle;
- cinfo.format:=Format;
- FImg:=VK_NULL_HANDLE;
- r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FImg);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln('vkCreateImageView:',r);
-  Exit;
- end;
- Result:=TvImageView.Create;
- Result.FHandle:=FImg;
-end;
-}
 
 Procedure TvImageView.Acquire;
 begin

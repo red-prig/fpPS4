@@ -182,10 +182,12 @@ Procedure vkCmdBindVertexBuffer(commandBuffer:TVkCommandBuffer;
                                 Buffer:TVkBuffer;
                                 Offset:TVkDeviceSize);
 
+{
 Procedure vkCmdBindDescriptorBuffer(commandBuffer:TVkCommandBuffer;
                                     Binding:TVkUInt32;
                                     Buffer:TVkBuffer;
                                     Offset:TVkDeviceSize);
+}
 
 Procedure vkCmdBindSB(cmd:TVkCommandBuffer;
                       point:TVkPipelineBindPoint;
@@ -1419,6 +1421,7 @@ begin
  vkCmdBindVertexBuffers(commandBuffer,Binding,1,@Buffer,@Offset);
 end;
 
+{
 Procedure vkCmdBindDescriptorBuffer(commandBuffer:TVkCommandBuffer;
                                     Binding:TVkUInt32;
                                     Buffer:TVkBuffer;
@@ -1430,6 +1433,7 @@ begin
  info.sType:=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 
 end;
+}
 
 Procedure vkCmdBindSB(cmd:TVkCommandBuffer;
                       point:TVkPipelineBindPoint;

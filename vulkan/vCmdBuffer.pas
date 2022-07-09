@@ -115,6 +115,21 @@ type
                          rangeCount:TVkUInt32;
                          const pRanges:PVkImageSubresourceRange);
 
+  Procedure   ClearColorImage(
+                         image:TVkImage;
+                         imageLayout:TVkImageLayout;
+                         const pColor:PVkClearColorValue;
+                         rangeCount:TVkUInt32;
+                         const pRanges:PVkImageSubresourceRange);
+
+  Procedure   ResolveImage(
+                         srcImage:TVkImage;
+                         srcImageLayout:TVkImageLayout;
+                         dstImage:TVkImage;
+                         dstImageLayout:TVkImageLayout;
+                         regionCount:TVkUInt32;
+                         const pRegions:PVkImageResolve);
+
  end;
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
@@ -588,6 +603,55 @@ begin
    rangeCount,
    pRanges);
 
+end;
+
+Procedure TvCustomCmdBuffer.ClearColorImage(
+                       image:TVkImage;
+                       imageLayout:TVkImageLayout;
+                       const pColor:PVkClearColorValue;
+                       rangeCount:TVkUInt32;
+                       const pRanges:PVkImageSubresourceRange);
+begin
+ if (Self=nil) then Exit;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkCmdClearColorImage(
+  cmdbuf,
+  image,
+  imageLayout,
+  pColor,
+  rangeCount,
+  pRanges);
+end;
+
+Procedure TvCustomCmdBuffer.ResolveImage(
+                       srcImage:TVkImage;
+                       srcImageLayout:TVkImageLayout;
+                       dstImage:TVkImage;
+                       dstImageLayout:TVkImageLayout;
+                       regionCount:TVkUInt32;
+                       const pRegions:PVkImageResolve);
+begin
+ if (Self=nil) then Exit;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+
+ vkCmdResolveImage(
+  cmdbuf,
+  srcImage,
+  srcImageLayout,
+  dstImage,
+  dstImageLayout,
+  regionCount,
+  pRegions);
 end;
 
 Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);

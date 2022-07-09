@@ -2612,13 +2612,13 @@ begin
 
  slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
 
- tile_row_index := y div kMicroTileHeight;
+ tile_row_index    := y div kMicroTileHeight;
  tile_column_index := x div kMicroTileWidth;
- tile_offset := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
+ tile_offset       := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
 
- element_offset := element_index * m_bitsPerElement;
+ element_offset    := element_index * m_bitsPerElement;
 
- final_offset := (slice_offset + tile_offset)*8 + element_offset;
+ final_offset      := (slice_offset + tile_offset)*8 + element_offset;
 
  outTiledBitOffset := final_offset;
 

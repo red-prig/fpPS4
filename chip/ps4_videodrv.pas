@@ -743,12 +743,13 @@ procedure onEventWrite(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4CMDEVENTWRITE);
 begin
  {$ifdef ww}
  Case Body^.eventType of
-  THREAD_TRACE_MARKER        :Writeln(' THREAD_TRACE_MARKER');
+  CACHE_FLUSH_AND_INV_EVENT  :Writeln(' FLUSH_AND_INV_EVENT');
   FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' FLUSH_AND_INV_CB_PIXEL_DATA');
   FLUSH_AND_INV_DB_DATA_TS   :Writeln(' FLUSH_AND_INV_DB_DATA_TS');
   FLUSH_AND_INV_DB_META      :Writeln(' FLUSH_AND_INV_DB_META');
   FLUSH_AND_INV_CB_DATA_TS   :Writeln(' FLUSH_AND_INV_CB_DATA_TS');
   FLUSH_AND_INV_CB_META      :Writeln(' FLUSH_AND_INV_CB_META');
+  THREAD_TRACE_MARKER        :Writeln(' THREAD_TRACE_MARKER');
   else
    Assert(False,IntToStr(Body^.eventType));
  end;
@@ -1189,7 +1190,18 @@ begin
 
   mmPA_SC_AA_MASK_X0Y0_X1Y0:DWORD(GPU_REGS.SC_AA_MASK_X0Y0_X1Y0):=value;
   mmPA_SC_AA_MASK_X0Y1_X1Y1:DWORD(GPU_REGS.SC_AA_MASK_X0Y1_X1Y1):=value;
+
   mmPA_SC_AA_CONFIG        :DWORD(GPU_REGS.SC_AA_CONFIG):=value;
+
+  mmPA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_0..mmPA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_3:
+  begin
+   PDWORD(@GPU_REGS.SC_AA_SAMPLE_LOCS_PIXEL)[reg-mmPA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_0]:=value;
+  end;
+
+  mmPA_SC_CENTROID_PRIORITY_0..mmPA_SC_CENTROID_PRIORITY_1:
+  begin
+   PDWORD(@GPU_REGS.SC_CENTROID_PRIORITY)[reg-mmPA_SC_CENTROID_PRIORITY_0]:=value;
+  end;
 
   mmPA_SU_HARDWARE_SCREEN_OFFSET:DWORD(GPU_REGS.HARDWARE_SCREEN_OFFSET):=value;
 
@@ -1201,6 +1213,8 @@ begin
 
   mmPA_CL_CLIP_CNTL:DWORD(GPU_REGS.CL_CLIP_CNTL)        :=value;
   mmPA_SC_CLIPRECT_RULE:DWORD(GPU_REGS.SC_CLIPRECT_RULE):=value;
+
+  mmPA_SU_SC_MODE_CNTL:DWORD(GPU_REGS.SC_MODE_CNTL):=value;
 
   mmPA_CL_GB_VERT_CLIP_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_CLIP_ADJ)^:=value;
   mmPA_CL_GB_VERT_DISC_ADJ:PDWORD(@GPU_REGS.GB_CLIP.VERT_DISC_ADJ)^:=value;
@@ -1248,6 +1262,10 @@ begin
 
   mmDB_HTILE_SURFACE     :DWORD(GPU_REGS.DEPTH.HTILE_SURFACE     ):=value;
 
+  mmDB_EQAA              :DWORD(GPU_REGS.DEPTH.EQAA):=value;
+
+  mmDB_COUNT_CONTROL     :DWORD(GPU_REGS.DEPTH.COUNT_CONTROL):=value;
+
   mmVGT_SHADER_STAGES_EN :DWORD(GPU_REGS.VGT_SHADER_STAGES_EN) :=value;
   mmVGT_OUT_DEALLOC_CNTL :DWORD(GPU_REGS.VGT_OUT_DEALLOC_CNTL) :=value;
 
@@ -1262,9 +1280,15 @@ begin
 
   mmVGT_OUTPUT_PATH_CNTL:DWORD(GPU_REGS.VGT_OUTPUT_PATH_CNTL):=value;
 
-  //mmVGT_GS_MODE:value:=value;
+  mmVGT_GS_MODE:DWORD(GPU_REGS.VGT_GS_MODE):=value;
+
+  mmVGT_GS_PER_ES:DWORD(GPU_REGS.VGT_GS_PER_ES):=value;
+  mmVGT_ES_PER_GS:DWORD(GPU_REGS.VGT_ES_PER_GS):=value;
+  mmVGT_GS_PER_VS:DWORD(GPU_REGS.VGT_GS_PER_VS):=value;
 
   mmPA_SU_POLY_OFFSET_DB_FMT_CNTL:DWORD(GPU_REGS.PA_SU_POLY_OFFSET_DB_FMT_CNTL):=value;
+
+  mmIA_MULTI_VGT_PARAM:DWORD(GPU_REGS.IA_MULTI_VGT_PARAM):=value;
 
   {$ifdef ww}else
    Writeln('SetContextReg:',getRegName(reg),'=',HexStr(value,8));{$endif}
@@ -1343,7 +1367,8 @@ end;
 
 const
  CONTEXT_REG_BASE = $A000;
- CONTEXT_SPACE_START=$0000a000;
+ CONTEXT_REG_END  = $A400;
+ CONTEXT_REG_SIZE = CONTEXT_REG_END - CONTEXT_REG_BASE;
 
 procedure onSetContextReg(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDSETDATA);
 var
@@ -1357,7 +1382,7 @@ begin
   r:=CONTEXT_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  //{$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  {$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
   Inc(GFXRing.SetCxCount);
@@ -1368,7 +1393,9 @@ begin
 end;
 
 const
- PERSISTENT_SPACE_START=$00002c00;
+ SH_REG_BASE = $2C00;
+ SH_REG_END  = $3000;
+ SH_REG_SIZE = SH_REG_END - SH_REG_BASE;
 
 procedure onSetShReg(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDSETDATA);
 var
@@ -1379,10 +1406,10 @@ begin
  if c<>0 then
  For i:=0 to c-1 do
  begin
-  r:=PERSISTENT_SPACE_START+Body^.REG_OFFSET+i;
+  r:=SH_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  //{$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  {$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
   Inc(GFXRing.SetShCount);
@@ -1397,7 +1424,9 @@ type
  PGRBM_GFX_INDEX=^TGRBM_GFX_INDEX;
 
 Const
- UCONFIG_SPACE_START=$0000c000;
+ USERCONFIG_REG_BASE = $0C000;
+ USERCONFIG_REG_END  = $10000;
+ USERCONFIG_REG_SIZE = USERCONFIG_REG_END - USERCONFIG_REG_BASE;
 
 procedure onSetUConfigReg(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDSETDATA);
 var
@@ -1415,10 +1444,10 @@ begin
  if c<>0 then
  For i:=0 to c-1 do
  begin
-  r:=UCONFIG_SPACE_START{ $C000}+Body^.REG_OFFSET+i;
+  r:=USERCONFIG_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  //{$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  {$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
 
   SetUContextReg(r,v);
 
@@ -1459,13 +1488,132 @@ begin
  Free;
 end;
 
+procedure ClearRenderTarget;
+var
+ RT_INFO:TRT_INFO;
+ ri:TvImage2;
+ range:TVkImageSubresourceRange;
+begin
+ Assert(DWORD(GPU_REGS.TARGET_MASK)=$F);
+
+ RT_INFO:=GPU_REGS.GET_RT_INFO(0);
+
+ GFXRing.AllocCmdBuffer;
+ GFXRing.CmdBuffer.EndRenderPass;
+
+ ri:=FetchImage(GFXRing.CmdBuffer,
+                RT_INFO.FImageInfo,
+                ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
+                ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
+                ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                TM_CLEAR
+                );
+
+ ri.PushBarrier(GFXRing.CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ range:=ri.GetSubresRange;
+
+ GFXRing.CmdBuffer.ClearColorImage(ri.FHandle,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   @RT_INFO.CLEAR_COLOR,
+                                   1,@range);
+end;
+
+procedure ResolveRenderTarget;
+var
+ RT_INFO_SRC,RT_INFO_DST:TRT_INFO;
+ ri_src,ri_dst:TvImage2;
+ vport:TVkRect2D;
+ range:TVkImageResolve;
+begin
+ Assert(DWORD(GPU_REGS.TARGET_MASK)=$F);
+
+ RT_INFO_SRC:=GPU_REGS.GET_RT_INFO(0);
+ RT_INFO_DST:=GPU_REGS.GET_RT_INFO(1);
+
+ vport:=GPU_REGS.GET_SCISSOR(0);
+
+ GFXRing.AllocCmdBuffer;
+ GFXRing.CmdBuffer.EndRenderPass;
+
+ ri_src:=FetchImage(GFXRing.CmdBuffer,
+                    RT_INFO_SRC.FImageInfo,
+                    ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
+                    ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
+                    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                    {TM_READ}0
+                    );
+
+ ri_dst:=FetchImage(GFXRing.CmdBuffer,
+                    RT_INFO_DST.FImageInfo,
+                    ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
+                    ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
+                    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                    TM_WRITE
+                    );
+
+ ri_src.PushBarrier(GFXRing.CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_READ_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ ri_dst.PushBarrier(GFXRing.CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ range:=Default(TVkImageResolve);
+
+ range.srcSubresource:=ri_src.GetSubresLayer;
+ range.dstSubresource:=ri_dst.GetSubresLayer;
+
+ range.srcOffset.Create(vport.offset.x,vport.offset.y,0);
+ range.dstOffset:=range.srcOffset;
+
+ range.extent.Create(vport.extent.width,vport.extent.height,1);
+
+ GFXRing.CmdBuffer.ResolveImage(
+                        ri_src.FHandle,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        ri_dst.FHandle,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        1,@range);
+
+end;
+
+procedure ClearDepthTarget(ri:TvImage2;clr:TVkClearDepthStencilValue);
+var
+ range:TVkImageSubresourceRange;
+begin
+ ri.PushBarrier(GFXRing.CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ range:=ri.GetSubresRange;
+
+ GFXRing.CmdBuffer.ClearDepthStencilImage(ri.FHandle,
+                                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                          @clr,
+                                          1,@range);
+
+end;
+
+
+
 var
  LastSetShCount:ptruint;
  LastSetCxCount:ptruint;
 
  LastRenderCmd:TvRenderTargets;
 
-procedure UpdateGpuRegsInfo;
+function UpdateGpuRegsInfo:Boolean;
 var
  FAttrBuilder:TvAttrBuilder;
  FUniformBuilder:TvUniformBuilder;
@@ -1486,8 +1634,6 @@ var
  range:TVkImageSubresourceRange;
  clr:TVkClearColorValue;
 
- clr2:TVkClearDepthStencilValue;
-
  BufferImageCopy:TVkBufferImageCopy;
 
  fdump_ps,fdump_vs:RawByteString;
@@ -1504,7 +1650,10 @@ var
 
  ctx_change:Boolean;
 
+ Event:TvEvent2;
+
 begin
+ Result:=True;
 
  {$ifdef null_rt}Exit;{$endif}
 
@@ -1526,9 +1675,43 @@ begin
  {$ifdef ww}Writeln(fdump_vs);{$endif}
  {$ifdef ww}Writeln(fdump_ps);{$endif}
 
- //if not GPU_REGS.COMP_ENABLE then Exit;
+ Case GPU_REGS.CB_COLOR_CONTROL.MODE of
+  CB_DISABLE             :
+  begin
+   {$ifdef ww}Writeln('CB_DISABLE');{$endif}
+   Exit(False);
+  end;
+  CB_NORMAL              :; //continue
+  CB_ELIMINATE_FAST_CLEAR:
+   begin
+    ClearRenderTarget;
+    Exit(False);
+   end;
+  CB_RESOLVE             :
+   begin
+    ResolveRenderTarget;
+    Exit(False);
+   end;
+  CB_DECOMPRESS          :
+   begin
+    {$ifdef ww}Writeln('CB_DECOMPRESS');{$endif}
+    Exit(False);
+   end;
+  CB_FMASK_DECOMPRESS    :
+  begin
+   {$ifdef ww}Writeln('CB_FMASK_DECOMPRESS');{$endif}
+   Exit(False);
+  end;
+  CB_DCC_DECOMPRESS      :
+  begin
+   {$ifdef ww}Writeln('CB_DCC_DECOMPRESS');{$endif}
+   Exit(False);
+  end;
+  else
+   Assert(false,'CB_COLOR_CONTROL.MODE:'+IntToStr(GPU_REGS.CB_COLOR_CONTROL.MODE));
+ end;
 
- if not (GPU_REGS.COMP_ENABLE or GPU_REGS.DB_ENABLE) then Exit;
+ if not (GPU_REGS.COMP_ENABLE or GPU_REGS.DB_ENABLE) then Exit(False);
 
  GFXRing.AllocCmdBuffer;
 
@@ -1559,6 +1742,16 @@ begin
   FRenderCmd.FPipeline.SetPrimType(GPU_REGS.GET_PRIM_TYPE);
   FRenderCmd.FPipeline.SetBlendColors(@GPU_REGS.CB_BLEND_RGBA);
 
+  //FRenderCmd.FPipeline.multisampling.sampleShadingEnable  :=VK_FALSE;
+  //FRenderCmd.FPipeline.multisampling.rasterizationSamples :=TVkSampleCountFlagBits(1 shl GPU_REGS.SC_AA_CONFIG.MSAA_NUM_SAMPLES);
+  //FRenderCmd.FPipeline.multisampling.minSampleShading     :=1;
+  //FRenderCmd.FPipeline.multisampling.pSampleMask          :=nil;
+  //FRenderCmd.FPipeline.multisampling.alphaToCoverageEnable:=VK_FALSE;
+  //FRenderCmd.FPipeline.multisampling.alphaToOneEnable     :=VK_FALSE;
+
+  //SC_MODE_CNTL_0 = {
+  //MSAA_ENABLE = 1,
+
   FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
 
 
@@ -1576,7 +1769,39 @@ begin
    begin
     RT_INFO:=GPU_REGS.GET_RT_INFO(i);
 
-    {$ifdef ww}Writeln('RT:',i,' ',HexStr(RT_INFO.FImageInfo.Addr));{$endif}
+    {$ifdef ww}
+    Writeln('RT:',i,' ',HexStr(RT_INFO.FImageInfo.Addr));
+    Writeln(' TM_READ :',RT_INFO.IMAGE_USAGE and TM_READ <>0);
+    Writeln(' TM_WRITE:',RT_INFO.IMAGE_USAGE and TM_WRITE<>0);
+    Writeln(' TM_CLEAR:',RT_INFO.IMAGE_USAGE and TM_CLEAR<>0);
+
+    Writeln(' format:',RT_INFO.FImageInfo.cformat);
+    Writeln(' size:',RT_INFO.FImageInfo.params.extend.width,'x',RT_INFO.FImageInfo.params.extend.height);
+    Writeln(' samples:',RT_INFO.FImageInfo.params.samples);
+    {$endif}
+
+    //if (RT_INFO.FImageInfo.params.samples>ord(FRenderCmd.FPipeline.multisampling.rasterizationSamples)) then
+    //begin
+    // FRenderCmd.FPipeline.multisampling.rasterizationSamples:=TVkSampleCountFlagBits(RT_INFO.FImageInfo.params.samples);
+    //end;
+
+    RT_INFO.FImageInfo.params.samples:=1;
+
+    if (RT_INFO.IMAGE_USAGE and TM_READ)=0 then
+    begin
+     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
+    end;
+
+    if (RT_INFO.IMAGE_USAGE and TM_CLEAR)=0 then
+    begin
+     RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_READ;
+    end;
+
+    if (RT_INFO.blend.blendEnable<>0) then
+    begin
+     //Exit(false);
+     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
+    end;
 
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_READ);
@@ -1590,17 +1815,14 @@ begin
                    RT_INFO.IMAGE_USAGE
                    );
 
-    //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
+    //if (RT_INFO.blend.blendEnable=0) then
+    begin
+     //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
+    end;
 
     iv:=ri.FetchView(GFXRing.CmdBuffer,RT_INFO.FImageView);
 
     //
-
-    {$ifdef ww}
-    Writeln('TM_READ :',RT_INFO.IMAGE_USAGE and TM_READ <>0);
-    Writeln('TM_WRITE:',RT_INFO.IMAGE_USAGE and TM_WRITE<>0);
-    Writeln('TM_CLEAR:',RT_INFO.IMAGE_USAGE and TM_CLEAR<>0);
-    {$endif}
 
     //Writeln(hexstr(PDWORD(RT_INFO.FImageInfo.Addr)[0],8));
     //writeln;
@@ -1608,6 +1830,11 @@ begin
     //RT_INFO.IMAGE_USAGE:={TM_CLEAR or }TM_READ{ or TM_WRITE};
 
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_CLEAR);
+
+    ri.PushBarrier(GFXRing.CmdBuffer,
+                   ord(VK_ACCESS_TRANSFER_READ_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     ri.PushBarrier(GFXRing.CmdBuffer,
                    GetColorAccessMask(RT_INFO.IMAGE_USAGE),
@@ -1630,23 +1857,41 @@ begin
     //RT_INFO.blend.blendEnable:=0;
     FRenderCmd.FPipeline.AddBlend(RT_INFO.blend);
 
+    //RT_INFO.CLEAR_COLOR.float32[0]:=1;
+    //RT_INFO.CLEAR_COLOR.float32[1]:=0;
+    //RT_INFO.CLEAR_COLOR.float32[2]:=0;
+    //RT_INFO.CLEAR_COLOR.float32[3]:=1;
+
     FRenderCmd.AddClearColor(TVkClearValue(RT_INFO.CLEAR_COLOR));
 
    end;
 
-  if GPU_REGS.DB_ENABLE then
+  //if not GPU_REGS.COMP_ENABLE then Exit(false);
+  if GPU_REGS.DB_ENABLE {false} then
   begin
    DB_INFO:=GPU_REGS.GET_DB_INFO;
 
+   //if (DB_INFO.DEPTH_USAGE and TM_READ)=0 then
+   //begin
+    //DB_INFO.DEPTH_USAGE:=DB_INFO.DEPTH_USAGE or TM_CLEAR;
+   //end;
+
    {$ifdef ww}
    Writeln('DB');
-   Writeln('TM_READ :',DB_INFO.DEPTH_USAGE and TM_READ <>0);
-   Writeln('TM_WRITE:',DB_INFO.DEPTH_USAGE and TM_WRITE<>0);
-   Writeln('TM_CLEAR:',DB_INFO.DEPTH_USAGE and TM_CLEAR<>0);
+   Writeln(' TM_READ :',DB_INFO.DEPTH_USAGE and TM_READ <>0);
+   Writeln(' TM_WRITE:',DB_INFO.DEPTH_USAGE and TM_WRITE<>0);
+   Writeln(' TM_CLEAR:',DB_INFO.DEPTH_USAGE and TM_CLEAR<>0);
+
+   Writeln(' format:',DB_INFO.FImageInfo.cformat);
+   Writeln(' size:',DB_INFO.FImageInfo.params.extend.width,'x',DB_INFO.FImageInfo.params.extend.height);
+   Writeln(' samples:',DB_INFO.FImageInfo.params.samples);
+
    {$endif}
 
    //DB_INFO.DEPTH_USAGE:={TM_CLEAR or} TM_READ or TM_WRITE;
 
+   DB_INFO.FImageInfo.params.samples:=1;
+   //DB_INFO.FImageInfo.params.samples:=ord(FRenderCmd.FPipeline.multisampling.rasterizationSamples);
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   DB_INFO.FImageInfo,
@@ -1661,22 +1906,15 @@ begin
    iv:=ri.FetchView(GFXRing.CmdBuffer);
 
 
+   ri.PushBarrier(GFXRing.CmdBuffer,
+                  ord(VK_ACCESS_TRANSFER_READ_BIT),
+                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
    if not GPU_REGS.COMP_ENABLE then
    begin
-    ri.PushBarrier(GFXRing.CmdBuffer,
-                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-    range:=iv.GetSubresRange;
-    clr2:=DB_INFO.CLEAR_VALUE.depthStencil;
-
-    GFXRing.CmdBuffer.ClearDepthStencilImage(ri.FHandle,
-                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                             @clr2,
-                                             1,@range);
-
-    Exit;
+    ClearDepthTarget(ri,DB_INFO.CLEAR_VALUE.depthStencil);
+    Exit(False);
    end;
 
    ri.PushBarrier(GFXRing.CmdBuffer,
@@ -1690,7 +1928,9 @@ begin
    //Writeln('colorAttachmentCount:',FRenderCmd.FRenderPass.subpass.colorAttachmentCount);
    //Writeln('AtCount:',FRenderCmd.FRenderPass.AtCount);
 
-   FRenderCmd.FRenderPass.SetDepthStencilRef(FRenderCmd.FRenderPass.subpass.colorAttachmentCount,DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE);
+   FRenderCmd.FRenderPass.SetDepthStencilRef(
+      FRenderCmd.FRenderPass.subpass.colorAttachmentCount,
+      DB_INFO.DEPTH_USAGE,DB_INFO.STENCIL_USAGE);
 
    //if not GPU_REGS.COMP_ENABLE then
    //begin
@@ -1725,7 +1965,7 @@ begin
 
  {$ifdef ww}Writeln('[FVSShader]');{$endif}
  FVSShader:=FetchShader(vShaderStageVs,0,GPU_REGS);
- if (FVSShader=nil) then Exit;
+ if (FVSShader=nil) then Exit(False);
 
  FAttrBuilder:=Default(TvAttrBuilder);
  FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,@GPU_REGS.SPI.VS.USER_DATA);
@@ -1743,7 +1983,7 @@ begin
 
  {$ifdef ww}Writeln('[FPSShader]');{$endif}
  FPSShader:=FetchShader(vShaderStagePs,1,GPU_REGS);
- if (FPSShader=nil) then Exit;
+ //if (FPSShader=nil) then Exit;
 
  FShadersKey:=Default(TvShadersKey);
  FShadersKey.SetVSShader(FVSShader);
@@ -1791,6 +2031,25 @@ begin
 
   end;
  end;
+
+{
+ Event:=TvEvent2.Create;
+ GFXRing.CmdBuffer.AddDependence(@Event.Release);
+
+ vkCmdSetEvent(
+  GFXRing.CmdBuffer.cmdbuf,
+  Event.FHandle,
+  ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
+
+ vkCmdWaitEvents(
+  GFXRing.CmdBuffer.cmdbuf,
+  1,@Event.FHandle,
+  ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
+  ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
+  0,nil,
+  0,nil,
+  0,nil);
+ }
 
  if ctx_change then
  begin
@@ -1860,7 +2119,7 @@ begin
 
    iv:=ri.FetchView(GFXRing.CmdBuffer,FView);
 
-   ri.data_usage:=ri.data_usage and (not TM_READ); ////////
+   //ri.data_usage:=ri.data_usage and (not TM_READ); ////////
 
    FDescriptorGroup.FSets[fset].BindImg(bind,0,
                                         iv.FHandle,
@@ -2028,11 +2287,11 @@ begin
 
   //drawInitiator:TVGT_DRAW_INITIATOR;
 
- UpdateGpuRegsInfo;
-
- Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
-
- GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
+ if UpdateGpuRegsInfo then
+ begin
+  Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
+  GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
+ end;
 
  {$ifdef ww}Writeln('DrawIndex:',Body^.indexCount);{$endif}
 
@@ -2043,9 +2302,10 @@ procedure onDrawIndexAuto(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXAUTO);
 begin
  GPU_REGS.VGT_DMA.INDICES:=Body^.indexCount;
 
- UpdateGpuRegsInfo;
-
- GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
+ if UpdateGpuRegsInfo then
+ begin
+  GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
+ end;
 
  {$ifdef ww}Writeln('onDrawIndexAuto:',Body^.indexCount);{$endif}
 
@@ -2094,6 +2354,7 @@ begin
   i:=0;
   s:=node^.dcbSizesInBytes[n];
   P:=PByte(node^.dcbGpuAddrs[n]);
+
   While (i<s) do
   begin
    token:=PDWORD(P)^;
@@ -2261,7 +2522,7 @@ begin
 end;
 
 initialization
- GPU_REGS.Clear;
+ GPU_REGS.InitDefault;
 
 end.
 

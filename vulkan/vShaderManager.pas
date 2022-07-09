@@ -202,7 +202,8 @@ begin
  SprvEmit.FBuffers.cfg.minStorageBufferOffsetAlignment:=limits.minStorageBufferOffsetAlignment; // $10
  SprvEmit.FBuffers.cfg.minUniformBufferOffsetAlignment:=limits.minUniformBufferOffsetAlignment; // $100
 
- SprvEmit.FBuffers.cfg.maxPushConstantsSize:=0;
+ SprvEmit.FBuffers.cfg.maxPushConstantsSize:=16*4;
+ SprvEmit.FBuffers.cfg.maxPushConstantsSize:=12;
  //SprvEmit.FUseVertexInput:=False;
 
  if (SprvEmit.Parse(pData)>1) then

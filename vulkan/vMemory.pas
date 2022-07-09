@@ -661,7 +661,7 @@ begin
  InitVulkan;
 
  //Some games request too much video memory, relevant for built-in iGPU
- if (len>1024*1024*1024) then len:=1024*1024*1024;
+ //if (len>1024*1024*1024) then len:=1024*1024*1024;
 
  Result:=vkAllocHostPointer(Device.FHandle,len,MemManager.FHostVisibMt{FHostCacheMt},addr);
  Assert(Result<>VK_NULL_HANDLE);
