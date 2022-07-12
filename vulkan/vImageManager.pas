@@ -8,6 +8,7 @@ uses
  SysUtils,
  RWLock,
  g23tree,
+ sys_types,
  Vulkan,
  vDevice,
  vMemory,
@@ -251,10 +252,29 @@ begin
 end;
 
 function TvHostImage2.GetImageInfo:TVkImageCreateInfo;
+var
+ bpp,size:qword;
 begin
  Result:=Parent.GetImageInfo;
  Result.tiling:=VK_IMAGE_TILING_LINEAR;
  Result.usage :=FUsage;
+ if (Parent.key.params.tiling_idx=8) then
+ begin
+  size:=Result.extent.width;
+  bpp:=getFormatSize(Result.format);
+  if IsTexelFormat(Result.format) then
+  begin
+   size:=(size+3) div 4;
+  end;
+  size:=size*bpp;
+  size:=AlignUp(size,128);
+  size:=size div bpp;
+  if IsTexelFormat(Result.format) then
+  begin
+   size:=size*4;
+  end;
+  Result.extent.width:=size;
+ end;
 end;
 
 Function TvImage2.GetSubresRange:TVkImageSubresourceRange;

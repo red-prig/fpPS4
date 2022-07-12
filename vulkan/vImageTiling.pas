@@ -24,45 +24,6 @@ implementation
 uses
  vImageManager;
 
-Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
-begin
- Result:=0;
- Case cformat of
-  //pixel size
-  VK_FORMAT_R8G8B8A8_SRGB       :Result:=4;
-  VK_FORMAT_R8G8B8A8_UNORM      :Result:=4;
-  VK_FORMAT_R8G8_UNORM          :Result:=2;
-  VK_FORMAT_R8_UNORM            :Result:=1;
-  VK_FORMAT_R8_UINT             :Result:=4;
-  VK_FORMAT_R5G6B5_UNORM_PACK16 :Result:=2;
-
-  //texel size
-  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
-  VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
-  VK_FORMAT_BC4_UNORM_BLOCK..
-  VK_FORMAT_BC4_SNORM_BLOCK     :Result:=8;
-
-  VK_FORMAT_BC2_UNORM_BLOCK..
-  VK_FORMAT_BC3_SRGB_BLOCK,
-  VK_FORMAT_BC5_UNORM_BLOCK..
-  VK_FORMAT_BC7_SRGB_BLOCK      :Result:=16;
-
-  else
-   Assert(false,'TODO');
- end;
-end;
-
-function IsTexelFormat(cformat:TVkFormat):Boolean;
-begin
- Case cformat of
-  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
-  VK_FORMAT_BC7_SRGB_BLOCK:
-   Result:=True;
-  else
-   Result:=False;
- end;
-end;
-
 {
 Procedure _Load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
 var
