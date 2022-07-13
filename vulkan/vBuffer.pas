@@ -28,6 +28,7 @@ var
  cinfo:TVkBufferCreateInfo;
  r:TVkResult;
 begin
+ Assert(size<>0);
  FSize:=size;
  FUsage:=usage;
  cinfo:=Default(TVkBufferCreateInfo);

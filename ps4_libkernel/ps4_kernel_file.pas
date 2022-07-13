@@ -262,7 +262,11 @@ end;
 
 function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=_set_errno(sce2px(ps4_sceKernelOpen(path,flags,mode)));
+ Result:=ps4_sceKernelOpen(path,flags,mode);
+ if (Result<0) then
+ begin
+  Result:=_set_errno(sce2px(Result));
+ end;
 end;
 
 function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;

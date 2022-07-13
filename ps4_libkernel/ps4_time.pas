@@ -41,6 +41,8 @@ function ps4_sceKernelGetTscFrequency():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelReadTsc():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelClockGettime(clockId:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelGetProcessTime:QWORD; SysV_ABI_CDecl; //microseconds
+function ps4_sceKernelGetProcessTimeCounterFrequency:QWORD; SysV_ABI_CDecl; //microseconds*10
+function ps4_sceKernelGetProcessTimeCounter:QWORD; SysV_ABI_CDecl; //microseconds*10
 
 function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl;          //microseconds
@@ -324,6 +326,26 @@ begin
  end else
  begin
   _set_errno(EINVAL);
+  Result:=0;
+ end;
+ _sig_unlock;
+end;
+
+function ps4_sceKernelGetProcessTimeCounterFrequency:QWORD; SysV_ABI_CDecl; //microseconds*10
+begin
+ Result:=HECTONANOSEC_PER_SEC;
+end;
+
+function ps4_sceKernelGetProcessTimeCounter:QWORD; SysV_ABI_CDecl; //microseconds*10
+var
+ ct,et,kt,ut:TFileTime;
+begin
+ _sig_lock;
+ if GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then
+ begin
+  Result:=({QWORD(kt)+}QWORD(ut));
+ end else
+ begin
   Result:=0;
  end;
  _sig_unlock;

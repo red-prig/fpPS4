@@ -286,8 +286,8 @@ begin
  //   'sceKernelClockGettime':;
  //   'pthread_mutex_lock':;
  //   'pthread_mutex_unlock':;
- //   'sceKernelPread':;
- //   'sceKernelClose':;
+ //   //'sceKernelPread':;
+ //   //'sceKernelClose':;
  //   'sceDiscMapIsRequestOnHDD':;
  //   'Unknow':;
  //   'sceFiosIOFilterPsarcDearchiver':;
@@ -301,10 +301,11 @@ begin
  //   'scePthreadRwlockUnlock':;
  //   'scePthreadCondBroadcast':;
  //   'sceFiosFHCloseSync':;
- //   'sceKernelStat':;
+ //   //'sceKernelStat':;
  //   'sceFiosFHOpenSync':;
  //   'sceFiosFHGetSize':;
- //   'sceKernelOpen':;
+ //   //'sceKernelOpen':;
+ //   '_write':;
  //   else
  //    begin
  //     Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
@@ -407,6 +408,12 @@ begin
 
  //ps4_app.app_path:='..\samples\api_gnm\';
  //ps4_app.app_file:='..\samples\api_gnm\anisotropy-sample\anisotropy-sample_debug.elf';
+
+ //ps4_app.app_path:='..\samples\api_gnm\';
+ //ps4_app.app_file:='..\samples\api_gnm\depth-mode-sample\depth-mode-sample_debug.elf';
+
+ //ps4_app.app_path:='..\samples\api_gnm\';
+ //ps4_app.app_file:='..\samples\api_gnm\eqaa-sample\eqaa-sample_debug.elf';
 
  //ps4_app.app_path:='..\samples\tutorial_graphics_programming\basic_quad\';
  //ps4_app.app_file:='..\samples\tutorial_graphics_programming\basic_quad\basic_quad_debug.elf';
@@ -514,6 +521,15 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Stardew_Valley\CUSA06829\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Stardew_Valley\CUSA06829\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Stardew_Valley\CUSA06829\';
+ //ps4_app.app_file:='G:\Games\Stardew_Valley\CUSA06829\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Super Exploding Zoo\CUSA00446\';
+ //ps4_app.app_file:='G:\Games\Super Exploding Zoo\CUSA00446\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Untitled Goose Game\CUSA23079\';
+ //ps4_app.app_file:='G:\Games\Untitled Goose Game\CUSA23079\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

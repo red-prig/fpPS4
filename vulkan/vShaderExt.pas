@@ -610,7 +610,7 @@ end;
 Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord);
 var
  b:TBufBindExt;
- i,stride:Integer;
+ i,stride,num_records:Integer;
 begin
  Assert(PV<>nil);
  if (PV=nil) then Exit;
@@ -625,8 +625,10 @@ begin
  b.addr:=Pointer(PV^.base);
 
  stride:=PV^.stride;
+ num_records:=PV^.num_records;
  if (stride=0) then stride:=1;
- b.size:=stride*PV^.num_records;
+ if (num_records=0) then num_records:=1;
+ b.size:=stride*num_records;
 
  i:=Length(FBuffers);
  SetLength(FBuffers,i+1);

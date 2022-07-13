@@ -287,18 +287,10 @@ begin
    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
  end;
 
- _sig_lock;
- err:=Pa_OpenDefaultStream(@pstream,
-                           0,
-                           pnumOutputChannels,
-                           psampleFormat,
-                           freq,
-                           paFramesPerBufferUnspecified,nil,nil);
- _sig_unlock;
-
- if (err<>0) and (pnumOutputChannels>2) then
+ pstream:=nil;
+ err:=0;
+ if (_type=SCE_AUDIO_OUT_PORT_TYPE_MAIN) then //so far only main
  begin
-  pnumOutputChannels:=2;
   _sig_lock;
   err:=Pa_OpenDefaultStream(@pstream,
                             0,
@@ -307,13 +299,25 @@ begin
                             freq,
                             paFramesPerBufferUnspecified,nil,nil);
   _sig_unlock;
- end;
 
- if (err<>0) then
- begin
-  Writeln(StdErr,'Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
-  //Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-  pstream:=nil;
+  if (err<>0) and (pnumOutputChannels>2) then
+  begin
+   pnumOutputChannels:=2;
+   _sig_lock;
+   err:=Pa_OpenDefaultStream(@pstream,
+                             0,
+                             pnumOutputChannels,
+                             psampleFormat,
+                             freq,
+                             paFramesPerBufferUnspecified,nil,nil);
+   _sig_unlock;
+  end;
+
+  if (err<>0) then
+  begin
+   Writeln(StdErr,'Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
+   //Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+  end;
  end;
 
  err:=0;
@@ -444,6 +448,23 @@ begin
 
  H.Release;
  Writeln('sceAudioOutSetVolume:',handle,':',flag);
+ Result:=0;
+end;
+
+function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer; SysV_ABI_CDecl;
+Var
+ H:TAudioOutHandle;
+ i:Integer;
+begin
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+
+ _sig_lock;
+ H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
+ _sig_unlock;
+
+ //ignore
+
+ H.Release;
  Result:=0;
 end;
 
@@ -702,6 +723,7 @@ begin
  lib^.set_proc($B35FFFB84F66045C,@ps4_sceAudioOutClose);
  lib^.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
  lib^.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
+ lib^.set_proc($C15C0F539D294B57,@ps4_sceAudioOutSetMixLevelPadSpk);
  lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
 end;

@@ -61,6 +61,28 @@ type
   __align:Integer;
  end;
 
+const
+ SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE=32;
+ SCE_KERNEL_VQ_FIND_NEXT=1;
+
+type
+ pSceKernelVirtualQueryInfo=^SceKernelVirtualQueryInfo;
+ SceKernelVirtualQueryInfo=packed record
+  pstart:Pointer;
+  pend  :Pointer;
+  offset:QWORD;
+  protection:Integer;
+  memoryType:Integer;
+  bits:bitpacked record
+   isFlexibleMemory:0..1;
+   isDirectMemory  :0..1;
+   isStack         :0..1;
+   isPooledMemory  :0..1;
+   isCommitted     :0..1;
+  end;
+  name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
+ end;
+
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
 
@@ -108,7 +130,14 @@ function ps4_sceKernelMapFlexibleMemory(
 
 function ps4_sceKernelMunmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelVirtualQuery(addr:Pointer;
+                                   flags:Integer;
+                                   info:pSceKernelVirtualQueryInfo;
+                                   infoSize:QWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:Pchar):Integer; SysV_ABI_CDecl;
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
 function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
@@ -1700,6 +1729,15 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceKernelVirtualQuery(addr:Pointer;
+                                   flags:Integer;
+                                   info:pSceKernelVirtualQueryInfo;
+                                   infoSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Assert(false,'TODO');
+end;
+
 function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
@@ -1708,6 +1746,12 @@ begin
  if PageMM.ChangeProt(addr,len,prot) then Result:=0;
  _sig_unlock;
 
+end;
+
+function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceKernelSetVirtualRangeName:',HexStr(addr),':',len,':',name);
+ Result:=0;
 end;
 
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;

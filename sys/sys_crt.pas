@@ -12,6 +12,9 @@ Procedure sys_crt_init;
 
 implementation
 
+uses
+ sys_signal;
+
 var
  StdOutLock:Pointer=nil;
 
@@ -33,6 +36,7 @@ Begin
  if (t.BufPos=0) then exit;
  n:=0;
 
+ _sig_lock;
  spin_lock(StdOutLock);
 
  WriteConsole(t.Handle,t.Bufptr,t.BufPos,@n,nil);
@@ -41,6 +45,7 @@ Begin
  t.BufPos:=0;
 
  spin_unlock(StdOutLock);
+ _sig_unlock;
 end;
 
 Procedure CrtErrWrite(var t:TextRec);
@@ -53,6 +58,7 @@ Begin
  if (t.BufPos=0) then exit;
  n:=0;
 
+ _sig_lock;
  spin_lock(StdOutLock);
 
  old:=7;
@@ -67,6 +73,7 @@ Begin
  t.BufPos:=0;
 
  spin_unlock(StdOutLock);
+ _sig_unlock;
 end;
 
 Procedure CrtClose(Var F:TextRec);

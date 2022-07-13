@@ -1029,7 +1029,9 @@ begin
  lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
  lib^.set_proc($71091EF54B8140E9,@ps4_sceKernelMunmap);
  lib^.set_proc($58571F2F697389DA,@ps4_sceKernelQueryMemoryProtection);
+ lib^.set_proc($AD58D1BC72745FA7,@ps4_sceKernelVirtualQuery);
  lib^.set_proc($BD23009B77316136,@ps4_sceKernelMprotect);
+ lib^.set_proc($0C6306DC9B21AD95,@ps4_sceKernelSetVirtualRangeName);
 
  //mmap
 
@@ -1061,6 +1063,9 @@ begin
  lib^.set_proc($FF62115023BFFCF3,@ps4_sceKernelReadTsc);
  lib^.set_proc($4018BB1C22B4DE1C,@ps4_sceKernelClockGettime);
  lib^.set_proc($E09DAC5099AE1D94,@ps4_sceKernelGetProcessTime);
+ lib^.set_proc($04DA30C76979F3C1,@ps4_sceKernelGetProcessTimeCounterFrequency);
+ lib^.set_proc($7E0C6731E4CD52D6,@ps4_sceKernelGetProcessTimeCounter);
+
  lib^.set_proc($C92F14D931827B50,@ps4_nanosleep);
  lib^.set_proc($41CB5E4706EC9D5D,@ps4_usleep);
  lib^.set_proc($D637D72D15738AC7,@ps4_sceKernelUsleep);

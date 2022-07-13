@@ -184,6 +184,8 @@ begin
  Result:=0;
 end;
 
+//nop nid:libSceNpScore:00D26CB0FCF7998D:sceNpScoreRecordScoreAsync
+
 function Load_libSceNpScoreRanking(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;

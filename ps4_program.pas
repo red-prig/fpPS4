@@ -425,73 +425,73 @@ begin
  Result:=PathConcat(s,filename);
 end;
 
+function _parse_cast(var pp,fp:PChar;var Path:RawByteString):Byte;
+begin
+ Result:=0;
+ Case (fp-pp) of
+  0:pp:=fp+1; //next
+  4:Case PDWORD(pp)^ of
+     $30707061: //app0
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Path:=PathConcat(ps4_app.app_path,fp);
+        Result:=1;
+       end;
+     else
+        Result:=2;
+    end;
+  9:Case PQWORD(pp)^ of
+     $6174616465766173: //savedata
+       begin
+        Case (pp+8)^ of
+         '0'..'9':
+           begin
+            if (fp^<>#0) then Inc(fp);
+            Path:=MountConcat(ord((pp+8)^)-ord('0'),fp);;
+            Result:=1;
+           end;
+         else
+            Result:=2;
+        end;
+       end;
+     else
+       Result:=2;
+    end;
+ 10:Case PQWORD(pp)^ of
+     $6174616465766173: //savedata
+       begin
+        Case PWORD(pp+8)^ of
+         $3031, //10
+         $3131, //11
+         $3231, //12
+         $3331, //13
+         $3431, //14
+         $3531: //15
+           begin
+            if (fp^<>#0) then Inc(fp);
+            Path:=MountConcat(ord((pp+9)^)-ord('0')+10,fp);
+            //Result:=PathConcat(GetCurrentDir,fp);
+            Result:=1;
+           end;
+         else
+          Result:=2;
+        end;
+       end;
+     else
+       Result:=2;
+    end;
+  else
+    begin
+     //Writeln((fp-pp),'*',fp,'*',pp);
+     Result:=2;
+    end;
+ end;
+end;
+
 function _parse_filename(filename:PChar):RawByteString;
 var
  Path:RawByteString;
  pp,fp:PChar;
-
- function _cast(var str:RawByteString):Byte;
- begin
-  Result:=0;
-  Case (fp-pp) of
-   0:pp:=fp+1; //next
-   4:Case PDWORD(pp)^ of
-      $30707061: //app0
-        begin
-         if (fp^<>#0) then Inc(fp);
-         str:=PathConcat(ps4_app.app_path,fp);
-         Result:=1;
-        end;
-      else
-         Result:=2;
-     end;
-   9:Case PQWORD(pp)^ of
-      $6174616465766173: //savedata
-        begin
-         Case (pp+8)^ of
-          '0'..'9':
-            begin
-             if (fp^<>#0) then Inc(fp);
-             str:=MountConcat(ord((pp+8)^)-ord('0'),fp);;
-             Result:=1;
-            end;
-          else
-             Result:=2;
-         end;
-        end;
-      else
-        Result:=2;
-     end;
-  10:Case PQWORD(pp)^ of
-      $6174616465766173: //savedata
-        begin
-         Case PWORD(pp+8)^ of
-          $3031, //10
-          $3131, //11
-          $3231, //12
-          $3331, //13
-          $3431, //14
-          $3531: //15
-            begin
-             if (fp^<>#0) then Inc(fp);
-             str:=MountConcat(ord((pp+9)^)-ord('0')+10,fp);
-             //Result:=PathConcat(GetCurrentDir,fp);
-             Result:=1;
-            end;
-          else
-           Result:=2;
-         end;
-        end;
-      else
-        Result:=2;
-     end;
-   else
-     begin
-      //Writeln((fp-pp),'*',fp,'*',pp);
-      Result:=2;
-     end;
-  end;
- end;
 
 begin
  Result:='';
@@ -506,9 +506,9 @@ begin
   Case fp^ of
    '/':
    begin
-    Case _cast(Result) of
+    Case _parse_cast(pp,fp,Result) of
      1:Exit;     //mapped
-     2:Exit(''); //not mapped
+     2:Exit;     //not mapped
      else;
                  //next char
     end;
@@ -517,10 +517,10 @@ begin
   Inc(fp);
  end;
 
- Case _cast(Result) of
+ Case _parse_cast(pp,fp,Result) of
   1:Exit;     //mapped
   else;
-    Exit(''); //not mapped
+    Exit;     //not mapped
  end;
 
 end;

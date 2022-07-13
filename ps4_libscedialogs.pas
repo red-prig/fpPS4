@@ -67,6 +67,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceErrorDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0; //SCE_ERROR_DIALOG_STATUS_NONE
+end;
+
 function ps4_sceNpProfileDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpProfileDialogInitialize');
@@ -237,6 +242,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpCommerceDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0; //SCE_COMMON_DIALOG_STATUS_NONE
+end;
+
 //
 
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
@@ -259,6 +269,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceErrorDialog');
  lib^.set_proc($23CF0A0A19729D2B,@ps4_sceErrorDialogInitialize);
+ lib^.set_proc($596886BA1F577E04,@ps4_sceErrorDialogUpdateStatus);
 end;
 
 //
@@ -312,6 +323,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNpCommerce');
  lib^.set_proc($D1A4766969906A5E,@ps4_sceNpCommerceDialogInitialize);
+ lib^.set_proc($2D1E5CC0530C0951,@ps4_sceNpCommerceDialogUpdateStatus);
 end;
 
 initialization
