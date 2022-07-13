@@ -311,7 +311,7 @@ begin
  r:=vkCreateFramebuffer(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateFramebuffer');
+  Writeln(StdErr,'vkCreateFramebuffer');
  end;
 
  Result:=(r=VK_SUCCESS);
@@ -379,7 +379,7 @@ begin
  r:=vkCreateSwapchainKHR(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateSwapchainKHR:',r);
+  Writeln(StdErr,'vkCreateSwapchainKHR:',r);
   Exit;
  end;
 
@@ -395,7 +395,7 @@ begin
  r:=vkGetSwapchainImagesKHR(Device.FHandle,FHandle,@count,@FImage[0]);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkGetSwapchainImagesKHR:',r);
+  Writeln(StdErr,'vkGetSwapchainImagesKHR:',r);
   Exit;
  end;
 
@@ -420,7 +420,7 @@ begin
   r:=vkCreateImageView(Device.FHandle,@cimg,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln('vkCreateImageView:',r);
+   Writeln(StdErr,'vkCreateImageView:',r);
    Exit;
   end;
   FImages[i]:=TvSwapChainImage.Create;
@@ -499,7 +499,7 @@ begin
  r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateImage:',r);
+  Writeln(StdErr,'vkCreateImage:',r);
   Exit;
  end;
  Result:=True;
@@ -543,7 +543,7 @@ begin
  r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FImg);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateImageView:',r);
+  Writeln(StdErr,'vkCreateImageView:',r);
   Exit;
  end;
  Result:=TvImageView.Create;

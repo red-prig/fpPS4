@@ -166,6 +166,8 @@ function SysBeginThread(sa:Pointer;
 implementation
 
 uses
+ atomic,
+ spinlock,
  Windows;
 
 function _get_curthread:pthread; inline;
@@ -174,34 +176,23 @@ begin
 end;
 
 var
- TLSKey:PDword; external name '_FPC_TlsKey';
+ _lazy_init:Integer=0;
+ _lazy_wait:Integer=0;
 
-procedure SysAllocateThreadVars; external name '_FPC_SysAllocateThreadVars';
-
-function SysRelocateThreadVar(offset : dword) : pointer;
-var
- dataindex : pointer;
- errorsave : dword;
+function _thread_null(parameter:pointer):ptrint;
 begin
- errorsave:=GetLastError;
- dataindex:=TlsGetValue(tlskey^);
- if (dataindex=nil) then
- begin
-  SysAllocateThreadVars;
-  dataindex:=TlsGetValue(tlskey^);
-  InitThread($1000000);
- end;
- SetLastError(errorsave);
- Result:=DataIndex+Offset;
+ Result:=0;
 end;
 
-procedure SysInitTLS;
+procedure init_threads;
 begin
- if (TLSKey^=$ffffffff) then
+ if XCHG(_lazy_init,1)=0 then
  begin
-  { We're still running in single thread mode, setup the TLS }
-  TLSKey^:=TlsAlloc;
-  InitThreadVars(@SysRelocateThreadVar);
+  BeginThread(@_thread_null);
+  fetch_add(_lazy_wait,1);
+ end else
+ begin
+  wait_until_equal(_lazy_wait,0);
  end;
 end;
 
@@ -224,18 +215,11 @@ function SysBeginThread(sa:Pointer;
                         creationFlags:dword;
                         var ThreadId:TThreadID):TThreadID;
 var
- _threadid : dword;
+ _threadid:dword;
 begin
  _sig_lock;
 
- { Initialize multithreading if not done }
- SysInitTLS;
- if not IsMultiThread then
- begin
-  { lazy initialize thread support }
-   LazyInitThreading;
-   IsMultiThread:=true;
- end;
+ init_threads;
 
  _threadid:=0;
  Result:=CreateThread(sa,stacksize,ThreadMain,p,creationflags,_threadid);

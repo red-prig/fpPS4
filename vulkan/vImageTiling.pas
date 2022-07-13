@@ -24,17 +24,60 @@ implementation
 uses
  vImageManager;
 
-{
+Function GetAlignWidth(format:TVkFormat;width:DWORD):DWORD;
+var
+ bpp,size:Ptruint;
+begin
+ size:=width;
+ bpp:=getFormatSize(format);
+ if IsTexelFormat(format) then
+ begin
+  size:=(size+3) div 4;
+ end;
+ size:=size*bpp;
+ size:=(size+127) and (not 127);
+ size:=size div bpp;
+ if IsTexelFormat(format) then
+ begin
+  size:=size*4;
+ end;
+ Result:=size;
+end;
+
+Function GetLinearSize(image:TvImage2;align:Boolean):Ptruint;
+var
+ extend:TvExtent3D;
+begin
+ extend:=image.key.params.extend;
+
+ if align then
+ begin
+  extend.width:=GetAlignWidth(image.key.cformat,extend.width);
+ end;
+
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  extend.width  :=(extend.width  +3) div 4;
+  extend.height :=(extend.height +3) div 4;
+  extend.depth  :=(extend.depth  +3) div 4;
+ end;
+
+ Result:=extend.width*
+         extend.height*
+         extend.depth*
+         getFormatSize(image.key.cformat);
+end;
+
 Procedure _Load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
 var
  buf:TvHostBuffer;
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
 begin
- size:=image.key.params.extend.width*
-       image.key.params.extend.height*
-       image.key.params.extend.depth*
-       getFormatSize(image.key.cformat);
+
+ if (image.key.params.samples>ord(VK_SAMPLE_COUNT_1_BIT)) then Exit;
+
+ size:=GetLinearSize(image,(image.key.params.tiling_idx=8));
 
  image.PushBarrier(cmd,
                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),
@@ -65,13 +108,18 @@ begin
                                     image.key.params.extend.height,
                                     image.key.params.extend.depth);
 
-  Case image.key.cformat of
-   VK_FORMAT_D16_UNORM_S8_UINT,
-   VK_FORMAT_D24_UNORM_S8_UINT,
-   VK_FORMAT_D32_SFLOAT_S8_UINT:
-    BufferImageCopy.imageSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_DEPTH_BIT);
-   else;
-  end;
+ if (image.key.params.tiling_idx=8) then
+ begin
+  BufferImageCopy.bufferRowLength:=GetAlignWidth(image.key.cformat,image.key.params.extend.width);
+ end;
+
+ Case image.key.cformat of
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   BufferImageCopy.imageSubresource.aspectMask:=ord(VK_IMAGE_ASPECT_DEPTH_BIT);
+  else;
+ end;
 
  //image.data_usage:=image.data_usage and (not TM_READ);
 
@@ -82,8 +130,8 @@ begin
                         1,
                         @BufferImageCopy);
 end;
-}
 
+{
 Procedure _Load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
 var
  buf:TvHostImage2;
@@ -134,6 +182,7 @@ begin
                 1,@ImageCopy);
 
 end;
+}
 
 type
  TvTempBuffer=class(TvBuffer)
@@ -150,25 +199,12 @@ end;
 Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvImage2);
 var
  BufferImageCopy:TVkBufferImageCopy;
- extend:TvExtent3D;
  size:Ptruint;
 begin
 
  cmd.AddDependence(@buf.Release);
 
- extend:=image.key.params.extend;
-
- if IsTexelFormat(image.key.cformat) then
- begin
-  extend.width  :=(extend.width  +3) div 4;
-  extend.height :=(extend.height +3) div 4;
-  extend.depth  :=(extend.depth  +3) div 4;
- end;
-
- size:=extend.width*
-       extend.height*
-       extend.depth*
-       getFormatSize(image.key.cformat);
+ size:=GetLinearSize(image,false);
 
  image.PushBarrier(cmd,
                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),
@@ -323,13 +359,13 @@ begin
  end else
  Case m_bitsPerElement of
   32:begin
-      tiler.m_paddedWidth :=((tiler.m_linearWidth +7) div 8)*8;
-      tiler.m_paddedHeight:=((tiler.m_linearHeight+7) div 8)*8;
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +7) and (not 7);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);
       tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
    8:begin
-      tiler.m_paddedWidth :=((tiler.m_linearWidth +31) div 32)*32;
-      tiler.m_paddedHeight:=((tiler.m_linearHeight+ 7) div  8)*8;
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +31) and (not 31);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+ 7) and (not  7);
       tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
   else

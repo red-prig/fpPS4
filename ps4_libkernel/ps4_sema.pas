@@ -53,7 +53,7 @@ type
  end;
 
 
-function ps4_sem_init(sem:PSceKernelSema;value:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sem_init(sem:PSceKernelSema;pshared,value:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sem_destroy(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
 function ps4_sem_getvalue(sem:PSceKernelSema;sval:PInteger):Integer; SysV_ABI_CDecl;
 function ps4_sem_post(sem:PSceKernelSema):Integer; SysV_ABI_CDecl;
@@ -566,7 +566,7 @@ end;
 
 //
 
-function ps4_sem_init(sem:PSceKernelSema;value:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sem_init(sem:PSceKernelSema;pshared,value:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=_set_errno(_sem_init(sem,value));
 end;

@@ -33,7 +33,7 @@ begin
  r:=vkCreateSampler(Device.FHandle,pInfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateImage:',r);
+  Writeln(StdErr,'vkCreateImage:',r);
   Exit;
  end;
  Result:=True;

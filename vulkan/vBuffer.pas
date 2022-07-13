@@ -39,7 +39,7 @@ begin
  r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateBuffer:',r);
+  Writeln(StdErr,'vkCreateBuffer:',r);
   Exit;
  end;
 end;

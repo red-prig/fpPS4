@@ -9,6 +9,7 @@ uses
  Classes,
  sysutils,
  stub_manager,
+ sys_crt,
  sys_types,
  sys_pthread,
  ps4libdoc,
@@ -96,14 +97,14 @@ begin
 
  if not FileExists(ps4_app.app_file) then
  begin
-  Writeln('File not found:',ps4_app.app_file);
+  Writeln(StdErr,'File not found:',ps4_app.app_file);
   Writeln;
   Goto promo;
  end;
 
  if not DirectoryExists(ps4_app.app_path) then
  begin
-  Writeln('Path not found:',ps4_app.app_path);
+  Writeln(StdErr,'Path not found:',ps4_app.app_path);
   Writeln;
   Goto promo;
  end;
@@ -145,7 +146,7 @@ end;
 
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
- Writeln('nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
+ Writeln(StdErr,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
  //DebugBreak;
  Sleep(INFINITE);
  //readln;
@@ -388,6 +389,7 @@ begin
  DefaultFileSystemCodePage:=CP_UTF8;
  DefaultRTLFileSystemCodePage:=CP_UTF8;
  UTF8CompareLocale:=CP_UTF8;
+ sys_crt_init;
 
  ps4_app.save_path:=IncludeTrailingPathDelimiter(GetCurrentDir)+'savedata';
  if not ParseCmd then Exit;
@@ -509,6 +511,9 @@ begin
 
  //ps4_app.app_path:='G:\Games\Shovel Knight\CUSA01867\';
  //ps4_app.app_file:='G:\Games\Shovel Knight\CUSA01867\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Stardew_Valley\CUSA06829\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Stardew_Valley\CUSA06829\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

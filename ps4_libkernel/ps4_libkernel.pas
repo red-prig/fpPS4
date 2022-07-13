@@ -55,7 +55,7 @@ Const
 
 procedure ps4_stack_chk_fail; SysV_ABI_CDecl;
 begin
- Writeln('Stack overflow detected! Aborting program.');
+ Writeln(StdErr,'Stack overflow detected! Aborting program.');
  DebugBreak;
 end;
 
@@ -67,8 +67,8 @@ var
  t:pthread;
 begin
  t:=_get_curthread;
- if (t<>nil) then
-  Writeln('RaiseThread=',t^.name);
+ //if (t<>nil) then
+ // Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
  DebugBreak;
 end;
@@ -78,8 +78,8 @@ var
  t:pthread;
 begin
  t:=_get_curthread;
- if (t<>nil) then
-  Writeln('RaiseThread=',t^.name);
+ //if (t<>nil) then
+ // Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
  DebugBreak;
 end;
@@ -1029,6 +1029,7 @@ begin
  lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
  lib^.set_proc($71091EF54B8140E9,@ps4_sceKernelMunmap);
  lib^.set_proc($58571F2F697389DA,@ps4_sceKernelQueryMemoryProtection);
+ lib^.set_proc($BD23009B77316136,@ps4_sceKernelMprotect);
 
  //mmap
 

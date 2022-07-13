@@ -536,7 +536,7 @@ begin
   r:=FCreateDebugReportCallback(VulkanApp.FInstance,@cinfo,nil,@FHandle);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln('CreateDebugReportCallback:',r);
+   Writeln(StdErr,'CreateDebugReportCallback:',r);
    Exit;
   end;
  end;
@@ -716,14 +716,14 @@ begin
  r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateInstance:',r);
+  Writeln(StdErr,'vkCreateInstance:',r);
   Exit;
  end;
 
  FPhysicalDevice:=vkGetPhysicalDevice(FInstance);
  if (FPhysicalDevice=VK_NULL_HANDLE) then
  begin
-  Writeln('failed to choice vulkan GPU');
+  Writeln(StdErr,'failed to choice vulkan GPU');
   halt;
  end;
 
@@ -889,7 +889,7 @@ begin
  r:=vkCreateWin32SurfaceKHR(VulkanApp.FInstance,@ci,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateWin32SurfaceKHR:',r);
+  Writeln(StdErr,'vkCreateWin32SurfaceKHR:',r);
   Exit;
  end;
  LoadFamily;
@@ -907,7 +907,7 @@ begin
  FPFamily:=0;
  if not vkGetQueuePresentFamily(VulkanApp.FPhysicalDevice,FHandle,FPFamily) then
  begin
-  Writeln('failed to chouse QueuePresentFamily');
+  Writeln(StdErr,'failed to chouse QueuePresentFamily');
   Exit;
  end;
 end;
@@ -1110,7 +1110,7 @@ begin
  r:=vkCreateDevice(VulkanApp.FPhysicalDevice,@DeviceInfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateDevice:',r);
+  Writeln(StdErr,'vkCreateDevice:',r);
   Exit;
  end;
 
@@ -1185,7 +1185,7 @@ begin
  r:=vkCreateCommandPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('failed to create command pool!');
+  Writeln(StdErr,'vkCreateCommandPool:',r);
   exit;
  end;
 end;
@@ -1209,7 +1209,7 @@ begin
  r:=vkAllocateCommandBuffers(Device.FHandle,@ainfo,@Result);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('failed to allocate command buffers!');
+  Writeln(StdErr,'vkAllocateCommandBuffers:',r);
   Exit;
  end;
 end;
@@ -1232,7 +1232,7 @@ begin
  r:=vkCreateFence(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateFence:',r);
+  Writeln(StdErr,'vkCreateFence:',r);
   Exit;
  end;
 end;

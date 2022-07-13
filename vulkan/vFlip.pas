@@ -431,11 +431,11 @@ begin
         if FNeoMode then
         begin
          buf^.PITCH:=(width+127) div 128;
-         buf^.SIZE :=buf^.PITCH*128*((height+127) div 128)*128*4;
+         buf^.SIZE :=buf^.PITCH*128*((height+127) and (not 127))*4;
         end else
         begin
          buf^.PITCH:=(width+127) div 128;
-         buf^.SIZE :=buf^.PITCH*128*((height+63) div 64)*64*4;
+         buf^.SIZE :=buf^.PITCH*128*((height+63) and (not 63))*4;
         end;
        end;
     end;
@@ -594,7 +594,7 @@ begin
    VK_NOT_READY:Exit(False);
    else
     begin
-     Writeln('vkGetEventStatus:',r);
+     Writeln(StdErr,'vkGetEventStatus:',r);
      Exit;
     end;
   end;
@@ -679,7 +679,7 @@ begin
    VK_SUBOPTIMAL_KHR:recreateSwapChain;
    else
     begin
-     Writeln('vkAcquireNextImageKHR:',R);
+     Writeln(StdErr,'vkAcquireNextImageKHR:',R);
      Exit;
     end;
   end;
@@ -1024,7 +1024,7 @@ begin
   VK_SUBOPTIMAL_KHR:recreateSwapChain;
    else
     begin
-     Writeln('vkQueuePresentKHR:',R);
+     Writeln(StdErr,'vkQueuePresentKHR:',R);
      Exit;
     end;
  end;

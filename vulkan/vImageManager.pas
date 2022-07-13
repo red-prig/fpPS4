@@ -8,7 +8,7 @@ uses
  SysUtils,
  RWLock,
  g23tree,
- sys_types,
+ //sys_types,
  Vulkan,
  vDevice,
  vMemory,
@@ -41,6 +41,7 @@ type
 
  TvImageView2Set=specialize T23treeSet<PvImageViewKey,TvImageView2Compare>;
 
+ {
  TvHostImage2=class(TvCustomImage)
   Parent:TvImage2;
   FUsage:TVkFlags;
@@ -54,6 +55,7 @@ type
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
  end;
+ }
 
  TvImage2=class(TvCustomImage)
   key:TvImageKey;
@@ -64,7 +66,7 @@ type
   //
   Barrier:TvImageBarrier;
   //
-  FHostImage:TvHostImage2;
+  //FHostImage:TvHostImage2;
   //
   Fdevc:TvPointer;
   //
@@ -79,7 +81,7 @@ type
   Function    GetSubresLayer:TVkImageSubresourceLayers;
   function    FetchView(cmd:TvCustomCmdBuffer;var F:TvImageViewKey):TvImageView2;
   function    FetchView(cmd:TvCustomCmdBuffer):TvImageView2;
-  function    FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
+  //function    FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
@@ -245,6 +247,7 @@ begin
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 end;
 
+{
 Constructor TvHostImage2.Create;
 begin
  inherited;
@@ -258,6 +261,7 @@ begin
  Result:=Parent.GetImageInfo;
  Result.tiling:=VK_IMAGE_TILING_LINEAR;
  Result.usage :=FUsage;
+ Result.flags :=ord(VK_IMAGE_CREATE_ALIAS_BIT);
  if (Parent.key.params.tiling_idx=8) then
  begin
   size:=Result.extent.width;
@@ -276,6 +280,7 @@ begin
   Result.extent.width:=size;
  end;
 end;
+}
 
 Function TvImage2.GetSubresRange:TVkImageSubresourceRange;
 begin
@@ -336,7 +341,7 @@ begin
   if (r<>VK_SUCCESS) then
   begin
    rwlock_unlock(lock);
-   Writeln('vkCreateImageView:',r);
+   Writeln(StdErr,'vkCreateImageView:',r);
    Exit;
   end;
 
@@ -395,6 +400,7 @@ begin
  Result:=FetchView(cmd,F);
 end;
 
+{
 function TvImage2.FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
 var
  t:TvHostImage2;
@@ -447,6 +453,7 @@ begin
  end;
 
 end;
+}
 
 procedure TvImage2.PushBarrier(cmd:TvCustomCmdBuffer;
                                dstAccessMask:TVkAccessFlags;
@@ -471,6 +478,7 @@ begin
  rwlock_unlock(lock);
 end;
 
+{
 procedure TvHostImage2.PushBarrier(cmd:TvCustomCmdBuffer;
                                    dstAccessMask:TVkAccessFlags;
                                    newImageLayout:TVkImageLayout;
@@ -489,6 +497,7 @@ begin
   Inc(cmd.cmd_count);
  end;
 end;
+}
 
 Procedure TvImage2.Acquire(Sender:TObject);
 begin

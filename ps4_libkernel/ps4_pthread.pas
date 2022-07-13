@@ -7,6 +7,7 @@ interface
 uses
  LFQueue,
  windows,
+ sys_crt,
  sys_pthread,
  sys_signal;
 
@@ -329,6 +330,7 @@ begin
  ps4_app.InitThread(1);
  ps4_app.InitCode;
  Telf_file(ps4_app.prog).mapCodeEntry;
+ writeln('--[END]--');
 end;
 
 const
@@ -353,6 +355,8 @@ type
  Tps4entry=function(arg:Pointer):Pointer; SysV_ABI_CDecl;
 begin
  Result:=0;
+
+ sys_crt_init;
 
  StackLength:=data^.Attr.stacksize_attr;
  StackBottom:=Sptr-StackLength;

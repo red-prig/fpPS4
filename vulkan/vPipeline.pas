@@ -237,7 +237,7 @@ begin
  r:=vkCreateDescriptorSetLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateDescriptorSetLayout:',r);
+  Writeln(StdErr,'vkCreateDescriptorSetLayout:',r);
   Exit;
  end;
  FCompile:=FEdit;
@@ -373,7 +373,7 @@ begin
  r:=vkCreatePipelineLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreatePipelineLayout:',r);
+  Writeln(StdErr,'vkCreatePipelineLayout:',r);
   Exit;
  end;
  FCompile:=FEdit;
@@ -454,7 +454,7 @@ begin
  r:=vkCreateComputePipelines(Device.FHandle,VK_NULL_HANDLE,1,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateComputePipelines:',r);
+  Writeln(StdErr,'vkCreateComputePipelines:',r);
   Exit;
  end;
  FCompile:=FEdit;
@@ -604,7 +604,7 @@ begin
  r:=vkCreateDescriptorPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateDescriptorPool:',r);
+  Writeln(StdErr,'vkCreateDescriptorPool:',r);
   Exit;
  end;
 
@@ -703,7 +703,7 @@ begin
  r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FResult);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkAllocateDescriptorSets:',r);
+  Writeln(StdErr,'vkAllocateDescriptorSets:',r);
   Exit;
  end;
  Result:=TvDescriptorSet.Create;
@@ -730,7 +730,7 @@ begin
   r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FHandle);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln('vkAllocateDescriptorSets:',r);
+   Writeln(StdErr,'vkAllocateDescriptorSets:',r);
    Exit;
   end;
  end;
@@ -747,7 +747,7 @@ begin
   r:=vkFreeDescriptorSets(Device.FHandle,FParent.FHandle,1,@FHandle);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln('vkFreeDescriptorSets:',r);
+   Writeln(StdErr,'vkFreeDescriptorSets:',r);
   end;
  end;
  FHandle:=VK_NULL_HANDLE;
@@ -959,7 +959,7 @@ begin
  r:=vkCreateDescriptorPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateDescriptorPool:',r);
+  Writeln(StdErr,'vkCreateDescriptorPool:',r);
   Exit;
  end;
 
@@ -987,7 +987,7 @@ begin
  r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FResult);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkAllocateDescriptorSets:',r);
+  Writeln(StdErr,'vkAllocateDescriptorSets:',r);
   Exit;
  end;
 

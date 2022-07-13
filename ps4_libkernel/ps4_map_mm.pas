@@ -102,12 +102,13 @@ function ps4_sceKernelMapNamedFlexibleMemory(
 
 function ps4_sceKernelMapFlexibleMemory(
            virtualAddrDest:PPointer;
-           length:Int64;
+           length:QWORD;
            protections:Integer;
            flags:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelMunmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
 function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
@@ -494,6 +495,7 @@ type
   function  unmap(addr:Pointer;len:size_t):Boolean;
 
   function  QueryProt(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Boolean;
+  function  ChangeProt(addr:Pointer;len:QWORD;prot:Integer):Boolean;
  end;
 
 Procedure TPageMM.Init;
@@ -1134,6 +1136,70 @@ begin
  rwlock_unlock(FLock);
 end;
 
+function __mprotect(addr:Pointer;len:size_t;prot:Integer):Integer;
+Var
+ newprotect,oldprotect:DWORD;
+begin
+ newprotect:=__map_mmap_prot_page(prot);
+ oldprotect:=0;
+
+ if not VirtualProtect(addr,len,newprotect,oldprotect) then
+ begin
+  Exit(-1);
+ end;
+
+ Result:=0;
+end;
+
+function TPageMM.ChangeProt(addr:Pointer;len:QWORD;prot:Integer):Boolean;
+var
+ _pblock:PBlock;
+begin
+ Result:=False;
+ rwlock_rdlock(FLock);
+
+ repeat
+
+  if _TryGetMapBlockByAddr(addr,_pblock) then
+  begin
+
+   if (_pblock^.nSize>len) then
+   begin
+    Result:=(__mprotect(addr,len,prot)=0);
+    Break;
+   end else
+   begin
+    Result:=(__mprotect(addr,_pblock^.nSize,prot)=0);
+   end;
+
+   if (len>=_pblock^.nSize) then
+   begin
+    len:=len-_pblock^.nSize;
+    addr:=addr+_pblock^.nSize;
+   end else
+   begin
+    Break;
+   end;
+
+  end else
+  begin
+
+   if (len>=PHYSICAL_PAGE_SIZE) then
+   begin
+    len:=len-PHYSICAL_PAGE_SIZE;
+    addr:=addr+PHYSICAL_PAGE_SIZE;
+   end else
+   begin
+    Break;
+   end;
+
+  end;
+
+ until (len=0);
+
+ rwlock_unlock(FLock);
+end;
+
 ///////
 
 Var
@@ -1213,11 +1279,11 @@ begin
 
  if (searchEnd>SCE_KERNEL_MAIN_DMEM_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
+
  if not IsAlign(length   ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(alignment,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsPowerOfTwo(alignment)              then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
 
  Adr.pAddr:=AlignUp(Pointer(searchStart),alignment);
  Adr.nSize:=length;
@@ -1314,12 +1380,12 @@ begin
 
  if (searchEnd>SCE_KERNEL_MAIN_DMEM_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
+
  if not IsAlign(searchStart,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(searchEnd  ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(alignment  ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsPowerOfTwo(alignment)                then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
 
  physAddrOut^:=0;
  sizeOut^    :=0;
@@ -1455,6 +1521,8 @@ begin
          'physicalAddr:',HexStr(physicalAddr,16),' ',
          'alignment:',HexStr(alignment,16));
 
+ if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
+
  if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(length   ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if not IsAlign(alignment,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
@@ -1547,7 +1615,7 @@ end;
 
 function ps4_sceKernelMapFlexibleMemory(
            virtualAddrDest:PPointer;
-           length:Int64;
+           length:QWORD;
            protections:Integer;
            flags:Integer):Integer; SysV_ABI_CDecl;
 var
@@ -1630,6 +1698,16 @@ begin
  _sig_lock;
  if PageMM.QueryProt(addr,pStart,pEnd,pProt) then Result:=0;
  _sig_unlock;
+end;
+
+function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ _sig_lock;
+ if PageMM.ChangeProt(addr,len,prot) then Result:=0;
+ _sig_unlock;
+
 end;
 
 function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
@@ -1729,24 +1807,10 @@ begin
 end;
 
 function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
-Var
- newprotect,oldprotect:DWORD;
 begin
-
- newprotect:=__map_mmap_prot_page(prot);
- oldprotect:=0;
-
  _sig_lock;
- if not VirtualProtect(addr,len,newprotect,oldprotect) then
- begin
-  _sig_unlock;
-  Writeln('GetLastError:',GetLastError);
-  Exit;
- end;
+ Result:=__mprotect(addr,len,prot);
  _sig_unlock;
-
-
- Result:=0;
 end;
 
 initialization

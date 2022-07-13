@@ -1622,6 +1622,22 @@ var
 
  LastRenderCmd:TvRenderTargets;
 
+function FindImageInFrameBuffer(f:TvFramebuffer;ri:TvImage2):Boolean;
+var
+ i:ptruint;
+ iv:TvImageView2;
+begin
+ Result:=False;
+ if (f=nil) or (ri=nil) then Exit;
+
+ if (f.FImagesCount<>0) then
+ For i:=0 to f.FImagesCount-1 do
+ begin
+  iv:=TvImageView2(f.FImages[i]);
+  if (iv.Parent=ri) then Exit(True);
+ end;
+end;
+
 function UpdateGpuRegsInfo:Boolean;
 var
  FAttrBuilder:TvAttrBuilder;
@@ -1847,7 +1863,7 @@ begin
 
     ri.PushBarrier(GFXRing.CmdBuffer,
                    GetColorAccessMask(RT_INFO.IMAGE_USAGE),
-                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   {VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}VK_IMAGE_LAYOUT_GENERAL,
                    ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                    ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
@@ -2031,6 +2047,12 @@ begin
 
    //if not GFXRing.CmdBuffer.IsRenderPass then
    begin
+
+    //if FindImageInFrameBuffer(FRenderCmd.FFramebuffer,ri) then
+    //begin
+    // writeln('wtf');
+    //end;
+
     ri.PushBarrier(GFXRing.CmdBuffer,
                    ord(VK_ACCESS_SHADER_READ_BIT),
                    VK_IMAGE_LAYOUT_GENERAL,
@@ -2064,7 +2086,7 @@ begin
  begin
   if not GFXRing.CmdBuffer.BeginRenderPass(FRenderCmd) then
   begin
-   Writeln('!BeginRenderPass');
+   Writeln(StdErr,'!BeginRenderPass');
    Assert(false);
   end;
  end;

@@ -260,7 +260,7 @@ begin
  r:=vkBeginCommandBuffer(cmdbuf,@Info);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkBeginCommandBuffer:',r);
+  Writeln(StdErr,'vkBeginCommandBuffer:',r);
   Exit;
  end;
  FCBState:=True;
@@ -285,7 +285,7 @@ begin
   r:=vkEndCommandBuffer(cmdbuf);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln('vkEndCommandBuffer:',r);
+   Writeln(StdErr,'vkEndCommandBuffer:',r);
   end;
   FCBState:=False;
  end;
@@ -452,7 +452,7 @@ begin
  ret:=Integer(r);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkQueueSubmit:',r);
+  Writeln(StdErr,'vkQueueSubmit:',r);
   exit;
  end;
 

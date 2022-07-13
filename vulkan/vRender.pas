@@ -176,7 +176,7 @@ var
 begin
  if (subpass.colorAttachmentCount>7) then Exit;
  ColorRef[subpass.colorAttachmentCount].attachment:=id;
- ColorRef[subpass.colorAttachmentCount].layout    :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL{VK_IMAGE_LAYOUT_GENERAL};
+ ColorRef[subpass.colorAttachmentCount].layout    :={VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}VK_IMAGE_LAYOUT_GENERAL;
  Inc(subpass.colorAttachmentCount);
 
  dependency.srcStageMask :=dependency.srcStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -239,14 +239,14 @@ begin
  With ColorAt[AtCount] do
   if (IMAGE_USAGE and TM_READ<>0) then
   begin
-   initialLayout :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+   initialLayout :={VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}VK_IMAGE_LAYOUT_GENERAL;
   end else
   begin
    initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
   end;
 
  With ColorAt[AtCount] do
-  finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  finalLayout:={VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}VK_IMAGE_LAYOUT_GENERAL;
 
  Inc(AtCount);
 end;
@@ -363,7 +363,7 @@ begin
  r:=vkCreateRenderPass(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateRenderPass');
+  Writeln(StdErr,'vkCreateRenderPass:',r);
   Exit;
  end;
 
@@ -560,7 +560,7 @@ begin
  r:=vkCreateGraphicsPipelines(Device.FHandle,VK_NULL_HANDLE,1,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('failed to create graphics pipeline!');
+  Writeln(StdErr,'vkCreateGraphicsPipelines:',r);
   exit;
  end;
 

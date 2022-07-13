@@ -289,7 +289,7 @@ begin
  r:=vkCreateRenderPass(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateRenderPass');
+  Writeln(StdErr,'vkCreateRenderPass:',r);
   Exit;
  end;
 

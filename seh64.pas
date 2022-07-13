@@ -424,7 +424,7 @@ begin
       else;
      end;
 
-     Writeln(HexStr(PDWORD(rec.ExceptionAddress)[0],8)); //C1780FF2
+     Writeln(StdErr,HexStr(PDWORD(rec.ExceptionAddress)[0],8)); //C1780FF2
      Exit(EXCEPTION_EXECUTE_HANDLER); //Unknow
     end;
   else

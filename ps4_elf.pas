@@ -385,14 +385,14 @@ Var
   Result:=False;
   if PDWORD(@elf_hdr^.e_ident)^<>ELFMAG then
   begin
-   Writeln(name,' ELF identifier mismatch');
+   Writeln(StdErr,name,' ELF identifier mismatch');
    Exit;
   end;
   if ((elf_hdr^.e_type <> ET_SCE_DYNEXEC) and
       (elf_hdr^.e_type <> ET_SCE_DYNAMIC)) or
       (elf_hdr^.e_machine <> EM_X86_64) then
   begin
-   Writeln(name,'unspported TYPE/ARCH.');
+   Writeln(StdErr,name,'unspported TYPE/ARCH.');
    Exit;
   end;
   Writeln('hdr.[EI_CLASS]  :',elf_hdr^.e_ident[EI_CLASS]);
@@ -428,7 +428,7 @@ begin
     SELF_SIZE:=FileSeek(F,0,fsFromEnd);
     if (SELF_SIZE<=0) then
     begin
-     Writeln('Error read file:',name);
+     Writeln(StdErr,'Error read file:',name);
      FileClose(F);
      Exit;
     end;
@@ -439,14 +439,14 @@ begin
 
     if (s<>SELF_SIZE) then
     begin
-     Writeln('Error read file:',name);
+     Writeln(StdErr,'Error read file:',name);
      FreeMem(SELF_MEM);
      Exit;
     end;
 
     if not _test_elf(SELF_MEM) then
     begin
-     Writeln('Error test file:',name);
+     Writeln(StdErr,'Error test file:',name);
      FreeMem(SELF_MEM);
      Exit;
     end;
@@ -462,7 +462,7 @@ begin
     SELF_SIZE:=FileSeek(F,0,fsFromEnd);
     if (SELF_SIZE<=0) then
     begin
-     Writeln('Error read file:',name);
+     Writeln(StdErr,'Error read file:',name);
      FileClose(F);
      Exit;
     end;
@@ -473,7 +473,7 @@ begin
 
     if (s<>SELF_SIZE) then
     begin
-     Writeln('Error read file:',name);
+     Writeln(StdErr,'Error read file:',name);
      FreeMem(SELF_MEM);
      Exit;
     end;
@@ -490,13 +490,13 @@ begin
     begin
      if (Segments[i].flags and (SF_ENCR or SF_DFLG))<>0 then
      begin
-      Writeln('[',i,']');
-      Writeln(' Seg.flags =',test_SF_flags(Segments[i].flags));
-      Writeln(' Seg.id    =',Segments[i].flags shr 20);
-      Writeln(' Seg.offset=',HexStr(Segments[i].offset,16));
-      Writeln(' Seg.c_size=',HexStr(Segments[i].encrypted_compressed_size,16));
-      Writeln(' Seg.d_size=',HexStr(Segments[i].decrypted_decompressed_size,16));
-      Writeln('encrypted or deflated SELF not support!');
+      Writeln(StdErr,'[',i,']');
+      Writeln(StdErr,' Seg.flags =',test_SF_flags(Segments[i].flags));
+      Writeln(StdErr,' Seg.id    =',Segments[i].flags shr 20);
+      Writeln(StdErr,' Seg.offset=',HexStr(Segments[i].offset,16));
+      Writeln(StdErr,' Seg.c_size=',HexStr(Segments[i].encrypted_compressed_size,16));
+      Writeln(StdErr,' Seg.d_size=',HexStr(Segments[i].decrypted_decompressed_size,16));
+      Writeln(StdErr,'encrypted or deflated SELF not support!');
       FreeMem(SELF_MEM);
       Exit;
      end;
@@ -505,7 +505,7 @@ begin
 
     if not _test_elf(elf_hdr) then
     begin
-     Writeln('Error test file:',name);
+     Writeln(StdErr,'Error test file:',name);
      FreeMem(SELF_MEM);
      Exit;
     end;
@@ -525,7 +525,7 @@ begin
     end;
     if (LowSeg=High(Int64)) then
     begin
-     Writeln('Error LowSeg');
+     Writeln(StdErr,'Error LowSeg');
      FreeMem(SELF_MEM);
      elf.Free;
      Exit;
@@ -548,7 +548,7 @@ begin
   else
    begin
     FileClose(F);
-    Writeln(name,' is unknow file type!');
+    Writeln(StdErr,name,' is unknow file type!');
    end;
  end;
 end;
@@ -1573,23 +1573,23 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   if (IInfo._md=nil) then
   begin
-   Writeln('Unknow module from ',Info^.pName);
+   Writeln(StdErr,'Unknow module from ',Info^.pName);
   end;
 
   if (IInfo._md^.Import<>Import) then
   begin
-   Writeln('Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
+   Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
   end;
 
   if (IInfo.lib=nil) then
   begin
-   Writeln('Unknow library from ',Info^.pName);
+   Writeln(StdErr,'Unknow library from ',Info^.pName);
    Exit;
   end;
 
   if (IInfo.lib^.Import<>Import) then
   begin
-   Writeln('Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
+   Writeln(StdErr,'Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
    Exit;
   end;
 
@@ -1646,12 +1646,12 @@ begin
        _do_load(elf.mMap.pAddr+Info^.value);
       end;
      else
-      Writeln('invalid sym bingding ',Info^.sBind);
+      Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
     end;
    end;
 
   else
-   Writeln('rela type not handled ', HexStr(Info^.rType,8));
+   Writeln(StdErr,'rela type not handled ', HexStr(Info^.rType,8));
 
  end;
 
@@ -1708,23 +1708,23 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   if (IInfo._md=nil) then
   begin
-   Writeln('Unknow module from ',Info^.pName);
+   Writeln(StdErr,'Unknow module from ',Info^.pName);
   end;
 
   if (IInfo._md^.Import<>Import) then
   begin
-   Writeln('Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
+   Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
   end;
 
   if (IInfo.lib=nil) then
   begin
-   Writeln('Unknow library from ',Info^.pName);
+   Writeln(StdErr,'Unknow library from ',Info^.pName);
    Exit;
   end;
 
   if (IInfo.lib^.Import<>Import) then
   begin
-   Writeln('Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
+   Writeln(StdErr,'Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
    Exit;
   end;
 

@@ -429,6 +429,70 @@ function _parse_filename(filename:PChar):RawByteString;
 var
  Path:RawByteString;
  pp,fp:PChar;
+
+ function _cast(var str:RawByteString):Byte;
+ begin
+  Result:=0;
+  Case (fp-pp) of
+   0:pp:=fp+1; //next
+   4:Case PDWORD(pp)^ of
+      $30707061: //app0
+        begin
+         if (fp^<>#0) then Inc(fp);
+         str:=PathConcat(ps4_app.app_path,fp);
+         Result:=1;
+        end;
+      else
+         Result:=2;
+     end;
+   9:Case PQWORD(pp)^ of
+      $6174616465766173: //savedata
+        begin
+         Case (pp+8)^ of
+          '0'..'9':
+            begin
+             if (fp^<>#0) then Inc(fp);
+             str:=MountConcat(ord((pp+8)^)-ord('0'),fp);;
+             Result:=1;
+            end;
+          else
+             Result:=2;
+         end;
+        end;
+      else
+        Result:=2;
+     end;
+  10:Case PQWORD(pp)^ of
+      $6174616465766173: //savedata
+        begin
+         Case PWORD(pp+8)^ of
+          $3031, //10
+          $3131, //11
+          $3231, //12
+          $3331, //13
+          $3431, //14
+          $3531: //15
+            begin
+             if (fp^<>#0) then Inc(fp);
+             str:=MountConcat(ord((pp+9)^)-ord('0')+10,fp);
+             //Result:=PathConcat(GetCurrentDir,fp);
+             Result:=1;
+            end;
+          else
+           Result:=2;
+         end;
+        end;
+      else
+        Result:=2;
+     end;
+   else
+     begin
+      //Writeln((fp-pp),'*',fp,'*',pp);
+      Result:=2;
+     end;
+  end;
+ end;
+
 begin
  Result:='';
  //Writeln(filename);
@@ -440,71 +504,25 @@ begin
  While (fp^<>#0) do
  begin
   Case fp^ of
-   '/':Case (fp-pp) of
-        0:pp:=fp+1; //next
-        4:Case PDWORD(pp)^ of
-           $30707061: //app0
-             begin
-              Inc(fp);
-              Result:=PathConcat(ps4_app.app_path,fp);
-              Exit;
-             end;
-           else
-             Break;
-          end;
-        9:Case PQWORD(pp)^ of
-           $6174616465766173: //savedata
-             begin
-              Case (pp+8)^ of
-               '0'..'9':
-                 begin
-                  Inc(fp);
-                  Result:=MountConcat(ord((pp+8)^)-ord('0'),fp);
-                  //Result:=PathConcat(GetCurrentDir,fp);
-                  Exit;
-                 end;
-               else
-                Break;
-              end;
-             end;
-           else
-             Break;
-          end;
-       10:Case PQWORD(pp)^ of
-           $6174616465766173: //savedata
-             begin
-              Case PWORD(pp+8)^ of
-               $3031, //10
-               $3131, //11
-               $3231, //12
-               $3331, //13
-               $3431, //14
-               $3531: //15
-                 begin
-                  Inc(fp);
-                  Result:=MountConcat(ord((pp+9)^)-ord('0')+10,fp);
-                  //Result:=PathConcat(GetCurrentDir,fp);
-                  Exit;
-                 end;
-               else
-                Break;
-              end;
-             end;
-           else
-             Break;
-          end;
-        else
-          begin
-           //Writeln((fp-pp),'*',fp,'*',pp);
-           Break;
-          end;
-       end;
+   '/':
+   begin
+    Case _cast(Result) of
+     1:Exit;     //mapped
+     2:Exit(''); //not mapped
+     else;
+                 //next char
+    end;
+   end;
   end;
   Inc(fp);
  end;
- fp:=PChar(Path);
- if (fp^='/') then Inc(fp);
- Result:=PathConcat(GetCurrentDir,fp);
+
+ Case _cast(Result) of
+  1:Exit;     //mapped
+  else;
+    Exit(''); //not mapped
+ end;
+
 end;
 
 //--
@@ -973,7 +991,7 @@ begin
  nid:=ps4_nid_hash(node.pFileName);
  PP:=HAMT_insert64(@files.hamt,nid,Pointer(node));
  Assert(PP<>nil);
- if (PP^<>Pointer(node)) then Writeln('Warn, ',node.pFileName,' file is registred');
+ if (PP^<>Pointer(node)) then Writeln(StdErr,'Warn, ',node.pFileName,' file is registred');
 
  files.Unlock;
 end;
@@ -1028,7 +1046,7 @@ begin
  nid:=ps4_nid_hash(strName);
  PP:=HAMT_insert64(@mods.hamt,nid,Pointer(node));
  Assert(PP<>nil);
- if (PP^<>Pointer(node)) then Writeln('Warn, ',strName,' module is registred');
+ if (PP^<>Pointer(node)) then Writeln(StdErr,'Warn, ',strName,' module is registred');
 end;
 
 Procedure Tps4_program.SetLib(lib:PLIBRARY);
@@ -1042,7 +1060,7 @@ begin
  nid:=ps4_nid_hash(lib^.strName);
  PP:=HAMT_insert64(@libs.hamt,nid,Pointer(lib));
  Assert(PP<>nil);
- if (PP^<>Pointer(lib)) then Writeln('Warn, ',lib^.strName,' lib is registred');
+ if (PP^<>Pointer(lib)) then Writeln(StdErr,'Warn, ',lib^.strName,' lib is registred');
 end;
 
 function Tps4_program.GetLib(const strName:RawByteString):PLIBRARY;
@@ -1129,7 +1147,7 @@ begin
  pre_load.LockWr;
  if not pre_load._set_proc(nid,Pointer(cb)) then
  begin
-  Writeln('Warn, ',strName,' is registred')
+  Writeln(StdErr,'Warn, ',strName,' is registred')
  end;
  pre_load.Unlock;
 end;
@@ -1143,7 +1161,7 @@ begin
  fin_load.LockWr;
  if not fin_load._set_proc(nid,Pointer(cb)) then
  begin
-  Writeln('Warn, ',strName,' is registred')
+  Writeln(StdErr,'Warn, ',strName,' is registred')
  end;
  fin_load.Unlock;
 end;
@@ -1299,7 +1317,7 @@ begin
   node:=Loader(S);
   if (node=nil) then
   begin
-   Writeln('Warn, file ',S,' not loaded!');
+   Writeln(StdErr,'Warn, file ',S,' not loaded!');
   end else
   begin
    PopupFile(node);
