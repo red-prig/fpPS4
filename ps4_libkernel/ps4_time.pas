@@ -48,6 +48,25 @@ function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl;          //microseconds
 function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
 
+type
+ ptimesec=^timesec;
+ timesec=packed record
+  tz_time   :time_t;
+  tz_secwest:DWORD;
+  tz_dstsec :DWORD;
+ end;
+
+function ps4_sceKernelConvertUtcToLocaltime(_time:time_t;
+                                            local_time:ptime_t;
+                                            _tsec:ptimesec;
+                                            _dstsec:PDWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelConvertLocaltimeToUtc(_time:time_t;
+                                            unknow:qword;
+                                            utc_time:ptime_t;
+                                            _tsec:ptimesec;
+                                            _dstsec:PDWORD):Integer; SysV_ABI_CDecl;
+
 implementation
 
 Uses
@@ -219,6 +238,11 @@ begin
     tp^.tv_sec :=QWORD(ct) div POW10_7;
     tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
    end;
+
+  CLOCK_EXT_NETWORK      ,
+  CLOCK_EXT_DEBUG_NETWORK,
+  CLOCK_EXT_AD_NETWORK   ,
+  CLOCK_EXT_RAW_NETWORK  ,
 
   CLOCK_MONOTONIC,
   CLOCK_MONOTONIC_PRECISE,
@@ -441,6 +465,87 @@ begin
  ft:=-(10*usec); //in 100ns
  SwDelayExecution(False,@ft);
  Result:=0;
+end;
+
+//
+
+function ps4_sceKernelConvertUtcToLocaltime(_time:time_t;
+                                            local_time:ptime_t;
+                                            _tsec:ptimesec;
+                                            _dstsec:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ tmz:timezone;
+ perror:pinteger;
+begin
+ Result:=ps4_gettimeofday(nil,@tmz);
+ if (Result<0) then
+ begin
+  perror:=_error;
+  if (perror<>nil) then
+  begin
+   Result:=px2sce(perror^);
+  end;
+  Exit;
+ end;
+
+ if (local_time<>nil) then
+ begin
+  local_time^:=(tmz.tz_minuteswest+tmz.tz_dsttime)*60+_time;
+ end;
+
+ if (_tsec<>nil) then
+ begin
+  _tsec^.tz_time   :=_time;
+  _tsec^.tz_secwest:=tmz.tz_minuteswest*60;
+  _tsec^.tz_dstsec :=tmz.tz_dsttime*60;
+ end;
+
+ if (_dstsec<>nil) then
+ begin
+  _dstsec^:=tmz.tz_dsttime*60;
+ end;
+end;
+
+function ps4_sceKernelConvertLocaltimeToUtc(_time:time_t;
+                                            unknow:qword;
+                                            utc_time:ptime_t;
+                                            _tsec:ptimesec;
+                                            _dstsec:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ tmz:timezone;
+ rtime:time_t;
+ perror:pinteger;
+begin
+ Result:=ps4_gettimeofday(nil,@tmz);
+ if (Result<0) then
+ begin
+  perror:=_error;
+  if (perror<>nil) then
+  begin
+   Result:=px2sce(perror^);
+  end;
+  Exit;
+ end;
+
+ rtime:=_time-((tmz.tz_minuteswest+tmz.tz_dsttime)*60);
+
+ if (utc_time<>nil) then
+ begin
+  utc_time^:=rtime;
+ end;
+
+ if (_tsec<>nil) then
+ begin
+  _tsec^.tz_time   :=rtime;
+  _tsec^.tz_secwest:=tmz.tz_minuteswest*60;
+  _tsec^.tz_dstsec :=tmz.tz_dsttime*60;
+ end;
+
+ if (_dstsec<>nil) then
+ begin
+  _dstsec^:=tmz.tz_dsttime*60;
+ end;
+
 end;
 
 Procedure Init;

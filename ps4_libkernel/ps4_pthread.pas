@@ -20,8 +20,12 @@ function  ps4_pthread_attr_destroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDe
 function  ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_attr_setstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+function  ps4_pthread_attr_setdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_pthread_attr_getschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
@@ -205,6 +209,23 @@ begin
  Result:=0;
 end;
 
+function ps4_pthread_attr_setdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=EINVAL;
+ if (pAttr=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+
+ Case detachstate of
+  PTHREAD_CREATE_JOINABLE:;
+  PTHREAD_CREATE_DETACHED:;
+  else
+   Exit(EINVAL);
+ end;
+
+ pAttr^^.flags:=detachstate;
+ Result:=0;
+end;
+
 function ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
@@ -220,6 +241,33 @@ begin
  if (pAttr=nil) or (param=nil) then Exit;
  if (pAttr^=nil) then Exit;
  pAttr^^.prio:=param^;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+ if (pAttr=nil) or (param=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+ param^:=pAttr^^.prio;
+ Result:=0;
+end;
+
+function ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=EINVAL;
+ if (pAttr=nil) or (param=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+ pAttr^^.prio:=param^;
+ Result:=0;
+end;
+
+function ps4_pthread_attr_getschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=EINVAL;
+ if (pAttr=nil) or (param=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+ param^:=pAttr^^.prio;
  Result:=0;
 end;
 

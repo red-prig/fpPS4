@@ -523,121 +523,19 @@ end;
 
 function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
 begin
- Write('sceSysmoduleLoadModule:');
-
- Case id of
-  SCE_SYSMODULE_FIBER                    :Writeln('SCE_SYSMODULE_FIBER                   ');
-  SCE_SYSMODULE_ULT                      :Writeln('SCE_SYSMODULE_ULT                     ');
-  SCE_SYSMODULE_NGS2                     :Writeln('SCE_SYSMODULE_NGS2                    ');
-  SCE_SYSMODULE_XML                      :Writeln('SCE_SYSMODULE_XML                     ');
-  SCE_SYSMODULE_NP_UTILITY               :Writeln('SCE_SYSMODULE_NP_UTILITY              ');
-  SCE_SYSMODULE_VOICE                    :Writeln('SCE_SYSMODULE_VOICE                   ');
-  SCE_SYSMODULE_VOICEQOS                 :Writeln('SCE_SYSMODULE_VOICEQOS                ');
-  SCE_SYSMODULE_NP_MATCHING2             :Writeln('SCE_SYSMODULE_NP_MATCHING2            ');
-  SCE_SYSMODULE_NP_SCORE_RANKING         :Writeln('SCE_SYSMODULE_NP_SCORE_RANKING        ');
-  SCE_SYSMODULE_RUDP                     :Writeln('SCE_SYSMODULE_RUDP                    ');
-  SCE_SYSMODULE_NP_TUS                   :Writeln('SCE_SYSMODULE_NP_TUS                  ');
-  SCE_SYSMODULE_FACE                     :Writeln('SCE_SYSMODULE_FACE                    ');
-  SCE_SYSMODULE_SMART                    :Writeln('SCE_SYSMODULE_SMART                   ');
-  SCE_SYSMODULE_GAME_LIVE_STREAMING      :Writeln('SCE_SYSMODULE_GAME_LIVE_STREAMING     ');
-  SCE_SYSMODULE_COMPANION_UTIL           :Writeln('SCE_SYSMODULE_COMPANION_UTIL          ');
-  SCE_SYSMODULE_PLAYGO                   :Writeln('SCE_SYSMODULE_PLAYGO                  ');
-  SCE_SYSMODULE_FONT                     :Writeln('SCE_SYSMODULE_FONT                    ');
-  SCE_SYSMODULE_VIDEO_RECORDING          :Writeln('SCE_SYSMODULE_VIDEO_RECORDING         ');
-  SCE_SYSMODULE_S3DCONVERSION            :Writeln('SCE_SYSMODULE_S3DCONVERSION           ');
-  SCE_SYSMODULE_AUDIODEC                 :Writeln('SCE_SYSMODULE_AUDIODEC                ');
-  SCE_SYSMODULE_JPEG_DEC                 :Writeln('SCE_SYSMODULE_JPEG_DEC                ');
-  SCE_SYSMODULE_JPEG_ENC                 :Writeln('SCE_SYSMODULE_JPEG_ENC                ');
-  SCE_SYSMODULE_PNG_DEC                  :Writeln('SCE_SYSMODULE_PNG_DEC                 ');
-  SCE_SYSMODULE_PNG_ENC                  :Writeln('SCE_SYSMODULE_PNG_ENC                 ');
-  SCE_SYSMODULE_VIDEODEC                 :Writeln('SCE_SYSMODULE_VIDEODEC                ');
-  SCE_SYSMODULE_MOVE                     :Writeln('SCE_SYSMODULE_MOVE                    ');
-  SCE_SYSMODULE_PAD_TRACKER              :Writeln('SCE_SYSMODULE_PAD_TRACKER             ');
-  SCE_SYSMODULE_DEPTH                    :Writeln('SCE_SYSMODULE_DEPTH                   ');
-  SCE_SYSMODULE_HAND                     :Writeln('SCE_SYSMODULE_HAND                    ');
-  SCE_SYSMODULE_LIBIME                   :Writeln('SCE_SYSMODULE_LIBIME                  ');
-  SCE_SYSMODULE_IME_DIALOG               :Writeln('SCE_SYSMODULE_IME_DIALOG              ');
-  SCE_SYSMODULE_NP_PARTY                 :Writeln('SCE_SYSMODULE_NP_PARTY                ');
-  SCE_SYSMODULE_FONT_FT                  :Writeln('SCE_SYSMODULE_FONT_FT                 ');
-  SCE_SYSMODULE_FREETYPE_OT              :Writeln('SCE_SYSMODULE_FREETYPE_OT             ');
-  SCE_SYSMODULE_FREETYPE_OL              :Writeln('SCE_SYSMODULE_FREETYPE_OL             ');
-  SCE_SYSMODULE_FREETYPE_OPT_OL          :Writeln('SCE_SYSMODULE_FREETYPE_OPT_OL         ');
-  SCE_SYSMODULE_SCREEN_SHOT              :Writeln('SCE_SYSMODULE_SCREEN_SHOT             ');
-  SCE_SYSMODULE_NP_AUTH                  :Writeln('SCE_SYSMODULE_NP_AUTH                 ');
-  SCE_SYSMODULE_SULPHA                   :Writeln('SCE_SYSMODULE_SULPHA                  ');
-  SCE_SYSMODULE_SAVE_DATA_DIALOG         :Writeln('SCE_SYSMODULE_SAVE_DATA_DIALOG        ');
-  SCE_SYSMODULE_INVITATION_DIALOG        :Writeln('SCE_SYSMODULE_INVITATION_DIALOG       ');
-  SCE_SYSMODULE_DEBUG_KEYBOARD           :Writeln('SCE_SYSMODULE_DEBUG_KEYBOARD          ');
-  SCE_SYSMODULE_MESSAGE_DIALOG           :Writeln('SCE_SYSMODULE_MESSAGE_DIALOG          ');
-  SCE_SYSMODULE_AV_PLAYER                :Writeln('SCE_SYSMODULE_AV_PLAYER               ');
-  SCE_SYSMODULE_CONTENT_EXPORT           :Writeln('SCE_SYSMODULE_CONTENT_EXPORT          ');
-  SCE_SYSMODULE_AUDIO_3D                 :Writeln('SCE_SYSMODULE_AUDIO_3D                ');
-  SCE_SYSMODULE_NP_COMMERCE              :Writeln('SCE_SYSMODULE_NP_COMMERCE             ');
-  SCE_SYSMODULE_MOUSE                    :Writeln('SCE_SYSMODULE_MOUSE                   ');
-  SCE_SYSMODULE_COMPANION_HTTPD          :Writeln('SCE_SYSMODULE_COMPANION_HTTPD         ');
-  SCE_SYSMODULE_WEB_BROWSER_DIALOG       :Writeln('SCE_SYSMODULE_WEB_BROWSER_DIALOG      ');
-  SCE_SYSMODULE_ERROR_DIALOG             :Writeln('SCE_SYSMODULE_ERROR_DIALOG            ');
-  SCE_SYSMODULE_NP_TROPHY                :Writeln('SCE_SYSMODULE_NP_TROPHY               ');
-  SCE_SYSMODULE_NP_SNS_FACEBOOK          :Writeln('SCE_SYSMODULE_NP_SNS_FACEBOOK         ');
-  SCE_SYSMODULE_MOVE_TRACKER             :Writeln('SCE_SYSMODULE_MOVE_TRACKER            ');
-  SCE_SYSMODULE_NP_PROFILE_DIALOG        :Writeln('SCE_SYSMODULE_NP_PROFILE_DIALOG       ');
-  SCE_SYSMODULE_NP_FRIEND_LIST_DIALOG    :Writeln('SCE_SYSMODULE_NP_FRIEND_LIST_DIALOG   ');
-  SCE_SYSMODULE_APP_CONTENT              :Writeln('SCE_SYSMODULE_APP_CONTENT             ');
-  SCE_SYSMODULE_NP_SIGNALING             :Writeln('SCE_SYSMODULE_NP_SIGNALING            ');
-  SCE_SYSMODULE_REMOTE_PLAY              :Writeln('SCE_SYSMODULE_REMOTE_PLAY             ');
-  SCE_SYSMODULE_USBD                     :Writeln('SCE_SYSMODULE_USBD                    ');
-  SCE_SYSMODULE_GAME_CUSTOM_DATA_DIALOG  :Writeln('SCE_SYSMODULE_GAME_CUSTOM_DATA_DIALOG ');
-  SCE_SYSMODULE_M4AAC_ENC                :Writeln('SCE_SYSMODULE_M4AAC_ENC               ');
-  SCE_SYSMODULE_AUDIODEC_CPU             :Writeln('SCE_SYSMODULE_AUDIODEC_CPU            ');
-  SCE_SYSMODULE_ZLIB                     :Writeln('SCE_SYSMODULE_ZLIB                    ');
-  SCE_SYSMODULE_CONTENT_SEARCH           :Writeln('SCE_SYSMODULE_CONTENT_SEARCH          ');
-  SCE_SYSMODULE_DECI4H                   :Writeln('SCE_SYSMODULE_DECI4H                  ');
-  SCE_SYSMODULE_HEAD_TRACKER             :Writeln('SCE_SYSMODULE_HEAD_TRACKER            ');
-  SCE_SYSMODULE_SYSTEM_GESTURE           :Writeln('SCE_SYSMODULE_SYSTEM_GESTURE          ');
-  SCE_SYSMODULE_VIDEODEC2                :Writeln('SCE_SYSMODULE_VIDEODEC2               ');
-  SCE_SYSMODULE_AT9_ENC                  :Writeln('SCE_SYSMODULE_AT9_ENC                 ');
-  SCE_SYSMODULE_CONVERT_KEYCODE          :Writeln('SCE_SYSMODULE_CONVERT_KEYCODE         ');
-  SCE_SYSMODULE_SHARE_PLAY               :Writeln('SCE_SYSMODULE_SHARE_PLAY              ');
-  SCE_SYSMODULE_HMD                      :Writeln('SCE_SYSMODULE_HMD                     ');
-  SCE_SYSMODULE_FACE_TRACKER             :Writeln('SCE_SYSMODULE_FACE_TRACKER            ');
-  SCE_SYSMODULE_HAND_TRACKER             :Writeln('SCE_SYSMODULE_HAND_TRACKER            ');
-  SCE_SYSMODULE_AUDIODEC_CPU_HEVAG       :Writeln('SCE_SYSMODULE_AUDIODEC_CPU_HEVAG      ');
-  SCE_SYSMODULE_LOGIN_DIALOG             :Writeln('SCE_SYSMODULE_LOGIN_DIALOG            ');
-  SCE_SYSMODULE_LOGIN_SERVICE            :Writeln('SCE_SYSMODULE_LOGIN_SERVICE           ');
-  SCE_SYSMODULE_SIGNIN_DIALOG            :Writeln('SCE_SYSMODULE_SIGNIN_DIALOG           ');
-  SCE_SYSMODULE_JSON2                    :Writeln('SCE_SYSMODULE_JSON2                   ');
-  SCE_SYSMODULE_AUDIO_LATENCY_ESTIMATION :Writeln('SCE_SYSMODULE_AUDIO_LATENCY_ESTIMATION');
-  SCE_SYSMODULE_HMD_SETUP_DIALOG         :Writeln('SCE_SYSMODULE_HMD_SETUP_DIALOG        ');
-  SCE_SYSMODULE_VR_TRACKER               :Writeln('SCE_SYSMODULE_VR_TRACKER              ');
-  SCE_SYSMODULE_CONTENT_DELETE           :Writeln('SCE_SYSMODULE_CONTENT_DELETE          ');
-  SCE_SYSMODULE_IME_BACKEND              :Writeln('SCE_SYSMODULE_IME_BACKEND             ');
-  SCE_SYSMODULE_NET_CTL_AP_DIALOG        :Writeln('SCE_SYSMODULE_NET_CTL_AP_DIALOG       ');
-  SCE_SYSMODULE_PLAYGO_DIALOG            :Writeln('SCE_SYSMODULE_PLAYGO_DIALOG           ');
-  SCE_SYSMODULE_SOCIAL_SCREEN            :Writeln('SCE_SYSMODULE_SOCIAL_SCREEN           ');
-  SCE_SYSMODULE_EDIT_MP4                 :Writeln('SCE_SYSMODULE_EDIT_MP4                ');
-  SCE_SYSMODULE_TEXT_TO_SPEECH           :Writeln('SCE_SYSMODULE_TEXT_TO_SPEECH          ');
-  SCE_SYSMODULE_BLUETOOTH_HID            :Writeln('SCE_SYSMODULE_BLUETOOTH_HID           ');
-  SCE_SYSMODULE_VR_SERVICE_DIALOG        :Writeln('SCE_SYSMODULE_VR_SERVICE_DIALOG       ');
-  SCE_SYSMODULE_JOB_MANAGER              :Writeln('SCE_SYSMODULE_JOB_MANAGER             ');
-  SCE_SYSMODULE_SOCIAL_SCREEN_DIALOG     :Writeln('SCE_SYSMODULE_SOCIAL_SCREEN_DIALOG    ');
-  SCE_SYSMODULE_NP_TOOLKIT2              :Writeln('SCE_SYSMODULE_NP_TOOLKIT2             ');
-  else
-   Writeln(HexStr(id,4));
- end;
-
-
+ Writeln('sceSysmoduleLoadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
 function ps4_sceSysmoduleUnloadModule(id:Word):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceSysmoduleUnloadModule:',HexStr(id,4));
+ Writeln('sceSysmoduleUnloadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
 function ps4_sceSysmoduleIsLoaded(id:Word):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceSysmoduleIsLoaded:',HexStr(id,4));
+ Writeln('sceSysmoduleIsLoaded:',GetSysmoduleName(id));
  Result:=0;
 end;
 
@@ -948,8 +846,12 @@ begin
  lib^.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize);
  lib^.set_proc($D90D33EAB9C1AD31,@ps4_pthread_attr_setstacksize);
  lib^.set_proc($FD6ADEA6BB6ED10B,@ps4_scePthreadAttrSetdetachstate);
+ lib^.set_proc($13EB72A37969E4BC,@ps4_pthread_attr_setdetachstate);
  lib^.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy);
  lib^.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam);
+ lib^.set_proc($1573D61CD93C39FD,@ps4_scePthreadAttrGetschedparam);
+ lib^.set_proc($7AE291826D159F63,@ps4_pthread_attr_setschedparam);
+ lib^.set_proc($AA593DA522EC5263,@ps4_pthread_attr_getschedparam);
  lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
  lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
  lib^.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
@@ -1069,6 +971,9 @@ begin
  lib^.set_proc($C92F14D931827B50,@ps4_nanosleep);
  lib^.set_proc($41CB5E4706EC9D5D,@ps4_usleep);
  lib^.set_proc($D637D72D15738AC7,@ps4_sceKernelUsleep);
+
+ lib^.set_proc($FE8E6E103A4DFA86,@ps4_sceKernelConvertUtcToLocaltime);
+ lib^.set_proc($D0D4C737534A38D2,@ps4_sceKernelConvertLocaltimeToUtc);
 
  //time
 

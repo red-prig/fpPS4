@@ -184,7 +184,29 @@ begin
  Result:=0;
 end;
 
-//nop nid:libSceNpScore:00D26CB0FCF7998D:sceNpScoreRecordScoreAsync
+function ps4_sceNpScoreRecordScoreAsync(
+             reqId:Integer;
+             boardId:DWORD;     //SceNpScoreBoardId
+             score:Int64;       //SceNpScoreValue
+             scoreComment:pSceNpScoreComment;
+             gameInfo:pSceNpScoreGameInfo;
+             tmpRank:DWORD;     //SceNpScoreRankNumber
+             compareDate:QWORD; //SceRtcTick
+             option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpScorePollAsync(
+             reqId:Integer;
+             r_out:Pinteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (r_out<>nil) then
+ begin
+  r_out^:=0;
+ end;
+end;
 
 function Load_libSceNpScoreRanking(Const name:RawByteString):TElf_node;
 var
@@ -201,6 +223,8 @@ begin
  lib^.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
  lib^.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
  lib^.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
+ lib^.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
+ lib^.set_proc($9B50DF351B2D9124,@ps4_sceNpScorePollAsync);
 end;
 
 initialization

@@ -687,7 +687,9 @@ begin
      Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
 
      _emit_image_load(Tgrp,@info);
-    end
+    end;
+
+  IMAGE_STORE:; //TODO
 
   else
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));

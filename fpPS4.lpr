@@ -13,6 +13,9 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
+ //ps4_libSceRtc
+ ps4_libSceNpSignaling,
+ ps4_libSceNpMatching2,
  ps4_libSceRemoteplay,
  ps4_libSceAjm,
  ps4_libSceMouse,
@@ -30,7 +33,7 @@ uses
  ps4_libSceSaveData,
  ps4_libSceDialogs,
  ps4_libSceUserService,
- ps4_libsceaudioout,
+ ps4_libSceAudioOut,
  ps4_libSceVideoOut,
  ps4_libScePad,
  ps4_libkernel,
@@ -268,6 +271,9 @@ begin
  begin
 
  //Case Info^.lib^.strName of
+ // 'libSceGnmDriver':;
+ // 'libSceAjm':;
+ // 'libSceAudioOut':;
  // 'libc':;
  // 'libSceLibcInternal':;
  // else
@@ -286,8 +292,8 @@ begin
  //   'sceKernelClockGettime':;
  //   'pthread_mutex_lock':;
  //   'pthread_mutex_unlock':;
- //   //'sceKernelPread':;
- //   //'sceKernelClose':;
+ //   'sceKernelPread':;
+ //   'sceKernelClose':;
  //   'sceDiscMapIsRequestOnHDD':;
  //   'Unknow':;
  //   'sceFiosIOFilterPsarcDearchiver':;
@@ -301,10 +307,11 @@ begin
  //   'scePthreadRwlockUnlock':;
  //   'scePthreadCondBroadcast':;
  //   'sceFiosFHCloseSync':;
- //   //'sceKernelStat':;
+ //   'sceKernelStat':;
  //   'sceFiosFHOpenSync':;
  //   'sceFiosFHGetSize':;
- //   //'sceKernelOpen':;
+ //   'sceKernelOpen':;
+ //   'sceKernelUsleep':;
  //   '_write':;
  //   else
  //    begin
@@ -530,6 +537,9 @@ begin
 
  //ps4_app.app_path:='G:\Games\Untitled Goose Game\CUSA23079\';
  //ps4_app.app_file:='G:\Games\Untitled Goose Game\CUSA23079\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

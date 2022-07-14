@@ -431,6 +431,9 @@ type
  end;
  Ptimezone=^timezone;
 
+ time_t=QWORD;
+ ptime_t=^time_t;
+
  TMemChunk=packed record
   pAddr:Pointer;
   nSize:Int64;
