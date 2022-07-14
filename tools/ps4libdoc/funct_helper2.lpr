@@ -220,6 +220,9 @@ begin
  FileClose(F);
 end;
 
+var
+ i,n:Integer;
+
 begin
  DefaultSystemCodePage:=CP_UTF8;
  DefaultUnicodeCodePage:=CP_UTF8;
@@ -229,14 +232,40 @@ begin
 
  MapSym:=TMapSym.Create;
 
- if FileExists('ps4libdoc.inl') then
-  loadInlFile(MapSym,'ps4libdoc.inl');
+ if (ParamCount=0) then
+ begin
+  Writeln('Build names base to ps');
+  Writeln(' Parameters:');
+  Writeln('  -inl <name>  //inl file name');
+  Writeln('  -txt <name>  //txt file name');
+  Exit;
+ end;
 
- if FileExists('list_from_sdk.txt') then
-  loadTxtFile(MapSym,'list_from_sdk.txt');
+ n:=-1;
+ For i:=1 to ParamCount do
+ begin
+  case LowerCase(ParamStr(i)) of
+    '-inl':n:=0;
+    '-txt':n:=1;
+   else
+     if (n<>-1) then
+     begin
+      Case n of
+       0:begin
+          if FileExists(ParamStr(i)) then
+           loadInlFile(MapSym,ParamStr(i));
+         end;
+       1:begin
+          if FileExists(ParamStr(i)) then
+           loadTxtFile(MapSym,ParamStr(i));
+         end;
+      end;
+      n:=-1;
+     end;
+  end;
+ end;
 
- if FileExists('ps4_names.txt') then
-  loadTxtFile(MapSym,'ps4_names.txt');
+ //-txt sceKernelDlsym.txt -txt list_from_sdk.txt -txt ps4_names.txt -txt known_names.txt
 
  Writeln('Load is Fin');
  SaveToPas('ps4libdoc.pas');
