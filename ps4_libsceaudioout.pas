@@ -289,7 +289,7 @@ begin
 
  pstream:=nil;
  err:=0;
- if (_type=SCE_AUDIO_OUT_PORT_TYPE_MAIN) then //so far only main
+ if (_type=SCE_AUDIO_OUT_PORT_TYPE_MAIN) or (_type=SCE_AUDIO_OUT_PORT_TYPE_BGM) then //so far only MAIN/BGM
  begin
   _sig_lock;
   err:=Pa_OpenDefaultStream(@pstream,

@@ -367,20 +367,132 @@ const
  FPC_EXCEPTION_CODE=$E0465043;
 
 {
-INSERTQ xmm1, xmm2, imm8,
+psllq = _m128i _mm_slli_epi64(_m128i a, int cnt)
+psrlq = _m128i _mm_srli_epi64(_m128i a, int cnt)
 
-imm8 F2 0F 78 /r ib ib
-Insert field starting at bit 0 of xmm2 with the length
-specified by [5:0] of the first immediate byte. This
-field is inserted into xmm1 starting at the bit position
-specified by [5:0] of the second immediate byte.
+SSP_FORCEINLINE __m128i ssp_logical_bitwise_select_SSE2	(__m128i a,b,mask)
 
-INSERTQ xmm1, xmm2 F2 0F 79 /r
-Insert field starting at bit 0 of xmm2 with the length
-specified by xmm2[69:64]. This field is inserted into
-xmm1 starting at the bit position specified by
-xmm2[77:72].
+{
+    a = _mm_and_si128   ( a,    mask ); // clear a where mask = 0
+    b = _mm_andnot_si128( mask, b    ); // clear b where mask = 1
+    a = _mm_or_si128    ( a,    b    ); // a = a OR b
+    return a;
 }
+
+SSP_FORCEINLINE __m128i ssp_inserti_si64_SSE2( __m128i a, __m128i b, int len, int ndx )
+
+    const static __m128i MASK = SSP_CONST_SET_32I( 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF );
+
+    int left = ndx + len;
+    __m128i m;
+    m = _mm_slli_epi64( MASK, 64-left );    // clear the mask to the left
+    m = _mm_srli_epi64( m,    64-len  );    // clear the mask to the right
+    m = _mm_slli_epi64( m,    ndx     );    // put the mask into the proper position
+    b = _mm_slli_epi64( b,    ndx     );    // put the insert bits into the proper position
+
+    a = ssp_logical_bitwise_select_SSE2( b, a, m );
+    return a;
+}
+
+//f2      0f 78 [c1] [30] [00] insertq $0x0,$0x30,%xmm1 ,%xmm0  c1 = [11] %xmm[000]   %xmm[001]
+//f2 [44] 0f 78 [c7] [30] [00] insertq $0x0,$0x30,%xmm7 ,%xmm8  c7 = [11] %xmm[000]+8 %xmm[111]
+//f2 [41] 0f 78 [f8] [30] [00] insertq $0x0,$0x30,%xmm8 ,%xmm7  f8 = [11] %xmm[111]   %xmm[000]+8
+//f2 [45] 0f 78 [c7] [30] [00] insertq $0x0,$0x30,%xmm15,%xmm8  c7 = [11] %xmm[000]+8 %xmm[111]+8
+
+const
+ IQ_MASK:array[0..3] of DWORD=($FFFFFFFF,$FFFFFFFF,$FFFFFFFF,$FFFFFFFF);
+
+procedure ssp_logical_bitwise_select_SSE2; assembler; nostackframe;
+asm
+ andps  %xmm2, %xmm0 //( a,    mask ) r = %xmm0
+ andnps %xmm1, %xmm2 //( mask, b    ) r = %xmm2
+ orps   %xmm2, %xmm0 //( a,    b    ) r = %xmm0
+end;
+
+procedure insertq_xmm5_xmm8_30_00; assembler;
+const
+ len=$30;
+ ndx=$00;
+ left=ndx+len;
+ m64_left=64-left;
+ m64_len =64-len;
+var
+ xmm0,xmm1,xmm2:array[0..3] of DWORD;
+asm
+ Movq %xmm0,xmm0
+ Movq %xmm1,xmm1
+ Movq %xmm2,xmm2
+
+ Movq IQ_MASK,%xmm2
+
+ //a = xmm5
+ //b = xmm8
+
+ Movq  %xmm8,%xmm0
+ Movq  %xmm5,%xmm1
+
+ psllq m64_left,%xmm2 //m = ( MASK, 64-left ) clear the mask to the left
+ psrlq m64_len ,%xmm2 //m = ( m,    64-len  ) clear the mask to the right
+ psllq ndx     ,%xmm2 //m = ( m,    ndx     ) put the mask into the proper position
+ psllq ndx     ,%xmm0 //b = ( b,    ndx     ) put the insert bits into the proper position
+
+ call  ssp_logical_bitwise_select_SSE2
+
+ Movq  %xmm0,%xmm5
+
+ Movq xmm0,%xmm0
+ Movq xmm1,%xmm1
+ Movq xmm2,%xmm2
+end;
+
+procedure patch_insertq(p:Pbyte);
+var
+ i:int64;
+begin
+ Case p[1] of
+  $0f:
+   begin
+    p[0]:=$90;
+    p[1]:=$90;
+    p[2]:=$90;
+    p[3]:=$90;
+    p[4]:=$90;
+    p[5]:=$90;
+   end;
+  $41:
+   begin
+    //e8 [00 00 00 00] ,(90) callq rel32, nop
+    p[0]:=$90;
+    p[1]:=$90;
+    p[2]:=$90;
+    p[3]:=$90;
+    p[4]:=$90;
+    p[5]:=$90;
+    p[6]:=$90;
+   end;
+  $44:
+   begin
+    p[0]:=$90;
+    p[1]:=$90;
+    p[2]:=$90;
+    p[3]:=$90;
+    p[4]:=$90;
+    p[5]:=$90;
+    p[6]:=$90;
+   end;
+  $45:
+   begin
+    p[0]:=$90;
+    p[1]:=$90;
+    p[2]:=$90;
+    p[3]:=$90;
+    p[4]:=$90;
+    p[5]:=$90;
+    p[6]:=$90;
+   end;
+  else;
+ end;
+end;
 
 function Test_SIGILL(const rec:TExceptionRecord;ctx:PCONTEXT):longint;
 begin
@@ -388,37 +500,24 @@ begin
   STATUS_ILLEGAL_INSTRUCTION:
     begin
      Case PDWORD(rec.ExceptionAddress)[0] of  //4 byte
-                 //00 11 22 33 44 55 66
-      $780f41f2: //f2 41 0f 78 e8 30 00           insertq $0x0,$0x30,%xmm8,%xmm5
+                 //00 11 22 33 44  55   66
+      $780f41f2, //f2 41 0f 78 e8 [30] [00]           insertq $0x0,$0x30,%xmm8,%xmm5
+      $780f44f2,
+      $780f45f2:
+       if ((PBYTE(rec.ExceptionAddress)[4] and $C0)=$C0) then
        begin
-        PBYTE(rec.ExceptionAddress)[0]:=$90;
-        PBYTE(rec.ExceptionAddress)[1]:=$90;
-        PBYTE(rec.ExceptionAddress)[2]:=$90;
-        PBYTE(rec.ExceptionAddress)[3]:=$90;
-        PBYTE(rec.ExceptionAddress)[4]:=$90;
-        PBYTE(rec.ExceptionAddress)[5]:=$90;
-        PBYTE(rec.ExceptionAddress)[6]:=$90;
-
-        ctx^.Rip:=ctx^.Rip+7;
-
+        patch_insertq(rec.ExceptionAddress);
         NtContinue(ctx,False);
        end;
       else;
      end;
 
      Case (PDWORD(rec.ExceptionAddress)[0] and $FFFFFF) of  //3 byte
-                //00 11 22 33 44 55
-       $780FF2: //f2 0f 78 c1 30 00              insertq $0x0,$0x30,%xmm1,%xmm0
+                // 00 11 22   33   44   55               c1 = [11] %xmm[000] %xmm[001]
+       $780FF2: //[f2 0f 78] [c1] [30] [00]              insertq $0x0,$0x30,%xmm1,%xmm0
+       if ((PBYTE(rec.ExceptionAddress)[3] and $C0)=$C0) then
        begin
-        PBYTE(rec.ExceptionAddress)[0]:=$90;
-        PBYTE(rec.ExceptionAddress)[1]:=$90;
-        PBYTE(rec.ExceptionAddress)[2]:=$90;
-        PBYTE(rec.ExceptionAddress)[3]:=$90;
-        PBYTE(rec.ExceptionAddress)[4]:=$90;
-        PBYTE(rec.ExceptionAddress)[5]:=$90;
-
-        ctx^.Rip:=ctx^.Rip+6;
-
+        patch_insertq(rec.ExceptionAddress);
         NtContinue(ctx,False);
        end;
       else;

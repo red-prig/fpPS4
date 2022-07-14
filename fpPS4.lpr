@@ -339,7 +339,7 @@ begin
    //RTYPE = 7, //R_X86_64_JUMP_SLOT
    //SBIND = 2, //STB_WEAK
    //STYPE = 0} //STT_NOTYPE
-   Writeln('Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
+   Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end;
  end;
 
@@ -540,6 +540,9 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\JETPACKJOYRIDE\CUSA03633\';
+ //ps4_app.app_file:='G:\Games\JETPACKJOYRIDE\CUSA03633\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;

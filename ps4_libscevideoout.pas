@@ -1114,7 +1114,10 @@ begin
 
   //SwSaveTime(t1);
 
-  ps4_usleep(time);
+  if (time<>0) then
+  begin
+   ps4_usleep(time);
+  end;
   //Sleep(_usec2msec(time));
 
   //t2:=SwTimePassedUnits(t1);
@@ -1134,6 +1137,7 @@ begin
 
  if (bufferIndex=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
  begin
+  post_event_flip(flipArg);
   post_event_vblank(flipArg);
  end else
  begin

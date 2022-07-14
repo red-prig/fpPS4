@@ -115,7 +115,7 @@ end;
 
 function SwDelayExecution(Alertable:Boolean;DelayInterval:PQWORD):DWORD;
 begin
- _sig_lock(Alertable);
+ _sig_lock(ord(Alertable));
  Result:=NtDelayExecution(Alertable,Pointer(DelayInterval));
  _sig_unlock;
 end;
@@ -126,7 +126,7 @@ function SwWaitForSingleObject(
           TimeOut:PQWORD;
           Alertable:LONGBOOL):DWORD;
 begin
- _sig_lock(Alertable);
+ _sig_lock(ord(Alertable));
  Result:=NtWaitForSingleObject(ObjectHandle,Alertable,Pointer(TimeOut));
  _sig_unlock;
 end;
@@ -164,7 +164,7 @@ begin
    SwSaveTime(QTIME);
 
    timeout:=-timeout;
-   _sig_lock(True);
+   _sig_lock(SL_ALERTABLE);
    res:=NtWaitForSingleObject(Handle,True,@timeout);
    _sig_unlock;
    timeout:=-timeout;
@@ -181,7 +181,7 @@ begin
 
   end else
   begin
-   _sig_lock(True);
+   _sig_lock(SL_ALERTABLE);
    res:=NtWaitForSingleObject(Handle,True,@timeout);
    _sig_unlock;
   end;

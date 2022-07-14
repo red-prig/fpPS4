@@ -254,8 +254,6 @@ begin
 end;
 
 function ps4_scePadRead(handle:Integer;data:PScePadData;num:Integer):Integer; SysV_ABI_CDecl;
-var
- i:Integer;
 begin
  Result:=0;
  if (num<>0) then
@@ -263,11 +261,6 @@ begin
   ps4_scePadReadState(handle,data);
   Result:=1;
  end;
- if (num>1) then
-  For i:=1 to num-1 do
-  begin
-   data[i]:=Default(ScePadData);
-  end;
 end;
 
 function ps4_scePadSetVibration(handle:Integer;pParam:PScePadVibrationParam):Integer; SysV_ABI_CDecl;

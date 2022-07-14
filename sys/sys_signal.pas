@@ -52,6 +52,10 @@ type
   _rsp:QWORD;
  end;
 
+Const
+ SL_ALERTABLE=1;
+ SL_NOINTRRUP=2;
+
 function _SIG_IDX(sig:Integer):DWORD;        inline;
 function _SIG_VALID(sig:Integer):Boolean;    inline;
 function _SIG_VALID_32(sig:Integer):Boolean; inline;
@@ -68,8 +72,8 @@ function  __sigprocmask(how:Integer;_set,oldset:p_sigset_t):Integer;
 
 function  __sigaction(signum:Integer;act,oldact:p_sigaction_t):Integer;
 
-procedure _sig_lock(Alertable:Boolean=False);
-procedure _sig_unlock;
+procedure _sig_lock(flags:integer=0);
+procedure _sig_unlock(flags:integer=0);
 
 function  _pthread_kill(t:Pointer;sig:Integer):Integer;
 
@@ -421,7 +425,7 @@ const
 
 function __sig_self_interrupt(t:pthread):Integer; forward;
 
-procedure _sig_lock(Alertable:Boolean=False);
+procedure _sig_lock(flags:integer=0);
 label
  tryagain;
 var
@@ -432,7 +436,7 @@ begin
  t:=_get_curthread;
  if (t=nil) then Exit;
 
- if Alertable then
+ if ((flags and SL_ALERTABLE)<>0) then
  begin
   fetch_or(t^.sig._flag,ALERTABLE_FLAG);
  end;
@@ -440,7 +444,7 @@ begin
  i:=fetch_add(t^.sig._lock,1);
 
  //need to interrupt
- if (i=0) or Alertable then
+ if ((flags and SL_NOINTRRUP)=0) and ((i=0) or ((flags and SL_ALERTABLE)<>0)) then
  begin
   tryagain:
 
@@ -466,7 +470,7 @@ begin
 
 end;
 
-procedure _sig_unlock;
+procedure _sig_unlock(flags:integer=0);
 label
  tryagain;
 var
@@ -484,7 +488,7 @@ begin
  i:=fetch_sub(t^.sig._lock,1);
 
  //need to interrupt
- if (i=1) or Alertable then
+ if ((flags and SL_NOINTRRUP)=0) and ((i=1) or Alertable) then
  begin
   tryagain:
 
@@ -508,7 +512,10 @@ begin
 
  end;
 
- fetch_and(t^.sig._flag,DWORD(not ALERTABLE_FLAG));
+ if ((flags and SL_NOINTRRUP)=0) then
+ begin
+  fetch_and(t^.sig._flag,DWORD(not ALERTABLE_FLAG));
+ end;
 end;
 
 //var
@@ -545,7 +552,7 @@ begin
   While (sigqueue_get(@t^.sig,signo,@info)<>0) do
   begin
 
-   Writeln('>__sig_test:'{,system.InterlockedIncrement(_test_counter)},':',t^.ThreadId);
+   //Writeln('>__sig_test:'{,system.InterlockedIncrement(_test_counter)},':',t^.ThreadId);
 
    sact:=ps_sigact[_SIG_IDX(signo)];
 
@@ -609,7 +616,7 @@ begin
      end;
    end;
 
-   Writeln('<__sig_test:'{,_test_counter,':'},t^.ThreadId);
+   //Writeln('<__sig_test:'{,_test_counter,':'},t^.ThreadId);
 
   end;
 
@@ -649,7 +656,7 @@ begin
   end;
  end;
 
- Writeln('>__sig_interrupt:',t^.ThreadId,' ',t^.sig._lock);
+ //Writeln('>__sig_interrupt:',t^.ThreadId,' ',t^.sig._lock);
 
  repeat
   __sig_test_align(t,@ctx);
@@ -685,7 +692,7 @@ begin
 
  event_try_enable(t^.sig._event); //mark change
 
- Writeln('__sig_self_interrupt');
+ //Writeln('__sig_self_interrupt');
 
  if not InitializeContextExtended(@ctx) then Exit(ESRCH);
  if (NtGetContextThread(t^.handle,ctx.CONTEXT)<>STATUS_SUCCESS) then Exit(ESRCH);
@@ -702,14 +709,14 @@ begin
  ctx.CONTEXT^.Rcx:=qword(t);
  ctx.CONTEXT^.Rsp:=rsp;
 
- Writeln('beg Sptr=',HexStr(Sptr));
+ //Writeln('beg Sptr=',HexStr(Sptr));
 
- Writeln('>NtContinue:',HexStr(ctx.CONTEXT^.Rip,16));
+ //Writeln('>NtContinue:',HexStr(ctx.CONTEXT^.Rip,16));
  NtContinue(ctx.CONTEXT,False);
 
  eoi:
 
- Writeln('end Sptr=',HexStr(Sptr));
+ //Writeln('end Sptr=',HexStr(Sptr));
 
  Result:=0;
 end;
@@ -769,7 +776,7 @@ begin
   if IS_SYSCALL(ctx.CONTEXT^.Rip) then //system call in code without blocking
   begin
    //skip
-   Writeln('Warn syscall:0x',HexStr(ctx.CONTEXT^.Rax,4));
+   //Writeln('Warn syscall:0x',HexStr(ctx.CONTEXT^.Rax,4));
 
    //store_release(t^.sig._wait,1);
 
@@ -869,6 +876,8 @@ var
  sinfo:siginfo_t;
 begin
  if (t=nil) then Exit(EINVAL);
+
+ Writeln('_pthread_kill:',sig,':',pthread(t)^.ThreadId);
 
  if (sig=0) then Exit(0); //check pthread
 

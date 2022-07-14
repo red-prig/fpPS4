@@ -36,7 +36,7 @@ Begin
  if (t.BufPos=0) then exit;
  n:=0;
 
- _sig_lock;
+ _sig_lock(SL_NOINTRRUP);
  spin_lock(StdOutLock);
 
  WriteConsole(t.Handle,t.Bufptr,t.BufPos,@n,nil);
@@ -45,7 +45,7 @@ Begin
  t.BufPos:=0;
 
  spin_unlock(StdOutLock);
- _sig_unlock;
+ _sig_unlock(SL_NOINTRRUP);
 end;
 
 Procedure CrtErrWrite(var t:TextRec);
@@ -58,7 +58,7 @@ Begin
  if (t.BufPos=0) then exit;
  n:=0;
 
- _sig_lock;
+ _sig_lock(SL_NOINTRRUP);
  spin_lock(StdOutLock);
 
  old:=7;
@@ -73,7 +73,7 @@ Begin
  t.BufPos:=0;
 
  spin_unlock(StdOutLock);
- _sig_unlock;
+ _sig_unlock(SL_NOINTRRUP);
 end;
 
 Procedure CrtClose(Var F:TextRec);
