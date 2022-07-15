@@ -90,6 +90,7 @@ type
   Queue:TIntrusiveMPSCQueue;
   Current:PvSubmitNode;
   CmdBuffer:TvCmdBuffer;
+  submit_id:ptruint;
   SetShCount:ptruint;
   SetCxCount:ptruint;
   LastSetReg:WORD;
@@ -174,6 +175,7 @@ begin
  begin
   FreeMem(Current);
   Current:=nil;
+  Inc(submit_id);
  end;
  LastSetReg:=0;
 
@@ -190,6 +192,7 @@ begin
  if (CmdBuffer=nil) then
  begin
   CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+  CmdBuffer.submit_id:=submit_id;
  end;
 end;
 
@@ -1812,21 +1815,21 @@ begin
 
     RT_INFO.FImageInfo.params.samples:=1;
 
-    if (RT_INFO.IMAGE_USAGE and TM_READ)=0 then
-    begin
-     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
-    end;
+    //if (RT_INFO.IMAGE_USAGE and TM_READ)=0 then
+    //begin
+    // RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
+    //end;
 
-    if (RT_INFO.IMAGE_USAGE and TM_CLEAR)=0 then
-    begin
-     RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_READ;
-    end;
+    //if (RT_INFO.IMAGE_USAGE and TM_CLEAR)=0 then
+    //begin
+    // RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_READ;
+    //end;
 
-    if (RT_INFO.blend.blendEnable<>0) then
-    begin
-     //Exit(false);
-     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
-    end;
+    //if (RT_INFO.blend.blendEnable<>0) then
+    //begin
+    // Exit(false);
+    // RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
+    //end;
 
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE or TM_CLEAR;
     //RT_INFO.IMAGE_USAGE:=RT_INFO.IMAGE_USAGE and (not TM_READ);
@@ -1841,9 +1844,9 @@ begin
                    );
 
     //if (RT_INFO.blend.blendEnable=0) then
-    begin
-     //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
-    end;
+    //begin
+    // ri.data_usage:=ri.data_usage and (not TM_READ); //reset read
+    //end;
 
     iv:=ri.FetchView(GFXRing.CmdBuffer,RT_INFO.FImageView);
 
@@ -1923,7 +1926,7 @@ begin
                   ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
                   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                  {DB_INFO.DEPTH_USAGE}0
+                  DB_INFO.DEPTH_USAGE
                   );
 
    //ri.data_usage:=ri.data_usage and (not TM_READ); //reset read

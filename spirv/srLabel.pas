@@ -29,7 +29,7 @@ type
 
  TsrSetLabelType=Set of TsrLabelType;
 
- TsrBlockType=(btMain,btAdr,btSetpc,btCond,btLoop,btOther);
+ TsrBlockType=(btMain,btAdr,btAdrBranch,btSetpc,btCond,btLoop,btOther);
 
  PsrLabel=^TsrLabel;
  TsrLabel=object

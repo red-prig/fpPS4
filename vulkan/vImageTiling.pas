@@ -18,10 +18,12 @@ uses
  vCmdBuffer;
 
 Procedure LoadFromBuffer(cmd:TvCustomCmdBuffer;image:TObject); //TvImage2
+function  CheckFromBuffer(image:TObject):Boolean; //TvImage2
 
 implementation
 
 uses
+ shader_dump,
  vImageManager;
 
 Function GetAlignWidth(format:TVkFormat;width:DWORD):DWORD;
@@ -465,7 +467,11 @@ begin
   kTileModeDisplay_2dThin: //render target tiling todo
    _Load_Linear(cmd,TvImage2(image));
 
-  kTileModeDepth_2dThin_64: //depth tiling todo
+  kTileModeDepth_2dThin_64 ,
+  kTileModeDepth_2dThin_128,
+  kTileModeDepth_2dThin_256,
+  kTileModeDepth_2dThin_512,
+  kTileModeDepth_2dThin_1K : //depth tiling todo
    _Load_Linear(cmd,TvImage2(image));
 
   kTileModeThin_1dThin: //texture
@@ -473,6 +479,129 @@ begin
 
   kTileModeThin_2dThin:
    _Load_Linear(cmd,TvImage2(image)); //TODO
+
+  else
+   Assert(false,'TODO');
+ end;
+
+end;
+
+//FastHash(data:PByte;len:DWORD):DWORD;
+
+function _Check_Linear(image:TvImage2):Boolean;
+var
+ size:Ptruint;
+ cur:DWORD;
+begin
+ Result:=False;
+
+ if (image.key.params.samples>ord(VK_SAMPLE_COUNT_1_BIT)) then Exit;
+
+ size:=GetLinearSize(image,(image.key.params.tiling_idx=8));
+
+ cur:=FastHash(image.key.Addr,size);
+
+ if (cur<>image.hash) then
+ begin
+  image.hash:=cur;
+  Result:=True;
+ end;
+
+end;
+
+function _Check_Thin_1dThin(image:TvImage2):Boolean;
+var
+ tiler:Tiler1d;
+
+ size:QWORD;
+
+ m_bytePerElement:Word;
+ m_bitsPerElement:Word;
+
+ cur:DWORD;
+begin
+ Result:=False;
+
+ if (image.key.params.samples>ord(VK_SAMPLE_COUNT_1_BIT)) then Exit;
+
+ tiler:=Texture2d_32;
+
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bitsPerElement:=m_bytePerElement*8;
+
+ tiler.m_bitsPerElement:=m_bitsPerElement;
+
+ tiler.m_linearWidth :=image.key.params.extend.width;
+ tiler.m_linearHeight:=image.key.params.extend.height;
+ tiler.m_linearDepth :=image.key.params.extend.depth;
+
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  tiler.m_linearWidth :=(tiler.m_linearWidth +3) div 4;
+  tiler.m_linearHeight:=(tiler.m_linearHeight+3) div 4;
+  tiler.m_linearDepth :=(tiler.m_linearDepth +3) div 4;
+ end;
+
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  tiler.m_paddedWidth :=tiler.m_linearWidth ;
+  tiler.m_paddedHeight:=tiler.m_linearHeight;
+  tiler.m_paddedDepth :=tiler.m_linearDepth ;
+ end else
+ Case m_bitsPerElement of
+  32:begin
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +7) and (not 7);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
+     end;
+   8:begin
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +31) and (not 31);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+ 7) and (not  7);
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
+     end;
+  else
+   Assert(false);
+ end;
+
+ size:=tiler.m_paddedWidth*
+       tiler.m_paddedHeight*
+       tiler.m_paddedDepth*
+       m_bytePerElement;
+
+ cur:=FastHash(image.key.Addr,size);
+
+ if (cur<>image.hash) then
+ begin
+  image.hash:=cur;
+  Result:=True;
+ end;
+
+end;
+
+function CheckFromBuffer(image:TObject):Boolean;
+begin
+ Result:=False;
+
+ Case TvImage2(image).key.params.tiling_idx of
+  kTileModeDisplay_LinearAligned,
+  kTileModeDisplay_LinearGeneral:
+   Result:=_Check_Linear(TvImage2(image));
+
+  kTileModeDisplay_2dThin: //render target tiling todo
+   Result:=false;
+
+  kTileModeDepth_2dThin_64 ,
+  kTileModeDepth_2dThin_128,
+  kTileModeDepth_2dThin_256,
+  kTileModeDepth_2dThin_512,
+  kTileModeDepth_2dThin_1K : //depth tiling todo
+   Result:=false;
+
+  kTileModeThin_1dThin: //texture
+   Result:=_Check_Thin_1dThin(TvImage2(image));
+
+  kTileModeThin_2dThin:
+   Result:=_Check_Linear(TvImage2(image)); //TODO
 
   else
    Assert(false,'TODO');

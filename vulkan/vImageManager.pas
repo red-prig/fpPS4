@@ -73,6 +73,9 @@ type
   FRefs:ptruint;
   FDeps:TObjectSetLock;
   //
+  submit_id:ptruint;
+  hash:dword;
+  //
   data_usage:Byte;
   Constructor Create;
   Destructor  Destroy; override;
@@ -611,12 +614,24 @@ begin
   end;
 
   if not cmd.IsRenderPass then
-  if ((Result.data_usage and TM_READ)=0) and
-     ((data_usage and TM_READ)<>0) and
-     ((data_usage and TM_CLEAR)=0) then
   begin
-   Result.data_usage:=Result.data_usage or TM_READ;
-   LoadFromBuffer(cmd,Result);
+
+   if ((Result.data_usage and TM_READ)<>0) and (Result.submit_id<>cmd.submit_id) then
+   begin
+    //hash test
+    if CheckFromBuffer(Result) then
+    begin
+     Result.data_usage:=Result.data_usage and (not TM_READ);
+    end;
+   end;
+
+   if ((Result.data_usage and TM_READ)=0) and ((data_usage and TM_READ)<>0) then
+   begin
+    Result.submit_id:=cmd.submit_id;
+    Result.data_usage:=Result.data_usage or TM_READ;
+    LoadFromBuffer(cmd,Result);
+   end;
+
   end;
 
   Result.data_usage:=Result.data_usage or (data_usage and TM_WRITE);

@@ -16,6 +16,7 @@ type
  SceAppContentInitParam=packed record
   reserved:array[0..31] of Byte;
  end;
+
  PSceAppContentBootParam=^SceAppContentBootParam;
  SceAppContentBootParam=packed record
   reserved1:array[0..3] of Byte;
@@ -52,6 +53,24 @@ begin
  end;
 end;
 
+const
+ SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE=16;
+ SCE_APP_CONTENT_ADDCONT_MOUNT_MAXNUM   =64;
+
+ //E temporary data option
+ SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_NONE  =0;
+ SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT=1;
+
+type
+ pSceAppContentMountPoint=^SceAppContentMountPoint;
+ SceAppContentMountPoint=array[0..SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE-1] of AnsiChar;
+
+function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Assert(false,'TODO');
+end;
+
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -63,6 +82,7 @@ begin
 
  lib^.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
  lib^.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
+ lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
 end;
 
 

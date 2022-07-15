@@ -70,6 +70,8 @@ type
   cmd_count:qword;
   ret:Integer;
 
+  submit_id:ptruint;
+
   FCurrPipeline:array[0..1] of TVkPipeline;
   FCurrLayout:array[0..1] of TVkPipelineLayout;
 

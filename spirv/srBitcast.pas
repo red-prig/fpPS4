@@ -72,7 +72,7 @@ begin
  src^.mark_read;
  dst:=PSprvEmit(pRoot)^.NewReg(dtype);
  dst^.pLine:=src^.pLine;
- dst^.pWriter.SetParam(ntReg,src);
+ dst^.SetReg(src);
 
  dst^.mark_read;
  Result:=dst;
@@ -89,13 +89,14 @@ begin
  Result^.mark_read;
 
  Result^.pWriter:=src^.pWriter;
- src^.pWriter.SetParam(ntReg,Result);
+ src^.SetReg(Result);
 end;
 
 function TsrBitcastList.FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
 var
  node:PsrBitcast;
  dst:PsrRegNode;
+ pConst:PsrConst;
 
 begin
  Result:=src;
@@ -119,10 +120,11 @@ begin
 
  if src^.is_const then
  begin
-  src^.AsConst^.mark_unread;
+  pConst:=src^.AsConst;
+  pConst^.mark_unread;
   dst:=PSprvEmit(pRoot)^.NewReg(dtype);
   dst^.pLine:=src^.pLine;
-  dst^.pWriter.SetParam(ntConst,PSprvEmit(pRoot)^.FConsts.Bitcast(dtype,src^.AsConst));
+  dst^.SetConst(PSprvEmit(pRoot)^.FConsts.Bitcast(dtype,pConst))
  end else
  begin
   if TryBitcastType(src^.dtype,dtype) then

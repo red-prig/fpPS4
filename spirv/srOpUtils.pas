@@ -52,7 +52,8 @@ Function  is_term_op(pLine:PspirvOp):Boolean;
 procedure _up_merge_line(var pLine:PspirvOp);
 function  FindUpSameOp(pLine,node:PspirvOp):PspirvOp;
 
-function  GreaterThanLine(p1,p2:PspirvOp):Boolean; //(p1>p2)
+function  isGTLine(p1,p2:PspirvOp):Boolean;  //(p1>p2)
+function  IsGTFlow(pSrc,pDst:PSpirvOp):Boolean;
 function  GetMaxPlace(pLine:PSpirvOp;count:Byte;src:PPsrRegNode):PSpirvOp;
 
 implementation
@@ -132,7 +133,7 @@ begin
  end;
 end;
 
-function GreaterThanLine(p1,p2:PspirvOp):Boolean; //(p1>p2)
+function isGTLine(p1,p2:PspirvOp):Boolean; //(p1>p2)
 begin
  Result:=False;
  p2:=p2^.pNext;
@@ -143,13 +144,79 @@ begin
  end;
 end;
 
-Function ParentOf(pLine,pCurr:PsrOpBlock):Boolean;
+function isGTELine(p1,p2:PspirvOp):Boolean; //(p1>=p2)
+begin
+ Result:=False;
+ While (p2<>nil) do
+ begin
+  if (p1=p2) then Exit(True);
+  p2:=p2^.pNext;
+ end;
+end;
+
+Function IsParentOf(pLine,pCurr:PsrOpBlock):Boolean;
 begin
  Result:=False;
  While (pLine<>nil) do
  begin
   if (pLine=pCurr) then Exit(True);
   pLine:=pLine^.pParent;
+ end;
+end;
+
+function FindBlockLine(pCurent,node:PsrOpBlock):PspirvOp;
+var
+ tmp:PspirvOp;
+begin
+ Result:=nil;
+ if (pCurent=nil) then Exit;
+ tmp:=pCurent^.pHead;
+ While (tmp<>nil) do
+ begin
+  if (tmp^.OpId=OpBlock) and (tmp^.dst.pData=node) then
+  begin
+   Exit(tmp);
+  end;
+  tmp:=tmp^.pNext;
+ end;
+end;
+
+{
+ [pSrc]
+  |
+  V
+  [pBlock] -> [pDst]
+}
+
+function IsGTFlow(pSrc,pDst:PSpirvOp):Boolean;
+var
+ pLine,pCurr:PsrOpBlock;
+ tmp:PSpirvOp;
+begin
+ Result:=False;
+
+ pLine:=pDst^.pParent;
+ pCurr:=pSrc^.pParent;
+
+ While (pLine<>nil) do
+ begin
+
+  if (pLine=pCurr) then
+  begin
+   Result:=isGTELine(pSrc,pDst);
+   Exit;
+  end;
+
+  if (pLine^.pParent=nil) then Exit;
+
+  tmp:=pLine^.pUpLine;
+  if (tmp=nil) then
+  begin
+   tmp:=FindBlockLine(pLine^.pParent,pLine);
+  end;
+  pDst:=tmp;
+
+  pLine:=pDst^.pParent;
  end;
 end;
 
@@ -165,7 +232,7 @@ begin
  begin
   t:=src[i]^.pLine;
   if not src[i]^.is_const then
-  if ParentOf(pLine^.pParent,t^.pParent) then
+  if IsParentOf(pLine^.pParent,t^.pParent) then
   begin
    if (m=nil) then
    begin
@@ -173,7 +240,7 @@ begin
    end else
    if (m^.pParent=t^.pParent) then
    begin
-    if GreaterThanLine(t,m) then
+    if isGTLine(t,m) then
     begin
      m:=t;
     end;
@@ -328,25 +395,13 @@ begin
   begin
    pBlock:=pLine^.pParent;
    if (pBlock=nil) then Exit;
+   if (pBlock^.pParent=nil) then Exit;
    tmp:=pBlock^.pUpLine;
    if (tmp=nil) then
    begin
-    pBlock:=pBlock^.pParent;
-    if (pBlock=nil) then Exit;
-    tmp:=pBlock^.pHead;
-    While (tmp<>nil) do
-    begin
-     if (tmp^.OpId=OpBlock) and (tmp^.dst.pData=pBlock) then
-     begin
-      tmp:=tmp^.pPrev;
-      Break;
-     end;
-     tmp:=tmp^.pNext;
-    end;
-   end else
-   begin
-    tmp:=tmp^.pPrev;
+    tmp:=FindBlockLine(pBlock^.pParent,pBlock);
    end;
+   tmp:=tmp^.pPrev;
   end;
   pLine:=tmp;
  end;

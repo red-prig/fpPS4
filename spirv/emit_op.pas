@@ -224,6 +224,7 @@ Var
 begin
  p.SetParam(ntVar,src);
  dtype:=FSpirvTypes.Fetch(dst^.dtype);
+ //Assert(dtype<>nil);
  emit_OpLoad(pLine,dtype,dst,p);
 end;
 
@@ -891,7 +892,7 @@ begin
  end else
  begin
   p^.pReg^.mark_read;
-  dst^.pWriter.SetParam(ntReg,p^.pReg);
+  dst^.SetReg(p^.pReg);
   //deref
   For i:=0 to count-1 do
   begin

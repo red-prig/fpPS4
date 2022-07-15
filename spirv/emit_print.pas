@@ -595,7 +595,7 @@ begin
    if (node^.key.dtype=dtUnknow) then
    begin
     Write('; ');
-    PrintConstId(node);
+    //PrintConstId(node);
     Writeln(' = dtUnknow: read_count=',node^.read_count,' value=',node^.Data);
    end else
    //Assert(node^.dtype<>dtUnknow);

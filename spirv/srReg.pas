@@ -29,9 +29,10 @@ type
   Procedure mark_read;
   Procedure mark_unread;
   procedure SetConst(pConst:PsrConst);
+  procedure SetReg(pReg:PsrRegNode);
   function  AsConst:PsrConst;
   function  AsOp:Pointer;
-  function  AsReg:Pointer;
+  function  AsReg:PsrRegNode;
   function  is_const:Boolean;
   function  is_bool:Boolean;
   function  is_bool_or_const_bool:Boolean;
@@ -372,6 +373,12 @@ begin
  dtype:=pConst^.key.dtype;
 end;
 
+procedure TsrRegNode.SetReg(pReg:PsrRegNode);
+begin
+ Assert(@Self<>pReg);
+ pWriter.SetParam(ntReg,pReg);
+end;
+
 function TsrRegNode.AsConst:PsrConst;
 begin
  Result:=nil;
@@ -388,7 +395,7 @@ begin
  Result:=pWriter.pData;
 end;
 
-function TsrRegNode.AsReg:Pointer;
+function TsrRegNode.AsReg:PsrRegNode;
 begin
  Result:=nil;
  if (@Self=nil) then Exit;

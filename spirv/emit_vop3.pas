@@ -32,8 +32,7 @@ type
   procedure _emit_V_ADD_F32;
   procedure _emit_V_SUB_F32;
   procedure _emit_V_CVT_PKRTZ_F16_F32;
-  procedure _emit_V_MIN_F32;
-  procedure _emit_V_MAX_F32;
+  procedure _emit_V_MIN_MAX_F32(OpId:DWORD);
   procedure _emit_V_MUL_LO_I32;
   procedure _emit_V_MUL_F32;
   procedure _emit_V_MUL_I32_I24;
@@ -276,7 +275,7 @@ begin
  _emit_ConvFloatToHalf(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP3._emit_V_MIN_F32;
+procedure TEmit_VOP3._emit_V_MIN_MAX_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -289,26 +288,7 @@ begin
  _emit_src_abs_bit(@src,2);
  _emit_src_neg_bit(@src,2);
 
- emit_OpFMin(dst,src[0],src[1]);
-
- _emit_dst_omod_f(dst);
- _emit_dst_clamp_f(dst);
-end;
-
-procedure TEmit_VOP3._emit_V_MAX_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
-begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
-
- _emit_src_abs_bit(@src,2);
- _emit_src_neg_bit(@src,2);
-
- emit_OpFMax(dst,src[0],src[1]);
+ emit_OpExt2(OpId,dtFloat32,dst,src[0],src[1]);
 
  _emit_dst_omod_f(dst);
  _emit_dst_clamp_f(dst);
@@ -353,10 +333,12 @@ end;
 
 procedure TEmit_VOP3._emit_V_MUL_I32_I24;
 Var
- dst:PsrRegSlot;
+ dst,tmp:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
+ bit24:PsrRegNode;
 begin
  dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
@@ -366,16 +348,27 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
 
- //24bit mask TODO
+ bit24:=FetchReg(FConsts.Fetch(dtUInt32,$FFFFFF));
+
+ emit_OpBitwiseAnd(tmp,src[0],bit24);
+ src[0]:=MakeRead(tmp,dtInt32);
+
+ bit24^.mark_read;
+
+ emit_OpBitwiseAnd(tmp,src[1],bit24);
+ src[1]:=MakeRead(tmp,dtInt32);
+
  emit_OpIMul(dst,src[0],src[1]);
 end;
 
 procedure TEmit_VOP3._emit_V_MUL_U32_U24;
 Var
- dst:PsrRegSlot;
+ dst,tmp:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
+ bit24:PsrRegNode;
 begin
  dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
@@ -385,7 +378,16 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
 
- //24bit mask TODO
+ bit24:=FetchReg(FConsts.Fetch(dtUInt32,$FFFFFF));
+
+ emit_OpBitwiseAnd(tmp,src[0],bit24);
+ src[0]:=MakeRead(tmp,dtUInt32);
+
+ bit24^.mark_read;
+
+ emit_OpBitwiseAnd(tmp,src[1],bit24);
+ src[1]:=MakeRead(tmp,dtUInt32);
+
  emit_OpIMul(dst,src[0],src[1]);
 end;
 
@@ -423,7 +425,7 @@ begin
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
- src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
+ src[2]:=MakeRead(dst,dtFloat32);
 
  _emit_src_abs_bit(@src,3);
  _emit_src_neg_bit(@src,3);
@@ -517,10 +519,12 @@ end;
 
 procedure TEmit_VOP3._emit_V_MAD_I32_I24;
 Var
- dst:PsrRegSlot;
+ dst,tmp:PsrRegSlot;
  src:array[0..2] of PsrRegNode;
+ bit24:PsrRegNode;
 begin
  dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
@@ -531,15 +535,27 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtInt32);
 
+ bit24:=FetchReg(FConsts.Fetch(dtUInt32,$FFFFFF));
+
+ emit_OpBitwiseAnd(tmp,src[0],bit24);
+ src[0]:=MakeRead(tmp,dtInt32);
+
+ bit24^.mark_read;
+
+ emit_OpBitwiseAnd(tmp,src[1],bit24);
+ src[1]:=MakeRead(tmp,dtInt32);
+
  emit_OpFmaI32(dst,src[0],src[1],src[2]);
 end;
 
 procedure TEmit_VOP3._emit_V_MAD_U32_U24;
 Var
- dst:PsrRegSlot;
+ dst,tmp:PsrRegSlot;
  src:array[0..2] of PsrRegNode;
+ bit24:PsrRegNode;
 begin
  dst:=FRegsStory.get_vdst8(FSPI.VOP3a.VDST);
+ tmp:=@FRegsStory.FUnattach;
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
@@ -549,6 +565,16 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUInt32);
+
+ bit24:=FetchReg(FConsts.Fetch(dtUInt32,$FFFFFF));
+
+ emit_OpBitwiseAnd(tmp,src[0],bit24);
+ src[0]:=MakeRead(tmp,dtUInt32);
+
+ bit24^.mark_read;
+
+ emit_OpBitwiseAnd(tmp,src[1],bit24);
+ src[1]:=MakeRead(tmp,dtUInt32);
 
  emit_OpFmaU32(dst,src[0],src[1],src[2]);
 end;
@@ -969,15 +995,11 @@ begin
     _emit_V_CVT_PKRTZ_F16_F32;
    end;
 
-  256+V_MIN_F32:
-   begin
-    _emit_V_MIN_F32;
-   end;
+  256+V_MIN_LEGACY_F32:_emit_V_MIN_MAX_F32(GlslOp.NMin);
+  256+V_MAX_LEGACY_F32:_emit_V_MIN_MAX_F32(GlslOp.NMax);
 
-  256+V_MAX_F32:
-   begin
-    _emit_V_MAX_F32;
-   end;
+  256+V_MIN_F32:_emit_V_MIN_MAX_F32(GlslOp.FMin);
+  256+V_MAX_F32:_emit_V_MIN_MAX_F32(GlslOp.FMax);
 
   256+V_MUL_F32:
     begin

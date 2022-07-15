@@ -206,6 +206,8 @@ function ps4_read(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
+
 implementation
 
 uses
@@ -813,6 +815,33 @@ begin
    else
      Exit(_set_errno(EIO));
   end;
+ end;
+
+end;
+
+function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
+var
+ fn:RawByteString;
+begin
+ Result:=0;
+
+ if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+
+ Writeln('sceKernelCheckReachability:',path);
+
+ _sig_lock;
+ fn:=_parse_filename(path);
+ _sig_unlock;
+
+ if (fn='') then Exit(SCE_KERNEL_ERROR_EACCES);
+
+ if FileExists(fn) or DirectoryExists(fn) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_ENOENT;
  end;
 
 end;

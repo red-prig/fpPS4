@@ -379,6 +379,7 @@ procedure TSprvEmit_alloc.AllocOpId(node:PSpirvOp);
 var
  Param:POpParamNode;
  Info:Op.TOpInfo;
+ pReg:PsrRegNode;
 begin
  if (node=nil) then Exit;
 
@@ -400,7 +401,13 @@ begin
 
  if Info.rstype then //dst type
  begin
-  Assert(node^.dst_type<>nil,'AllocOp$4');
+  if (node^.dst_type=nil) then
+  begin
+   pReg:=node^.dst.AsReg;
+   if (pReg^.dtype=dtUnknow) then pReg^.dtype:=dtFloat32;
+   node^.dst_type:=FSpirvTypes.Fetch(pReg^.dtype);
+   //Assert(false,'AllocOp$4');
+  end;
  end;
 
  Param:=node^.pParam.pHead;

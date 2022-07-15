@@ -175,7 +175,7 @@ begin
        Decorates^.emit_decorate(ntVar,pVar,Decoration.BuiltIn,BuiltIn.FrontFacing);
       end;
     else
-     Assert(false,'AllocBinding');
+     {Assert(false,'AllocBinding')};
    end;
   end;
   node:=Next(node);

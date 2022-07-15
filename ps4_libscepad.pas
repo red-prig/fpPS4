@@ -344,6 +344,16 @@ begin
  Result:=0;
 end;
 
+function ps4_scePadResetOrientation(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_scePadSetTiltCorrectionState(handle:Integer;bEnable:BOOL):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libScePad(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -363,6 +373,8 @@ begin
  lib^.set_proc($8233FDFCA433A149,@ps4_scePadGetControllerInformation);
  lib^.set_proc($72556F2F86439EDC,@ps4_scePadSetMotionSensorState);
  lib^.set_proc($451E27A2F50410D6,@ps4_scePadSetLightBar);
+ lib^.set_proc($AC866747A792A6F9,@ps4_scePadResetOrientation);
+ lib^.set_proc($BC32CCA092DD7BC2,@ps4_scePadSetTiltCorrectionState);
 end;
 
 initialization

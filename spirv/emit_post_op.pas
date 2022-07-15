@@ -179,7 +179,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -336,7 +336,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -416,7 +416,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -542,7 +542,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -748,7 +748,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -1020,7 +1020,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -1337,7 +1337,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -1483,7 +1483,7 @@ var
  procedure _SetReg(src:PsrRegNode);
  begin
   src^.mark_read;
-  dst^.pWriter.SetParam(ntReg,src);
+  dst^.SetReg(src);
   node^.OpId:=OpLinks; //mark remove
   node^.dst:=Default(TOpParamSingle);
   Inc(Result);
@@ -1867,7 +1867,7 @@ begin
  end;
 
  h:=FConsts.Fetch_vec(rtype,count,@nodes);
- dst^.pWriter.SetParam(ntConst,h);
+ dst^.SetConst(h);
 end;
 
 procedure TEmitPostOp.MakeVecOne(dst:PsrRegNode;src:PPsrRegNode);
@@ -1878,7 +1878,7 @@ begin
  pLine:=src[0]^.AsOp;
  rsrc:=pLine^.ParamNode(0)^.AsReg;
  rsrc^.mark_read;
- dst^.pWriter.SetParam(ntReg,rsrc);
+ dst^.SetReg(rsrc);
 end;
 
 function TEmitPostOp.MakeVecComp(pLine:PSpirvOp;rtype:TsrDataType;dst:PsrRegNode;count:Byte;src:PPsrRegNode):PSpirvOp;

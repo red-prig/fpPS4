@@ -362,7 +362,7 @@ begin
   end else
   begin //save to another step
    node^.mark_read;
-   node^.pWriter.SetParam(ntReg,old);
+   node^.SetReg(old);
   end;
  end;
 end;
@@ -573,7 +573,7 @@ begin
  if (src=nil) or (dst=nil) then Exit;
 
  src^.mark_read;
- dst^.pWriter.SetParam(ntReg,src);
+ dst^.SetReg(src);
 
  node^.OpId:=OpLinks; //mark remove
  node^.dst:=Default(TOpParamSingle);

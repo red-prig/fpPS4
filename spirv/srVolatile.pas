@@ -227,6 +227,21 @@ begin
  FRegsStory.ForEachSlot(@make_copy_slot);
 end;
 
+{
+function is_load_from(dst:PspirvOp;r:PsrRegNode;v:PsrVariable):Boolean;
+var
+ src:PspirvOp;
+ pVar:PsrVariable;
+begin
+ Result:=False;
+ src:=r^.AsOp;
+ if (src=nil) then Exit;
+ if (src^.OpId<>Op.OpLoad) then Exit;
+ pVar:=src^.pParam.pHead^.AsVar;
+ if (pVar<>v) then Exit;
+ Result:=IsGTFlow(src,dst);
+end;
+}
 
 function get_load_from(r:PsrRegNode):PsrVariable;
 var
@@ -342,7 +357,7 @@ begin
 
     MoveVolatiles(@src^.pWriter.pData,@st_tmp);
 
-    pReg^.pWriter.SetParam(ntReg,src);
+    pReg^.SetReg(src);
 
     node^.pReg:=nil;
     Inc(Result);
@@ -396,7 +411,8 @@ begin
   //Assert(pReg<>nil);
   //Assert(pReg^.pWriter.ntype<>ntVolatile);
   tmp:=RegDownSlot(pReg);
-  if (v<>get_load_from(tmp)) then
+
+  if (src<>tmp) and (v<>get_load_from(tmp)) then
   begin
    //mark_read volatile->emit_OpStore
    pLine:=tmp^.pLine;
@@ -404,20 +420,23 @@ begin
 
    if (tmp^.pWriter.ntype=ntVolatile) then
    begin
-    st_tmp.pHead:=tmp^.pWriter.pData;
-    Assert(st_tmp.pHead<>nil);
 
-    st.Move_from(st_tmp);
+    begin
+     st_tmp.pHead:=tmp^.pWriter.pData;
+     Assert(st_tmp.pHead<>nil);
 
-    src^.mark_read;
-    tmp^.pWriter.SetParam(ntReg,src);
+     st.Move_from(st_tmp);
 
-    //tmp^.pLine:=dst;
-    //writeln;
-    //PrepVolatile(pReg^.pLine,pReg);
+     src^.mark_read;
+     tmp^.SetReg(src);
 
-    node^.pReg:=nil;
-    Continue;
+     //tmp^.pLine:=dst;
+     //writeln;
+     //PrepVolatile(pReg^.pLine,pReg);
+
+     node^.pReg:=nil;
+     Continue;
+    end;
    end;
 
    {Case pLine^.OpId of
@@ -443,9 +462,11 @@ begin
    TSprvEmit_post(Self).emit_OpStore(pLine,v,pReg); //after reg
   end else
   begin
+   node^.pReg:=nil;
    RegUnmark(pReg);
    //pReg^.mark_unread;
   end;
+
  until false;
 
  v^.mark_read;

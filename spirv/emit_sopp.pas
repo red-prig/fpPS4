@@ -315,20 +315,20 @@ begin
  Info:=Default(TsrBlockInfo);
 
  c_adr:=FCursor.Adr;                      //get current
- SetPtr(adr.get_pc,btAdr);                //set new
+ SetPtr(adr.get_pc,btAdrBranch);          //set new
  e_adr:=FCursor.pCode^.FTop.pELabel^.Adr; //get end of code
  SetPtr(c_adr.get_pc,btMain);             //ret current
 
  Info.b_adr:=adr;
  Info.e_adr:=e_adr;
- Info.bType:=btAdr;
+ Info.bType:=btAdrBranch;
 
  //down group
  pOpChild:=AllocBlockOp;
  pOpChild^.SetInfo(Info);
  PushBlockOp(line,pOpChild,nil);
 
- SetPtr(adr.get_pc,btAdr);
+ SetPtr(adr.get_pc,btAdrBranch);
 end;
 
 procedure TEmit_SOPP._emit_S_BRANCH;

@@ -45,6 +45,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceUserServiceInitialize2(threadPriority:Integer;cpuAffinityMask:qword):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceUserServiceTerminate:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -102,6 +107,7 @@ begin
  lib:=Result._add_lib('libSceUserService');
 
  lib^.set_proc($8F760CBB531534DA,@ps4_sceUserServiceInitialize);
+ lib^.set_proc($6B3FF447A7AF899D,@ps4_sceUserServiceInitialize2);
  lib^.set_proc($6F01634BE6D7F660,@ps4_sceUserServiceTerminate);
  lib^.set_proc($7CF87298A36F2BF0,@ps4_sceUserServiceGetLoginUserIdList);
  lib^.set_proc($09D5A9D281D61ABD,@ps4_sceUserServiceGetInitialUser);

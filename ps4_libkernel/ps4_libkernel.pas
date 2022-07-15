@@ -1000,6 +1000,8 @@ begin
  lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
  lib^.set_proc($246322A3EDB52F87,@ps4_mkdir);
 
+ lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
+
  //file
 
  px:=Result._add_lib('libScePosix');

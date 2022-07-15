@@ -624,8 +624,8 @@ begin
  SpvVersion:=$10100;
  maxUniformBufferRange:=$FFFF;
  maxPushConstantsSize:=128;
- minStorageBufferOffsetAlignment:=$10;
- minUniformBufferOffsetAlignment:=$100;
+ minStorageBufferOffsetAlignment:=0;
+ minUniformBufferOffsetAlignment:=0;
 end;
 
 Function TsrBufferCfg.CanUseStorageBufferClass:Boolean;

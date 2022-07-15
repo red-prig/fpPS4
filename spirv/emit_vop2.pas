@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  spirv,
   srTypes,
   srConst,
   srReg,
@@ -37,8 +38,7 @@ type
   procedure _emit_V_MAC_F32;
   procedure _emit_V_MADAK_F32;
   procedure _emit_V_MADMK_F32;
-  procedure _emit_V_MIN_F32;
-  procedure _emit_V_MAX_F32;
+  procedure _emit_V_MIN_MAX(OpId:DWORD;rtype:TsrDataType);
  end;
 
 implementation
@@ -370,30 +370,17 @@ begin
  emit_OpFmaF32(dst,src[0],src[1],src[2]);
 end;
 
-procedure TEmit_VOP2._emit_V_MIN_F32;
+procedure TEmit_VOP2._emit_V_MIN_MAX(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
 begin
  dst:=FRegsStory.get_vdst8(FSPI.VOP2.VDST);
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,rtype);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,rtype);
 
- emit_OpFMin(dst,src[0],src[1]);
-end;
-
-procedure TEmit_VOP2._emit_V_MAX_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
-begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP2.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
-
- emit_OpFMax(dst,src[0],src[1]);
+ emit_OpExt2(OpId,rtype,dst,src[0],src[1]);
 end;
 
 procedure TEmit_VOP2._emit_VOP2;
@@ -510,15 +497,17 @@ begin
      _emit_V_MADMK_F32;
     end;
 
-  V_MIN_F32:
-    begin
-     _emit_V_MIN_F32;
-    end;
+  V_MIN_LEGACY_F32:_emit_V_MIN_MAX(GlslOp.NMin,dtFloat32);
+  V_MAX_LEGACY_F32:_emit_V_MIN_MAX(GlslOp.NMax,dtFloat32);
 
-  V_MAX_F32:
-    begin
-     _emit_V_MAX_F32;
-    end;
+  V_MIN_F32:_emit_V_MIN_MAX(GlslOp.FMin,dtFloat32);
+  V_MAX_F32:_emit_V_MIN_MAX(GlslOp.FMax,dtFloat32);
+
+  V_MIN_I32:_emit_V_MIN_MAX(GlslOp.SMin,dtInt32);
+  V_MAX_I32:_emit_V_MIN_MAX(GlslOp.SMax,dtInt32);
+
+  V_MIN_U32:_emit_V_MIN_MAX(GlslOp.UMin,dtUint32);
+  V_MAX_U32:_emit_V_MIN_MAX(GlslOp.UMax,dtUint32);
 
   else
    Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP));

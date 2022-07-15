@@ -1114,7 +1114,7 @@ begin
 
   //SwSaveTime(t1);
 
-  if (time<>0) then
+  if (time>100) then
   begin
    ps4_usleep(time);
   end;

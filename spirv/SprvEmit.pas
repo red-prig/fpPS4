@@ -344,7 +344,8 @@ begin
      pOpChild^.SetInfo(Info);
      PushBlockOp(line,pOpChild,nil);
     end;
-   btAdr: //skip
+   btAdr,
+   btAdrBranch: //skip
     begin
      adr:=pLBlock^.pELabel^.Adr;
      FCursor.Adr:=adr;
@@ -487,6 +488,7 @@ begin
  if (pChild=nil) then Exit;
  Case pChild^.Block.bType of
   btAdr,
+  btAdrBranch,
   btOther:;
   else
    Exit;
@@ -499,115 +501,145 @@ var
  pOpBlock:PsrOpBlock;
  pOpChild:PsrOpBlock;
  pOpLabel:array[0..2] of PspirvOp;
+
+ branch_up:Boolean;
+
+ procedure pop_cond;
+ begin
+  Assert(pOpLabel[1]<>nil);
+
+  Case pOpBlock^.Regs.FVolMark of
+   vmNone:TEmitVolatile(Self).build_volatile_cur(pOpBlock^.Regs.pSnap);
+   vmEnd :TEmitVolatile(Self).build_volatile_dis(pOpBlock^.Regs.pSnap);
+   else;
+  end;
+
+  if not is_term_op(line) then
+  begin
+   TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]);
+  end;
+
+  AddSpirvOp(line,pOpLabel[1]); //end
+ end;
+
+ procedure pop_loop;
+ begin
+  //add OpLoopMerge continue
+
+  Assert(pOpLabel[0]<>nil);
+  Assert(pOpLabel[1]<>nil);
+  Assert(pOpLabel[2]<>nil);
+
+  Case pOpBlock^.Regs.FVolMark of
+   vmNone:TEmitVolatile(Self).build_volatile_old(pOpBlock^.Regs.pSnap);
+   else;
+  end;
+
+  if pOpBlock^.Cond.FUseCont then //use continue
+  begin
+
+   if not is_term_op(line) then
+   begin
+    TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]); //break
+   end;
+
+   AddSpirvOp(line,pOpLabel[2]); //OpLoopMerge end
+
+     pOpChild:=AllocBlockOp;
+     pOpChild^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
+     PushBlockOp(line,pOpChild,nil);
+     TEmitOp(Self).emit_OpBranch(line,pOpLabel[0]); //continue
+   FMain^.PopBlock;
+
+   AddSpirvOp(line,pOpLabel[1]); //end
+
+  end else //dont used continue
+  begin
+
+   if not is_term_op(line) then
+   begin
+    AddSpirvOp(line,NewLabelOp); //devide
+   end;
+
+   AddSpirvOp(line,pOpLabel[2]); //OpLoopMerge end
+
+     pOpChild:=AllocBlockOp;
+     pOpChild^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
+     PushBlockOp(line,pOpChild,nil);
+     TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]); //break
+   FMain^.PopBlock;
+
+   AddSpirvOp(line,pOpLabel[1]); //end
+
+  end;
+
+ end;
+
+ procedure pop_else;
+ begin
+  if (pOpLabel[1]<>nil) then
+  begin
+   if not is_term_op(line) then
+   begin
+    TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]);
+   end;
+   AddSpirvOp(line,pOpLabel[1]);
+  end;
+ end;
+
 begin
  Result:=False;
  if (FMain=nil) then Exit;
- if (FMain^.pBlock=nil) then Exit;
 
- pOpBlock:=FMain^.pBlock;
- UpdateVolMark(pOpBlock);
+ branch_up:=False;
 
- pOpLabel[0]:=pOpBlock^.Labels.pBegOp;
- pOpLabel[1]:=pOpBlock^.Labels.pEndOp;
- pOpLabel[2]:=pOpBlock^.Labels.pMrgOp;
+ repeat
 
- Case pOpBlock^.Block.bType of
-  btCond:
-   begin
+  pOpBlock:=FMain^.pBlock;
+  if (pOpBlock=nil) then Exit;
 
-    Assert(pOpLabel[1]<>nil);
+  UpdateVolMark(pOpBlock);
 
-    Case pOpBlock^.Regs.FVolMark of
-     vmNone:TEmitVolatile(Self).build_volatile_cur(pOpBlock^.Regs.pSnap);
-     vmEnd :TEmitVolatile(Self).build_volatile_dis(pOpBlock^.Regs.pSnap);
-     else;
-    end;
+  pOpLabel[0]:=pOpBlock^.Labels.pBegOp;
+  pOpLabel[1]:=pOpBlock^.Labels.pEndOp;
+  pOpLabel[2]:=pOpBlock^.Labels.pMrgOp;
 
-    if not is_term_op(line) then
+  Case pOpBlock^.Block.bType of
+   btCond:
     begin
-     TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]);
+     pop_cond;
+     branch_up:=False;
     end;
-
-    AddSpirvOp(line,pOpLabel[1]); //end
-
-   end;
-  btLoop:
-   begin
-
-    //add OpLoopMerge continue
-
-    Assert(pOpLabel[0]<>nil);
-    Assert(pOpLabel[1]<>nil);
-    Assert(pOpLabel[2]<>nil);
-
-    Case pOpBlock^.Regs.FVolMark of
-     vmNone:TEmitVolatile(Self).build_volatile_old(pOpBlock^.Regs.pSnap);
-     else;
-    end;
-
-    if pOpBlock^.Cond.FUseCont then //use continue
+   btLoop:
     begin
-
-     if not is_term_op(line) then
-     begin
-      TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]); //break
-     end;
-
-     AddSpirvOp(line,pOpLabel[2]); //OpLoopMerge end
-
-       pOpChild:=AllocBlockOp;
-       pOpChild^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
-       PushBlockOp(line,pOpChild,nil);
-       TEmitOp(Self).emit_OpBranch(line,pOpLabel[0]); //continue
-     FMain^.PopBlock;
-
-     AddSpirvOp(line,pOpLabel[1]); //end
-
-    end else //dont used continue
-    begin
-
-     if not is_term_op(line) then
-     begin
-      AddSpirvOp(line,NewLabelOp); //devide
-     end;
-
-     AddSpirvOp(line,pOpLabel[2]); //OpLoopMerge end
-
-       pOpChild:=AllocBlockOp;
-       pOpChild^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
-       PushBlockOp(line,pOpChild,nil);
-       TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]); //break
-     FMain^.PopBlock;
-
-     AddSpirvOp(line,pOpLabel[1]); //end
-
+     pop_loop;
+     branch_up:=False;
     end;
+   else
+     pop_else;
+  end;
 
-   end;
-  else
-   if (pOpLabel[1]<>nil) then
-   begin
-    if not is_term_op(line) then
+  Case pOpBlock^.Block.bType of
+   btAdr:
     begin
-     TEmitOp(Self).emit_OpBranch(line,pOpLabel[1]);
+     FCursor:=pOpBlock^.FCursor;
     end;
-    AddSpirvOp(line,pOpLabel[1]);
-   end;
- end;
+   btAdrBranch:
+    begin
+     FCursor:=pOpBlock^.FCursor;
+     branch_up:=True;
+    end;
+   btOther:; //nop
+   else
+    begin
+     FCursor.PopBlock;
+    end;
+  end;
 
- Case pOpBlock^.Block.bType of
-  btAdr:
-   begin
-    FCursor:=pOpBlock^.FCursor;
-   end;
-  btOther:; //nop
-  else
-   begin
-    FCursor.PopBlock;
-   end;
- end;
+  Result:=FMain^.PopBlock;
 
- Result:=FMain^.PopBlock;
+ until (not branch_up) or (not Result);
+
 end;
 
 function TSprvEmit.NewSpirvOp(OpId:DWORD):PSpirvOp;
@@ -823,7 +855,7 @@ begin
  TEmitOp(Self).emit_OpStore(line,dst,pReg);
  pReg^.pLine:=line; //update line
 
- pReg^.pWriter.SetParam(ntReg,src);
+ pReg^.SetReg(src);
 end;
 
 procedure TSprvEmit.AddUserdata(dst:PsrRegSlot;offset_dw:Byte);
@@ -1461,7 +1493,7 @@ var
  node:PsrRegNode;
 begin
  node:=dst^.New(line,src^.dtype);
- node^.pWriter.SetParam(ntReg,src);
+ node^.SetReg(src);
 
  dst^.current^.mark_read;
  PostReg(dst^.current); //post processing
@@ -1595,7 +1627,7 @@ begin
      pReg^.pLine  :=node^.pLine;
      pReg^.pWriter:=node^.pWriter;
      pReg^.mark_read;
-     node^.pWriter.SetParam(ntReg,pReg);
+     node^.SetReg(pReg);
      rtype:=ctype;
     end;
    end;

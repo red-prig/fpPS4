@@ -178,6 +178,25 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpCreateRequest():Integer; SysV_ABI_CDecl;
+begin
+ Result:=11;
+end;
+
+function ps4_sceNpDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpCheckNpAvailability(reqId:Integer;onlineId:pSceNpOnlineId;pReserved:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ onlineId^:=Default(SceNpOnlineId);
+ onlineId^.data:='user';
+ Result:=0;
+end;
+
+//
+
 function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
 begin
  if (Cb4Toolkit.callback<>nil) then
@@ -281,6 +300,9 @@ begin
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
+ lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
+ lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
+ lib^.set_proc($DABB059A519695E4,@ps4_sceNpCheckNpAvailability);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
@@ -302,7 +324,7 @@ end;
 
 initialization
  ps4_app.RegistredPreLoad('libSceNpManager.prx',@Load_libSceNpManager);
- ps4_app.RegistredPreLoad('libSceNpCommon.prx',@Load_libSceNpCommon);
+ ps4_app.RegistredPreLoad('libSceNpCommon.prx' ,@Load_libSceNpCommon);
 
 end.
 

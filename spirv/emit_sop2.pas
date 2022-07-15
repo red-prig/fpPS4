@@ -232,15 +232,16 @@ end;
 procedure TEmit_SOP2._emit_S_CSELECT_B32; //sdst = SCC ? ssrc0 : ssrc1
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..1] of PsrRegNode;
+ scc:PsrRegNode;
 begin
  dst:=FRegsStory.get_sdst7(FSPI.SOP2.SDST);
 
  src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUnknow);
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUnknow);
- src[2]:=MakeRead(@FRegsStory.SCC,dtBool);
+ scc:=MakeRead(@FRegsStory.SCC,dtBool);
 
- emit_OpSelect(dst,src[0],src[1],src[2]);
+ emit_OpSelect(dst,src[0],src[1],scc);
 end;
 
 procedure TEmit_SOP2._emit_S_CSELECT_B64; //sdst[2] = SCC ? ssrc0[2] : ssrc1[2]
@@ -251,8 +252,8 @@ Var
 begin
  if not FRegsStory.get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
- if not fetch_ssrc9_pair(@src0,FSPI.SOP2.SSRC0,dtUInt32) then Assert(False);
- if not fetch_ssrc9_pair(@src1,FSPI.SOP2.SSRC1,dtUInt32) then Assert(False);
+ if not fetch_ssrc9_pair(@src0,FSPI.SOP2.SSRC0,dtUnknow) then Assert(False);
+ if not fetch_ssrc9_pair(@src1,FSPI.SOP2.SSRC1,dtUnknow) then Assert(False);
 
  scc:=MakeRead(@FRegsStory.SCC,dtBool);
  scc^.mark_read;

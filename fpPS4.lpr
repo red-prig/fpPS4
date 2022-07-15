@@ -544,6 +544,12 @@ begin
  //ps4_app.app_path:='G:\Games\JETPACKJOYRIDE\CUSA03633\';
  //ps4_app.app_file:='G:\Games\JETPACKJOYRIDE\CUSA03633\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Dont.Die.Mr.Robot\CUSA02782\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Dont.Die.Mr.Robot\CUSA02782\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Patapon\CUSA07184\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Patapon\CUSA07184\eboot.bin';
+
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
  //elf.SavePs4ElfToFile('libSceLibcInternal.prx');

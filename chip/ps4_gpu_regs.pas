@@ -895,14 +895,18 @@ begin
 
  Result.COMP_SWAP:=RENDER_TARGET[i].INFO.COMP_SWAP;
 
- Result.IMAGE_USAGE:=(TM_CLEAR*RENDER_TARGET[i].INFO.FAST_CLEAR);
-
- if (Result.blend.blendEnable<>0) then
+ if (RENDER_TARGET[i].INFO.FAST_CLEAR<>0) then
  begin
-  Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_READ;
+  Result.IMAGE_USAGE:=TM_CLEAR or TM_WRITE;
+ end else
+ begin
+  Result.IMAGE_USAGE:=TM_READ  or TM_WRITE;
  end;
 
- Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_WRITE;
+ //if (Result.blend.blendEnable<>0) then
+ //begin
+ // Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_READ;
+ //end;
 
   Case RENDER_TARGET[i].INFO.FORMAT of
    COLOR_8_8_8_8:
