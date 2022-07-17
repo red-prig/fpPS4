@@ -41,11 +41,11 @@ Begin
 
  WriteConsole(t.Handle,t.Bufptr,t.BufPos,@n,nil);
 
- if (n<>t.BufPos) then InOutRes:=101;
- t.BufPos:=0;
-
  spin_unlock(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
+
+ if (n<>t.BufPos) then InOutRes:=101;
+ t.BufPos:=0;
 end;
 
 Procedure CrtErrWrite(var t:TextRec);
@@ -57,23 +57,20 @@ var
 Begin
  if (t.BufPos=0) then exit;
  n:=0;
+ old:=t._private;
 
  _sig_lock(SL_NOINTRRUP);
  spin_lock(StdOutLock);
 
- old:=7;
- GetConsoleTextAttribute(t.Handle,old);
  SetConsoleTextAttribute(t.Handle,new);
-
  WriteConsole(t.Handle,t.Bufptr,t.BufPos,@n,nil);
-
  SetConsoleTextAttribute(t.Handle,old);
-
- if (n<>t.BufPos) then InOutRes:=101;
- t.BufPos:=0;
 
  spin_unlock(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
+
+ if (n<>t.BufPos) then InOutRes:=101;
+ t.BufPos:=0;
 end;
 
 Procedure CrtClose(Var F:TextRec);
@@ -90,11 +87,17 @@ Begin
 end;
 
 Procedure CrtOpenErr(Var F:TextRec);
+var
+ old:WORD;
 Begin
  TextRec(F).Handle:=GetStdHandle(STD_ERROR_HANDLE);
  TextRec(F).InOutFunc:=@CrtErrWrite;
  TextRec(F).FlushFunc:=@CrtErrWrite;
  TextRec(F).CloseFunc:=@CrtClose;
+
+ old:=7;
+ GetConsoleTextAttribute(TextRec(F).Handle,old);
+ TextRec(F)._private:=old;
 end;
 
 procedure AssignCrt(var F:Text;cb:codepointer);

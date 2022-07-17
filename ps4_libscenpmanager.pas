@@ -78,6 +78,15 @@ const
  SCE_NP_STATE_SIGNED_IN  =2;
 
 type
+ pSceNpCreateAsyncRequestParameter=^SceNpCreateAsyncRequestParameter;
+ SceNpCreateAsyncRequestParameter=packed record
+  size:qword;
+  cpuAffinityMask:qword; //SceKernelCpumask
+  threadPriority:Integer;
+  padding:Integer;
+ end;
+
+type
  SceUserServiceUserId=Integer;
 
  SceNpStateCallback=procedure(userId:SceUserServiceUserId;
@@ -183,6 +192,11 @@ begin
  Result:=11;
 end;
 
+function ps4_sceNpCreateAsyncRequest(pParam:pSceNpCreateAsyncRequestParameter):Integer; SysV_ABI_CDecl;
+begin
+ Result:=22;
+end;
+
 function ps4_sceNpDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -242,7 +256,7 @@ var
 begin
  if (mem_out=nil) then
  begin
-  Exit(-$7faa7ffb);
+  Exit(-$7faa7ffb); //NP-32268-1
  end;
 
  mem_out^.unknow:=0;
@@ -269,7 +283,7 @@ function ps4_sceNpAllocateKernelMemoryNoAlignment(
 begin
  if (mem_out=nil) then
  begin
-  Exit(-$7faa7ffb);
+  Exit(-$7faa7ffb); //NP-32268-1
  end;
 
  mem_out^.unknow:=0;
@@ -301,6 +315,7 @@ begin
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
+ lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
  lib^.set_proc($DABB059A519695E4,@ps4_sceNpCheckNpAvailability);
 

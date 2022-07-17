@@ -550,6 +550,12 @@ begin
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Patapon\CUSA07184\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Patapon\CUSA07184\eboot.bin';
 
+ //ps4_app.app_path:='G:\Games\Patapon\CUSA07184\';
+ //ps4_app.app_file:='G:\Games\Patapon\CUSA07184\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Bards.Gold\CUSA05012\';
+ //ps4_app.app_file:='G:\Games\Bards.Gold\CUSA05012\eboot.bin';
+
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
  //elf.SavePs4ElfToFile('libSceLibcInternal.prx');
