@@ -454,7 +454,6 @@ end;
 function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer; SysV_ABI_CDecl;
 Var
  H:TAudioOutHandle;
- i:Integer;
 begin
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
