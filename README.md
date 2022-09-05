@@ -1,6 +1,6 @@
-# fpPS4
+# fpPS4 [![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions)
 
-[![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions/workflows/main.yml)
+![Book logo](/icons/logo.png) 
 
   PS4 compatibility layer (emulator) on Free Pascal
  
