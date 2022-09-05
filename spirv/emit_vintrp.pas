@@ -6,22 +6,21 @@ interface
 
 uses
   sysutils,
+  spirv,
   ps4_pssl,
-  srTypes,
+  srType,
   srInput,
   srReg,
-  spirv,
-  SprvEmit,
-  emit_op;
+  emit_fetch;
 
 type
- TEmit_VINTRP=object(TEmitOp)
-  procedure _emit_VINTRP;
+ TEmit_VINTRP=class(TEmitFetch)
+  procedure emit_VINTRP;
  end;
 
 implementation
 
-procedure TEmit_VINTRP._emit_VINTRP;
+procedure TEmit_VINTRP.emit_VINTRP;
 var
  inp_M0:PsrInput;
 
@@ -35,23 +34,23 @@ var
 begin
  Assert(FExecutionModel=ExecutionModel.Fragment); //only pixel shader
 
- dst:=FRegsStory.get_vdst8(FSPI.VINTRP.VDST);
+ dst:=get_vdst8(FSPI.VINTRP.VDST);
 
- inp_M0:=GetInputRegNode(FRegsStory.M0.current);
+ inp_M0:=GetInputRegNode(get_m0^.current);
 
  Assert(inp_M0<>nil);
- Assert(inp_M0^.key.itype=itPsState);
+ Assert(inp_M0^.itype=itPsState);
 
  Case FSPI.VINTRP.OP of
   V_INTERP_P1_F32:
     begin
-     src:=FRegsStory.get_vsrc8(FSPI.VINTRP.VSRC);
+     src:=get_vsrc8(FSPI.VINTRP.VSRC);
 
      inp_SRC:=GetInputRegNode(src^.current);
 
      Assert(inp_SRC<>nil);
 
-     Case inp_SRC^.key.itype of
+     Case inp_SRC^.itype of
       itPerspSample,
       itPerspCenter,   //barycentrics with perspective interpolation
       itPerspCentroid,
@@ -62,24 +61,23 @@ begin
        Assert(false);
      end;
 
-     Assert(inp_SRC^.key.typeid=0);            //I
+     Assert(inp_SRC^.typeid=0);            //I
 
-     rsl:=AddFragLayout(inp_SRC^.key.itype,dtVec4f,FSPI.VINTRP.ATTR);
-     rsl^.mark_read;
+     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
 
      dst^.New(line,dtFloat32);
-     emit_OpCompExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
 
     end;
   V_INTERP_P2_F32:
     begin
-     src:=FRegsStory.get_vsrc8(FSPI.VINTRP.VSRC);
+     src:=get_vsrc8(FSPI.VINTRP.VSRC);
 
      inp_SRC:=GetInputRegNode(src^.current);
 
      Assert(inp_SRC<>nil);
 
-     Case inp_SRC^.key.itype of
+     Case inp_SRC^.itype of
       itPerspSample,
       itPerspCenter,   //barycentrics with perspective interpolation
       itPerspCentroid,
@@ -90,13 +88,12 @@ begin
        Assert(false);
      end;
 
-     Assert(inp_SRC^.key.typeid=1);            //J
+     Assert(inp_SRC^.typeid=1);            //J
 
-     rsl:=AddFragLayout(inp_SRC^.key.itype,dtVec4f,FSPI.VINTRP.ATTR);
-     rsl^.mark_read;
+     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
 
      dst^.New(line,dtFloat32);
-     emit_OpCompExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
 
     end;
 

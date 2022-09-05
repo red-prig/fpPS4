@@ -1,14 +1,14 @@
-unit srCFG;
+unit srCFGParser;
 
 {$mode ObjFPC}{$H+}
 
 interface
 
 uses
- sysutils,
  ps4_pssl,
- srNodes,
- srLabel;
+ ginodes,
+ srNode,
+ srCFGLabel;
 
 type
  PsrCFGBlock=^TsrCFGBlock;
@@ -42,7 +42,7 @@ type
  TsrCodeBlock=object
   pNext:PsrCodeBlock;
   //----
-  Alloc:TfnAlloc;
+  FEmit:TCustomEmit;
   Body:Pointer;
   Size:ptruint;
   FLabels:TsrLabels;
@@ -475,10 +475,9 @@ begin
  Result:=FLabels.FNTree.Find(@node);
  if (Result=nil) then
  begin
-  Result:=Alloc(SizeOf(TsrLabel));
+  Result:=FEmit.Alloc(SizeOf(TsrLabel));
   Result^.Adr:=Adr;
   FLabels.FNTree.Insert(Result);
-  //FLabels.FList.Push_tail(Result);
  end;
 end;
 
@@ -489,7 +488,7 @@ end;
 
 Function TsrCFGParser.NewBlock:PsrCFGBlock;
 begin
- Result:=pCode^.Alloc(SizeOf(TsrCFGBlock));
+ Result:=pCode^.FEmit.Alloc(SizeOf(TsrCFGBlock));
 end;
 
 Procedure TsrCFGParser.PushBlock(New:PsrCFGBlock);

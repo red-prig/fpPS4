@@ -5,49 +5,110 @@ unit srOp;
 interface
 
 uses
-  srNodes,
-  srLabel,
-  srCFG,
-  srParser,
-  srTypes,
-  srRefId,
-  srReg;
+ sysutils,
+ spirv,
+ ginodes,
+ srNode,
+ srCFGLabel,
+ srCFGParser,
+ srCFGCursor,
+ srLiteral,
+ srType,
+ srTypes,
+ srRefId,
+ srReg;
 
 type
+ ntOpCustom=class(TsrNodeVmt)
+  class function  Next  (node:PsrNode):Pointer;             override;
+  class function  Prev  (node:PsrNode):Pointer;             override;
+  class function  Parent(node:PsrNode):Pointer;             override;
+ end;
+
+ ntOp=class(ntOpCustom)
+  class Procedure zero_read(node:PsrNode);                  override;
+  class Procedure PrepType(node:PPrepTypeNode);             override;
+  class Function  GetPtype (node:PsrNode):PsrNode;          override;
+  class function  GetIndexCount(node:PsrNode):DWORD;        override;
+ end;
+
+ ntOpBlock=class(ntOpCustom)
+  class function  First        (node:PsrNode):Pointer;      override;
+  class function  Last         (node:PsrNode):Pointer;      override;
+  class function  GetIndexCount(node:PsrNode):DWORD;        override;
+ end;
+
+ ntFunc=class(TsrNodeVmt)
+  class function  First       (node:PsrNode):Pointer;       override;
+  class function  Last        (node:PsrNode):Pointer;       override;
+  class function  GetRef      (node:PsrNode):Pointer;       override;
+  class function  GetPrintName(node:PsrNode):RawByteString; override;
+ end;
+
+ PPspirvOp=^PspirvOp;
+ PspirvOp=^TspirvOp;
+
  POpParamNode=^TOpParamNode;
- TOpParamNode=packed record
-  pNext:POpParamNode;
-  //----
-  ntype:TsrNodeType;
-  Case Byte of
-   0:(pData:Pointer);
-   1:(Value:DWORD;name:record end);
+ TOpParamNode=packed object
+  private
+   pNext:POpParamNode;
+   pParent:PspirvOp;
+   pValue:PsrNode;
+   procedure SetValue(v:PsrNode);
+  public
+   property Next:POpParamNode read pNext;
+   property Parent:PspirvOp   read pParent;
+   property Value:PsrNode     read pValue write SetValue;
+   function AsReg:Pointer;
+   function TryGetValue(var V:PtrUint):Boolean;
  end;
 
  TOpParamQueue=specialize TNodeQueue<POpParamNode>;
 
  PsrOpBlock=^TsrOpBlock;
 
- PspirvOp=^TspirvOp;
- TspirvOp=object
-  pPrev,pNext:PspirvOp;
-  //----
-  pParent:PsrOpBlock;
-  pParam:TOpParamQueue;
-  Adr:TSrcAdr;
-  dst_type:PsrType;
-  dst:TOpParamSingle;
-  OpId:DWORD;
-  procedure InsertAfter(new:PspirvOp);
-  procedure InsertBefore(new:PspirvOp);
-  procedure Remove;
-  function  ParamNode(i:Byte):POpParamNode;
-  procedure AddParam(const s:TOpParamSingle);
-  procedure AddParam(ntype:TsrNodeType;Data:Pointer);
-  procedure AddParamAfter(prev:POpParamNode;ntype:TsrNodeType;Data:Pointer);
-  procedure AddLiteral(Value:PtrUint;const name:RawByteString='');
-  procedure AddString(const name:RawByteString);
-  Procedure SetDstReg(r:Pointer);
+ PsrOpCustom=^TsrOpCustom;
+ TsrOpCustom=object(TsrNode)
+  private
+   pPrev,pNext:PsrOpCustom;
+   pParent:PsrOpBlock;
+ end;
+
+ TsrOpList=specialize TNodeList<PsrOpCustom>;
+
+ TsoFlags=(soClear,soNotUsed);
+ TsoSetFlags=Set of TsoFlags;
+
+ TspirvOp=object(TsrOpCustom)
+  private
+   pParam:TOpParamQueue;
+   FType:PsrType;
+   Fdst:PsrNode;
+   flags:TsoSetFlags;
+   procedure SetType(t:PsrType);
+   Procedure SetDst(r:PsrNode);
+   Procedure UnClear;
+  public
+   Adr:TSrcAdr;
+   OpId:DWORD;
+   property  pType:PsrType read FType write SetType;
+   property  pDst:PsrNode  read Fdst  write SetDst;
+   procedure Init(_OpId:DWORD); inline;
+   procedure InsertAfter(new:PspirvOp);
+   procedure InsertBefore(new:PspirvOp);
+   procedure Remove;
+   Function  Alloc(Size:ptruint):Pointer;
+   function  ParamFirst:POpParamNode;
+   function  ParamLast:POpParamNode;
+   function  ParamNode(i:Byte):POpParamNode;
+   procedure AddParam(p:Pointer);
+   procedure AddParamAfter(_prev:POpParamNode;p:Pointer);
+   procedure AddLiteral(Value:PtrUint;const name:RawByteString='');
+   procedure AddString(const name:RawByteString);
+   function  is_cleared:Boolean;
+   function  Clear:Boolean;
+   procedure mark_not_used;
+   function  can_clear:Boolean;
  end;
 
  TsrVolMark=(vmNone,vmEnd,vmBreak,vmCont);
@@ -57,77 +118,91 @@ type
   bType:TsrBlockType;
  end;
 
- TsrOpList=specialize TNodeList<PspirvOp>;
-
- TsrOpBlockSimple=object(TsrOpList)
-  Alloc:TfnAlloc;
-  procedure Init(cb:TfnAlloc);
-  function  NewSpirvOp(OpId:DWORD):PSpirvOp;
-  function  AddSpirvOp(node:PSpirvOp):PSpirvOp;
-  function  AddSpirvOp(OpId:DWORD):PSpirvOp;
+ TsrOpBlockCustom=object(TsrOpCustom)
+  private
+   FEmit:TCustomEmit;
+   FList:TsrOpList;
+   FIndex:DWORD;
+   FLevel:DWORD;
+   procedure AddIndex(d:DWORD);
+   procedure SubIndex(d:DWORD);
+  public
+   property  Emit:TCustomEmit read FEmit;
+   property  Level:DWORD      read FLevel;
+   procedure Init(_Emit:TCustomEmit);
+   procedure InsertAfter(node,new:PsrOpCustom);
+   procedure InsertBefore(node,new:PsrOpCustom);
+   procedure Remove(node:PsrOpCustom);
+   procedure UpdateLevel;
+   Function  Alloc(Size:ptruint):Pointer;
+   function  NewSpirvOp(OpId:DWORD):PSpirvOp;
+   function  AddSpirvOp(node:PSpirvOp):PSpirvOp;
+   function  AddSpirvOp(OpId:DWORD):PSpirvOp;
+   function  line:Pointer;
  end;
 
- TsrOpBlock=object(TsrOpBlockSimple)
-  pParent:PsrOpBlock;
-  pUpLine:PSpirvOp; //from post
+ TsrOpBlock=packed object(TsrOpBlockCustom)
+  public
 
-  Block:TsrBlockInfo;
+   Block:TsrBlockInfo;
 
-  Labels:record
-   pBegOp:PspirvOp;
-   pEndOp:PspirvOp;
-   pMrgOp:PspirvOp;
-  end;
+   Labels:record
+    pBegOp:PspirvOp;
+    pEndOp:PspirvOp;
+    pMrgOp:PspirvOp;
+   end;
 
-  FCursor:TsrCursor;
+   FCursor:TsrCursor;
 
-  Regs:record
-   pSnap:PsrRegsSnapshot;
-   FVolMark:TsrVolMark;
-  end;
+   Regs:record
+    pSnap:PsrRegsSnapshot;
+    FVolMark:TsrVolMark;
+   end;
 
-  Cond:record
-   pReg:PsrRegNode;
-   FVal:Boolean;
-   FUseCont:Boolean;
-  end;
+   Cond:record
+    pReg:PsrRegNode;
+    FVal:Boolean;
+    FUseCont:Boolean;
+   end;
 
-  FLevel:DWORD;
+   dummy:TspirvOp;
 
-  dummy:TspirvOp;
-
-  function  line:PSpirvOp;
-  procedure SetCFGBlock(pLBlock:PsrCFGBlock);
-  procedure SetInfo(const b:TsrBlockInfo);
-  procedure SetInfo(bType:TsrBlockType;b_adr,e_adr:TSrcAdr);
-  procedure SetLabels(pBegOp,pEndOp,pMrgOp:PspirvOp);
-  procedure SetCond(pReg:PsrRegNode;FVal:Boolean);
-  function  IsEndOf(Adr:TSrcAdr):Boolean;
-  function  FindUpLoop:PsrOpBlock;
-  function  FindUpCond(pReg:PsrRegNode):PsrOpBlock;
+   procedure Init(_Emit:TCustomEmit);
+   procedure SetCFGBlock(pLBlock:PsrCFGBlock);
+   procedure SetInfo(const b:TsrBlockInfo);
+   procedure SetInfo(bType:TsrBlockType;b_adr,e_adr:TSrcAdr);
+   procedure SetLabels(pBegOp,pEndOp,pMrgOp:PspirvOp);
+   procedure SetCond(pReg:PsrRegNode;FVal:Boolean);
+   function  IsEndOf(Adr:TSrcAdr):Boolean;
+   function  FindUpLoop:PsrOpBlock;
+   function  FindUpCond(pReg:PsrRegNode):PsrOpBlock;
  end;
 
  PSpirvFunc=^TSpirvFunc;
- TSpirvFunc=object
-  pPrev,pNext,pLeft,pRight:PSpirvFunc;
-  //----
-  read_count:DWORD;
-  FTop:TsrOpBlock;
-  pBlock:PsrOpBlock;
-  ID:TsrRefId; //post id
-  name:RawByteString;
-  function  c(n1,n2:PSpirvFunc):Integer; static;
-  Procedure PushBlock(New:PsrOpBlock);
-  function  PopBlock:Boolean;
-  function  line:PSpirvOp;
-  Procedure Init(const fname:RawByteString;Alloc:TfnAlloc);
-  Procedure mark_read;
-  Procedure mark_unread;
-  function  NewSpirvOp(OpId:DWORD):PSpirvOp;
-  function  AddSpirvOp(node:PSpirvOp):PSpirvOp;
-  function  AddSpirvOp(OpId:DWORD):PSpirvOp;
+ TSpirvFunc=object(TsrNode)
+  private
+   pPrev,pNext,pLeft,pRight:PSpirvFunc;
+   //----
+   FName:RawByteString;
+   FTop:TsrOpBlock;
+   FBlock:PsrOpBlock;
+   ID:TsrRefId; //post id
+   function  c(n1,n2:PSpirvFunc):Integer; static;
+  public
+   property  Name:RawByteString read FName;
+   property  pBlock:PsrOpBlock  read FBlock;
+   Function  pTop:PsrOpBlock;
+   Procedure PushBlock(New:PsrOpBlock);
+   function  PopBlock:Boolean;
+   function  line:Pointer;
+   Procedure Init(const _name:RawByteString;Emit:TCustomEmit);
+   function  NewSpirvOp(OpId:DWORD):PSpirvOp;
+   function  AddSpirvOp(node:PSpirvOp):PSpirvOp;
+   function  AddSpirvOp(OpId:DWORD):PSpirvOp;
+   function  GetPrintName:RawByteString;
  end;
 
+ PsrFuncList=^TsrFuncList;
  TsrFuncList=object
   type
    TNodeList=specialize TNodeList<PSpirvFunc>;
@@ -137,60 +212,191 @@ type
    FNTree:TNodeFetch;
   function  Search(const name:RawByteString):PSpirvFunc;
   procedure Insert(new:PSpirvFunc);
+  function  First:PSpirvFunc; inline;
  end;
 
- PsrCacheOp=^TsrCacheOp;
- TsrCacheOp=object
-  pLeft,pRight:PsrCacheOp;
-  //----
-  pReg:PsrRegNode;
-  key:packed record
-   place:PsrOpBlock;
-   OpId:DWORD;
-   dtype:TsrDataType;
-   count:DWORD;
-  end;
-  Data:record end;
-  function  c(n1,n2:PsrCacheOp):Integer; static;
-  function  GetCompItem(i:Byte):PsrRegNode; inline;
-  Procedure SetCompItem(i:Byte;p:PsrRegNode); inline;
- end;
-
- TsrCacheOpList=object
-  type
-   TNodeFetch=specialize TNodeFetch<PsrCacheOp,TsrCacheOp>;
-  var
-   Alloc:TfnAlloc;
-   FNTree:TNodeFetch;
-  function Fetch(place:PsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):PsrCacheOp;
- end;
+Function is_write_op(OpId:DWORD):Boolean;
 
 implementation
 
-uses
- SprvEmit;
+class function ntOpCustom.Next(node:PsrNode):Pointer;
+begin
+ Result:=PsrOpCustom(node)^.pNext;
+end;
+
+class function ntOpCustom.Prev(node:PsrNode):Pointer;
+begin
+ Result:=PsrOpCustom(node)^.pPrev;
+end;
+
+class function ntOpCustom.Parent(node:PsrNode):Pointer;
+begin
+ Result:=PsrOpCustom(node)^.pParent;
+end;
+
+//
+
+class Procedure ntOp.zero_read(node:PsrNode);
+begin
+ PspirvOp(node)^.UnClear;
+end;
+
+class Function ntOp.GetPtype(node:PsrNode):PsrNode;
+begin
+ Result:=PspirvOp(node)^.FType;
+end;
+
+class function ntOp.GetIndexCount(node:PsrNode):DWORD;
+begin
+ Result:=1;
+end;
+
+class Procedure ntOp.PrepType(node:PPrepTypeNode);
+var
+ new:TsrDataType;
+ pNode:POpParamNode;
+ pTypeList:PsrTypeList;
+begin
+ With PspirvOp(node^.dnode)^ do
+ begin
+  new:=TsrDataType(node^.rtype);
+  if (new=dtUnknow) then Exit;
+
+  Case OpId of
+    Op.OpLoad:
+     begin
+      pNode:=ParamNode(0);
+      if (pNode<>nil) then
+      begin
+       //change?
+       pTypeList:=pParent^.FEmit.GetTypeList;
+       pType:=pTypeList^.Fetch(new);
+       //next
+       node^.dnode:=pNode^.pValue;
+       Exit;
+      end;
+     end;
+   else;
+  end;
+
+ end;
+
+ node^.dnode:=nil;
+end;
+
+//
+
+class function ntOpBlock.First(node:PsrNode):Pointer;
+begin
+ Result:=PsrOpBlock(node)^.FList.pHead;
+end;
+
+class function ntOpBlock.Last(node:PsrNode):Pointer;
+begin
+ Result:=PsrOpBlock(node)^.FList.pTail;
+end;
+
+class function ntOpBlock.GetIndexCount(node:PsrNode):DWORD;
+begin
+ Result:=PsrOpBlock(node)^.FIndex;
+end;
+
+//
+
+class function ntFunc.First(node:PsrNode):Pointer;
+begin
+ Result:=PSpirvFunc(node)^.FTop.FList.pHead;
+end;
+
+class function ntFunc.Last(node:PsrNode):Pointer;
+begin
+ Result:=PSpirvFunc(node)^.FTop.FList.pTail;
+end;
+
+class function ntFunc.GetPrintName(node:PsrNode):RawByteString;
+begin
+ Result:=PSpirvFunc(node)^.GetPrintName;
+end;
+
+class function ntFunc.GetRef(node:PsrNode):Pointer;
+begin
+ Result:=@PSpirvFunc(node)^.ID;
+end;
+
+//
+
+procedure TOpParamNode.SetValue(v:PsrNode);
+begin
+ if (pValue=v) then Exit;
+ Assert(pParent<>nil);
+ if not pParent^.is_cleared then
+ begin
+       v^.mark_read  (pParent);
+  pValue^.mark_unread(pParent);
+ end;
+ pValue:=v;
+end;
+
+function TOpParamNode.AsReg:Pointer;
+begin
+ Result:=nil;
+ if (@Self=nil) then Exit;
+ Result:=pValue^.AsType(ntReg);
+end;
+
+function TOpParamNode.TryGetValue(var V:PtrUint):Boolean;
+begin
+ Result:=False;
+ if (@Self=nil) then Exit;
+ if pValue^.IsType(ntLiteral) then
+ begin
+  V:=PsrLiteral(pValue)^.Value;
+  Result:=True;
+ end;
+end;
+
+
+//
+
+procedure TspirvOp.Init(_OpId:DWORD); inline;
+begin
+ fntype:=ntOp;
+ OpId:=_OpId;
+end;
 
 procedure TspirvOp.InsertAfter(new:PspirvOp);
 begin
  Assert(new<>nil);
  Assert(pParent<>nil);
  pParent^.InsertAfter(@Self,new);
- new^.pParent:=pParent;
 end;
 
 procedure TspirvOp.InsertBefore(new:PspirvOp);
 begin
  Assert(new<>nil);
  Assert(pParent<>nil);
- pParent^.InsertAfter(@Self,new);
- new^.pParent:=pParent;
+ pParent^.InsertBefore(@Self,new);
 end;
 
 procedure TspirvOp.Remove;
 begin
  Assert(pParent<>nil);
  pParent^.Remove(@Self);
- pParent:=nil;
+end;
+
+Function TspirvOp.Alloc(Size:ptruint):Pointer;
+begin
+ Result:=pParent^.Alloc(Size);
+end;
+
+function TspirvOp.ParamFirst:POpParamNode;
+begin
+ Result:=pParam.pHead;
+end;
+
+function TspirvOp.ParamLast:POpParamNode;
+begin
+ Result:=pParam.pTail;
 end;
 
 function TspirvOp.ParamNode(i:Byte):POpParamNode;
@@ -207,78 +413,164 @@ begin
  end;
 end;
 
-procedure TspirvOp.AddParam(const s:TOpParamSingle);
+procedure TspirvOp.AddParam(p:Pointer);
 var
  node:POpParamNode;
 begin
- node:=pParent^.Alloc(SizeOf(TOpParamNode));
- node^.ntype:=s.ntype;
- node^.pData:=s.pData;
+ node:=Alloc(SizeOf(TOpParamNode));
+ node^.pParent:=@Self;
+ node^.pValue :=p;
  pParam.Push_tail(node);
+
+ if not is_cleared then
+ begin
+  PsrNode(p)^.mark_read(@Self);
+ end;
 end;
 
-procedure TspirvOp.AddParam(ntype:TsrNodeType;Data:Pointer);
+procedure TspirvOp.AddParamAfter(_prev:POpParamNode;p:Pointer);
 var
  node:POpParamNode;
 begin
- node:=pParent^.Alloc(SizeOf(TOpParamNode));
- node^.ntype:=ntype;
- node^.pData:=Data;
- pParam.Push_tail(node);
-end;
+ node:=Alloc(SizeOf(TOpParamNode));
+ node^.pParent:=@Self;
+ node^.pValue:=p;
+ pParam.InsertAfter(_prev,node);
 
-procedure TspirvOp.AddParamAfter(prev:POpParamNode;ntype:TsrNodeType;Data:Pointer);
-var
- node:POpParamNode;
-begin
- node:=pParent^.Alloc(SizeOf(TOpParamNode));
- node^.ntype:=ntype;
- node^.pData:=Data;
- pParam.InsertAfter(prev,node);
+ if not is_cleared then
+ begin
+  PsrNode(p)^.mark_read(@Self);
+ end;
 end;
 
 procedure TspirvOp.AddLiteral(Value:PtrUint;const name:RawByteString='');
 var
- node:POpParamNode;
- l:ptruint;
+ pLiterals:PsrLiteralList;
+ Literal:PsrLiteral;
 begin
- l:={%H-}ptruint(@TOpParamNode(nil^).name)+Length(name)+1;
- node:=pParent^.Alloc(l);
- node^.ntype:=ntLiteral;
- node^.Value:=Value;
- Move(PChar(name)^,node^.name,Length(name)+1);
- pParam.Push_tail(node);
+ pLiterals:=pParent^.FEmit.GetLiteralList;
+ Literal:=pLiterals^.FetchLiteral(Value,Pchar(name));
+ AddParam(Literal);
 end;
 
 procedure TspirvOp.AddString(const name:RawByteString);
 var
- node:POpParamNode;
- l:ptruint;
+ pLiterals:PsrLiteralList;
+ Literal:PsrLiteralString;
 begin
- l:={%H-}ptruint(@TOpParamNode(nil^).name)+Length(name)+1;
- l:=Align(l,SizeOf(DWORD));
- node:=pParent^.Alloc(l);
- node^.ntype:=ntString;
- node^.Value:=0;
- Move(PChar(name)^,node^.name,Length(name)+1);
- pParam.Push_tail(node);
+ pLiterals:=pParent^.FEmit.GetLiteralList;
+ Literal:=pLiterals^.FetchString(Pchar(name));
+ AddParam(Literal);
 end;
 
-Procedure TspirvOp.SetDstReg(r:Pointer);
+procedure TspirvOp.SetType(t:PsrType);
 begin
- Assert(r<>nil);
- dst.SetParam(ntReg,r);
- PsrRegNode(r)^.pWriter.SetParam(ntOp,@Self);
- PsrRegNode(r)^.pLine:=@Self; //update line [bitcast order]
-end;
-
-function TsrOpBlock.line:PSpirvOp;
-begin
- Result:=nil;
- if (@Self<>nil) then
+ if (FType=t) then Exit;
+ if not is_cleared then
  begin
-  Result:=pTail;
+      t^.mark_read  (@Self);
+  FType^.mark_unread(@Self);
  end;
+ FType:=t;
+end;
+
+Procedure TspirvOp.SetDst(r:PsrNode);
+begin
+ if (Fdst=r) then Exit;
+
+ if is_write_op(OpId) then
+ begin
+  if not is_cleared then
+  begin
+      r^.mark_write  (@Self);
+   Fdst^.mark_unwrite(@Self);
+  end;
+  Fdst:=r;
+ end else
+ begin
+  Fdst^.ResetWriter(@Self);
+  Fdst:=r;
+  Fdst^.SetWriter(@Self,@Self);
+ end;
+
+end;
+
+function TspirvOp.is_cleared:Boolean;
+begin
+ Result:=(soClear in flags);
+end;
+
+function TspirvOp.Clear:Boolean;
+var
+ node:POpParamNode;
+begin
+ Result:=False;
+ if not can_clear then Exit;
+
+ Assert(read_count=0);
+
+ if is_write_op(OpId) then
+ begin
+  Fdst^.mark_unwrite(@Self);
+ end;
+
+ FType^.mark_unread(@Self);
+ node:=pParam.pHead;
+ While (node<>nil) do
+ begin
+  node^.pValue^.mark_unread(@Self);
+  node:=node^.pNext;
+ end;
+
+ flags:=flags-[soNotUsed];
+ flags:=flags+[soClear];
+ Result:=True;
+end;
+
+Procedure TspirvOp.UnClear;
+var
+ node:POpParamNode;
+begin
+ if not is_cleared then Exit;
+
+ if is_write_op(OpId) then
+ begin
+  Fdst^.mark_write(@Self);
+ end;
+
+ FType^.mark_read(@Self);
+ node:=pParam.pHead;
+ While (node<>nil) do
+ begin
+  node^.pValue^.mark_read(@Self);
+  node:=node^.pNext;
+ end;
+
+ flags:=flags-[soClear];
+end;
+
+procedure TspirvOp.mark_not_used;
+begin
+ flags:=flags+[soNotUsed];
+end;
+
+function TspirvOp.can_clear:Boolean;
+begin
+ if (soClear in flags)   then Exit(False);
+ if (soNotUsed in flags) then Exit(True);
+ if (OpId=Op.OpNop)      then Exit(True);
+ if (Fdst=nil)           then Exit(False);
+ Result:=not Fdst^.IsUsed;
+end;
+
+//
+
+procedure TsrOpBlock.Init(_Emit:TCustomEmit);
+begin
+ fntype:=ntOpBlock;
+ FEmit :=_Emit;
+ dummy.Init(Op.OpNop);
+ AddSpirvOp(@dummy);
 end;
 
 procedure TsrOpBlock.SetCFGBlock(pLBlock:PsrCFGBlock);
@@ -356,72 +648,66 @@ function TSpirvFunc.c(n1,n2:PSpirvFunc):Integer;
 var
  count1,count2:sizeint;
 begin
- Count1:=Length(n1^.name);
- Count2:=Length(n2^.name);
+ Count1:=Length(n1^.FName);
+ Count2:=Length(n2^.FName);
  Result:=Integer(Count1>Count2)-Integer(Count1<Count2);
  if (Result=0) then
  begin
-  Result:=CompareByte(PChar(n1^.name)^,PChar(n2^.name)^,Count1);
+  Result:=CompareByte(PChar(n1^.FName)^,PChar(n2^.FName)^,Count1);
  end;
+end;
+
+Function TSpirvFunc.pTop:PsrOpBlock;
+begin
+ Result:=@FTop;
 end;
 
 Procedure TSpirvFunc.PushBlock(New:PsrOpBlock);
 begin
  if (New=nil) then Exit;
- New^.pParent:=pBlock;
- New^.FLevel :=pBlock^.FLevel+1;
- pBlock:=New;
+ New^.pParent:=FBlock;
+ New^.FLevel :=FBlock^.FLevel+1;
+ FBlock:=New;
 end;
 
 function TSpirvFunc.PopBlock:Boolean;
 begin
  Result:=False;
- if (pBlock=nil) then Exit;
- if (pBlock^.pParent=nil) then Exit;
- pBlock:=pBlock^.pParent;
+ if (FBlock=nil) then Exit;
+ if (FBlock^.pParent=nil) then Exit;
+ FBlock:=FBlock^.pParent;
  Result:=True;
 end;
 
-function TSpirvFunc.line:PSpirvOp;
+function TSpirvFunc.line:Pointer;
 begin
  Result:=nil;
- if (pBlock<>nil) then
+ if (FBlock<>nil) then
  begin
-  Result:=pBlock^.pTail;
+  Result:=FBlock^.FList.pTail;
  end;
 end;
 
-Procedure TSpirvFunc.Init(const fname:RawByteString;Alloc:TfnAlloc);
+Procedure TSpirvFunc.Init(const _name:RawByteString;Emit:TCustomEmit);
 begin
- name:=fname;
- pBlock:=@FTop;
- pBlock^.Alloc:=Alloc;
- pBlock^.dummy.pParent:=pBlock;
- pBlock^.Push_head(@pBlock^.dummy);
-end;
-
-Procedure TSpirvFunc.mark_read;
-begin
- Inc(read_count);
-end;
-
-Procedure TSpirvFunc.mark_unread;
-begin
- if (read_count<>0) then Dec(read_count);
+ fntype:=ntFunc;
+ FName:=_name;
+ FBlock:=@FTop;
+ FBlock^.Init(Emit);
 end;
 
 function TSpirvFunc.NewSpirvOp(OpId:DWORD):PSpirvOp;
 begin
  Result:=FTop.Alloc(SizeOf(TSpirvOp));
- Result^.OpId:=OpId;
+ Result^.Init(OpId);
 end;
 
 function TSpirvFunc.AddSpirvOp(node:PSpirvOp):PSpirvOp;
 begin
  Result:=node;
  if (node=nil) then Exit;
- pBlock^.Push_tail(node);
- node^.pParent:=pBlock;
+ FBlock^.FList.Push_tail(node);
+ node^.pParent:=FBlock;
 end;
 
 function TSpirvFunc.AddSpirvOp(OpId:DWORD):PSpirvOp;
@@ -429,30 +715,120 @@ begin
  Result:=AddSpirvOp(NewSpirvOp(OpId));
 end;
 
+function TSpirvFunc.GetPrintName:RawByteString;
+begin
+ if (name<>'') then
+ begin
+  Result:=name;
+ end else
+ begin
+  Assert(ID.Alloc);
+  Result:='f'+IntToStr(ID.ID);
+ end;
+end;
+
 //
 
-procedure TsrOpBlockSimple.Init(cb:TfnAlloc);
+procedure TsrOpBlockCustom.Init(_Emit:TCustomEmit);
 begin
- Alloc:=cb;
+ fntype:=ntOpBlock;
+ FEmit :=_Emit;
 end;
 
-function TsrOpBlockSimple.NewSpirvOp(OpId:DWORD):PSpirvOp;
+procedure TsrOpBlockCustom.AddIndex(d:DWORD);
+var
+ node:PsrOpBlock;
+begin
+ node:=@Self;
+ While (node<>nil) do
+ begin
+  node^.FIndex:=node^.FIndex+d;
+  node:=node^.pParent;
+ end;
+end;
+
+procedure TsrOpBlockCustom.SubIndex(d:DWORD);
+var
+ node:PsrOpBlock;
+begin
+ node:=@Self;
+ While (node<>nil) do
+ begin
+  Assert(node^.FIndex>=d);
+  node^.FIndex:=node^.FIndex-d;
+  node:=node^.pParent;
+ end;
+end;
+
+procedure TsrOpBlockCustom.InsertAfter(node,new:PsrOpCustom);
+begin
+ FList.InsertAfter(node,new);
+ new^.pParent:=@Self;
+ AddIndex(new^.GetIndexCount);
+ mark_read(@Self);
+end;
+
+procedure TsrOpBlockCustom.InsertBefore(node,new:PsrOpCustom);
+begin
+ FList.InsertBefore(node,new);
+ new^.pParent:=@Self;
+ AddIndex(new^.GetIndexCount);
+ mark_read(@Self);
+end;
+
+procedure TsrOpBlockCustom.Remove(node:PsrOpCustom);
+begin
+ Assert(node^.pParent=@Self);
+ FList.Remove(node);
+ node^.pParent:=nil;
+ SubIndex(node^.GetIndexCount);
+ mark_unread(@Self);
+end;
+
+procedure TsrOpBlockCustom.UpdateLevel;
+begin
+ if (pParent=nil) then
+ begin
+  FLevel:=0;
+ end else
+ begin
+  FLevel:=pParent^.FLevel+1;
+ end;
+end;
+
+Function TsrOpBlockCustom.Alloc(Size:ptruint):Pointer;
+begin
+ Result:=FEmit.Alloc(Size);
+end;
+
+function TsrOpBlockCustom.NewSpirvOp(OpId:DWORD):PSpirvOp;
 begin
  Result:=Alloc(SizeOf(TSpirvOp));
- Result^.OpId:=OpId;
+ Result^.Init(OpId);
 end;
 
-function TsrOpBlockSimple.AddSpirvOp(node:PSpirvOp):PSpirvOp;
+function TsrOpBlockCustom.AddSpirvOp(node:PSpirvOp):PSpirvOp;
 begin
  Result:=node;
  if (node=nil) then Exit;
- Push_tail(node);
+ FList.Push_tail(node);
  node^.pParent:=@Self;
+ AddIndex(node^.GetIndexCount);
+ mark_read(@Self);
 end;
 
-function TsrOpBlockSimple.AddSpirvOp(OpId:DWORD):PSpirvOp;
+function TsrOpBlockCustom.AddSpirvOp(OpId:DWORD):PSpirvOp;
 begin
  Result:=AddSpirvOp(NewSpirvOp(OpId));
+end;
+
+function TsrOpBlockCustom.line:Pointer;
+begin
+ Result:=nil;
+ if (@Self<>nil) then
+ begin
+  Result:=FList.pTail;
+ end;
 end;
 
 //
@@ -462,7 +838,7 @@ var
  node:TSpirvFunc;
 begin
  node:=Default(TSpirvFunc);
- node.name:=name;
+ node.FName:=name;
  Result:=FNTree.Find(@node);
 end;
 
@@ -472,61 +848,24 @@ begin
  FList.Push_head(new);
 end;
 
+function TsrFuncList.First:PSpirvFunc; inline;
+begin
+ Result:=FList.pHead;
+end;
+
 //--
 
-function TsrCacheOp.c(n1,n2:PsrCacheOp):Integer;
-var
- count:DWORD;
+Function is_write_op(OpId:DWORD):Boolean;
 begin
- Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrCacheOp.key));
- if (Result=0) then
- begin
-  count:=n1^.key.count;
-  if (count<>0) then
-  begin
-   Result:=CompareByte(n1^.Data,n2^.Data,count*SizeOf(Pointer));
-  end;
- end;
-end;
-
-function TsrCacheOp.GetCompItem(i:Byte):PsrRegNode; inline;
-begin
- Result:=PPsrRegNode(@Data)[i];
-end;
-
-Procedure TsrCacheOp.SetCompItem(i:Byte;p:PsrRegNode); inline;
-begin
- PPsrRegNode(@Data)[i]:=p;
-end;
-
-function TsrCacheOpList.Fetch(place:PsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):PsrCacheOp;
-var
- i:Byte;
- size:ptruint;
- rec:record
-  node:TsrCacheOp;
-  align:array[0..3] of Pointer;
- end;
-begin
- Assert(place<>nil);
- Assert((count>0) and (count<=4));
- Result:=nil;
- rec.node:=Default(TsrCacheOp);
- rec.node.key.place:=place;
- rec.node.key.OpId :=OpId;
- rec.node.key.dtype:=rtype;
- rec.node.key.count:=count;
- For i:=0 to count-1 do
- begin
-  rec.node.SetCompItem(i,src[i]);
- end;
- Result:=FNTree.Find(@rec.node);
- if (Result=nil) then
- begin
-  size:=SizeOf(TsrCacheOp)+SizeOf(Pointer)*count;
-  Result:=Alloc(size);
-  Move(rec.node,Result^,Size);
-  FNTree.Insert(Result);
+ Case OpId of
+  Op.OpStore,
+  Op.OpImageWrite,
+  Op.OpAtomicStore,
+  Op.OpAtomicExchange,
+  Op.OpAtomicCompareExchange,
+  Op.OpAtomicCompareExchangeWeak:Result:=True;
+  else
+   Result:=False;
  end;
 end;
 

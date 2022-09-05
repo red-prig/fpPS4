@@ -14,6 +14,8 @@ uses
   ps4_gpu_regs,
   shader_dump,
 
+  ps4_program,
+
   vDevice,
 
   vShaderExt,
@@ -163,12 +165,39 @@ begin
  end;
 end;
 
+Procedure DumpSpv(FStage:TvShaderStage;M:TMemoryStream);
+var
+ hash:DWORD;
+ F:THandle;
+ fname:RawByteString;
+begin
+ hash:=FastHash(M.Memory,M.Size);
+
+ case FStage of
+  vShaderStagePs:fname:='_ps_';
+  vShaderStageVs:fname:='_vs_';
+  vShaderStageCs:fname:='_cs_';
+  else
+    Exit;
+ end;
+
+ fname:='shader_dump\'+get_dev_progname+fname+HexStr(hash,8)+'.spv';
+
+ if FileExists(fname) then Exit;
+
+ CreateDir('shader_dump');
+
+ F:=FileCreate(fname);
+ FileWrite(F,M.Memory^,M.Size);
+ FileClose(F);
+end;
+
 function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS):TMemoryStream;
 var
  SprvEmit:TSprvEmit;
 begin
  Result:=nil;
- SprvEmit:=Default(TSprvEmit);
+ SprvEmit:=TSprvEmit.Create;
 
  case FStage of
   vShaderStagePs  :
@@ -191,37 +220,37 @@ begin
     Exit;
  end;
 
- SprvEmit.FPrintAsm      :=False;
- SprvEmit.FUseVertexInput:=True;
- SprvEmit.FUseTexelBuffer:=False;
- SprvEmit.FUseOutput16   :=storageInputOutput16;
+ SprvEmit.Config.PrintAsm      :=False;
+ SprvEmit.Config.UseVertexInput:=True;
+ SprvEmit.Config.UseTexelBuffer:=False;
+ SprvEmit.Config.UseOutput16   :=storageInputOutput16;
 
- SprvEmit.FBuffers.cfg.maxUniformBufferRange          :=0; // $FFFF
- SprvEmit.FBuffers.cfg.PushConstantsOffset            :=0; // 0
- SprvEmit.FBuffers.cfg.maxPushConstantsSize           :=limits.maxPushConstantsSize; // 128
- SprvEmit.FBuffers.cfg.minStorageBufferOffsetAlignment:=limits.minStorageBufferOffsetAlignment; // $10
- SprvEmit.FBuffers.cfg.minUniformBufferOffsetAlignment:=limits.minUniformBufferOffsetAlignment; // $100
+ SprvEmit.Config.maxUniformBufferRange          :=0; // $FFFF
+ SprvEmit.Config.PushConstantsOffset            :=0; // 0
+ SprvEmit.Config.maxPushConstantsSize           :=limits.maxPushConstantsSize; // 128
+ SprvEmit.Config.minStorageBufferOffsetAlignment:=limits.minStorageBufferOffsetAlignment; // $10
+ SprvEmit.Config.minUniformBufferOffsetAlignment:=limits.minUniformBufferOffsetAlignment; // $100
 
- SprvEmit.FBuffers.cfg.maxPushConstantsSize:=16*4;
- SprvEmit.FBuffers.cfg.maxPushConstantsSize:=12;
- //SprvEmit.FUseVertexInput:=False;
+ SprvEmit.Config.maxPushConstantsSize:=16*4;
+ SprvEmit.Config.maxPushConstantsSize:=12;
+ //SprvEmit.Config.UseVertexInput:=False;
 
- if (SprvEmit.Parse(pData)>1) then
+ if (SprvEmit.ParseStage(pData)>1) then
  begin
   Writeln(StdErr,'Shader Parse Err');
-  SprvEmit.FAllocator.Free;
+  SprvEmit.Free;
   Exit;
  end;
 
- TSprvEmit_post(SprvEmit).Post;
- TSprvEmit_alloc(SprvEmit).Alloc;
-
- //TSprvEmit_print(SprvEmit).Print;
+ SprvEmit.PostStage;
+ SprvEmit.AllocStage;
 
  Result:=TMemoryStream.Create;
- TSprvEmit_bin(SprvEmit).SaveToStream(Result);
+ SprvEmit.SaveToStream(Result);
 
- SprvEmit.FAllocator.Free;
+ SprvEmit.Free;
+
+ //DumpSpv(FStage,Result);
 end;
 
 function _FetchShader(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;

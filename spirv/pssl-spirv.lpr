@@ -7,8 +7,8 @@ Uses
  si_ci_vi_merged_registers,
  ps4_pssl,
  ps4_shader,
- //spirv,
- srBuffer,
+
+ srConfig,
  SprvEmit,
 
  emit_post,
@@ -21,13 +21,9 @@ var
   FName:RawByteString;
   FSave:RawByteString;
   FPrintInfo:Boolean;
-  FPrintAsm:Boolean;
   FPrintSpv:Boolean;
-  FUseVertexInput:Boolean;
-  FUseTexelBuffer:Boolean;
-  FUseOutput16:Boolean;
-
-  BufferCfg:TsrBufferCfg;
+  //
+  cfg:TsrConfig;
  end;
 
 type
@@ -35,67 +31,12 @@ type
   REG,COUNT:WORD;
  end;
 
-{
-procedure load_spv(const fname:RawByteString);
-var
- M:TMemoryStream;
- Header:TSPIRVHeader;
-
- DW:TSPIRVInstruction;
-
-label
-  _exit;
-begin
- M:=TMemoryStream.Create;
- M.LoadFromFile(fname);
- M.Position:=0;
-
- Header:=Default(TSPIRVHeader);
- M.Read(Header,SizeOf(TSPIRVHeader));
- if (Header.MAGIC<>spirv.MagicNumber) then Goto _exit;
- Writeln(HexStr(Header.TOOL_ID,8));
-
- DW:=Default(TSPIRVInstruction);
- repeat
-  if M.Read(DW,SizeOf(TSPIRVInstruction))<>SizeOf(TSPIRVInstruction) then Break;
-  Writeln(spirv.Op.GetStr(DW.OP));
-  if (DW.COUNT>1) then
-  begin
-   M.Seek(SizeOf(DWORD)*(DW.COUNT-1),soCurrent);
-  end;
- until false;
-
- _exit:
- M.Free;
-end;
-}
-
-procedure post_SprvEmit(var SprvEmit:TSprvEmit);
-begin
- TSprvEmit_post(SprvEmit).Post;
-end;
-
-procedure alloc_SprvEmit(var SprvEmit:TSprvEmit);
-begin
- TSprvEmit_alloc(SprvEmit).Alloc;
-end;
-
-procedure print_SprvEmit(var SprvEmit:TSprvEmit);
-begin
- TSprvEmit_print(SprvEmit).Print;
-end;
-
-procedure SaveToStream_SprvEmit(Stream:TStream;var SprvEmit:TSprvEmit);
-begin
- TSprvEmit_bin(SprvEmit).SaveToStream(Stream);
-end;
-
-procedure SaveToFile_SprvEmit(const FName:RawByteString;var SprvEmit:TSprvEmit);
+procedure SaveToFile_Spv(const FName:RawByteString;var SprvEmit:TSprvEmit);
 var
  F:TFileStream;
 begin
  F:=TFileStream.Create(FName,fmCreate);
- SaveToStream_SprvEmit(F,SprvEmit);
+ SprvEmit.SaveToStream(F);
  F.Free;
 end;
 
@@ -325,9 +266,6 @@ var
 
  SprvEmit:TSprvEmit;
 
- //LParser:TsrLParser;
- //FCode:TsrCodeBlock;
-
  i:Byte;
 
 begin
@@ -410,6 +348,8 @@ begin
 
  Assert(info<>nil);
 
+ SprvEmit:=TSprvEmit.Create;
+
  case info^.m_type of
   kShaderTypePs  :
   begin
@@ -444,39 +384,34 @@ begin
    end;
  end;
 
- SprvEmit.FPrintAsm      :=cfg.FPrintAsm;
- SprvEmit.FUseVertexInput:=cfg.FUseVertexInput;
- SprvEmit.FUseTexelBuffer:=cfg.FUseTexelBuffer;
- SprvEmit.FUseOutput16   :=cfg.FUseOutput16;
+ SprvEmit.Config:=cfg.cfg;
 
- SprvEmit.FBuffers.cfg:=cfg.BufferCfg;
-
- if (SprvEmit.Parse(base)>1) then
+ if (SprvEmit.ParseStage(base)>1) then
  begin
   Writeln(StdErr,'Shader Parse Err');
  end;
 
- if cfg.FPrintAsm or cfg.FPrintSpv or (cfg.FSave<>'') then
+ if cfg.cfg.PrintAsm or cfg.FPrintSpv or (cfg.FSave<>'') then
  begin
-  post_SprvEmit(SprvEmit);
-  alloc_SprvEmit(SprvEmit);
+  SprvEmit.PostStage;
+  SprvEmit.AllocStage;
  end;
 
  if cfg.FPrintSpv then
  begin
-  print_SprvEmit(SprvEmit);
+  SprvEmit.Print;
   Writeln;
  end;
 
  if (cfg.FSave<>'') then
  begin
-  SaveToFile_SprvEmit(cfg.FSave,SprvEmit);
+  SaveToFile_Spv(cfg.FSave,SprvEmit);
  end;
 
  if cfg.FPrintInfo then
-  Writeln('used_size=',SprvEmit.FAllocator.used_size);
+  Writeln('used_size=',SprvEmit.Allocator.used_size);
 
- SprvEmit.FAllocator.Free;
+ SprvEmit.Free;
 end;
 
 function ParseCmd:Boolean;
@@ -492,25 +427,28 @@ begin
   Exit(False);
  end;
 
- cfg.FUseVertexInput:=True;
- cfg.BufferCfg.Init;
+ cfg.FName:='';
+ cfg.FSave:='';
+ cfg.FPrintInfo:=False;
+ cfg.FPrintSpv :=False;
+ cfg.cfg.Init;
 
  n:=-1;
  For i:=1 to ParamCount do
  begin
   case LowerCase(ParamStr(i)) of
        '-i':cfg.FPrintInfo:=True;
-       '-a':cfg.FPrintAsm:=True;
+       '-a':cfg.cfg.PrintAsm:=True;
        '-p':cfg.FPrintSpv:=True;
 
-     '-eva':cfg.FUseVertexInput:=True;
-     '-dva':cfg.FUseVertexInput:=False;
+     '-eva':cfg.cfg.UseVertexInput:=True;
+     '-dva':cfg.cfg.UseVertexInput:=False;
 
-     '-etb':cfg.FUseTexelBuffer:=True;
-     '-dtb':cfg.FUseTexelBuffer:=False;
+     '-etb':cfg.cfg.UseTexelBuffer:=True;
+     '-dtb':cfg.cfg.UseTexelBuffer:=False;
 
-     '-eoh':cfg.FUseOutput16:=True;
-     '-doh':cfg.FUseOutput16:=False;
+     '-eoh':cfg.cfg.UseOutput16:=True;
+     '-doh':cfg.cfg.UseOutput16:=False;
 
        '-b':n:=0;
 
@@ -525,11 +463,11 @@ begin
       Case n of
        -1:cfg.FName:=ParamStr(i);
         0:cfg.FSave:=ParamStr(i);
-        1:cfg.BufferCfg.maxUniformBufferRange          :=StrToInt64Def(ParamStr(i),0);
-        2:cfg.BufferCfg.PushConstantsOffset            :=StrToInt64Def(ParamStr(i),0);
-        3:cfg.BufferCfg.maxPushConstantsSize           :=StrToInt64Def(ParamStr(i),0);
-        4:cfg.BufferCfg.minStorageBufferOffsetAlignment:=StrToInt64Def(ParamStr(i),0);
-        5:cfg.BufferCfg.minUniformBufferOffsetAlignment:=StrToInt64Def(ParamStr(i),0);
+        1:cfg.cfg.maxUniformBufferRange          :=StrToInt64Def(ParamStr(i),0);
+        2:cfg.cfg.PushConstantsOffset            :=StrToInt64Def(ParamStr(i),0);
+        3:cfg.cfg.maxPushConstantsSize           :=StrToInt64Def(ParamStr(i),0);
+        4:cfg.cfg.minStorageBufferOffsetAlignment:=StrToInt64Def(ParamStr(i),0);
+        5:cfg.cfg.minUniformBufferOffsetAlignment:=StrToInt64Def(ParamStr(i),0);
       end;
       n:=-1;
      end;
@@ -552,81 +490,47 @@ begin
 
  if (cfg.FName='') then
  begin
-  //loadspv('vert.spv');
-
-  //branch adr
-  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_ps_595F5E5D.dump');
-  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_vs_B9E80F51.dump');
-
-  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_vs_72685B15.dump');
-
-  //branch
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_cs_3685EFC7.dump');
-
-  //branch
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_8D309F69.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_30AC6582.dump');
-
-  //V_MED3_F32
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_46F7D0CB.dump');
-
-  //branch
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_897BFEFF.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_A9A43387.dump');
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_BD5B57D5.dump');
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_C342C7CD.dump');
-
-  //V_MED3_F32
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_E125C5F7.dump');
-
-  //branch cycle
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_E820FFDE.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_1CE5C47E.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_22E9CA76.dump');
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_48FA7A4C.dump');
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_243D8C75.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_B4E470AF.dump');
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_vs_E1C90BE3.dump');
-
-  //branch
-  ////load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_cs_FEA061C5.dump');
+  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_vs_78EF9008.dump');
+  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_ps_FBCA196D.dump');
 
   //load_dump('shader_dump\simplet-simple-fs_debug\simplet-simple-fs_debug_vs_398C5BF6.dump');
   //load_dump('shader_dump\simplet-simple-fs_debug\simplet-simple-fs_debug_ps_F327ABD1.dump');
 
-  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_vs_78EF9008.dump');
-  load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_ps_FBCA196D.dump');
+  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_cs_FEA061C5.dump');
+  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_ps_B9680888.dump');
+  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_ps_BA60EAD7.dump');
+  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_vs_0C420DE0.dump');
 
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_ps_C342C7CD.dump');
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_vs_D216FEB8.dump');
-
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_cs_3685EFC7.dump');
+  load_dump('shader_dump\basic-sample\basic-sample_debug_ps_E125C5F7.dump');
 
   //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_ps_A9F64695.dump');
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_vs_B4E470AF.dump');
-
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_vs_1CE5C47E.dump');
-
-  //load_dump('shader_dump\basic-compute_debug\basic-compute_debug_ps_4BD7E17E.dump');
-  //load_dump('shader_dump\basic-compute_debug\basic-compute_debug_vs_0C30DA0F.dump');
-
-  //load_dump('shader_dump\SonicMania\SonicMania_ps_0C48E8B2.dump');
-
-
-  //load_dump('shader_dump\SonicMania\SonicMania_ps_B4281DBF.dump');
+  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_cs_3685EFC7.dump');
 
   //load_dump('shader_dump\SonicMania\SonicMania_ps_11DF2A32.dump');
+  //load_dump('shader_dump\SonicMania\SonicMania_ps_3CC22A00.dump');
 
-  //load_dump('shader_dump\SonicMania\SonicMania_ps_3CC22A00.dump'); //cfg
+  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_ps_595F5E5D.dump');
+  load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_ps_B42E92C3.dump');
+  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_vs_B9E80F51.dump');
+
+  //load_dump('shader_dump\basic-sample\basic-sample_debug_cs_4303E70D.dump');
+  //load_dump('shader_dump\basic-sample\basic-sample_debug_cs_C4EA2D91.dump');
+
+  //load_dump('shader_dump\Cladun_Returns\ClassicDungeon3ORBIS_ps_B2ED8D0C.dump');
+  //load_dump('shader_dump\Cladun_Returns\ClassicDungeon3ORBIS_ps_B39D802A.dump');
+
+  //load_dump('shader_dump\depth-mode-sample\depth-mode-sample_debug_ps_E125C5F7.dump');
+
+  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_E820FFDE.dump');
+
+  //load_dump('shader_dump\JETPACKJOYRIDE\mgjp_cs_2D246406.dump');
  end;
 
+
  if (cfg.FName<>'') then
+ begin
   load_dump(cfg.FName);
+ end;
 
  load_pssl(GPU_REGS.CS.Addr);
 
@@ -634,7 +538,9 @@ begin
  load_pssl(GPU_REGS.PS.Addr);
 
  if cfg.FPrintInfo then
+ begin
   readln;
+ end;
 end.
 
 {

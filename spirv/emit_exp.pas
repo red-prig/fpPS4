@@ -6,27 +6,26 @@ interface
 
 uses
   sysutils,
-  spirv,
   ps4_pssl,
-  srNodes,
-  srLabel,
-  srTypes,
+  srCFGLabel,
+  srConfig,
+  srFlow,
+  srType,
   srReg,
   srVariable,
   srOutput,
   srOp,
   srOpUtils,
-  SprvEmit,
-  emit_op;
+  emit_fetch;
 
 type
- TEmit_EXP=object(TEmitOp)
-  procedure _emit_EXP;
+ TEmit_EXP=class(TEmitFetch)
+  procedure emit_EXP;
  end;
 
 implementation
 
-procedure TEmit_EXP._emit_EXP;
+procedure TEmit_EXP.emit_EXP;
 Var
  exc:PsrRegNode;
  node:PSpirvOp;
@@ -35,7 +34,7 @@ Var
  dout:PsrVariable;
  dst:PsrRegNode;
  src:array[0..3] of PsrRegNode;
- rsl:array[0..3] of PsrRegNode;
+ //rsl:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
  f,i,p:Byte;
 
@@ -46,12 +45,12 @@ begin
  if (FSPI.EXP.VM<>0) and (FSPI.EXP.DONE<>0) then
  begin
   pOpBlock:=AllocBlockOp;
-  pOpBlock^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
+  pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
   PushBlockOp(line,pOpBlock,nil);
 
-  exc:=MakeRead(@FRegsStory.EXEC[0],dtBool);
+  exc:=MakeRead(get_exec0,dtBool);
   node:=AddSpirvOp(OpMakeExp);
-  node^.AddParam(ntReg,exc); //<-fetch read
+  node^.AddParam(exc); //<-fetch read
  end;
 
  //before
@@ -60,13 +59,13 @@ begin
  begin
   if (pOpBlock<>nil) then //is pushed
   begin
-   FMain^.PopBlock;
+   Main^.PopBlock;
   end;
   Exit;
  end;
 
  pOpBlock:=AllocBlockOp; //down
- pOpBlock^.SetInfo(btOther,FCursor.Adr,FCursor.Adr);
+ pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
  PushBlockOp(line,pOpBlock,nil);
 
  //output
@@ -94,7 +93,7 @@ begin
      Assert(false);
    end;
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),dtFloat32); //output in FSPI.EXP.TGT
-   emit_OpStore(line,dout,src[0]);
+   OpStore(line,dout,src[0]);
   end else
   begin
 
@@ -128,11 +127,10 @@ begin
     Inc(i);
    end;
 
-   dst:=emit_OpMakeVec(line,rtype,p,@src);
-   dst^.mark_read;
+   dst:=OpMakeVec(line,rtype,@src);
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   emit_OpStore(line,dout,dst);
+   OpStore(line,dout,dst);
   end;
 
  end else
@@ -153,43 +151,31 @@ begin
     Assert(false);
   end;
 
-  if FUseOutput16 then
+  if Config.UseOutput16 then
   begin
-   dst:=emit_OpMakeVec(line,dtVec4h,4,@src);
-   dst^.mark_read;
+   dst:=OpMakeVec(line,dtVec4h,@src);
 
    rtype:=dtVec4h;
   end else
   begin
-   rsl[0]:=NewReg(dtFloat32);
-   rsl[1]:=NewReg(dtFloat32);
-   rsl[2]:=NewReg(dtFloat32);
-   rsl[3]:=NewReg(dtFloat32);
-
-   _emit_Op1(line,Op.OpFConvert,rsl[0],src[0]);
-   _emit_Op1(line,Op.OpFConvert,rsl[1],src[1]);
-   _emit_Op1(line,Op.OpFConvert,rsl[2],src[2]);
-   _emit_Op1(line,Op.OpFConvert,rsl[3],src[3]);
-
-   rsl[0]^.mark_read;
-   rsl[1]^.mark_read;
-   rsl[2]^.mark_read;
-   rsl[3]^.mark_read;
-
-   dst:=emit_OpMakeVec(line,dtVec4f,4,@rsl);
-   dst^.mark_read;
+   src[0]:=OpFToF(src[0],dtFloat32);
+   src[1]:=OpFToF(src[1],dtFloat32);
+   src[2]:=OpFToF(src[2],dtFloat32);
+   src[3]:=OpFToF(src[3],dtFloat32);
 
    rtype:=dtVec4f;
   end;
 
+  dst:=OpMakeVec(line,rtype,@src);
+
   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-  emit_OpStore(line,dout,dst);
+  OpStore(line,dout,dst);
  end;
 
  if (pOpBlock<>nil) then //is pushed
  begin
-  FMain^.PopBlock;
-  FMain^.PopBlock;
+  Main^.PopBlock;
+  Main^.PopBlock;
  end;
 end;
 

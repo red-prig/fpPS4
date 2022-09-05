@@ -21,6 +21,7 @@ uses
 
 type
  TvResourceType=(
+  vtRoot,
   vtBufPtr2,
   vtFunPtr2,
   vtVSharp4,
@@ -279,6 +280,7 @@ end;
 procedure TvShaderExt.OnDataLayout(P:PChar);
 begin
  Case P[1] of
+  'R':AddDataLayout(vtRoot   ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'B':AddDataLayout(vtBufPtr2,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'F':AddDataLayout(vtFunPtr2,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'V':AddDataLayout(vtVSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
@@ -473,12 +475,15 @@ begin
 
  pSharp:=pData;
 
- if (Length(addr)>1) then
- For i:=High(addr)-1 downto 0 do
+ For i:=High(addr) downto 0 do
  begin
   pData:=pData+addr[i].offset;
 
   Case addr[i].rtype of
+   vtRoot:
+     begin
+      pSharp:=pData;
+     end;
    vtBufPtr2:
      begin
       pData:=Pointer(PPtrUint(pData)^ and (not 3));
@@ -895,6 +900,7 @@ begin
   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     Case b.addr[0].rtype of
+     vtRoot,
      vtBufPtr2:
        begin
         a:=AlignShift(P,limits.minStorageBufferOffsetAlignment);
@@ -905,7 +911,8 @@ begin
         a:=AlignShift(Pointer(PVSharpResource4(P)^.base),limits.minStorageBufferOffsetAlignment);
         if (a<>b.offset) then FResult:=False;
        end;
-     else;
+     else
+      Assert(false);
     end;
 
   else;

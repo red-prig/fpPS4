@@ -5,9 +5,8 @@ unit srVBufInfo;
 interface
 
 uses
-  sysutils,
   ps4_pssl,
-  srTypes,
+  srType,
   srLayout,
   spirv;
 

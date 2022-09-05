@@ -6,31 +6,48 @@ interface
 
 uses
   spirv,
-  srNodes,
+  srNode,
   srOp;
 
 type
+ PsrHeaderList=^TsrHeaderList;
+ TsrHeaderList=object(TsrOpBlockCustom)
+  FGLSL_std_450:PSpirvOp;
+  function emit_glsl_ext:PSpirvOp;
+ end;
+
  PsrDecorateList=^TsrDecorateList;
- TsrDecorateList=object(TsrOpBlockSimple)
-  FDescriptorSet:DWORD;
-  procedure emit_decorate(ntype:TsrNodeType;Data:Pointer;dec_id,param:DWORD);
-  procedure emit_member_decorate(ntype:TsrNodeType;Data:Pointer;index,offset:DWORD);
+ TsrDecorateList=object(TsrOpBlockCustom)
+  procedure OpDecorate(Data:PsrNode;dec_id,param:DWORD);
+  procedure OpMemberDecorate(Data:PsrNode;index,offset:DWORD);
  end;
 
  PsrDebugInfoList=^TsrDebugInfoList;
- TsrDebugInfoList=object(TsrOpBlockSimple)
-  procedure emit_source_extension(const n:RawByteString);
-  procedure emit_name(ntype:TsrNodeType;Data:Pointer;const n:RawByteString);
+ TsrDebugInfoList=object(TsrOpBlockCustom)
+  procedure OpSourceExtension(const n:RawByteString);
+  procedure OpName(Data:PsrNode;const n:RawByteString);
+  function  OpString(const n:RawByteString):PsrNode;
  end;
 
 implementation
 
-procedure TsrDecorateList.emit_decorate(ntype:TsrNodeType;Data:Pointer;dec_id,param:DWORD);
+function TsrHeaderList.emit_glsl_ext:PSpirvOp;
+begin
+ if (FGLSL_std_450=nil) then
+ begin
+  FGLSL_std_450:=AddSpirvOp(Op.OpExtInstImport);
+  FGLSL_std_450^.pDst:=Emit.NewRefNode;
+  FGLSL_std_450^.AddString('GLSL.std.450');
+ end;
+ Result:=FGLSL_std_450;
+end;
+
+procedure TsrDecorateList.OpDecorate(Data:PsrNode;dec_id,param:DWORD);
 var
  node:PSpirvOp;
 begin
  node:=AddSpirvOp(Op.OpDecorate);
- node^.AddParam(ntype,Data);
+ node^.AddParam(Data);
  node^.AddLiteral(dec_id,Decoration.GetStr(dec_id));
  Case dec_id of
   Decoration.BuiltIn:
@@ -48,18 +65,18 @@ begin
  end;
 end;
 
-procedure TsrDecorateList.emit_member_decorate(ntype:TsrNodeType;Data:Pointer;index,offset:DWORD);
+procedure TsrDecorateList.OpMemberDecorate(Data:PsrNode;index,offset:DWORD);
 var
  node:PSpirvOp;
 begin
  node:=AddSpirvOp(Op.OpMemberDecorate);
- node^.AddParam(ntype,Data);
+ node^.AddParam(Data);
  node^.AddLiteral(index);
  node^.AddLiteral(Decoration.Offset,Decoration.GetStr(Decoration.Offset));
  node^.AddLiteral(offset);
 end;
 
-procedure TsrDebugInfoList.emit_source_extension(const n:RawByteString);
+procedure TsrDebugInfoList.OpSourceExtension(const n:RawByteString);
 var
  node:PSpirvOp;
 begin
@@ -67,13 +84,23 @@ begin
  node^.AddString(n);
 end;
 
-procedure TsrDebugInfoList.emit_name(ntype:TsrNodeType;Data:Pointer;const n:RawByteString);
+procedure TsrDebugInfoList.OpName(Data:PsrNode;const n:RawByteString);
 var
  node:PSpirvOp;
 begin
  node:=AddSpirvOp(Op.OpName);
- node^.AddParam(ntype,Data);
+ node^.AddParam(Data);
  node^.AddString(n);
+end;
+
+function TsrDebugInfoList.OpString(const n:RawByteString):PsrNode;
+var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(Op.OpString);
+ node^.pDst:=Emit.NewRefNode;
+ node^.AddString(n);
+ Result:=node^.pDst;
 end;
 
 end.

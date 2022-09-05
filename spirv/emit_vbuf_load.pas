@@ -6,14 +6,11 @@ interface
 
 uses
   sysutils,
-  spirv,
   ps4_pssl,
-  srTypes,
-  srConst,
+  srType,
   srReg,
   srLayout,
-  SprvEmit,
-  emit_op,
+  emit_fetch,
   srVBufInfo,
   emit_vbuf_chain;
 
@@ -29,21 +26,15 @@ type
   elm:array[0..3] of PsrRegNode;
  end;
 
- TEmit_vbuf_load=object(TEmitOp)
+ TEmit_vbuf_load=class(TEmitFetch)
   procedure buf_load(info:TBuf_info);
-  function  OpMulF(pReg:PsrRegNode;s:Single):PsrRegNode;
-  function  OpAddF(pReg:PsrRegNode;s:Single):PsrRegNode;
-  function  OpUToF(pReg:PsrRegNode):PsrRegNode;
-  function  OpSToF(pReg:PsrRegNode):PsrRegNode;
-  function  OpShlI(pReg:PsrRegNode;i:DWORD):PsrRegNode;
-  function  OpAddI(pReg:PsrRegNode;i:DWORD):PsrRegNode;
-  function  _convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
-  procedure _make_load_cv_id(var lc:Tload_cache;i:Byte);
-  procedure _make_load_ce_id(var lc:Tload_cache;i:Byte);
-  procedure _make_load_uv_id(var lc:Tload_cache;i:Byte);
-  procedure _make_load_ue_id(var lc:Tload_cache;i:Byte);
-  procedure _make_load_zero(var lc:Tload_cache);
-  procedure _make_load_one(var lc:Tload_cache);
+  function  convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
+  procedure make_load_cv_id(var lc:Tload_cache;i:Byte);
+  procedure make_load_ce_id(var lc:Tload_cache;i:Byte);
+  procedure make_load_uv_id(var lc:Tload_cache;i:Byte);
+  procedure make_load_ue_id(var lc:Tload_cache;i:Byte);
+  procedure make_load_zero(var lc:Tload_cache);
+  procedure make_load_one(var lc:Tload_cache);
   procedure buf_load_cv(info:TBuf_info;v:TvarChain);
  end;
 
@@ -53,7 +44,7 @@ procedure TEmit_vbuf_load.buf_load(info:TBuf_info);
 var
  v:TvarChain;
 begin
- v:=TEmit_vbuf_chain(Self).get_chain(info);
+ v:=TEmit_vbuf_chain(TObject(Self)).get_chain(info);
 
  if (v.vType=vcUniformVector) then
  begin
@@ -64,131 +55,77 @@ begin
  buf_load_cv(info,v);
 end;
 
-function TEmit_vbuf_load.OpMulF(pReg:PsrRegNode;s:Single):PsrRegNode;
-begin
- if (pReg=nil) or (s=1) then Exit(pReg);
- Result:=NewReg(pReg^.dtype);
- pReg^.mark_read;
- _emit_Op2(line,Op.OpFMul,Result,pReg,FetchReg(FConsts.Fetchf(dtFloat32,s)));
-end;
-
-function TEmit_vbuf_load.OpAddF(pReg:PsrRegNode;s:Single):PsrRegNode;
-begin
- if (pReg=nil) or (s=0) then Exit(pReg);
- Result:=NewReg(pReg^.dtype);
- pReg^.mark_read;
- _emit_Op2(line,Op.OpFAdd,Result,pReg,FetchReg(FConsts.Fetchf(dtFloat32,s)));
-end;
-
-function TEmit_vbuf_load.OpUToF(pReg:PsrRegNode):PsrRegNode;
-begin
- if (pReg=nil) then Exit(pReg);
- Result:=NewReg(dtFloat32);
- pReg^.mark_read;
- _emit_Op1(line,Op.OpConvertUToF,Result,pReg);
-end;
-
-function TEmit_vbuf_load.OpSToF(pReg:PsrRegNode):PsrRegNode;
-begin
- if (pReg=nil) then Exit(pReg);
- Result:=NewReg(dtFloat32);
- pReg^.mark_read;
- _emit_Op1(line,Op.OpConvertSToF,Result,pReg);
-end;
-
-function TEmit_vbuf_load.OpShlI(pReg:PsrRegNode;i:DWORD):PsrRegNode;
-begin
- if (pReg=nil) or (i=0) then Exit(pReg);
- Result:=NewReg(pReg^.dtype);
- pReg^.mark_read;
- _emit_OpShl(line,Result,pReg,FetchReg(FConsts.Fetchi(dtUint32,i)));
-end;
-
-function TEmit_vbuf_load.OpAddI(pReg:PsrRegNode;i:DWORD):PsrRegNode;
-begin
- if (pReg=nil) or (i=0) then Exit(pReg);
- Result:=NewReg(pReg^.dtype);
- pReg^.mark_read;
- _emit_OpIAdd(line,Result,pReg,FetchReg(FConsts.Fetchi(dtUint32,i)));
-end;
-
-function TEmit_vbuf_load._convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
+function TEmit_vbuf_load.convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
 begin
  Result:=src;
  if (lc.elem_resl<>lc.elem_orig) then
   Case lc.info.NFMT of
    BUF_NUM_FORMAT_UNORM   :  //Unsigned, normalized to range [0.0..1.0]; data/(1<<nbits-1)
     begin
-     Result:=OpUToF(src);
-     Result:=OpMulF(Result,1/GetTypeHigh(lc.elem_orig));
+     Result:=OpUToF(src,dtFloat32);
+     Result:=OpFMulToS(Result,1/lc.elem_orig.High);
     end;
 
    BUF_NUM_FORMAT_SNORM   :  //Signed, normalized to range [-1.0..1.0]; data/(1<<(nbits-1)-1) clamped
     begin
-     Result:=OpSToF(src);
-     Result:=OpMulF(Result,1/(GetTypeHigh(lc.elem_orig) shr 1));
-     Result:=OpAddF(Result,-1);
+     Result:=OpSToF(src,dtFloat32);
+     Result:=OpFMulToS(Result,1/(lc.elem_orig.High shr 1));
+     Result:=OpFAddToS(Result,-1);
     end;
 
    BUF_NUM_FORMAT_USCALED :  //Unsigned integer to float [0.0 .. (1<<nbits)-1]
     begin
-     Result:=OpUToF(src);
+     Result:=OpUToF(src,dtFloat32);
     end;
 
    BUF_NUM_FORMAT_SSCALED :  //Signed integer to float [-(1<<(nbits-1)) ..(1<<(nbits-1))-1]
     begin
-     Result:=OpSToF(src);
+     Result:=OpSToF(src,dtFloat32);
     end;
 
    BUF_NUM_FORMAT_SNORM_NZ:  //Signed, normalized to range [-1.0..1.0]; (data*2+1)/(1<<nbits-1)
     begin
      if (lc.info.GetElemSize=4) then
      begin
-      Result:=OpSToF(src);
-      Result:=OpMulF(Result,2);
-      Result:=OpAddF(Result,1);
-      Result:=OpMulF(Result,1/GetTypeHigh(lc.elem_orig));
+      Result:=OpSToF(src,dtFloat32);
+      Result:=OpFMulToS(Result,2);
+      Result:=OpFAddToS(Result,1);
+      Result:=OpFMulToS(Result,1/lc.elem_orig.High);
      end else
      begin
-      Result:=OpShlI(src,1);
-      Result:=OpAddI(Result,1);
-      Result:=OpSToF(Result);
-      Result:=OpMulF(Result,1/GetTypeHigh(lc.elem_orig));
+      Result:=OpShlTo(src,1);
+      Result:=OpIAddTo(Result,1);
+      Result:=OpSToF(Result,dtFloat32);
+      Result:=OpFMulToS(Result,1/lc.elem_orig.High);
      end;
     end;
 
    BUF_NUM_FORMAT_UINT    :
     begin
-     Result:=NewReg(lc.elem_resl);
-     src^.mark_read;
-     _emit_Op1(line,Op.OpUConvert,Result,src);
+     Result:=OpUToU(src,lc.elem_resl);
     end;
 
    BUF_NUM_FORMAT_SINT    :
     begin
-     Result:=NewReg(lc.elem_resl);
-     src^.mark_read;
-     _emit_Op1(line,Op.OpSConvert,Result,src);
+     Result:=OpSToS(src,lc.elem_resl);
     end;
 
    BUF_NUM_FORMAT_FLOAT   :
     begin
-     Result:=NewReg(lc.elem_resl);
-     src^.mark_read;
-     _emit_Op1(line,Op.OpFConvert,Result,src);
+     Result:=OpFToF(src,lc.elem_resl);
     end;
 
   end;
 end;
 
-procedure TEmit_vbuf_load._make_load_cv_id(var lc:Tload_cache;i:Byte);
+procedure TEmit_vbuf_load.make_load_cv_id(var lc:Tload_cache;i:Byte);
 var
  rsl:PsrRegNode;
 begin
  rsl:=lc.rsl;
  if (rsl=nil) then
  begin
-  rsl:=FetchLoad(lc.v.data[0],GetVecType(lc.elem_orig,lc.elem_count));
+  rsl:=FetchLoad(lc.v.data[0],lc.elem_orig.AsVector(lc.elem_count));
   lc.rsl:=rsl;
  end;
 
@@ -197,17 +134,16 @@ begin
 
   if (lc.elem_count=1) then
   begin
-   rsl:=_convert_e(lc,rsl);
+   rsl:=convert_e(lc,rsl);
 
    lc.elm[i]:=rsl;
   end else
   begin
    lc.elm[i]:=NewReg(lc.elem_orig);
 
-   rsl^.mark_read;
-   emit_OpCompExtract(line,lc.elm[i],rsl,i);
+   OpExtract(line,lc.elm[i],rsl,i);
 
-   lc.elm[i]:=_convert_e(lc,lc.elm[i]);
+   lc.elm[i]:=convert_e(lc,lc.elm[i]);
   end;
 
  end;
@@ -215,37 +151,39 @@ begin
  MakeCopy(lc.dst,lc.elm[i]);
 end;
 
-procedure TEmit_vbuf_load._make_load_ce_id(var lc:Tload_cache;i:Byte);
+procedure TEmit_vbuf_load.make_load_ce_id(var lc:Tload_cache;i:Byte);
 var
  orig,elm:PsrChain;
  sum_d:PsrRegNode;
- ext:TsrChainExt;
+ lvl_0:TsrChainLvl_0;
+ lvl_1:TsrChainLvl_1;
  rsl:PsrRegNode;
 begin
 
  if (lc.elm[i]=nil) then
  begin
   orig:=lc.v.data[0];
-  sum_d:=orig^.key.ext.pIndex;
+  sum_d:=orig^.pIndex;
 
   if (i=0) then
   begin
    elm:=orig;
   end else
   begin
-   sum_d:=TEmit_vbuf_chain(Self).OpAddTo(sum_d,i);
+   sum_d:=OpIAddTo(sum_d,i);
 
-   sum_d^.mark_read;
-   ext:=Default(TsrChainExt);
-   ext.pIndex:=sum_d;
-   ext.stride:=orig^.key.ext.stride;
+   lvl_0.offset:=0;
+   lvl_0.size  :=orig^.size;
 
-   elm:=lc.info.grp^.Fetch(0,orig^.key.size,@ext);
+   lvl_1.pIndex:=sum_d;
+   lvl_1.stride:=orig^.stride;
+
+   elm:=lc.info.grp^.Fetch(@lvl_0,@lvl_1);
   end;
 
   rsl:=FetchLoad(elm,lc.elem_orig);
 
-  rsl:=_convert_e(lc,rsl);
+  rsl:=convert_e(lc,rsl);
 
   lc.elm[i]:=rsl;
  end;
@@ -253,7 +191,7 @@ begin
  MakeCopy(lc.dst,lc.elm[i]);
 end;
 
-procedure TEmit_vbuf_load._make_load_uv_id(var lc:Tload_cache;i:Byte);
+procedure TEmit_vbuf_load.make_load_uv_id(var lc:Tload_cache;i:Byte);
 var
  rsl,idx:PsrRegNode;
 begin
@@ -261,20 +199,18 @@ begin
  rsl:=lc.rsl;
  if (rsl=nil) then
  begin
-  rsl:=NewReg(GetVecType(lc.elem_resl,4));
+  rsl:=NewReg(lc.elem_resl.AsVector(4));
   idx:=lc.v.data[1];
 
-  idx^.mark_read;
-  emit_OpImageRead(line,lc.v.data[0],rsl,idx);
+  OpImageRead(line,lc.v.data[0],rsl,idx);
 
   lc.rsl:=rsl;
  end;
 
  if (lc.elm[i]=nil) then
  begin
-  rsl^.mark_read;
   lc.dst^.New(line,lc.elem_resl);
-  emit_OpCompExtract(line,lc.dst^.current,rsl,i);
+  OpExtract(line,lc.dst^.current,rsl,i);
 
   lc.elm[i]:=lc.dst^.current;
  end else
@@ -283,7 +219,7 @@ begin
  end;
 end;
 
-procedure TEmit_vbuf_load._make_load_ue_id(var lc:Tload_cache;i:Byte);
+procedure TEmit_vbuf_load.make_load_ue_id(var lc:Tload_cache;i:Byte);
 var
  rsl,idx,sum_d:PsrRegNode;
 begin
@@ -297,13 +233,12 @@ begin
    sum_d:=idx;
   end else
   begin
-   sum_d:=TEmit_vbuf_chain(Self).OpAddTo(idx,i);
+   sum_d:=OpIAddTo(idx,i);
   end;
 
   rsl:=lc.dst^.New(line,lc.elem_resl);
 
-  sum_d^.mark_read;
-  emit_OpImageRead(line,lc.v.data[0],rsl,sum_d);
+  OpImageRead(line,lc.v.data[0],rsl,sum_d);
 
   lc.elm[i]:=rsl;
  end else
@@ -312,19 +247,19 @@ begin
  end;
 end;
 
-procedure TEmit_vbuf_load._make_load_zero(var lc:Tload_cache);
+procedure TEmit_vbuf_load.make_load_zero(var lc:Tload_cache);
 begin
- SetConst(lc.dst,FConsts.Fetchi(lc.elem_resl,0));
+ SetConst_i(lc.dst,lc.elem_resl,0);
 end;
 
-procedure TEmit_vbuf_load._make_load_one(var lc:Tload_cache);
+procedure TEmit_vbuf_load.make_load_one(var lc:Tload_cache);
 begin
  if (lc.elem_resl=dtFloat32) then
  begin
-  SetConst(lc.dst,FConsts.Fetchf(lc.elem_resl,1));
+  SetConst_s(lc.dst,lc.elem_resl,1);
  end else
  begin
-  SetConst(lc.dst,FConsts.Fetchi(lc.elem_resl,1));
+  SetConst_i(lc.dst,lc.elem_resl,1);
  end;
 end;
 
@@ -348,16 +283,16 @@ begin
 
  For i:=0 to count-1 do
  begin
-  lc.dst:=FRegsStory.get_vdst8(FSPI.MUBUF.VDATA+i);
+  lc.dst:=get_vdst8(FSPI.MUBUF.VDATA+i);
   if (lc.dst=nil) then Assert(false);
 
   //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
   Case info.dsel[i] of
    0:begin //0
-      _make_load_zero(lc);
+      make_load_zero(lc);
      end;
    1:begin //1
-      _make_load_one(lc);
+      make_load_one(lc);
      end;
    4..7:
      begin //RGBA
@@ -367,22 +302,22 @@ begin
       begin
 
        Case v.vType of
-        vcInvalid       :_make_load_zero(lc);
-        vcChainVector   :_make_load_cv_id(lc,d);
-        vcChainElement  :_make_load_ce_id(lc,d);
-        vcUniformVector :_make_load_uv_id(lc,d);
-        vcUniformElement:_make_load_ue_id(lc,d);
+        vcInvalid       :make_load_zero(lc);
+        vcChainVector   :make_load_cv_id(lc,d);
+        vcChainElement  :make_load_ce_id(lc,d);
+        vcUniformVector :make_load_uv_id(lc,d);
+        vcUniformElement:make_load_ue_id(lc,d);
        end;
 
       end else
       begin //as zero
-       _make_load_zero(lc);
+       make_load_zero(lc);
       end;
 
      end;
    else
     begin //as zero
-     _make_load_zero(lc);
+     make_load_zero(lc);
     end;
   end;
 

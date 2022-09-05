@@ -4,11 +4,27 @@ unit srRefId;
 
 interface
 
+uses
+ sysutils,
+ srNode;
+
 type
+ ntRefId=class(TsrNodeVmt)
+  class function  GetPrintName(node:PsrNode):RawByteString;     override;
+  class function  GetRef(node:PsrNode):Pointer;                 override;
+ end;
+
  PsrRefId=^TsrRefId;
- TsrRefId=packed object
+ TsrRefId=object
   ID:DWORD;
-  function Alloc:Boolean; inline;
+  function  Alloc:Boolean; inline;
+ end;
+
+ PsrRefNode=^TsrRefNode;
+ TsrRefNode=object(TsrNode)
+  ID:TsrRefId;
+  Procedure Init; inline;
+  function  GetPrintName:RawByteString;
  end;
 
  PsrRefIdAlloc=^TsrRefIdAlloc;
@@ -20,6 +36,27 @@ type
  end;
 
 implementation
+
+class function ntRefId.GetPrintName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrRefNode(node)^.GetPrintName;
+end;
+
+class function ntRefId.GetRef(node:PsrNode):Pointer;
+begin
+ Result:=@PsrRefNode(node)^.ID;
+end;
+
+Procedure TsrRefNode.Init; inline;
+begin
+ fntype:=ntRefId;
+end;
+
+function TsrRefNode.GetPrintName:RawByteString;
+begin
+ Assert(ID.ID<>0);
+ Result:=IntToStr(ID.ID);
+end;
 
 function TsrRefId.Alloc:Boolean; inline;
 begin

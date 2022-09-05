@@ -5,14 +5,23 @@ unit srBuffer;
 interface
 
 uses
-  spirv,
-  srNodes,
-  srTypes,
-  srVariable,
-  srLayout,
-  srDecorate;
+ sysutils,
+ spirv,
+ ginodes,
+ srNode,
+ srType,
+ srTypes,
+ srVariable,
+ srLayout,
+ srDecorate,
+ srConfig;
 
 type
+ ntBuffer=class(ntDescriptor)
+  class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
+  class function  GetStorageName(node:PsrNode):RawByteString; override;
+ end;
+
  PsrBuffer=^TsrBuffer;
 
  PsrField=^TsrField;
@@ -33,7 +42,7 @@ type
    //----
 
    pBuffer:PsrBuffer;
-   parent:PsrField;
+   pParent:PsrField;
    offset:PtrUint;
    size:PtrUint;
    stride:PtrUint;
@@ -45,7 +54,6 @@ type
 
    //
 
-   Alloc:TfnAlloc;
    FList:TFieldFetch;
 
   function  c(n1,n2:PsrField):Integer; static;
@@ -60,79 +68,89 @@ type
   function  FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType):TFieldFetchValue;
   function  FetchRuntimeArray(_offset,_stride:PtrUint):TFieldFetchValue;
   function  IsStructUsedRuntimeArray:Boolean;
-  function  IsStructNotUsed:Boolean;
+  function  IsStructNotUsed:Boolean; inline;
+  function  IsTop:Boolean; inline;
   function  GetStructDecorate:DWORD;
+  procedure UpdateSize;
+  function  GetSize:PtrUint;
   procedure FillNode(o,s:PtrUint);
   function  FillSpace:Integer;
-  procedure AllocID;
-  procedure AllocBinding(aType:PsrType;Decorates:PsrDecorateList);
  end;
 
  TsrBufferType=(btStorageBuffer,btUniformBuffer,btPushConstant);
 
- TsrBuffer=object(TsrDescriptor)
+ TsrBuffer=packed object(TsrDescriptor)
   pLeft,pRight:PsrBuffer;
   //----
+  fwrite_count:DWORD;
+  fchain_read :DWORD;
+  fchain_write:DWORD;
+  //
+  align_offset:DWORD;
 
-  key:packed record
-   pLayout:PsrDataLayout;
-   CastNum:PtrInt;
-  end;
+  FEmit:TCustomEmit;
 
   bType:TsrBufferType;
 
-  write_count:DWORD;
-  align_offset:DWORD;
+  key:packed record
+   pLayout:PsrDataLayout;
+   AliasId:PtrInt;
+  end;
 
   FTop:TsrField;
+
   function  c(n1,n2:PsrBuffer):Integer; static;
+  Procedure Init(Emit:TCustomEmit); inline;
+  function  GetStorageName:RawByteString;
   function  GetTypeChar:Char;
   function  GetString:RawByteString;
   function  GetStructName:RawByteString;
-  procedure UpdateSize;
   function  GetSize:PtrUint;
+  procedure TakeChain(node:PsrChain);
   procedure EnumAllField(cb:TFieldEnumCb);
   procedure ShiftOffset(Offset:PtrUint);
  end;
 
- TsrBufferCfg=object
-  SpvVersion:PtrUint;
-  maxUniformBufferRange:PtrUint;           // $FFFF
-  PushConstantsOffset:PtrUint;             // 0
-  maxPushConstantsSize:PtrUint;            // 128
-  minStorageBufferOffsetAlignment:PtrUint; // $10
-  minUniformBufferOffsetAlignment:PtrUint; // $100
-  Procedure Init;
-  Function  CanUseStorageBufferClass:Boolean;
- end;
-
+ PsrBufferList=^TsrBufferList;
  TsrBufferList=object
   type
    TNodeFetch=specialize TNodeFetch<PsrBuffer,TsrBuffer>;
   var
-   Alloc:TfnAlloc;
-   cfg:TsrBufferCfg;
+   FEmit:TCustomEmit;
    FNTree:TNodeFetch;
    FPushConstant:PsrBuffer;
-  procedure Init(cb:TfnAlloc);
+  procedure Init(Emit:TCustomEmit); inline;
   function  Fetch(s:PsrDataLayout;n:PtrInt):PsrBuffer;
-  function  NextCast(buf:PsrBuffer):PsrBuffer;
+  function  NextAlias(buf:PsrBuffer):PsrBuffer;
   Function  First:PsrBuffer;
   Function  Next(node:PsrBuffer):PsrBuffer;
   procedure EnumAllField(cb:TFieldEnumCb);
   procedure OnFillSpace(node:PsrField);
   procedure FillSpace;
-  procedure OnAllocID(node:PsrField);
+  procedure OnAllocID(pField:PsrField);
   procedure AllocID;
-  procedure AllocBinding(Var FBinding:Integer;Decorates:PsrDecorateList);
-  procedure AllocSourceExtension(FDebugInfo:PsrDebugInfoList);
-  procedure UpdateStorage(node:PsrChain;pBuffer:PsrBuffer);
+  procedure AllocBinding(Var FBinding:Integer);
+  procedure AllocSourceExtension;
+  function  FindUserDataBuf:PsrBuffer;
   procedure ApplyBufferType;
   procedure AlignOffset(node:PsrBuffer;offset:PtrUint);
   procedure AlignOffset;
+  procedure OnAllocTypeBinding(pField:PsrField);
+  procedure AllocTypeBinding;
+  procedure AllocName;
  end;
 
 implementation
+
+class Function ntBuffer.pwrite_count(node:PsrNode):PDWORD;
+begin
+ Result:=@PsrBuffer(node)^.fwrite_count;
+end;
+
+class function ntBuffer.GetStorageName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrBuffer(node)^.GetStorageName;
+end;
 
 //---
 
@@ -194,12 +212,12 @@ begin
  Result:=FList.Find(@node);
  if (Result=nil) then
  begin
-  Result:=Alloc(SizeOf(TsrField));
-  Result^.Alloc:=Alloc;
+  Assert(pBuffer^.FEmit<>nil);
+  Result:=pBuffer^.FEmit.Alloc(SizeOf(TsrField));
   Result^.pBuffer:=pBuffer;
-  Result^.parent:=@Self;
-  Result^.offset:=o;
-  Result^.FID:=-1;
+  Result^.pParent:=@Self;
+  Result^.offset :=o;
+  Result^.FID    :=-1;
   FList.Insert(Result);
   Inc(FCount);
  end;
@@ -213,9 +231,9 @@ begin
  Result:=Default(TFieldFetchValue);
 
  _stride:=0;
- if isVector(_dtype) then
+ if _dtype.isVector then
  begin
-  _stride:=BitSizeType(GetVecChild(_dtype)) div 8;
+  _stride:=_dtype.Child.BitSize div 8;
  end;
 
  node:=Find_le(_offset);
@@ -262,9 +280,9 @@ begin
    end;
   else
    begin
-    if isVector(node^.dtype) then
+    if node^.dtype.isVector then
     begin //ftVector
-     if isVector(_dtype) then
+     if _dtype.isVector then
      begin
       if (node^.offset=_offset) and
          (node^.size  =_size)   and
@@ -287,7 +305,7 @@ begin
      end;
     end else
     begin //ftValue
-     if isVector(_dtype) then
+     if _dtype.isVector then
      begin
       if (node^.offset=_offset) and
          (node^.size  =_size)   then
@@ -350,15 +368,20 @@ begin
  end;
 end;
 
-function TsrField.IsStructNotUsed:Boolean;
+function TsrField.IsStructNotUsed:Boolean; inline;
 begin
- Result:=(FCount<=1) and (parent<>nil);
+ Result:=(FCount<=1) and (pParent<>nil);
+end;
+
+function TsrField.IsTop:Boolean; inline;
+begin
+ Result:=(pParent=nil);
 end;
 
 function TsrField.GetStructDecorate:DWORD;
 begin
  Result:=DWORD(-1); //dont use
- if (parent=nil) then //is top
+ if IsTop then
  if (dtype=dtTypeStruct) then  //is struct
  begin
 
@@ -372,6 +395,23 @@ begin
   end;
 
  end;
+end;
+
+procedure TsrField.UpdateSize;
+var
+ node:PsrField;
+begin
+ node:=FList.Max;
+ if (node<>nil) then
+ begin
+  size:=node^.offset+node^.size;
+ end;
+end;
+
+function TsrField.GetSize:PtrUint;
+begin
+ UpdateSize;
+ Result:=size;
 end;
 
 procedure TsrField.FillNode(o,s:PtrUint);
@@ -477,43 +517,6 @@ begin
  end;
 end;
 
-procedure TsrField.AllocID;
-var
- node:PsrField;
- ID:Integer;
-begin
- ID:=0;
- node:=First;
- While (node<>nil) do
- begin
-  if IsVector(dtype) then
-  begin
-   ID:=node^.offset div stride;
-   node^.FID:=ID;
-  end else
-  begin
-   node^.FID:=ID;
-   Inc(ID);
-  end;
-  node:=Next(node);
- end;
-end;
-
-procedure TsrField.AllocBinding(aType:PsrType;Decorates:PsrDecorateList);
-var
- node:PsrField;
-begin
- if (aType=nil) then Exit;
- if (Decorates=nil) then Exit;
- if isVector(dtype) then Exit;
- node:=First;
- While (node<>nil) do
- begin
-  Decorates^.emit_member_decorate(ntType,aType,node^.FID,node^.offset);
-  node:=Next(node);
- end;
-end;
-
 //--
 
 function TsrBuffer.c(n1,n2:PsrBuffer):Integer;
@@ -522,7 +525,30 @@ begin
  Result:=Integer(n1^.key.pLayout>n2^.key.pLayout)-Integer(n1^.key.pLayout<n2^.key.pLayout);
  if (Result<>0) then Exit;
  //second CastNum
- Result:=Integer(n1^.key.CastNum>n2^.key.CastNum)-Integer(n1^.key.CastNum<n2^.key.CastNum);
+ Result:=Integer(n1^.key.AliasId>n2^.key.AliasId)-Integer(n1^.key.AliasId<n2^.key.AliasId);
+end;
+
+Procedure TsrBuffer.Init(Emit:TCustomEmit); inline;
+begin
+ FEmit:=Emit;
+
+ fntype  :=ntBuffer;
+ bType   :=btStorageBuffer;
+ FStorage:=StorageClass.Uniform;
+ FBinding:=-1;
+
+ FTop.FID:=-1;
+ FTop.dtype:=dtTypeStruct;
+end;
+
+function TsrBuffer.GetStorageName:RawByteString;
+begin
+ Result:='';
+ Case bType of
+  btStorageBuffer:Result:='sBuf'+IntToStr(FBinding);
+  btUniformBuffer:Result:='uBuf'+IntToStr(FBinding);
+  btPushConstant :Result:='cBuf';
+ end;
 end;
 
 function TsrBuffer.GetTypeChar:Char;
@@ -556,21 +582,19 @@ begin
  Result:='TD'+HexStr(FBinding,8);
 end;
 
-procedure TsrBuffer.UpdateSize;
-var
- node:PsrField;
-begin
- node:=FTop.FList.Max;
- if (node<>nil) then
- begin
-  FTop.size:=node^.offset+node^.size;
- end;
-end;
-
 function TsrBuffer.GetSize:PtrUint;
 begin
- UpdateSize;
- Result:=FTop.size;
+ Result:=FTop.GetSize;
+end;
+
+procedure TsrBuffer.TakeChain(node:PsrChain);
+begin
+ if (@Self=nil) or (node=nil) then Exit;
+
+ mark_read(node);
+
+ fchain_read :=fchain_read +node^.read_count;
+ fchain_write:=fchain_write+node^.write_count;
 end;
 
 procedure TsrBuffer.EnumAllField(cb:TFieldEnumCb);
@@ -583,9 +607,8 @@ begin
  repeat
   While (node<>nil) do
   begin
-   if (node^.FList.pRoot<>nil) then //child exist
+   if (node^.First<>nil) then //child exist
    begin
-    curr^.FList._Splay(node); //Move to root
     curr:=node;
     node:=curr^.First;        //down
    end else
@@ -595,9 +618,9 @@ begin
    end;
   end;
   cb(curr);
-  curr:=curr^.parent; //up
+  node:=curr;
+  curr:=curr^.pParent; //up
   if (curr=nil) then Break;
-  node:=curr^.FList.pRoot; //last find
   node:=curr^.Next(node);
  until false;
 end;
@@ -619,24 +642,9 @@ begin
  end;
 end;
 
-Procedure TsrBufferCfg.Init;
+procedure TsrBufferList.Init(Emit:TCustomEmit); inline;
 begin
- SpvVersion:=$10100;
- maxUniformBufferRange:=$FFFF;
- maxPushConstantsSize:=128;
- minStorageBufferOffsetAlignment:=0;
- minUniformBufferOffsetAlignment:=0;
-end;
-
-Function TsrBufferCfg.CanUseStorageBufferClass:Boolean;
-begin
- Result:=(SpvVersion>=$10300);
-end;
-
-procedure TsrBufferList.Init(cb:TfnAlloc);
-begin
- Alloc:=cb;
- cfg.Init;
+ FEmit:=Emit;
 end;
 
 function TsrBufferList.Fetch(s:PsrDataLayout;n:PtrInt):PsrBuffer;
@@ -644,30 +652,27 @@ var
  node:TsrBuffer;
 begin
  node:=Default(TsrBuffer);
+ node.Init(FEmit);
  node.key.pLayout:=s;
- node.key.CastNum:=n;
+ node.key.AliasId:=n;
  Result:=FNTree.Find(@node);
  if (Result=nil) then
  begin
-  Result:=Alloc(SizeOf(TsrBuffer));
-  Result^.key.pLayout:=s;
-  Result^.key.CastNum:=n;
-  Result^.bType   :=btStorageBuffer;
-  Result^.FStorage:=StorageClass.Uniform;
-  Result^.FBinding:=-1;
-  Result^.FTop.Alloc:=Alloc;
+  Result:=FEmit.Alloc(SizeOf(TsrBuffer));
+  Move(node,Result^,SizeOf(TsrBuffer));
   Result^.FTop.pBuffer:=Result;
-  Result^.FTop.FID:=-1;
-  Result^.FTop.dtype:=dtTypeStruct;
+  //
+  Result^.InitVar(FEmit);
+  //
   FNTree.Insert(Result);
  end;
 end;
 
-function TsrBufferList.NextCast(buf:PsrBuffer):PsrBuffer;
+function TsrBufferList.NextAlias(buf:PsrBuffer):PsrBuffer;
 begin
  Result:=nil;
  if (buf=nil) then Exit;
- Result:=Fetch(buf^.key.pLayout,buf^.key.CastNum+1);
+ Result:=Fetch(buf^.key.pLayout,buf^.key.AliasId+1);
 end;
 
 Function TsrBufferList.First:PsrBuffer;
@@ -688,7 +693,10 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  node^.EnumAllField(cb);
+  if node^.IsUsed then
+  begin
+   node^.EnumAllField(cb);
+  end;
   node:=Next(node);
  end;
 end;
@@ -703,9 +711,26 @@ begin
  EnumAllField(@OnFillSpace);
 end;
 
-procedure TsrBufferList.OnAllocID(node:PsrField);
+procedure TsrBufferList.OnAllocID(pField:PsrField);
+var
+ node:PsrField;
+ ID:Integer;
 begin
- node^.AllocID;
+ ID:=0;
+ node:=pField^.First;
+ While (node<>nil) do
+ begin
+  if pField^.dtype.IsVector then
+  begin
+   ID:=node^.offset div pField^.stride;
+   node^.FID:=ID;
+  end else
+  begin
+   node^.FID:=ID;
+   Inc(ID);
+  end;
+  node:=pField^.Next(node);
+ end;
 end;
 
 procedure TsrBufferList.AllocID;
@@ -713,80 +738,108 @@ begin
  EnumAllField(@OnAllocID);
 end;
 
-procedure TsrBufferList.AllocBinding(Var FBinding:Integer;Decorates:PsrDecorateList);
+procedure TsrBufferList.AllocBinding(Var FBinding:Integer);
 var
+ pConfig:PsrConfig;
+ pDecorateList:PsrDecorateList;
  node:PsrBuffer;
  pVar:PsrVariable;
 begin
- if (Decorates=nil) then Exit;
+ pConfig:=FEmit.GetConfig;
+ pDecorateList:=FEmit.GetDecorateList;
  node:=First;
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed then
+  if (node^.bType<>btPushConstant) then
+  if (node^.FBinding=-1) then //alloc
   begin
-   if (node^.bType<>btPushConstant) then
-   if (node^.FBinding=-1) then //alloc
+   pDecorateList^.OpDecorate(pVar,Decoration.Binding,FBinding);
+   pDecorateList^.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
+   node^.FBinding:=FBinding;
+   Inc(FBinding);
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrBufferList.AllocSourceExtension;
+var
+ pDebugInfoList:PsrDebugInfoList;
+ node:PsrBuffer;
+ pVar:PsrVariable;
+begin
+ pDebugInfoList:=FEmit.GetDebugInfoList;
+ node:=First;
+ While (node<>nil) do
+ begin
+  pVar:=node^.pVar;
+  if (pVar<>nil) and node^.IsUsed then
+  begin
+   pDebugInfoList^.OpSourceExtension(node^.GetString);
+  end;
+  node:=Next(node);
+ end;
+end;
+
+function TsrBufferList.FindUserDataBuf:PsrBuffer;
+var
+ node:PsrBuffer;
+begin
+ Result:=nil;
+ node:=First;
+ While (node<>nil) do
+ begin
+  if node^.IsUsed then
+  begin
+   if node^.key.pLayout^.IsUserData then
    begin
-    Decorates^.emit_decorate(ntVar,pVar,Decoration.Binding,FBinding);
-    Decorates^.emit_decorate(ntVar,pVar,Decoration.DescriptorSet,Decorates^.FDescriptorSet);
-    node^.FBinding:=FBinding;
-    Inc(FBinding);
+    Exit(node);
    end;
   end;
   node:=Next(node);
  end;
 end;
 
-procedure TsrBufferList.AllocSourceExtension(FDebugInfo:PsrDebugInfoList);
-var
- node:PsrBuffer;
- pVar:PsrVariable;
-begin
- if (FDebugInfo=nil) then Exit;
- node:=First;
- While (node<>nil) do
- begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) then
-  begin
-   FDebugInfo^.emit_source_extension(node^.GetString);
-  end;
-  node:=Next(node);
- end;
-end;
-
-procedure TsrBufferList.UpdateStorage(node:PsrChain;pBuffer:PsrBuffer);
-begin
- if (node=nil) or (pBuffer=nil) then Exit;
- pBuffer^.write_count:=pBuffer^.write_count+node^.write_count;
-end;
-
 procedure TsrBufferList.ApplyBufferType;
 var
+ pConfig:PsrConfig;
  node:PsrBuffer;
 begin
+ pConfig:=FEmit.GetConfig;
+
+ node:=FindUserDataBuf;
+ if (node<>nil) and (FPushConstant=nil) then
+ if (node^.write_count=0) and
+    (node^.GetSize<=pConfig^.maxPushConstantsSize) then
+ begin
+  node^.bType   :=btPushConstant;
+  node^.FStorage:=StorageClass.PushConstant;
+  FPushConstant :=node;
+ end;
+
  node:=First;
  While (node<>nil) do
  begin
-  if (node^.bType=btStorageBuffer) then
+  if node^.IsUsed and (node^.bType=btStorageBuffer) then
   begin
 
    if (FPushConstant=nil) and
-      (node^.write_count=0) and
-      (node^.GetSize<=cfg.maxPushConstantsSize) then
+      (node^.fchain_write=0) and
+      (node^.GetSize<=pConfig^.maxPushConstantsSize) then
    begin
     node^.bType   :=btPushConstant;
     node^.FStorage:=StorageClass.PushConstant;
-    FPushConstant:=node;
+    FPushConstant :=node;
    end else
-   if (node^.write_count=0) and
-      (node^.GetSize<=cfg.maxUniformBufferRange) then
+   if (node^.fchain_write=0) and
+      (node^.GetSize<=pConfig^.maxUniformBufferRange) then
    begin
     node^.bType   :=btUniformBuffer;
     node^.FStorage:=StorageClass.Uniform;
    end else
-   if cfg.CanUseStorageBufferClass then
+   if pConfig^.CanUseStorageBufferClass then
    begin
     node^.FStorage:=StorageClass.StorageBuffer;
    end else
@@ -822,25 +875,97 @@ end;
 
 procedure TsrBufferList.AlignOffset;
 var
+ pConfig:PsrConfig;
  node:PsrBuffer;
 begin
+ pConfig:=FEmit.GetConfig;
  node:=First;
  While (node<>nil) do
  begin
-  Case node^.bType of
-   btStorageBuffer:
-     begin
-      AlignOffset(node,cfg.minStorageBufferOffsetAlignment);
-     end;
-   btUniformBuffer:
-     begin
-      AlignOffset(node,cfg.minUniformBufferOffsetAlignment);
-     end;
-   btPushConstant:
-     begin
-      node^.align_offset:=cfg.PushConstantsOffset;
-      node^.ShiftOffset(cfg.PushConstantsOffset);
-     end;
+  if node^.IsUsed then
+  begin
+   Case node^.bType of
+    btStorageBuffer:
+      begin
+       AlignOffset(node,pConfig^.minStorageBufferOffsetAlignment);
+      end;
+    btUniformBuffer:
+      begin
+       AlignOffset(node,pConfig^.minUniformBufferOffsetAlignment);
+      end;
+    btPushConstant:
+      begin
+       node^.align_offset:=pConfig^.PushConstantsOffset;
+       node^.ShiftOffset(pConfig^.PushConstantsOffset);
+      end;
+   end;
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrBufferList.OnAllocTypeBinding(pField:PsrField);
+var
+ pDecorateList:PsrDecorateList;
+ node:PsrField;
+ SD:DWORD;
+begin
+ if (pField^.dtype<>dtTypeStruct) then Exit;
+ if (pField^.pType=nil) then Exit;
+ pDecorateList:=FEmit.GetDecorateList;
+ SD:=pField^.GetStructDecorate;
+ if (SD<>DWORD(-1)) then
+ begin
+  pDecorateList^.OpDecorate(pField^.pType,SD,0);
+ end;
+ node:=pField^.First;
+ While (node<>nil) do
+ begin
+  pDecorateList^.OpMemberDecorate(pField^.pType,node^.FID,node^.offset);
+  node:=pField^.Next(node);
+ end;
+end;
+
+procedure TsrBufferList.AllocTypeBinding;
+var
+ pDecorateList:PsrDecorateList;
+ node:PsrBuffer;
+begin
+ EnumAllField(@OnAllocTypeBinding);
+ //
+ pDecorateList:=FEmit.GetDecorateList;
+ //
+ node:=First;
+ While (node<>nil) do
+ begin
+  if node^.IsUsed and (node^.pVar<>nil) then
+  if (node^.bType=btStorageBuffer) then
+  begin
+   if (node^.fchain_read=0) then
+   begin
+    pDecorateList^.OpDecorate(node^.pVar,Decoration.NonReadable,0);
+   end;
+   if (node^.fchain_write=0) then
+   begin
+    pDecorateList^.OpDecorate(node^.pVar,Decoration.NonWritable,0);
+   end;
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrBufferList.AllocName;
+var
+ FDebugInfo:PsrDebugInfoList;
+ node:PsrBuffer;
+begin
+ FDebugInfo:=FEmit.GetDebugInfoList;
+ node:=First;
+ While (node<>nil) do
+ begin
+  if node^.IsUsed and (node^.FTop.pType<>nil) then
+  begin
+   FDebugInfo^.OpName(node^.FTop.pType,node^.GetStructName);
   end;
   node:=Next(node);
  end;

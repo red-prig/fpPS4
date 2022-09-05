@@ -5,7 +5,7 @@ unit srAllocator;
 interface
 
 uses
-  srNodes;
+ ginodes;
 
 type
  PsrAllocNode=^TsrAllocNode;

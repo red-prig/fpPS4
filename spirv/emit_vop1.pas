@@ -7,188 +7,153 @@ interface
 uses
   sysutils,
   ps4_pssl,
-  srTypes,
-  srReg,
   spirv,
-  SprvEmit,
-  emit_op;
+  srType,
+  srReg,
+  emit_fetch;
 
 type
- TEmit_VOP1=object(TEmitOp)
-  procedure _emit_VOP1;
-  procedure _emit_V_MOV_B32;
-  procedure _emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
-  procedure _emit_V_CVT_OFF_F32_I4;
-  procedure _emit_V_CVT_F32_UBYTE0;
-  procedure _emit_V_EXT_F32(OpId:DWORD);
-  procedure _emit_V_RCP_F32;
-  procedure _emit_V_FFBL_B32;
+ TEmit_VOP1=class(TEmitFetch)
+  procedure emit_VOP1;
+  procedure emit_V_MOV_B32;
+  procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
+  procedure emit_V_CVT_OFF_F32_I4;
+  procedure emit_V_CVT_F32_UBYTE0;
+  procedure emit_V_EXT_F32(OpId:DWORD);
+  procedure emit_V_RCP_F32;
+  procedure emit_V_FFBL_B32;
  end;
 
 implementation
 
-procedure TEmit_VOP1._emit_V_MOV_B32;
+procedure TEmit_VOP1.emit_V_MOV_B32;
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
- _MakeCopy(dst,src);
+ MakeCopy(dst,src);
 end;
 
-procedure TEmit_VOP1._emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
+procedure TEmit_VOP1.emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,src_type);
- emit_Op1(OpId,dst_type,dst,src);
+ Op1(OpId,dst_type,dst,src);
 end;
 
 //V_CVT_OFF_F32_I4
 //([0..3]-8)/16
-procedure TEmit_VOP1._emit_V_CVT_OFF_F32_I4;
+procedure TEmit_VOP1.emit_V_CVT_OFF_F32_I4;
 Var
- dst,tmp:PsrRegSlot;
+ dst:PsrRegSlot;
  src:PsrRegNode;
- num_8:PsrRegNode;
- num_15:PsrRegNode;
  num_16:PsrRegNode;
- subi,subf:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
- tmp:=@FRegsStory.FUnattach;
- num_15:=FetchReg(FConsts.Fetch(dtUInt32,15));
+ src:=OpBitwiseAndTo(src,15);
+ src^.PrepType(ord(dtInt32));
 
- emit_OpBitwiseAnd(tmp,src,num_15);
- src:=MakeRead(tmp,dtUInt32);
+ src:=OpISubTo(src,8);
 
- num_8:=FetchReg(FConsts.Fetch(dtInt32,8));
- subi:=dst^.New(line,dtInt32);
+ src:=OpSToF(src,dtFloat32);
 
- _emit_OpISub(line,subi,src,num_8);
-
- subi^.mark_read;
- subf:=dst^.New(line,dtFloat32);
-
- _emit_Op1(line,Op.OpConvertSToF,subf,subi);
-
- subf^.mark_read;
- num_16:=FetchReg(FConsts.Fetchf(dtFloat32,16));
-
- emit_OpFDiv(dst,subf,num_16);
+ num_16:=NewReg_s(dtFloat32,16);
+ Op2(Op.OpFDiv,dtFloat32,dst,src,num_16);
 end;
 
-procedure TEmit_VOP1._emit_V_CVT_F32_UBYTE0;
-Var
- dst,tmp:PsrRegSlot;
- src:PsrRegNode;
- num_FF:PsrRegNode;
-
-begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
- src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
-
- tmp:=@FRegsStory.FUnattach;
- num_FF:=FetchReg(FConsts.Fetch(dtUInt32,$FF));
-
- emit_OpBitwiseAnd(tmp,src,num_FF);
- src:=MakeRead(tmp,dtUInt32);
-
- emit_Op1(Op.OpConvertUToF,dtFloat32,dst,src);
-end;
-
-procedure TEmit_VOP1._emit_V_EXT_F32(OpId:DWORD);
+procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE0;
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
- src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
- emit_OpExt1(OpId,dtFloat32,dst,src);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ src:=OpBitwiseAndTo(src,$FF);
+ src^.PrepType(ord(dtUInt32));
+
+ Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
 
-procedure TEmit_VOP1._emit_V_RCP_F32;
+procedure TEmit_VOP1.emit_V_EXT_F32(OpId:DWORD);
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+ OpGlsl1(OpId,dtFloat32,dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_RCP_F32;
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
  one:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
 
- one:=FetchReg(FConsts.Fetchf(dtFloat32,1));
+ one:=NewReg_s(dtFloat32,1);
 
- emit_OpFDiv(dst,one,src);
+ Op2(Op.OpFDiv,dtFloat32,dst,one,src);
 end;
 
-procedure TEmit_VOP1._emit_V_FFBL_B32;
+procedure TEmit_VOP1.emit_V_FFBL_B32;
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
- dst:=FRegsStory.get_vdst8(FSPI.VOP1.VDST);
+ dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtInt32);
 
- emit_OpExt1(GlslOp.FindILsb,dtInt32,dst,src);
+ OpGlsl1(GlslOp.FindILsb,dtInt32,dst,src);
 end;
 
 
-procedure TEmit_VOP1._emit_VOP1;
+procedure TEmit_VOP1.emit_VOP1;
 begin
 
  Case FSPI.VOP1.OP of
 
   V_NOP:;
 
-  V_MOV_B32:
-    begin
-     _emit_V_MOV_B32;
-    end;
+  V_MOV_B32: emit_V_MOV_B32;
 
-  V_CVT_F32_I32: _emit_V_CVT(Op.OpConvertSToF,dtFloat32,dtInt32);
-  V_CVT_F32_U32: _emit_V_CVT(Op.OpConvertUToF,dtFloat32,dtUInt32);
-  V_CVT_U32_F32: _emit_V_CVT(Op.OpConvertFToU,dtUInt32 ,dtFloat32);
-  V_CVT_I32_F32: _emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
+  V_CVT_F32_I32: emit_V_CVT(Op.OpConvertSToF,dtFloat32,dtInt32);
+  V_CVT_F32_U32: emit_V_CVT(Op.OpConvertUToF,dtFloat32,dtUInt32);
+  V_CVT_U32_F32: emit_V_CVT(Op.OpConvertFToU,dtUInt32 ,dtFloat32);
+  V_CVT_I32_F32: emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
 
-  V_CVT_OFF_F32_I4:
-    begin
-     _emit_V_CVT_OFF_F32_I4;
-    end;
+  V_CVT_OFF_F32_I4: emit_V_CVT_OFF_F32_I4;
 
-  V_CVT_F32_UBYTE0:
-    begin
-     _emit_V_CVT_F32_UBYTE0;
-    end;
+  V_CVT_F32_UBYTE0: emit_V_CVT_F32_UBYTE0;
 
-  V_FRACT_F32: _emit_V_EXT_F32(GlslOp.Fract);
-  V_TRUNC_F32: _emit_V_EXT_F32(GlslOp.Trunc);
-  V_CEIL_F32 : _emit_V_EXT_F32(GlslOp.Ceil);
+  V_FRACT_F32: emit_V_EXT_F32(GlslOp.Fract);
+  V_TRUNC_F32: emit_V_EXT_F32(GlslOp.Trunc);
+  V_CEIL_F32 : emit_V_EXT_F32(GlslOp.Ceil);
 
-  V_FLOOR_F32: _emit_V_EXT_F32(GlslOp.Floor);
-  V_EXP_F32  : _emit_V_EXT_F32(GlslOp.Exp2);
-  V_LOG_F32  : _emit_V_EXT_F32(GlslOp.Log2);
+  V_FLOOR_F32: emit_V_EXT_F32(GlslOp.Floor);
+  V_EXP_F32  : emit_V_EXT_F32(GlslOp.Exp2);
+  V_LOG_F32  : emit_V_EXT_F32(GlslOp.Log2);
 
-  V_RSQ_F32  : _emit_V_EXT_F32(GlslOp.InverseSqrt);
+  V_RSQ_F32  : emit_V_EXT_F32(GlslOp.InverseSqrt);
 
-  V_SQRT_F32 : _emit_V_EXT_F32(GlslOp.Sqrt);
+  V_SQRT_F32 : emit_V_EXT_F32(GlslOp.Sqrt);
 
-  V_SIN_F32  : _emit_V_EXT_F32(GlslOp.Sin);
-  V_COS_F32  : _emit_V_EXT_F32(GlslOp.Cos);
+  V_SIN_F32  : emit_V_EXT_F32(GlslOp.Sin);
+  V_COS_F32  : emit_V_EXT_F32(GlslOp.Cos);
 
-  V_RCP_F32:
-    begin
-     _emit_V_RCP_F32;
-    end;
+  V_RCP_F32  : emit_V_RCP_F32;
 
-  V_FFBL_B32:
-    begin
-     _emit_V_FFBL_B32;
-    end;
+  V_FFBL_B32 : emit_V_FFBL_B32;
 
   else
    Assert(false,'VOP1?'+IntToStr(FSPI.VOP1.OP));

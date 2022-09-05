@@ -5,352 +5,501 @@ unit srTypes;
 interface
 
 uses
-  bittype,
-  Half16,
-  spirv,
-  srNodes,
-  srRefId;
+ sysutils,
+ spirv,
+ srType,
+ ginodes,
+ srNode,
+ srLiteral,
+ srRefId;
 
 type
- TsrDataType=(
-  //Real types
-  dtUnknow,
-  dtBool,
-
-  dtFloat32,
-  dtHalf16,
-
-  dtInt8,
-  dtUint8,
-
-  dtInt16,
-  dtUint16,
-
-  dtInt32,
-  dtUint32,
-
-  dtInt64,
-  dtUint64,
-
-  //Composite types
-  dtVec2b,
-  dtVec3b,
-  dtVec4b,
-
-  dtStruct2u,
-
-  dtVec2u8,
-  dtVec4u8,
-
-  dtVec2i8,
-  dtVec4i8,
-
-  dtVec2u16,
-  dtVec4u16,
-
-  dtVec2i16,
-  dtVec4i16,
-
-  dtVec2u,
-  dtVec3u,
-  dtVec4u,
-
-  dtVec2i,
-  dtVec3i,
-  dtVec4i,
-
-  dtVec2f,
-  dtVec3f,
-  dtVec4f,
-
-  dtVec2h,
-  dtVec4h,
-
-  //Spirv types
-  dtTypeVoid,
-  dtTypeFunction,
-  dtTypePointer,
-  dtTypeStruct,
-  dtTypeArray,
-  dtTypeRuntimeArray,
-  dtTypeImage,
-  dtTypeSampler,
-  dtTypeSampledImage
- );
-
- Pvec2f=^Tvec2f;
- Tvec2f=array[0..1] of Single;
-
- Pvec3f=^Tvec3f;
- Tvec3f=array[0..2] of Single;
-
- Pvec4f=^Tvec4f;
- Tvec4f=array[0..3] of Single;
-
- Pvec2h=^Tvec2h;
- Tvec2h=array[0..1] of THalf16;
-
- Pvec4h=^Tvec4h;
- Tvec4h=array[0..3] of THalf16;
+ ntType=class(TsrNodeVmt)
+  class Procedure zero_read   (node:PsrNode);               override;
+  class Procedure zero_unread (node:PsrNode);               override;
+  class function  Next        (node:PsrNode):Pointer;       override;
+  class function  Prev        (node:PsrNode):Pointer;       override;
+  class function  GetPrintName(node:PsrNode):RawByteString; override;
+  class function  GetRef      (node:PsrNode):Pointer;       override;
+ end;
 
  PPsrType=^PsrType;
  PsrType=^TsrType;
-
- //child - result type
- TsrTypeImageInfo=bitpacked record
-  Dim    :bit3;  //Dim.*
-  Depth  :bit2;  //0:no,1:yes,2:any
-  Arrayed:bit1;  //0:no,1:yes
-  MS     :bit1;  //0:no,1:yes
-  Sampled:bit2;  //0:runtime,1:sampling,2:read/write
-  Format :bit23; //ImageFormat.*
+ TsrType=packed object(TsrNode)
+  private
+   pPrev,pNext,pLeft,pRight:PsrType;
+   //
+   ID:TsrRefId; //post id
+   fdtype:TsrDataType;
+   fsize:DWORD;
+   fOpId:WORD;
+   fcount:WORD;
+   pData:PPsrNode;
+   function  c(n1,n2:PsrType):Integer; static;
+  public
+   property  size:DWORD        read fsize;
+   property  OpId:WORD         read fOpId;
+   property  ItemCount:WORD    read fcount;
+   Procedure Init; inline;
+   function  dtype:TsrDataType;
+   function  GetItem(i:Word):PsrNode;
+   function  GetDWORD(i:Word):DWORD;
+   function  array_stride:DWORD;
+   function  array_count:DWORD;
+   function  storage_class:DWORD;
+   function  image_info:TsrTypeImageInfo;
+   function  GetPrintName:RawByteString;
  end;
 
- PsrImageInfo=^TsrImageInfo;
- TsrImageInfo=packed record
-  dtype:TsrDataType;
-  tinfo:TsrTypeImageInfo;
- end;
-
- TsrType=object
-  pPrev,pNext,pLeft,pRight:PsrType;
-  //----
-  ID:TsrRefId; //post id
-  read_count:DWORD;
-  dtype:TsrDataType;
-  key:packed record
-   OpId:DWORD;
-   count:DWORD;
-   ext:packed record
-    case byte of
-     0:(int_size,int_sign:DWORD);
-     1:(float_size:DWORD);
-     2:(storage_class:DWORD);
-     3:(pField:Pointer);
-     4:(array_count,array_stride:DWORD);
-     5:(vector_count:DWORD);
-     6:(image:TsrTypeImageInfo);
-   end;
-  end;
-  Data:record end;
-  function  c(n1,n2:PsrType):Integer; static;
-  Procedure mark_read;
-  Procedure mark_unread;
-  function  GetCompItem(i:DWORD):PsrType; inline;
-  Procedure SetCompItem(i:DWORD;p:PsrType); inline;
-  Procedure _mark_read_child;
-  Procedure _mark_unread_child;
-  Procedure Clear;
- end;
-
+ PsrTypeList=^TsrTypeList;
  TsrTypeList=object
   type
    TNodeList=specialize TNodeList<PsrType>;
    TNodeFetch=specialize TNodeFetch<PsrType,TsrType>;
   var
-   Alloc:TfnAlloc;
+   FEmit:TCustomEmit;
    FList:TNodeList;
    FNTree:TNodeFetch;
-  function _New(count:DWORD):PsrType;
-  function _Insert(node:PsrType):PsrType;
-  function _Fetch(node:PsrType):PsrType;
-  function _FetchVector(dtype,ctype:TsrDataType;vector_count:DWORD):PsrType;
-  function Fetch(dtype:TsrDataType):PsrType;
-  function FetchPointer(child:PsrType;storage_class:DWORD):PsrType;
-  function FetchFunction(ret:PsrType):PsrType;
-  function FetchFunction1(ret,param:PsrType):PsrType;
-  function FetchStruct(child:PsrType;pField:Pointer):PsrType;
-  function FetchStructNode(node:PsrType;count:DWORD;pField:Pointer):PsrType;
-  function FetchArrayNode(node,child:PsrType;array_count,array_stride:DWORD):PsrType;
-  function FetchArray(child:PsrType;array_count,array_stride:DWORD):PsrType;
-  function FetchRuntimeArray(child:PsrType;array_stride:DWORD):PsrType;
-  function FetchImage(child:PsrType;image_info:TsrTypeImageInfo):PsrType;
-  function FetchSampledImage(child:PsrType):PsrType;
+  Procedure Init(Emit:TCustomEmit);
+  function  _Insert(node:PsrType;copy:Boolean):PsrType;
+  function  _Fetch(node:PsrType;copy:Boolean):PsrType;
+  function  _Fetch0(dtype:TsrDataType;OpId:DWORD):PsrType;
+  function  _FetchVector(dtype:TsrDataType):PsrType;
+  function  _FetchInt(dtype:TsrDataType):PsrType;
+  function  _FetchFloat(dtype:TsrDataType):PsrType;
+  function  _FetchStruct2(dtype:TsrDataType):PsrType;
+  function  _FetchConst(dtype:TsrDataType;Value:QWORD):PsrType;
+  function  Fetch(dtype:TsrDataType):PsrType;
+  function  FetchPointer(child:PsrType;storage_class:DWORD):PsrType;
+  function  FetchFunction(ret:PsrType):PsrType;
+  function  FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):PsrType;
+  function  FetchStruct (count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
+  function  InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
+  function  FetchArray(child:PsrType;array_count:DWORD):PsrType;
+  function  FetchRuntimeArray(child:PsrType):PsrType;
+  function  FetchImage(child:PsrType;image_info:TsrTypeImageInfo):PsrType;
+  function  FetchSampledImage(child:PsrType):PsrType;
+  function  First:PsrType; inline;
  end;
-
-const
- ExtImgBuf:TsrTypeImageInfo=(
-  Dim    :0; //Dim1D
-  Depth  :0;
-  Arrayed:0;
-  MS     :0;
-  Sampled:2;
-  Format :0; //Unknown
- );
-
- ExtImage2D:TsrTypeImageInfo=(
-  Dim    :1; //Dim2D
-  Depth  :0;
-  Arrayed:0;
-  MS     :0;
-  Sampled:1;
-  Format :0; //Unknown
- );
-
-function _GetNodeSize(count:DWORD):ptruint; inline;
-function LazyType2(t1,t2:TsrDataType):TsrDataType;
-function LazyType3(t1,t2,t3:TsrDataType):TsrDataType;
-function isIntVector(rtype:TsrDataType):Boolean; inline;
-function isIntScalar(rtype:TsrDataType):Boolean; inline;
-function GetVecChild(rtype:TsrDataType):TsrDataType;
-function GetVecCount(rtype:TsrDataType):Byte;
-Function GetVecType(elem:TsrDataType;count:Byte):TsrDataType;
-function isVector(rtype:TsrDataType):Boolean; inline;
-function GetTypeHigh(rtype:TsrDataType):QWORD;
-function CompareType(rtype1,rtype2:TsrDataType):Boolean;
-function SignType(rtype:TsrDataType):Byte;
-function BitSizeType(rtype:TsrDataType):Byte;
-function TryBitcastType(rtype1,rtype2:TsrDataType):Boolean;
 
 implementation
 
+//
+
+class Procedure ntType.zero_read(node:PsrNode);
+var
+ i:DWORD;
+begin
+ With PsrType(node)^ do
+ begin
+  if (fcount<>0) then
+   For i:=0 to fcount-1 do
+   begin
+    GetItem(i)^.mark_read(node);
+   end;
+ end;
+end;
+
+class Procedure ntType.zero_unread(node:PsrNode);
+var
+ i:DWORD;
+begin
+ With PsrType(node)^ do
+ begin
+  if (fcount<>0) then
+   For i:=0 to fcount-1 do
+   begin
+    GetItem(i)^.mark_unread(node);
+   end;
+ end;
+end;
+
+class function ntType.Next(node:PsrNode):Pointer;
+begin
+ Result:=PsrType(node)^.pNext;
+end;
+
+class function ntType.Prev(node:PsrNode):Pointer;
+begin
+ Result:=PsrType(node)^.pPrev;
+end;
+
+class function ntType.GetPrintName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrType(node)^.GetPrintName;
+end;
+
+class function ntType.GetRef(node:PsrNode):Pointer;
+begin
+ Result:=@PsrType(node)^.ID;
+end;
+
+//
+
+Procedure TsrType.Init; inline;
+begin
+ fntype:=ntType;
+end;
+
 function TsrType.c(n1,n2:PsrType):Integer;
 begin
- Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrType.key));
+ //first OpId
+ Result:=Integer(n1^.fOpId>n2^.fOpId)-Integer(n1^.fOpId<n2^.fOpId);
  if (Result<>0) then Exit;
- Result:=ComparePtruint(@n1^.Data,@n2^.Data,n1^.key.count);
+ //second fCount
+ Result:=Integer(n1^.fCount>n2^.fCount)-Integer(n1^.fCount<n2^.fCount);
+ if (Result<>0) then Exit;
+ //third pData
+ Result:=ComparePtruint(PPtruint(n1^.pData),PPtruint(n2^.pData),n1^.fCount);
 end;
 
-Procedure TsrType.mark_read;
+function TsrType.dtype:TsrDataType;
 begin
- Inc(read_count);
+ Result:=dtUnknow;
+ if (@Self=nil) then Exit;
+ Result:=fdtype;
 end;
 
-Procedure TsrType.mark_unread;
+function TsrType.GetItem(i:Word):PsrNode;
 begin
- if (read_count<>0) then Dec(read_count);
+ if (i>fCount) then Exit(nil);
+ Result:=pData[i];
 end;
 
-
-function TsrType.GetCompItem(i:DWORD):PsrType; inline;
-begin
- Result:=PPsrType(@Data)[i];
-end;
-
-Procedure TsrType.SetCompItem(i:DWORD;p:PsrType); inline;
-begin
- PPsrType(@Data)[i]:=p;
-end;
-
-Procedure TsrType._mark_read_child;
+function TsrType.GetDWORD(i:Word):DWORD;
 var
- i:DWORD;
+ pCount:PsrLiteral;
 begin
- if (key.count<>0) then
-  For i:=0 to key.count-1 do
-  begin
-   GetCompItem(i)^.mark_read;
-  end;
+ Result:=0;
+ if (i>fCount) then Exit;
+ pCount:=pData[i]^.AsType(ntLiteral);
+ if (pCount=nil) then Exit;
+ Result:=pCount^.Value;
 end;
 
-Procedure TsrType._mark_unread_child;
+function TsrType.array_stride:DWORD;
 var
- i:DWORD;
+ child:PsrType;
 begin
- if (key.count<>0) then
-  For i:=0 to key.count-1 do
-  begin
-   GetCompItem(i)^.mark_unread;
-  end;
+ Result:=0;
+
+ Case fdtype of
+   dtTypeArray:;
+   dtTypeRuntimeArray:;
+  else
+   Exit;
+ end;
+
+ child:=GetItem(0)^.AsType(ntType);
+ if (child=nil) then Exit;
+
+ Result:=child^.fsize;
 end;
 
-Procedure TsrType.Clear;
+function TsrType.array_count:DWORD;
 var
- i:DWORD;
+ pConst:PsrType;
 begin
- if (key.count<>0) then
- begin
-  For i:=0 to key.count-1 do
-  begin
-   GetCompItem(i)^.mark_unread;
-   SetCompItem(i,nil);
-  end;
-  key.count:=0;
+ Result:=0;
+ if (fdtype<>dtTypeArray) then Exit;
+ pConst:=GetItem(1)^.AsType(ntType);
+ if (pConst=nil) then Exit;
+ Result:=pConst^.GetDWORD(1);
+end;
+
+function TsrType.storage_class:DWORD;
+begin
+ Result:=0;
+ if (fdtype<>dtTypePointer) then Exit;
+ Result:=GetDWORD(0);
+end;
+
+function TsrType.image_info:TsrTypeImageInfo;
+
+begin
+ Result:=Default(TsrTypeImageInfo);
+ if (fdtype<>dtTypeImage) then Exit;
+ if (fCount<>7) then Exit;
+ //
+ Result.Dim    :=GetDWORD(1);
+ Result.Depth  :=GetDWORD(2);
+ Result.Arrayed:=GetDWORD(3);
+ Result.MS     :=GetDWORD(4);
+ Result.Sampled:=GetDWORD(5);
+ Result.Format :=GetDWORD(6);
+end;
+
+function type_get_base_name2(node:PsrType):RawByteString;
+var
+ R:PsrRefId;
+ child:PsrType;
+begin
+ Result:='';
+ case node^.dtype of
+  dtTypeImage:
+    begin
+     R:=node^.GetRef;
+     Assert(R<>nil  ,'type_get_base_name2$1');
+     Assert(R^.Alloc,'type_get_base_name2$2');
+     Result:='ti'+IntToStr(R^.ID);
+    end;
+  dtTypeSampledImage:
+    begin
+     child:=node^.GetItem(0)^.AsType(ntType);
+     if (child=nil) then Exit;
+     Result:=type_get_base_name2(child);
+     if (Result='') then Exit;
+     Result:='tm'+Result;
+    end;
+  dtTypeArray:
+    begin
+     child:=node^.GetItem(0)^.AsType(ntType);
+     if (child=nil) then Exit;
+     Result:=type_get_base_name2(child);
+     if (Result='') then Exit;
+     Result:='ta'+Result+IntToStr(node^.array_count);
+    end;
+  dtTypeRuntimeArray:
+    begin
+     child:=node^.GetItem(0)^.AsType(ntType);
+     if (child=nil) then Exit;
+     Result:=type_get_base_name2(child);
+     if (Result='') then Exit;
+     Result:='tr'+Result;
+    end;
+  dtTypeStruct:
+    begin
+     Assert(node^.ID.Alloc);
+     Result:='ts'+IntToStr(node^.ID.ID);
+    end;
+  dtTypeFunction:
+    begin
+     child:=node^.GetItem(0)^.AsType(ntType);
+     if (child=nil) then Exit;
+     Result:=type_get_base_name2(child);
+     if (Result='') then Exit;
+     Result:='tf'+Result;
+    end;
+  dtConstant:
+    begin
+     Result:='tc'+IntToStr(node^.GetDWORD(1));
+    end;
+  else
+    Result:=type_get_base_name1(node^.dtype);
  end;
 end;
 
-function _GetNodeSize(count:DWORD):ptruint; inline;
+function type_get_base_name3(node:PsrType):RawByteString;
+var
+ child:PsrType;
 begin
- Result:=SizeOf(TsrType)+SizeOf(Pointer)*count;
-end;
-
-function TsrTypeList._New(count:DWORD):PsrType;
-begin
- Result:=Alloc(_GetNodeSize(count));
-end;
-
-function TsrTypeList._Insert(node:PsrType):PsrType;
-begin
- Result:=FNTree.Find(node);
- if (Result=nil) then
- begin
-  FNTree.Insert(node);
-  FList.Push_tail(node);
-  Result:=node;
- end else
- begin
-  node^._mark_unread_child;
+ case node^.dtype of
+  dtTypePointer:
+    begin
+     child:=node^.GetItem(1)^.AsType(ntType);
+     if (child=nil) then Exit;
+     Result:=type_get_base_name2(child);
+     if (Result='') then Exit;
+     Case node^.storage_class of
+      StorageClass.UniformConstant :Result:='p'+Result+'_uc';
+      StorageClass.Input           :Result:='p'+Result+'_in';
+      StorageClass.Uniform         :Result:='p'+Result+'_uf';
+      StorageClass.Output          :Result:='p'+Result+'_ot';
+      StorageClass.Workgroup       :Result:='p'+Result+'_wg';
+      StorageClass.CrossWorkgroup  :Result:='p'+Result+'_cw';
+      StorageClass.Private_        :Result:='p'+Result+'_pv';
+      StorageClass.Function_       :Result:='p'+Result+'_fc';
+      StorageClass.PushConstant    :Result:='p'+Result+'_pc';
+      StorageClass.Image           :Result:='p'+Result+'_im';
+      StorageClass.StorageBuffer   :Result:='p'+Result+'_sb';
+      else
+       Exit('');
+     end;
+    end;
+  else
+   begin
+    Result:=type_get_base_name2(node);
+   end;
  end;
 end;
 
-function TsrTypeList._Fetch(node:PsrType):PsrType;
+function TsrType.GetPrintName:RawByteString;
+begin
+ Result:=type_get_base_name3(@Self);
+ if (Result='') then
+ begin
+  Assert(ID.Alloc);
+  Result:='t'+IntToStr(ID.ID);
+ end;
+end;
+
+//
+
+Procedure TsrTypeList.Init(Emit:TCustomEmit);
+begin
+ FEmit:=Emit;
+end;
+
+function TsrTypeList._Insert(node:PsrType;copy:Boolean):PsrType;
 var
  size:ptruint;
 begin
+ Result:=FEmit.Alloc(SizeOf(TsrType));
+ Move(node^,Result^,SizeOf(TsrType));
+
+ if copy and (node^.fCount<>0) then
+ begin
+  size:=SizeOf(Pointer)*node^.fCount;
+  Result^.pData:=FEmit.Alloc(size);
+  Move(node^.pData^,Result^.pData^,Size);
+ end;
+
+ FList.Push_tail(Result);
+end;
+
+function TsrTypeList._Fetch(node:PsrType;copy:Boolean):PsrType;
+begin
  Result:=FNTree.Find(node);
  if (Result=nil) then
  begin
-  size:=_GetNodeSize(node^.key.count);
-  Result:=Alloc(size);
-  Move(node^,Result^,Size);
+  Result:=_Insert(node,copy);
   FNTree.Insert(Result);
-  FList.Push_tail(Result);
- end else
- begin
-  node^._mark_unread_child;
  end;
 end;
 
-function TsrTypeList._FetchVector(dtype,ctype:TsrDataType;vector_count:DWORD):PsrType;
+function TsrTypeList._Fetch0(dtype:TsrDataType;OpId:DWORD):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
- child:PsrType;
+ node:TsrType;
 begin
  Result:=nil;
- child:=Fetch(ctype);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtype;
- rec.node.key.OpId:=Op.OpTypeVector;
- rec.node.key.ext.vector_count:=vector_count;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtype;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=OpId;
+ Result:=_Fetch(@node,True);
+end;
+
+function TsrTypeList._FetchVector(dtype:TsrDataType):PsrType;
+var
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..1] of PsrNode;
+begin
+ Result:=nil;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=Fetch(dtype.Child);
+ item[1]:=pLiteralList^.FetchLiteral(dtype.Count,nil);
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtype;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=Op.OpTypeVector;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
+end;
+
+function TsrTypeList._FetchInt(dtype:TsrDataType):PsrType;
+var
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..1] of PsrNode;
+begin
+ Result:=nil;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=pLiteralList^.FetchLiteral(dtype.BitSize,nil);
+ item[1]:=pLiteralList^.FetchLiteral(dtype.Sign   ,nil);
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtype;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=Op.OpTypeInt;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
+end;
+
+function TsrTypeList._FetchFloat(dtype:TsrDataType):PsrType;
+var
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..0] of PsrNode;
+begin
+ Result:=nil;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=pLiteralList^.FetchLiteral(dtype.BitSize,nil);
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtype;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=Op.OpTypeFloat;
+ node.fCount:=1;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
+end;
+
+function TsrTypeList._FetchStruct2(dtype:TsrDataType):PsrType;
+var
+ node:TsrType;
+ item:array[0..1] of PsrNode;
+begin
+ Result:=nil;
+ item[0]:=Fetch(dtype.Child);
+ item[1]:=item[0];
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtype;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=Op.OpTypeStruct;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
+end;
+
+function TsrTypeList._FetchConst(dtype:TsrDataType;Value:QWORD):PsrType;
+var
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..1] of PsrNode;
+begin
+ Result:=nil;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=Fetch(dtype);
+ item[1]:=pLiteralList^.FetchConst(dtype,Value);
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtConstant;
+ node.fsize :=dtype.BitSize div 8;
+ node.fOpId :=Op.OpConstant;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
 end;
 
 function TsrTypeList.Fetch(dtype:TsrDataType):PsrType;
-var
- rec:record
-  node:TsrType;
-  align:array[0..1] of Pointer;
- end;
- child:PsrType;
 begin
  Result:=nil;
- rec.node:=Default(TsrType);
+
  Case dtype of
   dtUnknow:;
 
   dtBool:
     begin
-     rec.node.dtype:=dtype;
-     rec.node.key.OpId:=Op.OpTypeBool;
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_Fetch0(dtype,Op.OpTypeBool);
     end;
+
+  //
 
   dtInt8,
   dtUint8,
@@ -361,38 +510,24 @@ begin
   dtInt64,
   dtUint64:
     begin
-     rec.node.dtype:=dtype;
-     rec.node.key.OpId:=Op.OpTypeInt;
-     rec.node.key.ext.int_sign:=SignType(dtype);
-     rec.node.key.ext.int_size:=BitSizeType(dtype);
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_FetchInt(dtype);
     end;
 
+  dtHalf16,
   dtFloat32,
-  dtHalf16:
+  dtFloat64:
     begin
-     rec.node.dtype:=dtype;
-     rec.node.key.OpId:=Op.OpTypeFloat;
-     rec.node.key.ext.float_size:=BitSizeType(dtype);
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_FetchFloat(dtype);
     end;
 
   dtTypeVoid:
     begin
-     rec.node.dtype:=dtype;
-     rec.node.key.OpId:=Op.OpTypeVoid;
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_Fetch0(dtype,Op.OpTypeVoid);
     end;
 
   dtTypeSampler:
     begin
-     rec.node.dtype:=dtype;
-     rec.node.key.OpId:=Op.OpTypeSampler;
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_Fetch0(dtype,Op.OpTypeSampler);
     end;
 
   //
@@ -421,26 +556,21 @@ begin
   dtVec3i,
   dtVec4i,
 
+  dtVec2h,
+  dtVec4h,
+
   dtVec2f,
   dtVec3f,
-  dtVec4f,
-
-  dtVec2h,
-  dtVec4h:Result:=_FetchVector(dtype,GetVecChild(dtype),GetVecCount(dtype));
+  dtVec4f:
+   begin
+    Result:=_FetchVector(dtype);
+   end;
 
   //
 
   dtStruct2u:
     begin
-     child:=Fetch(dtUint32);
-     child^.mark_read;
-     rec.node.dtype:=dtStruct2u;
-     rec.node.key.OpId:=Op.OpTypeStruct;
-     rec.node.key.count:=2;
-     rec.node.SetCompItem(0,child);
-     rec.node.SetCompItem(1,child);
-     Result:=_Fetch(@rec.node);
-     Result^.mark_read;
+     Result:=_FetchStruct2(dtype);
     end;
 
   //
@@ -453,500 +583,182 @@ end;
 
 function TsrTypeList.FetchPointer(child:PsrType;storage_class:DWORD):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..1] of PsrNode;
 begin
  Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypePointer;
- rec.node.key.OpId:=Op.OpTypePointer;
- rec.node.key.ext.storage_class:=storage_class;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=pLiteralList^.FetchLiteral(storage_class,PChar(StorageClass.GetStr(storage_class)));
+ item[1]:=child;
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypePointer;
+ node.fOpId :=Op.OpTypePointer;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
 end;
 
 function TsrTypeList.FetchFunction(ret:PsrType):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
+ node:TsrType;
 begin
  Assert(ret<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeFunction;
- rec.node.key.OpId:=Op.OpTypeFunction;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,ret);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeFunction;
+ node.fOpId :=Op.OpTypeFunction;
+ node.fCount:=1;
+ node.pData :=@ret;
+ Result:=_Fetch(@node,True);
 end;
 
-function TsrTypeList.FetchFunction1(ret,param:PsrType):PsrType;
+function TsrTypeList.FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:array[0..1] of Pointer;
- end;
+ node:TsrType;
 begin
- Assert(ret<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeFunction;
- rec.node.key.OpId:=Op.OpTypeFunction;
- rec.node.key.count:=2;
- rec.node.SetCompItem(0,ret);
- rec.node.SetCompItem(1,param);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ Assert(count<>0);
+ Assert(pData<>nil);
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeFunction;
+ node.fOpId :=Op.OpTypeFunction;
+ node.fCount:=count;
+ node.pData :=Pointer(pData);
+ Result:=_Fetch(@node,copy);
 end;
 
-function TsrTypeList.FetchStruct(child:PsrType;pField:Pointer):PsrType;
+function TsrTypeList.FetchStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
+ node:TsrType;
+begin
+ Assert(count<>0);
+ Assert(pData<>nil);
+ Assert(_size<>0);
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeStruct;
+ node.fsize :=_size;
+ node.fOpId :=Op.OpTypeStruct;
+ node.fCount:=count;
+ node.pData :=Pointer(pData);
+ Result:=_Fetch(@node,copy);
+end;
+
+function TsrTypeList.InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
+var
+ node:TsrType;
+begin
+ Assert(count<>0);
+ Assert(pData<>nil);
+ Assert(_size<>0);
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeStruct;
+ node.fsize :=_size;
+ node.fOpId :=Op.OpTypeStruct;
+ node.fCount:=count;
+ node.pData :=Pointer(pData);
+ Result:=_Insert(@node,copy);
+end;
+
+function TsrTypeList.FetchArray(child:PsrType;array_count:DWORD):PsrType;
+var
+ node:TsrType;
+ item:array[0..1] of PsrType;
 begin
  Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeStruct;
- rec.node.key.OpId:=Op.OpTypeStruct;
- rec.node.key.ext.pField:=pField;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ //
+ item[0]:=child;
+ item[1]:=_FetchConst(dtUInt32,array_count);
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeArray;
+ node.fsize :=child^.fsize*array_count;
+ node.fOpId :=Op.OpTypeArray;
+ node.fCount:=2;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
 end;
 
-function TsrTypeList.FetchStructNode(node:PsrType;count:DWORD;pField:Pointer):PsrType;
-begin
- Assert(node<>nil);
- node^.dtype:=dtTypeStruct;
- node^.key.OpId:=Op.OpTypeStruct;
- node^.key.ext.pField:=pField;
- node^.key.count:=count;
- Result:=_Insert(node);
- Result^.mark_read;
-end;
-
-function TsrTypeList.FetchArrayNode(node,child:PsrType;array_count,array_stride:DWORD):PsrType;
+function TsrTypeList.FetchRuntimeArray(child:PsrType):PsrType;
 var
- aUint:PsrType;
+ node:TsrType;
 begin
- Assert(node<>nil);
  Assert(child<>nil);
- node^:=Default(TsrType);
- node^.dtype:=dtTypeArray;
- node^.key.OpId:=Op.OpTypeArray;
- node^.key.ext.array_count:=array_count;
- node^.key.ext.array_stride:=array_stride;
- node^.key.count:=2;
- node^.SetCompItem(0,child);
- aUint:=Fetch(dtUInt32);
- node^.SetCompItem(1,aUint);
- FList.Push_tail(node);
- Result:=node;
- Result^.mark_read;
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeRuntimeArray;
+ node.fsize :=DWORD(-1);
+ node.fOpId :=Op.OpTypeRuntimeArray;
+ node.fCount:=1;
+ node.pData :=@child;
+ Result:=_Fetch(@node,True);
 end;
 
-function TsrTypeList.FetchArray(child:PsrType;array_count,array_stride:DWORD):PsrType;
-var
- rec:record
-  node:TsrType;
-  align:array[0..1] of Pointer;
+function Dim_GetStr(w:Word):PChar;
+begin
+ Result:='';
+ Case w of
+  Dim.Dim1D      :Result:='1D';
+  Dim.Dim2D      :Result:='2D';
+  Dim.Dim3D      :Result:='3D';
+  Dim.Cube       :Result:='Cube';
+  Dim.Rect       :Result:='Rect';
+  Dim.Buffer     :Result:='Buffer';
+  Dim.SubpassData:Result:='SubpassData';
+  else;
  end;
- aUint:PsrType;
-begin
- Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeArray;
- rec.node.key.OpId:=Op.OpTypeArray;
- rec.node.key.ext.array_count:=array_count;
- rec.node.key.ext.array_stride:=array_stride;
- rec.node.key.count:=2;
- rec.node.SetCompItem(0,child);
- aUint:=Fetch(dtUInt32);
- rec.node.SetCompItem(1,aUint);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
-end;
-
-function TsrTypeList.FetchRuntimeArray(child:PsrType;array_stride:DWORD):PsrType;
-var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
-begin
- Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeRuntimeArray;
- rec.node.key.OpId:=Op.OpTypeRuntimeArray;
- rec.node.key.ext.array_stride:=array_stride;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
 end;
 
 function TsrTypeList.FetchImage(child:PsrType;image_info:TsrTypeImageInfo):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
+ pLiteralList:PsrLiteralList;
+ node:TsrType;
+ item:array[0..6] of PsrNode;
 begin
  Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeImage;
- rec.node.key.OpId:=Op.OpTypeImage;
- rec.node.key.ext.image:=image_info;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ pLiteralList:=FEmit.GetLiteralList;
+ //
+ item[0]:=child;
+ item[1]:=pLiteralList^.FetchLiteral(image_info.Dim    ,Dim_GetStr(image_info.Dim));
+ item[2]:=pLiteralList^.FetchLiteral(image_info.Depth  ,nil);
+ item[3]:=pLiteralList^.FetchLiteral(image_info.Arrayed,nil);
+ item[4]:=pLiteralList^.FetchLiteral(image_info.MS     ,nil);
+ item[5]:=pLiteralList^.FetchLiteral(image_info.Sampled,nil);
+ item[6]:=pLiteralList^.FetchLiteral(image_info.Format ,PChar(ImageFormat.GetStr(image_info.Format)));
+ //
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeImage;
+ node.fOpId :=Op.OpTypeImage;
+ node.fCount:=7;
+ node.pData :=@item;
+ Result:=_Fetch(@node,True);
 end;
 
 function TsrTypeList.FetchSampledImage(child:PsrType):PsrType;
 var
- rec:record
-  node:TsrType;
-  align:Pointer;
- end;
+ node:TsrType;
 begin
  Assert(child<>nil);
- rec.node:=Default(TsrType);
- rec.node.dtype:=dtTypeSampledImage;
- rec.node.key.OpId:=Op.OpTypeSampledImage;
- rec.node.key.count:=1;
- rec.node.SetCompItem(0,child);
- Result:=_Fetch(@rec.node);
- Result^.mark_read;
+ node:=Default(TsrType);
+ node.Init;
+ node.fdtype:=dtTypeSampledImage;
+ node.fOpId :=Op.OpTypeSampledImage;
+ node.fCount:=1;
+ node.pData :=@child;
+ Result:=_Fetch(@node,True);
 end;
 
-function LazyType2(t1,t2:TsrDataType):TsrDataType;
+function TsrTypeList.First:PsrType; inline;
 begin
- if (t1<>dtUnknow) then Result:=t1 else Result:=t2;
+ Result:=FList.pHead;
 end;
-
-function LazyType3(t1,t2,t3:TsrDataType):TsrDataType;
-begin
- if (t1<>dtUnknow) then Result:=t1 else Result:=t2;
- if (Result=dtUnknow) then Result:=t3;
-end;
-
-function isIntVector(rtype:TsrDataType):Boolean; inline;
-begin
- Case rtype of
-  dtVec2u8,
-  dtVec4u8,
-
-  dtVec2i8,
-  dtVec4i8,
-
-  dtVec2u16,
-  dtVec4u16,
-
-  dtVec2i16,
-  dtVec4i16,
-
-  dtVec2u,
-  dtVec3u,
-  dtVec4u,
-
-  dtVec2i,
-  dtVec3i,
-  dtVec4i:Result:=True;
-  else
-           Result:=False;
- end;
-end;
-
-function isIntScalar(rtype:TsrDataType):Boolean; inline;
-begin
- Case rtype of
-  dtInt8,
-  dtUint8,
-
-  dtInt16,
-  dtUint16,
-
-  dtInt32 ,
-  dtUint32,
-
-  dtInt64 ,
-  dtUint64:Result:=True;
-  else
-           Result:=False;
- end;
-end;
-
-function GetVecChild(rtype:TsrDataType):TsrDataType;
-begin
- Case rtype of
-  dtVec2b,
-  dtVec3b,
-  dtVec4b:Result:=dtBool;
-
-  dtVec2u8,
-  dtVec4u8:Result:=dtUint8;
-
-  dtVec2i8,
-  dtVec4i8:Result:=dtInt8;
-
-  dtVec2u16,
-  dtVec4u16:Result:=dtUint16;
-
-  dtVec2i16,
-  dtVec4i16:Result:=dtInt16;
-
-  dtStruct2u,
-  dtVec2u,
-  dtVec3u,
-  dtVec4u:Result:=dtUint32;
-
-  dtVec2i,
-  dtVec3i,
-  dtVec4i:Result:=dtInt32;
-
-  dtVec2f,
-  dtVec3f,
-  dtVec4f:Result:=dtFloat32;
-
-  dtVec2h,
-  dtVec4h:Result:=dtHalf16;
-  else
-           Result:=dtUnknow;
- end;
-end;
-
-function GetVecCount(rtype:TsrDataType):Byte;
-begin
- Case rtype of
-  dtVec2b,
-  dtVec2u8,
-  dtVec2i8,
-  dtVec2u16,
-  dtVec2i16,
-  dtVec2u,
-  dtVec2i,
-  dtVec2f,
-  dtVec2h,
-  dtStruct2u:Result:=2;
-
-  dtVec3b,
-  dtVec3u,
-  dtVec3i,
-  dtVec3f:Result:=3;
-
-  dtVec4b,
-  dtVec4u8,
-  dtVec4i8,
-  dtVec4u16,
-  dtVec4i16,
-  dtVec4u,
-  dtVec4i,
-  dtVec4f,
-  dtVec4h:Result:=4;
-  else
-          Result:=0;
- end;
-end;
-
-Function GetVecType(elem:TsrDataType;count:Byte):TsrDataType;
-begin
- Result:=dtUnknow;
- if (count<=1) then Exit(elem);
- Case elem of
-  dtBool:
-    Case count of
-     2:Result:=dtVec2b;
-     3:Result:=dtVec3b;
-     4:Result:=dtVec4b;
-    end;
-  dtUint8:
-    Case count of
-     2:Result:=dtVec2u8;
-     4:Result:=dtVec4u8;
-    end;
-  dtInt8:
-    Case count of
-     2:Result:=dtVec2i8;
-     4:Result:=dtVec4i8;
-    end;
-  dtUint16:
-    Case count of
-     2:Result:=dtVec2u16;
-     4:Result:=dtVec4u16;
-    end;
-  dtInt16:
-    Case count of
-     2:Result:=dtVec2i16;
-     4:Result:=dtVec4i16;
-    end;
-  dtHalf16:
-    Case count of
-     2:Result:=dtVec2h;
-     4:Result:=dtVec4h;
-    end;
-  dtFloat32:
-    Case count of
-     2:Result:=dtVec2f;
-     3:Result:=dtVec3f;
-     4:Result:=dtVec4f;
-    end;
-  dtInt32:
-    Case count of
-     2:Result:=dtVec2i;
-     3:Result:=dtVec3i;
-     4:Result:=dtVec4i;
-    end;
-  dtUint32:
-    Case count of
-     2:Result:=dtVec2u;
-     3:Result:=dtVec3u;
-     4:Result:=dtVec4u;
-    end;
-  else;
- end;
-end;
-
-function isVector(rtype:TsrDataType):Boolean; inline;
-begin
- Result:=GetVecChild(rtype)<>dtUnknow;
-end;
-
-function GetTypeHigh(rtype:TsrDataType):QWORD;
-var
- s:Byte;
-begin
- Result:=0;
- if (rtype=dtBool) then Exit(1);
- s:=BitSizeType(rtype);
- Case s of
-   8:Result:=High(Byte);
-  16:Result:=High(Word);
-  32:Result:=High(DWord);
-  64:Result:=High(QWord);
-  else
-     Assert(false);
- end;
-end;
-
-function CompareType(rtype1,rtype2:TsrDataType):Boolean;
-begin
- Case rtype1 of
-  dtInt8,
-  dtUint8:Result:=(rtype2=dtInt8) or (rtype2=dtUint8);
-
-  dtInt16,
-  dtUint16:Result:=(rtype2=dtInt16) or (rtype2=dtUint16);
-
-  dtInt32,
-  dtUint32:Result:=(rtype2=dtInt32) or (rtype2=dtUint32);
-
-  dtVec2u8,
-  dtVec2i8:Result:=(rtype2=dtVec2u8) or (rtype2=dtVec2i8);
-
-  dtVec4u8,
-  dtVec4i8:Result:=(rtype2=dtVec4u8) or (rtype2=dtVec4i8);
-
-  dtVec2u16,
-  dtVec2i16:Result:=(rtype2=dtVec2u16) or (rtype2=dtVec2i16);
-
-  dtVec4u16,
-  dtVec4i16:Result:=(rtype2=dtVec4u16) or (rtype2=dtVec4i16);
-
-  dtVec2u,
-  dtVec2i:Result:=(rtype2=dtVec2u) or (rtype2=dtVec2i);
-
-  dtVec3u,
-  dtVec3i:Result:=(rtype2=dtVec3u) or (rtype2=dtVec3i);
-
-  dtVec4u,
-  dtVec4i:Result:=(rtype2=dtVec4u) or (rtype2=dtVec4i);
-
- else
-          Result:=(rtype1=rtype2);
- end;
-end;
-
-function SignType(rtype:TsrDataType):Byte;
-begin
- Result:=0;
- Case rtype of
-
-  dtInt8,
-  dtInt16,
-  dtInt32,
-  dtInt64:Result:=1;
-
-  dtHalf16,
-  dtFloat32,
-  dtVec2h,
-  dtVec4h,
-  dtVec2f,
-  dtVec3f,
-  dtVec4f:Result:=1;
-
-  else;
- end;
-end;
-
-function BitSizeType(rtype:TsrDataType):Byte;
-begin
- Result:=0;
- Case rtype of
-
-  dtInt8,
-  dtUint8:Result:=8;
-
-  dtInt16,
-  dtUint16,
-  dtVec2u8,
-  dtVec2i8,
-  dtHalf16:Result:=16;
-
-  dtUnknow,
-  dtBool,    //for typecast
-  dtFloat32,
-  dtInt32,
-  dtUint32,
-  dtVec4u8,
-  dtVec4i8,
-  dtVec2u16,
-  dtVec2i16,
-  dtVec2h:Result:=32;
-
-  dtInt64,
-  dtUint64,
-  dtVec4u16,
-  dtVec4i16,
-  dtVec2f,
-  dtVec4h,
-  dtStruct2u:Result:=64;
-
-  dtVec3u,
-  dtVec3f:Result:=96;
-  dtVec4f:Result:=128;
-
-  else;
- end;
-end;
-
-function TryBitcastType(rtype1,rtype2:TsrDataType):Boolean;
-var
- s,d:Byte;
-begin
- s:=BitSizeType(rtype1);
- d:=BitSizeType(rtype2);
- Result:=(s<>0) and (d<>0) and (s=d);
-end;
-
 
 end.
 

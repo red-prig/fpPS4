@@ -1,16 +1,17 @@
-unit srParser;
+unit srCFGCursor;
 
 {$mode ObjFPC}{$H+}
 
 interface
 
 uses
- sysutils,
- srLabel,
- srCFG,
- srNodes;
+ srCFGLabel,
+ srCFGParser,
+ ginodes,
+ srNode;
 
 type
+ PsrCursor=^TsrCursor;
  TsrCursor=object(TsrLCursor)
   pCode:PsrCodeBlock;
   pBlock:PsrCFGBlock;
@@ -18,8 +19,11 @@ type
  end;
 
  TsrCodeList=specialize TNodeQueue<PsrCodeBlock>;
+
+ PsrCodeHeap=^TsrCodeHeap;
  TsrCodeHeap=object(TsrCodeList)
-  Alloc:TfnAlloc;
+  FEmit:TCustomEmit;
+  Procedure Init(Emit:TCustomEmit);
   function  FindByPtr(base:Pointer):PsrCodeBlock;
   function  FetchByPtr(base:Pointer;bType:TsrBlockType):TsrCursor;
  end;
@@ -27,6 +31,11 @@ type
 implementation
 
 //
+
+Procedure TsrCodeHeap.Init(Emit:TCustomEmit);
+begin
+ FEmit:=Emit;
+end;
 
 function TsrCodeHeap.FindByPtr(base:Pointer):PsrCodeBlock;
 var
@@ -52,8 +61,8 @@ begin
  node:=FindByPtr(base);
  if (node=nil) then
  begin
-  node:=Alloc(SizeOf(TsrCodeBlock));
-  node^.Alloc:=Alloc;
+  node:=FEmit.Alloc(SizeOf(TsrCodeBlock));
+  node^.FEmit:=FEmit;
   if parse_code_cfg(bType,base,node)>1 then Assert(False);
   Push_tail(node);
  end;

@@ -7,39 +7,32 @@ interface
 uses
   sysutils,
   ps4_pssl,
-  srTypes,
-  srConst,
+  srType,
   srReg,
-  SprvEmit,
-  emit_op;
+  emit_fetch;
 
 type
- TEmit_SOPK=object(TEmitOp)
-  procedure _emit_SOPK;
-  procedure _emit_S_MOVK_I32;
+ TEmit_SOPK=class(TEmitFetch)
+  procedure emit_SOPK;
+  procedure emit_S_MOVK_I32;
  end;
 
 implementation
 
-procedure TEmit_SOPK._emit_S_MOVK_I32;
+procedure TEmit_SOPK.emit_S_MOVK_I32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
 begin
- dst:=FRegsStory.get_sdst7(FSPI.SOPK.SDST);
- src:=FetchReg(FConsts.Fetchi(dtInt32,SmallInt(FSPI.SOPK.SIMM)));
- _MakeCopy(dst,src);
+ dst:=get_sdst7(FSPI.SOPK.SDST);
+ SetConst_i(dst,dtInt32,SmallInt(FSPI.SOPK.SIMM));
 end;
 
-procedure TEmit_SOPK._emit_SOPK;
+procedure TEmit_SOPK.emit_SOPK;
 begin
 
  Case FSPI.SOPK.OP of
 
-  S_MOVK_I32:
-   begin
-    _emit_S_MOVK_I32;
-   end;
+  S_MOVK_I32: emit_S_MOVK_I32;
 
   else
    Assert(false,'SOPK?'+IntToStr(FSPI.SOPK.OP));

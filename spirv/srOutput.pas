@@ -5,13 +5,14 @@ unit srOutput;
 interface
 
 uses
-  typinfo,
-  spirv,
-  srNodes,
-  srOp,
-  srLayout,
-  srVariable,
-  srDecorate;
+ typinfo,
+ spirv,
+ srNode,
+ srType,
+ srOp,
+ srLayout,
+ srVariable,
+ srDecorate;
 
 type
  TpsslExportType=(
@@ -39,55 +40,83 @@ type
   etParam28,etParam29,etParam30,etParam31
  );
 
- PsrOutput=^TsrOutput;
- TsrOutput=object(TsrDescriptor)
-  etype:TpsslExportType;
-  function GetName:RawByteString;
+ ntOutput=class(ntDescriptor)
+  class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
+  class function  GetStorageName(node:PsrNode):RawByteString; override;
  end;
 
+ PsrOutput=^TsrOutput;
+ TsrOutput=object(TsrDescriptor)
+  fwrite_count:DWORD;
+  etype:TpsslExportType;
+  function GetStorageName:RawByteString;
+ end;
+
+ PsrOutputList=^TsrOutputList;
  TsrOutputList=object
+  FEmit:TCustomEmit;
   data:array[TpsslExportType] of TsrOutput;
-  Procedure Init;
-  function  Fetch(etype:TpsslExportType):PsrOutput;
-  procedure AllocBinding(Decorates:PsrDecorateList);
+  Procedure Init(Emit:TCustomEmit); inline;
+  function  Fetch(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
+  procedure AllocBinding;
   procedure AllocEntryPoint(EntryPoint:PSpirvOp);
  end;
 
 implementation
 
-function TsrOutput.GetName:RawByteString;
+class Function ntOutput.pwrite_count(node:PsrNode):PDWORD;
+begin
+ Result:=@PsrOutput(node)^.fwrite_count;
+end;
+
+class function ntOutput.GetStorageName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrOutput(node)^.GetStorageName;
+end;
+
+//
+
+function TsrOutput.GetStorageName:RawByteString;
 begin
  Result:=GetEnumName(TypeInfo(TpsslExportType),ord(etype));
 end;
 
-Procedure TsrOutputList.Init;
+Procedure TsrOutputList.Init(Emit:TCustomEmit); inline;
 var
  i:TpsslExportType;
 begin
+ FEmit:=Emit;
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
  begin
-  data[i].etype:=i;
+  data[i].fntype  :=ntOutput;
+  data[i].etype   :=i;
   data[i].FStorage:=StorageClass.Output;
   data[i].FBinding:=-1;
  end;
 end;
 
-function TsrOutputList.Fetch(etype:TpsslExportType):PsrOutput;
+function TsrOutputList.Fetch(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
 begin
  Result:=@data[etype];
+ //
+ Result^.InitType(rtype,FEmit);
+ Result^.InitVar(FEmit);
 end;
 
-procedure TsrOutputList.AllocBinding(Decorates:PsrDecorateList);
+//
+
+procedure TsrOutputList.AllocBinding;
 var
+ pDecorateList:PsrDecorateList;
  i:TpsslExportType;
  pVar:PsrVariable;
  FLocation:Integer;
 begin
- if (Decorates=nil) then Exit;
+ pDecorateList:=FEmit.GetDecorateList;
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
  begin
   pVar:=data[i].pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and data[i].IsUsed then
   begin
    Case i of
     etMrt0..etMrt7:
@@ -95,7 +124,7 @@ begin
        if (data[i].FBinding=-1) then //alloc
        begin
         FLocation:=ord(i)-ord(etMrt0);
-        Decorates^.emit_decorate(ntVar,pVar,Decoration.Location,FLocation);
+        pDecorateList^.OpDecorate(pVar,Decoration.Location,FLocation);
         data[i].FBinding:=FLocation;
        end;
        //Decoration.Index; ???
@@ -103,13 +132,13 @@ begin
     //etMrtz,
     etPos0:
       begin
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.BuiltIn,BuiltIn.Position);
+       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
       end;
     //etPos1..etPos3,
     etParam0..etParam31: //interpolate param
      begin
       FLocation:=ord(i)-ord(etParam0);
-      Decorates^.emit_decorate(ntVar,pVar,Decoration.Location,FLocation);
+      pDecorateList^.OpDecorate(pVar,Decoration.Location,FLocation);
       data[i].FBinding:=FLocation;
      end;
     else
@@ -129,9 +158,10 @@ begin
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
  begin
   pVar:=data[i].pVar;
-  if (pVar<>nil) then
+  if (not data[i].IsUsed) and (pVar<>nil) then assert(false);
+  if (pVar<>nil) and data[i].IsUsed then
   begin
-   EntryPoint^.AddParam(ntVar,pVar);
+   EntryPoint^.AddParam(pVar);
   end;
  end;
 end;

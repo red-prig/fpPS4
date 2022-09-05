@@ -1,13 +1,12 @@
-unit srLabel;
+unit srCFGLabel;
 
 {$mode ObjFPC}{$H+}
 
 interface
 
 uses
- sysutils,
  ps4_pssl,
- srNodes;
+ ginodes;
 
 type
  TSrcAdr=object

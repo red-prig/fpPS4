@@ -1,228 +1,241 @@
 unit srOpUtils;
 
 {$mode objfpc}{$H+}
-{$MODESWITCH ADVANCEDRECORDS}
 
 interface
 
 uses
  spirv,
- srNodes,
- srTypes,
+ srNode,
+ srOp,
  srReg,
- srConst,
  srLayout,
- srVariable,
- srOp;
+ srVariable;
 
 const
- OpLinks  =DWORD(-1);
- OpBlock  =DWORD(-2);
- OpMakeExp=DWORD(-3);
- OpMakeVec=DWORD(-4);
- OpIAddExt=DWORD(-5);
- OpISubExt=DWORD(-6);
- OpAbsDiff=DWORD(-7);
- OpWQM32  =DWORD(-8);
- OpPackOfs=DWORD(-9);
- //OpMED3F
+ OpIAddExt=DWORD(-1);
+ OpISubExt=DWORD(-2);
+ OpAbsDiff=DWORD(-3);
+ OpWQM32  =DWORD(-4);
 
- OpCUBEID =DWORD(-10);
- OpCUBESC =DWORD(-11);
- OpCUBETC =DWORD(-12);
- OpCUBEMA =DWORD(-13);
+ OpBFEU32 =DWORD(-5);
+ OpBFIB32 =DWORD(-6);
 
- OpMakeCM =DWORD(-14);
+ OpPackAnc=DWORD(-7);
+ OpPackOfs=DWORD(-8);
+ OpMakeExp=DWORD(-9);
+ OpMakeVec=DWORD(-10);
+ OpMakeCub=DWORD(-11);
 
-type
- TOpParamNodeHelper = record helper for TOpParamNode
-  function AsParam:TOpParamSingle;
-  function AsReg:Pointer;
-  function AsVar:Pointer;
-  function AsChain:Pointer;
-  function TryGetValue(var V:DWORD):Boolean;
- end;
+ OpCUBEID =DWORD(-12);
+ OpCUBESC =DWORD(-13);
+ OpCUBETC =DWORD(-14);
+ OpCUBEMA =DWORD(-15);
 
-function  InsSpirvOp(pLine,pNew:PspirvOp):PSpirvOp;
-Procedure MarkUnreadParamSingle(const node:TOpParamSingle);
+function  InsSpirvOp(pLine,pNew:PspirvOp):PspirvOp;
 Function  get_inverse_cmp_op(OpId:DWORD):DWORD;
 Function  is_term_op(OpId:DWORD):Boolean;
 Function  is_merge_op(OpId:DWORD):Boolean;
 Function  is_term_op(pLine:PspirvOp):Boolean;
-procedure _up_merge_line(var pLine:PspirvOp);
+procedure up_merge_line(var pLine:PspirvOp);
 function  FindUpSameOp(pLine,node:PspirvOp):PspirvOp;
 
-function  isGTLine(p1,p2:PspirvOp):Boolean;  //(p1>p2)
-function  IsGTFlow(pSrc,pDst:PSpirvOp):Boolean;
+function  GetGlobalIndex(pLine:PspirvOp):DWORD;
+function  MaxLine(p1,p2:PspirvOp):PspirvOp;
 function  GetMaxPlace(pLine:PSpirvOp;count:Byte;src:PPsrRegNode):PSpirvOp;
+
+function  GetChainRegNode(node:PsrRegNode):PsrChain;
+function  GetSourceRegNode(node:PsrRegNode):PsrNode;
+
+function  flow_down_next_up(pLine:PspirvOp):PspirvOp;
+function  flow_down_prev_up(pLine:PspirvOp):PspirvOp;
 
 implementation
 
-function TOpParamNodeHelper.AsParam:TOpParamSingle;
-begin
- Result:=Default(TOpParamSingle);
- if (@Self=nil) then Exit;
- Result.ntype:=ntype;
- Result.pData:=pData;
-end;
-
-function TOpParamNodeHelper.AsReg:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntReg) then Exit;
- Result:=pData;
-end;
-
-function TOpParamNodeHelper.AsVar:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntVar) then Exit;
- Result:=pData;
-end;
-
-function TOpParamNodeHelper.AsChain:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntChain) then Exit;
- Result:=pData;
-end;
-
-function TOpParamNodeHelper.TryGetValue(var V:DWORD):Boolean;
-begin
- Result:=False;
- if (@Self=nil) then Exit;
- if (ntype<>ntLiteral) then Exit;
- V:=Value;
- Result:=True;
-end;
-
 //--
 
-function InsSpirvOp(pLine,pNew:PspirvOp):PSpirvOp;
+function flow_down_next_up(pLine:PspirvOp):PspirvOp;
+begin
+ Result:=pLine^.First;
+ if (Result=nil) then
+ begin
+  repeat
+   Result:=pLine^.Next;
+   pLine:=pLine^.Parent;
+  until (pLine=nil) or (Result<>nil);
+ end;
+end;
+
+function flow_down_prev_up(pLine:PspirvOp):PspirvOp;
+begin
+ Result:=pLine^.Last;
+ if (Result=nil) then
+ begin
+  repeat
+   Result:=pLine^.Prev;
+   pLine:=pLine^.Parent;
+  until (pLine=nil) or (Result<>nil);
+ end;
+end;
+
+function flow_prev_up(pLine:PspirvOp):PspirvOp;
+begin
+ repeat
+  Result:=pLine^.Prev;
+  pLine:=pLine^.Parent;
+ until (pLine=nil) or (Result<>nil);
+end;
+
+function InsSpirvOp(pLine,pNew:PspirvOp):PspirvOp;
+var
+ tmp:PspirvOp;
 begin
  Result:=nil;
  Assert(pLine<>nil);
  if (pLine=nil) or (pNew=nil) then Exit;
 
- if (pLine^.pNext<>nil) then
+ if (pLine^.Next<>nil) then
+ if pNew^.IsType(ntOp) then
  begin
-  pNew^.adr:=pLine^.adr;
+  tmp:=pLine;
+  while (not tmp^.IsType(ntOp)) do
+  begin
+   tmp:=flow_down_prev_up(tmp);
+   Assert(tmp<>nil);
+  end;
+  pNew^.Adr:=tmp^.Adr;
  end;
 
  pLine^.InsertAfter(pNew);
  Result:=pNew;
 end;
 
-Procedure MarkUnreadParamSingle(const node:TOpParamSingle);
+function GetCurrentIndex(pLine:PspirvOp):DWORD;
+var
+ pParent:PsrOpBlock;
+ node:PspirvOp;
 begin
- Case node.ntype of
-  ntLiteral:;
-  ntConst:PsrConst   (node.pData)^.mark_unread;
-  ntType :PsrType    (node.pData)^.mark_unread;
-  ntFunc :PSpirvFunc (node.pData)^.mark_unread;
-  ntVar  :PsrVariable(node.pData)^.mark_unread;
-  ntRefId:;
-  ntReg  :PsrRegNode (node.pData)^.mark_unread;
-  //ntReg  :RegUnmark(node.pData);
-  ntChain:PsrChain  (node.pData)^.mark_unread;
-  else
-    Assert(false);
+ Result:=0;
+ if (pLine=nil) then Exit;
+ pParent:=pLine^.Parent;
+ if (pParent=nil) then Exit;
+ node:=pParent^.First;
+ While (node<>nil) and (node<>pLine) do
+ begin
+  Result:=Result+node^.GetIndexCount;
+  node:=node^.Next;
+ end;
+end;
+
+function GetGlobalIndex(pLine:PspirvOp):DWORD;
+var
+ pParent:PsrOpBlock;
+ node:PspirvOp;
+begin
+ Result:=0;
+ if (pLine=nil) then Exit;
+ node:=pLine;
+ pParent:=node^.Parent;
+ While (pParent<>nil) do
+ begin
+  Result:=Result+GetCurrentIndex(node);
+  node:=PspirvOp(pParent);
+  pParent:=node^.Parent;
  end;
 end;
 
 function isGTLine(p1,p2:PspirvOp):Boolean; //(p1>p2)
 begin
  Result:=False;
- p2:=p2^.pNext;
+ p2:=p2^.Next;
  While (p2<>nil) do
  begin
   if (p1=p2) then Exit(True);
-  p2:=p2^.pNext;
+  p2:=p2^.Next;
  end;
 end;
 
-function isGTELine(p1,p2:PspirvOp):Boolean; //(p1>=p2)
+Function IsGTLevel(p1,p2:PspirvOp):Boolean; //(p1>p2)
+var
+ pParent1:PsrOpBlock;
+ pParent2:PsrOpBlock;
 begin
  Result:=False;
- While (p2<>nil) do
+ pParent1:=p1^.Parent;
+ pParent2:=p2^.Parent;
+ Result:=(pParent1^.Level>pParent2^.Level);
+end;
+
+function MaxLine(p1,p2:PspirvOp):PspirvOp;
+var
+ pParent:PsrOpBlock;
+ node:PspirvOp;
+ i,w:DWORD;
+begin
+ Result:=nil;
+ if (p1=nil) then Exit(p2);
+ if (p2=nil) or (p1=p2) then Exit(p1);
+
+ if IsGTLevel(p2,p1) then //(p2>p1)
  begin
-  if (p1=p2) then Exit(True);
-  p2:=p2^.pNext;
+  //swap
+  node:=p1;
+  p1:=p2;
+  p2:=node;
+ end;
+
+ i:=0;
+ node:=p1;
+ pParent:=node^.Parent;
+ While (pParent<>nil) do
+ begin
+  if (pParent=p2^.Parent) then
+  begin
+   if isGTLine(node,p2) then //(node>p2)
+   begin
+    //Assert(not isGTLine(p2,node));
+    Exit(p1);
+   end else
+   begin
+    //Assert(isGTLine(p2,node));
+    Exit(p2);
+   end;
+  end;
+  i:=i+GetCurrentIndex(node);
+  node:=PspirvOp(pParent);
+  pParent:=node^.Parent;
+ end;
+
+ w:=GetGlobalIndex(p2);
+ if (i>w) then
+ begin
+  Result:=p1;
+ end else
+ begin
+  Result:=p2;
  end;
 end;
 
 Function IsParentOf(pLine,pCurr:PsrOpBlock):Boolean;
 begin
  Result:=False;
+ if not pLine^.IsType(ntOpBlock) then Exit;
+ if not pCurr^.IsType(ntOpBlock) then Exit;
  While (pLine<>nil) do
  begin
   if (pLine=pCurr) then Exit(True);
-  pLine:=pLine^.pParent;
+  pLine:=pLine^.Parent;
  end;
 end;
 
-function FindBlockLine(pCurent,node:PsrOpBlock):PspirvOp;
-var
- tmp:PspirvOp;
+Function IsParentOfLine(pLine,pCurr:PSpirvOp):Boolean;
 begin
- Result:=nil;
- if (pCurent=nil) then Exit;
- tmp:=pCurent^.pHead;
- While (tmp<>nil) do
- begin
-  if (tmp^.OpId=OpBlock) and (tmp^.dst.pData=node) then
-  begin
-   Exit(tmp);
-  end;
-  tmp:=tmp^.pNext;
- end;
-end;
-
-{
- [pSrc]
-  |
-  V
-  [pBlock] -> [pDst]
-}
-
-function IsGTFlow(pSrc,pDst:PSpirvOp):Boolean;
-var
- pLine,pCurr:PsrOpBlock;
- tmp:PSpirvOp;
-begin
- Result:=False;
-
- pLine:=pDst^.pParent;
- pCurr:=pSrc^.pParent;
-
- While (pLine<>nil) do
- begin
-
-  if (pLine=pCurr) then
-  begin
-   Result:=isGTELine(pSrc,pDst);
-   Exit;
-  end;
-
-  if (pLine^.pParent=nil) then Exit;
-
-  tmp:=pLine^.pUpLine;
-  if (tmp=nil) then
-  begin
-   tmp:=FindBlockLine(pLine^.pParent,pLine);
-  end;
-  pDst:=tmp;
-
-  pLine:=pDst^.pParent;
- end;
+ Result:=IsParentOf(pLine^.Parent,pCurr^.Parent);
 end;
 
 function GetMaxPlace(pLine:PSpirvOp;count:Byte;src:PPsrRegNode):PSpirvOp;
 var
- m,t:PSpirvOp;
+ m:PSpirvOp;
  i:Byte;
 begin
  Result:=pLine;
@@ -230,25 +243,10 @@ begin
  m:=nil;
  For i:=0 to count-1 do
  begin
-  t:=src[i]^.pLine;
-  if not src[i]^.is_const then
-  if IsParentOf(pLine^.pParent,t^.pParent) then
+  if (not src[i]^.is_const) then
+  if IsParentOfLine(pLine,src[i]^.pLine) then
   begin
-   if (m=nil) then
-   begin
-    m:=t;
-   end else
-   if (m^.pParent=t^.pParent) then
-   begin
-    if isGTLine(t,m) then
-    begin
-     m:=t;
-    end;
-   end else
-   if (t^.pParent^.FLevel>m^.pParent^.FLevel) then
-   begin
-    m:=t;
-   end;
+   m:=MaxLine(m,src[i]^.pLine);
   end;
  end;
  if (m<>nil) then
@@ -325,36 +323,57 @@ begin
  if (pLine=nil) then Exit;
 
  repeat //up
-  Case pLine^.OpId of
-   Op.OpNop,
-   OpLinks:pLine:=pLine^.pPrev;
-   OpBlock:pLine:=PsrOpBlock(pLine^.dst.pData)^.pTail;
-   else
-    Break;
+
+  if pLine^.IsType(ntOpBlock) then
+  begin
+   //
+  end else
+  if pLine^.IsType(ntOp) then
+  begin
+   if not pLine^.is_cleared then
+   begin
+    Case pLine^.OpId of
+     Op.OpNop:; //
+     else
+      Break;
+    end;
+   end;
+  end else
+  begin
+   Exit;
   end;
-  if (pLine=nil) then Exit;
+
+  pLine:=flow_down_prev_up(pLine);
+
  until false;
 
  Result:=is_term_op(pLine^.OpId);
 end;
 
-procedure _up_merge_line(var pLine:PspirvOp);
+procedure up_merge_line(var pLine:PspirvOp);
+var
+ node:PspirvOp;
 begin
  repeat
-  if is_merge_op(pLine^.OpId) then
+  if pLine^.IsType(ntOp) then
   begin
-   pLine:=pLine^.pPrev;
-   Assert(pLine<>nil);
-  end else
-  begin
-   Break;
+   if pLine^.is_cleared or is_merge_op(pLine^.OpId) then
+   begin
+    node:=pLine^.Prev;
+    if (node<>nil) then
+    begin
+     pLine:=node;
+     Continue;
+    end;
+   end;
   end;
+  Break;
  until false;
 end;
 
 function CompareParam(p1,p2:POpParamNode):Boolean;
 begin
- Result:=(p1^.ntype=p2^.ntype) and (p1^.pData=p2^.pData);
+ Result:=(p1^.Value=p2^.Value);
 end;
 
 function CompareOp(p1,p2:PspirvOp):Boolean;
@@ -362,51 +381,68 @@ var
  n1,n2:POpParamNode;
 begin
  Result:=False;
- if (p1^.OpId<>p2^.OpId) then Exit;
- if (p1^.dst_type<>p2^.dst_type) then Exit;
 
- n1:=p1^.pParam.pHead;
- n2:=p2^.pParam.pHead;
+ if not p1^.IsType(ntOp) then Exit;
+ if not p2^.IsType(ntOp) then Exit;
+
+ if (p1^.OpId<>p2^.OpId) then Exit;
+ if (p1^.pDst<>p2^.pDst) then Exit;
+
+ n1:=p1^.ParamNode(0);
+ n2:=p2^.ParamNode(0);
 
  While (n1<>nil) do
  begin
   if (n2=nil) then Exit;
   if not CompareParam(n1,n2) then Exit;
-  n1:=n1^.pNext;
-  n2:=n2^.pNext;
+  n1:=n1^.Next;
+  n2:=n2^.Next;
  end;
 
  Result:=(n2=nil);
 end;
 
 function FindUpSameOp(pLine,node:PspirvOp):PspirvOp;
-var
- tmp:PspirvOp;
- pBlock:PsrOpBlock;
 begin
  Result:=nil;
  if (pLine=nil) or (node=nil) then Exit;
 
  While (pLine<>nil) do
  begin
-  if CompareOp(pLine,node) then Exit(pLine);
-  tmp:=pLine^.pPrev;
-  if (tmp=nil) then
+  if not pLine^.is_cleared then
   begin
-   pBlock:=pLine^.pParent;
-   if (pBlock=nil) then Exit;
-   if (pBlock^.pParent=nil) then Exit;
-   tmp:=pBlock^.pUpLine;
-   if (tmp=nil) then
-   begin
-    tmp:=FindBlockLine(pBlock^.pParent,pBlock);
-   end;
-   tmp:=tmp^.pPrev;
+   if CompareOp(pLine,node) then Exit(pLine);
   end;
-  pLine:=tmp;
+  pLine:=flow_prev_up(pLine);
  end;
 end;
 
+function GetChainRegNode(node:PsrRegNode):PsrChain;
+var
+ pOp:PSpirvOp;
+begin
+ Result:=nil;
+ node:=RegDown(node);
+ pOp:=node^.pWriter^.AsType(ntOp);
+ if (pOp=nil) then Exit;
+ if (pOp^.OpId<>Op.OpLoad) then Exit;
+ Result:=pOp^.ParamNode(0)^.Value^.AsType(ntChain);
+end;
+
+function GetSourceRegNode(node:PsrRegNode):PsrNode;
+var
+ pOp:PSpirvOp;
+ pVar:PsrVariable;
+begin
+ Result:=nil;
+ node:=RegDown(node);
+ pOp:=node^.pWriter^.AsType(ntOp);
+ if (pOp=nil) then Exit;
+ if (pOp^.OpId<>Op.OpLoad) then Exit;
+ pVar:=pOp^.ParamNode(0)^.Value^.AsType(ntVariable);
+ if (pVar=nil) then Exit;
+ Result:=pVar^.pSource;
+end;
 
 end.
 

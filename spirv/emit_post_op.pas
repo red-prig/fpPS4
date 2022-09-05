@@ -8,21 +8,20 @@ uses
   sysutils,
   bittype,
   Half16,
-  srLabel,
-  srNodes,
+  spirv,
+  srCFGLabel,
+  srNode,
+  srType,
   srTypes,
   srRefId,
   srConst,
   srReg,
   srOp,
   srOpUtils,
-  spirv,
-  SprvEmit,
-  emit_op,
-  emit_post;
+  emit_fetch;
 
 type
- TEmitPostOp=object(TSprvEmit_post)
+ TEmitPostOp=class(TEmitFetch)
   function  PostForward1(node:PSpirvOp):Integer;
   function  PostForward2(node:PSpirvOp):Integer;
   //
@@ -38,7 +37,10 @@ type
   function  OnAbsDiff1(node:PSpirvOp):Integer;
   function  OnWQM32__1(node:PSpirvOp):Integer;
   function  OnPackOfs1(node:PSpirvOp):Integer;
-  function  OnMakeCM1(node:PSpirvOp):Integer;
+  function  _Fetch_PackAnc(node:PsrRegNode;index,count:Byte):PsrRegNode;
+  function  OnBFEU32_1(node:PSpirvOp):Integer;
+  function  OnBFIB32_1(node:PSpirvOp):Integer;
+  function  OnMakeCub1(node:PSpirvOp):Integer;
   //
   function  OnBitwiseAnd1(node:PSpirvOp):Integer;
   function  OnLogicalAnd1(node:PSpirvOp):Integer;
@@ -49,17 +51,16 @@ type
   //
   function  OnSelect1(node:PSpirvOp):Integer;
   //
-  procedure MakeVecConst(rtype:TsrDataType;dst:PsrRegNode;count:Byte;src:PPsrRegNode);
+  procedure MakeVecConst(rtype:TsrDataType;dst:PsrRegNode;src:PPsrRegNode);
   procedure MakeVecOne(dst:PsrRegNode;src:PPsrRegNode);
-  function  MakeVecComp(pLine:PSpirvOp;rtype:TsrDataType;dst:PsrRegNode;count:Byte;src:PPsrRegNode):PSpirvOp;
+  function  MakeVecComp(pLine:PSpirvOp;rtype:TsrDataType;dst:PsrRegNode;src:PPsrRegNode):PSpirvOp;
   //
   function  OnMakeVec2(node:PSpirvOp):Integer;
   function  OnReturn_2(node:PSpirvOp):Integer;
   function  OnMakeExp2(node:PSpirvOp):Integer;
   function  OnIAddExt2(node:PSpirvOp):Integer;
   function  OnISubExt2(node:PSpirvOp):Integer;
-  //function  NewMED3F:PSpirvFunc;
-  //function  OpMED3F__2(node:PSpirvOp):Integer;
+  function  OnPackAnc2(node:PSpirvOp):Integer;
  end;
 
 implementation
@@ -84,10 +85,12 @@ begin
   Op.OpShiftRightLogical,
   Op.OpShiftRightArithmetic:Result:=OnShr1(node);
 
-  OpAbsDiff             :Result:=OnAbsDiff1(node);
-  OpWQM32               :Result:=OnWQM32__1(node);
-  OpPackOfs             :Result:=OnPackOfs1(node);
-  OpMakeCM              :Result:=OnMakeCM1(node);
+  srOpUtils.OpAbsDiff   :Result:=OnAbsDiff1(node);
+  srOpUtils.OpWQM32     :Result:=OnWQM32__1(node);
+  srOpUtils.OpPackOfs   :Result:=OnPackOfs1(node);
+  srOpUtils.OpBFEU32    :Result:=OnBFEU32_1(node);
+  srOpUtils.OpBFIB32    :Result:=OnBFIB32_1(node);
+  srOpUtils.OpMakeCub   :Result:=OnMakeCub1(node);
 
   Op.OpSelect           :Result:=OnSelect1(node);
 
@@ -110,13 +113,11 @@ begin
 
  Case node^.OpId of
 
-  //Op.OpIAdd             :Result:=OnIAdd1(node);
-  //Op.OpISub             :Result:=OnISub1(node);
+  srOpUtils.OpIAddExt:Result:=OnIAddExt2(node);
+  srOpUtils.OpISubExt:Result:=OnISubExt2(node);
+  srOpUtils.OpMakeVec:Result:=OnMakeVec2(node);
 
-  OpIAddExt:Result:=OnIAddExt2(node);
-  OpISubExt:Result:=OnISubExt2(node);
-  OpMakeVec:Result:=OnMakeVec2(node);
-      //OpMED3F  :Result:=OpMED3F__2(node);
+  srOpUtils.OpPackAnc:Result:=OnPackAnc2(node);
 
   Op.OpReturn:Result:=OnReturn_2(node);
   OpMakeExp  :Result:=OnMakeExp2(node);
@@ -136,7 +137,7 @@ begin
  begin
   Result:=0;
  end else
- if (value=GetTypeHigh(dtype)) then //always true
+ if (value=dtype.High) then //always true
  begin
   Result:=1;
  end else
@@ -147,7 +148,7 @@ end;
 
 function _classif_const(p:PsrConst):Integer;
 begin
- Result:=_classif_const(p^.key.dtype,p^.GetData);
+ Result:=_classif_const(p^.dtype,p^.GetData);
 end;
 
 function BinType(t:TsrDataType):TsrDataType;
@@ -170,18 +171,17 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
@@ -193,38 +193,29 @@ var
    node^.OpId:=OpId;
    Inc(Result);
   end;
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
  procedure _SetType(dtype:TsrDataType);
  begin
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -245,7 +236,7 @@ begin
   if (src[0]^.is_const) then
   begin
    Case src[0]^.AsConst^.AsBool of
-    True :_SetReg(node^.ParamNode(1)^.pData);
+    True :_SetReg(src[1]);
     False:_SetConst(dtBool,0);
    end;
    Exit;
@@ -253,7 +244,7 @@ begin
   if (src[1]^.is_const) then
   begin
    Case src[1]^.AsConst^.AsBool of
-    True :_SetReg(node^.ParamNode(0)^.pData);
+    True :_SetReg(src[0]);
     False:_SetConst(dtBool,0);
    end;
    Exit;
@@ -269,14 +260,14 @@ begin
   begin
    case _classif_const(src[0]^.AsConst) of
     0:_SetConst(dtype,0); //always false
-    1:_SetReg(node^.ParamNode(1)^.pData);    //always true
+    1:_SetReg(src[1]);    //always true
    end;
   end;
   if (src[1]^.is_const) then
   begin
    case _classif_const(src[1]^.AsConst) of
     0:_SetConst(dtype,0); //always false
-    1:_SetReg(node^.ParamNode(0)^.pData);    //always true
+    1:_SetReg(src[0]);    //always true
    end;
   end;
 
@@ -298,17 +289,15 @@ begin
 
  repeat
 
-  p:=node^.AsOp;
+  p:=node^.pWriter^.AsType(ntOp);
   if (p<>nil) then
    if (p^.OpId=Op.OpLogicalAnd) then
    begin
-    tmp:=p^.ParamNode(0)^.AsReg;
-    tmp:=RegDown(tmp);
+    tmp:=RegDown(p^.ParamNode(0)^.AsReg);
     if (tmp=src) then Exit(True);
     Result:=_FindNest_LAnd(tmp,src); //recursion
     if Result then Exit(True);
-    tmp:=p^.ParamNode(1)^.AsReg;
-    tmp:=RegDown(tmp);
+    tmp:=RegDown(p^.ParamNode(1)^.AsReg);
     if (tmp=src) then Exit(True);
     node:=tmp;
     Continue; //cycle
@@ -327,29 +316,25 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -366,7 +351,7 @@ begin
  if (src[0]^.is_const) then
  begin
   Case src[0]^.AsConst^.AsBool of
-   True :_SetReg(node^.ParamNode(1)^.pData);
+   True :_SetReg(src[1]);
    False:_SetConst(dtBool,0);
   end;
   Exit;
@@ -374,7 +359,7 @@ begin
  if (src[1]^.is_const) then
  begin
   Case src[1]^.AsConst^.AsBool of
-   True :_SetReg(node^.ParamNode(0)^.pData);
+   True :_SetReg(src[0]);
    False:_SetConst(dtBool,0);
   end;
   Exit;
@@ -382,18 +367,74 @@ begin
 
  if _FindNest_LAnd(src[1],src[0]) then //Find src[0] in src[1]
  begin
-  _SetReg(node^.ParamNode(1)^.pData);
+  _SetReg(src[1]);
   Exit;
  end;
 
  if _FindNest_LAnd(src[0],src[1]) then //Find src[1] in src[0]
  begin
-  _SetReg(node^.ParamNode(0)^.pData);
+  _SetReg(src[0]);
   Exit;
  end;
 
  Result:=Result+PrepTypeParam(node^.ParamNode(0),dtBool);
  Result:=Result+PrepTypeParam(node^.ParamNode(1),dtBool);
+end;
+
+function _Fetch_BitwiseOr_Const(node:PsrRegNode):PsrConst;
+var
+ pLine:PSpirvOp;
+ src:array[0..1] of PsrRegNode;
+begin
+ Result:=nil;
+ if (node=nil) then Exit;
+ pLine:=node^.pWriter^.AsType(ntOp);
+ if (pLine=nil) then Exit;
+ if (pLine^.OpId<>Op.OpBitwiseOr) then Exit;
+
+ src[0]:=RegDown(pLine^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(pLine^.ParamNode(1)^.AsReg);
+
+ if (src[0]=nil) or (src[1]=nil) then Exit;
+
+ if src[0]^.is_const and src[1]^.is_const then Exit;
+
+ if src[0]^.is_const then
+ begin
+  Result:=src[0]^.AsConst;
+ end else
+ if src[1]^.is_const then
+ begin
+  Result:=src[1]^.AsConst;
+ end;
+end;
+
+function _Fetch_BitwiseOr_Value(node:PsrRegNode):PsrRegNode;
+var
+ pLine:PSpirvOp;
+ src:array[0..1] of PsrRegNode;
+begin
+ Result:=nil;
+ if (node=nil) then Exit;
+ pLine:=node^.pWriter^.AsType(ntOp);
+ if (pLine=nil) then Exit;
+ if (pLine^.OpId<>Op.OpBitwiseOr) then Exit;
+
+ src[0]:=RegDown(pLine^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(pLine^.ParamNode(1)^.AsReg);
+
+ if (src[0]=nil) or (src[1]=nil) then Exit;
+
+ if src[0]^.is_const and src[1]^.is_const then Exit;
+
+ if src[0]^.is_const then
+ begin
+  Result:=src[1];
+ end else
+ if src[1]^.is_const then
+ begin
+  Result:=src[0];
+ end;
 end;
 
 //
@@ -405,20 +446,21 @@ var
  src:array[0..1] of PsrRegNode;
  data:array[0..1] of QWORD;
 
+ pConst:PsrConst;
+
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
@@ -430,38 +472,29 @@ var
    node^.OpId:=OpId;
    Inc(Result);
   end;
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
  procedure _SetType(dtype:TsrDataType);
  begin
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -483,7 +516,7 @@ begin
   begin
    Case src[0]^.AsConst^.AsBool of
     True :_SetConst(dtBool,1);
-    False:_SetReg(node^.ParamNode(1)^.pData);
+    False:_SetReg(src[1]);
    end;
    Exit;
   end;
@@ -491,13 +524,56 @@ begin
   begin
    Case src[1]^.AsConst^.AsBool of
     True :_SetConst(dtBool,1);
-    False:_SetReg(node^.ParamNode(0)^.pData);
+    False:_SetReg(src[0]);
    end;
    Exit;
   end;
 
   _SetOpType(Op.OpLogicalOr,dtBool);
- end else
+
+  Result:=Result+PrepTypeParam(node^.ParamNode(0),dst^.dtype);
+  Result:=Result+PrepTypeParam(node^.ParamNode(1),dst^.dtype);
+
+  Exit;
+ end;
+
+ //
+ pConst:=_Fetch_BitwiseOr_Const(src[0]);
+ if (pConst<>nil) and src[1]^.is_const then
+ begin
+  //need a const calc
+  data[0]:=         pConst^.GetData;
+  data[1]:=src[1]^.AsConst^.GetData;
+
+  dtype:=LazyType3(dst^.dtype,src[0]^.dtype,src[1]^.dtype);
+  src[1]:=NewReg_q(dtype,data[0] or data[1],@Node);
+
+  src[0]:=_Fetch_BitwiseOr_Value(src[0]);
+  Assert(src[0]<>nil);
+
+  node^.ParamNode(0)^.Value:=src[0];
+  node^.ParamNode(1)^.Value:=src[1];
+ end;
+
+ //
+ pConst:=_Fetch_BitwiseOr_Const(src[1]);
+ if src[0]^.is_const and (pConst<>nil) then
+ begin
+  //need a const calc
+  data[0]:=src[0]^.AsConst^.GetData;
+  data[1]:=         pConst^.GetData;
+
+  dtype:=LazyType3(dst^.dtype,src[0]^.dtype,src[1]^.dtype);
+  src[0]:=NewReg_q(dtype,data[0] or data[1],@Node);
+
+  src[1]:=_Fetch_BitwiseOr_Value(src[1]);
+  Assert(src[1]<>nil);
+
+  node^.ParamNode(0)^.Value:=src[0];
+  node^.ParamNode(1)^.Value:=src[1];
+ end;
+
+ //else
  begin
   dtype:=LazyType3(BinType(dst^.dtype),BinType(src[0]^.dtype),BinType(src[1]^.dtype));
   dtype:=LazyType2(dtype,dtUint32);
@@ -505,15 +581,15 @@ begin
   if (src[0]^.is_const) then
   begin
    case _classif_const(src[0]^.AsConst) of
-    0:_SetReg(node^.ParamNode(1)^.pData);
-    1:_SetConst(dtype,GetTypeHigh(dtype)); //is high
+    0:_SetReg(src[1]);
+    1:_SetConst(dtype,dtype.High); //is high
    end;
   end;
   if (src[1]^.is_const) then
   begin
    case _classif_const(src[1]^.AsConst) of
-    0:_SetReg(node^.ParamNode(0)^.pData);
-    1:_SetConst(dtype,GetTypeHigh(dtype)); //is high
+    0:_SetReg(src[0]);
+    1:_SetConst(dtype,dtype.High); //is high
    end;
   end;
 
@@ -533,29 +609,25 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -573,7 +645,7 @@ begin
  begin
   Case src[0]^.AsConst^.AsBool of
    True :_SetConst(dtBool,1);
-   False:_SetReg(node^.ParamNode(1)^.pData);
+   False:_SetReg(src[1]);
   end;
   Exit;
  end;
@@ -581,7 +653,7 @@ begin
  begin
   Case src[1]^.AsConst^.AsBool of
    True :_SetConst(dtBool,1);
-   False:_SetReg(node^.ParamNode(0)^.pData);
+   False:_SetReg(src[0]);
   end;
   Exit;
  end;
@@ -599,9 +671,9 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
@@ -613,35 +685,29 @@ var
    node^.OpId:=OpId;
    Inc(Result);
   end;
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
  procedure _SetType(dtype:TsrDataType);
  begin
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
+  dst:=node^.pDst^.AsType(ntReg);
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
   //
   dtype:=dst^.dtype;
-  if (node^.dst_type<>nil) then
-  begin
-   node^.dst_type^.mark_unread;
-  end;
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
+  node^.pType:=TypeList.Fetch(dtype);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src:=node^.ParamNode(0)^.AsReg;
- src:=RegDown(src);
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
  if (dst=nil) or (src=nil) then Exit;
 
  if src^.is_const then
@@ -650,7 +716,7 @@ begin
 
   //need a const calc
   data[0]:=src^.AsConst^.GetData;
-  data[1]:=GetTypeHigh(dtype);
+  data[1]:=dtype.High;
 
   _SetConst(dtype,(not data[0]) and data[1]);
   Exit;
@@ -681,21 +747,20 @@ end;
 
 function TEmitPostOp.OnBranchConditional1(node:PSpirvOp):Integer;
 var
- cur,src,prv:PsrRegNode;
+ src,prv:PsrRegNode;
  pOp:PSpirvOp;
- pLabel:array[0..1] of PsrRefId;
+ pLabel:array[0..1] of PsrRefNode;
 begin
  Result:=0;
- cur:=node^.ParamNode(0)^.AsReg;
- if (cur=nil) then Exit;
- src:=RegDown(cur);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
 
- pOp:=src^.AsOp;
+ if (src=nil) then Exit;
+
+ pOp:=src^.pWriter^.AsType(ntOp);
  if (pOp=nil) then Exit;
 
  Case pOp^.OpId of
   Op.OpLogicalNot:;
-  //Op.OpNot:;
   else
    Exit;
  end;
@@ -703,16 +768,13 @@ begin
  prv:=pOp^.ParamNode(0)^.AsReg;
  if (prv=nil) then Exit;
 
- node^.ParamNode(0)^.pData:=prv; //set new
+ node^.ParamNode(0)^.Value:=prv; //set new
 
- pLabel[0]:=node^.ParamNode(1)^.pData; //read
- pLabel[1]:=node^.ParamNode(2)^.pData; //read
+ pLabel[0]:=node^.ParamNode(1)^.Value^.AsType(ntRefId); //read
+ pLabel[1]:=node^.ParamNode(2)^.Value^.AsType(ntRefId); //read
 
- node^.ParamNode(1)^.pData:=pLabel[1]; //swap
- node^.ParamNode(2)^.pData:=pLabel[0]; //swap
-
- prv^.mark_read;
- RegUnmark(cur);
+ node^.ParamNode(1)^.Value:=pLabel[1]; //swap
+ node^.ParamNode(2)^.Value:=pLabel[0]; //swap
 
  Inc(Result);
 end;
@@ -727,30 +789,26 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
- procedure _SetConst(dtype:TsrDataType;value:double);
+ procedure _SetConst_s(dtype:TsrDataType;value:Single);
  begin
-  Case dtype of
-   dtFloat32:dst^.SetConst(FConsts.Fetchf(dtype,value));
-   else
-     Assert(false,'TODO');
-  end;
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  Assert(dtype=dtFloat32);
+  dst^.pWriter:=ConstList.Fetch_s(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
@@ -761,9 +819,9 @@ var
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src:=node^.ParamNode(0)^.AsReg;
- src:=RegDown(src);
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
  if (dst=nil) or (src=nil) then Exit;
 
  tmp:=src;
@@ -774,11 +832,7 @@ begin
 
  if (tmp<>src) then
  begin
-  src:=node^.ParamNode(0)^.AsReg;
-  tmp^.mark_read;
-  node^.ParamNode(0)^.ntype:=ntReg;
-  node^.ParamNode(0)^.pData:=tmp;
-  src^.mark_unread;
+  node^.ParamNode(0)^.Value:=tmp;
   src:=tmp;
   Inc(Result);
  end;
@@ -797,7 +851,7 @@ begin
         end;
       dtHalf16:
         case dst^.dtype of
-         dtFloat32:_SetConst(dst^.dtype,Single(pc^.AsHalf16));
+         dtFloat32:_SetConst_s(dst^.dtype,Single(pc^.AsHalf16));
          else;
         end;
       else;
@@ -817,35 +871,34 @@ begin
 
    Op.OpConvertSToF:
      case src^.dtype of
-      dtInt32 :_SetConst(dst^.dtype,double(pc^.AsInt));
-      dtUint32:_SetConst(dst^.dtype,double(pc^.AsInt));
+      dtInt32 :_SetConst_s(dst^.dtype,pc^.AsInt32);
+      dtUint32:_SetConst_s(dst^.dtype,pc^.AsInt32);
 
-      dtInt64 :_SetConst(dst^.dtype,double(pc^.AsInt64));
-      dtUint64:_SetConst(dst^.dtype,double(pc^.AsInt64));
+      dtInt64 :_SetConst_s(dst^.dtype,pc^.AsInt64);
+      dtUint64:_SetConst_s(dst^.dtype,pc^.AsInt64);
       else;
      end;
 
    Op.OpConvertUToF:
      case src^.dtype of
-      dtInt32 :_SetConst(dst^.dtype,double(pc^.AsUint));
-      dtUint32:_SetConst(dst^.dtype,double(pc^.AsUint));
+      dtInt32 :_SetConst_s(dst^.dtype,pc^.AsUint32);
+      dtUint32:_SetConst_s(dst^.dtype,pc^.AsUint32);
 
-      dtInt64 :_SetConst(dst^.dtype,double(pc^.AsUint64));
-      dtUint64:_SetConst(dst^.dtype,double(pc^.AsUint64));
+      dtInt64 :_SetConst_s(dst^.dtype,pc^.AsUint64);
+      dtUint64:_SetConst_s(dst^.dtype,pc^.AsUint64);
       else;
      end;
 
   end;
  end else
  begin
-  pLine:=src^.AsOp;
+  pLine:=src^.pWriter^.AsType(ntOp);
   if (pLine=nil) then Exit;
 
   Case pLine^.OpId of
    Op.OpFConvert:
      begin
-      tmp:=pLine^.ParamNode(0)^.AsReg;
-      tmp:=RegDown(tmp);
+      tmp:=RegDown(pLine^.ParamNode(0)^.AsReg);
 
       Case node^.OpId of
        Op.OpFConvert:
@@ -868,27 +921,27 @@ function TEmitPostOp.OnCompositeExtract1(node:PSpirvOp):Integer;
 var
  pc:PsrConst;
  dst,src:PsrRegNode;
- pos:DWORD;
+ pos:PtrUint;
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src:=node^.ParamNode(0)^.AsReg;
- src:=RegDown(src);
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
  if (dst=nil) or (src=nil) then Exit;
+
  pos:=0;
  if not node^.ParamNode(1)^.TryGetValue(pos) then Exit;
 
  if src^.is_const then
  begin
   pc:=src^.AsConst;
-  if (pos<pc^.key.count) then
+  if (pos<pc^.ItemCount) then
   begin
-   pc:=pc^.GetCompItem(pos);
-   pc^.mark_read;
-   dst^.SetConst(pc);
+   pc:=pc^.GetConst(pos);
+   dst^.pWriter:=pc;
 
-   node^.OpId:=OpLinks; //mark remove
-   node^.dst:=Default(TOpParamSingle);
+   node^.mark_not_used;
+   node^.pDst:=nil;
    Inc(Result);
   end;
  end;
@@ -937,18 +990,27 @@ var
  src:array[0..1] of PsrRegNode;
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
+ dst:=node^.pDst^.AsType(ntReg);
  src[0]:=node^.ParamNode(1)^.AsReg;
  src[1]:=node^.ParamNode(2)^.AsReg;
+
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
- if (node^.dst_type=nil) then
+ dtype:=LazyType3(dst^.dtype,src[0]^.dtype,src[1]^.dtype);
+
+ if (node^.pType^.dtype<>dtype) then
  begin
-  dtype:=LazyType3(dst^.dtype,src[0]^.dtype,src[1]^.dtype);
-  node^.dst_type:=FSpirvTypes.Fetch(dtype);
-  Result:=Result+PrepTypeDst(node^.dst.pData,dtype);
-  dst:=node^.dst.pData;
-  Inc(Result);
+  node^.pType:=TypeList.Fetch(dtype);
+  if (node^.pType^.dtype=dtype) then
+  begin
+   Inc(Result);
+  end;
+ end;
+
+ if (dst^.dtype<>dtype) then
+ begin
+  Result:=Result+PrepTypeDst(dst,dtype);
+  node^.pDst:=dst;
  end;
 
  Result:=Result+PrepTypeParam(node^.ParamNode(1),dst^.dtype);
@@ -961,26 +1023,20 @@ var
  src:array[0..1] of PsrRegNode;
  pCon:array[0..1] of PsrConst;
 
- procedure _SetConst(dtype:TsrDataType;value:Single);
+ procedure _SetConst_s(dtype:TsrDataType;value:Single);
  begin
-  Case dtype of
-   dtFloat32:dst^.SetConst(FConsts.Fetchf(dtype,value));
-   else
-     Assert(false,'TODO');
-  end;
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  Assert(dtype=dtFloat32);
+  dst^.pWriter:=ConstList.Fetch_s(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -995,7 +1051,7 @@ begin
   Case src[0]^.dtype of
    dtFloat32:
      begin
-      _SetConst(dst^.dtype,pCon[0]^.AsFloat32/pCon[1]^.AsFloat32);
+      _SetConst_s(dst^.dtype,pCon[0]^.AsFloat32/pCon[1]^.AsFloat32);
      end;
    else;
   end;
@@ -1011,29 +1067,25 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1069,20 +1121,17 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1104,20 +1153,17 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1131,7 +1177,7 @@ begin
  end else
  if (src[1]^.is_const) then
  begin
-  Result:=_OnShr_ext1(node,src[0]^.AsOp,src[1]^.AsConst);
+  Result:=_OnShr_ext1(node,src[0]^.pWriter^.AsType(ntOp),src[1]^.AsConst);
  end;
 end;
 
@@ -1146,11 +1192,8 @@ begin
  Case pOp^.OpId of
   Op.OpBitwiseAnd:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1166,15 +1209,12 @@ begin
 
   Op.OpIAdd:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
-     Result:=_OnShr_ext_add(node,src[0]^.AsOp,src[1]^.AsOp,pShrVal);
+     Result:=_OnShr_ext_add(node,src[0]^.pWriter^.AsType(ntOp),src[1]^.pWriter^.AsType(ntOp),pShrVal);
     end;
 
   else;
@@ -1189,9 +1229,9 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
@@ -1204,7 +1244,7 @@ begin
 
  if (data[0] and data[1]=0) then
  begin
-  dst:=node^.dst.AsReg;
+  dst:=node^.pDst^.AsType(ntReg);
   _SetConst(dst^.dtype,0);
  end;
 end;
@@ -1230,11 +1270,8 @@ begin
  Case pOp^.OpId of
   Op.OpIMul:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1261,11 +1298,8 @@ begin
 
   Op.OpShiftLeftLogical:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1293,11 +1327,8 @@ begin
  Case pOp^.OpId of
   Op.OpIMul:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1313,11 +1344,8 @@ begin
 
   Op.OpShiftLeftLogical:
     begin
-     src[0]:=pOp^.ParamNode(0)^.AsReg;
-     src[1]:=pOp^.ParamNode(1)^.AsReg;
-
-     src[0]:=RegDown(src[0]);
-     src[1]:=RegDown(src[1]);
+     src[0]:=RegDown(pOp^.ParamNode(0)^.AsReg);
+     src[1]:=RegDown(pOp^.ParamNode(1)^.AsReg);
 
      if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1336,13 +1364,11 @@ var
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
-
 
 begin
  Result:=0;
@@ -1357,11 +1383,10 @@ begin
   dst_shr[0]:=_GetShrOptReg(pOp0);
  end else
  begin
-  dst:=pOp0^.dst.AsReg;
-  dst_shr[0]:=NewReg(dst^.dtype);
+  dst:=pOp0^.pDst^.AsType(ntReg);
+
   src:=_GetShrOptReg(pOp0);
-  src^.mark_read;
-  _emit_OpShl(pOp0,dst_shr[0],src,FetchReg(FConsts.Fetch(dst^.dtype,data[0])));
+  dst_shr[0]:=OpShlTo(src,data[0],@pOp0)
  end;
 
  if (data[1]=0) then
@@ -1369,21 +1394,17 @@ begin
   dst_shr[1]:=_GetShrOptReg(pOp1);
  end else
  begin
-  dst:=pOp1^.dst.AsReg;
-  dst_shr[1]:=NewReg(dst^.dtype);
+  dst:=pOp1^.pDst^.AsType(ntReg);
+
   src:=_GetShrOptReg(pOp1);
-  src^.mark_read;
-  _emit_OpShl(pOp1,dst_shr[1],src,FetchReg(FConsts.Fetch(dst^.dtype,data[1])));
+  dst_shr[1]:=OpShlTo(src,data[1],@pOp0)
  end;
 
- dst:=node^.dst.AsReg;
- pOp0:=dst^.AsOp; //OpIAdd
- src:=NewReg(dst^.dtype);
+ dst:=node^.pDst^.AsType(ntReg);
+ pOp0:=dst^.pWriter^.AsType(ntOp); //OpIAdd
 
- dst_shr[0]^.mark_read;
- dst_shr[1]^.mark_read;
- _emit_OpIAdd(pOp0,src,dst_shr[0],dst_shr[1]);
 
+ src:=OpIAddTo(dst_shr[0],dst_shr[1],@pOp0);
  _SetReg(src);
 
  //Writeln(data[0],' ',data[1]);
@@ -1400,20 +1421,25 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
+  Inc(Result);
+ end;
+
+ procedure _SetReg(src:PsrRegNode);
+ begin
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src[0]:=node^.ParamNode(0)^.AsReg;
- src[1]:=node^.ParamNode(1)^.AsReg;
-
- src[0]:=RegDown(src[0]);
- src[1]:=RegDown(src[1]);
+ dst:=node^.pDst^.AsType(ntReg);
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -1427,28 +1453,38 @@ begin
    _SetConst(dst^.dtype,data[0]-data[1])
   else
    _SetConst(dst^.dtype,data[1]-data[0]);
+  Exit;
  end else
+ if src[0]^.is_const then
  begin
-  src[0]:=node^.ParamNode(0)^.AsReg; //get original
-  src[1]:=node^.ParamNode(1)^.AsReg; //get original
-
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
-
-  rmax:=NewReg(dst^.dtype);
-  src[0]^.mark_read;
-  src[1]^.mark_read;
-  node:=_emit_OpUMax(node,rmax,src[0],src[1]);
-
-  rmin:=NewReg(dst^.dtype);
-  src[0]^.mark_read;
-  src[1]^.mark_read;
-  node:=_emit_OpUMin(node,rmin,src[0],src[1]);
-
-  rmax^.mark_read;
-  rmin^.mark_read;
-  node:=_emit_OpISub(node,dst,rmax,rmin);
+  if src[0]^.AsConst^.isZeroVal then
+  begin
+   //src[1]-0
+   src[1]:=node^.ParamNode(1)^.AsReg; //get original
+   _SetReg(src[1]);
+   Exit;
+  end;
+ end else
+ if src[1]^.is_const then
+ begin
+  if src[1]^.AsConst^.isZeroVal then
+  begin
+   //src[0]-0
+   src[0]:=node^.ParamNode(0)^.AsReg; //get original
+   _SetReg(src[0]);
+   Exit;
+  end;
  end;
+
+ //else
+
+ node^.mark_not_used;
+ node^.pDst:=nil;
+
+ rmax:=OpUMaxTo(src[0],src[1],@node); //update line
+ rmin:=OpUMinTo(src[0],src[1],@node); //update line
+
+ _Op2(node,Op.OpISub,dst,rmax,rmin);
 end;
 
 function F_WQM_32(D:DWORD):DWORD;
@@ -1474,26 +1510,25 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst^.SetConst(FConsts.Fetch(dtype,value));
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
  procedure _SetReg(src:PsrRegNode);
  begin
-  src^.mark_read;
-  dst^.SetReg(src);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
   Inc(Result);
  end;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
- src:=node^.ParamNode(0)^.AsReg;
- src:=RegDown(src);
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
  if (dst=nil) or (src=nil) then Exit;
 
  if src^.is_const then
@@ -1537,26 +1572,21 @@ var
  data:QWORD;
  P:Ppacked_offset;
 
- rtype:TsrDataType;
- count:DWORD;
+ count:PtrUint;
 
  ret:PsrConst;
  vec:array[0..2] of PsrConst;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
+ dst:=node^.pDst^.AsType(ntReg);
  if (dst=nil) then Exit;
 
  count:=0;
  if not node^.ParamNode(0)^.TryGetValue(count) then Exit;
- rtype:=TsrDataType(count);
 
- count:=0;
- if not node^.ParamNode(1)^.TryGetValue(count) then Exit;
+ src:=RegDown(node^.ParamNode(1)^.AsReg);
 
- src:=node^.ParamNode(2)^.AsReg;
- src:=RegDown(src);
  if (src=nil) then Exit;
 
  if src^.is_const then
@@ -1569,30 +1599,32 @@ begin
   Case count of
    1:
      begin
-      ret:=FConsts.Fetchi(dtInt32,int6(P^.x));
+      ret:=ConstList.Fetch_i(dtInt32,int6(P^.x));
      end;
    2:
      begin
-      vec[0]:=FConsts.Fetchi(dtInt32,int6(P^.x));
-      vec[1]:=FConsts.Fetchi(dtInt32,int6(P^.y));
+      vec[0]:=ConstList.Fetch_i(dtInt32,int6(P^.x));
+      vec[1]:=ConstList.Fetch_i(dtInt32,int6(P^.y));
 
-      ret:=FConsts.Fetch_vec(dtVec2i,2,@vec);
+      ret:=ConstList.FetchVector(dtVec2i,@vec,true);
      end;
    3:
      begin
-      vec[0]:=FConsts.Fetchi(dtInt32,int6(P^.x));
-      vec[1]:=FConsts.Fetchi(dtInt32,int6(P^.y));
-      vec[2]:=FConsts.Fetchi(dtInt32,int6(P^.z));
+      vec[0]:=ConstList.Fetch_i(dtInt32,int6(P^.x));
+      vec[1]:=ConstList.Fetch_i(dtInt32,int6(P^.y));
+      vec[2]:=ConstList.Fetch_i(dtInt32,int6(P^.z));
 
-      ret:=FConsts.Fetch_vec(dtVec3i,3,@vec);
+      ret:=ConstList.FetchVector(dtVec3i,@vec,true);
      end;
    else
     Assert(False);
   end;
 
-  dst^.SetConst(ret);
-  node^.OpId:=OpLinks; //mark remove
-  node^.dst:=Default(TOpParamSingle);
+  dst^.pWriter:=ret;
+
+  node^.mark_not_used;
+  node^.pDst:=nil;
+
   Inc(Result);
  end else
  begin
@@ -1600,9 +1632,247 @@ begin
  end;
 end;
 
+////////
+
+function TEmitPostOp._Fetch_PackAnc(node:PsrRegNode;index,count:Byte):PsrRegNode;
+var
+ pLine:PSpirvOp;
+ src:array[0..2] of PsrRegNode;
+ prim,smid,rtid:Boolean;
+begin
+ Result:=nil;
+
+ if (node=nil) then Exit;
+ if (count=0) then Exit;
+
+ pLine:=node^.pWriter^.AsType(ntOp);
+ if (pLine=nil) then Exit;
+ if (pLine^.OpId<>srOpUtils.OpPackAnc) then Exit;
+
+ src[0]:=pLine^.ParamNode(0)^.AsReg;
+ src[1]:=pLine^.ParamNode(1)^.AsReg;
+ src[2]:=pLine^.ParamNode(2)^.AsReg;
+
+ if (src[0]=nil) or (src[1]=nil) or (src[2]=nil) then Exit;
+
+ prim:=                (index+count<= 2); //[ 1: 0]
+ smid:=(index>= 8) and (index+count<=12); //[11: 8]
+ rtid:=(index>=16) and (index+count<=27); //[26:16]
+
+ count:=ord(prim)+ord(smid)+ord(rtid);
+
+ if (count=0) then
+ begin
+  Result:=NewReg_q(node^.dtype,0);
+ end else
+ if (count=1) then
+ begin
+  if prim then
+  begin
+   Result:=src[0];
+  end else
+  if smid then
+  begin
+   Result:=src[1];
+  end else
+  if rtid then
+  begin
+   Result:=src[2];
+  end;
+ end;
+
+end;
+
+function TEmitPostOp.OnBFEU32_1(node:PSpirvOp):Integer;
+var
+ dst:PsrRegNode;
+ rBase,rIndex,rCount:PsrRegNode;
+ rsl:PsrRegNode;
+ num_31:PsrRegNode;
+ data:array[0..1] of QWORD;
+ index,count:Byte;
+begin
+ Result:=0;
+ dst:=node^.pDst^.AsType(ntReg);
+ if (dst=nil) then Exit;
+
+ rBase :=node^.ParamNode(0)^.AsReg;
+ rIndex:=RegDown(node^.ParamNode(1)^.AsReg);
+ rCount:=RegDown(node^.ParamNode(2)^.AsReg);
+
+ if (rBase=nil) or (rIndex=nil) or (rCount=nil) then Exit;
+
+ //else
+ node^.mark_not_used;
+ node^.pDst:=nil;
+
+ if (rIndex^.is_const) and (rCount^.is_const) then
+ begin
+  data[0]:=rIndex^.AsConst^.GetData;
+  data[1]:=rCount^.AsConst^.GetData;
+  //
+  index:=Byte(data[0] and 31);
+  count:=Byte(data[1] and 31);
+  //
+  rsl:=_Fetch_PackAnc(rBase,index,count);
+
+  if (rsl<>nil) then
+  begin
+
+   rBase:=RegDown(rsl);
+   if (rBase^.is_const) then
+   begin
+    data[0]:=rBase^.AsConst^.GetData;
+    data[1]:=(1 shl count)-1;
+    data[0]:=data[0] and data[1];
+    //
+    if (data[0]<>rBase^.AsConst^.GetData) then
+    begin
+     rsl:=NewReg_q(dtUInt32,data[0],@Node);
+    end;
+   end else
+   begin
+    data[1]:=(1 shl count)-1;
+    num_31:=NewReg_q(dtUInt32,data[1],@Node);
+    //
+    rsl:=OpBitwiseAndTo(rsl,num_31,@node);
+    rsl^.PrepType(ord(dtUInt32));
+   end;
+
+   dst^.pWriter:=rsl;
+   dst^.pLine  :=rsl^.pLine;
+
+   Exit;
+  end;
+
+ end;
+
+ num_31:=nil;
+
+ //
+ if (rIndex^.is_const) then
+ begin
+  data[0]:=rIndex^.AsConst^.GetData;
+  data[0]:=data[0] and 31;
+  //
+  if (data[0]<>rIndex^.AsConst^.GetData) then
+  begin
+   rIndex:=NewReg_q(dtUInt32,data[0],@Node);
+  end else
+  begin
+   rIndex:=node^.ParamNode(1)^.AsReg; //orig
+  end;
+ end else
+ begin
+  num_31:=NewReg_q(dtUInt32,31,@Node);
+  //
+  rIndex:=node^.ParamNode(1)^.AsReg; //orig
+  rIndex:=OpBitwiseAndTo(rIndex,num_31,@node);
+  rIndex^.PrepType(ord(dtUInt32));
+ end;
+
+ //
+ if (rCount^.is_const) then
+ begin
+  data[1]:=rCount^.AsConst^.GetData;
+  data[1]:=data[1] and 31;
+  //
+  if (data[1]<>rCount^.AsConst^.GetData) then
+  begin
+   rCount:=NewReg_q(dtUInt32,data[1],@Node);
+  end else
+  begin
+   rCount:=node^.ParamNode(2)^.AsReg; //orig
+  end;
+ end else
+ begin
+  if (num_31<>nil) then
+  begin
+   num_31:=NewReg_q(dtUInt32,31,@Node);
+  end;
+  //
+  rCount:=node^.ParamNode(2)^.AsReg; //orig
+  rCount:=OpBitwiseAndTo(rCount,num_31,@node);
+  rCount^.PrepType(ord(dtUInt32));
+ end;
+
+ _Op3(node,Op.OpBitFieldUExtract,dst,rBase,rIndex,rCount);
+end;
+
+function TEmitPostOp.OnBFIB32_1(node:PSpirvOp):Integer;
+var
+ dst:PsrRegNode;
+ bitmsk:PsrRegNode;
+ src:array[0..1] of PsrRegNode;
+ rIndex,rCount:PsrRegNode;
+ data:array[0..1] of QWORD;
+ index,count:Byte;
+begin
+ Result:=0;
+ dst:=node^.pDst^.AsType(ntReg);
+ if (dst=nil) then Exit;
+
+ bitmsk:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[0]:=RegDown(node^.ParamNode(1)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(2)^.AsReg);
+
+ if (bitmsk=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
+
+ if bitmsk^.is_const then
+ begin
+  data[0]:=bitmsk^.AsConst^.GetData;
+
+  index:=BsfQWord(data[0]);
+  count:=PopCnt  (data[0]);
+
+  data[1]:=((1 shl count)-1) shl index;
+
+  if (data[0]=data[1]) then
+  begin
+
+   if (index<>0) then
+   begin
+    Assert(false,'TODO');
+   end;
+
+   node^.mark_not_used;
+   node^.pDst:=nil;
+
+   rIndex:=NewReg_q(dtUint32,index,@Node);
+   rCount:=NewReg_q(dtUint32,count,@Node);
+
+   src[0]:=node^.ParamNode(1)^.AsReg;
+   src[1]:=node^.ParamNode(2)^.AsReg;
+
+   _Op4(node,Op.OpBitFieldInsert,dst,src[1],src[0],rIndex,rCount);
+
+   Exit;
+  end;
+
+ end;
+
+ //else
+ node^.mark_not_used;
+ node^.pDst:=nil;
+
+ src[0]:=node^.ParamNode(1)^.AsReg;
+ src[1]:=node^.ParamNode(2)^.AsReg;
+
+ src[0]:=OpBitwiseAndTo(src[0],bitmsk,@node);
+ src[0]^.PrepType(ord(dtUInt32));
+
+ bitmsk:=OpNotTo(bitmsk,@node);
+ bitmsk^.PrepType(ord(dtUInt32));
+
+ src[1]:=OpBitwiseAndTo(src[1],bitmsk,@node);
+ src[1]^.PrepType(ord(dtUInt32));
+
+ _Op2(node,Op.OpBitwiseOr,dst,src[0],src[1]);
+end;
+
 function _IsFma(node:PSpirvOp):Boolean;
 var
- OpId:DWORD;
+ OpId:PtrUint;
 begin
  Result:=False;
  if (node=nil) then Exit;
@@ -1622,31 +1892,31 @@ end;
 
 function _IsConstFloat_1_0(pReg:PsrRegNode):Boolean;
 var
- pCon:PsrConst;
+ pConst:PsrConst;
 begin
  Result:=False;
  if (pReg=nil) then Exit;
- pCon:=pReg^.AsConst;
- if (pCon=nil) then Exit;
- if (pCon^.key.dtype<>dtFloat32) then Exit;
- Result:=(Round(PSingle(@pCon^.Data)^*10)=10);
+ pConst:=pReg^.AsConst;
+ if (pConst=nil) then Exit;
+ if (pConst^.dtype<>dtFloat32) then Exit;
+ Result:=(Round(pConst^.AsFloat32*10)=10);
 end;
 
 function _IsConstFloat_1_5(pReg:PsrRegNode):Boolean;
 var
- pCon:PsrConst;
+ pConst:PsrConst;
 begin
  Result:=False;
  if (pReg=nil) then Exit;
- pCon:=pReg^.AsConst;
- if (pCon=nil) then Exit;
- if (pCon^.key.dtype<>dtFloat32) then Exit;
- Result:=(Round(PSingle(@pCon^.Data)^*10)=15);
+ pConst:=pReg^.AsConst;
+ if (pConst=nil) then Exit;
+ if (pConst^.dtype<>dtFloat32) then Exit;
+ Result:=(Round(pConst^.AsFloat32*10)=15);
 end;
 
 function _Fetch_FAbs_Value(node:PSpirvOp):PSpirvOp;
 var
- OpId:DWORD;
+ OpId:PtrUint;
  pReg:PsrRegNode;
 begin
  Result:=nil;
@@ -1655,9 +1925,9 @@ begin
  OpId:=0;
  node^.ParamNode(1)^.TryGetValue(OpId);
  if (OpId<>GlslOp.FAbs) then Exit;
- pReg:=node^.ParamNode(2)^.AsReg;
+ pReg:=RegDown(node^.ParamNode(2)^.AsReg);
  if (pReg=nil) then Exit;
- Result:=pReg^.AsOp;
+ Result:=pReg^.pWriter^.AsType(ntOp);
 end;
 
 function _cmp_src_cube_op3(node0,node1:PSpirvOp):Boolean;
@@ -1689,7 +1959,7 @@ end;
 function is_all_in_one_comp(src:PPsrRegNode;rtype:TsrDataType;count:byte):Boolean;
 var
  i:Byte;
- pos:DWORD;
+ pos:PtrUint;
  pLine:PspirvOp;
  pReg,tmp:PsrRegNode;
 begin
@@ -1697,7 +1967,7 @@ begin
  Result:=True;
  For i:=0 to count-1 do
  begin
-  pLine:=src[i]^.AsOp;
+  pLine:=src[i]^.pWriter^.AsType(ntOp);
   if (pLine=nil) then Exit(false);
   if (pLine^.OpId<>Op.OpCompositeExtract) then Exit(false);
 
@@ -1705,7 +1975,7 @@ begin
   if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
   if (pos<>i) then Exit(false);
 
-  tmp:=pLine^.ParamNode(0)^.AsReg;
+  tmp:=RegDown(pLine^.ParamNode(0)^.AsReg);
   if (tmp=nil) then Exit(false);
   if (tmp^.dtype<>rtype) then Exit(false);
 
@@ -1723,31 +1993,31 @@ end;
 function try_get_comp_bridge(var src:PsrRegNode):Integer;
 var
  pLine:PspirvOp;
- pos:DWORD;
+ pos:PtrUint;
  pReg:PsrRegNode;
 begin
  Result:=0;
- pLine:=src^.AsOp;
+ pLine:=src^.pWriter^.AsType(ntOp);
  if (pLine=nil) then Exit;
  if (pLine^.OpId<>Op.OpCompositeExtract) then Exit;
 
  pos:=0;
  if not pLine^.ParamNode(1)^.TryGetValue(pos) then Exit;
 
- pReg:=pLine^.ParamNode(0)^.AsReg;
+ pReg:=RegDown(pLine^.ParamNode(0)^.AsReg);
  if (pReg=nil) then Exit;
 
- pLine:=pReg^.AsOp;
+ pLine:=pReg^.pWriter^.AsType(ntOp);
  if (pLine=nil) then Exit;
  if (pLine^.OpId<>Op.OpCompositeConstruct) then Exit;
 
- pReg:=pLine^.ParamNode(pos)^.AsReg;
+ pReg:=RegDown(pLine^.ParamNode(pos)^.AsReg);
  if (pReg=nil) then Exit;
  src:=pReg;
  Result:=1;
 end;
 
-function TEmitPostOp.OnMakeCM1(node:PSpirvOp):Integer;
+function TEmitPostOp.OnMakeCub1(node:PSpirvOp):Integer;
 var
  dst:PsrRegNode;
  src:array[0..2] of PsrRegNode;
@@ -1765,28 +2035,21 @@ var
  pOp:PspirvOp;
 
  rtype:TsrDataType;
- i,count:DWORD;
+ i:Byte;
 
 begin
  Result:=0;
- dst:=node^.dst.AsReg;
+ dst:=node^.pDst^.AsType(ntReg);
  if (dst=nil) then Exit;
 
- count:=0;
- if not node^.ParamNode(0)^.TryGetValue(count) then Exit;
- rtype:=TsrDataType(count);
+ rtype:=dst^.dtype;
 
- if GetVecChild(rtype)<>dtFloat32 then Assert(false,'TODO');
+ if (rtype.Child<>dtFloat32) then Assert(false,'TODO');
+ if (rtype.Count=4) then Assert(false,'TODO');
 
- count:=0;
- if not node^.ParamNode(1)^.TryGetValue(count) then Exit;
- if (count=0) then Exit;
-
- if (count=4) then Assert(false,'TODO');
-
- m_x:=RegDown(node^.ParamNode(2)^.AsReg)^.AsOp; //param1
- m_y:=RegDown(node^.ParamNode(3)^.AsReg)^.AsOp; //param2
- m_f:=RegDown(node^.ParamNode(4)^.AsReg)^.AsOp; //param3
+ m_x:=RegDown(node^.ParamNode(0)^.AsReg)^.pWriter^.AsType(ntOp); //param1
+ m_y:=RegDown(node^.ParamNode(1)^.AsReg)^.pWriter^.AsType(ntOp); //param2
+ m_f:=RegDown(node^.ParamNode(2)^.AsReg)^.pWriter^.AsType(ntOp); //param3
 
  if not _IsFma(m_x) then Exit;
  if not _IsFma(m_y) then Exit;
@@ -1796,19 +2059,19 @@ begin
 
  //m_x
  pReg:=RegDown(m_x^.ParamNode(2)^.AsReg); //param1
- pOp:=pReg^.AsOp;
+ pOp:=pReg^.pWriter^.AsType(ntOp);
  if not _IsOp(pOp,OpCUBESC) then Exit;
  m_CUBE_SC:=pOp;
 
  pReg:=RegDown(m_x^.ParamNode(3)^.AsReg); //param2
- pOp:=pReg^.AsOp;
+ pOp:=pReg^.pWriter^.AsType(ntOp);
  if not _IsOp(pOp,Op.OpFDiv) then Exit;
 
    pReg:=RegDown(pOp^.ParamNode(0)^.AsReg);  //div
    if not _IsConstFloat_1_0(pReg) then Exit; //1.0
 
    pReg:=RegDown(pOp^.ParamNode(1)^.AsReg);
-   pOp:=_Fetch_FAbs_Value(pReg^.AsOp);
+   pOp:=_Fetch_FAbs_Value(pReg^.pWriter^.AsType(ntOp));
    if not _IsOp(pOp,OpCUBEMA) then Exit;
    m_x_CUBE_MA:=pOp;
 
@@ -1817,19 +2080,19 @@ begin
 
  //m_y
  pReg:=RegDown(m_y^.ParamNode(2)^.AsReg); //param1
- pOp:=pReg^.AsOp;
+ pOp:=pReg^.pWriter^.AsType(ntOp);
  if not _IsOp(pOp,OpCUBETC) then Exit;
  m_CUBE_TC:=pOp;
 
  pReg:=RegDown(m_x^.ParamNode(3)^.AsReg); //param2
- pOp:=pReg^.AsOp;
+ pOp:=pReg^.pWriter^.AsType(ntOp);
  if not _IsOp(pOp,Op.OpFDiv) then Exit;
 
    pReg:=RegDown(pOp^.ParamNode(0)^.AsReg);  //div
    if not _IsConstFloat_1_0(pReg) then Exit; //1.0
 
    pReg:=RegDown(pOp^.ParamNode(1)^.AsReg);
-   pOp:=_Fetch_FAbs_Value(pReg^.AsOp);
+   pOp:=_Fetch_FAbs_Value(pReg^.pWriter^.AsType(ntOp));
    if not _IsOp(pOp,OpCUBEMA) then Exit;
    m_y_CUBE_MA:=pOp;
 
@@ -1838,8 +2101,8 @@ begin
 
  //
 
- if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_TC) then Exit;
- if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_ID) then Exit;
+ if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_TC  ) then Exit;
+ if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_ID  ) then Exit;
  if not _cmp_src_cube_op3(m_CUBE_SC,m_x_CUBE_MA) then Exit;
  if not _cmp_src_cube_op3(m_CUBE_SC,m_y_CUBE_MA) then Exit;
 
@@ -1848,26 +2111,26 @@ begin
   src[i]:=RegDown(m_CUBE_SC^.ParamNode(i)^.AsReg);
  end;
 
- MakeVecComp(node,dtVec3f,dst,3,@src);
+ MakeVecComp(node,dtVec3f,dst,@src);
 
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
+ node^.mark_not_used;
+ node^.pDst:=nil;
  Result:=1;
 end;
 
-procedure TEmitPostOp.MakeVecConst(rtype:TsrDataType;dst:PsrRegNode;count:Byte;src:PPsrRegNode);
+procedure TEmitPostOp.MakeVecConst(rtype:TsrDataType;dst:PsrRegNode;src:PPsrRegNode);
 var
  nodes:array[0..3] of PsrConst;
  h:PsrConst;
  i:Byte;
 begin
- For i:=0 to count-1 do
+ For i:=0 to rtype.Count-1 do
  begin
   nodes[i]:=src[i]^.AsConst;
  end;
 
- h:=FConsts.Fetch_vec(rtype,count,@nodes);
- dst^.SetConst(h);
+ h:=ConstList.FetchVector(rtype,@nodes,true);
+ dst^.pWriter:=h;
 end;
 
 procedure TEmitPostOp.MakeVecOne(dst:PsrRegNode;src:PPsrRegNode);
@@ -1875,13 +2138,12 @@ var
  pLine:PspirvOp;
  rsrc:PsrRegNode;
 begin
- pLine:=src[0]^.AsOp;
- rsrc:=pLine^.ParamNode(0)^.AsReg;
- rsrc^.mark_read;
- dst^.SetReg(rsrc);
+ pLine:=src[0]^.pWriter^.AsType(ntOp);
+ rsrc:=RegDown(pLine^.ParamNode(0)^.AsReg);
+ dst^.pWriter:=rsrc;
 end;
 
-function TEmitPostOp.MakeVecComp(pLine:PSpirvOp;rtype:TsrDataType;dst:PsrRegNode;count:Byte;src:PPsrRegNode):PSpirvOp;
+function TEmitPostOp.MakeVecComp(pLine:PSpirvOp;rtype:TsrDataType;dst:PsrRegNode;src:PPsrRegNode):PSpirvOp;
 var
  r:Integer;
  i:Byte;
@@ -1890,18 +2152,18 @@ begin
 
  repeat
   r:=0;
-  For i:=0 to count-1 do
+  For i:=0 to rtype.Count-1 do
   begin
    r:=r+try_get_comp_bridge(src[i]);
   end;
 
-  if is_all_const(src,count) then
+  if is_all_const(src,rtype.Count) then
   begin
-   MakeVecConst(rtype,dst,count,src);
+   MakeVecConst(rtype,dst,src);
    Exit; //
   end;
 
-  if is_all_in_one_comp(src,rtype,count) then
+  if is_all_in_one_comp(src,rtype,rtype.Count) then
   begin
    MakeVecOne(dst,src);
    Exit; //
@@ -1909,11 +2171,7 @@ begin
 
  until (r=0);
 
- For i:=0 to count-1 do
- begin
-  src[i]^.mark_read; //strict type later
- end;
- Result:=emit_OpMakeConstruct(pLine,dst,count,src);
+ Result:=OpMakeCon(pLine,dst,src);
 end;
 
 function TEmitPostOp.OnMakeVec2(node:PSpirvOp):Integer;
@@ -1922,43 +2180,37 @@ var
  dst:PsrRegNode;
  src:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
- i,count:DWORD;
+ i:Byte;
 begin
  Result:=1;
 
- dst:=node^.dst.AsReg;
+ dst:=node^.pDst^.AsType(ntReg);
  if (dst=nil) then Exit;
 
- pParam:=node^.pParam.pHead;
+ pParam:=node^.ParamFirst;
 
- count:=0;
- if not pParam^.TryGetValue(count) then Exit;
- rtype:=TsrDataType(count);
+ rtype:=dst^.dtype;
 
- pParam:=pParam^.pNext;
- count:=0;
- if not pParam^.TryGetValue(count) then Exit;
-
- For i:=0 to count-1 do
+ For i:=0 to rtype.Count-1 do
  begin
-  pParam:=pParam^.pNext;
   src[i]:=pParam^.AsReg;
+  pParam:=pParam^.Next;
   if (src[i]=nil) then Assert(false,'OnMakeVec2');
  end;
 
- MakeVecComp(node,rtype,dst,count,@src);
+ MakeVecComp(node,rtype,dst,@src);
 
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
+ node^.mark_not_used;
+ node^.pDst:=nil;
 end;
 
 function TEmitPostOp.OnReturn_2(node:PSpirvOp):Integer;
 begin
  Result:=0;
 
- if is_term_op(node^.pPrev) then
+ if is_term_op(node^.Prev) then
  begin
-  node^.OpId:=OpLinks; //mark remove
+  node^.mark_not_used;
   Inc(Result);
  end;
 
@@ -1970,74 +2222,75 @@ var
  pOpBlock:PsrOpBlock;
  pChild:PsrOpBlock;
  pOpLabel:array[0..2] of PspirvOp;
- exc,tmp:PsrRegNode;
+ exc:PsrRegNode;
  b_adr:TSrcAdr;
 begin
  Result:=1;
 
- pOpBlock:=node^.pParent;
+ pOpBlock:=node^.Parent;
 
- exc:=node^.ParamNode(0)^.AsReg;
+ exc:=RegDown(node^.ParamNode(0)^.AsReg);
  if (exc=nil) then Exit;
 
- tmp:=RegDown(exc);
- if tmp^.is_const then
+ if exc^.is_const then
  begin
-  node^.OpId:=OpLinks;
-  //node^.OpId:=Op.OpNop;
-  //NodeOpClear(node);    //clear
+  node^.mark_not_used;
 
-  Case tmp^.AsConst^.AsBool of
+  Case exc^.AsConst^.AsBool of
    True :  //is always store
      begin
-      pLine:=node^.pNext;
+      pLine:=node^.Next;
       if (pLine<>nil) then
       begin
-       pChild:=pLine^.dst.AsBlock;
+       pChild:=pLine^.AsType(ntOpBlock);
        if (pChild<>nil) then
        begin
-        Dec(pChild^.FLevel); //up
+        //up
+        pOpBlock^.Remove(pChild);
+        pLine:=PspirvOp(pOpBlock);
+        pLine^.InsertAfter(PspirvOp(pChild));
+        pChild^.UpdateLevel;
        end;
       end;
      end;
    False:  //is always kill
      begin
-      pOpBlock^.dummy.OpId:=Op.OpKill; //add kill
+      AddSpirvOp(@pOpBlock^.dummy,Op.OpKill); //add kill
       //clear all
-      node:=pOpBlock^.pHead;
+      node:=pOpBlock^.First;
       While (node<>nil) do
       begin
-       Case node^.OpId of
-        Op.OpNop:;
-        OpLinks:;
-        Op.OpKill:;
-        OpBlock:
-          begin
-           pChild:=node^.dst.AsBlock;
-           node:=pChild^.pHead;
-           Continue;
-          end;
-        else
-         node^.OpId:=OpLinks; //mark remove
+       if node^.IsType(ntOpBlock) then
+       begin
+        pChild:=node^.AsType(ntOpBlock);
+        node:=pChild^.First;
+        Continue;
+       end else
+       begin
+        Case node^.OpId of
+         Op.OpNop:;
+         Op.OpKill:;
+         else
+          node^.mark_not_used;
+        end;
        end;
-       node:=node^.pNext;
+       node:=node^.Next;
       end;
      end;
   end;
   Exit;
  end else
  begin
-  node^.OpId:=OpLinks; //mark remove
+  node^.mark_not_used;
 
-  exc^.mark_read;
   b_adr:=pOpBlock^.Block.b_adr;
 
-  pLine:=node^.pNext;
+  pLine:=node^.Next;
   if (pLine=nil) then //kill or nop
   begin
 
-   pOpLabel[0]:=NewLabelOp; //current
-   pOpLabel[1]:=NewLabelOp; //end
+   pOpLabel[0]:=NewLabelOp(False); //current
+   pOpLabel[1]:=NewLabelOp(False); //end
 
    pOpLabel[0]^.Adr:=b_adr;
    pOpLabel[1]^.Adr:=b_adr;
@@ -2047,26 +2300,27 @@ begin
    pOpBlock^.SetCond(nil,true);
 
    pLine:=node;
-   pLine:=emit_OpCondMerge(pLine,pOpLabel[1]);
-   pLine:=emit_OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
+   pLine:=OpCondMerge(pLine,pOpLabel[1]);
+   pLine:=OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
    pLine:=AddSpirvOp(pLine,pOpLabel[0]);
 
      pChild:=AllocBlockOp; //create new
      pChild^.SetInfo(btOther,b_adr,b_adr);
-     pChild^.dummy.OpId:=Op.OpKill;
+     pChild^.dummy.OpId:=Op.OpKill; //set kill to dummy
+
    pLine:=InsertBlockOp(pLine,pChild);
 
-   //emit_OpBranch not need from kill
-   pLine:=emit_OpBranch(pLine,pOpLabel[1]);
+   //OpBranch not need from kill
+   pLine:=OpBranch(pLine,pOpLabel[1]);
    pLine:=AddSpirvOp(pLine,pOpLabel[1]);
 
   end else
   begin //kill or store
-   Assert(pLine^.OpId=OpBlock);
+   Assert(pLine^.IsType(ntOpBlock));
 
-   pOpLabel[0]:=NewLabelOp; //current
-   pOpLabel[1]:=NewLabelOp; //else
-   pOpLabel[2]:=NewLabelOp; //end
+   pOpLabel[0]:=NewLabelOp(False); //current
+   pOpLabel[1]:=NewLabelOp(False); //else
+   pOpLabel[2]:=NewLabelOp(False); //end
 
    pOpLabel[0]^.Adr:=b_adr;
    pOpLabel[1]^.Adr:=b_adr;
@@ -2077,22 +2331,23 @@ begin
    pOpBlock^.SetCond(nil,true);
 
    pLine:=node;
-   pLine:=emit_OpCondMerge(pLine,pOpLabel[2]);
-   pLine:=emit_OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
+   pLine:=OpCondMerge(pLine,pOpLabel[2]);
+   pLine:=OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
    pLine:=AddSpirvOp(pLine,pOpLabel[0]);
 
      pChild:=AllocBlockOp; //create new
      pChild^.SetInfo(btOther,b_adr,b_adr);
-     pChild^.dummy.OpId:=Op.OpKill;
+     pChild^.dummy.OpId:=Op.OpKill; //set kill to dummy
+
    pLine:=InsertBlockOp(pLine,pChild);
 
-   //emit_OpBranch not need from kill
+   //OpBranch not need from kill
    pLine:=AddSpirvOp(pLine,pOpLabel[1]);
 
    //OpStore child
 
-   pLine:=pOpBlock^.pTail;
-   pLine:=emit_OpBranch(pLine,pOpLabel[2]);
+   pLine:=pOpBlock^.Last;
+   pLine:=OpBranch(pLine,pOpLabel[2]);
    pLine:=AddSpirvOp(pLine,pOpLabel[2]); //end
 
   end;
@@ -2103,304 +2358,100 @@ end;
 
 function TEmitPostOp.OnIAddExt2(node:PSpirvOp):Integer;
 var
+ rsl:PsrRegPair;
  dst,car:PsrRegNode;
  src:array[0..1] of PsrRegNode;
 begin
  Result:=1;
- dst:=node^.dst.AsReg;
- car:=node^.ParamNode(0)^.AsReg;
+ rsl:=node^.pDst^.AsType(ntRegPair);
+ if (rsl=nil) then Exit;
+
+ dst:=rsl^.pDst0^.AsType(ntReg);
+ car:=rsl^.pDst1^.AsType(ntReg);
  if (dst=nil) or (car=nil) then Exit;
 
- src[0]:=node^.ParamNode(1)^.AsReg;
- src[1]:=node^.ParamNode(2)^.AsReg;
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
+
  if (src[0]=nil) or (src[1]=nil) then Exit;
 
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
+ node^.mark_not_used;
+ node^.pDst:=nil;
 
- if (car^.read_count>1) then //carry is use
+ if (car^.IsUsed) then //carry is use
  begin
-  src[0]^.mark_read; //strict type later
-  src[1]^.mark_read; //strict type later
-  _emit_OpIAddC(node,dst,car,src[0],src[1]);
+  OpIAddCar(node,dst,car,src[0],src[1]);
  end else
  begin
-  src[0]^.mark_read;
-  src[1]^.mark_read;
-  _emit_OpIAdd(node,dst,src[0],src[1]);
+  _Op2(node,Op.OpIAdd,dst,src[0],src[1]);
  end;
 end;
 
 function TEmitPostOp.OnISubExt2(node:PSpirvOp):Integer;
 var
+ rsl:PsrRegPair;
  dst,bor:PsrRegNode;
  src:array[0..1] of PsrRegNode;
 begin
  Result:=1;
- dst:=node^.dst.AsReg;
- bor:=node^.ParamNode(0)^.AsReg;
+ rsl:=node^.pDst^.AsType(ntRegPair);
+ if (rsl=nil) then Exit;
+
+ dst:=rsl^.pDst0^.AsType(ntReg);
+ bor:=rsl^.pDst1^.AsType(ntReg);
  if (dst=nil) or (bor=nil) then Exit;
 
- src[0]:=node^.ParamNode(1)^.AsReg;
- src[1]:=node^.ParamNode(2)^.AsReg;
+ src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
+ src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
+
  if (src[0]=nil) or (src[1]=nil) then Exit;
 
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
+ node^.mark_not_used;
+ node^.pDst:=nil;
 
- if (bor^.read_count>1) then //borrow is use
+ if (bor^.IsUsed) then //borrow is use
  begin
-  src[0]^.mark_read; //strict type later
-  src[1]^.mark_read; //strict type later
-  _emit_OpISubB(node,dst,bor,src[0],src[1]);
+  OpISubBor(node,dst,bor,src[0],src[1]);
  end else
  begin
-  src[0]^.mark_read;
-  src[1]^.mark_read;
-  _emit_OpISub(node,dst,src[0],src[1]);
+  _Op2(node,Op.OpISub,dst,src[0],src[1]);
  end;
 end;
 
-{
-If (isNan(S0.f) || isNan(S1.f) || isNan(S2.f))
-  D.f = MIN3(S0.f, S1.f, S2.f)
-Else if (MAX3(S0.f,S1.f,S2.f) == S0.f)
-  D.f = MAX(S1.f, S2.f)
-Else if (MAX3(S0.f,S1.f,S2.f) == S1.f)
-  D.f = MAX(S0.f, S2.f)
-Else
-  D.f = MAX(S0.f, S1.f)
-}
-
-{
-float MED3F(vec3 s) {
-
- float s0=s.x;
- float s1=s.y;
- float s2=s.z;
-
- if (any(isnan(s))) {
-  return min(s0,min(s1,s2));
- }
-
- return max(min(s0,s1), min(max(s0,s1), s2));
-}
-}
-
-//%MED3F_vf3_ = OpFunction %float None %9
-//         %s = OpFunctionParameter %_ptr_Function_v3float
-//        %12 = OpLabel
-
-//        %17 = OpAccessChain %_ptr_Function_float %s %uint_0
-//        %21 = OpAccessChain %_ptr_Function_float %s %uint_1
-//        %25 = OpAccessChain %_ptr_Function_float %s %uint_2
-
-//        %s0 = OpLoad %float %17
-//        %s1 = OpLoad %float %21
-//        %s2 = OpLoad %float %25
-
-//        %27 = OpLoad %v3float %s
-//        %30 = OpIsNan %v3bool %27
-//        %31 = OpAny %bool %30
-
-//              OpSelectionMerge %33 None
-//              OpBranchConditional %31 %32 %33
-//        %32 = OpLabel
-//                %37 = OpExtInst %float %1 FMin %s1 %s2
-//                %38 = OpExtInst %float %1 FMin %s0 %37
-//                      OpReturnValue %38
-//        %33 = OpLabel
-
-//        %min = OpExtInst %float %1 FMin %s0 %s1
-//        %max = OpExtInst %float %1 FMax %s0 %s1
-//        %tmp = OpExtInst %float %1 FMin %max %s2
-//        %ret = OpExtInst %float %1 FMax %min %tmp
-//              OpReturnValue %ret
-//              OpFunctionEnd
-
-{
-function TEmitPostOp.NewMED3F:PSpirvFunc;
-var
- pFunc:PSpirvFunc;
-
- node:PSpirvOp;
-
- tvec3f:PsrType;
- pvec3f:PsrType;
- tfloat:PsrType;
- tftype:PsrType;
-
- vparam:TOpParamSingle;
-
- rparam:PsrRegNode;
- visnan:PsrRegNode;
- bisnan:PsrRegNode;
- max:PsrRegNode;
- min:PsrRegNode;
- tmp:PsrRegNode;
- ret:PsrRegNode;
-
- src:array[0..2] of PsrRegNode;
-
- pOpLabel:array[0..1] of PspirvOp;
-
-begin
- pFunc:=FSpirvFuncs.Search('MED3F');
- if (pFunc<>nil) then
- begin
-  pFunc^.mark_read;
-  Exit(pFunc);
- end;
-
- pFunc:=Alloc(SizeOf(TSpirvFunc));
- pFunc^.Init('MED3F',@Alloc);
- pFunc^.mark_read;
-
- tvec3f:=FSpirvTypes.Fetch(dtVec3f);
- pvec3f:=FSpirvTypes.FetchPointer(tvec3f,StorageClass.Function_);
- tfloat:=FSpirvTypes.Fetch(dtFloat32);
- tftype:=FSpirvTypes.FetchFunction1(tfloat,pvec3f);
-
- //OpFunction
- node:=pFunc^.AddSpirvOp(Op.OpFunction);
- node^.dst_type:=FSpirvTypes.Fetch(dtFloat32);
- node^.dst.SetParam(ntFunc,pFunc); //self
- node^.AddLiteral(FunctionControl.None,'None');
- node^.AddParam(ntType,tftype);
-
- vparam:=Default(TOpParamSingle);
- vparam.SetParam(ntRefId,NewRefId);
- pvec3f^.mark_read;
- //OpFunctionParameter
- node:=pFunc^.AddSpirvOp(Op.OpFunctionParameter);
- node^.dst_type:=pvec3f;
- node^.dst:=vparam;
-
- //OpLabel
- node:=NewLabelOp;
- node^.Adr:=Default(TSrcAdr);
- pFunc^.AddSpirvOp(node);
-
- rparam:=NewReg(dtVec3f); //load
- tvec3f^.mark_read;
- emit_OpLoad(pFunc^.line,tvec3f,rparam,vparam)^.Adr:=Default(TSrcAdr);
-
- src[0]:=NewReg(dtFloat32);
- src[1]:=NewReg(dtFloat32);
- src[2]:=NewReg(dtFloat32);
-
- rparam^.mark_read;
- emit_OpCompExtract(pFunc^.line,src[0],rparam,0)^.Adr:=Default(TSrcAdr);
-
- rparam^.mark_read;
- emit_OpCompExtract(pFunc^.line,src[1],rparam,1)^.Adr:=Default(TSrcAdr);
-
- rparam^.mark_read;
- emit_OpCompExtract(pFunc^.line,src[2],rparam,2)^.Adr:=Default(TSrcAdr);
-
- //
- visnan:=NewReg(dtVec3b); //OpIsNan
- rparam^.mark_read;
- _emit_OpIsNan(pFunc^.line,visnan,rparam)^.Adr:=Default(TSrcAdr);
-
- bisnan:=NewReg(dtBool); //OpAny
- visnan^.mark_read;
- _emit_Op1(pFunc^.line,Op.OpAny,bisnan,visnan)^.Adr:=Default(TSrcAdr);
-
- //
- pOpLabel[0]:=NewLabelOp;
- pOpLabel[1]:=NewLabelOp;
- pOpLabel[0]^.Adr:=Default(TSrcAdr);
- pOpLabel[1]^.Adr:=Default(TSrcAdr);
- emit_OpCondMerge(pFunc^.line,pOpLabel[1])^.Adr:=Default(TSrcAdr); //merge
- bisnan^.mark_read;
- emit_OpBranchCond(pFunc^.line,pOpLabel[0],pOpLabel[1],bisnan)^.Adr:=Default(TSrcAdr); //branch
- pFunc^.AddSpirvOp(pOpLabel[0]); //OpLabel
-
- tmp:=NewReg(dtFloat32);
- src[0]^.mark_read;
- src[1]^.mark_read;
- _emit_OpFMin(pFunc^.line,tmp,src[0],src[1])^.Adr:=Default(TSrcAdr); //min(s0,s1)
-
- ret:=NewReg(dtFloat32);
- tmp^.mark_read;
- src[2]^.mark_read;
- _emit_OpFMin(pFunc^.line,ret,tmp,src[2])^.Adr:=Default(TSrcAdr); //min(min(s0,s1),s2)
-
- ret^.mark_read;
- emit_OpReturnValue(pFunc^.line,ret)^.Adr:=Default(TSrcAdr); //ret
-
- pFunc^.AddSpirvOp(pOpLabel[1]); //end branch
-
- //
- min:=NewReg(dtFloat32);
- src[0]^.mark_read;
- src[1]^.mark_read;
- _emit_OpFMin(pFunc^.line,min,src[0],src[1])^.Adr:=Default(TSrcAdr); //min(s0,s1)
-
- max:=NewReg(dtFloat32);
- src[0]^.mark_read;
- src[1]^.mark_read;
- _emit_OpFMax(pFunc^.line,max,src[0],src[1])^.Adr:=Default(TSrcAdr); //max(s0,s1)
-
- tmp:=NewReg(dtFloat32);
- max^.mark_read;
- src[2]^.mark_read;
- _emit_OpFMin(pFunc^.line,tmp,max,src[2])^.Adr:=Default(TSrcAdr); //min(max(s0,s1),s2)
-
- ret:=NewReg(dtFloat32);
- min^.mark_read;
- tmp^.mark_read;
- _emit_OpFMax(pFunc^.line,ret,min,tmp)^.Adr:=Default(TSrcAdr); //max(min(s0,s1),min(max(s0,s1),s2))
-
- ret^.mark_read;
- emit_OpReturnValue(pFunc^.line,ret)^.Adr:=Default(TSrcAdr); //ret
-
- pFunc^.AddSpirvOp(Op.OpFunctionEnd); //end
-
- FSpirvFuncs.Insert(pFunc);
-
- pFunc^.mark_read;
- Result:=pFunc;
-end;
-}
-
-//%114 = OpFunctionCall %float %MED3F_vf3_ %param
-
-{
-function TEmitPostOp.OpMED3F__2(node:PSpirvOp):Integer;
+function TEmitPostOp.OnPackAnc2(node:PSpirvOp):Integer;
 var
  dst:PsrRegNode;
- vec:PsrRegNode;
  src:array[0..2] of PsrRegNode;
- pFunc:PSpirvFunc;
+ num4 :PsrRegNode;
+ num8 :PsrRegNode;
+ num11:PsrRegNode;
+ num16:PsrRegNode;
 begin
- Result:=1;
+ Result:=0;
+ dst:=node^.pDst^.AsType(ntReg);
+ if (dst=nil) then Exit;
 
- dst:=node^.dst.pData;
- src[0]:=node^.ParamNode(0)^.pData;
- src[1]:=node^.ParamNode(1)^.pData;
- src[2]:=node^.ParamNode(2)^.pData;
+ src[0]:=node^.ParamNode(0)^.AsReg;
+ src[1]:=node^.ParamNode(1)^.AsReg;
+ src[2]:=node^.ParamNode(2)^.AsReg;
 
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
+ if (src[0]=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
- //build vec
- vec:=NewReg(dtVec3f);
- node:=MakeVecComp(node,dtVec3f,vec,3,@src);
+ node^.mark_not_used;
+ node^.pDst:=nil;
 
- pFunc:=NewMED3F;
+ num4 :=NewReg_q(dtUint32, 4);
+ num8 :=NewReg_q(dtUint32, 8);
+ num11:=NewReg_q(dtUint32,11);
+ num16:=NewReg_q(dtUint32,16);
 
- vec^.mark_read;
- //OpFunctionCall
- node:=AddSpirvOp(node,Op.OpFunctionCall);
- node^.dst_type:=FSpirvTypes.Fetch(dtFloat32);
- node^.dst.SetParam(ntReg,dst); //dst
- node^.AddParam(ntFunc,pFunc);  //func id
- node^.AddParam(ntReg,vec);     //vec3f
+ //Base,Insert,Offset,Count
+ src[0]:=OpBFITo(src[0],src[1],num8 ,num4 ,@node);
+ src[0]:=OpBFITo(src[0],src[2],num16,num11,@node);
 
+ dst^.pWriter:=src[0];
+ dst^.pLine  :=src[0]^.pLine;
 end;
-}
 
 //
 

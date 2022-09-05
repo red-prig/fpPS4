@@ -5,11 +5,11 @@ unit srBitcast;
 interface
 
 uses
-  sysutils,
-  srNodes,
-  srTypes,
-  srConst,
-  srReg;
+ ginodes,
+ srNode,
+ srType,
+ srConst,
+ srReg;
 
 type
  PsrBitcast=^TsrBitcast;
@@ -24,27 +24,34 @@ type
   function  c(n1,n2:PsrBitcast):Integer; static;
  end;
 
+ PsrBitcastList=^TsrBitcastList;
  TsrBitcastList=object
   type
    TNodeFetch=specialize TNodeFetch<PsrBitcast,TsrBitcast>;
   var
-   pRoot:Pointer;
    FNTree:TNodeFetch;
-  function Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
-  function FetchRead(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
-  function FetchDst(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
-  function FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+   rSlot:TsrRegSlot;
+  procedure Init(Emit:TCustomEmit); inline;
+  function  Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
+  function  FetchRead(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+  function  FetchDstr(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+  function  FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
  end;
 
 implementation
 
-uses
- SprvEmit,
- emit_op;
-
 function TsrBitcast.c(n1,n2:PsrBitcast):Integer;
 begin
- Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrBitcast.key));
+ //first dtype
+ Result:=Integer(n1^.key.dtype>n2^.key.dtype)-Integer(n1^.key.dtype<n2^.key.dtype);
+ if (Result<>0) then Exit;
+ //second src
+ Result:=Integer(n1^.key.src>n2^.key.src)-Integer(n1^.key.src<n2^.key.src);
+end;
+
+procedure TsrBitcastList.Init(Emit:TCustomEmit); inline;
+begin
+ rSlot.Init(Emit,'BCAST');
 end;
 
 function TsrBitcastList.Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
@@ -63,37 +70,33 @@ var
 begin
  Result:=src;
  if (src=nil) then Exit;
- if (dtype=dtUnknow) or (dtype=src^.dtype) then
- begin
-  src^.mark_read;
-  Exit;
- end;
+ if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
- src^.mark_read;
- dst:=PSprvEmit(pRoot)^.NewReg(dtype);
- dst^.pLine:=src^.pLine;
- dst^.SetReg(src);
+ dst:=rSlot.New(src^.pLine,dtype);
+ dst^.pWriter:=src;
 
- dst^.mark_read;
  Result:=dst;
 end;
 
-function TsrBitcastList.FetchDst(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+function TsrBitcastList.FetchDstr(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+var
+ dst:PsrRegNode;
 begin
  Result:=src;
  if (src=nil) then Exit;
  if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
- Result:=PSprvEmit(pRoot)^.NewReg(dtype);
- Result^.pLine:=src^.pLine;
- Result^.mark_read;
+ dst:=rSlot.New(src^.pLine,dtype);
+ dst^.pWriter:=src^.pWriter;
 
- Result^.pWriter:=src^.pWriter;
- src^.SetReg(Result);
+ src^.pWriter:=dst;
+
+ Result:=dst;
 end;
 
 function TsrBitcastList.FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
 var
+ pConstList:PsrConstList;
  node:PsrBitcast;
  dst:PsrRegNode;
  pConst:PsrConst;
@@ -101,52 +104,46 @@ var
 begin
  Result:=src;
  if (src=nil) then Exit;
- if (dtype=dtUnknow) or (dtype=src^.dtype) then
- begin
-  src^.mark_read;
-  Exit;
- end;
+ if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
  dst:=nil;
 
  node:=Find(dtype,src);
  if (node<>nil) then
  begin
-  dst:=node^.dst;
-  dst^.mark_read;
-  Result:=dst;
+  Result:=node^.dst;
   Exit;
  end;
 
  if src^.is_const then
  begin
   pConst:=src^.AsConst;
-  pConst^.mark_unread;
-  dst:=PSprvEmit(pRoot)^.NewReg(dtype);
-  dst^.pLine:=src^.pLine;
-  dst^.SetConst(PSprvEmit(pRoot)^.FConsts.Bitcast(dtype,pConst))
+
+  pConstList:=rSlot.FEmit.GetConstList;
+  pConst:=pConstList^.Bitcast(dtype,pConst);
+
+  dst:=rSlot.New(src^.pLine,dtype);
+  dst^.pWriter:=pConst;
  end else
  begin
   if TryBitcastType(src^.dtype,dtype) then
   begin
-   src^.mark_read;
-   dst:=PSprvEmit(pRoot)^.NewReg(dtype);
-   dst^.pLine:=src^.pLine;
-   PEmitOp(pRoot)^.emit_OpCastExt(src^.pLine,dst,src);
+   dst:=rSlot.New(src^.pLine,dtype);
+
+   rSlot.FEmit.OpCast(src^.pLine,dst,src)
   end else
   begin
    Assert(false,'bitcast');
   end;
  end;
 
- node:=PSprvEmit(pRoot)^.Alloc(SizeOf(TsrBitcast));
+ node:=rSlot.FEmit.Alloc(SizeOf(TsrBitcast));
  node^:=Default(TsrBitcast);
  node^.key.dtype:=dtype;
  node^.key.src:=src;
  node^.dst:=dst;
  FNTree.Insert(node);
 
- dst^.mark_read;
  Result:=dst;
 end;
 

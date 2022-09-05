@@ -5,48 +5,72 @@ unit srVertLayout;
 interface
 
 uses
-  sysutils,
-  spirv,
-  srNodes,
-  srReg,
-  srOp,
-  srVariable,
-  srLayout,
-  srDecorate;
+ sysutils,
+ spirv,
+ ginodes,
+ srNode,
+ srType,
+ srReg,
+ srOp,
+ srVariable,
+ srLayout,
+ srDecorate;
 
 type
- PsrVertLayout=^TsrVertLayout;
- TsrVertLayout=object(TsrDescriptor)
-  pLeft,pRight:PsrVertLayout;
-  //----
-  pLayout:PsrDataLayout;
-  pReg:PsrRegNode;
-  function c(n1,n2:PsrVertLayout):Integer; static;
-  function GetString:RawByteString;
-  function GetName:RawByteString;
+ ntVertLayout=class(ntDescriptor)
+  class function  GetStorageName(node:PsrNode):RawByteString; override;
  end;
 
+ PsrVertLayout=^TsrVertLayout;
+ TsrVertLayout=object(TsrDescriptor)
+  private
+   pLeft,pRight:PsrVertLayout;
+   //----
+   pLayout:PsrDataLayout;
+   function  c(n1,n2:PsrVertLayout):Integer; static;
+  public
+   pReg:PsrRegNode;
+   procedure Init(p:PsrDataLayout); inline;
+   function  GetString:RawByteString;
+   function  GetStorageName:RawByteString;
+ end;
+
+ PsrVertLayoutList=^TsrVertLayoutList;
  TsrVertLayoutList=object
   type
    TNodeFetch=specialize TNodeFetch<PsrVertLayout,TsrVertLayout>;
   var
-   Alloc:TfnAlloc;
+   FEmit:TCustomEmit;
    FNTree:TNodeFetch;
-  procedure Init(cb:TfnAlloc);
-  function  Fetch(p:PsrDataLayout):PsrVertLayout;
+  procedure Init(Emit:TCustomEmit); inline;
+  function  Fetch(p:PsrDataLayout;rtype:TsrDataType):PsrVertLayout;
   Function  First:PsrVertLayout;
   Function  Next(node:PsrVertLayout):PsrVertLayout;
-  procedure AllocBinding(Decorates:PsrDecorateList);
+  procedure AllocBinding;
   procedure AllocEntryPoint(EntryPoint:PSpirvOp);
-  procedure AllocSourceExtension(FDebugInfo:PsrDebugInfoList);
+  procedure AllocSourceExtension;
  end;
 
 implementation
 
+class function ntVertLayout.GetStorageName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrVertLayout(node)^.GetStorageName;
+end;
+
+//
+
 function TsrVertLayout.c(n1,n2:PsrVertLayout):Integer;
 begin
  Result:=Integer(n1^.pLayout>n2^.pLayout)-Integer(n1^.pLayout<n2^.pLayout);
- //Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrVertLayout.key));
+end;
+
+procedure TsrVertLayout.Init(p:PsrDataLayout); inline;
+begin
+ fntype  :=ntVertLayout;
+ FStorage:=StorageClass.Input;
+ FBinding:=-1;
+ pLayout :=p;
 end;
 
 function TsrVertLayout.GetString:RawByteString;
@@ -62,29 +86,31 @@ begin
            ';BND='+HexStr(FBinding,8);
 end;
 
-function TsrVertLayout.GetName:RawByteString;
+function TsrVertLayout.GetStorageName:RawByteString;
 begin
  Result:='atParam'+IntToStr(FBinding);
 end;
 
-procedure TsrVertLayoutList.Init(cb:TfnAlloc);
+procedure TsrVertLayoutList.Init(Emit:TCustomEmit); inline;
 begin
- Alloc:=cb;
+ FEmit:=Emit;
 end;
 
-function TsrVertLayoutList.Fetch(p:PsrDataLayout):PsrVertLayout;
+function TsrVertLayoutList.Fetch(p:PsrDataLayout;rtype:TsrDataType):PsrVertLayout;
 var
  node:TsrVertLayout;
 begin
  node:=Default(TsrVertLayout);
- node.pLayout:=p;
+ node.Init(p);
  Result:=FNTree.Find(@node);
  if (Result=nil) then
  begin
-  Result:=Alloc(SizeOf(TsrVertLayout));
-  Result^.pLayout:=p;
-  Result^.FStorage:=StorageClass.Input;
-  Result^.FBinding:=-1;
+  Result:=FEmit.Alloc(SizeOf(TsrVertLayout));
+  Move(node,Result^,SizeOf(TsrVertLayout));
+  //
+  Result^.InitType(rtype,FEmit);
+  Result^.InitVar(FEmit);
+  //
   FNTree.Insert(Result);
  end;
 end;
@@ -99,26 +125,24 @@ begin
  Result:=FNTree.Next(node);
 end;
 
-procedure TsrVertLayoutList.AllocBinding(Decorates:PsrDecorateList);
+procedure TsrVertLayoutList.AllocBinding;
 var
+ pDecorateList:PsrDecorateList;
  node:PsrVertLayout;
  pVar:PsrVariable;
  FBinding:Integer;
 begin
- if (Decorates=nil) then Exit;
+ pDecorateList:=FEmit.GetDecorateList;
  FBinding:=0;
  node:=First;
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed and (node^.FBinding=-1) then
   begin
-   if (node^.FBinding=-1) then //alloc
-   begin
-    Decorates^.emit_decorate(ntVar,pVar,Decoration.Location,FBinding);
-    node^.FBinding:=FBinding;
-    Inc(FBinding);
-   end;
+   pDecorateList^.OpDecorate(pVar,Decoration.Location,FBinding);
+   node^.FBinding:=FBinding;
+   Inc(FBinding);
   end;
   node:=Next(node);
  end;
@@ -134,27 +158,28 @@ begin
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed then
   begin
-   EntryPoint^.AddParam(ntVar,pVar);
+   EntryPoint^.AddParam(pVar);
   end;
   node:=Next(node);
  end;
 end;
 
-procedure TsrVertLayoutList.AllocSourceExtension(FDebugInfo:PsrDebugInfoList);
+procedure TsrVertLayoutList.AllocSourceExtension;
 var
+ FDebugInfo:PsrDebugInfoList;
  node:PsrVertLayout;
  pVar:PsrVariable;
 begin
- if (FDebugInfo=nil) then Exit;
+ FDebugInfo:=FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed then
   begin
-   FDebugInfo^.emit_source_extension(node^.GetString);
+   FDebugInfo^.OpSourceExtension(node^.GetString);
   end;
   node:=Next(node);
  end;

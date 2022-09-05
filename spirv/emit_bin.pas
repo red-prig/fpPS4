@@ -8,17 +8,16 @@ uses
   SySutils,
   Classes,
   spirv,
-  srNodes,
+  srNode,
+  srType,
   srTypes,
   srConst,
-  srReg,
-  srLayout,
   srVariable,
   srOp,
   srOpUtils,
-  srCap,
+  srCapability,
   srRefId,
-  SprvEmit;
+  emit_fetch;
 
 type
  TSPIRVHeader=packed record
@@ -30,7 +29,7 @@ type
   TOOL_VERSION:WORD;
   TOOL_ID:WORD;
   BOUND:DWORD;
-  RESERVED:DWORD;
+  SCHEMA:DWORD;
  end;
 
  PSPIRVInstruction=^TSPIRVInstruction;
@@ -45,31 +44,23 @@ type
   COUNT:DWORD;
   Procedure AllocData;
   Procedure NewOp(OpId:WORD);
+  Procedure Reset;
   Procedure Flush(Stream:TStream);
-  procedure AddParamId(P:DWORD);
-  procedure AddString(const name:PChar);
-  procedure AddRefId(P:PsrRefId);
-  procedure AddConstId(P:PsrConst);
-  procedure AddVarId(P:PsrVariable);
-  procedure AddTypeId(P:PsrType);
-  procedure AddFuncId(P:PSpirvFunc);
-  procedure AddChainId(P:PsrChain);
-  procedure AddRegId(P:PsrRegNode);
+  procedure AddParam(P:DWORD);
+  procedure AddNode(node:PsrNode);
  end;
 
- TSprvEmit_bin=object(TSprvEmit)
+ TSprvEmit_bin=class(TEmitFetch)
   procedure SaveToStream(Stream:TStream);
   procedure SaveHeader(Stream:TStream;var Header:TSPIRVHeader);
   procedure SaveCaps(Stream:TStream);
-  procedure SaveOpList(Stream:TStream;node:PspirvOp);
+  procedure SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
   procedure SaveHeaderInfo(Stream:TStream);
   procedure SaveTypes(Stream:TStream);
-  procedure SaveConst(var buf:TSVInstrBuffer;node:PsrConst);
   procedure SaveConst(Stream:TStream);
   procedure SaveVariable(Stream:TStream);
   procedure SaveFunc(Stream:TStream);
   procedure SaveOp(Stream:TStream;node:PSpirvOp);
-  procedure SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
  end;
 
 implementation
@@ -97,15 +88,20 @@ begin
  Data[0]:=DWORD(I);
 end;
 
+Procedure TSVInstrBuffer.Reset;
+begin
+ COUNT:=0;
+end;
+
 Procedure TSVInstrBuffer.Flush(Stream:TStream);
 begin
  if (Stream=nil) or (COUNT=0) then Exit;
  TSPIRVInstruction(Data[0]).COUNT:=COUNT;
  Stream.Write(Data[0],COUNT*SizeOf(DWORD));
- COUNT:=0;
+ Reset;
 end;
 
-procedure TSVInstrBuffer.AddParamId(P:DWORD);
+procedure TSVInstrBuffer.AddParam(P:DWORD);
 var
  I:DWORD;
 begin
@@ -116,75 +112,33 @@ begin
  Data[i]:=P;
 end;
 
-procedure TSVInstrBuffer.AddString(const name:PChar);
+procedure TSVInstrBuffer.AddNode(node:PsrNode);
 var
+ R:PsrRefId;
  I,L,D:DWORD;
 begin
- Assert(name<>nil);
+ Assert(node<>nil);
  Assert(COUNT<>0,'new op not created');
 
- L:=StrLen(name);
- D:=(L+SizeOf(DWORD)) div SizeOf(DWORD);
+ R:=node^.GetRef;
+ if (R<>nil) then
+ begin
+  I:=COUNT;
+  Inc(COUNT);
+  AllocData;
+  Data[i]:=R^.ID;
+ end else
+ begin
+  L:=node^.GetData(nil);          //get size
+  D:=(L+(SizeOf(DWORD)-1)) div 4; //align
+  Assert(D<>0,'AddNode:'+node^.ntype.ClassName);
 
- I:=COUNT;
- COUNT:=COUNT+D;
- AllocData;
+  I:=COUNT;
+  COUNT:=COUNT+D;
+  AllocData;
 
- FillDWord(Data[i],D,0);
- Move(PChar(name)^,Data[i],L);
-end;
-
-procedure TSVInstrBuffer.AddRefId(P:PsrRefId);
-begin
- Assert(P<>nil  ,'AddRefId$1');
- Assert(P^.Alloc,'AddRefId$2');
- AddParamId(P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddConstId(P:PsrConst);
-begin
- Assert(P<>nil,'AddConstId');
- AddRefId(@P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddVarId(P:PsrVariable);
-begin
- Assert(P<>nil,'AddVarId');
- AddRefId(@P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddTypeId(P:PsrType);
-begin
- Assert(P<>nil,'AddTypeId');
- AddRefId(@P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddFuncId(P:PSpirvFunc);
-begin
- Assert(P<>nil,'AddFuncId');
- AddRefId(@P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddChainId(P:PsrChain);
-begin
- Assert(P<>nil,'AddChainId');
- AddRefId(@P^.ID);
-end;
-
-procedure TSVInstrBuffer.AddRegId(P:PsrRegNode);
-begin
- Assert(P<>nil,'AddRegId$1');
- Case P^.pWriter.ntype of
-  ntConst:
-    begin
-     AddConstId(P^.pWriter.pData);
-    end;
-  ntOp:
-    begin
-     AddRefId(@P^.ID);
-    end;
-  else
-   Assert(false,'AddRegId$2');
+  FillDWord(Data[i],D,0);
+  node^.GetData(@Data[i]);
  end;
 end;
 
@@ -196,10 +150,12 @@ begin
 
  Header:=Default(TSPIRVHeader);
 
- Header.MAGIC:=spirv.MagicNumber;
- DWORD(Header.VERSION):=FBuffers.cfg.SpvVersion;
- Header.TOOL_VERSION:=1;
- Header.BOUND:=FSpirvIdAlloc.GetSpirvIDBound;
+       Header.MAGIC       :=MagicNumber;
+ DWORD(Header.VERSION)    :=Config.SpvVersion;
+       Header.TOOL_VERSION:=2;
+       Header.TOOL_ID     :=0;
+       Header.BOUND       :=RefIdAlloc.GetSpirvIDBound;
+       Header.SCHEMA      :=0;
 
  SaveHeader(Stream,Header);
 
@@ -219,199 +175,96 @@ end;
 procedure TSprvEmit_bin.SaveCaps(Stream:TStream);
 var
  buf:TSVInstrBuffer;
- node:PSpirvCap;
+ node:PsrCapability;
 begin
  buf:=Default(TSVInstrBuffer);
- node:=FSpirvCaps.First;
+ node:=CapabilityList.First;
  While (node<>nil) do
  begin
   buf.NewOp(Op.OpCapability);
-  buf.AddParamId(node^.ID);
+  buf.AddParam(node^.ID);
   buf.Flush(Stream);
-  node:=FSpirvCaps.Next(node);
+  node:=CapabilityList.Next(node);
  end;
 end;
 
-procedure TSprvEmit_bin.SaveOpList(Stream:TStream;node:PspirvOp);
+procedure TSprvEmit_bin.SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
+var
+ node:PSpirvOp;
 begin
+ if (pBlock=nil) then Exit;
+ node:=pBlock^.First;
+
  While (node<>nil) do
  begin
-  SaveOp(Stream,node);
-  node:=node^.pNext;
+  if node^.IsType(ntOp) then
+  begin
+   SaveOp(Stream,node);
+  end;
+  node:=flow_down_next_up(node);
  end;
 end;
 
 procedure TSprvEmit_bin.SaveHeaderInfo(Stream:TStream);
 begin
- SaveOpList(Stream,FHeader.pHead);
- SaveOpList(Stream,FDebugInfo.pHead);
- SaveOpList(Stream,FDecorates.pHead);
+ SaveOpBlock(Stream,@HeaderList);
+ SaveOpBlock(Stream,@DebugInfoList);
+ SaveOpBlock(Stream,@DecorateList);
 end;
 
 procedure TSprvEmit_bin.SaveTypes(Stream:TStream);
 var
  buf:TSVInstrBuffer;
  node:PsrType;
- pConst:PsrConst;
- i:dword;
- ie:Boolean;
+ i:Word;
 begin
- buf:=Default(TSVInstrBuffer);
- node:=FSpirvTypes.FList.pHead;
+ node:=TypeList.First;
  While (node<>nil) do
  begin
-  ie:=True;
+  buf.NewOp(node^.OpId);
+  buf.AddNode(node);
 
-  pConst:=nil;
-  case node^.dtype of
-   dtTypeArray:
-     begin
-      //find a const
-      pConst:=FConsts.Fetchi(dtUInt32,node^.key.ext.array_count);
-      SaveConst(buf,pConst);
-      buf.Flush(Stream);
-     end;
-   else;
-  end;
-
-  buf.NewOp(node^.key.OpId);
-  buf.AddTypeId(node);
-
-  case node^.key.OpId of
-
-   Op.OpTypeFloat:
-    begin
-     buf.AddParamId(node^.key.ext.float_size);
-    end;
-
-   Op.OpTypeInt:
-    begin
-     buf.AddParamId(node^.key.ext.int_size);
-     buf.AddParamId(node^.key.ext.int_sign);
-    end;
-
-   Op.OpTypeVector:
-    begin
-     ie:=False;
-     buf.AddTypeId(node^.GetCompItem(0));
-     buf.AddParamId(node^.key.ext.array_count);
-    end;
-
-   Op.OpTypePointer:
-    begin
-     buf.AddParamId(node^.key.ext.Storage_Class);
-    end;
-
-   Op.OpTypeArray:
-    begin
-     ie:=False;
-     buf.AddTypeId(node^.GetCompItem(0));
-     buf.AddConstId(pConst);
-    end;
-
-   Op.OpTypeRuntimeArray:
-    begin
-     ie:=False;
-     buf.AddTypeId(node^.GetCompItem(0));
-    end;
-
-   Op.OpTypeImage:
-    begin
-     ie:=False;
-     buf.AddTypeId(node^.GetCompItem(0));
-     With node^.key.ext.image do
-     begin
-      buf.AddParamId(Dim);
-      buf.AddParamId(Depth);
-      buf.AddParamId(Arrayed);
-      buf.AddParamId(MS);
-      buf.AddParamId(Sampled);
-      buf.AddParamId(Format);
-     end;
-    end;
-
-
-  end;
-
-  if ie then
-   if (node^.key.count<>0) then
+  if (node^.ItemCount<>0) then
+  begin
+   For i:=0 to node^.ItemCount-1 do
    begin
-    For i:=0 to node^.key.count-1 do
-    begin
-     buf.AddTypeId(node^.GetCompItem(i));
-    end;
+    buf.AddNode(node^.GetItem(i));
    end;
+  end;
 
   buf.Flush(Stream);
 
-  node:=node^.pNext;
+  node:=node^.Next;
  end;
-end;
-
-procedure TSprvEmit_bin.SaveConst(var buf:TSVInstrBuffer;node:PsrConst);
-var
- i:dword;
-begin
-
- if (node^.key.count=0) then
- begin
-  if (node^.key.dtype=dtBool) then
-  begin
-   Case node^.AsBool of
-    True :buf.NewOp(Op.OpConstantTrue);
-    False:buf.NewOp(Op.OpConstantFalse);
-   end;
-
-   buf.AddTypeId(node^.pType);
-   buf.AddConstId(node);
-  end else
-  begin
-   buf.NewOp(Op.OpConstant);
-   buf.AddTypeId(node^.pType);
-   buf.AddConstId(node);
-
-   Case BitSizeType(node^.key.dtype) of
-     8:buf.AddParamId(node^.AsByte);
-    16:buf.AddParamId(node^.AsWord);
-    32:buf.AddParamId(node^.AsUint);
-    64:begin
-        buf.AddParamId(Lo(node^.AsUint64));
-        buf.AddParamId(Hi(node^.AsUint64));
-       end;
-    else
-      Assert(false,'SaveConst');
-   end;
-
-  end;
- end else
- begin
-  buf.NewOp(Op.OpConstantComposite);
-  buf.AddTypeId(node^.pType);
-  buf.AddConstId(node);
-
-  For i:=0 to node^.key.count-1 do
-  begin
-   buf.AddConstId(node^.GetCompItem(i));
-  end;
- end;
-
 end;
 
 procedure TSprvEmit_bin.SaveConst(Stream:TStream);
 var
  buf:TSVInstrBuffer;
  node:PsrConst;
+ i:Word;
 begin
  buf:=Default(TSVInstrBuffer);
- node:=FConsts.FList.pHead;
+ node:=ConstList.FList.pHead;
  While (node<>nil) do
  begin
-  if (node^.key.dtype<>dtUnknow) then
+  if (node^.dtype<>dtUnknow) then
   begin
-   SaveConst(buf,node);
+   buf.NewOp(node^.OpId);
+   buf.AddNode(node^.pType);
+   buf.AddNode(node);
+
+   if (node^.dtype<>dtBool) and (node^.ItemCount<>0) then
+   begin
+    For i:=0 to node^.ItemCount-1 do
+    begin
+     buf.AddNode(node^.GetItem(i));
+    end;
+   end;
+
    buf.Flush(Stream);
   end;
-  node:=node^.pNext;
+  node:=node^.Next;
  end;
 end;
 
@@ -421,52 +274,19 @@ var
  node:PsrVariable;
 begin
  buf:=Default(TSVInstrBuffer);
- node:=FVariables.pHead;
+ node:=VariableList.First;
  While (node<>nil) do
  begin
   if (node^.pType<>nil) then
   begin
    buf.NewOp(Op.OpVariable);
-   buf.AddTypeId(node^.pType);
-   buf.AddVarId(node);
-   buf.AddParamId(node^.GetStorageClass);
+   buf.AddNode(node^.pType);
+   buf.AddNode(node);
+   buf.AddParam(node^.GetStorageClass);
+
    buf.Flush(Stream);
   end;
-  node:=node^.pNext;
- end;
-end;
-
-procedure SaveOpSingle(var buf:TSVInstrBuffer;const Param:TOpParamSingle);
-begin
- Assert(Param.pData<>nil,'SaveOpSingle$1');
- Case Param.ntype of
-   ntFunc :buf.AddFuncId(Param.pData);
-   ntRefId:buf.AddRefId(Param.pData);
-   ntType :buf.AddTypeId(Param.pData);
-   ntReg  :buf.AddRegId(Param.pData);
-   ntVar  :buf.AddVarId(Param.pData);
-   ntChain:buf.AddChainId(Param.pData);
-   ntConst:buf.AddConstId(Param.pData);
-  else
-   Assert(false,'PrintOpSingle$3');
- end;
-end;
-
-procedure SaveOpParamNode(var buf:TSVInstrBuffer;node:POpParamNode);
-begin
- Case node^.ntype of
-  ntLiteral:
-    begin
-     buf.AddParamId(node^.Value);
-    end;
-  ntString:
-    begin
-     buf.AddString(@node^.name);
-    end;
-  else
-   begin
-    SaveOpSingle(buf,node^.AsParam);
-   end;
+  node:=node^.Next;
  end;
 end;
 
@@ -474,11 +294,11 @@ procedure TSprvEmit_bin.SaveFunc(Stream:TStream);
 var
  pFunc:PSpirvFunc;
 begin
- pFunc:=FSpirvFuncs.FList.pHead;
+ pFunc:=FuncList.First;
  While (pFunc<>nil) do
  begin
-  SaveOpBlock(Stream,@pFunc^.FTop);
-  pFunc:=pFunc^.pNext;
+  SaveOpBlock(Stream,pFunc^.pTop);
+  pFunc:=pFunc^.Next;
  end;
 end;
 
@@ -497,56 +317,44 @@ begin
 
  if Info.rstype then //dst type
  begin
-  Assert(node^.dst_type<>nil,'SaveOp$4');
-  buf.AddTypeId(node^.dst_type);
+  Assert(node^.pType<>nil,'SaveOp$1');
+  if (node^.pType<>nil) then
+  begin
+   buf.AddNode(node^.pType);
+  end else
+  begin
+   buf.Reset;
+   Exit;
+  end;
  end;
 
  if Info.result then //dst
  begin
-  Assert(node^.dst.ntype<>ntUnknow,'SaveOp$1');
-  Assert(node^.dst.pData<>nil,'SaveOp$2');
-  SaveOpSingle(buf,node^.dst);
+  Assert(node^.pDst<>nil,'SaveOp$2');
+  if (node^.pDst<>nil) then
+  begin
+   buf.AddNode(node^.pDst);
+  end else
+  begin
+   buf.Reset;
+   Exit;
+  end;
  end else
  begin  //no dst
-  if (node^.dst.ntype<>ntUnknow) then
+  if (node^.pDst<>nil) then
   begin
-   Assert(node^.dst.pData<>nil,'SaveOp$3');
-   SaveOpSingle(buf,node^.dst);
+   buf.AddNode(node^.pDst);
   end;
  end;
 
- Param:=node^.pParam.pHead;
+ Param:=node^.ParamFirst;
  While (Param<>nil) do
  begin
-  SaveOpParamNode(buf,Param);
-  Param:=Param^.pNext;
+  buf.AddNode(Param^.Value);
+  Param:=Param^.Next;
  end;
 
  buf.Flush(Stream);
-end;
-
-procedure TSprvEmit_bin.SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
-var
- node:PSpirvOp;
-begin
- if (pBlock=nil) then Exit;
- node:=pBlock^.pHead;
- While (node<>nil) do
- begin
-
-  if (node^.OpId=OpBlock) then
-  begin
-   if (node^.dst.ntype=ntBlock) then
-   begin
-    SaveOpBlock(Stream,node^.dst.pData);
-   end;
-  end else
-  begin
-   SaveOp(Stream,node);
-  end;
-
-  node:=node^.pNext;
- end;
 end;
 
 end.

@@ -5,16 +5,18 @@ unit srFragLayout;
 interface
 
 uses
-  sysutils,
-  spirv,
-  srNodes,
-  srReg,
-  srOp,
-  srLayout,
-  srVariable,
-  srInput,
-  srCap,
-  srDecorate;
+ sysutils,
+ spirv,
+ ginodes,
+ srNode,
+ srType,
+ srReg,
+ srOp,
+ srLayout,
+ srVariable,
+ srInput,
+ srCapability,
+ srDecorate;
 
 type
  //itPerspSample,    //Sample
@@ -24,44 +26,63 @@ type
  //itLinearCenter,   //NoPerspective
  //itLinearCentroid, //NoPerspective Centroid
 
- PsrFragLayout=^TsrFragLayout;
- TsrFragLayout=object(TsrDescriptor)
-  pLeft,pRight:PsrFragLayout;
-  //----
-  itype:TpsslInputType;
-
-  pReg:PsrRegNode;
-
-  function c(n1,n2:PsrFragLayout):Integer; static;
-  function GetName:RawByteString;
+ ntFragLayout=class(ntDescriptor)
+  class function  GetStorageName(node:PsrNode):RawByteString; override;
  end;
 
+ PsrFragLayout=^TsrFragLayout;
+ TsrFragLayout=object(TsrDescriptor)
+  private
+   pLeft,pRight:PsrFragLayout;
+   //----
+   itype:TpsslInputType;
+   function  c(n1,n2:PsrFragLayout):Integer; static;
+  public
+   pReg:PsrRegNode;
+   Procedure Init; inline;
+   function  GetStorageName:RawByteString;
+ end;
+
+ PsrFragLayoutList=^TsrFragLayoutList;
  TsrFragLayoutList=object
   type
    TNodeFetch=specialize TNodeFetch<PsrFragLayout,TsrFragLayout>;
   var
-   Alloc:TfnAlloc;
+   FEmit:TCustomEmit;
    FNTree:TNodeFetch;
-  procedure Init(cb:TfnAlloc);
-  function  Fetch(itype:TpsslInputType;location:DWORD):PsrFragLayout;
+  procedure Init(Emit:TCustomEmit); inline;
+  function  Fetch(itype:TpsslInputType;location:DWORD;rtype:TsrDataType):PsrFragLayout;
   Function  First:PsrFragLayout;
   Function  Next(node:PsrFragLayout):PsrFragLayout;
-  procedure AllocBinding(Decorates:PsrDecorateList;Cap:PsrCapList);
+  procedure AllocBinding;
   procedure AllocEntryPoint(EntryPoint:PSpirvOp);
  end;
 
 implementation
 
+class function ntFragLayout.GetStorageName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrFragLayout(node)^.GetStorageName;
+end;
+
+//
+
 function TsrFragLayout.c(n1,n2:PsrFragLayout):Integer;
 begin
  //first itype
  Result:=Integer(n1^.itype>n2^.itype)-Integer(n1^.itype<n2^.itype);
+ if (Result<>0) then Exit;
  //second location
  Result:=Integer(n1^.FBinding>n2^.FBinding)-Integer(n1^.FBinding<n2^.FBinding);
- //Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrFragLayout.key));
 end;
 
-function TsrFragLayout.GetName:RawByteString;
+Procedure TsrFragLayout.Init; inline;
+begin
+ fntype  :=ntFragLayout;
+ FStorage:=StorageClass.Input;
+end;
+
+function TsrFragLayout.GetStorageName:RawByteString;
 begin
  Case itype of
    itPerspSample:
@@ -81,24 +102,28 @@ begin
  end;
 end;
 
-procedure TsrFragLayoutList.Init(cb:TfnAlloc);
+procedure TsrFragLayoutList.Init(Emit:TCustomEmit); inline;
 begin
- Alloc:=cb;
+ FEmit:=Emit;
 end;
 
-function TsrFragLayoutList.Fetch(itype:TpsslInputType;location:DWORD):PsrFragLayout;
+function TsrFragLayoutList.Fetch(itype:TpsslInputType;location:DWORD;rtype:TsrDataType):PsrFragLayout;
 var
  node:TsrFragLayout;
 begin
  node:=Default(TsrFragLayout);
+ node.Init;
  node.itype:=itype;
- node.FStorage:=StorageClass.Input;
  node.FBinding:=location;
  Result:=FNTree.Find(@node);
  if (Result=nil) then
  begin
-  Result:=Alloc(SizeOf(TsrFragLayout));
+  Result:=FEmit.Alloc(SizeOf(TsrFragLayout));
   Move(node,Result^,SizeOf(TsrFragLayout));
+  //
+  Result^.InitType(rtype,FEmit);
+  Result^.InitVar(FEmit);
+  //
   FNTree.Insert(Result);
  end;
 end;
@@ -113,45 +138,48 @@ begin
  Result:=FNTree.Next(node);
 end;
 
-procedure TsrFragLayoutList.AllocBinding(Decorates:PsrDecorateList;Cap:PsrCapList);
+procedure TsrFragLayoutList.AllocBinding;
 var
+ pDecorateList:PsrDecorateList;
+ pCapabilityList:PsrCapabilityList;
  node:PsrFragLayout;
  pVar:PsrVariable;
 begin
- if (Decorates=nil) then Exit;
+ pDecorateList:=FEmit.GetDecorateList;
+ pCapabilityList:=FEmit.GetCapabilityList;
  //interpolate param
  node:=First;
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed then
   begin
-   Decorates^.emit_decorate(ntVar,pVar,Decoration.Location,node^.FBinding);
+   pDecorateList^.OpDecorate(pVar,Decoration.Location,node^.FBinding);
 
    case node^.itype of
     itPerspSample:    //Sample
       begin
-       Cap^.Add(Capability.SampleRateShading);
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.Sample,0);
+       pCapabilityList^.Add(Capability.SampleRateShading);
+       pDecorateList^.OpDecorate(pVar,Decoration.Sample,0);
       end;
     itPerspCenter:;   //default
     itPerspCentroid:  //Centroid
       begin
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.Centroid,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
       end;
     itLinearSample:   //NoPerspective Sample
       begin
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.NoPerspective,0);
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.Sample,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.Sample,0);
       end;
     itLinearCenter:   //NoPerspective
       begin
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.NoPerspective,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
       end;
     itLinearCentroid: //NoPerspective Centroid
       begin
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.NoPerspective,0);
-       Decorates^.emit_decorate(ntVar,pVar,Decoration.Centroid,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
+       pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
       end;
     else
      Assert(false,'AllocBinding');
@@ -172,9 +200,9 @@ begin
  While (node<>nil) do
  begin
   pVar:=node^.pVar;
-  if (pVar<>nil) then
+  if (pVar<>nil) and node^.IsUsed then
   begin
-   EntryPoint^.AddParam(ntVar,pVar);
+   EntryPoint^.AddParam(pVar);
   end;
   node:=Next(node);
  end;

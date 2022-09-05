@@ -5,38 +5,101 @@ unit srReg;
 interface
 
 uses
-  srNodes,
-  srRefId,
-  srTypes,
-  srConst;
+ sysutils,
+ ginodes,
+ srNode,
+ srRefId,
+ srType,
+ srConst;
 
 type
+ ntReg=class(TsrNodeVmt)
+  class Procedure add_read    (node,src:PsrNode);           override;
+  class Procedure rem_read    (node,src:PsrNode);           override;
+  class Procedure SetWriter   (node,w,line:PsrNode);        override;
+  class Procedure ResetWriter (node,w:PsrNode);             override;
+  class function  Down        (node:PsrNode):Pointer;       override;
+  class function  Next        (node:PsrNode):Pointer;       override;
+  class function  Prev        (node:PsrNode):Pointer;       override;
+  class Procedure PrepType    (node:PPrepTypeNode);         override;
+  class function  GetPrintName(node:PsrNode):RawByteString; override;
+  class function  GetRef      (node:PsrNode):Pointer;       override;
+ end;
+
+ ntRegPair=class(TsrNodeVmt)
+  class function  Down       (node:PsrNode):Pointer; override;
+  class Procedure SetWriter  (node,w,line:PsrNode);  override;
+  class Procedure ResetWriter(node,w:PsrNode);       override;
+ end;
+
  PPsrRegSlot=^PsrRegSlot;
  PsrRegSlot=^TsrRegSlot;
 
  PPsrRegNode=^PsrRegNode;
  PsrRegNode=^TsrRegNode;
- TsrRegNode=packed object
-  pPrev,pNext:PsrRegNode;
-  //----
-  read_count:DWORD;
-  ID:TsrRefId; //post id
-  pSlot:PsrRegSlot;
-  pWriter:TOpParamSingle; //ntReg,ntConst,ntOp,ntVolatile
-  pLine:Pointer; //PspirvOp;
-  dtype:TsrDataType;
-  function  GetName:RawByteString;
-  Procedure mark_read;
-  Procedure mark_unread;
-  procedure SetConst(pConst:PsrConst);
-  procedure SetReg(pReg:PsrRegNode);
-  function  AsConst:PsrConst;
-  function  AsOp:Pointer;
-  function  AsReg:PsrRegNode;
-  function  is_const:Boolean;
-  function  is_bool:Boolean;
-  function  is_bool_or_const_bool:Boolean;
-  function  is_unknow:Boolean;
+
+ PRegDNode=^TRegDNode;
+ TRegDNode=record
+  pNext:PRegDNode;
+  pNode:PsrNode;
+ end;
+ TRegDNodeList=specialize TNodeStack<PRegDNode>;
+
+ TsrRegNode=packed object(TsrNode)
+  private
+   pPrev,pNext:PsrRegNode;
+   //
+   ID:TsrRefId;            //post id
+   F:bitpacked record
+    dtype:TsrDataType;
+    weak:Boolean;
+   end;
+   FSlot:PsrRegSlot;
+   FWriter:PsrNode;        //ntReg,ntConst,ntOp,ntVolatile
+   FDList:TRegDNodeList;
+   FLine:Pointer;
+   Procedure AddDep(t:PsrNode);
+   Procedure RemDep(t:PsrNode);
+   function  GetDtype:TsrDataType;
+   Procedure SetDtype(t:TsrDataType);
+   function  GetWeak:Boolean;
+   Procedure SetWeak(t:Boolean);
+   Procedure SetWriter(t:PsrNode);
+   Function  GetWriter:PsrNode;
+   Procedure SetLine(t:Pointer);
+  public
+   property  pLine  :Pointer     read FLine     write SetLine; //PspirvOp;
+   property  pSlot  :PsrRegSlot  read FSlot;
+   property  dtype  :TsrDataType read GetDtype  write SetDtype;
+   property  Weak   :Boolean     read GetWeak   write SetWeak;
+   property  pWriter:PsrNode     read GetWriter write SetWriter;
+   Procedure Init; inline;
+   function  FirstDep:PRegDNode;
+   function  GetName:RawByteString;
+   function  AsConst:PsrConst;
+   function  AsReg:PsrRegNode;
+   function  is_const:Boolean;
+   function  is_bool:Boolean;
+   function  is_bool_or_const_bool:Boolean;
+   function  is_unknow:Boolean;
+   function  GetPrintName:RawByteString;
+ end;
+
+ PsrRegPair=^TsrRegPair;
+ TsrRegPair=object(TsrNode)
+  private
+   FWriter:PsrNode;
+   FDst0:PsrNode;
+   FDst1:PsrNode;
+   Procedure SetWriter(t:PsrNode);
+   Procedure SetDst0(r:PsrNode);
+   Procedure SetDst1(r:PsrNode);
+  public
+   property  pLine:PsrNode   read FWriter;
+   property  pWriter:PsrNode read FWriter write SetWriter;
+   property  pDst0:PsrNode   read FDst0   write SetDst0;
+   property  pDst1:PsrNode   read FDst1   write SetDst1;
+   Procedure Init; inline;
  end;
 
  TRegStory=specialize TNodeList<PsrRegNode>;
@@ -44,15 +107,16 @@ type
  TString5=string[5];
 
  TsrRegSlot=object
-  Alloc:TfnAlloc;
-  pVar:Pointer;
+  FEmit:TCustomEmit;
   pStory:TRegStory;
   rid:TString5;
-  Procedure Init(a:TfnAlloc;const n:TString5);
+  Procedure Init(Emit:TCustomEmit;const n:TString5);
   function  first:PsrRegNode;
   function  current:PsrRegNode;
+  function  isBoolOnly:Boolean;
   function  New(pLine:Pointer;rtype:TsrDataType):PsrRegNode;
   function  NewAfter(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
+  function  NewBefore(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
   procedure Remove(r:PsrRegNode);
  end;
 
@@ -69,6 +133,7 @@ type
  TForEachSlot=procedure(pSlot:PsrRegSlot) of object;
  TForEachSnap=procedure(pSlot:PsrRegSlot;var old:PsrRegNode) of object;
 
+ PsrRegsStory=^TsrRegsStory;
  TsrRegsStory=object
   SGRP:array[0..103] of TsrRegSlot;
   VCC:array[0..1] of TsrRegSlot;
@@ -77,25 +142,171 @@ type
   SCC:TsrRegSlot;
   VGRP:array[0..255] of TsrRegSlot;
   FUnattach:TsrRegSlot;
-  Procedure Init(Alloc:TfnAlloc);
-  function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
+  //
+  FDList:TRegDNodeList;
+  //
+  Procedure Init(Emit:TCustomEmit);
+  //
+  Function  AllocDep:PRegDNode;
+  Procedure FreeDep(node:PRegDNode);
+  //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
+  function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
   function  get_ssrc8(SSRC:Byte):PsrRegSlot;
-  function  get_ssrc9_pair(SSRC:Word;src:PPsrRegSlot):Boolean;
   function  get_ssrc9(SSRC:Word):PsrRegSlot;
+  function  get_ssrc9_pair(SSRC:Word;src:PPsrRegSlot):Boolean;
   function  get_vsrc8(VSRC:Byte):PsrRegSlot;
   function  get_vdst8(VDST:Byte):PsrRegSlot;
   function  get_sbase(SBASE,count:Byte;src:PPsrRegSlot):Boolean;
   function  get_srsrc(SRSRC,count:Byte;src:PPsrRegSlot):Boolean;
-
+  //
   function  get_snapshot:TsrRegsSnapshot;
   procedure ForEachSlot(cb:TForEachSlot);
   procedure ForEachSnap(cb:TForEachSnap;old:PsrRegsSnapshot);
  end;
 
+function RegDown(node:PsrRegNode):PsrRegNode;
+function RegDownSlot(node:PsrRegNode):PsrRegNode;
+function CompareReg(r1,r2:PsrRegNode):Boolean;
+
 implementation
 
-Procedure TsrRegsStory.Init(Alloc:TfnAlloc);
+//
+
+class Procedure ntReg.add_read(node,src:PsrNode);
+begin
+ inherited;
+ PsrRegNode(node)^.AddDep(src);
+end;
+
+class Procedure ntReg.rem_read(node,src:PsrNode);
+begin
+ inherited;
+ PsrRegNode(node)^.RemDep(src);
+end;
+
+class Procedure ntReg.SetWriter(node,w,line:PsrNode);
+begin
+ With PsrRegNode(node)^ do
+ begin
+  SetWriter(w);
+  pLine:=line;
+ end;
+end;
+
+class Procedure ntReg.ResetWriter(node,w:PsrNode);
+begin
+ With PsrRegNode(node)^ do
+ if (FWriter=w) then
+ begin
+  SetWriter(nil);
+  pLine:=nil;
+ end;
+end;
+
+class function ntReg.Down(node:PsrNode):Pointer;
+begin
+ Result:=PsrRegNode(node)^.FWriter;
+end;
+
+class function ntReg.Next(node:PsrNode):Pointer;
+begin
+ Result:=PsrRegNode(node)^.pNext;
+end;
+
+class function ntReg.Prev(node:PsrNode):Pointer;
+begin
+ Result:=PsrRegNode(node)^.pPrev;
+end;
+
+class Procedure ntReg.PrepType(node:PPrepTypeNode);
+var
+ new:TsrDataType;
+ pConstList:PsrConstList;
+begin
+ With PsrRegNode(node^.dnode)^ do
+ begin
+  new:=TsrDataType(node^.rtype);
+  if (new=dtUnknow) then
+  begin
+   node^.dnode:=nil;
+   Exit;
+  end;
+
+  if FSlot^.isBoolOnly then
+  begin
+   //next
+   node^.rtype:=ord(dtBool);
+   node^.dnode:=pWriter;
+   Exit;
+  end else
+  if is_unprep_type(dtype,new,Weak) then
+  begin
+   dtype:=new;
+   Weak:=True;
+   if is_const then
+   begin
+    pConstList:=FSlot^.FEmit.GetConstList;
+    pWriter:=pConstList^.Bitcast(new,pWriter^.AsType(ntConst));
+   end else
+   begin
+    //next
+    node^.dnode:=pWriter;
+    Exit;
+   end;
+  end;
+
+ end;
+
+ node^.dnode:=nil;
+end;
+
+class function ntReg.GetPrintName(node:PsrNode):RawByteString;
+begin
+ Result:=PsrRegNode(node)^.GetPrintName;
+end;
+
+class function ntReg.GetRef(node:PsrNode):Pointer;
+begin
+ With PsrRegNode(node)^ do
+ begin
+  if is_const then
+  begin
+   Result:=AsConst^.GetRef;
+  end else
+  begin
+   Result:=@ID;
+  end;
+ end;
+end;
+
+//
+
+class function ntRegPair.Down(node:PsrNode):Pointer;
+begin
+ Result:=PsrRegPair(node)^.FWriter;
+end;
+
+class Procedure ntRegPair.SetWriter(node,w,line:PsrNode);
+begin
+ With PsrRegPair(node)^ do
+ begin
+  SetWriter(w);
+ end;
+end;
+
+class Procedure ntRegPair.ResetWriter(node,w:PsrNode);
+begin
+ With PsrRegPair(node)^ do
+ if (FWriter=w) then
+ begin
+  SetWriter(nil);
+ end;
+end;
+
+//
+
+Procedure TsrRegsStory.Init(Emit:TCustomEmit);
 var
  i:Word;
  n:TString5;
@@ -104,20 +315,50 @@ begin
  For i:=0 to 103 do
  begin
   Str(i,n);
-  SGRP[i].Init(Alloc,'S'+n);
+  SGRP[i].Init(Emit,'S'+n);
  end;
- VCC[0].Init(Alloc,'VCCL');
- VCC[1].Init(Alloc,'VCCH');
- M0.Init(Alloc,'M0');
- EXEC[0].Init(Alloc,'EXECL');
- EXEC[1].Init(Alloc,'EXECH');
- SCC.Init(Alloc,'SCC');
+ VCC[0].Init(Emit,'VCCL');
+ VCC[1].Init(Emit,'VCCH');
+ M0.Init(Emit,'M0');
+ EXEC[0].Init(Emit,'EXECL');
+ EXEC[1].Init(Emit,'EXECH');
+ SCC.Init(Emit,'SCC');
  For i:=0 to 255 do
  begin
   Str(i,n);
-  VGRP[i].Init(Alloc,'V'+n);
+  VGRP[i].Init(Emit,'V'+n);
  end;
- FUnattach.Init(Alloc,'UNATT');
+ FUnattach.Init(Emit,'UNATT');
+end;
+
+Function TsrRegsStory.AllocDep:PRegDNode;
+begin
+ Result:=FDList.Pop_head;
+ if (Result=nil) then
+ begin
+  Result:=FUnattach.FEmit.Alloc(SizeOf(TRegDNode));
+ end;
+end;
+
+Procedure TsrRegsStory.FreeDep(node:PRegDNode);
+begin
+ if (node=nil) then Exit;
+ node^:=Default(TRegDNode);
+ FDList.Push_head(node);
+end;
+
+function TsrRegsStory.get_sdst7(SDST:Byte):PsrRegSlot;
+begin
+ Case SDST of
+  0..103:Result:=@SGRP[SDST];
+  106:Result:=@VCC[0];
+  107:Result:=@VCC[1];
+  124:Result:=@M0;
+  126:Result:=@EXEC[0];
+  127:Result:=@EXEC[1];
+  else
+      Result:=nil;
+ end;
 end;
 
 function TsrRegsStory.get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
@@ -145,20 +386,6 @@ begin
  end;
 end;
 
-function TsrRegsStory.get_sdst7(SDST:Byte):PsrRegSlot;
-begin
- Case SDST of
-  0..103:Result:=@SGRP[SDST];
-  106:Result:=@VCC[0];
-  107:Result:=@VCC[1];
-  124:Result:=@M0;
-  126:Result:=@EXEC[0];
-  127:Result:=@EXEC[1];
-  else
-      Result:=nil;
- end;
-end;
-
 function TsrRegsStory.get_ssrc8(SSRC:Byte):PsrRegSlot;
 begin
  Case SSRC of
@@ -174,6 +401,27 @@ begin
 
   253:Result:=@SCC;
   //254:Write('LDS_DIRECT');
+  else
+      Result:=nil;
+ end;
+end;
+
+function TsrRegsStory.get_ssrc9(SSRC:Word):PsrRegSlot;
+begin
+ Case SSRC of
+  0..103:Result:=@SGRP[SSRC];
+  106:Result:=@VCC[0];
+  107:Result:=@VCC[1];
+  124:Result:=@M0;
+  126:Result:=@EXEC[0];
+  127:Result:=@EXEC[1];
+
+  //251:Result:=@VCC[0];  //VCCZ
+  //252:Result:=@EXEC[0]; //EXECZ
+
+  253:Result:=@SCC;
+  //254:Write('LDS_DIRECT');
+  256..511:Result:=@VGRP[SSRC-256];
   else
       Result:=nil;
  end;
@@ -206,27 +454,6 @@ begin
    end;
   else
       Result:=False;
- end;
-end;
-
-function TsrRegsStory.get_ssrc9(SSRC:Word):PsrRegSlot;
-begin
- Case SSRC of
-  0..103:Result:=@SGRP[SSRC];
-  106:Result:=@VCC[0];
-  107:Result:=@VCC[1];
-  124:Result:=@M0;
-  126:Result:=@EXEC[0];
-  127:Result:=@EXEC[1];
-
-  //251:Result:=@VCC[0];  //VCCZ
-  //252:Result:=@EXEC[0]; //EXECZ
-
-  253:Result:=@SCC;
-  //254:Write('LDS_DIRECT');
-  256..511:Result:=@VGRP[SSRC-256];
-  else
-      Result:=nil;
  end;
 end;
 
@@ -350,85 +577,210 @@ end;
 
 //--
 
+Procedure TsrRegNode.Init; inline;
+begin
+ fntype:=ntReg;
+end;
+
 function TsrRegNode.GetName:RawByteString;
 begin
  Result:='';
- if (pSlot<>nil) then Result:=pSlot^.rid;
+ if (FSlot<>nil) then Result:=FSlot^.rid;
 end;
 
-Procedure TsrRegNode.mark_read;
+Procedure TsrRegNode.AddDep(t:PsrNode);
+var
+ pRegsStory:PsrRegsStory;
+ node:PRegDNode;
 begin
- Inc(read_count);
+ if (t=nil) or (@Self=nil) then Exit;
+
+ pRegsStory:=FSlot^.FEmit.GetRegsStory;
+ node:=pRegsStory^.AllocDep;
+
+ node^.pNode:=t;
+ FDList.Push_head(node);
 end;
 
-Procedure TsrRegNode.mark_unread;
+Procedure TsrRegNode.RemDep(t:PsrNode);
+var
+ pRegsStory:PsrRegsStory;
+ node,_prev:PRegDNode;
 begin
- Assert(read_count<>0);
- if (read_count<>0) then Dec(read_count);
+ if (t=nil) or (@Self=nil) then Exit;
+ node:=FDList.pHead;
+ _prev:=nil;
+ While (node<>nil) do
+ begin
+  if (node^.pNode=t) then
+  begin
+   if (_prev=nil) then
+   begin
+    FDList.pHead:=node^.pNext;
+   end else
+   begin
+    _prev^.pNext:=node^.pNext;
+   end;
+
+   pRegsStory:=FSlot^.FEmit.GetRegsStory;
+   pRegsStory^.FreeDep(node);
+
+   Exit;
+  end;
+  _prev:=node;
+  node:=node^.pNext;
+ end;
 end;
 
-procedure TsrRegNode.SetConst(pConst:PsrConst);
+function TsrRegNode.FirstDep:PRegDNode;
 begin
- pWriter.SetParam(ntConst,pConst);
- dtype:=pConst^.key.dtype;
+ Result:=nil;
+ if (@Self=nil) then Exit;
+ Result:=FDList.pHead;
 end;
 
-procedure TsrRegNode.SetReg(pReg:PsrRegNode);
+function TsrRegNode.GetDtype:TsrDataType;
 begin
- Assert(@Self<>pReg);
- pWriter.SetParam(ntReg,pReg);
+ Result:=F.dtype;
+end;
+
+Procedure TsrRegNode.SetDtype(t:TsrDataType);
+begin
+ F.dtype:=t;
+end;
+
+function TsrRegNode.GetWeak:Boolean;
+begin
+ Result:=F.weak;
+end;
+
+Procedure TsrRegNode.SetWeak(t:Boolean);
+begin
+ F.weak:=t;
+end;
+
+Procedure TsrRegNode.SetWriter(t:PsrNode);
+begin
+ if (@Self=nil) then Exit;
+ if (FWriter=t) then Exit;
+
+ Assert(RegDown(t^.AsType(ntReg))<>@Self,'Circular reference');
+
+ if isUsed then
+ begin
+        t^.mark_read  (@Self);
+  FWriter^.mark_unread(@Self);
+ end;
+ FWriter:=t;
+end;
+
+Function TsrRegNode.GetWriter:PsrNode;
+begin
+ Result:=nil;
+ if (@Self=nil) then Exit;
+ Result:=FWriter;
+end;
+
+Procedure TsrRegNode.SetLine(t:Pointer);
+begin
+ if (@Self=nil) then Exit;
+ if (FWriter<>nil) then
+ if (FWriter^.ntype.ClassName='ntOp') then
+ begin
+  Assert(FWriter=t);
+ end;
+ FLine:=t;
 end;
 
 function TsrRegNode.AsConst:PsrConst;
 begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (pWriter.ntype<>ntConst) then Exit;
- Result:=pWriter.pData;
-end;
-
-function TsrRegNode.AsOp:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (pWriter.ntype<>ntOp) then Exit;
- Result:=pWriter.pData;
+ if (@Self=nil) then Exit(nil);
+ Result:=PsrConst(FWriter^.AsType(ntConst));
 end;
 
 function TsrRegNode.AsReg:PsrRegNode;
 begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (pWriter.ntype<>ntReg) then Exit;
- Result:=pWriter.pData;
+ if (@Self=nil) then Exit(nil);
+ Result:=PsrRegNode(FWriter^.AsType(ntReg));
 end;
 
 function TsrRegNode.is_const:Boolean;
 begin
- Result:=(pWriter.ntype=ntConst);
+ if (@Self=nil) then Exit(False);
+ Result:=FWriter^.IsType(ntConst);
 end;
 
 function TsrRegNode.is_bool:Boolean;
 begin
+ if (@Self=nil) then Exit(False);
  Result:=(dtype=dtBool);
 end;
 
 function TsrRegNode.is_bool_or_const_bool:Boolean;
 begin
+ if (@Self=nil) then Exit(False);
  Result:=is_bool or
-  (is_const and (AsConst<>nil) and AsConst^.isBoolVal);
+  (is_const and AsConst^.isBoolVal);
 end;
 
 function TsrRegNode.is_unknow:Boolean;
 begin
+ if (@Self=nil) then Exit(True);
  Result:=(dtype=dtUnknow);
+end;
+
+function TsrRegNode.GetPrintName:RawByteString;
+begin
+ if is_const then
+ begin
+  Result:=AsConst^.GetPrintName;
+ end else
+ begin
+  Assert(ID.Alloc);
+  Result:='r'+IntToStr(ID.ID);
+ end;
+end;
+
+//
+
+
+Procedure TsrRegPair.SetWriter(t:PsrNode);
+begin
+ if (FWriter=t) then Exit;
+ if isUsed then
+ begin
+        t^.mark_read  (@Self);
+  FWriter^.mark_unread(@Self);
+ end;
+ FWriter:=t;
+end;
+
+Procedure TsrRegPair.SetDst0(r:PsrNode);
+begin
+ if (FDst0=r) then Exit;
+ FDst0^.ResetWriter(@Self);
+ FDst0:=r;
+ FDst0^.SetWriter(@Self,pLine);
+end;
+
+Procedure TsrRegPair.SetDst1(r:PsrNode);
+begin
+ if (FDst1=r) then Exit;
+ FDst1^.ResetWriter(@Self);
+ FDst1:=r;
+ FDst1^.SetWriter(@Self,pLine);
+end;
+
+Procedure TsrRegPair.Init; inline;
+begin
+ fntype:=ntRegPair;
 end;
 
 //--
 
-Procedure TsrRegSlot.Init(a:TfnAlloc;const n:TString5);
+Procedure TsrRegSlot.Init(Emit:TCustomEmit;const n:TString5);
 begin
- Alloc:=a;
+ FEmit:=Emit;
  rid  :=n;
 end;
 
@@ -442,12 +794,22 @@ begin
  Result:=pStory.pTail;
 end;
 
+function TsrRegSlot.isBoolOnly:Boolean;
+begin
+ Result:=(rid='SCC');
+end;
+
 function TsrRegSlot.New(pLine:Pointer;rtype:TsrDataType):PsrRegNode;
 var
  node:PsrRegNode;
 begin
- node:=Alloc(SizeOf(TsrRegNode));
- node^.pSlot:=@Self;
+ if isBoolOnly then
+ begin
+  rtype:=dtBool;
+ end;
+ node:=FEmit.Alloc(SizeOf(TsrRegNode));
+ node^.Init;
+ node^.FSlot:=@Self;
  node^.dtype:=rtype;
  node^.pLine:=pLine;
  pStory.Push_tail(node);
@@ -458,11 +820,33 @@ function TsrRegSlot.NewAfter(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
 var
  node:PsrRegNode;
 begin
- node:=Alloc(SizeOf(TsrRegNode));
- node^.pSlot:=@Self;
+ if isBoolOnly then
+ begin
+  rtype:=dtBool;
+ end;
+ node:=FEmit.Alloc(SizeOf(TsrRegNode));
+ node^.Init;
+ node^.FSlot:=@Self;
  node^.dtype:=rtype;
  node^.pLine:=r^.pLine;
  pStory.InsertAfter(r,node);
+ Result:=node;
+end;
+
+function TsrRegSlot.NewBefore(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
+var
+ node:PsrRegNode;
+begin
+ if isBoolOnly then
+ begin
+  rtype:=dtBool;
+ end;
+ node:=FEmit.Alloc(SizeOf(TsrRegNode));
+ node^.Init;
+ node^.FSlot:=@Self;
+ node^.dtype:=rtype;
+ node^.pLine:=r^.pLine;
+ pStory.InsertBefore(r,node);
  Result:=node;
 end;
 
@@ -470,6 +854,50 @@ procedure TsrRegSlot.Remove(r:PsrRegNode);
 begin
  if (r=nil) then Exit;
  pStory.Remove(r);
+end;
+
+//
+
+function RegDown(node:PsrRegNode):PsrRegNode;
+var
+ tmp:PsrRegNode;
+begin
+ //backtrace
+ Result:=node;
+ While (Result<>nil) do
+ begin
+  tmp:=Result^.AsReg; //next
+  if (tmp=nil) then Break;
+  Assert(tmp<>Result);
+  Result:=tmp;
+ end;
+end;
+
+function RegDownSlot(node:PsrRegNode):PsrRegNode;
+var
+ tmp:PsrRegNode;
+begin
+ //backtrace
+ Result:=node;
+ While (Result<>nil) do
+ begin
+  tmp:=Result^.AsReg; //next
+  if (tmp=nil) then Break;
+  Assert(tmp<>Result);
+  if (tmp^.pSlot<>Result^.pSlot) then Break;
+  Result:=tmp;
+ end;
+end;
+
+function CompareReg(r1,r2:PsrRegNode):Boolean;
+begin
+ r1:=RegDown(r1);
+ r2:=RegDown(r2);
+ Result:=(r1=r2);
+ if not Result then
+ begin
+  Result:=CompareConst(r1^.AsConst,r2^.AsConst);
+ end;
 end;
 
 end.

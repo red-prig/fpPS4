@@ -1,4 +1,4 @@
-unit srNodes;
+unit ginodes;
 
 {$mode objfpc}{$H+}
 
@@ -45,45 +45,7 @@ type
   procedure Insert(new:PNode);
  end;
 
- TsrNodeType=(
-  ntUnknow,
-  ntLiteral,
-  ntString,
-  ntConst,
-  ntType,
-  ntLabel,
-  ntBlock,
-  ntFunc,
-  ntVar,
-  ntRefId,
-  ntOp,
-  ntReg,
-  ntVolatile,
-  ntInput,
-  ntVertLayout,
-  ntFragLayout,
-  ntOutput,
-  ntChain,
-  ntUniform,
-  ntBuffer
- );
-
- TOpParamSingle=packed object
-  ntype:TsrNodeType;
-  pData:Pointer;
-  procedure SetParam(_ntype:TsrNodeType;_Data:Pointer);
-  function  AsConst:Pointer;
-  function  AsOp:Pointer;
-  function  AsReg:Pointer;
-  function  AsVar:Pointer;
-  function  AsBlock:Pointer;
-  function  AsInput:Pointer;
-  function  AsRefId:Pointer;
-  function  AsUniform:Pointer;
- end;
-
- TfnAlloc=Function(Size:ptruint):Pointer of object;
-
+function ComparePChar(buf1,buf2:PChar):Integer;
 function ComparePtruint(buf1,buf2:PPtruint;count:PtrUint):Integer;
 
 implementation
@@ -169,10 +131,7 @@ function TNodeFetch.Next(node:PNode):PNode;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- if (node^.pRight=nil) then
- begin
-  _Splay(node);
- end;
+ _Splay(node);
  node:=node^.pRight;
  While (node<>nil) do
  begin
@@ -185,10 +144,7 @@ function TNodeFetch.Prev(node:PNode):PNode;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- if (node^.pLeft=nil) then
- begin
-  _Splay(node);
- end;
+ _Splay(node);
  node:=node^.pLeft;
  While (node<>nil) do
  begin
@@ -483,74 +439,32 @@ begin
  end;
 end;
 
-procedure TOpParamSingle.SetParam(_ntype:TsrNodeType;_Data:Pointer);
-begin
- ntype:=_ntype;
- pData:=_Data;
-end;
+//
 
-function TOpParamSingle.AsConst:Pointer;
+function ComparePChar(buf1,buf2:PChar):Integer;
 begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntConst) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsOp:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntOp) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsReg:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntReg) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsVar:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntVar) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsBlock:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntBlock) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsInput:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntInput) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsRefId:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntRefId) then Exit;
- Result:=pData;
-end;
-
-function TOpParamSingle.AsUniform:Pointer;
-begin
- Result:=nil;
- if (@Self=nil) then Exit;
- if (ntype<>ntUniform) then Exit;
- Result:=pData;
+ Result:=0;
+ if (buf1=nil) and (buf2=nil) then
+ begin
+  Exit;
+ end else
+ if (buf1=nil) then
+ begin
+  Result:=-Integer(buf2^);
+ end else
+ if (buf2=nil) then
+ begin
+  Result:=Integer(buf1^);
+ end else
+ begin
+  While true do
+  begin
+   Result:=Integer(buf1^)-Integer(buf2^);
+   if (Result<>0) or (buf1^=#0) or (buf2^=#0) then Exit;
+   Inc(buf1);
+   Inc(buf2);
+  end;
+ end;
 end;
 
 function ComparePtruint(buf1,buf2:PPtruint;count:PtrUint):Integer;
