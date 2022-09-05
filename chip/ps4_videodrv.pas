@@ -13,6 +13,8 @@ uses
   LFQueue,
   bittype,
 
+  sys_crt,
+
   sys_types,
   sys_kernel,
   ps4_libSceVideoOut,
@@ -398,6 +400,9 @@ var
  work_do:Boolean;
 begin
  Result:=0;
+
+ sys_crt_init;
+
  repeat
   work_do:=False;
 

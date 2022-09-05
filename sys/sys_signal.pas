@@ -73,7 +73,9 @@ function  __sigprocmask(how:Integer;_set,oldset:p_sigset_t):Integer;
 function  __sigaction(signum:Integer;act,oldact:p_sigaction_t):Integer;
 
 procedure _sig_lock(flags:integer=0);
+procedure __sig_lock(pt:Pointer;flags:integer=0);
 procedure _sig_unlock(flags:integer=0);
+procedure __sig_unlock(pt:Pointer;flags:integer=0);
 
 function  _pthread_kill(t:Pointer;sig:Integer):Integer;
 
@@ -319,7 +321,7 @@ function __sigprocmask(how:Integer;_set,oldset:p_sigset_t):Integer;
 var
  t:pthread;
 begin
- t:=_get_curthread;
+ t:=tcb_thread;
  if (t=nil) then Exit(EINVAL);
 
  if (_set=nil) then
@@ -426,6 +428,11 @@ const
 function __sig_self_interrupt(t:pthread):Integer; forward;
 
 procedure _sig_lock(flags:integer=0);
+begin
+ __sig_lock(tcb_thread,flags);
+end;
+
+procedure __sig_lock(pt:Pointer;flags:integer=0);
 label
  tryagain;
 var
@@ -433,8 +440,8 @@ var
  i:Integer;
  pc:QWORD;
 begin
- t:=_get_curthread;
- if (t=nil) then Exit;
+ if (pt=nil) then Exit;
+ t:=pt;
 
  if ((flags and SL_ALERTABLE)<>0) then
  begin
@@ -471,6 +478,11 @@ begin
 end;
 
 procedure _sig_unlock(flags:integer=0);
+begin
+ __sig_unlock(tcb_thread,flags);
+end;
+
+procedure __sig_unlock(pt:Pointer;flags:integer=0);
 label
  tryagain;
 var
@@ -479,8 +491,8 @@ var
  Alertable:Boolean;
  pc:QWORD;
 begin
- t:=_get_curthread;
- if (t=nil) then Exit;
+ if (pt=nil) then Exit;
+ t:=pt;
 
  i:=load_acq_rel(t^.sig._lock);
  Alertable:=((t^.sig._flag and ALERTABLE_FLAG)<>0);
@@ -908,7 +920,7 @@ begin
  Result:=sigqueue_add(@pthread(t)^.sig,@sinfo);
  if (Result<>0) then Exit;
 
- if (t=_get_curthread) then
+ if (t=tcb_thread) then
  begin
   _sig_lock;
   Result:=__sig_self_interrupt(t);
