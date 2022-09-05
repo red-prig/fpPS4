@@ -545,6 +545,19 @@ begin
  Result:=0;
 end;
 
+//
+
+function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
+                                                   argc:size_t;
+                                                   argp:PPointer;
+                                                   flags:DWORD;
+                                                   pRes:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleName(id));
+ if (pRes<>nil) then pRes^:=0;
+ Result:=0;
+end;
+
 const
  __progname:PChar='eboot.bin'; //argv[0]
 
@@ -669,6 +682,8 @@ begin
  lib^.set_proc($83C70CDFD11467AA,@ps4_sceSysmoduleLoadModule);
  lib^.set_proc($791D9B6450005344,@ps4_sceSysmoduleUnloadModule);
  lib^.set_proc($7CC3F934750E68C9,@ps4_sceSysmoduleIsLoaded);
+
+ lib^.set_proc($847AC6A06A0D7FEB,@ps4_sceSysmoduleLoadModuleInternalWithArg);
 end;
 
 function Load_libkernel(Const name:RawByteString):TElf_node;
