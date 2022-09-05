@@ -1,6 +1,10 @@
 # fpPS4 [![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions)
 
+# Donate: [<img src="https://static.boosty.to/assets/images/logo.Ffjjd.svg"/>](https://boosty.to/fpps4)
+
 ![Book logo](/icons/logo.png) 
+
+#
 
   PS4 compatibility layer (emulator) on Free Pascal
  
