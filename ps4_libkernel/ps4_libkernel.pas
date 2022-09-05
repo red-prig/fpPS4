@@ -91,6 +91,12 @@ begin
  //Result:=1; //yes
 end;
 
+//ps5? no
+function ps4_sceKernelIsProspero:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0; //no
+end;
+
 //void * _aligned_malloc(
 //    size_t size,
 //    size_t alignment
@@ -919,6 +925,7 @@ begin
  //thread
 
  lib^.set_proc($5AC95C2B51507062,@ps4_sceKernelIsNeoMode);
+ lib^.set_proc($9A9C4076A5BB74A6,@ps4_sceKernelIsProspero);
 
  //mmap
 
@@ -1005,6 +1012,9 @@ begin
  //file
 
  px:=Result._add_lib('libScePosix');
+ px^.MapSymbol:=lib^.MapSymbol;
+
+ px:=Result._add_lib('libkernel_cpumode_platform');
  px^.MapSymbol:=lib^.MapSymbol;
 
  lib:=Result._add_lib('libkernel_unity');

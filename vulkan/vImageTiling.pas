@@ -480,6 +480,9 @@ begin
   kTileModeThin_2dThin:
    _Load_Linear(cmd,TvImage2(image)); //TODO
 
+  kTileModeDepth_1dThin:
+   _Load_Linear(cmd,TvImage2(image)); //TODO
+
   else
    Assert(false,'TODO');
  end;
@@ -601,6 +604,9 @@ begin
    Result:=_Check_Thin_1dThin(TvImage2(image));
 
   kTileModeThin_2dThin:
+   Result:=_Check_Linear(TvImage2(image)); //TODO
+
+  kTileModeDepth_1dThin:
    Result:=_Check_Linear(TvImage2(image)); //TODO
 
   else
