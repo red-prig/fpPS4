@@ -198,6 +198,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpCommerceHidePsStoreIcon():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -262,6 +267,11 @@ begin
     'libSceUlt':
     Case Info^.nid of
      QWORD($859220D44586B073):Result:=@ps4_sceUltInitialize;
+    end;
+
+    'libSceNpCommerce':
+    Case Info^.nid of
+     QWORD($76CA8256C34CD198):Result:=@ps4_sceNpCommerceHidePsStoreIcon;
     end;
 
   end;
@@ -557,6 +567,12 @@ begin
 
  //ps4_app.app_path:='G:\Games\Bards.Gold\CUSA05012\';
  //ps4_app.app_file:='G:\Games\Bards.Gold\CUSA05012\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Record of Lodoss War Deedlit in Wonder Labyrinth\CUSA29366\';
+ //ps4_app.app_file:='G:\Games\Record of Lodoss War Deedlit in Wonder Labyrinth\CUSA29366\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Spelunky 2\CUSA20601\';
+ //ps4_app.app_file:='G:\Games\Spelunky 2\CUSA20601\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
