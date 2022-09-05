@@ -391,6 +391,8 @@ var
 //label
 // _lab;
 
+{$R *.res}
+
 begin
  DefaultSystemCodePage:=CP_UTF8;
  DefaultUnicodeCodePage:=CP_UTF8;
