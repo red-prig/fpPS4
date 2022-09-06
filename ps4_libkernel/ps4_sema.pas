@@ -19,7 +19,7 @@ const
 
 type
  pwsem_node=^wsem_node;
- wsem_node=record
+ wsem_node=packed record
   pNext,pPrev:pwsem_node;
   //
   thread:THandle;
@@ -40,7 +40,7 @@ type
 
  PSceKernelSema=^SceKernelSema;
  SceKernelSema=^_sem_t;
- _sem_t=record
+ _sem_t=packed record
   valid:DWORD;
   init :Integer;
   max  :Integer;

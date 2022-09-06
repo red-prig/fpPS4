@@ -21,7 +21,7 @@ type
 
  p_pthread_cond=^pthread_cond;
  pthread_cond=^pthread_cond_t;
- pthread_cond_t=record
+ pthread_cond_t=packed record
   valid:DWORD;
   busy :DWORD;
   waiters_count_:DWORD;

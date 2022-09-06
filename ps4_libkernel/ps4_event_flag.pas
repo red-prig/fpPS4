@@ -30,7 +30,7 @@ type
  end;
 
  pwef_node=^wef_node;
- wef_node=record
+ wef_node=packed record
   pNext,pPrev:pwef_node;
   //
   thread:THandle;

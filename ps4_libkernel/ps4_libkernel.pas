@@ -15,6 +15,7 @@ uses
   ps4_cond,
   ps4_sema,
   ps4_rwlock,
+  ps4_barrier,
   ps4_time,
   ps4_kernel_file,
   ps4_queue,
@@ -857,6 +858,14 @@ begin
  lib^.set_proc($246823ED4BEB97E0,@ps4_scePthreadCondBroadcast);
 
  //cond
+
+ //barrier
+
+ lib^.set_proc($66C5CB16D7768EA4,@ps4_pthread_barrier_init);
+ lib^.set_proc($F8FAAE6FD1D908FA,@ps4_pthread_barrier_destroy);
+ lib^.set_proc($09AC1980262A5D69,@ps4_pthread_barrier_wait);
+
+ //barrier
 
  //thread
 

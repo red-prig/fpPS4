@@ -162,6 +162,14 @@ begin
  Result:=3;
 end;
 
+function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
+                          poolSize:size_t;
+                          maxConcurrentRequest:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceHttp2Init:',poolSize);
+ Result:=3;
+end;
+
 function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
@@ -242,6 +250,11 @@ begin
    'libSceSsl':
     Case Info^.nid of
      QWORD($85DA551140C55B7B):Result:=@ps4_sceSslInit;
+    end;
+
+   'libSceHttp2':
+    Case Info^.nid of
+     QWORD($DC909EDE509B43C0):Result:=@ps4_sceHttp2Init;
     end;
 
    'libSceNpWebApi':
@@ -573,6 +586,9 @@ begin
 
  //ps4_app.app_path:='G:\Games\Spelunky 2\CUSA20601\';
  //ps4_app.app_file:='G:\Games\Spelunky 2\CUSA20601\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\eboot.bin';
 
  //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
  //elf.Prepare;
