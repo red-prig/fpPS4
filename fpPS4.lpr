@@ -147,6 +147,8 @@ asm
  xor %rax,%rax
 end;
 
+//nop nid:libSceNpGameIntent:8C4217500AFD5C4F:sceNpGameIntentReceiveIntent
+
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
  Writeln(StdErr,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
@@ -170,10 +172,24 @@ begin
  Result:=3;
 end;
 
-function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
+function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;
+                                   poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
  Result:=4;
+end;
+
+function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
+                                    poolSize:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApi2Initialize:',poolSize);
+ Result:=4;
+end;
+
+function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApi2CreateUserContext:',libCtxId);
+ Result:=5;
 end;
 
 function ps4_sceMoveInit:Integer; SysV_ABI_CDecl;
@@ -209,6 +225,11 @@ end;
 function ps4_sceNpCommerceHidePsStoreIcon():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
+end;
+
+function ps4_sceNpGameIntentInitialize(initParam:PByte;size:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=6;
 end;
 
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
@@ -262,6 +283,12 @@ begin
      QWORD($1B70272CD7510631):Result:=@ps4_sceNpWebApiInitialize;
     end;
 
+   'libSceNpWebApi2':
+    Case Info^.nid of
+     QWORD($FA8F7CD7A61086A4):Result:=@ps4_sceNpWebApi2Initialize;
+     QWORD($B24E786E2E85B583):Result:=@ps4_sceNpWebApi2CreateUserContext;
+    end;
+
    'libSceMove':
     Case Info^.nid of
      QWORD($8F521313F1282661):Result:=@ps4_sceMoveInit;
@@ -285,6 +312,11 @@ begin
     'libSceNpCommerce':
     Case Info^.nid of
      QWORD($76CA8256C34CD198):Result:=@ps4_sceNpCommerceHidePsStoreIcon;
+    end;
+
+    'libSceNpGameIntent':
+    Case Info^.nid of
+     QWORD($9BCEC11F1B7F1FAD):Result:=@ps4_sceNpGameIntentInitialize;
     end;
 
   end;

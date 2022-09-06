@@ -855,6 +855,13 @@ begin
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
 
  Case RENDER_TARGET[i].INFO.FORMAT of
+  COLOR_8:
+   Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
+    NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8_UNORM;
+    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8_SRGB;
+    else
+     Assert(false,'TODO');
+   end;
   COLOR_8_8_8_8:
    Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
     NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
@@ -909,6 +916,7 @@ begin
  //end;
 
   Case RENDER_TARGET[i].INFO.FORMAT of
+   COLOR_8,
    COLOR_8_8_8_8:
     Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
      NUMBER_UNORM,

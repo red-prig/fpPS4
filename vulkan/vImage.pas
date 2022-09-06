@@ -180,6 +180,7 @@ begin
   VK_FORMAT_R8G8_UNORM          :Result:=2;
   VK_FORMAT_R8_UNORM            :Result:=1;
   VK_FORMAT_R8_UINT             :Result:=1;
+  VK_FORMAT_R8_SRGB             :Result:=1;
   VK_FORMAT_R5G6B5_UNORM_PACK16 :Result:=2;
   VK_FORMAT_R32_SFLOAT          :Result:=4;
 
