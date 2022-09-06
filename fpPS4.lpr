@@ -147,8 +147,6 @@ asm
  xor %rax,%rax
 end;
 
-//nop nid:libSceNpGameIntent:8C4217500AFD5C4F:sceNpGameIntentReceiveIntent
-
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
  Writeln(StdErr,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
@@ -227,9 +225,53 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGameIntentInitialize(initParam:PByte;size:PInteger):Integer; SysV_ABI_CDecl;
+const
+ SCE_NP_GAME_INTENT_TYPE_MAX_SIZE=(32+1);
+ SCE_NP_GAME_INTENT_DATA_MAX_SIZE=(16*1024+1);
+
+type
+ pSceNpGameIntentInitParam=^SceNpGameIntentInitParam;
+ SceNpGameIntentInitParam=packed record
+  size:QWORD;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceNpGameIntentData=^SceNpGameIntentData;
+ SceNpGameIntentData=packed record
+  data:array[0..SCE_NP_GAME_INTENT_DATA_MAX_SIZE-1] of Byte;
+  padding:array[0..6] of Byte;
+ end;
+
+ pSceNpGameIntentInfo=^SceNpGameIntentInfo;
+ SceNpGameIntentInfo=packed record
+  size:QWORD;
+  userId:Integer;
+  intentType:array[0..SCE_NP_GAME_INTENT_TYPE_MAX_SIZE-1] of AnsiChar;
+  padding:array[0..6] of Byte;
+  reserved:array[0..255] of Byte;
+  intentData:SceNpGameIntentData;
+ end;
+
+function ps4_sceNpGameIntentInitialize(initParam:pSceNpGameIntentInitParam):Integer; SysV_ABI_CDecl;
 begin
  Result:=6;
+end;
+
+function ps4_sceNpGameIntentReceiveIntent(intentInfo:pSceNpGameIntentInfo):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpGameIntentGetPropertyValueString(intentData:pSceNpGameIntentData;
+                                                   key:Pchar;
+                                                   valueBuf:Pchar;
+                                                   bufSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (valueBuf<>nil) then
+ begin
+  FillChar(valueBuf^,bufSize,0);
+ end;
+ Result:=0;
 end;
 
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
@@ -317,6 +359,8 @@ begin
     'libSceNpGameIntent':
     Case Info^.nid of
      QWORD($9BCEC11F1B7F1FAD):Result:=@ps4_sceNpGameIntentInitialize;
+     QWORD($8C4217500AFD5C4F):Result:=@ps4_sceNpGameIntentReceiveIntent;
+     QWORD($ACF97420D35CFCCF):Result:=@ps4_sceNpGameIntentGetPropertyValueString;
     end;
 
   end;
