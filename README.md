@@ -2,6 +2,7 @@
   PS4 compatibility layer (emulator) on Free Pascal
  
 This project is at the beginning and started for fun.
+You can support the project via https://boosty.to/fpps4
  
 ### Building
 - Free pascal compiler: 3.0.0 and higher, x86_64 only. 
