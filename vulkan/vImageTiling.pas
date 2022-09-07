@@ -365,6 +365,11 @@ begin
       tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);
       tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
+  16:begin
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +15) and (not 15);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+ 7) and (not  7);
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
+     end;
    8:begin
       tiler.m_paddedWidth :=(tiler.m_linearWidth +31) and (not 31);
       tiler.m_paddedHeight:=(tiler.m_linearHeight+ 7) and (not  7);
@@ -555,6 +560,11 @@ begin
   32:begin
       tiler.m_paddedWidth :=(tiler.m_linearWidth +7) and (not 7);
       tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
+     end;
+  16:begin
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +15) and (not 15);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+ 7) and (not  7);
       tiler.m_paddedDepth :=tiler.m_linearDepth;
      end;
    8:begin

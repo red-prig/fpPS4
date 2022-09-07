@@ -516,6 +516,9 @@ begin
  //ps4_app.app_path:='G:\Games\BLAZING_CHROME\CUSA14656\';
  //ps4_app.app_file:='G:\Games\BLAZING_CHROME\CUSA14656\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\BLAZING_CHROME\CUSA14656';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\BLAZING_CHROME\CUSA14656\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\Sonic Mania\CUSA07023\';
  //ps4_app.app_file:='G:\Games\Sonic Mania\CUSA07023\eboot.bin';
 

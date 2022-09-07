@@ -250,6 +250,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpPollAsync(reqId:Integer;
+                            pResult:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (pResult<>nil) then
+ begin
+  pResult^:=0;
+ end;
+ Result:=0; //SCE_NP_POLL_ASYNC_RET_FINISHED
+end;
+
 //
 
 function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
@@ -362,6 +372,7 @@ begin
  lib^.set_proc($F19D897391AF1832,@ps4_sceNpCheckNpAvailabilityA);
  lib^.set_proc($29F199836CBBDE83,@ps4_sceNpCheckNpReachability);
  lib^.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
+ lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);

@@ -535,6 +535,18 @@ begin
  end;
 end;
 
+procedure print_img_usage(usage:TVkFlags);
+begin
+ if (usage and ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT            ))<>0 then Write(' TRANSFER_SRC');
+ if (usage and ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT            ))<>0 then Write(' TRANSFER_DST');
+ if (usage and ord(VK_IMAGE_USAGE_SAMPLED_BIT                 ))<>0 then Write(' SAMPLED');
+ if (usage and ord(VK_IMAGE_USAGE_STORAGE_BIT                 ))<>0 then Write(' STORAGE');
+ if (usage and ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT        ))<>0 then Write(' COLOR_ATTACHMENT');
+ if (usage and ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))<>0 then Write(' DEPTH_STENCIL_ATTACHMENT');
+ if (usage and ord(VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT    ))<>0 then Write(' TRANSIENT_ATTACHMENT');
+ if (usage and ord(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ))<>0 then Write(' INPUT_ATTACHMENT');
+end;
+
 function _FetchImage(var F:TvImageKey;usage:TVkFlags):TvImage2;
 var
  t:TvImage2;
@@ -548,6 +560,14 @@ begin
 
   if ((t.FUsage and usage)<>usage) then
   begin
+   Write('Current usage:');
+   print_img_usage(t.FUsage);
+   Writeln;
+
+   Write('Need    usage:');
+   print_img_usage(usage);
+   Writeln;
+
    Assert(false,'TODO');
   end;
 

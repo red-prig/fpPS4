@@ -1505,6 +1505,22 @@ begin
  Free;
 end;
 
+//VK_IMAGE_USAGE_STORAGE_BIT
+
+const
+ VK_IMAGE_USAGE_DEFAULT=
+   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT) or
+   ord(VK_IMAGE_USAGE_SAMPLED_BIT);
+
+ VK_IMAGE_USAGE_DEFAULT_COLOR=
+   VK_IMAGE_USAGE_DEFAULT or
+   ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+
+ VK_IMAGE_USAGE_DEFAULT_DEPTH=
+   VK_IMAGE_USAGE_DEFAULT or
+   ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
 procedure ClearRenderTarget;
 var
  RT_INFO:TRT_INFO;
@@ -1520,10 +1536,7 @@ begin
 
  ri:=FetchImage(GFXRing.CmdBuffer,
                 RT_INFO.FImageInfo,
-                ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
-                ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                VK_IMAGE_USAGE_DEFAULT_COLOR,
                 TM_CLEAR
                 );
 
@@ -1559,19 +1572,13 @@ begin
 
  ri_src:=FetchImage(GFXRing.CmdBuffer,
                     RT_INFO_SRC.FImageInfo,
-                    ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                    ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
-                    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                    VK_IMAGE_USAGE_DEFAULT_COLOR,
                     {TM_READ}0
                     );
 
  ri_dst:=FetchImage(GFXRing.CmdBuffer,
                     RT_INFO_DST.FImageInfo,
-                    ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                    ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
-                    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                    VK_IMAGE_USAGE_DEFAULT_COLOR,
                     TM_WRITE
                     );
 
@@ -1841,10 +1848,7 @@ begin
 
     ri:=FetchImage(GFXRing.CmdBuffer,
                    RT_INFO.FImageInfo,
-                   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                   ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) or
-                   ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                   ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   VK_IMAGE_USAGE_DEFAULT_COLOR,
                    RT_INFO.IMAGE_USAGE
                    );
 
@@ -1928,9 +1932,7 @@ begin
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   DB_INFO.FImageInfo,
-                  ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                  VK_IMAGE_USAGE_DEFAULT_DEPTH,
                   DB_INFO.DEPTH_USAGE
                   );
 
@@ -2045,9 +2047,7 @@ begin
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
-                  ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                  VK_IMAGE_USAGE_DEFAULT_COLOR,
                   TM_READ
                   );
 
@@ -2150,9 +2150,7 @@ begin
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
-                  ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                  ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                  VK_IMAGE_USAGE_DEFAULT_COLOR,
                   TM_READ
                   );
 

@@ -292,6 +292,7 @@
       <Unit64>
         <Filename Value="src\ps4_libsceappcontent.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAppContent"/>
       </Unit64>
       <Unit65>
         <Filename Value="src\ps4_libscedialogs.pas"/>
@@ -354,6 +355,7 @@
       <Unit79>
         <Filename Value="src\ps4_libscevideoout.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceVideoOut"/>
       </Unit79>
       <Unit80>
         <Filename Value="src\ajm\ajm_error.inc"/>
