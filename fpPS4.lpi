@@ -296,6 +296,7 @@
       <Unit65>
         <Filename Value="src\ps4_libscedialogs.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDialogs"/>
       </Unit65>
       <Unit66>
         <Filename Value="src\ps4_libscediscmap.pas"/>
@@ -308,6 +309,7 @@
       <Unit68>
         <Filename Value="src\ps4_libscehttp.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceHttp"/>
       </Unit68>
       <Unit69>
         <Filename Value="src\ps4_libsceime.pas"/>
@@ -360,6 +362,7 @@
       <Unit81>
         <Filename Value="src\ajm\ps4_libsceajm.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAjm"/>
       </Unit81>
       <Unit82>
         <Filename Value="src\audio\libportaudio.pas"/>
@@ -372,6 +375,7 @@
       <Unit84>
         <Filename Value="src\np\ps4_libscenpmanager.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpManager"/>
       </Unit84>
       <Unit85>
         <Filename Value="src\np\ps4_libscenpmatching2.pas"/>

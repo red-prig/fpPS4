@@ -61,22 +61,57 @@ begin
  Result:=0;
 end;
 
+//
+
 function ps4_sceErrorDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceErrorDialogInitialize');
  Result:=0;
 end;
 
+type
+ pSceErrorDialogParam=^SceErrorDialogParam;
+ SceErrorDialogParam=packed record
+  size:Integer;
+  errorCode:Integer;
+  userId:Integer;
+  reserved:Integer;
+ end;
+
+const
+ SCE_ERROR_DIALOG_ERROR_PARAM_INVALID=Integer($80ED0003);
+
+var
+ status_err_dialog:Integer=0; //SCE_ERROR_DIALOG_STATUS_NONE
+
+function ps4_sceErrorDialogOpen(param:pSceErrorDialogParam):Integer; SysV_ABI_CDecl;
+begin
+ if (param=nil) then Exit(SCE_ERROR_DIALOG_ERROR_PARAM_INVALID);
+ Writeln('sceErrorDialogOpen:',HexStr(param^.errorCode,4));
+ status_err_dialog:=3; //SCE_ERROR_DIALOG_STATUS_FINISHED
+ Result:=0;
+end;
+
 function ps4_sceErrorDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=0; //SCE_ERROR_DIALOG_STATUS_NONE
+ Result:=status_err_dialog;
 end;
+
+function ps4_sceErrorDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ status_err_dialog:=0; //SCE_ERROR_DIALOG_STATUS_NONE
+ Result:=0;
+end;
+
+//
 
 function ps4_sceNpProfileDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpProfileDialogInitialize');
  Result:=0;
 end;
+
+//
 
 function ps4_sceSaveDataDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
@@ -204,6 +239,9 @@ const
  SCE_COMMON_DIALOG_ERROR_PARAM_INVALID=-2135425014; // 0x80B8000A
  SCE_COMMON_DIALOG_ERROR_ARG_NULL     =-2135425011; // 0x80B8000D
 
+var
+ status_msg_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
 function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer; SysV_ABI_CDecl;
 begin
  if (param=nil) then Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
@@ -217,21 +255,35 @@ begin
 
      //TODO
     end;
-  else
-   Assert(false,'TODO');
+  //else
+  // Assert(false,'TODO');
  end;
 
+ status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+
+ Result:=0;
+end;
+
+function ps4_sceMsgDialogClose():Integer; SysV_ABI_CDecl;
+begin
+ status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
 
 function ps4_sceMsgDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=status_msg_dialog;
 end;
 
 function ps4_sceMsgDialogGetStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=status_msg_dialog;
+end;
+
+function ps4_sceMsgDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=0;
 end;
 
 //
@@ -242,9 +294,61 @@ begin
  Result:=0;
 end;
 
+var
+ status_commerce_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
+type
+ pSceNpCommerceDialogParam=^SceNpCommerceDialogParam;
+ SceNpCommerceDialogParam=packed record
+  baseParam:SceCommonDialogBaseParam;
+  size:Integer;
+  userId:Integer;
+  mode:Integer;       //SceNpCommerceDialogMode
+  serviceLabel:DWORD; //SceNpServiceLabel
+  targets:PPChar;
+  numTargets:DWORD;
+  align:Integer;
+  features:QWORD;
+  userData:Pointer;
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceNpCommerceDialogOpen(param:pSceNpCommerceDialogParam):Integer; SysV_ABI_CDecl;
+begin
+ status_commerce_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+ Result:=0;
+end;
+
 function ps4_sceNpCommerceDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=0; //SCE_COMMON_DIALOG_STATUS_NONE
+ Result:=status_commerce_dialog;
+end;
+
+type
+ pSceNpCommerceDialogResult=^SceNpCommerceDialogResult;
+ SceNpCommerceDialogResult=packed record
+  result:Integer;
+  authorized:Boolean;
+  align1:Byte;
+  align2:Word;
+  userData:Pointer;
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceNpCommerceDialogGetResult(pResult:pSceNpCommerceDialogResult):Integer; SysV_ABI_CDecl;
+begin
+ if (pResult<>nil) then
+ begin
+  pResult^.result:=1; //SCE_COMMON_DIALOG_RESULT_USER_CANCELED
+  pResult^.authorized:=false;
+ end;
+ Result:=0;
+end;
+
+function ps4_sceNpCommerceDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ status_commerce_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=0;
 end;
 
 const
@@ -256,6 +360,12 @@ const
 function ps4_sceNpCommerceShowPsStoreIcon(pos:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpCommerceShowPsStoreIcon:',pos);
+ Result:=0;
+end;
+
+function ps4_sceNpCommerceHidePsStoreIcon():Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpCommerceHidePsStoreIcon');
  Result:=0;
 end;
 
@@ -297,6 +407,12 @@ begin
  Result:=SCE_SIGNIN_DIALOG_STATUS_FINISHED;
 end;
 
+function ps4_scePlayerInvitationDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Writeln('scePlayerInvitationDialogTerminate');
+ Result:=0;
+end;
+
 //
 
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
@@ -319,7 +435,9 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceErrorDialog');
  lib^.set_proc($23CF0A0A19729D2B,@ps4_sceErrorDialogInitialize);
+ lib^.set_proc($336645FC294B8606,@ps4_sceErrorDialogOpen);
  lib^.set_proc($596886BA1F577E04,@ps4_sceErrorDialogUpdateStatus);
+ lib^.set_proc($F570312B63CCC24F,@ps4_sceErrorDialogTerminate);
 end;
 
 //
@@ -361,8 +479,10 @@ begin
  lib:=Result._add_lib('libSceMsgDialog');
  lib^.set_proc($943AB1698D546C4A,@ps4_sceMsgDialogInitialize);
  lib^.set_proc($6F4E878740CF11A1,@ps4_sceMsgDialogOpen);
+ lib^.set_proc($1D3ADC0CA9452AE3,@ps4_sceMsgDialogClose);
  lib^.set_proc($E9F202DD72ADDA4D,@ps4_sceMsgDialogUpdateStatus);
  lib^.set_proc($096556EFC41CDDF2,@ps4_sceMsgDialogGetStatus);
+ lib^.set_proc($78FC3F92A6667A5A,@ps4_sceMsgDialogTerminate);
 end;
 
 function Load_libSceNpCommerce(Const name:RawByteString):TElf_node;
@@ -373,8 +493,12 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNpCommerce');
  lib^.set_proc($D1A4766969906A5E,@ps4_sceNpCommerceDialogInitialize);
+ lib^.set_proc($0DF4820D10371236,@ps4_sceNpCommerceDialogOpen);
  lib^.set_proc($2D1E5CC0530C0951,@ps4_sceNpCommerceDialogUpdateStatus);
+ lib^.set_proc($AF8D9B59C41BB596,@ps4_sceNpCommerceDialogGetResult);
+ lib^.set_proc($9BF23DD806F9D16F,@ps4_sceNpCommerceDialogTerminate);
  lib^.set_proc($0C79B0B1AE92F137,@ps4_sceNpCommerceShowPsStoreIcon);
+ lib^.set_proc($76CA8256C34CD198,@ps4_sceNpCommerceHidePsStoreIcon);
 end;
 
 function Load_libSceSigninDialog(Const name:RawByteString):TElf_node;
@@ -390,14 +514,25 @@ begin
  lib^.set_proc($2D79664BA3EF25D5,@ps4_sceSigninDialogTerminate);
 end;
 
+function Load_libScePlayerInvitationDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libScePlayerInvitationDialog');
+ lib^.set_proc($8039B96BA19213DE,@ps4_scePlayerInvitationDialogTerminate);
+end;
+
 initialization
- ps4_app.RegistredPreLoad('libSceCommonDialog.prx'   ,@Load_libSceCommonDialog);
- ps4_app.RegistredPreLoad('libSceErrorDialog.prx'    ,@Load_libSceErrorDialog);
- ps4_app.RegistredPreLoad('libSceNpProfileDialog.prx',@Load_libSceNpProfileDialog);
- ps4_app.RegistredPreLoad('libSceSaveDataDialog.prx' ,@Load_libSceSaveDataDialog);
- ps4_app.RegistredPreLoad('libSceMsgDialog.prx'      ,@Load_libSceMsgDialog);
- ps4_app.RegistredPreLoad('libSceNpCommerce.prx'     ,@Load_libSceNpCommerce);
- ps4_app.RegistredPreLoad('libSceSigninDialog.prx'   ,@Load_libSceSigninDialog);
+ ps4_app.RegistredPreLoad('libSceCommonDialog.prx'          ,@Load_libSceCommonDialog);
+ ps4_app.RegistredPreLoad('libSceErrorDialog.prx'           ,@Load_libSceErrorDialog);
+ ps4_app.RegistredPreLoad('libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog);
+ ps4_app.RegistredPreLoad('libSceSaveDataDialog.prx'        ,@Load_libSceSaveDataDialog);
+ ps4_app.RegistredPreLoad('libSceMsgDialog.prx'             ,@Load_libSceMsgDialog);
+ ps4_app.RegistredPreLoad('libSceNpCommerce.prx'            ,@Load_libSceNpCommerce);
+ ps4_app.RegistredPreLoad('libSceSigninDialog.prx'          ,@Load_libSceSigninDialog);
+ ps4_app.RegistredPreLoad('libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
 
 end.
 

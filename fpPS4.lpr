@@ -30,6 +30,7 @@ uses
  ps4_libSceNpTrophy,
  ps4_libSceSystemService,
  ps4_libSceNpManager,
+ ps4_libSceNpGameIntent,
  ps4_libSceSaveData,
  ps4_libSceDialogs,
  ps4_libSceUserService,
@@ -220,60 +221,6 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpCommerceHidePsStoreIcon():Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
-const
- SCE_NP_GAME_INTENT_TYPE_MAX_SIZE=(32+1);
- SCE_NP_GAME_INTENT_DATA_MAX_SIZE=(16*1024+1);
-
-type
- pSceNpGameIntentInitParam=^SceNpGameIntentInitParam;
- SceNpGameIntentInitParam=packed record
-  size:QWORD;
-  reserved:array[0..31] of Byte;
- end;
-
- pSceNpGameIntentData=^SceNpGameIntentData;
- SceNpGameIntentData=packed record
-  data:array[0..SCE_NP_GAME_INTENT_DATA_MAX_SIZE-1] of Byte;
-  padding:array[0..6] of Byte;
- end;
-
- pSceNpGameIntentInfo=^SceNpGameIntentInfo;
- SceNpGameIntentInfo=packed record
-  size:QWORD;
-  userId:Integer;
-  intentType:array[0..SCE_NP_GAME_INTENT_TYPE_MAX_SIZE-1] of AnsiChar;
-  padding:array[0..6] of Byte;
-  reserved:array[0..255] of Byte;
-  intentData:SceNpGameIntentData;
- end;
-
-function ps4_sceNpGameIntentInitialize(initParam:pSceNpGameIntentInitParam):Integer; SysV_ABI_CDecl;
-begin
- Result:=6;
-end;
-
-function ps4_sceNpGameIntentReceiveIntent(intentInfo:pSceNpGameIntentInfo):Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
-function ps4_sceNpGameIntentGetPropertyValueString(intentData:pSceNpGameIntentData;
-                                                   key:Pchar;
-                                                   valueBuf:Pchar;
-                                                   bufSize:QWORD):Integer; SysV_ABI_CDecl;
-begin
- if (valueBuf<>nil) then
- begin
-  FillChar(valueBuf^,bufSize,0);
- end;
- Result:=0;
-end;
-
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -351,75 +298,68 @@ begin
      QWORD($859220D44586B073):Result:=@ps4_sceUltInitialize;
     end;
 
-    'libSceNpCommerce':
-    Case Info^.nid of
-     QWORD($76CA8256C34CD198):Result:=@ps4_sceNpCommerceHidePsStoreIcon;
-    end;
-
-    'libSceNpGameIntent':
-    Case Info^.nid of
-     QWORD($9BCEC11F1B7F1FAD):Result:=@ps4_sceNpGameIntentInitialize;
-     QWORD($8C4217500AFD5C4F):Result:=@ps4_sceNpGameIntentReceiveIntent;
-     QWORD($ACF97420D35CFCCF):Result:=@ps4_sceNpGameIntentGetPropertyValueString;
-    end;
-
   end;
  end;
 
+ {
  if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
  begin
 
- //Case Info^.lib^.strName of
- // 'libSceGnmDriver':;
- // 'libSceAjm':;
- // 'libSceAudioOut':;
- // 'libc':;
- // 'libSceLibcInternal':;
- // else
- //  Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
- //   'scePthreadMutexInit':;
- //   'scePthreadMutexattrInit':;
- //   'scePthreadMutexattrDestroy':;
- //   'scePthreadMutexattrSettype':;
- //   'scePthreadMutexTrylock':;
- //   'scePthreadMutexLock':;
- //   'scePthreadMutexUnlock':;
- //   'pthread_self':;
- //   'scePthreadSelf':;
- //   'scePthreadEqual':;
- //   'sceKernelGettimeofday':;
- //   'sceKernelClockGettime':;
- //   'pthread_mutex_lock':;
- //   'pthread_mutex_unlock':;
- //   'sceKernelPread':;
- //   'sceKernelClose':;
- //   'sceDiscMapIsRequestOnHDD':;
- //   'Unknow':;
- //   'sceFiosIOFilterPsarcDearchiver':;
- //   'sceFiosFHReadSync':;
- //   'sceFiosFHTell':;
- //   'sceNgs2VoiceGetState':;
- //   'sceNgs2SystemRender':;
- //   'sceAudioOutOutputs':;
- //   '__tls_get_addr':;
- //   'scePthreadRwlockRdlock':;
- //   'scePthreadRwlockUnlock':;
- //   'scePthreadCondBroadcast':;
- //   'sceFiosFHCloseSync':;
- //   'sceKernelStat':;
- //   'sceFiosFHOpenSync':;
- //   'sceFiosFHGetSize':;
- //   'sceKernelOpen':;
- //   'sceKernelUsleep':;
- //   '_write':;
- //   else
- //    begin
- //     Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
- //    end;
- //  end;
- //end;
+ Case Info^.lib^.strName of
+  'libSceGnmDriver':;
+  'libSceAjm':;
+  'libSceAudioOut':;
+  'libc':;
+  'libSceLibcInternal':;
+  else
+   Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
+    'sceKernelGetProcessTimeCounter':;
+    'sceKernelSignalSema':;
+    'sceKernelWaitSema':;
+    'scePthreadMutexInit':;
+    'scePthreadMutexattrInit':;
+    'scePthreadMutexattrDestroy':;
+    'scePthreadMutexattrSettype':;
+    'scePthreadMutexTrylock':;
+    'scePthreadMutexLock':;
+    'scePthreadMutexUnlock':;
+    'pthread_self':;
+    'scePthreadSelf':;
+    'scePthreadEqual':;
+    'sceKernelGettimeofday':;
+    'sceKernelClockGettime':;
+    'pthread_mutex_lock':;
+    'pthread_mutex_unlock':;
+    'sceKernelPread':;
+    'sceKernelClose':;
+    'sceDiscMapIsRequestOnHDD':;
+    'Unknow':;
+    'sceFiosIOFilterPsarcDearchiver':;
+    'sceFiosFHReadSync':;
+    'sceFiosFHTell':;
+    'sceNgs2VoiceGetState':;
+    'sceNgs2SystemRender':;
+    'sceAudioOutOutputs':;
+    '__tls_get_addr':;
+    'scePthreadRwlockRdlock':;
+    'scePthreadRwlockUnlock':;
+    'scePthreadCondBroadcast':;
+    'sceFiosFHCloseSync':;
+    'sceKernelStat':;
+    'sceFiosFHOpenSync':;
+    'sceFiosFHGetSize':;
+    'sceKernelOpen':;
+    'sceKernelUsleep':;
+    '_write':;
+    else
+     begin
+      Result:=TStubMemoryTrace(Stub).NewTraceStub(Info^.Nid,Info^.lib,Result,@_trace_enter,@_trace_exit);
+     end;
+   end;
+ end;
 
  end;
+ }
 
 
  if (Result=nil) then
@@ -660,19 +600,14 @@ begin
  //ps4_app.app_path:='G:\Games\Record of Lodoss War Deedlit in Wonder Labyrinth\CUSA29366\';
  //ps4_app.app_file:='G:\Games\Record of Lodoss War Deedlit in Wonder Labyrinth\CUSA29366\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\LODOSSWARDEEDLIT\CUSA29366\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\LODOSSWARDEEDLIT\CUSA29366\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\Spelunky 2\CUSA20601\';
  //ps4_app.app_file:='G:\Games\Spelunky 2\CUSA20601\eboot.bin';
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\eboot.bin';
-
- //elf:=Telf_file(LoadPs4ElfFromFile('libSceLibcInternal.sprx'));
- //elf.Prepare;
- //elf.SavePs4ElfToFile('libSceLibcInternal.prx');
- //F:=FileCreate('libSceLibcInternal.txt');
- //elf.DympSymbol(F);
- //FileClose(F);
- //FreeAndNil(elf);
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;

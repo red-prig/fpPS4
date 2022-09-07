@@ -317,6 +317,21 @@ begin
  H.Release;
 end;
 
+function ps4_sceAjmInstanceDestroy(uiContext:SceAjmContextId;
+                                   uiInstance:SceAjmInstanceId):Integer; SysV_ABI_CDecl;
+Var
+ H:TAjmContext;
+begin
+ Result:=0;
+
+ H:=TAjmContext(FAjmMap.Acqure(uiContext));
+ if (H=nil) then Exit(SCE_AJM_ERROR_INVALID_CONTEXT);
+
+ //
+
+ H.Release;
+end;
+
 function ps4_sceAjmBatchJobControlBufferRa(
           pBatchPosition:Pointer;
           uiInstance:SceAjmInstanceId;
@@ -325,13 +340,34 @@ function ps4_sceAjmBatchJobControlBufferRa(
           szSidebandInputSize:qword;
           pSidebandOutput:Pointer;
           szSidebandOutputSize:qword;
-          pReturnAddress:PPointer):Integer; SysV_ABI_CDecl;
+          pReturnAddress:PPointer):Pointer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=nil;
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
  end;
+end;
+
+function ps4_sceAjmBatchJobRunBufferRa(
+          pBatchPosition:Pointer;
+          uiInstance:SceAjmInstanceId;
+          uiFlags:qword;
+          pDataInput:Pointer;
+          szDataInputSize:qword;
+          pDataOutput:Pointer;
+          szDataOutputSize:qword;
+          pSidebandOutput:Pointer;
+          szSidebandOutputSize:qword;
+          pReturnAddress:PPointer):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=nil;
+ if (pSidebandOutput<>nil) then
+ begin
+  FillChar(pSidebandOutput^,szSidebandOutputSize,0);
+ end;
+
+ FillChar(pDataOutput^,szDataOutputSize,0);
 end;
 
 function ps4_sceAjmBatchJobRunSplitBufferRa(
@@ -344,11 +380,11 @@ function ps4_sceAjmBatchJobRunSplitBufferRa(
           szNumDataOutputBuffers:qword;
           pSidebandOutput:Pointer;
           szSidebandOutputSize:qword;
-          pReturnAddress:PPointer):Integer; SysV_ABI_CDecl;
+          pReturnAddress:PPointer):Pointer; SysV_ABI_CDecl;
 var
  i:qword;
 begin
- Result:=0;
+ Result:=nil;
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
@@ -397,7 +433,9 @@ begin
  lib^.set_proc($5A2EC3B652D5F8A2,@ps4_sceAjmModuleUnregister);
  lib^.set_proc($307BABEAA0AC52EB,@ps4_sceAjmFinalize);
  lib^.set_proc($031A03AC8369E09F,@ps4_sceAjmInstanceCreate);
+ lib^.set_proc($45B2DBB8ABFCCE1A,@ps4_sceAjmInstanceDestroy);
  lib^.set_proc($7660F26CDFFF167F,@ps4_sceAjmBatchJobControlBufferRa);
+ lib^.set_proc($125B25382A4E227B,@ps4_sceAjmBatchJobRunBufferRa);
  lib^.set_proc($EE37405CAFB67CCA,@ps4_sceAjmBatchJobRunSplitBufferRa);
  lib^.set_proc($7C5164934C5F196B,@ps4_sceAjmBatchStartBuffer);
  lib^.set_proc($FEA2EC7C3032C086,@ps4_sceAjmBatchWait);

@@ -107,8 +107,10 @@ type
                                   userdata:Pointer); SysV_ABI_CDecl;
 
 const
- SCE_NP_ERROR_INVALID_ARGUMENT=$80550003;
- SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=$80550008;
+ SCE_NP_ERROR_INVALID_ARGUMENT=Integer($80550003);
+ SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=Integer($80550008);
+
+ SCE_NP_ERROR_SIGNED_OUT=Integer($80550006);
 
 implementation
 
@@ -204,8 +206,47 @@ end;
 
 function ps4_sceNpCheckNpAvailability(reqId:Integer;onlineId:pSceNpOnlineId;pReserved:Pointer):Integer; SysV_ABI_CDecl;
 begin
- onlineId^:=Default(SceNpOnlineId);
- onlineId^.data:='user';
+ Result:=0;
+ //Result:=SCE_NP_ERROR_SIGNED_OUT;
+end;
+
+function ps4_sceNpCheckNpAvailabilityA(reqId,userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ //Result:=SCE_NP_ERROR_SIGNED_OUT;
+end;
+
+function ps4_sceNpCheckNpReachability(reqId,userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ //Result:=SCE_NP_ERROR_SIGNED_OUT;
+end;
+
+type
+ pSceNpCheckPlusParameter=^SceNpCheckPlusParameter;
+ SceNpCheckPlusParameter=packed record
+  size:QWORD;
+  userId:Integer;
+  padding:array[0..3] of Byte;
+  features:QWORD;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceNpCheckPlusResult=^SceNpCheckPlusResult;
+ SceNpCheckPlusResult=packed record
+  authorized:Boolean;
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceNpCheckPlus(reqId:Integer;
+                            pParam:pSceNpCheckPlusParameter;
+                            pResult:pSceNpCheckPlusResult
+                           ):Integer; SysV_ABI_CDecl;
+begin
+ if (pResult<>nil) then
+ begin
+  pResult^.authorized:=False;
+ end;
  Result:=0;
 end;
 
@@ -221,11 +262,11 @@ begin
 end;
 
 Const
- SCE_NP_UTIL_ERROR_NOT_MATCH=$80550609;
+ SCE_NP_UTIL_ERROR_NOT_MATCH=Integer($80550609);
 
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
- if (npid1=nil) or (npid2=nil) then Exit(Integer(SCE_NP_ERROR_INVALID_ARGUMENT));
+ if (npid1=nil) or (npid2=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
  if (CompareChar0(npid1^.handle,npid2^.handle,SCE_NP_ONLINEID_MAX_LENGTH)=0) and
     (QWORD(npid1^.opt)=QWORD(npid2^.opt)) then
@@ -233,7 +274,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=Integer(SCE_NP_UTIL_ERROR_NOT_MATCH);
+  Result:=SCE_NP_UTIL_ERROR_NOT_MATCH;
  end;
 
 end;
@@ -318,6 +359,9 @@ begin
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
  lib^.set_proc($DABB059A519695E4,@ps4_sceNpCheckNpAvailability);
+ lib^.set_proc($F19D897391AF1832,@ps4_sceNpCheckNpAvailabilityA);
+ lib^.set_proc($29F199836CBBDE83,@ps4_sceNpCheckNpReachability);
+ lib^.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
