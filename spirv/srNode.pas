@@ -133,7 +133,7 @@ end;
 
 class Procedure TsrNodeVmt.rem_read(node,src:PsrNode);
 begin
- Assert(node^.fread_count<>0);
+ Assert(node^.fread_count<>0,node^.ntype.ClassName);
  if (node^.fread_count=0) then Exit;
  Dec(node^.fread_count);
 end;

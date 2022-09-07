@@ -280,6 +280,25 @@ begin
  Result:=status_msg_dialog;
 end;
 
+type
+ pSceMsgDialogResult=^SceMsgDialogResult;
+ SceMsgDialogResult=packed record
+  mode:Integer;     //SceMsgDialogMode
+  result:Integer;
+  buttonId:Integer; //SceMsgDialogButtonId
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer; SysV_ABI_CDecl;
+begin
+ if (pResult<>nil) then
+ begin
+  pResult^.result:=0;
+  pResult^.buttonId:=1;
+ end;
+ Result:=0;
+end;
+
 function ps4_sceMsgDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
  status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
@@ -482,6 +501,7 @@ begin
  lib^.set_proc($1D3ADC0CA9452AE3,@ps4_sceMsgDialogClose);
  lib^.set_proc($E9F202DD72ADDA4D,@ps4_sceMsgDialogUpdateStatus);
  lib^.set_proc($096556EFC41CDDF2,@ps4_sceMsgDialogGetStatus);
+ lib^.set_proc($2EBF28BC71FD97A0,@ps4_sceMsgDialogGetResult);
  lib^.set_proc($78FC3F92A6667A5A,@ps4_sceMsgDialogTerminate);
 end;
 

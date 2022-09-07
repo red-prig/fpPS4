@@ -57,7 +57,6 @@ type
    FSlot:PsrRegSlot;
    FWriter:PsrNode;        //ntReg,ntConst,ntOp,ntVolatile
    FDList:TRegDNodeList;
-   FLine:Pointer;
    Procedure AddDep(t:PsrNode);
    Procedure RemDep(t:PsrNode);
    function  GetDtype:TsrDataType;
@@ -66,9 +65,8 @@ type
    Procedure SetWeak(t:Boolean);
    Procedure SetWriter(t:PsrNode);
    Function  GetWriter:PsrNode;
-   Procedure SetLine(t:Pointer);
   public
-   property  pLine  :Pointer     read FLine     write SetLine; //PspirvOp;
+   pLine:Pointer;   //PspirvOp;
    property  pSlot  :PsrRegSlot  read FSlot;
    property  dtype  :TsrDataType read GetDtype  write SetDtype;
    property  Weak   :Boolean     read GetWeak   write SetWeak;
@@ -630,6 +628,7 @@ begin
   _prev:=node;
   node:=node^.pNext;
  end;
+ Assert(false,'not found!');
 end;
 
 function TsrRegNode.FirstDep:PRegDNode;
@@ -679,17 +678,6 @@ begin
  Result:=nil;
  if (@Self=nil) then Exit;
  Result:=FWriter;
-end;
-
-Procedure TsrRegNode.SetLine(t:Pointer);
-begin
- if (@Self=nil) then Exit;
- if (FWriter<>nil) then
- if (FWriter^.ntype.ClassName='ntOp') then
- begin
-  Assert(FWriter=t);
- end;
- FLine:=t;
 end;
 
 function TsrRegNode.AsConst:PsrConst;

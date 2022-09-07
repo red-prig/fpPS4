@@ -51,7 +51,8 @@ type
 
   function  OnChainUpdate(node:PsrChain):Integer;
 
-  function  PostDataLayoutAnalize:Integer;
+  function  PostDataLayoutAnalize1:Integer;
+  function  PostDataLayoutAnalize2:Integer;
   function  FetchField(var pChain:PsrChain;dtype:TsrDataType):PsrField;
   function  OnChainField(node:PsrChain):Integer;
   function  OnChainAlloc(node:PsrChain):Integer;
@@ -576,35 +577,35 @@ begin
     repeat //OnOpStep2
 
      repeat //OnOpStep1
-      i:=EnumBlockOpBackward(@OnOpStep1,pFunc^.pTop);
+      i:=EnumBlockOpBackward(@OnOpStep1,pFunc^.pTop); //OnOpStep1 Reg Collapse
       if (i=0) then Break;
       Result:=Result+i;
      until false;
 
-     i:=EnumBlockOpForward(@OnOpStep2,pFunc^.pTop);
+     i:=EnumBlockOpForward(@OnOpStep2,pFunc^.pTop); //OnOpStep2 PostForward1
      if (i=0) then Break;
      Result:=Result+i;
     until false;
 
-    i:=EnumBlockOpForward(@OnOpStep3,pFunc^.pTop);
+    i:=EnumBlockOpForward(@OnOpStep3,pFunc^.pTop); //OnOpStep3 PostForward2
     if (i=0) then Break;
     Result:=Result+i;
    until false;
 
    if data_layout then
    begin
-    Result:=Result+PostDataLayoutAnalize;
+    Result:=Result+PostDataLayoutAnalize1;
     data_layout:=false;
    end;
 
-   repeat //OnOpStep4
+   repeat //OnOpStep4 Volatile Reslove
     i:=EnumBlockOpForward(@OnOpStep4,pFunc^.pTop);
     if (i=0) then Break;
     Result:=Result+i;
    until false;
 
    r4:=0;
-   repeat //OnOpStep5
+   repeat //OnOpStep5 Weak Reslove
     i:=EnumBlockOpBackward(@OnOpStep5,pFunc^.pTop);
     if (i=0) then Break;
     r4:=r4+i;
@@ -614,17 +615,25 @@ begin
    Result:=Result+r4;
   until false;
 
+  PrivateList.RemoveAllStore;
+
+  data_layout:=(Main=pFunc);
+  if data_layout then
+  begin
+   Result:=Result+PostDataLayoutAnalize2;
+  end;
+
   //UpdateRegType OpLoad/OpStore
   DataLayoutList.EnumChain(@OnChainUpdate);
   PrivateList.Post;
 
-  repeat //OnOpStep6
+  repeat //OnOpStep6 Typecast
    i:=EnumBlockOpBackward(@OnOpStep6,pFunc^.pTop);
    if (i=0) then Break;
    Result:=Result+i;
   until false;
 
-  Result:=Result+EnumBlockOpBackward(@OnOpStep7,pFunc^.pTop);
+  Result:=Result+EnumBlockOpBackward(@OnOpStep7,pFunc^.pTop); //OnOpStep7 Remove Lines
 
   pFunc:=pFunc^.Prev;
  end;
@@ -636,13 +645,18 @@ begin
  node^.UpdateRegType;
 end;
 
-function TSprvEmit_post.PostDataLayoutAnalize:Integer;
+function TSprvEmit_post.PostDataLayoutAnalize1:Integer;
 begin
  Result:=0;
 
  DataLayoutList.AllocID;
 
  Result:=Result+DataLayoutList.EnumChain(@OnChainField);
+end;
+
+function TSprvEmit_post.PostDataLayoutAnalize2:Integer;
+begin
+ Result:=0;
 
  BufferList.ApplyBufferType;
  BufferList.AlignOffset;
@@ -773,7 +787,8 @@ begin
  begin
   node^.dtype:=pField^.dtype;
  end;
- pField^.pBuffer^.TakeChain(node);
+ //pField^.pBuffer^.TakeChain(node);
+ node^.pBuffer:=pField^.pBuffer;
 end;
 
 procedure TSprvEmit_post.OnFieldType(node:PsrField);

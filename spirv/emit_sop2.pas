@@ -25,6 +25,7 @@ type
   procedure emit_S_AND_B64;
   procedure emit_S_ANDN2_B64;
   procedure emit_S_OR_B64;
+  procedure emit_S_ORN2_B64;
   procedure emit_S_NOR_B64;
   procedure emit_S_CSELECT_B32;
   procedure emit_S_CSELECT_B64;
@@ -177,6 +178,28 @@ begin
  OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
 end;
 
+procedure TEmit_SOP2.emit_S_ORN2_B64; //SCC = (sdst[2] != 0)
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src0,src1,src2:array[0..1] of PsrRegNode;
+begin
+ if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
+
+ if not fetch_ssrc9_pair(FSPI.SOP2.SSRC0,@src0,dtUInt32) then Assert(False);
+ if not fetch_ssrc9_pair(FSPI.SOP2.SSRC1,@src1,dtUInt32) then Assert(False);
+
+ src1[0]:=OpNotTo(src1[0]);
+ src1[1]:=OpNotTo(src1[1]);
+
+ OpBitwiseOr(dst[0],src0[0],src1[0]);
+ OpBitwiseOr(dst[1],src0[1],src1[1]);
+
+ src2[0]:=dst[0]^.current;
+ src2[1]:=dst[1]^.current;
+
+ OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+end;
+
 procedure TEmit_SOP2.emit_S_NOR_B64; //SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -269,6 +292,8 @@ begin
   S_ANDN2_B64: emit_S_ANDN2_B64;
 
   S_OR_B64: emit_S_OR_B64;
+
+  S_ORN2_B64: emit_S_ORN2_B64;
 
   S_NOR_B64: emit_S_NOR_B64;
 

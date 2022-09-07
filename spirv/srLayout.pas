@@ -37,6 +37,9 @@ type
   class Procedure zero_read   (node:PsrNode);               override;
   class Procedure zero_unread (node:PsrNode);               override;
   class Function  pwrite_count(node:PsrNode):PDWORD;        override;
+  class Procedure SetWriter   (node,w,line:PsrNode);        override;
+  class Procedure ResetWriter (node,w:PsrNode);             override;
+  class function  Down        (node:PsrNode):Pointer;       override;
   class function  Next        (node:PsrNode):Pointer;       override;
   class function  Prev        (node:PsrNode):Pointer;       override;
   class function  Parent      (node:PsrNode):Pointer;       override;
@@ -81,19 +84,26 @@ type
     lvl_1:TsrChainLvl_1;
     lvl_0:TsrChainLvl_0;
    end;
+   FBuffer:PsrNode;
+   FWriter:PsrNode;
    Fdtype:TsrDataType;
    FList:TNodeList;
    function  c(n1,n2:PsrChain):Integer; static;
+   Procedure SetWriter(t:PsrNode);
+   Function  GetWriter:PsrNode;
+   Procedure SetBuffer(t:PsrNode);
+   Function  GetBuffer:PsrNode;
    Procedure SetRegType(rtype:TsrDataType);
   public
    pField:Pointer;
-   //pLine:Pointer;
    property  Parent:PsrDataLayout read FParent;
    property  pIndex:PsrRegNode    read key.lvl_1.pIndex;
    property  stride:PtrUint       read key.lvl_1.stride;
    property  size  :PtrUint       read key.lvl_0.size;
    property  offset:PtrUint       read key.lvl_0.offset;
    property  dtype:TsrDataType    read Fdtype write SetRegType;
+   property  pWriter:PsrNode      read GetWriter write SetWriter;
+   property  pBuffer:PsrNode      read GetBuffer write SetBuffer;
    Procedure Init(L:PsrDataLayout);
    function  Emit:TCustomEmit;
    Procedure UpdateRegType;
@@ -197,6 +207,7 @@ begin
  With PsrChain(node)^ do
  begin
   key.lvl_1.pIndex^.mark_read(node);
+  FBuffer^.mark_read(node);
  end;
 end;
 
@@ -205,12 +216,35 @@ begin
  With PsrChain(node)^ do
  begin
   key.lvl_1.pIndex^.mark_unread(node);
+  FBuffer^.mark_unread(node);
  end;
 end;
 
 class Function ntChain.pwrite_count(node:PsrNode):PDWORD;
 begin
  Result:=@PsrChain(node)^.fwrite_count;
+end;
+
+class Procedure ntChain.SetWriter(node,w,line:PsrNode);
+begin
+ With PsrChain(node)^ do
+ begin
+  SetWriter(w);
+ end;
+end;
+
+class Procedure ntChain.ResetWriter(node,w:PsrNode);
+begin
+ With PsrChain(node)^ do
+ if (FWriter=w) then
+ begin
+  SetWriter(nil);
+ end;
+end;
+
+class function ntChain.Down(node:PsrNode):Pointer;
+begin
+ Result:=PsrChain(node)^.FWriter;
 end;
 
 class function ntChain.Next(node:PsrNode):Pointer;
@@ -620,6 +654,46 @@ begin
  Result:=FParent^.FEmit;
 end;
 
+Procedure TsrChain.SetWriter(t:PsrNode);
+begin
+ if (@Self=nil) then Exit;
+ if (FWriter=t) then Exit;
+
+ if isUsed then
+ begin
+        t^.mark_read  (@Self);
+  FWriter^.mark_unread(@Self);
+ end;
+ FWriter:=t;
+end;
+
+Function TsrChain.GetWriter:PsrNode;
+begin
+ Result:=nil;
+ if (@Self=nil) then Exit;
+ Result:=FWriter;
+end;
+
+Procedure TsrChain.SetBuffer(t:PsrNode);
+begin
+ if (@Self=nil) then Exit;
+ if (FBuffer=t) then Exit;
+
+ if isUsed then
+ begin
+        t^.mark_read  (@Self);
+  FBuffer^.mark_unread(@Self);
+ end;
+ FBuffer:=t;
+end;
+
+Function TsrChain.GetBuffer:PsrNode;
+begin
+ Result:=nil;
+ if (@Self=nil) then Exit;
+ Result:=FBuffer;
+end;
+
 Procedure TsrChain.SetRegType(rtype:TsrDataType);
 var
  pTypeList:PsrTypeList;
@@ -820,7 +894,8 @@ end;
 procedure TsrDescriptor.SetType(t:PsrType);
 begin
  if (FType=t) then Exit;
- if not IsUsed then
+
+ if isUsed then
  begin
       t^.mark_read  (@Self);
   FType^.mark_unread(@Self);

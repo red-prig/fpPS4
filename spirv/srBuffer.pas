@@ -11,6 +11,7 @@ uses
  srNode,
  srType,
  srTypes,
+ srReg,
  srVariable,
  srLayout,
  srDecorate,
@@ -18,6 +19,9 @@ uses
 
 type
  ntBuffer=class(ntDescriptor)
+  class Procedure add_read      (node,src:PsrNode);           override;
+  class Procedure rem_read      (node,src:PsrNode);           override;
+  //
   class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
   class function  GetStorageName(node:PsrNode):RawByteString; override;
  end;
@@ -83,12 +87,11 @@ type
   pLeft,pRight:PsrBuffer;
   //----
   fwrite_count:DWORD;
-  fchain_read :DWORD;
-  fchain_write:DWORD;
   //
   align_offset:DWORD;
 
   FEmit:TCustomEmit;
+  FDList:TRegDNodeList;
 
   bType:TsrBufferType;
 
@@ -101,12 +104,15 @@ type
 
   function  c(n1,n2:PsrBuffer):Integer; static;
   Procedure Init(Emit:TCustomEmit); inline;
+  Procedure AddDep(t:PsrNode);
+  Procedure RemDep(t:PsrNode);
+  function  chain_read :DWORD;
+  function  chain_write:DWORD;
   function  GetStorageName:RawByteString;
   function  GetTypeChar:Char;
   function  GetString:RawByteString;
   function  GetStructName:RawByteString;
   function  GetSize:PtrUint;
-  procedure TakeChain(node:PsrChain);
   procedure EnumAllField(cb:TFieldEnumCb);
   procedure ShiftOffset(Offset:PtrUint);
  end;
@@ -141,6 +147,26 @@ type
  end;
 
 implementation
+
+class Procedure ntBuffer.add_read(node,src:PsrNode);
+begin
+ inherited;
+ if src^.IsType(ntChain) then
+ begin
+  PsrBuffer(node)^.AddDep(src);
+ end;
+end;
+
+class Procedure ntBuffer.rem_read(node,src:PsrNode);
+begin
+ inherited;
+ if src^.IsType(ntChain) then
+ begin
+  PsrBuffer(node)^.RemDep(src);
+ end;
+end;
+
+//
 
 class Function ntBuffer.pwrite_count(node:PsrNode):PDWORD;
 begin
@@ -541,6 +567,83 @@ begin
  FTop.dtype:=dtTypeStruct;
 end;
 
+Procedure TsrBuffer.AddDep(t:PsrNode);
+var
+ pRegsStory:PsrRegsStory;
+ node:PRegDNode;
+begin
+ if (t=nil) or (@Self=nil) then Exit;
+
+ pRegsStory:=FEmit.GetRegsStory;
+ node:=pRegsStory^.AllocDep;
+
+ node^.pNode:=t;
+ FDList.Push_head(node);
+end;
+
+Procedure TsrBuffer.RemDep(t:PsrNode);
+var
+ pRegsStory:PsrRegsStory;
+ node,_prev:PRegDNode;
+begin
+ if (t=nil) or (@Self=nil) then Exit;
+ node:=FDList.pHead;
+ _prev:=nil;
+ While (node<>nil) do
+ begin
+  if (node^.pNode=t) then
+  begin
+   if (_prev=nil) then
+   begin
+    FDList.pHead:=node^.pNext;
+   end else
+   begin
+    _prev^.pNext:=node^.pNext;
+   end;
+
+   pRegsStory:=FEmit.GetRegsStory;
+   pRegsStory^.FreeDep(node);
+
+   Exit;
+  end;
+  _prev:=node;
+  node:=node^.pNext;
+ end;
+ Assert(false,'not found!');
+end;
+
+function TsrBuffer.chain_read:DWORD;
+var
+ node:PRegDNode;
+begin
+ Result:=0;
+ node:=FDList.pHead;
+ While (node<>nil) do
+ begin
+  if node^.pNode^.IsType(ntChain) then
+  begin
+   Result:=Result+PsrChain(node^.pNode)^.read_count;
+  end;
+  node:=node^.pNext;
+ end;
+end;
+
+function TsrBuffer.chain_write:DWORD;
+var
+ node:PRegDNode;
+begin
+ Result:=0;
+ node:=FDList.pHead;
+ While (node<>nil) do
+ begin
+  if node^.pNode^.IsType(ntChain) then
+  begin
+   Result:=Result+PsrChain(node^.pNode)^.write_count;
+  end;
+  node:=node^.pNext;
+ end;
+end;
+
 function TsrBuffer.GetStorageName:RawByteString;
 begin
  Result:='';
@@ -585,16 +688,6 @@ end;
 function TsrBuffer.GetSize:PtrUint;
 begin
  Result:=FTop.GetSize;
-end;
-
-procedure TsrBuffer.TakeChain(node:PsrChain);
-begin
- if (@Self=nil) or (node=nil) then Exit;
-
- mark_read(node);
-
- fchain_read :=fchain_read +node^.read_count;
- fchain_write:=fchain_write+node^.write_count;
 end;
 
 procedure TsrBuffer.EnumAllField(cb:TFieldEnumCb);
@@ -806,6 +899,7 @@ procedure TsrBufferList.ApplyBufferType;
 var
  pConfig:PsrConfig;
  node:PsrBuffer;
+ fchain_write:DWORD;
 begin
  pConfig:=FEmit.GetConfig;
 
@@ -825,15 +919,17 @@ begin
   if node^.IsUsed and (node^.bType=btStorageBuffer) then
   begin
 
+   fchain_write:=node^.chain_write;
+
    if (FPushConstant=nil) and
-      (node^.fchain_write=0) and
+      (fchain_write=0) and
       (node^.GetSize<=pConfig^.maxPushConstantsSize) then
    begin
     node^.bType   :=btPushConstant;
     node^.FStorage:=StorageClass.PushConstant;
     FPushConstant :=node;
    end else
-   if (node^.fchain_write=0) and
+   if (fchain_write=0) and
       (node^.GetSize<=pConfig^.maxUniformBufferRange) then
    begin
     node^.bType   :=btUniformBuffer;
@@ -941,11 +1037,11 @@ begin
   if node^.IsUsed and (node^.pVar<>nil) then
   if (node^.bType=btStorageBuffer) then
   begin
-   if (node^.fchain_read=0) then
+   if (node^.chain_read=0) then
    begin
     pDecorateList^.OpDecorate(node^.pVar,Decoration.NonReadable,0);
    end;
-   if (node^.fchain_write=0) then
+   if (node^.chain_write=0) then
    begin
     pDecorateList^.OpDecorate(node^.pVar,Decoration.NonWritable,0);
    end;

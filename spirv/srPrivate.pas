@@ -78,7 +78,6 @@ type
    Procedure SetRegType(rtype:TsrDataType);
    function  GetRegType:TsrDataType;
   public
-   //FVolatile:TsrVolatile;
    property  dtype:TsrDataType read GetRegType write SetRegType;
    property  Source:PsrRegSlot read FSource;
    Procedure Init; inline;
@@ -118,6 +117,7 @@ type
   procedure make_copy_slot(pSlot:PsrRegSlot);
   procedure make_copy_all;
   procedure PrepVolatile(dst:PspirvOp;src:PsrRegNode);
+  Procedure RemoveAllStore;
   Procedure Post;
  end;
 
@@ -192,7 +192,8 @@ end;
 Function TsrVolatile.PopStore:PVNode;
 begin
  Result:=FList.Pop_head;
- if (Result<>nil) and IsUsed then
+ if (Result<>nil) then
+ if IsUsed then
  begin
   Result^.pReg^.mark_unread(@Self);
  end;
@@ -554,8 +555,6 @@ begin
   Result:=FEmit.Alloc(SizeOf(TsrPrivate));
   Move(node,Result^,SizeOf(TsrPrivate));
   //
-  //Result^.FVolatile.Init(Result);
-  //
   FNTree.Insert(Result);
  end;
 end;
@@ -605,13 +604,12 @@ begin
  end;
 
  pPrivate :=Fetch(pSlot);
- //pVolatile:=@pPrivate^.FVolatile;
  pVolatile:=pPrivate^.NewVolatile;
 
  rtype:=dtUnknow;
 
  if (old<>nil) then
- //if (old^.pWriter^.AsType(ntVolatile)<>pVolatile) then
+ //if (pVolatile<>old^.pWriter^.AsType(ntVolatile)) then
  //if not old^.pWriter^.IsType(ntVolatile) then
  begin
   pVolatile^.AddStore(old);
@@ -619,7 +617,7 @@ begin
  end;
  //
  if (cur<>nil) then
- //if (cur^.pWriter^.AsType(ntVolatile)<>pVolatile) then
+ //if (pVolatile<>cur^.pWriter^.AsType(ntVolatile)) then
  //if not cur^.pWriter^.IsType(ntVolatile) then
  begin
   pVolatile^.AddStore(cur);
@@ -667,7 +665,6 @@ begin
  end;
 
  pPrivate :=Fetch(pSlot);
- //pVolatile:=@pPrivate^.FVolatile;
  pVolatile:=pPrivate^.NewVolatile;
 
  //if (pVolatile<>prv^.pWriter^.AsType(ntVolatile)) then
@@ -686,6 +683,7 @@ begin
  end else
  if (cur<>nil) then
  begin
+  //prev is unresolve
   new:=pSlot^.New(cur^.pLine,cur^.dtype);
   new^.pWriter:=pVolatile;
   FEmit.PostLink(FEmit.curr_line,new); //post processing
@@ -849,6 +847,18 @@ begin
  pPrivate^.FetchLoad(pLine,src); //before reg
 end;
 
+Procedure TsrPrivateList.RemoveAllStore;
+var
+ node:PsrPrivate;
+begin
+ node:=FNTree.Min;
+ While (node<>nil) do
+ begin
+  node^.RemoveAllStore;
+  node:=FNTree.Next(node);
+ end;
+end;
+
 Procedure TsrPrivateList.Post;
 var
  node:PsrPrivate;
@@ -858,7 +868,6 @@ begin
  begin
   if node^.IsUsed then
   begin
-   node^.RemoveAllStore;
    node^.SortLines;
    node^.Optimize;
    node^.UpdateRegType;
