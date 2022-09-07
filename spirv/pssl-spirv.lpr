@@ -490,40 +490,7 @@ begin
 
  if (cfg.FName='') then
  begin
-  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_vs_78EF9008.dump');
-  //load_dump('shader_dump\simplet-single-triangle_debug\simplet-single-triangle_debug_ps_FBCA196D.dump');
-
-  //load_dump('shader_dump\simplet-simple-fs_debug\simplet-simple-fs_debug_vs_398C5BF6.dump');
-  //load_dump('shader_dump\simplet-simple-fs_debug\simplet-simple-fs_debug_ps_F327ABD1.dump');
-
-  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_cs_FEA061C5.dump');
-  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_ps_B9680888.dump');
-  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_ps_BA60EAD7.dump');
-  //load_dump('shader_dump\WeAreDoomed\WeAreDoomed_ps4_vs_0C420DE0.dump');
-
-  load_dump('shader_dump\basic-sample\basic-sample_debug_ps_E125C5F7.dump');
-
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_ps_A9F64695.dump');
-  //load_dump('shader_dump\basic_quad_debug\basic_quad_debug_cs_3685EFC7.dump');
-
-  //load_dump('shader_dump\SonicMania\SonicMania_ps_11DF2A32.dump');
-  //load_dump('shader_dump\SonicMania\SonicMania_ps_3CC22A00.dump');
-
-  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_ps_595F5E5D.dump');
-  load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_ps_B42E92C3.dump');
-  //load_dump('shader_dump\MomodoraRUtM\MomodoraRUtM_vs_B9E80F51.dump');
-
-  //load_dump('shader_dump\basic-sample\basic-sample_debug_cs_4303E70D.dump');
-  //load_dump('shader_dump\basic-sample\basic-sample_debug_cs_C4EA2D91.dump');
-
-  //load_dump('shader_dump\Cladun_Returns\ClassicDungeon3ORBIS_ps_B2ED8D0C.dump');
-  //load_dump('shader_dump\Cladun_Returns\ClassicDungeon3ORBIS_ps_B39D802A.dump');
-
-  //load_dump('shader_dump\depth-mode-sample\depth-mode-sample_debug_ps_E125C5F7.dump');
-
-  //load_dump('shader_dump\tutorial_anti-aliasing_debug\tutorial_anti-aliasing_debug_ps_E820FFDE.dump');
-
-  //load_dump('shader_dump\JETPACKJOYRIDE\mgjp_cs_2D246406.dump');
+  //
  end;
 
 
