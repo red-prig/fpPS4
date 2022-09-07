@@ -31,174 +31,372 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="39">
+    <Units Count="91">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
       <Unit1>
-        <Filename Value="ps4_elf_tls.pas"/>
+        <Filename Value="chip\ps4_gpu_regs.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit1>
       <Unit2>
-        <Filename Value="ps4_libkerenel\ps4_rwlock.pas"/>
+        <Filename Value="chip\shader_dump.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit2>
       <Unit3>
-        <Filename Value="ps4_libkerenel\ps4_time.pas"/>
+        <Filename Value="vulkan\vRender.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit3>
       <Unit4>
-        <Filename Value="ps4_libkerenel\ps4_pthread.pas"/>
+        <Filename Value="vulkan\vCmdBuffer.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit4>
       <Unit5>
-        <Filename Value="ps4_libsceuserservice.pas"/>
+        <Filename Value="vulkan\vBuffer.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceUserService"/>
       </Unit5>
       <Unit6>
-        <Filename Value="ps4_libkerenel\ps4_kernel_file.pas"/>
+        <Filename Value="vulkan\vSampler.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit6>
       <Unit7>
-        <Filename Value="ps4_libscesavedata.pas"/>
+        <Filename Value="vulkan\vShaderManager.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceSaveData"/>
       </Unit7>
       <Unit8>
-        <Filename Value="ps4_libscenptrophy.pas"/>
+        <Filename Value="vulkan\vImageTiling.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceNpTrophy"/>
       </Unit8>
       <Unit9>
-        <Filename Value="ps4_libkerenel\ps4_queue.pas"/>
+        <Filename Value="sys\sys_time.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit9>
       <Unit10>
-        <Filename Value="chip\ps4_gpu_regs.pas"/>
+        <Filename Value="vulkan\vRenderPassManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
       <Unit11>
-        <Filename Value="chip\shader_dump.pas"/>
+        <Filename Value="ps4_elf.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit11>
       <Unit12>
-        <Filename Value="ps4_libscehttp.pas"/>
+        <Filename Value="chip\ps4_videodrv.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceHttp"/>
       </Unit12>
       <Unit13>
-        <Filename Value="ps4_libscenet.pas"/>
+        <Filename Value="vulkan\vFlip.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceNet"/>
       </Unit13>
       <Unit14>
-        <Filename Value="vulkan\vRender.pas"/>
+        <Filename Value="vulkan\Vulkan.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit14>
       <Unit15>
-        <Filename Value="ps4_libkernel\ps4_event_flag.pas"/>
+        <Filename Value="vulkan\vDevice.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit15>
       <Unit16>
-        <Filename Value="shaderext.pas"/>
+        <Filename Value="vulkan\vShader.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ShaderExt"/>
       </Unit16>
       <Unit17>
-        <Filename Value="vSetLayoutPool.pas"/>
+        <Filename Value="chip\ps4_tiling.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_Tiling"/>
       </Unit17>
       <Unit18>
-        <Filename Value="vpipelinelayoutpool.pas"/>
+        <Filename Value="chip\si_ci_vi_merged_enum.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="vPipelineLayoutPool"/>
       </Unit18>
       <Unit19>
-        <Filename Value="vulkan\vSetsPool.pas"/>
+        <Filename Value="vulkan\vPipeline.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit19>
       <Unit20>
-        <Filename Value="vulkan\vCmdBuffer.pas"/>
+        <Filename Value="chip\ps4_shader.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit20>
       <Unit21>
-        <Filename Value="vulkan\vHostBufferPool.pas"/>
+        <Filename Value="vulkan\vImage.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit21>
       <Unit22>
-        <Filename Value="vulkan\vImagePool.pas"/>
+        <Filename Value="vulkan\vShaderExt.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit22>
       <Unit23>
-        <Filename Value="vulkan\vBuffer.pas"/>
+        <Filename Value="vulkan\vMemory.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit23>
       <Unit24>
-        <Filename Value="vulkan\vSamplerPool.pas"/>
+        <Filename Value="chip\ps4_pssl.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit24>
       <Unit25>
-        <Filename Value="vulkan\vSampler.pas"/>
+        <Filename Value="vulkan\vImageManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit25>
       <Unit26>
-        <Filename Value="vulkan\vShaderManager.pas"/>
+        <Filename Value="vulkan\vSamplerManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit26>
       <Unit27>
-        <Filename Value="vulkan\vImageTiling.pas"/>
+        <Filename Value="vulkan\vHostBufferManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit27>
       <Unit28>
-        <Filename Value="trace_manager.pas"/>
+        <Filename Value="chip\pm4defs.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit28>
       <Unit29>
-        <Filename Value="ps4_libkernel\ps4_signal.pas"/>
+        <Filename Value="rtl\ntapi.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit29>
       <Unit30>
-        <Filename Value="ps4_libkernel\regs_context.pas"/>
+        <Filename Value="sys\errno.inc"/>
         <IsPartOfProject Value="True"/>
       </Unit30>
       <Unit31>
-        <Filename Value="ps4_libkernel\kernel.pas"/>
+        <Filename Value="sys\spinlock.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit31>
       <Unit32>
-        <Filename Value="ps4_libkernel\pthread.pas"/>
+        <Filename Value="rtl\LFQueue.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="sys_pthread"/>
       </Unit32>
       <Unit33>
-        <Filename Value="ps4_libkernel\sys_signal.pas"/>
+        <Filename Value="sys\sce_errno.inc"/>
         <IsPartOfProject Value="True"/>
       </Unit33>
       <Unit34>
-        <Filename Value="sys\sys_time.pas"/>
+        <Filename Value="rtl\g23tree.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit34>
       <Unit35>
-        <Filename Value="ps4_libsceime.pas"/>
+        <Filename Value="vulkan\vPipelineLayoutManager.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceIme"/>
       </Unit35>
       <Unit36>
-        <Filename Value="ps4_libscediscmap.pas"/>
+        <Filename Value="vulkan\vSetsPoolManager.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceDiscMap"/>
       </Unit36>
       <Unit37>
-        <Filename Value="ps4_libsceplaygo.pas"/>
+        <Filename Value="rtl\RWLock.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libScePlayGo"/>
       </Unit37>
       <Unit38>
-        <Filename Value="vulkan\vRenderPassManager.pas"/>
+        <Filename Value="chip\si_ci_vi_merged_registers.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit38>
+      <Unit39>
+        <Filename Value="chip\si_ci_vi_merged_offset.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit39>
+      <Unit40>
+        <Filename Value="vulkan\vSetLayoutManager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit40>
+      <Unit41>
+        <Filename Value="sys\sys_crt.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit41>
+      <Unit42>
+        <Filename Value="rtl\stub_manager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit42>
+      <Unit43>
+        <Filename Value="kernel\libsysmodule.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit43>
+      <Unit44>
+        <Filename Value="kernel\StopNotificationReason.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit44>
+      <Unit45>
+        <Filename Value="kernel\ps4_barrier.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit45>
+      <Unit46>
+        <Filename Value="kernel\ps4_cond.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit46>
+      <Unit47>
+        <Filename Value="kernel\ps4_event_flag.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit47>
+      <Unit48>
+        <Filename Value="kernel\ps4_kernel_file.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit48>
+      <Unit49>
+        <Filename Value="kernel\ps4_libkernel.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit49>
+      <Unit50>
+        <Filename Value="kernel\ps4_map_mm.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit50>
+      <Unit51>
+        <Filename Value="kernel\ps4_mutex.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit51>
+      <Unit52>
+        <Filename Value="kernel\ps4_pthread.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit52>
+      <Unit53>
+        <Filename Value="kernel\ps4_queue.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit53>
+      <Unit54>
+        <Filename Value="kernel\ps4_rwlock.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit54>
+      <Unit55>
+        <Filename Value="kernel\ps4_sema.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit55>
+      <Unit56>
+        <Filename Value="kernel\ps4_signal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit56>
+      <Unit57>
+        <Filename Value="kernel\ps4_time.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit57>
+      <Unit58>
+        <Filename Value="rtl\atomic.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit58>
+      <Unit59>
+        <Filename Value="rtl\bittype.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit59>
+      <Unit60>
+        <Filename Value="rtl\hamt.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit60>
+      <Unit61>
+        <Filename Value="rtl\ps4_elf_tls.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit61>
+      <Unit62>
+        <Filename Value="rtl\ps4_handles.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit62>
+      <Unit63>
+        <Filename Value="rtl\seh64.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit63>
+      <Unit64>
+        <Filename Value="src\ps4_libsceappcontent.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit64>
+      <Unit65>
+        <Filename Value="src\ps4_libscedialogs.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit65>
+      <Unit66>
+        <Filename Value="src\ps4_libscediscmap.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit66>
+      <Unit67>
+        <Filename Value="src\ps4_libscegnmdriver.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit67>
+      <Unit68>
+        <Filename Value="src\ps4_libscehttp.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit68>
+      <Unit69>
+        <Filename Value="src\ps4_libsceime.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit69>
+      <Unit70>
+        <Filename Value="src\ps4_libscemouse.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit70>
+      <Unit71>
+        <Filename Value="src\ps4_libscenet.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit71>
+      <Unit72>
+        <Filename Value="src\ps4_libscepad.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit72>
+      <Unit73>
+        <Filename Value="src\ps4_libsceplaygo.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit73>
+      <Unit74>
+        <Filename Value="src\ps4_libsceremoteplay.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit74>
+      <Unit75>
+        <Filename Value="src\ps4_libscertc.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit75>
+      <Unit76>
+        <Filename Value="src\ps4_libscesavedata.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit76>
+      <Unit77>
+        <Filename Value="src\ps4_libscesystemservice.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit77>
+      <Unit78>
+        <Filename Value="src\ps4_libsceuserservice.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit78>
+      <Unit79>
+        <Filename Value="src\ps4_libscevideoout.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit79>
+      <Unit80>
+        <Filename Value="src\ajm\ajm_error.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit80>
+      <Unit81>
+        <Filename Value="src\ajm\ps4_libsceajm.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit81>
+      <Unit82>
+        <Filename Value="src\audio\libportaudio.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit82>
+      <Unit83>
+        <Filename Value="src\audio\ps4_libsceaudioout.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit83>
+      <Unit84>
+        <Filename Value="src\np\ps4_libscenpmanager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit84>
+      <Unit85>
+        <Filename Value="src\np\ps4_libscenpmatching2.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit85>
+      <Unit86>
+        <Filename Value="src\np\ps4_libscenpscore.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit86>
+      <Unit87>
+        <Filename Value="src\np\ps4_libscenpsignaling.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit87>
+      <Unit88>
+        <Filename Value="src\np\ps4_libscenptrophy.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit88>
+      <Unit89>
+        <Filename Value="sys\signal.inc"/>
+        <IsPartOfProject Value="True"/>
+      </Unit89>
+      <Unit90>
+        <Filename Value="sys\sys_context.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit90>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -208,9 +406,9 @@
       <Filename Value="fpPS4"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir)"/>
+      <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;ps4_libkernel;vulkan;chip;spirv"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

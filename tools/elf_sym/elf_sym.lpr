@@ -4,10 +4,11 @@ uses
  cmem,
  cthreads,
  {$ENDIF}
- Classes,sysutils,
+ Classes,
+ sysutils,
  gset,
  sha1,
- ps4_types,
+ sys_types,
  uarch;
 
 type
