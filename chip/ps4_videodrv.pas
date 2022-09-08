@@ -848,11 +848,15 @@ begin
        end;
 
       end;
-     kDmaDataDstRegister,
+     kDmaDataDstRegister:
+      {$ifdef ww}Writeln('SetRegister:',HexStr(Body^.dstAddrLo shr 2,4),' count(DW):',Body^.Flags2.byteCount div 4){$endif};
+
      kDmaDataDstRegisterNoIncrement:
-      {$ifdef ww}Writeln('SetRegister:',HexStr(Body^.dstAddrLo shr 2,4),' count(DW):1'){$endif};
-     kDmaDataDstGds:
-      {$ifdef ww}Writeln('SetGds'){$endif};
+      {$ifdef ww}Writeln('SetRegisterNoInc:',HexStr(Body^.dstAddrLo shr 2,4),' count(DW):',Body^.Flags2.byteCount div 4){$endif};
+
+     kDmaDataDstGds: //max size = kGdsAccessibleMemorySizeInBytes = 0xBF00
+      {$ifdef ww}Writeln('SetGds:',HexStr(Body^.dstAddrLo,4),' count(DW):',Body^.Flags2.byteCount div 4){$endif};
+
      else
       Assert(False);
     end;
@@ -1283,6 +1287,10 @@ begin
 
   mmDB_COUNT_CONTROL     :DWORD(GPU_REGS.DEPTH.COUNT_CONTROL):=value;
 
+  mmDB_STENCIL_CONTROL   :DWORD(GPU_REGS.DEPTH.STENCIL_CONTROL  ):=value;
+  mmDB_STENCILREFMASK    :DWORD(GPU_REGS.DEPTH.STENCILREFMASK_FF):=value;
+  mmDB_STENCILREFMASK_BF :DWORD(GPU_REGS.DEPTH.STENCILREFMASK_BF):=value;
+
   mmVGT_SHADER_STAGES_EN :DWORD(GPU_REGS.VGT_SHADER_STAGES_EN) :=value;
   mmVGT_OUT_DEALLOC_CNTL :DWORD(GPU_REGS.VGT_OUT_DEALLOC_CNTL) :=value;
 
@@ -1399,7 +1407,7 @@ begin
   r:=CONTEXT_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  {$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  //{$ifdef ww}Writeln('SetContextReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
   Inc(GFXRing.SetCxCount);
@@ -1426,7 +1434,7 @@ begin
   r:=SH_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  {$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  //{$ifdef ww}Writeln('SetShReg:',getRegName(r),'=',HexStr(v,8));{$endif}
   //Continue;
 
   Inc(GFXRing.SetShCount);
@@ -1464,7 +1472,7 @@ begin
   r:=USERCONFIG_REG_BASE+Body^.REG_OFFSET+i;
   v:=PDWORD(@Body^.REG_DATA)[i];
 
-  {$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
+  //{$ifdef ww}Writeln('SetUConfigReg:',getRegName(r),'=',HexStr(v,8));{$endif}
 
   SetUContextReg(r,v);
 
