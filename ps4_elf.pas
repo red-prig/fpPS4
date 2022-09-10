@@ -1475,14 +1475,19 @@ begin
   Info.shndx:=symbol^.st_shndx;
 
   if (Info.shndx<>SHN_UNDEF) then
+  begin
+   cbs(Self,@Info,data);
+  end;
+
+  if (Info.shndx<>SHN_UNDEF) then
   case Info.sType of
    //STT_NOTYPE :;
-   STT_OBJECT :cbs(Self,@Info,data);
-   STT_FUN    :cbs(Self,@Info,data);
+   STT_OBJECT :;
+   STT_FUN    :;
    //STT_SECTION:;
    //STT_FILE   :;
-   STT_COMMON :cbs(Self,@Info,data);
-   STT_TLS    :cbs(Self,@Info,data);
+   STT_COMMON :;
+   STT_TLS    :;
    else
     Writeln(__sType(Info.sType));
   end;

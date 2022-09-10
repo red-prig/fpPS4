@@ -234,10 +234,21 @@ begin
 end;
 
 function ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ P:PSceProcParam;
 begin
- if (sdkVersion=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- sdkVersion^:=$FFFFFFFF;
- Result:=0;
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+ if (sdkVersion=nil) then Exit;
+ P:=GetProcParam;
+
+ if (P<>nil) then
+ if (P^.Header.Size>$13) then
+ if (P^.Header.Magic=$4942524f) then
+ if (P^.Header.Entry_count<>0) then
+ begin
+  sdkVersion^:=P^.Header.SDK_version;
+  Result:=0;
+ end;
 end;
 
 //dynamic load????
