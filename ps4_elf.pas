@@ -1814,6 +1814,7 @@ const
   Import:Boolean;
   mss:Integer;
 
+  space_lib:TLIBRARY;
  begin
   Import:=(Info^.shndx=SHN_UNDEF);
 
@@ -1844,13 +1845,16 @@ const
   if (IInfo.lib=nil) then
   begin
    FWriteln('Unknow library from '+Info^.pName);
-   Exit;
+   space_lib:=Default(TLIBRARY);
+   space_lib.Import:=Import;
+   IInfo.lib:=@space_lib;
+   //Exit;
   end;
 
   if (IInfo.lib^.Import<>Import) and (mss=-1) then
   begin
    FWriteln('Wrong library ref:'+IInfo.lib^.strName+':'+BoolToStr(IInfo._md^.Import)+'<>'+BoolToStr(Import));
-   Exit;
+   //Exit;
   end;
 
   functName:=ps4libdoc.GetFunctName(IInfo.nid);
