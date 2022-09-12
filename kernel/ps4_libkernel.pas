@@ -182,6 +182,7 @@ end;
 //cb used in pthread_exit
 function ps4_sceKernelSetThreadDtors(Proc:TProcedure):Integer; SysV_ABI_CDecl;
 begin
+ sceKernelThreadDtors:=Proc;
  Writeln('sceKernelSetThreadDtors:',HexStr(proc));
  Result:=0;
 end;
@@ -309,7 +310,7 @@ begin
 
   ps4_app.InitCode;
 
-  i:=node.module_start(argc,argp);
+  i:=node.module_start(argc,argp,nil);
 
   Result:=node.Handle;
   node.Release;

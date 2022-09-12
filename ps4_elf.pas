@@ -243,7 +243,7 @@ type
    procedure InitThread(is_static:QWORD); override;
    Procedure InitProt;   override;
    Procedure InitCode;   override;
-   function  module_start(argc:size_t;argp:PPointer):Integer; override;
+   function  module_start(argc:size_t;argp,param:PPointer):Integer; override;
    function  GetCodeFrame:TMemChunk;  override;
    function  GetEntryPoint:Pointer;  override;
    Function  GetModuleInfo:TKernelModuleInfo; override;
@@ -2556,7 +2556,7 @@ begin
 
  if (Prog<>Self) then
  begin
-  module_start(0,nil);
+  module_start(0,nil,nil);
  end;
 
  //if (Prog<>Self) then
@@ -2613,25 +2613,22 @@ begin
  FInitCode:=True;
 end;
 
-function Telf_file.module_start(argc:size_t;argp:PPointer):Integer;
+function Telf_file.module_start(argc:size_t;argp,param:PPointer):Integer;
 var
- mp:PsceModuleParam;
- M:Pointer;
+ //mp:PsceModuleParam;
+ //M:Pointer;
  P:TmoduleStart;
 begin
  Result:=0;
 
- Pointer(mp):=Pointer(mMap.pAddr+pModuleParam);
-
+ //Pointer(mp):=Pointer(mMap.pAddr+pModuleParam);
  //M:=get_proc_by_name('module_start');
- M:=nil;
 
  Pointer(P):=Pointer(mMap.pAddr+dtInit);
 
  Writeln('module_start');
 
- Result:=P(argc,argp,M);
-
+ Result:=P(argc,argp,param);
 end;
 
 function Telf_file.GetCodeFrame:TMemChunk;

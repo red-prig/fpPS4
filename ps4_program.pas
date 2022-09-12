@@ -86,7 +86,7 @@ type
    Procedure   FreeThread; virtual;
    Procedure   InitProt;   virtual;
    Procedure   InitCode;   virtual;
-   function    module_start(argc:size_t;argp:PPointer):Integer; virtual;
+   function    module_start(argc:size_t;argp,param:PPointer):Integer; virtual;
    function    GetCodeFrame:TMemChunk; virtual;
    function    GetEntryPoint:Pointer; virtual;
    Function    GetModuleInfo:TKernelModuleInfo; virtual;
@@ -901,7 +901,7 @@ begin
  FInitCode:=True;
 end;
 
-function TElf_node.module_start(argc:size_t;argp:PPointer):Integer;
+function TElf_node.module_start(argc:size_t;argp,param:PPointer):Integer;
 begin
  Result:=0;
 end;

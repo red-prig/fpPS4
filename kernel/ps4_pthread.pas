@@ -79,9 +79,9 @@ procedure ps4_pthread_yield(); SysV_ABI_CDecl;
 
 procedure ps4_pthread_cleanup_push(routine:t_cb_proc;arg:Pointer); SysV_ABI_CDecl;
 procedure ps4_pthread_cleanup_pop(execute:Integer); SysV_ABI_CDecl;
-procedure ps4___pthread_cleanup_push_imp(cleanup_routine:t_cb_proc;
-                                         cleanup_arg:Pointer;
-                                         cleanup_info:p_pthread_cleanup_info); SysV_ABI_CDecl;
+procedure ps4___pthread_cleanup_push_imp(routine:t_cb_proc;
+                                         arg:Pointer;
+                                         info:p_pthread_cleanup); SysV_ABI_CDecl;
 procedure ps4___pthread_cleanup_pop_imp(execute:Integer); SysV_ABI_CDecl;
 
 function  ps4_pthread_key_create(pKey:Ppthread_key_t;dest:t_cb_proc):Integer; SysV_ABI_CDecl;
@@ -363,8 +363,25 @@ begin
  _sig_unlock;
 end;
 
+procedure _pthread_cleanup_pop; inline;
+var
+ curthread:pthread;
+begin
+ curthread:=_get_curthread;
+ if (curthread=nil) then Exit;
+
+ While (curthread^.cleanup<>nil) do ps4___pthread_cleanup_pop_imp(1);
+end;
+
 procedure _thread_cleanup;
 begin
+ _pthread_cleanup_pop;
+
+ if (sceKernelThreadDtors<>nil) then
+ begin
+  sceKernelThreadDtors();
+ end;
+
  _sig_lock;
  _pthread_keys_cleanup_dest;
  ps4_app.FreeThread;
@@ -863,27 +880,73 @@ begin
 end;
 
 procedure ps4_pthread_cleanup_push(routine:t_cb_proc;arg:Pointer); SysV_ABI_CDecl;
+var
+ curthread:pthread;
+ newbuf:p_pthread_cleanup;
 begin
  Writeln('pthread_cleanup_push');
+
+ curthread:=_get_curthread;
+ if (curthread=nil) then Exit;
+
+ newbuf:=AllocMem(SizeOf(pthread_cleanup));
+ if (newbuf=nil) then Exit;
+
+ newbuf^.routine    :=routine;
+ newbuf^.routine_arg:=arg;
+ newbuf^.onheap     :=1;
+ newbuf^.prev       :=curthread^.cleanup;
+
+ curthread^.cleanup:=newbuf;
 end;
 
 procedure ps4_pthread_cleanup_pop(execute:Integer); SysV_ABI_CDecl;
 begin
- Assert(execute=0);
- Writeln('pthread_cleanup_pop');
+ ps4___pthread_cleanup_pop_imp(execute);
 end;
 
-procedure ps4___pthread_cleanup_push_imp(cleanup_routine:t_cb_proc;
-                                         cleanup_arg:Pointer;
-                                         cleanup_info:p_pthread_cleanup_info); SysV_ABI_CDecl;
+procedure ps4___pthread_cleanup_push_imp(routine:t_cb_proc;
+                                         arg:Pointer;
+                                         info:p_pthread_cleanup); SysV_ABI_CDecl;
+var
+ curthread:pthread;
 begin
  Writeln('__pthread_cleanup_push_imp');
+
+ curthread:=_get_curthread;
+ if (curthread=nil) then Exit;
+
+ info^.routine    :=routine;
+ info^.routine_arg:=arg;
+ info^.onheap     :=0;
+ info^.prev       :=curthread^.cleanup;
+
+ curthread^.cleanup:=info;
 end;
 
 procedure ps4___pthread_cleanup_pop_imp(execute:Integer); SysV_ABI_CDecl;
+var
+ curthread:pthread;
+ old:p_pthread_cleanup;
 begin
- Assert(execute=0);
  Writeln('__pthread_cleanup_pop_imp');
+
+ curthread:=_get_curthread;
+ if (curthread=nil) then Exit;
+
+ old:=curthread^.cleanup;
+ if (old<>nil) then
+ begin
+  curthread^.cleanup:=old^.prev;
+  if (execute<>0) then
+  begin
+   old^.routine(old^.routine_arg);
+  end;
+  if (old^.onheap<>0) then
+  begin
+   FreeMem(old);
+  end;
+ end;
 end;
 
 procedure _pthread_keys_init;

@@ -115,6 +115,20 @@ type
   data_:Pointer;
  end;
 
+ t_init_routine_proc=procedure; SysV_ABI_CDecl;
+ t_cb_proc=procedure(data:Pointer); SysV_ABI_CDecl;
+
+ Ppthread_key_t=^pthread_key_t;
+ pthread_key_t=DWORD;
+
+ p_pthread_cleanup=^pthread_cleanup;
+ pthread_cleanup=packed record
+  prev:p_pthread_cleanup;
+  routine:t_cb_proc;
+  routine_arg:Pointer;
+  onheap:Integer;
+ end;
+
  p_pthread=^pthread;
  pthread=^pthread_t;
  pthread_t=record
@@ -128,20 +142,11 @@ type
   //
   errno:QWORD;
   //
+  cleanup:p_pthread_cleanup;
+  //
   keys:array[0..SCE_PTHREAD_KEYS_MAX-1] of _pthread_key_data;
   //
   sig:sigqueue_t;
- end;
-
- t_init_routine_proc=procedure; SysV_ABI_CDecl;
- t_cb_proc=procedure(data:Pointer); SysV_ABI_CDecl;
-
- Ppthread_key_t=^pthread_key_t;
- pthread_key_t=DWORD;
-
- p_pthread_cleanup_info=^_pthread_cleanup_info;
- _pthread_cleanup_info=packed record
-  pthread_cleanup_pad:array[0..7] of qword;
  end;
 
  PSceKernelSchedParam=^SceKernelSchedParam;
@@ -151,6 +156,9 @@ type
 
 threadvar
  tcb_thread:pthread;
+
+var
+ sceKernelThreadDtors:TProcedure;
 
 function _get_curthread:pthread; inline;
 
