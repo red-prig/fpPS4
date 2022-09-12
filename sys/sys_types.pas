@@ -354,6 +354,8 @@ type
   Size:QWORD;
   Magic:QWORD;
   SDK_version:QWORD;
+  param1:Integer;
+  param2:Integer;
  end;
 
  PTLS_index=^TLS_index;
@@ -391,6 +393,8 @@ Const
  STT_LOPRO         =13;
  STT_SPARC_REGISTER=13;
  STT_HIPROC        =15;
+
+ STT_SCE           =11; //module_start/module_stop
 
  STV_DEFAULT   =0;
  STV_INTERNAL  =1;

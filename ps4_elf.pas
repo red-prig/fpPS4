@@ -12,7 +12,8 @@ uses
   ps4libdoc,
   ps4_program,
   ps4_elf_tls,
-  Classes, SysUtils;
+  Classes,
+  SysUtils;
 
 type
  PsceLibcMallocReplace=^TsceLibcMallocReplace;
@@ -252,7 +253,7 @@ type
 type
  TinitProc   =function(argc:Integer;argv,environ:PPchar):Integer; SysV_ABI_CDecl; //preinit_array/init_array
  TEntryPoint =procedure(pEnv:Pointer;pfnExitHandler:Pointer);     SysV_ABI_CDecl; //EntryPoint
- TmoduleStart=function(argc:size_t;argp:Pointer):Integer;         SysV_ABI_CDecl; //module_start/module_stop
+ TmoduleStart=function(argc:size_t;argp,proc:Pointer):Integer;    SysV_ABI_CDecl; //module_start/module_stop
 
 function  LoadPs4ElfFromFile(Const name:RawByteString):TElf_node;
 
@@ -1344,6 +1345,7 @@ begin
   STT_FILE   :Result:='STT_FILE   ';
   STT_COMMON :Result:='STT_COMMON ';
   STT_TLS    :Result:='STT_TLS    ';
+  STT_SCE    :Result:='STT_SCE    ';
   else        Result:='STT_'+HexStr(sType,2)+'     ';
  end;
 end;
@@ -1404,6 +1406,7 @@ begin
    STT_SECTION:;
    STT_FILE   :;
    STT_COMMON :;
+   STT_SCE    :;
    STT_TLS    :Writeln(__sType(Info.sType));
    else
     Writeln(__sType(Info.sType));
@@ -1441,6 +1444,7 @@ begin
    STT_SECTION:;
    STT_FILE   :;
    STT_COMMON :;
+   STT_SCE    :;
    STT_TLS    :Writeln(__sType(Info.sType));
    else
     Writeln(__sType(Info.sType));
@@ -1488,6 +1492,7 @@ begin
    //STT_FILE   :;
    STT_COMMON :;
    STT_TLS    :;
+   STT_SCE    :;
    else
     Writeln(__sType(Info.sType));
   end;
@@ -1537,30 +1542,12 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   Import:Boolean;
 
  begin
-  Import:=(Info^.shndx=SHN_UNDEF);  //
 
-  case _on_module_start_stop(Info^.pName) of
-   0:begin //module_start
-      //nSymVal:=elf.mMap.pAddr+elf.dtInit;
-      _do_set(nSymVal);
-
-      //IInfo.nid:=ps4_nid_hash(Info^.pName);
-      //IInfo.lib:=elf._get_lib(0);
-      //IInfo.lib^.set_proc(IInfo.nid,nSymVal);
-
-      Exit;
-     end;
-   1:begin //module_stop
-      //nSymVal:=elf.mMap.pAddr+elf.dtFini;
-      _do_set(nSymVal);
-
-      //IInfo.nid:=ps4_nid_hash(Info^.pName);
-      //IInfo.lib:=elf._get_lib(0);
-      //IInfo.lib^.set_proc(IInfo.nid,nSymVal);
-
-      Exit;
-     end;
-   else;
+  case Info^.sType of
+   STT_NOTYPE :Import:=False;
+   STT_SCE    :Import:=False;
+   else
+    Import:=(Info^.shndx=SHN_UNDEF);
   end;
 
   if Import then Exit;
@@ -1569,10 +1556,32 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   nModuleId:=0;
   nLibraryId:=0;
-  if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
-  begin
-   IInfo.nid:=ps4_nid_hash(Info^.pName);
+
+  case Info^.sType of
+   STT_NOTYPE:
+    begin
+     IInfo.nid:=ps4_nid_hash(Info^.pName);
+     nModuleId:=elf._find_mod_export;
+     nLibraryId:=elf._find_lib_export;
+    end;
+   STT_SCE:
+    begin
+     if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo.nid) then
+     begin
+      Writeln(StdErr,'Error decode:',Info^.pName);
+     end;
+     nModuleId:=elf._find_mod_export;
+     nLibraryId:=elf._find_lib_export;
+    end;
+   else
+    begin
+     if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
+     begin
+      Writeln(StdErr,'Error decode:',Info^.pName);
+     end;
+    end;
   end;
+
   IInfo._md:=elf._get_mod(nModuleId);
   IInfo.lib:=elf._get_lib(nLibraryId);
 
@@ -1581,6 +1590,7 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    Writeln(StdErr,'Unknow module from ',Info^.pName);
   end;
 
+  if (IInfo._md<>nil) then
   if (IInfo._md^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
@@ -1683,20 +1693,13 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   Import:Boolean;
 
  begin
-  Import:=(Info^.shndx=SHN_UNDEF);  //
 
-  if (_on_module_start_stop(Info^.pName)<>-1) then Exit;
-
-  //case _on_module_start_stop(Info^.pName) of
-  // 0:begin //module_start
-  //    Writeln('module_start:',HexStr(PPointer(elf.mMap.pAddr+Info^.Offset)^));
-  //    Exit;
-  //   end;
-  // 1:begin //module_stop
-  //    Exit;
-  //   end;
-  // else;
-  //end;
+  case Info^.sType of
+   STT_NOTYPE :Import:=False;
+   STT_SCE    :Import:=False;
+   else
+    Import:=(Info^.shndx=SHN_UNDEF);
+  end;
 
   if not Import then Exit;
 
@@ -1704,10 +1707,12 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   nModuleId:=0;
   nLibraryId:=0;
+
   if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
   begin
-   IInfo.nid:=ps4_nid_hash(Info^.pName);
+   Writeln(StdErr,'Error decode:',Info^.pName);
   end;
+
   IInfo._md:=elf._get_mod(nModuleId);
   IInfo.lib:=elf._get_lib(nLibraryId);
 
@@ -1716,6 +1721,7 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    Writeln(StdErr,'Unknow module from ',Info^.pName);
   end;
 
+  if (IInfo._md<>nil) then
   if (IInfo._md^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
@@ -1812,23 +1818,45 @@ const
   nModuleId,nLibraryId:Word;
 
   Import:Boolean;
-  mss:Integer;
 
-  space_lib:TLIBRARY;
  begin
-  Import:=(Info^.shndx=SHN_UNDEF);
-
-  mss:=_on_module_start_stop(Info^.pName);
-  if (mss<>-1) then Import:=False;
+  case Info^.sType of
+   STT_NOTYPE :Import:=False;
+   STT_SCE    :Import:=False;
+   else
+    Import:=(Info^.shndx=SHN_UNDEF);
+  end;
 
   IInfo:=Default(TResolveImportInfo);
 
   nModuleId:=0;
   nLibraryId:=0;
-  if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
-  begin
-   IInfo.nid:=ps4_nid_hash(Info^.pName);
+
+  case Info^.sType of
+   STT_NOTYPE:
+    begin
+     IInfo.nid:=ps4_nid_hash(Info^.pName);
+     nModuleId:=elf._find_mod_export;
+     nLibraryId:=elf._find_lib_export;
+    end;
+   STT_SCE:
+    begin
+     if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo.nid) then
+     begin
+      Writeln(StdErr,'Error decode:',Info^.pName);
+     end;
+     nModuleId:=elf._find_mod_export;
+     nLibraryId:=elf._find_lib_export;
+    end;
+   else
+    begin
+     if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
+     begin
+      Writeln(StdErr,'Error decode:',Info^.pName);
+     end;
+    end;
   end;
+
   IInfo._md:=elf._get_mod(nModuleId);
   IInfo.lib:=elf._get_lib(nLibraryId);
 
@@ -1837,6 +1865,7 @@ const
    FWriteln('Unknow module from '+Info^.pName);
   end;
 
+  if (IInfo._md<>nil) then
   if (IInfo._md^.Import<>Import) then
   begin
    FWriteln('Wrong module ref:'+IInfo._md^.strName+':'+BoolToStr(IInfo._md^.Import)+'<>'+BoolToStr(Import));
@@ -1845,20 +1874,24 @@ const
   if (IInfo.lib=nil) then
   begin
    FWriteln('Unknow library from '+Info^.pName);
-   space_lib:=Default(TLIBRARY);
-   space_lib.Import:=Import;
-   IInfo.lib:=@space_lib;
-   //Exit;
   end;
 
-  if (IInfo.lib^.Import<>Import) and (mss=-1) then
+  if (IInfo.lib<>nil) then
+  if (IInfo.lib^.Import<>Import) then
   begin
-   FWriteln('Wrong library ref:'+IInfo.lib^.strName+':'+BoolToStr(IInfo._md^.Import)+'<>'+BoolToStr(Import));
-   //Exit;
+   FWriteln('Wrong library ref:'+IInfo.lib^.strName+':'+BoolToStr(IInfo.lib^.Import)+'<>'+BoolToStr(Import));
   end;
 
   functName:=ps4libdoc.GetFunctName(IInfo.nid);
-  FWriteln(__nBind(Info^.sBind)+':'+__sType(Info^.sType)+':'+IInfo._md^.strName +':'+IInfo.lib^.strName+':'+functName);
+
+  FWrite(__nBind(Info^.sBind)+':'+__sType(Info^.sType)+':'+IInfo._md^.strName +':');
+
+  if (IInfo.lib<>nil) then
+  begin
+   FWrite(IInfo.lib^.strName);
+  end;
+
+  FWriteln(':'+functName);
 
   if Import then
   begin
@@ -2582,27 +2615,23 @@ end;
 
 function Telf_file.module_start(argc:size_t;argp:PPointer):Integer;
 var
+ mp:PsceModuleParam;
+ M:Pointer;
  P:TmoduleStart;
 begin
  Result:=0;
 
- Pointer(P):=Pointer(mMap.pAddr+dtInit);
- Writeln('module_start');
- Result:=P(argc,argp);
+ Pointer(mp):=Pointer(mMap.pAddr+pModuleParam);
 
- //Pointer(P):=Pointer(pModule.pStart);
- //Case Int64(P) of
- // -1,0,1:;//skip
- // else
- //  begin
- //   Pointer(P):=Pointer(mMap.pAddr+QWORD(P));
- //
- //   Writeln('module_start');
- //
- //   Result:=P(argc,argp);
- //
- //  end;
- //end;
+ //M:=get_proc_by_name('module_start');
+ M:=nil;
+
+ Pointer(P):=Pointer(mMap.pAddr+dtInit);
+
+ Writeln('module_start');
+
+ Result:=P(argc,argp,M);
+
 end;
 
 function Telf_file.GetCodeFrame:TMemChunk;

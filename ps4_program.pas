@@ -65,6 +65,8 @@ type
    procedure _set_lib(id:Word;lib:TLIBRARY); inline;
    procedure _set_lib_attr(u:TLibraryValue); inline;
    function  _get_lib(id:Word):PLIBRARY; inline;
+   function  _find_mod_export:Word;
+   function  _find_lib_export:Word;
   public
    pFileName:RawByteString;
    property    IsStatic:Boolean read FStatic write FStatic;
@@ -718,6 +720,19 @@ begin
  end;
 end;
 
+function TElf_node._find_mod_export:Word;
+var
+ i:Word;
+begin
+ Result:=0;
+ if Length(aMods)>0 then
+ For i:=0 to High(aMods) do
+  if not aMods[i].Import then
+  begin
+   Exit(i);
+  end;
+end;
+
 procedure TElf_node._set_lib(id:Word;lib:TLIBRARY); inline;
 var
  i:SizeInt;
@@ -773,6 +788,20 @@ begin
  Result^.parent:=Self;
  Result^.strName:=strName;
  aLibs[i]:=Result;
+end;
+
+function TElf_node._find_lib_export:Word;
+var
+ i:Word;
+begin
+ Result:=0;
+ if Length(aLibs)>0 then
+ For i:=0 to High(aLibs) do
+ if (aLibs[i]<>nil) then
+  if not aLibs[i]^.Import then
+  begin
+   Exit(i);
+  end;
 end;
 
 function TElf_node.ModuleNameFromId(id:WORD):RawByteString;

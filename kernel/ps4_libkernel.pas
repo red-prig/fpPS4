@@ -179,7 +179,7 @@ begin
  Writeln('   __free:',HexStr(heap_api^._free));   //__free
 end;
 
-//registred destroy proc?
+//cb used in pthread_exit
 function ps4_sceKernelSetThreadDtors(Proc:TProcedure):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceKernelSetThreadDtors:',HexStr(proc));
@@ -192,13 +192,14 @@ begin
  Result:=0;
 end;
 
-//registred thread atexit proc?
-function ps4_sceKernelSetThreadAtexitCount(proc:TKernelAtexitFunc):Integer; SysV_ABI_CDecl;
+//cb used in sceKernelStopUnloadModule
+function ps4_sceKernelSetThreadAtexitCount(proc:TKernelAtexitFuncCount):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceKernelSetThreadAtexitCount:',HexStr(proc));
  Result:=0;
 end;
 
+//cb used in sceKernelStopUnloadModule
 function ps4_sceKernelSetThreadAtexitReport(proc:TKernelAtexitReportFunc):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceKernelSetThreadAtexitReport:',HexStr(proc));
@@ -250,6 +251,10 @@ begin
   Result:=0;
  end;
 end;
+
+//dynlib_get_obj_member(handle,8,&ptr); module param
+//dynlib_get_obj_member(handle,1,&ptr); init
+//dynlib_get_obj_member(handle,2,&ptr); fini
 
 //dynamic load????
 function ps4_sceKernelLoadStartModule(moduleFileName:Pchar;

@@ -19,8 +19,8 @@ type
  end;
 
  atexit_func=function(param:Pointer):Integer;SysV_ABI_CDecl;
- TKernelAtexitFunc=function(param:Integer):Integer;SysV_ABI_CDecl;
- TKernelAtexitReportFunc=procedure(param:Integer);
+ TKernelAtexitFuncCount=function(handle:Integer):Integer;SysV_ABI_CDecl;
+ TKernelAtexitReportFunc=procedure(handle:Integer);
 
 function  px2sce(e:Integer):Integer;
 function  sce2px(e:Integer):Integer;

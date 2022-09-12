@@ -1,0 +1,58 @@
+object frmMain: TfrmMain
+  Left = 441
+  Height = 240
+  Top = 138
+  Width = 556
+  Caption = 'nid_gui_test'
+  ClientHeight = 240
+  ClientWidth = 556
+  LCLVersion = '2.3.0.0'
+  object NidBase64: TLabeledEdit
+    Left = 8
+    Height = 33
+    Top = 24
+    Width = 536
+    Anchors = [akTop, akLeft, akRight]
+    EditLabel.Height = 15
+    EditLabel.Width = 536
+    EditLabel.Caption = 'Nid Base64'
+    Font.Height = -19
+    ParentFont = False
+    TabOrder = 0
+    OnClick = NidBase64Click
+    OnExit = NidBase64Click
+    OnKeyDown = TextKeyDown
+  end
+  object NidHex: TLabeledEdit
+    Left = 8
+    Height = 33
+    Top = 80
+    Width = 536
+    Anchors = [akTop, akLeft, akRight]
+    EditLabel.Height = 15
+    EditLabel.Width = 536
+    EditLabel.Caption = 'Nid Hex'
+    Font.Height = -19
+    ParentFont = False
+    TabOrder = 1
+    OnClick = NidHexClick
+    OnExit = NidHexClick
+    OnKeyDown = TextKeyDown
+  end
+  object NidName: TLabeledEdit
+    Left = 8
+    Height = 33
+    Top = 136
+    Width = 536
+    Anchors = [akTop, akLeft, akRight]
+    EditLabel.Height = 15
+    EditLabel.Width = 536
+    EditLabel.Caption = 'Nid Name'
+    Font.Height = -19
+    ParentFont = False
+    TabOrder = 2
+    OnClick = NidNameClick
+    OnExit = NidNameClick
+    OnKeyDown = TextKeyDown
+  end
+end
