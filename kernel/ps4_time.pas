@@ -118,6 +118,32 @@ begin
   Result:=t1-t2;
 end;
 
+function SwGetProcessTime(var ut:QWORD):Boolean;
+var
+ ct,et,kt:TFileTime;
+begin
+ QWORD(ct):=0;
+ QWORD(et):=0;
+ QWORD(kt):=0;
+ ut:=0;
+ _sig_lock;
+ Result:=GetProcessTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
+ _sig_unlock;
+end;
+
+function SwGetThreadTime(var ut:QWORD):Boolean;
+var
+ ct,et,kt:TFileTime;
+begin
+ QWORD(ct):=0;
+ QWORD(et):=0;
+ QWORD(kt):=0;
+ ut:=0;
+ _sig_lock;
+ Result:=GetThreadTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
+ _sig_unlock;
+end;
+
 function ps4_gettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
 Var
  tp:timespec;
@@ -212,7 +238,6 @@ end;
 
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 var
- ct,et,kt,ut:TFILETIME;
  pc,pf:QWORD;
 begin
 
@@ -222,10 +247,12 @@ begin
  case clock_id of
   CLOCK_SECOND:
   begin
-   GetSystemTimeAsFileTime(ct);
-   QWORD(ct):=QWORD(ct)-DELTA_EPOCH_IN_100NS;
-   tp^.tv_sec :=QWORD(ct) div POW10_7;
-   //tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+   _sig_lock;
+   GetSystemTimeAsFileTime(TFILETIME(pc));
+   _sig_unlock;
+   pc:=pc-DELTA_EPOCH_IN_100NS;
+   tp^.tv_sec :=pc div POW10_7;
+   //tp^.tv_nsec:=(QWORD(pc) mod POW10_7)*100;
    tp^.tv_nsec:=0;
   end;
 
@@ -233,10 +260,12 @@ begin
   CLOCK_REALTIME_PRECISE,
   CLOCK_REALTIME_FAST:
    begin
-    GetSystemTimeAsFileTime(ct);
-    QWORD(ct):=QWORD(ct)-DELTA_EPOCH_IN_100NS;
-    tp^.tv_sec :=QWORD(ct) div POW10_7;
-    tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+    _sig_lock;
+    GetSystemTimeAsFileTime(TFILETIME(pc));
+    _sig_unlock;
+    pc:=pc-DELTA_EPOCH_IN_100NS;
+    tp^.tv_sec :=(pc div POW10_7);
+    tp^.tv_nsec:=(pc mod POW10_7)*100;
    end;
 
   CLOCK_EXT_NETWORK      ,
@@ -286,27 +315,25 @@ begin
 
   CLOCK_PROCTIME:
    begin
-    _sig_lock;
-    if not GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then Result:=_set_errno(EINVAL);
-    _sig_unlock;
-    if (Result=0) then
+    if SwGetProcessTime(pc) then
     begin
-     QWORD(ct)  :=QWORD(kt)+QWORD(ut);
-     tp^.tv_sec :=QWORD(ct) div POW10_7;
-     tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+     tp^.tv_sec :=(pc div POW10_7);
+     tp^.tv_nsec:=(pc mod POW10_7)*100;
+    end else
+    begin
+     Result:=_set_errno(EINVAL);
     end;
    end;
 
   CLOCK_THREAD_CPUTIME_ID:
    begin
-    _sig_lock;
-    if not GetThreadTimes(GetCurrentProcess,ct,et,kt,ut) then Result:=_set_errno(EINVAL);
-    _sig_unlock;
-    if (Result=0) then
+    if SwGetThreadTime(pc) then
     begin
-     QWORD(ct)  :=QWORD(kt)+QWORD(ut);
-     tp^.tv_sec :=QWORD(ct) div POW10_7;
-     tp^.tv_nsec:=(QWORD(ct) mod POW10_7)*100;
+     tp^.tv_sec :=(pc div POW10_7);
+     tp^.tv_nsec:=(pc mod POW10_7)*100;
+    end else
+    begin
+     Result:=_set_errno(EINVAL);
     end;
    end
 
@@ -340,19 +367,15 @@ begin
 end;
 
 function ps4_sceKernelGetProcessTime:QWORD; SysV_ABI_CDecl; //microseconds
-var
- ct,et,kt,ut:TFileTime;
 begin
- _sig_lock;
- if GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then
+ if SwGetProcessTime(Result) then
  begin
-  Result:=({QWORD(kt)+}QWORD(ut)) div 10;
+  Result:=Result div 10;
  end else
  begin
   _set_errno(EINVAL);
   Result:=0;
  end;
- _sig_unlock;
 end;
 
 function ps4_sceKernelGetProcessTimeCounterFrequency:QWORD; SysV_ABI_CDecl; //microseconds*10
@@ -361,18 +384,15 @@ begin
 end;
 
 function ps4_sceKernelGetProcessTimeCounter:QWORD; SysV_ABI_CDecl; //microseconds*10
-var
- ct,et,kt,ut:TFileTime;
 begin
- _sig_lock;
- if GetProcessTimes(GetCurrentProcess,ct,et,kt,ut) then
+ if SwGetProcessTime(Result) then
  begin
-  Result:=({QWORD(kt)+}QWORD(ut));
+  //
  end else
  begin
+  _set_errno(EINVAL);
   Result:=0;
  end;
- _sig_unlock;
 end;
 
 //1sec=10 000 000
