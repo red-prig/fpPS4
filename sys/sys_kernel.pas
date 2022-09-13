@@ -26,6 +26,7 @@ function  px2sce(e:Integer):Integer;
 function  sce2px(e:Integer):Integer;
 
 function  _set_errno(r:Integer):Integer;
+function  _set_sce_errno(r:Integer):Integer;
 function  _error:Pointer;
 
 function  SwFreeMem(p:pointer):ptruint;
@@ -74,10 +75,24 @@ function _set_errno(r:Integer):Integer;
 var
  t:pthread;
 begin
- if (r<>0) then
+ //if (r<>0) then
  begin
   t:=tcb_thread;
   if (t<>nil) then t^.errno:=r;
+  Exit(-1);
+ end;
+ Result:=r;
+end;
+
+function _set_sce_errno(r:Integer):Integer;
+var
+ t:pthread;
+begin
+ Result:=r;
+ //if (r<>0) then
+ begin
+  t:=tcb_thread;
+  if (t<>nil) then t^.errno:=sce2px(r);
   Exit(-1);
  end;
  Result:=r;

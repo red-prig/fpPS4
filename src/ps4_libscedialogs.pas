@@ -63,9 +63,13 @@ end;
 
 //
 
+var
+ status_err_dialog:Integer=0; //SCE_ERROR_DIALOG_STATUS_NONE
+
 function ps4_sceErrorDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceErrorDialogInitialize');
+ status_err_dialog:=1; //SCE_ERROR_DIALOG_STATUS_INITIALIZED
  Result:=0;
 end;
 
@@ -80,9 +84,6 @@ type
 
 const
  SCE_ERROR_DIALOG_ERROR_PARAM_INVALID=Integer($80ED0003);
-
-var
- status_err_dialog:Integer=0; //SCE_ERROR_DIALOG_STATUS_NONE
 
 function ps4_sceErrorDialogOpen(param:pSceErrorDialogParam):Integer; SysV_ABI_CDecl;
 begin
@@ -114,20 +115,24 @@ end;
 
 //
 
+var
+ status_save_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
 function ps4_sceSaveDataDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSaveDataDialogInitialize');
+ status_save_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
 
 function ps4_sceSaveDataDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=status_save_dialog;
 end;
 
 function ps4_sceSaveDataDialogGetStatus():Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=status_save_dialog;
 end;
 
 type
@@ -153,6 +158,7 @@ end;
 function ps4_sceSaveDataDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSaveDataDialogTerminate');
+ status_save_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
  Result:=0;
 end;
 
@@ -162,7 +168,7 @@ const
 function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSaveDataDialogGetResult');
- Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
+ Result:=0;
 end;
 
 type
@@ -180,9 +186,13 @@ end;
 
 //
 
+var
+ status_msg_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
 function ps4_sceMsgDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceMsgDialogInitialize');
+ status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
 
@@ -240,9 +250,6 @@ type
 const
  SCE_COMMON_DIALOG_ERROR_PARAM_INVALID=-2135425014; // 0x80B8000A
  SCE_COMMON_DIALOG_ERROR_ARG_NULL     =-2135425011; // 0x80B8000D
-
-var
- status_msg_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
 
 function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer; SysV_ABI_CDecl;
 begin
@@ -314,14 +321,15 @@ end;
 
 //
 
+var
+ status_commerce_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
 function ps4_sceNpCommerceDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpCommerceDialogInitialize');
+ status_commerce_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
-
-var
- status_commerce_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
 
 type
  pSceNpCommerceDialogParam=^SceNpCommerceDialogParam;
@@ -400,15 +408,26 @@ end;
 
 //
 
+const
+ SCE_SIGNIN_DIALOG_STATUS_NONE       =0;
+ SCE_SIGNIN_DIALOG_STATUS_INITIALIZED=1;
+ SCE_SIGNIN_DIALOG_STATUS_RUNNING    =2;
+ SCE_SIGNIN_DIALOG_STATUS_FINISHED   =3;
+
+var
+ status_signin_dialog:Integer=SCE_SIGNIN_DIALOG_STATUS_NONE;
+
 function ps4_sceSigninDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSigninDialogInitialize');
+ status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
 
 function ps4_sceSigninDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSigninDialogTerminate');
+ status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_NONE;
  Result:=0;
 end;
 
@@ -420,21 +439,16 @@ type
   reserved:array[0..1] of Integer;
  end;
 
-const
- SCE_SIGNIN_DIALOG_STATUS_NONE       =0;
- SCE_SIGNIN_DIALOG_STATUS_INITIALIZED=1;
- SCE_SIGNIN_DIALOG_STATUS_RUNNING    =2;
- SCE_SIGNIN_DIALOG_STATUS_FINISHED   =3;
-
 function ps4_sceSigninDialogOpen(param:pSceSigninDialogParam):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSigninDialogOpen');
+ status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
 
 function ps4_sceSigninDialogUpdateStatus:Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_SIGNIN_DIALOG_STATUS_FINISHED;
+ Result:=status_signin_dialog;
 end;
 
 function ps4_scePlayerInvitationDialogTerminate():Integer; SysV_ABI_CDecl;

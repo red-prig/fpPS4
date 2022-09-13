@@ -70,6 +70,27 @@ begin
  Result:=0;
 end;
 
+type
+ PSceHttpNBEvent=^SceHttpNBEvent;
+ SceHttpNBEvent=packed record
+  events:DWORD;
+  eventDetail:DWORD;
+  id:Integer;
+  userArg:Pointer;
+ end;
+
+function ps4_sceHttpWaitRequest(eh:SceHttpEpollHandle;
+                                nbev:PSceHttpNBEvent;
+                                maxevents:Integer;
+                                timeout_us:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceHttpWaitReques');
+ nbev^.events:=8; //SCE_HTTP_NB_EVENT_SOCK_ERR
+ nbev^.id:=3;
+
+ Result:=1;
+end;
+
 function ps4_sceHttpAddRequestHeader(id:Integer;name:PChar;value:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -133,6 +154,7 @@ begin
   statusCode^:=404;
  end;
  Result:=0;
+ Result:=Integer($80431082);
 end;
 
 const
@@ -179,6 +201,7 @@ begin
  lib^.set_proc($C1885755F4B612DE,@ps4_sceHttpDestroyEpoll);
  lib^.set_proc($FF19BB91940DA472,@ps4_sceHttpSetEpoll);
  lib^.set_proc($E7DB4BD404016FC5,@ps4_sceHttpUnsetEpoll);
+ lib^.set_proc($A884A30C7AF138D7,@ps4_sceHttpWaitRequest);
  lib^.set_proc($118DBC4F66E437B9,@ps4_sceHttpAddRequestHeader);
  lib^.set_proc($86DC813A859E4B9F,@ps4_sceHttpsSetSslCallback);
  lib^.set_proc($AA0C43063A2B531B,@ps4_sceHttpCreateConnectionWithURL);

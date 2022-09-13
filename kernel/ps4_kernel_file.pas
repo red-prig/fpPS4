@@ -288,20 +288,28 @@ var
 begin
  if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ Writeln('sceKernelOpen:',path,' ',flags,' ',mode);
+
  Assert((flags and SCE_KERNEL_O_DIRECTORY)=0,'folder open TODO');
 
  if (flags and WR_RDWR)=WR_RDWR then
  begin
-  Exit(SCE_KERNEL_ERROR_EINVAL);
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
  end;
 
- if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+ if (path[0]=#0) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+ end;
 
  _sig_lock;
  rp:=_parse_filename(path);
  _sig_unlock;
 
- if (rp='') then Exit(SCE_KERNEL_ERROR_EACCES);
+ if (rp='') then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+ end;
 
  _sig_lock;
  wp:=UTF8Decode(rp);
@@ -330,14 +338,15 @@ begin
   Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
-   ERROR_FILE_NOT_FOUND   :Exit(SCE_KERNEL_ERROR_ENOENT);
-   ERROR_ACCESS_DENIED    :Exit(SCE_KERNEL_ERROR_EACCES);
-   ERROR_BUFFER_OVERFLOW  :Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
-   ERROR_NOT_ENOUGH_MEMORY:Exit(SCE_KERNEL_ERROR_ENOMEM);
-   ERROR_FILE_EXISTS      :Exit(SCE_KERNEL_ERROR_EEXIST);
-   ERROR_DISK_FULL:        Exit(SCE_KERNEL_ERROR_ENOSPC);
+   ERROR_FILE_NOT_FOUND   :Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+   ERROR_ACCESS_DENIED    :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+   ERROR_BUFFER_OVERFLOW  :Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
+   ERROR_NOT_ENOUGH_MEMORY:Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
+   ERROR_ALREADY_EXISTS   :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
+   ERROR_FILE_EXISTS      :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
+   ERROR_DISK_FULL:        Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOSPC));
    else
-                           Exit(SCE_KERNEL_ERROR_EIO);
+                           Exit(_set_sce_errno(SCE_KERNEL_ERROR_EIO));
   end;
  end;
 
@@ -347,7 +356,7 @@ begin
 
  if (Result=-1) then
  begin
-  Exit(SCE_KERNEL_ERROR_EMFILE);
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EMFILE));
  end;
 
 end;
@@ -360,7 +369,10 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+ end;
 
  _sig_lock;
  case whence of
@@ -368,11 +380,11 @@ begin
   SCE_KERNEL_SEEK_CUR:Result:=FileSeek(h,offset,fsFromCurrent);
   SCE_KERNEL_SEEK_END:Result:=FileSeek(h,offset,fsFromEnd);
   else
-                      Result:=SCE_KERNEL_ERROR_EINVAL;
+                      Result:=_set_sce_errno(SCE_KERNEL_ERROR_EINVAL);
  end;
  _sig_unlock;
 
- if (Result=-1) then Result:=SCE_KERNEL_ERROR_EOVERFLOW;
+ if (Result=-1) then Result:=_set_sce_errno(SCE_KERNEL_ERROR_EOVERFLOW);
 end;
 
 function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
@@ -384,10 +396,13 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+ end;
 
- if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
- if (nbytes<0) or (nbytes>High(Integer)) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
+ if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
 
  N:=0;
  _sig_lock;
@@ -396,7 +411,7 @@ begin
   Result:=N;
  end else
  begin
-  Result:=SCE_KERNEL_ERROR_EIO;
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
  end;
  _sig_unlock;
 end;
@@ -410,10 +425,13 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+ end;
 
- if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
- if (nbytes<0) or (nbytes>High(Integer)) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
+ if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
 
  N:=0;
  _sig_lock;
@@ -422,7 +440,7 @@ begin
   Result:=N;
  end else
  begin
-  Result:=SCE_KERNEL_ERROR_EIO;
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
  end;
  _sig_unlock;
 end;
@@ -433,14 +451,17 @@ var
  N:DWORD;
  O:TOVERLAPPED;
 begin
- if (buf=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
- if (nbytes<0) or (nbytes>High(Integer)) or (offset<0) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
+ if (nbytes<0) or (nbytes>High(Integer)) or (offset<0) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
 
  _sig_lock;
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+ end;
 
  O:=Default(TOVERLAPPED);
  PInt64(@O.Offset)^:=offset;
@@ -452,7 +473,7 @@ begin
   Result:=N;
  end else
  begin
-  Result:=SCE_KERNEL_ERROR_EIO;
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
  end;
  _sig_unlock;
 end;
@@ -462,7 +483,10 @@ begin
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
- if (Result<>0) then Result:=_set_errno(EBADF);
+ if (Result<>0) then
+ begin
+  Result:=_set_errno(EBADF);
+ end;
 end;
 
 function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
@@ -470,7 +494,10 @@ begin
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
- if (Result<>0) then Result:=SCE_KERNEL_ERROR_EBADF;
+ if (Result<>0) then
+ begin
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EBADF);
+ end;
 end;
 
 function file_attr_to_st_mode(attr:DWORD):Word;
@@ -510,8 +537,11 @@ var
  hfi:WIN32_FILE_ATTRIBUTE_DATA;
  err:DWORD;
 begin
- if (path=nil) or (stat=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+ if (path=nil) or (stat=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+ if (path[0]=#0) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+ end;
 
  stat^:=Default(SceKernelStat);
 
@@ -519,7 +549,7 @@ begin
  rp:=_parse_filename(path);
  _sig_unlock;
 
- if (rp='') then Exit(SCE_KERNEL_ERROR_EACCES);
+ if (rp='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
  hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
  err:=SwGetFileAttributes(rp,@hfi);
@@ -531,16 +561,16 @@ begin
    ERROR_SHARING_VIOLATION,
    ERROR_LOCK_VIOLATION,
    ERROR_SHARING_BUFFER_EXCEEDED:
-     Exit(SCE_KERNEL_ERROR_EACCES);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
    ERROR_BUFFER_OVERFLOW:
-     Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
 
    ERROR_NOT_ENOUGH_MEMORY:
-     Exit(SCE_KERNEL_ERROR_ENOMEM);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
 
    else
-     Exit(SCE_KERNEL_ERROR_ENOENT);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
   end;
  end;
 
@@ -584,7 +614,7 @@ var
  hfi:TByHandleFileInformation;
  err:DWORD;
 begin
- if (stat=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (stat=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
 
  stat^:=Default(SceKernelStat);
 
@@ -592,7 +622,10 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+ end;
 
  Case SwGetFileType(h) of
   FILE_TYPE_PIPE:
@@ -620,16 +653,16 @@ begin
        ERROR_SHARING_VIOLATION,
        ERROR_LOCK_VIOLATION,
        ERROR_SHARING_BUFFER_EXCEEDED:
-         Exit(SCE_KERNEL_ERROR_EACCES);
+         Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
        ERROR_BUFFER_OVERFLOW:
-         Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
 
        ERROR_NOT_ENOUGH_MEMORY:
-         Exit(SCE_KERNEL_ERROR_ENOMEM);
+         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
 
        else
-         Exit(SCE_KERNEL_ERROR_ENOENT);
+         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
       end;
      end;
 
@@ -645,7 +678,7 @@ begin
     end;
 
   else
-   Exit(SCE_KERNEL_ERROR_EBADF);
+   Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
  end;
 
  Result:=0;
@@ -668,7 +701,10 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(_set_errno(EBADF));
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_errno(EBADF));
+ end;
 
  N:=0;
  _sig_lock;
@@ -694,7 +730,10 @@ begin
  h:=_get_osfhandle(fd);
  _sig_unlock;
 
- if (h=INVALID_HANDLE_VALUE) then Exit(_set_errno(EBADF));
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_errno(EBADF));
+ end;
 
  N:=0;
  _sig_lock;
@@ -708,25 +747,29 @@ begin
  _sig_unlock;
 end;
 
-Function SwCreateDir(Const NewDir:RawByteString):Boolean;
-var
- err:DWORD;
+Function SwCreateDir(Const NewDir:RawByteString):DWORD;
 begin
+ Result:=0;
  _sig_lock;
- Result:=CreateDir(NewDir);
- err:=GetLastError;
+ if not CreateDir(NewDir) then
+ begin
+  Result:=GetLastError;
+ end;
  _sig_unlock;
- SetLastError(err);
 end;
 
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 var
  fn:RawByteString;
+ err:DWORD;
 begin
  Result:=0;
 
  if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+ if (path[0]=#0) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+ end;
 
  Writeln('sceKernelMkdir:',path,'(',OctStr(mode,3),')');
 
@@ -734,36 +777,39 @@ begin
  fn:=_parse_filename(path);
  _sig_unlock;
 
- if (fn='') then Exit(SCE_KERNEL_ERROR_EACCES);
+ if (fn='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
- if not SwCreateDir(fn) then
+ err:=SwCreateDir(fn);
+
+ if (err<>0) then
  begin
-  Case GetLastError() of
+  Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
    ERROR_FILE_NOT_FOUND:
-     Exit(SCE_KERNEL_ERROR_ENOENT);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
 
    ERROR_ACCESS_DENIED,
    ERROR_SHARING_VIOLATION,
    ERROR_LOCK_VIOLATION,
    ERROR_SHARING_BUFFER_EXCEEDED:
-     Exit(SCE_KERNEL_ERROR_EACCES);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
    ERROR_BUFFER_OVERFLOW:
-     Exit(SCE_KERNEL_ERROR_ENAMETOOLONG);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
 
    ERROR_NOT_ENOUGH_MEMORY:
-     Exit(SCE_KERNEL_ERROR_ENOMEM);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
 
+   ERROR_ALREADY_EXISTS,
    ERROR_FILE_EXISTS:
-     Exit(SCE_KERNEL_ERROR_EEXIST);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
 
    ERROR_DISK_FULL:
-     Exit(SCE_KERNEL_ERROR_ENOSPC);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOSPC));
 
    else
-     Exit(SCE_KERNEL_ERROR_EIO);
+     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EIO));
   end;
  end;
 
@@ -772,11 +818,15 @@ end;
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
 var
  fn:RawByteString;
+ err:DWORD;
 begin
  Result:=0;
 
  if (path=nil) then Exit(_set_errno(EINVAL));
- if (path[0]=#0) then Exit(_set_errno(ENOENT));
+ if (path[0]=#0) then
+ begin
+  Exit(_set_errno(ENOENT));
+ end;
 
  Writeln('mkdir:',path);
 
@@ -786,9 +836,11 @@ begin
 
  if (fn='') then Exit(_set_errno(EACCES));
 
- if not SwCreateDir(fn) then
+ err:=SwCreateDir(fn);
+
+ if (err<>0) then
  begin
-  Case GetLastError() of
+  Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
    ERROR_FILE_NOT_FOUND:
@@ -806,6 +858,7 @@ begin
    ERROR_NOT_ENOUGH_MEMORY:
      Exit(_set_errno(ENOMEM));
 
+   ERROR_ALREADY_EXISTS,
    ERROR_FILE_EXISTS:
      Exit(_set_errno(EEXIST));
 
@@ -825,8 +878,11 @@ var
 begin
  Result:=0;
 
- if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (path[0]=#0) then Exit(SCE_KERNEL_ERROR_ENOENT);
+ if (path=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+ if (path[0]=#0) then
+ begin
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+ end;
 
  Writeln('sceKernelCheckReachability:',path);
 
@@ -834,14 +890,14 @@ begin
  fn:=_parse_filename(path);
  _sig_unlock;
 
- if (fn='') then Exit(SCE_KERNEL_ERROR_EACCES);
+ if (fn='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
 
  if FileExists(fn) or DirectoryExists(fn) then
  begin
   Result:=0;
  end else
  begin
-  Result:=SCE_KERNEL_ERROR_ENOENT;
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_ENOENT);
  end;
 
 end;
