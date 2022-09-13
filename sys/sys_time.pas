@@ -7,8 +7,7 @@ interface
 uses
  windows,
  ntapi,
- sys_types,
- sys_kernel;
+ sys_types;
 
 function  _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
 function  _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
@@ -28,6 +27,9 @@ procedure SwQueryPerformanceCounter(var pc,pf:QWORD);
 procedure SwSaveTime(var pc:QWORD);
 function  SwTimePassedUnits(ot:QWORD):QWORD;
 function  SwGetTimeUnits:Int64;
+
+function  SwGetProcessTime(var ut:QWORD):Boolean;
+function  SwGetThreadTime(var ut:QWORD):Boolean;
 
 procedure SwGetSystemTimeAsFileTime(var lpSystemTimeAsFileTime:TFILETIME);
 procedure Swgettimezone(z:Ptimezone);
@@ -166,6 +168,32 @@ begin
  Result:=sec*POW10_7{POW10_11}+uec;
 end;
 
+function SwGetProcessTime(var ut:QWORD):Boolean;
+var
+ ct,et,kt:TFileTime;
+begin
+ QWORD(ct):=0;
+ QWORD(et):=0;
+ QWORD(kt):=0;
+ ut:=0;
+ _sig_lock;
+ Result:=GetProcessTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
+ _sig_unlock;
+end;
+
+function SwGetThreadTime(var ut:QWORD):Boolean;
+var
+ ct,et,kt:TFileTime;
+begin
+ QWORD(ct):=0;
+ QWORD(et):=0;
+ QWORD(kt):=0;
+ ut:=0;
+ _sig_lock;
+ Result:=GetThreadTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
+ _sig_unlock;
+end;
+
 type
  TGetSystemTimeAsFileTime=procedure(var lpSystemTimeAsFileTime:TFILETIME); stdcall;
 
@@ -222,7 +250,7 @@ begin
  Swgettimezone(z);
  if (tp<>nil) then
  begin
-  GetSystemTimeAsFileTime(_now);
+  SwGetSystemTimeAsFileTime(_now);
   QWORD(_now):=filetime_to_hnsec(_now);
   tp^.tv_sec :=QWORD(_now) div HECTONANOSEC_PER_SEC;
   tp^.tv_nsec:=(QWORD(_now) mod HECTONANOSEC_PER_SEC)*100;

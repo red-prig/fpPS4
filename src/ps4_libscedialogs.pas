@@ -99,6 +99,7 @@ end;
 
 function ps4_sceErrorDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceErrorDialogTerminate');
  status_err_dialog:=0; //SCE_ERROR_DIALOG_STATUS_NONE
  Result:=0;
 end;
@@ -121,7 +122,6 @@ end;
 
 function ps4_sceSaveDataDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
- //Writeln('sceSaveDataDialogUpdateStatus');
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 end;
 
@@ -161,6 +161,7 @@ const
 
 function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceSaveDataDialogGetResult');
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
 end;
 
@@ -173,6 +174,7 @@ type
 
 function ps4_sceSaveDataDialogClose(closeParam:pSceSaveDataDialogCloseParam):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceSaveDataDialogClose');
  Result:=0;
 end;
 
@@ -246,6 +248,8 @@ function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer; SysV_ABI_CDecl;
 begin
  if (param=nil) then Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
 
+ Writeln('sceMsgDialogOpen');
+
  Case param^.mode of
    SCE_MSG_DIALOG_MODE_USER_MSG:
     begin
@@ -266,6 +270,7 @@ end;
 
 function ps4_sceMsgDialogClose():Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceMsgDialogClose');
  status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
@@ -291,6 +296,7 @@ type
 
 function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceMsgDialogGetResult');
  if (pResult<>nil) then
  begin
   pResult^.result:=0;
@@ -301,6 +307,7 @@ end;
 
 function ps4_sceMsgDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceMsgDialogTerminate');
  status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
  Result:=0;
 end;
@@ -334,6 +341,7 @@ type
 
 function ps4_sceNpCommerceDialogOpen(param:pSceNpCommerceDialogParam):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpCommerceDialogOpen');
  status_commerce_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
@@ -356,6 +364,7 @@ type
 
 function ps4_sceNpCommerceDialogGetResult(pResult:pSceNpCommerceDialogResult):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpCommerceDialogGetResult');
  if (pResult<>nil) then
  begin
   pResult^.result:=1; //SCE_COMMON_DIALOG_RESULT_USER_CANCELED
@@ -366,6 +375,7 @@ end;
 
 function ps4_sceNpCommerceDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpCommerceDialogTerminate');
  status_commerce_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
  Result:=0;
 end;
@@ -418,6 +428,7 @@ const
 
 function ps4_sceSigninDialogOpen(param:pSceSigninDialogParam):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceSigninDialogOpen');
  Result:=0;
 end;
 

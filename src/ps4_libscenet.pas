@@ -117,6 +117,11 @@ begin
  Result:=0;
 end;
 
+procedure ps4_sceNetCtlTerm; SysV_ABI_CDecl;
+begin
+ //
+end;
+
 const
  SCE_NET_CTL_ERROR_NOT_INITIALIZED =-2143215359; // 0x80412101
  SCE_NET_CTL_ERROR_CALLBACK_MAX    =-2143215357; // 0x80412103
@@ -375,6 +380,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNetCtl');
  lib^.set_proc($824CB4FA868D3389,@ps4_sceNetCtlInit);
+ lib^.set_proc($678C3008588110B4,@ps4_sceNetCtlTerm);
  lib^.set_proc($B813E5AF495BBA22,@ps4_sceNetCtlGetState);
  lib^.set_proc($509F99ED0FB8724D,@ps4_sceNetCtlRegisterCallback);
  lib^.set_proc($890C378903E1BD44,@ps4_sceNetCtlCheckCallback);

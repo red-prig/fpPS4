@@ -266,7 +266,7 @@ function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
 begin
  if (Cb4Toolkit.callback<>nil) then
  begin
-  //Cb4Toolkit.callback(0,SCE_NP_STATE_SIGNED_OUT,Cb4Toolkit.userdata);
+  //Cb4Toolkit.callback(0,SCE_NP_STATE_SIGNED_OUT,nil,Cb4Toolkit.userdata);
  end;
  Result:=0;
 end;

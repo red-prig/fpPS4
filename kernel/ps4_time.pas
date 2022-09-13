@@ -118,32 +118,6 @@ begin
   Result:=t1-t2;
 end;
 
-function SwGetProcessTime(var ut:QWORD):Boolean;
-var
- ct,et,kt:TFileTime;
-begin
- QWORD(ct):=0;
- QWORD(et):=0;
- QWORD(kt):=0;
- ut:=0;
- _sig_lock;
- Result:=GetProcessTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
- _sig_unlock;
-end;
-
-function SwGetThreadTime(var ut:QWORD):Boolean;
-var
- ct,et,kt:TFileTime;
-begin
- QWORD(ct):=0;
- QWORD(et):=0;
- QWORD(kt):=0;
- ut:=0;
- _sig_lock;
- Result:=GetThreadTimes(GetCurrentProcess,ct,et,kt,TFileTime(ut));
- _sig_unlock;
-end;
-
 function ps4_gettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
 Var
  tp:timespec;
@@ -247,9 +221,7 @@ begin
  case clock_id of
   CLOCK_SECOND:
   begin
-   _sig_lock;
-   GetSystemTimeAsFileTime(TFILETIME(pc));
-   _sig_unlock;
+   SwGetSystemTimeAsFileTime(TFILETIME(pc));
    pc:=pc-DELTA_EPOCH_IN_100NS;
    tp^.tv_sec :=pc div POW10_7;
    //tp^.tv_nsec:=(QWORD(pc) mod POW10_7)*100;
@@ -260,9 +232,7 @@ begin
   CLOCK_REALTIME_PRECISE,
   CLOCK_REALTIME_FAST:
    begin
-    _sig_lock;
-    GetSystemTimeAsFileTime(TFILETIME(pc));
-    _sig_unlock;
+    SwGetSystemTimeAsFileTime(TFILETIME(pc));
     pc:=pc-DELTA_EPOCH_IN_100NS;
     tp^.tv_sec :=(pc div POW10_7);
     tp^.tv_nsec:=(pc mod POW10_7)*100;
