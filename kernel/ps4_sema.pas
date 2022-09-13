@@ -519,8 +519,8 @@ begin
    begin
     if (node^.Count>value) then
     begin
-     Dec(node^.Count,value);
-     value:=0;
+     //Dec(node^.Count,value);
+     //value:=0;
      Break;
     end else
     if (node^.Count<=value) then
@@ -624,10 +624,11 @@ function ps4_sceKernelCreateSema(
 var
  sv:SceKernelSema;
 begin
- if (sem=nil) or (max<=0) or (init<0) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (sem=nil) or (max<=0) or (init<0) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
  sv:=sem^;
  _sig_lock;
  Result:=px2sce(sem_impl_init(sem,@sv,max,init));
+ _set_sce_errno(Result);
  _sig_unlock;
  if (Result<>0) then Exit;
  if (name<>nil) then MoveChar0(name^,sv^.name,32);
@@ -637,6 +638,7 @@ function ps4_sceKernelDeleteSema(sem:SceKernelSema):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=px2sce(_sem_destroy(@sem));
+ _set_sce_errno(Result);
  _sig_unlock;
 end;
 
@@ -649,12 +651,14 @@ begin
  begin
   _sig_lock;
   Result:=px2sce(_sem_wait(@sem,Count,nil));
+  _set_sce_errno(Result);
   _sig_unlock;
  end else
  begin
   t:=_usec2nsec(pTimeout^);
   _sig_lock;
   Result:=px2sce(_sem_wait(@sem,Count,@t));
+  _set_sce_errno(Result);
   _sig_unlock;
   pTimeout^:=dwMilliSecs(_nsec2usec(t));
  end;
@@ -667,12 +671,14 @@ begin
  _sig_unlock;
  if (Result=EOVERFLOW) then Result:=EINVAL;
  Result:=px2sce(Result);
+ _set_sce_errno(Result);
 end;
 
 function ps4_sceKernelPollSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=px2sce(_sem_trywait(@sem,count));
+ _set_sce_errno(Result);
  _sig_unlock;
 end;
 
@@ -690,7 +696,7 @@ begin
  begin
   spin_unlock(sv^.vlock);
   sem_leave(sv);
-  Exit(SCE_KERNEL_ERROR_EINVAL);
+  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
  end;
 
  sv^.value:=setCount;
@@ -716,6 +722,8 @@ begin
 
  spin_unlock(sv^.vlock);
  sem_leave(sv);
+
+ _set_sce_errno(Result);
 end;
 
 
