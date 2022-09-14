@@ -29,6 +29,7 @@ uses
   SysUtils;
 
 function  ps4_sceKernelIsNeoMode:Integer; SysV_ABI_CDecl;
+function  ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
 
 implementation
 
