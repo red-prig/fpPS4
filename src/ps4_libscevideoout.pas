@@ -27,6 +27,12 @@ uses
   vMemory;
 
 type
+ pSceVideoOutStereoBuffers=^SceVideoOutStereoBuffers;
+ SceVideoOutStereoBuffers=packed record
+  left :Pointer;
+  right:Pointer;
+ end;
+
  PSceVideoOutBufferAttribute=^TSceVideoOutBufferAttribute;
  TSceVideoOutBufferAttribute=packed record
   format     ,
@@ -391,7 +397,7 @@ type
   //(MAIN port: 1 to 16, AUX port: 1 to 8)
   FBuffers:record
    lock:Pointer;
-   addr:array[0..15] of Pointer;
+   addr:array[0..15] of SceVideoOutStereoBuffers;
    attr:array[0..15] of TSceVideoOutBufferAttribute;
   end;
 
@@ -708,12 +714,14 @@ begin
  _sig_unlock;
 end;
 
+//
+
 function __sceVideoOutRegisterBuffers(hVideo:Integer;
-                                    index:Integer;
-                                    addr:PPointer;
-                                    num:Integer;
-                                    attr:PSceVideoOutBufferAttribute
-                                   ):Integer;
+                                      index:Integer;
+                                      addr:PPointer;
+                                      num:Integer;
+                                      attr:PSceVideoOutBufferAttribute
+                                     ):Integer;
 var
  H:TVideoOut;
  buf:TvPointer;
@@ -732,7 +740,7 @@ begin
  s:=index+num-1;
  For i:=index to s do
   begin
-   if (H.FBuffers.addr[i]<>nil) then
+   if (H.FBuffers.addr[i].left<>nil) then
    begin
     spin_unlock(H.FBuffers.lock);
     H.Release;
@@ -742,7 +750,8 @@ begin
 
  For i:=index to s do
   begin
-   H.FBuffers.addr[i]:=addr[i-index];
+   H.FBuffers.addr[i].left :=addr[i-index];
+   H.FBuffers.addr[i].right:=nil;
    H.FBuffers.attr[i]:=attr^;
   end;
 
@@ -753,12 +762,61 @@ begin
  Result:=0;
 end;
 
+
+function __sceVideoOutRegisterStereoBuffers(hVideo:Integer;
+                                            index:Integer;
+                                            buffers:pSceVideoOutStereoBuffers;
+                                            bufferNum:Integer;
+                                            attr:PSceVideoOutBufferAttribute
+                                           ):Integer;
+var
+ H:TVideoOut;
+ buf:TvPointer;
+ i,s:Integer;
+begin
+ For i:=0 to bufferNum-1 do
+  begin
+   if not TryGetHostPointerByAddr(buffers[i].left ,buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
+   if not TryGetHostPointerByAddr(buffers[i].right,buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
+  end;
+
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ spin_lock(H.FBuffers.lock);
+
+ s:=index+bufferNum-1;
+ For i:=index to s do
+  begin
+   if (H.FBuffers.addr[i].left<>nil) then
+   begin
+    spin_unlock(H.FBuffers.lock);
+    H.Release;
+    Exit(SCE_VIDEO_OUT_ERROR_SLOT_OCCUPIED);
+   end;
+  end;
+
+ For i:=index to s do
+  begin
+   H.FBuffers.addr[i]:=buffers[i-index];
+   H.FBuffers.attr[i]:=attr^;
+  end;
+
+ spin_unlock(H.FBuffers.lock);
+
+ H.Release;
+
+ Result:=0;
+end;
+
+//
+
 function ps4_sceVideoOutRegisterBuffers(hVideo:Integer;
-                                    index:Integer;
-                                    addr:PPointer;
-                                    num:Integer;
-                                    attr:PSceVideoOutBufferAttribute
-                                   ):Integer; SysV_ABI_CDecl;
+                                        index:Integer;
+                                        addr:PPointer;
+                                        num:Integer;
+                                        attr:PSceVideoOutBufferAttribute
+                                       ):Integer; SysV_ABI_CDecl;
 begin
 
  if (addr=nil) or (attr=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
@@ -768,7 +826,9 @@ begin
   else
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
  end;
+
  if (num<0) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+
  Case (index+num) of
   1..16:;
   else
@@ -794,8 +854,8 @@ begin
  end;
 
  if (attr^.aspect<>SCE_VIDEO_OUT_ASPECT_RATIO_16_9) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ASPECT_RATIO);
- if (attr^.width=0) or (attr^.height=0) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_RESOLUTION);
- if (attr^.pixelPitch=0) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_PITCH);
+ if (attr^.width=0) or (attr^.height=0)             then Exit(SCE_VIDEO_OUT_ERROR_INVALID_RESOLUTION);
+ if (attr^.pixelPitch=0)                            then Exit(SCE_VIDEO_OUT_ERROR_INVALID_PITCH);
 
  {Case attr^.option of
   SCE_VIDEO_OUT_BUFFER_ATTRIBUTE_OPTION_NONE              :;
@@ -807,11 +867,74 @@ begin
 
  _sig_lock;
  Result:=__sceVideoOutRegisterBuffers(hVideo,
-                                    index,
-                                    addr,
-                                    num,
-                                    attr);
+                                      index,
+                                      addr,
+                                      num,
+                                      attr);
  _sig_unlock;
+end;
+
+function ps4_sceVideoOutRegisterStereoBuffers(hVideo:Integer;
+                                              index:Integer;
+                                              buffers:pSceVideoOutStereoBuffers;
+                                              bufferNum:Integer;
+                                              attr:PSceVideoOutBufferAttribute
+                                             ):Integer; SysV_ABI_CDecl;
+begin
+
+  if (buffers=nil) or (attr=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+
+  Case index of
+   0..15:;
+   else
+    Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+  end;
+
+  if (bufferNum<0) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+
+  Case (index+bufferNum) of
+   1..16:;
+   else
+    Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+  end;
+
+  case attr^.format of
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB        :;
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A16R16G16B16_FLOAT   :;
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB        :;
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10          :;
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB     :;
+   SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ:;
+   else
+    Exit(SCE_VIDEO_OUT_ERROR_INVALID_PIXEL_FORMAT);
+  end;
+
+  Case attr^.tmode of
+   SCE_VIDEO_OUT_TILING_MODE_LINEAR:;
+   SCE_VIDEO_OUT_TILING_MODE_TILE:;
+   else
+    Exit(SCE_VIDEO_OUT_ERROR_INVALID_TILING_MODE);
+  end;
+
+  if (attr^.aspect<>SCE_VIDEO_OUT_ASPECT_RATIO_16_9) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ASPECT_RATIO);
+  if (attr^.width=0) or (attr^.height=0)             then Exit(SCE_VIDEO_OUT_ERROR_INVALID_RESOLUTION);
+  if (attr^.pixelPitch=0)                            then Exit(SCE_VIDEO_OUT_ERROR_INVALID_PITCH);
+
+  {Case attr^.option of
+   SCE_VIDEO_OUT_BUFFER_ATTRIBUTE_OPTION_NONE              :;
+   SCE_VIDEO_OUT_BUFFER_ATTRIBUTE_OPTION_VR                :;
+   SCE_VIDEO_OUT_BUFFER_ATTRIBUTE_OPTION_STRICT_COLORIMETRY:;
+   else
+    Exit(SCE_VIDEO_OUT_ERROR_INVALID_OPTION);
+  end;}
+
+  _sig_lock;
+  Result:= __sceVideoOutRegisterStereoBuffers(hVideo,
+                                              index,
+                                              buffers,
+                                              bufferNum,
+                                              attr);
+  _sig_unlock;
 end;
 
 function ps4_sceVideoOutColorSettingsSetGamma_(P:PSceVideoOutColorSettings;
@@ -1055,7 +1178,7 @@ begin
   begin
 
    spin_lock(FBuffers.lock);
-   addr:=FBuffers.addr[bufferIndex];
+   addr:=FBuffers.addr[bufferIndex].left;
    attr:=FBuffers.attr[bufferIndex];
    spin_unlock(FBuffers.lock);
 
@@ -1585,6 +1708,16 @@ function ps4_sceVideoOutConfigureOutputMode_(hVideo:Integer;
 var
  H:TVideoOut;
 begin
+ if (pMode=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+ if (sizeOfMode<SizeOf(SceVideoOutMode)) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+
+ Case pMode^.resolution of
+  SCE_VIDEO_OUT_RESOLUTION_720P_S3D_FRAME_PACKING,
+  SCE_VIDEO_OUT_RESOLUTION_1080P_VR_VIEW         ,
+  SCE_VIDEO_OUT_RESOLUTION_ANY_S3D               ,
+  SCE_VIDEO_OUT_RESOLUTION_ANY_VR_VIEW           :Exit(SCE_VIDEO_OUT_ERROR_UNSUPPORTED_OUTPUT_MODE);
+ end;
+
  _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
  _sig_unlock;
@@ -1603,8 +1736,8 @@ function ps4_sceVideoOutGetDeviceCapabilityInfo_(hVideo:Integer;
 var
  H:TVideoOut;
 begin
- if (pInfo=nil) or (sizeOfInfo<SizeOf(SceVideoOutDeviceCapabilityInfo)) then
-  Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+ if (pInfo=nil)then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
+ if (sizeOfInfo<SizeOf(SceVideoOutDeviceCapabilityInfo)) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
 
  _sig_lock;
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
@@ -1637,6 +1770,7 @@ begin
  lib^.set_proc($5EBBBDDB01C94668,@ps4_sceVideoOutAddVblankEvent);
  lib^.set_proc($8BAFEC47DD56B7FE,@ps4_sceVideoOutSetBufferAttribute);
  lib^.set_proc($C37058FAD0048906,@ps4_sceVideoOutRegisterBuffers);
+ lib^.set_proc($9424C23A88116E4D,@ps4_sceVideoOutRegisterStereoBuffers);
  lib^.set_proc($0D886159B2527918,@ps4_sceVideoOutColorSettingsSetGamma_);
  lib^.set_proc($A6FF42239542F91D,@ps4_sceVideoOutAdjustColor_);
  lib^.set_proc($EA43E78F9D53EB66,@ps4_sceVideoOutGetResolutionStatus);
