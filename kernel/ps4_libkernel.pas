@@ -28,6 +28,9 @@ uses
   Classes,
   SysUtils;
 
+function  ps4___error:Pointer; SysV_ABI_CDecl;
+function  ps4_sceKernelError(i:Integer):Integer; SysV_ABI_CDecl;
+
 function  ps4_sceKernelIsNeoMode:Integer; SysV_ABI_CDecl;
 function  ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
 
@@ -1010,6 +1013,11 @@ begin
  lib^.set_proc($B26223EDEAB3644F,@ps4_clock_getres);
  lib^.set_proc($94B313F6F240724D,@ps4_clock_gettime);
  lib^.set_proc($7A37A471A35036AD,@ps4_sceKernelGettimeofday);
+
+ lib^.set_proc($77B9D48F52CE7435,@ps4_clock_settime);
+ lib^.set_proc($55D5C80C06C9DED4,@ps4_settimeofday);
+ lib^.set_proc($0A108E0A13D4FD83,@ps4_sceKernelSettimeofday);
+
  lib^.set_proc($D63DD2DE7FED4D6E,@ps4_sceKernelGetTscFrequency);
  lib^.set_proc($FF62115023BFFCF3,@ps4_sceKernelReadTsc);
  lib^.set_proc($4018BB1C22B4DE1C,@ps4_sceKernelClockGettime);

@@ -37,6 +37,11 @@ function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
+
+function ps4_clock_settime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
+function ps4_settimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelSettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelGetTscFrequency():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelReadTsc():QWORD; SysV_ABI_CDecl;
 function ps4_sceKernelClockGettime(clockId:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
@@ -142,6 +147,21 @@ begin
  end;
 end;
 
+function ps4_clock_settime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(EPERM);
+end;
+
+function ps4_settimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(EPERM);
+end;
+
+function ps4_sceKernelSettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(px2sce(EPERM));
+end;
+
 function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 var
  pc,pf:QWORD;
@@ -149,7 +169,8 @@ var
  TimeAdjustmentDisabled:BOOL;
 begin
  if (tp=nil) then Exit(_set_errno(EINVAL));
- Result:=0;
+
+ Result:=_set_errno(0);
 
  case clock_id of
   CLOCK_SECOND:
@@ -207,16 +228,13 @@ begin
 
 end;
 
-//var
-// old_tp:timespec;
-
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 var
  pc,pf:QWORD;
 begin
-
  if (tp=nil) then Exit(_set_errno(EINVAL));
- Result:=0;
+
+ Result:=_set_errno(0);
 
  case clock_id of
   CLOCK_SECOND:
