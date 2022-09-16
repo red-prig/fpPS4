@@ -307,8 +307,8 @@ _next2:
      repeat
       days := uVar2;
       year := year + 1;
-      uVar2 := days - MonthDays[leap][ms1];
-     until not (MonthDays[leap][ms1] <= days);
+      uVar2 := days - MonthDays[leap][ms1+1];
+     until not (MonthDays[leap][ms1+1] <= days);
      pTime^.month := Word(year);
      pTime^.day := Word(days) + 1;
      Exit(0);
@@ -628,18 +628,26 @@ var
  leap:Boolean;
 begin
  if (year<=0)  then Exit(-$7f4afff8);
+ if (month<=0) then Exit(-$7f4afff7);
  if (month>12) then Exit(-$7f4afff7);
 
  leap:=leap_year(year);
- Result:=MonthDays[leap][month-1];
+ Result:=MonthDays[leap][month];
+end;
+
+function int64_mul_high(a,b:Int64):Int64; assembler; nostackframe;
+asm
+ mov  a,%rax
+ imul b
+ mov  %rdx,Result
 end;
 
 function ps4_sceRtcGetDayOfWeek(year,month,day:Integer):Integer; SysV_ABI_CDecl;
 var
  month_m1:DWORD;
- lVar2:QWORD;
- lVar3:QWORD;
- lVar4:QWORD;
+
+ v10,v11:Int64;
+
  days:Byte;
  leap:Boolean;
 begin
@@ -647,9 +655,11 @@ begin
  if (SDK_VERSION < $3000000) then
  begin
   if (year<1)    then Exit(-$7f4afff8);
+  if (month<=0)  then Exit(-$7f4afff7);
   if (month>12)  then Exit(-$7f4afff7);
  end else
  begin
+  if (month<=0)  then Exit(-$7f4afff7);
   if (month>12)  then Exit(-$7f4afff7);
   if (year<1)    then Exit(-$7f4afff8);
   if (year>9999) then Exit(-$7f4afff8);
@@ -658,47 +668,30 @@ begin
  month_m1:=month-1;
 
  leap:=leap_year(year);
- days:=MonthDays[leap][month_m1];
+ days:=MonthDays[leap][month];
 
  if ((day <= 0) or (day > days)) then Exit(-$7f4afff6);
 
  if (month_m1<2) then
  begin
-  month:=month+$c;
+  month:=month+12;
  end;
 
+ v10 := Integer(year - int32(month_m1 < 2));
 
- lVar3 := (year - Integer(month_m1 < 2));
+ v11 := int64_mul_high($5C28F5C28F5C28F5 , v10) - v10;
 
- //
+ v11 := (v11 shr $3F) + SarInt64(v11 , 6);
+
+ v10 := v10 + (v10 div 4) + (v10 div 400);
+
+ Result := Integer( (13 * month + 8) div 5
+                     + v10
+                     + v11
+                     + day)
+                    mod 7;
+
 end;
-
-{
-ecx: = rsi + 0xc; //month+$c
-
-r9_7  := int64(edi);
-
-rdi_6 := (r9 * 0x5c28f5c28f5c28f5) - r9;
-
-rdx_5 := (r9 * 0xa3d70a3d70a3d70b) + r9;
-
-rax_4 := int64((esi * 0xd) + 8) * 0x66666667;
-
-rcx_3 := int64(r8d) + r9 +
-         ( ( (( r9 >> 0x3f ) >> 0x3e) + r9) >> 2) +
-         ( (rdi_6 >> 6) + (rdi_6 >> 0x3f) ) +
-         (rdx_5 >> 8) +
-         (rdx_5 >> 0x3f) +
-         int64(Int32( int64(Int32(rax_4 >> 0x21)) +
-         int64(Int32( rax_4 >> 0x3f )) ));
-
-rdx_2 := rcx_3 * (0x4924924924924925);
-
-rdx_1 := rdx_2 >> 1;
-
-ret   := Int32(rcx_3) - (Int32(rdx_1*8) - ( Int32(rdx_1) + Int32( rdx_2 >> 0x3f )));
-}
-
 
 function ps4_sceRtcCheckValid(pTime:pSceRtcDateTime):Integer; SysV_ABI_CDecl;
 var
@@ -709,7 +702,9 @@ begin
  year:=pTime^.year;
  leap:=leap_year(year);
  if (year>9999)                                then Exit(-$7f4afff8);
+ if (pTime^.month<=0)                          then Exit(-$7f4afff7);
  if (pTime^.month>12)                          then Exit(-$7f4afff7);
+ if (pTime^.day<=0)                            then Exit(-$7f4afff6);
  if (pTime^.day>MonthDays[leap][pTime^.month]) then Exit(-$7f4afff6);
  if (pTime^.hour>=24)                          then Exit(-$7f4afff5);
  if (pTime^.minute>=60)                        then Exit(-$7f4afff4);
@@ -728,10 +723,8 @@ begin
  end;
 end;
 
-//TODO
 
-//nop nid:libSceRtc:CCEF542F7A8820D4:sceRtcGetCurrentNetworkTick
-//nop nid:libSceRtc:D7C076352D72F545:sceRtcGetCurrentTick
+
 
 function Load_libSceRtc(Const name:RawByteString):TElf_node;
 var
@@ -752,7 +745,6 @@ begin
 end;
 
 initialization
- ps4_sceRtcGetDayOfWeek(2022,6,1);
  //ps4_app.RegistredPreLoad('libSceRtc.prx',@Load_libSceRtc);
 
 end.
