@@ -12,7 +12,29 @@ uses
   Classes,
   SysUtils;
 
-implementation
+const
+ SCE_RTC_ERROR_NOT_INITIALIZED    =$80B50001;
+ SCE_RTC_ERROR_INVALID_POINTER    =$80B50002;
+ SCE_RTC_ERROR_INVALID_VALUE      =$80B50003;
+ SCE_RTC_ERROR_INVALID_ARG        =$80B50004;
+ SCE_RTC_ERROR_NOT_SUPPORTED      =$80B50005;
+ SCE_RTC_ERROR_NO_CLOCK           =$80B50006;
+ SCE_RTC_ERROR_BAD_PARSE          =$80B50007;
+ SCE_RTC_ERROR_INVALID_YEAR       =$80B50008;
+ SCE_RTC_ERROR_INVALID_MONTH      =$80B50009;
+ SCE_RTC_ERROR_INVALID_DAY        =$80B5000A;
+ SCE_RTC_ERROR_INVALID_HOUR       =$80B5000B;
+ SCE_RTC_ERROR_INVALID_MINUTE     =$80B5000C;
+ SCE_RTC_ERROR_INVALID_SECOND     =$80B5000D;
+ SCE_RTC_ERROR_INVALID_MICROSECOND=$80B5000E;
+
+ SCE_RTC_DAYOFWEEK_SUNDAY   =0;
+ SCE_RTC_DAYOFWEEK_MONDAY   =1;
+ SCE_RTC_DAYOFWEEK_TUESDAY  =2;
+ SCE_RTC_DAYOFWEEK_WEDNESDAY=3;
+ SCE_RTC_DAYOFWEEK_THURSDAY =4;
+ SCE_RTC_DAYOFWEEK_FRIDAY   =5;
+ SCE_RTC_DAYOFWEEK_SATURDAY =6;
 
 type
  pSceRtcDateTime=^SceRtcDateTime;
@@ -25,6 +47,8 @@ type
   second:Word;
   microsecond:QWORD;
  end;
+
+implementation
 
 var
  SDK_VERSION:DWORD;
@@ -124,6 +148,28 @@ begin
  end;
 end;
 
+function _sceRtcCheckValid(pTime:pSceRtcDateTime):Integer; inline;
+var
+ year:WORD;
+ leap:Boolean;
+begin
+ if (pTime=nil) then Exit(-$7f4afffe);
+
+ year:=pTime^.year;
+
+ if (year=0) or (year>9999)                    then Exit(-$7f4afff8);
+ if (pTime^.month=0) or (pTime^.month>12)      then Exit(-$7f4afff7);
+ if (pTime^.day=0)                             then Exit(-$7f4afff6);
+
+ leap:=leap_year(year);
+ if (pTime^.day>MonthDays[leap][pTime^.month]) then Exit(-$7f4afff6);
+ if (pTime^.hour>=24)                          then Exit(-$7f4afff5);
+ if (pTime^.minute>=60)                        then Exit(-$7f4afff4);
+ if (pTime^.second>=60)                        then Exit(-$7f4afff3);
+ if (pTime^.microsecond>=1000000)              then Exit(-$7f4afff2);
+ Result:=0;
+end;
+
 //
 
 function ps4_sceRtcTickAddTicks(pTick0,pTick1:PQWORD;lAdd:Int64):Integer; SysV_ABI_CDecl;
@@ -190,9 +236,6 @@ begin
  Result:=0;
 end;
 
-//TODO sceRtcTickAddMonths
-//TODO sceRtcTickAddYears
-
 //
 
 function ps4_sceRtcSetConf(param_1,param_2:QWORD;tz_minuteswest,tz_dsttime:Integer):Integer; SysV_ABI_CDecl;
@@ -230,104 +273,85 @@ begin
 end;
 
 function ps4_sceRtcSetTick(pTime:pSceRtcDateTime;pTick:PQWORD):Integer; SysV_ABI_CDecl;
-label
- _skip,_next1,_next2;
 var
- iVar1:Integer;
- uVar2:DWORD;
- year:DWORD;
- days:DWORD;
- ms1:QWORD;
- iVar3:Integer;
- sec:QWORD;
- min:Word;
- ms2:QWORD;
- leap:Boolean;
+ ly,ld,lm,j:cardinal;
+ days:qword;
+ msec:qword;
 begin
  if (pTime=nil) or (pTick=nil) then Exit(-$7f4afffe);
 
- sec := pTick^ div 86400000000;
- ms1 := pTick^ mod 86400000000;
- ms2 := ms1 div 1000000;
- pTime^.microsecond := Integer(ms1) + (Integer(ms2) * -1000000);
- min := Word(ms2 div $3c);
- pTime^.second := Word(ms1 div 1000000) + (min * -$3c);
- year := 1;
- pTime^.minute := min + Word((ms2 div $3c) div $3c) * -$3c;
- pTime^.hour := Word(ms2 div $e10) -
-               (Word((ms2 div $e10) div $18) * 8 +
-               (Word((ms2 div $e10) * $aaaaaaab shr $20) and $fff0));
- if (DWORD(sec) > $23ab0) then
+ days:=pTick^ div (3600000*1000*24);
+ msec:=pTick^ mod (3600000*1000*24);
+
+ days:=days+307;
+
+ j := pred(days SHL 2);
+ ly:= j DIV 146097;
+ j:= j - 146097 * cardinal(ly);
+ ld := j SHR 2;
+ j:=(ld SHL 2 + 3) DIV 1461;
+ ld:= (cardinal(ld) SHL 2 + 7 - 1461*j) SHR 2;
+ lm:=(5 * ld-3) DIV 153;
+ ld:= (5 * ld +2 - 153*lm) DIV 5;
+ ly:= 100 * cardinal(ly) + j;
+ if lm < 10 then
  begin
-  iVar1 := Integer(sec div $23ab1);
-  year  := iVar1 * 400 or 1;
-  sec   := QWORD(iVar1 * -$23ab1 + DWORD(sec));
- end;
- uVar2 := DWORD(sec);
- if (uVar2 > $8eab) then
+  inc(lm,3);
+ end else
  begin
-  iVar1 := Integer((sec shr 2) div $23ab);
-  iVar3 := iVar1 * 100;
-  uVar2 := iVar1 * -$8eac + uVar2;
-  if (uVar2 = 0) then
-  begin
-   year := iVar3 + -1 + year;
-   uVar2 := $16d;
-   goto _skip;
-  end;
-  year := iVar3 + year;
- end;
- if ($5b4 < uVar2) then
- begin
-  year := year + (uVar2 div $5b5) * 4;
-  uVar2 := uVar2 mod $5b5;
+  dec(lm,9);
+  inc(ly);
  end;
 
-_skip:
+ pTime^.year :=ly;
+ pTime^.month:=lm;
+ pTime^.day  :=ld;
 
- repeat
-   days := year mod 400;
-   if (((Integer(year) < 1) or (days = 0)) or (((year <> (year div 100) * 100) and ((year and 3) = 0)))) then
-   begin
-    iVar1 := -$16e;
-    if (uVar2 < $16e) then
-    begin
-     pTime^.year := Word(year);
-     if (Integer(year) > 0) then
-     begin
-      leap:=True;
-      if (days <> 0) then
-      begin
-_next1:
-       leap:=leap_year(Word(year));
-      end;
-     end;
-_next2:
-     year := 0;
-     repeat
-      days := uVar2;
-      year := year + 1;
-      uVar2 := days - MonthDays[leap][ms1+1];
-     until not (MonthDays[leap][ms1+1] <= days);
-     pTime^.month := Word(year);
-     pTime^.day := Word(days) + 1;
-     Exit(0);
-    end;
-   end else
-   begin
-    iVar1 := -$16d;
-    if (uVar2 < $16d) then
-    begin
-     pTime^.year := Word(year);
-     if (days <> 0) then goto _next1;
-     leap := True;
-     goto _next2;
-    end;
-   end;
-   uVar2 := uVar2 + iVar1;
-   year := year + 1;
- until false;
+ pTime^.Hour   := msec div (3600000*1000);
+ msec := msec mod (3600000*1000);
+ pTime^.Minute := msec div (60000*1000);
+ msec := msec mod (60000*1000);
+ pTime^.Second := msec div (1000*1000);
+ msec := msec mod (1000*1000);
+ pTime^.microsecond := msec;
+end;
 
+function _sceRtcGetTick(pTime:pSceRtcDateTime;pTick:PQWORD):Integer;
+var
+ c,ya:cardinal;
+ days:qword;
+ msec:qword;
+begin
+ Result:=0;
+ if (pTime^.month>2) then
+ begin
+  Dec(pTime^.month,3);
+ end else
+ begin
+  Inc(pTime^.month,9);
+  Dec(pTime^.Year);
+ end;
+ c:= pTime^.Year DIV 100;
+ ya:=pTime^.Year - 100*c;
+
+ days:=(146097*c) SHR 2 + (1461*ya) SHR 2 + (153*cardinal(pTime^.Month)+2) DIV 5 + cardinal(pTime^.Day);
+ days:=days-307;
+ days:=days*(3600000*1000*24);
+
+ msec:=cardinal(pTime^.Hour)*(3600000*1000)+
+       cardinal(pTime^.minute)*(60000*1000)+
+       cardinal(pTime^.second)*(1000*1000)+
+       pTime^.microsecond;
+
+ pTick^:=days+msec;
+end;
+
+function ps4_sceRtcGetTick(pTime:pSceRtcDateTime;pTick:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pTick=nil) then Exit(-$7f4afffe);
+ Result:=_sceRtcCheckValid(pTime);
+ if (Result<>0) then Exit;
+ Result:=_sceRtcGetTick(pTime,pTick);
 end;
 
 function ps4_sceRtcGetCurrentClock(pTime:pSceRtcDateTime;iTimeZone:Integer):Integer; SysV_ABI_CDecl;
@@ -599,13 +623,6 @@ begin
  Result:=1000000;
 end;
 
-//TODO sceRtcParseDateTime
-//TODO sceRtcParseRFC3339
-//TODO sceRtcFormatRFC2822LocalTime
-//TODO sceRtcFormatRFC2822
-//TODO sceRtcFormatRFC3339LocalTime
-//TODO sceRtcFormatRFC3339
-
 function ps4_sceRtcIsLeapYear(year:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (year<1) then
@@ -694,23 +711,140 @@ begin
 end;
 
 function ps4_sceRtcCheckValid(pTime:pSceRtcDateTime):Integer; SysV_ABI_CDecl;
-var
- year:WORD;
- leap:Boolean;
 begin
- if (pTime=nil) then  Exit(-$7f4afffe);
- year:=pTime^.year;
- leap:=leap_year(year);
- if (year>9999)                                then Exit(-$7f4afff8);
- if (pTime^.month<=0)                          then Exit(-$7f4afff7);
- if (pTime^.month>12)                          then Exit(-$7f4afff7);
- if (pTime^.day<=0)                            then Exit(-$7f4afff6);
- if (pTime^.day>MonthDays[leap][pTime^.month]) then Exit(-$7f4afff6);
- if (pTime^.hour>=24)                          then Exit(-$7f4afff5);
- if (pTime^.minute>=60)                        then Exit(-$7f4afff4);
- if (pTime^.second>=60)                        then Exit(-$7f4afff3);
- if (pTime^.microsecond>=1000000)              then Exit(-$7f4afff2);
+ Result:=_sceRtcCheckValid(pTime);
+end;
+
+function ps4_sceRtcSetDosTime(pTime:pSceRtcDateTime;uiDosTime:DWORD):Integer; SysV_ABI_CDecl;
+var
+ days:Word;
+begin
+ if (pTime=nil) then Exit(-$7f4afffe);
+
+ pTime^.microsecond:= 0;
+ pTime^.second     := (uiDosTime shl 1) and $3e;
+ pTime^.minute     := (uiDosTime shr 5) and $3f;
+ pTime^.hour       := (uiDosTime and $f800) shr $b;
+
+ days := uiDosTime shr $10;
+
+ pTime^.day        := (days and $1f);
+ pTime^.month      := (days shr 5) and $f;
+ pTime^.year       := (days shr 9) + $7bc;
+
+ Result:=0
+end;
+
+function ps4_sceRtcGetDosTime(pTime:pSceRtcDateTime;puiDosTime:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ days:Word;
+ year:Word;
+ month:Word;
+begin
+ if (puiDosTime=nil) then Exit(-$7f4afffe);
+ Result:=_sceRtcCheckValid(pTime);
+ if (Result<>0) then Exit;
+
+ year := pTime^.year;
+
+ month := pTime^.month;
+
+ days := pTime^.day;
+
+ if (year < 1980) then
+ begin
+  puiDosTime^ := 0;
+ end else
+ begin
+  if (year < 2108) then
+  begin
+   puiDosTime^ := ((pTime^.second shr 1) and $1f) or
+                  ((pTime^.minute and $3f) shl 5) or
+                  ((pTime^.hour and $1f) shl $b) or
+                  (((month and $f) * $20 + $8800 + (year * $200) or (days and $1f)) shl $10);
+   Exit(0);
+  end;
+  puiDosTime^ := $ff9fbf7d;
+ end;
+ Result := -$7f4afff8;
+
+end;
+
+function ps4_sceRtcSetWin32FileTime(pTime:pSceRtcDateTime;ulWin32Time:QWORD):Integer; SysV_ABI_CDecl;
+var
+ tick:QWORD;
+begin
+ if (pTime=nil) then Exit(-$7f4afffe);
+
+ tick:=(ulWin32Time div 10) + $b36168b6a58000;
+ ps4_sceRtcSetTick(pTime,@tick);
+
  Result:=0;
+end;
+
+function ps4_sceRtcGetWin32FileTime(pTime:pSceRtcDateTime;pulWin32Time:PQWORD):Integer; SysV_ABI_CDecl;
+var
+ tick:qword;
+begin
+ if (pulWin32Time=nil) then Exit(-$7f4afffe);
+ Result:=_sceRtcCheckValid(pTime);
+ if (Result<>0) then Exit;
+
+ Result:=_sceRtcGetTick(pTime,@tick);
+
+ if (tick < $b36168b6a58000) then
+ begin
+  pulWin32Time^:=0;
+  Result:=(-Integer(pTime^.year<1601)*5)+(-$7f4afffd);
+ end else
+ begin
+  pulWin32Time^:=tick*10+-$701ce1722770000;
+ end;
+end;
+
+function ps4_sceRtcSetTime_t(pTime:pSceRtcDateTime;iTime:Int64):Integer; SysV_ABI_CDecl;
+var
+ tick:QWORD;
+begin
+ if (SDK_VERSION<$3000000) then
+ begin
+  iTime:=iTime and $ffffffff;
+ end else
+ if (iTime<0) then
+ begin
+  Exit(-$7f4afffd);
+ end;
+
+ if (pTime=nil) then
+ begin
+  Exit(-$7f4afffe);
+ end else
+ begin
+  tick:=iTime*1000000+$dcbffeff2bc000;
+  ps4_sceRtcSetTick(pTime,@tick);
+  Result:=0;
+ end;
+end;
+
+function ps4_sceRtcGetTime_t(pTime:pSceRtcDateTime;piTime:PInt64):Integer; SysV_ABI_CDecl;
+var
+ tick:QWORD;
+begin
+ if (piTime=nil) then Exit(-$7f4afffe);
+ Result:=_sceRtcCheckValid(pTime);
+ if (Result<>0) then Exit;
+
+ Result:=_sceRtcGetTick(pTime,@tick);
+
+ if (tick < $dcbffeff2bc000) then
+ begin
+  piTime^:=0;
+  Result :=(-Integer(pTime^.year<1970)*5)+(-$7f4afffd);
+ end else
+ begin
+  piTime^:=(tick+$ff23400100d44000) div 1000000;
+ end
+
 end;
 
 function ps4_sceRtcCompareTick(pTick0,pTick1:PQWORD):Integer; SysV_ABI_CDecl;
@@ -722,9 +856,6 @@ begin
   Result:=(-Integer(pTick1^<pTick0^)) and 1;
  end;
 end;
-
-
-
 
 function Load_libSceRtc(Const name:RawByteString):TElf_node;
 var
@@ -739,10 +870,54 @@ begin
  lib^.set_proc($2A90CCACF1EFB774,@ps4_module_stop);
  lib^.set_proc($2E5A1D08C0DB937A,@ps4_sceRtcInit);
  lib^.set_proc($F12963431EA90CFF,@ps4_sceRtcEnd);
-
+ lib^.set_proc($02A54CB2CAF9D917,@ps4_sceRtcTickAddTicks);
+ lib^.set_proc($5CF222C39F02F863,@ps4_sceRtcTickAddMicroseconds);
+ lib^.set_proc($D3B3B9DB91E0202B,@ps4_sceRtcTickAddSeconds);
+ lib^.set_proc($9A7FED7F84221739,@ps4_sceRtcTickAddMinutes);
+ lib^.set_proc($30373971DF077C20,@ps4_sceRtcTickAddHours);
+ lib^.set_proc($351D49D0DECBDB16,@ps4_sceRtcTickAddDays);
+ lib^.set_proc($808E2DD7DE1CD96F,@ps4_sceRtcTickAddWeeks);
+ lib^.set_proc($7C52E098D5290A18,@ps4_sceRtcSetConf);
+ lib^.set_proc($7787C72C21A663CD,@ps4_sceRtcSetCurrentTick);
+ lib^.set_proc($D7C076352D72F545,@ps4_sceRtcGetCurrentTick);
+ lib^.set_proc($B9E7A06BABF7194C,@ps4_sceRtcSetTick);
+ lib^.set_proc($F30FC7D7D8A9E3C2,@ps4_sceRtcGetTick);
+ lib^.set_proc($F257EF9D132AC043,@ps4_sceRtcGetCurrentClock);
+ lib^.set_proc($64F0F560E288F8AC,@ps4_sceRtcGetCurrentClockLocalTime);
+ lib^.set_proc($3354EF16CB7F8EB3,@ps4_sceRtcConvertUtcToLocalTime);
+ lib^.set_proc($F18AF5E37C849D1A,@ps4_sceRtcConvertLocalTimeToUtc);
+ lib^.set_proc($CCEF542F7A8820D4,@ps4_sceRtcGetCurrentNetworkTick);
+ lib^.set_proc($1D6C4739D6CCFCF8,@ps4_sceRtcGetCurrentRawNetworkTick);
+ lib^.set_proc($3ADD431378227FCE,@ps4_sceRtcGetCurrentDebugNetworkTick);
+ lib^.set_proc($2CDDD971BEF64347,@ps4_sceRtcGetCurrentAdNetworkTick);
+ lib^.set_proc($AA10C1B48A3E6AEC,@ps4_sceRtcSetCurrentNetworkTick);
+ lib^.set_proc($54B0D43CA9B0E4BF,@ps4_sceRtcSetCurrentDebugNetworkTick);
+ lib^.set_proc($B15DAD2BEC8E8415,@ps4_sceRtcSetCurrentAdNetworkTick);
+ lib^.set_proc($8CC370A98AF847F9,@ps4_sceRtcGetTickResolution);
+ lib^.set_proc($520F290B042F8747,@ps4_sceRtcIsLeapYear);
+ lib^.set_proc($DCEECB9FC02A275A,@ps4_sceRtcGetDaysInMonth);
+ lib^.set_proc($0B220AFE2E177604,@ps4_sceRtcGetDayOfWeek);
+ lib^.set_proc($94F10161D557D174,@ps4_sceRtcCheckValid);
+ lib^.set_proc($6983C27757028728,@ps4_sceRtcSetDosTime);
+ lib^.set_proc($13B011E28ECDCBB1,@ps4_sceRtcGetDosTime);
+ lib^.set_proc($9F92620095EC6DCB,@ps4_sceRtcSetWin32FileTime);
+ lib^.set_proc($8DF44ED2E4E3B730,@ps4_sceRtcGetWin32FileTime);
+ lib^.set_proc($6C311554FE1B4E34,@ps4_sceRtcSetTime_t);
+ lib^.set_proc($06DAA6A534571E09,@ps4_sceRtcGetTime_t);
+ lib^.set_proc($7CD699E036F31C01,@ps4_sceRtcCompareTick);
 
  ps4_module_start(0,nil);
 end;
+
+//TODO sceRtcTickAddMonths
+//TODO sceRtcTickAddYears
+
+//TODO sceRtcParseDateTime
+//TODO sceRtcParseRFC3339
+//TODO sceRtcFormatRFC2822LocalTime
+//TODO sceRtcFormatRFC2822
+//TODO sceRtcFormatRFC3339LocalTime
+//TODO sceRtcFormatRFC3339
 
 initialization
  //ps4_app.RegistredPreLoad('libSceRtc.prx',@Load_libSceRtc);
