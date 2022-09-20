@@ -13,7 +13,7 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
- //ps4_libSceRtc
+ ps4_libSceRtc,
  ps4_libSceNpSignaling,
  ps4_libSceNpMatching2,
  ps4_libSceRemoteplay,
@@ -306,6 +306,14 @@ begin
  begin
 
  Case Info^.lib^.strName of
+  'libSceVideoOut':;
+  'libSceSystemService':;
+  'libSceUserService':;
+  'libSceNetCtl':;
+  'libSceNpManager':;
+  'libSceNpManagerForToolkit':;
+  'libScePad':;
+  'libSceFios2':;
   'libSceGnmDriver':;
   'libSceAjm':;
   'libSceAudioOut':;
@@ -313,7 +321,16 @@ begin
   'libSceLibcInternal':;
   else
    Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
+    'scePthreadCondSignal':;
+    'scePthreadCondTimedwait':;
+    'scePthreadYield':;
+    'nanosleep':;
     'sceKernelGetProcessTimeCounter':;
+    'clock_gettime':;
+    'pthread_mutex_init':;
+    'sceKernelLseek':;
+    'scePthreadMutexDestroy':;
+    'sceKernelRead':;
     'sceKernelSignalSema':;
     'sceKernelWaitSema':;
     'scePthreadMutexInit':;
@@ -333,7 +350,7 @@ begin
     'sceKernelPread':;
     'sceKernelClose':;
     'sceDiscMapIsRequestOnHDD':;
-    'Unknow':;
+    //'Unknow':;
     'sceFiosIOFilterPsarcDearchiver':;
     'sceFiosFHReadSync':;
     'sceFiosFHTell':;
@@ -346,8 +363,6 @@ begin
     'scePthreadCondBroadcast':;
     'sceFiosFHCloseSync':;
     'sceKernelStat':;
-    'sceFiosFHOpenSync':;
-    'sceFiosFHGetSize':;
     'sceKernelOpen':;
     'sceKernelUsleep':;
     '_write':;
@@ -611,6 +626,16 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\SPELUNKY2\CUSA20601\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Desert.Child\CUSA12744\';
+ //ps4_app.app_file:='G:\Games\Desert.Child\CUSA12744\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Blackhole\CUSA06921\';
+ //ps4_app.app_file:='G:\Games\Blackhole\CUSA06921\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Spelunky\CUSA00491\';
+ //ps4_app.app_file:='G:\Games\Spelunky\CUSA00491\eboot.bin';
+
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;

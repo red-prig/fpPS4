@@ -306,6 +306,7 @@
       <Unit67>
         <Filename Value="src\ps4_libscegnmdriver.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceGnmDriver"/>
       </Unit67>
       <Unit68>
         <Filename Value="src\ps4_libscehttp.pas"/>
@@ -339,6 +340,7 @@
       <Unit75>
         <Filename Value="src\ps4_libscertc.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceRtc"/>
       </Unit75>
       <Unit76>
         <Filename Value="src\ps4_libscesavedata.pas"/>
@@ -351,6 +353,7 @@
       <Unit78>
         <Filename Value="src\ps4_libsceuserservice.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceUserService"/>
       </Unit78>
       <Unit79>
         <Filename Value="src\ps4_libscevideoout.pas"/>
@@ -373,6 +376,7 @@
       <Unit83>
         <Filename Value="src\audio\ps4_libsceaudioout.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAudioOut"/>
       </Unit83>
       <Unit84>
         <Filename Value="src\np\ps4_libscenpmanager.pas"/>

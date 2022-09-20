@@ -45,7 +45,7 @@ type
   hour  :Word;
   minute:Word;
   second:Word;
-  microsecond:QWORD;
+  microsecond:DWORD;
  end;
 
 implementation
@@ -94,6 +94,12 @@ var
 begin
  if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
 
+ if (lSub=0) then
+ begin
+  pTick0^:=pTick1^;
+  Exit(0);
+ end;
+
  t1:=pTick1^;
 
  if (lSub<0) then
@@ -115,6 +121,12 @@ var
  t1:QWORD;
 begin
  if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+
+ if (lAdd=0) then
+ begin
+  pTick0^:=pTick1^;
+  Exit(0);
+ end;
 
  ladd_mul:=lAdd*60000000;
 
@@ -388,11 +400,13 @@ begin
   tick := _tick + $dcbffeff2bc000;
 
   Result:=ps4_sceKernelConvertUtcToLocaltime(_tick div 1000000,@local_time,@tsec,nil);
+
   if (Result>=0) then
   begin
    ps4_sceRtcTickAddMinutes(@tick,@tick,(tsec.tz_dstsec + tsec.tz_secwest) div $3c);
    ps4_sceRtcSetTick(pTime,@tick);
   end;
+
  end;
 end;
 
@@ -857,6 +871,74 @@ begin
  end;
 end;
 
+function ps4_sceRtcTickAddMonths(pTick0,pTick1:PQWORD;iAdd:Integer):Integer; SysV_ABI_CDecl;
+var
+ Time:SceRtcDateTime;
+ TempMonth,S:Integer;
+begin
+ if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+
+ if (iAdd=0) then
+ begin
+  pTick0^:=pTick1^;
+  Exit(0);
+ end;
+
+ ps4_sceRtcSetTick(@Time,pTick1);
+
+ If (iAdd>=0) then
+ begin
+  s:=1
+ end else
+ begin
+  s:=-1;
+ end;
+
+ inc(Time.Year,(iAdd div 12));
+ TempMonth:=Time.Month+(iAdd mod 12)-1;
+
+ if (TempMonth>11) or
+    (TempMonth<0) then
+ begin
+  Dec(TempMonth,S*12);
+  Inc(Time.Year,S);
+ end;
+
+ Time.Month:=TempMonth+1;
+
+ If (Time.Day>MonthDays[leap_year(Time.Year)][Time.Month]) then
+ begin
+  Time.Day:=MonthDays[leap_year(Time.Year)][Time.Month];
+ end;
+
+ Result:=_sceRtcCheckValid(@Time);
+ if (Result<>0) then Exit;
+
+ Result:=_sceRtcGetTick(@Time,pTick0);
+end;
+
+function ps4_sceRtcTickAddYears(pTick0,pTick1:PQWORD;iAdd:Integer):Integer; SysV_ABI_CDecl;
+var
+ Time:SceRtcDateTime;
+begin
+ if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+
+ if (iAdd=0) then
+ begin
+  pTick0^:=pTick1^;
+  Exit(0);
+ end;
+
+ ps4_sceRtcSetTick(@Time,pTick1);
+
+ Inc(Time.Year,iAdd);
+
+ Result:=_sceRtcCheckValid(@Time);
+ if (Result<>0) then Exit;
+
+ Result:=_sceRtcGetTick(@Time,pTick0);
+end;
+
 function Load_libSceRtc(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -905,12 +987,11 @@ begin
  lib^.set_proc($6C311554FE1B4E34,@ps4_sceRtcSetTime_t);
  lib^.set_proc($06DAA6A534571E09,@ps4_sceRtcGetTime_t);
  lib^.set_proc($7CD699E036F31C01,@ps4_sceRtcCompareTick);
+ lib^.set_proc($08BEB2F6AFD76EE4,@ps4_sceRtcTickAddMonths);
+ lib^.set_proc($FF9CB6B89EB6A92F,@ps4_sceRtcTickAddYears);
 
  ps4_module_start(0,nil);
 end;
-
-//TODO sceRtcTickAddMonths
-//TODO sceRtcTickAddYears
 
 //TODO sceRtcParseDateTime
 //TODO sceRtcParseRFC3339
@@ -920,7 +1001,7 @@ end;
 //TODO sceRtcFormatRFC3339
 
 initialization
- //ps4_app.RegistredPreLoad('libSceRtc.prx',@Load_libSceRtc);
+ ps4_app.RegistredPreLoad('libSceRtc.prx',@Load_libSceRtc);
 
 end.
 
