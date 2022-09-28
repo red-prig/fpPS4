@@ -573,6 +573,9 @@ begin
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Undertale\CUSA09415\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Undertale\CUSA09415\eboot.bin';
 
+ //ps4_app.app_path:='G:\Games\Undertale\CUSA09415\';
+ //ps4_app.app_file:='G:\Games\Undertale\CUSA09415\eboot.bin';
+
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Cladun Returns This Is Sengoku v1.00\CUSA06770\eboot.bin';
 
@@ -636,6 +639,8 @@ begin
  //ps4_app.app_path:='G:\Games\Spelunky\CUSA00491\';
  //ps4_app.app_file:='G:\Games\Spelunky\CUSA00491\eboot.bin';
 
+ //ps4_app.app_path:='G:\Games\Mega Man Legacy Collection v1.00\CUSA02516\';
+ //ps4_app.app_file:='G:\Games\Mega Man Legacy Collection v1.00\CUSA02516\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
@@ -651,7 +656,7 @@ begin
  Stub.FinStub;
  ps4_app.InitProt;
 
- _pthread_run_entry(@main);
+ _pthread_run_entry(@main,GetSceUserMainThreadName,GetSceUserMainThreadStackSize);
 
  //ps4_app.InitCode;
  //elf.mapCodeEntry;
