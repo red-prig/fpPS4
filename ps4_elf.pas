@@ -83,6 +83,9 @@ type
   sceLibcStdThreadStackSize:PQWORD;
   Unknown3:QWORD;
   sceKernelInternalMemoryDebugFlags:PQWORD;
+  sceLibcWorkerThreadNum:PQWORD;
+  sceLibcWorkerThreadPriority:PQWORD;
+  sceLibcThreadUnnamedObjects:PQWORD;
  end;
 
  PSceKernelMemParam=^TSceKernelMemParam;
@@ -117,6 +120,7 @@ type
   _sceLibcParam     :PSceLibcParam;
   _sceKernelMemParam:PSceKernelMemParam;
   _sceKernelFsParam :PSceKernelFsParam;
+  sceProcessPreloadEnabled:PQWORD;
  end;
 
  Telf_file=class;
