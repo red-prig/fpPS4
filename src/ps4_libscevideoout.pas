@@ -1018,7 +1018,6 @@ Const
 var
  H:TVideoOut;
 begin
- Writeln('sceVideoOutSetFlipRate:',rate);
  case rate of
   0..2:
     begin
@@ -1026,9 +1025,14 @@ begin
      H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
      _sig_unlock;
      if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+     if (H.FlipRate<>rateTable[rate]) then
+     begin
+      Writeln('sceVideoOutSetFlipRate:',rateTable[rate]);
+     end;
+
      H.FlipRate:=rateTable[rate];
      H.Release;
-     Writeln('Rate:',rateTable[rate]);
      Result:=0;
     end;
   else

@@ -167,7 +167,7 @@ const
 
 function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceSaveDataDialogGetResult');
+ //Writeln('sceSaveDataDialogGetResult');
  Result:=0;
 end;
 
@@ -303,7 +303,7 @@ type
 
 function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceMsgDialogGetResult');
+ //Writeln('sceMsgDialogGetResult');
  if (pResult<>nil) then
  begin
   pResult^.result:=0;
@@ -372,7 +372,7 @@ type
 
 function ps4_sceNpCommerceDialogGetResult(pResult:pSceNpCommerceDialogResult):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceNpCommerceDialogGetResult');
+ //Writeln('sceNpCommerceDialogGetResult');
  if (pResult<>nil) then
  begin
   pResult^.result:=1; //SCE_COMMON_DIALOG_RESULT_USER_CANCELED

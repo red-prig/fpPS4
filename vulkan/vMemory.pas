@@ -103,28 +103,6 @@ begin
  if (Result<>0) then Exit;
  //3 FBlockId
  Result:=Integer(a.FBlockId>b.FBlockId)-Integer(a.FBlockId<b.FBlockId);
- {
- if (a.FmType=b.FmType) then
- begin
-  if (a.FSize=b.FSize) then
-  begin
-   if (a.FBlockId=b.FBlockId) then
-    Result:=0
-   else
-   if (a.FBlockId<b.FBlockId) then
-    Result:=-1
-   else
-    Result:=1;
-  end else
-  if (a.FSize<b.FSize) then
-   Result:=-1
-  else
-   Result:=1;
- end else
- if (a.FmType<b.FmType) then
-  Result:=-1
- else
-  Result:=1;}
 end;
 
 //alloc: [FBlockId]|[FOffset]
@@ -133,23 +111,8 @@ begin
  //1 FBlockId
  Result:=Integer(a.FBlockId>b.FBlockId)-Integer(a.FBlockId<b.FBlockId);
  if (Result<>0) then Exit;
- //2 FBlockId
+ //2 FOffset
  Result:=Integer(a.FOffset>b.FOffset)-Integer(a.FOffset<b.FOffset);
- {
- if (a.FBlockId=b.FBlockId) then
- begin
-  if (a.FOffset=b.FOffset) then
-   Result:=0
-  else
-  if (a.FOffset<b.FOffset) then
-   Result:=-1
-  else
-   Result:=1;
- end else
- if (a.FBlockId<b.FBlockId) then
-  Result:=-1
- else
-  Result:=1;}
 end;
 
 const
@@ -398,7 +361,7 @@ end;
 //alloc: [FBlockId]|[FOffset]
 Function TvMemManager._FetchFree_l(key:TDevNode;var R:TDevNode):Boolean;
 var
- It:TFreeDevNodeSet.Iterator;
+ It:TAllcDevNodeSet.Iterator;
  key2:TDevNode;
 begin
  Result:=false;
@@ -417,7 +380,7 @@ end;
 //alloc: [FBlockId]|[FOffset]
 Function TvMemManager._FetchFree_b(key:TDevNode;var R:TDevNode):Boolean;
 var
- It:TFreeDevNodeSet.Iterator;
+ It:TAllcDevNodeSet.Iterator;
  key2:TDevNode;
 begin
  Result:=false;
