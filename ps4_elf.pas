@@ -67,25 +67,25 @@ type
  TSceLibcParam=packed record
   Size:QWORD;
   Unknown1:QWORD; //10000000c
-  sceLibcHeapSize:PQWORD;
-  sceLibcHeapDelayedAlloc:PQWORD;
-  sceLibcHeapExtendedAlloc:PQWORD;
-  sceLibcHeapInitialSize:PQWORD;
+  sceLibcHeapSize:PDWORD;
+  sceLibcHeapDelayedAlloc:PDWORD;
+  sceLibcHeapExtendedAlloc:PDWORD;
+  sceLibcHeapInitialSize:PDWORD;
   _sceLibcMallocReplace:PsceLibcMallocReplace;
   _sceLibcNewReplace:PsceLibcNewReplace;
   sceLibcHeapHighAddressAlloc:PQWORD;
-  Need_sceLibc:PQWORD;
+  Need_sceLibc:PDWORD;
   sceLibcHeapMemoryLock:PQWORD;
   sceKernelInternalMemorySize:PQWORD;
   _sceLibcMallocReplaceForTls:PsceLibcMallocReplaceForTls;
   Unknown2:QWORD;
   sceLibcHeapDebugFlags:PQWORD;
-  sceLibcStdThreadStackSize:PQWORD;
+  sceLibcStdThreadStackSize:PDWORD;
   Unknown3:QWORD;
-  sceKernelInternalMemoryDebugFlags:PQWORD;
-  sceLibcWorkerThreadNum:PQWORD;
-  sceLibcWorkerThreadPriority:PQWORD;
-  sceLibcThreadUnnamedObjects:PQWORD;
+  sceKernelInternalMemoryDebugFlags:PDWORD;
+  sceLibcWorkerThreadNum:PDWORD;
+  sceLibcWorkerThreadPriority:PDWORD;
+  sceLibcThreadUnnamedObjects:PDWORD;
  end;
 
  PSceKernelMemParam=^TSceKernelMemParam;
@@ -110,17 +110,17 @@ type
   Header:packed record
    Size:QWORD;        //0x50
    Magic:DWORD;       //"ORBI" //0x4942524F
-   Entry_count:DWORD;
+   Entry_count:DWORD; //>=1
    SDK_version:QWORD; //0x4508101
   end;
   sceProcessName:PChar;
   sceUserMainThreadName:PChar;
-  sceUserMainThreadPriority:PQWORD;
-  sceUserMainThreadStackSize:PQWORD;
+  sceUserMainThreadPriority:PDWORD;
+  sceUserMainThreadStackSize:PDWORD;
   _sceLibcParam     :PSceLibcParam;
   _sceKernelMemParam:PSceKernelMemParam;
   _sceKernelFsParam :PSceKernelFsParam;
-  sceProcessPreloadEnabled:PQWORD;
+  sceProcessPreloadEnabled:PDWORD;
  end;
 
  Telf_file=class;

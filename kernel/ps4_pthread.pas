@@ -89,7 +89,7 @@ function  ps4_pthread_key_delete(Key:pthread_key_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_getspecific(Key:pthread_key_t):Pointer; SysV_ABI_CDecl;
 function  ps4_pthread_setspecific(Key:pthread_key_t;value:Pointer):Integer; SysV_ABI_CDecl;
 
-function  _pthread_run_entry(pthread:p_pthread):Integer;
+function  _pthread_run_entry(pthread:p_pthread;name:Pchar;stack:PDWORD):Integer;
 
 implementation
 
@@ -400,14 +400,28 @@ end;
 
 const
  default_name:Pchar='main';
+ default_stack:Integer=DefaultStackSize;
 
-function _pthread_run_entry(pthread:p_pthread):Integer;
+function _pthread_run_entry(pthread:p_pthread;name:Pchar;stack:PDWORD):Integer;
 var
  attr:pthread_attr_t;
 begin
+ if (name=nil) then
+ begin
+  name:=default_name;
+ end;
+ if (stack=nil) then
+ begin
+  stack:=@default_stack;
+ end else
+ if (stack^<PTHREAD_STACK_MIN) then
+ begin
+  stack:=@default_stack;
+ end;
+
  ps4_pthread_attr_init(@attr);
- ps4_pthread_attr_setstacksize(@attr,DefaultStackSize);
- Result:=ps4_scePthreadCreate(pthread,@attr,@on_ps4_run_entry,nil,default_name);
+ ps4_pthread_attr_setstacksize(@attr,stack^);
+ Result:=ps4_scePthreadCreate(pthread,@attr,@on_ps4_run_entry,nil,name);
  ps4_pthread_attr_destroy(@attr);
 end;
 

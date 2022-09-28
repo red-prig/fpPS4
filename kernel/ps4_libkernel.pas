@@ -167,7 +167,7 @@ end;
 function ps4_sceKernelGetProcParam:Pointer; SysV_ABI_CDecl;
 begin
  Writeln('KernelGetProcParam');
- Result:=GetProcParam;
+ Result:=GetSceProcParam;
 end;
 
 type
@@ -245,7 +245,7 @@ var
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (sdkVersion=nil) then Exit;
- P:=GetProcParam;
+ P:=GetSceProcParam;
 
  if (P<>nil) then
  if (P^.Header.Size>$13) then

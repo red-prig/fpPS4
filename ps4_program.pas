@@ -173,7 +173,11 @@ Function  UnMountPath(path:PChar):Integer;
 
 function  _parse_filename(filename:PChar):RawByteString;
 
-function  GetProcParam:Pointer;
+function  GetSceProcParam:Pointer;
+function  GetSceUserMainThreadName:PChar;
+function  GetSceUserMainThreadPriority:PDWORD;
+function  GetSceUserMainThreadStackSize:PDWORD;
+
 Function  get_dev_progname:RawByteString;
 
 implementation
@@ -1501,7 +1505,7 @@ begin
  rwlock_unlock(lock);
 end;
 
-function GetProcParam:Pointer;
+function GetSceProcParam:Pointer;
 var
  elf:Telf_file;
 begin
@@ -1510,6 +1514,48 @@ begin
  if (elf=nil) then Exit;
  if (elf.pProcParam=0) then Exit;
  Result:=elf.mMap.pAddr+elf.pProcParam;
+end;
+
+function GetSceUserMainThreadName:PChar;
+var
+ p:PSceProcParam;
+begin
+ Result:=nil;
+ p:=GetSceProcParam;
+ if (p=nil) then Exit;
+
+ if (P^.Header.Size>=qword(@PSceProcParam(nil)^.sceUserMainThreadName)+SizeOf(Pointer)) then
+ begin
+  Result:=p^.sceUserMainThreadName;
+ end;
+end;
+
+function GetSceUserMainThreadPriority:PDWORD;
+var
+ p:PSceProcParam;
+begin
+ Result:=nil;
+ p:=GetSceProcParam;
+ if (p=nil) then Exit;
+
+ if (P^.Header.Size>=qword(@PSceProcParam(nil)^.SceUserMainThreadPriority)+SizeOf(Pointer)) then
+ begin
+  Result:=p^.SceUserMainThreadPriority;
+ end;
+end;
+
+function GetSceUserMainThreadStackSize:PDWORD;
+var
+ p:PSceProcParam;
+begin
+ Result:=nil;
+ p:=GetSceProcParam;
+ if (p=nil) then Exit;
+
+ if (P^.Header.Size>=qword(@PSceProcParam(nil)^.SceUserMainThreadStackSize)+SizeOf(Pointer)) then
+ begin
+  Result:=p^.SceUserMainThreadStackSize;
+ end;
 end;
 
 Function get_dev_progname:RawByteString;
