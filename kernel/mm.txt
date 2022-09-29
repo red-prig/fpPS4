@@ -1,0 +1,332 @@
+
+int sceKernelMapDirectMemory
+              (void **virtualAddrDest,qword length,int protections,int flags,qword physicalAddr,
+              qword alignment)
+
+{
+  int iVar1;
+  ulong in_stack_00000000;
+  
+  pthread_once((pthread_once_t *)&_mem_init_ctl,_mem_init);
+  iVar1 = _sceKernelMapDirectMemory
+                    (_direct_pool_id,virtualAddrDest,length,protections,flags,physicalAddr,alignment
+                     ,in_stack_00000000);
+  return iVar1;
+}
+
+int _sceKernelMapDirectMemory
+              (uint pool_id,void **virtualAddrDest,qword length,int protections,int flags,
+              qword physicalAddr,qword alignment,ulong param_8)
+
+{
+  int last;
+  int *perror;
+  uint _flags;
+  dword *poffset;
+  void *adr;
+  qword align;
+  int ret1;
+  uint _len;
+  
+  pthread_once((pthread_once_t *)&_mem_init_ctl,_mem_init);
+  ret1 = L'\x80020016';
+  if (pool_id < 3) {
+    adr = *virtualAddrDest;
+    if ((((_direct_pool_id == 1) && ((DAT_01084c7c & 2) == 0)) &&
+        (((long)physicalAddr < 0x3000000000 || (0x301fffffff < physicalAddr)))) &&
+       (((flags & 0x400U) == 0 && (0x24fffff < DAT_01059790)))) {
+      ret1 = sceKernelMapDirectMemory2
+                       (virtualAddrDest,length,-1,protections,flags,physicalAddr,alignment);
+      return ret1;
+    }
+    if (((((flags & 0xff9ffb6fU) == 0) && ((protections & 0xffffffc8U) == 0)) &&
+        (_len = (uint)length,
+        (((uint)adr | (uint)alignment | (uint)physicalAddr | _len) & 0x3fff) == 0)) &&
+       ((~-alignment & alignment) == 0)) {
+      _flags = flags & 0xfffffbff;
+      if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
+        if (0x16fffff < DAT_01059790) {
+          return L'\x80020016';
+        }
+        _flags = flags & 0xfffffbef;
+        puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
+      }
+      if (adr == (void *)0x0) {
+        if (param_8 >> 0x1e == 0x20) {
+          adr = (void *)0x880000000;
+        }
+        else {
+          adr = (void *)((ulong)((DAT_01084c7c & 2) == 0) << 0x21);
+        }
+      }
+      align = 0x4000;
+      if (0x4000 < alignment) {
+        align = alignment;
+      }
+      last = flsl(align);
+      if (last + -1 < 31) {
+        poffset = &DAT_01059578;
+        if (0x301fffffff < physicalAddr) {
+          poffset = DWORD_ARRAY_01059570 + (int)pool_id;
+        }
+        if ((long)physicalAddr < 0x3000000000) {
+          poffset = DWORD_ARRAY_01059570 + (int)pool_id;
+        }
+        adr = mmap(adr,length,protections,_flags | (last + -1) * 0x1000000 | MAP_SHARED,*poffset,physicalAddr);
+        if (adr == MAP_FAILED) {
+          perror = (int *)__error();
+          last = *perror;
+          ret1 = last + -0x7ffe0000;
+          if (last == 0) {
+            ret1 = last;
+          }
+        }
+        else {
+          *virtualAddrDest = adr;
+          ret1 = 0;
+        }
+      }
+    }
+  }
+  return ret1;
+}
+
+int sceKernelMapDirectMemory2
+              (void **virtualAddrDest,qword length,int memoryType,int protections,int flags,
+              qword physicalAddr,qword alignment)
+
+{
+  int last;
+  void *adr;
+  int *perror;
+  int ret1;
+  qword align;
+  
+  pthread_once((pthread_once_t *)&_mem_init_ctl,_mem_init);
+  ret1 = L'\x8002002d';
+  if ((((_direct_pool_id == 1) && ((DAT_01084c7c & 2) == 0)) &&
+      (ret1 = -0x7ffdffea, (flags & 0x1f000000U) == 0)) &&
+     (((alignment & 0x3fff) == 0 && ((~-alignment & alignment) == 0)))) {
+    align = 0x4000;
+    if (0x4000 < alignment) {
+      align = alignment;
+    }
+    last = flsl(align);
+    if (last + -1 < 31) {
+      adr = (void *)sys_mmap_dmem(*virtualAddrDest,length,memoryType,protections,
+                                  (last + -1) * 0x1000000 | flags,physicalAddr);
+      if (adr == MAP_FAILED) {
+        perror = (int *)__error();
+        last = *perror;
+        ret1 = last + -0x7ffe0000;
+        if (last == 0) {
+          ret1 = last;
+        }
+      }
+      else {
+        *virtualAddrDest = adr;
+        ret1 = 0;
+      }
+    }
+  }
+  return ret1;
+}
+
+int sceKernelMapFlexibleMemory(void **virtualAddrDest,qword length,int protections,int flags)
+
+{
+  int iVar1;
+  undefined in_stack_00000000;
+  undefined7 in_stack_00000001;
+  
+  iVar1 = _sceKernelMapFlexibleMemory
+                    (virtualAddrDest,length,protections,flags,
+                     CONCAT71(in_stack_00000001,in_stack_00000000));
+  return iVar1;
+}
+
+int _sceKernelMapFlexibleMemory
+              (void **virtualAddrDest,qword length,int protections,int flags,ulong param)
+
+{
+  int *perror;
+  int ret1;
+  void *adr;
+  int err;
+  
+  ret1 = -0x7ffdffea;
+  if (((0x3fff < length) && ((length & 0x3fff) == 0)) &&
+     ((flags & 0xffbfff6fU | protections & 0xffffffc8U) == 0)) {
+    adr = *virtualAddrDest;
+    if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
+      if (0x16fffff < DAT_01059790) {
+        return L'\x80020016';
+      }
+      flags = flags & 0xffffffef;
+      puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
+    }
+    if (adr == (void *)0x0) {
+      if (param >> 0x1e == 0x20) {
+        adr = (void *)0x880000000;
+      }
+      else {
+        adr = (void *)((ulong)((DAT_01084c7c & 2) == 0) << 0x21);
+      }
+    }
+    adr = (void *)mmap(adr,length,protections,flags | MAP_ANON,-1,0);
+    if (adr == MAP_FAILED) {
+      perror = (int *)__error();
+      err = *perror;
+      ret1 = err + -0x7ffe0000;
+      if (err == 0) {
+        ret1 = err;
+      }
+    }
+    else {
+      *virtualAddrDest = adr;
+      ret1 = 0;
+    }
+  }
+  return ret1;
+}
+
+int sceKernelReserveVirtualRange(void **addr,size_t len,int flags,size_t alignment)
+
+{
+  int last;
+  int *perror;
+  size_t align;
+  int ret1;
+  void *adr;
+  
+  ret1 = -0x7ffdffea;
+  if ((((flags & 0xffbfff6fU) == 0) &&
+      (adr = *addr, (((uint)adr | (uint)alignment | (uint)len) & 0x3fff) == 0)) &&
+     ((~-alignment & alignment) == 0)) {
+    align = 0x4000;
+    if (0x4000 < alignment) {
+      align = alignment;
+    }
+    last = flsl(align);
+    if (last + -1 < 0x1f) {
+      if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
+        if (0x16fffff < DAT_01059790) {
+          return -0x7ffdffea;
+        }
+        flags = flags & 0xffffffef;
+        puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
+      }
+      adr = (void *)mmap(adr,len,0,(last + -1) * 0x1000000 | flags | MAP_VOID | MAP_SHARED,-1,0);
+      if (adr == MAP_FAILED) {
+        perror = (int *)__error();
+        last = *perror;
+        ret1 = last + -0x7ffe0000;
+        if (last == 0) {
+          ret1 = last;
+        }
+      }
+      else {
+        *addr = adr;
+        ret1 = 0;
+      }
+    }
+  }
+  return ret1;
+}
+
+int sceKernelMprotect(void *addr,size_t len,int prot)
+
+{
+  int ret1;
+  int *perror;
+  int err;
+  
+  ret1 = mprotect(addr,len,prot);
+  if (ret1 < 0) {
+    perror = (int *)__error();
+    err = *perror;
+    ret1 = err + -0x7ffe0000;
+    if (err == 0) {
+      ret1 = err;
+    }
+  }
+  return ret1;
+}
+
+int sceKernelMsync(void *addr,size_t len,int flags)
+
+{
+  int ret1;
+  int *perror;
+  int err;
+  
+  ret1 = msync(addr,len,flags);
+  if (ret1 < 0) {
+    perror = (int *)__error();
+    err = *perror;
+    ret1 = err + -0x7ffe0000;
+    if (err == 0) {
+      ret1 = err;
+    }
+  }
+  return ret1;
+}
+
+int sceKernelMmap(void *addr,size_t len,int prot,int flags,int fd,size_t offset,void **res)
+
+{
+  int iVar1;
+  int err;
+  void *adr;
+  int *perror;
+  
+  adr = mmap(addr,len,prot,flags,fd,offset);
+  if (adr != MAP_FAILED) {
+    *res = adr;
+    return 0;
+  }
+  perror = (int *)__error();
+  iVar1 = *perror;
+  err = iVar1 + -0x7ffe0000;
+  if (iVar1 == 0) {
+    err = iVar1;
+  }
+  return err;
+}
+
+int sceKernelMunmap(void *addr,size_t len)
+
+{
+  int ret1;
+  int *perror;
+  int err;
+  
+  ret1 = munmap(addr,len);
+  if (ret1 < 0) {
+    perror = (int *)__error();
+    err = *perror;
+    ret1 = err + -0x7ffe0000;
+    if (err == 0) {
+      ret1 = err;
+    }
+  }
+  return ret1;
+}
+
+int sceKernelReleaseFlexibleMemory(void *addr,size_t len)
+
+{
+  int ret2;
+  int ret1;
+  
+  ret1 = -0x7ffdffea;
+  if ((((uint)addr | (uint)len) & 0x3fff) == 0) {
+    ret2 = madvise(addr,len,MADV_FREE);
+    ret1 = -0x7ffdffea;
+    if (ret2 != -1) {
+      ret1 = 0;
+    }
+  }
+  return ret1;
+}
+

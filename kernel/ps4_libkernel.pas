@@ -975,9 +975,14 @@ begin
  //mmap
 
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
+ lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
+ lib^.set_proc($07EBDCD803B666B7,@ps4_sceKernelAllocateMainDirectMemory);
  lib^.set_proc($0B47FB4C971B7DA7,@ps4_sceKernelAvailableDirectMemorySize);
  lib^.set_proc($047A2E2D0CE1D17D,@ps4_sceKernelDirectMemoryQuery);
- lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
+ lib^.set_proc($042F8E1B99BDF9BC,@ps4_sceKernelGetDirectMemoryType);
+ lib^.set_proc($8705523C29A9E6D3,@ps4_sceKernelCheckedReleaseDirectMemory);
+ lib^.set_proc($301B88B6F6DAEB3F,@ps4_sceKernelReleaseDirectMemory);
+
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
  lib^.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
  lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);

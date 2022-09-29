@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="91">
+    <Units Count="92">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -324,6 +324,7 @@
       <Unit71>
         <Filename Value="src\ps4_libscenet.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNet"/>
       </Unit71>
       <Unit72>
         <Filename Value="src\ps4_libscepad.pas"/>
@@ -345,10 +346,12 @@
       <Unit76>
         <Filename Value="src\ps4_libscesavedata.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSaveData"/>
       </Unit76>
       <Unit77>
         <Filename Value="src\ps4_libscesystemservice.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSystemService"/>
       </Unit77>
       <Unit78>
         <Filename Value="src\ps4_libsceuserservice.pas"/>
@@ -390,6 +393,7 @@
       <Unit86>
         <Filename Value="src\np\ps4_libscenpscore.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpScore"/>
       </Unit86>
       <Unit87>
         <Filename Value="src\np\ps4_libscenpsignaling.pas"/>
@@ -398,6 +402,7 @@
       <Unit88>
         <Filename Value="src\np\ps4_libscenptrophy.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpTrophy"/>
       </Unit88>
       <Unit89>
         <Filename Value="sys\signal.inc"/>
@@ -407,6 +412,10 @@
         <Filename Value="sys\sys_context.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit90>
+      <Unit91>
+        <Filename Value="rtl\mmap.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit91>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
