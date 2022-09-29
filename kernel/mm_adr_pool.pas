@@ -115,6 +115,13 @@ end;
 
 //
 
+function Max(a,b:QWORD):QWORD; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
+//
+
 Function TPoolAdrNode.GetOffset:QWORD; inline;
 begin
  Result:=QWORD(F.Offset) shl 12;
@@ -215,7 +222,7 @@ begin
  if (It.Item=nil) then Exit;
  repeat
   key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
   if (se>=Offset) then
   begin
    FEndN:=key.Offset+key.Size;
@@ -437,7 +444,7 @@ begin
 
  if _FetchFree_s(ss,se,Size,Align,key) then
  begin
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
 
   _Devide(Offset,Size,key);
 
@@ -473,7 +480,7 @@ begin
  While (It.Item<>nil) do
  begin
   key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
   if (se>=Offset) then
   begin
    Size:=key.Size-(Offset-key.Offset);

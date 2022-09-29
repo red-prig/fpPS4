@@ -84,7 +84,7 @@ type
 
     procedure _Merge(key:TDirectAdrNode);
     procedure _Devide(Offset,Size:QWORD;var key:TDirectAdrNode);
-    procedure _Unmap(addr:Pointer;Size:QWORD);
+    procedure _UnmapVirtual(addr:Pointer;Size:QWORD);
   public
     var
      OnMemoryUnmapCb:TMemoryUnmapCb;
@@ -129,6 +129,24 @@ function TDirectAdrAllcCompare.c(const a,b:TDirectAdrNode):Integer;
 begin
  //1 FOffset
  Result:=Integer(a.F.Offset>b.F.Offset)-Integer(a.F.Offset<b.F.Offset);
+end;
+
+//
+
+function ia(addr:Pointer;Size:qword):Pointer; inline;
+begin
+ if (addr=nil) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  Result:=addr+Size;
+ end;
+end;
+
+function Max(a,b:QWORD):QWORD; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
 end;
 
 //
@@ -244,7 +262,7 @@ begin
  if (It.Item=nil) then Exit;
  repeat
   key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
   if (se>=Offset) then
   begin
    FEndN:=key.Offset+key.Size;
@@ -258,17 +276,6 @@ begin
    end;
   end;
  until not It.Next;
-end;
-
-function ia(addr:Pointer;Size:qword):Pointer; inline;
-begin
- if (addr=nil) then
- begin
-  Result:=nil;
- end else
- begin
-  Result:=addr+Size;
- end;
 end;
 
 const
@@ -420,9 +427,9 @@ begin
  key.addr   :=ia(Faddr,(Offset-FOffset));
 end;
 
-procedure TDirectManager._Unmap(addr:Pointer;Size:QWORD);
+procedure TDirectManager._UnmapVirtual(addr:Pointer;Size:QWORD);
 begin
- if (addr=nil) then Exit;
+ if (addr=nil) or (Size=0) then Exit;
  if (OnMemoryUnmapCb=nil) then Exit;
  OnMemoryUnmapCb(addr,Size);
 end;
@@ -471,7 +478,7 @@ begin
 
  if _FetchFree_s(ss,se,Size,Align,key) then
  begin
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
 
   _Devide(Offset,Size,key);
 
@@ -554,7 +561,7 @@ begin
  While (It.Item<>nil) do
  begin
   key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
   if (se>=Offset) then
   begin
    Size:=key.Size-(Offset-key.Offset);
@@ -693,8 +700,15 @@ var
   Size  :=Size  -FSize;
  end;
 
- procedure _skip; inline;
+ function _skip:Boolean; inline;
  begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
   FSize:=FEndO-Offset;
 
   Offset:=Offset+FSize;
@@ -719,7 +733,7 @@ begin
 
    _Devide(Offset,Size,key);
 
-   _Unmap(key.addr,key.Size);
+   _UnmapVirtual(key.addr,key.Size);
 
    if _map then Break;
   end else
@@ -730,27 +744,17 @@ begin
 
    _Devide(key.Offset,FEndN-key.Offset,key);
 
-   _Unmap(key.addr,key.Size);
+   _UnmapVirtual(key.addr,key.Size);
 
    if _map then Break;
   end else
   if _Find_m(M_LE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   if _Find_m(M_BE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   begin
    Break;
@@ -770,7 +774,6 @@ var
   Result:=False;
 
   //new save
-  key.IsFree :=False;
   key.addr   :=addr;
   _Merge(key);
 
@@ -783,8 +786,15 @@ var
   Size  :=Size  -FSize;
  end;
 
- procedure _skip; inline;
+ function _skip:Boolean; inline;
  begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
   FSize:=FEndO-Offset;
 
   addr  :=ia(addr,FSize);
@@ -823,21 +833,11 @@ begin
   end else
   if _Find_m(M_LE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   if _Find_m(M_BE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   begin
    Break;
@@ -857,7 +857,6 @@ var
   Result:=False;
 
   //new save
-  key.IsFree :=False;
   key.F.mtype:=mtype;
   key.addr   :=addr;
   _Merge(key);
@@ -871,8 +870,15 @@ var
   Size  :=Size  -FSize;
  end;
 
- procedure _skip; inline;
+ function _skip:Boolean; inline;
  begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
   FSize:=FEndO-Offset;
 
   addr  :=ia(addr,FSize);
@@ -911,21 +917,11 @@ begin
   end else
   if _Find_m(M_LE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   if _Find_m(M_BE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   _skip;
+   if _skip then Break;
   end else
   begin
    Break;

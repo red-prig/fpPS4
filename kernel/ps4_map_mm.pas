@@ -43,6 +43,7 @@ System reserved area: 0x00FC 0000 0000 - 0x00FF FFFF FFFF Size: 0x0003 FFFF FFFF
 
 var
  DirectManager:TDirectManager;
+ VirtualManager:TVirtualManager;
 
 Const
  SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
@@ -1618,20 +1619,20 @@ begin
 
  if (flags and MAP_VOID)<>0 then //reserved
  begin
-  Assert(false);
+  Result:=VirtualManager.mmap_reserved(QWORD(addr),len,align,prot,flags,QWORD(res));
  end else
  if (flags and MAP_ANON)<>0 then //flex
  begin
-  Assert(false);
+  Result:=VirtualManager.mmap_flex(QWORD(addr),len,align,prot,flags,QWORD(res));
  end else
  if (flags and MAP_SHARED)<>0 then
  begin
   if (fd=-1) then Exit;
-  if (fd=0) then //direct
+  if (fd=0) then //direct (psevdo dmem fd=0)
   begin
    Assert(false);
   end else
-  begin //file
+  begin //map file
    Assert(false);
   end;
  end;
@@ -1972,10 +1973,9 @@ var
  res:Pointer;
 
 initialization
- DirectManager:=TDirectManager.Create(0,SCE_KERNEL_MAIN_DMEM_SIZE-1);
+ DirectManager :=TDirectManager .Create(0,SCE_KERNEL_MAIN_DMEM_SIZE-1);
+ VirtualManager:=TVirtualManager.Create($400000,$3FFFFFFFF);
  PageMM.init;
-
- __mmap(nil,4*1024,4*1024,0,0,0,0,res);
 
 end.
 

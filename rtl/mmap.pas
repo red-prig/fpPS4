@@ -80,6 +80,7 @@ function _VirtualDecommit(Addr:Pointer;dwSize:PTRUINT):Integer;
 function _VirtualFree    (Addr:Pointer):Integer;
 function _VirtualMmap    (Addr:Pointer;len:size_t;prot,fd:Integer;offst:size_t):Integer;
 function _VirtualUnmap   (addr:Pointer):Integer;
+function _VirtualProtect (addr:Pointer;len:size_t;prot:Integer):Integer;
 
 implementation
 
@@ -238,6 +239,18 @@ begin
  begin
   Result:=0;
  end else
+ begin
+  Result:=GetLastError;
+ end;
+end;
+
+function _VirtualProtect(addr:Pointer;len:size_t;prot:Integer):Integer;
+Var
+ old:DWORD;
+begin
+ Result:=0;
+ old:=0;
+ if not VirtualProtect(addr,len,__map_prot_page(prot),old) then
  begin
   Result:=GetLastError;
  end;

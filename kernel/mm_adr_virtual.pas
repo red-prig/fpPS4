@@ -25,7 +25,8 @@ uses
   direct  0..0 :1
   stack   0..0 :1
   polled  0..0 :1
-  align        :4
+  mapped  0..0 :1
+  align        :3
 
   block  Pointer    ->[alloc bloc]
  ]
@@ -47,6 +48,8 @@ const
  BT_FMAP=3;
 
 type
+ PVirtualAdrNode=^TVirtualAdrNode;
+
  PVirtualAdrBlock=^TVirtualAdrBlock;
  TVirtualAdrBlock=packed object
   private
@@ -66,8 +69,10 @@ type
   property  Offset:QWORD   read GetOffset write SetOffset;
   property  Size:QWORD     read GetSize   write SetSize;
   property  Used:QWORD     read GetUsed   write SetUsed;
-  function  Commit(_offset,_size:QWORD;prot:Integer):Integer;
-  function  Free(_offset,_size:QWORD):Integer;
+  function  Commit(key:PVirtualAdrNode;prot:Integer):Integer;
+  function  Free(key:PVirtualAdrNode):Integer;
+  function  Reserved(key:PVirtualAdrNode):Integer;
+  function  Protect(key:PVirtualAdrNode;prot:Integer):Integer;
  end;
 
  TVirtualAdrNode=packed object
@@ -78,8 +83,8 @@ type
    Procedure SetOffset(q:QWORD);   inline;
    Function  GetSize:QWORD;        inline;
    Procedure SetSize(q:QWORD);     inline;
-   Function  GetAddr:Pointer;      inline;
-   Procedure SetAddr(p:Pointer);   inline;
+   Function  GetAddr:QWORD;        inline;
+   Procedure SetAddr(p:QWORD);     inline;
    Function  GetIsFree:Boolean;    inline;
    Procedure SetIsFree(b:Boolean); inline;
   public
@@ -93,12 +98,13 @@ type
     direct:bit1;
     stack :bit1;
     polled:bit1;
-    align :bit4;
+    mapped:bit1;
+    align :bit3;
    end;
    block:PVirtualAdrBlock;
    property Offset:QWORD   read GetOffset write SetOffset;
    property Size:QWORD     read GetSize   write SetSize;
-   property addr:Pointer   read GetAddr   write SetAddr;
+   property addr:QWORD     read GetAddr   write SetAddr;
    property IsFree:Boolean read GetIsFree write SetIsFree;
    Function cmp_merge(const n:TVirtualAdrNode):Boolean;
  end;
@@ -110,6 +116,8 @@ type
  TVirtualAdrAllcCompare=object
   function c(const a,b:TVirtualAdrNode):Integer; static;
  end;
+
+ TDirectUnmapCb=procedure(Offset,Size:QWORD);
 
  TVirtualManager=class
   private
@@ -135,15 +143,19 @@ type
 
     procedure _Merge(key:TVirtualAdrNode);
     procedure _Devide(Offset,Size:QWORD;var key:TVirtualAdrNode);
+    procedure _UnmapDirect(Offset,Size:QWORD);
   public
+    var
+     OnDirectUnmapCb:TDirectUnmapCb;
+
     Function  Alloc_flex(ss,Size,Align:QWORD;prot:Byte;var AdrOut:QWORD):Integer;
-    Function  check_fixed(Offset,Size:QWORD;btype,flags:Byte):Integer;
-    Function  mmap_flex(Offset,Size:QWORD;prot,flags:Byte):Integer;
+    Function  Alloc_resv(ss,Size,Align:QWORD;prot:Byte;var AdrOut:QWORD):Integer;
+    Function  check_fixed(Offset,Size:QWORD;flags:Byte):Integer;
+    Function  mmap_flex    (Offset,Size,Align:QWORD;prot,flags:Byte;var AdrOut:QWORD):Integer;
+    Function  mmap_reserved(Offset,Size,Align:QWORD;prot,flags:Byte;var AdrOut:QWORD):Integer;
+
     Function  CheckedAlloc(Offset,Size:QWORD):Integer;
-    Function  CheckedMMap(Offset,Size:QWORD):Integer;
     Function  Release(Offset,Size:QWORD):Integer;
-    //Function  mmap(Offset,Size:QWORD;addr:Pointer):Integer;
-    Function  mmap2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
 
     procedure Print;
  end;
@@ -220,6 +232,24 @@ end;
 
 //
 
+function ia(var k:TVirtualAdrNode;addr,Size:qword):qword; inline;
+begin
+ if (k.F.direct<>0) or (k.F.mapped<>0) then
+ begin
+  Result:=addr+Size;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
+function Max(a,b:QWORD):QWORD; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
+//
+
 Function TVirtualAdrBlock.GetOffset:QWORD; inline;
 begin
  Result:=QWORD(F.Offset) shl 12;
@@ -253,27 +283,56 @@ begin
  Assert(GetUsed=q);
 end;
 
-function TVirtualAdrBlock.Commit(_offset,_size:QWORD;prot:Integer):Integer;
+function TVirtualAdrBlock.Commit(key:PVirtualAdrNode;prot:Integer):Integer;
 begin
  Result:=0;
- Assert((Used+_size)<=Size);
- Used:=Used+_size;
+ if (key=nil) then Exit;
+
+ if (key^.F.reserv=0) then
+ begin
+  Assert((Used+key^.Size)<=Size);
+  Used:=Used+key^.Size;
+ end;
 
  case F.btype of
   BT_PRIV,
   BT_GPUM:
    begin
-    Result:=_VirtualCommit(Pointer(_offset),_size,prot);
+    Result:=_VirtualCommit(Pointer(key^.Offset),key^.Size,prot);
+    if (Result=0) then
+    begin
+     key^.F.prot:=prot;
+    end;
    end;
   else;
  end;
 end;
 
-function TVirtualAdrBlock.Free(_offset,_size:QWORD):Integer;
+function TVirtualAdrBlock.Free(key:PVirtualAdrNode):Integer;
 begin
- Assert(Used>=_size);
- Used:=Used-_size;
- Result:=_VirtualDecommit(Pointer(_offset),_size);
+ Assert(Used>=key^.Size);
+ Used:=Used-key^.Size;
+ Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
+end;
+
+function TVirtualAdrBlock.Reserved(key:PVirtualAdrNode):Integer;
+begin
+ Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
+end;
+
+function TVirtualAdrBlock.Protect(key:PVirtualAdrNode;prot:Integer):Integer;
+begin
+ Result:=0;
+ if (key=nil) then Exit;
+
+ if (key^.F.prot<>prot) then
+ begin
+  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,prot);
+  if (Result=0) then
+  begin
+   key^.F.prot:=prot;
+  end;
+ end;
 end;
 
 //
@@ -300,12 +359,12 @@ begin
  Assert(GetSize=q);
 end;
 
-Function TVirtualAdrNode.GetAddr:Pointer; inline;
+Function TVirtualAdrNode.GetAddr:QWORD; inline;
 begin
- Result:=Pointer(QWORD(F.addr) shl 12);
+ Result:=QWORD(F.addr) shl 12;
 end;
 
-Procedure TVirtualAdrNode.SetAddr(p:Pointer); inline;
+Procedure TVirtualAdrNode.SetAddr(p:QWORD); inline;
 begin
  F.addr:=DWORD(QWORD(p) shr 12);
  Assert(GetAddr=p);
@@ -356,16 +415,9 @@ procedure TVirtualManager._Insert(const key:TVirtualAdrNode);
 begin
  if key.IsFree then
  begin
-  if (key.block=nil) then
+  if (key.F.mapped=0) then
   begin
    FFreeSet.Insert(key);
-  end else
-  begin
-   case key.block^.F.btype of
-    BT_PRIV,
-    BT_GPUM:FFreeSet.Insert(key);
-    else;
-   end;
   end;
  end;
  FAllcSet.Insert(key);
@@ -386,7 +438,7 @@ begin
  if (It.Item=nil) then Exit;
  repeat
   key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
   if (Offset+Size)<=(key.Offset+key.Size) then
   begin
    R:=key;
@@ -395,17 +447,6 @@ begin
    Exit(True);
   end;
  until not It.Next;
-end;
-
-function ia(addr:Pointer;Size:qword):Pointer; inline;
-begin
- if (addr=nil) then
- begin
-  Result:=nil;
- end else
- begin
-  Result:=addr+Size;
- end;
 end;
 
 const
@@ -443,9 +484,9 @@ begin
  Case (mode and (not 1)) of
   C_UP:
        begin
-        if not rkey.cmp_merge(key)             then Exit;
-        if (ia(rkey.addr,rkey.Size)<>key.addr) then Exit;
-        if ((rkey.Offset+rkey.Size)<>cmp     ) then Exit;
+        if not rkey.cmp_merge(key)                  then Exit;
+        if (ia(rkey,rkey.addr,rkey.Size)<>key.addr) then Exit;
+        if ((rkey.Offset+rkey.Size)<>cmp     )      then Exit;
        end;
   C_DW:
        begin
@@ -509,7 +550,7 @@ begin
  repeat
   rkey:=key;
   rkey.F.Offset:=rkey.F.Offset+rkey.F.Size; //hack
-  rkey.addr    :=ia(key.addr,key.Size);     //find addr
+  rkey.addr    :=ia(key,key.addr,key.Size); //find addr
 
   if not _FetchNode_m(M_BE or C_DW,(key.Offset+key.Size),rkey) then Break;
 
@@ -523,7 +564,7 @@ procedure TVirtualManager._Devide(Offset,Size:QWORD;var key:TVirtualAdrNode);
 var
  FOffset:QWORD;
  FSize:QWORD;
- Faddr:Pointer;
+ Faddr:QWORD;
  FEndN,FEndO:QWORD;
 begin
  FOffset:=key.Offset;
@@ -543,7 +584,7 @@ begin
  begin
   key.Offset:=FEndN;
   key.Size  :=FEndO-FEndN;
-  key.addr  :=ia(Faddr,(FEndN-FOffset));
+  key.addr  :=ia(key,Faddr,(FEndN-FOffset));
 
   _Merge(key);
  end else
@@ -555,7 +596,14 @@ begin
  //new save
  key.Offset :=Offset;
  key.Size   :=Size;
- key.addr   :=ia(Faddr,(Offset-FOffset));
+ key.addr   :=ia(key,Faddr,(Offset-FOffset));
+end;
+
+procedure TVirtualManager._UnmapDirect(Offset,Size:QWORD);
+begin
+ if (Size=0) then Exit;
+ if (OnDirectUnmapCb=nil) then Exit;
+ OnDirectUnmapCb(Offset,Size);
 end;
 
 Function TVirtualManager.Alloc_flex(ss,Size,Align:QWORD;prot:Byte;var AdrOut:QWORD):Integer;
@@ -572,7 +620,7 @@ begin
 
  if _FetchFree_s(ss,Size,Align,key) then
  begin
-  Offset:=System.Align(key.Offset,Align);
+  Offset:=System.Align(Max(key.Offset,ss),Align);
 
   _Devide(Offset,Size,key);
 
@@ -599,7 +647,7 @@ begin
    end;
   end;
 
-  block^.Commit(key.Offset,key.Size,prot);
+  block^.Commit(@key,prot);
   if _isgpu(prot) then //mark to gpu
   begin
    block^.F.btype:=BT_GPUM;
@@ -607,7 +655,6 @@ begin
 
   //new save
   key.IsFree  :=False;
-  key.F.prot  :=prot;
   key.F.addr  :=0;
   key.F.reserv:=0;
   key.F.direct:=0;
@@ -624,7 +671,84 @@ begin
  end;
 end;
 
-Function TVirtualManager.check_fixed(Offset,Size:QWORD;btype,flags:Byte):Integer;
+Function TVirtualManager.Alloc_resv(ss,Size,Align:QWORD;prot:Byte;var AdrOut:QWORD):Integer;
+var
+ key:TVirtualAdrNode;
+ Offset:QWORD;
+ block:PVirtualAdrBlock;
+begin
+ Result:=0;
+ if (Size=0) or (Align=0) then Exit(EINVAL);
+ if (ss<Flo) or (ss>Fhi)  then Exit(EINVAL);
+
+ key:=Default(TVirtualAdrNode);
+
+ if _FetchFree_s(ss,Size,Align,key) then
+ begin
+  Offset:=System.Align(Max(key.Offset,ss),Align);
+
+  _Devide(Offset,Size,key);
+
+  if (key.block<>nil) then
+  begin
+   block:=key.block;
+   Case block^.F.btype of
+    BT_FMAP:
+     begin
+      _Insert(key); //ret
+      Assert(false,'map flex to file');
+      Exit(ENOSYS);
+     end;
+    else;
+   end;
+  end else
+  begin
+   block:=NewAdrBlock(key.Offset,key.Size,prot,BT_PRIV,-1,0);
+   if (block=nil) then
+   begin
+    _Merge(key); //ret
+    Assert(False);
+    Exit(ENOSYS);
+   end;
+  end;
+
+  //new save
+  key.IsFree  :=False;
+  key.F.addr  :=0;
+  key.F.reserv:=1;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  key.block   :=block;
+  _Merge(key);
+
+  AdrOut:=key.Offset;
+  Result:=0;
+ end else
+ begin
+  Result:=ENOMEM;
+ end;
+end;
+
+function _comp_btype(b1,b2:Byte):Integer;
+begin
+ Case b1 of
+  BT_PRIV,
+  BT_GPUM:
+   begin
+    Case b2 of
+     BT_PRIV,
+     BT_GPUM:Result:=0;
+     else
+      Result:=ENOSYS; //file map not valid for any devide
+    end;
+   end;
+  else
+   Result:=ENOSYS;
+ end;
+end;
+
+Function TVirtualManager.check_fixed(Offset,Size:QWORD;flags:Byte):Integer;
 var
  It:TAllcPoolNodeSet.Iterator;
  key:TVirtualAdrNode;
@@ -646,31 +770,14 @@ begin
 
   if (Offset>=key.Offset) then
   begin
+   if (key.F.mapped<>0) then Exit(ENOSYS);
    if key.IsFree then
    begin
-    if (key.block<>nil) then
-    begin
-     Case btype of
-      BT_PRIV,
-      BT_GPUM:
-       begin
-        Case key.block^.F.btype of
-         BT_PRIV,
-         BT_GPUM:;
-         else
-          Exit(ENOSYS); //file map not valid for any devide
-        end;
-       end;
-      else
-       Exit(ENOSYS);
-     end;
-    end;
+    //
    end else
+   if (key.F.reserv=0) then
    begin
-    if (flags and MAP_NO_OVERWRITE)<>0 then
-    begin
-     Exit(ENOMEM);
-    end;
+    if (flags and MAP_NO_OVERWRITE)<>0 then Exit(ENOMEM);
    end;
   end;
 
@@ -680,16 +787,70 @@ begin
  end;
 end;
 
-Function TVirtualManager.mmap_flex(Offset,Size:QWORD;prot,flags:Byte):Integer;
+Function TVirtualManager.mmap_flex(Offset,Size,Align:QWORD;prot,flags:Byte;var AdrOut:QWORD):Integer;
 var
  key:TVirtualAdrNode;
  FEndN,FEndO:QWORD;
  FSize:QWORD;
  btype:Byte;
+
+ function _map:Boolean;
+ begin
+  Result:=False;
+
+  //new save
+  key.IsFree  :=False;
+  key.F.addr  :=0;
+  key.F.reserv:=0;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  _Merge(key);
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+ function _remap:Boolean;
+ begin
+  Result:=False;
+
+  if (key.F.direct<>0) then
+  begin
+   _UnmapDirect(key.Offset,key.Size);
+  end;
+
+  //new save
+  key.F.addr  :=0;
+  key.F.reserv:=0;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  _Merge(key);
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
 begin
- Result:=0;
- if (Size=0)                     then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+
+ if (flags and MAP_FIXED)=0 then //not fixed
+ begin
+  Result:=Alloc_flex(Offset,Size,Align,prot,AdrOut);
+ end else
+ begin
+  Result:=0;
+  if (Size=0)                     then Exit(EINVAL);
+  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+ end;
 
  if _isgpu(prot) then
  begin
@@ -699,13 +860,15 @@ begin
   btype:=BT_PRIV;
  end;
 
- Result:=check_fixed(Offset,Size,btype,flags);
+ Result:=check_fixed(Offset,Size,flags);
  if (Result<>0) then Exit;
+
+ AdrOut:=Offset;
 
  repeat
 
   key:=Default(TVirtualAdrNode);
-  key.IsFree:=False;
+  key.IsFree:=True;
   key.Offset:=Offset;
 
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
@@ -726,25 +889,14 @@ begin
     end;
    end;
 
-   key.block^.Commit(key.Offset,key.Size,prot);
+   Result:=key.block^.Commit(@key,prot);
+   if (Result<>0) then
+   begin
+    Assert(false,IntToStr(Result));
+    Exit(EINVAL);
+   end;
 
-   //new save
-   key.IsFree  :=False;
-   key.F.prot  :=prot;
-   key.F.addr  :=0;
-   key.F.reserv:=0;
-   key.F.direct:=0;
-   key.F.stack :=0;
-   key.F.polled:=0;
-   _Merge(key);
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   //addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _map then Break;
   end else
   if _FetchNode_m(M_BE or C_BE,Offset,key) then
   begin
@@ -753,51 +905,249 @@ begin
 
    _Devide(key.Offset,FEndN-key.Offset,key);
 
-   //new save
-   key.IsFree :=False;
-   //key.addr   :=addr;
-   _Merge(key);
+   if (key.block=nil) then
+   begin
+    key.block:=NewAdrBlock(key.Offset,key.Size,prot,btype,-1,0);
+    if (key.block=nil) then
+    begin
+     _Merge(key); //ret
+     Assert(False);
+     Exit(ENOSYS);
+    end;
+   end;
 
-   if (FEndO>=FEndN) then Break;
+   Result:=key.block^.Commit(@key,prot);
+   if (Result<>0) then
+   begin
+    Assert(false,IntToStr(Result));
+    Exit(EINVAL);
+   end;
 
-   FSize:=FEndO-Offset;
-
-   //addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  if _Find_m(M_LE,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   //addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  if _Find_m(M_BE,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   //addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _map then Break;
   end else
   begin
-   Break;
+   //overwrite
+   key.IsFree:=False;
+
+   if _FetchNode_m(M_LE or C_LE,Offset,key) then
+   begin
+    FEndN:=Offset+Size;
+    FEndO:=key.Offset+key.Size;
+
+    _Devide(Offset,Size,key);
+
+    if (key.F.mapped<>0) then
+    begin
+     _Merge(key); //ret
+     Assert(False);
+     Exit(ENOSYS);
+    end;
+
+    Result:=key.block^.Protect(@key,prot);
+    if (Result<>0) then
+    begin
+     Assert(false,IntToStr(Result));
+     Exit(EINVAL);
+    end;
+
+    if _remap then Break;
+   end else
+   if _FetchNode_m(M_BE or C_BE,Offset,key) then
+   begin
+    FEndN:=Offset+Size;
+    FEndO:=key.Offset+key.Size;
+
+    _Devide(key.Offset,FEndN-key.Offset,key);
+
+    if (key.F.mapped<>0) then
+    begin
+     _Merge(key); //ret
+     Assert(False);
+     Exit(ENOSYS);
+    end;
+
+    Result:=key.block^.Protect(@key,prot);
+    if (Result<>0) then
+    begin
+     Assert(false,IntToStr(Result));
+     Exit(EINVAL);
+    end;
+
+    if _remap then Break;
+   end else
+   begin
+    Break;
+   end;
+
+   //overwrite
   end;
 
  until false;
 end;
+
+Function TVirtualManager.mmap_reserved(Offset,Size,Align:QWORD;prot,flags:Byte;var AdrOut:QWORD):Integer;
+var
+ key:TVirtualAdrNode;
+ FEndN,FEndO:QWORD;
+ FSize:QWORD;
+
+ function _map:Boolean;
+ begin
+  Result:=False;
+
+  //new save
+  key.IsFree  :=False;
+  key.F.addr  :=0;
+  key.F.reserv:=1;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  _Merge(key);
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+ function _remap:Boolean;
+ begin
+  Result:=False;
+
+  //new save
+  key.F.addr  :=0;
+  key.F.reserv:=1;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  _Merge(key);
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+begin
+
+ if (flags and MAP_FIXED)=0 then //not fixed
+ begin
+  Result:=Alloc_resv(Offset,Size,Align,prot,AdrOut);
+ end else
+ begin
+  Result:=0;
+  if (Size=0)                     then Exit(EINVAL);
+  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+ end;
+
+ Result:=check_fixed(Offset,Size,flags);
+ if (Result<>0) then Exit;
+
+ AdrOut:=Offset;
+
+ repeat
+
+  key:=Default(TVirtualAdrNode);
+  key.IsFree:=True;
+  key.Offset:=Offset;
+
+  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(Offset,Size,key);
+
+   if (key.block=nil) then
+   begin
+    key.block:=NewAdrBlock(key.Offset,key.Size,prot,BT_PRIV,-1,0);
+    if (key.block=nil) then
+    begin
+     _Merge(key); //ret
+     Assert(False);
+     Exit(ENOSYS);
+    end;
+   end;
+
+   if _map then Break;
+  end else
+  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(key.Offset,FEndN-key.Offset,key);
+
+   if (key.block=nil) then
+   begin
+    key.block:=NewAdrBlock(key.Offset,key.Size,prot,BT_PRIV,-1,0);
+    if (key.block=nil) then
+    begin
+     _Merge(key); //ret
+     Assert(False);
+     Exit(ENOSYS);
+    end;
+   end;
+
+   if _map then Break;
+  end else
+  begin
+   //overwrite
+   key.IsFree:=False;
+
+   if _FetchNode_m(M_LE or C_LE,Offset,key) then
+   begin
+    FEndN:=Offset+Size;
+    FEndO:=key.Offset+key.Size;
+
+    _Devide(Offset,Size,key);
+
+    Result:=key.block^.Reserved(@key);
+    if (Result<>0) then
+    begin
+     Assert(false,IntToStr(Result));
+     Exit(EINVAL);
+    end;
+
+    if _remap then Break;
+   end else
+   if _FetchNode_m(M_BE or C_BE,Offset,key) then
+   begin
+    FEndN:=Offset+Size;
+    FEndO:=key.Offset+key.Size;
+
+    _Devide(key.Offset,FEndN-key.Offset,key);
+
+    Result:=key.block^.Reserved(@key);
+    if (Result<>0) then
+    begin
+     Assert(false,IntToStr(Result));
+     Exit(EINVAL);
+    end;
+
+    if _remap then Break;
+   end else
+   begin
+    Break;
+   end;
+
+   //overwrite
+  end;
+
+ until false;
+end;
+
+////
+////
+////
+////
+////
+////
+////
 
 Function TVirtualManager.CheckedAlloc(Offset,Size:QWORD):Integer;
 var
@@ -833,49 +1183,64 @@ begin
  end;
 end;
 
-Function TVirtualManager.CheckedMMap(Offset,Size:QWORD):Integer;
-var
- It:TAllcPoolNodeSet.Iterator;
- key:TVirtualAdrNode;
- FEndO:QWORD;
-begin
- Result:=0;
- if (Size=0) then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
-
- FEndO:=Offset+Size;
-
- key:=Default(TVirtualAdrNode);
- key.Offset:=Offset;
-
- It:=FAllcSet.find_le(key);
- While (It.Item<>nil) do
- begin
-  key:=It.Item^;
-
-  if (Offset>=key.Offset) then
-  begin
-   if key.IsFree then
-   begin
-    Exit(EACCES);
-   end;
-   if (key.addr<>nil) then
-   begin
-    Exit(EBUSY);
-   end;
-  end;
-
-  if (key.Offset>=FEndO) then Break;
-
-  It.Next;
- end;
-end;
-
 Function TVirtualManager.Release(Offset,Size:QWORD):Integer;
 var
  key:TVirtualAdrNode;
  FEndN,FEndO:QWORD;
  FSize:QWORD;
+
+ function _map:Boolean;
+ var
+  block:PVirtualAdrBlock;
+ begin
+  Result:=False;
+
+  if (key.F.direct<>0) then
+  begin
+   _UnmapDirect(key.Offset,key.Size);
+  end;
+
+  key.block^.Free(@key);
+
+  //new save
+  key.IsFree  :=True;
+  key.F.prot  :=0;
+  key.F.addr  :=0;
+  key.F.reserv:=0;
+  key.F.direct:=0;
+  key.F.stack :=0;
+  key.F.polled:=0;
+  _Merge(key);
+
+  block:=key.block;
+  if (block^.Used=0) then
+  begin
+   //TODO free block
+  end;
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+ function _skip:Boolean; inline;
+ begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
 begin
  Result:=0;
  if (Size=0) then Exit(EINVAL);
@@ -894,19 +1259,7 @@ begin
 
    _Devide(Offset,Size,key);
 
-   //new save
-   key.IsFree :=True;
-   key.F.prot :=0;
-   //key.F.ntype:=NT_FREE;
-   key.addr   :=nil;
-   _Merge(key);
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _map then Break;
   end else
   if _FetchNode_m(M_BE or C_BE,Offset,key) then
   begin
@@ -915,134 +1268,15 @@ begin
 
    _Devide(key.Offset,FEndN-key.Offset,key);
 
-   //new save
-   key.IsFree :=True;
-   key.F.prot :=0;
-   //key.F.ntype:=NT_FREE;
-   key.addr   :=nil;
-   _Merge(key);
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _map then Break;
   end else
   if _Find_m(M_LE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _skip then Break;
   end else
   if _Find_m(M_BE,key) then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  begin
-   Break;
-  end;
-
- until false;
-end;
-
-Function TVirtualManager.mmap2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
-var
- key:TVirtualAdrNode;
- FEndN,FEndO:QWORD;
- FSize:QWORD;
-begin
- Result:=0;
- if (Size=0)                     then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
-
- repeat
-
-  key:=Default(TVirtualAdrNode);
-  key.IsFree:=False;
-  key.Offset:=Offset;
-
-  if _FetchNode_m(M_LE or C_LE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(Offset,Size,key);
-
-   //new save
-   key.IsFree :=False;
-   //key.F.mtype:=mtype;
-   key.addr   :=addr;
-   _Merge(key);
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(key.Offset,FEndN-key.Offset,key);
-
-   //new save
-   key.IsFree :=False;
-   //key.F.mtype:=mtype;
-   key.addr   :=addr;
-   _Merge(key);
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  if _Find_m(M_LE,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
-  end else
-  if _Find_m(M_BE,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   if (FEndO>=FEndN) then Break;
-
-   FSize:=FEndO-Offset;
-
-   addr  :=ia(addr,FSize);
-   Offset:=Offset+FSize;
-   Size  :=Size  -FSize;
+   if _skip then Break;
   end else
   begin
    Break;
