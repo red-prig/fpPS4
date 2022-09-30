@@ -257,6 +257,39 @@ begin
  end;
 end;
 
+const
+ //eLoadOptions
+ LOAD_OPTIONS_DEFAULT                         =$0000;
+ LOAD_OPTIONS_LOAD_SUSPENDED                  =$0001;
+ LOAD_OPTIONS_USE_SYSTEM_LIBRARY_VERIFICATION =$0002;
+ LOAD_OPTIONS_SLV_MODE_WARN                   =$0004;
+ LOAD_OPTIONS_ARG_STACK_SIZE                  =$0008;
+ LOAD_OPTIONS_FULL_DEBUG_REQUIRED             =$0010;
+
+type
+ PSCE_APP_ENV=^TSCE_APP_ENV;
+ TSCE_APP_ENV=packed record
+  unk1:array[0..15] of Byte; //16
+  ustr:array[0.. 9] of char; //10
+  unk2:array[0..37] of Byte; //38
+  flags:Byte;                //1  eLoadOptions
+  unk3:array[0.. 6] of Byte; //7
+ end;
+
+//sysctl to KERN_PROC_ENV
+function ps4_sceKernelGetAppInfo(pid:Integer;env:PSCE_APP_ENV):Integer; SysV_ABI_CDecl;
+begin
+ //ignore pid
+ Result:=0;
+ if (env=nil) then
+ begin
+  _set_errno(EINVAL);
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ env^:=Default(TSCE_APP_ENV);
+end;
+
 //dynlib_get_obj_member(handle,8,&ptr); module param
 //dynlib_get_obj_member(handle,1,&ptr); init
 //dynlib_get_obj_member(handle,2,&ptr); fini
@@ -756,6 +789,7 @@ begin
  lib^.set_proc($6E7671620005780D,@ps4_sceKernelGetSanitizerNewReplaceExternal);
  lib^.set_proc($8E1FBC5E22B82DE1,@ps4_sceKernelIsAddressSanitizerEnabled);
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
+ lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
@@ -1077,6 +1111,8 @@ begin
  lib^.set_proc($5A4C0477737BC346,@ps4_sceKernelInstallExceptionHandler);
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
+ //
+ ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
 end;
 
 initialization

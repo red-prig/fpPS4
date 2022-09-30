@@ -10,6 +10,9 @@ Uses
 {$I sce_errno.inc}
 {$I errno.inc}
 
+var
+ SDK_VERSION:DWORD=0;
+
 type
  SceKernelModule=Integer;
 

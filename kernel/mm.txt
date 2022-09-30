@@ -29,12 +29,12 @@ int _sceKernelMapDirectMemory
   uint _len;
   
   pthread_once((pthread_once_t *)&_mem_init_ctl,_mem_init);
-  ret1 = L'\x80020016';
+  ret1 = SCE_KERNEL_ERROR_EINVAL;
   if (pool_id < 3) {
     adr = *virtualAddrDest;
-    if ((((_direct_pool_id == 1) && ((DAT_01084c7c & 2) == 0)) &&
+    if ((((_direct_pool_id == 1) && ((APP_INFO[4] & 2) == 0)) &&
         (((long)physicalAddr < 0x3000000000 || (0x301fffffff < physicalAddr)))) &&
-       (((flags & 0x400U) == 0 && (0x24fffff < DAT_01059790)))) {
+       (((flags & 0x400U) == 0 && (0x24fffff < SDK_VERSION)))) {
       ret1 = sceKernelMapDirectMemory2
                        (virtualAddrDest,length,-1,protections,flags,physicalAddr,alignment);
       return ret1;
@@ -44,9 +44,9 @@ int _sceKernelMapDirectMemory
         (((uint)adr | (uint)alignment | (uint)physicalAddr | _len) & 0x3fff) == 0)) &&
        ((~-alignment & alignment) == 0)) {
       _flags = flags & 0xfffffbff;
-      if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
-        if (0x16fffff < DAT_01059790) {
-          return L'\x80020016';
+      if (((flags & MAP_FIXED) != 0) && (adr == (void *)0x0)) {
+        if (0x16fffff < SDK_VERSION) {
+          return SCE_KERNEL_ERROR_EINVAL;
         }
         _flags = flags & 0xfffffbef;
         puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
@@ -56,7 +56,7 @@ int _sceKernelMapDirectMemory
           adr = (void *)0x880000000;
         }
         else {
-          adr = (void *)((ulong)((DAT_01084c7c & 2) == 0) << 0x21);
+          adr = (void *)((ulong)((APP_INFO[4] & 2) == 0) << 0x21);
         }
       }
       align = 0x4000;
@@ -103,9 +103,9 @@ int sceKernelMapDirectMemory2
   qword align;
   
   pthread_once((pthread_once_t *)&_mem_init_ctl,_mem_init);
-  ret1 = L'\x8002002d';
-  if ((((_direct_pool_id == 1) && ((DAT_01084c7c & 2) == 0)) &&
-      (ret1 = -0x7ffdffea, (flags & 0x1f000000U) == 0)) &&
+  ret1 = SCE_KERNEL_ERROR_EOPNOTSUPP;
+  if ((((_direct_pool_id == 1) && ((APP_INFO[4] & 2) == 0)) &&
+      (ret1 = SCE_KERNEL_ERROR_EINVAL, (flags & 0x1f000000U) == 0)) &&
      (((alignment & 0x3fff) == 0 && ((~-alignment & alignment) == 0)))) {
     align = 0x4000;
     if (0x4000 < alignment) {
@@ -154,13 +154,13 @@ int _sceKernelMapFlexibleMemory
   void *adr;
   int err;
   
-  ret1 = -0x7ffdffea;
+  ret1 = SCE_KERNEL_ERROR_EINVAL;
   if (((0x3fff < length) && ((length & 0x3fff) == 0)) &&
      ((flags & 0xffbfff6fU | protections & 0xffffffc8U) == 0)) {
     adr = *virtualAddrDest;
-    if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
-      if (0x16fffff < DAT_01059790) {
-        return L'\x80020016';
+    if (((flags & MAP_FIXED) != 0) && (adr == (void *)0x0)) {
+      if (0x16fffff < SDK_VERSION) {
+        return SCE_KERNEL_ERROR_EINVAL;
       }
       flags = flags & 0xffffffef;
       puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
@@ -170,7 +170,7 @@ int _sceKernelMapFlexibleMemory
         adr = (void *)0x880000000;
       }
       else {
-        adr = (void *)((ulong)((DAT_01084c7c & 2) == 0) << 0x21);
+        adr = (void *)((ulong)((APP_INFO[4] & 2) == 0) << 0x21);
       }
     }
     adr = (void *)mmap(adr,length,protections,flags | MAP_ANON,-1,0);
@@ -199,7 +199,7 @@ int sceKernelReserveVirtualRange(void **addr,size_t len,int flags,size_t alignme
   int ret1;
   void *adr;
   
-  ret1 = -0x7ffdffea;
+  ret1 = SCE_KERNEL_ERROR_EINVAL;
   if ((((flags & 0xffbfff6fU) == 0) &&
       (adr = *addr, (((uint)adr | (uint)alignment | (uint)len) & 0x3fff) == 0)) &&
      ((~-alignment & alignment) == 0)) {
@@ -209,9 +209,9 @@ int sceKernelReserveVirtualRange(void **addr,size_t len,int flags,size_t alignme
     }
     last = flsl(align);
     if (last + -1 < 0x1f) {
-      if (((flags & 0x10U) != 0) && (adr == (void *)0x0)) {
-        if (0x16fffff < DAT_01059790) {
-          return -0x7ffdffea;
+      if (((flags & MAP_FIXED) != 0) && (adr == (void *)0x0)) {
+        if (0x16fffff < SDK_VERSION) {
+          return SCE_KERNEL_ERROR_EINVAL;
         }
         flags = flags & 0xffffffef;
         puts("[WARNING] map(addr=0, flags=MAP_FIXED)");
@@ -319,10 +319,10 @@ int sceKernelReleaseFlexibleMemory(void *addr,size_t len)
   int ret2;
   int ret1;
   
-  ret1 = -0x7ffdffea;
+  ret1 = SCE_KERNEL_ERROR_EINVAL;
   if ((((uint)addr | (uint)len) & 0x3fff) == 0) {
     ret2 = madvise(addr,len,MADV_FREE);
-    ret1 = -0x7ffdffea;
+    ret1 = SCE_KERNEL_ERROR_EINVAL;
     if (ret2 != -1) {
       ret1 = 0;
     }

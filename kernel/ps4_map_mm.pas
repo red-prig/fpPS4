@@ -1285,9 +1285,9 @@ begin
  if not _test_mtype(memoryType) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_wrlock(PageMM.FLock); //rw
 
- Result:=DirectManager.Alloc_search(searchStart,searchEnd,length,alignment,Byte(memoryType),physicalAddrDest^);
+ Result:=DirectManager.Alloc(searchStart,searchEnd,length,alignment,Byte(memoryType),physicalAddrDest^);
 
  rwlock_unlock(PageMM.FLock);
  _sig_unlock;
@@ -1316,9 +1316,9 @@ begin
  if not _test_mtype(memoryType) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_wrlock(PageMM.FLock); //rw
 
- Result:=DirectManager.Alloc_any(length,alignment,Byte(memoryType),physicalAddrDest^);
+ Result:=DirectManager.Alloc(length,alignment,Byte(memoryType),physicalAddrDest^);
 
  rwlock_unlock(PageMM.FLock);
  _sig_unlock;
@@ -1347,8 +1347,11 @@ begin
  if not IsPowerOfTwo(alignment)                then Exit;
  if (fastIntLog2(alignment)>31)                then Exit;
 
+ FAdrOut :=0;
+ FSizeOut:=0;
+
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_rdlock(PageMM.FLock); //r
 
  Result:=DirectManager.CheckedAvailable(searchStart,searchEnd,alignment,FAdrOut,FSizeOut);
 
@@ -1382,8 +1385,10 @@ begin
 
  if not IsAlign(offset,LOGICAL_PAGE_SIZE) then Exit;
 
+ ROut:=Default(TDirectAdrNode);
+
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_rdlock(PageMM.FLock); //r
 
  Result:=DirectManager.Query(offset,(flags=SCE_KERNEL_DMQ_FIND_NEXT),ROut);
 
@@ -1415,8 +1420,10 @@ begin
 
  start:=AlignDw(start,PHYSICAL_PAGE_SIZE);
 
+ ROut:=Default(TDirectAdrNode);
+
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_rdlock(PageMM.FLock); //r
 
  Result:=DirectManager.QueryMType(start,ROut);
 
@@ -1439,7 +1446,7 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_rdlock(PageMM.FLock); //r
 
  Result:=DirectManager.CheckedRelease(start,len);
 
@@ -1455,7 +1462,7 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock);
+ rwlock_wrlock(PageMM.FLock); //rw
 
  Result:=DirectManager.Release(start,len);
 
@@ -1617,28 +1624,121 @@ begin
  if not IsAlign(len   ,PHYSICAL_PAGE_SIZE) then Exit;
  if not IsAlign(offset,PHYSICAL_PAGE_SIZE) then Exit;
 
+ if (align<PHYSICAL_PAGE_SIZE) then align:=PHYSICAL_PAGE_SIZE;
+
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock); //rw
+
  if (flags and MAP_VOID)<>0 then //reserved
  begin
-  Result:=VirtualManager.mmap(QWORD(addr),len,align,prot,flags,QWORD(res));
+  flags:=flags and (not MAP_SHARED);
+  Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
  end else
  if (flags and MAP_ANON)<>0 then //flex
  begin
-  Result:=VirtualManager.mmap(QWORD(addr),len,align,prot,flags,QWORD(res));
+  Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
  end else
  if (flags and MAP_SHARED)<>0 then
  begin
-  if (fd=-1) then Exit;
-  if (fd=0) then //direct (psevdo dmem fd=0)
+  if (fd>=0) then
   begin
-   Assert(false);
-  end else
-  begin //map file
-   Assert(false);
+   if (fd=0) then //direct (psevdo dmem fd=0)
+   begin
+    Result:=DirectManager.CheckedMMap(offset,len);
+
+    if (Result=0) then
+    begin
+
+     Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
+
+     if (Result=0) then
+     begin
+      Result:=DirectManager.mmap_addr(offset,len,addr);
+     end;
+
+    end;
+   end else
+   begin //map file
+    Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
+   end;
   end;
  end;
 
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+end;
+
+function __munmap(addr:Pointer;len:size_t):Integer;
+begin
+ Result:=VirtualManager.Release(addr,len);
+end;
+
+function _munmap(addr:Pointer;len:size_t):Integer;
+begin
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock); //rw
+
+ Result:=VirtualManager.Release(addr,len);
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+end;
+
+function __release_direct(Offset,Size:QWORD):Integer;
+begin
+ Result:=DirectManager.Release(Offset,Size);
+end;
+
+function _sceKernelMapFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prot,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+var
+ addr:Pointer;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ if ((($3fff < length) and ((length and $3fff)=0)) and
+    (((flags and $ffbfff6f) or (prot and $ffffffc8))=0)) then
+ begin
+  addr:=virtualAddrDest^;
+
+  if (((flags and MAP_FIXED)<>0) and (addr=nil)) then
+  begin
+   if ($16fffff < SDK_VERSION) then
+   begin
+    Exit(SCE_KERNEL_ERROR_EINVAL);
+   end;
+   flags:=flags and $ffffffef;
+   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
+  end else
+  if (addr=nil) then
+  begin
+   addr:=Pointer($001000000000);
+  end;
+
+  Result:=__mmap(addr,length,0,prot,flags or MAP_ANON,-1,0,addr);
+  _set_errno(Result);
+
+  if (Result<>0) then
+  begin
+   Result:=px2sce(Result);
+  end else
+  begin
+   virtualAddrDest^:=addr;
+   Result:=0;
+  end;
+
+ end;
 
 end;
+
+////
+////
+
+
 
 function ps4_sceKernelMapDirectMemory(
            virtualAddrDest:PPointer;
@@ -1969,12 +2069,11 @@ begin
  _sig_unlock;
 end;
 
-var
- res:Pointer;
-
 initialization
  DirectManager :=TDirectManager .Create;
+ DirectManager .OnMemoryUnmapCb:=@__munmap;
  VirtualManager:=TVirtualManager.Create($400000,$3FFFFFFFF);
+ VirtualManager.OnDirectUnmapCb:=@__release_direct;
  PageMM.init;
 
 end.

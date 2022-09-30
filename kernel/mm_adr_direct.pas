@@ -57,7 +57,7 @@ type
   function c(const a,b:TDirectAdrNode):Integer; static;
  end;
 
- TMemoryUnmapCb=procedure(addr:Pointer;Size:QWORD);
+ TMemoryUnmapCb=function(addr:Pointer;Size:QWORD):Integer;
 
  TDirectManager=class
   private
@@ -76,20 +76,19 @@ type
     Constructor Create;
   private
     procedure _Insert(const key:TDirectAdrNode);
-    Function  _FetchFree_a(Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
     Function  _FetchFree_s(ss,se,Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
     Function  _FetchNode_m(mode:Byte;cmp:QWORD;var R:TDirectAdrNode):Boolean;
     Function  _Find_m(mode:Byte;var R:TDirectAdrNode):Boolean;
 
     procedure _Merge(key:TDirectAdrNode);
     procedure _Devide(Offset,Size:QWORD;var key:TDirectAdrNode);
-    procedure _UnmapVirtual(addr:Pointer;Size:QWORD);
+    function  _UnmapVirtual(addr:Pointer;Size:QWORD):Integer;
   public
     var
      OnMemoryUnmapCb:TMemoryUnmapCb;
 
-    Function  Alloc_any(Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
-    Function  Alloc_search(ss,se,Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
+    Function  Alloc(ss,se,Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
+    Function  Alloc(Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
     Function  Query(Offset:QWORD;next:Boolean;var ROut:TDirectAdrNode):Integer;
     Function  QueryMType(Offset:QWORD;var ROut:TDirectAdrNode):Integer;
     Function  CheckedAvailable(ss,se,Align:QWORD;var AdrOut,SizeOut:QWORD):Integer;
@@ -97,8 +96,7 @@ type
     Function  CheckedMMap(Offset,Size:QWORD):Integer;
     Function  CheckedRelease(Offset,Size:QWORD):Integer;
     Function  Release(Offset,Size:QWORD):Integer;
-    Function  mmap_addr(Offset,Size:QWORD;addr:Pointer):Integer;
-    Function  mmap_addr2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
+    Function  mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
     Function  unmap_addr(Offset,Size:QWORD):Integer;
 
     procedure Print;
@@ -219,30 +217,6 @@ begin
 end;
 
 //free:  [Size]  |[Offset]
-Function TDirectManager._FetchFree_a(Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
-var
- It:TFreePoolNodeSet.Iterator;
- key:TDirectAdrNode;
- Offset:QWORD;
-begin
- Result:=false;
- key:=Default(TDirectAdrNode);
- key.Size:=Size;
- It:=FFreeSet.find_be(key);
- if (It.Item=nil) then Exit;
- repeat
-  key:=It.Item^;
-  Offset:=System.Align(key.Offset,Align);
-  if (Offset+Size)<=(key.Offset+key.Size) then
-  begin
-   R:=key;
-   FAllcSet.delete(key);
-   FFreeSet.erase(It);
-   Exit(True);
-  end;
- until not It.Next;
-end;
-
 Function TDirectManager._FetchFree_s(ss,se,Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
 var
  It:TFreePoolNodeSet.Iterator;
@@ -423,44 +397,14 @@ begin
  key.addr   :=ia(Faddr,(Offset-FOffset));
 end;
 
-procedure TDirectManager._UnmapVirtual(addr:Pointer;Size:QWORD);
+function TDirectManager._UnmapVirtual(addr:Pointer;Size:QWORD):Integer;
 begin
- if (addr=nil) or (Size=0) then Exit;
- if (OnMemoryUnmapCb=nil) then Exit;
- OnMemoryUnmapCb(addr,Size);
+ if (addr=nil) or (Size=0) then Exit(0);
+ if (OnMemoryUnmapCb=nil) then Exit(EINVAL);
+ Result:=OnMemoryUnmapCb(addr,Size);
 end;
 
-Function TDirectManager.Alloc_any(Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
-var
- key:TDirectAdrNode;
- Offset:QWORD;
-begin
- Result:=0;
- if (Size=0) or (Align=0) then Exit(EINVAL);
-
- key:=Default(TDirectAdrNode);
-
- if _FetchFree_a(Size,Align,key) then
- begin
-  Offset:=System.Align(key.Offset,Align);
-
-  _Devide(Offset,Size,key);
-
-  //new save
-  key.IsFree :=False;
-  key.F.mtype:=mtype;
-  key.addr   :=nil;
-  _Merge(key);
-
-  AdrOut:=key.Offset;
-  Result:=0;
- end else
- begin
-  Result:=ENOMEM;
- end;
-end;
-
-Function TDirectManager.Alloc_search(ss,se,Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
+Function TDirectManager.Alloc(ss,se,Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
 var
  key:TDirectAdrNode;
  Offset:QWORD;
@@ -490,6 +434,11 @@ begin
  begin
   Result:=ENOMEM;
  end;
+end;
+
+Function TDirectManager.Alloc(Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
+begin
+ Result:=Alloc(Flo,Fhi,Size,Align,mtype,AdrOut);
 end;
 
 Function TDirectManager.Query(Offset:QWORD;next:Boolean;var ROut:TDirectAdrNode):Integer;
@@ -678,6 +627,30 @@ var
  FEndN,FEndO:QWORD;
  FSize:QWORD;
 
+ function _fetch:Boolean;
+ begin
+  Result:=False;
+
+  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(Offset,Size,key);
+
+   Result:=True;
+  end else
+  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(key.Offset,FEndN-key.Offset,key);
+
+   Result:=True;
+  end;
+ end;
+
  function _map:Boolean;
  begin
   Result:=False;
@@ -722,25 +695,16 @@ begin
   key.IsFree:=False;
   key.Offset:=Offset;
 
-  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  if _fetch then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
+   Result:=_UnmapVirtual(key.addr,key.Size);
 
-   _Devide(Offset,Size,key);
-
-   _UnmapVirtual(key.addr,key.Size);
-
-   if _map then Break;
-  end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(key.Offset,FEndN-key.Offset,key);
-
-   _UnmapVirtual(key.addr,key.Size);
+   if (Result<>0) then
+   begin
+    _Merge(key); //undo
+    Assert(false,IntToStr(Result));
+    Exit;
+   end;
 
    if _map then Break;
   end else
@@ -759,17 +723,47 @@ begin
  until false;
 end;
 
-Function TDirectManager.mmap_addr(Offset,Size:QWORD;addr:Pointer):Integer;
+Function TDirectManager.mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
 var
  key:TDirectAdrNode;
  FEndN,FEndO:QWORD;
  FSize:QWORD;
+
+ function _fetch:Boolean;
+ begin
+  Result:=False;
+
+  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(Offset,Size,key);
+
+   Result:=True;
+  end else
+  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(key.Offset,FEndN-key.Offset,key);
+
+   Result:=True;
+  end;
+ end;
 
  function _map:Boolean;
  begin
   Result:=False;
 
   //new save
+
+  if (mtype>=0) then
+  begin
+   key.F.mtype:=mtype;
+  end;
+
   key.addr   :=addr;
   _Merge(key);
 
@@ -809,106 +803,8 @@ begin
   key.IsFree:=False;
   key.Offset:=Offset;
 
-  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  if _fetch then
   begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(Offset,Size,key);
-
-   if _map then Break;
-  end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(key.Offset,FEndN-key.Offset,key);
-
-   if _map then Break;
-  end else
-  if _Find_m(M_LE,key) then
-  begin
-   if _skip then Break;
-  end else
-  if _Find_m(M_BE,key) then
-  begin
-   if _skip then Break;
-  end else
-  begin
-   Break;
-  end;
-
- until false;
-end;
-
-Function TDirectManager.mmap_addr2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
-var
- key:TDirectAdrNode;
- FEndN,FEndO:QWORD;
- FSize:QWORD;
-
- function _map:Boolean;
- begin
-  Result:=False;
-
-  //new save
-  key.F.mtype:=mtype;
-  key.addr   :=addr;
-  _Merge(key);
-
-  if (FEndO>=FEndN) then Exit(True);
-
-  FSize:=FEndO-Offset;
-
-  addr  :=ia(addr,FSize);
-  Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
- end;
-
- function _skip:Boolean; inline;
- begin
-  Result:=False;
-
-  FEndN:=Offset+Size;
-  FEndO:=key.Offset+key.Size;
-
-  if (FEndO>=FEndN) then Exit(True);
-
-  FSize:=FEndO-Offset;
-
-  addr  :=ia(addr,FSize);
-  Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
- end;
-
-begin
- Result:=0;
- if (Size=0)                     then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
-
- repeat
-
-  key:=Default(TDirectAdrNode);
-  key.IsFree:=False;
-  key.Offset:=Offset;
-
-  if _FetchNode_m(M_LE or C_LE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(Offset,Size,key);
-
-   if _map then Exit;
-  end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
-  begin
-   FEndN:=Offset+Size;
-   FEndO:=key.Offset+key.Size;
-
-   _Devide(key.Offset,FEndN-key.Offset,key);
-
    if _map then Exit;
   end else
   if _Find_m(M_LE,key) then
@@ -967,22 +863,22 @@ var
 begin
  test:=TDirectManager.Create;
 
- test.Alloc_any(4*1024,1,0,addr[0]);
+ test.Alloc(4*1024,1,0,addr[0]);
  Writeln(HexStr(addr[0],16));
 
- test.Alloc_any(4*1024,1,0,addr[1]);
+ test.Alloc(4*1024,1,0,addr[1]);
  Writeln(HexStr(addr[1],16));
 
- test.Alloc_any(4*1024,1,0,addr[2]);
+ test.Alloc(4*1024,1,0,addr[2]);
  Writeln(HexStr(addr[2],16));
 
- test.Alloc_any(4*1024,1,0,addr[3]);
+ test.Alloc(4*1024,1,0,addr[3]);
  Writeln(HexStr(addr[3],16));
 
- test.Alloc_any(4*1024,1,0,addr[4]);
+ test.Alloc(4*1024,1,0,addr[4]);
  Writeln(HexStr(addr[4],16));
 
- test.Alloc_any(4*1024,1,0,addr[5]);
+ test.Alloc(4*1024,1,0,addr[5]);
  Writeln(HexStr(addr[5],16));
 
  writeln;
