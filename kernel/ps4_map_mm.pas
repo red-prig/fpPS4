@@ -1619,11 +1619,11 @@ begin
 
  if (flags and MAP_VOID)<>0 then //reserved
  begin
-  Result:=VirtualManager.mmap_reserved(QWORD(addr),len,align,prot,flags,QWORD(res));
+  Result:=VirtualManager.mmap(QWORD(addr),len,align,prot,flags,QWORD(res));
  end else
  if (flags and MAP_ANON)<>0 then //flex
  begin
-  Result:=VirtualManager.mmap_flex(QWORD(addr),len,align,prot,flags,QWORD(res));
+  Result:=VirtualManager.mmap(QWORD(addr),len,align,prot,flags,QWORD(res));
  end else
  if (flags and MAP_SHARED)<>0 then
  begin
@@ -1973,7 +1973,7 @@ var
  res:Pointer;
 
 initialization
- DirectManager :=TDirectManager .Create(0,SCE_KERNEL_MAIN_DMEM_SIZE-1);
+ DirectManager :=TDirectManager .Create;
  VirtualManager:=TVirtualManager.Create($400000,$3FFFFFFFF);
  PageMM.init;
 
