@@ -65,16 +65,15 @@ type
     TFreePoolNodeSet=specialize T23treeSet<TDirectAdrNode,TDirectAdrFreeCompare>;
     TAllcPoolNodeSet=specialize T23treeSet<TDirectAdrNode,TDirectAdrAllcCompare>;
 
-   var
-    Flo,Fhi:QWORD;
+   const
+    Flo=0;
+    Fhi=$17FFFFFFF;
 
+   var
     FFreeSet:TFreePoolNodeSet;
     FAllcSet:TAllcPoolNodeSet;
   public
-    property lo:QWORD read Flo;
-    property hi:QWORD read Fhi;
-
-    Constructor Create(_lo,_hi:QWORD);
+    Constructor Create;
   private
     procedure _Insert(const key:TDirectAdrNode);
     Function  _FetchFree_a(Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
@@ -98,9 +97,9 @@ type
     Function  CheckedMMap(Offset,Size:QWORD):Integer;
     Function  CheckedRelease(Offset,Size:QWORD):Integer;
     Function  Release(Offset,Size:QWORD):Integer;
-    Function  mmap(Offset,Size:QWORD;addr:Pointer):Integer;
-    Function  mmap2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
-    Function  unmap(Offset,Size:QWORD):Integer;
+    Function  mmap_addr(Offset,Size:QWORD;addr:Pointer):Integer;
+    Function  mmap_addr2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
+    Function  unmap_addr(Offset,Size:QWORD):Integer;
 
     procedure Print;
  end;
@@ -196,19 +195,16 @@ end;
 
 ///
 
-Constructor TDirectManager.Create(_lo,_hi:QWORD);
+Constructor TDirectManager.Create;
 var
  key:TDirectAdrNode;
 begin
- Assert(_lo<_hi);
-
- Flo:=_lo;
- Fhi:=_hi;
+ Assert(Flo<Fhi);
 
  key:=Default(TDirectAdrNode);
  key.IsFree:=True;
- key.Offset:=_lo;
- key.Size  :=(_hi-_lo+1);
+ key.Offset:=Flo;
+ key.Size  :=(Fhi-Flo+1);
 
  _Insert(key);
 end;
@@ -763,7 +759,7 @@ begin
  until false;
 end;
 
-Function TDirectManager.mmap(Offset,Size:QWORD;addr:Pointer):Integer;
+Function TDirectManager.mmap_addr(Offset,Size:QWORD;addr:Pointer):Integer;
 var
  key:TDirectAdrNode;
  FEndN,FEndO:QWORD;
@@ -846,7 +842,7 @@ begin
  until false;
 end;
 
-Function TDirectManager.mmap2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
+Function TDirectManager.mmap_addr2(Offset,Size:QWORD;addr:Pointer;mtype:Byte):Integer;
 var
  key:TDirectAdrNode;
  FEndN,FEndO:QWORD;
@@ -930,9 +926,9 @@ begin
  until false;
 end;
 
-Function TDirectManager.unmap(Offset,Size:QWORD):Integer;
+Function TDirectManager.unmap_addr(Offset,Size:QWORD):Integer;
 begin
- Result:=mmap(Offset,Size,nil);
+ Result:=mmap_addr(Offset,Size,nil);
 end;
 
 function _alloc_str(IsFree:Boolean):RawByteString;
@@ -969,7 +965,7 @@ var
  test:TDirectManager;
  addr:array[0..5] of qword;
 begin
- test:=TDirectManager.Create(0,$180000000-1);
+ test:=TDirectManager.Create;
 
  test.Alloc_any(4*1024,1,0,addr[0]);
  Writeln(HexStr(addr[0],16));
@@ -1023,7 +1019,7 @@ begin
 
  writeln(test.CheckedMmap(addr[1],4*1024));
 
- test.mmap(addr[0],4*1024*6,Pointer(4*1024));
+ test.mmap_addr(addr[0],4*1024*6,Pointer(4*1024));
 
  writeln(test.CheckedMmap(addr[1],4*1024));
 
