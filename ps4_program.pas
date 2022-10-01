@@ -177,6 +177,8 @@ function  GetSceProcParam:Pointer;
 function  GetSceUserMainThreadName:PChar;
 function  GetSceUserMainThreadPriority:PDWORD;
 function  GetSceUserMainThreadStackSize:PDWORD;
+function  GetSceKernelMemParam:Pointer;
+function  GetSceKernelFlexibleMemorySize:PQWORD;
 
 Function  get_dev_progname:RawByteString;
 
@@ -1555,6 +1557,34 @@ begin
  if (P^.Header.Size>=qword(@PSceProcParam(nil)^.SceUserMainThreadStackSize)+SizeOf(Pointer)) then
  begin
   Result:=p^.SceUserMainThreadStackSize;
+ end;
+end;
+
+function GetSceKernelMemParam:Pointer;
+var
+ p:PSceProcParam;
+begin
+ Result:=nil;
+ p:=GetSceProcParam;
+ if (p=nil) then Exit;
+
+ if (P^.Header.Size>=qword(@PSceProcParam(nil)^._sceKernelMemParam)+SizeOf(Pointer)) then
+ begin
+  Result:=p^._sceKernelMemParam;
+ end;
+end;
+
+function GetSceKernelFlexibleMemorySize:PQWORD;
+var
+ p:PSceKernelMemParam;
+begin
+ Result:=nil;
+ p:=GetSceKernelMemParam;
+ if (p=nil) then Exit;
+
+ if (P^.Size>=qword(@PSceKernelMemParam(nil)^.sceKernelFlexibleMemorySize)+SizeOf(Pointer)) then
+ begin
+  Result:=p^.sceKernelFlexibleMemorySize;
  end;
 end;
 

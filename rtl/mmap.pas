@@ -71,6 +71,7 @@ const
 
 function _isgpu(prot:Integer):Boolean; inline;
 function __map_prot_page(prot:Integer):DWORD;
+function __win_prot_page(prot:DWORD):Integer;
 function __map_prot_file(prot:Integer):DWORD;
 
 function _VirtualAlloc   (Addr:Pointer;dwSize:PTRUINT;prot:Integer):Integer;
@@ -81,6 +82,7 @@ function _VirtualFree    (Addr:Pointer):Integer;
 function _VirtualMmap    (Addr:Pointer;len:size_t;prot,fd:Integer;offst:size_t):Integer;
 function _VirtualUnmap   (addr:Pointer):Integer;
 function _VirtualProtect (addr:Pointer;len:size_t;prot:Integer):Integer;
+function _VirtualQuery   (addr:Pointer;paddr:PPointer;psize:Pptruint;pprots,pflags:PInteger):Integer;
 
 implementation
 
@@ -117,6 +119,29 @@ begin
  end else
  begin
   Result:=PAGE_READONLY;
+ end;
+end;
+
+function __win_prot_page(prot:DWORD):Integer;
+begin
+ Result:=0;
+
+ prot:=prot and (
+  PAGE_NOACCESS or
+  PAGE_READONLY or
+  PAGE_READWRITE or
+  PAGE_EXECUTE or
+  PAGE_EXECUTE_READ or
+  PAGE_EXECUTE_READWRITE);
+
+ Case prot of
+  PAGE_NOACCESS         :Result:=0;
+  PAGE_READONLY         :Result:=PROT_READ;
+  PAGE_READWRITE        :Result:=PROT_READ or PROT_WRITE;
+  PAGE_EXECUTE          :Result:=PROT_EXEC;
+  PAGE_EXECUTE_READ     :Result:=PROT_EXEC or PROT_READ;
+  PAGE_EXECUTE_READWRITE:Result:=PROT_EXEC or PROT_READ or PROT_WRITE;
+  else;
  end;
 end;
 
@@ -253,6 +278,58 @@ begin
  if not VirtualProtect(addr,len,__map_prot_page(prot),old) then
  begin
   Result:=GetLastError;
+ end;
+end;
+
+function _win_state(state:DWORD):Integer; inline;
+begin
+ Case state of
+  MEM_COMMIT :Result:=MAP_FIXED;
+  MEM_RESERVE:Result:=MAP_VOID;
+  else        Result:=0;
+ end;
+end;
+
+function _win_mtype(mtype:DWORD):Integer; inline;
+begin
+ Case mtype of
+  MEM_PRIVATE:Result:=MAP_ANON;
+  else        Result:=MAP_SHARED;
+
+ end;
+end;
+
+function _VirtualQuery(addr:Pointer;paddr:PPointer;psize:Pptruint;pprots,pflags:PInteger):Integer;
+var
+ Info:TMemoryBasicInformation;
+begin
+ Result:=0;
+ Info:=Default(TMemoryBasicInformation);
+ Result:=VirtualQuery(addr,Info,SizeOf(TMemoryBasicInformation));
+ if (Result=0) then
+ begin
+  Result:=GetLastError;
+ end else
+ begin
+  if (paddr<>nil) then
+  begin
+   paddr^:=Info.AllocationBase;
+  end;
+
+  if (psize<>nil) then
+  begin
+   psize^:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
+  end;
+
+  if (pprots<>nil) then
+  begin
+   pprots^:=__win_prot_page(Info.Protect);
+  end;
+
+  if (pflags<>nil) then
+  begin
+   pflags^:=_win_state(Info.State) or _win_mtype(Info._Type)
+  end;
  end;
 end;
 

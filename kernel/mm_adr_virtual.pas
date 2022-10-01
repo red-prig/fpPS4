@@ -154,7 +154,7 @@ type
     Function  check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
     Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
 
-    Function  CheckedAlloc(Offset:Pointer;Size:QWORD):Integer;
+    procedure Protect(Offset:Pointer;Size:QWORD;prot:Integer);
     Function  Release(Offset:Pointer;Size:QWORD):Integer;
 
     procedure Print;
@@ -1113,40 +1113,98 @@ begin
  end;
 end;
 
-/////////
-
-Function TVirtualManager.CheckedAlloc(Offset:Pointer;Size:QWORD):Integer;
+procedure TVirtualManager.Protect(Offset:Pointer;Size:QWORD;prot:Integer);
 var
- It:TAllcPoolNodeSet.Iterator;
  key:TVirtualAdrNode;
- FEndO:Pointer;
-begin
- Result:=0;
- if (Size=0) then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+ FEndN,FEndO:Pointer;
+ FSize:QWORD;
 
- FEndO:=Offset+Size;
-
- key:=Default(TVirtualAdrNode);
- key.Offset:=Offset;
-
- It:=FAllcSet.find_le(key);
- While (It.Item<>nil) do
+ function _fetch:Boolean;
  begin
-  key:=It.Item^;
+  Result:=False;
 
-  if (Offset>=key.Offset) then
+  if _FetchNode_m(M_LE or C_FR or C_LE,Offset,key) then
   begin
-   if not key.IsFree then
-   begin
-    Exit(ENOMEM);
-   end;
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(Offset,Size,key);
+
+   Result:=True;
+  end else
+  if _FetchNode_m(M_BE or C_FR or C_BE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(key.Offset,FEndN-key.Offset,key);
+
+   Result:=True;
+  end;
+ end;
+
+ function _map:Boolean;
+ begin
+  Result:=False;
+
+  //new save
+  if (key.block=nil) then
+  begin
+   key.F.prot:=prot;
+  end else
+  begin
+   key.block^.Protect(@key,prot);
   end;
 
-  if (key.Offset>=FEndO) then Break;
+  _Merge(key);
 
-  It.Next;
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
  end;
+
+ function _skip:Boolean; inline;
+ begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+begin
+
+ repeat
+
+  key:=Default(TVirtualAdrNode);
+  key.Offset:=Offset;
+
+  if _fetch then
+  begin
+   if _map then Break;
+  end else
+  if _Find_m(M_LE,key) then
+  begin
+   if _skip then Break;
+  end else
+  if _Find_m(M_BE,key) then
+  begin
+   if _skip then Break;
+  end else
+  begin
+   Break;
+  end;
+
+ until false;
 end;
 
 Function TVirtualManager.Release(Offset:Pointer;Size:QWORD):Integer;
@@ -1291,11 +1349,34 @@ begin
  until false;
 end;
 
-function _alloc_str(IsFree:Boolean):RawByteString;
+function _alloc_str(var key:TVirtualAdrNode):RawByteString;
 begin
- Case IsFree of
-  True :Result:='FREE';
-  FAlse:Result:='ALLC';
+ if (key.F.Free<>0) then
+ begin
+  Result:='FREE';
+ end else
+ if (key.F.reserv<>0) then
+ begin
+  Result:='RSRV';
+ end else
+ if (key.F.direct<>0) then
+ begin
+  Result:='DRCT';
+ end else
+ if (key.F.stack<>0) then
+ begin
+  Result:='STCK';
+ end else
+ if (key.F.polled<>0) then
+ begin
+  Result:='POOL';
+ end else
+ if (key.F.mapped<>0) then
+ begin
+  Result:='FMAP';
+ end else
+ begin
+  Result:='ALLC';
  end;
 end;
 
@@ -1313,7 +1394,7 @@ begin
           HexStr(QWORD(key.Offset+key.Size),10),':',
           HexStr(key.Size,10),'#',
           HexStr(qword(key.addr),10),'#',
-          _alloc_str(key.IsFree),'#');
+          _alloc_str(key),'#');
 
   It.Next;
  end;

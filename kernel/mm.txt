@@ -34,7 +34,7 @@ int _sceKernelMapDirectMemory
     adr = *virtualAddrDest;
     if ((((_direct_pool_id == 1) && ((APP_INFO[4] & 2) == 0)) &&
         (((long)physicalAddr < 0x3000000000 || (0x301fffffff < physicalAddr)))) &&
-       (((flags & 0x400U) == 0 && (0x24fffff < SDK_VERSION)))) {
+       (((flags & SCE_KERNEL_MAP_DMEM_COMPAT) == 0 && (0x24fffff < SDK_VERSION)))) {
       ret1 = sceKernelMapDirectMemory2
                        (virtualAddrDest,length,-1,protections,flags,physicalAddr,alignment);
       return ret1;
@@ -330,3 +330,102 @@ int sceKernelReleaseFlexibleMemory(void *addr,size_t len)
   return ret1;
 }
 
+int sceKernelQueryMemoryProtection(void *addr,void **start,void **end,int *prot)
+
+{
+  int ret1;
+  int *perror;
+  void *_start;
+  void *_end;
+  uint _prot;
+  long __guard;
+  int err;
+  
+  __guard = __stack_chk_guard._0_8_;
+  ret1 = sys_query_memory_protection(addr,&_start);
+  if (ret1 == 0) {
+    if (start != (void **)0x0) {
+      *start = _start;
+    }
+    if (end != (void **)0x0) {
+      *end = _end;
+    }
+    ret1 = 0;
+    if (prot != (int *)0x0) {
+      *prot = _prot & 0x37;
+    }
+  }
+  else {
+    perror = (int *)__error();
+    err = *perror;
+    ret1 = err + -0x7ffe0000;
+    if (err == 0) {
+      ret1 = err;
+    }
+  }
+  if (__stack_chk_guard._0_8_ != __guard) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return ret1;
+}
+
+int sceKernelVirtualQuery(void *addr,int flags,void *info,qword infoSize)
+
+{
+  int ret1;
+  int err;
+  int *perror;
+  
+  ret1 = sys_virtual_query();
+  err = 0;
+  if (ret1 == -1) {
+    perror = (int *)__error();
+    ret1 = *perror;
+    err = ret1 + -0x7ffe0000;
+    if (ret1 == 0) {
+      err = ret1;
+    }
+  }
+  return err;
+}
+
+int sceKernelMtypeprotect(void *addr,qword len,int type,int prot)
+
+{
+  int ret1;
+  int err;
+  int *perror;
+  
+  ret1 = sys_mtypeprotect();
+  err = 0;
+  if (ret1 == -1) {
+    perror = (int *)__error();
+    ret1 = *perror;
+    err = ret1 + -0x7ffe0000;
+    if (ret1 == 0) {
+      err = ret1;
+    }
+  }
+  return err;
+}
+
+int sceKernelSetVirtualRangeName(void *addr,qword len,char *name)
+
+{
+  int ret1;
+  int err;
+  int *perror;
+  
+  ret1 = sys_mname();
+  err = 0;
+  if (ret1 == -1) {
+    perror = (int *)__error();
+    ret1 = *perror;
+    err = ret1 + -0x7ffe0000;
+    if (ret1 == 0) {
+      err = ret1;
+    }
+  }
+  return err;
+}

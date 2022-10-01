@@ -1616,7 +1616,7 @@ end;
 //flag:MAP_ANON   fd=-1                               //flex
 //flag:MAP_SHARED fd=/dev/dmem%d offset=physicalAddr  //direct
 
-function __mmap(addr:Pointer;len,align:size_t;prot,flags:Integer;fd:Integer;offset:size_t;var res:Pointer):Integer;
+function __mmap(addr:Pointer;len,align:size_t;prot,flags,fd:Integer;offset:size_t;var res:Pointer):Integer;
 begin
  Result:=EINVAL;
 
@@ -1668,6 +1668,36 @@ begin
  _sig_unlock;
 end;
 
+function __sys_mmap_dmem(
+           addr:Pointer;
+           length:QWORD;
+           alignment:QWORD;
+           mtype,prots,flags:Integer;
+           physicalAddr:QWORD;
+           var res:Pointer):Integer;
+begin
+ Result:=0;
+
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock); //rw
+
+ Result:=DirectManager.CheckedMMap(physicalAddr,length);
+
+ if (Result=0) then
+ begin
+  flags:=flags or MAP_SHARED;
+  Result:=VirtualManager.mmap(addr,length,alignment,prots,flags,0,physicalAddr,res);
+
+  if (Result=0) then
+  begin
+   Result:=DirectManager.mmap_addr(physicalAddr,length,addr,mtype);
+  end;
+ end;
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+end;
+
 function __munmap(addr:Pointer;len:size_t):Integer;
 begin
  Result:=VirtualManager.Release(addr,len);
@@ -1692,48 +1722,182 @@ end;
 function _sceKernelMapFlexibleMemory(
            virtualAddrDest:PPointer;
            length:QWORD;
-           prot,flags:Integer;
-           physicalAddr:QWORD;
-           alignment:QWORD):Integer; SysV_ABI_CDecl;
+           prots,flags:Integer):Integer;
 var
  addr:Pointer;
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
 
- if ((($3fff < length) and ((length and $3fff)=0)) and
-    (((flags and $ffbfff6f) or (prot and $ffffffc8))=0)) then
+ if ((flags and $ffbfff6f)<>0) then Exit;
+ if ((prots and $ffffffc8)<>0) then Exit;
+
+ if (length<LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
+
+ addr:=virtualAddrDest^;
+ if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ if (((flags and MAP_FIXED) <> 0) and (addr=nil)) then
  begin
-  addr:=virtualAddrDest^;
-
-  if (((flags and MAP_FIXED)<>0) and (addr=nil)) then
+  if (SDK_VERSION > $16fffff) then
   begin
-   if ($16fffff < SDK_VERSION) then
-   begin
-    Exit(SCE_KERNEL_ERROR_EINVAL);
-   end;
-   flags:=flags and $ffffffef;
-   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
-  end else
-  if (addr=nil) then
-  begin
-   addr:=Pointer($001000000000);
+   Exit(SCE_KERNEL_ERROR_EINVAL);
   end;
-
-  Result:=__mmap(addr,length,0,prot,flags or MAP_ANON,-1,0,addr);
-  _set_errno(Result);
-
-  if (Result<>0) then
-  begin
-   Result:=px2sce(Result);
-  end else
-  begin
-   virtualAddrDest^:=addr;
-   Result:=0;
-  end;
-
+  flags:=flags and $ffffffef;
+  Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
+ if (addr=nil) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
+ Result:=__mmap(addr,length,0,prots,flags or MAP_ANON,-1,0,addr);
+
+ if (Result=0) then
+ begin
+  virtualAddrDest^:=addr;
+  Result:=0;
+ end;
 end;
+
+function _sceKernelReserveVirtualRange(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           flags:Integer;
+           alignment:QWORD):Integer;
+var
+ addr:Pointer;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ if ((flags and $ffbfff6f)<>0) then Exit;
+
+ if (length<LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(length   ,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(alignment,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsPowerOfTwo(alignment) then Exit;
+
+ if (alignment<LOGICAL_PAGE_SIZE) then alignment:=LOGICAL_PAGE_SIZE;
+ if (fastIntLog2(alignment)>31) then Exit;
+
+ addr:=virtualAddrDest^;
+ if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ if (((flags and MAP_FIXED) <> 0) and (addr=nil)) then
+ begin
+  if (SDK_VERSION > $16fffff) then
+  begin
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+  end;
+  flags:=flags and $ffffffef;
+  Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
+ end;
+
+ Result:=__mmap(addr,length,alignment,0,flags or MAP_VOID or MAP_SHARED,-1,0,addr);
+
+ if (Result=0) then
+ begin
+  virtualAddrDest^:=addr;
+  Result:=0;
+ end;
+end;
+
+function _sceKernelMapDirectMemory2(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           mtype,prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer;
+var
+ addr:Pointer;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ if ((flags and $1f000000)<>0) then Exit;
+ if ((prots and $ffffffc8)<>0) then Exit;
+
+ if (length<LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(length      ,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(physicalAddr,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(alignment   ,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsPowerOfTwo(alignment) then Exit;
+
+ if (alignment<LOGICAL_PAGE_SIZE) then alignment:=LOGICAL_PAGE_SIZE;
+ if (fastIntLog2(alignment)>31) then Exit;
+
+ addr:=virtualAddrDest^;
+ if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ Result:=__sys_mmap_dmem(addr,length,alignment,mtype,prots,flags,physicalAddr,addr);
+
+ if (Result=0) then
+ begin
+  virtualAddrDest^:=addr;
+  Result:=0;
+ end;
+end;
+
+function _sceKernelMapDirectMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer;
+var
+ addr:Pointer;
+ _flags:Integer;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ if ((physicalAddr < $3000000000) or (physicalAddr > $301fffffff)) and
+    ((flags and SCE_KERNEL_MAP_DMEM_COMPAT)=0) and (SDK_VERSION > $24fffff) then
+ begin
+  Result:=_sceKernelMapDirectMemory2(virtualAddrDest,length,-1,prots,flags,physicalAddr,alignment);
+  Exit;
+ end;
+
+ if ((flags and $1f000000)<>0) then Exit;
+ if ((prots and $ffffffc8)<>0) then Exit;
+
+ if (length<LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(length      ,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(physicalAddr,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(alignment   ,LOGICAL_PAGE_SIZE) then Exit;
+ if not IsPowerOfTwo(alignment) then Exit;
+
+ if (alignment<LOGICAL_PAGE_SIZE) then alignment:=LOGICAL_PAGE_SIZE;
+ if (fastIntLog2(alignment)>31) then Exit;
+
+ addr:=virtualAddrDest^;
+ if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ _flags:=flags and $fffffbff;
+
+ if (((flags and MAP_FIXED) <> 0) and (addr=nil)) then
+ begin
+  if (SDK_VERSION > $16fffff) then
+  begin
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+  end;
+  _flags:=flags and $fffffbef;
+  Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
+ end;
+
+ if (addr=nil) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
+ Result:=__mmap(addr,length,alignment,prots,_flags or MAP_SHARED,0,physicalAddr,addr);
+
+ if (Result=0) then
+ begin
+  virtualAddrDest^:=addr;
+  Result:=0;
+ end;
+end;
+
 
 ////
 ////
