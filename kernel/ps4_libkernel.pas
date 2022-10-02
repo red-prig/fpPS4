@@ -1113,6 +1113,7 @@ begin
 
  //
  ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
+ _mem_init;
 end;
 
 initialization

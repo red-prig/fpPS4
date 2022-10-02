@@ -12,7 +12,7 @@ uses
   mmap,
   mm_adr_direct,
   mm_adr_virtual,
-  mm_adr_pool,
+  mm_adr_name,
   Classes,
   SysUtils;
 
@@ -179,9 +179,15 @@ Function  TryGetGpuMemBlockByAddr(addr:Pointer;var block:TGpuMemBlock):Boolean;
 Procedure RegistredStack;
 Procedure UnRegistredStack;
 
+var
+ SceKernelFlexibleMemorySize:QWORD=0;
+
+Procedure _mem_init;
+
 implementation
 
 uses
+ ps4_program,
  sys_kernel,
  sys_signal;
 
@@ -1703,8 +1709,25 @@ begin
  Result:=VirtualManager.Release(addr,len);
 end;
 
+function __release_direct(Offset,Size:QWORD):Integer;
+begin
+ Result:=DirectManager.Release(Offset,Size);
+end;
+
+function __mtype_direct(Offset,Size:QWORD;mtype:Integer):Integer;
+begin
+ Result:=DirectManager.mmap_type(Offset,Size,mtype);
+end;
+
 function _munmap(addr:Pointer;len:size_t):Integer;
 begin
+ Result:=EINVAL;
+
+ if (len<PHYSICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
+
+ if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
+
  _sig_lock;
  rwlock_wrlock(PageMM.FLock); //rw
 
@@ -1714,9 +1737,139 @@ begin
  _sig_unlock;
 end;
 
-function __release_direct(Offset,Size:QWORD):Integer;
+function _mprotect(addr:Pointer;len:size_t;prot:Integer):Integer;
+var
+ tmp:Pointer;
 begin
- Result:=DirectManager.Release(Offset,Size);
+ Result:=EINVAL;
+
+ if ((prot and $ffffffc8)<>0) then Exit;
+
+ tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+ len:=len+(addr-tmp);
+
+ addr:=tmp;
+ len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock); //rw
+
+ Result:=VirtualManager.Protect(addr,len,prot);
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+end;
+
+function _sys_mtypeprotect(addr:Pointer;len:size_t;mtype,prot:Integer):Integer;
+var
+ tmp:Pointer;
+begin
+ Result:=EINVAL;
+
+ if ((prot and $ffffffc8)<>0) then Exit;
+
+ tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+ len:=len+(addr-tmp);
+
+ addr:=tmp;
+ len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+
+ _sig_lock;
+ rwlock_wrlock(PageMM.FLock); //rw
+
+ Result:=VirtualManager.Mtypeprotect(addr,len,mtype,prot);
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+end;
+
+function _sys_query_memory_protection(addr:Pointer;
+                                      pStart,pEnd:PPointer;
+                                      pProt:PInteger):Integer;
+var
+ ROut:TVirtualAdrNode;
+begin
+ Result:=0;
+
+ addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+
+ ROut:=Default(TVirtualAdrNode);
+
+ _sig_lock;
+ rwlock_rdlock(PageMM.FLock); //r
+
+ Result:=VirtualManager.QueryProt(addr,ROut);
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+
+ if (Result<>0) then
+ begin
+  if (pStart<>nil) then
+  begin
+   pStart^:=ROut.Offset;
+  end;
+
+  if (pEnd<>nil) then
+  begin
+   pEnd  ^:=ROut.Offset+ROut.Size;
+  end;
+
+  if (pProt<>nil) then
+  begin
+   pProt ^:=ROut.F.prot;
+  end;
+ end;
+end;
+
+function _sys_virtual_query(addr:Pointer;
+                            flags:Integer;
+                            info:pSceKernelVirtualQueryInfo;
+                            infoSize:QWORD):Integer;
+var
+ VOut:TVirtualAdrNode;
+ DOut:TDirectAdrNode;
+ Committed:Boolean;
+begin
+ Result:=EFAULT;
+
+ if (info=nil) then Exit;
+ if (infoSize<>SizeOf(SceKernelVirtualQueryInfo)) then Exit;
+
+ addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+
+ VOut:=Default(TVirtualAdrNode);
+ DOut:=Default(TDirectAdrNode);
+
+ _sig_lock;
+ rwlock_rdlock(PageMM.FLock); //r
+
+ Result:=VirtualManager.Query(addr,(flags=SCE_KERNEL_VQ_FIND_NEXT),VOut);
+
+ if (Result<>0) and (VOut.F.direct=1) then
+ begin
+  Result:=DirectManager.QueryMType(VOut.addr,DOut);
+ end;
+
+ rwlock_unlock(PageMM.FLock);
+ _sig_unlock;
+
+ if (Result<>0) then
+ begin
+  Committed:=(VOut.F.Free=0) and (VOut.F.reserv=0);
+  info^:=Default(SceKernelVirtualQueryInfo);
+  info^.pstart               :=VOut.Offset;
+  info^.pend                 :=VOut.Offset+VOut.Size;
+  info^.offset               :=VOut.addr;
+  info^.protection           :=VOut.F.prot;
+  info^.memoryType           :=DOut.F.mtype;
+  info^.bits.isFlexibleMemory:=Byte((VOut.F.direct=0) and Committed);
+  info^.bits.isDirectMemory  :=VOut.F.direct;
+  info^.bits.isStack         :=VOut.F.stack;
+  info^.bits.isPooledMemory  :=VOut.F.polled;
+  info^.bits.isCommitted     :=Byte(Committed);
+  //info^.name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
+ end;
 end;
 
 function _sceKernelMapFlexibleMemory(
@@ -1753,8 +1906,12 @@ begin
  end;
 
  Result:=__mmap(addr,length,0,prots,flags or MAP_ANON,-1,0,addr);
+ _set_errno(Result);
 
- if (Result=0) then
+ if (Result<>0) then
+ begin
+  Result:=px2sce(Result);
+ end else
  begin
   virtualAddrDest^:=addr;
   Result:=0;
@@ -1795,8 +1952,12 @@ begin
  end;
 
  Result:=__mmap(addr,length,alignment,0,flags or MAP_VOID or MAP_SHARED,-1,0,addr);
+ _set_errno(Result);
 
- if (Result=0) then
+ if (Result<>0) then
+ begin
+  Result:=px2sce(Result);
+ end else
  begin
   virtualAddrDest^:=addr;
   Result:=0;
@@ -1830,8 +1991,12 @@ begin
  if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
 
  Result:=__sys_mmap_dmem(addr,length,alignment,mtype,prots,flags,physicalAddr,addr);
+ _set_errno(Result);
 
- if (Result=0) then
+ if (Result<>0) then
+ begin
+  Result:=px2sce(Result);
+ end else
  begin
   virtualAddrDest^:=addr;
   Result:=0;
@@ -1890,14 +2055,17 @@ begin
  end;
 
  Result:=__mmap(addr,length,alignment,prots,_flags or MAP_SHARED,0,physicalAddr,addr);
+ _set_errno(Result);
 
- if (Result=0) then
+ if (Result<>0) then
+ begin
+  Result:=px2sce(Result);
+ end else
  begin
   virtualAddrDest^:=addr;
   Result:=0;
  end;
 end;
-
 
 ////
 ////
@@ -2233,11 +2401,25 @@ begin
  _sig_unlock;
 end;
 
+Procedure _mem_init;
+var
+ p:PQWORD;
+begin
+ SceKernelFlexibleMemorySize:=(448*1024*1024);
+ p:=GetSceKernelFlexibleMemorySize;
+ if (p<>nil) then
+ begin
+  SceKernelFlexibleMemorySize:=p^;
+ end;
+end;
+
 initialization
  DirectManager :=TDirectManager .Create;
  DirectManager .OnMemoryUnmapCb:=@__munmap;
+
  VirtualManager:=TVirtualManager.Create($400000,$3FFFFFFFF);
  VirtualManager.OnDirectUnmapCb:=@__release_direct;
+ VirtualManager.OnDirectMtypeCb:=@__mtype_direct;
  PageMM.init;
 
 end.

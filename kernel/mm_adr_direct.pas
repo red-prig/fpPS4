@@ -97,6 +97,7 @@ type
     Function  CheckedRelease(Offset,Size:QWORD):Integer;
     Function  Release(Offset,Size:QWORD):Integer;
     Function  mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
+    Function  mmap_type(Offset,Size:QWORD;mtype:Integer):Integer;
     Function  unmap_addr(Offset,Size:QWORD):Integer;
 
     procedure Print;
@@ -788,6 +789,97 @@ var
   FSize:=FEndO-Offset;
 
   addr  :=ia(addr,FSize);
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+begin
+ Result:=0;
+ if (Size=0)                     then Exit(EINVAL);
+ if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+
+ repeat
+
+  key:=Default(TDirectAdrNode);
+  key.IsFree:=False;
+  key.Offset:=Offset;
+
+  if _fetch then
+  begin
+   if _map then Exit;
+  end else
+  if _Find_m(M_LE,key) then
+  begin
+   if _skip then Break;
+  end else
+  if _Find_m(M_BE,key) then
+  begin
+   if _skip then Break;
+  end else
+  begin
+   Break;
+  end;
+
+ until false;
+end;
+
+Function TDirectManager.mmap_type(Offset,Size:QWORD;mtype:Integer):Integer;
+var
+ key:TDirectAdrNode;
+ FEndN,FEndO:QWORD;
+ FSize:QWORD;
+
+ function _fetch:Boolean;
+ begin
+  Result:=False;
+
+  if _FetchNode_m(M_LE or C_LE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(Offset,Size,key);
+
+   Result:=True;
+  end else
+  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  begin
+   FEndN:=Offset+Size;
+   FEndO:=key.Offset+key.Size;
+
+   _Devide(key.Offset,FEndN-key.Offset,key);
+
+   Result:=True;
+  end;
+ end;
+
+ function _map:Boolean;
+ begin
+  Result:=False;
+
+  //new save
+  key.F.mtype:=mtype;
+  _Merge(key);
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -FSize;
+ end;
+
+ function _skip:Boolean; inline;
+ begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
