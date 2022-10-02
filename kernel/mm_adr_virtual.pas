@@ -426,6 +426,7 @@ end;
 
 procedure TVirtualManager._Insert(const key:TVirtualAdrNode);
 begin
+ Assert(key.Size<>0);
  if key.IsFree then
  begin
   if (key.F.mapped=0) then
@@ -478,17 +479,17 @@ begin
        begin
         if not rkey.cmp_merge(key)                  then Exit;
         if (ia(rkey,rkey.addr,rkey.Size)<>key.addr) then Exit;
-        if ((rkey.Offset+rkey.Size)<>cmp     )      then Exit;
+        if ((rkey.Offset+rkey.Size)<>cmp)           then Exit;
        end;
   C_DW:
        begin
         if not rkey.cmp_merge(key)  then Exit;
         if (rkey.addr   <>key.addr) then Exit;
-        if (rkey.Offset <>cmp     ) then Exit;
+        if (rkey.Offset <>cmp)      then Exit;
        end;
 
-  C_LE:if ((rkey.Offset+rkey.Size)<cmp) then Exit;
-  C_BE:if (key.Offset<cmp) then Exit;
+  C_LE:if ((rkey.Offset+rkey.Size)<=cmp) then Exit;
+  C_BE:if (rkey.Offset<=cmp) then Exit;
 
   else
        Exit;
@@ -651,7 +652,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -665,6 +666,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.block:=block;
@@ -709,7 +711,9 @@ begin
    if _map then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -734,7 +738,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -748,6 +752,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.addr:=addr;
@@ -780,7 +785,9 @@ begin
    if _map then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -909,7 +916,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -923,6 +930,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.IsFree  :=False;
@@ -948,21 +956,24 @@ var
   Result:=False;
   err:=0;
 
-  if (key.F.direct<>0) then
+  if (key.Size<>0) then
   begin
-   err:=_UnmapDirect(key.addr,key.Size);
-   if (err<>0) then Exit;
-  end;
+   if (key.F.direct<>0) then
+   begin
+    err:=_UnmapDirect(key.addr,key.Size);
+    if (err<>0) then Exit;
+   end;
 
-  //new save
-  key.IsFree  :=False;
-  key.F.addr  :=addr;
-  key.F.reserv:=_reserv;
-  key.F.direct:=_direct;
-  key.F.stack :=0;
-  key.F.polled:=0;
-  key.F.mapped:=_mapped;
-  _Merge(key);
+   //new save
+   key.IsFree  :=False;
+   key.F.addr  :=addr;
+   key.F.reserv:=_reserv;
+   key.F.direct:=_direct;
+   key.F.stack :=0;
+   key.F.polled:=0;
+   key.F.mapped:=_mapped;
+   _Merge(key);
+  end;
 
   if (FEndO>=FEndN) then Exit(True);
 
@@ -975,11 +986,16 @@ var
 
 begin
  Result:=0;
- if (Size=0)                     then Exit(EINVAL);
- if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+ if (Size=0) then Exit(EINVAL);
+ if (Offset>Fhi) then Exit(EINVAL);
 
- if not _fixed then
+ if _fixed then
  begin
+  if (Offset<Flo) then Exit(EINVAL);
+ end else
+ begin
+  Offset:=Max(Offset,Flo);
+
   Result:=_FindFreeOffset(Offset,Size,Align,Offset);
   if (Result<>0) then Exit;
   flags:=flags or MAP_FIXED;
@@ -1091,7 +1107,9 @@ begin
 
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -1121,7 +1139,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -1135,6 +1153,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   if (key.F.reserv=0) then
@@ -1194,7 +1213,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -1219,7 +1240,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -1233,6 +1254,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   if (key.F.direct<>0) then
   begin
@@ -1297,7 +1319,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -1323,7 +1347,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -1340,6 +1364,7 @@ var
  begin
   Result:=False;
   err:=0;
+  Assert(key.Size<>0);
 
   if (key.F.direct<>0) then
   begin
@@ -1439,7 +1464,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -1532,28 +1559,15 @@ begin
  begin
   key:=It.Item^;
 
-  Writeln(HexStr(QWORD(key.Offset),10),'..',
-          HexStr(QWORD(key.Offset+key.Size),10),':',
-          HexStr(key.Size,10),'#',
-          HexStr(qword(key.addr),10),'#',
+  Writeln(HexStr(QWORD(key.Offset),11),'..',
+          HexStr(QWORD(key.Offset+key.Size),11),':',
+          HexStr(key.Size,11),'#',
+          HexStr(qword(key.addr),11),'#',
           _alloc_str(key),'#');
 
   It.Next;
  end;
 end;
-
-procedure itest;
-var
- test:TVirtualManager;
- addr:array[0..5] of qword;
-begin
- test:=TVirtualManager.Create(0,$180000000-1);
-
-
-end;
-
-initialization
- //itest;
 
 end.
 

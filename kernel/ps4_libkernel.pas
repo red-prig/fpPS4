@@ -771,13 +771,6 @@ begin
 
  //signal
 
- lib^.set_proc($93E017AAEDBF7817,@ps4_getpagesize);
- lib^.set_proc($04F13DB3DBD0417A,@ps4_mmap);
- lib^.set_proc($52A0C68D7039C943,@ps4_munmap);
- lib^.set_proc($B59638F9264D1610,@ps4_msync);
- lib^.set_proc($61039FC4BE107DE5,@ps4_mprotect);
-
-
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
@@ -1008,7 +1001,9 @@ begin
 
  //mmap
 
+ lib^.set_proc($93E017AAEDBF7817,@ps4_getpagesize);
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
+
  lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
  lib^.set_proc($07EBDCD803B666B7,@ps4_sceKernelAllocateMainDirectMemory);
  lib^.set_proc($0B47FB4C971B7DA7,@ps4_sceKernelAvailableDirectMemorySize);
@@ -1017,14 +1012,26 @@ begin
  lib^.set_proc($8705523C29A9E6D3,@ps4_sceKernelCheckedReleaseDirectMemory);
  lib^.set_proc($301B88B6F6DAEB3F,@ps4_sceKernelReleaseDirectMemory);
 
- lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
- lib^.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
- lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
+ lib^.set_proc($04F13DB3DBD0417A,@ps4_mmap);
+ lib^.set_proc($3C68501DDFDDCEFF,@ps4_sceKernelMmap);
+ lib^.set_proc($52A0C68D7039C943,@ps4_munmap);
  lib^.set_proc($71091EF54B8140E9,@ps4_sceKernelMunmap);
+ lib^.set_proc($B5E888B4BD9BA05C,@ps4_sceKernelReleaseFlexibleMemory);
+ lib^.set_proc($61039FC4BE107DE5,@ps4_mprotect);
+ lib^.set_proc($BD23009B77316136,@ps4_sceKernelMprotect);
+ lib^.set_proc($F5B7DD2C8CAEC026,@ps4_sceKernelMtypeprotect);
  lib^.set_proc($58571F2F697389DA,@ps4_sceKernelQueryMemoryProtection);
  lib^.set_proc($AD58D1BC72745FA7,@ps4_sceKernelVirtualQuery);
- lib^.set_proc($BD23009B77316136,@ps4_sceKernelMprotect);
  lib^.set_proc($0C6306DC9B21AD95,@ps4_sceKernelSetVirtualRangeName);
+ lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
+ lib^.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
+ lib^.set_proc($EE8C6FDCF3C2BA6A,@ps4_sceKernelReserveVirtualRange);
+ lib^.set_proc($0504278A8963F6D4,@ps4_sceKernelMapDirectMemory2);
+ lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
+ lib^.set_proc($35C6965317CC3484,@ps4_sceKernelMapNamedDirectMemory);
+
+ lib^.set_proc($B59638F9264D1610,@ps4_msync);
+ lib^.set_proc($0E435E6F1989C952,@ps4_sceKernelMsync);
 
  //mmap
 

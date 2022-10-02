@@ -42,8 +42,11 @@ System reserved area: 0x00FC 0000 0000 - 0x00FF FFFF FFFF Size: 0x0003 FFFF FFFF
 }
 
 var
- DirectManager:TDirectManager;
+ MMLock:TRWLock;
+
+ DirectManager :TDirectManager;
  VirtualManager:TVirtualManager;
+ NamedManager  :TNamedManager;
 
 Const
  SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
@@ -60,7 +63,7 @@ type
 const
  SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE=32;
  SCE_KERNEL_DMQ_FIND_NEXT=1;
- SCE_KERNEL_VQ_FIND_NEXT=1;
+ SCE_KERNEL_VQ_FIND_NEXT =1;
 
 type
  pSceKernelVirtualQueryInfo=^SceKernelVirtualQueryInfo;
@@ -82,6 +85,8 @@ type
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
+
+//direct
 
 function ps4_sceKernelAllocateDirectMemory(
            searchStart:QWORD;
@@ -121,41 +126,83 @@ function ps4_sceKernelReleaseDirectMemory(start,len:QWORD):Integer; SysV_ABI_CDe
 
 //mapping
 
-function ps4_sceKernelMapDirectMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer;
-           physicalAddr:QWORD;
-           alignment:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_mmap(addr:Pointer;
+                  len:size_t;
+                  prot,flags,fd:Integer;
+                  offset:size_t):Pointer; SysV_ABI_CDecl;
 
-function ps4_sceKernelMapNamedFlexibleMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer;
-           name:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMmap(addr:Pointer;
+                           len:size_t;
+                           prot,flags,fd:Integer;
+                           offset:size_t;
+                           res:PPointer):Integer; SysV_ABI_CDecl;
 
-function ps4_sceKernelMapFlexibleMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer):Integer; SysV_ABI_CDecl;
+function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelMunmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelReleaseFlexibleMemory(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
+
+function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMtypeprotect(addr:Pointer;len:size_t;mtype,prot:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelQueryMemoryProtection(addr:Pointer;
+                                            pStart,pEnd:PPointer;
+                                            pProt:PInteger):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelVirtualQuery(addr:Pointer;
                                    flags:Integer;
                                    info:pSceKernelVirtualQueryInfo;
                                    infoSize:QWORD):Integer; SysV_ABI_CDecl;
 
-function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:Pchar):Integer; SysV_ABI_CDecl;
-function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
-function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
+Function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;pname:PChar):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMapFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMapNamedFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           name:PChar):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelReserveVirtualRange(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           flags:Integer;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMapDirectMemory2(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           mtype,prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMapDirectMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelMapNamedDirectMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD;
+           name:Pchar):Integer; SysV_ABI_CDecl;
+
+//
+
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
-function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMsync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
 
 type
  TGpuMemAlloc=function(addr:Pointer;len:size_t):Pointer;
@@ -191,67 +238,6 @@ uses
  sys_kernel,
  sys_signal;
 
-const
- INVALID_DIRECT=QWORD(-1);
-
- BT_STACK     =0;
- BT_DIRECT_BIG=1;
- BT_DIRECT_64K=2;
- BT_PHYSIC_BIG=3;
- BT_PHYSIC_64K=4;
-
- BS_FREE   =0;
- BS_RESERVE=1;
- BS_COMMIT =2;
-
-type
- PBlock=^TBlock;
- TBlock=object
-  pAddr:Pointer;
-  nSize:Int64;
-  bType:SizeUint;
- end;
-
- pdlist=^Tdlist;
-
- Pdnode=^Tdnode;
- Tdnode=object
-  pPrev,pNext:Pdnode;
- end;
-
- Tdlist=object
-  pHead,pTail:Pdnode;
-  function  REMOVE_HEAD:Pdnode;    inline;
-  procedure INSERT_TAIL(e:Pdnode); inline;
-  procedure REMOVE(e:Pdnode); inline;
- end;
-
- TnodeInfo=bitpacked record
-  id:Byte;
-  prot:Byte;
-  state:Byte;
-  len:Byte;
-  align2:DWORD;
- end;
-
- PdnodeAdr=^TdnodeAdr;
- TdnodeAdr=object(Tdnode)
-  direct:QWORD;
-  info:TnodeInfo;
- end;
-
- PBlockBig=^TBlockBig;
- TBlockBig=object(TBlock)
-  direct:QWORD;
-  Handle:Pointer;
-  prot:Byte;
- end;
-
- PBlock64k=^TBlock64k;
- TBlock64k=object(TBlock)
-  nodes:array[0..3] of TdnodeAdr;
- end;
-
 function IsPowerOfTwo(x:QWORD):Boolean; inline;
 begin
  Result:=(x and (x - 1))=0;
@@ -284,926 +270,14 @@ begin
  if (flags and SCE_KERNEL_PROT_GPU_WRITE)<>0 then Result:=Result+' GPU_WRIT';
 end;
 
-//
-
-function Get16kBlockCount(len:PTRUINT):PTRUINT; inline;
-begin
- Result:=len div LOGICAL_PAGE_SIZE;
-end;
-
-function Get4kBlockCount(len:PTRUINT):PTRUINT; inline;
-begin
- Result:=len div PHYSICAL_PAGE_SIZE;
-end;
-
-//
-
-function VirtualAllocAlign(Addr:Pointer;dwSize,alignment:PTRUINT;flAllocationType,flProtect:DWORD):Pointer;
-begin
- Result:=nil;
- if (alignment<=GRANULAR_PAGE_SIZE) or (Addr<>nil) then
- begin
-  Result:=VirtualAlloc(Addr,dwSize,flAllocationType,flProtect);
-  Exit;
- end;
- Addr:=Pointer($5400000);
- Addr:=AlignUp(Addr,alignment);
- repeat
-  Result:=VirtualAlloc(Addr,dwSize,flAllocationType,flProtect);
-  if (Result<>nil) then Exit;
-  Case GetLastError of
-   ERROR_INVALID_ADDRESS:;
-   else
-    Exit;
-  end;
-  Addr:=Addr+alignment;
- until false;
-end;
-
-function VirtualQueryBase(Addr:Pointer):TBlock;
-var
- Info:TMemoryBasicInformation;
-begin
- Result:=Default(TBlock);
- Info:=Default(TMemoryBasicInformation);
- if (VirtualQuery(addr,Info,SizeOf(TMemoryBasicInformation))<>0) then
- begin
-  Case Info.State of
-   MEM_FREE   :Result.bType:=BS_FREE;
-   MEM_COMMIT :Result.bType:=BS_COMMIT;
-   MEM_RESERVE:Result.bType:=BS_RESERVE;
-  end;
-  Result.pAddr:=Info.AllocationBase;
-  Result.nSize:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
- end;
-end;
-
-function VirtualIsFullReserve(Addr:Pointer;dwSize:PTRUINT):Boolean;
-var
- curr:Pointer;
- q:TBlock;
-begin
- Result:=True;
- curr:=Addr;
- While (curr<Addr+dwSize) do
- begin
-  q:=VirtualQueryBase(curr);
-  Case q.bType of
-   BS_FREE:
-   begin
-    curr:=q.pAddr+q.nSize;
-   end;
-   BS_RESERVE:curr:=curr+PHYSICAL_PAGE_SIZE;
-   BS_COMMIT:Exit(False);
-  end;
- end;
-end;
-
-///
-
-function Tdlist.REMOVE_HEAD:Pdnode; inline;
-begin
- Result:=pHead;
- if (pHead<>nil) then
- begin
-  pHead:=pHead^.pNext;
-  if (pHead<>nil) then
-  begin
-   pHead^.pPrev:=nil;
-  end else
-  begin
-   pTail:=nil;
-  end;
-  Result^.pPrev:=nil;
-  Result^.pNext:=nil;
- end;
-end;
-
-procedure Tdlist.INSERT_TAIL(e:Pdnode); inline;
-begin
- if (e=nil) then Exit;
- if (e^.pPrev<>nil) or (e^.pNext<>nil) then Exit;
- if (pHead=nil) then
- begin
-  pHead:=e;
- end else
- begin
-  pTail^.pNext:=e;
-  e^.pPrev:=pTail;
- end;
- pTail:=e;
-end;
-
-procedure Tdlist.REMOVE(e:Pdnode); inline;
-var
- p,n:Pdnode;
-begin
- if (e=nil) then Exit;
- if (pHead=e) then
- begin
-  pHead:=pHead^.pNext;
-  if (pHead=nil) then pTail:=nil;
- end else
- if (pTail=e) then
- begin
-  pTail:=pTail^.pPrev;
-  if (pTail=nil) then pHead:=nil;
- end else
- begin
-  p:=e^.pPrev;
-  n:=e^.pNext;
-  if (p<>nil) then p^.pNext:=n;
-  if (n<>nil) then n^.pPrev:=p;
- end;
- e^.pPrev:=nil;
- e^.pNext:=nil;
-end;
-
-type
- TBlockCompare=object
-  function c(const a,b:PBlock):Integer; static;
- end;
-
-function TBlockCompare.c(const a,b:PBlock):Integer; static;
-begin
- if (a^.pAddr=b^.pAddr) then
-  Result:=0
- else
- if (a^.pAddr<b^.pAddr) then
-  Result:=-1
- else
-  Result:=1;
-end;
-
-type
- TMemDirectAdrCompare=object
-  function c(const a,b:TBlock):Integer; static;
- end;
-
-function TMemDirectAdrCompare.c(const a,b:TBlock):Integer; static;
-begin
- if (a.pAddr=b.pAddr) then
-  Result:=0
- else
- if (a.pAddr<b.pAddr) then
-  Result:=-1
- else
-  Result:=1;
-end;
-
-type
- TDirectAdrSet=specialize T23treeSet<TBlock,TMemDirectAdrCompare>;
-
-type
- TBlockSet=specialize T23treeSet<PBlock,TBlockCompare>;
-
- TPageMM=object
-  var
-   FLock:TRWLock;
-
-   FDirectSize:QWORD;
-   //FDirectAdrSet:TDirectAdrSet;
-
-   FMapBlockSet:TBlockSet;
-
-               //direct,num ,len
-   Falign:array[Boolean,0..3,1..3] of Tdlist;
-
-  Procedure Init;
-
-  function  _new_big_block_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte):Pointer;
-  function  _new_64k_block_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte):Pointer;
-  function  _isfree_64k_block_d(block:PBlock64k):Boolean;
-  procedure _unmap_64k_block_d(block:PBlock64k);
-  procedure _map_64k_block_d(block:PBlock64k);
-  function  _alloc_part_d(len,alignment,direct:size_t;prot:Byte):Pointer;
-  function  _TryGetMapBlockByAddr(addr:Pointer;var _pblock:PBlock):Boolean;
-  procedure _DeleteBlockByAddr(addr:Pointer);
-  function  _check_fixed(addr:Pointer;len:size_t;overwrite:Boolean):Boolean;
-  function  _free_fixed(addr:Pointer;len:size_t):Boolean;
-  function  _commit_fixed_d(addr:Pointer;len,direct:size_t;prot:Byte):Boolean;
-
-  function  mmap_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte;overwrite:Boolean):Pointer;
-
-  function  unmap(addr:Pointer;len:size_t):Boolean;
-
-  function  QueryProt(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Boolean;
-  function  ChangeProt(addr:Pointer;len:QWORD;prot:Integer):Boolean;
- end;
-
-Procedure TPageMM.Init;
-begin
- FillChar(Self,SizeOf(TPageMM),0);
- rwlock_init(FLock);
-end;
-
-function TPageMM._new_big_block_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte):Pointer;
-var
- base:Pointer;
- block:PBlockBig;
-begin
- Result:=nil;
- base:=VirtualAllocAlign(addr,len,alignment,MEM_COMMIT or MEM_RESERVE,__map_prot_page(prot));
- if (base=nil) then Exit;
- block:=AllocMem(SizeOf(TBlockBig));
- if (block=nil) then
- begin
-  VirtualFree(base,0,MEM_RELEASE);
-  Exit;
- end;
- block^.pAddr:=base;
- block^.nSize:=len;
- block^.bType:=BT_DIRECT_BIG;
- block^.direct:=direct;
- block^.prot:=prot;
- if _isgpu(prot) and (GpuMemCb.Alloc<>nil) then
- begin
-  block^.Handle:=GpuMemCb.Alloc(base,len);
- end;
- Assert(block<>nil);
- FMapBlockSet.Insert(block);
- Result:=base;
-end;
-
-function TPageMM._new_64k_block_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte):Pointer;
-var
- base:Pointer;
- block:PBlock64k;
- i,c:Byte;
-begin
- Result:=nil;
- base:=VirtualAllocAlign(addr,GRANULAR_PAGE_SIZE,alignment,MEM_COMMIT or MEM_RESERVE,__map_prot_page(prot));
- if (len<>GRANULAR_PAGE_SIZE) then
- begin
-  VirtualFree(base+len,GRANULAR_PAGE_SIZE-len,MEM_DECOMMIT);
- end;
- if (base=nil) then Exit;
- block:=AllocMem(SizeOf(TBlock64k));
- if (block=nil) then
- begin
-  VirtualFree(base,0,MEM_RELEASE);
-  Exit;
- end;
- block^.pAddr:=base;
- block^.nSize:=GRANULAR_PAGE_SIZE;
- block^.bType:=BT_DIRECT_64K;
-
- For i:=0 to 3 do
- begin
-  if (direct=INVALID_DIRECT) then
-  begin
-   block^.nodes[i].direct:=INVALID_DIRECT;
-  end else
-  begin
-   block^.nodes[i].direct:=direct+(i*LOGICAL_PAGE_SIZE);
-  end;
-  block^.nodes[i].info.id:=i;
-  block^.nodes[i].info.prot:=prot;
-  block^.nodes[i].info.state:=BS_COMMIT;
- end;
-
- c:=Get16kBlockCount(len);
- if (c<4) then
- begin
-  For i:=c to 3 do
-  begin
-   block^.nodes[i].direct:=0;
-   block^.nodes[i].info.prot:=0;
-   block^.nodes[i].info.state:=BS_FREE;
-  end;
-  _map_64k_block_d(block);
- end;
-
- Assert(block<>nil);
- FMapBlockSet.Insert(block);
- Result:=base;
-end;
-
-function TPageMM._isfree_64k_block_d(block:PBlock64k):Boolean;
-var
- i:Byte;
-begin
- Result:=True;
- For i:=0 to 3 do
- begin
-  if (block^.nodes[i].info.state=BS_COMMIT) then Exit(false);
- end;
-end;
-
-procedure TPageMM._unmap_64k_block_d(block:PBlock64k);
-var
- i:Byte;
-begin
- For i:=0 to 3 do
- begin
-  Falign[block^.nodes[i].direct<>INVALID_DIRECT,
-         i,
-         block^.nodes[i].info.len].
-          REMOVE(@block^.nodes[i]);
- end;
-end;
-
-procedure TPageMM._map_64k_block_d(block:PBlock64k);
-var
- ip,ic:Byte;
-begin
- ip:=0;
- While (ip<=3) do
- begin
-  if (block^.nodes[ip].info.state<>BS_COMMIT) then
-  begin
-   ic:=1;
-   While (ip+ic<=3) do
-   begin
-    if (block^.nodes[ip+ic].info.state<>BS_COMMIT) then
-     Inc(ic)
-    else
-     Break;
-   end;
-   block^.nodes[ip].info.len:=ic;
-   Falign[block^.nodes[ip].direct<>INVALID_DIRECT,ip,ic].INSERT_TAIL(@block^.nodes[ip]);
-  end;
-  Inc(ip);
- end;
-end;
-
-//  //num ,len
-//  Falign_d:array[0..3,1..3] of Tdlist;
-
-function TPageMM._alloc_part_d(len,alignment,direct:size_t;prot:Byte):Pointer;
-var
- block:PBlock64k;
- node:PdnodeAdr;
- i,b,n,count:Byte;
-
- function _find_by_len_16(len:Byte):PdnodeAdr;
- var
-  i:Byte;
- begin
-  Result:=nil;
-  For i:=0 to 3 do
-  begin
-   Result:=PdnodeAdr(Falign[direct<>INVALID_DIRECT,i,len].REMOVE_HEAD);
-   if (Result<>nil) then Break;
-  end;
- end;
-
- function _find_by_len_32(len:Byte):PdnodeAdr;
- begin
-  Result:=PdnodeAdr(Falign[direct<>INVALID_DIRECT,0,len].REMOVE_HEAD);
-  if (Result<>nil) then Exit;
-  Result:=PdnodeAdr(Falign[direct<>INVALID_DIRECT,2,len].REMOVE_HEAD);
- end;
-
-begin
- count:=Get16kBlockCount(len);
-
- node:=nil;
- if (alignment<=16*1024) then
- begin //16k
-  node:=_find_by_len_16(count);
- end else
- if (alignment<=32*1024) then
- begin //32k
-  node:=_find_by_len_32(count);
-  if (node=nil) and (count<=2) then
-  begin
-   node:=PdnodeAdr(Falign[direct<>INVALID_DIRECT,1,count].REMOVE_HEAD);
-   if (node<>nil) then Inc(node);
-  end;
- end else
- begin //64k
-  node:=PdnodeAdr(Falign[direct<>INVALID_DIRECT,0,count].REMOVE_HEAD);
- end;
-
- if (node=nil) then //not found
- begin
-  Result:=_new_64k_block_d(nil,len,alignment,direct,prot);
- end else
- begin
-  b:=node^.info.id;
-  block:=Pointer(PtrUint(@node[-b])-PtrUint(@PBlock64k(nil)^.nodes));
-
-  n:=b+count-1;
-
-  For i:=b to n do
-  begin
-   if (direct=INVALID_DIRECT) then
-   begin
-    block^.nodes[i].direct:=INVALID_DIRECT;
-   end else
-   begin
-    block^.nodes[i].direct:=direct+((i-b)*LOGICAL_PAGE_SIZE);
-   end;
-   block^.nodes[i].info.prot:=prot;
-   block^.nodes[i].info.state:=BS_COMMIT;
-   block^.nodes[i].info.len:=0;
-  end;
-
-  _map_64k_block_d(block);
-
-  Result:=block^.pAddr+(b*LOGICAL_PAGE_SIZE);
-  Result:=VirtualAlloc(Result,len,MEM_COMMIT,__map_prot_page(prot));
- end;
-end;
-
-function TPageMM._TryGetMapBlockByAddr(addr:Pointer;var _pblock:PBlock):Boolean;
-var
- It:TBlockSet.Iterator;
- i:Integer;
-begin
- Result:=False;
- It:=FMapBlockSet.find_le(@addr);
- //if (It.Item=nil) then Exit;
-
- if (It.Item=nil) then
- begin
-  Writeln('Memory dump:',HexStr(addr));
-  It:=FMapBlockSet.cbegin;
-  While (It.Item<>nil) do
-  begin
-   _pblock:=It.Item^;
-   if (_pblock<>nil) then
-   begin
-    Case _pblock^.bType of
-      BT_STACK:
-       begin
-        Writeln('[BT_STACK]');
-        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
-        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
-       end;
-      BT_DIRECT_BIG:
-       begin
-        Writeln('[BT_DIRECT_BIG]');
-        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
-        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
-        Writeln(' direct:',HexStr(PBlockBig(_pblock)^.direct,16));
-        Writeln(' Handle:',HexStr(PBlockBig(_pblock)^.Handle));
-        Writeln(' prot:',test_KP_flags(PBlockBig(_pblock)^.prot));
-       end;
-      BT_DIRECT_64K:
-       begin
-        Writeln('[BT_DIRECT_64K]');
-        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
-        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
-
-        For i:=0 to 3 do
-        begin
-         Writeln(' [node]:',i);
-         Writeln('  direct:'    ,HexStr(PBlock64k(_pblock)^.nodes[i].direct,16));
-         Writeln('  info.id:'   ,HexStr(PBlock64k(_pblock)^.nodes[i].info.id,2));
-         Writeln('  info.prot:' ,test_KP_flags(PBlock64k(_pblock)^.nodes[i].info.prot));
-         Writeln('  info.state:',PBlock64k(_pblock)^.nodes[i].info.state);
-         Writeln('  info.len:'  ,PBlock64k(_pblock)^.nodes[i].info.len);
-        end;
-
-       end;
-      BT_PHYSIC_BIG:
-       begin
-        Writeln('[BT_PHYSIC_BIG]');
-        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
-        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
-       end;
-      BT_PHYSIC_64K:
-       begin
-        Writeln('[BT_PHYSIC_64K]');
-        Writeln(' pAddr:',HexStr(_pblock^.pAddr));
-        Writeln(' nSize:',HexStr(_pblock^.nSize,16));
-       end;
-
-     else;
-    end;
-   end;
-
-   It.Next;
-  end;
-  Writeln('------------');
-  Assert(false);
-  Exit;
- end;
-
- _pblock:=It.Item^;
- if (_pblock=nil) then Exit;
- if (_pblock^.pAddr>addr) or (_pblock^.pAddr+_pblock^.nSize<=addr) then
- begin
-  _pblock:=nil;
-  Exit;
- end;
- Result:=True;
-end;
-
-procedure TPageMM._DeleteBlockByAddr(addr:Pointer);
-var
- It:TBlockSet.Iterator;
- _pblock:PBlock;
-begin
- It:=FMapBlockSet.find(@addr);
- if (It.Item=nil) then Exit;
- _pblock:=It.Item^;
- FMapBlockSet.erase(It);
- if (_pblock<>nil) then FreeMem(_pblock);
-end;
-
-function TPageMM._check_fixed(addr:Pointer;len:size_t;overwrite:Boolean):Boolean;
-var
- curr:Pointer;
- q:TBlock;
- _pblock:PBlock;
-begin
- Result:=true;
- curr:=addr;
- repeat
-  q:=VirtualQueryBase(curr);
-  Case q.bType of
-   BS_FREE:
-   begin
-    curr:=q.pAddr+q.nSize;
-   end;
-   BS_RESERVE,
-   BS_COMMIT:
-   begin
-    if (q.bType=BS_COMMIT) and (not overwrite) then Exit(False);
-
-    if not _TryGetMapBlockByAddr(curr,_pblock) then Exit;
-
-    Case _pblock^.bType of
-     BT_DIRECT_BIG,
-     BT_DIRECT_64K:
-      begin
-       curr:=curr+LOGICAL_PAGE_SIZE;
-      end;
-     BT_PHYSIC_BIG,
-     BT_PHYSIC_64K:
-      begin
-       curr:=curr+PHYSICAL_PAGE_SIZE;
-      end;
-     else
-      Exit(False);
-    end;
-
-   end;
-  end;
-
- until (curr>=addr+len);
-end;
-
-function TPageMM._free_fixed(addr:Pointer;len:size_t):Boolean;
-var
- curr:Pointer;
- q:TBlock;
- _pblock:PBlock;
- i:Byte;
-begin
- Result:=true;
- curr:=addr;
- repeat
-  q:=VirtualQueryBase(curr);
-  Case q.bType of
-   BS_FREE:
-   begin
-    curr:=q.pAddr+q.nSize;
-   end;
-   BS_RESERVE,
-   BS_COMMIT:
-   begin
-    if not _TryGetMapBlockByAddr(curr,_pblock) then Exit;
-
-    Case _pblock^.bType of
-     BT_DIRECT_BIG:
-      begin
-       if (curr=q.pAddr) and (_pblock^.pAddr=q.pAddr) and (_pblock^.nSize=q.nSize) then
-       begin
-        if _isgpu(PBlockBig(_pblock)^.prot) and (GpuMemCb.Free<>nil) then
-        begin
-         GpuMemCb.Free(PBlockBig(_pblock)^.Handle);
-        end;
-        if not VirtualFree(q.pAddr,0,MEM_RELEASE) then Exit(False);
-        _DeleteBlockByAddr(q.pAddr);
-        curr:=q.pAddr+q.nSize;
-       end else
-       begin
-        VirtualFree(curr,LOGICAL_PAGE_SIZE,MEM_DECOMMIT);
-        curr:=curr+LOGICAL_PAGE_SIZE;
-        if VirtualIsFullReserve(q.pAddr,q.nSize) then
-        begin
-         if _isgpu(PBlockBig(_pblock)^.prot) and (GpuMemCb.Free<>nil) then
-         begin
-          GpuMemCb.Free(PBlockBig(_pblock)^.Handle);
-         end;
-         if not VirtualFree(q.pAddr,0,MEM_RELEASE) then Exit(False);
-         _DeleteBlockByAddr(q.pAddr);
-         curr:=q.pAddr+q.nSize;
-        end;
-       end;
-      end;
-     BT_PHYSIC_BIG:
-      begin
-       if (curr=q.pAddr) and (_pblock^.pAddr=q.pAddr) and (_pblock^.nSize=q.nSize) then
-       begin
-        if not VirtualFree(q.pAddr,0,MEM_RELEASE) then Exit(False);
-        _DeleteBlockByAddr(q.pAddr);
-        curr:=q.pAddr+q.nSize;
-       end else
-       begin
-        VirtualFree(curr,PHYSICAL_PAGE_SIZE,MEM_DECOMMIT);
-        curr:=curr+PHYSICAL_PAGE_SIZE;
-        if VirtualIsFullReserve(q.pAddr,q.nSize) then
-        begin
-         if not VirtualFree(q.pAddr,0,MEM_RELEASE) then Exit(False);
-         _DeleteBlockByAddr(q.pAddr);
-         curr:=q.pAddr+q.nSize;
-        end;
-       end;
-      end;
-     BT_DIRECT_64K:
-      if (q.bType=BS_COMMIT) then
-      begin
-       VirtualFree(curr,LOGICAL_PAGE_SIZE,MEM_DECOMMIT);
-       i:=Get16kBlockCount(curr-_pblock^.pAddr);
-       _unmap_64k_block_d(PBlock64k(_pblock));
-       if PBlock64k(_pblock)^.nodes[i].direct<>INVALID_DIRECT then
-       begin
-        PBlock64k(_pblock)^.nodes[i].direct:=0;
-       end;
-       PBlock64k(_pblock)^.nodes[i].info.prot:=0;
-       PBlock64k(_pblock)^.nodes[i].info.state:=BS_FREE;
-       if _isfree_64k_block_d(PBlock64k(_pblock)) then
-       begin
-        if not VirtualFree(_pblock^.pAddr,0,MEM_RELEASE) then Exit(False);
-        q.pAddr:=_pblock^.pAddr;
-        _DeleteBlockByAddr(q.pAddr);
-       end else
-       begin
-        _map_64k_block_d(PBlock64k(_pblock));
-       end;
-       curr:=curr+LOGICAL_PAGE_SIZE;
-      end else
-      begin
-       curr:=curr+LOGICAL_PAGE_SIZE;
-      end;
-     BT_PHYSIC_64K:Assert(False);
-     else
-      Exit(False);
-    end;
-
-   end;
-  end;
-
- until (curr>=addr+len);
-end;
-
-function TPageMM._commit_fixed_d(addr:Pointer;len,direct:size_t;prot:Byte):Boolean;
-var
- base:Pointer;
- curr:Pointer;
- q:TBlock;
- _pblock:PBlock;
- i:Byte;
-begin
- Result:=true;
- curr:=addr;
- repeat
-  q:=VirtualQueryBase(curr);
-  Case q.bType of
-   BS_FREE:
-   begin
-    base:=curr;
-    curr:=q.pAddr+q.nSize;
-    if (curr>addr+len) then curr:=addr+len;
-    if _new_big_block_d(base,curr-base,0,direct,prot)=nil then Exit(False);
-    if (direct<>INVALID_DIRECT) then
-    begin
-     direct:=direct+(curr-base);
-    end;
-   end;
-   BS_RESERVE:
-   begin
-    if not _TryGetMapBlockByAddr(curr,_pblock) then Exit;
-
-    Case _pblock^.bType of
-     BT_DIRECT_BIG:
-      begin
-       if VirtualAlloc(curr,LOGICAL_PAGE_SIZE,MEM_COMMIT,__map_prot_page(prot))=nil then Exit(False);
-       curr:=curr+LOGICAL_PAGE_SIZE;
-       if (direct<>INVALID_DIRECT) then
-       begin
-        direct:=direct+LOGICAL_PAGE_SIZE;
-       end;
-      end;
-     BT_PHYSIC_BIG:
-      begin
-       if VirtualAlloc(curr,PHYSICAL_PAGE_SIZE,MEM_COMMIT,__map_prot_page(prot))=nil then Exit(False);
-       curr:=curr+PHYSICAL_PAGE_SIZE;
-       if (direct<>INVALID_DIRECT) then
-       begin
-        direct:=direct+PHYSICAL_PAGE_SIZE;
-       end;
-      end;
-     BT_DIRECT_64K:
-      begin
-       if VirtualAlloc(curr,LOGICAL_PAGE_SIZE,MEM_COMMIT,__map_prot_page(prot))=nil then Exit(False);
-       i:=Get16kBlockCount(curr-_pblock^.pAddr);
-       _unmap_64k_block_d(PBlock64k(_pblock));
-       PBlock64k(_pblock)^.nodes[i].direct:=direct;
-       PBlock64k(_pblock)^.nodes[i].info.prot:=prot;
-       PBlock64k(_pblock)^.nodes[i].info.state:=BS_COMMIT;
-       _map_64k_block_d(PBlock64k(_pblock));
-       curr:=curr+LOGICAL_PAGE_SIZE;
-       if (direct<>INVALID_DIRECT) then
-       begin
-        direct:=direct+LOGICAL_PAGE_SIZE;
-       end;
-      end;
-     BT_PHYSIC_64K:Assert(False);
-     else
-      Exit(False);
-    end;
-   end;
-   BS_COMMIT:Exit(False);
-  end;
-
- until (curr>=addr+len);
-end;
-
-function TPageMM.mmap_d(addr:Pointer;len,alignment,direct:size_t;prot:Byte;overwrite:Boolean):Pointer;
-begin
- Result:=nil;
- rwlock_wrlock(FLock);
-
- if _isgpu(prot) then
- begin
-  Result:=_new_big_block_d(addr,len,alignment,direct,prot);
- end else
- if (addr<>nil) then //fixed adr
- begin
-  if _check_fixed(addr,len,overwrite) then
-  begin
-   if _free_fixed(addr,len) then
-   begin
-    if _commit_fixed_d(addr,len,direct,prot) then
-     Result:=addr;
-   end;
-  end;
- end else
- begin //any addr
-  if (alignment<=GRANULAR_PAGE_SIZE) and (len<=GRANULAR_PAGE_SIZE) then //64k block
-  begin
-   if (len=GRANULAR_PAGE_SIZE) then //full
-   begin
-    Result:=_new_64k_block_d(addr,len,alignment,direct,prot);
-   end else
-   begin
-    Result:=_alloc_part_d(len,alignment,direct,prot);
-   end;
-  end else
-  if (len<=GRANULAR_PAGE_SIZE) then //64k but big aligned
-  begin
-   Result:=_new_64k_block_d(addr,len,alignment,direct,prot);
-  end else
-  begin //big block
-   Result:=_new_big_block_d(addr,len,alignment,direct,prot);
-  end;
- end;
-
- rwlock_unlock(FLock);
-end;
-
-function TPageMM.unmap(addr:Pointer;len:size_t):Boolean;
-begin
- Result:=false;
- rwlock_wrlock(FLock);
-
- Result:=_check_fixed(addr,len,true);
- if Result then
- begin
-  Result:=_free_fixed(addr,len);
- end;
-
- rwlock_unlock(FLock);
-end;
-
-function TPageMM.QueryProt(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Boolean;
-var
- _pblock:PBlock;
- i,b,e:Byte;
-begin
- Result:=False;
- rwlock_rdlock(FLock);
-
- if _TryGetMapBlockByAddr(addr,_pblock) then
- begin
-  Result:=True;
-  Case _pblock^.bType of
-   BT_DIRECT_BIG,
-   BT_PHYSIC_BIG:
-    begin
-     if (pStart<>nil) then pStart^:=_pblock^.pAddr;
-     if (pEnd<>nil)   then pEnd^  :=_pblock^.pAddr+_pblock^.nSize-1;
-     if (pProt<>nil)  then pProt^ :=PBlockBig(_pblock)^.prot;
-    end;
-   BT_DIRECT_64K:
-    begin
-     i:=Get16kBlockCount(addr-_pblock^.pAddr);
-     b:=i;
-     repeat
-      if (b=0) then Break;
-      if (PBlock64k(_pblock)^.nodes[b-1].info.state<>PBlock64k(_pblock)^.nodes[i].info.state) then Break;
-      if (PBlock64k(_pblock)^.nodes[b-1].info.prot<>PBlock64k(_pblock)^.nodes[i].info.prot) then Break;
-      Dec(b);
-     until false;
-     e:=i;
-     repeat
-      if (e=3) then Break;
-      if (PBlock64k(_pblock)^.nodes[e+1].info.state<>PBlock64k(_pblock)^.nodes[i].info.state) then Break;
-      if (PBlock64k(_pblock)^.nodes[e+1].info.prot<>PBlock64k(_pblock)^.nodes[i].info.prot) then Break;
-      Inc(e);
-     until false;
-     if (pStart<>nil) then pStart^:=_pblock^.pAddr+(b*LOGICAL_PAGE_SIZE);
-     if (pEnd<>nil)   then pEnd^  :=_pblock^.pAddr+(e*LOGICAL_PAGE_SIZE)-1;
-     if (pProt<>nil)  then pProt^ := PBlock64k(_pblock)^.nodes[i].info.prot;
-    end;
-   BT_PHYSIC_64K:Assert(False);
-  end;
- end;
-
- rwlock_unlock(FLock);
-end;
-
-function __mprotect(addr:Pointer;len:size_t;prot:Integer):Integer;
-Var
- newprotect,oldprotect:DWORD;
-begin
- newprotect:=__map_prot_page(prot);
- oldprotect:=0;
-
- if not VirtualProtect(addr,len,newprotect,oldprotect) then
- begin
-  Exit(-1);
- end;
-
- Result:=0;
-end;
-
-function TPageMM.ChangeProt(addr:Pointer;len:QWORD;prot:Integer):Boolean;
-var
- _pblock:PBlock;
-begin
- Result:=False;
- rwlock_rdlock(FLock);
-
- repeat
-
-  if _TryGetMapBlockByAddr(addr,_pblock) then
-  begin
-
-   if (_pblock^.nSize>len) then
-   begin
-    Result:=(__mprotect(addr,len,prot)=0);
-    Break;
-   end else
-   begin
-    Result:=(__mprotect(addr,_pblock^.nSize,prot)=0);
-   end;
-
-   if (len>=_pblock^.nSize) then
-   begin
-    len:=len-_pblock^.nSize;
-    addr:=addr+_pblock^.nSize;
-   end else
-   begin
-    Break;
-   end;
-
-  end else
-  begin
-
-   if (len>=PHYSICAL_PAGE_SIZE) then
-   begin
-    len:=len-PHYSICAL_PAGE_SIZE;
-    addr:=addr+PHYSICAL_PAGE_SIZE;
-   end else
-   begin
-    Break;
-   end;
-
-  end;
-
- until (len=0);
-
- rwlock_unlock(FLock);
-end;
-
-///////
-
-Var
- PageMM:TPageMM;
-
 Function TryGetGpuMemBlockByAddr(addr:Pointer;var block:TGpuMemBlock):Boolean;
-var
- _pblock:PBlock;
+//var
+ //_pblock:PBlock;
 begin
  Result:=False;
- rwlock_rdlock(PageMM.FLock);
+ Assert(false,'TODO');
+{
+ rwlock_rdlock(MMLock);
  if PageMM._TryGetMapBlockByAddr(addr,_pblock) then
  begin
   Case _pblock^.bType of
@@ -1217,28 +291,29 @@ begin
     end;
   end;
  end;
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
+ }
 end;
 
 Procedure RegistredStack;
-var
- block:PBlock;
+//var
+// block:PBlock;
 begin
- rwlock_wrlock(PageMM.FLock);
- block:=AllocMem(SizeOf(TBlock));
- if (block=nil) then Exit;
- block^.pAddr:=StackBottom;
- block^.nSize:=StackLength;
- block^.bType:=BT_STACK;
- PageMM.FMapBlockSet.Insert(block);
- rwlock_unlock(PageMM.FLock);
+ //rwlock_wrlock(MMLock);
+ //block:=AllocMem(SizeOf(TBlock));
+ //if (block=nil) then Exit;
+ //block^.pAddr:=StackBottom;
+ //block^.nSize:=StackLength;
+ //block^.bType:=BT_STACK;
+ //PageMM.FMapBlockSet.Insert(block);
+ //rwlock_unlock(MMLock);
 end;
 
 Procedure UnRegistredStack;
 begin
- rwlock_wrlock(PageMM.FLock);
- PageMM._DeleteBlockByAddr(StackBottom);
- rwlock_unlock(PageMM.FLock);
+ //rwlock_wrlock(MMLock);
+ //PageMM._DeleteBlockByAddr(StackBottom);
+ //rwlock_unlock(MMLock);
 end;
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
@@ -1291,11 +366,11 @@ begin
  if not _test_mtype(memoryType) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=DirectManager.Alloc(searchStart,searchEnd,length,alignment,Byte(memoryType),physicalAddrDest^);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1322,11 +397,11 @@ begin
  if not _test_mtype(memoryType) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=DirectManager.Alloc(length,alignment,Byte(memoryType),physicalAddrDest^);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1357,11 +432,11 @@ begin
  FSizeOut:=0;
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=DirectManager.CheckedAvailable(searchStart,searchEnd,alignment,FAdrOut,FSizeOut);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 
  if (Result=0) then
@@ -1394,11 +469,11 @@ begin
  ROut:=Default(TDirectAdrNode);
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=DirectManager.Query(offset,(flags=SCE_KERNEL_DMQ_FIND_NEXT),ROut);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 
  if (Result<>0) then
@@ -1429,11 +504,11 @@ begin
  ROut:=Default(TDirectAdrNode);
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=DirectManager.QueryMType(start,ROut);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 
  if (Result<>0) then
@@ -1452,11 +527,11 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=DirectManager.CheckedRelease(start,len);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1468,11 +543,11 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=DirectManager.Release(start,len);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1633,7 +708,7 @@ begin
  if (align<PHYSICAL_PAGE_SIZE) then align:=PHYSICAL_PAGE_SIZE;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  if (flags and MAP_VOID)<>0 then //reserved
  begin
@@ -1670,8 +745,33 @@ begin
   end;
  end;
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
+end;
+
+function _mmap(addr:Pointer;
+               len:size_t;
+               prots,flags,fd:Integer;
+               offset:size_t;
+               var res:Pointer):Integer;
+var
+ align:size_t;
+begin
+ Result:=EINVAL;
+
+ if ((prots and $ffffffc8)<>0) then Exit;
+
+ if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
+
+ if (len<PHYSICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
+
+ align:=(flags and MAP_ALIGNMENT_MASK) shr MAP_ALIGNMENT_BIT;
+ align:=1 shl align;
+
+ flags:=flags and (not MAP_ALIGNMENT_MASK);
+
+ Result:=__mmap(addr,len,align,prots,flags,fd,offset,res);
 end;
 
 function __sys_mmap_dmem(
@@ -1685,7 +785,7 @@ begin
  Result:=0;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=DirectManager.CheckedMMap(physicalAddr,length);
 
@@ -1700,13 +800,18 @@ begin
   end;
  end;
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
 function __munmap(addr:Pointer;len:size_t):Integer;
 begin
  Result:=VirtualManager.Release(addr,len);
+
+ if (Result<>0) then
+ begin
+  NamedManager.Mname(addr,len,nil);
+ end;
 end;
 
 function __release_direct(Offset,Size:QWORD):Integer;
@@ -1729,11 +834,16 @@ begin
  if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=VirtualManager.Release(addr,len);
 
- rwlock_unlock(PageMM.FLock);
+ if (Result<>0) then
+ begin
+  NamedManager.Mname(addr,len,nil);
+ end;
+
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1752,11 +862,11 @@ begin
  len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=VirtualManager.Protect(addr,len,prot);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1775,11 +885,11 @@ begin
  len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
 
  _sig_lock;
- rwlock_wrlock(PageMM.FLock); //rw
+ rwlock_wrlock(MMLock); //rw
 
  Result:=VirtualManager.Mtypeprotect(addr,len,mtype,prot);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 end;
 
@@ -1796,11 +906,11 @@ begin
  ROut:=Default(TVirtualAdrNode);
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=VirtualManager.QueryProt(addr,ROut);
 
- rwlock_unlock(PageMM.FLock);
+ rwlock_unlock(MMLock);
  _sig_unlock;
 
  if (Result<>0) then
@@ -1829,6 +939,7 @@ function _sys_virtual_query(addr:Pointer;
 var
  VOut:TVirtualAdrNode;
  DOut:TDirectAdrNode;
+ Name:TName;
  Committed:Boolean;
 begin
  Result:=EFAULT;
@@ -1840,9 +951,10 @@ begin
 
  VOut:=Default(TVirtualAdrNode);
  DOut:=Default(TDirectAdrNode);
+ Name:=Default(TName);
 
  _sig_lock;
- rwlock_rdlock(PageMM.FLock); //r
+ rwlock_rdlock(MMLock); //r
 
  Result:=VirtualManager.Query(addr,(flags=SCE_KERNEL_VQ_FIND_NEXT),VOut);
 
@@ -1851,7 +963,12 @@ begin
   Result:=DirectManager.QueryMType(VOut.addr,DOut);
  end;
 
- rwlock_unlock(PageMM.FLock);
+ if (Result<>0) then
+ begin
+  NamedManager.Query(addr,@name);
+ end;
+
+ rwlock_unlock(MMLock);
  _sig_unlock;
 
  if (Result<>0) then
@@ -1868,8 +985,32 @@ begin
   info^.bits.isStack         :=VOut.F.stack;
   info^.bits.isPooledMemory  :=VOut.F.polled;
   info^.bits.isCommitted     :=Byte(Committed);
-  //info^.name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
+  info^.name                 :=Name;
  end;
+end;
+
+Function _sys_mname(addr:Pointer;len:QWORD;pname:PChar):Integer;
+var
+ tmp:Pointer;
+begin
+ Result:=EFAULT;
+
+ if (pname=nil) then Exit;
+ if (StrLen(pname)>32) then Exit;
+
+ tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+ len:=len+(addr-tmp);
+
+ addr:=tmp;
+ len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+
+ _sig_lock;
+ rwlock_rdlock(MMLock); //r
+
+ Result:=NamedManager.Mname(addr,len,pname);
+
+ rwlock_unlock(MMLock);
+ _sig_unlock;
 end;
 
 function _sceKernelMapFlexibleMemory(
@@ -2070,207 +1211,139 @@ end;
 ////
 ////
 
-
-
-function ps4_sceKernelMapDirectMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer;
-           physicalAddr:QWORD;
-           alignment:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_mmap(addr:Pointer;
+                  len:size_t;
+                  prot,flags,fd:Integer;
+                  offset:size_t):Pointer; SysV_ABI_CDecl;
 var
- //flProtect:DWORD;
- R:Pointer;
+ err:Integer;
 begin
- if (virtualAddrDest=nil) or (length=0) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ err:=_mmap(addr,len,prot,flags,fd,offset,addr);
+ _set_errno(err);
 
- //Assert(flags=0);
-
- //Writeln('AddrSrc:',HexStr(virtualAddrDest^));
-
- Writeln('length:',HexStr(length,16),' ',
-         test_KP_flags(protections),' ',
-         'flags:',flags);
- Writeln('length:',HexStr(length,16),' ',
-         'physicalAddr:',HexStr(physicalAddr,16),' ',
-         'alignment:',HexStr(alignment,16));
-
- if (alignment=0) then alignment:=LOGICAL_PAGE_SIZE;
-
- if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if not IsAlign(length   ,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if not IsAlign(alignment,LOGICAL_PAGE_SIZE) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if not IsPowerOfTwo(alignment) then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- if (flags and SCE_KERNEL_MAP_FIXED)<>0 then
+ if (err=0) then
  begin
-  R:=virtualAddrDest^;
+  Result:=addr;
  end else
  begin
-  R:=nil;
+  Writeln(StdErr,'[WARN]:mmap:',err);
+  Result:=MAP_FAILED;
  end;
-
- _sig_lock;
- R:=PageMM.mmap_d(R,length,alignment,physicalAddr,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
- _sig_unlock;
- //Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
- virtualAddrDest^:=R;
-
- if (R=nil) then
- begin
-  Exit(SCE_KERNEL_ERROR_ENOMEM);
- end;
-
- if _isgpu(protections) then
- begin
-  Writeln('GPU:',HexStr(R),'..',HexStr(R+length));
- end;
-
- Assert(IsAlign(R,alignment),'sceKernelMapDirectMemory not aligned!');
-
- Result:=0;
 end;
 
-function ps4_sceKernelMapNamedFlexibleMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer;
-           name:PChar):Integer; SysV_ABI_CDecl;
-var
- //flProtect:DWORD;
- R:Pointer;
+function ps4_sceKernelMmap(addr:Pointer;
+                           len:size_t;
+                           prot,flags,fd:Integer;
+                           offset:size_t;
+                           res:PPointer):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (virtualAddrDest=nil) or (length=0) then Exit;
+ Result:=_mmap(addr,len,prot,flags,fd,offset,addr);
+ _set_errno(Result);
 
- //Assert(flags=0);
-
- //Writeln('AddrSrc:',HexStr(virtualAddrDest^));
-
- Writeln('length:',HexStr(length,16),' ',
-         test_KP_flags(protections),' ',
-         'flags:',flags);
- Writeln('length:',HexStr(length,16),' ',
-         'name:',name);
-
- if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit;
- if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
-
- if (flags and SCE_KERNEL_MAP_FIXED)<>0 then
+ if (Result=0) then
  begin
-  R:=virtualAddrDest^;
+  res^:=addr;
  end else
  begin
-  R:=nil;
+  Writeln(StdErr,'[WARN]:sceKernelMmap:',Result);
  end;
-
- _sig_lock;
- R:=PageMM.mmap_d(R,length,0,INVALID_DIRECT,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
- _sig_unlock;
-
- Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
- virtualAddrDest^:=R;
-
- if (R=nil) then
- begin
-  Exit(SCE_KERNEL_ERROR_ENOMEM);
- end;
-
- if _isgpu(protections) then
- begin
-  Writeln('GPU:',HexStr(R),'..',HexStr(R+length));
- end;
-
- Result:=0;
 end;
 
-function ps4_sceKernelMapFlexibleMemory(
-           virtualAddrDest:PPointer;
-           length:QWORD;
-           protections:Integer;
-           flags:Integer):Integer; SysV_ABI_CDecl;
-var
- //flProtect:DWORD;
- R:Pointer;
+function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (virtualAddrDest=nil) or (length=0) then Exit;
+ Result:=_munmap(addr,len);
 
- //Assert(flags=0);
-
- //Writeln('AddrSrc:',HexStr(virtualAddrDest^));
-
- Writeln('length:',HexStr(length,16),' ',
-         test_KP_flags(protections),' ',
-         'flags:',flags);
- Writeln('length:',HexStr(length,16));
-
- if not IsAlign(virtualAddrDest^,LOGICAL_PAGE_SIZE) then Exit;
- if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
-
- if (flags and SCE_KERNEL_MAP_FIXED)<>0 then
+ if (Result<>0) then
  begin
-  R:=virtualAddrDest^;
- end else
- begin
-  R:=nil;
+  Writeln(StdErr,'[WARN]:munmap:',Result);
  end;
 
- _sig_lock;
- R:=PageMM.mmap_d(R,length,0,INVALID_DIRECT,protections,(flags and SCE_KERNEL_MAP_NO_OVERWRITE)=0);
- _sig_unlock;
-
- //Writeln('alloc:',HexStr(R),'..',HexStr(R+length));
- virtualAddrDest^:=R;
-
- if (R=nil) then
- begin
-  Exit(SCE_KERNEL_ERROR_ENOMEM);
- end;
-
- if _isgpu(protections) then
- begin
-  Writeln('GPU:',HexStr(R),'..',HexStr(R+length));
- end;
-
- Result:=0;
+ Result:=_set_errno(Result);
 end;
 
-//MEMORY_BASIC_INFORMATION = record
-//     BaseAddress       : PVOID;   addr to check
-//     AllocationBase    : PVOID;   addr to begin region
-//     AllocationProtect : DWORD;   R/W/E
-//     RegionSize        : PTRUINT; Full size-( (addr to begin)-(addr to check)  )
-//     State             : DWORD;   MEM_COMMIT or MEM_RESERVE
-//     Protect           : DWORD;   R/W/E
-//     _Type             : DWORD;   MEM_PRIVATE
-//end;
-
-//flex
 function ps4_sceKernelMunmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (addr=nil) or (len=0) then Exit;
+ Result:=_munmap(addr,len);
+ _set_errno(Result);
 
- if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
- if not IsAlign(len,LOGICAL_PAGE_SIZE) then Exit;
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMunmap:',Result);
+ end;
 
- _sig_lock;
- if PageMM.unmap(addr,len) then Result:=0;
- _sig_unlock;
+ Result:=px2sce(Result);
 end;
 
-//flex
-function ps4_sceKernelQueryMemoryProtection(addr:Pointer;pStart,pEnd:PPointer;pProt:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelReleaseFlexibleMemory(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EACCES;
- //Writeln(HexStr(addr));
- //addr:=AlignDw(addr,LOGICAL_PAGE_SIZE);
- _sig_lock;
- if PageMM.QueryProt(addr,pStart,pEnd,pProt) then Result:=0;
- _sig_unlock;
+ Result:=_munmap(addr,len);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelReleaseFlexibleMemory:',Result);
+ end;
+
+ Result:=px2sce(Result);
+end;
+
+function ps4_mprotect(addr:Pointer;
+                      len:size_t;
+                      prot:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_mprotect(addr,len,prot);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:mprotect:',Result);
+ end;
+
+ Result:=_set_errno(Result);
+end;
+
+function ps4_sceKernelMprotect(addr:Pointer;
+                               len:size_t;
+                               prot:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_mprotect(addr,len,prot);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMprotect:',Result);
+ end;
+
+ Result:=px2sce(Result);
+end;
+
+function ps4_sceKernelMtypeprotect(addr:Pointer;
+                                   len:size_t;
+                                   mtype,prot:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sys_mtypeprotect(addr,len,mtype,prot);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMtypeprotect:',Result);
+ end;
+
+ Result:=px2sce(Result);
+end;
+
+function ps4_sceKernelQueryMemoryProtection(addr:Pointer;
+                                            pStart,pEnd:PPointer;
+                                            pProt:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sys_query_memory_protection(addr,pStart,pEnd,pProt);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelQueryMemoryProtection:',Result);
+ end;
+
+ Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelVirtualQuery(addr:Pointer;
@@ -2278,127 +1351,152 @@ function ps4_sceKernelVirtualQuery(addr:Pointer;
                                    info:pSceKernelVirtualQueryInfo;
                                    infoSize:QWORD):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
- Assert(false,'TODO');
+ Result:=_sys_virtual_query(addr,flags,info,infoSize);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelVirtualQuery:',Result);
+ end;
+
+ Result:=px2sce(Result);
 end;
 
-function ps4_sceKernelMprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; SysV_ABI_CDecl;
+Function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;pname:PChar):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
+ Result:=_sys_mname(addr,len,pname);
+ _set_errno(Result);
 
- _sig_lock;
- if PageMM.ChangeProt(addr,len,prot) then Result:=0;
- _sig_unlock;
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelSetVirtualRangeName:',Result);
+ end;
 
+ Result:=px2sce(Result);
 end;
 
-function ps4_sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:Pchar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMapFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceKernelSetVirtualRangeName:',HexStr(addr),':',len,':',name);
- Result:=0;
+ Result:=_sceKernelMapFlexibleMemory(virtualAddrDest,length,prots,flags);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMapFlexibleMemory:',Result);
+ end;
 end;
 
-function ps4_mmap(addr:Pointer;len:size_t;prot,flags:Integer;fd:Integer;offset:size_t):Pointer; SysV_ABI_CDecl;
-Var
- map:Pointer;
- protect:DWORD;
+function ps4_sceKernelMapNamedFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           name:PChar):Integer; SysV_ABI_CDecl;
 begin
- map:=MAP_FAILED;
+ Result:=_sceKernelMapFlexibleMemory(virtualAddrDest,length,prots,flags);
 
- if (fd<>-1) {or ((flags and MAP_ANONYMOUS)=0)} then
+ if (Result=0) then
  begin
-  SetLastError(EBADF);
-  Result:=MAP_FAILED;
-  Exit;
- end;
-
- if (not IsAlign(addr,PHYSICAL_PAGE_SIZE)) or
-    (not IsAlign(len,PHYSICAL_PAGE_SIZE)) or
-    (not IsAlign(offset,PHYSICAL_PAGE_SIZE)) then
+  _sys_mname(virtualAddrDest^,length,name);
+ end else
+ if (Result<>0) then
  begin
-  SetLastError(EINVAL);
-  Result:=MAP_FAILED;
-  Exit;
+  Writeln(StdErr,'[WARN]:sceKernelMapNamedFlexibleMemory:',Result);
  end;
-
- protect:=__map_prot_page(prot);
-
- SetLastError(0);
-
- if (len=0) or
-    // Unsupported flag combinations
-    ((flags and MAP_FIXED)<>0) then
-    // Usupported protection combinations
-    //(prot=PROT_EXEC) then
- begin
-  SetLastError(EINVAL);
-  Result:=MAP_FAILED;
-  Exit;
- end;
-
- _sig_lock;
- map:=VirtualAlloc(addr,len,MEM_COMMIT or MEM_RESERVE,Protect);
- _sig_unlock;
-
- if (map=nil) then
- begin
-  Result:=MAP_FAILED;
-  Exit;
- end;
-
- Result:=map;
 end;
 
-function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
-var
- Info:TMemoryBasicInformation;
+function ps4_sceKernelReserveVirtualRange(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           flags:Integer;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
 begin
- Result:=-1;
- if (addr=nil) or (len=0) then Exit;
+ Result:=_sceKernelReserveVirtualRange(virtualAddrDest,length,flags,alignment);
 
- if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
-
- Info:=Default(TMemoryBasicInformation);
- _sig_lock;
- if (VirtualQuery(addr,Info,len)=0) then
+ if (Result<>0) then
  begin
-  _sig_unlock;
-  Writeln('GetLastError:',GetLastError);
-  Exit;
+  Writeln(StdErr,'[WARN]:sceKernelReserveVirtualRange:',Result);
  end;
- _sig_unlock;
- if (Info._Type=MEM_FREE) then
- begin
-  Writeln('GetLastError:',GetLastError);
-  Exit;
- end;
-
- Assert((Info.BaseAddress=Info.AllocationBase) and (Info.RegionSize=len),'partial unmap not impliment!');
-
- _sig_lock;
- if not VirtualFree(addr,0,MEM_RELEASE) then
- begin
-  _sig_unlock;
-  Writeln('GetLastError:',GetLastError);
-  Exit;
- end;
- _sig_unlock;
-
- Result:=0;
 end;
+
+function ps4_sceKernelMapDirectMemory2(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           mtype,prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceKernelMapDirectMemory2(virtualAddrDest,length,mtype,prots,flags,physicalAddr,alignment);
+
+ if _isgpu(prots) then
+ begin
+  Writeln('GPU:',HexStr(virtualAddrDest^),'..',HexStr(virtualAddrDest^+length));
+ end;
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMapDirectMemory2:',Result);
+ end;
+end;
+
+function ps4_sceKernelMapDirectMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceKernelMapDirectMemory(virtualAddrDest,length,prots,flags,physicalAddr,alignment);
+
+ if _isgpu(prots) then
+ begin
+  Writeln('GPU:',HexStr(virtualAddrDest^),'..',HexStr(virtualAddrDest^+length));
+ end;
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMapDirectMemory:',Result);
+ end;
+end;
+
+function ps4_sceKernelMapNamedDirectMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           physicalAddr:QWORD;
+           alignment:QWORD;
+           name:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceKernelMapDirectMemory(virtualAddrDest,length,prots,flags,physicalAddr,alignment);
+
+ if _isgpu(prots) then
+ begin
+  Writeln('GPU:',HexStr(virtualAddrDest^),'..',HexStr(virtualAddrDest^+length));
+ end;
+
+ if (Result=0) then
+ begin
+  _sys_mname(virtualAddrDest^,length,name);
+ end else
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMapNamedDirectMemory:',Result);
+ end;
+end;
+
+////
+////
 
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- //Writeln('msync:',HexStr(addr));
  System.ReadWriteBarrier;
  Result:=0;
 end;
 
-function ps4_mprotect(addr:Pointer;len:size_t;prot:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMsync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- _sig_lock;
- Result:=__mprotect(addr,len,prot);
- _sig_unlock;
+ System.ReadWriteBarrier;
+ Result:=0;
 end;
 
 Procedure _mem_init;
@@ -2414,13 +1512,16 @@ begin
 end;
 
 initialization
+ rwlock_init(MMLock);
+
  DirectManager :=TDirectManager .Create;
  DirectManager .OnMemoryUnmapCb:=@__munmap;
 
- VirtualManager:=TVirtualManager.Create($400000,$3FFFFFFFF);
+ VirtualManager:=TVirtualManager.Create($400000,$FFFFFFFFFF);
  VirtualManager.OnDirectUnmapCb:=@__release_direct;
  VirtualManager.OnDirectMtypeCb:=@__mtype_direct;
- PageMM.init;
+
+ NamedManager  :=TNamedManager.Create($400000,$FFFFFFFFFF);
 
 end.
 

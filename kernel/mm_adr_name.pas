@@ -142,6 +142,7 @@ end;
 
 procedure TNamedManager._Insert(const key:TNameAdrNode);
 begin
+ Assert(key.Size<>0);
  FAllcSet.Insert(key);
 end;
 
@@ -187,8 +188,8 @@ begin
         if (rkey.Offset <>cmp    ) then Exit;
        end;
 
-  C_LE:if ((rkey.Offset+rkey.Size)<cmp) then Exit;
-  C_BE:if (key.Offset<cmp) then Exit;
+  C_LE:if ((rkey.Offset+rkey.Size)<=cmp) then Exit;
+  C_BE:if (rkey.Offset<=cmp) then Exit;
 
   else
        Exit;
@@ -285,7 +286,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -299,6 +300,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.name:=name;
@@ -314,6 +316,8 @@ var
 
 begin
  Result:=0;
+ if (Size=0) then Exit(EINVAL);
+ if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  name:=Default(TName);
  if (pname<>nil) then

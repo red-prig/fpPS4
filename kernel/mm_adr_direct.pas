@@ -210,6 +210,7 @@ end;
 
 procedure TDirectManager._Insert(const key:TDirectAdrNode);
 begin
+ Assert(key.Size<>0);
  if key.IsFree then
  begin
   FFreeSet.Insert(key);
@@ -294,8 +295,8 @@ begin
         if (rkey.Offset<>cmp     ) then Exit;
        end;
 
-  C_LE:if ((rkey.Offset+rkey.Size)<cmp) then Exit;
-  C_BE:if (key.Offset<cmp) then Exit;
+  C_LE:if ((rkey.Offset+rkey.Size)<=cmp) then Exit;
+  C_BE:if (rkey.Offset<=cmp) then Exit;
 
   else
        Exit;
@@ -641,7 +642,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -655,6 +656,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.IsFree :=True;
@@ -718,7 +720,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -743,7 +747,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -757,6 +761,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
 
@@ -817,7 +822,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -842,7 +849,7 @@ var
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,Offset,key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -856,6 +863,7 @@ var
  function _map:Boolean;
  begin
   Result:=False;
+  Assert(key.Size<>0);
 
   //new save
   key.F.mtype:=mtype;
@@ -908,7 +916,9 @@ begin
    if _skip then Break;
   end else
   begin
-   Break;
+   if (Size<=$1000) then Break;
+   Offset:=Offset+$1000;
+   Size  :=Size  -$1000;
   end;
 
  until false;
@@ -937,104 +947,16 @@ begin
  begin
   key:=It.Item^;
 
-  Writeln(HexStr(key.Offset,10),'..',
-          HexStr(key.Offset+key.Size,10),':',
-          HexStr(key.Size,10),'#',
-          HexStr(qword(key.addr),10),'#',
+  Writeln(HexStr(key.Offset,11),'..',
+          HexStr(key.Offset+key.Size,11),':',
+          HexStr(key.Size,11),'#',
+          HexStr(qword(key.addr),11),'#',
           _alloc_str(key.IsFree),'#',
           key.F.mtype);
 
   It.Next;
  end;
 end;
-
-procedure itest;
-var
- test:TDirectManager;
- addr:array[0..5] of qword;
-begin
- test:=TDirectManager.Create;
-
- test.Alloc(4*1024,1,0,addr[0]);
- Writeln(HexStr(addr[0],16));
-
- test.Alloc(4*1024,1,0,addr[1]);
- Writeln(HexStr(addr[1],16));
-
- test.Alloc(4*1024,1,0,addr[2]);
- Writeln(HexStr(addr[2],16));
-
- test.Alloc(4*1024,1,0,addr[3]);
- Writeln(HexStr(addr[3],16));
-
- test.Alloc(4*1024,1,0,addr[4]);
- Writeln(HexStr(addr[4],16));
-
- test.Alloc(4*1024,1,0,addr[5]);
- Writeln(HexStr(addr[5],16));
-
- writeln;
- test.Print;
- writeln;
-
- test.Release(addr[0],4*1024);
- test.Release(addr[2],4*1024);
- //test.Release(addr[4],4*1024);
-
- writeln;
- test.Print;
- writeln;
-
- //writeln(test.CheckedRelease(addr[1],4*1024*2));
-
- //test.Release(addr[1],4*1024*2);
-
- //test.Release(addr[0],4*1024);
- //test.Release(addr[2],4*1024);
- //test.Release(addr[1],4*1024);
-
- //test.Release(addr[0],4*1024);
- //test.Release(addr[1],4*1024);
- //test.Release(addr[2],4*1024);
- //test.Release(addr[2],4*1024);
-
- //writeln(test.CheckedRelease(addr[1],4*1024));
- //writeln(test.CheckedRelease(addr[2],4*1024));
-
- //test.Release(addr[3]+4*1024,4*1024);
-
- test.Release(addr[4],4*1024);
-
- writeln(test.CheckedMmap(addr[1],4*1024));
-
- test.mmap_addr(addr[0],4*1024*6,Pointer(4*1024));
-
- writeln(test.CheckedMmap(addr[1],4*1024));
-
- writeln;
- test.Print;
- writeln;
-
- test.Release(addr[0],4*1024*6);
-
- writeln;
- test.Print;
- writeln;
-
- //test.Alloc_any(4*1024,1,0,addr[0]);
- //Writeln(HexStr(addr[0],16));
- //
- //test.Alloc_any(4*1024,1,0,addr[1]);
- //Writeln(HexStr(addr[1],16));
- //
- //test.Alloc_any(4*1024,1,0,addr[2]);
- //Writeln(HexStr(addr[2],16));
-
- readln;
-end;
-
-initialization
- //itest;
 
 end.
 
