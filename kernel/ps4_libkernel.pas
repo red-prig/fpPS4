@@ -49,6 +49,7 @@ function ps4_sceKernelUuidCreate(outUuid:pSceKernelUuid):Integer; SysV_ABI_CDecl
 begin
  if (outUuid=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  CreateGUID(outUuid^);
+ _set_errno(0);
  Result:=0;
 end;
 

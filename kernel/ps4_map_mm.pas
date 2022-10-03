@@ -713,7 +713,7 @@ begin
  Result:=EINVAL;
 
  if not IsAlign(addr  ,PHYSICAL_PAGE_SIZE) then Exit;
- if not IsAlign(len   ,PHYSICAL_PAGE_SIZE) then Exit;
+ //if not IsAlign(len   ,PHYSICAL_PAGE_SIZE) then Exit;
  if not IsAlign(offset,PHYSICAL_PAGE_SIZE) then Exit;
 
  if (align<PHYSICAL_PAGE_SIZE) then align:=PHYSICAL_PAGE_SIZE;
@@ -774,8 +774,8 @@ begin
 
  if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
 
- if (len<PHYSICAL_PAGE_SIZE) then Exit;
- if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
+ //if (len<PHYSICAL_PAGE_SIZE) then Exit;
+ //if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
 
  align:=(flags and MAP_ALIGNMENT_MASK) shr MAP_ALIGNMENT_BIT;
  align:=1 shl align;
