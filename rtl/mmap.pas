@@ -311,14 +311,22 @@ begin
   Result:=GetLastError;
  end else
  begin
+  Result:=0;
+
   if (paddr<>nil) then
   begin
-   paddr^:=Info.AllocationBase;
+   Case Info.State of
+    MEM_FREE :paddr^:=Info.BaseAddress;
+    else      paddr^:=Info.AllocationBase;
+   end;
   end;
 
   if (psize<>nil) then
   begin
-   psize^:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
+   Case Info.State of
+    MEM_FREE :psize^:=Info.RegionSize;
+    else      psize^:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
+   end;
   end;
 
   if (pprots<>nil) then

@@ -76,6 +76,7 @@ type
     Constructor Create;
   private
     procedure _Insert(const key:TDirectAdrNode);
+    procedure _Delete(const key:TDirectAdrNode);
     Function  _FetchFree_s(ss,se,Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
     Function  _FetchNode_m(mode:Byte;cmp:QWORD;var R:TDirectAdrNode):Boolean;
     Function  _Find_m(mode:Byte;var R:TDirectAdrNode):Boolean;
@@ -218,6 +219,12 @@ begin
  FAllcSet.Insert(key);
 end;
 
+procedure TDirectManager._Delete(const key:TDirectAdrNode);
+begin
+ FAllcSet.delete(key);
+ FFreeSet.delete(key);
+end;
+
 //free:  [Size]  |[Offset]
 Function TDirectManager._FetchFree_s(ss,se,Size,Align:QWORD;var R:TDirectAdrNode):Boolean;
 var
@@ -242,8 +249,7 @@ begin
    if (FEndO<=FEndN) then
    begin
     R:=key;
-    FAllcSet.delete(key);
-    FFreeSet.erase(It);
+    _Delete(key);
     Exit(True);
    end;
   end;
@@ -303,8 +309,7 @@ begin
  end;
 
  R:=rkey;
- FAllcSet.erase(It);
- FFreeSet.delete(rkey);
+ _Delete(rkey);
  Result:=True;
 end;
 
@@ -720,9 +725,7 @@ begin
    if _skip then Break;
   end else
   begin
-   if (Size<=$1000) then Break;
-   Offset:=Offset+$1000;
-   Size  :=Size  -$1000;
+   Break;
   end;
 
  until false;
@@ -822,9 +825,7 @@ begin
    if _skip then Break;
   end else
   begin
-   if (Size<=$1000) then Break;
-   Offset:=Offset+$1000;
-   Size  :=Size  -$1000;
+   Break;
   end;
 
  until false;
@@ -916,9 +917,7 @@ begin
    if _skip then Break;
   end else
   begin
-   if (Size<=$1000) then Break;
-   Offset:=Offset+$1000;
-   Size  :=Size  -$1000;
+   Break;
   end;
 
  until false;

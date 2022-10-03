@@ -271,28 +271,38 @@ begin
 end;
 
 Function TryGetGpuMemBlockByAddr(addr:Pointer;var block:TGpuMemBlock):Boolean;
-//var
- //_pblock:PBlock;
+var
+ pb:PVirtualAdrBlock;
+label
+ __exit;
 begin
  Result:=False;
- Assert(false,'TODO');
-{
+
+ pb:=nil;
+ addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+
  rwlock_rdlock(MMLock);
- if PageMM._TryGetMapBlockByAddr(addr,_pblock) then
+
+ if VirtualManager.TryGetMapBlockByAddr(addr,pb) then
  begin
-  Case _pblock^.bType of
-   BT_DIRECT_BIG:
-    if _isgpu(PBlockBig(_pblock)^.prot) then
-    begin
-     block.pAddr :=_pblock^.pAddr;
-     block.nSize :=_pblock^.nSize;
-     block.Handle:=PBlockBig(_pblock)^.Handle;
-     Result:=true;
-    end;
+  if (pb^.F.btype<>BT_GPUM) then goto __exit;
+
+  if (pb^.Handle=nil) then
+  begin
+   if (GpuMemCb.Alloc=nil) then goto __exit;
+   pb^.Handle:=GpuMemCb.Alloc(pb^.Offset,pb^.Size);
+   if (pb^.Handle=nil) then goto __exit;
   end;
+
+  block.pAddr :=pb^.Offset;
+  block.nSize :=pb^.Size;
+  block.Handle:=pb^.Handle;
+  Result:=true;
+
  end;
+
+ __exit:
  rwlock_unlock(MMLock);
- }
 end;
 
 Procedure RegistredStack;
@@ -1092,6 +1102,11 @@ begin
   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
+ if (addr=nil) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
  Result:=__mmap(addr,length,alignment,0,flags or MAP_VOID or MAP_SHARED,-1,0,addr);
  _set_errno(Result);
 
@@ -1130,6 +1145,11 @@ begin
 
  addr:=virtualAddrDest^;
  if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ if (addr=nil) then
+ begin
+  addr:=Pointer($880000000);
+ end;
 
  Result:=__sys_mmap_dmem(addr,length,alignment,mtype,prots,flags,physicalAddr,addr);
  _set_errno(Result);
