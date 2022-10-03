@@ -80,6 +80,7 @@ type
    isPooledMemory  :0..1;
    isCommitted     :0..1;
   end;
+  align:array[0..6] of Byte;
   name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
  end;
 
@@ -486,7 +487,7 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   info^:=Default(SceKernelDirectMemoryQueryInfo);
   info^.start:=ROut.Offset;
@@ -521,7 +522,7 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   memoryTypeOut ^:=ROut.F.mtype;
   regionStartOut^:=ROut.Offset;
@@ -818,7 +819,7 @@ function __munmap(addr:Pointer;len:size_t):Integer;
 begin
  Result:=VirtualManager.Release(addr,len);
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   NamedManager.Mname(addr,len,nil);
  end;
@@ -848,7 +849,7 @@ begin
 
  Result:=VirtualManager.Release(addr,len);
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   NamedManager.Mname(addr,len,nil);
  end;
@@ -923,7 +924,7 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   if (pStart<>nil) then
   begin
@@ -968,12 +969,12 @@ begin
 
  Result:=VirtualManager.Query(addr,(flags=SCE_KERNEL_VQ_FIND_NEXT),VOut);
 
- if (Result<>0) and (VOut.F.direct=1) then
+ if (Result=0) and (VOut.F.direct=1) then
  begin
   Result:=DirectManager.QueryMType(VOut.addr,DOut);
  end;
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   NamedManager.Query(addr,@name);
  end;
@@ -981,7 +982,7 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
- if (Result<>0) then
+ if (Result=0) then
  begin
   Committed:=(VOut.F.Free=0) and (VOut.F.reserv=0);
   info^:=Default(SceKernelVirtualQueryInfo);

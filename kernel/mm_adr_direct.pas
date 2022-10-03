@@ -460,16 +460,24 @@ begin
  if next then
  begin
   It:=FAllcSet.find_be(key);
+
+  repeat
+   if (It.Item=nil) then Exit(EACCES);
+   key:=It.Item^;
+   if (not key.IsFree) then Break;
+   It.Next;
+  until false;
+
  end else
  begin
   It:=FAllcSet.find(key);
+
+  if (It.Item=nil) then Exit(EINVAL);
+
+  key:=It.Item^;
+
+  if key.IsFree then Exit(EACCES);
  end;
-
- if (It.Item=nil) then Exit(EACCES);
-
- key:=It.Item^;
-
- if key.IsFree then Exit(EACCES);
 
  ROut:=key;
 end;

@@ -41,6 +41,17 @@ uses
  sys_pthread,
  sys_signal;
 
+type
+ pSceKernelUuid=^SceKernelUuid;
+ SceKernelUuid=TGuid;
+
+function ps4_sceKernelUuidCreate(outUuid:pSceKernelUuid):Integer; SysV_ABI_CDecl;
+begin
+ if (outUuid=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ CreateGUID(outUuid^);
+ Result:=0;
+end;
+
 function ps4___error:Pointer; SysV_ABI_CDecl;
 begin
  Result:=_error;
@@ -759,6 +770,8 @@ begin
  lib^.set_proc($3AEDE22F569BBE78,@ps4_stack_chk_fail);
  lib^.set_proc($91BC385071D2632D,@ps4_pthread_cxa_finalize);
 
+ lib^.set_proc($5E3A28B22C3E5CF2,@ps4_sceKernelUuidCreate);
+
  //signal
 
  lib^.set_proc($38C0D128A019F08E,@ps4_sceKernelDebugRaiseException);
@@ -1091,8 +1104,10 @@ begin
 
  lib^.set_proc($C2E0ABA081A3B768,@ps4_open);
  lib^.set_proc($6D8FCF3BA261CE14,@ps4_close);
- lib^.set_proc($171559A81000EE4B,@ps4_write);
- lib^.set_proc($0D1B81B76A6F2029,@ps4_read);
+ lib^.set_proc($171559A81000EE4B,@ps4_write); //_write
+ lib^.set_proc($14DE2068F9AE155F,@ps4_write); //write
+ lib^.set_proc($0D1B81B76A6F2029,@ps4_read);  //_read
+ lib^.set_proc($02A062A02DAF1772,@ps4_read);  //read
 
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);

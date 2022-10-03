@@ -425,7 +425,7 @@ begin
  ch:=psCondWaitHelper(arg);
  _c:=ch^.c;
 
- System.EnterCriticalSection(_c^.waiters_count_lock_);
+ SwEnterCriticalSection(_c^.waiters_count_lock_);
 
  n:=_c^.waiters_count_unblock_;
  if (n<>0) then

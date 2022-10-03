@@ -2630,7 +2630,7 @@ begin
 
  Pointer(P):=Pointer(mMap.pAddr+dtInit);
 
- Writeln('module_start');
+ Writeln('module_start:',pFileName);
 
  Result:=P(argc,argp,param);
 end;

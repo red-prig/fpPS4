@@ -271,6 +271,10 @@ begin
  end;
 end;
 
+var
+ dev_random_nm:array[0..1] of PChar=('/dev/random','/dev/urandom');
+ dev_random_fd:Integer=-1;
+
 function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 const
  WR_RDWR=SCE_KERNEL_O_WRONLY or SCE_KERNEL_O_RDWR;
@@ -300,6 +304,32 @@ begin
  if (path[0]=#0) then
  begin
   Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+ end;
+
+ if (CompareChar0(path^,dev_random_nm[0]^,Length(dev_random_nm[0]))=0) or
+    (CompareChar0(path^,dev_random_nm[1]^,Length(dev_random_nm[1]))=0) then
+ begin
+  if (dev_random_fd<>-1) then
+  begin
+   Exit(dev_random_fd);
+  end else
+  begin
+   _sig_lock;
+   h:=_get_osfhandle(0);
+
+   Result:=_open_osfhandle(h,flags and O_OFS);
+
+   _sig_unlock;
+
+   if (Result=-1) then
+   begin
+    Exit(_set_sce_errno(SCE_KERNEL_ERROR_EMFILE));
+   end else
+   begin
+    dev_random_fd:=Result;
+   end;
+  end;
+  Exit;
  end;
 
  _sig_lock;
@@ -365,6 +395,8 @@ function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_
 var
  h:THandle;
 begin
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
  _sig_lock;
  h:=_get_osfhandle(fd);
  _sig_unlock;
@@ -392,6 +424,8 @@ var
  h:THandle;
  N:DWORD;
 begin
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
  _sig_lock;
  h:=_get_osfhandle(fd);
  _sig_unlock;
@@ -416,11 +450,29 @@ begin
  _sig_unlock;
 end;
 
+const
+ BCRYPT_USE_SYSTEM_PREFERRED_RNG=2;
+
+function BCryptGenRandom(hAlgorithm:Pointer;
+                         pbBuffer:PByte;
+                         cbBuffer:DWORD;
+                         dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
+
 function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 var
  h:THandle;
  N:DWORD;
 begin
+ if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
+ if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  BCryptGenRandom(nil,buf,nbytes,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  Result:=nbytes;
+  Exit(_set_sce_errno(0));
+ end;
+
  _sig_lock;
  h:=_get_osfhandle(fd);
  _sig_unlock;
@@ -429,9 +481,6 @@ begin
  begin
   Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
  end;
-
- if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
- if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
 
  N:=0;
  _sig_lock;
@@ -453,6 +502,13 @@ var
 begin
  if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
  if (nbytes<0) or (nbytes>High(Integer)) or (offset<0) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  BCryptGenRandom(nil,buf,nbytes,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  Result:=nbytes;
+  Exit(_set_sce_errno(0));
+ end;
 
  _sig_lock;
  h:=_get_osfhandle(fd);
@@ -725,6 +781,13 @@ var
 begin
  if (data=nil) then Exit(_set_errno(EFAULT));
  if (size>High(Integer)) then Exit(_set_errno(EINVAL));
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  Result:=size;
+  Exit(_set_errno(0));
+ end;
 
  _sig_lock;
  h:=_get_osfhandle(fd);
