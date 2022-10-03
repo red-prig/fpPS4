@@ -27,12 +27,25 @@ type
 function ps4_sceAppContentInitialize(initParam:PSceAppContentInitParam;bootParam:PSceAppContentBootParam):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceAppContentInitialize');
+
+ if (initParam<>nil) then
+ begin
+  initParam^:=Default(SceAppContentInitParam);
+ end;
+
+ if (bootParam<>nil) then
+ begin
+  bootParam^:=Default(SceAppContentBootParam);
+ end;
+
  Result:=0;
 end;
 
 Const
  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG=0;
  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1=1;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2=2;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3=3;
  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4=4;
 
  SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334;//0x80D90002
@@ -47,7 +60,8 @@ begin
  Writeln('sceAppContentAppParamGetInt:',paramId);
  Case SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG of
   SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG:Result:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
-  1..4:Result:=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1..
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:Result:=0;
   else
    Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
  end;

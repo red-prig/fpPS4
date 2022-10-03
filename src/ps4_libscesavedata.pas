@@ -282,20 +282,45 @@ const
  SCE_SAVE_DATA_ERROR_MOUNT_FULL =-2137063412; // 0x809F000C
  SCE_SAVE_DATA_ERROR_NOT_MOUNTED=-2137063420; // 0x809F0004
 
+ SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
+ SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
+ SCE_SAVE_DATA_MOUNT_MODE_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
+ SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
+
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;mountResult:pSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ mountResult^:=Default(SceSaveDataMountResult);
+
  _sig_lock;
- Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint);
+ Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
+
+ if (Result=0) and
+    ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
+ begin
+  mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+ end;
+
 end;
 
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ mountResult^:=Default(SceSaveDataMountResult);
+
  _sig_lock;
- Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint);
+ Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
+
+ if (Result=0) and
+    ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
+ begin
+  mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+ end;
+
 end;
 
 function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
@@ -312,6 +337,8 @@ begin
  if (info<>nil) then
  begin
   info^:=Default(SceSaveDataMountInfo);
+  info^.blocks    :=100000;
+  info^.freeBlocks:=100000;
  end;
 end;
 

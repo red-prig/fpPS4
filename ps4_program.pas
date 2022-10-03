@@ -168,7 +168,7 @@ var
 
 Procedure DumpExceptionCallStack(E: Exception);
 
-Function  FetchMount(path,point:PChar):Integer;
+Function  FetchMount(path,point:PChar;mode:Integer):Integer;
 Function  UnMountPath(path:PChar):Integer;
 
 function  _parse_filename(filename:PChar):RawByteString;
@@ -293,11 +293,23 @@ var
 const
  SCE_SAVE_DATA_ERROR_PARAMETER  =-2137063424; // 0x809F0000
  SCE_SAVE_DATA_ERROR_EXISTS     =-2137063417; // 0x809F0007
+ SCE_SAVE_DATA_ERROR_NOT_FOUND  =-2137063416; // 0x809f0008
  SCE_SAVE_DATA_ERROR_MOUNT_FULL =-2137063412; // 0x809F000C
  SCE_SAVE_DATA_ERROR_NOT_MOUNTED=-2137063420; // 0x809F0004
+ SCE_SAVE_DATA_ERROR_INTERNAL   =-2137063413; // 0x809f000b
+ SCE_SAVE_DATA_ERROR_BUSY       =-2137063421; // 0x809f0003
 
-Function FetchMount(path,point:PChar):Integer;
+
+ SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
+ SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
+ SCE_SAVE_DATA_MOUNT_MODE_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
+ SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
+
+Function FetchMount(path,point:PChar;mode:Integer):Integer;
 var
+ sp:RawByteString;
  s:TMountDir;
  i,m:Integer;
 Label
@@ -312,6 +324,22 @@ begin
  i:=IndexChar(s,MOUNT_MAXSIZE,#0);
  if (i=0) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
 
+ sp:=IncludeTrailingPathDelimiter(ps4_app.save_path)+s;
+
+ if (mode and SCE_SAVE_DATA_MOUNT_MODE_CREATE2)<>0 then
+ begin
+  if not ForceDirectories(ps4_app.save_path) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+  CreateDir(sp);
+ end else
+ if (mode and SCE_SAVE_DATA_MOUNT_MODE_CREATE)<>0 then
+ begin
+  if not ForceDirectories(ps4_app.save_path) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+  if not CreateDir(sp) then Exit(SCE_SAVE_DATA_ERROR_EXISTS);
+ end else
+ begin
+  if not DirectoryExists(sp) then Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);
+ end;
+
  rwlock_wrlock(FMounts_lock);
 
  m:=-1;
@@ -324,7 +352,7 @@ begin
   begin
    if (FMounts[i]=s) then
    begin
-    Result:=SCE_SAVE_DATA_ERROR_EXISTS;
+    Result:=SCE_SAVE_DATA_ERROR_BUSY;
     goto _exit;
    end;
   end;
@@ -428,7 +456,7 @@ begin
 
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+s;
 
- if not ForceDirectories(s) then Exit('');
+ if not FileExists(s) then Exit('');
 
  Result:=PathConcat(s,filename);
 end;
