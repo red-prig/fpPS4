@@ -456,8 +456,6 @@ begin
 
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+s;
 
- if not FileExists(s) then Exit('');
-
  Result:=PathConcat(s,filename);
 end;
 
