@@ -53,6 +53,8 @@ function  ps4_pthread_equal(t1,t2:pthread):Integer; SysV_ABI_CDecl;
 procedure ps4_scePthreadExit(value_ptr:Pointer); SysV_ABI_CDecl;
 procedure ps4_pthread_exit(value_ptr:Pointer); SysV_ABI_CDecl;
 
+function  ps4_pthread_setcancelstate(state:Integer;oldstate:PInteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_self():pthread; SysV_ABI_CDecl;
 function  ps4_scePthreadSelf():pthread; SysV_ABI_CDecl;
 
@@ -715,6 +717,19 @@ end;
 procedure ps4_pthread_exit(value_ptr:Pointer); SysV_ABI_CDecl;
 begin
  ps4_scePthreadExit(value_ptr);
+end;
+
+function ps4_pthread_setcancelstate(state:Integer;oldstate:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+
+ Case state of
+  PTHREAD_CANCEL_DISABLE:Writeln('PTHREAD_CANCEL_DISABLE');
+  PTHREAD_CANCEL_ENABLE :Writeln('PTHREAD_CANCEL_ENABLE');
+  else
+   Exit(EINVAL);
+ end;
+
 end;
 
 function ps4_pthread_self():pthread; SysV_ABI_CDecl;

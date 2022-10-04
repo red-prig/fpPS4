@@ -215,10 +215,6 @@ uses
  sys_signal,
  sys_time;
 
-function _open_osfhandle(h:THandle;flags:Integer):Integer; cdecl; external 'msvcrt';
-function _get_osfhandle(fd:Integer):THandle; cdecl; external 'msvcrt';
-function _close(fd:Integer):Integer; cdecl; external 'msvcrt';
-
 Function get_DesiredAccess(flags:Integer):DWORD;
 begin
  Result:=0;
@@ -575,20 +571,6 @@ begin
  Result:=_set_errno(sce2px(ps4_sceKernelStat(path,stat)));
 end;
 
-function SwGetFileAttributes(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
-var
- wp:WideString;
-begin
- Result:=0;
- _sig_lock;
- wp:=UTF8Decode(lpFileName);
- if not GetFileAttributesExW(PWideChar(wp),GetFileExInfoStandard,lpFileInformation) then
- begin
-  Result:=GetLastError;
- end;
- _sig_unlock;
-end;
-
 function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 var
  rp:RawByteString;
@@ -646,24 +628,6 @@ end;
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 begin
  Result:=_set_errno(sce2px(ps4_sceKernelFstat(fd,stat)));
-end;
-
-function SwGetFileType(hFile:HANDLE):DWORD;
-begin
- _sig_lock;
- Result:=GetFileType(hFile);
- _sig_unlock;
-end;
-
-function SwGetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
-begin
- Result:=0;
- _sig_lock;
- if not GetFileInformationByHandle(hFile,lpFileInformation) then
- begin
-  Result:=GetLastError;
- end;
- _sig_unlock;
 end;
 
 function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
@@ -811,17 +775,6 @@ begin
  end else
  begin
   Result:=_set_errno(EIO);
- end;
- _sig_unlock;
-end;
-
-Function SwCreateDir(Const NewDir:RawByteString):DWORD;
-begin
- Result:=0;
- _sig_lock;
- if not CreateDir(NewDir) then
- begin
-  Result:=GetLastError;
  end;
  _sig_unlock;
 end;

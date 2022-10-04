@@ -5,6 +5,7 @@ unit sys_kernel;
 interface
 
 Uses
+ SysUtils,
  Windows;
 
 {$I sce_errno.inc}
@@ -45,10 +46,27 @@ function  SwWaitForSingleObject(
 
 function  SwWaitFor(Handle:THandle;pTimeout:PQWORD):Integer; //pTimeout in ns
 
+function  SwGetFileAttributes(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
+function  SwGetFileType(hFile:HANDLE):DWORD;
+function  SwGetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
+Function  SwCreateDir(Const NewDir:RawByteString):DWORD;
+
 Function  safe_move(const src;var dst;count:QWORD):QWORD;
 procedure safe_move_ptr(const src;var dst);
 function  safe_test(var src:DWORD;value:DWORD):Boolean;
 function  safe_str(P:PChar):shortstring;
+
+
+function _open_osfhandle(h:THandle;flags:Integer):Integer; cdecl; external 'msvcrt';
+function _get_osfhandle(fd:Integer):THandle; cdecl; external 'msvcrt';
+function _close(fd:Integer):Integer; cdecl; external 'msvcrt';
+
+function MapViewOfFileEx(hFileMappingObject:HANDLE;
+                         dwDesiredAccess:DWORD;
+                         dwFileOffsetHigh:DWORD;
+                         dwFileOffsetLow:DWORD;
+                         dwNumberOfBytesToMap:SIZE_T;
+                         lpBaseAddress:LPVOID):LPVOID; stdcall; external 'kernel32' name 'MapViewOfFileEx';
 
 implementation
 
@@ -248,6 +266,49 @@ begin
 
  until false;
 
+end;
+
+function SwGetFileAttributes(Const lpFileName:RawByteString;lpFileInformation:LPVOID):DWORD;
+var
+ wp:WideString;
+begin
+ Result:=0;
+ _sig_lock;
+ wp:=UTF8Decode(lpFileName);
+ if not GetFileAttributesExW(PWideChar(wp),GetFileExInfoStandard,lpFileInformation) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+function SwGetFileType(hFile:HANDLE):DWORD;
+begin
+ _sig_lock;
+ Result:=GetFileType(hFile);
+ _sig_unlock;
+end;
+
+function SwGetFileInformationByHandle(hFile:HANDLE;lpFileInformation:LPBY_HANDLE_FILE_INFORMATION):DWORD;
+begin
+ Result:=0;
+ _sig_lock;
+ if not GetFileInformationByHandle(hFile,lpFileInformation) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+Function SwCreateDir(Const NewDir:RawByteString):DWORD;
+begin
+ Result:=0;
+ _sig_lock;
+ if not CreateDir(NewDir) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
 end;
 
 Function safe_move(const src;var dst;count:QWORD):QWORD;

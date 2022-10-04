@@ -86,6 +86,9 @@ function _VirtualQuery   (addr:Pointer;paddr:PPointer;psize:Pptruint;pprots,pfla
 
 implementation
 
+uses
+ sys_kernel;
+
 const
  FILE_MAP_EXECUTE=$0020;
 
@@ -208,20 +211,21 @@ begin
  end;
 end;
 
-function _get_osfhandle(fd:Integer):THandle; cdecl; external 'msvcrt';
-
-function MapViewOfFileEx(hFileMappingObject:HANDLE;
-                         dwDesiredAccess:DWORD;
-                         dwFileOffsetHigh:DWORD;
-                         dwFileOffsetLow:DWORD;
-                         dwNumberOfBytesToMap:SIZE_T;
-                         lpBaseAddress:LPVOID):LPVOID; stdcall; external 'kernel32' name 'MapViewOfFileEx';
-
 function _VirtualMmap(Addr:Pointer;len:size_t;prot,fd:Integer;offst:size_t):Integer;
 Var
  fm,h:THandle;
- dwFileOffsetLow,dwFileOffsetHigh,protect,desiredAccess,dwMaxSizeLow,dwMaxSizeHigh:DWORD;
+
+ dwFileOffsetLow,
+ dwFileOffsetHigh,
+ protect,
+ desiredAccess,
+ dwMaxSizeLow,
+ dwMaxSizeHigh:DWORD;
+
+ fileSize:size_t;
  maxSize:size_t;
+
+ info:BY_HANDLE_FILE_INFORMATION;
 begin
  Result:=0;
  if (Addr=nil) then Exit(-1);
@@ -232,7 +236,19 @@ begin
   Exit(GetLastError);
  end;
 
+ info:=Default(BY_HANDLE_FILE_INFORMATION);
+ Result:=SwGetFileInformationByHandle(h,@info);
+ if (Result<>0) then Exit;
+
+ fileSize:=info.nFileSizeLow or (QWORD(info.nFileSizeHigh) shl 32);
+
  maxSize:=offst+len;
+
+ if (maxSize>fileSize) then
+ begin
+  maxSize:=fileSize;
+  len:=maxSize-offst;
+ end;
 
  dwFileOffsetLow :=DWORD(offst and $FFFFFFFF);
  dwFileOffsetHigh:=DWORD(offst shr 32);
