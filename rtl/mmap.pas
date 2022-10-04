@@ -223,6 +223,7 @@ Var
  dwFileOffsetLow,dwFileOffsetHigh,protect,desiredAccess,dwMaxSizeLow,dwMaxSizeHigh:DWORD;
  maxSize:size_t;
 begin
+ Result:=0;
  if (Addr=nil) then Exit(-1);
 
  h:=_get_osfhandle(fd);

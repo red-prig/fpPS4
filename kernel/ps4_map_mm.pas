@@ -723,36 +723,32 @@ begin
 
  if (flags and MAP_VOID)<>0 then //reserved
  begin
-  flags:=flags and (not MAP_SHARED);
-  Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
+  Result:=VirtualManager.mmap(addr,len,align,prot,flags,-1,0,res);
  end else
  if (flags and MAP_ANON)<>0 then //flex
  begin
-  Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
+  Result:=VirtualManager.mmap(addr,len,align,prot,flags,-1,0,res);
  end else
- if (flags and MAP_SHARED)<>0 then
+ if (fd>=0) then
  begin
-  if (fd>=0) then
+  if (fd=0) then //direct (psevdo dmem fd=0)
   begin
-   if (fd=0) then //direct (psevdo dmem fd=0)
+   Result:=DirectManager.CheckedMMap(offset,len);
+
+   if (Result=0) then
    begin
-    Result:=DirectManager.CheckedMMap(offset,len);
+
+    Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
 
     if (Result=0) then
     begin
-
-     Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
-
-     if (Result=0) then
-     begin
-      Result:=DirectManager.mmap_addr(offset,len,addr);
-     end;
-
+     Result:=DirectManager.mmap_addr(offset,len,addr);
     end;
-   end else
-   begin //map file
-    Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
+
    end;
+  end else
+  begin //map file
+   Result:=VirtualManager.mmap(addr,len,align,prot,flags,fd,offset,res);
   end;
  end;
 
@@ -802,7 +798,6 @@ begin
 
  if (Result=0) then
  begin
-  flags:=flags or MAP_SHARED;
   Result:=VirtualManager.mmap(addr,length,alignment,prots,flags,0,physicalAddr,res);
 
   if (Result=0) then

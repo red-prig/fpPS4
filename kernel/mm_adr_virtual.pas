@@ -188,26 +188,40 @@ var
  FShift :QWORD;
  FOffset:Pointer;
  FSize  :QWORD;
+ ASize  :QWORD;
  err    :Integer;
 begin
  Result:=nil;
 
  FOffset:=AlignDw(Offset,GRANULAR_PAGE_SIZE);
  FShift :=Offset-FOffset;
- FSize  :=AlignUp(FShift+Size,GRANULAR_PAGE_SIZE);
+ FSize  :=FShift+Size;
+ ASize  :=AlignUp(FSize,GRANULAR_PAGE_SIZE);
 
  case btype of
   BT_PRIV,
   BT_GPUM:
    begin
-    err:=_VirtualReserve(Pointer(FOffset),FSize,prot);
-    if (err<>0) then Exit;
+    err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
+    if (err<>0) then
+    begin
+     Writeln(StdErr,'_VirtualReserve(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
+     Exit;
+    end;
    end;
   BT_FMAP:
    begin
-    if (offst<FShift) then Exit;
+    if (offst<FShift) then
+    begin
+     Writeln(StdErr,'offst<FShift:',offst,'<',FShift);
+     Exit;
+    end;
     err:=_VirtualMmap(Pointer(FOffset),FSize,prot,fd,offst-FShift);
-    if (err<>0) then Exit;
+    if (err<>0) then
+    begin
+     Writeln(StdErr,'_VirtualMmap(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
+     Exit;
+    end;
    end;
   else
        Exit;
@@ -218,7 +232,7 @@ begin
 
  Result^.F.btype :=btype;
  Result^.Offset  :=FOffset;
- Result^.Size    :=FSize;
+ Result^.Size    :=ASize;
 end;
 
 //
@@ -259,6 +273,11 @@ end;
 function Max(a,b:Pointer):Pointer; inline;
 begin
  if (a>b) then Result:=a else Result:=b;
+end;
+
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
 end;
 
 //
@@ -646,7 +665,7 @@ begin
   key:=It.Item^;
   if (key.F.mapped=0) then
   begin
-   Offset:=System.Align(Max(key.Offset,ss),Align);
+   Offset:=AlignUp(Max(key.Offset,ss),Align);
    if (Offset+Size)<=(key.Offset+key.Size) then
    begin
 
@@ -656,12 +675,12 @@ begin
      if ((_qflag and (MAP_FIXED or MAP_VOID))<>0) then //commit or reserved
      begin
       _mmap_sys(_qaddr,_qsize);
-      ss:=Offset;
+      ss:=(Offset+Size);
       Goto _start;
      end else
      if (_qsize<Size) then //not fit
      begin
-      ss:=Offset;
+      ss:=(Offset+Size);
       Goto _start;
      end;
     end else
@@ -944,7 +963,7 @@ var
 
  function _mapped:Boolean; inline;
  begin
-  Result:=((flags and MAP_SHARED)<>0) and (fd>0);
+  Result:=((flags and MAP_ANON)=0) and (fd>0);
  end;
 
 begin
@@ -990,6 +1009,7 @@ var
  key:TVirtualAdrNode;
  start:Pointer;
  FEndN,FEndO:Pointer;
+ ASize:QWORD;
  FSize:QWORD;
  err:Integer;
  btype:Byte;
@@ -1011,17 +1031,17 @@ var
 
  function _direct:Byte; inline;
  begin
-  Result:=Byte(((flags and MAP_SHARED)<>0) and (fd=0));
+  Result:=Byte(((flags and MAP_ANON)=0) and (fd=0));
  end;
 
  function _mapped:Byte; inline;
  begin
-  Result:=Byte(((flags and MAP_SHARED)<>0) and (fd>0));
+  Result:=Byte(((flags and MAP_ANON)=0) and (fd>0));
  end;
 
  function _addres:Boolean; inline;
  begin
-  Result:=((flags and MAP_SHARED)<>0);
+  Result:=((flags and MAP_ANON)=0);
  end;
 
  function _fetch:Boolean;
@@ -1030,16 +1050,16 @@ var
 
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
+   FEndN:=Offset+ASize;
    FEndO:=key.Offset+key.Size;
 
-   _Devide(Offset,Size,key);
+   _Devide(Offset,ASize,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,(Offset+ASize),key) then
   begin
-   FEndN:=Offset+Size;
+   FEndN:=Offset+ASize;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1069,6 +1089,8 @@ var
 
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
+
+  ASize :=ASize -FSize;
   Size  :=Size  -FSize;
  end;
 
@@ -1102,6 +1124,8 @@ var
 
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
+
+  ASize :=ASize -FSize;
   Size  :=Size  -FSize;
  end;
 
@@ -1110,6 +1134,10 @@ begin
  if (Size=0) then Exit(EINVAL);
  if (Offset>Fhi) then Exit(EINVAL);
 
+ if (Align<PHYSICAL_PAGE_SIZE) then Align:=PHYSICAL_PAGE_SIZE;
+
+ ASize:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
  if _fixed then
  begin
   if (Offset<Flo) then Exit(EINVAL);
@@ -1117,7 +1145,12 @@ begin
  begin
   Offset:=Max(Offset,Flo);
 
-  Result:=_FindFreeOffset(Offset,Size,Align,Offset);
+  if (_mapped<>0) or (Size>=GRANULAR_PAGE_SIZE) then
+  begin
+   if (Align<GRANULAR_PAGE_SIZE) then Align:=GRANULAR_PAGE_SIZE;
+  end;
+
+  Result:=_FindFreeOffset(Offset,ASize,Align,Offset);
   if (Result<>0) then Exit;
  end;
 
@@ -1152,7 +1185,19 @@ begin
    begin
     if (key.block=nil) then
     begin
-     key.block:=NewAdrBlock(key.Offset,key.Size,prot,btype,fd,addr);
+     if (key.Offset>Offset) then
+     begin
+      FSize:=key.Offset-Offset;
+      FSize:=Min(Size-FSize,key.Size);
+
+      key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
+     end else
+     begin
+      FSize:=Offset-key.Offset;
+      FSize:=Min(Size+FSize,key.Size);
+
+      key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
+     end;
 
      if (key.block=nil) then
      begin

@@ -437,16 +437,28 @@ begin
 
  sys_crt_init;
 
+ //StackTop    - Max
+ //StackBottom - Min
+
  StackLength:=data^.Attr.stacksize_attr;
- StackBottom:=Sptr-StackLength;
+ Assert(StackLength<>0);
+
+ StackBottom:=StackTop-StackLength;
+
+ Writeln('StackTop   :',HexStr(StackTop));
+ Writeln('Sptr       :',HexStr(Sptr));
+
+ Writeln('StackBottom:',HexStr(StackBottom));
+ Writeln('StackLength:',HexStr(StackLength,16));
 
  ReadBarrier;
  if (data<>nil) and (data^.entry<>nil) then
  begin
-  if (data^.Attr.stackaddr_attr=nil) then
-  begin
+  //if (data^.Attr.stackaddr_attr=nil) then
+  //begin
    data^.Attr.stackaddr_attr:=StackBottom;
-  end;
+   data^.Attr.stacksize_attr:=StackLength;
+  //end;
 
   writeln('BeginThread:',data^.name,':',HexStr(data^.entry));
   tcb_thread:=data;
