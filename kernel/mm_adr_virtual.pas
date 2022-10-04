@@ -275,6 +275,11 @@ begin
  if (a>b) then Result:=a else Result:=b;
 end;
 
+function Max(a,b:QWORD):QWORD; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
 function Min(a,b:QWORD):QWORD; inline;
 begin
  if (a<b) then Result:=a else Result:=b;
@@ -637,6 +642,8 @@ var
  key:TVirtualAdrNode;
  Offset:Pointer;
 
+ galign:QWORD;
+
  err:Integer;
 
  _qaddr:Pointer;
@@ -648,6 +655,8 @@ label
 
 begin
  Result:=0;
+
+ galign:=Max(Align,GRANULAR_PAGE_SIZE);
 
  _qaddr:=nil;
  _qsize:=0;
@@ -665,7 +674,15 @@ begin
   key:=It.Item^;
   if (key.F.mapped=0) then
   begin
-   Offset:=AlignUp(Max(key.Offset,ss),Align);
+
+   if (key.block=nil) then
+   begin
+    Offset:=AlignUp(Max(key.Offset,ss),galign);
+   end else
+   begin
+    Offset:=AlignUp(Max(key.Offset,ss),Align);
+   end;
+
    if (Offset+Size)<=(key.Offset+key.Size) then
    begin
 
@@ -1134,7 +1151,7 @@ begin
  if (Size=0) then Exit(EINVAL);
  if (Offset>Fhi) then Exit(EINVAL);
 
- if (Align<PHYSICAL_PAGE_SIZE) then Align:=PHYSICAL_PAGE_SIZE;
+ Align:=Max(Align,PHYSICAL_PAGE_SIZE);
 
  ASize:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
@@ -1145,9 +1162,9 @@ begin
  begin
   Offset:=Max(Offset,Flo);
 
-  if (_mapped<>0) or (Size>=GRANULAR_PAGE_SIZE) then
+  if (_mapped<>0) then
   begin
-   if (Align<GRANULAR_PAGE_SIZE) then Align:=GRANULAR_PAGE_SIZE;
+   Align:=Max(Align,GRANULAR_PAGE_SIZE);
   end;
 
   Result:=_FindFreeOffset(Offset,ASize,Align,Offset);

@@ -2209,6 +2209,19 @@ end;
 //  0    1    2    3   4   5  6  7  8
 //[64] [48] [8b] [04] 25 [00 00 00 00] :0x0
 
+
+//MOV RAX,qword ptr FS:[0x0]
+
+//  0    1    2
+//[66] [66] [66]
+
+//  3    4    5    6   7   8  9 10 11
+//[64] [48] [8b] [04] 25 [00 00 00 00]
+
+//[66] [66] [66]
+//64488b042500000000 //data16 data16 data16 mov %fs:0x0,%rax
+
+
 //                  v this adr - base adr
 //[e8] [9e be b3 00] relative
 //^ call
@@ -2255,11 +2268,17 @@ end;
 procedure Telf_file._PatchTls(Proc:Pointer;Addr:PByte;Size:QWORD);
 Const
  prefix1:DWORD=$048b4864;
- //prefix2:DWORD=$00000025;
- //prefix3:Byte =$00;
+
+ prefix2:Byte =$25;
+ prefix3:DWORD=$00000000;
+
  //prefix3:DWORD=$05034800;
 
- prefix4:QWORD=$0503480000000025;
+ //prefix4:QWORD=$0503480000000025;
+
+ prefix5:DWORD=$666666;
+
+ prefixm:DWORD=$FFFFFF;
 
 var
  Stub:Pointer;
@@ -2279,6 +2298,15 @@ var
  begin
   _call._ofs:=Integer(PtrInt(Stub)-PtrInt(P)-PtrInt(@Tpatch_fs(nil^).{_pop_rcx}_nop));
   Ppatch_fs(p)^:=_call;
+
+  p:=p-3;
+  if ((PDWORD(p)^ and prefixm)=prefix5) then
+  begin
+   p[0]:=$90; //nop
+   p[1]:=$90; //nop
+   p[2]:=$90; //nop
+  end;
+
  end;
 
  procedure do_find(p:PByte;s:SizeInt);
@@ -2291,7 +2319,8 @@ var
    if (i=-1) then Break;
    A:=@P[i];
 
-   if (PQWORD(@A[4])^=prefix4) then
+   if (A[4]=prefix2) and (PDWORD(@A[5])^=prefix3) then
+   //if (PQWORD(@A[4])^=prefix4) then
    if not _ro_seg_adr_in(A,12) then
    begin
     Inc(c);

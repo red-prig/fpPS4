@@ -1132,6 +1132,7 @@ begin
  lib:=Result._add_lib('libkernel_unity');
 
  lib^.set_proc($5A4C0477737BC346,@ps4_sceKernelInstallExceptionHandler);
+ lib^.set_proc($421BF90110283847,@ps4_sceKernelRemoveExceptionHandler);
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
  //

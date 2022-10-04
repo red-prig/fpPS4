@@ -18,6 +18,7 @@ type
  TsceKernelExceptionHandler=procedure(signum:Integer;context:Pointer); SysV_ABI_CDecl;
 
 function ps4_sceKernelInstallExceptionHandler(signum:Integer;callback:TsceKernelExceptionHandler):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelRemoveExceptionHandler(signum:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelRaiseException(_pthread:Pointer;sig:Integer):Integer; SysV_ABI_CDecl;
 
 implementation
@@ -117,6 +118,26 @@ begin
   act:=Default(sigaction_t);
   act.__sigaction_u.__sa_handler:=@__ex_handler;
   act.sa_flags:=SA_RESTART;
+
+  Result:=px2sce(__sigaction(signum,@act,nil));
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_EAGAIN;
+ end;
+
+end;
+
+function ps4_sceKernelRemoveExceptionHandler(signum:Integer):Integer; SysV_ABI_CDecl;
+var
+ act:sigaction_t;
+begin
+ if not _SIG_VALID_32(signum) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if CAS(Pointer(EX_HANDLERS[_SIG_IDX(signum)]),EX_HANDLERS[_SIG_IDX(signum)],nil) then
+ begin
+
+  act:=Default(sigaction_t);
+  act.sa_flags:=SA_RESETHAND;
 
   Result:=px2sce(__sigaction(signum,@act,nil));
  end else
