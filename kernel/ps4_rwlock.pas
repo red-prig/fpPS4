@@ -183,7 +183,10 @@ function pthread_rwlock_init(m:p_pthread_rwlock;a:p_pthread_rwlockattr;str:PChar
 var
  mi:pthread_rwlock;
 begin
- Result:=rwlock_impl(m,mi);
+ mi:=m^;
+ mi:=rwlock_impl_init(m,mi);
+ if (mi=nil) then Exit(ENOMEM);
+
  if (Result<>0) then Exit;
  if (str<>nil) then MoveChar0(str^,mi^.name,32);
 end;

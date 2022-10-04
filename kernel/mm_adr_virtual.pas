@@ -216,10 +216,10 @@ begin
      Writeln(StdErr,'offst<FShift:',offst,'<',FShift);
      Exit;
     end;
-    err:=_VirtualMmap(Pointer(FOffset),FSize,prot,fd,offst-FShift);
+    err:=_VirtualMmap(Pointer(FOffset),FSize,prot,fd,(offst-FShift));
     if (err<>0) then
     begin
-     Writeln(StdErr,'_VirtualMmap(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
+     Writeln(StdErr,'_VirtualMmap(',HexStr(FOffset),',',HexStr(FSize,16),',',fd,',',(offst-FShift),'):',err);
      Exit;
     end;
    end;
