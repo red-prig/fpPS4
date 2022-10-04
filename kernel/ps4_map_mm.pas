@@ -834,11 +834,6 @@ function _munmap(addr:Pointer;len:size_t):Integer;
 begin
  Result:=EINVAL;
 
- if (len<PHYSICAL_PAGE_SIZE) then Exit;
- if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
-
- if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
-
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
 
@@ -854,18 +849,8 @@ begin
 end;
 
 function _mprotect(addr:Pointer;len:size_t;prot:Integer):Integer;
-var
- tmp:Pointer;
 begin
  Result:=EINVAL;
-
- if ((prot and $ffffffc8)<>0) then Exit;
-
- tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
- len:=len+(addr-tmp);
-
- addr:=tmp;
- len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
 
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
@@ -877,18 +862,8 @@ begin
 end;
 
 function _sys_mtypeprotect(addr:Pointer;len:size_t;mtype,prot:Integer):Integer;
-var
- tmp:Pointer;
 begin
  Result:=EINVAL;
-
- if ((prot and $ffffffc8)<>0) then Exit;
-
- tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
- len:=len+(addr-tmp);
-
- addr:=tmp;
- len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
 
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
@@ -996,19 +971,11 @@ begin
 end;
 
 Function _sys_mname(addr:Pointer;len:QWORD;pname:PChar):Integer;
-var
- tmp:Pointer;
 begin
  Result:=EFAULT;
 
  if (pname=nil) then Exit;
  if (StrLen(pname)>32) then Exit;
-
- tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
- len:=len+(addr-tmp);
-
- addr:=tmp;
- len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
 
  _sig_lock;
  rwlock_rdlock(MMLock); //r

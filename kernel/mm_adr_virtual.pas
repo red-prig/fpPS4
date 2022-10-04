@@ -58,17 +58,21 @@ type
    Procedure SetSize(q:QWORD);     inline;
    Function  GetUsed:QWORD;        inline;
    Procedure SetUsed(q:QWORD);     inline;
+   Function  GetRsrv:QWORD;        inline;
+   Procedure SetRsrv(q:QWORD);     inline;
   public
    F:bitpacked record
     Offset:bit28;
     Size  :bit28;
     btype :bit8;
+    rsrv  :DWORD;
     used  :DWORD;
    end;
    Handle:Pointer; //gpu
   property  Offset:Pointer read GetOffset write SetOffset;
   property  Size:QWORD     read GetSize   write SetSize;
   property  Used:QWORD     read GetUsed   write SetUsed;
+  property  Rsrv:QWORD     read GetRsrv   write SetRsrv;
   function  Commit(key:PVirtualAdrNode;prot:Integer):Integer;
   function  Free(key:PVirtualAdrNode):Integer;
   function  Reserved(key:PVirtualAdrNode):Integer;
@@ -119,6 +123,8 @@ type
  TDirectUnmapCb=function(Offset,Size:QWORD):Integer;
  TDirectMtypeCb=function(Offset,Size:QWORD;mtype:Integer):Integer;
 
+ TBlockCb=function(block:PVirtualAdrBlock):Integer;
+
  TVirtualManager=class
   private
    type
@@ -145,6 +151,8 @@ type
     procedure _Devide(Offset:Pointer;Size:QWORD;var key:TVirtualAdrNode);
     function  _UnmapDirect(Offset,Size:QWORD):Integer;
     function  _MtypeDirect(Offset,Size:QWORD;mtype:Integer):Integer;
+    function  _CreateBlock(block:PVirtualAdrBlock):Integer;
+    function  _FreeBlock(block:PVirtualAdrBlock):Integer;
     Function  _FindFreeOffset(ss:Pointer;Size,Align:QWORD;var AdrOut:Pointer):Integer;
     procedure _set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock);
     procedure _mmap_addr(Offset:Pointer;Size,addr:QWORD;direct:Boolean);
@@ -153,6 +161,9 @@ type
     var
      OnDirectUnmapCb:TDirectUnmapCb;
      OnDirectMtypeCb:TDirectMtypeCb;
+
+     OnCreateBlockCb:TBlockCb;
+     OnFreeBlockCb  :TBlockCb;
 
     Function  check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
     Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
@@ -233,6 +244,20 @@ begin
  Result^.F.btype :=btype;
  Result^.Offset  :=FOffset;
  Result^.Size    :=ASize;
+
+ case btype of
+  BT_PRIV,
+  BT_GPUM:
+   begin
+    Result^.Rsrv:=ASize;
+   end;
+  BT_FMAP:
+   begin
+    Result^.Used:=ASize;
+   end;
+  else;
+ end;
+
 end;
 
 //
@@ -320,15 +345,41 @@ begin
  Assert(GetUsed=q);
 end;
 
+Function TVirtualAdrBlock.GetRsrv:QWORD; inline;
+begin
+ Result:=QWORD(F.rsrv) shl 12;
+end;
+
+Procedure TVirtualAdrBlock.SetRsrv(q:QWORD); inline;
+begin
+ F.rsrv:=DWORD(q shr 12);
+ Assert(GetRsrv=q);
+end;
+
 function TVirtualAdrBlock.Commit(key:PVirtualAdrNode;prot:Integer):Integer;
 begin
  Result:=0;
  if (key=nil) then Exit;
 
- if (key^.F.reserv=0) then
+ Assert(key^.Offset           >= Offset);
+ Assert(key^.Offset+key^.Size >= Offset+Size);
+
+ if (key^.F.Free<>0) then //free->commit
  begin
   Assert((Used+key^.Size)<=Size);
-  Used:=Used+key^.Size;
+
+  Used:=Used+key^.Size; //+
+ end else
+ if (key^.F.reserv<>0) then //reserved->commit
+ begin
+  Assert(Rsrv>=key^.Size);
+  Assert((Used+key^.Size)<=Size);
+
+  Rsrv:=Rsrv-key^.Size; //-
+  Used:=Used+key^.Size; //+
+ end else
+ begin
+  Exit;
  end;
 
  case F.btype of
@@ -343,17 +394,56 @@ begin
    end;
   else;
  end;
+
 end;
 
 function TVirtualAdrBlock.Free(key:PVirtualAdrNode):Integer;
 begin
- Assert(Used>=key^.Size);
- Used:=Used-key^.Size;
+ Result:=0;
+ if (key=nil) then Exit;
+ if (key^.F.Free<>0) then Exit; //its free
+
+ Assert(key^.Offset           >= Offset);
+ Assert(key^.Offset+key^.Size >= Offset+Size);
+
+ if (key^.F.reserv<>0) then //reserved->free
+ begin
+  Assert(Rsrv>=key^.Size);
+
+  Rsrv:=Rsrv-key^.Size;    //-
+ end else
+ begin                     //commit->free
+  Assert(Used>=key^.Size);
+
+  Used:=Used-key^.Size; //-
+ end;
+
  Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
 end;
 
 function TVirtualAdrBlock.Reserved(key:PVirtualAdrNode):Integer;
 begin
+ Result:=0;
+ if (key=nil) then Exit;
+ if (key^.F.reserv<>0) then Exit; //its reserved
+
+ Assert(key^.Offset           >= Offset);
+ Assert(key^.Offset+key^.Size >= Offset+Size);
+
+ if (key^.F.Free<>0) then //free->reserved
+ begin
+  Assert((Rsrv+key^.Size)<=Size);
+
+  Rsrv:=Rsrv+key^.Size; //+
+ end else
+ begin                    //commit->reserved
+  Assert(Used>=key^.Size);
+  Assert((Rsrv+key^.Size)<=Size);
+
+  Used:=Used-key^.Size; //-
+  Rsrv:=Rsrv+key^.Size; //+
+ end;
+
  Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
 end;
 
@@ -361,6 +451,10 @@ function TVirtualAdrBlock.Protect(key:PVirtualAdrNode;prot:Integer):Integer;
 begin
  Result:=0;
  if (key=nil) then Exit;
+ if (key^.F.Free<>0) then Exit; //its free
+
+ Assert(key^.Offset           >= Offset);
+ Assert(key^.Offset+key^.Size >= Offset+Size);
 
  if (key^.F.prot<>prot) then
  begin
@@ -634,6 +728,18 @@ begin
  if (Size=0) then Exit(0);
  if (OnDirectMtypeCb=nil) then Exit(EINVAL);
  Result:=OnDirectMtypeCb(Offset,Size,mtype);
+end;
+
+function TVirtualManager._CreateBlock(block:PVirtualAdrBlock):Integer;
+begin
+ if (OnCreateBlockCb=nil) then Exit(0);
+ Result:=OnCreateBlockCb(block);
+end;
+
+function TVirtualManager._FreeBlock(block:PVirtualAdrBlock):Integer;
+begin
+ if (OnFreeBlockCb=nil) then Exit(0);
+ Result:=OnFreeBlockCb(block);
 end;
 
 Function TVirtualManager._FindFreeOffset(ss:Pointer;Size,Align:QWORD;var AdrOut:Pointer):Integer;
@@ -1202,19 +1308,18 @@ begin
    begin
     if (key.block=nil) then
     begin
+
      if (key.Offset>Offset) then
      begin
       FSize:=key.Offset-Offset;
       FSize:=Min(Size-FSize,key.Size);
-
-      key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
      end else
      begin
       FSize:=Offset-key.Offset;
       FSize:=Min(Size+FSize,key.Size);
-
-      key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
      end;
+
+     key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
 
      if (key.block=nil) then
      begin
@@ -1222,6 +1327,9 @@ begin
       Assert(False);
       Exit(ENOSYS);
      end;
+
+     Result:=_CreateBlock(key.block);
+     if (Result<>0) then Exit;
 
      _set_block(key.block^.Offset,key.block^.Size,key.block);
 
@@ -1381,6 +1489,13 @@ var
 
 begin
  Result:=0;
+ if ((prot and $ffffffc8)<>0) then Exit(EINVAL);
+
+ FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+ Size:=Size+(Offset-FEndO);
+
+ Offset:=FEndO;
+ Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
  repeat
 
@@ -1486,6 +1601,13 @@ var
 
 begin
  Result:=0;
+ if ((prot and $ffffffc8)<>0) then Exit(EINVAL);
+
+ FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+ Size:=Size+(Offset-FEndO);
+
+ Offset:=FEndO;
+ Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
  repeat
 
@@ -1564,6 +1686,8 @@ var
   if (block^.Used=0) then
   begin
 
+   _FreeBlock(block);
+
    if (block^.F.btype=BT_FMAP) then
    begin
     err:=_VirtualUnmap(Pointer(block^.Offset));
@@ -1584,6 +1708,8 @@ var
 
    _set_block(block^.Offset,block^.Size,nil);
    FreeMem(block);
+
+   key.block:=nil;
   end;
 
   //new save
@@ -1623,6 +1749,12 @@ begin
  Result:=0;
  if (Size=0) then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
+
+ FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+ Size:=Size+(Offset-FEndO);
+
+ Offset:=FEndO;
+ Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
  repeat
 

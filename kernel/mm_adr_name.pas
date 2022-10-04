@@ -8,7 +8,8 @@ uses
   Windows,
   Classes,
   SysUtils,
-  g23tree;
+  g23tree,
+  sys_types;
 
 {
  name node:
@@ -319,6 +320,12 @@ begin
  if (Size=0) then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
+ FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+ Size:=Size+(Offset-FEndO);
+
+ Offset:=FEndO;
+ Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
  name:=Default(TName);
  if (pname<>nil) then
  begin
@@ -350,6 +357,8 @@ begin
  Result:=0;
 
  if (pname=nil) then Exit(EINVAL);
+
+ Offset:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
 
  key:=Default(TNameAdrNode);
  key.Offset:=Offset;
