@@ -534,23 +534,41 @@ end;
 
 function ps4_close(fd:Integer):Integer; SysV_ABI_CDecl;
 begin
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  Exit(_set_errno(0));
+ end;
+
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
  if (Result<>0) then
  begin
   Result:=_set_errno(EBADF);
+ end else
+ begin
+  Result:=_set_errno(0);
  end;
 end;
 
 function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
 begin
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  Exit(_set_sce_errno(0));
+ end;
+
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
  if (Result<>0) then
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EBADF);
+ end else
+ begin
+  Result:=_set_sce_errno(0);
  end;
 end;
 

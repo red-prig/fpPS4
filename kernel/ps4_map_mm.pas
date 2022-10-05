@@ -306,6 +306,20 @@ begin
  rwlock_unlock(MMLock);
 end;
 
+function __free_block(block:PVirtualAdrBlock):Integer;
+begin
+ Result:=0;
+ if (block=nil) then Exit;
+ if (block^.F.btype<>BT_GPUM) then Exit;
+ if (block^.Handle<>nil) then Exit;
+
+ if (GpuMemCb.Free<>nil) then Exit;
+
+ GpuMemCb.Free(block^.Handle);
+
+ block^.Handle:=nil;
+end;
+
 Procedure RegistredStack;
 //var
 // block:PBlock;
@@ -770,9 +784,6 @@ begin
 
  if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit;
 
- //if (len<PHYSICAL_PAGE_SIZE) then Exit;
- //if not IsAlign(len,PHYSICAL_PAGE_SIZE) then Exit;
-
  align:=(flags and MAP_ALIGNMENT_MASK) shr MAP_ALIGNMENT_BIT;
  align:=1 shl align;
 
@@ -1235,6 +1246,7 @@ end;
 function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=_munmap(addr,len);
+ _set_errno(Result);
 
  if (Result<>0) then
  begin
@@ -1275,6 +1287,7 @@ function ps4_mprotect(addr:Pointer;
                       prot:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=_mprotect(addr,len,prot);
+ _set_errno(Result);
 
  if (Result<>0) then
  begin
@@ -1503,6 +1516,7 @@ initialization
  VirtualManager:=TVirtualManager.Create($400000,$FFFFFFFFFF);
  VirtualManager.OnDirectUnmapCb:=@__release_direct;
  VirtualManager.OnDirectMtypeCb:=@__mtype_direct;
+ VirtualManager.OnFreeBlockCb  :=@__free_block;
 
  NamedManager  :=TNamedManager.Create($400000,$FFFFFFFFFF);
 

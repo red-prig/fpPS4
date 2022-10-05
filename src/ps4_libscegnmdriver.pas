@@ -1451,6 +1451,7 @@ begin
    Exit(SCE_KERNEL_ERROR_ENOMEM);
   end;
   node^.ev.filter:=SCE_KERNEL_EVFILT_GNM;
+  node^.ev.flags :=EV_CLEAR;
   node^.ev.data  :=id;
   node^.ev.udata :=udata;
   HAMT_insert64(@pEvents^.hamt,QWORD(eq),node);

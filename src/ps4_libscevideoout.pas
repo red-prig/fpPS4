@@ -656,6 +656,7 @@ begin
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
   node^.ev.ident :=SCE_VIDEO_OUT_EVENT_FLIP;
+  node^.ev.flags :=EV_CLEAR;
   node^.ev.filter:=SCE_KERNEL_EVFILT_VIDEO_OUT;
   node^.ev.udata :=udata;
   HAMT_insert64(@H.FlipEvents.hamt,QWORD(eq),node);
@@ -701,6 +702,7 @@ begin
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
   node^.ev.ident :=SCE_VIDEO_OUT_EVENT_VBLANK;
+  node^.ev.flags :=EV_CLEAR;
   node^.ev.filter:=SCE_KERNEL_EVFILT_VIDEO_OUT;
   node^.ev.udata :=udata;
   HAMT_insert64(@H.VblankEvents.hamt,QWORD(eq),node);
@@ -1219,8 +1221,8 @@ begin
   //post_event_flip(flipArg);
  end;
 
- node^.wait:=1;
- free_node(node);
+ //node^.wait:=1;
+ //free_node(node);
 
  //FlipRate:=20;
  if (flipMode=SCE_VIDEO_OUT_FLIP_MODE_VSYNC) then
@@ -1303,8 +1305,8 @@ begin
   end;
  end;
 
- //node^.wait:=1;
- //free_node(node);
+ node^.wait:=1;
+ free_node(node);
 
 end;
 

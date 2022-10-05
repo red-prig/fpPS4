@@ -7,7 +7,9 @@ interface
 uses
   windows,
   Classes,
-  SysUtils;
+  SysUtils,
+  hamt,
+  RWLock;
 
 const
  EVFILT_READ                =(-1) ;
@@ -95,6 +97,16 @@ type
  end;
 
 type
+ Phamt32locked=^Thamt32locked;
+ Thamt32locked=object
+  lock:TRWLock;
+  hamt:TSTUB_HAMT32;
+  Procedure Init;
+  Procedure LockRd;
+  Procedure LockWr;
+  Procedure Unlock;
+ end;
+
  PSceKernelEqueue=^SceKernelEqueue;
  SceKernelEqueue=^SceKernelEqueue_t;
  SceKernelEqueue_t=record
@@ -103,6 +115,7 @@ type
   lock:DWORD;
   wait:DWORD;
   hIOCP:Thandle;
+  FUserEvents:Thamt32locked;
   name:array[0..31] of AnsiChar;
  end;
 
@@ -116,13 +129,20 @@ type
  end;
 
 function ps4_sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelWaitEqueue(
           eq:SceKernelEqueue;
           ev:PSceKernelEvent;
           num:Integer;
           out_num:PInteger;
           timo:PDWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
+
+function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
 
 type
  TKFetchEvent=function(node:PKEventNode;ev:PSceKernelEvent):Boolean;
@@ -145,6 +165,27 @@ uses
  sys_kernel,
  sys_signal,
  sys_time;
+
+Procedure Thamt32locked.Init;
+begin
+ FillChar(Self,SizeOf(Self),0);
+ rwlock_init(lock);
+end;
+
+Procedure Thamt32locked.LockRd;
+begin
+ rwlock_rdlock(lock);
+end;
+
+Procedure Thamt32locked.LockWr;
+begin
+ rwlock_wrlock(lock);
+end;
+
+Procedure Thamt32locked.Unlock;
+begin
+ rwlock_unlock(lock);
+end;
 
 const
  LIFE_EQ=$BAB1F00D;
@@ -188,6 +229,10 @@ begin
   begin
    SwFreeMem(node);
    Exit;
+  end else
+  if ((node^.ev.flags and EV_CLEAR)=0) then //level trigger?
+  begin
+   _trigger_kevent_node(node,nil,nil);
   end;
  end;
  ev^:=tmp;
@@ -222,7 +267,7 @@ begin
  end;
 end;
 
-function ps4_sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer; SysV_ABI_CDecl;
+function _sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer;
 var
  hIOCP:Thandle;
  data:SceKernelEqueue;
@@ -235,9 +280,9 @@ begin
  begin
   Exit(SCE_KERNEL_ERROR_ENOMEM);
  end;
- _sig_lock;
+
  hIOCP:=CreateIoCompletionPort(INVALID_HANDLE_VALUE,0,0,High(Integer));
- _sig_unlock;
+
  if (hIOCP=0) then
  begin
   Exit(SCE_KERNEL_ERROR_EMFILE);
@@ -246,10 +291,18 @@ begin
  data^.valid:=LIFE_EQ;
  data^.FRefs:=1;
  data^.hIOCP:=hIOCP;
+ data^.FUserEvents.Init;
  if (name<>nil) then MoveChar0(name^,data^.name,32);
 
  outEq^:=data;
  Result:=0;
+end;
+
+function ps4_sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_sce_errno(_sceKernelCreateEqueue(outEq,name));
+ _sig_unlock;
 end;
 
 function _post_event(eq:SceKernelEqueue;node:PKEventNode;cb:TKFetchEvent):Boolean;
@@ -322,12 +375,12 @@ function GetQueuedCompletionStatusEx(CompletionPort:THandle;
                                      dwMilliseconds:DWORD;
                                      fAlertable:BOOL):BOOL; stdcall; external kernel32;
 
-function ps4_sceKernelWaitEqueue(
+function _sceKernelWaitEqueue(
           eq:SceKernelEqueue;
           ev:PSceKernelEvent;
           num:Integer;
           out_num:PInteger;
-          timo:PDWORD):Integer; SysV_ABI_CDecl;
+          timo:PDWORD):Integer;
 Var
  QTIME:DWORD;
  LTIME:DWORD;
@@ -361,7 +414,7 @@ begin
  CTXProc:=nil;
  Repeat
   ulNum:=0;
-  _sig_lock;
+
   if (LTIME<>INFINITE) then QTIME:=Windows.GetTickCount;
 
   spin_lock(eq^.lock);
@@ -381,12 +434,10 @@ begin
   begin
    err:=GetLastError;
   end;
-  _sig_unlock;
+
   if (LTIME<>INFINITE) then
   begin
-   _sig_lock;
    QTIME:=Windows.GetTickCount-QTIME;
-   _sig_unlock;
    if (QTIME>LTIME) then
     LTIME:=0
    else
@@ -426,12 +477,120 @@ begin
  Until false;
 end;
 
+function ps4_sceKernelWaitEqueue(
+          eq:SceKernelEqueue;
+          ev:PSceKernelEvent;
+          num:Integer;
+          out_num:PInteger;
+          timo:PDWORD):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_sce_errno(_sceKernelWaitEqueue(eq,ev,num,out_num,timo));
+ _sig_unlock;
+end;
+
 function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
 begin
  if (ev=nil) then Exit(nil);
  Result:=ev^.udata;
 end;
 
+function _sceKernelAddUserEvent(eq:SceKernelEqueue;id,flags:Integer):Integer;
+var
+ P:PPointer;
+ node:PKEventNode;
+begin
+ if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (eq^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ eq^.FUserEvents.LockWr;
+
+ P:=HAMT_search32(@eq^.FUserEvents.hamt,id);
+ if (P<>nil) then
+ begin
+  node:=P^;
+  node^.ev.flags:=flags; //update
+ end else
+ begin
+  node:=_alloc_kevent_node(eq,SizeOf(TKEventNode));
+  if (node=nil) or (node=Pointer(1)) then
+  begin
+   eq^.FUserEvents.Unlock;
+   Exit(SCE_KERNEL_ERROR_ENOMEM);
+  end;
+
+  node^.ev.ident :=id;
+  node^.ev.flags :=flags;
+  node^.ev.filter:=SCE_KERNEL_EVFILT_USER;
+
+  HAMT_insert32(@eq^.FUserEvents.hamt,id,node);
+ end;
+
+ eq^.FUserEvents.Unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Writeln('sceKernelAddUserEvent:',id);
+ Result:=_set_sce_errno(_sceKernelAddUserEvent(eq,id,0));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Writeln('sceKernelAddUserEventEdge:',id);
+ Result:=_set_sce_errno(_sceKernelAddUserEvent(eq,id,EV_CLEAR));
+ _sig_unlock;
+end;
+
+//sceKernelDeleteUserEvent
+
+function _sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
+var
+ P:PPointer;
+ node:PKEventNode;
+begin
+ if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (eq^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ eq^.FUserEvents.LockRd;
+
+ P:=HAMT_search32(@eq^.FUserEvents.hamt,id);
+ if (P<>nil) then
+ begin
+  node:=P^;
+
+  node^.ev.udata:=udata; //update
+
+  if (node^.wait=0) then //do not re trigger?
+  begin
+   _trigger_kevent_node(node,nil,nil);
+  end;
+
+ end else
+ begin
+  eq^.FUserEvents.Unlock;
+  Exit(SCE_KERNEL_ERROR_ENOENT);
+ end;
+
+ eq^.FUserEvents.Unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_sce_errno(_sceKernelTriggerUserEvent(eq,id,udata));
+ _sig_unlock;
+end;
 
 end.
+
+
+
 

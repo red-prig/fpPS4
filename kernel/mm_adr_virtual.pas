@@ -362,7 +362,7 @@ begin
  if (key=nil) then Exit;
 
  Assert(key^.Offset           >= Offset);
- Assert(key^.Offset+key^.Size >= Offset+Size);
+ Assert(key^.Offset+key^.Size <= Offset+Size);
 
  if (key^.F.Free<>0) then //free->commit
  begin
@@ -404,7 +404,7 @@ begin
  if (key^.F.Free<>0) then Exit; //its free
 
  Assert(key^.Offset           >= Offset);
- Assert(key^.Offset+key^.Size >= Offset+Size);
+ Assert(key^.Offset+key^.Size <= Offset+Size);
 
  if (key^.F.reserv<>0) then //reserved->free
  begin
@@ -428,7 +428,7 @@ begin
  if (key^.F.reserv<>0) then Exit; //its reserved
 
  Assert(key^.Offset           >= Offset);
- Assert(key^.Offset+key^.Size >= Offset+Size);
+ Assert(key^.Offset+key^.Size <= Offset+Size);
 
  if (key^.F.Free<>0) then //free->reserved
  begin
@@ -454,7 +454,7 @@ begin
  if (key^.F.Free<>0) then Exit; //its free
 
  Assert(key^.Offset           >= Offset);
- Assert(key^.Offset+key^.Size >= Offset+Size);
+ Assert(key^.Offset+key^.Size <= Offset+Size);
 
  if (key^.F.prot<>prot) then
  begin
@@ -792,23 +792,26 @@ begin
    if (Offset+Size)<=(key.Offset+key.Size) then
    begin
 
-    err:=_VirtualQuery(Offset,@_qaddr,@_qsize,nil,@_qflag);
-    if (err=0) then
+    if (key.block=nil) then
     begin
-     if ((_qflag and (MAP_FIXED or MAP_VOID))<>0) then //commit or reserved
+     err:=_VirtualQuery(Offset,@_qaddr,@_qsize,nil,@_qflag);
+     if (err=0) then
      begin
-      _mmap_sys(_qaddr,_qsize);
-      ss:=(Offset+Size);
-      Goto _start;
+      if ((_qflag and (MAP_FIXED or MAP_VOID))<>0) then //commit or reserved
+      begin
+       _mmap_sys(_qaddr,_qsize);
+       ss:=(Offset+Size);
+       Goto _start;
+      end else
+      if (_qsize<Size) then //not fit
+      begin
+       ss:=(Offset+Size);
+       Goto _start;
+      end;
      end else
-     if (_qsize<Size) then //not fit
      begin
-      ss:=(Offset+Size);
-      Goto _start;
+      Assert(false,IntToStr(err));
      end;
-    end else
-    begin
-     Assert(false,IntToStr(err));
     end;
 
     AdrOut:=Offset;
@@ -1144,7 +1147,7 @@ var
 
  function _commited:Boolean; inline;
  begin
-  Result:=((flags and MAP_VOID)=0);
+  Result:=((flags and MAP_VOID)=0) and (((flags and MAP_ANON)<>0) or (fd<=0));
  end;
 
  function _reserv:Byte; inline;

@@ -1057,6 +1057,10 @@ begin
  lib^.set_proc($7F3C8C2ACF648A6D,@ps4_sceKernelWaitEqueue);
  lib^.set_proc($BF3FA9836CDDA292,@ps4_sceKernelGetEventUserData);
 
+ lib^.set_proc($E11EBF3AF2367040,@ps4_sceKernelAddUserEvent);
+ lib^.set_proc($583B339926D6B839,@ps4_sceKernelAddUserEventEdge);
+ lib^.set_proc($17A7B4930A387279,@ps4_sceKernelTriggerUserEvent);
+
  //queue
 
  //event_flag
