@@ -123,23 +123,72 @@ end;
 //   void *memblock
 //);
 
-function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;P2:Integer;info:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
+type
+ pSceKernelModuleInfoEx=^SceKernelModuleInfoEx;
+ SceKernelModuleInfoEx=packed record
+  st_size:QWORD;
+  name:array[0..255] of AnsiChar;
+  id               :Integer;
+  tls_index        :DWORD;
+  tls_init_addr    :QWORD;
+  tls_init_size    :DWORD;
+  tls_size         :DWORD;
+  tls_offset       :DWORD;
+  tls_align        :DWORD;
+  init_proc_addr   :QWORD;
+  fini_proc_addr   :QWORD;
+  reserved1        :QWORD;
+  reserved2        :QWORD;
+  eh_frame_hdr_addr:QWORD;
+  eh_frame_addr    :QWORD;
+  eh_frame_hdr_size:DWORD;
+  eh_frame_size    :DWORD;
+  segments:array[0..3] of TKernelModuleSegmentInfo;
+  segment_count:DWORD;
+  ref_count    :DWORD;
+ end;
+
+function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
 begin
  if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
- _sig_lock;
- Writeln('GetModuleInfoFromAddr:',HexStr(Addr),':',P2,':',HexStr(info));
- node:=ps4_app.AcqureFileByCodeAdr(Addr);
- if (node=nil) then
+
+ if (flags - 1 < 2) then
  begin
-  _sig_unlock;
-  Exit(SCE_KERNEL_ERROR_EINVAL);
+  if (info=nil) then
+  begin
+   Result:=-$7ffdfff2;
+  end else
+  begin
+
+   _sig_lock;
+
+   Writeln('GetModuleInfoFromAddr:',HexStr(Addr),':',flags,':',HexStr(info));
+   node:=ps4_app.AcqureFileByCodeAdr(Addr);
+
+   if (node=nil) then
+   begin
+    _sig_unlock;
+
+    info^:=Default(SceKernelModuleInfoEx);
+    Exit(-$7ffdfffd);
+   end;
+
+   info^.st_size:=424;
+
+   //info^:=node.GetModuleInfo;
+
+   node.Release;
+
+   _sig_unlock;
+   Result:=0;
+  end;
+ end else
+ begin
+  Result:=-$7ffdffea;
+  info^:=Default(SceKernelModuleInfoEx);
  end;
- info^:=node.GetModuleInfo;
- node.Release;
- _sig_unlock;
- Result:=0;
 end;
 
 function ps4_sceKernelGetModuleInfo(handle:Integer;info:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
@@ -159,6 +208,43 @@ begin
  node.Release;
  _sig_unlock;
  Result:=0;
+end;
+
+type
+ PSceModuleInfoForUnwind=^SceModuleInfoForUnwind;
+ SceModuleInfoForUnwind=packed record
+  st_size:qword; //304
+  name:array[0..255] of AnsiChar;
+  eh_frame_hdr_addr:qword;
+  eh_frame_addr:qword;
+  eh_frame_size:qword;
+  seg0_addr:qword;
+  seg0_size:qword;
+ end;
+
+//nop nid:libkernel:4694092552938853:sceKernelGetModuleInfoForUnwind
+function ps4_sceKernelGetModuleInfoForUnwind(addr:Pointer;flags:DWORD;info:PSceModuleInfoForUnwind):Integer; SysV_ABI_CDecl;
+begin
+ if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+ if (flags - 1 < 2) then
+ begin
+  if (info=nil) then
+  begin
+   Result:=-$7ffdfff2;
+  end else
+  begin
+   Result:=-$7ffdffea;
+   if (info^.st_size > 303) then
+   begin
+
+    //Result:=-$7ffdfffd; //not found
+   end;
+  end;
+ end else
+ begin
+  Result:=-$7ffdffea;
+  info^:=Default(SceModuleInfoForUnwind);
+ end;
 end;
 
 type

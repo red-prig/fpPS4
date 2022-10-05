@@ -1337,6 +1337,45 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGnmSubmitAndFlipCommandBuffersForWorkload(
+          workload:QWORD;
+          count:DWORD;
+          dcbGpuAddrs:PPointer;
+          dcbSizesInBytes:PDWORD;
+          ccbGpuAddrs:PPointer;
+          ccbSizesInBytes:PDWORD;
+          videoOutHandle:Integer;
+          displayBufferIndex:Integer;
+          flipMode:Integer;
+          flipArg:QWORD):Integer; SysV_ABI_CDecl; //10
+var
+ Submit:TvSubmitInfo;
+ Flip:TqcFlipInfo;
+begin
+ if (count=0) or
+    (dcbGpuAddrs=nil) or
+    (dcbSizesInBytes=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ Submit:=Default(TvSubmitInfo);
+ Submit.count          :=count          ;
+ Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
+ Submit.dcbSizesInBytes:=dcbSizesInBytes;
+ Submit.ccbGpuAddrs    :=ccbGpuAddrs    ;
+ Submit.ccbSizesInBytes:=ccbSizesInBytes;
+
+ Flip.hVideo     :=videoOutHandle;
+ Flip.bufferIndex:=displayBufferIndex;
+ Flip.flipMode   :=flipMode;
+ Flip.flipArg    :=flipArg;
+
+ _sig_lock;
+ //Writeln(GetCurrentThreadId,'>SubmitAndFlip');
+ Result:=vSubmitCommandBuffers(@Submit,@Flip);
+ //Writeln(GetCurrentThreadId,'<SubmitAndFlip');
+ _sig_unlock;
+ Result:=0;
+end;
+
 //Signals the system that every graphics and asynchronous compute command buffer for this frame has been submitted.
 function ps4_sceGnmSubmitDone:Integer; SysV_ABI_CDecl;
 begin
@@ -1396,6 +1435,46 @@ function ps4_sceGnmRegisterResource(pResourceHandle:PInteger; //ResourceHandle
 begin
  Writeln('sceGnmRegisterResource:',resourceName);
  Result:=Integer(SCE_GNM_ERROR_FAILURE);
+end;
+
+const
+ kWorkloadStatusOk                 = 0;
+ kWorkloadStatusInvalidStream      = 1;
+ kWorkloadStatusInvalidWorkload    = 2;
+ kWorkloadStatusInvalidPointer     = 3;
+ kWorkloadStatusTooManyStreams     = 4;
+ kWorkloadStatusTooManyWorkloads   = 5;
+ kWorkloadStatusStreamNotAllocated = 6;
+ kWorkloadStatusInternalError      = 7;
+
+function ps4_sceGnmCreateWorkloadStream(name:Pchar;workloadStream:PDWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=kWorkloadStatusInvalidPointer;
+ if (name<>nil) and (workloadStream<>nil) then
+ begin
+  Writeln('sceGnmCreateWorkloadStream:',name);
+  workloadStream^:=1;
+  Result:=kWorkloadStatusOk;
+ end;
+end;
+
+function ps4_sceGnmBeginWorkload(stream:DWORD;workload:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (workload<>nil) then
+ begin
+  workload^:=QWORD(-DWORD(stream < $10) and 1);
+  Exit(DWORD($f < stream));
+ end;
+ Result:=kWorkloadStatusInvalidPointer;
+end;
+
+
+function ps4_sceGnmEndWorkload(workload:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (workload<>0) then
+ begin
+  Result:=DWORD($f < DWORD(workload shr $38)) * 2;
+ end;
 end;
 
 const
@@ -1534,6 +1613,7 @@ begin
 
  lib^.set_proc($CF0634615F754D32,@ps4_sceGnmSubmitCommandBuffers);
  lib^.set_proc($C5BC4D6AD6B0A217,@ps4_sceGnmSubmitAndFlipCommandBuffers);
+ lib^.set_proc($19AEABEC7E98D112,@ps4_sceGnmSubmitAndFlipCommandBuffersForWorkload);
  lib^.set_proc($CAF67BDEE414AAB9,@ps4_sceGnmSubmitDone);
  lib^.set_proc($881B7739ED342AF7,@ps4_sceGnmFlushGarlic);
 
@@ -1545,6 +1625,10 @@ begin
 
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
+
+ lib^.set_proc($E6E7409BEE9BA158,@ps4_sceGnmCreateWorkloadStream);
+ lib^.set_proc($8A1C6B6ECA122967,@ps4_sceGnmBeginWorkload);
+ lib^.set_proc($15ADF1EF938E2D10,@ps4_sceGnmEndWorkload);
 
   //nop nid:libSceGnmDriver:DBDA0ABCA5F3119A:sceGnmMapComputeQueue
 
