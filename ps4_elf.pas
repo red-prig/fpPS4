@@ -158,7 +158,7 @@ type
   mElf:TMemChunk;
   mMap:TMemChunk;
 
-  ModuleInfo:TKernelModuleInfo;
+  ModuleInfo:SceKernelModuleInfo;
 
   ro_segments:array[0..3] of TMemChunk;
 
@@ -181,6 +181,7 @@ type
   end;
 
   dtInit:QWORD;
+  dtFini:QWORD;
 
   pInit:packed record
    dt_preinit_array,
@@ -189,7 +190,15 @@ type
    dt_init_array_count:QWORD;
   end;
 
-  dtFini:QWORD;
+  eh_frame_hdr:packed record
+   addr:QWORD;
+   size:QWORD;
+  end;
+
+  eh_frame:packed record
+   addr:QWORD;
+   size:QWORD;
+  end;
 
   pSceDynLib:TMemChunk;       //mElf
 
@@ -250,7 +259,8 @@ type
    function  module_start(argc:size_t;argp,param:PPointer):Integer; override;
    function  GetCodeFrame:TMemChunk;  override;
    function  GetEntryPoint:Pointer;  override;
-   Function  GetModuleInfo:TKernelModuleInfo; override;
+   Function  GetModuleInfo:SceKernelModuleInfo; override;
+   Function  GetModuleInfoEx:SceKernelModuleInfoEx; override;
    procedure mapCodeEntry;
  end;
 
@@ -585,6 +595,94 @@ begin
  if (p_flags and PF_R)<>0 then Result:=Result+' PF_R';
 end;
 
+function read_encoded_value(hdr:p_eh_frame_hdr;hdr_size,hdr_vaddr:Int64;enc:Byte;var P:Pointer;var res:Int64):Boolean;
+var
+ value:Int64;
+ endp:Pointer;
+begin
+ Result:=False;
+
+ res:=0;
+
+ Case (enc and $70) of
+  DW_EH_PE_absptr:;
+  DW_EH_PE_pcrel:
+   begin
+    res:=(hdr_vaddr + (P - hdr));
+   end;
+  DW_EH_PE_datarel:
+   begin
+    res:=hdr_vaddr;
+   end;
+  else
+   Exit(True);
+ end;
+
+ value:=0;
+ endp:=Pointer(hdr) + hdr_size;
+
+ Case (enc and $0f) of
+  DW_EH_PE_udata2:
+   begin
+    if (p + 2 > endp) then Exit(True);
+    value:=PWORD(p)^;
+    p:=p + 2;
+   end;
+  DW_EH_PE_sdata2:
+   begin
+    if (p + 2 > endp) then Exit(True);
+    value:=PSmallint(p)^;
+    p:=p + 2;
+   end;
+  DW_EH_PE_udata4:
+   begin
+    if (p + 4 > endp) then Exit(True);
+    value:=PDWORD(p)^;
+    p:=p + 4;
+   end;
+  DW_EH_PE_sdata4:
+   begin
+    if (p + 4 > endp) then Exit(True);
+    value:=PInteger(p)^;
+    p:=p + 4;
+   end;
+  DW_EH_PE_udata8,
+  DW_EH_PE_sdata8:
+   begin
+    if (p + 8 > endp) then Exit(True);
+    value:=PInteger(p)^;
+    p:=p + 8;
+   end;
+  DW_EH_PE_absptr:
+   begin
+    value:=0;
+   end;
+  else
+   Exit(True);
+ end;
+
+ res:=res+value;
+
+ Result:=False;
+end;
+
+function parse_eh_frame_hdr(hdr:p_eh_frame_hdr;hdr_size,hdr_vaddr:Int64;var eh_frame_ptr:Int64):Boolean;
+var
+ p:Pointer;
+begin
+ if (hdr^.eh_frame_ptr_enc=DW_EH_PE_omit) then Exit(False);
+
+ p:=@hdr^.encoded;
+
+ if read_encoded_value(hdr,hdr_size,
+                   hdr_vaddr,
+                   hdr^.eh_frame_ptr_enc,
+                   p,
+                   eh_frame_ptr) then Exit(False);
+
+ Result:=True;
+end;
+
 function Telf_file.PreparePhdr:Boolean;
 Var
  i:SizeInt;
@@ -594,8 +692,8 @@ Var
 begin
  Result:=False;
 
- ModuleInfo:=Default(TKernelModuleInfo);
- ModuleInfo.size:=SizeOf(TKernelModuleInfo);
+ ModuleInfo:=Default(SceKernelModuleInfo);
+ ModuleInfo.size:=SizeOf(SceKernelModuleInfo);
 
  elf_hdr:=mElf.pAddr;
  if (elf_hdr=nil) then Exit;
@@ -698,7 +796,8 @@ begin
      end;
     PT_GNU_EH_FRAME:
      begin
-
+      eh_frame_hdr.addr:=elf_phdr[i].p_vaddr;
+      eh_frame_hdr.size:=elf_phdr[i].p_filesz;
      end;
 
     else
@@ -1026,7 +1125,7 @@ begin
  end;
 end;
 
-procedure _add_seg(MI:PKernelModuleInfo;adr:Pointer;size:DWORD;prot:Integer); inline;
+procedure _add_seg(MI:pSceKernelModuleInfo;adr:Pointer;size:DWORD;prot:Integer); inline;
 var
  i:DWORD;
 begin
@@ -1240,6 +1339,9 @@ var
  i:SizeInt;
  elf_hdr:Pelf64_hdr;
  elf_phdr:Pelf64_phdr;
+
+ hdr:p_eh_frame_hdr;
+ eh_frame_ptr:Int64;
 begin
  Result:=False;
  if (Self=nil) then Exit;
@@ -1293,17 +1395,54 @@ begin
     begin
      _addSegment(@elf_phdr[i],'.DYNM');
     end;
+
    PT_SCE_PROCPARAM,
-   PT_TLS,
-   PT_GNU_EH_FRAME:
-    if (elf_phdr[i].p_flags=PF_R) then
+   PT_TLS:
     begin
-     _add_ro_seg(@elf_phdr[i]);
+     if (elf_phdr[i].p_flags=PF_R) then
+     begin
+      _add_ro_seg(@elf_phdr[i]);
+     end;
     end;
+
+   PT_GNU_EH_FRAME:
+    begin
+     if (elf_phdr[i].p_flags=PF_R) then
+     begin
+      _add_ro_seg(@elf_phdr[i]);
+     end;
+
+     eh_frame_hdr.addr:=elf_phdr[i].p_vaddr;
+     eh_frame_hdr.size:=elf_phdr[i].p_filesz;
+
+     hdr:=mMap.pAddr+eh_frame_hdr.addr;
+
+     eh_frame_ptr:=0;
+     if parse_eh_frame_hdr(hdr,
+                           eh_frame_hdr.size,
+                           Int64(hdr),
+                           eh_frame_ptr) then
+     begin
+      eh_frame.addr:=eh_frame_ptr-QWORD(mMap.pAddr);
+
+      if (eh_frame_hdr.addr>eh_frame.addr) then
+      begin
+       eh_frame.size:=(eh_frame_hdr.addr-eh_frame.addr);
+      end else
+      begin
+       eh_frame.size:=(mMap.nSize-eh_frame_hdr.addr)
+      end;
+
+     end;
+
+    end;
+
   end;
  end;
 
  _print_rdol;
+
+
 
  pEntryPoint:=Pelf64_hdr(mElf.pAddr)^.e_entry;
 
@@ -2681,13 +2820,43 @@ begin
  end;
 end;
 
-Function Telf_file.GetModuleInfo:TKernelModuleInfo;
+Function Telf_file.GetModuleInfo:SceKernelModuleInfo;
 begin
  if (ModuleInfo.name[0]=#0) then
  begin
   MoveChar0(PChar(pFileName)^,ModuleInfo.name,SCE_DBG_MAX_NAME_LENGTH);
  end;
  Result:=ModuleInfo;
+end;
+
+Function Telf_file.GetModuleInfoEx:SceKernelModuleInfoEx;
+begin
+ Result:=inherited;
+
+ if (ModuleInfo.name[0]=#0) then
+ begin
+  MoveChar0(PChar(pFileName)^,ModuleInfo.name,SCE_DBG_MAX_NAME_LENGTH);
+ end;
+
+ Result.name:=ModuleInfo.name;
+
+ Result.tls_index        :=pTls.index;
+ Result.tls_init_addr    :=mMap.pAddr+pTls.tmpl_start;
+ Result.tls_init_size    :=pTls.tmpl_size;
+ Result.tls_size         :=pTls.full_size;
+ Result.tls_offset       :=pTls.offset;
+ Result.tls_align        :=pTls.align;
+
+ Result.init_proc_addr   :=mMap.pAddr+dtInit;
+ Result.fini_proc_addr   :=mMap.pAddr+dtFini;
+
+ Result.eh_frame_hdr_addr:=mMap.pAddr+eh_frame_hdr.addr;
+ Result.eh_frame_addr    :=mMap.pAddr+eh_frame.addr;
+ Result.eh_frame_hdr_size:=eh_frame_hdr.size;
+ Result.eh_frame_size    :=eh_frame.size;
+
+ Result.segments     :=ModuleInfo.segmentInfo;
+ Result.segment_count:=ModuleInfo.segmentCount;
 end;
 
 procedure Telf_file.mapCodeEntry;

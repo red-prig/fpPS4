@@ -80,10 +80,10 @@ end;
 
 // eStopNotificationReason
 procedure ps4_sceKernelDebugRaiseException(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
-var
- t:pthread;
+//var
+// t:pthread;
 begin
- t:=_get_curthread;
+ //t:=_get_curthread;
  //if (t<>nil) then
  // Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
@@ -91,10 +91,10 @@ begin
 end;
 
 procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
-var
- t:pthread;
+//var
+// t:pthread;
 begin
- t:=_get_curthread;
+ //t:=_get_curthread;
  //if (t<>nil) then
  // Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
@@ -123,31 +123,6 @@ end;
 //   void *memblock
 //);
 
-type
- pSceKernelModuleInfoEx=^SceKernelModuleInfoEx;
- SceKernelModuleInfoEx=packed record
-  st_size:QWORD;
-  name:array[0..255] of AnsiChar;
-  id               :Integer;
-  tls_index        :DWORD;
-  tls_init_addr    :QWORD;
-  tls_init_size    :DWORD;
-  tls_size         :DWORD;
-  tls_offset       :DWORD;
-  tls_align        :DWORD;
-  init_proc_addr   :QWORD;
-  fini_proc_addr   :QWORD;
-  reserved1        :QWORD;
-  reserved2        :QWORD;
-  eh_frame_hdr_addr:QWORD;
-  eh_frame_addr    :QWORD;
-  eh_frame_hdr_size:DWORD;
-  eh_frame_size    :DWORD;
-  segments:array[0..3] of TKernelModuleSegmentInfo;
-  segment_count:DWORD;
-  ref_count    :DWORD;
- end;
-
 function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
@@ -175,14 +150,13 @@ begin
     Exit(-$7ffdfffd);
    end;
 
-   info^.st_size:=424;
-
-   //info^:=node.GetModuleInfo;
+   info^:=node.GetModuleInfoEx;
 
    node.Release;
 
    _sig_unlock;
    Result:=0;
+
   end;
  end else
  begin
@@ -191,7 +165,7 @@ begin
  end;
 end;
 
-function ps4_sceKernelGetModuleInfo(handle:Integer;info:PKernelModuleInfo):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetModuleInfo(handle:Integer;info:pSceKernelModuleInfo):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
 begin
@@ -210,20 +184,10 @@ begin
  Result:=0;
 end;
 
-type
- PSceModuleInfoForUnwind=^SceModuleInfoForUnwind;
- SceModuleInfoForUnwind=packed record
-  st_size:qword; //304
-  name:array[0..255] of AnsiChar;
-  eh_frame_hdr_addr:qword;
-  eh_frame_addr:qword;
-  eh_frame_size:qword;
-  seg0_addr:qword;
-  seg0_size:qword;
- end;
-
-//nop nid:libkernel:4694092552938853:sceKernelGetModuleInfoForUnwind
-function ps4_sceKernelGetModuleInfoForUnwind(addr:Pointer;flags:DWORD;info:PSceModuleInfoForUnwind):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetModuleInfoForUnwind(addr:Pointer;flags:DWORD;info:pSceModuleInfoForUnwind):Integer; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+ info_ex:SceKernelModuleInfoEx;
 begin
  if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  if (flags - 1 < 2) then
@@ -237,7 +201,33 @@ begin
    if (info^.st_size > 303) then
    begin
 
-    //Result:=-$7ffdfffd; //not found
+    _sig_lock;
+
+    Writeln('sceKernelGetModuleInfoForUnwind:',HexStr(Addr),':',flags,':',HexStr(info));
+    node:=ps4_app.AcqureFileByCodeAdr(Addr);
+
+    if (node=nil) then
+    begin
+     _sig_unlock;
+
+     info^:=Default(SceModuleInfoForUnwind);
+     Exit(-$7ffdfffd);
+    end;
+
+    info_ex:=node.GetModuleInfoEx;
+
+    node.Release;
+
+    _sig_unlock;
+
+    info^.name             :=info_ex.name;
+    info^.eh_frame_hdr_addr:=info_ex.eh_frame_hdr_addr;
+    info^.eh_frame_addr    :=info_ex.eh_frame_addr;
+    info^.eh_frame_size    :=info_ex.eh_frame_size;
+    info^.seg0_addr        :=info_ex.segments[0].address;
+    info^.seg0_size        :=info_ex.segments[0].size;
+
+    Result:=0;
    end;
   end;
  end else
@@ -874,6 +864,7 @@ begin
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
+ lib^.set_proc($4694092552938853,@ps4_sceKernelGetModuleInfoForUnwind);
  lib^.set_proc($F79F6AADACCF22B8,@ps4_sceKernelGetProcParam);
  lib^.set_proc($A7911C41E11E2401,@ps4_sceKernelRtldSetApplicationHeapAPI);
  lib^.set_proc($ACD856CFE96F38C5,@ps4_sceKernelSetThreadDtors);

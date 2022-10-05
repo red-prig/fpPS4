@@ -89,7 +89,8 @@ type
    function    module_start(argc:size_t;argp,param:PPointer):Integer; virtual;
    function    GetCodeFrame:TMemChunk; virtual;
    function    GetEntryPoint:Pointer; virtual;
-   Function    GetModuleInfo:TKernelModuleInfo; virtual;
+   Function    GetModuleInfo:SceKernelModuleInfo; virtual;
+   Function    GetModuleInfoEx:SceKernelModuleInfoEx; virtual;
    Function    get_proc(nid:QWORD):Pointer;
    Function    get_proc_by_name(const name:RawByteString):Pointer;
  end;
@@ -948,16 +949,23 @@ begin
  Result:=nil;
 end;
 
-Function TElf_node.GetModuleInfo:TKernelModuleInfo;
+Function TElf_node.GetModuleInfo:SceKernelModuleInfo;
 begin
- Result:=Default(TKernelModuleInfo);
- Result.size:=SizeOf(TKernelModuleInfo);
+ Result:=Default(SceKernelModuleInfo);
+ Result.size:=SizeOf(SceKernelModuleInfo);
+
+ MoveChar0(PChar(pFileName)^,Result.name,SCE_DBG_MAX_NAME_LENGTH);
+end;
+
+Function TElf_node.GetModuleInfoEx:SceKernelModuleInfoEx;
+begin
+ Result:=Default(SceKernelModuleInfoEx);
+ Result.st_size:=SizeOf(SceKernelModuleInfoEx);
 
  MoveChar0(PChar(pFileName)^,Result.name,SCE_DBG_MAX_NAME_LENGTH);
 
-//segmentInfo:array[0..SCE_DBG_MAX_SEGMENTS-1] of TKernelModuleSegmentInfo;
-//segmentCount:DWORD;
-//fingerprint:array[0..SCE_DBG_NUM_FINGERPRINT-1] of Byte;
+ Result.id:=FHandle;
+ Result.ref_count:=1;
 end;
 
 Function TElf_node.get_proc(nid:QWORD):Pointer;

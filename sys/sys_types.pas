@@ -316,21 +316,85 @@ const
  SCE_DBG_NUM_FINGERPRINT = 20;
 
 type
- TKernelModuleSegmentInfo=packed record
+ SceKernelModuleSegmentInfo=packed record
   address:Pointer;
   size:DWORD;
   prot:Integer;  //PF_
  end;
 
- PKernelModuleInfo=^TKernelModuleInfo;
- TKernelModuleInfo=packed record
+ pSceKernelModuleInfo=^SceKernelModuleInfo;
+ SceKernelModuleInfo=packed record
   size:QWORD;  //Size of this structure
   name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar; //module name
-  segmentInfo:array[0..SCE_DBG_MAX_SEGMENTS-1] of TKernelModuleSegmentInfo;
+  segmentInfo:array[0..SCE_DBG_MAX_SEGMENTS-1] of SceKernelModuleSegmentInfo;
   segmentCount:DWORD;
   fingerprint:array[0..SCE_DBG_NUM_FINGERPRINT-1] of Byte;
  end;
 
+ pSceKernelModuleInfoEx=^SceKernelModuleInfoEx;
+ SceKernelModuleInfoEx=packed record
+  st_size:QWORD; //424
+  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar;
+  id               :Integer;
+  tls_index        :DWORD;
+  tls_init_addr    :Pointer;
+  tls_init_size    :DWORD;
+  tls_size         :DWORD;
+  tls_offset       :DWORD;
+  tls_align        :DWORD;
+  init_proc_addr   :Pointer;
+  fini_proc_addr   :Pointer;
+  reserved1        :QWORD;
+  reserved2        :QWORD;
+  eh_frame_hdr_addr:Pointer;
+  eh_frame_addr    :Pointer;
+  eh_frame_hdr_size:QWORD;
+  eh_frame_size    :DWORD;
+  segments:array[0..SCE_DBG_MAX_SEGMENTS-1] of SceKernelModuleSegmentInfo;
+  segment_count:DWORD;
+  ref_count    :DWORD;
+ end;
+
+ pSceModuleInfoForUnwind=^SceModuleInfoForUnwind;
+ SceModuleInfoForUnwind=packed record
+  st_size:qword; //304
+  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar;
+  eh_frame_hdr_addr:Pointer;
+  eh_frame_addr:Pointer;
+  eh_frame_size:qword;
+  seg0_addr:Pointer;
+  seg0_size:qword;
+ end;
+
+type
+ p_eh_frame_hdr=^eh_frame_hdr;
+ eh_frame_hdr=packed record
+  version:Byte;
+  eh_frame_ptr_enc:Byte;
+  fde_count_enc:Byte;
+  table_enc:Byte;
+  encoded:record end;
+  //encoded eh_frame_ptr
+  //encoded fde_count
+ end;
+
+const
+ DW_EH_PE_omit   =$ff; // no data follows
+
+ DW_EH_PE_absptr =$00;
+ DW_EH_PE_pcrel	 =$10;
+ DW_EH_PE_datarel=$30;
+
+ DW_EH_PE_uleb128=$01;
+ DW_EH_PE_udata2 =$02;
+ DW_EH_PE_udata4 =$03;
+ DW_EH_PE_udata8 =$04;
+ DW_EH_PE_sleb128=$09;
+ DW_EH_PE_sdata2 =$0A;
+ DW_EH_PE_sdata4 =$0B;
+ DW_EH_PE_sdata8 =$0C;
+
+type
  TModuleValue=packed record
   case Byte of
    0:(value:Int64);
