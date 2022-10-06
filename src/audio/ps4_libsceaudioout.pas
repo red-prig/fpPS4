@@ -447,7 +447,7 @@ begin
  if (flag and SCE_AUDIO_VOLUME_FLAG_RE_CH <>0) then H.volume[7]:=i;
 
  H.Release;
- Writeln('sceAudioOutSetVolume:',handle,':',flag);
+ //Writeln('sceAudioOutSetVolume:',handle,':',flag);
  Result:=0;
 end;
 

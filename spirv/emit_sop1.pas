@@ -22,8 +22,9 @@ type
   Function  GetFuncPtr(src:PPsrRegNode):Pointer;
   procedure emit_S_MOV_B32;
   procedure emit_S_MOV_B64;
-  procedure emit_S_SWAPPC_B64;
+  procedure emit_S_GETPC_B64;
   procedure emit_S_SETPC_B64;
+  procedure emit_S_SWAPPC_B64;
   procedure emit_S_AND_SAVEEXEC_B64;
   procedure emit_S_WQM_B64;
  end;
@@ -88,6 +89,33 @@ begin
  MakeCopy(dst[1],src[1]);
 end;
 
+procedure TEmit_SOP1.emit_S_GETPC_B64;
+Var
+ dst:array[0..1] of PsrRegSlot;
+
+ oldptr:Pointer;
+begin
+ if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
+
+ oldptr:=GetPtr;
+
+ SetConst_q(dst[0],dtUint32,QWORD(oldptr));
+ SetConst_q(dst[1],dtUint32,QWORD(oldptr) shr 32);
+end;
+
+procedure TEmit_SOP1.emit_S_SETPC_B64;
+Var
+ src:array[0..1] of PsrRegNode;
+
+ newptr:Pointer;
+begin
+ if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
+
+ newptr:=GetFuncPtr(@src);
+
+ SetPtr(newptr,btMain);
+end;
+
 procedure TEmit_SOP1.emit_S_SWAPPC_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -107,19 +135,6 @@ begin
  SetConst_q(dst[1],dtUint32,QWORD(oldptr) shr 32);
 
  SetPtr(newptr,btSetpc);
-end;
-
-procedure TEmit_SOP1.emit_S_SETPC_B64;
-Var
- src:array[0..1] of PsrRegNode;
-
- newptr:Pointer;
-begin
- if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
-
- newptr:=GetFuncPtr(@src);
-
- SetPtr(newptr,btMain);
 end;
 
 procedure TEmit_SOP1.emit_S_AND_SAVEEXEC_B64; //sdst.du = EXEC;| EXEC = (ssrc.du & EXEC);| SCC = (sdst != 0)
@@ -175,10 +190,10 @@ begin
   S_MOV_B32         : emit_S_MOV_B32;
   S_MOV_B64         : emit_S_MOV_B64;
   S_WQM_B64         : emit_S_WQM_B64;
-  S_SWAPPC_B64      : emit_S_SWAPPC_B64;
+  S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
+  S_SWAPPC_B64      : emit_S_SWAPPC_B64;
   S_AND_SAVEEXEC_B64: emit_S_AND_SAVEEXEC_B64;
-
   else
    Assert(false,'SOP1?'+IntToStr(FSPI.SOP1.OP));
  end;

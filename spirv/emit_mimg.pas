@@ -712,9 +712,6 @@ var
  Tgrp:PsrNode;
 
 begin
-
- Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
-
  pLayout:=nil;
 
  Case FSPI.MIMG.R128 of
@@ -735,6 +732,8 @@ begin
  Case FSPI.MIMG.OP of
   IMAGE_SAMPLE..IMAGE_SAMPLE_C_LZ_O:  //sampled
     begin
+     Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
+
      info.tinfo.Sampled:=1;
      Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
 

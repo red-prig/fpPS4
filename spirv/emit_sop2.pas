@@ -16,7 +16,9 @@ uses
 type
  TEmit_SOP2=class(TEmitFetch)
   procedure emit_SOP2;
+  procedure emit_S_ADD_U32;
   procedure emit_S_ADD_I32;
+  procedure emit_S_ADDC_U32;
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:PsrRegNode);
   procedure emit_S_LSHL_B32;
@@ -34,6 +36,20 @@ type
 
 implementation
 
+procedure TEmit_SOP2.emit_S_ADD_U32;
+Var
+ dst,car:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+ car:=get_scc;
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+
+ OpIAddExt(dst,car,src[0],src[1]);
+end;
+
 procedure TEmit_SOP2.emit_S_ADD_I32;
 Var
  dst,car:PsrRegSlot;
@@ -46,6 +62,30 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
 
  OpIAddExt(dst,car,src[0],src[1]);
+end;
+
+procedure TEmit_SOP2.emit_S_ADDC_U32;
+Var
+ dst,car:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+ car:=get_scc;
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+ src[2]:=MakeRead(car,dtUInt32);
+
+ OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+
+ src[0]:=MakeRead(dst,dtUInt32);
+ src[1]:=MakeRead(car,dtUInt32);
+
+ OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+SCC
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ OpBitwiseOr(car,src[1],src[0]);  //SCC1 or SCC2
 end;
 
 procedure TEmit_SOP2.emit_S_MUL_I32;
@@ -280,7 +320,11 @@ begin
 
  Case FSPI.SOP2.OP of
 
+  S_ADD_U32: emit_S_ADD_U32;
   S_ADD_I32: emit_S_ADD_I32;
+
+  S_ADDC_U32: emit_S_ADDC_U32;
+
   S_MUL_I32: emit_S_MUL_I32;
 
   S_LSHL_B32: emit_S_LSHL_B32;
