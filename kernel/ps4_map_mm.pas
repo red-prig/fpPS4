@@ -343,7 +343,7 @@ end;
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_MAIN_DMEM_SIZE;
+ Result:=SCE_KERNEL_MAIN_DMEM_SIZE-(448*1024*1024);
 end;
 
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
@@ -441,7 +441,7 @@ var
 begin
  Result:=EINVAL;
 
- if (physAddrOut=nil) or (sizeOut=nil) or (searchEnd<=searchStart) then Exit;
+ if (searchEnd<=searchStart) then Exit;
 
  if (searchEnd>SCE_KERNEL_MAIN_DMEM_SIZE) then Exit;
 

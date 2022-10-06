@@ -81,6 +81,10 @@ function ps4_sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integ
 function ps4_sceKernelClearEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelDeleteEventFlag(ef:SceKernelEventFlag):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelCancelEventFlag(ef:SceKernelEventFlag;
+                                      bitPattern:QWORD;
+                                      pNumWaitThreads:Pinteger):Integer; SysV_ABI_CDecl;
+
 implementation
 
 uses
@@ -428,7 +432,7 @@ end;
 function ps4_sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 var
  node:pwef_node;
- prev,bits:QWORD;
+ bits:QWORD;
  attr:DWORD;
 begin
  Result:=ef_enter(ef);
@@ -548,11 +552,72 @@ begin
  Result:=0;
 end;
 
+function ps4_sceKernelCancelEventFlag(ef:SceKernelEventFlag;
+                                      bitPattern:QWORD;
+                                      pNumWaitThreads:Pinteger):Integer; SysV_ABI_CDecl;
+var
+ node:pwef_node;
+ attr:DWORD;
+ count:Integer;
+begin
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit(SCE_KERNEL_ERROR_ESRCH);
+
+ _sig_lock;
+
+ Writeln('>sceKernelCancelEventFlag:',HexStr(ef),':',ef^.name);
+
+ spin_lock(ef^.lock_list);
+
+ attr:=ef^.attr;
+
+ count:=0;
+
+ //cancel all
+ if _is_single(attr) then
+ begin
+  fetch_or(ef^.bitPattern,bitPattern);
+
+  ef^.single.ret:=SCE_KERNEL_ERROR_ECANCELED;
+  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+
+  count:=1;
+ end else
+ begin
+  fetch_or(ef^.bitPattern,bitPattern);
+
+  node:=ef^.list.pHead;
+  While (node<>nil) do
+  begin
+   if (node^.ret=1) then
+   begin
+    node^.ResultPat:=ef^.bitPattern;
+    node^.ret:=SCE_KERNEL_ERROR_ECANCELED;
+    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+
+    Inc(count);
+   end;
+   node:=node^.pNext;
+  end;
+ end;
+
+ spin_unlock(ef^.lock_list);
+
+ _sig_unlock;
+
+ if (pNumWaitThreads<>nil) then
+ begin
+  pNumWaitThreads^:=count;
+ end;
+
+ System.InterlockedDecrement(ef^.refs);
+ ef_leave(ef);
+ Result:=0;
+end;
+
 {
 int sceKernelPollEventFlag(SceKernelEventFlag ef, uint64_t bitPattern,
 			   uint32_t waitMode, uint64_t *pResultPat);
-int sceKernelCancelEventFlag(SceKernelEventFlag ef, uint64_t setPattern,
-			     int *pNumWaitThreads);
                              }
 
 end.
