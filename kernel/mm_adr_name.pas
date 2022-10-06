@@ -369,6 +369,8 @@ begin
 
  key:=It.Item^;
 
+ if (Offset>=(key.Size+key.Offset)) then Exit(EINVAL);
+
  MoveChar0(key.name,pname^,SizeOf(TName));
 end;
 

@@ -457,9 +457,25 @@ begin
  key:=Default(TDirectAdrNode);
  key.Offset:=Offset;
 
+ It:=FAllcSet.find_le(key);
+
+ if (It.Item=nil) then
+ begin
+  if next then
+  begin
+   It:=FAllcSet.find_be(key);
+  end else
+  begin
+   Exit(EINVAL);
+  end;
+ end;
+
+ key:=It.Item^;
+
+ if (Offset>=(key.Size+key.Offset)) then Exit(EINVAL);
+
  if next then
  begin
-  It:=FAllcSet.find_be(key);
 
   repeat
    if (It.Item=nil) then Exit(EACCES);
@@ -470,12 +486,6 @@ begin
 
  end else
  begin
-  It:=FAllcSet.find(key);
-
-  if (It.Item=nil) then Exit(EINVAL);
-
-  key:=It.Item^;
-
   if key.IsFree then Exit(EACCES);
  end;
 
@@ -498,6 +508,7 @@ begin
  key:=It.Item^;
 
  if key.IsFree then Exit(ENOENT);
+ if (Offset>=(key.Size+key.Offset)) then Exit(ENOENT);
 
  ROut:=key;
 end;
