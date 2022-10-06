@@ -744,6 +744,8 @@ begin
 
   case elf_phdr[i].p_type of
 
+   PT_NOTE:; //skip
+
    PT_LOAD:;//load
    PT_SCE_RELRO:;//load
 

@@ -237,6 +237,11 @@ begin
  end;
 end;
 
+function ps4_sceSysmoduleGetModuleInfoForUnwind(addr:Pointer;flags:DWORD;info:pSceModuleInfoForUnwind):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceKernelGetModuleInfoForUnwind(addr,flags,info);
+end;
+
 type
  PInternalSegmentInfo=^TInternalSegmentInfo;
  TInternalSegmentInfo=packed record
@@ -827,6 +832,8 @@ begin
  lib^.set_proc($7CC3F934750E68C9,@ps4_sceSysmoduleIsLoaded);
 
  lib^.set_proc($847AC6A06A0D7FEB,@ps4_sceSysmoduleLoadModuleInternalWithArg);
+
+ lib^.set_proc($E1F539CAF3A4546E,@ps4_sceSysmoduleGetModuleInfoForUnwind);
 end;
 
 function Load_libkernel(Const name:RawByteString):TElf_node;

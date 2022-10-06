@@ -334,9 +334,15 @@ begin
    if _is_single(attr) then
    begin
 
-    if _test_and_set(ef,bitPattern,waitMode,pResultPat) then
+    if (ef^.single.ret<>1) then //is signaled
     begin
-     Break;
+     if _test_and_set(ef,bitPattern,waitMode,pResultPat) then
+     begin
+      Result:=ef^.single.ret;
+      ef^.single.thread:=0;
+      Break;
+     end;
+     ef^.single.ret:=1;
     end;
 
    end else
@@ -409,8 +415,6 @@ begin
 
  if _is_single(attr) then
  begin
-  ef^.single.thread:=0;
-  Result:=ef^.single.ret;
   spin_unlock(ef^.lock_sing);
  end else
  begin
@@ -449,8 +453,13 @@ begin
  if _is_single(attr) then
  begin
   fetch_or(ef^.bitPattern,bitPattern);
-  ef^.single.ret:=0;
-  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+
+  if (ef^.single.ret=1) then
+  begin
+   ef^.single.ret:=0;
+   NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+  end;
+
  end else
  begin
 
@@ -526,8 +535,13 @@ begin
  //cancel all
  if _is_single(attr) then
  begin
-  ef^.single.ret:=SCE_KERNEL_ERROR_EACCES;
-  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+
+  if (ef^.single.ret=1) then
+  begin
+   ef^.single.ret:=SCE_KERNEL_ERROR_EACCES;
+   NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+  end;
+
  end else
  begin
   node:=ef^.list.pHead;
@@ -578,10 +592,13 @@ begin
  begin
   fetch_or(ef^.bitPattern,bitPattern);
 
-  ef^.single.ret:=SCE_KERNEL_ERROR_ECANCELED;
-  NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+  if (ef^.single.ret=1) then
+  begin
+   ef^.single.ret:=SCE_KERNEL_ERROR_ECANCELED;
+   NtQueueApcThread(ef^.single.thread,@_apc_null,0,nil,0);
+   count:=1;
+  end;
 
-  count:=1;
  end else
  begin
   fetch_or(ef^.bitPattern,bitPattern);

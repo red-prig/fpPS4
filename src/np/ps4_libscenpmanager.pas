@@ -123,6 +123,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetAccountIdA(userId:Integer;pAccountId:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pAccountId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pAccountId^:=1111;
+ Result:=0;
+end;
+
 function ps4_sceNpGetNpId(userId:Integer;npId:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
  npId^:=Default(SceNpId);
@@ -357,6 +364,7 @@ begin
 
  lib:=Result._add_lib('libSceNpManager');
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
+ lib^.set_proc($ADB9276948E9A96A,@ps4_sceNpGetAccountIdA);
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);

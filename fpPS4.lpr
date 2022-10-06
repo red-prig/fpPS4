@@ -178,16 +178,25 @@ begin
  Result:=4;
 end;
 
+function ps4_sceNpWebApiCreateContextA(libCtxId,userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApiCreateContextA:',libCtxId,':',userId);
+ Result:=Integer($80552907);
+end;
+
+//nop nid:libSceNpWebApi:ADD82CE59D4CC85C:sceNpWebApiCreateRequest
+
+
 function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
                                     poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceNpWebApi2Initialize:',poolSize);
+ Writeln('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
  Result:=4;
 end;
 
 function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceNpWebApi2CreateUserContext:',libCtxId);
+ Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
  Result:=5;
 end;
 
@@ -270,6 +279,8 @@ begin
    'libSceNpWebApi':
     Case Info^.nid of
      QWORD($1B70272CD7510631):Result:=@ps4_sceNpWebApiInitialize;
+     QWORD($CE4E9CEB9C68C8ED):Result:=@ps4_sceNpWebApiCreateContextA;
+     //nop nid:libSceNpWebApi:ADD82CE59D4CC85C:sceNpWebApiCreateRequest
     end;
 
    'libSceNpWebApi2':
@@ -501,7 +512,7 @@ begin
  //ps4_app.app_file:='..\samples\api_video_out\videoout_basic_1d.elf';
 
  //ps4_app.app_path:='..\samples\http_get\';
- //ps4_app.app_file:='..\samples\http_get\simple4.elf';
+ //ps4_app.app_file:='..\samples\http_get\simple5.elf';
 
  //ps4_app.app_path:='G:\Games\MOMODORA\CUSA05694\';
  //ps4_app.app_file:='G:\Games\MOMODORA\CUSA05694\eboot.bin';
@@ -641,6 +652,18 @@ begin
 
  //ps4_app.app_path:='G:\Games\Mega Man Legacy Collection v1.00\CUSA02516\';
  //ps4_app.app_file:='G:\Games\Mega Man Legacy Collection v1.00\CUSA02516\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\ps4-homebrew\PS4_Player\';
+ //ps4_app.app_file:='G:\Games\ps4-homebrew\PS4_Player\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\ps4-homebrew\pad\';
+ //ps4_app.app_file:='G:\Games\ps4-homebrew\pad\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Castlevania\SLUS00067\';
+ //ps4_app.app_file:='G:\Games\Castlevania\SLUS00067\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Roombo First Blood\CUSA19205\';
+ //ps4_app.app_file:='G:\Games\Roombo First Blood\CUSA19205\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
