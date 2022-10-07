@@ -27,14 +27,14 @@ type
   private
    //free:  [Size]  |[Offset]
    //alloc: [Offset]
-   Function  GetOffset:QWORD;      inline;
-   Procedure SetOffset(q:qword);   inline;
-   Function  GetSize:QWORD;        inline;
-   Procedure SetSize(q:qword);     inline;
-   Function  GetAddr:Pointer;      inline;
-   Procedure SetAddr(p:Pointer);   inline;
-   Function  GetIsFree:Boolean;    inline;
-   Procedure SetIsFree(b:Boolean); inline;
+   Function  GetOffset:QWORD;
+   Procedure SetOffset(q:qword);
+   Function  GetSize:QWORD;
+   Procedure SetSize(q:qword);
+   Function  GetAddr:Pointer;
+   Procedure SetAddr(p:Pointer);
+   Function  GetIsFree:Boolean;
+   Procedure SetIsFree(b:Boolean);
   public
    F:bitpacked record
     Offset:bit28;
@@ -68,6 +68,7 @@ type
    const
     Flo=0;
     Fhi=$17FFFFFFF;
+    FMaxSize=(Fhi-Flo+1);
 
    var
     FFreeSet:TFreePoolNodeSet;
@@ -150,45 +151,45 @@ end;
 
 //
 
-Function TDirectAdrNode.GetOffset:QWORD; inline;
+Function TDirectAdrNode.GetOffset:QWORD;
 begin
  Result:=QWORD(F.Offset) shl 12;
 end;
 
-Procedure TDirectAdrNode.SetOffset(q:qword); inline;
+Procedure TDirectAdrNode.SetOffset(q:qword);
 begin
  F.Offset:=DWORD(q shr 12);
  Assert(GetOffset=q);
 end;
 
-Function TDirectAdrNode.GetSize:QWORD; inline;
+Function TDirectAdrNode.GetSize:QWORD;
 begin
  Result:=QWORD(F.Size) shl 12;
 end;
 
-Procedure TDirectAdrNode.SetSize(q:qword); inline;
+Procedure TDirectAdrNode.SetSize(q:qword);
 begin
  F.Size:=DWORD(q shr 12);
  Assert(GetSize=q);
 end;
 
-Function TDirectAdrNode.GetAddr:Pointer; inline;
+Function TDirectAdrNode.GetAddr:Pointer;
 begin
  Result:=Pointer(QWORD(F.addr) shl 12);
 end;
 
-Procedure TDirectAdrNode.SetAddr(p:Pointer); inline;
+Procedure TDirectAdrNode.SetAddr(p:Pointer);
 begin
  F.addr:=DWORD(QWORD(p) shr 12);
  Assert(GetAddr=p);
 end;
 
-Function TDirectAdrNode.GetIsFree:Boolean; inline;
+Function TDirectAdrNode.GetIsFree:Boolean;
 begin
  Result:=Boolean(F.Free);
 end;
 
-Procedure TDirectAdrNode.SetIsFree(b:Boolean); inline;
+Procedure TDirectAdrNode.SetIsFree(b:Boolean);
 begin
  F.Free:=Byte(b);
 end;
@@ -204,7 +205,7 @@ begin
  key:=Default(TDirectAdrNode);
  key.IsFree:=True;
  key.Offset:=Flo;
- key.Size  :=(Fhi-Flo+1);
+ key.Size  :=FMaxSize;
 
  _Insert(key);
 end;
@@ -417,9 +418,9 @@ var
  Offset:QWORD;
 begin
  Result:=0;
- if (Size=0) or (Align=0) then Exit(EINVAL);
- if (ss<Flo) or (ss>Fhi)  then Exit(EINVAL);
- if (se<Flo) or (se<ss)   then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize) then Exit(EINVAL);
+ if (ss<Flo) or (ss>Fhi)        then Exit(EINVAL);
+ if (se<Flo) or (se<ss)         then Exit(EINVAL);
 
  key:=Default(TDirectAdrNode);
 
@@ -454,6 +455,9 @@ var
  key:TDirectAdrNode;
 begin
  Result:=0;
+
+ if (Offset>Fhi) then Exit(EINVAL);
+
  key:=Default(TDirectAdrNode);
  key.Offset:=Offset;
 
@@ -498,6 +502,9 @@ var
  key:TDirectAdrNode;
 begin
  Result:=0;
+
+ if (Offset>Fhi) then Exit(EINVAL);
+
  key:=Default(TDirectAdrNode);
  key.Offset:=Offset;
 
@@ -521,7 +528,6 @@ var
  Size:QWORD;
 begin
  Result:=ENOMEM;
- if (Align=0) then Exit(EINVAL);
  if (ss<Flo) or (ss>Fhi)  then Exit(EINVAL);
  if (se<Flo) or (se<ss)   then Exit(EINVAL);
 
@@ -532,14 +538,20 @@ begin
  While (It.Item<>nil) do
  begin
   key:=It.Item^;
-  Offset:=System.Align(Max(key.Offset,ss),Align);
-  if (se>=Offset) then
+
+  if key.IsFree then
   begin
-   Size:=key.Size-(Offset-key.Offset);
-   AdrOut :=Offset;
-   SizeOut:=Size;
-   Exit(0);
+   Offset:=System.Align(Max(key.Offset,ss),Align);
+
+   if (se>=Offset) then
+   begin
+    Size:=key.Size-(Offset-key.Offset);
+    AdrOut :=Offset;
+    SizeOut:=Size;
+    Exit(0);
+   end;
   end;
+
   It.Next
  end;
 end;
@@ -551,7 +563,7 @@ var
  FEndO:QWORD;
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=Offset+Size;
@@ -585,7 +597,7 @@ var
  FEndO:QWORD;
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=Offset+Size;
@@ -623,7 +635,7 @@ var
  FEndO:QWORD;
 begin
  Result:=ENOENT;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=Offset+Size;
@@ -713,7 +725,7 @@ var
 
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  repeat
@@ -822,7 +834,7 @@ var
 
 begin
  Result:=0;
- if (Size=0)                     then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  repeat
@@ -914,7 +926,7 @@ var
 
 begin
  Result:=0;
- if (Size=0)                     then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  repeat

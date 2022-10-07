@@ -7,6 +7,7 @@ interface
 uses
  Classes,
  SysUtils,
+ half16,
  vulkan,
  vImage,
  bittype,
@@ -836,10 +837,76 @@ const
  // Hugely inefficient linear display mode -- do not use!
  kTileModeDisplay_LinearGeneral             = $0000001F; ///< Unsupported; do not use!
 
+function _conv_clr_to_float(num:Byte;value,mask:qword):DWORD;
+var
+ s:Single;
+ i:Integer;
+begin
+ Result:=0;
+ Case num of
+  NUMBER_UNORM,
+  NUMBER_SRGB:
+   begin
+    s:=(value and mask)/mask;
+    Result:=PDWORD(@s)^;
+   end;
+  NUMBER_SNORM:
+   begin
+    i:=0;
+
+    Case mask of
+         $FF:i:=PShortInt(@value)^;
+       $FFFF:i:=PSmallInt(@value)^;
+     $FFFFFF:i:=PInteger (@value)^;
+    end;
+
+    s:=i/(mask div 2);
+    Result:=PDWORD(@s)^;
+   end;
+  NUMBER_UINT,
+  NUMBER_USCALED:
+   begin
+    Result:=(value and mask);
+   end;
+  NUMBER_SINT,
+  NUMBER_SSCALED:
+   begin
+    i:=0;
+
+    Case mask of
+         $FF:i:=PShortInt(@value)^;
+       $FFFF:i:=PSmallInt(@value)^;
+     $FFFFFF:i:=PInteger (@value)^;
+     else;
+    end;
+
+    Result:=PDWORD(@i)^;
+   end;
+  NUMBER_FLOAT:
+   begin
+
+    Case mask of
+       $FFFF:
+      begin
+       s:=PHalf16(@value)^;
+       Result:=PDWORD(@s)^;
+      end;
+     $FFFFFF:Result:=value;
+     else;
+    end;
+
+   end;
+
+  else;
+ end;
+end;
+
 Function TGPU_REGS.GET_RT_INFO(i:Byte):TRT_INFO; //0..7
 var
  COMP_MAP:TCOMP_MAP;
  W:QWORD;
+ FORMAT:Byte;
+ NUMBER_TYPE:Byte;
 begin
  Result:=Default(TRT_INFO);
 
@@ -859,20 +926,34 @@ begin
  Assert(RENDER_TARGET[i].INFO.ENDIAN=ENDIAN_NONE);
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
 
- Case RENDER_TARGET[i].INFO.FORMAT of
+ FORMAT     :=RENDER_TARGET[i].INFO.FORMAT;
+ NUMBER_TYPE:=RENDER_TARGET[i].INFO.NUMBER_TYPE;
+
+ Case FORMAT of
   COLOR_8:
-   Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
+   Case NUMBER_TYPE of
     NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8_UNORM;
     NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8_SRGB;
     else
      Assert(false,'TODO');
    end;
   COLOR_8_8_8_8:
-   Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
+   Case NUMBER_TYPE of
     NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
     NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
     else
      Assert(false,'TODO');
+   end;
+  COLOR_16_16:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UNORM;
+    NUMBER_SRGB   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UNORM;
+    NUMBER_SNORM  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SNORM;
+    NUMBER_USCALED:Result.FImageInfo.cformat:=VK_FORMAT_R16G16_USCALED;
+    NUMBER_SSCALED:Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SSCALED;
+    NUMBER_UINT   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UINT;
+    NUMBER_SINT   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SINT;
+    NUMBER_FLOAT  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SFLOAT;
    end;
   else
    Assert(false,'TODO');
@@ -920,12 +1001,10 @@ begin
  // Result.IMAGE_USAGE:=Result.IMAGE_USAGE or TM_READ;
  //end;
 
-  Case RENDER_TARGET[i].INFO.FORMAT of
+  Case FORMAT of
    COLOR_8,
+   COLOR_8_8,
    COLOR_8_8_8_8:
-    Case RENDER_TARGET[i].INFO.NUMBER_TYPE of
-     NUMBER_UNORM,
-     NUMBER_SRGB :
       begin
        COMP_MAP:=GetCompMap(RENDER_TARGET[i].INFO.COMP_SWAP,4);
 
@@ -941,14 +1020,25 @@ begin
        //Writeln((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255);
        //Writeln((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255);
 
-       Result.CLEAR_COLOR.float32[0]:=((W shr (BsrDWord(COMP_MAP[0]) shl 3)) and 255)/255;
-       Result.CLEAR_COLOR.float32[1]:=((W shr (BsrDWord(COMP_MAP[1]) shl 3)) and 255)/255;
-       Result.CLEAR_COLOR.float32[2]:=((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255)/255;
-       Result.CLEAR_COLOR.float32[3]:=((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255)/255;
+       Result.CLEAR_COLOR.uint32[0]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[0]) shl 3),$FF);
+       Result.CLEAR_COLOR.uint32[1]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[1]) shl 3),$FF);
+       Result.CLEAR_COLOR.uint32[2]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[2]) shl 3),$FF);
+       Result.CLEAR_COLOR.uint32[3]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[3]) shl 3),$FF);
       end;
-     else
-      Assert(false);
-    end;
+
+   COLOR_16_16,
+   COLOR_16_16_16_16:
+      begin
+       COMP_MAP:=GetCompMap(RENDER_TARGET[i].INFO.COMP_SWAP,4);
+
+       W:=RENDER_TARGET[i].CLEAR_WORD;
+
+       Result.CLEAR_COLOR.uint32[0]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[0]) shl 4),$FFFF);
+       Result.CLEAR_COLOR.uint32[1]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[1]) shl 4),$FFFF);
+       Result.CLEAR_COLOR.uint32[2]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[2]) shl 4),$FFFF);
+       Result.CLEAR_COLOR.uint32[3]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[3]) shl 4),$FFFF);
+      end;
+
    else
     Assert(false);
   end;
@@ -1342,7 +1432,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UNORM;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
     else
      Assert(false,_get_buf_dfmt_str(PV^.dfmt));
@@ -1353,7 +1443,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SNORM;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
     else
      Assert(false,_get_buf_dfmt_str(PV^.dfmt));
@@ -1364,7 +1454,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_USCALED;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_USCALED;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
     else
      Assert(false,_get_buf_dfmt_str(PV^.dfmt));
@@ -1375,7 +1465,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SSCALED;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SSCALED;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
     else
      Assert(false,_get_buf_dfmt_str(PV^.dfmt));
@@ -1386,7 +1476,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UINT;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UINT;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UINT;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UINT;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UINT;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UINT;
     BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_UINT;
     BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_UINT;
@@ -1401,7 +1491,7 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SINT;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SINT;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
     BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
     BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
@@ -1447,7 +1537,7 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
-     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UNORM;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
      IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
      IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_R4G4B4A4_UNORM_PACK16;
@@ -1473,7 +1563,7 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
-     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SNORM;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
@@ -1484,7 +1574,7 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
-     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_USCALED;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_USCALED;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
@@ -1496,7 +1586,7 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
-     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SSCALED;
+     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SSCALED;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
@@ -1507,7 +1597,7 @@ begin
     IMG_DATA_FORMAT_8           :Result:=VK_FORMAT_R8_UINT;
     IMG_DATA_FORMAT_8_8         :Result:=VK_FORMAT_R8G8_UINT;
     IMG_DATA_FORMAT_8_8_8_8     :Result:=VK_FORMAT_R8G8B8A8_UINT;
-    IMG_DATA_FORMAT_16_16       :Result:=VK_FORMAT_R16_UINT;
+    IMG_DATA_FORMAT_16_16       :Result:=VK_FORMAT_R16G16_UINT;
     IMG_DATA_FORMAT_16_16_16_16 :Result:=VK_FORMAT_R16G16B16A16_UINT;
     IMG_DATA_FORMAT_32          :Result:=VK_FORMAT_R32_UINT;
     IMG_DATA_FORMAT_32_32       :Result:=VK_FORMAT_R32G32_UINT;
@@ -1528,7 +1618,7 @@ begin
     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
-    IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_SINT;
+    IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SINT;
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
     IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;

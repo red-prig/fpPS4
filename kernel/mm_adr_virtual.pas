@@ -52,14 +52,14 @@ type
  PVirtualAdrBlock=^TVirtualAdrBlock;
  TVirtualAdrBlock=packed object
   private
-   Function  GetOffset:Pointer;    inline;
-   Procedure SetOffset(q:Pointer); inline;
-   Function  GetSize:QWORD;        inline;
-   Procedure SetSize(q:QWORD);     inline;
-   Function  GetUsed:QWORD;        inline;
-   Procedure SetUsed(q:QWORD);     inline;
-   Function  GetRsrv:QWORD;        inline;
-   Procedure SetRsrv(q:QWORD);     inline;
+   Function  GetOffset:Pointer;
+   Procedure SetOffset(q:Pointer);
+   Function  GetSize:QWORD;
+   Procedure SetSize(q:QWORD);
+   Function  GetUsed:QWORD;
+   Procedure SetUsed(q:QWORD);
+   Function  GetRsrv:QWORD;
+   Procedure SetRsrv(q:QWORD);
   public
    F:bitpacked record
     Offset:bit28;
@@ -83,14 +83,14 @@ type
   private
    //free:  [Size]  |[Offset]
    //alloc: [Offset]
-   Function  GetOffset:Pointer;    inline;
-   Procedure SetOffset(q:Pointer); inline;
-   Function  GetSize:QWORD;        inline;
-   Procedure SetSize(q:QWORD);     inline;
-   Function  GetAddr:QWORD;        inline;
-   Procedure SetAddr(p:QWORD);     inline;
-   Function  GetIsFree:Boolean;    inline;
-   Procedure SetIsFree(b:Boolean); inline;
+   Function  GetOffset:Pointer;
+   Procedure SetOffset(q:Pointer);
+   Function  GetSize:QWORD;
+   Procedure SetSize(q:QWORD);
+   Function  GetAddr:QWORD;
+   Procedure SetAddr(p:QWORD);
+   Function  GetIsFree:Boolean;
+   Procedure SetIsFree(b:Boolean);
   public
    F:bitpacked record
     Offset:bit28;
@@ -133,6 +133,7 @@ type
 
    var
     Flo,Fhi:Pointer;
+    FMaxSize:QWORD;
 
     FFreeSet:TFreePoolNodeSet;
     FAllcSet:TAllcPoolNodeSet;
@@ -312,45 +313,45 @@ end;
 
 //
 
-Function TVirtualAdrBlock.GetOffset:Pointer; inline;
+Function TVirtualAdrBlock.GetOffset:Pointer;
 begin
  Result:=Pointer(QWORD(F.Offset) shl 12);
 end;
 
-Procedure TVirtualAdrBlock.SetOffset(q:Pointer); inline;
+Procedure TVirtualAdrBlock.SetOffset(q:Pointer);
 begin
  F.Offset:=DWORD(QWORD(q) shr 12);
  Assert(GetOffset=q);
 end;
 
-Function TVirtualAdrBlock.GetSize:QWORD; inline;
+Function TVirtualAdrBlock.GetSize:QWORD;
 begin
  Result:=QWORD(F.Size) shl 12;
 end;
 
-Procedure TVirtualAdrBlock.SetSize(q:QWORD); inline;
+Procedure TVirtualAdrBlock.SetSize(q:QWORD);
 begin
  F.Size:=DWORD(q shr 12);
  Assert(GetSize=q);
 end;
 
-Function TVirtualAdrBlock.GetUsed:QWORD; inline;
+Function TVirtualAdrBlock.GetUsed:QWORD;
 begin
  Result:=QWORD(F.used) shl 12;
 end;
 
-Procedure TVirtualAdrBlock.SetUsed(q:QWORD); inline;
+Procedure TVirtualAdrBlock.SetUsed(q:QWORD);
 begin
  F.used:=DWORD(q shr 12);
  Assert(GetUsed=q);
 end;
 
-Function TVirtualAdrBlock.GetRsrv:QWORD; inline;
+Function TVirtualAdrBlock.GetRsrv:QWORD;
 begin
  Result:=QWORD(F.rsrv) shl 12;
 end;
 
-Procedure TVirtualAdrBlock.SetRsrv(q:QWORD); inline;
+Procedure TVirtualAdrBlock.SetRsrv(q:QWORD);
 begin
  F.rsrv:=DWORD(q shr 12);
  Assert(GetRsrv=q);
@@ -468,45 +469,45 @@ end;
 
 //
 
-Function TVirtualAdrNode.GetOffset:Pointer; inline;
+Function TVirtualAdrNode.GetOffset:Pointer;
 begin
  Result:=Pointer(QWORD(F.Offset) shl 12);
 end;
 
-Procedure TVirtualAdrNode.SetOffset(q:Pointer); inline;
+Procedure TVirtualAdrNode.SetOffset(q:Pointer);
 begin
  F.Offset:=DWORD(QWORD(q) shr 12);
  Assert(GetOffset=q);
 end;
 
-Function TVirtualAdrNode.GetSize:QWORD; inline;
+Function TVirtualAdrNode.GetSize:QWORD;
 begin
  Result:=QWORD(F.Size) shl 12;
 end;
 
-Procedure TVirtualAdrNode.SetSize(q:QWORD); inline;
+Procedure TVirtualAdrNode.SetSize(q:QWORD);
 begin
  F.Size:=DWORD(q shr 12);
  Assert(GetSize=q);
 end;
 
-Function TVirtualAdrNode.GetAddr:QWORD; inline;
+Function TVirtualAdrNode.GetAddr:QWORD;
 begin
  Result:=QWORD(F.addr) shl 12;
 end;
 
-Procedure TVirtualAdrNode.SetAddr(p:QWORD); inline;
+Procedure TVirtualAdrNode.SetAddr(p:QWORD);
 begin
  F.addr:=DWORD(QWORD(p) shr 12);
  Assert(GetAddr=p);
 end;
 
-Function TVirtualAdrNode.GetIsFree:Boolean; inline;
+Function TVirtualAdrNode.GetIsFree:Boolean;
 begin
  Result:=Boolean(F.Free);
 end;
 
-Procedure TVirtualAdrNode.SetIsFree(b:Boolean); inline;
+Procedure TVirtualAdrNode.SetIsFree(b:Boolean);
 begin
  F.Free:=Byte(b);
 end;
@@ -535,10 +536,12 @@ begin
  Flo:=Pointer(_lo);
  Fhi:=Pointer(_hi);
 
+ FMaxSize:=(_hi-_lo+1);
+
  key:=Default(TVirtualAdrNode);
  key.IsFree:=True;
  key.Offset:=Pointer(_lo);
- key.Size  :=(_hi-_lo+1);
+ key.Size  :=FMaxSize;
 
  _Insert(key);
 end;
@@ -546,6 +549,12 @@ end;
 procedure TVirtualManager._Insert(const key:TVirtualAdrNode);
 begin
  Assert(key.Size<>0);
+
+ if (key.F.direct<>0) then
+ begin
+  Assert(key.addr<$17FFFFFFF);
+ end;
+
  if key.IsFree then
  begin
   if (key.F.mapped=0) then
@@ -649,7 +658,6 @@ procedure TVirtualManager._Merge(key:TVirtualAdrNode);
 var
  rkey:TVirtualAdrNode;
 begin
-
  //prev union
  repeat
   rkey:=key;
@@ -864,7 +872,7 @@ var
   begin
    key.IsFree  :=True;
    key.F.prot  :=0;
-   key.F.addr  :=0;
+   key.F.addr  :=0; //hack
    key.F.reserv:=0;
    key.F.direct:=0;
    key.F.stack :=0;
@@ -1015,7 +1023,7 @@ var
 
   //new save
   key.IsFree  :=False;
-  key.F.addr  :=0;
+  key.F.addr  :=0; //hack
   key.F.reserv:=0;
   key.F.direct:=0;
   key.F.stack :=0;
@@ -1094,7 +1102,7 @@ var
 
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=Offset+Size;
@@ -1199,9 +1207,14 @@ var
   Result:=False;
   Assert(key.Size<>0);
 
+  if (_direct<>0) then
+  begin
+   Assert(addr<$17FFFFFFF);
+  end;
+
   //new save
   key.IsFree  :=False;
-  key.F.addr  :=addr;
+  key.addr    :=addr;
   key.F.reserv:=_reserv;
   key.F.direct:=_direct;
   key.F.stack :=0;
@@ -1235,7 +1248,7 @@ var
 
    //new save
    key.IsFree  :=False;
-   key.F.addr  :=addr;
+   key.addr    :=addr;
    key.F.reserv:=_reserv;
    key.F.direct:=_direct;
    key.F.stack :=0;
@@ -1257,7 +1270,7 @@ var
 
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize) then Exit(EINVAL);
  if (Offset>Fhi) then Exit(EINVAL);
 
  Align:=Max(Align,PHYSICAL_PAGE_SIZE);
@@ -1494,6 +1507,9 @@ begin
  Result:=0;
  if ((prot and $ffffffc8)<>0) then Exit(EINVAL);
 
+ if (Size>FMaxSize) then Exit(EINVAL);
+ if (Offset>Fhi) then Exit(EINVAL);
+
  FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
  Size:=Size+(Offset-FEndO);
 
@@ -1605,6 +1621,9 @@ var
 begin
  Result:=0;
  if ((prot and $ffffffc8)<>0) then Exit(EINVAL);
+
+ if (Size>FMaxSize) then Exit(EINVAL);
+ if (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
  Size:=Size+(Offset-FEndO);
@@ -1718,7 +1737,7 @@ var
   //new save
   key.IsFree  :=True;
   key.F.prot  :=0;
-  key.F.addr  :=0;
+  key.F.addr  :=0; //hack
   key.F.reserv:=0;
   key.F.direct:=0;
   key.F.stack :=0;
@@ -1750,7 +1769,7 @@ var
 
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize)  then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
@@ -1804,6 +1823,11 @@ var
  key:TVirtualAdrNode;
 begin
  Result:=0;
+
+ if (Offset>Fhi) then Exit(EINVAL);
+
+ Offset:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+
  key:=Default(TVirtualAdrNode);
  key.Offset:=Offset;
 
@@ -1848,6 +1872,11 @@ var
  key:TVirtualAdrNode;
 begin
  Result:=0;
+
+ if (Offset>Fhi) then Exit(EINVAL);
+
+ Offset:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+
  key:=Default(TVirtualAdrNode);
  key.Offset:=Offset;
 
@@ -1870,6 +1899,11 @@ var
  key:TVirtualAdrNode;
 begin
  Result:=False;
+
+ if (Offset>Fhi) then Exit;
+
+ Offset:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+
  key:=Default(TVirtualAdrNode);
  key.Offset:=Offset;
 

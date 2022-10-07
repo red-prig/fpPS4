@@ -27,10 +27,10 @@ type
 
  TNameAdrNode=packed object
   private
-   Function  GetOffset:Pointer;    inline;
-   Procedure SetOffset(q:Pointer); inline;
-   Function  GetSize:QWORD;        inline;
-   Procedure SetSize(q:QWORD);     inline;
+   Function  GetOffset:Pointer;
+   Procedure SetOffset(q:Pointer);
+   Function  GetSize:QWORD;
+   Procedure SetSize(q:QWORD);
   public
    F:bitpacked record
     Offset:DWORD;
@@ -54,6 +54,7 @@ type
 
    var
     Flo,Fhi:Pointer;
+    FMaxSize:QWORD;
 
     FAllcSet:TAllcPoolNodeSet;
   public
@@ -94,23 +95,23 @@ end;
 
 //
 
-Function TNameAdrNode.GetOffset:Pointer; inline;
+Function TNameAdrNode.GetOffset:Pointer;
 begin
  Result:=Pointer(QWORD(F.Offset) shl 12);
 end;
 
-Procedure TNameAdrNode.SetOffset(q:Pointer); inline;
+Procedure TNameAdrNode.SetOffset(q:Pointer);
 begin
  F.Offset:=DWORD(QWORD(q) shr 12);
  Assert(GetOffset=q);
 end;
 
-Function TNameAdrNode.GetSize:QWORD; inline;
+Function TNameAdrNode.GetSize:QWORD;
 begin
  Result:=QWORD(F.Size) shl 12;
 end;
 
-Procedure TNameAdrNode.SetSize(q:QWORD); inline;
+Procedure TNameAdrNode.SetSize(q:QWORD);
 begin
  F.Size:=DWORD(q shr 12);
  Assert(GetSize=q);
@@ -134,9 +135,11 @@ begin
  Flo:=Pointer(_lo);
  Fhi:=Pointer(_hi);
 
+ FMaxSize:=(_hi-_lo+1);
+
  key:=Default(TNameAdrNode);
  key.Offset:=Pointer(_lo);
- key.Size  :=(_hi-_lo+1);
+ key.Size  :=FMaxSize;
 
  _Insert(key);
 end;
@@ -317,7 +320,7 @@ var
 
 begin
  Result:=0;
- if (Size=0) then Exit(EINVAL);
+ if (Size=0) or (Size>FMaxSize) then Exit(EINVAL);
  if (Offset<Flo) or (Offset>Fhi) then Exit(EINVAL);
 
  FEndO:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);

@@ -183,6 +183,7 @@ begin
   VK_FORMAT_R8_SRGB              :Result:=1;
   VK_FORMAT_R5G6B5_UNORM_PACK16  :Result:=2;
   VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
+  VK_FORMAT_R16G16_SFLOAT        :Result:=4;
   VK_FORMAT_R32_SFLOAT           :Result:=4;
 
   //stencil

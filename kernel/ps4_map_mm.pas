@@ -280,7 +280,6 @@ begin
  Result:=False;
 
  pb:=nil;
- addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
 
  rwlock_rdlock(MMLock);
 
@@ -893,8 +892,6 @@ var
 begin
  Result:=0;
 
- addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
-
  ROut:=Default(TVirtualAdrNode);
 
  _sig_lock;
@@ -938,8 +935,6 @@ begin
 
  if (info=nil) then Exit;
  if (infoSize<>SizeOf(SceKernelVirtualQueryInfo)) then Exit;
-
- addr:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
 
  VOut:=Default(TVirtualAdrNode);
  DOut:=Default(TDirectAdrNode);

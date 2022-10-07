@@ -333,6 +333,7 @@
       <Unit73>
         <Filename Value="src\ps4_libsceplaygo.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libScePlayGo"/>
       </Unit73>
       <Unit74>
         <Filename Value="src\ps4_libsceremoteplay.pas"/>

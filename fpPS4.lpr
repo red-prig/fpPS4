@@ -396,16 +396,9 @@ begin
    //Writeln('Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end else
   begin
-   //PNAME = 'module_stop',
-   //_MD = $11af200,
-   //LIB = $114e110,
-   //NID = 0,
-   //OFFSET = 311584,
-   //RTYPE = 7, //R_X86_64_JUMP_SLOT
-   //SBIND = 2, //STB_WEAK
-   //STYPE = 0} //STT_NOTYPE
    Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end;
+
  end;
 
  if (Result<>nil) then //cache
@@ -608,8 +601,14 @@ begin
  //ps4_app.app_path:='G:\Games\Super Exploding Zoo\CUSA00446\';
  //ps4_app.app_file:='G:\Games\Super Exploding Zoo\CUSA00446\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Super.Exploding.Zoo\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Super.Exploding.Zoo\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\Untitled Goose Game\CUSA23079\';
  //ps4_app.app_file:='G:\Games\Untitled Goose Game\CUSA23079\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Untitled Goose Game\CUSA23079\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Untitled Goose Game\CUSA23079\eboot.bin';
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\JETPACKJOYRIDE\CUSA03633\eboot.bin';
@@ -647,6 +646,9 @@ begin
  //ps4_app.app_path:='G:\Games\Blackhole\CUSA06921\';
  //ps4_app.app_file:='G:\Games\Blackhole\CUSA06921\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Blackhole\CUSA06921\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Blackhole\CUSA06921\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\Spelunky\CUSA00491\';
  //ps4_app.app_file:='G:\Games\Spelunky\CUSA00491\eboot.bin';
 
@@ -664,6 +666,24 @@ begin
 
  //ps4_app.app_path:='G:\Games\Roombo First Blood\CUSA19205\';
  //ps4_app.app_file:='G:\Games\Roombo First Blood\CUSA19205\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\PS4_Player_9.00\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\PS4_Player_9.00\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\Eboot_Give\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\Eboot_Give\RayTracing3_eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Metal_Max_Xeno\CUSA12350\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Metal_Max_Xeno\CUSA12350\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Roombo First Blood\CUSA19205\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Roombo First Blood\CUSA19205\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\pad\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\pad\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Gem.Smashers\CUSA07572\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Gem.Smashers\CUSA07572\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
