@@ -175,36 +175,37 @@ begin
  Result:=0;
  Case cformat of
   //pixel size
-  VK_FORMAT_R8G8B8A8_SRGB       :Result:=4;
-  VK_FORMAT_R8G8B8A8_UNORM      :Result:=4;
-  VK_FORMAT_R8G8_UNORM          :Result:=2;
-  VK_FORMAT_R8_UNORM            :Result:=1;
-  VK_FORMAT_R8_UINT             :Result:=1;
-  VK_FORMAT_R8_SRGB             :Result:=1;
-  VK_FORMAT_R5G6B5_UNORM_PACK16 :Result:=2;
-  VK_FORMAT_R32_SFLOAT          :Result:=4;
+  VK_FORMAT_R8G8B8A8_SRGB        :Result:=4;
+  VK_FORMAT_R8G8B8A8_UNORM       :Result:=4;
+  VK_FORMAT_R8G8_UNORM           :Result:=2;
+  VK_FORMAT_R8_UNORM             :Result:=1;
+  VK_FORMAT_R8_UINT              :Result:=1;
+  VK_FORMAT_R8_SRGB              :Result:=1;
+  VK_FORMAT_R5G6B5_UNORM_PACK16  :Result:=2;
+  VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
+  VK_FORMAT_R32_SFLOAT           :Result:=4;
 
   //stencil
-  VK_FORMAT_S8_UINT             :Result:=1;
+  VK_FORMAT_S8_UINT              :Result:=1;
   //depth
-  VK_FORMAT_D16_UNORM           :Result:=2;
-  VK_FORMAT_X8_D24_UNORM_PACK32 :Result:=4;
-  VK_FORMAT_D32_SFLOAT          :Result:=4;
+  VK_FORMAT_D16_UNORM            :Result:=2;
+  VK_FORMAT_X8_D24_UNORM_PACK32  :Result:=4;
+  VK_FORMAT_D32_SFLOAT           :Result:=4;
   //depth stencil
-  VK_FORMAT_D16_UNORM_S8_UINT   :Result:=3;
-  VK_FORMAT_D24_UNORM_S8_UINT   :Result:=4;
-  VK_FORMAT_D32_SFLOAT_S8_UINT  :Result:=5;
+  VK_FORMAT_D16_UNORM_S8_UINT    :Result:=3;
+  VK_FORMAT_D24_UNORM_S8_UINT    :Result:=4;
+  VK_FORMAT_D32_SFLOAT_S8_UINT   :Result:=5;
 
   //texel size
   VK_FORMAT_BC1_RGB_UNORM_BLOCK..
   VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
   VK_FORMAT_BC4_UNORM_BLOCK..
-  VK_FORMAT_BC4_SNORM_BLOCK     :Result:=8;
+  VK_FORMAT_BC4_SNORM_BLOCK      :Result:=8;
 
   VK_FORMAT_BC2_UNORM_BLOCK..
   VK_FORMAT_BC3_SRGB_BLOCK,
   VK_FORMAT_BC5_UNORM_BLOCK..
-  VK_FORMAT_BC7_SRGB_BLOCK      :Result:=16;
+  VK_FORMAT_BC7_SRGB_BLOCK       :Result:=16;
 
   else
    Assert(false,'TODO');

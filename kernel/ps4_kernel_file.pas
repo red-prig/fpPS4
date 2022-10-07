@@ -715,6 +715,9 @@ begin
      stat^.st_mtim:=filetime_to_timespec(hfi.ftLastWriteTime);
      stat^.st_ctim:=stat^.st_mtim;
      stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
+
+     stat^.st_blocks  :=((stat^.st_size+511) div 512);
+     stat^.st_blksize :=512;
     end;
 
   else

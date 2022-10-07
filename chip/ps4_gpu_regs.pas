@@ -1450,8 +1450,9 @@ begin
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16_UNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
      IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
+     IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_R4G4B4A4_UNORM_PACK16;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-     IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK
+     IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
     end;
@@ -1462,7 +1463,7 @@ begin
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SRGB;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SRGB;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
-     IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_SRGB_BLOCK
+     IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_SRGB_BLOCK;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
     end;
