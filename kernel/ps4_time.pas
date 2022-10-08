@@ -52,6 +52,7 @@ function ps4_sceKernelGetProcessTimeCounter:QWORD; SysV_ABI_CDecl; //microsecond
 function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl;          //microseconds
 function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
+function ps4_sceKernelSleep(sec:Integer):Integer; SysV_ABI_CDecl;
 
 type
  ptimesec=^timesec;
@@ -471,6 +472,15 @@ begin
  //usec:=((usec+99999) div 100000)*100000;
  //
  ft:=-(10*usec); //in 100ns
+ SwDelayExecution(False,@ft);
+ Result:=0;
+end;
+
+function ps4_sceKernelSleep(sec:Integer):Integer; SysV_ABI_CDecl;
+var
+ ft:TLargeInteger;
+begin
+ ft:=-(10000000*sec); //in 100ns
  SwDelayExecution(False,@ft);
  Result:=0;
 end;

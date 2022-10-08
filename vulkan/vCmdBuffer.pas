@@ -763,6 +763,8 @@ var
 begin
  if (Self=nil) then Exit;
 
+ byteCount:=byteCount and (not 3); //4 byte align
+
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
@@ -784,7 +786,7 @@ begin
  vkCmdFillBuffer(cmdbuf,
                  dstb.FHandle,
                  dstb.Foffset,
-                 byteCount div 4,src);
+                 byteCount,src);
 
  if isBlocking then
  begin

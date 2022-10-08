@@ -1179,6 +1179,7 @@ begin
  lib^.set_proc($C92F14D931827B50,@ps4_nanosleep);
  lib^.set_proc($41CB5E4706EC9D5D,@ps4_usleep);
  lib^.set_proc($D637D72D15738AC7,@ps4_sceKernelUsleep);
+ lib^.set_proc($FD947E846EDA0C7C,@ps4_sceKernelSleep);
 
  lib^.set_proc($FE8E6E103A4DFA86,@ps4_sceKernelConvertUtcToLocaltime);
  lib^.set_proc($D0D4C737534A38D2,@ps4_sceKernelConvertLocaltimeToUtc);
