@@ -8,11 +8,13 @@ uses
  Windows,
  sys_signal;
 
-function  ps4_sigfillset(_set:P_sigset_t):Integer; SysV_ABI_CDecl;
-function  ps4_sigaddset(_set:p_sigset_t;signum:Integer):Integer; SysV_ABI_CDecl;
-function  ps4_sigprocmask(how:Integer;_set,oldset:P_sigset_t):Integer; SysV_ABI_CDecl;
-function  ps4_pthread_sigmask(how:Integer;_set,oldset:P_sigset_t):Integer; SysV_ABI_CDecl;
-function  ps4_is_signal_return(param:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sigfillset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
+function ps4_sigaddset(_set:p_sigset_t;signum:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sigprocmask(how:Integer;_set,oldset:p_sigset_t):Integer; SysV_ABI_CDecl;
+function ps4_pthread_sigmask(how:Integer;_set,oldset:p_sigset_t):Integer; SysV_ABI_CDecl;
+function ps4_is_signal_return(param:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sigaction(signum:Integer;act,oldact:p_sigaction_t):Integer; SysV_ABI_CDecl;
+function ps4_signal_(sig:Integer;func:sig_t):sig_t; SysV_ABI_CDecl;
 
 type
  TsceKernelExceptionHandler=procedure(signum:Integer;context:Pointer); SysV_ABI_CDecl;
@@ -69,7 +71,7 @@ begin
  Exit(_set_errno(__sigaction(signum,act,oldact)));
 end;
 
-function ps4_signal(sig:Integer;func:sig_t):sig_t; SysV_ABI_CDecl;
+function ps4_signal_(sig:Integer;func:sig_t):sig_t; SysV_ABI_CDecl;
 var
  act,old:sigaction_t;
  ret:Integer;

@@ -1439,6 +1439,7 @@ begin
 
     end;
 
+   else;
   end;
  end;
 
@@ -1535,7 +1536,7 @@ var
 begin
  Result:=False;
  if (cbs=nil) then Exit;
- if (nRelaCount=0) then Exit;
+ if (nRelaCount=0) then Exit(True);
  For i:=0 to nRelaCount-1 do
  begin
   pRela:=@pRelaEntries[i];
@@ -1573,7 +1574,7 @@ var
 begin
  Result:=False;
  if (cbs=nil) then Exit;
- if nPltRelaCount=0 then Exit;
+ if (nPltRelaCount=0) then Exit(True);
  For i:=0 to nPltRelaCount-1 do
  begin
   pRela:=@pPltRela[i];
@@ -1609,7 +1610,7 @@ begin
  Result:=False;
  if (cbs=nil) then Exit;
 
- if nSymTabCount=0 then Exit;
+ if (nSymTabCount=0) then Exit(True);
  For i:=0 to nSymTabCount-1 do
  begin
   symbol:=@pSymTab[i];
@@ -2861,11 +2862,28 @@ begin
  Result.segment_count:=ModuleInfo.segmentCount;
 end;
 
+procedure _Entry(P:TEntryPoint;pFileName:Pchar);
+var
+ StartupParams:TPS4StartupParams;
+begin
+ StartupParams:=Default(TPS4StartupParams);
+ StartupParams.argc:=1;
+ StartupParams.argv[0]:=pFileName;
+
+ //OpenOrbis relies on the fact that besides %rdi and %rsp also link to StartupParams, a very strange thing
+ asm
+  xor %esi,%esi
+  lea StartupParams,%rdi
+  mov %rdi,%rsp
+  jmp P
+ end;
+
+ //P(@StartupParams,nil);
+end;
+
 procedure Telf_file.mapCodeEntry;
 var
  P:TEntryPoint;
- StartupParams:TPS4StartupParams;
-
 begin
  Pointer(P):=Pointer(pEntryPoint);
  Writeln('EntryPoint:',HexStr(P));
@@ -2875,12 +2893,7 @@ begin
    begin
     Pointer(P):=Pointer(mMap.pAddr+QWORD(P));
 
-    StartupParams:=Default(TPS4StartupParams);
-    StartupParams.argc:=1;
-    StartupParams.argv[0]:=PChar(pFileName);
-
-    P(@StartupParams,nil);
-
+    _Entry(P,PChar(pFileName));
    end;
  end;
 

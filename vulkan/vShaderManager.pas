@@ -339,9 +339,14 @@ begin
      Assert(false);
   end;
 
-  FShader:=TvShaderExt.Create;
-  FShader.FDescSetId:=FDescSetId;
-  FShader.LoadFromFile(ChangeFileExt(fdump,'.spv'));
+  if FileExists(ChangeFileExt(fdump,'.spv')) then
+  begin
+   FShader:=TvShaderExt.Create;
+   FShader.FDescSetId:=FDescSetId;
+   FShader.LoadFromFile(ChangeFileExt(fdump,'.spv'));
+   Result:=FShader;
+   Exit;
+  end;
  }
 
 

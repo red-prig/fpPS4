@@ -858,13 +858,17 @@ begin
 
  //signal
 
- lib^.set_proc($38C0D128A019F08E,@ps4_sceKernelDebugRaiseException);
- lib^.set_proc($CC4FF05C86632E83,@ps4_sceKernelDebugRaiseExceptionOnReleaseMode);
-
  lib^.set_proc($5644C0B2B643709D,@ps4_sigfillset);
+ lib^.set_proc($2548A616D29ED0A7,@ps4_sigaddset);
  lib^.set_proc($68F732A6D6CE899B,@ps4_sigprocmask);
  lib^.set_proc($EB1569CB415DABE2,@ps4_sigprocmask);
+ lib^.set_proc($2592B0E7E5AB9DAC,@ps4_pthread_sigmask);
  lib^.set_proc($72B6F98FB9A49357,@ps4_is_signal_return);
+ lib^.set_proc($2A22443C4591C946,@ps4_sigaction);
+ lib^.set_proc($5400DCDCC350DDC3,@ps4_signal_);
+
+ lib^.set_proc($38C0D128A019F08E,@ps4_sceKernelDebugRaiseException);
+ lib^.set_proc($CC4FF05C86632E83,@ps4_sceKernelDebugRaiseExceptionOnReleaseMode);
 
  //signal
 

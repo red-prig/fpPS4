@@ -20,6 +20,7 @@ type
   procedure emit_V_CVT_OFF_F32_I4;
   procedure emit_V_CVT_F32_UBYTE0;
   procedure emit_V_EXT_F32(OpId:DWORD);
+  procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
   procedure emit_V_FFBL_B32;
  end;
@@ -92,6 +93,21 @@ begin
  OpGlsl1(OpId,dtFloat32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_SIN_COS(OpId:DWORD);
+const
+ PI2:Single=2*PI;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+
+ src:=OpFMulToS(src,PI2);
+
+ OpGlsl1(OpId,dtFloat32,dst,src);
+end;
+
 procedure TEmit_VOP1.emit_V_RCP_F32;
 Var
  dst:PsrRegSlot;
@@ -148,8 +164,8 @@ begin
 
   V_SQRT_F32 : emit_V_EXT_F32(GlslOp.Sqrt);
 
-  V_SIN_F32  : emit_V_EXT_F32(GlslOp.Sin);
-  V_COS_F32  : emit_V_EXT_F32(GlslOp.Cos);
+  V_SIN_F32  : emit_V_SIN_COS(GlslOp.Sin);
+  V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
 
   V_RCP_F32  : emit_V_RCP_F32;
 
