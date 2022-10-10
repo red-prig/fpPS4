@@ -101,6 +101,11 @@ begin
  DebugBreak;
 end;
 
+procedure ps4_sceKernelDebugOutText(dbg_id:Integer;text:Pchar); SysV_ABI_CDecl;
+begin
+ Writeln(text);
+end;
+
 //ps4 neo mode is support? (Ps4 Pro)
 function ps4_sceKernelIsNeoMode:Integer; SysV_ABI_CDecl;
 begin
@@ -869,6 +874,7 @@ begin
 
  lib^.set_proc($38C0D128A019F08E,@ps4_sceKernelDebugRaiseException);
  lib^.set_proc($CC4FF05C86632E83,@ps4_sceKernelDebugRaiseExceptionOnReleaseMode);
+ lib^.set_proc($F4960DA8DEA300A2,@ps4_sceKernelDebugOutText);
 
  //signal
 
