@@ -1273,17 +1273,22 @@ begin
  Result:=False;
 end;
 
-function ps4_sceGnmSubmitCommandBuffers(
-          count:DWORD;                     //1
-          dcbGpuAddrs:PPointer;            //2
-          dcbSizesInBytes:PDWORD;          //3
-          ccbGpuAddrs:PPointer;            //4
-          ccbSizesInBytes:PDWORD):Integer; SysV_ABI_CDecl; //5
+//
+
+function ps4_sceGnmSubmitCommandBuffersForWorkload(
+          workload:QWORD;
+          count:DWORD;
+          dcbGpuAddrs:PPointer;
+          dcbSizesInBytes:PDWORD;
+          ccbGpuAddrs:PPointer;
+          ccbSizesInBytes:PDWORD):Integer; SysV_ABI_CDecl;
 var
  Submit:TvSubmitInfo;
 begin
  if (count=0) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ count:=count and $ffffffff;
+
  Submit:=Default(TvSubmitInfo);
  Submit.count          :=count          ;
  Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
@@ -1292,50 +1297,29 @@ begin
  Submit.ccbSizesInBytes:=ccbSizesInBytes;
 
  _sig_lock;
- //Writeln(GetCurrentThreadId,'>Submit');
  Result:=vSubmitCommandBuffers(@Submit,nil);
- //Writeln(GetCurrentThreadId,'<Submit');
  _sig_unlock;
+
  Result:=0;
 end;
 
-function ps4_sceGnmSubmitAndFlipCommandBuffers(
-          count:DWORD;                     //1
-          dcbGpuAddrs:PPointer;            //2
-          dcbSizesInBytes:PDWORD;          //3
-          ccbGpuAddrs:PPointer;            //4
-          ccbSizesInBytes:PDWORD;          //5
-          videoOutHandle:Integer;          //6
-          displayBufferIndex:Integer;      //7
-          flipMode:Integer;                //8
-          flipArg:QWORD):Integer; SysV_ABI_CDecl;    //9
-var
- Submit:TvSubmitInfo;
- Flip:TqcFlipInfo;
+function ps4_sceGnmSubmitCommandBuffers(
+          count:DWORD;
+          dcbGpuAddrs:PPointer;
+          dcbSizesInBytes:PDWORD;
+          ccbGpuAddrs:PPointer;
+          ccbSizesInBytes:PDWORD):Integer; SysV_ABI_CDecl;
 begin
- if (count=0) or
-    (dcbGpuAddrs=nil) or
-    (dcbSizesInBytes=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- Submit:=Default(TvSubmitInfo);
- Submit.count          :=count          ;
- Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
- Submit.dcbSizesInBytes:=dcbSizesInBytes;
- Submit.ccbGpuAddrs    :=ccbGpuAddrs    ;
- Submit.ccbSizesInBytes:=ccbSizesInBytes;
-
- Flip.hVideo     :=videoOutHandle;
- Flip.bufferIndex:=displayBufferIndex;
- Flip.flipMode   :=flipMode;
- Flip.flipArg    :=flipArg;
-
- _sig_lock;
- //Writeln(GetCurrentThreadId,'>SubmitAndFlip');
- Result:=vSubmitCommandBuffers(@Submit,@Flip);
- //Writeln(GetCurrentThreadId,'<SubmitAndFlip');
- _sig_unlock;
- Result:=0;
+ Result:=ps4_sceGnmSubmitCommandBuffersForWorkload(
+          count,
+          count and $ffffffff,
+          dcbGpuAddrs,
+          dcbSizesInBytes,
+          ccbGpuAddrs,
+          ccbSizesInBytes);
 end;
+
+//
 
 function ps4_sceGnmSubmitAndFlipCommandBuffersForWorkload(
           workload:QWORD;
@@ -1356,6 +1340,8 @@ begin
     (dcbGpuAddrs=nil) or
     (dcbSizesInBytes=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
+ count:=count and $ffffffff;
+
  Submit:=Default(TvSubmitInfo);
  Submit.count          :=count          ;
  Submit.dcbGpuAddrs    :=dcbGpuAddrs    ;
@@ -1369,12 +1355,101 @@ begin
  Flip.flipArg    :=flipArg;
 
  _sig_lock;
- //Writeln(GetCurrentThreadId,'>SubmitAndFlip');
  Result:=vSubmitCommandBuffers(@Submit,@Flip);
- //Writeln(GetCurrentThreadId,'<SubmitAndFlip');
  _sig_unlock;
+
  Result:=0;
 end;
+
+function ps4_sceGnmSubmitAndFlipCommandBuffers(
+          count:DWORD;
+          dcbGpuAddrs:PPointer;
+          dcbSizesInBytes:PDWORD;
+          ccbGpuAddrs:PPointer;
+          ccbSizesInBytes:PDWORD;
+          videoOutHandle:Integer;
+          displayBufferIndex:Integer;
+          flipMode:Integer;
+          flipArg:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceGnmSubmitAndFlipCommandBuffersForWorkload(
+           count,
+           count and $ffffffff,
+           dcbGpuAddrs,
+           dcbSizesInBytes,
+           ccbGpuAddrs,
+           ccbSizesInBytes,
+           videoOutHandle,
+           displayBufferIndex,
+           flipMode,
+           flipArg);
+end;
+
+//
+
+const
+ SCE_GNM_ERROR_SUBMISSION_NOT_ENOUGH_RESOURCES=-2133782527;
+
+function ps4_sceGnmRequestFlipAndSubmitDoneForWorkload(
+          workload:QWORD;
+          gpuAddr:Pointer;
+          gpuAddrSizeInBytes:DWORD;
+          videoOutHandle:Integer;
+          displayBufferIndex:Integer;
+          flipMode:Integer;
+          flipArg:QWORD):Integer; SysV_ABI_CDecl;
+var
+ Submit:TvSubmitInfo;
+ Flip:TqcFlipInfo;
+ dcbGpuAddrs:Pointer;
+ dcbSizesInBytes:DWORD;
+begin
+ if (gpuAddr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ if (gpuAddrSizeInBytes<$FF) then Exit(SCE_GNM_ERROR_SUBMISSION_NOT_ENOUGH_RESOURCES);
+
+ PQWORD(gpuAddr)^:=$68750777c03e1000; //prepare flip?
+
+ dcbGpuAddrs    :=gpuAddr;
+ dcbSizesInBytes:=$100;
+
+ Submit:=Default(TvSubmitInfo);
+ Submit.count          :=1;
+ Submit.dcbGpuAddrs    :=@dcbGpuAddrs;
+ Submit.dcbSizesInBytes:=@dcbSizesInBytes;
+
+ Flip.hVideo     :=videoOutHandle;
+ Flip.bufferIndex:=displayBufferIndex;
+ Flip.flipMode   :=flipMode;
+ Flip.flipArg    :=flipArg;
+
+ _sig_lock;
+ Result:=vSubmitCommandBuffers(@Submit,@Flip);
+ vSubmitDone;
+ _sig_unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceGnmRequestFlipAndSubmitDone(
+          gpuAddr:Pointer;
+          gpuAddrSizeInBytes:DWORD;
+          videoOutHandle:Integer;
+          displayBufferIndex:Integer;
+          flipMode:Integer;
+          flipArg:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceGnmRequestFlipAndSubmitDoneForWorkload(
+           qword(gpuAddr),
+           gpuAddr,
+           gpuAddrSizeInBytes,
+           videoOutHandle,
+           displayBufferIndex,
+           flipMode,
+           flipArg);
+end;
+
+//
 
 //Signals the system that every graphics and asynchronous compute command buffer for this frame has been submitted.
 function ps4_sceGnmSubmitDone:Integer; SysV_ABI_CDecl;
@@ -1382,9 +1457,9 @@ begin
  //exit(0);
 
  _sig_lock;
- //Writeln(GetCurrentThreadId,':SubmitDone');
  vSubmitDone;
  _sig_unlock;
+
  Result:=0;
 end;
 
@@ -1611,9 +1686,13 @@ begin
 
  lib^.set_proc($8E0DF7AC428B7D5B,@ps4_sceGnmIsUserPaEnabled);
 
+ lib^.set_proc($8D1708F157204F3E,@ps4_sceGnmSubmitCommandBuffersForWorkload);
  lib^.set_proc($CF0634615F754D32,@ps4_sceGnmSubmitCommandBuffers);
- lib^.set_proc($C5BC4D6AD6B0A217,@ps4_sceGnmSubmitAndFlipCommandBuffers);
  lib^.set_proc($19AEABEC7E98D112,@ps4_sceGnmSubmitAndFlipCommandBuffersForWorkload);
+ lib^.set_proc($C5BC4D6AD6B0A217,@ps4_sceGnmSubmitAndFlipCommandBuffers);
+ lib^.set_proc($E98447861E661C2B,@ps4_sceGnmRequestFlipAndSubmitDoneForWorkload);
+ lib^.set_proc($80E6CE0E58BF387F,@ps4_sceGnmRequestFlipAndSubmitDone);
+
  lib^.set_proc($CAF67BDEE414AAB9,@ps4_sceGnmSubmitDone);
  lib^.set_proc($881B7739ED342AF7,@ps4_sceGnmFlushGarlic);
 
