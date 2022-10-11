@@ -86,6 +86,7 @@ type
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
+function ps4_sceKernelAvailableFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
 
 //direct
 
@@ -348,6 +349,32 @@ end;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
 begin
  Result:=PHYSICAL_PAGE_SIZE;
+end;
+
+function ps4_sceKernelAvailableFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
+var
+ flex:QWORD;
+begin
+ Result:=0;
+ if (sizeOut=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ _sig_lock;
+ rwlock_rdlock(MMLock); //r
+
+ flex:=VirtualManager.stat.flex;
+
+ rwlock_unlock(MMLock);
+ _sig_unlock;
+
+ if (flex<SceKernelFlexibleMemorySize) then
+ begin
+  flex:=SceKernelFlexibleMemorySize-flex;
+ end else
+ begin
+  flex:=0;
+ end;
+
+ sizeOut^:=flex;
 end;
 
 function _test_mtype(mtype:Integer):Boolean; inline;

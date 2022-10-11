@@ -954,6 +954,11 @@ begin
  lib^.set_proc($5E15879FA3F947B5,@ps4_pthread_rwlock_trywrlock);
  lib^.set_proc($12098BA3A11682CA,@ps4_pthread_rwlock_unlock);
 
+ lib^.set_proc($C8E7C683F2356482,@ps4_scePthreadRwlockattrInit);
+ lib^.set_proc($8B689F6777D2D9FA,@ps4_scePthreadRwlockattrDestroy);
+ lib^.set_proc($2B296CD42845CAB7,@ps4_scePthreadRwlockattrGettype);
+ lib^.set_proc($87F3A27E2A2E05DF,@ps4_scePthreadRwlockattrSettype);
+
  lib^.set_proc($E942C06B47EAE230,@ps4_scePthreadRwlockInit);
  lib^.set_proc($041FA46F4F1397D0,@ps4_scePthreadRwlockDestroy);
  lib^.set_proc($3B1F62D1CECBE70D,@ps4_scePthreadRwlockRdlock);
@@ -1113,6 +1118,7 @@ begin
 
  lib^.set_proc($93E017AAEDBF7817,@ps4_getpagesize);
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
+ lib^.set_proc($68DCF5D5F9E7CE2E,@ps4_sceKernelAvailableFlexibleMemorySize);
 
  lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
  lib^.set_proc($07EBDCD803B666B7,@ps4_sceKernelAllocateMainDirectMemory);

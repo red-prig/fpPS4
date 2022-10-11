@@ -166,6 +166,13 @@ type
      OnCreateBlockCb:TBlockCb;
      OnFreeBlockCb  :TBlockCb;
 
+     stat:record
+      flex:QWORD;
+      direct:QWORD;
+      cpu:QWORD;
+      gpu:QWORD;
+     end;
+
     Function  check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
     Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
 
@@ -561,12 +568,59 @@ begin
   begin
    FFreeSet.Insert(key);
   end;
+ end else
+ if (key.block<>nil) then //not system
+ begin
+  if (key.F.direct=0) then //is flex
+  begin
+   Inc(stat.flex,key.Size);
+  end else  //is direct
+  begin
+   Inc(stat.direct,key.Size);
+  end;
+
+  if _isgpu(key.F.prot) then
+  begin
+   Inc(stat.gpu,key.Size);
+  end else
+  begin
+   Inc(stat.cpu,key.Size);
+  end;
  end;
  FAllcSet.Insert(key);
 end;
 
 procedure TVirtualManager._Delete(const key:TVirtualAdrNode);
+var
+ It:TAllcPoolNodeSet.Iterator;
+ rkey:TVirtualAdrNode;
 begin
+ It:=FAllcSet.find(key);
+ if (It.Item<>nil) then
+ begin
+  rkey:=It.Item^;
+
+  if not rkey.IsFree then
+  if (rkey.block<>nil) then //not system
+  begin
+   if (rkey.F.direct=0) then //is flex
+   begin
+    Dec(stat.flex,rkey.Size);
+   end else  //is direct
+   begin
+    Dec(stat.direct,rkey.Size);
+   end;
+
+   if _isgpu(rkey.F.prot) then
+   begin
+    Dec(stat.gpu,rkey.Size);
+   end else
+   begin
+    Dec(stat.cpu,rkey.Size);
+   end;
+  end;
+ end;
+
  FAllcSet.delete(key);
  FFreeSet.delete(key);
 end;

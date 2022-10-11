@@ -1406,7 +1406,7 @@ var
 begin
  if (gpuAddr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
- if (gpuAddrSizeInBytes<$FF) then Exit(SCE_GNM_ERROR_SUBMISSION_NOT_ENOUGH_RESOURCES);
+ if (gpuAddrSizeInBytes<=$FF) then Exit(SCE_GNM_ERROR_SUBMISSION_NOT_ENOUGH_RESOURCES);
 
  PQWORD(gpuAddr)^:=$68750777c03e1000; //prepare flip?
 
