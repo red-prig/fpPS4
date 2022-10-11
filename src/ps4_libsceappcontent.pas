@@ -68,6 +68,34 @@ begin
 end;
 
 const
+ SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE=17;
+
+type
+ SceNpUnifiedEntitlementLabel=packed record
+  data:array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
+  padding:array[0..2] of Byte;
+ end;
+
+ pSceAppContentAddcontInfo=^SceAppContentAddcontInfo;
+ SceAppContentAddcontInfo=packed record
+  entitlementLabel:SceNpUnifiedEntitlementLabel;
+  status:DWORD; //SceAppContentAddcontDownloadStatus
+ end;
+
+function ps4_sceAppContentGetAddcontInfoList(serviceLabel:DWORD; //SceNpServiceLabel
+                                             list:pSceAppContentAddcontInfo;
+                                             listNum:DWORD;
+                                             hitNum:PDWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Writeln('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
+ if (hitNum<>nil) then
+ begin
+  hitNum^:=0;
+ end;
+end;
+
+const
  SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE=16;
  SCE_APP_CONTENT_ADDCONT_MOUNT_MAXNUM   =64;
 
@@ -96,6 +124,7 @@ begin
 
  lib^.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
  lib^.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
+ lib^.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
  lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
 end;
 

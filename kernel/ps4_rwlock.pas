@@ -23,7 +23,7 @@ type
  end;
 
  p_pthread_rwlockattr=^pthread_rwlockattr_t;
- pthread_rwlockattr_t=packed record
+ pthread_rwlockattr_t=bitpacked record
   _type:0..3;           //2
   _shared:0..1;         //1
   _align:0..536870911;  //29

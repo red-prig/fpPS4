@@ -58,6 +58,12 @@ begin
  Result:=111;
 end;
 
+function ps4_sceNetEpollCreate(name:PChar;flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetEpollCreate:',name,':',flags);
+ Result:=3;
+end;
+
 const
  AF_INET  = 2;
  AF_INET6 = 10;
@@ -367,6 +373,7 @@ begin
  lib^.set_proc($76024169E2671A9A,@ps4_sceNetPoolCreate);
  lib^.set_proc($2BB465AD3908FE6C,@ps4_sceNetPoolDestroy);
  lib^.set_proc($0B85200C71CFBDDC,@ps4_sceNetResolverCreate);
+ lib^.set_proc($485E3B901D8C353A,@ps4_sceNetEpollCreate);
  lib^.set_proc($F0A729E5DFEAD54A,@ps4_sceNetInetPton);
  lib^.set_proc($BFA338B7179C0AEA,@ps4_sceNetEtherNtostr);
  lib^.set_proc($E8E7346CBB0861ED,@ps4_sceNetGetMacAddress);
