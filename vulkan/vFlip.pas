@@ -342,14 +342,11 @@ begin
         FreeAndNil(Ffilp_shader);
         Ffilp_shader:=TvShaderCompute.Create;
 
-        //Ffilp_shader.FLocalSize.Create(64,64,1);
-        //Ffilp_shader.FLocalSize:=limits.maxComputeWorkGroupSize;
-
         Ffilp_shader.LoadFromFile('shaders\FLIP_LINE_A8R8G8B8_SRGB.spv');
         FPipelineFlip.SetShader(Ffilp_shader);
        end;
      else
-      Assert(false);
+      Assert(false,HexStr(format,8));
     end;
   SCE_VIDEO_OUT_TILING_MODE_TILE:
     Case format of
@@ -361,19 +358,6 @@ begin
         FreeAndNil(Ffilp_shader);
         Ffilp_shader:=TvShaderCompute.Create;
 
-        //Ffilp_shader.FLocalSize.Create(64,64,1);
-
-        {Ffilp_shader.FLocalSize:=limits.maxComputeWorkGroupSize;
-        Ffilp_shader.FLocalSize.z:=1;
-
-        While (Ffilp_shader.FLocalSize.x*Ffilp_shader.FLocalSize.y>limits.maxComputeWorkGroupInvocations) do
-        begin
-         if (Ffilp_shader.FLocalSize.x>Ffilp_shader.FLocalSize.y) then
-          Ffilp_shader.FLocalSize.x:=Ffilp_shader.FLocalSize.x div 2
-         else
-          Ffilp_shader.FLocalSize.y:=Ffilp_shader.FLocalSize.y div 2;
-        end;}
-
         if FNeoMode then
         begin
          Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8R8G8B8_SRGB_NEO.spv');
@@ -382,12 +366,28 @@ begin
          Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8R8G8B8_SRGB.spv');
         end;
 
-        //Ffilp_shader.FLocalSize.Create(16,16,1);
-
         FPipelineFlip.SetShader(Ffilp_shader);
        end;
+     SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB:
+       begin
+        Fformat:=format;
+        Ftmode:=tmode;
+        FlipQueue.WaitIdle;
+        FreeAndNil(Ffilp_shader);
+        Ffilp_shader:=TvShaderCompute.Create;
+
+        if FNeoMode then
+        begin
+         Assert(false,'TODO');
+        end else
+        begin
+         Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8B8G8R8_SRGB.spv');
+        end;
+
+        FPipelineFlip.SetShader(Ffilp_shader);
+       end
      else
-      Assert(false);
+      Assert(false,HexStr(format,8));
     end;
   else
    Assert(false);

@@ -2337,6 +2337,31 @@ begin
  //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
 
+procedure onIndexBase(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXBASE);
+begin
+ GPU_REGS.VGT_DMA.BASE_LO:=Body^.indexBaseLo;
+ GPU_REGS.VGT_DMA.BASE_HI:=Body^.indexBaseHi;
+end;
+
+procedure onDrawIndexOffset2(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXOFFSET2);
+var
+ Addr:Pointer;
+
+begin
+ GPU_REGS.VGT_DMA.MAX_SIZE:=Body^.maxSize;
+ GPU_REGS.VGT_DMA.SIZE    :=Body^.indexCount;
+ GPU_REGS.VGT_DMA.INDICES :=Body^.indexCount;
+
+ if UpdateGpuRegsInfo then
+ begin
+  Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
+  GFXRing.CmdBuffer.DrawIndexOffset2(Addr,Body^.indexOffset,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
+ end;
+
+ {$ifdef ww}Writeln('DrawIndexOffset2:',Body^.indexOffset,' ',Body^.indexCount);{$endif}
+
+end;
+
 procedure onDispatchDirect(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDISPATCHDIRECT);
 begin
 
@@ -2439,6 +2464,7 @@ begin
          {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
          onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
+
         IT_INDEX_TYPE:
         begin
          {$ifdef ww}Writeln('IT_INDEX_TYPE');{$endif}
@@ -2454,6 +2480,17 @@ begin
          {$ifdef ww}Writeln('IT_DRAW_INDEX_AUTO');{$endif}
          onDrawIndexAuto(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
+        IT_INDEX_BASE:
+        begin
+         {$ifdef ww}Writeln('IT_INDEX_BASE');{$endif}
+         onIndexBase(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+        IT_DRAW_INDEX_OFFSET_2:
+        begin
+         {$ifdef ww}Writeln('IT_DRAW_INDEX_OFFSET_2');{$endif}
+         onDrawIndexOffset2(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
         IT_DISPATCH_DIRECT:
         begin
          {$ifdef ww}Writeln('IT_DISPATCH_DIRECT');{$endif}
@@ -2486,7 +2523,7 @@ begin
 
         else
          begin
-          Writeln('PM4_TYPE_3.opcode:',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+          Writeln('PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
           Assert(False);
          end;
        end;

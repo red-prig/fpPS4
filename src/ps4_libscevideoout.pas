@@ -312,6 +312,7 @@ begin
   Dec(rc);
   if rc=0 then Break;
  end;
+
 end;
 
 procedure TUserApp.OnTimer(Sender:TObject);
@@ -326,7 +327,7 @@ var
 
 Procedure App_Run;
 begin
- Timer:=TTimer.Create(nil);
+ Timer:=TTimer.Create(Application);
  Timer.Interval:=10;
  Timer.OnTimer:=@TUserApp(Application).OnTimer;
  Timer.Enabled:=true;
@@ -363,6 +364,8 @@ type
  TVideoOut=class(TClassHandle)
 
   FForm:TMyForm;
+  TVBlank:TTimer;
+
   FGpuFlip:TvFlip;
 
   FNodePos,FNodesUses:PtrUInt;
@@ -408,15 +411,16 @@ type
   function  alloc_node:PQNode;
   procedure free_node(n:PQNode);
 
+  procedure OnVblank(Sender:TObject);
   procedure sceVideoOutOpen(node:PQNode);
 
   procedure post_event_flip(flipArg:Int64);
-  procedure post_event_vblank(flipArg:Int64);
+  procedure post_event_vblank;
 
   procedure sceVideoOutSubmitFlip(node:PQNode);
 
   Constructor Create;
-  Destructor Destroy; override;
+  Destructor  Destroy; override;
  end;
 
 procedure _on_free_kevent(data,userdata:Pointer);
@@ -428,6 +432,7 @@ end;
 Destructor TVideoOut.Destroy;
 begin
  FreeAndNil(FGpuFlip);
+ FreeAndNil(TVBlank);
  FreeAndNil(FForm);
  FlipEvents.LockWr;
  HAMT_clear64(@FlipEvents.hamt,@_on_free_kevent,nil);
@@ -491,6 +496,11 @@ begin
  Message.Result:=1;
 end;
 
+procedure TVideoOut.OnVblank(Sender:TObject);
+begin
+ post_event_vblank;
+end;
+
 procedure TVideoOut.sceVideoOutOpen(node:PQNode);
 begin
 
@@ -512,6 +522,11 @@ begin
 
  FGpuFlip:=TvFlip.Create(FForm.Handle);
  FGpuFlip.FNeoMode:=ps4_sceKernelIsNeoMode<>0;
+
+ TVBlank:=TTimer.Create(FForm);
+ TVBlank.Interval:=(1000 div 60); //59.94
+ TVBlank.OnTimer:=@OnVblank;
+ TVBlank.Enabled:=true;
 
  //data? nop
  free_node(node);
@@ -1118,6 +1133,17 @@ begin
  _trigger_kevent_node(node,@_on_after,nil);
 end;
 
+procedure _on_trigger_blank(data,userdata:Pointer);
+var
+ node:PKEventNode;
+ count:Byte;
+begin
+ node:=data;
+ if (node=nil) then Exit;
+ node^.ev.data:=(ptruint(userdata) and $FFFFFFFFFFFF);
+ _trigger_kevent_node(node,@_on_after,nil);
+end;
+
 procedure TVideoOut.post_event_flip(flipArg:Int64);
 begin
  //Writeln('post_event_flip');
@@ -1126,11 +1152,24 @@ begin
  FlipEvents.Unlock;
 end;
 
-procedure TVideoOut.post_event_vblank(flipArg:Int64);
+procedure TVideoOut.post_event_vblank;
+var
+ elap:QWORD;
+ count:QWORD;
+ time:DWORD;
+ hz:Byte;
 begin
+ hz:=60; //59.94
+
+ time:=(1000000 div hz);
+ elap:=SwTimePassedUnits(VblankStatus.FTsc);
+ elap:=(elap+9) div 10;
+
+ count:=elap div time;
+
  //Writeln('post_event_vblank');
  VblankEvents.LockRd;
- HAMT_traverse64(@VblankEvents.hamt,@_on_trigger_flip,Pointer(flipArg));
+ HAMT_traverse64(@VblankEvents.hamt,@_on_trigger_blank,Pointer(count));
  VblankEvents.Unlock;
 end;
 
@@ -1267,13 +1306,13 @@ begin
  if (bufferIndex=SCE_VIDEO_OUT_BUFFER_INDEX_BLANK) then
  begin
   post_event_flip(flipArg);
-  post_event_vblank(flipArg);
+  post_event_vblank;
  end else
  begin
   System.InterlockedDecrement64(FLabels[bufferIndex]);
 
   post_event_flip(flipArg);
-  post_event_vblank(flipArg);
+  post_event_vblank;
  end;
 
  Case _type of

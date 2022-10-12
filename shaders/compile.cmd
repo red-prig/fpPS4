@@ -1,9 +1,9 @@
 
 @echo off
 
-Set spirvgls=spirv\glslangValidator -g0 -V --target-env vulkan1.0 
+Set spirvgls=glslangValidator -g0 -V --target-env vulkan1.0 
 
-Set spirvopt=spirv\spirv-opt --eliminate-dead-branches --eliminate-local-multi-store --inline-entry-points-exhaustive --eliminate-dead-code-aggressive --scalar-replacement --simplify-instructions
+Set spirvopt=spirv-opt --eliminate-dead-branches --eliminate-local-multi-store --inline-entry-points-exhaustive --eliminate-dead-code-aggressive --scalar-replacement --simplify-instructions
 
 For /F %%a in ('dir /B') do if "%%~xa"==".comp" (call :compil %%a %%~na)
 

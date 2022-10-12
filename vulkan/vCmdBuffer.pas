@@ -148,6 +148,7 @@ type
   Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
 
+  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndexAuto(INDICES:DWORD);
  end;
@@ -856,7 +857,7 @@ begin
  end;
 end;
 
-Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 var
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
@@ -887,28 +888,37 @@ begin
     begin
      vkCmdDrawIndexed(
          cmdbuf,
-         INDICES,
-         1,0,0,0);
+         INDICES,  //indexCount
+         1,        //instanceCount
+         OFFSET,   //firstIndex
+         0,        //vertexOffset
+         0);       //firstInstance
     end;
   DI_PT_QUADLIST:
     begin
+     Assert(OFFSET=0);
      h:=INDICES div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
       vkCmdDrawIndexed(
        cmdbuf,
-       4,
-       1,
-       i*4,
-       0,
-       0);
+       4,      //indexCount
+       1,      //instanceCount
+       i*4,    //firstIndex
+       0,      //vertexOffset
+       0);     //firstInstance
      end;
     end;
   else
    Assert(false,'TODO');
  end;
 
+end;
+
+Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+begin
+ DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
 end;
 
 Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD);
@@ -937,6 +947,7 @@ begin
      }
      //0 1 2
      //0 2 3
+
      h:=INDICES div 3;
      if (h>0) then h:=h-1;
      For i:=0 to h do
@@ -944,11 +955,12 @@ begin
       Inc(cmd_count);
       vkCmdDraw(
           cmdbuf,
-          4,
-          1,
-          0,
-          0);
+          4,       //vertexCount
+          1,       //instanceCount
+          0,       //firstVertex
+          0);      //firstInstance
      end;
+
     end;
   //DI_PT_LINELOOP :;
   DI_PT_QUADLIST :

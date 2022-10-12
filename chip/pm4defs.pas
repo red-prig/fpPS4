@@ -594,24 +594,40 @@ type
 
  PPM4CMDDRAWINDEX2=^TPM4CMDDRAWINDEX2;
  TPM4CMDDRAWINDEX2=packed record
-  maxSize:DWORD;      // VGT_DMA_MAX_SIZE
-  indexBaseLo:DWORD;  // VGT_DMA_BASE
-  indexBaseHi:DWORD;  // VGT_DMA_BASE_HI
-  indexCount:DWORD;   // VGT_DMA_SIZE ,VGT_NUM_INDICES
+  maxSize      :DWORD;  // VGT_DMA_MAX_SIZE
+  indexBaseLo  :DWORD;  // VGT_DMA_BASE
+  indexBaseHi  :DWORD;  // VGT_DMA_BASE_HI
+  indexCount   :DWORD;  // VGT_DMA_SIZE ,VGT_NUM_INDICES
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
  PPM4CMDDRAWINDEXAUTO=^TPM4CMDDRAWINDEXAUTO;
  TPM4CMDDRAWINDEXAUTO=packed record
-  indexCount:DWORD;  ///< max index count
+  indexCount   :DWORD;  ///< max index count
+  drawInitiator:TVGT_DRAW_INITIATOR;
+ end;
+
+ PPM4CMDDRAWINDEXBASE=^TPM4CMDDRAWINDEXBASE;
+ TPM4CMDDRAWINDEXBASE=bitpacked record
+  indexBaseLo:DWORD; ///< Base Address Lo of index buffer, must be 2 byte aligned
+  indexBaseHi:Word;  ///< Base Address Hi of index buffer
+  reserved1  :bit14;
+  baseSelect :bit2;  ///< Base Address select mode
+ end;
+
+ PPM4CMDDRAWINDEXOFFSET2=^TPM4CMDDRAWINDEXOFFSET2;
+ TPM4CMDDRAWINDEXOFFSET2=packed record
+  maxSize      :DWORD; ///< maximum number of indices
+  indexOffset  :DWORD; ///< zero based starting index number
+  indexCount   :DWORD; ///< number of indices in the Index Buffer
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
  PPM4CMDDISPATCHDIRECT=^TPM4CMDDISPATCHDIRECT;
  TPM4CMDDISPATCHDIRECT=packed record
-  dimX:DWORD; ///< X dimensions of the array of thread groups to be dispatched
-  dimY:DWORD; ///< Y dimensions of the array of thread groups to be dispatched
-  dimZ:DWORD; ///< Z dimensions of the array of thread groups to be dispatched
+  dimX             :DWORD;                       ///< X dimensions of the array of thread groups to be dispatched
+  dimY             :DWORD;                       ///< Y dimensions of the array of thread groups to be dispatched
+  dimZ             :DWORD;                       ///< Z dimensions of the array of thread groups to be dispatched
   dispatchInitiator:TCOMPUTE_DISPATCH_INITIATOR; ///< Dispatch Initiator Register
  end;
 

@@ -96,13 +96,15 @@ begin
  mr:=t.GetRequirements;
 
  Foffset:=0;
- if not IsAlign(host.FOffset,mr.alignment) then
+ if (Size<mr.size) or (not IsAlign(host.FOffset,mr.alignment)) then
  begin
   pAlign:=AlignDw(host.FOffset,mr.alignment);
   Foffset:=(host.FOffset-pAlign);
 
   host.FOffset:=pAlign;
   Size:=Size+Foffset;
+
+  if (Size<mr.size) then Size:=mr.size;
 
   FreeAndNil(t);
 
