@@ -341,16 +341,16 @@ type
  PEVENTWRITEEOP=^TEVENTWRITEEOP;
  TEVENTWRITEEOP=packed record
   EVENT_CNTL:bitpacked record
-   EVENT_TYPE:bit6;    //6  ///< event type written to VGT_EVENT_INITIATOR
-   Reserved1:bit2;     //2
-   EVENT_INDEX:bit4;   //4  ///< event index
+   EVENT_TYPE:bit6;           //6  ///< event type written to VGT_EVENT_INITIATOR
+   Reserved1:bit2;            //2
+   EVENT_INDEX:bit4;          //4  ///< event index
 
-   tcl1VolActionEna__CI:bit1; //1
-   tcVolActionEna__CI  :bit1; //1
-   reserved2:bit1;            //1
-   tcWbActionEna__CI:bit1;    //1
-   tcl1ActionEna__CI:bit1;    //1
-   tcActionEna__CI:bit1;      //1
+   tcl1VolActionEna__CI:bit1; //1  //cacheAction
+   tcVolActionEna__CI  :bit1; //1  //cacheAction
+   reserved2:bit1;            //1  //cacheAction
+   tcWbActionEna__CI:bit1;    //1  //cacheAction
+   tcl1ActionEna__CI:bit1;    //1  //cacheAction
+   tcActionEna__CI:bit1;      //1  //cacheAction
 
    reserved3:bit2;            //2
    invalidateL2__SI:bit1;     //1
@@ -363,7 +363,8 @@ type
   ADDRESS_LO:DWORD;  ///< low bits of address
   DATA_CNTL:bitpacked record
    addressHi:bit16; //16  ///< high bits of address
-   reserved6:bit8;  //24  ///< reserved (dstSelector & 1)
+   destTcL2:bit1;   //1   ///< (dstSelector & 1)
+   reserved6:bit7;  //24  ///< reserved
    intSel:bit2;     //26  ///< selects interrupt action for end-of-pipe (25 bit is eop)
    reserved7:bit3;  //29  ///< reserved
    dataSel:bit3;    //32  ///< selects source of data (srcSelector)

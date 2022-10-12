@@ -623,7 +623,7 @@ var
  adr:PDWORD;
 begin
  QWORD(adr):=QWORD(Body^.ADDRES_LO) or (QWORD(Body^.ADDRES_HI) shl $20);
- {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
+ {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',HexStr(Body^.DATA,8));{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
  GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,False);
@@ -634,7 +634,7 @@ begin
  {$ifdef ww}writeln;{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,True);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,False{True});
 end;
 
 procedure onPrepareFlipWithEopInterruptLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
@@ -642,10 +642,10 @@ var
  adr:PDWORD;
 begin
  QWORD(adr):=QWORD(Body^.ADDRES_LO) or (QWORD(Body^.ADDRES_HI) shl $20);
- {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',Body^.DATA);{$endif}
+ {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',HexStr(Body^.DATA,8));{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,True);
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,False{True});
 end;
 
 procedure onEventWriteEop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PEVENTWRITEEOP);
@@ -664,7 +664,7 @@ begin
  end;
  {$endif}
 
- if ((Body^.DATA_CNTL.reserved6 and 1)<>0) then
+ if (Body^.DATA_CNTL.destTcL2<>0) then
  begin
   {$ifdef ww}Writeln('kEventWriteDestTcL2');{$endif}
  end else
@@ -674,8 +674,8 @@ begin
 
   {$ifdef ww}
   Case Body^.DATA_CNTL.dataSel of
-   kEventWriteSource32BitsImmediate    :Writeln('kEventWriteSource32BitsImmediate     adr:',HexStr(adr),' data:',Body^.DATA_LO);
-   kEventWriteSource64BitsImmediate    :Writeln('kEventWriteSource64BitsImmediate     adr:',HexStr(adr),' data:',PQWORD(@Body^.DATA_LO)^);
+   kEventWriteSource32BitsImmediate    :Writeln('kEventWriteSource32BitsImmediate     adr:',HexStr(adr),' data:',HexStr(Body^.DATA_LO,8));
+   kEventWriteSource64BitsImmediate    :Writeln('kEventWriteSource64BitsImmediate     adr:',HexStr(adr),' data:',HexStr(PQWORD(@Body^.DATA_LO)^,16));
    kEventWriteSourceGlobalClockCounter :Writeln('kEventWriteSourceGlobalClockCounter  adr:',HexStr(adr),' data:',GetTickCount64*1000);
    kEventWriteSourceGpuCoreClockCounter:Writeln('kEventWriteSourceGpuCoreClockCounter adr:',HexStr(adr),' data:',GetTickCount64*1000);
    else;
@@ -683,28 +683,7 @@ begin
   {$endif}
 
   GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
-  GFXMicroEngine.PushEop(adr,PQWORD(@Body^.DATA_LO)^,Body^.DATA_CNTL.dataSel,(Body^.DATA_CNTL.intSel<>0));
-
-  {
-  Case Body^.DATA_CNTL.dataSel of
-   EVENTWRITEEOP_DATA_SEL_DISCARD:;//nop
-   kEventWriteSource32BitsImmediate    :PDWORD(adr)^:=Body^.DATA_LO;
-   kEventWriteSource64BitsImmediate    :PQWORD(adr)^:=PQWORD(@Body^.DATA_LO)^;
-   kEventWriteSourceGlobalClockCounter ,
-   kEventWriteSourceGpuCoreClockCounter:PQWORD(adr)^:=GetTickCount64*1000;
-   else
-    Assert(False);
-  end;
-
-  if (Body^.DATA_CNTL.intSel<>0) then
-  begin
-   {$ifdef ww}Writeln('Interrupt');{$endif}
-
-   vSubmitDone;
-
-   post_event_eop;
-  end;
-  }
+  GFXMicroEngine.PushEop(adr,PQWORD(@Body^.DATA_LO)^,Body^.DATA_CNTL.dataSel,True{(Body^.DATA_CNTL.intSel<>0)});
 
  end;
 
