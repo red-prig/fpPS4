@@ -20,6 +20,9 @@ This project is at the beginning and started for fun.
 - CPU: x64, AVX2 support
 - GPU: Vulkan API support
 
+### Game compatibility tracker
+https://github.com/red-prig/fpps4-game-compatibility/issues
+
 ### Control layout
 
 PS4 Gamepad button              | Keyboard button
