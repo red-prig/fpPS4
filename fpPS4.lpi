@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="92">
+    <Units Count="93">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -399,6 +399,7 @@
       <Unit87>
         <Filename Value="src\np\ps4_libscenpsignaling.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpSignaling"/>
       </Unit87>
       <Unit88>
         <Filename Value="src\np\ps4_libscenptrophy.pas"/>
@@ -417,6 +418,11 @@
         <Filename Value="rtl\mmap.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit91>
+      <Unit92>
+        <Filename Value="src\ps4_libscescreenshot.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceScreenShot"/>
+      </Unit92>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

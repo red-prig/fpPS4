@@ -13,6 +13,7 @@ uses
  sys_types,
  sys_pthread,
  ps4libdoc,
+ ps4_libSceScreenShot,
  ps4_libSceRtc,
  ps4_libSceNpSignaling,
  ps4_libSceNpMatching2,
@@ -206,17 +207,6 @@ begin
  Result:=0;
 end;
 
-function ps4_sceScreenShotSetOverlayImageWithOrigin(
-          filePath:PChar;
-          marginX:Integer;
-          marginY:Integer;
-          origin:Integer //SceScreenShotOrigin
-         ):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceScreenShotSetOverlayImageWithOrigin:',filePath);
- Result:=0;
-end;
-
 function ps4_sceVoiceQoSInit(
           pMemBlock:Pointer;
           memSize:DWORD;
@@ -250,17 +240,7 @@ begin
   Result:=lib^.get_proc(Info^.Nid);
  end;
 
- //if (lib<>nil) then
- //if (lib^.strName='mono-ps4') then
- //begin
- // Writeln(Info^.pName);
- //
- // if Info^.nid=$4FCEF2B219D790C5 then
- // begin
- //  writeln;
- // end;
- //
- //end;
+ //Writeln('Resolve:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid));
 
  if (Result=nil) then
  begin
@@ -294,11 +274,6 @@ begin
      QWORD($8F521313F1282661):Result:=@ps4_sceMoveInit;
     end;
 
-    'libSceScreenShot':
-    Case Info^.nid of
-     QWORD($EF7590E098F49C92):Result:=@ps4_sceScreenShotSetOverlayImageWithOrigin;
-    end;
-
     'libSceVoiceQoS':
     Case Info^.nid of
      QWORD($53C21F365EBF0ACB):Result:=@ps4_sceVoiceQoSInit;
@@ -317,7 +292,7 @@ begin
  begin
 
  Case Info^.lib^.strName of
-  'libSceVideoOut':;
+  //'libSceVideoOut':;
   'libSceSystemService':;
   'libSceUserService':;
   'libSceNetCtl':;
@@ -332,8 +307,13 @@ begin
   'libSceLibcInternal':;
   else
    Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
-    'scePthreadCondSignal':;
-    'scePthreadCondTimedwait':;
+    'sceKernelClearEventFlag':;
+    'sceKernelWaitEventFlag':;
+    'sceKernelSetEventFlag':;
+    'sceNetCtlCheckCallbackForNpToolkit':;
+    'sceKernelReadTsc':;
+    //'scePthreadCondSignal':;
+    //'scePthreadCondTimedwait':;
     'scePthreadYield':;
     'nanosleep':;
     'sceKernelGetProcessTimeCounter':;
@@ -371,7 +351,7 @@ begin
     '__tls_get_addr':;
     'scePthreadRwlockRdlock':;
     'scePthreadRwlockUnlock':;
-    'scePthreadCondBroadcast':;
+    //'scePthreadCondBroadcast':;
     'sceFiosFHCloseSync':;
     'sceKernelStat':;
     'sceKernelOpen':;
@@ -386,7 +366,6 @@ begin
 
  end;
  }
-
 
  if (Result=nil) then
  begin
@@ -419,17 +398,6 @@ begin
 
  lib:=ps4_app.GetLib(Info^.lib^.strName);
  if (lib=nil) then Exit;
-
- //if (lib^.strName='mono-ps4') then
- //begin
- // Writeln(Info^.pName);
- //
- // if Info^.nid=$4FCEF2B219D790C5 then
- // begin
- //  writeln;
- // end;
- //
- //end;
 
  if (lib^.parent<>node) then Exit;
 
@@ -684,6 +652,16 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Gem.Smashers\CUSA07572\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Gem.Smashers\CUSA07572\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Gem.Smashers\CUSA07572\';
+ //ps4_app.app_file:='G:\Games\Gem.Smashers\CUSA07572\eboot.bin';
+
+ //ps4_app.app_path:='G:\Games\Taiko No Tatsujin\CUSA07515\';
+ //ps4_app.app_file:='G:\Games\Taiko No Tatsujin\CUSA07515\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Taiko_No_Tatsujin\CUSA07515\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Taiko_No_Tatsujin\CUSA07515\eboot.bin';
+
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
