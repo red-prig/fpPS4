@@ -1806,7 +1806,7 @@ var
  src:array[0..1] of PsrRegNode;
  rIndex,rCount:PsrRegNode;
  data:array[0..1] of QWORD;
- index,count:Byte;
+ index,count:DWORD;
 begin
  Result:=0;
  dst:=node^.pDst^.AsType(ntReg);

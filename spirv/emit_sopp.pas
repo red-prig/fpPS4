@@ -164,7 +164,7 @@ begin
  bnew:=true;
  if Cursor.pBlock^.IsEndOf(Cursor.Adr) then //is last
  begin
-  Assert(node^.Block.e_adr.get_pc=Cursor.Adr.get_pc);
+  //Assert(node^.Block.e_adr.get_pc=Cursor.Adr.get_pc);
   Case node^.Block.bType of
    btSetpc:;
    else
@@ -276,7 +276,7 @@ begin
 
  pLabel:=FindLabel(b_adr);
  Assert(pLabel<>nil);
- Assert(not pLabel^.IsType(ltUnknow));
+ //Assert(not pLabel^.IsType(ltUnknow));
 
  if pLabel^.IsType(ltBegAdr) then //adr
  begin

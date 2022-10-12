@@ -36,7 +36,7 @@ Var
  src:array[0..3] of PsrRegNode;
  //rsl:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
- f,i,p:Byte;
+ f,i,p:DWORD;
 
 begin
  //if (VM<>0) and (EXEC<>0) = set pixel else (if DONE=1) discard pixel /(PS only)

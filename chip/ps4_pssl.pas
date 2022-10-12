@@ -1237,6 +1237,7 @@ EXP 64
 }
 
 type
+ PSPI=^TSPI;
  TSPI=packed record
   OFFSET_DW:DWORD;
   CMD:packed record
@@ -1799,40 +1800,46 @@ end;
 
 procedure _print_SMRD(Var SPI:TSPI);
 var
- t:Byte;
+ t1,t2:Byte;
 begin
- t:=0;
+ t1:=0;
+ t2:=0;
 
  Case SPI.SMRD.OP of
 
   S_LOAD_DWORD:
     begin
      Write('S_LOAD_DWORD');
-     t:=1;
+     t1:=1;
+     t2:=2;
     end;
 
   S_LOAD_DWORDX2:
     begin
      Write('S_LOAD_DWORDX2');
-     t:=2;
+     t1:=2;
+     t2:=2;
     end;
 
   S_LOAD_DWORDX4:
     begin
      Write('S_LOAD_DWORDX4');
-     t:=4;
+     t1:=4;
+     t2:=2;
     end;
 
    S_LOAD_DWORDX8:
     begin
      Write('S_LOAD_DWORDX8');
-     t:=8;
+     t1:=8;
+     t2:=2;
     end;
 
   S_LOAD_DWORDX16:
     begin
      Write('S_LOAD_DWORDX16');
-     t:=16;
+     t1:=16;
+     t2:=2;
     end;
 
   //--
@@ -1840,31 +1847,36 @@ begin
   S_BUFFER_LOAD_DWORD:
     begin
      Write('S_BUFFER_LOAD_DWORD');
-     t:=1;
+     t1:=1;
+     t2:=4;
     end;
 
   S_BUFFER_LOAD_DWORDX2:
     begin
      Write('S_BUFFER_LOAD_DWORDX2');
-     t:=2;
+     t1:=2;
+     t2:=4;
     end;
 
   S_BUFFER_LOAD_DWORDX4:
     begin
      Write('S_BUFFER_LOAD_DWORDX4');
-     t:=4;
+     t1:=4;
+     t2:=4;
     end;
 
   S_BUFFER_LOAD_DWORDX8:
     begin
      Write('S_BUFFER_LOAD_DWORDX8');
-     t:=8;
+     t1:=8;
+     t2:=4;
     end;
 
   S_BUFFER_LOAD_DWORDX16:
     begin
      Write('S_BUFFER_LOAD_DWORDX16');
-     t:=16;
+     t1:=16;
+     t2:=4;
     end;
 
   S_MEMTIME:
@@ -1887,31 +1899,41 @@ begin
  end;
  Write(' ');
 
- case t of
+
+ case t1 of
   1:begin
      With SPI.SMRD do
-      Write('s[',SDST,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+      Write('s[',SDST,'], ');
     end;
   2:begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+1,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+      Write('s[',SDST,':',SDST+1,'], ');
     end;
   4:begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+3,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+      Write('s[',SDST,':',SDST+3,'], ');
     end;
   8:begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+7,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+      Write('s[',SDST,':',SDST+7,'], ');
     end;
   16:
     begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+15,'], s[',SBASE*2,':',SBASE*2+3,'], ');
+      Write('s[',SDST,':',SDST+15,'], ');
     end;
  end;
 
- Write(' ');
+ case t2 of
+  2:begin
+     With SPI.SMRD do
+      Write('s[',SBASE*2,':',SBASE*2+1,'], ');
+    end;
+  4:begin
+     With SPI.SMRD do
+      Write('s[',SBASE*2,':',SBASE*2+3,'], ');
+    end;
+ end;
 
  With SPI.SMRD do
   Case IMM of
@@ -2219,7 +2241,7 @@ begin
  _print_ssrc9(VOP3.SRC1);
  if Byte(VOP3.ABS).TestBit(1) then Write(')');
 
- Writeln;
+ Writeln(' ; VOP3c');
 end;
 
 procedure _print_VOP3a(Var VOP3:TVOP3a);
@@ -2236,7 +2258,7 @@ begin
   256+V_MUL_F32           :Write('V_MUL_F32');
   256+V_MUL_I32_I24       :Write('V_MUL_I32_I24');
   256+V_MUL_HI_I32_I24    :Write('V_MUL_HI_I32_I24');
-  256+V_MUL_U32_U24       :Write('V_MUL_U32_U24 ');
+  256+V_MUL_U32_U24       :Write('V_MUL_U32_U24');
   256+V_MUL_HI_U32_U24    :Write('V_MUL_HI_U32_U24');
   256+V_MIN_LEGACY_F32    :Write('V_MIN_LEGACY_F32');
   256+V_MAX_LEGACY_F32    :Write('V_MAX_LEGACY_F32');
@@ -2439,7 +2461,7 @@ begin
  if (VOP3.CLAMP<>0) then
   Write(' clamp');
 
- Writeln;
+ Writeln(' ; VOP3a');
 end;
 
 procedure _print_VOP3b(Var VOP3:TVOP3b);
@@ -2484,7 +2506,7 @@ begin
  if Byte(VOP3.NEG).TestBit(2) then Write('-');
  _print_ssrc9(VOP3.SRC2);
 
- Writeln;
+ Writeln(' ; VOP3b');
 end;
 
 procedure _print_VOP3(Var SPI:TSPI);
@@ -2511,7 +2533,7 @@ begin
   V_MUL_F32           :Write('V_MUL_F32');
   V_MUL_I32_I24       :Write('V_MUL_I32_I24');
   V_MUL_HI_I32_I24    :Write('V_MUL_HI_I32_I24');
-  V_MUL_U32_U24       :Write('V_MUL_U32_U24 ');
+  V_MUL_U32_U24       :Write('V_MUL_U32_U24');
   V_MUL_HI_U32_U24    :Write('V_MUL_HI_U32_U24');
   V_MIN_LEGACY_F32    :Write('V_MIN_LEGACY_F32');
   V_MAX_LEGACY_F32    :Write('V_MAX_LEGACY_F32');
@@ -2985,7 +3007,7 @@ begin
   BUF_DATA_FORMAT_32         :Write('32');
   BUF_DATA_FORMAT_16_16      :Write('16_16');
   BUF_DATA_FORMAT_10_11_11   :Write('10_11_11');
-  BUF_DATA_FORMAT_11_11_10   :Write('11_11_10 ');
+  BUF_DATA_FORMAT_11_11_10   :Write('11_11_10');
   BUF_DATA_FORMAT_10_10_10_2 :Write('10_10_10_2');
   BUF_DATA_FORMAT_2_10_10_10 :Write('2_10_10_10');
   BUF_DATA_FORMAT_8_8_8_8    :Write('8_8_8_8');

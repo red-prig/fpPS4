@@ -49,8 +49,8 @@ type
   procedure emit_V_FMA_F32;
   procedure emit_V_CUBE(OpId:DWORD);
   procedure emit_V_MOV_B32;
-  procedure emit_V2_EXT_F32(OpId:DWORD);
-  procedure emit_V2_SIN_COS(OpId:DWORD);
+  procedure emit_V_EXT_F32(OpId:DWORD);
+  procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
  end;
 
@@ -644,7 +644,7 @@ begin
 
 end;
 
-procedure TEmit_VOP3.emit_V2_EXT_F32(OpId:DWORD);
+procedure TEmit_VOP3.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
@@ -662,7 +662,7 @@ begin
  emit_dst_clamp_f(dst);
 end;
 
-procedure TEmit_VOP3.emit_V2_SIN_COS(OpId:DWORD);
+procedure TEmit_VOP3.emit_V_SIN_COS(OpId:DWORD);
 const
  PI2:Single=2*PI;
 Var
@@ -905,20 +905,21 @@ begin
 
   384+V_MOV_B32  : emit_V_MOV_B32;
 
-  384+V_FRACT_F32: emit_V2_EXT_F32(GlslOp.Fract);
-  384+V_TRUNC_F32: emit_V2_EXT_F32(GlslOp.Trunc);
-  384+V_CEIL_F32 : emit_V2_EXT_F32(GlslOp.Ceil);
+  384+V_FRACT_F32: emit_V_EXT_F32(GlslOp.Fract);
+  384+V_TRUNC_F32: emit_V_EXT_F32(GlslOp.Trunc);
+  384+V_CEIL_F32 : emit_V_EXT_F32(GlslOp.Ceil);
 
-  384+V_FLOOR_F32: emit_V2_EXT_F32(GlslOp.Floor);
-  384+V_EXP_F32  : emit_V2_EXT_F32(GlslOp.Exp2);
-  384+V_LOG_F32  : emit_V2_EXT_F32(GlslOp.Log2);
+  384+V_RNDNE_F32: emit_V_EXT_F32(GlslOp.RoundEven);
+  384+V_FLOOR_F32: emit_V_EXT_F32(GlslOp.Floor);
+  384+V_EXP_F32  : emit_V_EXT_F32(GlslOp.Exp2);
+  384+V_LOG_F32  : emit_V_EXT_F32(GlslOp.Log2);
 
-  384+V_RSQ_F32  : emit_V2_EXT_F32(GlslOp.InverseSqrt);
+  384+V_RSQ_F32  : emit_V_EXT_F32(GlslOp.InverseSqrt);
 
-  384+V_SQRT_F32 : emit_V2_EXT_F32(GlslOp.Sqrt);
+  384+V_SQRT_F32 : emit_V_EXT_F32(GlslOp.Sqrt);
 
-  384+V_SIN_F32  : emit_V2_SIN_COS(GlslOp.Sin);
-  384+V_COS_F32  : emit_V2_SIN_COS(GlslOp.Cos);
+  384+V_SIN_F32  : emit_V_SIN_COS(GlslOp.Sin);
+  384+V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
 
   384+V_RCP_F32  : emit_V_RCP_F32;
 

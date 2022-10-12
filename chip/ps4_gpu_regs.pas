@@ -1543,6 +1543,7 @@ begin
      IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_R4G4B4A4_UNORM_PACK16;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK;
+     IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_UNORM_BLOCK;
      else
       Assert(false,_get_tex_dfmt_str(PT^.dfmt));
     end;

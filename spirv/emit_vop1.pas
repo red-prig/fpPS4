@@ -17,6 +17,8 @@ type
   procedure emit_VOP1;
   procedure emit_V_MOV_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
+  procedure emit_V_CVT_F16_F32;
+  procedure emit_V_CVT_F32_F16;
   procedure emit_V_CVT_OFF_F32_I4;
   procedure emit_V_CVT_F32_UBYTE0;
   procedure emit_V_EXT_F32(OpId:DWORD);
@@ -45,6 +47,41 @@ begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,src_type);
  Op1(OpId,dst_type,dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_CVT_F16_F32; //vdst[15:0].hf = ConvertFloatToHalfFloat(vsrc.f)
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+ dstv:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src[0]:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+
+ src[0]:=OpFToF(src[0],dtHalf16);
+ src[1]:=NewReg_s(dtHalf16,0);
+
+ dstv:=OpMakeVec(line,dtVec2h,@src);
+
+ dst^.New(line,dtVec2h)^.pWriter:=dstv;
+end;
+
+procedure TEmit_VOP1.emit_V_CVT_F32_F16; //vdst.f = ConvertHalfFloatToFloat(vsrc[15:0].hf)
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+ dst0:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtVec2h{dtUnknow});
+
+ //src:=OpBitwiseAndTo(src,$FFFF);
+ //src^.PrepType(ord(dtHalf16));
+
+ dst0:=NewReg(dtHalf16);
+ OpExtract(line,dst0,src,0);
+
+ Op1(Op.OpFConvert,dtFloat32,dst,{src}dst0);
 end;
 
 //V_CVT_OFF_F32_I4
@@ -148,6 +185,9 @@ begin
   V_CVT_U32_F32: emit_V_CVT(Op.OpConvertFToU,dtUInt32 ,dtFloat32);
   V_CVT_I32_F32: emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
 
+  V_CVT_F16_F32: emit_V_CVT_F16_F32;
+  V_CVT_F32_F16: emit_V_CVT_F32_F16;
+
   V_CVT_OFF_F32_I4: emit_V_CVT_OFF_F32_I4;
 
   V_CVT_F32_UBYTE0: emit_V_CVT_F32_UBYTE0;
@@ -156,6 +196,7 @@ begin
   V_TRUNC_F32: emit_V_EXT_F32(GlslOp.Trunc);
   V_CEIL_F32 : emit_V_EXT_F32(GlslOp.Ceil);
 
+  V_RNDNE_F32: emit_V_EXT_F32(GlslOp.RoundEven);
   V_FLOOR_F32: emit_V_EXT_F32(GlslOp.Floor);
   V_EXP_F32  : emit_V_EXT_F32(GlslOp.Exp2);
   V_LOG_F32  : emit_V_EXT_F32(GlslOp.Log2);

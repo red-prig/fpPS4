@@ -28,6 +28,8 @@ type
   function  emit_BUFFER_LOAD_VA(src:PPsrRegSlot;count:Byte):Boolean;
   procedure emit_BUFFER_LOAD_FORMAT(count:Byte);
   procedure emit_BUFFER_STORE_FORMAT(count:Byte);
+  procedure emit_BUFFER_LOAD_DWORDX(count,dfmt:Byte);
+  procedure emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
  end;
 
 implementation
@@ -204,6 +206,56 @@ begin
 
 end;
 
+procedure TEmit_MUBUF.emit_BUFFER_LOAD_DWORDX(count,dfmt:Byte);
+var
+ src:array[0..3] of PsrRegSlot;
+
+ grp:PsrDataLayout;
+ PV:PVSharpResource4;
+
+begin
+ Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
+
+ if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
+
+ grp:=GroupingSharp(@src,rtVSharp4);
+ PV:=grp^.pData;
+
+ TEmit_vbuf_load(TObject(Self)).buf_load(
+  Buf_info(grp,
+           dst_sel_identity,
+           dfmt,
+           PV^.nfmt,
+           count)
+ );
+
+end;
+
+procedure TEmit_MUBUF.emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
+var
+ src:array[0..3] of PsrRegSlot;
+
+ grp:PsrDataLayout;
+ PV:PVSharpResource4;
+
+begin
+ Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
+
+ if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
+
+ grp:=GroupingSharp(@src,rtVSharp4);
+ PV:=grp^.pData;
+
+ TEmit_vbuf_store(TObject(Self)).buf_store(
+  Buf_info(grp,
+           dst_sel_identity,
+           dfmt,
+           PV^.nfmt,
+           count)
+ );
+
+end;
+
 procedure TEmit_MUBUF.emit_MUBUF;
 begin
  case FSPI.MUBUF.OP of
@@ -216,6 +268,16 @@ begin
   BUFFER_STORE_FORMAT_XY  : emit_BUFFER_STORE_FORMAT(2);
   BUFFER_STORE_FORMAT_XYZ : emit_BUFFER_STORE_FORMAT(3);
   BUFFER_STORE_FORMAT_XYZW: emit_BUFFER_STORE_FORMAT(4);
+
+  BUFFER_LOAD_DWORD       : emit_BUFFER_LOAD_DWORDX(1,BUF_DATA_FORMAT_32);
+  BUFFER_LOAD_DWORDX2     : emit_BUFFER_LOAD_DWORDX(2,BUF_DATA_FORMAT_32_32);
+  BUFFER_LOAD_DWORDX3     : emit_BUFFER_LOAD_DWORDX(3,BUF_DATA_FORMAT_32_32_32);
+  BUFFER_LOAD_DWORDX4     : emit_BUFFER_LOAD_DWORDX(4,BUF_DATA_FORMAT_32_32_32_32);
+
+  BUFFER_STORE_DWORD      : emit_BUFFER_STORE_DWORDX(1,BUF_DATA_FORMAT_32);
+  BUFFER_STORE_DWORDX2    : emit_BUFFER_STORE_DWORDX(2,BUF_DATA_FORMAT_32_32);
+  BUFFER_STORE_DWORDX3    : emit_BUFFER_STORE_DWORDX(3,BUF_DATA_FORMAT_32_32_32);
+  BUFFER_STORE_DWORDX4    : emit_BUFFER_STORE_DWORDX(4,BUF_DATA_FORMAT_32_32_32_32);
 
   else
       Assert(false,'MUBUF?'+IntToStr(FSPI.MUBUF.OP));
