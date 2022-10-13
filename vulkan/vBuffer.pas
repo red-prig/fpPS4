@@ -10,18 +10,32 @@ uses
  vMemory;
 
 type
+ AVkSparseMemoryBind=array of TVkSparseMemoryBind;
+
  TvBuffer=class
   FHandle:TVkBuffer;
   FSize:TVkDeviceSize;
   FUsage:TVkFlags;
   Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
+  Constructor CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Destructor  Destroy; override;
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
  end;
 
+function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
+
 implementation
+
+function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
+var
+ Buffer:TvBuffer;
+begin
+ Buffer:=TvBuffer.Create(size,usage,ext);
+ Result:=Buffer.GetRequirements;
+ Buffer.Free;
+end;
 
 Constructor TvBuffer.Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
 var
@@ -33,6 +47,29 @@ begin
  FUsage:=usage;
  cinfo:=Default(TVkBufferCreateInfo);
  cinfo.sType:=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+ cinfo.size :=size;
+ cinfo.usage:=usage;
+ cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
+ cinfo.pNext:=ext;
+ r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateBuffer:',r);
+  Exit;
+ end;
+end;
+
+Constructor TvBuffer.CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
+var
+ cinfo:TVkBufferCreateInfo;
+ r:TVkResult;
+begin
+ Assert(size<>0);
+ FSize:=size;
+ FUsage:=usage;
+ cinfo:=Default(TVkBufferCreateInfo);
+ cinfo.sType:=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+ cinfo.flags:=ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT) or ord(VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT) or ord(VK_BUFFER_CREATE_SPARSE_ALIASED_BIT);
  cinfo.size :=size;
  cinfo.usage:=usage;
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;

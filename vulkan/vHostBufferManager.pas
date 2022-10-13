@@ -16,10 +16,14 @@ uses
  vCmdBuffer;
 
 type
+ AVkSparseMemoryBind=array of TVkSparseMemoryBind;
+
  TvHostBuffer=class(TvBuffer)
   FAddr:Pointer;
   Fhost:TvPointer;
   Foffset:TVkDeviceSize; //offset inside buffer
+  //
+  FSparse:AVkSparseMemoryBind;
   //
   FRefs:ptruint;
   Procedure Acquire(Sender:TObject);
@@ -85,36 +89,144 @@ begin
  end;
 end;
 
-function _New(host:TvPointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+function _fix_buf_size(var Offset,Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
 var
- t:TvHostBuffer;
  mr:TVkMemoryRequirements;
  pAlign:TVkDeviceSize;
- Foffset:TVkDeviceSize;
 begin
+ mr:=GetRequirements(Size,usage,@buf_ext);
+
+ pAlign:=AlignDw(Offset,mr.alignment);
+ Result:=(Offset-pAlign);
+
+ Offset:=pAlign;
+ Size  :=Size+Result;
+
+ if (Size<mr.size) then Size:=mr.size;
+end;
+
+function _New_simple(host:TvPointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+var
+ t:TvHostBuffer;
+ Offset,Foffset:TVkDeviceSize;
+begin
+ Offset :=host.FOffset;
+ Foffset:=_fix_buf_size(Offset,Size,usage);
+
  t:=TvHostBuffer.Create(Size,usage,@buf_ext);
 
- mr:=t.GetRequirements;
-
- Foffset:=0;
- if (Size<mr.size) or (not IsAlign(host.FOffset,mr.alignment)) then
- begin
-  pAlign:=AlignDw(host.FOffset,mr.alignment);
-  Foffset:=(host.FOffset-pAlign);
-
-  host.FOffset:=pAlign;
-  Size:=Size+Foffset;
-
-  if (Size<mr.size) then Size:=mr.size;
-
-  FreeAndNil(t);
-
-  t:=TvHostBuffer.Create(Size,usage,@buf_ext);
- end;
-
- t.Fhost:=host;
+ t.Fhost  :=host;
  t.Foffset:=Foffset;
  t.BindMem(host);
+
+ Result:=t;
+end;
+
+function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
+var
+ finfo:TVkFenceCreateInfo;
+ fence:TVkFence;
+
+ bind:TVkSparseBufferMemoryBindInfo;
+ info:TVkBindSparseInfo;
+begin
+ finfo:=Default(TVkFenceCreateInfo);
+ finfo.sType:=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+ Result:=vkCreateFence(Device.FHandle,@finfo,nil,@fence);
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateFence:',Result);
+  Exit;
+ end;
+
+ bind:=Default(TVkSparseBufferMemoryBindInfo);
+ bind.buffer   :=buffer;
+ bind.bindCount:=bindCount;
+ bind.pBinds   :=pBinds;
+
+ info:=Default(TVkBindSparseInfo);
+ info.sType          :=VK_STRUCTURE_TYPE_BIND_SPARSE_INFO;
+ info.bufferBindCount:=1;
+ info.pBufferBinds   :=@bind;
+
+ Result:=vkQueueBindSparse(queue,1,@info,fence);
+
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkQueueBindSparse:',Result);
+  vkDestroyFence(Device.FHandle,fence,nil);
+  Exit;
+ end;
+
+ Result:=vkWaitForFences(Device.FHandle,1,@fence,VK_TRUE,TVkUInt64(-1));
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkWaitForFences:',Result);
+ end;
+
+ vkDestroyFence(Device.FHandle,fence,nil);
+end;
+
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+function _New_sparce(queue:TVkQueue;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+var
+ host:TvPointer;
+
+ asize:qword;
+ hsize:qword;
+ msize:qword;
+
+ Offset,Foffset:TVkDeviceSize;
+
+ bind:TVkSparseMemoryBind;
+ Binds:AVkSparseMemoryBind;
+ i:Integer;
+
+ t:TvHostBuffer;
+begin
+ Result:=nil;
+
+ Offset :=TVkDeviceSize(Addr); //hack align at same in virtual mem
+ Foffset:=_fix_buf_size(Offset,Size,usage);
+
+ Binds:=Default(AVkSparseMemoryBind);
+ host :=Default(TvPointer);
+ hsize:=0;
+
+ Offset:=0;
+ asize:=Size;
+ While (asize<>0) do
+ begin
+  if not TryGetHostPointerByAddr(addr,host,@hsize) then Exit;
+
+  msize:=Min(hsize,asize);
+
+  bind:=Default(TVkSparseMemoryBind);
+  bind.resourceOffset:=Offset;
+  bind.size          :=msize;
+  bind.memory        :=host.FHandle;
+  bind.memoryOffset  :=host.FOffset;
+
+  i:=Length(Binds);
+  SetLength(Binds,i+1);
+  Binds[i]:=bind;
+
+  //next
+  Offset:=Offset+msize;
+  addr  :=addr  +msize;
+  asize :=asize -msize;
+ end;
+
+ t:=TvHostBuffer.CreateSparce(Size,usage,@buf_ext);
+
+ t.Foffset:=Foffset;
+ t.FSparse:=Binds;
+
+ VkBindSparseBufferMemory(queue,t.FHandle,Length(Binds),@Binds[0]);
 
  Result:=t;
 end;
@@ -156,9 +268,18 @@ begin
   begin
    Goto _exit;
   end;
-  Assert(_size>=Size,'Sparse buffers TODO:'+BooltoStr(vDevice.sparseBinding,True));
-  t:=_New(host,Size,usage);
+
+  if (_size>=Size) then
+  begin
+   t:=_New_simple(host,Size,usage);
+  end else
+  begin //is Sparse buffers
+   Assert(vDevice.sparseBinding,'sparseBinding not support');
+   t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
+  end;
+
   t.FAddr:=addr;
+
   FHostBufferSet.Insert(@t.FAddr);
   t.Acquire(nil);
  end;
