@@ -142,6 +142,12 @@ type
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
 var
  mPoint:TPoint;
+
+ function GetAsyncKeyState(vKey:longint):Boolean; inline;
+ begin
+  Result:=(Windows.GetKeyState(vKey) and $8000)<>0;
+ end;
+
 begin
  Result:=SCE_PAD_ERROR_INVALID_ARG;
  if (data=nil) then Exit;
@@ -171,81 +177,81 @@ begin
 
  //
 
- if GetAsyncKeyState(VK_W)<>0 then
+ if GetAsyncKeyState(VK_W) then
   data^.leftStick.y:=0;
 
- if GetAsyncKeyState(VK_S)<>0 then
+ if GetAsyncKeyState(VK_S) then
   data^.leftStick.y:=$FF;
 
- if GetAsyncKeyState(VK_A)<>0 then
+ if GetAsyncKeyState(VK_A) then
   data^.leftStick.x:=0;
 
- if GetAsyncKeyState(VK_D)<>0 then
+ if GetAsyncKeyState(VK_D) then
   data^.leftStick.x:=$FF;
 
  //
 
- if GetAsyncKeyState(VK_I)<>0 then
+ if GetAsyncKeyState(VK_I) then
   data^.rightStick.y:=0;
 
- if GetAsyncKeyState(VK_K)<>0 then
+ if GetAsyncKeyState(VK_K) then
   data^.rightStick.y:=$FF;
 
- if GetAsyncKeyState(VK_J)<>0 then
+ if GetAsyncKeyState(VK_J) then
   data^.rightStick.x:=0;
 
- if GetAsyncKeyState(VK_L)<>0 then
+ if GetAsyncKeyState(VK_L) then
   data^.rightStick.x:=$FF;
 
  //
 
- if GetAsyncKeyState(VK_LBUTTON)<>0 then
+ if GetAsyncKeyState(VK_LBUTTON) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
- if GetAsyncKeyState(VK_RETURN)<>0 then
+ if GetAsyncKeyState(VK_RETURN) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
 
- if GetAsyncKeyState(VK_UP)<>0 then
+ if GetAsyncKeyState(VK_UP) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
 
- if GetAsyncKeyState(VK_RIGHT)<>0 then
+ if GetAsyncKeyState(VK_RIGHT) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
 
- if GetAsyncKeyState(VK_DOWN)<>0 then
+ if GetAsyncKeyState(VK_DOWN) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
 
- if GetAsyncKeyState(VK_LEFT)<>0 then
+ if GetAsyncKeyState(VK_LEFT) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;
 
- if GetAsyncKeyState(VK_NUMPAD8)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD8) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
 
- if GetAsyncKeyState(VK_NUMPAD6)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD6) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
 
- if GetAsyncKeyState(VK_NUMPAD2)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD2) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
 
- if GetAsyncKeyState(VK_NUMPAD4)<>0 then
+ if GetAsyncKeyState(VK_NUMPAD4) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
 
- if GetAsyncKeyState(VK_Q)<>0 then
+ if GetAsyncKeyState(VK_Q) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
 
- if GetAsyncKeyState(VK_TAB)<>0 then
+ if GetAsyncKeyState(VK_TAB) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;
 
- if GetAsyncKeyState(VK_Z)<>0 then
+ if GetAsyncKeyState(VK_Z) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
 
 
- if GetAsyncKeyState(VK_E)<>0 then
+ if GetAsyncKeyState(VK_E) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
 
- if GetAsyncKeyState(VK_R)<>0 then
+ if GetAsyncKeyState(VK_R) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
 
- if GetAsyncKeyState(VK_C)<>0 then
+ if GetAsyncKeyState(VK_C) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
 
 

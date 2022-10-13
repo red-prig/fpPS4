@@ -10,8 +10,6 @@ uses
  vMemory;
 
 type
- AVkSparseMemoryBind=array of TVkSparseMemoryBind;
-
  TvBuffer=class
   FHandle:TVkBuffer;
   FSize:TVkDeviceSize;
