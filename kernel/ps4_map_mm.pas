@@ -80,8 +80,8 @@ type
    isPooledMemory  :0..1;
    isCommitted     :0..1;
   end;
-  align:array[0..6] of Byte;
   name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
+  align:array[0..6] of Byte;
  end;
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;

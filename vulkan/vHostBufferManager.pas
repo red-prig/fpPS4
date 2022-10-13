@@ -10,6 +10,7 @@ uses
  sys_types,
  g23tree,
  Vulkan,
+ vDevice,
  vMemory,
  vBuffer,
  vCmdBuffer;
@@ -123,6 +124,8 @@ var
  t:TvHostBuffer;
  host:TvPointer;
 
+ _size:qword;
+
 label
  _exit;
 
@@ -149,10 +152,11 @@ begin
  begin
   //Writeln('NewBuf:',HexStr(Addr));
   host:=Default(TvPointer);
-  if not TryGetHostPointerByAddr(addr,host) then
+  if not TryGetHostPointerByAddr(addr,host,@_size) then
   begin
    Goto _exit;
   end;
+  Assert(_size>=Size,'Sparse buffers TODO:'+BooltoStr(vDevice.sparseBinding,True));
   t:=_New(host,Size,usage);
   t.FAddr:=addr;
   FHostBufferSet.Insert(@t.FAddr);

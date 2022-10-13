@@ -84,7 +84,7 @@ function vkAllocHostPointer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt3
 function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
-Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer):Boolean;
+Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
 
 implementation
 
@@ -637,7 +637,7 @@ begin
  vkFreeMemory(Device.FHandle,h,nil);
 end;
 
-Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer):Boolean;
+Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
 var
  block:TGpuMemBlock;
 begin
@@ -646,6 +646,12 @@ begin
  begin
   P.FHandle:=TVkDeviceMemory(block.Handle);
   P.FOffset:=addr-block.pAddr;
+
+  if (SizeOut<>nil) then
+  begin
+   SizeOut^:=block.nSize-P.FOffset;
+  end;
+
   Result:=True;
  end;
 end;

@@ -225,6 +225,7 @@ function  uniformBuffer8Bit:Boolean;
 function  storageBuffer16Bit:Boolean;
 function  uniformBuffer16Bit:Boolean;
 function  storageInputOutput16:Boolean;
+function  sparseBinding:Boolean;
 
 var
  limits:record
@@ -332,6 +333,11 @@ end;
 function storageInputOutput16:Boolean;
 begin
  Result:=Boolean(VulkanApp.FSF16.storageInputOutput16);
+end;
+
+function sparseBinding:Boolean;
+begin
+ Result:=Boolean(VulkanApp.FDeviceFeature.sparseBinding);
 end;
 
 procedure FillDeviceProperties(physicalDevice:TVkPhysicalDevice);
