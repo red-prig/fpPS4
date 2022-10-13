@@ -229,6 +229,7 @@ begin
   end else
   begin //is Sparse buffers
    Assert(vDevice.sparseBinding,'sparseBinding not support');
+   Assert(MemManager.SparceSupportHost,'sparse not support for host');
    t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
   end;
 

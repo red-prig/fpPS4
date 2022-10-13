@@ -52,6 +52,8 @@ type
   FHostVisibMt:TVkUInt32;
   //FHostCacheMt:TVkUInt32;
 
+  FSparceMemoryTypes:TVkUInt32;
+
   lock:Pointer;
 
   FDevBlocks:array of TDevBlock;
@@ -59,6 +61,8 @@ type
   FAllcSet:TAllcDevNodeSet;
 
   Constructor Create;
+
+  function    SparceSupportHost:Boolean;
   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
   procedure   PrintMemoryType(typeFilter:TVkUInt32);
 
@@ -85,6 +89,9 @@ function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUI
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
 Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
+
+function GetHostMappedRequirements:TVkMemoryRequirements;
+function GetSparceMemoryTypes:TVkUInt32;
 
 implementation
 
@@ -143,7 +150,33 @@ begin
   vkGetBufferMemoryRequirements(Device.FHandle,FHandle,@Result);
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
  end;
+end;
 
+function GetSparceMemoryTypes:TVkUInt32;
+var
+ cinfo:TVkBufferCreateInfo;
+ mr:TVkMemoryRequirements;
+ r:TVkResult;
+ FHandle:TVkBuffer;
+begin
+ Result:=0;
+ mr:=Default(TVkMemoryRequirements);
+
+ cinfo:=Default(TVkBufferCreateInfo);
+ cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+ cinfo.flags      :=ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT) or ord(VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT) or ord(VK_BUFFER_CREATE_SPARSE_ALIASED_BIT);
+ cinfo.size       :=4*1024;
+ cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+ cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
+ cinfo.pNext      :=@buf_ext;
+
+ r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r=VK_SUCCESS) then
+ begin
+  vkGetBufferMemoryRequirements(Device.FHandle,FHandle,@mr);
+  vkDestroyBuffer(Device.FHandle,FHandle,nil);
+  Result:=mr.memoryTypeBits;
+ end;
 end;
 
 Constructor TvMemManager.Create;
@@ -154,11 +187,20 @@ begin
  mr:=GetHostMappedRequirements;
 
  Writeln('[HostMappedRequirements]');
- Writeln('  alignment=',mr.alignment);
+ Writeln('  Alignment=',mr.alignment);
 
- Write('  memoryType=');
+ Write('  MemoryType=');
  For i:=0 to 31 do
  if ((1 shl i) and (mr.memoryTypeBits))<>0 then
+ begin
+  Write(i,',');
+ end;
+ Writeln;
+
+ FSparceMemoryTypes:=GetSparceMemoryTypes;
+ Write('  SparceType=');
+ For i:=0 to 31 do
+ if ((1 shl i) and (FSparceMemoryTypes))<>0 then
  begin
   Write(i,',');
  end;
@@ -197,6 +239,13 @@ begin
  //begin
  // FHostCacheMt:=FHostVisibMt;
  //end;
+
+ Writeln('  SelectHost=',FHostVisibMt);
+end;
+
+function TvMemManager.SparceSupportHost:Boolean;
+begin
+ Result:=(FHostVisibMt and FSparceMemoryTypes)<>0;
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
