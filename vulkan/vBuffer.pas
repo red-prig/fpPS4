@@ -22,9 +22,55 @@ type
   function    BindMem(P:TvPointer):TVkResult;
  end;
 
+function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
 function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
 
 implementation
+
+function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
+var
+ finfo:TVkFenceCreateInfo;
+ fence:TVkFence;
+
+ bind:TVkSparseBufferMemoryBindInfo;
+ info:TVkBindSparseInfo;
+begin
+ finfo:=Default(TVkFenceCreateInfo);
+ finfo.sType:=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+ Result:=vkCreateFence(Device.FHandle,@finfo,nil,@fence);
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateFence:',Result);
+  Exit;
+ end;
+
+ bind:=Default(TVkSparseBufferMemoryBindInfo);
+ bind.buffer   :=buffer;
+ bind.bindCount:=bindCount;
+ bind.pBinds   :=pBinds;
+
+ info:=Default(TVkBindSparseInfo);
+ info.sType          :=VK_STRUCTURE_TYPE_BIND_SPARSE_INFO;
+ info.bufferBindCount:=1;
+ info.pBufferBinds   :=@bind;
+
+ Result:=vkQueueBindSparse(queue,1,@info,fence);
+
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkQueueBindSparse:',Result);
+  vkDestroyFence(Device.FHandle,fence,nil);
+  Exit;
+ end;
+
+ Result:=vkWaitForFences(Device.FHandle,1,@fence,VK_TRUE,TVkUInt64(-1));
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkWaitForFences:',Result);
+ end;
+
+ vkDestroyFence(Device.FHandle,fence,nil);
+end;
 
 function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
 var

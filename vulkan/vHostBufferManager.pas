@@ -108,63 +108,17 @@ end;
 function _New_simple(host:TvPointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
 var
  t:TvHostBuffer;
- Offset,Foffset:TVkDeviceSize;
+ delta:TVkDeviceSize;
 begin
- Offset :=host.FOffset;
- Foffset:=_fix_buf_size(Offset,Size,usage);
+ delta:=_fix_buf_size(host.FOffset,Size,usage);
 
  t:=TvHostBuffer.Create(Size,usage,@buf_ext);
 
  t.Fhost  :=host;
- t.Foffset:=Foffset;
+ t.Foffset:=delta;
  t.BindMem(host);
 
  Result:=t;
-end;
-
-function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
-var
- finfo:TVkFenceCreateInfo;
- fence:TVkFence;
-
- bind:TVkSparseBufferMemoryBindInfo;
- info:TVkBindSparseInfo;
-begin
- finfo:=Default(TVkFenceCreateInfo);
- finfo.sType:=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
- Result:=vkCreateFence(Device.FHandle,@finfo,nil,@fence);
- if (Result<>VK_SUCCESS) then
- begin
-  Writeln(StdErr,'vkCreateFence:',Result);
-  Exit;
- end;
-
- bind:=Default(TVkSparseBufferMemoryBindInfo);
- bind.buffer   :=buffer;
- bind.bindCount:=bindCount;
- bind.pBinds   :=pBinds;
-
- info:=Default(TVkBindSparseInfo);
- info.sType          :=VK_STRUCTURE_TYPE_BIND_SPARSE_INFO;
- info.bufferBindCount:=1;
- info.pBufferBinds   :=@bind;
-
- Result:=vkQueueBindSparse(queue,1,@info,fence);
-
- if (Result<>VK_SUCCESS) then
- begin
-  Writeln(StdErr,'vkQueueBindSparse:',Result);
-  vkDestroyFence(Device.FHandle,fence,nil);
-  Exit;
- end;
-
- Result:=vkWaitForFences(Device.FHandle,1,@fence,VK_TRUE,TVkUInt64(-1));
- if (Result<>VK_SUCCESS) then
- begin
-  Writeln(StdErr,'vkWaitForFences:',Result);
- end;
-
- vkDestroyFence(Device.FHandle,fence,nil);
 end;
 
 function Min(a,b:QWORD):QWORD; inline;
@@ -180,7 +134,7 @@ var
  hsize:qword;
  msize:qword;
 
- Offset,Foffset:TVkDeviceSize;
+ Offset,delta:TVkDeviceSize;
 
  bind:TVkSparseMemoryBind;
  Binds:AVkSparseMemoryBind;
@@ -190,8 +144,8 @@ var
 begin
  Result:=nil;
 
- Offset :=TVkDeviceSize(Addr); //hack align at same in virtual mem
- Foffset:=_fix_buf_size(Offset,Size,usage);
+ //hack; alignment is the same in virtual memory
+ delta:=_fix_buf_size(TVkDeviceSize(Addr),Size,usage);
 
  Binds:=Default(AVkSparseMemoryBind);
  host :=Default(TvPointer);
@@ -223,7 +177,7 @@ begin
 
  t:=TvHostBuffer.CreateSparce(Size,usage,@buf_ext);
 
- t.Foffset:=Foffset;
+ t.Foffset:=delta;
  t.FSparse:=Binds;
 
  VkBindSparseBufferMemory(queue,t.FHandle,Length(Binds),@Binds[0]);

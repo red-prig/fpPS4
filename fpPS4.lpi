@@ -329,6 +329,7 @@
       <Unit72>
         <Filename Value="src\ps4_libscepad.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libScePad"/>
       </Unit72>
       <Unit73>
         <Filename Value="src\ps4_libsceplaygo.pas"/>

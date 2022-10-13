@@ -13,6 +13,9 @@ uses
 
 implementation
 
+uses
+ ps4_libSceVideoOut;
+
 const
  SCE_PAD_ERROR_INVALID_ARG             =-2137915391; // 0x80920001
  SCE_PAD_ERROR_INVALID_PORT            =-2137915390; // 0x80920002
@@ -156,8 +159,28 @@ begin
 
  _sig_lock;
 
- //FillChar(data^,SizeOf(ScePadData),1);
- //FillChar(data^.touchData,SizeOf(ScePadData.touchData),1);
+ //connect data
+
+ data^.timestamp:=Sysutils.GetTickCount64;
+
+ data^.connected:=True;
+ data^.connectedCount:=1;
+
+ data^.leftStick.x :=$80;
+ data^.leftStick.y :=$80;
+ data^.rightStick.x:=$80;
+ data^.rightStick.y:=$80;
+
+ //only in active windows
+
+ if (MainWindows<>GetForegroundWindow) then
+ begin
+  _sig_unlock;
+  Result:=0;
+  Exit;
+ end;
+
+ //mouse as touch pad
 
  data^.touchData.touchNum:=1;
  data^.touchData.touch[0].id:=0;
@@ -166,16 +189,7 @@ begin
  data^.touchData.touch[0].x:=mPoint.X;
  data^.touchData.touch[0].y:=mPoint.Y;
 
- data^.connected:=True;
- data^.timestamp:=Sysutils.GetTickCount64;
- data^.connectedCount:=1;
-
- data^.leftStick.x:=$80;
- data^.leftStick.y:=$80;
- data^.rightStick.x:=$80;
- data^.rightStick.y:=$80;
-
- //
+ //keymapping
 
  if GetAsyncKeyState(VK_W) then
   data^.leftStick.y:=0;
@@ -253,7 +267,6 @@ begin
 
  if GetAsyncKeyState(VK_C) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
-
 
  _sig_unlock;
  Result:=0;

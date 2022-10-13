@@ -243,6 +243,9 @@ type
 
 function _qc_sceVideoOutSubmitFlip(Flip:PqcFlipInfo):Integer;
 
+var
+ MainWindows:THandle;
+
 implementation
 
 uses
@@ -266,7 +269,10 @@ type
    wait:SizeUint;
    u:record
     Case Byte of
-     0:(bufferIndex:Integer;
+     0:(userID,
+        busType,
+        index:Integer);
+     1:(bufferIndex,
         flipMode:Integer;
         flipArg:Int64;
         _type:Integer);
@@ -528,6 +534,14 @@ begin
  TVBlank.OnTimer:=@OnVblank;
  TVBlank.Enabled:=true;
 
+ Case node^.u.busType of
+  SCE_VIDEO_OUT_BUS_TYPE_MAIN:
+   begin
+    MainWindows:=FForm.Handle;
+   end;
+  else
+ end;
+
  //data? nop
  free_node(node);
 end;
@@ -556,15 +570,21 @@ begin
  node:=H.alloc_node;
 
  Result:=-1;
- FVideoOutMap.New(H,Result);
+ if not FVideoOutMap.New(H,Result) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_VALUE);
 
- Writeln('>sceVideoOutOpen:',HexStr(Pointer(H)));
+ //Writeln('>sceVideoOutOpen:',HexStr(Pointer(H)));
+
  node^.Parent:=@H.sceVideoOutOpen;
+
+ node^.u.userID :=userID;
+ node^.u.busType:=busType;
+ node^.u.index  :=index;
+
  Push2VideoOut(node);
 
  H.Release;
 
- Writeln('<sceVideoOutOpen:',userID,' ',busType);
+ //Writeln('<sceVideoOutOpen:',userID,' ',busType);
 
  _sig_unlock;
 end;
