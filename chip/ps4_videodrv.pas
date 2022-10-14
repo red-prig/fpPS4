@@ -638,7 +638,7 @@ begin
  {$ifdef ww}writeln;{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,False{True});
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,0,nil,True);
 end;
 
 procedure onPrepareFlipWithEopInterruptLabel(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4PrepareFlipWithEopInterrupt);
@@ -649,7 +649,7 @@ begin
  {$ifdef ww}Writeln('adr:',HexStr(adr),' data:',HexStr(Body^.DATA,8));{$endif}
 
  GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
- GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,False{True});
+ GFXMicroEngine.PushFlip(GFXRing.Current^.Flip,Body^.DATA,adr,True);
 end;
 
 procedure onEventWriteEop(pm4Hdr:PM4_TYPE_3_HEADER;Body:PEVENTWRITEEOP);

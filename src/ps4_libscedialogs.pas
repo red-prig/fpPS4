@@ -190,6 +190,7 @@ type
 function ps4_sceSaveDataDialogClose(closeParam:pSceSaveDataDialogCloseParam):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSaveDataDialogClose');
+ status_save_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
 
