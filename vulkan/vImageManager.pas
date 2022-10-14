@@ -644,13 +644,16 @@ begin
    begin
     //hash test
 
-    if IMAGE_TEST_HACK then
+    if not IMAGE_LOAD_HACK then
     begin
-     Result.data_usage:=Result.data_usage and (not TM_READ);
-    end else
-    if CheckFromBuffer(Result) then
-    begin
-     Result.data_usage:=Result.data_usage and (not TM_READ);
+     if IMAGE_TEST_HACK then
+     begin
+      Result.data_usage:=Result.data_usage and (not TM_READ);
+     end else
+     if CheckFromBuffer(Result) then
+     begin
+      Result.data_usage:=Result.data_usage and (not TM_READ);
+     end;
     end;
 
    end;
@@ -659,11 +662,7 @@ begin
    begin
     Result.submit_id:=cmd.submit_id;
     Result.data_usage:=Result.data_usage or TM_READ;
-
-    if not IMAGE_LOAD_HACK then
-    begin
-     LoadFromBuffer(cmd,Result);
-    end;
+    LoadFromBuffer(cmd,Result);
    end;
 
   end;
