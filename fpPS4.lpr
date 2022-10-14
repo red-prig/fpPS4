@@ -44,6 +44,10 @@ uses
  ps4_program,
  ps4_elf_tls,
 
+ ps4_videodrv,
+ vMemory,
+ vImageManager,
+
  trace_manager;
 
 function ParseCmd:Boolean;
@@ -62,6 +66,14 @@ begin
   Writeln('  -e <name>  //decrypted elf or self file name');
   Writeln('  -f <name>  //folder of app');
   Writeln('  -s <name>  //savedata path');
+
+  Writeln('  -h <name>  //enable hack');
+  Writeln('     DEPTH_DISABLE_HACK   //disable depth buffer');
+  Writeln('     COMPUTE_DISABLE_HACK //disable compute shaders');
+  Writeln('     MEMORY_BOUND_HACK    //limit the amount of GPU allocated memory (iGPU)');
+  Writeln('     IMAGE_TEST_HACK      //always mark that the texture has changed');
+  Writeln('     IMAGE_LOAD_HACK      //never reload texture');
+
   Exit(False);
  end;
 
@@ -72,6 +84,7 @@ begin
     '-e':n:=0;
     '-f':n:=1;
     '-s':n:=2;
+    '-h':n:=3;
    else
      if (n<>-1) then
      begin
@@ -91,6 +104,16 @@ begin
          end;
        2:begin
           ps4_app.save_path:=Trim(ParamStr(i));
+         end;
+       3:begin
+          case UpperCase(ParamStr(i)) of
+           'DEPTH_DISABLE_HACK'  :ps4_videodrv.DEPTH_DISABLE_HACK:=True;
+           'COMPUTE_DISABLE_HACK':ps4_videodrv.COMPUTE_DISABLE_HACK:=True;
+           'MEMORY_BOUND_HACK'   :vMemory.MEMORY_BOUND_HACK:=True;
+           'IMAGE_TEST_HACK'     :vImageManager.IMAGE_TEST_HACK:=True;
+           'IMAGE_LOAD_HACK'     :vImageManager.IMAGE_LOAD_HACK:=True;
+           else;
+          end;
          end;
       end;
       n:=-1;
@@ -662,6 +685,11 @@ begin
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Taiko_No_Tatsujin\CUSA07515\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Taiko_No_Tatsujin\CUSA07515\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\project_PM4_KernelEqueue\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\project_PM4_KernelEqueue\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Shantae Riskys Revenge\CUSA01587\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Shantae Riskys Revenge\CUSA01587\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
