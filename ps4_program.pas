@@ -335,7 +335,8 @@ begin
  if (mode and SCE_SAVE_DATA_MOUNT_MODE_CREATE)<>0 then
  begin
   if not ForceDirectories(ps4_app.save_path) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
-  if not CreateDir(sp) then Exit(SCE_SAVE_DATA_ERROR_EXISTS);
+  //if not CreateDir(sp) then Exit(SCE_SAVE_DATA_ERROR_EXISTS);
+  CreateDir(sp);
  end else
  begin
   if not DirectoryExists(sp) then Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);

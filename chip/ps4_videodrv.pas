@@ -69,6 +69,10 @@ const
 
 procedure vSubmitDone;
 
+var
+ DEPTH_DISABLE_HACK:Boolean=false;
+ COMPUTE_DISABLE_HACK:Boolean=false;
+
 implementation
 
 Uses
@@ -1893,8 +1897,8 @@ begin
 
    end;
 
-  if not GPU_REGS.COMP_ENABLE then Exit(false);
-  if GPU_REGS.DB_ENABLE {false} then
+  if DEPTH_DISABLE_HACK and (not GPU_REGS.COMP_ENABLE) then Exit(false);
+  if (not DEPTH_DISABLE_HACK) and GPU_REGS.DB_ENABLE {false} then
   begin
    DB_INFO:=GPU_REGS.GET_DB_INFO;
 
@@ -2200,7 +2204,7 @@ begin
  //writeln;
 end;
 
-procedure UpdateGpuRegsInfoCompute;
+function UpdateGpuRegsInfoCompute:Boolean;
 var
  FUniformBuilder:TvUniformBuilder;
 
@@ -2221,13 +2225,16 @@ var
 
  FComputePipeline:TvComputePipeline2;
 begin
+ Result:=False;
+
+ if COMPUTE_DISABLE_HACK then Exit;
 
  {$ifdef null_rt}Exit;{$endif}
 
  if (LastSetShCount=GFXRing.SetShCount) and
     (LastSetCxCount=GFXRing.SetCxCount) then
  begin
-  Exit;
+  Exit(True);
  end;
 
  LastSetShCount:=GFXRing.SetShCount;
@@ -2300,6 +2307,7 @@ begin
  GFXRing.CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_COMPUTE,FDescriptorGroup);
 
  //
+ Result:=True;
 end;
 
 procedure test_reset_index(INDEX_TYPE:TVkIndexType;RESET_EN:Byte;IB_RESET_INDX:DWORD);
@@ -2409,9 +2417,10 @@ end;
 procedure onDispatchDirect(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDISPATCHDIRECT);
 begin
 
- UpdateGpuRegsInfoCompute;
-
- GFXRing.CmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
+ if UpdateGpuRegsInfoCompute then
+ begin
+  GFXRing.CmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
+ end;
 
  {$ifdef ww}Writeln('onDispatchDirect:',Body^.dimX,':',Body^.dimY,':',Body^.dimZ);{$endif}
 

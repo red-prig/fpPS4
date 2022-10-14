@@ -342,14 +342,133 @@ begin
  end;
 end;
 
+const
+ SCE_SAVE_DATA_SORT_KEY_DIRNAME    =0;
+ SCE_SAVE_DATA_SORT_KEY_USER_PARAM =1;
+ SCE_SAVE_DATA_SORT_KEY_BLOCKS     =2;
+ SCE_SAVE_DATA_SORT_KEY_MTIME      =3;
+ SCE_SAVE_DATA_SORT_KEY_FREE_BLOCKS=4;
+
+ SCE_SAVE_DATA_SORT_ORDER_ASCENT =0;
+ SCE_SAVE_DATA_SORT_ORDER_DESCENT=1;
+
+function _convert_dir_name_search(P:PChar):RawByteString;
+var
+ i:Integer;
+begin
+ Result:=RawByteString(P); //copy
+ if (Length(Result)=0) then
+ begin
+  Result:='*';
+ end else
+ For i:=1 to Length(Result) do
+ begin
+  Case Result[i] of
+   '%':Result[i]:='*';
+   '_':Result[i]:='#';
+   else;
+  end;
+ end;
+end;
+
+function StringListAscCompare(List:TStringList;Index1,Index2:Integer):Integer;
+begin
+ Result:=CompareStr(List[Index1],List[Index2]);
+end;
+
+function StringListDscCompare(List:TStringList;Index1,Index2:Integer):Integer;
+begin
+ Result:=CompareStr(List[Index2],List[Index1]);
+end;
+
 function ps4_sceSaveDataDirNameSearch(cond:pSceSaveDataDirNameSearchCond;
                                       sres:pSceSaveDataDirNameSearchResult):Integer; SysV_ABI_CDecl;
+var
+ ROut:TRawByteSearchRec;
+ S,F:RawByteString;
+ List:TStringList;
+ i,n:Integer;
 begin
  Result:=0;
- if (sres<>nil) then
- begin
-  sres^:=Default(SceSaveDataDirNameSearchResult);
+
+ if (cond=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (sres=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+
+ Case cond^.order of
+  SCE_SAVE_DATA_SORT_ORDER_ASCENT :;
+  SCE_SAVE_DATA_SORT_ORDER_DESCENT:;
+  else
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
+
+ Assert(cond^.key  =SCE_SAVE_DATA_SORT_KEY_DIRNAME);
+
+ s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(@cond^.dirName);
+
+ ROut:=Default(TRawByteSearchRec);
+ if (FindFirst(s,faDirectory,ROut)=0) then
+ begin
+  List:=TStringList.Create;
+  repeat
+   if (ROut.FindData.dwFileAttributes and faDirectory)=faDirectory then
+   begin
+    F:=UTF8Encode(WideString(ROut.FindData.cFileName));
+    Case F of
+     '.','..':;
+     else
+      List.Add(F);
+    end;
+   end;
+  until (FindNext(ROut)<>0);
+  FindClose(ROut);
+
+  sres^.hitNum:=List.Count;
+  if (List.Count<>0) and (sres^.dirNamesNum<>0) then
+  begin
+   Case cond^.order of
+    SCE_SAVE_DATA_SORT_ORDER_ASCENT :List.CustomSort(@StringListAscCompare);
+    SCE_SAVE_DATA_SORT_ORDER_DESCENT:List.CustomSort(@StringListDscCompare);
+    else;
+   end;
+
+   n:=List.Count;
+   if (n>sres^.dirNamesNum) then n:=sres^.dirNamesNum;
+
+   sres^.setNum:=n;
+
+   For i:=0 to n-1 do
+   begin
+    s:=List[i];
+
+    if (sres^.dirNames<>nil) then
+    begin
+     sres^.dirNames[i]:=Default(SceSaveDataDirName);
+     MoveChar0(PChar(s)^,sres^.dirNames[i],SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+    end;
+
+    if (sres^.params<>nil) then
+    begin
+     sres^.params[i]:=Default(SceSaveDataParam);
+    end;
+
+    if (sres^.infos<>nil) then
+    begin
+     sres^.infos[i]:=Default(SceSaveDataSearchInfo);
+     sres^.infos[i].blocks    :=100000;
+     sres^.infos[i].freeBlocks:=100000;
+    end;
+
+   end;
+
+  end else
+  begin
+   sres^.setNum:=0;
+  end;
+
+  FreeAndNil(List);
+
+ end;
+
 end;
 
 type

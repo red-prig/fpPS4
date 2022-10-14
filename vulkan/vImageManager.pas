@@ -103,6 +103,10 @@ const
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
 
+var
+ IMAGE_TEST_HACK:Boolean=False;
+ IMAGE_LOAD_HACK:Boolean=False;
+
 implementation
 
 type
@@ -639,17 +643,27 @@ begin
    if ((Result.data_usage and TM_READ)<>0) and (Result.submit_id<>cmd.submit_id) then
    begin
     //hash test
+
+    if IMAGE_TEST_HACK then
+    begin
+     Result.data_usage:=Result.data_usage and (not TM_READ);
+    end else
     if CheckFromBuffer(Result) then
     begin
      Result.data_usage:=Result.data_usage and (not TM_READ);
     end;
+
    end;
 
    if ((Result.data_usage and TM_READ)=0) and ((data_usage and TM_READ)<>0) then
    begin
     Result.submit_id:=cmd.submit_id;
     Result.data_usage:=Result.data_usage or TM_READ;
-    LoadFromBuffer(cmd,Result);
+
+    if not IMAGE_LOAD_HACK then
+    begin
+     LoadFromBuffer(cmd,Result);
+    end;
    end;
 
   end;

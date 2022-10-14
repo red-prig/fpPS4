@@ -93,6 +93,9 @@ Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil
 function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
 
+var
+ MEMORY_BOUND_HACK:Boolean=False;
+
 implementation
 
 uses
@@ -673,7 +676,10 @@ begin
  InitVulkan;
 
  //Some games request too much video memory, relevant for built-in iGPU
- if (len>1024*1024*1024) then len:=1024*1024*1024;
+ if MEMORY_BOUND_HACK then
+ begin
+  if (len>1024*1024*1024) then len:=1024*1024*1024;
+ end;
 
  Result:=vkAllocHostPointer(Device.FHandle,len,MemManager.FHostVisibMt{FHostCacheMt},addr);
  Assert(Result<>VK_NULL_HANDLE);
