@@ -89,28 +89,65 @@ begin
  end;
 end;
 
-function _fix_buf_size(var Offset,Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
-var
- mr:TVkMemoryRequirements;
- pAlign:TVkDeviceSize;
+function Max(a,b:QWORD):QWORD; inline;
 begin
- mr:=GetRequirements(Size,usage,@buf_ext);
-
- pAlign:=AlignDw(Offset,mr.alignment);
- Result:=(Offset-pAlign);
-
- Offset:=pAlign;
- Size  :=Size+Result;
-
- if (Size<mr.size) then Size:=mr.size;
+ if (a>b) then Result:=a else Result:=b;
 end;
 
-function _New_simple(host:TvPointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+function _fix_buf_size(sparce:Boolean;var Addr:Pointer;var Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
 var
+ mr:TVkMemoryRequirements;
+ pAlign:Pointer;
+begin
+ mr:=GetRequirements(sparce,Size,usage,@buf_ext);
+
+ pAlign:=AlignDw(Addr,mr.alignment);
+ Result:=(Addr-pAlign);
+
+ Addr:=pAlign;
+ Size:=Max(Size+Result,mr.size);
+end;
+
+function _is_sparce(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):Integer;
+var
+ host:TvPointer;
+ hsize:qword;
+begin
+ _fix_buf_size(False,Addr,Size,usage);
+
+ host:=Default(TvPointer);
+ if not TryGetHostPointerByAddr(addr,host,@hsize) then
+ begin
+  Exit(-1);
+ end;
+
+ if (hsize>=Size) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=1;
+ end;
+end;
+
+function _New_simple(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+var
+ host:TvPointer;
+
  t:TvHostBuffer;
  delta:TVkDeviceSize;
 begin
- delta:=_fix_buf_size(host.FOffset,Size,usage);
+ Result:=nil;
+
+ delta:=_fix_buf_size(False,Addr,Size,usage);
+
+ host:=Default(TvPointer);
+ if not TryGetHostPointerByAddr(addr,host) then Exit;
 
  t:=TvHostBuffer.Create(Size,usage,@buf_ext);
 
@@ -119,11 +156,6 @@ begin
  t.BindMem(host);
 
  Result:=t;
-end;
-
-function Min(a,b:QWORD):QWORD; inline;
-begin
- if (a<b) then Result:=a else Result:=b;
 end;
 
 function _New_sparce(queue:TVkQueue;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
@@ -145,7 +177,7 @@ begin
  Result:=nil;
 
  //hack; alignment is the same in virtual memory
- delta:=_fix_buf_size(TVkDeviceSize(Addr),Size,usage);
+ delta:=_fix_buf_size(True,Addr,Size,usage);
 
  Binds:=Default(AVkSparseMemoryBind);
  host :=Default(TvPointer);
@@ -188,9 +220,6 @@ end;
 function FetchHostBuffer(cmd:TvCustomCmdBuffer;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
 var
  t:TvHostBuffer;
- host:TvPointer;
-
- _size:qword;
 
 label
  _exit;
@@ -217,20 +246,18 @@ begin
  if (t=nil) then
  begin
   //Writeln('NewBuf:',HexStr(Addr));
-  host:=Default(TvPointer);
-  if not TryGetHostPointerByAddr(addr,host,@_size) then
-  begin
-   Goto _exit;
-  end;
 
-  if (_size>=Size) then
-  begin
-   t:=_New_simple(host,Size,usage);
-  end else
-  begin //is Sparse buffers
-   Assert(vDevice.sparseBinding,'sparseBinding not support');
-   Assert(MemManager.SparceSupportHost,'sparse not support for host');
-   t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
+  t:=nil;
+  Case _is_sparce(Addr,Size,usage) of
+   0:begin
+      t:=_New_simple(Addr,Size,usage);
+     end;
+   1:begin  //is Sparse buffers
+      Assert(vDevice.sparseBinding,'sparseBinding not support');
+      Assert(MemManager.SparceSupportHost,'sparse not support for host');
+      t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
+     end;
+   else;
   end;
 
   t.FAddr:=addr;

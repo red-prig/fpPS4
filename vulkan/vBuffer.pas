@@ -23,7 +23,7 @@ type
  end;
 
 function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
-function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
+function GetRequirements(sparce:boolean;size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
 
 implementation
 
@@ -72,11 +72,14 @@ begin
  vkDestroyFence(Device.FHandle,fence,nil);
 end;
 
-function GetRequirements(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
+function GetRequirements(sparce:boolean;size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil):TVkMemoryRequirements;
 var
  Buffer:TvBuffer;
 begin
- Buffer:=TvBuffer.Create(size,usage,ext);
+ Case sparce of
+  True :Buffer:=TvBuffer.CreateSparce(size,usage,ext);
+  False:Buffer:=TvBuffer.Create(size,usage,ext);
+ end;
  Result:=Buffer.GetRequirements;
  Buffer.Free;
 end;

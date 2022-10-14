@@ -1280,7 +1280,8 @@ begin
 
   mmVGT_INDX_OFFSET      :DWORD(GPU_REGS.VGT_VTX_INDX.INDX_OFFSET):=value;
 
-  mmVGT_MULTI_PRIM_IB_RESET_INDX:DWORD(GPU_REGS.VGT_MULTI_PRIM_IB_RESET_INDX):=value;
+  mmVGT_MULTI_PRIM_IB_RESET_EN  :DWORD(GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN):=value;
+  mmVGT_MULTI_PRIM_IB_RESET_INDX:DWORD(GPU_REGS.VGT_MULTI_PRIM.IB_RESET_INDX):=value;
 
   mmVGT_OUTPUT_PATH_CNTL:DWORD(GPU_REGS.VGT_OUTPUT_PATH_CNTL):=value;
 
@@ -1766,7 +1767,9 @@ begin
 
   FRenderCmd.FFramebuffer.SetSize(GPU_REGS.GET_SCREEN_SIZE);
 
-  FRenderCmd.FPipeline.SetPrimType(GPU_REGS.GET_PRIM_TYPE);
+  FRenderCmd.FPipeline.SetPrimType (GPU_REGS.GET_PRIM_TYPE);
+  FRenderCmd.FPipeline.SetPrimReset(GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN.RESET_EN);
+
   FRenderCmd.FPipeline.SetBlendColors(@GPU_REGS.CB_BLEND_RGBA);
 
   //FRenderCmd.FPipeline.multisampling.sampleShadingEnable  :=VK_FALSE;
@@ -1890,7 +1893,7 @@ begin
 
    end;
 
-  //if not GPU_REGS.COMP_ENABLE then Exit(false);
+  if not GPU_REGS.COMP_ENABLE then Exit(false);
   if GPU_REGS.DB_ENABLE {false} then
   begin
    DB_INFO:=GPU_REGS.GET_DB_INFO;
@@ -2299,6 +2302,19 @@ begin
  //
 end;
 
+procedure test_reset_index(INDEX_TYPE:TVkIndexType;RESET_EN:Byte;IB_RESET_INDX:DWORD);
+begin
+ if (RESET_EN<>0) then
+ begin
+  Case INDEX_TYPE of
+   VK_INDEX_TYPE_UINT8_EXT:Assert(IB_RESET_INDX=$000000FF,'unsupport reset index:'+HexStr(IB_RESET_INDX,8));
+   VK_INDEX_TYPE_UINT16   :Assert(IB_RESET_INDX=$0000FFFF,'unsupport reset index:'+HexStr(IB_RESET_INDX,8));
+   VK_INDEX_TYPE_UINT32   :Assert(IB_RESET_INDX=$FFFFFFFF,'unsupport reset index:'+HexStr(IB_RESET_INDX,8));
+   else;
+  end;
+ end;
+end;
+
 procedure onDrawIndex2(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEX2);
 var
  Addr:Pointer;
@@ -2312,13 +2328,26 @@ begin
 
   //drawInitiator:TVGT_DRAW_INITIATOR;
 
+ test_reset_index(GPU_REGS.GET_INDEX_TYPE,
+                  GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN.RESET_EN,
+                  GPU_REGS.VGT_MULTI_PRIM.IB_RESET_INDX);
+
  if UpdateGpuRegsInfo then
  begin
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
   GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
  end;
 
- {$ifdef ww}Writeln('DrawIndex:',Body^.indexCount);{$endif}
+ {$ifdef ww}
+  Writeln('DrawIndex:',Body^.indexCount);
+  Writeln('VGT_VTX_INDX.CNT_EN         :',GPU_REGS.VGT_VTX_INDX.CNT_EN.VTX_CNT_EN);
+  Writeln('VGT_VTX_INDX.INDX_OFFSET    :',GPU_REGS.VGT_VTX_INDX.INDX_OFFSET);
+
+  Writeln('VGT_MULTI_PRIM.IB_RESET_EN  :',GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN.RESET_EN);
+  Writeln('VGT_MULTI_PRIM.IB_RESET_INDX:',HexStr(GPU_REGS.VGT_MULTI_PRIM.IB_RESET_INDX,8));
+ {$endif}
+
+
 
  //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
@@ -2332,7 +2361,10 @@ begin
   GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
  end;
 
- {$ifdef ww}Writeln('onDrawIndexAuto:',Body^.indexCount);{$endif}
+ {$ifdef ww}
+  Writeln('onDrawIndexAuto:',Body^.indexCount);
+  Writeln('VGT_VTX_INDX.CNT_EN:',GPU_REGS.VGT_VTX_INDX.CNT_EN.VTX_CNT_EN);
+ {$endif}
 
  //GFXMicroEngine.PushCmd(GFXRing.CmdBuffer);
 end;
@@ -2352,13 +2384,25 @@ begin
  GPU_REGS.VGT_DMA.SIZE    :=Body^.indexCount;
  GPU_REGS.VGT_DMA.INDICES :=Body^.indexCount;
 
+ test_reset_index(GPU_REGS.GET_INDEX_TYPE,
+                  GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN.RESET_EN,
+                  GPU_REGS.VGT_MULTI_PRIM.IB_RESET_INDX);
+
  if UpdateGpuRegsInfo then
  begin
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
   GFXRing.CmdBuffer.DrawIndexOffset2(Addr,Body^.indexOffset,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
  end;
 
- {$ifdef ww}Writeln('DrawIndexOffset2:',Body^.indexOffset,' ',Body^.indexCount);{$endif}
+ {$ifdef ww}
+  Writeln('DrawIndexOffset2:',Body^.indexOffset,' ',Body^.indexCount);
+
+  Writeln('VGT_VTX_INDX.CNT_EN         :',GPU_REGS.VGT_VTX_INDX.CNT_EN.VTX_CNT_EN);
+  Writeln('VGT_VTX_INDX.INDX_OFFSET    :',GPU_REGS.VGT_VTX_INDX.INDX_OFFSET);
+
+  Writeln('VGT_MULTI_PRIM.IB_RESET_EN  :',GPU_REGS.VGT_MULTI_PRIM.IB_RESET_EN.RESET_EN);
+  Writeln('VGT_MULTI_PRIM.IB_RESET_INDX:',HexStr(GPU_REGS.VGT_MULTI_PRIM.IB_RESET_INDX,8));
+ {$endif}
 
 end;
 
@@ -2380,6 +2424,7 @@ type
 procedure onNumInstances(pm4Hdr:PM4_TYPE_3_HEADER;Body:PVGT_DMA_NUM_INSTANCES);
 begin
  GPU_REGS.VGT_DMA.NUM_INSTANCES:=Body^;
+ Assert(GPU_REGS.VGT_DMA.NUM_INSTANCES<=1,'instancing TODO:'+IntToStr(GPU_REGS.VGT_DMA.NUM_INSTANCES));
  {$ifdef ww}Writeln('onNumInstances:',Body^);{$endif}
 end;
 

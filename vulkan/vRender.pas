@@ -73,6 +73,7 @@ type
   emulate_primtype:Integer;
 
   Procedure SetPrimType(t:TVkPrimitiveTopology);
+  Procedure SetPrimReset(enable:TVkBool32);
   Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
   Procedure AddBlend(const b:TVkPipelineColorBlendAttachmentState);
   Procedure Clear;
@@ -396,6 +397,11 @@ begin
   end;
 
  end;
+end;
+
+Procedure TvGraphicsPipeline.SetPrimReset(enable:TVkBool32);
+begin
+ inputAssembly.primitiveRestartEnable:=enable;
 end;
 
 Procedure TvGraphicsPipeline.AddVPort(const V:TVkViewport;const S:TVkRect2D);
