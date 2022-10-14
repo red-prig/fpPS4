@@ -125,6 +125,15 @@ begin
  Result:=0;
 end;
 
+//SceSaveDataDialogParam
+function ps4_sceSaveDataDialogOpen(param:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (param=nil) then Exit(SCE_ERROR_DIALOG_ERROR_PARAM_INVALID);
+ Writeln('sceSaveDataDialogOpen:');
+ status_save_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+ Result:=0;
+end;
+
 function ps4_sceSaveDataDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
  Result:=status_save_dialog;
@@ -506,6 +515,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceSaveDataDialog');
  lib^.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);
+ lib^.set_proc($E2D3E1B0FE85A432,@ps4_sceSaveDataDialogOpen);
  lib^.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
  lib^.set_proc($1112B392C6AE0090,@ps4_sceSaveDataDialogGetStatus);
  lib^.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);
