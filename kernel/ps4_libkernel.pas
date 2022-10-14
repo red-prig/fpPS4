@@ -1211,12 +1211,19 @@ begin
  lib^.set_proc($FABDEB305C08B55E,@ps4_sceKernelPread);
  lib^.set_proc($50AD939760D6527B,@ps4_sceKernelClose);
 
- lib^.set_proc($C2E0ABA081A3B768,@ps4_open);
- lib^.set_proc($6D8FCF3BA261CE14,@ps4_close);
+ lib^.set_proc($C2E0ABA081A3B768,@ps4_open);  //open
+ lib^.set_proc($E9CDEB09513F7D35,@ps4_open);  //_open
+ lib^.set_proc($6D8FCF3BA261CE14,@ps4_close); //close
+ lib^.set_proc($34DB4568A25B3EDD,@ps4_close); //_close
  lib^.set_proc($171559A81000EE4B,@ps4_write); //_write
  lib^.set_proc($14DE2068F9AE155F,@ps4_write); //write
  lib^.set_proc($0D1B81B76A6F2029,@ps4_read);  //_read
  lib^.set_proc($02A062A02DAF1772,@ps4_read);  //read
+ lib^.set_proc($F9646590A8D9BDA8,@ps4_readv); //_readv
+ lib^.set_proc($23B22670B76CFEE5,@ps4_readv); //readv
+
+ lib^.set_proc($97F61135C3DE998C,@ps4_lseek); //_lseek
+ lib^.set_proc($3B2E88A7082D60E9,@ps4_lseek); //lseek
 
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);

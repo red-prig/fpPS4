@@ -152,6 +152,12 @@ const
  SCE_KERNEL_LWFS_ENABLE  =(1);
 
 type
+ p_iovec=^iovec;
+ iovec=packed record
+  iov_base:Pointer; //Base address.
+  iov_len :QWORD;   //Length.
+ end;
+
  PSceKernelStat=^SceKernelStat;
  SceKernelStat=packed object
   type
@@ -200,8 +206,12 @@ function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDe
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
-function ps4_write(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
-function ps4_read(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_write(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
+function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
+
+function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+
+function ps4_lseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
@@ -382,7 +392,10 @@ begin
 
  if (Result=-1) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EMFILE));
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EMFILE);
+ end else
+ begin
+  _set_sce_errno(0);
  end;
 
 end;
@@ -412,7 +425,13 @@ begin
  end;
  _sig_unlock;
 
- if (Result=-1) then Result:=_set_sce_errno(SCE_KERNEL_ERROR_EOVERFLOW);
+ if (Result=-1) then
+ begin
+  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EOVERFLOW);
+ end else
+ begin
+  _set_sce_errno(0);
+ end;
 end;
 
 function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
@@ -439,6 +458,7 @@ begin
  if WriteFile(h,buf^,nbytes,N,nil) then
  begin
   Result:=N;
+  _set_sce_errno(0);
  end else
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
@@ -484,6 +504,7 @@ begin
  if ReadFile(h,buf^,nbytes,N,nil) then
  begin
   Result:=N;
+  _set_sce_errno(0);
  end else
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
@@ -525,6 +546,7 @@ begin
  if ReadFile(h,buf^,nbytes,N,@O) then
  begin
   Result:=N;
+  _set_sce_errno(0);
  end else
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
@@ -543,6 +565,7 @@ begin
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
+
  if (Result<>0) then
  begin
   Result:=_set_errno(EBADF);
@@ -563,6 +586,7 @@ begin
  _sig_lock;
  Result:=_close(fd);
  _sig_unlock;
+
  if (Result<>0) then
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EBADF);
@@ -632,14 +656,18 @@ begin
   end;
  end;
 
- stat^.st_mode :=file_attr_to_st_mode(hfi.dwFileAttributes);
- stat^.st_size :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
+ stat^.st_mode    :=file_attr_to_st_mode(hfi.dwFileAttributes);
+ stat^.st_size    :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
 
- stat^.st_atim:=filetime_to_timespec(hfi.ftLastAccessTime);
- stat^.st_mtim:=filetime_to_timespec(hfi.ftLastWriteTime);
- stat^.st_ctim:=stat^.st_mtim;
+ stat^.st_atim    :=filetime_to_timespec(hfi.ftLastAccessTime);
+ stat^.st_mtim    :=filetime_to_timespec(hfi.ftLastWriteTime);
+ stat^.st_ctim    :=stat^.st_mtim;
  stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
 
+ stat^.st_blocks  :=((stat^.st_size+511) div 512);
+ stat^.st_blksize :=512;
+
+ _set_errno(0);
  Result:=0;
 end;
 
@@ -706,14 +734,14 @@ begin
       end;
      end;
 
-     stat^.st_mode :=file_attr_to_st_mode(hfi.dwFileAttributes);
-     stat^.st_size :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
-     stat^.st_nlink:=Word(hfi.nNumberOfLinks);
-     stat^.st_gen  :=hfi.nFileIndexLow;
+     stat^.st_mode    :=file_attr_to_st_mode(hfi.dwFileAttributes);
+     stat^.st_size    :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
+     stat^.st_nlink   :=Word(hfi.nNumberOfLinks);
+     stat^.st_gen     :=hfi.nFileIndexLow;
 
-     stat^.st_atim:=filetime_to_timespec(hfi.ftLastAccessTime);
-     stat^.st_mtim:=filetime_to_timespec(hfi.ftLastWriteTime);
-     stat^.st_ctim:=stat^.st_mtim;
+     stat^.st_atim    :=filetime_to_timespec(hfi.ftLastAccessTime);
+     stat^.st_mtim    :=filetime_to_timespec(hfi.ftLastWriteTime);
+     stat^.st_ctim    :=stat^.st_mtim;
      stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
 
      stat^.st_blocks  :=((stat^.st_size+511) div 512);
@@ -724,6 +752,7 @@ begin
    Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
  end;
 
+ _set_sce_errno(0);
  Result:=0;
 end;
 
@@ -732,7 +761,7 @@ begin
  SetString(Result,P,L);
 end;
 
-function ps4_write(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_write(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
 var
  h:THandle;
  N:DWORD;
@@ -756,6 +785,7 @@ begin
  if WriteFile(h,data^,size,N,nil) then
  begin
   Result:=N;
+  _set_errno(0);
  end else
  begin
   Result:=_set_errno(EIO);
@@ -763,7 +793,7 @@ begin
  _sig_unlock;
 end;
 
-function ps4_read(fd:Integer;data:Pointer;size:DWORD):Integer; SysV_ABI_CDecl;
+function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
 var
  h:THandle;
  N:DWORD;
@@ -775,7 +805,7 @@ begin
  begin
   BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
   Result:=size;
-  _set_sce_errno(0);
+  _set_errno(0);
   Exit;
  end;
 
@@ -793,11 +823,111 @@ begin
  if ReadFile(h,data^,size,N,nil) then
  begin
   Result:=N;
+  _set_errno(0);
  end else
  begin
   Result:=_set_errno(EIO);
  end;
  _sig_unlock;
+end;
+
+function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+var
+ h:THandle;
+ N:DWORD;
+ i:Integer;
+begin
+ if (vector=nil) then Exit(_set_errno(EFAULT));
+
+ if (count=0) then Exit(_set_errno(EINVAL));
+
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+
+  Result:=0;
+  For i:=0 to count-1 do
+  begin
+   if (vector[i].iov_base=nil) then Exit(_set_errno(EFAULT));
+   if (vector[i].iov_len=0) then Exit(_set_errno(EINVAL));
+
+   BCryptGenRandom(nil,vector[i].iov_base,vector[i].iov_len,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+   Result:=Result+vector[i].iov_len;
+  end;
+
+  _set_errno(0);
+  Exit;
+ end;
+
+ _sig_lock;
+ h:=_get_osfhandle(fd);
+ _sig_unlock;
+
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_errno(EBADF));
+ end;
+
+ _sig_lock;
+
+ Result:=0;
+ For i:=0 to count-1 do
+ begin
+  if (vector[i].iov_base=nil) then Exit(_set_errno(EFAULT));
+  if (vector[i].iov_len=0) then Exit(_set_errno(EINVAL));
+
+  N:=0;
+  if ReadFile(h,vector[i].iov_base^,vector[i].iov_len,N,nil) then
+  begin
+   Result:=Result+N;
+   if (N<vector[i].iov_len) then Exit;
+  end else
+  begin
+   Result:=_set_errno(EIO);
+   Break;
+  end;
+
+ end;
+
+ if (Result>=0) then
+ begin
+  _set_errno(0);
+ end;
+
+ _sig_unlock;
+end;
+
+function ps4_lseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
+var
+ h:THandle;
+begin
+ if (dev_random_fd=fd) then Exit(_set_errno(EINVAL));
+
+ _sig_lock;
+ h:=_get_osfhandle(fd);
+ _sig_unlock;
+
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(_set_errno(EBADF));
+ end;
+
+ _sig_lock;
+ case whence of
+  SCE_KERNEL_SEEK_SET:Result:=FileSeek(h,offset,fsFromBeginning);
+  SCE_KERNEL_SEEK_CUR:Result:=FileSeek(h,offset,fsFromCurrent);
+  SCE_KERNEL_SEEK_END:Result:=FileSeek(h,offset,fsFromEnd);
+  else
+                      Result:=_set_errno(EINVAL);
+ end;
+ _sig_unlock;
+
+ if (Result=-1) then
+ begin
+  Result:=_set_errno(EOVERFLOW);
+ end else
+ begin
+  _set_errno(0);
+ end;
 end;
 
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
@@ -855,6 +985,7 @@ begin
   end;
  end;
 
+ _set_sce_errno(0);
 end;
 
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
@@ -912,6 +1043,7 @@ begin
   end;
  end;
 
+ _set_errno(0);
 end;
 
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
@@ -937,6 +1069,7 @@ begin
  if FileExists(fn) or DirectoryExists(fn) then
  begin
   Result:=0;
+  _set_errno(0);
  end else
  begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_ENOENT);
