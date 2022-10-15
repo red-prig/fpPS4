@@ -469,6 +469,21 @@ end;
 
 //
 
+const
+ SCE_IME_DIALOG_STATUS_NONE    =0;
+ SCE_IME_DIALOG_STATUS_RUNNING =1;
+ SCE_IME_DIALOG_STATUS_FINISHED=2;
+
+var
+ status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
+
+function ps4_sceImeDialogGetStatus:Integer; SysV_ABI_CDecl;
+begin
+ Result:=status_ime_dialog;
+end;
+
+//
+
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -580,6 +595,16 @@ begin
  lib^.set_proc($8039B96BA19213DE,@ps4_scePlayerInvitationDialogTerminate);
 end;
 
+function Load_libSceImeDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceImeDialog');
+ lib^.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
+end;
+
 initialization
  ps4_app.RegistredPreLoad('libSceCommonDialog.prx'          ,@Load_libSceCommonDialog);
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx'           ,@Load_libSceErrorDialog);
@@ -589,6 +614,7 @@ initialization
  ps4_app.RegistredPreLoad('libSceNpCommerce.prx'            ,@Load_libSceNpCommerce);
  ps4_app.RegistredPreLoad('libSceSigninDialog.prx'          ,@Load_libSceSigninDialog);
  ps4_app.RegistredPreLoad('libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
+ ps4_app.RegistredPreLoad('libSceImeDialog.prx'             ,@Load_libSceImeDialog);
 
 end.
 

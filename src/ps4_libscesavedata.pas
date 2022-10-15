@@ -330,6 +330,14 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=UnMountPath(PChar(mountPoint));
+ //backup this
+ _sig_unlock;
+end;
+
 function ps4_sceSaveDataGetMountInfo(mountPoint:PSceSaveDataMountPoint;
                                      info:pSceSaveDataMountInfo):Integer; SysV_ABI_CDecl;
 begin
@@ -401,7 +409,7 @@ begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- Assert(cond^.key  =SCE_SAVE_DATA_SORT_KEY_DIRNAME);
+ //Assert(cond^.key  =SCE_SAVE_DATA_SORT_KEY_DIRNAME);
 
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(@cond^.dirName);
 
@@ -511,6 +519,7 @@ begin
  lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
+ lib^.set_proc($57069DC0104127CD,@ps4_sceSaveDataUmountWithBackup);
  lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
  lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
