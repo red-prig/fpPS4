@@ -588,19 +588,22 @@ begin
       end;
 
       ucontext:=Default(_ucontext_t);
-      _copy_ctx_from_sys(@ectx^.CONTEXT,@ucontext);
+      _copy_ctx_from_sys(ectx^.CONTEXT,@ucontext);
       ucontext.uc_sigmask:=t^.sig._mask;
       ucontext.uc_mcontext.mc_err:=errno;
 
-      asm
-       //Mov %rsp,_rsp
-       Mov %rbp,_rbp
-      end;
+      //asm
+      // //Mov %rsp,_rsp
+      // Mov %rbp,_rbp
+      //end;
 
       //link break from???
       //ucontext.uc_mcontext.mc_lbrfrom :=_rsp;
       //link break to???
-      ucontext.uc_mcontext.mc_lbrto   :=_rbp; //bottom in GC_push_all_stack
+      //ucontext.uc_mcontext.mc_lbrto   :=_rbp; //bottom in GC_push_all_stack
+
+      //ucontext.uc_mcontext.mc_lbrfrom :=ucontext.uc_mcontext.mc_rsp;
+      //ucontext.uc_mcontext.mc_lbrto   :=ucontext.uc_mcontext.mc_rsp;
 
       _lock:=t^.sig._lock;
 
