@@ -302,6 +302,7 @@
       <Unit66>
         <Filename Value="src\ps4_libscediscmap.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDiscMap"/>
       </Unit66>
       <Unit67>
         <Filename Value="src\ps4_libscegnmdriver.pas"/>
@@ -316,6 +317,7 @@
       <Unit69>
         <Filename Value="src\ps4_libsceime.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceIme"/>
       </Unit69>
       <Unit70>
         <Filename Value="src\ps4_libscemouse.pas"/>

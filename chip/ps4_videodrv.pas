@@ -69,6 +69,8 @@ const
 
 procedure vSubmitDone;
 
+function  vSubmitsAllowed:Boolean;
+
 var
  DEPTH_DISABLE_HACK:Boolean=false;
  COMPUTE_DISABLE_HACK:Boolean=false;
@@ -163,6 +165,9 @@ var
  GFXMicroEngine:TvMicroEngine;
 
  FIdleEvent:PRTLEvent=nil;
+
+ FSubmitEvent:PRTLEvent=nil;
+ FSubmitAllowed:DWORD=0;
 
  GPU_REGS:TGPU_REGS;
 
@@ -420,10 +425,10 @@ begin
   begin
    if me_node_test(GFXMicroEngine.Current) then
    begin
-    if (GFXMicroEngine.Current^.mode=metCmdBuffer) then
-    begin
-     RTLEventSetEvent(FIdleEvent);
-    end;
+    //if (GFXMicroEngine.Current^.mode=metCmdBuffer) then
+    //begin
+    // RTLEventSetEvent(FIdleEvent);
+    //end;
    end else
    begin
     time:=-100000;
@@ -461,6 +466,9 @@ begin
 
   FIdleEvent:=RTLEventCreate;
   RTLEventSetEvent(FIdleEvent);
+
+  FSubmitEvent:=RTLEventCreate;
+  RTLEventSetEvent(FSubmitEvent);
 
   t:=BeginThread(@GFX_thread);
 
@@ -607,14 +615,25 @@ end;
 
 procedure vSubmitDone;
 begin
- if (FIdleEvent<>nil) then
+ if (FIdleEvent<>nil) and (FSubmitEvent<>nil) then
  begin
-  RTLEventWaitFor(FIdleEvent);
+  While not CAS(FSubmitAllowed,0,1) do
+  begin
+   RTLEventWaitFor(FSubmitEvent); //wait another vSubmitDone
+  end;
+  RTLEventResetEvent(FSubmitEvent);
+
+  RTLEventWaitFor(FIdleEvent,2000);      //wait idle GPU
+
+  RTLEventSetEvent(FSubmitEvent);
+  store_release(FSubmitAllowed,0);
  end;
- //Sleep(100);
- //Device.WaitIdle;
 end;
 
+function vSubmitsAllowed:Boolean;
+begin
+ Result:=FSubmitAllowed=0;
+end;
 
 procedure onPrepareFlip();
 begin

@@ -11,11 +11,30 @@ uses
 
 implementation
 
+type
+ pSceImeEvent=^SceImeEvent;
+ SceImeEvent=packed record
+  id:Integer; //SceImeEventId
+  //param:SceImeEventParam;
+ end;
+
+ SceImeEventHandler=procedure(arg:Pointer;e:pSceImeEvent);
+
+ pSceImeKeyboardParam=^SceImeKeyboardParam;
+ SceImeKeyboardParam=packed record
+  option:DWORD;
+  reserved1:DWORD;
+  arg:Pointer;
+  handler:SceImeEventHandler;
+  reserved2:QWORD;
+ end;
+
 function ps4_sceImeKeyboardOpen(
           userId:Integer;
-          param:Pointer //SceImeKeyboardParam
+          param:pSceImeKeyboardParam
           ):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceImeKeyboardOpen:',userId,' ',HexStr(param));
  Result:=Integer($80BC0004);
 end;
 
@@ -23,6 +42,7 @@ function ps4_sceImeUpdate(
           handler:Pointer //SceImeEventHandler
           ):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceImeUpdate:',HexStr(handler));
  Result:=Integer($80BC0004);
 end;
 

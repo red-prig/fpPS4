@@ -1300,6 +1300,9 @@ end;
 
 //
 
+var
+ SceSubmitDoneGame:TRTLCriticalSection;
+
 function ps4_sceGnmSubmitCommandBuffersForWorkload(
           workload:QWORD;
           count:DWORD;
@@ -1322,7 +1325,11 @@ begin
  Submit.ccbSizesInBytes:=ccbSizesInBytes;
 
  _sig_lock;
+ EnterCriticalSection(SceSubmitDoneGame);
+
  Result:=vSubmitCommandBuffers(@Submit,nil);
+
+ LeaveCriticalSection(SceSubmitDoneGame);
  _sig_unlock;
 
  Result:=0;
@@ -1380,7 +1387,11 @@ begin
  Flip.flipArg    :=flipArg;
 
  _sig_lock;
+ EnterCriticalSection(SceSubmitDoneGame);
+
  Result:=vSubmitCommandBuffers(@Submit,@Flip);
+
+ LeaveCriticalSection(SceSubmitDoneGame);
  _sig_unlock;
 
  Result:=0;
@@ -1449,8 +1460,12 @@ begin
  Flip.flipArg    :=flipArg;
 
  _sig_lock;
+ EnterCriticalSection(SceSubmitDoneGame);
+
  Result:=vSubmitCommandBuffers(@Submit,@Flip);
  vSubmitDone;
+
+ LeaveCriticalSection(SceSubmitDoneGame);
  _sig_unlock;
 
  Result:=0;
@@ -1482,7 +1497,11 @@ begin
  //exit(0);
 
  _sig_lock;
+ EnterCriticalSection(SceSubmitDoneGame);
+
  vSubmitDone;
+
+ LeaveCriticalSection(SceSubmitDoneGame);
  _sig_unlock;
 
  Result:=0;
@@ -1512,7 +1531,7 @@ end;
 //A value of true is returned if submit/dingdong is allowed; otherwise false is returned.
 function ps4_sceGnmAreSubmitsAllowed:Boolean; SysV_ABI_CDecl;
 begin
- Result:=true;
+ Result:=vSubmitsAllowed;
 end;
 
 const
@@ -1741,6 +1760,8 @@ end;
 
 initialization
  GnmInitEmbedded;
+
+ InitCriticalSection(SceSubmitDoneGame);
 
  EopEvents.Init;
  ComputeEvents[0].Init;
