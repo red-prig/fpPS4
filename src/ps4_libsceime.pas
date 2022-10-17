@@ -525,6 +525,140 @@ begin
  end
 end;
 
+function scan_code_to_hid(scanCode:Word):Word;
+begin
+ Result:=0;
+ Case scanCode of
+  $00FF:Result:=$01; // Overrun Error
+  $00FC:Result:=$02; // POST Fail
+  $001E:Result:=$04; // a A
+  $0030:Result:=$05; // b B
+  $002E:Result:=$06; // c C
+  $0020:Result:=$07; // d D
+  $0012:Result:=$08; // e E
+  $0021:Result:=$09; // f F
+  $0022:Result:=$0A; // g G
+  $0023:Result:=$0B; // h H
+  $0017:Result:=$0C; // i I
+  $0024:Result:=$0D; // j J
+  $0025:Result:=$0E; // k K
+  $0026:Result:=$0F; // l L
+  $0032:Result:=$10; // m M
+  $0031:Result:=$11; // n N
+  $0018:Result:=$12; // o O
+  $0019:Result:=$13; // p P
+  $0010:Result:=$14; // q Q
+  $0013:Result:=$15; // r R
+  $001F:Result:=$16; // s S
+  $0014:Result:=$17; // t T
+  $0016:Result:=$18; // u U
+  $002F:Result:=$19; // v V
+  $0011:Result:=$1A; // w W
+  $002D:Result:=$1B; // x X
+  $0015:Result:=$1C; // y Y
+  $002C:Result:=$1D; // z Z
+  $0002:Result:=$1E; // 1 !
+  $0003:Result:=$1F; // 2 @
+  $0004:Result:=$20; // 3 #
+  $0005:Result:=$21; // 4 $
+  $0006:Result:=$22; // 5 %
+  $0007:Result:=$23; // 6 ^
+  $0008:Result:=$24; // 7 &
+  $0009:Result:=$25; // 8 *
+  $000A:Result:=$26; // 9 (
+  $000B:Result:=$27; // 0 )
+  $001C:Result:=$28; // Return
+  $0001:Result:=$29; // Escape
+  $000E:Result:=$2A; // Backspace
+  $000F:Result:=$2B; // Tab
+  $0039:Result:=$2C; // Space
+  $000C:Result:=$2D; // - _
+  $000D:Result:=$2E; // = +
+  $001A:Result:=$2F; // [ {
+  $001B:Result:=$30; // ] }
+  $002B:Result:=$31; // \ |
+  //$002B:Result:=$32; // Europe 1 (Note 2)
+  $0027:Result:=$33; // ; :
+  $0028:Result:=$34; // ' "
+  $0029:Result:=$35; // ` ~
+  $0033:Result:=$36; // , <
+  $0034:Result:=$37; // . >
+  $0035:Result:=$38; // / ?
+  $003A:Result:=$39; // Caps Lock
+  $003B:Result:=$3A; // F1
+  $003C:Result:=$3B; // F2
+  $003D:Result:=$3C; // F3
+  $003E:Result:=$3D; // F4
+  $003F:Result:=$3E; // F5
+  $0040:Result:=$3F; // F6
+  $0041:Result:=$40; // F7
+  $0042:Result:=$41; // F8
+  $0043:Result:=$42; // F9
+  $0044:Result:=$43; // F10
+  $0057:Result:=$44; // F11
+  $0058:Result:=$45; // F12
+  $0054:Result:=$46; // Print Screen (Note 1)
+  $E037:Result:=$46; // Print Screen (Note 1)
+  $0046:Result:=$47; // Scroll Lock
+  $e046:Result:=$48; // Break (Ctrl + Pause)
+  $e11d:Result:=$48; // Pause (Ctrl + NumLock)
+  $E052:Result:=$49; // Insert (Note 1)
+  $E047:Result:=$4A; // Home (Note 1)
+  $E049:Result:=$4B; // Page Up (Note 1)
+  $E053:Result:=$4C; // Delete (Note 1)
+  $E04F:Result:=$4D; // End (Note 1)
+  $E051:Result:=$4E; // Page Down (Note 1)
+  $E04D:Result:=$4F; // Right Arrow (Note 1)
+  $E04B:Result:=$50; // Left Arrow (Note 1)
+  $E050:Result:=$51; // Down Arrow (Note 1)
+  $E048:Result:=$52; // Up Arrow (Note 1)
+  $0045:Result:=$53; // Num Lock
+  $E035:Result:=$54; // Keypad / (Note 1)
+  $0037:Result:=$55; // Keypad *
+  $004A:Result:=$56; // Keypad -
+  $004E:Result:=$57; // Keypad +
+  $E01C:Result:=$58; // Keypad Enter
+  $004F:Result:=$59; // Keypad 1 End
+  $0050:Result:=$5A; // Keypad 2 Down
+  $0051:Result:=$5B; // Keypad 3 PageDn
+  $004B:Result:=$5C; // Keypad 4 Left
+  $004C:Result:=$5D; // Keypad 5
+  $004D:Result:=$5E; // Keypad 6 Right
+  $0047:Result:=$5F; // Keypad 7 Home
+  $0048:Result:=$60; // Keypad 8 Up
+  $0049:Result:=$61; // Keypad 9 PageUp
+  $0052:Result:=$62; // Keypad 0 Insert
+  $0053:Result:=$63; // Keypad . Delete
+  $0056:Result:=$64; // Europe 2 (Note 2)
+  $E05D:Result:=$65; // App
+  $0059:Result:=$67; // Keypad =
+  $005D:Result:=$68; // F13
+  $005E:Result:=$69; // F14
+  $005F:Result:=$6A; // F15
+  $007E:Result:=$85; // Keypad , (Brazilian Keypad .)
+  $0073:Result:=$87; // Keyboard Int'l 1 ろ (Ro)
+  $0070:Result:=$88; // Keyboard Int'l 2 かたかな ひらがな ローマ字 (Katakana/Hiragana)
+  $007D:Result:=$89; // Keyboard Int'l 3 ￥ (Yen)
+  $0079:Result:=$8A; // Keyboard Int'l 4 前候補 変換 (次候補) 全候補 (Henkan)
+  $007B:Result:=$8B; // Keyboard Int'l 5 無変換 (Muhenkan)
+  $005C:Result:=$8C; // Keyboard Int'l 6 (PC9800 Keypad , )
+  $00F2:Result:=$90; // Keyboard Lang 1 한/영 (Hanguel/English)
+  $00F1:Result:=$91; // Keyboard Lang 2 한자 (Hanja)
+  $0078:Result:=$92; // Keyboard Lang 3 かたかな (Katakana)
+  $0077:Result:=$93; // Keyboard Lang 4 ひらがな (Hiragana)
+  $0076:Result:=$94; // Keyboard Lang 5 半角/全角 (Zenkaku/Hankaku)
+  $001D:Result:=$E0; // Left Control
+  $002A:Result:=$E1; // Left Shift
+  $0038:Result:=$E2; // Left Alt
+  $E05B:Result:=$E3; // Left GUI
+  $E01D:Result:=$E4; // Right Control
+  $0036:Result:=$E5; // Right Shift
+  $E038:Result:=$E6; // Right Alt
+  $E05C:Result:=$E7; // Right GUI
+  else;
+ end;
+end;
+
 function KeyboardHookCallback(nCode:longint;wParam:WPARAM;lParam:LPARAM):LRESULT; stdcall;
 var
  KeyBoardState:TKeyboardState;
@@ -618,7 +752,7 @@ begin
   end;
 
   keycode:=Default(SceImeKeycode);
-  keycode.keycode   :=ScanCode;
+  keycode.keycode   :=scan_code_to_hid(scanCode);
   keycode.character :=AChr[0];
   keycode.status    :=status;
   keycode._type     :=SCE_IME_KEYBOARD_TYPE_ENGLISH_US;
