@@ -8,6 +8,7 @@ unit ps4_videodrv;
 interface
 
 uses
+  Windows,
   Classes,
   SysUtils,
   LFQueue,
@@ -164,10 +165,8 @@ var
  GFXRing:TvCmdRing;
  GFXMicroEngine:TvMicroEngine;
 
- FIdleEvent:PRTLEvent=nil;
-
- FSubmitEvent:PRTLEvent=nil;
- FSubmitAllowed:DWORD=0;
+ FIdleEvent:THandle=0;
+ FSubmitAllowed:QWORD=0;
 
  GPU_REGS:TGPU_REGS;
 
@@ -427,7 +426,7 @@ begin
    begin
     //if (GFXMicroEngine.Current^.mode=metCmdBuffer) then
     //begin
-    // RTLEventSetEvent(FIdleEvent);
+    // SetEvent(FIdleEvent);
     //end;
    end else
    begin
@@ -446,7 +445,7 @@ begin
 
   if not work_do then
   begin
-   RTLEventSetEvent(FIdleEvent);
+   SetEvent(FIdleEvent);
    time:=Int64(NT_INFINITE);
    NtDelayExecution(True,@time);
   end;
@@ -464,11 +463,7 @@ begin
   GFXRing.Init;
   GFXMicroEngine.Init;
 
-  FIdleEvent:=RTLEventCreate;
-  RTLEventSetEvent(FIdleEvent);
-
-  FSubmitEvent:=RTLEventCreate;
-  RTLEventSetEvent(FSubmitEvent);
+  FIdleEvent:=CreateEvent(nil,True,True,nil);
 
   t:=BeginThread(@GFX_thread);
 
@@ -608,24 +603,17 @@ begin
   node^.Flip:=Flip^;
  end;
 
- RTLEventResetEvent(FIdleEvent);
+ ResetEvent(FIdleEvent);
  GFXRing.Queue.Push(node);
  NtQueueApcThread(_gfx_handle,@_apc_null,0,nil,0);
 end;
 
 procedure vSubmitDone;
 begin
- if (FIdleEvent<>nil) and (FSubmitEvent<>nil) then
+ if (FIdleEvent<>0) then
+ if CAS(FSubmitAllowed,0,1) then
  begin
-  While not CAS(FSubmitAllowed,0,1) do
-  begin
-   RTLEventWaitFor(FSubmitEvent); //wait another vSubmitDone
-  end;
-  RTLEventResetEvent(FSubmitEvent);
-
-  RTLEventWaitFor(FIdleEvent,2000);      //wait idle GPU
-
-  RTLEventSetEvent(FSubmitEvent);
+  NtWaitForSingleObject(FIdleEvent,False,nil); //wait idle GPU
   store_release(FSubmitAllowed,0);
  end;
 end;
