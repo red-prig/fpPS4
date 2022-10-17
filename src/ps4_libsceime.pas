@@ -431,6 +431,7 @@ type
   _type:Integer; //SceImeKeyboardType
   userId:Integer;
   resourceId:DWORD;
+  _align:Integer;
   timestamp:QWORD; //SceRtcTick
  end;
 
@@ -453,6 +454,7 @@ type
  pSceImeEvent=^SceImeEvent;
  SceImeEvent=packed record
   id:Integer; //SceImeEventId
+  _align:Integer;
   param:SceImeEventParam;
  end;
 
