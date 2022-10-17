@@ -407,6 +407,7 @@ type
   r,g,b,a:Byte;
  end;
 
+ pSceImeKeyboardInfo=^SceImeKeyboardInfo;
  SceImeKeyboardInfo=packed record
   userId:Integer;
   device:Integer; //SceImeKeyboardDeviceType
@@ -417,6 +418,7 @@ type
   reserved:array[0..11] of Byte;
  end;
 
+ pSceImeKeyboardResourceIdArray=^SceImeKeyboardResourceIdArray;
  SceImeKeyboardResourceIdArray=packed record
   userId:Integer;
   resourceId:array[0..SCE_IME_KEYBOARD_MAX_NUMBER-1] of DWORD;
@@ -683,6 +685,31 @@ begin
  Result:=0;
 end;
 
+function ps4_sceImeKeyboardGetResourceId(userId:Integer;resourceIdArray:pSceImeKeyboardResourceIdArray):Integer; SysV_ABI_CDecl;
+begin
+ if (keyboard_init=0) then Exit(SCE_IME_ERROR_NOT_OPENED);
+ if (resourceIdArray=nil) then Exit(SCE_IME_ERROR_INVALID_ADDRESS);
+
+ resourceIdArray^:=Default(SceImeKeyboardResourceIdArray);
+ resourceIdArray^.userId:=userId;
+ resourceIdArray^.resourceId[0]:=1;
+end;
+
+function ps4_sceImeKeyboardGetInfo(resourceId:DWORD;info:pSceImeKeyboardInfo):Integer; SysV_ABI_CDecl;
+begin
+ if (keyboard_init=0) then Exit(SCE_IME_ERROR_NOT_OPENED);
+ if (info=nil) then Exit(SCE_IME_ERROR_INVALID_ADDRESS);
+
+ info^:=Default(SceImeKeyboardInfo);
+
+ info^.userId:=-1;
+ info^.device:=SCE_IME_KEYBOARD_DEVICE_TYPE_KEYBOARD;
+ info^._type :=SCE_IME_KEYBOARD_TYPE_ENGLISH_US;
+ info^.repeatDelay:=1;
+ info^.repeatRate :=1;
+ info^.status     :=CE_IME_KEYBOARD_STATE_CONNECTED;
+end;
+
 procedure init_ime;
 begin
  g_ime_event_queue.Create(256);
@@ -698,6 +725,8 @@ begin
  lib:=Result._add_lib('libSceIme');
  lib^.set_proc($79A1578DF26FDF1B,@ps4_sceImeKeyboardOpen);
  lib^.set_proc($FF81827D874D175B,@ps4_sceImeUpdate);
+ lib^.set_proc($74A69DA9916028A4,@ps4_sceImeKeyboardGetResourceId);
+ lib^.set_proc($564A8B3C0ADF15D7,@ps4_sceImeKeyboardGetInfo);
 
  init_ime;
 end;
