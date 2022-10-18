@@ -21,6 +21,7 @@ uses
  ps4_libSceAjm,
  ps4_libSceMouse,
  ps4_libSceIme,
+ ps4_libSceMove,
  ps4_libScePlayGo,
  ps4_libSceDiscMap,
  ps4_libSceAppContent,
@@ -224,12 +225,6 @@ begin
  Result:=5;
 end;
 
-function ps4_sceMoveInit:Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceMoveInit');
- Result:=0;
-end;
-
 function ps4_sceVoiceQoSInit(
           pMemBlock:Pointer;
           memSize:DWORD;
@@ -290,11 +285,6 @@ begin
     Case Info^.nid of
      QWORD($FA8F7CD7A61086A4):Result:=@ps4_sceNpWebApi2Initialize;
      QWORD($B24E786E2E85B583):Result:=@ps4_sceNpWebApi2CreateUserContext;
-    end;
-
-   'libSceMove':
-    Case Info^.nid of
-     QWORD($8F521313F1282661):Result:=@ps4_sceMoveInit;
     end;
 
     'libSceVoiceQoS':
@@ -690,6 +680,15 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Shantae Riskys Revenge\CUSA01587\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Shantae Riskys Revenge\CUSA01587\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\OpenOrbis\IPNGDRAW\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\OpenOrbis\IPNGDRAW\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\LAPY10018\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\LAPY10018\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Super Star Wars\CUSA03292\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Super Star Wars\CUSA03292\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;

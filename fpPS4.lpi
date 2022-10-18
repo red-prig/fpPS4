@@ -322,6 +322,7 @@
       <Unit70>
         <Filename Value="src\ps4_libscemouse.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceMouse"/>
       </Unit70>
       <Unit71>
         <Filename Value="src\ps4_libscenet.pas"/>

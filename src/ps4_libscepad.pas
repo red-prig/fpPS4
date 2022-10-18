@@ -7,6 +7,7 @@ interface
 uses
   windows,
   ps4_program,
+  spinlock,
   sys_signal,
   Classes,
   SysUtils;
@@ -142,9 +143,14 @@ type
  ScePadLightBarParam=ScePadColor;
  PScePadLightBarParam=^ScePadLightBarParam;
 
+var
+ last_mouse_lock:Pointer;
+ last_mouse_point:TPoint;
+ last_mouse_init:Integer=0;
+
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
 var
- mPoint:TPoint;
+ mPoint,delta:TPoint;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
  begin
@@ -182,12 +188,35 @@ begin
 
  //mouse as touch pad
 
- data^.touchData.touchNum:=1;
- data^.touchData.touch[0].id:=0;
+ spin_lock(last_mouse_lock);
 
  GetCursorPos(mPoint);
- data^.touchData.touch[0].x:=mPoint.X;
- data^.touchData.touch[0].y:=mPoint.Y;
+
+  if (last_mouse_init=0) then
+  begin
+   last_mouse_init :=1;
+   last_mouse_point:=mPoint;
+  end else
+  if QWORD(mPoint)<>QWORD(last_mouse_point) then
+  begin
+   data^.touchData.touchNum:=1;
+   data^.touchData.touch[0].id:=0;
+
+   delta:=mPoint;
+
+   if (delta.X<0) then delta.X:=0;
+   if (delta.Y<0) then delta.Y:=0;
+
+   if (delta.X>1919) then delta.X:=1919;
+   if (delta.Y>941)  then delta.Y:=941;
+
+   data^.touchData.touch[0].x:=delta.X;
+   data^.touchData.touch[0].y:=delta.Y;
+
+   last_mouse_point:=mPoint;
+  end;
+
+ spin_unlock(last_mouse_lock);
 
  //keymapping
 
