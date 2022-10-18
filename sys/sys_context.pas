@@ -78,7 +78,7 @@ type
  PPCONTEXT=^PCONTEXT;
 
 const
- CONTEXT_STUB_SIZE=SizeOf(TCONTEXT)+SizeOf(TCONTEXT_EX)+SizeOf(TXSTATE)+64;
+ CONTEXT_STUB_SIZE=4*1024-64; //I hope this will be enough
 
 type
  TCONTEXT_STUB=array[0..CONTEXT_STUB_SIZE-1] of Byte;
@@ -154,6 +154,7 @@ begin
 
  if (ContextSize>SizeOf(TCONTEXT_EXTENDED)) then
  begin
+  Writeln('Not enough context size:',ContextSize,'>',SizeOf(TCONTEXT_EXTENDED));
   Assert(false);
   SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   Exit(False);
