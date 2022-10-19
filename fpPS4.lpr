@@ -305,7 +305,8 @@ begin
  begin
 
  Case Info^.lib^.strName of
-  //'libSceVideoOut':;
+  'libSceSaveDataDialog':;
+  'libSceVideoOut':;
   'libSceSystemService':;
   'libSceUserService':;
   'libSceNetCtl':;
@@ -320,13 +321,25 @@ begin
   'libSceLibcInternal':;
   else
    Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
+
+    'scePadGetControllerInformation':;
+    'scePadRead':;
+    'scePadSetVibration':;
+
+    'sceUserServiceGetLoginUserIdList':;
+    'sceSystemServiceGetStatus':;
+
+    'sceKernelDebugRaiseException':;
+    'sceKernelDebugRaiseExceptionOnReleaseMode':;
+    '_sigprocmask':;
+    '__error':;
     'sceKernelClearEventFlag':;
     'sceKernelWaitEventFlag':;
     'sceKernelSetEventFlag':;
     'sceNetCtlCheckCallbackForNpToolkit':;
     'sceKernelReadTsc':;
-    //'scePthreadCondSignal':;
-    //'scePthreadCondTimedwait':;
+    'scePthreadCondSignal':;
+    'scePthreadCondTimedwait':;
     'scePthreadYield':;
     'nanosleep':;
     'sceKernelGetProcessTimeCounter':;
@@ -364,7 +377,7 @@ begin
     '__tls_get_addr':;
     'scePthreadRwlockRdlock':;
     'scePthreadRwlockUnlock':;
-    //'scePthreadCondBroadcast':;
+    'scePthreadCondBroadcast':;
     'sceFiosFHCloseSync':;
     'sceKernelStat':;
     'sceKernelOpen':;
@@ -689,6 +702,9 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\Super Star Wars\CUSA03292\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\Super Star Wars\CUSA03292\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\VA-11.Hall-A\CUSA15402\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\VA-11.Hall-A\CUSA15402\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;

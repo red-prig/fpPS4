@@ -98,7 +98,7 @@ begin
  Writeln('sceNpTrophyGetTrophyUnlockState:',handle);
  Result:=0;
  flags^:=Default(SceNpTrophyFlagArray);
- count^:=0;
+ count^:=2;  //must answer correctly for each game
 end;
 
 function ps4_sceNpTrophyUnlockTrophy(context:Integer;
