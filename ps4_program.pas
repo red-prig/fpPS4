@@ -1287,6 +1287,29 @@ begin
  end;
 end;
 
+Function sce_load_filter(Const name:RawByteString):Boolean;
+const
+ c_libc='libc';
+ c_libSce='libSce';
+begin
+ Result:=(Copy(name,1,Length(c_libc))=c_libc) or
+         (Copy(name,1,Length(c_libSce))=c_libSce);
+end;
+
+function TryLoadElf(Const path,name:RawByteString):TElf_node;
+var
+ s:RawByteString;
+begin
+ //bulid path
+ s:=IncludeTrailingPathDelimiter(path)+'sce_module'+DirectorySeparator+name;
+ Result:=LoadPs4ElfFromFile(s); //try defaut .prx
+ if (Result=nil) then
+ begin
+  s:=ChangeFileExt(s,'.sprx');
+  Result:=LoadPs4ElfFromFile(s); //try .sprx
+ end;
+end;
+
 function Tps4_program.Loader(Const name:RawByteString):TElf_node;
 var
  nid:QWORD;
@@ -1313,34 +1336,20 @@ begin
   Exit;
  end;
 
- Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'sce_module'+DirectorySeparator+name);
- if (Result<>nil) then //is default load app_path\sce_module
+ if sce_load_filter(name) then
  begin
-  Result.Prepare;
-  ps4_app.RegistredElf(Result);
-  Exit;
+  Result:=TryLoadElf(app_path,name);
+  if (Result<>nil) then //is default load app_path\sce_module
+  begin
+   Result.Prepare;
+   ps4_app.RegistredElf(Result);
+   Exit;
+  end;
  end;
 
  //
- //Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'Media'+DirectorySeparator+'Modules'+DirectorySeparator+name);
- //if (Result<>nil) then //is app_path\Media\Modules
- //begin
- // Result.Prepare;
- // ps4_app.RegistredElf(Result);
- // Exit;
- //end;
- //
- //Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(app_path)+'Media'+DirectorySeparator+'Plugins'+DirectorySeparator+name);
- //if (Result<>nil) then //is app_path\Media\Plugins
- //begin
- // Result.Prepare;
- // ps4_app.RegistredElf(Result);
- // Exit;
- //end;
 
- //
-
- Result:=LoadPs4ElfFromFile(IncludeTrailingPathDelimiter(GetCurrentDir)+'sce_module'+DirectorySeparator+name);
+ Result:=TryLoadElf(GetCurrentDir,name);
  if (Result<>nil) then //is default load current_dir\sce_module
  begin
   Result.Prepare;

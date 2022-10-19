@@ -341,7 +341,7 @@ type
   connectionType:Byte;
   connectedCount:Byte;
   connected:Boolean;
-  deviceClass:DWORD;
+  deviceClass:DWORD; //ScePadDeviceClass
   reserve:array[0..7] of Byte;
  end;
 
@@ -351,6 +351,7 @@ const
  SCE_PAD_CONNECTION_TYPE_REMOTE_VITA=SCE_PAD_CONNECTION_TYPE_REMOTE;
  SCE_PAD_CONNECTION_TYPE_REMOTE_DUALSHOCK4=2;
 
+ //ScePadDeviceClass
  SCE_PAD_DEVICE_CLASS_INVALID        = -1;
  SCE_PAD_DEVICE_CLASS_STANDARD       = 0;
  SCE_PAD_DEVICE_CLASS_GUITAR         = 1;
@@ -363,11 +364,10 @@ const
  SCE_PAD_DEVICE_CLASS_FLIGHT_STICK   = 8;
  SCE_PAD_DEVICE_CLASS_GUN            = 9;
 
-
-function ps4_scePadGetControllerInformation(handle:Integer;pInfo:PScePadControllerInformation):Integer; SysV_ABI_CDecl;
+function ps4_scePadGetControllerInformation(handle:Integer;
+                                            pInfo:PScePadControllerInformation
+                                            ):Integer; SysV_ABI_CDecl;
 begin
- //FillChar(pInfo^,SizeOf(ScePadControllerInformation),1);
- //Exit(0);
  if (pInfo=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  pInfo^:=Default(ScePadControllerInformation);
  pInfo^.touchPadInfo.pixelDensity := 1;
@@ -380,6 +380,56 @@ begin
  pInfo^.connected      := True;
  pInfo^.deviceClass    := SCE_PAD_DEVICE_CLASS_STANDARD;
  Result:=0;
+end;
+
+type
+ pScePadDeviceClassExtendedInformation=^ScePadDeviceClassExtendedInformation;
+ ScePadDeviceClassExtendedInformation=packed record
+  deviceClass:DWORD; //ScePadDeviceClass
+  reserved:DWORD;
+  classData:packed record
+   Case Byte of
+
+    0:(steeringWheel:packed record
+        capability:Byte;
+        reserved1:Byte;
+        maxPhysicalWheelAngle:Word;
+        reserved2:QWORD;
+       end);
+
+    1:(guitar:packed record
+        capability:Byte;
+        quantityOfSelectorSwitch:Byte;
+        reserved1:Word;
+        reserved2:QWORD;
+       end);
+
+    2:(drum:packed record
+        capability:Byte;
+        reserved1:Byte;
+        reserved2:Word;
+        reserved3:QWORD;
+       end);
+
+    3:(flightStick:packed record
+        capability:Byte;
+        reserved1:Byte;
+        reserved2:Word;
+        reserved3:QWORD;
+       end);
+
+    4:(data:array[0..11] of Byte);
+
+  end;
+ end;
+
+function ps4_scePadDeviceClassGetExtendedInformation(handle:Integer;
+                                                     pExtInfo:pScePadDeviceClassExtendedInformation
+                                                     ):Integer; SysV_ABI_CDecl;
+begin
+ if (pExtInfo=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ pExtInfo^:=Default(ScePadDeviceClassExtendedInformation);
+ pExtInfo^.deviceClass:=SCE_PAD_DEVICE_CLASS_STANDARD;
 end;
 
 function ps4_scePadSetMotionSensorState(handle:Integer;bEnable:Boolean):Integer; SysV_ABI_CDecl;
@@ -419,6 +469,7 @@ begin
  lib^.set_proc($C8556739D1B1BD96,@ps4_scePadSetVibration);
  lib^.set_proc($0EC703D62F475F5C,@ps4_scePadResetLightBar);
  lib^.set_proc($8233FDFCA433A149,@ps4_scePadGetControllerInformation);
+ lib^.set_proc($01CB25A4DD631D1F,@ps4_scePadDeviceClassGetExtendedInformation);
  lib^.set_proc($72556F2F86439EDC,@ps4_scePadSetMotionSensorState);
  lib^.set_proc($451E27A2F50410D6,@ps4_scePadSetLightBar);
  lib^.set_proc($AC866747A792A6F9,@ps4_scePadResetOrientation);

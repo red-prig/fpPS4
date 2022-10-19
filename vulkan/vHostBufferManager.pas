@@ -212,7 +212,11 @@ begin
  t.Foffset:=delta;
  t.FSparse:=Binds;
 
- VkBindSparseBufferMemory(queue,t.FHandle,Length(Binds),@Binds[0]);
+ if (VkBindSparseBufferMemory(queue,t.FHandle,Length(Binds),@Binds[0])<>VK_SUCCESS) then
+ begin
+  t.Free;
+  Exit;
+ end;
 
  Result:=t;
 end;
@@ -251,11 +255,13 @@ begin
   Case _is_sparce(Addr,Size,usage) of
    0:begin
       t:=_New_simple(Addr,Size,usage);
+      Assert(t<>nil,'create simple buffer fail');
      end;
    1:begin  //is Sparse buffers
       Assert(vDevice.sparseBinding,'sparseBinding not support');
       Assert(MemManager.SparceSupportHost,'sparse not support for host');
       t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
+      Assert(t<>nil,'create sparse buffer fail');
      end;
    else;
   end;

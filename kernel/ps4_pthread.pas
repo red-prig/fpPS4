@@ -447,11 +447,11 @@ begin
 
  StackBottom:=StackTop-StackLength;
 
- Writeln('StackTop   :',HexStr(StackTop));
- Writeln('Sptr       :',HexStr(Sptr));
-
- Writeln('StackBottom:',HexStr(StackBottom));
- Writeln('StackLength:',HexStr(StackLength,16));
+ //Writeln('StackTop   :',HexStr(StackTop));
+ //Writeln('Sptr       :',HexStr(Sptr));
+ //
+ //Writeln('StackBottom:',HexStr(StackBottom));
+ //Writeln('StackLength:',HexStr(StackLength,16));
 
  ReadBarrier;
  if (data<>nil) and (data^.entry<>nil) then
@@ -952,7 +952,7 @@ procedure ps4___pthread_cleanup_push_imp(routine:t_cb_proc;
 var
  curthread:pthread;
 begin
- Writeln('__pthread_cleanup_push_imp');
+ //Writeln('__pthread_cleanup_push_imp');
 
  curthread:=_get_curthread;
  if (curthread=nil) then Exit;
@@ -970,7 +970,7 @@ var
  curthread:pthread;
  old:p_pthread_cleanup;
 begin
- Writeln('__pthread_cleanup_pop_imp');
+ //Writeln('__pthread_cleanup_pop_imp');
 
  curthread:=_get_curthread;
  if (curthread=nil) then Exit;

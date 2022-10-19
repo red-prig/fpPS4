@@ -248,7 +248,7 @@ end;
 
 function TvMemManager.SparceSupportHost:Boolean;
 begin
- Result:=(FHostVisibMt and FSparceMemoryTypes)<>0;
+ Result:=((1 shl FHostVisibMt) and FSparceMemoryTypes)<>0;
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
