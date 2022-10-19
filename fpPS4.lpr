@@ -652,8 +652,8 @@ begin
  //ps4_app.app_path:='G:\Games\ps4-homebrew\PS4_Player\';
  //ps4_app.app_file:='G:\Games\ps4-homebrew\PS4_Player\eboot.bin';
 
- //ps4_app.app_path:='G:\Games\ps4-homebrew\pad\';
- //ps4_app.app_file:='G:\Games\ps4-homebrew\pad\eboot.bin';
+ //ps4_app.app_path:='G:\Games\ps4-homebrew\TEST_PAD\';
+ //ps4_app.app_file:='G:\Games\ps4-homebrew\TEST_PAD\eboot.bin';
 
  //ps4_app.app_path:='G:\Games\Castlevania\SLUS00067\';
  //ps4_app.app_file:='G:\Games\Castlevania\SLUS00067\eboot.bin';
