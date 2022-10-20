@@ -76,8 +76,9 @@ function  ps4_scePthreadSetschedparam(_pthread:pthread;policy:Integer;param:PSce
 function  ps4_sched_get_priority_max(policy:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_sched_get_priority_min(policy:Integer):Integer; SysV_ABI_CDecl;
 
-procedure ps4_scePthreadYield(); SysV_ABI_CDecl;
-procedure ps4_pthread_yield(); SysV_ABI_CDecl;
+procedure ps4_scePthreadYield; SysV_ABI_CDecl;
+function  ps4_pthread_yield:Integer; SysV_ABI_CDecl;
+function  ps4_sched_yield:Integer; SysV_ABI_CDecl;
 
 procedure ps4_pthread_cleanup_push(routine:t_cb_proc;arg:Pointer); SysV_ABI_CDecl;
 procedure ps4_pthread_cleanup_pop(execute:Integer); SysV_ABI_CDecl;
@@ -910,14 +911,21 @@ begin
  Result:=0;
 end;
 
-procedure ps4_scePthreadYield(); SysV_ABI_CDecl;
+procedure ps4_scePthreadYield; SysV_ABI_CDecl;
 begin
  SwYieldExecution;
 end;
 
-procedure ps4_pthread_yield(); SysV_ABI_CDecl;
+function ps4_pthread_yield:Integer; SysV_ABI_CDecl;
 begin
  SwYieldExecution;
+ Result:=0;
+end;
+
+function ps4_sched_yield:Integer; SysV_ABI_CDecl;
+begin
+ SwYieldExecution;
+ Result:=0;
 end;
 
 procedure ps4_pthread_cleanup_push(routine:t_cb_proc;arg:Pointer); SysV_ABI_CDecl;

@@ -1098,6 +1098,7 @@ begin
 
  lib^.set_proc($4FBDA1CFA7DFAB4F,@ps4_scePthreadYield);
  lib^.set_proc($0791A65432B0A67D,@ps4_pthread_yield);
+ lib^.set_proc($E971B8077DCDD3D8,@ps4_sched_yield);
 
  lib^.set_proc($E1979959C32C015D,@ps4_pthread_cleanup_push);
  lib^.set_proc($455C5BD12B1AE6DD,@ps4_pthread_cleanup_pop);

@@ -6,6 +6,7 @@ interface
 
 uses
   ps4_program,
+  atomic,
   Classes,
   SysUtils;
 
@@ -95,18 +96,17 @@ const
  SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
 
 var
- login_event:Boolean=False;
+ login_event:Integer=0;
 
 function ps4_sceUserServiceGetEvent(event:pSceUserServiceEvent):Integer; SysV_ABI_CDecl;
 begin
  if (event=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
 
- if login_event then
+ if not CAS(login_event,0,1) then
  begin
   Result:=SCE_USER_SERVICE_ERROR_NO_EVENT;
  end else
  begin
-  login_event:=True;
 
   event^:=Default(SceUserServiceEvent);
   event^.eventType:=SCE_USER_SERVICE_EVENT_TYPE_LOGIN;

@@ -7,6 +7,7 @@ interface
 uses
   windows,
   sys_types,
+  sys_signal,
   ps4_time,
   ps4_program,
   atomic,
@@ -487,25 +488,31 @@ var
 
 Procedure push_keyboard_open(userId:Integer);
 var
- event:SceImeEvent;
+ event,tmp:SceImeEvent;
 begin
  event:=Default(SceImeEvent);
  event.id:=SCE_IME_KEYBOARD_EVENT_OPEN;
  event.param.resourceIdArray.userId:=userId;
  event.param.resourceIdArray.resourceId[0]:=1;
 
- g_ime_event_queue.enqueue(event);
+ while not g_ime_event_queue.enqueue(event) do
+ begin
+  g_ime_event_queue.dequeue(tmp); //drop first
+ end;
 end;
 
 Procedure push_keyboard_code(id:Integer;var keycode:SceImeKeycode);
 var
- event:SceImeEvent;
+ event,tmp:SceImeEvent;
 begin
  event:=Default(SceImeEvent);
  event.id:=id;
  event.param.keycode:=keycode;
 
- g_ime_event_queue.enqueue(event);
+ while not g_ime_event_queue.enqueue(event) do
+ begin
+  g_ime_event_queue.dequeue(tmp); //drop first
+ end;
 end;
 
 function ToUnicodeEx(wVirtKey,wScanCode:UINT;lpKeyState:PByte;pwszBuff:PWideChar;cchBuff:Integer;
@@ -736,17 +743,17 @@ begin
    status:=status or SCE_IME_KEYCODE_STATE_MODIFIER_R_GUI;
   end;
 
-  if ((GetKeyState(VK_NUMLOCK) and 1)<>0) then
+  if ((KeyBoardState[VK_NUMLOCK] and 1)<>0) then
   begin
    status:=status or SCE_IME_KEYCODE_STATE_LED_NUM_LOCK;
   end;
 
-  if ((GetKeyState(VK_CAPITAL) and 1)<>0) then
+  if ((KeyBoardState[VK_CAPITAL] and 1)<>0) then
   begin
    status:=status or SCE_IME_KEYCODE_STATE_LED_CAPS_LOCK;
   end;
 
-  if ((GetKeyState(VK_SCROLL) and 1)<>0) then
+  if ((KeyBoardState[VK_SCROLL] and 1)<>0) then
   begin
    status:=status or SCE_IME_KEYCODE_STATE_LED_SCROLL_LOCK;
   end;
@@ -786,7 +793,11 @@ begin
 
  if not CAS(keyboard_init,0,1) then Exit(SCE_IME_ERROR_BUSY);
 
+ _sig_lock;
+
  g_hook:=SetWindowsHookExW(WH_KEYBOARD,@KeyboardHookCallback,GetModuleHandle(nil),MainThreadID);
+
+ _sig_unlock;
 
  if (g_hook=0) then
  begin
