@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="93">
+    <Units Count="94">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -427,6 +427,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceScreenShot"/>
       </Unit92>
+      <Unit93>
+        <Filename Value="sys\sys_path.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit93>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

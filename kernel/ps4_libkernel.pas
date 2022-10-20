@@ -37,6 +37,7 @@ function  ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_AB
 implementation
 
 uses
+ sys_path,
  sys_kernel,
  sys_pthread,
  sys_signal;
@@ -409,7 +410,13 @@ begin
 
  Writeln('Load Lib:',moduleFileName);
 
- fn:=_parse_filename(moduleFileName);
+ Result:=parse_filename(moduleFileName,fn);
+
+ if (Result<>0) then
+ begin
+  _sig_unlock;
+  Exit(px2sce(Result));
+ end;
 
  node:=ps4_app.AcqureFileByName(ExtractFileName(fn));
  if (node<>nil) then

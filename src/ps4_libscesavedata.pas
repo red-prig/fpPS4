@@ -189,6 +189,7 @@ type
 implementation
 
 uses
+ sys_path,
  sys_signal;
 
 function ps4_sceSaveDataInitialize(params:Pointer):Integer; SysV_ABI_CDecl;
@@ -295,7 +296,7 @@ begin
  mountResult^:=Default(SceSaveDataMountResult);
 
  _sig_lock;
- Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
+ Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
 
  if (Result=0) and
@@ -312,7 +313,7 @@ begin
  mountResult^:=Default(SceSaveDataMountResult);
 
  _sig_lock;
- Result:=FetchMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
+ Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
 
  if (Result=0) and
@@ -326,14 +327,14 @@ end;
 function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=UnMountPath(PChar(mountPoint));
+ Result:=UnMountSavePath(PChar(mountPoint));
  _sig_unlock;
 end;
 
 function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=UnMountPath(PChar(mountPoint));
+ Result:=UnMountSavePath(PChar(mountPoint));
  //backup this
  _sig_unlock;
 end;
@@ -413,6 +414,8 @@ begin
 
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(@cond^.dirName);
 
+ _sig_lock;
+
  ROut:=Default(TRawByteSearchRec);
  if (FindFirst(s,faDirectory,ROut)=0) then
  begin
@@ -476,6 +479,8 @@ begin
   FreeAndNil(List);
 
  end;
+
+ _sig_unlock;
 
 end;
 

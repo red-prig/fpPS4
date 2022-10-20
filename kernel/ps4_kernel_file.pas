@@ -7,7 +7,7 @@ interface
 uses
   windows,
   sys_types,
-  ps4_program,
+  sys_path,
   Classes,
   SysUtils;
 
@@ -339,12 +339,12 @@ begin
  end;
 
  _sig_lock;
- rp:=_parse_filename(path);
+ Result:=parse_filename(path,rp);
  _sig_unlock;
 
- if (rp='') then
+ if (Result<>0) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+  Exit(_set_sce_errno(px2sce(Result)));
  end;
 
  _sig_lock;
@@ -628,10 +628,13 @@ begin
  stat^:=Default(SceKernelStat);
 
  _sig_lock;
- rp:=_parse_filename(path);
+ Result:=parse_filename(path,rp);
  _sig_unlock;
 
- if (rp='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+ if (Result<>0) then
+ begin
+  Exit(_set_sce_errno(px2sce(Result)));
+ end;
 
  hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
  err:=SwGetFileAttributes(rp,@hfi);
@@ -946,10 +949,13 @@ begin
  Writeln('sceKernelMkdir:',path,'(',OctStr(mode,3),')');
 
  _sig_lock;
- fn:=_parse_filename(path);
+ Result:=parse_filename(path,fn);
  _sig_unlock;
 
- if (fn='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+ if (Result<>0) then
+ begin
+  Exit(_set_sce_errno(px2sce(Result)));
+ end;
 
  err:=SwCreateDir(fn);
 
@@ -1004,10 +1010,13 @@ begin
  Writeln('mkdir:',path);
 
  _sig_lock;
- fn:=_parse_filename(path);
+ Result:=parse_filename(path,fn);
  _sig_unlock;
 
- if (fn='') then Exit(_set_errno(EACCES));
+ if (Result<>0) then
+ begin
+  Exit(_set_errno(Result));
+ end;
 
  err:=SwCreateDir(fn);
 
@@ -1061,10 +1070,13 @@ begin
  Writeln('sceKernelCheckReachability:',path);
 
  _sig_lock;
- fn:=_parse_filename(path);
+ Result:=parse_filename(path,fn);
  _sig_unlock;
 
- if (fn='') then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+ if (Result<>0) then
+ begin
+  Exit(_set_sce_errno(px2sce(Result)));
+ end;
 
  if FileExists(fn) or DirectoryExists(fn) then
  begin
