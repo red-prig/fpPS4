@@ -208,6 +208,8 @@ Procedure TvRenderPass.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkS
 begin
  if (AtCount>8) then Exit;
 
+ format:=vkFixFormatSupport(format,VK_IMAGE_TILING_OPTIMAL,ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+
  ColorAt[AtCount]:=Default(TVkAttachmentDescription);
  ColorAt[AtCount].format        :=format;
  ColorAt[AtCount].samples       :=samples{VK_SAMPLE_COUNT_1_BIT};
@@ -278,6 +280,8 @@ end;
 Procedure TvRenderPass.AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
 begin
  if (AtCount>8) then Exit;
+
+ format:=vkFixFormatSupport(format,VK_IMAGE_TILING_OPTIMAL,ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
 
  ColorAt[AtCount]:=Default(TVkAttachmentDescription);
  ColorAt[AtCount].format        :=format;
