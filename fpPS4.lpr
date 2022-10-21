@@ -238,6 +238,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingInitialize(heapSize:qword):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGameLiveStreamingInitialize:',heapSize);
+ Result:=0;
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -295,6 +301,11 @@ begin
     'libSceUlt':
     Case Info^.nid of
      QWORD($859220D44586B073):Result:=@ps4_sceUltInitialize;
+    end;
+
+    'libSceGameLiveStreaming':
+    Case Info^.nid of
+     QWORD($92F604C369419DD9):Result:=@ps4_sceGameLiveStreamingInitialize;
     end;
 
   end;
@@ -705,6 +716,12 @@ begin
 
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\VA-11.Hall-A\CUSA15402\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\VA-11.Hall-A\CUSA15402\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\Quiz\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\Quiz\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\namco\uroot\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\namco\uroot\eboot.bin';
 
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
