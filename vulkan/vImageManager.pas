@@ -316,6 +316,7 @@ var
  r:TVkResult;
 begin
  Result:=nil;
+ if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
 
  rwlock_wrlock(lock);
@@ -342,6 +343,8 @@ begin
   cinfo.subresourceRange.levelCount    :=F.last_level-F.base_level+1;
   cinfo.subresourceRange.baseArrayLayer:=F.base_array;
   cinfo.subresourceRange.layerCount    :=F.last_array-F.base_array+1;
+
+  cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,FUsage);
 
   FView:=VK_NULL_HANDLE;
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);
@@ -378,6 +381,8 @@ function TvImage2.FetchView(cmd:TvCustomCmdBuffer):TvImageView2;
 var
  F:TvImageViewKey;
 begin
+ if (Self=nil) then Exit;
+
  F:=Default(TvImageViewKey);
  F.cformat:=key.cformat;
 

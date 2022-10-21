@@ -168,6 +168,9 @@ Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
 
+function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
+function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
+
 implementation
 
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
@@ -496,6 +499,91 @@ begin
  Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FHandle,P.FOffset);
 end;
 
+procedure _test_and_set_to(var new:TVkFlags;
+                           test:TVkFlags;
+                           val_test:TVkImageUsageFlagBits;
+                           val_sets:TVkFormatFeatureFlagBits);
+begin
+ if ((test and ord(val_test))<>0) then
+ begin
+  new:=new or ord(val_sets);
+ end;
+end;
+
+function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
+var
+ prop:TVkFormatProperties;
+ test:TVkFormatFeatureFlags;
+begin
+ Result:=False;
+
+ prop:=Default(TVkFormatProperties);
+ vkGetPhysicalDeviceFormatProperties(
+  VulkanApp.FPhysicalDevice,
+  format,
+  @prop);
+
+ test:=0;
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_TRANSFER_SRC_BIT            ,VK_FORMAT_FEATURE_TRANSFER_SRC_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_TRANSFER_DST_BIT            ,VK_FORMAT_FEATURE_TRANSFER_DST_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_SAMPLED_BIT                 ,VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_STORAGE_BIT                 ,VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT        ,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT        ,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+ _test_and_set_to(test,usage,VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT);
+
+ Case tiling of
+  VK_IMAGE_TILING_OPTIMAL:
+   begin
+    Result:=(prop.optimalTilingFeatures and test)=test;
+   end;
+  VK_IMAGE_TILING_LINEAR:
+   begin
+    Result:=(prop.linearTilingFeatures and test)=test;
+   end;
+  else;
+ end;
+
+end;
+
+//D16_UNORM_S8_UINT   -> D24_UNORM_S8_UINT -> D32_SFLOAT_S8_UINT
+//X8_D24_UNORM_PACK32 -> D32_SFLOAT
+
+function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
+begin
+ Result:=format;
+
+ repeat
+
+  Case Result of
+
+   VK_FORMAT_D16_UNORM_S8_UINT:
+    begin
+     if vkGetFormatSupport(Result,tiling,usage) then Break;
+     Result:=VK_FORMAT_D24_UNORM_S8_UINT;
+    end;
+
+   VK_FORMAT_D24_UNORM_S8_UINT:
+    begin
+     if vkGetFormatSupport(Result,tiling,usage) then Break;
+     Result:=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    end;
+
+   VK_FORMAT_X8_D24_UNORM_PACK32:
+    begin
+     if vkGetFormatSupport(Result,tiling,usage) then Break;
+     Result:=VK_FORMAT_D32_SFLOAT;
+    end;
+
+   else
+        Break;
+  end;
+
+ until false;
+
+end;
+
 function TvCustomImage.Compile(ext:Pointer):Boolean;
 var
  cinfo:TVkImageCreateInfo;
@@ -511,6 +599,9 @@ begin
 
  cinfo:=GetImageInfo;
  cinfo.pNext:=ext;
+
+ cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
+
  r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
