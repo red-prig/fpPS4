@@ -268,22 +268,13 @@ begin
  end;
 end;
 
-function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
-begin
- Result:=ps4_sceKernelOpen(path,flags,mode);
- if (Result<0) then
- begin
-  Result:=_set_errno(sce2px(Result));
- end;
-end;
-
 var
  dev_random_nm:array[0..1] of PChar=('/dev/random','/dev/urandom');
  dev_random_fd:Integer=-1;
 
-function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
+function _sys_open(path:PChar;flags,mode:Integer;var fd:Integer):Integer;
 const
- WR_RDWR=SCE_KERNEL_O_WRONLY or SCE_KERNEL_O_RDWR;
+ WR_RDWR=O_WRONLY or O_RDWR;
  O_OFS=O_RDONLY or O_WRONLY or O_RDWR or O_APPEND;
 
 var
@@ -296,20 +287,21 @@ var
  rp:RawByteString;
  wp:WideString;
 begin
- if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ Result:=0;
+ if (path=nil) then Exit(EINVAL);
 
- Writeln('sceKernelOpen:',path,' ',flags,' ',mode);
+ Writeln('open:',path,' ',flags,' ',mode);
 
- Assert((flags and SCE_KERNEL_O_DIRECTORY)=0,'folder open TODO');
+ Assert((flags and O_DIRECTORY)=0,'folder open TODO');
 
- if (flags and WR_RDWR)=WR_RDWR then
+ if ((flags and WR_RDWR)=WR_RDWR) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+  Exit(EINVAL);
  end;
 
  if (path[0]=#0) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+  Exit(ENOENT);
  end;
 
  if (CompareChar0(path^,dev_random_nm[0]^,Length(dev_random_nm[0]))=0) or
@@ -320,42 +312,34 @@ begin
    Exit(dev_random_fd);
   end else
   begin
-   _sig_lock;
    h:=_get_osfhandle(0);
 
    Result:=_open_osfhandle(h,flags and O_OFS);
 
-   _sig_unlock;
-
-   if (Result=-1) then
+   if (Result<>0) then
    begin
-    Exit(_set_sce_errno(SCE_KERNEL_ERROR_EMFILE));
+    Exit(EMFILE);
    end else
    begin
     dev_random_fd:=Result;
    end;
   end;
-  Exit;
+  Exit(0);
  end;
 
- _sig_lock;
+ rp:='';
  Result:=parse_filename(path,rp);
- _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_sce_errno(px2sce(Result)));
+  Exit(EACCES);
  end;
 
- _sig_lock;
  wp:=UTF8Decode(rp);
- _sig_unlock;
-
 
  dwDesiredAccess:=get_DesiredAccess(flags);
  dwCreationDisposition:=get_CreationDisposition(flags);
 
- _sig_lock;
  h:=CreateFileW(
   PWideChar(wp),
   dwDesiredAccess,
@@ -365,39 +349,102 @@ begin
   FILE_ATTRIBUTE_NORMAL,
   0
  );
- err:=GetLastError;
- _sig_unlock;
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
+  err:=GetLastError;
   //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
   Case err of
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
-   ERROR_FILE_NOT_FOUND   :Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
-   ERROR_ACCESS_DENIED    :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
-   ERROR_BUFFER_OVERFLOW  :Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
-   ERROR_NOT_ENOUGH_MEMORY:Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
-   ERROR_ALREADY_EXISTS   :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
-   ERROR_FILE_EXISTS      :Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
-   ERROR_DISK_FULL:        Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOSPC));
+   ERROR_FILE_NOT_FOUND   :Exit(ENOENT);
+   ERROR_ACCESS_DENIED    :Exit(EACCES);
+   ERROR_BUFFER_OVERFLOW  :Exit(ENAMETOOLONG);
+   ERROR_NOT_ENOUGH_MEMORY:Exit(ENOMEM);
+   ERROR_ALREADY_EXISTS   :Exit(EEXIST);
+   ERROR_FILE_EXISTS      :Exit(EEXIST);
+   ERROR_DISK_FULL:        Exit(ENOSPC);
    else
-                           Exit(_set_sce_errno(SCE_KERNEL_ERROR_EIO));
+                           Exit(EIO);
   end;
  end;
 
- _sig_lock;
- Result:=_open_osfhandle(h,flags and O_OFS);
- _sig_unlock;
+ fd:=_open_osfhandle(h,flags and O_OFS);
 
- if (Result=-1) then
+ if (fd<0) then
  begin
-  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EMFILE);
- end else
- begin
-  _set_sce_errno(0);
+  CloseHandle(h);
+  Exit(EMFILE);
  end;
 
+end;
+
+function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
+var
+ fd:Integer;
+begin
+ fd:=0;
+ _sig_lock;
+ Result:=_sys_open(path,flags,mode,fd);
+ _sig_unlock;
+
+ if (Result<>0) then
+ begin
+  Result:=_set_errno(Result);
+ end else
+ begin
+  Result:=fd;
+ end;
+end;
+
+function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
+var
+ fd:Integer;
+begin
+ fd:=0;
+ _sig_lock;
+ Result:=_sys_open(path,flags,mode,fd);
+ _sig_unlock;
+
+ if (Result<>0) then
+ begin
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  Result:=fd;
+ end;
+end;
+
+function _sys_close(fd:Integer):Integer;
+begin
+ if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ begin
+  Exit(0);
+ end;
+
+ Result:=_close(fd);
+
+ if (Result<>0) then
+ begin
+  Result:=EBADF;
+ end;
+end;
+
+function ps4_close(fd:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_close(fd));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_close(fd);
+ _sig_unlock;
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
@@ -554,48 +601,6 @@ begin
  _sig_unlock;
 end;
 
-function ps4_close(fd:Integer):Integer; SysV_ABI_CDecl;
-begin
-
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
- begin
-  Exit(_set_errno(0));
- end;
-
- _sig_lock;
- Result:=_close(fd);
- _sig_unlock;
-
- if (Result<>0) then
- begin
-  Result:=_set_errno(EBADF);
- end else
- begin
-  Result:=_set_errno(0);
- end;
-end;
-
-function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
-begin
-
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
- begin
-  Exit(_set_sce_errno(0));
- end;
-
- _sig_lock;
- Result:=_close(fd);
- _sig_unlock;
-
- if (Result<>0) then
- begin
-  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EBADF);
- end else
- begin
-  Result:=_set_sce_errno(0);
- end;
-end;
-
 function file_attr_to_st_mode(attr:DWORD):Word;
 begin
  Result:=S_IRUSR;
@@ -627,13 +632,14 @@ begin
 
  stat^:=Default(SceKernelStat);
 
+ rp:='';
  _sig_lock;
  Result:=parse_filename(path,rp);
  _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_sce_errno(px2sce(Result)));
+  Exit(_set_sce_errno(px2sce(EACCES)));
  end;
 
  hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
@@ -948,13 +954,14 @@ begin
 
  Writeln('sceKernelMkdir:',path,'(',OctStr(mode,3),')');
 
+ fn:='';
  _sig_lock;
  Result:=parse_filename(path,fn);
  _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_sce_errno(px2sce(Result)));
+  Exit(_set_sce_errno(px2sce(EACCES)));
  end;
 
  err:=SwCreateDir(fn);
@@ -1009,13 +1016,14 @@ begin
 
  Writeln('mkdir:',path);
 
+ fn:='';
  _sig_lock;
  Result:=parse_filename(path,fn);
  _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_errno(Result));
+  Exit(_set_errno(EACCES));
  end;
 
  err:=SwCreateDir(fn);
@@ -1069,13 +1077,14 @@ begin
 
  Writeln('sceKernelCheckReachability:',path);
 
+ fn:='';
  _sig_lock;
  Result:=parse_filename(path,fn);
  _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_sce_errno(px2sce(Result)));
+  Exit(_set_sce_errno(px2sce(EACCES)));
  end;
 
  if FileExists(fn) or DirectoryExists(fn) then
