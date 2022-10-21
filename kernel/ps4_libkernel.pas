@@ -275,7 +275,7 @@ type
   _malloc,_free:Pointer;
  end;
 
-procedure ps4_sceKernelRtldSetApplicationHeapAPI(heap_api:PAppHeapAPI); SysV_ABI_CDecl;
+procedure ps4__sceKernelRtldSetApplicationHeapAPI(heap_api:PAppHeapAPI); SysV_ABI_CDecl;
 begin
  Writeln('SetApplicationHeapAPI:',HexStr(heap_api));
  Writeln(' __malloc:',HexStr(heap_api^._malloc)); //__malloc
@@ -325,17 +325,38 @@ end;
 //size_t user_malloc_usable_size(void *ptr);
 //}
 
-//PlayStation®4 Clang: UndefinedBehaviorSanitizer (UBSan)
-function ps4_sceKernelGetSanitizerNewReplaceExternal():Pointer; SysV_ABI_CDecl;
+function ps4_sceKernelGetSanitizerMallocReplaceExternal:Pointer; SysV_ABI_CDecl;
 begin
- //list mem of proc????
+ //sceKernelDlsym: libSceDbgAddressSanitizer.prx->__asan_malloc_replace_external
  Result:=nil;
 end;
 
-function ps4_sceKernelIsAddressSanitizerEnabled():Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetSanitizerNewReplaceExternal:Pointer; SysV_ABI_CDecl;
 begin
- Writeln('sceKernelIsAddressSanitizerEnabled');
+ //sceKernelDlsym: libSceDbgAddressSanitizer.prx->__asan_new_replace_external
+ Result:=nil;
+end;
+
+function ps4_sceKernelGetSanitizerMallocReplace:Pointer; SysV_ABI_CDecl;
+begin
+ //sceKernelDlsym: libSceDbgAddressSanitizer.prx->__asan_malloc_replace
+ Result:=nil;
+end;
+
+function ps4_sceKernelGetSanitizerNewReplace:Pointer; SysV_ABI_CDecl;
+begin
+ //sceKernelDlsym: libSceDbgAddressSanitizer.prx->__asan_new_replace
+ Result:=nil;
+end;
+
+function ps4_sceKernelIsAddressSanitizerEnabled:Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
+end;
+
+function ps4_sceKernelMapSanitizerShadowMemory(addr:Pointer;len:qword;flags:DWORD;name:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
 end;
 
 function ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
@@ -890,12 +911,18 @@ begin
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
  lib^.set_proc($4694092552938853,@ps4_sceKernelGetModuleInfoForUnwind);
  lib^.set_proc($F79F6AADACCF22B8,@ps4_sceKernelGetProcParam);
- lib^.set_proc($A7911C41E11E2401,@ps4_sceKernelRtldSetApplicationHeapAPI);
+ lib^.set_proc($A7911C41E11E2401,@ps4__sceKernelRtldSetApplicationHeapAPI);
  lib^.set_proc($ACD856CFE96F38C5,@ps4_sceKernelSetThreadDtors);
  lib^.set_proc($A41FF2199DA743DA,@ps4_sceKernelSetThreadAtexitCount);
  lib^.set_proc($5A109CD70DC48522,@ps4_sceKernelSetThreadAtexitReport);
+
+ lib^.set_proc($A72E8BF2389500DF,@ps4_sceKernelGetSanitizerMallocReplaceExternal);
  lib^.set_proc($6E7671620005780D,@ps4_sceKernelGetSanitizerNewReplaceExternal);
+ lib^.set_proc($6EDD0F38451975D1,@ps4_sceKernelGetSanitizerMallocReplace);
+ lib^.set_proc($1782A26F731BD302,@ps4_sceKernelGetSanitizerNewReplace);
  lib^.set_proc($8E1FBC5E22B82DE1,@ps4_sceKernelIsAddressSanitizerEnabled);
+ lib^.set_proc($F1C0250B3A0E8A27,@ps4_sceKernelMapSanitizerShadowMemory);
+
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
 
