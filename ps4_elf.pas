@@ -1644,7 +1644,7 @@ begin
 
   if (Info.shndx<>SHN_UNDEF) then
   case Info.sType of
-   //STT_NOTYPE :;
+   STT_NOTYPE :;
    STT_OBJECT :;
    STT_FUN    :;
    //STT_SECTION:;
@@ -1691,13 +1691,13 @@ begin
  nLibId:=$FFFF; //no lib
 
  case Info^.sType of
-  STT_NOTYPE:
+  STT_NOTYPE: //original string
    begin
     IInfo^.nid:=ps4_nid_hash(Info^.pName);
 
     if (Info^.shndx=SHN_UNDEF) then //import
     begin
-     //
+     //Export link without explicit name
     end else
     begin
      nModId:=elf._find_mod_export;
@@ -1705,7 +1705,7 @@ begin
     end;
 
    end;
-  STT_SCE:
+  STT_SCE: //base64 string without specifying the module and library
    begin
     if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo^.nid) then
     begin
@@ -1714,7 +1714,7 @@ begin
 
     if (Info^.shndx=SHN_UNDEF) then //import
     begin
-     //
+     //Export link without explicit name
     end else
     begin
      nModId:=elf._find_mod_export;
@@ -1722,7 +1722,7 @@ begin
     end;
 
    end;
-  else
+  else //base64 string specifying the module and library
    begin
     if not DecodeEncName(Info^.pName,nModId,nLibId,IInfo^.nid) then
     begin
@@ -1751,7 +1751,7 @@ end;
 
 Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
- procedure _do_set(nSymVal:Pointer);// inline;
+ procedure _do_set(nSymVal:Pointer); inline;
  begin
   if (Info^.Offset<>0) then
   begin
@@ -1883,13 +1883,6 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   Import:Boolean;
 
  begin
-
-  case Info^.sType of
-   STT_NOTYPE :Import:=False;
-   STT_SCE    :Import:=False;
-   else
-    Import:=(Info^.shndx=SHN_UNDEF);
-  end;
   Import:=(Info^.shndx=SHN_UNDEF);
 
   if not Import then Exit;
@@ -2001,12 +1994,6 @@ const
   Import:Boolean;
 
  begin
-  case Info^.sType of
-   STT_NOTYPE :Import:=False;
-   STT_SCE    :Import:=False;
-   else
-    Import:=(Info^.shndx=SHN_UNDEF);
-  end;
   Import:=(Info^.shndx=SHN_UNDEF);
 
   IInfo:=Default(TResolveImportInfo);
