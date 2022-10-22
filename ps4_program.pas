@@ -58,13 +58,13 @@ type
    aMods:array of TMODULE;
    aLibs:array of PLIBRARY;
    procedure _set_filename(const name:RawByteString);
-   procedure _add_need(const name:RawByteString); inline;
-   procedure _set_mod(id:Word;_md:TMODULE); inline;
-   procedure _set_mod_attr(u:TModuleValue); inline;
-   function  _get_mod(id:Word):PMODULE; inline;
-   procedure _set_lib(id:Word;lib:TLIBRARY); inline;
-   procedure _set_lib_attr(u:TLibraryValue); inline;
-   function  _get_lib(id:Word):PLIBRARY; inline;
+   procedure _add_need(const name:RawByteString);
+   procedure _set_mod(id:Word;_md:TMODULE);
+   procedure _set_mod_attr(u:TModuleValue);
+   function  _get_mod(id:Word):PMODULE;
+   procedure _set_lib(id:Word;lib:TLIBRARY);
+   procedure _set_lib_attr(u:TLibraryValue);
+   function  _get_lib(id:Word):PLIBRARY;
    function  _find_mod_export:Word;
    function  _find_lib_export:Word;
   public
@@ -351,7 +351,7 @@ begin
  pFileName:=name;
 end;
 
-procedure TElf_node._add_need(const name:RawByteString); inline;
+procedure TElf_node._add_need(const name:RawByteString);
 var
  i:SizeInt;
 begin
@@ -360,7 +360,7 @@ begin
  aNeed[i]:=name;
 end;
 
-procedure TElf_node._set_mod(id:Word;_md:TMODULE); inline;
+procedure TElf_node._set_mod(id:Word;_md:TMODULE);
 var
  i:SizeInt;
 begin
@@ -373,7 +373,7 @@ begin
  aMods[id]:=_md;
 end;
 
-procedure TElf_node._set_mod_attr(u:TModuleValue); inline;
+procedure TElf_node._set_mod_attr(u:TModuleValue);
 var
  i:SizeInt;
 begin
@@ -386,7 +386,7 @@ begin
  aMods[u.id].attr:=u.name_offset;
 end;
 
-function TElf_node._get_mod(id:Word):PMODULE; inline;
+function TElf_node._get_mod(id:Word):PMODULE;
 begin
  Result:=nil;
  if (Length(aMods)>id) then
@@ -408,7 +408,7 @@ begin
   end;
 end;
 
-procedure TElf_node._set_lib(id:Word;lib:TLIBRARY); inline;
+procedure TElf_node._set_lib(id:Word;lib:TLIBRARY);
 var
  i:SizeInt;
  plib:PLIBRARY;
@@ -426,7 +426,7 @@ begin
  aLibs[id]:=plib;
 end;
 
-procedure TElf_node._set_lib_attr(u:TLibraryValue); inline;
+procedure TElf_node._set_lib_attr(u:TLibraryValue);
 var
  i:SizeInt;
  plib:PLIBRARY;
@@ -444,7 +444,7 @@ begin
  aLibs[u.id]:=plib;
 end;
 
-function TElf_node._get_lib(id:Word):PLIBRARY; inline;
+function TElf_node._get_lib(id:Word):PLIBRARY;
 begin
  Result:=nil;
  if (Length(aLibs)>id) then
@@ -637,6 +637,7 @@ var
  data:PPointer;
  PP:PPointer;
 begin
+ if (@Self=nil) then Exit(False);
  if (MapSymbol=nil) then MapSymbol:=HAMT_create64;
 
  data:=nil;
@@ -668,6 +669,7 @@ var
  PP:PPointer;
 begin
  Result:=nil;
+ if (@Self=nil) then Exit;
  data:=nil;
  PP:=HAMT_search64(MapSymbol,nid);
  if (PP<>nil) then data:=PP^;
@@ -676,6 +678,7 @@ end;
 
 function TLIBRARY.set_proc(nid:QWORD;value:Pointer):Boolean;
 begin
+ if (@Self=nil) then Exit(False);
  if (Fset_proc_cb<>nil) then
   Result:=Fset_proc_cb(@self,nid,value)
  else
@@ -684,6 +687,7 @@ end;
 
 function TLIBRARY.get_proc(nid:QWORD):Pointer;
 begin
+ if (@Self=nil) then Exit(nil);
  if (Fget_proc_cb<>nil) then
   Result:=Fget_proc_cb(@self,nid)
  else

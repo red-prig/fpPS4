@@ -263,7 +263,7 @@ begin
  //sceKernelGetLibkernelTextLocation(pOut^.address,pOut^.size)
 end;
 
-function ps4_sceKernelGetProcParam:Pointer; SysV_ABI_CDecl;
+function ps4_sceKernelGetProcParam:PSceProcParam; SysV_ABI_CDecl;
 begin
  Writeln('KernelGetProcParam');
  Result:=GetSceProcParam;

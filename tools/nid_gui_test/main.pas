@@ -120,11 +120,11 @@ end;
 
 procedure TfrmMain.TextKeyDown(Sender:TObject;var Key:Word;Shift:TShiftState);
 begin
- if Sender.InheritsFrom(TLabeledEdit) then
- if (TLabeledEdit(Sender).OnClick<>nil) then
  if (Key=13) then
+ if Sender.InheritsFrom(TLabeledEdit) then
+ if (TLabeledEdit(Sender).OnExit<>nil) then
  begin
-  TLabeledEdit(Sender).OnClick(Sender);
+  TLabeledEdit(Sender).OnExit(Sender);
  end;
 end;
 

@@ -290,7 +290,7 @@ begin
  Result:=0;
  if (path=nil) then Exit(EINVAL);
 
- Writeln('open:',path,' ',flags,' ',mode);
+ Writeln('open:',path,' ',flags,' (',OctStr(mode,3),')');
 
  Assert((flags and O_DIRECTORY)=0,'folder open TODO');
 

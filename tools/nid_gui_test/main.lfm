@@ -19,7 +19,6 @@ object frmMain: TfrmMain
     Font.Height = -19
     ParentFont = False
     TabOrder = 0
-    OnClick = NidBase64Click
     OnExit = NidBase64Click
     OnKeyDown = TextKeyDown
   end
@@ -35,7 +34,6 @@ object frmMain: TfrmMain
     Font.Height = -19
     ParentFont = False
     TabOrder = 1
-    OnClick = NidHexClick
     OnExit = NidHexClick
     OnKeyDown = TextKeyDown
   end
@@ -51,7 +49,6 @@ object frmMain: TfrmMain
     Font.Height = -19
     ParentFont = False
     TabOrder = 2
-    OnClick = NidNameClick
     OnExit = NidNameClick
     OnKeyDown = TextKeyDown
   end

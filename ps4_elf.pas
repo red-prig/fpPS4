@@ -398,18 +398,32 @@ Var
  function _test_elf(elf_hdr:Pelf64_hdr):Boolean;
  begin
   Result:=False;
+
   if PDWORD(@elf_hdr^.e_ident)^<>ELFMAG then
   begin
-   Writeln(StdErr,name,' ELF identifier mismatch');
+   Writeln(StdErr,name,' ELF identifier mismatch:',HexStr(PDWORD(@elf_hdr^.e_ident)^,8));
    Exit;
   end;
-  if ((elf_hdr^.e_type <> ET_SCE_DYNEXEC) and
-      (elf_hdr^.e_type <> ET_SCE_DYNAMIC)) or
-      (elf_hdr^.e_machine <> EM_X86_64) then
+
+  Case elf_hdr^.e_type of
+   ET_SCE_EXEC       :;
+   ET_SCE_REPLAY_EXEC:;
+   ET_SCE_RELEXEC    :;
+   ET_SCE_DYNEXEC    :;
+   ET_SCE_DYNAMIC    :;
+   else
+    begin
+     Writeln(StdErr,name,' unspported TYPE:',HexStr(elf_hdr^.e_type,4));
+     Exit;
+    end;
+  end;
+
+  if (elf_hdr^.e_machine<>EM_X86_64) then
   begin
-   Writeln(StdErr,name,'unspported TYPE/ARCH.');
+   Writeln(StdErr,name,' unspported ARCH:',elf_hdr^.e_machine);
    Exit;
   end;
+
   Writeln('hdr.[EI_CLASS]  :',elf_hdr^.e_ident[EI_CLASS]);
   Writeln('hdr.[EI_DATA]   :',elf_hdr^.e_ident[EI_DATA]);
   Writeln('hdr.[EI_VERSION]:',elf_hdr^.e_ident[EI_VERSION]);
@@ -563,7 +577,7 @@ begin
   else
    begin
     FileClose(F);
-    Writeln(StdErr,name,' is unknow file type!');
+    Writeln(StdErr,name,' is unknow file type:',HexStr(self_header.Magic,8));
    end;
  end;
 end;
@@ -994,7 +1008,6 @@ end;
 
 procedure Telf_file.ParseSingleDynEntry(var entry:Elf64_Dyn);
 var
- i:SizeInt;
  mu:TModuleValue;
  lu:TLibraryValue;
  _md:TMODULE;
@@ -1647,29 +1660,98 @@ begin
  Result:=True;
 end;
 
-function _on_module_start_stop(pName:PChar):Integer;
+var
+ mod_space:TMODULE=(
+  attr:0;
+  Import:True;
+  strName:'';
+ );
+
+var
+ lib_space:TLIBRARY=(
+  parent:nil;
+  MapSymbol:nil;
+  attr:0;
+  Import:True;
+  strName:'';
+  Fset_proc_cb:nil;
+  Fget_proc_cb:nil;
+ );
+
+function _convert_info_name(elf:Telf_file;
+                            Info:PRelaInfo;
+                            IInfo:PResolveImportInfo
+                            ):Boolean;
+var
+ nModId,nLibId:WORD;
 begin
- Result:=-1;
- if (PQWORD(pName)^=$735F656C75646F6D) then //module_s
- begin
-  Case PDWORD(@pName[8])^ of
-   $74726174: //tart
-    if (pName[$C]=#0) then
-    begin //module_start
-     Result:=0;
+ Result:=True;
+
+ nModId:=$FFFF; //no mod
+ nLibId:=$FFFF; //no lib
+
+ case Info^.sType of
+  STT_NOTYPE:
+   begin
+    IInfo^.nid:=ps4_nid_hash(Info^.pName);
+
+    if (Info^.shndx=SHN_UNDEF) then //import
+    begin
+     //
+    end else
+    begin
+     nModId:=elf._find_mod_export;
+     nLibId:=elf._find_lib_export;
     end;
-   $00706F74: //top0
-    begin //module_stop
-     Result:=1;
+
+   end;
+  STT_SCE:
+   begin
+    if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo^.nid) then
+    begin
+     Exit(False);
     end;
-   else;
-  end;
+
+    if (Info^.shndx=SHN_UNDEF) then //import
+    begin
+     //
+    end else
+    begin
+     nModId:=elf._find_mod_export;
+     nLibId:=elf._find_lib_export;
+    end;
+
+   end;
+  else
+   begin
+    if not DecodeEncName(Info^.pName,nModId,nLibId,IInfo^.nid) then
+    begin
+     Exit(False);
+    end;
+   end;
  end;
+
+ if (nModId=$FFFF) then
+ begin
+  IInfo^._md:=@mod_space;
+ end else
+ begin
+  IInfo^._md:=elf._get_mod(nModId);
+ end;
+
+ if (nLibId=$FFFF) then
+ begin
+  IInfo^.lib:=@lib_space;
+ end else
+ begin
+  IInfo^.lib:=elf._get_lib(nLibId);
+ end;
+
 end;
 
 Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
- procedure _do_set(nSymVal:Pointer); inline;
+ procedure _do_set(nSymVal:Pointer);// inline;
  begin
   if (Info^.Offset<>0) then
   begin
@@ -1681,62 +1763,27 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
  var
   IInfo:TResolveImportInfo;
 
-  nModuleId,nLibraryId:Word;
-
   val:Pointer;
 
   Import:Boolean;
 
  begin
-
-  case Info^.sType of
-   STT_NOTYPE :Import:=False;
-   STT_SCE    :Import:=False;
-   else
-    Import:=(Info^.shndx=SHN_UNDEF);
-  end;
+  Import:=(Info^.shndx=SHN_UNDEF);
 
   if Import then Exit;
 
   IInfo:=Default(TResolveImportInfo);
 
-  nModuleId:=0;
-  nLibraryId:=0;
-
-  case Info^.sType of
-   STT_NOTYPE:
-    begin
-     IInfo.nid:=ps4_nid_hash(Info^.pName);
-     nModuleId:=elf._find_mod_export;
-     nLibraryId:=elf._find_lib_export;
-    end;
-   STT_SCE:
-    begin
-     if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo.nid) then
-     begin
-      Writeln(StdErr,'Error decode:',Info^.pName);
-     end;
-     nModuleId:=elf._find_mod_export;
-     nLibraryId:=elf._find_lib_export;
-    end;
-   else
-    begin
-     if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
-     begin
-      Writeln(StdErr,'Error decode:',Info^.pName);
-     end;
-    end;
+  if not _convert_info_name(elf,Info,@IInfo) then
+  begin
+   Writeln(StdErr,'Error decode:',Info^.pName);
+   Exit;
   end;
 
-  IInfo._md:=elf._get_mod(nModuleId);
-  IInfo.lib:=elf._get_lib(nLibraryId);
-
-  if (IInfo._md=nil) then
+  if (IInfo._md=nil)then
   begin
    Writeln(StdErr,'Unknow module from ',Info^.pName);
-  end;
-
-  if (IInfo._md<>nil) then
+  end else
   if (IInfo._md^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
@@ -1746,8 +1793,7 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   begin
    Writeln(StdErr,'Unknow library from ',Info^.pName);
    Exit;
-  end;
-
+  end else
   if (IInfo.lib^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
@@ -1834,8 +1880,6 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
  var
   IInfo:TResolveImportInfo;
 
-  nModuleId,nLibraryId:Word;
-
   Import:Boolean;
 
  begin
@@ -1846,28 +1890,22 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    else
     Import:=(Info^.shndx=SHN_UNDEF);
   end;
+  Import:=(Info^.shndx=SHN_UNDEF);
 
   if not Import then Exit;
 
   IInfo:=Default(TResolveImportInfo);
 
-  nModuleId:=0;
-  nLibraryId:=0;
-
-  if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
+  if not _convert_info_name(elf,Info,@IInfo) then
   begin
    Writeln(StdErr,'Error decode:',Info^.pName);
+   Exit;
   end;
-
-  IInfo._md:=elf._get_mod(nModuleId);
-  IInfo.lib:=elf._get_lib(nLibraryId);
 
   if (IInfo._md=nil) then
   begin
    Writeln(StdErr,'Unknow module from ',Info^.pName);
-  end;
-
-  if (IInfo._md<>nil) then
+  end else
   if (IInfo._md^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong module ref:',IInfo._md^.strName,':',IInfo._md^.Import,'<>',Import);
@@ -1877,8 +1915,7 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   begin
    Writeln(StdErr,'Unknow library from ',Info^.pName);
    Exit;
-  end;
-
+  end else
   if (IInfo.lib^.Import<>Import) then
   begin
    Writeln(StdErr,'Wrong library ref:',IInfo.lib^.strName,':',IInfo.lib^.Import,'<>',Import);
@@ -1961,8 +1998,6 @@ const
 
   IInfo:TResolveImportInfo;
 
-  nModuleId,nLibraryId:Word;
-
   Import:Boolean;
 
  begin
@@ -1972,46 +2007,19 @@ const
    else
     Import:=(Info^.shndx=SHN_UNDEF);
   end;
+  Import:=(Info^.shndx=SHN_UNDEF);
 
   IInfo:=Default(TResolveImportInfo);
 
-  nModuleId:=0;
-  nLibraryId:=0;
-
-  case Info^.sType of
-   STT_NOTYPE:
-    begin
-     IInfo.nid:=ps4_nid_hash(Info^.pName);
-     nModuleId:=elf._find_mod_export;
-     nLibraryId:=elf._find_lib_export;
-    end;
-   STT_SCE:
-    begin
-     if not DecodeValue64(Info^.pName,StrLen(Info^.pName),IInfo.nid) then
-     begin
-      Writeln(StdErr,'Error decode:',Info^.pName);
-     end;
-     nModuleId:=elf._find_mod_export;
-     nLibraryId:=elf._find_lib_export;
-    end;
-   else
-    begin
-     if not DecodeEncName(Info^.pName,nModuleId,nLibraryId,IInfo.nid) then
-     begin
-      Writeln(StdErr,'Error decode:',Info^.pName);
-     end;
-    end;
+  if not _convert_info_name(elf,Info,@IInfo) then
+  begin
+   FWriteln('Error decode:'+Info^.pName);
   end;
-
-  IInfo._md:=elf._get_mod(nModuleId);
-  IInfo.lib:=elf._get_lib(nLibraryId);
 
   if (IInfo._md=nil) then
   begin
    FWriteln('Unknow module from '+Info^.pName);
-  end;
-
-  if (IInfo._md<>nil) then
+  end else
   if (IInfo._md^.Import<>Import) then
   begin
    FWriteln('Wrong module ref:'+IInfo._md^.strName+':'+BoolToStr(IInfo._md^.Import)+'<>'+BoolToStr(Import));
@@ -2020,9 +2028,7 @@ const
   if (IInfo.lib=nil) then
   begin
    FWriteln('Unknow library from '+Info^.pName);
-  end;
-
-  if (IInfo.lib<>nil) then
+  end else
   if (IInfo.lib^.Import<>Import) then
   begin
    FWriteln('Wrong library ref:'+IInfo.lib^.strName+':'+BoolToStr(IInfo.lib^.Import)+'<>'+BoolToStr(Import));
@@ -2030,7 +2036,14 @@ const
 
   functName:=ps4libdoc.GetFunctName(IInfo.nid);
 
-  FWrite(__nBind(Info^.sBind)+':'+__sType(Info^.sType)+':'+IInfo._md^.strName +':');
+  FWrite(__nBind(Info^.sBind)+':'+__sType(Info^.sType)+':');
+
+  if (IInfo._md<>nil) then
+  begin
+   FWrite(IInfo._md^.strName);
+  end;
+
+  FWriteln(':');
 
   if (IInfo.lib<>nil) then
   begin
