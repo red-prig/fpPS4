@@ -1215,6 +1215,7 @@ begin
  lib^.set_proc($B26223EDEAB3644F,@ps4_clock_getres);
  lib^.set_proc($94B313F6F240724D,@ps4_clock_gettime);
  lib^.set_proc($7A37A471A35036AD,@ps4_sceKernelGettimeofday);
+ lib^.set_proc($90E7277ABCA99D00,@ps4_sceKernelGettimezone);
 
  lib^.set_proc($77B9D48F52CE7435,@ps4_clock_settime);
  lib^.set_proc($55D5C80C06C9DED4,@ps4_settimeofday);

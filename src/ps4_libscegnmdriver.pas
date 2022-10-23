@@ -23,6 +23,169 @@ uses
  ps4_libSceVideoOut{, ps4_pssl};
 
 const
+ InitDefault_stub:array[0..114] of DWORD=(
+  $c0017600,
+  $216,
+  $ffffffff,
+  $c0017600,
+  $217,
+  $ffffffff,
+  $c0017600,
+  $215,
+  0,
+  $c0016900,
+  $2f9,
+  $2d,
+  $c0016900,
+  $282,
+  8,
+  $c0016900,
+  $280,
+  $80008,
+  $c0016900,
+  $281,
+  $ffff0000,
+  $c0016900,
+  $204,
+  0,
+  $c0016900,
+  $206,
+  $43f,
+  $c0016900,
+  $83,
+  $ffff,
+  $c0016900,
+  $317,
+  $10,
+  $c0016900,
+  $2fa,
+  $3f800000,
+  $c0016900,
+  $2fc,
+  $3f800000,
+  $c0016900,
+  $2fb,
+  $3f800000,
+  $c0016900,
+  $2fd,
+  $3f800000,
+  $c0016900,
+  $202,
+  $cc0010,
+  $c0016900,
+  $30e,
+  $ffffffff,
+  $c0016900,
+  $30f,
+  $ffffffff,
+  $c0002f00,
+  1,
+  $c0017600,
+  7,
+  $1ff,
+  $c0017600,
+  $46,
+  $1ff,
+  $c0017600,
+  $87,
+  $1ff,
+  $c0017600,
+  199,
+  $1ff,
+  $c0017600,
+  $107,
+  0,
+  $c0017600,
+  $147,
+  $1ff,
+  $c0016900,
+  $1b1,
+  2,
+  $c0016900,
+  $101,
+  0,
+  $c0016900,
+  $100,
+  $ffffffff,
+  $c0016900,
+  $103,
+  0,
+  $c0016900,
+  $284,
+  0,
+  $c0016900,
+  $290,
+  0,
+  $c0016900,
+  $2ae,
+  0,
+  $c0016900,
+  $292,
+  0,
+  $c0016900,
+  $293,
+  $6000000,
+  $c0016900,
+  $2f8,
+  0,
+  $c0016900,
+  $2de,
+  $1e9,
+  $c0036900,
+  $295,
+  $100,
+  $100,
+  4,
+  $c0017900,
+  $00000200,
+  $e0000000
+ );
+
+function _sceGnmDrawInitDefaultHardwareState(cmdBuffer:PDWORD;numDwords:DWORD;param_3:Integer):DWORD;
+var
+ _cmdBuffer:PDWORD;
+ count:DWORD;
+begin
+ Result:=0;
+
+ if (numDwords>$FF) then
+ begin
+  _cmdBuffer:=cmdBuffer;
+
+  if (param_3<>0) then
+  begin
+   _cmdBuffer:=cmdBuffer+$C;
+   cmdBuffer[0]:=$c0012800;
+   cmdBuffer[1]:=$80000000;
+   cmdBuffer[2]:=$80000000;
+   cmdBuffer[3]:=$c0001200;
+   cmdBuffer[4]:=0;
+   cmdBuffer[5]:=$c0055800;
+   cmdBuffer[6]:=$2ec47fc0;
+   cmdBuffer[7]:=$ffffffff;
+   cmdBuffer[8]:=0;
+   cmdBuffer[9]:=0;
+   cmdBuffer[10]:=0;
+   cmdBuffer[11]:=$a;
+  end;
+
+  Move(InitDefault_stub,cmdBuffer^,SizeOf(InitDefault_stub));
+
+  count:=$100-(QWORD(Int64(_cmdBuffer)+($1cc-Int64(cmdBuffer))) shr 2);  //ftw
+  Result:=(Int64(_cmdBuffer) + ((count*4+$1cc)-Int64(cmdBuffer))) shr 2;
+
+  _cmdBuffer[$73]:=(count*$10000+$3ffe0000) or $c0001000;
+  _cmdBuffer[$74]:=0;
+ end;
+
+end;
+
+function ps4_sceGnmDrawInitDefaultHardwareState(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=_sceGnmDrawInitDefaultHardwareState(cmdBuffer,numDwords,1);
+end;
+
+const
  InitDefault175_stub:array[0..128] of DWORD=(
   $c0012800,
   $80000000,
@@ -1694,6 +1857,7 @@ begin
 
  lib:=Result._add_lib('libSceGnmDriver');
 
+ lib^.set_proc($21D7DFC1FDF287CB,@ps4_sceGnmDrawInitDefaultHardwareState);
  lib^.set_proc($4219F245EB5E2753,@ps4_sceGnmDrawInitDefaultHardwareState175);
  lib^.set_proc($D07DAF0586D32C72,@ps4_sceGnmDrawInitDefaultHardwareState200);
  lib^.set_proc($C9BD9C4616A00F52,@ps4_sceGnmDrawInitDefaultHardwareState350);

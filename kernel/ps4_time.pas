@@ -37,6 +37,7 @@ function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGettimezone(tz:Ptimezone):Integer; SysV_ABI_CDecl;
 
 function ps4_clock_settime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_settimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
@@ -140,12 +141,20 @@ function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
 Var
  tp:timespec;
 begin
- Result:=px2sce(Swgetntptimeofday(@tp,nil));
+ Result:=Swgetntptimeofday(@tp,nil);
+ _set_errno(Result);
+ Result:=px2sce(Result);
  if (Result=0) and (tv<>nil) then
  begin
   tv^.tv_sec :=tp.tv_sec;
   tv^.tv_usec:=(tp.tv_nsec div 1000);
  end;
+end;
+
+function ps4_sceKernelGettimezone(tz:Ptimezone):Integer; SysV_ABI_CDecl;
+begin
+ Swgettimezone(tz);
+ Result:=_set_errno(0);
 end;
 
 function ps4_clock_settime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
