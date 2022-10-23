@@ -209,9 +209,8 @@ end;
 type
  SceCommonDialogBaseParam=packed record
   size:QWORD;
-  reserved:array[0..31] of Byte;
+  reserved:array[0..35] of Byte;
   magic:DWORD;
-  _align:Integer;
  end; //__attribute__ ((__aligned__(8)));
 
  pSceMsgDialogButtonsParam=^SceMsgDialogButtonsParam;
