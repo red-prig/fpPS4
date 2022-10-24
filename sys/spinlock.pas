@@ -82,12 +82,13 @@ begin
  begin
   For n:=0 to m_nExpCur-1 do
   begin
-   spin_pause;
+   SwYieldExecution;
   end;
   m_nExpCur:=m_nExpCur*2;
  end else
  begin
-  SwYieldExecution;
+  n:=-1000;
+  SwDelayExecution(False,@n);
  end;
 end;
 

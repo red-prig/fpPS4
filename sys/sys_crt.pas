@@ -18,7 +18,7 @@ uses
  sys_signal;
 
 var
- StdOutLock:Pointer=nil;
+ StdOutLock:TRTLCriticalSection;
  StdOutColor:Word;
 
 const
@@ -54,7 +54,7 @@ Begin
  n:=0;
 
  _sig_lock(SL_NOINTRRUP);
- spin_lock(StdOutLock);
+ EnterCriticalSection(StdOutLock);
 
  WriteConsole(t.Handle,
               t.Bufptr,
@@ -62,7 +62,7 @@ Begin
               @n,
               nil);
 
- spin_unlock(StdOutLock);
+ LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
  if (n<>t.BufPos) then InOutRes:=101;
@@ -78,7 +78,7 @@ Begin
  n:=0;
 
  _sig_lock(SL_NOINTRRUP);
- spin_lock(StdOutLock);
+ EnterCriticalSection(StdOutLock);
 
  dwCursorPosition:=Default(COORD);
 
@@ -97,7 +97,7 @@ Begin
                             dwCursorPosition,
                             n);
 
- spin_unlock(StdOutLock);
+ LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
  if (n<>t.BufPos) then InOutRes:=101;
@@ -112,7 +112,7 @@ Begin
  n:=0;
 
  _sig_lock(SL_NOINTRRUP);
- spin_lock(StdOutLock);
+ EnterCriticalSection(StdOutLock);
 
  WriteFile(t.Handle,
            t.Bufptr^,
@@ -120,7 +120,7 @@ Begin
            n,
            nil);
 
- spin_unlock(StdOutLock);
+ LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
  if (n<>t.BufPos) then InOutRes:=101;
@@ -190,6 +190,9 @@ begin
 end;
 
 initialization
+
+ InitCriticalSection(StdOutLock);
+
  StdOutColor:=7;
  GetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),StdOutColor);
 

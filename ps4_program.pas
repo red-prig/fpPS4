@@ -139,17 +139,18 @@ type
    mods:Thamt64locked;
    libs:Thamt64locked;
    elfs:TIntegerHandles;
-   Procedure RegistredFile(node:TElf_node);
+   function  RegistredFile(node:TElf_node):Boolean;
    Procedure RegistredMod(node:TElf_node;const strName:RawByteString);
   public
    Procedure LockRd;
+   Procedure LockWr;
    Procedure Unlock;
    function  FirstFile:TElf_node;
    function  AcqureFileByName(const strName:RawByteString):TElf_node;
    procedure PopupFile(node:TElf_node);
    Procedure SetLib(lib:PLIBRARY);
    function  GetLib(const strName:RawByteString):PLIBRARY;
-   Procedure RegistredElf(node:TElf_node);
+   function  RegistredElf(node:TElf_node):Boolean;
    Procedure RegistredPreLoad(const strName:RawByteString;cb:TOnElfLoadCb);
    Procedure RegistredFinLoad(const strName:RawByteString;cb:TOnElfLoadCb);
    function  Loader(Const name:RawByteString):TElf_node;
@@ -694,11 +695,13 @@ begin
   Result:=_get_proc(nid);
 end;
 
-Procedure Tps4_program.RegistredFile(node:TElf_node);
+function Tps4_program.RegistredFile(node:TElf_node):Boolean;
 var
  nid:QWORD;
  PP:PPointer;
 begin
+ Result:=True;
+
  files.LockWr;
  files.Remove(node);
  files.Push_tail(node);
@@ -706,7 +709,12 @@ begin
  nid:=ps4_nid_hash(node.pFileName);
  PP:=HAMT_insert64(@files.hamt,nid,Pointer(node));
  Assert(PP<>nil);
- if (PP^<>Pointer(node)) then Writeln(StdErr,'Warn, ',node.pFileName,' file is registred');
+
+ if (PP^<>Pointer(node)) then
+ begin
+  Writeln(StdErr,'Warn, ',node.pFileName,' file is registred');
+  Result:=False;
+ end;
 
  files.Unlock;
 end;
@@ -714,6 +722,11 @@ end;
 Procedure Tps4_program.LockRd;
 begin
  files.LockRd;
+end;
+
+Procedure Tps4_program.LockWr;
+begin
+ files.LockWr;
 end;
 
 Procedure Tps4_program.Unlock;
@@ -791,18 +804,20 @@ begin
  libs.Unlock;
 end;
 
-Procedure Tps4_program.RegistredElf(node:TElf_node);
+function Tps4_program.RegistredElf(node:TElf_node):Boolean;
 var
  FHandle:Integer;
  i:SizeInt;
 begin
- if (node=nil) then Exit;
+ if (node=nil) then Exit(False);
  FHandle:=0;
+
  if not elfs.New(node,FHandle) then
   raise Exception.Create('Error alloc handle');
  node.FHandle:=FHandle;
 
- RegistredFile(node);
+ Result:=RegistredFile(node);
+ if not Result then Exit;
 
  if Length(node.aMods)<>0 then
  begin

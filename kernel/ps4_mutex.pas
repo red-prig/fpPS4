@@ -204,6 +204,9 @@ Const
  MS_Locked  =1;
  MS_Waiting =2;
 
+const
+ PTHREAD_MUTEX_FREE=2;
+
 function STATIC_INITIALIZER(m:pthread_mutex):Boolean; inline;
 begin
  Result:=False;
@@ -242,6 +245,7 @@ begin
  Case PtrUInt(mi) of
   PTHREAD_MUTEX_INITIALIZER            :mi:=mutex_impl_init(m,mi,default);
   PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP:mi:=mutex_impl_init(m,mi,PTHREAD_MUTEX_ADAPTIVE);
+  PTHREAD_MUTEX_FREE                   :Exit(EINVAL);
  end;
  if (mi=nil) then Exit(ENOMEM);
  if not safe_test(mi^.valid,LIFE_MUTEX) then Exit(EINVAL);
@@ -428,7 +432,8 @@ begin
  mi:=m^;
  if not STATIC_INITIALIZER(mi) then
  begin
-  mi:=XCHG(m^,nil);
+  mi:=XCHG(m^,Pointer(PTHREAD_MUTEX_FREE));
+  if (mi=Pointer(PTHREAD_MUTEX_FREE)) then Exit(EINVAL);
   if STATIC_INITIALIZER(mi) then Exit(0);
   if not CAS(mi^.valid,LIFE_MUTEX,DEAD_MUTEX) then Exit(EINVAL);
   _sig_lock;

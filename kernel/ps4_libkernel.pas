@@ -139,7 +139,7 @@ begin
  begin
   if (info=nil) then
   begin
-   Result:=-$7ffdfff2;
+   Result:=SCE_KERNEL_ERROR_EFAULT;
   end else
   begin
 
@@ -153,7 +153,7 @@ begin
     _sig_unlock;
 
     info^:=Default(SceKernelModuleInfoEx);
-    Exit(-$7ffdfffd);
+    Exit(SCE_KERNEL_ERROR_ESRCH);
    end;
 
    info^:=node.GetModuleInfoEx;
@@ -166,7 +166,7 @@ begin
   end;
  end else
  begin
-  Result:=-$7ffdffea;
+  Result:=SCE_KERNEL_ERROR_EINVAL;
   info^:=Default(SceKernelModuleInfoEx);
  end;
 end;
@@ -200,10 +200,10 @@ begin
  begin
   if (info=nil) then
   begin
-   Result:=-$7ffdfff2;
+   Result:=SCE_KERNEL_ERROR_EFAULT;
   end else
   begin
-   Result:=-$7ffdffea;
+   Result:=SCE_KERNEL_ERROR_EINVAL;
    if (info^.st_size > 303) then
    begin
 
@@ -217,7 +217,7 @@ begin
      _sig_unlock;
 
      info^:=Default(SceModuleInfoForUnwind);
-     Exit(-$7ffdfffd);
+     Exit(SCE_KERNEL_ERROR_ESRCH);
     end;
 
     info_ex:=node.GetModuleInfoEx;
@@ -238,7 +238,7 @@ begin
   end;
  end else
  begin
-  Result:=-$7ffdffea;
+  Result:=SCE_KERNEL_ERROR_EINVAL;
   info^:=Default(SceModuleInfoForUnwind);
  end;
 end;
@@ -414,20 +414,19 @@ end;
 //dynlib_get_obj_member(handle,1,&ptr); init
 //dynlib_get_obj_member(handle,2,&ptr); fini
 
-//dynamic load????
-function ps4_sceKernelLoadStartModule(moduleFileName:Pchar;
-                                      argc:size_t;
-                                      argp:PPointer;
-                                      flags:DWORD;
-                                      pOpt:PSceKernelLoadModuleOpt;
-                                      pRes:PInteger):SceKernelModule; SysV_ABI_CDecl;
+function _sceKernelLoadStartModule(moduleFileName:Pchar;
+                                   argc:size_t;
+                                   argp:PPointer;
+                                   flags:DWORD;
+                                   pOpt:PSceKernelLoadModuleOpt;
+                                   pRes:PInteger):SceKernelModule;
 var
  node:TElf_node;
  fn:RawByteString;
  i:Integer;
 begin
  Result:=0;
- _sig_lock;
+ if (pOpt<>nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
 
  Writeln('Load Lib:',moduleFileName);
 
@@ -435,8 +434,7 @@ begin
 
  if (Result<>0) then
  begin
-  _sig_unlock;
-  Exit(px2sce(Result));
+  Exit(SCE_KERNEL_ERROR_EACCES);
  end;
 
  node:=ps4_app.AcqureFileByName(ExtractFileName(fn));
@@ -449,7 +447,6 @@ begin
 
   if (pRes<>nil) then pRes^:=0;
 
-  _sig_unlock;
   Exit;
  end;
 
@@ -462,7 +459,7 @@ begin
   node.Acqure;
 
   node.Prepare;
-  ps4_app.RegistredElf(node);
+  if not ps4_app.RegistredElf(node) then Assert(false,'RegistredElf');
   ps4_app.ResolveDepended(node);
   ps4_app.LoadSymbolImport(nil);
   ps4_app.ReLoadSymbolImport(Pointer(node));
@@ -485,6 +482,25 @@ begin
  begin
   Result:=SCE_KERNEL_ERROR_ENOENT;
  end;
+end;
+
+function ps4_sceKernelLoadStartModule(moduleFileName:Pchar;
+                                      argc:size_t;
+                                      argp:PPointer;
+                                      flags:DWORD;
+                                      pOpt:PSceKernelLoadModuleOpt;
+                                      pRes:PInteger):SceKernelModule; SysV_ABI_CDecl;
+begin
+ if (flags<>0) then Exit(SCE_KERNEL_ERROR_EINVAL);
+
+ _sig_lock;
+
+ Result:=_sceKernelLoadStartModule(moduleFileName,
+                                   argc,
+                                   argp,
+                                   0,
+                                   pOpt,
+                                   pRes);
 
  _sig_unlock;
 end;
