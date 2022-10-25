@@ -200,18 +200,19 @@ function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
 function ps4_lseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 
-function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+
 function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+
+function ps4_write(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
+function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 
 function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
-
-function ps4_write(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
-function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
 
 function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
 
@@ -449,6 +450,7 @@ var
  err:DWORD;
 begin
  Result:=0;
+ if (fd<0) then Exit(-EINVAL);
  if (dev_random_fd=fd) then Exit(-ESPIPE);
 
  h:=_get_osfhandle(fd);
@@ -506,38 +508,6 @@ begin
  end;
 end;
 
-function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
-var
- h:THandle;
- N:DWORD;
-begin
- if (dev_random_fd=fd) then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- _sig_lock;
- h:=_get_osfhandle(fd);
- _sig_unlock;
-
- if (h=INVALID_HANDLE_VALUE) then
- begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
- end;
-
- if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
- if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
-
- N:=0;
- _sig_lock;
- if WriteFile(h,buf^,nbytes,N,nil) then
- begin
-  Result:=N;
-  _set_sce_errno(0);
- end else
- begin
-  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
- end;
- _sig_unlock;
-end;
-
 const
  BCRYPT_USE_SYSTEM_PREFERRED_RNG=2;
 
@@ -546,42 +516,64 @@ function BCryptGenRandom(hAlgorithm:Pointer;
                          cbBuffer:DWORD;
                          dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
 
-function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
 var
  h:THandle;
  N:DWORD;
 begin
- if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
- if (nbytes<0) or (nbytes>High(Integer)) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+ if (data=nil) then Exit(-EFAULT);
+ if (fd<0) then Exit(-EINVAL);
+ if (size<=0) then Exit(-EINVAL);
 
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ Assert(size<High(DWORD));
+
+ if (dev_random_fd=fd) then
  begin
-  BCryptGenRandom(nil,buf,nbytes,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  Result:=nbytes;
-  _set_sce_errno(0);
-  Exit;
+  BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  Exit(size);
  end;
 
- _sig_lock;
  h:=_get_osfhandle(fd);
- _sig_unlock;
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+  Exit(-EBADF);
  end;
 
  N:=0;
- _sig_lock;
- if ReadFile(h,buf^,nbytes,N,nil) then
+ if ReadFile(h,data^,size,N,nil) then
  begin
   Result:=N;
-  _set_sce_errno(0);
  end else
  begin
-  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
+  Result:=-EIO;
  end;
+end;
+
+function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_read(fd,data,size);
  _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end;
+end;
+
+function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_read(fd,buf,nbytes);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end;
 end;
 
 function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
@@ -624,6 +616,62 @@ begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
  end;
  _sig_unlock;
+end;
+
+function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
+var
+ h:THandle;
+ N:DWORD;
+begin
+ if (data=nil) then Exit(-EFAULT);
+ if (fd<0) then Exit(-EINVAL);
+ if (size<=0) then Exit(-EINVAL);
+
+ Assert(size<High(DWORD));
+
+ if (dev_random_fd=fd) then Exit(-EPIPE);
+
+ h:=_get_osfhandle(fd);
+
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(-EBADF);
+ end;
+
+ N:=0;
+ if WriteFile(h,data^,size,N,nil) then
+ begin
+  Result:=N;
+ end else
+ begin
+  Result:=-EIO;
+ end;
+end;
+
+function ps4_write(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_write(fd,data,size);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end;
+end;
+
+function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_write(fd,buf,nbytes);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end;
 end;
 
 function file_attr_to_st_mode(attr:DWORD):Word;
@@ -793,76 +841,6 @@ end;
 function GetStr(p:Pointer;L:SizeUint):RawByteString;
 begin
  SetString(Result,P,L);
-end;
-
-function ps4_write(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
-var
- h:THandle;
- N:DWORD;
-begin
- if (data=nil) then Exit(_set_errno(EFAULT));
- if (size>High(Integer)) then Exit(_set_errno(EINVAL));
-
- if (dev_random_fd=fd) then Exit(_set_errno(EINVAL));
-
- _sig_lock;
- h:=_get_osfhandle(fd);
- _sig_unlock;
-
- if (h=INVALID_HANDLE_VALUE) then
- begin
-  Exit(_set_errno(EBADF));
- end;
-
- N:=0;
- _sig_lock;
- if WriteFile(h,data^,size,N,nil) then
- begin
-  Result:=N;
-  _set_errno(0);
- end else
- begin
-  Result:=_set_errno(EIO);
- end;
- _sig_unlock;
-end;
-
-function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
-var
- h:THandle;
- N:DWORD;
-begin
- if (data=nil) then Exit(_set_errno(EFAULT));
- if (size>High(Integer)) then Exit(_set_errno(EINVAL));
-
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
- begin
-  BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  Result:=size;
-  _set_errno(0);
-  Exit;
- end;
-
- _sig_lock;
- h:=_get_osfhandle(fd);
- _sig_unlock;
-
- if (h=INVALID_HANDLE_VALUE) then
- begin
-  Exit(_set_errno(EBADF));
- end;
-
- N:=0;
- _sig_lock;
- if ReadFile(h,data^,size,N,nil) then
- begin
-  Result:=N;
-  _set_errno(0);
- end else
- begin
-  Result:=_set_errno(EIO);
- end;
- _sig_unlock;
 end;
 
 function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
