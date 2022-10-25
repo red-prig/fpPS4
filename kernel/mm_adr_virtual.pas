@@ -221,7 +221,8 @@ begin
   BT_PRIV,
   BT_GPUM:
    begin
-    err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
+    //err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
+    err:=_VirtualAlloc(Pointer(FOffset),ASize,prot);
     if (err<>0) then
     begin
      Writeln(StdErr,'_VirtualReserve(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
@@ -394,7 +395,8 @@ begin
   BT_PRIV,
   BT_GPUM:
    begin
-    Result:=_VirtualCommit(Pointer(key^.Offset),key^.Size,prot);
+    //Result:=_VirtualCommit(Pointer(key^.Offset),key^.Size,prot);
+    Result:=0;
     if (Result=0) then
     begin
      key^.F.prot:=prot;
@@ -452,7 +454,8 @@ begin
   Rsrv:=Rsrv+key^.Size; //+
  end;
 
- Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
+ //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
+ Result:=0;
 end;
 
 function TVirtualAdrBlock.Protect(key:PVirtualAdrNode;prot:Integer):Integer;
@@ -1979,6 +1982,10 @@ begin
  if (key.F.Free<>0) then
  begin
   Result:='FREE';
+ end else
+ if (key.block=nil) then
+ begin
+  Result:='SYST';
  end else
  if (key.F.reserv<>0) then
  begin

@@ -312,7 +312,7 @@ begin
  end;
 
  {
- if (Result<>nil) and (Info^.sType=STT_FUN) then //trace
+ if (Result<>nil) and ((Info^.sType=STT_FUN) or (Info^.sType=STT_SCE)) then //trace
  begin
 
  Case Info^.lib^.strName of
@@ -406,11 +406,11 @@ begin
 
  if (Result=nil) then
  begin
-  if (Info^.sType=STT_FUN) then
+  if (Info^.sType=STT_FUN) or (Info^.sType=STT_SCE) then
   begin
    Result:=Stub.NewNopStub(Info^.Nid,Info^.lib,@print_stub);
-   //Writeln('Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end else
+  if (Info^.sBind<>STB_WEAK) then
   begin
    Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end;

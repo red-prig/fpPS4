@@ -23,6 +23,10 @@ const
  SCE_AJM_CODEC_CELP_DEC =12;
  SCE_AJM_CODEC_CELP_ENC =13;
 
+ SCE_AJM_FLAG_SIDEBAND_STREAM        =(1 shl 47);
+ SCE_AJM_FLAG_SIDEBAND_FORMAT        =(1 shl 46);
+ SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE=(1 shl 45);
+
 var
  FAjmMap:TIntegerHandles;
 
@@ -39,6 +43,25 @@ type
  SceAjmSidebandResult=packed record
   iResult        :SceAjmResult;
   iInternalResult:SceAjmResult;
+ end;
+
+ SceAjmSidebandStream=packed record
+  iSizeConsumed:Integer;
+  iSizeProduced:Integer;
+  uiTotalDecodedSamples:QWORD;
+ end;
+
+ SceAjmSidebandDecAt9CodecInfo=packed record
+  uiSuperFrameSize:DWORD;
+  uiFramesInSuperFrame:DWORD;
+  uiNextFrameSize:DWORD;
+  uiFrameSamples:DWORD;
+ end;
+
+ pSceAjmDecAt9GetCodecInfoResult=^SceAjmDecAt9GetCodecInfoResult;
+ SceAjmDecAt9GetCodecInfoResult=packed record
+  sResult:SceAjmSidebandResult;
+  sCodecInfo:SceAjmSidebandDecAt9CodecInfo;
  end;
 
  pSceAjmBuffer=^SceAjmBuffer;
@@ -332,6 +355,23 @@ begin
  H.Release;
 end;
 
+type
+ pSceAjmSidebandStreamResult=^SceAjmSidebandStreamResult;
+ SceAjmSidebandStreamResult=packed record
+  sResult:SceAjmSidebandResult;
+  sStream:SceAjmSidebandStream;
+ end;
+
+procedure FixSideband(uiFlags:qword;pSidebandOutput:Pointer;szSidebandOutputSize:qword);
+begin
+ if ((uiFlags and SCE_AJM_FLAG_SIDEBAND_STREAM)<>0) then
+ begin
+  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.iSizeConsumed:=1;
+  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.iSizeProduced:=1;
+  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
+ end;
+end;
+
 function ps4_sceAjmBatchJobControlBufferRa(
           pBatchPosition:Pointer;
           uiInstance:SceAjmInstanceId;
@@ -346,7 +386,9 @@ begin
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
+  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
+
 end;
 
 function ps4_sceAjmBatchJobRunBufferRa(
@@ -362,9 +404,11 @@ function ps4_sceAjmBatchJobRunBufferRa(
           pReturnAddress:PPointer):Pointer; SysV_ABI_CDecl;
 begin
  Result:=nil;
+
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
+  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
  FillChar(pDataOutput^,szDataOutputSize,0);
@@ -388,6 +432,7 @@ begin
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
+  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
  if (pDataOutputBuffers<>nil) and (szNumDataOutputBuffers<>0) then

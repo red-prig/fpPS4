@@ -5,6 +5,7 @@ unit ps4_libSceNpManager;
 interface
 
 uses
+  windows,
   ps4_program,
   Classes,
   SysUtils;
@@ -14,6 +15,7 @@ Const
 
 type
  // Np country code (ISO 3166-1 two-letter system)
+ pSceNpCountryCode=^SceNpCountryCode;
  SceNpCountryCode=packed record
   data:array[0..SCE_NP_COUNTRY_CODE_LENGTH-1] of AnsiChar;
   term:AnsiChar;
@@ -127,6 +129,50 @@ function ps4_sceNpGetAccountIdA(userId:Integer;pAccountId:PQWORD):Integer; SysV_
 begin
  if (pAccountId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  pAccountId^:=1111;
+ Result:=0;
+end;
+
+const
+ GEOCLASS_NATION = 16;
+
+ GEO_ISO2 = $0004;
+
+type
+ GEOID = LONG;
+ GEOTYPE = DWORD;
+ GEOCLASS = DWORD;
+
+function GetUserGeoID(GeoClass: GEOCLASS):GEOID; stdcall external kernel32;
+
+function GetGeoInfoA(Location: GEOID; GeoType: GEOTYPE; lpGeoData: LPSTR;
+  cchData: Integer; LangId: LANGID): Integer; stdcall external kernel32;
+
+function ps4_sceNpGetAccountCountry(onlineId:pSceNpOnlineId;pCountryCode:pSceNpCountryCode):Integer; SysV_ABI_CDecl;
+var
+ g:GEOID;
+ s:integer;
+ b:RawByteString;
+begin
+ if (onlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pCountryCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ g:=GetUserGeoID(GEOCLASS_NATION);
+ s:=GetGeoInfoA(g,GEO_ISO2,nil,0,0);
+ SetLength(b,s);
+ GetGeoInfoA(g,GEO_ISO2,PChar(b),s,0);
+
+ if (s>=2) then
+ begin
+  pCountryCode^:=Default(SceNpCountryCode);
+  pCountryCode^.data[0]:=LowerCase(b[1]);
+  pCountryCode^.data[1]:=LowerCase(b[2]);
+ end else
+ begin
+  pCountryCode^:=Default(SceNpCountryCode);
+  pCountryCode^.data[0]:='u';
+  pCountryCode^.data[1]:='s';
+ end;
+
  Result:=0;
 end;
 
@@ -365,6 +411,7 @@ begin
  lib:=Result._add_lib('libSceNpManager');
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
  lib^.set_proc($ADB9276948E9A96A,@ps4_sceNpGetAccountIdA);
+ lib^.set_proc($1A1CFD8960D4B42E,@ps4_sceNpGetAccountCountry);
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
