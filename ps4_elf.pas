@@ -16,6 +16,9 @@ uses
   SysUtils;
 
 type
+ t_user_free=procedure(ptr:Pointer); SysV_ABI_CDecl;
+ t_user_malloc=function(size:qword):Pointer; SysV_ABI_CDecl;
+
  PsceLibcMallocReplace=^TsceLibcMallocReplace;
  TsceLibcMallocReplace=packed record
   Size:QWORD;

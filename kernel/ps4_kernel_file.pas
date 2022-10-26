@@ -155,7 +155,7 @@ type
  p_iovec=^iovec;
  iovec=packed record
   iov_base:Pointer; //Base address.
-  iov_len :QWORD;   //Length.
+  iov_len :Int64;   //Length.
  end;
 
  PSceKernelStat=^SceKernelStat;
@@ -200,24 +200,29 @@ function ps4_sceKernelClose(fd:Integer):Integer; SysV_ABI_CDecl;
 function ps4_lseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelLseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 
-function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
+function ps4_read(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelRead(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 
+function ps4_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
 function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+
+function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+function ps4_sceKernelReadv(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_ABI_CDecl;
 
 function ps4_write(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 
-function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
-function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
+function ps4_sceKernelPwrite(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
 
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
-function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
-function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 
@@ -319,15 +324,15 @@ begin
 
    Result:=_open_osfhandle(h,flags and O_OFS);
 
-   if (Result<>0) then
+   if (Result<0) then
    begin
     Exit(-EMFILE);
    end else
    begin
     dev_random_fd:=Result;
+    Exit;
    end;
   end;
-  Exit(0);
  end;
 
  rp:='';
@@ -366,7 +371,7 @@ begin
    ERROR_NOT_ENOUGH_MEMORY:Exit(-ENOMEM);
    ERROR_ALREADY_EXISTS   :Exit(-EEXIST);
    ERROR_FILE_EXISTS      :Exit(-EEXIST);
-   ERROR_DISK_FULL:        Exit(-ENOSPC);
+   ERROR_DISK_FULL        :Exit(-ENOSPC);
    else
                            Exit(-EIO);
   end;
@@ -391,6 +396,9 @@ begin
  if (Result<0) then
  begin
   Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -405,6 +413,9 @@ begin
   Result:=-Result;
   _set_errno(Result);
   Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -435,6 +446,7 @@ begin
  _sig_lock;
  Result:=_sys_close(fd);
  _sig_unlock;
+
  _set_errno(Result);
  Result:=px2sce(Result);
 end;
@@ -491,6 +503,9 @@ begin
  if (Result<0) then
  begin
   Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -505,6 +520,9 @@ begin
   Result:=-Result;
   _set_errno(Result);
   Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -550,7 +568,7 @@ begin
  end;
 end;
 
-function ps4_read(fd:Integer;data:Pointer;size:QWORD):Int64; SysV_ABI_CDecl;
+function ps4_read(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sys_read(fd,data,size);
@@ -559,6 +577,9 @@ begin
  if (Result<0) then
  begin
   Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -573,49 +594,167 @@ begin
   Result:=-Result;
   _set_errno(Result);
   Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
-function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 var
  h:THandle;
  N:DWORD;
  O:TOVERLAPPED;
 begin
- if (buf=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EFAULT));
- if (nbytes<0) or (nbytes>High(Integer)) or (offset<0) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+ if (data=nil) then Exit(-EFAULT);
+ if (fd<0) then Exit(-EINVAL);
+ if (size<=0) then Exit(-EINVAL);
+ if (offset<0) then Exit(-EINVAL);
 
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
+ Assert(size<High(DWORD));
+
+ if (dev_random_fd=fd) then
  begin
-  BCryptGenRandom(nil,buf,nbytes,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  Result:=nbytes;
-  _set_sce_errno(0);
-  Exit;
+  BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  Exit(size);
  end;
 
- _sig_lock;
  h:=_get_osfhandle(fd);
- _sig_unlock;
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+  Exit(-EBADF);
  end;
 
  O:=Default(TOVERLAPPED);
  PInt64(@O.Offset)^:=offset;
 
  N:=0;
- _sig_lock;
- if ReadFile(h,buf^,nbytes,N,@O) then
+ if ReadFile(h,data^,size,N,@O) then
  begin
   Result:=N;
-  _set_sce_errno(0);
  end else
  begin
-  Result:=_set_sce_errno(SCE_KERNEL_ERROR_EIO);
+  Result:=-EIO;
  end;
+end;
+
+function ps4_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_pread(fd,data,size,offset);
  _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_pread(fd,buf,nbytes,offset);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
+var
+ h:THandle;
+ N:DWORD;
+ i:Integer;
+begin
+ if (vector=nil) then Exit(-EFAULT);
+ if (fd<0) then Exit(-EINVAL);
+ if (count<=0) then Exit(-EINVAL);
+
+ For i:=0 to count-1 do
+ begin
+  if (vector[i].iov_base=nil) then Exit(-EFAULT);
+  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
+ end;
+
+ if (dev_random_fd=fd) then
+ begin
+
+  Result:=0;
+  For i:=0 to count-1 do
+  begin
+   BCryptGenRandom(nil,vector[i].iov_base,vector[i].iov_len,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+   Result:=Result+vector[i].iov_len;
+  end;
+
+  Exit;
+ end;
+
+ h:=_get_osfhandle(fd);
+
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(-EBADF);
+ end;
+
+ Result:=0;
+ For i:=0 to count-1 do
+ begin
+  N:=0;
+  if ReadFile(h,vector[i].iov_base^,vector[i].iov_len,N,nil) then
+  begin
+   Result:=Result+N;
+   if (N<vector[i].iov_len) then Exit;
+  end else
+  begin
+   Exit(-EIO);
+   Break;
+  end;
+
+ end;
+
+end;
+
+function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_readv(fd,vector,count);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_sceKernelReadv(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_readv(fd,iov,iovcnt);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
 end;
 
 function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
@@ -657,6 +796,9 @@ begin
  if (Result<0) then
  begin
   Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -671,6 +813,76 @@ begin
   Result:=-Result;
   _set_errno(Result);
   Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
+var
+ h:THandle;
+ N:DWORD;
+ O:TOVERLAPPED;
+begin
+ if (data=nil) then Exit(-EFAULT);
+ if (fd<0) then Exit(-EINVAL);
+ if (size<=0) then Exit(-EINVAL);
+ if (offset<0) then Exit(-EINVAL);
+
+ Assert(size<High(DWORD));
+
+ if (dev_random_fd=fd) then Exit(-EPIPE);
+
+ h:=_get_osfhandle(fd);
+
+ if (h=INVALID_HANDLE_VALUE) then
+ begin
+  Exit(-EBADF);
+ end;
+
+ O:=Default(TOVERLAPPED);
+ PInt64(@O.Offset)^:=offset;
+
+ N:=0;
+ if WriteFile(h,data^,size,N,@O) then
+ begin
+  Result:=N;
+ end else
+ begin
+  Result:=-EIO;
+ end;
+end;
+
+function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_pwrite(fd,data,size,offset);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_sceKernelPwrite(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_pwrite(fd,buf,nbytes,offset);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
  end;
 end;
 
@@ -686,95 +898,21 @@ begin
   Result:=Result or S_IWUSR;
 end;
 
-function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
-begin
- Result:=_set_errno(sce2px(ps4_sceKernelStat(path,stat)));
-end;
-
-function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
-var
- rp:RawByteString;
- hfi:WIN32_FILE_ATTRIBUTE_DATA;
- err:DWORD;
-begin
- if (path=nil) or (stat=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
- if (path[0]=#0) then
- begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
- end;
-
- stat^:=Default(SceKernelStat);
-
- rp:='';
- _sig_lock;
- Result:=parse_filename(path,rp);
- _sig_unlock;
-
- if (Result<>0) then
- begin
-  Exit(_set_sce_errno(px2sce(EACCES)));
- end;
-
- hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
- err:=SwGetFileAttributes(rp,@hfi);
- if (err<>0) then
- begin
-  //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
-  Case err of
-   ERROR_ACCESS_DENIED,
-   ERROR_SHARING_VIOLATION,
-   ERROR_LOCK_VIOLATION,
-   ERROR_SHARING_BUFFER_EXCEEDED:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
-
-   ERROR_BUFFER_OVERFLOW:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
-
-   ERROR_NOT_ENOUGH_MEMORY:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
-
-   else
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
-  end;
- end;
-
- stat^.st_mode    :=file_attr_to_st_mode(hfi.dwFileAttributes);
- stat^.st_size    :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
-
- stat^.st_atim    :=filetime_to_timespec(hfi.ftLastAccessTime);
- stat^.st_mtim    :=filetime_to_timespec(hfi.ftLastWriteTime);
- stat^.st_ctim    :=stat^.st_mtim;
- stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
-
- stat^.st_blocks  :=((stat^.st_size+511) div 512);
- stat^.st_blksize :=512;
-
- _set_errno(0);
- Result:=0;
-end;
-
-function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
-begin
- Result:=_set_errno(sce2px(ps4_sceKernelFstat(fd,stat)));
-end;
-
-function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
 var
  h:THandle;
  hfi:TByHandleFileInformation;
  err:DWORD;
 begin
- if (stat=nil) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+ if (stat=nil) then Exit(EINVAL);
 
  stat^:=Default(SceKernelStat);
 
- _sig_lock;
  h:=_get_osfhandle(fd);
- _sig_unlock;
 
  if (h=INVALID_HANDLE_VALUE) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+  Exit(EBADF);
  end;
 
  Case SwGetFileType(h) of
@@ -797,22 +935,21 @@ begin
      err:=SwGetFileInformationByHandle(h,@hfi);
      if (err<>0) then
      begin
-      //Writeln('GetLastError:',err{,' ',ps4_pthread_self^.sig._lock});
       Case err of
        ERROR_ACCESS_DENIED,
        ERROR_SHARING_VIOLATION,
        ERROR_LOCK_VIOLATION,
        ERROR_SHARING_BUFFER_EXCEEDED:
-         Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+         Exit(EACCES);
 
        ERROR_BUFFER_OVERFLOW:
-         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
+         Exit(ENAMETOOLONG);
 
        ERROR_NOT_ENOUGH_MEMORY:
-         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
+         Exit(ENOMEM);
 
        else
-         Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+         Exit(ENOENT);
       end;
      end;
 
@@ -831,168 +968,127 @@ begin
     end;
 
   else
-   Exit(_set_sce_errno(SCE_KERNEL_ERROR_EBADF));
+   Exit(EBADF);
  end;
 
- _set_sce_errno(0);
  Result:=0;
 end;
 
-function GetStr(p:Pointer;L:SizeUint):RawByteString;
+function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 begin
- SetString(Result,P,L);
-end;
-
-function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
-var
- h:THandle;
- N:DWORD;
- i:Integer;
-begin
- if (vector=nil) then Exit(_set_errno(EFAULT));
-
- if (count=0) then Exit(_set_errno(EINVAL));
-
- if (dev_random_fd<>-1) and (dev_random_fd=fd) then
- begin
-
-  Result:=0;
-  For i:=0 to count-1 do
-  begin
-   if (vector[i].iov_base=nil) then Exit(_set_errno(EFAULT));
-   if (vector[i].iov_len=0) then Exit(_set_errno(EINVAL));
-
-   BCryptGenRandom(nil,vector[i].iov_base,vector[i].iov_len,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-   Result:=Result+vector[i].iov_len;
-  end;
-
-  _set_errno(0);
-  Exit;
- end;
-
  _sig_lock;
- h:=_get_osfhandle(fd);
- _sig_unlock;
-
- if (h=INVALID_HANDLE_VALUE) then
- begin
-  Exit(_set_errno(EBADF));
- end;
-
- _sig_lock;
-
- Result:=0;
- For i:=0 to count-1 do
- begin
-  if (vector[i].iov_base=nil) then Exit(_set_errno(EFAULT));
-  if (vector[i].iov_len=0) then Exit(_set_errno(EINVAL));
-
-  N:=0;
-  if ReadFile(h,vector[i].iov_base^,vector[i].iov_len,N,nil) then
-  begin
-   Result:=Result+N;
-   if (N<vector[i].iov_len) then Exit;
-  end else
-  begin
-   Result:=_set_errno(EIO);
-   Break;
-  end;
-
- end;
-
- if (Result>=0) then
- begin
-  _set_errno(0);
- end;
-
+ Result:=_set_errno(_sys_fstat(fd,stat));
  _sig_unlock;
 end;
 
-function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_fstat(fd,stat);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function _sys_stat(path:PChar;stat:PSceKernelStat):Integer;
 var
- fn:RawByteString;
+ rp:RawByteString;
+ hfi:WIN32_FILE_ATTRIBUTE_DATA;
  err:DWORD;
 begin
- Result:=0;
+ if (path=nil) or (stat=nil) then Exit(EINVAL);
 
- if (path=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  if (path[0]=#0) then
  begin
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
+  Exit(ENOENT);
  end;
 
- Writeln('sceKernelMkdir:',path,'(',OctStr(mode,3),')');
+ stat^:=Default(SceKernelStat);
 
- fn:='';
- _sig_lock;
- Result:=parse_filename(path,fn);
- _sig_unlock;
+ rp:='';
+ Result:=parse_filename(path,rp);
 
  if (Result<>0) then
  begin
-  Exit(_set_sce_errno(px2sce(EACCES)));
+  Exit(EACCES);
  end;
 
- err:=SwCreateDir(fn);
-
+ hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
+ err:=SwGetFileAttributes(rp,@hfi);
  if (err<>0) then
  begin
   Case err of
-   ERROR_INVALID_DRIVE,
-   ERROR_PATH_NOT_FOUND,
-   ERROR_FILE_NOT_FOUND:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOENT));
-
    ERROR_ACCESS_DENIED,
    ERROR_SHARING_VIOLATION,
    ERROR_LOCK_VIOLATION,
    ERROR_SHARING_BUFFER_EXCEEDED:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
+     Exit(SCE_KERNEL_ERROR_EACCES);
 
    ERROR_BUFFER_OVERFLOW:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENAMETOOLONG));
+     Exit(ENAMETOOLONG);
 
    ERROR_NOT_ENOUGH_MEMORY:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOMEM));
-
-   ERROR_ALREADY_EXISTS,
-   ERROR_FILE_EXISTS:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EEXIST));
-
-   ERROR_DISK_FULL:
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_ENOSPC));
+     Exit(ENOMEM);
 
    else
-     Exit(_set_sce_errno(SCE_KERNEL_ERROR_EIO));
+     Exit(ENOENT);
   end;
  end;
 
- _set_sce_errno(0);
+ stat^.st_mode    :=file_attr_to_st_mode(hfi.dwFileAttributes);
+ stat^.st_size    :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
+
+ stat^.st_atim    :=filetime_to_timespec(hfi.ftLastAccessTime);
+ stat^.st_mtim    :=filetime_to_timespec(hfi.ftLastWriteTime);
+ stat^.st_ctim    :=stat^.st_mtim;
+ stat^.st_birthtim:=filetime_to_timespec(hfi.ftCreationTime);
+
+ stat^.st_blocks  :=((stat^.st_size+511) div 512);
+ stat^.st_blksize :=512;
+
+ Result:=0;
 end;
 
-function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
+function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_stat(path,stat));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_stat(path,stat);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function _sys_mkdir(path:PChar):Integer;
 var
  fn:RawByteString;
  err:DWORD;
 begin
  Result:=0;
 
- if (path=nil) then Exit(_set_errno(EINVAL));
+ if (path=nil) then Exit(EINVAL);
+
  if (path[0]=#0) then
  begin
-  Exit(_set_errno(ENOENT));
+  Exit(ENOENT);
  end;
 
  Writeln('mkdir:',path);
 
  fn:='';
- _sig_lock;
  Result:=parse_filename(path,fn);
- _sig_unlock;
 
  if (Result<>0) then
  begin
-  Exit(_set_errno(EACCES));
+  Exit(EACCES);
  end;
 
  err:=SwCreateDir(fn);
@@ -1003,33 +1099,50 @@ begin
    ERROR_INVALID_DRIVE,
    ERROR_PATH_NOT_FOUND,
    ERROR_FILE_NOT_FOUND:
-     Exit(_set_errno(ENOENT));
+     Exit(ENOENT);
 
    ERROR_ACCESS_DENIED,
    ERROR_SHARING_VIOLATION,
    ERROR_LOCK_VIOLATION,
    ERROR_SHARING_BUFFER_EXCEEDED:
-     Exit(_set_errno(EACCES));
+     Exit(EACCES);
 
    ERROR_BUFFER_OVERFLOW:
-     Exit(_set_errno(ENAMETOOLONG));
+     Exit(ENAMETOOLONG);
 
    ERROR_NOT_ENOUGH_MEMORY:
-     Exit(_set_errno(ENOMEM));
+     Exit(ENOMEM);
 
    ERROR_ALREADY_EXISTS,
    ERROR_FILE_EXISTS:
-     Exit(_set_errno(EEXIST));
+     Exit(EEXIST);
 
    ERROR_DISK_FULL:
-     Exit(_set_errno(ENOSPC));
+     Exit(ENOSPC);
 
    else
-     Exit(_set_errno(EIO));
+     Exit(EIO);
   end;
  end;
 
- _set_errno(0);
+ Result:=0;
+end;
+
+function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_mkdir(path));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_mkdir(path);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;

@@ -70,6 +70,7 @@ const
   MAP_FAILED    =Pointer(-1);
 
 function _isgpu(prot:Integer):Boolean; inline;
+function _iswrite(prot:Integer):Boolean; inline;
 function __map_prot_page(prot:Integer):DWORD;
 function __win_prot_page(prot:DWORD):Integer;
 function __map_prot_file(prot:Integer):DWORD;
@@ -95,6 +96,11 @@ const
 function _isgpu(prot:Integer):Boolean; inline;
 begin
  Result:=prot and (SCE_KERNEL_PROT_GPU_READ or SCE_KERNEL_PROT_GPU_WRITE)<>0;
+end;
+
+function _iswrite(prot:Integer):Boolean; inline;
+begin
+ Result:=prot and (PROT_WRITE or SCE_KERNEL_PROT_GPU_WRITE)<>0;
 end;
 
 function __map_prot_page(prot:Integer):DWORD;

@@ -154,10 +154,9 @@ type
     function  _MtypeDirect(Offset,Size:QWORD;mtype:Integer):Integer;
     function  _CreateBlock(block:PVirtualAdrBlock):Integer;
     function  _FreeBlock(block:PVirtualAdrBlock):Integer;
-    Function  _FindFreeOffset(ss:Pointer;Size,Align:QWORD;var AdrOut:Pointer):Integer;
+    Function  _FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Byte;var AdrOut:Pointer):Integer;
     procedure _set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock);
     procedure _mmap_addr(Offset:Pointer;Size,addr:QWORD;direct:Boolean);
-    procedure _mmap_sys(Offset:Pointer;Size:QWORD);
   public
     var
      OnDirectUnmapCb:TDirectUnmapCb;
@@ -172,6 +171,8 @@ type
       cpu:QWORD;
       gpu:QWORD;
      end;
+
+    procedure _mmap_sys(Offset:Pointer;Size:QWORD);
 
     Function  check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
     Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
@@ -222,7 +223,7 @@ begin
   BT_GPUM:
    begin
     //err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
-    err:=_VirtualAlloc(Pointer(FOffset),ASize,prot);
+    err:=_VirtualAlloc(Pointer(FOffset),ASize,0);
     if (err<>0) then
     begin
      Writeln(StdErr,'_VirtualReserve(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
@@ -395,8 +396,8 @@ begin
   BT_PRIV,
   BT_GPUM:
    begin
+    Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,prot);
     //Result:=_VirtualCommit(Pointer(key^.Offset),key^.Size,prot);
-    Result:=0;
     if (Result=0) then
     begin
      key^.F.prot:=prot;
@@ -428,7 +429,14 @@ begin
   Used:=Used-key^.Size; //-
  end;
 
- Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
+ if not _iswrite(key^.F.prot) then
+ begin
+  _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
+  FillChar(key^.Offset^,key^.Size,0);
+ end;
+
+ Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
+ //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
 end;
 
 function TVirtualAdrBlock.Reserved(key:PVirtualAdrNode):Integer;
@@ -453,6 +461,14 @@ begin
   Used:=Used-key^.Size; //-
   Rsrv:=Rsrv+key^.Size; //+
  end;
+
+ if not _iswrite(key^.F.prot) then
+ begin
+  _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
+  FillChar(key^.Offset^,key^.Size,0);
+ end;
+
+ Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
 
  //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
  Result:=0;
@@ -807,7 +823,7 @@ begin
  Result:=OnFreeBlockCb(block);
 end;
 
-Function TVirtualManager._FindFreeOffset(ss:Pointer;Size,Align:QWORD;var AdrOut:Pointer):Integer;
+Function TVirtualManager._FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Byte;var AdrOut:Pointer):Integer;
 var
  It:TFreePoolNodeSet.Iterator;
  key:TVirtualAdrNode;
@@ -877,6 +893,23 @@ begin
      begin
       Assert(false,IntToStr(err));
      end;
+    end else
+    begin
+
+     if _isgpu(prot) then
+     begin
+      if (key.block^.F.btype<>BT_GPUM) then
+      begin
+       Goto _start;
+      end;
+     end else
+     begin
+      if (key.block^.F.btype<>BT_PRIV) then
+      begin
+       Goto _start;
+      end;
+     end;
+
     end;
 
     AdrOut:=Offset;
@@ -1346,7 +1379,7 @@ begin
    Align:=Max(Align,GRANULAR_PAGE_SIZE);
   end;
 
-  Result:=_FindFreeOffset(Offset,ASize,Align,Offset);
+  Result:=_FindFreeOffset(Offset,ASize,Align,prot,Offset);
   if (Result<>0) then Exit;
  end;
 

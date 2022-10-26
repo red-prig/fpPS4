@@ -174,6 +174,7 @@ function  GetSceProcParam:Pointer;
 function  GetSceUserMainThreadName:PChar;
 function  GetSceUserMainThreadPriority:PDWORD;
 function  GetSceUserMainThreadStackSize:PDWORD;
+function  GetSceLibcParam:Pointer;
 function  GetSceKernelMemParam:Pointer;
 function  GetSceKernelFlexibleMemorySize:PQWORD;
 
@@ -1261,6 +1262,20 @@ begin
  if (P^.Header.Size>=qword(@PSceProcParam(nil)^.SceUserMainThreadStackSize)+SizeOf(Pointer)) then
  begin
   Result:=p^.SceUserMainThreadStackSize;
+ end;
+end;
+
+function GetSceLibcParam:Pointer;
+var
+ p:PSceProcParam;
+begin
+ Result:=nil;
+ p:=GetSceProcParam;
+ if (p=nil) then Exit;
+
+ if (P^.Header.Size>=qword(@PSceProcParam(nil)^._sceLibcParam)+SizeOf(Pointer)) then
+ begin
+  Result:=p^._sceLibcParam;
  end;
 end;
 

@@ -1047,7 +1047,7 @@ begin
   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
- if (addr=nil) then
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
  begin
   addr:=Pointer($880000000);
  end;
@@ -1088,7 +1088,7 @@ begin
  addr:=virtualAddrDest^;
  if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
 
- if (((flags and MAP_FIXED) <> 0) and (addr=nil)) then
+ if (((flags and MAP_FIXED)<>0) and (addr=nil)) then
  begin
   if (SDK_VERSION > $16fffff) then
   begin
@@ -1098,7 +1098,7 @@ begin
   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
- if (addr=nil) then
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
  begin
   addr:=Pointer($880000000);
  end;
@@ -1142,7 +1142,7 @@ begin
  addr:=virtualAddrDest^;
  if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
 
- if (addr=nil) then
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
  begin
   addr:=Pointer($880000000);
  end;
@@ -1206,7 +1206,7 @@ begin
   Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
- if (addr=nil) then
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
  begin
   addr:=Pointer($880000000);
  end;
@@ -1234,6 +1234,12 @@ function ps4_mmap(addr:Pointer;
 var
  err:Integer;
 begin
+
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
  err:=_mmap(addr,len,prot,flags,fd,offset,addr);
  _set_errno(err);
 
@@ -1253,6 +1259,12 @@ function ps4_sceKernelMmap(addr:Pointer;
                            offset:size_t;
                            res:PPointer):Integer; SysV_ABI_CDecl;
 begin
+
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
  Result:=_mmap(addr,len,prot,flags,fd,offset,addr);
  _set_errno(Result);
 
@@ -1539,6 +1551,7 @@ initialization
  VirtualManager.OnDirectUnmapCb:=@__release_direct;
  VirtualManager.OnDirectMtypeCb:=@__mtype_direct;
  VirtualManager.OnFreeBlockCb  :=@__free_block;
+ VirtualManager._mmap_sys(Pointer($400000),$7FFBFC000);
 
  NamedManager  :=TNamedManager.Create($400000,$FFFFFFFFFF);
 
