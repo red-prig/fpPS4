@@ -412,7 +412,7 @@ begin
 
  //Assert(cond^.key  =SCE_SAVE_DATA_SORT_KEY_DIRNAME);
 
- s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(@cond^.dirName);
+ s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(Pchar(cond^.dirName));
 
  _sig_lock;
 
