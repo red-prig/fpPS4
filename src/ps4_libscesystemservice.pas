@@ -232,9 +232,19 @@ begin
  end;
 end;
 
-procedure ps4_sceSystemServiceHideSplashScreen; assembler; nostackframe;
-asm
- xor %rax,%rax
+function ps4_sceSystemServiceHideSplashScreen:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSystemServiceDisableMusicPlayer:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSystemServiceReenableMusicPlayer:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 type
@@ -285,6 +295,8 @@ begin
  lib:=Result._add_lib('libSceSystemService');
  lib^.set_proc($7D9A38F2E9FB2CAE,@ps4_sceSystemServiceParamGetInt);
  lib^.set_proc($568E55F0A0300A69,@ps4_sceSystemServiceHideSplashScreen);
+ lib^.set_proc($C75501F5BC0348EC,@ps4_sceSystemServiceDisableMusicPlayer);
+ lib^.set_proc($F643C2CFB3ABFB56,@ps4_sceSystemServiceReenableMusicPlayer);
  lib^.set_proc($D67DFBAB506F7396,@ps4_sceSystemServiceGetDisplaySafeAreaInfo);
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
 end;
