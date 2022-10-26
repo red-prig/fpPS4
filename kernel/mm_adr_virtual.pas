@@ -432,8 +432,8 @@ begin
  if not _iswrite(key^.F.prot) then
  begin
   _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
-  FillChar(key^.Offset^,key^.Size,0);
  end;
+ FillChar(key^.Offset^,key^.Size,0);
 
  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
  //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
@@ -465,8 +465,8 @@ begin
  if not _iswrite(key^.F.prot) then
  begin
   _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
-  FillChar(key^.Offset^,key^.Size,0);
  end;
+ FillChar(key^.Offset^,key^.Size,0);
 
  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
 

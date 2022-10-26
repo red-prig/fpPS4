@@ -625,7 +625,7 @@ begin
   DW_EH_PE_absptr:;
   DW_EH_PE_pcrel:
    begin
-    res:=(hdr_vaddr + (P - hdr));
+    res:=(hdr_vaddr + (P - Pointer(hdr)));
    end;
   DW_EH_PE_datarel:
    begin

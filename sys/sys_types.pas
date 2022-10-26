@@ -353,7 +353,7 @@ type
   reserved2        :QWORD;
   eh_frame_hdr_addr:Pointer;
   eh_frame_addr    :Pointer;
-  eh_frame_hdr_size:QWORD;
+  eh_frame_hdr_size:DWORD;
   eh_frame_size    :DWORD;
   segments:array[0..SCE_DBG_MAX_SEGMENTS-1] of SceKernelModuleSegmentInfo;
   segment_count:DWORD;

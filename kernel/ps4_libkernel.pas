@@ -73,7 +73,7 @@ Const
 
 procedure ps4_stack_chk_fail; SysV_ABI_CDecl;
 begin
- Writeln(StdErr,'Stack overflow detected! Aborting program.');
+ Writeln(StdErr,GetCurrentThreadId,':Stack overflow detected! Aborting program.');
  DebugBreak;
 end;
 
@@ -119,15 +119,6 @@ function ps4_sceKernelIsProspero:Integer; SysV_ABI_CDecl;
 begin
  Result:=0; //no
 end;
-
-//void * _aligned_malloc(
-//    size_t size,
-//    size_t alignment
-//);
-
-//void _aligned_free (
-//   void *memblock
-//);
 
 function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
 var
@@ -909,8 +900,8 @@ begin
 
  lib^.set_proc($5644C0B2B643709D,@ps4_sigfillset);
  lib^.set_proc($2548A616D29ED0A7,@ps4_sigaddset);
- lib^.set_proc($68F732A6D6CE899B,@ps4_sigprocmask);
- lib^.set_proc($EB1569CB415DABE2,@ps4_sigprocmask);
+ lib^.set_proc($68F732A6D6CE899B,@ps4_sigprocmask); //sigprocmask
+ lib^.set_proc($EB1569CB415DABE2,@ps4_sigprocmask); //_sigprocmask
  lib^.set_proc($2592B0E7E5AB9DAC,@ps4_pthread_sigmask);
  lib^.set_proc($72B6F98FB9A49357,@ps4_is_signal_return);
  lib^.set_proc($2A22443C4591C946,@ps4_sigaction);
