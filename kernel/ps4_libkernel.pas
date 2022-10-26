@@ -1136,6 +1136,7 @@ begin
  lib^.set_proc($6EDDC24C12A61B22,@ps4_scePthreadSetaffinity);
  lib^.set_proc($ADCAD5149B105916,@ps4_scePthreadGetaffinity);
 
+ lib^.set_proc($8345530717C9CAED,@ps4_sceKernelGetCurrentCpu);
 
  lib^.set_proc($D6D2B21BB465309A,@ps4_scePthreadGetprio);
  lib^.set_proc($5B41E99B65F4B8F1,@ps4_scePthreadSetprio);

@@ -67,6 +67,8 @@ function  ps4_scePthreadRename(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CD
 function  ps4_scePthreadSetaffinity(_pthread:pthread;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetaffinity(_pthread:pthread;mask:PQWORD):Integer; SysV_ABI_CDecl;
 
+function  ps4_sceKernelGetCurrentCpu():Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadGetprio(_pthread:pthread;prio:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
 
@@ -772,6 +774,15 @@ begin
  _pthread^.Attr.cpuset:=mask;
  _sig_lock;
  SetThreadAffinityMask(_pthread^.handle,mask);
+ _sig_unlock;
+end;
+
+function GetCurrentProcessorNumber():DWORD; stdcall external 'kernel32';
+
+function ps4_sceKernelGetCurrentCpu():Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+Result:=GetCurrentProcessorNumber;
  _sig_unlock;
 end;
 
