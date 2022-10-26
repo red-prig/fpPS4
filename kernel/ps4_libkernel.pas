@@ -1104,8 +1104,10 @@ begin
  lib^.set_proc($5544F5652AC74F42,@ps4_pthread_attr_getdetachstate);
 
  lib^.set_proc($C755FBE9AAD83315,@ps4_scePthreadAttrGet);
- lib^.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate);
+
+ lib^.set_proc($2668BEF70F6ED04E,@ps4_pthread_create_name_np);
  lib^.set_proc($3B184807C2C1FCF4,@ps4_pthread_create);
+ lib^.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate);
 
  lib^.set_proc($E2A1AB47A7A83FD6,@ps4_scePthreadDetach);
  lib^.set_proc($F94D51E16B57BE87,@ps4_pthread_detach);

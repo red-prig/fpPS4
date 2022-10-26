@@ -37,8 +37,11 @@ function  ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pi
 function  ps4_pthread_attr_getdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
 
 function  ps4_scePthreadAttrGet(pid:pthread;pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadCreate(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
+
+function  ps4_pthread_create_name_np(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_create(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadCreate(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadDetach(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_detach(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadJoin(_pthread:pthread;value:PPointer):Integer; SysV_ABI_CDecl;
@@ -498,9 +501,7 @@ begin
  pAttr^^:=pid^.Attr;
 end;
 
-//typedef pthread_t ScePthread;
-
-function ps4_scePthreadCreate(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
+function ps4_pthread_create_name_np(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
 Var
  data:pthread;
  Handle,ThreadId:TThreadID;
@@ -508,17 +509,14 @@ Var
  ss:SizeUInt;
  creationFlags:dword;
 begin
- Writeln('scePthreadCreate:',HexStr(entry),' ',name);
+ Writeln('pthread_create:',HexStr(entry),' ',name);
 
- Result:=SCE_KERNEL_ERROR_EINVAL;
+ Result:=EINVAL;
  if (pthread=nil) then Exit;
 
- //if {false} name='AudioOutThread' then
- //if (name='streamThread') or (name='AudioOutThread') then
- //if false then
  begin
   data:=SwAllocMem(SizeOf(pthread_t));
-  if (data=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
+  if (data=nil) then Exit(ENOMEM);
 
   sigqueue_init(@data^.sig);
 
@@ -553,7 +551,7 @@ begin
    if (Handle=0) then
    begin
     SwFreeMem(data);
-    Exit(SCE_KERNEL_ERROR_EAGAIN);
+    Exit(EAGAIN);
    end;
 
    if (pAttr^^.cpuset<>0) then
@@ -592,7 +590,12 @@ end;
 
 function ps4_pthread_create(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer):Integer; SysV_ABI_CDecl;
 begin
- Result:=sce2px(ps4_scePthreadCreate(pthread,pAttr,entry,arg,nil));
+ Result:=ps4_pthread_create_name_np(pthread,pAttr,entry,arg,nil);
+end;
+
+function ps4_scePthreadCreate(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_create_name_np(pthread,pAttr,entry,arg,name));
 end;
 
 function ps4_scePthreadDetach(_pthread:pthread):Integer; SysV_ABI_CDecl;
