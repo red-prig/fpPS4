@@ -186,6 +186,19 @@ type
   _align2:Integer;
  end;
 
+ pSceSaveDataEvent=^SceSaveDataEvent;
+ SceSaveDataEvent=packed record
+  _type:DWORD; //SceSaveDataEventType;
+  errorCode:Integer;
+  userId:Integer;
+  padding:Integer;
+  titleId:SceSaveDataTitleId;
+  dirName:SceSaveDataDirName;
+  reserved:array[0..39] of Byte;
+ end;
+
+ TSceSaveDataEventCallback=procedure(event:pSceSaveDataEvent;data:Pointer); SysV_ABI_CDecl;
+
 implementation
 
 uses
@@ -501,6 +514,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSaveDataRegisterEventCallback(cb:TSceSaveDataEventCallback;data:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceSaveData(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -529,6 +547,7 @@ begin
  lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
  lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
+ lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
 end;
 
 initialization
