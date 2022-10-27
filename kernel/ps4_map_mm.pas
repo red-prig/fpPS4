@@ -6,7 +6,6 @@ interface
 
 uses
   Windows,
-  g23tree,
   RWLock,
   sys_types,
   mmap,
@@ -527,9 +526,10 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
+ info^:=Default(SceKernelDirectMemoryQueryInfo);
+
  if (Result=0) then
  begin
-  info^:=Default(SceKernelDirectMemoryQueryInfo);
   info^.start:=ROut.Offset;
   info^.__end:=ROut.Offset+ROut.Size;
   info^.mType:=ROut.F.mtype;
@@ -985,10 +985,11 @@ begin
  rwlock_unlock(MMLock);
  _sig_unlock;
 
+ info^:=Default(SceKernelVirtualQueryInfo);
+
  if (Result=0) then
  begin
   Committed:=(VOut.F.Free=0) and (VOut.F.reserv=0);
-  info^:=Default(SceKernelVirtualQueryInfo);
   info^.pstart               :=VOut.Offset;
   info^.pend                 :=VOut.Offset+VOut.Size;
   info^.offset               :=VOut.addr;

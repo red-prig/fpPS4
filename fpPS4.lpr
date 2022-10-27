@@ -244,6 +244,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSharePlayInitialize(pHeap:Pointer;heapSize:qword):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceSharePlayInitialize:',HexStr(pHeap),':',heapSize);
+ Result:=0;
+end;
+
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -308,6 +314,11 @@ begin
      QWORD($92F604C369419DD9):Result:=@ps4_sceGameLiveStreamingInitialize;
     end;
 
+    'libSceSharePlay':
+    Case Info^.nid of
+     QWORD($8ACAEEAAD86961CC):Result:=@ps4_sceSharePlayInitialize;
+    end;
+
   end;
  end;
 
@@ -330,6 +341,8 @@ begin
   'libSceAudioOut':;
   'libc':;
   'libSceLibcInternal':;
+  'libScePosix':;
+  'libSceDiscMap':;
   else
    Case RawByteString(ps4libdoc.GetFunctName(Info^.Nid)) of
 
@@ -353,6 +366,7 @@ begin
     'scePthreadCondTimedwait':;
     'scePthreadYield':;
     'nanosleep':;
+    'sceKernelGetProcessTime':;
     'sceKernelGetProcessTimeCounter':;
     'clock_gettime':;
     'pthread_mutex_init':;
@@ -382,8 +396,6 @@ begin
     'sceFiosIOFilterPsarcDearchiver':;
     'sceFiosFHReadSync':;
     'sceFiosFHTell':;
-    'sceNgs2VoiceGetState':;
-    'sceNgs2SystemRender':;
     'sceAudioOutOutputs':;
     '__tls_get_addr':;
     'scePthreadRwlockRdlock':;
