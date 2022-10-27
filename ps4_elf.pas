@@ -174,11 +174,11 @@ type
 
   pTls:packed record
    tmpl_start:QWORD;
-   tmpl_size,
-   full_size,
-   align,
-   index,
-   offset:QWORD;
+   tmpl_size :QWORD;
+   full_size :QWORD;
+   align     :QWORD;
+   index     :QWORD;
+   offset    :Int64;
 
    stub:TMemChunk;
   end;
@@ -799,7 +799,7 @@ begin
       pTls.full_size :=elf_phdr[i].p_memsz;
       pTls.align     :=elf_phdr[i].p_align;
       pTls.index     :=PtrUint(Self);// module id
-      pTls.offset    :=0;  //offset in static
+      pTls.offset    :=-pTls.full_size;  //offset in static
 
       //Assert(IsAlign(elf.pTls.tmpl_start,elf.pTls.align));
       Writeln('tmpl_size:',pTls.tmpl_size,' full_size:',pTls.full_size);
@@ -1853,7 +1853,7 @@ begin
      STB_GLOBAL,
      STB_WEAK:
       begin
-       _do_load(elf.mMap.pAddr+Info^.value);
+       _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
       end;
      else
       Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
@@ -1955,7 +1955,7 @@ begin
      STB_GLOBAL,
      STB_WEAK:
       begin
-       _do_load(elf.mMap.pAddr+Info^.value);
+       _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
       end;
     end;
    end;
@@ -2069,7 +2069,7 @@ begin
 
   R_X86_64_TPOFF64:
     begin            //tls_offset????
-     _do_load(Pointer(Info^.value+Info^.Addend));
+     _do_load(Pointer(elf.pTls.offset+Info^.value+Info^.Addend));
     end;
 
   R_X86_64_DTPMOD64:
@@ -2094,7 +2094,7 @@ begin
      STB_GLOBAL,
      STB_WEAK:
       begin
-        _do_load(Pointer(Info^.value));
+        _do_load(Pointer(Info^.value)+Info^.Addend);
       end;
      else
         FWriteln('invalid sym bingding '+__nBind(Info^.sBind));
