@@ -1276,6 +1276,8 @@ begin
  begin
   Writeln(StdErr,'[WARN]:sceKernelMmap:',Result);
  end;
+
+ Result:=px2sce(Result);
 end;
 
 function ps4_munmap(addr:Pointer;len:size_t):Integer; SysV_ABI_CDecl;

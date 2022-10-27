@@ -452,8 +452,8 @@ begin
 end;
 
 function SetFilePointerEx(hFile:HANDLE;
-                          lDistanceToMove:LARGE_INTEGER;
-                          lpDistanceToMoveHigh:PLARGE_INTEGER;
+                          liDistanceToMove:LARGE_INTEGER;
+                          lpNewFilePointer:PLARGE_INTEGER;
                           dwMoveMethod:DWORD):BOOL; external 'kernel32';
 
 function _sys_lseek(fd:Integer;offset:Int64;whence:Integer):Int64;
@@ -605,6 +605,7 @@ var
  h:THandle;
  N:DWORD;
  O:TOVERLAPPED;
+ p:Int64;
 begin
  if (data=nil) then Exit(-EFAULT);
  if (fd<0) then Exit(-EINVAL);
@@ -637,6 +638,10 @@ begin
  begin
   Result:=-EIO;
  end;
+
+ //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
+ p:=-N;
+ SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_CURRENT);
 end;
 
 function ps4_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
@@ -824,6 +829,7 @@ var
  h:THandle;
  N:DWORD;
  O:TOVERLAPPED;
+ p:Int64;
 begin
  if (data=nil) then Exit(-EFAULT);
  if (fd<0) then Exit(-EINVAL);
@@ -852,6 +858,10 @@ begin
  begin
   Result:=-EIO;
  end;
+
+ //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
+ p:=-N;
+ SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_CURRENT);
 end;
 
 function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
