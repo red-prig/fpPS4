@@ -600,6 +600,22 @@ begin
  end;
 end;
 
+function _get_pos(h:THandle):Int64;
+const
+ zero:LARGE_INTEGER=(QuadPart:0);
+begin
+ Result:=-1;
+ if not SetFilePointerEx(h,zero,@Result,FILE_CURRENT) then
+ begin
+  Result:=-1;
+ end;
+end;
+
+procedure _set_pos(h:THandle;p:Int64);
+begin
+ SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_BEGIN);
+end;
+
 function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 var
  h:THandle;
@@ -630,6 +646,9 @@ begin
  O:=Default(TOVERLAPPED);
  PInt64(@O.Offset)^:=offset;
 
+ //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
+ p:=_get_pos(h);
+
  N:=0;
  if ReadFile(h,data^,size,N,@O) then
  begin
@@ -639,9 +658,7 @@ begin
   Result:=-EIO;
  end;
 
- //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
- p:=-N;
- SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_CURRENT);
+ _set_pos(h,p);
 end;
 
 function ps4_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
@@ -850,6 +867,9 @@ begin
  O:=Default(TOVERLAPPED);
  PInt64(@O.Offset)^:=offset;
 
+ //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
+ p:=_get_pos(h);
+
  N:=0;
  if WriteFile(h,data^,size,N,@O) then
  begin
@@ -859,9 +879,7 @@ begin
   Result:=-EIO;
  end;
 
- //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
- p:=-N;
- SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_CURRENT);
+ _set_pos(h,p);
 end;
 
 function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
