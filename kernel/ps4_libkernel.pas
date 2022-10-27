@@ -81,25 +81,14 @@ end;
 
 // eStopNotificationReason
 procedure ps4_sceKernelDebugRaiseException(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
-//var
-// t:pthread;
 begin
- //t:=_get_curthread;
- //if (t<>nil) then
- // Writeln('RaiseThread=',t^.name);
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
  DebugBreak;
 end;
 
 procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
-//var
-// t:pthread;
 begin
- //t:=_get_curthread;
- //if (t<>nil) then
- // Writeln('RaiseThread=',t^.name);
- Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
- DebugBreak;
+ //skip
 end;
 
 procedure ps4_sceKernelDebugOutText(dbg_id:Integer;text:Pchar); SysV_ABI_CDecl;

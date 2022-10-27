@@ -148,19 +148,22 @@ begin
 
  if (details<>nil) then
  begin
-  details^.numGroups  :=0;
-  details^.numTrophies:=0;
-  details^.numPlatinum:=0;
-  details^.numGold    :=0;
-  details^.numSilver  :=0;
-  details^.numBronze  :=0;
-  FillChar(details^.title,SizeOf(details^.title),0);
-  FillChar(details^.description,SizeOf(details^.description),0);
+  details^:=Default(SceNpTrophyGameDetails);
+  details^.numGroups  :=1;
+  details^.numTrophies:=1;
+  details^.numPlatinum:=1;
+  details^.numGold    :=1;
+  details^.numSilver  :=1;
+  details^.numBronze  :=1;
  end;
 
  Result:=0;
 end;
 
+const
+ SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND=-2141907436; //0x80551614;
+
+//result is png image
 function ps4_sceNpTrophyGetGameIcon(context:Integer;
                                     handle:Integer;
                                     buffer:Pointer;
@@ -168,7 +171,7 @@ function ps4_sceNpTrophyGetGameIcon(context:Integer;
 begin
  Writeln('sceNpTrophyGetGameIcon:',handle);
  size^:=0;
- Result:=0;
+ Result:=SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND;
 end;
 
 function Load_libSceNpTrophy(Const name:RawByteString):TElf_node;
