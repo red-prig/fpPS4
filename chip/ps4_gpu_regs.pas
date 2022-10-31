@@ -990,7 +990,7 @@ begin
 
  if (Result=VK_FORMAT_UNDEFINED) then
  begin
-  Assert(false,'Unknow Rebder target format:'+IntTostr(FORMAT)+':'+IntTostr(NUMBER_TYPE));
+  Assert(false,'Unknown Render target format:'+IntTostr(FORMAT)+':'+IntTostr(NUMBER_TYPE));
  end;
 
 end;
