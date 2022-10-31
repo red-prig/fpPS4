@@ -178,16 +178,56 @@ begin
  Result:=0;
  Case cformat of
   //pixel size
-  VK_FORMAT_R8G8B8A8_SRGB        :Result:=4;
-  VK_FORMAT_R8G8B8A8_UNORM       :Result:=4;
-  VK_FORMAT_R8G8_UNORM           :Result:=2;
+
   VK_FORMAT_R8_UNORM             :Result:=1;
+  VK_FORMAT_R8_SNORM             :Result:=1;
   VK_FORMAT_R8_UINT              :Result:=1;
+  VK_FORMAT_R8_SINT              :Result:=1;
   VK_FORMAT_R8_SRGB              :Result:=1;
+
+  VK_FORMAT_R8G8_UNORM           :Result:=2;
+  VK_FORMAT_R8G8_SNORM           :Result:=2;
+  VK_FORMAT_R8G8_UINT            :Result:=2;
+  VK_FORMAT_R8G8_SINT            :Result:=2;
+
+  VK_FORMAT_R8G8B8A8_UNORM       :Result:=4;
+  VK_FORMAT_R8G8B8A8_SRGB        :Result:=4;
+  VK_FORMAT_R8G8B8A8_SNORM       :Result:=4;
+  VK_FORMAT_R8G8B8A8_UINT        :Result:=4;
+  VK_FORMAT_R8G8B8A8_SINT        :Result:=4;
+
+  VK_FORMAT_R16_UNORM            :Result:=2;
+  VK_FORMAT_R16_SNORM            :Result:=2;
+  VK_FORMAT_R16_UINT             :Result:=2;
+  VK_FORMAT_R16_SINT             :Result:=2;
+  VK_FORMAT_R16_SFLOAT           :Result:=2;
+
+  VK_FORMAT_R16G16_UNORM         :Result:=4;
+  VK_FORMAT_R16G16_SNORM         :Result:=4;
+  VK_FORMAT_R16G16_UINT          :Result:=4;
+  VK_FORMAT_R16G16_SINT          :Result:=4;
+  VK_FORMAT_R16G16_SFLOAT        :Result:=4;
+
+  VK_FORMAT_R16G16B16A16_UNORM   :Result:=8;
+  VK_FORMAT_R16G16B16A16_SNORM   :Result:=8;
+  VK_FORMAT_R16G16B16A16_UINT    :Result:=8;
+  VK_FORMAT_R16G16B16A16_SINT    :Result:=8;
+  VK_FORMAT_R16G16B16A16_SFLOAT  :Result:=8;
+
+  VK_FORMAT_R32_UINT             :Result:=4;
+  VK_FORMAT_R32_SINT             :Result:=4;
+  VK_FORMAT_R32_SFLOAT           :Result:=4;
+
+  VK_FORMAT_R32G32_UINT          :Result:=8;
+  VK_FORMAT_R32G32_SINT          :Result:=8;
+  VK_FORMAT_R32G32_SFLOAT        :Result:=8;
+
+  VK_FORMAT_R32G32B32A32_UINT    :Result:=16;
+  VK_FORMAT_R32G32B32A32_SINT    :Result:=16;
+  VK_FORMAT_R32G32B32A32_SFLOAT  :Result:=16;
+
   VK_FORMAT_R5G6B5_UNORM_PACK16  :Result:=2;
   VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
-  VK_FORMAT_R16G16_SFLOAT        :Result:=4;
-  VK_FORMAT_R32_SFLOAT           :Result:=4;
 
   //stencil
   VK_FORMAT_S8_UINT              :Result:=1;

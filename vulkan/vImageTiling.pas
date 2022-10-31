@@ -360,6 +360,11 @@ begin
   tiler.m_paddedDepth :=tiler.m_linearDepth ;
  end else
  Case m_bitsPerElement of
+  64:begin
+      tiler.m_paddedWidth :=(tiler.m_linearWidth +3) and (not 3);
+      tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);
+      tiler.m_paddedDepth :=tiler.m_linearDepth;
+     end;
   32:begin
       tiler.m_paddedWidth :=(tiler.m_linearWidth +7) and (not 7);
       tiler.m_paddedHeight:=(tiler.m_linearHeight+7) and (not 7);

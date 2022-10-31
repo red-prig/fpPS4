@@ -904,6 +904,101 @@ begin
  end;
 end;
 
+function GetRenderTargetFormat(FORMAT,NUMBER_TYPE:Byte):TVkFormat;
+begin
+ Result:=VK_FORMAT_UNDEFINED;
+
+ Case FORMAT of
+  COLOR_8:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM:Result:=VK_FORMAT_R8_UNORM;
+    NUMBER_SNORM:Result:=VK_FORMAT_R8_SNORM;
+    NUMBER_UINT :Result:=VK_FORMAT_R8_UINT;
+    NUMBER_SINT :Result:=VK_FORMAT_R8_SINT;
+    else;
+   end;
+  COLOR_8_8:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM:Result:=VK_FORMAT_R8G8_UNORM;
+    NUMBER_SNORM:Result:=VK_FORMAT_R8G8_SNORM;
+    NUMBER_UINT :Result:=VK_FORMAT_R8G8_UINT;
+    NUMBER_SINT :Result:=VK_FORMAT_R8G8_SINT;
+    else;
+   end;
+  COLOR_8_8_8_8:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM:Result:=VK_FORMAT_R8G8B8A8_UNORM;
+    NUMBER_SRGB :Result:=VK_FORMAT_R8G8B8A8_SRGB;
+    NUMBER_SNORM:Result:=VK_FORMAT_R8G8B8A8_SNORM;
+    NUMBER_UINT :Result:=VK_FORMAT_R8G8B8A8_UINT;
+    NUMBER_SINT :Result:=VK_FORMAT_R8G8B8A8_SINT;
+    else;
+   end;
+
+  COLOR_16:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result:=VK_FORMAT_R16_UNORM;
+    NUMBER_SNORM  :Result:=VK_FORMAT_R16_SNORM;
+    NUMBER_UINT   :Result:=VK_FORMAT_R16_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R16_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R16_SFLOAT;
+    else;
+   end;
+  COLOR_16_16:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result:=VK_FORMAT_R16G16_UNORM;
+    NUMBER_SNORM  :Result:=VK_FORMAT_R16G16_SNORM;
+    NUMBER_UINT   :Result:=VK_FORMAT_R16G16_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R16G16_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R16G16_SFLOAT;
+    else;
+   end;
+  COLOR_16_16_16_16:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result:=VK_FORMAT_R16G16B16A16_UNORM;
+    NUMBER_SNORM  :Result:=VK_FORMAT_R16G16B16A16_SNORM;
+    NUMBER_UINT   :Result:=VK_FORMAT_R16G16B16A16_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R16G16B16A16_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R16G16B16A16_SFLOAT;
+    else;
+   end;
+
+  COLOR_32:
+   Case NUMBER_TYPE of
+    NUMBER_UINT   :Result:=VK_FORMAT_R32_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R32_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R32_SFLOAT;
+    else;
+   end;
+  COLOR_32_32:
+   Case NUMBER_TYPE of
+    NUMBER_UINT   :Result:=VK_FORMAT_R32G32_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R32G32_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R32G32_SFLOAT;
+    else;
+   end;
+  COLOR_32_32_32_32:
+   Case NUMBER_TYPE of
+    NUMBER_UINT   :Result:=VK_FORMAT_R32G32B32A32_UINT;
+    NUMBER_SINT   :Result:=VK_FORMAT_R32G32B32A32_SINT;
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
+    else;
+   end;
+
+  else;
+ end;
+
+ if (Result=VK_FORMAT_UNDEFINED) then
+ begin
+  Assert(false,'Unknow Rebder target format:'+IntTostr(FORMAT)+':'+IntTostr(NUMBER_TYPE));
+ end;
+
+end;
+
+//
+//FORMAT     :=RENDER_TARGET[i].INFO.FORMAT;
+//NUMBER_TYPE:=RENDER_TARGET[i].INFO.NUMBER_TYPE;
+
 Function TGPU_REGS.GET_RT_INFO(i:Byte):TRT_INFO; //0..7
 var
  COMP_MAP:TCOMP_MAP;
@@ -932,35 +1027,7 @@ begin
  FORMAT     :=RENDER_TARGET[i].INFO.FORMAT;
  NUMBER_TYPE:=RENDER_TARGET[i].INFO.NUMBER_TYPE;
 
- Case FORMAT of
-  COLOR_8:
-   Case NUMBER_TYPE of
-    NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8_UNORM;
-    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8_SRGB;
-    else
-     Assert(false,'TODO');
-   end;
-  COLOR_8_8_8_8:
-   Case NUMBER_TYPE of
-    NUMBER_UNORM:Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
-    NUMBER_SRGB :Result.FImageInfo.cformat:=VK_FORMAT_R8G8B8A8_SRGB;
-    else
-     Assert(false,'TODO');
-   end;
-  COLOR_16_16:
-   Case NUMBER_TYPE of
-    NUMBER_UNORM  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UNORM;
-    NUMBER_SRGB   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UNORM;
-    NUMBER_SNORM  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SNORM;
-    NUMBER_USCALED:Result.FImageInfo.cformat:=VK_FORMAT_R16G16_USCALED;
-    NUMBER_SSCALED:Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SSCALED;
-    NUMBER_UINT   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_UINT;
-    NUMBER_SINT   :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SINT;
-    NUMBER_FLOAT  :Result.FImageInfo.cformat:=VK_FORMAT_R16G16_SFLOAT;
-   end;
-  else
-   Assert(false,'TODO');
- end;
+ Result.FImageInfo.cformat:=GetRenderTargetFormat(FORMAT,NUMBER_TYPE);
 
  if (RENDER_TARGET[i].INFO.LINEAR_GENERAL<>0) then
   Result.FImageInfo.params.tiling_idx:=kTileModeDisplay_LinearGeneral
@@ -1029,6 +1096,7 @@ begin
        Result.CLEAR_COLOR.uint32[3]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[3]) shl 3),$FF);
       end;
 
+   COLOR_16,
    COLOR_16_16,
    COLOR_16_16_16_16:
       begin
@@ -1041,6 +1109,21 @@ begin
        Result.CLEAR_COLOR.uint32[2]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[2]) shl 4),$FFFF);
        Result.CLEAR_COLOR.uint32[3]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[3]) shl 4),$FFFF);
       end;
+
+   COLOR_32,
+   COLOR_32_32:
+      begin
+       COMP_MAP:=GetCompMap(RENDER_TARGET[i].INFO.COMP_SWAP,4);
+
+       W:=RENDER_TARGET[i].CLEAR_WORD;
+
+       Result.CLEAR_COLOR.uint32[0]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[0]) shl 5),$FFFFFFFF);
+       Result.CLEAR_COLOR.uint32[1]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[1]) shl 5),$FFFFFFFF);
+       Result.CLEAR_COLOR.uint32[2]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[2]) shl 5),$FFFFFFFF);
+       Result.CLEAR_COLOR.uint32[3]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[3]) shl 5),$FFFFFFFF);
+      end;
+
+   COLOR_32_32_32_32:; //128bit ignore
 
    else
     Assert(false);
@@ -1634,6 +1717,9 @@ begin
 
   IMG_NUM_FORMAT_FLOAT  :
    case PT^.dfmt of
+    IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SFLOAT;
+    IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SFLOAT;
+    IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SFLOAT;
     IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SFLOAT;
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
     IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
