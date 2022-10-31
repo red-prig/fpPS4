@@ -50,10 +50,14 @@ function ps4_sceKernelGetProcessTime:QWORD; SysV_ABI_CDecl; //microseconds
 function ps4_sceKernelGetProcessTimeCounterFrequency:QWORD; SysV_ABI_CDecl; //microseconds*10
 function ps4_sceKernelGetProcessTimeCounter:QWORD; SysV_ABI_CDecl; //microseconds*10
 
-function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
+function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;          //nanoseconds
+function ps4_sceKernelNanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl; //nanoseconds
+
 function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl;          //microseconds
 function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
-function ps4_sceKernelSleep(sec:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_sleep(sec:DWORD):DWORD; SysV_ABI_CDecl;          //second
+function ps4_sceKernelSleep(sec:DWORD):DWORD; SysV_ABI_CDecl; //second
 
 type
  ptimesec=^timesec;
@@ -398,12 +402,13 @@ end;
 //lpUserTime/ 10 000 000 *1 000 000
 //lpUserTime/ 10   *1
 
-function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl;
+function _nanosleep(req,rem:Ptimespec):Integer;
 var
  timeout:Int64;
  passed :Int64;
  START:QWORD;
 begin
+ //test_cancel
  if (req=nil) then Exit(EINVAL);
 
  timeout:=_time_in_ns_from_timespec(req^);
@@ -414,6 +419,7 @@ begin
 
  timeout:=-((timeout+99) div 100); //in 100ns
 
+ START:=0;
  if (rem<>nil) then
  begin
   SwSaveTime(START);
@@ -422,7 +428,7 @@ begin
  Case SwDelayExecution(True,@timeout) of
   STATUS_USER_APC,
   STATUS_KERNEL_APC,
-  STATUS_ALERTED:
+  STATUS_ALERTED: //signal interrupt
    begin
     if (rem<>nil) then
     begin
@@ -441,7 +447,7 @@ begin
      end;
 
     end;
-    Result:=_set_errno(EINVAL);
+    Result:=EINTR;
    end;
   else
    begin
@@ -453,44 +459,132 @@ begin
    end;
  end;
 
+ //test_cancel
+end;
+
+function ps4_nanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl; //nanoseconds
+begin
+ Result:=_set_errno(_nanosleep(req,rem));
+end;
+
+function ps4_sceKernelNanosleep(req,rem:Ptimespec):Integer; SysV_ABI_CDecl; //nanoseconds
+var
+ tmp:timespec;
+begin
+ tmp:=Default(timespec);
+
+ repeat
+  Result:=_nanosleep(req,@tmp);
+  _set_errno(Result);
+
+  if (Result=0) then
+  begin
+   if (rem<>nil) then
+   begin
+    rem^:=tmp;
+   end;
+   Exit;
+  end;
+
+  req:=@tmp;
+ until (Result<>EINTR);
+
+ Result:=px2sce(Result);
 end;
 
 function ps4_usleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
 var
- ft:TLargeInteger;
+ time:timespec;
 begin
- //usec:=((usec+99999) div 100000)*100000;
- //
- ft:=-(10*usec); //in 100ns
- Case SwDelayExecution(True,@ft) of
-  STATUS_USER_APC,
-  STATUS_KERNEL_APC,
-  STATUS_ALERTED:
+ //test_cancel
+ time.tv_sec :=usec div 1000000;
+ time.tv_nsec:=((usec mod 1000000)*1000);
+ Result:=_set_errno(_nanosleep(@time,nil));
+ //test_cancel
+end;
+
+function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl; //microseconds
+var
+ req,rem:timespec;
+begin
+ rem:=Default(timespec);
+
+ req.tv_sec :=usec div 1000000;
+ req.tv_nsec:=((usec mod 1000000)*1000);
+
+ repeat
+  Result:=_nanosleep(@req,@rem);
+  _set_errno(Result);
+
+  if (Result=0) then Exit;
+
+  req:=rem;
+ until (Result<>EINTR);
+
+ Result:=px2sce(Result);
+end;
+
+function _sleep(sec:DWORD):DWORD;
+var
+ req,rem:timespec;
+ ret,rsec:DWORD;
+begin
+ rem:=Default(timespec);
+
+ if (Integer(sec)<0) then
+ begin
+  req.tv_sec :=$7fffffff;
+  req.tv_nsec:=0;
+
+  ret:=_nanosleep(@req,@rem);
+  _set_errno(ret);
+
+  rsec:=0;
+  if (ret<>0) then
+  begin
+   if (ret=EINTR) then
    begin
-    Result:=_set_errno(EINVAL);
+    rsec:=(Integer(rem.tv_sec)+1)-DWORD(rem.tv_nsec=0);
    end;
-  else
-   Result:=0;
+  end;
+
+  Result:=sec+$80000001+rsec;
+ end else
+ begin
+  req.tv_sec :=sec;
+  req.tv_nsec:=0;
+
+  ret:=_nanosleep(@req,@rem);
+  _set_errno(ret);
+
+  Result:=0;
+  if (ret<>0) then
+  begin
+   Result:=sec;
+   if (ret=EINTR) then
+   begin
+    Result:=(Integer(rem.tv_sec)+1)-DWORD(rem.tv_nsec=0);
+   end;
+  end;
+
  end;
+
 end;
 
-function ps4_sceKernelUsleep(usec:DWORD):Integer; SysV_ABI_CDecl;
-var
- ft:TLargeInteger;
+function ps4_sleep(sec:DWORD):DWORD; SysV_ABI_CDecl; //second
 begin
- //usec:=((usec+99999) div 100000)*100000;
- //
- ft:=-(10*usec); //in 100ns
- SwDelayExecution(False,@ft);
- Result:=0;
+ //test_cancel
+ Result:=_sleep(sec);
+ //test_cancel
 end;
 
-function ps4_sceKernelSleep(sec:Integer):Integer; SysV_ABI_CDecl;
-var
- ft:TLargeInteger;
+function ps4_sceKernelSleep(sec:DWORD):DWORD; SysV_ABI_CDecl; //second
 begin
- ft:=-(10000000*sec); //in 100ns
- SwDelayExecution(False,@ft);
+ repeat
+  //test_cancel
+  sec:=_sleep(sec);
+  //test_cancel
+ until (sec=0);
  Result:=0;
 end;
 

@@ -1228,8 +1228,12 @@ begin
  lib^.set_proc($7E0C6731E4CD52D6,@ps4_sceKernelGetProcessTimeCounter);
 
  lib^.set_proc($C92F14D931827B50,@ps4_nanosleep);
+ lib^.set_proc($42FB19C689AF507B,@ps4_sceKernelNanosleep);
+
  lib^.set_proc($41CB5E4706EC9D5D,@ps4_usleep);
  lib^.set_proc($D637D72D15738AC7,@ps4_sceKernelUsleep);
+
+ lib^.set_proc($D30BB7DE1BA735D1,@ps4_sleep);
  lib^.set_proc($FD947E846EDA0C7C,@ps4_sceKernelSleep);
 
  lib^.set_proc($FE8E6E103A4DFA86,@ps4_sceKernelConvertUtcToLocaltime);
