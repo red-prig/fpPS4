@@ -714,6 +714,7 @@ begin
   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     Case b.addr[0].rtype of
+     vtRoot,
      vtBufPtr2:AddBufPtr(P,Fset,b.size,b.bind,b.offset);
      vtVSharp4:AddVSharp(P,Fset,b.bind,b.offset);
      else

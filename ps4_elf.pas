@@ -165,7 +165,9 @@ type
 
   ro_segments:array[0..3] of TMemChunk;
 
-  pEntryPoint:QWORD;
+  pEntry:QWORD;
+  dtInit:QWORD;
+  dtFini:QWORD;
 
   pProcParam     :QWORD;
   pModuleParam   :QWORD;
@@ -182,9 +184,6 @@ type
 
    stub:TMemChunk;
   end;
-
-  dtInit:QWORD;
-  dtFini:QWORD;
 
   pInit:packed record
    dt_preinit_array,
@@ -261,7 +260,9 @@ type
    Procedure InitCode;   override;
    function  module_start(argc:size_t;argp,param:PPointer):Integer; override;
    function  GetCodeFrame:TMemChunk;  override;
-   function  GetEntryPoint:Pointer;  override;
+   function  GetEntry:Pointer;  override;
+   function  GetdInit:Pointer;  override;
+   function  GetdFini:Pointer;  override;
    Function  GetModuleInfo:SceKernelModuleInfo; override;
    Function  GetModuleInfoEx:SceKernelModuleInfoEx; override;
    procedure mapCodeEntry;
@@ -1381,7 +1382,14 @@ begin
   end;
  end;
 
- mMap.pAddr:=VirtualAlloc(nil,mMap.nSize,MEM_COMMIT or MEM_RESERVE,PAGE_READWRITE);
+ mMap.pAddr:=nil;
+
+ if (ps4_app.prog=self) then
+ begin
+  mMap.pAddr:=Pointer($800000000);
+ end;
+
+ mMap.pAddr:=VirtualAlloc(mMap.pAddr,mMap.nSize,MEM_COMMIT or MEM_RESERVE,PAGE_READWRITE);
 
  Assert(mMap.pAddr<>nil);
  Assert(IsAlign(mMap.pAddr,16*1024));
@@ -1463,7 +1471,7 @@ begin
 
 
 
- pEntryPoint:=Pelf64_hdr(mElf.pAddr)^.e_entry;
+ pEntry:=Pelf64_hdr(mElf.pAddr)^.e_entry;
 
  Result:=True;
 end;
@@ -2170,7 +2178,7 @@ var
  P:PPointer;
 
 begin
- FWriteln('e_entry:' +HexStr(elf.pEntryPoint,16));
+ FWriteln('e_entry:' +HexStr(elf.pEntry,16));
 
  base:=elf.mMap.pAddr;
 
@@ -2817,13 +2825,35 @@ begin
  safe_move(mMap,Result,SizeOf(TMemChunk));
 end;
 
-function Telf_file.GetEntryPoint:Pointer;
+function Telf_file.GetEntry:Pointer;
 begin
- Case Int64(pEntryPoint) of
-  -1,0,1:Result:=nil;//skip
+ Case Int64(pEntry) of
+  -1:Result:=nil;//skip
   else
    begin
-    Result:=Pointer(mMap.pAddr+QWORD(pEntryPoint));
+    Result:=Pointer(mMap.pAddr+QWORD(pEntry));
+   end;
+ end;
+end;
+
+function Telf_file.GetdInit:Pointer;
+begin
+ Case Int64(dtInit) of
+  -1:Result:=nil;//skip
+  else
+   begin
+    Result:=Pointer(mMap.pAddr+QWORD(dtInit));
+   end;
+ end;
+end;
+
+function Telf_file.GetdFini:Pointer;
+begin
+ Case Int64(dtFini) of
+  -1:Result:=nil;//skip
+  else
+   begin
+    Result:=Pointer(mMap.pAddr+QWORD(dtFini));
    end;
  end;
 end;
@@ -2890,8 +2920,8 @@ procedure Telf_file.mapCodeEntry;
 var
  P:TEntryPoint;
 begin
- Pointer(P):=Pointer(pEntryPoint);
- Writeln('EntryPoint:',HexStr(P));
+ Pointer(P):=Pointer(pEntry);
+ Writeln('Entry:',HexStr(P));
  Case Int64(P) of
   -1,0,1:;//skip
   else

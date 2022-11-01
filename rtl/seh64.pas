@@ -255,6 +255,50 @@ begin
  end;
 end;
 
+Function FindLQProcStr(node:TElf_node;r:PTLQRec):shortstring;
+var
+ adr:Pointer;
+begin
+ Result:='';
+ if FindLQProc(node,r) then
+ begin
+  Result:=ps4libdoc.GetFunctName(r^.LastNid);
+ end else
+ begin
+  adr:=node.GetdInit;
+
+  if (adr>=r^.pAddr) then
+  if (adr<=r^.ExceptAddr) then
+  if (adr>r^.LastAdr) then
+  begin
+   r^.LastAdr:=adr;
+   Result:='dtInit';
+  end;
+
+  adr:=node.GetdFini;
+
+  if (adr>=r^.pAddr) then
+  if (adr<=r^.ExceptAddr) then
+  if (adr>r^.LastAdr) then
+  begin
+   r^.LastAdr:=adr;
+   Result:='dtFini';
+  end;
+
+  adr:=node.GetEntry;
+
+  if (adr>=r^.pAddr) then
+  if (adr<=r^.ExceptAddr) then
+  if (adr>r^.LastAdr) then
+  begin
+   r^.LastAdr:=adr;
+   Result:='Entry';
+  end;
+
+ end;
+
+end;
+
 Procedure WriteErr(Const s:shortstring);
 var
  num:DWORD;
@@ -299,6 +343,7 @@ var
  procedure print_adr;
  var
   r:TLQRec;
+  n:shortstring;
  begin
   Report:='  $'+hexstr(ExceptAddr);
   if (node<>nil) then
@@ -308,16 +353,13 @@ var
    begin
     safe_move_ptr(node.pFileName,pFileName);
     Report:=Report+' offset $'+hexstr(ExceptAddr-Mem.pAddr,8)+' '+safe_str(pFileName);
+
     r.pAddr:=Mem.pAddr;
     r.ExceptAddr:=ExceptAddr;
-    if FindLQProc(node,@r) then
-    begin
-     Report:=Report+':'+ps4libdoc.GetFunctName(r.LastNid)+'+$'+hexstr(ExceptAddr-r.LastAdr,8);
-    end else
-    if (node.GetEntryPoint<>nil) then
-    begin
-     Report:=Report+':EntryPoint+$'+hexstr(ExceptAddr-node.GetEntryPoint,8);
-    end;
+
+    n:=FindLQProcStr(node,@r);
+
+    Report:=Report+':'+n+'+$'+hexstr(ExceptAddr-r.LastAdr,8);
    end;
   end;
   Report:=Report+#13#10;

@@ -263,7 +263,8 @@ begin
       t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
       Assert(t<>nil,'create sparse buffer fail');
      end;
-   else;
+   else
+    Assert(false,'_is_sparce');
   end;
 
   t.FAddr:=addr;

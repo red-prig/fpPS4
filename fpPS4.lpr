@@ -327,6 +327,7 @@ begin
  begin
 
  Case Info^.lib^.strName of
+  'libSceNpToolkit':;
   'libSceSaveDataDialog':;
   'libSceVideoOut':;
   'libSceSystemService':;
@@ -739,8 +740,12 @@ begin
  ps4_app.reload_cb :=@ReloadImport;
 
  elf:=Telf_file(LoadPs4ElfFromFile(ps4_app.app_file));
- elf.Prepare;
+ Assert(elf<>nil);
+
  ps4_app.prog:=elf;
+
+ elf.Prepare;
+
  ps4_app.RegistredElf(elf);
  ps4_app.ResolveDepended(elf);
  ps4_app.LoadSymbolImport(nil);

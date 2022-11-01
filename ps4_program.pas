@@ -88,7 +88,9 @@ type
    Procedure   InitCode;   virtual;
    function    module_start(argc:size_t;argp,param:PPointer):Integer; virtual;
    function    GetCodeFrame:TMemChunk; virtual;
-   function    GetEntryPoint:Pointer; virtual;
+   function    GetEntry:Pointer; virtual;
+   function    GetdInit:Pointer; virtual;
+   function    GetdFini:Pointer; virtual;
    Function    GetModuleInfo:SceKernelModuleInfo; virtual;
    Function    GetModuleInfoEx:SceKernelModuleInfoEx; virtual;
    Function    get_proc(nid:QWORD):Pointer;
@@ -588,7 +590,17 @@ begin
  Result:=Default(TMemChunk);
 end;
 
-function TElf_node.GetEntryPoint:Pointer;
+function TElf_node.GetEntry:Pointer;
+begin
+ Result:=nil;
+end;
+
+function TElf_node.GetdInit:Pointer;
+begin
+ Result:=nil;
+end;
+
+function TElf_node.GetdFini:Pointer;
 begin
  Result:=nil;
 end;
