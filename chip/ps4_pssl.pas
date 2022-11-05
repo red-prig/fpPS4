@@ -255,6 +255,7 @@ const
  //VOP2
  V_CNDMASK_B32       =$00;
  V_READLANE_B32      =$01;
+ V_WRITELANE_B32     =$02;
  V_ADD_F32           =$03;
  V_SUB_F32           =$04;
  V_SUBREV_F32        =$05;
@@ -2250,6 +2251,7 @@ begin
 
   256+V_CNDMASK_B32       :Write('V_CNDMASK_B32');
   256+V_READLANE_B32      :Write('V_READLANE_B32');
+  256+V_WRITELANE_B32     :Write('V_WRITELANE_B32');
   256+V_ADD_F32           :Write('V_ADD_F32');
   256+V_SUB_F32           :Write('V_SUB_F32');
   256+V_SUBREV_F32        :Write('V_SUBREV_F32');
@@ -2484,7 +2486,6 @@ begin
  Write(' ');
 
  _print_vdst8(VOP3.VDST);
- Write(', ');
 
  Case VOP3.OMOD of
   0:;
@@ -2525,6 +2526,7 @@ begin
  Case SPI.VOP2.OP of
   V_CNDMASK_B32       :Write('V_CNDMASK_B32');
   V_READLANE_B32      :Write('V_READLANE_B32');
+  V_WRITELANE_B32     :Write('V_WRITELANE_B32');
   V_ADD_F32           :Write('V_ADD_F32');
   V_SUB_F32           :Write('V_SUB_F32');
   V_SUBREV_F32        :Write('V_SUBREV_F32');
@@ -2581,7 +2583,18 @@ begin
  Write(', ');
  _print_ssrc9(SPI.VOP2.SRC0,SPI.INLINE32);
  Write(', ');
- _print_vdst8(SPI.VOP2.VSRC1);
+
+ Case SPI.VOP2.OP of
+  V_READLANE_B32,
+  V_WRITELANE_B32:
+    begin
+     _print_ssrc8(SPI.VOP2.VSRC1);
+    end;
+  else
+   begin
+    _print_vdst8(SPI.VOP2.VSRC1);
+   end;
+ end;
 
  Writeln;
 end;
@@ -2808,7 +2821,7 @@ begin
   else
       Write('VOPC?',SPI.VOPC.OP);
  end;
- Write(' vcc, ');
+ Write(' VCC, ');
 
  _print_ssrc9(SPI.VOPC.SRC0,SPI.INLINE32);
  Write(', ');
