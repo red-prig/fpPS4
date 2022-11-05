@@ -5,6 +5,7 @@ unit srFragLayout;
 interface
 
 uses
+ typinfo,
  sysutils,
  spirv,
  ginodes,
@@ -182,7 +183,7 @@ begin
        pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
       end;
     else
-     Assert(false,'AllocBinding');
+     Assert(false,'AllocBinding:'+GetEnumName(TypeInfo(TpsslInputType),ord(node^.itype)));
    end;
 
   end;

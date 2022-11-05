@@ -10,7 +10,8 @@ uses
  srOp,
  srReg,
  srLayout,
- srVariable;
+ srVariable,
+ srCFGLabel;
 
 const
  OpIAddExt=DWORD(-1);
@@ -39,9 +40,14 @@ Function  is_merge_op(OpId:DWORD):Boolean;
 Function  is_term_op(pLine:PspirvOp):Boolean;
 procedure up_merge_line(var pLine:PspirvOp);
 function  FindUpSameOp(pLine,node:PspirvOp):PspirvOp;
+function  IsDominUp(pNodeUp,pLine:PspirvOp):Boolean;
 
 function  GetGlobalIndex(pLine:PspirvOp):DWORD;
+function  GetGlobalIndexA(pLine:PspirvOp):DWORD;
 function  MaxLine(p1,p2:PspirvOp):PspirvOp;
+function  MinLine(p1,p2:PspirvOp):PspirvOp;
+Function  IsParentOf(pLine,pCurr:PsrOpBlock):Boolean;
+Function  IsParentOfLine(pLine,pCurr:PSpirvOp):Boolean;
 function  GetMaxPlace(pLine:PSpirvOp;count:Byte;src:PPsrRegNode):PSpirvOp;
 
 function  GetChainRegNode(node:PsrRegNode):PsrChain;
@@ -49,6 +55,7 @@ function  GetSourceRegNode(node:PsrRegNode):PsrNode;
 
 function  flow_down_next_up(pLine:PspirvOp):PspirvOp;
 function  flow_down_prev_up(pLine:PspirvOp):PspirvOp;
+function  flow_prev_up(pLine:PspirvOp):PspirvOp;
 
 implementation
 
@@ -56,10 +63,10 @@ implementation
 
 function flow_down_next_up(pLine:PspirvOp):PspirvOp;
 begin
- Result:=pLine^.First;
+ Result:=pLine^.First; //down
  if (Result=nil) then
  begin
-  repeat
+  repeat //up
    Result:=pLine^.Next;
    pLine:=pLine^.Parent;
   until (pLine=nil) or (Result<>nil);
@@ -68,10 +75,10 @@ end;
 
 function flow_down_prev_up(pLine:PspirvOp):PspirvOp;
 begin
- Result:=pLine^.Last;
+ Result:=pLine^.Last; //down
  if (Result=nil) then
  begin
-  repeat
+  repeat //up
    Result:=pLine^.Prev;
    pLine:=pLine^.Parent;
   until (pLine=nil) or (Result<>nil);
@@ -79,11 +86,28 @@ begin
 end;
 
 function flow_prev_up(pLine:PspirvOp):PspirvOp;
+
+ function _last(p:PspirvOp):PspirvOp;
+ begin
+  Result:=nil;
+  if (p<>nil) then
+  if p^.IsType(ntOpBlock) then
+  if not (PsrOpBlock(p)^.Block.bType in [btCond,btLoop]) then
+  begin
+   Result:=p^.Last;
+  end;
+ end;
+
 begin
- repeat
-  Result:=pLine^.Prev;
-  pLine:=pLine^.Parent;
- until (pLine=nil) or (Result<>nil);
+ Result:=_last(pLine); //down
+
+ if (Result=nil) then
+ begin
+  repeat //up
+   Result:=pLine^.Prev;
+   pLine:=pLine^.Parent;
+  until (pLine=nil) or (Result<>nil);
+ end;
 end;
 
 function InsSpirvOp(pLine,pNew:PspirvOp):PspirvOp;
@@ -142,6 +166,11 @@ begin
   node:=PspirvOp(pParent);
   pParent:=node^.Parent;
  end;
+end;
+
+function GetGlobalIndexA(pLine:PspirvOp):DWORD;
+begin
+ Result:=pLine^.GetIndexCount+GetGlobalIndex(pLine);
 end;
 
 function isGTLine(p1,p2:PspirvOp):Boolean; //(p1>p2)
@@ -213,6 +242,17 @@ begin
  end else
  begin
   Result:=p2;
+ end;
+end;
+
+function MinLine(p1,p2:PspirvOp):PspirvOp;
+begin
+ if (MaxLine(p1,p2)=p1) then
+ begin
+  Result:=p2;
+ end else
+ begin
+  Result:=p1;
  end;
 end;
 
@@ -413,6 +453,18 @@ begin
   begin
    if CompareOp(pLine,node) then Exit(pLine);
   end;
+  pLine:=flow_prev_up(pLine);
+ end;
+end;
+
+function IsDominUp(pNodeUp,pLine:PspirvOp):Boolean;
+begin
+ Result:=False;
+ if (pNodeUp=nil) or (pLine=nil) then Exit;
+
+ While (pLine<>nil) do
+ begin
+  if (pNodeUp=pLine) then Exit(True);
   pLine:=flow_prev_up(pLine);
  end;
 end;

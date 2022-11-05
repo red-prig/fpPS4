@@ -74,6 +74,7 @@ uses
 function TSprvEmit_post.PostStage:Integer;
 begin
  Result:=0;
+ InputList.Test;
  Result:=Result+PostFuncAnalize;
  Result:=Result+PostVariableAnalize;
  Result:=Result+PostConstAnalize;
@@ -214,19 +215,14 @@ begin
 
  old:=node;
 
- repeat
-  node:=RegDown(old);
-  if node^.pWriter^.IsType(ntVolatile) then
-  begin
-   //create load/store
-   //use forward only
-   PrivateList.PrepVolatile(pLine,node);
-   Inc(Result);
-  end else
-  begin
-   Break;
-  end;
- until false;
+ node:=RegDown(old);
+ if node^.pWriter^.IsType(ntVolatile) then
+ begin
+  //create load/store
+  //use forward only
+  node:=PrivateList.PrepVolatile(pLine,node);
+  Inc(Result);
+ end;
 
  if (old<>node) then //is change?
  begin
@@ -684,6 +680,8 @@ begin
  begin
   //RuntimeArray
 
+  //Writeln('RA:',HexStr(pChain^.parent),':',pChain^.offset);
+
   buf:=BufferList.Fetch(pChain^.parent,0);
   repeat
 
@@ -709,6 +707,8 @@ begin
  end else
  begin
   //Value/Vector
+
+  //Writeln('VV:',HexStr(pChain^.parent),':',pChain^.offset);
 
   buf:=BufferList.Fetch(pChain^.parent,0);
   fset_index:=False;

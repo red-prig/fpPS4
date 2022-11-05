@@ -621,8 +621,8 @@ end;
 
 function TsrChainLvl_1.c(n1,n2:PsrChainLvl_1):Integer;
 begin
- //first pIndex forward
- Result:=Integer(n1^.pIndex>n2^.pIndex)-Integer(n1^.pIndex<n2^.pIndex);
+ //first pIndex backward
+ Result:=Integer(n1^.pIndex<n2^.pIndex)-Integer(n1^.pIndex>n2^.pIndex);
  if (Result<>0) then Exit;
 
  //second stride forward

@@ -92,6 +92,7 @@ type
 
  TCustomEmit=class
   Function  Alloc(Size:ptruint):Pointer;                   virtual abstract;
+  Function  GetExecutionModel  :Word;                      virtual abstract;
   Function  GetConfig          :Pointer;                   virtual abstract;
   Function  GetCodeHeap        :Pointer;                   virtual abstract;
   Function  GetLiteralList     :Pointer;                   virtual abstract;

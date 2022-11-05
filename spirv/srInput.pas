@@ -13,6 +13,7 @@ uses
  srType,
  srReg,
  srOp,
+ srConst,
  srLayout,
  srVariable,
  srCapability,
@@ -95,6 +96,7 @@ type
   function  Fetch(rtype:TsrDataType;itype:TpsslInputType;id:Byte):PsrInput;
   Function  First:PsrInput;
   Function  Next(node:PsrInput):PsrInput;
+  procedure Test;
   procedure AllocBinding;
   procedure AllocEntryPoint(EntryPoint:PSpirvOp);
  end;
@@ -176,12 +178,25 @@ begin
  Result:=FNTree.Next(node);
 end;
 
-procedure TsrInputList.AllocBinding;
+procedure TsrInputList.Test;
 var
  pDecorateList:PsrDecorateList;
  pCapabilityList:PsrCapabilityList;
  node:PsrInput;
  pVar:PsrVariable;
+
+ procedure SetConst;
+ var
+  c:PsrConst;
+  l:PspirvOp;
+ begin
+  l:=node^.pReg^.pWriter^.AsType(ntOp);
+  l^.mark_not_used;
+
+  c:=PsrConstList(FEmit.GetConstList)^.Fetch(node^.pReg^.dtype,0);
+  node^.pReg^.pWriter:=c;
+ end;
+
 begin
  pDecorateList  :=FEmit.GetDecorateList;
  pCapabilityList:=FEmit.GetCapabilityList;
@@ -192,6 +207,55 @@ begin
   pVar:=node^.pVar;
   if (pVar<>nil) and node^.IsUsed then
   begin
+
+   Case node^.key.itype of
+    itPerspSample,
+    itPerspCenter,
+    itPerspCentroid,
+    itLinearSample,
+    itLinearCenter,
+    itLinearCentroid:
+      begin
+       //need support for barycentric coordinates, just a constant for now
+       SetConst;
+      end;
+
+    else;
+   end;
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrInputList.AllocBinding;
+var
+ pDecorateList:PsrDecorateList;
+ pCapabilityList:PsrCapabilityList;
+ node:PsrInput;
+ pVar:PsrVariable;
+
+ procedure TestFlat;
+ begin
+  //only pixel shader
+  if (FEmit.GetExecutionModel=ExecutionModel.Fragment) then
+  if (node^.pReg<>nil) then
+  if (node^.pReg^.dtype.isInt) then //only integer
+  begin
+   pDecorateList^.OpDecorate(pVar,Decoration.Flat,0);
+  end;
+ end;
+
+begin
+ pDecorateList  :=FEmit.GetDecorateList;
+ pCapabilityList:=FEmit.GetCapabilityList;
+
+ node:=First;
+ While (node<>nil) do
+ begin
+  pVar:=node^.pVar;
+  if (pVar<>nil) and node^.IsUsed then
+  begin
+
    Case node^.key.itype of
     itFloatPos:
       begin
@@ -216,16 +280,28 @@ begin
 
     itLayer:
       begin
+       TestFlat;
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Layer);
        pCapabilityList^.Add(Capability.Geometry);
       end;
     itSampleId:
       begin
+       TestFlat;
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.SampleId);
       end;
 
+    itPerspSample,
+    itPerspCenter,
+    itPerspCentroid,
+    itLinearSample,
+    itLinearCenter,
+    itLinearCentroid:
+      begin
+       //
+      end;
+
     else
-     {Assert(false,'AllocBinding')};
+     Assert(false,'AllocBinding:'+GetEnumName(TypeInfo(TpsslInputType),ord(node^.key.itype)));
    end;
   end;
   node:=Next(node);

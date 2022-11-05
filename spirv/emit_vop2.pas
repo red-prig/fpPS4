@@ -15,6 +15,7 @@ uses
 type
  TEmit_VOP2=class(TEmitFetch)
   procedure emit_VOP2;
+  function  get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
   procedure emit_V_CNDMASK_B32;
   procedure emit_V_AND_B32;
   procedure emit_V_OR_B32;
@@ -25,17 +26,40 @@ type
   procedure emit_V_SUB_I32;
   procedure emit_V_SUBREV_I32;
   procedure emit_V2_F32(OpId:DWORD);
+  procedure emit_V_MUL_LEGACY_F32;
   procedure emit_V_SUBREV_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
   procedure emit_V_MAC_F32;
+  procedure emit_V_MAC_LEGACY_F32;
   procedure emit_V_MADAK_F32;
   procedure emit_V_MADMK_F32;
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
  end;
 
 implementation
+
+function TEmit_VOP2.get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
+var
+ eql:array[0..1] of PsrRegNode;
+begin
+ if CompareReg(src0,src1) then
+ begin
+  Result:=NewReg(dtBool);
+  _Op2(line,Op.OpFOrdEqual,Result,src0,zero);
+ end else
+ begin
+  eql[0]:=NewReg(dtBool);
+  eql[1]:=NewReg(dtBool);
+
+  _Op2(line,Op.OpFOrdEqual,eql[0],src0,zero);
+  _Op2(line,Op.OpFOrdEqual,eql[1],src1,zero);
+
+  Result:=NewReg(dtBool);
+  _Op2(line,Op.OpLogicalOr,Result,eql[0],eql[1]);
+ end;
+end;
 
 procedure TEmit_VOP2.emit_V_CNDMASK_B32;
 Var
@@ -189,6 +213,29 @@ begin
  Op2(OpId,dtFloat32,dst,src[0],src[1]);
 end;
 
+procedure TEmit_VOP2.emit_V_MUL_LEGACY_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+ zero:PsrRegNode;
+ cmp:PsrRegNode;
+ mul:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+
+ zero:=NewReg_s(dtFloat32,0);
+ cmp:=get_legacy_cmp(src[0],src[1],zero);
+
+ //
+ mul:=NewReg(dtFloat32);
+ _Op2(line,Op.OpFMul,mul,src[0],src[1]);
+
+ OpSelect(dst,mul,zero,cmp); //false,true,cond
+end;
+
 procedure TEmit_VOP2.emit_V_SUBREV_F32;
 Var
  dst:PsrRegSlot;
@@ -273,6 +320,32 @@ begin
  OpFmaF32(dst,src[0],src[1],src[2]);
 end;
 
+procedure TEmit_VOP2.emit_V_MAC_LEGACY_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ zero:PsrRegNode;
+ cmp:PsrRegNode;
+ mul:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+ src[2]:=MakeRead(dst,dtFloat32);
+
+ zero:=NewReg_s(dtFloat32,0);
+ cmp:=get_legacy_cmp(src[0],src[1],zero);
+
+ //
+ OpFmaF32(dst,src[0],src[1],src[2]);
+ //
+
+ mul:=MakeRead(dst,dtFloat32);
+
+ OpSelect(dst,mul,zero,cmp); //false,true,cond
+end;
+
 procedure TEmit_VOP2.emit_V_MADAK_F32; //vdst = vsrc0.f * vsrc1.f + kadd.f
 Var
  dst:PsrRegSlot;
@@ -340,7 +413,8 @@ begin
   V_SUB_F32    : emit_V2_F32(Op.OpFSub);
   V_SUBREV_F32 : emit_V_SUBREV_F32;
 
-  V_MUL_F32    :emit_V2_F32(Op.OpFMul);
+  V_MUL_F32    : emit_V2_F32(Op.OpFMul);
+  V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
   V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
 
@@ -348,6 +422,8 @@ begin
   V_MUL_U32_U24: emit_V_MUL_U32_U24;
 
   V_MAC_F32  : emit_V_MAC_F32;
+  V_MAC_LEGACY_F32: emit_V_MAC_LEGACY_F32;
+
   V_MADAK_F32: emit_V_MADAK_F32;
   V_MADMK_F32: emit_V_MADMK_F32;
 

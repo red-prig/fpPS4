@@ -105,17 +105,23 @@ type
  TString5=string[5];
 
  TsrRegSlot=object
-  FEmit:TCustomEmit;
-  pStory:TRegStory;
-  rid:TString5;
-  Procedure Init(Emit:TCustomEmit;const n:TString5);
-  function  first:PsrRegNode;
-  function  current:PsrRegNode;
-  function  isBoolOnly:Boolean;
-  function  New(pLine:Pointer;rtype:TsrDataType):PsrRegNode;
-  function  NewAfter(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
-  function  NewBefore(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
-  procedure Remove(r:PsrRegNode);
+  private
+   FEmit:TCustomEmit;
+   pStory:TRegStory;
+   Frid:TString5;
+  public
+   current:PsrRegNode;
+   property  Emit:TCustomEmit read FEmit;
+   property  rid :TString5    read Frid;
+   Procedure Init(e:TCustomEmit;const n:TString5);
+   function  first:PsrRegNode;
+   function  last :PsrRegNode;
+   function  isBoolOnly:Boolean;
+   function  New(pLine:Pointer;rtype:TsrDataType):PsrRegNode;
+   function  NewAfter(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
+   function  NewBefore(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
+   procedure Insert(r:PsrRegNode);
+   procedure Remove(r:PsrRegNode);
  end;
 
  PsrRegsSnapshot=^TsrRegsSnapshot;
@@ -766,10 +772,10 @@ end;
 
 //--
 
-Procedure TsrRegSlot.Init(Emit:TCustomEmit;const n:TString5);
+Procedure TsrRegSlot.Init(e:TCustomEmit;const n:TString5);
 begin
- FEmit:=Emit;
- rid  :=n;
+ FEmit:=e;
+ Frid :=n;
 end;
 
 function TsrRegSlot.first:PsrRegNode;
@@ -777,7 +783,7 @@ begin
  Result:=pStory.pHead;
 end;
 
-function TsrRegSlot.current:PsrRegNode;
+function TsrRegSlot.last:PsrRegNode;
 begin
  Result:=pStory.pTail;
 end;
@@ -802,6 +808,8 @@ begin
  node^.pLine:=pLine;
  pStory.Push_tail(node);
  Result:=node;
+ //update
+ current:=pStory.pTail;
 end;
 
 function TsrRegSlot.NewAfter(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
@@ -819,6 +827,11 @@ begin
  node^.pLine:=r^.pLine;
  pStory.InsertAfter(r,node);
  Result:=node;
+ //update
+ if (r=pStory.pTail) then
+ begin
+  current:=pStory.pTail;
+ end;
 end;
 
 function TsrRegSlot.NewBefore(rtype:TsrDataType;r:PsrRegNode):PsrRegNode;
@@ -836,12 +849,30 @@ begin
  node^.pLine:=r^.pLine;
  pStory.InsertBefore(r,node);
  Result:=node;
+ //update
+ if (r=pStory.pTail) then
+ begin
+  current:=pStory.pTail;
+ end;
+end;
+
+procedure TsrRegSlot.Insert(r:PsrRegNode);
+begin
+ if (r=nil) then Exit;
+ pStory.Push_tail(r);
+ //update
+ current:=pStory.pTail;
 end;
 
 procedure TsrRegSlot.Remove(r:PsrRegNode);
 begin
  if (r=nil) then Exit;
  pStory.Remove(r);
+ //update
+ if (r=current) then
+ begin
+  current:=pStory.pTail;
+ end;
 end;
 
 //
@@ -879,8 +910,8 @@ end;
 
 function CompareReg(r1,r2:PsrRegNode):Boolean;
 begin
- r1:=RegDown(r1);
- r2:=RegDown(r2);
+ r1:=RegDownSlot(r1);
+ r2:=RegDownSlot(r2);
  Result:=(r1=r2);
  if not Result then
  begin

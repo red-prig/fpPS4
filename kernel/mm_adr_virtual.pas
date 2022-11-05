@@ -223,7 +223,7 @@ begin
   BT_GPUM:
    begin
     //err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
-    err:=_VirtualAlloc(Pointer(FOffset),ASize,0);
+    err:=_VirtualAlloc(Pointer(FOffset),ASize,{0}prot);
     if (err<>0) then
     begin
      Writeln(StdErr,'_VirtualReserve(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
@@ -259,7 +259,7 @@ begin
   BT_PRIV,
   BT_GPUM:
    begin
-    Result^.Rsrv:=ASize;
+    //Result^.Rsrv:=ASize;
    end;
   BT_FMAP:
    begin

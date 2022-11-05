@@ -10,6 +10,7 @@ uses
   spirv,
   srType,
   srReg,
+  srConst,
   emit_fetch;
 
 type
@@ -22,6 +23,7 @@ type
   procedure emit_V_CVT_OFF_F32_I4;
   procedure emit_V_CVT_F32_UBYTE0;
   procedure emit_V_EXT_F32(OpId:DWORD);
+  procedure emit_V_RSQ_CLAMP_F32;
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
   procedure emit_V_FFBL_B32;
@@ -130,6 +132,22 @@ begin
  OpGlsl1(OpId,dtFloat32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_RSQ_CLAMP_F32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+ flt:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+ OpGlsl1(GlslOp.InverseSqrt,dtFloat32,dst,src);
+
+ src:=MakeRead(dst,dtFloat32);
+ flt:=NewReg_s(dtFloat32,FLT_MAX);
+
+ OpGlsl2(GlslOp.NMin,dtFloat32,dst,src,flt);
+end;
+
 procedure TEmit_VOP1.emit_V_SIN_COS(OpId:DWORD);
 const
  PI2:Single=2*PI;
@@ -202,6 +220,7 @@ begin
   V_LOG_F32  : emit_V_EXT_F32(GlslOp.Log2);
 
   V_RSQ_F32  : emit_V_EXT_F32(GlslOp.InverseSqrt);
+  V_RSQ_CLAMP_F32: emit_V_RSQ_CLAMP_F32;
 
   V_SQRT_F32 : emit_V_EXT_F32(GlslOp.Sqrt);
 

@@ -783,6 +783,7 @@ function try_get_comp_bridge(var src:PsrRegNode):Integer; forward;
 
 function TEmitPostOp.OpConvert1(node:PSpirvOp):Integer;
 var
+ i:Int64;
  dst,src,tmp:PsrRegNode;
  pc:PsrConst;
  pLine:PspirvOp;
@@ -837,6 +838,7 @@ begin
   Inc(Result);
  end;
 
+ i:=0;
  if src^.is_const then
  begin
   pc:=src^.AsConst;
@@ -859,13 +861,21 @@ begin
 
    Op.OpConvertFToU:
      case src^.dtype of
-      dtFloat32:_SetConst(dst^.dtype,minz(Trunc(pc^.AsFloat32)));
+      dtFloat32:
+        if TryTruncInt64(pc^.AsFloat32,i) then
+        begin
+         _SetConst(dst^.dtype,minz(i));
+        end;
       else;
      end;
 
    Op.OpConvertFToS:
      case src^.dtype of
-      dtFloat32:_SetConst(dst^.dtype,Trunc(pc^.AsFloat32));
+      dtFloat32:
+       if TryTruncInt64(pc^.AsFloat32,i) then
+       begin
+        _SetConst(dst^.dtype,i);
+       end;
       else;
      end;
 
@@ -2370,8 +2380,8 @@ begin
  car:=rsl^.pDst1^.AsType(ntReg);
  if (dst=nil) or (car=nil) then Exit;
 
- src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
- src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
+ src[0]:=node^.ParamNode(0)^.AsReg;
+ src[1]:=node^.ParamNode(1)^.AsReg;
 
  if (src[0]=nil) or (src[1]=nil) then Exit;
 
@@ -2401,8 +2411,8 @@ begin
  bor:=rsl^.pDst1^.AsType(ntReg);
  if (dst=nil) or (bor=nil) then Exit;
 
- src[0]:=RegDown(node^.ParamNode(0)^.AsReg);
- src[1]:=RegDown(node^.ParamNode(1)^.AsReg);
+ src[0]:=node^.ParamNode(0)^.AsReg;
+ src[1]:=node^.ParamNode(1)^.AsReg;
 
  if (src[0]=nil) or (src[1]=nil) then Exit;
 

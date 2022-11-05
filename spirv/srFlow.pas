@@ -75,11 +75,9 @@ begin
  if (not pChild^.IsType(ntOpBlock)) then Exit;
 
  Case pChild^.Block.bType of
-  btAdr,
-  btAdrBranch,
-  btOther:;
-  else
-   Exit;
+  btCond,
+  btLoop:Exit;
+  else;
  end;
 
  pBlock^.Regs.FVolMark:=pChild^.Regs.FVolMark;
@@ -97,18 +95,23 @@ var
  begin
   Assert(pOpLabel[1]<>nil);
 
-  Case pOpBlock^.Regs.FVolMark of
-   vmNone:PrivateList.build_volatile_cur(pOpBlock^.Regs.pSnap);
-   vmEnd :PrivateList.build_volatile_dis(pOpBlock^.Regs.pSnap);
-   else;
-  end;
-
   if not is_term_op(line) then
   begin
    OpBranch(line,pOpLabel[1]);
   end;
 
   AddSpirvOp(line,pOpLabel[1]); //end
+ end;
+
+ procedure pop_cond_after;
+ begin
+  if (pOpBlock^.Regs.FVolMark<>vmEnd) then
+  begin
+   PrivateList.build_volatile_cur(pOpBlock^.Regs.pSnap_org);
+  end else
+  begin
+   PrivateList.build_volatile_dis(pOpBlock^.Regs.pSnap_org);
+  end;
  end;
 
  procedure pop_loop;
@@ -118,11 +121,6 @@ var
   Assert(pOpLabel[0]<>nil);
   Assert(pOpLabel[1]<>nil);
   Assert(pOpLabel[2]<>nil);
-
-  Case pOpBlock^.Regs.FVolMark of
-   vmNone:PrivateList.build_volatile_old(pOpBlock^.Regs.pSnap);
-   else;
-  end;
 
   if pOpBlock^.Cond.FUseCont then //use continue
   begin
@@ -162,6 +160,11 @@ var
 
   end;
 
+ end;
+
+ procedure pop_loop_after;
+ begin
+  PrivateList.build_volatile_old(pOpBlock^.Regs.pSnap_org);
  end;
 
  procedure pop_else;
@@ -226,6 +229,23 @@ begin
   end;
 
   Result:=Main^.PopBlock;
+
+  Case pOpBlock^.Block.bType of
+   btCond:
+    begin
+     pop_cond_after;
+     //PrivateList.build_volatile_test;
+    end;
+   btLoop:
+    begin
+     pop_loop_after;
+     //PrivateList.build_volatile_test;
+    end;
+   else
+    begin
+     //PrivateList.build_volatile_test;
+    end;
+  end;
 
  until (not branch_up) or (not Result);
 
@@ -366,6 +386,9 @@ begin
  if Config.PrintAsm then
  begin
   Write(HexStr(Cursor.OFFSET_DW*4,4));
+
+  //Write('(',GetGlobalIndex(line),')');
+
   FLevel:=0;
   if (Main<>nil) then
   if (Main^.pBlock<>nil) then

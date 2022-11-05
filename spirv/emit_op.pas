@@ -142,6 +142,8 @@ type
   //
   function  OpImageSampleImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageSampleExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
+  function  OpImageSampleDrefImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
+  function  OpImageSampleDrefExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
   function  OpImageFetch(pLine:PspirvOp;Tgrp:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageRead(pLine:PspirvOp;Tgrp:PsrNode;dst,idx:PsrRegNode):PspirvOp;
   function  OpImageWrite(pLine:PspirvOp;Tgrp:PsrNode;idx,src:PsrRegNode):PspirvOp;
@@ -1207,8 +1209,9 @@ begin
  node^.pType:=TypeList.Fetch(dst^.dtype);
  node^.pDst:=dst;
 
- node^.AddParam(img);
- node^.AddParam(coord);
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+                        //Image Operands
 
  Result:=node;
 end;
@@ -1222,8 +1225,42 @@ begin
  node^.pType:=TypeList.Fetch(dst^.dtype);
  node^.pDst:=dst;
 
- node^.AddParam(img);
- node^.AddParam(coord);
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+                        //Image Operands
+ Result:=node;
+end;
+
+function TEmitOp.OpImageSampleDrefImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
+Var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(pLine,Op.OpImageSampleDrefImplicitLod); //need first
+
+ node^.pType:=TypeList.Fetch(dst^.dtype);
+ node^.pDst:=dst;
+
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+ node^.AddParam(pcf);   //Dref
+                        //Image Operands
+
+ Result:=node;
+end;
+
+function TEmitOp.OpImageSampleDrefExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
+Var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(pLine,Op.OpImageSampleDrefExplicitLod); //need first
+
+ node^.pType:=TypeList.Fetch(dst^.dtype);
+ node^.pDst:=dst;
+
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+ node^.AddParam(pcf);   //Dref
+                        //Image Operands
 
  Result:=node;
 end;

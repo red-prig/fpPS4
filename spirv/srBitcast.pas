@@ -119,7 +119,7 @@ begin
  begin
   pConst:=src^.AsConst;
 
-  pConstList:=rSlot.FEmit.GetConstList;
+  pConstList:=rSlot.Emit.GetConstList;
   pConst:=pConstList^.Bitcast(dtype,pConst);
 
   dst:=rSlot.New(src^.pLine,dtype);
@@ -130,14 +130,14 @@ begin
   begin
    dst:=rSlot.New(src^.pLine,dtype);
 
-   rSlot.FEmit.OpCast(src^.pLine,dst,src)
+   rSlot.Emit.OpCast(src^.pLine,dst,src)
   end else
   begin
    Assert(false,'bitcast');
   end;
  end;
 
- node:=rSlot.FEmit.Alloc(SizeOf(TsrBitcast));
+ node:=rSlot.Emit.Alloc(SizeOf(TsrBitcast));
  node^:=Default(TsrBitcast);
  node^.key.dtype:=dtype;
  node^.key.src:=src;

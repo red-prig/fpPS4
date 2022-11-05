@@ -303,6 +303,8 @@ begin
     if (node^.stride<_size) then Exit;   //ident or min stride
     Result.fValue:=frValueInArray;
     Result.pField:=node;
+
+    Result.fValue:=frNotFit;
    end;
   else
    begin
@@ -358,6 +360,20 @@ var
  node:PsrField;
 begin
  Result:=Default(TFieldFetchValue);
+
+ node:=Find_be(_offset); //RA only last item
+ if (node<>nil) then
+ begin
+  if (node^.offset>_offset) or
+     (node^.dtype<>dtTypeRuntimeArray) or
+     (node^.stride<>_stride) then
+  begin
+   Result.fValue:=frNotFit;
+   Result.pField:=nil;
+   Exit;
+  end;
+ end;
+
  node:=Find_le(_offset);
  if (node=nil) then
  begin

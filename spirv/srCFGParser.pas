@@ -525,7 +525,7 @@ begin
  if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
  begin
 
-  child:=nil;
+  child:=pBlock^.FList.pTail;
   parent:=pBlock;
 
   repeat
@@ -557,6 +557,7 @@ begin
    end;
 
    if (t_adr.get_pc<=b_adr.get_pc) then Break;
+   if (parent^.pParent=nil) then Break;
 
    child:=parent;
    parent:=parent^.pParent;

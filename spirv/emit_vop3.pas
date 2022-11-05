@@ -26,9 +26,13 @@ type
   procedure emit_src_abs_bit(src:PPsrRegNode;count:Byte);
   procedure emit_dst_omod_f(dst:PsrRegSlot);
   procedure emit_dst_clamp_f(dst:PsrRegSlot);
+  function  get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
+
+  procedure emit_V_ADDC_U32;
 
   procedure emit_V_CNDMASK_B32;
   procedure emit_V2_F32(OpId:DWORD);
+  procedure emit_V_SUBREV_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_MMX_F32(OpId:DWORD);
   procedure emit_V_MUL_LO_I32;
@@ -40,6 +44,7 @@ type
   procedure emit_V_BFE_U32;
   procedure emit_V_BFI_B32;
   procedure emit_V_MAD_F32;
+  procedure emit_V_MAD_LEGACY_F32;
   procedure emit_V_MAD_I32_I24;
   procedure emit_V_MAD_U32_U24;
   procedure emit_V_SAD_U32;
@@ -49,6 +54,7 @@ type
   procedure emit_V_FMA_F32;
   procedure emit_V_CUBE(OpId:DWORD);
   procedure emit_V_MOV_B32;
+  procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
@@ -180,6 +186,27 @@ begin
  OpGlsl3(GlslOp.FClamp,dtFloat32,dst,src,min,max);
 end;
 
+function TEmit_VOP3.get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
+var
+ eql:array[0..1] of PsrRegNode;
+begin
+ if CompareReg(src0,src1) then
+ begin
+  Result:=NewReg(dtBool);
+  _Op2(line,Op.OpFOrdEqual,Result,src0,zero);
+ end else
+ begin
+  eql[0]:=NewReg(dtBool);
+  eql[1]:=NewReg(dtBool);
+
+  _Op2(line,Op.OpFOrdEqual,eql[0],src0,zero);
+  _Op2(line,Op.OpFOrdEqual,eql[1],src1,zero);
+
+  Result:=NewReg(dtBool);
+  _Op2(line,Op.OpLogicalOr,Result,eql[0],eql[1]);
+ end;
+end;
+
 procedure TEmit_VOP3.emit_V_CNDMASK_B32;
 Var
  dst:PsrRegSlot;
@@ -214,6 +241,25 @@ begin
  emit_src_neg_bit(@src,2);
 
  Op2(OpId,dtFloat32,dst,src[0],src[1]);
+
+ emit_dst_omod_f(dst);
+ emit_dst_clamp_f(dst);
+end;
+
+procedure TEmit_VOP3.emit_V_SUBREV_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_bit(@src,2);
+ emit_src_neg_bit(@src,2);
+
+ Op2(Op.OpFSub,dtFloat32,dst,src[1],src[0]);
 
  emit_dst_omod_f(dst);
  emit_dst_clamp_f(dst);
@@ -432,6 +478,39 @@ begin
  emit_dst_clamp_f(dst);
 end;
 
+procedure TEmit_VOP3.emit_V_MAD_LEGACY_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ zero:PsrRegNode;
+ cmp:PsrRegNode;
+ mul:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
+
+ zero:=NewReg_s(dtFloat32,0);
+ cmp:=get_legacy_cmp(src[0],src[1],zero);
+
+ //
+ emit_src_abs_bit(@src,3);
+ emit_src_neg_bit(@src,3);
+
+ OpFmaF32(dst,src[0],src[1],src[2]);
+
+ emit_dst_omod_f(dst);
+ emit_dst_clamp_f(dst);
+ //
+
+
+ mul:=MakeRead(dst,dtFloat32);
+
+ OpSelect(dst,mul,zero,cmp); //false,true,cond
+end;
+
 procedure TEmit_VOP3.emit_V_MAD_I32_I24;
 Var
  dst:PsrRegSlot;
@@ -644,13 +723,41 @@ begin
 
 end;
 
+procedure TEmit_VOP3.emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,src_type);
+
+ if (not src_type.isFloat) then
+ begin
+  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ end;
+
+ emit_src_abs_bit(@src,1);
+ emit_src_neg_bit(@src,1);
+
+ Op1(OpId,dst_type,dst,src);
+
+ if (not dst_type.isFloat) then
+ begin
+  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ end;
+
+ emit_dst_omod_f(dst);
+ emit_dst_clamp_f(dst);
+end;
+
 procedure TEmit_VOP3.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
-
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
  emit_src_abs_bit(@src,1);
@@ -670,7 +777,6 @@ Var
  src:PsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
-
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
  src:=OpFMulToS(src,PI2);
@@ -691,7 +797,6 @@ Var
  one:PsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
-
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
  emit_src_abs_bit(@src,1);
@@ -845,9 +950,50 @@ begin
 
 end;
 
+procedure TEmit_VOP3.emit_V_ADDC_U32;
+Var
+ dst,car:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ exc:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3b.VDST);
+ car:=get_sdst7(FSPI.VOP3b.SDST);
+
+ Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
+ Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3b.SRC2,dtUInt32);
+
+ src[2]:=OpBitwiseAndTo(src[2],1);
+ src[2]^.PrepType(ord(dtUInt32));
+
+ OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+
+ src[0]:=MakeRead(dst,dtUInt32);
+ src[1]:=MakeRead(car,dtUInt32);   //save car1
+
+ OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+src2
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ OpBitwiseOr(car,src[1],src[0]);   //car1 or car2
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ exc:=MakeRead(get_exec0,dtUnknow);
+ OpBitwiseAnd(car,src[0],exc);     //carry_out & EXEC
+end;
+
 procedure TEmit_VOP3.emit_VOP3b;
 begin
- Assert(false,'VOP3b?'+IntToStr(FSPI.VOP3b.OP));
+ Case FSPI.VOP3b.OP of
+  256+V_ADDC_U32: emit_V_ADDC_U32;
+
+  else
+   Assert(false,'VOP3b?'+IntToStr(FSPI.VOP3b.OP));
+ end;
 end;
 
 procedure TEmit_VOP3.emit_VOP3a;
@@ -860,6 +1006,7 @@ begin
 
   256+V_ADD_F32: emit_V2_F32(Op.OpFAdd);
   256+V_SUB_F32: emit_V2_F32(Op.OpFSub);
+  256+V_SUBREV_F32: emit_V_SUBREV_F32;
 
   256+V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
 
@@ -884,6 +1031,7 @@ begin
   V_BFE_U32: emit_V_BFE_U32;
   V_BFI_B32: emit_V_BFI_B32;
   V_MAD_F32: emit_V_MAD_F32;
+  V_MAD_LEGACY_F32: emit_V_MAD_LEGACY_F32;
 
   V_MAD_I32_I24: emit_V_MAD_I32_I24;
   V_MAD_U32_U24: emit_V_MAD_U32_U24;
@@ -902,6 +1050,11 @@ begin
   //VOP1 analog
 
   384+V_NOP:;
+
+  384+V_CVT_F32_I32: emit_V_CVT(Op.OpConvertSToF,dtFloat32,dtInt32);
+  384+V_CVT_F32_U32: emit_V_CVT(Op.OpConvertUToF,dtFloat32,dtUInt32);
+  384+V_CVT_U32_F32: emit_V_CVT(Op.OpConvertFToU,dtUInt32 ,dtFloat32);
+  384+V_CVT_I32_F32: emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
 
   384+V_MOV_B32  : emit_V_MOV_B32;
 

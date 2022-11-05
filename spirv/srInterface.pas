@@ -81,6 +81,7 @@ type
   RefIdAlloc:TsrRefIdAlloc;
   //
   function  Alloc(Size:ptruint):Pointer; override;
+  Function  GetExecutionModel  :Word;    override;
   Function  GetConfig          :Pointer; override;
   Function  GetCodeHeap        :Pointer; override;
 
@@ -155,6 +156,11 @@ implementation
 function TEmitInterface.Alloc(Size:ptruint):Pointer;
 begin
  Result:=Allocator.Alloc(Size);
+end;
+
+Function TEmitInterface.GetExecutionModel:Word;
+begin
+ Result:=FExecutionModel;
 end;
 
 Function TEmitInterface.GetConfig:Pointer;
@@ -493,8 +499,10 @@ end;
 function TEmitInterface.NewBlockOp(Snap:TsrRegsSnapshot):PsrOpBlock;
 begin
  Result:=AllocBlockOp;
- Result^.Regs.pSnap :=Alloc(SizeOf(TsrRegsSnapshot));
- Result^.Regs.pSnap^:=Snap;
+ Result^.Regs.pSnap_org :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result^.Regs.pSnap_cur :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result^.Regs.pSnap_org^:=Snap;
+ Result^.Regs.pSnap_cur^:=Snap;
  Result^.Regs.FVolMark:=vmNone;
  Result^.Cond.FUseCont:=false;
 end;

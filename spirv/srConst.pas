@@ -15,6 +15,9 @@ uses
  srTypes,
  half16;
 
+const
+ FLT_MAX=3.402823466e+38;
+
 type
  ntConst=class(TsrNodeVmt)
   class Procedure zero_read     (node:PsrNode);               override;
@@ -97,6 +100,8 @@ function is_const_soffset(SSRC:Byte):Boolean; inline;
 function is_const_ssrc8(SSRC:Byte):Boolean; inline;
 function is_const_ssrc9(SSRC:Word):Boolean; inline;
 function CompareConst(r1,r2:PsrConst):Boolean;
+
+Function TryTruncInt64(c:Single;var i:int64):Boolean;
 
 implementation
 
@@ -362,13 +367,16 @@ begin
   dtHalf16:
     begin
      s:=Single(AsHalf16);
-     i:=Trunc(s);
-     if (s=i) then
+     i:=0;
+     if TryTruncInt64(s,i) then
      begin
-      Case i of
-         0..99:Result:='ch'+IntToStr(i);
-        -9..-1:Result:='chm'+IntToStr(abs(i));
-       else;
+      if (s=i) then
+      begin
+       Case i of
+          0..99:Result:='ch'+IntToStr(i);
+         -9..-1:Result:='chm'+IntToStr(abs(i));
+        else;
+       end;
       end;
      end;
     end;
@@ -376,13 +384,16 @@ begin
   dtFloat32:
     begin
      s:=AsFloat32;
-     i:=Trunc(s);
-     if (s=i) then
+     i:=0;
+     if TryTruncInt64(s,i) then
      begin
-      Case i of
-         0..99:Result:='cf'+IntToStr(i);
-        -9..-1:Result:='cfm'+IntToStr(abs(i));
-       else;
+      if (s=i) then
+      begin
+       Case i of
+          0..99:Result:='cf'+IntToStr(i);
+         -9..-1:Result:='cfm'+IntToStr(abs(i));
+        else;
+       end;
       end;
      end;
     end;
@@ -790,6 +801,15 @@ begin
     Result:=CompareConstCount(Pointer(r1^.pData),Pointer(r2^.pData),r1^.fCount);
    end;
   end;
+ end;
+end;
+
+Function TryTruncInt64(c:Single;var i:int64):Boolean;
+begin
+ Result:=(c>=Low(int64)) and (c<=High(int64));
+ if Result then
+ begin
+  i:=Trunc(c);
  end;
 end;
 

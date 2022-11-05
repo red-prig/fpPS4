@@ -24,6 +24,7 @@ type
   function  GatherDmask(telem:TsrDataType):PsrRegNode;
   Function  GatherCoord_f(var offset:DWORD;dim_id:Byte):PsrRegNode;
   Function  GatherCoord_u(var offset:DWORD;dim_id:Byte):PsrRegNode;
+  Function  Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
   Function  Gather_packed_offset(var offset:DWORD;dim:Byte):PsrRegNode;
   procedure emit_image_sample(Tgrp:PsrNode;info:PsrImageInfo);
   procedure emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
@@ -515,6 +516,14 @@ begin
  offset:=offset+count;
 end;
 
+Function TEmit_MIMG.Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
+var
+ src:PsrRegNode;
+begin
+ Result:=fetch_vsrc8(FSPI.MIMG.VADDR+offset,rtype);
+ Inc(offset);
+end;
+
 Function TEmit_MIMG.Gather_packed_offset(var offset:DWORD;dim:Byte):PsrRegNode;
 var
  src:PsrRegNode;
@@ -541,7 +550,7 @@ var
  pLayout:PsrDataLayout;
  Sgrp:PsrNode;
 
- dst,cmb,coord,lod,offset:PsrRegNode;
+ dst,cmb,coord,pcf,lod,offset:PsrRegNode;
 
  roffset:DWORD;
 
@@ -605,8 +614,23 @@ begin
      node^.AddParam(offset);
     end;
 
+  IMAGE_SAMPLE_C_LZ:
+    begin
+     pcf:=Gather_value(roffset,dtFloat32);
+
+     coord:=GatherCoord_f(roffset,info^.tinfo.Dim);
+
+     node:=OpImageSampleDrefExplicitLod(line,cmb,dst,coord,pcf);
+
+     node^.AddLiteral(ImageOperands.Lod,'Lod');
+
+     //0
+     lod:=NewReg_s(dtFloat32,0);
+     node^.AddParam(lod);
+    end;
+
   else
-    Assert(false);
+    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
  DistribDmask(dst,info^.dtype);
@@ -652,7 +676,7 @@ begin
      node^.AddParam(lod);
     end;
   else
-    Assert(false);
+    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
  DistribDmask(dst,info^.dtype);
@@ -697,7 +721,7 @@ begin
      node^.AddParam(lod);
     end;
   else
-    Assert(false);
+    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
 end;

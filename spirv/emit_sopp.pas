@@ -120,8 +120,8 @@ begin
  begin
 
   Case node^.Block.bType of
-   btCond:PrivateList.build_volatile_cur(node^.Regs.pSnap);
-   btLoop:PrivateList.build_volatile_old(node^.Regs.pSnap);
+   btCond:PrivateList.build_volatile_cur(node^.Regs.pSnap_cur);
+   btLoop:PrivateList.build_volatile_brk(node^.Regs.pSnap_cur);
    else;
   end;
 

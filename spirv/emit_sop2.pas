@@ -79,13 +79,13 @@ begin
  OpIAddExt(dst,car,src[0],src[1]); //src0+src1
 
  src[0]:=MakeRead(dst,dtUInt32);
- src[1]:=MakeRead(car,dtUInt32);
+ src[1]:=MakeRead(car,dtUInt32);   //save car1
 
  OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+SCC
 
  src[0]:=MakeRead(car,dtUInt32);
 
- OpBitwiseOr(car,src[1],src[0]);  //SCC1 or SCC2
+ OpBitwiseOr(car,src[1],src[0]);   //SCC1 or SCC2
 end;
 
 procedure TEmit_SOP2.emit_S_MUL_I32;

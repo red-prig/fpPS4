@@ -155,7 +155,8 @@ type
    FCursor:TsrCursor;
 
    Regs:record
-    pSnap:PsrRegsSnapshot;
+    pSnap_org:PsrRegsSnapshot;
+    pSnap_cur:PsrRegsSnapshot;
     FVolMark:TsrVolMark;
    end;
 
@@ -706,8 +707,7 @@ function TSpirvFunc.AddSpirvOp(node:PSpirvOp):PSpirvOp;
 begin
  Result:=node;
  if (node=nil) then Exit;
- FBlock^.FList.Push_tail(node);
- node^.pParent:=FBlock;
+ FBlock^.AddSpirvOp(node);
 end;
 
 function TSpirvFunc.AddSpirvOp(OpId:DWORD):PSpirvOp;

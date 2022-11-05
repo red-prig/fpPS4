@@ -142,7 +142,7 @@ begin
       data[i].FBinding:=FLocation;
      end;
     else
-     Assert(False,'AllocBinding');
+     Assert(false,'AllocBinding:'+GetEnumName(TypeInfo(TpsslExportType),ord(i)));
    end;
   end;
  end;
