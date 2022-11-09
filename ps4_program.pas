@@ -130,8 +130,9 @@ type
    resolve_cb:Pointer;
    reload_cb:Pointer;
    prog:TElf_node;
-   app_file:RawByteString;
-   app_path:RawByteString;
+   app0_file:RawByteString;
+   app0_path:RawByteString;
+   app1_path:RawByteString;
    save_path:RawByteString;
   private
    pre_load:Thamt64locked_proc;
@@ -1011,12 +1012,21 @@ begin
 
  if sce_load_filter(name) then
  begin
-  Result:=TryLoadElf(app_path,name);
-  if (Result<>nil) then //is default load app_path\sce_module
+  Result:=TryLoadElf(app1_path,name);
+  if (Result<>nil) then //is default load app1_path\sce_module
   begin
    Result.Prepare;
    ps4_app.RegistredElf(Result);
    Exit;
+  end else
+  begin
+   Result:=TryLoadElf(app0_path,name);
+   if (Result<>nil) then //is default load app0_path\sce_module
+   begin
+    Result.Prepare;
+    ps4_app.RegistredElf(Result);
+    Exit;
+   end;
   end;
  end;
 

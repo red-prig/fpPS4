@@ -11,6 +11,12 @@ uses
  ps4_program,
  sys_kernel;
 
+const
+ PT_ERR=-1;
+ PT_ROOT=0;
+ PT_FILE=1;
+ PT_DEV =2;
+
 Function  FetchSaveMount(path,point:PChar;mode:Integer):Integer;
 Function  UnMountSavePath(path:PChar):Integer;
 
@@ -108,13 +114,14 @@ begin
  if (Result='') or (not IsSep(Result[Length(Result)])) then Result:=Result+DirectorySeparator;
 end;
 
-function PathConcat(Path,filename:RawByteString):RawByteString;
+function PathConcat(Path,filename:RawByteString;var r:RawByteString):Integer;
 begin
  Path:=Trim(Path);
- If (Path='') then Exit('');
+ If (Path='') then Exit(PT_ERR);
  if (not IsSep(Path[Length(Path)])) then Path:=Path+DirectorySeparator;
  DoDirSeparators(filename);
- Result:=Path+filename;
+ r:=Path+filename;
+ Result:=PT_FILE;
 end;
 
 Function FetchSaveMount(path,point:PChar;mode:Integer):Integer;
@@ -258,46 +265,58 @@ end;
 // /savedata0
 // /savedata15
 
-function MountSaveConcat(id:Byte;const filename:RawByteString):RawByteString;
+function MountSaveConcat(id:Byte;const filename:RawByteString;var r:RawByteString):Integer;
 var
  s:RawByteString;
 begin
  s:=GetSaveMount(id);
- if (s='') then Exit('');
+ if (s='') then Exit(PT_ERR);
 
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+s;
 
- Result:=PathConcat(s,filename);
+ Result:=PathConcat(s,filename,r);
 end;
 
 const
- P_ERR  =-1;
- P_NEXT =0;
- P_MOUNT=1;
+ PT_NEXT=PT_ROOT;
 
-function _parse_cast(var pp,fp:PChar;var Path:RawByteString):Integer;
+function _parse_cast(var pp,fp:PChar;var r:RawByteString):Integer;
 begin
- Result:=P_NEXT;
+ Result:=PT_NEXT;
  Case (fp-pp) of
-  0:pp:=fp+1; //next
+  0:if (fp^<>#0) then pp:=fp+1; //next
   3:Case (PDWORD(pp)^ and $00FFFFFF) of
      $00766564: //dev
        begin
         if (fp^<>#0) then Inc(fp);
-        Result:=P_ERR; //TODO
+        r:=fp;
+        Result:=PT_DEV;
        end;
      else
-        Result:=P_ERR;
+        Result:=PT_ERR;
     end;
   4:Case PDWORD(pp)^ of
      $30707061: //app0
        begin
         if (fp^<>#0) then Inc(fp);
-        Path:=PathConcat(ps4_app.app_path,fp);
-        Result:=P_MOUNT;
+
+        //easy way to patch apply
+        Result:=PathConcat(ps4_app.app1_path,fp,r);
+        if (Result<>PT_ERR) then
+         if FileExists(r) then
+         begin
+          Exit; //done
+         end;
+
+        Result:=PathConcat(ps4_app.app0_path,fp,r);
+       end;
+     $31707061: //app1
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=PathConcat(ps4_app.app1_path,fp,r);
        end;
      else
-        Result:=P_ERR;
+        Result:=PT_ERR;
     end;
   9:Case PQWORD(pp)^ of
      $6174616465766173: //savedata
@@ -306,15 +325,14 @@ begin
          '0'..'9':
            begin
             if (fp^<>#0) then Inc(fp);
-            Path:=MountSaveConcat(ord((pp+8)^)-ord('0'),fp);
-            Result:=P_MOUNT;
+            Result:=MountSaveConcat(ord((pp+8)^)-ord('0'),fp,r);
            end;
          else
-            Result:=P_ERR;
+            Result:=PT_ERR;
         end;
        end;
      else
-       Result:=P_ERR;
+       Result:=PT_ERR;
     end;
  10:Case PQWORD(pp)^ of
      $6174616465766173: //savedata
@@ -328,20 +346,19 @@ begin
          $3531: //15
            begin
             if (fp^<>#0) then Inc(fp);
-            Path:=MountSaveConcat(ord((pp+9)^)-ord('0')+10,fp);
-            Result:=P_MOUNT;
+            Result:=MountSaveConcat(ord((pp+9)^)-ord('0')+10,fp,r);
            end;
          else
-          Result:=P_ERR;
+          Result:=PT_ERR;
         end;
        end;
      else
-       Result:=P_ERR;
+       Result:=PT_ERR;
     end;
   else
     begin
      //Writeln((fp-pp),'*',fp,'*',pp);
-     Result:=P_ERR;
+     Result:=PT_ERR;
     end;
  end;
 end;
@@ -366,23 +383,14 @@ begin
   Case fp^ of
    '/':
    begin
-    Case _parse_cast(pp,fp,r) of
-     P_MOUNT:Exit(0);      //mapped
-     P_ERR  :Exit(EACCES); //not mapped
-     else;
-                           //next char
-    end;
+    Result:=_parse_cast(pp,fp,r);
+    if (Result<>PT_NEXT) then Exit;
    end;
   end;
   Inc(fp);
  end;
 
- Case _parse_cast(pp,fp,r) of
-  P_MOUNT:Exit(0); //mapped
-  else;
-    Exit(EACCES);  //not mapped
- end;
-
+ Result:=_parse_cast(pp,fp,r);
 end;
 
 initialization

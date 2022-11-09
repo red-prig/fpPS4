@@ -12,6 +12,7 @@ uses
  sys_crt,
  sys_types,
  sys_pthread,
+ sys_path,
  ps4libdoc,
  ps4_libSceScreenShot,
  ps4_libSceRtc,
@@ -65,7 +66,8 @@ begin
   Writeln('PS4 compatibility layer (emulator) on Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
   Writeln('  -e <name>  //decrypted elf or self file name');
-  Writeln('  -f <name>  //folder of app');
+  Writeln('  -f <name>  //folder of app   (/app0)');
+  Writeln('  -p <name>  //folder of patch (/app1)');
   Writeln('  -s <name>  //savedata path');
 
   Writeln('  -h <name>  //enable hack');
@@ -84,29 +86,34 @@ begin
   case LowerCase(ParamStr(i)) of
     '-e':n:=0;
     '-f':n:=1;
-    '-s':n:=2;
-    '-h':n:=3;
+    '-p':n:=2;
+    '-s':n:=3;
+    '-h':n:=4;
    else
      if (n<>-1) then
      begin
       Case n of
        0:begin
-          if (ps4_app.app_file<>'') then Goto promo;
-          ps4_app.app_file:=Trim(ParamStr(i));
-          if (ps4_app.app_path='') then
+          if (ps4_app.app0_file<>'') then Goto promo;
+          ps4_app.app0_file:=Trim(ParamStr(i));
+          if (ps4_app.app0_path='') then
           begin
-           ps4_app.app_path:=ExtractFileDir(ps4_app.app_file);
-           if (ExcludeLeadingPathDelimiter(ps4_app.app_path)='') then ps4_app.app_path:=GetCurrentDir;
+           ps4_app.app0_path:=ExtractFileDir(ps4_app.app0_file);
+           if (ExcludeLeadingPathDelimiter(ps4_app.app0_path)='') then ps4_app.app0_path:=GetCurrentDir;
           end;
          end;
        1:begin
-          ps4_app.app_path:=Trim(ParamStr(i));
-          if (ExcludeLeadingPathDelimiter(ps4_app.app_path)='') then ps4_app.app_path:=GetCurrentDir;
+          ps4_app.app0_path:=Trim(ParamStr(i));
+          if (ExcludeLeadingPathDelimiter(ps4_app.app0_path)='') then ps4_app.app0_path:=GetCurrentDir;
          end;
        2:begin
-          ps4_app.save_path:=Trim(ParamStr(i));
+          ps4_app.app1_path:=Trim(ParamStr(i));
+          if (ExcludeLeadingPathDelimiter(ps4_app.app1_path)='') then ps4_app.app1_path:=GetCurrentDir;
          end;
        3:begin
+          ps4_app.save_path:=Trim(ParamStr(i));
+         end;
+       4:begin
           case UpperCase(ParamStr(i)) of
            'DEPTH_DISABLE_HACK'  :ps4_videodrv.DEPTH_DISABLE_HACK:=True;
            'COMPUTE_DISABLE_HACK':ps4_videodrv.COMPUTE_DISABLE_HACK:=True;
@@ -122,18 +129,31 @@ begin
   end;
  end;
 
- if (ps4_app.app_file='') or (ps4_app.app_path='') or (ps4_app.save_path='') then Goto promo;
+ if (ps4_app.app0_file='') or (ps4_app.app0_path='') or (ps4_app.save_path='') then Goto promo;
 
- if not FileExists(ps4_app.app_file) then
+ if (ps4_app.app1_path=ps4_app.app0_path) then
  begin
-  Writeln(StdErr,'File not found:',ps4_app.app_file);
+  ps4_app.app1_path:='';
+ end;
+
+ if not FileExists(ps4_app.app0_file) then
+ begin
+  Writeln(StdErr,'File not found:',ps4_app.app0_file);
   Writeln;
   Goto promo;
  end;
 
- if not DirectoryExists(ps4_app.app_path) then
+ if not DirectoryExists(ps4_app.app0_path) then
  begin
-  Writeln(StdErr,'Path not found:',ps4_app.app_path);
+  Writeln(StdErr,'Path not found:',ps4_app.app0_path);
+  Writeln;
+  Goto promo;
+ end;
+
+ if (ps4_app.app1_path<>'') then
+ if not DirectoryExists(ps4_app.app1_path) then
+ begin
+  Writeln(StdErr,'Path not found:',ps4_app.app1_path);
   Writeln;
   Goto promo;
  end;
@@ -397,6 +417,8 @@ begin
     'sceFiosIOFilterPsarcDearchiver':;
     'sceFiosFHReadSync':;
     'sceFiosFHTell':;
+    'sceNgs2VoiceGetState':;
+    'sceNgs2SystemRender':;
     'sceAudioOutOutputs':;
     '__tls_get_addr':;
     'scePthreadRwlockRdlock':;
@@ -458,16 +480,37 @@ begin
 end;
 
 var
- elf:Telf_file;
- //i:Integer;
- //F:THandle;
-
  main:pthread;
 
-//label
-// _lab;
-
 {$R *.res}
+
+procedure LoadProgram;
+var
+ elf:Telf_file;
+ f:RawByteString;
+begin
+ elf:=nil;
+
+ if (ps4_app.app1_path<>'') then
+ begin
+  //first try patch
+  f:='';
+  if (parse_filename('/app1/eboot.bin',f)=PT_FILE) then
+  begin
+   elf:=Telf_file(LoadPs4ElfFromFile(f));
+  end;
+ end;
+
+ if (elf=nil) then
+ begin
+  //second try app0_file
+  elf:=Telf_file(LoadPs4ElfFromFile(ps4_app.app0_file));
+ end;
+
+ Assert(elf<>nil,'program not loaded!');
+
+ ps4_app.prog:=elf;
+end;
 
 begin
  DefaultSystemCodePage:=CP_UTF8;
@@ -679,6 +722,9 @@ begin
  //ps4_app.app_path:='G:\Games\ps4-homebrew\TEST_PAD\';
  //ps4_app.app_file:='G:\Games\ps4-homebrew\TEST_PAD\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\TEST_PAD\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\TEST_PAD\eboot.bin';
+
  //ps4_app.app_path:='G:\Games\Castlevania\SLUS00067\';
  //ps4_app.app_file:='G:\Games\Castlevania\SLUS00067\eboot.bin';
 
@@ -736,18 +782,41 @@ begin
  //ps4_app.app_path:='C:\Users\User\Desktop\Games\namco\uroot\';
  //ps4_app.app_file:='C:\Users\User\Desktop\Games\namco\uroot\eboot.bin';
 
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\ps4-homebrew\PS4-Xplorer\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\ps4-homebrew\PS4-Xplorer\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Chronicles_of_Teddy_Harmony_of_Exidus\CUSA03328\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Chronicles_of_Teddy_Harmony_of_Exidus\CUSA03328\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Another_World\CUSA00602\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Another_World\CUSA00602\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Dino.Dinis.Kick.Off.Revival\CUSA03453\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Dino.Dinis.Kick.Off.Revival\CUSA03453\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Cat.Quest\CUSA09499\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Cat.Quest\CUSA09499\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Kitten.Squad\CUSA04801\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Kitten.Squad\CUSA04801\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Mitsurugi.Kamui.Hikae\CUSA02166\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Mitsurugi.Kamui.Hikae\CUSA02166\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Prison_Architect\CUSA03487\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Prison_Architect\CUSA03487\eboot.bin';
+
+ //ps4_app.app_path:='C:\Users\User\Desktop\Games\Pumped.BMX.Plus.PS4-PRELUDE\CUSA02589\';
+ //ps4_app.app_file:='C:\Users\User\Desktop\Games\Pumped.BMX.Plus.PS4-PRELUDE\CUSA02589\eboot.bin';
+
  ps4_app.resolve_cb:=@ResolveImport;
  ps4_app.reload_cb :=@ReloadImport;
 
- elf:=Telf_file(LoadPs4ElfFromFile(ps4_app.app_file));
- Assert(elf<>nil);
+ LoadProgram;
+ ps4_app.prog.Prepare;
 
- ps4_app.prog:=elf;
-
- elf.Prepare;
-
- ps4_app.RegistredElf(elf);
- ps4_app.ResolveDepended(elf);
+ ps4_app.RegistredElf    (ps4_app.prog);
+ ps4_app.ResolveDepended (ps4_app.prog);
  ps4_app.LoadSymbolImport(nil);
 
 
@@ -755,9 +824,6 @@ begin
  ps4_app.InitProt;
 
  _pthread_run_entry(@main,GetSceUserMainThreadName,GetSceUserMainThreadStackSize);
-
- //ps4_app.InitCode;
- //elf.mapCodeEntry;
 
  ps4_libSceVideoOut.App_Run;
 

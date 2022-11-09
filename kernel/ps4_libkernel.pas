@@ -412,9 +412,10 @@ begin
 
  Result:=parse_filename(moduleFileName,fn);
 
- if (Result<>0) then
- begin
-  Exit(SCE_KERNEL_ERROR_EACCES);
+ Case Result of
+  PT_FILE:;
+  else
+          Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
  end;
 
  node:=ps4_app.AcqureFileByName(ExtractFileName(fn));
@@ -462,6 +463,8 @@ begin
  begin
   Result:=SCE_KERNEL_ERROR_ENOENT;
  end;
+
+ _set_sce_errno(Result);
 end;
 
 function ps4_sceKernelLoadStartModule(moduleFileName:Pchar;

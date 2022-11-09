@@ -20,7 +20,7 @@ uses
 type
  TEmit_MIMG=class(TEmitFetch)
   procedure emit_MIMG;
-  procedure DistribDmask(dst:PsrRegNode;telem:TsrDataType);
+  procedure DistribDmask(dst:PsrRegNode;info:PsrImageInfo);
   function  GatherDmask(telem:TsrDataType):PsrRegNode;
   Function  GatherCoord_f(var offset:DWORD;dim_id:Byte):PsrRegNode;
   Function  GatherCoord_u(var offset:DWORD;dim_id:Byte):PsrRegNode;
@@ -374,7 +374,82 @@ begin
  Result.tinfo.Format :=GetImageFormat(PT);
 end;
 
-procedure TEmit_MIMG.DistribDmask(dst:PsrRegNode;telem:TsrDataType); //result
+type
+ TsrImageMods=Set Of (imMinLod,imGrad,imLod,imBiasLod,imZeroLod,imDref,imOffset);
+
+function GetImageMods(OP:Byte):TsrImageMods;
+begin
+ Case OP of
+  IMAGE_SAMPLE_CL       :Result:=[imMinLod];
+  IMAGE_SAMPLE_D        :Result:=[imGrad];
+  IMAGE_SAMPLE_D_CL     :Result:=[imGrad,imMinLod];
+  IMAGE_SAMPLE_L        :Result:=[imLod];
+  IMAGE_SAMPLE_B        :Result:=[imBiasLod];
+  IMAGE_SAMPLE_B_CL     :Result:=[imBiasLod,imMinLod];
+  IMAGE_SAMPLE_LZ       :Result:=[imZeroLod];
+  IMAGE_SAMPLE_C        :Result:=[imDref];
+  IMAGE_SAMPLE_C_CL     :Result:=[imDref,imMinLod];
+  IMAGE_SAMPLE_C_D      :Result:=[imDref,imGrad];
+  IMAGE_SAMPLE_C_D_CL   :Result:=[imDref,imGrad,imMinLod];
+  IMAGE_SAMPLE_C_L      :Result:=[imDref,imLod];
+  IMAGE_SAMPLE_C_B      :Result:=[imDref,imBiasLod];
+  IMAGE_SAMPLE_C_B_CL   :Result:=[imDref,imBiasLod,imMinLod];
+  IMAGE_SAMPLE_C_LZ     :Result:=[imDref,imZeroLod];
+  IMAGE_SAMPLE_O        :Result:=[imOffset];
+  IMAGE_SAMPLE_CL_O     :Result:=[imMinLod,imOffset];
+  IMAGE_SAMPLE_D_O      :Result:=[imGrad,imOffset];
+  IMAGE_SAMPLE_D_CL_O   :Result:=[imGrad,imMinLod,imOffset];
+  IMAGE_SAMPLE_L_O      :Result:=[imLod,imOffset];
+  IMAGE_SAMPLE_B_O      :Result:=[imBiasLod,imOffset];
+  IMAGE_SAMPLE_B_CL_O   :Result:=[imBiasLod,imMinLod,imOffset];
+  IMAGE_SAMPLE_LZ_O     :Result:=[imZeroLod,imOffset];
+  IMAGE_SAMPLE_C_O      :Result:=[imDref,imOffset];
+  IMAGE_SAMPLE_C_CL_O   :Result:=[imDref,imMinLod,imOffset];
+  IMAGE_SAMPLE_C_D_O    :Result:=[imDref,imGrad,imOffset];
+  IMAGE_SAMPLE_C_D_CL_O :Result:=[imDref,imGrad,imMinLod,imOffset];
+  IMAGE_SAMPLE_C_L_O    :Result:=[imDref,imLod,imOffset];
+  IMAGE_SAMPLE_C_B_O    :Result:=[imDref,imBiasLod,imOffset];
+  IMAGE_SAMPLE_C_B_CL_O :Result:=[imDref,imBiasLod,imMinLod,imOffset];
+  IMAGE_SAMPLE_C_LZ_O   :Result:=[imDref,imZeroLod,imOffset];
+  //
+  IMAGE_GATHER4_CL      :Result:=[imMinLod];
+  IMAGE_GATHER4_L       :Result:=[imLod];
+  IMAGE_GATHER4_B       :Result:=[imBiasLod];
+  IMAGE_GATHER4_B_CL    :Result:=[imBiasLod,imMinLod];
+  IMAGE_GATHER4_LZ      :Result:=[imZeroLod];
+  IMAGE_GATHER4_C       :Result:=[imDref];
+  IMAGE_GATHER4_C_CL    :Result:=[imDref,imMinLod];
+  IMAGE_GATHER4_C_L     :Result:=[imDref,imLod];
+  IMAGE_GATHER4_C_B     :Result:=[imDref,imBiasLod];
+  IMAGE_GATHER4_C_B_CL  :Result:=[imDref,imBiasLod,imMinLod];
+  IMAGE_GATHER4_C_LZ    :Result:=[imDref,imMinLod];
+  IMAGE_GATHER4_O       :Result:=[imOffset];
+  IMAGE_GATHER4_CL_O    :Result:=[imMinLod,imOffset];
+  IMAGE_GATHER4_L_O     :Result:=[imLod,imOffset];
+  IMAGE_GATHER4_B_O     :Result:=[imBiasLod,imOffset];
+  IMAGE_GATHER4_B_CL_O  :Result:=[imBiasLod,imMinLod,imOffset];
+  IMAGE_GATHER4_LZ_O    :Result:=[imZeroLod,imOffset];
+  IMAGE_GATHER4_C_O     :Result:=[imDref,imOffset];
+  IMAGE_GATHER4_C_CL_O  :Result:=[imDref,imMinLod,imOffset];
+  IMAGE_GATHER4_C_L_O   :Result:=[imDref,imLod,imOffset];
+  IMAGE_GATHER4_C_B_O   :Result:=[imDref,imBiasLod,imOffset];
+  IMAGE_GATHER4_C_B_CL_O:Result:=[imDref,imBiasLod,imMinLod,imOffset];
+  IMAGE_GATHER4_C_LZ_O  :Result:=[imDref,imZeroLod,imOffset];
+  //
+  IMAGE_SAMPLE_CD       :Result:=[imGrad];
+  IMAGE_SAMPLE_CD_CL    :Result:=[imGrad,imMinLod];
+  IMAGE_SAMPLE_C_CD     :Result:=[imDref,imGrad];
+  IMAGE_SAMPLE_C_CD_CL  :Result:=[imDref,imGrad,imMinLod];
+  IMAGE_SAMPLE_CD_O     :Result:=[imGrad,imOffset];
+  IMAGE_SAMPLE_CD_CL_O  :Result:=[imGrad,imMinLod,imOffset];
+  IMAGE_SAMPLE_C_CD_O   :Result:=[imDref,imGrad,imOffset];
+  IMAGE_SAMPLE_C_CD_CL_O:Result:=[imDref,imGrad,imMinLod,imOffset];
+  else
+    Result:=[];
+ end;
+end;
+
+procedure TEmit_MIMG.DistribDmask(dst:PsrRegNode;info:PsrImageInfo); //result
 var
  pSlot:PsrRegSlot;
  i,d:Byte;
@@ -386,7 +461,21 @@ begin
    pSlot:=get_vdst8(FSPI.MIMG.VDATA+d);
    Inc(d);
    Assert(pSlot<>nil);
-   OpExtract(line,pSlot^.New(line,telem),dst,i);
+
+   if (info^.tinfo.Depth=1) then
+   begin
+    if (i=0) then
+    begin
+     MakeCopy(pSlot,dst);
+    end else
+    begin
+     SetConst_i(pSlot,info^.dtype,0);
+    end;
+   end else
+   begin
+    OpExtract(line,pSlot^.New(line,info^.dtype),dst,i);
+   end;
+
   end;
 end;
 
@@ -564,7 +653,13 @@ begin
 
  cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
 
- dst:=NewReg(info^.dtype.AsVector(4));
+ if (info^.tinfo.Depth=1) then
+ begin
+  dst:=NewReg(info^.dtype);
+ end else
+ begin
+  dst:=NewReg(info^.dtype.AsVector(4));
+ end;
 
  roffset:=0;
 
@@ -633,7 +728,7 @@ begin
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
- DistribDmask(dst,info^.dtype);
+ DistribDmask(dst,info);
 end;
 
 procedure TEmit_MIMG.emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
@@ -679,7 +774,7 @@ begin
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
- DistribDmask(dst,info^.dtype);
+ DistribDmask(dst,info);
 end;
 
 procedure TEmit_MIMG.emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
@@ -752,6 +847,11 @@ begin
  end;
 
  info:=GetImageInfo(pLayout^.pData);
+
+ if (imDref in GetImageMods(FSPI.MIMG.OP)) then
+ begin
+  info.tinfo.Depth:=1;
+ end;
 
  Case FSPI.MIMG.OP of
   IMAGE_SAMPLE..IMAGE_SAMPLE_C_LZ_O:  //sampled

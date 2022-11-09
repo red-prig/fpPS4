@@ -338,9 +338,12 @@ begin
  rp:='';
  Result:=parse_filename(path,rp);
 
- if (Result<>0) then
- begin
-  Exit(-EACCES);
+ Case Result of
+  PT_ROOT:Exit(-EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(-EACCES); //TODO
+  else
+          Exit(-EACCES);
  end;
 
  wp:=UTF8Decode(rp);
@@ -1037,9 +1040,19 @@ begin
  rp:='';
  Result:=parse_filename(path,rp);
 
- if (Result<>0) then
- begin
-  Exit(EACCES);
+ Case Result of
+  PT_ROOT:Exit(-EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :
+    begin
+     stat^.st_dev  :=1;
+     stat^.st_rdev :=1;
+     stat^.st_mode :=S_IFCHR;
+     stat^.st_nlink:=1;
+     Exit(0);
+    end
+  else
+          Exit(-EACCES);
  end;
 
  hfi:=Default(WIN32_FILE_ATTRIBUTE_DATA);
@@ -1114,9 +1127,12 @@ begin
  fn:='';
  Result:=parse_filename(path,fn);
 
- if (Result<>0) then
- begin
-  Exit(EACCES);
+ Case Result of
+  PT_ROOT:Exit(-EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(-EACCES);
+  else
+          Exit(-EACCES);
  end;
 
  err:=SwCreateDir(fn);
@@ -1192,9 +1208,12 @@ begin
  Result:=parse_filename(path,fn);
  _sig_unlock;
 
- if (Result<>0) then
- begin
-  Exit(_set_sce_errno(px2sce(EACCES)));
+ Case Result of
+  PT_ROOT:Exit(_set_sce_errno(0));
+  PT_FILE:;
+  PT_DEV :Exit(_set_sce_errno(0));
+  else
+          Exit(_set_sce_errno(px2sce(EACCES)));
  end;
 
  if FileExists(fn) or DirectoryExists(fn) then
