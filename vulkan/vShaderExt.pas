@@ -835,6 +835,7 @@ begin
 
     B[p]:=Default(TVkPushConstantRange);
     B[p].stageFlags:=ord(FShaders[i].FStage);
+    B[p].offset    :=FShaders[i].FPushConst.offset;
     B[p].size      :=FShaders[i].FPushConst.size;
 
     Inc(p);

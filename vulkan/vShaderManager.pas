@@ -47,7 +47,16 @@ type
   Destructor Destroy; override;
  end;
 
-function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
+ PPushConstAllocator=^TPushConstAllocator;
+ TPushConstAllocator=object
+  size:DWORD;
+  offset:DWORD;
+  Procedure Init;
+  function  GetAvailable:DWORD;
+  procedure Apply(i:DWORD);
+ end;
+
+function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
 
 implementation
@@ -192,7 +201,27 @@ begin
  FileClose(F);
 end;
 
-function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS):TMemoryStream;
+procedure TPushConstAllocator.Init;
+begin
+ Size:=limits.maxPushConstantsSize;
+ offset:=0;
+end;
+
+function TPushConstAllocator.GetAvailable:DWORD;
+begin
+ Result:=0;
+ if (offset<Size) then
+ begin
+  Result:=Size-offset;
+ end;
+end;
+
+procedure TPushConstAllocator.Apply(i:DWORD);
+begin
+ offset:=offset+i;
+end;
+
+function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TMemoryStream;
 var
  SprvEmit:TSprvEmit;
 begin
@@ -227,12 +256,16 @@ begin
 
  SprvEmit.Config.maxUniformBufferRange          :=0; // $FFFF
  SprvEmit.Config.PushConstantsOffset            :=0; // 0
- SprvEmit.Config.maxPushConstantsSize           :=limits.maxPushConstantsSize; // 128
  SprvEmit.Config.minStorageBufferOffsetAlignment:=limits.minStorageBufferOffsetAlignment; // $10
  SprvEmit.Config.minUniformBufferOffsetAlignment:=limits.minUniformBufferOffsetAlignment; // $100
 
- SprvEmit.Config.maxPushConstantsSize:=16*4;
- SprvEmit.Config.maxPushConstantsSize:=12;
+ SprvEmit.Config.maxPushConstantsSize:=0;
+ if (pc<>nil) then
+ begin
+  SprvEmit.Config.PushConstantsOffset :=pc^.offset;
+  SprvEmit.Config.maxPushConstantsSize:=pc^.GetAvailable;
+ end;
+
  //SprvEmit.Config.UseVertexInput:=False;
 
  if (SprvEmit.ParseStage(pData)>1) then
@@ -253,7 +286,7 @@ begin
  //DumpSpv(FStage,Result);
 end;
 
-function _FetchShader(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
+function _FetchShader(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 var
  F:TShaderDataKey;
 
@@ -296,7 +329,20 @@ begin
    FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData);
    if ch.FResult then
    begin
-    Break;
+
+    if (FShader.FPushConst.size<>0) and (pc<>nil) then
+    begin
+     if (FShader.FPushConst.offset=pc^.offset) then
+     if (FShader.FPushConst.size<=pc^.GetAvailable) then
+     begin
+      pc^.Apply(FShader.FPushConst.size);
+      Break;
+     end;
+    end else
+    begin
+     Break;
+    end;
+
    end else
    begin
     FShader:=nil;
@@ -306,12 +352,19 @@ begin
   if (FShader=nil) then
   begin
 
-   M:=ParseShader(FStage,pData,GPU_REGS);
+   M:=ParseShader(FStage,pData,GPU_REGS,pc);
    Assert(M<>nil);
 
    FShader:=TvShaderExt.Create;
    FShader.FDescSetId:=FDescSetId;
    FShader.LoadFromStream(M);
+
+   if (FShader.FPushConst.size<>0) and (pc<>nil) then
+   begin
+    FShader.FPushConst.offset:=pc^.offset;
+    Dec(FShader.FPushConst.size,pc^.offset);
+    pc^.Apply(FShader.FPushConst.size);
+   end;
 
    M.Free;
 
@@ -350,7 +403,7 @@ begin
  }
 
 
-  M:=ParseShader(FStage,pData,GPU_REGS);
+  M:=ParseShader(FStage,pData,GPU_REGS,pc);
   Assert(M<>nil);
 
   FShader:=TvShaderExt.Create;
@@ -359,6 +412,12 @@ begin
 
   M.Free;
 
+  if (FShader.FPushConst.size<>0) and (pc<>nil) then
+  begin
+   FShader.FPushConst.offset:=pc^.offset;
+   Dec(FShader.FPushConst.size,pc^.offset);
+   pc^.Apply(FShader.FPushConst.size);
+  end;
 
   SetLength(t.FShaders,1);
   t.FShaders[0]:=FShader;
@@ -369,7 +428,7 @@ begin
  Result:=FShader;
 end;
 
-function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS):TvShaderExt;
+function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 var
  pData:PDWORD;
 begin
@@ -387,7 +446,7 @@ begin
 
  FShaderCacheSet.Lock_wr;
 
- Result:=_FetchShader(FStage,pData,FDescSetId,GPU_REGS);
+ Result:=_FetchShader(FStage,pData,FDescSetId,GPU_REGS,pc);
 
  FShaderCacheSet.Unlock;
 end;

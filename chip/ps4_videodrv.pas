@@ -1708,6 +1708,8 @@ var
 
  Event:TvEvent2;
 
+ pa:TPushConstAllocator;
+
 begin
  Result:=True;
 
@@ -2016,9 +2018,20 @@ begin
   FRenderCmd:=LastRenderCmd;
  end;
 
+ pa.Init;
+ //
+
+ {$ifdef ww}Writeln('[FPSShader]');{$endif}
+ FPSShader:=FetchShader(vShaderStagePs,1,GPU_REGS,@pa);
+ //if (FPSShader=nil) then Exit;
+
+ //
+
  {$ifdef ww}Writeln('[FVSShader]');{$endif}
- FVSShader:=FetchShader(vShaderStageVs,0,GPU_REGS);
+ FVSShader:=FetchShader(vShaderStageVs,0,GPU_REGS,@pa);
  if (FVSShader=nil) then Exit(False);
+
+ //
 
  FAttrBuilder:=Default(TvAttrBuilder);
  FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,@GPU_REGS.SPI.VS.USER_DATA);
@@ -2034,9 +2047,7 @@ begin
   end;
  end;
 
- {$ifdef ww}Writeln('[FPSShader]');{$endif}
- FPSShader:=FetchShader(vShaderStagePs,1,GPU_REGS);
- //if (FPSShader=nil) then Exit;
+ //
 
  FShadersKey:=Default(TvShadersKey);
  FShadersKey.SetVSShader(FVSShader);
@@ -2044,6 +2055,8 @@ begin
 
  FShaderGroup:=FetchShaderGroup(@FShadersKey);
  Assert(FShaderGroup<>nil);
+
+ //
 
  FRenderCmd.FPipeline.FShaderGroup:=FShaderGroup;
 
@@ -2119,18 +2132,6 @@ begin
 
  //
 
- if (FVSShader.FPushConst.size<>0) then
- begin
-  pData:=FVSShader.GetPushConstData(@GPU_REGS.SPI.VS.USER_DATA);
-
-  if (pData<>nil) then
-  GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                 ord(VK_SHADER_STAGE_VERTEX_BIT),
-                                 0,FVSShader.FPushConst.size,
-                                 pData);
-
- end;
-
  if (FPSShader<>nil) then
  if (FPSShader.FPushConst.size<>0) then
  begin
@@ -2139,8 +2140,20 @@ begin
   if (pData<>nil) then
   GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
                                  ord(VK_SHADER_STAGE_FRAGMENT_BIT),
-                                 0,FPSShader.FPushConst.size,
+                                 FPSShader.FPushConst.offset,FPSShader.FPushConst.size,
                                  pData);
+ end;
+
+ if (FVSShader.FPushConst.size<>0) then
+ begin
+  pData:=FVSShader.GetPushConstData(@GPU_REGS.SPI.VS.USER_DATA);
+
+  if (pData<>nil) then
+  GFXRing.CmdBuffer.PushConstant(VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                 ord(VK_SHADER_STAGE_VERTEX_BIT),
+                                 FVSShader.FPushConst.offset,FVSShader.FPushConst.size,
+                                 pData);
+
  end;
 
  if (Length(FAttrBuilder.FBindExt)<>0) then
@@ -2248,6 +2261,9 @@ var
  FShaderGroup:TvShaderGroup;
 
  FComputePipeline:TvComputePipeline2;
+
+ pa:TPushConstAllocator;
+
 begin
  Result:=False;
 
@@ -2269,7 +2285,9 @@ begin
  GFXRing.AllocCmdBuffer;
  GFXRing.CmdBuffer.EndRenderPass;
 
- FCSShader:=FetchShader(vShaderStageCs,0,GPU_REGS);
+ pa.Init;
+
+ FCSShader:=FetchShader(vShaderStageCs,0,GPU_REGS,@pa);
  if (FCSShader=nil) then Exit;
 
 
