@@ -22,7 +22,8 @@ type
  wsem_node=packed record
   pNext,pPrev:pwsem_node;
   //
-  thread:THandle;
+  thread:Pointer;
+  event:THandle;
   Count:Integer;
   ret:Integer;
  end;
@@ -291,8 +292,10 @@ begin
  end;
 end;
 
-procedure _apc_null(dwParam:PTRUINT); stdcall;
+procedure _wakeup(node:pwsem_node;ret:Integer);
 begin
+ store_seq_cst(node^.ret,ret);
+ SetEvent(node^.event);
 end;
 
 function _sem_destroy(sem:PSceKernelSema):Integer;
@@ -321,8 +324,7 @@ begin
   if (node^.ret=1) then
    begin
     node^.Count:=0;
-    node^.ret:=EACCES;
-    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+    _wakeup(node,EACCES);
    end;
   node:=node^.pNext;
  end;
@@ -397,7 +399,8 @@ begin
  end;
 
  node:=Default(wsem_node);
- node.thread:=t^.handle;
+ node.thread:=t;
+ node.event :=CreateEvent(nil,True,false,nil);
  node.count :=count;
  node.ret   :=1;
  sv^.list.Insert(@node);
@@ -419,7 +422,21 @@ begin
   begin
    Result:=node.ret;
    Break;
+  end else
+  if (Result=EINTR) then
+  begin
+   Break;
   end;
+
+  spin_lock(sv^.vlock);
+   if (sv^.value>=count) then
+   begin
+    Dec(sv^.value,count);
+    spin_unlock(sv^.vlock);
+    sem_leave(sv);
+    Exit(0);
+   end;
+  spin_unlock(sv^.vlock);
 
   if (pTimeout<>nil) then
   begin
@@ -429,10 +446,32 @@ begin
     Break;
    end;
 
+   QTIME:=0;
    SwSaveTime(QTIME);
 
    timeout:=-timeout;
-   SwDelayExecution(True,@timeout);
+  end;
+
+  Case SwWaitForSingleObject(node.event,@timeout,True) of
+   STATUS_SUCCESS:
+    begin
+     Result:=0;
+    end;
+   STATUS_USER_APC,
+   STATUS_KERNEL_APC,
+   STATUS_ALERTED: //signal interrupt
+    begin
+     Result:=EINTR;
+    end;
+   else
+    begin
+     Result:=ETIMEDOUT;
+     Break;
+    end;
+  end;
+
+  if (pTimeout<>nil) then
+  begin
    timeout:=-timeout;
 
    passed:=SwTimePassedUnits(QTIME);
@@ -446,9 +485,6 @@ begin
     timeout:=timeout-passed;
    end;
 
-  end else
-  begin
-   SwDelayExecution(True,@timeout);
   end;
 
  until false;
@@ -468,6 +504,8 @@ begin
  spin_lock(sv^.vlock);
    sv^.list.Remove(@node);
  spin_unlock(sv^.vlock);
+
+ CloseHandle(node.event);
 
  //Writeln(GetCurrentThreadId,':<sem_wait:',sv^.name,' count:',count,' value:',sv^.value);
  sem_leave(sv);
@@ -527,8 +565,7 @@ begin
     begin
      Dec(value,node^.Count);
      node^.Count:=0;
-     node^.ret:=0;
-     NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+     _wakeup(node,0);
      if (value=0) then Break;
     end;
    end;
@@ -626,10 +663,14 @@ var
 begin
  if (sem=nil) or (max<=0) or (init<0) then Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
  sv:=sem^;
+
  _sig_lock;
- Result:=px2sce(sem_impl_init(sem,@sv,max,init));
- _set_sce_errno(Result);
+ Result:=sem_impl_init(sem,@sv,max,init);
  _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+
  if (Result<>0) then Exit;
  if (name<>nil) then MoveChar0(name^,sv^.name,32);
 end;
@@ -637,9 +678,11 @@ end;
 function ps4_sceKernelDeleteSema(sem:SceKernelSema):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=px2sce(_sem_destroy(@sem));
- _set_sce_errno(Result);
+ Result:=_sem_destroy(@sem);
  _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 //typedef unsigned int SceKernelUseconds;
@@ -647,21 +690,28 @@ function ps4_sceKernelWaitSema(sem:SceKernelSema;Count:Integer;pTimeout:PDWORD):
 var
  t:QWORD;
 begin
- if (pTimeout=nil) then
- begin
-  _sig_lock;
-  Result:=px2sce(_sem_wait(@sem,Count,nil));
-  _set_sce_errno(Result);
-  _sig_unlock;
- end else
- begin
-  t:=_usec2nsec(pTimeout^);
-  _sig_lock;
-  Result:=px2sce(_sem_wait(@sem,Count,@t));
-  _set_sce_errno(Result);
-  _sig_unlock;
-  pTimeout^:=dwMilliSecs(_nsec2usec(t));
- end;
+ repeat
+
+  if (pTimeout=nil) then
+  begin
+   _sig_lock;
+   Result:=_sem_wait(@sem,Count,nil);
+   _sig_unlock;
+  end else
+  begin
+   t:=_usec2nsec(pTimeout^);
+
+   _sig_lock;
+   Result:=_sem_wait(@sem,Count,@t);
+   _sig_unlock;
+
+   pTimeout^:=dwMilliSecs(_nsec2usec(t));
+  end;
+
+ until (Result<>EINTR);
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelSignalSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
@@ -669,20 +719,22 @@ begin
  _sig_lock;
  Result:=_sem_post(@sem,Count);
  _sig_unlock;
- if (Result=EOVERFLOW) then Result:=EINVAL;
+
+ _set_errno(Result);
  Result:=px2sce(Result);
- _set_sce_errno(Result);
 end;
 
 function ps4_sceKernelPollSema(sem:SceKernelSema;Count:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=px2sce(_sem_trywait(@sem,count));
- _set_sce_errno(Result);
+ Result:=_sem_trywait(@sem,count);
  _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
-function ps4_sceKernelCancelSema(sem:SceKernelSema;setCount:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
+function _sceKernelCancelSema(sem:SceKernelSema;setCount:Integer;threads:PInteger):Integer;
 var
  sv:SceKernelSema;
  node:pwsem_node;
@@ -696,7 +748,7 @@ begin
  begin
   spin_unlock(sv^.vlock);
   sem_leave(sv);
-  Exit(_set_sce_errno(SCE_KERNEL_ERROR_EINVAL));
+  Exit(EINVAL);
  end;
 
  sv^.value:=setCount;
@@ -709,8 +761,7 @@ begin
    begin
     Inc(reset);
     node^.Count:=0;
-    node^.ret:=ECANCELED;
-    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+    _wakeup(node,ECANCELED);
    end;
   node:=node^.pNext;
  end;
@@ -722,10 +773,17 @@ begin
 
  spin_unlock(sv^.vlock);
  sem_leave(sv);
-
- _set_sce_errno(Result);
 end;
 
+function ps4_sceKernelCancelSema(sem:SceKernelSema;setCount:Integer;threads:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceKernelCancelSema(sem,setCount,threads);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
 
 end.
 

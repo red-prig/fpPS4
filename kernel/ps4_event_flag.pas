@@ -33,7 +33,8 @@ type
  wef_node=packed record
   pNext,pPrev:pwef_node;
   //
-  thread:THandle;
+  thread:Pointer;
+  event:THandle;
   bitPattern:QWORD;
   ResultPat:QWORD;
   waitMode:DWORD;
@@ -310,7 +311,8 @@ begin
 
  insert:=False;
  node:=Default(wef_node);
- node.thread    :=t^.handle;
+ node.thread    :=t;
+ node.event     :=CreateEvent(nil,True,false,nil);
  node.bitPattern:=bitPattern;
  node.waitMode  :=waitMode;
  node.ret       :=1;
@@ -372,7 +374,28 @@ begin
    SwSaveTime(QTIME);
 
    timeout:=-timeout;
-   Result:=SwDelayExecution(True,@timeout);
+  end;
+
+  Case SwWaitForSingleObject(node.event,@timeout,True) of
+   STATUS_SUCCESS:
+    begin
+     Result:=0;
+    end;
+   STATUS_USER_APC,
+   STATUS_KERNEL_APC,
+   STATUS_ALERTED: //signal interrupt
+    begin
+     Result:=EINTR;
+    end;
+   else
+    begin
+     Result:=ETIMEDOUT;
+     Break;
+    end;
+  end;
+
+  if (pTimeout<>nil) then
+  begin
    timeout:=-timeout;
 
    passed:=SwTimePassedUnits(QTIME);
@@ -385,24 +408,6 @@ begin
    begin
     timeout:=timeout-passed;
    end;
-
-  end else
-  begin
-   //timeout:=-10000;
-   Result:=SwDelayExecution(True,@timeout);
-  end;
-
-  Case Result of
-   STATUS_USER_APC,
-   STATUS_KERNEL_APC,
-   STATUS_ALERTED: //signal interrupt
-    begin
-     Result:=EINTR;
-    end;
-   else
-    begin
-     Result:=ETIMEDOUT;
-    end;
   end;
 
  until false;
@@ -425,6 +430,8 @@ begin
     ef^.list.Remove(@node);
   spin_unlock(ef^.lock_list);
  end;
+
+ CloseHandle(node.event);
 
  //Writeln('<sceKernelWaitEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
@@ -450,8 +457,10 @@ end;
 
 //
 
-procedure _apc_null(dwParam:PTRUINT); stdcall;
+procedure _wakeup(node:pwef_node;ret:Integer);
 begin
+ store_seq_cst(node^.ret,ret);
+ SetEvent(node^.event);
 end;
 
 function _sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer;
@@ -481,9 +490,8 @@ begin
      store_seq_cst(ef^.bitPattern,bits);
     end;
     node^.ResultPat:=prev;
-    store_seq_cst(node^.ret,0);
 
-    NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+    _wakeup(node,0);
    end;
   node:=node^.pNext;
  end;
@@ -559,9 +567,8 @@ begin
   if (node^.ret=1) then
   begin
    node^.ResultPat:=ef^.bitPattern;
-   store_seq_cst(node^.ret,EACCES);
 
-   NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+   _wakeup(node,EACCES);
   end;
   node:=node^.pNext;
  end;
@@ -610,9 +617,8 @@ begin
   if (node^.ret=1) then
   begin
    node^.ResultPat:=ef^.bitPattern;
-   store_seq_cst(node^.ret,ECANCELED);
 
-   NtQueueApcThread(node^.thread,@_apc_null,0,nil,0);
+   _wakeup(node,ECANCELED);
 
    Inc(count);
   end;
