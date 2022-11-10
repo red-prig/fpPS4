@@ -333,21 +333,23 @@ begin
  Result:=0;
  repeat
 
-  if (node.ret<>1) then //is signaled
-  begin
-   if (pResultPat<>nil) then
-   begin
-    pResultPat^:=node.ResultPat;
-   end;
-   Result:=node.ret;
-   Break;
-  end else
-  if (Result=EINTR) then
-  begin
-   Break;
-  end;
-
   spin_lock(ef^.lock_list);
+    if (node.ret<>1) then //is signaled
+    begin
+     if (pResultPat<>nil) then
+     begin
+      pResultPat^:=node.ResultPat;
+     end;
+     Result:=node.ret;
+     spin_unlock(ef^.lock_list);
+     Break;
+    end else
+    if (Result=EINTR) then
+    begin
+     spin_unlock(ef^.lock_list);
+     Break;
+    end;
+
     if _test_and_set(ef,bitPattern,waitMode,pResultPat) then
     begin
      store_seq_cst(node.ret,0);

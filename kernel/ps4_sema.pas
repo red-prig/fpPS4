@@ -418,17 +418,19 @@ begin
 
  repeat
 
-  if (node.ret<>1) then //is signaled
-  begin
-   Result:=node.ret;
-   Break;
-  end else
-  if (Result=EINTR) then
-  begin
-   Break;
-  end;
-
   spin_lock(sv^.vlock);
+   if (node.ret<>1) then //is signaled
+   begin
+    Result:=node.ret;
+    spin_unlock(sv^.vlock);
+    Break;
+   end else
+   if (Result=EINTR) then
+   begin
+    spin_unlock(sv^.vlock);
+    Break;
+   end;
+
    if (sv^.value>=count) then
    begin
     Dec(sv^.value,count);
