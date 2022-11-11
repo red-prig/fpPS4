@@ -10,7 +10,6 @@ uses
  SysUtils,
  RWLock,
  sys_kernel,
- sys_time,
  sys_fd;
 
 function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
@@ -33,8 +32,10 @@ type
  end;
 
  TDevStd=class(TDevFile)
-  Text:PText;
-  cache:TMemoryStream;
+  var
+   Text:PText;
+   lock:TRWLock;
+   cache:RawByteString;
   Constructor Create(t:PText);
   Destructor  Destroy; override;
   function read  (data:Pointer;size:Int64):Int64;        override;
@@ -155,38 +156,101 @@ type
 begin
  Handle:=PTextRec(t)^.Handle;
  Text:=t;
- cache:=TMemoryStream.Create
+ rwlock_init(lock);
+ cache:='';
 end;
 
 Destructor TDevStd.Destroy;
 begin
- FreeAndNil(cache);
+ rwlock_destroy(lock);
+ cache:='';
 end;
 
 function TDevStd.read  (data:Pointer;size:Int64):Int64;
+var
+ S:RawByteString;
 begin
- //
+ rwlock_wrlock(lock);
+  if (Length(cache)<>0) then
+  begin
+   if (size>Length(cache)) then
+   begin
+    size:=Length(cache);
+   end;
+
+   Move(PChar(cache)^,data^,size);
+   Delete(cache,1,size);
+
+   rwlock_unlock(lock);
+   Exit(size);
+  end;
+ rwlock_unlock(lock);
+
+ S:='';
+ System.ReadLn(Text^,S);
+ S:=S+#10;
+
+ if (Length(S)>size) then
+ begin
+  Move(PChar(S)^,data^,size);
+  Result:=size;
+
+  Delete(S,1,size);
+
+  rwlock_wrlock(lock);
+   cache:=cache+S;
+  rwlock_unlock(lock);
+ end else
+ begin
+  size:=Length(S);
+  Move(PChar(S)^,data^,size);
+  Result:=size;
+ end;
 end;
 
 function TDevStd.pread (data:Pointer;size,offset:Int64):Int64;
 begin
- //
+ Result:=read(data,size);
 end;
 
 function TDevStd.readv (vector:p_iovec;count:Integer):Int64;
+var
+ i,n:Integer;
 begin
- //
+ Result:=0;
+
+ For i:=0 to count-1 do
+ begin
+  n:=read(vector[i].iov_base,vector[i].iov_len);
+
+  if (n>0) then
+  begin
+   Result:=Result+n;
+   if (n<vector[i].iov_len) then Exit;
+  end else
+  begin
+   Exit(-EIO);
+   Break;
+  end;
+
+ end;
 end;
 
 function TDevStd.write (data:Pointer;size:Int64):Int64;
+var
+ S:RawByteString;
 begin
- //
+ SetString(S,data,size);
+ System.Write(Text^,S);
+ Result:=size;
 end;
 
 function TDevStd.pwrite(data:Pointer;size,offset:Int64):Int64;
 begin
- //
+ Result:=write(data,size);
 end;
+
+//
 
 end.
 

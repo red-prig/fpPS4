@@ -11,6 +11,7 @@ uses
   sys_fd,
   sys_file,
   sys_dev,
+  sys_dir,
   Classes,
   SysUtils;
 
@@ -1036,7 +1037,7 @@ begin
   PT_FILE:;
   PT_DEV :Exit(_set_sce_errno(0));
   else
-          Exit(_set_sce_errno(px2sce(EACCES)));
+          Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
  end;
 
  if FileExists(fn) or DirectoryExists(fn) then

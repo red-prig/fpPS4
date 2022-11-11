@@ -379,6 +379,9 @@ begin
       end;
      end;
 
+     stat^.st_dev     :=fd;
+     stat^.st_rdev    :=fd;
+
      stat^.st_mode    :=file_attr_to_st_mode(hfi.dwFileAttributes);
      stat^.st_size    :=hfi.nFileSizeLow or (QWORD(hfi.nFileSizeHigh) shl 32);
      stat^.st_nlink   :=Word(hfi.nNumberOfLinks);

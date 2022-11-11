@@ -196,13 +196,14 @@ type
   var
    fd:Integer;
    Handle:THandle;
-  function lseek (offset:Int64;whence:Integer):Int64;    virtual;
-  function read  (data:Pointer;size:Int64):Int64;        virtual;
-  function pread (data:Pointer;size,offset:Int64):Int64; virtual;
-  function readv (vector:p_iovec;count:Integer):Int64;   virtual;
-  function write (data:Pointer;size:Int64):Int64;        virtual;
-  function pwrite(data:Pointer;size,offset:Int64):Int64; virtual;
-  function fstat (stat:PSceKernelStat):Integer;          virtual;
+  function lseek (offset:Int64;whence:Integer):Int64;                  virtual;
+  function read  (data:Pointer;size:Int64):Int64;                      virtual;
+  function pread (data:Pointer;size,offset:Int64):Int64;               virtual;
+  function readv (vector:p_iovec;count:Integer):Int64;                 virtual;
+  function write (data:Pointer;size:Int64):Int64;                      virtual;
+  function pwrite(data:Pointer;size,offset:Int64):Int64;               virtual;
+  function fstat (stat:PSceKernelStat):Integer;                        virtual;
+  function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; virtual;
  end;
 
 function _sys_get_osfhandle(fd:Integer):THandle;
@@ -249,6 +250,11 @@ end;
 function TCustomFile.fstat (stat:PSceKernelStat):Integer;
 begin
  Result:=-ENOTSUP;
+end;
+
+function TCustomFile.getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
+begin
+ Result:=-EINVAL;
 end;
 
 //
