@@ -487,7 +487,7 @@ begin
 end;
 
 initialization
- FAjmMap:=TIntegerHandles.Create;
+ FAjmMap:=TIntegerHandles.Create(1);
  ps4_app.RegistredPreLoad('libSceAjm.prx',@Load_libSceAjm);
 
 end.

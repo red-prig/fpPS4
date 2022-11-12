@@ -12,7 +12,9 @@ uses
  sys_kernel,
  sys_fd;
 
-function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
+procedure _sys_dev_init;
+function  _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
+function  _sys_dev_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 
 implementation
 
@@ -45,6 +47,13 @@ type
   function pwrite(data:Pointer;size,offset:Int64):Int64; override;
  end;
 
+procedure _sys_dev_init;
+begin
+ _sys_dev_open('stdin' ,O_RDONLY,0); //0
+ _sys_dev_open('stdout',O_WRONLY,0); //1
+ _sys_dev_open('stderr',O_WRONLY,0); //2
+end;
+
 function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
 var
  f:TCustomFile;
@@ -68,11 +77,21 @@ begin
 
  if (Result<0) then
  begin
-  f.Release;
+  f.Destroy;
  end else
  begin
-  f.Destroy;
+  f.Release;
  end;
+end;
+
+//
+
+function _sys_dev_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+begin
+ Result:=0;
+ stat^:=Default(SceKernelStat);
+ stat^.st_mode :=S_IFCHR;
+ stat^.st_nlink:=1;
 end;
 
 //

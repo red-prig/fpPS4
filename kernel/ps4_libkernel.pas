@@ -40,7 +40,8 @@ uses
  sys_path,
  sys_kernel,
  sys_pthread,
- sys_signal;
+ sys_signal,
+ sys_dev;
 
 type
  pSceKernelUuid=^SceKernelUuid;
@@ -868,6 +869,13 @@ begin
  lib^.set_proc($E1F539CAF3A4546E,@ps4_sceSysmoduleGetModuleInfoForUnwind);
 end;
 
+procedure _kernel_init;
+begin
+ _mem_init;
+ _sys_dev_init;
+ ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
+end;
+
 function Load_libkernel(Const name:RawByteString):TElf_node;
 var
  lib,px:PLIBRARY;
@@ -1255,6 +1263,9 @@ begin
  lib^.set_proc($9CA5A2FCDD87055E,@ps4_sceKernelPwrite);
  lib^.set_proc($901C023EC617FE6E,@ps4_sceKernelFstat);
 
+ lib^.set_proc($B5A4568532454E01,@ps4_sceKernelGetdirentries);
+ lib^.set_proc($8F6008A92A893F4C,@ps4_sceKernelGetdents);
+
  lib^.set_proc($C2E0ABA081A3B768,@ps4_open);  //open
  lib^.set_proc($E9CDEB09513F7D35,@ps4_open);  //_open
 
@@ -1277,6 +1288,9 @@ begin
  lib^.set_proc($0B6909FDBC92E6B3,@ps4_pwrite); //pwrite
 
  lib^.set_proc($9AA40C875CCF3D3F,@ps4_fstat);
+
+ lib^.set_proc($7F4F4ABC83F2FD06,@ps4_getdirentries);
+ lib^.set_proc($D86EA2EA13085146,@ps4_getdents);
 
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
@@ -1301,8 +1315,7 @@ begin
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
  //
- ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
- _mem_init;
+ _kernel_init;
 end;
 
 initialization

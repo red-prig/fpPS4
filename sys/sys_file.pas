@@ -14,6 +14,7 @@ uses
  sys_fd;
 
 function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_file_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 
 implementation
 
@@ -75,9 +76,8 @@ begin
  end;
 end;
 
-function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
+function __sys_file_open(const path:RawByteString;flags,mode:Integer;var f:TFile):Integer;
 var
- f:TFile;
  h:THandle;
 
  err:DWORD;
@@ -124,16 +124,40 @@ begin
 
  f:=TFile.Create;
  f.Handle:=h;
+end;
+
+function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
+var
+ f:TFile;
+begin
+ f:=nil;
+ Result:=__sys_file_open(path,flags,mode,f);
+ if (Result<>0) then Exit;
 
  Result:=_sys_open_fd(f);
 
  if (Result<0) then
  begin
-  f.Release;
+  f.Destroy;
  end else
  begin
-  f.Destroy;
+  f.Release;
  end;
+end;
+
+//
+
+function _sys_file_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+var
+ f:TFile;
+begin
+ f:=nil;
+ Result:=__sys_file_open(path,O_RDONLY,0,f);
+ if (Result<>0) then Exit(-Result);
+
+ Result:=f.fstat(stat);
+
+ f.Destroy;
 end;
 
 //

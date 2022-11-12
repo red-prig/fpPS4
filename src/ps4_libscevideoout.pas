@@ -1856,7 +1856,7 @@ end;
 
 initialization
  FQueueVideoOut.Create;
- FVideoOutMap:=TIntegerHandles.Create;
+ FVideoOutMap:=TIntegerHandles.Create(1);
  ps4_app.RegistredPreLoad('libSceVideoOut.prx',@Load_libSceVideoOut);
 
 end.

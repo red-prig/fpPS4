@@ -1342,7 +1342,7 @@ initialization
  ps4_app.files.Init;
  ps4_app.mods.Init;
  ps4_app.libs.Init;
- ps4_app.elfs:=TIntegerHandles.Create;
+ ps4_app.elfs:=TIntegerHandles.Create(1);
 
 end.
 

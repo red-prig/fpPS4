@@ -56,11 +56,6 @@ procedure safe_move_ptr(const src;var dst);
 function  safe_test(var src:DWORD;value:DWORD):Boolean;
 function  safe_str(P:PChar):shortstring;
 
-
-function _open_osfhandle(h:THandle;flags:Integer):Integer; cdecl; external 'msvcrt';
-function _get_osfhandle(fd:Integer):THandle; cdecl; external 'msvcrt';
-function _close(fd:Integer):Integer; cdecl; external 'msvcrt';
-
 function MapViewOfFileEx(hFileMappingObject:HANDLE;
                          dwDesiredAccess:DWORD;
                          dwFileOffsetHigh:DWORD;

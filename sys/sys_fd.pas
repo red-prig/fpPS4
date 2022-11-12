@@ -208,6 +208,7 @@ type
 
 function _sys_get_osfhandle(fd:Integer):THandle;
 function _sys_open_fd(f:TCustomFile):Integer;
+function _sys_acqure_fd(fd:Integer):TCustomFile;
 function _sys_close(fd:Integer):Integer;
 
 implementation
@@ -284,6 +285,11 @@ begin
  end;
 end;
 
+function _sys_acqure_fd(fd:Integer):TCustomFile;
+begin
+ Result:=TCustomFile(FileHandles.Acqure(fd));
+end;
+
 function _sys_close(fd:Integer):Integer;
 begin
  Result:=0;
@@ -294,8 +300,7 @@ end;
 //
 
 initialization
- FileHandles:=TIntegerHandles.Create;
- FileHandles.min_key:=0;
+ FileHandles:=TIntegerHandles.Create(0);
 
 end.
 

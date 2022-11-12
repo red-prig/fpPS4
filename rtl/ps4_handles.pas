@@ -32,7 +32,6 @@ type
  TIntegerHandles=class
   private
    Const
-    def_min_key=1;
     def_max_key=$7FFFFFFF;
    var
     FStub:TSTUB_HAMT32;
@@ -41,7 +40,7 @@ type
     FLock:TRWLock;
   public
    min_key,max_key:Integer;
-   constructor Create;
+   constructor Create(min:Integer);
    destructor  Destroy; override;
    function    New(H:TClassHandle;var OutKey:Integer):Boolean;
    function    Acqure(const Key:Integer):TClassHandle;
@@ -85,11 +84,11 @@ begin
  rwlock_unlock(FLock);
 end;
 
-constructor TIntegerHandles.Create;
+constructor TIntegerHandles.Create(min:Integer);
 begin
- min_key:=def_min_key;
+ min_key:=min;
  max_key:=def_max_key;
- FPos:=def_min_key;
+ FPos:=min;
  FHAMT:=@FStub;
  rwlock_init(FLock);
 end;

@@ -132,7 +132,7 @@ begin
   _sig_unlock;
   if (Result<>0) then Exit(SCE_AUDIO_OUT_ERROR_TRANS_EVENT);
   _sig_lock;
-  HAudioOuts:=TIntegerHandles.Create;
+  HAudioOuts:=TIntegerHandles.Create(1);
   _sig_unlock;
   fetch_add(_lazy_wait,1);
  end else

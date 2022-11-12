@@ -88,6 +88,7 @@ function _VirtualQuery   (addr:Pointer;paddr:PPointer;psize:Pptruint;pprots,pfla
 implementation
 
 uses
+ sys_fd,
  sys_kernel;
 
 const
@@ -236,7 +237,7 @@ begin
  Result:=0;
  if (Addr=nil) then Exit(-1);
 
- h:=_get_osfhandle(fd);
+ h:=_sys_get_osfhandle(fd);
  if (h=INVALID_HANDLE_VALUE) then
  begin
   Exit(GetLastError);

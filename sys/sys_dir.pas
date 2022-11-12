@@ -131,6 +131,7 @@ begin
    ERROR_BUFFER_OVERFLOW  :Exit(-ENAMETOOLONG);
    ERROR_NOT_ENOUGH_MEMORY:Exit(-ENOMEM);
    ERROR_DISK_FULL        :Exit(-ENOSPC);
+   ERROR_NO_MORE_FILES,
    ERROR_FILE_NOT_FOUND   :;
    else
                            Exit(-EIO);
@@ -140,7 +141,7 @@ begin
  f:=TDirFile.Create;
  f.path:=path;
 
- if (err<>ERROR_FILE_NOT_FOUND) then
+ if (h<>INVALID_HANDLE_VALUE) then
  begin
   tmp:=Default(dirent);
   move_dirent(0,@data,@tmp);
@@ -161,6 +162,7 @@ begin
    begin
     err:=GetLastError;
     Case err of
+     ERROR_NO_MORE_FILES,
      ERROR_FILE_NOT_FOUND:
       begin
        Break;
@@ -174,16 +176,17 @@ begin
     end;
    end;
   until false;
+  Windows.FindClose(h);
  end;
 
  Result:=_sys_open_fd(f);
 
  if (Result<0) then
  begin
-  f.Release;
+  f.Destroy;
  end else
  begin
-  f.Destroy;
+  f.Release;
  end;
 end;
 
