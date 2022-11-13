@@ -153,7 +153,9 @@ begin
    if FindNextFileW(h,data) then
    begin
     tmp:=Default(dirent);
-    move_dirent(0,@data,@tmp);
+
+    i:=Length(f.dirs);
+    move_dirent(i,@data,@tmp);
 
     i:=Length(f.dirs);
     SetLength(f.dirs,i+1);
@@ -352,11 +354,13 @@ begin
 
   if (count<>0) then
   begin
-   Move(dirs[pos],buf^,count);
+   Move(dirs[pos],buf^,count*SizeOf(dirent));
   end;
 
   pos:=i;
  rwlock_unlock(lock);
+
+ Writeln('getdirentries:',count,' ',i);
 
  if (basep<>nil) then
  begin

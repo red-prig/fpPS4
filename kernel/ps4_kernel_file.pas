@@ -548,8 +548,15 @@ begin
  Result:=_sys_getdirentries(fd,buf,nbytes,basep);
  _sig_unlock;
 
- _set_errno(Result);
- Result:=px2sce(Result);
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
 end;
 
 function ps4_sceKernelGetdents(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
@@ -558,8 +565,15 @@ begin
  Result:=_sys_getdirentries(fd,buf,nbytes,nil);
  _sig_unlock;
 
- _set_errno(Result);
- Result:=px2sce(Result);
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
 end;
 
 function _sys_stat(path:PChar;stat:PSceKernelStat):Integer;
