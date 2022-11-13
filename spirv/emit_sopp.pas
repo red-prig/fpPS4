@@ -362,6 +362,8 @@ begin
   S_NOP,
   S_WAITCNT:;
 
+  S_TTRACEDATA:; //write_thread_trace_data(M0[31:0])
+
   S_ENDPGM:
    begin
     if not is_term_op(line) then

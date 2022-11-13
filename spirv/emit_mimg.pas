@@ -606,8 +606,6 @@ begin
 end;
 
 Function TEmit_MIMG.Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
-var
- src:PsrRegNode;
 begin
  Result:=fetch_vsrc8(FSPI.MIMG.VADDR+offset,rtype);
  Inc(offset);

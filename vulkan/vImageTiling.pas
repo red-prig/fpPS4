@@ -8,6 +8,7 @@ uses
  SysUtils,
  RWLock,
  g23tree,
+ ps4_shader,
  ps4_tiling,
  Vulkan,
  vDevice,
@@ -494,7 +495,7 @@ begin
    _Load_Thin_1dThin(cmd,TvImage2(image));
 
   else
-   Assert(false,'TODO');
+   Assert(false,'TODO tiling_idx:'+get_tiling_idx_str(TvImage2(image).key.params.tiling_idx));
  end;
 
 end;

@@ -389,6 +389,7 @@ Function  getResourceMemoryType_vsharp(PV:PVSharpResource4):Byte;
 Function  getResourceMemoryType_tsharp4(PT:PTSharpResource4):Byte;
 Function  getResourceMemoryType_tsharp8(PT:PTSharpResource8):Byte;
 Function  getMemoryType_str(b:Byte):RawByteString;
+function  get_tiling_idx_str(b:Byte):RawByteString;
 
 procedure print_vsharp(PV:PVSharpResource4);
 procedure print_tsharp4(PT:PTSharpResource4);

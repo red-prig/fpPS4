@@ -180,8 +180,6 @@ end;
 
 procedure TsrInputList.Test;
 var
- pDecorateList:PsrDecorateList;
- pCapabilityList:PsrCapabilityList;
  node:PsrInput;
  pVar:PsrVariable;
 
@@ -198,9 +196,6 @@ var
  end;
 
 begin
- pDecorateList  :=FEmit.GetDecorateList;
- pCapabilityList:=FEmit.GetCapabilityList;
-
  node:=First;
  While (node<>nil) do
  begin

@@ -1614,7 +1614,7 @@ end;
 
 function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
 begin
- Result:=Default(TVkFormat);
+ Result:=VK_FORMAT_UNDEFINED;
  if (PT=nil) then Exit;
 
  Case PT^.nfmt of
@@ -1623,6 +1623,7 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
+     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_UNORM;
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
      IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
@@ -1630,8 +1631,7 @@ begin
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_UNORM_BLOCK;
-     else
-      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+     else;
     end;
 
   IMG_NUM_FORMAT_SRGB  :
@@ -1641,8 +1641,7 @@ begin
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SRGB;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_SRGB_BLOCK;
-     else
-      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+     else;
     end;
 
   IMG_NUM_FORMAT_SNORM  :
@@ -1650,10 +1649,10 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
+     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SNORM;
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
-     else
-      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+     else;
     end;
 
   IMG_NUM_FORMAT_USCALED:
@@ -1661,10 +1660,10 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
+     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_USCALED;
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_USCALED;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
-     else
-      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+     else;
     end;
 
 
@@ -1673,10 +1672,10 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
+     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SSCALED;
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SSCALED;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
-     else
-      Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+     else;
     end;
 
   IMG_NUM_FORMAT_UINT   :
@@ -1684,6 +1683,7 @@ begin
     IMG_DATA_FORMAT_8           :Result:=VK_FORMAT_R8_UINT;
     IMG_DATA_FORMAT_8_8         :Result:=VK_FORMAT_R8G8_UINT;
     IMG_DATA_FORMAT_8_8_8_8     :Result:=VK_FORMAT_R8G8B8A8_UINT;
+    IMG_DATA_FORMAT_16          :Result:=VK_FORMAT_R16_UINT;
     IMG_DATA_FORMAT_16_16       :Result:=VK_FORMAT_R16G16_UINT;
     IMG_DATA_FORMAT_16_16_16_16 :Result:=VK_FORMAT_R16G16B16A16_UINT;
     IMG_DATA_FORMAT_32          :Result:=VK_FORMAT_R32_UINT;
@@ -1696,8 +1696,7 @@ begin
     IMG_DATA_FORMAT_FMASK8_S2_F2:Result:=VK_FORMAT_R8_UINT;
     IMG_DATA_FORMAT_FMASK8_S4_F2:Result:=VK_FORMAT_R8_UINT;
     IMG_DATA_FORMAT_FMASK8_S4_F4:Result:=VK_FORMAT_R8_UINT;
-    else
-     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    else;
    end;
 
   IMG_NUM_FORMAT_SINT   :
@@ -1705,14 +1704,14 @@ begin
     IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
     IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
     IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
+    IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SINT;
     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SINT;
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
     IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
     IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SINT;
     IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SINT;
-    else
-     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    else;
    end;
 
   IMG_NUM_FORMAT_FLOAT  :
@@ -1724,14 +1723,13 @@ begin
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
     IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
     IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
-    else
-     Assert(false,_get_tex_dfmt_str(PT^.dfmt));
+    else;
    end;
 
-  else
-   Assert(false,_get_tex_nfmt_str(PT^.nfmt));
+  else;
  end;
 
+ Assert(Result<>VK_FORMAT_UNDEFINED,'[_get_tsharp4_cformat] dfmt:'+_get_tex_dfmt_str(PT^.dfmt)+' nfmt:'+_get_tex_nfmt_str(PT^.dfmt));
 end;
 
 function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
