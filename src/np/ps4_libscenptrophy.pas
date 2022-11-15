@@ -50,7 +50,6 @@ const
  SCE_NP_TROPHY_FLAG_BITS_SHIFT=(5);
  SCE_NP_TROPHY_FLAG_BITS_MASK =(SCE_NP_TROPHY_FLAG_BITS - 1);
  SCE_NP_TROPHY_FLAG_BITS_MAX  =(SCE_NP_TROPHY_FLAG_SETSIZE - 1);
-
 type
  pSceNpTrophyFlagArray=^SceNpTrophyFlagArray;
  SceNpTrophyFlagArray=packed record
@@ -160,6 +159,111 @@ begin
  Result:=0;
 end;
 
+type
+ pSceNpTrophyDetails=^SceNpTrophyDetails;
+ SceNpTrophyDetails=packed record
+  size:qword;
+  trophyId:SceNpTrophyId;
+  trophyGrade:SceNpTrophyGrade;
+  groupId:SceNpTrophyGroupId;
+  hidden:boolean;
+  reserved:array[0..2] of Byte;
+  name:array[0..SCE_NP_TROPHY_NAME_MAX_SIZE-1] of AnsiChar;
+  description:array[0..SCE_NP_TROPHY_DESCR_MAX_SIZE-1] of AnsiChar;
+ end;
+
+ pSceNpTrophyData=^SceNpTrophyData;
+ SceNpTrophyData=packed record
+  size:qword;
+  trophyId:SceNpTrophyId;
+  unlocked:boolean;
+  reserved:array[0..2] of Byte;
+  timestamp:QWORD;
+ end;
+
+function ps4_sceNpTrophyGetTrophyInfo(context:Integer;
+                                      handle:Integer;
+                                      trophyId:Integer;
+                                      details:pSceNpTrophyDetails;
+                                      data:pSceNpTrophyData):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (details<>nil) then
+ begin
+  details^.trophyId   :=trophyId;
+  details^.trophyGrade:=SCE_NP_TROPHY_GRADE_BRONZE;
+  details^.groupId    :=0;
+  details^.hidden     :=false;
+  details^.name       :='tname';
+  details^.description:='tdesc';
+ end;
+ if (data<>nil) then
+ begin
+  data^.trophyId :=trophyId;
+  data^.unlocked :=false;
+  data^.timestamp:=0;
+ end;
+end;
+
+type
+ pSceNpTrophyGroupDetails=^SceNpTrophyGroupDetails;
+ SceNpTrophyGroupDetails=packed record
+  size:qword;
+  groupId:SceNpTrophyGroupId;
+  numTrophies:DWORD;
+  numPlatinum:DWORD;
+  numGold    :DWORD;
+  numSilver  :DWORD;
+  numBronze  :DWORD;
+  title:array[0..SCE_NP_TROPHY_GROUP_TITLE_MAX_SIZE-1] of AnsiChar;
+  description:array[0..SCE_NP_TROPHY_GROUP_DESCR_MAX_SIZE-1] of AnsiChar;
+ end;
+
+ pSceNpTrophyGroupData=^SceNpTrophyGroupData;
+ SceNpTrophyGroupData=packed record
+  size:qword;
+  groupId:SceNpTrophyGroupId;
+  unlockedTrophies  :DWORD;
+  unlockedPlatinum  :DWORD;
+  unlockedGold      :DWORD;
+  unlockedSilver    :DWORD;
+  unlockedBronze    :DWORD;
+  progressPercentage:DWORD;
+  reserved:DWORD;
+ end;
+
+
+function ps4_sceNpTrophyGetGroupInfo(context:Integer;
+                                     handle:Integer;
+                                     groupId:Integer;
+                                     details:pSceNpTrophyGroupDetails;
+                                     data:pSceNpTrophyGroupData):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Writeln(SizeOf(SceNpTrophyGroupDetails),' ',SizeOf(SceNpTrophyGroupData));
+ if (details<>nil) then
+ begin
+  details^.groupId    :=groupId;
+  details^.numTrophies:=0;
+  details^.numPlatinum:=0;
+  details^.numGold    :=0;
+  details^.numSilver  :=0;
+  details^.numBronze  :=0;
+  details^.title      :='gname';
+  details^.description:='gdesc';
+ end;
+ if (data<>nil) then
+ begin
+  data^.groupId           :=groupId;
+  data^.unlockedTrophies  :=0;
+  data^.unlockedPlatinum  :=0;
+  data^.unlockedGold      :=0;
+  data^.unlockedSilver    :=0;
+  data^.unlockedBronze    :=0;
+  data^.progressPercentage:=0;
+ end;
+end;
+
 const
  SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND=-2141907436; //0x80551614;
 
@@ -188,6 +292,8 @@ begin
  lib^.set_proc($2C7B9298EDD22DDF,@ps4_sceNpTrophyGetTrophyUnlockState);
  lib^.set_proc($DBCC6645415AA3AF,@ps4_sceNpTrophyUnlockTrophy);
  lib^.set_proc($6183F77F65B4F688,@ps4_sceNpTrophyGetGameInfo);
+ lib^.set_proc($AAA515183810066D,@ps4_sceNpTrophyGetTrophyInfo);
+ lib^.set_proc($C1353019FB292A27,@ps4_sceNpTrophyGetGroupInfo);
  lib^.set_proc($1CBC33D5F448C9C0,@ps4_sceNpTrophyGetGameIcon);
 end;
 

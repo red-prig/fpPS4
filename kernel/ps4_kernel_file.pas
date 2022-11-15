@@ -49,7 +49,7 @@ function ps4_sceKernelGetdents(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_
 function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
-function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
+function ps4_mkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
@@ -591,7 +591,7 @@ begin
  Result:=parse_filename(path,rp);
 
  Case Result of
-  PT_ROOT:Exit(-EACCES); //TODO
+  PT_ROOT:Exit(EACCES); //TODO
   PT_FILE:
     begin
      if DirectoryExists(rp) then
@@ -607,7 +607,7 @@ begin
      Result:=_sys_dev_stat(rp,stat);
     end;
   else
-          Exit(-EACCES);
+          Exit(EACCES);
  end;
 end;
 
@@ -628,7 +628,7 @@ begin
  Result:=px2sce(Result);
 end;
 
-function _sys_mkdir(path:PChar):Integer;
+function _sys_mkdir(path:PChar;mode:Integer):Integer;
 var
  fn:RawByteString;
  err:DWORD;
@@ -648,11 +648,11 @@ begin
  Result:=parse_filename(path,fn);
 
  Case Result of
-  PT_ROOT:Exit(-EACCES); //TODO
+  PT_ROOT:Exit(EEXIST); //TODO
   PT_FILE:;
-  PT_DEV :Exit(-EACCES);
+  PT_DEV :Exit(EACCES);
   else
-          Exit(-EACCES);
+          Exit(EACCES);
  end;
 
  err:=SwCreateDir(fn);
@@ -692,17 +692,17 @@ begin
  Result:=0;
 end;
 
-function ps4_mkdir(path:PChar):Integer; SysV_ABI_CDecl;
+function ps4_mkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=_set_errno(_sys_mkdir(path));
+ Result:=_set_errno(_sys_mkdir(path,mode));
  _sig_unlock;
 end;
 
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=_sys_mkdir(path);
+ Result:=_sys_mkdir(path,mode);
  _sig_unlock;
 
  _set_errno(Result);
