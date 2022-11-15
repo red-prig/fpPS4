@@ -137,6 +137,7 @@ type
  TvCmdBuffer=class(TvCustomCmdBuffer)
 
   emulate_primtype:Integer;
+  instanceCount:DWORD;
 
   function    BeginRenderPass(RT:TvRenderTargets):Boolean;
 
@@ -868,6 +869,8 @@ begin
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
+ if (instanceCount=0) then instanceCount:=1;
+
  Size:=INDICES*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
 
  rb:=FetchHostBuffer(Self,Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
@@ -888,15 +891,16 @@ begin
     begin
      vkCmdDrawIndexed(
          cmdbuf,
-         INDICES,  //indexCount
-         1,        //instanceCount
-         OFFSET,   //firstIndex
-         0,        //vertexOffset
-         0);       //firstInstance
+         INDICES,       //indexCount
+         instanceCount, //instanceCount
+         OFFSET,        //firstIndex
+         0,             //vertexOffset
+         0);            //firstInstance
     end;
   DI_PT_QUADLIST:
     begin
-     Assert(OFFSET=0);
+     Assert(instanceCount<=1,'instance DI_PT_QUADLIST');
+     Assert(OFFSET=0,'OFFSET DI_PT_QUADLIST');
      h:=INDICES div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do
@@ -930,17 +934,22 @@ begin
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
+ if (instanceCount=0) then instanceCount:=1;
+
  Case emulate_primtype of
   0:
     begin
      vkCmdDraw(
       cmdbuf,
-      INDICES,
-      1,0,0);
+      INDICES,       //vertexCount
+      instanceCount, //instanceCount
+      0,             //firstVertex
+      0);            //firstInstance
     end;
 
   DI_PT_RECTLIST :
     begin
+     Assert(instanceCount<=1,'instance DI_PT_RECTLIST');
      {
      0   3
      1   2
@@ -965,6 +974,7 @@ begin
   //DI_PT_LINELOOP :;
   DI_PT_QUADLIST :
     begin
+     Assert(instanceCount<=1,'instance DI_PT_QUADLIST');
      h:=INDICES div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do
@@ -972,10 +982,10 @@ begin
       Inc(cmd_count);
       vkCmdDraw(
           cmdbuf,
-          4,
-          1,
-          i*4,
-          0);
+          4,       //vertexCount
+          1,       //instanceCount
+          i*4,     //firstVertex
+          0);      //firstInstance
      end;
     end;
   //DI_PT_QUADSTRIP:;

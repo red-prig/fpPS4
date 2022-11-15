@@ -2385,6 +2385,7 @@ begin
  if UpdateGpuRegsInfo then
  begin
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
+  GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
  end;
 
@@ -2408,6 +2409,7 @@ begin
 
  if UpdateGpuRegsInfo then
  begin
+  GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
  end;
 
@@ -2441,6 +2443,7 @@ begin
  if UpdateGpuRegsInfo then
  begin
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
+  GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndexOffset2(Addr,Body^.indexOffset,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
  end;
 
@@ -2475,7 +2478,6 @@ type
 procedure onNumInstances(pm4Hdr:PM4_TYPE_3_HEADER;Body:PVGT_DMA_NUM_INSTANCES);
 begin
  GPU_REGS.VGT_DMA.NUM_INSTANCES:=Body^;
- Assert(GPU_REGS.VGT_DMA.NUM_INSTANCES<=1,'instancing TODO:'+IntToStr(GPU_REGS.VGT_DMA.NUM_INSTANCES));
  {$ifdef ww}Writeln('onNumInstances:',Body^);{$endif}
 end;
 
