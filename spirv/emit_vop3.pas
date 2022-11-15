@@ -339,10 +339,10 @@ begin
 
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
- src[0]:=OpBitwiseAndTo(src[0],bit24);
+ src[0]:=OpAndTo(src[0],bit24);
  src[0]^.PrepType(ord(dtInt32));
 
- src[1]:=OpBitwiseAndTo(src[1],bit24);
+ src[1]:=OpAndTo(src[1],bit24);
  src[1]^.PrepType(ord(dtInt32));
 
  OpIMul(dst,src[0],src[1]);
@@ -366,10 +366,10 @@ begin
 
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
- src[0]:=OpBitwiseAndTo(src[0],bit24);
+ src[0]:=OpAndTo(src[0],bit24);
  src[0]^.PrepType(ord(dtUInt32));
 
- src[1]:=OpBitwiseAndTo(src[1],bit24);
+ src[1]:=OpAndTo(src[1],bit24);
  src[1]^.PrepType(ord(dtUInt32));
 
  OpIMul(dst,src[0],src[1]);
@@ -530,10 +530,10 @@ begin
 
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
- src[0]:=OpBitwiseAndTo(src[0],bit24);
+ src[0]:=OpAndTo(src[0],bit24);
  src[0]^.PrepType(ord(dtInt32));
 
- src[1]:=OpBitwiseAndTo(src[1],bit24);
+ src[1]:=OpAndTo(src[1],bit24);
  src[1]^.PrepType(ord(dtInt32));
 
  OpFmaI32(dst,src[0],src[1],src[2]);
@@ -558,10 +558,10 @@ begin
 
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
- src[0]:=OpBitwiseAndTo(src[0],bit24);
+ src[0]:=OpAndTo(src[0],bit24);
  src[0]^.PrepType(ord(dtUInt32));
 
- src[1]:=OpBitwiseAndTo(src[1],bit24);
+ src[1]:=OpAndTo(src[1],bit24);
  src[1]^.PrepType(ord(dtUInt32));
 
  OpFmaU32(dst,src[0],src[1],src[2]);
@@ -966,7 +966,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3b.SRC2,dtUInt32);
 
- src[2]:=OpBitwiseAndTo(src[2],1);
+ src[2]:=OpAndTo(src[2],1);
  src[2]^.PrepType(ord(dtUInt32));
 
  OpIAddExt(dst,car,src[0],src[1]); //src0+src1

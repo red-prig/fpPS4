@@ -122,6 +122,18 @@ begin
  Blocks.Clear;
 end;
 
+procedure _print_hex(addr:Pointer;size:DWORD);
+var
+ i:DWORD;
+begin
+ For i:=0 to size-1 do
+ begin
+  if (i<>0) and ((i mod 16)=0) then Writeln;
+  Write(HexStr(PByte(addr)[i],2));
+ end;
+ if (i<>0) and ((i mod 16)<>0) then Writeln;
+end;
+
 procedure load_dump(const fname:RawByteString);
 var
  M:TMemoryStream;
@@ -218,6 +230,8 @@ begin
     Blocks.Add(addr);
     addr:=Align(addr,8);
    end;
+
+   //_print_hex(addr,size);
 
    Case W.REG of
     mmCOMPUTE_PGM_LO:
@@ -356,7 +370,7 @@ begin
    if cfg.FPrintInfo then
     Writeln('USGPR:',GPU_REGS.PS.RSRC2.USER_SGPR,' VGPRS:',GPU_REGS.PS.RSRC1.VGPRS,' SGPRS:',GPU_REGS.PS.RSRC1.SGPRS);
 
-   SprvEmit.InitPs(GPU_REGS.PS.RSRC2,GPU_REGS.PS.INPUT_ENA);
+   SprvEmit.InitPs(GPU_REGS.PS.RSRC1,GPU_REGS.PS.RSRC2,GPU_REGS.PS.INPUT_ENA);
    SprvEmit.SetUserData(@GPU_REGS.PS.USER_DATA);
   end;
   kShaderTypeVsVs:
@@ -364,7 +378,7 @@ begin
    if cfg.FPrintInfo then
     Writeln('USGPR:',GPU_REGS.VS.RSRC2.USER_SGPR,' VGPRS:',GPU_REGS.VS.RSRC1.VGPRS,' SGPRS:',GPU_REGS.VS.RSRC1.SGPRS);
 
-   SprvEmit.InitVs(GPU_REGS.VS.RSRC2,GPU_REGS.VGT_NUM_INSTANCES);
+   SprvEmit.InitVs(GPU_REGS.VS.RSRC1,GPU_REGS.VS.RSRC2,GPU_REGS.VGT_NUM_INSTANCES);
    SprvEmit.SetUserData(@GPU_REGS.VS.USER_DATA);
   end;
   kShaderTypeCs:
@@ -372,9 +386,8 @@ begin
    if cfg.FPrintInfo then
     Writeln('USGPR:',GPU_REGS.CS.RSRC2.USER_SGPR,' VGPRS:',GPU_REGS.CS.RSRC1.VGPRS,' SGPRS:',GPU_REGS.CS.RSRC1.SGPRS);
 
-   SprvEmit.InitCs(GPU_REGS.CS.RSRC2,GPU_REGS.CS.NUM_THREAD_X,GPU_REGS.CS.NUM_THREAD_Y,GPU_REGS.CS.NUM_THREAD_Z);
+   SprvEmit.InitCs(GPU_REGS.CS.RSRC1,GPU_REGS.CS.RSRC2,GPU_REGS.CS.NUM_THREAD_X,GPU_REGS.CS.NUM_THREAD_Y,GPU_REGS.CS.NUM_THREAD_Z);
    SprvEmit.SetUserData(@GPU_REGS.CS.USER_DATA);
-
   end;
 
   else

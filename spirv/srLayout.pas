@@ -582,7 +582,7 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  pDebugInfoList^.OpSourceExtension(node^.GetString);
+  pDebugInfoList^.OpSource(node^.GetString);
   node:=Next(node);
  end;
 end;
@@ -604,7 +604,7 @@ begin
    block:=pHeap^.FindByPtr(node^.pData);
    if (block<>nil) then
    begin
-    pDebugInfoList^.OpSourceExtension(node^.GetFuncString(block^.Size));
+    pDebugInfoList^.OpSource(node^.GetFuncString(block^.Size));
    end;
   end;
   node:=Next(node);

@@ -136,14 +136,16 @@ type
   procedure OpLogicalAnd(dst:PsrRegSlot;src0,src1:PsrRegNode);
   //
   function  OpNotTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
-  function  OpBitwiseOrTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
-  function  OpBitwiseAndTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
-  function  OpBitwiseAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpOrTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpAndTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   function  OpImageSampleImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageSampleExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageSampleDrefImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
   function  OpImageSampleDrefExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
+  function  OpImageGather(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode;id:Byte):PSpirvOp;
+  function  OpImageDrefGather(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
   function  OpImageFetch(pLine:PspirvOp;Tgrp:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageRead(pLine:PspirvOp;Tgrp:PsrNode;dst,idx:PsrRegNode):PspirvOp;
   function  OpImageWrite(pLine:PspirvOp;Tgrp:PsrNode;idx,src:PsrRegNode):PspirvOp;
@@ -1180,22 +1182,22 @@ begin
  _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpNot,Result,src)); //post type
 end;
 
-function TEmitOp.OpBitwiseOrTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+function TEmitOp.OpOrTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  Result:=NewReg(dtUnknow);
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpBitwiseOr,Result,src0,src1)); //post type
 end;
 
-function TEmitOp.OpBitwiseAndTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+function TEmitOp.OpAndTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  Result:=NewReg(dtUnknow);
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpBitwiseAnd,Result,src0,src1)); //post type
 end;
 
-function TEmitOp.OpBitwiseAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
+function TEmitOp.OpAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  if (src0=nil) then Exit(src0);
- Result:=OpBitwiseAndTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
+ Result:=OpAndTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
 end;
 
 //
@@ -1253,6 +1255,49 @@ Var
  node:PSpirvOp;
 begin
  node:=AddSpirvOp(pLine,Op.OpImageSampleDrefExplicitLod); //need first
+
+ node^.pType:=TypeList.Fetch(dst^.dtype);
+ node^.pDst:=dst;
+
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+ node^.AddParam(pcf);   //Dref
+                        //Image Operands
+
+ Result:=node;
+end;
+
+function TEmitOp.OpImageGather(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode;id:Byte):PSpirvOp;
+Var
+ node:PSpirvOp;
+ comp:PsrRegNode;
+begin
+ Case id of
+  0..3:;
+  else
+   Assert(False);
+ end;
+
+ comp:=NewReg_i(dtUint32,id);
+
+ node:=AddSpirvOp(pLine,Op.OpImageGather); //need first
+
+ node^.pType:=TypeList.Fetch(dst^.dtype);
+ node^.pDst:=dst;
+
+ node^.AddParam(img);   //Sampled Image
+ node^.AddParam(coord); //Coordinate
+ node^.AddParam(comp);  //Component
+                        //Image Operands
+
+ Result:=node;
+end;
+
+function TEmitOp.OpImageDrefGather(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
+Var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(pLine,Op.OpImageDrefGather); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
  node^.pDst:=dst;

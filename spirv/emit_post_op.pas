@@ -1745,7 +1745,7 @@ begin
     data[1]:=(1 shl count)-1;
     num_31:=NewReg_q(dtUInt32,data[1],@Node);
     //
-    rsl:=OpBitwiseAndTo(rsl,num_31,@node);
+    rsl:=OpAndTo(rsl,num_31,@node);
     rsl^.PrepType(ord(dtUInt32));
    end;
 
@@ -1777,7 +1777,7 @@ begin
   num_31:=NewReg_q(dtUInt32,31,@Node);
   //
   rIndex:=node^.ParamNode(1)^.AsReg; //orig
-  rIndex:=OpBitwiseAndTo(rIndex,num_31,@node);
+  rIndex:=OpAndTo(rIndex,num_31,@node);
   rIndex^.PrepType(ord(dtUInt32));
  end;
 
@@ -1802,7 +1802,7 @@ begin
   end;
   //
   rCount:=node^.ParamNode(2)^.AsReg; //orig
-  rCount:=OpBitwiseAndTo(rCount,num_31,@node);
+  rCount:=OpAndTo(rCount,num_31,@node);
   rCount^.PrepType(ord(dtUInt32));
  end;
 
@@ -1868,13 +1868,13 @@ begin
  src[0]:=node^.ParamNode(1)^.AsReg;
  src[1]:=node^.ParamNode(2)^.AsReg;
 
- src[0]:=OpBitwiseAndTo(src[0],bitmsk,@node);
+ src[0]:=OpAndTo(src[0],bitmsk,@node);
  src[0]^.PrepType(ord(dtUInt32));
 
  bitmsk:=OpNotTo(bitmsk,@node);
  bitmsk^.PrepType(ord(dtUInt32));
 
- src[1]:=OpBitwiseAndTo(src[1],bitmsk,@node);
+ src[1]:=OpAndTo(src[1],bitmsk,@node);
  src[1]^.PrepType(ord(dtUInt32));
 
  _Op2(node,Op.OpBitwiseOr,dst,src[0],src[1]);

@@ -35,9 +35,21 @@ type
   Constructor Create;
 
   procedure   SetUserData(pData:Pointer);
-  Procedure   InitVs(RSRC2:TSPI_SHADER_PGM_RSRC2_VS;instance:Byte);
-  Procedure   InitPs(RSRC2:TSPI_SHADER_PGM_RSRC2_PS;ENA:TSPI_PS_INPUT_ENA);
-  Procedure   InitCs(RSRC2:TCOMPUTE_PGM_RSRC2;NTX:TCOMPUTE_NUM_THREAD_X;NTY:TCOMPUTE_NUM_THREAD_Y;NTZ:TCOMPUTE_NUM_THREAD_Z);
+  procedure   FillGPR(VGPRS,USER_SGPR,SGPRS:Byte);
+
+  Procedure   InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
+                     RSRC2:TSPI_SHADER_PGM_RSRC2_VS;
+                     instance:Byte);
+
+  Procedure   InitPs(RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
+                     RSRC2:TSPI_SHADER_PGM_RSRC2_PS;
+                     ENA:TSPI_PS_INPUT_ENA);
+
+  Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
+                     RSRC2:TCOMPUTE_PGM_RSRC2;
+                     NTX:TCOMPUTE_NUM_THREAD_X;
+                     NTY:TCOMPUTE_NUM_THREAD_Y;
+                     NTZ:TCOMPUTE_NUM_THREAD_Z);
 
   procedure   emit_spi; override;
 
@@ -127,7 +139,32 @@ begin
  DataLayoutList.SetUserData(pData);
 end;
 
-Procedure TSprvEmit.InitVs(RSRC2:TSPI_SHADER_PGM_RSRC2_VS;instance:Byte);
+procedure TSprvEmit.FillGPR(VGPRS,USER_SGPR,SGPRS:Byte);
+var
+ p:Byte;
+begin
+ if (VGPRS<>0) then
+ For p:=0 to VGPRS-1 do
+ begin
+  if (RegsStory.VGRP[p].current=nil) then
+  begin
+   SetConst_i(@RegsStory.VGRP[p],dtUnknow,0);
+  end;
+ end;
+
+ if (SGPRS<>0) then
+ For p:=USER_SGPR to (SGPRS+USER_SGPR)-1 do
+ begin
+  if (RegsStory.SGRP[p].current=nil) then
+  begin
+   SetConst_i(@RegsStory.SGRP[p],dtUnknow,0);
+  end;
+ end;
+end;
+
+Procedure TSprvEmit.InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
+                           RSRC2:TSPI_SHADER_PGM_RSRC2_VS;
+                           instance:Byte);
 var
  p:Byte;
 begin
@@ -232,11 +269,14 @@ begin
   AddInput(@RegsStory.VGRP[p],dtUint32,itVInstance,0);
  end;
 
- AddCapability(Capability.Shader);
+ FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
+ AddCapability(Capability.Shader);
 end;
 
-Procedure TSprvEmit.InitPs(RSRC2:TSPI_SHADER_PGM_RSRC2_PS;ENA:TSPI_PS_INPUT_ENA);
+Procedure TSprvEmit.InitPs(RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
+                           RSRC2:TSPI_SHADER_PGM_RSRC2_PS;
+                           ENA:TSPI_PS_INPUT_ENA);
 var
  p:Byte;
 begin
@@ -385,11 +425,16 @@ begin
   //Per-pixel fixed point position Y[31:16], X[15:0]
  end;
 
- AddCapability(Capability.Shader);
+ FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
+ AddCapability(Capability.Shader);
 end;
 
-Procedure TSprvEmit.InitCs(RSRC2:TCOMPUTE_PGM_RSRC2;NTX:TCOMPUTE_NUM_THREAD_X;NTY:TCOMPUTE_NUM_THREAD_Y;NTZ:TCOMPUTE_NUM_THREAD_Z);
+Procedure TSprvEmit.InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
+                           RSRC2:TCOMPUTE_PGM_RSRC2;
+                           NTX:TCOMPUTE_NUM_THREAD_X;
+                           NTY:TCOMPUTE_NUM_THREAD_Y;
+                           NTZ:TCOMPUTE_NUM_THREAD_Z);
 var
  p:Byte;
 begin
@@ -471,6 +516,8 @@ begin
  if (FLocalSize.x=0) then FLocalSize.x:=1;
  if (FLocalSize.y=0) then FLocalSize.y:=1;
  if (FLocalSize.z=0) then FLocalSize.z:=1;
+
+ FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
  AddCapability(Capability.Shader);
 end;

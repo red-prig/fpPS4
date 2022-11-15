@@ -852,6 +852,7 @@ begin
      end;
   end;
 
+  node^.sType:=sType;
   node^.pType:=pType;
 
   if node^.IsTop then
@@ -862,6 +863,7 @@ begin
 
  end else
  begin
+  node^.sType:=nil;
   node^.pType:=TypeList.Fetch(node^.dtype);
  end;
 

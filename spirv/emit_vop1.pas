@@ -97,7 +97,7 @@ begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
- src:=OpBitwiseAndTo(src,15);
+ src:=OpAndTo(src,15);
  src^.PrepType(ord(dtInt32));
 
  src:=OpISubTo(src,8);
@@ -116,7 +116,7 @@ begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
- src:=OpBitwiseAndTo(src,$FF);
+ src:=OpAndTo(src,$FF);
  src^.PrepType(ord(dtUInt32));
 
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);

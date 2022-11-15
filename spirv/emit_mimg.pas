@@ -18,15 +18,28 @@ uses
   emit_fetch;
 
 type
+ TsrImageMods=Set Of (imMinLod,imGrad,imLod,imBiasLod,imZeroLod,imDref,imOffset);
+
+ TImgSampleParam=object
+  roffset:DWORD;
+  mods:TsrImageMods;
+  img_op:Integer;
+
+  coord,pcf,bias,lod,min_lod,offset:PsrRegNode;
+ end;
+
  TEmit_MIMG=class(TEmitFetch)
   procedure emit_MIMG;
-  procedure DistribDmask(dst:PsrRegNode;info:PsrImageInfo);
+  procedure DistribDmask(DMASK:Byte;dst:PsrRegNode;info:PsrImageInfo);
   function  GatherDmask(telem:TsrDataType):PsrRegNode;
   Function  GatherCoord_f(var offset:DWORD;dim_id:Byte):PsrRegNode;
   Function  GatherCoord_u(var offset:DWORD;dim_id:Byte):PsrRegNode;
   Function  Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
   Function  Gather_packed_offset(var offset:DWORD;dim:Byte):PsrRegNode;
+  procedure Gather_sample_param(var p:TImgSampleParam;info:PsrImageInfo);
+  procedure add_sample_op(var p:TImgSampleParam;node:PSpirvOp);
   procedure emit_image_sample(Tgrp:PsrNode;info:PsrImageInfo);
+  procedure emit_image_sample_gather(Tgrp:PsrNode;info:PsrImageInfo);
   procedure emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
   procedure emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
  end;
@@ -374,9 +387,6 @@ begin
  Result.tinfo.Format :=GetImageFormat(PT);
 end;
 
-type
- TsrImageMods=Set Of (imMinLod,imGrad,imLod,imBiasLod,imZeroLod,imDref,imOffset);
-
 function GetImageMods(OP:Byte):TsrImageMods;
 begin
  Case OP of
@@ -449,14 +459,40 @@ begin
  end;
 end;
 
-procedure TEmit_MIMG.DistribDmask(dst:PsrRegNode;info:PsrImageInfo); //result
+function GetImgOpStr(i:Integer):RawByteString;
+
+ procedure t(o:Integer;const v:RawByteString); inline;
+ begin
+  if ((o and i)<>0) then
+  begin
+   if (Result<>'') then
+   begin
+    Result:=Result+'|'+v;
+   end else
+   begin
+    Result:=v;
+   end;
+  end;
+ end;
+
+begin
+ Result:='';
+ t(ImageOperands.Bias        ,'Bias');
+ t(ImageOperands.Lod         ,'Lod');
+ t(ImageOperands.Grad        ,'Grad');
+ t(ImageOperands.ConstOffset ,'ConstOffset');
+ t(ImageOperands.Sample      ,'Sample');
+ t(ImageOperands.MinLod      ,'MinLod');
+end;
+
+procedure TEmit_MIMG.DistribDmask(DMASK:Byte;dst:PsrRegNode;info:PsrImageInfo); //result
 var
  pSlot:PsrRegSlot;
  i,d:Byte;
 begin
  d:=0;
  For i:=0 to 3 do
-  if Byte(FSPI.MIMG.DMASK).TestBit(i) then
+  if DMASK.TestBit(i) then
   begin
    pSlot:=get_vdst8(FSPI.MIMG.VDATA+d);
    Inc(d);
@@ -630,6 +666,93 @@ begin
 
 end;
 
+procedure TEmit_MIMG.Gather_sample_param(var p:TImgSampleParam;info:PsrImageInfo);
+begin
+ p.roffset:=0;
+ p.mods:=GetImageMods(FSPI.MIMG.OP);
+ p.img_op:=0;
+
+ //gather
+ if (imOffset in p.mods) then
+ begin
+  p.offset:=Gather_packed_offset(p.roffset,GetDimCount(info^.tinfo.Dim));
+  p.img_op:=p.img_op or ImageOperands.ConstOffset;
+ end;
+
+ if (imBiasLod in p.mods) then
+ begin
+  p.bias:=Gather_value(p.roffset,dtFloat32);
+  p.img_op:=p.img_op or ImageOperands.Bias;
+ end;
+
+ if (imDref in p.mods) then
+ begin
+  p.pcf:=Gather_value(p.roffset,dtFloat32);
+ end;
+
+ if (imGrad in p.mods) then
+ begin
+  Assert(false,'TODO imGrad');
+ end;
+
+ p.coord:=GatherCoord_f(p.roffset,info^.tinfo.Dim);
+
+ if (imLod in p.mods) then
+ begin
+  p.lod:=Gather_value(p.roffset,dtFloat32);
+  p.img_op:=p.img_op or ImageOperands.Lod;
+ end else
+ if (imZeroLod in p.mods) then
+ begin
+  p.lod:=NewReg_s(dtFloat32,0);
+  p.img_op:=p.img_op or ImageOperands.Lod;
+ end;
+
+ if (imMinLod in p.mods) then
+ begin
+  p.min_lod:=Gather_value(p.roffset,dtFloat32);
+  p.img_op:=p.img_op or ImageOperands.MinLod;
+ end;
+ //gather
+end;
+
+procedure TEmit_MIMG.add_sample_op(var p:TImgSampleParam;node:PSpirvOp);
+begin
+ //ImageOperands
+ if (p.img_op<>0) then
+ begin
+  node^.AddLiteral(p.img_op,GetImgOpStr(p.img_op));
+
+  if ((p.img_op and ImageOperands.Bias)<>0) then
+  begin
+   node^.AddParam(p.bias);
+  end;
+
+  if ((p.img_op and ImageOperands.Lod)<>0) then
+  begin
+   node^.AddParam(p.lod);
+  end;
+
+  if ((p.img_op and ImageOperands.Grad)<>0) then
+  begin
+   Assert(false,'TODO imGrad');
+  end;
+
+  if ((p.img_op and ImageOperands.ConstOffset)<>0) then
+  begin
+   node^.AddParam(p.offset);
+  end;
+
+  if ((p.img_op and ImageOperands.MinLod)<>0) then
+  begin
+   node^.AddParam(p.min_lod);
+   AddCapability(Capability.MinLod);
+  end;
+
+ end;
+ //ImageOperands
+end;
+
 procedure TEmit_MIMG.emit_image_sample(Tgrp:PsrNode;info:PsrImageInfo);
 var
  src:array[0..3] of PsrRegSlot;
@@ -637,12 +760,11 @@ var
  pLayout:PsrDataLayout;
  Sgrp:PsrNode;
 
- dst,cmb,coord,pcf,lod,offset:PsrRegNode;
+ dst,cmb:PsrRegNode;
 
- roffset:DWORD;
+ param:TImgSampleParam;
 
  node:PSpirvOp;
-
 begin
  if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 
@@ -659,74 +781,101 @@ begin
   dst:=NewReg(info^.dtype.AsVector(4));
  end;
 
- roffset:=0;
+ //gather
+ param:=Default(TImgSampleParam);
+ Gather_sample_param(param,info);
+ //gather
 
- Case FSPI.MIMG.OP of
-  IMAGE_SAMPLE:
-    begin
-     coord:=GatherCoord_f(roffset,info^.tinfo.Dim);
+ //OpImage
 
-     if (FExecutionModel=ExecutionModel.Fragment) then
-     begin
-      node:=OpImageSampleImplicitLod(line,cmb,dst,coord);
-     end else
-     begin
-      node:=OpImageSampleExplicitLod(line,cmb,dst,coord);
-     end;
+ if (imDref in param.mods) then
+ begin
+  if (FExecutionModel=ExecutionModel.Fragment) and
+     ((param.img_op and ImageOperands.Lod)=0) then
+  begin
+   node:=OpImageSampleDrefImplicitLod(line,cmb,dst,param.coord,param.pcf);
+  end else
+  begin
+   node:=OpImageSampleDrefExplicitLod(line,cmb,dst,param.coord,param.pcf);
+  end;
+ end else
+ begin
+  if (FExecutionModel=ExecutionModel.Fragment) and
+     ((param.img_op and ImageOperands.Lod)=0) then
+  begin
+   node:=OpImageSampleImplicitLod(line,cmb,dst,param.coord);
+  end else
+  begin
+   node:=OpImageSampleExplicitLod(line,cmb,dst,param.coord);
+  end;
+ end;
+ //OpImage
 
-    end;
+ //ImageOperands
+ add_sample_op(param,node);
+ //ImageOperands
 
-  IMAGE_SAMPLE_LZ:
-    begin
-     coord:=GatherCoord_f(roffset,info^.tinfo.Dim);
+ DistribDmask(FSPI.MIMG.DMASK,dst,info);
+end;
 
-     node:=OpImageSampleExplicitLod(line,cmb,dst,coord);
+procedure TEmit_MIMG.emit_image_sample_gather(Tgrp:PsrNode;info:PsrImageInfo);
+var
+ src:array[0..3] of PsrRegSlot;
 
-     node^.AddLiteral(ImageOperands.Lod,'Lod');
+ pLayout:PsrDataLayout;
+ Sgrp:PsrNode;
 
-     //0
-     lod:=NewReg_s(dtFloat32,0);
-     node^.AddParam(lod);
-    end;
+ dst,cmb:PsrRegNode;
 
-  IMAGE_SAMPLE_LZ_O:
-    begin
-     offset:=Gather_packed_offset(roffset,GetDimCount(info^.tinfo.Dim));
+ param:TImgSampleParam;
+ id:Byte;
 
-     coord:=GatherCoord_f(roffset,info^.tinfo.Dim);
+ node:PSpirvOp;
+begin
+ if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 
-     node:=OpImageSampleExplicitLod(line,cmb,dst,coord);
+ pLayout:=GroupingSharp(src,rtSSharp4);
+ Sgrp:=FetchSampler(pLayout);
 
-     node^.AddLiteral(ImageOperands.Lod or ImageOperands.ConstOffset,'Lod|ConstOffset');
+ cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
 
-     //0
-     lod:=NewReg_s(dtFloat32,0);
-     node^.AddParam(lod);
-
-     //1
-     node^.AddParam(offset);
-    end;
-
-  IMAGE_SAMPLE_C_LZ:
-    begin
-     pcf:=Gather_value(roffset,dtFloat32);
-
-     coord:=GatherCoord_f(roffset,info^.tinfo.Dim);
-
-     node:=OpImageSampleDrefExplicitLod(line,cmb,dst,coord,pcf);
-
-     node^.AddLiteral(ImageOperands.Lod,'Lod');
-
-     //0
-     lod:=NewReg_s(dtFloat32,0);
-     node^.AddParam(lod);
-    end;
-
-  else
-    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
+ if (info^.tinfo.Depth=1) then
+ begin
+  dst:=NewReg(info^.dtype);
+ end else
+ begin
+  dst:=NewReg(info^.dtype.AsVector(4));
  end;
 
- DistribDmask(dst,info);
+ //gather
+ param:=Default(TImgSampleParam);
+ Gather_sample_param(param,info);
+ //gather
+
+ id:=BsrByte(FSPI.MIMG.DMASK);
+ //OpImage
+ if (imDref in param.mods) then
+ begin
+  Assert(id=0,'gather pcf with non red component');
+  node:=OpImageDrefGather(line,cmb,dst,param.coord,param.pcf);
+ end else
+ begin
+  node:=OpImageGather(line,cmb,dst,param.coord,id);
+ end;
+ //OpImage
+
+ //OpExtension "SPV_AMD_texture_gather_bias_lod"
+ //Capability.ImageGatherBiasLodAMD
+ //VK_AMD_texture_gather_bias_lod
+ begin
+  param.img_op:=param.img_op and (not (ImageOperands.Bias or ImageOperands.Lod))
+ end;
+
+ //ImageOperands
+ add_sample_op(param,node);
+ //ImageOperands
+
+ DistribDmask(15,dst,info);
 end;
 
 procedure TEmit_MIMG.emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
@@ -750,8 +899,7 @@ begin
 
      if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
      begin
-      smp:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
-      Inc(roffset);
+      smp:=Gather_value(roffset,dtUint32);
 
       node^.AddLiteral(ImageOperands.Sample,'Sample');
       node^.AddParam(smp);
@@ -762,8 +910,7 @@ begin
      coord:=GatherCoord_u(roffset,info^.tinfo.Dim);
      node:=OpImageFetch(line,Tgrp,dst,coord);
 
-     lod:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
-     Inc(roffset);
+     lod:=Gather_value(roffset,dtUint32);
 
      node^.AddLiteral(ImageOperands.Lod,'Lod');
      node^.AddParam(lod);
@@ -772,7 +919,7 @@ begin
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
  end;
 
- DistribDmask(dst,info);
+ DistribDmask(FSPI.MIMG.DMASK,dst,info);
 end;
 
 procedure TEmit_MIMG.emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
@@ -795,8 +942,7 @@ begin
 
      if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
      begin
-      smp:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
-      Inc(roffset);
+      smp:=Gather_value(roffset,dtUint32);
 
       node^.AddLiteral(ImageOperands.Sample,'Sample');
       node^.AddParam(smp);
@@ -807,8 +953,7 @@ begin
      coord:=GatherCoord_u(roffset,info^.tinfo.Dim);
      node:=OpImageWrite(line,Tgrp,coord,dst);
 
-     lod:=fetch_vsrc8(FSPI.MIMG.VADDR+roffset,dtUint32);
-     Inc(roffset);
+     lod:=Gather_value(roffset,dtUint32);
 
      node^.AddLiteral(ImageOperands.Lod,'Lod');
      node^.AddParam(lod);
@@ -860,6 +1005,16 @@ begin
      Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
 
      emit_image_sample(Tgrp,@info);
+    end;
+
+  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O: //sampled gather
+    begin
+     Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
+
+     info.tinfo.Sampled:=1;
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+
+     emit_image_sample_gather(Tgrp,@info);
     end;
 
   IMAGE_LOAD..IMAGE_LOAD_MIP_PCK_SGN: //loaded

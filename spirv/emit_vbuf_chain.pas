@@ -228,7 +228,8 @@ begin
  adr.stride :=PV^.stride;
  adr.align  :=info.GetAlignSize;
  adr.fsize  :=info.GetSizeFormat;
- adr.csize  :=Min(info.GetElemSize*info.count,adr.fsize);
+ adr.csize  :=adr.fsize;
+ //adr.csize  :=Min(info.GetElemSize*info.count,adr.fsize);
  adr.ioffset:=FSPI.MUBUF.OFFSET;
 
  if (adr.stride=0) then adr.stride:=1;

@@ -179,7 +179,7 @@ begin
   pVar:=node^.pVar;
   if (pVar<>nil) and node^.IsUsed then
   begin
-   FDebugInfo^.OpSourceExtension(node^.GetString);
+   FDebugInfo^.OpSource(node^.GetString);
   end;
   node:=Next(node);
  end;

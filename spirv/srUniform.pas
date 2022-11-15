@@ -442,7 +442,7 @@ begin
   pVar:=node^.pVar;
   if (pVar<>nil) and node^.IsUsed then
   begin
-   pDebugInfoList^.OpSourceExtension(node^.GetString);
+   pDebugInfoList^.OpSource(node^.GetString);
   end;
   node:=Next(node);
  end;

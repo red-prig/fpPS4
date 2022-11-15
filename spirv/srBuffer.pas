@@ -53,7 +53,9 @@ type
 
    FCount:PtrUint;
    dtype:TsrDataType;
-   pType:PsrType;
+
+   sType,pType:PsrType;
+
    FID:Integer; //alloc late
 
    //
@@ -72,8 +74,8 @@ type
   function  FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType):TFieldFetchValue;
   function  FetchRuntimeArray(_offset,_stride:PtrUint):TFieldFetchValue;
   function  IsStructUsedRuntimeArray:Boolean;
-  function  IsStructNotUsed:Boolean; inline;
-  function  IsTop:Boolean; inline;
+  function  IsStructNotUsed:Boolean;
+  function  IsTop:Boolean;
   function  GetStructDecorate:DWORD;
   procedure UpdateSize;
   function  GetSize:PtrUint;
@@ -262,6 +264,8 @@ begin
   _stride:=_dtype.Child.BitSize div 8;
  end;
 
+ Assert(_size=(_dtype.BitSize div 8));
+
  node:=Find_le(_offset);
  if (node<>nil) then
  begin
@@ -410,12 +414,25 @@ begin
  end;
 end;
 
-function TsrField.IsStructNotUsed:Boolean; inline;
+function TsrField.IsStructNotUsed:Boolean;
+var
+ child:PsrField;
 begin
- Result:=(FCount<=1) and (pParent<>nil);
+ Result:=False;
+
+ if IsTop then Exit;
+ if (FCount>1) then Exit;
+
+ child:=First;
+ if (child=nil) then Exit;
+
+ if (child^.offset<>0) then Exit;
+ if (child^.size<>stride) then Exit;
+
+ Result:=True;
 end;
 
-function TsrField.IsTop:Boolean; inline;
+function TsrField.IsTop:Boolean;
 begin
  Result:=(pParent=nil);
 end;
@@ -886,7 +903,7 @@ begin
   pVar:=node^.pVar;
   if (pVar<>nil) and node^.IsUsed then
   begin
-   pDebugInfoList^.OpSourceExtension(node^.GetString);
+   pDebugInfoList^.OpSource(node^.GetString);
   end;
   node:=Next(node);
  end;
@@ -1022,18 +1039,19 @@ var
  node:PsrField;
  SD:DWORD;
 begin
- if (pField^.dtype<>dtTypeStruct) then Exit;
- if (pField^.pType=nil) then Exit;
+ if (pField^.sType=nil) then Exit;
+ if (pField^.sType^.dtype<>dtTypeStruct) then Exit;
+
  pDecorateList:=FEmit.GetDecorateList;
  SD:=pField^.GetStructDecorate;
  if (SD<>DWORD(-1)) then
  begin
-  pDecorateList^.OpDecorate(pField^.pType,SD,0);
+  pDecorateList^.OpDecorate(pField^.sType,SD,0);
  end;
  node:=pField^.First;
  While (node<>nil) do
  begin
-  pDecorateList^.OpMemberDecorate(pField^.pType,node^.FID,node^.offset);
+  pDecorateList^.OpMember(pField^.sType,node^.FID,node^.offset);
   node:=pField^.Next(node);
  end;
 end;
