@@ -147,8 +147,7 @@ begin
 
  if (details<>nil) then
  begin
-  details^:=Default(SceNpTrophyGameDetails);
-  details^.numGroups  :=1;
+  details^.numGroups  :=0;
   details^.numTrophies:=1;
   details^.numPlatinum:=1;
   details^.numGold    :=1;
@@ -192,7 +191,7 @@ begin
  begin
   details^.trophyId   :=trophyId;
   details^.trophyGrade:=SCE_NP_TROPHY_GRADE_BRONZE;
-  details^.groupId    :=0;
+  details^.groupId    :=-1;
   details^.hidden     :=false;
   details^.name       :='tname';
   details^.description:='tdesc';
@@ -240,7 +239,6 @@ function ps4_sceNpTrophyGetGroupInfo(context:Integer;
                                      data:pSceNpTrophyGroupData):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
- Writeln(SizeOf(SceNpTrophyGroupDetails),' ',SizeOf(SceNpTrophyGroupData));
  if (details<>nil) then
  begin
   details^.groupId    :=groupId;
