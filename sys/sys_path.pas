@@ -23,6 +23,8 @@ Function  FetchSaveMount(path,point:PChar;mode:Integer):Integer;
 Function  UnMountSavePath(path:PChar):Integer;
 
 Function  FetchTmpMount(point:PChar;mode:Integer):Integer;
+Function  UnMountTmpPath(point:PChar):Integer;
+Function  FormatTmpPath(point:PChar):Integer;
 
 function  parse_filename(filename:PChar;var r:RawByteString):Integer;
 
@@ -288,9 +290,10 @@ end;
 //
 
 const
- SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334; //0x80D90002;
- SCE_APP_CONTENT_ERROR_BUSY     =-2133262333; //0x80D90003;
- SCE_APP_CONTENT_ERROR_INTERNAL =-2133262326; //0x80D9000A;
+ SCE_APP_CONTENT_ERROR_PARAMETER  =-2133262334; //0x80D90002
+ SCE_APP_CONTENT_ERROR_BUSY       =-2133262333; //0x80D90003
+ SCE_APP_CONTENT_ERROR_NOT_MOUNTED=-2133262332; //0x80D90004
+ SCE_APP_CONTENT_ERROR_INTERNAL   =-2133262326; //0x80D9000A
 
  M_TMP_VALUE:PChar='tmp';
 
@@ -300,21 +303,59 @@ var
 begin
  if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- if XCHG(FTmpMount,1)<>0 then Exit(SCE_APP_CONTENT_ERROR_BUSY);
-
- Move(M_TMP_VALUE,point^,Length(M_TMP_VALUE)+1);
-
  Case mode of
   0:;
-  1:begin //format
-     S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
-     DeleteDirectory(S,False);
-    end;
+  1:;
   else
    Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
  end;
 
+ if not CAS(FTmpMount,0,1) then Exit(SCE_APP_CONTENT_ERROR_BUSY);
+
+ PDWORD(point)^:=$00706D74; //tmp
+
+ S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+
+ if (mode=1) then //format
+ begin
+  DeleteDirectory(S,False);
+ end;
+
  CreateDir(S);
+
+ XCHG(FTmpMount,2);
+ Result:=0;
+end;
+
+Function UnMountTmpPath(point:PChar):Integer;
+begin
+ if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ if (PDWORD(point)^<>$00706D74) then //tmp
+ begin
+  Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+ end;
+
+ if not CAS(FTmpMount,2,0) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+
+ Result:=0;
+end;
+
+Function FormatTmpPath(point:PChar):Integer;
+var
+ S:RawByteString;
+begin
+ if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ if (PDWORD(point)^<>$00706D74) then //tmp
+ begin
+  Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+ end;
+
+ if (FTmpMount<>2) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+
+ S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+ DeleteDirectory(S,False);
 
  Result:=0;
 end;
@@ -323,7 +364,7 @@ function MountTmpConcat(const filename:RawByteString;var r:RawByteString):Intege
 var
  S:RawByteString;
 begin
- if (FTmpMount=0) then Exit(PT_ERR);
+ if (FTmpMount<>2) then Exit(PT_ERR);
 
  S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
 
