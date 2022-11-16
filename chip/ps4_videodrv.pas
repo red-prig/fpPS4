@@ -2126,7 +2126,7 @@ begin
   if not GFXRing.CmdBuffer.BeginRenderPass(FRenderCmd) then
   begin
    Writeln(StdErr,'!BeginRenderPass');
-   Assert(false);
+   Assert(false,'!BeginRenderPass');
   end;
  end;
 

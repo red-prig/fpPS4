@@ -334,37 +334,38 @@ end;
 
 function TDirFile.getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
 var
- i,count:DWORD;
+ s,e,count:DWORD;
 begin
  count:=nbytes div SizeOf(dirent);
+ if (count=0) then Exit(-EINVAL);
 
  rwlock_wrlock(lock);
-  i:=pos+count;
-  if (i>Length(dirs)) then
+  s:=pos;
+  e:=s+count;
+  if (e>Length(dirs)) then
   begin
-   i:=Length(dirs);
-   if (pos>i) then
+   e:=Length(dirs);
+   if (s>e) then
    begin
     count:=0;
    end else
    begin
-    count:=(i-pos);
+    count:=(e-s);
    end;
   end;
-
-  if (count<>0) then
-  begin
-   Move(dirs[pos],buf^,count*SizeOf(dirent));
-  end;
-
-  pos:=i;
+  pos:=e;
  rwlock_unlock(lock);
 
- Writeln('getdirentries:',count,' ',i);
+ if (count<>0) then
+ begin
+  Move(dirs[s],buf^,count*SizeOf(dirent));
+ end;
+
+ Writeln('getdirentries:',count,' ',e);
 
  if (basep<>nil) then
  begin
-  basep^:=i;
+  basep^:=e;
  end;
 
  Result:=count*SizeOf(dirent);
