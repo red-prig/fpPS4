@@ -7,6 +7,8 @@ interface
 uses
  Classes,
  SysUtils,
+ fileutil,
+ atomic,
  RWLock,
  ps4_program,
  sys_kernel;
@@ -19,6 +21,8 @@ const
 
 Function  FetchSaveMount(path,point:PChar;mode:Integer):Integer;
 Function  UnMountSavePath(path:PChar):Integer;
+
+Function  FetchTmpMount(point:PChar;mode:Integer):Integer;
 
 function  parse_filename(filename:PChar;var r:RawByteString):Integer;
 
@@ -49,6 +53,8 @@ type
 var
  FSaveMounts_lock:TRWLock;
  FSaveMounts:array[0..15] of TMountDir;
+
+ FTmpMount:Integer=0;
 
 Procedure DoFixRelative(var Path:RawByteString);
 Var
@@ -254,6 +260,8 @@ begin
 
 end;
 
+//
+
 Function GetSaveMount(id:Byte):RawByteString;
 begin
  rwlock_rdlock(FSaveMounts_lock);
@@ -277,6 +285,53 @@ begin
  Result:=PathConcat(s,filename,r);
 end;
 
+//
+
+const
+ SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334; //0x80D90002;
+ SCE_APP_CONTENT_ERROR_BUSY     =-2133262333; //0x80D90003;
+ SCE_APP_CONTENT_ERROR_INTERNAL =-2133262326; //0x80D9000A;
+
+ M_TMP_VALUE:PChar='tmp';
+
+Function FetchTmpMount(point:PChar;mode:Integer):Integer;
+var
+ S:RawByteString;
+begin
+ if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ if XCHG(FTmpMount,1)<>0 then Exit(SCE_APP_CONTENT_ERROR_BUSY);
+
+ Move(M_TMP_VALUE,point^,Length(M_TMP_VALUE)+1);
+
+ Case mode of
+  0:;
+  1:begin //format
+     S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+     DeleteDirectory(S,False);
+    end;
+  else
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+ end;
+
+ CreateDir(S);
+
+ Result:=0;
+end;
+
+function MountTmpConcat(const filename:RawByteString;var r:RawByteString):Integer;
+var
+ S:RawByteString;
+begin
+ if (FTmpMount=0) then Exit(PT_ERR);
+
+ S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+
+ Result:=PathConcat(s,filename,r);
+end;
+
+//
+
 const
  PT_NEXT=PT_ROOT;
 
@@ -291,6 +346,11 @@ begin
         if (fp^<>#0) then Inc(fp);
         r:=fp;
         Result:=PT_DEV;
+       end;
+     $00706D74: //tmp
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountTmpConcat(fp,r);
        end;
      else
         Result:=PT_ERR;
