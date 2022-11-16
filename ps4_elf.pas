@@ -2907,7 +2907,7 @@ begin
 
  //OpenOrbis relies on the fact that besides %rdi and %rsp also link to StartupParams, a very strange thing
  asm
-  xor %esi,%esi
+  xor %rsi,%rsi
   lea StartupParams,%rdi
   mov %rdi,%rsp
   jmp P

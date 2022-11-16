@@ -56,6 +56,7 @@ end;
 function ps4_is_signal_return(param:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=1;
+ if ptruint(param)<4*1024 then Exit;
 
  if (param[0]<>$48006a40247c8d48) or
     (param[1]<>$050f000001a1c0c7) or
