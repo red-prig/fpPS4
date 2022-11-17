@@ -7,6 +7,7 @@ interface
 uses
   Windows,
   RWLock,
+  ps4libdoc,
   ps4_map_mm,
   ps4_pthread,
   ps4_time,
@@ -215,27 +216,17 @@ function _get_proc_libSceLibcInternal(src:PLIBRARY;nid:QWORD):Pointer;
 var
  lib:PLIBRARY;
 begin
- Result:=nil;
- lib:=ps4_app.GetLib('libc');
- if (lib<>nil) then
- begin
-  Result:=lib^.get_proc(Nid);
- end;
- if (Result=nil) then
- begin
-  Result:=src^._get_proc(nid);
- end;
-end;
-
-{
-function _get_proc_libSceLibcInternal(src:PLIBRARY;nid:QWORD):Pointer;
-var
- lib:PLIBRARY;
-begin
  Result:=src^._get_proc(nid);
- if (Result=nil) then
+ if (Result=nil) then //redirect to libc
  begin
   Case nid of
+
+   //Variadic
+   $C3537144142A7E64, //printf_s
+   $FAA8AD3046E44969, //vsprintf_s
+   $43657E8AABE3802D, //vsnprintf
+   $85CB90803E775313, //printf
+   $18CA6FC4F156F76E, //vprintf
    $78B743C3A974FDB5: //snprintf
    begin
     lib:=ps4_app.GetLib('libc');
@@ -244,26 +235,8 @@ begin
      Result:=lib^.get_proc(Nid);
     end;
    end;
-   $F33B2ED385CDB19E: //expf
-   begin
-    lib:=ps4_app.GetLib('libc');
-    if (lib<>nil) then
-    begin
-     Result:=lib^.get_proc(Nid);
-    end;
-    if (Result=nil) then
-    begin
-     Result:=@ps4_expf;
-    end;
-   end;
-  $DC63E98D0740313C: //__cxa_guard_acquire
-   begin
-    lib:=ps4_app.GetLib('libc');
-    if (lib<>nil) then
-    begin
-     Result:=lib^.get_proc(Nid);
-    end;
-   end;
+
+  $DC63E98D0740313C, //__cxa_guard_acquire
   $F6B01E00D4F6B721: //__cxa_guard_release
    begin
     lib:=ps4_app.GetLib('libc');
@@ -272,14 +245,26 @@ begin
      Result:=lib^.get_proc(Nid);
     end;
    end;
+
+  end; //Case
+
+  //TODO redirect
+  if (Result=nil) then
+  begin
+   lib:=ps4_app.GetLib('libc');
+   if (lib<>nil) then
+   begin
+    Writeln(StdErr,'Redirected:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
+    Result:=lib^.get_proc(Nid);
+   end;
   end;
-  if (Result<>nil) then
+
+  if (Result<>nil) then //save new
   begin
    src^.set_proc(nid,Result);
   end;
  end;
 end;
-}
 
 function Load_libSceLibcInternal(Const name:RawByteString):TElf_node;
 var
@@ -294,19 +279,23 @@ begin
 
  lib^.set_proc($653E0E0C3D93B3DA,@Need_sceLibcInternal);
 
- lib^.set_proc($D530E8FC89AA9097,@_Stdin );
- lib^.set_proc($DAC5B3858A851F81,@_Stdout);
- lib^.set_proc($1FC029ACA799B4D8,@_Stderr);
+ //lib^.set_proc($D530E8FC89AA9097,@_Stdin );
+ //lib^.set_proc($DAC5B3858A851F81,@_Stdout);
+ //lib^.set_proc($1FC029ACA799B4D8,@_Stderr);
 
  lib^.set_proc($F334C5BC120020DF,@ps4_memset);
  lib^.set_proc($0DF8AF3C0AE1B9C8,@ps4_memcmp);
  lib^.set_proc($3452ECF9D44918D8,@ps4_memcpy_s);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
- lib^.set_proc($FE19F5B5C547AB94,@ps4_sceLibcMspaceCreate);
- lib^.set_proc($3898E6FD03881E52,@ps4_sceLibcMspaceMalloc);
 
- lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
+ //lib^.set_proc($FE19F5B5C547AB94,@ps4_sceLibcMspaceCreate);
+ //lib^.set_proc($3898E6FD03881E52,@ps4_sceLibcMspaceMalloc);
+ //5BA4A25528820ED2:sceLibcMspaceDestroy
+
+ //lib^.set_proc($F33B2ED385CDB19E,@ps4_expf);
+
+ //lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
 
  lib:=Result._add_lib('libSceLibcInternalExt');
 
