@@ -14,6 +14,8 @@ uses
  sys_pthread,
  sys_path,
  ps4libdoc,
+ ps4_libkernel,
+ ps4_libSceLibcInternal,
  ps4_libSceScreenShot,
  ps4_libSceRtc,
  ps4_libSceNpSignaling,
@@ -40,7 +42,7 @@ uses
  ps4_libSceAudioOut,
  ps4_libSceVideoOut,
  ps4_libScePad,
- ps4_libkernel,
+ ps4_libSceNpWebApi,
  ps4_elf,
  ps4_pthread,
  ps4_program,
@@ -216,35 +218,6 @@ begin
  Result:=3;
 end;
 
-function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;
-                                   poolSize:size_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
- Result:=4;
-end;
-
-function ps4_sceNpWebApiCreateContextA(libCtxId,userId:Integer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApiCreateContextA:',libCtxId,':',userId);
- Result:=Integer($80552907);
-end;
-
-//nop nid:libSceNpWebApi:ADD82CE59D4CC85C:sceNpWebApiCreateRequest
-
-
-function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
-                                    poolSize:size_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
- Result:=4;
-end;
-
-function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
- Result:=5;
-end;
-
 function ps4_sceVoiceQoSInit(
           pMemBlock:Pointer;
           memSize:DWORD;
@@ -304,19 +277,6 @@ begin
    'libSceHttp2':
     Case Info^.nid of
      QWORD($DC909EDE509B43C0):Result:=@ps4_sceHttp2Init;
-    end;
-
-   'libSceNpWebApi':
-    Case Info^.nid of
-     QWORD($1B70272CD7510631):Result:=@ps4_sceNpWebApiInitialize;
-     QWORD($CE4E9CEB9C68C8ED):Result:=@ps4_sceNpWebApiCreateContextA;
-     //nop nid:libSceNpWebApi:ADD82CE59D4CC85C:sceNpWebApiCreateRequest
-    end;
-
-   'libSceNpWebApi2':
-    Case Info^.nid of
-     QWORD($FA8F7CD7A61086A4):Result:=@ps4_sceNpWebApi2Initialize;
-     QWORD($B24E786E2E85B583):Result:=@ps4_sceNpWebApi2CreateUserContext;
     end;
 
     'libSceVoiceQoS':
