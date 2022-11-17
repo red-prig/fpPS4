@@ -50,15 +50,17 @@ type
 
 implementation
 
-var
- SDK_VERSION:DWORD;
+uses
+ sys_kernel;
+
+function SDK_VERSION:DWORD;
+begin
+ Result:=sys_kernel.SDK_VERSION;
+ if (Result=0) then Result:=$5050031;
+end;
 
 function ps4_module_start(args:QWORD;argp:Pointer):Integer; SysV_ABI_CDecl; //BaOKcng8g88
 begin
- if (ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION)<0) then
- begin
-  SDK_VERSION:=$5050031;
- end;
  Result:=0;
 end;
 

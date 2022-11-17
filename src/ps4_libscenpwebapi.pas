@@ -21,8 +21,8 @@ end;
 function ps4_sceNpWebApiCreateContextA(libCtxId,userId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpWebApiCreateContextA:',libCtxId,':',userId);
- //Result:=Integer($80552907);
- Result:=0;
+ Result:=Integer($80552907);
+ //Result:=0;
 end;
 
 //nop nid:libSceNpWebApi:ADD82CE59D4CC85C:sceNpWebApiCreateRequest

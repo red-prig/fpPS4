@@ -92,21 +92,64 @@ type
   base:Pointer;
   capacity:size_t;
   count:size_t;
+  alloc:Integer;
+  flag:Integer;
   lock:TRWLock;
  end;
 
 function ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):SceLibcMspace; SysV_ABI_CDecl;
+var
+ addr:Pointer;
+ max_size:Integer;
+ unk_flag:Integer;
+ alloc:Integer;
+ r:Integer;
 begin
  Result:=nil;
 
- if ((QWORD(base) and $F)<>0) or ((capacity and $F)<>0) then Exit;
- if (capacity<=1440) then Exit;
+ max_size:=1440;
+ if (SDK_VERSION<>0) and (SDK_VERSION<=$34fffff) then
+ begin
+  max_size:=1408;
+ end;
+
+ unk_flag:=flag and 2;
+
+ if ((unk_flag=0) or (base<>nil)) and
+    (
+     (ptruint(base)<$400000) or
+     (capacity>$fbffc00000)  or
+     ((ptruint(base)+capacity)>$fbffffffff)
+    ) then Exit;
+
+ if (flag>15) then Exit;
+
+ if (SDK_VERSION<>0) and (SDK_VERSION<=$34fffff) then
+ begin
+  if (capacity<=max_size) or (((ptruint(base) or capacity) and 7)<>0) then Exit;
+ end else
+ begin
+  if (capacity<=max_size) then Exit;
+ end;
 
  Writeln('sceLibcMspaceCreate:',name,':',HexStr(base),'..',HexStr(base+capacity));
+
+ alloc:=0;
+ if (base=nil) then
+ begin
+  r:=ps4_sceKernelMapNamedFlexibleMemory(@base,Align(capacity,64*1024),3,0,name);
+  if (r<>0) then Exit;
+  alloc:=1;
+ end;
+
  Result:=SwAllocMem(SizeOf(TSceLibcMspace));
- Result^.base:=base;
+ if (Result=nil) then Exit;
+
+ Result^.base    :=base;
  Result^.capacity:=capacity;
- Result^.count:=1440;
+ Result^.count   :=max_size;
+ Result^.alloc   :=alloc;
+ Result^.flag    :=flag;
 
  _sig_lock;
  rwlock_init(Result^.lock);
@@ -119,11 +162,11 @@ begin
  if (msp=nil) then Exit;
  _sig_lock;
  rwlock_wrlock(msp^.lock);
- if ((msp^.count+size)<=msp^.capacity) then
- begin
-  Result:=msp^.base+msp^.count;
-  msp^.count:=msp^.count+size;
- end;
+  if ((msp^.count+size)<=msp^.capacity) then
+  begin
+   Result:=msp^.base+msp^.count;
+   msp^.count:=msp^.count+size;
+  end;
  rwlock_unlock(msp^.lock);
  _sig_unlock;
 end;
