@@ -69,20 +69,21 @@ type
  PSceLibcParam=^TSceLibcParam;
  TSceLibcParam=packed record
   Size:QWORD;
-  Unknown1:QWORD; //10000000c
+  entry_count:DWORD;         //0xc
+  SceLibcInternalHeap:DWORD; //1       //(entry_count > 1)
   sceLibcHeapSize:PDWORD;
   sceLibcHeapDelayedAlloc:PDWORD;
   sceLibcHeapExtendedAlloc:PDWORD;
   sceLibcHeapInitialSize:PDWORD;
   _sceLibcMallocReplace:PsceLibcMallocReplace;
   _sceLibcNewReplace:PsceLibcNewReplace;
-  sceLibcHeapHighAddressAlloc:PQWORD;
+  sceLibcHeapHighAddressAlloc:PQWORD;  //(entry_count > 2)
   Need_sceLibc:PDWORD;
-  sceLibcHeapMemoryLock:PQWORD;
+  sceLibcHeapMemoryLock:PQWORD;        //(entry_count > 4)
   sceKernelInternalMemorySize:PQWORD;
   _sceLibcMallocReplaceForTls:PsceLibcMallocReplaceForTls;
-  Unknown2:QWORD;
-  sceLibcHeapDebugFlags:PQWORD;
+  sceLibcMaxSystemSize:PQWORD;         //The maximum amount of the memory areas for the mspace. min:0x1000000
+  sceLibcHeapDebugFlags:PQWORD;        //(entry_count > 8)
   sceLibcStdThreadStackSize:PDWORD;
   Unknown3:QWORD;
   sceKernelInternalMemoryDebugFlags:PDWORD;
