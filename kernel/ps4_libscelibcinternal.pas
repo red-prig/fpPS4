@@ -88,30 +88,68 @@ const
  SCE_LIBC_MSPACE_DEBUG_SHORTAGE =($00000004);
 
 type
+ {
+            <- base
+  ......
+  [base]:8  <-p_mspace_chunk
+  [size]:8
+  [next]:8  <-SceLibcMspace (1312)
+  [aflag]:4
+  ......
+ }
+
+ p_mspace_chunk=^t_mspace_chunk;
+ t_mspace_chunk=packed record
+  base:Pointer;
+  size:QWORD;
+  next:Pointer;
+  aflag:Integer;
+ end;
+
  SceLibcMspace=^TSceLibcMspace;
  TSceLibcMspace=packed record
-  base:Pointer;
-  capacity:size_t;
-  count:size_t;
-  alloc:Integer;
-  flag:Integer;
+  _next:Pointer;
+  _aflag:Integer;
+
+  //Next comes the structure is not identical to the original
+  _align:Integer;
+
+  flags:Integer;
+  aflag:Integer;
+
+  magic:QWORD;   //0x58585858
   lock:TRWLock;
+
+  base:Pointer;
+  size:QWORD;
+
+  list:p_mspace_chunk;
+
+  alloc_addr:Pointer;
+  alloc_size:QWORD;
+
+  name:array[0..31] of AnsiChar;
  end;
 
 function ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):SceLibcMspace; SysV_ABI_CDecl;
 var
- addr:Pointer;
- max_size:Integer;
+ m_count:Integer;
  unk_flag:Integer;
- alloc:Integer;
+ aflag:Integer;
  r:Integer;
+
+ base_offst:Integer;
+ base_align:QWORD;
+
+ chunk:p_mspace_chunk;
+
 begin
  Result:=nil;
 
- max_size:=1440;
+ m_count:=1440;
  if (SDK_VERSION<>0) and (SDK_VERSION<=$34fffff) then
  begin
-  max_size:=1408;
+  m_count:=1408;
  end;
 
  unk_flag:=flag and 2;
@@ -127,34 +165,64 @@ begin
 
  if (SDK_VERSION<>0) and (SDK_VERSION<=$34fffff) then
  begin
-  if (capacity<=max_size) or (((ptruint(base) or capacity) and 7)<>0) then Exit;
+  if (capacity<=m_count) or (((ptruint(base) or capacity) and 7)<>0) then Exit;
  end else
  begin
-  if (capacity<=max_size) then Exit;
+  if (capacity<=m_count) then Exit;
  end;
 
  Writeln('sceLibcMspaceCreate:',name,':',HexStr(base),'..',HexStr(base+capacity));
 
- alloc:=0;
+ aflag:=0;
  if (base=nil) then
  begin
-  r:=ps4_sceKernelMapNamedFlexibleMemory(@base,Align(capacity,64*1024),3,0,name);
+  capacity:=Align(capacity,64*1024);
+  r:=ps4_sceKernelMapNamedFlexibleMemory(@base,capacity,3,0,name);
   if (r<>0) then Exit;
-  alloc:=1;
+  aflag:=1;
  end;
 
- Result:=SwAllocMem(SizeOf(TSceLibcMspace));
- if (Result=nil) then Exit;
+ base_offst:=Integer(ptruint(base)+16);
+ base_align:=Qword((-base_offst) and 31);
+ if ((base_offst and 31)=0) then
+ begin
+  base_align:=(base_offst and 31);
+ end;
 
- Result^.base    :=base;
- Result^.capacity:=capacity;
- Result^.count   :=max_size;
- Result^.alloc   :=alloc;
- Result^.flag    :=flag;
+ chunk:=p_mspace_chunk(base+base_align);
+
+ chunk^.base :=nil;  //root
+ chunk^.size :=1312; //root
+ chunk^.aflag:=0;    //root
+
+ Result:=SceLibcMspace(@chunk^.next); //+16
+
+ if (name=nil) then name:='SceLibcMspace'; //+hexstr(base) ???
+
+ FillChar(Result^,1312,0);
+
+ Result^.flags:=flag;
+ Result^.aflag:=aflag;
+
+ Result^.magic:=$58585858;
+
+ Result^.base:=base;     //real data of root
+ Result^.size:=capacity; //real data of root
+
+ Result^.alloc_addr:=Pointer(Result)+1312;
+ Result^.alloc_size:=capacity-(Pointer(Result)-base);
+
+ MoveChar0(name^,Result^.name,32);
 
  _sig_lock;
- rwlock_init(Result^.lock);
+  rwlock_init(Result^.lock);
  _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceDestroy(msp:SceLibcMspace):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Assert(False,'sceLibcMspaceDestroy');
 end;
 
 function ps4_sceLibcMspaceMalloc(msp:SceLibcMspace;size:size_t):Pointer; SysV_ABI_CDecl;
@@ -163,19 +231,45 @@ begin
  if (msp=nil) then Exit;
  _sig_lock;
  rwlock_wrlock(msp^.lock);
-  if ((msp^.count+size)<=msp^.capacity) then
+  if (msp^.alloc_size>=size) then //linear (-_-)
   begin
-   Result:=msp^.base+msp^.count;
-   msp^.count:=msp^.count+size;
+   Result:=msp^.alloc_addr;
+   msp^.alloc_addr:=msp^.alloc_addr+size;
+   msp^.alloc_size:=msp^.alloc_size-size;
   end;
  rwlock_unlock(msp^.lock);
  _sig_unlock;
 end;
 
-function ps4_expf(x:Single):Single; SysV_ABI_CDecl;
+function ps4_sceLibcMspaceCalloc(msp:SceLibcMspace;nelem,size:size_t):Pointer; SysV_ABI_CDecl;
 begin
- Result:=System.Exp(x);
+ Result:=ps4_sceLibcMspaceMalloc(msp,nelem*size);
+ if (Result<>nil) then
+ begin
+  FillChar(Result^,nelem*size,0);
+ end;
 end;
+
+function ps4_sceLibcMspaceFree(msp:SceLibcMspace;ptr:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ Assert(False,'sceLibcMspaceFree');
+end;
+
+//void * sceLibcMspaceMemalign(SceLibcMspace *msp,size_t boundary,size_t size)
+//int sceLibcMspacePosixMemalign(SceLibcMspace *msp,void **ptr,size_t boundary,size_t size)
+//void * sceLibcMspaceRealloc(SceLibcMspace *msp,void *ptr,size_t size)
+//void * sceLibcMspaceReallocalign(SceLibcMspace *msp,void *ptr,size_t boundary,size_t size)
+
+//size_t sceLibcMspaceMallocUsableSize(void *ptr)
+
+//int sceLibcMspaceSetMallocCallback(SceLibcMspace *msp,void *cbs)
+//int sceLibcMspaceGetAddressRanges(SceLibcMspace *msp)
+//int sceLibcMspaceIsHeapEmpty(SceLibcMspace *msp)
+
+//int sceLibcMspaceMallocStats(SceLibcMspace *msp,SceLibcMallocManagedSize *mmsize)
+//int sceLibcMspaceMallocStatsFast(SceLibcMspace *msp,SceLibcMallocManagedSize *mmsize)
+
 
 type
  PGetTraceInfo=^TGetTraceInfo;
@@ -291,9 +385,8 @@ begin
 
  //lib^.set_proc($FE19F5B5C547AB94,@ps4_sceLibcMspaceCreate);
  //lib^.set_proc($3898E6FD03881E52,@ps4_sceLibcMspaceMalloc);
- //5BA4A25528820ED2:sceLibcMspaceDestroy
 
- //lib^.set_proc($F33B2ED385CDB19E,@ps4_expf);
+ //5BA4A25528820ED2:sceLibcMspaceDestroy
 
  //lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
 
