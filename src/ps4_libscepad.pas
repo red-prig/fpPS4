@@ -117,6 +117,7 @@ type
   angularVelocity  :Tvec_float3;
   touchData        :ScePadTouchData;
   connected        :Boolean;
+  _align:array[0..2] of Byte;
   timestamp        :QWORD;
   extensionUnitData:ScePadExtensionUnitData;
   connectedCount   :Byte;
@@ -164,6 +165,7 @@ type
   connectionType:Byte;
   connectedCount:Byte;
   connected:Boolean;
+  _align:array[0..2] of Byte;
   deviceClass:DWORD; //ScePadDeviceClass
   reserve:array[0..7] of Byte;
  end;
@@ -211,7 +213,8 @@ type
  pScePadDeviceClassData=^ScePadDeviceClassData;
  ScePadDeviceClassData=packed record
   deviceClass:DWORD; //ScePadDeviceClass
-  bDataValid :Integer;
+  bDataValid :Boolean;
+  _align:array[0..2] of Byte;
   classData:packed record
    Case Byte of
 
@@ -501,7 +504,7 @@ begin
  if (pDeviceClassData=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  pDeviceClassData^:=Default(ScePadDeviceClassData);
  pDeviceClassData^.deviceClass:=SCE_PAD_DEVICE_CLASS_STANDARD;
- pDeviceClassData^.bDataValid:=Integer(True);
+ pDeviceClassData^.bDataValid:=True;
  Result:=0;
 end;
 
