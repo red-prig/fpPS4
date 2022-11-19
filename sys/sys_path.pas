@@ -373,6 +373,25 @@ end;
 
 //
 
+function MountDownloadConcat(id:Byte;const filename:RawByteString;var r:RawByteString):Integer;
+var
+ S:RawByteString;
+begin
+ Case id of
+  0..1:;
+  else
+   Exit(PT_ERR);
+ end;
+
+ //param.sfo download size TODO
+ S:=IncludeTrailingPathDelimiter(GetCurrentDir)+'download'+IntToStr(id);
+ if not ForceDirectories(S) then Exit(PT_ERR);
+
+ Result:=PathConcat(S,filename,r);
+end;
+
+//
+
 const
  PT_NEXT=PT_ROOT;
 
@@ -420,6 +439,18 @@ begin
         Result:=PT_ERR;
     end;
   9:Case PQWORD(pp)^ of
+     $64616F6C6E776F64: //download
+       begin
+        Case (pp+8)^ of
+         '0'..'1':
+           begin
+            if (fp^<>#0) then Inc(fp);
+            Result:=MountDownloadConcat(ord((pp+8)^)-ord('0'),fp,r);
+           end;
+         else
+            Result:=PT_ERR;
+        end;
+       end;
      $6174616465766173: //savedata
        begin
         Case (pp+8)^ of
@@ -458,8 +489,14 @@ begin
     end;
   else
     begin
-     //Writeln((fp-pp),'*',fp,'*',pp);
-     Result:=PT_ERR;
+     if (fp^=#0) then //root???
+     begin
+      Result:=PT_ROOT;
+     end else
+     begin
+      //Writeln((fp-pp),'*',fp,'*',pp);
+      Result:=PT_ERR;
+     end;
     end;
  end;
 end;
