@@ -16,90 +16,120 @@ uses
   SysUtils;
 
 type
- t_user_free=procedure(ptr:Pointer); SysV_ABI_CDecl;
- t_user_malloc=function(size:qword):Pointer; SysV_ABI_CDecl;
+ t_user_malloc_init       =function():Integer;                              SysV_ABI_CDecl;
+ t_user_malloc_finalize   =function():Integer;                              SysV_ABI_CDecl;
+ t_user_malloc            =function(size:qword):Pointer;                    SysV_ABI_CDecl;
+ t_user_free              =procedure(ptr:Pointer);                          SysV_ABI_CDecl;
+ t_user_calloc            =function(nelem,count:qword):Pointer;             SysV_ABI_CDecl;
+ t_user_realloc           =function(ptr:Pointer;size:qword):Pointer;        SysV_ABI_CDecl;
+ t_user_memalign          =function(align,size:qword):Pointer;              SysV_ABI_CDecl;
+ t_user_reallocalign      =function(ptr:Pointer;size,align:qword):Pointer;  SysV_ABI_CDecl;
+ t_user_posix_memalign    =function(ptr:PPointer;align,size:qword):Integer; SysV_ABI_CDecl;
+ t_user_malloc_stats      =function(mmsize:Pointer):Integer;                SysV_ABI_CDecl;
+ t_user_malloc_stats_fast =function(mmsize:Pointer):Integer;                SysV_ABI_CDecl;
+ t_user_malloc_usable_size=function(ptr:Pointer):qword;                     SysV_ABI_CDecl;
 
  PsceLibcMallocReplace=^TsceLibcMallocReplace;
  TsceLibcMallocReplace=packed record
   Size:QWORD;
   Unknown1:QWORD; //00000001
-  user_malloc_init:Pointer;
-  user_malloc_finalize:Pointer;
-  user_malloc:Pointer;
-  user_free:Pointer;
-  user_calloc:Pointer;
-  user_realloc:Pointer;
-  user_memalign:Pointer;
-  user_reallocalign:Pointer;
-  user_posix_memalign:Pointer;
-  user_malloc_stats:Pointer;
-  user_malloc_stats_fast:Pointer;
-  user_malloc_usable_size:Pointer;
+  user_malloc_init       :t_user_malloc_init;
+  user_malloc_finalize   :t_user_malloc_finalize;
+  user_malloc            :t_user_malloc;
+  user_free              :t_user_free;
+  user_calloc            :t_user_calloc;
+  user_realloc           :t_user_realloc;
+  user_memalign          :t_user_memalign;
+  user_reallocalign      :t_user_reallocalign;
+  user_posix_memalign    :t_user_posix_memalign;
+  user_malloc_stats      :t_user_malloc_stats;
+  user_malloc_stats_fast :t_user_malloc_stats_fast;
+  user_malloc_usable_size:t_user_malloc_usable_size;
  end;
+
+ t_user_new_1         =function(size:qword):Pointer;                    SysV_ABI_CDecl;
+ t_user_new_2         =function(size:qword;throw:Pointer):Pointer;      SysV_ABI_CDecl;
+ t_user_new_array_1   =function(size:qword):Pointer;                    SysV_ABI_CDecl;
+ t_user_new_array_2   =function(size:qword;throw:Pointer):Pointer;      SysV_ABI_CDecl;
+ t_user_delete_1      =procedure(ptr:Pointer);                          SysV_ABI_CDecl;
+ t_user_delete_2      =procedure(ptr:Pointer;throw:Pointer);            SysV_ABI_CDecl;
+ t_user_delete_array_1=procedure(ptr:Pointer);                          SysV_ABI_CDecl;
+ t_user_delete_array_2=procedure(ptr:Pointer;throw:Pointer);            SysV_ABI_CDecl;
+ t_user_delete_3      =procedure(ptr:Pointer;size:qword);               SysV_ABI_CDecl;
+ t_user_delete_4      =procedure(ptr:Pointer;size:qword;throw:Pointer); SysV_ABI_CDecl;
+ t_user_delete_array_3=procedure(ptr:Pointer;size:qword);               SysV_ABI_CDecl;
+ t_user_delete_array_4=procedure(ptr:Pointer;size:qword;throw:Pointer); SysV_ABI_CDecl;
 
  PsceLibcNewReplace=^TsceLibcNewReplace;
  TsceLibcNewReplace=packed record
   Size:QWORD;
   Unknown1:QWORD; //00000002
-  EXTERNAL_user_new1:Pointer;
-  EXTERNAL_user_new2:Pointer;
-  EXTERNAL_user_new_array1:Pointer;
-  EXTERNAL_user_new_array2:Pointer;
-  EXTERNAL_user_delete1:Pointer;
-  EXTERNAL_user_delete2:Pointer;
-  EXTERNAL_user_delete_array1:Pointer;
-  EXTERNAL_user_delete_array2:Pointer;
-  EXTERNAL_user_delete3:Pointer;
-  EXTERNAL_user_delete4:Pointer;
-  EXTERNAL_user_delete_array3:Pointer;
-  EXTERNAL_user_delete_array4:Pointer;
+  user_new_1         :t_user_new_1;
+  user_new_2         :t_user_new_2;
+  user_new_array_1   :t_user_new_array_1;
+  user_new_array_2   :t_user_new_array_2;
+  user_delete_1      :t_user_delete_1;
+  user_delete_2      :t_user_delete_2;
+  user_delete_array_1:t_user_delete_array_1;
+  user_delete_array_2:t_user_delete_array_2;
+  user_delete_3      :t_user_delete_3;
+  user_delete_4      :t_user_delete_4;
+  user_delete_array_3:t_user_delete_array_3;
+  user_delete_array_4:t_user_delete_array_4;
  end;
+
+ t_user_malloc_init_for_tls   =function():Integer;                              SysV_ABI_CDecl;
+ t_user_malloc_fini_for_tls   =function():Integer;                              SysV_ABI_CDecl;
+ t_user_malloc_for_tls        =function(size:qword):Pointer;                    SysV_ABI_CDecl;
+ t_user_posix_memalign_for_tls=function(ptr:PPointer;align,size:qword):Integer; SysV_ABI_CDecl;
+ t_user_free_for_tls          =procedure(ptr:Pointer);                          SysV_ABI_CDecl;
 
  PsceLibcMallocReplaceForTls=^TsceLibcMallocReplaceForTls;
  TsceLibcMallocReplaceForTls=packed record
   Size:QWORD;
   Unknown1:QWORD; //00000001
-  user_malloc_init_for_tls:Pointer;
-  user_malloc_fini_for_tls:Pointer;
-  user_malloc_for_tls:Pointer;
-  user_posix_memalign_for_tls:Pointer;
-  user_free_for_tls:Pointer;
+  user_malloc_init_for_tls   :t_user_malloc_init_for_tls;
+  user_malloc_fini_for_tls   :t_user_malloc_fini_for_tls;
+  user_malloc_for_tls        :t_user_malloc_for_tls;
+  user_posix_memalign_for_tls:t_user_posix_memalign_for_tls;
+  user_free_for_tls          :t_user_free_for_tls;
  end;
 
  PSceLibcParam=^TSceLibcParam;
  TSceLibcParam=packed record
   Size:QWORD;
-  entry_count:DWORD;         //0xc
-  SceLibcInternalHeap:DWORD; //1       //(entry_count > 1)
-  sceLibcHeapSize:PDWORD;
-  sceLibcHeapDelayedAlloc:PDWORD;
-  sceLibcHeapExtendedAlloc:PDWORD;
-  sceLibcHeapInitialSize:PDWORD;
-  _sceLibcMallocReplace:PsceLibcMallocReplace;
-  _sceLibcNewReplace:PsceLibcNewReplace;
-  sceLibcHeapHighAddressAlloc:PQWORD;  //(entry_count > 2)
-  Need_sceLibc:PDWORD;
-  sceLibcHeapMemoryLock:PQWORD;        //(entry_count > 4)
-  sceKernelInternalMemorySize:PQWORD;
-  _sceLibcMallocReplaceForTls:PsceLibcMallocReplaceForTls;
-  sceLibcMaxSystemSize:PQWORD;         //The maximum amount of the memory areas for the mspace. min:0x1000000
-  sceLibcHeapDebugFlags:PQWORD;        //(entry_count > 8)
-  sceLibcStdThreadStackSize:PDWORD;
+  entry_count:DWORD;
+  SceLibcInternalHeap              :DWORD; //1 //(entry_count > 1)
+  sceLibcHeapSize                  :PDWORD;
+  sceLibcHeapDelayedAlloc          :PDWORD;
+  sceLibcHeapExtendedAlloc         :PDWORD;
+  sceLibcHeapInitialSize           :PDWORD;
+  _sceLibcMallocReplace            :PsceLibcMallocReplace;
+  _sceLibcNewReplace               :PsceLibcNewReplace;
+  sceLibcHeapHighAddressAlloc      :PQWORD;    //(entry_count > 2)
+  Need_sceLibc                     :PDWORD;
+  sceLibcHeapMemoryLock            :PQWORD;    //(entry_count > 4)
+  sceKernelInternalMemorySize      :PQWORD;
+  _sceLibcMallocReplaceForTls      :PsceLibcMallocReplaceForTls;
+  //The maximum amount of the memory areas for the mspace. min:0x1000000
+  sceLibcMaxSystemSize             :PQWORD;
+  sceLibcHeapDebugFlags            :PQWORD;    //(entry_count > 8)
+  sceLibcStdThreadStackSize        :PDWORD;
   Unknown3:QWORD;
   sceKernelInternalMemoryDebugFlags:PDWORD;
-  sceLibcWorkerThreadNum:PDWORD;
-  sceLibcWorkerThreadPriority:PDWORD;
-  sceLibcThreadUnnamedObjects:PDWORD;
+  sceLibcWorkerThreadNum           :PDWORD;
+  sceLibcWorkerThreadPriority      :PDWORD;
+  sceLibcThreadUnnamedObjects      :PDWORD;
  end;
 
  PSceKernelMemParam=^TSceKernelMemParam;
  TSceKernelMemParam=packed record
   Size:QWORD;
-  sceKernelExtendedPageTable:PQWORD;
-  sceKernelFlexibleMemorySize:PQWORD;
-  sceKernelExtendedMemory1:PQWORD;
+  sceKernelExtendedPageTable   :PQWORD;
+  sceKernelFlexibleMemorySize  :PQWORD;
+  sceKernelExtendedMemory1     :PQWORD;
   sceKernelExtendedGpuPageTable:PQWORD;
-  sceKernelExtendedMemory2:PQWORD;
+  sceKernelExtendedMemory2     :PQWORD;
   sceKernelExtendedCpuPageTable:PQWORD;
  end;
 
@@ -117,14 +147,14 @@ type
    Entry_count:DWORD; //>=1
    SDK_version:QWORD; //0x4508101
   end;
-  sceProcessName:PChar;
-  sceUserMainThreadName:PChar;
-  sceUserMainThreadPriority:PDWORD;
+  sceProcessName            :PChar;
+  sceUserMainThreadName     :PChar;
+  sceUserMainThreadPriority :PDWORD;
   sceUserMainThreadStackSize:PDWORD;
-  _sceLibcParam     :PSceLibcParam;
-  _sceKernelMemParam:PSceKernelMemParam;
-  _sceKernelFsParam :PSceKernelFsParam;
-  sceProcessPreloadEnabled:PDWORD;
+  _sceLibcParam             :PSceLibcParam;
+  _sceKernelMemParam        :PSceKernelMemParam;
+  _sceKernelFsParam         :PSceKernelFsParam;
+  sceProcessPreloadEnabled  :PDWORD;
  end;
 
  Telf_file=class;

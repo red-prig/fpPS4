@@ -253,14 +253,18 @@ end;
 type
  PAppHeapAPI=^TAppHeapAPI;
  TAppHeapAPI=packed record
-  _malloc,_free:Pointer;
+  malloc:Pointer;
+  free  :Pointer;
+  unknow:array[0..3] of Pointer;
+  posix_memalign:Pointer;
  end;
 
 procedure ps4__sceKernelRtldSetApplicationHeapAPI(heap_api:PAppHeapAPI); SysV_ABI_CDecl;
 begin
  Writeln('SetApplicationHeapAPI:',HexStr(heap_api));
- Writeln(' __malloc:',HexStr(heap_api^._malloc)); //__malloc
- Writeln('   __free:',HexStr(heap_api^._free));   //__free
+ Writeln('               malloc:',HexStr(heap_api^.malloc));
+ Writeln('                 free:',HexStr(heap_api^.free));
+ Writeln('       posix_memalign:',HexStr(heap_api^.posix_memalign));
 end;
 
 //cb used in pthread_exit
