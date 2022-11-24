@@ -18,6 +18,7 @@ uses
 implementation
 
 uses
+ ps4_mspace,
  sys_kernel,
  sys_signal;
 
@@ -192,7 +193,7 @@ begin
  chunk:=p_mspace_chunk(base+base_align);
 
  chunk^.base :=nil;  //root
- chunk^.size :=1312; //root
+ chunk^.size :=1315; //root
  chunk^.aflag:=0;    //root
 
  Result:=SceLibcMspace(@chunk^.next); //+16
