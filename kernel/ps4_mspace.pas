@@ -117,6 +117,18 @@ type
  malloc_state=SceLibcMspace;
  mstate      =^malloc_state;
 
+ T_CALLBACK_ACTION=procedure(id:Integer;data:Pointer); SysV_ABI_CDecl;
+
+function _sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace;
+function _sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer;
+function _sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer;
+function _sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer;
+function _sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer;
+function _sceLibcMspaceRealloc(msp:pSceLibcMspace;ptr:Pointer;size:size_t):Pointer;
+function _sceLibcMspaceMemalign(msp:pSceLibcMspace;boundary,size:size_t):Pointer;
+function _sceLibcMspaceReallocalign(msp:pSceLibcMspace;ptr:Pointer;boundary,size:size_t):Pointer;
+function _sceLibcMspacePosixMemalign(msp:pSceLibcMspace;ptr:PPointer;boundary,size:size_t):Integer;
+
 implementation
 
 uses
@@ -137,8 +149,8 @@ Const
 
  MAX_SIZE_T            =not ptruint(0);
 
- SIZE_T_SIZE           = sizeof(ptruint);
- SIZE_T_BITSIZE        = (sizeof(ptruint) shl 3);
+ SIZE_T_SIZE           =sizeof(ptruint);
+ SIZE_T_BITSIZE        =(sizeof(ptruint) shl 3);
 
  SIZE_T_ZERO           =ptruint(0);
  SIZE_T_ONE            =ptruint(1);
@@ -478,12 +490,12 @@ begin
  Result:=(s>m^.trim_check);
 end;
 
-function INITIAL_LOCK(m:mstate;name:Pchar):Integer; inline;
+function INITIAL_LOCK(m:mstate):Integer; inline;
 begin
  Result:=0;
  if use_lock(m) then
  begin
-  Result:=ps4_scePthreadMutexInit(@m^.mutex,nil,name);
+  Result:=ps4_scePthreadMutexInit(@m^.mutex,nil,@m^.name);
  end;
 end;
 
@@ -1837,7 +1849,7 @@ begin
 end;
 
 function  mspace_malloc_implementation(ms:mstate;bytes:ptruint):Pointer; forward;
-procedure mspace_free(ms:mstate;mem:Pointer); forward;
+function  mspace_free(ms:mstate;mem:Pointer):Integer; forward;
 
 function  internal_memalign(m:mstate;alignment,bytes:ptruint):Pointer; forward;
 
@@ -1974,7 +1986,7 @@ var
  remainder_size:ptruint;
  remainder:mchunkptr;
 begin
- if (alignment <= MALLOC_ALIGNMENT) then
+ if (alignment<=MALLOC_ALIGNMENT) then
  begin
   Exit(internal_malloc(m, bytes));
  end;
@@ -2099,7 +2111,7 @@ begin
  Result:=m;
 end;
 
-function destroy_mspace(ms:mstate):ptruint;
+function destroy_mspace(ms:mstate):Integer;
 var
  sp:msegmentptr;
  base:Pointer;
@@ -2134,8 +2146,6 @@ begin
    end;
   end;
  end;
-
- Result:=freed;
 end;
 
 function mspace_malloc_implementation(ms:mstate;bytes:ptruint):Pointer;
@@ -2303,7 +2313,7 @@ begin
   USAGE_ERROR_ACTION(ms,ms);
   Exit(nil);
  end;
- if (alignment <= MALLOC_ALIGNMENT) then
+ if (alignment<=MALLOC_ALIGNMENT) then
  begin
   Result:=mspace_malloc_implementation(ms, bytes);
  end else
@@ -2312,7 +2322,7 @@ begin
  end;
 end;
 
-procedure mspace_free(ms:mstate;mem:Pointer);
+function mspace_free(ms:mstate;mem:Pointer):Integer;
 label
  _postaction,
  _erroraction;
@@ -2329,17 +2339,23 @@ var
  nsize:ptruint;
  tp:tchunkptr;
 begin
+ Result:=0;
  if (mem<>nil) then
  begin
   p:=mem2chunk(mem);
 
   fm:=get_mstate_for(p);
-  Assert(fm=ms);
+
+  if (fm<>ms) then
+  begin
+   USAGE_ERROR_ACTION(ms, p);
+   Exit(1);
+  end;
 
   if (not ok_magic(fm)) then
   begin
    USAGE_ERROR_ACTION(fm, p);
-   Exit;
+   Exit(2);
   end;
 
   if (PREACTION(fm)=0) then
@@ -2446,9 +2462,10 @@ begin
     end;
    end;
   _erroraction:
-   USAGE_ERROR_ACTION(fm, p);
+    USAGE_ERROR_ACTION(fm, p);
+    Result:=3;
   _postaction:
-   POSTACTION(fm);
+    POSTACTION(fm);
   end;
  end;
 end;
@@ -2464,6 +2481,7 @@ begin
   USAGE_ERROR_ACTION(ms,ms);
   Exit(nil);
  end;
+
  if (n_elements<>0) then
  begin
   req:=n_elements*elem_size;
@@ -2516,11 +2534,6 @@ begin
  end;
 end;
 
-function mspace_realloc(ms:mstate;oldmem:Pointer;bytes:ptruint):Pointer;
-begin
- Result:=mspace_realloc2(ms,oldmem,bytes,0);
-end;
-
 function mspace_memalign(ms:mstate;alignment,bytes:ptruint):Pointer;
 begin
  if (not ok_magic(ms)) then
@@ -2563,7 +2576,22 @@ end;
 
 /////
 
-function ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace; SysV_ABI_CDecl;
+procedure CALLBACK_ACTION(m:mstate;id:Integer;data:Pointer); inline;
+var
+ cbs:T_CALLBACK_ACTION;
+begin
+ cbs:=T_CALLBACK_ACTION(m^.cbs);
+ if (cbs<>nil) then
+ if (PREACTION(m)=0) then
+ begin
+  cbs(id,data);
+  POSTACTION(m);
+ end;
+end;
+
+/////
+
+function _sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace;
 var
  ALLOC_BASE:Boolean;
  is_alloc:Boolean;
@@ -2610,8 +2638,6 @@ begin
 
  Result:=init_user_mstate(base, capacity);
 
- Writeln(HexStr(Result),' ',HexStr(pSceLibcMspace(base+base_align+16)));
-
  if is_alloc then
  begin
   Result^.seg.sflags:=Result^.seg.sflags or USE_MMAP_BIT;
@@ -2624,8 +2650,6 @@ begin
  Result^.page_size       :=16384;
  Result^.granularity     :=65536;
 
- INITIAL_LOCK(m);
-
  if (name=nil) then
  begin
   str:=Default(shortstring);
@@ -2634,6 +2658,8 @@ begin
  end;
  MoveChar0(name^,Result^.name,32);
  Result^.name[31]:=#0;
+
+ INITIAL_LOCK(Result);
 
  if (flag and SCE_LIBC_MSPACE_THREAD_UNSAFE)<>0 then
  begin
@@ -2670,6 +2696,144 @@ begin
   Result^.msp_array_id:=1; //fake id
  end;
 
+end;
+
+function _sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer;
+begin
+ Result:=destroy_mspace(msp);
+end;
+
+function _sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer;
+var
+ data:array[0..1] of Pointer;
+begin
+ Result:=mspace_malloc(msp,size);
+
+ data[0]:=msp;
+ data[1]:=Result;
+ CALLBACK_ACTION(msp,0,@data)
+end;
+
+function _sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer;
+var
+ data:array[0..1] of Pointer;
+begin
+ data[0]:=msp;
+ data[1]:=ptr;
+ CALLBACK_ACTION(msp,1,@data);
+
+ Result:=mspace_free(msp,ptr);
+end;
+
+function _sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer;
+var
+ data:array[0..3] of Pointer;
+begin
+ Result:=mspace_calloc(msp,nelem,size);
+
+ data[0]:=msp;
+ data[1]:=Result;
+ data[2]:=Pointer(nelem);
+ data[3]:=Pointer(size);
+ CALLBACK_ACTION(msp,2,@data);
+end;
+
+function _sceLibcMspaceRealloc(msp:pSceLibcMspace;ptr:Pointer;size:size_t):Pointer;
+var
+ data:array[0..3] of Pointer;
+begin
+ Result:=mspace_realloc2(msp,ptr,size,1);
+
+ data[0]:=msp;
+ data[1]:=Result;
+ data[2]:=ptr;
+ data[3]:=Pointer(size);
+ CALLBACK_ACTION(msp,3,@data);
+end;
+
+function _sceLibcMspaceMemalign(msp:pSceLibcMspace;boundary,size:size_t):Pointer;
+var
+ data:array[0..3] of Pointer;
+begin
+ Result:=mspace_memalign(msp,boundary,size);
+
+ data[0]:=msp;
+ data[1]:=Result;
+ data[2]:=Pointer(boundary);
+ data[3]:=Pointer(size);
+ CALLBACK_ACTION(msp,4,@data);
+end;
+
+function _sceLibcMspaceReallocalign(msp:pSceLibcMspace;ptr:Pointer;boundary,size:size_t):Pointer;
+var
+ data:array[0..4] of Pointer;
+begin
+ Result:=mspace_realloc2(msp,ptr,size,boundary);
+
+ data[0]:=msp;
+ data[1]:=Result;
+ data[2]:=ptr;
+ data[3]:=Pointer(size);
+ data[4]:=Pointer(boundary);
+ CALLBACK_ACTION(msp,5,@data);
+end;
+
+function _sceLibcMspacePosixMemalign(msp:pSceLibcMspace;ptr:PPointer;boundary,size:size_t):Integer;
+label
+ _end_alloc;
+var
+ align:size_t;
+ mem:Pointer;
+ data:array[0..4] of Pointer;
+begin
+ Result:=0;
+
+ align:=boundary shr 3;
+ if ((boundary and 7)<>0) or
+    (align=0) or
+    (((align+ptruint($1fffffffffffffff)) and align)<>0) then
+ begin
+  Result:=22;
+  goto _end_alloc;
+ end;
+
+ if (ptruint(-boundary - 128) < size) then
+ begin
+  Result:=12;
+  goto _end_alloc;
+ end;
+
+ if not ok_magic(msp) then
+ begin
+  Result:=12;
+  goto _end_alloc;
+ end;
+
+ align:=32;
+ if (boundary > 32) then
+ begin
+  align:=boundary;
+ end;
+
+ mem:=mspace_memalign(msp,align,size);
+
+ if (mem=nil) then
+ begin
+  Result:=12;
+ end else
+ begin
+  Result:=0;
+  ptr^:=mem;
+ end;
+
+ _end_alloc:
+
+ data[0]:=msp;
+ data[1]:=Pointer(ptruint(Result));
+ data[2]:=ptr;
+ data[3]:=Pointer(boundary);
+ data[4]:=Pointer(size);
+ CALLBACK_ACTION(msp,6,@data);
 end;
 
 
