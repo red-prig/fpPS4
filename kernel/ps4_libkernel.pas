@@ -940,6 +940,7 @@ begin
  lib^.set_proc($0C6306DC9B21AD95,@ps4_sceKernelSetVirtualRangeName);
  lib^.set_proc($21620105D4C78ADE,@ps4_sceKernelMapFlexibleMemory);
  lib^.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
+ lib^.set_proc($91CF8B1042186A47,@ps4_sceKernelMapNamedSystemFlexibleMemory);
  lib^.set_proc($EE8C6FDCF3C2BA6A,@ps4_sceKernelReserveVirtualRange);
  lib^.set_proc($0504278A8963F6D4,@ps4_sceKernelMapDirectMemory2);
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);

@@ -172,6 +172,12 @@ function ps4_sceKernelMapNamedFlexibleMemory(
            prots,flags:Integer;
            name:PChar):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelMapNamedSystemFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           name:PChar):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelReserveVirtualRange(
            virtualAddrDest:PPointer;
            length:QWORD;
@@ -1066,6 +1072,54 @@ begin
  end;
 end;
 
+function _sceKernelMapNamedSystemFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           name:PChar):Integer;
+var
+ addr:Pointer;
+begin
+ Result:=SCE_KERNEL_ERROR_EINVAL;
+
+ if ((flags and $ffbfff6f)<>0) then Exit;
+ if ((prots and $ffffffc8)<>0) then Exit;
+
+ if (length<LOGICAL_PAGE_SIZE) then Exit;
+ if not IsAlign(length,LOGICAL_PAGE_SIZE) then Exit;
+
+ addr:=virtualAddrDest^;
+ if not IsAlign(addr,LOGICAL_PAGE_SIZE) then Exit;
+
+ if (((flags and MAP_FIXED) <> 0) and (addr=nil)) then
+ begin
+  if (SDK_VERSION > $16fffff) then
+  begin
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+  end;
+  flags:=flags and $ffffffef;
+  Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
+ end;
+
+ if (((flags and MAP_FIXED)=0) and (addr=nil)) then
+ begin
+  addr:=Pointer($880000000);
+ end;
+
+ Result:=__mmap(addr,length,0,prots,flags or MAP_ANON or MAP_SYSTEM,-1,0,addr);
+ _set_errno(Result);
+
+ if (Result<>0) then
+ begin
+  Result:=px2sce(Result);
+ end else
+ begin
+  _sys_mname(addr,length,name);
+  virtualAddrDest^:=addr;
+  Result:=0;
+ end;
+end;
+
 function _sceKernelReserveVirtualRange(
            virtualAddrDest:PPointer;
            length:QWORD;
@@ -1436,6 +1490,20 @@ begin
  if (Result<>0) then
  begin
   Writeln(StdErr,'[WARN]:sceKernelMapNamedFlexibleMemory:',Result);
+ end;
+end;
+
+function ps4_sceKernelMapNamedSystemFlexibleMemory(
+           virtualAddrDest:PPointer;
+           length:QWORD;
+           prots,flags:Integer;
+           name:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceKernelMapNamedSystemFlexibleMemory(virtualAddrDest,length,prots,flags,name);
+
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'[WARN]:sceKernelMapNamedSystemFlexibleMemory:',Result);
  end;
 end;
 

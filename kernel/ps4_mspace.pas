@@ -5,6 +5,8 @@ unit ps4_mspace;
 interface
 
 uses
+ ps4_elf,
+ ps4_program,
  ps4_mutex,
  ps4_map_mm;
 
@@ -64,8 +66,8 @@ type
 
  pSceLibcMallocManagedSize=^SceLibcMallocManagedSize;
  SceLibcMallocManagedSize=packed record
-  size             :word;
-  version          :word;
+  size             :word;  //1
+  version          :word;  //40
   reserved1        :dword;
   maxSystemSize    :QWORD;
   currentSystemSize:QWORD;
@@ -101,8 +103,8 @@ type
   HighAddressAlloc :QWORD;
   heap_bits        :DWORD;
   f_988:Integer;
-  f_992:QWORD;
-  cbs              :Pointer; //callbak actions
+  g_cbs            :Pointer; //global callback actions
+  cbs              :Pointer; //callback actions
   msp_array_flags  :DWORD;   //save to array used
   msp_array_id     :DWORD;   //array pos + 1
   SystemSize       :QWORD;
@@ -134,6 +136,35 @@ implementation
 uses
  sys_kernel,
  sys_signal;
+
+type
+ TAddressRangeCallback=procedure(base:Pointer;size:ptruint); SysV_ABI_CDecl;
+
+var
+ SceLibcIHeap:SceLibcMspace;
+ p_SceLibcIHeap:pSceLibcMspace=nil;
+
+ g_addr_cbs:TAddressRangeCallback=nil;
+
+ g_SceKernelIntMemPthread:pSceLibcMspace;
+ g_SceKernelIntMemTLS:pSceLibcMspace;
+ g_SceKernelIntMemThrSpec:pSceLibcMspace;
+
+ g_SystemSize:ptruint=0;
+
+ g_SceKernelIntMemTLS_base:Pointer;
+
+ g_heap_param:packed record
+  custom_heap_size:Integer;
+  HeapDelayedAlloc:Integer;
+  SystemData:Pointer;
+  f_16:Integer;
+  custom_heap_init_size:Integer;
+  HeapInitialSize:Integer;
+  HeapMemoryLock:Integer;
+  ptype_is_1:Integer;
+  f_36:Integer;
+ end;
 
 //libc use nedmalloc modification
 
@@ -490,12 +521,17 @@ begin
  Result:=(s>m^.trim_check);
 end;
 
+function _INITIAL_LOCK(m:mstate):Integer; inline;
+begin
+ Result:=ps4_scePthreadMutexInit(@m^.mutex,nil,@m^.name);
+end;
+
 function INITIAL_LOCK(m:mstate):Integer; inline;
 begin
  Result:=0;
  if use_lock(m) then
  begin
-  Result:=ps4_scePthreadMutexInit(@m^.mutex,nil,@m^.name);
+  Result:=_INITIAL_LOCK(m);
  end;
 end;
 
@@ -1202,11 +1238,19 @@ begin
    begin
     m^.least_addr:=mm;
    end;
+
    m^.footprint:=m^.footprint+mmsize;
    if (m^.footprint > m^.max_footprint) then
    begin
     m^.max_footprint:=m^.footprint;
    end;
+
+   m^.currentInuseSize:=m^.currentInuseSize+128;
+   if (m^.currentInuseSize > m^.maxInuseSize) then
+   begin
+    m^.maxInuseSize:=m^.currentInuseSize;
+   end;
+
    assert(is_aligned(chunk2mem(p)));
    //check_mmapped_chunk(m, p); debug
    Result:=chunk2mem(p);
@@ -1255,11 +1299,21 @@ begin
    begin
     m^.least_addr:=cp;
    end;
-   m^.footprint:=m^.footprint+(newmmsize-oldmmsize);
+
+   psize:=ptruint(newmmsize-oldmmsize);
+
+   m^.footprint:=m^.footprint+psize;
    if (m^.footprint > m^.max_footprint) then
    begin
     m^.max_footprint:=m^.footprint;
    end;
+
+   m^.currentInuseSize:=m^.currentInuseSize+psize;
+   if (m^.currentInuseSize > m^.maxInuseSize) then
+   begin
+    m^.maxInuseSize:=m^.currentInuseSize;
+   end;
+
    //check_mmapped_chunk(m, newp); debug
    Result:=newp;
   end;
@@ -1487,6 +1541,12 @@ begin
    m^.max_footprint:=m^.footprint;
   end;
 
+  m^.currentInuseSize:=m^.currentInuseSize+128;
+  if (m^.currentInuseSize > m^.maxInuseSize) then
+  begin
+   m^.maxInuseSize:=m^.currentInuseSize;
+  end;
+
   if (not is_initialized(m)) then
   begin
    if (m^.least_addr=nil) or (tbase < m^.least_addr) then
@@ -1612,7 +1672,9 @@ begin
     if (CALL_MUNMAP(base, size)=0) then
     begin
      released:=released+size;
+
      m^.footprint:=m^.footprint-size;
+     m^.currentInuseSize:=m^.currentInuseSize-128;
 
      sp:=pred;
      sp^.next:=next;
@@ -1672,7 +1734,10 @@ begin
    if (released <> 0) then
    begin
     sp^.size:=sp^.size-released;
+
     m^.footprint:= m^.footprint-released;
+    m^.currentInuseSize:=m^.currentInuseSize-128;
+
     init_top(m, m^.top, m^.topsize - released);
     //check_top_chunk(m, m^.top); debug
    end;
@@ -1884,6 +1949,7 @@ begin
   MALLOC_FAILURE_ACTION;
   Exit(nil);
  end;
+
  if (PREACTION(m)=0) then
  begin
   oldp:=mem2chunk(oldmem);
@@ -1929,6 +1995,7 @@ begin
    POSTACTION(m);
    Exit(nil);
   end;
+
   //#if DEBUG
   //    if (newp != 0) begin
   //      check_inuse_chunk(m, newp);
@@ -1990,10 +2057,12 @@ begin
  begin
   Exit(internal_malloc(m, bytes));
  end;
+
  if (alignment<MIN_CHUNK_SIZE) then
  begin
   alignment:=MIN_CHUNK_SIZE;
  end;
+
  if ((alignment and (alignment-SIZE_T_ONE)) <> 0) then
  begin
   a:=MALLOC_ALIGNMENT shl 1;
@@ -2067,14 +2136,23 @@ begin
    assert((ptruint(chunk2mem(p)) and alignment) = 0);
    //check_inuse_chunk(m, p); debug
    POSTACTION(m);
+
    if (leader <> nil) then
    begin
     internal_free(m, leader);
    end;
+
    if (trailer <> nil) then
    begin
     internal_free(m, trailer);
    end;
+
+   m^.currentInuseSize:=m^.currentInuseSize+chunksize(p);
+   if (m^.currentInuseSize > m^.maxInuseSize) then
+   begin
+    m^.maxInuseSize:=m^.currentInuseSize;
+   end;
+
    Exit(chunk2mem(p));
   end;
  end;
@@ -2289,6 +2367,13 @@ begin
   mem:=sys_alloc(ms,nb);
 
  _postaction:
+
+  ms^.currentInuseSize:=ms^.currentInuseSize+chunksize(mem2chunk(mem));
+  if (ms^.currentInuseSize > ms^.maxInuseSize) then
+  begin
+   ms^.maxInuseSize:=ms^.currentInuseSize;
+  end;
+
   POSTACTION(ms);
   Exit(mem);
  end;
@@ -2361,6 +2446,7 @@ begin
   if (PREACTION(fm)=0) then
   begin
    //check_inuse_chunk(fm, p); debug
+   psize:=0;
    if ok_address(fm, p) and ok_inuse(p) then
    begin
     psize:=chunksize(p);
@@ -2375,6 +2461,7 @@ begin
       if (CALL_MUNMAP(mm, psize)=0) then
       begin
        fm^.footprint:=fm^.footprint-psize;
+       fm^.currentInuseSize:=fm^.currentInuseSize-128;
       end;
       goto _postaction;
      end else
@@ -2465,6 +2552,7 @@ begin
     USAGE_ERROR_ACTION(fm, p);
     Result:=3;
   _postaction:
+    fm^.currentInuseSize:=fm^.currentInuseSize-psize;
     POSTACTION(fm);
   end;
  end;
@@ -2534,7 +2622,7 @@ begin
  end;
 end;
 
-function mspace_memalign(ms:mstate;alignment,bytes:ptruint):Pointer;
+function mspace_memalign(ms:mstate;alignment,bytes:ptruint):Pointer; inline;
 begin
  if (not ok_magic(ms)) then
  begin
@@ -2544,7 +2632,7 @@ begin
  Result:=internal_memalign(ms,alignment,bytes);
 end;
 
-function mspace_trim(ms:mstate;pad:ptruint):Integer;
+function mspace_trim(ms:mstate;pad:ptruint):Integer; inline;
 begin
  Result:=0;
  if (not ok_magic(ms)) then
@@ -2559,7 +2647,7 @@ begin
  end;
 end;
 
-function mspace_usable_size(mem:Pointer):ptruint;
+function mspace_usable_size(mem:Pointer):ptruint; inline;
 var
  p:mchunkptr;
 begin
@@ -2836,6 +2924,481 @@ begin
  CALLBACK_ACTION(msp,6,@data);
 end;
 
+function _sceLibcMspaceMallocUsableSize(ptr:Pointer):ptruint;
+begin
+ Result:=mspace_usable_size(ptr);
+end;
+
+function _sceLibcMspaceMallocStatsFast(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer;
+begin
+ Result:=1;
+ if (msp<>nil) then
+ if (mmsize<>nil) then
+ if ok_magic(msp) then
+ if (mmsize^.version=1) and (mmsize^.size=40) then
+ if (PREACTION(msp)=0) then
+ begin
+  mmsize^.maxSystemSize    :=msp^.max_footprint;
+  mmsize^.currentSystemSize:=msp^.footprint;
+  mmsize^.maxInuseSize     :=msp^.maxInuseSize;
+  mmsize^.currentInuseSize :=msp^.currentInuseSize;
+  POSTACTION(msp);
+  Result:=0;
+ end;
+end;
+
+function _sceLibcMspaceIsHeapEmpty(msp:pSceLibcMspace):Integer;
+var
+ InuseSize:ptruint;
+begin
+ Result:=1;
+ if (msp<>nil) then
+ if ok_magic(msp) then
+ if (PREACTION(msp)=0) then
+ begin
+  InuseSize:=msp^.currentInuseSize;
+  POSTACTION(msp);
+  Result:=Integer((InuseSize and ptruint($ffffffffffffff7f))=0);
+  if (p_SceLibcIHeap<>msp) then
+  begin
+   Result:=Integer(InuseSize=1440);
+  end;
+ end;
+end;
+
+procedure _sceLibcMspaceSetMallocCallback(msp:pSceLibcMspace;cbs:Pointer);
+begin
+ if (cbs<>nil) then
+ if (PREACTION(msp)=0) then
+ begin
+  msp^.cbs:=cbs;
+  POSTACTION(msp);
+ end;
+end;
+
+/////
+
+function _sceLibcHeapSetAddressRangeCallback(cbs:Pointer):Integer;
+begin
+ Result:=-1;
+ if (cbs<>nil) then
+ begin
+  Result:=0;
+  g_addr_cbs:=TAddressRangeCallback(cbs);
+ end;
+end;
+
+function _sceLibcMspaceGetAddressRanges(msp:pSceLibcMspace):Integer;
+var
+ sp:msegmentptr;
+begin
+ Result:=-1;
+ if (msp<>nil) then
+ if (g_addr_cbs<>nil) then
+ if ok_magic(msp) then
+ begin
+  sp:=@msp^.seg;
+  While (sp<>nil) do
+  begin
+   g_addr_cbs(sp^.base,sp^.size);
+   sp:=sp^.next;
+  end;
+  Result:=0;
+ end;
+end;
+
+function _QZ9YgTk_yrE:Integer; //QZ9YgTk+yrE
+begin
+ Result:=-1;
+ if (g_addr_cbs<>nil) then
+ begin
+  g_addr_cbs(p_SceLibcIHeap,1280);
+  Result:=0;
+ end;
+end;
+
+function _sceLibcHeapGetAddressRanges:Integer;
+begin
+ Result:=_sceLibcMspaceGetAddressRanges(p_SceLibcIHeap);
+end;
+
+function wUqJ0psUjDo(msp:pSceLibcMspace):Integer; //wUqJ0psUjDo
+begin
+ Result:=-1;
+ if (msp<>nil) then
+ if ok_magic(msp) then
+ begin
+  p_SceLibcIHeap^.MutexPoolForMono:=msp;
+  Result:=0;
+ end;
+end;
+
+//procedure sceLibcHeapSetTraceMarker;
+//procedure sceLibcHeapUnsetTraceMarker;
+
+/////
+
+procedure mem_init(m:mstate;nb:ptruint);
+var
+ tbase:Pointer;
+ tsize:ptruint;
+ mmap_flag:flag_t;
+ rsize:ptruint;
+ mp:Pointer;
+ mn:mchunkptr;
+begin
+ tbase:=nil;
+ tsize:=0;
+ mmap_flag:=0;
+
+ rsize:=granularity_align(nb + SYS_ALLOC_PADDING);
+ if (rsize > nb) then
+ begin
+  mp:=CALL_MMAP(m,rsize);
+  if (mp<>nil) then
+  begin
+   tbase:=mp;
+   tsize:=rsize;
+   mmap_flag:=USE_MMAP_BIT;
+  end;
+ end;
+
+ if (tbase<>nil) then
+ begin
+
+  m^.footprint:=m^.footprint+tsize;
+  if (m^.footprint > m^.max_footprint) then
+  begin
+   m^.max_footprint:=m^.footprint;
+  end;
+
+  m^.currentInuseSize:=m^.currentInuseSize+128;
+  if (m^.currentInuseSize > m^.maxInuseSize) then
+  begin
+   m^.maxInuseSize:=m^.currentInuseSize;
+  end;
+
+  if (not is_initialized(m)) then
+  begin
+   if (m^.least_addr=nil) or (tbase < m^.least_addr) then
+   begin
+    m^.least_addr:=tbase;
+   end;
+   m^.seg.base  :=tbase;
+   m^.seg.size  :=tsize;
+   m^.seg.sflags:=mmap_flag;
+   m^.magic     :=DEFAULT_MAGIC;
+   init_bins(m);
+   begin
+    mn:=next_chunk(mem2chunk(m));
+    init_top(m, mn, ((tbase + tsize) - Pointer(mn)) -TOP_FOOT_SIZE);
+   end;
+  end;
+
+  Exit;
+ end;
+
+ MALLOC_FAILURE_ACTION;
+end;
+
+function _mmap_system(size:ptruint;_out:PPointer;name:Pchar):Integer;
+var
+ ret:Integer;
+ res:Pointer;
+ addr:Pointer;
+begin
+ addr:=nil;
+ res:=g_heap_param.SystemData;
+ if (res=nil) then
+ begin
+  if (g_heap_param.ptype_is_1=0) then
+  begin
+   ret:=ps4_sceKernelMapNamedSystemFlexibleMemory(@addr,size,3,0,name);
+  end else
+  begin
+   ret:=ps4_sceKernelMapNamedFlexibleMemory(@addr,size,3,0,name);
+  end;
+  if (ret=0) then
+  begin
+   res:=addr;
+   if (g_heap_param.HeapMemoryLock=0) then
+   begin
+    ret:=0;
+    //ret:=sceKernelMlock(addr,size); TODO
+    if (ret=0) then
+    begin
+     _out^:=res;
+     Exit(0);
+    end;
+   end;
+   Assert(p_SceLibcIHeap^.top<>nil);
+  end else
+  begin
+   Assert(p_SceLibcIHeap^.top<>nil);
+  end;
+  ret:=-1;
+ end else
+ begin
+  _out^:=res;
+  Exit(0);
+ end;
+ Result:=ret;
+end;
+
+function _malloc_init_lv2(msp:pSceLibcMspace):Integer;
+label
+ _mmap_resize,
+ _break;
+var
+ tmp:pSceLibcMspace;
+
+ SceLibcParam:PSceLibcParam;
+ SceLibcInternalHeap:DWORD;
+ sceLibcHeapDebugFlags:DWORD;
+ sceLibcHeapSize:QWORD;
+ sceLibcHeapDelayedAlloc:DWORD;
+ sceLibcHeapExtendedAlloc:DWORD;
+ sceLibcHeapInitialSize:DWORD;
+ sceLibcHeapMemoryLock:DWORD;
+ sceLibcMaxSystemSize:QWORD;
+
+ len:QWORD;
+
+ _SystemData:Pointer;
+ _SystemSize:ptruint;
+
+begin
+ if (p_SceLibcIHeap=nil) then
+ begin
+  p_SceLibcIHeap:=msp;
+ end;
+
+ tmp:=p_SceLibcIHeap;
+
+ tmp^.name:='SceLibcIHeap';
+
+ if _INITIAL_LOCK(@tmp)<>0 then Exit(1);
+
+ tmp^.magic      :=DEFAULT_MAGIC;
+ tmp^.mflags     :=USE_MMAP_BIT or USE_LOCK_BIT or 4;
+ tmp^.page_size  :=16384;
+ tmp^.granularity:=65536;
+
+ //
+
+ g_SystemSize:=$40000;
+ g_heap_param.custom_heap_size:=1;
+ g_heap_param.ptype_is_1:=integer(1{sceKernelGetProcessType(-1)}=1); //app_type mean????
+
+ SceLibcInternalHeap:=0;
+ sceLibcHeapDebugFlags:=0;
+ sceLibcHeapSize:=0;
+ sceLibcHeapDelayedAlloc:=0;
+ sceLibcHeapExtendedAlloc:=0;
+ sceLibcHeapInitialSize:=0;
+ sceLibcMaxSystemSize:=0;
+
+ SceLibcParam:=GetSceLibcParam;
+ if (SceLibcParam<>nil) then
+ begin
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.SceLibcInternalHeap)+SizeOf(Pointer)) then
+  begin
+   SceLibcInternalHeap:=SceLibcParam^.SceLibcInternalHeap;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapDebugFlags)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapDebugFlags<>nil) then
+  begin
+   sceLibcHeapDebugFlags:=SceLibcParam^.sceLibcHeapDebugFlags^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapSize)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapSize<>nil) then
+  begin
+   sceLibcHeapSize:=SceLibcParam^.sceLibcHeapSize^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapDelayedAlloc)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapDelayedAlloc<>nil) then
+  begin
+   sceLibcHeapDelayedAlloc:=SceLibcParam^.sceLibcHeapDelayedAlloc^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapExtendedAlloc)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapExtendedAlloc<>nil) then
+  begin
+   sceLibcHeapExtendedAlloc:=SceLibcParam^.sceLibcHeapExtendedAlloc^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapInitialSize)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapInitialSize<>nil) then
+  begin
+   sceLibcHeapInitialSize:=SceLibcParam^.sceLibcHeapInitialSize^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcHeapMemoryLock)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcHeapMemoryLock<>nil) then
+  begin
+   sceLibcHeapMemoryLock:=SceLibcParam^.sceLibcHeapMemoryLock^;
+  end;
+
+  if (SceLibcParam^.Size>=qword(@PSceLibcParam(nil)^.sceLibcMaxSystemSize)+SizeOf(Pointer)) then
+  if (SceLibcParam^.sceLibcMaxSystemSize<>nil) then
+  begin
+   sceLibcMaxSystemSize:=SceLibcParam^.sceLibcMaxSystemSize^;
+  end;
+
+ end;
+
+ //
+
+ if (sceLibcHeapDebugFlags and SCE_LIBC_MSPACE_DEBUG_SHORTAGE)<>0 then
+ begin
+  tmp^.debug_flags:=tmp^.debug_flags or 4;
+ end;
+
+ if (sceLibcHeapDebugFlags and SCE_LIBC_MSPACE_IN_ARRAY)<>0 then
+ begin
+  tmp^.msp_array_flags:=tmp^.msp_array_flags or 1;
+ end;
+
+ tmp^.ptr_self:=tmp;
+
+ if (SceLibcInternalHeap=0) then
+ begin
+
+  tmp:=p_SceLibcIHeap;
+  tmp^.name:='SceLibcInternalHeap';
+
+  if (sceLibcHeapSize<>0) then
+  begin
+   g_heap_param.custom_heap_size:=1;
+   g_SystemSize:=ptruint($ffffffffffffffff);
+   if (sceLibcHeapSize < ptruint($ffffffffffff0001)) then
+   begin
+    g_SystemSize:=(sceLibcHeapSize+$ffff) and ptruint($ffffffffffff0000);
+   end;
+  end;
+
+  if (sceLibcHeapSize<>0) then
+  begin
+   g_heap_param.HeapDelayedAlloc:=1;
+  end;
+
+  if (sceLibcHeapExtendedAlloc<>0) then
+  begin
+   g_heap_param.custom_heap_size:=0;
+  end;
+
+  if (sceLibcHeapInitialSize<>0) then
+  begin
+   g_heap_param.custom_heap_init_size:=1;
+   g_heap_param.HeapInitialSize:=(sceLibcHeapInitialSize + $ffff) and $ffff0000;
+  end;
+
+  //sceLibcHeapHighAddressAlloc
+
+  if (sceLibcHeapMemoryLock<>0) then
+  begin
+   g_heap_param.HeapMemoryLock:=1;
+  end;
+
+_mmap_resize:
+   if ((g_heap_param.custom_heap_size = 0) or (g_heap_param.HeapDelayedAlloc <> 0)) then
+   begin
+    if ((g_heap_param.custom_heap_size = 0) and (g_heap_param.custom_heap_init_size <> 0)) then
+    begin
+     if (g_SystemSize < g_heap_param.HeapInitialSize) then Exit(1);
+     if (g_heap_param.HeapDelayedAlloc = 0) then
+     begin
+      len:=g_heap_param.HeapInitialSize-96;
+      mem_init(p_SceLibcIHeap,len);
+     end;
+    end;
+   end else
+   if (g_SystemSize<>0) then
+   begin
+    _mmap_system(g_SystemSize,@g_heap_param.SystemData,p_SceLibcIHeap^.name);
+   end;
+   p_SceLibcIHeap^.g_cbs:=nil;
+
+  end else //SceLibcInternalHeap
+  begin
+   if ((SceLibcInternalHeap<>1) or (sceLibcParam^.entry_count<6)) then //sceKernelInternalMemorySize ???
+   begin
+    g_SystemSize:=ptruint($ffffffffffffffff);
+    g_heap_param.custom_heap_size:=0;
+    goto _mmap_resize;
+   end;
+
+   p_SceLibcIHeap^.name:='SceKernelInternalMemory';
+
+   g_SystemSize:=$1000000;
+
+   if (g_heap_param.ptype_is_1<>0) and (sceLibcMaxSystemSize<>0) then
+   begin
+    g_SystemSize:=sceLibcMaxSystemSize;
+    if (g_SystemSize<$1000000) then
+    begin
+      g_SystemSize:=$1000000;
+    end else
+    if (g_SystemSize > ptruint($ffffffffffff0000)) then goto _break;
+
+    g_SystemSize:=(g_SystemSize+$ffff) and ptruint($ffffffffffff0000);
+   end;
+
+_break:
+
+  g_heap_param.custom_heap_size:=1;
+
+  _mmap_system(g_SystemSize,@g_heap_param.SystemData,p_SceLibcIHeap^.name);
+
+  _SystemData:=g_heap_param.SystemData;
+  _SystemSize:=g_SystemSize;
+
+  tmp:=_sceLibcMspaceCreate('SceKernelIntMemPthread',
+                            _SystemData+(_SystemSize-$b4000), //base
+                            $b4000, //size
+                            SCE_LIBC_MSPACE_THREAD_UNSAFE or SCE_LIBC_MSPACE_IN_ARRAY);
+
+  if (tmp=nil) then Exit(-1);
+  g_SceKernelIntMemPthread:=tmp;
+  tmp^.mutex:=p_SceLibcIHeap^.mutex;
+
+  g_SceKernelIntMemTLS_base:=_SystemData+(_SystemSize-$29c000);
+
+  tmp:=_sceLibcMspaceCreate('SceKernelIntMemTLS',
+                            g_SceKernelIntMemTLS_base+$48000, //base
+                            $1a0000, //size
+                            SCE_LIBC_MSPACE_THREAD_UNSAFE or SCE_LIBC_MSPACE_IN_ARRAY);
+
+  if (tmp=nil) then Exit(-1);
+  g_SceKernelIntMemTLS:=tmp;
+  tmp^.mutex:=p_SceLibcIHeap^.mutex;
+
+  tmp:=_sceLibcMspaceCreate('SceKernelIntMemPthread',
+                            _SystemData+(_SystemSize-$294000), //base
+                            $40000, //size
+                            SCE_LIBC_MSPACE_THREAD_UNSAFE or SCE_LIBC_MSPACE_IN_ARRAY);
+
+  if (tmp=nil) then Exit(-1);
+  g_SceKernelIntMemThrSpec:=tmp;
+  tmp^.mutex:=p_SceLibcIHeap^.mutex;
+
+  //g_internal_alloc = 1;
+
+  g_SystemSize:=g_SystemSize-$29c000;
+ end;
+
+ p_SceLibcIHeap^.SystemSize:=g_SystemSize;
+ Result:=0;
+end;
+
+function _malloc_init:Integer;
+begin
+ Result:=_malloc_init_lv2(@SceLibcIHeap);
+end;
 
 
 end.

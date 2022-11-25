@@ -112,7 +112,7 @@ type
   sceKernelInternalMemorySize      :PQWORD;
   _sceLibcMallocReplaceForTls      :PsceLibcMallocReplaceForTls;
   //The maximum amount of the memory areas for the mspace. min:0x1000000
-  sceLibcMaxSystemSize             :PQWORD;
+  sceLibcMaxSystemSize             :PQWORD;    //(entry_count > 7)
   sceLibcHeapDebugFlags            :PQWORD;    //(entry_count > 8)
   sceLibcStdThreadStackSize        :PDWORD;
   Unknown3:QWORD;
