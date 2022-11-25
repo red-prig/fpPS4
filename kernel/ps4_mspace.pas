@@ -122,7 +122,24 @@ type
  T_CALLBACK_ACTION=procedure(id:Integer;data:Pointer); SysV_ABI_CDecl;
  TAddressRangeCallback=procedure(base:Pointer;size:ptruint); SysV_ABI_CDecl;
 
-function _malloc_init:Integer;
+ PGetTraceInfo=^TGetTraceInfo;
+ TGetTraceInfo=packed record
+  Size:QWORD;                    //32
+  flag:DWORD;                    //1
+  get_segment_info:DWORD;        //0
+  mspace_atomic_id_mask:PQWORD;
+  mstate_table:PQWORD;
+ end;
+
+function  ps4_malloc_init_lv2(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+function  ps4_malloc_initialize:Integer; SysV_ABI_CDecl;
+function  ps4_malloc_init:Integer; SysV_ABI_CDecl;
+function  ps4_malloc_finalize_lv2:size_t; SysV_ABI_CDecl;
+function  ps4_malloc_finalize:size_t; SysV_ABI_CDecl;
+function  ps4_malloc_fini:size_t; SysV_ABI_CDecl;
+procedure ps4_malloc_prefork; SysV_ABI_CDecl;
+procedure ps4_malloc_postfork; SysV_ABI_CDecl;
+procedure ps4_malloc_thread_cleanup; SysV_ABI_CDecl;
 
 function  ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace; SysV_ABI_CDecl;
 function  ps4_sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
@@ -163,6 +180,13 @@ procedure ps4_sceLibcHeapSetTraceMarker; SysV_ABI_CDecl;
 procedure ps4_sceLibcHeapUnsetTraceMarker; SysV_ABI_CDecl;
 function  ps4_sceLibcGetMallocParam:size_t; SysV_ABI_CDecl;
 
+function  ps4_sceLibcInternalMemoryGetWakeAddr(_out:PQWORD):Pointer; SysV_ABI_CDecl;
+procedure ps4_sceLibcInternalMemoryMutexEnable; SysV_ABI_CDecl;
+function  ps4_GG6441JdYkA:Pointer; SysV_ABI_CDecl; //GG6441JdYkA
+function  ps4_bGuDd3kWVKQ:Pointer; SysV_ABI_CDecl; //bGuDd3kWVKQ
+function  ps4_f9LVyN8Ky8g:Pointer; SysV_ABI_CDecl; //f9LVyN8Ky8g
+
+procedure ps4_sceLibcHeapGetTraceInfo(P:PGetTraceInfo); SysV_ABI_CDecl;
 
 implementation
 
@@ -183,6 +207,9 @@ var
  g_SystemSize:ptruint=0;
 
  g_SceKernelIntMemTLS_base:Pointer;
+
+ g_internal_alloc:Integer=0;
+ g_USE_LOCKS:Integer=0;
 
  g_heap_param:packed record
   custom_heap_size:Integer;
@@ -446,7 +473,7 @@ end;
 
 function use_lock(M:mstate):boolean; inline;
 begin
- Result:=(M^.mflags and USE_LOCK_BIT)<>0
+ Result:=((g_USE_LOCKS or 1)<>0) and ((M^.mflags and USE_LOCK_BIT)<>0)
 end;
 
 procedure enable_lock(M:mstate); inline;
@@ -664,7 +691,7 @@ begin
   I:=NTREEBINS-1;
  end else
  begin
-  K:=BsfQWord(X);
+  K:=BsrDWord(X);
   I:=((K shl 1) + ((S shr (K + (TREEBIN_SHIFT-1)) and 1)));
  end;
 end;
@@ -734,7 +761,7 @@ end;
 
 function least_bit(x:ptruint):ptruint; inline;
 begin
- Result:=x and -x;
+ Result:=x and ptruint(-x);
 end;
 
 function left_bits(x:ptruint):ptruint; inline;
@@ -744,15 +771,12 @@ end;
 
 function same_or_left_bits(x:ptruint):ptruint; inline;
 begin
- Result:=x or -x;
+ Result:=x or ptruint(-x);
 end;
 
 procedure compute_bit2idx(X:ptruint;var I:bindex_t); inline;
-var
- J:ptruint;
 begin
- J:=BsfQWord(X);
- I:=bindex_t(J);
+ I:=BsfDWord(X) and 31;
 end;
 
 function ok_address(m:mstate;a:Pointer):boolean; inline;
@@ -816,88 +840,6 @@ begin
 
  mark_inuse_foot(M,p,s);
 end;
-
-{
-
-maxSystemSize    :QWORD;
-currentSystemSize:QWORD;
-maxInuseSize     :QWORD;
-currentInuseSize :QWORD;
-
-static struct mallinfo internal_mallinfo(mstate m) {
-  struct mallinfo nm = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-  ensure_initialization();
-  if (!PREACTION(m)) {
-    check_malloc_state(m);
-    if (is_initialized(m)) {
-      size_t nfree = SIZE_T_ONE; /* top always free */
-      size_t mfree = m->topsize + TOP_FOOT_SIZE;
-      size_t sum = mfree;
-      msegmentptr s = &m->seg;
-      while (s <> 0) {
-        mchunkptr q = align_as_chunk(s->base);
-        while (segment_holds(s, q) &&
-               q <> m->top && q->head <> FENCEPOST_HEAD) {
-          size_t sz = chunksize(q);
-          sum += sz;
-          if (!is_inuse(q)) {
-            mfree += sz;
-            ++nfree;
-          }
-          q = next_chunk(q);
-        }
-        s = s->next;
-      }
-
-      nm.arena             = sum;
-      nm.ordblks           = nfree;
-      nm.hblkhd            = m->footprint - sum;
-      nm.currentSystemSize = m->footprint
-      nm.maxSystemSize     = m->max_footprint;
-      nm.uordblks          = m->footprint - mfree;
-      nm.fordblks          = mfree;
-      nm.keepcost          = m->topsize;
-    }
-
-    POSTACTION(m);
-  }
-  return nm;
-}
-
-static void internal_malloc_stats(mstate m) {
-  ensure_initialization();
-  if (!PREACTION(m)) {
-    size_t maxfp = 0;
-    size_t fp = 0;
-    size_t used = 0;
-    check_malloc_state(m);
-    if (is_initialized(m)) {
-      msegmentptr s = &m->seg;
-      maxfp = m->max_footprint;
-      fp = m->footprint;
-      used = fp - (m->topsize + TOP_FOOT_SIZE);
-
-      while (s <> 0) {
-        mchunkptr q = align_as_chunk(s->base);
-        while (segment_holds(s, q) &&
-               q <> m->top && q->head <> FENCEPOST_HEAD) {
-          if (!is_inuse(q))
-            used -= chunksize(q);
-          q = next_chunk(q);
-        }
-        s = s->next;
-      }
-    }
-
-    fprintf(stderr, "max system bytes = %10lu\n", (unsigned long)(maxfp));
-    fprintf(stderr, "system bytes     = %10lu\n", (unsigned long)(fp));
-    fprintf(stderr, "in use bytes     = %10lu\n", (unsigned long)(used));
-
-    POSTACTION(m);
-  }
-}
-
-}
 
 procedure insert_small_chunk(m:mstate;p:mchunkptr;s:ptruint);
 var
@@ -2296,11 +2238,14 @@ begin
       goto _postaction;
      end else
      begin
-      mem:=tmalloc_small(ms, nb);
-      if (ms^.treemap<>0) and (mem<>nil) then
+      if (ms^.treemap<>0) then
       begin
-       //check_malloced_chunk(ms, mem, nb); debug
-       goto _postaction;
+       mem:=tmalloc_small(ms, nb);
+       if (mem<>nil) then
+       begin
+        //check_malloced_chunk(ms, mem, nb); debug
+        goto _postaction;
+       end;
       end;
      end;
     end;
@@ -2311,11 +2256,14 @@ begin
    end else
    begin
     nb:=pad_request(bytes);
-    mem:=tmalloc_large(ms, nb);
-    if (ms^.treemap<>0) and (mem<>nil) then
+    if (ms^.treemap<>0) then
     begin
-     //check_malloced_chunk(ms, mem, nb); debug
-     goto _postaction;
+     mem:=tmalloc_large(ms, nb);
+     if (mem<>nil) then
+     begin
+      //check_malloced_chunk(ms, mem, nb); debug
+      goto _postaction;
+     end;
     end;
    end;
 
@@ -3211,6 +3159,8 @@ begin
  Result:=ret;
 end;
 
+//init
+
 function _malloc_init_lv2(msp:pSceLibcMspace):Integer;
 label
  _mmap_resize,
@@ -3452,7 +3402,7 @@ _break:
   g_SceKernelIntMemThrSpec:=tmp;
   tmp^.mutex:=p_SceLibcIHeap^.mutex;
 
-  //g_internal_alloc = 1;
+  g_internal_alloc:=1;
 
   g_SystemSize:=g_SystemSize-$29c000;
  end;
@@ -3461,9 +3411,55 @@ _break:
  Result:=0;
 end;
 
-function _malloc_init:Integer;
+function ps4_malloc_init_lv2(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
+ Result:=_malloc_init_lv2(msp);
+ _sig_unlock;
+end;
+
+function ps4_malloc_initialize:Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
  Result:=_malloc_init_lv2(@SceLibcIHeap);
+ _sig_unlock;
+end;
+
+function ps4_malloc_init:Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_malloc_init_lv2(@SceLibcIHeap);
+ _sig_unlock;
+end;
+
+function ps4_malloc_finalize_lv2:size_t; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_malloc_finalize:size_t; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_malloc_fini:size_t; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+procedure ps4_malloc_prefork; SysV_ABI_CDecl;
+begin
+ ACQUIRE_LOCK(p_SceLibcIHeap^.mutex);
+end;
+
+procedure ps4_malloc_postfork; SysV_ABI_CDecl;
+begin
+ RELEASE_LOCK(p_SceLibcIHeap^.mutex);
+end;
+
+procedure ps4_malloc_thread_cleanup; SysV_ABI_CDecl;
+begin
+//
 end;
 
 ///interface
@@ -3713,6 +3709,57 @@ end;
 function ps4_sceLibcGetMallocParam:size_t; SysV_ABI_CDecl;
 begin
  Result:=0;
+end;
+
+function ps4_sceLibcInternalMemoryGetWakeAddr(_out:PQWORD):Pointer; SysV_ABI_CDecl;
+begin
+ _out^:=(g_internal_alloc and 1) shl 15;
+ Result:=g_SceKernelIntMemTLS_base;
+end;
+
+procedure ps4_sceLibcInternalMemoryMutexEnable; SysV_ABI_CDecl;
+begin
+ g_USE_LOCKS:=1;
+ if (g_SceKernelIntMemPthread<>nil) then
+ begin
+  g_SceKernelIntMemPthread^.mflags:=g_SceKernelIntMemPthread^.mflags or USE_LOCK_BIT;
+ end;
+ if (g_SceKernelIntMemTLS<>nil) then
+ begin
+  g_SceKernelIntMemTLS^.mflags:=g_SceKernelIntMemTLS^.mflags or 2;
+ end;
+ if (g_SceKernelIntMemThrSpec<>nil) then
+ begin
+  g_SceKernelIntMemThrSpec^.mflags:=g_SceKernelIntMemThrSpec^.mflags or USE_LOCK_BIT;
+ end;
+end;
+
+function ps4_GG6441JdYkA:Pointer; SysV_ABI_CDecl; //GG6441JdYkA
+begin
+ Result:=g_SceKernelIntMemPthread;
+end;
+
+function ps4_bGuDd3kWVKQ:Pointer; SysV_ABI_CDecl; //bGuDd3kWVKQ
+begin
+ Result:=g_SceKernelIntMemTLS;
+end;
+
+function ps4_f9LVyN8Ky8g:Pointer; SysV_ABI_CDecl; //f9LVyN8Ky8g
+begin
+ Result:=g_SceKernelIntMemThrSpec;
+end;
+
+//
+
+var
+ g_mspace_atomic_id_mask:QWORD=0;
+ g_mstate_table:array[0..63] of QWORD;
+
+procedure ps4_sceLibcHeapGetTraceInfo(P:PGetTraceInfo); SysV_ABI_CDecl;
+begin
+ P^.get_segment_info     :=0;
+ P^.mspace_atomic_id_mask:=@g_mspace_atomic_id_mask;
+ P^.mstate_table         :=@g_mstate_table;
 end;
 
 
