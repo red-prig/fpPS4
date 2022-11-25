@@ -120,25 +120,55 @@ type
  mstate      =^malloc_state;
 
  T_CALLBACK_ACTION=procedure(id:Integer;data:Pointer); SysV_ABI_CDecl;
+ TAddressRangeCallback=procedure(base:Pointer;size:ptruint); SysV_ABI_CDecl;
 
-function _sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace;
-function _sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer;
-function _sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer;
-function _sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer;
-function _sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer;
-function _sceLibcMspaceRealloc(msp:pSceLibcMspace;ptr:Pointer;size:size_t):Pointer;
-function _sceLibcMspaceMemalign(msp:pSceLibcMspace;boundary,size:size_t):Pointer;
-function _sceLibcMspaceReallocalign(msp:pSceLibcMspace;ptr:Pointer;boundary,size:size_t):Pointer;
-function _sceLibcMspacePosixMemalign(msp:pSceLibcMspace;ptr:PPointer;boundary,size:size_t):Integer;
+function _malloc_init:Integer;
+
+function  ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceRealloc(msp:pSceLibcMspace;ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceMemalign(msp:pSceLibcMspace;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceReallocalign(msp:pSceLibcMspace;ptr:Pointer;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspacePosixMemalign(msp:pSceLibcMspace;ptr:PPointer;boundary,size:size_t):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceMallocUsableSize(ptr:Pointer):size_t; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceMallocStats(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceMallocStatsFast(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceIsHeapEmpty(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+
+function  ps4_malloc(size:size_t):Pointer; SysV_ABI_CDecl;
+procedure ps4_free(ptr:Pointer); SysV_ABI_CDecl;
+function  ps4_calloc(nelem,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_realloc(ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_reallocf(ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_memalign(boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_reallocalign(ptr:Pointer;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+function  ps4_posix_memalign(ptr:PPointer;boundary,size:size_t):Integer; SysV_ABI_CDecl;
+function  ps4_malloc_usable_size(ptr:Pointer):size_t; SysV_ABI_CDecl;
+function  ps4_malloc_stats(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+function  ps4_malloc_stats_fast(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+function  ps4_malloc_get_malloc_state:pSceLibcMspace; SysV_ABI_CDecl;
+function  ps4_malloc_get_footer_value(ptr:Pointer):size_t; SysV_ABI_CDecl;
+
+function  ps4_sceLibcMspaceSetMallocCallback(msp:pSceLibcMspace;cbs:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcInternalSetMallocCallback(cbs:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcHeapSetAddressRangeCallback(cbs:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_sceLibcMspaceGetAddressRanges(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+function  ps4_QZ9YgTk_yrE:Integer; SysV_ABI_CDecl; //QZ9YgTk+yrE
+function  ps4_sceLibcHeapGetAddressRanges:Integer; SysV_ABI_CDecl;
+function  ps4_wUqJ0psUjDo(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl; //wUqJ0psUjDo
+procedure ps4_sceLibcHeapSetTraceMarker; SysV_ABI_CDecl;
+procedure ps4_sceLibcHeapUnsetTraceMarker; SysV_ABI_CDecl;
+function  ps4_sceLibcGetMallocParam:size_t; SysV_ABI_CDecl;
+
 
 implementation
 
 uses
  sys_kernel,
  sys_signal;
-
-type
- TAddressRangeCallback=procedure(base:Pointer;size:ptruint); SysV_ABI_CDecl;
 
 var
  SceLibcIHeap:SceLibcMspace;
@@ -2189,43 +2219,6 @@ begin
  Result:=m;
 end;
 
-function destroy_mspace(ms:mstate):Integer;
-var
- sp:msegmentptr;
- base:Pointer;
- size:ptruint;
- flag:flag_t;
-begin
- Result:=0;
-
- if (not ok_magic(ms)) then
- begin
-  USAGE_ERROR_ACTION(ms,ms);
-  Exit(0);
- end;
-
- DESTROY_LOCK(ms);
-
- //msp_array_id ignore
-
- if (ms^.mflags and EXTERN_BIT)<>0 then
- begin
-  sp:=@ms^.seg;
-  while (sp<>nil) do
-  begin
-   base:=sp^.base;
-   size:=sp^.size;
-   flag:=sp^.sflags;
-   sp:=sp^.next;
-   if ((flag and USE_MMAP_BIT)<>0) then
-   begin
-    CALL_MUNMAP(base,size);
-    Result:=1;
-   end;
-  end;
- end;
-end;
-
 function mspace_malloc_implementation(ms:mstate;bytes:ptruint):Pointer;
 label
  _postaction;
@@ -2381,16 +2374,6 @@ begin
  Result:=nil;
 end;
 
-function mspace_malloc(ms:mstate;bytes:ptruint):Pointer;
-begin
- if (not ok_magic(ms)) then
- begin
-  USAGE_ERROR_ACTION(ms,ms);
-  Exit(nil);
- end;
- Result:=mspace_malloc_implementation(ms,bytes);
-end;
-
 function mspace_malloc2(ms:mstate;bytes,alignment:ptruint):Pointer;
 begin
  if (not ok_magic(ms)) then
@@ -2398,6 +2381,7 @@ begin
   USAGE_ERROR_ACTION(ms,ms);
   Exit(nil);
  end;
+
  if (alignment<=MALLOC_ALIGNMENT) then
  begin
   Result:=mspace_malloc_implementation(ms, bytes);
@@ -2786,20 +2770,52 @@ begin
 
 end;
 
-function _sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer;
+function _sceLibcMspaceDestroy(ms:mstate):Integer;
+var
+ sp:msegmentptr;
+ base:Pointer;
+ size:ptruint;
+ flag:flag_t;
 begin
- Result:=destroy_mspace(msp);
+ Result:=0;
+
+ if (not ok_magic(ms)) then
+ begin
+  USAGE_ERROR_ACTION(ms,ms);
+  Exit(0);
+ end;
+
+ DESTROY_LOCK(ms);
+
+ //msp_array_id ignore
+
+ if (ms^.mflags and EXTERN_BIT)<>0 then
+ begin
+  sp:=@ms^.seg;
+  while (sp<>nil) do
+  begin
+   base:=sp^.base;
+   size:=sp^.size;
+   flag:=sp^.sflags;
+   sp:=sp^.next;
+   if ((flag and USE_MMAP_BIT)<>0) then
+   begin
+    CALL_MUNMAP(base,size);
+    Result:=1;
+   end;
+  end;
+ end;
 end;
 
 function _sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer;
 var
  data:array[0..1] of Pointer;
 begin
- Result:=mspace_malloc(msp,size);
+ Result:=mspace_malloc2(msp,size,1);
 
  data[0]:=msp;
  data[1]:=Result;
- CALLBACK_ACTION(msp,0,@data)
+ CALLBACK_ACTION(msp,0,@data);
 end;
 
 function _sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer;
@@ -2924,11 +2940,6 @@ begin
  CALLBACK_ACTION(msp,6,@data);
 end;
 
-function _sceLibcMspaceMallocUsableSize(ptr:Pointer):ptruint;
-begin
- Result:=mspace_usable_size(ptr);
-end;
-
 function _sceLibcMspaceMallocStatsFast(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer;
 begin
  Result:=1;
@@ -2966,27 +2977,7 @@ begin
  end;
 end;
 
-procedure _sceLibcMspaceSetMallocCallback(msp:pSceLibcMspace;cbs:Pointer);
-begin
- if (cbs<>nil) then
- if (PREACTION(msp)=0) then
- begin
-  msp^.cbs:=cbs;
-  POSTACTION(msp);
- end;
-end;
-
 /////
-
-function _sceLibcHeapSetAddressRangeCallback(cbs:Pointer):Integer;
-begin
- Result:=-1;
- if (cbs<>nil) then
- begin
-  Result:=0;
-  g_addr_cbs:=TAddressRangeCallback(cbs);
- end;
-end;
 
 function _sceLibcMspaceGetAddressRanges(msp:pSceLibcMspace):Integer;
 var
@@ -3007,34 +2998,109 @@ begin
  end;
 end;
 
-function _QZ9YgTk_yrE:Integer; //QZ9YgTk+yrE
+/////
+
+procedure CALLBACK_GLOBAL(id:Integer;data:Pointer); inline;
+var
+ cbs:T_CALLBACK_ACTION;
 begin
- Result:=-1;
- if (g_addr_cbs<>nil) then
+ cbs:=T_CALLBACK_ACTION(SceLibcIHeap.g_cbs);
+ if (cbs<>nil) then
+ if (PREACTION(@SceLibcIHeap)=0) then
  begin
-  g_addr_cbs(p_SceLibcIHeap,1280);
-  Result:=0;
+  cbs(id,data);
+  POSTACTION(@SceLibcIHeap);
  end;
 end;
 
-function _sceLibcHeapGetAddressRanges:Integer;
+function _malloc(size:size_t):Pointer;
+var
+ data:array[0..1] of Pointer;
 begin
- Result:=_sceLibcMspaceGetAddressRanges(p_SceLibcIHeap);
+ Result:=_sceLibcMspaceMalloc(@SceLibcIHeap,size);
+
+ data[0]:=Result;
+ data[1]:=Pointer(size);
+ CALLBACK_GLOBAL(0,@data);
 end;
 
-function wUqJ0psUjDo(msp:pSceLibcMspace):Integer; //wUqJ0psUjDo
+procedure _free(ptr:Pointer);
 begin
- Result:=-1;
- if (msp<>nil) then
- if ok_magic(msp) then
+ CALLBACK_GLOBAL(1,@ptr);
+
+ _sceLibcMspaceFree(@SceLibcIHeap,ptr);
+end;
+
+function _calloc(nelem,size:size_t):Pointer;
+var
+ data:array[0..2] of Pointer;
+begin
+ Result:=_sceLibcMspaceCalloc(@SceLibcIHeap,nelem,size);
+
+ data[0]:=Result;
+ data[1]:=Pointer(nelem);
+ data[2]:=Pointer(size);
+ CALLBACK_GLOBAL(2,@data);
+end;
+
+function _realloc(ptr:Pointer;size:size_t):Pointer;
+var
+ data:array[0..2] of Pointer;
+begin
+ Result:=mspace_realloc2(@SceLibcIHeap,ptr,size,1);
+
+ data[0]:=Result;
+ data[1]:=ptr;
+ data[2]:=Pointer(size);
+ CALLBACK_GLOBAL(3,@data);
+end;
+
+function _reallocf(ptr:Pointer;size:size_t):Pointer;
+begin
+ Result:=_realloc(ptr,size);
+ if (size<>0) and (ptr<>nil) and (Result=nil) then
  begin
-  p_SceLibcIHeap^.MutexPoolForMono:=msp;
-  Result:=0;
+  _free(ptr);
  end;
 end;
 
-//procedure sceLibcHeapSetTraceMarker;
-//procedure sceLibcHeapUnsetTraceMarker;
+function _memalign(boundary,size:size_t):Pointer;
+var
+ data:array[0..2] of Pointer;
+begin
+ Result:=_sceLibcMspaceMemalign(@SceLibcIHeap,boundary,size);
+
+ data[0]:=Result;
+ data[1]:=Pointer(boundary);
+ data[2]:=Pointer(size);
+ CALLBACK_GLOBAL(4,@data);
+end;
+
+function _reallocalign(ptr:Pointer;boundary,size:size_t):Pointer;
+var
+ data:array[0..3] of Pointer;
+begin
+ Result:=mspace_realloc2(@SceLibcIHeap,ptr,size,boundary);
+
+ data[0]:=Result;
+ data[1]:=ptr;
+ data[2]:=Pointer(boundary);
+ data[3]:=Pointer(size);
+ CALLBACK_GLOBAL(5,@data);
+end;
+
+function _posix_memalign(ptr:PPointer;boundary,size:size_t):Integer;
+var
+ data:array[0..3] of Pointer;
+begin
+ Result:=_sceLibcMspacePosixMemalign(@SceLibcIHeap,ptr,boundary,size);
+
+ data[0]:=Pointer(ptruint(Result));
+ data[1]:=ptr;
+ data[2]:=Pointer(boundary);
+ data[3]:=Pointer(size);
+ CALLBACK_GLOBAL(6,@data);
+end;
 
 /////
 
@@ -3281,7 +3347,7 @@ begin
    end;
   end;
 
-  if (sceLibcHeapSize<>0) then
+  if (sceLibcHeapDelayedAlloc<>0) then
   begin
    g_heap_param.HeapDelayedAlloc:=1;
   end;
@@ -3398,6 +3464,255 @@ end;
 function _malloc_init:Integer;
 begin
  Result:=_malloc_init_lv2(@SceLibcIHeap);
+end;
+
+///interface
+
+function ps4_sceLibcMspaceCreate(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceCreate(name,base,capacity,flag);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceDestroy(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceDestroy(msp);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceMalloc(msp:pSceLibcMspace;size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceMalloc(msp,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceFree(msp:pSceLibcMspace;ptr:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceFree(msp,ptr);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceCalloc(msp,nelem,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceRealloc(msp:pSceLibcMspace;ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceRealloc(msp,ptr,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceMemalign(msp:pSceLibcMspace;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceMemalign(msp,boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceReallocalign(msp:pSceLibcMspace;ptr:Pointer;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspaceReallocalign(msp,ptr,boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspacePosixMemalign(msp:pSceLibcMspace;ptr:PPointer;boundary,size:size_t):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceLibcMspacePosixMemalign(msp,ptr,boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_sceLibcMspaceMallocUsableSize(ptr:Pointer):size_t; SysV_ABI_CDecl;
+begin
+ Result:=mspace_usable_size(ptr);
+end;
+
+function ps4_sceLibcMspaceMallocStats(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceMallocStatsFast(msp,mmsize);
+end;
+
+function ps4_sceLibcMspaceMallocStatsFast(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceMallocStatsFast(msp,mmsize);
+end;
+
+function ps4_sceLibcMspaceIsHeapEmpty(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceIsHeapEmpty(msp);
+end;
+
+////
+
+function ps4_malloc(size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_malloc(size);
+ _sig_unlock;
+end;
+
+procedure ps4_free(ptr:Pointer); SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ _free(ptr);
+ _sig_unlock;
+end;
+
+function ps4_calloc(nelem,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_calloc(nelem,size);
+ _sig_unlock;
+end;
+
+function ps4_realloc(ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_realloc(ptr,size);
+ _sig_unlock;
+end;
+
+function ps4_reallocf(ptr:Pointer;size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_reallocf(ptr,size);
+ _sig_unlock;
+end;
+
+function ps4_memalign(boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_memalign(boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_reallocalign(ptr:Pointer;boundary,size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_reallocalign(ptr,boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_posix_memalign(ptr:PPointer;boundary,size:size_t):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_posix_memalign(ptr,boundary,size);
+ _sig_unlock;
+end;
+
+function ps4_malloc_usable_size(ptr:Pointer):size_t; SysV_ABI_CDecl;
+begin
+ Result:=mspace_usable_size(ptr);
+end;
+
+function ps4_malloc_stats(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceMallocStatsFast(@SceLibcIHeap,mmsize);
+end;
+
+function ps4_malloc_stats_fast(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceMallocStatsFast(@SceLibcIHeap,mmsize);
+end;
+
+function ps4_malloc_get_malloc_state:pSceLibcMspace; SysV_ABI_CDecl;
+begin
+ Result:=@SceLibcIHeap;
+end;
+
+function ps4_malloc_get_footer_value(ptr:Pointer):size_t; SysV_ABI_CDecl;
+var
+ p:mchunkptr;
+begin
+ p:=mem2chunk(ptr);
+ Result:=mchunkptr(Pointer(p)+chunksize(p))^.prev_foot xor DEFAULT_MAGIC
+end;
+
+////
+
+function ps4_sceLibcMspaceSetMallocCallback(msp:pSceLibcMspace;cbs:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=PREACTION(msp);
+ if (Result=0) then
+ begin
+  msp^.cbs:=cbs;
+  POSTACTION(msp);
+ end;
+end;
+
+function ps4_sceLibcInternalSetMallocCallback(cbs:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=PREACTION(@SceLibcIHeap);
+ if (Result=0) then
+ begin
+  SceLibcIHeap.g_cbs:=cbs;
+  POSTACTION(@SceLibcIHeap);
+ end;
+end;
+
+function ps4_sceLibcHeapSetAddressRangeCallback(cbs:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=-1;
+ if (cbs<>nil) then
+ begin
+  Result:=0;
+  g_addr_cbs:=TAddressRangeCallback(cbs);
+ end;
+end;
+
+function ps4_sceLibcMspaceGetAddressRanges(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceGetAddressRanges(msp);
+end;
+
+function ps4_QZ9YgTk_yrE:Integer; SysV_ABI_CDecl; //QZ9YgTk+yrE
+begin
+ Result:=-1;
+ if (g_addr_cbs<>nil) then
+ begin
+  g_addr_cbs(p_SceLibcIHeap,1280);
+  Result:=0;
+ end;
+end;
+
+function ps4_sceLibcHeapGetAddressRanges:Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sceLibcMspaceGetAddressRanges(p_SceLibcIHeap);
+end;
+
+function ps4_wUqJ0psUjDo(msp:pSceLibcMspace):Integer; SysV_ABI_CDecl; //wUqJ0psUjDo
+begin
+ Result:=-1;
+ if (msp<>nil) then
+ if ok_magic(msp) then
+ begin
+  p_SceLibcIHeap^.MutexPoolForMono:=msp;
+  Result:=0;
+ end;
+end;
+
+procedure ps4_sceLibcHeapSetTraceMarker; SysV_ABI_CDecl;
+begin
+ //
+end;
+
+procedure ps4_sceLibcHeapUnsetTraceMarker; SysV_ABI_CDecl;
+begin
+ //
+end;
+
+function ps4_sceLibcGetMallocParam:size_t; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 
