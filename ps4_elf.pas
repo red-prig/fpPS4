@@ -1085,7 +1085,7 @@ begin
     lu.value:=entry.d_un.d_val;
     lib.strName:=PChar(@pStrTable[lu.name_offset]);
     lib.Import:=True;
-    Writeln('DT_SCE_IMPORT_LIB:',lib.strName,':',HexStr(lu.id,4)); //import lib name
+    Writeln('DT_SCE_IMPORT_LIB       :',lib.strName,':',HexStr(lu.id,4)); //import lib name
     _set_lib(lu.id,lib);
    end;
   DT_SCE_EXPORT_LIB:
@@ -1923,7 +1923,6 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   IInfo:TResolveImportInfo;
 
   Import:Boolean;
-
  begin
   Import:=(Info^.shndx=SHN_UNDEF);
 
@@ -2353,14 +2352,9 @@ begin
    '-':nIndex:=63;
    else Exit;
   end;
-  if (i<(nEncLenMax-1)) then
   begin
    nVal:=nVal shl 6;
    nVal:=nVal or nIndex;
-  end else
-  begin
-   nVal:=nVal shl 4;
-   nVal:=nVal or (nIndex shr 2);
   end;
  end;
  Result:=True;
