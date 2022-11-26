@@ -41,6 +41,12 @@ type
 
 implementation
 
+const
+ SCE_USER_SERVICE_ERROR_NOT_INITIALIZED =-2137653246; //0x80960002
+ SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT=-2137653243; //0x80960005
+ SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
+ SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT=-2137653238; //0x8096000A
+
 function ps4_sceUserServiceInitialize(params:PUserServiceInitializeParams):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -70,17 +76,18 @@ end;
 
 function ps4_sceUserServiceGetInitialUser(pUserId:PInteger):Integer; SysV_ABI_CDecl;
 begin
- Result:=-1;
- if pUserId=nil then Exit;
+ if (pUserId=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
  pUserId^:=1;
  Result:=0;
 end;
 
 function ps4_sceUserServiceGetUserName(userId:Integer;userName:PChar;size:size_t):Integer; SysV_ABI_CDecl;
 Const
- cuser:PChar='user';
+ cuser:PChar='user'#0;
 begin
- Move(cuser^,userName^,Length(cuser)+1);
+ if (userName=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
+ if (size<Length(cuser)) then Exit(SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT);
+ Move(cuser^,userName^,Length(cuser));
  Result:=0;
 end;
 
@@ -89,11 +96,6 @@ begin
  Writeln('sceUserServiceRegisterEventCallback:',HexStr(func));
  Result:=0;
 end;
-
-const
- SCE_USER_SERVICE_ERROR_NOT_INITIALIZED =-2137653246; //0x80960002
- SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT=-2137653243; //0x80960005
- SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
 
 var
  login_event:Integer=0;

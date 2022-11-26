@@ -242,7 +242,7 @@ begin
  Case paramId of
   SCE_SYSTEM_SERVICE_PARAM_ID_SYSTEM_NAME:
    begin
-    if (bufSize<Length(CUH)) then Exit;
+    if (bufSize<Length(CUH)) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
     Move(PChar(CUH)^,buf^,Length(CUH));
    end;
   else
