@@ -1056,6 +1056,7 @@ end;
 function ps4_pthread_key_create(pKey:Ppthread_key_t;dest:t_cb_proc):Integer; SysV_ABI_CDecl;
 var
  node:p_pthread_key_node;
+ Key:pthread_key_t;
 begin
  if (pKey=nil) then Exit(EINVAL);
  Writeln('pthread_key_create',' ',ps4_pthread_self^.sig._lock);
@@ -1072,7 +1073,10 @@ begin
  System.InterlockedIncrement(Pointer(node^.version_));
  XCHG(Pointer(node^.dest_),Pointer(dest));
 
- pKey^:=(node-p_pthread_key_node(@_pthread_key_nodes));
+ Key:=(node-p_pthread_key_node(@_pthread_key_nodes));
+ Key:=Key+1;
+
+ pKey^:=Key;
  Result:=0;
 end;
 
@@ -1080,7 +1084,9 @@ function ps4_pthread_key_delete(Key:pthread_key_t):Integer; SysV_ABI_CDecl;
 var
  node:p_pthread_key_node;
 begin
- if (DWORD(Key)>=SCE_PTHREAD_KEYS_MAX) then Exit(EINVAL);
+ Key:=Key-1;
+
+ if (DWORD(Key)>SCE_PTHREAD_KEYS_MAX) then Exit(EINVAL);
  Writeln('pthread_key_delete');
 
  node:=@_pthread_key_nodes[Key];
@@ -1098,6 +1104,8 @@ var
  version:ptruint;
  local:p_pthread_key_data;
 begin
+ Key:=Key-1;
+
  if (DWORD(Key)>=SCE_PTHREAD_KEYS_MAX) then Exit(nil);
 
  node:=@_pthread_key_nodes[Key];
@@ -1118,6 +1126,8 @@ var
  version:ptruint;
  local:p_pthread_key_data;
 begin
+ Key:=Key-1;
+
  if (DWORD(Key)>=SCE_PTHREAD_KEYS_MAX) then Exit(EINVAL);
 
  node:=@_pthread_key_nodes[Key];

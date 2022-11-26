@@ -125,6 +125,9 @@ begin
     end;
    end;
 
+  $B6CBC49A77A7CF8F, //__cxa_atexit
+  $1F67BCB7949C4067, //__cxa_finalize
+  $CEBD3DE04437F56C, //__cxa_pure_virtual
   $DC63E98D0740313C, //__cxa_guard_acquire
   $F6B01E00D4F6B721: //__cxa_guard_release
    begin
@@ -140,11 +143,17 @@ begin
   //TODO redirect
   if (Result=nil) then
   begin
-   lib:=ps4_app.GetLib('libc');
-   if (lib<>nil) then
+   if (Copy(ps4libdoc.GetFunctName(Nid),1,2)<>'_Z') then
    begin
-    Writeln(StdErr,'Redirected:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
-    Result:=lib^.get_proc(Nid);
+    lib:=ps4_app.GetLib('libc');
+    if (lib<>nil) then
+    begin
+     Writeln(StdErr,'Redirected:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
+     Result:=lib^.get_proc(Nid);
+    end;
+   end else
+   begin
+    Writeln(StdErr,'Operator:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
    end;
   end;
 
