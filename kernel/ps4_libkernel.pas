@@ -9,6 +9,7 @@ uses
   RWLock,
   sys_types,
   ps4_map_mm,
+  ps4_mspace,
   ps4_pthread,
   ps4_signal,
   ps4_mutex,
@@ -625,9 +626,10 @@ end;
 
 procedure _kernel_init;
 begin
+ ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
  _mem_init;
  _sys_dev_init;
- ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
+ ps4_malloc_init;
 end;
 
 function Load_libkernel(Const name:RawByteString):TElf_node;

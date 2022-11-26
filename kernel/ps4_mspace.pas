@@ -3193,7 +3193,7 @@ begin
 
  tmp^.name:='SceLibcIHeap';
 
- if _INITIAL_LOCK(@tmp)<>0 then Exit(1);
+ if _INITIAL_LOCK(tmp)<>0 then Exit(1);
 
  tmp^.magic      :=DEFAULT_MAGIC;
  tmp^.mflags     :=USE_MMAP_BIT or USE_LOCK_BIT or 4;

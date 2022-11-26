@@ -232,6 +232,25 @@ begin
  end;
 end;
 
+const
+ CUH='CUH-0000'#0;
+
+function ps4_sceSystemServiceParamGetString(paramId:Integer;buf:Pchar;bufSize:size_t):Integer; SysV_ABI_CDecl;
+begin
+ if (buf=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+
+ Case paramId of
+  SCE_SYSTEM_SERVICE_PARAM_ID_SYSTEM_NAME:
+   begin
+    if (bufSize<Length(CUH)) then Exit;
+    Move(PChar(CUH)^,buf^,Length(CUH));
+   end;
+  else
+   Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ end;
+
+end;
+
 function ps4_sceSystemServiceHideSplashScreen:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -294,6 +313,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceSystemService');
  lib^.set_proc($7D9A38F2E9FB2CAE,@ps4_sceSystemServiceParamGetInt);
+ lib^.set_proc($4AC0BF9BF4BD2530,@ps4_sceSystemServiceParamGetString);
  lib^.set_proc($568E55F0A0300A69,@ps4_sceSystemServiceHideSplashScreen);
  lib^.set_proc($C75501F5BC0348EC,@ps4_sceSystemServiceDisableMusicPlayer);
  lib^.set_proc($F643C2CFB3ABFB56,@ps4_sceSystemServiceReenableMusicPlayer);
