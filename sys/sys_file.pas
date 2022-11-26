@@ -96,7 +96,7 @@ begin
  h:=CreateFileW(
   PWideChar(wp),
   dwDesiredAccess,
-  FILE_SHARE_READ,
+  FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
   nil,
   dwCreationDisposition,
   FILE_ATTRIBUTE_NORMAL,
