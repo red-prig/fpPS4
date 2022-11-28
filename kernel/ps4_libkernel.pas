@@ -230,19 +230,31 @@ begin
  Result:=ps4_sceKernelGetModuleInfoForUnwind(addr,flags,info);
 end;
 
+function ps4_sceKernelGetLibkernelTextLocation(address:PPointer;size:PQWORD):Integer; SysV_ABI_CDecl;
+var
+ elf:Telf_file;
+begin
+ Result:=0;
+ elf:=Telf_file(ps4_program.ps4_app.prog);
+ if (elf=nil) then Exit(-1);
+
+ address^:=elf.ModuleInfo.segmentInfo[0].address;
+ size   ^:=elf.ModuleInfo.segmentInfo[0].size;
+end;
+
 type
  PInternalSegmentInfo=^TInternalSegmentInfo;
  TInternalSegmentInfo=packed record
   address:Pointer;
-  size:DWORD;
+  size:QWORD;
  end;
 
 function ps4_sceKernelInternalMemoryGetModuleSegmentInfo(pOut:PInternalSegmentInfo):Integer; SysV_ABI_CDecl;
 begin
- pOut^.address:=nil;
- pOut^.size:=0;
- Result:=0;
- //sceKernelGetLibkernelTextLocation(pOut^.address,pOut^.size)
+ //pOut^.address:=nil;
+ //pOut^.size:=0;
+ //Result:=0;
+ Result:=ps4_sceKernelGetLibkernelTextLocation(@pOut^.address,@pOut^.size)
 end;
 
 function ps4_sceKernelGetProcParam:PSceProcParam; SysV_ABI_CDecl;
@@ -668,7 +680,7 @@ begin
  lib^.set_proc($F4960DA8DEA300A2,@ps4_sceKernelDebugOutText);
 
  //signal
-
+ lib^.set_proc($0262749A7DA5E253,@ps4_sceKernelGetLibkernelTextLocation);
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);

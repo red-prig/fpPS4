@@ -94,6 +94,16 @@ begin
  Result:=0;
 end;
 
+procedure ps4__ZNSt8ios_base4InitC1Ev(this:Pointer); //void __thiscall std::ios_base::Init::Init(Init *this)
+begin
+ //
+end;
+
+procedure ps4__ZNSt6_WinitC1Ev(this:Pointer); //void __thiscall std::_Winit::_Winit(_Winit *this)
+begin
+ //
+end;
+
 Const
  Need_sceLibcInternal:QWORD=1;
 
@@ -189,6 +199,9 @@ begin
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
 
  //lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
+
+ lib^.set_proc($B2A5B2B678587448,@ps4__ZNSt8ios_base4InitC1Ev);
+ lib^.set_proc($FC197DFD26769E87,@ps4__ZNSt6_WinitC1Ev);
 
  //mspace
 

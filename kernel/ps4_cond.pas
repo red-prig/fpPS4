@@ -12,7 +12,8 @@ uses
 
 type
  p_pthread_condattr=^pthread_condattr_t;
- pthread_condattr_t=bitpacked record
+ pthread_condattr_t=^pthread_condattr;
+ pthread_condattr=bitpacked record
   _shared:0..1;         //1
   _clock:0..31;         //5
   _align:0..67108863;   //26
@@ -80,29 +81,39 @@ Uses
  ps4_time;
 
 function ps4_pthread_condattr_init(pAttr:p_pthread_condattr):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_condattr_t;
 begin
  if (pAttr=nil) then Exit(EINVAL);
- pAttr^:=Default(pthread_condattr_t);
+ attr:=AllocMem(SizeOf(pthread_condattr));
+ if (attr=nil) then Exit(ENOMEM);
+ pAttr^:=attr;
  Result:=0;
 end;
 
 function ps4_pthread_condattr_destroy(pAttr:p_pthread_condattr):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_condattr_t;
 begin
  if (pAttr=nil) then Exit(EINVAL);
- pAttr^:=Default(pthread_condattr_t);
+ attr:=pAttr^;
+ if (attr=nil) then Exit(EINVAL);
+ FreeMem(attr);
  Result:=0;
 end;
 
 function ps4_pthread_condattr_getclock(pAttr:p_pthread_condattr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._clock;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._clock;
  Result:=0;
 end;
 
 function ps4_pthread_condattr_setclock(pAttr:p_pthread_condattr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  Case t of
   CLOCK_REALTIME         :;
   CLOCK_VIRTUAL          :;
@@ -125,27 +136,29 @@ begin
   else
    Exit(EINVAL);
  end;
- pAttr^._clock:=t;
+ pAttr^^._clock:=t;
  Result:=0;
 end;
 
 function ps4_pthread_condattr_getpshared(pAttr:p_pthread_condattr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._shared;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._shared;
  Result:=0;
 end;
 
 function ps4_pthread_condattr_setpshared(pAttr:p_pthread_condattr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  Case t of
   PTHREAD_PROCESS_PRIVATE:;
   PTHREAD_PROCESS_SHARED :;
   else
    Exit(EINVAL);
  end;
- pAttr^._shared:=t;
+ pAttr^^._shared:=t;
  Result:=0;
 end;
 
@@ -672,16 +685,12 @@ end;
 
 function ps4_scePthreadCondattrInit(pAttr:p_pthread_condattr):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^:=Default(pthread_condattr_t);
- Result:=0;
+ Result:=px2sce(ps4_pthread_condattr_init(pAttr));
 end;
 
 function ps4_scePthreadCondattrDestroy(pAttr:p_pthread_condattr):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^:=Default(pthread_condattr_t);
- Result:=0;
+ Result:=px2sce(ps4_pthread_condattr_destroy(pAttr));
 end;
 
 function ps4_scePthreadCondInit(pCond:PScePthreadCond;pAttr:p_pthread_condattr;name:Pchar):Integer; SysV_ABI_CDecl;

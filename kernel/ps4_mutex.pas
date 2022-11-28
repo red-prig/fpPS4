@@ -11,7 +11,8 @@ uses
 
 type
  p_pthread_mutex_attr=^pthread_mutex_attr_t;
- pthread_mutex_attr_t=bitpacked record
+ pthread_mutex_attr_t=^pthread_mutex_attr;
+ pthread_mutex_attr=bitpacked record
   _type:0..7;           //3
   _shared:0..1;         //1
   _protocol:0..3;       //2
@@ -104,29 +105,41 @@ Uses
  ps4_time;
 
 function ps4_pthread_mutexattr_init(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_mutex_attr_t;
 begin
  if (pAttr=nil) then Exit(EINVAL);
- pAttr^:=Default(pthread_mutex_attr_t);
- pAttr^._type:=PTHREAD_MUTEX_DEFAULT;
+ attr:=AllocMem(SizeOf(pthread_mutex_attr));
+ if (attr=nil) then Exit(ENOMEM);
+ attr^:=Default(pthread_mutex_attr);
+ attr^._type:=PTHREAD_MUTEX_DEFAULT;
+ pAttr^:=attr;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_destroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_mutex_attr_t;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ attr:=pAttr^;
+ if (attr=nil) then Exit(EINVAL);
+ FreeMem(attr);
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_gettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._type;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._type;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_settype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  Case t of
   PTHREAD_MUTEX_ERRORCHECK:;
   PTHREAD_MUTEX_RECURSIVE :;
@@ -135,40 +148,44 @@ begin
   else
    Exit(EINVAL);
  end;
- pAttr^._type:=t;
+ pAttr^^._type:=t;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_getpshared(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._shared;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._shared;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_setpshared(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  Case t of
   PTHREAD_PROCESS_PRIVATE:;
   PTHREAD_PROCESS_SHARED :;
   else
    Exit(EINVAL);
  end;
- pAttr^._shared:=t;
+ pAttr^^._shared:=t;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_getprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._protocol;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._protocol;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_setprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  Case t of
   PTHREAD_PRIO_NONE   :;
   PTHREAD_PRIO_INHERIT:;
@@ -176,21 +193,23 @@ begin
   else
    Exit(EINVAL);
  end;
- pAttr^._protocol:=t;
+ pAttr^^._protocol:=t;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_getprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) or (t=nil) then Exit(EINVAL);
- t^:=pAttr^._prioceiling;
+ if (pAttr^=nil) then Exit(EINVAL);
+ t^:=pAttr^^._prioceiling;
  Result:=0;
 end;
 
 function ps4_pthread_mutexattr_setprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (pAttr=nil) then Exit(EINVAL);
- pAttr^._prioceiling:=t;
+ if (pAttr^=nil) then Exit(EINVAL);
+ pAttr^^._prioceiling:=t;
  Result:=0;
 end;
 
@@ -401,12 +420,20 @@ end;
 function pthread_mutex_init(m:p_pthread_mutex;a:p_pthread_mutex_attr;str:PChar;default:Integer):Integer;
 var
  mi:pthread_mutex;
+ attr:pthread_mutex_attr_t;
 begin
  if (m=nil) then Exit(EINVAL);
  mi:=m^;
+
+ attr:=nil;
  if (a<>nil) then
  begin
-  mi:=mutex_impl_init(m,mi,a^._type);
+  attr:=a^;
+ end;
+
+ if (attr<>nil) then
+ begin
+  mi:=mutex_impl_init(m,mi,attr^._type);
  end else
  begin
   mi:=mutex_impl_init(m,mi,default);
@@ -454,73 +481,43 @@ end;
 
 function ps4_scePthreadMutexattrInit(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^:=Default(pthread_mutex_attr_t);
- pAttr^._type:=SCE_PTHREAD_MUTEX_DEFAULT;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_init(pAttr));
 end;
 
 function ps4_scePthreadMutexattrDestroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_destroy(pAttr));
 end;
 
 function ps4_scePthreadMutexattrGettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- t^:=pAttr^._type;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_gettype(pAttr,t));
 end;
 
 function ps4_scePthreadMutexattrSettype(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- Case t of
-  SCE_PTHREAD_MUTEX_ERRORCHECK:;
-  SCE_PTHREAD_MUTEX_RECURSIVE :;
-  SCE_PTHREAD_MUTEX_NORMAL    :;
-  SCE_PTHREAD_MUTEX_ADAPTIVE  :;
-  else
-   Exit(SCE_KERNEL_ERROR_EINVAL);
- end;
- pAttr^._type:=t;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_settype(pAttr,t));
 end;
 
 function ps4_scePthreadMutexattrGetprotocol(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- t^:=pAttr^._protocol;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_getprotocol(pAttr,t));
 end;
 
 function ps4_scePthreadMutexattrSetprotocol(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- Case t of
-  PTHREAD_PRIO_NONE   :;
-  PTHREAD_PRIO_INHERIT:;
-  PTHREAD_PRIO_PROTECT:;
-  else
-   Exit(SCE_KERNEL_ERROR_EINVAL);
- end;
- pAttr^._protocol:=t;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_setprotocol(pAttr,t));
 end;
 
 function ps4_scePthreadMutexattrGetprioceiling(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (t=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- t^:=pAttr^._prioceiling;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_getprioceiling(pAttr,t));
+
 end;
 
 function ps4_scePthreadMutexattrSetprioceiling(pAttr:p_pthread_mutex_attr;t:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^._prioceiling:=t;
- Result:=0;
+ Result:=px2sce(ps4_pthread_mutexattr_setprioceiling(pAttr,t));
 end;
 
 //////////////
