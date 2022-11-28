@@ -123,8 +123,8 @@ type
   numGold    :DWORD;
   numSilver  :DWORD;
   numBronze  :DWORD;
-  title:array[0..SCE_NP_TROPHY_GAME_TITLE_MAX_SIZE-1] of Byte;
-  description:array[0..SCE_NP_TROPHY_GAME_DESCR_MAX_SIZE-1] of Byte;
+  title:array[0..SCE_NP_TROPHY_GAME_TITLE_MAX_SIZE-1] of AnsiChar;
+  description:array[0..SCE_NP_TROPHY_GAME_DESCR_MAX_SIZE-1] of AnsiChar;
  end;
 
  pSceNpTrophyGameData=^SceNpTrophyGameData;
@@ -149,10 +149,12 @@ begin
  begin
   details^.numGroups  :=0;
   details^.numTrophies:=1;
-  details^.numPlatinum:=1;
-  details^.numGold    :=1;
-  details^.numSilver  :=1;
+  details^.numPlatinum:=0;
+  details^.numGold    :=0;
+  details^.numSilver  :=0;
   details^.numBronze  :=1;
+  details^.title      :='tname';
+  details^.description:='tdesc';
  end;
 
  Result:=0;
@@ -272,8 +274,18 @@ function ps4_sceNpTrophyGetGameIcon(context:Integer;
                                     size:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpTrophyGetGameIcon:',handle);
- size^:=0;
- Result:=SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND;
+
+ size^:=8;
+
+ if (buffer<>nil) then
+ begin
+  pqword(buffer)^:=0;
+ end;
+
+ Result:=0;
+
+ //size^:=0;
+ //Result:=SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND;
 end;
 
 function Load_libSceNpTrophy(Const name:RawByteString):TElf_node;
