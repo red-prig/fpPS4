@@ -52,6 +52,9 @@ function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDe
 function ps4_mkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
+function ps4_unlink(path:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelUnlink(path:PChar):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 
 implementation
@@ -703,6 +706,101 @@ function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sys_mkdir(path,mode);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+Function SwDelete(Const path:RawByteString):DWORD;
+var
+ W:WideString;
+begin
+ Result:=0;
+ _sig_lock;
+ W:=UTF8Decode(path);
+ if not DeleteFileW(PWideChar(W)) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+function _sys_unlink(path:PChar):Integer;
+var
+ fn:RawByteString;
+ err:DWORD;
+begin
+ Result:=0;
+
+ if (path=nil) then Exit(EINVAL);
+
+ if (path[0]=#0) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ Writeln('unlink:',path);
+
+ fn:='';
+ Result:=parse_filename(path,fn);
+
+ Case Result of
+  PT_ROOT:Exit(EEXIST); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(EACCES);
+  else
+          Exit(EACCES);
+ end;
+
+ err:=SwDelete(fn);
+
+ if (err<>0) then
+ begin
+  Case err of
+   ERROR_INVALID_DRIVE,
+   ERROR_PATH_NOT_FOUND,
+   ERROR_FILE_NOT_FOUND:
+     Exit(ENOENT);
+
+   ERROR_ACCESS_DENIED,
+   ERROR_SHARING_VIOLATION,
+   ERROR_LOCK_VIOLATION,
+   ERROR_SHARING_BUFFER_EXCEEDED:
+     Exit(EACCES);
+
+   ERROR_BUFFER_OVERFLOW:
+     Exit(ENAMETOOLONG);
+
+   ERROR_NOT_ENOUGH_MEMORY:
+     Exit(ENOMEM);
+
+   ERROR_ALREADY_EXISTS,
+   ERROR_FILE_EXISTS:
+     Exit(EEXIST);
+
+   ERROR_DISK_FULL:
+     Exit(ENOSPC);
+
+   else
+     Exit(EIO);
+  end;
+ end;
+
+ Result:=0;
+end;
+
+function ps4_unlink(path:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_unlink(path));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelUnlink(path:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_unlink(path);
  _sig_unlock;
 
  _set_errno(Result);

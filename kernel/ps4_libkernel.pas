@@ -1067,6 +1067,9 @@ begin
  lib^.set_proc($246322A3EDB52F87,@ps4_mkdir);
  lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
 
+ lib^.set_proc($540CECC2F4CE0B32,@ps4_unlink);
+ lib^.set_proc($0145D5C5678953F0,@ps4_sceKernelUnlink);
+
  lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
 
  //file
