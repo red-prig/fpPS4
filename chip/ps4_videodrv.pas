@@ -1472,6 +1472,12 @@ begin
 
 end;
 
+procedure onIndexBufferSize(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
+begin
+ GPU_REGS.VGT_DMA.SIZE    :=Body^.numIndices;
+ GPU_REGS.VGT_DMA.INDICES :=Body^.numIndices;
+end;
+
 type
  PVGT_DMA_INDEX_TYPE=^TVGT_DMA_INDEX_TYPE;
 
@@ -2561,6 +2567,12 @@ begin
         begin
          {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
          onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_INDEX_BUFFER_SIZE:
+        begin
+         {$ifdef ww}Writeln('IT_INDEX_BUFFER_SIZE');{$endif}
+         onIndexBufferSize(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
 
         IT_INDEX_TYPE:
