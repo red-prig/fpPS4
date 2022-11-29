@@ -92,21 +92,25 @@ type
  SceUserServiceUserId=Integer;
 
  SceNpStateCallback=procedure(userId:SceUserServiceUserId;
-                              state:Integer;
+                              state:Integer; //SceNpState
                               npId:pSceNpId;
                               userdata:Pointer); SysV_ABI_CDecl;
 
  SceNpStateCallbackA=procedure(userId:SceUserServiceUserId;
-                               state:Integer;
+                               state:Integer; //SceNpState
                                userdata:Pointer); SysV_ABI_CDecl;
 
  SceNpGamePresenceCallback=procedure(pOnlineId:pSceNpOnlineId;
-                                     status:Integer;
+                                     status:Integer; //SceNpGamePresenceStatus
                                      userdata:Pointer); SysV_ABI_CDecl;
 
  SceNpPlusEventCallback=procedure(userId:SceUserServiceUserId;
-                                  event:Integer;
+                                  event:Integer; //SceNpPlusEventType
                                   userdata:Pointer); SysV_ABI_CDecl;
+
+ SceNpReachabilityStateCallback=procedure(userId:SceUserServiceUserId;
+                                          state:Integer; //SceNpReachabilityState
+                                          userdata:Pointer); SysV_ABI_CDecl;
 
 const
  SCE_NP_ERROR_INVALID_ARGUMENT=Integer($80550003);
@@ -232,12 +236,22 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpRegisterStateCallbackA(callback:SceNpStateCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpRegisterGamePresenceCallback(callback:SceNpGamePresenceCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
 function ps4_sceNpRegisterPlusEventCallback(callback:SceNpPlusEventCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpRegisterNpReachabilityStateCallback(callback:SceNpReachabilityStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -418,8 +432,10 @@ begin
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
+ lib^.set_proc($A9025F3BC1C089A6,@ps4_sceNpRegisterStateCallbackA);
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
+ lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
