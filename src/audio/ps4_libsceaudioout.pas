@@ -18,6 +18,7 @@ uses
 implementation
 
 uses
+ ps4_time,
  sys_signal;
 
 const
@@ -179,6 +180,8 @@ type
 
   bufsize:Integer;
   buf:Pointer;
+
+  last_time:QWORD;
 
   //d:QWORD;
 
@@ -688,6 +691,8 @@ begin
 
  //Writeln('sceAudioOutOutput:',handle,':',HexStr(ptr));
 
+ H.last_time:=ps4_sceKernelGetProcessTime;
+
  _sig_lock;
  H.Release;
  _sig_unlock;
@@ -708,6 +713,30 @@ begin
  end;
 end;
 
+
+function ps4_sceAudioOutGetLastOutputTime(handle:Integer;outputTime:PQWORD):Integer;  SysV_ABI_CDecl;
+Var
+ H:TAudioOutHandle;
+begin
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+
+ if (outputTime=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+
+ _sig_lock;
+ H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
+ _sig_unlock;
+
+ if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+
+ outputTime^:=H.last_time;
+
+ _sig_lock;
+ H.Release;
+ _sig_unlock;
+
+ Result:=0;
+end;
+
 function Load_libSceAudioOut(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -725,6 +754,7 @@ begin
  lib^.set_proc($C15C0F539D294B57,@ps4_sceAudioOutSetMixLevelPadSpk);
  lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
+ lib^.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
 end;
 
 const
