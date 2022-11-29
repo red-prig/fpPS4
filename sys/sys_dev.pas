@@ -21,8 +21,9 @@ implementation
 type
  TDevFile=class(TCustomFile)
   Constructor Create;
-  function lseek (offset:Int64;whence:Integer):Int64;    override;
-  function fstat (stat:PSceKernelStat):Integer;          override;
+  function lseek    (offset:Int64;whence:Integer):Int64; override;
+  function ftruncate(size:Int64):Integer;                override;
+  function fstat    (stat:PSceKernelStat):Integer;       override;
  end;
 
  TDevRandom=class(TDevFile)
@@ -104,6 +105,11 @@ end;
 function TDevFile.lseek (offset:Int64;whence:Integer):Int64;
 begin
  Result:=-ESPIPE;
+end;
+
+function TDevFile.ftruncate(size:Int64):Integer;
+begin
+ Result:=EACCES;
 end;
 
 function TDevFile.fstat (stat:PSceKernelStat):Integer;

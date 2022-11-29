@@ -38,6 +38,9 @@ function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI
 function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
 function ps4_sceKernelPwrite(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
 
+function ps4_ftruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelFtruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
+
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
@@ -467,6 +470,38 @@ begin
  end;
 end;
 
+function _sys_ftruncate(fd:Integer;size:Int64):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+ if (size<=0) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.ftruncate(size);
+
+ f.Release;
+end;
+
+function ps4_ftruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_ftruncate(fd,size));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelFtruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_ftruncate(fd,size);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
 function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
 var
  f:TCustomFile;
@@ -475,7 +510,7 @@ begin
  if (stat=nil) then Exit(EINVAL);
 
  f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
+ if (f=nil) then Exit(EBADF);
 
  Result:=f.fstat(stat);
 

@@ -54,13 +54,14 @@ type
    pos:DWORD;
   Constructor Create;
   Destructor  Destroy; override;
-  function read  (data:Pointer;size:Int64):Int64;                      override;
-  function pread (data:Pointer;size,offset:Int64):Int64;               override;
-  function readv (vector:p_iovec;count:Integer):Int64;                 override;
-  function write (data:Pointer;size:Int64):Int64;                      override;
-  function pwrite(data:Pointer;size,offset:Int64):Int64;               override;
-  function fstat (stat:PSceKernelStat):Integer;                        override;
-  function lseek (offset:Int64;whence:Integer):Int64;                  override;
+  function read         (data:Pointer;size:Int64):Int64;               override;
+  function pread        (data:Pointer;size,offset:Int64):Int64;        override;
+  function readv        (vector:p_iovec;count:Integer):Int64;          override;
+  function write        (data:Pointer;size:Int64):Int64;               override;
+  function pwrite       (data:Pointer;size,offset:Int64):Int64;        override;
+  function ftruncate    (size:Int64):Integer;                          override;
+  function fstat        (stat:PSceKernelStat):Integer;                 override;
+  function lseek        (offset:Int64;whence:Integer):Int64;           override;
   function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; override;
  end;
 
@@ -275,6 +276,11 @@ end;
 function TDirFile.pwrite(data:Pointer;size,offset:Int64):Int64;
 begin
  Result:=-EISDIR;
+end;
+
+function TDirFile.ftruncate(size:Int64):Integer;
+begin
+ Result:=EISDIR;
 end;
 
 function TDirFile.fstat (stat:PSceKernelStat):Integer;

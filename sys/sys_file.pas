@@ -24,13 +24,14 @@ type
    lock:TRWLock;
   Constructor Create;
   Destructor  Destroy; override;
-  function lseek (offset:Int64;whence:Integer):Int64;    override;
-  function read  (data:Pointer;size:Int64):Int64;        override;
-  function pread (data:Pointer;size,offset:Int64):Int64; override;
-  function readv (vector:p_iovec;count:Integer):Int64;   override;
-  function write (data:Pointer;size:Int64):Int64;        override;
-  function pwrite(data:Pointer;size,offset:Int64):Int64; override;
-  function fstat (stat:PSceKernelStat):Integer;          override;
+  function lseek    (offset:Int64;whence:Integer):Int64;    override;
+  function read     (data:Pointer;size:Int64):Int64;        override;
+  function pread    (data:Pointer;size,offset:Int64):Int64; override;
+  function readv    (vector:p_iovec;count:Integer):Int64;   override;
+  function write    (data:Pointer;size:Int64):Int64;        override;
+  function pwrite   (data:Pointer;size,offset:Int64):Int64; override;
+  function ftruncate(size:Int64):Integer;                   override;
+  function fstat    (stat:PSceKernelStat):Integer;          override;
  end;
 
 Function get_DesiredAccess(flags:Integer):DWORD;
@@ -233,9 +234,9 @@ begin
  end;
 end;
 
-procedure _set_pos(h:THandle;p:Int64);
+function _set_pos(h:THandle;p:Int64):Boolean;
 begin
- SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_BEGIN);
+ Result:=SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_BEGIN);
 end;
 
 function TFile.pread (data:Pointer;size,offset:Int64):Int64;
@@ -254,7 +255,7 @@ begin
   //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
   p:=_get_pos(Handle);
   R:=ReadFile(Handle,data^,size,N,@O);
-  _set_pos(Handle,p);
+  if not _set_pos(Handle,p) then Assert(False);
  rwlock_unlock(lock);
 
  if R then
@@ -334,7 +335,7 @@ begin
   //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
   p:=_get_pos(Handle);
   R:=WriteFile(Handle,data^,size,N,@O);
-  _set_pos(Handle,p);
+  if not _set_pos(Handle,p) then Assert(False);
  rwlock_unlock(lock);
 
  if R then
@@ -344,6 +345,29 @@ begin
  begin
   Result:=-EIO;
  end;
+end;
+
+function TFile.ftruncate(size:Int64):Integer;
+var
+ p:Int64;
+begin
+ Result:=0;
+ rwlock_wrlock(lock);
+  p:=_get_pos(Handle);
+
+  if _set_pos(Handle,size) then
+  begin
+   if not SetEndOfFile(Handle) then
+   begin
+    Result:=EIO;
+   end;
+  end else
+  begin
+   Result:=EINVAL;
+  end;
+
+  if not _set_pos(Handle,p) then Assert(False);
+ rwlock_unlock(lock);
 end;
 
 function file_attr_to_st_mode(attr:DWORD):Word;

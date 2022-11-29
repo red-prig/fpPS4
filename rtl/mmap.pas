@@ -232,7 +232,7 @@ Var
  fileSize:size_t;
  maxSize:size_t;
 
- info:BY_HANDLE_FILE_INFORMATION;
+ //info:BY_HANDLE_FILE_INFORMATION;
 begin
  Result:=0;
  if (Addr=nil) then Exit(-1);
@@ -243,11 +243,17 @@ begin
   Exit(GetLastError);
  end;
 
- info:=Default(BY_HANDLE_FILE_INFORMATION);
- Result:=SwGetFileInformationByHandle(h,@info);
- if (Result<>0) then Exit;
+ fileSize:=0;
+ if not GetFileSizeEx(h,@fileSize) then
+ begin
+  Exit(GetLastError);
+ end;
 
- fileSize:=info.nFileSizeLow or (QWORD(info.nFileSizeHigh) shl 32);
+ //info:=Default(BY_HANDLE_FILE_INFORMATION);
+ //Result:=SwGetFileInformationByHandle(h,@info);
+ //if (Result<>0) then Exit;
+
+ //fileSize:=info.nFileSizeLow or (QWORD(info.nFileSizeHigh) shl 32);
 
  maxSize:=offst+len;
 

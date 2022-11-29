@@ -56,12 +56,15 @@ procedure safe_move_ptr(const src;var dst);
 function  safe_test(var src:DWORD;value:DWORD):Boolean;
 function  safe_str(P:PChar):shortstring;
 
-function MapViewOfFileEx(hFileMappingObject:HANDLE;
-                         dwDesiredAccess:DWORD;
-                         dwFileOffsetHigh:DWORD;
-                         dwFileOffsetLow:DWORD;
-                         dwNumberOfBytesToMap:SIZE_T;
-                         lpBaseAddress:LPVOID):LPVOID; stdcall; external 'kernel32' name 'MapViewOfFileEx';
+function  GetFileSizeEx(hFile:HANDLE;
+                        lpFileSize:PLARGE_INTEGER):BOOL; stdcall; external 'kernel32';
+
+function  MapViewOfFileEx(hFileMappingObject:HANDLE;
+                          dwDesiredAccess:DWORD;
+                          dwFileOffsetHigh:DWORD;
+                          dwFileOffsetLow:DWORD;
+                          dwNumberOfBytesToMap:SIZE_T;
+                          lpBaseAddress:LPVOID):LPVOID; stdcall; external 'kernel32' name 'MapViewOfFileEx';
 
 implementation
 
