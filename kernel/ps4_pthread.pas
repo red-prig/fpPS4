@@ -474,6 +474,17 @@ begin
 
   wait_until_equal(data^.handle,0);
 
+  //init static tls in stack top
+  begin
+   asm
+    movq  %gs:(8)   ,%rax    //-> StackTop
+    lea   -0x8(%rax),%rax    //-> StackTop[-1]
+    movq  %rax      ,%gs:(8) //<- StackTop
+   end;
+   PPointer(StackTop)^:=Telf_file(ps4_program.ps4_app.prog)._get_tls;
+  end;
+  //init static tls in stack top
+
   //data^.arg:=Tps4entry(data^.entry)(data^.arg);
   data^.arg:=sysv_wrapper(data^.arg,data^.entry);
   ReadWriteBarrier;

@@ -278,8 +278,8 @@ type
    procedure mapCodeInit;
    Procedure ClearElfFile;
    function  _init_tls(is_static:QWORD):Ptls_tcb;
-   function  _get_tls:Ptls_tcb;
   public
+   function  _get_tls:Ptls_tcb;
    Procedure Clean; override;
    function  SavePs4ElfToFile(Const name:RawByteString):Boolean;
    function  Prepare:Boolean; override;
@@ -2552,6 +2552,7 @@ begin
   end;
 end;
 
+{
 function _static_get_tls_adr:Pointer; MS_ABI_Default;
 var
  elf:Telf_file;
@@ -2561,9 +2562,23 @@ begin
  if (elf=nil) then Exit;
  Result:=elf._get_tls;
 end;
+}
+
+{
+ [oob page] <- old Stack guard
+ [tls link] <- new Stack guard
+ [Stack]
+ [Stack]
+ [Stack]
+}
 
 function __static_get_tls_adr:Pointer; assembler; nostackframe;
 asm
+ //new idea, no stack save, only %rax used
+ movq  %gs:(8),%rax //-> StackTop
+ movq  (%rax) ,%rax //-> StackTop^
+
+ {
  push %rcx
  push %rdx
  push %r8
@@ -2579,6 +2594,7 @@ asm
  pop %r8
  pop %rdx
  pop %rcx
+ }
 end;
 
 //-not need:
