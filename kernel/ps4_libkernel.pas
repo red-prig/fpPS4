@@ -582,6 +582,14 @@ begin
  Result:=SCE_KERNEL_CPUMODE_7CPU_NORMAL;
 end;
 
+//wtf it mean?
+function ps4_sceKernelSetFsstParam(prio:Integer;
+                                   mask:QWORD //SceKernelCpumask
+                                   ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 {$I libsysmodule.inc}
 
 function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
@@ -706,6 +714,7 @@ begin
  lib^.set_proc($2F01BC8379E2AB00,@ps4_sceKernelDlsym);
 
  lib^.set_proc($54EC7C3469875D3B,@ps4_sceKernelGetCpumode);
+ lib^.set_proc($56306D83906D97DE,@ps4_sceKernelSetFsstParam);
 
  //mutex
 

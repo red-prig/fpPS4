@@ -154,8 +154,8 @@ type
     function  _MtypeDirect(Offset,Size:QWORD;mtype:Integer):Integer;
     function  _CreateBlock(block:PVirtualAdrBlock):Integer;
     function  _FreeBlock(block:PVirtualAdrBlock):Integer;
-    Function  _FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Byte;var AdrOut:Pointer):Integer;
-    procedure _set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock);
+    Function  _FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Integer;var AdrOut:Pointer):Integer;
+    procedure _set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock;reserved:Byte);
     procedure _mmap_addr(Offset:Pointer;Size,addr:QWORD;direct:Boolean);
   public
     var
@@ -174,8 +174,8 @@ type
 
     procedure _mmap_sys(Offset:Pointer;Size:QWORD);
 
-    Function  check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
-    Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
+    Function  check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
+    Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags,fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
 
     Function  Protect(Offset:Pointer;Size:QWORD;prot:Integer):Integer;
     Function  Mtypeprotect(Offset:Pointer;Size:QWORD;mtype,prot:Integer):Integer;
@@ -203,7 +203,7 @@ const
 
 //
 
-function NewAdrBlock(Offset:Pointer;Size:QWORD;prot:Integer;btype:Byte;fd:Integer;offst:size_t):PVirtualAdrBlock;
+function NewAdrBlock(key:PVirtualAdrNode;Size:QWORD;prot:Integer;btype:Byte;fd:Integer;offst:size_t):PVirtualAdrBlock;
 var
  FShift :QWORD;
  FOffset:Pointer;
@@ -213,8 +213,8 @@ var
 begin
  Result:=nil;
 
- FOffset:=AlignDw(Offset,GRANULAR_PAGE_SIZE);
- FShift :=Offset-FOffset;
+ FOffset:=AlignDw(key^.Offset,GRANULAR_PAGE_SIZE);
+ FShift :=key^.Offset-FOffset;
  FSize  :=FShift+Size;
  ASize  :=AlignUp(FSize,GRANULAR_PAGE_SIZE);
 
@@ -259,7 +259,7 @@ begin
   BT_PRIV,
   BT_GPUM:
    begin
-    //Result^.Rsrv:=ASize;
+    //
    end;
   BT_FMAP:
    begin
@@ -466,7 +466,7 @@ begin
  begin
   _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
  end;
- FillChar(key^.Offset^,key^.Size,0);
+ FillChar(Pointer(key^.Offset)^,key^.Size,0);
 
  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
 
@@ -823,7 +823,7 @@ begin
  Result:=OnFreeBlockCb(block);
 end;
 
-Function TVirtualManager._FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Byte;var AdrOut:Pointer):Integer;
+Function TVirtualManager._FindFreeOffset(ss:Pointer;Size,Align:QWORD;prot:Integer;var AdrOut:Pointer):Integer;
 var
  It:TFreePoolNodeSet.Iterator;
  key:TVirtualAdrNode;
@@ -920,7 +920,7 @@ begin
  Result:=ENOMEM;
 end;
 
-procedure TVirtualManager._set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock);
+procedure TVirtualManager._set_block(Offset:Pointer;Size:QWORD;block:PVirtualAdrBlock;reserved:Byte);
 var
  key:TVirtualAdrNode;
  FEndN,FEndO:Pointer;
@@ -970,10 +970,8 @@ var
    key.F.mapped:=0;
   end else
   begin
-   if (block^.F.btype=BT_FMAP) then
-   begin
-    key.F.mapped:=1;
-   end;
+   key.F.mapped:=ord(block^.F.btype=BT_FMAP);
+   key.F.reserv:=reserved;
   end;
 
   _Merge(key);
@@ -1174,7 +1172,7 @@ begin
  until false;
 end;
 
-Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags:Byte;fd:Integer):Integer;
+Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
 var
  It:TAllcPoolNodeSet.Iterator;
  key:TVirtualAdrNode;
@@ -1213,11 +1211,14 @@ begin
     //
    end else
    begin
-    if _mapped then Exit(ENOSYS);
-    if (key.block=nil) then Exit(EINVAL);
-    if (key.F.reserv=0) then
+    if (key.block=nil) then Exit(EINVAL); //system?
+    if (key.F.reserv=0) then //alloc?
     begin
+     if _mapped then Exit(ENOSYS);
      if not _overwrite then Exit(ENOMEM);
+    end else
+    begin //reserved?
+     //
     end;
    end;
   end;
@@ -1228,7 +1229,7 @@ begin
  end;
 end;
 
-Function TVirtualManager.mmap(Offset:Pointer;Size,Align:QWORD;prot,flags:Byte;fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
+Function TVirtualManager.mmap(Offset:Pointer;Size,Align:QWORD;prot,flags,fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
 var
  key:TVirtualAdrNode;
  start:Pointer;
@@ -1425,7 +1426,7 @@ begin
       FSize:=Min(Size+FSize,key.Size);
      end;
 
-     key.block:=NewAdrBlock(key.Offset,FSize,prot,btype,fd,addr);
+     key.block:=NewAdrBlock(@key,FSize,prot,btype,fd,addr);
 
      if (key.block=nil) then
      begin
@@ -1437,7 +1438,7 @@ begin
      Result:=_CreateBlock(key.block);
      if (Result<>0) then Exit;
 
-     _set_block(key.block^.Offset,key.block^.Size,key.block);
+     _set_block(key.block^.Offset,key.block^.Size,key.block,_reserv);
 
      if _addres then
      begin
@@ -1454,6 +1455,15 @@ begin
       Assert(false,IntToStr(Result));
       Exit(EINVAL);
      end;
+    end else
+    if (_reserv<>0) then
+    begin
+     Result:=key.block^.Reserved(@key);
+     if (Result<>0) then
+     begin
+      Assert(false,IntToStr(Result));
+      Exit(EINVAL);
+     end;
     end;
 
     if _map then Break;
@@ -1461,30 +1471,35 @@ begin
    begin
     //overwrite
 
-    if (btype=BT_FMAP) or (key.F.mapped<>0) then
+    if (key.block=nil) then //is system?
+    begin
+     _Merge(key); //undo
+     Exit(EINVAL);
+    end;
+
+    if (btype=BT_FMAP) and (key.F.reserv<>0) then //remap reserved to mapped
+    begin
+     Assert(False,'remap reserved to mapped');
+    end;
+
+    if (btype=BT_FMAP) or (key.F.mapped<>0) then //mapped to non mapped
     begin
      _Merge(key); //undo
      Assert(False);
      Exit(ENOSYS);
     end;
 
-    if (key.block=nil) then
+    if _commited then //do commit?
     begin
-     _Merge(key); //undo
-     Exit(EINVAL);
-    end;
-
-    if _commited then
-    begin
-     if (key.F.reserv=0) then
+     if (key.F.reserv=0) then //mem allocated?
      begin
       Result:=key.block^.Protect(@key,prot);
      end else
-     begin
+     begin //mem reserved?
       Result:=key.block^.Commit(@key,prot);
      end;
     end else
-    begin
+    begin //do reserved?
      Result:=key.block^.Reserved(@key);
     end;
 
@@ -1818,7 +1833,7 @@ var
     end;
    end;
 
-   _set_block(block^.Offset,block^.Size,nil);
+   _set_block(block^.Offset,block^.Size,nil,0);
    FreeMem(block);
 
    key.block:=nil;
