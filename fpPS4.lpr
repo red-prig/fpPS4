@@ -40,6 +40,7 @@ uses
  ps4_libSceDialogs,
  ps4_libSceUserService,
  ps4_libSceAudioOut,
+ ps4_libSceVoice,
  ps4_libSceVideoOut,
  ps4_libScePad,
  ps4_libSceNpWebApi,
@@ -211,22 +212,6 @@ begin
  Result:=3;
 end;
 
-function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
-                          poolSize:size_t;
-                          maxConcurrentRequest:Integer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceHttp2Init:',poolSize);
- Result:=3;
-end;
-
-function ps4_sceVoiceQoSInit(
-          pMemBlock:Pointer;
-          memSize:DWORD;
-          appType:Integer):Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
 function ps4_sceUltInitialize():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -273,16 +258,6 @@ begin
    'libSceSsl':
     Case Info^.nid of
      QWORD($85DA551140C55B7B):Result:=@ps4_sceSslInit;
-    end;
-
-   'libSceHttp2':
-    Case Info^.nid of
-     QWORD($DC909EDE509B43C0):Result:=@ps4_sceHttp2Init;
-    end;
-
-    'libSceVoiceQoS':
-    Case Info^.nid of
-     QWORD($53C21F365EBF0ACB):Result:=@ps4_sceVoiceQoSInit;
     end;
 
     'libSceUlt':

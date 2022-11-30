@@ -215,8 +215,27 @@ begin
  lib^.set_proc($3F9A5DA3290F6139,@ps4_sceHttpReadData);
 end;
 
+function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
+                          poolSize:size_t;
+                          maxConcurrentRequest:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceHttp2Init:',poolSize);
+ Result:=3;
+end;
+
+function Load_libSceHttp2(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceHttp2');
+ lib^.set_proc($DC909EDE509B43C0,@ps4_sceHttp2Init);
+end;
+
 initialization
- ps4_app.RegistredPreLoad('libSceHttp.prx',@Load_libSceHttp);
+ ps4_app.RegistredPreLoad('libSceHttp.prx' ,@Load_libSceHttp);
+ ps4_app.RegistredPreLoad('libSceHttp2.prx',@Load_libSceHttp2);
 
 end.
 

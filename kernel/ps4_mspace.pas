@@ -389,7 +389,7 @@ end;
 
 function chunk_plus_offset(p:Pointer;s:ptruint):mchunkptr; inline;
 begin
- Result:=mchunkptr(p+s);
+ Result:=mchunkptr(Pointer(p)+s);
 end;
 
 function chunk_minus_offset(p:mchunkptr;s:ptruint):mchunkptr; inline;
@@ -654,7 +654,7 @@ end;
 
 function is_small(s:ptruint):boolean; inline;
 begin
- Result:=((s shl SMALLBIN_SHIFT) < NSMALLBINS);
+ Result:=((s shr SMALLBIN_SHIFT) < NSMALLBINS);
 end;
 
 function small_index(s:ptruint):bindex_t; inline;
@@ -804,21 +804,21 @@ begin
  Result:=(m^.magic=DEFAULT_MAGIC);
 end;
 
-procedure mark_inuse_foot(m:mstate;p:Pointer;s:ptruint); inline;
+procedure mark_inuse_foot(m:mstate;p:mchunkptr;s:ptruint); inline;
 begin
- mchunkptr(p + s)^.prev_foot:=ptruint(m) xor DEFAULT_MAGIC;
+ mchunkptr(Pointer(p) + s)^.prev_foot:=ptruint(m) xor DEFAULT_MAGIC;
 end;
 
-function get_mstate_for(p:Pointer):mstate; inline;
+function get_mstate_for(p:mchunkptr):mstate; inline;
 begin
- Result:=mstate(mchunkptr(p + chunksize(p))^.prev_foot xor DEFAULT_MAGIC);
+ Result:=mstate(mchunkptr(Pointer(p) + chunksize(p))^.prev_foot xor DEFAULT_MAGIC);
 end;
 
 procedure set_inuse(m:mstate;p:mchunkptr;s:ptruint); inline;
 begin
  p^.head:=(p^.head and PINUSE_BIT) or s or CINUSE_BIT;
 
- with mchunkptr(p + s)^ do
+ with mchunkptr(Pointer(p) + s)^ do
   head:=head or PINUSE_BIT;
 
  mark_inuse_foot(M,p,s);
@@ -828,7 +828,7 @@ procedure set_inuse_and_pinuse(m:mstate;p:Pointer;s:ptruint); inline;
 begin
  mchunkptr(p)^.head:=s or PINUSE_BIT or CINUSE_BIT;
 
- with mchunkptr(p + s)^ do
+ with mchunkptr(Pointer(p) + s)^ do
   head:=head or PINUSE_BIT;
 
  mark_inuse_foot(M,p,s);

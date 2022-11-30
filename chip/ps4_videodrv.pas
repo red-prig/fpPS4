@@ -2390,6 +2390,7 @@ begin
 
  if UpdateGpuRegsInfo then
  begin
+  GFXRing.AllocCmdBuffer;
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
   GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndex2(Addr,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
@@ -2415,6 +2416,7 @@ begin
 
  if UpdateGpuRegsInfo then
  begin
+  GFXRing.AllocCmdBuffer;
   GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndexAuto(GPU_REGS.VGT_DMA.INDICES);
  end;
@@ -2448,6 +2450,7 @@ begin
 
  if UpdateGpuRegsInfo then
  begin
+  GFXRing.AllocCmdBuffer;
   Addr:=getIndexAddress(GPU_REGS.VGT_DMA.BASE_LO,GPU_REGS.VGT_DMA.BASE_HI);
   GFXRing.CmdBuffer.instanceCount:=GPU_REGS.VGT_DMA.NUM_INSTANCES;
   GFXRing.CmdBuffer.DrawIndexOffset2(Addr,Body^.indexOffset,GPU_REGS.VGT_DMA.INDICES,GPU_REGS.GET_INDEX_TYPE);
@@ -2470,6 +2473,7 @@ begin
 
  if UpdateGpuRegsInfoCompute then
  begin
+  GFXRing.AllocCmdBuffer;
   GFXRing.CmdBuffer.DispatchDirect(Body^.dimX,Body^.dimY,Body^.dimZ);
  end;
 

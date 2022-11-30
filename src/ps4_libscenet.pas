@@ -109,6 +109,11 @@ begin
 
 end;
 
+function ps4_sceNetHtons(host16:Word):Word; SysV_ABI_CDecl;
+begin
+ Result:=htons(host16);
+end;
+
 function ps4_sceNetGetMacAddress(addr:pSceNetEtherAddr;
                                  flags:Integer):Integer; SysV_ABI_CDecl;
 begin
@@ -376,6 +381,7 @@ begin
  lib^.set_proc($485E3B901D8C353A,@ps4_sceNetEpollCreate);
  lib^.set_proc($F0A729E5DFEAD54A,@ps4_sceNetInetPton);
  lib^.set_proc($BFA338B7179C0AEA,@ps4_sceNetEtherNtostr);
+ lib^.set_proc($896416AF0892B7C0,@ps4_sceNetHtons);
  lib^.set_proc($E8E7346CBB0861ED,@ps4_sceNetGetMacAddress);
 end;
 
