@@ -237,6 +237,7 @@ var
  SceKernelFlexibleMemorySize:QWORD=0;
 
 Procedure _mem_init;
+Procedure _mem_print;
 
 implementation
 
@@ -421,6 +422,8 @@ begin
 
  if not _test_mtype(memoryType) then Exit;
 
+ searchStart:=AlignUp(searchStart,LOGICAL_PAGE_SIZE);
+
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
 
@@ -483,6 +486,8 @@ begin
  if not IsAlign(alignment  ,LOGICAL_PAGE_SIZE) then Exit;
  if not IsPowerOfTwo(alignment)                then Exit;
  if (fastIntLog2(alignment)>31)                then Exit;
+
+ searchStart:=AlignUp(searchStart,LOGICAL_PAGE_SIZE);
 
  FAdrOut :=0;
  FSizeOut:=0;
@@ -1610,6 +1615,12 @@ begin
  begin
   SceKernelFlexibleMemorySize:=p^;
  end;
+end;
+
+Procedure _mem_print;
+begin
+ VirtualManager.Print;
+ NamedManager.Print;
 end;
 
 initialization

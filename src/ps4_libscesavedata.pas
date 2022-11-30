@@ -5,11 +5,36 @@ unit ps4_libSceSaveData;
 interface
 
 uses
+  mpmc_queue,
   ps4_program,
   Classes,
   SysUtils;
 
 Const
+ SCE_SAVE_DATA_ERROR_PARAMETER                           =-2137063424; // 0x809F0000
+ SCE_SAVE_DATA_ERROR_NOT_INITIALIZED                     =-2137063423; // 0x809F0001
+ SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY                       =-2137063422; // 0x809F0002
+ SCE_SAVE_DATA_ERROR_BUSY                                =-2137063421; // 0x809F0003
+ SCE_SAVE_DATA_ERROR_NOT_MOUNTED                         =-2137063420; // 0x809F0004
+ SCE_SAVE_DATA_ERROR_NO_PERMISSION                       =-2137063419; // 0x809F0005
+ SCE_SAVE_DATA_ERROR_FINGERPRINT_MISMATCH                =-2137063418; // 0x809F0006
+ SCE_SAVE_DATA_ERROR_EXISTS                              =-2137063417; // 0x809F0007
+ SCE_SAVE_DATA_ERROR_NOT_FOUND                           =-2137063416; // 0x809F0008
+ SCE_SAVE_DATA_ERROR_NO_SPACE_FS                         =-2137063414; // 0x809F000A
+ SCE_SAVE_DATA_ERROR_INTERNAL                            =-2137063413; // 0x809F000B
+ SCE_SAVE_DATA_ERROR_MOUNT_FULL                          =-2137063412; // 0x809F000C
+ SCE_SAVE_DATA_ERROR_BAD_MOUNTED                         =-2137063411; // 0x809F000D
+ SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND                      =-2137063410; // 0x809F000E
+ SCE_SAVE_DATA_ERROR_BROKEN                              =-2137063409; // 0x809F000F
+ SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER                  =-2137063407; // 0x809F0011
+ SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY                    =-2137063406; // 0x809F0012
+ SCE_SAVE_DATA_ERROR_BACKUP_BUSY                         =-2137063405; // 0x809F0013
+ SCE_SAVE_DATA_ERROR_NOT_REGIST_CALLBACK                 =-2137063403; // 0x809F0015
+ SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING                     =-2137063402; // 0x809F0016
+ SCE_SAVE_DATA_ERROR_LIMITATION_OVER                     =-2137063401; // 0x809F0017
+ SCE_SAVE_DATA_ERROR_EVENT_BUSY                          =-2137063400; // 0x809F0018
+ SCE_SAVE_DATA_ERROR_PARAMSFO_TRANSFER_TITLE_ID_NOT_FOUND=-2137063399; // 0x809F0019
+
  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE=10;
  SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE=65;
 
@@ -20,6 +45,11 @@ Const
  SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE=32;
  SCE_SAVE_DATA_MOUNT_POINT_DATA_MAXSIZE=16;
  SCE_SAVE_DATA_MOUNT_STATUS_CREATED=$00000001;
+
+ //SceSaveDataEventType
+ SCE_SAVE_DATA_EVENT_TYPE_UMOUNT_BACKUP_END        =1;
+ SCE_SAVE_DATA_EVENT_TYPE_BACKUP_END               =2;
+ SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END=3;
 
 type
  PSceSaveDataParam=^SceSaveDataParam;
@@ -186,6 +216,8 @@ type
   _align2:Integer;
  end;
 
+ SceSaveDataParamType=DWORD;
+
  pSceSaveDataEvent=^SceSaveDataEvent;
  SceSaveDataEvent=packed record
   _type:DWORD; //SceSaveDataEventType;
@@ -197,13 +229,41 @@ type
   reserved:array[0..39] of Byte;
  end;
 
- TSceSaveDataEventCallback=procedure(event:pSceSaveDataEvent;data:Pointer); SysV_ABI_CDecl;
+ pSceSaveDataEventParam=Pointer;
+
+ SceSaveDataEventCallbackFunc=procedure(event:pSceSaveDataEvent;userdata:Pointer); SysV_ABI_CDecl;
 
 implementation
 
 uses
  sys_path,
  sys_signal;
+
+type
+ t_backup_event_queue=specialize mpmc_bounded_queue<SceSaveDataEvent>;
+
+var
+ backup:record
+  queue:t_backup_event_queue;
+  cb:SceSaveDataEventCallbackFunc;
+  userdata:Pointer;
+ end;
+
+Procedure push_event(event:pSceSaveDataEvent);
+var
+ tmp:SceSaveDataEvent;
+begin
+
+ if (backup.cb<>nil) then
+ begin
+  backup.cb(event,backup.userdata);
+ end;
+
+ while not backup.queue.enqueue(event^) do
+ begin
+  backup.queue.dequeue(tmp); //drop first
+ end;
+end;
 
 function ps4_sceSaveDataInitialize(params:Pointer):Integer; SysV_ABI_CDecl;
 begin
@@ -291,11 +351,6 @@ begin
 end;
 
 const
- SCE_SAVE_DATA_ERROR_PARAMETER  =-2137063424; // 0x809F0000
- SCE_SAVE_DATA_ERROR_EXISTS     =-2137063417; // 0x809F0007
- SCE_SAVE_DATA_ERROR_MOUNT_FULL =-2137063412; // 0x809F000C
- SCE_SAVE_DATA_ERROR_NOT_MOUNTED=-2137063420; // 0x809F0004
-
  SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
  SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
  SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
@@ -345,10 +400,22 @@ begin
 end;
 
 function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
+var
+ event:SceSaveDataEvent;
 begin
  _sig_lock;
  Result:=UnMountSavePath(PChar(mountPoint));
  //backup this
+ //...
+
+ //in another thread?
+ event:=Default(SceSaveDataEvent);
+ event._type:=SCE_SAVE_DATA_EVENT_TYPE_UMOUNT_BACKUP_END;
+ event.userId:=1;
+ //event.titleId:SceSaveDataTitleId;
+ //event.dirName:SceSaveDataDirName;
+ push_event(@event);
+
  _sig_unlock;
 end;
 
@@ -497,9 +564,6 @@ begin
 
 end;
 
-type
- SceSaveDataParamType=DWORD;
-
 function ps4_sceSaveDataSetParam(mountPoint:PSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
@@ -514,9 +578,32 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataRegisterEventCallback(cb:TSceSaveDataEventCallback;data:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
+ backup.cb:=cb;
+ backup.userdata:=userdata;
  Result:=0;
+end;
+
+function ps4_sceSaveDataGetEventResult(param:pSceSaveDataEventParam;
+                                       event:pSceSaveDataEvent):Integer; SysV_ABI_CDecl;
+begin
+ if (event=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+
+ event^:=Default(SceSaveDataEvent);
+
+ if backup.queue.dequeue(event^) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+ end;
+end;
+
+procedure init_save;
+begin
+ backup.queue.Create(32);
 end;
 
 function Load_libSceSaveData(Const name:RawByteString):TElf_node;
@@ -548,6 +635,9 @@ begin
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
  lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
  lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
+ lib^.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
+
+ init_save;
 end;
 
 initialization

@@ -871,7 +871,7 @@ begin
 
  if (instanceCount=0) then instanceCount:=1;
 
- Size:=INDICES*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
+ Size:=(OFFSET+INDICES)*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
 
  rb:=FetchHostBuffer(Self,Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);

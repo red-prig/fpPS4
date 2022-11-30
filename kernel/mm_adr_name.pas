@@ -71,6 +71,8 @@ type
   public
     Function  Mname(Offset:Pointer;Size:QWORD;pname:PChar):Integer;
     Function  Query(Offset:Pointer;pname:PChar):Integer;
+
+    procedure Print;
  end;
 
 implementation
@@ -375,6 +377,25 @@ begin
  if (Offset>=(key.Size+key.Offset)) then Exit(EINVAL);
 
  MoveChar0(key.name,pname^,SizeOf(TName));
+end;
+
+procedure TNamedManager.Print;
+var
+ key:TNameAdrNode;
+ It:TAllcPoolNodeSet.Iterator;
+begin
+ It:=FAllcSet.cbegin;
+ While (It.Item<>nil) do
+ begin
+  key:=It.Item^;
+
+  Writeln(HexStr(QWORD(key.Offset),11),'..',
+          HexStr(QWORD(key.Offset+key.Size),11),':',
+          HexStr(key.Size,11),'#',
+          Pchar(@key.name));
+
+  It.Next;
+ end;
 end;
 
 initialization
