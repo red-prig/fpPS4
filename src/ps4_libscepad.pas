@@ -284,6 +284,11 @@ begin
  Result:=222;
 end;
 
+function ps4_scePadGetHandle(userID,_type,index:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=222;
+end;
+
 function ps4_scePadClose(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -540,6 +545,7 @@ begin
  lib^.set_proc($86FD65BA226BA903,@ps4_scePadInit);
  lib^.set_proc($EA77207B9FA5E50B,@ps4_scePadClose);
  lib^.set_proc($C64D0071AACFDD5E,@ps4_scePadOpen);
+ lib^.set_proc($BB51911E9FA85A86,@ps4_scePadGetHandle);
  lib^.set_proc($6277605EA41557B7,@ps4_scePadReadState);
  lib^.set_proc($AB570735F1B270B2,@ps4_scePadRead);
  lib^.set_proc($C8556739D1B1BD96,@ps4_scePadSetVibration);
