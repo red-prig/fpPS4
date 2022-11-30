@@ -141,6 +141,7 @@ function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDe
 
 function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelDeleteUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
 
@@ -459,7 +460,10 @@ begin
     CTXProc:=TKFetchEvent(OE[i].lpCompletionKey);
     if Assigned(CTXProc) then
     begin
-     if CTXProc(PKEventNode(OE[i].lpOverlapped),@ev[olNum]) then Inc(olNum);
+     if CTXProc(PKEventNode(OE[i].lpOverlapped),@ev[olNum]) then
+     begin
+      Inc(olNum);
+     end;
     end else
     begin
      Assert(false);
@@ -472,7 +476,7 @@ begin
     //Writeln('<sceKernelWaitEqueue:',eq^.name,':',olNum);
     Exit(0);
    end;
-   Assert(false);
+   //Assert(false);
   end;
  Until false;
 end;
@@ -531,10 +535,35 @@ begin
  Result:=0;
 end;
 
+function _sceKernelDeleteUserEvent(eq:SceKernelEqueue;id:Integer):Integer;
+var
+ P:PPointer;
+ node:PKEventNode;
+begin
+ if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (eq^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ eq^.FUserEvents.LockWr;
+
+ P:=HAMT_search32(@eq^.FUserEvents.hamt,id);
+ if (P<>nil) then
+ begin
+  Result:=0;
+  node:=P^;
+  HAMT_delete32(@eq^.FUserEvents.hamt,id);
+  _free_kevent_node(node);
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_ENOENT;
+ end;
+
+ eq^.FUserEvents.Unlock;
+end;
+
 function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Writeln('sceKernelAddUserEvent:',id);
+ //Writeln('sceKernelAddUserEvent:',id);
  Result:=_set_sce_errno(_sceKernelAddUserEvent(eq,id,0));
  _sig_unlock;
 end;
@@ -542,12 +571,18 @@ end;
 function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Writeln('sceKernelAddUserEventEdge:',id);
+ //Writeln('sceKernelAddUserEventEdge:',id);
  Result:=_set_sce_errno(_sceKernelAddUserEvent(eq,id,EV_CLEAR));
  _sig_unlock;
 end;
 
-//sceKernelDeleteUserEvent
+function ps4_sceKernelDeleteUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ //Writeln('sceKernelDeleteUserEvent:',id);
+ Result:=_set_sce_errno(_sceKernelDeleteUserEvent(eq,id));
+ _sig_unlock;
+end;
 
 function _sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
 var

@@ -982,6 +982,7 @@ begin
 
  lib^.set_proc($E11EBF3AF2367040,@ps4_sceKernelAddUserEvent);
  lib^.set_proc($583B339926D6B839,@ps4_sceKernelAddUserEventEdge);
+ lib^.set_proc($2C90F07523539C38,@ps4_sceKernelDeleteUserEvent);
  lib^.set_proc($17A7B4930A387279,@ps4_sceKernelTriggerUserEvent);
 
  //queue

@@ -1698,12 +1698,12 @@ begin
 end;
 
 const
- SCE_GNM_ERROR_FAILURE=$8eee00ff;
+ SCE_GNM_ERROR_FAILURE=-1897004801; //$8eee00ff;
 
 function ps4_sceGnmRegisterOwner(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGnmRegisterOwner:',ownerName);
- Result:=Integer(SCE_GNM_ERROR_FAILURE);
+ Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
 function ps4_sceGnmRegisterResource(pResourceHandle:PInteger; //ResourceHandle
@@ -1716,7 +1716,13 @@ function ps4_sceGnmRegisterResource(pResourceHandle:PInteger; //ResourceHandle
                                     ):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGnmRegisterResource:',resourceName);
- Result:=Integer(SCE_GNM_ERROR_FAILURE);
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmUnregisterResource(resourceHandle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmUnregisterResource:',resourceHandle);
+ Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
 const
@@ -1913,6 +1919,7 @@ begin
 
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
+ lib^.set_proc($93C11792120FFA53,@ps4_sceGnmUnregisterResource);
 
  lib^.set_proc($E6E7409BEE9BA158,@ps4_sceGnmCreateWorkloadStream);
  lib^.set_proc($8A1C6B6ECA122967,@ps4_sceGnmBeginWorkload);
