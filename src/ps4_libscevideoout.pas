@@ -34,8 +34,8 @@ type
   right:Pointer;
  end;
 
- PSceVideoOutBufferAttribute=^TSceVideoOutBufferAttribute;
- TSceVideoOutBufferAttribute=packed record
+ pSceVideoOutBufferAttribute=^sceVideoOutBufferAttribute;
+ SceVideoOutBufferAttribute=packed record
   format     ,
   tmode      ,
   aspect     ,
@@ -409,7 +409,7 @@ type
   FBuffers:record
    lock:Pointer;
    addr:array[0..15] of SceVideoOutStereoBuffers;
-   attr:array[0..15] of TSceVideoOutBufferAttribute;
+   attr:array[0..15] of SceVideoOutBufferAttribute;
   end;
 
   FCursors:array[0..SCE_VIDEO_OUT_CURSOR_NUM_MAX-1] of TVCursor;
@@ -880,6 +880,25 @@ begin
  Result:=0;
 end;
 
+function _sceVideoOutUnregisterBuffers(hVideo:Integer;index:Integer):Integer;
+var
+ H:TVideoOut;
+begin
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ spin_lock(H.FBuffers.lock);
+
+ H.FBuffers.addr[index]:=Default(SceVideoOutStereoBuffers);
+ H.FBuffers.attr[index]:=Default(SceVideoOutBufferAttribute);
+
+ spin_unlock(H.FBuffers.lock);
+
+ H.Release;
+
+ Result:=0;
+end;
+
 //
 
 function ps4_sceVideoOutRegisterBuffers(hVideo:Integer;
@@ -1006,6 +1025,20 @@ begin
                                               bufferNum,
                                               attr);
   _sig_unlock;
+end;
+
+function ps4_sceVideoOutUnregisterBuffers(hVideo:Integer;index:Integer):Integer; SysV_ABI_CDecl;
+begin
+
+ Case index of
+  0..15:;
+  else
+   Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+ end;
+
+ _sig_lock;
+ Result:=_sceVideoOutUnregisterBuffers(hVideo,index);
+ _sig_unlock;
 end;
 
 function ps4_sceVideoOutColorSettingsSetGamma_(P:PSceVideoOutColorSettings;
@@ -1237,7 +1270,7 @@ var
  pos:array[0..1] of TVCursorPos;
 
  addr:Pointer;
- attr:TSceVideoOutBufferAttribute;
+ attr:SceVideoOutBufferAttribute;
 
  //buf:TvPointer;
 
@@ -1870,6 +1903,7 @@ begin
  lib^.set_proc($8BAFEC47DD56B7FE,@ps4_sceVideoOutSetBufferAttribute);
  lib^.set_proc($C37058FAD0048906,@ps4_sceVideoOutRegisterBuffers);
  lib^.set_proc($9424C23A88116E4D,@ps4_sceVideoOutRegisterStereoBuffers);
+ lib^.set_proc($379283B642238C9E,@ps4_sceVideoOutUnregisterBuffers);
  lib^.set_proc($0D886159B2527918,@ps4_sceVideoOutColorSettingsSetGamma_);
  lib^.set_proc($A6FF42239542F91D,@ps4_sceVideoOutAdjustColor_);
  lib^.set_proc($EA43E78F9D53EB66,@ps4_sceVideoOutGetResolutionStatus);
