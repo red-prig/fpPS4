@@ -562,6 +562,39 @@ const
  _BL=6;
  _BR=7;
 
+ STD_SL=6;
+ STD_SR=7;
+ STD_BL=4;
+ STD_BR=5;
+
+procedure __VecMulF32CH8ToS(Src,Dst:Pointer;count:Integer;fvolume:PSingle);
+var
+ fL,fR:Single;
+begin
+ While (count>0) do
+ begin
+
+  fL:=(PSingle(Src)[_FL]*fvolume[_FL])+
+      (PSingle(Src)[_FC]*fvolume[_FC])+
+      (PSingle(Src)[_SL]*fvolume[_SL])+
+      (PSingle(Src)[_BL]*fvolume[_BL]);
+
+  fR:=(PSingle(Src)[_FR]*fvolume[_FR])+
+      (PSingle(Src)[_FC]*fvolume[_FC])+
+      (PSingle(Src)[_SR]*fvolume[_SR])+
+      (PSingle(Src)[_BR]*fvolume[_BR]);
+
+  PSingle(Dst)^:=fL;
+  Inc(Dst,4);
+  PSingle(Dst)^:=fR;
+  Inc(Dst,4);
+
+  Inc(Src,4*8);
+
+  Dec(count);
+ end;
+end;
+
 procedure _VecMulF32CH8ToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
 const
  fdiv1:Single=1+(3/Sqrt(2));
@@ -577,31 +610,25 @@ begin
  fvolume[_SR]:=(volume[_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
  fvolume[_BL]:=(volume[_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
  fvolume[_BR]:=(volume[_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- While (count>0) do
- begin
+ __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
+end;
 
-  fL:=(PSingle(Src)[_FL]*fvolume[_FL])+
-      (PSingle(Src)[_FC]*fvolume[_FC])+
-      (PSingle(Src)[_SL]*fvolume[_SL])+
-      (PSingle(Src)[_BL]*fvolume[_BL]);
-
-  fR:=(PSingle(Src)[_FR]*fvolume[_FR])+
-      (PSingle(Src)[_FC]*fvolume[_FC])+
-      (PSingle(Src)[_SR]*fvolume[_SR])+
-      (PSingle(Src)[_BR]*fvolume[_BR]);
-
-  //fL:=fL*0.05;
-  //fR:=fR*0.05;
-
-  PSingle(Dst)^:=fL;
-  Inc(Dst,4);
-  PSingle(Dst)^:=fR;
-  Inc(Dst,4);
-
-  Inc(Src,4*8);
-
-  Dec(count);
- end;
+procedure _VecMulF32CH8STDToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
+const
+ fdiv1:Single=1+(3/Sqrt(2));
+ fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
+var
+ fvolume:array[0..7] of Single;
+ fL,fR:Single;
+begin
+ fvolume[_FL]:=(volume[   _FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
+ fvolume[_FR]:=(volume[   _FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
+ fvolume[_FC]:=(volume[   _FC]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_SL]:=(volume[STD_SL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_SR]:=(volume[STD_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_BL]:=(volume[STD_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_BR]:=(volume[STD_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
 end;
 
 function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;  SysV_ABI_CDecl;
@@ -641,7 +668,7 @@ begin
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
    begin
-    Assert(false);
+    Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH');
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
    begin
@@ -660,7 +687,7 @@ begin
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
    begin
 
-    if H.pnumOutputChannels=2 then
+    if (H.pnumOutputChannels=2) then
     begin
      _VecMulF32CH8ToS(ptr,H.buf,count,@H.volume);
      _sig_lock;
@@ -668,17 +695,28 @@ begin
      _sig_unlock;
     end else
     begin
-     Assert(false);
+     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH');
     end;
 
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD:
    begin
-    Assert(false);
+    Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD');
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
    begin
-    Assert(false);
+
+    if (H.pnumOutputChannels=2) then
+    begin
+     _VecMulF32CH8STDToS(ptr,H.buf,count,@H.volume);
+     _sig_lock;
+     err:=Pa_WriteStream(H.pstream,H.buf,count);
+     _sig_unlock;
+    end else
+    begin
+     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD');
+    end;
+
    end;
  end;
 
