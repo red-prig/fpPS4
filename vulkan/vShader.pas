@@ -5,7 +5,11 @@ unit vShader;
 interface
 
 uses
-  Classes, SysUtils, vulkan, vDevice;
+  Classes,
+  SysUtils,
+  shaders,
+  vulkan,
+  vDevice;
 
 type
  TvSupportDescriptorType=array[0..1] of TVkDescriptorType;
@@ -29,6 +33,7 @@ type
   procedure   LoadFromMemory(data:Pointer;size:Ptruint);
   procedure   LoadFromStream(Stream:TStream);
   procedure   LoadFromFile(const FileName:RawByteString);
+  procedure   LoadFromResource(const FileName:RawByteString);
   procedure   Parse(data:Pointer;size:Ptruint);
   procedure   OnEntryPoint(Stage:DWORD;P:PChar); virtual;
   procedure   OnSourceExtension(P:PChar); virtual;
@@ -124,6 +129,14 @@ begin
  LoadFromMemory(data,size);
  FreeMem(data);
  FileClose(F);
+end;
+
+procedure TvShader.LoadFromResource(const FileName:RawByteString);
+var
+ Stream:TStream;
+begin
+ Stream:=GetResourceStream(FileName,'SPV');
+ LoadFromStream(Stream);
 end;
 
 type

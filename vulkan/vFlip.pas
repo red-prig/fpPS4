@@ -342,7 +342,7 @@ begin
         FreeAndNil(Ffilp_shader);
         Ffilp_shader:=TvShaderCompute.Create;
 
-        Ffilp_shader.LoadFromFile('shaders\FLIP_LINE_A8R8G8B8_SRGB.spv');
+        Ffilp_shader.LoadFromResource('FLIP_LINE_A8R8G8B8_SRGB');
         FPipelineFlip.SetShader(Ffilp_shader);
        end;
      else
@@ -360,10 +360,10 @@ begin
 
         if FNeoMode then
         begin
-         Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8R8G8B8_SRGB_NEO.spv');
+         Ffilp_shader.LoadFromResource('FLIP_TILE_A8R8G8B8_SRGB_NEO');
         end else
         begin
-         Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8R8G8B8_SRGB.spv');
+         Ffilp_shader.LoadFromResource('FLIP_TILE_A8R8G8B8_SRGB');
         end;
 
         FPipelineFlip.SetShader(Ffilp_shader);
@@ -381,7 +381,7 @@ begin
          Assert(false,'TODO');
         end else
         begin
-         Ffilp_shader.LoadFromFile('shaders\FLIP_TILE_A8B8G8R8_SRGB.spv');
+         Ffilp_shader.LoadFromResource('FLIP_TILE_A8B8G8R8_SRGB');
         end;
 
         FPipelineFlip.SetShader(Ffilp_shader);
@@ -543,7 +543,7 @@ begin
      if (Fcursor_shader=nil) then
      begin
       Fcursor_shader:=TvShaderCompute.Create;
-      Fcursor_shader.LoadFromFile('shaders\FLIP_CURSOR.spv');
+      Fcursor_shader.LoadFromResource('FLIP_CURSOR');
       FPipelineCursor.SetShader(Fcursor_shader);
      end;
 

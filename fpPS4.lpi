@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="94">
+    <Units Count="98">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -431,6 +431,24 @@
         <Filename Value="sys\sys_path.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit93>
+      <Unit94>
+        <Filename Value="kernel\ps4_mspace.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit94>
+      <Unit95>
+        <Filename Value="src\ps4_libscerudp.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceRudp"/>
+      </Unit95>
+      <Unit96>
+        <Filename Value="src\ps4_libscevoice.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceVoice"/>
+      </Unit96>
+      <Unit97>
+        <Filename Value="shaders\shaders.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit97>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -442,7 +460,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;shaders"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
