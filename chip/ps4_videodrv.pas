@@ -2167,7 +2167,8 @@ begin
   For i:=0 to High(FAttrBuilder.FBindExt) do
   With FAttrBuilder.FBindExt[i] do
   begin
-   buf:=FetchHostBuffer(GFXRing.CmdBuffer,min_addr,stride*count,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+
+   buf:=FetchHostBuffer(GFXRing.CmdBuffer,min_addr,GetSize,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
 
    GFXRing.CmdBuffer.BindVertexBuffer(
                          binding,

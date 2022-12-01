@@ -476,6 +476,12 @@ const
 var
  status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
 
+//function ps4_sceImeDialogInit(param:pSceImeDialogParam;
+//                              extended:pSceImeParamExtended
+//                              ):Integer; SysV_ABI_CDecl;
+//
+//nop nid:libSceImeDialog:354781ACDEE1CDFD:sceImeDialogInit
+
 function ps4_sceImeDialogGetStatus:Integer; SysV_ABI_CDecl;
 begin
  Result:=status_ime_dialog;

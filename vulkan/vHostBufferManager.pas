@@ -230,6 +230,7 @@ label
 
 begin
  Result:=nil;
+ Assert(Size<>0);
 
  FHostBufferSet.Lock_wr;
 

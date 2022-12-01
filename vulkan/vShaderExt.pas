@@ -117,11 +117,12 @@ type
   Function  Compile:Boolean;
  end;
 
- TAttrBindExt=packed record
+ TAttrBindExt=packed object
   min_addr:Pointer;
   binding:TVkUInt32;
   stride:TVkUInt32;
   count:TVkUInt32;
+  Function GetSize:TVkUInt32;
  end;
 
  TvAttrBuilder=object
@@ -185,6 +186,17 @@ type
 function GetSharpByPatch(pData:Pointer;addr:ADataLayout):Pointer;
 
 implementation
+
+Function TAttrBindExt.GetSize:TVkUInt32;
+begin
+ if (stride=0) then
+ begin
+  Result:=count;
+ end else
+ begin
+  Result:=stride*count;
+ end;
+end;
 
 procedure TvShaderExt.ClearInfo;
 begin

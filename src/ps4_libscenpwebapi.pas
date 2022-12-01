@@ -118,7 +118,23 @@ end;
 function ps4_sceNpWebApiGetHttpStatusCode(requestId:Int64;
                                           pStatusCode:PInteger):Integer; SysV_ABI_CDecl;
 begin
- pStatusCode^:=404;
+ if (pStatusCode<>nil) then
+ begin
+  pStatusCode^:=404;
+ end;
+ Result:=0;
+end;
+
+function ps4_sceNpWebApiGetHttpResponseHeaderValueLength(
+                                          requestId:Int64;
+                                          pFieldName:PChar;
+                                          pValueLength:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApiGetHttpResponseHeaderValueLength:',pFieldName);
+ if (pValueLength<>nil) then
+ begin
+  pValueLength^:=0;
+ end;
  Result:=0;
 end;
 
@@ -192,6 +208,7 @@ begin
  lib^.set_proc($9156CBE212F72BBC,@ps4_sceNpWebApiSendRequest);
  lib^.set_proc($2A335E67FDBDCAC4,@ps4_sceNpWebApiSendRequest2);
  lib^.set_proc($936D74A0A80FF346,@ps4_sceNpWebApiGetHttpStatusCode);
+ lib^.set_proc($EF8DD9CC4073955F,@ps4_sceNpWebApiGetHttpResponseHeaderValueLength);
  lib^.set_proc($090B4F45217A0ECF,@ps4_sceNpWebApiReadData);
  lib^.set_proc($CB94DAE490B34076,@ps4_sceNpWebApiCreatePushEventFilter);
  lib^.set_proc($B08171EF7E3EC72B,@ps4_sceNpWebApiCreateServicePushEventFilter);
