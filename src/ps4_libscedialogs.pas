@@ -98,6 +98,11 @@ begin
  Result:=status_err_dialog;
 end;
 
+function ps4_sceErrorDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=status_err_dialog;
+end;
+
 function ps4_sceErrorDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceErrorDialogTerminate');
@@ -511,6 +516,7 @@ begin
  lib^.set_proc($23CF0A0A19729D2B,@ps4_sceErrorDialogInitialize);
  lib^.set_proc($336645FC294B8606,@ps4_sceErrorDialogOpen);
  lib^.set_proc($596886BA1F577E04,@ps4_sceErrorDialogUpdateStatus);
+ lib^.set_proc($B7616F1D15F382A9,@ps4_sceErrorDialogGetStatus);
  lib^.set_proc($F570312B63CCC24F,@ps4_sceErrorDialogTerminate);
 end;
 
