@@ -13,6 +13,7 @@ uses
   Forms,
   LMessages,
   LCLType,
+  LCLIntf,
 
   LFQueue,
   ps4_program,
@@ -353,6 +354,7 @@ type
  TMyForm=class(TForm)
   procedure CloseEvent(Sender:TObject;var CloseAction:TCloseAction);
   procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
+  procedure KeyEvent(Sender:TObject;var Key:Word;Shift:TShiftState);
  end;
 
  TVPos=packed record
@@ -502,6 +504,37 @@ begin
  Message.Result:=1;
 end;
 
+procedure TMyForm.KeyEvent(Sender:TObject;var Key:Word;Shift:TShiftState);
+var
+ style:ptrint;
+begin
+ if (Shift=[ssAlt]) and (Key=13) then //Alt+Enter
+ begin
+  LockRealizeBounds;
+
+  //BorderStyle:=bsNone; is buggy
+  style:=GetWindowLong(Handle,GWL_STYLE);
+
+  if ((style and WS_POPUP)=0) then //Windows->Fullscreen
+  begin
+   style:=style and (not WS_BORDER);
+   style:=style or WS_POPUP;
+   SetWindowLong(Handle,GWL_STYLE,style);
+
+   WindowState:=wsFullScreen;
+  end else
+  begin //Fullscreen->Windows
+   style:=style and (not WS_POPUP);
+   style:=style or WS_BORDER;
+   SetWindowLong(Handle,GWL_STYLE,style);
+
+   WindowState:=wsNormal;
+  end;
+
+  UnlockRealizeBounds;
+ end;
+end;
+
 procedure TVideoOut.OnVblank(Sender:TObject);
 begin
  post_event_vblank;
@@ -522,6 +555,7 @@ begin
  FForm.SetBounds(100, 100, pd_Width, pd_Height);
  FForm.Caption:='fpPS4';
  FForm.OnClose:=@FForm.CloseEvent;
+ FForm.OnKeyDown:=@FForm.KeyEvent;
 
  Application.UpdateMainForm(FForm);
  FForm.Show;
