@@ -1,5 +1,7 @@
 # fpPS4 [![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions)
 
+# Discord: [<img src="https://img.shields.io/discord/1047920770225012769?color=5865F2&label=fpPS4&logo=discord&logoColor=white"/>](https://discord.gg/7JnYvKnJxM)
+
 # Donate: [<img src="https://static.boosty.to/assets/images/logo.Ffjjd.svg"/>](https://boosty.to/fpps4)
 
 ![Book logo](/icons/logo.png) 
