@@ -139,6 +139,17 @@ type
   padding:array[0..5] of Byte;
  end;
 
+ pSceSaveDataDelete=^SceSaveDataDelete;
+ SceSaveDataDelete=packed record
+  userId:Integer;
+  align1:Integer;
+  titleId:pSceSaveDataTitleId;
+  dirName:pSceSaveDataDirName;
+  unused:Integer;
+  reserved:array[0..31] of Byte;
+  align2:Integer;
+ end;
+
  pSceSaveDataFingerprint=^SceSaveDataFingerprint;
  SceSaveDataFingerprint=packed record
   data:array[0..SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1] of Byte;
@@ -346,6 +357,11 @@ end;
 
 function ps4_sceSaveDataSyncSaveDataMemory(
            syncParam:PSceSaveDataMemorySync):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -626,6 +642,7 @@ begin
  lib^.set_proc($8776144735C64954,@ps4_sceSaveDataSetSaveDataMemory);
  lib^.set_proc($71DBB2F6FE18993E,@ps4_sceSaveDataSetSaveDataMemory2);
  lib^.set_proc($C224FD8DE0BBC4FC,@ps4_sceSaveDataSyncSaveDataMemory);
+ lib^.set_proc($4B51A478F235EF34,@ps4_sceSaveDataDelete);
  lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
