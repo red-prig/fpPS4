@@ -43,7 +43,7 @@ uses
 const
  BT_FREE=0;
  BT_PRIV=1;
- BT_GPUM=2;
+ //BT_GPUM=2;
  BT_FMAP=3;
 
 type
@@ -60,6 +60,8 @@ type
    Procedure SetUsed(q:QWORD);
    Function  GetRsrv:QWORD;
    Procedure SetRsrv(q:QWORD);
+   Function  GetFgpu:QWORD;
+   Procedure SetFgpu(q:QWORD);
   public
    F:bitpacked record
     Offset:bit28;
@@ -67,12 +69,15 @@ type
     btype :bit8;
     rsrv  :DWORD;
     used  :DWORD;
+    fgpu  :DWORD;
    end;
    Handle:Pointer; //gpu
   property  Offset:Pointer read GetOffset write SetOffset;
   property  Size:QWORD     read GetSize   write SetSize;
   property  Used:QWORD     read GetUsed   write SetUsed;
   property  Rsrv:QWORD     read GetRsrv   write SetRsrv;
+  property  Fgpu:QWORD     read GetFgpu   write SetFgpu;
+  function  isgpu:Boolean;
   function  Commit(key:PVirtualAdrNode;prot:Integer):Integer;
   function  Free(key:PVirtualAdrNode):Integer;
   function  Reserved(key:PVirtualAdrNode):Integer;
@@ -220,8 +225,8 @@ begin
  ASize  :=AlignUp(FSize,GRANULAR_PAGE_SIZE);
 
  case btype of
-  BT_PRIV,
-  BT_GPUM:
+  BT_PRIV{,
+  BT_GPUM}:
    begin
     //err:=_VirtualReserve(Pointer(FOffset),ASize,prot);
     err:=_VirtualAlloc(Pointer(FOffset),ASize,{0}prot);
@@ -257,13 +262,14 @@ begin
  Result^.Size    :=ASize;
 
  case btype of
-  BT_PRIV,
-  BT_GPUM:
+  BT_PRIV{,
+  BT_GPUM}:
    begin
     //
    end;
   BT_FMAP:
    begin
+    key^.F.prot:=prot;
     Result^.Used:=ASize;
    end;
   else;
@@ -367,6 +373,22 @@ begin
  Assert(GetRsrv=q);
 end;
 
+Function TVirtualAdrBlock.GetFgpu:QWORD;
+begin
+ Result:=QWORD(F.fgpu) shl 12;
+end;
+
+Procedure TVirtualAdrBlock.SetFgpu(q:QWORD);
+begin
+ F.fgpu:=DWORD(q shr 12);
+ Assert(GetFgpu=q);
+end;
+
+function TVirtualAdrBlock.isgpu:Boolean;
+begin
+ Result:=(F.fgpu<>0);
+end;
+
 function TVirtualAdrBlock.Commit(key:PVirtualAdrNode;prot:Integer):Integer;
 begin
  Result:=0;
@@ -380,6 +402,12 @@ begin
   Assert((Used+key^.Size)<=Size);
 
   Used:=Used+key^.Size; //+
+
+  if _isgpu(prot) then
+  begin
+   fgpu:=fgpu+key^.Size; //+
+  end;
+
  end else
  if (key^.F.reserv<>0) then //reserved->commit
  begin
@@ -388,14 +416,20 @@ begin
 
   Rsrv:=Rsrv-key^.Size; //-
   Used:=Used+key^.Size; //+
+
+  if _isgpu(prot) then
+  begin
+   fgpu:=fgpu+key^.Size; //+
+  end;
+
  end else
  begin
   Exit;
  end;
 
  case F.btype of
-  BT_PRIV,
-  BT_GPUM:
+  BT_PRIV{,
+  BT_GPUM}:
    begin
     Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,prot);
     //Result:=_VirtualCommit(Pointer(key^.Offset),key^.Size,prot);
@@ -428,6 +462,11 @@ begin
   Assert(Used>=key^.Size);
 
   Used:=Used-key^.Size; //-
+
+  if _isgpu(key^.F.prot) then
+  begin
+   fgpu:=fgpu-key^.Size //-
+  end;
 
   ////
   if not _iswrite(key^.F.prot) then
@@ -463,15 +502,20 @@ begin
 
   Used:=Used-key^.Size; //-
   Rsrv:=Rsrv+key^.Size; //+
- end;
 
- if not _iswrite(key^.F.prot) then
- begin
-  _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
- end;
- FillChar(Pointer(key^.Offset)^,key^.Size,0);
+  if _isgpu(key^.F.prot) then
+  begin
+   fgpu:=fgpu-key^.Size //-
+  end;
 
- Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
+  if not _iswrite(key^.F.prot) then
+  begin
+   _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
+  end;
+  FillChar(Pointer(key^.Offset)^,key^.Size,0);
+
+  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
+ end;
 
  //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
  Result:=0;
@@ -491,6 +535,16 @@ begin
   Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,prot);
   if (Result=0) then
   begin
+
+   if _isgpu(prot) and (not _isgpu(key^.F.prot)) then
+   begin
+    fgpu:=fgpu+key^.Size; //+
+   end else
+   if (not _isgpu(prot)) and _isgpu(key^.F.prot) then
+   begin
+    fgpu:=fgpu-key^.Size; //-
+   end;
+
    key^.F.prot:=prot;
   end;
  end;
@@ -901,7 +955,7 @@ begin
 
      if _isgpu(prot) then
      begin
-      if (key.block^.F.btype<>BT_GPUM) then
+      if (not key.block^.isgpu) {(key.block^.F.btype<>BT_GPUM)} then
       begin
        Goto _start;
       end;
@@ -1201,7 +1255,7 @@ begin
 
  until false;
 
- Test;
+ //Test;
 end;
 
 Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
@@ -1428,7 +1482,7 @@ begin
  end else
  if _isgpu(prot) then
  begin
-  btype:=BT_GPUM;
+  btype:={BT_GPUM}BT_PRIV;
  end else
  begin
   btype:=BT_PRIV;
@@ -1437,7 +1491,7 @@ begin
  Result:=check_fixed(Offset,Size,flags,fd);
  if (Result<>0) then Exit;
 
- Test;
+ //Test;
 
  repeat
 
@@ -1570,7 +1624,7 @@ begin
 
  until false;
 
- Test;
+ //Test;
 
  if (Result=0) then
  begin
@@ -1691,7 +1745,7 @@ begin
 
  until false;
 
- Test;
+ //Test;
 end;
 
 Function TVirtualManager.Mtypeprotect(Offset:Pointer;Size:QWORD;mtype,prot:Integer):Integer;
@@ -1786,7 +1840,7 @@ begin
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
- Test;
+ //Test;
 
  repeat
 
@@ -1812,7 +1866,7 @@ begin
 
  until false;
 
- Test;
+ //Test;
 end;
 
 Function TVirtualManager.Release(Offset:Pointer;Size:QWORD;inher:Boolean):Integer;
@@ -1945,11 +1999,11 @@ begin
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
- Test;
+ //Test;
 
  repeat
 
-  Test;
+  //Test;
 
   key:=Default(TVirtualAdrNode);
   key.IsFree:=False;
@@ -1987,7 +2041,7 @@ begin
 
  until false;
 
- Test;
+ //Test;
 end;
 
 Function TVirtualManager.Query(Offset:Pointer;next:Boolean;var ROut:TVirtualAdrNode):Integer;
@@ -1997,7 +2051,7 @@ var
 begin
  Result:=0;
 
- Test;
+ //Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 
@@ -2048,7 +2102,7 @@ var
 begin
  Result:=0;
 
- Test;
+ //Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 

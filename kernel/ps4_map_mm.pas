@@ -292,7 +292,7 @@ begin
 
  if VirtualManager.TryGetMapBlockByAddr(addr,pb) then
  begin
-  if (pb^.F.btype<>BT_GPUM) then goto __exit;
+  if (not pb^.isgpu) {(pb^.F.btype<>BT_GPUM)} then goto __exit;
 
   if (pb^.Handle=nil) then
   begin
@@ -316,7 +316,7 @@ function __free_block(block:PVirtualAdrBlock):Integer;
 begin
  Result:=0;
  if (block=nil) then Exit;
- if (block^.F.btype<>BT_GPUM) then Exit;
+ //if (block^.F.btype<>BT_GPUM) then Exit;
  if (block^.Handle<>nil) then Exit;
 
  if (GpuMemCb.Free<>nil) then Exit;
