@@ -228,8 +228,17 @@ function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
 var
  f:TCustomFile;
 begin
- if (data=nil) then Exit(-EFAULT);
  if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
@@ -277,6 +286,15 @@ var
  f:TCustomFile;
 begin
  if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
  if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
  if (offset<0) then Exit(-EINVAL);
@@ -326,8 +344,8 @@ var
  f:TCustomFile;
  i:Integer;
 begin
- if (vector=nil) then Exit(-EFAULT);
  if (fd<0) then Exit(-EINVAL);
+ if (vector=nil) then Exit(-EFAULT);
  if (count<=0) then Exit(-EINVAL);
 
  For i:=0 to count-1 do
@@ -380,8 +398,17 @@ function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
 var
  f:TCustomFile;
 begin
- if (data=nil) then Exit(-EFAULT);
  if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
@@ -429,6 +456,15 @@ var
  f:TCustomFile;
 begin
  if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
  if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
  if (offset<0) then Exit(-EINVAL);
