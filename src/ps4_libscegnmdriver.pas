@@ -1756,13 +1756,17 @@ begin
  Result:=kWorkloadStatusInvalidPointer;
 end;
 
-
 function ps4_sceGnmEndWorkload(workload:QWORD):Integer; SysV_ABI_CDecl;
 begin
  if (workload<>0) then
  begin
   Result:=DWORD($f < DWORD(workload shr $38)) * 2;
  end;
+end;
+
+function ps4_sceGnmGetGpuCoreClockFrequency:QWORD; SysV_ABI_CDecl;
+begin
+ Result:=800000000;
 end;
 
 const
@@ -1924,6 +1928,8 @@ begin
  lib^.set_proc($E6E7409BEE9BA158,@ps4_sceGnmCreateWorkloadStream);
  lib^.set_proc($8A1C6B6ECA122967,@ps4_sceGnmBeginWorkload);
  lib^.set_proc($15ADF1EF938E2D10,@ps4_sceGnmEndWorkload);
+
+ lib^.set_proc($170BE1FBE9BD2102,@ps4_sceGnmGetGpuCoreClockFrequency);
 
   //nop nid:libSceGnmDriver:DBDA0ABCA5F3119A:sceGnmMapComputeQueue
 

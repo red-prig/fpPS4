@@ -592,6 +592,10 @@ begin
  rwlock_rdlock(MMLock); //r
 
  Result:=DirectManager.CheckedRelease(start,len);
+ if (Result=0) then
+ begin
+  Result:=DirectManager.Release(start,len,False);
+ end;
 
  rwlock_unlock(MMLock);
  _sig_unlock;
@@ -607,7 +611,7 @@ begin
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
 
- Result:=DirectManager.Release(start,len);
+ Result:=DirectManager.Release(start,len,False);
 
  rwlock_unlock(MMLock);
  _sig_unlock;
@@ -733,6 +737,7 @@ begin
 
  if (Result<>0) then
  begin
+  Result:=_sceKernelCheckedReleaseDirectMemory(start,len);
   Writeln(StdErr,'[WARN]:sceKernelCheckedReleaseDirectMemory:',Result);
  end;
  _set_errno(Result);
@@ -870,7 +875,7 @@ end;
 
 function __release_direct(Offset,Size:QWORD):Integer;
 begin
- Result:=DirectManager.Release(Offset,Size);
+ Result:=DirectManager.Release(Offset,Size,True);
 end;
 
 function __mtype_direct(Offset,Size:QWORD;mtype:Integer):Integer;

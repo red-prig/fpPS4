@@ -316,6 +316,26 @@ begin
  end;
 end;
 
+const
+ GpuCoreClockFrequency=800000000;
+
+function GetGpuTickCount:QWORD;
+var
+ pc,pf:QWORD;
+ DW0,DW1:QWORD;
+begin
+ pc:=0;
+ pf:=1;
+ NtQueryPerformanceCounter(@pc,@pf);
+
+ //DW0*GF/pf + SHL_32* DW1*GF/pf
+
+ DW0:=(DWORD(pc shr 00)*GpuCoreClockFrequency) div pf;
+ DW1:=(DWORD(pc shr 32)*GpuCoreClockFrequency) div pf;
+
+ Result:=DW0+(DW1 shl 32);
+end;
+
 Function me_eop(node:pvMeEopInfo):Boolean;
 begin
  Result:=True;
@@ -326,7 +346,7 @@ begin
   kEventWriteSource32BitsImmediate    :PDWORD(node^.adr)^:=PDWORD(@node^.data)^;
   kEventWriteSource64BitsImmediate    :PQWORD(node^.adr)^:=PQWORD(@node^.data)^;
   kEventWriteSourceGlobalClockCounter ,
-  kEventWriteSourceGpuCoreClockCounter:PQWORD(node^.adr)^:=GetTickCount64*1000;
+  kEventWriteSourceGpuCoreClockCounter:PQWORD(node^.adr)^:=GetGpuTickCount;
   else
    Assert(False);
  end;

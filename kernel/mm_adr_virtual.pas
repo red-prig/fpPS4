@@ -187,6 +187,7 @@ type
 
     Function  TryGetMapBlockByAddr(Offset:Pointer;var block:PVirtualAdrBlock):Boolean;
 
+    procedure Test;
     procedure Print;
  end;
 
@@ -427,15 +428,17 @@ begin
   Assert(Used>=key^.Size);
 
   Used:=Used-key^.Size; //-
+
+  ////
+  if not _iswrite(key^.F.prot) then
+  begin
+   _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
+  end;
+  FillChar(key^.Offset^,key^.Size,0);
+
+  Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
  end;
 
- if not _iswrite(key^.F.prot) then
- begin
-  _VirtualProtect(Pointer(key^.Offset),key^.Size,PROT_READ or PROT_WRITE);
- end;
- FillChar(key^.Offset^,key^.Size,0);
-
- Result:=_VirtualProtect(Pointer(key^.Offset),key^.Size,0);
  //Result:=_VirtualDecommit(Pointer(key^.Offset),key^.Size);
 end;
 
@@ -979,6 +982,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -1000,6 +1004,7 @@ begin
   end;
 
  until false;
+
 end;
 
 procedure TVirtualManager._mmap_addr(Offset:Pointer;Size,addr:QWORD;direct:Boolean);
@@ -1050,6 +1055,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   addr  :=addr  +FSize;
   Offset:=Offset+FSize;
@@ -1072,6 +1078,7 @@ begin
   end;
 
  until false;
+
 end;
 
 procedure TVirtualManager._mmap_sys(Offset:Pointer;Size:QWORD);
@@ -1123,12 +1130,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -1138,6 +1146,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -1170,6 +1179,8 @@ begin
   end;
 
  until false;
+
+ //Test;
 end;
 
 Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
@@ -1316,6 +1327,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
@@ -1351,6 +1363,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
@@ -1403,6 +1416,8 @@ begin
  Result:=check_fixed(Offset,Size,flags,fd);
  if (Result<>0) then Exit;
 
+ //Test;
+
  repeat
 
   key:=Default(TVirtualAdrNode);
@@ -1436,7 +1451,11 @@ begin
      end;
 
      Result:=_CreateBlock(key.block);
-     if (Result<>0) then Exit;
+     if (Result<>0) then
+     begin
+      _Merge(key); //undo
+      Exit;
+     end;
 
      _set_block(key.block^.Offset,key.block^.Size,key.block,_reserv);
 
@@ -1530,6 +1549,8 @@ begin
 
  until false;
 
+ //Test;
+
  if (Result=0) then
  begin
   AdrOut:=start;
@@ -1588,12 +1609,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -1603,6 +1625,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -1620,6 +1643,8 @@ begin
 
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
+ //Test;
 
  repeat
 
@@ -1644,6 +1669,8 @@ begin
   end;
 
  until false;
+
+ //Test;
 end;
 
 Function TVirtualManager.Mtypeprotect(Offset:Pointer;Size:QWORD;mtype,prot:Integer):Integer;
@@ -1703,12 +1730,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -1718,6 +1746,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -1735,6 +1764,8 @@ begin
 
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
+ //Test;
 
  repeat
 
@@ -1759,6 +1790,8 @@ begin
   end;
 
  until false;
+
+ //Test;
 end;
 
 Function TVirtualManager.Release(Offset:Pointer;Size:QWORD):Integer;
@@ -1852,12 +1885,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -1867,6 +1901,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -1882,6 +1917,8 @@ begin
 
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
+ //Test;
 
  repeat
 
@@ -1920,6 +1957,8 @@ begin
   end;
 
  until false;
+
+ //Test;
 end;
 
 Function TVirtualManager.Query(Offset:Pointer;next:Boolean;var ROut:TVirtualAdrNode):Integer;
@@ -1928,6 +1967,8 @@ var
  key:TVirtualAdrNode;
 begin
  Result:=0;
+
+ //Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 
@@ -1977,6 +2018,8 @@ var
  key:TVirtualAdrNode;
 begin
  Result:=0;
+
+ //Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 
@@ -2057,6 +2100,35 @@ begin
  end else
  begin
   Result:='ALLC';
+ end;
+end;
+
+procedure TVirtualManager.Test;
+var
+ prev,curr:Pointer;
+ key:TVirtualAdrNode;
+ It:TAllcPoolNodeSet.Iterator;
+begin
+ prev:=nil;
+
+ It:=FAllcSet.cbegin;
+ While (It.Item<>nil) do
+ begin
+  key:=It.Item^;
+
+  if (prev<>nil) then
+  begin
+   curr:=key.Offset;
+   if (curr<>prev) then
+   begin
+    Writeln(HexStr(prev),':',HexStr(curr));
+    Assert(false);
+   end;
+  end;
+
+  prev:=key.Offset+key.Size;
+
+  It.Next;
  end;
 end;
 

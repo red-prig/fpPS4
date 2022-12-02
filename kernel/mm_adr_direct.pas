@@ -97,7 +97,7 @@ type
     Function  CheckedAlloc(Offset,Size:QWORD):Integer;
     Function  CheckedMMap(Offset,Size:QWORD):Integer;
     Function  CheckedRelease(Offset,Size:QWORD):Integer;
-    Function  Release(Offset,Size:QWORD):Integer;
+    Function  Release(Offset,Size:QWORD;inher:Boolean):Integer;
     Function  mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
     Function  mmap_type(Offset,Size:QWORD;mtype:Integer):Integer;
     Function  unmap_addr(Offset,Size:QWORD):Integer;
@@ -659,7 +659,7 @@ begin
  end;
 end;
 
-Function TDirectManager.Release(Offset,Size:QWORD):Integer;
+Function TDirectManager.Release(Offset,Size:QWORD;inher:Boolean):Integer;
 var
  key:TDirectAdrNode;
  FEndN,FEndO:QWORD;
@@ -703,12 +703,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -718,6 +719,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
@@ -736,7 +738,13 @@ begin
 
   if _fetch then
   begin
-   Result:=_UnmapVirtual(key.addr,key.Size);
+   if inher then
+   begin
+    Result:=0;
+   end else
+   begin
+    Result:=_UnmapVirtual(key.addr,key.Size);
+   end;
 
    if (Result<>0) then
    begin
@@ -810,13 +818,14 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   addr  :=ia(addr,FSize);
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -826,6 +835,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   addr  :=ia(addr,FSize);
   Offset:=Offset+FSize;
@@ -904,12 +914,13 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
  end;
 
- function _skip:Boolean; inline;
+ function _skip:Boolean; //inline;
  begin
   Result:=False;
 
@@ -919,6 +930,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;

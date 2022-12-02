@@ -315,6 +315,7 @@ var
   if (FEndO>=FEndN) then Exit(True);
 
   FSize:=FEndO-Offset;
+  Assert(FSize<>0);
 
   Offset:=Offset+FSize;
   Size  :=Size  -FSize;
