@@ -236,14 +236,11 @@ begin
                               );
  end;
 
- //FHostCacheMt:=findMemoryType(mr.memoryTypeBits,
- //                             ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
- //                             ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT));
-
- //if (FHostCacheMt=DWORD(-1)) then
- //begin
- // FHostCacheMt:=FHostVisibMt;
- //end;
+ //We'll try it, but the driver still sucks
+ if (FHostVisibMt=DWORD(-1)) then
+ begin
+  FHostVisibMt:=0;
+ end;
 
  Writeln('  SelectHost=',FHostVisibMt);
 end;
