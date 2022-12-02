@@ -142,7 +142,7 @@ begin
 
  cinfo:=Default(TVkBufferCreateInfo);
  cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
- cinfo.size       :=4*1024;
+ cinfo.size       :=64*1024;
  cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
  cinfo.pNext      :=@buf_ext;
@@ -163,12 +163,14 @@ var
  FHandle:TVkBuffer;
 begin
  Result:=0;
+ if not sparseBinding then Exit;
+
  mr:=Default(TVkMemoryRequirements);
 
  cinfo:=Default(TVkBufferCreateInfo);
  cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
- cinfo.flags      :=ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT) or ord(VK_BUFFER_CREATE_SPARSE_RESIDENCY_BIT) or ord(VK_BUFFER_CREATE_SPARSE_ALIASED_BIT);
- cinfo.size       :=4*1024;
+ cinfo.flags      :=ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT);
+ cinfo.size       :=64*1024;
  cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
  cinfo.pNext      :=@buf_ext;
