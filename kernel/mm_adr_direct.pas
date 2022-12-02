@@ -149,6 +149,11 @@ begin
  if (a>b) then Result:=a else Result:=b;
 end;
 
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
 //
 
 Function TDirectAdrNode.GetOffset:QWORD;
@@ -303,7 +308,7 @@ begin
        end;
 
   C_LE:if ((rkey.Offset+rkey.Size)<=cmp) then Exit;
-  C_BE:if (rkey.Offset<=cmp) then Exit;
+  C_BE:if (rkey.Offset>=cmp) then Exit;
 
   else
        Exit;
@@ -669,16 +674,17 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
    FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
@@ -706,7 +712,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -722,7 +728,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -780,18 +786,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -822,7 +828,7 @@ var
 
   addr  :=ia(addr,FSize);
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -839,7 +845,7 @@ var
 
   addr  :=ia(addr,FSize);
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -882,18 +888,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -917,7 +923,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -933,7 +939,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin

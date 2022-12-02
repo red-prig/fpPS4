@@ -96,12 +96,12 @@ const
 
 function _isgpu(prot:Integer):Boolean; inline;
 begin
- Result:=prot and (SCE_KERNEL_PROT_GPU_READ or SCE_KERNEL_PROT_GPU_WRITE)<>0;
+ Result:=prot and (PROT_GPU_READ or PROT_GPU_WRITE)<>0;
 end;
 
 function _iswrite(prot:Integer):Boolean; inline;
 begin
- Result:=prot and (PROT_WRITE or SCE_KERNEL_PROT_GPU_WRITE)<>0;
+ Result:=prot and (PROT_WRITE or PROT_GPU_WRITE)<>0;
 end;
 
 function __map_prot_page(prot:Integer):DWORD;
@@ -111,11 +111,11 @@ begin
 
  if (prot and PROT_EXEC)<>0 then
  begin
-  if (prot and (PROT_WRITE or SCE_KERNEL_PROT_GPU_WRITE))<>0 then
+  if (prot and (PROT_WRITE or PROT_GPU_WRITE))<>0 then
   begin
    Result:=PAGE_EXECUTE_READWRITE;
   end else
-  if (prot and (PROT_READ or SCE_KERNEL_PROT_GPU_READ))<>0 then
+  if (prot and (PROT_READ or PROT_GPU_READ))<>0 then
   begin
    Result:=PAGE_EXECUTE_READ;
   end else
@@ -123,7 +123,7 @@ begin
    Result:=PAGE_EXECUTE;
   end;
  end else
- if (prot and (PROT_WRITE or SCE_KERNEL_PROT_GPU_WRITE))<>0 then
+ if (prot and (PROT_WRITE or PROT_GPU_WRITE))<>0 then
  begin
   Result:=PAGE_READWRITE;
  end else

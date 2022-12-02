@@ -180,7 +180,7 @@ type
     Function  Protect(Offset:Pointer;Size:QWORD;prot:Integer):Integer;
     Function  Mtypeprotect(Offset:Pointer;Size:QWORD;mtype,prot:Integer):Integer;
 
-    Function  Release(Offset:Pointer;Size:QWORD):Integer;
+    Function  Release(Offset:Pointer;Size:QWORD;inher:Boolean):Integer;
 
     Function  Query(Offset:Pointer;next:Boolean;var ROut:TVirtualAdrNode):Integer;
     Function  QueryProt(Offset:Pointer;var ROut:TVirtualAdrNode):Integer;
@@ -699,7 +699,7 @@ begin
        end;
 
   C_LE:if ((rkey.Offset+rkey.Size)<=cmp) then Exit;
-  C_BE:if (rkey.Offset<=cmp) then Exit;
+  C_BE:if (rkey.Offset>=cmp) then Exit;
 
   else
        Exit;
@@ -933,18 +933,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -956,7 +956,12 @@ var
  function _map:Boolean;
  begin
   Result:=False;
-  Assert(key.Size<>0);
+
+  if (key.Size=0) then
+  begin
+   if (FEndO>=FEndN) then Exit(True);
+   Exit;
+  end;
 
   //new save
   key.block:=block;
@@ -985,7 +990,23 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
+ end;
+
+ function _skip:Boolean; //inline;
+ begin
+  Result:=False;
+
+  FEndN:=Offset+Size;
+  FEndO:=key.Offset+key.Size;
+
+  if (FEndO>=FEndN) then Exit(True);
+
+  FSize:=FEndO-Offset;
+  if (FSize=0) then FSize:=PHYSICAL_PAGE_SIZE;
+
+  Offset:=Offset+FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1000,7 +1021,7 @@ begin
    if _map then Break;
   end else
   begin
-   Break;
+   if _skip then Break;
   end;
 
  until false;
@@ -1017,18 +1038,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1059,7 +1080,7 @@ var
 
   addr  :=addr  +FSize;
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1091,18 +1112,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_FR or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1133,7 +1154,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -1149,7 +1170,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1180,7 +1201,7 @@ begin
 
  until false;
 
- //Test;
+ Test;
 end;
 
 Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
@@ -1284,18 +1305,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+ASize;
+
   if _FetchNode_m(M_LE or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+ASize;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,ASize,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_BE,(Offset+ASize),key) then
+  if _FetchNode_m(M_BE or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+ASize;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1332,8 +1353,8 @@ var
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
 
-  ASize :=ASize -FSize;
-  Size  :=Size  -FSize;
+  ASize :=ASize -Min(FSize,ASize);
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _remap:Boolean;
@@ -1368,8 +1389,8 @@ var
   addr  :=ia(_addres,addr,FSize);
   Offset:=Offset+FSize;
 
-  ASize :=ASize -FSize;
-  Size  :=Size  -FSize;
+  ASize :=ASize -Min(FSize,ASize);
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1416,7 +1437,7 @@ begin
  Result:=check_fixed(Offset,Size,flags,fd);
  if (Result<>0) then Exit;
 
- //Test;
+ Test;
 
  repeat
 
@@ -1549,7 +1570,7 @@ begin
 
  until false;
 
- //Test;
+ Test;
 
  if (Result=0) then
  begin
@@ -1567,18 +1588,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_FR or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1612,7 +1633,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -1628,7 +1649,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1670,7 +1691,7 @@ begin
 
  until false;
 
- //Test;
+ Test;
 end;
 
 Function TVirtualManager.Mtypeprotect(Offset:Pointer;Size:QWORD;mtype,prot:Integer):Integer;
@@ -1683,18 +1704,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_FR or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1733,7 +1754,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -1749,7 +1770,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1765,7 +1786,7 @@ begin
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
- //Test;
+ Test;
 
  repeat
 
@@ -1791,10 +1812,10 @@ begin
 
  until false;
 
- //Test;
+ Test;
 end;
 
-Function TVirtualManager.Release(Offset:Pointer;Size:QWORD):Integer;
+Function TVirtualManager.Release(Offset:Pointer;Size:QWORD;inher:Boolean):Integer;
 var
  key:TVirtualAdrNode;
  FEndN,FEndO:Pointer;
@@ -1805,18 +1826,18 @@ var
  begin
   Result:=False;
 
+  FEndN:=Offset+Size;
+
   if _FetchNode_m(M_LE or C_FR or C_LE,Offset,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(Offset,Size,key);
 
    Result:=True;
   end else
-  if _FetchNode_m(M_BE or C_FR or C_BE,(Offset+Size),key) then
+  if _FetchNode_m(M_BE or C_FR or C_BE,FEndN,key) then
   begin
-   FEndN:=Offset+Size;
    FEndO:=key.Offset+key.Size;
 
    _Devide(key.Offset,FEndN-key.Offset,key);
@@ -1835,7 +1856,13 @@ var
 
   if (key.F.direct<>0) then
   begin
-   err:=_UnmapDirect(key.addr,key.Size);
+   if inher then
+   begin
+    err:=0;
+   end else
+   begin
+    err:=_UnmapDirect(key.addr,key.Size);
+   end;
    if (err<>0) then Exit;
   end;
 
@@ -1888,7 +1915,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
  function _skip:Boolean; //inline;
@@ -1904,7 +1931,7 @@ var
   Assert(FSize<>0);
 
   Offset:=Offset+FSize;
-  Size  :=Size  -FSize;
+  Size  :=Size  -Min(FSize,Size);
  end;
 
 begin
@@ -1918,9 +1945,11 @@ begin
  Offset:=FEndO;
  Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
 
- //Test;
+ Test;
 
  repeat
+
+  Test;
 
   key:=Default(TVirtualAdrNode);
   key.IsFree:=False;
@@ -1958,7 +1987,7 @@ begin
 
  until false;
 
- //Test;
+ Test;
 end;
 
 Function TVirtualManager.Query(Offset:Pointer;next:Boolean;var ROut:TVirtualAdrNode):Integer;
@@ -1968,7 +1997,7 @@ var
 begin
  Result:=0;
 
- //Test;
+ Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 
@@ -2019,7 +2048,7 @@ var
 begin
  Result:=0;
 
- //Test;
+ Test;
 
  if (Offset>Fhi) then Exit(EINVAL);
 
@@ -2116,6 +2145,16 @@ begin
  begin
   key:=It.Item^;
 
+  if (key.block<>nil) then
+  begin
+   if (key.Offset< key.block^.Offset) or
+      (key.Offset>=key.block^.Offset+key.block^.Size) then
+   begin
+    Writeln(HexStr(key.Offset),':',HexStr(key.block^.Offset));
+    Assert(false);
+   end;
+  end;
+
   if (prev<>nil) then
   begin
    curr:=key.Offset;
@@ -2132,6 +2171,21 @@ begin
  end;
 end;
 
+const
+ pt_r:array[boolean] of AnsiChar=('_','R');
+ pt_w:array[boolean] of AnsiChar=('_','W');
+ pt_e:array[boolean] of AnsiChar=('_','E');
+
+function _prot_str(prot:Integer):RawByteString;
+begin
+ Result:=pt_r[prot and PROT_READ <>0]+
+         pt_w[prot and PROT_WRITE<>0]+
+         pt_e[prot and PROT_EXEC <>0]+
+         ':'+
+         pt_r[prot and PROT_GPU_READ <>0]+
+         pt_w[prot and PROT_GPU_WRITE<>0];
+end;
+
 procedure TVirtualManager.Print;
 var
  key:TVirtualAdrNode;
@@ -2146,7 +2200,9 @@ begin
           HexStr(QWORD(key.Offset+key.Size),11),':',
           HexStr(key.Size,11),'#',
           HexStr(qword(key.addr),11),'#',
-          _alloc_str(key),'#');
+          _alloc_str(key),'#',
+          _prot_str(key.F.prot)
+         );
 
   It.Next;
  end;

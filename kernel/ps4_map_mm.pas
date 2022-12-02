@@ -865,7 +865,7 @@ end;
 
 function __munmap(addr:Pointer;len:size_t):Integer;
 begin
- Result:=VirtualManager.Release(addr,len);
+ Result:=VirtualManager.Release(addr,len,True);
 
  if (Result=0) then
  begin
@@ -890,7 +890,7 @@ begin
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
 
- Result:=VirtualManager.Release(addr,len);
+ Result:=VirtualManager.Release(addr,len,False);
 
  if (Result=0) then
  begin
