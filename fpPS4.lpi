@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="98">
+    <Units Count="99">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -449,6 +449,11 @@
         <Filename Value="shaders\shaders.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit97>
+      <Unit98>
+        <Filename Value="src\ps4_libscerandom.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceRandom"/>
+      </Unit98>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -174,11 +174,6 @@ begin
  CloseHandle(Handle);
 end;
 
-function SetFilePointerEx(hFile:HANDLE;
-                          liDistanceToMove:LARGE_INTEGER;
-                          lpNewFilePointer:PLARGE_INTEGER;
-                          dwMoveMethod:DWORD):BOOL; external 'kernel32';
-
 function TFile.lseek (offset:Int64;whence:Integer):Int64;
 var
  err:DWORD;

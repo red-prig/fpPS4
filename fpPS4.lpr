@@ -45,6 +45,7 @@ uses
  ps4_libScePad,
  ps4_libSceNpWebApi,
  ps4_libSceRudp,
+ ps4_libSceRandom,
  ps4_elf,
  ps4_pthread,
  ps4_program,

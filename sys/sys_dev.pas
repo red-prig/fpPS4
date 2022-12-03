@@ -124,14 +124,6 @@ end;
 
 //
 
-const
- BCRYPT_USE_SYSTEM_PREFERRED_RNG=2;
-
-function BCryptGenRandom(hAlgorithm:Pointer;
-                         pbBuffer:PByte;
-                         cbBuffer:DWORD;
-                         dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
-
 function TDevRandom.read  (data:Pointer;size:Int64):Int64;
 begin
  Assert(size<High(DWORD));

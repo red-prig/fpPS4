@@ -66,6 +66,19 @@ function  MapViewOfFileEx(hFileMappingObject:HANDLE;
                           dwNumberOfBytesToMap:SIZE_T;
                           lpBaseAddress:LPVOID):LPVOID; stdcall; external 'kernel32' name 'MapViewOfFileEx';
 
+function  SetFilePointerEx(hFile:HANDLE;
+                           liDistanceToMove:LARGE_INTEGER;
+                           lpNewFilePointer:PLARGE_INTEGER;
+                           dwMoveMethod:DWORD):BOOL; external 'kernel32';
+
+const
+ BCRYPT_USE_SYSTEM_PREFERRED_RNG=2;
+
+function  BCryptGenRandom(hAlgorithm:Pointer;
+                          pbBuffer:PByte;
+                          cbBuffer:DWORD;
+                          dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
+
 implementation
 
 uses
