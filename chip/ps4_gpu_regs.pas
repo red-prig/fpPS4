@@ -1508,7 +1508,7 @@ end;
 
 function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
 begin
- Result:=Default(TVkFormat);
+ Result:=VK_FORMAT_UNDEFINED;
  if (PV=nil) then Exit;
 
  Case PV^.nfmt of
@@ -1518,10 +1518,10 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_UNORM;
     BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_SNORM:
@@ -1529,10 +1529,10 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SNORM;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SNORM;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SNORM;
-    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SNORM;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SNORM;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SNORM;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_USCALED:
@@ -1540,10 +1540,10 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_USCALED;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_USCALED;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_USCALED;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_USCALED;
     BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_USCALED;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_USCALED;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_SSCALED:
@@ -1551,10 +1551,10 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SSCALED;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SSCALED;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SSCALED;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SSCALED;
     BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SSCALED;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SSCALED;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_UINT:
@@ -1562,14 +1562,14 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UINT;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UINT;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UINT;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_UINT;
     BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UINT;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UINT;
     BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_UINT;
     BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_UINT;
     BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_UINT;
     BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_UINT;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_SINT:
@@ -1577,29 +1577,32 @@ begin
     BUF_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SINT;
     BUF_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SINT;
     BUF_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SINT;
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SINT;
     BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SINT;
     BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
     BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
     BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
     BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SINT;
     BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SINT;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
   BUF_NUM_FORMAT_FLOAT:
    case PV^.dfmt of
+    BUF_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SFLOAT;
+    BUF_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SFLOAT;
+    BUF_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SFLOAT;
     BUF_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SFLOAT;
     BUF_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
     BUF_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
     BUF_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
-    else
-     Assert(false,_get_buf_dfmt_str(PV^.dfmt));
+    else;
    end;
 
-  else
-   Assert(false,_get_buf_nfmt_str(PV^.nfmt));
+  else;
  end;
+
+ Assert(Result<>VK_FORMAT_UNDEFINED,'[_get_vsharp_cformat] dfmt:'+_get_buf_dfmt_str(PV^.dfmt)+' nfmt:'+_get_buf_nfmt_str(PV^.nfmt));
 end;
 
 function _img_is_msaa(b:Byte):Boolean; inline;
@@ -1729,7 +1732,7 @@ begin
   else;
  end;
 
- Assert(Result<>VK_FORMAT_UNDEFINED,'[_get_tsharp4_cformat] dfmt:'+_get_tex_dfmt_str(PT^.dfmt)+' nfmt:'+_get_tex_nfmt_str(PT^.dfmt));
+ Assert(Result<>VK_FORMAT_UNDEFINED,'[_get_tsharp4_cformat] dfmt:'+_get_tex_dfmt_str(PT^.dfmt)+' nfmt:'+_get_tex_nfmt_str(PT^.nfmt));
 end;
 
 function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
