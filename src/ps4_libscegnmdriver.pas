@@ -681,13 +681,154 @@ begin
  end;
 end;
 
-function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar):Integer; SysV_ABI_CDecl;
+const
+ DefaultContextState_stub:array[0..14] of DWORD=(
+  $c0012800,
+  $80000000,
+  $80000000,
+  $c0001200,
+  0,
+  $c0002f00,
+  1,
+  $c0016900,
+  $00000102,
+  0,
+  $c0016900,
+  $00000202,
+  $00cc0010,
+  $c0111000,
+  0
+ );
+
+function ps4_sceGnmDrawInitToDefaultContextState(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (numDwords>$20) then
+ begin
+  Move(DefaultContextState_stub,cmdBuffer^,SizeOf(DefaultContextState_stub));
+  Result:=$20;
+ end;
+end;
+
+const
+ DefaultContextState400_stub:array[0..97] of DWORD=(
+  $c0012800,
+  $80000000,
+  $80000000,
+  $c0001200,
+  0,
+  $c0016900,
+  $2f9,
+  $2d,
+  $c0016900,
+  $282,
+  8,
+  $c0016900,
+  $280,
+  $80008,
+  $c0016900,
+  $281,
+  $ffff0000,
+  $c0016900,
+  $204,
+  0,
+  $c0016900,
+  $206,
+  $43f,
+  $c0016900,
+  $83,
+  $ffff,
+  $c0016900,
+  $317,
+  $10,
+  $c0016900,
+  $2fa,
+  $3f800000,
+  $c0016900,
+  $2fc,
+  $3f800000,
+  $c0016900,
+  $2fb,
+  $3f800000,
+  $c0016900,
+  $2fd,
+  $3f800000,
+  $c0016900,
+  $202,
+  $cc0010,
+  $c0016900,
+  $30e,
+  $ffffffff,
+  $c0016900,
+  $30f,
+  $ffffffff,
+  $c0002f00,
+  1,
+  $c0016900,
+  $1b1,
+  2,
+  $c0016900,
+  $101,
+  0,
+  $c0016900,
+  $100,
+  $ffffffff,
+  $c0016900,
+  $103,
+  0,
+  $c0016900,
+  $284,
+  0,
+  $c0016900,
+  $290,
+  0,
+  $c0016900,
+  $2ae,
+  0,
+  $c0016900,
+  $102,
+  0,
+  $c0016900,
+  $292,
+  0,
+  $c0016900,
+  $293,
+  $6020000,
+  $c0016900,
+  $2f8,
+  0,
+  $c0016900,
+  $2de,
+  $1e9,
+  $c0036900,
+  $295,
+  $100,
+  $100,
+  4,
+  $c0016900,
+  $2aa,
+  $ff,
+  $c09e1000,
+  0
+ );
+
+function ps4_sceGnmDrawInitToDefaultContextState400(cmdBuffer:PDWORD;numDwords:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (numDwords=$100) then
+ begin
+  Move(DefaultContextState400_stub,cmdBuffer^,SizeOf(DefaultContextState400_stub));
+  Result:=$100;
+ end;
+end;
+
+function ps4_sceGnmInsertPushMarker(cmdBuffer:PDWORD;numDwords:DWORD;name:PChar):Integer; SysV_ABI_CDecl;
 var
  cmdSize,len,len3,len4:DWORD;
 begin
- if (cmdBuffer=nil) or (param=nil) then Exit(-1);
+ if (cmdBuffer=nil) or (name=nil) then Exit(-1);
 
- len:=StrLen(param);
+ len:=StrLen(name);
  len3:=(len + $c) shr 3;
  len4:=(len + $8) shr 2;
 
@@ -698,7 +839,7 @@ begin
  cmdBuffer[1]:=$68750001;
 
  len3:=len+1;
- Move(param^,cmdBuffer[2],len3);
+ Move(name^,cmdBuffer[2],len3);
  FillChar(PByte(@cmdBuffer[2])[len3],cmdSize*SizeOf(DWORD)-len3,0);
 
  Result:=0;
@@ -716,13 +857,13 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGnmInsertSetMarker(cmdBuffer:PDWORD;numDwords:DWORD;param:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceGnmInsertSetMarker(cmdBuffer:PDWORD;numDwords:DWORD;name:PChar):Integer; SysV_ABI_CDecl;
 var
  cmdSize,len,len3,len4:DWORD;
 begin
- if (cmdBuffer=nil) or (param=nil) then Exit(-1);
+ if (cmdBuffer=nil) or (name=nil) then Exit(-1);
 
- len:=StrLen(param);
+ len:=StrLen(name);
  len3:=(len + $c) shr 3;
  len4:=(len + $8) shr 2;
 
@@ -733,8 +874,56 @@ begin
  cmdBuffer[1]:=$68750003;
 
  len3:=len+1;
- Move(param^,cmdBuffer[2],len3);
+ Move(name^,cmdBuffer[2],len3);
  FillChar(PByte(@cmdBuffer[2])[len3],cmdSize*SizeOf(DWORD)-len3,0);
+
+ Result:=0;
+end;
+
+function ps4_sceGnmInsertPushColorMarker(cmdBuffer:PDWORD;numDwords:DWORD;name:PChar;color:DWORD):Integer; SysV_ABI_CDecl;
+var
+ cmdSize,len,len3,len2:DWORD;
+begin
+ if (cmdBuffer=nil) or (name=nil) then Exit(-1);
+
+ len:=StrLen(name);
+ len3:=(len + $10) shr 3;
+ len2:=(len + $c ) shr 2;
+
+ cmdSize:=len2+len3*2;
+ if ((cmdSize+2)<>numDwords) then Exit(-1);
+
+ cmdBuffer[0]:=cmdSize*$10000 or $c0001000; //NOP
+ cmdBuffer[1]:=$6875000e;
+
+ len3:=len+1;
+ Move(name^,cmdBuffer[2],len3);
+ PDWORD(PByte(cmdBuffer)+len3+8)^:=color;
+ FillChar(PByte(@cmdBuffer[3])[len3],cmdSize*SizeOf(DWORD)-len-5,0);
+
+ Result:=0;
+end;
+
+function ps4_sceGnmInsertSetColorMarker(cmdBuffer:PDWORD;numDwords:DWORD;name:PChar;color:DWORD):Integer; SysV_ABI_CDecl;
+var
+ cmdSize,len,len3,len2:DWORD;
+begin
+ if (cmdBuffer=nil) or (name=nil) then Exit(-1);
+
+ len:=StrLen(name);
+ len3:=(len + $10) shr 3;
+ len2:=(len + $c ) shr 2;
+
+ cmdSize:=len2+len3*2;
+ if ((cmdSize+2)<>numDwords) then Exit(-1);
+
+ cmdBuffer[0]:=cmdSize*$10000 or $c0001000;//NOP
+ cmdBuffer[1]:=$6875000f;
+
+ len3:=len+1;
+ Move(name^,cmdBuffer[2],len3);
+ PDWORD(PByte(cmdBuffer)+len3+8)^:=color;
+ FillChar(PByte(@cmdBuffer[3])[len3],cmdSize*SizeOf(DWORD)-len-5,0);
 
  Result:=0;
 end;
@@ -1683,12 +1872,83 @@ begin
  Result:=Pointer($ff0000000);
 end;
 
-const
- SCE_GNM_ERROR_VALIDATION_NOT_ENABLED=$80d13fff;
-
-function ps4_sceGnmValidateCommandBuffers:Integer; SysV_ABI_CDecl;
+function ps4_sceGnmGetOffChipTessellationBufferSize:QWORD; SysV_ABI_CDecl;
 begin
- Result:=Integer(SCE_GNM_ERROR_VALIDATION_NOT_ENABLED);
+ Result:=$800000
+end;
+
+const
+ SCE_GNM_ERROR_VALIDATION_NOT_ENABLED=-2133770241; // $80d13fff;
+
+function ps4_sceGnmValidateCommandBuffers(count:DWORD;
+                                          dcbGpuAddrs:PPointer;
+                                          dcbSizesInBytes:PDWORD;
+                                          ccbGpuAddrs:PPointer;
+                                          ccbSizesInBytes:PDWORD
+                                         ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateDispatchCommandBuffers(count:DWORD;
+                                                  dcbGpuAddrs:PPointer;
+                                                  dcbSizesInBytes:PDWORD
+                                                 ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateDrawCommandBuffers(count:DWORD;
+                                              dcbGpuAddrs:PPointer;
+                                              dcbSizesInBytes:PDWORD;
+                                              ccbGpuAddrs:PPointer;
+                                              ccbSizesInBytes:PDWORD
+                                             ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateDisableDiagnostics(count:DWORD;
+                                              data:Pointer
+                                             ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateDisableDiagnostics2(count:DWORD;
+                                               diagList:PDWORD
+                                              ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateGetDiagnosticInfo(query:Integer;         //ValidationDiagnosticQuery
+                                             diagnosticInfo:Pointer //ValidationDiagnosticInfo
+                                            ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateGetDiagnostics(query:Integer;            //ValidationDiagnosticQuery
+                                          diagnosticOutputs:Pointer
+                                         ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateResetState:Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_VALIDATION_NOT_ENABLED;
+end;
+
+function ps4_sceGnmValidateGetVersion:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceGnmValidateOnSubmitEnabled:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 //A value of true is returned if submit/dingdong is allowed; otherwise false is returned.
@@ -1698,7 +1958,12 @@ begin
 end;
 
 const
- SCE_GNM_ERROR_FAILURE=-1897004801; //$8eee00ff;
+ SCE_GNM_ERROR_FAILURE=-1897004801; // $8eee00ff;
+
+function ps4_sceGnmGetResourceRegistrationBuffers({params?}):Int64; SysV_ABI_CDecl;
+begin
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
 
 function ps4_sceGnmRegisterOwner(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
 begin
@@ -1872,10 +2137,14 @@ begin
  lib^.set_proc($D07DAF0586D32C72,@ps4_sceGnmDrawInitDefaultHardwareState200);
  lib^.set_proc($C9BD9C4616A00F52,@ps4_sceGnmDrawInitDefaultHardwareState350);
  lib^.set_proc($9C5E9B1515014405,@ps4_sceGnmDispatchInitDefaultHardwareState);
+ lib^.set_proc($F251F9E2C7E37E65,@ps4_sceGnmDrawInitToDefaultContextState);
+ lib^.set_proc($8A6D99B88B5A6EEE,@ps4_sceGnmDrawInitToDefaultContextState400);
 
  lib^.set_proc($5B512D8FF8E55BB6,@ps4_sceGnmInsertPushMarker);
  lib^.set_proc($EEA65536012EF926,@ps4_sceGnmInsertPopMarker);
  lib^.set_proc($8E222DCD2EBEDB68,@ps4_sceGnmInsertSetMarker);
+ lib^.set_proc($68F2192535C2F9C5,@ps4_sceGnmInsertPushColorMarker);
+ lib^.set_proc($6A3DCBFE26859B29,@ps4_sceGnmInsertSetColorMarker);
 
  lib^.set_proc($D6A5CB1C8A5138F1,@ps4_sceGnmInsertWaitFlipDone);
  lib^.set_proc($29796D9C2C042474,@ps4_sceGnmSetCsShader);
@@ -1916,11 +2185,24 @@ begin
  lib^.set_proc($881B7739ED342AF7,@ps4_sceGnmFlushGarlic);
 
  lib^.set_proc($967DF7CE306B7E39,@ps4_sceGnmGetTheTessellationFactorRingBufferBaseAddress);
+ lib^.set_proc($145559702BB7CD65,@ps4_sceGnmGetOffChipTessellationBufferSize);
+
  lib^.set_proc($8823BCD38660CDD0,@ps4_sceGnmValidateCommandBuffers);
+ lib^.set_proc($A863FBE13E4E5897,@ps4_sceGnmValidateDispatchCommandBuffers);
+ lib^.set_proc($86C64F7F594E37B1,@ps4_sceGnmValidateDrawCommandBuffers);
+ lib^.set_proc($497C387591248290,@ps4_sceGnmValidateDisableDiagnostics);
+ lib^.set_proc($060337B772EF70D9,@ps4_sceGnmValidateDisableDiagnostics2);
+ lib^.set_proc($457ED708D49A2FA2,@ps4_sceGnmValidateGetDiagnosticInfo);
+ lib^.set_proc($E521C63702D7055E,@ps4_sceGnmValidateGetDiagnostics);
+ lib^.set_proc($30131AE8416EE0AA,@ps4_sceGnmValidateResetState);
+ lib^.set_proc($1F330DEC036A6047,@ps4_sceGnmValidateGetVersion);
+ lib^.set_proc($AD3215D759CC42E3,@ps4_sceGnmValidateOnSubmitEnabled);
+
  lib^.set_proc($6F4C729659D563F2,@ps4_sceGnmAddEqEvent);
 
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 
+ lib^.set_proc($78B41B36C29E4E45,@ps4_sceGnmGetResourceRegistrationBuffers);
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
  lib^.set_proc($93C11792120FFA53,@ps4_sceGnmUnregisterResource);
