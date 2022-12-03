@@ -941,6 +941,7 @@ begin
  lib^.set_proc($93E017AAEDBF7817,@ps4_getpagesize);
  lib^.set_proc($A4EF7A4F0CCE9B91,@ps4_sceKernelGetDirectMemorySize);
  lib^.set_proc($68DCF5D5F9E7CE2E,@ps4_sceKernelAvailableFlexibleMemorySize);
+ lib^.set_proc($9F5FEFE85814ECC4,@ps4_sceKernelConfiguredFlexibleMemorySize);
 
  lib^.set_proc($AD35F0EB9C662C80,@ps4_sceKernelAllocateDirectMemory);
  lib^.set_proc($07EBDCD803B666B7,@ps4_sceKernelAllocateMainDirectMemory);

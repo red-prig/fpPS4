@@ -86,6 +86,7 @@ type
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
 function ps4_sceKernelAvailableFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelConfiguredFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
 
 //direct
 
@@ -381,6 +382,13 @@ begin
  end;
 
  sizeOut^:=flex;
+end;
+
+function ps4_sceKernelConfiguredFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+ if (sizeOut=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ sizeOut^:=SceKernelFlexibleMemorySize;
 end;
 
 function _test_mtype(mtype:Integer):Boolean; inline;
