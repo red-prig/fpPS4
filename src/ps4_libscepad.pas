@@ -432,7 +432,7 @@ begin
  if GetAsyncKeyState(VK_Q) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
 
- if GetAsyncKeyState(VK_TAB) then
+ if GetAsyncKeyState(VK_1) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;
 
  if GetAsyncKeyState(VK_Z) then
@@ -442,7 +442,7 @@ begin
  if GetAsyncKeyState(VK_E) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
 
- if GetAsyncKeyState(VK_R) then
+ if GetAsyncKeyState(VK_4) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
 
  if GetAsyncKeyState(VK_C) then
