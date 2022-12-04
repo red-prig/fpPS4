@@ -46,8 +46,8 @@ Square                   		    |Numpad 4
 Cross                   		    |Numpad 2
 Circle                   		    |Numpad 6
 L1                   			      |Q
-L2                   			      |TAB
+L2                   			      |1
 L3                   			      |Z
 R1                   			      |E
-R2                   			      |R
+R2                   			      |4
 R3                   			      |C
