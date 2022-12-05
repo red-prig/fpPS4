@@ -27,6 +27,7 @@ type
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
   procedure emit_V_FFBL_B32;
+  procedure emit_V_BFREV_B32;
  end;
 
 implementation
@@ -188,6 +189,17 @@ begin
  OpGlsl1(GlslOp.FindILsb,dtInt32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_BFREV_B32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+ one:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ Op1(Op.OpBitReverse,dtUInt32,dst,src);
+end;
 
 procedure TEmit_VOP1.emit_VOP1;
 begin
@@ -230,6 +242,8 @@ begin
   V_RCP_F32  : emit_V_RCP_F32;
 
   V_FFBL_B32 : emit_V_FFBL_B32;
+
+  V_BFREV_B32: emit_V_BFREV_B32;
 
   else
    Assert(false,'VOP1?'+IntToStr(FSPI.VOP1.OP));
