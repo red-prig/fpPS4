@@ -904,6 +904,34 @@ begin
  end;
 end;
 
+type
+ TCLR_2_10_10_10=bitpacked record
+  A:bit2;
+  R:bit10;
+  G:bit10;
+  B:bit10;
+ end;
+
+procedure _conv_clr_2_10_10_10(num:Byte;value:dword;var clr:TVkClearColorValue);
+var
+ i:array[0..3] of Integer;
+begin
+ i[0]:=TCLR_2_10_10_10(value).R;
+ i[1]:=TCLR_2_10_10_10(value).G;
+ i[2]:=TCLR_2_10_10_10(value).B;
+ i[3]:=TCLR_2_10_10_10(value).A;
+
+ if (num=NUMBER_SNORM) then
+ begin
+  Assert(false,'TODO');
+ end;
+
+ clr.float32[0]:=i[0];
+ clr.float32[1]:=i[1];
+ clr.float32[2]:=i[2];
+ clr.float32[3]:=i[3];
+end;
+
 function GetRenderTargetFormat(FORMAT,NUMBER_TYPE:Byte):TVkFormat;
 begin
  Result:=VK_FORMAT_UNDEFINED;
@@ -984,6 +1012,13 @@ begin
     NUMBER_FLOAT  :Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
     else;
    end;
+
+  COLOR_2_10_10_10:
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+    else;
+   end;
+
 
   else;
  end;
@@ -1124,6 +1159,13 @@ begin
       end;
 
    COLOR_32_32_32_32:; //128bit ignore
+
+   COLOR_2_10_10_10:
+    begin
+     W:=RENDER_TARGET[i].CLEAR_WORD;
+
+     _conv_clr_2_10_10_10(NUMBER_TYPE,W,Result.CLEAR_COLOR);
+    end
 
    else
     Assert(false);
@@ -1632,8 +1674,12 @@ begin
      IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
      IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_R4G4B4A4_UNORM_PACK16;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+     IMG_DATA_FORMAT_BC2        :Result:=VK_FORMAT_BC2_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK;
+     IMG_DATA_FORMAT_BC6        :Result:=VK_FORMAT_BC6H_UFLOAT_BLOCK;
      IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_UNORM_BLOCK;
+
+     IMG_DATA_FORMAT_2_10_10_10 :Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
      else;
     end;
 
@@ -1643,7 +1689,9 @@ begin
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SRGB;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_SRGB;
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+     IMG_DATA_FORMAT_BC2        :Result:=VK_FORMAT_BC2_SRGB_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_SRGB_BLOCK;
+     IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_SRGB_BLOCK;
      else;
     end;
 

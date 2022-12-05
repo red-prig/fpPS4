@@ -229,6 +229,9 @@ begin
   VK_FORMAT_R5G6B5_UNORM_PACK16  :Result:=2;
   VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
 
+  VK_FORMAT_A2R10G10B10_UNORM_PACK32:Result:=4;
+
+
   //stencil
   VK_FORMAT_S8_UINT              :Result:=1;
   //depth
