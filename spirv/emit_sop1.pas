@@ -22,6 +22,9 @@ type
   Function  GetFuncPtr(src:PPsrRegNode):Pointer;
   procedure emit_S_MOV_B32;
   procedure emit_S_MOV_B64;
+  procedure OpISccNotZero(src:PsrRegNode);
+  procedure emit_S_NOT_B32;
+  procedure emit_S_NOT_B64;
   procedure emit_S_GETPC_B64;
   procedure emit_S_SETPC_B64;
   procedure emit_S_SWAPPC_B64;
@@ -87,6 +90,48 @@ begin
 
  MakeCopy(dst[0],src[0]);
  MakeCopy(dst[1],src[1]);
+end;
+
+procedure TEmit_SOP1.OpISccNotZero(src:PsrRegNode); //SCC = (sdst.u != 0)
+begin
+ MakeCopy(get_scc,src);
+ get_scc^.current^.dtype:=dtBool; //implict cast (int != 0)
+end;
+
+procedure TEmit_SOP1.emit_S_NOT_B32; //sdst = ~ssrc; SCC = (sdst != 0)
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
+
+ OpNot(dst,src);
+
+ src:=MakeRead(dst,dtUnknow);
+
+ OpISccNotZero(src);
+end;
+
+procedure TEmit_SOP1.emit_S_NOT_B64; //sdst[2] = ~ssrc0[2]; SCC = (sdst[2] != 0)
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst[0]:=get_sdst7(FSPI.SOP1.SDST+0);
+ dst[1]:=get_sdst7(FSPI.SOP1.SDST+1);
+
+ src[0]:=fetch_ssrc9(FSPI.SOP1.SSRC+0,dtUnknow);
+ src[1]:=fetch_ssrc9(FSPI.SOP1.SSRC+1,dtUnknow);
+
+ OpNot(dst[0],src[0]);
+ OpNot(dst[1],src[1]);
+
+ src[0]:=MakeRead(dst[0],dtUnknow);
+ src[1]:=MakeRead(dst[1],dtUnknow);
+
+ OpLogicalOr(get_scc,src[0],src[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP1.emit_S_GETPC_B64;
@@ -189,7 +234,12 @@ begin
  Case FSPI.SOP1.OP of
   S_MOV_B32         : emit_S_MOV_B32;
   S_MOV_B64         : emit_S_MOV_B64;
+
+  S_NOT_B32         : emit_S_NOT_B32;
+  S_NOT_B64         : emit_S_NOT_B64;
+
   S_WQM_B64         : emit_S_WQM_B64;
+
   S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
   S_SWAPPC_B64      : emit_S_SWAPPC_B64;

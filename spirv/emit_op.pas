@@ -14,6 +14,7 @@ uses
  srLayout,
  srVariable,
  srOp,
+ srCFGLabel,
  srOpUtils,
  srCacheOp,
  srInterface;
@@ -839,11 +840,67 @@ Var
  p:PsrCacheOp;
  dst:PsrRegNode;
  node:PSpirvOp;
+ tmp:PSpirvOp;
+label
+ _prev;
 begin
  src[0]:=Tgrp;
  src[1]:=Sgrp;
 
+ Assert(pLine<>nil);
+
  p:=CacheOpList.Fetch(pLine^.Parent,Op.OpSampledImage,dtTypeSampledImage,2,@src);
+
+ if (p^.pDst<>nil) then //check before break block
+ begin
+  node:=pLine;
+  repeat
+
+   if (node^.pDst=p^.pDst) then
+   begin
+    Break; //end
+   end;
+
+   if node^.IsType(ntOpBlock) then
+   begin
+    tmp:=nil;
+    if (PsrOpBlock(node)^.Block.bType in [btCond,btLoop]) then
+    begin
+     p^.pDst:=nil; //reset
+     Break;
+    end else
+    begin
+     tmp:=node^.Last;
+    end;
+    if (tmp<>nil) then
+    begin
+     node:=tmp;
+     Continue;
+    end;
+   end;
+
+   _prev:
+
+   tmp:=node^.Prev;
+
+   if (tmp=nil) then
+   begin
+    if (node^.Parent=nil) or
+       (node^.Parent=pLine^.Parent) then
+    begin
+     Break; //end
+    end else
+    begin
+     node:=node^.Parent;
+     Goto _prev;
+    end;
+   end else
+   begin
+    node:=tmp;
+   end;
+
+  until false;
+ end;
 
  if (p^.pDst=nil) then
  begin
