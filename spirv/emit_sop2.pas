@@ -34,6 +34,7 @@ type
   procedure emit_S_CSELECT_B32;
   procedure emit_S_CSELECT_B64;
   procedure emit_S_BFE_U32;
+  procedure emit_S_BFM_B32;
  end;
 
 implementation
@@ -358,6 +359,31 @@ begin
  OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
 end;
 
+procedure TEmit_SOP2.emit_S_BFM_B32; //sdst.u = ((1 << ssrc0.u[4:0])-1) << ssrc1[4:0]
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+ one:PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUint32);
+
+ src[0]:=OpAndTo(src[0],31);
+ src[1]:=OpAndTo(src[1],31);
+
+ src[0]^.PrepType(ord(dtUInt32));
+ src[1]^.PrepType(ord(dtUInt32));
+
+ one:=NewReg_q(dtUint32,1);
+
+ src[0]:=OpShrTo(one,src[0]); //(1 << src0)
+ src[0]:=OpISubTo(src[0],1);  //-1
+
+ Op2(Op.OpShiftRightLogical,dtUint32,dst,src[0],src[1]);
+end;
+
 procedure TEmit_SOP2.emit_SOP2;
 begin
 
@@ -392,6 +418,7 @@ begin
   S_CSELECT_B64: emit_S_CSELECT_B64;
 
   S_BFE_U32: emit_S_BFE_U32;
+  S_BFM_B32: emit_S_BFM_B32;
 
   else
    Assert(False,'SOP2?'+IntToStr(FSPI.SOP2.OP));
