@@ -35,10 +35,10 @@ type
   procedure emit_V_SUBREV_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_MMX_F32(OpId:DWORD);
-  procedure emit_V_MUL_LO_I32;
+  procedure emit_V_MUL_LO(rtype:TsrDataType);
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
-  procedure emit_V_MUL_HI_U32;
+  procedure emit_V_MUL_HI(rtype:TsrDataType);
   procedure emit_V_MAC_F32;
 
   procedure emit_V_BFE_U32;
@@ -303,7 +303,7 @@ begin
  emit_dst_clamp_f(dst);
 end;
 
-procedure TEmit_VOP3.emit_V_MUL_LO_I32;
+procedure TEmit_VOP3.emit_V_MUL_LO(rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -315,8 +315,8 @@ begin
  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
 
  OpIMul(dst,src[0],src[1]);
 end;
@@ -375,11 +375,12 @@ begin
  OpIMul(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP3.emit_V_MUL_HI_U32;
+procedure TEmit_VOP3.emit_V_MUL_HI(rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
  tmp_r,dst_r:PsrRegNode;
+ tst:TsrDataType;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -388,13 +389,23 @@ begin
  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
 
- tmp_r:=NewReg(dtStruct2u);
- _Op2(line,Op.OpUMulExtended,tmp_r,src[0],src[1]);
+ tst:=rtype.AsStruct2;
+ Assert(tst<>dtUnknow);
 
- dst_r:=dst^.New(line,dtUInt32);
+ tmp_r:=NewReg(tst);
+
+ if (rtype.Sign=0) then
+ begin
+  _Op2(line,Op.OpUMulExtended,tmp_r,src[0],src[1]);
+ end else
+ begin
+  _Op2(line,Op.OpSMulExtended,tmp_r,src[0],src[1]);
+ end;
+
+ dst_r:=dst^.New(line,rtype);
 
  OpExtract(line,dst_r,tmp_r,1);
 end;
@@ -1025,8 +1036,11 @@ begin
 
   //VOP3 only
 
-  V_MUL_LO_I32: emit_V_MUL_LO_I32;
-  V_MUL_HI_U32: emit_V_MUL_HI_U32;
+  V_MUL_LO_U32: emit_V_MUL_LO(dtUint32);
+  V_MUL_HI_U32: emit_V_MUL_HI(dtUint32);
+
+  V_MUL_LO_I32: emit_V_MUL_LO(dtInt32);
+  V_MUL_HI_I32: emit_V_MUL_HI(dtInt32);
 
   V_BFE_U32: emit_V_BFE_U32;
   V_BFI_B32: emit_V_BFI_B32;

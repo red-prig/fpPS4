@@ -38,15 +38,20 @@ Var
  rtype:TsrDataType;
  f,i,p:DWORD;
 
+ push_count:DWORD;
 begin
  //if (VM<>0) and (EXEC<>0) = set pixel else (if DONE=1) discard pixel /(PS only)
+
+ push_count:=0;
 
  pOpBlock:=nil;
  if (FSPI.EXP.VM<>0) and (FSPI.EXP.DONE<>0) then
  begin
   pOpBlock:=AllocBlockOp;
   pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+
   PushBlockOp(line,pOpBlock,nil);
+  Inc(push_count);
 
   exc:=MakeRead(get_exec0,dtBool);
   node:=AddSpirvOp(OpMakeExp);
@@ -57,16 +62,21 @@ begin
  if (TpsslExportType(FSPI.EXP.TGT)=etNull) //only set kill mask
    or (FSPI.EXP.EN=0) then //nop
  begin
-  if (pOpBlock<>nil) then //is pushed
+
+  While (push_count<>0) do
   begin
    Main^.PopBlock;
+   Dec(push_count);
   end;
+
   Exit;
  end;
 
  pOpBlock:=AllocBlockOp; //down
  pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+
  PushBlockOp(line,pOpBlock,nil);
+ Inc(push_count);
 
  //output
 
@@ -172,10 +182,10 @@ begin
   OpStore(line,dout,dst);
  end;
 
- if (pOpBlock<>nil) then //is pushed
+ While (push_count<>0) do
  begin
   Main^.PopBlock;
-  Main^.PopBlock;
+  Dec(push_count);
  end;
 end;
 

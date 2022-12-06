@@ -35,6 +35,7 @@ type
   procedure emit_V_MAC_LEGACY_F32;
   procedure emit_V_MADAK_F32;
   procedure emit_V_MADMK_F32;
+  procedure emit_V_BCNT_U32_B32;
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
  end;
 
@@ -374,6 +375,21 @@ begin
  OpFmaF32(dst,src[0],src[1],src[2]);
 end;
 
+procedure TEmit_VOP2.emit_V_BCNT_U32_B32; //vdst = bit_count(vsrc0) + vsrc1.u
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+
+ src[0]:=OpBitCountTo(src[0]);
+
+ Op2(Op.OpIAdd,dtUint32,dst,src[0],src[1]);
+end;
+
 procedure TEmit_VOP2.emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
@@ -426,6 +442,8 @@ begin
 
   V_MADAK_F32: emit_V_MADAK_F32;
   V_MADMK_F32: emit_V_MADMK_F32;
+
+  V_BCNT_U32_B32: emit_V_BCNT_U32_B32;
 
   V_MIN_LEGACY_F32: emit_V_MMX(GlslOp.NMin,dtFloat32);
   V_MAX_LEGACY_F32: emit_V_MMX(GlslOp.NMax,dtFloat32);

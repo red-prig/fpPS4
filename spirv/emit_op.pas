@@ -141,6 +141,8 @@ type
   function  OpAndTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
   //
+  function  OpBitCountTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  //
   function  OpImageSampleImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageSampleExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:PsrRegNode):PSpirvOp;
   function  OpImageSampleDrefImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrRegNode):PSpirvOp;
@@ -1255,6 +1257,14 @@ function TEmitOp.OpAndTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrReg
 begin
  if (src0=nil) then Exit(src0);
  Result:=OpAndTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
+end;
+
+//
+
+function TEmitOp.OpBitCountTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ Result:=NewReg(src^.dtype);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpBitCount,Result,src));
 end;
 
 //

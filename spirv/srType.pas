@@ -36,6 +36,7 @@ type
   dtVec3b,
   dtVec4b,
 
+  dtStruct2i,
   dtStruct2u,
 
   dtVec2u8,
@@ -92,6 +93,7 @@ type
   function BitSize:Byte;
   function High:QWORD;
   function AsVector(_count:Byte):TsrDataType;
+  function AsStruct2:TsrDataType;
  end;
 
  Pvec2f=^Tvec2f;
@@ -163,6 +165,7 @@ begin
   dtVec3b      :Result:='bvec3';
   dtVec4b      :Result:='bvec4';
 
+  dtStruct2i   :Result:='rec2i';
   dtStruct2u   :Result:='rec2u';
 
   dtVec2u8     :Result:='u8vec2';
@@ -233,6 +236,7 @@ begin
   dtInt64,
   dtUint64,
 
+  dtStruct2i,
   dtStruct2u,
 
   dtVec2u8,
@@ -305,6 +309,7 @@ begin
   dtVec3b,
   dtVec4b,
 
+  dtStruct2i,
   dtStruct2u,
 
   dtVec2u8,
@@ -369,6 +374,7 @@ begin
   dtVec3u,
   dtVec4u:Result:=dtUint32;
 
+  dtStruct2i,
   dtVec2i,
   dtVec3i,
   dtVec4i:Result:=dtInt32;
@@ -396,6 +402,7 @@ begin
   dtVec2i,
   dtVec2h,
   dtVec2f,
+  dtStruct2i,
   dtStruct2u:Result:=2;
 
   dtVec3b,
@@ -424,6 +431,8 @@ begin
   dtInt16,
   dtInt32,
   dtInt64,
+
+  dtStruct2i,
 
   dtHalf16,
   dtFloat32,
@@ -469,6 +478,7 @@ begin
   dtVec4i16,
   dtVec2f,
   dtVec4h,
+  dtStruct2i,
   dtStruct2u:Result:=64;
 
   dtVec3u,
@@ -555,6 +565,16 @@ begin
      3:Result:=dtVec3u;
      4:Result:=dtVec4u;
     end;
+  else;
+ end;
+end;
+
+function TsrDataTypeHelper.AsStruct2:TsrDataType;
+begin
+ Result:=dtUnknow;
+ Case Self of
+  dtInt32 :Result:=dtStruct2i;
+  dtUint32:Result:=dtStruct2u;
   else;
  end;
 end;

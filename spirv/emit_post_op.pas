@@ -49,6 +49,8 @@ type
   function  OnNot1(node:PSpirvOp):Integer;
   function  OnBranchConditional1(node:PSpirvOp):Integer;
   //
+  function  OpBitCount1(node:PSpirvOp):Integer;
+  //
   function  OnSelect1(node:PSpirvOp):Integer;
   //
   procedure MakeVecConst(rtype:TsrDataType;dst:PsrRegNode;src:PPsrRegNode);
@@ -102,6 +104,8 @@ begin
   Op.OpNot              :Result:=OnNot1(node);
 
   Op.OpBranchConditional:Result:=OnBranchConditional1(node);
+
+  Op.OpBitCount         :Result:=OpBitCount1(node);
 
   else;
  end;
@@ -778,6 +782,39 @@ begin
 
  Inc(Result);
 end;
+
+function TEmitPostOp.OpBitCount1(node:PSpirvOp):Integer;
+var
+ dst,src:PsrRegNode;
+ data:QWORD;
+
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
+ if (dst=nil) or (src=nil) then Exit;
+
+ if src^.is_const then
+ begin
+  //need a const calc
+  data:=src^.AsConst^.GetData;
+  data:=PopCnt(data); //BitCount
+
+  _SetConst(dst^.dtype,data);
+  Exit;
+ end;
+
+end;
+
 
 function try_get_comp_bridge(var src:PsrRegNode):Integer; forward;
 

@@ -568,6 +568,7 @@ begin
 
   //
 
+  dtStruct2i,
   dtStruct2u:
     begin
      Result:=_FetchStruct2(dtype);
