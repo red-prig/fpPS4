@@ -95,11 +95,11 @@ end;
 type
  pSceNpWebApiResponseInformationOption=^SceNpWebApiResponseInformationOption;
  SceNpWebApiResponseInformationOption=packed record
-  httpStatus:Integer;
+  httpStatus:Integer;      //out
   _align:Integer;
-  pErrorObject:Pchar;
-  errorObjectSize:size_t;
-  responseDataSize:size_t;
+  pErrorObject:Pchar;      //in
+  errorObjectSize:size_t;  //in
+  responseDataSize:size_t; //out
  end;
 
 function ps4_sceNpWebApiSendRequest2(requestId:Int64;
@@ -111,6 +111,7 @@ begin
  if (pRespInfoOption<>nil) then
  begin
   pRespInfoOption^.httpStatus:=404;
+  pRespInfoOption^.responseDataSize:=0;
  end;
  Result:=0;
 end;

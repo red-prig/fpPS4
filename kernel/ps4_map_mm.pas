@@ -806,7 +806,7 @@ begin
 
     if (Result=0) then
     begin
-     Result:=DirectManager.mmap_addr(offset,len,addr);
+     Result:=DirectManager.mmap_addr(offset,len,res);
     end;
 
    end;
@@ -863,7 +863,7 @@ begin
 
   if (Result=0) then
   begin
-   Result:=DirectManager.mmap_addr(physicalAddr,length,addr,mtype);
+   Result:=DirectManager.mmap_addr(physicalAddr,length,res,mtype);
   end;
  end;
 
@@ -1633,7 +1633,10 @@ end;
 Procedure _mem_print;
 begin
  VirtualManager.Print;
+ Writeln('---');
  NamedManager.Print;
+ Writeln('---');
+ DirectManager.Print;
 end;
 
 initialization

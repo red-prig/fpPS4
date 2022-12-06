@@ -1070,7 +1070,7 @@ begin
     _md.Import:=False;
     Writeln('DT_SCE_MODULE_INFO:',_md.strName,':',HexStr(mu.id,4)); //current module name
     _set_mod(mu.id,_md);
-    StrPLCopy(@ModuleInfo.name,_md.strName,SCE_DBG_MAX_NAME_LENGTH);
+    ModuleInfo.name:=_md.strName+'.prx';
    end;
   DT_SCE_NEEDED_MODULE:
    begin
@@ -1179,7 +1179,11 @@ procedure _add_seg(MI:pSceKernelModuleInfo;adr:Pointer;size:DWORD;prot:Integer);
 var
  i:DWORD;
 begin
- if (MI^.segmentCount>=SCE_DBG_MAX_SEGMENTS) then Exit;
+ if (MI^.segmentCount>=SCE_DBG_MAX_SEGMENTS) then
+ begin
+  Assert(False,'segmentCount');
+  Exit;
+ end;
  i:=MI^.segmentCount;
  MI^.segmentInfo[i].address:=adr;
  MI^.segmentInfo[i].size:=size;
@@ -1608,7 +1612,7 @@ begin
    STT_FILE   :;
    STT_COMMON :;
    STT_SCE    :;
-   STT_TLS    :Writeln(__sType(Info.sType));
+   STT_TLS    :;
    else
     Writeln(__sType(Info.sType));
   end;
@@ -1646,7 +1650,7 @@ begin
    STT_FILE   :;
    STT_COMMON :;
    STT_SCE    :;
-   STT_TLS    :Writeln(__sType(Info.sType));
+   STT_TLS    :;
    else
     Writeln(__sType(Info.sType));
   end;
@@ -1689,10 +1693,10 @@ begin
    STT_NOTYPE :;
    STT_OBJECT :;
    STT_FUN    :;
-   //STT_SECTION:;
-   //STT_FILE   :;
-   STT_COMMON :;
-   STT_TLS    :;
+   STT_SECTION:Writeln(__sType(Info.sType));
+   STT_FILE   :Writeln(__sType(Info.sType));
+   STT_COMMON :Writeln(__sType(Info.sType));
+   STT_TLS    :Writeln(__sType(Info.sType));
    STT_SCE    :;
    else
     Writeln(__sType(Info.sType));
@@ -1844,7 +1848,8 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   _do_set(nSymVal);
 
-  val:=elf.mMap.pAddr+Info^.value;
+  val:=nSymVal;
+  //val:=elf.mMap.pAddr+Info^.value;
 
   IInfo.lib^.set_proc(IInfo.nid,val);
 
@@ -1853,12 +1858,12 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 begin
 
  case Info^.rType of
-  R_X86_64_NONE    :Writeln('R_X86_64_NONE    ');
-  R_X86_64_PC32    :Writeln('R_X86_64_PC32    ');
-  R_X86_64_COPY    :Writeln('R_X86_64_COPY    ');
-
-  R_X86_64_TPOFF32 :Writeln('R_X86_64_TPOFF32 ');
-  R_X86_64_DTPOFF32:Writeln('R_X86_64_DTPOFF32');
+  //R_X86_64_NONE    :Writeln('R_X86_64_NONE    ');
+  //R_X86_64_PC32    :Writeln('R_X86_64_PC32    ');
+  //R_X86_64_COPY    :Writeln('R_X86_64_COPY    ');
+  //
+  //R_X86_64_TPOFF32 :Writeln('R_X86_64_TPOFF32 ');
+  //R_X86_64_DTPOFF32:Writeln('R_X86_64_DTPOFF32');
 
   R_X86_64_RELATIVE:
    begin
@@ -2093,12 +2098,12 @@ const
 begin
 
  case Info^.rType of
-  R_X86_64_NONE    :FWriteln('R_X86_64_NONE');
-  R_X86_64_PC32    :FWriteln('R_X86_64_PC32');
-  R_X86_64_COPY    :FWriteln('R_X86_64_COPY');
-
-  R_X86_64_TPOFF32 :FWriteln('R_X86_64_TPOFF32');
-  R_X86_64_DTPOFF32:FWriteln('R_X86_64_DTPOFF32');
+  //R_X86_64_NONE    :FWriteln('R_X86_64_NONE');
+  //R_X86_64_PC32    :FWriteln('R_X86_64_PC32');
+  //R_X86_64_COPY    :FWriteln('R_X86_64_COPY');
+  //
+  //R_X86_64_TPOFF32 :FWriteln('R_X86_64_TPOFF32');
+  //R_X86_64_DTPOFF32:FWriteln('R_X86_64_DTPOFF32');
 
   R_X86_64_RELATIVE:
    begin

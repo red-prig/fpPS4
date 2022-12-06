@@ -330,7 +330,7 @@ type
  pSceKernelModuleInfo=^SceKernelModuleInfo;
  SceKernelModuleInfo=packed record
   size:QWORD;  //Size of this structure
-  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar; //module name
+  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar; //name.prx
   segmentInfo:array[0..SCE_DBG_MAX_SEGMENTS-1] of SceKernelModuleSegmentInfo;
   segmentCount:DWORD;
   fingerprint:array[0..SCE_DBG_NUM_FINGERPRINT-1] of Byte;
@@ -339,7 +339,7 @@ type
  pSceKernelModuleInfoEx=^SceKernelModuleInfoEx;
  SceKernelModuleInfoEx=packed record
   st_size:QWORD; //424
-  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar;
+  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar; //name.prx
   id               :Integer;
   tls_index        :DWORD;
   tls_init_addr    :Pointer;
@@ -363,7 +363,7 @@ type
  pSceModuleInfoForUnwind=^SceModuleInfoForUnwind;
  SceModuleInfoForUnwind=packed record
   st_size:qword; //304
-  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar;
+  name:array[0..SCE_DBG_MAX_NAME_LENGTH-1] of AnsiChar; //name.prx
   eh_frame_hdr_addr:Pointer;
   eh_frame_addr:Pointer;
   eh_frame_size:qword;
