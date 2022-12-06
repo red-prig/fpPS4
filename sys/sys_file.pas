@@ -32,6 +32,7 @@ type
   function pwrite   (data:Pointer;size,offset:Int64):Int64; override;
   function ftruncate(size:Int64):Integer;                   override;
   function fstat    (stat:PSceKernelStat):Integer;          override;
+  function fsync    ():Integer;                             override;
  end;
 
 Function get_DesiredAccess(flags:Integer):DWORD;
@@ -444,6 +445,25 @@ begin
  end;
 
  Result:=0;
+end;
+
+function TFile.fsync:Integer;
+var
+ err:DWORD;
+begin
+ if FlushFileBuffers(Handle) then
+ begin
+  Result:=0;
+ end else
+ begin
+  err:=GetLastError;
+  Case err of
+   ERROR_INVALID_HANDLE:
+     Exit(EINVAL);
+   else
+     Exit(EIO);
+  end;
+ end;
 end;
 
 //

@@ -204,6 +204,7 @@ type
   function pwrite       (data:Pointer;size,offset:Int64):Int64;        virtual;
   function ftruncate    (size:Int64):Integer;                          virtual;
   function fstat        (stat:PSceKernelStat):Integer;                 virtual;
+  function fsync        ():Integer;                                    virtual;
   function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; virtual;
  end;
 
@@ -257,6 +258,11 @@ end;
 function TCustomFile.fstat (stat:PSceKernelStat):Integer;
 begin
  Result:=ENOTSUP;
+end;
+
+function TCustomFile.fsync:Integer;
+begin
+ Result:=EINVAL;
 end;
 
 function TCustomFile.getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
