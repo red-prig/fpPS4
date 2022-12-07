@@ -113,10 +113,10 @@ type
                                           userdata:Pointer); SysV_ABI_CDecl;
 
 const
- SCE_NP_ERROR_INVALID_ARGUMENT=Integer($80550003);
- SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=Integer($80550008);
+ SCE_NP_ERROR_INVALID_ARGUMENT           =-2141913085; //80550003
+ SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=-2141913080; //80550008
 
- SCE_NP_ERROR_SIGNED_OUT=Integer($80550006);
+ SCE_NP_ERROR_SIGNED_OUT                 =-2141913082; //80550006
 
 implementation
 
@@ -177,10 +177,6 @@ begin
 end;
 
 function ps4_sceNpGetAccountCountry(onlineId:pSceNpOnlineId;pCountryCode:pSceNpCountryCode):Integer; SysV_ABI_CDecl;
-var
- g:GEOID;
- s:integer;
- b:RawByteString;
 begin
  if (onlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  if (pCountryCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -191,10 +187,6 @@ begin
 end;
 
 function ps4_sceNpGetAccountCountryA(userId:Integer;pCountryCode:pSceNpCountryCode):Integer; SysV_ABI_CDecl;
-var
- g:GEOID;
- s:integer;
- b:RawByteString;
 begin
  if (pCountryCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
@@ -260,6 +252,11 @@ begin
 end;
 
 function ps4_sceNpRegisterStateCallbackA(callback:SceNpStateCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpUnregisterStateCallback:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -362,7 +359,7 @@ begin
 end;
 
 Const
- SCE_NP_UTIL_ERROR_NOT_MATCH=Integer($80550609);
+ SCE_NP_UTIL_ERROR_NOT_MATCH=-2141911543; //80550609
 
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
@@ -457,6 +454,7 @@ begin
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
  lib^.set_proc($A9025F3BC1C089A6,@ps4_sceNpRegisterStateCallbackA);
+ lib^.set_proc($9A38D35E1F8D1D66,@ps4_sceNpUnregisterStateCallback);
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
  lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
