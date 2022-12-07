@@ -104,6 +104,10 @@ type
                                      status:Integer; //SceNpGamePresenceStatus
                                      userdata:Pointer); SysV_ABI_CDecl;
 
+ SceNpGamePresenceCallbackA=procedure(userId:Integer;
+                                      status:Integer; //SceNpGamePresenceStatus
+                                      userdata:Pointer); SysV_ABI_CDecl;
+
  SceNpPlusEventCallback=procedure(userId:SceUserServiceUserId;
                                   event:Integer; //SceNpPlusEventType
                                   userdata:Pointer); SysV_ABI_CDecl;
@@ -262,6 +266,11 @@ begin
 end;
 
 function ps4_sceNpRegisterGamePresenceCallback(callback:SceNpGamePresenceCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpRegisterGamePresenceCallbackA(callback:SceNpGamePresenceCallbackA;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -456,6 +465,7 @@ begin
  lib^.set_proc($A9025F3BC1C089A6,@ps4_sceNpRegisterStateCallbackA);
  lib^.set_proc($9A38D35E1F8D1D66,@ps4_sceNpUnregisterStateCallback);
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
+ lib^.set_proc($2ACC312F19387356,@ps4_sceNpRegisterGamePresenceCallbackA);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
  lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
