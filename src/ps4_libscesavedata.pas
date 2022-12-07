@@ -179,6 +179,16 @@ type
   align2:Integer;
  end;
 
+ pSceSaveDataTransferringMount=^SceSaveDataTransferringMount;
+ SceSaveDataTransferringMount=packed record
+  userId:Integer;
+  align1:Integer;
+  titleId:pSceSaveDataTitleId;
+  dirName:PSceSaveDataDirName;
+  fingerprint:pSceSaveDataFingerprint;
+  reserved:array[0..31] of Byte;
+ end;
+
  PSceSaveDataMountResult=^SceSaveDataMountResult;
  SceSaveDataMountResult=packed record
   mountPoint:SceSaveDataMountPoint;
@@ -374,7 +384,8 @@ const
  SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
  SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
 
-function ps4_sceSaveDataMount(mount:pSceSaveDataMount;mountResult:pSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
+                              mountResult:pSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
@@ -391,7 +402,8 @@ begin
 
 end;
 
-function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
+                               mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
@@ -405,6 +417,18 @@ begin
  begin
   mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
  end;
+
+end;
+
+function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
+                                          mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+begin
+ if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ mountResult^:=Default(SceSaveDataMountResult);
+
+ _sig_lock;
+ Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,SCE_SAVE_DATA_MOUNT_MODE_RDONLY);
+ _sig_unlock;
 
 end;
 
@@ -659,6 +683,7 @@ begin
  lib^.set_proc($4B51A478F235EF34,@ps4_sceSaveDataDelete);
  lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
  lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
+ lib^.set_proc($580CD64D99B51FE2,@ps4_sceSaveDataTransferringMount);
  lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
  lib^.set_proc($57069DC0104127CD,@ps4_sceSaveDataUmountWithBackup);
  lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
