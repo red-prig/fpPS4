@@ -580,6 +580,20 @@ begin
 
 end;
 
+function ps4_sceSaveDataGetParam(mountPoint:PSceSaveDataMountPoint;
+                                 paramType:SceSaveDataParamType;
+                                 paramBuf:Pointer;
+                                 paramBufSize:size_t;
+                                 gotSize:PQWORD
+                                ):Integer; SysV_ABI_CDecl;
+begin
+ if (gotSize<>nil) then
+ begin
+  gotSize^:=0;
+ end;
+ Result:=0;
+end;
+
 function ps4_sceSaveDataSetParam(mountPoint:PSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
@@ -649,6 +663,7 @@ begin
  lib^.set_proc($57069DC0104127CD,@ps4_sceSaveDataUmountWithBackup);
  lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
  lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
+ lib^.set_proc($5E0BD2B88767325C,@ps4_sceSaveDataGetParam);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
  lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
  lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
