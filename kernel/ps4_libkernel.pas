@@ -1205,6 +1205,9 @@ begin
  lib^.set_proc($73B6674FB57507DF,@ps4_rmdir);
  lib^.set_proc($9DA22752362DDECA,@ps4_sceKernelRmdir);
 
+ lib^.set_proc($34DD35A8B4618AA5,@ps4_rename);
+ lib^.set_proc($E7635C614F7E944A,@ps4_sceKernelRename);
+
  lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
 
  //file

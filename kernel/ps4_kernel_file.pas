@@ -63,6 +63,9 @@ function ps4_sceKernelUnlink(path:PChar):Integer; SysV_ABI_CDecl;
 function ps4_rmdir(path:PChar):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelRmdir(path:PChar):Integer; SysV_ABI_CDecl;
 
+function ps4_rename(from,pto:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelRename(from,pto:PChar):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 
 implementation
@@ -1008,6 +1011,117 @@ function ps4_sceKernelRmdir(path:PChar):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sys_rmdir(path);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+Function SwMoveFileEx(Const f,t:RawByteString):DWORD;
+var
+ Wf,Wt:WideString;
+begin
+ Result:=0;
+ _sig_lock;
+
+ Wf:=UTF8Decode(f);
+ Wt:=UTF8Decode(t);
+
+ if not MoveFileExW(PWideChar(Wf),PWideChar(Wt),MOVEFILE_REPLACE_EXISTING or MOVEFILE_COPY_ALLOWED) then
+ begin
+  Result:=GetLastError;
+ end;
+ _sig_unlock;
+end;
+
+function _sys_rename(from,pto:PChar):Integer;
+var
+ ffrom,fto:RawByteString;
+ err:DWORD;
+begin
+ Result:=0;
+
+ if (from=nil) or (pto=nil) then Exit(EINVAL);
+
+ if (from[0]=#0) or (pto[0]=#0) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ Writeln('rename:',from,'->',pto);
+
+ ffrom:='';
+ Result:=parse_filename(from,ffrom);
+
+ Case Result of
+  PT_ROOT:Exit(EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(EACCES);
+  else
+          Exit(EACCES);
+ end;
+
+ fto:='';
+ Result:=parse_filename(pto,fto);
+
+ Case Result of
+  PT_ROOT:Exit(EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(EACCES);
+  else
+          Exit(EACCES);
+ end;
+
+ err:=SwMoveFileEx(ffrom,fto);
+
+ if (err<>0) then
+ begin
+  Case err of
+   ERROR_DIRECTORY,
+   ERROR_INVALID_DRIVE,
+   ERROR_PATH_NOT_FOUND,
+   ERROR_FILE_NOT_FOUND:
+     Exit(ENOENT);
+
+   ERROR_CURRENT_DIRECTORY,
+   ERROR_ACCESS_DENIED,
+   ERROR_SHARING_VIOLATION,
+   ERROR_LOCK_VIOLATION,
+   ERROR_SHARING_BUFFER_EXCEEDED:
+     Exit(EACCES);
+
+   ERROR_BUFFER_OVERFLOW:
+     Exit(ENAMETOOLONG);
+
+   ERROR_NOT_ENOUGH_MEMORY:
+     Exit(ENOMEM);
+
+   ERROR_ALREADY_EXISTS,
+   ERROR_FILE_EXISTS:
+     Exit(EEXIST);
+
+   ERROR_DISK_FULL:
+     Exit(ENOSPC);
+
+   else
+     Exit(EIO);
+  end;
+ end;
+
+ Result:=0;
+end;
+
+function ps4_rename(from,pto:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_rename(from,pto));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelRename(from,pto:PChar):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_rename(from,pto);
  _sig_unlock;
 
  _set_errno(Result);
