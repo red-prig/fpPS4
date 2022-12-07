@@ -689,6 +689,19 @@ begin
  //ru_nivcsw
 end;
 
+function ps4_getargc:Integer; SysV_ABI_CDecl;
+begin
+ Result:=1;
+end;
+
+const
+ g_argv:array[0..1] of PChar=('eboot.bin',nil);
+
+function ps4_getargv:PPChar; SysV_ABI_CDecl;
+begin
+ Result:=@g_argv;
+end;
+
 {$I libsysmodule.inc}
 
 function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
@@ -772,6 +785,9 @@ begin
  lib^.set_proc($5E3A28B22C3E5CF2,@ps4_sceKernelUuidCreate);
 
  lib^.set_proc($8479594149E5C523,@ps4_getrusage);
+
+ lib^.set_proc($88A24C5AB02E98F1,@ps4_getargc);
+ lib^.set_proc($1499A09664CC76BE,@ps4_getargv);
 
  //signal
 
