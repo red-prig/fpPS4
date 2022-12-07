@@ -14,12 +14,12 @@ implementation
 
 function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:Integer;selfNpId:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=1;
 end;
 
 function ps4_sceNpScoreCreateNpTitleCtxA(npServiceLabel:Integer;selfId:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=2;
 end;
 
 function ps4_sceNpScoreCreateRequest(titleCtxId:Integer):Integer; SysV_ABI_CDecl;
@@ -110,8 +110,14 @@ function ps4_sceNpScoreGetFriendsRanking(
              totalRecord:PDWORD;
              option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
 begin
- //lastSortDate^:=0;
- //totalRecord^:=0;
+ if (lastSortDate<>nil) then
+ begin
+  lastSortDate^:=0;
+ end;
+ if (totalRecord<>nil) then
+ begin
+  totalRecord^:=0;
+ end;
  Result:=0;
 end;
 
@@ -130,8 +136,14 @@ function ps4_sceNpScoreGetFriendsRankingA(
              totalRecord:PDWORD;
              option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
 begin
- //lastSortDate^:=0;
- //totalRecord^:=0;
+ if (lastSortDate<>nil) then
+ begin
+  lastSortDate^:=0;
+ end;
+ if (totalRecord<>nil) then
+ begin
+  totalRecord^:=0;
+ end;
  Result:=0;
 end;
 
@@ -159,8 +171,14 @@ function ps4_sceNpScoreGetRankingByAccountIdPcId(
              totalRecord:PDWORD;
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
- //lastSortDate^:=0;
- //totalRecord^:=0;
+ if (lastSortDate<>nil) then
+ begin
+  lastSortDate^:=0;
+ end;
+ if (totalRecord<>nil) then
+ begin
+  totalRecord^:=0;
+ end;
  Result:=0;
 end;
 
@@ -179,21 +197,48 @@ function ps4_sceNpScoreGetRankingByRange(
              totalRecord:PDWORD;
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
- //lastSortDate^:=0;
- //totalRecord^:=0;
+ if (lastSortDate<>nil) then
+ begin
+  lastSortDate^:=0;
+ end;
+ if (totalRecord<>nil) then
+ begin
+  totalRecord^:=0;
+ end;
+ Result:=0;
+end;
+
+function ps4_sceNpScoreRecordScore(
+             reqId:Integer;
+             boardId:DWORD;      //SceNpScoreBoardId
+             score:Int64;        //SceNpScoreValue
+             scoreComment:pSceNpScoreComment;
+             gameInfo:pSceNpScoreGameInfo;
+             tmpRank:PDWORD;     //SceNpScoreRankNumber
+             compareDate:PQWORD; //SceRtcTick
+             option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (tmpRank<>nil) then
+ begin
+  tmpRank^:=0;
+ end;
  Result:=0;
 end;
 
 function ps4_sceNpScoreRecordScoreAsync(
              reqId:Integer;
-             boardId:DWORD;     //SceNpScoreBoardId
-             score:Int64;       //SceNpScoreValue
+             boardId:DWORD;      //SceNpScoreBoardId
+             score:Int64;        //SceNpScoreValue
              scoreComment:pSceNpScoreComment;
              gameInfo:pSceNpScoreGameInfo;
-             tmpRank:DWORD;     //SceNpScoreRankNumber
-             compareDate:QWORD; //SceRtcTick
+             tmpRank:PDWORD;     //SceNpScoreRankNumber
+             compareDate:PQWORD; //SceRtcTick
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
+ if (tmpRank<>nil) then
+ begin
+  tmpRank^:=0;
+ end;
  Result:=0;
 end;
 
@@ -201,11 +246,11 @@ function ps4_sceNpScorePollAsync(
              reqId:Integer;
              r_out:Pinteger):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
  if (r_out<>nil) then
  begin
   r_out^:=0;
  end;
+ Result:=0;
 end;
 
 function Load_libSceNpScoreRanking(Const name:RawByteString):TElf_node;
@@ -223,6 +268,7 @@ begin
  lib^.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
  lib^.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
  lib^.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
+ lib^.set_proc($CD3D1706D82D3922,@ps4_sceNpScoreRecordScore);
  lib^.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
  lib^.set_proc($9B50DF351B2D9124,@ps4_sceNpScorePollAsync);
 end;
