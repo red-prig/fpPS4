@@ -267,16 +267,17 @@ begin
 end;
 
 type
- PSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
+ pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
  SceSystemServiceDisplaySafeAreaInfo=packed record
   ratio:Single; //Ratio of the safe area (0.9 or more, 1.0 or less)
   reserved:array[0..127] of Byte;
  end;
 
-function ps4_sceSystemServiceGetDisplaySafeAreaInfo(info:PSceSystemServiceDisplaySafeAreaInfo):Integer; SysV_ABI_CDecl;
+function ps4_sceSystemServiceGetDisplaySafeAreaInfo(info:pSceSystemServiceDisplaySafeAreaInfo):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_UNKNOWN;
  if (info=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ info^:=Default(SceSystemServiceDisplaySafeAreaInfo);
  info^.ratio:=1.0;
  Result:=0;
 end;
@@ -295,13 +296,30 @@ type
 
 function ps4_sceSystemServiceGetStatus(status:PSceSystemServiceStatus):Integer; SysV_ABI_CDecl;
 begin
- if status=nil then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ if (status=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
  status^.eventNum:=0;
  status^.isSystemUiOverlaid:=false;
  status^.isInBackgroundExecution:=false;
  status^.isCpuMode7CpuNormal:=true;
  status^.isGameLiveStreamingOnAir:=false;
  status^.isOutOfVrPlayArea:=false;
+ Result:=0;
+end;
+
+type
+ pSceSystemServiceHdrToneMapLuminance=^SceSystemServiceHdrToneMapLuminance;
+ SceSystemServiceHdrToneMapLuminance=packed record
+  maxFullFrameToneMapLuminance:Single;
+  maxToneMapLuminance         :Single;
+  minToneMapLuminance         :Single;
+ end;
+
+function ps4_sceSystemServiceGetHdrToneMapLuminance(hdrToneMapLuminance:pSceSystemServiceHdrToneMapLuminance):Integer; SysV_ABI_CDecl;
+begin
+ if (hdrToneMapLuminance=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ hdrToneMapLuminance^.maxFullFrameToneMapLuminance:=1000;
+ hdrToneMapLuminance^.maxToneMapLuminance         :=1000;
+ hdrToneMapLuminance^.minToneMapLuminance         :=0.01;
  Result:=0;
 end;
 
@@ -319,6 +337,7 @@ begin
  lib^.set_proc($F643C2CFB3ABFB56,@ps4_sceSystemServiceReenableMusicPlayer);
  lib^.set_proc($D67DFBAB506F7396,@ps4_sceSystemServiceGetDisplaySafeAreaInfo);
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
+ lib^.set_proc($98FA4FC6FE4266DE,@ps4_sceSystemServiceGetHdrToneMapLuminance);
 end;
 
 initialization
