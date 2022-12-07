@@ -590,6 +590,105 @@ begin
  Result:=0;
 end;
 
+const
+ RUSAGE_SELF    = 0;
+ RUSAGE_CHILDREN=-1;
+ RUSAGE_THREAD  = 1;
+
+type
+ p_rusage=^rusage;
+ rusage=packed record
+  ru_utime   :timeval; // user time used
+  ru_stime   :timeval; // system time used
+  ru_maxrss  :DWORD;   // max resident set size
+  ru_ixrss   :DWORD;   // integral shared memory size *
+  ru_idrss   :DWORD;   // integral unshared data
+  ru_isrss   :DWORD;   // integral unshared stack
+  ru_minflt  :DWORD;   // page reclaims
+  ru_majflt  :DWORD;   // page faults
+  ru_nswap   :DWORD;   // swaps
+  ru_inblock :DWORD;   // block input operations
+  ru_oublock :DWORD;   // block output operations
+  ru_msgsnd  :DWORD;   // messages sent
+  ru_msgrcv  :DWORD;   // messages received
+  ru_nsignals:DWORD;   // signals received
+  ru_nvcsw   :DWORD;   // voluntary context switches
+  ru_nivcsw  :DWORD;   // involuntary
+ end;
+
+function ps4_getrusage(who:Integer;usage:p_rusage):Integer; SysV_ABI_CDecl;
+var
+ ct,et,kt,ut:TFileTime;
+ pmc:_PROCESS_MEMORY_COUNTERS;
+ pio:_IO_COUNTERS;
+
+ function _timeval(f:TFileTime):timeval; inline;
+ begin
+  Result.tv_sec :=(QWORD(f) div 10000000);
+  Result.tv_usec:=(QWORD(f) mod 10000000) div 10
+ end;
+
+begin
+ Result:=0;
+ if (usage=nil) then Exit(_set_errno(EFAULT));
+
+ usage^:=Default(rusage);
+
+ QWORD(ct):=0;
+ QWORD(et):=0;
+ QWORD(kt):=0;
+ QWORD(ut):=0;
+ pmc:=Default(_PROCESS_MEMORY_COUNTERS);
+ pmc.cb:=sizeof(pmc);
+ pio:=Default(_IO_COUNTERS);
+
+ Case who of
+  RUSAGE_SELF:
+    begin
+     _sig_lock;
+
+     GetProcessTimes(GetCurrentProcess,ct,et,kt,ut);
+     GetProcessMemoryInfo(GetCurrentProcess,@pmc,sizeof(pmc));
+     GetProcessIoCounters(GetCurrentProcess,@pio);
+
+     _sig_unlock;
+    end;
+  RUSAGE_THREAD:
+    begin
+     _sig_lock;
+
+     GetThreadTimes(GetCurrentThread,ct,et,kt,ut);
+
+     _sig_unlock;
+    end;
+  else;
+    Exit(_set_errno(EINVAL));
+ end;
+
+ usage^.ru_utime:=_timeval(ut);
+ usage^.ru_stime:=_timeval(kt);
+
+ usage^.ru_maxrss:=pmc.PeakWorkingSetSize div 1024;
+
+ //ru_ixrss
+ //ru_idrss
+ //ru_isrss
+
+ //ru_minflt
+ usage^.ru_majflt:=pmc.PageFaultCount;
+
+ //ru_nswap
+
+ usage^.ru_inblock:=pio.ReadOperationCount;
+ usage^.ru_oublock:=pio.WriteOperationCount;
+
+ //ru_msgsnd
+ //ru_msgrcv
+ //ru_nsignals
+ //ru_nvcsw    >NtQuerySystemInformation
+ //ru_nivcsw
+end;
+
 {$I libsysmodule.inc}
 
 function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
@@ -671,6 +770,8 @@ begin
  lib^.set_proc($91BC385071D2632D,@ps4_pthread_cxa_finalize);
 
  lib^.set_proc($5E3A28B22C3E5CF2,@ps4_sceKernelUuidCreate);
+
+ lib^.set_proc($8479594149E5C523,@ps4_getrusage);
 
  //signal
 

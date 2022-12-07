@@ -79,6 +79,40 @@ function  BCryptGenRandom(hAlgorithm:Pointer;
                           cbBuffer:DWORD;
                           dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
 
+type
+ PPROCESS_MEMORY_COUNTERS = ^_PROCESS_MEMORY_COUNTERS;
+ _PROCESS_MEMORY_COUNTERS = record
+   cb                        :DWORD;
+   PageFaultCount            :DWORD;
+   PeakWorkingSetSize        :SIZE_T;
+   WorkingSetSize            :SIZE_T;
+   QuotaPeakPagedPoolUsage   :SIZE_T;
+   QuotaPagedPoolUsage       :SIZE_T;
+   QuotaPeakNonPagedPoolUsage:SIZE_T;
+   QuotaNonPagedPoolUsage    :SIZE_T;
+   PagefileUsage             :SIZE_T;
+   PeakPagefileUsage         :SIZE_T;
+ end;
+
+function  GetProcessMemoryInfo(hProcess:HANDLE;
+                               ppsmemCounters:PPROCESS_MEMORY_COUNTERS;
+                               cb:DWORD):BOOL; external 'psapi.dll';
+
+type
+ PIO_COUNTERS=^_IO_COUNTERS;
+ _IO_COUNTERS = record
+  ReadOperationCount :SIZE_T;
+  WriteOperationCount:SIZE_T;
+  OtherOperationCount:SIZE_T;
+  ReadTransferCount  :SIZE_T;
+  WriteTransferCount :SIZE_T;
+  OtherTransferCount :SIZE_T;
+ end;
+
+function  GetProcessIoCounters(hProcess:HANDLE;
+                               lpIoCounters:PIO_COUNTERS
+                              ):BOOL; external 'kernel32';
+
 implementation
 
 uses

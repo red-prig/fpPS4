@@ -132,8 +132,11 @@ function SwTimePassedUnits(ot:QWORD):QWORD;
 var
  pc:QWORD;
  pf:QWORD;
- sec:QWORD;
- uec:QWORD;
+
+ //sec:QWORD;
+ //uec:QWORD;
+
+ DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
@@ -146,26 +149,44 @@ begin
  else
   pc:=(ot+High(QWORD))+pc;
 
- sec:=pc div pf;
- uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
- Result:=sec*POW10_7{POW10_11}+uec;
+ //DW0*POW10_7/pf + SHL_32* DW1*POW10_7/pf
+
+ DW0:=(DWORD(pc shr 00)*POW10_7) div pf;
+ DW1:=(DWORD(pc shr 32)*POW10_7) div pf;
+
+ Result:=DW0+(DW1 shl 32);
+
+ //sec:=pc div pf;
+ //uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
+ //Result:=sec*POW10_7{POW10_11}+uec;
 end;
 
 function SwGetTimeUnits:Int64;
 var
  pc:QWORD;
  pf:QWORD;
- sec:QWORD;
- uec:QWORD;
+
+ //sec:QWORD;
+ //uec:QWORD;
+
+ DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
  _sig_lock;
  NtQueryPerformanceCounter(@pc,@pf);
  _sig_unlock;
- sec:=pc div pf;
- uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
- Result:=sec*POW10_7{POW10_11}+uec;
+
+ //DW0*POW10_7/pf + SHL_32* DW1*POW10_7/pf
+
+ DW0:=(DWORD(pc shr 00)*POW10_7) div pf;
+ DW1:=(DWORD(pc shr 32)*POW10_7) div pf;
+
+ Result:=DW0+(DW1 shl 32);
+
+ //sec:=pc div pf;
+ //uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
+ //Result:=sec*POW10_7{POW10_11}+uec;
 end;
 
 function SwGetProcessTime(var ut:QWORD):Boolean;
