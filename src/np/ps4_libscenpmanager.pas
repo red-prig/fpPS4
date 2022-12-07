@@ -319,6 +319,33 @@ begin
 end;
 
 type
+ pSceNpParentalControlInfo=^SceNpParentalControlInfo;
+ SceNpParentalControlInfo=packed record
+  contentRestriction:Boolean;
+  chatRestriction   :Boolean;
+  ugcRestriction    :Boolean;
+ end;
+
+function ps4_sceNpGetParentalControlInfo(reqId:Integer;
+                                         pOnlineId:pSceNpOnlineId;
+                                         pAge:PByte;
+                                         pInfo:pSceNpParentalControlInfo
+                                        ):Integer; SysV_ABI_CDecl;
+begin
+ if (pAge<>nil) then
+ begin
+  pAge^:=18;
+ end;
+ if (pInfo<>nil) then
+ begin
+  pInfo^.contentRestriction:=False;
+  pInfo^.chatRestriction   :=False;
+  pInfo^.ugcRestriction    :=False;
+ end;
+ Result:=0;
+end;
+
+type
  pSceNpCheckPlusParameter=^SceNpCheckPlusParameter;
  SceNpCheckPlusParameter=packed record
   size:QWORD;
@@ -474,6 +501,7 @@ begin
  lib^.set_proc($DABB059A519695E4,@ps4_sceNpCheckNpAvailability);
  lib^.set_proc($F19D897391AF1832,@ps4_sceNpCheckNpAvailabilityA);
  lib^.set_proc($29F199836CBBDE83,@ps4_sceNpCheckNpReachability);
+ lib^.set_proc($8A5C0B338CCE9AEE,@ps4_sceNpGetParentalControlInfo);
  lib^.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
 
