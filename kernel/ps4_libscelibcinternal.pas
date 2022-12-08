@@ -94,12 +94,24 @@ begin
  Result:=0;
 end;
 
-procedure ps4__ZNSt8ios_base4InitC1Ev(this:Pointer); //void __thiscall std::ios_base::Init::Init(Init *this)
+procedure ps4__init_env; SysV_ABI_CDecl;
 begin
  //
 end;
 
-procedure ps4__ZNSt6_WinitC1Ev(this:Pointer); //void __thiscall std::_Winit::_Winit(_Winit *this)
+procedure ps4__init_tls; SysV_ABI_CDecl;
+begin
+ //
+end;
+
+////void __thiscall std::ios_base::Init::Init(Init *this)
+procedure ps4__ZNSt8ios_base4InitC1Ev(this:Pointer); SysV_ABI_CDecl;
+begin
+ //
+end;
+
+////void __thiscall std::_Winit::_Winit(_Winit *this)
+procedure ps4__ZNSt6_WinitC1Ev(this:Pointer); SysV_ABI_CDecl;
 begin
  //
 end;
@@ -199,6 +211,9 @@ begin
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
 
  //lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
+
+ lib^.set_proc($6F3404C72D7CF592,@ps4__init_env);
+ lib^.set_proc($E8D08EAABDDC0FBE,@ps4__init_tls);
 
  lib^.set_proc($B2A5B2B678587448,@ps4__ZNSt8ios_base4InitC1Ev);
  lib^.set_proc($FC197DFD26769E87,@ps4__ZNSt6_WinitC1Ev);
