@@ -19,6 +19,11 @@ begin
  Result:=4;
 end;
 
+function ps4_sceNpWebApiTerminate(libCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpWebApiCreateContext(libCtxId:Integer;pOnlineId:pSceNpOnlineId):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpWebApiCreateContext:',libCtxId,':',pOnlineId^.data);
@@ -200,7 +205,8 @@ begin
 
  lib:=Result._add_lib('libSceNpWebApi');
 
- lib^.set_proc($1B70272CD7510631,@ps4_sceNpWebApiInitialize );
+ lib^.set_proc($1B70272CD7510631,@ps4_sceNpWebApiInitialize);
+ lib^.set_proc($6ACCF74ED22A185F,@ps4_sceNpWebApiTerminate);
  lib^.set_proc($C7563BCA261293B7,@ps4_sceNpWebApiCreateContext);
  lib^.set_proc($CE4E9CEB9C68C8ED,@ps4_sceNpWebApiCreateContextA);
  lib^.set_proc($EFD33F26ABEF1A8D,@ps4_sceNpWebApiCreateHandle);
