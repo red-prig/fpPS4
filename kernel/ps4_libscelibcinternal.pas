@@ -260,6 +260,25 @@ begin
  lib^.set_proc($6C6B8377791654A4,@ps4_bGuDd3kWVKQ);
  lib^.set_proc($7FD2D5C8DF0ACBC8,@ps4_f9LVyN8Ky8g);
 
+ lib^.set_proc($46A784ACEDDC1475,@ps4__ZSt15set_new_handlerPFvvE);
+ lib^.set_proc($0A46340156BF7EB8,@ps4__ZSt15get_new_handlerv);
+
+ lib^.set_proc($85D9B461F31AED34,@ps4__Znam);
+ lib^.set_proc($7C99E9B955416CA9,@ps4__Znwm);
+ lib^.set_proc($AF25310FFEB46CA3,@ps4__ZnwmRKSt9nothrow_t);
+ lib^.set_proc($261E6A51CC224849,@ps4__ZnamRKSt9nothrow_t);
+
+ lib^.set_proc($30B5A5F7448558D1,@ps4__ZdaPv);
+ lib^.set_proc($14EB79E5935A5499,@ps4__ZdaPvm);
+ lib^.set_proc($EE50A2848D7C37D2,@ps4__ZdaPvmRKSt9nothrow_t);
+ lib^.set_proc($9BF7D2A3711BC4D0,@ps4__ZdaPvRKSt9nothrow_t);
+ lib^.set_proc($CFE3FEC429D62C19,@ps4__ZdlPv);
+ lib^.set_proc($9580F3055139999B,@ps4__ZdlPvm);
+ lib^.set_proc($ED53C8605A705360,@ps4__ZdlPvmRKSt9nothrow_t);
+ lib^.set_proc($31CB069EA57AC911,@ps4__ZdlPvRKSt9nothrow_t);
+ lib^.set_proc($4AE73C5B440FC63C,@ps4__ZdaPvS_);
+ lib^.set_proc($D6FA3AAAAA9AF45E,@ps4__ZdlPvS_);
+
  lib:=Result._add_lib('libSceLibcInternalExt');
 
  lib^.set_proc($356B53375D1C2731,@ps4_sceLibcHeapGetTraceInfo);

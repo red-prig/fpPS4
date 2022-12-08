@@ -188,9 +188,29 @@ function  ps4_f9LVyN8Ky8g:Pointer; SysV_ABI_CDecl; //f9LVyN8Ky8g
 
 procedure ps4_sceLibcHeapGetTraceInfo(P:PGetTraceInfo); SysV_ABI_CDecl;
 
+function  ps4__ZSt15set_new_handlerPFvvE(new_p:Pointer):Pointer; SysV_ABI_CDecl;
+function  ps4__ZSt15get_new_handlerv:Pointer; SysV_ABI_CDecl;
+
+function  ps4__Znam(count:qword):Pointer; SysV_ABI_CDecl;
+function  ps4__Znwm(count:qword):Pointer; SysV_ABI_CDecl;
+function  ps4__ZnwmRKSt9nothrow_t(count:qword;tag:Pointer):Pointer; SysV_ABI_CDecl;
+function  ps4__ZnamRKSt9nothrow_t(count:qword;tag:Pointer):Pointer; SysV_ABI_CDecl;
+
+procedure ps4__ZdaPv(ptr:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdaPvm(ptr:Pointer;size:qword); SysV_ABI_CDecl;
+procedure ps4__ZdaPvmRKSt9nothrow_t(ptr:Pointer;size:qword;tag:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdaPvRKSt9nothrow_t(ptr,tag:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdlPv(ptr:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdlPvm(ptr:Pointer;size:qword); SysV_ABI_CDecl;
+procedure ps4__ZdlPvmRKSt9nothrow_t(ptr:Pointer;size:qword;tag:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdlPvRKSt9nothrow_t(ptr,tag:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdaPvS_(ptr,place:Pointer); SysV_ABI_CDecl;
+procedure ps4__ZdlPvS_(ptr,place:Pointer); SysV_ABI_CDecl;
+
 implementation
 
 uses
+ atomic,
  sys_kernel,
  sys_signal;
 
@@ -3760,6 +3780,175 @@ begin
  P^.get_segment_info     :=0;
  P^.mspace_atomic_id_mask:=@g_mspace_atomic_id_mask;
  P^.mstate_table         :=@g_mstate_table;
+end;
+
+//
+
+var
+ g_std_new_handler:Pointer=nil;
+
+//_func_void * std::set_new_handler(_func_void *new_p)
+function ps4__ZSt15set_new_handlerPFvvE(new_p:Pointer):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=XCHG(g_std_new_handler,new_p);
+end;
+
+//_func_void * std::get_new_handler(void)
+function ps4__ZSt15get_new_handlerv:Pointer; SysV_ABI_CDecl;
+begin
+ Result:=load_acq_rel(g_std_new_handler);
+end;
+
+//
+
+//void * operator.new[](ulong count)
+function ps4__Znam(count:qword):Pointer; SysV_ABI_CDecl;
+var
+ addr:Pointer;
+ handler:TProcedure;
+begin
+ if (count=0) then count:=1;
+
+ While (true) do
+ begin
+  addr:=ps4_malloc(count);
+  if (addr<>nil) then Exit(addr);
+  handler:=TProcedure(ps4__ZSt15get_new_handlerv);
+  if (handler=nil) then Break;
+  handler();
+ end;
+ Assert(false,'std::_Xbad_alloc');
+end;
+
+//void * operator.new(ulong count)
+function ps4__Znwm(count:qword):Pointer; SysV_ABI_CDecl;
+var
+ addr:Pointer;
+ handler:TProcedure;
+begin
+ if (count=0) then count:=1;
+
+ While (true) do
+ begin
+  addr:=ps4_malloc(count);
+  if (addr<>nil) then Exit(addr);
+  handler:=TProcedure(ps4__ZSt15get_new_handlerv);
+  if (handler=nil) then Break;
+  handler();
+ end;
+ Assert(false,'std::_Xbad_alloc');
+end;
+
+//void * operator.new(ulong count,nothrow_t *tag)
+function ps4__ZnwmRKSt9nothrow_t(count:qword;tag:Pointer):Pointer; SysV_ABI_CDecl;
+var
+ addr:Pointer;
+ handler:TProcedure;
+begin
+ if (count=0) then count:=1;
+
+ While (true) do
+ begin
+  addr:=ps4_malloc(count);
+  if (addr<>nil) then Break;
+  handler:=TProcedure(ps4__ZSt15get_new_handlerv);
+  if (handler=nil) then Break;
+  handler();
+ end;
+
+ Result:=addr;
+end;
+
+//void * operator.new[](ulong count,nothrow_t *tag)
+function ps4__ZnamRKSt9nothrow_t(count:qword;tag:Pointer):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=ps4__ZnwmRKSt9nothrow_t(count,tag);
+end;
+
+//
+
+//void operator.delete[](void *ptr)
+procedure ps4__ZdaPv(ptr:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete[](void *ptr,ulong size)
+procedure ps4__ZdaPvm(ptr:Pointer;size:qword); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete[](void *ptr,ulong size,nothrow_t *tag)
+procedure ps4__ZdaPvmRKSt9nothrow_t(ptr:Pointer;size:qword;tag:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete[](void *ptr,nothrow_t *tag)
+procedure ps4__ZdaPvRKSt9nothrow_t(ptr,tag:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete(void *ptr)
+procedure ps4__ZdlPv(ptr:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete(void *ptr,ulong size)
+procedure ps4__ZdlPvm(ptr:Pointer;size:qword); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete(void *ptr,ulong size,nothrow_t *tag)
+procedure ps4__ZdlPvmRKSt9nothrow_t(ptr:Pointer;size:qword;tag:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete(void *ptr,nothrow_t *tag)
+procedure ps4__ZdlPvRKSt9nothrow_t(ptr,tag:Pointer); SysV_ABI_CDecl;
+begin
+ if (ptr<>nil) then
+ begin
+  ps4_free(ptr);
+ end;
+end;
+
+//void operator.delete[](void *ptr,void *place)
+procedure ps4__ZdaPvS_(ptr,place:Pointer); SysV_ABI_CDecl;
+begin
+ //
+end;
+
+//void operator.delete(void *ptr,void *place)
+procedure ps4__ZdlPvS_(ptr,place:Pointer); SysV_ABI_CDecl;
+begin
+ //
 end;
 
 
