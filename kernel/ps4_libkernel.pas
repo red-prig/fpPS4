@@ -957,9 +957,24 @@ begin
 
  //barrier
 
+ lib^.set_proc($E27A829CB252BDC9,@ps4_pthread_barrierattr_init);
+ lib^.set_proc($02C0900984DB7BCD,@ps4_pthread_barrierattr_destroy);
+ lib^.set_proc($6B92593328C557AF,@ps4_pthread_barrierattr_getpshared);
+ lib^.set_proc($8EAAC6249C458665,@ps4_pthread_barrierattr_setpshared);
+
  lib^.set_proc($66C5CB16D7768EA4,@ps4_pthread_barrier_init);
  lib^.set_proc($F8FAAE6FD1D908FA,@ps4_pthread_barrier_destroy);
  lib^.set_proc($09AC1980262A5D69,@ps4_pthread_barrier_wait);
+ lib^.set_proc($5B04510248630113,@ps4_pthread_barrier_setname_np);
+
+ lib^.set_proc($483915F7184834A2,@ps4_scePthreadBarrierattrInit);
+ lib^.set_proc($A13FE3E03A891D8F,@ps4_scePthreadBarrierattrDestroy);
+ lib^.set_proc($4A4BAD0ED82A27D8,@ps4_scePthreadBarrierattrGetpshared);
+ lib^.set_proc($3697E970B7F93D83,@ps4_scePthreadBarrierattrSetpshared);
+
+ lib^.set_proc($E5D80E10FB041AAC,@ps4_scePthreadBarrierInit);
+ lib^.set_proc($1EE741D89BF630F6,@ps4_scePthreadBarrierDestroy);
+ lib^.set_proc($B7DBD5C93825A874,@ps4_scePthreadBarrierWait);
 
  //barrier
 

@@ -27,21 +27,93 @@ type
   waiters:Integer;
   refcount:Integer;
   destroying:Integer;
+  name:array[0..31] of AnsiChar;
  end;
 
 const
  PTHREAD_BARRIER_SERIAL_THREAD=-1;
 
-function ps4_pthread_barrier_init(bar:p_pthread_barrier_t;attr:p_pthread_barrierattr_t;count:DWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_pthread_barrierattr_init(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+function ps4_pthread_barrierattr_destroy(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+function ps4_pthread_barrierattr_getpshared(attr:p_pthread_barrierattr_t;pshared:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_barrierattr_setpshared(attr:p_pthread_barrierattr_t;pshared:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_pthread_barrier_init(bar:p_pthread_barrier_t;
+                                  attr:p_pthread_barrierattr_t;
+                                  count:DWORD):Integer; SysV_ABI_CDecl;
 function ps4_pthread_barrier_destroy(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
 function ps4_pthread_barrier_wait(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
+function ps4_pthread_barrier_setname_np(bar:p_pthread_barrier_t;name:PChar):Integer; SysV_ABI_CDecl;
+
+function ps4_scePthreadBarrierattrInit(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadBarrierattrDestroy(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadBarrierattrGetpshared(attr:p_pthread_barrierattr_t;pshared:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadBarrierattrSetpshared(attr:p_pthread_barrierattr_t;pshared:Integer):Integer; SysV_ABI_CDecl;
+
+function ps4_scePthreadBarrierInit(bar:p_pthread_barrier_t;
+                                   attr:p_pthread_barrierattr_t;
+                                   count:DWORD;
+                                   name:PChar):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadBarrierDestroy(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadBarrierWait(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
 
 implementation
 
 uses
  atomic,
  sys_kernel,
- sys_signal;
+ sys_signal,
+ sys_pthread;
+
+//
+
+function _pthread_barrierattr_init(attr:p_pthread_barrierattr_t):Integer;
+begin
+ if (attr=nil) then Exit(EINVAL);
+
+ _sig_lock;
+ attr^:=AllocMem(SizeOf(pthread_barrier_attr));
+ _sig_unlock;
+
+ if (attr^=nil) then Exit(ENOMEM);
+
+ attr^^.pshared:=PTHREAD_PROCESS_PRIVATE;
+ Result:=0;
+end;
+
+function _pthread_barrierattr_destroy(attr:p_pthread_barrierattr_t):Integer;
+begin
+ if (attr=nil) then Exit(EINVAL);
+ if (attr^=nil) then Exit(EINVAL);
+
+ FreeMem(attr^);
+ Result:=0;
+end;
+
+function _pthread_barrierattr_getpshared(attr:p_pthread_barrierattr_t;pshared:PInteger):Integer;
+begin
+ if (attr=nil) then Exit(EINVAL);
+ if (pshared=nil) then Exit(EINVAL);
+ if (attr^=nil) then Exit(EINVAL);
+
+ pshared^:=attr^^.pshared;
+ Result:=0;
+end;
+
+function _pthread_barrierattr_setpshared(attr:p_pthread_barrierattr_t;pshared:Integer):Integer;
+begin
+ if (attr=nil) then Exit(EINVAL);
+ if (attr^=nil) then Exit(EINVAL);
+
+ //Only PTHREAD_PROCESS_PRIVATE is supported.
+ if (pshared<>PTHREAD_PROCESS_PRIVATE) then Exit(EINVAL);
+
+ attr^^.pshared:=pshared;
+ Result:=0;
+end;
+
+//
 
 const
  LIFE_BAR=$BAB1F00D;
@@ -81,7 +153,9 @@ begin
  Result:=0;
 end;
 
-function _pthread_barrier_init(bar:p_pthread_barrier_t;attr:p_pthread_barrierattr_t;count:DWORD):Integer;
+function _pthread_barrier_init(bar:p_pthread_barrier_t;
+                               attr:p_pthread_barrierattr_t;
+                               count:DWORD):Integer;
 var
  new:pthread_barrier_t;
 begin
@@ -89,7 +163,7 @@ begin
 
  if (attr<>nil) then
  if (attr^<>nil) then
- if (attr^^.pshared<>0) then //<>PTHREAD_PROCESS_PRIVATE
+ if (attr^^.pshared<>PTHREAD_PROCESS_PRIVATE) then
  begin
   Assert(false,'shared barrier not support!');
   Exit(ENOSYS);
@@ -196,7 +270,46 @@ begin
  end;
 end;
 
-function ps4_pthread_barrier_init(bar:p_pthread_barrier_t;attr:p_pthread_barrierattr_t;count:DWORD):Integer; SysV_ABI_CDecl;
+function _pthread_barrier_setname_np(bar:p_pthread_barrier_t;name:PChar):Integer;
+var
+ bv:pthread_barrier_t;
+begin
+ Result:=bar_enter(bar,@bv);
+ if (Result<>0) then Exit;
+
+ if (name<>nil) then MoveChar0(name^,bv^.name,32);
+
+ ps4_pthread_mutex_unlock(@bv^.mlock);
+ Result:=0;
+end;
+
+//interface
+
+function ps4_pthread_barrierattr_init(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_pthread_barrierattr_init(attr);
+end;
+
+function ps4_pthread_barrierattr_destroy(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_pthread_barrierattr_destroy(attr);
+end;
+
+function ps4_pthread_barrierattr_getpshared(attr:p_pthread_barrierattr_t;pshared:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_pthread_barrierattr_getpshared(attr,pshared);
+end;
+
+function ps4_pthread_barrierattr_setpshared(attr:p_pthread_barrierattr_t;pshared:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_pthread_barrierattr_setpshared(attr,pshared);
+end;
+
+//
+
+function ps4_pthread_barrier_init(bar:p_pthread_barrier_t;
+                                  attr:p_pthread_barrierattr_t;
+                                  count:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=_pthread_barrier_init(bar,attr,count);
 end;
@@ -211,5 +324,58 @@ begin
  Result:=_pthread_barrier_wait(bar);
 end;
 
+function ps4_pthread_barrier_setname_np(bar:p_pthread_barrier_t;name:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_pthread_barrier_setname_np(bar,name);
+end;
+
+//
+
+function ps4_scePthreadBarrierattrInit(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrierattr_init(attr));
+end;
+
+function ps4_scePthreadBarrierattrDestroy(attr:p_pthread_barrierattr_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrierattr_destroy(attr));
+end;
+
+function ps4_scePthreadBarrierattrGetpshared(attr:p_pthread_barrierattr_t;pshared:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrierattr_getpshared(attr,pshared));
+end;
+
+function ps4_scePthreadBarrierattrSetpshared(attr:p_pthread_barrierattr_t;pshared:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrierattr_setpshared(attr,pshared));
+end;
+
+//
+
+function ps4_scePthreadBarrierInit(bar:p_pthread_barrier_t;
+                                   attr:p_pthread_barrierattr_t;
+                                   count:DWORD;
+                                   name:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrier_init(bar,attr,count));
+ if (Result=0) then
+ begin
+  _pthread_barrier_setname_np(bar,name);
+ end;
+end;
+
+function ps4_scePthreadBarrierDestroy(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrier_destroy(bar));
+end;
+
+function ps4_scePthreadBarrierWait(bar:p_pthread_barrier_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(_pthread_barrier_wait(bar));
+end;
+
+
 end.
+
 
