@@ -5,7 +5,6 @@ unit ps4_pthread;
 interface
 
 uses
- LFQueue,
  windows,
  sys_crt,
  sys_pthread,
@@ -92,11 +91,6 @@ procedure ps4___pthread_cleanup_push_imp(routine:t_cb_proc;
                                          info:p_pthread_cleanup); SysV_ABI_CDecl;
 procedure ps4___pthread_cleanup_pop_imp(execute:Integer); SysV_ABI_CDecl;
 
-function  ps4_pthread_key_create(pKey:Ppthread_key_t;dest:t_cb_proc):Integer; SysV_ABI_CDecl;
-function  ps4_pthread_key_delete(Key:pthread_key_t):Integer; SysV_ABI_CDecl;
-function  ps4_pthread_getspecific(Key:pthread_key_t):Pointer; SysV_ABI_CDecl;
-function  ps4_pthread_setspecific(Key:pthread_key_t;value:Pointer):Integer; SysV_ABI_CDecl;
-
 function  _pthread_run_entry(pthread:p_pthread;name:Pchar;stack:PDWORD):Integer;
 
 implementation
@@ -105,25 +99,11 @@ uses
  atomic,
  spinlock,
  sys_kernel,
+ ps4_pthread_key,
  ps4_mutex,
  ps4_map_mm,
  ps4_program,
  ps4_elf;
-
-type
- p_pthread_key_node=^_pthread_key_node;
- _pthread_key_node=packed record
-  next_:p_pthread_key_node;
-  version_:ptruint;
-  dest_:t_cb_proc;
- end;
-
-var
- _pthread_key_nodes:array[0..SCE_PTHREAD_KEYS_MAX-1] of _pthread_key_node;
- _pthread_key_queue:TIntrusiveMPSCQueue;
- _pthread_key_queue_lock:Pointer;
-
-procedure _pthread_keys_cleanup_dest; forward;
 
 //struct dl_phdr_info
 procedure ps4_pthread_cxa_finalize(P:Pointer); SysV_ABI_CDecl;
@@ -391,7 +371,7 @@ begin
  end;
 
  _sig_lock;
- _pthread_keys_cleanup_dest;
+ _thread_cleanupspecific;
  ps4_app.FreeThread;
  UnRegistredStack;
  _sig_unlock;
@@ -1023,139 +1003,6 @@ begin
  end;
 end;
 
-procedure _pthread_keys_init;
-var
- i:Integer;
-begin
- _pthread_key_queue.Create;
- For i:=Low(_pthread_key_nodes) to High(_pthread_key_nodes) do
- begin
-  _pthread_key_nodes[i]:=Default(_pthread_key_node);
-  _pthread_key_queue.Push(@_pthread_key_nodes[i]);
- end;
-end;
-
-procedure _pthread_keys_cleanup_dest;
-var
- i:Integer;
- local:p_pthread_key_data;
-
- node:p_pthread_key_node;
- version:ptruint;
- dest:t_cb_proc;
-begin
- local:=@tcb_thread^.keys[0];
-
- For i:=Low(_pthread_key_nodes) to High(_pthread_key_nodes) do
- begin
-  node:=@_pthread_key_nodes[i];
-
-  version:=load_consume(node^.version_);
-  dest:=t_cb_proc(load_consume(Pointer(node^.dest_)));
-
-  if (ptruint(dest)>1) and
-     (local[i].version_=version) and
-     (local[i].data_<>nil) then
-  begin
-   dest(local[i].data_);
-  end;
-
- end;
-
-end;
-
-function ps4_pthread_key_create(pKey:Ppthread_key_t;dest:t_cb_proc):Integer; SysV_ABI_CDecl;
-var
- node:p_pthread_key_node;
- Key:pthread_key_t;
-begin
- if (pKey=nil) then Exit(EINVAL);
- Writeln('pthread_key_create',' ',ps4_pthread_self^.sig._lock);
-
- if (dest=nil) then dest:=t_cb_proc(1);
-
- node:=nil;
- spin_lock(_pthread_key_queue_lock);
- _pthread_key_queue.Pop(node);
- spin_unlock(_pthread_key_queue_lock);
-
- if (node=nil) then Exit(EAGAIN);
-
- System.InterlockedIncrement(Pointer(node^.version_));
- XCHG(Pointer(node^.dest_),Pointer(dest));
-
- Key:=(node-p_pthread_key_node(@_pthread_key_nodes));
- Key:=Key+1;
-
- pKey^:=Key;
- Result:=0;
-end;
-
-function ps4_pthread_key_delete(Key:pthread_key_t):Integer; SysV_ABI_CDecl;
-var
- node:p_pthread_key_node;
-begin
- Key:=Key-1;
-
- if (DWORD(Key)>SCE_PTHREAD_KEYS_MAX) then Exit(EINVAL);
- Writeln('pthread_key_delete');
-
- node:=@_pthread_key_nodes[Key];
-
- if (XCHG(Pointer(node^.dest_),nil)=nil) then Exit(EINVAL);
-
- System.InterlockedIncrement(Pointer(node^.version_));
-
- _pthread_key_queue.Push(node);
-end;
-
-function ps4_pthread_getspecific(Key:pthread_key_t):Pointer; SysV_ABI_CDecl;
-var
- node:p_pthread_key_node;
- version:ptruint;
- local:p_pthread_key_data;
-begin
- Key:=Key-1;
-
- if (DWORD(Key)>=SCE_PTHREAD_KEYS_MAX) then Exit(nil);
-
- node:=@_pthread_key_nodes[Key];
-
- version:=load_consume(node^.version_);
- if (load_consume(Pointer(node^.dest_))=nil) then Exit(nil);
-
- local:=@tcb_thread^.keys[Key];
-
- if (local^.version_<>version) then Exit(nil);
-
- Result:=local^.data_;
-end;
-
-function ps4_pthread_setspecific(Key:pthread_key_t;value:Pointer):Integer; SysV_ABI_CDecl;
-var
- node:p_pthread_key_node;
- version:ptruint;
- local:p_pthread_key_data;
-begin
- Key:=Key-1;
-
- if (DWORD(Key)>=SCE_PTHREAD_KEYS_MAX) then Exit(EINVAL);
-
- node:=@_pthread_key_nodes[Key];
-
- version:=load_consume(node^.version_);
- if (load_consume(Pointer(node^.dest_))=nil) then Exit(EINVAL);
-
- local:=@tcb_thread^.keys[Key];
-
- local^.version_:=version;
- local^.data_   :=value;
-
- Result:=0;
-end;
-
-initialization
- _pthread_keys_init;
 
 end.
 

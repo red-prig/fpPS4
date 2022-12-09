@@ -11,6 +11,7 @@ uses
   ps4_map_mm,
   ps4_mspace,
   ps4_pthread,
+  ps4_pthread_key,
   ps4_signal,
   ps4_mutex,
   ps4_cond,
@@ -1058,12 +1059,21 @@ begin
  lib^.set_proc($D71BED515C75FD28,@ps4___pthread_cleanup_push_imp);
  lib^.set_proc($896B0595831FDCAC,@ps4___pthread_cleanup_pop_imp);
 
+ //thread
+
+ //pthread_key
+
  lib^.set_proc($9AA50B35D8A64E7D,@ps4_pthread_key_create);
  lib^.set_proc($E81A4466E0D3ED82,@ps4_pthread_key_delete);
  lib^.set_proc($D3F297692EF4C72E,@ps4_pthread_getspecific);
  lib^.set_proc($5AB38BBC7534C903,@ps4_pthread_setspecific);
 
- //thread
+ lib^.set_proc($81E0DAAA01FD9538,@ps4_scePthreadKeyCreate);
+ lib^.set_proc($3EB747BAE0DE9216,@ps4_scePthreadKeyDelete);
+ lib^.set_proc($7A886DEE640E0A6A,@ps4_scePthreadGetspecific);
+ lib^.set_proc($F81CD7624A9878B1,@ps4_scePthreadSetspecific);
+
+ //pthread_key
 
  lib^.set_proc($5AC95C2B51507062,@ps4_sceKernelIsNeoMode);
  lib^.set_proc($9A9C4076A5BB74A6,@ps4_sceKernelIsProspero);

@@ -122,6 +122,8 @@ type
   data_:Pointer;
  end;
 
+ _pthread_keys=array[0..SCE_PTHREAD_KEYS_MAX-1] of _pthread_key_data;
+
  t_init_routine_proc=procedure; SysV_ABI_CDecl;
  t_cb_proc=procedure(data:Pointer); SysV_ABI_CDecl;
 
@@ -151,7 +153,7 @@ type
   //
   cleanup:p_pthread_cleanup;
   //
-  keys:array[0..SCE_PTHREAD_KEYS_MAX-1] of _pthread_key_data;
+  specific:p_pthread_key_data;
   //
   sig:sigqueue_t;
  end;
