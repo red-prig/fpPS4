@@ -132,6 +132,9 @@ type
   Procedure   Flip;
  end;
 
+var
+ SRGB_HACK:Boolean=True;
+
 implementation
 
 Procedure TvFlipCursor.Free;
@@ -313,9 +316,6 @@ begin
  buf:=@FBuffers[FcurrentBuffer];
  buf^.Init(Self);
 end;
-
-Const
- SRGB_HACK=True;
 
 Procedure TvFlip.SetImageFormat(format,tmode:DWORD);
 begin

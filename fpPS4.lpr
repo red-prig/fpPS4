@@ -54,6 +54,7 @@ uses
  ps4_videodrv,
  vMemory,
  vImageManager,
+ vFlip,
 
  trace_manager;
 
@@ -81,6 +82,7 @@ begin
   Writeln('     MEMORY_BOUND_HACK    //limit the amount of GPU allocated memory (iGPU)');
   Writeln('     IMAGE_TEST_HACK      //always mark that the texture has changed');
   Writeln('     IMAGE_LOAD_HACK      //never reload texture');
+  Writeln('     DISABLE_SRGB_HACK    //disables hacked display of SRGB');
 
   Exit(False);
  end;
@@ -125,6 +127,7 @@ begin
            'MEMORY_BOUND_HACK'   :vMemory.MEMORY_BOUND_HACK:=True;
            'IMAGE_TEST_HACK'     :vImageManager.IMAGE_TEST_HACK:=True;
            'IMAGE_LOAD_HACK'     :vImageManager.IMAGE_LOAD_HACK:=True;
+           'DISABLE_SRGB_HACK'   :vFlip.SRGB_HACK:=False;
            else;
           end;
          end;
