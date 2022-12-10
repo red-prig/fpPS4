@@ -1134,6 +1134,7 @@ begin
 
  lib^.set_proc($0691686E8509A195,@ps4_sceKernelCreateEventFlag);
  lib^.set_proc($253BC17E58586B34,@ps4_sceKernelWaitEventFlag);
+ lib^.set_proc($F65BE3E438C76620,@ps4_sceKernelPollEventFlag);
  lib^.set_proc($20E9D2BC7CEABBA0,@ps4_sceKernelSetEventFlag);
  lib^.set_proc($EEE8411564404BAD,@ps4_sceKernelClearEventFlag);
  lib^.set_proc($F26AA5F4E7109DDE,@ps4_sceKernelDeleteEventFlag);

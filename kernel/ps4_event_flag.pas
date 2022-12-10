@@ -73,6 +73,12 @@ function ps4_sceKernelWaitEventFlag(
   pResultPat:PQWORD;
   pTimeout:PDWORD):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelPollEventFlag(
+  ef:SceKernelEventFlag;
+  bitPattern:QWORD;
+  waitMode:DWORD;
+  pResultPat:PQWORD):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelClearEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelDeleteEventFlag(ef:SceKernelEventFlag):Integer; SysV_ABI_CDecl;
@@ -457,6 +463,65 @@ begin
  Result:=px2sce(Result);
 end;
 
+function _sceKernelPollEventFlag(
+  ef:SceKernelEventFlag;
+  bitPattern:QWORD;
+  waitMode:DWORD;
+  pResultPat:PQWORD):Integer;
+begin
+ if (bitPattern=0) then Exit(EINVAL);
+
+ Case (waitMode and WOP_MODES) of
+  SCE_KERNEL_EVF_WAITMODE_AND:;
+  SCE_KERNEL_EVF_WAITMODE_OR :;
+  else
+   Exit(EINVAL);
+ end;
+
+ Result:=ef_enter(ef);
+ if (Result<>0) then Exit;
+
+ if _is_single(ef^.attr) then
+ begin
+  spin_lock(ef^.lock_list);
+    if not spin_trylock(ef^.lock_sing) then
+    begin
+     spin_unlock(ef^.lock_list);
+     ef_leave(ef);
+     Exit(EPERM);
+    end;
+  spin_unlock(ef^.lock_list);
+ end;
+
+ spin_lock(ef^.lock_list);
+   if _test_and_set(ef,bitPattern,waitMode,pResultPat) then
+   begin
+    Result:=0;
+   end else
+   begin
+    Result:=EBUSY;
+   end;
+ spin_unlock(ef^.lock_list);
+
+ ef_leave(ef);
+end;
+
+function ps4_sceKernelPollEventFlag(
+  ef:SceKernelEventFlag;
+  bitPattern:QWORD;
+  waitMode:DWORD;
+  pResultPat:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ repeat
+  _sig_lock;
+  Result:=_sceKernelPollEventFlag(ef,bitPattern,waitMode,pResultPat);
+  _sig_unlock;
+ until (Result<>EINTR);
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
 //
 
 procedure _wakeup(node:pwef_node;ret:Integer);
@@ -651,10 +716,6 @@ begin
  Result:=px2sce(Result);
 end;
 
-{
-int sceKernelPollEventFlag(SceKernelEventFlag ef, uint64_t bitPattern,
-			   uint32_t waitMode, uint64_t *pResultPat);
-                             }
 
 end.
 
