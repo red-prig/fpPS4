@@ -1047,7 +1047,7 @@ var
 begin
  if (src=nil) or (dst=nil) then Exit;
 
- context_ex:=PCONTEXT_EX(src+1);
+ context_ex:=PCONTEXT_EX(dst+1);
  xs:=PXSTATE(PByte(context_ex)+context_ex^.XState.Offset);
 
  uc_xsave:=PXmmSaveArea(@src^.uc_mcontext.mc_fpstate);
