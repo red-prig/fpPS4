@@ -5,6 +5,7 @@ unit sys_path;
 interface
 
 uses
+ windows,
  Classes,
  SysUtils,
  fileutil,
@@ -25,6 +26,7 @@ Function  UnMountSavePath(path:PChar):Integer;
 Function  FetchTmpMount(point:PChar;mode:Integer):Integer;
 Function  UnMountTmpPath(point:PChar):Integer;
 Function  FormatTmpPath(point:PChar):Integer;
+Function  GetTmpPathAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 
 function  parse_filename(filename:PChar;var r:RawByteString):Integer;
 
@@ -297,6 +299,11 @@ const
 
  M_TMP_VALUE:PChar='tmp';
 
+function temp_path:RawByteString;
+begin
+ Result:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+end;
+
 Function FetchTmpMount(point:PChar;mode:Integer):Integer;
 var
  S:RawByteString;
@@ -314,7 +321,7 @@ begin
 
  PDWORD(point)^:=$00706D74; //tmp
 
- S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+ S:=temp_path;
 
  if (mode=1) then //format
  begin
@@ -354,7 +361,7 @@ begin
 
  if (FTmpMount<>2) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
 
- S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+ S:=temp_path;
  DeleteDirectory(S,False);
 
  Result:=0;
@@ -366,9 +373,37 @@ var
 begin
  if (FTmpMount<>2) then Exit(PT_ERR);
 
- S:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+ S:=temp_path;
 
  Result:=PathConcat(s,filename,r);
+end;
+
+Function GetTmpPathAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
+var
+ S:RawByteString;
+ W:WideString;
+ bytes:Int64;
+begin
+ if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ if (PDWORD(point)^<>$00706D74) then //tmp
+ begin
+  Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+ end;
+
+ if (FTmpMount<>2) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+
+ S:=temp_path;
+ W:=UTF8Decode(S);
+
+ if GetDiskFreeSpaceExW(PWideChar(W),@bytes,nil,nil) then
+ begin
+  size^:=bytes div 1024;
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_APP_CONTENT_ERROR_INTERNAL;
+ end;
 end;
 
 //

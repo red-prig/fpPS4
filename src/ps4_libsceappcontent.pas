@@ -12,7 +12,8 @@ uses
 implementation
 
 uses
- sys_path;
+ sys_path,
+ sys_signal;
 
 type
  PSceAppContentInitParam=^SceAppContentInitParam;
@@ -112,17 +113,30 @@ type
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=FormatTmpPath(PChar(mountPoint));
+ _sig_unlock;
 end;
 
 function ps4_sceAppContentTemporaryDataMount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=FetchTmpMount(PChar(mountPoint),SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT);
+ _sig_unlock;
 end;
 
 function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
 begin
+ _sig_lock;
  Result:=FetchTmpMount(PChar(mountPoint),option);
+ _sig_unlock;
+end;
+
+function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=GetTmpPathAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
+ _sig_unlock;
 end;
 
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
@@ -140,6 +154,7 @@ begin
  lib^.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
  lib^.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
+ lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
 end;
 
 
