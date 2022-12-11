@@ -26,7 +26,10 @@ Function  UnMountSavePath(path:PChar):Integer;
 Function  FetchTmpMount(point:PChar;mode:Integer):Integer;
 Function  UnMountTmpPath(point:PChar):Integer;
 Function  FormatTmpPath(point:PChar):Integer;
+
+
 Function  GetTmpPathAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
+Function  GetDownloadAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 
 function  parse_filename(filename:PChar;var r:RawByteString):Integer;
 
@@ -297,11 +300,14 @@ const
  SCE_APP_CONTENT_ERROR_NOT_MOUNTED=-2133262332; //0x80D90004
  SCE_APP_CONTENT_ERROR_INTERNAL   =-2133262326; //0x80D9000A
 
- M_TMP_VALUE:PChar='tmp';
-
 function temp_path:RawByteString;
 begin
- Result:=IncludeTrailingPathDelimiter(GetCurrentDir)+M_TMP_VALUE;
+ Result:=IncludeTrailingPathDelimiter(GetCurrentDir)+'tmp';
+end;
+
+function download_path(id:Byte):RawByteString;
+begin
+ Result:=IncludeTrailingPathDelimiter(GetCurrentDir)+'download'+IntToStr(id);
 end;
 
 Function FetchTmpMount(point:PChar;mode:Integer):Integer;
@@ -406,6 +412,34 @@ begin
  end;
 end;
 
+Function GetDownloadAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
+var
+ S:RawByteString;
+ W:WideString;
+ bytes:Int64;
+begin
+ if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ if (PDWORD(point)^<>$00706D74) then //tmp
+ begin
+  Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+ end;
+
+ if (FTmpMount<>2) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
+
+ S:=download_path(0);
+ W:=UTF8Decode(S);
+
+ if GetDiskFreeSpaceExW(PWideChar(W),@bytes,nil,nil) then
+ begin
+  size^:=bytes div 1024;
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_APP_CONTENT_ERROR_INTERNAL;
+ end;
+end;
+
 //
 
 function MountDownloadConcat(id:Byte;const filename:RawByteString;var r:RawByteString):Integer;
@@ -419,7 +453,7 @@ begin
  end;
 
  //param.sfo download size TODO
- S:=IncludeTrailingPathDelimiter(GetCurrentDir)+'download'+IntToStr(id);
+ S:=download_path(id);
  if not ForceDirectories(S) then Exit(PT_ERR);
 
  Result:=PathConcat(S,filename,r);

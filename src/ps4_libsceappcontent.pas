@@ -139,6 +139,13 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceAppContentDownloadDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=GetDownloadAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
+ _sig_unlock;
+end;
+
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -155,6 +162,7 @@ begin
  lib^.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
  lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
+ lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
 end;
 
 
