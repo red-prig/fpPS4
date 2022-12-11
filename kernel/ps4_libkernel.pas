@@ -1112,6 +1112,11 @@ begin
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
  lib^.set_proc($35C6965317CC3484,@ps4_sceKernelMapNamedDirectMemory);
 
+ lib^.set_proc($9930597C46A5D81C,@ps4_mlock);
+ lib^.set_proc($386E11B03C0B82EA,@ps4_munlock);
+ lib^.set_proc($DE4EA4C7FCCE3924,@ps4_sceKernelMlock);
+ lib^.set_proc($C502087C9F3AD2C9,@ps4_sceKernelMunlock);
+
  lib^.set_proc($B59638F9264D1610,@ps4_msync);
  lib^.set_proc($0E435E6F1989C952,@ps4_sceKernelMsync);
 

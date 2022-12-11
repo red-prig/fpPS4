@@ -3157,8 +3157,8 @@ begin
    res:=addr;
    if (g_heap_param.HeapMemoryLock=0) then
    begin
+    ps4_sceKernelMlock(addr,size); //ignore ret
     ret:=0;
-    //ret:=sceKernelMlock(addr,size); TODO
     if (ret=0) then
     begin
      _out^:=res;

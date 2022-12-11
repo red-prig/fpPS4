@@ -207,6 +207,11 @@ function ps4_sceKernelMapNamedDirectMemory(
            alignment:QWORD;
            name:Pchar):Integer; SysV_ABI_CDecl;
 
+function ps4_mlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+function ps4_munlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMunlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+
 //
 
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
@@ -1601,6 +1606,70 @@ begin
  begin
   Writeln(StdErr,'[WARN]:sceKernelMapNamedDirectMemory:',Result);
  end;
+end;
+
+//
+
+function _sys_mlock(addr:Pointer;len:qword):Integer;
+var
+ tmp:Pointer;
+begin
+ tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+ len:=len+(addr-tmp);
+
+ addr:=tmp;
+ len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+
+ if VirtualLock(addr,len) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=ENOMEM;
+ end;
+end;
+
+function _sys_munlock(addr:Pointer;len:qword):Integer;
+var
+ tmp:Pointer;
+begin
+ tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
+ len:=len+(addr-tmp);
+
+ addr:=tmp;
+ len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+
+ if VirtualUnlock(addr,len) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=ENOMEM;
+ end;
+end;
+
+function ps4_mlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(_sys_mlock(addr,len));
+end;
+
+function ps4_munlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(_sys_munlock(addr,len));
+end;
+
+function ps4_sceKernelMlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sys_mlock(addr,len);
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function ps4_sceKernelMunlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sys_munlock(addr,len);
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 ////
