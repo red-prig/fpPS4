@@ -1951,6 +1951,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceRazorIsLoaded:Int64; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //A value of true is returned if submit/dingdong is allowed; otherwise false is returned.
 function ps4_sceGnmAreSubmitsAllowed:Boolean; SysV_ABI_CDecl;
 begin
@@ -2197,6 +2202,8 @@ begin
  lib^.set_proc($30131AE8416EE0AA,@ps4_sceGnmValidateResetState);
  lib^.set_proc($1F330DEC036A6047,@ps4_sceGnmValidateGetVersion);
  lib^.set_proc($AD3215D759CC42E3,@ps4_sceGnmValidateOnSubmitEnabled);
+
+ lib^.set_proc($7F7DCEAEBB9061B3,@ps4_sceRazorIsLoaded);
 
  lib^.set_proc($6F4C729659D563F2,@ps4_sceGnmAddEqEvent);
 
