@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="99">
+    <Units Count="100">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -454,6 +454,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRandom"/>
       </Unit98>
+      <Unit99>
+        <Filename Value="kernel\ps4_pthread_key.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit99>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

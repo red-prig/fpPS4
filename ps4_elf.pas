@@ -1857,6 +1857,14 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
 begin
 
+ Case Info^.sBind of
+  STB_LOCAL :;
+  STB_GLOBAL:;
+  STB_WEAK  :;
+  else
+   Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
+ end;
+
  case Info^.rType of
   //R_X86_64_NONE    :Writeln('R_X86_64_NONE    ');
   //R_X86_64_PC32    :Writeln('R_X86_64_PC32    ');
@@ -1867,45 +1875,69 @@ begin
 
   R_X86_64_RELATIVE:
    begin
-    _do_set(elf.mMap.pAddr+Info^.Addend);
+    Case Info^.sBind of
+     STB_LOCAL:
+      begin
+       _do_set(elf.mMap.pAddr+Info^.Addend);
+      end;
+     else
+      begin
+       _do_load(elf.mMap.pAddr+Info^.Addend);
+      end;
+    end;
    end;
 
   R_X86_64_TPOFF64:
     begin            //tls_offset????
+     Assert(Info^.sBind=STB_LOCAL);
      _do_load(Pointer(elf.pTls.offset+Info^.value+Info^.Addend));
     end;
 
   R_X86_64_DTPMOD64:
     begin            //tls_index????
+     Assert(Info^.sBind=STB_LOCAL);
      _do_set(Pointer(elf.pTls.index));
     end;
 
   R_X86_64_DTPOFF64:  //tls
     begin
+     Assert(Info^.sBind=STB_LOCAL);
      _do_load(Pointer(Info^.value+Info^.Addend));
     end;
 
   R_X86_64_JUMP_SLOT,
-  R_X86_64_GLOB_DAT,
+  R_X86_64_GLOB_DAT:
+   begin
+    Case Info^.sBind of
+     STB_LOCAL:
+      begin
+       _do_set(elf.mMap.pAddr+Info^.value);
+      end;
+     else
+      begin
+       _do_load(elf.mMap.pAddr+Info^.value);
+      end;
+    end;
+   end;
+
   R_X86_64_64:
    begin
     Case Info^.sBind of
      STB_LOCAL:
-     begin
-      _do_set(elf.mMap.pAddr+Info^.value+Info^.Addend);
-     end;
-     STB_GLOBAL,
-     STB_WEAK:
+      begin
+       _do_set(elf.mMap.pAddr+Info^.value+Info^.Addend);
+      end;
+     else
       begin
        _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
       end;
-     else
-      Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
     end;
    end;
 
   else
-   Writeln(StdErr,'rela type not handled ', HexStr(Info^.rType,8));
+   begin
+    Writeln(StdErr,'rela type not handled ', __rtype(Info^.rType));
+   end;
 
  end;
 
@@ -1932,6 +1964,7 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
   Import:=(Info^.shndx=SHN_UNDEF);
 
   if not Import then Exit;
+  Assert(Info^.value=0);
 
   IInfo:=Default(TResolveImportInfo);
 
@@ -1970,38 +2003,92 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    IInfo.sBind :=Info^.sBind;
    IInfo.sType :=Info^.sType;
    nSymVal:=TResolveImportCb(PPointer(data)[0])(elf,@IInfo,PPointer(data)[1]);
-   if nSymVal<>nil then nSymVal:=nSymVal+Info^.Addend;
+
+   if (nSymVal<>nil) then
+   if (Info^.rType=R_X86_64_64) then
+   begin
+    nSymVal:=nSymVal+Info^.Addend;
+   end;
+
    _do_set(nSymVal);
   end;
 
  end;
 
 begin
+
+ Case Info^.sBind of
+  STB_LOCAL :;
+  STB_GLOBAL:;
+  STB_WEAK  :;
+  else
+   Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
+ end;
+
  case Info^.rType of
   R_X86_64_TPOFF64:
     begin            //tls_offset????
-     _do_load(Pointer(elf.pTls.offset+Info^.value+Info^.Addend));
+     Assert(Info^.sBind=STB_LOCAL);
     end;
 
-  R_X86_64_DTPMOD64:;
+  R_X86_64_RELATIVE:
+   begin
+    Case Info^.sBind of
+     STB_LOCAL:
+      begin
+       //
+      end;
+     else
+      begin
+       _do_load(elf.mMap.pAddr+Info^.Addend);
+      end;
+    end;
+   end;
+
+  R_X86_64_DTPMOD64:
+    begin            //tls_index????
+     Assert(Info^.sBind=STB_LOCAL);
+    end;
 
   R_X86_64_DTPOFF64:  //tls
     begin
-     _do_load(Pointer(Info^.value+Info^.Addend));
+     Assert(Info^.sBind=STB_LOCAL);
     end;
 
   R_X86_64_JUMP_SLOT,
-  R_X86_64_GLOB_DAT,
+  R_X86_64_GLOB_DAT:
+   begin
+    Case Info^.sBind of
+     STB_LOCAL:
+      begin
+       //
+      end;
+     else
+      begin
+       _do_load(elf.mMap.pAddr+Info^.value);
+      end;
+    end;
+   end;
+
   R_X86_64_64:
    begin
     Case Info^.sBind of
-     STB_GLOBAL,
-     STB_WEAK:
+     STB_LOCAL:
+      begin
+       //
+      end;
+     else
       begin
        _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
       end;
     end;
    end;
+
+  else
+   begin
+    Writeln(StdErr,'rela type not handled ', __rtype(Info^.rType));
+   end;
+
  end;
 end;
 
@@ -2097,6 +2184,14 @@ const
 
 begin
 
+ Case Info^.sBind of
+  STB_LOCAL :;
+  STB_GLOBAL:;
+  STB_WEAK  :;
+  else
+   FWriteln('invalid sym bingding '+__nBind(Info^.sBind));
+ end;
+
  case Info^.rType of
   //R_X86_64_NONE    :FWriteln('R_X86_64_NONE');
   //R_X86_64_PC32    :FWriteln('R_X86_64_PC32');
@@ -2139,13 +2234,12 @@ begin
       begin
         _do_load(Pointer(Info^.value)+Info^.Addend);
       end;
-     else
-        FWriteln('invalid sym bingding '+__nBind(Info^.sBind));
+     else;
     end;
    end;
 
   else
-   FWriteln('rela type not handled '+HexStr(Info^.rType,8));
+   FWriteln('rela type not handled '+__rtype(Info^.rType));
 
  end;
 
