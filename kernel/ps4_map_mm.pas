@@ -1625,7 +1625,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=ENOMEM;
+  Result:=0;
  end;
 end;
 
@@ -1644,7 +1644,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=ENOMEM;
+  Result:=0;
  end;
 end;
 
