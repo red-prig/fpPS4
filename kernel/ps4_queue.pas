@@ -137,13 +137,22 @@ function ps4_sceKernelWaitEqueue(
           out_num:PInteger;
           timo:PDWORD):Integer; SysV_ABI_CDecl;
 
-function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
-
 function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelDeleteUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelTriggerUserEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
+
+//
+
+function ps4_sceKernelGetEventData(ev:PSceKernelEvent):Int64; SysV_ABI_CDecl;
+function ps4_sceKernelGetEventError(ev:PSceKernelEvent):DWORD; SysV_ABI_CDecl;
+function ps4_sceKernelGetEventFflags(ev:PSceKernelEvent):DWORD; SysV_ABI_CDecl;
+function ps4_sceKernelGetEventFilter(ev:PSceKernelEvent):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetEventId(ev:PSceKernelEvent):QWORD; SysV_ABI_CDecl;
+function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
+
+//
 
 type
  TKFetchEvent=function(node:PKEventNode;ev:PSceKernelEvent):Boolean;
@@ -493,12 +502,6 @@ begin
  _sig_unlock;
 end;
 
-function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
-begin
- if (ev=nil) then Exit(nil);
- Result:=ev^.udata;
-end;
-
 function _sceKernelAddUserEvent(eq:SceKernelEqueue;id,flags:Integer):Integer;
 var
  P:PPointer;
@@ -623,6 +626,44 @@ begin
  Result:=_set_sce_errno(_sceKernelTriggerUserEvent(eq,id,udata));
  _sig_unlock;
 end;
+
+///
+
+function ps4_sceKernelGetEventData(ev:PSceKernelEvent):Int64; SysV_ABI_CDecl;
+begin
+ Result:=ev^.data;
+end;
+
+function ps4_sceKernelGetEventError(ev:PSceKernelEvent):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=ev^.fflags;
+ if (Result<>0) then //px2sce
+ begin
+  Result:=Result+$80020000;
+ end;
+end;
+
+function ps4_sceKernelGetEventFflags(ev:PSceKernelEvent):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=ev^.fflags;
+end;
+
+function ps4_sceKernelGetEventFilter(ev:PSceKernelEvent):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ev^.filter;
+end;
+
+function ps4_sceKernelGetEventId(ev:PSceKernelEvent):QWORD; SysV_ABI_CDecl;
+begin
+ Result:=ev^.ident;
+end;
+
+function ps4_sceKernelGetEventUserData(ev:PSceKernelEvent):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=ev^.udata;
+end;
+
+
 
 end.
 

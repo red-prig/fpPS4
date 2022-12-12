@@ -1126,12 +1126,18 @@ begin
 
  lib^.set_proc($0F439D14C8E9E3A2,@ps4_sceKernelCreateEqueue);
  lib^.set_proc($7F3C8C2ACF648A6D,@ps4_sceKernelWaitEqueue);
- lib^.set_proc($BF3FA9836CDDA292,@ps4_sceKernelGetEventUserData);
 
  lib^.set_proc($E11EBF3AF2367040,@ps4_sceKernelAddUserEvent);
  lib^.set_proc($583B339926D6B839,@ps4_sceKernelAddUserEventEdge);
  lib^.set_proc($2C90F07523539C38,@ps4_sceKernelDeleteUserEvent);
  lib^.set_proc($17A7B4930A387279,@ps4_sceKernelTriggerUserEvent);
+
+ lib^.set_proc($9301B2CA3A21239D,@ps4_sceKernelGetEventData);
+ lib^.set_proc($52EFE20C50BD6947,@ps4_sceKernelGetEventError);
+ lib^.set_proc($434AABF40CAA2529,@ps4_sceKernelGetEventFflags);
+ lib^.set_proc($DB708F3C8D6DC816,@ps4_sceKernelGetEventFilter);
+ lib^.set_proc($989EDA8219A0BDF7,@ps4_sceKernelGetEventId);
+ lib^.set_proc($BF3FA9836CDDA292,@ps4_sceKernelGetEventUserData);
 
  //queue
 
