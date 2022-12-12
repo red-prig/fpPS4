@@ -66,6 +66,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceMoveClose(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceMoveClose:',handle);
+ Result:=0;
+end;
+
 function ps4_sceMoveGetDeviceInfo(handle:Integer;pInfo:pSceMoveDeviceInfo):Integer; SysV_ABI_CDecl;
 begin
  if (pInfo=nil) then Exit(SCE_MOVE_ERROR_INVALID_ARG);
@@ -94,6 +100,7 @@ begin
  lib:=Result._add_lib('libSceMove');
  lib^.set_proc($8F521313F1282661,@ps4_sceMoveInit);
  lib^.set_proc($1F30BAD0C7E32715,@ps4_sceMoveOpen);
+ lib^.set_proc($5D7EB0971A47C9EA,@ps4_sceMoveClose);
  lib^.set_proc($1965D3CB1B3841B1,@ps4_sceMoveGetDeviceInfo);
  lib^.set_proc($7F66DCA4AEA425F8,@ps4_sceMoveReadStateRecent);
 end;
