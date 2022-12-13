@@ -670,7 +670,7 @@ begin
  if (ev=nil) or (data=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if (ev^.filter<>SCE_KERNEL_EVFILT_VIDEO_OUT) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT);
  ret:=ev^.data shr 16;
- if (ev^.data>=0) or (ev^.ident=0) then
+ if (ev^.data>=0) or ((ev^.ident shr 48)<>$0006) then
  begin
   data^:=ret;
  end else
@@ -684,13 +684,17 @@ function ps4_sceVideoOutGetEventId(ev:PSceKernelEvent):Integer; SysV_ABI_CDecl;
 begin
  if (ev=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if (ev^.filter<>SCE_KERNEL_EVFILT_VIDEO_OUT) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT);
- case ev^.ident of
-    0:Result:=0;
-    1:Result:=1;
-    2:Result:=2;
+
+ Case (ev^.ident shr 48) of
+  $0006:Result:=0; //SCE_VIDEO_OUT_EVENT_FLIP
+  $0007:Result:=1; //SCE_VIDEO_OUT_EVENT_VBLANK
+  $0008:Result:=SCE_VIDEO_OUT_ERROR_INVALID_EVENT;
+  $0051:Result:=8;
+  $0058:Result:=12;
   else
       Result:=SCE_VIDEO_OUT_ERROR_INVALID_EVENT;
  end;
+
 end;
 
 function ps4_sceVideoOutAddFlipEvent(eq:SceKernelEqueue;hVideo:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
@@ -724,7 +728,7 @@ begin
    _sig_unlock;
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
-  node^.ev.ident :=SCE_VIDEO_OUT_EVENT_FLIP;
+  node^.ev.ident :=$0006 shl 48; //SCE_VIDEO_OUT_EVENT_FLIP;
   node^.ev.flags :=EV_CLEAR;
   node^.ev.filter:=SCE_KERNEL_EVFILT_VIDEO_OUT;
   node^.ev.udata :=udata;
@@ -770,7 +774,7 @@ begin
    _sig_unlock;
    Exit(SCE_VIDEO_OUT_ERROR_INVALID_EVENT_QUEUE);
   end;
-  node^.ev.ident :=SCE_VIDEO_OUT_EVENT_VBLANK;
+  node^.ev.ident :=$0007 shl 48; //SCE_VIDEO_OUT_EVENT_VBLANK;
   node^.ev.flags :=EV_CLEAR;
   node^.ev.filter:=SCE_KERNEL_EVFILT_VIDEO_OUT;
   node^.ev.udata :=udata;
@@ -1898,6 +1902,9 @@ begin
 
  lib^.set_proc($529DFA3D393AF3B1,@ps4_sceVideoOutOpen);
  lib^.set_proc($BAAB951F8FC3BBBF,@ps4_sceVideoOutClose);
+ lib^.set_proc($32DE101C793190E7,@ps4_sceVideoOutGetEventCount);
+ lib^.set_proc($AD651370A7645334,@ps4_sceVideoOutGetEventData);
+ lib^.set_proc($536249B52A8D2992,@ps4_sceVideoOutGetEventId);
  lib^.set_proc($1D7CE32BDC88DF49,@ps4_sceVideoOutAddFlipEvent);
  lib^.set_proc($5EBBBDDB01C94668,@ps4_sceVideoOutAddVblankEvent);
  lib^.set_proc($8BAFEC47DD56B7FE,@ps4_sceVideoOutSetBufferAttribute);
