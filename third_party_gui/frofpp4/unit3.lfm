@@ -1,0 +1,68 @@
+object Form3: TForm3
+  Left = 892
+  Height = 368
+  Top = 406
+  Width = 461
+  Caption = 'Info'
+  ClientHeight = 368
+  ClientWidth = 461
+  DesignTimePPI = 120
+  LCLVersion = '2.2.2.0'
+  object Button1: TButton
+    Left = 168
+    Height = 31
+    Top = 306
+    Width = 94
+    Caption = 'OK'
+    OnClick = Button1Click
+    TabOrder = 0
+  end
+  object Label1: TLabel
+    Left = 144
+    Height = 20
+    Top = 40
+    Width = 136
+    Caption = 'Gui for Emu "fpPS4" '
+    ParentColor = False
+  end
+  object Label2: TLabel
+    Left = 168
+    Height = 20
+    Top = 80
+    Width = 80
+    Caption = 'V 0.000001a'
+    ParentColor = False
+  end
+  object Label3: TLabel
+    Left = 112
+    Height = 20
+    Top = 128
+    Width = 203
+    Caption = 'this program is free of charge. '
+    ParentColor = False
+  end
+  object Label4: TLabel
+    Left = 144
+    Height = 20
+    Top = 160
+    Width = 133
+    Caption = 'use at your own risk.'
+    ParentColor = False
+  end
+  object Label5: TLabel
+    Left = 96
+    Height = 20
+    Top = 200
+    Width = 234
+    Caption = 'no warranty of any kind is assumed.'
+    ParentColor = False
+  end
+  object Label6: TLabel
+    Left = 144
+    Height = 20
+    Top = 248
+    Width = 135
+    Caption = 'SLRHUI 2022 Austria'
+    ParentColor = False
+  end
+end
