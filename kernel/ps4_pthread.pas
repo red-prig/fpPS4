@@ -672,18 +672,12 @@ end;
 
 function ps4_scePthreadEqual(t1,t2:pthread):Integer; SysV_ABI_CDecl;
 begin
- if (t1=t2) then
-  Result:=1
- else
-  Result:=0;
+ Result:=px2sce(ps4_pthread_equal(t1,t2));
 end;
 
 function ps4_pthread_equal(t1,t2:pthread):Integer; SysV_ABI_CDecl;
 begin
- if (t1=t2) then
-  Result:=1
- else
-  Result:=0;
+ Result:=ord(t1=t2);
 end;
 
 procedure ps4_scePthreadExit(value_ptr:Pointer); SysV_ABI_CDecl;

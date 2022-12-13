@@ -110,7 +110,7 @@ begin
  Result:=(Addr-pAlign);
 
  Addr:=pAlign;
- Size:=Max(Size+Result,mr.size);
+ Size:=Size+Result;
 end;
 
 function _is_sparce(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):Integer;
