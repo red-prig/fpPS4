@@ -23,6 +23,8 @@ function ps4_sceKernelInstallExceptionHandler(signum:Integer;callback:TsceKernel
 function ps4_sceKernelRemoveExceptionHandler(signum:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelRaiseException(_pthread:Pointer;sig:Integer):Integer; SysV_ABI_CDecl;
 
+function ps4___Ux86_64_setcontext(ctx:Pointer):Integer; assembler; SysV_ABI_CDecl;
+
 implementation
 
 uses
@@ -160,6 +162,51 @@ begin
  Result:=px2sce(Result);
 end;
 
+function ps4___Ux86_64_setcontext(ctx:Pointer):Integer; assembler; nostackframe; SysV_ABI_CDecl;
+label
+ _next;
+asm
+ push       %rdi
+ xor        %rdx  ,%rdx
+ lea        (%rdi),%rsi
+ mov        $0x3  ,%rdi
+ mov        %rcx  ,%r10
+
+ call       ps4_sigprocmask
+
+ pop        %rdi
+
+ cmpq       $0x20001,0x118(%rdi)
+
+ jnz        _next
+ cmpq       $0x10002,0x110(%rdi)
+
+
+ jnz        _next
+ fxrstor    0x120(%rdi)
+
+ _next:
+
+ mov        0x68(%rdi),%r8
+ mov        0x70(%rdi),%r9
+ mov        0x80(%rdi),%rbx
+ mov        0x88(%rdi),%rbp
+ mov        0xa0(%rdi),%r12
+ mov        0xa8(%rdi),%r13
+ mov        0xb0(%rdi),%r14
+ mov        0xb8(%rdi),%r15
+ mov        0x50(%rdi),%rsi
+ mov        0x58(%rdi),%rdx
+ mov        0x78(%rdi),%rax
+ mov        0x60(%rdi),%rcx
+ mov        0xf8(%rdi),%rsp
+ mov        0xe0(%rdi),%rcx
+
+ push       %rcx
+
+ mov        0x60(%rdi),%rcx
+ mov        0x48(%rdi),%rdi
+end;
 
 end.
 

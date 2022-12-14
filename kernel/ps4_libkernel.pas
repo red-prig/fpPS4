@@ -829,6 +829,8 @@ begin
  lib^.set_proc($CC4FF05C86632E83,@ps4_sceKernelDebugRaiseExceptionOnReleaseMode);
  lib^.set_proc($F4960DA8DEA300A2,@ps4_sceKernelDebugOutText);
 
+ lib^.set_proc($3A35ACB5B2113D4A,@ps4___Ux86_64_setcontext);
+
  //signal
 
  //module
