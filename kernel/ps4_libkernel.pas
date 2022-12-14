@@ -231,6 +231,30 @@ begin
  Result:=ps4_sceKernelGetModuleInfoForUnwind(addr,flags,info);
 end;
 
+function ps4__sceKernelRtldThreadAtexitIncrement(Addr:Pointer):Integer; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+begin
+ _sig_lock;
+ node:=ps4_app.AcqureFileByCodeAdr(Addr); //inc ref
+ _sig_unlock;
+ Result:=-ord(node=nil);
+end;
+
+procedure ps4__sceKernelRtldThreadAtexitDecrement(Addr:Pointer); SysV_ABI_CDecl;
+var
+ node:TElf_node;
+begin
+ _sig_lock;
+ node:=ps4_app.AcqureFileByCodeAdr(Addr); //inc ref
+ _sig_unlock;
+ if (node<>nil) then
+ begin
+  node.Release; //dec ref
+  node.Release; //dec ref
+ end;
+end;
+
 function ps4_sceKernelGetLibkernelTextLocation(address:PPointer;size:PQWORD):Integer; SysV_ABI_CDecl;
 var
  elf:Telf_file;
@@ -806,11 +830,18 @@ begin
  lib^.set_proc($F4960DA8DEA300A2,@ps4_sceKernelDebugOutText);
 
  //signal
+
+ //module
+
  lib^.set_proc($0262749A7DA5E253,@ps4_sceKernelGetLibkernelTextLocation);
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
  lib^.set_proc($4694092552938853,@ps4_sceKernelGetModuleInfoForUnwind);
+
+ lib^.set_proc($4F3E113540816C62,@ps4__sceKernelRtldThreadAtexitIncrement);
+ lib^.set_proc($F0E9D65E581096FA,@ps4__sceKernelRtldThreadAtexitDecrement);
+
  lib^.set_proc($F79F6AADACCF22B8,@ps4_sceKernelGetProcParam);
  lib^.set_proc($A7911C41E11E2401,@ps4__sceKernelRtldSetApplicationHeapAPI);
  lib^.set_proc($ACD856CFE96F38C5,@ps4_sceKernelSetThreadDtors);
@@ -833,6 +864,8 @@ begin
 
  lib^.set_proc($54EC7C3469875D3B,@ps4_sceKernelGetCpumode);
  lib^.set_proc($56306D83906D97DE,@ps4_sceKernelSetFsstParam);
+
+ //module
 
  //mutex
 
