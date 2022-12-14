@@ -72,17 +72,17 @@ Var
     2:if (PWORD(@Path[CF])^=$2E2E) then //..
       begin
        i:=i-PF+1;
-       L:=L-i;
        Delete(Path,PF,i);
+       L:=Length(Path);
        CF:=PF;
        i:=PF-1;
       end;
     1:if (Path[CF]='.') then //.
       begin
-       Delete(Path,1,CF);
+       i:=(i-CF)+1;
+       Delete(Path,CF,i);
        L:=Length(Path);
-       CF:=1;
-       i:=1;
+       i:=CF-1;
       end;
    end;
    PF:=CF;
