@@ -27,7 +27,6 @@ Function  FetchTmpMount(point:PChar;mode:Integer):Integer;
 Function  UnMountTmpPath(point:PChar):Integer;
 Function  FormatTmpPath(point:PChar):Integer;
 
-
 Function  GetTmpPathAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 Function  GetDownloadAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 
@@ -325,7 +324,9 @@ begin
 
  if not CAS(FTmpMount,0,1) then Exit(SCE_APP_CONTENT_ERROR_BUSY);
 
- PDWORD(point)^:=$00706D74; //tmp
+ //temp0#0
+ PDWORD(point)[0]:=$706D6574; //temp
+ PDWORD(point)[1]:=$00000030; //0#0
 
  S:=temp_path;
 
@@ -340,11 +341,16 @@ begin
  Result:=0;
 end;
 
+function _is_temp0(P:Pointer):Boolean; inline;
+begin
+ Result:=(PDWORD(P)[0]=$706D6574) and ((PDWORD(P)[1] and $FFFF)=$0030);
+end;
+
 Function UnMountTmpPath(point:PChar):Integer;
 begin
  if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- if (PDWORD(point)^<>$00706D74) then //tmp
+ if not _is_temp0(point) then
  begin
   Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
  end;
@@ -360,7 +366,7 @@ var
 begin
  if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- if (PDWORD(point)^<>$00706D74) then //tmp
+ if not _is_temp0(point) then
  begin
   Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
  end;
@@ -392,7 +398,7 @@ var
 begin
  if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- if (PDWORD(point)^<>$00706D74) then //tmp
+ if not _is_temp0(point) then
  begin
   Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
  end;
@@ -412,22 +418,37 @@ begin
  end;
 end;
 
+function _is_download(P:Pointer):Integer; inline;
+begin
+ Result:=-1;
+ if (PQWORD(P)^=$64616F6C6E776F64) then //download
+ begin
+  Case PChar(P)[8] of
+   '0'..'1':Result:=ord(PChar(P)[8])-ord('0');
+   else;
+  end;
+ end;
+end;
+
 Function GetDownloadAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 var
  S:RawByteString;
  W:WideString;
  bytes:Int64;
+ i:Integer;
 begin
  if (point=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- if (PDWORD(point)^<>$00706D74) then //tmp
+ i:=_is_download(point);
+
+ if (i=-1) then
  begin
   Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
  end;
 
  if (FTmpMount<>2) then Exit(SCE_APP_CONTENT_ERROR_NOT_MOUNTED);
 
- S:=download_path(0);
+ S:=download_path(i);
  W:=UTF8Decode(S);
 
  if GetDiskFreeSpaceExW(PWideChar(W),@bytes,nil,nil) then
@@ -476,11 +497,6 @@ begin
         r:=fp;
         Result:=PT_DEV;
        end;
-     $00706D74: //tmp
-       begin
-        if (fp^<>#0) then Inc(fp);
-        Result:=MountTmpConcat(fp,r);
-       end;
      else
         Result:=PT_ERR;
     end;
@@ -503,6 +519,22 @@ begin
        begin
         if (fp^<>#0) then Inc(fp);
         Result:=PathConcat(ps4_app.app1_path,fp,r);
+       end;
+     else
+        Result:=PT_ERR;
+    end;
+  5:Case PDWORD(pp)^ of
+     $706D6574: //temp
+       begin
+        Case (pp+4)^ of
+         '0':
+           begin
+            if (fp^<>#0) then Inc(fp);
+            Result:=MountTmpConcat(fp,r);
+           end;
+         else
+            Result:=PT_ERR;
+        end;
        end;
      else
         Result:=PT_ERR;
