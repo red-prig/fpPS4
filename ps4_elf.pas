@@ -1977,15 +1977,13 @@ var
    IInfo.sType :=Info^.sType;
    val:=TResolveImportCb(PPointer(data)[0])(elf,@IInfo,PPointer(data)[1]);
 
+   //Important! Don't store the value if the return is nil!
    if (val<>nil) then
    begin
     nSymVal:=Pointer(ptruint(val)+ptruint(nSymVal));
-   end else
-   begin
-    nSymVal:=nil;
+    _do_set(nSymVal);
    end;
 
-   _do_set(nSymVal);
   end;
 
  end;

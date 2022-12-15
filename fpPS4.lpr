@@ -409,14 +409,22 @@ begin
  node:=Telf_file(data);
 
  lib:=ps4_app.GetLib(Info^.lib^.strName);
- if (lib=nil) then Exit;
+ if (lib=nil) then Exit(nil); //Don't reload!
 
- if (lib^.parent<>node) then Exit;
+ if (lib^.parent<>node) then Exit(nil); //Don't reload!
 
  Result:=lib^.get_proc(Info^.Nid);
 
- //cache
- Info^.lib^.set_proc(Info^.nid,Result);
+ if (Result=nil) then
+ begin
+  Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
+  Exit(nil); //Don't reload!
+ end;
+
+ if (Result<>nil) then //cache
+ begin
+  Info^.lib^.set_proc(Info^.nid,Result);
+ end;
 end;
 
 var
