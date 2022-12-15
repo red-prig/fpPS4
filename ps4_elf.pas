@@ -1693,10 +1693,10 @@ begin
    STT_NOTYPE :;
    STT_OBJECT :;
    STT_FUN    :;
-   STT_SECTION:Writeln(__sType(Info.sType));
-   STT_FILE   :Writeln(__sType(Info.sType));
-   STT_COMMON :Writeln(__sType(Info.sType));
-   STT_TLS    :Writeln(__sType(Info.sType));
+   STT_SECTION:;
+   STT_FILE   :;
+   STT_COMMON :;
+   STT_TLS    :;
    STT_SCE    :;
    else
     Writeln(__sType(Info.sType));
@@ -1797,10 +1797,15 @@ end;
 
 Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
+var
+ nSymVal:Pointer;
+ Import:Boolean;
+
  procedure _do_set(nSymVal:Pointer); inline;
  begin
   if (Info^.Offset<>0) then
   begin
+   Assert(Info^.Offset<elf.mMap.nSize);
    PPointer(elf.mMap.pAddr+Info^.Offset)^:=nSymVal;
   end;
  end;
@@ -1808,11 +1813,6 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
  procedure _do_load(nSymVal:Pointer);
  var
   IInfo:TResolveImportInfo;
-
-  val:Pointer;
-
-  Import:Boolean;
-
  begin
   Import:=(Info^.shndx=SHN_UNDEF);
 
@@ -1848,97 +1848,67 @@ Procedure OnLoadRelaExport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
   _do_set(nSymVal);
 
-  val:=nSymVal;
-  //val:=elf.mMap.pAddr+Info^.value;
-
-  IInfo.lib^.set_proc(IInfo.nid,val);
-
+  IInfo.lib^.set_proc(IInfo.nid,nSymVal);
  end;
 
 begin
 
- Case Info^.sBind of
-  STB_LOCAL :;
-  STB_GLOBAL:;
-  STB_WEAK  :;
-  else
-   Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
- end;
-
  case Info^.rType of
-  //R_X86_64_NONE    :Writeln('R_X86_64_NONE    ');
-  //R_X86_64_PC32    :Writeln('R_X86_64_PC32    ');
-  //R_X86_64_COPY    :Writeln('R_X86_64_COPY    ');
-  //
-  //R_X86_64_TPOFF32 :Writeln('R_X86_64_TPOFF32 ');
-  //R_X86_64_DTPOFF32:Writeln('R_X86_64_DTPOFF32');
 
   R_X86_64_RELATIVE:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       _do_set(elf.mMap.pAddr+Info^.Addend);
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.Addend);
-      end;
-    end;
+    nSymVal:=elf.mMap.pAddr+Info^.Addend;
    end;
 
   R_X86_64_TPOFF64:
     begin            //tls_offset????
-     Assert(Info^.sBind=STB_LOCAL);
-     _do_load(Pointer(elf.pTls.offset+Info^.value+Info^.Addend));
+     nSymVal:=Pointer(elf.pTls.offset+Info^.value+Info^.Addend);
     end;
 
   R_X86_64_DTPMOD64:
     begin            //tls_index????
-     Assert(Info^.sBind=STB_LOCAL);
-     _do_set(Pointer(elf.pTls.index));
+     nSymVal:=Pointer(elf.pTls.index);
     end;
 
   R_X86_64_DTPOFF64:  //tls
     begin
-     Assert(Info^.sBind=STB_LOCAL);
-     _do_load(Pointer(Info^.value+Info^.Addend));
+     nSymVal:=Pointer(Info^.value+Info^.Addend);
     end;
 
   R_X86_64_JUMP_SLOT,
   R_X86_64_GLOB_DAT:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       _do_set(elf.mMap.pAddr+Info^.value);
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.value);
-      end;
-    end;
+    nSymVal:=elf.mMap.pAddr+Info^.value;
    end;
 
   R_X86_64_64:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       _do_set(elf.mMap.pAddr+Info^.value+Info^.Addend);
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
-      end;
-    end;
+    nSymVal:=elf.mMap.pAddr+Info^.value+Info^.Addend;
    end;
 
   else
    begin
     Writeln(StdErr,'rela type not handled ', __rtype(Info^.rType));
+    Assert(False);
    end;
 
+ end;
+
+ Case Info^.sBind of
+  STB_LOCAL :
+   begin
+   _do_set(nSymVal);
+   end;
+  STB_GLOBAL,
+  STB_WEAK  :
+   begin
+    _do_load(nSymVal);
+   end;
+  else
+   begin
+    Writeln(StdErr,'invalid sym bingding ',__nBind(Info^.sBind));
+    Assert(False);
+   end;
  end;
 
 end;
@@ -1947,10 +1917,15 @@ end;
 
 Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
+var
+ nSymVal:Pointer;
+ Import:Boolean;
+
  procedure _do_set(nSymVal:Pointer); inline;
  begin
   if (Info^.Offset<>0) then
   begin
+   Assert(Info^.Offset<elf.mMap.nSize);
    PPointer(elf.mMap.pAddr+Info^.Offset)^:=nSymVal;
   end;
  end;
@@ -1958,13 +1933,11 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
  procedure _do_load(nSymVal:Pointer);
  var
   IInfo:TResolveImportInfo;
-
-  Import:Boolean;
+  val:Pointer;
  begin
   Import:=(Info^.shndx=SHN_UNDEF);
 
   if not Import then Exit;
-  Assert(Info^.value=0);
 
   IInfo:=Default(TResolveImportInfo);
 
@@ -1994,7 +1967,7 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    Exit;
   end;
 
-  nSymVal:=nil;
+  val:=nil;
   if (data<>nil) and (PPointer(data)[0]<>nil) and (Info^.Offset<>0) then
   begin
    IInfo.pName :=Info^.pName;
@@ -2002,12 +1975,14 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
    IInfo.rType :=Info^.rType;
    IInfo.sBind :=Info^.sBind;
    IInfo.sType :=Info^.sType;
-   nSymVal:=TResolveImportCb(PPointer(data)[0])(elf,@IInfo,PPointer(data)[1]);
+   val:=TResolveImportCb(PPointer(data)[0])(elf,@IInfo,PPointer(data)[1]);
 
-   if (nSymVal<>nil) then
-   if (Info^.rType=R_X86_64_64) then
+   if (val<>nil) then
    begin
-    nSymVal:=nSymVal+Info^.Addend;
+    nSymVal:=Pointer(ptruint(val)+ptruint(nSymVal));
+   end else
+   begin
+    nSymVal:=nil;
    end;
 
    _do_set(nSymVal);
@@ -2017,79 +1992,64 @@ Procedure OnLoadRelaImport(elf:Telf_file;Info:PRelaInfo;data:Pointer);
 
 begin
 
- Case Info^.sBind of
-  STB_LOCAL :;
-  STB_GLOBAL:;
-  STB_WEAK  :;
-  else
-   Writeln(StdErr,'invalid sym bingding ',Info^.sBind);
- end;
-
  case Info^.rType of
-  R_X86_64_TPOFF64:
-    begin            //tls_offset????
-     Assert(Info^.sBind=STB_LOCAL);
-    end;
 
   R_X86_64_RELATIVE:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       //
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.Addend);
-      end;
-    end;
+    nSymVal:=Pointer(Info^.Addend);
    end;
+
+  R_X86_64_TPOFF64:
+    begin            //tls_offset????
+     nSymVal:=Pointer(elf.pTls.offset+Info^.value+Info^.Addend);
+    end;
 
   R_X86_64_DTPMOD64:
     begin            //tls_index????
-     Assert(Info^.sBind=STB_LOCAL);
+     nSymVal:=Pointer(elf.pTls.index);
     end;
 
   R_X86_64_DTPOFF64:  //tls
     begin
-     Assert(Info^.sBind=STB_LOCAL);
+     nSymVal:=Pointer(Info^.value+Info^.Addend);
     end;
 
   R_X86_64_JUMP_SLOT,
   R_X86_64_GLOB_DAT:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       //
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.value);
-      end;
-    end;
+    nSymVal:=Pointer(Info^.value);
    end;
 
   R_X86_64_64:
    begin
-    Case Info^.sBind of
-     STB_LOCAL:
-      begin
-       //
-      end;
-     else
-      begin
-       _do_load(elf.mMap.pAddr+Info^.value+Info^.Addend);
-      end;
-    end;
+    nSymVal:=Pointer(Info^.value+Info^.Addend);
    end;
 
   else
    begin
     Writeln(StdErr,'rela type not handled ', __rtype(Info^.rType));
+    Assert(False);
    end;
 
  end;
+
+ Case Info^.sBind of
+  STB_LOCAL :
+   begin
+    //
+   end;
+  STB_GLOBAL,
+  STB_WEAK  :
+   begin
+    _do_load(nSymVal);
+   end;
+  else
+   begin
+    Writeln(StdErr,'invalid sym bingding ',__nBind(Info^.sBind));
+    Assert(False);
+   end;
+ end;
+
 end;
 
 
