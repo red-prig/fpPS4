@@ -87,6 +87,18 @@ begin
  Result:=0;
 end;
 
+function ps4_scePlayGoGetInstallSpeed(
+          handle:Integer;
+          speed:PInteger //ScePlayGoInstallSpeed
+          ):Integer; SysV_ABI_CDecl;
+begin
+ if (speed<>nil) then
+ begin
+  speed^:=0;
+ end;
+ Result:=0;
+end;
+
 function ps4_scePlayGoSetInstallSpeed(
           handle:Integer;
           speed:Integer //ScePlayGoInstallSpeed
@@ -128,6 +140,7 @@ begin
  lib^.set_proc($B6CE8695938A46B1,@ps4_scePlayGoInitialize);
  lib^.set_proc($3351A66B5A1CAC61,@ps4_scePlayGoOpen);
  lib^.set_proc($B962182C5924C2A9,@ps4_scePlayGoGetLocus);
+ lib^.set_proc($AEF0527D38A67A31,@ps4_scePlayGoGetInstallSpeed);
  lib^.set_proc($E0001C4D4F51DD73,@ps4_scePlayGoSetInstallSpeed);
  lib^.set_proc($367EF32B09C0E6AD,@ps4_scePlayGoGetToDoList);
 end;
