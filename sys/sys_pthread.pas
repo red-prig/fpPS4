@@ -150,6 +150,7 @@ type
   name:array[0..31] of AnsiChar;
   //
   errno:QWORD;
+  net_errno:QWORD;
   //
   cleanup:p_pthread_cleanup;
   //

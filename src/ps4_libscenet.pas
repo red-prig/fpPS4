@@ -12,6 +12,9 @@ uses
 
 implementation
 
+uses
+ sys_pthread;
+
 type
  SceNetInAddr_t=DWORD;
 
@@ -29,6 +32,35 @@ type
  SceNetEtherAddr=packed record
   data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
  end;
+
+function _set_net_errno(r:Integer):Integer;
+var
+ t:pthread;
+begin
+ Result:=0;
+
+ t:=tcb_thread;
+ if (t<>nil) then t^.net_errno:=r;
+
+ if (r<>0) then
+ begin
+  Result:=-1;
+ end;
+end;
+
+function _net_error:Pointer;
+var
+ t:pthread;
+begin
+ Result:=nil;
+ t:=tcb_thread;
+ if (t<>nil) then Result:=@t^.net_errno;
+end;
+
+function ps4_sceNetErrnoLoc:Pointer; SysV_ABI_CDecl;
+begin
+ Result:=_net_error;
+end;
 
 function ps4_sceNetInit:Integer; SysV_ABI_CDecl;
 begin
@@ -378,6 +410,7 @@ begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNet');
+ lib^.set_proc($1D03B09DF3068A94,@ps4_sceNetErrnoLoc);
  lib^.set_proc($3657AFECB83C9370,@ps4_sceNetInit);
  lib^.set_proc($7131A473AFD30652,@ps4_sceNetTerm);
  lib^.set_proc($76024169E2671A9A,@ps4_sceNetPoolCreate);
