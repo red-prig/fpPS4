@@ -1286,6 +1286,8 @@ begin
 
  lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
 
+ lib^.set_proc($B19BB06833C04CAB,@ps4_getdtablesize);
+
  //file
 
  px:=Result._add_lib('libScePosix');
