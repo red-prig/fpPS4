@@ -47,6 +47,11 @@ begin
  Result:=0;
 end;
 
+function ps4_scePlayGoClose(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 const
  //ScePlayGoLocusValue
  SCE_PLAYGO_LOCUS_NOT_DOWNLOADED =0;
@@ -139,6 +144,7 @@ begin
  lib:=Result._add_lib('libScePlayGo');
  lib^.set_proc($B6CE8695938A46B1,@ps4_scePlayGoInitialize);
  lib^.set_proc($3351A66B5A1CAC61,@ps4_scePlayGoOpen);
+ lib^.set_proc($51CA352347650E2F,@ps4_scePlayGoClose);
  lib^.set_proc($B962182C5924C2A9,@ps4_scePlayGoGetLocus);
  lib^.set_proc($AEF0527D38A67A31,@ps4_scePlayGoGetInstallSpeed);
  lib^.set_proc($E0001C4D4F51DD73,@ps4_scePlayGoSetInstallSpeed);
