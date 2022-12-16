@@ -417,9 +417,17 @@ const
  _PREPARE_FREE=2;
  _PREPARE_JOIN=3;
 
+procedure SetStackTop(p:Pointer); assembler; nostackframe;
+asm
+ movq %rax,%gs:(8)
+end;
+
 function on_ps4_run_thread(data:pthread):Longint; stdcall;
 type
  Tps4entry=function(arg:Pointer):Pointer; SysV_ABI_CDecl;
+
+var
+ base:Pointer;
 begin
  Result:=0;
 
@@ -455,13 +463,11 @@ begin
   wait_until_equal(data^.handle,0);
 
   //init static tls in stack top
+  if (Telf_file(ps4_program.ps4_app.prog).pTls.full_size<>0) then
   begin
-   asm
-    movq  %gs:(8)   ,%rax    //-> StackTop
-    lea   -0x8(%rax),%rax    //-> StackTop[-1]
-    movq  %rax      ,%gs:(8) //<- StackTop
-   end;
-   PPointer(StackTop)^:=Telf_file(ps4_program.ps4_app.prog)._get_tls;
+   base:=StackTop-SizeOf(Pointer);
+   SetStackTop(base);
+   PPointer(base)^:=Telf_file(ps4_program.ps4_app.prog)._get_tls;
   end;
   //init static tls in stack top
 
@@ -747,12 +753,14 @@ function ps4_scePthreadGetname(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CD
 begin
  if (_pthread=nil) or (name=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  MoveChar0(_pthread^.name,name^,32);
+ Result:=0;
 end;
 
 function ps4_scePthreadRename(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 begin
  if (_pthread=nil) or (name=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  MoveChar0(name^,_pthread^.name,32);
+ Result:=0;
 end;
 
 function ps4_scePthreadSetaffinity(_pthread:pthread;mask:QWORD):Integer; SysV_ABI_CDecl;
@@ -770,7 +778,7 @@ function GetCurrentProcessorNumber():DWORD; stdcall external 'kernel32';
 function ps4_sceKernelGetCurrentCpu():Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
-Result:=GetCurrentProcessorNumber;
+ Result:=GetCurrentProcessorNumber;
  _sig_unlock;
 end;
 
