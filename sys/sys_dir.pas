@@ -140,7 +140,6 @@ begin
  end;
 
  f:=TDirFile.Create;
- f.status:=flags and O_FL_STATUS;
  f.path:=path;
 
  if (h<>INVALID_HANDLE_VALUE) then
@@ -183,7 +182,7 @@ begin
   Windows.FindClose(h);
  end;
 
- Result:=_sys_open_fd(f);
+ Result:=_sys_open_fd(f,flags);
 
  if (Result<0) then
  begin

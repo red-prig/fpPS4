@@ -214,9 +214,20 @@ type
  end;
 
 function _sys_get_osfhandle(fd:Integer):THandle;
-function _sys_open_fd(f:TCustomFile):Integer;
+function _sys_open_fd(f:TCustomFile;flags:Integer):Integer;
 function _sys_acqure_fd(fd:Integer):TCustomFile;
 function _sys_close(fd:Integer):Integer;
+function _sys_lseek(fd:Integer;offset:Int64;whence:Integer):Int64;
+function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
+function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
+function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
+function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
+function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
+function _sys_ftruncate(fd:Integer;size:Int64):Integer;
+function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
+function _sys_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
+function _sys_fsync(fd:Integer):Integer;
+function _sys_fcntl(fd,cmd:Integer;param1:ptruint):Integer;
 
 implementation
 
@@ -309,12 +320,13 @@ begin
  end;
 end;
 
-function _sys_open_fd(f:TCustomFile):Integer;
+function _sys_open_fd(f:TCustomFile;flags:Integer):Integer;
 begin
  if (f=nil) then Exit(-EINVAL);
  if FileHandles.New(f,Result) then
  begin
   f.fd:=Result;
+  f.status:=flags and O_FL_STATUS;
  end else
  begin
   Result:=-EMFILE;
@@ -331,6 +343,228 @@ begin
  Result:=0;
  if (fd<0) then Exit(EINVAL);
  if not FileHandles.Delete(fd) then Exit(EBADF);
+end;
+
+function _sys_lseek(fd:Integer;offset:Int64;whence:Integer):Int64;
+var
+ f:TCustomFile;
+begin
+ Result:=0;
+ if (fd<0) then Exit(-EINVAL);
+
+ case whence of
+  SEEK_SET,
+  SEEK_CUR,
+  SEEK_END:;
+  else
+   Exit(-EINVAL);
+ end;
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.lseek(offset,whence);
+
+ f.Release;
+end;
+
+function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
+ if (size<=0) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.read(data,size);
+
+ f.Release;
+end;
+
+function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
+ if (size<=0) then Exit(-EINVAL);
+ if (offset<0) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.pread(data,size,offset);
+
+ f.Release;
+end;
+
+function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
+var
+ f:TCustomFile;
+ i:Integer;
+begin
+ if (fd<0) then Exit(-EINVAL);
+ if (vector=nil) then Exit(-EFAULT);
+ if (count<=0) then Exit(-EINVAL);
+
+ For i:=0 to count-1 do
+ begin
+  if (vector[i].iov_base=nil) then Exit(-EFAULT);
+  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
+ end;
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.readv(vector,count);
+
+ f.Release;
+end;
+
+function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
+ if (size<=0) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.write(data,size);
+
+ f.Release;
+end;
+
+function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+
+ if (size=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (data=nil) then Exit(-EFAULT);
+ if (size<=0) then Exit(-EINVAL);
+ if (offset<0) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.pwrite(data,size,offset);
+
+ f.Release;
+end;
+
+function _sys_ftruncate(fd:Integer;size:Int64):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+ if (size<=0) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.ftruncate(size);
+
+ f.Release;
+end;
+
+function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+ if (stat=nil) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.fstat(stat);
+
+ f.Release;
+end;
+
+function _sys_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+ if (buf=nil) then Exit(-EFAULT);
+ if (nbytes<=0) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.getdirentries(buf,nbytes,basep);
+
+ f.Release;
+end;
+
+function _sys_fsync(fd:Integer):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.fsync;
+
+ f.Release;
+end;
+
+function _sys_fcntl(fd,cmd:Integer;param1:ptruint):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.fcntl(cmd,param1);
+
+ f.Release;
 end;
 
 //

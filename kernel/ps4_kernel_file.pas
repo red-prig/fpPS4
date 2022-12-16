@@ -178,29 +178,6 @@ begin
  Result:=px2sce(Result);
 end;
 
-function _sys_lseek(fd:Integer;offset:Int64;whence:Integer):Int64;
-var
- f:TCustomFile;
-begin
- Result:=0;
- if (fd<0) then Exit(-EINVAL);
-
- case whence of
-  SEEK_SET,
-  SEEK_CUR,
-  SEEK_END:;
-  else
-   Exit(-EINVAL);
- end;
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.lseek(offset,whence);
-
- f.Release;
-end;
-
 function ps4_lseek(fd:Integer;offset:Int64;whence:Integer):Int64; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -231,31 +208,6 @@ begin
  begin
   _set_errno(0);
  end;
-end;
-
-function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(-EINVAL);
-
- if (size=0) then //zero check
- begin
-  f:=_sys_acqure_fd(fd);
-  if (f=nil) then Exit(-EBADF);
-  f.Release;
-  Exit(0);
- end;
-
- if (data=nil) then Exit(-EFAULT);
- if (size<=0) then Exit(-EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.read(data,size);
-
- f.Release;
 end;
 
 function ps4_read(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
@@ -290,32 +242,6 @@ begin
  end;
 end;
 
-function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(-EINVAL);
-
- if (size=0) then //zero check
- begin
-  f:=_sys_acqure_fd(fd);
-  if (f=nil) then Exit(-EBADF);
-  f.Release;
-  Exit(0);
- end;
-
- if (data=nil) then Exit(-EFAULT);
- if (size<=0) then Exit(-EINVAL);
- if (offset<0) then Exit(-EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.pread(data,size,offset);
-
- f.Release;
-end;
-
 function ps4_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -346,29 +272,6 @@ begin
  begin
   _set_errno(0);
  end;
-end;
-
-function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
-var
- f:TCustomFile;
- i:Integer;
-begin
- if (fd<0) then Exit(-EINVAL);
- if (vector=nil) then Exit(-EFAULT);
- if (count<=0) then Exit(-EINVAL);
-
- For i:=0 to count-1 do
- begin
-  if (vector[i].iov_base=nil) then Exit(-EFAULT);
-  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
- end;
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.readv(vector,count);
-
- f.Release;
 end;
 
 function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
@@ -403,31 +306,6 @@ begin
  end;
 end;
 
-function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(-EINVAL);
-
- if (size=0) then //zero check
- begin
-  f:=_sys_acqure_fd(fd);
-  if (f=nil) then Exit(-EBADF);
-  f.Release;
-  Exit(0);
- end;
-
- if (data=nil) then Exit(-EFAULT);
- if (size<=0) then Exit(-EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.write(data,size);
-
- f.Release;
-end;
-
 function ps4_write(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -458,32 +336,6 @@ begin
  begin
   _set_errno(0);
  end;
-end;
-
-function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(-EINVAL);
-
- if (size=0) then //zero check
- begin
-  f:=_sys_acqure_fd(fd);
-  if (f=nil) then Exit(-EBADF);
-  f.Release;
-  Exit(0);
- end;
-
- if (data=nil) then Exit(-EFAULT);
- if (size<=0) then Exit(-EINVAL);
- if (offset<0) then Exit(-EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.pwrite(data,size,offset);
-
- f.Release;
 end;
 
 function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
@@ -518,21 +370,6 @@ begin
  end;
 end;
 
-function _sys_ftruncate(fd:Integer;size:Int64):Integer;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(EINVAL);
- if (size<=0) then Exit(EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(EBADF);
-
- Result:=f.ftruncate(size);
-
- f.Release;
-end;
-
 function ps4_ftruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -550,21 +387,6 @@ begin
  Result:=px2sce(Result);
 end;
 
-function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(EINVAL);
- if (stat=nil) then Exit(EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(EBADF);
-
- Result:=f.fstat(stat);
-
- f.Release;
-end;
-
 function ps4_fstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -580,22 +402,6 @@ begin
 
  _set_errno(Result);
  Result:=px2sce(Result);
-end;
-
-function _sys_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(-EINVAL);
- if (buf=nil) then Exit(-EFAULT);
- if (nbytes<=0) then Exit(-EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(-EBADF);
-
- Result:=f.getdirentries(buf,nbytes,basep);
-
- f.Release;
 end;
 
 function ps4_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64; SysV_ABI_CDecl;
@@ -662,20 +468,6 @@ begin
  end;
 end;
 
-function _sys_fsync(fd:Integer):Integer;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(EBADF);
-
- Result:=f.fsync;
-
- f.Release;
-end;
-
 function ps4_fsync(fd:Integer):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -691,20 +483,6 @@ begin
 
  _set_errno(Result);
  Result:=px2sce(Result);
-end;
-
-function _sys_fcntl(fd,cmd:Integer;param1:ptruint):Integer;
-var
- f:TCustomFile;
-begin
- if (fd<0) then Exit(EINVAL);
-
- f:=_sys_acqure_fd(fd);
- if (f=nil) then Exit(EBADF);
-
- Result:=f.fcntl(cmd,param1);
-
- f.Release;
 end;
 
 function ps4_fcntl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;

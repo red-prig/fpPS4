@@ -127,7 +127,6 @@ begin
 
  f:=TFile.Create;
  f.Handle:=h;
- f.status:=flags and O_FL_STATUS;
 end;
 
 function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
@@ -138,7 +137,7 @@ begin
  Result:=__sys_file_open(path,flags,mode,f);
  if (Result<>0) then Exit;
 
- Result:=_sys_open_fd(f);
+ Result:=_sys_open_fd(f,flags);
 
  if (Result<0) then
  begin

@@ -74,9 +74,7 @@ begin
    Exit(-ENOENT);
  end;
 
- f.status:=flags and O_FL_STATUS;
-
- Result:=_sys_open_fd(f);
+ Result:=_sys_open_fd(f,flags);
 
  if (Result<0) then
  begin
