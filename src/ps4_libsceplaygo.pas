@@ -95,6 +95,28 @@ begin
  Result:=0;
 end;
 
+type
+ pScePlayGoToDo=^ScePlayGoToDo;
+ ScePlayGoToDo=packed record
+  chunkId:ScePlayGoChunkId;
+  locus:ScePlayGoLocus;
+  reserved:Byte;
+ end;
+
+function ps4_scePlayGoGetToDoList(
+          handle:Integer;
+          outTodoList:pScePlayGoToDo;
+          numberOfEntries:DWORD;
+          outEntries:PDWORD
+          ):Integer; SysV_ABI_CDecl;
+begin
+ if (outEntries<>nil) then
+ begin
+  outEntries^:=0;
+ end;
+ Result:=0;
+end;
+
 function Load_libScePlayGo(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -107,6 +129,7 @@ begin
  lib^.set_proc($3351A66B5A1CAC61,@ps4_scePlayGoOpen);
  lib^.set_proc($B962182C5924C2A9,@ps4_scePlayGoGetLocus);
  lib^.set_proc($E0001C4D4F51DD73,@ps4_scePlayGoSetInstallSpeed);
+ lib^.set_proc($367EF32B09C0E6AD,@ps4_scePlayGoGetToDoList);
 end;
 
 initialization
