@@ -152,6 +152,9 @@ const
  SCE_KERNEL_LWFS_DISABLE =(0);
  SCE_KERNEL_LWFS_ENABLE  =(1);
 
+ //fcntl
+ O_FL_STATUS=O_NONBLOCK or O_APPEND or O_DIRECT {or O_ASYNC} or O_SYNC or O_DSYNC;
+
 type
  p_iovec=^iovec;
  iovec=packed record
@@ -195,6 +198,7 @@ type
  TCustomFile=class(TClassHandle)
   var
    fd:Integer;
+   status:Integer;
    Handle:THandle;
   function lseek        (offset:Int64;whence:Integer):Int64;           virtual;
   function read         (data:Pointer;size:Int64):Int64;               virtual;
@@ -205,6 +209,7 @@ type
   function ftruncate    (size:Int64):Integer;                          virtual;
   function fstat        (stat:PSceKernelStat):Integer;                 virtual;
   function fsync        ():Integer;                                    virtual;
+  function fcntl        (cmd:Integer;param1:ptruint):Integer;          virtual;
   function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; virtual;
  end;
 
@@ -263,6 +268,25 @@ end;
 function TCustomFile.fsync:Integer;
 begin
  Result:=EINVAL;
+end;
+
+function TCustomFile.fcntl(cmd:Integer;param1:ptruint):Integer;
+begin
+ Case cmd of
+  F_GETFL:
+   begin
+    Result:=status;
+   end;
+  F_SETFL:
+   begin
+    status:=Integer(param1) and O_FL_STATUS;
+   end;
+  else
+   begin
+    Assert(false,'fcntl:'+IntToStr(cmd));
+    Exit(EINVAL);
+   end;
+ end;
 end;
 
 function TCustomFile.getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;

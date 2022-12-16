@@ -33,6 +33,7 @@ type
   function ftruncate(size:Int64):Integer;                   override;
   function fstat    (stat:PSceKernelStat):Integer;          override;
   function fsync    ():Integer;                             override;
+  function fcntl    (cmd:Integer;param1:ptruint):Integer;   override;
  end;
 
 Function get_DesiredAccess(flags:Integer):DWORD;
@@ -126,6 +127,7 @@ begin
 
  f:=TFile.Create;
  f.Handle:=h;
+ f.status:=flags and O_FL_STATUS;
 end;
 
 function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
@@ -464,6 +466,25 @@ begin
      Exit(EIO);
   end;
  end;
+end;
+
+function TFile.fcntl(cmd:Integer;param1:ptruint):Integer;
+begin
+ Case cmd of
+  F_SETFL:
+   begin
+    if (Integer(param1) and O_NONBLOCK)<>(status and O_NONBLOCK) then
+    begin
+     Writeln(StdErr,'fcntl:O_NONBLOCK:TODO');
+    end;
+    if (Integer(param1) and O_APPEND)<>(status and O_APPEND) then
+    begin
+     Writeln(StdErr,'fcntl:O_APPEND:TODO');
+    end;
+   end;
+  else;
+ end;
+ Result:=inherited;
 end;
 
 //

@@ -1236,6 +1236,7 @@ begin
  lib^.set_proc($B5A4568532454E01,@ps4_sceKernelGetdirentries);
  lib^.set_proc($8F6008A92A893F4C,@ps4_sceKernelGetdents);
  lib^.set_proc($7D3C7AEA5E625880,@ps4_sceKernelFsync);
+ lib^.set_proc($4A8664C599021DAC,@ps4_sceKernelFcntl);
 
  lib^.set_proc($C2E0ABA081A3B768,@ps4_open);  //open
  lib^.set_proc($E9CDEB09513F7D35,@ps4_open);  //_open
@@ -1263,7 +1264,10 @@ begin
 
  lib^.set_proc($7F4F4ABC83F2FD06,@ps4_getdirentries);
  lib^.set_proc($D86EA2EA13085146,@ps4_getdents);
+
  lib^.set_proc($8EE59B4CD33EF21C,@ps4_fsync);
+
+ lib^.set_proc($F27635F5B2A88999,@ps4_fcntl);
 
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);

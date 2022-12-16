@@ -140,6 +140,7 @@ begin
  end;
 
  f:=TDirFile.Create;
+ f.status:=flags and O_FL_STATUS;
  f.path:=path;
 
  if (h<>INVALID_HANDLE_VALUE) then
