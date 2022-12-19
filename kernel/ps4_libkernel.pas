@@ -1286,6 +1286,8 @@ begin
 
  lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
 
+ lib^.set_proc($F2F13A67A5446329,@ps4_access);
+
  lib^.set_proc($B19BB06833C04CAB,@ps4_getdtablesize);
 
  //file

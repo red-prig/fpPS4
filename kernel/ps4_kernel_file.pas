@@ -72,6 +72,8 @@ function ps4_sceKernelRename(from,pto:PChar):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 
+function ps4_access(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+
 function ps4_getdtablesize:Integer; SysV_ABI_CDecl;
 
 implementation
@@ -946,6 +948,7 @@ end;
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 var
  fn:RawByteString;
+ ex:Boolean;
 begin
  Result:=0;
 
@@ -970,7 +973,11 @@ begin
           Exit(_set_sce_errno(SCE_KERNEL_ERROR_EACCES));
  end;
 
- if FileExists(fn) or DirectoryExists(fn) then
+ _sig_lock;
+ ex:=FileExists(fn) or DirectoryExists(fn);
+ _sig_unlock;
+
+ if ex then
  begin
   Result:=0;
   _set_errno(0);
@@ -979,6 +986,61 @@ begin
   Result:=_set_sce_errno(SCE_KERNEL_ERROR_ENOENT);
  end;
 
+end;
+
+//access function
+const
+ F_OK = $00; // test for existence of file
+ X_OK = $01; // test for execute or search permission
+ W_OK = $02; // test for write permission
+ R_OK = $04; // test for read permission
+
+ A_ALL=F_OK or X_OK or W_OK or R_OK;
+
+function sys_access(path:PChar;mode:Integer):Integer;
+var
+ fn:RawByteString;
+begin
+ Result:=0;
+
+ if (path=nil) then Exit(EFAULT);
+
+ if (path[0]=#0) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ if ((mode and (not A_ALL))<>0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ fn:='';
+ Result:=parse_filename(path,fn);
+
+ Case Result of
+  PT_ROOT:Exit(0);
+  PT_FILE:;
+  PT_DEV :Exit(0);
+  else
+          Exit(EACCES);
+ end;
+
+ if FileExists(fn) or DirectoryExists(fn) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=ENOENT;
+ end;
+
+end;
+
+function ps4_access(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(sys_access(path,mode));
+ _sig_unlock;
 end;
 
 function ps4_getdtablesize:Integer; SysV_ABI_CDecl;
