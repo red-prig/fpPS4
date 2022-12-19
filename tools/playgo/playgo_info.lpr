@@ -144,27 +144,20 @@ type
   inner_mchunk_attrs:p_playgo_mchunk_attr_desc;
  end;
 
+ bits2 =0..((1 shl  2)-1);
  bits4 =0..((1 shl  4)-1);
  bits48=0..((1 shl 48)-1);
 
- t_playgo_chunk_loc=packed record
-  Case Byte of
-   0:(bits:bitpacked record
-       offset:bits48;
-       _align1:Byte;
-       image_no:bits4;
-       _align2:bits4;
-      end);
-   1:(raw:QWORD);
+ t_playgo_chunk_loc=bitpacked record
+  offset:bits48;
+  _align1:Byte;
+  image_no:bits4;
+  _align2:bits4;
  end;
 
- t_playgo_chunk_size=packed record
-  Case Byte of
-   0:(bits:bitpacked record
-       size:bits48;
-       _align:Word;
-      end);
-   1:(raw:QWORD);
+ t_playgo_chunk_size=bitpacked record
+  size:bits48;
+  _align:Word;
  end;
 
  t_chunk=packed record
@@ -224,20 +217,26 @@ type
   _unk:array[0..18] of Byte;
   initial_chunk_count:WORD;
   chunk_count  :WORD;
-  chunks_offset:DWORD;
-  label_offset :DWORD;
+  chunks_offset:DWORD;       //<-scenario_chunks
+  label_offset :DWORD;       //<-scenario_labels
+ end;
+
+ t_image_disc_layer_no=bitpacked record
+  layer_no:bits2;
+  disc_no :bits2;
+  image_no:bits4;
  end;
 
  p_playgo_chunk_attr_entry=^t_playgo_chunk_attr_entry;
  t_playgo_chunk_attr_entry=packed record
   flag:Byte;
-  image_disc_layer_no:Byte;
+  image_disc_layer_no:t_image_disc_layer_no;
   req_locus:Byte;
-  unk:array[0..10] of Char;
+  unk:array[0..10] of Byte;
   mchunk_count:Word;
   language_mask:QWORD;
-  mchunks_offset:DWORD;
-  label_offset:DWORD;
+  mchunks_offset:DWORD;     //<-chunk_mchunks
+  label_offset:DWORD;       //<-chunk_labels
  end;
 
  p_playgo_mchunk_attr_entry=^t_playgo_mchunk_attr_entry;
@@ -297,8 +296,8 @@ end;
 function get_str_scenario_type(_type:Byte):RawByteString;
 begin
  Case _type of
-  PLAYGO_SCENARIO_TYPE_SP:Result:='sp';
-  PLAYGO_SCENARIO_TYPE_MP:Result:='mp';
+  PLAYGO_SCENARIO_TYPE_SP:Result:='Singleplayer';
+  PLAYGO_SCENARIO_TYPE_MP:Result:='Multiplayer';
   PLAYGO_SCENARIO_TYPE_USER_00..$FF:
     begin
      Result:='User-defined Scenario #'+IntTostr(_type-PLAYGO_SCENARIO_TYPE_USER_00+1);
@@ -308,11 +307,23 @@ begin
  end;
 end;
 
+function get_str_req_locus(req_locus:Byte):RawByteString;
+begin
+ Case req_locus of
+  PLAYGO_LOCUS_NOT_DOWNLOADED:Result:='Not downloaded';
+  PLAYGO_LOCUS_LOCAL_SLOW    :Result:='Slow';
+  PLAYGO_LOCUS_LOCAL_FAST    :Result:='Fast';
+  else
+   Result:=IntToStr(req_locus);
+ end;
+end;
+
 function LoadPlaygoFile(Const name:RawByteString):Boolean;
 Var
  F:THandle;
 
  i,count:DWORD;
+ x,ofs,chunk_count:DWORD;
 
  hdr:t_playgo_header;
 
@@ -349,7 +360,7 @@ begin
 
  FileRead(F,hdr,SizeOf(hdr));
 
- Writeln('magic                    :0x',HexStr(hdr.magic,8));
+ Writeln('magic              :0x',HexStr(hdr.magic,8));
 
  if (hdr.magic<>PLAYGO_MAGIC) then
  begin
@@ -358,33 +369,35 @@ begin
   Exit;
  end;
 
- Writeln('version                  :0x',HexStr((hdr.version_major),4),'.0x',HexStr(hdr.version_minor,4));
- Writeln('image_count              :',hdr.image_count              );
- Writeln('chunk_count              :',hdr.chunk_count              );
- Writeln('mchunk_count             :',hdr.mchunk_count             );
- Writeln('scenario_count           :',hdr.scenario_count           );
- Writeln('file_size                :',hdr.file_size                );
- Writeln('default_scenario_id      :',hdr.default_scenario_id      );
- Writeln('attrib                   :',hdr.attrib                   );
- Writeln('sdk_version              :0x',HexStr(hdr.sdk_version,8)  );
- Writeln('disc_count               :',hdr.disc_count               );
- Writeln('layer_bmp                :',hdr.layer_bmp                );
- Writeln('content_id               :',hdr.content_id               );
- Writeln('chunk_attrs              :',get_str_t_chunk(hdr.chunk_attrs       ));
- Writeln('chunk_mchunks            :',get_str_t_chunk(hdr.chunk_mchunks     ));
- Writeln('chunk_labels             :',get_str_t_chunk(hdr.chunk_labels      ));
- Writeln('mchunk_attrs             :',get_str_t_chunk(hdr.mchunk_attrs      ));
- Writeln('scenario_attrs           :',get_str_t_chunk(hdr.scenario_attrs    ));
- Writeln('scenario_chunks          :',get_str_t_chunk(hdr.scenario_chunks   ));
- Writeln('scenario_labels          :',get_str_t_chunk(hdr.scenario_labels   ));
- Writeln('inner_mchunk_attrs       :',get_str_t_chunk(hdr.inner_mchunk_attrs));
+ Writeln('version            :0x',HexStr((hdr.version_major),4),'.0x',HexStr(hdr.version_minor,4));
+ Writeln('image_count        :',hdr.image_count              );
+ Writeln('chunk_count        :',hdr.chunk_count              );
+ Writeln('mchunk_count       :',hdr.mchunk_count             );
+ Writeln('scenario_count     :',hdr.scenario_count           );
+ Writeln('file_size          :',hdr.file_size                );
+ Writeln('default_scenario_id:',hdr.default_scenario_id      );
+ Writeln('attrib             :',hdr.attrib                   );
+ Writeln('sdk_version        :0x',HexStr(hdr.sdk_version,8)  );
+ Writeln('disc_count         :',hdr.disc_count               );
+ Writeln('layer_bmp          :',hdr.layer_bmp                );
+ Writeln('content_id         :',hdr.content_id               );
+ Writeln('chunk_attrs        :',get_str_t_chunk(hdr.chunk_attrs       ));
+ Writeln('chunk_mchunks      :',get_str_t_chunk(hdr.chunk_mchunks     ));
+ Writeln('chunk_labels       :',get_str_t_chunk(hdr.chunk_labels      ));
+ Writeln('mchunk_attrs       :',get_str_t_chunk(hdr.mchunk_attrs      ));
+ Writeln('scenario_attrs     :',get_str_t_chunk(hdr.scenario_attrs    ));
+ Writeln('scenario_chunks    :',get_str_t_chunk(hdr.scenario_chunks   ));
+ Writeln('scenario_labels    :',get_str_t_chunk(hdr.scenario_labels   ));
+ Writeln('inner_mchunk_attrs :',get_str_t_chunk(hdr.inner_mchunk_attrs));
 
  scenario_attrs    :=load_chunk(hdr.scenario_attrs);
  scenario_chunks   :=load_chunk(hdr.scenario_chunks);
  scenario_labels   :=load_chunk(hdr.scenario_labels);
+
  chunk_attrs       :=load_chunk(hdr.chunk_attrs);;
  chunk_mchunks     :=load_chunk(hdr.chunk_mchunks);
  chunk_labels      :=load_chunk(hdr.chunk_labels);
+
  mchunk_attrs      :=load_chunk(hdr.mchunk_attrs);
  inner_mchunk_attrs:=load_chunk(hdr.inner_mchunk_attrs);
 
@@ -401,7 +414,19 @@ begin
    Writeln(' chunk_count        :',scenario_attrs[i].chunk_count        );
    Writeln(' chunks_offset      :',scenario_attrs[i].chunks_offset      );
    Writeln(' label_offset       :',scenario_attrs[i].label_offset       );
-   Writeln(' label              :',PChar(scenario_labels+scenario_attrs[i].label_offset))
+   Writeln(' label              :',PChar(scenario_labels+scenario_attrs[i].label_offset));
+
+   chunk_count:=scenario_attrs[i].chunk_count;
+   if (chunk_count<>0) then
+   begin
+    ofs:=scenario_attrs[i].chunks_offset;
+    For x:=0 to chunk_count-1 do
+    begin
+     Writeln(' [chunk]:',x);
+     Writeln('  0x',HexStr(PWord(Pointer(scenario_chunks)+ofs)[x],4));
+    end;
+   end;
+
   end;
  end;
 
@@ -413,18 +438,64 @@ begin
   For i:=0 to count-1 do
   begin
    Writeln('[chunk_attrs]:',i);
-   Writeln(' flag               :',chunk_attrs[i].flag               );
-   Writeln(' image_no           :',(chunk_attrs[i].image_disc_layer_no shl 4) and $F);
-   Writeln(' disc_no            :',(chunk_attrs[i].image_disc_layer_no shl 2) and $3);
-   Writeln(' layer_no           :',(chunk_attrs[i].image_disc_layer_no shl 0) and $3);
-   Writeln(' req_locus          :',chunk_attrs[i].req_locus          );
-   Writeln(' mchunk_count       :',chunk_attrs[i].mchunk_count       );
-   Writeln(' language_mask      :0x',HexStr(chunk_attrs[i].language_mask,16));
-   Writeln(' mchunks_offset     :',chunk_attrs[i].mchunks_offset     );
-   Writeln(' label_offset       :',chunk_attrs[i].label_offset       );
-   Writeln(' label              :',PChar(chunk_labels+chunk_attrs[i].label_offset))
+   Writeln(' flag          :0x',HexStr(chunk_attrs[i].flag,2));
+   Writeln(' image_no      :',chunk_attrs[i].image_disc_layer_no.image_no);
+   Writeln(' disc_no       :',chunk_attrs[i].image_disc_layer_no.disc_no);
+   Writeln(' layer_no      :',chunk_attrs[i].image_disc_layer_no.layer_no);
+   Writeln(' req_locus     :',get_str_req_locus(chunk_attrs[i].req_locus));
+   Writeln(' mchunk_count  :',chunk_attrs[i].mchunk_count       );
+   Writeln(' language_mask :0x',HexStr(chunk_attrs[i].language_mask,16));
+   Writeln(' mchunks_offset:',chunk_attrs[i].mchunks_offset     );
+   Writeln(' label_offset  :',chunk_attrs[i].label_offset       );
+   Writeln(' label         :',PChar(chunk_labels+chunk_attrs[i].label_offset));
+
+   chunk_count:=chunk_attrs[i].mchunk_count;
+   if (chunk_count<>0) then
+   begin
+    ofs:=chunk_attrs[i].mchunks_offset;
+    For x:=0 to chunk_count-1 do
+    begin
+     Writeln(' [chunk]:',x);
+     Writeln('  0x',HexStr(PWord(Pointer(chunk_mchunks)+ofs)[x],4));
+    end;
+   end;
+
   end;
  end;
+
+ count:=hdr.mchunk_attrs.size div SizeOf(t_playgo_mchunk_attr_entry);
+ if (count<>0) then
+ begin
+  For i:=0 to count-1 do
+  begin
+   Writeln('[chunk_attrs]:',i);
+   Writeln(' image_no:',mchunk_attrs[i].loc.image_no);
+   Writeln(' offset  :',mchunk_attrs[i].loc.offset);
+   Writeln(' size    :',mchunk_attrs[i].size.size);
+  end;
+ end;
+
+ count:=hdr.inner_mchunk_attrs.size div SizeOf(t_playgo_mchunk_attr_entry);
+ if (count<>0) then
+ begin
+  For i:=0 to count-1 do
+  begin
+   Writeln('[inner_mchunk_attrs]:',i);
+   Writeln(' offset  :',inner_mchunk_attrs[i].loc.offset);
+   Writeln(' size    :',inner_mchunk_attrs[i].size.size);
+  end;
+ end;
+
+ FreeMem(scenario_attrs    );
+ FreeMem(scenario_chunks   );
+ FreeMem(scenario_labels   );
+
+ FreeMem(chunk_attrs       );
+ FreeMem(chunk_mchunks     );
+ FreeMem(chunk_labels      );
+
+ FreeMem(mchunk_attrs      );
+ FreeMem(inner_mchunk_attrs);
 
  FileClose(F);
 end;
