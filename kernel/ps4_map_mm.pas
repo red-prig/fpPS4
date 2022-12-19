@@ -401,9 +401,7 @@ end;
 function _test_mtype(mtype:Integer):Boolean; inline;
 begin
  Case mtype of
-  SCE_KERNEL_WB_ONION ,
-  SCE_KERNEL_WC_GARLIC,
-  SCE_KERNEL_WB_GARLIC:Result:=True;
+  SCE_KERNEL_WB_ONION..SCE_KERNEL_WB_GARLIC:Result:=True;
   else
    Result:=False;
  end;
