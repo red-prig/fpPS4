@@ -160,21 +160,21 @@ begin
  fd:=ps4_open(path,0,0);
  if (fd=-1) then
  begin
-  Writeln(StdErr,'Error open playgo chunk file!');
+  Writeln(StdErr,'Error open:',path);
   Exit;
  end;
 
  hdr:=Default(t_playgo_header);
  if (ps4_read(fd,@hdr,SizeOf(hdr))<>SizeOf(hdr)) then
  begin
-  Writeln(StdErr,'Error read playgo chunk file!');
+  Writeln(StdErr,'Error read:',path);
   ps4_close(fd);
   Exit;
  end;
 
  if (hdr.magic<>PLAYGO_MAGIC) then
  begin
-  Writeln(StdErr,'Invalid playgo chunk file!');
+  Writeln(StdErr,'Invalid file:',path);
   ps4_close(fd);
   Exit;
  end;
@@ -189,7 +189,7 @@ begin
     (chunk_labels=nil) or
     (mchunk_attrs=nil) then
  begin
-  Writeln(StdErr,'Error read playgo chunk file!');
+  Writeln(StdErr,'Error read:',path);
 
   FreeMem(chunk_attrs  );
   FreeMem(chunk_mchunks);
