@@ -10,14 +10,6 @@ uses
   windows,
   ps4_program;
 
-implementation
-
-uses
- sys_types,
- sys_kernel,
- sys_signal,
- sys_time;
-
 const
  SCE_SYSTEM_SERVICE_PARAM_ID_LANG                =1;
  SCE_SYSTEM_SERVICE_PARAM_ID_DATE_FORMAT         =2;
@@ -100,6 +92,16 @@ const
  //
  SCE_SYSTEM_PARAM_ENTER_BUTTON_ASSIGN_CIRCLE=0;
  SCE_SYSTEM_PARAM_ENTER_BUTTON_ASSIGN_CROSS =1;
+
+function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer; SysV_ABI_CDecl;
+
+implementation
+
+uses
+ sys_types,
+ sys_kernel,
+ sys_signal,
+ sys_time;
 
 function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer; SysV_ABI_CDecl;
 var
