@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="100">
+    <Units Count="99">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -335,129 +335,124 @@
         <UnitName Value="ps4_libScePad"/>
       </Unit72>
       <Unit73>
-        <Filename Value="src\ps4_libsceplaygo.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libScePlayGo"/>
-      </Unit73>
-      <Unit74>
         <Filename Value="src\ps4_libsceremoteplay.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit74>
-      <Unit75>
+      </Unit73>
+      <Unit74>
         <Filename Value="src\ps4_libscertc.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRtc"/>
-      </Unit75>
-      <Unit76>
+      </Unit74>
+      <Unit75>
         <Filename Value="src\ps4_libscesavedata.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceSaveData"/>
-      </Unit76>
-      <Unit77>
+      </Unit75>
+      <Unit76>
         <Filename Value="src\ps4_libscesystemservice.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceSystemService"/>
-      </Unit77>
-      <Unit78>
+      </Unit76>
+      <Unit77>
         <Filename Value="src\ps4_libsceuserservice.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceUserService"/>
-      </Unit78>
-      <Unit79>
+      </Unit77>
+      <Unit78>
         <Filename Value="src\ps4_libscevideoout.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVideoOut"/>
-      </Unit79>
-      <Unit80>
+      </Unit78>
+      <Unit79>
         <Filename Value="src\ajm\ajm_error.inc"/>
         <IsPartOfProject Value="True"/>
-      </Unit80>
-      <Unit81>
+      </Unit79>
+      <Unit80>
         <Filename Value="src\ajm\ps4_libsceajm.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAjm"/>
-      </Unit81>
-      <Unit82>
+      </Unit80>
+      <Unit81>
         <Filename Value="src\audio\libportaudio.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit82>
-      <Unit83>
+      </Unit81>
+      <Unit82>
         <Filename Value="src\audio\ps4_libsceaudioout.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAudioOut"/>
-      </Unit83>
-      <Unit84>
+      </Unit82>
+      <Unit83>
         <Filename Value="src\np\ps4_libscenpmanager.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpManager"/>
-      </Unit84>
-      <Unit85>
+      </Unit83>
+      <Unit84>
         <Filename Value="src\np\ps4_libscenpmatching2.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit85>
-      <Unit86>
+      </Unit84>
+      <Unit85>
         <Filename Value="src\np\ps4_libscenpscore.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpScore"/>
-      </Unit86>
-      <Unit87>
+      </Unit85>
+      <Unit86>
         <Filename Value="src\np\ps4_libscenpsignaling.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpSignaling"/>
-      </Unit87>
-      <Unit88>
+      </Unit86>
+      <Unit87>
         <Filename Value="src\np\ps4_libscenptrophy.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpTrophy"/>
+      </Unit87>
+      <Unit88>
+        <Filename Value="sys\signal.inc"/>
+        <IsPartOfProject Value="True"/>
       </Unit88>
       <Unit89>
-        <Filename Value="sys\signal.inc"/>
+        <Filename Value="sys\sys_context.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit89>
       <Unit90>
-        <Filename Value="sys\sys_context.pas"/>
+        <Filename Value="rtl\mmap.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit90>
       <Unit91>
-        <Filename Value="rtl\mmap.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit91>
-      <Unit92>
         <Filename Value="src\ps4_libscescreenshot.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceScreenShot"/>
+      </Unit91>
+      <Unit92>
+        <Filename Value="sys\sys_path.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit92>
       <Unit93>
-        <Filename Value="sys\sys_path.pas"/>
+        <Filename Value="kernel\ps4_mspace.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit93>
       <Unit94>
-        <Filename Value="kernel\ps4_mspace.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit94>
-      <Unit95>
         <Filename Value="src\ps4_libscerudp.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRudp"/>
-      </Unit95>
-      <Unit96>
+      </Unit94>
+      <Unit95>
         <Filename Value="src\ps4_libscevoice.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVoice"/>
-      </Unit96>
-      <Unit97>
+      </Unit95>
+      <Unit96>
         <Filename Value="shaders\shaders.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit97>
-      <Unit98>
+      </Unit96>
+      <Unit97>
         <Filename Value="src\ps4_libscerandom.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRandom"/>
-      </Unit98>
-      <Unit99>
+      </Unit97>
+      <Unit98>
         <Filename Value="kernel\ps4_pthread_key.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit99>
+      </Unit98>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -469,7 +464,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;shaders"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
