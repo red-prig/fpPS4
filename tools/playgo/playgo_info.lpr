@@ -422,8 +422,7 @@ begin
     ofs:=scenario_attrs[i].chunks_offset;
     For x:=0 to chunk_count-1 do
     begin
-     Writeln(' [chunk]:',x);
-     Writeln('  0x',HexStr(PWord(Pointer(scenario_chunks)+ofs)[x],4));
+     Writeln(' [chunk]:',PWord(Pointer(scenario_chunks)+ofs)[x]);
     end;
    end;
 
@@ -455,8 +454,7 @@ begin
     ofs:=chunk_attrs[i].mchunks_offset;
     For x:=0 to chunk_count-1 do
     begin
-     Writeln(' [chunk]:',x);
-     Writeln('  0x',HexStr(PWord(Pointer(chunk_mchunks)+ofs)[x],4));
+     Writeln(' [mchunk]:',PWord(Pointer(chunk_mchunks)+ofs)[x]);
     end;
    end;
 
@@ -468,7 +466,7 @@ begin
  begin
   For i:=0 to count-1 do
   begin
-   Writeln('[chunk_attrs]:',i);
+   Writeln('[mchunk_attrs]:',i);
    Writeln(' image_no:',mchunk_attrs[i].loc.image_no);
    Writeln(' offset  :',mchunk_attrs[i].loc.offset);
    Writeln(' size    :',mchunk_attrs[i].size.size);
