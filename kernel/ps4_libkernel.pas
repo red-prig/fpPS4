@@ -729,25 +729,40 @@ end;
 
 {$I libsysmodule.inc}
 
-function ps4_sceSysmoduleLoadModule(id:Word):Integer; SysV_ABI_CDecl;
+function ps4_sceSysmoduleLoadModule(id:DWord):Integer; SysV_ABI_CDecl;
 begin
+ if (Word(id)=0) then Exit(-2141581312);
+ if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(-2141581312);
+
  Writeln('sceSysmoduleLoadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
-function ps4_sceSysmoduleUnloadModule(id:Word):Integer; SysV_ABI_CDecl;
+function ps4_sceSysmoduleUnloadModule(id:DWord):Integer; SysV_ABI_CDecl;
 begin
+ if (Word(id)=0) then Exit(-2141581312);
+
  Writeln('sceSysmoduleUnloadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
-function ps4_sceSysmoduleIsLoaded(id:Word):Integer; SysV_ABI_CDecl;
+function ps4_sceSysmoduleIsLoaded(id:DWord):Integer; SysV_ABI_CDecl;
 begin
+ if (Word(id)=0) then Exit(-2141581312);
+
  Writeln('sceSysmoduleIsLoaded:',GetSysmoduleName(id));
- Result:=0;
+ Result:=0; //0 -> loaded ; -2141581311 -> not loaded
 end;
 
 //
+
+function ps4_sceSysmoduleIsLoadedInternal(id:DWord):Integer; SysV_ABI_CDecl;
+begin
+ if ((id or $80000000)=$80000000) then Exit(-2141581312);
+
+ Writeln('sceSysmoduleIsLoadedInternal:',GetSysmoduleName(id));
+ Result:=0; //0 -> loaded ; -2141581311 -> not loaded
+end;
 
 function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
                                                    argc:size_t;
@@ -755,6 +770,9 @@ function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
                                                    flags:DWORD;
                                                    pRes:PInteger):Integer; SysV_ABI_CDecl;
 begin
+ if ((id or $80000000)=$80000000) or (flags<>0) then Exit(-2141581312);
+ if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(-2141581312);
+
  Writeln('sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleName(id));
  if (pRes<>nil) then pRes^:=0;
  Result:=0;
@@ -776,6 +794,7 @@ begin
  lib^.set_proc($791D9B6450005344,@ps4_sceSysmoduleUnloadModule);
  lib^.set_proc($7CC3F934750E68C9,@ps4_sceSysmoduleIsLoaded);
 
+ lib^.set_proc($CA714A4396DF1A4B,@ps4_sceSysmoduleIsLoadedInternal);
  lib^.set_proc($847AC6A06A0D7FEB,@ps4_sceSysmoduleLoadModuleInternalWithArg);
 
  lib^.set_proc($E1F539CAF3A4546E,@ps4_sceSysmoduleGetModuleInfoForUnwind);
