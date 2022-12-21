@@ -22,6 +22,7 @@ Const
  //SceCommonDialogResult
  SCE_COMMON_DIALOG_RESULT_OK           =0;
  SCE_COMMON_DIALOG_RESULT_USER_CANCELED=1;
+ SCE_NP_COMMERCE_DIALOG_RESULT_PURCHASED=2;
 
  SCE_COMMON_DIALOG_MAGIC_NUMBER=$C0D1A109;
 
@@ -389,7 +390,7 @@ begin
  //Writeln('sceNpCommerceDialogGetResult');
  if (pResult<>nil) then
  begin
-  pResult^.result:=1; //SCE_COMMON_DIALOG_RESULT_USER_CANCELED
+  pResult^.result:=SCE_NP_COMMERCE_DIALOG_RESULT_PURCHASED;
   pResult^.authorized:=false;
  end;
  Result:=0;

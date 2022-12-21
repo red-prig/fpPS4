@@ -256,7 +256,8 @@ uses
  sys_time,
  ps4_time,
  spinlock,
- hamt;
+ hamt,
+ param_sfo;
 
 type
  PQNode=^TQNode;
@@ -352,9 +353,11 @@ var
 
 type
  TMyForm=class(TForm)
-  procedure CloseEvent(Sender:TObject;var CloseAction:TCloseAction);
-  procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
-  procedure KeyEvent(Sender:TObject;var Key:Word;Shift:TShiftState);
+  public
+   caption_format:RawByteString;
+   procedure CloseEvent(Sender:TObject;var CloseAction:TCloseAction);
+   procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
+   procedure KeyEvent(Sender:TObject;var Key:Word;Shift:TShiftState);
  end;
 
  TVPos=packed record
@@ -541,10 +544,16 @@ begin
 end;
 
 procedure TVideoOut.sceVideoOutOpen(node:PQNode);
+var
+ TITLE,TITLE_ID,APP_VER:RawByteString;
 begin
 
  VblankStatus.FprocessTime:=ps4_sceKernelReadTsc;
  VblankStatus.FTsc        :=ps4_sceKernelGetProcessTime;
+
+ TITLE   :=param_sfo.ParamSfoGetString('TITLE');
+ TITLE_ID:=param_sfo.ParamSfoGetString('TITLE_ID');
+ APP_VER :=param_sfo.ParamSfoGetString('APP_VER');
 
  Writeln('sceVideoOutOpen:',HexStr(Pointer(Self)));
  FForm:=TMyForm.CreateNew(nil);
@@ -553,7 +562,8 @@ begin
  FForm.ParentDoubleBuffered:=False;
  FForm.FormStyle:=fsNormal;
  FForm.SetBounds(100, 100, pd_Width, pd_Height);
- FForm.Caption:='fpPS4';
+ FForm.caption_format:='fpPS4 '+'['+TITLE+'-'+TITLE_ID+':'+APP_VER+'] FPS:%d';
+ FForm.Caption:=Format(FForm.caption_format,[0]);
  FForm.OnClose:=@FForm.CloseEvent;
  FForm.OnKeyDown:=@FForm.KeyEvent;
 
@@ -1429,7 +1439,7 @@ begin
   Inc(Ffps);
   if ((FlipStatus.Ftsc_flips-Ftsc_prev) div ps4_sceKernelGetTscFrequency)>=1 then
   begin
-   FForm.Caption:='fpPS4 FPS:'+IntToStr(Ffps);
+   FForm.Caption:=Format(FForm.caption_format,[Ffps]);
    Ffps:=0;
    Ftsc_prev:=FlipStatus.Ftsc_flips;
   end;

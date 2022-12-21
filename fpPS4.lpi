@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="99">
+    <Units Count="100">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -453,6 +453,10 @@
         <Filename Value="kernel\ps4_pthread_key.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit98>
+      <Unit99>
+        <Filename Value="src\param_sfo.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit99>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -13,7 +13,31 @@ implementation
 
 uses
  sys_path,
- sys_signal;
+ sys_signal,
+ param_sfo;
+
+Const
+ SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            =0;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1=1;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2=2;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3=3;
+ SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4=4;
+
+ SCE_APP_CONTENT_APPPARAM_SKU_FLAG_TRIAL=1;
+ SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL =2;
+
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED=4;
+
+ SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE=17;
+
+ SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE=16;
+ SCE_APP_CONTENT_ADDCONT_MOUNT_MAXNUM   =64;
+
+ //E temporary data option
+ SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_NONE  =0;
+ SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT=1;
+
+ SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334; //0x80D90002
 
 type
  PSceAppContentInitParam=^SceAppContentInitParam;
@@ -27,6 +51,20 @@ type
   attr:DWORD;
   reserved2:array[0..31] of Byte;
  end;
+
+ SceNpUnifiedEntitlementLabel=packed record
+  data:array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
+  padding:array[0..2] of Byte;
+ end;
+
+ pSceAppContentAddcontInfo=^SceAppContentAddcontInfo;
+ SceAppContentAddcontInfo=packed record
+  entitlementLabel:SceNpUnifiedEntitlementLabel;
+  status:DWORD; //SceAppContentAddcontDownloadStatus
+ end;
+
+ pSceAppContentMountPoint=^SceAppContentMountPoint;
+ SceAppContentMountPoint=array[0..SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE-1] of AnsiChar;
 
 function ps4_sceAppContentInitialize(initParam:PSceAppContentInitParam;bootParam:PSceAppContentBootParam):Integer; SysV_ABI_CDecl;
 begin
@@ -45,46 +83,19 @@ begin
  Result:=0;
 end;
 
-Const
- SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG=0;
- SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1=1;
- SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2=2;
- SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3=3;
- SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4=4;
-
- SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334;//0x80D90002
-
- SCE_APP_CONTENT_APPPARAM_SKU_FLAG_TRIAL=1;
- SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL =2;
-
- SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED=4;
-
 function ps4_sceAppContentAppParamGetInt(paramId:DWORD;value:PInteger):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceAppContentAppParamGetInt:',paramId);
  Case SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG of
-  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG:Result:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1..
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:Result:=0;
+  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            :Result:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1:Result:=ParamSfoGetInt('USER_DEFINED_PARAM_1');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2:Result:=ParamSfoGetInt('USER_DEFINED_PARAM_2');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3:Result:=ParamSfoGetInt('USER_DEFINED_PARAM_3');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:Result:=ParamSfoGetInt('USER_DEFINED_PARAM_4');
   else
    Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
  end;
 end;
-
-const
- SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE=17;
-
-type
- SceNpUnifiedEntitlementLabel=packed record
-  data:array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
-  padding:array[0..2] of Byte;
- end;
-
- pSceAppContentAddcontInfo=^SceAppContentAddcontInfo;
- SceAppContentAddcontInfo=packed record
-  entitlementLabel:SceNpUnifiedEntitlementLabel;
-  status:DWORD; //SceAppContentAddcontDownloadStatus
- end;
 
 function ps4_sceAppContentGetAddcontInfoList(serviceLabel:DWORD; //SceNpServiceLabel
                                              list:pSceAppContentAddcontInfo;
@@ -98,18 +109,6 @@ begin
   hitNum^:=0;
  end;
 end;
-
-const
- SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE=16;
- SCE_APP_CONTENT_ADDCONT_MOUNT_MAXNUM   =64;
-
- //E temporary data option
- SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_NONE  =0;
- SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT=1;
-
-type
- pSceAppContentMountPoint=^SceAppContentMountPoint;
- SceAppContentMountPoint=array[0..SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE-1] of AnsiChar;
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
 begin
