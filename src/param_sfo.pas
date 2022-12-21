@@ -58,7 +58,8 @@ function  ParamSfoGetInt(const name:RawByteString):Integer;
 implementation
 
 uses
- atomic;
+ atomic,
+ spinlock;
 
 function LoadParamSfoFile(path:PChar):TParamSfoFile;
 Var
@@ -77,6 +78,7 @@ Var
  key_table:PChar;
  value_table:PByte;
 
+ size:DWORD;
  name,value:RawByteString;
 
  function load_chunk(offset,size:DWORD):Pointer;
@@ -158,8 +160,9 @@ begin
    name :=PChar(key_table+entry_table[i].key_offset);
 
    value:='';
-   SetLength(value,entry_table[i].max_size);
-   Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,entry_table[i].max_size);
+   size:=entry_table[i].max_size;
+   SetLength(value,size);
+   Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,size);
 
    Result.params[i].format:=entry_table[i].format;
    Result.params[i].name  :=name;
@@ -222,6 +225,9 @@ begin
  begin
   param_sfo_file:=LoadParamSfoFile('/app0/sce_sys/param.sfo');
   param_sfo_lazy_init:=2;
+ end else
+ begin
+  wait_until_equal(param_sfo_lazy_init,1);
  end;
 end;
 

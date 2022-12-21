@@ -731,8 +731,8 @@ end;
 
 function ps4_sceSysmoduleLoadModule(id:DWord):Integer; SysV_ABI_CDecl;
 begin
- if (Word(id)=0) then Exit(-2141581312);
- if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(-2141581312);
+ if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
+ if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleLoadModule:',GetSysmoduleName(id));
  Result:=0;
@@ -740,7 +740,7 @@ end;
 
 function ps4_sceSysmoduleUnloadModule(id:DWord):Integer; SysV_ABI_CDecl;
 begin
- if (Word(id)=0) then Exit(-2141581312);
+ if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleUnloadModule:',GetSysmoduleName(id));
  Result:=0;
@@ -748,20 +748,20 @@ end;
 
 function ps4_sceSysmoduleIsLoaded(id:DWord):Integer; SysV_ABI_CDecl;
 begin
- if (Word(id)=0) then Exit(-2141581312);
+ if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleIsLoaded:',GetSysmoduleName(id));
- Result:=0; //0 -> loaded ; -2141581311 -> not loaded
+ Result:=0; //0 -> loaded ; SCE_SYSMODULE_ERROR_UNLOADED -> not loaded
 end;
 
 //
 
 function ps4_sceSysmoduleIsLoadedInternal(id:DWord):Integer; SysV_ABI_CDecl;
 begin
- if ((id or $80000000)=$80000000) then Exit(-2141581312);
+ if ((id or $80000000)=$80000000) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleIsLoadedInternal:',GetSysmoduleName(id));
- Result:=0; //0 -> loaded ; -2141581311 -> not loaded
+ Result:=0; //0 -> loaded ; SCE_SYSMODULE_ERROR_UNLOADED -> not loaded
 end;
 
 function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
@@ -770,8 +770,8 @@ function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
                                                    flags:DWORD;
                                                    pRes:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if ((id or $80000000)=$80000000) or (flags<>0) then Exit(-2141581312);
- if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(-2141581312);
+ if ((id or $80000000)=$80000000) or (flags<>0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
+ if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleName(id));
  if (pRes<>nil) then pRes^:=0;
