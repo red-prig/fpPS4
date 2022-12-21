@@ -39,6 +39,7 @@ function  ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_AB
 implementation
 
 uses
+ atomic,
  sys_path,
  sys_kernel,
  sys_pthread,
@@ -727,6 +728,42 @@ begin
  Result:=@g_argv;
 end;
 
+//
+
+const
+ SCE_COREDUMP_ERROR_NOT_REGISTERED    =-2129133567; // 0x81180001
+ SCE_COREDUMP_ERROR_ALREADY_REGISTERED=-2129133566; // 0x81180002
+
+var
+ g_CoredumpHandler:Pointer=nil;
+
+function ps4_sceCoredumpRegisterCoredumpHandler(handler:Pointer;
+                                                stackSize:QWORD;
+                                                pCommon:Pointer
+                                               ):Integer; SysV_ABI_CDecl;
+begin
+ if CAS(g_CoredumpHandler,nil,handler) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_COREDUMP_ERROR_ALREADY_REGISTERED;
+ end;
+end;
+
+function ps4_sceCoredumpUnregisterCoredumpHandler:Integer; SysV_ABI_CDecl;
+begin
+ if (XCHG(g_CoredumpHandler,nil)<>nil) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_COREDUMP_ERROR_NOT_REGISTERED;
+ end;
+end;
+
+//
+
 {$I libsysmodule.inc}
 
 function ps4_sceSysmoduleLoadModule(id:DWord):Integer; SysV_ABI_CDecl;
@@ -1322,6 +1359,11 @@ begin
  lib^.set_proc($5A4C0477737BC346,@ps4_sceKernelInstallExceptionHandler);
  lib^.set_proc($421BF90110283847,@ps4_sceKernelRemoveExceptionHandler);
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
+
+ lib:=Result._add_lib('libSceCoredump');
+
+ lib^.set_proc($F332D27C47D6E405,@ps4_sceCoredumpRegisterCoredumpHandler);
+ lib^.set_proc($7C59213A0CED8820,@ps4_sceCoredumpUnregisterCoredumpHandler);
 
  //
  _kernel_init;
