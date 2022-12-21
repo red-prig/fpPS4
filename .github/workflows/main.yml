@@ -20,6 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Hash
+        shell: cmd
+        working-directory: ./
+        run: echo '%GITHUB_SHA:~0,7%' > tag.inc
+
       - name: Tag
         shell: cmd
         working-directory: ./
@@ -47,8 +52,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           mkdir sce_module
-          echo "put libSceNgs2.prx here" > sce_module/info.txt
-          zip -9 -qq -r "fpPS4_%GITHUB_REF_NAME%.zip" "fpPS4.exe" "shaders/*.spv" "sce_module/info.txt"
+          echo "Put libSceNgs2.prx and etc. here" > sce_module/info.txt
+          zip -9 -qq -r "fpPS4_%GITHUB_REF_NAME%.zip" "fpPS4.exe" "sce_module/info.txt"
 
       - name: Release
         uses: softprops/action-gh-release@v1
