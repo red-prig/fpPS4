@@ -268,6 +268,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSystemServiceEnableSuspendConfirmationDialog:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSystemServiceDisableSuspendConfirmationDialog:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 type
  pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
  SceSystemServiceDisplaySafeAreaInfo=packed record
@@ -337,6 +347,8 @@ begin
  lib^.set_proc($568E55F0A0300A69,@ps4_sceSystemServiceHideSplashScreen);
  lib^.set_proc($C75501F5BC0348EC,@ps4_sceSystemServiceDisableMusicPlayer);
  lib^.set_proc($F643C2CFB3ABFB56,@ps4_sceSystemServiceReenableMusicPlayer);
+ lib^.set_proc($467DF63B93C3966A,@ps4_sceSystemServiceEnableSuspendConfirmationDialog);
+ lib^.set_proc($3D0F928D7020DC43,@ps4_sceSystemServiceDisableSuspendConfirmationDialog);
  lib^.set_proc($D67DFBAB506F7396,@ps4_sceSystemServiceGetDisplaySafeAreaInfo);
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
  lib^.set_proc($98FA4FC6FE4266DE,@ps4_sceSystemServiceGetHdrToneMapLuminance);
