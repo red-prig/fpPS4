@@ -1155,6 +1155,634 @@ end;
 
 //
 
+const
+ ParseDay_aucDayLen:array[0..6] of Byte=(
+  6,6,7,9,
+  8,6,8);
+
+ ParseMonth_aucMonthLen:array[0..11] of Byte=(
+  7,8,5,5,
+  3,4,4,6,
+  9,7,8,8);
+
+type
+ t_tzinfo=packed record
+  p:Byte;
+  s:Byte;
+  r:SmallInt;
+ end;
+
+const
+ ParseTimezone_tzinfo:array[0..69] of t_tzinfo=(
+  (p:$00;s:$03;r:SmallInt($0000)),
+  (p:$03;s:$03;r:SmallInt($fed4)),
+  (p:$06;s:$03;r:SmallInt($ff10)),
+  (p:$09;s:$03;r:SmallInt($fe98)),
+  (p:$0c;s:$03;r:SmallInt($fed4)),
+  (p:$0f;s:$03;r:SmallInt($fe5c)),
+  (p:$12;s:$03;r:SmallInt($fe98)),
+  (p:$15;s:$03;r:SmallInt($fe20)),
+  (p:$18;s:$03;r:SmallInt($fe5c)),
+  (p:$1b;s:$04;r:SmallInt($030c)),
+  (p:$1f;s:$04;r:SmallInt($02d0)),
+  (p:$23;s:$04;r:SmallInt($02d0)),
+  (p:$27;s:$03;r:SmallInt($02d0)),
+  (p:$2a;s:$05;r:SmallInt($0294)),
+  (p:$2f;s:$05;r:SmallInt($0276)),
+  (p:$34;s:$04;r:SmallInt($0276)),
+  (p:$38;s:$04;r:SmallInt($0276)),
+  (p:$3c;s:$04;r:SmallInt($0258)),
+  (p:$40;s:$04;r:SmallInt($0258)),
+  (p:$44;s:$03;r:SmallInt($0258)),
+  (p:$47;s:$04;r:SmallInt($0258)),
+  (p:$4b;s:$04;r:SmallInt($023a)),
+  (p:$4f;s:$04;r:SmallInt($023a)),
+  (p:$53;s:$04;r:SmallInt($023a)),
+  (p:$57;s:$05;r:SmallInt($021c)),
+  (p:$5c;s:$03;r:SmallInt($021c)),
+  (p:$5f;s:$03;r:SmallInt($021c)),
+  (p:$62;s:$03;r:SmallInt($021c)),
+  (p:$65;s:$02;r:SmallInt($01fe)),
+  (p:$67;s:$04;r:SmallInt($01e0)),
+  (p:$6b;s:$03;r:SmallInt($01e0)),
+  (p:$6e;s:$04;r:SmallInt($01e0)),
+  (p:$72;s:$03;r:SmallInt($01e0)),
+  (p:$75;s:$02;r:SmallInt($01c2)),
+  (p:$77;s:$04;r:SmallInt($01a4)),
+  (p:$7b;s:$02;r:SmallInt($00d2)),
+  (p:$7d;s:$02;r:SmallInt($00b4)),
+  (p:$7f;s:$06;r:SmallInt($00b4)),
+  (p:$85;s:$03;r:SmallInt($0078)),
+  (p:$88;s:$06;r:SmallInt($0078)),
+  (p:$8e;s:$03;r:SmallInt($0078)),
+  (p:$91;s:$03;r:SmallInt($0078)),
+  (p:$94;s:$04;r:SmallInt($0078)),
+  (p:$98;s:$06;r:SmallInt($0078)),
+  (p:$9e;s:$03;r:SmallInt($0078)),
+  (p:$a1;s:$03;r:SmallInt($003c)),
+  (p:$a4;s:$03;r:SmallInt($003c)),
+  (p:$a7;s:$03;r:SmallInt($003c)),
+  (p:$aa;s:$03;r:SmallInt($003c)),
+  (p:$ad;s:$03;r:SmallInt($003c)),
+  (p:$b0;s:$04;r:SmallInt($003c)),
+  (p:$b4;s:$03;r:SmallInt($003c)),
+  (p:$b7;s:$03;r:SmallInt($003c)),
+  (p:$ba;s:$03;r:SmallInt($003c)),
+  (p:$bd;s:$03;r:SmallInt($003c)),
+  (p:$c0;s:$06;r:SmallInt($003c)),
+  (p:$c6;s:$03;r:SmallInt($0000)),
+  (p:$c9;s:$03;r:SmallInt($ffc4)),
+  (p:$cc;s:$03;r:SmallInt($ffa6)),
+  (p:$cf;s:$03;r:SmallInt($ff4c)),
+  (p:$d2;s:$03;r:SmallInt($ff6a)),
+  (p:$d5;s:$03;r:SmallInt($ff6a)),
+  (p:$d8;s:$03;r:SmallInt($ff10)),
+  (p:$db;s:$03;r:SmallInt($fe20)),
+  (p:$de;s:$03;r:SmallInt($fde4)),
+  (p:$e1;s:$03;r:SmallInt($fde4)),
+  (p:$e4;s:$04;r:SmallInt($fda8)),
+  (p:$e8;s:$03;r:SmallInt($fda8)),
+  (p:$eb;s:$02;r:SmallInt($fd6c)),
+  (p:$ed;s:$04;r:SmallInt($fd30))
+ );
+
+function ps4_sceRtcParseDateTime(pUtc:PQWORD;pszDateTime:PChar):Integer; SysV_ABI_CDecl;
+label
+ _prev_week1,
+ _prev_month,
+ _next_month1,
+ _next_week1,
+ _next_week2,
+ _next_month2,
+ _next_month3,
+ _relse,
+ _next_tz,
+ _end_ret;
+
+var
+ pos7:DWORD;
+ pos6:Integer;
+ ret1:Integer;
+ pc1 :Pchar;
+ pos3:Int64;
+ pos2:QWORD;
+ pos5:Int64;
+ pstrDay:Pchar;
+ pstrTzAbbr:Pchar;
+ pos1:Int64;
+ chr1:Char;
+ chr2:Char;
+ chr3:Char;
+ pc2 :Pchar;
+ pc3 :Pchar;
+ pc4 :Pchar;
+ pos4:QWORD;
+ time:SceRtcDateTime;
+
+begin
+ if (pUtc=nil) then
+ begin
+  Exit(SCE_RTC_ERROR_INVALID_ARG);
+ end;
+ if (pszDateTime=nil) then
+ begin
+  Exit(SCE_RTC_ERROR_INVALID_ARG);
+ end;
+ time:=Default(SceRtcDateTime);
+ repeat
+  repeat
+   pc1:=pszDateTime;
+   chr1:=pc1[0];
+   pszDateTime:=pc1 + 1;
+  until (ord(chr1)<>9);
+ until (chr1<>' ');
+ pc2:=pc1 + 3;
+ if (((((ord(chr1) - ord('0')) < 10) and ((ord(pc1[1]) - ord('0')) < 10)) and ((ord(pc1[2]) - ord('0')) < 10))
+   and ((((ord(pc1[3]) - ord('0')) < 10) and
+     (ord(pc1[2]) * 10 + ord(chr1) * 1000 + ord(pc1[1]) * 100 + ord(pc1[3]) <> $d04f)))) then
+ begin
+  Exit(ps4_sceRtcParseRFC3339(pUtc,pc1));
+ end;
+ pos1:=0;
+ pstrDay:='SundayMondayTuesdayWednesdayThursdayFridaySaturday';
+ repeat
+  if (6 < pos1) then
+  begin
+   Exit(SCE_RTC_ERROR_BAD_PARSE);
+  end;
+  pos2:=ParseDay_aucDayLen[pos1];
+  pos3:=0;
+  pos4:=pos2;
+  repeat
+   if (int64(pos4) < 1) then
+   begin
+    pc2:=pc1 + pos2;
+    goto _next_month1;
+   end;
+   if (((ord(pc1[pos3]) xor ord(pstrDay[pos3])) and $df) <> 0) then break;
+   pos3:=pos3 + 1;
+   pos4:=pos4 - 1;
+  until false;
+  pos5:=3;
+  pos3:=0;
+  repeat
+   if (int64(pos5) < 1) then goto _next_month1;
+   if (((ord(pc1[pos3]) xor ord(pstrDay[pos3])) and $df) <> 0) then break;
+   pos3:=pos3 + 1;
+   pos5:=pos5 - 1;
+  until false;
+  pstrDay:=pstrDay + pos2;
+  pos1:=pos1 + 1;
+ until false;
+ _prev_week1:
+ pos5:=pos5 + 1;
+ pos3:=pos3 - 1;
+ goto _next_week1;
+_prev_month:
+ pc2:=(pc2 + pos2);
+ time.month:=time.month + 1;
+ pos1:=pos1 + 1;
+ goto _next_month2;
+_next_month1:
+ ret1:=SCE_RTC_ERROR_BAD_PARSE;
+ if (pc2 <> nil) then
+ begin
+  pc1:=pc2 + 1;
+  if (pc2[0] <> ',') then
+  begin
+   pc1:=pc2;
+  end;
+  repeat
+   repeat
+    pc2:=pc1;
+    pc1:=pc2 + 1;
+   until (pc2[0]<>'\t');
+  until (pc2[0]<>' ');
+  time.month:=1;
+  pstrDay:='JanuaryFebruaryMarchAprilMayJuneJulyAugustSeptemberOctoberNovemberDecember';
+  For pos1:=0 to 11 do
+  begin
+   pos2:=ParseMonth_aucMonthLen[pos1];
+   pos3:=0;
+   pos4:=pos2;
+   repeat
+    if (int64(pos4) < 1) then
+    begin
+     pstrDay:=pc2 + pos2;
+     goto _next_week2;
+    end;
+    if (((ord(pc2[pos3]) xor ord(pstrDay[pos3])) and $df) <> 0) then break;
+    pos3:=pos3 + 1;
+    pos4:=pos4 - 1;
+   until false;
+   pos5:=0;
+   pos3:=3;
+_next_week1:
+   if (int64(pos3) < 1) then
+   begin
+    pstrDay:=pc2 + 3;
+_next_week2:
+    if (pstrDay=nil) then break;
+    if (pstrDay[0] <> ' ') then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    chr1:=pstrDay[2];
+    ret1:=ord(pstrDay[1]);
+    if (ret1=ord(' ')) then
+    begin
+     ret1:=ord(chr1) - ord('0');
+     if (9 < ret1) then
+     begin
+      Exit(SCE_RTC_ERROR_BAD_PARSE);
+     end;
+     pstrDay:=pstrDay + 3;
+    end else
+    begin
+     if (9 < (ord(pstrDay[1]) - ord('0'))) then
+     begin
+      Exit(SCE_RTC_ERROR_BAD_PARSE);
+     end;
+     if ((ord(chr1) - ord('0')) < 10) then
+     begin
+      ret1:=ret1 * 10 - 528 + ord(chr1);
+      pstrDay:=pstrDay + 3;
+     end else
+     begin
+      pstrDay:=pstrDay + 2;
+      ret1:=ret1 - ord('0');
+     end;
+     if (pstrDay=nil) then
+     begin
+      Exit(SCE_RTC_ERROR_BAD_PARSE);
+     end;
+    end;
+    time.day:=ret1;
+    if (pstrDay[0] <> ' ') then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    chr1:=pstrDay[1];
+    if (9 < (ord(chr1) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if ((ord(pstrDay[2]) - ord('0')) < 10) then
+    begin
+     time.hour:=ord(chr1) * 10 - 528 + ord(pstrDay[2]);
+     pstrDay:=pstrDay + 3;
+    end else
+    begin
+     pstrDay:=pstrDay + 2;
+     time.hour:=ord(chr1) - ord('0');
+    end;
+    if (pstrDay=nil) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (pstrDay[0] <> ':') then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    chr1:=pstrDay[1];
+    if (9 < (ord(chr1) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if ((ord(pstrDay[2]) - ord('0')) < 10) then
+    begin
+     time.minute:=ord(chr1) * 10 - 528 + ord(pstrDay[2]);
+     pstrDay:=pstrDay + 3;
+    end else
+    begin
+     pstrDay:=pstrDay + 2;
+     time.minute:=ord(chr1) - ord('0');
+    end;
+    if (pstrDay=nil) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (pstrDay[0] <> ':') then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    chr1:=pstrDay[1];
+    if (9 < (ord(chr1) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if ((ord(pstrDay[2]) - ord('0')) < 10) then
+    begin
+     time.second:=ord(chr1) * 10 - 528 + ord(pstrDay[2]);
+     pstrDay:=pstrDay + 3;
+    end else
+    begin
+     pstrDay:=pstrDay + 2;
+     time.second:=ord(chr1) - ord('0');
+    end;
+    if (pstrDay=nil) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (pstrDay[0] <> ' ') then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (9 < (ord(pstrDay[1]) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (9 < (ord(pstrDay[2]) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (9 < (ord(pstrDay[3]) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    if (9 < (ord(pstrDay[4]) - ord('0'))) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    ret1:=ord(pstrDay[3]) * 10 + ord(pstrDay[1]) * 1000 + ord(pstrDay[2]) * 100 + ord(pstrDay[4]) - 53328;
+    if (ret1 < 0) then
+    begin
+     Exit(SCE_RTC_ERROR_BAD_PARSE);
+    end;
+    time.year:=ret1;
+    ret1:=0;
+    goto _end_ret;
+   end;
+   if (((ord(pc2[pos5]) xor ord(pstrDay[pos5])) and $df)=0) then goto _next_week1;
+   pstrDay:=pstrDay + pos2;
+   time.month:=time.month + 1;
+  end;
+  chr1:=pc2[0];
+  ret1:=SCE_RTC_ERROR_BAD_PARSE;
+  if ((ord(chr1) - ord('0')) < 10) then
+  begin
+   if ((ord(pc1[0]) - ord('0')) < 10) then
+   begin
+    time.day:=ord(chr1) * 10 - 528 + ord(pc1[0]);
+    pc1:=pc2 + 2;
+   end else
+   begin
+    time.day:=ord(chr1) - ord('0');
+   end;
+   ret1:=SCE_RTC_ERROR_BAD_PARSE;
+   if (pc1 <> nil) then
+   begin
+    time.month:=1;
+    pc2:='JanuaryFebruaryMarchAprilMayJuneJulyAugustSeptemberOctoberNovemberDecember';
+    pos1:=0;
+    ret1:=SCE_RTC_ERROR_BAD_PARSE;
+    if ((pc1[0]=' ') or (pc1[0]='-')) then
+    begin
+_next_month2:
+     ret1:=SCE_RTC_ERROR_BAD_PARSE;
+     if (integer(pos1) < 12) then
+     begin
+      pos2:=ParseMonth_aucMonthLen[pos1];
+      pos4:=pos2;
+      pc3:=pc2;
+      pc4:=(pc1 + 1);
+      repeat
+       if (int64(pos4) < 1) then
+       begin
+        pc1:=pc1 + pos2 + 1;
+        goto _next_month3;
+       end;
+       if (((ord(pc4[0]) xor ord(pc3[0])) and $df) <> 0) then break;
+       pos4:=pos4 - 1;
+       pc3:=pc3 + 1;
+       pc4:=pc4 + 1;
+      until false;
+      pc3:=(pc1 + 1);
+      pc4:=pc2;
+      For pos3:=3 downto 1 do
+      begin
+       if (((ord(pc3[0]) xor ord(pc4[0])) and $df) <> 0) then goto _prev_month;
+       pc4:=pc4 + 1;
+       pc3:=pc3 + 1;
+      end;
+      pc1:=pc1 + 4;
+_next_month3:
+      if (pc1=nil) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      if ((pc1[0] <> ' ') and (pc1[0] <> '-')) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      chr1:=pc1[1];
+      if (9 < (ord(chr1) - ord('0'))) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      chr2:=pc1[2];
+      if (((((ord(chr2) - ord('0')) < 10) and ((ord(pc1[3]) - ord('0')) < 10)) and
+        ((ord(pc1[4]) - ord('0')) < 10)) and
+        (-1 < ret1)) then
+      begin
+       ret1:=ord(pc1[3]) * 10 + ord(chr1) * 1000 + ord(chr2) * 100 + ord(pc1[4]) - 53328;
+       if (ret1 >= -1) then goto _relse;
+       pc1:=pc1 + 5;
+      end else
+      begin
+_relse:
+       if (9 < (ord(chr2) - ord('0'))) then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+       pos6:=ord(chr1) * 10 + ord(chr2) - 528;
+       if (pos6 < 0) then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+       pc1:=pc1 + 3;
+       ret1:=1900;
+       if (pos6 < 50) then
+       begin
+        ret1:=2000;
+       end;
+       ret1:=ret1 + pos6;
+      end;
+      time.year:=ret1;
+      if (pc1[0] <> ' ') then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      chr1:=pc1[1];
+      if (9 < (ord(chr1) - ord('0'))) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      if ((ord(pc1[2]) - ord('0')) < 10) then
+      begin
+       ret1:=ord(chr1) * 10 - 528 + ord(pc1[2]);
+       pc1:=pc1 + 3;
+      end else
+      begin
+       pc1:=pc1 + 2;
+       ret1:=ord(chr1) - ord('0');
+      end;
+      if (pc1=nil) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      if (25 < ret1) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      time.hour:=ret1;
+      if (pc1[0] <> ':') then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      chr1:=pc1[1];
+      if (9 < (ord(chr1) - ord('0'))) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      if ((ord(pc1[2]) - ord('0')) < 10) then
+      begin
+       time.minute:=ord(chr1) * 10 - 528 + ord(pc1[2]);
+       pc1:=pc1 + 3;
+      end else
+      begin
+       pc1:=pc1 + 2;
+       time.minute:=ord(chr1) - ord('0');
+      end;
+      if (pc1=nil) then
+      begin
+       Exit(SCE_RTC_ERROR_BAD_PARSE);
+      end;
+      time.second:=0;
+      ret1:=0;
+      if (pc1[0]=' ') then
+      begin
+       pc1:=pc1 + 1;
+      end else
+      begin
+       if (pc1[0] <> ':') then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+       chr1:=pc1[1];
+       if (9 < (ord(chr1) - ord('0'))) then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+       if ((ord(pc1[2]) - ord('0')) < 10) then
+       begin
+        time.second:=ord(chr1) * 10 - 528 + ord(pc1[2]);
+        pc1:=pc1 + 3;
+       end else
+       begin
+        pc1:=pc1 + 2;
+        time.second:=ord(chr1) - ord('0');
+       end;
+       if (pc1=nil) then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+      end;
+      if (pc1[0]=' ') then
+      begin
+       pc3:=(pc1 + 1);
+       chr3:=pc3[0];
+       ret1:=0;
+       if (chr3 <> 'U') then
+       begin
+        if ((chr3='-') or (chr3='+')) then
+        begin
+         ret1:=-1;
+         if ((ord(pc1[2]) - ord('0')) < 10) then
+         begin
+          ret1:=-1;
+          if ((ord(pc1[3]) - ord('0')) < 10) then
+          begin
+           ret1:=-1;
+           if ((ord(pc1[4]) - ord('0')) < 10) then
+           begin
+            ret1:=-1;
+            if ((ord(pc1[5]) - ord('0')) < 10) then
+            begin
+             ret1:=ord(pc1[5]) - 53328 + ord(pc1[4]) * 10 + ord(pc1[2]) * 1000 + ord(pc1[3]) * 100;
+            end;
+           end;
+          end;
+         end;
+         ret1:=ret1 mod 60 + (ret1 div 100) * 60;
+         if (chr3='-') then
+         begin
+          ret1:=-ret1;
+         end;
+        end else
+        begin
+         ret1:=0;
+         if (pc1[2] <> 'T') then
+         begin
+          For pos1:=0 to 69 do
+          begin
+           pstrTzAbbr:='GMTESTEDTCSTCDTMSTMDTPSTPDTNZDTNZSTIDLENZTAESSTACSSTCADTSADTAEST EASTGSTLIGTACSTSASTCASTAWSSTJSTKSTWDTMTAWSTCCTWADTWSTJTWASTITBTEETDSTEETCETDST FWTISTMESTMETDSTSSTBSTCETDNTFSTMETMEWTMEZNORSETSWTWETDSTWETWATNDTADTNFTNSTASTY DTHDTYSTAHSTCATNTIDLW';
+           pstrTzAbbr:=pstrTzAbbr + ParseTimezone_tzinfo[pos1].p;
+           pc4:=pc3;
+           pos4:=ParseTimezone_tzinfo[pos1].s;
+           repeat
+            if (int64(pos4) < 1) then
+            begin
+             if (ptrint(pc1 + ParseTimezone_tzinfo[pos1].s) <> ptrint(-1)) then
+             begin
+              ret1:=ParseTimezone_tzinfo[pos1].r;
+              goto _end_ret;
+             end;
+             goto _next_tz;
+            end;
+            if (((ord(pc4[0]) xor ord(pstrTzAbbr[0])) and $df) <> 0) then break;
+            pos4:=pos4 - 1;
+            pstrTzAbbr:=pstrTzAbbr + 1;
+            pc4:=pc4 + 1;
+           until false;
+          end;
+_next_tz:
+          pos7:=ord(pc3[0]) and $ffffffdf;
+          if ((((ord(pc3[0]) and $df) + $bf) < 9) or
+            ((byte(pos7) + $b5) < 3)) then
+          begin
+           ret1:=pos7 * 60 - 3900;
+          end else
+          if ((ord(chr1) + $b2) < 12) then
+          begin
+           ret1:=(78 - pos7) * 60;
+          end else
+          begin
+           ret1:=0;
+           if (chr1 <> 'Z') then
+           begin
+            Exit(SCE_RTC_ERROR_BAD_PARSE);
+           end
+          end;
+         end;
+        end;
+       end;
+      end;
+_end_ret:
+      time.microsecond:=0;
+      ps4_sceRtcGetTick(@time,pUtc);
+      ps4_sceRtcTickAddMinutes(pUtc,pUtc,-ret1);
+      ret1:=0;
+     end;
+    end;
+   end;
+  end;
+ end;
+ Result:=ret1;
+end;
+
+//
+
 function Load_libSceRtc(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -1207,6 +1835,7 @@ begin
  lib^.set_proc($FF9CB6B89EB6A92F,@ps4_sceRtcTickAddYears);
 
  lib^.set_proc($F7D6CC1A09455B72,@ps4_sceRtcParseRFC3339);
+ lib^.set_proc($371108D4A072BC22,@ps4_sceRtcParseDateTime);
 
  ps4_module_start(0,nil);
 end;
