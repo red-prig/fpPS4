@@ -11,6 +11,9 @@ uses
 
 implementation
 
+uses
+ ps4_time;
+
 function ps4_sceRudpInit(pool:Pointer;poolSize:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceRudpInit:',HexStr(pool),':',poolSize);
@@ -35,6 +38,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceRudpProcessEvents(timeout:QWORD // SceRudpUsec
+                                 ):Integer; SysV_ABI_CDecl;
+begin
+ ps4_usleep(timeout);
+ Result:=0;
+end;
+
 function Load_libSceRudp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -47,6 +57,7 @@ begin
  lib^.set_proc($4941157ACF20BE6C,@ps4_sceRudpSetEventHandler);
  lib^.set_proc($E8F04DA6C8326B1C,@ps4_sceRudpEnableInternalIOThread);
  lib^.set_proc($F8127DB2F0E68D8B,@ps4_sceRudpNetFlush);
+ lib^.set_proc($F54F66D581F449C4,@ps4_sceRudpProcessEvents);
 end;
 
 initialization
