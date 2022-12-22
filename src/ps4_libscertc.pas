@@ -934,6 +934,227 @@ begin
  Result:=_sceRtcGetTick(@Time,pTick0);
 end;
 
+//
+
+function ps4_sceRtcParseRFC3339(pUtc:PQWORD;pszDateTime:PChar):Integer; SysV_ABI_CDecl;
+label
+ _next;
+var
+ ret1:Integer;
+ mmul:DWORD;
+ gmt :Integer;
+ chr:Char;
+ pnext:PChar;
+ time:SceRtcDateTime;
+begin
+ ret1:=SCE_RTC_ERROR_INVALID_ARG;
+ if (pUtc <> nil) and (pszDateTime <> nil) then
+ begin
+  time.year:=$ffff;
+  if ((ord(pszDateTime[0]) - ord('0')) < 10) then
+  begin
+   time.year:=$ffff;
+   if ((ord(pszDateTime[1]) - ord('0')) < 10) then
+   begin
+    time.year:=$ffff;
+    if ((ord(pszDateTime[2]) - ord('0')) < 10) then
+    begin
+     time.year:=$ffff;
+     if ((ord(pszDateTime[3]) - ord('0')) < 10) then
+     begin
+      time.year:=ord(pszDateTime[3]) + 12208 +
+            ord(pszDateTime[2]) * 10 + ord(pszDateTime[0]) * 1000 + ord(pszDateTime[1]) * 100;
+     end;
+    end;
+   end;
+  end;
+  ret1:=SCE_RTC_ERROR_INVALID_YEAR;
+  if (pszDateTime[4]='-') then
+  begin
+   time.month:=$ffff;
+   if ((ord(pszDateTime[5]) - ord('0')) < 10) then
+   begin
+    time.month:=$ffff;
+    if ((ord(pszDateTime[6]) - ord('0')) < 10) then
+    begin
+     time.month:=ord(pszDateTime[5]) * 10 - 528 + ord(pszDateTime[6]);
+    end;
+   end;
+   ret1:=SCE_RTC_ERROR_INVALID_MONTH;
+   if (pszDateTime[7]='-') then
+   begin
+    time.day:=$ffff;
+    if ((ord(pszDateTime[8]) - ord('0')) < 10) then
+    begin
+     time.day:=$ffff;
+     if ((ord(pszDateTime[9]) - ord('0')) < 10) then
+     begin
+      time.day:=ord(pszDateTime[8]) * 10 - 528 + ord(pszDateTime[9]);
+     end;
+    end;
+    ret1:=SCE_RTC_ERROR_INVALID_DAY;
+    if ((ord(pszDateTime[10]) or $20)=ord('t')) then
+    begin
+     time.hour:=$ffff;
+     if ((ord(pszDateTime[11]) - ord('0')) < 10) then
+     begin
+      time.hour:=$ffff;
+      if ((ord(pszDateTime[12]) - ord('0')) < 10) then
+      begin
+       time.hour:=ord(pszDateTime[11]) * 10 - 528 + ord(pszDateTime[12]);
+      end;
+     end;
+     ret1:=SCE_RTC_ERROR_INVALID_HOUR;
+     if (pszDateTime[13]=':') then
+     begin
+      time.minute:=$ffff;
+      if ((ord(pszDateTime[14]) - ord('0')) < 10) then
+      begin
+       time.minute:=$ffff;
+       if ((ord(pszDateTime[15]) - ord('0')) < 10) then
+       begin
+        time.minute:=ord(pszDateTime[14]) * 10 - 528 + ord(pszDateTime[15]);
+       end;
+      end;
+      ret1:=SCE_RTC_ERROR_INVALID_MINUTE;
+      if (pszDateTime[16]=':') then
+      begin
+       time.second:=$ffff;
+       if ((ord(pszDateTime[17]) - ord('0')) < 10) then
+       begin
+        time.second:=$ffff;
+        if ((ord(pszDateTime[18]) - ord('0')) < 10) then
+        begin
+         time.second:=ord(pszDateTime[17]) * 10 - 528 + ord(pszDateTime[18]);
+        end;
+       end;
+       chr:=pszDateTime[19];
+       if (chr='.') then
+       begin
+        chr:=pszDateTime[20];
+        pnext:=pszDateTime + 20;
+        time.microsecond:=0;
+        if ((ord(chr) - ord('0')) < 10) then
+        begin
+         mmul:=100000;
+         repeat
+          time.microsecond:=(ord(chr) - 48) * mmul + time.microsecond;
+          if (mmul < 100000) then
+          begin
+           if (mmul < 10000) then
+           begin
+            if (mmul=10) then
+            begin
+             mmul:=1;
+            end else
+            if (mmul=100) then
+            begin
+             mmul:=10;
+            end else
+            begin
+             if (mmul <> 1000) then
+             begin
+              mmul:=0;
+              goto _next;
+             end;
+             mmul:=100;
+            end;
+           end else
+           begin
+            if (mmul <> 10000) then
+            begin
+             mmul:=0;
+             goto _next;
+            end;
+            mmul:=1000;
+           end;
+          end else
+          begin
+           if (mmul <> 100000) then
+           begin
+            mmul:=0;
+            goto _next;
+           end;
+           mmul:=10000;
+          end;
+    _next:
+          chr:=pnext[1];
+          pnext:=pnext + 1;
+         until ((ord(chr) - 48) >= 10)
+        end;
+        chr:=pnext[0];
+       end else
+       begin
+        pnext:=pszDateTime + 19;
+        time.microsecond:=0;
+       end;
+       ret1:=0;
+       if (chr < 'z') then
+       begin
+        if ((chr='+') or (chr='-')) then
+        begin
+         ret1:=-1;
+         gmt:=-1;
+         if ((ord(pnext[1]) - ord('0')) < 10) then
+         begin
+          gmt:=-1;
+          if ((ord(pnext[2]) - ord('0')) < 10) then
+          begin
+           gmt:=ord(pnext[1]) * 10 - 528 + ord(pnext[2]);
+          end;
+         end;
+         if ((ord(pnext[4]) - ord('0')) < 10) then
+         begin
+          ret1:=-1;
+          if ((ord(pnext[5]) - ord('0')) < 10) then
+          begin
+           ret1:=ord(pnext[4]) * 10 - 528 + ord(pnext[5]);
+          end;
+         end;
+         if (gmt < 0) then
+         begin
+          Exit(SCE_RTC_ERROR_BAD_PARSE);
+         end;
+         if (pnext[3] <> ':') then
+         begin
+          Exit(SCE_RTC_ERROR_BAD_PARSE);
+         end;
+         if (ret1 < 0) then
+         begin
+          Exit(SCE_RTC_ERROR_BAD_PARSE);
+         end;
+         ret1:=ret1 + gmt * 60;
+         if (chr='-') then
+         begin
+          ret1:=-ret1;
+         end;
+        end else
+        begin
+         ret1:=0;
+         if (chr <> 'Z') then
+         begin
+          Exit(SCE_RTC_ERROR_BAD_PARSE);
+         end;
+        end;
+       end else
+       if (chr <> 'z') then
+       begin
+        Exit(SCE_RTC_ERROR_BAD_PARSE);
+       end;
+       ps4_sceRtcGetTick(@time,pUtc);
+       ps4_sceRtcTickAddMinutes(pUtc,pUtc,-ret1);
+       ret1:=0;
+      end;
+     end;
+    end;
+   end;
+  end;
+ end;
+ Result:=ret1;
+end;
+
+//
+
 function Load_libSceRtc(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -985,11 +1206,12 @@ begin
  lib^.set_proc($08BEB2F6AFD76EE4,@ps4_sceRtcTickAddMonths);
  lib^.set_proc($FF9CB6B89EB6A92F,@ps4_sceRtcTickAddYears);
 
+ lib^.set_proc($F7D6CC1A09455B72,@ps4_sceRtcParseRFC3339);
+
  ps4_module_start(0,nil);
 end;
 
 //TODO sceRtcParseDateTime
-//TODO sceRtcParseRFC3339
 //TODO sceRtcFormatRFC2822LocalTime
 //TODO sceRtcFormatRFC2822
 //TODO sceRtcFormatRFC3339LocalTime
