@@ -355,6 +355,7 @@ type
  TMyForm=class(TForm)
   public
    caption_format:RawByteString;
+   procedure SetCaptionFPS(Ffps:QWORD);
    procedure CloseEvent(Sender:TObject;var CloseAction:TCloseAction);
    procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
    procedure KeyEvent(Sender:TObject;var Key:Word;Shift:TShiftState);
@@ -496,6 +497,11 @@ end;
 
 //
 
+procedure TMyForm.SetCaptionFPS(Ffps:QWORD);
+begin
+ Caption:=Format(caption_format,[Ffps]);
+end;
+
 procedure TMyForm.CloseEvent(Sender:TObject;var CloseAction:TCloseAction);
 begin
  //Halt;
@@ -543,17 +549,22 @@ begin
  post_event_vblank;
 end;
 
-procedure TVideoOut.sceVideoOutOpen(node:PQNode);
+function get_caption_format:RawByteString;
 var
  TITLE,TITLE_ID,APP_VER:RawByteString;
+begin
+ TITLE   :=param_sfo.ParamSfoGetString('TITLE');
+ TITLE_ID:=param_sfo.ParamSfoGetString('TITLE_ID');
+ APP_VER :=param_sfo.ParamSfoGetString('APP_VER');
+
+ Result:=Format('fpPS4 (%s) [%s-%s:%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
+end;
+
+procedure TVideoOut.sceVideoOutOpen(node:PQNode);
 begin
 
  VblankStatus.FprocessTime:=ps4_sceKernelReadTsc;
  VblankStatus.FTsc        :=ps4_sceKernelGetProcessTime;
-
- TITLE   :=param_sfo.ParamSfoGetString('TITLE');
- TITLE_ID:=param_sfo.ParamSfoGetString('TITLE_ID');
- APP_VER :=param_sfo.ParamSfoGetString('APP_VER');
 
  Writeln('sceVideoOutOpen:',HexStr(Pointer(Self)));
  FForm:=TMyForm.CreateNew(nil);
@@ -562,8 +573,8 @@ begin
  FForm.ParentDoubleBuffered:=False;
  FForm.FormStyle:=fsNormal;
  FForm.SetBounds(100, 100, pd_Width, pd_Height);
- FForm.caption_format:='fpPS4 '+'['+TITLE+'-'+TITLE_ID+':'+APP_VER+'] FPS:%d';
- FForm.Caption:=Format(FForm.caption_format,[0]);
+ FForm.caption_format:=get_caption_format;
+ FForm.SetCaptionFPS(0);
  FForm.OnClose:=@FForm.CloseEvent;
  FForm.OnKeyDown:=@FForm.KeyEvent;
 
@@ -1439,7 +1450,7 @@ begin
   Inc(Ffps);
   if ((FlipStatus.Ftsc_flips-Ftsc_prev) div ps4_sceKernelGetTscFrequency)>=1 then
   begin
-   FForm.Caption:=Format(FForm.caption_format,[Ffps]);
+   FForm.SetCaptionFPS(Ffps);
    Ffps:=0;
    Ftsc_prev:=FlipStatus.Ftsc_flips;
   end;

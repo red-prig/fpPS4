@@ -67,7 +67,7 @@ begin
  if (ParamCount=0) then
  begin
   promo:
-  Writeln('fpPS4 '+{$I tag.inc});
+  Writeln('fpPS4 (',{$I tag.inc},')');
   Writeln('Copyright (c) 2021-2022 by Red_prig');
   Writeln('PS4 compatibility layer (emulator) on Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
