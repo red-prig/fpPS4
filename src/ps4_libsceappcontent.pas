@@ -26,8 +26,6 @@ Const
  SCE_APP_CONTENT_APPPARAM_SKU_FLAG_TRIAL=1;
  SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL =2;
 
- SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED=4;
-
  SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE=17;
 
  SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE=16;
@@ -37,7 +35,15 @@ Const
  SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_NONE  =0;
  SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT=1;
 
- SCE_APP_CONTENT_ERROR_PARAMETER=-2133262334; //0x80D90002
+ SCE_APP_CONTENT_ERROR_PARAMETER         =-2133262334; //0x80D90002
+ SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT=-2133262329; //0x80D90007
+
+ //SceAppContentAddcontDownloadStatus
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_NO_EXTRA_DATA     =0;
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_NO_IN_QUEUE       =1;
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_DOWNLOADING       =2;
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_DOWNLOAD_SUSPENDED=3;
+ SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED         =4;
 
 type
  PSceAppContentInitParam=^SceAppContentInitParam;
@@ -52,6 +58,7 @@ type
   reserved2:array[0..31] of Byte;
  end;
 
+ pSceNpUnifiedEntitlementLabel=^SceNpUnifiedEntitlementLabel;
  SceNpUnifiedEntitlementLabel=packed record
   data:array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
   padding:array[0..2] of Byte;
@@ -69,16 +76,6 @@ type
 function ps4_sceAppContentInitialize(initParam:PSceAppContentInitParam;bootParam:PSceAppContentBootParam):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceAppContentInitialize');
-
- if (initParam<>nil) then
- begin
-  initParam^:=Default(SceAppContentInitParam);
- end;
-
- if (bootParam<>nil) then
- begin
-  bootParam^:=Default(SceAppContentBootParam);
- end;
 
  Result:=0;
 end;
@@ -106,8 +103,18 @@ begin
  Writeln('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
  if (hitNum<>nil) then
  begin
-  hitNum^:=0;
+  hitNum^:=0; //no DLC
  end;
+end;
+
+function ps4_sceAppContentGetAddcontInfo(serviceLabel:DWORD; //SceNpServiceLabel
+                                         entitlementLabel:pSceNpUnifiedEntitlementLabel;
+                                         info:pSceAppContentAddcontInfo
+                                        ):Integer; SysV_ABI_CDecl;
+begin
+ if (entitlementLabel=nil) or (info=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ Result:=SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT;
 end;
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
@@ -157,6 +164,7 @@ begin
  lib^.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
  lib^.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
  lib^.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
+ lib^.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
  lib^.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
  lib^.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
