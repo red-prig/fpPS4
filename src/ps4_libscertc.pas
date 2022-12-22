@@ -13,20 +13,20 @@ uses
   SysUtils;
 
 const
- SCE_RTC_ERROR_NOT_INITIALIZED    =$80B50001;
- SCE_RTC_ERROR_INVALID_POINTER    =$80B50002;
- SCE_RTC_ERROR_INVALID_VALUE      =$80B50003;
- SCE_RTC_ERROR_INVALID_ARG        =$80B50004;
- SCE_RTC_ERROR_NOT_SUPPORTED      =$80B50005;
- SCE_RTC_ERROR_NO_CLOCK           =$80B50006;
- SCE_RTC_ERROR_BAD_PARSE          =$80B50007;
- SCE_RTC_ERROR_INVALID_YEAR       =$80B50008;
- SCE_RTC_ERROR_INVALID_MONTH      =$80B50009;
- SCE_RTC_ERROR_INVALID_DAY        =$80B5000A;
- SCE_RTC_ERROR_INVALID_HOUR       =$80B5000B;
- SCE_RTC_ERROR_INVALID_MINUTE     =$80B5000C;
- SCE_RTC_ERROR_INVALID_SECOND     =$80B5000D;
- SCE_RTC_ERROR_INVALID_MICROSECOND=$80B5000E;
+ SCE_RTC_ERROR_NOT_INITIALIZED    =-2135621631; // 0x80B50001
+ SCE_RTC_ERROR_INVALID_POINTER    =-2135621630; // 0x80B50002
+ SCE_RTC_ERROR_INVALID_VALUE      =-2135621629; // 0x80B50003
+ SCE_RTC_ERROR_INVALID_ARG        =-2135621628; // 0x80B50004
+ SCE_RTC_ERROR_NOT_SUPPORTED      =-2135621627; // 0x80B50005
+ SCE_RTC_ERROR_NO_CLOCK           =-2135621626; // 0x80B50006
+ SCE_RTC_ERROR_BAD_PARSE          =-2135621625; // 0x80B50007
+ SCE_RTC_ERROR_INVALID_YEAR       =-2135621624; // 0x80B50008
+ SCE_RTC_ERROR_INVALID_MONTH      =-2135621623; // 0x80B50009
+ SCE_RTC_ERROR_INVALID_DAY        =-2135621622; // 0x80B5000A
+ SCE_RTC_ERROR_INVALID_HOUR       =-2135621621; // 0x80B5000B
+ SCE_RTC_ERROR_INVALID_MINUTE     =-2135621620; // 0x80B5000C
+ SCE_RTC_ERROR_INVALID_SECOND     =-2135621619; // 0x80B5000D
+ SCE_RTC_ERROR_INVALID_MICROSECOND=-2135621618; // 0x80B5000E
 
  SCE_RTC_DAYOFWEEK_SUNDAY   =0;
  SCE_RTC_DAYOFWEEK_MONDAY   =1;
@@ -94,7 +94,7 @@ function _sceRtcTickSubMicroseconds(pTick0,pTick1:PQWORD;lSub:Int64):Integer;
 var
  t1:QWORD;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  if (lSub=0) then
  begin
@@ -106,10 +106,10 @@ begin
 
  if (lSub<0) then
  begin
-  if (t1 < QWORD(-lSub)) then Exit(-$7f4afffd);
+  if (t1 < QWORD(-lSub)) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
  end else
  begin
-  if ((not t1) < QWORD(lSub)) then Exit(-$7f4afffd);
+  if ((not t1) < QWORD(lSub)) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
  end;
 
  t1:=t1+lSub;
@@ -122,7 +122,7 @@ var
  ladd_mul:QWORD;
  t1:QWORD;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  if (lAdd=0) then
  begin
@@ -136,10 +136,10 @@ begin
 
  if (lAdd < 0) then
  begin
-  if (t1 < QWORD(-ladd_mul)) then Exit(-$7f4afffd);
+  if (t1 < QWORD(-ladd_mul)) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
  end else
  begin
-  if ((not t1) < QWORD(ladd_mul)) then Exit(-$7f4afffd);
+  if ((not t1) < QWORD(ladd_mul)) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
  end;
 
  pTick0^:=t1+ladd_mul;
@@ -167,20 +167,20 @@ var
  year:WORD;
  leap:Boolean;
 begin
- if (pTime=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  year:=pTime^.year;
 
- if (year=0) or (year>9999)                    then Exit(-$7f4afff8);
- if (pTime^.month=0) or (pTime^.month>12)      then Exit(-$7f4afff7);
- if (pTime^.day=0)                             then Exit(-$7f4afff6);
+ if (year=0) or (year>9999)                    then Exit(SCE_RTC_ERROR_INVALID_YEAR);
+ if (pTime^.month=0) or (pTime^.month>12)      then Exit(SCE_RTC_ERROR_INVALID_MONTH);
+ if (pTime^.day=0)                             then Exit(SCE_RTC_ERROR_INVALID_DAY);
 
  leap:=leap_year(year);
- if (pTime^.day>MonthDays[leap][pTime^.month]) then Exit(-$7f4afff6);
- if (pTime^.hour>=24)                          then Exit(-$7f4afff5);
- if (pTime^.minute>=60)                        then Exit(-$7f4afff4);
- if (pTime^.second>=60)                        then Exit(-$7f4afff3);
- if (pTime^.microsecond>=1000000)              then Exit(-$7f4afff2);
+ if (pTime^.day>MonthDays[leap][pTime^.month]) then Exit(SCE_RTC_ERROR_INVALID_DAY);
+ if (pTime^.hour>=24)                          then Exit(SCE_RTC_ERROR_INVALID_HOUR);
+ if (pTime^.minute>=60)                        then Exit(SCE_RTC_ERROR_INVALID_MINUTE);
+ if (pTime^.second>=60)                        then Exit(SCE_RTC_ERROR_INVALID_SECOND);
+ if (pTime^.microsecond>=1000000)              then Exit(SCE_RTC_ERROR_INVALID_MICROSECOND);
  Result:=0;
 end;
 
@@ -188,7 +188,7 @@ end;
 
 function ps4_sceRtcTickAddTicks(pTick0,pTick1:PQWORD;lAdd:Int64):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=lAdd+pTick1^;
 
@@ -197,7 +197,7 @@ end;
 
 function ps4_sceRtcTickAddMicroseconds(pTick0,pTick1:PQWORD;lAdd:Int64):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=lAdd+pTick1^;
 
@@ -206,7 +206,7 @@ end;
 
 function ps4_sceRtcTickAddSeconds(pTick0,pTick1:PQWORD;lAdd:Int64):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=(lAdd*1000000)+pTick1^;
 
@@ -215,7 +215,7 @@ end;
 
 function ps4_sceRtcTickAddMinutes(pTick0,pTick1:PQWORD;lAdd:Int64):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=(lAdd*60000000)+pTick1^;
 
@@ -224,7 +224,7 @@ end;
 
 function ps4_sceRtcTickAddHours(pTick0,pTick1:PQWORD;lAdd:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=(Int64(lAdd)*3600000000)+pTick1^;
 
@@ -233,7 +233,7 @@ end;
 
 function ps4_sceRtcTickAddDays(pTick0,pTick1:PQWORD;lAdd:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=(Int64(lAdd)*86400000000)+pTick1^;
 
@@ -243,7 +243,7 @@ end;
 
 function ps4_sceRtcTickAddWeeks(pTick0,pTick1:PQWORD;lAdd:Integer):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTick0^:=(Int64(lAdd)*$8cd0e3a000)+pTick1^;
 
@@ -262,8 +262,8 @@ var
  tick:QWORD;
  time:timeval;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
- if (pTick^<=$dcbffeff2bbfff) then Exit(-$7f4afffd);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
+ if (pTick^<=$dcbffeff2bbfff) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
 
  tick:=pTick^+$ff23400100d44000;
 
@@ -276,7 +276,7 @@ function ps4_sceRtcGetCurrentTick(pTick:PQWORD):Integer; SysV_ABI_CDecl;
 var
  time:timespec;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_sceKernelClockGettime(0,@time);
 
@@ -292,7 +292,7 @@ var
  days:qword;
  msec:qword;
 begin
- if (pTime=nil) or (pTick=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) or (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  days:=pTick^ div (3600000*1000*24);
  msec:=pTick^ mod (3600000*1000*24);
@@ -362,7 +362,7 @@ end;
 
 function ps4_sceRtcGetTick(pTime:pSceRtcDateTime;pTick:PQWORD):Integer; SysV_ABI_CDecl;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
  Result:=_sceRtcCheckValid(pTime);
  if (Result<>0) then Exit;
  Result:=_sceRtcGetTick(pTime,pTick);
@@ -373,7 +373,7 @@ var
  tick:QWORD;
  time:timespec;
 begin
- if (pTime=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_sceKernelClockGettime(0,@time);
 
@@ -392,7 +392,7 @@ var
  time:timespec;
  tsec:timesec;
 begin
- if (pTime=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_sceKernelClockGettime(0,@time);
 
@@ -417,7 +417,7 @@ var
  tsec:timesec;
  local_time:time_t;
 begin
- if (pUtc=nil) then Exit(-$7f4afffe);
+ if (pUtc=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_sceKernelConvertUtcToLocaltime((pUtc^ + $ff23400100d44000) div 1000000,@local_time,@tsec,nil);
 
@@ -432,7 +432,7 @@ var
  tsec:timesec;
  utc_time:time_t;
 begin
- if (pLocalTime=nil) then Exit(-$7f4afffe);
+ if (pLocalTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_sceKernelConvertLocaltimeToUtc((pLocalTime^ + $ff23400100d44000) div 1000000,$ffffffff,@utc_time,@tsec,nil);
 
@@ -448,7 +448,7 @@ var
  perror:Pinteger;
  time:timespec;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_clock_gettime($10,@time);
  if (Result=0) then
@@ -457,7 +457,7 @@ begin
  end else
  begin
   perror:=ps4___error;
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
@@ -470,7 +470,7 @@ var
  perror:Pinteger;
  time:timespec;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_clock_gettime($13,@time);
  if (Result=0) then
@@ -479,7 +479,7 @@ begin
  end else
  begin
   perror:=ps4___error;
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
@@ -492,22 +492,22 @@ var
  perror:Pinteger;
  time:timespec;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_clock_gettime($11,@time);
  if (Result<>0) then
  begin
   perror:=ps4___error;
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
 
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
-   if (Result<>-$7f4affff) then Exit;
+   if (Result<>SCE_RTC_ERROR_NOT_INITIALIZED) then Exit;
   end;
   Result:=ps4_clock_gettime($10,@time);
 
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
@@ -525,22 +525,22 @@ var
  perror:Pinteger;
  time:timespec;
 begin
- if (pTick=nil) then Exit(-$7f4afffe);
+ if (pTick=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  Result:=ps4_clock_gettime($12,@time);
  if (Result<>0) then
  begin
   perror:=ps4___error;
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
 
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
-   if (Result<>-$7f4affff) then Exit;
+   if (Result<>SCE_RTC_ERROR_NOT_INITIALIZED) then Exit;
   end;
   Result:=ps4_clock_gettime($10,@time);
 
-  Result:=-$7f4affff;
+  Result:=SCE_RTC_ERROR_NOT_INITIALIZED;
   if (perror^<>5) then
   begin
    Result:=ps4_sceKernelError(perror^);
@@ -565,7 +565,7 @@ begin
   ptime:=nil;
  end else
  begin
-  if (pTick^<$dcbffeff2bc000) then Exit(-$7f4afffd);
+  if (pTick^<$dcbffeff2bc000) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
   ptime:=@time;
   tick:=pTick^+$ff23400100d44000;
   time.tv_sec :=(tick div 1000000);
@@ -592,7 +592,7 @@ begin
   ptime:=nil;
  end else
  begin
-  if (pTick^<$dcbffeff2bc000) then Exit(-$7f4afffd);
+  if (pTick^<$dcbffeff2bc000) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
   ptime:=@time;
   tick:=pTick^+$ff23400100d44000;
   time.tv_sec :=(tick div 1000000);
@@ -619,7 +619,7 @@ begin
   ptime:=nil;
  end else
  begin
-  if (pTick^<$dcbffeff2bc000) then Exit(-$7f4afffd);
+  if (pTick^<$dcbffeff2bc000) then Exit(SCE_RTC_ERROR_INVALID_VALUE);
   ptime:=@time;
   tick:=pTick^+$ff23400100d44000;
   time.tv_sec :=(tick div 1000000);
@@ -643,7 +643,7 @@ function ps4_sceRtcIsLeapYear(year:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (year<1) then
  begin
-  Exit(-$7f4afff8);
+  Exit(SCE_RTC_ERROR_INVALID_YEAR);
  end;
  if (year<>(year div 400)*400) then
  begin
@@ -660,9 +660,9 @@ function ps4_sceRtcGetDaysInMonth(year,month:Integer):Integer; SysV_ABI_CDecl;
 var
  leap:Boolean;
 begin
- if (year<=0)  then Exit(-$7f4afff8);
- if (month<=0) then Exit(-$7f4afff7);
- if (month>12) then Exit(-$7f4afff7);
+ if (year<=0)  then Exit(SCE_RTC_ERROR_INVALID_YEAR);
+ if (month<=0) then Exit(SCE_RTC_ERROR_INVALID_MONTH);
+ if (month>12) then Exit(SCE_RTC_ERROR_INVALID_MONTH);
 
  leap:=leap_year(year);
  Result:=MonthDays[leap][month];
@@ -677,9 +677,7 @@ end;
 
 function ps4_sceRtcGetDayOfWeek(year,month,day:Integer):Integer; SysV_ABI_CDecl;
 var
- month_m1:DWORD;
-
- v10,v11:Int64;
+ v11:Int64;
 
  days:Byte;
  leap:Boolean;
@@ -687,40 +685,35 @@ begin
 
  if (SDK_VERSION < $3000000) then
  begin
-  if (year<1)    then Exit(-$7f4afff8);
-  if (month<=0)  then Exit(-$7f4afff7);
-  if (month>12)  then Exit(-$7f4afff7);
+  if (year<1)    then Exit(SCE_RTC_ERROR_INVALID_YEAR);
+  if (month<=0)  then Exit(SCE_RTC_ERROR_INVALID_MONTH);
+  if (month>12)  then Exit(SCE_RTC_ERROR_INVALID_MONTH);
  end else
  begin
-  if (month<=0)  then Exit(-$7f4afff7);
-  if (month>12)  then Exit(-$7f4afff7);
-  if (year<1)    then Exit(-$7f4afff8);
-  if (year>9999) then Exit(-$7f4afff8);
+  if (month<=0)  then Exit(SCE_RTC_ERROR_INVALID_MONTH);
+  if (month>12)  then Exit(SCE_RTC_ERROR_INVALID_MONTH);
+  if (year<1)    then Exit(SCE_RTC_ERROR_INVALID_YEAR);
+  if (year>9999) then Exit(SCE_RTC_ERROR_INVALID_YEAR);
  end;
-
- month_m1:=month-1;
 
  leap:=leap_year(year);
  days:=MonthDays[leap][month];
 
- if ((day <= 0) or (day > days)) then Exit(-$7f4afff6);
+ if ((day <= 0) or (day > days)) then Exit(SCE_RTC_ERROR_INVALID_DAY);
 
- if (month_m1<2) then
+ if ((month-1)<2) then
  begin
   month:=month+12;
+  year :=year -1;
  end;
 
- v10 := Integer(year - int32(month_m1 < 2));
+ v11 := int64_mul_high($5C28F5C28F5C28F5 , year) - year;
 
- v11 := int64_mul_high($5C28F5C28F5C28F5 , v10) - v10;
-
- v11 := (v11 shr $3F) + SarInt64(v11 , 6);
-
- v10 := v10 + (v10 div 4) + (v10 div 400);
+ v11 := (v11 shr 63) + SarInt64(v11 , 6);
 
  Result := Integer( (13 * month + 8) div 5
-                     + v10
                      + v11
+                     + year + (year div 4) + (year div 400)
                      + day)
                     mod 7;
 
@@ -735,7 +728,7 @@ function ps4_sceRtcSetDosTime(pTime:pSceRtcDateTime;uiDosTime:DWORD):Integer; Sy
 var
  days:Word;
 begin
- if (pTime=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  pTime^.microsecond:= 0;
  pTime^.second     := (uiDosTime shl 1) and $3e;
@@ -757,7 +750,7 @@ var
  year:Word;
  month:Word;
 begin
- if (puiDosTime=nil) then Exit(-$7f4afffe);
+ if (puiDosTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
  Result:=_sceRtcCheckValid(pTime);
  if (Result<>0) then Exit;
 
@@ -782,7 +775,7 @@ begin
   end;
   puiDosTime^ := $ff9fbf7d;
  end;
- Result := -$7f4afff8;
+ Result := SCE_RTC_ERROR_INVALID_YEAR;
 
 end;
 
@@ -790,7 +783,7 @@ function ps4_sceRtcSetWin32FileTime(pTime:pSceRtcDateTime;ulWin32Time:QWORD):Int
 var
  tick:QWORD;
 begin
- if (pTime=nil) then Exit(-$7f4afffe);
+ if (pTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  tick:=(ulWin32Time div 10) + $b36168b6a58000;
  ps4_sceRtcSetTick(pTime,@tick);
@@ -802,7 +795,7 @@ function ps4_sceRtcGetWin32FileTime(pTime:pSceRtcDateTime;pulWin32Time:PQWORD):I
 var
  tick:qword;
 begin
- if (pulWin32Time=nil) then Exit(-$7f4afffe);
+ if (pulWin32Time=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
  Result:=_sceRtcCheckValid(pTime);
  if (Result<>0) then Exit;
 
@@ -811,7 +804,7 @@ begin
  if (tick < $b36168b6a58000) then
  begin
   pulWin32Time^:=0;
-  Result:=(-Integer(pTime^.year<1601)*5)+(-$7f4afffd);
+  Result:=(-Integer(pTime^.year<1601)*5)+(SCE_RTC_ERROR_INVALID_VALUE);
  end else
  begin
   pulWin32Time^:=tick*10+-$701ce1722770000;
@@ -828,12 +821,12 @@ begin
  end else
  if (iTime<0) then
  begin
-  Exit(-$7f4afffd);
+  Exit(SCE_RTC_ERROR_INVALID_VALUE);
  end;
 
  if (pTime=nil) then
  begin
-  Exit(-$7f4afffe);
+  Exit(SCE_RTC_ERROR_INVALID_POINTER);
  end else
  begin
   tick:=iTime*1000000+$dcbffeff2bc000;
@@ -846,7 +839,7 @@ function ps4_sceRtcGetTime_t(pTime:pSceRtcDateTime;piTime:PInt64):Integer; SysV_
 var
  tick:QWORD;
 begin
- if (piTime=nil) then Exit(-$7f4afffe);
+ if (piTime=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
  Result:=_sceRtcCheckValid(pTime);
  if (Result<>0) then Exit;
 
@@ -855,7 +848,7 @@ begin
  if (tick < $dcbffeff2bc000) then
  begin
   piTime^:=0;
-  Result :=(-Integer(pTime^.year<1970)*5)+(-$7f4afffd);
+  Result :=(-Integer(pTime^.year<1970)*5)+(SCE_RTC_ERROR_INVALID_VALUE);
  end else
  begin
   piTime^:=(tick+$ff23400100d44000) div 1000000;
@@ -865,7 +858,7 @@ end;
 
 function ps4_sceRtcCompareTick(pTick0,pTick1:PQWORD):Integer; SysV_ABI_CDecl;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
  Result:=-1;
  if (pTick1^<=pTick0^) then
  begin
@@ -878,7 +871,7 @@ var
  Time:SceRtcDateTime;
  TempMonth,S:Integer;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  if (iAdd=0) then
  begin
@@ -923,7 +916,7 @@ function ps4_sceRtcTickAddYears(pTick0,pTick1:PQWORD;iAdd:Integer):Integer; SysV
 var
  Time:SceRtcDateTime;
 begin
- if (pTick0=nil) or (pTick1=nil) then Exit(-$7f4afffe);
+ if (pTick0=nil) or (pTick1=nil) then Exit(SCE_RTC_ERROR_INVALID_POINTER);
 
  if (iAdd=0) then
  begin
