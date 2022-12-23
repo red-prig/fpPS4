@@ -787,6 +787,11 @@ begin
  {$endif}
 end;
 
+procedure onPfpSyncMe(pm4Hdr:PM4_TYPE_3_HEADER;Body:Pointer);
+begin
+ //wait ME idle in PFP
+end;
+
 procedure onDMAData(pm4Hdr:PM4_TYPE_3_HEADER;Body:PTPM4DMADATA);
 var
  adrSrc,adrDst:PDWORD;
@@ -2654,6 +2659,12 @@ begin
         begin
          {$ifdef ww}Writeln('IT_EVENT_WRITE'){$endif};
          onEventWrite(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_PFP_SYNC_ME:
+        begin
+         {$ifdef ww}Writeln('IT_PFP_SYNC_ME'){$endif};
+         onPfpSyncMe(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
 
         else
