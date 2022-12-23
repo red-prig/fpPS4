@@ -129,6 +129,7 @@ type
   function  OpFToF(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   function  OpFloorTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpPowTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   procedure OpNot(dst:PsrRegSlot;src:PsrRegNode);
   procedure OpLogicalNot(dst:PsrRegSlot;src:PsrRegNode);
@@ -1206,6 +1207,14 @@ begin
 
  Result:=NewReg(src^.dtype);
  _OpGlsl1(_get_line(ppLine),GlslOp.Floor,Result,src)
+end;
+
+function TEmitOp.OpPowTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ if (src1=nil) then Exit(nil);
+
+ Result:=NewReg(src0^.dtype);
+ _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.Pow,Result,src0,src1));
 end;
 
 //

@@ -40,6 +40,7 @@ type
   procedure emit_V_MUL_U32_U24;
   procedure emit_V_MUL_HI(rtype:TsrDataType);
   procedure emit_V_MAC_F32;
+  procedure emit_V_LDEXP_F32;
 
   procedure emit_V_BFE_U32;
   procedure emit_V_BFI_B32;
@@ -425,6 +426,31 @@ begin
  emit_src_neg_bit(@src,3);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
+
+ emit_dst_omod_f(dst);
+ emit_dst_clamp_f(dst);
+end;
+
+procedure TEmit_VOP3.emit_V_LDEXP_F32; //vdst.f = vsrc0.f * pow(2.0, vsrc1.s)
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ two:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+
+ emit_src_abs_bit(@src,1);
+ emit_src_neg_bit(@src,1);
+
+ two:=NewReg_s(dtFloat32,2);
+ src[1]:=OpSToF(src[1],dtFloat32);
+
+ src[1]:=OpPowTo(two,src[1]);
+
+ Op2(Op.OpFMul,dtFloat32,dst,src[0],src[1]);
 
  emit_dst_omod_f(dst);
  emit_dst_clamp_f(dst);
@@ -1033,6 +1059,8 @@ begin
   256+V_MUL_U32_U24: emit_V_MUL_U32_U24;
 
   256+V_MAC_F32: emit_V_MAC_F32;
+
+  256+V_LDEXP_F32: emit_V_LDEXP_F32;
 
   //VOP3 only
 

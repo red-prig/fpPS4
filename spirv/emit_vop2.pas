@@ -37,6 +37,7 @@ type
   procedure emit_V_MADMK_F32;
   procedure emit_V_BCNT_U32_B32;
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_LDEXP_F32;
  end;
 
 implementation
@@ -403,6 +404,25 @@ begin
  OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 end;
 
+procedure TEmit_VOP2.emit_V_LDEXP_F32; //vdst.f = vsrc0.f * pow(2.0, vsrc1.s)
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ two:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtInt32);
+
+ two:=NewReg_s(dtFloat32,2);
+ src[1]:=OpSToF(src[1],dtFloat32);
+
+ src[1]:=OpPowTo(two,src[1]);
+
+ Op2(Op.OpFMul,dtFloat32,dst,src[0],src[1]);
+end;
+
 procedure TEmit_VOP2.emit_VOP2;
 begin
 
@@ -456,6 +476,8 @@ begin
 
   V_MIN_U32: emit_V_MMX(GlslOp.UMin,dtUint32);
   V_MAX_U32: emit_V_MMX(GlslOp.UMax,dtUint32);
+
+  V_LDEXP_F32: emit_V_LDEXP_F32;
 
   else
    Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP));
