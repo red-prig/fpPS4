@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  spirv,
   srCFGLabel,
   srFlow,
   srType,
@@ -29,7 +30,10 @@ type
   procedure emit_S_SETPC_B64;
   procedure emit_S_SWAPPC_B64;
   procedure emit_S_AND_SAVEEXEC_B64;
+  procedure emit_S_WQM_B32;
   procedure emit_S_WQM_B64;
+  procedure emit_S_BREV_B32;
+  procedure emit_S_BREV_B64;
  end;
 
 implementation
@@ -74,6 +78,7 @@ Var
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
+
  MakeCopy(dst,src);
 end;
 
@@ -82,11 +87,9 @@ Var
  dst:array[0..1] of PsrRegSlot;
  src:array[0..1] of PsrRegNode;
 begin
- dst[0]:=get_sdst7(FSPI.SOP1.SDST+0);
- dst[1]:=get_sdst7(FSPI.SOP1.SDST+1);
+ if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
- src[0]:=fetch_ssrc9(FSPI.SOP1.SSRC+0,dtUnknow);
- src[1]:=fetch_ssrc9(FSPI.SOP1.SSRC+1,dtUnknow);
+ if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
 
  MakeCopy(dst[0],src[0]);
  MakeCopy(dst[1],src[1]);
@@ -104,7 +107,6 @@ Var
  src:PsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
-
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
 
  OpNot(dst,src);
@@ -119,11 +121,9 @@ Var
  dst:array[0..1] of PsrRegSlot;
  src:array[0..1] of PsrRegNode;
 begin
- dst[0]:=get_sdst7(FSPI.SOP1.SDST+0);
- dst[1]:=get_sdst7(FSPI.SOP1.SDST+1);
+ if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
- src[0]:=fetch_ssrc9(FSPI.SOP1.SSRC+0,dtUnknow);
- src[1]:=fetch_ssrc9(FSPI.SOP1.SSRC+1,dtUnknow);
+ if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
 
  OpNot(dst[0],src[0]);
  OpNot(dst[1],src[1]);
@@ -208,6 +208,17 @@ begin
  //SCC = (sdst != 0)    SCC = ((exc[0] != 0) or ((exc[1] != 0))
 end;
 
+procedure TEmit_SOP1.emit_S_WQM_B32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
+
+ OpWQM32(dst,src);
+end;
+
 procedure TEmit_SOP1.emit_S_WQM_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -228,6 +239,30 @@ begin
  OpWQM32(dst[1],src[1]);
 end;
 
+procedure TEmit_SOP1.emit_S_BREV_B32; //sdst[31:0] = ssrc[0:31]
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUInt32);
+
+ Op1(Op.OpBitReverse,dtUInt32,dst,src);
+end;
+
+procedure TEmit_SOP1.emit_S_BREV_B64; //sdst[63:0] = ssrc[0:63]
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
+
+ if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
+
+ Op1(Op.OpBitReverse,dtUInt32,dst[0],src[1]); //0 -> 1
+ Op1(Op.OpBitReverse,dtUInt32,dst[1],src[0]); //1 -> 0
+end;
+
 procedure TEmit_SOP1.emit_SOP1;
 begin
 
@@ -238,7 +273,11 @@ begin
   S_NOT_B32         : emit_S_NOT_B32;
   S_NOT_B64         : emit_S_NOT_B64;
 
+  S_WQM_B32         : emit_S_WQM_B32;
   S_WQM_B64         : emit_S_WQM_B64;
+
+  S_BREV_B32        : emit_S_BREV_B32;
+  S_BREV_B64        : emit_S_BREV_B64;
 
   S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
