@@ -22,6 +22,7 @@ type
   procedure emit_V_CVT_F32_F16;
   procedure emit_V_CVT_OFF_F32_I4;
   procedure emit_V_CVT_FLR_I32_F32;
+  procedure emit_V_CVT_RPI_I32_F32;
   procedure emit_V_CVT_F32_UBYTE0;
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_RSQ_CLAMP_F32;
@@ -114,15 +115,27 @@ procedure TEmit_VOP1.emit_V_CVT_FLR_I32_F32; //ConvertFloatToSignedInt(floor(vsr
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
- flr:PsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
 
- flr:=NewReg(dtFloat32);
- _OpGlsl1(line,GlslOp.Floor,flr,src);
+ src:=OpFloorTo(src);
 
- Op1(Op.OpConvertFToS,dtInt32,dst,flr);
+ Op1(Op.OpConvertFToS,dtInt32,dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_CVT_RPI_I32_F32; //ConvertFloatToSignedInt(floor(vsrc.f+0.5))
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+
+ src:=OpFAddToS(src,0.5);
+ src:=OpFloorTo(src);
+
+ Op1(Op.OpConvertFToS,dtInt32,dst,src);
 end;
 
 procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE0;
@@ -238,7 +251,10 @@ begin
 
   V_CVT_FLR_I32_F32: emit_V_CVT_FLR_I32_F32;
 
+  V_CVT_RPI_I32_F32: emit_V_CVT_RPI_I32_F32;
+
   V_CVT_F32_UBYTE0: emit_V_CVT_F32_UBYTE0;
+
 
   V_FRACT_F32: emit_V_EXT_F32(GlslOp.Fract);
   V_TRUNC_F32: emit_V_EXT_F32(GlslOp.Trunc);

@@ -128,6 +128,8 @@ type
   function  OpSToS(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpFToF(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   //
+  function  OpFloorTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  //
   procedure OpNot(dst:PsrRegSlot;src:PsrRegNode);
   procedure OpLogicalNot(dst:PsrRegSlot;src:PsrRegNode);
   procedure OpBitwiseOr(dst:PsrRegSlot;src0,src1:PsrRegNode);
@@ -1194,6 +1196,16 @@ begin
 
  Result:=NewReg(rtype);
  _Op1(_get_line(ppLine),Op.OpFConvert,Result,src);
+end;
+
+//
+
+function TEmitOp.OpFloorTo(src:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ if (src=nil) then Exit(src);
+
+ Result:=NewReg(src^.dtype);
+ _OpGlsl1(_get_line(ppLine),GlslOp.Floor,Result,src)
 end;
 
 //
