@@ -236,17 +236,16 @@ const
 
 
 type
- PPM4_HEADER=^PM4_HEADER;
- PM4_HEADER=bitpacked record
-  reserved:Word;  //16
-  count:bit14;    //14
-  _type:bit2;     //2
- end;
-
  PPM4_TYPE_0_HEADER=^PM4_TYPE_0_HEADER;
  PM4_TYPE_0_HEADER=bitpacked record
   baseIndex:Word; //16
   count:bit14;    //14
+  _type:bit2;     //2
+ end;
+
+ PPM4_TYPE_2_HEADER=^PM4_TYPE_2_HEADER;
+ PM4_TYPE_2_HEADER=bitpacked record
+  reserved:bit30; //30
   _type:bit2;     //2
  end;
 

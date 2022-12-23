@@ -976,9 +976,19 @@ begin
 
 end;
 
+//the first 32K bytes is system registers and beyond that is graphics and multi-media.
+//For the first 32KB of register space (system registers)
+//there is no SET_* type packet and TYPE-0 packets should be used.
+
 procedure onPm40(pm4Hdr:PM4_TYPE_0_HEADER;Body:PDWORD);
 begin
+ //set system registres
  {$ifdef ww}Writeln('PM4_TYPE_0:Reg:',HexStr(pm4Hdr.baseIndex,4),' count(DW):',pm4Hdr.count+1);{$endif}
+end;
+
+procedure onPm42(pm4Hdr:PM4_TYPE_2_HEADER);
+begin
+ {$ifdef ww}Writeln('PM4_TYPE_2');{$endif}
 end;
 
 procedure onPushMarker(Body:PChar);
@@ -2544,10 +2554,20 @@ begin
    token:=PDWORD(P)^;
 
    case PM4_TYPE(token) of
-    0:begin
+    0:begin //PM4_TYPE_0
        onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
       end;
-    3:begin
+    2:begin //PM4_TYPE_2
+       onPm42(PM4_TYPE_2_HEADER(token));
+
+       //no body
+       t:=sizeof(DWORD);
+       P:=P+t;
+       i:=i+t;
+
+       Continue;
+      end;
+    3:begin //PM4_TYPE_3
        case PM4_TYPE_3_HEADER(token).opcode of
         IT_NOP:
         begin
