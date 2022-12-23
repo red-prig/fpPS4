@@ -557,7 +557,15 @@ begin
  TITLE_ID:=param_sfo.ParamSfoGetString('TITLE_ID');
  APP_VER :=param_sfo.ParamSfoGetString('APP_VER');
 
- Result:=Format('fpPS4 (%s) [%s-%s:%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
+ if (TITLE='') then
+ begin
+  TITLE:=get_dev_progname;
+ end;
+
+ if (TITLE_ID<>'') then TITLE_ID:='-' +TITLE_ID;
+ if (APP_VER <>'') then APP_VER :=':v'+APP_VER;
+
+ Result:=Format('fpPS4 (%s) [%s%s%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
 end;
 
 procedure TVideoOut.sceVideoOutOpen(node:PQNode);
