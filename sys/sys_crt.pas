@@ -65,7 +65,6 @@ Begin
  LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
- if (n<>t.BufPos) then InOutRes:=101;
  t.BufPos:=0;
 end;
 
@@ -100,7 +99,6 @@ Begin
  LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
- if (n<>t.BufPos) then InOutRes:=101;
  t.BufPos:=0;
 end;
 
@@ -123,7 +121,6 @@ Begin
  LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 
- if (n<>t.BufPos) then InOutRes:=101;
  t.BufPos:=0;
 end;
 
