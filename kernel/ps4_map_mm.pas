@@ -83,6 +83,26 @@ type
   align:array[0..6] of Byte;
  end;
 
+const
+ //SceKernelMapEntryOperation
+ SCE_KERNEL_MAP_OP_MAP_DIRECT  =0;
+ SCE_KERNEL_MAP_OP_UNMAP       =1;
+ SCE_KERNEL_MAP_OP_PROTECT     =2;
+ SCE_KERNEL_MAP_OP_MAP_FLEXIBLE=3;
+ SCE_KERNEL_MAP_OP_TYPE_PROTECT=4;
+
+type
+ pSceKernelBatchMapEntry=^SceKernelBatchMapEntry;
+ SceKernelBatchMapEntry=packed record
+  start:Pointer;
+  offset:QWORD;
+  length:QWORD;
+  protection:Byte;
+  mtype:Byte;
+  pad1:Word;
+  operation:Integer;
+ end;
+
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
 function ps4_sceKernelAvailableFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
@@ -206,6 +226,22 @@ function ps4_sceKernelMapNamedDirectMemory(
            physicalAddr:QWORD;
            alignment:QWORD;
            name:Pchar):Integer; SysV_ABI_CDecl;
+
+//
+
+function ps4_sceKernelBatchMap(
+           entries:pSceKernelBatchMapEntry;
+           numberOfEntries:Integer;
+           numberOfEntriesOut:PInteger
+           ):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelBatchMap2(
+           entries:pSceKernelBatchMapEntry;
+           numberOfEntries:Integer;
+           numberOfEntriesOut:PInteger;
+           flags:Integer):Integer; SysV_ABI_CDecl;
+
+//
 
 function ps4_mlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 function ps4_munlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
@@ -370,7 +406,11 @@ var
  flex:QWORD;
 begin
  Result:=0;
- if (sizeOut=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (sizeOut=nil) then
+ begin
+  _set_errno(EINVAL);
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
 
  _sig_lock;
  rwlock_rdlock(MMLock); //r
@@ -394,7 +434,11 @@ end;
 function ps4_sceKernelConfiguredFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
- if (sizeOut=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (sizeOut=nil) then
+ begin
+  _set_errno(EINVAL);
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
  sizeOut^:=SceKernelFlexibleMemorySize;
 end;
 
@@ -1605,6 +1649,102 @@ begin
  end else
  begin
   Writeln(StdErr,'[WARN]:sceKernelMapNamedDirectMemory:',Result);
+ end;
+end;
+
+//
+
+function ps4_sceKernelBatchMap(
+           entries:pSceKernelBatchMapEntry;
+           numberOfEntries:Integer;
+           numberOfEntriesOut:PInteger
+           ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceKernelBatchMap2(
+            entries,
+            numberOfEntries,
+            numberOfEntriesOut,
+            0);
+end;
+
+function ps4_sceKernelBatchMap2(
+           entries:pSceKernelBatchMapEntry;
+           numberOfEntries:Integer;
+           numberOfEntriesOut:PInteger;
+           flags:Integer):Integer; SysV_ABI_CDecl;
+var
+ i:Integer;
+begin
+ if (entries=nil) then
+ begin
+  if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=0;
+  _set_errno(EFAULT);
+  Exit(SCE_KERNEL_ERROR_EFAULT);
+ end;
+ if (numberOfEntries=0) then
+ begin
+  if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=0;
+  _set_errno(EINVAL);
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ For i:=0 to numberOfEntries-1 do
+ begin
+  Case entries[i].operation of
+   SCE_KERNEL_MAP_OP_MAP_DIRECT:
+    begin
+     Result:=ps4_sceKernelMapDirectMemory(
+               @entries[i].start,
+               entries[i].length,
+               entries[i].protection,
+               flags,
+               entries[i].offset,
+               0);
+    end;
+   SCE_KERNEL_MAP_OP_UNMAP:
+    begin
+     Result:=ps4_sceKernelMunmap(entries[i].start,
+                                 entries[i].length);
+    end;
+   SCE_KERNEL_MAP_OP_PROTECT:
+    begin
+     Result:=ps4_sceKernelMprotect(entries[i].start,
+                                   entries[i].length,
+                                   entries[i].protection);
+    end;
+   SCE_KERNEL_MAP_OP_MAP_FLEXIBLE:
+    begin
+     Result:=ps4_sceKernelMapFlexibleMemory(@entries[i].start,
+                                            entries[i].length,
+                                            entries[i].protection,
+                                            flags);
+    end;
+   SCE_KERNEL_MAP_OP_TYPE_PROTECT:
+    begin
+     Result:=ps4_sceKernelMtypeprotect(entries[i].start,
+                                       entries[i].length,
+                                       entries[i].mtype,
+                                       entries[i].protection);
+    end;
+   else
+    begin
+     if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=i;
+     _set_errno(EINVAL);
+     Exit(SCE_KERNEL_ERROR_EINVAL);
+    end;
+  end;
+
+  if (Result<>0) then
+  begin
+   if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=i;
+   Exit;
+  end;
+
+ end;
+
+ if (Result<>0) then
+ begin
+  if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=numberOfEntries;
  end;
 end;
 

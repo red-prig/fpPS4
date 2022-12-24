@@ -1203,6 +1203,9 @@ begin
  lib^.set_proc($2FF4372C48C86E00,@ps4_sceKernelMapDirectMemory);
  lib^.set_proc($35C6965317CC3484,@ps4_sceKernelMapNamedDirectMemory);
 
+ lib^.set_proc($D92284C7A6D2ABFE,@ps4_sceKernelBatchMap);
+ lib^.set_proc($90127317CC784B21,@ps4_sceKernelBatchMap2);
+
  lib^.set_proc($9930597C46A5D81C,@ps4_mlock);
  lib^.set_proc($386E11B03C0B82EA,@ps4_munlock);
  lib^.set_proc($DE4EA4C7FCCE3924,@ps4_sceKernelMlock);
