@@ -391,9 +391,7 @@ end;
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 begin
- //5184 MiB - 512 MiB
- Result:=(5184*1024*1024)-(512*1024*1024);
- //Result:=SCE_KERNEL_MAIN_DMEM_SIZE-(448*1024*1024);
+ Result:=SCE_KERNEL_MAIN_DMEM_SIZE;
 end;
 
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
