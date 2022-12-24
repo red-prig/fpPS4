@@ -1427,7 +1427,7 @@ var
  v:DWORD;
 begin
  c:=pm4Hdr.count;
- if c<>0 then
+ if (c<>0) then
  For i:=0 to c-1 do
  begin
   r:=CONTEXT_REG_BASE+Body^.REG_OFFSET+i;
@@ -1454,7 +1454,7 @@ var
  v:DWORD;
 begin
  c:=pm4Hdr.count;
- if c<>0 then
+ if (c<>0) then
  For i:=0 to c-1 do
  begin
   r:=SH_REG_BASE+Body^.REG_OFFSET+i;
@@ -1492,7 +1492,7 @@ begin
  //mmVGT_NUM_INSTANCES__CI__VI                      = 0xC24D;
 
  c:=pm4Hdr.count;
- if c<>0 then
+ if (c<>0) then
  For i:=0 to c-1 do
  begin
   r:=USERCONFIG_REG_BASE+Body^.REG_OFFSET+i;
@@ -1505,6 +1505,24 @@ begin
  end;
 
 
+end;
+
+const
+ CONFIG_SPACE_START=$2000;
+
+procedure onSetConfigReg(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDSETDATA);
+var
+ i,c,r:WORD;
+ v:DWORD;
+begin
+ c:=pm4Hdr.count;
+ if (c<>0) then
+ For i:=0 to c-1 do
+ begin
+  r:=CONFIG_SPACE_START+Body^.REG_OFFSET+i;
+  v:=PDWORD(@Body^.REG_DATA)[i];
+  SetContextReg(r,v);
+ end;
 end;
 
 procedure onIndexBufferSize(pm4Hdr:PM4_TYPE_3_HEADER;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
@@ -2617,6 +2635,12 @@ begin
         begin
          {$ifdef ww}Writeln('IT_SET_UCONFIG_REG');{$endif}
          onSetUConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
+        end;
+
+        IT_SET_CONFIG_REG:
+        begin
+         {$ifdef ww}Writeln('IT_SET_CONFIG_REG');{$endif}
+         onSetConfigReg(PM4_TYPE_3_HEADER(token),@PDWORD(P)[1]);
         end;
 
         IT_INDEX_BUFFER_SIZE:
