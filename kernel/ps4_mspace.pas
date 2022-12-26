@@ -255,7 +255,7 @@ Const
 
  DEFAULT_MAGIC         =$58585858;
 
- MAX_SIZE_T            =not ptruint(0);
+ MAX_SIZE_T            =ptruint(not ptruint(0));
 
  SIZE_T_SIZE           =sizeof(ptruint);
  SIZE_T_BITSIZE        =(sizeof(ptruint) shl 3);
@@ -271,7 +271,7 @@ Const
  SEVEN_SIZE_T_SIZES    =(FOUR_SIZE_T_SIZES+TWO_SIZE_T_SIZES+SIZE_T_SIZE);
  HALF_MAX_SIZE_T       =(MAX_SIZE_T div 2);
 
- CHUNK_ALIGN_MASK      =(MALLOC_ALIGNMENT-SIZE_T_ONE);
+ CHUNK_ALIGN_MASK      =ptruint(MALLOC_ALIGNMENT-SIZE_T_ONE);
 
  CHUNK_OVERHEAD        =TWO_SIZE_T_SIZES;
 
@@ -285,7 +285,7 @@ Const
 
  MCHUNK_SIZE           =sizeof(mchunk);
 
- MIN_CHUNK_SIZE        =(MCHUNK_SIZE+CHUNK_ALIGN_MASK) and (not CHUNK_ALIGN_MASK);
+ MIN_CHUNK_SIZE        =(MCHUNK_SIZE+CHUNK_ALIGN_MASK) and ptruint(not CHUNK_ALIGN_MASK);
 
  MAX_REQUEST           =(-MIN_CHUNK_SIZE) shl 2;
  MIN_REQUEST           =MIN_CHUNK_SIZE-CHUNK_OVERHEAD-SIZE_T_ONE;
@@ -310,22 +310,25 @@ Const
 
  DEFAULT_MFLAGS        =USE_LOCK_BIT or USE_MMAP_BIT;
 
+// True if address a has acceptable alignment
 function is_aligned(A:Pointer):boolean; inline;
 begin
  Result:=(ptruint(A) and CHUNK_ALIGN_MASK)=0;
 end;
 
+// the number of bytes to offset an address to align it
 function align_offset(A:Pointer):ptruint; inline;
 begin
  if ((ptruint(A) and CHUNK_ALIGN_MASK)=0) then
  begin
-  Result:=MALLOC_ALIGNMENT-(ptruint(A) and CHUNK_ALIGN_MASK);
+  Result:=0;
  end else
  begin
-  Result:=CHUNK_ALIGN_MASK;
+  Result:=((MALLOC_ALIGNMENT - (ptruint(A) and CHUNK_ALIGN_MASK)) and CHUNK_ALIGN_MASK);
  end;
 end;
 
+// conversion from malloc headers to user pointers, and back
 function chunk2mem(p:Pointer):Pointer; inline;
 begin
  Result:=p+TWO_SIZE_T_SIZES;
@@ -336,16 +339,19 @@ begin
  Result:=p-TWO_SIZE_T_SIZES;
 end;
 
+// chunk associated with aligned address A
 function align_as_chunk(A:Pointer):mchunkptr; inline;
 begin
  Result:=mchunkptr(A+align_offset(chunk2mem(A)));
 end;
 
+// pad request bytes into a usable size
 function pad_request(req:ptruint):ptruint; inline;
 begin
- Result:=(req+CHUNK_OVERHEAD+CHUNK_ALIGN_MASK) and (not CHUNK_ALIGN_MASK)
+ Result:=(req+CHUNK_OVERHEAD+CHUNK_ALIGN_MASK) and ptruint(not CHUNK_ALIGN_MASK);
 end;
 
+// pad request, checking for minimum (but not maximum)
 function request2size(req:ptruint):ptruint; inline;
 begin
  if (req<MIN_REQUEST) then
@@ -389,12 +395,12 @@ end;
 
 function chunksize(p:Pointer):ptruint; inline;
 begin
- Result:=(mchunkptr(p)^.head and (not FLAG_BITS))
+ Result:=(mchunkptr(p)^.head and ptruint(not FLAG_BITS))
 end;
 
 procedure clear_pinuse(p:mchunkptr); inline;
 begin
- p^.head:=(p^.head and (not PINUSE_BIT))
+ p^.head:=(p^.head and ptruint(not PINUSE_BIT))
 end;
 
 procedure set_flag4(p:mchunkptr); inline;
@@ -404,9 +410,10 @@ end;
 
 procedure clear_flag4(p:mchunkptr); inline;
 begin
- p^.head:=(p^.head and (not FLAG4_BIT))
+ p^.head:=(p^.head and ptruint(not FLAG4_BIT))
 end;
 
+// Treat space at ptr +/- offset as a chunk
 function chunk_plus_offset(p:Pointer;s:ptruint):mchunkptr; inline;
 begin
  Result:=mchunkptr(Pointer(p)+s);
@@ -417,6 +424,7 @@ begin
  Result:=mchunkptr(Pointer(p)-s);
 end;
 
+// Ptr to next or previous physical malloc_chunk.
 function next_chunk(p:mchunkptr):mchunkptr; inline;
 begin
  Result:=mchunkptr(Pointer(p)+chunksize(p));
@@ -427,11 +435,13 @@ begin
  Result:=mchunkptr(Pointer(p)-p^.prev_foot);
 end;
 
+// extract next chunk's pinuse bit
 function next_pinuse(p:mchunkptr):boolean; inline;
 begin
  Result:=(next_chunk(p)^.head and PINUSE_BIT)<>0;
 end;
 
+// Get/set size at footer
 function get_foot(p:mchunkptr;s:ptruint):ptruint; inline;
 begin
  Result:=mchunkptr(Pointer(p)+s)^.prev_foot;
@@ -442,18 +452,21 @@ begin
  mchunkptr(Pointer(p)+s)^.prev_foot:=s;
 end;
 
+// Set size, pinuse bit, and foot
 procedure set_size_and_pinuse_of_free_chunk(p:mchunkptr;s:ptruint); inline;
 begin
  p^.head:=s or PINUSE_BIT;
  set_foot(p,s);
 end;
 
+// Set size, pinuse bit, foot, and clear next pinuse
 procedure set_free_with_pinuse(p:mchunkptr;s:ptruint;n:mchunkptr); inline;
 begin
  clear_pinuse(n);
  set_size_and_pinuse_of_free_chunk(p,s);
 end;
 
+// Get the internal overhead associated with chunk p
 function overhead_for(p:mchunkptr):ptruint; inline;
 begin
  if is_mmapped(p) then
@@ -503,7 +516,7 @@ end;
 
 procedure disable_lock(M:mstate);inline;
 begin
- M^.mflags:=(M^.mflags and (not USE_LOCK_BIT));
+ M^.mflags:=(M^.mflags and ptruint(not USE_LOCK_BIT));
 end;
 
 function use_mmap(M:mstate):boolean; inline;
@@ -518,41 +531,55 @@ end;
 
 procedure disable_mmap(M:mstate); inline;
 begin
- M^.mflags:=(M^.mflags and (not USE_MMAP_BIT));
+ M^.mflags:=(M^.mflags and ptruint(not USE_MMAP_BIT));
 end;
 
 procedure set_lock(M:mstate;L:Boolean);inline;
 begin
  Case L of
   True :M^.mflags:=(M^.mflags or USE_LOCK_BIT);
-  False:M^.mflags:=(M^.mflags and (not USE_LOCK_BIT));
+  False:M^.mflags:=(M^.mflags and ptruint(not USE_LOCK_BIT));
  end;
 end;
 
+// page-align a size
 function page_align(S:ptruint):ptruint; inline;
 begin
- Result:=(S+(DEFAULT_PAGE_SIZE-SIZE_T_ONE)) and (not (DEFAULT_PAGE_SIZE-SIZE_T_ONE));
+ Result:=(S+(DEFAULT_PAGE_SIZE-SIZE_T_ONE)) and ptruint(not (DEFAULT_PAGE_SIZE-SIZE_T_ONE));
 end;
 
+// granularity-align a size
 function granularity_align(S:ptruint):ptruint; inline;
 begin
- Result:=(S+(DEFAULT_GRANULARITY-SIZE_T_ONE)) and (not (DEFAULT_GRANULARITY-SIZE_T_ONE));
+ Result:=(S+(DEFAULT_GRANULARITY-SIZE_T_ONE)) and ptruint(not (DEFAULT_GRANULARITY-SIZE_T_ONE));
 end;
 
 const
  mmapped_granularity=DEFAULT_GRANULARITY;
 
+// For mmapped allocations align the size specially such that large
 function mmap_align_size(S:ptruint):ptruint; inline;
 begin
- Result:=(S+(mmapped_granularity-SIZE_T_ONE)) and (not (mmapped_granularity-SIZE_T_ONE));
+ Result:=(S+(mmapped_granularity-SIZE_T_ONE)) and ptruint(not (mmapped_granularity-SIZE_T_ONE));
 end;
 
-const
- align_offset_two =8;
- pad_m_segment    =48; //pad_request(sizeof(malloc_segment))
+{
+ TOP_FOOT_SIZE is padding at the end of a segment, including space
+ that may be needed to place segment records and fenceposts when new
+ noncontiguous segments are added.
+}
+function TOP_FOOT_SIZE:Ptruint; inline;
+begin
+ Result:=align_offset(Pointer(TWO_SIZE_T_SIZES))+
+         pad_request(sizeof(malloc_segment))+
+         MIN_CHUNK_SIZE;
+end;
 
- TOP_FOOT_SIZE    =align_offset_two+pad_m_segment+MIN_CHUNK_SIZE;
- SYS_ALLOC_PADDING=TOP_FOOT_SIZE+MALLOC_ALIGNMENT;
+// For sys_alloc, enough padding to ensure can malloc request on success
+function SYS_ALLOC_PADDING:Ptruint; inline;
+begin
+ Result:=TOP_FOOT_SIZE+MALLOC_ALIGNMENT;
+end;
 
 function is_page_aligned(S:ptruint):Boolean; inline;
 begin
@@ -564,11 +591,13 @@ begin
  Result:=(S and (DEFAULT_GRANULARITY-SIZE_T_ONE))=0;
 end;
 
+// True if segment S holds address A
 function segment_holds(S:msegmentptr;A:Pointer):Boolean; inline;
 begin
  Result:=(ptruint(A)>=ptruint(S^.base)) and (ptruint(A)<(ptruint(S^.base)+S^.size));
 end;
 
+// Return segment holding given address
 function segment_holding(m:mstate;addr:Pointer):msegmentptr;
 var
  sp:msegmentptr;
@@ -581,6 +610,7 @@ begin
  until false;
 end;
 
+// Return true if segment contains a segment link
 function has_segment_link(m:mstate;ss:msegmentptr):boolean;
 var
  sp:msegmentptr;
@@ -697,25 +727,27 @@ begin
  Result:=@m^.treebins[i];
 end;
 
-procedure compute_tree_index(var S:ptruint;var i:bindex_t);
+// assign tree index for size S to variable I.
+function compute_tree_index(S:ptruint):bindex_t;
 var
  X,K:ptruint;
 begin
  X:=S shr TREEBIN_SHIFT;
  if (X=0) then
  begin
-  I:=0;
+  Result:=0;
  end else
  if (X > $FFFF) then
  begin
-  I:=NTREEBINS-1;
+  Result:=NTREEBINS-1;
  end else
  begin
   K:=BsrDWord(X);
-  I:=((K shl 1) + ((S shr (K + (TREEBIN_SHIFT-1)) and 1)));
+  Result:=((K shl 1) + ((S shr (K + (TREEBIN_SHIFT-1))) and 1));
  end;
 end;
 
+// Bit representing maximum resolved size in a treebin at i
 function bit_for_tree_index(i:integer):ptruint; inline;
 begin
  if (i = (NTREEBINS-1)) then
@@ -727,6 +759,7 @@ begin
  end;
 end;
 
+// Shift placing maximum resolved bit in a treebin at i as sign bit
 function leftshift_for_tree_index(i:integer):ptruint; inline;
 begin
  if (i = (NTREEBINS-1)) then
@@ -738,17 +771,20 @@ begin
  end;
 end;
 
+// The size of the smallest chunk held in bin with index i
 function minsize_for_tree_index(i:integer):ptruint; inline;
 begin
  Result:=(SIZE_T_ONE shl ((i shr 1) + TREEBIN_SHIFT)) or
   ((i and SIZE_T_ONE) shl ((i shr 1) + TREEBIN_SHIFT - 1));
 end;
 
+// bit corresponding to given index
 function idx2bit(i:integer):binmap_t; inline;
 begin
  Result:=1 shl i;
 end;
 
+// Mark/Clear bits with given index
 procedure mark_smallmap(m:mstate;i:integer); inline;
 begin
  M^.smallmap:=M^.smallmap or idx2bit(i);
@@ -756,7 +792,7 @@ end;
 
 procedure clear_smallmap(m:mstate;i:integer); inline;
 begin
- M^.smallmap:=M^.smallmap and (not idx2bit(i));
+ M^.smallmap:=M^.smallmap and integer(not idx2bit(i));
 end;
 
 function smallmap_is_marked(m:mstate;i:integer):boolean; inline;
@@ -771,7 +807,7 @@ end;
 
 procedure clear_treemap(m:mstate;i:integer); inline;
 begin
- M^.treemap:=M^.treemap and (not idx2bit(i));
+ M^.treemap:=M^.treemap and integer(not idx2bit(i));
 end;
 
 function treemap_is_marked(m:mstate;i:integer):boolean; inline;
@@ -779,24 +815,28 @@ begin
  Result:=(M^.treemap and idx2bit(i))<>0;
 end;
 
+// isolate the least set bit of a bitmap
 function least_bit(x:ptruint):ptruint; inline;
 begin
  Result:=x and ptruint(-x);
 end;
 
+// mask with all bits to left of least bit of x on
 function left_bits(x:ptruint):ptruint; inline;
 begin
  Result:=(x shl 1) or -(x shl 1);
 end;
 
+// mask with all bits to left of or equal to least bit of x on
 function same_or_left_bits(x:ptruint):ptruint; inline;
 begin
  Result:=x or ptruint(-x);
 end;
 
-procedure compute_bit2idx(X:ptruint;var I:bindex_t); inline;
+// index corresponding to given bit.
+function compute_bit2idx(X:ptruint):bindex_t; inline;
 begin
- I:=BsfDWord(X) and 31;
+ Result:=BsfDWord(X) and 31;
 end;
 
 function ok_address(m:mstate;a:Pointer):boolean; inline;
@@ -824,6 +864,7 @@ begin
  Result:=(m^.magic=DEFAULT_MAGIC);
 end;
 
+// Set foot of inuse chunk to be xor of mstate and seed
 procedure mark_inuse_foot(m:mstate;p:mchunkptr;s:ptruint); inline;
 begin
  mchunkptr(Pointer(p) + s)^.prev_foot:=ptruint(m) xor DEFAULT_MAGIC;
@@ -834,6 +875,7 @@ begin
  Result:=mstate(mchunkptr(Pointer(p) + chunksize(p))^.prev_foot xor DEFAULT_MAGIC);
 end;
 
+// Set cinuse bit and pinuse bit of next chunk
 procedure set_inuse(m:mstate;p:mchunkptr;s:ptruint); inline;
 begin
  p^.head:=(p^.head and PINUSE_BIT) or s or CINUSE_BIT;
@@ -844,6 +886,7 @@ begin
  mark_inuse_foot(M,p,s);
 end;
 
+// Set cinuse and pinuse of this chunk and pinuse of next chunk
 procedure set_inuse_and_pinuse(m:mstate;p:Pointer;s:ptruint); inline;
 begin
  mchunkptr(p)^.head:=s or PINUSE_BIT or CINUSE_BIT;
@@ -854,6 +897,7 @@ begin
  mark_inuse_foot(M,p,s);
 end;
 
+// Set size, cinuse and pinuse bit of this chunk
 procedure set_size_and_pinuse_of_inuse_chunk(m:mstate;p:Pointer;s:ptruint); inline;
 begin
  mchunkptr(p)^.head:=s or PINUSE_BIT or CINUSE_BIT;
@@ -861,6 +905,7 @@ begin
  mark_inuse_foot(M,p,s);
 end;
 
+// Link a free chunk into a smallbin
 procedure insert_small_chunk(m:mstate;p:mchunkptr;s:ptruint);
 var
  I:bindex_t;
@@ -890,6 +935,7 @@ begin
  P^.bk:=B;
 end;
 
+// Unlink a chunk from a smallbin
 procedure unlink_small_chunk(m:mstate;p:mchunkptr;s:ptruint);
 var
  F:mchunkptr;
@@ -919,6 +965,7 @@ begin
  end;
 end;
 
+// Unlink the first chunk from a smallbin
 procedure unlink_first_small_chunk(m:mstate;B,P:mchunkptr;i:bindex_t);
 var
  F:mchunkptr;
@@ -941,6 +988,8 @@ begin
  end;
 end;
 
+// Replace dv node, binning the old one
+// Used only when dvsize known to be small
 procedure replace_dv(m:mstate;p:mchunkptr;s:ptruint);
 var
  DVS:ptruint;
@@ -957,6 +1006,7 @@ begin
  M^.dv    :=P;
 end;
 
+// Insert chunk into tree
 procedure insert_large_chunk(m:mstate;X:tbinptr;s:ptruint);
 var
  H:p_tbinptr;
@@ -966,8 +1016,7 @@ var
  C:^tchunkptr;
  F:tchunkptr;
 begin
- I:=0;
- compute_tree_index(S, I);
+ I:=compute_tree_index(S);
  H:=treebin_at(M, I);
  X^.index:=I;
  X^.child[0]:=nil;
@@ -986,7 +1035,7 @@ begin
   repeat
    if (chunksize(T)<>S) then
    begin
-    C:=@T^.child[(K shl (SIZE_T_BITSIZE-SIZE_T_ONE)) and 1];
+    C:=@T^.child[(K shr (SIZE_T_BITSIZE-SIZE_T_ONE)) and 1];
     K:=K shl 1;
     if (C^<>nil) then
     begin
@@ -1025,7 +1074,7 @@ begin
  end
 end;
 
-procedure unlink_large_chunk(m:mstate;X:tbinptr);
+procedure unlink_large_chunk(m:mstate;X:tchunkptr);
 var
  XP:tchunkptr;
  R:tchunkptr;
@@ -1151,6 +1200,8 @@ begin
  end
 end;
 
+// Relays to large vs small bin operations
+
 procedure insert_chunk(m:mstate;p:mchunkptr;s:ptruint);
 var
  TP:tchunkptr;
@@ -1188,12 +1239,11 @@ end;
 function CALL_MREMAP(m:mstate;ptr:Pointer;oldsize,newsize:ptruint):Pointer;
 begin
  Result:=nil;
- ps4_sceKernelMapNamedFlexibleMemory(@Result,newsize,3,0,@m^.name);
- if (Result<>nil) then
- begin
-  Move(ptr^,Result^,oldsize);
-  ps4_sceKernelMunmap(ptr,oldsize);
- end;
+ {
+ PS4 doesn't actually support MREMAP directly,
+ should it be implemented at all?
+ The performance gain seems questionable
+ }
 end;
 
 function CALL_MUNMAP(ptr:Pointer;size:ptruint):Integer;
@@ -1201,6 +1251,512 @@ begin
  Result:=ps4_sceKernelMunmap(ptr,size);
 end;
 
+//{$DEFINE DEBUG_MSPACE}
+
+{$IFDEF DEBUG_MSPACE}
+
+// Check properties of any chunk, whether free, inuse, mmapped etc
+procedure do_check_any_chunk(m:mstate;p:mchunkptr);
+begin
+ assert((is_aligned(chunk2mem(p))) or (p^.head = FENCEPOST_HEAD));
+ assert(ok_address(m, p));
+end;
+
+// Check properties of top chunk
+procedure do_check_top_chunk(m:mstate;p:mchunkptr);
+var
+ sp:msegmentptr;
+ sz:size_t;
+begin
+ sp := segment_holding(m, p);
+ sz := p^.head and ptruint(not INUSE_BITS);
+ assert(sp <> nil);
+ assert((is_aligned(chunk2mem(p))) or (p^.head = FENCEPOST_HEAD));
+ assert(ok_address(m, p));
+ assert(sz = m^.topsize);
+ assert(sz > 0);
+ assert(sz = ((sp^.base + sp^.size) - Pointer(p)) - TOP_FOOT_SIZE);
+ assert(pinuse(p));
+ assert(not pinuse(chunk_plus_offset(p, sz)));
+end;
+
+// Check properties of (inuse) mmapped chunks
+procedure do_check_mmapped_chunk(m:mstate;p:mchunkptr);
+var
+ sz:size_t;
+ len:size_t;
+begin
+ sz :=chunksize(p);
+ len:=(sz + (p^.prev_foot) + MMAP_FOOT_PAD);
+ assert(is_mmapped(p));
+ assert(use_mmap(m));
+ assert((is_aligned(chunk2mem(p))) or (p^.head = FENCEPOST_HEAD));
+ assert(ok_address(m, p));
+ assert(not is_small(sz));
+ assert((len and (mmapped_granularity-SIZE_T_ONE)) = 0);
+ assert(chunk_plus_offset(p, sz)^.head = FENCEPOST_HEAD);
+ assert(chunk_plus_offset(p, sz+SIZE_T_SIZE)^.head = 0);
+end;
+
+// Check properties of inuse chunks
+procedure do_check_inuse_chunk(m:mstate;p:mchunkptr);
+var
+ n:mchunkptr;
+begin
+ do_check_any_chunk(m, p);
+ assert(is_inuse(p));
+ n:=next_chunk(p);
+ assert(pinuse(n));
+ //assert(next_pinuse(p));
+ // If not pinuse and not mmapped, previous chunk has OK offset
+ assert(is_mmapped(p) or pinuse(p) or (next_chunk(prev_chunk(p)) = p));
+ if (is_mmapped(p)) then
+ begin
+  do_check_mmapped_chunk(m, p);
+ end;
+end;
+
+// Check properties of free chunks
+procedure do_check_free_chunk(m:mstate;p:mchunkptr);
+var
+ sz:size_t;
+ next:mchunkptr;
+begin
+ sz := chunksize(p);
+ next := chunk_plus_offset(p, sz);
+ do_check_any_chunk(m, p);
+ assert(not is_inuse(p));
+ assert(not next_pinuse(p));
+ assert(not is_mmapped(p));
+ if (p <> m^.dv) and (p <> m^.top) then
+ begin
+  if (sz >= MIN_CHUNK_SIZE) then
+  begin
+   assert((sz and CHUNK_ALIGN_MASK) = 0);
+   assert(is_aligned(chunk2mem(p)));
+   assert(next^.prev_foot = sz);
+   assert(pinuse(p));
+   assert ((next = m^.top) or is_inuse(next));
+   assert(p^.fd^.bk = p);
+   assert(p^.bk^.fd = p);
+  end else
+  // markers are always of size SIZE_T_SIZE
+  begin
+   assert(sz = SIZE_T_SIZE);
+  end;
+ end;
+end;
+
+// Check properties of malloced chunks at the point they are malloced
+procedure do_check_malloced_chunk(m:mstate;mem:Pointer;s:size_t);
+var
+ p:mchunkptr;
+ sz:size_t;
+begin
+ if (mem <> nil) then
+ begin
+  p  := mem2chunk(mem);
+  sz := p^.head and ptruint(not INUSE_BITS);
+  do_check_inuse_chunk(m, p);
+  assert((sz and CHUNK_ALIGN_MASK) = 0);
+  assert(sz >= MIN_CHUNK_SIZE);
+  assert(sz >= s);
+  // unless mmapped, size is less than MIN_CHUNK_SIZE more than request
+  assert(is_mmapped(p) or (sz < (s + MIN_CHUNK_SIZE)));
+ end;
+end;
+
+//  Check all the chunks in a smallbin.
+procedure do_check_smallbin(m:mstate;i:bindex_t);
+var
+ b:sbinptr;
+ p:mchunkptr;
+ empty:Boolean;
+ size:QWORD;
+ q:mchunkptr;
+begin
+ b := smallbin_at(m, i);
+ p := b^.bk;
+ empty := (m^.smallmap and (1 shl i)) = 0;
+ if (p = b) then
+ begin
+  assert(empty);
+ end;
+ if (not empty) then
+ begin
+  While (p<>b) do
+  begin
+   size := chunksize(p);
+   // each chunk claims to be free
+   do_check_free_chunk(m, p);
+   // chunk belongs in bin
+   assert(small_index(size) = i);
+   assert((p^.bk = b) or (chunksize(p^.bk) = chunksize(p)));
+   // chunk is followed by an inuse chunk
+   q := next_chunk(p);
+   if (q^.head <> FENCEPOST_HEAD) then
+   begin
+    do_check_inuse_chunk(m, q);
+   end;
+   p := p^.bk
+  end;
+ end;
+end;
+
+// Check a tree and its subtrees.
+procedure do_check_tree(m:mstate;t:tchunkptr);
+var
+ head:tchunkptr;
+ u:tchunkptr;
+ tindex:bindex_t;
+ tsize:size_t;
+ idx:bindex_t;
+begin
+ head:=nil;
+ u := t;
+ tindex := t^.index;
+ tsize := chunksize(t);
+ idx:=compute_tree_index(tsize);
+ assert(tindex = idx);
+ assert(tsize >= MIN_LARGE_SIZE);
+ assert(tsize >= minsize_for_tree_index(idx));
+ assert((idx = NTREEBINS-1) or (tsize < minsize_for_tree_index((idx+1))));
+
+ repeat // traverse through chain of same-sized nodes
+  do_check_any_chunk(m, mchunkptr(u));
+  assert(u^.index = tindex);
+  assert(chunksize(u) = tsize);
+  assert(not is_inuse(mchunkptr(u)));
+  assert(not next_pinuse(mchunkptr(u)));
+  assert(u^.fd^.bk = u);
+  assert(u^.bk^.fd = u);
+  if (u^.parent = nil) then
+  begin
+   assert(u^.child[0] = nil);
+   assert(u^.child[1] = nil);
+  end else
+  begin
+   assert(head = nil); // only one node on chain has parent
+   head := u;
+   assert(u^.parent <> u);
+   assert ((u^.parent^.child[0] = u) or
+           (u^.parent^.child[1] = u) or
+           (p_tbinptr(u^.parent)^ = u));
+   if (u^.child[0] <> nil) then
+   begin
+    assert(u^.child[0]^.parent = u);
+    assert(u^.child[0] <> u);
+    do_check_tree(m, u^.child[0]);
+   end;
+   if (u^.child[1] <> nil) then
+   begin
+    assert(u^.child[1]^.parent = u);
+    assert(u^.child[1] <> u);
+    do_check_tree(m, u^.child[1]);
+   end;
+   if ((u^.child[0] <> nil) and (u^.child[1] <> nil)) then
+   begin
+    assert(chunksize(u^.child[0]) < chunksize(u^.child[1]));
+   end
+  end;
+  u := u^.fd;
+ until (u = t);
+ assert(head <> nil);
+end;
+
+// Check a tree and its subtrees.
+procedure do_check_smallbin(m:mstate;t:tchunkptr);
+var
+ head:tchunkptr;
+ u:tchunkptr;
+ tindex:bindex_t;
+ tsize:QWORD;
+ idx:bindex_t;
+begin
+ head:=nil;
+ u:=t;
+ tindex := t^.index;
+ tsize := chunksize(t);
+ idx:=compute_tree_index(tsize);
+ assert(tindex = idx);
+ assert(tsize >= MIN_LARGE_SIZE);
+ assert(tsize >= minsize_for_tree_index(idx));
+ assert((idx = NTREEBINS-1) or (tsize < minsize_for_tree_index((idx+1))));
+
+ repeat // traverse through chain of same-sized nodes
+  do_check_any_chunk(m, mchunkptr(u));
+  assert(u^.index = tindex);
+  assert(chunksize(u) = tsize);
+  assert(not is_inuse(mchunkptr(u)));
+  assert(not next_pinuse(mchunkptr(u)));
+  assert(u^.fd^.bk = u);
+  assert(u^.bk^.fd = u);
+  if (u^.parent = nil) then
+  begin
+   assert(u^.child[0] = nil);
+   assert(u^.child[1] = nil);
+  end else
+  begin
+   assert(head = nil); // only one node on chain has parent
+   head := u;
+   assert(u^.parent <> u);
+   assert ((u^.parent^.child[0] = u) or
+           (u^.parent^.child[1] = u) or
+           (p_tbinptr(u^.parent)^ = u));
+   if (u^.child[0] <> nil) then
+   begin
+    assert(u^.child[0]^.parent = u);
+    assert(u^.child[0] <> u);
+    do_check_tree(m, u^.child[0]);
+   end;
+   if (u^.child[1] <> nil) then
+   begin
+    assert(u^.child[1]^.parent = u);
+    assert(u^.child[1] <> u);
+    do_check_tree(m, u^.child[1]);
+   end;
+   if (u^.child[0] <> nil) and (u^.child[1] <> nil) then
+   begin
+    assert(chunksize(u^.child[0]) < chunksize(u^.child[1]));
+   end;
+  end;
+  u := u^.fd;
+ until (u = t);
+ assert(head <> nil);
+end;
+
+//  Check all the chunks in a treebin.
+procedure do_check_treebin(m:mstate;i:bindex_t);
+var
+ tb:p_tbinptr;
+ t:tchunkptr;
+ empty:Boolean;
+begin
+ tb := treebin_at(m, i);
+ t := tb^;
+ empty := (m^.treemap and (1 shl i)) = 0;
+ if (t = nil) then
+ begin
+  assert(empty);
+ end;
+ if (not empty) then
+ begin
+  do_check_tree(m, t);
+ end;
+end;
+
+// Find x in a bin. Used in other check functions.
+function bin_find(m:mstate;x:mchunkptr):Boolean;
+var
+ size:QWORD;
+ sidx:bindex_t;
+ b:sbinptr;
+ p:mchunkptr;
+ tidx:bindex_t;
+ t:tchunkptr;
+ sizebits:QWORD;
+ u:tchunkptr;
+begin
+ size := chunksize(x);
+ if (is_small(size)) then
+ begin
+  sidx := small_index(size);
+  b := smallbin_at(m, sidx);
+  if (smallmap_is_marked(m, sidx)) then
+  begin
+   p := b;
+   repeat
+    if (p = x) then Exit(True);
+    p := p^.fd;
+   until (p = b);
+  end;
+ end else
+ begin
+  tidx:=compute_tree_index(size);
+  if (treemap_is_marked(m, tidx)) then
+  begin
+   t := treebin_at(m, tidx)^;
+   sizebits := size shl leftshift_for_tree_index(tidx);
+   while ((t <> nil) and (chunksize(t) <> size)) do
+   begin
+    t := t^.child[(sizebits shr (SIZE_T_BITSIZE-SIZE_T_ONE)) and 1];
+    sizebits:=sizebits shl 1;
+   end;
+   if (t <> nil) then
+   begin
+    u := t;
+    repeat
+     if (u = tchunkptr(x)) then Exit(True);
+     u := u^.fd ;
+    until (u = t);
+   end;
+  end;
+ end;
+ Result:=False;
+end;
+
+// Traverse each chunk and check it; return total
+function traverse_and_check(m:mstate):QWORD;
+var
+ sum:QWORD;
+ s:msegmentptr;
+ q:mchunkptr;
+ lastq:mchunkptr;
+
+begin
+ sum := 0;
+ if (is_initialized(m)) then
+ begin
+  s := @m^.seg;
+  sum:=sum + m^.topsize + TOP_FOOT_SIZE;
+  while (s <> nil) do
+  begin
+   q := align_as_chunk(s^.base);
+   lastq := nil;
+   assert(pinuse(q));
+   while (segment_holds(s, q) and
+          (q <> m^.top) and (q^.head <> FENCEPOST_HEAD)) do
+   begin
+    sum:=sum+chunksize(q);
+    if (is_inuse(q)) then
+    begin
+     assert(not bin_find(m, q));
+     do_check_inuse_chunk(m, q);
+    end else
+    begin
+     assert((q = m^.dv) or bin_find(m, q));
+     assert((lastq = nil) or is_inuse(lastq)); // Not 2 consecutive free
+     do_check_free_chunk(m, q);
+    end;
+    lastq := q;
+    q := next_chunk(q);
+   end;
+   s := s^.next;
+  end;
+ end;
+ Result:=sum;
+end;
+
+// Check all properties of malloc_state.
+procedure do_check_malloc_state(m:mstate);
+var
+ i:bindex_t;
+ total:QWORD;
+begin
+ // check bins
+ for i:=0 to NSMALLBINS-1 do
+ begin
+  do_check_smallbin(m, i);
+ end;
+ for i:=0 to NTREEBINS-1 do
+ begin
+  do_check_treebin(m, i);
+ end;
+
+ if (m^.dvsize <> 0) then
+ begin // check dv chunk
+  do_check_any_chunk(m, m^.dv);
+  assert(m^.dvsize = chunksize(m^.dv));
+  assert(m^.dvsize >= MIN_CHUNK_SIZE);
+  assert(not bin_find(m, m^.dv));
+ end;
+
+ if (m^.top <> nil) then
+ begin   // check top chunk
+  do_check_top_chunk(m, m^.top);
+  assert(m^.topsize > 0);
+  assert(not bin_find(m, m^.top));
+ end;
+
+ total := traverse_and_check(m);
+ assert(total <= m^.footprint);
+ assert(m^.footprint <= m^.max_footprint);
+end;
+
+{$ENDIF}
+
+procedure check_any_chunk(m:mstate;p:mchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_any_chunk(m,p);
+{$ENDIF}
+end;
+
+procedure check_top_chunk(m:mstate;p:mchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_top_chunk(m,p);
+{$ENDIF}
+end;
+
+procedure check_mmapped_chunk(m:mstate;p:mchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_mmapped_chunk(m,p);
+{$ENDIF}
+end;
+
+procedure check_inuse_chunk(m:mstate;p:mchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_inuse_chunk(m,p);
+{$ENDIF}
+end;
+
+procedure check_free_chunk(m:mstate;p:mchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_free_chunk(m,p);
+{$ENDIF}
+end;
+
+procedure check_malloced_chunk(m:mstate;mem:Pointer;s:size_t); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_malloced_chunk(m,mem,s);
+{$ENDIF}
+end;
+
+procedure check_smallbin(m:mstate;i:bindex_t); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_smallbin(m,i);
+{$ENDIF}
+end;
+
+procedure check_tree(m:mstate;t:tchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_tree(m,t);
+{$ENDIF}
+end;
+
+procedure check_smallbin(m:mstate;t:tchunkptr); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_smallbin(m,t);
+{$ENDIF}
+end;
+
+procedure check_treebin(m:mstate;i:bindex_t); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ do_check_treebin(m,i);
+{$ENDIF}
+end;
+
+procedure check_malloc_state(m:mstate); inline;
+begin
+{$IFDEF DEBUG_MSPACE}
+ if (PREACTION(m)=0) then
+ begin
+  do_check_malloc_state(m);
+  POSTACTION(m);
+ end;
+{$ENDIF}
+end;
+
+// Malloc using mmap
 function mmap_alloc(m:mstate;nb:ptruint):Pointer;
 var
  mmsize:ptruint;
@@ -1244,7 +1800,7 @@ begin
    end;
 
    assert(is_aligned(chunk2mem(p)));
-   //check_mmapped_chunk(m, p); debug
+   check_mmapped_chunk(m, p); //debug
    Result:=chunk2mem(p);
   end;
  end;
@@ -1252,6 +1808,7 @@ begin
  Result:=nil;
 end;
 
+// Realloc using mmap
 function mmap_resize(m:mstate;oldp:mchunkptr;nb:ptruint):Pointer;
 var
  oldsize:ptruint;
@@ -1306,7 +1863,7 @@ begin
     m^.maxInuseSize:=m^.currentInuseSize;
    end;
 
-   //check_mmapped_chunk(m, newp); debug
+   check_mmapped_chunk(m, newp); //debug
    Result:=newp;
   end;
  end;
@@ -1314,6 +1871,7 @@ begin
  Result:=nil;
 end;
 
+// Initialize top chunk and its size
 procedure init_top(m:mstate;p:mchunkptr;psize:ptruint);
 var
  offset:ptruint;
@@ -1331,11 +1889,13 @@ begin
  m^.trim_check:=DEFAULT_TRIM_THRESHOLD;
 end;
 
+// Initialize bins for a new mstate that is otherwise zeroed out
 procedure init_bins(m:mstate);
 var
  i:bindex_t;
  bin:sbinptr;
 begin
+ // Establish circular links for smallbins
  for i:=0 to NSMALLBINS-1 do
  begin
   bin:=smallbin_at(m,i);
@@ -1344,6 +1904,7 @@ begin
  end;
 end;
 
+// Allocate chunk and prepend remainder with chunk in successor base.
 function prepend_alloc(m:mstate;newbase,oldbase:Pointer;nb:ptruint):Pointer;
 var
  p:mchunkptr;
@@ -1372,7 +1933,7 @@ begin
   m^.topsize:=tsize;
   m^.top:=q;
   q^.head:=tsize or PINUSE_BIT;
-  //check_top_chunk(m, q); debug
+  check_top_chunk(m, q); //debug
  end else
  if (oldfirst = m^.dv) then
  begin
@@ -1391,13 +1952,14 @@ begin
   end;
   set_free_with_pinuse(q, qsize, oldfirst);
   insert_chunk(m, q, qsize);
-  //check_free_chunk(m, q); debug
+  check_free_chunk(m, q); //debug
  end;
 
- //check_malloced_chunk(m, chunk2mem(p), nb); debug
+ check_malloced_chunk(m, chunk2mem(p), nb); //debug
  Result:=chunk2mem(p);
 end;
 
+// Add a segment to hold a new noncontiguous region
 procedure add_segment(m:mstate;tbase:Pointer;tsize:ptruint;mmapped:flag_t);
 var
  old_top:Pointer;
@@ -1421,7 +1983,7 @@ begin
  old_top:=m^.top;
  oldsp:=segment_holding(m, old_top);
  old_end:=oldsp^.base + oldsp^.size;
- ssize:=pad_m_segment;
+ ssize:=pad_request(sizeof(malloc_segment));
  rawsp:=old_end - (ssize + FOUR_SIZE_T_SIZES + CHUNK_ALIGN_MASK);
  offset:=align_offset(chunk2mem(rawsp));
  asp:=rawsp + offset;
@@ -1473,9 +2035,10 @@ begin
   insert_chunk(m, q, psize);
  end;
 
- //check_top_chunk(m, m^.top); debug
+ check_top_chunk(m, m^.top); //debug
 end;
 
+// Get memory from system using MORECORE or MMAP
 function sys_alloc(m:mstate;nb:ptruint):Pointer;
 var
  tbase:Pointer;
@@ -1522,7 +2085,7 @@ begin
   end;
  end;
 
- //if (HAVE_MORECORE && tbase == CMFAIL) then skip
+ //if (HAVE_MORECORE and (tbase == CMFAIL)) then skip
 
  if (tbase<>nil) then
  begin
@@ -1562,8 +2125,8 @@ begin
    end;
   end else
   begin
-   sp:=@m^.seg;
 
+   sp:=@m^.seg;
    while (sp <> nil) and (tbase <> (sp^.base + sp^.size)) do
    begin
     sp:=sp^.next;
@@ -1582,11 +2145,13 @@ begin
     begin
      m^.least_addr:=tbase;
     end;
+
     sp:=@m^.seg;
     while (sp <> nil) and (sp^.base <> (tbase + tsize)) do
     begin
      sp:=sp^.next;
     end;
+
     if (sp <> nil) and
        (not is_extern_segment(sp)) and
        ((sp^.sflags and USE_MMAP_BIT) = mmap_flag) then
@@ -1610,9 +2175,12 @@ begin
    r:=chunk_plus_offset(p, nb);
    m^.top:=r;
    r^.head:=rsize or PINUSE_BIT;
+
+   Assert(chunksize(r)=rsize);
+
    set_size_and_pinuse_of_inuse_chunk(m, p, nb);
-   //check_top_chunk(m, m^.top); debug
-   //check_malloced_chunk(m, chunk2mem(p), nb); debug
+   check_top_chunk(m, m^.top); //debug
+   check_malloced_chunk(m, chunk2mem(p), nb); //debug
    Exit(chunk2mem(p));
   end;
  end;
@@ -1621,6 +2189,7 @@ begin
  Result:=nil;
 end;
 
+// Unmap and unlink any mmapped segments that don't contain used chunks
 function release_unused_segments(m:mstate):ptruint;
 var
  released:ptruint;
@@ -1731,7 +2300,7 @@ begin
     m^.currentInuseSize:=m^.currentInuseSize-128;
 
     init_top(m, m^.top, m^.topsize - released);
-    //check_top_chunk(m, m^.top); debug
+    check_top_chunk(m, m^.top); //debug
    end;
   end;
 
@@ -1753,6 +2322,7 @@ begin
  end;
 end;
 
+// allocate a large request from the best fitting chunk in a treebin
 function tmalloc_large(m:mstate;nb:ptruint):Pointer;
 var
  v:tchunkptr;
@@ -1770,8 +2340,7 @@ var
 begin
  v:=nil;
  rsize:=ptruint(-nb);
- idx:=0;
- compute_tree_index(nb, idx);
+ idx:=compute_tree_index(nb);
  t:=treebin_at(m, idx)^;
  if (t<>nil) then
  begin
@@ -1808,8 +2377,7 @@ begin
   if (leftbits <> 0) then
   begin
    leastbit:=least_bit(leftbits);
-   i:=0;
-   compute_bit2idx(leastbit, i);
+   i:=compute_bit2idx(leastbit);
    t:=treebin_at(m, i)^;
   end;
  end;
@@ -1851,6 +2419,7 @@ begin
  Result:=nil;
 end;
 
+// allocate a small request from the best fitting chunk in a treebin
 function tmalloc_small(m:mstate;nb:ptruint):Pointer;
 var
  t:tchunkptr;
@@ -1862,8 +2431,7 @@ var
  r:mchunkptr;
 begin
  leastbit:=least_bit(m^.treemap);
- i:=0;
- compute_bit2idx(leastbit, i);
+ i:=compute_bit2idx(leastbit);
  v:=treebin_at(m, i)^;
  t:=v;
  rsize:=chunksize(t) - nb;
@@ -1988,11 +2556,10 @@ begin
    Exit(nil);
   end;
 
-  //#if DEBUG
-  //    if (newp != 0) begin
-  //      check_inuse_chunk(m, newp);
-  //    end
-  //#endif
+  if (newp <> nil) then
+  begin
+   check_inuse_chunk(m, newp);
+  end;
 
   POSTACTION(m);
 
@@ -2126,7 +2693,7 @@ begin
 
    assert(chunksize(p) >= nb);
    assert((ptruint(chunk2mem(p)) and alignment) = 0);
-   //check_inuse_chunk(m, p); debug
+   check_inuse_chunk(m, p); //debug
    POSTACTION(m);
 
    if (leader <> nil) then
@@ -2162,11 +2729,15 @@ var
  msp:mchunkptr;
  m:mstate;
 begin
+
+ Assert(pad_request_malloc_state=pad_request(sizeof(malloc_state)));
+
  msp:=align_as_chunk(tbase);
  m:=chunk2mem(msp);
  FillChar(m^,msize,0);
 
  msp^.head:=(msize or INUSE_BITS);
+
  m^.seg.base        :=tbase;
  m^.least_addr      :=tbase;
  m^.seg.size        :=tsize;
@@ -2175,9 +2746,12 @@ begin
  m^.SystemSize      :=tsize;
 
  init_bins(m);
- mn:=next_chunk(mem2chunk(m));
- init_top(m,mn,ptruint((tbase + tsize) - Pointer(mn)) - TOP_FOOT_SIZE);
- //check_top_chunk(m, m^.top); debug
+
+ mn:=next_chunk(msp);
+ //mn:=next_chunk(mem2chunk(m));
+
+ init_top(m,mn,ptruint((Pointer(tbase) - Pointer(mn) + tsize) - TOP_FOOT_SIZE));
+ check_top_chunk(m, m^.top); //debug
  Result:=m;
 end;
 
@@ -2219,14 +2793,14 @@ begin
 
     if ((smallbits and 3) <> 0) then
     begin
-     idx:=idx+((not smallbits) and 1);
+     idx:=idx+(integer(not smallbits) and 1);
      b:=smallbin_at(ms, idx);
      p:=b^.fd;
      assert(chunksize(p)=small_index2size(idx));
      unlink_first_small_chunk(ms, b, p, idx);
      set_inuse_and_pinuse(ms, p, small_index2size(idx));
      mem:=chunk2mem(p);
-     //check_malloced_chunk(ms, mem, nb); debug
+     check_malloced_chunk(ms, mem, nb); //debug
      goto _postaction;
     end else
     if (nb > ms^.dvsize) then
@@ -2235,8 +2809,7 @@ begin
      begin
       leftbits:=(smallbits shl idx) and left_bits(idx2bit(idx));
       leastbit:=least_bit(leftbits);
-      i:=0;
-      compute_bit2idx(leastbit, i);
+      i:=compute_bit2idx(leastbit);
       b:=smallbin_at(ms, i);
       p:=b^.fd;
       assert(chunksize(p)=small_index2size(i));
@@ -2254,7 +2827,7 @@ begin
        replace_dv(ms, r, rsize);
       end;
       mem:=chunk2mem(p);
-      //check_malloced_chunk(ms, mem, nb); debug
+      check_malloced_chunk(ms, mem, nb); //debug
       goto _postaction;
      end else
      begin
@@ -2263,7 +2836,7 @@ begin
        mem:=tmalloc_small(ms, nb);
        if (mem<>nil) then
        begin
-        //check_malloced_chunk(ms, mem, nb); debug
+        check_malloced_chunk(ms, mem, nb); //debug
         goto _postaction;
        end;
       end;
@@ -2281,7 +2854,7 @@ begin
      mem:=tmalloc_large(ms, nb);
      if (mem<>nil) then
      begin
-      //check_malloced_chunk(ms, mem, nb); debug
+      check_malloced_chunk(ms, mem, nb); //debug
       goto _postaction;
      end;
     end;
@@ -2306,7 +2879,7 @@ begin
      set_inuse_and_pinuse(ms, p, dvs);
     end;
     mem:=chunk2mem(p);
-    //check_malloced_chunk(ms, mem, nb); debug
+    check_malloced_chunk(ms, mem, nb); //debug
     goto _postaction;
    end else
    if (nb < ms^.topsize) then
@@ -2319,8 +2892,8 @@ begin
     r^.head:=rsize or PINUSE_BIT;
     set_size_and_pinuse_of_inuse_chunk(ms, p, nb);
     mem:=chunk2mem(p);
-    //check_top_chunk(ms, ms^.top); debug
-    //check_malloced_chunk(ms, mem, nb); debug
+    check_top_chunk(ms, ms^.top); //debug
+    check_malloced_chunk(ms, mem, nb); //debug
     goto _postaction;
    end;
   end;
@@ -2397,7 +2970,7 @@ begin
 
   if (PREACTION(fm)=0) then
   begin
-   //check_inuse_chunk(fm, p); debug
+   check_inuse_chunk(fm, p); //debug
    psize:=0;
    if ok_address(fm, p) and ok_inuse(p) then
    begin
@@ -2436,7 +3009,7 @@ begin
       end else
       begin
        goto _erroraction;
-      end;;
+      end;
      end;
     end;
 
@@ -2488,12 +3061,12 @@ begin
      if is_small(psize) then
      begin
       insert_small_chunk(fm, p, psize);
-      //check_free_chunk(fm, p); debug
+      check_free_chunk(fm, p); //debug
      end else
      begin
       tp:=tchunkptr(p);
       insert_large_chunk(fm, tp, psize);
-      //check_free_chunk(fm, p); debug
+      check_free_chunk(fm, p); //debug
       //if (--fm^.release_checks == 0)
       //  release_unused_segments(fm);
      end;
@@ -2525,7 +3098,7 @@ begin
  if (n_elements<>0) then
  begin
   req:=n_elements*elem_size;
-  if boolean((n_elements or elem_size) and (not ptruint($ffff))) and
+  if boolean((n_elements or elem_size) and ptruint(not ptruint($ffff))) and
             ((req div n_elements) <> elem_size) then
   begin
    req:=MAX_SIZE_T;
@@ -2620,6 +3193,8 @@ procedure CALLBACK_ACTION(m:mstate;id:Integer;data:Pointer); inline;
 var
  cbs:T_CALLBACK_ACTION;
 begin
+ check_malloc_state(m);
+
  cbs:=T_CALLBACK_ACTION(m^.cbs);
  if (cbs<>nil) then
  if (PREACTION(m)=0) then
@@ -2736,6 +3311,8 @@ begin
   Result^.msp_array_id:=1; //fake id
  end;
 
+ check_malloc_state(Result);
+
 end;
 
 function _sceLibcMspaceDestroy(ms:mstate):Integer;
@@ -2795,6 +3372,8 @@ begin
  CALLBACK_ACTION(msp,1,@data);
 
  Result:=mspace_free(msp,ptr);
+
+ check_malloc_state(msp);
 end;
 
 function _sceLibcMspaceCalloc(msp:pSceLibcMspace;nelem,size:size_t):Pointer;
@@ -3219,6 +3798,8 @@ begin
  tmp^.mflags     :=USE_MMAP_BIT or USE_LOCK_BIT or 4;
  tmp^.page_size  :=16384;
  tmp^.granularity:=65536;
+
+ init_bins(tmp);
 
  //
 
