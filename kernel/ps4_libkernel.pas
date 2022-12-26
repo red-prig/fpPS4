@@ -283,6 +283,30 @@ begin
  Result:=ps4_sceKernelGetLibkernelTextLocation(@pOut^.address,@pOut^.size)
 end;
 
+function ps4___elf_phdr_match_addr(info:pSceKernelModuleInfoEx;addr:Pointer):Integer; SysV_ABI_CDecl;
+var
+ i,scount:Integer;
+begin
+ scount:=info^.segment_count;
+ if (scount=0) then
+ begin
+  Exit(ord(False));
+ end else
+ begin
+  For i:=0 to scount-1 do
+  begin
+   if ((info^.segments[i].prot and 4)<>0) then
+   begin
+    if (info^.segments[i].address<=addr) and
+       ((info^.segments[i].address+info^.segments[i].size)>addr) then
+    begin
+     Exit(ord(i<>scount));
+    end;
+   end;
+  end;
+ end;
+end;
+
 function ps4_sceKernelGetProcParam:PSceProcParam; SysV_ABI_CDecl;
 begin
  Writeln('KernelGetProcParam');
@@ -899,6 +923,8 @@ begin
 
  lib^.set_proc($4F3E113540816C62,@ps4__sceKernelRtldThreadAtexitIncrement);
  lib^.set_proc($F0E9D65E581096FA,@ps4__sceKernelRtldThreadAtexitDecrement);
+
+ lib^.set_proc($163738FE7D7ECB68,@ps4___elf_phdr_match_addr);
 
  lib^.set_proc($F79F6AADACCF22B8,@ps4_sceKernelGetProcParam);
  lib^.set_proc($A7911C41E11E2401,@ps4__sceKernelRtldSetApplicationHeapAPI);
