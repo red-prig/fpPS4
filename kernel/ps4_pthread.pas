@@ -10,8 +10,6 @@ uses
  sys_pthread,
  sys_signal;
 
-procedure ps4_pthread_cxa_finalize(P:Pointer); SysV_ABI_CDecl;
-
 function  ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_attr_init(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
@@ -104,12 +102,6 @@ uses
  ps4_map_mm,
  ps4_program,
  ps4_elf;
-
-//struct dl_phdr_info
-procedure ps4_pthread_cxa_finalize(P:Pointer); SysV_ABI_CDecl;
-begin
- Writeln('__pthread_cxa_finalize');
-end;
 
 //struct pthread_attr _pthread_attr_default = {
 //        .sched_policy = SCHED_OTHER,

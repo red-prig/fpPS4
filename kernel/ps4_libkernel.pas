@@ -34,7 +34,13 @@ function  ps4___error:Pointer; SysV_ABI_CDecl;
 function  ps4_sceKernelError(i:Integer):Integer; SysV_ABI_CDecl;
 
 function  ps4_sceKernelIsNeoMode:Integer; SysV_ABI_CDecl;
+function  ps4_sceKernelIsProspero:Integer; SysV_ABI_CDecl;
+
 function  ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
+
+function  ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
+function  ps4___elf_phdr_match_addr(phdr_info:pSceKernelModuleInfoEx;addr:Pointer):Integer; SysV_ABI_CDecl;
+procedure ps4___pthread_cxa_finalize(phdr_info:pSceKernelModuleInfoEx); SysV_ABI_CDecl;
 
 implementation
 
@@ -283,11 +289,11 @@ begin
  Result:=ps4_sceKernelGetLibkernelTextLocation(@pOut^.address,@pOut^.size)
 end;
 
-function ps4___elf_phdr_match_addr(info:pSceKernelModuleInfoEx;addr:Pointer):Integer; SysV_ABI_CDecl;
+function ps4___elf_phdr_match_addr(phdr_info:pSceKernelModuleInfoEx;addr:Pointer):Integer; SysV_ABI_CDecl;
 var
  i,scount:Integer;
 begin
- scount:=info^.segment_count;
+ scount:=phdr_info^.segment_count;
  if (scount=0) then
  begin
   Exit(ord(False));
@@ -295,16 +301,21 @@ begin
  begin
   For i:=0 to scount-1 do
   begin
-   if ((info^.segments[i].prot and 4)<>0) then
+   if ((phdr_info^.segments[i].prot and PF_R)<>0) then
    begin
-    if (info^.segments[i].address<=addr) and
-       ((info^.segments[i].address+info^.segments[i].size)>addr) then
+    if (phdr_info^.segments[i].address<=addr) and
+       ((phdr_info^.segments[i].address+phdr_info^.segments[i].size)>addr) then
     begin
      Exit(ord(i<>scount));
     end;
    end;
   end;
  end;
+end;
+
+procedure ps4___pthread_cxa_finalize(phdr_info:pSceKernelModuleInfoEx); SysV_ABI_CDecl;
+begin
+ Writeln('__pthread_cxa_finalize');
 end;
 
 function ps4_sceKernelGetProcParam:PSceProcParam; SysV_ABI_CDecl;
@@ -885,7 +896,7 @@ begin
  lib^.set_proc($0F8CA56B7BF1E2D6,@ps4_sceKernelError);
  lib^.set_proc($7FBB8EC58F663355,@ps4_stack_chk_guard);
  lib^.set_proc($3AEDE22F569BBE78,@ps4_stack_chk_fail);
- lib^.set_proc($91BC385071D2632D,@ps4_pthread_cxa_finalize);
+ lib^.set_proc($91BC385071D2632D,@ps4___pthread_cxa_finalize);
 
  lib^.set_proc($5E3A28B22C3E5CF2,@ps4_sceKernelUuidCreate);
 
