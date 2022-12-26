@@ -3733,8 +3733,11 @@ begin
    res:=addr;
    if (g_heap_param.HeapMemoryLock=0) then
    begin
-    ps4_sceKernelMlock(addr,size); //ignore ret
-    ret:=0;
+    _out^:=res;
+    Exit(0);
+   end else
+   begin
+    ret:=ps4_sceKernelMlock(addr,size);
     if (ret=0) then
     begin
      _out^:=res;
@@ -3785,18 +3788,16 @@ begin
   p_SceLibcIHeap:=msp;
  end;
 
- tmp:=p_SceLibcIHeap;
+ p_SceLibcIHeap^.name:='SceLibcIHeap';
 
- tmp^.name:='SceLibcIHeap';
+ if _INITIAL_LOCK(p_SceLibcIHeap)<>0 then Exit(1);
 
- if _INITIAL_LOCK(tmp)<>0 then Exit(1);
+ p_SceLibcIHeap^.magic      :=DEFAULT_MAGIC;
+ p_SceLibcIHeap^.mflags     :=USE_MMAP_BIT or USE_LOCK_BIT or 4;
+ p_SceLibcIHeap^.page_size  :=16384;
+ p_SceLibcIHeap^.granularity:=65536;
 
- tmp^.magic      :=DEFAULT_MAGIC;
- tmp^.mflags     :=USE_MMAP_BIT or USE_LOCK_BIT or 4;
- tmp^.page_size  :=16384;
- tmp^.granularity:=65536;
-
- init_bins(tmp);
+ init_bins(p_SceLibcIHeap);
 
  //
 
@@ -3869,21 +3870,20 @@ begin
 
  if (sceLibcHeapDebugFlags and SCE_LIBC_MSPACE_DEBUG_SHORTAGE)<>0 then
  begin
-  tmp^.debug_flags:=tmp^.debug_flags or 4;
+  p_SceLibcIHeap^.debug_flags:=p_SceLibcIHeap^.debug_flags or 4;
  end;
 
  if (sceLibcHeapDebugFlags and SCE_LIBC_MSPACE_IN_ARRAY)<>0 then
  begin
-  tmp^.msp_array_flags:=tmp^.msp_array_flags or 1;
+  p_SceLibcIHeap^.msp_array_flags:=p_SceLibcIHeap^.msp_array_flags or 1;
  end;
 
- tmp^.ptr_self:=tmp;
+ p_SceLibcIHeap^.ptr_self:=p_SceLibcIHeap;
 
  if (SceLibcInternalHeap=0) then
  begin
 
-  tmp:=p_SceLibcIHeap;
-  tmp^.name:='SceLibcInternalHeap';
+  p_SceLibcIHeap^.name:='SceLibcInternalHeap';
 
   if (sceLibcHeapSize<>0) then
   begin
