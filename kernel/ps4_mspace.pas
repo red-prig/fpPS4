@@ -2175,9 +2175,6 @@ begin
    r:=chunk_plus_offset(p, nb);
    m^.top:=r;
    r^.head:=rsize or PINUSE_BIT;
-
-   Assert(chunksize(r)=rsize);
-
    set_size_and_pinuse_of_inuse_chunk(m, p, nb);
    check_top_chunk(m, m^.top); //debug
    check_malloced_chunk(m, chunk2mem(p), nb); //debug
