@@ -10,7 +10,8 @@ uses
   spinlock,
   sys_signal,
   Classes,
-  SysUtils;
+  SysUtils,
+  xinput;
 
 implementation
 
@@ -272,9 +273,23 @@ type
   end;
  end;
 
+var
+ last_mouse_lock:Pointer;
+ last_mouse_point:TPoint;
+ last_mouse_init:Integer=0;
+ xinput_last_poll:Long=0;
+ xinput_controllers_connected:Array[0..XUSER_MAX_COUNT-1] of Boolean;
+
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
+var
+ controllerIndex:Integer;
 begin
  Writeln('scePadInit');
+
+ // init xinput
+ for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+   xinput_controllers_connected[controllerIndex] := false;
+
  Result:=0;
 end;
 
@@ -294,14 +309,12 @@ begin
  Result:=0;
 end;
 
-var
- last_mouse_lock:Pointer;
- last_mouse_point:TPoint;
- last_mouse_init:Integer=0;
 
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
 var
  mPoint,delta:TPoint;
+ controllerState:TXInputState;
+ controllerIndex,stateResult:DWORD;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
  begin
@@ -335,6 +348,79 @@ begin
   _sig_unlock;
   Result:=0;
   Exit;
+ end;
+
+ // xinput - Check connected controllers every couple of seconds
+ if GetTickCount64 > xinput_last_poll + 10000 then
+ begin
+   for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+     xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, controllerState) <> ERROR_DEVICE_NOT_CONNECTED;
+
+   xinput_last_poll := GetTickCount64;
+ end;
+
+ // xinput for controllers
+ for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+ begin
+  if not xinput_controllers_connected[controllerIndex] then
+     continue;
+  ZeroMemory(@controllerState, SizeOf(controllerState));
+  stateResult := XInputGetState(controllerIndex, controllerState);
+
+  if stateResult = ERROR_SUCCESS then
+  begin
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_A) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_B) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_X) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_Y) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
+
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_START) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_BACK) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
+
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_SHOULDER) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_RIGHT_SHOULDER) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_THUMB) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_RIGHT_THUMB) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
+
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_UP) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_DOWN) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_LEFT) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;  
+   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_RIGHT) <> 0 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
+
+   if (Abs(controllerState.Gamepad.sThumbLX) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) then
+    data^.leftStick.x:=Trunc(((controllerState.Gamepad.sThumbLX / 32767.0)*0.5+0.5)*255);
+   if (Abs(controllerState.Gamepad.sThumbLY) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) then
+    data^.leftStick.y:=Trunc(255-((controllerState.Gamepad.sThumbLY / 32767.0)*0.5+0.5)*255);
+
+   if (Abs(controllerState.Gamepad.sThumbRX) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) then
+    data^.rightStick.x:=Trunc(((controllerState.Gamepad.sThumbRX / 32767.0)*0.5+0.5)*255);
+   if (Abs(controllerState.Gamepad.sThumbRY) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) then
+    data^.rightStick.y:=Trunc(255-((controllerState.Gamepad.sThumbRY / 32767.0)*0.5+0.5)*255);
+
+   if (controllerState.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) then
+    data^.analogButtons.l2:=controllerState.Gamepad.bLeftTrigger;
+   if (controllerState.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) then
+    data^.analogButtons.r2:=controllerState.Gamepad.bRightTrigger;
+
+   if (controllerState.Gamepad.bLeftTrigger > 250) then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;    
+   if (controllerState.Gamepad.bRightTrigger > 250) then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
+  end;
  end;
 
  //mouse as touch pad
