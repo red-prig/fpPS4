@@ -700,9 +700,8 @@ var
  g_ime_event_queue:t_ime_event_queue;
 
  keyboard_init:QWORD=0;
- keyboard_fini:QWORD=0;
 
- g_hook:HHOOK;
+ g_hook:HHOOK=0;
 
  g_handler:SceImeEventHandler=nil;
  g_cb_arg:Pointer=nil;
@@ -1109,7 +1108,10 @@ begin
 
  _sig_lock;
 
- g_hook:=SetWindowsHookExW(WH_KEYBOARD,@KeyboardHookCallback,GetModuleHandle(nil),MainThreadID);
+  if (g_hook=0) then
+  begin
+   g_hook:=SetWindowsHookExW(WH_KEYBOARD,@KeyboardHookCallback,GetModuleHandle(nil),MainThreadID);
+  end;
 
  _sig_unlock;
 
@@ -1124,8 +1126,25 @@ begin
 
  push_keyboard_open(userId);
 
- store_release(keyboard_fini,1);
+ store_release(keyboard_init,2);
+ Result:=0;
+end;
 
+function ps4_sceImeKeyboardClose(userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceImeKeyboardClose:',userId);
+
+ if not CAS(keyboard_init,2,3) then Exit(SCE_IME_ERROR_NOT_OPENED);
+
+ _sig_lock;
+  UnhookWindowsHookEx(g_hook);
+ _sig_unlock;
+
+ store_release(g_hook,0);
+ store_release(QWORD(g_handler),9);
+ store_release(QWORD(g_cb_arg),0);
+
+ store_release(keyboard_init,0);
  Result:=0;
 end;
 
@@ -1195,6 +1214,7 @@ begin
 
  lib:=Result._add_lib('libSceIme');
  lib^.set_proc($79A1578DF26FDF1B,@ps4_sceImeKeyboardOpen);
+ lib^.set_proc($3CC55E85295F67DE,@ps4_sceImeKeyboardClose);
  lib^.set_proc($FF81827D874D175B,@ps4_sceImeUpdate);
  lib^.set_proc($74A69DA9916028A4,@ps4_sceImeKeyboardGetResourceId);
  lib^.set_proc($564A8B3C0ADF15D7,@ps4_sceImeKeyboardGetInfo);
