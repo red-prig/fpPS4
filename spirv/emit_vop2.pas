@@ -38,6 +38,7 @@ type
   procedure emit_V_BCNT_U32_B32;
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_LDEXP_F32;
+  procedure emit_V_ADDC_U32;
  end;
 
 implementation
@@ -423,6 +424,39 @@ begin
  Op2(Op.OpFMul,dtFloat32,dst,src[0],src[1]);
 end;
 
+procedure TEmit_VOP2.emit_V_ADDC_U32;
+Var
+ dst,car:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ exc:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+ car:=get_vcc0;
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+ src[2]:=MakeRead(get_vcc0,dtUInt32);
+
+ src[2]:=OpAndTo(src[2],1);
+ src[2]^.PrepType(ord(dtUInt32));
+
+ OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+
+ src[0]:=MakeRead(dst,dtUInt32);
+ src[1]:=MakeRead(car,dtUInt32);   //save car1
+
+ OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+src2
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ OpBitwiseOr(car,src[1],src[0]);   //car1 or car2
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ exc:=MakeRead(get_exec0,dtUnknow);
+ OpBitwiseAnd(car,src[0],exc);     //carry_out & EXEC
+end;
+
 procedure TEmit_VOP2.emit_VOP2;
 begin
 
@@ -478,6 +512,8 @@ begin
   V_MAX_U32: emit_V_MMX(GlslOp.UMax,dtUint32);
 
   V_LDEXP_F32: emit_V_LDEXP_F32;
+
+  V_ADDC_U32: emit_V_ADDC_U32;
 
   else
    Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP));
