@@ -98,6 +98,8 @@ begin
     Result:='itLCenter'+IntToStr(FBinding);
    itLinearCentroid:
     Result:='itLCentroid'+IntToStr(FBinding);
+   itFlat:
+    Result:='itFlat'+IntToStr(FBinding);
   else
    Result:='';
  end;
@@ -182,6 +184,11 @@ begin
        pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
        pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
       end;
+    itFlat:
+     begin
+      pDecorateList^.OpDecorate(pVar,Decoration.Flat,0);
+     end;
+
     else
      Assert(false,'AllocBinding:'+GetEnumName(TypeInfo(TpsslInputType),ord(node^.itype)));
    end;

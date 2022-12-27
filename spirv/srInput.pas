@@ -43,6 +43,7 @@ type
   itLinearSample,
   itLinearCenter,
   itLinearCentroid,
+  itFlat,
 
   itFloatPos,
   itFrontFace,

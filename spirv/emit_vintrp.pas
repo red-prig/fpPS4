@@ -67,8 +67,8 @@ begin
 
      dst^.New(line,dtFloat32);
      OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
-
     end;
+
   V_INTERP_P2_F32:
     begin
      src:=get_vsrc8(FSPI.VINTRP.VSRC);
@@ -94,8 +94,21 @@ begin
 
      dst^.New(line,dtFloat32);
      OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
-
     end;
+
+   V_INTERP_MOV_F32:
+    begin
+     //src ignore
+
+     //just use nointerpolation
+     inp_SRC:=InputList.Fetch(dtVec4f,itFlat,0);
+
+     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
+
+     dst^.New(line,dtFloat32);
+     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+    end;
+
 
   else
    Assert(False,'VINTRP?'+IntToStr(FSPI.VINTRP.OP));
