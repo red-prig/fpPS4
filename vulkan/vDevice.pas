@@ -1703,7 +1703,7 @@ end;
 initialization
  if not LoadVulkanLibrary        then raise Exception.Create('LoadVulkanLibrary');
  if not LoadVulkanGlobalCommands then raise Exception.Create('LoadVulkanGlobalCommands');
- SetExceptionMask([exInvalidOp, exDenormalized, exPrecision]);
+ SetExceptionMask([exInvalidOp, exDenormalized, exPrecision, exUnderflow]);
 
 end.
 
