@@ -1,0 +1,107 @@
+unit XInput;
+
+interface
+
+uses
+  Windows;
+
+const
+  XINPUT_DLL = 'xinput1_3.dll';
+
+  XINPUT_DEVTYPE_GAMEPAD = $1;
+  XINPUT_DEVSUBTYPE_WHEEL = $2;
+  XINPUT_DEVSUBTYPE_ARCADE_STICK = $3;
+  XINPUT_DEVSUBTYPE_FLIGHT_SICK = $4;
+  XINPUT_DEVSUBTYPE_DANCE_PAD = $5;
+
+  XINPUT_DEVSUBTYPE_GAMEPAD = $1;
+  XINPUT_CAPS_VOICE_SUPPORTED = $4;
+
+  XINPUT_GAMEPAD_DPAD_UP = $1;
+  XINPUT_GAMEPAD_DPAD_DOWN = $2;
+  XINPUT_GAMEPAD_DPAD_LEFT = $4;
+  XINPUT_GAMEPAD_DPAD_RIGHT = $8;
+  XINPUT_GAMEPAD_START = $10;
+  XINPUT_GAMEPAD_BACK = $20;
+  XINPUT_GAMEPAD_LEFT_THUMB = $40;
+  XINPUT_GAMEPAD_RIGHT_THUMB = $80;
+  XINPUT_GAMEPAD_LEFT_SHOULDER = $100;
+  XINPUT_GAMEPAD_RIGHT_SHOULDER = $200;
+  XINPUT_GAMEPAD_A = $1000;
+  XINPUT_GAMEPAD_B = $2000;
+  XINPUT_GAMEPAD_X = $4000;
+  XINPUT_GAMEPAD_Y = $8000;
+
+  XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE = 7849;
+  XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE = 8689;
+  XINPUT_GAMEPAD_TRIGGER_THRESHOLD = 30;
+
+  XUSER_MAX_COUNT = 4;
+  XUSER_INDEX_ANY = $FF;
+
+  VK_PAD_A = $5800;
+  VK_PAD_B = $5801;
+  VK_PAD_X = $5802;
+  VK_PAD_Y = $5803;
+  VK_PAD_RSHOULDER = $5804;
+  VK_PAD_LSHOULDER = $5805;
+  VK_PAD_LTRIGGER = $5806;
+  VK_PAD_RTRIGGER = $5807;
+  VK_PAD_DPAD_UP = $5810;
+  VK_PAD_DPAD_DOWN = $5811;
+  VK_PAD_DPAD_LEFT = $5812;
+  VK_PAD_DPAD_RIGHT = $5813;
+  VK_PAD_START = $5814;
+  VK_PAD_BACK = $5815;
+  VK_PAD_LTHUMB_PRESS = $5816;
+  VK_PAD_RTHUMB_PRESS = $5817;
+  VK_PAD_LTHUMB_UP = $5820;
+  VK_PAD_LTHUMB_DOWN = $5821;
+  VK_PAD_LTHUMB_RIGHT = $5822;
+  VK_PAD_LTHUMB_LEFT = $5823;
+  VK_PAD_LTHUMB_UPLEFT = $5824;
+  VK_PAD_LTHUMB_UPRIGHT = $5825;
+  VK_PAD_LTHUMB_DOWNRIGHT = $5826;
+  VK_PAD_LTHUMB_DOWNLEFT = $5827;
+  VK_PAD_RTHUMB_UP = $5830;
+  VK_PAD_RTHUMB_DOWN = $5831;
+  VK_PAD_RTHUMB_RIGHT = $5832;
+  VK_PAD_RTHUMB_LEFT = $5833;
+  VK_PAD_RTHUMB_UPLEFT = $5834;
+  VK_PAD_RTHUMB_UPRIGHT = $5835;
+  VK_PAD_RTHUMB_DOWNRIGHT = $5836;
+  VK_PAD_RTHUMB_DOWNLEFT = $5837;
+
+  ERROR_DEVICE_NOT_CONNECTED = 1167;
+
+type
+  PXInputGamepad = ^TXInputGamepad;
+
+  TXInputGamepad = record
+    wButtons: word;
+    bLeftTrigger: byte;
+    bRightTrigger: byte;
+    sThumbLX: smallint;
+    sThumbLY: smallint;
+    sThumbRX: smallint;
+    sThumbRY: smallint;
+  end;
+
+  PXInputState = ^TXInputState;
+  TXInputState = record
+    dwPacketNumber: DWORD;
+    Gamepad: TXInputGamepad;
+  end;
+
+  PXInputVibration = ^TXInputVibration;
+  TXInputVibration = record
+    wLeftMotorSpeed: word;
+    wRightMotorSpeed: word;
+  end;
+
+function XInputGetState(userIndex: DWORD; out state: TXInputState): DWORD; stdcall; external XINPUT_DLL;
+function XInputSetState(userIndex: DWORD;  const vibration: TXInputVibration): DWORD; stdcall; external XINPUT_DLL;
+
+implementation
+
+end.
