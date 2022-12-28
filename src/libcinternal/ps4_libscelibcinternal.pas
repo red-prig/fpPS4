@@ -16,7 +16,8 @@ uses
 implementation
 
 uses
- ps4_mspace,
+ ps4_mspace_internal,
+ ps4_atexit_internal,
  sys_kernel,
  sys_signal;
 
@@ -293,6 +294,16 @@ begin
  lib^.set_proc($31CB069EA57AC911,@ps4__ZdlPvRKSt9nothrow_t);
  lib^.set_proc($4AE73C5B440FC63C,@ps4__ZdaPvS_);
  lib^.set_proc($D6FA3AAAAA9AF45E,@ps4__ZdlPvS_);
+
+ //mspace
+
+ //atexit
+
+ lib^.set_proc($F06D8B07E037AF38,@ps4_atexit);
+ lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
+ lib^.set_proc($1F67BCB7949C4067,@ps4___cxa_finalize);
+
+ //atexit
 
  lib:=Result._add_lib('libSceLibcInternalExt');
 

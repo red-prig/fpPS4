@@ -1,4 +1,4 @@
-unit ps4_mspace;
+unit ps4_mspace_internal;
 
 {$mode ObjFPC}{$H+}
 

@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="101">
+    <Units Count="111">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -427,41 +427,83 @@
         <IsPartOfProject Value="True"/>
       </Unit92>
       <Unit93>
-        <Filename Value="kernel\ps4_mspace.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit93>
-      <Unit94>
         <Filename Value="src\ps4_libscerudp.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRudp"/>
-      </Unit94>
-      <Unit95>
+      </Unit93>
+      <Unit94>
         <Filename Value="src\ps4_libscevoice.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVoice"/>
-      </Unit95>
-      <Unit96>
+      </Unit94>
+      <Unit95>
         <Filename Value="shaders\shaders.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit96>
-      <Unit97>
+      </Unit95>
+      <Unit96>
         <Filename Value="src\ps4_libscerandom.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceRandom"/>
+      </Unit96>
+      <Unit97>
+        <Filename Value="kernel\ps4_pthread_key.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit97>
       <Unit98>
-        <Filename Value="kernel\ps4_pthread_key.pas"/>
+        <Filename Value="src\param_sfo.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit98>
       <Unit99>
-        <Filename Value="src\param_sfo.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit99>
-      <Unit100>
         <Filename Value="src\inputs\xinput.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="XInput"/>
+      </Unit99>
+      <Unit100>
+        <Filename Value="sys\sys_file.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit100>
+      <Unit101>
+        <Filename Value="sys\sys_dev.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit101>
+      <Unit102>
+        <Filename Value="sys\sys_pthread.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit102>
+      <Unit103>
+        <Filename Value="sys\sys_fd.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit103>
+      <Unit104>
+        <Filename Value="src\ps4_libscenpwebapi.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpWebApi"/>
+      </Unit104>
+      <Unit105>
+        <Filename Value="src\libcinternal\ps4_libscelibcinternal.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceLibcInternal"/>
+      </Unit105>
+      <Unit106>
+        <Filename Value="src\libcinternal\ps4_atexit_internal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit106>
+      <Unit107>
+        <Filename Value="ps4_program.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit107>
+      <Unit108>
+        <Filename Value="sys\sys_kernel.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit108>
+      <Unit109>
+        <Filename Value="sys\sys_dir.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit109>
+      <Unit110>
+        <Filename Value="src\libcinternal\ps4_mspace_internal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit110>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -473,7 +515,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs;src\libcinternal"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
