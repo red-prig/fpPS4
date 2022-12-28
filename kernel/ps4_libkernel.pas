@@ -9,7 +9,7 @@ uses
   RWLock,
   sys_types,
   ps4_map_mm,
-  ps4_mspace,
+  ps4_mspace_internal,
   ps4_pthread,
   ps4_pthread_key,
   ps4_signal,
