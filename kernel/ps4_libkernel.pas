@@ -453,7 +453,6 @@ type
 function ps4_sceKernelGetAppInfo(pid:Integer;env:PSCE_APP_ENV):Integer; SysV_ABI_CDecl;
 begin
  //ignore pid
- Result:=0;
  if (env=nil) then
  begin
   _set_errno(EINVAL);
@@ -461,6 +460,55 @@ begin
  end;
 
  env^:=Default(TSCE_APP_ENV);
+
+ _set_errno(0);
+ Result:=0;
+end;
+
+type
+ p_get_authinfo=^t_get_authinfo;
+ t_get_authinfo=record //0x88
+  {
+  //know values of utype
+  0x3800000000000006
+  0x380000000000000f
+  0x3800000000000010
+  0x3800000000000015
+  0x3800000000000016
+  0x3800000000000017
+  0x3800000000000018
+  0x3800000000000033
+  0x3800000000000034
+  0x3800000000000035
+  0x3800000000000036
+  0x3800000000010003
+  0x3800000010000001
+  0x3800000010000002
+  0x3800000010000003
+  0x3800000010000004
+  0x3800000010000005
+  0x3800000010000009
+  0x380000001000000f
+  }
+  utype:qword;
+  flags:qword;  //62 bit IsSystemProcess
+  unknow:array[0..14] of qword
+ end;
+
+function ps4_get_authinfo(pid:Integer;info:p_get_authinfo):Integer; SysV_ABI_CDecl;
+begin
+ //ignore pid
+ Result:=0;
+ if (info=nil) then
+ begin
+  _set_errno(EINVAL);
+  Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ info^:=Default(t_get_authinfo);
+
+ _set_errno(0);
+ Result:=0;
 end;
 
 //dynlib_get_obj_member(handle,8,&ptr); module param
@@ -952,6 +1000,7 @@ begin
 
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
+ lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
