@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="113">
+    <Units Count="117">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -512,6 +512,22 @@
         <Filename Value="src\libcinternal\ps4_mtx_internal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit112>
+      <Unit113>
+        <Filename Value="kernel\mm_adr_direct.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit113>
+      <Unit114>
+        <Filename Value="kernel\mm_adr_virtual.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit114>
+      <Unit115>
+        <Filename Value="kernel\mm_adr_name.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit115>
+      <Unit116>
+        <Filename Value="rtl\trace_manager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit116>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -1466,6 +1466,9 @@ begin
  lib^.set_proc($421BF90110283847,@ps4_sceKernelRemoveExceptionHandler);
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
+ px:=Result._add_lib('libkernel_exception');
+ px^.MapSymbol:=lib^.MapSymbol;
+
  lib:=Result._add_lib('libSceCoredump');
 
  lib^.set_proc($F332D27C47D6E405,@ps4_sceCoredumpRegisterCoredumpHandler);
