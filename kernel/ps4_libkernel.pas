@@ -1158,6 +1158,9 @@ begin
 
  //thread
 
+ lib^.set_proc($B46FBCD396F53639,@ps4_pthread_set_defaultstacksize_np);
+ lib^.set_proc($A1567EFCA819246A,@ps4_scePthreadSetDefaultstacksize);
+
  lib^.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit);
  lib^.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy);
  lib^.set_proc($C2D92DFED791D6CA,@ps4_pthread_attr_init);

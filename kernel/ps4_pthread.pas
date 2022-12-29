@@ -10,6 +10,9 @@ uses
  sys_pthread,
  sys_signal;
 
+function  ps4_pthread_set_defaultstacksize_np(size:QWORD):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadSetDefaultstacksize(size:QWORD):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_attr_init(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
@@ -103,6 +106,28 @@ uses
  ps4_program,
  ps4_elf;
 
+
+const
+ default_name:Pchar='main';
+
+var
+ default_stack_size:QWORD=$10000;
+
+function ps4_pthread_set_defaultstacksize_np(size:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=EINVAL;
+ if (size>PTHREAD_STACK_MIN) then
+ begin
+  default_stack_size:=size;
+  Result:=0;
+ end;
+end;
+
+function ps4_scePthreadSetDefaultstacksize(size:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_set_defaultstacksize_np(size));
+end;
+
 //struct pthread_attr _pthread_attr_default = {
 //        .sched_policy = SCHED_OTHER,
 //        .sched_inherit = PTHREAD_INHERIT_SCHED,
@@ -122,7 +147,7 @@ begin
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
  if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
- pAttr^^.stacksize_attr:=PTHREAD_STACK_MIN;
+ pAttr^^.stacksize_attr:=default_stack_size;
  Result:=0;
 end;
 
@@ -141,7 +166,7 @@ begin
  if (pAttr=nil) then Exit(EINVAL);
  pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
  if (pAttr^=nil) then Exit(ENOMEM);
- pAttr^^.stacksize_attr:=PTHREAD_STACK_MIN;
+ pAttr^^.stacksize_attr:=default_stack_size;
  Result:=0;
 end;
 
@@ -378,10 +403,6 @@ begin
  writeln('--[END]--');
 end;
 
-const
- default_name:Pchar='main';
- default_stack:Integer=DefaultStackSize;
-
 function _pthread_run_entry(pthread:p_pthread;name:Pchar;stack:PDWORD):Integer;
 var
  attr:pthread_attr_t;
@@ -392,11 +413,11 @@ begin
  end;
  if (stack=nil) then
  begin
-  stack:=@default_stack;
+  stack:=@default_stack_size;
  end else
  if (stack^<PTHREAD_STACK_MIN) then
  begin
-  stack:=@default_stack;
+  stack:=@default_stack_size;
  end;
 
  ps4_pthread_attr_init(@attr);
