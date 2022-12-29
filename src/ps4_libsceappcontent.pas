@@ -138,6 +138,13 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceAppContentTemporaryDataUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=UnMountTmpPath(PChar(mountPoint));
+ _sig_unlock;
+end;
+
 function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
@@ -168,6 +175,7 @@ begin
  lib^.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
  lib^.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
+ lib^.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
  lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
 end;
