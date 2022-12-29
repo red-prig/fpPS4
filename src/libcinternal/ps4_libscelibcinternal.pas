@@ -55,6 +55,16 @@ begin
  Result:=0;
 end;
 
+function ps4_strlen(p:PChar):sizeint; SysV_ABI_CDecl;
+begin
+ Result:=StrLen(p);
+end;
+
+function ps4_strncpy(dst,src:PChar;len:sizeint):PChar; SysV_ABI_CDecl;
+begin
+ Result:=strlcopy(dst,src,len);
+end;
+
 function ps4_strcpy_s(dst:PChar;destSize:size_t;src:PChar):Integer; SysV_ABI_CDecl;
 var
  count:size_t;
@@ -198,6 +208,8 @@ begin
  lib^.set_proc($F334C5BC120020DF,@ps4_memset);
  lib^.set_proc($0DF8AF3C0AE1B9C8,@ps4_memcmp);
  lib^.set_proc($3452ECF9D44918D8,@ps4_memcpy_s);
+ lib^.set_proc($8F856258D1C4830C,@ps4_strlen);
+ lib^.set_proc($EAC256896491BAA9,@ps4_strncpy);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);

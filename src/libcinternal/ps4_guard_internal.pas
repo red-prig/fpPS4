@@ -54,7 +54,7 @@ begin
   // locked, not initialised) to the locked-uninitialised
   // position.
 
-  old:=InterlockedCompareExchange(LOCK_PART(guard_object)^,INITIAL,LOCKED);
+  old:=InterlockedCompareExchange(LOCK_PART(guard_object)^,LOCKED,INITIAL);
   if (old = INITIAL) then
   begin
    if (INITIALISED <> INIT_PART(guard_object)^) then
@@ -80,7 +80,7 @@ procedure ps4___cxa_guard_abort(guard_object:p_guard_t); SysV_ABI_CDecl;
 var
  reset:Boolean;
 begin
- reset:=InterlockedCompareExchange(LOCK_PART(guard_object)^,LOCKED,INITIAL)=INITIAL;
+ reset:=InterlockedCompareExchange(LOCK_PART(guard_object)^,INITIAL,LOCKED)=LOCKED;
  assert(reset);
 end;
 
@@ -92,7 +92,7 @@ procedure ps4___cxa_guard_release(guard_object:p_guard_t); SysV_ABI_CDecl;
 var
  reset:Boolean;
 begin
- reset:=InterlockedCompareExchange(INIT_PART(guard_object)^,INITIAL,INITIALISED)=INITIALISED;
+ reset:=InterlockedCompareExchange(INIT_PART(guard_object)^,INITIALISED,INITIAL)=INITIAL;
  assert(reset);
  LOCK_PART(guard_object)^ := INITIAL;
 end;
