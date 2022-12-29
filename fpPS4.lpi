@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="112">
+    <Units Count="113">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -508,6 +508,10 @@
         <Filename Value="src\libcinternal\ps4_guard_internal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit111>
+      <Unit112>
+        <Filename Value="src\libcinternal\ps4_mtx_internal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit112>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

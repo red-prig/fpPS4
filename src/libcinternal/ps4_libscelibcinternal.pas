@@ -19,6 +19,7 @@ uses
  ps4_mspace_internal,
  ps4_atexit_internal,
  ps4_guard_internal,
+ ps4_mtx_internal,
  sys_kernel,
  sys_signal;
 
@@ -100,6 +101,11 @@ begin
  Result:=dst;
 end;
 
+procedure ps4_bzero(s:Pointer;n:size_t); SysV_ABI_CDecl;
+begin
+ FillChar(s^,n,0);
+end;
+
 procedure ps4__init_env; SysV_ABI_CDecl;
 begin
  //
@@ -121,6 +127,40 @@ procedure ps4__ZNSt6_WinitC1Ev(this:Pointer); SysV_ABI_CDecl;
 begin
  //
 end;
+
+//void std::_Throw_Cpp_error(int err)
+procedure ps4__ZSt16_Throw_Cpp_errori(err:Integer); SysV_ABI_CDecl;
+begin
+ Assert(false,'Cpp error:'+IntToStr(err));
+ asm
+  ud2
+ end;
+end;
+
+//void std::_Throw_C_error(int err)
+procedure ps4__ZSt14_Throw_C_errori(err:Integer); SysV_ABI_CDecl;
+begin
+ if (err - 1 < 2) then
+ begin
+  ps4__ZSt16_Throw_Cpp_errori(6);
+  asm
+   ud2
+  end;
+ end;
+ if (err = 3) then
+ begin
+   ps4__ZSt16_Throw_Cpp_errori(0);
+   asm
+    ud2
+   end;
+ end;
+ if (err <> 4) then Exit;
+ ps4__ZSt16_Throw_Cpp_errori(1);
+ asm
+  ud2
+ end;
+end;
+
 
 Const
  Need_sceLibcInternal:QWORD=1;
@@ -213,12 +253,16 @@ begin
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
+ lib^.set_proc($F68897D64C9E79D0,@ps4_bzero);
 
  lib^.set_proc($6F3404C72D7CF592,@ps4__init_env);
  lib^.set_proc($E8D08EAABDDC0FBE,@ps4__init_tls);
 
  lib^.set_proc($B2A5B2B678587448,@ps4__ZNSt8ios_base4InitC1Ev);
  lib^.set_proc($FC197DFD26769E87,@ps4__ZNSt6_WinitC1Ev);
+
+ lib^.set_proc($5B48FABC2C61F4F7,@ps4__ZSt16_Throw_Cpp_errori);
+ lib^.set_proc($6D1BA3221796941D,@ps4__ZSt14_Throw_C_errori);
 
  //mspace
 
@@ -309,6 +353,22 @@ begin
  lib^.set_proc($D9E99A6A5B96CD4C,@ps4___cxa_guard_abort);
  lib^.set_proc($F6B01E00D4F6B721,@ps4___cxa_guard_release);
  //guard
+
+ //mtx
+ lib^.set_proc($CFB493785E9A6EE5,@ps4__Mtxinit);
+ lib^.set_proc($2DA3DA03A998037F,@ps4__Mtxdst);
+ lib^.set_proc($A44E0EB7709F7D6D,@ps4__Mtxlock);
+ lib^.set_proc($70CC204929A9139A,@ps4__Mtxunlock);
+ //
+ lib^.set_proc($B608A81A92AD99B1,@ps4__Mtx_init_with_name);
+ lib^.set_proc($61A1DCDC64BBCBB8,@ps4__Mtx_init);
+ lib^.set_proc($E4B7F9D63BE88534,@ps4__Mtx_destroy);
+ lib^.set_proc($55843016CE020B86,@ps4__Mtx_current_owns);
+ lib^.set_proc($892E1A59B5289E5D,@ps4__Mtx_lock);
+ lib^.set_proc($93AA4634CC09074F,@ps4__Mtx_trylock);
+ lib^.set_proc($84FCD849DE4D6AC7,@ps4__Mtx_timedlock);
+ lib^.set_proc($813B974303FDAEBB,@ps4__Mtx_unlock);
+ //mtx
 
  lib:=Result._add_lib('libSceLibcInternalExt');
 
