@@ -18,6 +18,7 @@ implementation
 uses
  ps4_mspace_internal,
  ps4_atexit_internal,
+ ps4_guard_internal,
  sys_kernel,
  sys_signal;
 
@@ -89,12 +90,6 @@ begin
  Result:=dst;
 end;
 
-function ps4___cxa_atexit(func:atexit_func;arg:Pointer;dso_handle:Pointer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('__cxa_atexit:',HexStr(func));
- Result:=0;
-end;
-
 procedure ps4__init_env; SysV_ABI_CDecl;
 begin
  //
@@ -148,11 +143,7 @@ begin
     end;
    end;
 
-  $B6CBC49A77A7CF8F, //__cxa_atexit
-  $1F67BCB7949C4067, //__cxa_finalize
-  $CEBD3DE04437F56C, //__cxa_pure_virtual
-  $DC63E98D0740313C, //__cxa_guard_acquire
-  $F6B01E00D4F6B721: //__cxa_guard_release
+  $CEBD3DE04437F56C: //__cxa_pure_virtual
    begin
     lib:=ps4_app.GetLib('libc');
     if (lib<>nil) then
@@ -210,8 +201,6 @@ begin
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
-
- //lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
 
  lib^.set_proc($6F3404C72D7CF592,@ps4__init_env);
  lib^.set_proc($E8D08EAABDDC0FBE,@ps4__init_tls);
@@ -298,12 +287,16 @@ begin
  //mspace
 
  //atexit
-
  lib^.set_proc($F06D8B07E037AF38,@ps4_atexit);
  lib^.set_proc($B6CBC49A77A7CF8F,@ps4___cxa_atexit);
  lib^.set_proc($1F67BCB7949C4067,@ps4___cxa_finalize);
-
  //atexit
+
+ //guard
+ lib^.set_proc($DC63E98D0740313C,@ps4___cxa_guard_acquire);
+ lib^.set_proc($D9E99A6A5B96CD4C,@ps4___cxa_guard_abort);
+ lib^.set_proc($F6B01E00D4F6B721,@ps4___cxa_guard_release);
+ //guard
 
  lib:=Result._add_lib('libSceLibcInternalExt');
 

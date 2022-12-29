@@ -2038,6 +2038,11 @@ begin
  check_top_chunk(m, m^.top); //debug
 end;
 
+function is_global(m:mstate):Boolean; inline;
+begin
+ Result:=(m=p_SceLibcIHeap);
+end;
+
 // Get memory from system using MORECORE or MMAP
 function sys_alloc(m:mstate;nb:ptruint):Pointer;
 var
@@ -2113,12 +2118,11 @@ begin
    m^.seg.sflags:=mmap_flag;
    m^.magic     :=DEFAULT_MAGIC;
    init_bins(m);
-   //#if !ONLY_MSPACES
-   //     if (is_global(m)) then
-   //     begin
-   //       init_top(m, mchunkptr(tbase), tsize - TOP_FOOT_SIZE);
-   //     end else
-   //#endif
+
+   if is_global(m) then
+   begin
+    init_top(m, mchunkptr(tbase), tsize - TOP_FOOT_SIZE);
+   end else
    begin
     mn:=next_chunk(mem2chunk(m));
     init_top(m, mn, ((tbase + tsize) - Pointer(mn)) -TOP_FOOT_SIZE);
@@ -3548,12 +3552,12 @@ procedure CALLBACK_GLOBAL(id:Integer;data:Pointer); inline;
 var
  cbs:T_CALLBACK_ACTION;
 begin
- cbs:=T_CALLBACK_ACTION(SceLibcIHeap.g_cbs);
+ cbs:=T_CALLBACK_ACTION(p_SceLibcIHeap^.g_cbs);
  if (cbs<>nil) then
- if (PREACTION(@SceLibcIHeap)=0) then
+ if (PREACTION(p_SceLibcIHeap)=0) then
  begin
   cbs(id,data);
-  POSTACTION(@SceLibcIHeap);
+  POSTACTION(p_SceLibcIHeap);
  end;
 end;
 
@@ -3561,7 +3565,7 @@ function _malloc(size:size_t):Pointer;
 var
  data:array[0..1] of Pointer;
 begin
- Result:=_sceLibcMspaceMalloc(@SceLibcIHeap,size);
+ Result:=_sceLibcMspaceMalloc(p_SceLibcIHeap,size);
 
  data[0]:=Result;
  data[1]:=Pointer(size);
@@ -3572,14 +3576,14 @@ procedure _free(ptr:Pointer);
 begin
  CALLBACK_GLOBAL(1,@ptr);
 
- _sceLibcMspaceFree(@SceLibcIHeap,ptr);
+ _sceLibcMspaceFree(p_SceLibcIHeap,ptr);
 end;
 
 function _calloc(nelem,size:size_t):Pointer;
 var
  data:array[0..2] of Pointer;
 begin
- Result:=_sceLibcMspaceCalloc(@SceLibcIHeap,nelem,size);
+ Result:=_sceLibcMspaceCalloc(p_SceLibcIHeap,nelem,size);
 
  data[0]:=Result;
  data[1]:=Pointer(nelem);
@@ -3591,7 +3595,7 @@ function _realloc(ptr:Pointer;size:size_t):Pointer;
 var
  data:array[0..2] of Pointer;
 begin
- Result:=mspace_realloc2(@SceLibcIHeap,ptr,size,1);
+ Result:=mspace_realloc2(p_SceLibcIHeap,ptr,size,1);
 
  data[0]:=Result;
  data[1]:=ptr;
@@ -3612,7 +3616,7 @@ function _memalign(boundary,size:size_t):Pointer;
 var
  data:array[0..2] of Pointer;
 begin
- Result:=_sceLibcMspaceMemalign(@SceLibcIHeap,boundary,size);
+ Result:=_sceLibcMspaceMemalign(p_SceLibcIHeap,boundary,size);
 
  data[0]:=Result;
  data[1]:=Pointer(boundary);
@@ -3624,7 +3628,7 @@ function _reallocalign(ptr:Pointer;boundary,size:size_t):Pointer;
 var
  data:array[0..3] of Pointer;
 begin
- Result:=mspace_realloc2(@SceLibcIHeap,ptr,size,boundary);
+ Result:=mspace_realloc2(p_SceLibcIHeap,ptr,size,boundary);
 
  data[0]:=Result;
  data[1]:=ptr;
@@ -3637,7 +3641,7 @@ function _posix_memalign(ptr:PPointer;boundary,size:size_t):Integer;
 var
  data:array[0..3] of Pointer;
 begin
- Result:=_sceLibcMspacePosixMemalign(@SceLibcIHeap,ptr,boundary,size);
+ Result:=_sceLibcMspacePosixMemalign(p_SceLibcIHeap,ptr,boundary,size);
 
  data[0]:=Pointer(ptruint(Result));
  data[1]:=ptr;
@@ -4210,17 +4214,17 @@ end;
 
 function ps4_malloc_stats(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
 begin
- Result:=_sceLibcMspaceMallocStatsFast(@SceLibcIHeap,mmsize);
+ Result:=_sceLibcMspaceMallocStatsFast(p_SceLibcIHeap,mmsize);
 end;
 
 function ps4_malloc_stats_fast(mmsize:pSceLibcMallocManagedSize):Integer; SysV_ABI_CDecl;
 begin
- Result:=_sceLibcMspaceMallocStatsFast(@SceLibcIHeap,mmsize);
+ Result:=_sceLibcMspaceMallocStatsFast(p_SceLibcIHeap,mmsize);
 end;
 
 function ps4_malloc_get_malloc_state:pSceLibcMspace; SysV_ABI_CDecl;
 begin
- Result:=@SceLibcIHeap;
+ Result:=p_SceLibcIHeap;
 end;
 
 function ps4_malloc_get_footer_value(ptr:Pointer):size_t; SysV_ABI_CDecl;
@@ -4245,11 +4249,11 @@ end;
 
 function ps4_sceLibcInternalSetMallocCallback(cbs:Pointer):Integer; SysV_ABI_CDecl;
 begin
- Result:=PREACTION(@SceLibcIHeap);
+ Result:=PREACTION(p_SceLibcIHeap);
  if (Result=0) then
  begin
-  SceLibcIHeap.g_cbs:=cbs;
-  POSTACTION(@SceLibcIHeap);
+  p_SceLibcIHeap^.g_cbs:=cbs;
+  POSTACTION(p_SceLibcIHeap);
  end;
 end;
 

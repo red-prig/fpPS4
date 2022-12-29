@@ -7,6 +7,7 @@ interface
 uses
  sys_types,
  ps4_libkernel,
+ ps4_mspace_internal,
  ps4_mutex;
 
 const
@@ -80,13 +81,13 @@ begin
   begin
    old__atexit:=__atexit;
    _MUTEX_UNLOCK;
-   p:=AllocMem(SizeOf(t_atexit));
+   p:=ps4_malloc(SizeOf(t_atexit));
    if (p=nil) then Exit(-1);
    _MUTEX_LOCK;
    if (old__atexit<>__atexit) then
    begin
     _MUTEX_UNLOCK;
-    FreeMem(p);
+    ps4_free(p);
     _MUTEX_LOCK;
     p:=__atexit;
     continue
