@@ -75,6 +75,7 @@ function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 function ps4_access(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_getdtablesize:Integer; SysV_ABI_CDecl;
+function ps4_sceKernelGetFsSandboxRandomWord:PChar; SysV_ABI_CDecl;
 
 implementation
 
@@ -1049,6 +1050,14 @@ begin
  _set_errno(0);
 end;
 
+const
+ fs_word:Pchar='sys';
+
+function ps4_sceKernelGetFsSandboxRandomWord:PChar; SysV_ABI_CDecl;
+begin
+ //__sys_randomized_path
+ Result:=fs_word;
+end;
 
 end.
 

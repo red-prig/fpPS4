@@ -119,6 +119,11 @@ begin
  Result:=0; //no
 end;
 
+function ps4_sceKernelHasNeoMode:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0; //no
+end;
+
 function ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
@@ -1271,6 +1276,7 @@ begin
 
  lib^.set_proc($5AC95C2B51507062,@ps4_sceKernelIsNeoMode);
  lib^.set_proc($9A9C4076A5BB74A6,@ps4_sceKernelIsProspero);
+ lib^.set_proc($ACD46D9B5BA2A326,@ps4_sceKernelHasNeoMode);
 
  //mmap
 
@@ -1451,6 +1457,7 @@ begin
  lib^.set_proc($F2F13A67A5446329,@ps4_access);
 
  lib^.set_proc($B19BB06833C04CAB,@ps4_getdtablesize);
+ lib^.set_proc($2467D330139D509A,@ps4_sceKernelGetFsSandboxRandomWord);
 
  //file
 
