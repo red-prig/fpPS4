@@ -73,7 +73,7 @@ type
   xiY = 16,
 
   xiSelect = 17,
-  xiUnused01 = 18,
+  xiGuide = 18,
   xiStart = 19,
 
   xiL1 = 20,
@@ -264,6 +264,7 @@ begin
   xiDPadRight: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_RIGHT) <> 0;
 
   xiSelect: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_BACK) <> 0;
+  xiGuide: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_GUIDE) <> 0;
   xiStart: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_START) <> 0;
 
   xiL1: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_SHOULDER) <> 0;
@@ -302,40 +303,7 @@ initialization
  MappableInputs.XInputButtonsNames[Ord(xiY)] := 'Y';
 
  MappableInputs.XInputButtonsNames[Ord(xiSelect)] := 'SELECT';
- MappableInputs.XInputButtonsNames[Ord(xiUnused01)] := 'UNUSED01';
- MappableInputs.XInputButtonsNames[Ord(xiStart)] := 'START';
-
- MappableInputs.XInputButtonsNames[Ord(xiL1)] := 'L1';
- MappableInputs.XInputButtonsNames[Ord(xiL2)] := 'L2';
- MappableInputs.XInputButtonsNames[Ord(xiL3)] := 'L3';
-
- MappableInputs.XInputButtonsNames[Ord(xiR1)] := 'R1';
- MappableInputs.XInputButtonsNames[Ord(xiR2)] := 'R2';
- MappableInputs.XInputButtonsNames[Ord(xiR3)] := 'R3';
-
- MappableInputs.XInputButtonsNames[Ord(xiUnbound)] := 'Unbound';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyUp)] := 'LJOY_UP';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyDown)] := 'LJOY_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyLeft)] := 'LJOY_LEFT';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyRight)] := 'LJOY_RIGHT';
-
- MappableInputs.XInputButtonsNames[Ord(xiRJoyUp)] := 'RJOY_UP';
- MappableInputs.XInputButtonsNames[Ord(xiRJoyDown)] := 'RJOY_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiRJoyLeft)] := 'RJOY_LEFT';
- MappableInputs.XInputButtonsNames[Ord(xiRJoyRight)] := 'RJOY_RIGHT';
-
- MappableInputs.XInputButtonsNames[Ord(xiDPadUp)] := 'DPAD_UP';
- MappableInputs.XInputButtonsNames[Ord(xiDPadDown)] := 'DPAD_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiDPadLeft)] := 'DPAD_LEFT';
- MappableInputs.XInputButtonsNames[Ord(xiDPadRight)] := 'DPAD_RIGHT';
-
- MappableInputs.XInputButtonsNames[Ord(xiA)] := 'A';
- MappableInputs.XInputButtonsNames[Ord(xiB)] := 'B';
- MappableInputs.XInputButtonsNames[Ord(xiX)] := 'X';
- MappableInputs.XInputButtonsNames[Ord(xiY)] := 'Y';
-
- MappableInputs.XInputButtonsNames[Ord(xiSelect)] := 'SELECT';
- MappableInputs.XInputButtonsNames[Ord(xiUnused01)] := 'UNUSED01';
+ MappableInputs.XInputButtonsNames[Ord(xiGuide)] := 'GUIDE';
  MappableInputs.XInputButtonsNames[Ord(xiStart)] := 'START';
 
  MappableInputs.XInputButtonsNames[Ord(xiL1)] := 'L1';
