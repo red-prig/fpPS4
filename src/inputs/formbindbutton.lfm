@@ -1,0 +1,43 @@
+object FormBindButtons: TFormBindButtons
+  Left = 701
+  Height = 401
+  Top = 433
+  Width = 929
+  Caption = 'Button Binding'
+  ClientHeight = 401
+  ClientWidth = 929
+  DesignTimePPI = 192
+  OnShow = FormShow
+  LCLVersion = '2.3.0.0'
+  object BitBtn1: TBitBtn
+    Left = 388
+    Height = 60
+    Top = 272
+    Width = 150
+    Caption = 'Cancel'
+    OnClick = BitBtn1Click
+    TabOrder = 0
+  end
+  object BitBtn2: TBitBtn
+    Left = 328
+    Height = 60
+    Top = 176
+    Width = 272
+    Caption = 'Unbind this button'
+    OnClick = BitBtn2Click
+    TabOrder = 1
+  end
+  object Label1: TLabel
+    Left = 208
+    Height = 32
+    Top = 72
+    Width = 526
+    Caption = 'Press a button or move a joystick / analog trigger'
+  end
+  object CheckInput: TTimer
+    Interval = 100
+    OnTimer = CheckInputTimer
+    Left = 736
+    Top = 216
+  end
+end

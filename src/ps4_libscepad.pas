@@ -11,12 +11,13 @@ uses
   sys_signal,
   Classes,
   SysUtils,
-  xinput;
+  xinput,
+  formController;
 
 implementation
 
 uses
- ps4_libSceVideoOut;
+ ps4_libSceVideoOut, uMappableInputs;
 
 const
  SCE_PAD_ERROR_INVALID_ARG             =-2137915391; // 0x80920001
@@ -313,7 +314,7 @@ end;
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
 var
  mPoint,delta:TPoint;
- controllerState:TXInputState;
+ cs:TXInputState;
  controllerIndex,stateResult:DWORD;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
@@ -354,7 +355,7 @@ begin
  if GetTickCount64 > xinput_last_poll + 10000 then
  begin
    for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
-     xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, controllerState) <> ERROR_DEVICE_NOT_CONNECTED;
+     xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, cs) <> ERROR_DEVICE_NOT_CONNECTED;
 
    xinput_last_poll := GetTickCount64;
  end;
@@ -362,63 +363,58 @@ begin
  // xinput for controllers
  for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
  begin
+  if not MappableInputs.XInputEnabled then break;
   if not xinput_controllers_connected[controllerIndex] then
      continue;
-  ZeroMemory(@controllerState, SizeOf(controllerState));
-  stateResult := XInputGetState(controllerIndex, controllerState);
+  ZeroMemory(@cs, SizeOf(cs));
+  stateResult := XInputGetState(controllerIndex, cs);
 
   if stateResult = ERROR_SUCCESS then
   begin
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_A) <> 0 then
+   if MappableInputs.PS4IsPressed(miCross, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_B) <> 0 then
+   if MappableInputs.PS4IsPressed(miCircle, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_X) <> 0 then
+   if MappableInputs.PS4IsPressed(miSquare, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_Y) <> 0 then
+   if MappableInputs.PS4IsPressed(miTriangle, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
 
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_START) <> 0 then
+   if MappableInputs.PS4IsPressed(miOptions, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_BACK) <> 0 then
+   if MappableInputs.PS4IsPressed(miTouchPad, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_SHOULDER) <> 0 then
+   if MappableInputs.PS4IsPressed(miL1, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_RIGHT_SHOULDER) <> 0 then
+   if MappableInputs.PS4IsPressed(miR1, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_THUMB) <> 0 then
+   if MappableInputs.PS4IsPressed(miL3, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_RIGHT_THUMB) <> 0 then
+   if MappableInputs.PS4IsPressed(miR3, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
 
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_UP) <> 0 then
+   if MappableInputs.PS4IsPressed(miDPadUp, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_DOWN) <> 0 then
+   if MappableInputs.PS4IsPressed(miDPadDown, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_LEFT) <> 0 then
+   if MappableInputs.PS4IsPressed(miDPadLeft, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;  
-   if (controllerState.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_RIGHT) <> 0 then
+   if MappableInputs.PS4IsPressed(miDPadRight, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
 
-   if (Abs(controllerState.Gamepad.sThumbLX) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) then
-    data^.leftStick.x:=Trunc(((controllerState.Gamepad.sThumbLX / 32767.0)*0.5+0.5)*255);
-   if (Abs(controllerState.Gamepad.sThumbLY) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) then
-    data^.leftStick.y:=Trunc(255-((controllerState.Gamepad.sThumbLY / 32767.0)*0.5+0.5)*255);
+   data^.leftStick.x:=Trunc(128+(MappableInputs.GetAnalog(miLJoyRight, cs)-MappableInputs.GetAnalog(miLJoyLeft, cs))*127);
+   data^.leftStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
 
-   if (Abs(controllerState.Gamepad.sThumbRX) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) then
-    data^.rightStick.x:=Trunc(((controllerState.Gamepad.sThumbRX / 32767.0)*0.5+0.5)*255);
-   if (Abs(controllerState.Gamepad.sThumbRY) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) then
-    data^.rightStick.y:=Trunc(255-((controllerState.Gamepad.sThumbRY / 32767.0)*0.5+0.5)*255);
+   data^.rightStick.x:=Trunc(128+(MappableInputs.GetAnalog(miRJoyRight, cs)-MappableInputs.GetAnalog(miRJoyLeft, cs))*127);
+   data^.rightStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
 
-   if (controllerState.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) then
-    data^.analogButtons.l2:=controllerState.Gamepad.bLeftTrigger;
-   if (controllerState.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) then
-    data^.analogButtons.r2:=controllerState.Gamepad.bRightTrigger;
+   data^.analogButtons.l2:=Trunc(MappableInputs.GetAnalog(miL2, cs)*255);
+   data^.analogButtons.r2:=Trunc(MappableInputs.GetAnalog(miR2, cs)*255);
 
-   if (controllerState.Gamepad.bLeftTrigger > 250) then
+   if MappableInputs.PS4IsPressed(miL2, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;    
-   if (controllerState.Gamepad.bRightTrigger > 250) then
+   if MappableInputs.PS4IsPressed(miR2, cs) then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
   end;
  end;
