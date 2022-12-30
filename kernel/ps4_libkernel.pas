@@ -902,7 +902,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSysmoduleLoadModuleInternalWithArg(id:Word;
+function ps4_sceSysmoduleLoadModuleInternalWithArg(id:DWord;
                                                    argc:size_t;
                                                    argp:PPointer;
                                                    flags:DWORD;
@@ -912,6 +912,27 @@ begin
  if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
  Writeln('sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleInternalName(id));
+ if (pRes<>nil) then pRes^:=0;
+ Result:=0;
+end;
+
+function ps4_sceSysmoduleUnloadModuleInternal(id:DWord):Integer; SysV_ABI_CDecl;
+begin
+ if ((id or $80000000)=$80000000) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
+
+ Writeln('sceSysmoduleUnloadModuleInternal:',GetSysmoduleInternalName(id));
+ Result:=0;
+end;
+
+function ps4_sceSysmoduleUnloadModuleInternalWithArg(id:DWord;
+                                                     argc:size_t;
+                                                     argp:PPointer;
+                                                     flags:DWORD;
+                                                     pRes:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if ((id or $80000000)=$80000000) or (flags<>0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
+
+ Writeln('sceSysmoduleUnloadModuleInternalWithArg:',GetSysmoduleInternalName(id));
  if (pRes<>nil) then pRes^:=0;
  Result:=0;
 end;
@@ -935,6 +956,8 @@ begin
  lib^.set_proc($CA714A4396DF1A4B,@ps4_sceSysmoduleIsLoadedInternal);
  lib^.set_proc($DFD895E44D47A029,@ps4_sceSysmoduleLoadModuleInternal);
  lib^.set_proc($847AC6A06A0D7FEB,@ps4_sceSysmoduleLoadModuleInternalWithArg);
+ lib^.set_proc($BD7661AED2719067,@ps4_sceSysmoduleUnloadModuleInternal);
+ lib^.set_proc($68A6BA61F04A66CE,@ps4_sceSysmoduleUnloadModuleInternalWithArg);
 
  lib^.set_proc($E1F539CAF3A4546E,@ps4_sceSysmoduleGetModuleInfoForUnwind);
 end;
