@@ -1,0 +1,671 @@
+object FormControllers: TFormControllers
+  Left = 502
+  Height = 1123
+  Top = 247
+  Width = 1873
+  Caption = 'XInput to PS4 Controller Config'
+  ClientHeight = 1123
+  ClientWidth = 1873
+  DesignTimePPI = 192
+  OnClose = FormClose
+  OnCreate = FormCreate
+  OnShow = FormShow
+  LCLVersion = '2.3.0.0'
+  object GroupBox1: TGroupBox
+    Left = 24
+    Height = 328
+    Top = 312
+    Width = 640
+    Caption = 'Left Joystick'
+    ClientHeight = 291
+    ClientWidth = 636
+    TabOrder = 0
+    object Shape1: TShape
+      Left = 240
+      Height = 130
+      Top = 72
+      Width = 130
+      Shape = stCircle
+    end
+    object LJoyUp: TBitBtn
+      Tag = 1
+      Left = 200
+      Height = 43
+      Top = 24
+      Width = 212
+      Caption = 'UP'
+      OnClick = ChangeKeyBiding
+      TabOrder = 0
+    end
+    object LJoyRight: TBitBtn
+      Tag = 4
+      Left = 400
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'RIGHT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 1
+    end
+    object LJoyDown: TBitBtn
+      Tag = 2
+      Left = 200
+      Height = 43
+      Top = 240
+      Width = 212
+      Caption = 'DOWN'
+      OnClick = ChangeKeyBiding
+      TabOrder = 2
+    end
+    object LJoyLeft: TBitBtn
+      Tag = 3
+      Left = 8
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'LEFT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 3
+    end
+    object Label1: TLabel
+      Left = 480
+      Height = 32
+      Top = 80
+      Width = 56
+      Alignment = taCenter
+      Caption = 'Right'
+    end
+    object Label2: TLabel
+      Left = 288
+      Height = 32
+      Top = -16
+      Width = 30
+      Alignment = taCenter
+      Caption = 'Up'
+    end
+    object Label3: TLabel
+      Left = 88
+      Height = 32
+      Top = 80
+      Width = 40
+      Alignment = taCenter
+      Caption = 'Left'
+    end
+    object Label4: TLabel
+      Left = 272
+      Height = 32
+      Top = 200
+      Width = 62
+      Alignment = taCenter
+      Caption = 'Down'
+    end
+  end
+  object GroupBox6: TGroupBox
+    Left = 464
+    Height = 258
+    Top = 8
+    Width = 578
+    Caption = 'Shoulder buttons / Triggers'
+    ClientHeight = 221
+    ClientWidth = 574
+    TabOrder = 1
+    object R3: TBitBtn
+      Tag = 25
+      Left = 344
+      Height = 60
+      Top = 16
+      Width = 184
+      Caption = 'L3'
+      OnClick = ChangeKeyBiding
+      TabOrder = 0
+    end
+    object L3: TBitBtn
+      Tag = 22
+      Left = 56
+      Height = 60
+      Top = 16
+      Width = 184
+      Caption = 'L3'
+      OnClick = ChangeKeyBiding
+      TabOrder = 1
+    end
+    object R2: TBitBtn
+      Tag = 24
+      Left = 344
+      Height = 60
+      Top = 80
+      Width = 184
+      Caption = 'L2'
+      OnClick = ChangeKeyBiding
+      TabOrder = 2
+    end
+    object L2: TBitBtn
+      Tag = 21
+      Left = 56
+      Height = 60
+      Top = 80
+      Width = 184
+      Caption = 'L2'
+      OnClick = ChangeKeyBiding
+      TabOrder = 3
+    end
+    object L1: TBitBtn
+      Tag = 20
+      Left = 56
+      Height = 60
+      Top = 144
+      Width = 184
+      Caption = 'L1'
+      OnClick = ChangeKeyBiding
+      TabOrder = 4
+    end
+    object R1: TBitBtn
+      Tag = 23
+      Left = 344
+      Height = 60
+      Top = 144
+      Width = 184
+      Caption = 'L1'
+      OnClick = ChangeKeyBiding
+      TabOrder = 5
+    end
+    object Label17: TLabel
+      Left = 16
+      Height = 32
+      Top = 24
+      Width = 24
+      Alignment = taCenter
+      Caption = 'L3'
+    end
+    object Label18: TLabel
+      Left = 16
+      Height = 32
+      Top = 88
+      Width = 24
+      Alignment = taCenter
+      Caption = 'L2'
+    end
+    object Label19: TLabel
+      Left = 16
+      Height = 32
+      Top = 160
+      Width = 24
+      Alignment = taCenter
+      Caption = 'L1'
+    end
+    object Label20: TLabel
+      Left = 280
+      Height = 32
+      Top = 24
+      Width = 27
+      Alignment = taCenter
+      Caption = 'R3'
+    end
+    object Label21: TLabel
+      Left = 280
+      Height = 32
+      Top = 88
+      Width = 27
+      Alignment = taCenter
+      Caption = 'R2'
+    end
+    object Label22: TLabel
+      Left = 280
+      Height = 32
+      Top = 160
+      Width = 27
+      Alignment = taCenter
+      Caption = 'R1'
+    end
+  end
+  object BitBtn17: TBitBtn
+    Tag = 19
+    Left = 1480
+    Height = 60
+    Top = 112
+    Width = 182
+    Caption = 'Start'
+    OnClick = ChangeKeyBiding
+    TabOrder = 2
+  end
+  object BitBtn18: TBitBtn
+    Tag = 17
+    Left = 1064
+    Height = 60
+    Top = 112
+    Width = 184
+    Caption = 'Share'
+    OnClick = ChangeKeyBiding
+    TabOrder = 3
+  end
+  object BitBtn19: TBitBtn
+    Tag = 18
+    Left = 1272
+    Height = 60
+    Top = 112
+    Width = 184
+    Caption = 'Touch Screen'
+    OnClick = ChangeKeyBiding
+    TabOrder = 4
+  end
+  object GroupBox3: TGroupBox
+    Left = 24
+    Height = 328
+    Top = 664
+    Width = 640
+    Caption = 'DPAD'
+    ClientHeight = 291
+    ClientWidth = 636
+    TabOrder = 5
+    object DPadUp: TBitBtn
+      Tag = 9
+      Left = 200
+      Height = 43
+      Top = 24
+      Width = 212
+      Caption = 'UP'
+      OnClick = ChangeKeyBiding
+      TabOrder = 0
+    end
+    object DPadRight: TBitBtn
+      Tag = 12
+      Left = 400
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'RIGHT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 1
+    end
+    object DPadDown: TBitBtn
+      Tag = 10
+      Left = 200
+      Height = 43
+      Top = 240
+      Width = 212
+      Caption = 'DOWN'
+      OnClick = ChangeKeyBiding
+      TabOrder = 2
+    end
+    object DPadLeft: TBitBtn
+      Tag = 11
+      Left = 8
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'LEFT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 3
+    end
+    object Label5: TLabel
+      Left = 480
+      Height = 32
+      Top = 80
+      Width = 56
+      Alignment = taCenter
+      Caption = 'Right'
+    end
+    object Label6: TLabel
+      Left = 288
+      Height = 32
+      Top = -16
+      Width = 30
+      Alignment = taCenter
+      Caption = 'Up'
+    end
+    object Label7: TLabel
+      Left = 88
+      Height = 32
+      Top = 80
+      Width = 40
+      Alignment = taCenter
+      Caption = 'Left'
+    end
+    object Label8: TLabel
+      Left = 272
+      Height = 32
+      Top = 200
+      Width = 62
+      Alignment = taCenter
+      Caption = 'Down'
+    end
+    object Shape2: TShape
+      Left = 283
+      Height = 34
+      Top = 80
+      Width = 39
+      Shape = stTriangle
+    end
+    object Shape5: TShape
+      Left = 283
+      Height = 34
+      Top = 160
+      Width = 39
+      Shape = stTriangleDown
+    end
+    object Shape6: TShape
+      Left = 331
+      Height = 34
+      Top = 120
+      Width = 39
+      Shape = stTriangleRight
+    end
+    object Shape7: TShape
+      Left = 235
+      Height = 34
+      Top = 120
+      Width = 39
+      Shape = stTriangleLeft
+    end
+  end
+  object GroupBox4: TGroupBox
+    Left = 712
+    Height = 328
+    Top = 664
+    Width = 640
+    Caption = 'Right joystick'
+    ClientHeight = 291
+    ClientWidth = 636
+    TabOrder = 6
+    object Shape3: TShape
+      Left = 240
+      Height = 130
+      Top = 72
+      Width = 130
+      Shape = stCircle
+    end
+    object RJoyUp: TBitBtn
+      Tag = 5
+      Left = 200
+      Height = 43
+      Top = 24
+      Width = 212
+      Caption = 'UP'
+      OnClick = ChangeKeyBiding
+      TabOrder = 0
+    end
+    object RJoyRight: TBitBtn
+      Tag = 8
+      Left = 400
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'RIGHT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 1
+    end
+    object RJoyDown: TBitBtn
+      Tag = 6
+      Left = 200
+      Height = 43
+      Top = 240
+      Width = 212
+      Caption = 'DOWN'
+      OnClick = ChangeKeyBiding
+      TabOrder = 2
+    end
+    object RJoyLeft: TBitBtn
+      Tag = 7
+      Left = 8
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'LEFT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 3
+    end
+    object Label9: TLabel
+      Left = 488
+      Height = 32
+      Top = 80
+      Width = 56
+      Alignment = taCenter
+      Caption = 'Right'
+    end
+    object Label10: TLabel
+      Left = 288
+      Height = 32
+      Top = -16
+      Width = 30
+      Alignment = taCenter
+      Caption = 'Up'
+    end
+    object Label11: TLabel
+      Left = 88
+      Height = 32
+      Top = 80
+      Width = 40
+      Alignment = taCenter
+      Caption = 'Left'
+    end
+    object Label12: TLabel
+      Left = 272
+      Height = 32
+      Top = 200
+      Width = 62
+      Alignment = taCenter
+      Caption = 'Down'
+    end
+  end
+  object GroupBox5: TGroupBox
+    Left = 712
+    Height = 328
+    Top = 312
+    Width = 640
+    Caption = 'Buttons'
+    ClientHeight = 291
+    ClientWidth = 636
+    TabOrder = 7
+    object Triangle: TBitBtn
+      Tag = 16
+      Left = 200
+      Height = 43
+      Top = 24
+      Width = 212
+      Caption = 'UP'
+      OnClick = ChangeKeyBiding
+      TabOrder = 0
+    end
+    object Circle: TBitBtn
+      Tag = 14
+      Left = 400
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'RIGHT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 1
+    end
+    object Cross: TBitBtn
+      Tag = 13
+      Left = 200
+      Height = 43
+      Top = 240
+      Width = 212
+      Caption = 'DOWN'
+      OnClick = ChangeKeyBiding
+      TabOrder = 2
+    end
+    object Square: TBitBtn
+      Tag = 15
+      Left = 8
+      Height = 43
+      Top = 120
+      Width = 212
+      Caption = 'LEFT'
+      OnClick = ChangeKeyBiding
+      TabOrder = 3
+    end
+    object Label13: TLabel
+      Left = 480
+      Height = 32
+      Top = 80
+      Width = 59
+      Alignment = taCenter
+      Caption = 'Circle'
+    end
+    object Label14: TLabel
+      Left = 264
+      Height = 32
+      Top = -16
+      Width = 84
+      Alignment = taCenter
+      Caption = 'Triangle'
+    end
+    object Label15: TLabel
+      Left = 72
+      Height = 32
+      Top = 80
+      Width = 74
+      Alignment = taCenter
+      Caption = 'Square'
+    end
+    object Label16: TLabel
+      Left = 272
+      Height = 32
+      Top = 200
+      Width = 57
+      Alignment = taCenter
+      Caption = 'Cross'
+    end
+  end
+  object Label23: TLabel
+    Left = 1128
+    Height = 32
+    Top = 72
+    Width = 60
+    Alignment = taCenter
+    Caption = 'Share'
+  end
+  object Label24: TLabel
+    Left = 1296
+    Height = 32
+    Top = 72
+    Width = 143
+    Alignment = taCenter
+    Caption = 'Touch Screen'
+  end
+  object Label25: TLabel
+    Left = 1528
+    Height = 32
+    Top = 72
+    Width = 84
+    Alignment = taCenter
+    Caption = 'Options'
+  end
+  object Save: TBitBtn
+    Left = 1352
+    Height = 60
+    Top = 1032
+    Width = 226
+    Caption = 'Save'
+    OnClick = SaveClick
+    TabOrder = 8
+  end
+  object Cancel: TBitBtn
+    Left = 1618
+    Height = 60
+    Top = 1032
+    Width = 226
+    Caption = 'Cancel'
+    OnClick = CancelClick
+    TabOrder = 9
+  end
+  object SavePreset: TBitBtn
+    Left = 56
+    Height = 60
+    Top = 104
+    Width = 226
+    Caption = 'Save as preset'
+    OnClick = SavePresetClick
+    TabOrder = 10
+  end
+  object LoadPreset: TBitBtn
+    Left = 56
+    Height = 60
+    Top = 184
+    Width = 226
+    Caption = 'Load preset'
+    OnClick = LoadPresetClick
+    TabOrder = 11
+  end
+  object CheckEnabled: TCheckBox
+    Left = 64
+    Height = 36
+    Top = 32
+    Width = 193
+    Caption = 'XInput Enabled'
+    Checked = True
+    OnChange = SaveConfig
+    State = cbChecked
+    TabOrder = 12
+  end
+  object GroupBox2: TGroupBox
+    Left = 1377
+    Height = 282
+    Top = 368
+    Width = 434
+    Caption = 'Dead zones'
+    ClientHeight = 245
+    ClientWidth = 430
+    TabOrder = 13
+    object dzLeft: TTrackBar
+      Left = 112
+      Height = 50
+      Top = 24
+      Width = 280
+      OnChange = SaveConfig
+      Position = 0
+      TabOrder = 0
+    end
+    object dzRight: TTrackBar
+      Left = 112
+      Height = 50
+      Top = 96
+      Width = 280
+      OnChange = SaveConfig
+      Position = 0
+      TabOrder = 1
+    end
+    object Label26: TLabel
+      Left = 16
+      Height = 32
+      Top = 24
+      Width = 40
+      Caption = 'Left'
+    end
+    object Label27: TLabel
+      Left = 16
+      Height = 32
+      Top = 96
+      Width = 56
+      Caption = 'Right'
+    end
+    object Label28: TLabel
+      Left = 16
+      Height = 32
+      Top = 168
+      Width = 84
+      Caption = 'Triggers'
+    end
+    object dzTriggers: TTrackBar
+      Left = 112
+      Height = 50
+      Top = 168
+      Width = 280
+      OnChange = SaveConfig
+      Position = 0
+      TabOrder = 2
+    end
+  end
+  object OpenDialog1: TOpenDialog
+    Filter = 'Ini files|*.ini'
+    Left = 328
+    Top = 66
+  end
+  object SaveDialog1: TSaveDialog
+    Filter = 'Ini file|*.ini'
+    Left = 328
+    Top = 184
+  end
+end

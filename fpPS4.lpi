@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="117">
+    <Units Count="120">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -513,21 +513,42 @@
         <IsPartOfProject Value="True"/>
       </Unit112>
       <Unit113>
-        <Filename Value="kernel\mm_adr_direct.pas"/>
+        <Filename Value="src\inputs\formcontroller.pas"/>
         <IsPartOfProject Value="True"/>
+        <ComponentName Value="FormControllers"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="formController"/>
       </Unit113>
       <Unit114>
-        <Filename Value="kernel\mm_adr_virtual.pas"/>
+        <Filename Value="src\inputs\umappableinputs.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="uMappableInputs"/>
       </Unit114>
       <Unit115>
-        <Filename Value="kernel\mm_adr_name.pas"/>
+        <Filename Value="src\inputs\formbindbutton.pas"/>
         <IsPartOfProject Value="True"/>
+        <ComponentName Value="FormBindButtons"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="formBindButton"/>
       </Unit115>
       <Unit116>
-        <Filename Value="rtl\trace_manager.pas"/>
+        <Filename Value="kernel\mm_adr_virtual.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit116>
+      <Unit117>
+        <Filename Value="kernel\mm_adr_direct.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit117>
+      <Unit118>
+        <Filename Value="rtl\trace_manager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit118>
+      <Unit119>
+        <Filename Value="kernel\mm_adr_name.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit119>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

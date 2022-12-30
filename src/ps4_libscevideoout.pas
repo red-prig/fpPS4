@@ -257,7 +257,8 @@ uses
  ps4_time,
  spinlock,
  hamt,
- param_sfo;
+ param_sfo,
+ formController;
 
 type
  PQNode=^TQNode;
@@ -542,6 +543,11 @@ begin
 
   UnlockRealizeBounds;
  end;
+
+ if Key = VK_ESCAPE then
+ begin
+  FormControllers.Show;
+ end;
 end;
 
 procedure TVideoOut.OnVblank(Sender:TObject);
@@ -585,9 +591,12 @@ begin
  FForm.SetCaptionFPS(0);
  FForm.OnClose:=@FForm.CloseEvent;
  FForm.OnKeyDown:=@FForm.KeyEvent;
+ FForm.Position:=poScreenCenter;
 
  Application.UpdateMainForm(FForm);
  FForm.Show;
+
+ Application.CreateForm(TFormControllers, FormControllers);
 
  FGpuFlip:=TvFlip.Create(FForm.Handle);
  FGpuFlip.FNeoMode:=ps4_sceKernelIsNeoMode<>0;
