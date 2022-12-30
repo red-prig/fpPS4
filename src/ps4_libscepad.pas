@@ -407,7 +407,7 @@ begin
    data^.leftStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
 
    data^.rightStick.x:=Trunc(128+(MappableInputs.GetAnalog(miRJoyRight, cs)-MappableInputs.GetAnalog(miRJoyLeft, cs))*127);
-   data^.rightStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
+   data^.rightStick.y:=Trunc(128+(MappableInputs.GetAnalog(miRJoyDown, cs)-MappableInputs.GetAnalog(miRJoyUp, cs))*127);
 
    data^.analogButtons.l2:=Trunc(MappableInputs.GetAnalog(miL2, cs)*255);
    data^.analogButtons.r2:=Trunc(MappableInputs.GetAnalog(miR2, cs)*255);
