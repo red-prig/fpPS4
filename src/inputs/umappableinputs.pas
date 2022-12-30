@@ -152,7 +152,7 @@ end;
 function TMappableInputs.GetAnalog(input : EnumPS4Buttons; s : TXInputState) : Single;
 var
  xinputButton : EnumXInputButtons;
- outOfDeadzoneL, outOfDeadzoneR, outOfDeadzoneT : single;
+ outOfDeadzoneL, outOfDeadzoneR : single;
 begin
  xInputButton := PS4toXInput[Ord(input)];
 
@@ -160,20 +160,19 @@ begin
  begin
   outOfDeadzoneL := IfThen(Trunc(sqrt(s.Gamepad.sThumbLX*s.Gamepad.sThumbLX+s.Gamepad.sThumbLY*s.Gamepad.sThumbLY)) > XInputDeadzoneLeft, 1, 0);  
   outOfDeadzoneR := IfThen(Trunc(sqrt(s.Gamepad.sThumbRX*s.Gamepad.sThumbRX+s.Gamepad.sThumbRY*s.Gamepad.sThumbRY)) > XInputDeadzoneRight, 1, 0);
-  outOfDeadzoneT := IfThen(s.Gamepad.bLeftTrigger > XInputDeadzoneTrigger, 1, 0);
 
   case (xInputButton) of
-   xiLJoyUp: Result := Max(s.Gamepad.sThumbLY, 0) * outOfDeadzoneL / 32767.0;
-   xiLJoyDown: Result := Min(s.Gamepad.sThumbLY, 0) * outOfDeadzoneL / 32767.0;
+   xiLJoyUp   : Result := Max(s.Gamepad.sThumbLY, 0) * outOfDeadzoneL / 32767.0;
+   xiLJoyDown : Result := Min(s.Gamepad.sThumbLY, 0) * outOfDeadzoneL / 32767.0;
    xiLJoyRight: Result := Max(s.Gamepad.sThumbLX, 0) * outOfDeadzoneL / 32767.0;
-   xiLJoyLeft: Result := Min(s.Gamepad.sThumbLX, 0) * outOfDeadzoneL / 32767.0;
+   xiLJoyLeft : Result := Min(s.Gamepad.sThumbLX, 0) * outOfDeadzoneL / 32767.0;
 
-   xiRJoyUp: Result := s.Gamepad.sThumbRY * outOfDeadzoneR / 32767.0;
-   xiRJoyDown: Result := s.Gamepad.sThumbRY * outOfDeadzoneR / 32767.0;
-   xiRJoyRight: Result := s.Gamepad.sThumbRX * outOfDeadzoneR / 32767.0;
-   xiRJoyLeft: Result := s.Gamepad.sThumbRX * outOfDeadzoneR / 32767.0;
+   xiRJoyUp   : Result := Max(s.Gamepad.sThumbRY, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyDown : Result := Min(s.Gamepad.sThumbRY, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyRight: Result := Max(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyLeft : Result := Min(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
 
-   xiL2: Result := IfThen(s.Gamepad.bLeftTrigger > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
+   xiL2: Result := IfThen(s.Gamepad.bLeftTrigger  > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
    xiR2: Result := IfThen(s.Gamepad.bRightTrigger > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
   else Result := 0;
   end;
