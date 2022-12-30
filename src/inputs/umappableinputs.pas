@@ -168,10 +168,10 @@ begin
    xiLJoyRight: Result := Max(s.Gamepad.sThumbLX, 0) * outOfDeadzoneL / 32767.0;
    xiLJoyLeft: Result := Min(s.Gamepad.sThumbLX, 0) * outOfDeadzoneL / 32767.0;
 
-   xiRJoyUp: Result := s.Gamepad.sThumbRY * outOfDeadzoneR / 32767.0;
-   xiRJoyDown: Result := s.Gamepad.sThumbRY * outOfDeadzoneR / 32767.0;
-   xiRJoyRight: Result := s.Gamepad.sThumbRX * outOfDeadzoneR / 32767.0;
-   xiRJoyLeft: Result := s.Gamepad.sThumbRX * outOfDeadzoneR / 32767.0;
+   xiRJoyUp: Result := Max(s.Gamepad.sThumbRY, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyDown: Result := Min(s.Gamepad.sThumbRY, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyRight: Result := Max(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
+   xiRJoyLeft: Result := Min(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
 
    xiL2: Result := IfThen(s.Gamepad.bLeftTrigger > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
    xiR2: Result := IfThen(s.Gamepad.bRightTrigger > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
