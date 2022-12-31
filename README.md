@@ -25,6 +25,8 @@ This project is at the beginning and started for fun.
 https://github.com/red-prig/fpps4-game-compatibility/issues
 
 ### Control layout
+To switch to borderless full screen mode, press Alt-Enter.
+
 FPPS4 support XInput-compatible gamepads natively. You can remap buttons by pressing Esc on keyboard during emulation. 
 Anyway you can use a keyboard input.
 A Dualshock4 touchpad is emulating by mouse.
