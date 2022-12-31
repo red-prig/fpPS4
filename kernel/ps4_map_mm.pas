@@ -392,11 +392,13 @@ end;
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_MAIN_DMEM_SIZE;
+ _set_errno(0);
 end;
 
 function ps4_getpagesize:Integer; SysV_ABI_CDecl;
 begin
  Result:=PHYSICAL_PAGE_SIZE;
+ _set_errno(0);
 end;
 
 function ps4_sceKernelAvailableFlexibleMemorySize(sizeOut:PQWORD):Integer; SysV_ABI_CDecl;

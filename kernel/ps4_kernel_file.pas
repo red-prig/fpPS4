@@ -109,7 +109,10 @@ begin
  Result:=parse_filename(path,rp);
 
  Case Result of
-  PT_ROOT:Exit(-EACCES); //TODO
+  PT_ROOT:
+    begin
+     Result:=_sys_root_open(rp,flags,mode);
+    end;
   PT_FILE:
     begin
      if DirectoryExists(rp) then
@@ -518,11 +521,18 @@ begin
   Exit(ENOENT);
  end;
 
+ //Writeln('stat:',path);
+
  rp:='';
  Result:=parse_filename(path,rp);
 
+ stat^:=Default(SceKernelStat);
+
  Case Result of
-  PT_ROOT:Exit(EACCES); //TODO
+  PT_ROOT:
+   begin
+    Result:=_sys_root_stat(rp,stat);
+   end;
   PT_FILE:
     begin
      if DirectoryExists(rp) then
@@ -674,7 +684,7 @@ begin
  Result:=parse_filename(path,fn);
 
  Case Result of
-  PT_ROOT:Exit(EEXIST); //TODO
+  PT_ROOT:Exit(EACCES); //TODO
   PT_FILE:;
   PT_DEV :Exit(EACCES);
   else
@@ -769,7 +779,7 @@ begin
  Result:=parse_filename(path,fn);
 
  Case Result of
-  PT_ROOT:Exit(EEXIST); //TODO
+  PT_ROOT:Exit(EACCES); //TODO
   PT_FILE:;
   PT_DEV :Exit(EACCES);
   else
@@ -967,7 +977,7 @@ begin
  _sig_unlock;
 
  Case Result of
-  PT_ROOT:Exit(_set_sce_errno(0));
+  PT_ROOT:Exit(_set_sce_errno(0)); //TODO dir exists
   PT_FILE:;
   PT_DEV :Exit(_set_sce_errno(0));
   else
@@ -1020,7 +1030,7 @@ begin
  Result:=parse_filename(path,fn);
 
  Case Result of
-  PT_ROOT:Exit(0);
+  PT_ROOT:Exit(0); //TODO test dir exits
   PT_FILE:;
   PT_DEV :Exit(0);
   else

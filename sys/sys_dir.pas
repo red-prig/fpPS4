@@ -41,6 +41,9 @@ type
 function _sys_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
 function _sys_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 
+function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+
 implementation
 
 type
@@ -54,15 +57,15 @@ type
    pos:DWORD;
   Constructor Create;
   Destructor  Destroy; override;
-  function read         (data:Pointer;size:Int64):Int64;               override;
-  function pread        (data:Pointer;size,offset:Int64):Int64;        override;
-  function readv        (vector:p_iovec;count:Integer):Int64;          override;
-  function write        (data:Pointer;size:Int64):Int64;               override;
-  function pwrite       (data:Pointer;size,offset:Int64):Int64;        override;
-  function ftruncate    (size:Int64):Integer;                          override;
-  function fstat        (stat:PSceKernelStat):Integer;                 override;
-  function lseek        (offset:Int64;whence:Integer):Int64;           override;
-  function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; override;
+  function  read         (data:Pointer;size:Int64):Int64;               override;
+  function  pread        (data:Pointer;size,offset:Int64):Int64;        override;
+  function  readv        (vector:p_iovec;count:Integer):Int64;          override;
+  function  write        (data:Pointer;size:Int64):Int64;               override;
+  function  pwrite       (data:Pointer;size,offset:Int64):Int64;        override;
+  function  ftruncate    (size:Int64):Integer;                          override;
+  function  fstat        (stat:PSceKernelStat):Integer;                 override;
+  function  lseek        (offset:Int64;whence:Integer):Int64;           override;
+  function  getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; override;
  end;
 
 function get_d_type(dwFileAttributes:DWORD):BYTE;
@@ -76,13 +79,11 @@ begin
  end;
 end;
 
-procedure move_dirent(id:DWORD;src:PWIN32FindDataW;buf:Pointer);
+procedure move_name(id:DWORD;d_type:Byte;f:RawByteString;buf:Pointer);
 var
  p:p_dirent;
- f:RawByteString;
  len:ptruint;
 begin
- f:=UTF8Encode(WideString(src^.cFileName));
  len:=Length(f);
  if (len>dirent.MAXNAMLEN) then len:=dirent.MAXNAMLEN;
 
@@ -93,10 +94,20 @@ begin
  p:=buf;
  p^.d_fileno:=id;
  p^.d_reclen:=SizeOf(dirent);
- p^.d_type  :=get_d_type(src^.dwFileAttributes);
+ p^.d_type  :=d_type;
  p^.d_namlen:=BYTE(len-1);
 
  Move(PChar(f)^,p^.d_name,len);
+end;
+
+procedure move_dirent(id:DWORD;src:PWIN32FindDataW;buf:Pointer);
+var
+ p:p_dirent;
+ f:RawByteString;
+ len:ptruint;
+begin
+ f:=UTF8Encode(WideString(src^.cFileName));
+ move_name(id,get_d_type(src^.dwFileAttributes),f,buf);
 end;
 
 function get_dir_wp(const path:RawByteString):WideString;
@@ -239,6 +250,71 @@ end;
 
 //
 
+function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
+var
+ f:TDirFile;
+
+ procedure add_dir(name:RawByteString);
+ var
+  tmp:dirent;
+  i:Integer;
+ begin
+  tmp:=Default(dirent);
+
+  i:=Length(f.dirs);
+  move_name(i,DT_DIR,name,@tmp);
+
+  i:=Length(f.dirs);
+  SetLength(f.dirs,i+1);
+  f.dirs[i]:=tmp;
+ end;
+
+begin
+ Result:=0;
+
+ f:=TDirFile.Create;
+ f.path:=path;
+
+ SetLength(f.dirs,0);
+
+ add_dir('.');
+ add_dir('..');
+ add_dir('app0');
+ add_dir('dev');
+ add_dir('sys');
+
+ Result:=_sys_open_fd(f,flags);
+
+ if (Result<0) then
+ begin
+  f.Destroy;
+ end else
+ begin
+  f.Release;
+ end;
+end;
+
+function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+begin
+ stat^:=Default(SceKernelStat);
+
+ stat^.st_mode    :=S_IFDIR;
+ stat^.st_size    :=1;
+ stat^.st_nlink   :=1;
+
+ stat^.st_atim.tv_sec    :=1;
+ stat^.st_mtim.tv_sec    :=1;
+ stat^.st_ctim.tv_sec    :=1;
+ stat^.st_birthtim.tv_sec:=1;
+
+ stat^.st_blocks  :=0;
+ stat^.st_blksize :=SizeOf(dirent);
+
+ Result:=0;
+end;
+
+//
+
 Constructor TDirFile.Create;
 begin
  pos:=0;
@@ -247,7 +323,7 @@ begin
  dirs:=Default(a_dirent);
 end;
 
-Destructor  TDirFile.Destroy;
+Destructor TDirFile.Destroy;
 begin
  dirs:=Default(a_dirent);
  rwlock_destroy(lock);
