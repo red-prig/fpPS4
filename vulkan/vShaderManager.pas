@@ -327,29 +327,43 @@ begin
    FShader:=t.FShaders[i];
    ch.FResult:=True;
    FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData);
-   if ch.FResult then
+   if ch.FResult then //Checking offsets within a shader
    begin
 
-    if (FShader.FPushConst.size<>0) and (pc<>nil) then
+    if (pc<>nil) then //push const allocator used?
     begin
-     if (FShader.FPushConst.offset=pc^.offset) then
-     if (FShader.FPushConst.size<=pc^.GetAvailable) then
+     if (FShader.FPushConst.size<>0) then //push const used?
      begin
-      pc^.Apply(FShader.FPushConst.size);
-      Break;
+      if (FShader.FPushConst.offset=pc^.offset) and       //Checking offsets push constant
+         (FShader.FPushConst.size<=pc^.GetAvailable) then //Is the remaining size sufficient?
+      begin
+       //found and apply with allocator
+       pc^.Apply(FShader.FPushConst.size);
+       Break;
+      end else
+      begin
+       FShader:=nil; //reset with not found
+      end;
      end;
     end else
-    begin
-     Break;
+    begin //push const allocator not used
+     if (FShader.FPushConst.size<>0) then
+     begin
+      FShader:=nil; //reset with not found
+     end else
+     begin
+      //found with no push const
+      Break;
+     end;
     end;
 
    end else
    begin
-    FShader:=nil;
+    FShader:=nil; //reset with not found
    end;
   end;
 
-  if (FShader=nil) then
+  if (FShader=nil) then //Rebuild with different parameters
   begin
 
    M:=ParseShader(FStage,pData,GPU_REGS,pc);
@@ -359,11 +373,11 @@ begin
    FShader.FDescSetId:=FDescSetId;
    FShader.LoadFromStream(M);
 
-   if (FShader.FPushConst.size<>0) and (pc<>nil) then
+   if (FShader.FPushConst.size<>0) and (pc<>nil) then //push const used?
    begin
-    FShader.FPushConst.offset:=pc^.offset;
-    Dec(FShader.FPushConst.size,pc^.offset);
-    pc^.Apply(FShader.FPushConst.size);
+    FShader.FPushConst.offset:=pc^.offset;   //Save offset
+    Dec(FShader.FPushConst.size,pc^.offset); //Move up size
+    pc^.Apply(FShader.FPushConst.size);      //apply with allocator
    end;
 
    M.Free;
@@ -402,6 +416,7 @@ begin
   end;
  }
 
+  //first parse
 
   M:=ParseShader(FStage,pData,GPU_REGS,pc);
   Assert(M<>nil);
@@ -412,11 +427,11 @@ begin
 
   M.Free;
 
-  if (FShader.FPushConst.size<>0) and (pc<>nil) then
+  if (FShader.FPushConst.size<>0) and (pc<>nil) then //push const used?
   begin
-   FShader.FPushConst.offset:=pc^.offset;
-   Dec(FShader.FPushConst.size,pc^.offset);
-   pc^.Apply(FShader.FPushConst.size);
+   FShader.FPushConst.offset:=pc^.offset;   //Save offset
+   Dec(FShader.FPushConst.size,pc^.offset); //Move up size
+   pc^.Apply(FShader.FPushConst.size);      //apply with allocator
   end;
 
   SetLength(t.FShaders,1);
