@@ -863,7 +863,7 @@ begin
  if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
  if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleLoadModule:',GetSysmoduleName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleLoadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
@@ -871,7 +871,7 @@ function ps4_sceSysmoduleUnloadModule(id:DWord):Integer; SysV_ABI_CDecl;
 begin
  if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleUnloadModule:',GetSysmoduleName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleUnloadModule:',GetSysmoduleName(id));
  Result:=0;
 end;
 
@@ -879,7 +879,7 @@ function ps4_sceSysmoduleIsLoaded(id:DWord):Integer; SysV_ABI_CDecl;
 begin
  if (Word(id)=0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleIsLoaded:',GetSysmoduleName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleIsLoaded:',GetSysmoduleName(id));
  Result:=0; //0 -> loaded ; SCE_SYSMODULE_ERROR_UNLOADED -> not loaded
 end;
 
@@ -889,7 +889,7 @@ function ps4_sceSysmoduleIsLoadedInternal(id:DWord):Integer; SysV_ABI_CDecl;
 begin
  if ((id or $80000000)=$80000000) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleIsLoadedInternal:',GetSysmoduleInternalName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleIsLoadedInternal:',GetSysmoduleInternalName(id));
  Result:=0; //0 -> loaded ; SCE_SYSMODULE_ERROR_UNLOADED -> not loaded
 end;
 
@@ -898,7 +898,7 @@ begin
  if ((id or $80000000)=$80000000) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
  if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleLoadModuleInternal:',GetSysmoduleInternalName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleLoadModuleInternal:',GetSysmoduleInternalName(id));
  Result:=0;
 end;
 
@@ -911,7 +911,7 @@ begin
  if ((id or $80000000)=$80000000) or (flags<>0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
  if ((Word(id)=$80) and (SDK_VERSION>=$3000000)) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleInternalName(id));
+ Writeln(SysLogPrefix, 'sceSysmoduleLoadModuleInternalWithArg:',GetSysmoduleInternalName(id));
  if (pRes<>nil) then pRes^:=0;
  Result:=0;
 end;

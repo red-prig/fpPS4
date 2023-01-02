@@ -341,6 +341,8 @@ begin
  Timer.OnTimer:=@TUserApp(Application).OnTimer;
  Timer.Enabled:=true;
 
+ SetThreadDebugName(GetCurrentThreadId, 'FPPS4 App Run');
+
  Application.OnException:=nil;
  Application.CaptureExceptions:=False;
  Application.AddOnIdleHandler(@TUserApp(Application).OnIdleUpdate,False);

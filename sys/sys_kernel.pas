@@ -113,13 +113,26 @@ function  GetProcessIoCounters(hProcess:HANDLE;
                                lpIoCounters:PIO_COUNTERS
                               ):BOOL; external 'kernel32';
 
+function SysLogPrefix : string;
+
 implementation
+
 
 uses
  ntapi,
  sys_pthread,
  sys_signal,
  sys_time;
+
+function SysLogPrefix : string;
+begin      
+ // Add thread name and id as prefix to log messages
+ Result := '';
+ if _get_curthread <> nil then
+ begin
+  Result:='['+_get_curthread^.name + ':'+ IntToStr(_get_curthread^.ThreadId) + '] ';
+ end;
+end;
 
 function px2sce(e:Integer):Integer;
 begin

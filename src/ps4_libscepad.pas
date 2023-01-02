@@ -17,7 +17,7 @@ uses
 implementation
 
 uses
- ps4_libSceVideoOut, uMappableInputs;
+ ps4_libSceVideoOut, uMappableInputs, sys_kernel;
 
 const
  SCE_PAD_ERROR_INVALID_ARG             =-2137915391; // 0x80920001
@@ -285,7 +285,7 @@ function ps4_scePadInit():Integer; SysV_ABI_CDecl;
 var
  controllerIndex:Integer;
 begin
- Writeln('scePadInit');
+ Writeln(SysLogPrefix,'scePadInit');
 
  // init xinput
  for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do

@@ -11,15 +11,20 @@ uses
 
 implementation
 
+uses sys_kernel;
+
+const
+ SCE_HTTP_NB_EVENT_SOCK_ERR = 8;
+
 function ps4_sceHttpInit(libnetMemId,libsslCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpInit:',poolSize);
- Result:=4;
+ Writeln(SysLogPrefix,'sceHttpInit poolSize=',poolSize);
+ Result:=4; // libhttpCtxId
 end;
 
 function ps4_sceHttpTerm(libhttpCtxId:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpTerm:',libhttpCtxId);
+ Writeln(SysLogPrefix,'sceHttpTerm:',libhttpCtxId);
  Result:=0;
 end;
 
@@ -29,8 +34,8 @@ function ps4_sceHttpCreateTemplate(
 	  httpVer:Integer;
 	  autoProxyConf:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('userAgent:',userAgent);
- Result:=1;
+ Writeln(SysLogPrefix,'sceHttpCreateTemplate userAgent=',userAgent,' httpVer=',httpVer);
+ Result:=1; // templateId
 end;
 
 function ps4_sceHttpDeleteTemplate(templateId:Integer):Integer; SysV_ABI_CDecl;
@@ -60,13 +65,13 @@ end;
 
 function ps4_sceHttpSetEpoll(id:Integer;eh:SceHttpEpollHandle;userArg:Pointer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpSetEpoll');
+ Writeln(SysLogPrefix, 'sceHttpSetEpoll');
  Result:=0;
 end;
 
 function ps4_sceHttpUnsetEpoll(id:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpUnsetEpoll');
+ Writeln(SysLogPrefix, 'sceHttpUnsetEpoll');
  Result:=0;
 end;
 
@@ -84,8 +89,9 @@ function ps4_sceHttpWaitRequest(eh:SceHttpEpollHandle;
                                 maxevents:Integer;
                                 timeout_us:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpWaitReques');
- nbev^.events:=8; //SCE_HTTP_NB_EVENT_SOCK_ERR
+ WriteLn(SysLogPrefix, 'sceHttpWaitRequest handle=', HexStr(eh),' event.id=', nbev^.id,' maxevents=',maxevents);
+
+ nbev^.events:=SCE_HTTP_NB_EVENT_SOCK_ERR;
  nbev^.id:=3;
 
  Result:=1;
@@ -94,7 +100,7 @@ end;
 function ps4_sceHttpAddRequestHeader(id:Integer;name:PChar;value:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
- Writeln(name,': ',value);
+ WriteLn(SysLogPrefix, 'sceHttpAddRequestHeader ',name,'=',value,' mode=',mode);
 end;
 
 type
@@ -106,7 +112,8 @@ type
                    userArg:Pointer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceHttpsSetSslCallback(id:Integer;cbfunc:SceHttpsCallback;userArg:Pointer):Integer; SysV_ABI_CDecl;
-begin
+begin      
+ WriteLn(SysLogPrefix, 'sceHttpsSetSslCallback id=',id,' callback=',HexStr(@cbfunc));
  Result:=0;
 end;
 
@@ -114,7 +121,7 @@ function ps4_sceHttpCreateConnectionWithURL(tmplId:Integer;
                                             url:PChar;
                                             enableKeepalive:Boolean):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpCreateConnectionWithURL:',url);
+ WriteLn(SysLogPrefix, 'sceHttpCreateConnectionWithURL:' + url);
  Result:=2;
 end;
 
@@ -128,13 +135,13 @@ function ps4_sceHttpCreateRequestWithURL2(connId:Integer;
                                           url:PChar;
                                           contentLength:QWORD):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpCreateRequestWithURL2:',url);
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequestWithURL2 method=', method, 'url=',url);
  Result:=3;
 end;
 
 function ps4_sceHttpDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpDeleteRequest');
+ WriteLn(SysLogPrefix, 'sceHttpDeleteRequest');
  Result:=0;
 end;
 
@@ -142,7 +149,7 @@ function ps4_sceHttpSendRequest(reqId:Integer;
                                 postData:Pointer;
                                 size:QWORD):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttpSendRequest');
+ WriteLn(SysLogPrefix, 'sceHttpSendRequest reqId=',reqId,' postData=',HexStr(postData));
  Result:=0;
 end;
 
@@ -219,7 +226,7 @@ function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
                           poolSize:size_t;
                           maxConcurrentRequest:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceHttp2Init:',poolSize);
+ WriteLn(SysLogPrefix, 'sceHttp2Init poolSize=',poolSize);
  Result:=3;
 end;
 

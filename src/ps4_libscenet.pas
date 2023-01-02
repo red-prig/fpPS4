@@ -75,7 +75,7 @@ end;
 function ps4_sceNetPoolCreate(name:PChar;size,flags:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNetPoolCreate:',name,':',size,':',flags);
- Result:=2;
+ Result:=2; // iNetLibId
 end;
 
 function ps4_sceNetPoolDestroy(memid:Integer):Integer; SysV_ABI_CDecl;

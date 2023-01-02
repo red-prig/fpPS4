@@ -143,7 +143,7 @@ end;
 
 function ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
- Writeln('scePthreadAttrInit');
+ Writeln(SysLogPrefix, 'scePthreadAttrInit');
  if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
  pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
  if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
@@ -153,7 +153,7 @@ end;
 
 function ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
- Writeln('scePthreadAttrDestroy');
+ Writeln(SysLogPrefix, 'scePthreadAttrDestroy');
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (pAttr=nil) then Exit;
  SwFreeMem(XCHG(pAttr^,nil));
@@ -162,7 +162,7 @@ end;
 
 function ps4_pthread_attr_init(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
- Writeln('pthread_attr_init');
+ Writeln(SysLogPrefix, 'pthread_attr_init');
  if (pAttr=nil) then Exit(EINVAL);
  pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
  if (pAttr^=nil) then Exit(ENOMEM);
@@ -171,8 +171,8 @@ begin
 end;
 
 function ps4_pthread_attr_destroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln('pthread_attr_destroy');
+begin                    
+ Writeln(SysLogPrefix, 'pthread_attr_destroy');
  Result:=EINVAL;
  if (pAttr=nil) then Exit;
  SwFreeMem(XCHG(pAttr^,nil));
@@ -469,8 +469,9 @@ begin
    data^.Attr.stacksize_attr:=StackLength;
   //end;
 
-  writeln('BeginThread:',data^.name,':',HexStr(data^.entry));
   tcb_thread:=data;
+  SetThreadDebugName(data^.ThreadId,'ps4:'+data^.name);
+  WriteLn(SysLogPrefix, 'BeginThread:',HexStr(data^.entry));
   _thread_init;
 
   wait_until_equal(data^.handle,0);
@@ -489,7 +490,7 @@ begin
   ReadWriteBarrier;
 
   _thread_cleanup;
-  writeln('EndThread:',data^.name);
+  writeln(SysLogPrefix,'EndThread:',data^.name);
 
   if CAS(data^.detachstate,PTHREAD_CREATE_DETACHED,_PREPARE_FREE) then
   begin
@@ -519,7 +520,7 @@ Var
  ss:SizeUInt;
  creationFlags:dword;
 begin
- Writeln('pthread_create:',HexStr(entry),' ',name);
+ Writeln(SysLogPrefix, 'pthread_create:',HexStr(entry),' ',name);
 
  Result:=EINVAL;
  if (pthread=nil) then Exit;
@@ -635,7 +636,7 @@ end;
 function ps4_scePthreadJoin(_pthread:pthread;value:PPointer):Integer; SysV_ABI_CDecl;
 begin
  if (_pthread=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- Writeln('scePthreadJoin:',_pthread^.name);
+ Writeln(SysLogPrefix, 'scePthreadJoin:',_pthread^.name);
 
  if CAS(_pthread^.detachstate,PTHREAD_CREATE_JOINABLE,_PREPARE_FREE) then
  begin
@@ -705,7 +706,7 @@ var
 begin
  data:=tcb_thread;
  if (data=nil) then Exit;
- Writeln('ExitThread:',data^.name);
+ Writeln(SysLogPrefix, 'ExitThread');
  data^.arg:=value_ptr;
 
  ReadWriteBarrier;

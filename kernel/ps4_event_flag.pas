@@ -259,7 +259,7 @@ function ps4_sceKernelCreateEventFlag(
   attr,init:QWORD;
   pOptParam:PSceKernelEventFlagOptParam):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceKernelCreateEventFlag:',pName);
+ Writeln(SysLogPrefix, 'sceKernelCreateEventFlag:',pName);
 
  if (pOptParam<>nil) then
  begin
@@ -588,7 +588,7 @@ begin
  Result:=ef_enter(ef);
  if (Result<>0) then Exit;
 
- //Writeln('sceKernelClearEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
+ //Writeln(SysLogPrefix, 'sceKernelClearEventFlag:',HexStr(ef),':',ef^.name,':',HexStr(bitPattern,16),':',ThreadID);
 
  spin_lock(ef^.lock_list);
   fetch_and(ef^.bitPattern,bitPattern);
