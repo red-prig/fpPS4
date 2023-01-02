@@ -93,7 +93,7 @@ begin
  Result:=0;
  if (path=nil) then Exit(-EINVAL);
 
- Writeln('open:',path,' ',flags,' (',OctStr(mode,3),')');
+ Writeln(SysLogPrefix, 'open:',path,' ',flags,' (',OctStr(mode,3),')');
 
  if ((flags and WR_RDWR)=WR_RDWR) then
  begin
