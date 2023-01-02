@@ -431,6 +431,8 @@ begin
 
  sys_crt_init;
 
+ SetThreadDebugName(GetCurrentThreadId, 'GFX Thread');
+
  repeat
   work_do:=False;
 
@@ -450,7 +452,7 @@ begin
     //end;
    end else
    begin
-    time:=-100000;
+    time:=-50000;
     NtDelayExecution(True,@time);
     Continue;
    end;
