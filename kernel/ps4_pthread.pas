@@ -111,6 +111,7 @@ const
  default_name:Pchar='main';
 
 var
+ default_main_stack:Integer=DefaultStackSize;
  default_stack_size:QWORD=$10000;
 
 function ps4_pthread_set_defaultstacksize_np(size:QWORD):Integer; SysV_ABI_CDecl;
@@ -413,11 +414,11 @@ begin
  end;
  if (stack=nil) then
  begin
-  stack:=@default_stack_size;
+  stack:=@default_main_stack;
  end else
- if (stack^<PTHREAD_STACK_MIN) then
+ if (stack^<default_main_stack) then
  begin
-  stack:=@default_stack_size;
+  stack:=@default_main_stack;
  end;
 
  ps4_pthread_attr_init(@attr);
