@@ -715,8 +715,18 @@ begin
  srcb:=FetchHostBuffer(Self,src,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
  Assert(srcb<>nil);
 
+ if (srcb.Foffset+byteCount>srcb.FSize) then
+ begin
+  Assert(False,'FetchHostBuffer:Insufficient buffer size!');
+ end;
+
  dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
+
+ if (dstb.Foffset+byteCount>dstb.FSize) then
+ begin
+  Assert(False,'FetchHostBuffer:Insufficient buffer size!');
+ end;
 
  Inc(cmd_count);
 

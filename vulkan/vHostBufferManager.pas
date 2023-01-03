@@ -102,14 +102,12 @@ end;
 function _fix_buf_size(sparce:Boolean;var Addr:Pointer;var Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
 var
  mr:TVkMemoryRequirements;
- pAlign:Pointer;
 begin
  mr:=GetRequirements(sparce,Size,usage,@buf_ext);
 
- pAlign:=AlignDw(Addr,mr.alignment);
- Result:=(Addr-pAlign);
+ Result:=(ptruint(Addr) mod mr.alignment);
 
- Addr:=pAlign;
+ Addr:=Pointer(ptruint(Addr)-Result);
  Size:=Size+Result;
 end;
 
@@ -234,11 +232,11 @@ begin
 
  FHostBufferSet.Lock_wr;
 
- t:=_Find(Addr);
+ t:=_Find(Addr); //find by key
 
  if (t<>nil) then
  begin
-  if (t.FSize<Size) or
+  if (t.FSize<(t.Foffset+Size)) or
      ((t.FUsage and usage)<>usage) then
   begin
    usage:=usage or t.FUsage;
@@ -268,7 +266,7 @@ begin
     Assert(false,'_is_sparce');
   end;
 
-  t.FAddr:=addr;
+  t.FAddr:=addr; //save key
 
   FHostBufferSet.Insert(@t.FAddr);
   t.Acquire(nil);
