@@ -97,7 +97,7 @@ type
     Function  CheckedAlloc(Offset,Size:QWORD):Integer;
     Function  CheckedMMap(Offset,Size:QWORD):Integer;
     Function  CheckedRelease(Offset,Size:QWORD):Integer;
-    Function  Release(Offset,Size:QWORD;inher:Boolean):Integer;
+    Function  Release(Offset,Size:QWORD):Integer;
     Function  mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
     Function  mmap_type(Offset,Size:QWORD;mtype:Integer):Integer;
     Function  unmap_addr(Offset,Size:QWORD):Integer;
@@ -664,7 +664,7 @@ begin
  end;
 end;
 
-Function TDirectManager.Release(Offset,Size:QWORD;inher:Boolean):Integer;
+Function TDirectManager.Release(Offset,Size:QWORD):Integer;
 var
  key:TDirectAdrNode;
  FEndN,FEndO:QWORD;
@@ -744,13 +744,7 @@ begin
 
   if _fetch then
   begin
-   if inher then
-   begin
-    Result:=0;
-   end else
-   begin
-    Result:=_UnmapVirtual(key.addr,key.Size);
-   end;
+   Result:=_UnmapVirtual(key.addr,key.Size);
 
    if (Result<>0) then
    begin

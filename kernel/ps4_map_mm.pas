@@ -651,7 +651,7 @@ begin
  Result:=DirectManager.CheckedRelease(start,len);
  if (Result=0) then
  begin
-  Result:=DirectManager.Release(start,len,False);
+  Result:=DirectManager.Release(start,len);
  end;
 
  rwlock_unlock(MMLock);
@@ -668,7 +668,7 @@ begin
  _sig_lock;
  rwlock_wrlock(MMLock); //rw
 
- Result:=DirectManager.Release(start,len,False);
+ Result:=DirectManager.Release(start,len);
 
  rwlock_unlock(MMLock);
  _sig_unlock;
@@ -930,9 +930,9 @@ begin
  end;
 end;
 
-function __release_direct(Offset,Size:QWORD):Integer;
+function __unmap_direct(Offset,Size:QWORD):Integer;
 begin
- Result:=DirectManager.Release(Offset,Size,True);
+ Result:=DirectManager.unmap_addr(Offset,Size);
 end;
 
 function __mtype_direct(Offset,Size:QWORD;mtype:Integer):Integer;
@@ -1664,7 +1664,9 @@ begin
             entries,
             numberOfEntries,
             numberOfEntriesOut,
-            0);
+            MAP_FIXED);
+//There is a function with the same name exported from the libkernel_pre250mmap
+// library, it differs only in that the flag is 0x410 (MAP_FIXED or MAP_STACK)
 end;
 
 function ps4_sceKernelBatchMap2(
@@ -1672,20 +1674,24 @@ function ps4_sceKernelBatchMap2(
            numberOfEntries:Integer;
            numberOfEntriesOut:PInteger;
            flags:Integer):Integer; SysV_ABI_CDecl;
+label
+ _exit;
 var
  i:Integer;
 begin
  if (entries=nil) then
  begin
-  if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=0;
+  numberOfEntries:=0;
   _set_errno(EFAULT);
-  Exit(SCE_KERNEL_ERROR_EFAULT);
+  Result:=SCE_KERNEL_ERROR_EFAULT;
+  goto _exit;
  end;
  if (numberOfEntries=0) then
  begin
-  if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=0;
+  numberOfEntries:=0;
   _set_errno(EINVAL);
-  Exit(SCE_KERNEL_ERROR_EINVAL);
+  Result:=SCE_KERNEL_ERROR_EINVAL;
+  goto _exit;
  end;
 
  For i:=0 to numberOfEntries-1 do
@@ -1728,24 +1734,23 @@ begin
     end;
    else
     begin
-     if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=i;
+     numberOfEntries:=i;
      _set_errno(EINVAL);
-     Exit(SCE_KERNEL_ERROR_EINVAL);
+     Result:=SCE_KERNEL_ERROR_EINVAL;
+     goto _exit;
     end;
   end;
 
   if (Result<>0) then
   begin
-   if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=i;
-   Exit;
+   numberOfEntries:=i;
+   goto _exit;
   end;
 
  end;
 
- if (Result<>0) then
- begin
+ _exit:
   if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=numberOfEntries;
- end;
 end;
 
 //
@@ -1841,10 +1846,11 @@ end;
 
 Procedure _mem_print;
 begin
+ Writeln('---[Virtual]---');
  VirtualManager.Print;
- Writeln('---');
+ Writeln('---[Named]---');
  NamedManager.Print;
- Writeln('---');
+ Writeln('---[Direct]---');
  DirectManager.Print;
 end;
 
@@ -1855,7 +1861,7 @@ initialization
  DirectManager .OnMemoryUnmapCb:=@__munmap;
 
  VirtualManager:=TVirtualManager.Create($400000,$FFFFFFFFFF);
- VirtualManager.OnDirectUnmapCb:=@__release_direct;
+ VirtualManager.OnDirectUnmapCb:=@__unmap_direct;
  VirtualManager.OnDirectMtypeCb:=@__mtype_direct;
  VirtualManager.OnFreeBlockCb  :=@__free_block;
  VirtualManager._mmap_sys(Pointer($400000),$7FFBFC000);
