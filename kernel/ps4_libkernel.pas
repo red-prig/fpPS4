@@ -1264,6 +1264,8 @@ begin
  lib^.set_proc($8345530717C9CAED,@ps4_sceKernelGetCurrentCpu);
 
  lib^.set_proc($D6D2B21BB465309A,@ps4_scePthreadGetprio);
+
+ lib^.set_proc($6B63FDC1819E66F7,@ps4_pthread_setprio);
  lib^.set_proc($5B41E99B65F4B8F1,@ps4_scePthreadSetprio);
 
  lib^.set_proc($3F8D644D6512DC42,@ps4_scePthreadGetschedparam);

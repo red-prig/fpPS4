@@ -73,6 +73,8 @@ function  ps4_scePthreadGetaffinity(_pthread:pthread;mask:PQWORD):Integer; SysV_
 function  ps4_sceKernelGetCurrentCpu():Integer; SysV_ABI_CDecl;
 
 function  ps4_scePthreadGetprio(_pthread:pthread;prio:PInteger):Integer; SysV_ABI_CDecl;
+
+function  ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
 
 function  ps4_scePthreadGetschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
@@ -862,16 +864,15 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
-Var
+function ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
+var
  r:Integer;
 begin
- if (_pthread=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (_pthread=nil) then Exit(EINVAL);
 
- if (prio>767) then prio:=767;
- if (prio<256) then prio:=256;
+ if (prio>767) then Exit(EINVAL);
+ if (prio<256) then Exit(EINVAL);
 
- //Writeln('scePthreadSetprio:',prio);
  r:=(((767-prio)*30) div 511);
  r:=PRIORITY_TABLE[r];
 
@@ -879,9 +880,14 @@ begin
  _sig_lock;
  if not System.ThreadSetPriority(_pthread^.handle,r) then
  begin
-  Result:=SCE_KERNEL_ERROR_ESRCH;
+  Result:=ESRCH;
  end;
  _sig_unlock;
+end;
+
+function ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_setprio(_pthread,prio));
 end;
 
 //ThreadGetPriority = -15 and 15. :0..30
