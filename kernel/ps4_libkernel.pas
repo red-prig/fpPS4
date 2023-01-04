@@ -1256,6 +1256,8 @@ begin
  lib^.set_proc($108FF9FE396AD9D1,@ps4_scePthreadGetthreadid);
 
  lib^.set_proc($1E8C3B07C39EB7A9,@ps4_scePthreadGetname);
+
+ lib^.set_proc($F6FC8FE99EDBAB37,@ps4_pthread_rename_np);
  lib^.set_proc($181518EF2C1D50B1,@ps4_scePthreadRename);
 
  lib^.set_proc($6EDDC24C12A61B22,@ps4_scePthreadSetaffinity);
