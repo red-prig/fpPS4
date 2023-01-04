@@ -51,10 +51,12 @@ function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger)
 function  ps4_pthread_attr_getschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_setinheritsched(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
 
-function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
@@ -93,8 +95,8 @@ end;
 function ps4_pthread_attr_destroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix, 'pthread_attr_destroy');
- Result:=EINVAL;
- if (pAttr=nil) then Exit;
+ if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  SwFreeMem(XCHG(pAttr^,nil));
  Result:=0;
 end;
@@ -147,10 +149,11 @@ end;
 
 function ps4_pthread_attr_setschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=EINVAL;
- if (pAttr=nil) then Exit;
- if (pAttr^=nil) then Exit;
+ if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+ if (policy<SCHED_FIFO) or (policy>SCHED_RR) then Exit(ENOTSUP);
  pAttr^^.sched_policy:=policy;
+ pAttr^^.prio:=SCE_KERNEL_PRIO_FIFO_DEFAULT;
  Result:=0;
 end;
 
@@ -160,10 +163,19 @@ begin
 end;
 
 function ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+var
+ policy:Integer;
 begin
- Result:=EINVAL;
- if (pAttr=nil) or (param=nil) then Exit;
- if (pAttr^=nil) then Exit;
+ if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+ if (param=nil) then Exit(ENOTSUP);
+
+ policy:=pAttr^^.sched_policy;
+ if (policy=SCHED_FIFO) or (policy=SCHED_RR) then
+ begin
+  if (param^>767) or (param^<256) then Exit(ENOTSUP);
+ end;
+
  pAttr^^.prio:=param^;
  Result:=0;
 end;
@@ -187,6 +199,28 @@ begin
  Result:=px2sce(ps4_pthread_attr_getschedparam(pAttr,param));
 end;
 
+function ps4_pthread_attr_setinheritsched(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+
+ if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+
+ Case sched_inherit of
+  PTHREAD_INHERIT_SCHED :;
+  PTHREAD_EXPLICIT_SCHED:;
+  else
+   Exit(ENOTSUP);
+ end;
+
+ pAttr^^.sched_inherit:=sched_inherit;
+end;
+
+function ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setinheritsched(pAttr,sched_inherit));
+end;
+
 function ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
@@ -202,15 +236,6 @@ begin
  if (pAttr=nil) or (mask=nil) then Exit;
  if (pAttr^=nil) then Exit;
  mask^:=pAttr^^.cpuset;
- Result:=0;
-end;
-
-function ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
-begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (pAttr=nil) then Exit;
- if (pAttr^=nil) then Exit;
- pAttr^^.sched_inherit:=inheritSched;
  Result:=0;
 end;
 

@@ -1225,10 +1225,12 @@ begin
  lib^.set_proc($AA593DA522EC5263,@ps4_pthread_attr_getschedparam);
  lib^.set_proc($1573D61CD93C39FD,@ps4_scePthreadAttrGetschedparam);
 
- lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
- lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity)
- ;
+ lib^.set_proc($ED99406A411FD108,@ps4_pthread_attr_setinheritsched);
  lib^.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
+
+ lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
+ lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
+
  lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
  lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
  lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
