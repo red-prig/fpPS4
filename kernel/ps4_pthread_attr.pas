@@ -18,7 +18,7 @@ var
   sched_inherit :PTHREAD_INHERIT_SCHED;
   prio          :0;
   suspend       :THR_CREATE_RUNNING;
-  flags         :PTHREAD_SCOPE_SYSTEM;
+  flags         :0{PTHREAD_SCOPE_SYSTEM};
   stackaddr_attr:nil;
   stacksize_attr:$10000;
   guardsize_attr:0;
@@ -42,6 +42,7 @@ function  ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Int
 function  ps4_pthread_attr_setdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_setschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
@@ -144,13 +145,18 @@ begin
  Result:=px2sce(ps4_pthread_attr_setdetachstate(pAttr,detachstate));
 end;
 
-function ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
+function ps4_pthread_attr_setschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
+ Result:=EINVAL;
  if (pAttr=nil) then Exit;
  if (pAttr^=nil) then Exit;
  pAttr^^.sched_policy:=policy;
  Result:=0;
+end;
+
+function ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setschedpolicy(pAttr,policy));
 end;
 
 function ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;

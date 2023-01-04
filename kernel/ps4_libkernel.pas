@@ -1204,28 +1204,38 @@ begin
  lib^.set_proc($B46FBCD396F53639,@ps4_pthread_set_defaultstacksize_np);
  lib^.set_proc($A1567EFCA819246A,@ps4_scePthreadSetDefaultstacksize);
 
- lib^.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit);
- lib^.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy);
  lib^.set_proc($C2D92DFED791D6CA,@ps4_pthread_attr_init);
  lib^.set_proc($CC772163C7EDE699,@ps4_pthread_attr_destroy);
- lib^.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize);
+
+ lib^.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit);
+ lib^.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy);
+
  lib^.set_proc($D90D33EAB9C1AD31,@ps4_pthread_attr_setstacksize);
- lib^.set_proc($FD6ADEA6BB6ED10B,@ps4_scePthreadAttrSetdetachstate);
+ lib^.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize);
+
  lib^.set_proc($13EB72A37969E4BC,@ps4_pthread_attr_setdetachstate);
+ lib^.set_proc($FD6ADEA6BB6ED10B,@ps4_scePthreadAttrSetdetachstate);
+
+ lib^.set_proc($25AACC232F242846,@ps4_pthread_attr_setschedpolicy);
  lib^.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy);
- lib^.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam);
- lib^.set_proc($1573D61CD93C39FD,@ps4_scePthreadAttrGetschedparam);
+
  lib^.set_proc($7AE291826D159F63,@ps4_pthread_attr_setschedparam);
+ lib^.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam);
+
  lib^.set_proc($AA593DA522EC5263,@ps4_pthread_attr_getschedparam);
+ lib^.set_proc($1573D61CD93C39FD,@ps4_scePthreadAttrGetschedparam);
+
  lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
- lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
+ lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity)
+ ;
  lib^.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
  lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
  lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
  lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
  lib^.set_proc($FEAB8F6B8484254C,@ps4_scePthreadAttrGetstack);
- lib^.set_proc($25A44CCBE41CA5E5,@ps4_scePthreadAttrGetdetachstate);
+
  lib^.set_proc($5544F5652AC74F42,@ps4_pthread_attr_getdetachstate);
+ lib^.set_proc($25A44CCBE41CA5E5,@ps4_scePthreadAttrGetdetachstate);
 
  lib^.set_proc($C755FBE9AAD83315,@ps4_scePthreadAttrGet);
 

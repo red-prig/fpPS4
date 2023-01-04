@@ -67,10 +67,20 @@ const
  SCE_KERNEL_CPUMASK_7CPU_ALL   =$7f;
  SCE_KERNEL_CPUMASK_USER_ALL   =$3f; // obsolete
 
+ //Thread creation state attributes.
+ THR_CREATE_RUNNING  =0;
+ THR_CREATE_SUSPENDED=1;
+
+ //Miscellaneous definitions.
+ THR_STACK_DEFAULT=(2 * 1024 * 1024);
+ THR_STACK_INITIAL=(THR_STACK_DEFAULT * 2);
+
+ THR_STACK_USER=$100; // 0xFF reserved for <pthread.h>
+
 type
  p_pthread_attr_t=^pthread_attr_t;
- pthread_attr_t=^tthread_attr_t;
- tthread_attr_t=packed record
+ pthread_attr_t=^pthread_attr;
+ pthread_attr=packed record
   sched_policy :Integer;
   sched_inherit:Integer;
   prio         :Integer;
@@ -79,26 +89,10 @@ type
   stackaddr_attr:Pointer;
   stacksize_attr:QWORD;
   guardsize_attr:QWORD;
-  cpuset:DWORD;
+  cpuset:QWORD;
   //cpuset_t *cpuset;
   //size_t   cpusetsize;
  end;
-
- //struct pthread_attr {
- //#define pthread_attr_start_copy	sched_policy
- //	int	sched_policy;
- //	int	sched_inherit;
- //	int	prio;
- //	int	suspend;
- //#define	THR_STACK_USER		0x100	/* 0xFF reserved for <pthread.h> */
- //	int	flags;                  //((*attr)->flags & PTHREAD_DETACHED)
- //	void	*stackaddr_attr;
- //	size_t	stacksize_attr;
- //	size_t	guardsize_attr;
- //#define pthread_attr_end_copy	cpuset
- //	cpuset_t	*cpuset;
- //	size_t	cpusetsize;
- //};
 
  p_pthread_once_t=^pthread_once_t;
  pthread_once_t=packed record
@@ -146,7 +140,7 @@ type
   handle:TThreadID;
   ThreadId:TThreadID;
   detachstate:Integer;
-  Attr:tthread_attr_t;
+  Attr:pthread_attr;
   name:array[0..31] of AnsiChar;
   //
   errno:QWORD;

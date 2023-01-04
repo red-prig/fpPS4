@@ -262,6 +262,7 @@ end;
 
 function ps4_pthread_create_name_np(pthread:p_pthread;pAttr:p_pthread_attr_t;entry:Pointer;arg:Pointer;name:Pchar):Integer; SysV_ABI_CDecl;
 Var
+ attr:pthread_attr_t;
  data:pthread;
  Handle,ThreadId:TThreadID;
  sa:Pointer;
@@ -285,64 +286,55 @@ begin
 
   ReadWriteBarrier;
 
-  if (pAttr<>nil) and (pAttr^<>nil) then
+  attr:=nil;
+  if (pAttr<>nil) then
   begin
-   data^.Attr:=pAttr^^;
-   data^.detachstate:=pAttr^^.flags;
-   ReadWriteBarrier;
-
-   creationFlags:=0;
-   sa:=pAttr^^.stackaddr_attr;
-   ss:=pAttr^^.stacksize_attr;
-
-   if (ss<PTHREAD_STACK_MIN) then
-   begin
-    ss:=PTHREAD_STACK_MIN;
-    data^.Attr.stacksize_attr:=ss;
-   end;
-
-   ThreadId:=0;
-   _sig_lock;
-
-   Handle:=SysBeginThread(sa,ss,@on_ps4_run_thread,data,creationFlags,ThreadId);
-
-   _sig_unlock;
-   if (Handle=0) then
-   begin
-    SwFreeMem(data);
-    Exit(EAGAIN);
-   end;
-
-   if (pAttr^^.cpuset<>0) then
-   begin
-    _sig_lock;
-    SetThreadAffinityMask(Handle,pAttr^^.cpuset);
-    _sig_unlock;
-   end;
-
-  end else
+   attr:=pAttr^;
+  end;
+  if (attr=nil) then
   begin
-   ThreadId:=0;
-   _sig_lock;
-
-   ss:=PTHREAD_STACK_MIN;
-   data^.Attr.stacksize_attr:=ss;
-
-   Handle:=SysBeginThread(nil,ss,@on_ps4_run_thread,data,0,ThreadId);
-
-   _sig_unlock;
-   if (Handle=0) then
-   begin
-    SwFreeMem(data);
-    Exit(SCE_KERNEL_ERROR_EAGAIN);
-   end;
+   attr:=@_pthread_attr_default;
   end;
 
-  XCHG(data^.ThreadId,ThreadId);
-  XCHG(data^.handle,Handle);
+  data^.Attr:=attr^;
+  data^.detachstate:=attr^.flags;
+  ReadWriteBarrier;
 
-  pthread^:=data;
+  creationFlags:=0;
+  sa:=attr^.stackaddr_attr;
+  ss:=attr^.stacksize_attr;
+
+  if (ss<PTHREAD_STACK_MIN) then
+  begin
+   ss:=PTHREAD_STACK_MIN;
+   data^.Attr.stacksize_attr:=ss;
+  end;
+
+  ThreadId:=0;
+  _sig_lock;
+
+  Handle:=SysBeginThread(sa,ss,@on_ps4_run_thread,data,creationFlags,ThreadId);
+
+  _sig_unlock;
+  if (Handle=0) then
+  begin
+   SwFreeMem(data);
+   Exit(EAGAIN);
+  end;
+
+  if (attr^.cpuset<>0) then
+  begin
+   _sig_lock;
+   SetThreadAffinityMask(Handle,attr^.cpuset);
+   _sig_unlock;
+  end;
+
  end;
+
+ XCHG(data^.ThreadId,ThreadId);
+ XCHG(data^.handle,Handle);
+
+ pthread^:=data;
 
  Result:=0;
 end;
