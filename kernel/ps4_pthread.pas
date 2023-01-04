@@ -72,6 +72,7 @@ function  ps4_scePthreadGetaffinity(_pthread:pthread;mask:PQWORD):Integer; SysV_
 
 function  ps4_sceKernelGetCurrentCpu():Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_getprio(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetprio(_pthread:pthread;prio:PInteger):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
@@ -429,6 +430,12 @@ begin
  ps4_pthread_attr_destroy(@attr);
 end;
 
+function sys_get_prior(handle:TThreadID):Integer;
+begin
+ Result:=System.ThreadGetPriority(handle);
+ Result:=767-(((Result+15)*511) div 30);
+end;
+
 const
  _PREPARE_FREE=2;
  _PREPARE_JOIN=3;
@@ -478,6 +485,8 @@ begin
   _thread_init;
 
   wait_until_equal(data^.handle,0);
+
+  data^.Attr.prio:=sys_get_prior(data^.handle);
 
   //init static tls in stack top
   if (Telf_file(ps4_program.ps4_app.prog).pTls.full_size<>0) then
@@ -852,15 +861,17 @@ const
 
 //ThreadGetPriority = -15 and 15. :0..30
 //scePthreadGetprio = 767 and 256 :0..511
+
+function ps4_pthread_getprio(_pthread:pthread):Integer; SysV_ABI_CDecl;
+begin
+ if (_pthread=nil) then Exit(-1);
+ Result:=_pthread^.Attr.prio;
+end;
+
 function ps4_scePthreadGetprio(_pthread:pthread;prio:PInteger):Integer; SysV_ABI_CDecl;
-Var
- r:Integer;
 begin
  if (_pthread=nil) or (prio=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- _sig_lock;
- r:=System.ThreadGetPriority(_pthread^.handle);
- _sig_unlock;
- prio^:=767-(((r+15)*511) div 30);
+ prio^:=_pthread^.Attr.prio;
  Result:=0;
 end;
 
@@ -878,7 +889,10 @@ begin
 
  Result:=0;
  _sig_lock;
- if not System.ThreadSetPriority(_pthread^.handle,r) then
+ if System.ThreadSetPriority(_pthread^.handle,r) then
+ begin
+  _pthread^.Attr.prio:=r;
+ end else
  begin
   Result:=ESRCH;
  end;
@@ -890,7 +904,6 @@ begin
  Result:=px2sce(ps4_pthread_setprio(_pthread,prio));
 end;
 
-//ThreadGetPriority = -15 and 15. :0..30
 function ps4_scePthreadGetschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
 Var
  r:Integer;

@@ -1263,6 +1263,7 @@ begin
 
  lib^.set_proc($8345530717C9CAED,@ps4_sceKernelGetCurrentCpu);
 
+ lib^.set_proc($68EF964B6C56BA8E,@ps4_pthread_getprio);
  lib^.set_proc($D6D2B21BB465309A,@ps4_scePthreadGetprio);
 
  lib^.set_proc($6B63FDC1819E66F7,@ps4_pthread_setprio);
