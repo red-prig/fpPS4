@@ -11,6 +11,7 @@ uses
   ps4_map_mm,
   ps4_mspace_internal,
   ps4_pthread,
+  ps4_pthread_attr,
   ps4_pthread_key,
   ps4_signal,
   ps4_mutex,
