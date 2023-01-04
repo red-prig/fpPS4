@@ -143,19 +143,21 @@ end;
 
 function _pthread_run_entry(pthread:p_pthread;name:Pchar;stack:PDWORD):Integer;
 var
+ init:Integer;
  attr:pthread_attr_t;
 begin
  if (name=nil) then
  begin
   name:=default_name;
  end;
+ init:=THR_STACK_INITIAL;
  if (stack=nil) then
  begin
-  stack:=@default_main_stack;
+  stack:=@init;
  end else
- if (stack^<default_main_stack) then
+ if (stack^<THR_STACK_INITIAL) then
  begin
-  stack:=@default_main_stack;
+  stack:=@init;
  end;
 
  ps4_pthread_attr_init(@attr);

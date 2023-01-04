@@ -13,34 +13,54 @@ const
  default_name:Pchar='main';
 
 var
- default_main_stack:Integer=DefaultStackSize;
- default_stack_size:QWORD=$10000;
+ _pthread_attr_default:pthread_attr=(
+  sched_policy  :SCHED_OTHER;
+  sched_inherit :PTHREAD_INHERIT_SCHED;
+  prio          :0;
+  suspend       :THR_CREATE_RUNNING;
+  flags         :PTHREAD_SCOPE_SYSTEM;
+  stackaddr_attr:nil;
+  stacksize_attr:$10000;
+  guardsize_attr:0;
+  cpuset        :0
+  //cpusetsize = 0,
+  //cpuset = NULL
+ );
 
 function  ps4_pthread_set_defaultstacksize_np(size:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetDefaultstacksize(size:QWORD):Integer; SysV_ABI_CDecl;
 
-function  ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_attr_init(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_attr_destroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
+
+function  ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_setstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_setdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_getschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;inheritSched:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstack(pAttr:p_pthread_attr_t;stackAddr:PPointer;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
-function  ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_getdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
 
 implementation
 
@@ -49,7 +69,7 @@ begin
  Result:=EINVAL;
  if (size>PTHREAD_STACK_MIN) then
  begin
-  default_stack_size:=size;
+  _pthread_attr_default.stacksize_attr:=size;
   Result:=0;
  end;
 end;
@@ -59,45 +79,13 @@ begin
  Result:=px2sce(ps4_pthread_set_defaultstacksize_np(size));
 end;
 
-//struct pthread_attr _pthread_attr_default = {
-//        .sched_policy = SCHED_OTHER,
-//        .sched_inherit = PTHREAD_INHERIT_SCHED,
-//        .prio = 0,
-//        .suspend = THR_CREATE_RUNNING,
-//        .flags = PTHREAD_SCOPE_SYSTEM,
-//        .stackaddr_attr = NULL,
-//        .stacksize_attr = THR_STACK_DEFAULT,
-//        .guardsize_attr = 0,
-//        .cpusetsize = 0,
-//        .cpuset = NULL
-//};
-
-function ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln(SysLogPrefix, 'scePthreadAttrInit');
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
- if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_ENOMEM);
- pAttr^^.stacksize_attr:=default_stack_size;
- Result:=0;
-end;
-
-function ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln(SysLogPrefix, 'scePthreadAttrDestroy');
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (pAttr=nil) then Exit;
- SwFreeMem(XCHG(pAttr^,nil));
- Result:=0;
-end;
-
 function ps4_pthread_attr_init(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix, 'pthread_attr_init');
  if (pAttr=nil) then Exit(EINVAL);
- pAttr^:=SwAllocMem(SizeOf(tthread_attr_t));
+ pAttr^:=SwAllocMem(SizeOf(pthread_attr));
  if (pAttr^=nil) then Exit(ENOMEM);
- pAttr^^.stacksize_attr:=default_stack_size;
+ pAttr^^:=_pthread_attr_default;
  Result:=0;
 end;
 
@@ -110,13 +98,14 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadAttrInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (size<PTHREAD_STACK_MIN) then Exit(SCE_KERNEL_ERROR_EINVAL);
- pAttr^^.stacksize_attr:=size;
- Result:=0;
+ Result:=px2sce(ps4_pthread_attr_init(pAttr));
+end;
+
+function ps4_scePthreadAttrDestroy(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_destroy(pAttr));
 end;
 
 function ps4_pthread_attr_setstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
@@ -128,21 +117,9 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadAttrSetstacksize(pAttr:p_pthread_attr_t;size:size_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (pAttr=nil) then Exit;
- if (pAttr^=nil) then Exit;
-
- Case detachstate of
-  PTHREAD_CREATE_JOINABLE:;
-  PTHREAD_CREATE_DETACHED:;
-  else
-   Exit(SCE_KERNEL_ERROR_EINVAL);
- end;
-
- pAttr^^.flags:=detachstate;
- Result:=0;
+ Result:=px2sce(ps4_pthread_attr_setstacksize(pAttr,size));
 end;
 
 function ps4_pthread_attr_setdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
@@ -162,30 +139,17 @@ begin
  Result:=0;
 end;
 
+function ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setdetachstate(pAttr,detachstate));
+end;
+
 function ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (pAttr=nil) then Exit;
  if (pAttr^=nil) then Exit;
  pAttr^^.sched_policy:=policy;
- Result:=0;
-end;
-
-function ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
-begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (pAttr=nil) or (param=nil) then Exit;
- if (pAttr^=nil) then Exit;
- pAttr^^.prio:=param^;
- Result:=0;
-end;
-
-function ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
-begin
- Result:=SCE_KERNEL_ERROR_EINVAL;
- if (pAttr=nil) or (param=nil) then Exit;
- if (pAttr^=nil) then Exit;
- param^:=pAttr^^.prio;
  Result:=0;
 end;
 
@@ -198,6 +162,11 @@ begin
  Result:=0;
 end;
 
+function ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setschedparam(pAttr,param));
+end;
+
 function ps4_pthread_attr_getschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 begin
  Result:=EINVAL;
@@ -205,6 +174,11 @@ begin
  if (pAttr^=nil) then Exit;
  param^:=pAttr^^.prio;
  Result:=0;
+end;
+
+function ps4_scePthreadAttrGetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_getschedparam(pAttr,param));
 end;
 
 function ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
@@ -267,20 +241,17 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
+function ps4_pthread_attr_getdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (detachstate=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (pAttr=nil) or (detachstate=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  detachstate^:=pAttr^^.flags;
  Result:=0;
 end;
 
-function ps4_pthread_attr_getdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
+function ps4_scePthreadAttrGetdetachstate(pAttr:p_pthread_attr_t;detachstate:Pinteger):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (detachstate=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- detachstate^:=pAttr^^.flags;
- Result:=0;
+ Result:=px2sce(ps4_pthread_attr_getdetachstate(pAttr,detachstate));
 end;
 
 end.
