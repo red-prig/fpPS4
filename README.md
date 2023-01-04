@@ -7,12 +7,12 @@
 
 #
 
-  PS4 compatibility layer (emulator) on Free Pascal
+  PS4 compatibility layer (emulator) written with Free Pascal
  
-This project is at the beginning and started for fun.
+This project is currently at the beginning and started for fun.
  
 ### Building
-- Free pascal compiler: 3.3.1 (use fpcupdeluxe with trunk), x86_64 only. 
+- Free Pascal compiler: 3.3.1 (use fpcupdeluxe with trunk), x86_64 only. 
 - Lazarus: 2.0.0 and higher, x86_64 only. 
 
 ### Minimum system requirements 
@@ -27,11 +27,11 @@ https://github.com/red-prig/fpps4-game-compatibility/issues
 ### Control layout
 To switch to borderless full screen mode, press Alt-Enter.
 
-FPPS4 support XInput-compatible gamepads natively. You can remap buttons by pressing Esc on keyboard during emulation. 
-Anyway you can use a keyboard input.
-A Dualshock4 touchpad is emulating by mouse.
+fpPS4 supports XInput-compatible gamepads natively. You can remap buttons by pressing Esc on the keyboard during emulation. 
+Regardless, you can use a keyboard as a input.
+A DualShock4 touchpad is emulated by the mouse.
 
-# KEYBOARD LAYOUT:
+# Keyboard layout:
 PS4 Gamepad button              | Keyboard button
 :------------                   | :------------
 Left Stick Up                   |W
