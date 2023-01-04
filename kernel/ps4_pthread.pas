@@ -64,6 +64,7 @@ function  ps4_scePthreadSelf():pthread; SysV_ABI_CDecl;
 function  ps4_getpid():Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetthreadid():Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_getname_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetname(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_rename_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
@@ -780,11 +781,16 @@ begin
  Result:=tcb_thread^.ThreadId;
 end;
 
-function ps4_scePthreadGetname(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
+function ps4_pthread_getname_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 begin
- if (_pthread=nil) or (name=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (_pthread=nil) or (name=nil) then Exit(EINVAL);
  MoveChar0(_pthread^.name,name^,32);
  Result:=0;
+end;
+
+function ps4_scePthreadGetname(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_getname_np(_pthread,name));
 end;
 
 function ps4_pthread_rename_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
