@@ -1269,7 +1269,10 @@ begin
  lib^.set_proc($6B63FDC1819E66F7,@ps4_pthread_setprio);
  lib^.set_proc($5B41E99B65F4B8F1,@ps4_scePthreadSetprio);
 
+ lib^.set_proc($148B37FD4413F6C8,@ps4_pthread_getschedparam);
  lib^.set_proc($3F8D644D6512DC42,@ps4_scePthreadGetschedparam);
+
+ lib^.set_proc($5ECF617620FBB000,@ps4_pthread_setschedparam);
  lib^.set_proc($A084454E3A082DB8,@ps4_scePthreadSetschedparam);
 
  lib^.set_proc($08136D5CEA1E7FF1,@ps4_sched_get_priority_max);

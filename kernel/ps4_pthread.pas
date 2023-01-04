@@ -78,7 +78,10 @@ function  ps4_scePthreadGetprio(_pthread:pthread;prio:PInteger):Integer; SysV_AB
 function  ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_getschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
+
+function  ps4_pthread_setschedparam(_pthread:pthread;policy:Integer;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetschedparam(_pthread:pthread;policy:Integer;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
 
 function  ps4_sched_get_priority_max(policy:Integer):Integer; SysV_ABI_CDecl;
@@ -904,52 +907,44 @@ begin
  Result:=px2sce(ps4_pthread_setprio(_pthread,prio));
 end;
 
-function ps4_scePthreadGetschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
-Var
- r:Integer;
+function ps4_pthread_getschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
 begin
- if (_pthread=nil) or (policy=nil) or (param=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (_pthread=nil) or (policy=nil) or (param=nil) then Exit(EINVAL);
 
- policy^:=SCE_KERNEL_SCHED_RR;
+ policy^:=_pthread^.Attr.sched_policy;
+ param^.sched_priority:=_pthread^.Attr.prio;
+ Result:=0;
+end;
 
- _sig_lock;
- r:=System.ThreadGetPriority(_pthread^.handle);
- _sig_unlock;
- param^.sched_priority:=(r+15);
+function ps4_scePthreadGetschedparam(_pthread:pthread;policy:PInteger;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_getschedparam(_pthread,policy,param));
+end;
+
+function ps4_pthread_setschedparam(_pthread:pthread;policy:Integer;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
+begin
+ if (_pthread=nil) or (param=nil) then Exit(EINVAL);
+
+ Result:=ps4_pthread_setprio(_pthread,param^.sched_priority);
+ if (Result<>0) then Exit;
+
+ _pthread^.Attr.sched_policy:=policy;
  Result:=0;
 end;
 
 function ps4_scePthreadSetschedparam(_pthread:pthread;policy:Integer;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;
-Var
- r:Integer;
 begin
- if (_pthread=nil) or (param=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
-
- r:=param^.sched_priority;
-
- if (r>30) then r:=30;
- if (r<0)  then r:=0;
-
- r:=PRIORITY_TABLE[r];
-
- Result:=0;
- _sig_lock;
- if not System.ThreadSetPriority(_pthread^.handle,r) then
- begin
-  Result:=SCE_KERNEL_ERROR_ESRCH;
- end;
- _sig_unlock;
+ Result:=px2sce(ps4_pthread_setschedparam(_pthread,policy,param));
 end;
-
 
 function ps4_sched_get_priority_max(policy:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=30;
+ Result:=SCE_KERNEL_PRIO_FIFO_HIGHEST;
 end;
 
 function ps4_sched_get_priority_min(policy:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=SCE_KERNEL_PRIO_FIFO_LOWEST;
 end;
 
 procedure ps4_scePthreadYield; SysV_ABI_CDecl;
