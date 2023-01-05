@@ -1237,6 +1237,7 @@ begin
  lib^.set_proc($24D91556C54398E9,@ps4_pthread_attr_getguardsize);
  lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
 
+ lib^.set_proc($0F198831443FC176,@ps4_pthread_attr_getstackaddr);
  lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
 
  lib^.set_proc($D2A3AD091FD91DC9,@ps4_pthread_attr_getstacksize);
