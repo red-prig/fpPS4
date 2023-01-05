@@ -172,8 +172,8 @@ begin
    xiRJoyRight: Result := Max(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
    xiRJoyLeft : Result := Min(s.Gamepad.sThumbRX, 0) * outOfDeadzoneR / 32767.0;
 
-   xiL2: Result := IfThen(s.Gamepad.bLeftTrigger  > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
-   xiR2: Result := IfThen(s.Gamepad.bRightTrigger > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger / 255.0, 0);
+   xiL2: Result := IfThen(s.Gamepad.bLeftTrigger  > XInputDeadzoneTrigger, s.Gamepad.bLeftTrigger  / 255.0, 0);
+   xiR2: Result := IfThen(s.Gamepad.bRightTrigger > XInputDeadzoneTrigger, s.Gamepad.bRightTrigger / 255.0, 0);
   else Result := 0;
   end;
 
