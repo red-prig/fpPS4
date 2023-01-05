@@ -5,6 +5,7 @@ unit sys_pthread;
 interface
 
 uses
+ sys_kernel,
  sys_signal;
 
 const
@@ -88,12 +89,12 @@ type
   prio         :Integer;
   suspend      :Integer;
   flags        :Integer; //((*attr)->flags & PTHREAD_DETACHED)
+  _align       :Integer;
   stackaddr_attr:Pointer;
   stacksize_attr:QWORD;
   guardsize_attr:QWORD;
-  cpuset:QWORD;
-  //cpuset_t *cpuset;
-  //size_t   cpusetsize;
+  cpuset    :QWORD; //cpuset_t *cpuset;
+  cpusetsize:QWORD;
  end;
 
  p_pthread_once_t=^pthread_once_t;
@@ -177,6 +178,9 @@ function SysBeginThread(sa:Pointer;
                         creationFlags:dword;
                         var ThreadId:TThreadID):TThreadID;
 
+function sys_get_thread_prior(handle:TThreadID):Integer;
+function sys_set_thread_prior(handle:TThreadID;prio:Integer):Integer;
+
 implementation
 
 uses
@@ -242,6 +246,65 @@ begin
 
  ThreadID:=_threadid;
 end;
+
+//ThreadGetPriority = -15 and 15. :0..30
+//scePthreadGetprio = 767 and 256 :0..511
+
+function sys_get_thread_prior(handle:TThreadID):Integer;
+begin
+ Result:=System.ThreadGetPriority(handle);
+ Result:=767-(((Result+15)*511) div 30);
+end;
+
+const
+ PRIORITY_TABLE:array[0..30] of SmallInt=(
+  { 0}  THREAD_PRIORITY_IDLE         , //-15
+  { 1}  THREAD_PRIORITY_IDLE         , //-15
+  { 2}  THREAD_PRIORITY_IDLE         , //-15
+  { 3}  THREAD_PRIORITY_LOWEST       , // -2
+  { 4}  THREAD_PRIORITY_LOWEST       , // -2
+  { 5}  THREAD_PRIORITY_LOWEST       , // -2
+  { 6}  THREAD_PRIORITY_LOWEST       , // -2
+  { 7}  THREAD_PRIORITY_LOWEST       , // -2
+  { 8}  THREAD_PRIORITY_BELOW_NORMAL , // -1
+  { 9}  THREAD_PRIORITY_BELOW_NORMAL , // -1
+  {10}  THREAD_PRIORITY_BELOW_NORMAL , // -1
+  {11}  THREAD_PRIORITY_BELOW_NORMAL , // -1
+  {12}  THREAD_PRIORITY_BELOW_NORMAL , // -1
+  {13}  THREAD_PRIORITY_NORMAL       , //  0
+  {14}  THREAD_PRIORITY_NORMAL       , //  0
+  {15}  THREAD_PRIORITY_NORMAL       , //  0
+  {16}  THREAD_PRIORITY_NORMAL       , //  0
+  {17}  THREAD_PRIORITY_NORMAL       , //  0
+  {18}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
+  {19}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
+  {20}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
+  {21}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
+  {22}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
+  {23}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
+  {24}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
+  {25}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
+  {26}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
+  {27}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
+  {28}  THREAD_PRIORITY_ABOVE_NORMAL , // 15
+  {29}  THREAD_PRIORITY_ABOVE_NORMAL , // 15
+  {30}  THREAD_PRIORITY_ABOVE_NORMAL   // 15
+ );
+
+function sys_set_thread_prior(handle:TThreadID;prio:Integer):Integer;
+begin
+ prio:=(((767-prio)*30) div 511);
+ prio:=PRIORITY_TABLE[prio];
+ if System.ThreadSetPriority(handle,prio) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=ESRCH;
+ end;
+end;
+
+
 
 end.
 

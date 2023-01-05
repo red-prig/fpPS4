@@ -166,12 +166,6 @@ begin
  ps4_pthread_attr_destroy(@attr);
 end;
 
-function sys_get_prior(handle:TThreadID):Integer;
-begin
- Result:=System.ThreadGetPriority(handle);
- Result:=767-(((Result+15)*511) div 30);
-end;
-
 const
  _PREPARE_FREE=2;
  _PREPARE_JOIN=3;
@@ -221,8 +215,6 @@ begin
   _thread_init;
 
   wait_until_equal(data^.handle,0);
-
-  data^.Attr.prio:=sys_get_prior(data^.handle);
 
   //init static tls in stack top
   if (Telf_file(ps4_program.ps4_app.prog).pTls.full_size<>0) then
@@ -310,24 +302,30 @@ begin
    data^.Attr.stacksize_attr:=ss;
   end;
 
+  if (attr^.prio>767) or (attr^.prio<256) then //if not valid set default
+  begin
+   data^.Attr.prio:=SCE_KERNEL_PRIO_FIFO_DEFAULT;
+  end;
+
   ThreadId:=0;
+
   _sig_lock;
-
-  Handle:=SysBeginThread(sa,ss,@on_ps4_run_thread,data,creationFlags,ThreadId);
-
+   Handle:=SysBeginThread(sa,ss,@on_ps4_run_thread,data,creationFlags,ThreadId);
   _sig_unlock;
+
   if (Handle=0) then
   begin
    SwFreeMem(data);
    Exit(EAGAIN);
   end;
 
-  if (attr^.cpuset<>0) then
-  begin
-   _sig_lock;
-   SetThreadAffinityMask(Handle,attr^.cpuset);
-   _sig_unlock;
-  end;
+  _sig_lock;
+   if (data^.Attr.cpuset<>0) then
+   begin
+     SetThreadAffinityMask(Handle,attr^.cpuset);
+   end;
+   sys_set_thread_prior(Handle,data^.Attr.prio);
+  _sig_unlock;
 
  end;
 
@@ -562,44 +560,6 @@ begin
  mask^:=_pthread^.Attr.cpuset;
 end;
 
-const
- PRIORITY_TABLE:array[0..30] of SmallInt=(
-  { 0}  THREAD_PRIORITY_IDLE         , //-15
-  { 1}  THREAD_PRIORITY_IDLE         , //-15
-  { 2}  THREAD_PRIORITY_IDLE         , //-15
-  { 3}  THREAD_PRIORITY_LOWEST       , // -2
-  { 4}  THREAD_PRIORITY_LOWEST       , // -2
-  { 5}  THREAD_PRIORITY_LOWEST       , // -2
-  { 6}  THREAD_PRIORITY_LOWEST       , // -2
-  { 7}  THREAD_PRIORITY_LOWEST       , // -2
-  { 8}  THREAD_PRIORITY_BELOW_NORMAL , // -1
-  { 9}  THREAD_PRIORITY_BELOW_NORMAL , // -1
-  {10}  THREAD_PRIORITY_BELOW_NORMAL , // -1
-  {11}  THREAD_PRIORITY_BELOW_NORMAL , // -1
-  {12}  THREAD_PRIORITY_BELOW_NORMAL , // -1
-  {13}  THREAD_PRIORITY_NORMAL       , //  0
-  {14}  THREAD_PRIORITY_NORMAL       , //  0
-  {15}  THREAD_PRIORITY_NORMAL       , //  0
-  {16}  THREAD_PRIORITY_NORMAL       , //  0
-  {17}  THREAD_PRIORITY_NORMAL       , //  0
-  {18}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
-  {19}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
-  {20}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
-  {21}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
-  {22}  THREAD_PRIORITY_ABOVE_NORMAL , //  1
-  {23}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
-  {24}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
-  {25}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
-  {26}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
-  {27}  THREAD_PRIORITY_ABOVE_NORMAL , //  2
-  {28}  THREAD_PRIORITY_ABOVE_NORMAL , // 15
-  {29}  THREAD_PRIORITY_ABOVE_NORMAL , // 15
-  {30}  THREAD_PRIORITY_ABOVE_NORMAL   // 15
- );
-
-//ThreadGetPriority = -15 and 15. :0..30
-//scePthreadGetprio = 767 and 256 :0..511
-
 function ps4_pthread_getprio(_pthread:pthread):Integer; SysV_ABI_CDecl;
 begin
  if (_pthread=nil) then Exit(-1);
@@ -614,26 +574,18 @@ begin
 end;
 
 function ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
-var
- r:Integer;
 begin
  if (_pthread=nil) then Exit(EINVAL);
 
  if (prio>767) then Exit(EINVAL);
  if (prio<256) then Exit(EINVAL);
 
- r:=(((767-prio)*30) div 511);
- r:=PRIORITY_TABLE[r];
-
- Result:=0;
  _sig_lock;
- if System.ThreadSetPriority(_pthread^.handle,r) then
- begin
-  _pthread^.Attr.prio:=r;
- end else
- begin
-  Result:=ESRCH;
- end;
+  Result:=sys_set_thread_prior(_pthread^.handle,prio);
+  if (Result<>0) then
+  begin
+   _pthread^.Attr.prio:=prio;
+  end;
  _sig_unlock;
 end;
 

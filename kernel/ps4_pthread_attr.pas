@@ -16,15 +16,15 @@ var
  _pthread_attr_default:pthread_attr=(
   sched_policy  :SCHED_OTHER;
   sched_inherit :PTHREAD_INHERIT_SCHED;
-  prio          :0;
+  prio          :SCE_KERNEL_PRIO_FIFO_DEFAULT;
   suspend       :THR_CREATE_RUNNING;
   flags         :0{PTHREAD_SCOPE_SYSTEM};
+  _align        :0;
   stackaddr_attr:nil;
   stacksize_attr:$10000;
   guardsize_attr:0;
-  cpuset        :0
-  //cpusetsize = 0,
-  //cpuset = NULL
+  cpuset        :0;
+  cpusetsize    :0
  );
 
 function  ps4_pthread_set_defaultstacksize_np(size:QWORD):Integer; SysV_ABI_CDecl;
