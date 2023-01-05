@@ -1236,7 +1236,10 @@ begin
 
  lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
  lib^.set_proc($46EDFA7E24ED2730,@ps4_scePthreadAttrGetstackaddr);
+
+ lib^.set_proc($D2A3AD091FD91DC9,@ps4_pthread_attr_getstacksize);
  lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
+
  lib^.set_proc($FEAB8F6B8484254C,@ps4_scePthreadAttrGetstack);
 
  lib^.set_proc($5544F5652AC74F42,@ps4_pthread_attr_getdetachstate);
