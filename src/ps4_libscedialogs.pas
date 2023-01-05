@@ -62,6 +62,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCommonDialogIsUsed():Boolean; SysV_ABI_CDecl;
+begin
+ Result:=True;
+end;
+
 //
 
 var
@@ -512,6 +517,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceCommonDialog');
  lib^.set_proc($BA85292C6364CA09,@ps4_sceCommonDialogInitialize);
+ lib^.set_proc($050DED7B2D099903,@ps4_sceCommonDialogIsUsed);
 end;
 
 //
