@@ -60,7 +60,9 @@ function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;sched_inherit
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_getguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
+
 function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_attr_getstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
@@ -259,12 +261,17 @@ begin
  Result:=0;
 end;
 
-function ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_pthread_attr_getguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 begin
- if (pAttr=nil) or (guardSize=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
- if (pAttr^=nil) then Exit(SCE_KERNEL_ERROR_EINVAL);
+ if (pAttr=nil) or (guardSize=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
  guardSize^:=pAttr^^.guardsize_attr;
  Result:=0;
+end;
+
+function ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_getguardsize(pAttr,guardSize));
 end;
 
 function ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
