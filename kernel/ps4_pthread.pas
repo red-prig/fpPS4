@@ -319,13 +319,13 @@ begin
    Exit(EAGAIN);
   end;
 
-  _sig_lock;
    if (data^.Attr.cpuset<>0) then
    begin
+    _sig_lock;
      SetThreadAffinityMask(Handle,attr^.cpuset);
+    _sig_unlock;
    end;
    sys_set_thread_prior(Handle,data^.Attr.prio);
-  _sig_unlock;
 
  end;
 
@@ -577,16 +577,18 @@ function ps4_pthread_setprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CD
 begin
  if (_pthread=nil) then Exit(EINVAL);
 
- if (prio>767) then Exit(EINVAL);
- if (prio<256) then Exit(EINVAL);
+ if (_pthread^.Attr.sched_policy=SCHED_OTHER) or
+    (_pthread^.Attr.prio=prio) then
+ begin
+  _pthread^.Attr.prio:=prio;
+  Exit(0);
+ end;
 
- _sig_lock;
-  Result:=sys_set_thread_prior(_pthread^.handle,prio);
-  if (Result<>0) then
-  begin
-   _pthread^.Attr.prio:=prio;
-  end;
- _sig_unlock;
+ Result:=sys_set_thread_prior(_pthread^.handle,prio);
+ if (Result<>0) then
+ begin
+  _pthread^.Attr.prio:=prio;
+ end;
 end;
 
 function ps4_scePthreadSetprio(_pthread:pthread;prio:Integer):Integer; SysV_ABI_CDecl;
@@ -612,11 +614,19 @@ function ps4_pthread_setschedparam(_pthread:pthread;policy:Integer;param:PSceKer
 begin
  if (_pthread=nil) or (param=nil) then Exit(EINVAL);
 
- Result:=ps4_pthread_setprio(_pthread,param^.sched_priority);
- if (Result<>0) then Exit;
+ if (_pthread^.Attr.sched_policy=policy) and
+    ((policy=SCHED_OTHER) or (_pthread^.Attr.prio=param^.sched_priority)) then
+ begin
+  _pthread^.Attr.prio:=param^.sched_priority;
+  Exit(0);
+ end;
 
- _pthread^.Attr.sched_policy:=policy;
- Result:=0;
+ Result:=sys_set_thread_prior(_pthread^.handle,param^.sched_priority);
+ if (Result<>0) then
+ begin
+  _pthread^.Attr.sched_policy:=policy;
+  _pthread^.Attr.prio:=param^.sched_priority;
+ end;
 end;
 
 function ps4_scePthreadSetschedparam(_pthread:pthread;policy:Integer;param:PSceKernelSchedParam):Integer; SysV_ABI_CDecl;

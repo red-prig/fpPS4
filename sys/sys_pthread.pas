@@ -252,7 +252,9 @@ end;
 
 function sys_get_thread_prior(handle:TThreadID):Integer;
 begin
- Result:=System.ThreadGetPriority(handle);
+ _sig_lock;
+  Result:=System.ThreadGetPriority(handle);
+ _sig_unlock;
  Result:=767-(((Result+15)*511) div 30);
 end;
 
@@ -293,15 +295,18 @@ const
 
 function sys_set_thread_prior(handle:TThreadID;prio:Integer):Integer;
 begin
+ if (prio>767) or (prio<256) then Exit(EINVAL);
  prio:=(((767-prio)*30) div 511);
  prio:=PRIORITY_TABLE[prio];
- if System.ThreadSetPriority(handle,prio) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=ESRCH;
- end;
+ _sig_lock;
+  if System.ThreadSetPriority(handle,prio) then
+  begin
+   Result:=0;
+  end else
+  begin
+   Result:=ESRCH;
+  end;
+ _sig_unlock;
 end;
 
 
