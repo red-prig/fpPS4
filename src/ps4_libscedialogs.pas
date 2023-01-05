@@ -113,10 +113,19 @@ end;
 
 //
 
+var
+ status_profile_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
+
 function ps4_sceNpProfileDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpProfileDialogInitialize');
+ status_profile_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
  Result:=0;
+end;
+
+function ps4_sceNpProfileDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=status_profile_dialog;
 end;
 
 //
@@ -531,6 +540,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceNpProfileDialog');
  lib^.set_proc($2E0F8D084EA94F04,@ps4_sceNpProfileDialogInitialize);
+ lib^.set_proc($85A55913D1602AA1,@ps4_sceNpProfileDialogUpdateStatus);
 end;
 
 //
