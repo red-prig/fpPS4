@@ -63,6 +63,9 @@ function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Inte
 function  ps4_pthread_attr_getguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_setstackaddr(pAttr:p_pthread_attr_t;stackAddr:Pointer):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetstackaddr(pAttr:p_pthread_attr_t;stackAddr:Pointer):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_getstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
 
@@ -274,6 +277,19 @@ end;
 function ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(ps4_pthread_attr_getguardsize(pAttr,guardSize));
+end;
+
+function ps4_pthread_attr_setstackaddr(pAttr:p_pthread_attr_t;stackAddr:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (pAttr=nil) or (stackAddr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+ pAttr^^.stackaddr_attr:=stackAddr;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrSetstackaddr(pAttr:p_pthread_attr_t;stackAddr:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setstackaddr(pAttr,stackAddr));
 end;
 
 function ps4_pthread_attr_getstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPointer):Integer; SysV_ABI_CDecl;
