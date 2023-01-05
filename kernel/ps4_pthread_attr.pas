@@ -45,6 +45,9 @@ function  ps4_scePthreadAttrSetdetachstate(pAttr:p_pthread_attr_t;detachstate:In
 function  ps4_pthread_attr_setschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_getschedpolicy(pAttr:p_pthread_attr_t;policy:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrGetschedpolicy(pAttr:p_pthread_attr_t;policy:PInteger):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrSetschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;
 
@@ -160,6 +163,20 @@ end;
 function ps4_scePthreadAttrSetschedpolicy(pAttr:p_pthread_attr_t;policy:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(ps4_pthread_attr_setschedpolicy(pAttr,policy));
+end;
+
+function ps4_pthread_attr_getschedpolicy(pAttr:p_pthread_attr_t;policy:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=EINVAL;
+ if (pAttr=nil) or (policy=nil) then Exit;
+ if (pAttr^=nil) then Exit;
+ policy^:=pAttr^^.sched_policy;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrGetschedpolicy(pAttr:p_pthread_attr_t;policy:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_getschedpolicy(pAttr,policy));
 end;
 
 function ps4_pthread_attr_setschedparam(pAttr:p_pthread_attr_t;param:PInteger):Integer; SysV_ABI_CDecl;

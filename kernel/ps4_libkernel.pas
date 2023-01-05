@@ -1219,6 +1219,9 @@ begin
  lib^.set_proc($25AACC232F242846,@ps4_pthread_attr_setschedpolicy);
  lib^.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy);
 
+ lib^.set_proc($46D2D157FA414D36,@ps4_pthread_attr_getschedpolicy);
+ lib^.set_proc($34CC8843D5A059B5,@ps4_scePthreadAttrGetschedpolicy);
+
  lib^.set_proc($7AE291826D159F63,@ps4_pthread_attr_setschedparam);
  lib^.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam);
 
