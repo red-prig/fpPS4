@@ -1234,6 +1234,9 @@ begin
  lib^.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity);
  lib^.set_proc($F3EB39073663C528,@ps4_scePthreadAttrGetaffinity);
 
+ lib^.set_proc($24AC86DD25B2035D,@ps4_pthread_attr_setguardsize);
+ lib^.set_proc($125F9C436D03CA75,@ps4_scePthreadAttrSetguardsize);
+
  lib^.set_proc($24D91556C54398E9,@ps4_pthread_attr_getguardsize);
  lib^.set_proc($B711ED9E027E7B27,@ps4_scePthreadAttrGetguardsize);
 

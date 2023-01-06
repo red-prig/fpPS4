@@ -60,6 +60,9 @@ function  ps4_scePthreadAttrSetinheritsched(pAttr:p_pthread_attr_t;sched_inherit
 function  ps4_scePthreadAttrSetaffinity(pAttr:p_pthread_attr_t;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetaffinity(pAttr:p_pthread_attr_t;mask:PQWORD):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_setguardsize(pAttr:p_pthread_attr_t;guardSize:QWORD):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetguardsize(pAttr:p_pthread_attr_t;guardSize:QWORD):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_getguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
 
@@ -264,6 +267,19 @@ begin
  if (pAttr^=nil) then Exit;
  mask^:=pAttr^^.cpuset;
  Result:=0;
+end;
+
+function ps4_pthread_attr_setguardsize(pAttr:p_pthread_attr_t;guardSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pAttr=nil) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+ pAttr^^.guardsize_attr:=guardSize;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrSetguardsize(pAttr:p_pthread_attr_t;guardSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setguardsize(pAttr,guardSize));
 end;
 
 function ps4_pthread_attr_getguardsize(pAttr:p_pthread_attr_t;guardSize:PQWORD):Integer; SysV_ABI_CDecl;
