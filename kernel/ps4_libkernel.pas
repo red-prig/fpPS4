@@ -709,6 +709,11 @@ begin
  Result:=0;
 end;
 
+procedure ps4_sceKernelSetGPO(uiBits:DWORD); SysV_ABI_CDecl;
+begin
+ Writeln('sceKernelSetGPO:',BinStr(uiBits,8));
+end;
+
 const
  RUSAGE_SELF    = 0;
  RUSAGE_CHILDREN=-1;
@@ -1051,6 +1056,7 @@ begin
 
  lib^.set_proc($54EC7C3469875D3B,@ps4_sceKernelGetCpumode);
  lib^.set_proc($56306D83906D97DE,@ps4_sceKernelSetFsstParam);
+ lib^.set_proc($71AEEFE82C6E973B,@ps4_sceKernelSetGPO);
 
  //module
 
