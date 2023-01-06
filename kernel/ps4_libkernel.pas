@@ -1249,6 +1249,9 @@ begin
  lib^.set_proc($D2A3AD091FD91DC9,@ps4_pthread_attr_getstacksize);
  lib^.set_proc($FDF03EED99460D0B,@ps4_scePthreadAttrGetstacksize);
 
+ lib^.set_proc($FD2ADB5E9191D5FD,@ps4_pthread_attr_setstack);
+ lib^.set_proc($06F9FBE2F8FAA0BA,@ps4_scePthreadAttrSetstack);
+
  lib^.set_proc($BD09B87C312C5A2F,@ps4_pthread_attr_getstack);
  lib^.set_proc($FEAB8F6B8484254C,@ps4_scePthreadAttrGetstack);
 

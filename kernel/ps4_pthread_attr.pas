@@ -75,6 +75,9 @@ function  ps4_scePthreadAttrGetstackaddr(pAttr:p_pthread_attr_t;stackAddr:PPoint
 function  ps4_pthread_attr_getstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 
+function  ps4_pthread_attr_setstack(pAttr:p_pthread_attr_t;stackAddr:Pointer;stackSize:QWORD):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadAttrSetstack(pAttr:p_pthread_attr_t;stackAddr:Pointer;stackSize:QWORD):Integer; SysV_ABI_CDecl;
+
 function  ps4_pthread_attr_getstack(pAttr:p_pthread_attr_t;stackAddr:PPointer;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadAttrGetstack(pAttr:p_pthread_attr_t;stackAddr:PPointer;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 
@@ -332,6 +335,20 @@ end;
 function ps4_scePthreadAttrGetstacksize(pAttr:p_pthread_attr_t;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(ps4_pthread_attr_getstacksize(pAttr,stackSize));
+end;
+
+function ps4_pthread_attr_setstack(pAttr:p_pthread_attr_t;stackAddr:Pointer;stackSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pAttr=nil) or (stackAddr=nil) or (stackSize<PTHREAD_STACK_MIN) then Exit(EINVAL);
+ if (pAttr^=nil) then Exit(EINVAL);
+ pAttr^^.stackaddr_attr:=stackAddr;
+ pAttr^^.stacksize_attr:=stackSize;
+ Result:=0;
+end;
+
+function ps4_scePthreadAttrSetstack(pAttr:p_pthread_attr_t;stackAddr:Pointer;stackSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_attr_setstack(pAttr,stackAddr,stackSize));
 end;
 
 function ps4_pthread_attr_getstack(pAttr:p_pthread_attr_t;stackAddr:PPointer;stackSize:PQWORD):Integer; SysV_ABI_CDecl;
