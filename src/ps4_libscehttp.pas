@@ -54,6 +54,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetRedirectCallback(id:Integer;
+                                        cbfunc:Pointer; //SceHttpRedirectCallback
+                                        userArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHttpSetNonblock(id:Integer;enable:Boolean):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -259,6 +266,7 @@ begin
  lib^.set_proc($D206233D347FE9C6,@ps4_sceHttpCreateTemplate);
  lib^.set_proc($E08F2F129B84859F,@ps4_sceHttpDeleteTemplate);
  lib^.set_proc($0CAF86A1708D4F4E,@ps4_sceHttpsLoadCert);
+ lib^.set_proc($87DC261595F88BFE,@ps4_sceHttpSetRedirectCallback);
  lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetNonblock);
  lib^.set_proc($4FF986A3D7F73EEE,@ps4_sceHttpSetAutoRedirect);
  lib^.set_proc($7F8D8ADFB9A6E513,@ps4_sceHttpsEnableOption);
