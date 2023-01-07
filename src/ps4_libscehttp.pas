@@ -79,6 +79,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetCookieEnabled(id:Integer;enable:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 type
  PSceHttpEpollHandle=^SceHttpEpollHandle;
  SceHttpEpollHandle=Pointer;
@@ -240,6 +245,7 @@ begin
  lib^.set_proc($7F8D8ADFB9A6E513,@ps4_sceHttpsEnableOption);
  lib^.set_proc($992402C73593C152,@ps4_sceHttpsDisableOption);
  lib^.set_proc($539131406CB2C7DB,@ps4_sceHttpsSetSslVersion);
+ lib^.set_proc($5CD5280F607D6BA0,@ps4_sceHttpSetCookieEnabled);
  lib^.set_proc($EB7F3575617EC6C4,@ps4_sceHttpCreateEpoll);
  lib^.set_proc($C1885755F4B612DE,@ps4_sceHttpDestroyEpoll);
  lib^.set_proc($FF19BB91940DA472,@ps4_sceHttpSetEpoll);
