@@ -176,12 +176,21 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpCreateRequestWithURL(connId:Integer;
+                                         method:Integer;
+                                         url:PChar;
+                                         contentLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequestWithURL: method=', method, 'url=',url);
+ Result:=3;
+end;
+
 function ps4_sceHttpCreateRequestWithURL2(connId:Integer;
                                           method:PChar;
                                           url:PChar;
                                           contentLength:QWORD):Integer; SysV_ABI_CDecl;
 begin
- WriteLn(SysLogPrefix, 'sceHttpCreateRequestWithURL2 method=', method, 'url=',url);
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequestWithURL2: method=', method, 'url=',url);
  Result:=3;
 end;
 
@@ -267,6 +276,7 @@ begin
  lib^.set_proc($86DC813A859E4B9F,@ps4_sceHttpsSetSslCallback);
  lib^.set_proc($AA0C43063A2B531B,@ps4_sceHttpCreateConnectionWithURL);
  lib^.set_proc($3FA037CADA6C8987,@ps4_sceHttpDeleteConnection);
+ lib^.set_proc($01EBB9C152A417DC,@ps4_sceHttpCreateRequestWithURL);
  lib^.set_proc($0A7A7BEE9A1D9025,@ps4_sceHttpCreateRequestWithURL2);
  lib^.set_proc($A9EEE867EBF83D60,@ps4_sceHttpDeleteRequest);
  lib^.set_proc($D5ED8137023F5F31,@ps4_sceHttpSendRequest);
