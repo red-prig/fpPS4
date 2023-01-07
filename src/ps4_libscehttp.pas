@@ -260,7 +260,7 @@ begin
  lib^.set_proc($E08F2F129B84859F,@ps4_sceHttpDeleteTemplate);
  lib^.set_proc($0CAF86A1708D4F4E,@ps4_sceHttpsLoadCert);
  lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetNonblock);
- lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetAutoRedirect);
+ lib^.set_proc($4FF986A3D7F73EEE,@ps4_sceHttpSetAutoRedirect);
  lib^.set_proc($7F8D8ADFB9A6E513,@ps4_sceHttpsEnableOption);
  lib^.set_proc($992402C73593C152,@ps4_sceHttpsDisableOption);
  lib^.set_proc($539131406CB2C7DB,@ps4_sceHttpsSetSslVersion);
