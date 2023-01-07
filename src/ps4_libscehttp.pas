@@ -48,6 +48,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetAutoRedirect(id:Integer;enable:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHttpsEnableOption(id:Integer;sslFlags:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -219,6 +224,7 @@ begin
  lib^.set_proc($D206233D347FE9C6,@ps4_sceHttpCreateTemplate);
  lib^.set_proc($E08F2F129B84859F,@ps4_sceHttpDeleteTemplate);
  lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetNonblock);
+ lib^.set_proc($B36FCD3C8BF3FA20,@ps4_sceHttpSetAutoRedirect);
  lib^.set_proc($7F8D8ADFB9A6E513,@ps4_sceHttpsEnableOption);
  lib^.set_proc($992402C73593C152,@ps4_sceHttpsDisableOption);
  lib^.set_proc($539131406CB2C7DB,@ps4_sceHttpsSetSslVersion);
