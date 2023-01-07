@@ -179,6 +179,7 @@ type
 
     procedure _mmap_sys(Offset:Pointer;Size:QWORD);
 
+    Function  check_mmaped(Offset:Pointer;Size:QWORD):Integer;
     Function  check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;
     Function  mmap(Offset:Pointer;Size,Align:QWORD;prot,flags,fd:Integer;addr:QWORD;var AdrOut:Pointer):Integer;
 
@@ -1256,6 +1257,49 @@ begin
  until false;
 
  //Test;
+end;
+
+Function TVirtualManager.check_mmaped(Offset:Pointer;Size:QWORD):Integer;
+var
+ It:TAllcPoolNodeSet.Iterator;
+ key:TVirtualAdrNode;
+ tmp,FEndO:Pointer;
+begin
+ Result:=0;
+ if (Offset<Flo) or (Offset>Fhi) then Exit(ENOMEM);
+
+ tmp:=AlignDw(Offset,PHYSICAL_PAGE_SIZE);
+ Size:=Size+(Offset-tmp);
+
+ Offset:=tmp;
+ Size:=AlignUp(Size,PHYSICAL_PAGE_SIZE);
+
+ FEndO:=Offset+Size;
+
+ key:=Default(TVirtualAdrNode);
+ key.Offset:=Offset;
+
+ It:=FAllcSet.find_le(key);
+ While (It.Item<>nil) do
+ begin
+  key:=It.Item^;
+
+  if (Offset>=key.Offset) then
+  begin
+   if key.IsFree then
+   begin
+    Exit(ENOMEM);
+   end else
+   if (key.F.reserv<>0) then //reserved?
+   begin
+    Exit(ENOMEM);
+   end;
+  end;
+
+  if (key.Offset>=FEndO) then Break;
+
+  It.Next;
+ end;
 end;
 
 Function TVirtualManager.check_fixed(Offset:Pointer;Size:QWORD;flags,fd:Integer):Integer;

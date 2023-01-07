@@ -245,8 +245,13 @@ function ps4_sceKernelBatchMap2(
 
 function ps4_mlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 function ps4_munlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+function ps4_mlockall(flags:Integer):Integer; SysV_ABI_CDecl;
+function ps4_munlockall:Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelMlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelMunlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMlockall(flags:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelMunlockall:Integer; SysV_ABI_CDecl;
 
 //
 
@@ -1755,81 +1760,104 @@ end;
 
 //
 
-function _sys_mlock(addr:Pointer;len:qword):Integer;
-var
- tmp:Pointer;
+function _sys_check_mmaped(addr:Pointer;len:qword):Integer;
 begin
- tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
- len:=len+(addr-tmp);
+ _sig_lock;
+ rwlock_rdlock(MMLock);
 
- addr:=tmp;
- len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
+ Result:=VirtualManager.check_mmaped(addr,len);
 
- if VirtualLock(addr,len) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=0;
- end;
+ rwlock_unlock(MMLock);
+ _sig_unlock;
 end;
 
-function _sys_munlock(addr:Pointer;len:qword):Integer;
-var
- tmp:Pointer;
+function _sys_mlockall(flags:Integer):Integer;
+const
+ MNALL=not Integer(MCL_CURRENT or MCL_FUTURE);
 begin
- tmp:=AlignDw(addr,PHYSICAL_PAGE_SIZE);
- len:=len+(addr-tmp);
-
- addr:=tmp;
- len:=AlignUp(len,PHYSICAL_PAGE_SIZE);
-
- if VirtualUnlock(addr,len) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=0;
- end;
+ if (flags=0) or ((flags and MNALL)<>0) then Exit(EINVAL);
+ Result:=0;
 end;
 
 function ps4_mlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 begin
- Result:=_set_errno(_sys_mlock(addr,len));
+ Result:=_set_errno(_sys_check_mmaped(addr,len));
 end;
 
 function ps4_munlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 begin
- Result:=_set_errno(_sys_munlock(addr,len));
+ Result:=_set_errno(_sys_check_mmaped(addr,len));
+end;
+
+function ps4_mlockall(flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(_sys_mlockall(flags));
+end;
+
+function ps4_munlockall:Integer; SysV_ABI_CDecl;
+begin
+ Result:=_set_errno(0);
 end;
 
 function ps4_sceKernelMlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 begin
- Result:=_sys_mlock(addr,len);
+ Result:=_sys_check_mmaped(addr,len);
  _set_errno(Result);
  Result:=px2sce(Result);
 end;
 
 function ps4_sceKernelMunlock(addr:Pointer;len:qword):Integer; SysV_ABI_CDecl;
 begin
- Result:=_sys_munlock(addr,len);
+ Result:=_sys_check_mmaped(addr,len);
  _set_errno(Result);
  Result:=px2sce(Result);
 end;
 
+function ps4_sceKernelMlockall(flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=_sys_mlockall(flags);
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function ps4_sceKernelMunlockall:Integer; SysV_ABI_CDecl;
+begin
+ _set_errno(0);
+ Result:=0;
+end;
+
 ////
-////
+
+function _sys_msync(addr:Pointer;len:size_t;flags:Integer):Integer;
+begin
+ if not IsAlign(addr,PHYSICAL_PAGE_SIZE) then Exit(EINVAL);
+
+ if ((flags and MS_ASYNC)<>0) and ((flags and MS_INVALIDATE)<>0) then Exit(EINVAL);
+
+ _sig_lock;
+ rwlock_rdlock(MMLock);
+
+ Result:=VirtualManager.check_mmaped(addr,len);
+
+ rwlock_unlock(MMLock);
+ _sig_unlock;
+
+ if (Result=0) then
+ begin
+  FlushViewOfFile(addr,len);
+ end;
+end;
 
 function ps4_msync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- System.ReadWriteBarrier;
- Result:=0;
+ Result:=_set_errno(_sys_msync(addr,len,flags));
 end;
 
 function ps4_sceKernelMsync(addr:Pointer;len:size_t;flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- System.ReadWriteBarrier;
- Result:=0;
+ Result:=_sys_msync(addr,len,flags);
+ _set_errno(Result);
+ Result:=px2sce(Result);
 end;
 
 Procedure _mem_init;

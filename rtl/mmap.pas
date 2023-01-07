@@ -78,7 +78,14 @@ const
   MAP_ALIGNMENT_MASK=$1f000000;
   MAP_ALIGNMENT_MUL =$01000000; //1 shl 24
 
+  MCL_CURRENT=$0001; // Lock only current memory
+  MCL_FUTURE =$0002; // Lock all future memory as well
+
   MAP_FAILED    =Pointer(-1);
+
+  MS_SYNC      =$0000; // msync synchronously
+  MS_ASYNC     =$0001; // return immediately
+  MS_INVALIDATE=$0002; // invalidate all cached data
 
 function _isgpu(prot:Integer):Boolean; inline;
 function _iswrite(prot:Integer):Boolean; inline;

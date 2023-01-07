@@ -1387,8 +1387,13 @@ begin
 
  lib^.set_proc($9930597C46A5D81C,@ps4_mlock);
  lib^.set_proc($386E11B03C0B82EA,@ps4_munlock);
+ lib^.set_proc($C7B83B11B7A8F3F5,@ps4_mlockall);
+ lib^.set_proc($3692C1A60555ECF5,@ps4_munlockall);
+
  lib^.set_proc($DE4EA4C7FCCE3924,@ps4_sceKernelMlock);
  lib^.set_proc($C502087C9F3AD2C9,@ps4_sceKernelMunlock);
+ lib^.set_proc($11FAA62A48AB245D,@ps4_sceKernelMlockall);
+ lib^.set_proc($96F0FBD633F63279,@ps4_sceKernelMunlockall);
 
  lib^.set_proc($B59638F9264D1610,@ps4_msync);
  lib^.set_proc($0E435E6F1989C952,@ps4_sceKernelMsync);
