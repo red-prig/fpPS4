@@ -39,6 +39,8 @@ type
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_LDEXP_F32;
   procedure emit_V_ADDC_U32;
+  procedure emit_V_MBCNT_LO_U32_B32;
+  procedure emit_V_MBCNT_HI_U32_B32;
  end;
 
 implementation
@@ -457,6 +459,46 @@ begin
  OpBitwiseAnd(car,src[0],exc);     //carry_out & EXEC
 end;
 
+//V_MBCNT_LO_U32_B32 v1, -1, v1
+
+procedure TEmit_VOP2.emit_V_MBCNT_LO_U32_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ //V_MBCNT_LO_U32_B32 vdst, vsrc, vaccum
+ //mask_lo_threads_before= (thread_id>32) ? 0xffffffff : (1<<thread_id)-1
+ //vdst = vaccum.u + bit_count(vsrc & mask_lo_threads_before)
+
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+
+ src[0]:=OpAndTo(src[0],1); //mean mask_lo_threads_before=1
+ src[0]:=OpBitCountTo(src[0]);
+
+ OpIAdd(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP2.emit_V_MBCNT_HI_U32_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ //V_MBCNT_HI_U32_B3 vdst, vsrc, vaccum
+ //mask_hi_threads_before= (thread_id>32) ? (1<<(thread_id-32))-1 : 0
+ //vdst = vaccum.u + bit_count(vsrc & mask_hi_threads_before)
+
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ //src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+
+ //only lower thread_id mean
+ MakeCopy(dst,src[1]);
+end;
+
 procedure TEmit_VOP2.emit_VOP2;
 begin
 
@@ -514,6 +556,9 @@ begin
   V_LDEXP_F32: emit_V_LDEXP_F32;
 
   V_ADDC_U32: emit_V_ADDC_U32;
+
+  V_MBCNT_LO_U32_B32: emit_V_MBCNT_LO_U32_B32;
+  V_MBCNT_HI_U32_B32: emit_V_MBCNT_HI_U32_B32;
 
   else
    Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP));

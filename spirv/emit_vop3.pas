@@ -41,6 +41,8 @@ type
   procedure emit_V_MUL_HI(rtype:TsrDataType);
   procedure emit_V_MAC_F32;
   procedure emit_V_LDEXP_F32;
+  procedure emit_V_MBCNT_LO_U32_B32;
+  procedure emit_V_MBCNT_HI_U32_B32;
 
   procedure emit_V_BFE_U32;
   procedure emit_V_BFI_B32;
@@ -454,6 +456,54 @@ begin
 
  emit_dst_omod_f(dst);
  emit_dst_clamp_f(dst);
+end;
+
+procedure TEmit_VOP3.emit_V_MBCNT_LO_U32_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ //V_MBCNT_LO_U32_B32 vdst, vsrc, vaccum
+ //mask_lo_threads_before= (thread_id>32) ? 0xffffffff : (1<<thread_id)-1
+ //vdst = vaccum.u + bit_count(vsrc & mask_lo_threads_before)
+
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ src[0]:=OpAndTo(src[0],1); //mean mask_lo_threads_before=1
+ src[0]:=OpBitCountTo(src[0]);
+
+ OpIAdd(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP3.emit_V_MBCNT_HI_U32_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ //V_MBCNT_HI_U32_B3 vdst, vsrc, vaccum
+ //mask_hi_threads_before= (thread_id>32) ? (1<<(thread_id-32))-1 : 0
+ //vdst = vaccum.u + bit_count(vsrc & mask_hi_threads_before)
+
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ //src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ //only lower thread_id mean
+ MakeCopy(dst,src[1]);
 end;
 
 procedure TEmit_VOP3.emit_V_BFE_U32;
@@ -1061,6 +1111,9 @@ begin
   256+V_MAC_F32: emit_V_MAC_F32;
 
   256+V_LDEXP_F32: emit_V_LDEXP_F32;
+
+  256+V_MBCNT_LO_U32_B32: emit_V_MBCNT_LO_U32_B32;
+  256+V_MBCNT_HI_U32_B32: emit_V_MBCNT_HI_U32_B32;
 
   //VOP3 only
 
