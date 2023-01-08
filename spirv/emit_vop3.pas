@@ -54,6 +54,8 @@ type
   procedure emit_V_MAX3_F32;
   procedure emit_V_MIN3_F32;
   procedure emit_V_MED3_F32;
+  procedure emit_V_MED3_I32;
+  procedure emit_V_MED3_U32;
   procedure emit_V_FMA_F32;
   procedure emit_V_CUBE(OpId:DWORD);
   procedure emit_V_MOV_B32;
@@ -743,6 +745,44 @@ begin
  emit_dst_clamp_f(dst);
 end;
 
+procedure TEmit_VOP3.emit_V_MED3_I32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtInt32);
+
+ OpMED3I(dst,src[0],src[1],src[2]);
+end;
+
+procedure TEmit_VOP3.emit_V_MED3_U32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ OpMED3U(dst,src[0],src[1],src[2]);
+end;
+
 procedure TEmit_VOP3.emit_V_FMA_F32;
 Var
  dst:PsrRegSlot;
@@ -1135,6 +1175,8 @@ begin
   V_MAX3_F32: emit_V_MAX3_F32;
   V_MIN3_F32: emit_V_MIN3_F32;
   V_MED3_F32: emit_V_MED3_F32;
+  V_MED3_I32: emit_V_MED3_I32;
+  V_MED3_U32: emit_V_MED3_U32;
   V_FMA_F32 : emit_V_FMA_F32;
 
   V_CUBEID_F32:emit_V_CUBE(OpCUBEID);

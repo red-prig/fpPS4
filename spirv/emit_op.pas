@@ -81,6 +81,8 @@ type
   //
   procedure OpPackAnc(dst:PsrRegSlot;prim,smid,rtid:PsrRegNode);
   //
+  function  OpSMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpSMaxTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpUMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpUMaxTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpFMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
@@ -88,6 +90,8 @@ type
   function  OpNMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpNMaxTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   //
+  procedure OpMED3I(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
+  procedure OpMED3U(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
   procedure OpMED3F(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
   //
   function  OpPackOfs(pLine:PspirvOp;rtype:TsrDataType;count:Byte;src:PsrRegNode):PsrRegNode;
@@ -658,6 +662,18 @@ end;
 
 //
 
+function TEmitOp.OpSMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ Result:=NewReg(src0^.dtype);
+ _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.SMin,Result,src0,src1));
+end;
+
+function TEmitOp.OpSMaxTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ Result:=NewReg(src0^.dtype);
+ _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.SMax,Result,src0,src1));
+end;
+
 function TEmitOp.OpUMinTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  Result:=NewReg(src0^.dtype);
@@ -692,6 +708,32 @@ function TEmitOp.OpNMaxTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  Result:=NewReg(src0^.dtype);
  _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.NMax,Result,src0,src1));
+end;
+
+procedure TEmitOp.OpMED3I(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
+var
+ min:PsrRegNode;
+ max:PsrRegNode;
+ mmx:PsrRegNode;
+begin
+ min:=OpSMinTo(src0,src1); //min(s0,s1)
+ max:=OpSMaxTo(src0,src1); //max(s0,s1)
+ mmx:=OpSMinTo(max ,src2); //min(max(s0,s1),s2)
+
+ OpGlsl2(GlslOp.SMax,src0^.dtype,dst,min,mmx); //max(min(s0,s1),min(max(s0,s1),s2))
+end;
+
+procedure TEmitOp.OpMED3U(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
+var
+ min:PsrRegNode;
+ max:PsrRegNode;
+ mmx:PsrRegNode;
+begin
+ min:=OpUMinTo(src0,src1); //min(s0,s1)
+ max:=OpUMaxTo(src0,src1); //max(s0,s1)
+ mmx:=OpUMinTo(max ,src2); //min(max(s0,s1),s2)
+
+ OpGlsl2(GlslOp.UMax,src0^.dtype,dst,min,mmx); //max(min(s0,s1),min(max(s0,s1),s2))
 end;
 
 procedure TEmitOp.OpMED3F(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
