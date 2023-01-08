@@ -181,6 +181,35 @@ begin
      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
      node^.AddParam(Main);
      node^.AddLiteral(ExecutionMode.OriginUpperLeft,ExecutionMode.GetStr(ExecutionMode.OriginUpperLeft));
+
+     if (foDepthReplacing in DecorateList.FfemOpSet) then
+     begin
+      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
+      node^.AddParam(Main);
+      node^.AddLiteral(ExecutionMode.DepthReplacing,ExecutionMode.GetStr(ExecutionMode.DepthReplacing));
+     end;
+
+     if (foDepthGreater in DecorateList.FfemOpSet) then
+     begin
+      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
+      node^.AddParam(Main);
+      node^.AddLiteral(ExecutionMode.DepthGreater,ExecutionMode.GetStr(ExecutionMode.DepthGreater));
+     end;
+
+     if (foDepthLess in DecorateList.FfemOpSet) then
+     begin
+      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
+      node^.AddParam(Main);
+      node^.AddLiteral(ExecutionMode.DepthLess,ExecutionMode.GetStr(ExecutionMode.DepthLess));
+     end;
+
+     if (foDepthUnchanged in DecorateList.FfemOpSet) then
+     begin
+      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
+      node^.AddParam(Main);
+      node^.AddLiteral(ExecutionMode.DepthUnchanged,ExecutionMode.GetStr(ExecutionMode.DepthUnchanged));
+     end;
+
     end;
   ExecutionModel.GLCompute:
     begin

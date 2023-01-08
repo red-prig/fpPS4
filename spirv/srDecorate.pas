@@ -31,12 +31,22 @@ type
    node:PSpirvOp;
  end;
 
+ TfemOp=(
+  foDepthReplacing,
+  foDepthGreater,
+  foDepthLess,
+  foDepthUnchanged
+ );
+
+ TfemOpSet=Set of TfemOp;
+
  PsrDecorateList=^TsrDecorateList;
  TsrDecorateList=object(TsrOpBlockCustom)
   type
    TNodeFetch=specialize TNodeFetch<PsrDecorate,TsrDecorate>;
   var
    FNTree:TNodeFetch;
+   FfemOpSet:TfemOpSet;
   function  Fetch(data:PsrNode;param1,param2,param3:DWORD):PsrDecorate;
   procedure OpDecorate(Data:PsrNode;dec_id,param:DWORD);
   procedure OpMember  (Data:PsrNode;index,offset:DWORD);
