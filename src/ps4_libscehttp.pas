@@ -219,6 +219,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetRequestContentLength(reqId:Integer;contentLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHttpSendRequest(reqId:Integer;
                                 postData:Pointer;
                                 size:QWORD):Integer; SysV_ABI_CDecl;
@@ -301,6 +306,7 @@ begin
  lib^.set_proc($01EBB9C152A417DC,@ps4_sceHttpCreateRequestWithURL);
  lib^.set_proc($0A7A7BEE9A1D9025,@ps4_sceHttpCreateRequestWithURL2);
  lib^.set_proc($A9EEE867EBF83D60,@ps4_sceHttpDeleteRequest);
+ lib^.set_proc($3D3885214C42A497,@ps4_sceHttpSetRequestContentLength);
  lib^.set_proc($D5ED8137023F5F31,@ps4_sceHttpSendRequest);
  lib^.set_proc($D1AD9304D7C4DC15,@ps4_sceHttpGetStatusCode);
  lib^.set_proc($68260F31250868FF,@ps4_sceHttpGetAllResponseHeaders);
