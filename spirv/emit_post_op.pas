@@ -819,6 +819,7 @@ end;
 
 Function ReverseBits(src:QWORD;count:Byte):QWORD;
 var
+ v:QWORD;
  i:Byte;
 begin
  Result:=0;
@@ -826,7 +827,8 @@ begin
  dec(count);
  For i:=0 to count do
  begin
-  Result.Bits[i]:=src.Bits[count-i];
+  v:=((src shr i) and 1); //get
+  Result:=Result or (v shl (count-i)); //set
  end;
 end;
 
@@ -1014,31 +1016,35 @@ end;
 function TEmitPostOp.OnCompositeExtract1(node:PSpirvOp):Integer;
 var
  pc:PsrConst;
- dst,src:PsrRegNode;
+ dst,org,src:PsrRegNode;
  pos:PtrUint;
 begin
  Result:=0;
  dst:=node^.pDst^.AsType(ntReg);
- src:=RegDown(node^.ParamNode(0)^.AsReg);
+ org:=node^.ParamNode(0)^.AsReg;
+ src:=RegDown(org);
 
  if (dst=nil) or (src=nil) then Exit;
 
  pos:=0;
  if not node^.ParamNode(1)^.TryGetValue(pos) then Exit;
 
- if src^.is_const then
- begin
-  pc:=src^.AsConst;
-  if (pos<pc^.ItemCount) then
-  begin
-   pc:=pc^.GetConst(pos);
-   dst^.pWriter:=pc;
+ if not src^.is_const then Exit;
 
-   node^.mark_not_used;
-   node^.pDst:=nil;
-   Inc(Result);
-  end;
- end;
+ pc:=src^.AsConst;
+
+ pc:=ConstList.Bitcast(org^.dtype,pc);
+
+ if (pos>=pc^.ItemCount) then Exit;
+
+ pc:=pc^.GetConst(pos);
+ if (pc=nil) then Exit;
+
+ dst^.pWriter:=pc;
+
+ node^.mark_not_used;
+ node^.pDst:=nil;
+ Inc(Result);
 end;
 
 {

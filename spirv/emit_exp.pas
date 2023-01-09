@@ -100,7 +100,7 @@ begin
     $4:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC2,dtFloat32);
     $8:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC3,dtFloat32);
     else
-     Assert(false);
+     Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
    end;
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),dtFloat32); //output in FSPI.EXP.TGT
    OpStore(line,dout,src[0]);
@@ -112,7 +112,7 @@ begin
     3:rtype:=dtVec3f;
     4:rtype:=dtVec4f;
     else
-      Assert(false,IntToStr(p));
+      Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
    end;
 
    i:=0;
@@ -158,13 +158,11 @@ begin
        fetch_vsrc8_vec2h(FSPI.EXP.VSRC3,src[2],src[3]);
       end;
    else
-    Assert(false);
+    Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
   end;
 
   if Config.UseOutput16 then
   begin
-   dst:=OpMakeVec(line,dtVec4h,@src);
-
    rtype:=dtVec4h;
   end else
   begin

@@ -32,7 +32,9 @@ type
    FNTree:TNodeFetch;
    rSlot:TsrRegSlot;
   procedure Init(Emit:TCustomEmit); inline;
-  function  Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
+  function  _Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
+  function  Find(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+  Procedure Save(dtype:TsrDataType;src,dst:PsrRegNode);
   function  FetchRead(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
   function  FetchDstr(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
   function  FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
@@ -54,7 +56,7 @@ begin
  rSlot.Init(Emit,'BCAST');
 end;
 
-function TsrBitcastList.Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
+function TsrBitcastList._Find(dtype:TsrDataType;src:PsrRegNode):PsrBitcast;
 var
  node:TsrBitcast;
 begin
@@ -64,16 +66,62 @@ begin
  Result:=FNTree.Find(@node);
 end;
 
+function TsrBitcastList.Find(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
+var
+ node:PsrBitcast;
+begin
+ Result:=nil;
+ node:=_Find(dtype,src);
+ if (node<>nil) then
+ begin
+  Result:=node^.dst;
+ end;
+end;
+
+Procedure TsrBitcastList.Save(dtype:TsrDataType;src,dst:PsrRegNode);
+var
+ node:PsrBitcast;
+begin
+ node:=rSlot.Emit.Alloc(SizeOf(TsrBitcast));
+ node^:=Default(TsrBitcast);
+ node^.key.dtype:=dtype;
+ node^.key.src:=src;
+ node^.dst:=dst;
+ FNTree.Insert(node);
+end;
+
 function TsrBitcastList.FetchRead(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
 var
+ pConstList:PsrConstList;
  dst:PsrRegNode;
+ pConst:PsrConst;
+
 begin
  Result:=src;
  if (src=nil) then Exit;
  if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
- dst:=rSlot.New(src^.pLine,dtype);
- dst^.pWriter:=src;
+ if src^.is_const then
+ begin
+  //only from consts, first
+  dst:=Find(dtype,src);
+  if (dst<>nil) then Exit(dst);
+
+  pConst:=src^.AsConst;
+
+  pConstList:=rSlot.Emit.GetConstList;
+  pConst:=pConstList^.Bitcast(dtype,pConst);
+
+  dst:=rSlot.New(src^.pLine,dtype);
+  dst^.pWriter:=pConst;
+
+  //
+  Save(dtype,src,dst);
+ end else
+ begin
+  dst:=rSlot.New(src^.pLine,dtype);
+  dst^.pWriter:=src;
+ end;
 
  Result:=dst;
 end;
@@ -97,7 +145,6 @@ end;
 function TsrBitcastList.FetchCast(dtype:TsrDataType;src:PsrRegNode):PsrRegNode;
 var
  pConstList:PsrConstList;
- node:PsrBitcast;
  dst:PsrRegNode;
  pConst:PsrConst;
 
@@ -108,12 +155,9 @@ begin
 
  dst:=nil;
 
- node:=Find(dtype,src);
- if (node<>nil) then
- begin
-  Result:=node^.dst;
-  Exit;
- end;
+ //
+ dst:=Find(dtype,src);
+ if (dst<>nil) then Exit(dst);
 
  if src^.is_const then
  begin
@@ -137,12 +181,8 @@ begin
   end;
  end;
 
- node:=rSlot.Emit.Alloc(SizeOf(TsrBitcast));
- node^:=Default(TsrBitcast);
- node^.key.dtype:=dtype;
- node^.key.src:=src;
- node^.dst:=dst;
- FNTree.Insert(node);
+ //
+ Save(dtype,src,dst);
 
  Result:=dst;
 end;
