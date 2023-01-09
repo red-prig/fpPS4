@@ -200,17 +200,18 @@ type
    fd:Integer;
    status:Integer;
    Handle:THandle;
-  function lseek        (offset:Int64;whence:Integer):Int64;           virtual;
-  function read         (data:Pointer;size:Int64):Int64;               virtual;
-  function pread        (data:Pointer;size,offset:Int64):Int64;        virtual;
-  function readv        (vector:p_iovec;count:Integer):Int64;          virtual;
-  function write        (data:Pointer;size:Int64):Int64;               virtual;
-  function pwrite       (data:Pointer;size,offset:Int64):Int64;        virtual;
-  function ftruncate    (size:Int64):Integer;                          virtual;
-  function fstat        (stat:PSceKernelStat):Integer;                 virtual;
-  function fsync        ():Integer;                                    virtual;
-  function fcntl        (cmd:Integer;param1:ptruint):Integer;          virtual;
-  function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64; virtual;
+  function lseek        (offset:Int64;whence:Integer):Int64;               virtual;
+  function read         (data:Pointer;size:Int64):Int64;                   virtual;
+  function pread        (data:Pointer;size,offset:Int64):Int64;            virtual;
+  function readv        (vector:p_iovec;count:Integer):Int64;              virtual;
+  function preadv       (vector:p_iovec;count:Integer;offset:Int64):Int64; virtual;
+  function write        (data:Pointer;size:Int64):Int64;                   virtual;
+  function pwrite       (data:Pointer;size,offset:Int64):Int64;            virtual;
+  function ftruncate    (size:Int64):Integer;                              virtual;
+  function fstat        (stat:PSceKernelStat):Integer;                     virtual;
+  function fsync        ():Integer;                                        virtual;
+  function fcntl        (cmd:Integer;param1:ptruint):Integer;              virtual;
+  function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;     virtual;
  end;
 
 function _sys_get_osfhandle(fd:Integer):THandle;
@@ -221,6 +222,7 @@ function _sys_lseek(fd:Integer;offset:Int64;whence:Integer):Int64;
 function _sys_read(fd:Integer;data:Pointer;size:Int64):Int64;
 function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
+function _sys_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64;
 function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
 function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 function _sys_ftruncate(fd:Integer;size:Int64):Integer;
@@ -252,6 +254,11 @@ begin
 end;
 
 function TCustomFile.readv (vector:p_iovec;count:Integer):Int64;
+begin
+ Result:=-ENOTSUP;
+end;
+
+function TCustomFile.preadv(vector:p_iovec;count:Integer;offset:Int64):Int64;
 begin
  Result:=-ENOTSUP;
 end;
@@ -438,6 +445,29 @@ begin
  if (f=nil) then Exit(-EBADF);
 
  Result:=f.readv(vector,count);
+
+ f.Release;
+end;
+
+function _sys_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64;
+var
+ f:TCustomFile;
+ i:Integer;
+begin
+ if (fd<0) then Exit(-EINVAL);
+ if (vector=nil) then Exit(-EFAULT);
+ if (count<=0) then Exit(-EINVAL);
+
+ For i:=0 to count-1 do
+ begin
+  if (vector[i].iov_base=nil) then Exit(-EFAULT);
+  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
+ end;
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.preadv(vector,count,offset);
 
  f.Release;
 end;

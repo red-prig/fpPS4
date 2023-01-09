@@ -27,11 +27,12 @@ type
  end;
 
  TDevRandom=class(TDevFile)
-  function read  (data:Pointer;size:Int64):Int64;        override;
-  function pread (data:Pointer;size,offset:Int64):Int64; override;
-  function readv (vector:p_iovec;count:Integer):Int64;   override;
-  function write (data:Pointer;size:Int64):Int64;        override;
-  function pwrite(data:Pointer;size,offset:Int64):Int64; override;
+  function read  (data:Pointer;size:Int64):Int64;                   override;
+  function pread (data:Pointer;size,offset:Int64):Int64;            override;
+  function readv (vector:p_iovec;count:Integer):Int64;              override;
+  function preadv(vector:p_iovec;count:Integer;offset:Int64):Int64; override;
+  function write (data:Pointer;size:Int64):Int64;                   override;
+  function pwrite(data:Pointer;size,offset:Int64):Int64;            override;
  end;
 
  TDevStd=class(TDevFile)
@@ -41,11 +42,12 @@ type
    cache:RawByteString;
   Constructor Create(t:PText);
   Destructor  Destroy; override;
-  function read  (data:Pointer;size:Int64):Int64;        override;
-  function pread (data:Pointer;size,offset:Int64):Int64; override;
-  function readv (vector:p_iovec;count:Integer):Int64;   override;
-  function write (data:Pointer;size:Int64):Int64;        override;
-  function pwrite(data:Pointer;size,offset:Int64):Int64; override;
+  function read  (data:Pointer;size:Int64):Int64;                   override;
+  function pread (data:Pointer;size,offset:Int64):Int64;            override;
+  function readv (vector:p_iovec;count:Integer):Int64;              override;
+  function preadv(vector:p_iovec;count:Integer;offset:Int64):Int64; override;
+  function write (data:Pointer;size:Int64):Int64;                   override;
+  function pwrite(data:Pointer;size,offset:Int64):Int64;            override;
  end;
 
 procedure _sys_dev_init;
@@ -134,10 +136,7 @@ end;
 
 function TDevRandom.pread (data:Pointer;size,offset:Int64):Int64;
 begin
- Assert(size<High(DWORD));
-
- BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
- Result:=size;
+ Result:=read(data,size);
 end;
 
 function TDevRandom.readv (vector:p_iovec;count:Integer):Int64;
@@ -148,11 +147,13 @@ begin
 
  For i:=0 to count-1 do
  begin
-  Assert(vector[i].iov_len<High(DWORD));
-
-  BCryptGenRandom(nil,vector[i].iov_base,vector[i].iov_len,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  Result:=Result+vector[i].iov_len;
+  Result:=Result+read(vector[i].iov_base,vector[i].iov_len);
  end;
+end;
+
+function TDevRandom.preadv(vector:p_iovec;count:Integer;offset:Int64):Int64;
+begin
+ Result:=readv(vector,count);
 end;
 
 function TDevRandom.write (data:Pointer;size:Int64):Int64;
@@ -251,6 +252,11 @@ begin
   end;
 
  end;
+end;
+
+function TDevStd.preadv(vector:p_iovec;count:Integer;offset:Int64):Int64;
+begin
+ Result:=readv(vector,count);
 end;
 
 function TDevStd.write (data:Pointer;size:Int64):Int64;

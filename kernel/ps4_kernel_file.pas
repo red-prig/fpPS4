@@ -32,6 +32,9 @@ function ps4_sceKernelPread(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; S
 function ps4_readv(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelReadv(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_ABI_CDecl;
 
+function ps4_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64; SysV_ABI_CDecl;
+function ps4_sceKernelPreadv(fd:Integer;iov:p_iovec;iovcnt:Integer;offset:Int64):Int64; SysV_ABI_CDecl;
+
 function ps4_write(fd:Integer;data:Pointer;size:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 
@@ -301,6 +304,38 @@ function ps4_sceKernelReadv(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_A
 begin
  _sig_lock;
  Result:=_sys_readv(fd,iov,iovcnt);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_preadv(fd,vector,count,offset);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_sceKernelPreadv(fd:Integer;iov:p_iovec;iovcnt:Integer;offset:Int64):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_preadv(fd,iov,iovcnt,offset);
  _sig_unlock;
 
  if (Result<0) then

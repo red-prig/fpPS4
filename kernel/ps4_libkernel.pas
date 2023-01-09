@@ -1477,6 +1477,7 @@ begin
  lib^.set_proc($A226FBE85FF5D9F9,@ps4_sceKernelLseek);
  lib^.set_proc($0A0E2CAD9E9329B5,@ps4_sceKernelRead);
  lib^.set_proc($FABDEB305C08B55E,@ps4_sceKernelPread);
+ lib^.set_proc($C938FAD88EE4C38B,@ps4_sceKernelPreadv);
  lib^.set_proc($E304B37BDD8184B2,@ps4_sceKernelWrite);
  lib^.set_proc($9CA5A2FCDD87055E,@ps4_sceKernelPwrite);
  lib^.set_proc($556DD355988CE3F1,@ps4_sceKernelFtruncate);
@@ -1498,15 +1499,17 @@ begin
  lib^.set_proc($0D1B81B76A6F2029,@ps4_read);  //_read
  lib^.set_proc($02A062A02DAF1772,@ps4_read);  //read
 
- lib^.set_proc($7B3BFF45204D2AA2,@ps4_pread); //pread
+ lib^.set_proc($7B3BFF45204D2AA2,@ps4_pread);
 
  lib^.set_proc($F9646590A8D9BDA8,@ps4_readv); //_readv
  lib^.set_proc($23B22670B76CFEE5,@ps4_readv); //readv
 
+ lib^.set_proc($65A47369AA406703,@ps4_preadv);
+
  lib^.set_proc($171559A81000EE4B,@ps4_write); //_write
  lib^.set_proc($14DE2068F9AE155F,@ps4_write); //write
 
- lib^.set_proc($0B6909FDBC92E6B3,@ps4_pwrite); //pwrite
+ lib^.set_proc($0B6909FDBC92E6B3,@ps4_pwrite);
 
  lib^.set_proc($8A1E020FDFE08213,@ps4_ftruncate);
  lib^.set_proc($9AA40C875CCF3D3F,@ps4_fstat);

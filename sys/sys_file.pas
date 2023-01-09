@@ -24,16 +24,17 @@ type
    lock:TRWLock;
   Constructor Create;
   Destructor  Destroy; override;
-  function lseek    (offset:Int64;whence:Integer):Int64;    override;
-  function read     (data:Pointer;size:Int64):Int64;        override;
-  function pread    (data:Pointer;size,offset:Int64):Int64; override;
-  function readv    (vector:p_iovec;count:Integer):Int64;   override;
-  function write    (data:Pointer;size:Int64):Int64;        override;
-  function pwrite   (data:Pointer;size,offset:Int64):Int64; override;
-  function ftruncate(size:Int64):Integer;                   override;
-  function fstat    (stat:PSceKernelStat):Integer;          override;
-  function fsync    ():Integer;                             override;
-  function fcntl    (cmd:Integer;param1:ptruint):Integer;   override;
+  function    lseek    (offset:Int64;whence:Integer):Int64;               override;
+  function    read     (data:Pointer;size:Int64):Int64;                   override;
+  function    pread    (data:Pointer;size,offset:Int64):Int64;            override;
+  function    readv    (vector:p_iovec;count:Integer):Int64;              override;
+  function    preadv   (vector:p_iovec;count:Integer;offset:Int64):Int64; override;
+  function    write    (data:Pointer;size:Int64):Int64;                   override;
+  function    pwrite   (data:Pointer;size,offset:Int64):Int64;            override;
+  function    ftruncate(size:Int64):Integer;                              override;
+  function    fstat    (stat:PSceKernelStat):Integer;                     override;
+  function    fsync    ():Integer;                                        override;
+  function    fcntl    (cmd:Integer;param1:ptruint):Integer;              override;
  end;
 
 Function get_DesiredAccess(flags:Integer):DWORD;
@@ -265,6 +266,8 @@ begin
 end;
 
 function TFile.readv (vector:p_iovec;count:Integer):Int64;
+label
+ _exit;
 var
  N:DWORD;
  R:BOOL;
@@ -272,27 +275,75 @@ var
 begin
  Result:=0;
 
- For i:=0 to count-1 do
- begin
-  Assert(vector[i].iov_len<High(DWORD));
+ rwlock_wrlock(lock);
 
-  N:=0;
-  rwlock_wrlock(lock);
+  For i:=0 to count-1 do
+  begin
+   Assert(vector[i].iov_len<High(DWORD));
+
+   N:=0;
    R:=ReadFile(Handle,vector[i].iov_base^,vector[i].iov_len,N,nil);
-  rwlock_unlock(lock);
 
-  if R then
-  begin
-   Result:=Result+N;
-   if (N<vector[i].iov_len) then Exit;
-  end else
-  begin
-   Exit(-EIO);
-   Break;
+   if R then
+   begin
+    Result:=Result+N;
+    if (N<vector[i].iov_len) then
+    begin
+     Goto _exit;
+    end;
+   end else
+   begin
+    Result:=-EIO;
+    Goto _exit;
+   end;
+
   end;
 
- end;
+ _exit:
+  rwlock_unlock(lock);
+end;
 
+function TFile.preadv(vector:p_iovec;count:Integer;offset:Int64):Int64;
+label
+ _exit;
+var
+ N:DWORD;
+ R:BOOL;
+ p:Int64;
+ i:Integer;
+begin
+ Result:=0;
+
+ rwlock_wrlock(lock);
+
+  p:=_get_pos(Handle);
+  if not _set_pos(Handle,offset) then Assert(False);
+
+  For i:=0 to count-1 do
+  begin
+   Assert(vector[i].iov_len<High(DWORD));
+
+   N:=0;
+   R:=ReadFile(Handle,vector[i].iov_base^,vector[i].iov_len,N,nil);
+
+   if R then
+   begin
+    Result:=Result+N;
+    if (N<vector[i].iov_len) then
+    begin
+     Goto _exit;
+    end;
+   end else
+   begin
+    Result:=-EIO;
+    Goto _exit;
+   end;
+
+  end;
+
+ _exit:
+  if not _set_pos(Handle,p) then Assert(False);
+  rwlock_unlock(lock);
 end;
 
 function TFile.write (data:Pointer;size:Int64):Int64;
