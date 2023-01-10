@@ -16,21 +16,21 @@ uses
 implementation
 
 const
- LANGUAGE_CODE_ENG:array[0..3] of Byte=(Byte('E'), Byte('N'), Byte('G'), 0);
+ LANGUAGE_CODE_ENG:array[0..3] of Char=('E', 'N', 'G', #0);
  DIRECTORY_AVPLAYER_DUMP = 'avplayer_dump';
 
 type
- SceAvPlayerAllocate=function(argP:Pointer; argAlignment:DWord; argSize:DWord):Pointer; SysV_ABI_CDecl;
- SceAvPlayerDeallocate=procedure(argP:Pointer; argMemory:Pointer); SysV_ABI_CDecl;
- SceAvPlayerAllocateTexture=function(argP:Pointer; argAlignment:DWord; argSize:DWord):Pointer; SysV_ABI_CDecl;
- SceAvPlayerDeallocateTexture=procedure(argP:Pointer; argMemory:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerAllocate=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
+ SceAvPlayerDeallocate=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerAllocateTexture=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
+ SceAvPlayerDeallocateTexture=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
 
- SceAvPlayerOpenFile=function(argP:Pointer; argFilename:PChar):Integer; SysV_ABI_CDecl;
+ SceAvPlayerOpenFile=function(argP:Pointer;argFilename:PChar):Integer; SysV_ABI_CDecl;
  SceAvPlayerCloseFile=function(argP:Pointer):Integer; SysV_ABI_CDecl;
- SceAvPlayerReadOffsetFile=function(argP:Pointer; argBuffer:PByte; argPosition:QWord; argLength:DWord):Integer; SysV_ABI_CDecl;
+ SceAvPlayerReadOffsetFile=function(argP:Pointer;argBuffer:PByte;argPosition:QWord;argLength:DWord):Integer; SysV_ABI_CDecl;
  SceAvPlayerSizeFile=function(argP:Pointer):QWord; SysV_ABI_CDecl;
 
- SceAvPlayerEventCallback=procedure(p:Pointer; argEventId:Integer; argSourceId:Integer; argEventData:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerEventCallback=procedure(p:Pointer;argEventId:Integer;argSourceId:Integer;argEventData:Pointer); SysV_ABI_CDecl;
 
  SceAvPlayerMemAllocator=packed record
   objectPointer    :Pointer;
@@ -71,14 +71,14 @@ type
   reserved    :array[0..1] of Byte;
   sampleRate  :DWord;
   size        :DWord;
-  languageCode:array[0..3] of Byte;
+  languageCode:array[0..3] of Char;
  end;
 
  SceAvPlayerVideo=packed record
   width       :DWord;
   height      :DWord;
   aspectRatio :Single;
-  languageCode:array[0..3] of Byte;
+  languageCode:array[0..3] of Char;
  end;
 
  SceAvPlayerTextPosition=packed record
@@ -89,7 +89,7 @@ type
  end;
 
  SceAvPlayerTimedText=packed record
-  languageCode:array[0..3] of Byte;
+  languageCode:array[0..3] of Char;
   textSize    :Word;
   fontSize    :Word;
   position    :SceAvPlayerTextPosition;
@@ -115,7 +115,7 @@ type
   reserved    :array[0..1] of Byte;
   sampleRate  :DWord;
   size        :DWord;
-  languageCode:array[0..3] of Byte;
+  languageCode:array[0..3] of Char;
   reserved1   :array[0..63] of Byte;
  end;
 
@@ -123,7 +123,7 @@ type
   width             :DWord;
   height            :DWord;
   aspectRatio       :Single;
-  languageCode      :array[0..3] of Byte;
+  languageCode      :array[0..3] of Char;
   framerate         :DWord;
   cropLeftOffset    :DWord;
   cropRightOffset   :DWord;
@@ -137,7 +137,7 @@ type
  end;
 
  SceAvPlayerTimedTextEx=packed record
-  languageCode:array[0..3] of Byte;
+  languageCode:array[0..3] of Char;
   reserved    :array[0..75] of Byte;
  end;
 
@@ -247,7 +247,7 @@ function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDe
 begin
  Writeln('sceAvPlayerIsActive');
  if handle=nil then
-   Exit(False);
+  Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
  if (not handle^.isLooped) and (handle^.lastTimeStamp>=1000000) then
  begin
