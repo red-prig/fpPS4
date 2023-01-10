@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="121">
+    <Units Count="122">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -553,6 +553,11 @@
         <Filename Value="kernel\ps4_pthread_attr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit120>
+      <Unit121>
+        <Filename Value="src\ps4_libsceavplayer.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAvPlayer"/>
+      </Unit121>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

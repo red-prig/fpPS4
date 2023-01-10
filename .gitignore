@@ -16,4 +16,5 @@ link.res
 lib/
 backup/
 shader_dump/*
+avplayer_dump/*
 savedata/*
