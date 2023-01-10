@@ -15,6 +15,9 @@ uses
 
 implementation
 
+uses
+  sys_kernel;
+
 const
  LANGUAGE_CODE_ENG:array[0..3] of Char=('E', 'N', 'G', #0);
  DIRECTORY_AVPLAYER_DUMP = 'avplayer_dump';
@@ -179,7 +182,7 @@ end;
 
 function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
 begin
- Writeln('sceAvPlayerInit');
+ Writeln(SysLogPrefix,'sceAvPlayerInit');
  New(Result);
  Result^.lastTimeStamp:=0;
  Result^.lastFrameTime:=GetTimeInMicroseconds;
@@ -204,7 +207,7 @@ var
  p            :Pointer;
  f            :THandle;
 begin
- Writeln('sceAvPlayerAddSource');
+ Writeln(SysLogPrefix,'sceAvPlayerAddSource');
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
    and (handle^.fileReplacement.readOffset<>nil) and (handle^.fileReplacement.size<>nil) then
  begin
@@ -245,7 +248,7 @@ end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
- Writeln('sceAvPlayerIsActive');
+ Writeln(SysLogPrefix,'sceAvPlayerIsActive');
  if handle=nil then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
@@ -258,7 +261,7 @@ end;
 
 function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:Boolean):DWord; SysV_ABI_CDecl;
 begin
- Writeln('sceAvPlayerSetLooping');
+ Writeln(SysLogPrefix,'sceAvPlayerSetLooping');
  Result:=0;
  handle^.isLooped:=loopFlag;
 end;
@@ -267,7 +270,7 @@ function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPl
 var
  currentTime:QWord;
 begin
- Writeln('sceAvPlayerGetAudioData');
+ Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  // TODO: dummy data for now
  if (frameInfo<>nil) and (handle<>nil) then
  begin
@@ -289,7 +292,7 @@ function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAv
 var
  currentTime:QWord;
 begin
- Writeln('sceAvPlayerGetVideoDataEx');
+ Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  // TODO: dummy data for now
  if (frameInfo<>nil) and (handle<>nil) then
  begin
