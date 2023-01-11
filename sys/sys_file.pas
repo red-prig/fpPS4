@@ -40,11 +40,11 @@ type
 Function get_DesiredAccess(flags:Integer):DWORD;
 begin
  Result:=0;
- if (flags and SCE_KERNEL_O_RDWR)<>0 then
+ if (flags and O_RDWR)<>0 then
  begin
   Result:=GENERIC_READ or GENERIC_WRITE;
  end else
- if (flags and SCE_KERNEL_O_WRONLY)<>0 then
+ if (flags and O_WRONLY)<>0 then
  begin
   Result:=GENERIC_WRITE;
  end else
@@ -52,26 +52,27 @@ begin
   Result:=GENERIC_READ;
  end;
 
- if (flags and SCE_KERNEL_O_APPEND)<>0 then
+ if (flags and O_APPEND)<>0 then
  begin
+  Result:=Result and (not GENERIC_WRITE);
   Result:=Result or FILE_APPEND_DATA;
  end;
 end;
 
 Function get_CreationDisposition(flags:Integer):DWORD;
 const
- CREAT_EXCL=SCE_KERNEL_O_CREAT or SCE_KERNEL_O_EXCL;
+ CREAT_EXCL=O_CREAT or O_EXCL;
 begin
  Result:=0;
  if (flags and CREAT_EXCL)=CREAT_EXCL then
  begin
   Result:=CREATE_NEW;
  end else
- if (flags and SCE_KERNEL_O_CREAT)<>0 then
+ if (flags and O_CREAT)<>0 then
  begin
   Result:=CREATE_ALWAYS;
  end else
- if (flags and SCE_KERNEL_O_TRUNC)<>0 then
+ if (flags and O_TRUNC)<>0 then
  begin
   Result:=TRUNCATE_EXISTING;
  end else
@@ -278,6 +279,7 @@ begin
  rwlock_wrlock(lock);
 
   For i:=0 to count-1 do
+  if (vector[i].iov_base<>nil) and (vector[i].iov_len<>0) then
   begin
    Assert(vector[i].iov_len<High(DWORD));
 
@@ -320,6 +322,7 @@ begin
   if not _set_pos(Handle,offset) then Assert(False);
 
   For i:=0 to count-1 do
+  if (vector[i].iov_base<>nil) and (vector[i].iov_len<>0) then
   begin
    Assert(vector[i].iov_len<High(DWORD));
 
