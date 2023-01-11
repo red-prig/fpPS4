@@ -1536,6 +1536,9 @@ begin
  lib^.set_proc($34DD35A8B4618AA5,@ps4_rename);
  lib^.set_proc($E7635C614F7E944A,@ps4_sceKernelRename);
 
+ lib^.set_proc($CF476D9CFC5882D8,@ps4_chmod);
+ lib^.set_proc($7E022C435D316150,@ps4_sceKernelChmod);
+
  lib^.set_proc($B96C96DEFF7CB14E,@ps4_sceKernelCheckReachability);
 
  lib^.set_proc($F2F13A67A5446329,@ps4_access);
