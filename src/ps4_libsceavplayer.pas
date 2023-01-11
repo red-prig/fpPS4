@@ -175,9 +175,9 @@ type
  // TODO: For now AvPlayer handle is pointer that points directly to player struct
  SceAvPlayerHandle=PAvPlayerInfo;
 
-function GetTimeInMicroseconds:QWord; inline;
+function GetTimeInMs:QWord; inline;
 begin
- Result:=GetTickCount64*1000; // TODO: Not accurate, obviously
+ Result:=GetTickCount64;
 end;
 
 function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
@@ -185,7 +185,7 @@ begin
  Writeln(SysLogPrefix,'sceAvPlayerInit');
  New(Result);
  Result^.lastTimeStamp:=0;
- Result^.lastFrameTime:=GetTimeInMicroseconds;
+ Result^.lastFrameTime:=GetTimeInMs;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
@@ -252,7 +252,7 @@ begin
  if handle=nil then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
- if (not handle^.isLooped) and (handle^.lastTimeStamp>=1000000) then
+ if (not handle^.isLooped) and (handle^.lastTimeStamp>=1000) then
  begin
   Result:=False;
  end else
@@ -274,7 +274,7 @@ begin
  // TODO: dummy data for now
  if (frameInfo<>nil) and (handle<>nil) then
  begin
-  currentTime:=GetTimeInMicroseconds;
+  currentTime:=GetTimeInMs;
   frameInfo^.pData:=handle^.audioBuffer;
   frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
   frameInfo^.details.audio.channelCount:=0;
@@ -296,7 +296,7 @@ begin
  // TODO: dummy data for now
  if (frameInfo<>nil) and (handle<>nil) then
  begin
-  currentTime:=GetTimeInMicroseconds;
+  currentTime:=GetTimeInMs;
   frameInfo^.pData:=handle^.videoBuffer;
   frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
   frameInfo^.details.video.width:=640;
@@ -308,6 +308,13 @@ begin
   handle^.lastTimeStamp:=frameInfo^.timeStamp;
   Result:=False; // TODO: For testing purpose
  end else
+  Result:=False;
+end;
+
+function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo); SysV_ABI_CDecl;
+begin
+  Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
+  // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
   Result:=False;
 end;
 
