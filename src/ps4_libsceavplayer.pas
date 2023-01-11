@@ -5,6 +5,12 @@ unit ps4_libSceAvPlayer;
 interface
 
 uses
+  libavcodec,
+  libavdevice,
+  libavformat,
+  libavutil,
+  libswscale,
+  libswresample,
   windows,
   ps4_program,
   sys_time,
@@ -68,6 +74,19 @@ type
   defaultLanguage           :PChar;
  end;
  PSceAvPlayerInitData=^SceAvPlayerInitData;
+
+ SceAvPlayerInitDataEx=packed record
+  size                      :DWord;
+  memoryReplacement         :SceAvPlayerMemAllocator;
+  fileReplacement           :SceAvPlayerFileReplacement;
+  eventReplacement          :SceAvPlayerEventReplacement;
+  defaultLanguage           :PChar;
+  padding                   :array[0..11] of DWord;
+  numOutputVideoFrameBuffers:Integer;
+  autoStart                 :Boolean;
+  reserved                  :array[0..2] of Byte;
+ end;
+ PSceAvPlayerInitDataEx=^SceAvPlayerInitDataEx;
 
  SceAvPlayerAudio=packed record
   channelCount:Word;
@@ -160,6 +179,12 @@ type
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
  TAvPlayerInfo=record
+  formatContext    :PAVFormatContext;
+  codecParameters  :pAVCodecParameters;
+  videoCodec       :PAVCodec;
+  audioCodec       :PAVCodec;
+  codecContext     :PAVCodecContext;
+  //
   isLooped         :Boolean;
   isPaused         :Boolean;
   lastFrameTime    :QWord;
@@ -194,6 +219,20 @@ begin
  Result^.audioBuffer:=AllocMem(44100);
 end;
 
+function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerInitEx');
+ New(Result);
+ Result^.lastTimeStamp:=0;
+ Result^.lastFrameTime:=GetTimeInMs;
+ Result^.memoryReplacement:=pInit^.memoryReplacement;
+ Result^.eventReplacement:=pInit^.eventReplacement;
+ Result^.fileReplacement:=pInit^.fileReplacement;
+ // TODO: Dummy values
+ Result^.videoBuffer:=AllocMem(640*360*4);
+ Result^.audioBuffer:=AllocMem(44100);
+end;
+
 function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 const
  BUF_SIZE = 512*1024;
@@ -206,6 +245,7 @@ var
  buf          :array[0..BUF_SIZE-1] of Byte;
  p            :Pointer;
  f            :THandle;
+ i            :Integer;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerAddSource');
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
@@ -240,6 +280,26 @@ begin
   end;
   FileClose(f);
   handle^.fileReplacement.close(p);
+  // Init player
+  handle^.formatContext:=avformat_alloc_context;
+  avformat_open_input(handle^.formatContext,PChar(handle^.source),nil,ppAVDictionary(nil));
+  // Print some useful information about media
+  for I:=0 to handle^.formatContext^.nb_streams-1 do
+  begin
+   handle^.codecParameters := handle^.formatContext^.streams[I]^.codecpar;
+   case handle^.codecParameters^.codec_type of
+    AVMEDIA_TYPE_VIDEO:
+     begin
+      handle^.videoCodec:=avcodec_find_decoder(handle^.codecParameters^.codec_id);
+      Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,handle^.videoCodec^.name,handle^.codecParameters^.width,handle^.codecParameters^.height]));
+     end;
+    AVMEDIA_TYPE_AUDIO:
+     begin
+      handle^.audioCodec:=avcodec_find_decoder(handle^.codecParameters^.codec_id);
+      Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,handle^.audioCodec^.name,handle^.codecParameters^.channels,handle^.codecParameters^.sample_rate]));
+     end;
+   end;
+  end;
   // TODO: prepare for playback should be here
   Result:=0;
  end else
@@ -342,6 +402,7 @@ begin
  lib:=Result._add_lib('libSceAvPlayer');
 
  lib^.set_proc($692EBA448D201A0A,@ps4_sceAvPlayerInit);
+ lib^.set_proc($A3D79646448BF8CE,@ps4_sceAvPlayerInitEx);
  lib^.set_proc($28C7046BEAC7B08A,@ps4_sceAvPlayerAddSource);
  lib^.set_proc($51B42861AC0EB1F6,@ps4_sceAvPlayerIsActive);
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
