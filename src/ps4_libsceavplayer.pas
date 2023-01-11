@@ -311,7 +311,7 @@ begin
   Result:=False;
 end;
 
-function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo); SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 begin
   Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
   // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
