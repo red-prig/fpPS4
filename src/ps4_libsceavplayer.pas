@@ -13,6 +13,7 @@ uses
   libswresample,
   windows,
   ps4_program,
+  spinlock,
   sys_time,
   sys_pthread,
   Classes,
@@ -179,11 +180,12 @@ type
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
  TAvPlayerInfo=record
-  formatContext    :PAVFormatContext;
-  codecParameters  :pAVCodecParameters;
-  videoCodec       :PAVCodec;
-  audioCodec       :PAVCodec;
-  codecContext     :PAVCodecContext;
+  formatContext       :PAVFormatContext;
+  videoCodecParameters:pAVCodecParameters;
+  audioCodecParameters:pAVCodecParameters;
+  videoCodec          :PAVCodec;
+  audioCodec          :PAVCodec;
+  codecContext        :PAVCodecContext;
   //
   isLooped         :Boolean;
   isPaused         :Boolean;
@@ -199,6 +201,9 @@ type
  PAvPlayerInfo=^TAvPlayerInfo;
  // TODO: For now AvPlayer handle is pointer that points directly to player struct
  SceAvPlayerHandle=PAvPlayerInfo;
+
+var
+ lock:Pointer;
 
 function GetTimeInMs:QWord; inline;
 begin
@@ -241,11 +246,12 @@ var
  bytesRemaining,
  offset,
  bytesRead,
- actualBufSize:DWord;
- buf          :array[0..BUF_SIZE-1] of Byte;
- p            :Pointer;
- f            :THandle;
- i            :Integer;
+ actualBufSize  :DWord;
+ buf            :array[0..BUF_SIZE-1] of Byte;
+ p              :Pointer;
+ f              :THandle;
+ i              :Integer;
+ codecParameters:PAVCodecParameters;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerAddSource');
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
@@ -283,20 +289,23 @@ begin
   // Init player
   handle^.formatContext:=avformat_alloc_context;
   avformat_open_input(handle^.formatContext,PChar(handle^.source),nil,ppAVDictionary(nil));
+  Writeln(SysLogPrefix,Format('Format: %s, duration: %d ms', [handle^.formatContext^.iformat^.long_name, handle^.formatContext^.duration div 1000]));
   // Print some useful information about media
   for I:=0 to handle^.formatContext^.nb_streams-1 do
   begin
-   handle^.codecParameters := handle^.formatContext^.streams[I]^.codecpar;
-   case handle^.codecParameters^.codec_type of
+   codecParameters := handle^.formatContext^.streams[I]^.codecpar;
+   case codecParameters^.codec_type of
     AVMEDIA_TYPE_VIDEO:
      begin
-      handle^.videoCodec:=avcodec_find_decoder(handle^.codecParameters^.codec_id);
-      Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,handle^.videoCodec^.name,handle^.codecParameters^.width,handle^.codecParameters^.height]));
+      handle^.videoCodecParameters:=codecParameters;
+      handle^.videoCodec:=avcodec_find_decoder(codecParameters^.codec_id);
+      Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,handle^.videoCodec^.name,codecParameters^.width,codecParameters^.height]));
      end;
     AVMEDIA_TYPE_AUDIO:
      begin
-      handle^.audioCodec:=avcodec_find_decoder(handle^.codecParameters^.codec_id);
-      Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,handle^.audioCodec^.name,handle^.codecParameters^.channels,handle^.codecParameters^.sample_rate]));
+      handle^.audioCodecParameters:=codecParameters;
+      handle^.audioCodec:=avcodec_find_decoder(codecParameters^.codec_id);
+      Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,handle^.audioCodec^.name,codecParameters^.channels,codecParameters^.sample_rate]));
      end;
    end;
   end;
@@ -309,10 +318,10 @@ end;
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if handle=nil then
+ if (handle=nil) or (handle^.formatContext=nil) then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
- if (not handle^.isLooped) and (handle^.lastTimeStamp>=1000) then
+ if (not handle^.isLooped) and (handle^.lastTimeStamp>=handle^.formatContext^.duration div 1000) then
  begin
   Result:=False;
  end else
@@ -332,8 +341,9 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.formatContext<>nil) then
  begin
+  spin_lock(lock);
   currentTime:=GetTimeInMs;
   frameInfo^.pData:=handle^.audioBuffer;
   frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
@@ -343,6 +353,7 @@ begin
   frameInfo^.details.audio.languageCode:=LANGUAGE_CODE_ENG;
   handle^.lastFrameTime:=currentTime;
   handle^.lastTimeStamp:=frameInfo^.timeStamp;
+  spin_unlock(lock);
   Result:=True;
  end else
   Result:=False;
@@ -354,8 +365,9 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.formatContext<>nil) then
  begin
+  spin_lock(lock);
   currentTime:=GetTimeInMs;
   frameInfo^.pData:=handle^.videoBuffer;
   frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
@@ -366,6 +378,7 @@ begin
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
   handle^.lastFrameTime:=currentTime;
   handle^.lastTimeStamp:=frameInfo^.timeStamp;
+  spin_unlock(lock);
   Result:=False; // TODO: For testing purpose
  end else
   Result:=False;
@@ -373,15 +386,19 @@ end;
 
 function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 begin
-  Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
-  // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
-  Result:=False;
+ Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
+ // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
+ Result:=False;
 end;
 
 function ps4_sceAvPlayerClose(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  if handle<>nil then
  begin
+  if handle^.codecContext<>nil then
+   avcodec_close(handle^.codecContext);
+  if handle^.formatContext<>nil then
+   avformat_close_input(handle^.formatContext);
   if handle^.audioBuffer<>nil then
    FreeMem(handle^.audioBuffer);
   if handle^.videoBuffer<>nil then
