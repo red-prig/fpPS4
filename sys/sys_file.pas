@@ -60,17 +60,21 @@ begin
 end;
 
 Function get_CreationDisposition(flags:Integer):DWORD;
-const
- CREAT_EXCL=O_CREAT or O_EXCL;
 begin
  Result:=0;
- if (flags and CREAT_EXCL)=CREAT_EXCL then
- begin
-  Result:=CREATE_NEW;
- end else
  if (flags and O_CREAT)<>0 then
  begin
-  Result:=CREATE_ALWAYS;
+  if (flags and O_EXCL)<>0 then
+  begin
+   Result:=CREATE_NEW;
+  end else
+  if (flags and O_TRUNC)<>0 then
+  begin
+   Result:=CREATE_ALWAYS;
+  end else
+  begin
+   Result:=OPEN_ALWAYS;
+  end;
  end else
  if (flags and O_TRUNC)<>0 then
  begin
@@ -94,6 +98,11 @@ begin
  Result:=0;
 
  wp:=UTF8Decode(path);
+
+ if ((flags and O_NONBLOCK)<>0) then
+ begin
+  Writeln(StdErr,'__sys_file_open:O_NONBLOCK:TODO');
+ end;
 
  dwDesiredAccess:=get_DesiredAccess(flags);
  dwCreationDisposition:=get_CreationDisposition(flags);
