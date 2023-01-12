@@ -33,6 +33,8 @@ function  _set_errno(r:Integer):Integer;
 function  _set_sce_errno(r:Integer):Integer;
 function  _error:Pointer;
 
+function  ntf2px(n:Integer):Integer;
+
 function  SwFreeMem(p:pointer):ptruint;
 function  SwAllocMem(Size:ptruint):pointer;
 
@@ -184,7 +186,7 @@ begin
  if (t<>nil) then Result:=@t^.errno;
 end;
 
-function ntf2px(n:DWORD):Integer;
+function ntf2px(n:Integer):Integer;
 begin
  case n of
   STATUS_SUCCESS           :Result:=0;
