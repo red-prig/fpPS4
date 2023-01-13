@@ -40,8 +40,12 @@ User area           : 0x0010 0000 0000 - 0x00FC 0000 0000 Size: 0x00EC 0000 0000
 System reserved area: 0x00FC 0000 0000 - 0x00FF FFFF FFFF Size: 0x0003 FFFF FFFF (15GB)
 }
 
+//FFFF FF|FF FFFF FFFF
+//0000 00|FF FFFF FFFF
+//mirror |addr
+
 var
- MMLock:TRWLock;
+ MMLock:System.TRTLCriticalSection;
 
  DirectManager :TDirectManager;
  VirtualManager:TVirtualManager;
@@ -293,6 +297,21 @@ uses
  sys_kernel,
  sys_signal;
 
+Procedure INIT_MLOCK; inline;
+begin
+ System.InitCriticalSection(MMLock);
+end;
+
+Procedure MLOCK; inline;
+begin
+ System.EnterCriticalSection(MMLock);
+end;
+
+Procedure MUNLOCK; inline;
+begin
+ System.LeaveCriticalSection(MMLock);
+end;
+
 function IsPowerOfTwo(x:QWORD):Boolean; inline;
 begin
  Result:=(x and (x - 1))=0;
@@ -335,7 +354,7 @@ begin
 
  pb:=nil;
 
- rwlock_rdlock(MMLock);
+ MLOCK;
 
  if VirtualManager.TryGetMapBlockByAddr(addr,pb) then
  begin
@@ -356,7 +375,7 @@ begin
  end;
 
  __exit:
- rwlock_unlock(MMLock);
+ MUNLOCK;
 end;
 
 function __free_block(block:PVirtualAdrBlock):Integer;
@@ -377,21 +396,21 @@ Procedure RegistredStack;
 //var
 // block:PBlock;
 begin
- //rwlock_wrlock(MMLock);
+ //MLOCK;
  //block:=AllocMem(SizeOf(TBlock));
  //if (block=nil) then Exit;
  //block^.pAddr:=StackBottom;
  //block^.nSize:=StackLength;
  //block^.bType:=BT_STACK;
  //PageMM.FMapBlockSet.Insert(block);
- //rwlock_unlock(MMLock);
+ //MUNLOCK;
 end;
 
 Procedure UnRegistredStack;
 begin
- //rwlock_wrlock(MMLock);
+ //MLOCK;
  //PageMM._DeleteBlockByAddr(StackBottom);
- //rwlock_unlock(MMLock);
+ //MUNLOCK;
 end;
 
 function ps4_sceKernelGetDirectMemorySize:Int64; SysV_ABI_CDecl;
@@ -418,11 +437,11 @@ begin
  end;
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  flex:=VirtualManager.stat.flex;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  if (flex<SceKernelFlexibleMemorySize) then
@@ -487,11 +506,11 @@ begin
  searchStart:=AlignUp(searchStart,LOGICAL_PAGE_SIZE);
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=DirectManager.Alloc(searchStart,searchEnd,length,alignment,Byte(memoryType),physicalAddrDest^);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -518,11 +537,11 @@ begin
  if not _test_mtype(memoryType) then Exit;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=DirectManager.Alloc(length,alignment,Byte(memoryType),physicalAddrDest^);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -555,11 +574,11 @@ begin
  FSizeOut:=0;
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=DirectManager.CheckedAvailable(searchStart,searchEnd,alignment,FAdrOut,FSizeOut);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  if (Result=0) then
@@ -592,11 +611,11 @@ begin
  ROut:=Default(TDirectAdrNode);
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=DirectManager.Query(offset,(flags=SCE_KERNEL_DMQ_FIND_NEXT),ROut);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  info^:=Default(SceKernelDirectMemoryQueryInfo);
@@ -628,11 +647,11 @@ begin
  ROut:=Default(TDirectAdrNode);
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=DirectManager.QueryMType(start,ROut);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  if (Result=0) then
@@ -651,7 +670,7 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=DirectManager.CheckedRelease(start,len);
  if (Result=0) then
@@ -659,7 +678,7 @@ begin
   Result:=DirectManager.Release(start,len);
  end;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -671,11 +690,11 @@ begin
  if not IsAlign(len  ,LOGICAL_PAGE_SIZE) then Exit;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=DirectManager.Release(start,len);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -837,7 +856,7 @@ begin
  if (align<PHYSICAL_PAGE_SIZE) then align:=PHYSICAL_PAGE_SIZE;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  if (flags and MAP_VOID)<>0 then //reserved
  begin
@@ -870,7 +889,7 @@ begin
   end;
  end;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -907,7 +926,7 @@ begin
  Result:=0;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=DirectManager.CheckedMMap(physicalAddr,length);
 
@@ -921,7 +940,7 @@ begin
   end;
  end;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -950,7 +969,7 @@ begin
  Result:=EINVAL;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=VirtualManager.Release(addr,len,False);
 
@@ -959,7 +978,7 @@ begin
   NamedManager.Mname(addr,len,nil);
  end;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -968,11 +987,11 @@ begin
  Result:=EINVAL;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=VirtualManager.Protect(addr,len,prot);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -981,11 +1000,11 @@ begin
  Result:=EINVAL;
 
  _sig_lock;
- rwlock_wrlock(MMLock); //rw
+ MLOCK;
 
  Result:=VirtualManager.Mtypeprotect(addr,len,mtype,prot);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -1000,11 +1019,11 @@ begin
  ROut:=Default(TVirtualAdrNode);
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=VirtualManager.QueryProt(addr,ROut);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  if (Result=0) then
@@ -1046,7 +1065,7 @@ begin
  Name:=Default(TName);
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=VirtualManager.Query(addr,(flags=SCE_KERNEL_VQ_FIND_NEXT),VOut);
 
@@ -1060,7 +1079,7 @@ begin
   NamedManager.Query(addr,@name);
  end;
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  info^:=Default(SceKernelVirtualQueryInfo);
@@ -1090,11 +1109,11 @@ begin
  if (StrLen(pname)>32) then Exit;
 
  _sig_lock;
- rwlock_rdlock(MMLock); //r
+ MLOCK;
 
  Result:=NamedManager.Mname(addr,len,pname);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -1680,7 +1699,7 @@ function ps4_sceKernelBatchMap2(
            numberOfEntriesOut:PInteger;
            flags:Integer):Integer; SysV_ABI_CDecl;
 label
- _exit;
+ _exit,_exit_lock;
 var
  i:Integer;
 begin
@@ -1698,6 +1717,9 @@ begin
   Result:=SCE_KERNEL_ERROR_EINVAL;
   goto _exit;
  end;
+
+ _sig_lock;
+ MLOCK;
 
  For i:=0 to numberOfEntries-1 do
  begin
@@ -1742,18 +1764,21 @@ begin
      numberOfEntries:=i;
      _set_errno(EINVAL);
      Result:=SCE_KERNEL_ERROR_EINVAL;
-     goto _exit;
+     goto _exit_lock;
     end;
   end;
 
   if (Result<>0) then
   begin
    numberOfEntries:=i;
-   goto _exit;
+   goto _exit_lock;
   end;
 
  end;
 
+ _exit_lock:
+  MUNLOCK;
+  _sig_unlock;
  _exit:
   if (numberOfEntriesOut<>nil) then numberOfEntriesOut^:=numberOfEntries;
 end;
@@ -1763,11 +1788,11 @@ end;
 function _sys_check_mmaped(addr:Pointer;len:qword):Integer;
 begin
  _sig_lock;
- rwlock_rdlock(MMLock);
+ MLOCK;
 
  Result:=VirtualManager.check_mmaped(addr,len);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 end;
 
@@ -1835,11 +1860,11 @@ begin
  if ((flags and MS_ASYNC)<>0) and ((flags and MS_INVALIDATE)<>0) then Exit(EINVAL);
 
  _sig_lock;
- rwlock_rdlock(MMLock);
+ MLOCK;
 
  Result:=VirtualManager.check_mmaped(addr,len);
 
- rwlock_unlock(MMLock);
+ MUNLOCK;
  _sig_unlock;
 
  if (Result=0) then
@@ -1883,7 +1908,7 @@ begin
 end;
 
 initialization
- rwlock_init(MMLock);
+ INIT_MLOCK;
 
  DirectManager :=TDirectManager .Create;
  DirectManager .OnMemoryUnmapCb:=@__munmap;

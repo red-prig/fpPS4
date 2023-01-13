@@ -49,15 +49,19 @@ type
   Directory     :WORD;
  end;
 
+ PIO_APC_ROUTINE=procedure(ApcContext:Pointer;
+                           IoStatusBlock:PIO_STATUS_BLOCK;
+                           Reserved:ULONG); stdcall;
+
 function NtAlertThread(hThread:THandle):DWORD; stdcall; external 'ntdll';
 function NtTestAlert():DWORD; stdcall; external 'ntdll';
 
 function NtQueueApcThread(
-          hThread:THandle;
-          ApcRoutine:Pointer;
-          ApcRoutineContext:PTRUINT;
-          ApcStatusBlock:Pointer;
-          ApcReserved:ULONG
+          hThread      :THandle;
+          ApcRoutine   :Pointer;
+          ApcContext   :Pointer;
+          IoStatusBlock:PIO_STATUS_BLOCK;
+          ApcReserved  :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtYieldExecution():DWORD; stdcall; external 'ntdll';

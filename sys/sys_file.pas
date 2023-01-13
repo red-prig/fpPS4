@@ -251,6 +251,7 @@ begin
  rwlock_wrlock(lock);
 
   e:=NtReadFile(Handle,0,nil,nil,@s,data,size,nil,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
 
  rwlock_unlock(lock);
 
@@ -296,6 +297,7 @@ begin
   //---------------------
 
   e:=NtReadFile(Handle,0,nil,nil,@s,data,size,@offset,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
 
   //---------------------------------------------
   //if not _set_pos(Handle,p) then Assert(False);
@@ -335,6 +337,7 @@ begin
 
     s:=Default(IO_STATUS_BLOCK);
     e:=NtReadFile(Handle,0,nil,nil,@s,v.iov_base,v.iov_len,nil,nil);
+    if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
 
     e:=-ntf2px(e);
 
@@ -388,6 +391,8 @@ begin
 
     s:=Default(IO_STATUS_BLOCK);
     e:=NtReadFile(Handle,0,nil,nil,@s,v.iov_base,v.iov_len,poffset,nil);
+    if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
     poffset:=nil; //reset
 
     e:=-ntf2px(e);
@@ -425,6 +430,7 @@ begin
  rwlock_wrlock(lock);
 
   e:=NtWriteFile(Handle,0,nil,nil,@s,data,size,nil,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
 
  rwlock_unlock(lock);
 
@@ -452,6 +458,7 @@ begin
   //---------------------
 
   e:=NtWriteFile(Handle,0,nil,nil,@s,data,size,@offset,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
 
   //---------------------------------------------
   //if not _set_pos(Handle,p) then Assert(False);
