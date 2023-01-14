@@ -472,8 +472,9 @@ begin
 
  if not cpu.AVX2Support then
  begin
-  Writeln('AVX2 not support!');
-  Assert(false,'AVX2 not support!');
+  Writeln('AVX2 not supported!');
+  Assert(false,'AVX2 not supported!');
+  Exit;
  end;
 
  ps4_app.save_path:=IncludeTrailingPathDelimiter(GetCurrentDir)+'savedata';
