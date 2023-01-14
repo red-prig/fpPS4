@@ -655,6 +655,16 @@ begin
  end;
 end;
 
+function ps4_sceSaveDataClearProgress():Integer; SysV_ABI_CDecl;
+begin
+ //Сlearing the progress value for:
+ //sceSaveDataMount2()
+ //sceSaveDataDelete()
+ //sceSaveDataRestoreBackupData()
+ //sceSaveDataGetProgress()
+ Result:=0;
+end;
+
 procedure init_save;
 begin
  backup.queue.Create(32);
@@ -693,6 +703,7 @@ begin
  lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
  lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
  lib^.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
+ lib^.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
 
  init_save;
 end;
