@@ -34,6 +34,7 @@ const
 
 type
  TAVPacketQueue = specialize TQueue<PAVPacket>;
+ TAVMediaQueue = specialize TQueue<RawByteString>;
 
  SceAvPlayerAllocate=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
  SceAvPlayerDeallocate=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
@@ -190,6 +191,7 @@ type
   videoCodecContext   :PAVCodecContext;
   audioPackets        :TAVPacketQueue;
   videoPackets        :TAVPacketQueue;
+  mediaQueue          :TAVMediaQueue;
   lastTimeStamp       :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
@@ -521,14 +523,14 @@ begin
   p:=handle^.fileReplacement.objectPointer;
   if handle^.fileReplacement.open(p, argFilename)<0 then
   begin
-   Exit(-1);
    spin_unlock(lock);
+   Exit(-1);
   end;
   fileSize:=handle^.fileReplacement.size(p);
   if fileSize<0 then
   begin
-   Exit(-1);
    spin_unlock(lock);
+   Exit(-1);
   end;
   // Read data and write to dump directory
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
@@ -545,8 +547,8 @@ begin
    if bytesRead<0 then
    begin
     handle^.fileReplacement.close(p);
-    Exit(-1);
     spin_unlock(lock);
+    Exit(-1);
    end;
    FileWrite(f,buf,actualBufSize);
    Dec(bytesRemaining,actualBufSize);
