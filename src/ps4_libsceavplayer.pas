@@ -361,8 +361,39 @@ begin
 end;
 
 function TAvPlayerState.ReceiveAudio:PWord;
+var
+ err          :Integer;
+ frame        :PAVFrame;
+ i, j         :Integer;
+ fdata        :PSingle;
+ sample       :Single;
+ pcmSample    :Word;
 begin
- 
+ if (audioStreamId<0) or (source='') then
+  Exit(nil);
+ frame:=av_frame_alloc;
+ while True do
+ begin
+  err:=avcodec_receive_frame(audioCodecContext,frame);
+  if (err=EAGAIN) and (NextPacket(audioStreamId)) then
+   continue;
+  if err<>0 then
+  begin
+   source:='';
+  end;
+  //
+  GetMem(Result,frame^.nb_samples*frame^.channels);
+  for i:=0 to frame^.nb_samples-1 do
+   for j:= 0 to frame^.channels-1 do
+   begin
+    fdata:=PSingle(frame^.data[j]);
+    sample:=fdata[i];
+    pcmSample:=Floor(sample*65535);
+    Result[i*frame^.channels+j]:=pcmSample;
+   end;
+  break;
+ end;
+ av_frame_free(frame);
 end;
 
 function TAvPlayerState.ReceiveVideo:PByte;
@@ -456,7 +487,7 @@ end;
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (handle=nil) or (handle^.playerState.formatContext=nil) then
+ if (handle=nil) or (handle^.playerState.source='') then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
  if (not handle^.isLooped) and (handle^.playerState.lastTimeStamp>=handle^.playerState.formatContext^.duration div 1000) then
@@ -479,7 +510,7 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.source<>'') then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
@@ -503,7 +534,7 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.source<>'') then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
