@@ -18,6 +18,7 @@ uses
   sys_pthread,
   Classes,
   SysUtils,
+  Generics.Collections,
   Math;
 
 implementation
@@ -30,6 +31,8 @@ const
  DIRECTORY_AVPLAYER_DUMP = 'avplayer_dump';
 
 type
+ TAVPacketQueue = specialize TQueue<PAVPacket>;
+
  SceAvPlayerAllocate=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
  SceAvPlayerDeallocate=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
  SceAvPlayerAllocateTexture=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
@@ -179,24 +182,37 @@ type
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
- TAvPlayerInfo=record
+ TAvPlayerState=class
   formatContext       :PAVFormatContext;
   videoCodecParameters:pAVCodecParameters;
   audioCodecParameters:pAVCodecParameters;
   videoCodec          :PAVCodec;
   audioCodec          :PAVCodec;
-  codecContext        :PAVCodecContext;
+  audioCodecContext   :PAVCodecContext;
+  videoCodecContext   :PAVCodecContext;
+  audioPackets        :TAVPacketQueue;
+  videoPackets        :TAVPacketQueue;
+  lastFrameTime       :QWord;
+  lastTimeStamp       :QWord;
+  audioBuffer         :PByte;
+  videoBuffer         :PByte;
+  source              :RawByteString;
+  constructor Create(aSource: RawByteString);
+  destructor  Destroy; override;
+  procedure   CreateData;
+  procedure   FreeData;
+  function    ReceiveAudio:PWord;
+  function    ReceiveVideo:PByte;
+ end;
+
+ TAvPlayerInfo=record
+  playerState      :TAvPlayerState;
   //
   isLooped         :Boolean;
   isPaused         :Boolean;
-  lastFrameTime    :QWord;
-  lastTimeStamp    :QWord;
   memoryReplacement:SceAvPlayerMemAllocator;
   fileReplacement  :SceAvPlayerFileReplacement;
   eventReplacement :SceAvPlayerEventReplacement;
-  audioBuffer      :PByte;
-  videoBuffer      :PByte;
-  source           :RawByteString;
  end;
  PAvPlayerInfo=^TAvPlayerInfo;
  // TODO: For now AvPlayer handle is pointer that points directly to player struct
@@ -210,32 +226,92 @@ begin
  Result:=GetTickCount64;
 end;
 
+constructor TAvPlayerState.Create(aSource:RawByteString);
+begin
+ inherited Create;
+ source:=aSource;
+ CreateData;
+end;
+
+destructor TAvPlayerState.Destroy;
+begin
+ FreeData;
+ inherited;
+end;
+
+procedure TAvPlayerState.CreateData;
+var
+ codecParameters:PAVCodecParameters;
+ I              : Integer;
+begin
+ formatContext:=avformat_alloc_context;
+
+ avformat_open_input(formatContext,PChar(source),nil,ppAVDictionary(nil));
+ Writeln(SysLogPrefix,Format('Format: %s, duration: %d ms',[formatContext^.iformat^.long_name,formatContext^.duration div 1000]));
+ // Print some useful information about media
+ for I:=0 to formatContext^.nb_streams-1 do
+ begin
+  codecParameters:=formatContext^.streams[I]^.codecpar;
+  case codecParameters^.codec_type of
+   AVMEDIA_TYPE_VIDEO:
+    begin
+     videoCodecParameters:=codecParameters;
+     videoCodec:=avcodec_find_decoder(codecParameters^.codec_id);
+     Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,videoCodec^.name,codecParameters^.width,codecParameters^.height]));
+    end;
+   AVMEDIA_TYPE_AUDIO:
+    begin
+     audioCodecParameters:=codecParameters;
+     audioCodec:=avcodec_find_decoder(codecParameters^.codec_id);
+     Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,audioCodec^.name,codecParameters^.channels,codecParameters^.sample_rate]));
+    end;
+  end;
+ end;
+
+ audioPackets:=TAVPacketQueue.Create;
+ videoPackets:=TAVPacketQueue.Create;
+ lastFrameTime:=GetTimeInMs;
+ videoBuffer:=AllocMem(640*360*4);
+ audioBuffer:=AllocMem(44100);
+end;
+
+procedure TAvPlayerState.FreeData;
+begin
+ audioPackets.Free;
+ videoPackets.Free;
+ avcodec_close(audioCodecContext);
+ avcodec_close(videoCodecContext);
+ avformat_close_input(formatContext);
+ FreeMem(audioBuffer);
+ FreeMem(videoBuffer);
+end;
+
+function TAvPlayerState.ReceiveAudio:PWord;
+begin
+ 
+end;
+
+function TAvPlayerState.ReceiveVideo:PByte;
+begin
+ 
+end;
+
 function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerInit');
  New(Result);
- Result^.lastTimeStamp:=0;
- Result^.lastFrameTime:=GetTimeInMs;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
- // TODO: Dummy values
- Result^.videoBuffer:=AllocMem(640*360*4);
- Result^.audioBuffer:=AllocMem(44100);
 end;
 
 function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
  New(Result);
- Result^.lastTimeStamp:=0;
- Result^.lastFrameTime:=GetTimeInMs;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
- // TODO: Dummy values
- Result^.videoBuffer:=AllocMem(640*360*4);
- Result^.audioBuffer:=AllocMem(44100);
 end;
 
 function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
@@ -250,24 +326,30 @@ var
  buf            :array[0..BUF_SIZE-1] of Byte;
  p              :Pointer;
  f              :THandle;
- i              :Integer;
- codecParameters:PAVCodecParameters;
+ source         :RawByteString;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerAddSource');
+ spin_lock(lock);
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
    and (handle^.fileReplacement.readOffset<>nil) and (handle^.fileReplacement.size<>nil) then
  begin
   p:=handle^.fileReplacement.objectPointer;
   if handle^.fileReplacement.open(p, argFilename)<0 then
+  begin
    Exit(-1);
+   spin_unlock(lock);
+  end;
   fileSize:=handle^.fileReplacement.size(p);
   if fileSize<0 then
+  begin
    Exit(-1);
+   spin_unlock(lock);
+  end;
   // Read data and write to dump directory
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
-  handle^.source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
-  f:=FileCreate(handle^.source,fmOpenWrite);
+  source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
+  f:=FileCreate(source,fmOpenWrite);
   //
   bytesRemaining:=fileSize;
   offset:=0;
@@ -279,6 +361,7 @@ begin
    begin
     handle^.fileReplacement.close(p);
     Exit(-1);
+    spin_unlock(lock);
    end;
    FileWrite(f,buf,actualBufSize);
    Dec(bytesRemaining,actualBufSize);
@@ -287,41 +370,20 @@ begin
   FileClose(f);
   handle^.fileReplacement.close(p);
   // Init player
-  handle^.formatContext:=avformat_alloc_context;
-  avformat_open_input(handle^.formatContext,PChar(handle^.source),nil,ppAVDictionary(nil));
-  Writeln(SysLogPrefix,Format('Format: %s, duration: %d ms', [handle^.formatContext^.iformat^.long_name, handle^.formatContext^.duration div 1000]));
-  // Print some useful information about media
-  for I:=0 to handle^.formatContext^.nb_streams-1 do
-  begin
-   codecParameters := handle^.formatContext^.streams[I]^.codecpar;
-   case codecParameters^.codec_type of
-    AVMEDIA_TYPE_VIDEO:
-     begin
-      handle^.videoCodecParameters:=codecParameters;
-      handle^.videoCodec:=avcodec_find_decoder(codecParameters^.codec_id);
-      Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,handle^.videoCodec^.name,codecParameters^.width,codecParameters^.height]));
-     end;
-    AVMEDIA_TYPE_AUDIO:
-     begin
-      handle^.audioCodecParameters:=codecParameters;
-      handle^.audioCodec:=avcodec_find_decoder(codecParameters^.codec_id);
-      Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,handle^.audioCodec^.name,codecParameters^.channels,codecParameters^.sample_rate]));
-     end;
-   end;
-  end;
-  // TODO: prepare for playback should be here
+  handle^.playerState:=TAvPlayerState.Create(source);
   Result:=0;
  end else
   Result:=-1;
+ spin_unlock(lock);
 end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (handle=nil) or (handle^.formatContext=nil) then
+ if (handle=nil) or (handle^.playerState=nil) or (handle^.playerState.formatContext=nil) then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
- if (not handle^.isLooped) and (handle^.lastTimeStamp>=handle^.formatContext^.duration div 1000) then
+ if (not handle^.isLooped) and (handle^.playerState.lastTimeStamp>=handle^.playerState.formatContext^.duration div 1000) then
  begin
   Result:=False;
  end else
@@ -341,18 +403,18 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState<>nil) and (handle^.playerState.formatContext<>nil) then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
-  frameInfo^.pData:=handle^.audioBuffer;
-  frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
+  frameInfo^.pData:=handle^.playerState.audioBuffer;
+  frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.playerState.lastFrameTime);
   frameInfo^.details.audio.channelCount:=0;
   frameInfo^.details.audio.sampleRate:=44100;
   frameInfo^.details.audio.size:=16384;
   frameInfo^.details.audio.languageCode:=LANGUAGE_CODE_ENG;
-  handle^.lastFrameTime:=currentTime;
-  handle^.lastTimeStamp:=frameInfo^.timeStamp;
+  handle^.playerState.lastFrameTime:=currentTime;
+  handle^.playerState.lastTimeStamp:=frameInfo^.timeStamp;
   spin_unlock(lock);
   Result:=True;
  end else
@@ -365,19 +427,19 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState<>nil) and (handle^.playerState.formatContext<>nil) then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
-  frameInfo^.pData:=handle^.videoBuffer;
-  frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.lastFrameTime);
+  frameInfo^.pData:=handle^.playerState.videoBuffer;
+  frameInfo^.timeStamp:=frameInfo^.timeStamp + (currentTime - handle^.playerState.lastFrameTime);
   frameInfo^.details.video.width:=640;
   frameInfo^.details.video.height:=360;
   frameInfo^.details.video.aspectRatio:=1;
   frameInfo^.details.video.framerate:=25;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  handle^.lastFrameTime:=currentTime;
-  handle^.lastTimeStamp:=frameInfo^.timeStamp;
+  handle^.playerState.lastFrameTime:=currentTime;
+  handle^.playerState.lastTimeStamp:=frameInfo^.timeStamp;
   spin_unlock(lock);
   Result:=False; // TODO: For testing purpose
  end else
@@ -395,14 +457,8 @@ function ps4_sceAvPlayerClose(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  if handle<>nil then
  begin
-  if handle^.codecContext<>nil then
-   avcodec_close(handle^.codecContext);
-  if handle^.formatContext<>nil then
-   avformat_close_input(handle^.formatContext);
-  if handle^.audioBuffer<>nil then
-   FreeMem(handle^.audioBuffer);
-  if handle^.videoBuffer<>nil then
-   FreeMem(handle^.videoBuffer);
+  if handle^.playerState<>nil then
+   handle^.playerState.Free;
   Dispose(handle);
   Result:=0;
  end else
