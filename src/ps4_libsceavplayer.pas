@@ -197,8 +197,8 @@ type
   source              :RawByteString;
   constructor Create;
   destructor  Destroy; override;
-  procedure   CreateData(aSource: RawByteString);
-  procedure   FreeData;
+  procedure   CreateMedia(aSource: RawByteString);
+  procedure   FreeMedia;
   function    NextPacket(const id:Integer):Boolean;
   function    ReceiveAudio:PWord;
   function    ReceiveVideo:PByte;
@@ -234,11 +234,11 @@ end;
 
 destructor TAvPlayerState.Destroy;
 begin
- FreeData;
+ FreeMedia;
  inherited;
 end;
 
-procedure TAvPlayerState.CreateData(aSource: RawByteString);
+procedure TAvPlayerState.CreateMedia(aSource: RawByteString);
 var
  videoCodec     :PAVCodec;
  audioCodec     :PAVCodec;
@@ -281,7 +281,7 @@ begin
  audioBuffer:=AllocMem(44100);
 end;
 
-procedure TAvPlayerState.FreeData;
+procedure TAvPlayerState.FreeMedia;
 var
   packet: PAVPacket;
 begin
@@ -326,12 +326,12 @@ var
 begin
  if id=videoStreamId then
  begin
-   thisQueue:=videoPackets;
-   thatQueue:=audioPackets;
+  thisQueue:=videoPackets;
+  thatQueue:=audioPackets;
  end else
  begin
-   thisQueue:=audioPackets;
-   thatQueue:=videoPackets;
+  thisQueue:=audioPackets;
+  thatQueue:=videoPackets;
  end;
  while True do
  begin
@@ -362,12 +362,12 @@ end;
 
 function TAvPlayerState.ReceiveAudio:PWord;
 var
- err          :Integer;
- frame        :PAVFrame;
- i, j         :Integer;
- fdata        :PSingle;
- sample       :Single;
- pcmSample    :Word;
+ err       :Integer;
+ frame     :PAVFrame;
+ i, j      :Integer;
+ fdata     :PSingle;
+ sample    :Single;
+ pcmSamplex:Word;
 begin
  if (audioStreamId<0) or (source='') then
   Exit(nil);
@@ -397,8 +397,36 @@ begin
 end;
 
 function TAvPlayerState.ReceiveVideo:PByte;
+var
+ size      :Integer;
+ err       :Integer;
+ frame     :PAVFrame;
+ i, j      :Integer;
+ fdata     :PSingle;
+ sample    :Single;
+ pcmSamplex:Word;
 begin
- 
+ if (audioStreamId<0) or (source='') then
+  Exit(nil);
+ frame:=av_frame_alloc;
+ while True do
+ begin
+  err:=avcodec_receive_frame(audioCodecContext,frame);
+  if (err=EAGAIN) and (NextPacket(audioStreamId)) then
+   continue;
+  if err<>0 then
+  begin
+   source:='';
+  end;
+  //
+  lastTimeStamp:=frame^.best_effort_timestamp;
+  size:=videoCodecContext^.width*videoCodecContext^.height*4;
+  GetMem(Result,size);
+  Move(frame^.data[0],Result[0],size);
+  // TODO: yuv to rgb
+  break;
+ end;
+ av_frame_free(frame);
 end;
 
 function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
@@ -477,7 +505,7 @@ begin
   FileClose(f);
   handle^.fileReplacement.close(p);
   // Init player
-  handle^.playerState.CreateData(source);
+  handle^.playerState.CreateMedia(source);
   Result:=0;
  end else
   Result:=-1;
