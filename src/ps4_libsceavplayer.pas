@@ -184,10 +184,6 @@ type
 
  TAvPlayerState=class
   formatContext       :PAVFormatContext;
-  videoCodecParameters:pAVCodecParameters;
-  audioCodecParameters:pAVCodecParameters;
-  videoCodec          :PAVCodec;
-  audioCodec          :PAVCodec;
   audioCodecContext   :PAVCodecContext;
   videoCodecContext   :PAVCodecContext;
   audioPackets        :TAVPacketQueue;
@@ -196,11 +192,14 @@ type
   lastTimeStamp       :QWord;
   audioBuffer         :PByte;
   videoBuffer         :PByte;
+  videoStreamId       :Integer;
+  audioStreamId       :Integer;
   source              :RawByteString;
-  constructor Create(aSource: RawByteString);
+  constructor Create;
   destructor  Destroy; override;
-  procedure   CreateData;
+  procedure   CreateData(aSource: RawByteString);
   procedure   FreeData;
+  function    NextPacket(const id:Integer):Boolean;
   function    ReceiveAudio:PWord;
   function    ReceiveVideo:PByte;
  end;
@@ -226,11 +225,11 @@ begin
  Result:=GetTickCount64;
 end;
 
-constructor TAvPlayerState.Create(aSource:RawByteString);
+constructor TAvPlayerState.Create;
 begin
  inherited Create;
- source:=aSource;
- CreateData;
+ videoStreamId:=-1;
+ audioStreamId:=-1;
 end;
 
 destructor TAvPlayerState.Destroy;
@@ -239,33 +238,40 @@ begin
  inherited;
 end;
 
-procedure TAvPlayerState.CreateData;
+procedure TAvPlayerState.CreateData(aSource: RawByteString);
 var
- codecParameters:PAVCodecParameters;
- I              : Integer;
+ videoCodec     :PAVCodec;
+ audioCodec     :PAVCodec;
+ videoStream    :PAVStream;
+ audioStream    :PAVStream;
+ p              :Pointer;
 begin
+ source:=aSource;
  formatContext:=avformat_alloc_context;
 
  avformat_open_input(formatContext,PChar(source),nil,ppAVDictionary(nil));
  Writeln(SysLogPrefix,Format('Format: %s, duration: %d ms',[formatContext^.iformat^.long_name,formatContext^.duration div 1000]));
  // Print some useful information about media
- for I:=0 to formatContext^.nb_streams-1 do
+
+ videoStreamId:=av_find_best_stream(formatContext,AVMEDIA_TYPE_VIDEO,-1,-1,p,0);
+ audioStreamId:=av_find_best_stream(formatContext,AVMEDIA_TYPE_AUDIO,-1,-1,p,0);
+ if videoStreamId>=0 then
  begin
-  codecParameters:=formatContext^.streams[I]^.codecpar;
-  case codecParameters^.codec_type of
-   AVMEDIA_TYPE_VIDEO:
-    begin
-     videoCodecParameters:=codecParameters;
-     videoCodec:=avcodec_find_decoder(codecParameters^.codec_id);
-     Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[I,videoCodec^.name,codecParameters^.width,codecParameters^.height]));
-    end;
-   AVMEDIA_TYPE_AUDIO:
-    begin
-     audioCodecParameters:=codecParameters;
-     audioCodec:=avcodec_find_decoder(codecParameters^.codec_id);
-     Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[I,audioCodec^.name,codecParameters^.channels,codecParameters^.sample_rate]));
-    end;
-  end;
+  videoStream:=formatContext^.streams[videoStreamId];
+  videoCodec:=avcodec_find_decoder(videoStream^.codecpar^.codec_id);
+  videoCodecContext:=avcodec_alloc_context3(videoCodec);
+  avcodec_parameters_to_context(videoCodecContext,videoStream^.codecpar);
+  avcodec_open2(videoCodecContext,videoCodec,nil);
+  Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[videoStreamId,videoCodec^.name,videoStream^.codecpar^.width,videoStream^.codecpar^.height]));
+ end;
+ if audioStreamId>=0 then
+ begin
+  audioStream:=formatContext^.streams[audioStreamId];
+  audioCodec:=avcodec_find_decoder(videoStream^.codecpar^.codec_id);
+  audioCodecContext:=avcodec_alloc_context3(audioCodec);
+  avcodec_parameters_to_context(audioCodecContext,audioStream^.codecpar);
+  avcodec_open2(audioCodecContext,audioCodec,nil);
+  Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[audioStreamId,audioCodec^.name,audioStream^.codecpar^.channels,audioStream^.codecpar^.sample_rate]));
  end;
 
  audioPackets:=TAVPacketQueue.Create;
@@ -276,14 +282,82 @@ begin
 end;
 
 procedure TAvPlayerState.FreeData;
+var
+  packet: PAVPacket;
 begin
+ if formatContext=nil then
+  Exit;
+
+ while audioPackets.Count>0 do
+ begin
+  packet:=audioPackets.Dequeue;
+  av_packet_free(packet);
+ end;
+ while videoPackets.Count>0 do
+ begin
+  packet:=videoPackets.Dequeue;
+  av_packet_free(packet);
+ end;
  audioPackets.Free;
  videoPackets.Free;
- avcodec_close(audioCodecContext);
- avcodec_close(videoCodecContext);
+
+ if videoCodecContext<>nil then
+ begin
+  avcodec_close(audioCodecContext);
+  avcodec_free_context(audioCodecContext);
+ end;
+ if audioCodecContext<>nil then
+ begin
+  avcodec_close(videoCodecContext);
+  avcodec_free_context(videoCodecContext);
+ end;
+
  avformat_close_input(formatContext);
  FreeMem(audioBuffer);
  FreeMem(videoBuffer);
+end;
+
+function TAvPlayerState.NextPacket(const id:Integer):Boolean;
+var
+ thisQueue,
+ thatQueue:TAvPacketQueue;
+ packet   :PAVPacket;
+ err      :Integer;
+begin
+ if id=videoStreamId then
+ begin
+   thisQueue:=videoPackets;
+   thatQueue:=audioPackets;
+ end else
+ begin
+   thisQueue:=audioPackets;
+   thatQueue:=videoPackets;
+ end;
+ while True do
+ begin
+  if thisQueue.Count>=0 then
+  begin
+   packet:=thisQueue.Dequeue;
+   if id=videoStreamId then
+   begin
+    err:=avcodec_send_packet(videoCodecContext,packet);
+    assert(err=0);
+   end else
+   begin
+    err:=avcodec_send_packet(audioCodecContext,packet);
+    assert(err=0);
+   end;
+  end;
+  av_packet_free(packet);
+  Exit(True);
+ end;
+ packet:=av_packet_alloc;
+ if av_read_frame(formatContext,packet)<>0 then
+  Exit(False);
+ if id=packet^.stream_index then
+  thisQueue.Enqueue(packet)
+ else
+  thatQueue.Enqueue(packet)
 end;
 
 function TAvPlayerState.ReceiveAudio:PWord;
@@ -300,6 +374,7 @@ function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV
 begin
  Writeln(SysLogPrefix,'sceAvPlayerInit');
  New(Result);
+ Result^.playerState:=TAvPlayerState.Create;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
@@ -309,6 +384,7 @@ function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; 
 begin
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
  New(Result);
+ Result^.playerState:=TAvPlayerState.Create;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
@@ -370,7 +446,7 @@ begin
   FileClose(f);
   handle^.fileReplacement.close(p);
   // Init player
-  handle^.playerState:=TAvPlayerState.Create(source);
+  handle^.playerState.CreateData(source);
   Result:=0;
  end else
   Result:=-1;
@@ -380,7 +456,7 @@ end;
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (handle=nil) or (handle^.playerState=nil) or (handle^.playerState.formatContext=nil) then
+ if (handle=nil) or (handle^.playerState.formatContext=nil) then
   Exit(False);
  // TODO: Dummy calculation, we "stop" the video after 1s if isLooped is not set
  if (not handle^.isLooped) and (handle^.playerState.lastTimeStamp>=handle^.playerState.formatContext^.duration div 1000) then
@@ -403,7 +479,7 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState<>nil) and (handle^.playerState.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.formatContext<>nil) then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
@@ -427,7 +503,7 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  // TODO: dummy data for now
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState<>nil) and (handle^.playerState.formatContext<>nil) then
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.formatContext<>nil) then
  begin
   spin_lock(lock);
   currentTime:=GetTimeInMs;
