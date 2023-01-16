@@ -82,15 +82,28 @@ type
  PSceAvPlayerInitData=^SceAvPlayerInitData;
 
  SceAvPlayerInitDataEx=packed record
-  size                      :DWord;
+  thisSize                  :QWORD;
   memoryReplacement         :SceAvPlayerMemAllocator;
   fileReplacement           :SceAvPlayerFileReplacement;
   eventReplacement          :SceAvPlayerEventReplacement;
   defaultLanguage           :PChar;
-  padding                   :array[0..11] of DWord;
+  debugLevel                :DWORD; //SceAvPlayerDebuglevels
+  audioDecoderPriority      :DWORD;
+  audioDecoderAffinity      :DWORD;
+  videoDecoderPriority      :DWORD;
+  videoDecoderAffinity      :DWORD;
+  demuxerPriority           :DWORD;
+  demuxerAffinity           :DWORD;
+  controllerPriority        :DWORD;
+  controllerAffinity        :DWORD;
+  httpStreamingPriority     :DWORD;
+  httpStreamingAffinity     :DWORD;
+  fileStreamingPriority     :DWORD;
+  fileStreamingAffinity     :DWORD;
   numOutputVideoFrameBuffers:Integer;
   autoStart                 :Boolean;
   reserved                  :array[0..2] of Byte;
+  _align                    :DWORD;
  end;
  PSceAvPlayerInitDataEx=^SceAvPlayerInitDataEx;
 
@@ -124,15 +137,17 @@ type
  end;
 
  SceAvPlayerStreamDetails=packed record
-  reserved:array[0..15] of Byte;
-  audio   :SceAvPlayerAudio;
-  video   :SceAvPlayerVideo;
-  subs    :SceAvPlayerTimedText;
+  case byte of //union
+   0:(reserved:array[0..15] of Byte);
+   1:(audio   :SceAvPlayerAudio    );
+   2:(video   :SceAvPlayerVideo    );
+   3:(subs    :SceAvPlayerTimedText);
  end;
 
  SceAvPlayerFrameInfo=packed record
   pData    :PByte;
-  reserved :array[0..3] of Byte;
+  reserved :DWORD;
+  _align   :DWORD;
   timeStamp:QWord;
   details  :SceAvPlayerStreamDetails;
  end;
@@ -170,15 +185,17 @@ type
  end;
 
  SceAvPlayerStreamDetailsEx=packed record
-  audio   :SceAvPlayerAudioEx;
-  video   :SceAvPlayerVideoEx;
-  subs    :SceAvPlayerTimedTextEx;
-  reserved:array[0..79] of Byte;
+  Case Byte of //union
+   0:(audio   :SceAvPlayerAudioEx    );
+   1:(video   :SceAvPlayerVideoEx    );
+   2:(subs    :SceAvPlayerTimedTextEx);
+   3:(reserved:array[0..79] of Byte  );
  end;
 
  SceAvPlayerFrameInfoEx=packed record
   pData    :PByte;
-  reserved :array[0..3] of Byte;
+  reserved :DWORD;
+  _align   :DWORD;
   timeStamp:QWord;
   details  :SceAvPlayerStreamDetailsEx;
  end;
@@ -751,3 +768,4 @@ initialization
  ps4_app.RegistredPreLoad('libSceAvPlayer.prx',@Load_libSceAvPlayer);
 
 end.
+
