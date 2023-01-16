@@ -184,6 +184,8 @@ type
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
+ PSceAvPlayerPostInitData = Pointer; // TODO: SceAvPlayerPostInitData
+
  TAvPlayerState=class
   formatContext       :PAVFormatContext;
   audioCodecContext   :PAVCodecContext;
@@ -198,7 +200,7 @@ type
   channelCount,
   sampleCount,
   sampleRate          :Integer;
-  source              :RawByteString;
+  source              :RawByteString; // TODO: "sceAvPlayerAddSource" indicates there may be more than 1 source per instance
   info                :Pointer; // Pointer to TAvPlayerInfo
   constructor Create;
   destructor  Destroy; override;
@@ -208,6 +210,7 @@ type
   function    ReceiveAudio:PSmallInt;
   function    ReceiveVideo:PByte;
   function    GetFramerate:QWord;
+  function    IsPlaying:Boolean;
   function    Buffer(const aType:DWord;const data:Pointer):Pointer;
  end;
 
@@ -330,6 +333,7 @@ begin
   if videoBuffer[I]<>nil then
    playerInfo^.memoryReplacement.deallocateTexture(playerInfo^.memoryReplacement.objectPointer,videoBuffer[I]);
  end;
+ source:='';
 end;
 
 function TAvPlayerState.NextPacket(const id:Integer):Boolean;
@@ -385,7 +389,7 @@ var
  fdata    :PSingle;
  pcmSample:SmallInt;
 begin
- if (audioStreamId<0) or (source='') then
+ if (audioStreamId<0) or (not IsPlaying) then
   Exit(nil);
  frame:=av_frame_alloc;
  Result:=nil;
@@ -429,7 +433,7 @@ var
  pcmSamplex:Word;
  p         :PByte;
 begin
- if (videoStreamId<0) or (source='') then
+ if (videoStreamId<0) or (IsPlaying) then
   Exit(nil);
  frame:=av_frame_alloc;
  Result:=nil;
@@ -475,6 +479,11 @@ var
 begin
  rational:=formatContext^.streams[videoStreamId]^.avg_frame_rate;
  Result:=Round(rational.den/rational.num * 1000000);
+end;
+
+function TAvPlayerState.IsPlaying:Boolean;
+begin
+ Result:=source<>'';
 end;
 
 function TAvPlayerState.Buffer(const aType:DWord;const data:Pointer):Pointer;
@@ -528,6 +537,15 @@ begin
  Result^.fileReplacement:=pInit^.fileReplacement;
 end;
 
+function ps4_sceAvPlayerPostInit(handle:SceAvPlayerHandle;pPostInit:PSceAvPlayerPostInitData):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerPostInit');
+ if handle<>nil then
+  Result:=0
+ else
+  Result:=-1;
+end;
+
 function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 const
  BUF_SIZE=512*1024;
@@ -544,11 +562,12 @@ var
 begin
  Writeln(SysLogPrefix,'sceAvPlayerAddSource');
  spin_lock(lock);
+ // With file functions provided by client
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
    and (handle^.fileReplacement.readOffset<>nil) and (handle^.fileReplacement.size<>nil) then
  begin
   p:=handle^.fileReplacement.objectPointer;
-  if handle^.fileReplacement.open(p, argFilename)<0 then
+  if handle^.fileReplacement.open(p,argFilename)<0 then
   begin
    spin_unlock(lock);
    Exit(-1);
@@ -563,6 +582,7 @@ begin
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
+  Writeln('source: ',source);
   f:=FileCreate(source,fmOpenWrite);
   //
   bytesRemaining:=fileSize;
@@ -587,14 +607,27 @@ begin
   handle^.playerState.CreateMedia(source);
   Result:=0;
  end else
-  Result:=-1;
+ // Without client-side file functions
+ begin
+  // Check for media in patch and app folders
+  source:=StringReplace(argFilename,'/app0',ps4_app.app0_path,[]);
+  if not FileExists(source) then
+   source:=StringReplace(source,'/app1',ps4_app.app1_path,[]);
+  if not FileExists(source) then
+   Result:=-1
+  else
+  begin
+   handle^.playerState.CreateMedia(source);
+   Result:=0;
+  end;
+ end;
  spin_unlock(lock);
 end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (handle=nil) or (handle^.playerState.source='') then
+ Writeln(SysLogPrefix,'sceAvPlayerIsActive');
+ if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Exit(False);
  Exit(True);
 end;
@@ -610,8 +643,9 @@ function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPl
 var
  audioData:PSmallInt=nil;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.source<>'') and (not handle^.isPaused) then
+ Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
+ Result:=False;
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
  begin
   spin_lock(lock);
   audioData:=handle^.playerState.ReceiveAudio;
@@ -627,8 +661,7 @@ begin
   frameInfo^.pData:=handle^.playerState.Buffer(0,audioData);
   spin_unlock(lock);
   Result:=True;
- end else
-  Result:=False;
+ end;
 end;
 
 function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
@@ -636,8 +669,9 @@ var
  currentTime:QWord;
  videoData  :PByte=nil;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.source<>'') then
+ Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
+ Result:=False;
+ if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
  begin
   spin_lock(lock);
   if handle^.lastFrameTime+handle^.playerState.GetFramerate<GetTimeInUs then
@@ -660,8 +694,7 @@ begin
   spin_unlock(lock);
   Exit(False); // TODO: Remove this once we solve the _is_sparce issue
   Result:=True;
- end else
-  Result:=False;
+ end;
 end;
 
 function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
@@ -669,6 +702,16 @@ begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
  // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
  Result:=False;
+end;
+
+function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerStop');
+ if handle<>nil then
+ begin
+  handle^.playerState.FreeMedia;
+ end;
+ Result:=0;
 end;
 
 function ps4_sceAvPlayerClose(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
@@ -694,11 +737,13 @@ begin
 
  lib^.set_proc($692EBA448D201A0A,@ps4_sceAvPlayerInit);
  lib^.set_proc($A3D79646448BF8CE,@ps4_sceAvPlayerInitEx);
+ lib^.set_proc($1C3D58295536EBF3,@ps4_sceAvPlayerPostInit);
  lib^.set_proc($28C7046BEAC7B08A,@ps4_sceAvPlayerAddSource);
  lib^.set_proc($51B42861AC0EB1F6,@ps4_sceAvPlayerIsActive);
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
+ lib^.set_proc($642D7BC37BC1E4BA,@ps4_sceAvPlayerStop);
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
 
