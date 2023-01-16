@@ -450,7 +450,7 @@ var
  pcmSamplex:Word;
  p         :PByte;
 begin
- if (videoStreamId<0) or (IsPlaying) then
+ if (videoStreamId<0) or (not IsPlaying) then
   Exit(nil);
  frame:=av_frame_alloc;
  Result:=nil;
@@ -709,7 +709,7 @@ begin
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
   frameInfo^.pData:=handle^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
-  Exit(False); // TODO: Remove this once we solve the _is_sparce issue
+  //Exit(False); // TODO: Remove this once we solve the _is_sparce issue
   Result:=True;
  end;
 end;
