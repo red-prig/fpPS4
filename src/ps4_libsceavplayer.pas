@@ -230,7 +230,7 @@ var
 
 function GetTimeInUs:QWord; inline;
 begin
- Result:=GetTickCount64*1000; // TODO: Not accurate
+ Result:=SwGetTimeUsec;
 end;
 
 constructor TAvPlayerState.Create;
