@@ -148,7 +148,7 @@ type
   pData    :PByte;
   reserved :DWORD;
   _align   :DWORD;
-  timeStamp:QWord;
+  timeStamp:QWord; //The timestamp in ms
   details  :SceAvPlayerStreamDetails;
  end;
  PSceAvPlayerFrameInfo=^SceAvPlayerFrameInfo;
@@ -196,7 +196,7 @@ type
   pData    :PByte;
   reserved :DWORD;
   _align   :DWORD;
-  timeStamp:QWord;
+  timeStamp:QWord; //The timestamp in ms
   details  :SceAvPlayerStreamDetailsEx;
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
@@ -671,7 +671,7 @@ begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=handle^.playerState.lastTimeStamp;
+  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastTimeStamp);
   frameInfo^.details.audio.channelCount:=handle^.playerState.channelCount;
   frameInfo^.details.audio.sampleRate:=handle^.playerState.sampleRate;
   frameInfo^.details.audio.size:=handle^.playerState.channelCount*handle^.playerState.sampleCount*SizeOf(SmallInt);
@@ -701,7 +701,7 @@ begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=handle^.playerState.lastTimeStamp;
+  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastTimeStamp);
   frameInfo^.details.video.width:=handle^.playerState.videoCodecContext^.width;
   frameInfo^.details.video.height:=handle^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.aspectRatio:=handle^.playerState.videoCodecContext^.width/handle^.playerState.videoCodecContext^.height;
