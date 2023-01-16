@@ -33,8 +33,7 @@ const
  BUFFER_COUNT=2;
 
 type
- TAVPacketQueue = specialize TQueue<PAVPacket>;
- TAVMediaQueue = specialize TQueue<RawByteString>;
+ TAVPacketQueue=specialize TQueue<PAVPacket>;
 
  SceAvPlayerAllocate=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
  SceAvPlayerDeallocate=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
@@ -191,7 +190,6 @@ type
   videoCodecContext   :PAVCodecContext;
   audioPackets        :TAVPacketQueue;
   videoPackets        :TAVPacketQueue;
-  mediaQueue          :TAVMediaQueue;
   lastTimeStamp       :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
@@ -201,6 +199,7 @@ type
   sampleCount,
   sampleRate          :Integer;
   source              :RawByteString;
+  info                :Pointer; // Pointer to TAvPlayerInfo
   constructor Create;
   destructor  Destroy; override;
   procedure   CreateMedia(const aSource: RawByteString);
@@ -260,6 +259,7 @@ begin
  formatContext:=avformat_alloc_context;
 
  avformat_open_input(formatContext,PChar(source),nil,ppAVDictionary(nil));
+ Writeln(SysLogPrefix,source);
  Writeln(SysLogPrefix,Format('Format: %s, duration: %dms',[formatContext^.iformat^.long_name,formatContext^.duration div 1000]));
  // Print some useful information about media
 
@@ -290,12 +290,14 @@ end;
 
 procedure TAvPlayerState.FreeMedia;
 var
- packet:PAVPacket;
- I     :Integer;
+ packet    :PAVPacket;
+ I         :Integer;
+ playerInfo:PAvPlayerInfo;
 begin
  if formatContext=nil then
   Exit;
 
+ playerInfo:=info;
  while audioPackets.Count>0 do
  begin
   packet:=audioPackets.Dequeue;
@@ -326,7 +328,7 @@ begin
   if audioBuffer[I]<>nil then
    FreeMem(audioBuffer[I]);
   if videoBuffer[I]<>nil then
-   FreeMem(videoBuffer[I]);
+   playerInfo^.memoryReplacement.deallocateTexture(playerInfo^.memoryReplacement.objectPointer,videoBuffer[I]);
  end;
 end;
 
@@ -421,18 +423,20 @@ var
  size      :Integer;
  err       :Integer;
  frame     :PAVFrame;
- i, j      :Integer;
+ i         :Integer;
  fdata     :PSingle;
  sample    :Single;
  pcmSamplex:Word;
+ p         :PByte;
 begin
- if (audioStreamId<0) or (source='') then
+ if (videoStreamId<0) or (source='') then
   Exit(nil);
  frame:=av_frame_alloc;
+ Result:=nil;
  while True do
  begin
-  err:=avcodec_receive_frame(audioCodecContext,frame);
-  if (err=EAGAIN) and (NextPacket(audioStreamId)) then
+  err:=avcodec_receive_frame(videoCodecContext,frame);
+  if (err=AVERROR_EAGAIN) and (NextPacket(videoStreamId)) then
    continue;
   if err<>0 then
   begin
@@ -442,8 +446,24 @@ begin
   lastTimeStamp:=frame^.best_effort_timestamp;
   size:=videoCodecContext^.width*videoCodecContext^.height*SizeOf(DWord);
   GetMem(Result,size);
-  Move(frame^.data[0],Result[0],size);
-  // TODO: yuv to rgb
+
+  p:=Result;
+  for i:=0 to frame^.height-1 do
+  begin
+   Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
+   p:=p+frame^.width;
+  end;
+  for i:=0 to frame^.height div 2-1 do
+  begin
+   Move(frame^.data[1][frame^.linesize[1]*i],p[0],frame^.width div 2);
+   p:=p+frame^.width div 2;
+  end;
+  for i:=0 to frame^.height div 2-1 do
+  begin
+   Move(frame^.data[2][frame^.linesize[2]*i],p[0],frame^.width div 2);
+   p:=p+frame^.width div 2;
+  end;
+  // TODO: convert yuv to rgb
   break;
  end;
  av_frame_free(frame);
@@ -458,7 +478,10 @@ begin
 end;
 
 function TAvPlayerState.Buffer(const aType:DWord;const data:Pointer):Pointer;
+var
+ playerInfo:PAvPlayerInfo;
 begin
+ playerInfo:=info;
  if aType=0 then
  begin
   if data<>nil then
@@ -472,9 +495,12 @@ begin
  begin
   if data<>nil then
   begin
-   if videoBuffer[0]<>nil then
-    FreeMem(videoBuffer[0]);
-   videoBuffer[0]:=data;
+   if videoBuffer[0]=nil then
+   begin
+    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,MemSize(data));
+   end;
+   Move(data^,videoBuffer[0]^,MemSize(data));
+   FreeMem(data);
   end;
   Exit(videoBuffer[0]);
  end;
@@ -485,6 +511,7 @@ begin
  Writeln(SysLogPrefix,'sceAvPlayerInit');
  New(Result);
  Result^.playerState:=TAvPlayerState.Create;
+ Result^.playerState.info:=Result;
  Result^.memoryReplacement:=pInit^.memoryReplacement;
  Result^.eventReplacement:=pInit^.eventReplacement;
  Result^.fileReplacement:=pInit^.fileReplacement;
@@ -503,7 +530,7 @@ end;
 
 function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 const
- BUF_SIZE = 512*1024;
+ BUF_SIZE=512*1024;
 var
  fileSize,
  bytesRemaining,
@@ -607,25 +634,32 @@ end;
 function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
 var
  currentTime:QWord;
- videoData  :PByte;
+ videoData  :PByte=nil;
 begin
  //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.source<>'') then
  begin
   spin_lock(lock);
-  {if handle^.lastFrameTime+handle^.playerState.GetFramerate<GetTimeInUs then
+  if handle^.lastFrameTime+handle^.playerState.GetFramerate<GetTimeInUs then
   begin
    handle^.lastFrameTime:=GetTimeInUs;
    videoData:=handle^.playerState.ReceiveVideo;
-  end;}
+  end;
+  if videoData=nil then
+  begin
+   spin_unlock(lock);
+   Exit(False);
+  end;
   frameInfo^.timeStamp:=handle^.playerState.lastTimeStamp;
   frameInfo^.details.video.width:=handle^.playerState.videoCodecContext^.width;
   frameInfo^.details.video.height:=handle^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.aspectRatio:=handle^.playerState.videoCodecContext^.width/handle^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.framerate:=0;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
+  frameInfo^.pData:=handle^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
-  Result:=False; // TODO: For testing purpose
+  Exit(False); // TODO: Remove this once we solve the _is_sparce issue
+  Result:=True;
  end else
   Result:=False;
 end;
