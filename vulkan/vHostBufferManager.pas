@@ -263,7 +263,7 @@ begin
       Assert(t<>nil,'create sparse buffer fail');
      end;
    else
-    Assert(false,'_is_sparce');
+    Assert(false,'Is not GPU Addr:'+HexStr(Addr));
   end;
 
   t.FAddr:=addr; //save key
