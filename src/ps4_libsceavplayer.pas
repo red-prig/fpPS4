@@ -17,7 +17,6 @@ uses
   sys_signal,
   sys_path,
   sys_time,
-  ps4_time,
   sys_pthread,
   Classes,
   SysUtils,
@@ -203,7 +202,7 @@ type
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
- PSceAvPlayerPostInitData = Pointer; // TODO: SceAvPlayerPostInitData
+ PSceAvPlayerPostInitData = Pointer;
 
  TAvPlayerState=class
   formatContext       :PAVFormatContext;
@@ -244,7 +243,7 @@ type
   eventReplacement :SceAvPlayerEventReplacement;
  end;
  PAvPlayerInfo=^TAvPlayerInfo;
- // TODO: For now AvPlayer handle is pointer that points directly to player struct
+ // For now AvPlayer handle is pointer that points directly to player struct
  SceAvPlayerHandle=PAvPlayerInfo;
 
 var
@@ -294,7 +293,7 @@ begin
   videoCodecContext:=avcodec_alloc_context3(videoCodec);
   avcodec_parameters_to_context(videoCodecContext,videoStream^.codecpar);
   avcodec_open2(videoCodecContext,videoCodec,nil);
-  Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[videoStreamId,videoCodec^.name,videoStream^.codecpar^.width,videoStream^.codecpar^.height]));
+  Writeln(SysLogPrefix,Format('%d) Video codec: %s, resolution: %d x %d',[videoStreamId,videoCodec^.long_name,videoStream^.codecpar^.width,videoStream^.codecpar^.height]));
  end;
  if audioStreamId>=0 then
  begin
@@ -303,7 +302,7 @@ begin
   audioCodecContext:=avcodec_alloc_context3(audioCodec);
   avcodec_parameters_to_context(audioCodecContext,audioStream^.codecpar);
   avcodec_open2(audioCodecContext,audioCodec,nil);
-  Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[audioStreamId,audioCodec^.name,audioStream^.codecpar^.channels,audioStream^.codecpar^.sample_rate]));
+  Writeln(SysLogPrefix,Format('%d) Audio codec: %s, channels: %d, sample rate: %d',[audioStreamId,audioCodec^.long_name,audioStream^.codecpar^.channels,audioStream^.codecpar^.sample_rate]));
  end;
 
  audioPackets:=TAVPacketQueue.Create;
@@ -487,7 +486,6 @@ begin
    Move(frame^.data[2][frame^.linesize[2]*i],p[0],frame^.width div 2);
    p:=p+frame^.width div 2;
   end;
-  // TODO: convert yuv to rgb
   break;
  end;
  av_frame_free(frame);
@@ -772,7 +770,6 @@ begin
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
   frameInfo^.pData:=handle^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
-  //Exit(False); // TODO: Remove this once we solve the _is_sparce issue
   Result:=True;
  end;
 end;
