@@ -791,26 +791,43 @@ begin
  Result:=False;
 end;
 
+function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
+begin
+ Result:=-1;
+ if (handle=nil) then Exit;
+
+ Writeln(SysLogPrefix,'sceAvPlayerStop');
+
+ handle^.playerState.FreeMedia;
+ Result:=0;
+end;
+
 function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerStop');
- if handle<>nil then
+ _sig_lock;
+ Result:=_sceAvPlayerStop(handle);
+ _sig_unlock;
+end;
+
+function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
+begin
+ Result:=-1;
+ if (handle=nil) then Exit;
+
+ if (handle^.playerState<>nil) then
  begin
-  handle^.playerState.FreeMedia;
+  handle^.playerState.Free;
  end;
+ Dispose(handle);
+
  Result:=0;
 end;
 
 function ps4_sceAvPlayerClose(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
- if handle<>nil then
- begin
-  if handle^.playerState<>nil then
-   handle^.playerState.Free;
-  Dispose(handle);
-  Result:=0;
- end else
-  Result:=-1;
+ _sig_lock;
+ Result:=_sceAvPlayerClose(handle);
+ _sig_unlock;
 end;
 
 function Load_libSceAvPlayer(Const name:RawByteString):TElf_node;
