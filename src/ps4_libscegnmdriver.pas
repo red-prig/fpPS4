@@ -15,6 +15,7 @@ implementation
 
 uses
  hamt,
+ atomic,
  ps4_program,
  sys_signal,
  sys_kernel,
@@ -2128,12 +2129,24 @@ begin
  _sig_unlock;
 end;
 
+var
+ libGnm_init:Integer=0;
+
 function Load_libSceGnmDriver(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
 begin
  Result:=TElf_node.Create;
- Result.pFileName:='libSceGnmDriver.prx';
+ Result.pFileName:=name;
+
+ if CAS(libGnm_init,0,1) then
+ begin
+  //start load
+ end else
+ begin
+  //never add same lib name
+  Exit;
+ end;
 
  lib:=Result._add_lib('libSceGnmDriver');
 
@@ -2222,6 +2235,7 @@ begin
 
   //nop nid:libSceGnmDriver:DBDA0ABCA5F3119A:sceGnmMapComputeQueue
 
+ libGnm_init:=2; //end load
 end;
 
 initialization
@@ -2238,7 +2252,7 @@ initialization
  ComputeEvents[5].Init;
  ComputeEvents[6].Init;
 
- ps4_app.RegistredPreLoad('libSceGnmDriver.prx',@Load_libSceGnmDriver);
+ ps4_app.RegistredPreLoad('libSceGnmDriver.prx'        ,@Load_libSceGnmDriver);
  ps4_app.RegistredPreLoad('libSceGnmDriver_padebug.prx',@Load_libSceGnmDriver);
 
 

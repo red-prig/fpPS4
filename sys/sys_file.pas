@@ -6,6 +6,7 @@ interface
 
 uses
  Windows,
+ ntapi,
  Classes,
  SysUtils,
  RWLock,
@@ -40,11 +41,11 @@ type
 Function get_DesiredAccess(flags:Integer):DWORD;
 begin
  Result:=0;
- if (flags and SCE_KERNEL_O_RDWR)<>0 then
+ if (flags and O_RDWR)<>0 then
  begin
   Result:=GENERIC_READ or GENERIC_WRITE;
  end else
- if (flags and SCE_KERNEL_O_WRONLY)<>0 then
+ if (flags and O_WRONLY)<>0 then
  begin
   Result:=GENERIC_WRITE;
  end else
@@ -52,26 +53,31 @@ begin
   Result:=GENERIC_READ;
  end;
 
- if (flags and SCE_KERNEL_O_APPEND)<>0 then
+ if (flags and O_APPEND)<>0 then
  begin
+  Result:=Result and (not GENERIC_WRITE);
   Result:=Result or FILE_APPEND_DATA;
  end;
 end;
 
 Function get_CreationDisposition(flags:Integer):DWORD;
-const
- CREAT_EXCL=SCE_KERNEL_O_CREAT or SCE_KERNEL_O_EXCL;
 begin
  Result:=0;
- if (flags and CREAT_EXCL)=CREAT_EXCL then
+ if (flags and O_CREAT)<>0 then
  begin
-  Result:=CREATE_NEW;
+  if (flags and O_EXCL)<>0 then
+  begin
+   Result:=CREATE_NEW;
+  end else
+  if (flags and O_TRUNC)<>0 then
+  begin
+   Result:=CREATE_ALWAYS;
+  end else
+  begin
+   Result:=OPEN_ALWAYS;
+  end;
  end else
- if (flags and SCE_KERNEL_O_CREAT)<>0 then
- begin
-  Result:=CREATE_ALWAYS;
- end else
- if (flags and SCE_KERNEL_O_TRUNC)<>0 then
+ if (flags and O_TRUNC)<>0 then
  begin
   Result:=TRUNCATE_EXISTING;
  end else
@@ -93,6 +99,11 @@ begin
  Result:=0;
 
  wp:=UTF8Decode(path);
+
+ if ((flags and O_NONBLOCK)<>0) then
+ begin
+  Writeln(StdErr,'__sys_file_open:O_NONBLOCK:TODO');
+ end;
 
  dwDesiredAccess:=get_DesiredAccess(flags);
  dwCreationDisposition:=get_CreationDisposition(flags);
@@ -177,50 +188,85 @@ begin
  CloseHandle(Handle);
 end;
 
-function TFile.lseek (offset:Int64;whence:Integer):Int64;
+function TFile.lseek(offset:Int64;whence:Integer):Int64;
+label
+ _set_pos;
 var
- err:DWORD;
- R:BOOL;
+ s:IO_STATUS_BLOCK;
+ i:FILE_STANDARD_INFORMATION;
+ e:Integer;
 begin
- Result:=0;
+ s:=Default(IO_STATUS_BLOCK);
 
  rwlock_wrlock(lock);
-  R:=SetFilePointerEx(Handle,LARGE_INTEGER(offset),@Result,whence);
- rwlock_unlock(lock);
 
- if not R then
- begin
-  err:=GetLastError;
-  Case err of
-   ERROR_HANDLE_EOF       :Exit(-EOVERFLOW);
-   ERROR_INVALID_PARAMETER:Exit(-EINVAL);
+  Case whence of
+   0:begin //beg
+      _set_pos:
+
+      e:=NtSetInformationFile(Handle,@s,@offset,SizeOf(Int64),FilePositionInformation);
+     end;
+   1:begin //cur
+      i.EndOfFile.QuadPart:=0;
+      e:=NtQueryInformationFile(Handle,@s,@i.EndOfFile,SizeOf(Int64),FilePositionInformation);
+      if (e>=0) then
+      begin
+       offset:=offset+i.EndOfFile.QuadPart;
+       goto _set_pos;
+      end;
+     end;
+   2:begin //end
+      i.EndOfFile.QuadPart:=0;
+      e:=NtQueryInformationFile(Handle,@s,@i,SizeOf(i),FileStandardInformation);
+      if (e>=0) then
+      begin
+       offset:=offset+i.EndOfFile.QuadPart;
+       goto _set_pos;
+      end;
+     end;
    else
-                           Exit(-EOVERFLOW);
+     e:=Integer(STATUS_INVALID_PARAMETER);
   end;
- end;
-end;
 
-function TFile.read  (data:Pointer;size:Int64):Int64;
-var
- N:DWORD;
- R:BOOL;
-begin
- Assert(size<High(DWORD));
-
- N:=0;
- rwlock_wrlock(lock);
-  R:=ReadFile(Handle,data^,size,N,nil);
  rwlock_unlock(lock);
 
- if R then
+ e:=-ntf2px(e);
+
+ if (e<>0) then
  begin
-  Result:=N;
+  Result:=e;
  end else
  begin
-  Result:=-EIO;
+  Result:=offset;
  end;
 end;
 
+function TFile.read(data:Pointer;size:Int64):Int64;
+var
+ s:IO_STATUS_BLOCK;
+ e:Integer;
+begin
+ s:=Default(IO_STATUS_BLOCK);
+
+ rwlock_wrlock(lock);
+
+  e:=NtReadFile(Handle,0,nil,nil,@s,data,size,nil,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+ rwlock_unlock(lock);
+
+ e:=-ntf2px(e);
+
+ if (e<>0) then
+ begin
+  Result:=e;
+ end else
+ begin
+  Result:=Int64(s.Information);
+ end;
+end;
+
+{
 function _get_pos(h:THandle):Int64;
 const
  zero:LARGE_INTEGER=(QuadPart:0);
@@ -236,42 +282,47 @@ function _set_pos(h:THandle;p:Int64):Boolean;
 begin
  Result:=SetFilePointerEx(h,LARGE_INTEGER(p),nil,FILE_BEGIN);
 end;
+}
 
-function TFile.pread (data:Pointer;size,offset:Int64):Int64;
+function TFile.pread(data:Pointer;size,offset:Int64):Int64;
 var
- N:DWORD;
- O:TOVERLAPPED;
- p:Int64;
- R:BOOL;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
 begin
- Assert(size<High(DWORD));
+ s:=Default(IO_STATUS_BLOCK);
 
- O:=Default(TOVERLAPPED);
- PInt64(@O.Offset)^:=offset;
- N:=0;
  rwlock_wrlock(lock);
-  //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
-  p:=_get_pos(Handle);
-  R:=ReadFile(Handle,data^,size,N,@O);
-  if not _set_pos(Handle,p) then Assert(False);
+  //---------------------
+  ///p:=_get_pos(Handle);
+  //---------------------
+
+  e:=NtReadFile(Handle,0,nil,nil,@s,data,size,@offset,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+  //---------------------------------------------
+  //if not _set_pos(Handle,p) then Assert(False);
+  //---------------------------------------------
  rwlock_unlock(lock);
 
- if R then
+ e:=-ntf2px(e);
+
+ if (e<>0) then
  begin
-  Result:=N;
+  Result:=e;
  end else
  begin
-  Result:=-EIO;
+  Result:=Int64(s.Information);
  end;
 end;
 
-function TFile.readv (vector:p_iovec;count:Integer):Int64;
+function TFile.readv(vector:p_iovec;count:Integer):Int64;
 label
  _exit;
 var
- N:DWORD;
- R:BOOL;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
  i:Integer;
+ v:iovec;
 begin
  Result:=0;
 
@@ -279,24 +330,31 @@ begin
 
   For i:=0 to count-1 do
   begin
-   Assert(vector[i].iov_len<High(DWORD));
+   v:=vector[i];
 
-   N:=0;
-   R:=ReadFile(Handle,vector[i].iov_base^,vector[i].iov_len,N,nil);
-
-   if R then
+   if (v.iov_base<>nil) and (v.iov_len<>0) then
    begin
-    Result:=Result+N;
-    if (N<vector[i].iov_len) then
+
+    s:=Default(IO_STATUS_BLOCK);
+    e:=NtReadFile(Handle,0,nil,nil,@s,v.iov_base,v.iov_len,nil,nil);
+    if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+    e:=-ntf2px(e);
+
+    if (e<>0) then
     begin
+     Result:=e;
      Goto _exit;
+    end else
+    begin
+     Result:=Result+Int64(s.Information);
+     if (Int64(s.Information)<v.iov_len) then
+     begin
+      Goto _exit;
+     end;
     end;
-   end else
-   begin
-    Result:=-EIO;
-    Goto _exit;
-   end;
 
+   end;
   end;
 
  _exit:
@@ -307,115 +365,135 @@ function TFile.preadv(vector:p_iovec;count:Integer;offset:Int64):Int64;
 label
  _exit;
 var
- N:DWORD;
- R:BOOL;
- p:Int64;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
  i:Integer;
+ v:iovec;
+ poffset:PLARGE_INTEGER;
 begin
  Result:=0;
 
+ poffset:=@offset; //first move to offset
+
  rwlock_wrlock(lock);
 
-  p:=_get_pos(Handle);
-  if not _set_pos(Handle,offset) then Assert(False);
+  //--------------------------------------------------
+  //p:=_get_pos(Handle);
+  //if not _set_pos(Handle,offset) then Assert(False);
+  //--------------------------------------------------
 
   For i:=0 to count-1 do
   begin
-   Assert(vector[i].iov_len<High(DWORD));
+   v:=vector[i];
 
-   N:=0;
-   R:=ReadFile(Handle,vector[i].iov_base^,vector[i].iov_len,N,nil);
-
-   if R then
+   if (v.iov_base<>nil) and (v.iov_len<>0) then
    begin
-    Result:=Result+N;
-    if (N<vector[i].iov_len) then
+
+    s:=Default(IO_STATUS_BLOCK);
+    e:=NtReadFile(Handle,0,nil,nil,@s,v.iov_base,v.iov_len,poffset,nil);
+    if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+    poffset:=nil; //reset
+
+    e:=-ntf2px(e);
+
+    if (e<>0) then
     begin
+     Result:=e;
      Goto _exit;
+    end else
+    begin
+     Result:=Result+Int64(s.Information);
+     if (Int64(s.Information)<v.iov_len) then
+     begin
+      Goto _exit;
+     end;
     end;
-   end else
-   begin
-    Result:=-EIO;
-    Goto _exit;
-   end;
 
+   end;
   end;
 
  _exit:
-  if not _set_pos(Handle,p) then Assert(False);
+  //--------------------------------------------------
+  //if not _set_pos(Handle,p) then Assert(False);
+  //--------------------------------------------------
   rwlock_unlock(lock);
 end;
 
-function TFile.write (data:Pointer;size:Int64):Int64;
+function TFile.write(data:Pointer;size:Int64):Int64;
 var
- N:DWORD;
- R:BOOL;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
 begin
- Assert(size<High(DWORD));
+ s:=Default(IO_STATUS_BLOCK);
 
- N:=0;
  rwlock_wrlock(lock);
-  R:=WriteFile(Handle,data^,size,N,nil);
+
+  e:=NtWriteFile(Handle,0,nil,nil,@s,data,size,nil,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
  rwlock_unlock(lock);
 
- if R then
+ e:=-ntf2px(e);
+
+ if (e<>0) then
  begin
-  Result:=N;
+  Result:=e;
  end else
  begin
-  Result:=-EIO;
+  Result:=Int64(s.Information);
  end;
 end;
 
 function TFile.pwrite(data:Pointer;size,offset:Int64):Int64;
 var
- N:DWORD;
- O:TOVERLAPPED;
- p:Int64;
- R:BOOL;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
 begin
- Assert(size<High(DWORD));
+ s:=Default(IO_STATUS_BLOCK);
 
- O:=Default(TOVERLAPPED);
- PInt64(@O.Offset)^:=offset;
- N:=0;
  rwlock_wrlock(lock);
-  //NOTE: pread and pwrite don't change the file position, but ReadFile/WriteFile do, damn it.
-  p:=_get_pos(Handle);
-  R:=WriteFile(Handle,data^,size,N,@O);
-  if not _set_pos(Handle,p) then Assert(False);
+  //---------------------
+  ///p:=_get_pos(Handle);
+  //---------------------
+
+  e:=NtWriteFile(Handle,0,nil,nil,@s,data,size,@offset,nil);
+  if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+  //---------------------------------------------
+  //if not _set_pos(Handle,p) then Assert(False);
+  //---------------------------------------------
  rwlock_unlock(lock);
 
- if R then
+ e:=-ntf2px(e);
+
+ if (e<>0) then
  begin
-  Result:=N;
+  Result:=e;
  end else
  begin
-  Result:=-EIO;
+  Result:=Int64(s.Information);
  end;
 end;
 
 function TFile.ftruncate(size:Int64):Integer;
 var
- p:Int64;
+ s:IO_STATUS_BLOCK;
+ e:Integer;
 begin
- Result:=0;
- rwlock_wrlock(lock);
-  p:=_get_pos(Handle);
+ s:=Default(IO_STATUS_BLOCK);
 
-  if _set_pos(Handle,size) then
+ rwlock_wrlock(lock);
+
+  e:=NtSetInformationFile(Handle,@s,@size,SizeOf(Int64),FileEndOfFileInformation);
+  if (e>=0) then
   begin
-   if not SetEndOfFile(Handle) then
-   begin
-    Result:=EIO;
-   end;
-  end else
-  begin
-   Result:=EINVAL;
+   e:=NtSetInformationFile(Handle,@s,@size,SizeOf(Int64),FileAllocationInformation);
   end;
 
-  if not _set_pos(Handle,p) then Assert(False);
  rwlock_unlock(lock);
+
+ Result:=ntf2px(e);
 end;
 
 function file_attr_to_st_mode(attr:DWORD):Word;

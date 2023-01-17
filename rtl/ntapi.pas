@@ -19,18 +19,49 @@ const
  STATUS_PENDING           =$00000103;
  STATUS_NO_YIELD_PERFORMED=$40000024;
  STATUS_ACCESS_VIOLATION  =$C0000005;
+ STATUS_INVALID_HANDLE    =$C0000008;
+ STATUS_INVALID_PARAMETER =$C000000D;
+ STATUS_END_OF_FILE       =$C0000011;
+ STATUS_ACCESS_DENIED     =$C0000022;
+ STATUS_DISK_FULL         =$C000007F;
 
  NT_INFINITE=$8000000000000000;
+
+ FileStandardInformation  = 5;
+ FilePositionInformation  =14;
+ FileAllocationInformation=19;
+ FileEndOfFileInformation =20;
+
+type
+ PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
+ IO_STATUS_BLOCK=packed record
+  Status:DWORD;
+  _Align:DWORD;
+  Information:PTRUINT;
+ end;
+
+ PFILE_STANDARD_INFORMATION=^FILE_STANDARD_INFORMATION;
+ FILE_STANDARD_INFORMATION=packed record
+  AllocationSize:LARGE_INTEGER;
+  EndOfFile     :LARGE_INTEGER;
+  NumberOfLinks :ULONG;
+  DeletePending :WORD;
+  Directory     :WORD;
+ end;
+
+ PIO_APC_ROUTINE=procedure(ApcContext:Pointer;
+                           IoStatusBlock:PIO_STATUS_BLOCK;
+                           Reserved:ULONG); stdcall;
 
 function NtAlertThread(hThread:THandle):DWORD; stdcall; external 'ntdll';
 function NtTestAlert():DWORD; stdcall; external 'ntdll';
 
 function NtQueueApcThread(
-          hThread:THandle;
-          ApcRoutine:Pointer;
-          ApcRoutineContext:PTRUINT;
-          ApcStatusBlock:Pointer;
-          ApcReserved:ULONG
+          hThread      :THandle;
+          ApcRoutine   :Pointer;
+          ApcContext   :Pointer;
+          IoStatusBlock:PIO_STATUS_BLOCK;
+          ApcReserved  :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtYieldExecution():DWORD; stdcall; external 'ntdll';
@@ -91,6 +122,46 @@ function NtSetTimerResolution(
           DesiredResolution:ULONG;
           SetResolution:BOOL;
           CurrentResolution:PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtReadFile(
+          FileHandle   :THandle;
+          Event        :THandle;
+          ApcRoutine   :Pointer;
+          ApcContext   :Pointer;
+          IoStatusBlock:PIO_STATUS_BLOCK;
+          Buffer       :Pointer;
+          Length       :ULONG;
+          ByteOffset   :PLARGE_INTEGER;
+          Key          :PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtWriteFile(
+          FileHandle   :THandle;
+          Event        :THandle;
+          ApcRoutine   :Pointer;
+          ApcContext   :Pointer;
+          IoStatusBlock:PIO_STATUS_BLOCK;
+          Buffer       :Pointer;
+          Length       :ULONG;
+          ByteOffset   :PLARGE_INTEGER;
+          Key          :PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtSetInformationFile(
+          FileHandle          :THandle;
+          IoStatusBlock       :PIO_STATUS_BLOCK;
+          FileInformation     :Pointer;
+          Length              :ULONG;
+          FileInformationClass:DWORD
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtQueryInformationFile(
+          FileHandle          :THandle;
+          IoStatusBlock       :PIO_STATUS_BLOCK;
+          FileInformation     :Pointer;
+          Length              :ULONG;
+          FileInformationClass:DWORD
          ):DWORD; stdcall; external 'ntdll';
 
 implementation

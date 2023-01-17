@@ -877,7 +877,7 @@ begin
  end else
  if ((t^.sig._flag and ALERTABLE_FLAG)<>0) then //Alertable
  begin
-  NtQueueApcThread(t^.handle,@_apc_null,0,nil,0);
+  NtQueueApcThread(t^.handle,@_apc_null,nil,nil,0);
 
   NtResumeThread(t^.handle,nil);
 

@@ -627,7 +627,7 @@ begin
 
  ResetEvent(FIdleEvent);
  GFXRing.Queue.Push(node);
- NtQueueApcThread(_gfx_handle,@_apc_null,0,nil,0);
+ NtQueueApcThread(_gfx_handle,@_apc_null,nil,nil,0);
 end;
 
 procedure vSubmitDone;

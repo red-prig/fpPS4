@@ -381,7 +381,7 @@ var
 begin
  if (fd<0) then Exit(-EINVAL);
 
- if (size=0) then //zero check
+ if (data=nil) or (size=0) then //zero check
  begin
   f:=_sys_acqure_fd(fd);
   if (f=nil) then Exit(-EBADF);
@@ -389,7 +389,6 @@ begin
   Exit(0);
  end;
 
- if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
@@ -406,7 +405,7 @@ var
 begin
  if (fd<0) then Exit(-EINVAL);
 
- if (size=0) then //zero check
+ if (data=nil) or (size=0) then //zero check
  begin
   f:=_sys_acqure_fd(fd);
   if (f=nil) then Exit(-EBADF);
@@ -414,7 +413,6 @@ begin
   Exit(0);
  end;
 
- if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
  if (offset<0) then Exit(-EINVAL);
 
@@ -432,14 +430,16 @@ var
  i:Integer;
 begin
  if (fd<0) then Exit(-EINVAL);
- if (vector=nil) then Exit(-EFAULT);
- if (count<=0) then Exit(-EINVAL);
 
- For i:=0 to count-1 do
+ if (vector=nil) or (count=0) then //zero check
  begin
-  if (vector[i].iov_base=nil) then Exit(-EFAULT);
-  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
  end;
+
+ if (count<=0) or (count>IOV_MAX) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
  if (f=nil) then Exit(-EBADF);
@@ -455,14 +455,16 @@ var
  i:Integer;
 begin
  if (fd<0) then Exit(-EINVAL);
- if (vector=nil) then Exit(-EFAULT);
- if (count<=0) then Exit(-EINVAL);
 
- For i:=0 to count-1 do
+ if (vector=nil) or (count=0) then //zero check
  begin
-  if (vector[i].iov_base=nil) then Exit(-EFAULT);
-  if (vector[i].iov_len<=0)   then Exit(-EINVAL);
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
  end;
+
+ if (count<=0) or (count>IOV_MAX) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
  if (f=nil) then Exit(-EBADF);
@@ -478,7 +480,7 @@ var
 begin
  if (fd<0) then Exit(-EINVAL);
 
- if (size=0) then //zero check
+ if (data=nil) or (size=0) then //zero check
  begin
   f:=_sys_acqure_fd(fd);
   if (f=nil) then Exit(-EBADF);
@@ -486,7 +488,6 @@ begin
   Exit(0);
  end;
 
- if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
 
  f:=_sys_acqure_fd(fd);
@@ -503,7 +504,7 @@ var
 begin
  if (fd<0) then Exit(-EINVAL);
 
- if (size=0) then //zero check
+ if (data=nil) or (size=0) then //zero check
  begin
   f:=_sys_acqure_fd(fd);
   if (f=nil) then Exit(-EBADF);
@@ -511,7 +512,6 @@ begin
   Exit(0);
  end;
 
- if (data=nil) then Exit(-EFAULT);
  if (size<=0) then Exit(-EINVAL);
  if (offset<0) then Exit(-EINVAL);
 

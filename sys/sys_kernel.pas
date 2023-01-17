@@ -33,6 +33,8 @@ function  _set_errno(r:Integer):Integer;
 function  _set_sce_errno(r:Integer):Integer;
 function  _error:Pointer;
 
+function  ntf2px(n:Integer):Integer;
+
 function  SwFreeMem(p:pointer):ptruint;
 function  SwAllocMem(Size:ptruint):pointer;
 
@@ -182,6 +184,27 @@ begin
  Result:=nil;
  t:=tcb_thread;
  if (t<>nil) then Result:=@t^.errno;
+end;
+
+function ntf2px(n:Integer):Integer;
+begin
+ case n of
+  STATUS_SUCCESS           :Result:=0;
+  STATUS_ABANDONED         :Result:=EPERM;
+  STATUS_USER_APC          :Result:=EINTR;
+  STATUS_KERNEL_APC        :Result:=EINTR;
+  STATUS_ALERTED           :Result:=EINTR;
+  STATUS_TIMEOUT           :Result:=ETIMEDOUT;
+  STATUS_PENDING           :Result:=EAGAIN;
+  STATUS_ACCESS_VIOLATION  :Result:=EFAULT;
+  STATUS_INVALID_HANDLE    :Result:=EBADF;
+  STATUS_INVALID_PARAMETER :Result:=EINVAL;
+  STATUS_END_OF_FILE       :Result:=0;
+  STATUS_ACCESS_DENIED     :Result:=EBADF;
+  STATUS_DISK_FULL         :Result:=ENOSPC;
+  else
+                            Result:=EIO;
+ end;
 end;
 
 function SwFreeMem(p:pointer):ptruint;

@@ -154,6 +154,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSaveDataDialogIsReadyToDisplay:Integer; SysV_ABI_CDecl;
+begin
+ Result:=1;
+end;
+
 function ps4_sceSaveDataDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
  Result:=status_save_dialog;
@@ -560,6 +565,7 @@ begin
  lib:=Result._add_lib('libSceSaveDataDialog');
  lib^.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);
  lib^.set_proc($E2D3E1B0FE85A432,@ps4_sceSaveDataDialogOpen);
+ lib^.set_proc($7A7EE03559E1F3BF,@ps4_sceSaveDataDialogIsReadyToDisplay);
  lib^.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
  lib^.set_proc($1112B392C6AE0090,@ps4_sceSaveDataDialogGetStatus);
  lib^.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);

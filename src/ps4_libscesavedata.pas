@@ -618,6 +618,7 @@ begin
  Result:=0;
 end;
 
+//Save icon
 function ps4_sceSaveDataSetParam(mountPoint:PSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
@@ -629,7 +630,18 @@ end;
 function ps4_sceSaveDataSaveIcon(mountPoint:PSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer; SysV_ABI_CDecl;
 begin
+ if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  Result:=0;
+end;
+
+//Load icon
+function ps4_sceSaveDataLoadIcon(mountPoint:PSceSaveDataMountPoint;
+                                 param:pSceSaveDataIcon):Integer; SysV_ABI_CDecl;
+begin
+ if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ Result:=SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND;
 end;
 
 function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer; SysV_ABI_CDecl;
@@ -653,6 +665,16 @@ begin
  begin
   Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
  end;
+end;
+
+function ps4_sceSaveDataClearProgress():Integer; SysV_ABI_CDecl;
+begin
+ //Сlearing the progress value for:
+ //sceSaveDataMount2()
+ //sceSaveDataDelete()
+ //sceSaveDataRestoreBackupData()
+ //sceSaveDataGetProgress()
+ Result:=0;
 end;
 
 procedure init_save;
@@ -691,8 +713,10 @@ begin
  lib^.set_proc($5E0BD2B88767325C,@ps4_sceSaveDataGetParam);
  lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
  lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
+ lib^.set_proc($7068CEDF0337576F,@ps4_sceSaveDataLoadIcon);
  lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
  lib^.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
+ lib^.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
 
  init_save;
 end;

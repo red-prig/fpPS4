@@ -73,6 +73,9 @@ function ps4_sceKernelRmdir(path:PChar):Integer; SysV_ABI_CDecl;
 function ps4_rename(from,pto:PChar):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelRename(from,pto:PChar):Integer; SysV_ABI_CDecl;
 
+function ps4_chmod(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelChmod(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelCheckReachability(path:PChar):Integer; SysV_ABI_CDecl;
 
 function ps4_access(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
@@ -985,6 +988,58 @@ function ps4_sceKernelRename(from,pto:PChar):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sys_rename(from,pto);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function _sys_chmod(path:PChar;mode:Integer):Integer;
+var
+ fn:RawByteString;
+begin
+ Result:=0;
+
+ if (path=nil) then Exit(EINVAL);
+
+ if (path[0]=#0) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ Writeln(SysLogPrefix,'chmod:',path,' (',OctStr(mode,3),')');
+
+ fn:='';
+ Result:=parse_filename(path,fn);
+
+ Case Result of
+  PT_ROOT:Exit(EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(EACCES);
+  else
+          Exit(EACCES);
+ end;
+
+ if FileExists(fn) or DirectoryExists(fn) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=ENOENT;
+ end;
+end;
+
+function ps4_chmod(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_chmod(path,mode));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelChmod(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_chmod(path,mode);
  _sig_unlock;
 
  _set_errno(Result);

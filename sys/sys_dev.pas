@@ -128,6 +128,7 @@ end;
 
 function TDevRandom.read  (data:Pointer;size:Int64):Int64;
 begin
+ if (data=nil) or (size=0) then Exit(0);
  Assert(size<High(DWORD));
 
  BCryptGenRandom(nil,data,size,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
@@ -188,6 +189,7 @@ function TDevStd.read  (data:Pointer;size:Int64):Int64;
 var
  S:RawByteString;
 begin
+ if (data=nil) or (size=0) then Exit(0);
  rwlock_wrlock(lock);
   if (Length(cache)<>0) then
   begin
