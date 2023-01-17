@@ -599,7 +599,6 @@ begin
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
-  Writeln('source: ',source);
   f:=FileCreate(source,fmOpenWrite);
   //
   bytesRemaining:=fileSize;
@@ -627,9 +626,9 @@ begin
  // Without client-side file functions
  begin
   // Check for media in patch and app folders
-  source:=StringReplace(argFilename,'/app0',ps4_app.app0_path,[]);
+  source:=StringReplace(argFilename,'/app1',ps4_app.app1_path,[]);
   if not FileExists(source) then
-   source:=StringReplace(source,'/app1',ps4_app.app1_path,[]);
+   source:=StringReplace(source,'/app0',ps4_app.app0_path,[]);
   if not FileExists(source) then
    Result:=-1
   else
