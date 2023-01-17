@@ -713,11 +713,11 @@ begin
  handle^.isLooped:=loopFlag;
 end;
 
-function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 var
  audioData:PSmallInt=nil;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
+ //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
  begin
@@ -736,6 +736,13 @@ begin
   spin_unlock(lock);
   Result:=True;
  end;
+end;
+
+function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceAvPlayerGetAudioData(handle,frameInfo);
+ _sig_unlock;
 end;
 
 function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
