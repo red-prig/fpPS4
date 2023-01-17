@@ -34,6 +34,7 @@ function  SwGetThreadTime(var ut:QWORD):Boolean;
 procedure SwGetSystemTimeAsFileTime(var lpSystemTimeAsFileTime:TFILETIME);
 procedure Swgettimezone(z:Ptimezone);
 function  Swgetntptimeofday(tp:Ptimespec;z:Ptimezone):Integer;
+function  SwGetTimeUsec:QWORD;
 
 Const
  FILETIME_1970        =116444736000000000;
@@ -279,6 +280,25 @@ begin
  Result:=0;
 end;
 
+function SwGetTimeUsec:QWORD;
+var
+ pc,pf:QWORD;
+
+ DW0,DW1:QWORD;
+begin
+ pc:=0;
+ pf:=1;
+ _sig_lock;
+ NtQueryPerformanceCounter(@pc,@pf);
+ _sig_unlock;
+
+ //DW0*1000000/pf + SHL_32* DW1*1000000/pf
+
+ DW0:=(DWORD(pc shr 00)*1000000) div pf;
+ DW1:=(DWORD(pc shr 32)*1000000) div pf;
+
+ Result:=DW0+(DW1 shl 32);
+end;
 
 end.
 

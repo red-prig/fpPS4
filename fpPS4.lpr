@@ -43,6 +43,7 @@ uses
  ps4_libSceAudioOut,
  ps4_libSceVoice,
  ps4_libSceVideoOut,
+ ps4_libSceAvPlayer,
  ps4_libScePad,
  ps4_libSceNpWebApi,
  ps4_libSceRudp,
