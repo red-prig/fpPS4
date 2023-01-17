@@ -477,6 +477,8 @@ begin
    source:='';
   end;
   //
+  if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
+   Writeln('Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
   Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
   GetMem(Result.pData,Result.fSize);
