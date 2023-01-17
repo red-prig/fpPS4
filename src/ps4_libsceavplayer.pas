@@ -615,7 +615,7 @@ begin
  Result:=0;
 end;
 
-function _sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
+function _sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer;
 const
  BUF_SIZE=512*1024;
 var
@@ -691,16 +691,16 @@ begin
  spin_unlock(lock);
 end;
 
-function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer;
+function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerAddSource(handle,argFilename);
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
+function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerIsActive');
+ //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
  if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Exit(False);
  Exit(True);
@@ -713,7 +713,7 @@ begin
  handle^.isLooped:=loopFlag;
 end;
 
-function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean;
 var
  audioData:PSmallInt=nil;
 begin
@@ -745,12 +745,11 @@ begin
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
+function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean;
 var
- currentTime:QWord;
  videoData  :PByte=nil;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
+ //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
  begin
@@ -776,6 +775,13 @@ begin
   //Exit(False); // TODO: Remove this once we solve the _is_sparce issue
   Result:=True;
  end;
+end;
+
+function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceAvPlayerGetVideoDataEx(handle,frameInfo);
+ _sig_unlock;
 end;
 
 function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
