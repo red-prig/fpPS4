@@ -352,7 +352,9 @@ begin
  for I:=0 to BUFFER_COUNT-1 do
  begin
   if audioBuffer[I]<>nil then
+  begin
    FreeMem(audioBuffer[I]);
+  end;
   if videoBuffer[I]<>nil then
    playerInfo^.memoryReplacement.deallocateTexture(playerInfo^.memoryReplacement.objectPointer,videoBuffer[I]);
  end;
@@ -413,8 +415,8 @@ var
  fdata    :PSingle;
  pcmSample:SmallInt;
 begin
- if (audioStreamId<0) or (not IsPlaying) then
-  Exit(Default(TMemChunk));
+ Result:=Default(TMemChunk);
+ if (audioStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
  Result.pData:=nil;
  while True do
@@ -457,8 +459,8 @@ var
  pcmSamplex:Word;
  p         :PByte;
 begin
- if (videoStreamId<0) or (not IsPlaying) then
-  Exit(Default(TMemChunk));
+ Result:=Default(TMemChunk);
+ if (videoStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
  Result.pData:=nil;
  while True do
@@ -519,7 +521,9 @@ begin
   if (chunk.pData<>nil) then
   begin
    if (audioBuffer[0]<>nil) then
+   begin
     FreeMem(audioBuffer[0]);
+   end;
    audioBuffer[0]:=chunk.pData;
   end;
   Exit(audioBuffer[0]);
@@ -724,6 +728,7 @@ begin
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
  begin
+  audioData:=Default(TMemChunk);
   spin_lock(lock);
   audioData:=handle^.playerState.ReceiveAudio;
   if (audioData.pData=nil) then
@@ -756,6 +761,7 @@ begin
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
  begin
+  videoData:=Default(TMemChunk);
   spin_lock(lock);
   if handle^.lastFrameTime+handle^.playerState.GetFramerate<GetTimeInUs then
   begin
