@@ -215,7 +215,8 @@ type
   videoCodecContext   :PAVCodecContext;
   audioPackets        :TAVPacketQueue;
   videoPackets        :TAVPacketQueue;
-  lastTimeStamp       :QWord;
+  lastVideoTimeStamp  :QWord;
+  lastAudioTimeStamp  :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
   videoStreamId       :Integer;
@@ -250,6 +251,7 @@ type
  PAvPlayerInfo=^TAvPlayerInfo;
  // For now AvPlayer handle is pointer that points directly to player struct
  SceAvPlayerHandle=PAvPlayerInfo;
+ PSceAvPlayerHandle=^SceAvPlayerHandle;
 
 var
  lock:Pointer;
@@ -432,6 +434,7 @@ begin
   //
   if frame^.format<>Integer(AV_SAMPLE_FMT_FLTP) then
    Writeln('Unknown audio format: ',frame^.format);
+  lastAudioTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[audioStreamId]^.time_base,AV_TIME_BASE_Q);
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
   sampleRate:=frame^.sample_rate;
@@ -473,7 +476,7 @@ begin
    source:='';
   end;
   //
-  lastTimeStamp:=frame^.best_effort_timestamp;
+  lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
   Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*SizeOf(DWord);
   GetMem(Result.pData,Result.fSize);
 
@@ -583,10 +586,12 @@ begin
  _sig_unlock;
 end;
 
-function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle;
+function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer;
+var
+ handle:SceAvPlayerHandle;
 begin
- Result:=nil;
- if (pInit=nil) then Exit;
+ Result:=-1;
+ if (pInit=nil) or (pHandle=nil) then Exit;
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
@@ -596,21 +601,24 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
 
- New(Result);
- Result^.playerState:=TAvPlayerState.Create;
- Result^.playerState.info :=Result;
+ New(handle);
+ handle^.playerState:=TAvPlayerState.Create;
+ handle^.playerState.info :=handle;
 
- Result^.memoryReplacement:=pInit^.memoryReplacement;
- Result^.eventReplacement :=pInit^.eventReplacement;
- Result^.fileReplacement  :=pInit^.fileReplacement;
+ handle^.memoryReplacement:=pInit^.memoryReplacement;
+ handle^.eventReplacement :=pInit^.eventReplacement;
+ handle^.fileReplacement  :=pInit^.fileReplacement;
 
- Result^.lastFrameTime    :=GetTimeInUs;
+ handle^.lastFrameTime    :=GetTimeInUs;
+
+ pHandle^:=handle;
+ Result:=0;
 end;
 
-function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; SysV_ABI_CDecl;
+function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=_sceAvPlayerInitEx(pInit);
+ Result:=_sceAvPlayerInitEx(pInit,pHandle);
  _sig_unlock;
 end;
 
@@ -736,7 +744,7 @@ begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastTimeStamp);
+  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastAudioTimeStamp);
   frameInfo^.details.audio.channelCount:=handle^.playerState.channelCount;
   frameInfo^.details.audio.sampleRate:=handle^.playerState.sampleRate;
   frameInfo^.details.audio.size:=handle^.playerState.channelCount*handle^.playerState.sampleCount*SizeOf(SmallInt);
@@ -763,17 +771,17 @@ begin
  begin
   videoData:=Default(TMemChunk);
   spin_lock(lock);
-  if handle^.lastFrameTime+handle^.playerState.GetFramerate<GetTimeInUs then
-  begin
-   handle^.lastFrameTime:=GetTimeInUs;
-   videoData:=handle^.playerState.ReceiveVideo;
-  end;
+  if handle^.playerState.lastVideoTimeStamp<handle^.playerState.lastAudioTimestamp then
+   repeat
+    handle^.lastFrameTime:=GetTimeInUs;
+    videoData:=handle^.playerState.ReceiveVideo;
+   until handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp; // Check to see if video catch up with current timestamp
   if (videoData.pData=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastTimeStamp);
+  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastVideoTimeStamp);
   frameInfo^.details.video.width:=handle^.playerState.videoCodecContext^.width;
   frameInfo^.details.video.height:=handle^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.aspectRatio:=handle^.playerState.videoCodecContext^.width/handle^.playerState.videoCodecContext^.height;
@@ -863,4 +871,3 @@ initialization
  ps4_app.RegistredPreLoad('libSceAvPlayer.prx',@Load_libSceAvPlayer);
 
 end.
-
