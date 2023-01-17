@@ -251,6 +251,7 @@ type
  PAvPlayerInfo=^TAvPlayerInfo;
  // For now AvPlayer handle is pointer that points directly to player struct
  SceAvPlayerHandle=PAvPlayerInfo;
+ PSceAvPlayerHandle=^SceAvPlayerHandle;
 
 var
  lock:Pointer;
@@ -585,10 +586,12 @@ begin
  _sig_unlock;
 end;
 
-function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle;
+function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer;
+var
+ handle:SceAvPlayerHandle;
 begin
- Result:=nil;
- if (pInit=nil) then Exit;
+ Result:=-1;
+ if (pInit=nil) or (pHandle=nil) then Exit;
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
@@ -598,21 +601,24 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
 
- New(Result);
- Result^.playerState:=TAvPlayerState.Create;
- Result^.playerState.info :=Result;
+ New(handle);
+ handle^.playerState:=TAvPlayerState.Create;
+ handle^.playerState.info :=handle;
 
- Result^.memoryReplacement:=pInit^.memoryReplacement;
- Result^.eventReplacement :=pInit^.eventReplacement;
- Result^.fileReplacement  :=pInit^.fileReplacement;
+ handle^.memoryReplacement:=pInit^.memoryReplacement;
+ handle^.eventReplacement :=pInit^.eventReplacement;
+ handle^.fileReplacement  :=pInit^.fileReplacement;
 
- Result^.lastFrameTime    :=GetTimeInUs;
+ handle^.lastFrameTime    :=GetTimeInUs;
+
+ pHandle^:=handle;
+ Result:=0;
 end;
 
-function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; SysV_ABI_CDecl;
+function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Result:=_sceAvPlayerInitEx(pInit);
+ Result:=_sceAvPlayerInitEx(pInit,pHandle);
  _sig_unlock;
 end;
 
