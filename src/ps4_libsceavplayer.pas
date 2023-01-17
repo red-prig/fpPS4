@@ -14,6 +14,7 @@ uses
   windows,
   ps4_program,
   spinlock,
+  sys_signal,
   sys_path,
   sys_time,
   ps4_time,
@@ -534,26 +535,76 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
+function _test_mem_alloc(var m:SceAvPlayerMemAllocator):Boolean; inline;
 begin
+ Result:=False;
+ if (m.allocate         =nil) then Exit;
+ if (m.deallocate       =nil) then Exit;
+ if (m.allocateTexture  =nil) then Exit;
+ if (m.deallocateTexture=nil) then Exit;
+ Result:=True;
+end;
+
+function _sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle;
+begin
+ Result:=nil;
+ if (pInit=nil) then Exit;
+
+ if not _test_mem_alloc(pInit^.memoryReplacement) then
+ begin
+  Writeln(SysLogPrefix,'All allocators are required for AVPlayer Initialisation.');
+  Exit;
+ end;
+
  Writeln(SysLogPrefix,'sceAvPlayerInit');
+
  New(Result);
  Result^.playerState:=TAvPlayerState.Create;
- Result^.playerState.info:=Result;
+ Result^.playerState.info :=Result;
+
  Result^.memoryReplacement:=pInit^.memoryReplacement;
- Result^.eventReplacement:=pInit^.eventReplacement;
- Result^.fileReplacement:=pInit^.fileReplacement;
- Result^.lastFrameTime:=GetTimeInUs;
+ Result^.eventReplacement :=pInit^.eventReplacement;
+ Result^.fileReplacement  :=pInit^.fileReplacement;
+
+ Result^.lastFrameTime    :=GetTimeInUs;
+end;
+
+function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sceAvPlayerInit(pInit);
+ _sig_unlock;
+end;
+
+function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle;
+begin
+ Result:=nil;
+ if (pInit=nil) then Exit;
+
+ if not _test_mem_alloc(pInit^.memoryReplacement) then
+ begin
+  Writeln(SysLogPrefix,'All allocators are required for AVPlayer Initialisation.');
+  Exit;
+ end;
+
+ Writeln(SysLogPrefix,'sceAvPlayerInitEx');
+
+ New(Result);
+ Result^.playerState:=TAvPlayerState.Create;
+ Result^.playerState.info :=Result;
+
+ Result^.memoryReplacement:=pInit^.memoryReplacement;
+ Result^.eventReplacement :=pInit^.eventReplacement;
+ Result^.fileReplacement  :=pInit^.fileReplacement;
+
+ Result^.lastFrameTime    :=GetTimeInUs;
 end;
 
 function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx):SceAvPlayerHandle; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerInitEx');
- New(Result);
- Result^.playerState:=TAvPlayerState.Create;
- Result^.memoryReplacement:=pInit^.memoryReplacement;
- Result^.eventReplacement:=pInit^.eventReplacement;
- Result^.fileReplacement:=pInit^.fileReplacement;
+ _sig_lock;
+ Result:=_sceAvPlayerInitEx(pInit);
+ _sig_unlock;
 end;
 
 function ps4_sceAvPlayerPostInit(handle:SceAvPlayerHandle;pPostInit:PSceAvPlayerPostInitData):Integer; SysV_ABI_CDecl;
