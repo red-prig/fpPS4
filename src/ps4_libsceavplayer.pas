@@ -204,6 +204,11 @@ type
 
  PSceAvPlayerPostInitData = Pointer;
 
+ TMemChunk=packed record
+  pData:Pointer;
+  fSize:Ptruint;
+ end;
+
  TAvPlayerState=class
   formatContext       :PAVFormatContext;
   audioCodecContext   :PAVCodecContext;
@@ -225,11 +230,11 @@ type
   procedure   CreateMedia(const aSource: RawByteString);
   procedure   FreeMedia;
   function    NextPacket(const id:Integer):Boolean;
-  function    ReceiveAudio:PSmallInt;
-  function    ReceiveVideo:PByte;
+  function    ReceiveAudio:TMemChunk;
+  function    ReceiveVideo:TMemChunk;
   function    GetFramerate:QWord;
   function    IsPlaying:Boolean;
-  function    Buffer(const aType:DWord;const data:Pointer):Pointer;
+  function    Buffer(const aType:DWord;const chunk:TMemChunk):Pointer;
  end;
 
  TAvPlayerInfo=record
@@ -400,7 +405,7 @@ begin
  end;
 end;
 
-function TAvPlayerState.ReceiveAudio:PSmallInt;
+function TAvPlayerState.ReceiveAudio:TMemChunk;
 var
  err      :Integer;
  frame    :PAVFrame;
@@ -409,9 +414,9 @@ var
  pcmSample:SmallInt;
 begin
  if (audioStreamId<0) or (not IsPlaying) then
-  Exit(nil);
+  Exit(Default(TMemChunk));
  frame:=av_frame_alloc;
- Result:=nil;
+ Result.pData:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(audioCodecContext,frame);
@@ -428,22 +433,22 @@ begin
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
   sampleRate:=frame^.sample_rate;
-  GetMem(Result,sampleCount*channelCount*SizeOf(SmallInt));
+  Result.fSize:=sampleCount*channelCount*SizeOf(SmallInt);
+  GetMem(Result.pData,Result.fSize);
   for i:=0 to sampleCount-1 do
    for j:=0 to channelCount-1 do
    begin
     fdata:=PSingle(frame^.data[j]);
     pcmSample:=Floor(fdata[i]*High(SmallInt));
-    Result[i*channelCount+j]:=pcmSample;
+    PSmallInt(Result.pData)[i*channelCount+j]:=pcmSample;
    end;
   break;
  end;
  av_frame_free(frame);
 end;
 
-function TAvPlayerState.ReceiveVideo:PByte;
+function TAvPlayerState.ReceiveVideo:TMemChunk;
 var
- size      :Integer;
  err       :Integer;
  frame     :PAVFrame;
  i         :Integer;
@@ -453,9 +458,9 @@ var
  p         :PByte;
 begin
  if (videoStreamId<0) or (not IsPlaying) then
-  Exit(nil);
+  Exit(Default(TMemChunk));
  frame:=av_frame_alloc;
- Result:=nil;
+ Result.pData:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(videoCodecContext,frame);
@@ -467,10 +472,10 @@ begin
   end;
   //
   lastTimeStamp:=frame^.best_effort_timestamp;
-  size:=videoCodecContext^.width*videoCodecContext^.height*SizeOf(DWord);
-  GetMem(Result,size);
+  Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*SizeOf(DWord);
+  GetMem(Result.pData,Result.fSize);
 
-  p:=Result;
+  p:=Result.pData;
   for i:=0 to frame^.height-1 do
   begin
    Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
@@ -504,30 +509,30 @@ begin
  Result:=source<>'';
 end;
 
-function TAvPlayerState.Buffer(const aType:DWord;const data:Pointer):Pointer;
+function TAvPlayerState.Buffer(const aType:DWord;const chunk:TMemChunk):Pointer;
 var
  playerInfo:PAvPlayerInfo;
 begin
  playerInfo:=info;
  if aType=0 then
  begin
-  if data<>nil then
+  if (chunk.pData<>nil) then
   begin
-   if audioBuffer[0]<>nil then
+   if (audioBuffer[0]<>nil) then
     FreeMem(audioBuffer[0]);
-   audioBuffer[0]:=data;
+   audioBuffer[0]:=chunk.pData;
   end;
   Exit(audioBuffer[0]);
  end else
  begin
-  if data<>nil then
+  if (chunk.pData<>nil) then
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,MemSize(data));
+    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,chunk.fSize);
    end;
-   Move(data^,videoBuffer[0]^,MemSize(data));
-   FreeMem(data);
+   Move(chunk.pData^,videoBuffer[0]^,chunk.fSize);
+   FreeMem(chunk.pData);
   end;
   Exit(videoBuffer[0]);
  end;
@@ -713,7 +718,7 @@ end;
 
 function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean;
 var
- audioData:PSmallInt=nil;
+ audioData:TMemChunk;
 begin
  //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
@@ -721,7 +726,7 @@ begin
  begin
   spin_lock(lock);
   audioData:=handle^.playerState.ReceiveAudio;
-  if audioData=nil then
+  if (audioData.pData=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
@@ -745,7 +750,7 @@ end;
 
 function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean;
 var
- videoData  :PByte=nil;
+ videoData:TMemChunk;
 begin
  //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  Result:=False;
@@ -757,7 +762,7 @@ begin
    handle^.lastFrameTime:=GetTimeInUs;
    videoData:=handle^.playerState.ReceiveVideo;
   end;
-  if videoData=nil then
+  if (videoData.pData=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
