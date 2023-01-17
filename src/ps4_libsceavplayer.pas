@@ -351,6 +351,7 @@ begin
    playerInfo^.memoryReplacement.deallocateTexture(playerInfo^.memoryReplacement.objectPointer,videoBuffer[I]);
  end;
  source:='';
+ formatContext:=nil;
 end;
 
 function TAvPlayerState.NextPacket(const id:Integer):Boolean;
