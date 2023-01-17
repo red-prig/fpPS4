@@ -621,9 +621,9 @@ const
 var
  fileSize,
  bytesRemaining,
- offset,
- bytesRead,
- actualBufSize  :DWord;
+ offset         :QWord;
+ bytesRead      :Integer;
+ actualBufSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
  p              :Pointer;
  f              :THandle;
@@ -642,7 +642,7 @@ begin
    Exit(-1);
   end;
   fileSize:=handle^.fileReplacement.size(p);
-  if fileSize<0 then
+  if (fileSize=0) then //result is uint64
   begin
    spin_unlock(lock);
    Exit(-1);
@@ -657,7 +657,7 @@ begin
   offset:=0;
   while bytesRemaining>0 do
   begin
-   actualBufSize:=Min(BUF_SIZE,bytesRemaining);
+   actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
    bytesRead:=handle^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
    if bytesRead<0 then
    begin
