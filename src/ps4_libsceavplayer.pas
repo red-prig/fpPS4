@@ -609,14 +609,13 @@ end;
 
 function ps4_sceAvPlayerPostInit(handle:SceAvPlayerHandle;pPostInit:PSceAvPlayerPostInitData):Integer; SysV_ABI_CDecl;
 begin
+ Result:=-1;
+ if (handle=nil) or (pPostInit=nil) then Exit;
  Writeln(SysLogPrefix,'sceAvPlayerPostInit');
- if handle<>nil then
-  Result:=0
- else
-  Result:=-1;
+ Result:=0;
 end;
 
-function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
+function _sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 const
  BUF_SIZE=512*1024;
 var
@@ -630,7 +629,7 @@ var
  f              :THandle;
  source         :RawByteString;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerAddSource');
+ Writeln(SysLogPrefix,'sceAvPlayerAddSource:',argFilename);
  spin_lock(lock);
  // With file functions provided by client
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
@@ -690,6 +689,13 @@ begin
   end;
  end;
  spin_unlock(lock);
+end;
+
+function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer;
+begin
+ _sig_lock;
+ Result:=_sceAvPlayerAddSource(handle,argFilename);
+ _sig_unlock;
 end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean SysV_ABI_CDecl;
