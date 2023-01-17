@@ -14,6 +14,7 @@ uses
   windows,
   ps4_program,
   spinlock,
+  sys_path,
   sys_time,
   ps4_time,
   sys_pthread,
@@ -626,16 +627,15 @@ begin
  end else
  // Without client-side file functions
  begin
-  // Check for media in patch and app folders
-  source:=StringReplace(argFilename,'/app1',ps4_app.app1_path,[]);
-  if not FileExists(source) then
-   source:=StringReplace(source,'/app0',ps4_app.app0_path,[]);
-  if not FileExists(source) then
-   Result:=-1
-  else
+  source:='';
+  Result:=parse_filename(argFilename,source);
+  if (Result=PT_FILE) then //only real files
   begin
    handle^.playerState.CreateMedia(source);
    Result:=0;
+  end else
+  begin
+   Result:=-1;
   end;
  end;
  spin_unlock(lock);
