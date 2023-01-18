@@ -847,7 +847,7 @@ begin
  if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Result:=0
  else
-  Result:=handle^.playerState.lastVideoTimeStamp;
+  Result:=_usec2msec(handle^.playerState.lastVideoTimeStamp);
 end;
 
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
