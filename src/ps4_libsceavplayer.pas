@@ -210,6 +210,7 @@ type
  SceAvPlayerUri=packed record
   name  :PChar;
   length:DWord;
+  _align:DWord;
  end;
 
  SceAvPlayerSourceDetails=packed record
@@ -741,6 +742,10 @@ begin
  if sourceDetails<>nil then
  begin
   Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:',sourceDetails^.uri.name);
+  if sourceDetails^.sourceType=1 then
+   Writeln('Source type: MP4')
+  else
+   Writeln('Source type: Unknown ',sourceDetails^.sourceType);
   Result:=_sceAvPlayerAddSource(handle,sourceDetails^.uri.name)
  end else
  begin
