@@ -298,6 +298,8 @@ var
  audioStream:PAVStream;
  p          :Pointer;
 begin
+ if source<>'' then
+  Writeln('TODO: 1 instance can have multiple media sources');
  FreeMedia;
  source:=aSource;
  formatContext:=avformat_alloc_context;
