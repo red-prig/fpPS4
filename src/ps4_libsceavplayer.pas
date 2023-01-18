@@ -48,6 +48,9 @@ type
 
  SceAvPlayerEventCallback=procedure(p:Pointer;argEventId:Integer;argSourceId:Integer;argEventData:Pointer); SysV_ABI_CDecl;
 
+ SceAvPlayerUriType=Integer; // enum
+ SceAvPlayerSourceType=Integer; // enum
+
  SceAvPlayerMemAllocator=packed record
   objectPointer    :Pointer;
   allocate         :SceAvPlayerAllocate;
@@ -204,6 +207,20 @@ type
 
  PSceAvPlayerPostInitData = Pointer;
 
+ SceAvPlayerUri=packed record
+  name  :PChar;
+  length:DWord;
+  _align:DWord;
+ end;
+
+ SceAvPlayerSourceDetails=packed record
+  uri       :SceAvPlayerUri;
+  reserved  :array[0..63] of Byte;
+  sourceType:SceAvPlayerSourceType;
+  reserved2 :array[0..43] of Byte;
+ end;
+ PSceAvPlayerSourceDetails=^SceAvPlayerSourceDetails;
+
  TMemChunk=packed record
   pData:Pointer;
   fSize:Ptruint;
@@ -282,6 +299,8 @@ var
  audioStream:PAVStream;
  p          :Pointer;
 begin
+ if source<>'' then
+  Writeln('TODO: 1 instance can have multiple media sources');
  FreeMedia;
  source:=aSource;
  formatContext:=avformat_alloc_context;
@@ -646,7 +665,6 @@ var
  f              :THandle;
  source         :RawByteString;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerAddSource:',argFilename);
  spin_lock(lock);
  // With file functions provided by client
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
@@ -666,6 +684,7 @@ begin
   end;
   // Read data and write to dump directory
   // TODO: Should cache the file so it can be reused later
+  Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
@@ -712,7 +731,27 @@ end;
 function ps4_sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
+ Writeln(SysLogPrefix,'sceAvPlayerAddSource:',argFilename);
  Result:=_sceAvPlayerAddSource(handle,argFilename);
+ _sig_unlock;
+end;
+
+function ps4_sceAvPlayerAddSourceEx(handle:SceAvPlayerHandle;uriType:SceAvPlayerUriType;sourceDetails:PSceAvPlayerSourceDetails):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ if sourceDetails<>nil then
+ begin
+  Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:',sourceDetails^.uri.name);
+  if sourceDetails^.sourceType=1 then
+   Writeln('Source type: MP4')
+  else
+   Writeln('Source type: Unknown ',sourceDetails^.sourceType);
+  Result:=_sceAvPlayerAddSource(handle,sourceDetails^.uri.name)
+ end else
+ begin
+  Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:nil');
+  Result:=-1;
+ end;
  _sig_unlock;
 end;
 
@@ -810,6 +849,14 @@ begin
  Result:=False;
 end;
 
+function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
+begin
+ if (handle=nil) or (not handle^.playerState.IsPlaying) then
+  Result:=0
+ else
+  Result:=_usec2msec(handle^.playerState.lastVideoTimeStamp);
+end;
+
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 begin
  Result:=-1;
@@ -862,10 +909,12 @@ begin
  lib^.set_proc($A3D79646448BF8CE,@ps4_sceAvPlayerInitEx);
  lib^.set_proc($1C3D58295536EBF3,@ps4_sceAvPlayerPostInit);
  lib^.set_proc($28C7046BEAC7B08A,@ps4_sceAvPlayerAddSource);
+ lib^.set_proc($C7CBAFB8538F6615,@ps4_sceAvPlayerAddSourceEx);
  lib^.set_proc($51B42861AC0EB1F6,@ps4_sceAvPlayerIsActive);
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
+ lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
  lib^.set_proc($642D7BC37BC1E4BA,@ps4_sceAvPlayerStop);
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
