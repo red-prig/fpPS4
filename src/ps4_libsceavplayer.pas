@@ -456,6 +456,7 @@ function TAvPlayerState.ReceiveVideo:TMemChunk;
 var
  err       :Integer;
  frame     :PAVFrame;
+ j         :Integer;
  i         :Integer;
  fdata     :PSingle;
  sample    :Single;
@@ -476,8 +477,10 @@ begin
    source:='';
   end;
   //
+  if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
+   Writeln('Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
-  Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*SizeOf(DWord);
+  Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
   GetMem(Result.pData,Result.fSize);
 
   p:=Result.pData;
@@ -488,13 +491,12 @@ begin
   end;
   for i:=0 to frame^.height div 2-1 do
   begin
-   Move(frame^.data[1][frame^.linesize[1]*i],p[0],frame^.width div 2);
-   p:=p+frame^.width div 2;
-  end;
-  for i:=0 to frame^.height div 2-1 do
-  begin
-   Move(frame^.data[2][frame^.linesize[2]*i],p[0],frame^.width div 2);
-   p:=p+frame^.width div 2;
+   for j:=0 to frame^.width div 2-1 do
+   begin
+    p[0]:=frame^.data[1][frame^.linesize[1]*i+j];
+    p[1]:=frame^.data[2][frame^.linesize[2]*i+j];
+    p:=p+2;
+   end;
   end;
   break;
  end;
@@ -663,6 +665,7 @@ begin
    Exit(-1);
   end;
   // Read data and write to dump directory
+  // TODO: Should cache the file so it can be reused later
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
