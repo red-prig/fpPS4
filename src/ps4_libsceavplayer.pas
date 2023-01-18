@@ -736,11 +736,15 @@ end;
 function ps4_sceAvPlayerAddSourceEx(handle:SceAvPlayerHandle;uriType:SceAvPlayerUriType;sourceDetails:PSceAvPlayerSourceDetails):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:',sourceDetails^.uri.name);
  if sourceDetails<>nil then
+ begin
+  Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:',sourceDetails^.uri.name);
   Result:=_sceAvPlayerAddSource(handle,sourceDetails^.uri.name)
- else
+ end else
+ begin
+  Writeln(SysLogPrefix,'sceAvPlayerAddSourceEx:nil');
   Result:=-1;
+ end;
  _sig_unlock;
 end;
 
