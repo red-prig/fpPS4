@@ -666,6 +666,7 @@ begin
   end;
   // Read data and write to dump directory
   // TODO: Should cache the file so it can be reused later
+  Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
   CreateDir(DIRECTORY_AVPLAYER_DUMP);
   //
   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
