@@ -1,0 +1,36 @@
+
+name: PR CI
+
+on:
+  push:
+    pull_request:
+      branches:
+        - '*'
+
+  workflow_dispatch:
+
+jobs:
+  build_windows:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Hash
+        shell: cmd
+        working-directory: ./
+        run: echo '%GITHUB_SHA:~0,7%' > tag.inc
+
+      - name: Compile
+        shell: cmd
+        working-directory: ./
+        run: |
+          lazbuild -B fpPS4.lpi > nul
+          strip fpPS4.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: fpPS4
+          path: fpPS4.exe
+          if-no-files-found: warn
