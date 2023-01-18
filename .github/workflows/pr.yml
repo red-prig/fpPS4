@@ -7,6 +7,8 @@ on:
       branches:
         - '*'
 
+  workflow_dispatch:
+
 jobs:
   build_windows:
     runs-on: self-hosted
