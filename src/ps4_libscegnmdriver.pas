@@ -1996,6 +1996,12 @@ begin
  Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
+function ps4_sceGnmUnregisterOwnerAndResources(ownerHandle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmUnregisterOwnerAndResources:',ownerHandle);
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
 const
  kWorkloadStatusOk                 = 0;
  kWorkloadStatusInvalidStream      = 1;
@@ -2226,6 +2232,7 @@ begin
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
  lib^.set_proc($93C11792120FFA53,@ps4_sceGnmUnregisterResource);
+ lib^.set_proc($7E12B0095563F679,@ps4_sceGnmUnregisterOwnerAndResources);
 
  lib^.set_proc($E6E7409BEE9BA158,@ps4_sceGnmCreateWorkloadStream);
  lib^.set_proc($8A1C6B6ECA122967,@ps4_sceGnmBeginWorkload);
