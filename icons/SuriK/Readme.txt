@@ -5,5 +5,5 @@
 \---------/
 
 Basic icon theme:
-Author: https://github.com/Mou-Ikkai
+Author: SuriK#7587
 
