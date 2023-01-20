@@ -201,6 +201,8 @@ end;
 
 function ps4_sceNpGetNpId(userId:Integer;npId:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
+ if (npId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
  npId^:=Default(SceNpId);
  npId^.handle.data:='user';
  Result:=0;
@@ -208,6 +210,8 @@ end;
 
 function ps4_sceNpGetOnlineId(userId:Integer;onlineId:pSceNpOnlineId):Integer; SysV_ABI_CDecl;
 begin
+ if (onlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
  onlineId^:=Default(SceNpOnlineId);
  onlineId^.data:='user';
  Result:=0;
@@ -215,7 +219,17 @@ end;
 
 function ps4_sceNpGetState(userId:Integer;state:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (state<>nil) then state^:=SCE_NP_STATE_SIGNED_OUT;
+ if (state=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ state^:=SCE_NP_STATE_SIGNED_OUT;
+ Result:=0;
+end;
+
+function ps4_sceNpHasSignedUp(userId:Integer;hasSignedUp:PBoolean):Integer; SysV_ABI_CDecl;
+begin
+ if (hasSignedUp=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ hasSignedUp^:=True;
  Result:=0;
 end;
 
@@ -226,7 +240,10 @@ end;
 
 function ps4_sceNpSetNpTitleId(titleId:PSceNpTitleId;titleSecret:PSceNpTitleSecret):Integer; SysV_ABI_CDecl;
 begin
- Writeln(GetStr(@titleId^.id,StrLen(@titleId^.id)));
+ if (titleId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (titleSecret=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ Writeln('sceNpSetNpTitleId:',GetStr(@titleId^.id,StrLen(@titleId^.id)));
  Result:=0;
 end;
 
@@ -235,23 +252,22 @@ begin
  Result:=0;
 end;
 
-var
- Cb4Toolkit:packed record
-  callback:SceNpStateCallback;
-  userdata:Pointer;
- end;
+//
 
 function ps4_sceNpRegisterStateCallbackForToolkit(callback:SceNpStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
- Cb4Toolkit.callback:=callback;
- Cb4Toolkit.userdata:=userdata;
  Result:=0;
 end;
 
+function ps4_sceNpUnregisterStateCallbackForToolkit:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
 function ps4_sceNpRegisterStateCallback(callback:SceNpStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
- Cb4Toolkit.callback:=callback;
- Cb4Toolkit.userdata:=userdata;
  Result:=0;
 end;
 
@@ -300,6 +316,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpAbortRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpCheckNpAvailability(reqId:Integer;onlineId:pSceNpOnlineId;pReserved:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -332,18 +353,37 @@ function ps4_sceNpGetParentalControlInfo(reqId:Integer;
                                          pInfo:pSceNpParentalControlInfo
                                         ):Integer; SysV_ABI_CDecl;
 begin
- if (pAge<>nil) then
- begin
-  pAge^:=18;
- end;
- if (pInfo<>nil) then
- begin
-  pInfo^.contentRestriction:=False;
-  pInfo^.chatRestriction   :=False;
-  pInfo^.ugcRestriction    :=False;
- end;
+ if (pOnlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pAge=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pInfo=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pAge^:=18;
+
+ pInfo^.contentRestriction:=False;
+ pInfo^.chatRestriction   :=False;
+ pInfo^.ugcRestriction    :=False;
+
  Result:=0;
 end;
+
+function ps4_sceNpGetParentalControlInfoA(reqId:Integer;
+                                          userId:Integer;
+                                          pAge:PByte;
+                                          pInfo:pSceNpParentalControlInfo
+                                         ):Integer; SysV_ABI_CDecl;
+begin
+ if (pAge=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pInfo=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pAge^:=18;
+
+ pInfo^.contentRestriction:=False;
+ pInfo^.chatRestriction   :=False;
+ pInfo^.ugcRestriction    :=False;
+
+ Result:=0;
+end;
+
 
 type
  pSceNpCheckPlusParameter=^SceNpCheckPlusParameter;
@@ -366,20 +406,38 @@ function ps4_sceNpCheckPlus(reqId:Integer;
                             pResult:pSceNpCheckPlusResult
                            ):Integer; SysV_ABI_CDecl;
 begin
- if (pResult<>nil) then
- begin
-  pResult^.authorized:=False;
- end;
+ if (pParam=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pResult=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pResult^.authorized:=False;
  Result:=0;
 end;
+
+type
+ pSceNpNotifyPlusFeatureParameter=^SceNpNotifyPlusFeatureParameter;
+ SceNpNotifyPlusFeatureParameter=packed record
+  size:QWORD;
+  userId:Integer;
+  padding:Integer;
+  features:QWORD;
+  reserved:array[0..31] of Byte;
+ end;
+
+function ps4_sceNpNotifyPlusFeature(pParam:pSceNpNotifyPlusFeatureParameter):Integer; SysV_ABI_CDecl;
+begin
+ if (pParam=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ Result:=0;
+end;
+
+//
 
 function ps4_sceNpPollAsync(reqId:Integer;
                             pResult:PInteger):Integer; SysV_ABI_CDecl;
 begin
- if (pResult<>nil) then
- begin
-  pResult^:=0;
- end;
+ if (pResult=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pResult^:=0;
  Result:=0; //SCE_NP_POLL_ASYNC_RET_FINISHED
 end;
 
@@ -387,10 +445,10 @@ end;
 
 function ps4_sceNpCheckCallbackForLib():Integer; SysV_ABI_CDecl;
 begin
- if (Cb4Toolkit.callback<>nil) then
- begin
-  //Cb4Toolkit.callback(0,SCE_NP_STATE_SIGNED_OUT,nil,Cb4Toolkit.userdata);
- end;
+ //if (Cb4Toolkit.callback<>nil) then
+ //begin
+ // Cb4Toolkit.callback(0,SCE_NP_STATE_SIGNED_OUT,nil,Cb4Toolkit.userdata);
+ //end;
  Result:=0;
 end;
 
@@ -486,6 +544,7 @@ begin
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
+ lib^.set_proc($39A777AEF63F3494,@ps4_sceNpHasSignedUp);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
  lib^.set_proc($55F45298F9A3F10F,@ps4_sceNpRegisterStateCallback);
@@ -498,15 +557,19 @@ begin
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
+ lib^.set_proc($3B32AF4EF8376585,@ps4_sceNpAbortRequest);
  lib^.set_proc($DABB059A519695E4,@ps4_sceNpCheckNpAvailability);
  lib^.set_proc($F19D897391AF1832,@ps4_sceNpCheckNpAvailabilityA);
  lib^.set_proc($29F199836CBBDE83,@ps4_sceNpCheckNpReachability);
  lib^.set_proc($8A5C0B338CCE9AEE,@ps4_sceNpGetParentalControlInfo);
+ lib^.set_proc($9BD2F73BACACB7F5,@ps4_sceNpGetParentalControlInfoA);
  lib^.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
+ lib^.set_proc($19AC6BA7711663F3,@ps4_sceNpNotifyPlusFeature);
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
+ lib^.set_proc($608BEAAAF2728C47,@ps4_sceNpUnregisterStateCallbackForToolkit);
  lib^.set_proc($2442C77F8C4FB9FA,@ps4_sceNpCheckCallbackForLib);
 end;
 
