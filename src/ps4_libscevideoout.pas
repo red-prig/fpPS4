@@ -242,6 +242,9 @@ type
   flipArg:Int64;
  end;
 
+Var
+ FULLSCREEN_MODE:Boolean=false;
+
 function _qc_sceVideoOutSubmitFlip(Flip:PqcFlipInfo):Integer;
 
 var
@@ -552,6 +555,17 @@ begin
  end;
 end;
 
+procedure SetFullscreen(Handle:hwnd);
+var
+ style:ptrint;
+begin
+ style:=GetWindowLong(Handle,GWL_STYLE);
+
+ style:=style and (not WS_BORDER);
+ style:=style or WS_POPUP;
+ SetWindowLong(Handle,GWL_STYLE,style);
+end;
+
 procedure TVideoOut.OnVblank(Sender:TObject);
 begin
  post_event_vblank;
@@ -594,6 +608,12 @@ begin
  FForm.OnClose:=@FForm.CloseEvent;
  FForm.OnKeyDown:=@FForm.KeyEvent;
  FForm.Position:=poScreenCenter;
+
+ if FULLSCREEN_MODE then
+ begin
+  FForm.WindowState:=wsFullScreen;
+  SetFullscreen(FForm.Handle);
+ end;
 
  Application.UpdateMainForm(FForm);
  FForm.Show;

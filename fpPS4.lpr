@@ -74,9 +74,10 @@ begin
   Writeln('PS4 compatibility layer (emulator) written with Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
   Writeln('  -e <name>  //Decrypted ELF or SELF file name');
-  Writeln('  -f <name>  //folder of app   (/app0)');
-  Writeln('  -p <name>  //folder of patch (/app1)');
-  Writeln('  -s <name>  //savedata path');
+  Writeln('  -f <name>  //Folder of app   (/app0)');
+  Writeln('  -p <name>  //Folder of patch (/app1)');
+  Writeln('  -s <name>  //Savedata path');
+  Writeln('  -w         //Fullscreen mode');
 
   Writeln('  -h <name>  //enable hack');
   Writeln('     DEPTH_DISABLE_HACK   //Disables depth buffer');
@@ -99,6 +100,7 @@ begin
     '-p':n:=2;
     '-s':n:=3;
     '-h':n:=4;
+    '-w':ps4_libSceVideoOut.FULLSCREEN_MODE:=True;
    else
      if (n<>-1) then
      begin
