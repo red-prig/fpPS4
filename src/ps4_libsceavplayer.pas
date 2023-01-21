@@ -24,7 +24,7 @@ uses
   Math;
 
 var
-  DISABLE_FMV_HACK: Boolean = False;
+  DISABLE_FMV_HACK:Boolean=False;
 
 implementation
 
@@ -760,7 +760,7 @@ begin
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean; SysV_ABI_CDecl;
+function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
@@ -770,7 +770,7 @@ begin
  Exit(True);
 end;
 
-function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:Boolean):DWord; SysV_ABI_CDecl;
+function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):DWord; SysV_ABI_CDecl;
 begin
  if DISABLE_FMV_HACK then
   Exit(0);
@@ -779,7 +779,7 @@ begin
  handle^.isLooped:=loopFlag;
 end;
 
-function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean;
+function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool;
 var
  audioData:TMemChunk;
 begin
@@ -807,14 +807,14 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetAudioData(handle,frameInfo);
  _sig_unlock;
 end;
 
-function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean;
+function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool;
 var
  videoData:TMemChunk;
 begin
@@ -848,14 +848,14 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetVideoDataEx(handle,frameInfo);
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
  // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
@@ -874,8 +874,6 @@ end;
 
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 begin
- if DISABLE_FMV_HACK then
-  Exit(-1);
  Result:=-1;
  if (handle=nil) then Exit;
 
@@ -894,8 +892,6 @@ end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
 begin
- if DISABLE_FMV_HACK then
-  Exit(-1);
  Result:=-1;
  if (handle=nil) then Exit;
 
