@@ -764,7 +764,7 @@ function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_C
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
- Writeln(SysLogPrefix,'sceAvPlayerIsActive');
+ //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
  if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Exit(False);
  Exit(True);
@@ -785,7 +785,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
- Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
+ //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
  begin
@@ -820,7 +820,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
- Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
+ //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
  begin
