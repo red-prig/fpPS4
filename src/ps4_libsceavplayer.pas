@@ -23,6 +23,9 @@ uses
   Generics.Collections,
   Math;
 
+var
+  DISABLE_FMV_HACK: Boolean = False;
+
 implementation
 
 uses
@@ -665,6 +668,8 @@ var
  f              :THandle;
  source         :RawByteString;
 begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
  spin_lock(lock);
  // With file functions provided by client
  if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
@@ -757,7 +762,9 @@ end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): Boolean; SysV_ABI_CDecl;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
+ if DISABLE_FMV_HACK then
+  Exit(False);
+ Writeln(SysLogPrefix,'sceAvPlayerIsActive');
  if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Exit(False);
  Exit(True);
@@ -765,6 +772,8 @@ end;
 
 function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:Boolean):DWord; SysV_ABI_CDecl;
 begin
+ if DISABLE_FMV_HACK then
+  Exit(0);
  Writeln(SysLogPrefix,'sceAvPlayerSetLooping');
  Result:=0;
  handle^.isLooped:=loopFlag;
@@ -774,7 +783,9 @@ function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlaye
 var
  audioData:TMemChunk;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
+ if DISABLE_FMV_HACK then
+  Exit(False);
+ Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
  begin
@@ -807,7 +818,9 @@ function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPla
 var
  videoData:TMemChunk;
 begin
- //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
+ if DISABLE_FMV_HACK then
+  Exit(False);
+ Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  Result:=False;
  if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
  begin
@@ -851,6 +864,8 @@ end;
 
 function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
 begin
+ if DISABLE_FMV_HACK then
+  Exit(0);
  if (handle=nil) or (not handle^.playerState.IsPlaying) then
   Result:=0
  else
@@ -859,6 +874,8 @@ end;
 
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
  Result:=-1;
  if (handle=nil) then Exit;
 
@@ -877,6 +894,8 @@ end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
 begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
  Result:=-1;
  if (handle=nil) then Exit;
 
