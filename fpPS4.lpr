@@ -85,6 +85,7 @@ begin
   Writeln('     IMAGE_TEST_HACK      //always mark that the texture has changed');
   Writeln('     IMAGE_LOAD_HACK      //never reload texture');
   Writeln('     DISABLE_SRGB_HACK    //disables hacked display of SRGB');
+  Writeln('     DISABLE_FMV_HACK     //disable in-game movies');
 
   Exit(False);
  end;
@@ -130,6 +131,7 @@ begin
            'IMAGE_TEST_HACK'     :vImageManager.IMAGE_TEST_HACK:=True;
            'IMAGE_LOAD_HACK'     :vImageManager.IMAGE_LOAD_HACK:=True;
            'DISABLE_SRGB_HACK'   :vFlip.SRGB_HACK:=False;
+           'DISABLE_FMV_HACK'    :ps4_libsceavplayer.DISABLE_FMV_HACK:=True;
            else;
           end;
          end;
