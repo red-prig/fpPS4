@@ -23,7 +23,7 @@ uses
   ps4_handles,
   ps4_libkernel,
 
-  vulkan,
+  Vulkan,
   vDevice,
   vMemory;
 

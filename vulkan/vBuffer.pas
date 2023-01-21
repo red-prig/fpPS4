@@ -5,7 +5,7 @@ unit vBuffer;
 interface
 
 uses
- vulkan,
+ Vulkan,
  vDevice,
  vMemory;
 

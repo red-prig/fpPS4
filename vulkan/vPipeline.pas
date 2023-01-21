@@ -6,7 +6,7 @@ interface
 
 uses
  g23tree,
- vulkan,
+ Vulkan,
  vDevice,
  vShader;
 
