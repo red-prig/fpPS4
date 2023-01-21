@@ -6,7 +6,7 @@ interface
 
 uses
  sysutils,
- half16,
+ Half16,
  srType,
  ginodes,
  srNode;

@@ -131,6 +131,7 @@ begin
            'IMAGE_TEST_HACK'     :vImageManager.IMAGE_TEST_HACK:=True;
            'IMAGE_LOAD_HACK'     :vImageManager.IMAGE_LOAD_HACK:=True;
            'DISABLE_SRGB_HACK'   :vFlip.SRGB_HACK:=False;
+           'DISABLE_FMV_HACK'    :ps4_libsceavplayer.DISABLE_FMV_HACK:=True;
            else;
           end;
          end;

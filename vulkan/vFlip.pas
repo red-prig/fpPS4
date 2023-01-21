@@ -8,7 +8,7 @@ uses
   Classes,
   SysUtils,
   ps4_libSceVideoOut,
-  vulkan,
+  Vulkan,
   vDevice,
   vMemory,
   vShader,

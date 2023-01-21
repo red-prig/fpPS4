@@ -7,8 +7,8 @@ interface
 uses
  Classes,
  SysUtils,
- half16,
- vulkan,
+ Half16,
+ Vulkan,
  vImage,
  bittype,
  pm4defs,

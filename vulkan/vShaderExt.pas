@@ -9,7 +9,7 @@ uses
   SysUtils,
   ps4_shader,
   ps4_gpu_regs,
-  vulkan,
+  Vulkan,
   vDevice,
   vPipeline,
   vShader,

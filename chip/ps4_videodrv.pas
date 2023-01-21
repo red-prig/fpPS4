@@ -25,7 +25,7 @@ uses
 
   //ps4_Tiling,
 
-  vulkan,
+  Vulkan,
   vDevice,
   vMemory,
   vShader,

@@ -5,7 +5,7 @@ unit vImage;
 interface
 
 uses
- vulkan,
+ Vulkan,
  vDevice,
  vPipeline,
  vMemory;

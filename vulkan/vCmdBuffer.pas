@@ -12,7 +12,7 @@ uses
   g23tree,
   //ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
-  vulkan,
+  Vulkan,
   vDevice,
   vMemory,
   //vShader,
