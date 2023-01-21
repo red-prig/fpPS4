@@ -70,22 +70,22 @@ begin
  begin
   promo:
   Writeln('fpPS4 (',{$I tag.inc},')');
-  Writeln('Copyright (c) 2021-2022 by Red_prig');
-  Writeln('PS4 compatibility layer (emulator) on Free Pascal '+{$I %FPCVERSION%});
+  Writeln('Copyright (c) 2021-2023 by red-prig');
+  Writeln('PS4 compatibility layer (emulator) written with Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
-  Writeln('  -e <name>  //decrypted elf or self file name');
+  Writeln('  -e <name>  //Decrypted ELF or SELF file name');
   Writeln('  -f <name>  //folder of app   (/app0)');
   Writeln('  -p <name>  //folder of patch (/app1)');
   Writeln('  -s <name>  //savedata path');
 
   Writeln('  -h <name>  //enable hack');
-  Writeln('     DEPTH_DISABLE_HACK   //disable depth buffer');
-  Writeln('     COMPUTE_DISABLE_HACK //disable compute shaders');
-  Writeln('     MEMORY_BOUND_HACK    //limit the amount of GPU allocated memory (iGPU)');
-  Writeln('     IMAGE_TEST_HACK      //always mark that the texture has changed');
-  Writeln('     IMAGE_LOAD_HACK      //never reload texture');
-  Writeln('     DISABLE_SRGB_HACK    //disables hacked display of SRGB');
-  Writeln('     DISABLE_FMV_HACK     //disable in-game movies');
+  Writeln('     DEPTH_DISABLE_HACK   //Disables depth buffer');
+  Writeln('     COMPUTE_DISABLE_HACK //Disables compute shaders');
+  Writeln('     MEMORY_BOUND_HACK    //Limits the amount of GPU allocated memory (iGPU)');
+  Writeln('     IMAGE_TEST_HACK      //Always marks that the texture has changed');
+  Writeln('     IMAGE_LOAD_HACK      //Never reload textures (improves performance on many games)');
+  Writeln('     DISABLE_SRGB_HACK    //Disables hacked SRGB display');
+  Writeln('     DISABLE_FMV_HACK     //Disables in-game movies');
 
   Exit(False);
  end;
