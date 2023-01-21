@@ -8,7 +8,7 @@ uses
   Classes,
   SysUtils,
   shaders,
-  vulkan,
+  Vulkan,
   vDevice;
 
 type
