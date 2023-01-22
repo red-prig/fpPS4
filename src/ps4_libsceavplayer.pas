@@ -36,6 +36,14 @@ const
  DIRECTORY_AVPLAYER_DUMP='avplayer_dump';
  BUFFER_COUNT=2;
 
+ SCE_AVPLAYER_STATE_STOP         =$01;
+ SCE_AVPLAYER_STATE_READY        =$02;
+ SCE_AVPLAYER_STATE_PLAY         =$03;
+ SCE_AVPLAYER_STATE_PAUSE        =$04;
+ SCE_AVPLAYER_STATE_BUFFERING    =$05;
+ SCE_AVPLAYER_TIMED_TEXT_DELIVERY=$10;
+ SCE_AVPLAYER_WARNING_ID         =$20;
+
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
 
@@ -208,7 +216,7 @@ type
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
- PSceAvPlayerPostInitData = Pointer;
+ PSceAvPlayerPostInitData=Pointer;
 
  SceAvPlayerUri=packed record
   name  :PChar;
@@ -279,6 +287,15 @@ var
 function GetTimeInUs:QWord; inline;
 begin
  Result:=SwGetTimeUsec;
+end;
+
+procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
+begin
+ if handle^.eventReplacement.eventCallback<>nil then
+ begin
+  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
+  handle^.eventReplacement.eventCallback(handle^.eventReplacement.objectPointer,0,event,eventData);
+ end;
 end;
 
 constructor TAvPlayerState.Create;
@@ -607,6 +624,7 @@ function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV
 begin
  _sig_lock;
  Result:=_sceAvPlayerInit(pInit);
+ _AvPlayerEventCallback(Result,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
@@ -643,6 +661,7 @@ function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayer
 begin
  _sig_lock;
  Result:=_sceAvPlayerInitEx(pInit,pHandle);
+ _AvPlayerEventCallback(pHandle^,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
@@ -886,7 +905,9 @@ end;
 function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
+ _AvPlayerEventCallback(pHandle^,SCE_AVPLAYER_STATE_STOP,nil);
  Result:=_sceAvPlayerStop(handle);
+
  _sig_unlock;
 end;
 
@@ -895,10 +916,7 @@ begin
  Result:=-1;
  if (handle=nil) then Exit;
 
- if (handle^.playerState<>nil) then
- begin
-  handle^.playerState.Free;
- end;
+ _sceAvPlayerStop;
  Dispose(handle);
 
  Result:=0;
