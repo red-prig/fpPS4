@@ -896,18 +896,19 @@ end;
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 begin
  Result:=-1;
- if (handle=nil) then Exit;
-
- Writeln(SysLogPrefix,'sceAvPlayerStop');
-
- handle^.playerState.FreeMedia;
+ if (handle<>nil) then
+ begin
+  handle^.playerState.FreeMedia;
+ end;
+ _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
  Result:=0;
 end;
 
 function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
+
+ Writeln(SysLogPrefix,'sceAvPlayerStop');
  Result:=_sceAvPlayerStop(handle);
 
  _sig_unlock;
