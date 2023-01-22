@@ -515,6 +515,7 @@ begin
   if err<>0 then
   begin
    source:='';
+   break;
   end;
   //
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
