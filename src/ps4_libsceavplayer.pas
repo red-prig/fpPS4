@@ -851,7 +851,7 @@ begin
    repeat
     handle^.lastFrameTime:=GetTimeInUs;
     videoData:=handle^.playerState.ReceiveVideo;
-   until handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp; // Check to see if video catch up with current timestamp
+   until (videoData.pData=nil) or (handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
   if (videoData.pData=nil) then
   begin
    spin_unlock(lock);
