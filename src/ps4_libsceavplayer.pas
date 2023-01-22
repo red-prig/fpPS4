@@ -36,6 +36,14 @@ const
  DIRECTORY_AVPLAYER_DUMP='avplayer_dump';
  BUFFER_COUNT=2;
 
+ SCE_AVPLAYER_STATE_STOP         =$01;
+ SCE_AVPLAYER_STATE_READY        =$02;
+ SCE_AVPLAYER_STATE_PLAY         =$03;
+ SCE_AVPLAYER_STATE_PAUSE        =$04;
+ SCE_AVPLAYER_STATE_BUFFERING    =$05;
+ SCE_AVPLAYER_TIMED_TEXT_DELIVERY=$10;
+ SCE_AVPLAYER_WARNING_ID         =$20;
+
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
 
@@ -50,6 +58,7 @@ type
  SceAvPlayerSizeFile=function(argP:Pointer):QWord; SysV_ABI_CDecl;
 
  SceAvPlayerEventCallback=procedure(p:Pointer;argEventId:Integer;argSourceId:Integer;argEventData:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerLogCallback=Pointer;
 
  SceAvPlayerUriType=Integer; // enum
  SceAvPlayerSourceType=Integer; // enum
@@ -208,7 +217,7 @@ type
  end;
  PSceAvPlayerFrameInfoEx=^SceAvPlayerFrameInfoEx;
 
- PSceAvPlayerPostInitData = Pointer;
+ PSceAvPlayerPostInitData=Pointer;
 
  SceAvPlayerUri=packed record
   name  :PChar;
@@ -279,6 +288,15 @@ var
 function GetTimeInUs:QWord; inline;
 begin
  Result:=SwGetTimeUsec;
+end;
+
+procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
+begin
+ if (handle<>nil) and (handle^.eventReplacement.eventCallback<>nil) then
+ begin
+  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
+  handle^.eventReplacement.eventCallback(handle^.eventReplacement.objectPointer,0,event,eventData);
+ end;
 end;
 
 constructor TAvPlayerState.Create;
@@ -497,6 +515,7 @@ begin
   if err<>0 then
   begin
    source:='';
+   break;
   end;
   //
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
@@ -607,6 +626,7 @@ function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV
 begin
  _sig_lock;
  Result:=_sceAvPlayerInit(pInit);
+ _AvPlayerEventCallback(Result,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
@@ -643,6 +663,7 @@ function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayer
 begin
  _sig_lock;
  Result:=_sceAvPlayerInitEx(pInit,pHandle);
+ _AvPlayerEventCallback(pHandle^,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
@@ -830,7 +851,7 @@ begin
    repeat
     handle^.lastFrameTime:=GetTimeInUs;
     videoData:=handle^.playerState.ReceiveVideo;
-   until handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp; // Check to see if video catch up with current timestamp
+   until (videoData.pData=nil) or (handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
   if (videoData.pData=nil) then
   begin
    spin_unlock(lock);
@@ -875,19 +896,28 @@ end;
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 begin
  Result:=-1;
- if (handle=nil) then Exit;
-
- Writeln(SysLogPrefix,'sceAvPlayerStop');
-
- handle^.playerState.FreeMedia;
+ if (handle<>nil) then
+ begin
+  handle^.playerState.FreeMedia;
+ end;
+ _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
  Result:=0;
 end;
 
 function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
+
+ Writeln(SysLogPrefix,'sceAvPlayerStop');
  Result:=_sceAvPlayerStop(handle);
+
  _sig_unlock;
+end;
+
+function ps4_sceAvPlayerSetLogCallback(logCb:SceAvPlayerLogCallback;userData:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerSetLogCallback');
+ Result:=0;
 end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
@@ -895,10 +925,7 @@ begin
  Result:=-1;
  if (handle=nil) then Exit;
 
- if (handle^.playerState<>nil) then
- begin
-  handle^.playerState.Free;
- end;
+ _sceAvPlayerStop(handle);
  Dispose(handle);
 
  Result:=0;
@@ -930,6 +957,7 @@ begin
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
+ lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
  lib^.set_proc($642D7BC37BC1E4BA,@ps4_sceAvPlayerStop);
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
