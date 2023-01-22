@@ -58,6 +58,7 @@ type
  SceAvPlayerSizeFile=function(argP:Pointer):QWord; SysV_ABI_CDecl;
 
  SceAvPlayerEventCallback=procedure(p:Pointer;argEventId:Integer;argSourceId:Integer;argEventData:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerLogCallback=Pointer;
 
  SceAvPlayerUriType=Integer; // enum
  SceAvPlayerSourceType=Integer; // enum
@@ -905,10 +906,16 @@ end;
 function ps4_sceAvPlayerStop(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
- _AvPlayerEventCallback(pHandle^,SCE_AVPLAYER_STATE_STOP,nil);
+ _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
  Result:=_sceAvPlayerStop(handle);
 
  _sig_unlock;
+end;
+
+function ps4_sceAvPlayerSetLogCallback(logCb:SceAvPlayerLogCallback;userData:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerSetLogCallback');
+ Result:=0;
 end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
@@ -916,7 +923,7 @@ begin
  Result:=-1;
  if (handle=nil) then Exit;
 
- _sceAvPlayerStop;
+ _sceAvPlayerStop(handle);
  Dispose(handle);
 
  Result:=0;
@@ -948,6 +955,7 @@ begin
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
+ lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
  lib^.set_proc($642D7BC37BC1E4BA,@ps4_sceAvPlayerStop);
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
