@@ -292,7 +292,7 @@ end;
 
 procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
 begin
- if handle^.eventReplacement.eventCallback<>nil then
+ if (handle<>nil) and (handle^.eventReplacement.eventCallback<>nil) then
  begin
   Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
   handle^.eventReplacement.eventCallback(handle^.eventReplacement.objectPointer,0,event,eventData);
