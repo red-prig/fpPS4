@@ -61,6 +61,8 @@ function ps4_sceKernelFsync(fd:Integer):Integer; SysV_ABI_CDecl;
 function ps4_fcntl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFcntl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;
 
+function ps4_ioctl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;
+
 function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
@@ -581,6 +583,13 @@ begin
 
  _set_errno(Result);
  Result:=px2sce(Result);
+end;
+
+function ps4_ioctl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_ioctl(fd,cmd,param1));
+ _sig_unlock;
 end;
 
 function _sys_stat(path:PChar;stat:PSceKernelStat):Integer;

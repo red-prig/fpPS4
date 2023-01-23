@@ -50,6 +50,7 @@ type
   function write (data:Pointer;size:Int64):Int64;                   override;
   function pwrite(data:Pointer;size,offset:Int64):Int64;            override;
   function writev(vector:p_iovec;count:Integer):Int64;              override;
+  function ioctl(cmd:Integer;param1:ptruint):Integer;               override;
  end;
 
 procedure _sys_dev_init;
@@ -311,6 +312,12 @@ begin
   end;
 
  end;
+end;
+
+function TDevStd.ioctl(cmd:Integer;param1:ptruint):Integer;
+begin
+ Assert(false,'TODO:ioctl:'+HexStr(cmd,8));
+ Result:=0;
 end;
 
 //

@@ -212,6 +212,7 @@ type
   function fstat        (stat:PSceKernelStat):Integer;                     virtual;
   function fsync        ():Integer;                                        virtual;
   function fcntl        (cmd:Integer;param1:ptruint):Integer;              virtual;
+  function ioctl        (cmd:Integer;param1:ptruint):Integer;              virtual;
   function getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;     virtual;
  end;
 
@@ -232,6 +233,7 @@ function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
 function _sys_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
 function _sys_fsync(fd:Integer):Integer;
 function _sys_fcntl(fd,cmd:Integer;param1:ptruint):Integer;
+function _sys_ioctl(fd,cmd:Integer;param1:ptruint):Integer;
 
 implementation
 
@@ -312,6 +314,11 @@ begin
     Exit(EINVAL);
    end;
  end;
+end;
+
+function TCustomFile.ioctl(cmd:Integer;param1:ptruint):Integer;
+begin
+ Result:=ENOTTY;
 end;
 
 function TCustomFile.getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;
@@ -622,6 +629,20 @@ begin
  if (f=nil) then Exit(EBADF);
 
  Result:=f.fcntl(cmd,param1);
+
+ f.Release;
+end;
+
+function _sys_ioctl(fd,cmd:Integer;param1:ptruint):Integer;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(EBADF);
+
+ Result:=f.ioctl(cmd,param1);
 
  f.Release;
 end;
