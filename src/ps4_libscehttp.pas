@@ -11,10 +11,33 @@ uses
 
 implementation
 
-uses sys_kernel;
+uses
+  sys_kernel,
+  sys_types;
 
 const
  SCE_HTTP_NB_EVENT_SOCK_ERR = 8;
+
+ SCE_HTTP_ERROR_OUT_OF_MEMORY=$80431022;
+ SCE_HTTP_ERROR_INVALID_VALUE=$804311fe;
+ SCE_HTTP_ERROR_INVALID_URL  =$80433060;
+
+type
+ SceHttpUriElement=packed record
+  opaque  :LongBool;
+  _align  :DWord;
+  scheme  :PChar;
+  username:PChar;
+  password:PChar;
+  hostname:PChar;
+  path    :PChar;
+  query   :PChar;
+  fragment:PChar;
+  port    :Word;
+  reserved:array[0..9] of Byte;
+  _align2 :DWord;
+ end;
+ PSceHttpUriElement=^SceHttpUriElement;
 
 function ps4_sceHttpInit(libnetMemId,libsslCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
@@ -271,6 +294,15 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpUriParse(output:PSceHttpUriElement;
+                             uri:PChar;
+                             pool:Pointer;
+                             require:psize_t;
+                             prepare:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -312,6 +344,7 @@ begin
  lib^.set_proc($68260F31250868FF,@ps4_sceHttpGetAllResponseHeaders);
  lib^.set_proc($CAE3B61F652F9E8B,@ps4_sceHttpGetResponseContentLength);
  lib^.set_proc($3F9A5DA3290F6139,@ps4_sceHttpReadData);
+ lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
