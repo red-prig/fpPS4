@@ -63,6 +63,7 @@ type
   function    preadv       (vector:p_iovec;count:Integer;offset:Int64):Int64; override;
   function    write        (data:Pointer;size:Int64):Int64;                   override;
   function    pwrite       (data:Pointer;size,offset:Int64):Int64;            override;
+  function    writev       (vector:p_iovec;count:Integer):Int64;              override;
   function    ftruncate    (size:Int64):Integer;                              override;
   function    fstat        (stat:PSceKernelStat):Integer;                     override;
   function    lseek        (offset:Int64;whence:Integer):Int64;               override;
@@ -356,6 +357,11 @@ begin
 end;
 
 function TDirFile.pwrite(data:Pointer;size,offset:Int64):Int64;
+begin
+ Result:=-EISDIR;
+end;
+
+function TDirFile.writev(vector:p_iovec;count:Integer):Int64;
 begin
  Result:=-EISDIR;
 end;

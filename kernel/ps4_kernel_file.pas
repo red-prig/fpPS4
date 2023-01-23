@@ -41,6 +41,9 @@ function ps4_sceKernelWrite(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI
 function ps4_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;  SysV_ABI_CDecl;
 function ps4_sceKernelPwrite(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; SysV_ABI_CDecl;
 
+function ps4_writev(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+function ps4_sceKernelWritev(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_ABI_CDecl;
+
 function ps4_ftruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFtruncate(fd:Integer;size:Int64):Integer; SysV_ABI_CDecl;
 
@@ -99,7 +102,7 @@ begin
  Result:=0;
  if (path=nil) then Exit(-EINVAL);
 
- Writeln(SysLogPrefix, 'open:',path,' ',flags,' (',OctStr(mode,3),')');
+ Writeln(SysLogPrefix, 'open:',path,' 0x',HexStr(flags,4),' (',OctStr(mode,3),')');
 
  if ((flags and WR_RDWR)=WR_RDWR) then
  begin
@@ -403,6 +406,38 @@ function ps4_sceKernelPwrite(fd:Integer;buf:Pointer;nbytes,offset:Int64):Int64; 
 begin
  _sig_lock;
  Result:=_sys_pwrite(fd,buf,nbytes,offset);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=-Result;
+  _set_errno(Result);
+  Result:=px2sce(Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_writev(fd:Integer;vector:p_iovec;count:Integer):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_writev(fd,vector,count);
+ _sig_unlock;
+
+ if (Result<0) then
+ begin
+  Result:=_set_errno(-Result);
+ end else
+ begin
+  _set_errno(0);
+ end;
+end;
+
+function ps4_sceKernelWritev(fd:Integer;iov:p_iovec;iovcnt:Integer):Int64; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_writev(fd,iov,iovcnt);
  _sig_unlock;
 
  if (Result<0) then
@@ -1105,6 +1140,8 @@ begin
  Result:=0;
 
  if (path=nil) then Exit(EFAULT);
+
+ //Writeln('access:',path,' ',mode);
 
  if (path[0]=#0) then
  begin

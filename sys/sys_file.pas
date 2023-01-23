@@ -32,6 +32,7 @@ type
   function    preadv   (vector:p_iovec;count:Integer;offset:Int64):Int64; override;
   function    write    (data:Pointer;size:Int64):Int64;                   override;
   function    pwrite   (data:Pointer;size,offset:Int64):Int64;            override;
+  function    writev   (vector:p_iovec;count:Integer):Int64;              override;
   function    ftruncate(size:Int64):Integer;                              override;
   function    fstat    (stat:PSceKernelStat):Integer;                     override;
   function    fsync    ():Integer;                                        override;
@@ -474,6 +475,52 @@ begin
  begin
   Result:=Int64(s.Information);
  end;
+end;
+
+function TFile.writev(vector:p_iovec;count:Integer):Int64;
+label
+ _exit;
+var
+ s:IO_STATUS_BLOCK;
+ e:Integer;
+ i:Integer;
+ v:iovec;
+begin
+ Result:=0;
+
+ rwlock_wrlock(lock);
+
+  For i:=0 to count-1 do
+  begin
+   v:=vector[i];
+
+   if (v.iov_base<>nil) and (v.iov_len<>0) then
+   begin
+
+    s:=Default(IO_STATUS_BLOCK);
+    e:=NtWriteFile(Handle,0,nil,nil,@s,v.iov_base,v.iov_len,nil,nil);
+    if (e=STATUS_PENDING) then e:=NtWaitForSingleObject(Handle,False,nil);
+
+    e:=-ntf2px(e);
+
+    if (e<>0) then
+    begin
+     Result:=e;
+     Goto _exit;
+    end else
+    begin
+     Result:=Result+Int64(s.Information);
+     if (Int64(s.Information)<v.iov_len) then
+     begin
+      Goto _exit;
+     end;
+    end;
+
+   end;
+  end;
+
+ _exit:
+  rwlock_unlock(lock);
 end;
 
 function TFile.ftruncate(size:Int64):Integer;

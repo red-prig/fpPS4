@@ -33,14 +33,15 @@ type
   function preadv(vector:p_iovec;count:Integer;offset:Int64):Int64; override;
   function write (data:Pointer;size:Int64):Int64;                   override;
   function pwrite(data:Pointer;size,offset:Int64):Int64;            override;
+  function writev(vector:p_iovec;count:Integer):Int64;              override;
  end;
 
  TDevStd=class(TDevFile)
   var
-   Text:PText;
+   RText,WText:PText;
    lock:TRWLock;
    cache:RawByteString;
-  Constructor Create(t:PText);
+  Constructor Create(r,w:PText);
   Destructor  Destroy; override;
   function read  (data:Pointer;size:Int64):Int64;                   override;
   function pread (data:Pointer;size,offset:Int64):Int64;            override;
@@ -48,13 +49,14 @@ type
   function preadv(vector:p_iovec;count:Integer;offset:Int64):Int64; override;
   function write (data:Pointer;size:Int64):Int64;                   override;
   function pwrite(data:Pointer;size,offset:Int64):Int64;            override;
+  function writev(vector:p_iovec;count:Integer):Int64;              override;
  end;
 
 procedure _sys_dev_init;
 begin
- _sys_dev_open('stdin' ,O_RDONLY,0); //0
- _sys_dev_open('stdout',O_WRONLY,0); //1
- _sys_dev_open('stderr',O_WRONLY,0); //2
+ _sys_dev_open('stdin' ,O_RDWR,0); //0
+ _sys_dev_open('stdout',O_RDWR,0); //1
+ _sys_dev_open('stderr',O_RDWR,0); //2
 end;
 
 function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
@@ -63,9 +65,9 @@ var
 begin
 
  Case path of
-  'stdin' :f:=TDevStd.Create(@Input);
-  'stdout':f:=TDevStd.Create(@StdOut);
-  'stderr':f:=TDevStd.Create(@StdErr);
+  'stdin' :f:=TDevStd.Create(@Input,@StdOut);
+  'stdout':f:=TDevStd.Create(@Input,@StdOut);
+  'stderr':f:=TDevStd.Create(@Input,@StdErr);
 
   'random',
   'urandom':
@@ -167,14 +169,27 @@ begin
  Result:=size;
 end;
 
+function TDevRandom.writev(vector:p_iovec;count:Integer):Int64;
+var
+ i:Integer;
+begin
+ Result:=0;
+
+ For i:=0 to count-1 do
+ begin
+  Result:=Result+vector[i].iov_len;
+ end;
+end;
+
 //
 
-Constructor TDevStd.Create(t:PText);
+Constructor TDevStd.Create(r,w:PText);
 type
  PTextRec=^TextRec;
 begin
- Handle:=PTextRec(t)^.Handle;
- Text:=t;
+ Handle:=PTextRec(w)^.Handle;
+ RText:=r;
+ WText:=w;
  rwlock_init(lock);
  cache:='';
 end;
@@ -207,7 +222,7 @@ begin
  rwlock_unlock(lock);
 
  S:='';
- System.ReadLn(Text^,S);
+ System.ReadLn(RText^,S);
  S:=S+#10;
 
  if (Length(S)>size) then
@@ -266,13 +281,36 @@ var
  S:RawByteString;
 begin
  SetString(S,data,size);
- System.Write(Text^,S);
+ System.Write(WText^,S);
  Result:=size;
 end;
 
 function TDevStd.pwrite(data:Pointer;size,offset:Int64):Int64;
 begin
  Result:=write(data,size);
+end;
+
+function TDevStd.writev(vector:p_iovec;count:Integer):Int64;
+var
+ i,n:Integer;
+begin
+ Result:=0;
+
+ For i:=0 to count-1 do
+ begin
+  n:=write(vector[i].iov_base,vector[i].iov_len);
+
+  if (n>0) then
+  begin
+   Result:=Result+n;
+   if (n<vector[i].iov_len) then Exit;
+  end else
+  begin
+   Exit(-EIO);
+   Break;
+  end;
+
+ end;
 end;
 
 //

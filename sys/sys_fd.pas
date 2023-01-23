@@ -207,6 +207,7 @@ type
   function preadv       (vector:p_iovec;count:Integer;offset:Int64):Int64; virtual;
   function write        (data:Pointer;size:Int64):Int64;                   virtual;
   function pwrite       (data:Pointer;size,offset:Int64):Int64;            virtual;
+  function writev       (vector:p_iovec;count:Integer):Int64;              virtual;
   function ftruncate    (size:Int64):Integer;                              virtual;
   function fstat        (stat:PSceKernelStat):Integer;                     virtual;
   function fsync        ():Integer;                                        virtual;
@@ -224,6 +225,7 @@ function _sys_pread(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
 function _sys_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64;
 function _sys_write(fd:Integer;data:Pointer;size:Int64):Int64;
+function _sys_writev(fd:Integer;vector:p_iovec;count:Integer):Int64;
 function _sys_pwrite(fd:Integer;data:Pointer;size,offset:Int64):Int64;
 function _sys_ftruncate(fd:Integer;size:Int64):Integer;
 function _sys_fstat(fd:Integer;stat:PSceKernelStat):Integer;
@@ -269,6 +271,11 @@ begin
 end;
 
 function TCustomFile.pwrite(data:Pointer;size,offset:Int64):Int64;
+begin
+ Result:=-ENOTSUP;
+end;
+
+function TCustomFile.writev(vector:p_iovec;count:Integer):Int64;
 begin
  Result:=-ENOTSUP;
 end;
@@ -427,7 +434,6 @@ end;
 function _sys_readv(fd:Integer;vector:p_iovec;count:Integer):Int64;
 var
  f:TCustomFile;
- i:Integer;
 begin
  if (fd<0) then Exit(-EINVAL);
 
@@ -452,7 +458,6 @@ end;
 function _sys_preadv(fd:Integer;vector:p_iovec;count:Integer;offset:Int64):Int64;
 var
  f:TCustomFile;
- i:Integer;
 begin
  if (fd<0) then Exit(-EINVAL);
 
@@ -519,6 +524,30 @@ begin
  if (f=nil) then Exit(-EBADF);
 
  Result:=f.pwrite(data,size,offset);
+
+ f.Release;
+end;
+
+function _sys_writev(fd:Integer;vector:p_iovec;count:Integer):Int64;
+var
+ f:TCustomFile;
+begin
+ if (fd<0) then Exit(-EINVAL);
+
+ if (vector=nil) or (count=0) then //zero check
+ begin
+  f:=_sys_acqure_fd(fd);
+  if (f=nil) then Exit(-EBADF);
+  f.Release;
+  Exit(0);
+ end;
+
+ if (count<=0) or (count>IOV_MAX) then Exit(-EINVAL);
+
+ f:=_sys_acqure_fd(fd);
+ if (f=nil) then Exit(-EBADF);
+
+ Result:=f.writev(vector,count);
 
  f.Release;
 end;
