@@ -2439,6 +2439,7 @@ var
  psrc:Pointer;
  W:DWORD;
 begin
+ Result:=-1;
  psrc:=pbuf;
  while (psrc<pend) do
  begin
@@ -2462,7 +2463,36 @@ begin
    $348B4C64:Result:=14; //r14
    $3C8B4C64:Result:=15; //r15
    $00A14864:Result:=16; //rax64
-   else      Result:=-1;
+
+   //shft 8
+   $8B486400..$8B4864FF,
+   $8B4C6400..$8B4C64FF,
+   $A1486400..$A14864FF:
+    begin
+     Inc(psrc,1);
+     Continue;
+    end;
+
+   //shft 16
+   $48640000..$4864FFFF,
+   $4C640000..$4C64FFFF:
+    begin
+     Inc(psrc,2);
+     Continue;
+    end;
+
+   //shft 24
+   $64000000..$64FFFFFF:
+    begin
+     Inc(psrc,3);
+     Continue;
+    end;
+
+   else
+    begin
+     Inc(psrc,4);
+     Continue;
+    end;
   end;
 
   Case Result of
