@@ -480,6 +480,15 @@ begin
  Result:=PathConcat(S,filename,r);
 end;
 
+function MountMiscConcat(const dir,filename:RawByteString;var r:RawByteString):Integer;
+var
+ s:RawByteString;
+begin
+ s:=IncludeTrailingPathDelimiter(GetCurrentDir)+dir;
+
+ Result:=PathConcat(s,filename,r);
+end;
+
 //
 
 const
@@ -496,6 +505,11 @@ begin
         if (fp^<>#0) then Inc(fp);
         r:=fp;
         Result:=PT_DEV;
+       end;
+     $00727375: //usr
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountMiscConcat('usr',fp,r);
        end;
      else
         Result:=PT_ERR;
@@ -519,6 +533,11 @@ begin
        begin
         if (fp^<>#0) then Inc(fp);
         Result:=PathConcat(ps4_app.app1_path,fp,r);
+       end;
+     $61746164: //data
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountMiscConcat('data',fp,r);
        end;
      else
         Result:=PT_ERR;
