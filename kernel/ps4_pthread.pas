@@ -170,11 +170,6 @@ const
  _PREPARE_FREE=2;
  _PREPARE_JOIN=3;
 
-procedure SetStackTop(p:Pointer); assembler; nostackframe;
-asm
- movq %rax,%gs:(8)
-end;
-
 function on_ps4_run_thread(data:pthread):Longint; stdcall;
 type
  Tps4entry=function(arg:Pointer):Pointer; SysV_ABI_CDecl;
@@ -216,14 +211,14 @@ begin
 
   wait_until_equal(data^.handle,0);
 
-  //init static tls in stack top
+  //init static tls
   if (Telf_file(ps4_program.ps4_app.prog).pTls.full_size<>0) then
   begin
-   base:=StackTop-SizeOf(Pointer);
-   SetStackTop(base);
-   PPointer(base)^:=Telf_file(ps4_program.ps4_app.prog)._get_tls;
+   base:=Telf_file(ps4_program.ps4_app.prog)._get_tls;
+   SetTlsBase(base);
+   Assert(GetTlsBase=base);
   end;
-  //init static tls in stack top
+  //init static tls
 
   //data^.arg:=Tps4entry(data^.entry)(data^.arg);
   data^.arg:=sysv_wrapper(data^.arg,data^.entry);

@@ -272,8 +272,8 @@ type
    function  RelocatePltRelaEnum(cbs:TOnRelaInfoCb;data:Pointer):Boolean;
    function  ParseSymbolsEnum(cbs:TOnRelaInfoCb;data:Pointer):Boolean;
    function  LoadSymbolExport:Boolean;
-   procedure _PatchTls(Proc:Pointer;Addr:PByte;Size:QWORD);
-   procedure PatchTls(Proc:Pointer);
+   procedure _PatchTls(Addr:PByte;Size:QWORD);
+   procedure PatchTls;
    procedure mapProt;
    procedure mapCodeInit;
    Procedure ClearElfFile;
@@ -314,6 +314,9 @@ function  DecodeValue64(strEnc:PAnsiChar;len:SizeUint;var nVal:QWORD):Boolean;
 function  DecodeEncName(strEncName:PAnsiChar;var nModuleId,nLibraryId:WORD;var nNid:QWORD):Boolean;
 
 function  _dynamic_tls_get_addr(ti:PTLS_index):Pointer; SysV_ABI_CDecl;
+
+procedure SetTlsBase(p:Pointer); assembler;
+function  GetTlsBase:Pointer;    assembler;
 
 implementation
 
@@ -1148,8 +1151,6 @@ begin
  Result:=True;
 end;
 
-function __static_get_tls_adr:Pointer; assembler; nostackframe; forward;
-
 function Telf_file.Prepare:Boolean;
 begin
  Result:=False;
@@ -1162,7 +1163,7 @@ begin
  Result:=MapImageIntoMemory;
  if not Result then raise Exception.Create('Error MapImageIntoMemory');
  Result:=LoadSymbolExport;
- PatchTls(@__static_get_tls_adr);
+ PatchTls;
  FPrepared:=True;
 end;
 
@@ -2439,228 +2440,177 @@ begin
  Result:=True;
 end;
 
-//64488b042500000000       mov    %fs:0x0,%rax
-//                     0   1  2  3  4
-//  0    1    2    3   4   5  6  7  8
-//[64] [48] [8b] [04] 25 [00 00 00 00] :0x0
+{
+64 48 A1 [0000000000000000] mov rax,fs:[$0000000000000000] -> 65 48 A1 [0807000000000000] mov rax,gs:[$0000000000000708]
+64 48 8B 04 25 [00000000]   mov rax,fs:[$00000000]         -> 65 48 8B 04 25 [08070000]   mov rax,gs:[$00000708]
+64 48 8B 0C 25 [00000000]   mov rcx,fs:[$00000000]         -> 65 48 8B 0C 25 [08070000]   mov rcx,gs:[$00000708]
+64 48 8B 14 25 [00000000]   mov rdx,fs:[$00000000]         -> 65 48 8B 14 25 [08070000]   mov rdx,gs:[$00000708]
+64 48 8B 1C 25 [00000000]   mov rbx,fs:[$00000000]         -> 65 48 8B 1C 25 [08070000]   mov rbx,gs:[$00000708]
+64 48 8B 24 25 [00000000]   mov rsp,fs:[$00000000]         -> 65 48 8B 24 25 [08070000]   mov rsp,gs:[$00000708]
+64 48 8B 2C 25 [00000000]   mov rbp,fs:[$00000000]         -> 65 48 8B 2C 25 [08070000]   mov rbp,gs:[$00000708]
+64 48 8B 34 25 [00000000]   mov rsi,fs:[$00000000]         -> 65 48 8B 34 25 [08070000]   mov rsi,gs:[$00000708]
+64 48 8B 3C 25 [00000000]   mov rdi,fs:[$00000000]         -> 65 48 8B 3C 25 [08070000]   mov rdi,gs:[$00000708]
+64 4C 8B 04 25 [00000000]   mov r8 ,fs:[$00000000]         -> 65 4C 8B 04 25 [08070000]   mov r8 ,gs:[$00000708]
+64 4C 8B 0C 25 [00000000]   mov r9 ,fs:[$00000000]         -> 65 4C 8B 0C 25 [08070000]   mov r9 ,gs:[$00000708]
+64 4C 8B 14 25 [00000000]   mov r10,fs:[$00000000]         -> 65 4C 8B 14 25 [08070000]   mov r10,gs:[$00000708]
+64 4C 8B 1C 25 [00000000]   mov r11,fs:[$00000000]         -> 65 4C 8B 1C 25 [08070000]   mov r11,gs:[$00000708]
+64 4C 8B 24 25 [00000000]   mov r12,fs:[$00000000]         -> 65 4C 8B 24 25 [08070000]   mov r12,gs:[$00000708]
+64 4C 8B 2C 25 [00000000]   mov r13,fs:[$00000000]         -> 65 4C 8B 2C 25 [08070000]   mov r13,gs:[$00000708]
+64 4C 8B 34 25 [00000000]   mov r14,fs:[$00000000]         -> 65 4C 8B 34 25 [08070000]   mov r14,gs:[$00000708]
+64 4C 8B 3C 25 [00000000]   mov r15,fs:[$00000000]         -> 65 4C 8B 3C 25 [08070000]   mov r15,gs:[$00000708]
+}
 
+type
+ t_patch_inst=array[0..11] of Byte;
 
-//MOV RAX,qword ptr FS:[0x0]
+const
+ patch_table:array[0..16] of t_patch_inst=(
+  ( 9,$65,$48,$8B,$04,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$0C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$14,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$1C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$24,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$2C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$34,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$48,$8B,$3C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$04,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$0C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$14,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$1C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$24,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$2C,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$34,$25,$08,$07,$00,$00,$00,$00),
+  ( 9,$65,$4C,$8B,$3C,$25,$08,$07,$00,$00,$00,$00),
+  (11,$65,$48,$A1,$08,$07,$00,$00,$00,$00,$00,$00)
+ );
 
-//  0    1    2
-//[66] [66] [66]
+procedure SetTlsBase(p:Pointer); assembler; nostackframe;
+asm
+ mov %rcx,%gs:(0x708)
+end;
 
-//  3    4    5    6   7   8  9 10 11
-//[64] [48] [8b] [04] 25 [00 00 00 00]
+function GetTlsBase:Pointer; assembler; nostackframe;
+asm
+ mov %gs:(0x708),%rax
+end;
 
-//[66] [66] [66]
-//64488b042500000000 //data16 data16 data16 mov %fs:0x0,%rax
-
-
-//                  v this adr - base adr
-//[e8] [9e be b3 00] relative
-//^ call
-//  0    1  2  3  4
-//90 = nop
-
-//48030504853603           add    0x3368504(%rip),%rax        # 0x81d44a8
-//      v-add
-//[48] [03] [05] [04 85 36 03] - adr
-//^64 bits
-
-//000000010000366B 51                       push   %rcx
-//000000010000366C 48b9d5728a0e00000000     movabs $0xe8a72d5,%rcx
-//0000000100003676 ff2500000000             jmpq   *0x0(%rip)        # 0x10000367c <main+76>
-//ff 25 eb ff ff ff
-// 0  1  2  3  4  5
-
-// $51 push   %rcx
-// $59 pop    %rcx
-
-
-//const
- //DWNOP=$90909090;
-
-function IndexUnalignDWord(Const buf;len:SizeInt;b:DWord):SizeInt;
+function IndexMovFs(var pbuf:Pointer;pend:Pointer):Integer;
 var
- psrc:PDWORD;
- pend:PBYTE;
+ psrc:Pointer;
+ W:DWORD;
 begin
- psrc:=@buf;
- pend:=PBYTE(psrc)+len;
- while (PBYTE(psrc)<pend) do
+ psrc:=pbuf;
+ while (psrc<pend) do
  begin
-  if (psrc^=b) then
+  W:=PDWORD(psrc)^;
+
+  Case W of
+   $048B4864:Result:= 0; //rax
+   $0C8B4864:Result:= 1; //rcx
+   $148B4864:Result:= 2; //rdx
+   $1C8B4864:Result:= 3; //rbx
+   $248B4864:Result:= 4; //rsp
+   $2C8B4864:Result:= 5; //rbp
+   $348B4864:Result:= 6; //rsi
+   $3C8B4864:Result:= 7; //rdi
+   $048B4C64:Result:= 8; //r8
+   $0C8B4C64:Result:= 9; //r9
+   $148B4C64:Result:=10; //r10
+   $1C8B4C64:Result:=11; //r11
+   $248B4C64:Result:=12; //r12
+   $2C8B4C64:Result:=13; //r13
+   $348B4C64:Result:=14; //r14
+   $3C8B4C64:Result:=15; //r15
+   $00A14864:Result:=16; //rax64
+   else      Result:=-1;
+  end;
+
+  Case Result of
+   0..15:
+     begin
+      if (PBYTE(psrc)[4]=$25) then
+      begin
+       if (PDWORD(@PBYTE(psrc)[5])^<>$00000000) then Result:=-1;
+      end else
+      begin
+       Result:=-1;
+      end;
+     end;
+      16:
+     begin
+      if (PQWORD(@PBYTE(psrc)[3])^<>$0000000000000000) then Result:=-1;
+     end;
+   else;
+  end;
+
+  if (Result<>-1) then
   begin
-   Result:=PBYTE(psrc)-PBYTE(@buf);
+   pbuf:=psrc;
    exit;
   end;
-  inc(PBYTE(psrc));
+
+  Inc(psrc);
  end;
  Result:=-1;
 end;
 
-procedure Telf_file._PatchTls(Proc:Pointer;Addr:PByte;Size:QWORD);
-Const
- prefix1:DWORD=$048b4864;
-
- prefix2:Byte =$25;
- prefix3:DWORD=$00000000;
-
- //prefix3:DWORD=$05034800;
-
- //prefix4:QWORD=$0503480000000025;
-
- prefix5:DWORD=$666666;
-
- prefixm:DWORD=$FFFFFF;
-
+procedure Telf_file._PatchTls(Addr:PByte;Size:QWORD);
 var
- Stub:Pointer;
- c:SizeInt;
- _call:Tpatch_fs;
+ count:SizeInt;
 
- procedure do_patch_ld(p:PByte); inline;
- var
-  _jmp:Tpatch_ld;
+ procedure do_patch(p:PByte;i:Integer); inline;
  begin
-  _jmp:=_patch_ld;
-  _jmp._addr:=proc;
-  Ppatch_ld(p)^:=_jmp;
- end;
-
- procedure do_patch(p:PByte); inline;
- begin
-  _call._ofs:=Integer(PtrInt(Stub)-PtrInt(P)-PtrInt(@Tpatch_fs(nil^).{_pop_rcx}_nop));
-  Ppatch_fs(p)^:=_call;
-
-  p:=p-3;
-  if ((PDWORD(p)^ and prefixm)=prefix5) then
-  begin
-   p[0]:=$90; //nop
-   p[1]:=$90; //nop
-   p[2]:=$90; //nop
-  end;
-
+  Move(patch_table[i][1],p^,patch_table[i][0]);
  end;
 
  procedure do_find(p:PByte;s:SizeInt);
  var
-  i:SizeInt;
-  A:PByte;
+  pend:Pointer;
+  i,len:Integer;
  begin
+  pend:=p+s;
   repeat
-   i:=IndexUnalignDWord(P^,s,prefix1);
-   if (i=-1) then Break;
-   A:=@P[i];
+   i:=IndexMovFs(p,pend);
 
-   if (A[4]=prefix2) and (PDWORD(@A[5])^=prefix3) then
-   //if (PQWORD(@A[4])^=prefix4) then
-   if not _ro_seg_adr_in(A,12) then
+   if (i=-1) then Exit;
+
+   len:=patch_table[i][0];
+
+   if not _ro_seg_adr_in(p,len) then
    begin
-    Inc(c);
-    do_patch(A);
+    Inc(count);
+    do_patch(p,i);
+    Inc(p,len);
    end;
 
-   Inc(i,4);
-   Inc(P,i);
-   Dec(s,i);
-  until (s<=0);
+  until false;
  end;
 
 begin
  if (Size=0) then Exit;
  if (Size>=12) then Size:=Size-12;
- c:=0;
- _call:=_patch_fs;
+ count:=0;
 
- Stub:=pTls.stub.pAddr;
+ do_find(@Addr[0],Size);
 
- do_find(@Addr[0],Size-0);
-
- //Writeln('patch_tls_count=',c);
- //do_find(@Addr[1],Size-1);
- //Writeln('patch_tls_count=',c);
- //do_find(@Addr[2],Size-2);
- //Writeln('patch_tls_count=',c);
- //do_find(@Addr[3],Size-3);
-
- Writeln('patch_tls_count=',c);
- if (c<>0) then
- begin
-  do_patch_ld(Stub);
- end;
+ Writeln('patch_tls_count=',count);
 end;
 
-procedure Telf_file.PatchTls(Proc:Pointer);
+procedure Telf_file.PatchTls;
 var
  i,c:DWORD;
 begin
- if (Self=nil) or (Proc=nil) then Exit;
+ if (Self=nil) then Exit;
  if (pTls.full_size=0) then Exit; //no tls?
  c:=ModuleInfo.segmentCount;
  if (c<>0) then
  For i:=0 to c-1 do
   if (ModuleInfo.segmentInfo[i].prot and PF_X<>0) then
   begin
-   _PatchTls(Proc,
-             ModuleInfo.segmentInfo[i].address,
+   _PatchTls(ModuleInfo.segmentInfo[i].address,
              ModuleInfo.segmentInfo[i].Size);
   end;
 end;
-
-{
-function _static_get_tls_adr:Pointer; MS_ABI_Default;
-var
- elf:Telf_file;
-begin
- Result:=nil;
- elf:=Telf_file(ps4_app.prog);
- if (elf=nil) then Exit;
- Result:=elf._get_tls;
-end;
-}
-
-{
- [oob page] <- old Stack guard
- [tls link] <- new Stack guard
- [Stack]
- [Stack]
- [Stack]
-}
-
-function __static_get_tls_adr:Pointer; assembler; nostackframe;
-asm
- //new idea, no stack save, only %rax used
- movq  %gs:(8),%rax //-> StackTop
- movq  (%rax) ,%rax //-> StackTop^
-
- {
- push %rcx
- push %rdx
- push %r8
- push %r9
- push %R10
- push %R11
-
- call _static_get_tls_adr
-
- pop %R11
- pop %R10
- pop %r9
- pop %r8
- pop %rdx
- pop %rcx
- }
-end;
-
-//-not need:
-//-RAX:result
-////-RCX,RDX:Tpatch_fs
-//-other:win call save
-
-//The registers RAX, RCX, RDX,  R8,  R9, R10, R11               are considered volatile    (вызывающий сохраняет)
-//The registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, and R15 are considered nonvolatile (вызываемый сохраняет)
 
 function _dynamic_tls_get_addr(ti:PTLS_index):Pointer; SysV_ABI_CDecl;
 var
