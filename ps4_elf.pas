@@ -320,46 +320,6 @@ function  GetTlsBase:Pointer;    assembler;
 
 implementation
 
-type
- Ppatch_ld=^Tpatch_ld;
- Tpatch_ld=packed record
-  //_movabs_rax:array[0..1] of Byte; // $48 $B8   //2
-  _addr:Pointer;                                //8
-  //_jmp_rax:array[0..1] of Byte;    // $FF $E0   //2  = 14
- end;
-
- Ppatch_fs=^Tpatch_fs;
- Tpatch_fs=packed record
-  _call_rip:array[0..1] of Byte; //$ff $15
-  //_push_rdx:Byte; // $52  //1
-  //_push_rcx:Byte; // $51  //1
-  //_call_32:Byte;  // $E8  //1
-  _ofs:Integer;           //4
-  //_pop_rcx:Byte;  // $59  //1
-  //_pop_rdx:Byte;  // $5a  //1 = 9
-  _nop:array[0..2] of Byte; //$90 $90 $90
- end;
-
-//ff 15 [d3 ff ff ff]
-
-Const
- _patch_ld:Tpatch_ld=(
-  //_movabs_rax:($48,$B8);
-  _addr:nil;
-  //_jmp_rax:($FF,$E0);
- );
-
- _patch_fs:Tpatch_fs=(
-  _call_rip:($ff,$15);
-  //_push_rcx:$51;
-  //_push_rdx:$52;
-  //_call_32:$E8;
-  _ofs:0;
-  //_pop_rdx:$5a;
-  //_pop_rcx:$59;
-  _nop:($90,$90,$90);
- );
-
 Procedure Telf_file.ClearElfFile;
 begin
  if (Self=nil) then Exit;
@@ -1365,28 +1325,8 @@ begin
 end;
 
 procedure Telf_file._find_tls_stub(elf_phdr:Pelf64_phdr;s:SizeInt);
-Const
- patch_ld_size=SizeOf(Tpatch_ld);
-var
- i:SizeInt;
- p:QWORD;
 begin
-  //find stub for static tls
- if (s<>0) then
-  For i:=0 to s-1 do
-  begin
-   if _isSegmentLoadable(@elf_phdr[i]) then
-    if ((elf_phdr[i].p_flags and PF_X)<>0) then
-    begin
-     p:=get_end_pad(elf_phdr[i].p_memsz,PHYSICAL_PAGE_SIZE);
-     if (p>=patch_ld_size) then
-     begin
-      pTls.stub.pAddr:=Pointer(elf_phdr[i].p_vaddr+elf_phdr[i].p_memsz);
-      pTls.stub.nSize:=p;
-      Exit;
-     end;
-    end;
-  end;
+ //
 end;
 
 function Telf_file.MapImageIntoMemory:Boolean;
@@ -2481,7 +2421,7 @@ const
   ( 9,$65,$4C,$8B,$2C,$25,$08,$07,$00,$00,$00,$00),
   ( 9,$65,$4C,$8B,$34,$25,$08,$07,$00,$00,$00,$00),
   ( 9,$65,$4C,$8B,$3C,$25,$08,$07,$00,$00,$00,$00),
-  (11,$65,$48,$A1,$08,$07,$00,$00,$00,$00,$00,$00)
+  (12,$65,$48,$A1,$08,$07,$00,$00,$00,$00,$00,$00)
  );
 
 procedure SetTlsBase(p:Pointer); assembler; nostackframe;
@@ -2726,7 +2666,6 @@ begin
 
  if (pTls.stub.pAddr<>nil) then
  begin
-  Assert(pTls.stub.nSize>=SizeOf(Tpatch_ld));
   //extra tls stub
   if (pTls.stub.nSize=PHYSICAL_PAGE_SIZE) then
   begin
