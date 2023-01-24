@@ -329,7 +329,7 @@ begin
 
  if (data<>nil) then
  begin
-  Dispose(data);
+  FreeMem(data);
  end;
 end;
 
@@ -675,7 +675,8 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInit');
 
- New(player);
+ player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
+
  player^.playerState:=TAvPlayerState.Create;
  player^.playerState.info :=player;
 
@@ -710,7 +711,8 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
 
- New(player);
+ player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
+
  player^.playerState:=TAvPlayerState.Create;
  player^.playerState.info :=player;
 
@@ -950,7 +952,7 @@ begin
  if (frameInfo<>nil) and (player<>nil) and (player^.playerState.IsPlaying) then
  begin
   videoData:=Default(TMemChunk);
-  if player^.playerState.lastVideoTimeStamp<player^.playerState.lastAudioTimestamp then
+  if player^.playerState.lastVideoTimeStamp<=player^.playerState.lastAudioTimestamp then
    repeat
     player^.lastFrameTime:=_GetTimeInUs;
     videoData:=player^.playerState.ReceiveVideo;
