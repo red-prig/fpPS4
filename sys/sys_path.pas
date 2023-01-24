@@ -32,6 +32,11 @@ Function  GetDownloadAvailableSpaceKb(point:PChar;size:PQWORD):Integer;
 
 function  parse_filename(filename:PChar;var r:RawByteString):Integer;
 
+type
+ TFeDirCb=procedure(const S:RawByteString) of object;
+
+Procedure ForEachRootDir(add_dir:TFeDirCb);
+
 implementation
 
 const
@@ -463,7 +468,7 @@ end;
 
 //
 
-function MountDownloadConcat(id:Byte;const filename:RawByteString;var r:RawByteString):Integer;
+function MountDownloadConcat(id:Byte;force:Boolean;const filename:RawByteString;var r:RawByteString):Integer;
 var
  S:RawByteString;
 begin
@@ -475,7 +480,11 @@ begin
 
  //param.sfo download size TODO
  S:=download_path(id);
- if not ForceDirectories(S) then Exit(PT_ERR);
+
+ if force then
+ begin
+  if not ForceDirectories(S) then Exit(PT_ERR);
+ end;
 
  Result:=PathConcat(S,filename,r);
 end;
@@ -487,6 +496,69 @@ begin
  s:=IncludeTrailingPathDelimiter(GetCurrentDir)+dir;
 
  Result:=PathConcat(s,filename,r);
+end;
+
+Procedure ForEachRootDir(add_dir:TFeDirCb);
+var
+ i:Integer;
+ r:RawByteString;
+begin
+ if (add_dir=nil) then Exit;
+
+ add_dir('.');
+ add_dir('..');
+ add_dir('app0');
+
+ if (ps4_app.app1_path<>'') then
+ begin
+  add_dir('app1');
+ end;
+
+ r:='';
+ if (MountMiscConcat('data','',r)=PT_FILE) then
+ if DirectoryExists(r) then
+ begin
+  add_dir('data');
+ end;
+
+ add_dir('dev');
+
+ For i:=0 to 15 do
+ begin
+  r:='';
+  if (MountDownloadConcat(i,False,'',r)=PT_FILE) then
+  if DirectoryExists(r) then
+  begin
+   add_dir('download'+IntToStr(i));
+  end;
+ end;
+
+ For i:=0 to 1 do
+ begin
+  r:='';
+  if (MountSaveConcat(i,'',r)=PT_FILE) then
+  if DirectoryExists(r) then
+  begin
+   add_dir('savedata'+IntToStr(i));
+  end;
+ end;
+
+ add_dir('sys'); //aka sceKernelGetFsSandboxRandomWord
+
+ r:='';
+ if (MountTmpConcat('',r)=PT_FILE) then
+ if DirectoryExists(r) then
+ begin
+  add_dir('temp0');
+ end;
+
+ r:='';
+ if (MountMiscConcat('usr','',r)=PT_FILE) then
+ if DirectoryExists(r) then
+ begin
+  add_dir('usr');
+ end;
+
 end;
 
 //
@@ -565,7 +637,7 @@ begin
          '0'..'1':
            begin
             if (fp^<>#0) then Inc(fp);
-            Result:=MountDownloadConcat(ord((pp+8)^)-ord('0'),fp,r);
+            Result:=MountDownloadConcat(ord((pp+8)^)-ord('0'),True,fp,r);
            end;
          else
             Result:=PT_ERR;

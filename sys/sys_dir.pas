@@ -11,7 +11,8 @@ uses
  RWLock,
  sys_kernel,
  sys_time,
- sys_fd;
+ sys_fd,
+ sys_path;
 
 const
  // File types
@@ -68,6 +69,7 @@ type
   function    fstat        (stat:PSceKernelStat):Integer;                     override;
   function    lseek        (offset:Int64;whence:Integer):Int64;               override;
   function    getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;     override;
+  procedure   add_dir(const name:RawByteString);
  end;
 
 function get_d_type(dwFileAttributes:DWORD):BYTE;
@@ -256,21 +258,6 @@ function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
 var
  f:TDirFile;
 
- procedure add_dir(name:RawByteString);
- var
-  tmp:dirent;
-  i:Integer;
- begin
-  tmp:=Default(dirent);
-
-  i:=Length(f.dirs);
-  move_name(i,DT_DIR,name,@tmp);
-
-  i:=Length(f.dirs);
-  SetLength(f.dirs,i+1);
-  f.dirs[i]:=tmp;
- end;
-
 begin
  Result:=0;
 
@@ -279,11 +266,7 @@ begin
 
  SetLength(f.dirs,0);
 
- add_dir('.');
- add_dir('..');
- add_dir('app0');
- add_dir('dev');
- add_dir('sys');
+ ForEachRootDir(@f.add_dir);
 
  Result:=_sys_open_fd(f,flags);
 
@@ -463,6 +446,21 @@ begin
  end;
 
  Result:=count*SizeOf(dirent);
+end;
+
+procedure TDirFile.add_dir(const name:RawByteString);
+var
+ tmp:dirent;
+ i:Integer;
+begin
+ tmp:=Default(dirent);
+
+ i:=Length(dirs);
+ move_name(i,DT_DIR,name,@tmp);
+
+ i:=Length(dirs);
+ SetLength(dirs,i+1);
+ dirs[i]:=tmp;
 end;
 
 //
