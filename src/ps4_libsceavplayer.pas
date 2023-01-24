@@ -47,15 +47,15 @@ const
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
 
- SceAvPlayerAllocate=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
- SceAvPlayerDeallocate=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
- SceAvPlayerAllocateTexture=function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
+ SceAvPlayerAllocate         =function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
+ SceAvPlayerDeallocate       =procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
+ SceAvPlayerAllocateTexture  =function(argP:Pointer;argAlignment:DWord;argSize:DWord):Pointer; SysV_ABI_CDecl;
  SceAvPlayerDeallocateTexture=procedure(argP:Pointer;argMemory:Pointer); SysV_ABI_CDecl;
 
- SceAvPlayerOpenFile=function(argP:Pointer;argFilename:PChar):Integer; SysV_ABI_CDecl;
- SceAvPlayerCloseFile=function(argP:Pointer):Integer; SysV_ABI_CDecl;
+ SceAvPlayerOpenFile      =function(argP:Pointer;argFilename:PChar):Integer; SysV_ABI_CDecl;
+ SceAvPlayerCloseFile     =function(argP:Pointer):Integer; SysV_ABI_CDecl;
  SceAvPlayerReadOffsetFile=function(argP:Pointer;argBuffer:PByte;argPosition:QWord;argLength:DWord):Integer; SysV_ABI_CDecl;
- SceAvPlayerSizeFile=function(argP:Pointer):QWord; SysV_ABI_CDecl;
+ SceAvPlayerSizeFile      =function(argP:Pointer):QWord; SysV_ABI_CDecl;
 
  SceAvPlayerEventCallback=procedure(p:Pointer;argEventId:Integer;argSourceId:Integer;argEventData:Pointer); SysV_ABI_CDecl;
  SceAvPlayerLogCallback=Pointer;
@@ -266,7 +266,7 @@ type
  PSceAvPlayerHandle=^SceAvPlayerHandle;
 
  PAvPlayerInfo=^TAvPlayerInfo;
- TAvPlayerInfo=record
+ TAvPlayerInfo=object
   handle           :SceAvPlayerHandle;
   lock             :Pointer;
   //
@@ -278,6 +278,19 @@ type
   memoryReplacement:SceAvPlayerMemAllocator;
   fileReplacement  :SceAvPlayerFileReplacement;
   eventReplacement :SceAvPlayerEventReplacement;
+  //
+  function  Allocate         (argAlignment:DWord;argSize:DWord):Pointer;
+  procedure Deallocate       (argMemory:Pointer);
+  function  AllocateTexture  (argAlignment:DWord;argSize:DWord):Pointer;
+  procedure DeallocateTexture(argMemory:Pointer);
+  //
+  procedure EventCallback    (argEventId:Integer;argSourceId:Integer;argEventData:Pointer);
+  //
+  Function  FileReplacementProvided:Boolean;
+  function  open             (argFilename:PChar):Integer;
+  function  close            ():Integer;
+  function  readOffset       (argBuffer:PByte;argPosition:QWord;argLength:DWord):Integer;
+  function  size             ():QWord;
  end;
 
 var
@@ -344,19 +357,98 @@ begin
  Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
 end;
 
+function  TAvPlayerInfo.Allocate(argAlignment:DWord;argSize:DWord):Pointer;
+begin
+ Result:=memoryReplacement.allocate(memoryReplacement.objectPointer,argAlignment,argSize);
+end;
+
+procedure TAvPlayerInfo.Deallocate(argMemory:Pointer);
+begin
+ memoryReplacement.Deallocate(memoryReplacement.objectPointer,argMemory);
+end;
+
+function  TAvPlayerInfo.AllocateTexture(argAlignment:DWord;argSize:DWord):Pointer;
+begin
+ Result:=memoryReplacement.AllocateTexture(memoryReplacement.objectPointer,argAlignment,argSize);
+end;
+
+procedure TAvPlayerInfo.DeallocateTexture(argMemory:Pointer);
+begin
+ memoryReplacement.DeallocateTexture(memoryReplacement.objectPointer,argMemory);
+end;
+
+//
+
+procedure TAvPlayerInfo.EventCallback(argEventId:Integer;argSourceId:Integer;argEventData:Pointer);
+begin
+ if (eventReplacement.eventCallback<>nil) then
+ begin
+  eventReplacement.eventCallback(eventReplacement.objectPointer,argEventId,argSourceId,argEventData);
+ end;
+end;
+
+//
+
+function _test_file_cbs(var m:SceAvPlayerFileReplacement):Boolean; inline;
+begin
+ Result:=False;
+ if (m.open      =nil) then Exit;
+ if (m.close     =nil) then Exit;
+ if (m.readOffset=nil) then Exit;
+ if (m.size      =nil) then Exit;
+ Result:=True;
+end;
+
+Function TAvPlayerInfo.FileReplacementProvided:Boolean;
+begin
+ Result:=_test_file_cbs(fileReplacement);
+end;
+
+function TAvPlayerInfo.open(argFilename:PChar):Integer;
+begin
+ Result:=0;
+ if (fileReplacement.open<>nil) then
+ begin
+  Result:=fileReplacement.open(fileReplacement.objectPointer,argFilename);
+ end;
+end;
+
+function TAvPlayerInfo.close():Integer;
+begin
+ Result:=0;
+ if (fileReplacement.close<>nil) then
+ begin
+  Result:=fileReplacement.close(fileReplacement.objectPointer);
+ end;
+end;
+
+function TAvPlayerInfo.readOffset(argBuffer:PByte;argPosition:QWord;argLength:DWord):Integer;
+begin
+ Result:=0;
+ if (fileReplacement.readOffset<>nil) then
+ begin
+  Result:=fileReplacement.readOffset(fileReplacement.objectPointer,argBuffer,argPosition,argLength);
+ end;
+end;
+
+function TAvPlayerInfo.size():QWord;
+begin
+ Result:=0;
+ if (fileReplacement.size<>nil) then
+ begin
+  Result:=fileReplacement.size(fileReplacement.objectPointer);
+ end;
+end;
+
 procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
 var
  player:PAvPlayerInfo;
 begin
  player:=_GetPlayer(handle);
- if (player<>nil) and (player^.eventReplacement.eventCallback<>nil) then
- begin
-  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
-  player^.eventReplacement.eventCallback(player^.eventReplacement.objectPointer,handle,event,eventData);
- end;
-
  if (player<>nil) then
  begin
+  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
+  player^.EventCallback(handle,event,eventData);
   spin_unlock(player^.lock); //release
  end;
 end;
@@ -460,7 +552,7 @@ begin
    FreeMem(audioBuffer[I]);
   end;
   if videoBuffer[I]<>nil then
-   playerInfo^.memoryReplacement.deallocateTexture(playerInfo^.memoryReplacement.objectPointer,videoBuffer[I]);
+   playerInfo^.DeallocateTexture(videoBuffer[I]);
  end;
  source:='';
  formatContext:=nil;
@@ -641,7 +733,7 @@ begin
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,chunk.nSize);
+    videoBuffer[0]:=playerInfo^.AllocateTexture(0,chunk.nSize);
    end;
    Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
    FreeMem(chunk.pAddr);
@@ -762,7 +854,6 @@ var
  bytesRead      :Integer;
  actualBufSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
- p              :Pointer;
  f              :THandle;
  source         :RawByteString;
 begin
@@ -770,67 +861,65 @@ begin
   Exit(-1);
  player:=_GetPlayer(handle);
  // With file functions provided by client
- if (player<>nil) and (player^.fileReplacement.open<>nil) and (player^.fileReplacement.close<>nil)
-   and (player^.fileReplacement.readOffset<>nil) and (player^.fileReplacement.size<>nil) then
+ if (player<>nil) then
  begin
-  p:=player^.fileReplacement.objectPointer;
-  if player^.fileReplacement.open(p,argFilename)<0 then
+  if player^.FileReplacementProvided then
   begin
-   spin_unlock(player^.lock); //release
-   Exit(-1);
-  end;
-  fileSize:=player^.fileReplacement.size(p);
-  if (fileSize=0) then //result is uint64
-  begin
-   spin_unlock(player^.lock); //release
-   Exit(-1);
-  end;
-  // Read data and write to dump directory
-  // TODO: Should cache the file so it can be reused later
-  Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
-  CreateDir(DIRECTORY_AVPLAYER_DUMP);
-  //
-  source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
-  f:=FileCreate(source,fmOpenWrite);
-  //
-  bytesRemaining:=fileSize;
-  offset:=0;
-  while bytesRemaining>0 do
-  begin
-   actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
-   if bytesRead<0 then
+   if player^.open(argFilename)<0 then
    begin
-    player^.fileReplacement.close(p);
     spin_unlock(player^.lock); //release
     Exit(-1);
    end;
-   FileWrite(f,buf,actualBufSize);
-   Dec(bytesRemaining,actualBufSize);
-   Inc(offset,actualBufSize);
-  end;
-  FileClose(f);
-  player^.fileReplacement.close(p);
-  // Init player
-  player^.playerState.CreateMedia(source);
-  Result:=0;
- end else
- // Without client-side file functions
- begin
-  source:='';
-  Result:=parse_filename(argFilename,source);
-  if (Result=PT_FILE) then //only real files
-  begin
+   fileSize:=player^.size();
+   if (fileSize=0) then //result is uint64
+   begin
+    spin_unlock(player^.lock); //release
+    Exit(-1);
+   end;
+   // Read data and write to dump directory
+   // TODO: Should cache the file so it can be reused later
+   Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
+   CreateDir(DIRECTORY_AVPLAYER_DUMP);
+   //
+   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
+   f:=FileCreate(source,fmOpenWrite);
+   //
+   bytesRemaining:=fileSize;
+   offset:=0;
+   while bytesRemaining>0 do
+   begin
+    actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
+    bytesRead:=player^.readOffset(@buf[0],offset,actualBufSize);
+    if bytesRead<0 then
+    begin
+     player^.close();
+     spin_unlock(player^.lock); //release
+     Exit(-1);
+    end;
+    FileWrite(f,buf,actualBufSize);
+    Dec(bytesRemaining,actualBufSize);
+    Inc(offset,actualBufSize);
+   end;
+   FileClose(f);
+   player^.close();
+   // Init player
    player^.playerState.CreateMedia(source);
    Result:=0;
   end else
+  // Without client-side file functions
   begin
-   Result:=-1;
+   source:='';
+   Result:=parse_filename(argFilename,source);
+   if (Result=PT_FILE) then //only real files
+   begin
+    player^.playerState.CreateMedia(source);
+    Result:=0;
+   end else
+   begin
+    Result:=-1;
+   end;
   end;
- end;
 
- if (player<>nil) then
- begin
   spin_unlock(player^.lock); //release
  end;
 end;
