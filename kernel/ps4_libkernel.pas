@@ -47,6 +47,7 @@ implementation
 
 uses
  atomic,
+ sys_crt,
  sys_path,
  sys_kernel,
  sys_pthread,
@@ -167,6 +168,25 @@ begin
  end;
 end;
 
+function ps4_sceKernelGetModuleInfoInternal(handle:Integer;info:pSceKernelModuleInfoEx):Integer; SysV_ABI_CDecl;
+var
+ node:TElf_node;
+begin
+ if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
+ _sig_lock;
+ Writeln('sceKernelGetModuleInfoInternal:',handle,':',HexStr(info));
+ node:=ps4_app.AcqureFileByHandle(handle);
+ if (node=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_KERNEL_ERROR_ESRCH);
+ end;
+ info^:=node.GetModuleInfoEx;
+ node.Release;
+ _sig_unlock;
+ Result:=0;
+end;
+
 function ps4_sceKernelGetModuleInfo(handle:Integer;info:pSceKernelModuleInfo):Integer; SysV_ABI_CDecl;
 var
  node:TElf_node;
@@ -178,7 +198,7 @@ begin
  if (node=nil) then
  begin
   _sig_unlock;
-  Exit(SCE_KERNEL_ERROR_EINVAL);
+  Exit(SCE_KERNEL_ERROR_ESRCH);
  end;
  info^:=node.GetModuleInfo;
  node.Release;
@@ -552,7 +572,7 @@ begin
  node:=ps4_app.AcqureFileByName(ExtractFileName(fn));
  if (node<>nil) then
  begin
-  Writeln('File Loaded:',ExtractFileName(fn));
+  Writeln(StdWrn,'File Loaded:',ExtractFileName(fn));
 
   Result:=node.Handle;
   node.Release;
@@ -613,6 +633,25 @@ begin
                                    argc,
                                    argp,
                                    0,
+                                   pOpt,
+                                   pRes);
+
+ _sig_unlock;
+end;
+
+function ps4_sceKernelLoadStartModuleForSysmodule(moduleFileName:Pchar;
+                                                  argc:size_t;
+                                                  argp:PPointer;
+                                                  flags:DWORD;
+                                                  pOpt:PSceKernelLoadModuleOpt;
+                                                  pRes:PInteger):SceKernelModule; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+
+ Result:=_sceKernelLoadStartModule(moduleFileName,
+                                   argc,
+                                   argp,
+                                   flags or $10000,
                                    pOpt,
                                    pRes);
 
@@ -931,7 +970,7 @@ function ps4_sceSysmoduleUnloadModuleInternal(id:DWord):Integer; SysV_ABI_CDecl;
 begin
  if ((id or $80000000)=$80000000) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleUnloadModuleInternal:',GetSysmoduleInternalName(id));
+ Writeln(SysLogPrefix,'sceSysmoduleUnloadModuleInternal:',GetSysmoduleInternalName(id));
  Result:=0;
 end;
 
@@ -943,8 +982,18 @@ function ps4_sceSysmoduleUnloadModuleInternalWithArg(id:DWord;
 begin
  if ((id or $80000000)=$80000000) or (flags<>0) then Exit(SCE_SYSMODULE_ERROR_INVALID_VALUE);
 
- Writeln('sceSysmoduleUnloadModuleInternalWithArg:',GetSysmoduleInternalName(id));
+ Writeln(SysLogPrefix,'sceSysmoduleUnloadModuleInternalWithArg:',GetSysmoduleInternalName(id));
  if (pRes<>nil) then pRes^:=0;
+ Result:=0;
+end;
+
+function ps4_sceSysmoduleLoadModuleByNameInternal(name:PChar;
+                                                  argc:size_t;
+                                                  argp:PPointer;
+                                                  flags:DWORD;
+                                                  pRes:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(StdWrn,SysLogPrefix,'sceSysmoduleLoadModuleByNameInternal:',name);
  Result:=0;
 end;
 
@@ -969,6 +1018,8 @@ begin
  lib^.set_proc($847AC6A06A0D7FEB,@ps4_sceSysmoduleLoadModuleInternalWithArg);
  lib^.set_proc($BD7661AED2719067,@ps4_sceSysmoduleUnloadModuleInternal);
  lib^.set_proc($68A6BA61F04A66CE,@ps4_sceSysmoduleUnloadModuleInternalWithArg);
+
+ lib^.set_proc($094F26F90B3E1CDE,@ps4_sceSysmoduleLoadModuleByNameInternal);
 
  lib^.set_proc($E1F539CAF3A4546E,@ps4_sceSysmoduleGetModuleInfoForUnwind);
 end;
@@ -1030,6 +1081,7 @@ begin
  lib^.set_proc($0262749A7DA5E253,@ps4_sceKernelGetLibkernelTextLocation);
  lib^.set_proc($FD84D6FAA5DCDC24,@ps4_sceKernelInternalMemoryGetModuleSegmentInfo);
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
+ lib^.set_proc($1D93BBC4EA2CE317,@ps4_sceKernelGetModuleInfoInternal);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
  lib^.set_proc($4694092552938853,@ps4_sceKernelGetModuleInfoForUnwind);
 
@@ -1056,6 +1108,7 @@ begin
  lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
+ lib^.set_proc($1A0DFEC962FA0D65,@ps4_sceKernelLoadStartModuleForSysmodule);
  lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
  lib^.set_proc($2F01BC8379E2AB00,@ps4_sceKernelDlsym);
 
