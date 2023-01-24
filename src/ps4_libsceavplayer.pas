@@ -310,9 +310,11 @@ begin
  Result:=nil;
  spin_lock(hamt_lock);
   data:=HAMT_search64(@AvHandleHamt,handle);
-  if (data=nil) then Exit;
-  Result:=data^;
-  spin_lock(Result^.lock); //acqure
+  if (data<>nil) then
+  begin
+   Result:=data^;
+   spin_lock(Result^.lock); //acqure
+  end;
  spin_unlock(hamt_lock);
 end;
 
