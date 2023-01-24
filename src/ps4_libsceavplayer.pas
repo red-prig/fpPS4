@@ -1017,6 +1017,7 @@ end;
 
 var
  handle:SceAvPlayerHandle;
+ player:PAvPlayerInfo;
 
 initialization
  AvHandleDict:=TAvHandleDict.Create;
@@ -1026,8 +1027,10 @@ finalization
  // Cleanup leftover handle. This should not happen, unless the game quit halfway or get memory leak somehow
  for handle in AvHandleDict.Keys do
  begin
+  player:=AvHandleDict[handle];
   Writeln('Leftover AvPlayer handle, let me clean it up: ', handle);
-  _sceAvPlayerClose(handle);
+  player^.playerState.FreeMedia;
+  _DeletePlayer(handle);
  end;
 
 end.
