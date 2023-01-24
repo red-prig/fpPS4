@@ -11,14 +11,13 @@ uses
   libavutil,
   libswscale,
   libswresample,
-  windows,
+  hamt,
   ps4_program,
   spinlock,
   sys_types,
   sys_signal,
   sys_path,
   sys_time,
-  sys_pthread,
   Classes,
   SysUtils,
   Generics.Collections,
@@ -263,7 +262,13 @@ type
   function    Buffer(const aType:DWord;const chunk:TMemChunk):Pointer;
  end;
 
+ SceAvPlayerHandle=QWord;
+ PSceAvPlayerHandle=^SceAvPlayerHandle;
+
+ PAvPlayerInfo=^TAvPlayerInfo;
  TAvPlayerInfo=record
+  handle           :SceAvPlayerHandle;
+  //
   playerState      :TAvPlayerState;
   //
   isLooped         :Boolean;
@@ -273,15 +278,11 @@ type
   fileReplacement  :SceAvPlayerFileReplacement;
   eventReplacement :SceAvPlayerEventReplacement;
  end;
- PAvPlayerInfo=^TAvPlayerInfo;
- SceAvPlayerHandle=QWord;
- PSceAvPlayerHandle=^SceAvPlayerHandle;
- TAvHandleDict=specialize TDictionary<SceAvPlayerHandle,PAvPlayerInfo>;
 
 var
  lock        :Pointer;
  handleCount :QWord=0;
- AvHandleDict:TAvHandleDict;
+ AvHandleHamt:TSTUB_HAMT64;
 
 function _GetTimeInUs:QWord; inline;
 begin
@@ -289,27 +290,55 @@ begin
 end;
 
 function _GetPlayer(const handle:SceAvPlayerHandle):PAvPlayerInfo;
+var
+ data:PPointer;
 begin
- if AvHandleDict.ContainsKey(handle) then
-  Result:=AvHandleDict[handle]
- else
-  Result:=nil;
+ Result:=nil;
+ data:=HAMT_search64(@AvHandleHamt,handle);
+ if (data=nil) then Exit;
+ Result:=data^;
 end;
 
 function _AddPlayer(const player:PAvPlayerInfo):SceAvPlayerHandle;
+var
+ data:PPointer;
 begin
  Inc(handleCount);
- AvHandleDict.AddOrSetValue(handleCount,player);
+
+ data:=HAMT_insert64(@AvHandleHamt,handleCount,player);
+
+ Assert(data<>nil,'unexpected err');
+
+ //force reuse
+ data^:=player;
+
+ //save handle
+ player^.handle:=handleCount;
+
  Result:=handleCount;
 end;
 
 procedure _DeletePlayer(const handle:SceAvPlayerHandle);
+var
+ data:PAvPlayerInfo;
 begin
- if AvHandleDict.ContainsKey(handle) then
+ data:=HAMT_delete64(@AvHandleHamt,handle);
+
+ if (data<>nil) then
  begin
-  Dispose(AvHandleDict[handle]);
-  AvHandleDict.Remove(handle);
+  Dispose(data);
  end;
+end;
+
+procedure AvHandleClean(data,userdata:Pointer);
+var
+ handle:SceAvPlayerHandle;
+ player:PAvPlayerInfo;
+begin
+ if (data=nil) then Exit;
+ player:=data;
+ handle:=player^.handle;
+ Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
 end;
 
 procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
@@ -1015,22 +1044,12 @@ begin
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
 
-var
- handle:SceAvPlayerHandle;
- player:PAvPlayerInfo;
-
 initialization
- AvHandleDict:=TAvHandleDict.Create;
+ FillChar(AvHandleHamt,SizeOf(AvHandleHamt),0);
  ps4_app.RegistredPreLoad('libSceAvPlayer.prx',@Load_libSceAvPlayer);
 
 finalization
  // Cleanup leftover handle. This should not happen, unless the game quit halfway or get memory leak somehow
- for handle in AvHandleDict.Keys do
- begin
-  player:=AvHandleDict[handle];
-  Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
-  //player^.playerState.FreeMedia;
-  //_DeletePlayer(handle);
- end;
+ HAMT_clear32(@AvHandleHamt,@AvHandleClean,nil);
 
 end.
