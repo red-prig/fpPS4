@@ -507,6 +507,7 @@ type
 
  time_t=QWORD;
  ptime_t=^time_t;
+ psize_t=^size_t;
 
  TMemChunk=packed record
   pAddr:Pointer;
