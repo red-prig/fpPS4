@@ -53,8 +53,8 @@ function ps4_sceKernelFstat(fd:Integer;stat:PSceKernelStat):Integer; SysV_ABI_CD
 function ps4_getdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64; SysV_ABI_CDecl;
 function ps4_getdents(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
 function ps4_sceKernelGetdirentries(fd:Integer;buf:Pointer;nbytes:Int64;basep:PInt64):Int64; SysV_ABI_CDecl;
-function ps4_sceKernelGetdents(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl
-;
+function ps4_sceKernelGetdents(fd:Integer;buf:Pointer;nbytes:Int64):Int64; SysV_ABI_CDecl;
+
 function ps4_fsync(fd:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelFsync(fd:Integer):Integer; SysV_ABI_CDecl;
 
