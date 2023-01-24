@@ -278,24 +278,53 @@ type
   eventReplacement :SceAvPlayerEventReplacement;
  end;
  PAvPlayerInfo=^TAvPlayerInfo;
- // For now AvPlayer handle is pointer that points directly to player struct
- SceAvPlayerHandle=PAvPlayerInfo;
+ SceAvPlayerHandle=DWord;
  PSceAvPlayerHandle=^SceAvPlayerHandle;
+ TAvHandleDict=specialize TDictionary<SceAvPlayerHandle,PAvPlayerInfo>;
 
 var
- lock:Pointer;
+ lock        :Pointer;
+ handleCount :DWord=0;
+ AvHandleDict:TAvHandleDict;
 
-function GetTimeInUs:QWord; inline;
+function _GetTimeInUs:QWord; inline;
 begin
  Result:=SwGetTimeUsec;
 end;
 
-procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
+function _GetPlayer(const handle:SceAvPlayerHandle):PAvPlayerInfo;
 begin
- if (handle<>nil) and (handle^.eventReplacement.eventCallback<>nil) then
+ if AvHandleDict.ContainsKey(handle) then
+  Result:=AvHandleDict[handle]
+ else
+  Result:=nil;
+end;
+
+function _AddPlayer(const player:PAvPlayerInfo):SceAvPlayerHandle;
+begin
+ Inc(handleCount);
+ AvHandleDict.AddOrSetValue(handleCount,player);
+ Result:=handleCount;
+end;
+
+procedure _DeletePlayer(const handle:SceAvPlayerHandle);
+begin
+ if AvHandleDict.ContainsKey(handle) then
+ begin
+  Dispose(AvHandleDict[handle]);
+  AvHandleDict.Remove(handle);
+ end;
+end;
+
+procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
+var
+ player:PAvPlayerInfo;
+begin
+ player:=_GetPlayer(handle);
+ if (player<>nil) and (player^.eventReplacement.eventCallback<>nil) then
  begin
   Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
-  handle^.eventReplacement.eventCallback(handle^.eventReplacement.objectPointer,0,event,eventData);
+  player^.eventReplacement.eventCallback(player^.eventReplacement.objectPointer,handle,event,eventData);
  end;
 end;
 
@@ -599,8 +628,10 @@ begin
 end;
 
 function _sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle;
+var
+ player:PAvPlayerInfo;
 begin
- Result:=nil;
+ Result:=0;
  if (pInit=nil) then Exit;
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
@@ -611,15 +642,16 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInit');
 
- New(Result);
- Result^.playerState:=TAvPlayerState.Create;
- Result^.playerState.info :=Result;
+ New(player);
+ player^.playerState:=TAvPlayerState.Create;
+ player^.playerState.info :=player;
 
- Result^.memoryReplacement:=pInit^.memoryReplacement;
- Result^.eventReplacement :=pInit^.eventReplacement;
- Result^.fileReplacement  :=pInit^.fileReplacement;
+ player^.memoryReplacement:=pInit^.memoryReplacement;
+ player^.eventReplacement :=pInit^.eventReplacement;
+ player^.fileReplacement  :=pInit^.fileReplacement;
 
- Result^.lastFrameTime    :=GetTimeInUs;
+ player^.lastFrameTime    :=_GetTimeInUs;
+ Result:=_AddPlayer(player);
 end;
 
 function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV_ABI_CDecl;
@@ -632,7 +664,7 @@ end;
 
 function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer;
 var
- handle:SceAvPlayerHandle;
+ player:PAvPlayerInfo;
 begin
  Result:=-1;
  if (pInit=nil) or (pHandle=nil) then Exit;
@@ -645,17 +677,17 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInitEx');
 
- New(handle);
- handle^.playerState:=TAvPlayerState.Create;
- handle^.playerState.info :=handle;
+ New(player);
+ player^.playerState:=TAvPlayerState.Create;
+ player^.playerState.info :=player;
 
- handle^.memoryReplacement:=pInit^.memoryReplacement;
- handle^.eventReplacement :=pInit^.eventReplacement;
- handle^.fileReplacement  :=pInit^.fileReplacement;
+ player^.memoryReplacement:=pInit^.memoryReplacement;
+ player^.eventReplacement :=pInit^.eventReplacement;
+ player^.fileReplacement  :=pInit^.fileReplacement;
 
- handle^.lastFrameTime    :=GetTimeInUs;
+ player^.lastFrameTime    :=_GetTimeInUs;
 
- pHandle^:=handle;
+ pHandle^:=_AddPlayer(player);
  Result:=0;
 end;
 
@@ -668,9 +700,12 @@ begin
 end;
 
 function ps4_sceAvPlayerPostInit(handle:SceAvPlayerHandle;pPostInit:PSceAvPlayerPostInitData):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
 begin
+ player:=_GetPlayer(handle);
  Result:=-1;
- if (handle=nil) or (pPostInit=nil) then Exit;
+ if (player=nil) or (pPostInit=nil) then Exit;
  Writeln(SysLogPrefix,'sceAvPlayerPostInit');
  Result:=0;
 end;
@@ -679,6 +714,7 @@ function _sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integ
 const
  BUF_SIZE=512*1024;
 var
+ player         :PAvPlayerInfo;
  fileSize,
  bytesRemaining,
  offset         :QWord;
@@ -691,18 +727,19 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
+ player:=_GetPlayer(handle);
  spin_lock(lock);
  // With file functions provided by client
- if (handle<>nil) and (handle^.fileReplacement.open<>nil) and (handle^.fileReplacement.close<>nil)
-   and (handle^.fileReplacement.readOffset<>nil) and (handle^.fileReplacement.size<>nil) then
+ if (player<>nil) and (player^.fileReplacement.open<>nil) and (player^.fileReplacement.close<>nil)
+   and (player^.fileReplacement.readOffset<>nil) and (player^.fileReplacement.size<>nil) then
  begin
-  p:=handle^.fileReplacement.objectPointer;
-  if handle^.fileReplacement.open(p,argFilename)<0 then
+  p:=player^.fileReplacement.objectPointer;
+  if player^.fileReplacement.open(p,argFilename)<0 then
   begin
    spin_unlock(lock);
    Exit(-1);
   end;
-  fileSize:=handle^.fileReplacement.size(p);
+  fileSize:=player^.fileReplacement.size(p);
   if (fileSize=0) then //result is uint64
   begin
    spin_unlock(lock);
@@ -721,10 +758,10 @@ begin
   while bytesRemaining>0 do
   begin
    actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-   bytesRead:=handle^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
+   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
    if bytesRead<0 then
    begin
-    handle^.fileReplacement.close(p);
+    player^.fileReplacement.close(p);
     spin_unlock(lock);
     Exit(-1);
    end;
@@ -733,9 +770,9 @@ begin
    Inc(offset,actualBufSize);
   end;
   FileClose(f);
-  handle^.fileReplacement.close(p);
+  player^.fileReplacement.close(p);
   // Init player
-  handle^.playerState.CreateMedia(source);
+  player^.playerState.CreateMedia(source);
   Result:=0;
  end else
  // Without client-side file functions
@@ -744,7 +781,7 @@ begin
   Result:=parse_filename(argFilename,source);
   if (Result=PT_FILE) then //only real files
   begin
-   handle^.playerState.CreateMedia(source);
+   player^.playerState.CreateMedia(source);
    Result:=0;
   end else
   begin
@@ -782,47 +819,55 @@ begin
 end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
+ player:=_GetPlayer(handle);
  //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (handle=nil) or (not handle^.playerState.IsPlaying) then
+ if (player=nil) or (not player^.playerState.IsPlaying) then
   Exit(False);
  Exit(True);
 end;
 
 function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):DWord; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(0);
+ player:=_GetPlayer(handle);
  Writeln(SysLogPrefix,'sceAvPlayerSetLooping');
  Result:=0;
- handle^.isLooped:=loopFlag;
+ player^.isLooped:=loopFlag;
 end;
 
 function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool;
 var
  audioData:TMemChunk;
+ player   :PAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
+ player:=_GetPlayer(handle);
  //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) and (not handle^.isPaused) then
+ if (frameInfo<>nil) and (player<>nil) and (player^.playerState.IsPlaying) and (not player^.isPaused) then
  begin
   audioData:=Default(TMemChunk);
   spin_lock(lock);
-  audioData:=handle^.playerState.ReceiveAudio;
+  audioData:=player^.playerState.ReceiveAudio;
   if (audioData.pData=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastAudioTimeStamp);
-  frameInfo^.details.audio.channelCount:=handle^.playerState.channelCount;
-  frameInfo^.details.audio.sampleRate:=handle^.playerState.sampleRate;
-  frameInfo^.details.audio.size:=handle^.playerState.channelCount*handle^.playerState.sampleCount*SizeOf(SmallInt);
-  frameInfo^.pData:=handle^.playerState.Buffer(0,audioData);
+  frameInfo^.timeStamp:=_usec2msec(player^.playerState.lastAudioTimeStamp);
+  frameInfo^.details.audio.channelCount:=player^.playerState.channelCount;
+  frameInfo^.details.audio.sampleRate:=player^.playerState.sampleRate;
+  frameInfo^.details.audio.size:=player^.playerState.channelCount*player^.playerState.sampleCount*SizeOf(SmallInt);
+  frameInfo^.pData:=player^.playerState.Buffer(0,audioData);
   spin_unlock(lock);
   Result:=True;
  end;
@@ -838,32 +883,34 @@ end;
 function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool;
 var
  videoData:TMemChunk;
+ player   :PAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
  //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
+ player:=_GetPlayer(handle);
  Result:=False;
- if (frameInfo<>nil) and (handle<>nil) and (handle^.playerState.IsPlaying) then
+ if (frameInfo<>nil) and (player<>nil) and (player^.playerState.IsPlaying) then
  begin
   videoData:=Default(TMemChunk);
   spin_lock(lock);
-  if handle^.playerState.lastVideoTimeStamp<handle^.playerState.lastAudioTimestamp then
+  if player^.playerState.lastVideoTimeStamp<player^.playerState.lastAudioTimestamp then
    repeat
-    handle^.lastFrameTime:=GetTimeInUs;
-    videoData:=handle^.playerState.ReceiveVideo;
-   until (videoData.pData=nil) or (handle^.playerState.lastVideoTimeStamp>=handle^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
+    player^.lastFrameTime:=_GetTimeInUs;
+    videoData:=player^.playerState.ReceiveVideo;
+   until (videoData.pData=nil) or (player^.playerState.lastVideoTimeStamp>=player^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
   if (videoData.pData=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(handle^.playerState.lastVideoTimeStamp);
-  frameInfo^.details.video.width:=handle^.playerState.videoCodecContext^.width;
-  frameInfo^.details.video.height:=handle^.playerState.videoCodecContext^.height;
-  frameInfo^.details.video.aspectRatio:=handle^.playerState.videoCodecContext^.width/handle^.playerState.videoCodecContext^.height;
+  frameInfo^.timeStamp:=_usec2msec(player^.playerState.lastVideoTimeStamp);
+  frameInfo^.details.video.width:=player^.playerState.videoCodecContext^.width;
+  frameInfo^.details.video.height:=player^.playerState.videoCodecContext^.height;
+  frameInfo^.details.video.aspectRatio:=player^.playerState.videoCodecContext^.width/player^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.framerate:=0;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  frameInfo^.pData:=handle^.playerState.Buffer(1,videoData);
+  frameInfo^.pData:=player^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
   Result:=True;
  end;
@@ -884,21 +931,27 @@ begin
 end;
 
 function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(0);
- if (handle=nil) or (not handle^.playerState.IsPlaying) then
+ player:=_GetPlayer(handle);
+ if (player=nil) or (not player^.playerState.IsPlaying) then
   Result:=0
  else
-  Result:=_usec2msec(handle^.playerState.lastVideoTimeStamp);
+  Result:=_usec2msec(player^.playerState.lastVideoTimeStamp);
 end;
 
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
+var
+ player:PAvPlayerInfo;
 begin
+ player:=_GetPlayer(handle);
  Result:=-1;
- if (handle<>nil) then
+ if (player<>nil) then
  begin
-  handle^.playerState.FreeMedia;
+  player^.playerState.FreeMedia;
  end;
  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
  Result:=0;
@@ -921,12 +974,15 @@ begin
 end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
+var
+ player:PAvPlayerInfo;
 begin
+ player:=_GetPlayer(handle);
  Result:=-1;
- if (handle=nil) then Exit;
+ if (player=nil) then Exit;
 
  _sceAvPlayerStop(handle);
- Dispose(handle);
+ _DeletePlayer(handle);
 
  Result:=0;
 end;
@@ -934,6 +990,7 @@ end;
 function ps4_sceAvPlayerClose(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 begin
  _sig_lock;
+ Writeln(SysLogPrefix,'sceAvPlayerClose');
  Result:=_sceAvPlayerClose(handle);
  _sig_unlock;
 end;
@@ -962,7 +1019,19 @@ begin
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
 
+var
+ handle:SceAvPlayerHandle;
+
 initialization
+ AvHandleDict:=TAvHandleDict.Create;
  ps4_app.RegistredPreLoad('libSceAvPlayer.prx',@Load_libSceAvPlayer);
+
+finalization
+ // Cleanup leftover handle. This should not happen, unless the game quit halfway or get memory leak somehow
+ for handle in AvHandleDict.Keys do
+ begin
+  Writeln('Leftover AvPlayer handle, let me clean it up: ', handle);
+  _sceAvPlayerClose(handle);
+ end;
 
 end.
