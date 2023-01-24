@@ -715,7 +715,7 @@ var
  bytesRemaining,
  offset         :QWord;
  bytesRead      :Integer;
- actualBunSize  :QWord;
+ actualBufSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
  p              :Pointer;
  f              :THandle;
@@ -753,17 +753,17 @@ begin
   offset:=0;
   while bytesRemaining>0 do
   begin
-   actualBunSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBunSize);
+   actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
+   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
    if bytesRead<0 then
    begin
     player^.fileReplacement.close(p);
     spin_unlock(lock);
     Exit(-1);
    end;
-   FileWrite(f,buf,actualBunSize);
-   Dec(bytesRemaining,actualBunSize);
-   Inc(offset,actualBunSize);
+   FileWrite(f,buf,actualBufSize);
+   Dec(bytesRemaining,actualBufSize);
+   Inc(offset,actualBufSize);
   end;
   FileClose(f);
   player^.fileReplacement.close(p);
