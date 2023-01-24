@@ -14,6 +14,7 @@ uses
   windows,
   ps4_program,
   spinlock,
+  sys_types,
   sys_signal,
   sys_path,
   sys_time,
@@ -161,7 +162,7 @@ type
  end;
 
  SceAvPlayerFrameInfo=packed record
-  pData    :PByte;
+  pAddr    :PByte;
   reserved :DWORD;
   _align   :DWORD;
   timeStamp:QWord; //The timestamp in ms
@@ -209,7 +210,7 @@ type
  end;
 
  SceAvPlayerFrameInfoEx=packed record
-  pData    :PByte;
+  pAddr    :PByte;
   reserved :DWORD;
   _align   :DWORD;
   timeStamp:QWord; //The timestamp in ms
@@ -232,11 +233,6 @@ type
   reserved2 :array[0..43] of Byte;
  end;
  PSceAvPlayerSourceDetails=^SceAvPlayerSourceDetails;
-
- TMemChunk=packed record
-  pData:Pointer;
-  fSize:Ptruint;
- end;
 
  TAvPlayerState=class
   formatContext       :PAVFormatContext;
@@ -489,7 +485,7 @@ begin
  Result:=Default(TMemChunk);
  if (audioStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
- Result.pData:=nil;
+ Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(audioCodecContext,frame);
@@ -507,14 +503,14 @@ begin
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
   sampleRate:=frame^.sample_rate;
-  Result.fSize:=sampleCount*channelCount*SizeOf(SmallInt);
-  GetMem(Result.pData,Result.fSize);
+  Result.nSize:=sampleCount*channelCount*SizeOf(SmallInt);
+  GetMem(Result.pAddr,Result.nSize);
   for i:=0 to sampleCount-1 do
    for j:=0 to channelCount-1 do
    begin
     fdata:=PSingle(frame^.data[j]);
     pcmSample:=Floor(fdata[i]*High(SmallInt));
-    PSmallInt(Result.pData)[i*channelCount+j]:=pcmSample;
+    PSmallInt(Result.pAddr)[i*channelCount+j]:=pcmSample;
    end;
   break;
  end;
@@ -535,7 +531,7 @@ begin
  Result:=Default(TMemChunk);
  if (videoStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
- Result.pData:=nil;
+ Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(videoCodecContext,frame);
@@ -550,10 +546,10 @@ begin
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
    Writeln('Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
-  Result.fSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
-  GetMem(Result.pData,Result.fSize);
+  Result.nSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
+  GetMem(Result.pAddr,Result.nSize);
 
-  p:=Result.pData;
+  p:=Result.pAddr;
   for i:=0 to frame^.height-1 do
   begin
    Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
@@ -593,25 +589,25 @@ begin
  playerInfo:=info;
  if aType=0 then
  begin
-  if (chunk.pData<>nil) then
+  if (chunk.pAddr<>nil) then
   begin
    if (audioBuffer[0]<>nil) then
    begin
     FreeMem(audioBuffer[0]);
    end;
-   audioBuffer[0]:=chunk.pData;
+   audioBuffer[0]:=chunk.pAddr;
   end;
   Exit(audioBuffer[0]);
  end else
  begin
-  if (chunk.pData<>nil) then
+  if (chunk.pAddr<>nil) then
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,chunk.fSize);
+    videoBuffer[0]:=playerInfo^.memoryReplacement.allocateTexture(playerInfo^.memoryReplacement.objectPointer,0,chunk.nSize);
    end;
-   Move(chunk.pData^,videoBuffer[0]^,chunk.fSize);
-   FreeMem(chunk.pData);
+   Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
+   FreeMem(chunk.pAddr);
   end;
   Exit(videoBuffer[0]);
  end;
@@ -719,7 +715,7 @@ var
  bytesRemaining,
  offset         :QWord;
  bytesRead      :Integer;
- actualBufSize  :QWord;
+ actualBunSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
  p              :Pointer;
  f              :THandle;
@@ -757,17 +753,17 @@ begin
   offset:=0;
   while bytesRemaining>0 do
   begin
-   actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBufSize);
+   actualBunSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
+   bytesRead:=player^.fileReplacement.readOffset(p,@buf[0],offset,actualBunSize);
    if bytesRead<0 then
    begin
     player^.fileReplacement.close(p);
     spin_unlock(lock);
     Exit(-1);
    end;
-   FileWrite(f,buf,actualBufSize);
-   Dec(bytesRemaining,actualBufSize);
-   Inc(offset,actualBufSize);
+   FileWrite(f,buf,actualBunSize);
+   Dec(bytesRemaining,actualBunSize);
+   Inc(offset,actualBunSize);
   end;
   FileClose(f);
   player^.fileReplacement.close(p);
@@ -858,7 +854,7 @@ begin
   audioData:=Default(TMemChunk);
   spin_lock(lock);
   audioData:=player^.playerState.ReceiveAudio;
-  if (audioData.pData=nil) then
+  if (audioData.pAddr=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
@@ -867,7 +863,7 @@ begin
   frameInfo^.details.audio.channelCount:=player^.playerState.channelCount;
   frameInfo^.details.audio.sampleRate:=player^.playerState.sampleRate;
   frameInfo^.details.audio.size:=player^.playerState.channelCount*player^.playerState.sampleCount*SizeOf(SmallInt);
-  frameInfo^.pData:=player^.playerState.Buffer(0,audioData);
+  frameInfo^.pAddr:=player^.playerState.Buffer(0,audioData);
   spin_unlock(lock);
   Result:=True;
  end;
@@ -898,8 +894,8 @@ begin
    repeat
     player^.lastFrameTime:=_GetTimeInUs;
     videoData:=player^.playerState.ReceiveVideo;
-   until (videoData.pData=nil) or (player^.playerState.lastVideoTimeStamp>=player^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
-  if (videoData.pData=nil) then
+   until (videoData.pAddr=nil) or (player^.playerState.lastVideoTimeStamp>=player^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
+  if (videoData.pAddr=nil) then
   begin
    spin_unlock(lock);
    Exit(False);
@@ -910,7 +906,7 @@ begin
   frameInfo^.details.video.aspectRatio:=player^.playerState.videoCodecContext^.width/player^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.framerate:=0;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  frameInfo^.pData:=player^.playerState.Buffer(1,videoData);
+  frameInfo^.pAddr:=player^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
   Result:=True;
  end;
