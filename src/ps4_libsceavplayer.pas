@@ -1029,8 +1029,8 @@ finalization
  begin
   player:=AvHandleDict[handle];
   Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
-  player^.playerState.FreeMedia;
-  _DeletePlayer(handle);
+  //player^.playerState.FreeMedia;
+  //_DeletePlayer(handle);
  end;
 
 end.
