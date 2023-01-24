@@ -498,7 +498,7 @@ begin
   end;
   //
   if frame^.format<>Integer(AV_SAMPLE_FMT_FLTP) then
-   Writeln('Unknown audio format: ',frame^.format);
+   Writeln('ERROR: Unknown audio format: ',frame^.format);
   lastAudioTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[audioStreamId]^.time_base,AV_TIME_BASE_Q);
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
@@ -544,7 +544,7 @@ begin
   end;
   //
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
-   Writeln('Unknown video format: ',frame^.format);
+   Writeln('ERROR: Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
   Result.nSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
   GetMem(Result.pAddr,Result.nSize);
@@ -632,7 +632,7 @@ begin
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
-  Writeln(SysLogPrefix,'All allocators are required for AVPlayer Initialisation.');
+  Writeln(SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
   Exit;
  end;
 
@@ -667,7 +667,7 @@ begin
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
-  Writeln(SysLogPrefix,'All allocators are required for AVPlayer Initialisation.');
+  Writeln(SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
   Exit;
  end;
 
@@ -804,7 +804,7 @@ begin
   if sourceDetails^.sourceType=1 then
    Writeln('Source type: MP4')
   else
-   Writeln('Source type: Unknown ',sourceDetails^.sourceType);
+   Writeln('ERROR: Source type: Unknown ',sourceDetails^.sourceType);
   Result:=_sceAvPlayerAddSource(handle,sourceDetails^.uri.name)
  end else
  begin
@@ -1028,7 +1028,7 @@ finalization
  for handle in AvHandleDict.Keys do
  begin
   player:=AvHandleDict[handle];
-  Writeln('Leftover AvPlayer handle, let me clean it up: ', handle);
+  Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
   player^.playerState.FreeMedia;
   _DeletePlayer(handle);
  end;
