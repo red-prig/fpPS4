@@ -122,7 +122,15 @@ begin
  Case Result of
   PT_ROOT:
     begin
-     Result:=_sys_root_open(rp,flags,mode);
+     if (rp='') then
+     begin
+      //root dir
+      Result:=_sys_root_dir_open(rp,flags,mode);
+     end else
+     begin
+      //root file
+      Exit(-ENOENT);
+     end;
     end;
   PT_FILE:
     begin
@@ -613,7 +621,15 @@ begin
  Case Result of
   PT_ROOT:
    begin
-    Result:=_sys_root_stat(rp,stat);
+    if (rp='') then
+    begin
+     //root dir
+     Result:=_sys_root_dir_stat(rp,stat);
+    end else
+    begin
+     //root file
+     Exit(ENOENT);
+    end;
    end;
   PT_FILE:
     begin

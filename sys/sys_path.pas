@@ -683,6 +683,7 @@ begin
     begin
      if (fp^=#0) then //root???
      begin
+      r:=pp;
       Result:=PT_ROOT;
      end else
      begin

@@ -42,8 +42,8 @@ type
 function _sys_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
 function _sys_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 
-function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
-function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+function _sys_root_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_root_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 
 implementation
 
@@ -254,7 +254,7 @@ end;
 
 //
 
-function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_root_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
 var
  f:TDirFile;
 
@@ -279,7 +279,7 @@ begin
  end;
 end;
 
-function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+function _sys_root_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 begin
  stat^:=Default(SceKernelStat);
 
