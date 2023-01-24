@@ -274,13 +274,13 @@ type
   eventReplacement :SceAvPlayerEventReplacement;
  end;
  PAvPlayerInfo=^TAvPlayerInfo;
- SceAvPlayerHandle=DWord;
+ SceAvPlayerHandle=QWord;
  PSceAvPlayerHandle=^SceAvPlayerHandle;
  TAvHandleDict=specialize TDictionary<SceAvPlayerHandle,PAvPlayerInfo>;
 
 var
  lock        :Pointer;
- handleCount :DWord=0;
+ handleCount :QWord=0;
  AvHandleDict:TAvHandleDict;
 
 function _GetTimeInUs:QWord; inline;
