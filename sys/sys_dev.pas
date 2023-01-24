@@ -259,7 +259,7 @@ begin
  begin
   n:=read(vector[i].iov_base,vector[i].iov_len);
 
-  if (n>0) then
+  if (n>=0) then
   begin
    Result:=Result+n;
    if (n<vector[i].iov_len) then Exit;
@@ -301,7 +301,7 @@ begin
  begin
   n:=write(vector[i].iov_base,vector[i].iov_len);
 
-  if (n>0) then
+  if (n>=0) then
   begin
    Result:=Result+n;
    if (n<vector[i].iov_len) then Exit;
