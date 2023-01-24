@@ -162,7 +162,7 @@ type
  end;
 
  SceAvPlayerFrameInfo=packed record
-  pAddr    :PByte;
+  pData    :PByte;
   reserved :DWORD;
   _align   :DWORD;
   timeStamp:QWord; //The timestamp in ms
@@ -210,7 +210,7 @@ type
  end;
 
  SceAvPlayerFrameInfoEx=packed record
-  pAddr    :PByte;
+  pData    :PByte;
   reserved :DWORD;
   _align   :DWORD;
   timeStamp:QWord; //The timestamp in ms
@@ -863,7 +863,7 @@ begin
   frameInfo^.details.audio.channelCount:=player^.playerState.channelCount;
   frameInfo^.details.audio.sampleRate:=player^.playerState.sampleRate;
   frameInfo^.details.audio.size:=player^.playerState.channelCount*player^.playerState.sampleCount*SizeOf(SmallInt);
-  frameInfo^.pAddr:=player^.playerState.Buffer(0,audioData);
+  frameInfo^.pData:=player^.playerState.Buffer(0,audioData);
   spin_unlock(lock);
   Result:=True;
  end;
@@ -906,7 +906,7 @@ begin
   frameInfo^.details.video.aspectRatio:=player^.playerState.videoCodecContext^.width/player^.playerState.videoCodecContext^.height;
   frameInfo^.details.video.framerate:=0;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  frameInfo^.pAddr:=player^.playerState.Buffer(1,videoData);
+  frameInfo^.pData:=player^.playerState.Buffer(1,videoData);
   spin_unlock(lock);
   Result:=True;
  end;
