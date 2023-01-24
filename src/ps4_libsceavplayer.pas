@@ -355,6 +355,7 @@ begin
  player:=data;
  handle:=player^.handle;
  Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
+ FreeMem(player);
 end;
 
 function  TAvPlayerInfo.Allocate(argAlignment:DWord;argSize:DWord):Pointer;
