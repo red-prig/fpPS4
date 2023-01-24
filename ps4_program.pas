@@ -11,6 +11,7 @@ uses
   RWLock,
   hamt,
   sys_types,
+  sys_crt,
   sys_kernel,
   ps4_handles;
 
@@ -726,7 +727,7 @@ begin
 
  if (PP^<>Pointer(node)) then
  begin
-  Writeln(StdErr,'Warn, ',node.pFileName,' file is registred');
+  Writeln(StdWrn,'[Warn]:',node.pFileName,' file is registred');
   Result:=False;
  end;
 
@@ -788,7 +789,7 @@ begin
  nid:=ps4_nid_hash(strName);
  PP:=HAMT_insert64(@mods.hamt,nid,Pointer(node));
  Assert(PP<>nil);
- if (PP^<>Pointer(node)) then Writeln(StdErr,'Warn, ',strName,' module is registred');
+ if (PP^<>Pointer(node)) then Writeln(StdWrn,'[Warn]:',strName,' module is registred');
 end;
 
 Procedure Tps4_program.SetLib(lib:PLIBRARY);
@@ -802,7 +803,7 @@ begin
  nid:=ps4_nid_hash(lib^.strName);
  PP:=HAMT_insert64(@libs.hamt,nid,Pointer(lib));
  Assert(PP<>nil);
- if (PP^<>Pointer(lib)) then Writeln(StdErr,'Warn, ',lib^.strName,' lib is registred');
+ if (PP^<>Pointer(lib)) then Writeln(StdWrn,'[Warn]:',lib^.strName,' lib is registred');
 end;
 
 function Tps4_program.GetLib(const strName:RawByteString):PLIBRARY;
@@ -891,7 +892,7 @@ begin
  pre_load.LockWr;
  if not pre_load._set_proc(nid,Pointer(cb)) then
  begin
-  Writeln(StdErr,'Warn, ',strName,' is registred')
+  Writeln(StdWrn,'[Warn]:',strName,' is registred')
  end;
  pre_load.Unlock;
 end;
@@ -905,7 +906,7 @@ begin
  fin_load.LockWr;
  if not fin_load._set_proc(nid,Pointer(cb)) then
  begin
-  Writeln(StdErr,'Warn, ',strName,' is registred')
+  Writeln(StdWrn,'[Warn]:',strName,' is registred')
  end;
  fin_load.Unlock;
 end;
@@ -1079,7 +1080,7 @@ begin
   node:=Loader(S);
   if (node=nil) then
   begin
-   Writeln(StdErr,'Warn, file ',S,' not loaded!');
+   Writeln(StdWrn,'[Warn]:',' file ',S,' not loaded!');
   end else
   begin
    PopupFile(node);

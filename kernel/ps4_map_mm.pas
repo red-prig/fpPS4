@@ -8,6 +8,7 @@ uses
   Windows,
   RWLock,
   sys_types,
+  sys_crt,
   mmap,
   mm_adr_direct,
   mm_adr_virtual,
@@ -718,7 +719,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelAllocateDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelAllocateDirectMemory:',Result);
  end;
  _set_errno(Result);
 
@@ -739,7 +740,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelAllocateMainDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelAllocateMainDirectMemory:',Result);
  end;
  _set_errno(Result);
 
@@ -762,7 +763,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelAvailableDirectMemorySize:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelAvailableDirectMemorySize:',Result);
  end;
  _set_errno(Result);
 
@@ -783,7 +784,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelDirectMemoryQuery:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelDirectMemoryQuery:',Result);
  end;
  _set_errno(Result);
 
@@ -805,7 +806,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelGetDirectMemoryType:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelGetDirectMemoryType:',Result);
  end;
  _set_errno(Result);
 
@@ -819,7 +820,7 @@ begin
  if (Result<>0) then
  begin
   Result:=_sceKernelCheckedReleaseDirectMemory(start,len);
-  Writeln(StdErr,'[WARN]:sceKernelCheckedReleaseDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelCheckedReleaseDirectMemory:',Result);
  end;
  _set_errno(Result);
 
@@ -832,7 +833,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelReleaseDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelReleaseDirectMemory:',Result);
  end;
  _set_errno(Result);
 
@@ -1142,7 +1143,7 @@ begin
    Exit(SCE_KERNEL_ERROR_EINVAL);
   end;
   flags:=flags and $ffffffef;
-  Writeln('[WARNING] map(addr=0, flags=MAP_FIXED)');
+  Writeln(StdWrn,'[WARNING] map(addr=0, flags=MAP_FIXED)');
  end;
 
  if (((flags and MAP_FIXED)=0) and (addr=nil)) then
@@ -1394,7 +1395,7 @@ begin
   Result:=addr;
  end else
  begin
-  Writeln(StdErr,'[WARN]:mmap:',err);
+  Writeln(StdWrn,'[WARN]:mmap:',err);
   Result:=MAP_FAILED;
  end;
 end;
@@ -1419,7 +1420,7 @@ begin
   res^:=addr;
  end else
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMmap:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMmap:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1432,7 +1433,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:munmap:',Result);
+  Writeln(StdWrn,'[WARN]:munmap:',Result);
  end;
 
  Result:=_set_errno(Result);
@@ -1445,7 +1446,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMunmap:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMunmap:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1458,7 +1459,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelReleaseFlexibleMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelReleaseFlexibleMemory:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1473,7 +1474,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:mprotect:',Result);
+  Writeln(StdWrn,'[WARN]:mprotect:',Result);
  end;
 
  Result:=_set_errno(Result);
@@ -1488,7 +1489,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMprotect:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMprotect:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1503,7 +1504,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMtypeprotect:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMtypeprotect:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1518,7 +1519,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelQueryMemoryProtection:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelQueryMemoryProtection:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1534,7 +1535,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelVirtualQuery:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelVirtualQuery:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1547,7 +1548,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelSetVirtualRangeName:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelSetVirtualRangeName:',Result);
  end;
 
  Result:=px2sce(Result);
@@ -1562,7 +1563,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapFlexibleMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapFlexibleMemory:',Result);
  end;
 end;
 
@@ -1580,7 +1581,7 @@ begin
  end else
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapNamedFlexibleMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapNamedFlexibleMemory:',Result);
  end;
 end;
 
@@ -1594,7 +1595,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapNamedSystemFlexibleMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapNamedSystemFlexibleMemory:',Result);
  end;
 end;
 
@@ -1608,7 +1609,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelReserveVirtualRange:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelReserveVirtualRange:',Result);
  end;
 end;
 
@@ -1628,7 +1629,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapDirectMemory2:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapDirectMemory2:',Result);
  end;
 end;
 
@@ -1648,7 +1649,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapDirectMemory:',Result);
  end;
 end;
 
@@ -1672,7 +1673,7 @@ begin
   _sys_mname(virtualAddrDest^,length,name);
  end else
  begin
-  Writeln(StdErr,'[WARN]:sceKernelMapNamedDirectMemory:',Result);
+  Writeln(StdWrn,'[WARN]:sceKernelMapNamedDirectMemory:',Result);
  end;
 end;
 

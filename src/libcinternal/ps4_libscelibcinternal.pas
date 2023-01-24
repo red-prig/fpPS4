@@ -6,6 +6,7 @@ interface
 
 uses
   ps4libdoc,
+  sys_crt,
   ps4_map_mm,
   ps4_pthread,
   ps4_time,
@@ -212,12 +213,12 @@ begin
     lib:=ps4_app.GetLib('libc');
     if (lib<>nil) then
     begin
-     Writeln(StdErr,'Redirected:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
+     Writeln(StdWrn,'Redirected:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
      Result:=lib^.get_proc(Nid);
     end;
    end else
    begin
-    Writeln(StdErr,'Operator:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
+    Writeln(StdWrn,'Operator:',HexStr(Nid,16),':',ps4libdoc.GetFunctName(Nid));
    end;
   end;
 

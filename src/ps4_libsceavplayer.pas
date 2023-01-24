@@ -15,6 +15,7 @@ uses
   ps4_program,
   spinlock,
   sys_types,
+  sys_crt,
   sys_signal,
   sys_path,
   sys_time,
@@ -356,7 +357,7 @@ begin
  if (data=nil) then Exit;
  player:=data;
  handle:=player^.handle;
- Writeln('WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
+ Writeln(StdWrn,'WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
  FreeMem(player);
 end;
 
@@ -630,7 +631,7 @@ begin
   end;
   //
   if frame^.format<>Integer(AV_SAMPLE_FMT_FLTP) then
-   Writeln('ERROR: Unknown audio format: ',frame^.format);
+   Writeln(StdErr,'ERROR: Unknown audio format: ',frame^.format);
   lastAudioTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[audioStreamId]^.time_base,AV_TIME_BASE_Q);
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
@@ -676,7 +677,7 @@ begin
   end;
   //
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
-   Writeln('ERROR: Unknown video format: ',frame^.format);
+   Writeln(StdErr,'ERROR: Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
   Result.nSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
   GetMem(Result.pAddr,Result.nSize);
@@ -764,7 +765,7 @@ begin
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
-  Writeln(SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
+  Writeln(StdErr,SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
   Exit;
  end;
 
@@ -800,7 +801,7 @@ begin
 
  if not _test_mem_alloc(pInit^.memoryReplacement) then
  begin
-  Writeln(SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
+  Writeln(StdErr,SysLogPrefix,'ERROR: All allocators are required for AVPlayer Initialisation.');
   Exit;
  end;
 
@@ -944,7 +945,7 @@ begin
   if sourceDetails^.sourceType=1 then
    Writeln('Source type: MP4')
   else
-   Writeln('ERROR: Source type: Unknown ',sourceDetails^.sourceType);
+   Writeln(StdErr,'ERROR: Source type: Unknown ',sourceDetails^.sourceType);
   Result:=_sceAvPlayerAddSource(handle,sourceDetails^.uri.name)
  end else
  begin

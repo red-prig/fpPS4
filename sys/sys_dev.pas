@@ -10,6 +10,7 @@ uses
  SysUtils,
  RWLock,
  sys_kernel,
+ sys_crt,
  sys_fd;
 
 procedure _sys_dev_init;
@@ -278,17 +279,15 @@ begin
 end;
 
 function TDevStd.write (data:Pointer;size:Int64):Int64;
-var
- S:RawByteString;
 begin
- SetString(S,data,size);
- System.Write(WText^,S);
+ CrtOutWriteDirect(WText,data,size);
  Result:=size;
 end;
 
 function TDevStd.pwrite(data:Pointer;size,offset:Int64):Int64;
 begin
- Result:=write(data,size);
+ CrtOutWriteDirect(WText,data,size);
+ Result:=size;
 end;
 
 function TDevStd.writev(vector:p_iovec;count:Integer):Int64;

@@ -393,7 +393,7 @@ begin
   end else
   if (Info^.sBind<>STB_WEAK) then
   begin
-   Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
+   Writeln(StdWrn,'[Warn]:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   end;
 
  end;
@@ -423,7 +423,7 @@ begin
 
  if (Result=nil) then
  begin
-  Writeln(StdErr,'Warn^:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
+  Writeln(StdWrn,'[Warn]:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid),':',HexStr(Info^.Nid,16));
   Exit(nil); //Don't reload!
  end;
 
@@ -477,7 +477,7 @@ begin
 
  if not cpu.AVX2Support then
  begin
-  Writeln('AVX2 not supported!');
+  Writeln(StdErr,'AVX2 not support!');
   Assert(false,'AVX2 not supported!');
   Exit;
  end;
