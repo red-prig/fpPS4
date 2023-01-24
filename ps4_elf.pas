@@ -2925,17 +2925,20 @@ end;
 
 procedure _Entry(P:TEntryPoint;pFileName:Pchar);
 var
- StartupParams:TPS4StartupParams;
+ data:array[0..SizeOf(TPS4StartupParams)+38] of Byte;
+ psp:PPS4StartupParams;
 begin
- StartupParams:=Default(TPS4StartupParams);
- StartupParams.argc:=1;
- StartupParams.argv[0]:=pFileName;
+ psp:=Pointer(Align(@data,32)+8); //AVX align +8
+
+ psp^:=Default(TPS4StartupParams);
+ psp^.argc:=1;
+ psp^.argv[0]:=pFileName;
 
  //OpenOrbis relies on the fact that besides %rdi and %rsp also link to StartupParams, a very strange thing
  asm
-  xor %rsi,%rsi
-  lea StartupParams,%rdi
-  mov %rdi,%rsp
+  xor %rsi,%rsi  //2
+  mov psp ,%rdi  //1
+  mov %rdi,%rsp  //stack
   jmp P
  end;
 

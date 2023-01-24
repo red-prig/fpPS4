@@ -437,7 +437,8 @@ type
  TPS4StartupParams=packed record
   argc:Integer;
   align:Integer;
-  argv:array[0..1] of Pointer;
+  argv:array[0..2] of Pointer;
+  //envrion = argv + argc + 1
  end;
 
 Const
