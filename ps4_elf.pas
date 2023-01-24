@@ -2500,15 +2500,24 @@ begin
      begin
       if (PBYTE(psrc)[4]=$25) then
       begin
-       if (PDWORD(@PBYTE(psrc)[5])^<>$00000000) then Result:=-1;
+       if (PDWORD(@PBYTE(psrc)[5])^<>$00000000) then
+       begin
+        Inc(psrc,5);
+        Continue;
+       end;
       end else
       begin
-       Result:=-1;
+       Inc(psrc,4);
+       Continue;
       end;
      end;
       16:
      begin
-      if (PQWORD(@PBYTE(psrc)[3])^<>$0000000000000000) then Result:=-1;
+      if (PQWORD(@PBYTE(psrc)[3])^<>$0000000000000000) then
+      begin
+       Inc(psrc,4);
+       Continue;
+      end;
      end;
    else;
   end;
