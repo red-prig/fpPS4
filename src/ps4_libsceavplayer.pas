@@ -244,6 +244,7 @@ type
   lastAudioTimeStamp  :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
+  streamCount         :DWord;
   videoStreamId       :Integer;
   audioStreamId       :Integer;
   channelCount,
@@ -260,6 +261,7 @@ type
   function    ReceiveVideo:TMemChunk;
   function    GetFramerate:QWord;
   function    IsPlaying:Boolean;
+  function    IsMediaAvailable:Boolean;
   function    Buffer(const aType:DWord;const chunk:TMemChunk):Pointer;
  end;
 
@@ -489,6 +491,7 @@ begin
  Writeln(SysLogPrefix,Format('Format: %s, duration: %dms',[formatContext^.iformat^.long_name,formatContext^.duration div 1000]));
  // Print some useful information about media
 
+ streamCount  :=formatContext^.nb_streams;
  videoStreamId:=av_find_best_stream(formatContext,AVMEDIA_TYPE_VIDEO,-1,-1,p,0);
  audioStreamId:=av_find_best_stream(formatContext,AVMEDIA_TYPE_AUDIO,-1,-1,p,0);
  if videoStreamId>=0 then
@@ -711,6 +714,11 @@ begin
 end;
 
 function TAvPlayerState.IsPlaying:Boolean;
+begin
+ Result:=IsMediaAvailable and (not PAvPlayerInfo(info)^.isPaused);
+end;
+
+function TAvPlayerState.IsMediaAvailable:Boolean;
 begin
  Result:=source<>'';
 end;
@@ -1134,6 +1142,76 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAvPlayerStreamCount(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
+begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
+ player:=_GetPlayer(handle);
+ if player<>nil then
+ begin
+  if player^.playerState.IsPlaying then
+   Result:=player^.playerState.streamCount
+  else
+   Result:=0;
+ end else
+  Result:=-1;
+end;
+
+function ps4_sceAvPlayerJumpToTime(handle:SceAvPlayerHandle;timeInMs:QWord):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
+begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
+ player:=_GetPlayer(handle);
+ // TODO: Do nothing for now
+ Result:=-1;
+end;
+
+function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
+begin
+ player:=_GetPlayer(handle);
+ if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+  Result:=-1
+ else
+ begin
+  player^.isPaused:=False;
+  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+ end;
+end;
+
+function ps4_sceAvPlayerPause(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
+begin
+ player:=_GetPlayer(handle);
+ if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+  Result:=-1
+ else
+ begin
+  player^.isPaused:=True;
+  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PAUSE,nil);
+ end;
+end;
+
+function ps4_sceAvPlayerResume(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
+var
+ player:PAvPlayerInfo;
+begin
+ player:=_GetPlayer(handle);
+ if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+  Result:=-1
+ else
+ begin
+  player^.isPaused:=False;
+  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+ end;
+end;
+
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
 begin
  Result:=-1;
@@ -1172,6 +1250,11 @@ begin
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
  lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
+ lib^.set_proc($85D4F247309741E4,@ps4_sceAvPlayerStreamCount);
+ lib^.set_proc($5C2F7033EC542F3F,@ps4_sceAvPlayerJumpToTime);
+ lib^.set_proc($113E06AFF52ED3BB,@ps4_sceAvPlayerStart);
+ lib^.set_proc($F72E6FF9F18DE169,@ps4_sceAvPlayerPause);
+ lib^.set_proc($C399A80013709D16,@ps4_sceAvPlayerResume);
  lib^.set_proc($642D7BC37BC1E4BA,@ps4_sceAvPlayerStop);
  lib^.set_proc($3642700F32A6225C,@ps4_sceAvPlayerClose);
 end;
