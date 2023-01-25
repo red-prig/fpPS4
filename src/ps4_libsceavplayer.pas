@@ -277,7 +277,6 @@ type
   //
   isLooped         :Boolean;
   isPaused         :Boolean;
-  isAutoStart      :Boolean;
   lastFrameTime    :QWord;
   memoryReplacement:SceAvPlayerMemAllocator;
   fileReplacement  :SceAvPlayerFileReplacement;
@@ -390,7 +389,7 @@ end;
 
 procedure TAvPlayerInfo.EventCallback(argEventId:Integer;argSourceId:Integer;argEventData:Pointer);
 begin
- if (eventReplacement.eventCallback<>nil) and (not isAutoStart) then
+ if (eventReplacement.eventCallback<>nil) then
  begin
   Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',argEventId);
   eventReplacement.eventCallback(eventReplacement.objectPointer,argEventId,argSourceId,argEventData);
@@ -790,7 +789,8 @@ begin
  player^.memoryReplacement:=pInit^.memoryReplacement;
  player^.eventReplacement :=pInit^.eventReplacement;
  player^.fileReplacement  :=pInit^.fileReplacement;
- player^.isAutoStart      :=pInit^.autoStart;
+
+ player^.isPaused         :=not pInit^.autoStart;
 
  player^.lastFrameTime    :=_GetTimeInUs;
  Result:=_AddPlayer(player);
@@ -826,7 +826,8 @@ begin
  player^.memoryReplacement:=pInit^.memoryReplacement;
  player^.eventReplacement :=pInit^.eventReplacement;
  player^.fileReplacement  :=pInit^.fileReplacement;
- player^.isAutoStart      :=pInit^.autoStart;
+
+ player^.isPaused         :=not pInit^.autoStart;
 
  player^.lastFrameTime    :=_GetTimeInUs;
 
