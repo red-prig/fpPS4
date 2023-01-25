@@ -932,6 +932,9 @@ begin
    end;
   end;
 
+  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_BUFFERING,nil);
+  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_READY,nil);
+
   spin_unlock(player^.lock); //release
  end;
 end;
