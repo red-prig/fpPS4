@@ -390,7 +390,7 @@ end;
 
 procedure TAvPlayerInfo.EventCallback(argEventId:Integer;argSourceId:Integer;argEventData:Pointer);
 begin
- if (eventReplacement.eventCallback<>nil) and (isAutoStart) then
+ if (eventReplacement.eventCallback<>nil) and (not isAutoStart) then
  begin
   Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',argEventId);
   eventReplacement.eventCallback(eventReplacement.objectPointer,argEventId,argSourceId,argEventData);
@@ -780,7 +780,7 @@ begin
   Exit;
  end;
 
- Writeln(SysLogPrefix,'sceAvPlayerInit');
+ Writeln(SysLogPrefix,'sceAvPlayerInit,autoStart=',pInit^.autoStart);
 
  player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
 
@@ -816,7 +816,7 @@ begin
   Exit;
  end;
 
- Writeln(SysLogPrefix,'sceAvPlayerInitEx');
+ Writeln(SysLogPrefix,'sceAvPlayerInitEx,autoStart=',pInit^.autoStart);
 
  player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
 
