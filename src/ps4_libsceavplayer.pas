@@ -45,6 +45,10 @@ const
  SCE_AVPLAYER_TIMED_TEXT_DELIVERY=$10;
  SCE_AVPLAYER_WARNING_ID         =$20;
 
+ SCE_AVPLAYER_VIDEO    =1;
+ SCE_AVPLAYER_AUDIO    =2;
+ SCE_AVPLAYER_TIMEDTEXT=3; // TODO: These values are not correct, need verification
+
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
 
@@ -220,6 +224,15 @@ type
 
  PSceAvPlayerPostInitData=Pointer;
 
+ SceAvPlayerStreamInfo=packed record
+  type_    :DWord;
+  align_   :Dword;
+  details  :SceAvPlayerStreamDetails;
+  duration :QWord;
+  startTime:QWord;
+ end;
+ PSceAvPlayerStreamInfo=^SceAvPlayerStreamInfo;
+
  SceAvPlayerUri=packed record
   name  :PChar;
   length:DWord;
@@ -244,6 +257,7 @@ type
   lastAudioTimeStamp  :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
+  durationInMs        :QWord;
   streamCount         :DWord;
   videoStreamId       :Integer;
   audioStreamId       :Integer;
@@ -540,8 +554,9 @@ begin
  formatContext:=avformat_alloc_context;
 
  avformat_open_input(formatContext,PChar(source),nil,ppAVDictionary(nil));
+ durationInMs:=formatContext^.duration div 1000;
  Writeln(SysLogPrefix,source);
- Writeln(SysLogPrefix,Format('Format: %s, duration: %dms',[formatContext^.iformat^.long_name,formatContext^.duration div 1000]));
+ Writeln(SysLogPrefix,Format('Format: %s, duration: %dms',[formatContext^.iformat^.long_name,durationInMs]));
  // Print some useful information about media
 
  streamCount  :=formatContext^.nb_streams;
@@ -1227,6 +1242,36 @@ begin
  player.dec_ref;
 end;
 
+function ps4_sceAvPlayerGetStreamInfo(handle:SceAvPlayerHandle;streamId:DWord;argInfo:PSceAvPlayerStreamInfo):Integer; SysV_ABI_CDecl;
+var
+ player:TAvPlayerInfo;
+begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
+ player:=_GetPlayer(handle);
+ if (player<>nil) and (player.playerState.IsMediaAvailable) and (argInfo<>nil) then
+ begin
+  if streamId=player.playerState.videoStreamId then
+  begin
+   argInfo^.type_    :=SCE_AVPLAYER_VIDEO;
+   argInfo^.duration :=player.playerState.durationInMs;
+   argInfo^.startTime:=0;
+   // TODO: Details
+  end else
+  if streamId=player.playerState.audioStreamId then
+  begin
+   argInfo^.type_    :=SCE_AVPLAYER_AUDIO;
+   argInfo^.duration :=player.playerState.durationInMs;
+   argInfo^.startTime:=0;
+   // TODO: Details
+  end else
+   argInfo^.type_:=0;
+  Result:=0;
+ end else
+  Result:=-1;
+ player.dec_ref;
+end;
+
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
@@ -1321,6 +1366,7 @@ begin
  lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
  lib^.set_proc($85D4F247309741E4,@ps4_sceAvPlayerStreamCount);
  lib^.set_proc($5C2F7033EC542F3F,@ps4_sceAvPlayerJumpToTime);
+ lib^.set_proc($77C15C6F37C0750C,@ps4_sceAvPlayerGetStreamInfo);
  lib^.set_proc($113E06AFF52ED3BB,@ps4_sceAvPlayerStart);
  lib^.set_proc($F72E6FF9F18DE169,@ps4_sceAvPlayerPause);
  lib^.set_proc($C399A80013709D16,@ps4_sceAvPlayerResume);
