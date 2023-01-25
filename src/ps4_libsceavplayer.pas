@@ -1148,6 +1148,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
+ Writeln(SysLogPrefix,'sceAvPlayerStreamCount');
  player:=_GetPlayer(handle);
  if player<>nil then
  begin
@@ -1165,6 +1166,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
+ Writeln(SysLogPrefix,'sceAvPlayerJumpToTime');
  player:=_GetPlayer(handle);
  // TODO: Do nothing for now
  Result:=-1;
@@ -1174,6 +1176,7 @@ function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
  player:PAvPlayerInfo;
 begin
+ Writeln(SysLogPrefix,'sceAvPlayerStart');
  player:=_GetPlayer(handle);
  if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
   Result:=-1
@@ -1188,6 +1191,7 @@ function ps4_sceAvPlayerPause(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
  player:PAvPlayerInfo;
 begin
+ Writeln(SysLogPrefix,'sceAvPlayerPause');
  player:=_GetPlayer(handle);
  if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
   Result:=-1
@@ -1202,6 +1206,7 @@ function ps4_sceAvPlayerResume(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl
 var
  player:PAvPlayerInfo;
 begin
+ Writeln(SysLogPrefix,'sceAvPlayerResume');
  player:=_GetPlayer(handle);
  if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
   Result:=-1
