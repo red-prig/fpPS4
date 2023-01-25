@@ -454,7 +454,7 @@ begin
  if (player<>nil) then
  begin
   Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
-  player^.EventCallback(handle,event,eventData);
+  player^.EventCallback(event,0,eventData);
   spin_unlock(player^.lock); //release
  end;
 end;
@@ -1189,7 +1189,7 @@ begin
  else
  begin
   player^.isPaused:=False;
-  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
@@ -1206,7 +1206,7 @@ begin
  else
  begin
   player^.isPaused:=True;
-  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PAUSE,nil);
+  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PAUSE,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
@@ -1223,7 +1223,7 @@ begin
  else
  begin
   player^.isPaused:=False;
-  player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
