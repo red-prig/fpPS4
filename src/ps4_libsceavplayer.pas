@@ -347,6 +347,7 @@ begin
 
  if (data<>nil) then
  begin
+  FreeAndNil(data^.playerState);
   FreeMem(data);
  end;
 end;
@@ -360,6 +361,7 @@ begin
  player:=data;
  handle:=player^.handle;
  Writeln(StdWrn,'WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
+ FreeAndNil(player^.playerState);
  FreeMem(player);
 end;
 
