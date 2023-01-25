@@ -47,7 +47,8 @@ const
 
  SCE_AVPLAYER_VIDEO    =0;
  SCE_AVPLAYER_AUDIO    =1;
- SCE_AVPLAYER_TIMEDTEXT=2; // TODO: These values may not correct, need verification
+ SCE_AVPLAYER_TIMEDTEXT=2;
+ SCE_AVPLAYER_UNKNOWN  =3;
 
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
@@ -1291,6 +1292,7 @@ begin
   Result:=0 // Do nothing
  else
   Result:=-1;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerDisableStream(handle:SceAvPlayerHandle;streamId:DWord):Integer; SysV_ABI_CDecl;
@@ -1305,6 +1307,7 @@ begin
   Result:=0 // Do nothing
  else
   Result:=-1;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
