@@ -796,7 +796,6 @@ function ps4_sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle; SysV
 begin
  _sig_lock;
  Result:=_sceAvPlayerInit(pInit);
- _AvPlayerEventCallback(Result,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
@@ -834,7 +833,6 @@ function ps4_sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayer
 begin
  _sig_lock;
  Result:=_sceAvPlayerInitEx(pInit,pHandle);
- _AvPlayerEventCallback(pHandle^,SCE_AVPLAYER_STATE_READY,nil);
  _sig_unlock;
 end;
 
