@@ -234,6 +234,12 @@ begin
     if (err<>0) then
     begin
      Writeln(StdErr,'_VirtualReserve(',HexStr(FOffset),',',HexStr(ASize,16),'):',err);
+     if (err=ERROR_COMMITMENT_LIMIT) then
+     begin
+      Writeln(StdErr,'Please increase the size of the paging file in your'+#13#10+
+                     ' OS settings or make it automatic,'+#13#10+
+                     '  you need at least:',(ASize/(1024*1024)):0:2,'MB');
+     end;
      Exit;
     end;
    end;
