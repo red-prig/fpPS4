@@ -1168,8 +1168,11 @@ begin
   Exit(-1);
  Writeln(SysLogPrefix,'sceAvPlayerJumpToTime');
  player:=_GetPlayer(handle);
+ if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+  Result:=-1
+ else
  // TODO: Do nothing for now
- Result:=-1;
+  Result:=0;
 end;
 
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
