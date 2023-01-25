@@ -758,6 +758,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceKernelGetCpuTemperature(temp:PDWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (temp=nil) then Exit(_set_errno(EINVAL));
+ temp^:=36;
+ Result:=_set_errno(0);
+end;
+
 const
  RUSAGE_SELF    = 0;
  RUSAGE_CHILDREN=-1;
@@ -1116,6 +1123,7 @@ begin
  lib^.set_proc($56306D83906D97DE,@ps4_sceKernelSetFsstParam);
  lib^.set_proc($71AEEFE82C6E973B,@ps4_sceKernelSetGPO);
  lib^.set_proc($E285D87BD5E69344,@ps4_sceKernelGetGPI);
+ lib^.set_proc($AA22F87C539B0313,@ps4_sceKernelGetCpuTemperature);
 
  //module
 
