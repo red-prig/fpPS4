@@ -389,6 +389,7 @@ procedure TAvPlayerInfo.EventCallback(argEventId:Integer;argSourceId:Integer;arg
 begin
  if (eventReplacement.eventCallback<>nil) then
  begin
+  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',argEventId);
   eventReplacement.eventCallback(eventReplacement.objectPointer,argEventId,argSourceId,argEventData);
  end;
 end;
@@ -453,7 +454,6 @@ begin
  player:=_GetPlayer(handle);
  if (player<>nil) then
  begin
-  Writeln(SysLogPrefix,'AvPlayerEventCallback,event=',event);
   player^.EventCallback(event,0,eventData);
   spin_unlock(player^.lock); //release
  end;
