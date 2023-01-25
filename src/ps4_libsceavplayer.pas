@@ -1156,6 +1156,7 @@ begin
    Result:=player^.playerState.streamCount
   else
    Result:=0;
+  spin_unlock(player^.lock);
  end else
   Result:=-1;
 end;
@@ -1173,6 +1174,8 @@ begin
  else
  // TODO: Do nothing for now
   Result:=0;
+ if player<>nil then
+  spin_unlock(player^.lock);
 end;
 
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
@@ -1188,6 +1191,8 @@ begin
   player^.isPaused:=False;
   player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
  end;
+ if player<>nil then
+  spin_unlock(player^.lock);
 end;
 
 function ps4_sceAvPlayerPause(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
@@ -1203,6 +1208,8 @@ begin
   player^.isPaused:=True;
   player^.EventCallback(handle,SCE_AVPLAYER_STATE_PAUSE,nil);
  end;
+ if player<>nil then
+  spin_unlock(player^.lock);
 end;
 
 function ps4_sceAvPlayerResume(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
@@ -1218,6 +1225,8 @@ begin
   player^.isPaused:=False;
   player^.EventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
  end;
+ if player<>nil then
+  spin_unlock(player^.lock);
 end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
