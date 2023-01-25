@@ -1152,7 +1152,7 @@ begin
  player:=_GetPlayer(handle);
  if player<>nil then
  begin
-  if player^.playerState.IsPlaying then
+  if player^.playerState.IsMediaAvailable then
    Result:=player^.playerState.streamCount
   else
    Result:=0;
