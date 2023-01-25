@@ -12,8 +12,8 @@ uses
 
 implementation
 
-uses
- sys_pthread;
+threadvar
+ sce_net_errno:Integer;
 
 type
  SceNetInAddr_t=DWORD;
@@ -24,6 +24,8 @@ type
  end;
 
 const
+ SCE_NET_INET_ADDRSTRLEN=16;
+
  SCE_NET_ETHER_ADDR_LEN  =6;
  SCE_NET_ETHER_ADDRSTRLEN=18;
 
@@ -33,33 +35,27 @@ type
   data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
  end;
 
-function _set_net_errno(r:Integer):Integer;
-var
- t:pthread;
+function libnet_tls_get_errno():PInteger;
 begin
- Result:=0;
-
- t:=tcb_thread;
- if (t<>nil) then t^.net_errno:=r;
-
- if (r<>0) then
- begin
-  Result:=-1;
- end;
+ Result:=@sce_net_errno;
 end;
 
-function _net_error:Pointer;
+function _set_net_errno(r:Integer):Integer;
 var
- t:pthread;
+ perr:PInteger;
 begin
- Result:=nil;
- t:=tcb_thread;
- if (t<>nil) then Result:=@t^.net_errno;
+ Result:=0;
+ perr:=libnet_tls_get_errno;
+ perr^:=r;
+ if (r<>0) then
+ begin
+  Result:=r or Integer($80410100);
+ end;
 end;
 
 function ps4_sceNetErrnoLoc:Pointer; SysV_ABI_CDecl;
 begin
- Result:=_net_error;
+ Result:=libnet_tls_get_errno;
 end;
 
 function ps4_sceNetInit:Integer; SysV_ABI_CDecl;
@@ -97,9 +93,11 @@ begin
 end;
 
 const
- AF_INET  = 2;
- AF_INET6 = 10;
+ AF_INET = 2;
+ AF_INET6=28;
 
+ SCE_NET_EINVAL      =22;
+ SCE_NET_ENOSPC      =28;
  SCE_NET_EAFNOSUPPORT=47;
 
 function ps4_sceNetInetPton(af:Integer;
@@ -107,15 +105,63 @@ function ps4_sceNetInetPton(af:Integer;
                             dst:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
- if (src=nil) or (dst=nil) then Exit;
 
- Case af of
-  AF_INET :if TryStrToHostAddr (src, in_addr(dst^)) then Result:=1;
-  AF_INET6:if TryStrToHostAddr6(src,in6_addr(dst^)) then Result:=1;
-  else;
-   //Exit(SCE_NET_EAFNOSUPPORT);
+ if (src=nil) or (dst=nil) then
+ begin
+  Exit(_set_net_errno(SCE_NET_EINVAL));
  end;
 
+ Case af of
+  AF_INET:
+   begin
+    if TryStrToHostAddr(src,in_addr(dst^)) then
+    begin
+     DWORD(dst^):=htonl(DWORD(dst^));
+     Result:=1;
+    end;
+   end;
+  AF_INET6:if TryStrToHostAddr6(src,in6_addr(dst^)) then Result:=1;
+  else
+   begin
+    Exit(_set_net_errno(SCE_NET_EAFNOSUPPORT));
+   end;
+ end;
+
+end;
+
+function ps4_sceNetInetNtop(af:Integer;
+                            src:Pointer;
+                            dst:Pchar;
+                            size:DWORD):Pchar; SysV_ABI_CDecl;
+var
+ S:RawByteString;
+begin
+ Result:=nil;
+
+ if (src=nil) or (dst=nil) then
+ begin
+  _set_net_errno(SCE_NET_EINVAL);
+  Exit;
+ end;
+
+ Case af of
+  AF_INET :S:=NetAddrToStr (in_addr (src^));
+  AF_INET6:S:=NetAddrToStr6(in6_addr(src^));
+  else
+   begin
+    _set_net_errno(SCE_NET_EAFNOSUPPORT);
+    Exit;
+   end;
+ end;
+
+ if (size<=Length(S)) then
+ begin
+  _set_net_errno(SCE_NET_ENOSPC);
+  Exit;
+ end;
+
+ Move(PChar(S)^,dst^,Length(S)+1);
+ Result:=dst;
 end;
 
 function ps4_sceNetEtherNtostr(n:pSceNetEtherAddr;
@@ -125,8 +171,16 @@ var
  i,p:Byte;
 begin
  Result:=0;
- if (n=nil) or (str=nil) then Exit;
- if (len<SCE_NET_ETHER_ADDRSTRLEN) then Exit;
+
+ if (n=nil) or (str=nil) then
+ begin
+  Exit(_set_net_errno(SCE_NET_EINVAL));
+ end;
+
+ if (len<SCE_NET_ETHER_ADDRSTRLEN) then
+ begin
+  Exit(_set_net_errno(SCE_NET_ENOSPC));
+ end;
 
  p:=0;
  For i:=0 to SCE_NET_ETHER_ADDR_LEN-1 do
@@ -155,7 +209,12 @@ function ps4_sceNetGetMacAddress(addr:pSceNetEtherAddr;
                                  flags:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
- if (addr=nil) then Exit;
+
+ if (addr=nil) then
+ begin
+  Exit(_set_net_errno(SCE_NET_EINVAL));
+ end;
+
  FillChar(addr^,SizeOf(SceNetEtherAddr),11);
 end;
 
@@ -418,6 +477,7 @@ begin
  lib^.set_proc($0B85200C71CFBDDC,@ps4_sceNetResolverCreate);
  lib^.set_proc($485E3B901D8C353A,@ps4_sceNetEpollCreate);
  lib^.set_proc($F0A729E5DFEAD54A,@ps4_sceNetInetPton);
+ lib^.set_proc($F6F036696F821EE0,@ps4_sceNetInetNtop);
  lib^.set_proc($BFA338B7179C0AEA,@ps4_sceNetEtherNtostr);
  lib^.set_proc($896416AF0892B7C0,@ps4_sceNetHtons);
  lib^.set_proc($F53DA90C5D91CAA8,@ps4_sceNetHtonl);
