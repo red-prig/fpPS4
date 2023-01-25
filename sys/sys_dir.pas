@@ -69,6 +69,10 @@ type
   function    fstat        (stat:PSceKernelStat):Integer;                     override;
   function    lseek        (offset:Int64;whence:Integer):Int64;               override;
   function    getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;     override;
+ end;
+
+ TDirFileRoot=class(TDirFile)
+  function    fstat(stat:PSceKernelStat):Integer; override;
   procedure   add_dir(const name:RawByteString);
  end;
 
@@ -256,12 +260,12 @@ end;
 
 function _sys_root_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
 var
- f:TDirFile;
+ f:TDirFileRoot;
 
 begin
  Result:=0;
 
- f:=TDirFile.Create;
+ f:=TDirFileRoot.Create;
  f.path:=path;
 
  SetLength(f.dirs,0);
@@ -448,7 +452,17 @@ begin
  Result:=count*SizeOf(dirent);
 end;
 
-procedure TDirFile.add_dir(const name:RawByteString);
+function TDirFileRoot.fstat(stat:PSceKernelStat):Integer;
+begin
+ Result:=_sys_root_dir_stat(path,stat);
+ if (Result=0) then
+ begin
+  stat^.st_dev :=fd;
+  stat^.st_rdev:=fd;
+ end;
+end;
+
+procedure TDirFileRoot.add_dir(const name:RawByteString);
 var
  tmp:dirent;
  i:Integer;
