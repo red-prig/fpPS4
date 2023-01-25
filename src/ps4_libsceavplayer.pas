@@ -932,9 +932,6 @@ begin
    end;
   end;
 
-  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_BUFFERING,nil);
-  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_READY,nil);
-
   spin_unlock(player^.lock); //release
  end;
 end;
@@ -1192,7 +1189,7 @@ begin
  else
  begin
   player^.isPaused:=False;
-  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+  player^.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
@@ -1209,7 +1206,7 @@ begin
  else
  begin
   player^.isPaused:=True;
-  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PAUSE,nil);
+  player^.EventCallback(SCE_AVPLAYER_STATE_PAUSE,0,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
@@ -1226,7 +1223,7 @@ begin
  else
  begin
   player^.isPaused:=False;
-  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_PLAY,nil);
+  player^.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
  end;
  if player<>nil then
   spin_unlock(player^.lock);
