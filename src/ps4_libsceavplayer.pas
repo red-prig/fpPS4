@@ -45,9 +45,9 @@ const
  SCE_AVPLAYER_TIMED_TEXT_DELIVERY=$10;
  SCE_AVPLAYER_WARNING_ID         =$20;
 
- SCE_AVPLAYER_VIDEO    =1;
- SCE_AVPLAYER_AUDIO    =2;
- SCE_AVPLAYER_TIMEDTEXT=3; // TODO: These values are not correct, need verification
+ SCE_AVPLAYER_VIDEO    =0;
+ SCE_AVPLAYER_AUDIO    =1;
+ SCE_AVPLAYER_TIMEDTEXT=2; // TODO: These values may not correct, need verification
 
 type
  TAVPacketQueue=specialize TQueue<PAVPacket>;
@@ -264,7 +264,7 @@ type
   channelCount,
   sampleCount,
   sampleRate          :Integer;
-  source              :RawByteString; // TODO: "sceAvPlayerAddSource" indicates there may be more than 1 source per instance
+  source              :RawByteString;
   info                :Pointer; // Pointer to TAvPlayerInfo
   constructor Create;
   destructor  Destroy; override;
@@ -554,7 +554,7 @@ begin
  formatContext:=avformat_alloc_context;
 
  avformat_open_input(formatContext,PChar(source),nil,ppAVDictionary(nil));
- durationInMs:=formatContext^.duration div 1000;
+ durationInMs:=_usec2msec(formatContext^.duration);
  Writeln(SysLogPrefix,source);
  Writeln(SysLogPrefix,Format('Format: %s, duration: %dms',[formatContext^.iformat^.long_name,durationInMs]));
  // Print some useful information about media
@@ -1032,18 +1032,20 @@ begin
  _sig_unlock;
 end;
 
+// TODO: Not working correctly for Descenders?
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
- Result:=True;
  player:=_GetPlayer(handle);
- //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (player=nil) or (not player.playerState.IsPlaying) then
-  Result:=False;
-
+ Result:=False;
+ if (player<>nil) then
+ begin
+  Result:=player.playerState.IsPlaying;
+ end;
+ //Writeln(SysLogPrefix,'sceAvPlayerIsActive=',Result);
  player.dec_ref;
 end;
 
@@ -1054,7 +1056,7 @@ begin
  if DISABLE_FMV_HACK then
   Exit(0);
  player:=_GetPlayer(handle);
- Writeln(SysLogPrefix,'sceAvPlayerSetLooping');
+ Writeln(SysLogPrefix,'sceAvPlayerSetLooping=',loopFlag);
  if (player<>nil) then
  begin
   player.isLooped:=loopFlag;
@@ -1074,29 +1076,31 @@ begin
  if DISABLE_FMV_HACK then
   Exit(False);
  player:=_GetPlayer(handle);
- player.lock;
  //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
- if (frameInfo<>nil) and (player<>nil) and (player.playerState.IsPlaying) and (not player.isPaused) then
+ if player<>nil then
  begin
-  audioData:=Default(TMemChunk);
-  audioData:=player.playerState.ReceiveAudio;
-  if (audioData.pAddr=nil) then
+  player.lock;
+  if (frameInfo<>nil) and (player.playerState.IsPlaying) then
   begin
-   player.unlock;
-   player.dec_ref;
-   Exit(False);
+   audioData:=Default(TMemChunk);
+   audioData:=player.playerState.ReceiveAudio;
+   if (audioData.pAddr=nil) then
+   begin
+    player.unlock;
+    player.dec_ref;
+    Exit(False);
+   end;
+   frameInfo^.timeStamp                 :=_usec2msec(player.playerState.lastAudioTimeStamp);
+   frameInfo^.details.audio.channelCount:=player.playerState.channelCount;
+   frameInfo^.details.audio.sampleRate  :=player.playerState.sampleRate;
+   frameInfo^.details.audio.size        :=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
+   frameInfo^.pData                     :=player.playerState.Buffer(0,audioData);
+   Result:=True;
   end;
-  frameInfo^.timeStamp:=_usec2msec(player.playerState.lastAudioTimeStamp);
-  frameInfo^.details.audio.channelCount:=player.playerState.channelCount;
-  frameInfo^.details.audio.sampleRate:=player.playerState.sampleRate;
-  frameInfo^.details.audio.size:=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
-  frameInfo^.pData:=player.playerState.Buffer(0,audioData);
-  Result:=True;
+  player.unlock;
+  player.dec_ref;
  end;
-
- player.unlock;
- player.dec_ref;
 end;
 
 function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
@@ -1115,34 +1119,36 @@ begin
   Exit(False);
  //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  player:=_GetPlayer(handle);
- player.lock;
  Result:=False;
- if (frameInfo<>nil) and (player<>nil) and (player.playerState.IsPlaying) then
+ if (player<>nil) then
  begin
-  videoData:=Default(TMemChunk);
-  if player.playerState.lastVideoTimeStamp<=player.playerState.lastAudioTimestamp then
-   repeat
-    player.lastFrameTime:=_GetTimeInUs;
-    videoData:=player.playerState.ReceiveVideo;
-   until (videoData.pAddr=nil) or (player.playerState.lastVideoTimeStamp>=player.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
-  if (videoData.pAddr=nil) then
+  player.lock;
+  if (frameInfo<>nil) and (player.playerState.IsPlaying) then
   begin
-   player.unlock;
-   player.dec_ref;
-   Exit(False);
+   videoData:=Default(TMemChunk);
+   if player.playerState.lastVideoTimeStamp<=player.playerState.lastAudioTimestamp then
+    repeat
+     player.lastFrameTime:=_GetTimeInUs;
+     videoData:=player.playerState.ReceiveVideo;
+    until (videoData.pAddr=nil) or (player.playerState.lastVideoTimeStamp>=player.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
+   if (videoData.pAddr=nil) then
+   begin
+    player.unlock;
+    player.dec_ref;
+    Exit(False);
+   end;
+   frameInfo^.timeStamp                 :=_usec2msec(player.playerState.lastVideoTimeStamp);
+   frameInfo^.details.video.width       :=player.playerState.videoCodecContext^.width;
+   frameInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.framerate   :=0;
+   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
+   frameInfo^.pData                     :=player.playerState.Buffer(1,videoData);
+   Result:=True;
   end;
-  frameInfo^.timeStamp:=_usec2msec(player.playerState.lastVideoTimeStamp);
-  frameInfo^.details.video.width:=player.playerState.videoCodecContext^.width;
-  frameInfo^.details.video.height:=player.playerState.videoCodecContext^.height;
-  frameInfo^.details.video.aspectRatio:=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
-  frameInfo^.details.video.framerate:=0;
-  frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  frameInfo^.pData:=player.playerState.Buffer(1,videoData);
-  Result:=True;
+  player.unlock;
+  player.dec_ref;
  end;
-
- player.unlock;
- player.dec_ref;
 end;
 
 function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool; SysV_ABI_CDecl;
@@ -1213,7 +1219,6 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
- Writeln(SysLogPrefix,'sceAvPlayerStreamCount');
  player:=_GetPlayer(handle);
  if (player<>nil) then
  begin
@@ -1224,6 +1229,7 @@ begin
   player.dec_ref;
  end else
   Result:=-1;
+ Writeln(SysLogPrefix,'sceAvPlayerStreamCount=',Result);
 end;
 
 function ps4_sceAvPlayerJumpToTime(handle:SceAvPlayerHandle;timeInMs:QWord):Integer; SysV_ABI_CDecl;
@@ -1248,7 +1254,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
- Writeln(SysLogPrefix,'sceAvPlayerGetStreamInfo');
+ Writeln(SysLogPrefix,'sceAvPlayerGetStreamInfo,streamId=',streamId);
  player:=_GetPlayer(handle);
  if (player<>nil) and (player.playerState.IsMediaAvailable) and (argInfo<>nil) then
  begin
@@ -1266,7 +1272,7 @@ begin
    argInfo^.startTime:=0;
    // TODO: Details
   end else
-   argInfo^.type_:=0;
+   argInfo^.type_    :=SCE_AVPLAYER_TIMEDTEXT;
   Result:=0;
  end else
   Result:=-1;
@@ -1279,7 +1285,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
- Writeln(SysLogPrefix,'sceAvPlayerEnableStream');
+ Writeln(SysLogPrefix,'sceAvPlayerEnableStream,streamId=',streamId);
  player:=_GetPlayer(handle);
  if (player<>nil) and (player.playerState.IsMediaAvailable) then
   Result:=0 // Do nothing
@@ -1293,7 +1299,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
- Writeln(SysLogPrefix,'sceAvPlayerDisableStream');
+ Writeln(SysLogPrefix,'sceAvPlayerDisableStream,streamId=',streamId);
  player:=_GetPlayer(handle);
  if (player<>nil) and (player.playerState.IsMediaAvailable) then
   Result:=0 // Do nothing
