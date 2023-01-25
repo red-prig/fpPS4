@@ -1248,6 +1248,7 @@ var
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
+ Writeln(SysLogPrefix,'sceAvPlayerGetStreamInfo');
  player:=_GetPlayer(handle);
  if (player<>nil) and (player.playerState.IsMediaAvailable) and (argInfo<>nil) then
  begin
@@ -1270,6 +1271,34 @@ begin
  end else
   Result:=-1;
  player.dec_ref;
+end;
+
+function ps4_sceAvPlayerEnableStream(handle:SceAvPlayerHandle;streamId:DWord):Integer; SysV_ABI_CDecl;
+var
+ player:TAvPlayerInfo;
+begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
+ Writeln(SysLogPrefix,'sceAvPlayerEnableStream');
+ player:=_GetPlayer(handle);
+ if (player<>nil) and (player.playerState.IsMediaAvailable) then
+  Result:=0 // Do nothing
+ else
+  Result:=-1;
+end;
+
+function ps4_sceAvPlayerDisableStream(handle:SceAvPlayerHandle;streamId:DWord):Integer; SysV_ABI_CDecl;
+var
+ player:TAvPlayerInfo;
+begin
+ if DISABLE_FMV_HACK then
+  Exit(-1);
+ Writeln(SysLogPrefix,'sceAvPlayerDisableStream');
+ player:=_GetPlayer(handle);
+ if (player<>nil) and (player.playerState.IsMediaAvailable) then
+  Result:=0 // Do nothing
+ else
+  Result:=-1;
 end;
 
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
@@ -1367,6 +1396,8 @@ begin
  lib^.set_proc($85D4F247309741E4,@ps4_sceAvPlayerStreamCount);
  lib^.set_proc($5C2F7033EC542F3F,@ps4_sceAvPlayerJumpToTime);
  lib^.set_proc($77C15C6F37C0750C,@ps4_sceAvPlayerGetStreamInfo);
+ lib^.set_proc($38324ADAC9FDC380,@ps4_sceAvPlayerEnableStream);
+ lib^.set_proc($04E54A033466B934,@ps4_sceAvPlayerDisableStream);
  lib^.set_proc($113E06AFF52ED3BB,@ps4_sceAvPlayerStart);
  lib^.set_proc($F72E6FF9F18DE169,@ps4_sceAvPlayerPause);
  lib^.set_proc($C399A80013709D16,@ps4_sceAvPlayerResume);
