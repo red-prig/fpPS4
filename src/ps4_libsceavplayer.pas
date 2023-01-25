@@ -268,10 +268,10 @@ type
  SceAvPlayerHandle=QWord;
  PSceAvPlayerHandle=^SceAvPlayerHandle;
 
- PAvPlayerInfo=^TAvPlayerInfo;
- TAvPlayerInfo=object
+ TAvPlayerInfo=class
   handle           :SceAvPlayerHandle;
-  lock             :Pointer;
+  refs             :DWORD;
+  Flock            :TRTLCriticalSection;
   //
   playerState      :TAvPlayerState;
   //
@@ -281,6 +281,14 @@ type
   memoryReplacement:SceAvPlayerMemAllocator;
   fileReplacement  :SceAvPlayerFileReplacement;
   eventReplacement :SceAvPlayerEventReplacement;
+  //
+  constructor Create;
+  destructor  Destroy; override;
+  //
+  procedure inc_ref;
+  procedure dec_ref;
+  procedure lock;
+  procedure unlock;
   //
   function  Allocate         (argAlignment:DWord;argSize:DWord):Pointer;
   procedure Deallocate       (argMemory:Pointer);
@@ -306,7 +314,8 @@ begin
  Result:=SwGetTimeUsec;
 end;
 
-function _GetPlayer(const handle:SceAvPlayerHandle):PAvPlayerInfo;
+//GetPlayer increment refs
+function _GetPlayer(const handle:SceAvPlayerHandle):TAvPlayerInfo;
 var
  data:PPointer;
 begin
@@ -315,13 +324,13 @@ begin
   data:=HAMT_search64(@AvHandleHamt,handle);
   if (data<>nil) then
   begin
-   Result:=data^;
-   spin_lock(Result^.lock); //acqure
+   Result:=TAvPlayerInfo(data^);
+   Result.inc_ref;
   end;
  spin_unlock(hamt_lock);
 end;
 
-function _AddPlayer(const player:PAvPlayerInfo):SceAvPlayerHandle;
+function _AddPlayer(const player:TAvPlayerInfo):SceAvPlayerHandle;
 var
  data:PPointer;
 begin
@@ -332,40 +341,82 @@ begin
   //force reuse
   data^:=player;
   //save handle
-  player^.handle:=handleCount;
+  player.handle:=handleCount;
+  //inc refs
+  player.inc_ref;
   Result:=handleCount;
  spin_unlock(hamt_lock);
 end;
 
 procedure _DeletePlayer(const handle:SceAvPlayerHandle);
 var
- data:PAvPlayerInfo;
+ data:TAvPlayerInfo;
 begin
  spin_lock(hamt_lock);
-  data:=HAMT_delete64(@AvHandleHamt,handle);
+  data:=TAvPlayerInfo(HAMT_delete64(@AvHandleHamt,handle));
  spin_unlock(hamt_lock);
 
  if (data<>nil) then
  begin
-  FreeAndNil(data^.playerState);
-  FreeMem(data);
+  data.dec_ref;
  end;
 end;
 
 procedure AvHandleClean(data,userdata:Pointer);
 var
  handle:SceAvPlayerHandle;
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if (data=nil) then Exit;
- player:=data;
- handle:=player^.handle;
+ player:=TAvPlayerInfo(data);
+ handle:=player.handle;
  Writeln(StdWrn,'WARNING: Leftover AvPlayer handle, let me clean it up: ', handle);
- FreeAndNil(player^.playerState);
- FreeMem(player);
+ player.dec_ref;
 end;
 
-function  TAvPlayerInfo.Allocate(argAlignment:DWord;argSize:DWord):Pointer;
+constructor TAvPlayerInfo.Create;
+begin
+ InitCriticalSection(Flock);
+ playerState:=TAvPlayerState.Create;
+ playerState.info:=Self;
+end;
+
+destructor TAvPlayerInfo.Destroy;
+begin
+ DoneCriticalSection(Flock);
+ FreeAndNil(playerState);
+end;
+
+procedure TAvPlayerInfo.inc_ref;
+begin
+ if (Self=nil) then Exit; //nil safe
+ System.InterlockedIncrement(refs);
+end;
+
+procedure TAvPlayerInfo.dec_ref;
+begin
+ if (Self=nil) then Exit; //nil safe
+ if (System.InterlockedDecrement(refs)=0) then
+ begin
+  //auto free
+  Free;
+ end;
+end;
+
+//recrusive lock
+procedure TAvPlayerInfo.lock;
+begin
+ if (Self=nil) then Exit; //nil safe
+ EnterCriticalSection(Flock);
+end;
+
+procedure TAvPlayerInfo.unlock;
+begin
+ if (Self=nil) then Exit; //nil safe
+ LeaveCriticalSection(Flock);
+end;
+
+function TAvPlayerInfo.Allocate(argAlignment:DWord;argSize:DWord):Pointer;
 begin
  Result:=memoryReplacement.allocate(memoryReplacement.objectPointer,argAlignment,argSize);
 end;
@@ -451,13 +502,13 @@ end;
 
 procedure _AvPlayerEventCallback(const handle:SceAvPlayerHandle;const event:Integer;const eventData:Pointer);
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  player:=_GetPlayer(handle);
- if player<>nil then
+ if (player<>nil) then
  begin
-  player^.EventCallback(event,0,eventData);
-  spin_unlock(player^.lock); //release
+  player.EventCallback(event,0,eventData);
+  player.dec_ref;
  end;
 end;
 
@@ -523,12 +574,12 @@ procedure TAvPlayerState.FreeMedia;
 var
  packet    :PAVPacket;
  I         :Integer;
- playerInfo:PAvPlayerInfo;
+ playerInfo:TAvPlayerInfo;
 begin
  if formatContext=nil then
   Exit;
 
- playerInfo:=info;
+ playerInfo:=TAvPlayerInfo(info);
  while audioPackets.Count>0 do
  begin
   packet:=audioPackets.Dequeue;
@@ -561,7 +612,7 @@ begin
    FreeMem(audioBuffer[I]);
   end;
   if videoBuffer[I]<>nil then
-   playerInfo^.DeallocateTexture(videoBuffer[I]);
+   playerInfo.DeallocateTexture(videoBuffer[I]);
  end;
  source:='';
  formatContext:=nil;
@@ -717,7 +768,7 @@ end;
 
 function TAvPlayerState.IsPlaying:Boolean;
 begin
- Result:=IsMediaAvailable and (not PAvPlayerInfo(info)^.isPaused);
+ Result:=IsMediaAvailable and (not TAvPlayerInfo(info).isPaused);
 end;
 
 function TAvPlayerState.IsMediaAvailable:Boolean;
@@ -727,9 +778,9 @@ end;
 
 function TAvPlayerState.Buffer(const aType:DWord;const chunk:TMemChunk):Pointer;
 var
- playerInfo:PAvPlayerInfo;
+ playerInfo:TAvPlayerInfo;
 begin
- playerInfo:=info;
+ playerInfo:=TAvPlayerInfo(info);
  if aType=0 then
  begin
   if (chunk.pAddr<>nil) then
@@ -747,7 +798,7 @@ begin
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo^.AllocateTexture(0,chunk.nSize);
+    videoBuffer[0]:=playerInfo.AllocateTexture(0,chunk.nSize);
    end;
    Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
    FreeMem(chunk.pAddr);
@@ -768,7 +819,7 @@ end;
 
 function _sceAvPlayerInit(pInit:PSceAvPlayerInitData):SceAvPlayerHandle;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  Result:=0;
  if (pInit=nil) then Exit;
@@ -781,18 +832,16 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInit,autoStart=',pInit^.autoStart);
 
- player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
+ player:=TAvPlayerInfo.Create;
 
- player^.playerState:=TAvPlayerState.Create;
- player^.playerState.info :=player;
+ player.memoryReplacement:=pInit^.memoryReplacement;
+ player.eventReplacement :=pInit^.eventReplacement;
+ player.fileReplacement  :=pInit^.fileReplacement;
 
- player^.memoryReplacement:=pInit^.memoryReplacement;
- player^.eventReplacement :=pInit^.eventReplacement;
- player^.fileReplacement  :=pInit^.fileReplacement;
+ player.isPaused         :=not pInit^.autoStart;
 
- player^.isPaused         :=not pInit^.autoStart;
+ player.lastFrameTime    :=_GetTimeInUs;
 
- player^.lastFrameTime    :=_GetTimeInUs;
  Result:=_AddPlayer(player);
 end;
 
@@ -805,7 +854,7 @@ end;
 
 function _sceAvPlayerInitEx(pInit:PSceAvPlayerInitDataEx;pHandle:PSceAvPlayerHandle):Integer;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  Result:=-1;
  if (pInit=nil) or (pHandle=nil) then Exit;
@@ -818,18 +867,15 @@ begin
 
  Writeln(SysLogPrefix,'sceAvPlayerInitEx,autoStart=',pInit^.autoStart);
 
- player:=AllocMem(SizeOf(TAvPlayerInfo)); //alloc and fill zero
+ player:=TAvPlayerInfo.Create;
 
- player^.playerState:=TAvPlayerState.Create;
- player^.playerState.info :=player;
+ player.memoryReplacement:=pInit^.memoryReplacement;
+ player.eventReplacement :=pInit^.eventReplacement;
+ player.fileReplacement  :=pInit^.fileReplacement;
 
- player^.memoryReplacement:=pInit^.memoryReplacement;
- player^.eventReplacement :=pInit^.eventReplacement;
- player^.fileReplacement  :=pInit^.fileReplacement;
+ player.isPaused         :=not pInit^.autoStart;
 
- player^.isPaused         :=not pInit^.autoStart;
-
- player^.lastFrameTime    :=_GetTimeInUs;
+ player.lastFrameTime    :=_GetTimeInUs;
 
  pHandle^:=_AddPlayer(player);
  Result:=0;
@@ -844,18 +890,13 @@ end;
 
 function ps4_sceAvPlayerPostInit(handle:SceAvPlayerHandle;pPostInit:PSceAvPlayerPostInitData):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  player:=_GetPlayer(handle);
  Result:=-1;
  if (player=nil) or (pPostInit=nil) then Exit;
  Writeln(SysLogPrefix,'sceAvPlayerPostInit');
-
- if (player<>nil) then
- begin
-  spin_unlock(player^.lock); //release
- end;
-
+ player.dec_ref;
  Result:=0;
 end;
 
@@ -863,7 +904,7 @@ function _sceAvPlayerAddSource(handle:SceAvPlayerHandle;argFilename:PChar):Integ
 const
  BUF_SIZE=512*1024;
 var
- player         :PAvPlayerInfo;
+ player         :TAvPlayerInfo;
  fileSize,
  bytesRemaining,
  offset         :QWord;
@@ -876,20 +917,24 @@ begin
  if DISABLE_FMV_HACK then
   Exit(-1);
  player:=_GetPlayer(handle);
+ player.lock;
+
  // With file functions provided by client
  if (player<>nil) then
  begin
-  if player^.FileReplacementProvided then
+  if player.FileReplacementProvided then
   begin
-   if player^.open(argFilename)<0 then
+   if player.open(argFilename)<0 then
    begin
-    spin_unlock(player^.lock); //release
+    player.unlock;
+    player.dec_ref;
     Exit(-1);
    end;
-   fileSize:=player^.size();
+   fileSize:=player.size();
    if (fileSize=0) then //result is uint64
    begin
-    spin_unlock(player^.lock); //release
+    player.unlock;
+    player.dec_ref;
     Exit(-1);
    end;
    // Read data and write to dump directory
@@ -905,11 +950,12 @@ begin
    while bytesRemaining>0 do
    begin
     actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-    bytesRead:=player^.readOffset(@buf[0],offset,actualBufSize);
+    bytesRead:=player.readOffset(@buf[0],offset,actualBufSize);
     if bytesRead<0 then
     begin
-     player^.close();
-     spin_unlock(player^.lock); //release
+     player.close();
+     player.unlock;
+     player.dec_ref;
      Exit(-1);
     end;
     FileWrite(f,buf,actualBufSize);
@@ -917,9 +963,9 @@ begin
     Inc(offset,actualBufSize);
    end;
    FileClose(f);
-   player^.close();
+   player.close();
    // Init player
-   player^.playerState.CreateMedia(source);
+   player.playerState.CreateMedia(source);
    Result:=0;
   end else
   // Without client-side file functions
@@ -928,7 +974,7 @@ begin
    Result:=parse_filename(argFilename,source);
    if (Result=PT_FILE) then //only real files
    begin
-    player^.playerState.CreateMedia(source);
+    player.playerState.CreateMedia(source);
     Result:=0;
    end else
    begin
@@ -936,10 +982,11 @@ begin
    end;
   end;
 
-  player^.EventCallback(SCE_AVPLAYER_STATE_BUFFERING,0,nil);
-  player^.EventCallback(SCE_AVPLAYER_STATE_READY,0,nil);
+  player.EventCallback(SCE_AVPLAYER_STATE_BUFFERING,0,nil);
+  player.EventCallback(SCE_AVPLAYER_STATE_READY,0,nil);
 
-  spin_unlock(player^.lock); //release
+  player.unlock;
+  player.dec_ref;
  end;
 end;
 
@@ -972,25 +1019,22 @@ end;
 
 function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
  Result:=True;
  player:=_GetPlayer(handle);
  //Writeln(SysLogPrefix,'sceAvPlayerIsActive');
- if (player=nil) or (not player^.playerState.IsPlaying) then
+ if (player=nil) or (not player.playerState.IsPlaying) then
   Result:=False;
 
- if (player<>nil) then
- begin
-  spin_unlock(player^.lock); //release
- end;
+ player.dec_ref;
 end;
 
-function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):DWord; SysV_ABI_CDecl;
+function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(0);
@@ -998,8 +1042,8 @@ begin
  Writeln(SysLogPrefix,'sceAvPlayerSetLooping');
  if (player<>nil) then
  begin
-  player^.isLooped:=loopFlag;
-  spin_unlock(player^.lock); //release
+  player.isLooped:=loopFlag;
+  player.dec_ref;
   Result:=0;
  end else
  begin
@@ -1010,34 +1054,34 @@ end;
 function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool;
 var
  audioData:TMemChunk;
- player   :PAvPlayerInfo;
+ player   :TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
  player:=_GetPlayer(handle);
+ player.lock;
  //Writeln(SysLogPrefix,'sceAvPlayerGetAudioData');
  Result:=False;
- if (frameInfo<>nil) and (player<>nil) and (player^.playerState.IsPlaying) and (not player^.isPaused) then
+ if (frameInfo<>nil) and (player<>nil) and (player.playerState.IsPlaying) and (not player.isPaused) then
  begin
   audioData:=Default(TMemChunk);
-  audioData:=player^.playerState.ReceiveAudio;
+  audioData:=player.playerState.ReceiveAudio;
   if (audioData.pAddr=nil) then
   begin
-   spin_unlock(player^.lock); //release
+   player.unlock;
+   player.dec_ref;
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(player^.playerState.lastAudioTimeStamp);
-  frameInfo^.details.audio.channelCount:=player^.playerState.channelCount;
-  frameInfo^.details.audio.sampleRate:=player^.playerState.sampleRate;
-  frameInfo^.details.audio.size:=player^.playerState.channelCount*player^.playerState.sampleCount*SizeOf(SmallInt);
-  frameInfo^.pData:=player^.playerState.Buffer(0,audioData);
+  frameInfo^.timeStamp:=_usec2msec(player.playerState.lastAudioTimeStamp);
+  frameInfo^.details.audio.channelCount:=player.playerState.channelCount;
+  frameInfo^.details.audio.sampleRate:=player.playerState.sampleRate;
+  frameInfo^.details.audio.size:=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
+  frameInfo^.pData:=player.playerState.Buffer(0,audioData);
   Result:=True;
  end;
 
- if (player<>nil) then
- begin
-  spin_unlock(player^.lock); //release
- end;
+ player.unlock;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
@@ -1050,40 +1094,40 @@ end;
 function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool;
 var
  videoData:TMemChunk;
- player   :PAvPlayerInfo;
+ player   :TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(False);
  //Writeln(SysLogPrefix,'sceAvPlayerGetVideoDataEx');
  player:=_GetPlayer(handle);
+ player.lock;
  Result:=False;
- if (frameInfo<>nil) and (player<>nil) and (player^.playerState.IsPlaying) then
+ if (frameInfo<>nil) and (player<>nil) and (player.playerState.IsPlaying) then
  begin
   videoData:=Default(TMemChunk);
-  if player^.playerState.lastVideoTimeStamp<=player^.playerState.lastAudioTimestamp then
+  if player.playerState.lastVideoTimeStamp<=player.playerState.lastAudioTimestamp then
    repeat
-    player^.lastFrameTime:=_GetTimeInUs;
-    videoData:=player^.playerState.ReceiveVideo;
-   until (videoData.pAddr=nil) or (player^.playerState.lastVideoTimeStamp>=player^.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
+    player.lastFrameTime:=_GetTimeInUs;
+    videoData:=player.playerState.ReceiveVideo;
+   until (videoData.pAddr=nil) or (player.playerState.lastVideoTimeStamp>=player.playerState.lastAudioTimeStamp); // Check to see if video catch up with current timestamp
   if (videoData.pAddr=nil) then
   begin
-   spin_unlock(player^.lock); //release
+   player.unlock;
+   player.dec_ref;
    Exit(False);
   end;
-  frameInfo^.timeStamp:=_usec2msec(player^.playerState.lastVideoTimeStamp);
-  frameInfo^.details.video.width:=player^.playerState.videoCodecContext^.width;
-  frameInfo^.details.video.height:=player^.playerState.videoCodecContext^.height;
-  frameInfo^.details.video.aspectRatio:=player^.playerState.videoCodecContext^.width/player^.playerState.videoCodecContext^.height;
+  frameInfo^.timeStamp:=_usec2msec(player.playerState.lastVideoTimeStamp);
+  frameInfo^.details.video.width:=player.playerState.videoCodecContext^.width;
+  frameInfo^.details.video.height:=player.playerState.videoCodecContext^.height;
+  frameInfo^.details.video.aspectRatio:=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
   frameInfo^.details.video.framerate:=0;
   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-  frameInfo^.pData:=player^.playerState.Buffer(1,videoData);
+  frameInfo^.pData:=player.playerState.Buffer(1,videoData);
   Result:=True;
  end;
 
- if (player<>nil) then
- begin
-  spin_unlock(player^.lock); //release
- end;
+ player.unlock;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool; SysV_ABI_CDecl;
@@ -1102,32 +1146,31 @@ end;
 
 function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(0);
  player:=_GetPlayer(handle);
- if (player=nil) or (not player^.playerState.IsPlaying) then
+ if (player=nil) or (not player.playerState.IsPlaying) then
   Result:=0
  else
-  Result:=_usec2msec(player^.playerState.lastVideoTimeStamp);
+  Result:=_usec2msec(player.playerState.lastVideoTimeStamp);
 
- if (player<>nil) then
- begin
-  spin_unlock(player^.lock); //release
- end;
+ player.dec_ref;
 end;
 
 function _sceAvPlayerStop(handle:SceAvPlayerHandle):Integer;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  player:=_GetPlayer(handle);
+ player.lock;
  Result:=-1;
  if (player<>nil) then
  begin
-  player^.playerState.FreeMedia;
-  spin_unlock(player^.lock); //release
+  player.playerState.FreeMedia;
+  player.unlock;
+  player.dec_ref;
   Result:=0;
  end;
  _AvPlayerEventCallback(handle,SCE_AVPLAYER_STATE_STOP,nil);
@@ -1151,89 +1194,91 @@ end;
 
 function ps4_sceAvPlayerStreamCount(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
  Writeln(SysLogPrefix,'sceAvPlayerStreamCount');
  player:=_GetPlayer(handle);
- if player<>nil then
+ if (player<>nil) then
  begin
-  if player^.playerState.IsMediaAvailable then
-   Result:=player^.playerState.streamCount
+  if player.playerState.IsMediaAvailable then
+   Result:=player.playerState.streamCount
   else
    Result:=0;
-  spin_unlock(player^.lock);
+  player.dec_ref;
  end else
   Result:=-1;
 end;
 
 function ps4_sceAvPlayerJumpToTime(handle:SceAvPlayerHandle;timeInMs:QWord):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
  Writeln(SysLogPrefix,'sceAvPlayerJumpToTime');
  player:=_GetPlayer(handle);
- if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+ if (player=nil) or ((player<>nil) and (not player.playerState.IsMediaAvailable)) then
   Result:=-1
  else
  // TODO: Do nothing for now
   Result:=0;
- if player<>nil then
-  spin_unlock(player^.lock);
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerStart(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerStart');
  player:=_GetPlayer(handle);
- if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+ player.lock;
+ if (player=nil) or ((player<>nil) and (not player.playerState.IsMediaAvailable)) then
   Result:=-1
  else
  begin
-  player^.isPaused:=False;
-  player^.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
+  player.isPaused:=False;
+  player.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
  end;
- if player<>nil then
-  spin_unlock(player^.lock);
+ player.unlock;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerPause(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerPause');
  player:=_GetPlayer(handle);
- if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+ player.lock;
+ if (player=nil) or ((player<>nil) and (not player.playerState.IsMediaAvailable)) then
   Result:=-1
  else
  begin
-  player^.isPaused:=True;
-  player^.EventCallback(SCE_AVPLAYER_STATE_PAUSE,0,nil);
+  player.isPaused:=True;
+  player.EventCallback(SCE_AVPLAYER_STATE_PAUSE,0,nil);
  end;
- if player<>nil then
-  spin_unlock(player^.lock);
+ player.unlock;
+ player.dec_ref;
 end;
 
 function ps4_sceAvPlayerResume(handle:SceAvPlayerHandle):Integer; SysV_ABI_CDecl;
 var
- player:PAvPlayerInfo;
+ player:TAvPlayerInfo;
 begin
  Writeln(SysLogPrefix,'sceAvPlayerResume');
  player:=_GetPlayer(handle);
- if (player=nil) or ((player<>nil) and (not player^.playerState.IsMediaAvailable)) then
+ player.lock;
+ if (player=nil) or ((player<>nil) and (not player.playerState.IsMediaAvailable)) then
   Result:=-1
  else
  begin
-  player^.isPaused:=False;
-  player^.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
+  player.isPaused:=False;
+  player.EventCallback(SCE_AVPLAYER_STATE_PLAY,0,nil);
  end;
- if player<>nil then
-  spin_unlock(player^.lock);
+ player.unlock;
+ player.dec_ref;
 end;
 
 function _sceAvPlayerClose(handle:SceAvPlayerHandle):Integer;
