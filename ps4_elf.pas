@@ -361,6 +361,16 @@ begin
  if (flags and SF_BFLG)<>0 then Result:=Result+' SF_BFLG';
 end;
 
+function maxInt64(a,b:Int64):Int64; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
+function minInt64(a,b:Int64):Int64; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
 function LoadPs4ElfFromFile(Const name:RawByteString):TElf_node;
 Var
  elf:Telf_file;
@@ -545,17 +555,15 @@ begin
     begin
      s:=elf_phdr[i].p_offset;
      if (s<>0) then
-      if (s<LowSeg) then LowSeg:=s;
-
-     s:=s+elf_phdr[i].p_filesz;
-     if s>elf.mElf.nSize then elf.mElf.nSize:=s;
+     begin
+      LowSeg:=MinInt64(s,LowSeg);
+     end;
+     s:=s+MaxInt64(elf_phdr[i].p_filesz,elf_phdr[i].p_memsz);
+     elf.mElf.nSize:=MaxInt64(s,elf.mElf.nSize);
     end;
     if (LowSeg=High(Int64)) then
     begin
-     Writeln(StdErr,'Error LowSeg');
-     FreeMem(SELF_MEM);
-     elf.Free;
-     Exit;
+     LowSeg:=0;
     end;
     elf.mElf.pAddr:=AllocMem(elf.mElf.nSize);
     Writeln('Elf with LowSeg:',LowSeg,' Size:',elf.mElf.nSize);
