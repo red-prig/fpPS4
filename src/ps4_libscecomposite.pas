@@ -26,6 +26,8 @@ var
  g_System:TMemInfo;
  g_Video :TMemInfo;
 
+ g_index_bits:DWORD=0;
+
 function alloc_dmem(var mem:TMemInfo;len:QWORD):Integer;
 begin
  Result:=ps4_sceKernelAllocateMainDirectMemory(len,0,SCE_KERNEL_WB_ONION,@mem.offset);
@@ -103,6 +105,35 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCompositorAllocateIndex():Integer; SysV_ABI_CDecl;
+var
+ i,m:Integer;
+begin
+ Result:=-1;
+ EnterCriticalSection(SceCompositorCmdMtx);
+ For i:=0 to 15 do
+ begin
+  m:=(1 shl i);
+  if ((g_index_bits and m)=0) then
+  begin
+   g_index_bits:=g_index_bits or m;
+   Result:=i;
+   Break;
+  end;
+ end;
+ LeaveCriticalSection(SceCompositorCmdMtx);
+end;
+
+procedure ps4_sceCompositorReleaseIndex(id:DWORD); SysV_ABI_CDecl;
+begin
+ if (id<16) then
+ begin
+  EnterCriticalSection(SceCompositorCmdMtx);
+  g_index_bits:=g_index_bits and (not DWORD(1 shl id));
+  LeaveCriticalSection(SceCompositorCmdMtx);
+ end;
+end;
+
 function Load_libSceComposite(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -121,6 +152,9 @@ begin
 
  lib^.set_proc($1A03ABC22FBDBDC0,@ps4_sceCompositorLockCommandBuffer);
  lib^.set_proc($D4E5DBB962D1C6A2,@ps4_sceCompositorReleaseCommandBuffer);
+
+ lib^.set_proc($1B843C28D91BE571,@ps4_sceCompositorAllocateIndex);
+ lib^.set_proc($670B01077B3CA8C9,@ps4_sceCompositorReleaseIndex);
 
  lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
 end;
