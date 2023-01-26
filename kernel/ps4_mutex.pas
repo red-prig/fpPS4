@@ -76,6 +76,8 @@ function ps4_pthread_mutex_unlock(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDec
 function ps4_pthread_mutex_init(pMutex:p_pthread_mutex;pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 function ps4_pthread_mutex_destroy(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 
+function ps4_pthread_mutex_setname_np(pMutex:p_pthread_mutex;name:Pchar):Integer; SysV_ABI_CDecl;
+
 function ps4_scePthreadMutexattrInit(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 function ps4_scePthreadMutexattrDestroy(pAttr:p_pthread_mutex_attr):Integer; SysV_ABI_CDecl;
 function ps4_scePthreadMutexattrGettype(pAttr:p_pthread_mutex_attr;t:PInteger):Integer; SysV_ABI_CDecl;
@@ -474,6 +476,21 @@ end;
 function ps4_pthread_mutex_destroy(pMutex:p_pthread_mutex):Integer; SysV_ABI_CDecl;
 begin
  Result:=pthread_mutex_destroy(pMutex);
+end;
+
+function ps4_pthread_mutex_setname_np(pMutex:p_pthread_mutex;name:Pchar):Integer; SysV_ABI_CDecl;
+var
+ m:pthread_mutex;
+begin
+ if (pMutex=nil) then Exit(EINVAL);
+ m:=pMutex^;
+ if (m=nil) then Exit(EINVAL);
+ if (name<>nil) then
+ begin
+  FillChar(m^.name,32,0);
+  MoveChar0(name^,m^.name,32);
+ end;
+ Result:=0;
 end;
 
 //---------------------------------------------------------

@@ -1148,6 +1148,8 @@ begin
  lib^.set_proc($228F7E9D329766D0,@ps4_pthread_mutex_timedlock);
  lib^.set_proc($2BF8D785BB76827E,@ps4_pthread_mutex_trylock);
 
+ lib^.set_proc($9D3C59069F183467,@ps4_pthread_mutex_setname_np);
+
  lib^.set_proc($17C6D41F0006DBCE,@ps4_scePthreadMutexattrInit);
  lib^.set_proc($B2658492D8B2C86D,@ps4_scePthreadMutexattrDestroy);
  lib^.set_proc($82AB84841AD2DA2C,@ps4_scePthreadMutexattrGettype);
