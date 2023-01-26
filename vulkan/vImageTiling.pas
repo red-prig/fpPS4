@@ -7,7 +7,6 @@ interface
 uses
  SysUtils,
  RWLock,
- g23tree,
  ps4_shader,
  ps4_tiling,
  Vulkan,
@@ -20,6 +19,9 @@ uses
 
 Procedure LoadFromBuffer(cmd:TvCustomCmdBuffer;image:TObject); //TvImage2
 function  CheckFromBuffer(image:TObject):Boolean; //TvImage2
+
+var
+ SKIP_UNKNOW_TILING:Boolean=False;
 
 implementation
 
@@ -495,6 +497,7 @@ begin
    _Load_Thin_1dThin(cmd,TvImage2(image));
 
   else
+   if not SKIP_UNKNOW_TILING then
    Assert(false,'TODO tiling_idx:'+get_tiling_idx_str(TvImage2(image).key.params.tiling_idx));
  end;
 
@@ -631,7 +634,8 @@ begin
    Result:=_Check_Thin_1dThin(TvImage2(image));
 
   else
-   Assert(false,'TODO');
+   if not SKIP_UNKNOW_TILING then
+   Assert(false,'TODO tiling_idx:'+get_tiling_idx_str(TvImage2(image).key.params.tiling_idx));
  end;
 
 end;

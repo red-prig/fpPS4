@@ -56,6 +56,7 @@ uses
  ps4_videodrv,
  vMemory,
  vImageManager,
+ vImageTiling,
  vFlip,
 
  trace_manager;
@@ -87,6 +88,7 @@ begin
   Writeln('     IMAGE_LOAD_HACK      //Never reload textures (improves performance on many games)');
   Writeln('     DISABLE_SRGB_HACK    //Disables hacked SRGB display');
   Writeln('     DISABLE_FMV_HACK     //Disables in-game movies');
+  Writeln('     SKIP_UNKNOW_TILING   //Skip unknown tiling texture types');
 
   Exit(False);
  end;
@@ -134,6 +136,7 @@ begin
            'IMAGE_LOAD_HACK'     :vImageManager.IMAGE_LOAD_HACK:=True;
            'DISABLE_SRGB_HACK'   :vFlip.SRGB_HACK:=False;
            'DISABLE_FMV_HACK'    :ps4_libsceavplayer.DISABLE_FMV_HACK:=True;
+           'SKIP_UNKNOW_TILING'  :vImageTiling.SKIP_UNKNOW_TILING:=True;
            else;
           end;
          end;
