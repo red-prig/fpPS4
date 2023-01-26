@@ -48,6 +48,12 @@ uses
  ps4_libSceNpWebApi,
  ps4_libSceRudp,
  ps4_libSceRandom,
+ ps4_libSceComposite,
+ ps4_libSceSysCore,
+ ps4_libSceSsl,
+ ps4_libSceUlt,
+ ps4_libSceGameLiveStreaming,
+ ps4_libSceSharePlay,
  ps4_elf,
  ps4_pthread,
  ps4_program,
@@ -219,29 +225,6 @@ begin
  //Print_libs(ps4_app.GetFile('libc.prx'));
 end;
 
-function ps4_sceSslInit(poolSize:size_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceSslInit:',poolSize);
- Result:=3;
-end;
-
-function ps4_sceUltInitialize():Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
-function ps4_sceGameLiveStreamingInitialize(heapSize:qword):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceGameLiveStreamingInitialize:',heapSize);
- Result:=0;
-end;
-
-function ps4_sceSharePlayInitialize(pHeap:Pointer;heapSize:qword):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceSharePlayInitialize:',HexStr(pHeap),':',heapSize);
- Result:=0;
-end;
-
 function ResolveImport(elf:Telf_file;Info:PResolveImportInfo;data:Pointer):Pointer;
 var
  lib:PLIBRARY;
@@ -263,33 +246,6 @@ begin
  end;
 
  //Writeln('Resolve:',Info^.lib^.strName,':',ps4libdoc.GetFunctName(Info^.Nid));
-
- if (Result=nil) then
- begin
-  Case Info^.lib^.strName of
-
-   'libSceSsl':
-    Case Info^.nid of
-     QWORD($85DA551140C55B7B):Result:=@ps4_sceSslInit;
-    end;
-
-    'libSceUlt':
-    Case Info^.nid of
-     QWORD($859220D44586B073):Result:=@ps4_sceUltInitialize;
-    end;
-
-    'libSceGameLiveStreaming':
-    Case Info^.nid of
-     QWORD($92F604C369419DD9):Result:=@ps4_sceGameLiveStreamingInitialize;
-    end;
-
-    'libSceSharePlay':
-    Case Info^.nid of
-     QWORD($8ACAEEAAD86961CC):Result:=@ps4_sceSharePlayInitialize;
-    end;
-
-  end;
- end;
 
  {
  if (Result<>nil) and ((Info^.sType=STT_FUN) or (Info^.sType=STT_SCE)) then //trace

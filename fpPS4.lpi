@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="122">
+    <Units Count="128">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -558,6 +558,35 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAvPlayer"/>
       </Unit121>
+      <Unit122>
+        <Filename Value="src\ps4_libscecomposite.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceComposite"/>
+      </Unit122>
+      <Unit123>
+        <Filename Value="src\ps4_libSceSsl.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit123>
+      <Unit124>
+        <Filename Value="src\ps4_libsceult.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceUlt"/>
+      </Unit124>
+      <Unit125>
+        <Filename Value="src\ps4_libscegamelivestreaming.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceGameLiveStreaming"/>
+      </Unit125>
+      <Unit126>
+        <Filename Value="src\ps4_libsceshareplay.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSharePlay"/>
+      </Unit126>
+      <Unit127>
+        <Filename Value="src\ps4_libscesyscore.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSysCore"/>
+      </Unit127>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
