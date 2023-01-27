@@ -478,7 +478,7 @@ type
   unk4:array[0.. 6] of Byte;    //7
  end;
 
-//sysctl to KERN_PROC_ENV
+//sysctl to CTL_KERN(1).KERN_PROC(14).KERN_PROC_APPINFO(35)
 function ps4_sceKernelGetAppInfo(pid:Integer;env:PSCE_APP_ENV):Integer; SysV_ABI_CDecl;
 begin
  //ignore pid

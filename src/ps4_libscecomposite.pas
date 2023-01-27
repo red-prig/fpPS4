@@ -134,6 +134,15 @@ begin
  end;
 end;
 
+function ps4_sceCompositorGetCanvasHandle(canvasId:Byte;ret_handle:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ app_id:Word;
+begin
+ app_id:=Word(GetProcessID);
+ ret_handle^:=app_id or (canvasId shl 16);
+ Result:=0;
+end;
+
 function Load_libSceComposite(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -155,6 +164,8 @@ begin
 
  lib^.set_proc($1B843C28D91BE571,@ps4_sceCompositorAllocateIndex);
  lib^.set_proc($670B01077B3CA8C9,@ps4_sceCompositorReleaseIndex);
+
+ lib^.set_proc($37B3EB33E94F316D,@ps4_sceCompositorGetCanvasHandle);
 
  lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
 end;
