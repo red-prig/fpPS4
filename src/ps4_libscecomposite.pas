@@ -8,6 +8,7 @@ uses
  ps4_program,
  mmap,
  ps4_map_mm,
+ ps4_libSceGnmDriver,
  Classes,
  SysUtils;
 
@@ -105,6 +106,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCompositorIsDebugCaptureEnabled():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceCompositorInsertThreadTraceMarker(cmdBuffer:PDWORD;numDwords:DWORD;param1:DWORD;param2:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceGnmInsertThreadTraceMarker(cmdBuffer,numDwords,param1,param2);
+end;
+
 function ps4_sceCompositorAllocateIndex():Integer; SysV_ABI_CDecl;
 var
  i,m:Integer;
@@ -168,6 +179,8 @@ begin
  lib^.set_proc($37B3EB33E94F316D,@ps4_sceCompositorGetCanvasHandle);
 
  lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
+ lib^.set_proc($ABE430D444B10A3F,@ps4_sceCompositorIsDebugCaptureEnabled);
+ lib^.set_proc($FF02001B9F3C9AF8,@ps4_sceCompositorInsertThreadTraceMarker);
 end;
 
 initialization

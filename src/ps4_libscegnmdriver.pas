@@ -11,6 +11,8 @@ uses
 
 procedure post_event_eop;
 
+function  ps4_sceGnmInsertThreadTraceMarker(cmdBuffer:PDWORD;numDwords:DWORD;param1:DWORD;param2:Pointer):Integer; SysV_ABI_CDecl;
+
 implementation
 
 uses
@@ -926,6 +928,11 @@ begin
  PDWORD(PByte(cmdBuffer)+len3+8)^:=color;
  FillChar(PByte(@cmdBuffer[3])[len3],cmdSize*SizeOf(DWORD)-len-5,0);
 
+ Result:=0;
+end;
+
+function ps4_sceGnmInsertThreadTraceMarker(cmdBuffer:PDWORD;numDwords:DWORD;param1:DWORD;param2:Pointer):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
