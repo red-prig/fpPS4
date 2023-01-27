@@ -9,6 +9,7 @@ uses
  mmap,
  ps4_map_mm,
  ps4_libSceGnmDriver,
+ ps4_shader,
  sys_crt,
  Classes,
  SysUtils;
@@ -155,15 +156,21 @@ begin
  Result:=0;
 end;
 
+//set texture to canvas id
 function ps4_sceCompositorSetCompositeCanvasCommandInC(canvasId:Byte;tex:PDWORD):Integer; SysV_ABI_CDecl;
-var
- i:Integer;
 begin
  Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC:',canvasId);
- For i:=0 to 7 do
- begin
-  Writeln(StdWrn,' [',i,']:0x',HexStr(tex[i],8));
- end;
+ print_tsharp8(PTSharpResource8(tex));
+ Result:=0;
+end;
+
+function ps4_sceCompositorSetGnmContextCommand(
+          dcbGpuAddress :Pointer;
+          dcbSizeInBytes:DWORD;
+          ccbGpuAddress :Pointer;
+          ccbSizeInByte :DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC');
  Result:=0;
 end;
 
@@ -196,6 +203,7 @@ begin
  lib^.set_proc($FF02001B9F3C9AF8,@ps4_sceCompositorInsertThreadTraceMarker);
 
  lib^.set_proc($815A0E137D804E0D,@ps4_sceCompositorSetCompositeCanvasCommandInC);
+ lib^.set_proc($0E1B4A7A554021A0,@ps4_sceCompositorSetGnmContextCommand);
 end;
 
 initialization
