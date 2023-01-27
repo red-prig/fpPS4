@@ -29,7 +29,8 @@ end;
 
 initialization
  //lower priority
- ps4_app.RegistredFinLoad('libSceSsl.prx',@Load_libSceSsl);
+ ps4_app.RegistredFinLoad('libSceSsl.prx' ,@Load_libSceSsl);
+ ps4_app.RegistredFinLoad('libSceSsl2.prx',@Load_libSceSsl);
 
 end.
 
