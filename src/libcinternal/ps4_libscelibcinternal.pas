@@ -90,6 +90,16 @@ begin
  Result:=0;
 end;
 
+function ps4_strcmp(a,b:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=StrComp(a,b);
+end;
+
+function ps4_strstr(str,sub:PChar):PChar; SysV_ABI_CDecl;
+begin
+ Result:=StrPos(str,sub);
+end;
+
 function ps4_memcpy(dst,src:Pointer;len:size_t):Pointer; SysV_ABI_CDecl;
 begin
  Move(src^,dst^,len);
@@ -252,6 +262,8 @@ begin
  lib^.set_proc($8F856258D1C4830C,@ps4_strlen);
  lib^.set_proc($EAC256896491BAA9,@ps4_strncpy);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
+ lib^.set_proc($3AF6F675224E02E1,@ps4_strcmp);
+ lib^.set_proc($BE28B014C68D6A60,@ps4_strstr);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
  lib^.set_proc($F68897D64C9E79D0,@ps4_bzero);
