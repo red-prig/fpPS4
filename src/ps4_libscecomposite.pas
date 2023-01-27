@@ -9,6 +9,7 @@ uses
  mmap,
  ps4_map_mm,
  ps4_libSceGnmDriver,
+ sys_crt,
  Classes,
  SysUtils;
 
@@ -97,7 +98,7 @@ end;
 function ps4_sceCompositorSetDebugPositionCommand(canvasId:Byte;
                                                   x,y,width,height:WORD):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceCompositorSetDebugPositionCommand:');
+ Writeln('sceCompositorSetDebugPositionCommand:',canvasId);
  Writeln(' x     :',x     );
  Writeln(' y     :',y     );
  Writeln(' width :',width );
@@ -154,6 +155,18 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCompositorSetCompositeCanvasCommandInC(canvasId:Byte;tex:PDWORD):Integer; SysV_ABI_CDecl;
+var
+ i:Integer;
+begin
+ Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC:',canvasId);
+ For i:=0 to 7 do
+ begin
+  Writeln(StdWrn,' [',i,']:0x',HexStr(tex[i],8));
+ end;
+ Result:=0;
+end;
+
 function Load_libSceComposite(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -181,6 +194,8 @@ begin
  lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
  lib^.set_proc($ABE430D444B10A3F,@ps4_sceCompositorIsDebugCaptureEnabled);
  lib^.set_proc($FF02001B9F3C9AF8,@ps4_sceCompositorInsertThreadTraceMarker);
+
+ lib^.set_proc($815A0E137D804E0D,@ps4_sceCompositorSetCompositeCanvasCommandInC);
 end;
 
 initialization
