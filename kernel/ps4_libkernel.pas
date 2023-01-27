@@ -1356,6 +1356,7 @@ begin
  lib^.set_proc($149AD3E4BB940405,@ps4_pthread_exit);
 
  lib^.set_proc($959CC5792C4F974F,@ps4_pthread_setcancelstate);
+ lib^.set_proc($D9D121BEF8E5AB7D,@ps4_pthread_setcanceltype);
 
  lib^.set_proc($128B51F1ADC049FE,@ps4_pthread_self);
  lib^.set_proc($688F8E782CFCC6B4,@ps4_scePthreadSelf);
