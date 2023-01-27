@@ -1066,6 +1066,7 @@ begin
 
  //signal
 
+ lib^.set_proc($F85EC2FE1764EFE1,@ps4_sigemptyset);
  lib^.set_proc($5644C0B2B643709D,@ps4_sigfillset);
  lib^.set_proc($2548A616D29ED0A7,@ps4_sigaddset);
  lib^.set_proc($68F732A6D6CE899B,@ps4_sigprocmask); //sigprocmask

@@ -8,6 +8,7 @@ uses
  Windows,
  sys_signal;
 
+function ps4_sigemptyset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
 function ps4_sigfillset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
 function ps4_sigaddset(_set:p_sigset_t;signum:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sigprocmask(how:Integer;_set,oldset:p_sigset_t):Integer; SysV_ABI_CDecl;
@@ -30,6 +31,14 @@ implementation
 uses
  atomic,
  sys_kernel;
+
+function ps4_sigemptyset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
+begin
+ if (_set=nil) then Exit(_set_errno(EINVAL));
+ _set^.qwords[0]:=0;
+ _set^.qwords[1]:=0;
+ Result:=0;
+end;
 
 function ps4_sigfillset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
 begin
