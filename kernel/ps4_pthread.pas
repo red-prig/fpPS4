@@ -44,6 +44,9 @@ function  ps4_scePthreadGetname(_pthread:pthread;name:Pchar):Integer; SysV_ABI_C
 function  ps4_pthread_rename_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadRename(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 
+procedure ps4_pthread_set_name_np(_pthread:pthread;name:Pchar); SysV_ABI_CDecl;
+procedure ps4_scePthreadSetName(_pthread:pthread;name:Pchar); SysV_ABI_CDecl;
+
 function  ps4_scePthreadSetaffinity(_pthread:pthread;mask:QWORD):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadGetaffinity(_pthread:pthread;mask:PQWORD):Integer; SysV_ABI_CDecl;
 
@@ -510,14 +513,35 @@ end;
 
 function ps4_pthread_rename_np(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 begin
- if (_pthread=nil) or (name=nil) then Exit(EINVAL);
- MoveChar0(name^,_pthread^.name,32);
+ if (_pthread=nil) then Exit(EINVAL);
+ FillChar(_pthread^.name,32,0);
+ if (name<>nil) then
+ begin
+  MoveChar0(name^,_pthread^.name,32);
+ end;
+ SetThreadDebugName(_pthread^.ThreadId,'ps4:'+_pthread^.name);
  Result:=0;
 end;
 
 function ps4_scePthreadRename(_pthread:pthread;name:Pchar):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(ps4_pthread_rename_np(_pthread,name));
+end;
+
+procedure ps4_pthread_set_name_np(_pthread:pthread;name:Pchar); SysV_ABI_CDecl;
+begin
+ if (_pthread=nil) then Exit;
+ FillChar(_pthread^.name,32,0);
+ if (name<>nil) then
+ begin
+  MoveChar0(name^,_pthread^.name,32);
+ end;
+ SetThreadDebugName(_pthread^.ThreadId,'ps4:'+_pthread^.name);
+end;
+
+procedure ps4_scePthreadSetName(_pthread:pthread;name:Pchar); SysV_ABI_CDecl;
+begin
+ ps4_pthread_set_name_np(_pthread,name);
 end;
 
 function ps4_scePthreadSetaffinity(_pthread:pthread;mask:QWORD):Integer; SysV_ABI_CDecl;

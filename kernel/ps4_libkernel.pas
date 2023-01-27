@@ -1368,6 +1368,9 @@ begin
  lib^.set_proc($F6FC8FE99EDBAB37,@ps4_pthread_rename_np);
  lib^.set_proc($181518EF2C1D50B1,@ps4_scePthreadRename);
 
+ lib^.set_proc($A31329F2E3EA6BE5,@ps4_pthread_set_name_np);
+ lib^.set_proc($5DE4EAC3ED19975D,@ps4_scePthreadSetName);
+
  lib^.set_proc($6EDDC24C12A61B22,@ps4_scePthreadSetaffinity);
  lib^.set_proc($ADCAD5149B105916,@ps4_scePthreadGetaffinity);
 
