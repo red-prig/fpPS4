@@ -16,6 +16,25 @@ uses
 
 implementation
 
+const
+ //SceCompositorCommandType
+ kSceCompositorCommandLocalStall           =$0;
+ kSceCompositorCommandNop                  =$1;
+ kSceCompositorCommandGnmContext           =$2;
+ kSceCompositorCommandSeparateContext      =$3;
+ kSceCompositorCommandCompositeCanvas      =$4;
+ kSceCompositorCommandRequestInvalideCanvas=$5;
+ kSceCompositorCommandEndOfFrame           =$6;
+ kSceCompositorCommandRepeat               =$7;
+ kSceCompositorCommandEvent                =$8;
+ kSceCompositorCommandMemory               =$9;
+ kSceCompositorCommandGameSurfaceControl   =$a;
+ kSceCompositorCommandPatch                =$b;
+ kSceCompositorCommandDebugPosition        =$c;
+ kSceCompositorCommandAcceptQuitRequest    =$d;
+ kSceCompositorCommandAcceptInvalidCanvas  =$e;
+ //sceCompositorSetPostEventCommand = 0x15
+
 type
  TMemInfo=packed record
   addr  :Pointer;
@@ -64,6 +83,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCompositorInit(sharedSystemMemorySize:DWORD;
+                               sharedVideoMemorySize :DWORD;
+                               privateVideoMemorySize:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceCompositorInitWithProcessOrder(sharedSystemMemorySize,
+                                               sharedVideoMemorySize ,
+                                               privateVideoMemorySize,
+                                               0);
+end;
+
 function ps4_sceCompositorGetSystemAddress():Pointer; SysV_ABI_CDecl;
 begin
  Result:=g_System.addr;
@@ -93,18 +122,6 @@ end;
 function ps4_sceCompositorReleaseCommandBuffer():Integer; SysV_ABI_CDecl;
 begin
  LeaveCriticalSection(SceCompositorCmdMtx);
- Result:=0;
-end;
-
-function ps4_sceCompositorSetDebugPositionCommand(canvasId:Byte;
-                                                  x,y,width,height:WORD):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceCompositorSetDebugPositionCommand:',canvasId);
- Writeln(' x     :',x     );
- Writeln(' y     :',y     );
- Writeln(' width :',width );
- Writeln(' height:',height);
-
  Result:=0;
 end;
 
@@ -156,9 +173,22 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCompositorSetDebugPositionCommand(canvasId:Byte;
+                                                  x,y,width,height:WORD):Integer; SysV_ABI_CDecl;
+begin
+ //(SceCompositorCommand)(dbuf * 0x100 | 0xc);
+ Writeln('sceCompositorSetDebugPositionCommand:',canvasId);
+ Writeln(' x     :',x     );
+ Writeln(' y     :',y     );
+ Writeln(' width :',width );
+ Writeln(' height:',height);
+ Result:=0;
+end;
+
 //set texture to canvas id
 function ps4_sceCompositorSetCompositeCanvasCommandInC(canvasId:Byte;tex:PDWORD):Integer; SysV_ABI_CDecl;
 begin
+ //(SceCompositorCommand)(dbuf * 0x100 | 0x4);
  Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC:',canvasId);
  print_tsharp8(PTSharpResource8(tex));
  Result:=0;
@@ -170,7 +200,35 @@ function ps4_sceCompositorSetGnmContextCommand(
           ccbGpuAddress :Pointer;
           ccbSizeInByte :DWORD):Integer; SysV_ABI_CDecl;
 begin
+ //(SceCompositorCommand)(dbuf * 0x100 | 0x2);
  Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC');
+ Result:=0;
+end;
+
+function ps4_sceCompositorSetPostEventCommand(event:Byte):Integer; SysV_ABI_CDecl;
+begin
+ //(SceCompositorCommand)(cmd << 8 | 0x15);
+ Writeln(StdWrn,'sceCompositorSetPostEventCommand:',event);
+ Result:=0;
+end;
+
+function ps4_sceCompositorWaitPostEvent(bit_num:Byte):Integer; SysV_ABI_CDecl;
+begin
+ //1 << (bit_num & 63)
+ Writeln(StdWrn,'sceCompositorWaitPostEvent:',bit_num);
+ Result:=0;
+end;
+
+function ps4_sceCompositorFlush():Integer; SysV_ABI_CDecl;
+begin
+ //(SceCompositorCommand)0x0;
+ //(SceCompositorCommand)0x1;
+ Writeln(StdWrn,'sceCompositorFlush');
+ Result:=0;
+end;
+
+function ps4_sceCompositorCheckCrash(param:Byte):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
@@ -183,6 +241,7 @@ begin
 
  lib:=Result._add_lib('libSceComposite');
 
+ lib^.set_proc($C4891C12974CC6BC,@ps4_sceCompositorInit);
  lib^.set_proc($2149691A7BA84757,@ps4_sceCompositorInitWithProcessOrder);
 
  lib^.set_proc($4FA09591D0833BBA,@ps4_sceCompositorGetSystemAddress);
@@ -198,12 +257,16 @@ begin
 
  lib^.set_proc($37B3EB33E94F316D,@ps4_sceCompositorGetCanvasHandle);
 
- lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
  lib^.set_proc($ABE430D444B10A3F,@ps4_sceCompositorIsDebugCaptureEnabled);
  lib^.set_proc($FF02001B9F3C9AF8,@ps4_sceCompositorInsertThreadTraceMarker);
 
+ lib^.set_proc($7472BEAAEE43D873,@ps4_sceCompositorSetDebugPositionCommand);
  lib^.set_proc($815A0E137D804E0D,@ps4_sceCompositorSetCompositeCanvasCommandInC);
  lib^.set_proc($0E1B4A7A554021A0,@ps4_sceCompositorSetGnmContextCommand);
+ lib^.set_proc($DD0F397B9712DDED,@ps4_sceCompositorSetPostEventCommand);
+ lib^.set_proc($75E2A8BDFDEA5620,@ps4_sceCompositorWaitPostEvent);
+ lib^.set_proc($A99345D37FA084B2,@ps4_sceCompositorFlush);
+ lib^.set_proc($F4CEC791BC14B3F1,@ps4_sceCompositorCheckCrash);
 end;
 
 initialization
