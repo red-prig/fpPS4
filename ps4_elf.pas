@@ -380,8 +380,7 @@ Var
  self_header:Tself_header;
  Segments:Pself_segment;
 
- SELF_MEM:Pointer;
- SELF_SIZE:Int64;
+ SELF:TMemChunk;
 
  elf_hdr:Pelf64_hdr;
  elf_phdr:Pelf64_phdr;
@@ -458,71 +457,79 @@ begin
  if (name='') then Exit;
  F:=FileOpen(name,fmOpenRead);
  if (F=feInvalidHandle) then Exit;
+
  FileRead(F,self_header.Magic,SizeOf(DWORD));
+
  case self_header.Magic of
   ELFMAG:
    begin
-    SELF_SIZE:=FileSeek(F,0,fsFromEnd);
-    if (SELF_SIZE<=0) then
+    SELF.nSize:=FileSeek(F,0,fsFromEnd);
+
+    if (SELF.nSize<=0) then
     begin
      Writeln(StdErr,'Error read file:',name);
      FileClose(F);
      Exit;
     end;
-    SELF_MEM:=GetMem(SELF_SIZE);
+
+    SELF.pAddr:=GetMem(SELF.nSize);
+
     FileSeek(F,0,fsFromBeginning);
-    s:=FileRead(F,SELF_MEM^,SELF_SIZE);
+    s:=FileRead(F,SELF.pAddr^,SELF.nSize);
     FileClose(F);
 
-    if (s<>SELF_SIZE) then
+    if (s<>SELF.nSize) then
     begin
      Writeln(StdErr,'Error read file:',name);
-     FreeMem(SELF_MEM);
+     FreeMem(SELF.pAddr);
      Exit;
     end;
 
-    if not _test_elf(SELF_MEM) then
+    if not _test_elf(SELF.pAddr) then
     begin
      Writeln(StdErr,'Error test file:',name);
-     FreeMem(SELF_MEM);
+     FreeMem(SELF.pAddr);
      Exit;
     end;
 
     elf:=Telf_file.Create;
-    elf.mElf.nSize:=SELF_SIZE;
-    elf.mElf.pAddr:=SELF_MEM;
+    elf.mElf:=SELF;
     elf._set_filename(name);
     Result:=elf;
    end;
   self_magic:
    begin
-    SELF_SIZE:=FileSeek(F,0,fsFromEnd);
-    if (SELF_SIZE<=0) then
+    SELF.nSize:=FileSeek(F,0,fsFromEnd);
+
+    if (SELF.nSize<=0) then
     begin
      Writeln(StdErr,'Error read file:',name);
      FileClose(F);
      Exit;
     end;
-    SELF_MEM:=GetMem(SELF_SIZE);
+
+    SELF.pAddr:=GetMem(SELF.nSize);
+
     FileSeek(F,0,fsFromBeginning);
-    s:=FileRead(F,SELF_MEM^,SELF_SIZE);
+    s:=FileRead(F,SELF.pAddr^,SELF.nSize);
     FileClose(F);
 
-    if (s<>SELF_SIZE) then
+    if (s<>SELF.nSize) then
     begin
      Writeln(StdErr,'Error read file:',name);
-     FreeMem(SELF_MEM);
+     FreeMem(SELF.pAddr);
      Exit;
     end;
 
-    if not _test_self(SELF_MEM) then
+    if not _test_self(SELF.pAddr) then
     begin
-     FreeMem(SELF_MEM);
+     FreeMem(SELF.pAddr);
      Exit;
     end;
 
-    Num_Segments:=Pself_header(SELF_MEM)^.Num_Segments;
-    Segments:=SELF_MEM+SizeOf(Tself_header);
+    Num_Segments:=Pself_header(SELF.pAddr)^.Num_Segments;
+    Segments:=SELF.pAddr+SizeOf(Tself_header);
+
     For i:=0 to Num_Segments-1 do
     begin
      if (Segments[i].flags and (SF_ENCR or SF_DFLG))<>0 then
@@ -534,23 +541,26 @@ begin
       Writeln(StdErr,' Seg.c_size=',HexStr(Segments[i].encrypted_compressed_size,16));
       Writeln(StdErr,' Seg.d_size=',HexStr(Segments[i].decrypted_decompressed_size,16));
       Writeln(StdErr,'encrypted or deflated SELF not support!');
-      FreeMem(SELF_MEM);
+      FreeMem(SELF.pAddr);
       Exit;
      end;
     end;
+
     elf_hdr:=Pointer(Segments)+(Num_Segments*SizeOf(Tself_segment));
 
     if not _test_elf(elf_hdr) then
     begin
      Writeln(StdErr,'Error test file:',name);
-     FreeMem(SELF_MEM);
+     FreeMem(SELF.pAddr);
      Exit;
     end;
 
     elf_phdr:=Pointer(elf_hdr)+SizeOf(elf64_hdr);
     LowSeg:=High(Int64);
+
     elf:=Telf_file.Create;
     elf.mElf.nSize:=0;
+
     For i:=0 to elf_hdr^.e_phnum-1 do
     begin
      s:=elf_phdr[i].p_offset;
@@ -558,25 +568,36 @@ begin
      begin
       LowSeg:=MinInt64(s,LowSeg);
      end;
-     s:=s+MaxInt64(elf_phdr[i].p_filesz,elf_phdr[i].p_memsz);
+     s:=s+elf_phdr[i].p_filesz;
      elf.mElf.nSize:=MaxInt64(s,elf.mElf.nSize);
     end;
+
     if (LowSeg=High(Int64)) then
     begin
      LowSeg:=0;
     end;
+
+    s:=ptruint(elf_hdr)-ptruint(SELF.pAddr); //offset
+
+    s:=MaxInt64(SELF.nSize,s)-s; //size
+
+    LowSeg:=MinInt64(LowSeg,s);  //trunc
+
     elf.mElf.pAddr:=AllocMem(elf.mElf.nSize);
     Writeln('Elf with LowSeg:',LowSeg,' Size:',elf.mElf.nSize);
+
     Move(elf_hdr^,elf.mElf.pAddr^,LowSeg);
+
     For i:=0 to Num_Segments-1 do
      if ((Segments[i].flags and SF_BFLG)<>0) then
      begin
       s:=(Segments[i].flags shr 20) and $FFF;
-      Move(Pointer(SELF_MEM+Segments[i].offset)^,
-           Pointer(elf.mElf.pAddr+elf_phdr[s].p_offset)^,
+      Move(Pointer(SELF.pAddr    +Segments[i].offset)^,   //src
+           Pointer(elf.mElf.pAddr+elf_phdr[s].p_offset)^, //dst
            Segments[i].encrypted_compressed_size);
      end;
-    FreeMem(SELF_MEM);
+
+    FreeMem(SELF.pAddr);
     elf._set_filename(name);
     Result:=elf;
    end;
