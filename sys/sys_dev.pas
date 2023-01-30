@@ -11,7 +11,8 @@ uses
  RWLock,
  sys_kernel,
  sys_crt,
- sys_fd;
+ sys_fd,
+ sys_dir;
 
 procedure _sys_dev_init;
 function  _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
@@ -25,6 +26,10 @@ type
   function lseek    (offset:Int64;whence:Integer):Int64; override;
   function ftruncate(size:Int64):Integer;                override;
   function fstat    (stat:PSceKernelStat):Integer;       override;
+ end;
+
+ TDirCharDev=class(TDirFile)
+  function fstat(stat:PSceKernelStat):Integer; override;
  end;
 
  TDevRandom=class(TDevFile)
@@ -61,10 +66,87 @@ begin
  _sys_dev_open('stderr',O_RDWR,0); //2
 end;
 
-function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_dev_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
+var
+ f:TDirCharDev;
+
+begin
+ Result:=0;
+
+ f:=TDirCharDev.Create;
+ f.path:=path;
+
+ SetLength(f.dirs,0);
+
+ f.add_dir('.');
+ f.add_dir('..');
+ f.add_dir('ajm'              );
+ f.add_dir('bpf'              );
+ f.add_dir('bpf0'             );
+ f.add_dir('camera'           );
+ f.add_dir('console'          );
+ f.add_dir('ctty'             );
+ f.add_dir('da0x6x1.crypt'    );
+ f.add_dir('da0x6x2.crypt'    );
+ f.add_dir('dbggc'            );
+ f.add_dir('dce'              );
+ f.add_dir('deci_stderr'      );
+ f.add_dir('deci_stdin'       );
+ f.add_dir('deci_stdout'      );
+ f.add_dir('deci_tty2'        );
+ f.add_dir('deci_tty3'        );
+ f.add_dir('deci_tty4'        );
+ f.add_dir('deci_tty5'        );
+ f.add_dir('deci_tty6'        );
+ f.add_dir('deci_tty7'        );
+ f.add_dir('deci_ttya0'       );
+ f.add_dir('deci_ttyb0'       );
+ f.add_dir('deci_ttyc0'       );
+ f.add_dir('dipsw'            );
+ f.add_dir('dmem0'            );
+ f.add_dir('dmem1'            );
+ f.add_dir('fd'               );
+ f.add_dir('gc'               );
+ f.add_dir('hid'              );
+ f.add_dir('icc_configuration');
+ f.add_dir('icc_device_power' );
+ f.add_dir('icc_indicator'    );
+ f.add_dir('icc_nvs'          );
+ f.add_dir('icc_power'        );
+ f.add_dir('notification0'    );
+ f.add_dir('notification1'    );
+ f.add_dir('null'             );
+ f.add_dir('random'           );
+ f.add_dir('rng'              );
+ f.add_dir('sce_zlib'         );
+ f.add_dir('srtc'             );
+ f.add_dir('ugen0.4'          );
+ f.add_dir('urandom'          );
+ f.add_dir('usb'              );
+ f.add_dir('usbctl'           );
+ f.add_dir('uvd'              );
+ f.add_dir('vce'              );
+ f.add_dir('zero'             );
+
+ Result:=_sys_open_fd(f,flags);
+
+ if (Result<0) then
+ begin
+  f.Destroy;
+ end else
+ begin
+  f.Release;
+ end;
+end;
+
+function _sys_dev_char_open(const path:RawByteString;flags,mode:Integer):Integer;
 var
  f:TCustomFile;
 begin
+ if (flags and O_DIRECTORY)<>0 then
+ begin
+  Exit(-ENOTDIR);
+ end;
 
  Case path of
   'stdin' :f:=TDevStd.Create(@Input,@StdOut);
@@ -91,14 +173,117 @@ begin
  end;
 end;
 
+function _sys_dev_open(const path:RawByteString;flags,mode:Integer):Integer;
+begin
+ if (path='') then
+ begin
+  Result:=_sys_dev_dir_open(path,flags,mode);
+ end else
+ begin
+  Result:=_sys_dev_char_open(path,flags,mode);
+ end;
+end;
+
 //
+
+function _sys_dev_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+begin
+ stat^:=Default(SceKernelStat);
+
+ stat^.st_mode    :=S_IFDIR;
+ stat^.st_size    :=1;
+ stat^.st_nlink   :=1;
+
+ stat^.st_atim.tv_sec    :=1;
+ stat^.st_mtim.tv_sec    :=1;
+ stat^.st_ctim.tv_sec    :=1;
+ stat^.st_birthtim.tv_sec:=1;
+
+ stat^.st_blocks  :=0;
+ stat^.st_blksize :=SizeOf(dirent);
+
+ Result:=0;
+end;
+
+function _sys_dev_char_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+begin
+ stat^:=Default(SceKernelStat);
+
+ stat^.st_mode    :=S_IFCHR;
+ stat^.st_size    :=1;
+ stat^.st_nlink   :=1;
+
+ stat^.st_atim.tv_sec    :=1;
+ stat^.st_mtim.tv_sec    :=1;
+ stat^.st_ctim.tv_sec    :=1;
+ stat^.st_birthtim.tv_sec:=1;
+
+ stat^.st_blocks  :=0;
+ stat^.st_blksize :=512;
+
+ Result:=0;
+end;
 
 function _sys_dev_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 begin
- Result:=0;
- stat^:=Default(SceKernelStat);
- stat^.st_mode :=S_IFCHR;
- stat^.st_nlink:=1;
+ Case path of
+  '':Result:=_sys_dev_dir_stat(path,stat);
+
+  'ajm',
+  'bpf',
+  'bpf0',
+  'camera',
+  'console',
+  'ctty',
+  'da0x6x1.crypt',
+  'da0x6x2.crypt',
+  'dbggc',
+  'dce',
+  'deci_stderr',
+  'deci_stdin',
+  'deci_stdout',
+  'deci_tty2',
+  'deci_tty3',
+  'deci_tty4',
+  'deci_tty5',
+  'deci_tty6',
+  'deci_tty7',
+  'deci_ttya0',
+  'deci_ttyb0',
+  'deci_ttyc0',
+  'dipsw',
+  'dmem0',
+  'dmem1',
+  'fd',
+  'gc',
+  'hid',
+  'icc_configuration',
+  'icc_device_power',
+  'icc_indicator',
+  'icc_nvs',
+  'icc_power',
+  'notification0',
+  'notification1',
+  'null',
+  'random',
+  'rng',
+  'sce_zlib',
+  'srtc',
+  'ugen0.4',
+  'urandom',
+  'usb',
+  'usbctl',
+  'uvd',
+  'vce',
+  'zero':
+   begin
+    Result:=_sys_dev_char_stat(path,stat);
+   end
+
+  else
+   Result:=ENOENT;
+
+ end;
 end;
 
 //
@@ -118,14 +303,24 @@ begin
  Result:=EACCES;
 end;
 
-function TDevFile.fstat (stat:PSceKernelStat):Integer;
+function TDevFile.fstat(stat:PSceKernelStat):Integer;
 begin
- Result:=0;
- stat^:=Default(SceKernelStat);
- stat^.st_dev  :=fd;
- stat^.st_rdev :=fd;
- stat^.st_mode :=S_IFCHR;
- stat^.st_nlink:=1;
+ Result:=_sys_dev_char_stat('',stat);
+ if (Result=0) then
+ begin
+  stat^.st_dev :=fd;
+  stat^.st_rdev:=fd;
+ end;
+end;
+
+function TDirCharDev.fstat(stat:PSceKernelStat):Integer;
+begin
+ Result:=_sys_dev_dir_stat(path,stat);
+ if (Result=0) then
+ begin
+  stat^.st_dev :=fd;
+  stat^.st_rdev:=fd;
+ end;
 end;
 
 //

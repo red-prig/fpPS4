@@ -39,15 +39,6 @@ type
    d_name  :array[0..MAXNAMLEN] of AnsiChar; //name must be no longer than this
  end;
 
-function _sys_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
-function _sys_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
-
-function _sys_root_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
-function _sys_root_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
-
-implementation
-
-type
  a_dirent=array of dirent;
 
  TDirFile=class(TCustomFile)
@@ -69,11 +60,20 @@ type
   function    fstat        (stat:PSceKernelStat):Integer;                     override;
   function    lseek        (offset:Int64;whence:Integer):Int64;               override;
   function    getdirentries(buf:Pointer;nbytes:Int64;basep:PInt64):Int64;     override;
+  procedure   add_dir(const name:RawByteString);
  end;
 
+function _sys_dir_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+
+function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
+function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+
+implementation
+
+type
  TDirFileRoot=class(TDirFile)
   function    fstat(stat:PSceKernelStat):Integer; override;
-  procedure   add_dir(const name:RawByteString);
  end;
 
 function get_d_type(dwFileAttributes:DWORD):BYTE;
@@ -283,6 +283,19 @@ begin
  end;
 end;
 
+function _sys_root_open(const path:RawByteString;flags,mode:Integer):Integer;
+begin
+ if (path='') then
+ begin
+  //root dir
+  Result:=_sys_root_dir_open(path,flags,mode);
+ end else
+ begin
+  //root file
+  Result:=-ENOENT;
+ end;
+end;
+
 function _sys_root_dir_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
 begin
  stat^:=Default(SceKernelStat);
@@ -300,6 +313,19 @@ begin
  stat^.st_blksize :=SizeOf(dirent);
 
  Result:=0;
+end;
+
+function _sys_root_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+begin
+ if (path='') then
+ begin
+  //root dir
+  Result:=_sys_root_dir_stat(path,stat);
+ end else
+ begin
+  //root file
+  Result:=ENOENT;
+ end;
 end;
 
 //
@@ -452,17 +478,7 @@ begin
  Result:=count*SizeOf(dirent);
 end;
 
-function TDirFileRoot.fstat(stat:PSceKernelStat):Integer;
-begin
- Result:=_sys_root_dir_stat(path,stat);
- if (Result=0) then
- begin
-  stat^.st_dev :=fd;
-  stat^.st_rdev:=fd;
- end;
-end;
-
-procedure TDirFileRoot.add_dir(const name:RawByteString);
+procedure TDirFile.add_dir(const name:RawByteString);
 var
  tmp:dirent;
  i:Integer;
@@ -475,6 +491,16 @@ begin
  i:=Length(dirs);
  SetLength(dirs,i+1);
  dirs[i]:=tmp;
+end;
+
+function TDirFileRoot.fstat(stat:PSceKernelStat):Integer;
+begin
+ Result:=_sys_root_dir_stat(path,stat);
+ if (Result=0) then
+ begin
+  stat^.st_dev :=fd;
+  stat^.st_rdev:=fd;
+ end;
 end;
 
 //
