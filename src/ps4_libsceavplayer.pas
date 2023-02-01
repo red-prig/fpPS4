@@ -68,6 +68,7 @@ type
 
  SceAvPlayerUriType=Integer; // enum
  SceAvPlayerSourceType=Integer; // enum
+ SceAvPlayerAvSyncMode=Integer; // enum
 
  SceAvPlayerMemAllocator=packed record
   objectPointer    :Pointer;
@@ -272,7 +273,7 @@ type
   procedure   CreateMedia(const aSource: RawByteString);
   procedure   FreeMedia;
   function    NextPacket(const id:Integer):Boolean;
-  function    ReceiveAudio:TMemChunk;
+  function    ReceiveAudio(const ignoreIsPlaying:Boolean=False):TMemChunk;
   function    ReceiveVideo:TMemChunk;
   function    GetFramerate:QWord;
   function    IsPlaying:Boolean;
@@ -679,7 +680,7 @@ begin
  end;
 end;
 
-function TAvPlayerState.ReceiveAudio:TMemChunk;
+function TAvPlayerState.ReceiveAudio(const ignoreIsPlaying:Boolean=False):TMemChunk;
 var
  err      :Integer;
  frame    :PAVFrame;
@@ -688,7 +689,7 @@ var
  pcmSample:SmallInt;
 begin
  Result:=Default(TMemChunk);
- if (audioStreamId<0) or (not IsPlaying) then Exit;
+ if (audioStreamId<0) or ((not ignoreIsPlaying) and (not IsPlaying)) then Exit;
  frame:=av_frame_alloc;
  Result.pAddr:=nil;
  while True do
@@ -1057,7 +1058,7 @@ begin
  if DISABLE_FMV_HACK then
   Exit(0);
  player:=_GetPlayer(handle);
- Writeln(SysLogPrefix,'sceAvPlayerSetLooping=',loopFlag);
+ Writeln(SysLogPrefix,'sceAvPlayerSetLooping,loopFlag=',loopFlag);
  if (player<>nil) then
  begin
   player.isLooped:=loopFlag;
@@ -1166,6 +1167,13 @@ begin
  Result:=False;
 end;
 
+function ps4_sceAvPlayerSetAvSyncMode(handle:SceAvPlayerHandle;argSyncMode:SceAvPlayerAvSyncMode):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerSetAvSyncMode');
+ // Do nothing
+ Result:=0;
+end;
+
 function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
@@ -1261,19 +1269,30 @@ begin
  begin
   if streamId=player.playerState.videoStreamId then
   begin
-   argInfo^.type_    :=SCE_AVPLAYER_VIDEO;
-   argInfo^.duration :=player.playerState.durationInMs;
-   argInfo^.startTime:=0;
-   // TODO: Details
+   argInfo^.type_                     :=SCE_AVPLAYER_VIDEO;
+   argInfo^.duration                  :=player.playerState.durationInMs;
+   argInfo^.startTime                 :=0;
+   argInfo^.details.video.width       :=player.playerState.videoCodecContext^.width;
+   argInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
+   argInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
+   argInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
   end else
   if streamId=player.playerState.audioStreamId then
   begin
-   argInfo^.type_    :=SCE_AVPLAYER_AUDIO;
-   argInfo^.duration :=player.playerState.durationInMs;
-   argInfo^.startTime:=0;
-   // TODO: Details
+   // We need to read audio packet to get sampleCount value. Since this function may be called before sceAvPlayerGetAudioData,
+   // the value we currently have may not valid.
+   // Therefore we need to manually call ReceiveAudio to receive audio information, in case sampleCount = 0
+   if player.playerState.sampleCount=0 then
+    player.playerState.ReceiveAudio(True);
+   argInfo^.type_                     :=SCE_AVPLAYER_AUDIO;
+   argInfo^.duration                  :=player.playerState.durationInMs;
+   argInfo^.startTime                 :=0;
+   argInfo^.details.audio.channelCount:=player.playerState.channelCount;
+   argInfo^.details.audio.sampleRate  :=player.playerState.sampleRate;
+   argInfo^.details.audio.size        :=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
+   argInfo^.details.audio.languageCode:=LANGUAGE_CODE_ENG;
   end else
-   argInfo^.type_    :=SCE_AVPLAYER_TIMEDTEXT;
+   argInfo^.type_:=SCE_AVPLAYER_UNKNOWN;
   Result:=0;
  end else
   Result:=-1;
@@ -1400,6 +1419,7 @@ begin
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
+ lib^.set_proc($93FABEC4EC5D7371,@ps4_sceAvPlayerSetAvSyncMode);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
  lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
  lib^.set_proc($85D4F247309741E4,@ps4_sceAvPlayerStreamCount);
