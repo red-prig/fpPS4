@@ -163,6 +163,7 @@ begin
   PAGE_EXECUTE_READWRITE);
 
  Case prot of
+  0,
   PAGE_NOACCESS         :Result:=0;
   PAGE_READONLY         :Result:=PROT_READ;
   PAGE_READWRITE        :Result:=PROT_READ or PROT_WRITE;
@@ -195,7 +196,7 @@ function _VirtualReserve(Addr:Pointer;dwSize:PTRUINT;prot:Integer):Integer;
 begin
  Result:=0;
  if (Addr=nil) then Exit(-1);
- Addr:=VirtualAlloc(Addr,dwSize,MEM_RESERVE,__map_prot_page(prot));
+ Addr:=VirtualAlloc(Addr,dwSize,MEM_RESERVE,PAGE_NOACCESS);
  if (Addr<>nil) then Exit;
  Result:=GetLastError;
 end;
