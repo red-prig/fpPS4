@@ -68,6 +68,7 @@ type
 
  SceAvPlayerUriType=Integer; // enum
  SceAvPlayerSourceType=Integer; // enum
+ SceAvPlayerAvSyncMode=Integer; // enum
 
  SceAvPlayerMemAllocator=packed record
   objectPointer    :Pointer;
@@ -1166,6 +1167,13 @@ begin
  Result:=False;
 end;
 
+function ps4_sceAvPlayerSetAvSyncMode(handle:SceAvPlayerHandle;argSyncMode:SceAvPlayerAvSyncMode):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceAvPlayerSetAvSyncMode');
+ // Do nothing
+ Result:=0;
+end;
+
 function ps4_sceAvPlayerCurrentTime(handle:SceAvPlayerHandle):QWord; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
@@ -1410,7 +1418,8 @@ begin
  lib^.set_proc($51B42861AC0EB1F6,@ps4_sceAvPlayerIsActive);
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
- lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
+ lib^.set_proc($93FABEC4EC5D7371,@ps4_sceAvPlayerGetVideoDataEx);
+ lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerSetAvSyncMode);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);
  lib^.set_proc($7814EB799F382456,@ps4_sceAvPlayerSetLogCallback);
  lib^.set_proc($85D4F247309741E4,@ps4_sceAvPlayerStreamCount);
