@@ -272,7 +272,7 @@ type
   procedure   CreateMedia(const aSource: RawByteString);
   procedure   FreeMedia;
   function    NextPacket(const id:Integer):Boolean;
-  function    ReceiveAudio:TMemChunk;
+  function    ReceiveAudio(const ignoreIsPlaying:Boolean=False):TMemChunk;
   function    ReceiveVideo:TMemChunk;
   function    GetFramerate:QWord;
   function    IsPlaying:Boolean;
@@ -679,7 +679,7 @@ begin
  end;
 end;
 
-function TAvPlayerState.ReceiveAudio:TMemChunk;
+function TAvPlayerState.ReceiveAudio(const ignoreIsPlaying:Boolean=False):TMemChunk;
 var
  err      :Integer;
  frame    :PAVFrame;
@@ -688,7 +688,7 @@ var
  pcmSample:SmallInt;
 begin
  Result:=Default(TMemChunk);
- if (audioStreamId<0) or (not IsPlaying) then Exit;
+ if (audioStreamId<0) or ((not ignoreIsPlaying) and (not IsPlaying)) then Exit;
  frame:=av_frame_alloc;
  Result.pAddr:=nil;
  while True do
@@ -1275,7 +1275,7 @@ begin
    // the value we currently have may not valid.
    // Therefore we need to manually call ReceiveAudio to receive audio information, in case sampleCount = 0
    if player.playerState.sampleCount=0 then
-    player.playerState.ReceiveAudio;
+    player.playerState.ReceiveAudio(True);
    argInfo^.type_                     :=SCE_AVPLAYER_AUDIO;
    argInfo^.duration                  :=player.playerState.durationInMs;
    argInfo^.startTime                 :=0;
