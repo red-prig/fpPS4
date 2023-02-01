@@ -1057,7 +1057,7 @@ begin
  if DISABLE_FMV_HACK then
   Exit(0);
  player:=_GetPlayer(handle);
- Writeln(SysLogPrefix,'sceAvPlayerSetLooping=',loopFlag);
+ Writeln(SysLogPrefix,'sceAvPlayerSetLooping,loopFlag=',loopFlag);
  if (player<>nil) then
  begin
   player.isLooped:=loopFlag;
@@ -1261,19 +1261,25 @@ begin
  begin
   if streamId=player.playerState.videoStreamId then
   begin
-   argInfo^.type_    :=SCE_AVPLAYER_VIDEO;
-   argInfo^.duration :=player.playerState.durationInMs;
-   argInfo^.startTime:=0;
-   // TODO: Details
+   argInfo^.type_                     :=SCE_AVPLAYER_VIDEO;
+   argInfo^.duration                  :=player.playerState.durationInMs;
+   argInfo^.startTime                 :=0;
+   argInfo^.details.video.width       :=player.playerState.videoCodecContext^.width;
+   argInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
+   argInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
+   argInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
   end else
   if streamId=player.playerState.audioStreamId then
   begin
-   argInfo^.type_    :=SCE_AVPLAYER_AUDIO;
-   argInfo^.duration :=player.playerState.durationInMs;
-   argInfo^.startTime:=0;
-   // TODO: Details
+   argInfo^.type_                     :=SCE_AVPLAYER_AUDIO;
+   argInfo^.duration                  :=player.playerState.durationInMs;
+   argInfo^.startTime                 :=0;
+   argInfo^.details.audio.channelCount:=player.playerState.channelCount;
+   argInfo^.details.audio.sampleRate  :=player.playerState.sampleRate;
+   argInfo^.details.audio.size        :=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
+   argInfo^.details.audio.languageCode:=LANGUAGE_CODE_ENG;
   end else
-   argInfo^.type_    :=SCE_AVPLAYER_TIMEDTEXT;
+   argInfo^.type_:=SCE_AVPLAYER_UNKNOWN;
   Result:=0;
  end else
   Result:=-1;
