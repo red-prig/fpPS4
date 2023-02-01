@@ -1271,6 +1271,11 @@ begin
   end else
   if streamId=player.playerState.audioStreamId then
   begin
+   // We need to read audio packet to get sampleCount value. Since this function may be called before sceAvPlayerGetAudioData,
+   // the value we currently have may not valid.
+   // Therefore we need to manually call ReceiveAudio to receive audio information, in case sampleCount = 0
+   if player.playerState.sampleCount=0 then
+    player.playerState.ReceiveAudio;
    argInfo^.type_                     :=SCE_AVPLAYER_AUDIO;
    argInfo^.duration                  :=player.playerState.durationInMs;
    argInfo^.startTime                 :=0;
