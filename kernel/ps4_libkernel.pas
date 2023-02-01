@@ -541,6 +541,45 @@ begin
  Result:=0;
 end;
 
+function _sysctlbyname(name   :PChar;
+                       oldp   :Pointer;
+                       oldlenp:Pptruint;
+                       newp   :Pointer;
+                       newlen :ptruint
+                      ):Integer;
+begin
+ Result:=0;
+
+ Case RawByteString(name) of
+  '':Result:=EINVAL;
+
+  'kern.rng_pseudo':
+    begin
+     if (oldlenp=nil) then Exit(EFAULT);
+
+     Result:=BCryptGenRandom(nil,oldp,oldlenp^,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+     if (Result<>0) then Result:=EFAULT;
+    end;
+  else
+   begin
+    Writeln(StdErr,'TODO sysctlbyname:',name);
+    Assert(False);
+   end;
+ end;
+end;
+
+function ps4_sysctlbyname(name   :PChar;
+                          oldp   :Pointer;
+                          oldlenp:Pptruint;
+                          newp   :Pointer;
+                          newlen :ptruint
+                         ):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sysctlbyname(name,oldp,oldlenp,newp,newlen));
+ _sig_unlock;
+end;
+
 //dynlib_get_obj_member(handle,8,&ptr); module param
 //dynlib_get_obj_member(handle,1,&ptr); init
 //dynlib_get_obj_member(handle,2,&ptr); fini
@@ -1114,6 +1153,7 @@ begin
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
  lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
+ lib^.set_proc($3210B9DD32A68D50,@ps4_sysctlbyname);
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($1A0DFEC962FA0D65,@ps4_sceKernelLoadStartModuleForSysmodule);
