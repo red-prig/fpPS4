@@ -42,6 +42,10 @@ type
   function writev(vector:p_iovec;count:Integer):Int64;              override;
  end;
 
+ TDevRng=class(TDevRandom)
+  function ioctl (cmd:Integer;param1:ptruint):Integer;              override;
+ end;
+
  TDevStd=class(TDevFile)
   var
    RText,WText:PText;
@@ -120,6 +124,9 @@ begin
  f.add_dir('rng'              );
  f.add_dir('sce_zlib'         );
  f.add_dir('srtc'             );
+ f.add_dir('stderr'           );
+ f.add_dir('stdin'            );
+ f.add_dir('stdout'           );
  f.add_dir('ugen0.4'          );
  f.add_dir('urandom'          );
  f.add_dir('usb'              );
@@ -158,6 +165,12 @@ begin
     begin
      f:=TDevRandom.Create;
     end;
+
+  'rng':
+    begin
+     f:=TDevRng.Create;
+    end;
+
   else
    Exit(-ENOENT);
  end;
@@ -375,6 +388,23 @@ begin
  For i:=0 to count-1 do
  begin
   Result:=Result+vector[i].iov_len;
+ end;
+end;
+
+//
+
+function TDevRng.ioctl(cmd:Integer;param1:ptruint):Integer;
+begin
+ case cmd of
+  $40445301, //_get_genuine_random
+  $40445302: //Fips186Prng
+  begin
+   if (param1<$1000) then Exit(EFAULT);
+   Result:=BCryptGenRandom(nil,Pointer(param1),64,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+   if (Result<>0) then Result:=EFAULT;
+  end;
+  else
+   Result:=EINVAL;
  end;
 end;
 
