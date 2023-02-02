@@ -68,6 +68,11 @@ begin
  Result:=strlcopy(dst,src,len);
 end;
 
+function ps4_strlcpy(dst,src:PChar;len:sizeint):sizeint; SysV_ABI_CDecl;
+begin
+ Result:=strlcopy(dst,src,len)-dst;
+end;
+
 function ps4_strcpy_s(dst:PChar;destSize:size_t;src:PChar):Integer; SysV_ABI_CDecl;
 var
  count:size_t;
@@ -225,6 +230,14 @@ begin
  end;
 end;
 
+procedure ps4_perror(str:PChar); SysV_ABI_CDecl;
+begin
+ if (str<>nil) and (str<>'') then
+ begin
+  Write(StdErr,str,': ');
+ end;
+ Writeln(StdErr,PInteger(_error)^);
+end;
 
 Const
  Need_sceLibcInternal:QWORD=1;
@@ -314,6 +327,7 @@ begin
  lib^.set_proc($3452ECF9D44918D8,@ps4_memcpy_s);
  lib^.set_proc($8F856258D1C4830C,@ps4_strlen);
  lib^.set_proc($EAC256896491BAA9,@ps4_strncpy);
+ lib^.set_proc($49F40865CAAFBE6B,@ps4_strlcpy);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($3AF6F675224E02E1,@ps4_strcmp);
  lib^.set_proc($69EB328EB1D55B2E,@ps4_strncmp);
@@ -332,6 +346,8 @@ begin
 
  lib^.set_proc($5B48FABC2C61F4F7,@ps4__ZSt16_Throw_Cpp_errori);
  lib^.set_proc($6D1BA3221796941D,@ps4__ZSt14_Throw_C_errori);
+
+ lib^.set_proc($10CBADC1A437E09A,@ps4_perror);
 
  //mspace
 
