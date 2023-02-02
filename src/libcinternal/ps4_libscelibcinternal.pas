@@ -21,6 +21,7 @@ uses
  ps4_atexit_internal,
  ps4_guard_internal,
  ps4_mtx_internal,
+ ps4_libkernel,
  sys_kernel,
  sys_signal;
 
@@ -95,6 +96,11 @@ begin
  Result:=StrComp(a,b);
 end;
 
+function ps4_strncmp(a,b:PChar;n:ptrint):Integer; SysV_ABI_CDecl;
+begin
+ Result:=StrLComp(a,b,n);
+end;
+
 function ps4_strstr(str,sub:PChar):PChar; SysV_ABI_CDecl;
 begin
  Result:=StrPos(str,sub);
@@ -115,6 +121,53 @@ end;
 procedure ps4_bzero(s:Pointer;n:size_t); SysV_ABI_CDecl;
 begin
  FillChar(s^,n,0);
+end;
+
+function ps4_getenv(name:PChar):PChar; SysV_ABI_CDecl;
+label
+ _err;
+var
+ n:PChar;
+ _environ:PPchar;
+ nlen:ptrint;
+ r:Integer;
+begin
+ if (name=nil) then goto _err;
+
+ nlen:=0;
+ n:=name;
+ While (n^<>#0) do
+ begin
+  if (n^='=') then goto _err;
+  Inc(n);
+  Inc(nlen);
+ end;
+
+ if (nlen=0) then goto _err;
+
+ if (environ=nil) then Exit(nil);
+
+ _environ:=environ;
+ n:=_environ^;
+ if (n=nil) then Exit(nil);
+
+ repeat
+  r:=StrLComp(n,name,nlen);
+
+  if (r=0) and (n[nlen]='=') then Break;
+
+  Inc(_environ);
+  n:=_environ^;
+
+  if (n=nil) then Exit(nil);
+
+ until false;
+
+ Exit(@n[nlen+1]);
+
+ _err:
+  _set_errno(EINVAL);
+  Result:=nil;
 end;
 
 procedure ps4__init_env; SysV_ABI_CDecl;
@@ -263,10 +316,13 @@ begin
  lib^.set_proc($EAC256896491BAA9,@ps4_strncpy);
  lib^.set_proc($E576B600234409DA,@ps4_strcpy_s);
  lib^.set_proc($3AF6F675224E02E1,@ps4_strcmp);
+ lib^.set_proc($69EB328EB1D55B2E,@ps4_strncmp);
  lib^.set_proc($BE28B014C68D6A60,@ps4_strstr);
  lib^.set_proc($437541C425E1507B,@ps4_memcpy);
  lib^.set_proc($F8FE854461F82DF0,@ps4_memmove);
  lib^.set_proc($F68897D64C9E79D0,@ps4_bzero);
+
+ lib^.set_proc($B266D0BA47F16093,@ps4_getenv);
 
  lib^.set_proc($6F3404C72D7CF592,@ps4__init_env);
  lib^.set_proc($E8D08EAABDDC0FBE,@ps4__init_tls);

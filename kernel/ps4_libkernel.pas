@@ -43,6 +43,14 @@ function  ps4_sceKernelGetModuleInfoFromAddr(Addr:Pointer;flags:DWORD;info:pSceK
 function  ps4___elf_phdr_match_addr(phdr_info:pSceKernelModuleInfoEx;addr:Pointer):Integer; SysV_ABI_CDecl;
 procedure ps4___pthread_cxa_finalize(phdr_info:pSceKernelModuleInfoEx); SysV_ABI_CDecl;
 
+const
+ __progname:PChar='eboot.bin'; //argv[0]
+
+ g_argv:array[0..1] of PChar=('eboot.bin',nil);
+
+ _env:array[0..2] of PChar=('HOME=/','PWD=/',nil);
+ environ:PPchar=@_env;
+
 implementation
 
 uses
@@ -908,9 +916,6 @@ begin
  Result:=1;
 end;
 
-const
- g_argv:array[0..1] of PChar=('eboot.bin',nil);
-
 function ps4_getargv:PPChar; SysV_ABI_CDecl;
 begin
  Result:=@g_argv;
@@ -1042,9 +1047,6 @@ begin
  Writeln(StdWrn,SysLogPrefix,'sceSysmoduleLoadModuleByNameInternal:',name);
  Result:=0;
 end;
-
-const
- __progname:PChar='eboot.bin'; //argv[0]
 
 function Load_libSceSysmodule(Const name:RawByteString):TElf_node;
 var
