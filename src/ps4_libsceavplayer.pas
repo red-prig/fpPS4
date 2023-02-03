@@ -659,11 +659,9 @@ begin
    if id=videoStreamId then
    begin
     err:=avcodec_send_packet(videoCodecContext,packet);
-    assert(err=0);
    end else
    begin
     err:=avcodec_send_packet(audioCodecContext,packet);
-    assert(err=0);
    end;
    av_packet_free(packet);
    Exit(True);
@@ -1169,7 +1167,7 @@ end;
 
 function ps4_sceAvPlayerSetAvSyncMode(handle:SceAvPlayerHandle;argSyncMode:SceAvPlayerAvSyncMode):Integer; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerSetAvSyncMode');
+ Writeln(SysLogPrefix,'sceAvPlayerSetAvSyncMode,argSyncMode=',argSyncMode);
  // Do nothing
  Result:=0;
 end;
@@ -1276,6 +1274,9 @@ begin
    argInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
    argInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
    argInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
+   Writeln('width: ',argInfo^.details.video.width);
+   Writeln('height: ',argInfo^.details.video.height);
+   Writeln('aspectRatio: ',argInfo^.details.video.aspectRatio:0:4);
   end else
   if streamId=player.playerState.audioStreamId then
   begin
@@ -1291,6 +1292,9 @@ begin
    argInfo^.details.audio.sampleRate  :=player.playerState.sampleRate;
    argInfo^.details.audio.size        :=player.playerState.channelCount*player.playerState.sampleCount*SizeOf(SmallInt);
    argInfo^.details.audio.languageCode:=LANGUAGE_CODE_ENG;
+   Writeln('channelCount: ',argInfo^.details.audio.channelCount);
+   Writeln('sampleRate: ',argInfo^.details.audio.sampleRate);
+   Writeln('size: ',argInfo^.details.audio.size);
   end else
    argInfo^.type_:=SCE_AVPLAYER_UNKNOWN;
   Result:=0;
