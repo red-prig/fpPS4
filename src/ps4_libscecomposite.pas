@@ -9,6 +9,7 @@ uses
  mmap,
  ps4_map_mm,
  ps4_libSceGnmDriver,
+ ps4_videodrv,
  ps4_shader,
  sys_crt,
  Classes,
@@ -50,12 +51,12 @@ var
 
  g_index_bits:DWORD=0;
 
-function alloc_dmem(var mem:TMemInfo;len:QWORD):Integer;
+function alloc_dmem(var mem:TMemInfo;len:QWORD;prot:Byte):Integer;
 begin
  Result:=ps4_sceKernelAllocateMainDirectMemory(len,0,SCE_KERNEL_WB_ONION,@mem.offset);
  if (Result<>0) then Exit;
 
- Result:=ps4_sceKernelMapDirectMemory(@mem.addr,len,7,0,mem.offset,0);
+ Result:=ps4_sceKernelMapDirectMemory(@mem.addr,len,prot,0,mem.offset,0);
  if (Result<>0) then Exit;
 
  mem.size:=len;
@@ -74,10 +75,10 @@ begin
 
  InitCriticalSection(SceCompositorCmdMtx);
 
- Result:=alloc_dmem(g_System,sharedSystemMemorySize);
+ Result:=alloc_dmem(g_System,sharedSystemMemorySize,PROT_CPU_ALL);
  if (Result<>0) then Exit;
 
- Result:=alloc_dmem(g_Video ,sharedVideoMemorySize);
+ Result:=alloc_dmem(g_Video ,sharedVideoMemorySize ,PROT_CPU_ALL or PROT_GPU_ALL);
  if (Result<>0) then Exit;
 
  Result:=0;
@@ -199,9 +200,22 @@ function ps4_sceCompositorSetGnmContextCommand(
           dcbSizeInBytes:DWORD;
           ccbGpuAddress :Pointer;
           ccbSizeInByte :DWORD):Integer; SysV_ABI_CDecl;
+var
+ info:TvSubmitInfo;
 begin
  //(SceCompositorCommand)(dbuf * 0x100 | 0x2);
  Writeln(StdWrn,'sceCompositorSetCompositeCanvasCommandInC');
+
+ info:=Default(TvSubmitInfo);
+
+ info.count:=1;
+ info.dcbGpuAddrs    :=@dcbGpuAddress;
+ info.dcbSizesInBytes:=@dcbSizeInBytes;
+ info.ccbGpuAddrs    :=@ccbGpuAddress;
+ info.ccbSizesInBytes:=@ccbSizeInByte;
+
+ vSubmitCommandBuffers(@info,nil);
+
  Result:=0;
 end;
 
