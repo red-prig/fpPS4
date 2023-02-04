@@ -49,6 +49,10 @@
         <Filename Value="..\kern_thread.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\..\kernel\libthr\thr_private.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -59,7 +63,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\vulkan;..\..\kernel;..\.."/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\vulkan;..\..\kernel;..\..;..\..\kernel\libthr"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

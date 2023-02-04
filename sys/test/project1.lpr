@@ -8,6 +8,7 @@ uses
  sys_umtx,
  kern_thread,
  kern_lock,
+ thr_private,
  sysutils,
  vulkan,
  vDevice;
