@@ -303,11 +303,13 @@ const
  PARSE_TYPE_SCHEME  =0;
  PARSE_TYPE_HOSTNAME=1;
  PARSE_TYPE_PATH    =2;
+ PARSE_TYPE_QUERY   =3;
 type
  TTokenKind=(tkString,
              tkSlash,
              tkColon,
              tkDoubleSlashes,
+             tkQuestion,
              tkUnknown,
              tkEOL);
 type
@@ -318,10 +320,17 @@ type
  end;
  TTokenList=specialize TList<TToken>;
 var
- tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString','tkSlash','tkColon','tkDoubleSlashes','tkUnknown','tkEOL');
+ tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString',
+                                                         'tkSlash',
+                                                         'tkColon',
+                                                         'tkDoubleSlashes',
+                                                         'tkQuestion',
+                                                         'tkUnknown',
+                                                         'tkEOL');
  scheme        :RawByteString;
  hostname      :RawByteString;
  path          :RawByteString;
+ query         :RawByteString;
  pos           :Integer;
  parseType     :Integer=PARSE_TYPE_SCHEME;
  tokenList     :TTokenList;
@@ -424,6 +433,11 @@ var
       token.kind :=tkColon;
       token.value:=c;
      end;
+    '?':
+     begin
+      token.kind :=tkQuestion;
+      token.value:=c;
+     end;
     #0:
      break;
     else
@@ -434,7 +448,7 @@ var
       Dec(pos);
       repeat
        token.value:=token.value + _nextChar;
-      until _peekAtNextChar in [#0,':','/','\'];
+      until _peekAtNextChar in [#0,':','/','\','?'];
      end;
    end;
    tokenList.Add(token);
@@ -479,6 +493,12 @@ var
     PARSE_TYPE_PATH:
      begin
       path:=path+token.value;
+      if _peekAtNextToken.kind=tkQuestion then
+       parseType:=PARSE_TYPE_QUERY;
+     end;
+    PARSE_TYPE_QUERY:
+     begin
+      query:=query+token.value;
      end;
    end;
   end;
@@ -510,8 +530,9 @@ var
   Writeln('scheme  : ',scheme);
   Writeln('hostname: ',hostname);
   Writeln('path    : ',path);
+  Writeln('query   : ',query);
   // Calculate size needed
-  sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+3;
+  sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+Length(query)+4;
   Writeln('require : ',sizeNeeded);
   if require<>nil then
    require^:=sizeNeeded;
@@ -524,6 +545,7 @@ var
   _writeStringToPool(@output^.scheme  ,scheme);
   _writeStringToPool(@output^.hostname,hostname);
   _writeStringToPool(@output^.path    ,path);
+  _writeStringToPool(@output^.query   ,query);
   Result:=0;
  end;
 
