@@ -7,7 +7,8 @@ interface
 uses
   ps4_program,
   Classes,
-  SysUtils;
+  SysUtils,
+  Generics.Collections;
 
 implementation
 
@@ -35,7 +36,6 @@ type
   fragment:PChar;
   port    :Word;
   reserved:array[0..9] of Byte;
-  _align2 :DWord;
  end;
  PSceHttpUriElement=^SceHttpUriElement;
 
@@ -299,8 +299,250 @@ function ps4_sceHttpUriParse(output:PSceHttpUriElement;
                              pool:Pointer;
                              require:psize_t;
                              prepare:size_t):Integer; SysV_ABI_CDecl;
+const
+ PARSE_TYPE_SCHEME  =0;
+ PARSE_TYPE_HOSTNAME=1;
+ PARSE_TYPE_PATH    =2;
+type
+ TTokenKind=(tkString,
+             tkSlash,
+             tkColon,
+             tkDoubleSlashes,
+             tkUnknown,
+             tkEOL);
+type
+ TToken=record
+  kind :TTokenKind;
+  value:RawByteString;
+  pos  :Integer;
+ end;
+ TTokenList=specialize TList<TToken>;
+var
+ tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString','tkSlash','tkColon','tkDoubleSlashes','tkUnknown','tkEOL');
+ scheme        :RawByteString;
+ hostname      :RawByteString;
+ path          :RawByteString;
+ pos           :Integer;
+ parseType     :Integer=PARSE_TYPE_SCHEME;
+ tokenList     :TTokenList;
+
+ function _nextChar:Char;
+ begin
+  Inc(pos);
+  Result:=uri[pos];
+ end;
+
+ function _peekAtNextChar:Char;
+ begin
+  if uri[pos]<>#0 then
+   Result:=uri[pos+1]
+  else
+   Result:=#0;
+ end;
+
+ function _nextToken:TToken;
+ begin
+  if pos+1<tokenList.Count then
+  begin
+   Inc(pos);
+   Result:=tokenList[pos];
+  end else
+   Result.kind:=tkEOL;
+ end;
+
+ function _peekAtNextToken:TToken;
+ begin
+  if pos+1<tokenList.Count then
+   Result:=tokenList[pos+1]
+  else
+   Result.kind:=tkEOL;
+ end;
+
+ function _tokenKindNames(const kinds:array of TTokenKind):RawByteString;
+ var
+  kind:TTokenKind;
+ begin
+  for kind in kinds do
+   Result:=Result+tokenKindNames[kind] + ' ';
+ end;
+
+ function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ var
+  kind:TTokenKind;
+ begin
+  Result:=_nextToken;
+  for kind in expected do
+   if kind=Result.kind then
+    exit;
+  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+ end;
+
+ function _peekAtNextTokenExpected(const expected:array of TTokenKind):TToken;
+ var
+  kind:TTokenKind;
+ begin
+  Result:=_peekAtNextToken;
+  for kind in expected do
+   if kind=Result.kind then
+    exit;
+  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+ end;
+
+ procedure _lex;
+ var
+  c    :Char;
+  token:TToken;
+ begin
+  Result:=0;
+  pos   :=-1;
+  while True do
+  begin
+   c:=_nextChar;
+   case c of
+    '\':
+     begin
+      token.kind :=tkSlash;
+      token.pos  :=pos;
+      token.value:=c;
+     end;
+    '/':
+     begin
+      if _peekAtNextChar='/' then
+      begin
+       token.kind :=tkDoubleSlashes;
+       token.pos  :=pos;
+       token.value:='//';
+       _nextChar;
+      end else
+      begin
+       token.kind :=tkSlash;
+       token.value:=c;
+      end;
+     end;
+    ':':
+     begin
+      token.kind :=tkColon;
+      token.value:=c;
+     end;
+    #0:
+     break;
+    else
+     begin
+      token.kind :=tkString;
+      token.value:='';
+      token.pos  :=pos;
+      Dec(pos);
+      repeat
+       token.value:=token.value + _nextChar;
+      until _peekAtNextChar in [#0,':','/','\'];
+     end;
+   end;
+   tokenList.Add(token);
+  end;
+ end;
+
+ procedure _parse;
+ var
+  token:TToken;
+ begin
+  pos:=-1;
+  while True do
+  begin
+   token:=_nextToken;
+   if token.kind=tkEOL then
+    break;
+   case parseType of
+    PARSE_TYPE_SCHEME:
+     begin
+      if token.kind=tkString then
+      begin
+       scheme:=token.value;
+       if (output<>nil) and (output^.opaque) then
+        scheme:=scheme+'://'
+       else
+       if output=nil then
+        scheme:=scheme+'://';
+       _nextTokenExpected([tkColon]);
+       while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
+        _nextToken;
+       parseType:=PARSE_TYPE_HOSTNAME;
+      end;
+     end;
+    PARSE_TYPE_HOSTNAME:
+     begin
+      if token.kind=tkString then
+      begin
+       hostname :=token.value;
+       parseType:=PARSE_TYPE_PATH;
+      end;
+     end;
+    PARSE_TYPE_PATH:
+     begin
+      path:=path+token.value;
+     end;
+   end;
+  end;
+ end;
+
+ function _assemble:Integer;
+ var
+  sizeNeeded:Integer;
+  p         :PChar;
+  c         :Char;
+ begin
+  Writeln('scheme  : ',scheme);
+  Writeln('hostname: ',hostname);
+  Writeln('path    : ',path);
+  // Calculate size needed
+  sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+3;
+  Writeln('require : ',sizeNeeded);
+  if require<>nil then
+   require^:=sizeNeeded;
+  if sizeNeeded>prepare then
+   Exit(SCE_HTTP_ERROR_OUT_OF_MEMORY);
+  p:=pool;
+  if output=nil then
+   Exit(0);
+  // Write strings to pool
+  if scheme<>'' then
+  begin
+   output^.scheme:=p;
+   for c in scheme do
+   begin
+    p^:=c;
+    Inc(p);
+   end;
+  end;
+  if hostname<>'' then
+  begin
+   output^.hostname:=p;
+   for c in hostname do
+   begin
+    p^:=c;
+    Inc(p);
+   end;
+  end;
+  if path<>'' then
+  begin
+   output^.path:=p;
+   for c in path do
+   begin
+    p^:=c;
+    Inc(p);
+   end;
+  end;
+  Result:=0;
+ end;
+
 begin
- Result:=0;
+ Writeln(SysLogPrefix,'sceHttpUriParse,uri=',uri,',prepare=',prepare);
+ if ((output=nil) or (pool=nil)) and (require=nil) then
+  Exit(SCE_HTTP_ERROR_INVALID_VALUE);
+ tokenList:=TTokenList.Create;
+ _lex;
+ _parse;
+ Result:=_assemble;
+ tokenList.Free;
 end;
 
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
