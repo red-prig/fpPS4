@@ -7,14 +7,37 @@ interface
 uses
   ps4_program,
   Classes,
-  SysUtils;
+  SysUtils,
+  Generics.Collections;
 
 implementation
 
-uses sys_kernel;
+uses
+  sys_kernel,
+  sys_types;
 
 const
  SCE_HTTP_NB_EVENT_SOCK_ERR = 8;
+
+ SCE_HTTP_ERROR_OUT_OF_MEMORY=$80431022;
+ SCE_HTTP_ERROR_INVALID_VALUE=$804311fe;
+ SCE_HTTP_ERROR_INVALID_URL  =$80433060;
+
+type
+ SceHttpUriElement=packed record
+  opaque  :LongBool;
+  _align  :DWord;
+  scheme  :PChar;
+  username:PChar;
+  password:PChar;
+  hostname:PChar;
+  path    :PChar;
+  query   :PChar;
+  fragment:PChar;
+  port    :Word;
+  reserved:array[0..9] of Byte;
+ end;
+ PSceHttpUriElement=^SceHttpUriElement;
 
 function ps4_sceHttpInit(libnetMemId,libsslCtxId:Integer;poolSize:size_t):Integer; SysV_ABI_CDecl;
 begin
@@ -271,6 +294,291 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpUriParse(output:PSceHttpUriElement;
+                             uri:PChar;
+                             pool:Pointer;
+                             require:psize_t;
+                             prepare:size_t):Integer; SysV_ABI_CDecl;
+const
+ PARSE_TYPE_SCHEME  =0;
+ PARSE_TYPE_HOSTNAME=1;
+ PARSE_TYPE_PATH    =2;
+ PARSE_TYPE_QUERY   =3;
+type
+ TTokenKind=(tkString,
+             tkSlash,
+             tkColon,
+             tkDoubleSlashes,
+             tkQuestion,
+             tkUnknown,
+             tkEOL);
+type
+ TToken=record
+  kind :TTokenKind;
+  value:RawByteString;
+  pos  :Integer;
+ end;
+ TTokenList=specialize TList<TToken>;
+var
+ tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString',
+                                                         'tkSlash',
+                                                         'tkColon',
+                                                         'tkDoubleSlashes',
+                                                         'tkQuestion',
+                                                         'tkUnknown',
+                                                         'tkEOL');
+ scheme        :RawByteString;
+ hostname      :RawByteString;
+ path          :RawByteString;
+ query         :RawByteString;
+ pos           :Integer;
+ parseType     :Integer=PARSE_TYPE_SCHEME;
+ tokenList     :TTokenList;
+
+ function _nextChar:Char;
+ begin
+  Inc(pos);
+  Result:=uri[pos];
+ end;
+
+ function _peekAtNextChar:Char;
+ begin
+  if uri[pos]<>#0 then
+   Result:=uri[pos+1]
+  else
+   Result:=#0;
+ end;
+
+ function _nextToken:TToken;
+ begin
+  if pos+1<tokenList.Count then
+  begin
+   Inc(pos);
+   Result:=tokenList[pos];
+  end else
+   Result.kind:=tkEOL;
+ end;
+
+ function _peekAtNextToken:TToken;
+ begin
+  if pos+1<tokenList.Count then
+   Result:=tokenList[pos+1]
+  else
+   Result.kind:=tkEOL;
+ end;
+
+ function _tokenKindNames(const kinds:array of TTokenKind):RawByteString;
+ var
+  kind:TTokenKind;
+ begin
+  for kind in kinds do
+   Result:=Result+tokenKindNames[kind] + ' ';
+ end;
+
+ function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ var
+  kind:TTokenKind;
+ begin
+  Result:=_nextToken;
+  for kind in expected do
+   if kind=Result.kind then
+    exit;
+  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+ end;
+
+ function _peekAtNextTokenExpected(const expected:array of TTokenKind):TToken;
+ var
+  kind:TTokenKind;
+ begin
+  Result:=_peekAtNextToken;
+  for kind in expected do
+   if kind=Result.kind then
+    exit;
+  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+ end;
+
+ procedure _lex;
+ var
+  c    :Char;
+  token:TToken;
+ begin
+  Result:=0;
+  pos   :=-1;
+  while True do
+  begin
+   c:=_nextChar;
+   case c of
+    '\':
+     begin
+      token.kind :=tkSlash;
+      token.pos  :=pos;
+      token.value:=c;
+     end;
+    '/':
+     begin
+      if _peekAtNextChar='/' then
+      begin
+       token.kind :=tkDoubleSlashes;
+       token.pos  :=pos;
+       token.value:='//';
+       _nextChar;
+      end else
+      begin
+       token.kind :=tkSlash;
+       token.value:=c;
+      end;
+     end;
+    ':':
+     begin
+      token.kind :=tkColon;
+      token.value:=c;
+     end;
+    '?':
+     begin
+      token.kind :=tkQuestion;
+      token.value:=c;
+     end;
+    #0:
+     break;
+    else
+     begin
+      token.kind :=tkString;
+      token.value:='';
+      token.pos  :=pos;
+      Dec(pos);
+      repeat
+       token.value:=token.value + _nextChar;
+      until _peekAtNextChar in [#0,':','/','\','?'];
+     end;
+   end;
+   tokenList.Add(token);
+  end;
+ end;
+
+ procedure _parse;
+ var
+  token:TToken;
+ begin
+  pos:=-1;
+  while True do
+  begin
+   token:=_nextToken;
+   if token.kind=tkEOL then
+    break;
+   case parseType of
+    PARSE_TYPE_SCHEME:
+     begin
+      if token.kind=tkString then
+      begin
+       scheme:=token.value;
+       if (output<>nil) and (not output^.opaque) then
+        scheme:=scheme+'//'
+       else
+       if output=nil then
+        scheme:=scheme+'//';
+       _nextTokenExpected([tkColon]);
+       while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
+        _nextToken;
+       parseType:=PARSE_TYPE_HOSTNAME;
+      end;
+     end;
+    PARSE_TYPE_HOSTNAME:
+     begin
+      if token.kind=tkString then
+      begin
+       hostname :=token.value;
+       parseType:=PARSE_TYPE_PATH;
+      end;
+     end;
+    PARSE_TYPE_PATH:
+     begin
+      path:=path+token.value;
+      if _peekAtNextToken.kind=tkQuestion then
+       parseType:=PARSE_TYPE_QUERY;
+     end;
+    PARSE_TYPE_QUERY:
+     begin
+      query:=query+token.value;
+     end;
+   end;
+  end;
+ end;
+
+ function _assemble:Integer;
+ var
+  sizeNeeded:Integer;
+  p         :PChar;
+
+  procedure _writeStringToPool(const pStartPos:PPChar;const src:RawByteString);
+  var
+   c:Char;
+  begin
+   if src<>'' then
+   begin
+    pStartPos^:=p;
+    for c in src do
+    begin
+     p^:=c;
+     Inc(p);
+    end;
+    p^:=#0;
+    Inc(p);
+   end;
+  end;
+
+ begin
+  Writeln('scheme  : ',scheme);
+  Writeln('hostname: ',hostname);
+  Writeln('path    : ',path);
+  Writeln('query   : ',query);
+  // Calculate size needed
+  sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+Length(query)+4;
+  Writeln('require : ',sizeNeeded);
+  if require<>nil then
+   require^:=sizeNeeded;
+  if sizeNeeded>prepare then
+   Exit(SCE_HTTP_ERROR_OUT_OF_MEMORY);
+  if output=nil then
+   Exit(0);
+  p:=pool;
+  // Write strings to pool
+  _writeStringToPool(@output^.scheme  ,scheme);
+  _writeStringToPool(@output^.hostname,hostname);
+  _writeStringToPool(@output^.path    ,path);
+  _writeStringToPool(@output^.query   ,query);
+  Result:=0;
+ end;
+
+begin
+ Writeln(SysLogPrefix,'sceHttpUriParse,uri=',uri,',prepare=',prepare);
+ if ((output=nil) or (pool=nil)) and (require=nil) then
+  Exit(SCE_HTTP_ERROR_INVALID_VALUE);
+ tokenList:=TTokenList.Create;
+ _lex;
+ _parse;
+ Result:=_assemble;
+ tokenList.Free;
+end;
+
+function ps4_sceHttpCreateConnection(tmplId:Integer;
+                                     server:PChar;
+                                     scheme:PChar;
+                                     port:Word;
+                                     keepAlive:LongBool):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpCreateConnection,server=',server,',scheme=',scheme,',port=',port,',keepAlive=',keepAlive);
+ Result:=2;
+end;
+
+function ps4_sceHttpCreateRequest(connId:Integer;
+                                  method:Integer;
+                                  url:PChar;
+                                  contentLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequest,method=', method,',url=',url);
+ Result:=3;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -312,6 +620,9 @@ begin
  lib^.set_proc($68260F31250868FF,@ps4_sceHttpGetAllResponseHeaders);
  lib^.set_proc($CAE3B61F652F9E8B,@ps4_sceHttpGetResponseContentLength);
  lib^.set_proc($3F9A5DA3290F6139,@ps4_sceHttpReadData);
+ lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
+ lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
+ lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
