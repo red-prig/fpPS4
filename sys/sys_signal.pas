@@ -9,9 +9,8 @@ uses
  sys_types,
  atomic,
  LFQueue,
+ signal,
  sys_context;
-
-{$I signal.inc}
 
 type
  p_ksiginfo_t=^ksiginfo_t;
@@ -56,10 +55,6 @@ Const
  SL_ALERTABLE=1;
  SL_NOINTRRUP=2;
 
-function _SIG_IDX(sig:Integer):DWORD;        inline;
-function _SIG_VALID(sig:Integer):Boolean;    inline;
-function _SIG_VALID_32(sig:Integer):Boolean; inline;
-
 Procedure sigqueue_init(sq:p_sigqueue_t);
 
 function  _sig_pending(sq:p_sigqueue_t):DWORD; inline;
@@ -94,22 +89,6 @@ Var
  ps_sigact:array[0..31] of sigaction_t;
 
  pf_deadlock:QWORD;
-
-
-function _SIG_IDX(sig:Integer):DWORD; inline;
-begin
- Result:=sig-1;
-end;
-
-function _SIG_VALID(sig:Integer):Boolean; inline;
-begin
- Result:=(sig<=_SIG_MAXSIG) and (sig>0);
-end;
-
-function _SIG_VALID_32(sig:Integer):Boolean; inline;
-begin
- Result:=(sig<=32) and (sig>0);
-end;
 
 procedure ksiginfo_list.Insert(Node:p_ksiginfo_t);
 begin
@@ -353,46 +332,6 @@ begin
  end;
 
  Result:=0;
-end;
-
-function _get_sig_str(signum:Integer):RawByteString;
-begin
- case signum of
-  SIGHUP   :Result:='SIGHUP';
-  SIGINT   :Result:='SIGINT';
-  SIGQUIT  :Result:='SIGQUIT';
-  SIGILL   :Result:='SIGILL';
-  SIGTRAP  :Result:='SIGTRAP';
-  SIGABRT  :Result:='SIGABRT';
-  SIGEMT   :Result:='SIGEMT';
-  SIGFPE   :Result:='SIGFPE';
-  SIGKILL  :Result:='SIGKILL';
-  SIGBUS   :Result:='SIGBUS';
-  SIGSEGV  :Result:='SIGSEGV';
-  SIGSYS   :Result:='SIGSYS';
-  SIGPIPE  :Result:='SIGPIPE';
-  SIGALRM  :Result:='SIGALRM';
-  SIGTERM  :Result:='SIGTERM';
-  SIGURG   :Result:='SIGURG';
-  SIGSTOP  :Result:='SIGSTOP';
-  SIGTSTP  :Result:='SIGTSTP';
-  SIGCONT  :Result:='SIGCONT';
-  SIGCHLD  :Result:='SIGCHLD';
-  SIGTTIN  :Result:='SIGTTIN';
-  SIGTTOU  :Result:='SIGTTOU';
-  SIGIO    :Result:='SIGIO';
-  SIGXCPU  :Result:='SIGXCPU';
-  SIGXFSZ  :Result:='SIGXFSZ';
-  SIGVTALRM:Result:='SIGVTALRM';
-  SIGPROF  :Result:='SIGPROF';
-  SIGWINCH :Result:='SIGWINCH';
-  SIGINFO  :Result:='SIGINFO';
-  SIGUSR1  :Result:='SIGUSR1';
-  SIGUSR2  :Result:='SIGUSR2';
-  SIGTHR   :Result:='SIGTHR';
-  else
-   Str(signum,Result);
-  end;
 end;
 
 function __sigaction(signum:Integer;act,oldact:p_sigaction_t):Integer;

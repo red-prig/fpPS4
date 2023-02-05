@@ -1,3 +1,8 @@
+unit signal;
+
+{$mode ObjFPC}{$H+}
+
+interface
 
 const
  _SIG_WORDS     =4;
@@ -86,13 +91,13 @@ const
 
 type
  p_sigset_t=^sigset_t;
- sigset_t=packed record
+ sigset_t=packed record //16
   Case Byte of
    0:(bits:array[0.._SIG_WORDS-1] of DWORD);
    1:(qwords:array[0..(_SIG_WORDS div 2)-1] of QWORD);
  end;
 
- sigval=packed record
+ sigval=packed record //8
   Case Byte of
    // Members as suggested by Annex C of POSIX 1003.1b.
    0:(sival_int:Integer);
@@ -120,7 +125,7 @@ type
  end;
 
  p_siginfo_t=^siginfo_t;
- siginfo_t=packed record
+ siginfo_t=packed record //80
   si_signo:Integer; //signal number
   si_errno:Integer; //errno association
   {
@@ -153,7 +158,7 @@ type
       end);
     4:(__spare__:packed record
         __spare1__:QWORD;
-        __spare2__:array[0..6] of Integer;
+        __spare2__:array[0..7] of Integer;
        end);
   end;
 
@@ -165,7 +170,7 @@ type
  sig_t=sa_handler;
 
  p_sigaction_t=^sigaction_t;
- sigaction_t=packed record
+ sigaction_t=packed record //28
 
   __sigaction_u:packed record        // signal handler
    Case Byte of
@@ -176,8 +181,6 @@ type
 
   sa_flags:Integer; //SA_SIGINFO
   sa_mask:sigset_t; //signal mask to apply     (signal mask inside signal)
-
-  _align:Integer;
  end;
 
  sigcontext=packed record //0x490(1168)
@@ -327,5 +330,69 @@ type
   _unknow_data:array[0..9] of QWORD; //10(qword) 20(int)
  end;
 
+function _SIG_IDX(sig:Integer):DWORD;        inline;
+function _SIG_VALID(sig:Integer):Boolean;    inline;
+function _SIG_VALID_32(sig:Integer):Boolean; inline;
+
+function _get_sig_str(signum:Integer):RawByteString;
+
+implementation
+
+function _SIG_IDX(sig:Integer):DWORD; inline;
+begin
+ Result:=sig-1;
+end;
+
+function _SIG_VALID(sig:Integer):Boolean; inline;
+begin
+ Result:=(sig<=_SIG_MAXSIG) and (sig>0);
+end;
+
+function _SIG_VALID_32(sig:Integer):Boolean; inline;
+begin
+ Result:=(sig<=32) and (sig>0);
+end;
+
+function _get_sig_str(signum:Integer):RawByteString;
+begin
+ case signum of
+  SIGHUP   :Result:='SIGHUP';
+  SIGINT   :Result:='SIGINT';
+  SIGQUIT  :Result:='SIGQUIT';
+  SIGILL   :Result:='SIGILL';
+  SIGTRAP  :Result:='SIGTRAP';
+  SIGABRT  :Result:='SIGABRT';
+  SIGEMT   :Result:='SIGEMT';
+  SIGFPE   :Result:='SIGFPE';
+  SIGKILL  :Result:='SIGKILL';
+  SIGBUS   :Result:='SIGBUS';
+  SIGSEGV  :Result:='SIGSEGV';
+  SIGSYS   :Result:='SIGSYS';
+  SIGPIPE  :Result:='SIGPIPE';
+  SIGALRM  :Result:='SIGALRM';
+  SIGTERM  :Result:='SIGTERM';
+  SIGURG   :Result:='SIGURG';
+  SIGSTOP  :Result:='SIGSTOP';
+  SIGTSTP  :Result:='SIGTSTP';
+  SIGCONT  :Result:='SIGCONT';
+  SIGCHLD  :Result:='SIGCHLD';
+  SIGTTIN  :Result:='SIGTTIN';
+  SIGTTOU  :Result:='SIGTTOU';
+  SIGIO    :Result:='SIGIO';
+  SIGXCPU  :Result:='SIGXCPU';
+  SIGXFSZ  :Result:='SIGXFSZ';
+  SIGVTALRM:Result:='SIGVTALRM';
+  SIGPROF  :Result:='SIGPROF';
+  SIGWINCH :Result:='SIGWINCH';
+  SIGINFO  :Result:='SIGINFO';
+  SIGUSR1  :Result:='SIGUSR1';
+  SIGUSR2  :Result:='SIGUSR2';
+  SIGTHR   :Result:='SIGTHR';
+  else
+   Str(signum,Result);
+  end;
+end;
+
+end.
 
 

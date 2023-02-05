@@ -3,6 +3,7 @@ uses
  windows,
  atomic,
  ntapi,
+ signal,
  _umtx,
  kern_umtx,
  sys_umtx,

@@ -6,6 +6,7 @@ interface
 
 uses
  Windows,
+ signal,
  sys_signal;
 
 function ps4_sigemptyset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;

@@ -5,6 +5,7 @@ unit thr_private;
 interface
 
 uses
+ signal,
  _umtx;
 
 const
@@ -50,6 +51,7 @@ type
   __has_kern_waiters:DWORD;
   __flags           :DWORD;
   __clock_id        :DWORD;
+  magic             :DWORD;
   u1,u2,u3          :DWORD;
  end;
 
@@ -150,27 +152,6 @@ type
   owner:Pointer; //pthread*
  end;
 
- sigset_t=array[0..3] of DWORD;
-
- siginfo_t=packed record
-  si_signo :Integer;
-  si_errno :Integer;
-  si_code  :Integer;
-  si_pid   :Integer;
-  si_uid   :Integer;
-  si_status:Integer;
-  si_addr  :Pointer;
-  __spare1 :qword;
-  __spare2 :array[0..6] of Integer;
- end;
-
- sigaction_t=packed record
-  __sigaction_u:Pointer;
-  sa_flags     :Integer;
-  sa_mask      :sigset_t;
-  _align       :Integer;
- end;
-
  _Unwind_Exception=packed record
   exception_class  :Int64;
   exception_cleanup:Pointer;
@@ -213,7 +194,6 @@ type
   deferred_siginfo   :siginfo_t;             //deferred signal info
   deferred_sigmask   :sigset_t;              //signal mask to restore.
   deferred_sigact    :sigaction_t;           //the sigaction should be used for deferred signal.
-  _align3            :Integer;
   deferred_run       :Integer;               //deferred signal delivery is performed, do not reenter.
   force_exit         :Integer;               //Force new thread to exit.
   state              :Integer;               //Thread state
@@ -245,8 +225,7 @@ type
   mutex_obj          :Pointer;               //Referenced mutex
   will_sleep         :Integer;               //Thread will sleep
   nwaiter_defer      :Integer;               //Number of threads deferred
-  defer_waiters      :array[0..49] of QWORD; //Deferred threads from pthread_cond_signal
-  _align6            :Integer;
+  defer_waiters      :array[0..50] of QWORD; //Deferred threads from pthread_cond_signal
   wake_addr          :p_wake_addr;
   sleepqueue         :Pointer;               //Sleep queue
  end;
