@@ -545,6 +545,25 @@ begin
  tokenList.Free;
 end;
 
+function ps4_sceHttpCreateConnection(tmplId:Integer;
+                                     server:PChar;
+                                     scheme:PChar;
+                                     port:Word;
+                                     keepAlive:LongBool):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpCreateConnection,server=',server,',scheme=',',port=',port,',keepAlive=',keepAlive);
+ Result:=2;
+end;
+
+function ps4_sceHttpCreateRequest(connId:Integer;
+                                  method:PChar;
+                                  url:PChar;
+                                  contentLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequest: method=', method, 'url=',url);
+ Result:=3;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -587,6 +606,8 @@ begin
  lib^.set_proc($CAE3B61F652F9E8B,@ps4_sceHttpGetResponseContentLength);
  lib^.set_proc($3F9A5DA3290F6139,@ps4_sceHttpReadData);
  lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
+ lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
+ lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
