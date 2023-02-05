@@ -10,6 +10,7 @@ uses
  atomic,
  LFQueue,
  signal,
+ ucontext,
  sys_context;
 
 type
@@ -519,7 +520,7 @@ var
  signo:Integer;
  sact:sigaction_t;
  info:siginfo_t;
- ucontext:_ucontext_t;
+ ucontext:ucontext_t;
  old:sigset_t;
  errno:QWORD;
  //_rsp:QWORD;
@@ -568,7 +569,7 @@ begin
        t^.sig._mask:=sact.sa_mask;
       end;
 
-      ucontext:=Default(_ucontext_t);
+      ucontext:=Default(ucontext_t);
       _copy_ctx_from_sys(ectx^.CONTEXT,@ucontext);
       ucontext.uc_sigmask:=t^.sig._mask;
       ucontext.uc_mcontext.mc_err:=errno;

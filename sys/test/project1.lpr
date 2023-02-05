@@ -4,6 +4,7 @@ uses
  atomic,
  ntapi,
  signal,
+ ucontext,
  _umtx,
  kern_umtx,
  sys_umtx,
