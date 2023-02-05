@@ -494,7 +494,7 @@ var
   Writeln('hostname: ',hostname);
   Writeln('path    : ',path);
   // Calculate size needed
-  sizeNeeded:=ByteLength(scheme)+ByteLength(hostname)+ByteLength(path)+3;
+  sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+3;
   Writeln('require : ',sizeNeeded);
   if require<>nil then
    require^:=sizeNeeded;
@@ -512,6 +512,8 @@ var
     p^:=c;
     Inc(p);
    end;
+   p^:=#0;
+   Inc(p);
   end;
   if hostname<>'' then
   begin
@@ -521,6 +523,8 @@ var
     p^:=c;
     Inc(p);
    end;
+   p^:=#0;
+   Inc(p);
   end;
   if path<>'' then
   begin
@@ -530,6 +534,8 @@ var
     p^:=c;
     Inc(p);
    end;
+   p^:=#0;
+   Inc(p);
   end;
   Result:=0;
  end;
