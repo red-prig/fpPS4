@@ -579,6 +579,18 @@ begin
  Result:=3;
 end;
 
+function ps4_sceHttpSetConnectTimeOut(id:Integer;usec:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpSetConnectTimeOut,id=',id,',usec=',usec);
+ Result:=0;
+end;
+
+function ps4_sceHttpSetSendTimeOut(id:Integer;usec:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpSetSendTimeOut,id=',id,',usec=',usec);
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -623,6 +635,8 @@ begin
  lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
  lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
  lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
+ lib^.set_proc($D12F6D4C7D2EA935,@ps4_sceHttpSetConnectTimeOut);
+ lib^.set_proc($C5E8057D9281565C,@ps4_sceHttpSetSendTimeOut);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
