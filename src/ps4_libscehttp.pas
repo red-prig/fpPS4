@@ -457,11 +457,11 @@ var
       if token.kind=tkString then
       begin
        scheme:=token.value;
-       if (output<>nil) and (output^.opaque) then
-        scheme:=scheme+'://'
+       if (output<>nil) and (not output^.opaque) then
+        scheme:=scheme+'//'
        else
        if output=nil then
-        scheme:=scheme+'://';
+        scheme:=scheme+'//';
        _nextTokenExpected([tkColon]);
        while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
         _nextToken;
@@ -488,7 +488,24 @@ var
  var
   sizeNeeded:Integer;
   p         :PChar;
-  c         :Char;
+
+  procedure _writeStringToPool(const pStartPos:PPChar;const src:RawByteString);
+  var
+   c:Char;
+  begin
+   if src<>'' then
+   begin
+    pStartPos^:=p;
+    for c in src do
+    begin
+     p^:=c;
+     Inc(p);
+    end;
+    p^:=#0;
+    Inc(p);
+   end;
+  end;
+
  begin
   Writeln('scheme  : ',scheme);
   Writeln('hostname: ',hostname);
@@ -504,39 +521,9 @@ var
    Exit(0);
   p:=pool;
   // Write strings to pool
-  if scheme<>'' then
-  begin
-   output^.scheme:=p;
-   for c in scheme do
-   begin
-    p^:=c;
-    Inc(p);
-   end;
-   p^:=#0;
-   Inc(p);
-  end;
-  if hostname<>'' then
-  begin
-   output^.hostname:=p;
-   for c in hostname do
-   begin
-    p^:=c;
-    Inc(p);
-   end;
-   p^:=#0;
-   Inc(p);
-  end;
-  if path<>'' then
-  begin
-   output^.path:=p;
-   for c in path do
-   begin
-    p^:=c;
-    Inc(p);
-   end;
-   p^:=#0;
-   Inc(p);
-  end;
+  _writeStringToPool(@output^.scheme  ,scheme);
+  _writeStringToPool(@output^.hostname,hostname);
+  _writeStringToPool(@output^.path    ,path);
   Result:=0;
  end;
 
@@ -557,7 +544,7 @@ function ps4_sceHttpCreateConnection(tmplId:Integer;
                                      port:Word;
                                      keepAlive:LongBool):Integer; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceHttpCreateConnection,server=',server,',scheme=',',port=',port,',keepAlive=',keepAlive);
+ Writeln(SysLogPrefix,'sceHttpCreateConnection,server=',server,',scheme=',scheme,',port=',port,',keepAlive=',keepAlive);
  Result:=2;
 end;
 
