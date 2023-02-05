@@ -500,9 +500,9 @@ var
    require^:=sizeNeeded;
   if sizeNeeded>prepare then
    Exit(SCE_HTTP_ERROR_OUT_OF_MEMORY);
-  p:=pool;
   if output=nil then
    Exit(0);
+  p:=pool;
   // Write strings to pool
   if scheme<>'' then
   begin
@@ -562,11 +562,11 @@ begin
 end;
 
 function ps4_sceHttpCreateRequest(connId:Integer;
-                                  method:PChar;
+                                  method:Integer;
                                   url:PChar;
                                   contentLength:QWORD):Integer; SysV_ABI_CDecl;
 begin
- WriteLn(SysLogPrefix, 'sceHttpCreateRequest: method=', method, 'url=',url);
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequest,method=', method,',url=',url);
  Result:=3;
 end;
 
