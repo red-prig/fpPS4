@@ -304,8 +304,10 @@ const
  PARSE_TYPE_HOSTNAME=1;
  PARSE_TYPE_PATH    =2;
  PARSE_TYPE_QUERY   =3;
+ PARSE_TYPE_PORT    =4;
 type
  TTokenKind=(tkString,
+             tkNumber,
              tkSlash,
              tkColon,
              tkDoubleSlashes,
@@ -321,6 +323,7 @@ type
  TTokenList=specialize TList<TToken>;
 var
  tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString',
+                                                         'tkNumber',
                                                          'tkSlash',
                                                          'tkColon',
                                                          'tkDoubleSlashes',
@@ -331,6 +334,7 @@ var
  hostname      :RawByteString;
  path          :RawByteString;
  query         :RawByteString;
+ port          :Word;
  pos           :Integer;
  parseType     :Integer=PARSE_TYPE_SCHEME;
  tokenList     :TTokenList;
@@ -438,6 +442,16 @@ var
       token.kind :=tkQuestion;
       token.value:=c;
      end;
+    '0'..'9':
+     begin
+      token.kind :=tkNumber;
+      token.value:='';
+      token.pos  :=pos;
+      Dec(pos);
+      repeat
+       token.value:=token.value + _nextChar;
+      until not (_peekAtNextChar in ['0'..'9']);
+     end;
     #0:
      break;
     else
@@ -462,43 +476,49 @@ var
   pos:=-1;
   while True do
   begin
-   token:=_nextToken;
-   if token.kind=tkEOL then
+   if _peekAtNextToken.kind=tkEOL then
     break;
    case parseType of
     PARSE_TYPE_SCHEME:
      begin
-      if token.kind=tkString then
-      begin
-       scheme:=token.value;
-       if (output<>nil) and (not output^.opaque) then
-        scheme:=scheme+'//'
-       else
-       if output=nil then
-        scheme:=scheme+'//';
-       _nextTokenExpected([tkColon]);
-       while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
-        _nextToken;
-       parseType:=PARSE_TYPE_HOSTNAME;
-      end;
+      token:=_nextTokenExpected([tkString]);
+      scheme:=token.value;
+      if (output<>nil) and (not output^.opaque) then
+       scheme:=scheme+'//'
+      else
+      if output=nil then
+       scheme:=scheme+'//';
+      _nextTokenExpected([tkColon]);
+      while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
+       _nextToken;
+      parseType:=PARSE_TYPE_HOSTNAME;
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      if token.kind=tkString then
+      token:=_nextTokenExpected([tkString]);
+      hostname :=token.value;
+      if _peekAtNextToken.kind=tkColon then
       begin
-       hostname :=token.value;
+       _nextToken;
+       parseType:=PARSE_TYPE_PORT;
+      end else
        parseType:=PARSE_TYPE_PATH;
-      end;
+     end;
+    PARSE_TYPE_PORT:
+     begin
+      token:=_nextTokenExpected([tkNumber]);
+      port:=StrToInt(token.value);
+      parseType:=PARSE_TYPE_PATH;
      end;
     PARSE_TYPE_PATH:
      begin
-      path:=path+token.value;
+      path:=path+_nextToken.value;
       if _peekAtNextToken.kind=tkQuestion then
        parseType:=PARSE_TYPE_QUERY;
      end;
     PARSE_TYPE_QUERY:
      begin
-      query:=query+token.value;
+      query:=query+_nextToken.value;
      end;
    end;
   end;
@@ -531,6 +551,7 @@ var
   Writeln('hostname: ',hostname);
   Writeln('path    : ',path);
   Writeln('query   : ',query);
+  Writeln('port    : ',port);
   // Calculate size needed
   sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+Length(query)+4;
   Writeln('require : ',sizeNeeded);
@@ -546,6 +567,7 @@ var
   _writeStringToPool(@output^.hostname,hostname);
   _writeStringToPool(@output^.path    ,path);
   _writeStringToPool(@output^.query   ,query);
+  output^.port:=port;
   Result:=0;
  end;
 
@@ -672,4 +694,3 @@ initialization
  ps4_app.RegistredPreLoad('libSceHttp2.prx',@Load_libSceHttp2);
 
 end.
-
