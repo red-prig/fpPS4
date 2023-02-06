@@ -579,6 +579,15 @@ begin
  Result:=3;
 end;
 
+function ps4_sceHttpCreateRequest2(connId:Integer;
+                                   method:Integer;
+                                   path:PChar;
+                                   contentLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix, 'sceHttpCreateRequest2,method=', method,',path=',path);
+ Result:=3;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -623,6 +632,7 @@ begin
  lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
  lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
  lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
+ lib^.set_proc($AC6366F858C85CA9,@ps4_sceHttpCreateRequest2);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
