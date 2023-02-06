@@ -496,7 +496,7 @@ var
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      _tokenExpected(token,[tkString]);
+      _tokenExpected(token,[tkString,tkNumber]);
       hostname:=token.value;
       if _peekAtNextToken.kind=tkColon then
       begin
