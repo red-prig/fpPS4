@@ -215,6 +215,7 @@ end;
 
 function ps4_sceHttpDeleteConnection(connId:Integer):Integer; SysV_ABI_CDecl;
 begin
+ WriteLn(SysLogPrefix, 'sceHttpDeleteConnection:connId=',connId);
  Result:=0;
 end;
 
@@ -238,7 +239,7 @@ end;
 
 function ps4_sceHttpDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
 begin
- WriteLn(SysLogPrefix, 'sceHttpDeleteRequest');
+ WriteLn(SysLogPrefix, 'sceHttpDeleteRequest,reqId=',reqId);
  Result:=0;
 end;
 
