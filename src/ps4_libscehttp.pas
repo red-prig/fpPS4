@@ -304,8 +304,10 @@ const
  PARSE_TYPE_HOSTNAME=1;
  PARSE_TYPE_PATH    =2;
  PARSE_TYPE_QUERY   =3;
+ PARSE_TYPE_PORT    =4;
 type
  TTokenKind=(tkString,
+             tkNumber,
              tkSlash,
              tkColon,
              tkDoubleSlashes,
@@ -321,6 +323,7 @@ type
  TTokenList=specialize TList<TToken>;
 var
  tokenKindNames:array[tkString..tkEOL] of RawByteString=('tkString',
+                                                         'tkNumber',
                                                          'tkSlash',
                                                          'tkColon',
                                                          'tkDoubleSlashes',
@@ -331,6 +334,7 @@ var
  hostname      :RawByteString;
  path          :RawByteString;
  query         :RawByteString;
+ port          :Word=0;
  pos           :Integer;
  parseType     :Integer=PARSE_TYPE_SCHEME;
  tokenList     :TTokenList;
@@ -375,26 +379,26 @@ var
    Result:=Result+tokenKindNames[kind] + ' ';
  end;
 
- function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ procedure _tokenExpected(const token: TToken;const expected:array of TTokenKind);
  var
   kind:TTokenKind;
  begin
-  Result:=_nextToken;
   for kind in expected do
-   if kind=Result.kind then
+   if kind=token.kind then
     exit;
-  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+  raise Exception.Create(IntToStr(token.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[token.kind]);
+ end;
+
+ function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ begin
+  Result:=_nextToken;
+  _tokenExpected(Result, expected);
  end;
 
  function _peekAtNextTokenExpected(const expected:array of TTokenKind):TToken;
- var
-  kind:TTokenKind;
  begin
   Result:=_peekAtNextToken;
-  for kind in expected do
-   if kind=Result.kind then
-    exit;
-  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+  _tokenExpected(Result, expected);
  end;
 
  procedure _lex;
@@ -438,6 +442,16 @@ var
       token.kind :=tkQuestion;
       token.value:=c;
      end;
+    '0'..'9':
+     begin
+      token.kind :=tkNumber;
+      token.value:='';
+      token.pos  :=pos;
+      Dec(pos);
+      repeat
+       token.value:=token.value + _nextChar;
+      until not (_peekAtNextChar in ['0'..'9']);
+     end;
     #0:
      break;
     else
@@ -468,27 +482,34 @@ var
    case parseType of
     PARSE_TYPE_SCHEME:
      begin
-      if token.kind=tkString then
-      begin
-       scheme:=token.value;
-       if (output<>nil) and (not output^.opaque) then
-        scheme:=scheme+'//'
-       else
-       if output=nil then
-        scheme:=scheme+'//';
-       _nextTokenExpected([tkColon]);
-       while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
-        _nextToken;
-       parseType:=PARSE_TYPE_HOSTNAME;
-      end;
+      _tokenExpected(token,[tkString]);
+      scheme:=token.value;
+      if (output<>nil) and (not output^.opaque) then
+       scheme:=scheme+'//'
+      else
+      if output=nil then
+       scheme:=scheme+'//';
+      _nextTokenExpected([tkColon]);
+      while _peekAtNextToken.kind in [tkSlash,tkDoubleSlashes] do
+       _nextToken;
+      parseType:=PARSE_TYPE_HOSTNAME;
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      if token.kind=tkString then
+      _tokenExpected(token,[tkString]);
+      hostname:=token.value;
+      if _peekAtNextToken.kind=tkColon then
       begin
-       hostname :=token.value;
+       _nextToken;
+       parseType:=PARSE_TYPE_PORT;
+      end else
        parseType:=PARSE_TYPE_PATH;
-      end;
+     end;
+    PARSE_TYPE_PORT:
+     begin
+      _tokenExpected(token,[tkNumber]);
+      port:=StrToInt(token.value);
+      parseType:=PARSE_TYPE_PATH;
      end;
     PARSE_TYPE_PATH:
      begin
@@ -531,6 +552,7 @@ var
   Writeln('hostname: ',hostname);
   Writeln('path    : ',path);
   Writeln('query   : ',query);
+  Writeln('port    : ',port);
   // Calculate size needed
   sizeNeeded:=Length(scheme)+Length(hostname)+Length(path)+Length(query)+4;
   Writeln('require : ',sizeNeeded);
@@ -546,6 +568,7 @@ var
   _writeStringToPool(@output^.hostname,hostname);
   _writeStringToPool(@output^.path    ,path);
   _writeStringToPool(@output^.query   ,query);
+  output^.port:=port;
   Result:=0;
  end;
 
@@ -586,6 +609,18 @@ function ps4_sceHttpCreateRequest2(connId:Integer;
 begin
  WriteLn(SysLogPrefix, 'sceHttpCreateRequest2,method=', method,',path=',path);
  Result:=3;
+end;
+
+function ps4_sceHttpSetConnectTimeOut(id:Integer;usec:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpSetConnectTimeOut,id=',id,',usec=',usec);
+ Result:=0;
+end;
+
+function ps4_sceHttpSetSendTimeOut(id:Integer;usec:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceHttpSetSendTimeOut,id=',id,',usec=',usec);
+ Result:=0;
 end;
 
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
@@ -633,6 +668,8 @@ begin
  lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
  lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
  lib^.set_proc($AC6366F858C85CA9,@ps4_sceHttpCreateRequest2);
+ lib^.set_proc($D12F6D4C7D2EA935,@ps4_sceHttpSetConnectTimeOut);
+ lib^.set_proc($C5E8057D9281565C,@ps4_sceHttpSetSendTimeOut);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
@@ -658,4 +695,3 @@ initialization
  ps4_app.RegistredPreLoad('libSceHttp2.prx',@Load_libSceHttp2);
 
 end.
-
