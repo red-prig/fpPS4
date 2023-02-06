@@ -379,26 +379,26 @@ var
    Result:=Result+tokenKindNames[kind] + ' ';
  end;
 
- function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ procedure _tokenExpected(const token: TToken;const expected:array of TTokenKind);
  var
   kind:TTokenKind;
  begin
-  Result:=_nextToken;
   for kind in expected do
-   if kind=Result.kind then
+   if kind=token.kind then
     exit;
-  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+  raise Exception.Create(IntToStr(token.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[token.kind]);
+ end;
+
+ function _nextTokenExpected(const expected:array of TTokenKind):TToken;
+ begin
+  Result:=_nextToken;
+  _tokenExpected(Result, expected);
  end;
 
  function _peekAtNextTokenExpected(const expected:array of TTokenKind):TToken;
- var
-  kind:TTokenKind;
  begin
   Result:=_peekAtNextToken;
-  for kind in expected do
-   if kind=Result.kind then
-    exit;
-  raise Exception.Create(IntToStr(Result.pos) + ': Expected '+_tokenKindNames(expected)+' but found '+tokenKindNames[Result.kind]);
+  _tokenExpected(Result, expected);
  end;
 
  procedure _lex;
@@ -470,16 +470,20 @@ var
  end;
 
  procedure _parse;
+ var
+  token:TToken;
  begin
   pos:=-1;
   while True do
   begin
-   if _peekAtNextToken.kind=tkEOL then
+   token:=_nextToken;
+   if token.kind=tkEOL then
     break;
    case parseType of
     PARSE_TYPE_SCHEME:
      begin
-      scheme:=_nextTokenExpected([tkString]).value;
+      _tokenExpected(token,[tkString]);
+      scheme:=token.value;
       if (output<>nil) and (not output^.opaque) then
        scheme:=scheme+'//'
       else
@@ -492,7 +496,8 @@ var
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      hostname :=_nextTokenExpected([tkString]).value;
+      _tokenExpected(token,[tkString]);
+      hostname:=token.value;
       if _peekAtNextToken.kind=tkColon then
       begin
        _nextToken;
@@ -502,18 +507,19 @@ var
      end;
     PARSE_TYPE_PORT:
      begin
-      port:=StrToInt(_nextTokenExpected([tkNumber]).value);
+      _tokenExpected(token,[tkNumber]);
+      port:=StrToInt(token.value);
       parseType:=PARSE_TYPE_PATH;
      end;
     PARSE_TYPE_PATH:
      begin
-      path:=path+_nextToken.value;
+      path:=path+token.value;
       if _peekAtNextToken.kind=tkQuestion then
        parseType:=PARSE_TYPE_QUERY;
      end;
     PARSE_TYPE_QUERY:
      begin
-      query:=query+_nextToken.value;
+      query:=query+token.value;
      end;
    end;
   end;
