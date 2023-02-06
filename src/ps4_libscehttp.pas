@@ -580,7 +580,7 @@ begin
 end;
 
 function ps4_sceHttpCreateRequest2(connId:Integer;
-                                   method:Integer;
+                                   method:PChar;
                                    path:PChar;
                                    contentLength:QWORD):Integer; SysV_ABI_CDecl;
 begin
