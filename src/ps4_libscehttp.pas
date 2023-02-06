@@ -334,7 +334,7 @@ var
  hostname      :RawByteString;
  path          :RawByteString;
  query         :RawByteString;
- port          :Word;
+ port          :Word=0;
  pos           :Integer;
  parseType     :Integer=PARSE_TYPE_SCHEME;
  tokenList     :TTokenList;
@@ -470,8 +470,6 @@ var
  end;
 
  procedure _parse;
- var
-  token:TToken;
  begin
   pos:=-1;
   while True do
@@ -481,8 +479,7 @@ var
    case parseType of
     PARSE_TYPE_SCHEME:
      begin
-      token:=_nextTokenExpected([tkString]);
-      scheme:=token.value;
+      scheme:=_nextTokenExpected([tkString]).value;
       if (output<>nil) and (not output^.opaque) then
        scheme:=scheme+'//'
       else
@@ -495,8 +492,7 @@ var
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      token:=_nextTokenExpected([tkString]);
-      hostname :=token.value;
+      hostname :=_nextTokenExpected([tkString]).value;
       if _peekAtNextToken.kind=tkColon then
       begin
        _nextToken;
@@ -506,8 +502,7 @@ var
      end;
     PARSE_TYPE_PORT:
      begin
-      token:=_nextTokenExpected([tkNumber]);
-      port:=StrToInt(token.value);
+      port:=StrToInt(_nextTokenExpected([tkNumber]).value);
       parseType:=PARSE_TYPE_PATH;
      end;
     PARSE_TYPE_PATH:
