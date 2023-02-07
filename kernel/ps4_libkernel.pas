@@ -296,6 +296,7 @@ begin
  end;
 end;
 
+//sysctl to CTL_KERN(1).KERN_PROC(14).KERN_PROC_(44)
 function ps4_sceKernelGetLibkernelTextLocation(address:PPointer;size:PQWORD):Integer; SysV_ABI_CDecl;
 var
  elf:Telf_file;
@@ -452,6 +453,7 @@ var
 begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (sdkVersion=nil) then Exit;
+ //sys_dynlib_get_proc_param
  P:=GetSceProcParam;
 
  if (P<>nil) then
@@ -473,17 +475,31 @@ const
  LOAD_OPTIONS_ARG_STACK_SIZE                  =$0008;
  LOAD_OPTIONS_FULL_DEBUG_REQUIRED             =$0010;
 
+ //mmap_flags
+ //bit 2 -> first find addr is (1 shl 33) ->
+ //_sceKernelMapFlexibleMemory
+ //_sceKernelMapDirectMemory
+ //sceKernelMapDirectMemory2
+
+ //excp_flags
+ //bit 1 -> use in [libkernel_exception] ->
+ //      -> sceKernelInstallExceptionHandler
+ //      -> sceKernelRemoveExceptionHandler
+ //      -> sceKernelAddGpuExceptionEvent
+ //      -> sceKernelDeleteGpuExceptionEvent
+ //      -> sceKernelBacktraceSelf
+
 type
  PSCE_APP_ENV=^TSCE_APP_ENV;
  TSCE_APP_ENV=packed record
   AppId:Integer;                //4
-  unk1:Integer;                 //4
-  unk2:Integer;                 //4
+  mmap_flags:Integer;           //4
+  excp_flags:Integer;           //4
   AppType:Integer;              //4
-  TitleId:array[0.. 9] of char; //10
-  unk3:array[0..37] of Byte;    //38
-  flags:Byte;                   //1  eLoadOptions
-  unk4:array[0.. 6] of Byte;    //7
+  TitleId:array[0..9] of char;  //10
+  debug_level:Byte;             //1
+  slv_flags:Byte;               //1  eLoadOptions
+  unk4:array[0..44] of Byte;    //44
  end;
 
 //sysctl to CTL_KERN(1).KERN_PROC(14).KERN_PROC_APPINFO(35)
@@ -715,6 +731,7 @@ begin
 
  _sig_lock;
 
+ //sys_dynlib_dlsym
  Writeln('sceKernelDlsym:',symbol);
 
  node:=ps4_app.AcqureFileByHandle(handle);
