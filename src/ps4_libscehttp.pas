@@ -215,6 +215,7 @@ end;
 
 function ps4_sceHttpDeleteConnection(connId:Integer):Integer; SysV_ABI_CDecl;
 begin
+ WriteLn(SysLogPrefix, 'sceHttpDeleteConnection:connId=',connId);
  Result:=0;
 end;
 
@@ -238,7 +239,7 @@ end;
 
 function ps4_sceHttpDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
 begin
- WriteLn(SysLogPrefix, 'sceHttpDeleteRequest');
+ WriteLn(SysLogPrefix, 'sceHttpDeleteRequest,reqId=',reqId);
  Result:=0;
 end;
 
@@ -496,8 +497,10 @@ var
      end;
     PARSE_TYPE_HOSTNAME:
      begin
-      _tokenExpected(token,[tkString]);
+      _tokenExpected(token,[tkString,tkNumber]);
       hostname:=token.value;
+      while _peekAtNextToken.kind in [tkString,tkNumber] do
+       hostname:=hostname+_nextToken.value;
       if _peekAtNextToken.kind=tkColon then
       begin
        _nextToken;
@@ -623,6 +626,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetChunkedTransferEnabled(id,isEnabled:Integer):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix,'sceHttpSetChunkedTransferEnabled,id=', id,',isEnabled=',isEnabled);
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -670,6 +679,7 @@ begin
  lib^.set_proc($AC6366F858C85CA9,@ps4_sceHttpCreateRequest2);
  lib^.set_proc($D12F6D4C7D2EA935,@ps4_sceHttpSetConnectTimeOut);
  lib^.set_proc($C5E8057D9281565C,@ps4_sceHttpSetSendTimeOut);
+ lib^.set_proc($3C3C52E3CC4640BB,@ps4_sceHttpSetChunkedTransferEnabled);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;
