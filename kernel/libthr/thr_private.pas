@@ -161,6 +161,7 @@ type
 
  td_event_msg_t=array[0..5] of DWORD;
 
+ pthread_t=^pthread;
  pthread=packed record
   tid                :Integer;
   _align1            :Integer;
@@ -248,7 +249,31 @@ const
 
  THR_MAGIC=$d09ba115;
 
+function SHOULD_CANCEL(thr:pthread_t):Boolean; inline;
+function THR_SHOULD_GC(thr:pthread_t):Boolean; inline;
+function THR_IN_CRITICAL(thr:pthread_t):Boolean; inline;
+
 implementation
+
+function SHOULD_CANCEL(thr:pthread_t):Boolean; inline;
+begin
+ Result:=(thr^.cancel_pending<>0) and
+         (thr^.cancel_enable<>0) and
+         (thr^.no_cancel=0);
+end;
+
+function THR_SHOULD_GC(thr:pthread_t):Boolean; inline;
+begin
+ Result:=(thr^.refcount=0) and
+         (thr^.state=PS_DEAD) and
+         ((thr^.flags and THR_FLAGS_DETACHED)<>0);
+end;
+
+function THR_IN_CRITICAL(thr:pthread_t):Boolean; inline;
+begin
+ Result:=(thr^.locklevel>0) or
+         (thr^.critical_count>0);
+end;
 
 end.
 
