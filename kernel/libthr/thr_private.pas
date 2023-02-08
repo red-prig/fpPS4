@@ -164,6 +164,20 @@ type
 
  td_event_msg_t=array[0..5] of DWORD;
 
+ p_pthread_specific_elem=^pthread_specific_elem;
+ pthread_specific_elem=packed record
+  data :Pointer;
+  seqno:Integer;
+  align:Integer;
+ end;
+
+ p_pthread_key=^pthread_key;
+ pthread_key=packed record
+  allocated:Integer;
+  seqno:Integer;
+  _destructor:Pointer;
+ end;
+
  pthread_t=^pthread;
 
  pthreadlist_entry=packed record
@@ -212,7 +226,7 @@ type
   pp_mutexq_next     :Pointer;               //Queue of all owned PRIO_PROTECT mutexes.
   pp_mutexq_prev     :Pointer;               //Queue of all owned PRIO_PROTECT mutexes.
   ret                :Pointer;
-  specific           :Pointer;
+  specific           :p_pthread_specific_elem;
   specific_data_count:Integer;
   rdlock_count       :Integer;               //Number rwlocks rdlocks held.
   rtld_bits          :Integer;               //Current locks bitmap for rtld.
@@ -230,7 +244,9 @@ type
   mutex_obj          :Pointer;               //Referenced mutex
   will_sleep         :Integer;               //Thread will sleep
   nwaiter_defer      :Integer;               //Number of threads deferred
-  defer_waiters      :array[0..50] of QWORD; //Deferred threads from pthread_cond_signal
+  defer_waiters      :array[0..49] of QWORD; //Deferred threads from pthread_cond_signal
+  spec_flag          :Integer;               //bit 1 specific is alloc
+  _align6            :Integer;
   wake_addr          :p_wake_addr;
   sleepqueue         :Pointer;               //Sleep queue
  end;
