@@ -76,7 +76,7 @@ Uses
 
 Procedure backoff_exp.Wait;
 Var
- n:SizeUInt;
+ n:Int64;
 begin
  if (m_nExpCur<=upper_bound) then
  begin

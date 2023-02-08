@@ -96,7 +96,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=-1;
+  Result:=DWORD(-1);
  end;
 end;
 

@@ -25,6 +25,7 @@ function _thread(parameter:pointer):ptrint;
 var
  td:kthread;
 begin
+ Result:=0;
  NtWaitForSingleObject(event,false,nil);
 
  td:=Default(kthread);
@@ -40,16 +41,16 @@ begin
 
  repeat
 
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK {UMTX_OP_LOCK},0,nil,nil);
+ e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
  //e:=__umtx_op_lock_umutex(@td,@mtx,nil);
  Writeln('  lock[',GetCurrentThreadId,'] ',e);
 
  //e:=_do_lock_normal(GetCurrentThreadId,@mtx,0,NT_INFINITE,0);
  //Writeln('  lock[',GetCurrentThreadId,'] ',e);
 
- sleep(100);
+ //sleep(100);
 
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK {UMTX_OP_UNLOCK},0,nil,nil);
+ e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_UNLOCK} UMTX_OP_UNLOCK,td.td_tid,nil,nil);
  //e:=__umtx_op_unlock_umutex(@td,@mtx);
  Writeln('unlock[',GetCurrentThreadId,'] ',e);
 

@@ -188,7 +188,7 @@ end;
 
 function ntf2px(n:Integer):Integer;
 begin
- case n of
+ case DWORD(n) of
   STATUS_SUCCESS           :Result:=0;
   STATUS_ABANDONED         :Result:=EPERM;
   STATUS_USER_APC          :Result:=EINTR;
