@@ -36,7 +36,7 @@ type
   m_yieldloops:Integer;
   magic1      :DWORD;
   //Link for all mutexes a thread currently owns.
-  pNext,pPrev :pthread_mutex_t;
+  pPrev,pNext :pthread_mutex_t;
   //
  end;
 
@@ -145,11 +145,14 @@ type
 
  pthread_rwlockattr=packed record
   pshared:Integer;
+  type_np:Integer;
  end;
 
  pthread_rwlock=packed record
   lock:urwlock;
   owner:Pointer; //pthread*
+  magic:DWORD;
+  align:DWORD;
  end;
 
  _Unwind_Exception=packed record
@@ -162,6 +165,11 @@ type
  td_event_msg_t=array[0..5] of DWORD;
 
  pthread_t=^pthread;
+
+ pthreadlist_entry=packed record
+  pPrev,pNext:pthread_t;
+ end;
+
  pthread=packed record
   tid                :Integer;
   _align1            :Integer;
@@ -170,14 +178,10 @@ type
   locklevel          :Integer;               //How many low level locks the thread held.
   critical_count     :Integer;               //Set to non-zero when this thread has entered a critical region.
   sigblock           :Integer;               //Signal blocked counter.
-  tle_next           :Pointer;               //link for all threads in process
-  tle_prev           :Pointer;               //link for all threads in process
-  gcle_next          :Pointer;               //Queue entry for GC lists.
-  gcle_prev          :Pointer;               //Queue entry for GC lists.
-  hle_next           :Pointer;               //Hash queue entry.
-  hle_prev           :Pointer;               //Hash queue entry.
-  wle_next           :Pointer;               //Sleep queue entry
-  wle_prev           :Pointer;               //Sleep queue entry
+  tle                :pthreadlist_entry;     //link for all threads in process
+  gcle               :pthreadlist_entry;     //Queue entry for GC lists.
+  hle                :pthreadlist_entry;     //Hash queue entry.
+  wle                :pthreadlist_entry;     //Sleep queue entry
   refcount           :Integer;               //Threads reference count.
   _align2            :Integer;
   start_routine      :Pointer;
@@ -214,7 +218,7 @@ type
   rtld_bits          :Integer;               //Current locks bitmap for rtld.
   _align5            :Integer;
   tcb                :Pointer;               //Thread control block
-  cleanup            :Pointer;               //Cleanup handlers Link List
+  cleanup            :p_pthread_cleanup;     //Cleanup handlers Link List
   ex                 :_Unwind_Exception;
   unwind_stackend    :Pointer;
   unwind_disabled    :Integer;
