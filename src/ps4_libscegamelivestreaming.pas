@@ -15,19 +15,19 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGameLiveStreamingPermitServerSideRecording(isPermit:LongBool):Integer; SysV_ABI_CDecl;
+function ps4_sceGameLiveStreamingPermitServerSideRecording(isPermit:Boolean):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGameLiveStreamingPermitServerSideRecording,isPermit=',isPermit);
  Result:=0;
 end;
 
-function ps4_sceGameLiveStreamingEnableLiveStreaming(isEnable:LongBool):Integer; SysV_ABI_CDecl;
+function ps4_sceGameLiveStreamingEnableLiveStreaming(isEnable:Boolean):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGameLiveStreamingEnableLiveStreaming,isEnable=',isEnable);
  Result:=0;
 end;
 
-function ps4_sceGameLiveStreamingPermitLiveStreaming(isPermit:LongBool):Integer; SysV_ABI_CDecl;
+function ps4_sceGameLiveStreamingPermitLiveStreaming(isPermit:Boolean):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGameLiveStreamingPermitLiveStreaming,isPermit=',isPermit);
  Result:=0;
