@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="130">
+    <Units Count="131">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -596,6 +596,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVideoRecording"/>
       </Unit129>
+      <Unit130>
+        <Filename Value="src\ps4_libsceusbd.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceUsbd"/>
+      </Unit130>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
