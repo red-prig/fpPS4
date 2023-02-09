@@ -296,6 +296,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpUnregisterPlusEventCallback():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpRegisterNpReachabilityStateCallback(callback:SceNpReachabilityStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -553,6 +558,7 @@ begin
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($2ACC312F19387356,@ps4_sceNpRegisterGamePresenceCallbackA);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
+ lib^.set_proc($C558AA25D0E02A5D,@ps4_sceNpUnregisterPlusEventCallback);
  lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
