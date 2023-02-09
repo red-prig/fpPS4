@@ -27,6 +27,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingPermitLiveStreaming(isPermit:LongBool):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGameLiveStreamingPermitLiveStreaming,isPermit=',isPermit);
+ Result:=0;
+end;
+
 function Load_libSceGameLiveStreaming(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -39,6 +45,7 @@ begin
  lib^.set_proc($92F604C369419DD9,@ps4_sceGameLiveStreamingInitialize);
  lib^.set_proc($FC41E753AF201315,@ps4_sceGameLiveStreamingPermitServerSideRecording);
  lib^.set_proc($75633CD005F7F68E,@ps4_sceGameLiveStreamingEnableLiveStreaming);
+ lib^.set_proc($2B443111B0FBABE7,@ps4_sceGameLiveStreamingPermitLiveStreaming);
 end;
 
 initialization
