@@ -1610,7 +1610,30 @@ begin
  end;
 
  umtxq_unlock(key);
+
  umtx_key_release(key);
+
+ if (Result<>0) then Result:=EFAULT;
+end;
+
+function do_cv_broadcast(td:p_kthread;cv:p_ucond):Integer;
+var
+ key:umtx_key;
+begin
+ Result:=0;
+
+ key:=umtx_key_get(cv,TYPE_CV);
+ if (key=nil) then Exit(EFAULT);
+
+ umtxq_lock(key);
+ umtxq_signal(key,High(Integer));
+ umtxq_unlock(key);
+
+ Result:=suword32(cv^.c_has_waiters,0);
+
+ umtx_key_release(key);
+
+ if (Result<>0) then Result:=EFAULT;
 end;
 
 ////
@@ -1799,6 +1822,31 @@ begin
  Result:=do_set_ceiling(td,obj,val,uaddr1);
 end;
 
+function __umtx_op_cv_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+var
+ ts:ptimespec;
+ timeout:timespec;
+begin
+ ts:=nil;
+ if (uaddr2<>nil) then
+ begin
+  Result:=umtx_copyin_timeout(uaddr2,@timeout);
+  if (Result<>0) then Exit;
+  ts:=@timeout;
+ end;
+ Result:=do_cv_wait(td,obj,uaddr1,ts,val);
+end;
+
+function __umtx_op_cv_signal(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
+begin
+ Result:=do_cv_signal(td,obj);
+end;
+
+function __umtx_op_cv_broadcast(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
+begin
+ Result:=do_cv_broadcast(td,obj);
+end;
+
 function _sys_umtx_lock(mtx:p_umtx):Integer;
 var
  td:p_kthread;
@@ -1835,9 +1883,9 @@ begin
   UMTX_OP_MUTEX_LOCK       :Result:=__umtx_op_lock_umutex      (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_UNLOCK     :Result:=__umtx_op_unlock_umutex    (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_SET_CEILING      :Result:=__umtx_op_set_ceiling      (td,obj,val,uaddr1,uaddr2);
-  //UMTX_OP_CV_WAIT
-  //UMTX_OP_CV_SIGNAL
-  //UMTX_OP_CV_BROADCAST
+  UMTX_OP_CV_WAIT          :Result:=__umtx_op_cv_wait          (td,obj,val,uaddr1,uaddr2);
+  UMTX_OP_CV_SIGNAL        :Result:=__umtx_op_cv_signal        (td,obj,val,uaddr1,uaddr2);
+  UMTX_OP_CV_BROADCAST     :Result:=__umtx_op_cv_broadcast     (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_WAIT_UINT        :Result:=__umtx_op_wait_uint        (td,obj,val,uaddr1,uaddr2);
   //UMTX_OP_RW_RDLOCK
   //UMTX_OP_RW_WRLOCK

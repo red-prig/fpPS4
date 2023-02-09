@@ -64,7 +64,6 @@ begin
   end;
  end;
  _unittime(time);
- time^:=time^-DELTA_EPOCH_IN_UNIT;
 end;
 
 procedure calcru(user,syst:PInt64);
@@ -93,7 +92,7 @@ begin
                            nil);
 
  unittime(@k.ExitTime.QuadPart);
- time^:=k.ExitTime.QuadPart-(k.CreateTime.QuadPart-DELTA_EPOCH_IN_UNIT);
+ time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
 end;
 
 procedure get_thread_cputime(time:PInt64);
@@ -107,7 +106,7 @@ begin
                           SizeOf(KERNEL_USER_TIMES),
                           nil);
  unittime(@k.ExitTime.QuadPart);
- time^:=k.ExitTime.QuadPart-(k.CreateTime.QuadPart-DELTA_EPOCH_IN_UNIT);
+ time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
 end;
 
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
@@ -122,6 +121,7 @@ begin
   CLOCK_REALTIME_FAST:
    begin
     unittime(@user);
+    user:=user-DELTA_EPOCH_IN_UNIT;
     time^:=user;
    end;
 
@@ -154,6 +154,7 @@ begin
   CLOCK_SECOND:
   begin
    unittime(@user);
+   user:=user-DELTA_EPOCH_IN_UNIT;
    user:=user-(user mod POW10_7);
    time^:=user;
   end;
