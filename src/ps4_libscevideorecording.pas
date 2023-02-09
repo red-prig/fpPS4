@@ -38,12 +38,13 @@ type
   flags:Integer;
   name :array[0..31 ] of Char;
   data :array[0..127] of Char;
+  align:Integer;
  end;
  PSceVideoRecordingInfoUserMeta=^SceVideoRecordingInfoUserMeta;
 
  SceVideoRecordingParam2=packed record
   size          :size_t;
-  affinityMask  :Integer;
+  affinityMask  :QWORD;
   threadPriority:Integer;
   ringSec       :Integer;
  end;
