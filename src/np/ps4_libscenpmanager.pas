@@ -318,6 +318,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpUnregisterNpReachabilityStateCallback():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpCreateRequest():Integer; SysV_ABI_CDecl;
 begin
  Result:=11;
@@ -573,6 +578,7 @@ begin
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
  lib^.set_proc($C558AA25D0E02A5D,@ps4_sceNpUnregisterPlusEventCallback);
  lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
+ lib^.set_proc($71120B004BE7FBD3,@ps4_sceNpUnregisterNpReachabilityStateCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
