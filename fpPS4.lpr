@@ -55,6 +55,7 @@ uses
  ps4_libSceUlt,
  ps4_libSceGameLiveStreaming,
  ps4_libSceSharePlay,
+ ps4_libSceVideoRecording,
  ps4_elf,
  ps4_pthread,
  ps4_program,
