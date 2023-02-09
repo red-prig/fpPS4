@@ -1,6 +1,7 @@
 unit thr_private;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

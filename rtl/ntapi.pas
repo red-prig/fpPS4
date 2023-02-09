@@ -46,6 +46,12 @@ const
  ThreadIsIoPending               = 16;
  ThreadHideFromDebugger          = 17;
 
+ ProcessBasicInformation=0;
+ ProcessQuotaLimits     =1;
+ ProcessIoCounters      =2;
+ ProcessVmCounters      =3;
+ ProcessTimes           =4;
+
  FileStandardInformation  = 5;
  FilePositionInformation  =14;
  FileAllocationInformation=19;
@@ -138,6 +144,14 @@ type
   AffinityMask  :ULONG_PTR;
   Priority      :DWORD;
   BasePriority  :DWORD;
+ end;
+
+ PKERNEL_USER_TIMES=^KERNEL_USER_TIMES;
+ KERNEL_USER_TIMES=packed record
+  CreateTime:LARGE_INTEGER;
+  ExitTime  :LARGE_INTEGER;
+  KernelTime:LARGE_INTEGER;
+  UserTime  :LARGE_INTEGER;
  end;
 
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
@@ -234,6 +248,14 @@ function NtQueryInformationThread(
           ThreadInformation      :Pointer;
           ThreadInformationLength:ULONG;
           ReturnLength           :PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtQueryInformationProcess(
+          ProcessHandle           :THandle;
+          ProcessInformationClass :DWORD;
+          ProcessInformation      :Pointer;
+          ProcessInformationLength:ULONG;
+          ReturnLength            :PULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetInformationThread(

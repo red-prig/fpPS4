@@ -1,12 +1,13 @@
 unit sys_umtx;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
  sys_kernel,
- sys_types,
+ time,
  _umtx,
  kern_umtx;
 

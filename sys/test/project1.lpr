@@ -220,7 +220,7 @@ begin
  writeln(HexStr(rax,16));
  writeln;
 
- //ExitThread(0);
+ thread_exit;
 end;
 
 function _VirtualQuery(addr:Pointer):Integer;
@@ -500,7 +500,6 @@ begin
 
 end;
 
-
 var
  ThreadHandle:THandle;
  v:Integer;
@@ -513,8 +512,6 @@ var
 
 begin
  //test_map;
-
- //readln;
 
  e:=NtCreateEvent(
          @event,

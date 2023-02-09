@@ -1,6 +1,7 @@
 unit kern_thread;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -318,13 +319,6 @@ begin
  InitialTeb^.AllocatedStackBase:=StackAddress;            //lo addr
 end;
 
-procedure _thr_start; assembler; nostackframe;
-asm
- mov  %gs:(0x8),%rsp   //set  stack
- call %rax             //call start_func
- call thread_exit
-end;
-
 procedure BaseInitializeContext(Context     :PCONTEXT;
                                 Parameter   :Pointer;
                                 StartAddress:Pointer;
@@ -333,11 +327,9 @@ begin
  Context^:=Default(TCONTEXT);
 
  Context^.Rsp:=ptruint(StackAddress);
+ Context^.Rbp:=ptruint(StackAddress);
  Context^.Rdi:=ptruint(Parameter);
-
- Context^.Rip:=ptruint(@_thr_start);  //_thread_start
- Context^.Rbp:=ptruint(StackAddress); //_thread_start
- Context^.Rax:=ptruint(StartAddress); //_thread_start
+ Context^.Rip:=ptruint(StartAddress);
 
  Context^.SegGs:=KGDT64_R3_DATA  or RPL_MASK;
  Context^.SegEs:=KGDT64_R3_DATA  or RPL_MASK;

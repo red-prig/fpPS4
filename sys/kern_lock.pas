@@ -1,6 +1,7 @@
 unit kern_lock;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

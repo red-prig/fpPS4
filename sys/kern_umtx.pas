@@ -1,16 +1,16 @@
 unit kern_umtx;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
  gtailq,
  kern_lock,
- sys_types,
+ time,
+ kern_time,
 
- windows,
- ntapi,
  kern_thread,
  _umtx,
  sys_kernel;
@@ -30,7 +30,10 @@ implementation
 
 uses
  HAMT,
- systm;
+ systm,
+
+ windows,
+ ntapi;
 
 const
  _UMUTEX_TRY =1;
@@ -76,12 +79,21 @@ var
  umtx_hamt:TSTUB_HAMT64;
  umtx_hamt_lock:Integer=0;
 
+ //TYPE_SIMPLE_WAIT  =0;
+ //TYPE_CV           =1;
+ //TYPE_SEM          =2;
+ //TYPE_SIMPLE_LOCK  =3;
+ //TYPE_NORMAL_UMUTEX=4;
+ //TYPE_PI_UMUTEX    =5;
+ //TYPE_PP_UMUTEX    =6;
+ //TYPE_RWLOCK       =7;
+
 procedure umtxq_sysinit; inline;
 begin
  FillChar(umtx_hamt,SizeOf(umtx_hamt),0);
 end;
 
-function umtx_key_get(m:Pointer):umtx_key;
+function umtx_key_get(m:Pointer;ktype:Integer):umtx_key;
 Var
  data:PPointer;
  new:umtx_key;
@@ -395,32 +407,6 @@ end;
 
 //
 
-function get_unit_uptime:Int64;
-var
- pc:QWORD;
- pf:QWORD;
-
- DW0,DW1:QWORD;
-begin
- pc:=0;
- pf:=1;
- NtQueryPerformanceCounter(@pc,@pf);
-
- //DW0*10000000/pf + SHL_32* DW1*10000000/pf
-
- DW0:=(DWORD(pc shr 00)*10000000) div pf;
- DW1:=(DWORD(pc shr 32)*10000000) div pf;
-
- Result:=DW0+(DW1 shl 32);
-end;
-
-function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
-begin
- Result:=(QWORD(ts^.tv_sec)*10000000)+(QWORD(ts^.tv_nsec) div 100);
-end;
-
-//
-
 function _do_lock_umtx(td:p_kthread;umtx:p_umtx;id:QWORD;timo:Int64):Integer;
 var
  uq:p_umtx_q;
@@ -450,7 +436,7 @@ begin
 
   if (Result<>0) then Exit;
 
-  uq^.uq_key:=umtx_key_get(umtx);
+  uq^.uq_key:=umtx_key_get(umtx,TYPE_SIMPLE_LOCK);
   if (uq^.uq_key=nil) then Exit(EFAULT);
 
   umtxq_lock(uq^.uq_key);
@@ -527,7 +513,6 @@ begin
 
  if ((owner and (not UMTX_CONTESTED))<>id) then
  begin
-  writeln((owner and (not UMTX_CONTESTED)));
   Exit(EPERM);
  end;
 
@@ -539,7 +524,7 @@ begin
   owner:=old;
  end;
 
- key:=umtx_key_get(umtx);
+ key:=umtx_key_get(umtx,TYPE_SIMPLE_LOCK);
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
@@ -582,7 +567,7 @@ begin
 
  uq:=td^.td_umtxq;
 
- uq^.uq_key:=umtx_key_get(addr);
+ uq^.uq_key:=umtx_key_get(addr,TYPE_SIMPLE_WAIT);
  if (uq^.uq_key=nil) then Exit(EFAULT);
 
  umtxq_lock(uq^.uq_key);
@@ -656,7 +641,7 @@ var
 begin
  Result:=0;
 
- key:=umtx_key_get(umtx);
+ key:=umtx_key_get(umtx,TYPE_SIMPLE_WAIT);
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
@@ -723,7 +708,7 @@ begin
 
    if (Result<>0) then Exit;
 
-   uq^.uq_key:=umtx_key_get(m);
+   uq^.uq_key:=umtx_key_get(m,TYPE_NORMAL_UMUTEX);
    if (uq^.uq_key=nil) then Exit(EFAULT);
 
    umtxq_lock(uq^.uq_key);
@@ -774,7 +759,7 @@ begin
   owner:=old;
  end;
 
- key:=umtx_key_get(m);
+ key:=umtx_key_get(m,TYPE_NORMAL_UMUTEX);
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
@@ -818,7 +803,7 @@ begin
   Exit(0);
  end;
 
- key:=umtx_key_get(m);
+ key:=umtx_key_get(m,TYPE_NORMAL_UMUTEX);
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
@@ -845,6 +830,7 @@ label
  _exit;
 var
  key:umtx_key;
+ ktype:Integer;
  owner,old:DWORD;
  count:ptrint;
 begin
@@ -852,14 +838,14 @@ begin
  if (ptrint(m)<$1000) then Exit(EFAULT);
 
  Case (flags and (UMUTEX_PRIO_INHERIT or UMUTEX_PRIO_PROTECT)) of
-                    0:;
-  UMUTEX_PRIO_INHERIT:;
-  UMUTEX_PRIO_PROTECT:;
+                    0:ktype:=TYPE_NORMAL_UMUTEX;
+  UMUTEX_PRIO_INHERIT:ktype:=TYPE_PI_UMUTEX;
+  UMUTEX_PRIO_PROTECT:ktype:=TYPE_PP_UMUTEX;
   else
    Exit(EINVAL);
  end;
 
- key:=umtx_key_get(m);
+ key:=umtx_key_get(m,ktype);
  if (key=nil) then Exit(EFAULT);
 
  owner:=0;
@@ -930,7 +916,7 @@ begin
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
 
- uq^.uq_key:=umtx_key_get(m);
+ uq^.uq_key:=umtx_key_get(m,TYPE_PI_UMUTEX);
  if (uq^.uq_key=nil) then Exit(EFAULT);
 
  owner:=fuword32(m^.m_owner);
@@ -1030,7 +1016,7 @@ begin
   owner:=old;
  end;
 
- key:=umtx_key_get(m);
+ key:=umtx_key_get(m,TYPE_PI_UMUTEX);
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
@@ -1108,7 +1094,7 @@ begin
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
- uq^.uq_key:=umtx_key_get(m);
+ uq^.uq_key:=umtx_key_get(m,TYPE_PP_UMUTEX);
  if (uq^.uq_key=nil) then Exit(EFAULT);
 
  repeat
@@ -1285,7 +1271,7 @@ begin
   new_inherited_pri:=rceiling;
  end;
 
- key:=umtx_key_get(m);
+ key:=umtx_key_get(m,TYPE_PP_UMUTEX);
  if (key=nil) then Exit(EFAULT);
 
  Result:=suword32(m^.m_owner,UMUTEX_CONTESTED);
@@ -1345,7 +1331,7 @@ begin
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
- uq^.uq_key:=umtx_key_get(m);
+ uq^.uq_key:=umtx_key_get(m,TYPE_PP_UMUTEX);
 
  if (uq^.uq_key=nil) then Exit(EFAULT);
 
@@ -1482,6 +1468,152 @@ begin
  end;
 
 end;
+
+////
+
+function do_cv_wait(td:p_kthread;cv:p_ucond;m:p_umutex;timeout:ptimespec;wflags:QWORD):Integer;
+label
+ _exit;
+var
+ uq:p_umtx_q;
+ clockid:Integer;
+ oldlen:Integer;
+ cts,ets,tts,tv:Int64;
+begin
+ Result:=0;
+
+ uq:=td^.td_umtxq;
+
+ uq^.uq_key:=umtx_key_get(cv,TYPE_CV);
+ if (uq^.uq_key=nil) then Exit(EFAULT);
+
+ if ((wflags and CVWAIT_CLOCKID)<>0) then
+ begin
+  clockid:=fuword32(cv^.c_clockid);
+  if (clockid<CLOCK_REALTIME) or
+     (clockid>=CLOCK_THREAD_CPUTIME_ID) then
+  begin
+   Result:=EINVAL;
+   goto _exit;
+  end;
+ end else
+ begin
+  clockid:=CLOCK_REALTIME;
+ end;
+
+ umtxq_lock(uq^.uq_key);
+ umtxq_insert(uq);
+ umtxq_unlock(uq^.uq_key);
+
+ if (fuword32(cv^.c_has_waiters)=0) then
+ begin
+  suword32(cv^.c_has_waiters,1);
+ end;
+
+ Result:=do_unlock_umutex(td,m);
+
+ if (Result=0) then
+ begin
+  if (timeout=nil) then
+  begin
+   Result:=umtxq_sleep(uq,NT_INFINITE);
+  end else
+  begin
+   if ((wflags and CVWAIT_ABSTIME)=0) then
+   begin
+    ets:=0;
+    Result:=kern_clock_gettime_unit(clockid,@ets);
+    if (Result<>0) then goto _exit;
+
+    tts:=TIMESPEC_TO_UNIT(timeout);
+    ets:=ets+tts;
+   end else
+   begin
+    ets:=TIMESPEC_TO_UNIT(timeout);
+
+    cts:=0;
+    Result:=kern_clock_gettime_unit(clockid,@cts);
+    if (Result<>0) then goto _exit;
+
+    tts:=tts-cts;
+   end;
+
+   tv:=tts;
+   repeat
+    Result:=umtxq_sleep(uq,-tv);
+    if (Result<>ETIMEDOUT) then Break;
+
+    kern_clock_gettime_unit(clockid,@cts);
+
+    if (cts>=ets) then
+    begin
+     Result:=ETIMEDOUT;
+     Break;
+    end;
+
+    tts:=ets;
+    tts:=tts-cts;
+    tv :=tts;
+   until false;
+  end;
+ end;
+
+ umtxq_lock(uq^.uq_key);
+
+ if ((uq^.uq_flags and UQF_UMTXQ)=0) then
+ begin
+  Result:=0;
+ end else
+ begin
+  if ((uq^.uq_flags and UQF_UMTXQ)<>0) then
+  begin
+   oldlen:=uq^.uq_cur_queue^.length;
+   umtxq_remove(uq);
+   if (oldlen=1) then
+   begin
+    umtxq_unlock(uq^.uq_key);
+    suword32(cv^.c_has_waiters,0);
+    umtxq_lock(uq^.uq_key);
+   end;
+  end;
+  if (Result=ERESTART) then
+  begin
+   Result:=EINTR;
+  end;
+ end;
+
+ umtxq_unlock(uq^.uq_key);
+
+ _exit:
+  umtx_key_release(uq^.uq_key);
+end;
+
+function do_cv_signal(td:p_kthread;cv:p_ucond):Integer;
+var
+ key:umtx_key;
+ count,nwake:Integer;
+begin
+ Result:=0;
+
+ key:=umtx_key_get(cv,TYPE_CV);
+ if (key=nil) then Exit(EFAULT);
+
+ umtxq_lock(key);
+
+ count:=umtxq_count(key);
+ nwake:=umtxq_signal(key,1);
+ if (count<=nwake) then
+ begin
+  umtxq_unlock(&key);
+  Result:=suword32(cv^.c_has_waiters,0);
+  umtxq_lock(&key);
+ end;
+
+ umtxq_unlock(key);
+ umtx_key_release(key);
+end;
+
+////
 
 function umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
 begin
