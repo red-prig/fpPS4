@@ -10,6 +10,7 @@ uses
  sys_umtx,
  kern_thread,
  kern_lock,
+ kern_rwlock,
  thr_private,
  sysutils,
  vulkan,

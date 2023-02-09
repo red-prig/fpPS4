@@ -37,9 +37,9 @@ type
  kthread=packed record
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
+  td_lock         :Pointer;
   td_tid          :DWORD;
   td_ref          :Integer;
-  td_lock         :Integer;
   td_priority     :Word;
   td_pri_class    :Word;
   td_base_pri     :Word;
@@ -137,12 +137,12 @@ implementation
 uses
  hamt,
  systm,
- kern_lock,
+ kern_rwlock,
  kern_umtx;
 
 var
  tidhashtbl:TSTUB_HAMT32;
- tidhash_lock:Integer=0;
+ tidhash_lock:Pointer=nil;
 
  p_numthreads:Integer=0;
 
@@ -197,12 +197,12 @@ end;
 
 procedure thread_lock(td:p_kthread);
 begin
- klock(td^.td_lock);
+ rw_wlock(td^.td_lock);
 end;
 
 procedure thread_unlock(td:p_kthread);
 begin
- kunlock(td^.td_lock);
+ rw_wunlock(td^.td_lock);
 end;
 
 procedure thread_link(td:p_kthread);
@@ -223,7 +223,7 @@ Var
  data:PPointer;
 begin
  Result:=nil;
- klock(tidhash_lock); //rdlock
+ rw_rlock(tidhash_lock);
 
  data:=HAMT_search32(@tidhashtbl,tid);
 
@@ -237,14 +237,14 @@ begin
   thread_inc_ref(Result);
  end;
 
- kunlock(tidhash_lock);
+ rw_runlock(tidhash_lock);
 end;
 
 procedure tidhash_add(td:p_kthread);
 var
  data:PPointer;
 begin
- klock(tidhash_lock); //wlock
+ rw_wlock(tidhash_lock);
 
  data:=HAMT_insert32(@tidhashtbl,td^.td_tid,td);
 
@@ -256,18 +256,18 @@ begin
   end;
  end;
 
- kunlock(tidhash_lock);
+ rw_wunlock(tidhash_lock);
 end;
 
 procedure tidhash_remove(td:p_kthread);
 var
  data:Pointer;
 begin
- klock(tidhash_lock); //wlock
+ rw_wlock(tidhash_lock);
 
  data:=HAMT_delete32(@tidhashtbl,td^.td_tid);
 
- kunlock(tidhash_lock);
+ rw_wunlock(tidhash_lock);
 
  if (data=td) then
  begin

@@ -7,7 +7,7 @@ interface
 
 uses
  gtailq,
- kern_lock,
+ kern_rwlock,
  time,
  kern_time,
 
@@ -70,14 +70,14 @@ type
  umtxq_queue=packed record
   head    :umtxq_head;
   length  :Integer;
-  lock    :Integer;
-  owner   :p_kthread;
   refs    :Integer;
+  lock    :Pointer;
+  owner   :p_kthread;
  end;
 
 var
  umtx_hamt:TSTUB_HAMT64;
- umtx_hamt_lock:Integer=0;
+ umtx_hamt_lock:Pointer=nil;
 
  //TYPE_SIMPLE_WAIT  =0;
  //TYPE_CV           =1;
@@ -100,7 +100,7 @@ Var
 begin
  Result:=nil;
 
- klock(umtx_hamt_lock);
+ rw_rlock(umtx_hamt_lock);
   data:=HAMT_search64(@umtx_hamt,QWORD(m));
   if (data<>nil) then //EXIST
   begin
@@ -110,14 +110,14 @@ begin
     System.InterlockedIncrement(Result^.refs); //GET
    end;
   end;
- kunlock(umtx_hamt_lock);
+ rw_runlock(umtx_hamt_lock);
 
  if (Result<>nil) then Exit; //EXIST
 
  new:=AllocMem(SizeOf(umtxq_queue)); //NEW
  new^.refs:=1; //INSERT
 
- klock(umtx_hamt_lock);
+ rw_wlock(umtx_hamt_lock);
   data:=HAMT_insert64(@umtx_hamt,QWORD(m),new);
   if (data<>nil) then //NOMEM
   begin
@@ -127,7 +127,7 @@ begin
     System.InterlockedIncrement(Result^.refs); //GET
    end;
   end;
- kunlock(umtx_hamt_lock);
+ rw_wunlock(umtx_hamt_lock);
 
  if (data=nil) then //NOMEM
  begin
@@ -144,9 +144,9 @@ end;
 function umtx_key_remove(m:Pointer):umtx_key;
 begin
  if (m=nil) then Exit(nil);
- klock(umtx_hamt_lock);
+ rw_wlock(umtx_hamt_lock);
   Result:=HAMT_delete64(@umtx_hamt,QWORD(m));
- kunlock(umtx_hamt_lock);
+ rw_wunlock(umtx_hamt_lock);
 end;
 
 procedure umtxq_set_owner(key:umtx_key;td:p_kthread); forward;
@@ -171,12 +171,12 @@ end;
 
 procedure umtxq_lock(key:umtx_key); inline;
 begin
- klock(key^.lock);
+ rw_wlock(key^.lock);
 end;
 
 procedure umtxq_unlock(key:umtx_key); inline;
 begin
- kunlock(key^.lock);
+ rw_wunlock(key^.lock);
 end;
 
 function umtxq_count(key:umtx_key):ptrint;
