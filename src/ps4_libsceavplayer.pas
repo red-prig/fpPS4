@@ -1032,8 +1032,7 @@ begin
  _sig_unlock;
 end;
 
-// TODO: Not working correctly for Descenders?
-function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle):Boolean; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
 begin
@@ -1049,7 +1048,7 @@ begin
  player.dec_ref;
 end;
 
-function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):Integer; SysV_ABI_CDecl;
+function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:Boolean):Integer; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
 begin
@@ -1068,7 +1067,7 @@ begin
  end;
 end;
 
-function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool;
+function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean;
 var
  audioData:TMemChunk;
  player   :TAvPlayerInfo;
@@ -1103,14 +1102,14 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetAudioData(handle,frameInfo);
  _sig_unlock;
 end;
 
-function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool;
+function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean;
 var
  videoData:TMemChunk;
  player   :TAvPlayerInfo;
@@ -1151,14 +1150,14 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetVideoDataEx(handle,frameInfo);
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 var
  frameInfoEx:SceAvPlayerFrameInfoEx;
 begin
