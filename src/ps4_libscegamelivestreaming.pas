@@ -31,6 +31,18 @@ type
   reserved:array[0..59] of Byte;
  end;
 
+ pSceGameLiveStreamingStatus2=^SceGameLiveStreamingStatus2;
+ SceGameLiveStreamingStatus2=packed record
+  userId:Integer;
+  isOnAir:Boolean;
+  _align:array[0..3] of Byte;
+  spectatorCounts     :DWORD;
+  textMessageCounts   :DWORD;
+  commandMessageCounts:DWORD;
+  broadcastVideoResolution:Integer; //SceGameLiveStreamingVideoResolution
+  reserved:array[0..47] of Byte;
+ end;
+
 implementation
 
 function ps4_sceGameLiveStreamingInitialize(heapSize:qword):Integer; SysV_ABI_CDecl;
@@ -73,6 +85,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingGetCurrentStatus2(status:pSceGameLiveStreamingStatus2):Integer; SysV_ABI_CDecl;
+begin
+ if (status=nil) then Exit(SCE_GAME_LIVE_STREAMING_ERROR_INVALID_PARAM);
+
+ status^:=Default(SceGameLiveStreamingStatus2);
+ status^.isOnAir:=False;
+
+ Result:=0;
+end;
+
 function Load_libSceGameLiveStreaming(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -88,6 +110,7 @@ begin
  lib^.set_proc($2B443111B0FBABE7,@ps4_sceGameLiveStreamingPermitLiveStreaming);
  lib^.set_proc($C013905A36D631F5,@ps4_sceGameLiveStreamingEnableSocialFeedback);
  lib^.set_proc($0A83CCC77EBD12A3,@ps4_sceGameLiveStreamingGetCurrentStatus);
+ lib^.set_proc($94AF1D2C1369F4E1,@ps4_sceGameLiveStreamingGetCurrentStatus2);
 end;
 
 initialization
