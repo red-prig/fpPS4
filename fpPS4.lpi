@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="133">
+    <Units Count="134">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -389,6 +389,7 @@
       <Unit84>
         <Filename Value="src\np\ps4_libscenpmatching2.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpMatching2"/>
       </Unit84>
       <Unit85>
         <Filename Value="src\np\ps4_libscenpscore.pas"/>
@@ -611,6 +612,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpCommon"/>
       </Unit132>
+      <Unit133>
+        <Filename Value="src\np\np_error.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit133>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

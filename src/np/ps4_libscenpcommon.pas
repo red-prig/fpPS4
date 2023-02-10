@@ -5,16 +5,8 @@ unit ps4_libSceNpCommon;
 interface
 
 uses
- ps4_program;
-
-const
- SCE_NP_ERROR_INVALID_ARGUMENT           =-2141913085; //80550003
- SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=-2141913080; //80550008
-
- SCE_NP_ERROR_SIGNED_OUT                 =-2141913082; //80550006
-
-
- SCE_NP_UTIL_ERROR_NOT_MATCH=-2141911543; //80550609
+ ps4_program,
+ np_error;
 
 const
  SCE_NP_ONLINEID_MIN_LENGTH=3;

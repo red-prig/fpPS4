@@ -6,8 +6,7 @@ interface
 
 uses
   ps4_program,
-  Classes,
-  SysUtils;
+  np_error;
 
 const
  SCE_NP_TROPHY_NUM_MAX                  =(128);
@@ -263,9 +262,6 @@ begin
   data^.progressPercentage:=0;
  end;
 end;
-
-const
- SCE_NP_TROPHY_ERROR_ICON_FILE_NOT_FOUND=-2141907436; //0x80551614;
 
 //result is png image
 function ps4_sceNpTrophyGetGameIcon(context:Integer;

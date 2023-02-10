@@ -7,6 +7,7 @@ interface
 uses
   windows,
   ps4_program,
+  np_error,
   ps4_libSceNpCommon;
 
 Const

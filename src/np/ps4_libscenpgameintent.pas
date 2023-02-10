@@ -5,9 +5,7 @@ unit ps4_libSceNpGameIntent;
 interface
 
 uses
-  ps4_program,
-  Classes,
-  SysUtils;
+  ps4_program;
 
 implementation
 
