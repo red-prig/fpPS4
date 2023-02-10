@@ -12,8 +12,10 @@ function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function fuword32(var base:DWORD):DWORD; inline;
+function fuword32(var base:Integer):Integer; inline;
 function fuword64(var base:QWORD):QWORD; inline;
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
+function casuword32(var base:Integer;oldval,newval:Integer):Integer; inline;
 function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD; inline;
 function suword32(var base:DWORD;word:DWORD):DWORD; inline;
 
@@ -72,6 +74,14 @@ begin
  end;
 end;
 
+function fuword32(var base:Integer):Integer; inline;
+begin
+ if (NtReadVirtualMemory(NtCurrentProcess,@base,@Result,SizeOf(DWORD),nil)<>0) then
+ begin
+  Result:=-1;
+ end;
+end;
+
 function fuword64(var base:QWORD):QWORD; inline;
 begin
  if (NtReadVirtualMemory(NtCurrentProcess,@base,@Result,SizeOf(QWORD),nil)<>0) then
@@ -81,6 +91,11 @@ begin
 end;
 
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
+begin
+ Result:=System.InterlockedCompareExchange(base,newval,oldval);
+end;
+
+function casuword32(var base:Integer;oldval,newval:Integer):Integer; inline;
 begin
  Result:=System.InterlockedCompareExchange(base,newval,oldval);
 end;

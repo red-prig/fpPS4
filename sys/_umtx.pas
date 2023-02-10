@@ -1,6 +1,7 @@
 unit _umtx;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -119,7 +120,14 @@ const
  TYPE_RWLOCK       =7;
  TYPE_FUTEX        =8;
 
+function URWLOCK_READER_COUNT(c:DWORD):DWORD; inline;
+
 implementation
+
+function URWLOCK_READER_COUNT(c:DWORD):DWORD; inline;
+begin
+ Result:=(c and URWLOCK_MAX_READERS);
+end;
 
 end.
 
