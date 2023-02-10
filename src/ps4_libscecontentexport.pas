@@ -49,7 +49,7 @@ begin
  Result:=SCE_CONTENT_EXPORT_ERROR_NOT_IMPLEMENTED;
 end;
 
-function Load_libSceSharePlay(Const name:RawByteString):TElf_node;
+function Load_libContentExportPlay(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
 begin
@@ -62,7 +62,7 @@ begin
 end;
 
 initialization
- ps4_app.RegistredPreLoad('libSceContentExport.prx',@Load_libSceSharePlay);
+ ps4_app.RegistredPreLoad('libSceContentExport.prx',@Load_libContentExportPlay);
 
 end.
 
