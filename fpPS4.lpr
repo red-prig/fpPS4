@@ -57,6 +57,7 @@ uses
  ps4_libSceSharePlay,
  ps4_libSceVideoRecording,
  ps4_libSceContentExport,
+ ps4_libSceUsbd,
  ps4_elf,
  ps4_pthread,
  ps4_program,
