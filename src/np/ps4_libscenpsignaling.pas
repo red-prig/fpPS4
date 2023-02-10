@@ -5,9 +5,7 @@ unit ps4_libSceNpSignaling;
 interface
 
 uses
-  ps4_program,
-  Classes,
-  SysUtils;
+  ps4_program;
 
 implementation
 

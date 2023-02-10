@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="129">
+    <Units Count="134">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -389,6 +389,7 @@
       <Unit84>
         <Filename Value="src\np\ps4_libscenpmatching2.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpMatching2"/>
       </Unit84>
       <Unit85>
         <Filename Value="src\np\ps4_libscenpscore.pas"/>
@@ -475,7 +476,7 @@
         <IsPartOfProject Value="True"/>
       </Unit103>
       <Unit104>
-        <Filename Value="src\ps4_libscenpwebapi.pas"/>
+        <Filename Value="src\np\ps4_libscenpwebapi.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpWebApi"/>
       </Unit104>
@@ -591,6 +592,30 @@
         <Filename Value="src\ps4_libsceaudiodec.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit128>
+      <Unit129>
+        <Filename Value="src\ps4_libscevideorecording.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceVideoRecording"/>
+      </Unit129>
+      <Unit130>
+        <Filename Value="src\ps4_libscecontentexport.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceContentExport"/>
+      </Unit130>
+      <Unit131>
+        <Filename Value="src\ps4_libsceusbd.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceUsbd"/>
+      </Unit131>
+      <Unit132>
+        <Filename Value="src\np\ps4_libscenpcommon.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpCommon"/>
+      </Unit132>
+      <Unit133>
+        <Filename Value="src\np\np_error.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit133>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

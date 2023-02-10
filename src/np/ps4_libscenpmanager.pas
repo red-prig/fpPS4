@@ -7,8 +7,8 @@ interface
 uses
   windows,
   ps4_program,
-  Classes,
-  SysUtils;
+  np_error,
+  ps4_libSceNpCommon;
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
@@ -38,25 +38,6 @@ type
  end;
 
 const
- SCE_NP_ONLINEID_MIN_LENGTH=3;
- SCE_NP_ONLINEID_MAX_LENGTH=16;
-
-type
- pSceNpOnlineId=^SceNpOnlineId;
- SceNpOnlineId=packed record
-  data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
-  term:AnsiChar;
-  dummy:array[0..2] of AnsiChar;
- end;
-
- PSceNpId=^SceNpId;
- SceNpId=packed record
-  handle:SceNpOnlineId;
-  opt:array[0..7] of Byte;
-  reserved:array[0..7] of Byte;
- end;
-
-const
  SCE_NP_TITLE_ID_LEN=12;
 
 type
@@ -78,6 +59,15 @@ const
  SCE_NP_STATE_UNKNOWN    =0;
  SCE_NP_STATE_SIGNED_OUT =1;
  SCE_NP_STATE_SIGNED_IN  =2;
+
+ //SceNpGamePresenceStatus
+ SCE_NP_GAME_PRESENCE_STATUS_OFFLINE=0;
+ SCE_NP_GAME_PRESENCE_STATUS_ONLINE =1;
+
+//SceNpReachabilityState
+ SCE_NP_REACHABILITY_STATE_UNAVAILABLE=0;
+ SCE_NP_REACHABILITY_STATE_AVAILABLE  =1;
+ SCE_NP_REACHABILITY_STATE_REACHABLE  =2;
 
 type
  pSceNpCreateAsyncRequestParameter=^SceNpCreateAsyncRequestParameter;
@@ -116,16 +106,7 @@ type
                                           state:Integer; //SceNpReachabilityState
                                           userdata:Pointer); SysV_ABI_CDecl;
 
-const
- SCE_NP_ERROR_INVALID_ARGUMENT           =-2141913085; //80550003
- SCE_NP_ERROR_CALLBACK_ALREADY_REGISTERED=-2141913080; //80550008
-
- SCE_NP_ERROR_SIGNED_OUT                 =-2141913082; //80550006
-
 implementation
-
-uses
- ps4_map_mm;
 
 function ps4_sceNpSetContentRestriction(pRestriction:PSceNpContentRestriction):Integer; SysV_ABI_CDecl;
 begin
@@ -225,6 +206,22 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetGamePresenceStatusA(userId:Integer;pStatus:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (pStatus=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pStatus^:=SCE_NP_GAME_PRESENCE_STATUS_OFFLINE;
+ Result:=0;
+end;
+
+function ps4_sceNpGetNpReachabilityState(userId:Integer;state:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (state=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ state^:=SCE_NP_REACHABILITY_STATE_UNAVAILABLE;
+ Result:=0;
+end;
+
 function ps4_sceNpHasSignedUp(userId:Integer;hasSignedUp:PBoolean):Integer; SysV_ABI_CDecl;
 begin
  if (hasSignedUp=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -296,7 +293,17 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpUnregisterPlusEventCallback():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpRegisterNpReachabilityStateCallback(callback:SceNpReachabilityStateCallback;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpUnregisterNpReachabilityStateCallback():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -452,83 +459,6 @@ begin
  Result:=0;
 end;
 
-Const
- SCE_NP_UTIL_ERROR_NOT_MATCH=-2141911543; //80550609
-
-function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
-begin
- if (npid1=nil) or (npid2=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
-
- if (CompareChar0(npid1^.handle,npid2^.handle,SCE_NP_ONLINEID_MAX_LENGTH)=0) and
-    (QWORD(npid1^.opt)=QWORD(npid2^.opt)) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=SCE_NP_UTIL_ERROR_NOT_MATCH;
- end;
-
-end;
-
-type
- pnp_mem=^np_mem;
- np_mem=packed record
-  len:qword;
-  unknow:qword;
-  ptr:Pointer;
- end;
-
-function ps4_sceNpAllocateKernelMemoryWithAlignment(
-          len:qword;
-          name:Pchar;
-          ptr_out:PPointer;
-          mem_out:pnp_mem):Integer; SysV_ABI_CDecl;
-var
- pad_len:qword;
-begin
- if (mem_out=nil) then
- begin
-  Exit(-$7faa7ffb); //NP-32268-1
- end;
-
- mem_out^.unknow:=0;
- pad_len:=0;
- if (len and $3fff)<>0 then
- begin
-  pad_len:=$4000-(len and $3fff);
- end;
- mem_out^.len:=pad_len+len;
-
- Result:=ps4_sceKernelMapNamedFlexibleMemory(@mem_out^.ptr,mem_out^.len,3,0,name);
-
- if (ptr_out<>nil) and (Result >-1) then
- begin
-  ptr_out^:=mem_out^.ptr;
- end;
-end;
-
-function ps4_sceNpAllocateKernelMemoryNoAlignment(
-          len:qword;
-          name:Pchar;
-          ptr_out:PPointer;
-          mem_out:pnp_mem):Integer; SysV_ABI_CDecl;
-begin
- if (mem_out=nil) then
- begin
-  Exit(-$7faa7ffb); //NP-32268-1
- end;
-
- mem_out^.unknow:=0;
- mem_out^.len:=len;
-
- Result:=ps4_sceKernelMapNamedFlexibleMemory(@mem_out^.ptr,mem_out^.len,3,0,name);
-
- if (ptr_out<>nil) and (Result >-1) then
- begin
-  ptr_out^:=mem_out^.ptr;
- end;
-end;
-
 function Load_libSceNpManager(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -544,6 +474,8 @@ begin
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
+ lib^.set_proc($A0F3BD538D98A602,@ps4_sceNpGetGamePresenceStatusA);
+ lib^.set_proc($7BF66E846128782E,@ps4_sceNpGetNpReachabilityState);
  lib^.set_proc($39A777AEF63F3494,@ps4_sceNpHasSignedUp);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
@@ -553,7 +485,9 @@ begin
  lib^.set_proc($B8526968A341023E,@ps4_sceNpRegisterGamePresenceCallback);
  lib^.set_proc($2ACC312F19387356,@ps4_sceNpRegisterGamePresenceCallbackA);
  lib^.set_proc($1889880A787E6E80,@ps4_sceNpRegisterPlusEventCallback);
+ lib^.set_proc($C558AA25D0E02A5D,@ps4_sceNpUnregisterPlusEventCallback);
  lib^.set_proc($870E4A36A0007A5B,@ps4_sceNpRegisterNpReachabilityStateCallback);
+ lib^.set_proc($71120B004BE7FBD3,@ps4_sceNpUnregisterNpReachabilityStateCallback);
  lib^.set_proc($1A92D00CD28809A7,@ps4_sceNpCreateRequest);
  lib^.set_proc($7A2A8C0ADF54B212,@ps4_sceNpCreateAsyncRequest);
  lib^.set_proc($4BB4139FBD8FAC3C,@ps4_sceNpDeleteRequest);
@@ -573,22 +507,8 @@ begin
  lib^.set_proc($2442C77F8C4FB9FA,@ps4_sceNpCheckCallbackForLib);
 end;
 
-function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
-var
- lib:PLIBRARY;
-begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
-
- lib:=Result._add_lib('libSceNpCommon');
- lib^.set_proc($8BC5265D34AAECDE,@ps4_sceNpCmpNpId);
- lib^.set_proc($80C958E9E7B0AFF7,@ps4_sceNpAllocateKernelMemoryWithAlignment);
- lib^.set_proc($3163CE92ACD8B2CD,@ps4_sceNpAllocateKernelMemoryNoAlignment);
-end;
-
 initialization
  ps4_app.RegistredPreLoad('libSceNpManager.prx',@Load_libSceNpManager);
- ps4_app.RegistredPreLoad('libSceNpCommon.prx' ,@Load_libSceNpCommon);
 
 end.
 

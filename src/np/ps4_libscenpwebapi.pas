@@ -6,9 +6,8 @@ interface
 
 uses
   ps4_program,
-  ps4_libSceNpManager,
-  Classes,
-  SysUtils;
+  ps4_libSceNpCommon,
+  ps4_libSceNpManager;
 
 implementation
 
