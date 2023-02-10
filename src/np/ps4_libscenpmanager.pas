@@ -64,6 +64,11 @@ const
  SCE_NP_GAME_PRESENCE_STATUS_OFFLINE=0;
  SCE_NP_GAME_PRESENCE_STATUS_ONLINE =1;
 
+//SceNpReachabilityState
+ SCE_NP_REACHABILITY_STATE_UNAVAILABLE=0;
+ SCE_NP_REACHABILITY_STATE_AVAILABLE  =1;
+ SCE_NP_REACHABILITY_STATE_REACHABLE  =2;
+
 type
  pSceNpCreateAsyncRequestParameter=^SceNpCreateAsyncRequestParameter;
  SceNpCreateAsyncRequestParameter=packed record
@@ -206,6 +211,14 @@ begin
  if (pStatus=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
  pStatus^:=SCE_NP_GAME_PRESENCE_STATUS_OFFLINE;
+ Result:=0;
+end;
+
+function ps4_sceNpGetNpReachabilityState(userId:Integer;state:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (state=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ state^:=SCE_NP_REACHABILITY_STATE_UNAVAILABLE;
  Result:=0;
 end;
 
@@ -462,6 +475,7 @@ begin
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
  lib^.set_proc($A0F3BD538D98A602,@ps4_sceNpGetGamePresenceStatusA);
+ lib^.set_proc($7BF66E846128782E,@ps4_sceNpGetNpReachabilityState);
  lib^.set_proc($39A777AEF63F3494,@ps4_sceNpHasSignedUp);
  lib^.set_proc($11CEB7CB9F65F6DC,@ps4_sceNpSetNpTitleId);
  lib^.set_proc($DD997C05E3D387D6,@ps4_sceNpCheckCallback);
