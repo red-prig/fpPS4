@@ -247,6 +247,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudiodecClearContext(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceAudiodecClearContext,handle=',handle);
+ Result:=0;
+end;
+
 function Load_libSceAudiodec(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -260,6 +266,7 @@ begin
  lib^.set_proc($3B77F5B0B31646FB,@ps4_sceAudiodecCreateDecoder);
  lib^.set_proc($2875C73032E420BC,@ps4_sceAudiodecDecode);
  lib^.set_proc($4E9F99132EBD98B9,@ps4_sceAudiodecDeleteDecoder);
+ lib^.set_proc($E957FD5932C3A2CB,@ps4_sceAudiodecClearContext);
 end;
 
 initialization

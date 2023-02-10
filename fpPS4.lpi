@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="134">
+    <Units Count="135">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -616,6 +616,11 @@
         <Filename Value="src\np\np_error.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit133>
+      <Unit134>
+        <Filename Value="src\ps4_libsceaudiodeccpu.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAudiodecCpu"/>
+      </Unit134>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
