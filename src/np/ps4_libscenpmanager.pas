@@ -492,6 +492,16 @@ begin
 
 end;
 
+function ps4_sceNpCmpOnlineId(str1,str2:PChar):Integer; SysV_ABI_CDecl;
+begin
+ if (str1=nil) or (str2=nil) then
+  Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if StrLComp(str1,str2,SCE_NP_ONLINEID_MAX_LENGTH)=0 then
+  Result:=0
+ else
+  Result:=SCE_NP_UTIL_ERROR_NOT_MATCH;
+end;
+
 type
  pnp_mem=^np_mem;
  np_mem=packed record
@@ -607,6 +617,7 @@ begin
 
  lib:=Result._add_lib('libSceNpCommon');
  lib^.set_proc($8BC5265D34AAECDE,@ps4_sceNpCmpNpId);
+ lib^.set_proc($763F8EE5A0F66B44,@ps4_sceNpCmpOnlineId);
  lib^.set_proc($80C958E9E7B0AFF7,@ps4_sceNpAllocateKernelMemoryWithAlignment);
  lib^.set_proc($3163CE92ACD8B2CD,@ps4_sceNpAllocateKernelMemoryNoAlignment);
 end;
