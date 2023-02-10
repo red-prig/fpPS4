@@ -1481,6 +1481,8 @@ var
  cts,ets,tts,tv:Int64;
 begin
  Result:=0;
+ if (ptrint(cv)<$1000) then Exit(EFAULT);
+ if (ptrint(m) <$1000) then Exit(EFAULT);
 
  uq:=td^.td_umtxq;
 
@@ -1594,6 +1596,7 @@ var
  count,nwake:Integer;
 begin
  Result:=0;
+ if (ptrint(cv)<$1000) then Exit(EFAULT);
 
  key:=umtx_key_get(cv,TYPE_CV);
  if (key=nil) then Exit(EFAULT);
@@ -1621,6 +1624,7 @@ var
  key:umtx_key;
 begin
  Result:=0;
+ if (ptrint(cv)<$1000) then Exit(EFAULT);
 
  key:=umtx_key_get(cv,TYPE_CV);
  if (key=nil) then Exit(EFAULT);

@@ -12,6 +12,7 @@ uses
 function get_unit_uptime:Int64;
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
 implementation
 
@@ -36,12 +37,17 @@ begin
  pf:=1;
  NtQueryPerformanceCounter(@pc,@pf);
 
- //DW0*10000000/pf + SHL_32* DW1*10000000/pf
+ if (pf=UNIT_PER_SEC) then
+ begin
+  Result:=pc;
+ end else
+ begin
+  //DW0*10000000/pf + SHL_32* DW1*10000000/pf
+  DW0:=(DWORD(pc shr 00)*UNIT_PER_SEC) div pf;
+  DW1:=(DWORD(pc shr 32)*UNIT_PER_SEC) div pf;
 
- DW0:=(DWORD(pc shr 00)*UNIT_PER_SEC) div pf;
- DW1:=(DWORD(pc shr 32)*UNIT_PER_SEC) div pf;
-
- Result:=DW0+(DW1 shl 32);
+  Result:=DW0+(DW1 shl 32);
+ end;
 end;
 
 type
@@ -186,6 +192,55 @@ begin
   tp^.tv_nsec:=(time mod POW10_7)*100;
  end;
 end;
+
+function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+begin
+ Result:=0;
+
+ case clock_id of
+  CLOCK_REALTIME,
+  CLOCK_VIRTUAL,
+  CLOCK_PROF,
+  CLOCK_MONOTONIC,
+  CLOCK_UPTIME,
+  CLOCK_UPTIME_PRECISE,
+  CLOCK_UPTIME_FAST,
+  CLOCK_REALTIME_PRECISE,
+  CLOCK_REALTIME_FAST,
+  CLOCK_MONOTONIC_PRECISE,
+  CLOCK_MONOTONIC_FAST,
+  CLOCK_THREAD_CPUTIME_ID,
+  CLOCK_PROCTIME,
+  CLOCK_EXT_NETWORK,
+  CLOCK_EXT_DEBUG_NETWORK,
+  CLOCK_EXT_AD_NETWORK,
+  CLOCK_EXT_RAW_NETWORK:
+   begin
+    tp^.tv_sec :=0;
+    tp^.tv_nsec:=100;
+   end;
+
+  CLOCK_SECOND:
+  begin
+   tp^.tv_sec :=1;
+   tp^.tv_nsec:=0;
+  end;
+
+  else
+   Result:=EINVAL;
+ end;
+end;
+
+Procedure Init;
+var
+ min,max,cur:ULONG;
+begin
+ NtQueryTimerResolution(@min,@max,@cur);
+ NtSetTimerResolution(max,True,@cur);
+end;
+
+initialization
+ Init;
 
 end.
 

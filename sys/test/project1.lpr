@@ -8,6 +8,8 @@ uses
  _umtx,
  kern_umtx,
  sys_umtx,
+ time,
+ kern_time,
  kern_thread,
  kern_lock,
  kern_rwlock,
@@ -511,8 +513,13 @@ var
  tid:DWORD;
  ktd:p_kthread;
 
+ _time:Int64;
+
 begin
  //test_map;
+
+ kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
+ writeln(_time/10000000:0:3);
 
  e:=NtCreateEvent(
          @event,
