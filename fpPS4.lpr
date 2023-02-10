@@ -35,6 +35,7 @@ uses
  ps4_libSceNpScore,
  ps4_libSceNpTrophy,
  ps4_libSceSystemService,
+ ps4_libSceNpCommon,
  ps4_libSceNpManager,
  ps4_libSceNpGameIntent,
  ps4_libSceSaveData,
