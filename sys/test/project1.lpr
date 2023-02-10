@@ -44,8 +44,8 @@ begin
 
  repeat
 
- e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
- //e:=__umtx_op_lock_umutex(@td,@mtx,nil);
+ //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td.td_tid,nil,nil);
  Writeln('  lock[',GetCurrentThreadId,'] ',e);
 
  //e:=_do_lock_normal(GetCurrentThreadId,@mtx,0,NT_INFINITE,0);
@@ -53,9 +53,11 @@ begin
 
  //sleep(100);
 
- e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_UNLOCK} UMTX_OP_UNLOCK,td.td_tid,nil,nil);
- //e:=__umtx_op_unlock_umutex(@td,@mtx);
+ //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_UNLOCK} UMTX_OP_UNLOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK,td.td_tid,nil,nil);
  Writeln('unlock[',GetCurrentThreadId,'] ',e);
+
+ sleep(1000)
 
  //_umtx_obj_done(@mtx);
 
@@ -531,7 +533,7 @@ begin
  _umutex_init(@mtx);
 
  //mtx.m_flags:=UMUTEX_PRIO_INHERIT;
- //mtx.m_flags:=UMUTEX_PRIO_PROTECT;
+ mtx.m_flags:=UMUTEX_PRIO_PROTECT;
 
  mseg:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);
  mem:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);

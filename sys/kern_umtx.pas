@@ -16,7 +16,6 @@ uses
  sys_kernel;
 
 procedure _umutex_init(mtx:p_umutex); inline;
-procedure _umtx_obj_done(mtx:Pointer;ktype:Integer);
 
 procedure umtx_thread_init(td:p_kthread);
 procedure umtx_thread_exit(td:p_kthread);
@@ -71,13 +70,16 @@ type
  umtxq_queue=packed record
   head    :umtxq_head;
   length  :Integer;
+  align   :Integer;
  end;
 
  umtxq_chain=packed record
-  uc_queue:array[0..1] of umtxq_queue;
-  uc_refs :Integer;
   uc_lock :Pointer;
   uc_owner:p_kthread;
+  uc_queue:array[0..1] of umtxq_queue;
+  uc_obj  :Pointer;
+  uc_type :Integer;
+  uc_refs :Integer;
  end;
 
  p_umtxq_hamt=^umtxq_hamt;
@@ -118,7 +120,8 @@ begin
  if (Result<>nil) then Exit; //EXIST
 
  new:=AllocMem(SizeOf(umtxq_chain)); //NEW
- new^.uc_refs:=1; //INSERT
+ new^.uc_obj :=m;
+ new^.uc_type:=ktype;
 
  rw_wlock(umtxq^.lock);
   data:=HAMT_insert64(@umtxq^.hamt,QWORD(m),new);
@@ -144,18 +147,29 @@ begin
  end;
 end;
 
-function umtx_key_remove(m:Pointer;ktype:Integer):umtx_key;
+function umtx_key_remove(key:umtx_key):Boolean;
 var
+ m:Pointer;
  umtxq:p_umtxq_hamt;
 begin
- if (m=nil) then Exit(nil);
- umtxq:=@umtxq_chains[ktype];
+ Result:=False;
+
+ m:=System.InterlockedExchange(key^.uc_obj,nil);
+ if (m=nil) then Exit;
+
+ umtxq:=@umtxq_chains[key^.uc_type];
  rw_wlock(umtxq^.lock);
-  Result:=HAMT_delete64(@umtxq^.hamt,QWORD(m));
+
+  if (key^.uc_refs=0) and
+     (key^.uc_owner=nil) and
+     (key^.uc_queue[0].length=0) and
+     (key^.uc_queue[1].length=0) then
+  begin
+   Result:=HAMT_delete64(@umtxq^.hamt,QWORD(m))=key;
+  end;
+
  rw_wunlock(umtxq^.lock);
 end;
-
-procedure umtxq_set_owner(key:umtx_key;td:p_kthread); forward;
 
 procedure umtx_key_release(var key:umtx_key);
 var
@@ -164,8 +178,9 @@ begin
  old:=System.InterlockedExchange(key,nil);
  if (old=nil) then Exit;
  if (System.InterlockedDecrement(old^.uc_refs)=0) then
+ if (old^.uc_owner=nil) then
+ if umtx_key_remove(old) then
  begin
-  umtxq_set_owner(old,nil);
   FreeMem(old);
  end;
 end;
@@ -199,6 +214,7 @@ var
  uh:p_umtxq_queue;
 begin
  Result:=0;
+ if (key=nil) then Exit;
  uh:=umtxq_queue_lookup(key,UMTX_SHARED_QUEUE);
  if (uh<>nil) then
  begin
@@ -1289,7 +1305,6 @@ begin
  end;
 
  umtxq_lock(key);
-
  umtxq_signal(key,1);
 
  uq^.uq_inherited_pri:=new_inherited_pri;
@@ -1311,11 +1326,11 @@ begin
   pri:=uq^.uq_inherited_pri;
  end;
 
+ umtxq_unlock(key);
+
  thread_lock(td);
  sched_lend_user_prio(td,pri);
  thread_unlock(td);
-
- umtxq_unlock(key);
 
  umtx_key_release(key);
 end;
@@ -2404,22 +2419,9 @@ begin
 
 end;
 
-
-
 procedure _umutex_init(mtx:p_umutex); inline;
 begin
  mtx^:=Default(umutex);
-end;
-
-procedure _umtx_obj_done(mtx:Pointer;ktype:Integer);
-var
- key:umtx_key;
-begin
- key:=umtx_key_remove(mtx,ktype);
- if (key<>nil) then
- begin
-  umtx_key_release(key);
- end;
 end;
 
 initialization
