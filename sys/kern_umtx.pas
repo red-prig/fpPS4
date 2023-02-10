@@ -1782,7 +1782,7 @@ function do_rw_rdlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimesp
 var
  ts,ts2,ts3,tv:Int64;
 begin
- if (ptrint(rwlock)<$1000) then Exit(EFAULT);
+ Result:=0;
 
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
@@ -1951,7 +1951,7 @@ function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimesp
 var
  ts,ts2,ts3,tv:Int64;
 begin
- if (ptrint(rwlock)<$1000) then Exit(EFAULT);
+ Result:=0;
 
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
@@ -1991,7 +1991,7 @@ var
  state,oldstate:Integer;
  q,count:Integer;
 begin
- if (ptrint(rwlock)<$1000) then Exit(EFAULT);
+ Result:=0;
 
  uq:=td^.td_umtxq;
 
@@ -2308,6 +2308,45 @@ begin
  Result:=do_cv_broadcast(td,obj);
 end;
 
+function __umtx_op_rw_rdlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+var
+ timeout:timespec;
+begin
+ if (ptrint(obj)<$1000) then Exit(EFAULT);
+
+ if (uaddr2=nil) then
+ begin
+  Result:=do_rw_rdlock(td,obj,val,NT_INFINITE);
+ end else
+ begin
+  Result:=umtx_copyin_timeout(uaddr2,@timeout);
+  if (Result<>0) then Exit;
+  Result:=do_rw_rdlock2(td,obj,val,@timeout);
+ end;
+end;
+
+function __umtx_op_rw_wrlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+var
+ timeout:timespec;
+begin
+ if (ptrint(obj)<$1000) then Exit(EFAULT);
+
+ if (uaddr2=nil) then
+ begin
+  Result:=do_rw_wrlock(td,obj,val,NT_INFINITE);
+ end else
+ begin
+  Result:=umtx_copyin_timeout(uaddr2,@timeout);
+  if (Result<>0) then Exit;
+  Result:=do_rw_wrlock2(td,obj,val,@timeout);
+ end;
+end;
+
+function __umtx_op_rw_unlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
+begin
+ Result:=do_rw_unlock(td,obj);
+end;
+
 function _sys_umtx_lock(mtx:p_umtx):Integer;
 var
  td:p_kthread;
@@ -2348,9 +2387,9 @@ begin
   UMTX_OP_CV_SIGNAL        :Result:=__umtx_op_cv_signal        (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_CV_BROADCAST     :Result:=__umtx_op_cv_broadcast     (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_WAIT_UINT        :Result:=__umtx_op_wait_uint        (td,obj,val,uaddr1,uaddr2);
-  //UMTX_OP_RW_RDLOCK
-  //UMTX_OP_RW_WRLOCK
-  //UMTX_OP_RW_UNLOCK
+  UMTX_OP_RW_RDLOCK        :Result:=__umtx_op_rw_rdlock        (td,obj,val,uaddr1,uaddr2);
+  UMTX_OP_RW_WRLOCK        :Result:=__umtx_op_rw_wrlock        (td,obj,val,uaddr1,uaddr2);
+  UMTX_OP_RW_UNLOCK        :Result:=__umtx_op_rw_unlock        (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_WAIT_UINT_PRIVATE:Result:=__umtx_op_wait_uint_private(td,obj,val,uaddr1,uaddr2);
   UMTX_OP_WAKE_PRIVATE     :Result:=__umtx_op_wake_private     (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_WAIT       :Result:=__umtx_op_wait_umutex      (td,obj,val,uaddr1,uaddr2);
@@ -2364,6 +2403,8 @@ begin
  end;
 
 end;
+
+
 
 procedure _umutex_init(mtx:p_umutex); inline;
 begin
