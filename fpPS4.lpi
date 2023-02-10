@@ -476,7 +476,7 @@
         <IsPartOfProject Value="True"/>
       </Unit103>
       <Unit104>
-        <Filename Value="src\ps4_libscenpwebapi.pas"/>
+        <Filename Value="src\np\ps4_libscenpwebapi.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpWebApi"/>
       </Unit104>
