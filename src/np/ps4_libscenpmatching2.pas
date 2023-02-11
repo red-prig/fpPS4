@@ -9,6 +9,9 @@ uses
 
 implementation
 
+const
+ SCE_NP_MATCHING2_ERROR_NOT_INITIALIZED=$80550c03;
+
 type
  pSceNpMatching2InitializeParameter=^SceNpMatching2InitializeParameter;
  SceNpMatching2InitializeParameter=packed record
@@ -20,6 +23,13 @@ type
   size:QWORD;             // size of this structure
   sslPoolSize:QWORD;      // 0 = default
  end;
+
+ SceNpMatching2CreateContextParam=packed record
+  serviceLabel:DWord;
+  _unknown1   :array[4..31] of Byte;
+  size        :size_t;
+ end;
+ PSceNpMatching2CreateContextParam=^SceNpMatching2CreateContextParam;
 
  SceNpMatching2ContextCallback=procedure(
                                 ctxId,event:Word;
@@ -38,6 +48,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpMatching2CreateContext(param:PSceNpMatching2CreateContextParam):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpMatching2CreateContext,serviceLabel=',param^.serviceLabel,',size=',param^.size);
+ Result:=SCE_NP_MATCHING2_ERROR_NOT_INITIALIZED;
+end;
+
 function Load_libSceNpMatching2(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -48,6 +64,7 @@ begin
  lib:=Result._add_lib('libSceNpMatching2');
  lib^.set_proc($D74B777B9F893E75,@ps4_sceNpMatching2Initialize);
  lib^.set_proc($7D041F3FCEC8EE1B,@ps4_sceNpMatching2RegisterContextCallback);
+ lib^.set_proc($61F9A95BBD7DACCA,@ps4_sceNpMatching2CreateContext);
 end;
 
 initialization
