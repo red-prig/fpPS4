@@ -206,6 +206,14 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetGamePresenceStatus(pOnlineId:pSceNpOnlineId;pStatus:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ if (pStatus=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pStatus^:=SCE_NP_GAME_PRESENCE_STATUS_OFFLINE;
+ Result:=0;
+end;
+
 function ps4_sceNpGetGamePresenceStatusA(userId:Integer;pStatus:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (pStatus=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -474,6 +482,7 @@ begin
  lib^.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
  lib^.set_proc($5C39DC5D02095129,@ps4_sceNpGetOnlineId);
  lib^.set_proc($7901FB9D63DC0207,@ps4_sceNpGetState);
+ lib^.set_proc($20F6F585DD700067,@ps4_sceNpGetGamePresenceStatus);
  lib^.set_proc($A0F3BD538D98A602,@ps4_sceNpGetGamePresenceStatusA);
  lib^.set_proc($7BF66E846128782E,@ps4_sceNpGetNpReachabilityState);
  lib^.set_proc($39A777AEF63F3494,@ps4_sceNpHasSignedUp);
