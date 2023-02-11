@@ -119,7 +119,6 @@ function ps4_sceGameLiveStreamingSetCameraFrameSetting(setting:pSceGameLiveStrea
 begin
  if (setting=nil) then Exit(SCE_GAME_LIVE_STREAMING_ERROR_INVALID_PARAM);
 
- setting^:=Default(SceGameLiveStreamingCameraFrameSetting);
  Result:=0;
 end;
 

@@ -13,6 +13,24 @@ uses
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
 
+ SCE_NP_TITLE_ID_LEN=12;
+
+ SCE_NP_TITLE_SECRET_SIZE=128;
+
+ //SceNpState
+ SCE_NP_STATE_UNKNOWN    =0;
+ SCE_NP_STATE_SIGNED_OUT =1;
+ SCE_NP_STATE_SIGNED_IN  =2;
+
+ //SceNpGamePresenceStatus
+ SCE_NP_GAME_PRESENCE_STATUS_OFFLINE=0;
+ SCE_NP_GAME_PRESENCE_STATUS_ONLINE =1;
+
+//SceNpReachabilityState
+ SCE_NP_REACHABILITY_STATE_UNAVAILABLE=0;
+ SCE_NP_REACHABILITY_STATE_AVAILABLE  =1;
+ SCE_NP_REACHABILITY_STATE_REACHABLE  =2;
+
 type
  // Np country code (ISO 3166-1 two-letter system)
  pSceNpCountryCode=^SceNpCountryCode;
@@ -37,39 +55,22 @@ type
   ageRestriction:SceNpAgeRestriction;
  end;
 
-const
- SCE_NP_TITLE_ID_LEN=12;
-
-type
  PSceNpTitleId=^SceNpTitleId;
  SceNpTitleId=packed record
   id:array[0..SCE_NP_TITLE_ID_LEN] of Char;
   padding:array[0..2] of Byte;
  end;
 
-const
- SCE_NP_TITLE_SECRET_SIZE=128;
-
-type
  PSceNpTitleSecret=^SceNpTitleSecret;
  SceNpTitleSecret=array[0..SCE_NP_TITLE_SECRET_SIZE-1] of Byte;
 
-const
- //SceNpState
- SCE_NP_STATE_UNKNOWN    =0;
- SCE_NP_STATE_SIGNED_OUT =1;
- SCE_NP_STATE_SIGNED_IN  =2;
+ pSceNpParentalControlInfo=^SceNpParentalControlInfo;
+ SceNpParentalControlInfo=packed record
+  contentRestriction:Boolean;
+  chatRestriction   :Boolean;
+  ugcRestriction    :Boolean;
+ end;
 
- //SceNpGamePresenceStatus
- SCE_NP_GAME_PRESENCE_STATUS_OFFLINE=0;
- SCE_NP_GAME_PRESENCE_STATUS_ONLINE =1;
-
-//SceNpReachabilityState
- SCE_NP_REACHABILITY_STATE_UNAVAILABLE=0;
- SCE_NP_REACHABILITY_STATE_AVAILABLE  =1;
- SCE_NP_REACHABILITY_STATE_REACHABLE  =2;
-
-type
  pSceNpCreateAsyncRequestParameter=^SceNpCreateAsyncRequestParameter;
  SceNpCreateAsyncRequestParameter=packed record
   size:qword;
@@ -78,7 +79,30 @@ type
   padding:Integer;
  end;
 
-type
+ pSceNpCheckPlusParameter=^SceNpCheckPlusParameter;
+ SceNpCheckPlusParameter=packed record
+  size:QWORD;
+  userId:Integer;
+  padding:array[0..3] of Byte;
+  features:QWORD;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceNpCheckPlusResult=^SceNpCheckPlusResult;
+ SceNpCheckPlusResult=packed record
+  authorized:Boolean;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceNpNotifyPlusFeatureParameter=^SceNpNotifyPlusFeatureParameter;
+ SceNpNotifyPlusFeatureParameter=packed record
+  size:QWORD;
+  userId:Integer;
+  padding:Integer;
+  features:QWORD;
+  reserved:array[0..31] of Byte;
+ end;
+
  SceUserServiceUserId=Integer;
 
  SceNpStateCallback=procedure(userId:SceUserServiceUserId;
@@ -354,14 +378,6 @@ begin
  //Result:=SCE_NP_ERROR_SIGNED_OUT;
 end;
 
-type
- pSceNpParentalControlInfo=^SceNpParentalControlInfo;
- SceNpParentalControlInfo=packed record
-  contentRestriction:Boolean;
-  chatRestriction   :Boolean;
-  ugcRestriction    :Boolean;
- end;
-
 function ps4_sceNpGetParentalControlInfo(reqId:Integer;
                                          pOnlineId:pSceNpOnlineId;
                                          pAge:PByte;
@@ -399,23 +415,6 @@ begin
  Result:=0;
 end;
 
-
-type
- pSceNpCheckPlusParameter=^SceNpCheckPlusParameter;
- SceNpCheckPlusParameter=packed record
-  size:QWORD;
-  userId:Integer;
-  padding:array[0..3] of Byte;
-  features:QWORD;
-  reserved:array[0..31] of Byte;
- end;
-
- pSceNpCheckPlusResult=^SceNpCheckPlusResult;
- SceNpCheckPlusResult=packed record
-  authorized:Boolean;
-  reserved:array[0..31] of Byte;
- end;
-
 function ps4_sceNpCheckPlus(reqId:Integer;
                             pParam:pSceNpCheckPlusParameter;
                             pResult:pSceNpCheckPlusResult
@@ -427,16 +426,6 @@ begin
  pResult^.authorized:=False;
  Result:=0;
 end;
-
-type
- pSceNpNotifyPlusFeatureParameter=^SceNpNotifyPlusFeatureParameter;
- SceNpNotifyPlusFeatureParameter=packed record
-  size:QWORD;
-  userId:Integer;
-  padding:Integer;
-  features:QWORD;
-  reserved:array[0..31] of Byte;
- end;
 
 function ps4_sceNpNotifyPlusFeature(pParam:pSceNpNotifyPlusFeatureParameter):Integer; SysV_ABI_CDecl;
 begin

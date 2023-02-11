@@ -13,6 +13,9 @@ const
  SCE_NP_ONLINEID_MAX_LENGTH=16;
 
 type
+ pSceNpAccountId=^SceNpAccountId;
+ SceNpAccountId=QWORD;
+
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
   data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
