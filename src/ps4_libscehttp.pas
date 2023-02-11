@@ -136,6 +136,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpSetResolveTimeOut(id:Integer;usec:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 type
  PSceHttpEpollHandle=^SceHttpEpollHandle;
  SceHttpEpollHandle=Pointer;
@@ -655,6 +660,7 @@ begin
  lib^.set_proc($8BD9A169FCE4122F,@ps4_sceHttpSetInflateGZIPEnabled);
  lib^.set_proc($A858364AEC932496,@ps4_sceHttpSetAuthEnabled);
  lib^.set_proc($CA282BE15D3F1D33,@ps4_sceHttpSetRecvTimeOut);
+ lib^.set_proc($4DCFE10180CAB507,@ps4_sceHttpSetResolveTimeOut);
  lib^.set_proc($EB7F3575617EC6C4,@ps4_sceHttpCreateEpoll);
  lib^.set_proc($C1885755F4B612DE,@ps4_sceHttpDestroyEpoll);
  lib^.set_proc($FF19BB91940DA472,@ps4_sceHttpSetEpoll);
