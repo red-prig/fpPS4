@@ -25,7 +25,7 @@ type
  pSceGameLiveStreamingStatus=^SceGameLiveStreamingStatus;
  SceGameLiveStreamingStatus=packed record
   isOnAir:Boolean;
-  _align:array[0..3] of Byte;
+  _align:array[0..2] of Byte;
   spectatorCounts:DWORD;
   userId:Integer;
   reserved:array[0..59] of Byte;
@@ -35,7 +35,7 @@ type
  SceGameLiveStreamingStatus2=packed record
   userId:Integer;
   isOnAir:Boolean;
-  _align:array[0..3] of Byte;
+  _align:array[0..2] of Byte;
   spectatorCounts     :DWORD;
   textMessageCounts   :DWORD;
   commandMessageCounts:DWORD;
