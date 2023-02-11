@@ -21,6 +21,18 @@ const
  SCE_GAME_LIVE_STREAMING_ERROR_SCREEN_RESOLUTION_MISMATCH=-2136997877; //0x80A0000B
  SCE_GAME_LIVE_STREAMING_ERROR_PARAMSFO_NOT_AUTHORIZED   =-2136997876; //0x80A0000C
 
+ //SceGameLiveStreamingVideoResolution
+ SCE_GAME_LIVE_STREAMING_VIDEO_RESOLUTION_640x360  =$00000001;
+ SCE_GAME_LIVE_STREAMING_VIDEO_RESOLUTION_960x540  =$00000002;
+ SCE_GAME_LIVE_STREAMING_VIDEO_RESOLUTION_1280x720 =$00000004;
+ SCE_GAME_LIVE_STREAMING_VIDEO_RESOLUTION_1920x1080=$00000008;
+
+ //SceGameLiveStreamingCameraFramePosition
+ SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_TOP_LEFT    =$01;
+ SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_TOP_RIGHT   =$02;
+ SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_BOTTOM_LEFT =$03;
+ SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_BOTTOM_RIGHT=$04;
+
 type
  pSceGameLiveStreamingStatus=^SceGameLiveStreamingStatus;
  SceGameLiveStreamingStatus=packed record
@@ -41,6 +53,14 @@ type
   commandMessageCounts:DWORD;
   broadcastVideoResolution:Integer; //SceGameLiveStreamingVideoResolution
   reserved:array[0..47] of Byte;
+ end;
+
+ pSceGameLiveStreamingCameraFrameSetting=^SceGameLiveStreamingCameraFrameSetting;
+ SceGameLiveStreamingCameraFrameSetting=packed record
+  position       :Integer; //SceGameLiveStreamingCameraFramePosition
+  alpha          :Single;
+  isDisableCamera:Boolean;
+  reserved:array[0..30] of Byte;
  end;
 
 implementation
@@ -95,6 +115,14 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingSetCameraFrameSetting(setting:pSceGameLiveStreamingCameraFrameSetting):Integer; SysV_ABI_CDecl;
+begin
+ if (setting=nil) then Exit(SCE_GAME_LIVE_STREAMING_ERROR_INVALID_PARAM);
+
+ setting^:=Default(SceGameLiveStreamingCameraFrameSetting);
+ Result:=0;
+end;
+
 function Load_libSceGameLiveStreaming(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -111,6 +139,7 @@ begin
  lib^.set_proc($C013905A36D631F5,@ps4_sceGameLiveStreamingEnableSocialFeedback);
  lib^.set_proc($0A83CCC77EBD12A3,@ps4_sceGameLiveStreamingGetCurrentStatus);
  lib^.set_proc($94AF1D2C1369F4E1,@ps4_sceGameLiveStreamingGetCurrentStatus2);
+ lib^.set_proc($DCF4A2C00CC52121,@ps4_sceGameLiveStreamingSetCameraFrameSetting);
 end;
 
 initialization
