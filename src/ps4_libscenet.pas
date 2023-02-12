@@ -35,6 +35,39 @@ type
   data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
  end;
 
+type
+ pSceNetSocklen_t=^SceNetSocklen_t;
+ SceNetSocklen_t=DWORD;
+
+type
+ SceNetSaFamily=Byte;
+
+type
+ SceNetEpollData= packed record
+  Case Byte of //union
+  0:(ptr:Pointer);
+  1:(u32:DWORD);
+  2:(fd:Integer);
+  3:(u64:QWORD);
+end;
+
+type
+ pSceNetSockaddr=^SceNetSockaddr;
+ SceNetSockaddr = packed record
+  sa_len:Byte;
+  sa_family:SceNetSaFamily;
+  sa_data:array[0..13] of Char;
+ end;
+
+type
+ pSceNetEpollEvent=^SceNetEpollEvent;
+ SceNetEpollEvent = packed record
+  events:DWORD;
+  reserved:DWORD;
+  ident:QWORD;
+  data:SceNetEpollData;
+ end;
+
 function libnet_tls_get_errno():PInteger;
 begin
  Result:=@sce_net_errno;
@@ -218,32 +251,86 @@ begin
  FillChar(addr^,SizeOf(SceNetEtherAddr),11);
 end;
 
-//Scuffed Function #1
-function ps4_sceNetSocket:Integer; SysV_ABI_CDecl;
+function ps4_sceNetSocket(const name: PChar; family:Integer; socket_type:Integer; protocol:Integer):Integer; SysV_ABI_CDecl; //will return socketID which will be used as "s","rid","eid",etc by other functions
 begin
  Result:=0;
 end;
 
-//Scuffed Function #2
-function ps4_sceNetSetsockopt:Integer; SysV_ABI_CDecl;
+function ps4_sceNetSetsockopt(s:Integer; level:Integer; opname:Integer; const optval:Pointer; optlen:SceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-//Scuffed Function #3
-function ps4_sceNetBind:Integer; SysV_ABI_CDecl;
+function ps4_sceNetBind(s:Integer; const addr:pSceNetSockaddr; addrlen:SceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-//Scuffed Function #4
-function ps4_sceNetListen:Integer; SysV_ABI_CDecl;
+function ps4_sceNetListen(s:Integer; backlog:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-//Scuffed Function #5
-function ps4_sceNetAccept:Integer; SysV_ABI_CDecl;
+function ps4_sceNetAccept(s:Integer; addr:pSceNetSockaddr; paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNetRecv(s:Integer; buf:Pointer; len:size_t; flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetRecv:',flags);
+ Result:=0;
+end;
+
+function ps4_sceNetSend(s:Integer; const buf:Pointer; len:size_t; flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetSend',flags);
+ Result:=0;
+end;
+
+function ps4_sceNetShutdown(s:Integer; how:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetShutdown:',how);
+ Result:=0;
+end;
+
+function ps4_sceNetSocketClose(s:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNetGetsockname(s:Integer; addr:pSceNetSockaddr; paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNetNtohl(net32:DWORD):DWORD; SysV_ABI_CDecl;
+begin
+ Result:=NToHl(net32);
+end;
+
+function ps4_sceNetNtohs(net16:Word):Integer; SysV_ABI_CDecl;
+begin
+ Result:=NToHs(net16);
+end;
+
+function ps4_sceNetEpollControl(eid:Integer; op:Integer; id:Integer; event:pSceNetEpollEvent):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//function ps4_sceNetGetsockopt(s:Integer; level:Integer; optname:Integer; optval:Pointer; optlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+//begin
+// Result:=0;
+//end;
+
+function ps4_sceNetResolverStartAton(rid:Integer; const addr:pSceNetInAddr; hostname:PChar; hostname_len:Integer; timeout:Integer; retry:Integer; flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNetResolveStartAton:',hostname,':',flags);
+ Result:=0;
+end;
+
+function ps4_sceNetResolverDestroy(rid:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -516,6 +603,17 @@ begin
  lib^.set_proc($6C4AF1E3D3E0C726,@ps4_sceNetBind);
  lib^.set_proc($90E8F51E2006139E,@ps4_sceNetListen);
  lib^.set_proc($3C85AA867F684B17,@ps4_sceNetAccept);
+ lib^.set_proc($F703BD5EB32C3617,@ps4_sceNetRecv);
+ lib^.set_proc($6DE4635C19FFCFEA,@ps4_sceNetSend);
+ lib^.set_proc($4D233AC21B5E9289,@ps4_sceNetShutdown);
+ lib^.set_proc($E398201336A43C94,@ps4_sceNetSocketClose);
+ lib^.set_proc($868380A1F86146F1,@ps4_sceNetGetsockname);
+ lib^.set_proc($A501A91D8A290086,@ps4_sceNetNtohl);
+ lib^.set_proc($45BBEDFB9636884C,@ps4_sceNetNtohs);
+ lib^.set_proc($655C38E9BB1AB009,@ps4_sceNetEpollControl);
+ //lib^.set_proc($C6986B66EB25EFC1,@ps4_sceNetGetsockopt);
+ lib^.set_proc($0296F8603C4AB112,@ps4_sceNetResolverStartAton);
+ lib^.set_proc($9099581F9B8C0162,@ps4_sceNetResolverDestroy);
 end;
 
 function Load_libSceNetCtl(Const name:RawByteString):TElf_node;
