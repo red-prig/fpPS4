@@ -39,7 +39,7 @@ jobs:
         shell: cmd
         working-directory: ./
         run: |
-          curl -k -L -s https://github.com/red-prig/fpps4-bin/raw/main/ffmpeg.zip -o ffmpeg.zip
+          curl -k -L -s https://github.com/Addy2004/fpps4-bin/raw/main/ffmpeg.zip -o ffmpeg.zip
           unzip ffmpeg.zip
 
       - name: Upload artifacts
