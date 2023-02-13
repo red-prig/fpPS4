@@ -42,6 +42,11 @@ begin
  Result:=5;
 end;
 
+function ps4_sceNpWebApiDeleteHandle(libCtxId,handleId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 const
  //SceNpWebApiHttpMethod
  SCE_NP_WEBAPI_HTTP_METHOD_GET   =0;
@@ -209,6 +214,7 @@ begin
  lib^.set_proc($C7563BCA261293B7,@ps4_sceNpWebApiCreateContext);
  lib^.set_proc($CE4E9CEB9C68C8ED,@ps4_sceNpWebApiCreateContextA);
  lib^.set_proc($EFD33F26ABEF1A8D,@ps4_sceNpWebApiCreateHandle);
+ lib^.set_proc($E4C9FB4D8C29977D,@ps4_sceNpWebApiDeleteHandle);
  lib^.set_proc($ADD82CE59D4CC85C,@ps4_sceNpWebApiCreateRequest);
  lib^.set_proc($9E842095EBBE28B1,@ps4_sceNpWebApiDeleteRequest);
  lib^.set_proc($9156CBE212F72BBC,@ps4_sceNpWebApiSendRequest);

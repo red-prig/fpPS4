@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="134">
+    <Units Count="135">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -589,33 +589,37 @@
         <UnitName Value="ps4_libSceSysCore"/>
       </Unit127>
       <Unit128>
-        <Filename Value="src\ps4_libsceaudiodec.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit128>
-      <Unit129>
         <Filename Value="src\ps4_libscevideorecording.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVideoRecording"/>
-      </Unit129>
-      <Unit130>
+      </Unit128>
+      <Unit129>
         <Filename Value="src\ps4_libscecontentexport.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceContentExport"/>
-      </Unit130>
-      <Unit131>
+      </Unit129>
+      <Unit130>
         <Filename Value="src\ps4_libsceusbd.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceUsbd"/>
-      </Unit131>
-      <Unit132>
+      </Unit130>
+      <Unit131>
         <Filename Value="src\np\ps4_libscenpcommon.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpCommon"/>
-      </Unit132>
-      <Unit133>
+      </Unit131>
+      <Unit132>
         <Filename Value="src\np\np_error.pas"/>
         <IsPartOfProject Value="True"/>
+      </Unit132>
+      <Unit133>
+        <Filename Value="src\audiodec\ps4_libsceaudiodec.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit133>
+      <Unit134>
+        <Filename Value="src\audiodec\ps4_libsceaudiodeccpu.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit134>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -627,7 +631,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs;src\libcinternal;ffmpeg"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs;src\libcinternal;ffmpeg;src\audiodec"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

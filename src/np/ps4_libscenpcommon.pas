@@ -19,6 +19,9 @@ const
 
 type
  SceNpServiceLabel=DWORD;
+ 
+ pSceNpAccountId=^SceNpAccountId;
+ SceNpAccountId=QWORD;
 
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
