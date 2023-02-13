@@ -588,6 +588,13 @@ begin
  _sig_unlock;
 end;
 
+//SetFanThreshold
+function ps4_gpgi_GwE2Is(param:PByte):Integer; SysV_ABI_CDecl; //gpgi-GwE2Is
+begin
+ Writeln('SetFanThreshold:',param[5]);
+ Result:=0;
+end;
+
 //dynlib_get_obj_member(handle,8,&ptr); module param
 //dynlib_get_obj_member(handle,1,&ptr); init
 //dynlib_get_obj_member(handle,2,&ptr); fini
@@ -1156,6 +1163,7 @@ begin
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
  lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
  lib^.set_proc($3210B9DD32A68D50,@ps4_sysctlbyname);
+ lib^.set_proc($829822FC6C04D88B,@ps4_gpgi_GwE2Is); //gpgi-GwE2Is
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($1A0DFEC962FA0D65,@ps4_sceKernelLoadStartModuleForSysmodule);
