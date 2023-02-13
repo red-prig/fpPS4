@@ -340,6 +340,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNetEpollWait(s:Integer; events:pSceNetEpollEvent; maxevents:Integer; timeout:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNetCtlInit:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -620,6 +625,7 @@ begin
  lib^.set_proc($0296F8603C4AB112,@ps4_sceNetResolverStartAton);
  lib^.set_proc($9099581F9B8C0162,@ps4_sceNetResolverDestroy);
  lib^.set_proc($3975D7E26524DEE9,@ps4_sceNetConnect);
+ lib^.set_proc($76B8C86C36C0ED44,@ps4_sceNetEpollWait);
 end;
 
 function Load_libSceNetCtl(Const name:RawByteString):TElf_node;
