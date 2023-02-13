@@ -29,7 +29,7 @@ type
 
  p_urwlock=^urwlock;
  urwlock=packed record
-  rw_state          :Integer;
+  rw_state          :DWORD;
   rw_flags          :DWORD;
   rw_blocked_readers:DWORD;
   rw_blocked_writers:DWORD;

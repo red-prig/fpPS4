@@ -20,6 +20,7 @@ uses
 
 var
  mtx:umutex;
+ rwl:urwlock;
  e:Integer;
 
  event:Thandle;
@@ -45,7 +46,8 @@ begin
  repeat
 
  //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td.td_tid,nil,nil);
+ //e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@rwl,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('  lock[',GetCurrentThreadId,'] ',e);
 
  //e:=_do_lock_normal(GetCurrentThreadId,@mtx,0,NT_INFINITE,0);
@@ -54,7 +56,8 @@ begin
  //sleep(100);
 
  //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_UNLOCK} UMTX_OP_UNLOCK,td.td_tid,nil,nil);
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK,td.td_tid,nil,nil);
+ //e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@rwl,UMTX_OP_RW_UNLOCK,0,nil,nil);
  Writeln('unlock[',GetCurrentThreadId,'] ',e);
 
  sleep(1000)

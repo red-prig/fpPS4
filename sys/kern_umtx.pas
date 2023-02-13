@@ -1398,12 +1398,10 @@ begin
  until false;
 
  umtxq_lock(uq^.uq_key);
-
  if (Result=0) then
  begin
   umtxq_signal(uq^.uq_key,High(Integer));
  end;
-
  umtxq_unlock(uq^.uq_key);
 
  umtx_key_release(uq^.uq_key);
@@ -1585,6 +1583,7 @@ begin
 
  if ((uq^.uq_flags and UQF_UMTXQ)=0) then
  begin
+  umtxq_unlock(uq^.uq_key);
   Result:=0;
  end else
  begin
@@ -1592,20 +1591,20 @@ begin
   begin
    oldlen:=uq^.uq_cur_queue^.length;
    umtxq_remove(uq);
+   umtxq_unlock(uq^.uq_key);
    if (oldlen=1) then
    begin
-    umtxq_unlock(uq^.uq_key);
     suword32(cv^.c_has_waiters,0);
-    umtxq_lock(uq^.uq_key);
    end;
+  end else
+  begin
+   umtxq_unlock(uq^.uq_key);
   end;
   if (Result=ERESTART) then
   begin
    Result:=EINTR;
   end;
  end;
-
- umtxq_unlock(uq^.uq_key);
 
  _exit:
   umtx_key_release(uq^.uq_key);
@@ -1623,21 +1622,17 @@ begin
  if (key=nil) then Exit(EFAULT);
 
  umtxq_lock(key);
-
  count:=umtxq_count(key);
  nwake:=umtxq_signal(key,1);
- if (count<=nwake) then
- begin
-  umtxq_unlock(&key);
-  Result:=suword32(cv^.c_has_waiters,0);
-  umtxq_lock(&key);
- end;
-
  umtxq_unlock(key);
 
- umtx_key_release(key);
+ if (count<=nwake) then
+ begin
+  Result:=suword32(cv^.c_has_waiters,0);
+  if (Result<>0) then Result:=EFAULT;
+ end;
 
- if (Result<>0) then Result:=EFAULT;
+ umtx_key_release(key);
 end;
 
 function do_cv_broadcast(td:p_kthread;cv:p_ucond):Integer;
@@ -1655,10 +1650,9 @@ begin
  umtxq_unlock(key);
 
  Result:=suword32(cv^.c_has_waiters,0);
+ if (Result<>0) then Result:=EFAULT;
 
  umtx_key_release(key);
-
- if (Result<>0) then Result:=EFAULT;
 end;
 
 ////
@@ -1795,7 +1789,7 @@ end;
 
 function do_rw_rdlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimespec):Integer;
 var
- ts,ts2,ts3,tv:Int64;
+ ts,ts2,tv:Int64;
 begin
  Result:=0;
 
@@ -1816,9 +1810,7 @@ begin
    Break;
   end;
 
-  ts3:=ts;
-  ts3:=ts3-ts2;
-  tv:=ts3;
+  tv:=ts-ts2;
  until false;
 
  if (Result=ERESTART) then
@@ -1927,7 +1919,7 @@ begin
    state:=fuword32(rwlock^.rw_state);
   end;
 
-  blocked_writers:=fuword32(&rwlock^.rw_blocked_writers);
+  blocked_writers:=fuword32(rwlock^.rw_blocked_writers);
   suword32(rwlock^.rw_blocked_writers,blocked_writers-1);
 
   if (blocked_writers=1) then
@@ -1964,7 +1956,7 @@ end;
 
 function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimespec):Integer;
 var
- ts,ts2,ts3,tv:Int64;
+ ts,ts2,tv:Int64;
 begin
  Result:=0;
 
@@ -1985,9 +1977,7 @@ begin
    Break;
   end;
 
-  ts3:=ts;
-  ts3:=ts3-ts2;
-  tv:=ts3;
+  tv:=ts-ts2;
  until false;
 
  if (Result=ERESTART) then
@@ -1995,7 +1985,6 @@ begin
   Result:=EINTR;
  end;
 end;
-
 
 function do_rw_unlock(td:p_kthread;rwlock:p_urwlock):Integer;
 label
@@ -2110,6 +2099,108 @@ begin
 
  _exit:
   umtx_key_release(uq^.uq_key);
+end;
+
+////
+
+function do_sem_wait(td:p_kthread;sem:p__usem;timeout:ptimespec):Integer;
+var
+ uq:p_umtx_q;
+ count:DWORD;
+ cts,ets,tv:Int64;
+begin
+ Result:=0;
+
+ uq:=td^.td_umtxq;
+
+ uq^.uq_key:=umtx_key_get(sem,TYPE_SEM);
+ if (uq^.uq_key=nil) then Exit(EFAULT);
+
+ umtxq_lock(uq^.uq_key);
+ umtxq_insert(uq);
+ umtxq_unlock(uq^.uq_key);
+
+ if ((fuword32(sem^._has_waiters))=0) then
+ begin
+  casuword32(sem^._has_waiters,0,1);
+ end;
+
+ count:=fuword32(sem^._count);
+
+ if (count<>0) then
+ begin
+  umtxq_lock(uq^.uq_key);
+  umtxq_remove(uq);
+  umtxq_unlock(uq^.uq_key);
+  umtx_key_release(uq^.uq_key);
+  Exit(0);
+ end;
+
+ if (timeout=nil) then
+ begin
+  Result:=umtxq_sleep(uq,NT_INFINITE);
+ end else
+ begin
+  ets:=get_unit_uptime;
+  tv:=TIMESPEC_TO_UNIT(timeout);
+  ets:=ets+tv;
+
+  repeat
+   Result:=umtxq_sleep(uq,-tv);
+   if (Result<>ETIMEDOUT) then Break;
+
+   cts:=get_unit_uptime;
+
+   if (cts>=ets) then
+   begin
+    Result:=ETIMEDOUT;
+    Break;
+   end;
+
+   tv:=ets-cts;
+  until false;
+ end;
+
+ if ((uq^.uq_flags and UQF_UMTXQ)=0) then
+ begin
+  Result:=0;
+ end else
+ begin
+  umtxq_lock(uq^.uq_key);
+  umtxq_remove(uq);
+  umtxq_unlock(uq^.uq_key);
+
+  if (Result=ERESTART) and (timeout<>nil) then
+  begin
+   Result:=EINTR;
+  end;
+ end;
+
+ umtx_key_release(uq^.uq_key);
+end;
+
+function do_sem_wake(td:p_kthread;sem:p__usem):Integer;
+var
+ key:umtx_key;
+ count,nwake:Integer;
+begin
+ Result:=0;
+
+ key:=umtx_key_get(sem,TYPE_SEM);
+ if (key=nil) then Exit(EFAULT);
+
+ umtxq_lock(key);
+ count:=umtxq_count(key);
+ nwake:=umtxq_signal(key,1);
+ umtxq_unlock(key);
+
+ if (count<=nwake) then
+ begin
+  Result:=suword32(sem^._has_waiters,0);
+  if (Result<>0) then Result:=EFAULT;
+ end;
+
+ umtx_key_release(key);
 end;
 
 ////
@@ -2382,6 +2473,28 @@ begin
  Result:=do_unlock_umtx(td,mtx,td^.td_tid);
 end;
 
+function __umtx_op_sem_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+var
+ ts:ptimespec;
+ timeout:timespec;
+begin
+ if (ptrint(obj)<$1000) then Exit(EFAULT);
+
+ ts:=nil;
+ if (uaddr2<>nil) then
+ begin
+  Result:=umtx_copyin_timeout(uaddr2,@timeout);
+  if (Result<>0) then Exit;
+  ts:=@timeout;
+ end;
+ Result:=do_sem_wait(td,obj,ts);
+end;
+
+function __umtx_op_sem_wake(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
+begin
+ Result:=do_sem_wake(td,obj)
+end;
+
 function _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
  td:p_kthread;
@@ -2409,8 +2522,8 @@ begin
   UMTX_OP_WAKE_PRIVATE     :Result:=__umtx_op_wake_private     (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_WAIT       :Result:=__umtx_op_wait_umutex      (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_WAKE       :Result:=__umtx_op_wake_umutex      (td,obj,val,uaddr1,uaddr2);
-  //UMTX_OP_SEM_WAIT
-  //UMTX_OP_SEM_WAKE
+  UMTX_OP_SEM_WAIT         :Result:=__umtx_op_sem_wait         (td,obj,val,uaddr1,uaddr2);
+  UMTX_OP_SEM_WAKE         :Result:=__umtx_op_sem_wake         (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_NWAKE_PRIVATE    :Result:=__umtx_op_nwake_private    (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_WAKE2      :Result:=__umtx_op_wake2_umutex     (td,obj,val,uaddr1,uaddr2);
   else
