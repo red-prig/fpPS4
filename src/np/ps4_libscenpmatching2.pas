@@ -5,7 +5,8 @@ unit ps4_libSceNpMatching2;
 interface
 
 uses
-  ps4_program;
+  ps4_program,
+  ps4_libSceNpCommon;
 
 implementation
 
@@ -24,12 +25,17 @@ type
   sslPoolSize:QWORD;      // 0 = default
  end;
 
+ SceNpMatching2ContextId=Word;
+
+ pSceNpMatching2CreateContextParam=^SceNpMatching2CreateContextParam;
  SceNpMatching2CreateContextParam=packed record
-  serviceLabel:DWord;
-  _unknown1   :array[4..31] of Byte;
+  npId        :pSceNpId;
+  commId      :pSceNpCommunicationId;
+  passPhrase  :pSceNpCommunicationPassphrase;
+  serviceLabel:SceNpServiceLabel;
+  _align      :DWORD;
   size        :size_t;
  end;
- PSceNpMatching2CreateContextParam=^SceNpMatching2CreateContextParam;
 
  SceNpMatching2ContextCallback=procedure(
                                 ctxId,event:Word;
@@ -48,7 +54,8 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpMatching2CreateContext(param:PSceNpMatching2CreateContextParam):Integer; SysV_ABI_CDecl;
+function ps4_sceNpMatching2CreateContext(param:pSceNpMatching2CreateContextParam;
+                                         ctxId:PWord):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpMatching2CreateContext,serviceLabel=',param^.serviceLabel,',size=',param^.size);
  Result:=SCE_NP_MATCHING2_ERROR_NOT_INITIALIZED;

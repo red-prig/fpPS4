@@ -9,10 +9,17 @@ uses
  np_error;
 
 const
+ SCE_NP_DEFAULT_SERVICE_LABEL=$00000000;
+ SCE_NP_INVALID_SERVICE_LABEL=$FFFFFFFF;
+
  SCE_NP_ONLINEID_MIN_LENGTH=3;
  SCE_NP_ONLINEID_MAX_LENGTH=16;
 
+ SCE_NP_COMMUNICATION_PASSPHRASE_SIZE=128;
+
 type
+ SceNpServiceLabel=DWORD;
+
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
   data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
@@ -25,6 +32,19 @@ type
   handle:SceNpOnlineId;
   opt:array[0..7] of Byte;
   reserved:array[0..7] of Byte;
+ end;
+
+ pSceNpCommunicationId=^SceNpCommunicationId;
+ SceNpCommunicationId=packed record
+  data :array[0..8] of Char;
+  term :Char;
+  num  :Byte;
+  dummy:Char;
+ end;
+
+ pSceNpCommunicationPassphrase=^SceNpCommunicationPassphrase;
+ SceNpCommunicationPassphrase=packed record
+  data:array[0..SCE_NP_COMMUNICATION_PASSPHRASE_SIZE-1] of Byte;
  end;
 
 implementation
