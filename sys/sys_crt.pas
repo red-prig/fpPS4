@@ -58,16 +58,20 @@ Begin
  n:=0;
 
  _sig_lock(SL_NOINTRRUP);
- EnterCriticalSection(StdOutLock);
 
  if Boolean(t.UserData[2]) then //IsChar
  begin
-  SetConsoleTextAttribute(t.Handle,t.UserData[1]);
-  WriteConsole(t.Handle,
-               data,
-               len,
-               @n,
-               nil);
+  EnterCriticalSection(StdOutLock);
+  //Text
+   SetConsoleTextAttribute(t.Handle,t.UserData[1]);
+   WriteConsole(t.Handle,
+                data,
+                len,
+                @n,
+                nil);
+   SetConsoleTextAttribute(t.Handle,StdOutColor);
+  //Text
+  LeaveCriticalSection(StdOutLock);
  end else
  begin
   WriteFile(t.Handle,
@@ -77,7 +81,6 @@ Begin
             nil);
  end;
 
- LeaveCriticalSection(StdOutLock);
  _sig_unlock(SL_NOINTRRUP);
 end;
 
