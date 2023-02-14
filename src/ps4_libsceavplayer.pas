@@ -126,7 +126,12 @@ type
   numOutputVideoFrameBuffers:Integer;
   autoStart                 :Boolean;
   reserved                  :array[0..2] of Byte;
-  _align                    :DWORD;
+  audioDecoderStackSize     :DWord;
+  videoDecoderStackSize     :DWord;
+  demuxerStackSize          :DWord;
+  controllerStackSize       :DWord;
+  httpStreamingStackSize    :DWord;
+  fileStreamingStackSize    :DWord;
  end;
  PSceAvPlayerInitDataEx=^SceAvPlayerInitDataEx;
 
@@ -625,9 +630,7 @@ begin
  for I:=0 to BUFFER_COUNT-1 do
  begin
   if audioBuffer[I]<>nil then
-  begin
-   FreeMem(audioBuffer[I]);
-  end;
+   playerInfo.Deallocate(audioBuffer[I]);
   if videoBuffer[I]<>nil then
    playerInfo.DeallocateTexture(videoBuffer[I]);
  end;
@@ -800,11 +803,12 @@ begin
  begin
   if (chunk.pAddr<>nil) then
   begin
-   if (audioBuffer[0]<>nil) then
+   if audioBuffer[0]=nil then
    begin
-    FreeMem(audioBuffer[0]);
+    audioBuffer[0]:=playerInfo.Allocate(0,chunk.nSize);
    end;
-   audioBuffer[0]:=chunk.pAddr;
+   Move(chunk.pAddr^,audioBuffer[0]^,chunk.nSize);
+   FreeMem(chunk.pAddr);
   end;
   Exit(audioBuffer[0]);
  end else
@@ -1136,13 +1140,16 @@ begin
     player.dec_ref;
     Exit(False);
    end;
-   frameInfo^.timeStamp                 :=_usec2msec(player.playerState.lastVideoTimeStamp);
-   frameInfo^.details.video.width       :=player.playerState.videoCodecContext^.width;
-   frameInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
-   frameInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
-   frameInfo^.details.video.framerate   :=0;
-   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-   frameInfo^.pData                     :=player.playerState.Buffer(1,videoData);
+   frameInfo^.timeStamp                   :=_usec2msec(player.playerState.lastVideoTimeStamp);
+   frameInfo^.details.video.width         :=player.playerState.videoCodecContext^.width;
+   frameInfo^.details.video.height        :=player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.aspectRatio   :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.framerate     :=0;
+   frameInfo^.details.video.languageCode  :=LANGUAGE_CODE_ENG;
+   frameInfo^.details.video.pitch         :=frameInfo^.details.video.width;
+   frameInfo^.details.video.lumaBitDepth  :=8;
+   frameInfo^.details.video.chromaBitDepth:=8;
+   frameInfo^.pData                       :=player.playerState.Buffer(1,videoData);
    Result:=True;
   end;
   player.unlock;
