@@ -53,8 +53,7 @@ var
  NamedManager  :TNamedManager;
 
 Const
- //SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
- SCE_KERNEL_MAIN_DMEM_SIZE=$200000000; //8GB
+ SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
 
 type
  pSceKernelDirectMemoryQueryInfo=^SceKernelDirectMemoryQueryInfo;
@@ -557,8 +556,6 @@ var
  FAdrOut,FSizeOut:QWORD;
 begin
  Result:=EINVAL;
-
- Writeln('srchd:',HexStr(searchStart,10),'..',HexStr(searchEnd,10),' align:',HexStr(alignment,10));
 
  if (searchEnd<=searchStart) then Exit;
 
