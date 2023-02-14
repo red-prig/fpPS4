@@ -580,7 +580,7 @@ begin
  _sig_lock;
  MLOCK;
 
- Result:=DirectManager.CheckedAvailable(searchStart,searchEnd,alignment,FAdrOut,FSizeOut);
+ Result:=DirectManager.QueryAvailable(searchStart,searchEnd,alignment,FAdrOut,FSizeOut);
 
  MUNLOCK;
  _sig_unlock;
@@ -676,7 +676,7 @@ begin
  _sig_lock;
  MLOCK;
 
- Result:=DirectManager.CheckedRelease(start,len);
+ Result:=DirectManager.CheckRelease(start,len);
  if (Result=0) then
  begin
   Result:=DirectManager.Release(start,len);
@@ -874,7 +874,7 @@ begin
  begin
   if (fd=0) then //direct (psevdo dmem fd=0)
   begin
-   Result:=DirectManager.CheckedMMap(offset,len);
+   Result:=DirectManager.CheckMMap(offset,len);
 
    if (Result=0) then
    begin
@@ -932,7 +932,7 @@ begin
  _sig_lock;
  MLOCK;
 
- Result:=DirectManager.CheckedMMap(physicalAddr,length);
+ Result:=DirectManager.CheckMMap(physicalAddr,length);
 
  if (Result=0) then
  begin

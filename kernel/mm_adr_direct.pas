@@ -93,10 +93,10 @@ type
     Function  Alloc(Size,Align:QWORD;mtype:Byte;var AdrOut:QWORD):Integer;
     Function  Query(Offset:QWORD;next:Boolean;var ROut:TDirectAdrNode):Integer;
     Function  QueryMType(Offset:QWORD;var ROut:TDirectAdrNode):Integer;
-    Function  CheckedAvailable(ss,se,Align:QWORD;var AdrOut,SizeOut:QWORD):Integer;
-    Function  CheckedAlloc(Offset,Size:QWORD):Integer;
-    Function  CheckedMMap(Offset,Size:QWORD):Integer;
-    Function  CheckedRelease(Offset,Size:QWORD):Integer;
+    Function  QueryAvailable(ss,se,Align:QWORD;var AdrOut,SizeOut:QWORD):Integer;
+    Function  CheckAlloc(Offset,Size:QWORD):Integer;
+    Function  CheckMMap(Offset,Size:QWORD):Integer;
+    Function  CheckRelease(Offset,Size:QWORD):Integer;
     Function  Release(Offset,Size:QWORD):Integer;
     Function  mmap_addr(Offset,Size:QWORD;addr:Pointer;mtype:Integer=-1):Integer;
     Function  mmap_type(Offset,Size:QWORD;mtype:Integer):Integer;
@@ -525,16 +525,25 @@ begin
  ROut:=key;
 end;
 
-Function TDirectManager.CheckedAvailable(ss,se,Align:QWORD;var AdrOut,SizeOut:QWORD):Integer;
+Function TDirectManager.QueryAvailable(ss,se,Align:QWORD;var AdrOut,SizeOut:QWORD):Integer;
 var
  It:TFreePoolNodeSet.Iterator;
  key:TDirectAdrNode;
  Offset:QWORD;
- Size:QWORD;
+ Size  :QWORD;
+
+ r:record
+  Offset:QWORD;
+  Size  :QWORD;
+ end;
 begin
  Result:=ENOMEM;
+
  if (ss<Flo) or (ss>Fhi)  then Exit(EINVAL);
  if (se<Flo) or (se<ss)   then Exit(EINVAL);
+
+ r.Size  :=0;
+ r.Offset:=0;
 
  key:=Default(TDirectAdrNode);
  key.Offset:=ss;
@@ -547,21 +556,31 @@ begin
   if key.IsFree then
   begin
    Offset:=System.Align(Max(key.Offset,ss),Align);
-
    if (se>=Offset) then
    begin
     Size:=key.Size-(Offset-key.Offset);
-    AdrOut :=Offset;
-    SizeOut:=Size;
-    Exit(0);
+
+    if (Size>r.Size) then
+    begin
+     r.Size  :=Size;
+     r.Offset:=Offset;
+    end;
+
+    Result:=0; //mark
    end;
   end;
 
-  It.Next
+  It.Next;
+ end;
+
+ if (Result=0) then //found
+ begin
+  AdrOut :=r.Offset;
+  SizeOut:=r.Size;
  end;
 end;
 
-Function TDirectManager.CheckedAlloc(Offset,Size:QWORD):Integer;
+Function TDirectManager.CheckAlloc(Offset,Size:QWORD):Integer;
 var
  It:TAllcPoolNodeSet.Iterator;
  key:TDirectAdrNode;
@@ -595,7 +614,7 @@ begin
  end;
 end;
 
-Function TDirectManager.CheckedMMap(Offset,Size:QWORD):Integer;
+Function TDirectManager.CheckMMap(Offset,Size:QWORD):Integer;
 var
  It:TAllcPoolNodeSet.Iterator;
  key:TDirectAdrNode;
@@ -633,7 +652,7 @@ begin
  end;
 end;
 
-Function TDirectManager.CheckedRelease(Offset,Size:QWORD):Integer;
+Function TDirectManager.CheckRelease(Offset,Size:QWORD):Integer;
 var
  It:TAllcPoolNodeSet.Iterator;
  key:TDirectAdrNode;
