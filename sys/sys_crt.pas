@@ -167,7 +167,7 @@ end;
 initialization
  AddExitProc(@_sys_crt_fini);
  InitCriticalSection(StdOutLock);
- _sys_crt_init
+ _sys_crt_init;
 
 end.
 
