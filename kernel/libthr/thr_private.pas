@@ -24,20 +24,42 @@ const
 
  MAX_DEFER_WAITERS    =50;
 
+ //Flags for condition variables.
+ COND_FLAGS_PRIVATE=$01;
+ COND_FLAGS_INITED =$02;
+ COND_FLAGS_BUSY   =$04;
+
+ THR_STACK_USER=$100; // 0xFF reserved for <pthread.h>
+
+ //Thread creation state attributes.
+ THR_CREATE_RUNNING  =0;
+ THR_CREATE_SUSPENDED=1;
+
+ //Miscellaneous definitions.
+ THR_STACK_DEFAULT=(2 * 1024 * 1024);
+ THR_STACK_INITIAL=(THR_STACK_DEFAULT * 2);
+
 type
- pthread_mutex_t=^pthread_mutex;
+ p_pthread=^pthread;
+
+ p_pthread_mutex=^pthread_mutex;
+
+ pthread_mutex_entry=packed record
+  pPrev,pNext:p_pthread_mutex;
+ end;
+
  pthread_mutex=packed record
   //Lock for accesses to this structure.
   m_lock      :umutex;
   m_flags     :Integer;
   magic2      :DWORD;
-  m_owner     :Pointer; //pthread
+  m_owner     :p_pthread;
   m_count     :Integer;
   m_spinloops :Integer;
   m_yieldloops:Integer;
   magic1      :DWORD;
   //Link for all mutexes a thread currently owns.
-  pPrev,pNext :pthread_mutex_t;
+  m_qe        :pthread_mutex_entry;
   //
  end;
 
@@ -77,13 +99,6 @@ type
   s_lock:umutex;
  end;
 
-const
- //Flags for condition variables.
- COND_FLAGS_PRIVATE=$01;
- COND_FLAGS_INITED =$02;
- COND_FLAGS_BUSY   =$04;
-
-type
  t_routine_proc=procedure(data:Pointer); SysV_ABI_CDecl;
 
  p_pthread_cleanup=^pthread_cleanup;
@@ -124,20 +139,21 @@ type
   pad  :array[0..11] of Byte;
  end;
 
- //sleepqueue
+ p_sleepqueue=^sleepqueue;
 
-const
- THR_STACK_USER=$100; // 0xFF reserved for <pthread.h>
+ sleepqueue_entry=packed record
+  pPrev,pNext:p_sleepqueue;
+ end;
 
- //Thread creation state attributes.
- THR_CREATE_RUNNING  =0;
- THR_CREATE_SUSPENDED=1;
+ sleepqueue=packed record
+  sq_blocked:sleepqueue_entry;
+  sq_freeq  :p_sleepqueue;
+  sq_hash   :sleepqueue_entry;
+  sq_flink  :p_sleepqueue;
+  sq_wchan  :Pointer;
+  sq_type   :Integer;
+ end;
 
- //Miscellaneous definitions.
- THR_STACK_DEFAULT=(2 * 1024 * 1024);
- THR_STACK_INITIAL=(THR_STACK_DEFAULT * 2);
-
-type
  pthread_prio=packed record
   pri_min    :Integer;
   pri_max    :Integer;
@@ -179,10 +195,8 @@ type
   _destructor:Pointer;
  end;
 
- pthread_t=^pthread;
-
  pthreadlist_entry=packed record
-  pPrev,pNext:pthread_t;
+  pPrev,pNext:p_pthread;
  end;
 
  pthread=packed record
@@ -222,10 +236,8 @@ type
   joiner             :Pointer;               //The joiner is the thread that is joining to this thread.
   flags              :Integer;               //Miscellaneous flags; only set with scheduling lock held.
   tlflags            :Integer;               //Thread list flags; only set with thread list lock held.
-  mutexq_next        :Pointer;               //Queue of currently owned NORMAL or PRIO_INHERIT type mutexes.
-  mutexq_prev        :Pointer;               //Queue of currently owned NORMAL or PRIO_INHERIT type mutexes.
-  pp_mutexq_next     :Pointer;               //Queue of all owned PRIO_PROTECT mutexes.
-  pp_mutexq_prev     :Pointer;               //Queue of all owned PRIO_PROTECT mutexes.
+  mutexq             :pthread_mutex_entry;   //Queue of currently owned NORMAL or PRIO_INHERIT type mutexes.
+  pp_mutexq          :pthread_mutex_entry;   //Queue of all owned PRIO_PROTECT mutexes.
   ret                :Pointer;
   specific           :p_pthread_specific_elem;
   specific_data_count:Integer;
@@ -241,15 +253,15 @@ type
   report_events      :Integer;               //Enable event reporting
   event_mask         :Integer;
   event_buf          :td_event_msg_t;        //Event
-  wchan              :Pointer;               //Wait channe
-  mutex_obj          :Pointer;               //Referenced mutex
+  wchan              :Pointer;               //Wait channel
+  mutex_obj          :p_pthread_mutex;       //Referenced mutex
   will_sleep         :Integer;               //Thread will sleep
   nwaiter_defer      :Integer;               //Number of threads deferred
   defer_waiters      :array[0..49] of QWORD; //Deferred threads from pthread_cond_signal
   spec_flag          :Integer;               //bit 1 specific is alloc
   _align6            :Integer;
   wake_addr          :p_wake_addr;
-  sleepqueue         :Pointer;               //Sleep queue
+  sleepqueue         :p_sleepqueue;          //Sleep queue
  end;
 
 const
@@ -270,27 +282,27 @@ const
 
  THR_MAGIC=$d09ba115;
 
-function SHOULD_CANCEL(thr:pthread_t):Boolean; inline;
-function THR_SHOULD_GC(thr:pthread_t):Boolean; inline;
-function THR_IN_CRITICAL(thr:pthread_t):Boolean; inline;
+function SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
+function THR_SHOULD_GC(thr:p_pthread):Boolean; inline;
+function THR_IN_CRITICAL(thr:p_pthread):Boolean; inline;
 
 implementation
 
-function SHOULD_CANCEL(thr:pthread_t):Boolean; inline;
+function SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
 begin
  Result:=(thr^.cancel_pending<>0) and
          (thr^.cancel_enable<>0) and
          (thr^.no_cancel=0);
 end;
 
-function THR_SHOULD_GC(thr:pthread_t):Boolean; inline;
+function THR_SHOULD_GC(thr:p_pthread):Boolean; inline;
 begin
  Result:=(thr^.refcount=0) and
          (thr^.state=PS_DEAD) and
          ((thr^.flags and THR_FLAGS_DETACHED)<>0);
 end;
 
-function THR_IN_CRITICAL(thr:pthread_t):Boolean; inline;
+function THR_IN_CRITICAL(thr:p_pthread):Boolean; inline;
 begin
  Result:=(thr^.locklevel>0) or
          (thr^.critical_count>0);
