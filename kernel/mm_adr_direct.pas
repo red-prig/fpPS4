@@ -67,7 +67,7 @@ type
 
    const
     Flo=0;
-    Fhi=$17FFFFFFF;
+    Fhi=$1FFFFFFFF;
     FMaxSize=(Fhi-Flo+1);
 
    var
