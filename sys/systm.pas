@@ -16,6 +16,7 @@ function fuword64(var base:QWORD):QWORD; inline;
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
 function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD; inline;
 function suword32(var base:DWORD;word:DWORD):DWORD; inline;
+function suword64(var base:QWORD;word:QWORD):DWORD; inline;
 
 implementation
 
@@ -101,6 +102,16 @@ begin
  end;
 end;
 
+function suword64(var base:QWORD;word:QWORD):DWORD; inline;
+begin
+ if (NtWriteVirtualMemory(NtCurrentProcess,@base,@word,SizeOf(QWORD),nil)=0) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=DWORD(-1);
+ end;
+end;
 
 end.
 

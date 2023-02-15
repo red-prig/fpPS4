@@ -14,6 +14,7 @@ uses
  kern_lock,
  kern_rwlock,
  thr_private,
+ kern_sig,
  sysutils,
  vulkan,
  vDevice;
@@ -515,7 +516,7 @@ var
 
  prio:rtprio;
 
- tid:DWORD;
+ tid:QWORD;
  ktd:p_kthread;
 
  _time:Int64;
@@ -567,8 +568,8 @@ begin
 
  ktd:=tdfind(tid);
 
- NtSuspendThread(ktd^.td_handle,nil);
- NtResumeThread(ktd^.td_handle,nil);
+ //NtSuspendThread(ktd^.td_handle,nil);
+ //NtResumeThread(ktd^.td_handle,nil);
 
  kunlock(lock);
 

@@ -204,6 +204,8 @@ const
 function _SIG_IDX(sig:Integer):DWORD;        inline;
 function _SIG_VALID(sig:Integer):Boolean;    inline;
 function _SIG_VALID_32(sig:Integer):Boolean; inline;
+function _SIG_WORD(sig:Integer):DWORD; inline;
+function _SIG_BIT(sig:Integer):DWORD; inline;
 
 function _get_sig_str(signum:Integer):RawByteString;
 
@@ -222,6 +224,16 @@ end;
 function _SIG_VALID_32(sig:Integer):Boolean; inline;
 begin
  Result:=(sig<=32) and (sig>0);
+end;
+
+function _SIG_WORD(sig:Integer):DWORD; inline;
+begin
+ Result:=_SIG_IDX(sig) shr 5;
+end;
+
+function _SIG_BIT(sig:Integer):DWORD; inline;
+begin
+ Result:=1 shl (_SIG_IDX(sig) and 31);
 end;
 
 function _get_sig_str(signum:Integer):RawByteString;

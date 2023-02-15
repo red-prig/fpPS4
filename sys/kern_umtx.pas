@@ -25,6 +25,10 @@ function  _sys_umtx_lock(mtx:p_umtx):Integer;
 function  _sys_umtx_unlock(mtx:p_umtx):Integer;
 function  _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 
+//
+
+function kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
+
 implementation
 
 uses
@@ -2459,7 +2463,7 @@ var
 begin
  if (mtx=nil) then Exit(EINVAL);
  td:=curkthread;
- if (td=nil) then Exit(EINVAL);
+ if (td=nil) then Exit(EFAULT);
  Result:=_do_lock_umtx(td,mtx,td^.td_tid,0);
 end;
 
@@ -2469,7 +2473,7 @@ var
 begin
  if (mtx=nil) then Exit(EINVAL);
  td:=curkthread;
- if (td=nil) then Exit(EINVAL);
+ if (td=nil) then Exit(EFAULT);
  Result:=do_unlock_umtx(td,mtx,td^.td_tid);
 end;
 
@@ -2501,7 +2505,7 @@ var
 begin
  if (obj=nil) then Exit(EINVAL);
  td:=curkthread;
- if (td=nil) then Exit(EINVAL);
+ if (td=nil) then Exit(EFAULT);
  Case op of
   UMTX_OP_LOCK             :Result:=__umtx_op_lock_umtx        (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_UNLOCK           :Result:=__umtx_op_unlock_umtx      (td,obj,val,uaddr1,uaddr2);

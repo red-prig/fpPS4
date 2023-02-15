@@ -8,7 +8,9 @@ interface
 uses
  ntapi,
  windows,
- sys_kernel;
+ sys_kernel,
+ signal,
+ signalvar;
 
 const
  PRI_ITHD     =1; // Interrupt thread.
@@ -38,7 +40,7 @@ type
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
   td_lock         :Pointer;
-  td_tid          :DWORD;
+  td_tid          :QWORD;
   td_ref          :Integer;
   td_priority     :Word;
   td_pri_class    :Word;
@@ -50,6 +52,8 @@ type
   //
   td_fsbase       :Pointer;
   td_cpuset       :Ptruint;
+  td_sigmask      :sigset_t;
+  td_sigqueue     :sigqueue_t;
  end;
 
  p_rtprio=^rtprio;
@@ -66,8 +70,8 @@ type
   stack_size:Ptruint;
   tls_base  :Pointer;
   tls_size  :Ptruint;
-  child_tid :PDWORD;
-  parent_tid:PDWORD;
+  child_tid :PQWORD;
+  parent_tid:PQWORD;
   flags     :Integer;
   align     :Integer;
   rtp       :p_rtprio;
@@ -92,14 +96,15 @@ function  create_thread(td        :p_kthread; //calling thread
                         stack_base:Pointer;
                         stack_size:QWORD;
                         tls_base  :Pointer;
-                        child_tid :PDWORD;
-                        parent_tid:PDWORD;
+                        child_tid :PQWORD;
+                        parent_tid:PQWORD;
                         flags     :Integer;
                         rtp       :p_rtprio;
                         name      :PChar
                        ):Integer;
 
-function  sys_thr_new(td:p_kthread;_param:p_thr_param;_size:Integer):Integer;
+function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
+function  sys_thr_self(id:PQWORD):Integer;
 
 procedure thread_exit;
 
@@ -111,6 +116,8 @@ function  tdfind(tid:DWORD):p_kthread;
 
 function  curkthread:p_kthread; assembler;
 procedure set_curkthread(td:p_kthread); assembler;
+
+function  SIGPENDING(td:p_kthread):Boolean; inline;
 
 implementation
 
@@ -157,6 +164,12 @@ end;
 procedure set_curkthread(td:p_kthread); assembler; nostackframe;
 asm
  movqq td,%gs:(0x700)
+end;
+
+function SIGPENDING(td:p_kthread):Boolean; inline;
+begin
+ Result:=SIGNOTEMPTY(@td^.td_sigqueue.sq_signals) and
+         sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
 end;
 
 procedure threadinit; inline;
@@ -352,8 +365,8 @@ function create_thread(td        :p_kthread; //calling thread
                        stack_base:Pointer;
                        stack_size:QWORD;
                        tls_base  :Pointer;
-                       child_tid :PDWORD;
-                       parent_tid:PDWORD;
+                       child_tid :PQWORD;
+                       parent_tid:PQWORD;
                        flags     :Integer;
                        rtp       :p_rtprio;
                        name      :PChar
@@ -455,17 +468,21 @@ begin
 
  if (child_tid<>nil) then
  begin
-  n:=suword32(child_tid^,newtd^.td_tid);
+  n:=suword64(child_tid^,newtd^.td_tid);
   if (n<>0) then Goto _term;
  end;
 
  if (parent_tid<>nil) then
  begin
-  n:=suword32(parent_tid^,newtd^.td_tid);
+  n:=suword64(parent_tid^,newtd^.td_tid);
   if (n<>0) then Goto _term;
  end;
 
- //newtd->td_sigmask = td->td_sigmask;
+ if (td<>nil) then
+ begin
+  newtd^.td_sigmask:=td^.td_sigmask;
+ end;
+
  thread_link(newtd);
 
  if (name<>nil) then
@@ -537,11 +554,15 @@ begin
                        @name);
 end;
 
-function sys_thr_new(td:p_kthread;_param:p_thr_param;_size:Integer):Integer;
+function sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 var
+ td:p_kthread;
  param:thr_param;
 begin
  if (_size<0) or (_size>Sizeof(thr_param)) then Exit(EINVAL);
+
+ td:=curkthread;
+ if (td=nil) then Exit(EFAULT);
 
  param:=Default(thr_param);
 
@@ -562,6 +583,9 @@ begin
 
  //td^.td_state:=TDS_INACTIVE;
 
+ tidhash_remove(td);
+ thread_unlink(td);
+
  umtx_thread_exit(td);
 
  thread_dec_ref(td);
@@ -569,11 +593,39 @@ begin
  RtlExitUserThread(0);
 end;
 
+function sys_thr_self(id:PQWORD):Integer;
+var
+ td:p_kthread;
+begin
+ if (id=nil) then Exit(EINVAL);
 
+ td:=curkthread;
+ if (td=nil) then Exit(EFAULT);
 
+ Result:=suword64(id^,td^.td_tid);
+ if (Result<>0) then Exit(EFAULT);
 
+ Result:=0;
+end;
 
+function sys_thr_exit(state:PQWORD):Integer;
+var
+ td:p_kthread;
+begin
 
+ td:=curkthread;
+ if (td=nil) then Exit(EFAULT);
+
+ if (state<>nil) then
+ begin
+  kern_umtx_wake(td,Pointer(state),High(Integer),0);
+ end;
+
+ //tdsigcleanup(td);
+ //thread_stopped(p);
+ thread_exit();
+ // NOTREACHED
+end;
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 var
