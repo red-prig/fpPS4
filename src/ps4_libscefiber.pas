@@ -10,14 +10,14 @@ uses
  ps4_program;
 
 const
- SCE_FIBER_ERROR_NULL       = $80590001;
- SCE_FIBER_ERROR_RANGE      = $80590003;
- SCE_FIBER_ERROR_INVALID    = $80590004;
- SCE_FIBER_ERROR_PERMISSION = $80590004;
- SCE_FIBER_ERROR_STATE      = $80590006;
+ SCE_FIBER_ERROR_NULL      =$80590001;
+ SCE_FIBER_ERROR_RANGE     =$80590003;
+ SCE_FIBER_ERROR_INVALID   =$80590004;
+ SCE_FIBER_ERROR_PERMISSION=$80590004;
+ SCE_FIBER_ERROR_STATE     =$80590006;
 
- SCE_FIBER_CONTEXT_MINIMUM_SIZE = 512;
- SCE_FIBER_MAX_NAME_LENGTH      = 31;
+ SCE_FIBER_CONTEXT_MINIMUM_SIZE=512;
+ SCE_FIBER_MAX_NAME_LENGTH     =31;
 
 type
  SceFiberEntry=procedure(argOnInitialize,argOnRun:QWord); SysV_ABI_CDecl;
@@ -32,11 +32,11 @@ type
   pArgReturn       :PQWord;                // 72
   argRun           :QWord;                 // 80
   argReturn        :QWord;                 // 88
-  state            :QWord;                 // 90 - 0 = init, 1 = running, 2 = suspend
-  addrContext      :Pointer;               // 98
-  sizeContext      :QWord;                 // 106
-  sizeContextMargin:QWord;                 // 114
-  _unknown         :array[0..255-114] of Byte; // 256
+  state            :QWord;                 // 96 - 0 = init, 1 = running, 2 = suspend
+  addrContext      :Pointer;               // 104
+  sizeContext      :QWord;                 // 112
+  sizeContextMargin:QWord;                 // 120
+  _unknown         :array[0..255-120] of Byte; // 256
  end;
  PSceFiber=^SceFiber;
  PPSceFiber=^PSceFiber;
@@ -74,9 +74,9 @@ function ps4_sceFiberReturnToThread(argReturn:QWord;argRun:PQWord):Integer; SysV
 implementation
 
 const
- FIBER_STATE_INIT    = 0;
- FIBER_STATE_RUN     = 1;
- FIBER_STATE_SUSPEND = 2;
+ FIBER_STATE_INIT   =0;
+ FIBER_STATE_RUN    =1;
+ FIBER_STATE_SUSPEND=2;
 
 threadvar
  _threadFiber :Pointer;   // TODO: Memory leak if thread is destroyed
