@@ -59,8 +59,15 @@ type
  end;
  PSceFiberInfo=^SceFiberInfo;
 
-function ps4_sceFiberSwitch(fiber:PSceFiber;argOnRunTo:QWord;argOnRun:PQWord):Integer; SysV_ABI_CDecl;
+function ps4_sceFiberInitialize(fiber      :PSceFiber;
+                                name       :PChar;
+                                entry      :SceFiberEntry;
+                                argInit    :QWord;
+                                addrContext:Pointer;
+                                sizeContext:QWord;
+                                option     :PSceFiberOptParam):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberFinalize(fiber:PSceFiber):Integer; SysV_ABI_CDecl;
+function ps4_sceFiberSwitch(fiber:PSceFiber;argOnRunTo:QWord;argOnRun:PQWord):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberRun(fiber:PSceFiber;argRun:QWord;argReturn:PQWord):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberReturnToThread(argReturn:QWord;argRun:PQWord):Integer; SysV_ABI_CDecl;
 
@@ -282,6 +289,7 @@ begin
  fiberInfo^.addrContext      :=fiber^.addrContext;
  fiberInfo^.sizeContext      :=fiber^.sizeContext;
  fiberInfo^.sizeContextMargin:=fiber^.sizeContextMargin;
+ Result:=0;
 end;
 
 function Load_libSceFiber(Const name:RawByteString):TElf_node;
