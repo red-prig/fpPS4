@@ -173,8 +173,8 @@ begin
   _ReCreateFiber(_currentFiber);
  end;
  _currentFiber  :=fiber;
- fiber^.pArgRun :=argRun;
  fiber^.pArgRun^:=argRunTo;
+ fiber^.pArgRun :=argRun;
  fiber^.state   :=FIBER_STATE_RUN;
  SwitchToFiber(fiber^.handle);
  Result:=0;
