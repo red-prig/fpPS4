@@ -116,6 +116,7 @@ function _RunFiber(fiber:PSceFiber;argRun:QWord;argReturn:PQWord):Integer;
 begin
  if _currentFiber<>nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
+ _currentFiber    :=fiber;
  fiber^.pArgRun^  :=argRun;
  fiber^.pArgReturn:=argReturn;
  fiber^.state     :=FIBER_STATE_RUN;
@@ -137,11 +138,32 @@ begin
  Result:=0;
 end;
 
+function _SwitchFiber(fiber:PSceFiber;argRunTo:QWord;argRun:PQWord):Integer; SysV_ABI_CDecl;
+begin
+ if _currentFiber^.addrContext<>nil then
+ begin
+  _currentFiber^.state:=FIBER_STATE_SUSPEND;
+ end else
+ begin
+  _ReCreateFiber(_currentFiber);
+ end;
+ _currentFiber  :=fiber;
+ fiber^.pArgRun :=argRun;
+ fiber^.pArgRun^:=argRunTo;
+ fiber^.state   :=FIBER_STATE_RUN;
+ SwitchToFiber(fiber^.handle);
+ Result:=0;
+end;
+
 // APIs
 
 function ps4_sceFiberSwitch(fiber:PSceFiber;argOnRunTo:QWord;argOnRun:PQWord):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceFiberSwitch');
+ if _currentFiber=nil then
+  Exit(SCE_FIBER_ERROR_PERMISSION);
+ if fiber=nil then
+  Exit(SCE_FIBER_ERROR_NULL);
  Result:=0;
 end;
 
