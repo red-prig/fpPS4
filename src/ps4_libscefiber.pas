@@ -33,7 +33,6 @@ type
   argRun    :QWord;                 // 80
   argReturn :QWord;                 // 88
   state     :QWord;                 // 80 - 0 = init, 1 = running
- // isRun   :LongBool;              // 68 - True = called by run function, False = called by init function
   _unknown :array[0..159] of Byte; // 256
  end;
  PSceFiber=^SceFiber;
@@ -80,7 +79,7 @@ begin
  _currentFiber:=fiber;
  Writeln('_FiberEntry,name=',PChar(@fiber^.name[0]));
  fiber^.entry(fiber^.argInit,fiber^.argRun);
- ps4_sceFiberReturnToThread(fiber,fiber^.pArgReturn^,@fiber^.pArgRun);
+ ps4_sceFiberReturnToThread(fiber,fiber^.pArgReturn^,fiber^.pArgRun);
 end;
 
 function _CreateFiber(fiber      :PSceFiber;
@@ -180,6 +179,35 @@ begin
  Result:=0;
 end;
 
+function ps4_sceFiberOptParamInitialize(param:PSceFiberOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if param=nil then
+  Exit(SCE_FIBER_ERROR_NULL);
+ Writeln('sceFiberOptParamInitialize');
+ Result:=0;
+end;
+
+function ps4_sceFiberStartContextSizeCheck(flags:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceFiberStartContextSizeCheck');
+ Result:=0;
+end;
+
+function ps4_sceFiberStopContextSizeCheck(flags:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceFiberStopContextSizeCheck');
+ Result:=0;
+end;
+
+function ps4_sceFiberRename(fiber:PSceFiber;name:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceFiberRename');
+ if fiber=nil then
+  Exit(SCE_FIBER_ERROR_NULL);
+ StrLCopy(@fiber^.name[0],name,SCE_FIBER_MAX_NAME_LENGTH);
+ Result:=0;
+end;
+
 function Load_libSceFiber(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -189,7 +217,14 @@ begin
 
  lib:=Result._add_lib('libSceFiber');
 
- lib^.set_proc($859220D44586B073,@ps4_sceFiberSwitch);
+ lib^.set_proc($25E357E45FCDCD05,@ps4_sceFiberFinalize);
+ lib^.set_proc($6B42CBAD959A7343,@ps4_sceFiberRun);
+ lib^.set_proc($3C54F64BFB49ED49,@ps4_sceFiberSwitch);
+ lib^.set_proc($074657DA1C7D0CCC,@ps4_sceFiberReturnToThread);
+ lib^.set_proc($6AC8D4249F9A6BCB,@ps4_sceFiberOptParamInitialize);
+ lib^.set_proc($2DCAADCBE40D5857,@ps4_sceFiberStartContextSizeCheck);
+ lib^.set_proc($2A3E275CCA6733C6,@ps4_sceFiberStopContextSizeCheck);
+ lib^.set_proc($273C93F75B9C1837,@ps4_sceFiberRename);
 end;
 
 initialization
