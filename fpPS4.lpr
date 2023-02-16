@@ -53,6 +53,7 @@ uses
  ps4_libSceComposite,
  ps4_libSceSysCore,
  ps4_libSceSsl,
+ ps4_libSceFiber,
  ps4_libSceUlt,
  ps4_libSceGameLiveStreaming,
  ps4_libSceSharePlay,
