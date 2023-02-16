@@ -107,6 +107,7 @@ type
  kthread=packed record
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
+  td_teb          :Pointer;
   td_lock         :Pointer;
   td_tid          :QWORD;
   td_sigstk       :stack_t;
@@ -380,14 +381,20 @@ begin
  Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));
 end;
 
-function cpu_set_user_tls(td:p_kthread;base:Pointer):Integer;
+procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+var
+ ptls:PPointer;
+begin
+ ptls:=td^.td_teb+$708;
+
+ ptls^:=base;
+end;
+
+function BaseQueryInfo(td:p_kthread):Integer;
 var
  TBI:THREAD_BASIC_INFORMATION;
  pcur:PPointer;
- ptls:PPointer;
 begin
- td^.td_fsbase:=base;
-
  TBI:=Default(THREAD_BASIC_INFORMATION);
 
  Result:=NtQueryInformationThread(
@@ -398,13 +405,12 @@ begin
            nil);
  if (Result<>0) then Exit;
 
+ td^.td_teb   :=TBI.TebBaseAddress;
  td^.td_cpuset:=TBI.AffinityMask;
 
- pcur:=TBI.TebBaseAddress+$700;
- ptls:=TBI.TebBaseAddress+$708;
+ pcur:=td^.td_teb+$700; //self
 
  pcur^:=td;
- ptls^:=base;
 end;
 
 procedure BaseInitializeStack(InitialTeb  :PINITIAL_TEB;
@@ -542,7 +548,7 @@ begin
 
  newtd^.td_tid:=DWORD(ClientId^.UniqueThread);
 
- if (cpu_set_user_tls(newtd,tls_base)<>0) then
+ if (BaseQueryInfo(newtd)<>0) then
  begin
   _term:
   NtTerminateThread(newtd^.td_handle,n);
@@ -551,6 +557,8 @@ begin
   thread_free(newtd);
   Exit(EFAULT);
  end;
+
+ cpu_set_user_tls(newtd,tls_base);
 
  if (child_tid<>nil) then
  begin
