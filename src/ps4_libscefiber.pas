@@ -7,7 +7,8 @@ interface
 uses
  Windows,
  SysUtils,
- ps4_program;
+ ps4_program,
+ sys_kernel;
 
 const
  SCE_FIBER_ERROR_NULL      =$80590001;
@@ -67,7 +68,7 @@ function ps4_sceFiberInitialize(fiber      :PSceFiber;
                                 sizeContext:QWord;
                                 option     :PSceFiberOptParam):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberFinalize(fiber:PSceFiber):Integer; SysV_ABI_CDecl;
-function ps4_sceFiberSwitch(fiber:PSceFiber;argOnRunTo:QWord;argOnRun:PQWord):Integer; SysV_ABI_CDecl;
+function ps4_sceFiberSwitch(fiber:PSceFiber;argRunTo:QWord;argRun:PQWord):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberRun(fiber:PSceFiber;argRun:QWord;argReturn:PQWord):Integer; SysV_ABI_CDecl;
 function ps4_sceFiberReturnToThread(argReturn:QWord;argRun:PQWord):Integer; SysV_ABI_CDecl;
 
@@ -91,10 +92,26 @@ procedure DeleteFiber(lpFiber:LPVOID); external 'kernel32' name 'DeleteFiber';
 
 // Wrappers
 
+procedure _CheckFail(P:Pointer);
+begin
+ if P=nil then
+  raise Exception.Create(Format('Error with code %d', [GetLastError]));
+end;
+
+procedure _CreateThreadFiber;
+begin
+ // Create a main fiber
+ if _threadFiber=nil then
+ begin
+  _threadFiber:=ConvertThreadToFiber(nil);
+  _CheckFail(_threadFiber);
+ end;
+end;
+
 procedure _FiberEntry(fiber:PSceFiber);
 begin
  _currentFiber:=fiber;
- Writeln('_FiberEntry,name=',PChar(@fiber^.name[0]));
+ Writeln(SysLogPrefix,'_FiberEntry,name=',PChar(@fiber^.name[0]));
  fiber^.entry(fiber^.argInit,fiber^.argRun);
  ps4_sceFiberReturnToThread(fiber^.pArgReturn^,fiber^.pArgRun);
 end;
@@ -114,8 +131,8 @@ begin
  fiber^.addrContext      :=addrContext;
  fiber^.sizeContext      :=sizeContext;
  fiber^.sizeContextMargin:=sizeContext;
+ fiber^.handle           :=CreateFiber(sizeContext,@_FiberEntry,fiber);
  StrLCopy(@fiber^.name[0],name,SCE_FIBER_MAX_NAME_LENGTH);
- fiber^.handle :=CreateFiber(0,@_FiberEntry,fiber);
  Result:=0;
 end;
 
@@ -123,6 +140,7 @@ function _RunFiber(fiber:PSceFiber;argRun:QWord;argReturn:PQWord):Integer;
 begin
  if _currentFiber<>nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
+ _CreateThreadFiber;
  _currentFiber    :=fiber;
  fiber^.pArgRun^  :=argRun;
  fiber^.pArgReturn:=argReturn;
@@ -140,7 +158,7 @@ end;
 function _ReCreateFiber(fiber:PSceFiber):Integer;
 begin
  _DeleteFiber(fiber);
- fiber^.handle:=CreateFiber(0,@_FiberEntry,fiber);
+ fiber^.handle:=CreateFiber(fiber^.sizeContext,@_FiberEntry,fiber);
  fiber^.state :=FIBER_STATE_INIT;
  Result:=0;
 end;
@@ -164,14 +182,14 @@ end;
 
 // APIs
 
-function ps4_sceFiberSwitch(fiber:PSceFiber;argOnRunTo:QWord;argOnRun:PQWord):Integer; SysV_ABI_CDecl;
+function ps4_sceFiberSwitch(fiber:PSceFiber;argRunTo:QWord;argRun:PQWord):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberSwitch');
  if _currentFiber=nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
- Result:=0;
+ Writeln(SysLogPrefix,'sceFiberSwitch,name=',fiber^.name);
+ Result:=_SwitchFiber(fiber,argRunTo,argRun);
 end;
 
 function ps4_sceFiberInitialize(fiber      :PSceFiber;
@@ -182,7 +200,6 @@ function ps4_sceFiberInitialize(fiber      :PSceFiber;
                                 sizeContext:QWord;
                                 option     :PSceFiberOptParam):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberFinalize,name=',name,',sizeContext=',sizeContext,',argInit=',argInit);
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
  if (sizeContext mod 16 <> 0) or
@@ -191,31 +208,27 @@ begin
   Exit(SCE_FIBER_ERROR_INVALID);
  if sizeContext<SCE_FIBER_CONTEXT_MINIMUM_SIZE then
   Exit(SCE_FIBER_ERROR_RANGE);
- // Create a main fiber
- if _threadFiber=nil then
- begin
-  _threadFiber:=ConvertThreadToFiber(nil);
- end;
+ Writeln(SysLogPrefix,'sceFiberInitialize,name=',name,',sizeContext=',sizeContext,',argInit=',argInit);
  Result:=_CreateFiber(fiber,name,entry,argInit,addrContext,sizeContext);
 end;
 
 function ps4_sceFiberFinalize(fiber:PSceFiber):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberFinalize');
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
  if fiber=_currentFiber then
   Exit(SCE_FIBER_ERROR_STATE);
+ Writeln(SysLogPrefix,'sceFiberFinalize,name=',fiber^.name);
  Result:=_DeleteFiber(fiber);
 end;
 
 function ps4_sceFiberRun(fiber:PSceFiber;argRun:QWord;argReturn:PQWord):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberRun');
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
  if fiber^.state=1 then
   Exit(SCE_FIBER_ERROR_STATE);
+ Writeln(SysLogPrefix,'sceFiberRun,name=',fiber^.name);
  fiber^.state:=1;
  Result:=_RunFiber(fiber,argRun,argReturn);
 end;
@@ -242,25 +255,25 @@ function ps4_sceFiberOptParamInitialize(param:PSceFiberOptParam):Integer; SysV_A
 begin
  if param=nil then
   Exit(SCE_FIBER_ERROR_NULL);
- Writeln('sceFiberOptParamInitialize');
+ Writeln(SysLogPrefix,'sceFiberOptParamInitialize');
  Result:=0;
 end;
 
 function ps4_sceFiberStartContextSizeCheck(flags:DWord):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberStartContextSizeCheck');
+ Writeln(SysLogPrefix,'sceFiberStartContextSizeCheck');
  Result:=0;
 end;
 
 function ps4_sceFiberStopContextSizeCheck(flags:DWord):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberStopContextSizeCheck');
+ Writeln(SysLogPrefix,'sceFiberStopContextSizeCheck');
  Result:=0;
 end;
 
 function ps4_sceFiberRename(fiber:PSceFiber;name:PChar):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberRename');
+ Writeln(SysLogPrefix,'sceFiberRun,name=',fiber^.name,',newName=',name);
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
  StrLCopy(@fiber^.name[0],name,SCE_FIBER_MAX_NAME_LENGTH);
@@ -269,7 +282,7 @@ end;
 
 function ps4_sceFiberGetSelf(pfiber:PPSceFiber):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceFiberGetSelf');
+ Writeln(SysLogPrefix,'sceFiberGetSelf');
  if _currentFiber=nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
  if pfiber=nil then
@@ -282,7 +295,7 @@ function ps4_sceFiberGetInfo(fiber:PSceFiber;fiberInfo:PSceFiberInfo):Integer; S
 begin
  if (fiber=nil) or (fiberInfo=nil) then
   Exit(SCE_FIBER_ERROR_NULL);
- Writeln('sceFiberGetInfo');
+ Writeln(SysLogPrefix,'sceFiberGetInfo,name=',fiber^.name);
  fiberInfo^.size             :=128;
  fiberInfo^.entry            :=fiber^.entry;
  fiberInfo^.argInit          :=fiber^.argInit;
@@ -301,6 +314,7 @@ begin
 
  lib:=Result._add_lib('libSceFiber');
 
+ lib^.set_proc($855603ECEBB6A424,@ps4_sceFiberInitialize);
  lib^.set_proc($25E357E45FCDCD05,@ps4_sceFiberFinalize);
  lib^.set_proc($6B42CBAD959A7343,@ps4_sceFiberRun);
  lib^.set_proc($3C54F64BFB49ED49,@ps4_sceFiberSwitch);
@@ -314,7 +328,7 @@ begin
 end;
 
 initialization
- ps4_app.RegistredPreLoad('Load_libSceFiber.prx',@Load_libSceFiber);
+ ps4_app.RegistredPreLoad('libSceFiber.prx',@Load_libSceFiber);
 
 end.
 
