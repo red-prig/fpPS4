@@ -8,7 +8,6 @@ uses
  signal;
 
 type
- p_sigacts=^sigacts;
  sigacts=packed record
   ps_sigact    :array[0.._SIG_MAXSIG-1] of sig_t;
   ps_catchmask :array[0.._SIG_MAXSIG-1] of sigset_t;
@@ -19,7 +18,12 @@ type
   ps_siginfo   :sigset_t;
   ps_sigignore :sigset_t;
   ps_sigcatch  :sigset_t;
+  ps_mtx       :Pointer;
+  ps_flag      :Integer;
  end;
+
+var
+ p_sigacts:sigacts;
 
 const
  PS_NOCLDWAIT=$0001; // No zombies if child dies
@@ -34,12 +38,12 @@ type
 
  ksiginfo_list=packed record
   pFirst:p_ksiginfo;
-  pLast:^p_ksiginfo;
+  pLast :PPointer;
  end;
 
  ksiginfo_entry=packed record
   pNext:p_ksiginfo;
-  pPrev:^p_ksiginfo;
+  pPrev:PPointer;
  end;
 
  ksiginfo_t=packed record
@@ -69,29 +73,38 @@ const
  // Flags for ksi_flags
  SQ_INIT=$01;
 
-function  SIGACTION  (p:p_sigacts;sig:Integer):sig_t; inline;
-procedure SIGADDSET  (p:p_sigset_t;signo:Integer); inline;
-procedure SIGDELSET  (p:p_sigset_t;signo:Integer); inline;
-procedure SIGEMPTYSET(p:p_sigset_t); inline;
-procedure SIGFILLSET (p:p_sigset_t); inline;
-function  SIGISMEMBER(p:p_sigset_t;signo:Integer):Boolean; inline;
-function  SIGISEMPTY (p:p_sigset_t):Boolean; inline;
-function  SIGNOTEMPTY(p:p_sigset_t):Boolean; inline;
-function  SIGSETEQ   (p1,p2:p_sigset_t):Boolean; inline;
-function  SIGSETNEQ  (p1,p2:p_sigset_t):Boolean; inline;
-procedure SIGSETOR   (p1,p2:p_sigset_t); inline;
-procedure SIGSETAND  (p1,p2:p_sigset_t); inline;
-procedure SIGSETNAND (p1,p2:p_sigset_t); inline;
+ SIG_STOP_ALLOWED    =100;
+ SIG_STOP_NOT_ALLOWED=101;
+
+function  SIGACTION      (sig:Integer):sig_t; inline;
+procedure SIGADDSET      (p:p_sigset_t;signo:Integer); inline;
+procedure SIGDELSET      (p:p_sigset_t;signo:Integer); inline;
+procedure SIGEMPTYSET    (p:p_sigset_t); inline;
+procedure SIGFILLSET     (p:p_sigset_t); inline;
+function  SIGISMEMBER    (p:p_sigset_t;signo:Integer):Boolean; inline;
+function  SIGISEMPTY     (p:p_sigset_t):Boolean; inline;
+function  SIGNOTEMPTY    (p:p_sigset_t):Boolean; inline;
+function  SIGSETEQ       (p1,p2:p_sigset_t):Boolean; inline;
+function  SIGSETNEQ      (p1,p2:p_sigset_t):Boolean; inline;
+procedure SIGSETOR       (p1,p2:p_sigset_t); inline;
+procedure SIGSETAND      (p1,p2:p_sigset_t); inline;
+procedure SIGSETNAND     (p1,p2:p_sigset_t); inline;
+procedure SIGSETLO       (p1,p2:p_sigset_t); inline;
+procedure SIG_CANTMASK   (p:p_sigset_t); inline;
+procedure SIG_STOPSIGMASK(p:p_sigset_t); inline;
+procedure SIG_CONTSIGMASK(p:p_sigset_t); inline;
 
 function  sigsetmasked(p,mask:p_sigset_t):Boolean; inline;
+function  sig_ffs(p:p_sigset_t):Integer; inline;
 
 procedure ksiginfo_copy(src,dst:p_ksiginfo); inline;
+procedure ksiginfo_set_sigev(dst:p_ksiginfo;sigev:p_sigevent); inline;
 
 implementation
 
-function SIGACTION(p:p_sigacts;sig:Integer):sig_t; inline;
+function SIGACTION(sig:Integer):sig_t; inline;
 begin
- Result:=p^.ps_sigact[_SIG_IDX(sig)];
+ Result:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
 end;
 
 procedure SIGADDSET(p:p_sigset_t;signo:Integer); inline;
@@ -159,16 +172,53 @@ begin
  p1^.qwords[1]:=p1^.qwords[1] and (not p2^.qwords[1]);
 end;
 
+procedure SIGSETLO(p1,p2:p_sigset_t); inline;
+begin
+ p1^.bits[0]:=p2^.bits[0];
+end;
+
+procedure SIG_CANTMASK(p:p_sigset_t); inline;
+begin
+ SIGDELSET(p,SIGKILL);
+ SIGDELSET(p,SIGSTOP);
+end;
+
+procedure SIG_STOPSIGMASK(p:p_sigset_t); inline;
+begin
+ SIGDELSET(p,SIGSTOP);
+ SIGDELSET(p,SIGTSTP);
+ SIGDELSET(p,SIGTTIN);
+ SIGDELSET(p,SIGTTOU);
+end;
+
+procedure SIG_CONTSIGMASK(p:p_sigset_t); inline;
+begin
+ SIGDELSET(p,SIGCONT)
+end;
+
 function sigsetmasked(p,mask:p_sigset_t):Boolean; inline;
 begin
  Result:=((p^.qwords[0] and (not mask^.qwords[0]))<>0) or
          ((p^.qwords[1] and (not mask^.qwords[1]))<>0);
 end;
 
+function sig_ffs(p:p_sigset_t):Integer; inline;
+begin
+ Result:=0;
+ if (p^.qwords[0]<>0) then Result:=BsfQWord(p^.qwords[0])+1;
+ if (p^.qwords[1]<>0) then Result:=BsfQWord(p^.qwords[1])+65;
+end;
+
 procedure ksiginfo_copy(src,dst:p_ksiginfo); inline;
 begin
  dst^.ksi_info :=src^.ksi_info;
  dst^.ksi_flags:=src^.ksi_flags and KSI_COPYMASK;
+end;
+
+procedure ksiginfo_set_sigev(dst:p_ksiginfo;sigev:p_sigevent); inline;
+begin
+ dst^.ksi_info.si_signo:=sigev^.sigev_signo;
+ dst^.ksi_info.si_value:=sigev^.sigev_value;
 end;
 
 

@@ -13,6 +13,74 @@ uses
  signalvar;
 
 const
+ TDF_BORROWING  =$00000001; // Thread is borrowing pri from another.
+ TDF_INPANIC    =$00000002; // Caused a panic, let it drive crashdump.
+ TDF_INMEM      =$00000004; // Thread's stack is in memory.
+ TDF_SINTR      =$00000008; // Sleep is interruptible.
+ TDF_TIMEOUT    =$00000010; // Timing out during sleep.
+ TDF_IDLETD     =$00000020; // This is a per-CPU idle thread.
+ TDF_CANSWAP    =$00000040; // Thread can be swapped.
+ TDF_SLEEPABORT =$00000080; // sleepq_abort was called.
+ TDF_KTH_SUSP   =$00000100; // kthread is suspended
+ TDF_UNUSED09   =$00000200; // --available--
+ TDF_BOUNDARY   =$00000400; // Thread suspended at user boundary
+ TDF_ASTPENDING =$00000800; // Thread has some asynchronous events.
+ TDF_TIMOFAIL   =$00001000; // Timeout from sleep after we were awake.
+ TDF_SBDRY      =$00002000; // Stop only on usermode boundary.
+ TDF_UPIBLOCKED =$00004000; // Thread blocked on user PI mutex.
+ TDF_NEEDSUSPCHK=$00008000; // Thread may need to suspend.
+ TDF_NEEDRESCHED=$00010000; // Thread needs to yield.
+ TDF_NEEDSIGCHK =$00020000; // Thread may need signal delivery.
+ TDF_NOLOAD     =$00040000; // Ignore during load avg calculations.
+ TDF_UNUSED19   =$00080000; // --available--
+ TDF_THRWAKEUP  =$00100000; // Libthr thread must not suspend itself.
+ TDF_UNUSED21   =$00200000; // --available--
+ TDF_SWAPINREQ  =$00400000; // Swapin request due to wakeup.
+ TDF_UNUSED23   =$00800000; // --available--
+ TDF_SCHED0     =$01000000; // Reserved for scheduler private use
+ TDF_SCHED1     =$02000000; // Reserved for scheduler private use
+ TDF_SCHED2     =$04000000; // Reserved for scheduler private use
+ TDF_SCHED3     =$08000000; // Reserved for scheduler private use
+ TDF_ALRMPEND   =$10000000; // Pending SIGVTALRM needs to be posted.
+ TDF_PROFPEND   =$20000000; // Pending SIGPROF needs to be posted.
+ TDF_MACPEND    =$40000000; // AST-based MAC event pending.
+
+ //
+
+ TDP_OLDMASK      =$00000001; // Need to restore mask after suspend.
+ TDP_INKTR        =$00000002; // Thread is currently in KTR code.
+ TDP_INKTRACE     =$00000004; // Thread is currently in KTRACE code.
+ TDP_BUFNEED      =$00000008; // Do not recurse into the buf flush
+ TDP_COWINPROGRESS=$00000010; // Snapshot copy-on-write in progress.
+ TDP_ALTSTACK     =$00000020; // Have alternate signal stack.
+ TDP_DEADLKTREAT  =$00000040; // Lock aquisition - deadlock treatment.
+ TDP_NOFAULTING   =$00000080; // Do not handle page faults.
+ TDP_NOSLEEPING   =$00000100; // Thread is not allowed to sleep on a sq.
+ TDP_OWEUPC       =$00000200; // Call addupc() at next AST.
+ TDP_ITHREAD      =$00000400; // Thread is an interrupt thread.
+ TDP_SYNCIO       =$00000800; // Local override, disable async i/o.
+ TDP_SCHED1       =$00001000; // Reserved for scheduler private use
+ TDP_SCHED2       =$00002000; // Reserved for scheduler private use
+ TDP_SCHED3       =$00004000; // Reserved for scheduler private use
+ TDP_SCHED4       =$00008000; // Reserved for scheduler private use
+ TDP_GEOM         =$00010000; // Settle GEOM before finishing syscall
+ TDP_SOFTDEP      =$00020000; // Stuck processing softdep worklist
+ TDP_NORUNNINGBUF =$00040000; // Ignore runningbufspace check
+ TDP_WAKEUP       =$00080000; // Don't sleep in umtx cond_wait
+ TDP_INBDFLUSH    =$00100000; // Already in BO_BDFLUSH, do not recurse
+ TDP_KTHREAD      =$00200000; // This is an official kernel thread
+ TDP_CALLCHAIN    =$00400000; // Capture thread's callchain
+ TDP_IGNSUSP      =$00800000; // Permission to ignore the MNTK_SUSPEND*
+ TDP_AUDITREC     =$01000000; // Audit record pending on thread
+ TDP_RFPPWAIT     =$02000000; // Handle RFPPWAIT on syscall exit
+ TDP_RESETSPUR    =$04000000; // Reset spurious page fault history.
+ TDP_NERRNO       =$08000000; // Last errno is already in td_errno
+ TDP_UIOHELD      =$10000000; // Current uio has pages held in td_ma
+ TDP_DEVMEMIO     =$20000000; // Accessing memory for /dev/mem
+ TDP_EXECVMSPC    =$40000000; // Execve destroyed old vmspace
+
+ //
+
  PRI_ITHD     =1; // Interrupt thread.
  PRI_REALTIME =2; // Real time process.
  PRI_TIMESHARE=3; // Time sharing process.
@@ -41,6 +109,9 @@ type
   td_handle       :THandle; //nt thread
   td_lock         :Pointer;
   td_tid          :QWORD;
+  td_sigstk       :stack_t;
+  td_pflags       :Integer;
+  td_flags        :Integer;
   td_ref          :Integer;
   td_priority     :Word;
   td_pri_class    :Word;
@@ -119,6 +190,9 @@ procedure set_curkthread(td:p_kthread); assembler;
 
 function  SIGPENDING(td:p_kthread):Boolean; inline;
 
+procedure PROC_LOCK;
+procedure PROC_UNLOCK;
+
 implementation
 
 {
@@ -148,6 +222,8 @@ uses
  kern_umtx;
 
 var
+ p_mtx:Pointer=nil;
+
  tidhashtbl:TSTUB_HAMT32;
  tidhash_lock:Pointer=nil;
 
@@ -170,6 +246,16 @@ function SIGPENDING(td:p_kthread):Boolean; inline;
 begin
  Result:=SIGNOTEMPTY(@td^.td_sigqueue.sq_signals) and
          sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
+end;
+
+procedure PROC_LOCK;
+begin
+ rw_wlock(p_mtx);
+end;
+
+procedure PROC_UNLOCK;
+begin
+ rw_wunlock(p_mtx);
 end;
 
 procedure threadinit; inline;
@@ -626,6 +712,8 @@ begin
  thread_exit();
  // NOTREACHED
 end;
+
+
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 var

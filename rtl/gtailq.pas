@@ -35,30 +35,32 @@ procedure TAILQ_REMOVE     (head,elm,field:Pointer); inline;
 implementation
 
 type
- p_tailq_list=^_tailq_list;
- _tailq_list=packed record
-  pFirst,pLast:Pointer;
+ p_tq_list=^_tq_list;
+ _tq_list=packed record
+  pFirst:Pointer;
+  pLast :PPointer;
  end;
 
- p_tailq_entry=^_tailq_entry;
- _tailq_entry=packed record
-  pNext,pPrev:Pointer;
+ p_tq_entry=^_tq_entry;
+ _tq_entry=packed record
+  pNext:Pointer;
+  pPrev:PPointer;
  end;
 
 procedure TAILQ_INIT(head:Pointer); inline;
 begin
- p_tailq_list(head)^.pFirst:=nil;
- p_tailq_list(head)^.pLast :=@p_tailq_list(head)^.pFirst;
+ p_tq_list(head)^.pFirst:=nil;
+ p_tq_list(head)^.pLast :=@p_tq_list(head)^.pFirst;
 end;
 
 function TAILQ_FIRST(head:Pointer):Pointer; inline;
 begin
- Result:=p_tailq_list(head)^.pFirst;
+ Result:=p_tq_list(head)^.pFirst;
 end;
 
 function TAILQ_NEXT(elm,field:Pointer):Pointer; inline;
 begin
- Result:=p_tailq_entry(field)^.pNext;
+ Result:=p_tq_entry(field)^.pNext;
 end;
 
 procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
@@ -66,27 +68,24 @@ var
  offset:ptruint;
 begin
  offset:=ptruint(field-elm);
- if (p_tailq_entry(field)^.pNext=p_tailq_list(head)^.pFirst) and
-    (p_tailq_list(head)^.pFirst<>nil) then
+ if (p_tq_entry(field)^.pNext=p_tq_list(head)^.pFirst) and
+    (p_tq_list(head)^.pFirst<>nil) then
  begin
-  p_tailq_entry(p_tailq_list(head)^.pFirst+offset)^.pPrev:=@p_tailq_entry(field)^.pNext;
+  p_tq_entry(p_tq_list(head)^.pFirst+offset)^.pPrev:=@p_tq_entry(field)^.pNext;
  end else
  begin
-  p_tailq_list(head)^.pLast:=@p_tailq_entry(field)^.pNext;
+  p_tq_list(head)^.pLast:=@p_tq_entry(field)^.pNext;
  end;
- p_tailq_list(head)^.pFirst:=elm;
- p_tailq_entry(field)^.pPrev:=@p_tailq_list(head)^.pFirst;
+ p_tq_list(head)^.pFirst:=elm;
+ p_tq_entry(field)^.pPrev:=@p_tq_list(head)^.pFirst;
 end;
 
 procedure TAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
-var
- offset:ptruint;
 begin
- offset:=ptruint(field-elm);
- p_tailq_entry(field)^.pNext:=nil;
- p_tailq_entry(field)^.pPrev:=p_tailq_list(head)^.pLast;
- PPointer(p_tailq_list(head)^.pLast)^:=elm;
- p_tailq_list(head)^.pLast:=@p_tailq_entry(field)^.pNext;
+ p_tq_entry(field)^.pNext:=nil;
+ p_tq_entry(field)^.pPrev:=p_tq_list(head)^.pLast;
+ p_tq_list(head)^.pLast^:=elm;
+ p_tq_list(head)^.pLast:=@p_tq_entry(field)^.pNext;
 end;
 
 procedure TAILQ_REMOVE(head,elm,field:Pointer); inline;
@@ -94,14 +93,14 @@ var
  offset:ptruint;
 begin
  offset:=ptruint(field-elm);
- if (p_tailq_entry(field)^.pNext<>nil) then
+ if (p_tq_entry(field)^.pNext<>nil) then
  begin
-  p_tailq_entry(p_tailq_entry(field)^.pNext+offset)^.pPrev:=p_tailq_entry(field)^.pPrev;
+  p_tq_entry(p_tq_entry(field)^.pNext+offset)^.pPrev:=p_tq_entry(field)^.pPrev;
  end else
  begin
-  p_tailq_list(head)^.pLast:=p_tailq_entry(field)^.pPrev;
+  p_tq_list(head)^.pLast:=p_tq_entry(field)^.pPrev;
  end;
- PPointer(p_tailq_entry(field)^.pPrev)^:=p_tailq_entry(field)^.pNext;
+ p_tq_entry(field)^.pPrev^:=p_tq_entry(field)^.pNext;
 end;
 
 procedure TAILQ_HEAD.Insert_head(Node:PNODE);

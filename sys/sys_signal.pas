@@ -356,7 +356,7 @@ begin
   SIGKILL,
   SIGSTOP:
     begin
-     case tmp.__sigaction_u.__code of
+     case tmp.u.code of
       SIG_DFL:;
       else
        Exit(EINVAL);
@@ -391,7 +391,7 @@ end;
 function _sig_act_type(sig:Integer;var act:sigaction_t):Integer;
 begin
  Result:=0;
- Case act.__sigaction_u.__code  of
+ Case act.u.code  of
   SIG_DFL:Case _sig_dfl(sig) of
            SIG_IGN:Result:=SIG_IGN;
            SIG_ERR:Result:=SIG_ERR;
@@ -592,11 +592,11 @@ begin
       if ((sact.sa_flags and SA_SIGINFO)=0) then
       begin
        //sa_handler
-       sact.__sigaction_u.__sa_handler(info.si_signo,info.si_code,@ucontext);
+       sact.u.sa_handler(info.si_signo,info.si_code,@ucontext);
       end else
       begin
        //sa_sigaction
-       sact.__sigaction_u.__sa_sigaction(info.si_signo,@info,@ucontext);
+       sact.u.sa_sigaction(info.si_signo,@info,@ucontext);
       end;
 
       if (_lock<>t^.sig._lock) then

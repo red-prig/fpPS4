@@ -55,6 +55,8 @@ const
  SIGLWP   =SIGTHR;
  SIGCANCEL=SIGTHR;
 
+ NSIG=32;
+
  SIGRTMIN=65;
  SIGRTMAX=126;
 
@@ -107,6 +109,7 @@ type
    3:(sigval_ptr:Pointer);
  end;
 
+ p_sigevent=^sigevent;
  sigevent=packed record
   sigev_notify:Integer; //Notification type
   sigev_signo :Integer; //Signal number
@@ -172,24 +175,27 @@ type
  p_sigaction_t=^sigaction_t;
  sigaction_t=packed record //28
 
-  __sigaction_u:packed record        // signal handler
+  u:packed record        // signal handler
    Case Byte of
-    0:(__code:Ptrint);               //SIG_DFL
-    1:(__sa_handler:sa_handler);     //void (*__sa_handler)(int);
-    2:(__sa_sigaction:sa_sigaction); //void (*__sa_sigaction)(int, struct __siginfo *, void *); (sa_flags and SA_SIGINFO)<>0
+    0:(code:Ptrint);               //SIG_DFL
+    1:(sa_handler:sa_handler);     //void (*__sa_handler)(int);
+    2:(sa_sigaction:sa_sigaction); //void (*__sa_sigaction)(int, struct __siginfo *, void *); (sa_flags and SA_SIGINFO)<>0
   end;
 
-  sa_flags:Integer; //SA_SIGINFO
-  sa_mask:sigset_t; //signal mask to apply     (signal mask inside signal)
+  sa_flags:Integer;  //SA_SIGINFO
+  sa_mask :sigset_t; //signal mask to apply     (signal mask inside signal)
  end;
 
  sigaltstack=packed record
-  ss_sp:Pointer;    //signal stack base
-  ss_size:size_t;   //signal stack length SIGSTKSZ
+  ss_sp   :Pointer; //signal stack base
+  ss_size :size_t;  //signal stack length SIGSTKSZ
   ss_flags:Integer; //SS_DISABLE and/or SS_ONSTACK
  end;
+ stack_t=sigaltstack;
 
 const
+ SA_NOCLDSTOP=$0008;   // do not generate SIGCHLD on child stop
+
  SS_ONSTACK  =$0001;   // take signal on alternate stack
  SS_DISABLE  =$0004;   // disable taking signals on alternate stack
  MINSIGSTKSZ =(512*4); // minimum stack size

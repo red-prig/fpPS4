@@ -10,7 +10,7 @@ uses
 
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-function copyout(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
+function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
 function fuword32(var base:DWORD):DWORD; inline;
 function fuword64(var base:QWORD):QWORD; inline;
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
@@ -54,7 +54,7 @@ begin
  end;
 end;
 
-function copyout(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
+function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
 begin
  if (NtWriteVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,nil)=0) then
  begin
