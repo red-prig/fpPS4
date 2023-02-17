@@ -66,6 +66,42 @@ type
   sc_spare:array[0..5] of QWORD; //6(qword) 12(int)
  end;
 
+ p_trapframe=^trapframe;
+ trapframe=packed record
+  tf_rdi:QWORD;
+  tf_rsi:QWORD;
+  tf_rdx:QWORD;
+  tf_rcx:QWORD;
+  tf_r8 :QWORD;
+  tf_r9 :QWORD;
+  tf_rax:QWORD;
+  tf_rbx:QWORD;
+  tf_rbp:QWORD;
+  tf_r10:QWORD;
+  tf_r11:QWORD;
+  tf_r12:QWORD;
+  tf_r13:QWORD;
+  tf_r14:QWORD;
+  tf_r15:QWORD;
+
+  tf_trapno:Integer;
+  tf_fs:Word;
+  tf_gs:Word;
+
+  tf_addr:QWORD;
+
+  tf_flags:Integer;
+  tf_es:Word;
+  tf_ds:Word;
+
+  tf_err   :QWORD; //errno
+  tf_rip   :QWORD;
+  tf_cs    :QWORD;
+  tf_rflags:QWORD; //EFlags
+  tf_rsp   :QWORD;
+  tf_ss    :QWORD;
+ end;
+
  p_mcontext_t=^mcontext_t;
  mcontext_t=packed record //0x480(1152)
   mc_onstack:QWORD; //sigstack state to restore  =1 if (SS_ONSTACK)

@@ -556,7 +556,6 @@ begin
                mem,
                @tid,
                nil,
-               0,
                @prio,
                nil
               );

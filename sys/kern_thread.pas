@@ -170,7 +170,6 @@ function  create_thread(td        :p_kthread; //calling thread
                         tls_base  :Pointer;
                         child_tid :PQWORD;
                         parent_tid:PQWORD;
-                        flags     :Integer;
                         rtp       :p_rtprio;
                         name      :PChar
                        ):Integer;
@@ -459,7 +458,6 @@ function create_thread(td        :p_kthread; //calling thread
                        tls_base  :Pointer;
                        child_tid :PQWORD;
                        parent_tid:PQWORD;
-                       flags     :Integer;
                        rtp       :p_rtprio;
                        name      :PChar
                       ):Integer;
@@ -603,11 +601,7 @@ begin
   end;
  end;
 
- if ((flags and THR_SUSPENDED)=0) then
- begin
-  NtResumeThread(newtd^.td_handle,nil);
- end;
-
+ NtResumeThread(newtd^.td_handle,nil);
 end;
 
 function kern_thr_new(td:p_kthread;param:p_thr_param):Integer;
@@ -643,7 +637,6 @@ begin
                        param^.tls_base,
                        param^.child_tid,
                        param^.parent_tid,
-                       param^.flags,
                        rtpp,
                        @name);
 end;
