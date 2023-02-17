@@ -39,7 +39,7 @@ type
   sizeContextMargin:QWord;                 // 120
   _unknown         :array[0..255-120] of Byte; // 256
  end;
- PSceFiber=^SceFiber;
+ PSceFiber =^SceFiber;
  PPSceFiber=^PSceFiber;
 
  // While we keep the size correct, the content is not the same as the one in original lib
@@ -60,6 +60,7 @@ type
  end;
  PSceFiberInfo=^SceFiberInfo;
 
+function GetFiberString:RawByteString;
 function ps4_sceFiberInitialize(fiber      :PSceFiber;
                                 name       :PChar;
                                 entry      :SceFiberEntry;
@@ -98,6 +99,17 @@ begin
   raise Exception.Create(Format('Error with code %d', [GetLastError]));
 end;
 
+function _GetFiberString(fiber:PSceFiber):RawByteString;
+begin
+ Result:='F:['+PChar(@fiber^.name[0])+':'+IntToStr(QWord(fiber^.handle))+'] ';
+end;
+
+function GetFiberString:RawByteString;
+begin
+ if _currentFiber<>nil then
+  Result:=_GetFiberString(_currentFiber);
+end;
+
 procedure _CreateThreadFiber;
 begin
  // Create a main fiber
@@ -109,10 +121,15 @@ begin
 end;
 
 procedure _FiberEntry(fiber:PSceFiber);
+var
+ argRun:QWord=0;
 begin
  _currentFiber:=fiber;
- Writeln(SysLogPrefix,'_FiberEntry,name=',PChar(@fiber^.name[0]));
- fiber^.entry(fiber^.argInit,fiber^.argRun);
+ Writeln(SysLogPrefix,'_FiberEntry Start');
+ if fiber^.pArgRun<>nil then
+  argRun:=fiber^.pArgRun^;
+ fiber^.entry(fiber^.argInit,argRun);
+ Writeln(SysLogPrefix,'_FiberEntry End');
  ps4_sceFiberReturnToThread(fiber^.pArgReturn^,fiber^.pArgRun);
 end;
 
@@ -142,7 +159,8 @@ begin
   Exit(SCE_FIBER_ERROR_PERMISSION);
  _CreateThreadFiber;
  _currentFiber    :=fiber;
- fiber^.pArgRun^  :=argRun;
+ if fiber^.pArgRun<>nil then
+  fiber^.pArgRun^ :=argRun;
  fiber^.pArgReturn:=argReturn;
  fiber^.state     :=FIBER_STATE_RUN;
  SwitchToFiber(fiber^.handle);
@@ -151,7 +169,8 @@ end;
 
 function _DeleteFiber(fiber:PSceFiber):Integer;
 begin
- DeleteFiber(fiber^.handle);
+ if (fiber^.state=FIBER_STATE_RUN) or (fiber^.state=FIBER_STATE_SUSPEND) then
+  DeleteFiber(fiber^.handle);
  Result:=0;
 end;
 
@@ -172,10 +191,11 @@ begin
  begin
   _ReCreateFiber(_currentFiber);
  end;
- _currentFiber  :=fiber;
- fiber^.pArgRun^:=argRunTo;
- fiber^.pArgRun :=argRun;
- fiber^.state   :=FIBER_STATE_RUN;
+ if _currentFiber^.pArgRun<>nil then
+  _currentFiber^.pArgRun^:=argRunTo;
+ fiber^.pArgRun  :=argRun;
+ fiber^.state    :=FIBER_STATE_RUN;
+ _currentFiber   :=fiber;
  SwitchToFiber(fiber^.handle);
  Result:=0;
 end;
@@ -188,7 +208,7 @@ begin
   Exit(SCE_FIBER_ERROR_PERMISSION);
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
- Writeln(SysLogPrefix,'sceFiberSwitch,name=',fiber^.name);
+ Writeln(SysLogPrefix,'sceFiberSwitch,to=',_GetFiberString(fiber));
  Result:=_SwitchFiber(fiber,argRunTo,argRun);
 end;
 
@@ -202,14 +222,14 @@ function ps4_sceFiberInitialize(fiber      :PSceFiber;
 begin
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
- if (sizeContext mod 16 <> 0) or
+ if (sizeContext mod 16<>0) or
     ((addrContext=nil) and (sizeContext>0)) or
     ((addrContext<>nil) and (sizeContext=0)) then
   Exit(SCE_FIBER_ERROR_INVALID);
  if sizeContext<SCE_FIBER_CONTEXT_MINIMUM_SIZE then
   Exit(SCE_FIBER_ERROR_RANGE);
- Writeln(SysLogPrefix,'sceFiberInitialize,name=',name,',sizeContext=',sizeContext,',argInit=',argInit);
  Result:=_CreateFiber(fiber,name,entry,argInit,addrContext,sizeContext);
+ Writeln(SysLogPrefix,'sceFiberInitialize,fiber=',_GetFiberString(fiber),',sizeContext=',sizeContext,',argInit=',argInit);
 end;
 
 function ps4_sceFiberFinalize(fiber:PSceFiber):Integer; SysV_ABI_CDecl;
@@ -218,7 +238,7 @@ begin
   Exit(SCE_FIBER_ERROR_NULL);
  if fiber=_currentFiber then
   Exit(SCE_FIBER_ERROR_STATE);
- Writeln(SysLogPrefix,'sceFiberFinalize,name=',fiber^.name);
+ Writeln(SysLogPrefix,'sceFiberFinalize,fiber=',_GetFiberString(fiber));
  Result:=_DeleteFiber(fiber);
 end;
 
@@ -228,7 +248,7 @@ begin
   Exit(SCE_FIBER_ERROR_NULL);
  if fiber^.state=1 then
   Exit(SCE_FIBER_ERROR_STATE);
- Writeln(SysLogPrefix,'sceFiberRun,name=',fiber^.name);
+ Writeln(SysLogPrefix,'sceFiberRun,fiber=',_GetFiberString(fiber));
  fiber^.state:=1;
  Result:=_RunFiber(fiber,argRun,argReturn);
 end;
@@ -237,15 +257,17 @@ function ps4_sceFiberReturnToThread(argReturn:QWord;argRun:PQWord):Integer; SysV
 begin
  if _currentFiber=nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
+ Writeln(SysLogPrefix,'sceFiberReturnToThread');
  if _currentFiber^.addrContext<>nil then
  begin
   _currentFiber^.state:=FIBER_STATE_SUSPEND;
  end else
  begin
-  _ReCreateFiber(_currentFiber);
+  _ReCreateFiber(_currentFiber); // TODO: Proper reset fiber
  end;
- _currentFiber^.pArgRun    :=argRun;
- _currentFiber^.pArgReturn^:=argReturn;
+ _currentFiber^.pArgRun     :=argRun;
+ if _currentFiber^.pArgReturn<>nil then
+  _currentFiber^.pArgReturn^:=argReturn;
  _currentFiber:=nil;
  SwitchToFiber(_threadFiber);
  Result:=0;
@@ -273,7 +295,7 @@ end;
 
 function ps4_sceFiberRename(fiber:PSceFiber;name:PChar):Integer; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceFiberRun,name=',fiber^.name,',newName=',name);
+ //Writeln(SysLogPrefix,'sceFiberRename,fiber=',_GetFiberString(fiber),',newName=',name);
  if fiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
  StrLCopy(@fiber^.name[0],name,SCE_FIBER_MAX_NAME_LENGTH);
@@ -282,11 +304,11 @@ end;
 
 function ps4_sceFiberGetSelf(pfiber:PPSceFiber):Integer; SysV_ABI_CDecl;
 begin
- Writeln(SysLogPrefix,'sceFiberGetSelf');
  if _currentFiber=nil then
   Exit(SCE_FIBER_ERROR_PERMISSION);
  if pfiber=nil then
   Exit(SCE_FIBER_ERROR_NULL);
+ //Writeln(SysLogPrefix,'sceFiberGetSelf');
  pfiber^:=_currentFiber;
  Result:=0;
 end;
@@ -295,7 +317,6 @@ function ps4_sceFiberGetInfo(fiber:PSceFiber;fiberInfo:PSceFiberInfo):Integer; S
 begin
  if (fiber=nil) or (fiberInfo=nil) then
   Exit(SCE_FIBER_ERROR_NULL);
- Writeln(SysLogPrefix,'sceFiberGetInfo,name=',fiber^.name);
  fiberInfo^.size             :=128;
  fiberInfo^.entry            :=fiber^.entry;
  fiberInfo^.argInit          :=fiber^.argInit;
