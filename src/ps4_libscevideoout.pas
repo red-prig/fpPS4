@@ -1644,7 +1644,7 @@ begin
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- spin_trylock(H.FCursors[index].lock);
+ spin_lock(H.FCursors[index].lock);
  H.FCursors[index].enable:=1;
  H.FCursors[index].adr:=address;
  spin_unlock(H.FCursors[index].lock);
@@ -1669,7 +1669,7 @@ begin
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- spin_trylock(H.FCursors[index].lock);
+ spin_lock(H.FCursors[index].lock);
  H.FCursors[index].enable:=0;
  spin_unlock(H.FCursors[index].lock);
 
@@ -1696,7 +1696,7 @@ begin
  if not IsAlign(address,4*1024) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if not TryGetHostPointerByAddr(address,buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
 
- spin_trylock(H.FCursors[index].lock);
+ spin_lock(H.FCursors[index].lock);
  H.FCursors[index].adr:=address;
  spin_unlock(H.FCursors[index].lock);
 
