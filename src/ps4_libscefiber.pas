@@ -122,7 +122,8 @@ end;
 
 procedure _FiberEntry(fiber:PSceFiber);
 var
- argRun:QWord=0;
+ argRun   :QWord=0;
+ argReturn:QWord=0;
 begin
  _currentFiber:=fiber;
  Writeln(SysLogPrefix,'_FiberEntry Start');
@@ -130,7 +131,9 @@ begin
   argRun:=fiber^.pArgRun^;
  fiber^.entry(fiber^.argInit,argRun);
  Writeln(SysLogPrefix,'_FiberEntry End');
- ps4_sceFiberReturnToThread(fiber^.pArgReturn^,fiber^.pArgRun);
+ if fiber^.pArgReturn<>nil then
+  argReturn:=fiber^.pArgReturn^;
+ ps4_sceFiberReturnToThread(fiber^.argReturn,fiber^.pArgRun);
 end;
 
 function _CreateFiber(fiber      :PSceFiber;
