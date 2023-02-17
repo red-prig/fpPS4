@@ -177,6 +177,13 @@ type
   _align2:array[0..2] of DWORD; //3(int)
  end;
 
+ p_sigframe=^sigframe;
+ sigframe=packed record
+  sf_ahu:Pointer;
+  sf_uc :ucontext_t;
+  sf_si :siginfo_t;
+ end;
+
 const
  // used by signal delivery to indicate status of signal stack
  _UC_SETSTACK=$00020000;
