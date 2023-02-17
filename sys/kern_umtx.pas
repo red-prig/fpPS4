@@ -58,7 +58,11 @@ type
 
  //per thread local
  umtx_q=packed record
-  pNext,pPrev:p_umtx_q; //uq_link
+  //pNext,pPrev:p_umtx_q; //uq_link
+  uq_link:packed record
+   pNext:p_umtx_q;
+   pPrev:PPointer;
+  end;
   //
   uq_key          :umtx_key;
   uq_flags        :Integer;
@@ -68,11 +72,15 @@ type
   uq_cur_queue    :p_umtxq_queue;
  end;
 
- umtxq_head=specialize TAILQ_HEAD<p_umtx_q>;
+ //umtxq_head=specialize TAILQ_HEAD<p_umtx_q>;
 
  //per mutex addr
  umtxq_queue=packed record
-  head    :umtxq_head;
+  head:packed record
+   pFirst:p_umtx_q;
+   pLast :PPointer;
+  end;
+  //head    :umtxq_head;
   length  :Integer;
   align   :Integer;
  end;
@@ -124,6 +132,10 @@ begin
  if (Result<>nil) then Exit; //EXIST
 
  new:=AllocMem(SizeOf(umtxq_chain)); //NEW
+
+ TAILQ_INIT(@new^.uc_queue[0].head);
+ TAILQ_INIT(@new^.uc_queue[1].head);
+
  new^.uc_obj :=m;
  new^.uc_type:=ktype;
 
@@ -222,7 +234,8 @@ begin
  uh:=umtxq_queue_lookup(key,UMTX_SHARED_QUEUE);
  if (uh<>nil) then
  begin
-  first:=uh^.head.pHead; //TAILQ_FIRST
+  //first:=uh^.head.pHead; //TAILQ_FIRST
+  first :=TAILQ_FIRST(@uh^.head);
   Result:=uh^.length;
  end;
 end;
@@ -252,7 +265,8 @@ begin
 
  uh:=umtxq_queue_lookup(uq^.uq_key,q);
 
- uh^.head.Insert_tail(uq);
+ //uh^.head.Insert_tail(uq);
+ TAILQ_INSERT_TAIL(@uh^.head,uq,@uq^.uq_link);
  Inc(uh^.length);
 
  uq^.uq_flags:=uq^.uq_flags or UQF_UMTXQ;
@@ -267,12 +281,14 @@ begin
  begin
   uh:=uq^.uq_cur_queue;
 
-  uh^.head.Remove(uq); //uq_link
+  //uh^.head.Remove(uq); //uq_link
+  TAILQ_REMOVE(@uh^.head,uq,@uq^.uq_link);
   Dec(uh^.length);
 
   uq^.uq_flags:=uq^.uq_flags and (not UQF_UMTXQ);
 
-  if (uh^.head.pHead=nil) then //TAILQ_EMPTY
+  //if (uh^.head.pHead=nil) then //TAILQ_EMPTY
+  if TAILQ_EMPTY(@uh^.head) then
   begin
    Assert(uh^.length=0,'inconsistent umtxq_queue length');
   end;
@@ -358,7 +374,8 @@ begin
  if (uh<>nil) then
  begin
   repeat
-   uq:=uh^.head.pHead; //TAILQ_FIRST
+   //uq:=uh^.head.pHead; //TAILQ_FIRST
+   uq:=TAILQ_FIRST(@uh^.head);
    if (uq=nil) then Break;
 
    umtxq_remove(uq);
@@ -1072,7 +1089,8 @@ begin
     pri:=UPRI(uq_first^.uq_thread);
    end;
 
-   uq_first:=uq_first^.pNext;
+   //uq_first:=uq_first^.pNext;
+   uq_first:=TAILQ_NEXT(uq_first,@uq_first^.uq_link);
   end;
 
   thread_lock(td);
@@ -1211,7 +1229,8 @@ begin
    begin
     pri:=UPRI(uq2^.uq_thread);
    end;
-   uq2:=uq2^.pNext;
+   uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
+   //uq2:=uq2^.pNext;
   end;
 
   if (pri>uq^.uq_inherited_pri) then
@@ -1242,7 +1261,8 @@ begin
    begin
     pri:=UPRI(uq2^.uq_thread);
    end;
-   uq2:=uq2^.pNext;
+   uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
+   //uq2:=uq2^.pNext;
   end;
 
   if (pri>uq^.uq_inherited_pri) then
@@ -1322,7 +1342,8 @@ begin
   begin
    pri:=UPRI(uq2^.uq_thread);
   end;
-  uq2:=uq2^.pNext;
+  uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
+  //uq2:=uq2^.pNext;
  end;
 
  if (pri>uq^.uq_inherited_pri) then

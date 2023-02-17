@@ -26,6 +26,7 @@ type
  end;
 
 procedure TAILQ_INIT       (head:Pointer); inline;
+function  TAILQ_EMPTY      (head:Pointer):Boolean; inline;
 function  TAILQ_FIRST      (head:Pointer):Pointer; inline;
 function  TAILQ_NEXT       (elm,field:Pointer):Pointer; inline;
 procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
@@ -51,6 +52,11 @@ procedure TAILQ_INIT(head:Pointer); inline;
 begin
  p_tq_list(head)^.pFirst:=nil;
  p_tq_list(head)^.pLast :=@p_tq_list(head)^.pFirst;
+end;
+
+function TAILQ_EMPTY(head:Pointer):Boolean; inline;
+begin
+ Result:=p_tq_list(head)^.pFirst=nil;
 end;
 
 function TAILQ_FIRST(head:Pointer):Pointer; inline;
