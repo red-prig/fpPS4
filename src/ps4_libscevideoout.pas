@@ -1644,7 +1644,7 @@ begin
  H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
  if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
 
- spin_trylock(H.FCursors[index].lock);
+ spin_lock(H.FCursors[index].lock);
  H.FCursors[index].enable:=1;
  H.FCursors[index].adr:=address;
  spin_unlock(H.FCursors[index].lock);
@@ -1656,6 +1656,30 @@ function ps4_sceVideoOutCursorEnable(hVideo:Integer;index:Integer;address:Pointe
 begin
  _sig_lock;
  Result:=__sceVideoOutCursorEnable(hVideo,index,address);
+ _sig_unlock;
+end;
+
+function __sceVideoOutCursorDisable(hVideo:Integer;index:Integer):Integer;
+var
+ H:TVideoOut;
+begin
+ Result:=0;
+ if (index<0) or (index>=SCE_VIDEO_OUT_CURSOR_NUM_MAX) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_INDEX);
+
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ spin_lock(H.FCursors[index].lock);
+ H.FCursors[index].enable:=0;
+ spin_unlock(H.FCursors[index].lock);
+
+ H.Release;
+end;
+
+function ps4_sceVideoOutCursorDisable(hVideo:Integer;index:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=__sceVideoOutCursorDisable(hVideo,index);
  _sig_unlock;
 end;
 
@@ -1672,7 +1696,7 @@ begin
  if not IsAlign(address,4*1024) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_ADDRESS);
  if not TryGetHostPointerByAddr(address,buf) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_MEMORY);
 
- spin_trylock(H.FCursors[index].lock);
+ spin_lock(H.FCursors[index].lock);
  H.FCursors[index].adr:=address;
  spin_unlock(H.FCursors[index].lock);
 
@@ -1980,6 +2004,7 @@ begin
  lib^.set_proc($538E8DC0E889A72B,@ps4_sceVideoOutSubmitFlip);
  lib^.set_proc($375EC02BCF0D743D,@ps4_sceVideoOutCursorSetPosition);
  lib^.set_proc($50F656087F2A4CCE,@ps4_sceVideoOutCursorEnable);
+ lib^.set_proc($7C43C4C1139D0B03,@ps4_sceVideoOutCursorDisable);
  lib^.set_proc($BBFF5B856400A6AF,@ps4_sceVideoOutCursorSetImageAddress);
  lib^.set_proc($1E26CEB5ECF34FA3,@ps4_sceVideoOutCursorIsUpdatePending);
  lib^.set_proc($D456412B2F0778D5,@ps4_sceVideoOutGetVblankStatus);

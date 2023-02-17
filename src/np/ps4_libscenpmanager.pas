@@ -434,6 +434,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpUnregisterStateCallbackA(callbackId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 function ps4_sceNpPollAsync(reqId:Integer;
@@ -498,6 +503,7 @@ begin
  lib^.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
  lib^.set_proc($19AC6BA7711663F3,@ps4_sceNpNotifyPlusFeature);
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
+ lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
