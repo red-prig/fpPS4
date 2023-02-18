@@ -320,27 +320,27 @@ end;
 function SceUltQueue.push(const aData:Pointer):Integer;
 begin
  queueData^.enter;
-  if ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) < queueData^.numData then
+  while ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) >= queueData^.numData do
   begin
-   Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
-   Inc(queueData^.queuePtr,queueData^.dataSize);
-   Result:=0;
-  end else
-   Result:=SCE_ULT_ERROR_BUSY;
+   SwYieldExecution;
+  end;
+  Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
+  Inc(queueData^.queuePtr,queueData^.dataSize);
+  Result:=0;
  queueData^.leave;
 end;
 
 function SceUltQueue.pop(const aData:Pointer):Integer;
 begin
  queueData^.enter;
-  if QWord(queueData^.queuePtr) > QWord(queueData^.workArea) then
+  while QWord(queueData^.queuePtr) <= QWord(queueData^.workArea) do
   begin
-   Move(queueData^.workArea^,aData^,queueData^.dataSize);
-   Move((queueData^.workArea+queueData^.dataSize)^,queueData^.workArea^,QWord(queueData^.queuePtr)-QWord(queueData^.workArea)-queueData^.dataSize);
-   Dec(queueData^.queuePtr,queueData^.dataSize);
-   Result:=0;
-  end else
-   Result:=SCE_ULT_ERROR_BUSY;
+   SwYieldExecution;
+  end;
+  Move(queueData^.workArea^,aData^,queueData^.dataSize);
+  Move((queueData^.workArea+queueData^.dataSize)^,queueData^.workArea^,QWord(queueData^.queuePtr)-QWord(queueData^.workArea)-queueData^.dataSize);
+  Dec(queueData^.queuePtr,queueData^.dataSize);
+  Result:=0;
  queueData^.leave;
 end;
 
