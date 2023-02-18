@@ -158,8 +158,8 @@ type
   queueData   :PSceUltQueueDataResourcePool;    // 144
   waitingQueue:PSceUltWaitingQueueResourcePool; // 152
   _unknown:array[0..511-152] of Byte; // 512
-  function  isPushable:Boolean;
-  procedure push(const aData:Pointer);
+  function push(const aData:Pointer):Integer;
+  function pop(const aData:Pointer):Integer;
  end;
 
 threadvar
@@ -185,13 +185,13 @@ begin
    if workerThread^.ulThreadList.Count=0 then
     continue;
    // Select next ulThread to be executed
-   EnterCriticalSection(runtime^.cs);
+   runtime^.enter;
     Inc(workerThread^.current);
     if workerThread^.current>=workerThread^.ulThreadList.Count then
      workerThread^.current:=0;
     ulThread:=workerThread^.ulThreadList[workerThread^.current];
     _currentUlThread:=ulThread;
-   LeaveCriticalSection(runtime^.cs);
+   runtime^.leave;
 
    // Execute ulThread
    if ulThread^.state<>ULT_STATE_PREPARE_JOIN then
@@ -317,21 +317,30 @@ begin
  LeaveCriticalSection(cs);
 end;
 
-function SceUltQueue.isPushable:Boolean;
+function SceUltQueue.push(const aData:Pointer):Integer;
 begin
  queueData^.enter;
-  Result:=False;
   if ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) < queueData^.numData then
-   Result:=True;
-  Writeln(Result);
+  begin
+   Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
+   Inc(queueData^.queuePtr,queueData^.dataSize);
+   Result:=0;
+  end else
+   Result:=SCE_ULT_ERROR_BUSY;
  queueData^.leave;
 end;
 
-procedure SceUltQueue.push(const aData:Pointer);
+function SceUltQueue.pop(const aData:Pointer):Integer;
 begin
  queueData^.enter;
-  Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
-  Inc(queueData^.queuePtr,queueData^.dataSize);
+  if QWord(queueData^.queuePtr) > QWord(queueData^.workArea) then
+  begin
+   Move(queueData^.workArea^,aData^,queueData^.dataSize);
+   Move((queueData^.workArea+queueData^.dataSize)^,queueData^.workArea^,QWord(queueData^.queuePtr)-QWord(queueData^.workArea)-queueData^.dataSize);
+   Dec(queueData^.queuePtr,queueData^.dataSize);
+   Result:=0;
+  end else
+   Result:=SCE_ULT_ERROR_BUSY;
  queueData^.leave;
 end;
 
@@ -521,10 +530,16 @@ function ps4_sceUltQueuePush(queue:PSceUltQueue;data:Pointer):Integer; SysV_ABI_
 begin
  if (queue=nil) or (data=nil) then
   Exit(SCE_ULT_ERROR_NULL);
- if not queue^.isPushable then
-  Exit(SCE_ULT_ERROR_BUSY);
  Writeln(SysLogPrefix,'sceUltQueuePush,queue=',queue^.name);
- queue^.push(data);
+ Result:=queue^.push(data);
+end;
+
+function ps4_sceUltQueuePop(queue:PSceUltQueue;data:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (queue=nil) or (data=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltQueuePop,queue=',queue^.name);
+ Result:=queue^.pop(data);
 end;
 
 //
@@ -553,6 +568,7 @@ begin
 
  lib^.set_proc($F58E6478EBDBEA89,@ps4_sceUltQueueCreate);
  lib^.set_proc($754C295F77B93431,@ps4_sceUltQueuePush);
+ lib^.set_proc($4554AADADB26DB2C,@ps4_sceUltQueuePop);
 end;
 
 initialization
