@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="136">
+    <Units Count="137">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -625,6 +625,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceFiber"/>
       </Unit135>
+      <Unit136>
+        <Filename Value="src\ps4_libscedepth.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDepth"/>
+      </Unit136>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
