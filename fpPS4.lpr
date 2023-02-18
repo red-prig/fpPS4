@@ -14,6 +14,7 @@ uses
  sys_types,
  sys_pthread,
  sys_path,
+ sys_kernel,
  ps4libdoc,
  ps4_libkernel,
  ps4_libSceLibcInternal,
@@ -226,7 +227,7 @@ end;
 
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
- Writeln(StdErr,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
+ Writeln(StdErr,SysLogPrefix,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
  //DebugBreak;
  Sleep(INFINITE);
  //readln;

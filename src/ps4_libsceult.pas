@@ -1,6 +1,7 @@
 unit ps4_libSceUlt;
 
 {$mode ObjFPC}{$H+}
+{$modeswitch ADVANCEDRECORDS}
 
 interface
 
@@ -24,6 +25,7 @@ const
  SCE_ULT_ERROR_INVALID       =$80810004;
  SCE_ULT_ERROR_PERMISSION    =$80810005;
  SCE_ULT_ERROR_STATE         =$80810006;
+ SCE_ULT_ERROR_BUSY          =$80810007;
  SCE_ULT_ERROR_AGAIN         =$80810008;
  SCE_ULT_ERROR_NOT_INITIALIZE=$8081000A;
 
@@ -36,6 +38,18 @@ const
 type
  SceUltUlthreadEntry=function(arg:QWord):Integer; SysV_ABI_CDecl;
 
+ PWorkerThread                          =^TWorkerThread;
+ PSceUltUlthreadRuntime                 =^SceUltUlthreadRuntime;
+ PSceUltUlthreadRuntimeOptParam         =^SceUltUlthreadRuntimeOptParam;
+ PSceUltWaitingQueueResourcePoolOptParam=^SceUltWaitingQueueResourcePoolOptParam;
+ PSceUltUlthreadOptParam                =^SceUltUlthreadOptParam;
+ PSceUltWaitingQueueResourcePool        =^SceUltWaitingQueueResourcePool;
+ PSceUltUlthread                        =^SceUltUlthread;
+ PSceUltQueueDataResourcePoolOptParam   =^SceUltQueueDataResourcePoolOptParam;
+ PSceUltQueueDataResourcePool           =^SceUltQueueDataResourcePool;
+ PSceUltQueueOptParam                   =^SceUltQueueOptParam;
+ PSceUltQueue                           =^SceUltQueue;
+
  SceUltUlthreadRuntimeOptParam=packed record
   oneShotThreadStackSize     :QWord;    // 8
   workerThreadCpuAffinityMask:QWord;    // 16
@@ -43,18 +57,25 @@ type
   inheritSched               :Integer;  // 24
   _unknown                   :array[0..127-24] of Byte; // 128
  end;
- PSceUltUlthreadRuntimeOptParam=^SceUltUlthreadRuntimeOptParam;
 
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltUlthread=packed record
-  fiber   :PSceFiber;           // 8
-  entry   :SceUltUlthreadEntry; // 16
-  arg     :QWord;               // 24
-  state   :QWord;               // 32
-  runtime :Pointer;             // 40
-  _unknown:array[0..255-40] of Byte; // 256
+  fiber       :PSceFiber;           // 8
+  entry       :SceUltUlthreadEntry; // 16
+  arg         :QWord;               // 24
+  state       :QWord;               // 32
+  runtime     :PSceUltUlthreadRuntime; // 40
+  returnStatus:QWord;                  // 48
+  _unknown:array[0..255-48] of Byte; // 256
+  procedure init(const aRuntime:PSceUltUlthreadRuntime;
+                 const aName:PChar;
+                 const aEntry:SceUltUlthreadEntry;
+                 const aArg:QWord;
+                 const aContext:Pointer;
+                 const aSizeContext:QWord);
+  function  getState:Integer;
+  procedure destroy;
  end;
- PSceUltUlthread=^SceUltUlthread;
 
  TUlThreadList=specialize TList<PSceUltUlthread>;
 
@@ -63,59 +84,88 @@ type
   attr    :DWord;                 // 4
   _unknown:array[0..127-4] of Byte; // 256
  end;
- PSceUltUlthreadOptParam=^SceUltUlthreadOptParam;
 
  TWorkerThread=record
   thread      :pthread;
-  runtime     :Pointer;
+  runtime     :PSceUltUlthreadRuntime;
   ulThreadList:TUlThreadList;
-  current     :QWord;
+  current     :QWord;         // Current ulThread index
+  indx        :QWord;         // This worker thread index in runtime
  end;
- PWorkerThread=^TWorkerThread;
 
  TWorkerThreadList=specialize TList<PWorkerThread>;
 
  // Our own invention of SceUltUlthreadRuntime. Not compatible with original one
  // Original size is 4096 bytes, but we ignore this info
  SceUltUlthreadRuntime=packed record
+  param           :SceUltUlthreadRuntimeOptParam;
   name            :RawByteString;
   maxUlThread     :Integer;
   maxWorkerThread :Integer;
-  param           :SceUltUlthreadRuntimeOptParam;
   workerThreadList:TWorkerThreadList;
   ulThreadCount   :QWord;
-  cs              :TRTLCriticalSection;
   balancer        :QWord;
+  cs              :TRTLCriticalSection;
+  procedure enter;
+  procedure leave;
  end;
- PSceUltUlthreadRuntime=^SceUltUlthreadRuntime;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltWaitingQueueResourcePoolOptParam=packed record
+  _unknown:array[0..127] of Byte; // 128
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltWaitingQueueResourcePool=packed record
+  param         :SceUltWaitingQueueResourcePoolOptParam; // 128
+  name          :RawByteString; // 136
+  numThreads    :DWord;         // 140
+  numSyncObjects:DWord;         // 144
+  workArea      :Pointer;       // 152
+  _unknown:array[0..255-152] of Byte; // 256
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltQueueDataResourcePoolOptParam=packed record
+  _unknown:array[0..127] of Byte; // 128
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltQueueDataResourcePool=packed record
+  param          :SceUltQueueDataResourcePoolOptParam; // 128
+  numData        :DWord;                               // 132
+  numQueueObjects:DWord;                               // 136
+  dataSize       :QWord;                               // 144
+  waitingQueue   :PSceUltWaitingQueueResourcePool;     // 152
+  workArea       :Pointer;                             // 160
+  name           :RawByteString;                       // 168
+  cs             :TRTLCriticalSection;                 // 208
+  queuePtr       :Pointer;                             // 216
+  _unknown:array[0..511-216] of Byte; // 512
+  procedure enter;
+  procedure leave;
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltQueueOptParam=packed record
+  _unknown:array[0..127] of Byte; // 128
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltQueue=packed record
+  param       :SceUltQueueOptParam; // 128
+  name        :RawByteString;                   // 136
+  queueData   :PSceUltQueueDataResourcePool;    // 144
+  waitingQueue:PSceUltWaitingQueueResourcePool; // 152
+  _unknown:array[0..511-152] of Byte; // 512
+  function  isPushable:Boolean;
+  procedure push(const aData:Pointer);
+ end;
 
 threadvar
  _currentUlThread:PSceUltUlthread;
 
 // Wrappers
-
-procedure _ulThreadDestroy(const ulThread:PSceUltUlthread);
-var
- workerThread:PWorkerThread;
- runtime     :PSceUltUlthreadRuntime;
- i,j         :Integer;
-begin
- runtime:=ulThread^.runtime;
- EnterCriticalSection(runtime^.cs);
-  for j:=0 to runtime^.workerThreadList.Count-1 do
-  begin
-   workerThread:=runtime^.workerThreadList[j];
-   for i:=0 to workerThread^.ulThreadList.Count-1 do
-    if workerThread^.ulThreadList[i]=ulThread then
-    begin
-     ps4_sceFiberFinalize(ulThread^.fiber);
-     Dispose(ulThread);
-     workerThread^.ulThreadList.Delete(i);
-     Exit;
-    end;
-  end;
- LeaveCriticalSection(runtime^.cs);
-end;
 
 procedure _workerThreadEntry(const workerThread:PWorkerThread); SysV_ABI_CDecl;
 var
@@ -149,7 +199,7 @@ begin
     if ulThread^.fiber^.state=FIBER_STATE_INIT then
     begin
      ulThread^.state:=ULT_STATE_RUN;
-     ps4_sceFiberRun(ulThread^.fiber,0,nil);
+     ps4_sceFiberRun(ulThread^.fiber,0,@ulThread^.returnStatus);
     end else
     if ulThread^.fiber^.state=FIBER_STATE_SUSPEND then
      ps4_sceFiberSwitch(ulThread^.fiber,0,nil);
@@ -180,50 +230,109 @@ begin
  Result^.ulThreadList:=TUlThreadList.Create;
  Result^.ulThreadList.Capacity:=runtime^.maxUlThread;
  Result^.runtime     :=runtime;
+ Result^.indx        :=runtime^.workerThreadList.Count;
  runtime^.workerThreadList.Add(Result);
- ps4_scePthreadCreate(@Result^.thread,nil,@_workerThreadEntry,Result,PChar(runtime^.name+'_ultWorker_'+IntToStr(runtime^.workerThreadList.Count)));
+ ps4_scePthreadCreate(@Result^.thread,nil,@_workerThreadEntry,Result,PChar(runtime^.name+'_ultWorker_'+IntToStr(Result^.indx)));
 end;
 
-procedure _ulThreadCreate(const ulThread:PSceUltUlthread;
-                          const runtime:PSceUltUlthreadRuntime;
-                          const name:PChar;
-                          const entry:SceUltUlthreadEntry;
-                          const arg:QWord;
-                          const context:Pointer;
-                          const sizeContext:QWord);
+procedure SceUltUlthreadRuntime.enter;
+begin
+ EnterCriticalSection(cs);
+end;
+
+procedure SceUltUlthreadRuntime.leave;
+begin
+ LeaveCriticalSection(cs);
+end;
+
+procedure SceUltUlthread.init(const aRuntime:PSceUltUlthreadRuntime;
+                              const aName:PChar;
+                              const aEntry:SceUltUlthreadEntry;
+                              const aArg:QWord;
+                              const aContext:Pointer;
+                              const aSizeContext:QWord);
 var
  workerThread:PWorkerThread;
 begin
- EnterCriticalSection(runtime^.cs);
-  New(ulThread^.fiber);
-  ulThread^.runtime:=runtime;
-  ulThread^.entry  :=entry;
-  ulThread^.arg    :=arg;
-  ps4_sceFiberInitialize(ulThread^.fiber,name,@_ulThreadEntry,QWord(ulThread),context,sizeContext,nil);
+ aRuntime^.enter;
+  New(fiber);
+  runtime:=aRuntime;
+  entry  :=aEntry;
+  arg    :=aArg;
+  ps4_sceFiberInitialize(fiber,aName,@_ulThreadEntry,QWord(@Self),aContext,runtime^.param.oneShotThreadStackSize,nil);
 
   workerThread:=runtime^.workerThreadList[runtime^.balancer mod runtime^.maxWorkerThread];
-  workerThread^.ulThreadList.Add(ulThread);
+  workerThread^.ulThreadList.Add(@Self);
   Inc(runtime^.balancer);
- LeaveCriticalSection(runtime^.cs);
+ aRuntime^.leave;
 end;
 
-function _ulThreadGetState(const ulThread:PSceUltUlthread):Integer;
+function SceUltUlthread.getState:Integer;
 var
  i,j         :Integer;
- runtime     :PSceUltUlthreadRuntime;
  workerThread:PWorkerThread;
 begin
- runtime:=ulThread^.runtime;
- EnterCriticalSection(runtime^.cs);
+ runtime^.enter;
+  for j:=0 to runtime^.workerThreadList.Count-1 do
+  begin
+   workerThread:=runtime^.workerThreadList[j];
+   for i:=0 to workerThread^.ulThreadList.Count-1 do
+    if workerThread^.ulThreadList[i]=@Self then
+     Exit(workerThread^.ulThreadList[i]^.state);
+  end;
+  Result:=ULT_STATE_DESTROYED;
+ runtime^.leave;
+end;
+
+procedure SceUltUlthread.destroy;
+var
+ workerThread:PWorkerThread;
+ ulThread    :PSceUltUlthread;
+ i,j         :Integer;
+begin
+ ulThread:=@Self;
+ runtime^.enter;
   for j:=0 to runtime^.workerThreadList.Count-1 do
   begin
    workerThread:=runtime^.workerThreadList[j];
    for i:=0 to workerThread^.ulThreadList.Count-1 do
     if workerThread^.ulThreadList[i]=ulThread then
-     Exit(workerThread^.ulThreadList[i]^.state);
+    begin
+     ps4_sceFiberFinalize(ulThread^.fiber);
+     Dispose(ulThread);
+     workerThread^.ulThreadList.Delete(i);
+     Exit;
+    end;
   end;
-  Result:=ULT_STATE_DESTROYED;
- LeaveCriticalSection(runtime^.cs);
+ runtime^.leave;
+end;
+
+procedure SceUltQueueDataResourcePool.enter;
+begin
+ EnterCriticalSection(cs);
+end;
+
+procedure SceUltQueueDataResourcePool.leave;
+begin
+ LeaveCriticalSection(cs);
+end;
+
+function SceUltQueue.isPushable:Boolean;
+begin
+ queueData^.enter;
+  Result:=False;
+  if ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) < queueData^.numData then
+   Result:=True;
+  Writeln(Result);
+ queueData^.leave;
+end;
+
+procedure SceUltQueue.push(const aData:Pointer);
+begin
+ queueData^.enter;
+  Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
+  Inc(queueData^.queuePtr,queueData^.dataSize);
+ queueData^.leave;
 end;
 
 // APIs
@@ -234,12 +343,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceUltUlthreadRuntimeGetWorkAreaSize(maxUlThread,maxWorkerThread:Integer):QWord; SysV_ABI_CDecl;
-begin
- Result:=8; // TODO: Fake size. Not important for current implementation of this lib.
-end;
-
-function ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize(numThreads,numSyncObjects:Integer):QWord; SysV_ABI_CDecl;
+function ps4_sceUltUlthreadRuntimeGetWorkAreaSize(maxUlThread,maxWorkerThread:DWord):QWord; SysV_ABI_CDecl;
 begin
  Result:=8; // TODO: Fake size. Not important for current implementation of this lib.
 end;
@@ -303,7 +407,7 @@ begin
  if runtime^.ulThreadCount>=runtime^.maxUlThread then
   Exit(SCE_ULT_ERROR_AGAIN);
  Writeln(SysLogPrefix,'sceUltUlthreadCreate,name=',name,'runtime=',runtime^.name);
- _ulThreadCreate(ulThread,runtime,name,entry,arg,context,sizeContext);
+ ulThread^.init(runtime,name,entry,arg,context,sizeContext);
 end;
 
 function ps4_sceUltUlthreadJoin(ulThread:PSceUltUlthread;status:PInteger):Integer; SysV_ABI_CDecl;
@@ -312,17 +416,118 @@ begin
   Exit(SCE_ULT_ERROR_NULL);
  if ulThread=_currentUlThread then
   Exit(SCE_ULT_ERROR_PERMISSION);
- if _ulThreadGetState(ulThread)=ULT_STATE_DESTROYED then
+ if ulThread^.getState=ULT_STATE_DESTROYED then
   Exit(SCE_ULT_ERROR_STATE);
  Writeln(SysLogPrefix,'sceUltUlthreadJoin,fiber=',GetFiberStringParam(ulThread^.fiber));
  repeat
   SwYieldExecution;
- until _ulThreadGetState(ulThread)=ULT_STATE_PREPARE_JOIN;
+ until ulThread^.getState=ULT_STATE_PREPARE_JOIN;
  //
  if (status<>nil) and (ulThread^.fiber^.pArgReturn<>nil) then
+ begin
   status^:=ulThread^.fiber^.pArgReturn^;
- _ulThreadDestroy(ulThread);
+  Writeln(SysLogPrefix,'Return code:',status^);
+ end;
+ ulThread^.destroy;
 end;
+
+//
+
+function ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize(numThreads,numSyncObjects:DWord):QWord; SysV_ABI_CDecl;
+begin
+ Result:=8; // TODO: Fake size. Not important for current implementation of this lib.
+end;
+
+function ps4_sceUltWaitingQueueResourcePoolCreate(pool          :PSceUltWaitingQueueResourcePool;
+                                                  name          :PChar;
+                                                  numThreads    :DWord;
+                                                  numSyncObjects:DWord;
+                                                  workArea      :Pointer;
+                                                  param         :PSceUltWaitingQueueResourcePoolOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if (pool=nil) or (name=nil) or (workArea=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (numThreads=0) or (numSyncObjects=0) then
+  Exit(SCE_ULT_ERROR_INVALID);
+ Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolCreate,name=',name,',numThreads=',numThreads,',numSyncObjects=',numSyncObjects);
+ pool^.name          :=name;
+ pool^.numThreads    :=numThreads;
+ pool^.numSyncObjects:=numSyncObjects;
+ pool^.workArea      :=workArea;
+ pool^.workArea      :=workArea;
+ if param<>nil then
+  pool^.param:=param^;
+ Result:=0; // TODO: Not used by current implementation of this lib.
+end;
+
+//
+
+function ps4_sceUltQueueDataResourcePoolGetWorkAreaSize(numData:DWord;dataSize:QWord;numQueueObjects:DWord):Integer; SysV_ABI_CDecl;
+begin
+ Result:=numData*dataSize*numQueueObjects;
+end;
+
+function ps4_sceUltQueueDataResourcePoolCreate(pool           :PSceUltQueueDataResourcePool;
+                                               name           :PChar;
+                                               numData        :DWord;
+                                               dataSize       :QWord;
+                                               numQueueObjects:DWord;
+                                               waitingQueue   :PSceUltWaitingQueueResourcePool;
+                                               workArea       :Pointer;
+                                               param          :PSceUltQueueDataResourcePoolOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if (pool=nil) or (name=nil) or (workArea=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (numData=0) or (dataSize=0) or (numQueueObjects=0) then
+  Exit(SCE_ULT_ERROR_INVALID);
+ assert(numQueueObjects=1,'TODO: numQueueObjects higher than 1');
+ Writeln(SysLogPrefix,'sceUltQueueDataResourcePoolCreate,name=',name,',numData=',numData,',dataSize=',dataSize,',numQueueObjects=',numQueueObjects);
+ pool^.name           :=name;
+ pool^.numData        :=numData;
+ pool^.dataSize       :=dataSize;
+ pool^.numQueueObjects:=numQueueObjects;
+ pool^.waitingQueue   :=waitingQueue;
+ pool^.workArea       :=workArea;
+ pool^.queuePtr       :=workArea;
+ InitCriticalSection(pool^.cs);
+ if param<>nil then
+  pool^.param:=param^;
+ Result:=0;
+end;
+
+//
+
+function ps4_sceUltQueueCreate(queue       :PSceUltQueue;
+                               name        :PChar;
+                               dataSize    :QWord;
+                               waitingQueue:PSceUltWaitingQueueResourcePool;
+                               queueData   :PSceUltQueueDataResourcePool;
+                               param       :PSceUltQueueOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if (queue=nil) or (name=nil) or (queueData=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (dataSize=0) or (dataSize>queueData^.dataSize) then
+  Exit(SCE_ULT_ERROR_INVALID);
+ Writeln(SysLogPrefix,'sceUltQueueCreate,name=',name,',dataSize=',dataSize);
+ queue^.name        :=name;
+ queue^.queueData   :=queueData;
+ queue^.waitingQueue:=waitingQueue;
+ if param<>nil then
+  queue^.param:=param^;
+ Result:=0;
+end;
+
+function ps4_sceUltQueuePush(queue:PSceUltQueue;data:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (queue=nil) or (data=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ if not queue^.isPushable then
+  Exit(SCE_ULT_ERROR_BUSY);
+ Writeln(SysLogPrefix,'sceUltQueuePush,queue=',queue^.name);
+ queue^.push(data);
+end;
+
+//
 
 function Load_libSceUlt(Const name:RawByteString):TElf_node;
 var
@@ -335,11 +540,19 @@ begin
 
  lib^.set_proc($859220D44586B073,@ps4_sceUltInitialize);
  lib^.set_proc($82BB36A5B7366B03,@ps4_sceUltUlthreadRuntimeGetWorkAreaSize);
- lib^.set_proc($588595D5077B3C55,@ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize);
  lib^.set_proc($576BB758BAF087AE,@ps4_sceUltUlthreadRuntimeOptParamInitialize);
  lib^.set_proc($8F0F45919057A3F8,@ps4_sceUltUlthreadRuntimeCreate);
  lib^.set_proc($CE7237ABC4BB290E,@ps4_sceUltUlthreadCreate);
  lib^.set_proc($802780239ECB1A02,@ps4_sceUltUlthreadJoin);
+
+ lib^.set_proc($588595D5077B3C55,@ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize);
+ lib^.set_proc($6221EE8CE1BDBD76,@ps4_sceUltWaitingQueueResourcePoolCreate);
+
+ lib^.set_proc($7AF8FD60F912F2CE,@ps4_sceUltQueueDataResourcePoolGetWorkAreaSize);
+ lib^.set_proc($4C51E6EBF37ABE4B,@ps4_sceUltQueueDataResourcePoolCreate);
+
+ lib^.set_proc($F58E6478EBDBEA89,@ps4_sceUltQueueCreate);
+ lib^.set_proc($754C295F77B93431,@ps4_sceUltQueuePush);
 end;
 
 initialization
