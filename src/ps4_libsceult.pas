@@ -34,6 +34,7 @@ const
  ULT_STATE_SUSPEND     =2;
  ULT_STATE_PREPARE_JOIN=3;
  ULT_STATE_DESTROYED   =4;
+ ULT_STATE_WAIT        =5;
 
 type
  SceUltUlthreadEntry=function(arg:QWord):Integer; SysV_ABI_CDecl;
@@ -141,6 +142,8 @@ type
   name           :RawByteString;                       // 168
   cs             :TRTLCriticalSection;                 // 208
   queuePtr       :Pointer;                             // 216
+  pushEvent      :PRTLEvent;                           // 224
+  popEvent       :PRTLEvent;                           // 232
   _unknown:array[0..511-216] of Byte; // 512
   procedure enter;
   procedure leave;
@@ -194,7 +197,7 @@ begin
    runtime^.leave;
 
    // Execute ulThread
-   if ulThread^.state<>ULT_STATE_PREPARE_JOIN then
+   if (ulThread^.state<>ULT_STATE_PREPARE_JOIN) and (ulThread^.state<>ULT_STATE_WAIT) then
    begin
     if ulThread^.fiber^.state=FIBER_STATE_INIT then
     begin
@@ -233,6 +236,12 @@ begin
  Result^.indx        :=runtime^.workerThreadList.Count;
  runtime^.workerThreadList.Add(Result);
  ps4_scePthreadCreate(@Result^.thread,nil,@_workerThreadEntry,Result,PChar(runtime^.name+'_ultWorker_'+IntToStr(Result^.indx)));
+end;
+
+procedure _currentUlThreadSetState(const state:QWord); inline;
+begin
+ if _currentUlThread<>nil then
+  _currentUlThread^.state:=state;
 end;
 
 procedure SceUltUlthreadRuntime.enter;
@@ -322,11 +331,16 @@ begin
  queueData^.enter;
   while ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) >= queueData^.numData do
   begin
-   SwYieldExecution;
+   _currentUlThreadSetState(ULT_STATE_WAIT);
+   queueData^.leave;
+   RTLeventWaitFor(queueData^.popEvent);
+   queueData^.enter;
   end;
+  _currentUlThreadSetState(ULT_STATE_RUN);
   Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
   Inc(queueData^.queuePtr,queueData^.dataSize);
   Result:=0;
+  RTLEventSetEvent(queueData^.pushEvent);
  queueData^.leave;
 end;
 
@@ -335,12 +349,17 @@ begin
  queueData^.enter;
   while QWord(queueData^.queuePtr) <= QWord(queueData^.workArea) do
   begin
-   SwYieldExecution;
+   _currentUlThreadSetState(ULT_STATE_WAIT);
+   queueData^.leave;
+   RTLeventWaitFor(queueData^.pushEvent);
+   queueData^.enter;
   end;
+  _currentUlThreadSetState(ULT_STATE_RUN);
   Move(queueData^.workArea^,aData^,queueData^.dataSize);
   Move((queueData^.workArea+queueData^.dataSize)^,queueData^.workArea^,QWord(queueData^.queuePtr)-QWord(queueData^.workArea)-queueData^.dataSize);
   Dec(queueData^.queuePtr,queueData^.dataSize);
   Result:=0;
+  RTLEventSetEvent(queueData^.popEvent);
  queueData^.leave;
 end;
 
@@ -499,6 +518,8 @@ begin
  pool^.workArea       :=workArea;
  pool^.queuePtr       :=workArea;
  InitCriticalSection(pool^.cs);
+ pool^.pushEvent      :=RTLEventCreate;
+ pool^.popEvent       :=RTLEventCreate;
  if param<>nil then
   pool^.param:=param^;
  Result:=0;
