@@ -328,7 +328,6 @@ begin
     if workerThread^.ulThreadList[i]=ulThread then
     begin
      ps4_sceFiberFinalize(ulThread^.fiber);
-     Dispose(ulThread);
      workerThread^.ulThreadList.Delete(i);
      Exit;
     end;
