@@ -12,6 +12,7 @@ uses
  sys_kernel,
  ps4_pthread,
  ps4_mutex,
+ ps4_sema,
  Generics.Collections;
 
 implementation
@@ -39,6 +40,7 @@ const
  ULT_STATE_PREPARE_JOIN=3;
  ULT_STATE_DESTROYED   =4;
  ULT_STATE_WAIT        =5;
+ ULT_EVENT_TIMEOUT     =5000;
 
 type
  SceUltUlthreadEntry=function(arg:QWord):Integer; SysV_ABI_CDecl;
@@ -56,6 +58,8 @@ type
  PSceUltQueue                           =^SceUltQueue;
  PSceUltMutexOptParam                   =^SceUltMutexOptParam;
  PSceUltMutex                           =^SceUltMutex;
+ PSceUltSemaphoreOptParam               =^SceUltSemaphoreOptParam;
+ PSceUltSemaphore                       =^SceUltSemaphore;
 
  SceUltUlthreadRuntimeOptParam=packed record
   oneShotThreadStackSize     :QWord;    // 8
@@ -186,6 +190,21 @@ type
   _unknown:array[0..255-176] of Byte; // 256
  end;
 
+  // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltSemaphoreOptParam=packed record
+  _unknown:array[0..127] of Byte; // 128
+ end;
+
+ // While we keep the size correct, the content is not the same as the one in original lib
+ SceUltSemaphore=packed record
+  param       :SceUltSemaphoreOptParam;  // 128
+  name        :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 160
+  waitingQueue:PSceUltWaitingQueueResourcePool; // 168
+  handle      :PSceKernelSema;           // 176
+  wakeUpEvent :PRTLEvent;                // 186
+  _unknown:array[0..255-184] of Byte;    // 256
+ end;
+
 threadvar
  _currentUlThread:PSceUltUlthread;
 
@@ -203,7 +222,7 @@ begin
  begin
   while workerThread^.ulThreadList.Count=0 do
   begin
-   RTLeventWaitFor(workerThread^.wakeUpEvent);
+   RTLEventWaitFor(workerThread^.wakeUpEvent,ULT_EVENT_TIMEOUT);
   end;
   if workerThread^.ulThreadList.Count=0 then
    continue;
@@ -354,7 +373,7 @@ begin
    assert(_currentUlThread=nil,'TODO: SceUltQueue.push currently not working with ulthreads');
    _currentUlThreadSetState(ULT_STATE_WAIT);
    queueData^.leave;
-   RTLeventWaitFor(queueData^.popEvent);
+   RTLEventWaitFor(queueData^.popEvent,ULT_EVENT_TIMEOUT);
    queueData^.enter;
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
@@ -373,7 +392,7 @@ begin
    assert(_currentUlThread=nil,'TODO: SceUltQueue.pop currently not working with ulthreads');
    _currentUlThreadSetState(ULT_STATE_WAIT);
    queueData^.leave;
-   RTLeventWaitFor(queueData^.pushEvent);
+   RTLEventWaitFor(queueData^.pushEvent,ULT_EVENT_TIMEOUT);
    queueData^.enter;
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
@@ -646,6 +665,75 @@ end;
 
 //
 
+function ps4_sceUltSemaphoreCreate(semaphore   :PSceUltSemaphore;
+                                   name        :PChar;
+                                   numResource :Integer;
+                                   waitingQueue:PSceUltWaitingQueueResourcePool;
+                                   param       :PSceUltSemaphoreOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if (semaphore=nil) or (name=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltSemaphoreCreate,name=',name,',numResource=',numResource);
+ semaphore^.handle      :=AllocMem(SizeOf(pthread_mutex));
+ semaphore^.waitingQueue:=waitingQueue;
+ semaphore^.wakeUpEvent :=RTLEventCreate;
+ ps4_sceKernelCreateSema(semaphore^.handle,name,SCE_KERNEL_SEMA_ATTR_TH_FIFO,numResource,$7FFFFFFF,nil);
+ StrLCopy(@semaphore^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
+ if param<>nil then
+  semaphore^.param:=param^;
+ Result:=0;
+end;
+
+function ps4_sceUltSemaphoreTryAcquire(semaphore  :PSceUltSemaphore;
+                                       numResource:DWord):Integer; SysV_ABI_CDecl;
+var
+ r:Integer;
+begin
+ if semaphore=nil then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (numResource<=0) or (numResource>=$80000000) then
+  Exit(SCE_ULT_ERROR_RANGE);
+ //Writeln(SysLogPrefix,'sceUltSemaphoreTryAcquire,name=',semaphore^.name,',numResource=',numResource);
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreTryAcquire currently not working with ulthreads');
+ r:=ps4_sceKernelPollSema(semaphore^.handle^,numResource);
+ if r=SCE_KERNEL_ERROR_EBUSY then
+  Exit(SCE_ULT_ERROR_AGAIN);
+ Result:=0;
+end;
+
+function ps4_sceUltSemaphoreAcquire(semaphore  :PSceUltSemaphore;
+                                    numResource:DWord):Integer; SysV_ABI_CDecl;
+begin
+ if semaphore=nil then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (numResource<=0) or (numResource>=$80000000) then
+  Exit(SCE_ULT_ERROR_RANGE);
+ //Writeln(SysLogPrefix,'sceUltSemaphoreAcquire,name=',semaphore^.name,',numResource=',numResource);
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreAcquire currently not working with ulthreads');
+ while ps4_sceKernelPollSema(semaphore^.handle^,numResource)<>0 do
+ begin
+  RTLEventWaitFor(semaphore^.wakeUpEvent,ULT_EVENT_TIMEOUT);
+ end;
+ Result:=0;
+end;
+
+function ps4_sceUltSemaphoreRelease(semaphore  :PSceUltSemaphore;
+                                    numResource:DWord):Integer; SysV_ABI_CDecl;
+begin
+ if semaphore=nil then
+  Exit(SCE_ULT_ERROR_NULL);
+ if (numResource<=0) or (numResource>=$80000000) then
+  Exit(SCE_ULT_ERROR_RANGE);
+ //Writeln(SysLogPrefix,'sceUltSemaphoreRelease,name=',semaphore^.name,',numResource=',numResource);
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreRelease currently not working with ulthreads');
+ if ps4_sceKernelSignalSema(semaphore^.handle^,numResource)=SCE_KERNEL_ERROR_EINVAL then
+  Exit(SCE_ULT_ERROR_STATE);
+ Result:=0;
+ RTLEventSetEvent(semaphore^.wakeUpEvent);
+end;
+
+//
+
 function Load_libSceUlt(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -677,6 +765,11 @@ begin
  lib^.set_proc($F21106911D697EBF,@ps4_sceUltMutexLock);
  lib^.set_proc($8745DE6CA88C06D9,@ps4_sceUltMutexUnlock);
  lib^.set_proc($D7EF2DF5A1CB8B3F,@ps4_sceUltMutexOptParamInitialize);
+
+ lib^.set_proc($8794252188FE468F,@ps4_sceUltSemaphoreCreate);
+ lib^.set_proc($1C0D4B75B8B794F6,@ps4_sceUltSemaphoreTryAcquire);
+ lib^.set_proc($4001F5A1F23DEEF5,@ps4_sceUltSemaphoreAcquire);
+ lib^.set_proc($95BB64E57D6679CC,@ps4_sceUltSemaphoreRelease);
 end;
 
 initialization
