@@ -351,11 +351,11 @@ begin
  queueData^.enter;
   while ((QWord(queueData^.queuePtr) - QWord(queueData^.workArea)) div queueData^.dataSize) >= queueData^.numData do
   begin
+   assert(_currentUlThread=nil,'TODO: SceUltQueue.push currently not working with ulthreads');
    _currentUlThreadSetState(ULT_STATE_WAIT);
    queueData^.leave;
    RTLeventWaitFor(queueData^.popEvent);
    queueData^.enter;
-   assert(_currentUlThread=nil,'TODO: SceUltQueue.push currently not working with ulthreads');
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
   Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
@@ -370,11 +370,11 @@ begin
  queueData^.enter;
   while QWord(queueData^.queuePtr) <= QWord(queueData^.workArea) do
   begin
+   assert(_currentUlThread=nil,'TODO: SceUltQueue.pop currently not working with ulthreads');
    _currentUlThreadSetState(ULT_STATE_WAIT);
    queueData^.leave;
    RTLeventWaitFor(queueData^.pushEvent);
    queueData^.enter;
-   assert(_currentUlThread=nil,'TODO: SceUltQueue.pop currently not working with ulthreads');
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
   Move(queueData^.workArea^,aData^,queueData^.dataSize);
