@@ -89,7 +89,7 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltUlthreadOptParam=packed record
   attr    :DWord;                 // 4
-  _unknown:array[0..127-4] of Byte; // 256
+  _unknown:array[0..127-4] of Byte; // 128
  end;
 
  TWorkerThread=record
