@@ -355,6 +355,7 @@ begin
    queueData^.leave;
    RTLeventWaitFor(queueData^.popEvent);
    queueData^.enter;
+   assert(_currentUlThread=nil,'TODO: SceUltQueue.push currently not working with ulthreads');
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
   Move(aData^,queueData^.queuePtr^,queueData^.dataSize);
@@ -373,6 +374,7 @@ begin
    queueData^.leave;
    RTLeventWaitFor(queueData^.pushEvent);
    queueData^.enter;
+   assert(_currentUlThread=nil,'TODO: SceUltQueue.pop currently not working with ulthreads');
   end;
   _currentUlThreadSetState(ULT_STATE_RUN);
   Move(queueData^.workArea^,aData^,queueData^.dataSize);
@@ -622,6 +624,7 @@ begin
   Exit(SCE_ULT_ERROR_NULL);
  //Writeln(SysLogPrefix,'sceUltMutexLock,mutex=',mutex^.name);
  ps4_pthread_mutex_lock(mutex^.handle);
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltMutexLock currently not working with ulthreads');
 end;
 
 function ps4_sceUltMutexUnlock(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
@@ -630,6 +633,7 @@ begin
   Exit(SCE_ULT_ERROR_NULL);
  //Writeln(SysLogPrefix,'sceUltMutexUnlock,mutex=',mutex^.name);
  ps4_pthread_mutex_unlock(mutex^.handle);
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltMutexUnlock currently not working with ulthreads');
 end;
 
 function ps4_sceUltMutexOptParamInitialize(param:PSceUltMutexOptParam):Integer; SysV_ABI_CDecl;
