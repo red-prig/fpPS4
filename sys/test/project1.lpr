@@ -15,6 +15,7 @@ uses
  kern_rwlock,
  thr_private,
  kern_sig,
+ trap,
  sysutils,
  vulkan,
  vDevice;
@@ -26,28 +27,45 @@ var
 
  event:Thandle;
 
+procedure trap_test;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+
+ Writeln('trap_test: ',' curkthread:',HexStr(curkthread),' sptr:',HexStr(sptr),' ',HexStr(td^.td_frame^.tf_rip,16));
+end;
+
 function _thread(parameter:pointer):ptrint;
 var
- td:kthread;
+ td:p_kthread;
 begin
  Result:=0;
  NtWaitForSingleObject(event,false,nil);
 
- td:=Default(kthread);
- td.td_tid   :=GetCurrentThreadId;
- td.td_handle:=GetCurrentThread;
- td.td_ref   :=1;
+ td:=thread_alloc;
+
+ td^.td_tid   :=GetCurrentThreadId;
+ td^.td_handle:=GetCurrentThread;
+ td^.td_ref   :=1;
 
  //sched_priority(@td,700);
 
- umtx_thread_init(@td);
+ umtx_thread_init(td);
 
- set_curkthread(@td);
+ set_curkthread(td);
 
  repeat
 
+ Writeln('before: sptr:',HexStr(sptr));
+ asm
+  Movq trap_test,%rax
+  call fast_syscall
+ end;
+ Writeln('after:  sptr:',HexStr(sptr));
+
  //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td^.td_tid,nil,nil);
  //e:=sys_umtx_op(@rwl,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('  lock[',GetCurrentThreadId,'] ',e);
 
@@ -57,7 +75,7 @@ begin
  //sleep(100);
 
  //e:=sys_umtx_op(@mtx,{UMTX_OP_MUTEX_UNLOCK} UMTX_OP_UNLOCK,td.td_tid,nil,nil);
- e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK,td.td_tid,nil,nil);
+ e:=sys_umtx_op(@mtx,UMTX_OP_MUTEX_UNLOCK,td^.td_tid,nil,nil);
  //e:=sys_umtx_op(@rwl,UMTX_OP_RW_UNLOCK,0,nil,nil);
  Writeln('unlock[',GetCurrentThreadId,'] ',e);
 

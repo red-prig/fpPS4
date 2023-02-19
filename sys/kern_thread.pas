@@ -9,6 +9,7 @@ uses
  ntapi,
  windows,
  sys_kernel,
+ ucontext,
  signal,
  signalvar;
 
@@ -126,6 +127,8 @@ type
   td_cpuset       :Ptruint;
   td_sigmask      :sigset_t;
   td_sigqueue     :sigqueue_t;
+  td_frame        :p_trapframe;
+  td_kstack       :Pointer;
  end;
 
  p_rtprio=^rtprio;
@@ -160,6 +163,9 @@ procedure sched_lend_user_prio(td:p_kthread;prio:Integer);
 
 function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
+
+function  thread_alloc:p_kthread;
+procedure thread_free(td:p_kthread);
 
 function  create_thread(td        :p_kthread; //calling thread
                         ctx       :Pointer;
@@ -264,8 +270,20 @@ begin
 end;
 
 function thread_alloc:p_kthread;
+var
+ data:Pointer;
 begin
- Result:=AllocMem(SizeOf(kthread));
+ data:=AllocMem(SizeOf(kthread)+SizeOf(trapframe));
+
+ Result:=data;
+
+ data:=data+SizeOf(kthread);
+ Result^.td_frame:=data;
+
+ data:=VirtualAlloc(nil,16*1024,MEM_COMMIT or MEM_RESERVE,PAGE_READWRITE);
+
+ data:=data+16*1024;
+ Result^.td_kstack:=data;
 
  //Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
@@ -274,9 +292,15 @@ begin
  umtx_thread_init(Result);
 end;
 
-procedure thread_free(td:p_kthread); inline;
+procedure thread_free(td:p_kthread);
+var
+ data:Pointer;
 begin
  umtx_thread_fini(td);
+ //
+ data:=td^.td_kstack;
+ data:=data-16*1024;
+ VirtualFree(data,0,MEM_RELEASE);
  //
  FreeMem(td);
 end;
@@ -669,6 +693,8 @@ begin
  //KASSERT(TAILQ_EMPTY(&td->td_sigqueue.sq_list), ("signal pending"));
 
  //td^.td_state:=TDS_INACTIVE;
+
+ thread_inc_ref(td);
 
  tidhash_remove(td);
  thread_unlink(td);
