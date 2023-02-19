@@ -283,11 +283,11 @@ var
  workerThread:PWorkerThread;
 begin
  aRuntime^.enter;
-  New(fiber);
+  fiber  :=AllocMem(SizeOf(SceFiber));
   runtime:=aRuntime;
   entry  :=aEntry;
   arg    :=aArg;
-  ps4_sceFiberInitialize(fiber,aName,@_ulThreadEntry,QWord(@Self),aContext,runtime^.param.oneShotThreadStackSize,nil);
+  ps4_sceFiberInitialize(fiber,aName,@_ulThreadEntry,QWord(@Self),aContext,aSizeContext,nil);
 
   workerThread:=runtime^.workerThreadList[runtime^.balancer mod runtime^.maxWorkerThread];
   workerThread^.ulThreadList.Add(@Self);
@@ -481,6 +481,18 @@ begin
  ulThread^.destroy;
 end;
 
+function ps4_sceUltUlthreadExit(status:Integer):Integer; SysV_ABI_CDecl;
+var
+ ulThread:PSceUltUlthread;
+begin
+ ulThread:=_currentUlThread;
+ if ulThread=nil then
+  Exit(SCE_ULT_ERROR_PERMISSION);
+ Writeln(SysLogPrefix,'sceUltUlthreadExit,fiber=',GetFiberStringParam(ulThread^.fiber));
+ ulThread^.state:=ULT_STATE_PREPARE_JOIN;
+ ps4_sceFiberReturnToThread(status,nil);
+end;
+
 //
 
 function ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize(numThreads,numSyncObjects:DWord):QWord; SysV_ABI_CDecl;
@@ -645,6 +657,7 @@ begin
  lib^.set_proc($8F0F45919057A3F8,@ps4_sceUltUlthreadRuntimeCreate);
  lib^.set_proc($CE7237ABC4BB290E,@ps4_sceUltUlthreadCreate);
  lib^.set_proc($802780239ECB1A02,@ps4_sceUltUlthreadJoin);
+ lib^.set_proc($905FFFB37C598DCA,@ps4_sceUltUlthreadExit);
 
  lib^.set_proc($588595D5077B3C55,@ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize);
  lib^.set_proc($6221EE8CE1BDBD76,@ps4_sceUltWaitingQueueResourcePoolCreate);
