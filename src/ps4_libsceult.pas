@@ -31,6 +31,7 @@ const
  SCE_ULT_ERROR_BUSY          =$80810007;
  SCE_ULT_ERROR_AGAIN         =$80810008;
  SCE_ULT_ERROR_NOT_INITIALIZE=$8081000A;
+ SCE_ULT_MAX_NAME_LENGTH     =31;
 
  ULT_STATE_INIT        =0;
  ULT_STATE_RUN         =1;
@@ -106,7 +107,7 @@ type
  // Original size is 4096 bytes, but we ignore this info
  SceUltUlthreadRuntime=packed record
   param           :SceUltUlthreadRuntimeOptParam;
-  name            :array[0..31] of Char;
+  name            :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char;
   maxUlThread     :Integer;
   maxWorkerThread :Integer;
   workerThreadList:TWorkerThreadList;
@@ -125,7 +126,7 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltWaitingQueueResourcePool=packed record
   param         :SceUltWaitingQueueResourcePoolOptParam; // 128
-  name          :array[0..31] of Char; // 160
+  name          :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 160
   numThreads    :DWord;                // 168
   numSyncObjects:DWord;                // 176
   workArea      :Pointer;              // 184
@@ -145,7 +146,7 @@ type
   dataSize       :QWord;                               // 144
   waitingQueue   :PSceUltWaitingQueueResourcePool;     // 152
   workArea       :Pointer;                             // 160
-  name           :array[0..31] of Char;                // 192
+  name           :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 192
   cs             :TRTLCriticalSection;                 // 200
   queuePtr       :Pointer;                             // 208
   pushEvent      :PRTLEvent;                           // 216
@@ -163,7 +164,7 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltQueue=packed record
   param       :SceUltQueueOptParam; // 128
-  name        :array[0..31] of Char;            // 160
+  name        :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 160
   queueData   :PSceUltQueueDataResourcePool;    // 168
   waitingQueue:PSceUltWaitingQueueResourcePool; // 176
   _unknown:array[0..511-152] of Byte; // 512
@@ -179,7 +180,7 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltMutex=packed record
   param       :SceUltMutexOptParam;  // 128
-  name        :array[0..31] of Char; // 160
+  name        :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 160
   waitingQueue:PSceUltWaitingQueueResourcePool; // 168
   handle      :p_pthread_mutex;      // 176
   _unknown:array[0..255-176] of Byte; // 256
@@ -409,7 +410,7 @@ begin
  if (maxUlThread=0) or (maxWorkerThread=0) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltUlthreadRuntimeCreate,name=',name,',maxUltThread=',maxUlThread,',maxWorkerThread=',maxWorkerThread);
- StrLCopy(@runtime^.name[0],name,31);
+ StrLCopy(@runtime^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
  runtime^.maxUlThread    :=maxUlThread;
  runtime^.maxWorkerThread:=maxWorkerThread;
  runtime^.balancer       :=0;
@@ -511,7 +512,7 @@ begin
  if (numThreads=0) or (numSyncObjects=0) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolCreate,name=',name,',numThreads=',numThreads,',numSyncObjects=',numSyncObjects);
- StrLCopy(@pool^.name[0],name,31);
+ StrLCopy(@pool^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
  pool^.numThreads    :=numThreads;
  pool^.numSyncObjects:=numSyncObjects;
  pool^.workArea      :=workArea;
@@ -543,7 +544,7 @@ begin
   Exit(SCE_ULT_ERROR_INVALID);
  assert(numQueueObjects=1,'TODO: numQueueObjects higher than 1');
  Writeln(SysLogPrefix,'sceUltQueueDataResourcePoolCreate,name=',name,',numData=',numData,',dataSize=',dataSize,',numQueueObjects=',numQueueObjects);
- StrLCopy(@pool^.name[0],name,31);
+ StrLCopy(@pool^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
  pool^.numData        :=numData;
  pool^.dataSize       :=dataSize;
  pool^.numQueueObjects:=numQueueObjects;
@@ -572,7 +573,7 @@ begin
  if (dataSize=0) or (dataSize>queueData^.dataSize) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltQueueCreate,name=',name,',dataSize=',dataSize);
- StrLCopy(@queue^.name[0],name,31);
+ StrLCopy(@queue^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
  queue^.queueData   :=queueData;
  queue^.waitingQueue:=waitingQueue;
  if param<>nil then
@@ -608,7 +609,7 @@ begin
  Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
  mutex^.handle      :=AllocMem(SizeOf(pthread_mutex));
  ps4_pthread_mutex_init(mutex^.handle,nil);
- StrLCopy(@mutex^.name[0],name,31);
+ StrLCopy(@mutex^.name[0],name,SCE_ULT_MAX_NAME_LENGTH);
  mutex^.waitingQueue:=waitingQueue;
  if param<>nil then
   mutex^.param:=param^;
