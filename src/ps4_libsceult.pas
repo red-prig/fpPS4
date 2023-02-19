@@ -105,7 +105,7 @@ type
  // Original size is 4096 bytes, but we ignore this info
  SceUltUlthreadRuntime=packed record
   param           :SceUltUlthreadRuntimeOptParam;
-  name            :RawByteString;
+  name            :array[0..31] of Char;
   maxUlThread     :Integer;
   maxWorkerThread :Integer;
   workerThreadList:TWorkerThreadList;
@@ -124,11 +124,11 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltWaitingQueueResourcePool=packed record
   param         :SceUltWaitingQueueResourcePoolOptParam; // 128
-  name          :RawByteString; // 136
-  numThreads    :DWord;         // 140
-  numSyncObjects:DWord;         // 144
-  workArea      :Pointer;       // 152
-  _unknown:array[0..255-152] of Byte; // 256
+  name          :array[0..31] of Char; // 160
+  numThreads    :DWord;                // 168
+  numSyncObjects:DWord;                // 176
+  workArea      :Pointer;              // 184
+  _unknown:array[0..255-184] of Byte;  // 256
  end;
 
  // While we keep the size correct, the content is not the same as the one in original lib
@@ -144,12 +144,12 @@ type
   dataSize       :QWord;                               // 144
   waitingQueue   :PSceUltWaitingQueueResourcePool;     // 152
   workArea       :Pointer;                             // 160
-  name           :RawByteString;                       // 168
-  cs             :TRTLCriticalSection;                 // 208
-  queuePtr       :Pointer;                             // 216
-  pushEvent      :PRTLEvent;                           // 224
-  popEvent       :PRTLEvent;                           // 232
-  _unknown:array[0..511-216] of Byte; // 512
+  name           :array[0..31] of Char;                // 192
+  cs             :TRTLCriticalSection;                 // 200
+  queuePtr       :Pointer;                             // 208
+  pushEvent      :PRTLEvent;                           // 216
+  popEvent       :PRTLEvent;                           // 224
+  _unknown:array[0..511-224] of Byte; // 512
   procedure enter;
   procedure leave;
  end;
@@ -162,9 +162,9 @@ type
  // While we keep the size correct, the content is not the same as the one in original lib
  SceUltQueue=packed record
   param       :SceUltQueueOptParam; // 128
-  name        :RawByteString;                   // 136
-  queueData   :PSceUltQueueDataResourcePool;    // 144
-  waitingQueue:PSceUltWaitingQueueResourcePool; // 152
+  name        :array[0..31] of Char;            // 160
+  queueData   :PSceUltQueueDataResourcePool;    // 168
+  waitingQueue:PSceUltWaitingQueueResourcePool; // 176
   _unknown:array[0..511-152] of Byte; // 512
   function push(const aData:Pointer):Integer;
   function pop(const aData:Pointer):Integer;
@@ -175,11 +175,11 @@ type
  end;
 
  SceUltMutex=packed record
-  param       :SceUltMutexOptParam; // 128
-  name        :RawByteString;       // 136
-  waitingQueue:PSceUltWaitingQueueResourcePool; // 144
-  handle      :p_pthread_mutex;     // 152
-  _unknown:array[0..255-152] of Byte; // 256
+  param       :SceUltMutexOptParam;  // 128
+  name        :array[0..31] of Char; // 160
+  waitingQueue:PSceUltWaitingQueueResourcePool; // 168
+  handle      :p_pthread_mutex;      // 176
+  _unknown:array[0..255-176] of Byte; // 256
  end;
 
 threadvar
@@ -407,7 +407,7 @@ begin
  if (maxUlThread=0) or (maxWorkerThread=0) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltUlthreadRuntimeCreate,name=',name,',maxUltThread=',maxUlThread,',maxWorkerThread=',maxWorkerThread);
- runtime^.name           :=name;
+ StrLCopy(@runtime^.name[0],name,31);
  runtime^.maxUlThread    :=maxUlThread;
  runtime^.maxWorkerThread:=maxWorkerThread;
  runtime^.balancer       :=0;
@@ -497,7 +497,7 @@ begin
  if (numThreads=0) or (numSyncObjects=0) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolCreate,name=',name,',numThreads=',numThreads,',numSyncObjects=',numSyncObjects);
- pool^.name          :=name;
+ StrLCopy(@pool^.name[0],name,31);
  pool^.numThreads    :=numThreads;
  pool^.numSyncObjects:=numSyncObjects;
  pool^.workArea      :=workArea;
@@ -529,7 +529,7 @@ begin
   Exit(SCE_ULT_ERROR_INVALID);
  assert(numQueueObjects=1,'TODO: numQueueObjects higher than 1');
  Writeln(SysLogPrefix,'sceUltQueueDataResourcePoolCreate,name=',name,',numData=',numData,',dataSize=',dataSize,',numQueueObjects=',numQueueObjects);
- pool^.name           :=name;
+ StrLCopy(@pool^.name[0],name,31);
  pool^.numData        :=numData;
  pool^.dataSize       :=dataSize;
  pool^.numQueueObjects:=numQueueObjects;
@@ -558,7 +558,7 @@ begin
  if (dataSize=0) or (dataSize>queueData^.dataSize) then
   Exit(SCE_ULT_ERROR_INVALID);
  Writeln(SysLogPrefix,'sceUltQueueCreate,name=',name,',dataSize=',dataSize);
- queue^.name        :=name;
+ StrLCopy(@queue^.name[0],name,31);
  queue^.queueData   :=queueData;
  queue^.waitingQueue:=waitingQueue;
  if param<>nil then
@@ -591,9 +591,10 @@ function ps4_sceUltMutexCreate(mutex       :PSceUltMutex;
 begin
  if (mutex=nil) or (name=nil) or (waitingQueue=nil) then
   Exit(SCE_ULT_ERROR_NULL);
- Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
+ //Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
+ mutex^.handle      :=AllocMem(SizeOf(pthread_mutex));
  ps4_pthread_mutex_init(mutex^.handle,nil);
- mutex^.name        :=name;
+ StrLCopy(@mutex^.name[0],name,31);
  mutex^.waitingQueue:=waitingQueue;
  if param<>nil then
   mutex^.param:=param^;
@@ -604,7 +605,7 @@ function ps4_sceUltMutexLock(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
 begin
  if (mutex=nil) then
   Exit(SCE_ULT_ERROR_NULL);
- Writeln(SysLogPrefix,'sceUltMutexLock,mutex=',mutex^.name);
+ //Writeln(SysLogPrefix,'sceUltMutexLock,mutex=',mutex^.name);
  ps4_pthread_mutex_lock(mutex^.handle);
 end;
 
@@ -612,7 +613,7 @@ function ps4_sceUltMutexUnlock(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
 begin
  if (mutex=nil) then
   Exit(SCE_ULT_ERROR_NULL);
- Writeln(SysLogPrefix,'sceUltMutexUnlock,mutex=',mutex^.name);
+ //Writeln(SysLogPrefix,'sceUltMutexUnlock,mutex=',mutex^.name);
  ps4_pthread_mutex_unlock(mutex^.handle);
 end;
 
@@ -620,7 +621,7 @@ function ps4_sceUltMutexOptParamInitialize(param:PSceUltMutexOptParam):Integer; 
 begin
  if param=nil then
   Exit(SCE_ULT_ERROR_NULL);
- Writeln(SysLogPrefix,'sceUltMutexOptParamInitialize');
+ //Writeln(SysLogPrefix,'sceUltMutexOptParamInitialize');
  Result:=0;
 end;
 
