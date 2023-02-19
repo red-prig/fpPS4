@@ -11,12 +11,15 @@ uses
  sys_pthread,
  sys_kernel,
  ps4_pthread,
+ ps4_mutex,
  Generics.Collections;
 
 implementation
 
 uses
  ps4_libSceFiber;
+
+{$I sce_errno.inc}
 
 const
  SCE_ULT_ERROR_NULL          =$80810001;
@@ -50,6 +53,8 @@ type
  PSceUltQueueDataResourcePool           =^SceUltQueueDataResourcePool;
  PSceUltQueueOptParam                   =^SceUltQueueOptParam;
  PSceUltQueue                           =^SceUltQueue;
+ PSceUltMutexOptParam                   =^SceUltMutexOptParam;
+ PSceUltMutex                           =^SceUltMutex;
 
  SceUltUlthreadRuntimeOptParam=packed record
   oneShotThreadStackSize     :QWord;    // 8
@@ -163,6 +168,18 @@ type
   _unknown:array[0..511-152] of Byte; // 512
   function push(const aData:Pointer):Integer;
   function pop(const aData:Pointer):Integer;
+ end;
+
+ SceUltMutexOptParam=packed record
+  _unknown:array[0..127] of Byte; // 128
+ end;
+
+ SceUltMutex=packed record
+  param       :SceUltMutexOptParam; // 128
+  name        :RawByteString;       // 136
+  waitingQueue:PSceUltWaitingQueueResourcePool; // 144
+  handle      :p_pthread_mutex;     // 152
+  _unknown:array[0..255-152] of Byte; // 256
  end;
 
 threadvar
@@ -394,6 +411,7 @@ begin
  runtime^.maxUlThread    :=maxUlThread;
  runtime^.maxWorkerThread:=maxWorkerThread;
  runtime^.balancer       :=0;
+ InitCriticalSection(runtime^.cs);
  if param<>nil then
   runtime^.param:=param^
  else
@@ -402,7 +420,6 @@ begin
   runtime^.param.workerThreadCpuAffinityMask:=SCE_KERNEL_CPUMASK_6CPU_ALL;
   runtime^.param.workerThreadPriority       :=SCE_KERNEL_PRIO_FIFO_DEFAULT;
   runtime^.param.inheritSched               :=SCE_PTHREAD_INHERIT_SCHED;
-  InitCriticalSection(runtime^.cs);
  end;
  runtime^.workerThreadList:=TWorkerThreadList.Create;
  runtime^.workerThreadList.Capacity:=maxWorkerThread;
@@ -447,9 +464,11 @@ begin
  if ulThread^.getState=ULT_STATE_DESTROYED then
   Exit(SCE_ULT_ERROR_STATE);
  Writeln(SysLogPrefix,'sceUltUlthreadJoin,fiber=',GetFiberStringParam(ulThread^.fiber));
+ _currentUlThreadSetState(ULT_STATE_WAIT);
  repeat
   SwYieldExecution;
  until ulThread^.getState=ULT_STATE_PREPARE_JOIN;
+ _currentUlThreadSetState(ULT_STATE_RUN);
  //
  if (status<>nil) and (ulThread^.fiber^.pArgReturn<>nil) then
  begin
@@ -565,6 +584,48 @@ end;
 
 //
 
+function ps4_sceUltMutexCreate(mutex       :PSceUltMutex;
+                               name        :PChar;
+                               waitingQueue:PSceUltWaitingQueueResourcePool;
+                               param       :PSceUltMutexOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if (mutex=nil) or (name=nil) or (waitingQueue=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
+ ps4_pthread_mutex_init(mutex^.handle,nil);
+ mutex^.name        :=name;
+ mutex^.waitingQueue:=waitingQueue;
+ if param<>nil then
+  mutex^.param:=param^;
+ Result:=0;
+end;
+
+function ps4_sceUltMutexLock(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
+begin
+ if (mutex=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltMutexLock,mutex=',mutex^.name);
+ ps4_pthread_mutex_lock(mutex^.handle);
+end;
+
+function ps4_sceUltMutexUnlock(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
+begin
+ if (mutex=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltMutexUnlock,mutex=',mutex^.name);
+ ps4_pthread_mutex_unlock(mutex^.handle);
+end;
+
+function ps4_sceUltMutexOptParamInitialize(param:PSceUltMutexOptParam):Integer; SysV_ABI_CDecl;
+begin
+ if param=nil then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltMutexOptParamInitialize');
+ Result:=0;
+end;
+
+//
+
 function Load_libSceUlt(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -590,6 +651,11 @@ begin
  lib^.set_proc($F58E6478EBDBEA89,@ps4_sceUltQueueCreate);
  lib^.set_proc($754C295F77B93431,@ps4_sceUltQueuePush);
  lib^.set_proc($4554AADADB26DB2C,@ps4_sceUltQueuePop);
+
+ lib^.set_proc($9A6B7C49AEAD2FA7,@ps4_sceUltMutexCreate);
+ lib^.set_proc($F21106911D697EBF,@ps4_sceUltMutexLock);
+ lib^.set_proc($8745DE6CA88C06D9,@ps4_sceUltMutexUnlock);
+ lib^.set_proc($D7EF2DF5A1CB8B3F,@ps4_sceUltMutexOptParamInitialize);
 end;
 
 initialization
