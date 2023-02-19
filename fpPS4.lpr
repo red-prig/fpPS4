@@ -63,6 +63,7 @@ uses
  ps4_libSceUsbd,
  ps4_libSceAudiodecCpu,
  ps4_libSceDepth,
+ ps4_libSceNpTus,
  ps4_elf,
  ps4_pthread,
  ps4_program,
