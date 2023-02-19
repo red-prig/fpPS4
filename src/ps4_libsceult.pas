@@ -97,6 +97,7 @@ type
   ulThreadList:TUlThreadList;
   current     :QWord;         // Current ulThread index
   indx        :QWord;         // This worker thread index in runtime
+  wakeUpEvent :PRTLEvent;
  end;
 
  TWorkerThreadList=specialize TList<PWorkerThread>;
@@ -170,10 +171,12 @@ type
   function pop(const aData:Pointer):Integer;
  end;
 
+ // While we keep the size correct, the content is not the same as the one in original lib
  SceUltMutexOptParam=packed record
   _unknown:array[0..127] of Byte; // 128
  end;
 
+ // While we keep the size correct, the content is not the same as the one in original lib
  SceUltMutex=packed record
   param       :SceUltMutexOptParam;  // 128
   name        :array[0..31] of Char; // 160
@@ -197,33 +200,31 @@ begin
  runtime:=workerThread^.runtime;
  while True do
  begin
+  while workerThread^.ulThreadList.Count=0 do
+  begin
+   RTLeventWaitFor(workerThread^.wakeUpEvent);
+  end;
   if workerThread^.ulThreadList.Count=0 then
-  begin
-   SwYieldExecution;
-  end else
-  begin
-   if workerThread^.ulThreadList.Count=0 then
-    continue;
-   // Select next ulThread to be executed
-   runtime^.enter;
-    Inc(workerThread^.current);
-    if workerThread^.current>=workerThread^.ulThreadList.Count then
-     workerThread^.current:=0;
-    ulThread:=workerThread^.ulThreadList[workerThread^.current];
-    _currentUlThread:=ulThread;
-   runtime^.leave;
+   continue;
+  // Select next ulThread to be executed
+  runtime^.enter;
+   Inc(workerThread^.current);
+   if workerThread^.current>=workerThread^.ulThreadList.Count then
+    workerThread^.current:=0;
+   ulThread:=workerThread^.ulThreadList[workerThread^.current];
+   _currentUlThread:=ulThread;
+  runtime^.leave;
 
-   // Execute ulThread
-   if (ulThread^.state<>ULT_STATE_PREPARE_JOIN) and (ulThread^.state<>ULT_STATE_WAIT) then
+  // Execute ulThread
+  if (ulThread^.state<>ULT_STATE_PREPARE_JOIN) and (ulThread^.state<>ULT_STATE_WAIT) then
+  begin
+   if ulThread^.fiber^.state=FIBER_STATE_INIT then
    begin
-    if ulThread^.fiber^.state=FIBER_STATE_INIT then
-    begin
-     ulThread^.state:=ULT_STATE_RUN;
-     ps4_sceFiberRun(ulThread^.fiber,0,@ulThread^.returnStatus);
-    end else
-    if ulThread^.fiber^.state=FIBER_STATE_SUSPEND then
-     ps4_sceFiberSwitch(ulThread^.fiber,0,nil);
-   end;
+    ulThread^.state:=ULT_STATE_RUN;
+    ps4_sceFiberRun(ulThread^.fiber,0,@ulThread^.returnStatus);
+   end else
+   if ulThread^.fiber^.state=FIBER_STATE_SUSPEND then
+    ps4_sceFiberSwitch(ulThread^.fiber,0,nil);
   end;
  end;
  Writeln(SysLogPrefix,'_workerThreadEntry End');
@@ -251,6 +252,7 @@ begin
  Result^.ulThreadList.Capacity:=runtime^.maxUlThread;
  Result^.runtime     :=runtime;
  Result^.indx        :=runtime^.workerThreadList.Count;
+ Result^.wakeUpEvent :=RTLEventCreate;
  runtime^.workerThreadList.Add(Result);
  ps4_scePthreadCreate(@Result^.thread,nil,@_workerThreadEntry,Result,PChar(runtime^.name+'_ultWorker_'+IntToStr(Result^.indx)));
 end;
@@ -290,6 +292,7 @@ begin
   workerThread:=runtime^.workerThreadList[runtime^.balancer mod runtime^.maxWorkerThread];
   workerThread^.ulThreadList.Add(@Self);
   Inc(runtime^.balancer);
+  RTLEventSetEvent(workerThread^.wakeUpEvent);
  aRuntime^.leave;
 end;
 
@@ -591,7 +594,7 @@ function ps4_sceUltMutexCreate(mutex       :PSceUltMutex;
 begin
  if (mutex=nil) or (name=nil) or (waitingQueue=nil) then
   Exit(SCE_ULT_ERROR_NULL);
- //Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
+ Writeln(SysLogPrefix,'sceUltMutexCreate,name=',name);
  mutex^.handle      :=AllocMem(SizeOf(pthread_mutex));
  ps4_pthread_mutex_init(mutex^.handle,nil);
  StrLCopy(@mutex^.name[0],name,31);
