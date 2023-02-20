@@ -8,8 +8,7 @@ interface
 uses
  sys_kernel,
  time,
- _umtx,
- kern_umtx;
+ _umtx;
 
 procedure umtx_init(var umtx:umtx); inline;
 function  umtx_owner(var umtx:umtx):QWORD; inline;
@@ -20,9 +19,15 @@ function  umtx_unlock(var umtx:umtx;id:QWORD):Integer; inline;
 function  umtx_wait(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
 function  umtx_wake(var umtx:umtx;nr_wakeup:Integer):Integer; inline;
 
-function  sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function  _umtx_lock(mtx:p_umtx):Integer;
+function  _umtx_unlock(mtx:p_umtx):Integer;
+function  _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 
 implementation
+
+uses
+ kern_umtx,
+ trap;
 
 procedure umtx_init(var umtx:umtx); inline;
 begin
@@ -39,7 +44,7 @@ begin
  Result:=0;
  if (System.InterlockedCompareExchange64(umtx.u_owner,id,UMTX_UNOWNED)=0) then
  begin
-  Result:=_sys_umtx_lock(@umtx);
+  Result:=_umtx_lock(@umtx);
  end;
 end;
 
@@ -57,7 +62,7 @@ begin
  Result:=0;
  if (System.InterlockedCompareExchange64(umtx.u_owner,id,UMTX_UNOWNED)=0) then
  begin
-  Result:=_sys_umtx_op(@umtx,UMTX_OP_LOCK,id,nil,timeout)
+  Result:=_umtx_op(@umtx,UMTX_OP_LOCK,id,nil,timeout)
  end;
 end;
 
@@ -66,23 +71,36 @@ begin
  Result:=0;
  if (System.InterlockedCompareExchange64(umtx.u_owner,UMTX_UNOWNED,id)=0) then
  begin
-  Result:=_sys_umtx_unlock(@umtx);
+  Result:=_umtx_unlock(@umtx);
  end;
 end;
 
 function umtx_wait(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
 begin
- Result:=_sys_umtx_op(@umtx,UMTX_OP_WAIT,id,nil,timeout)
+ Result:=_umtx_op(@umtx,UMTX_OP_WAIT,id,nil,timeout)
 end;
 
 function umtx_wake(var umtx:umtx;nr_wakeup:Integer):Integer; inline;
 begin
- Result:=_sys_umtx_op(@umtx,UMTX_OP_WAKE,nr_wakeup,nil,nil);
+ Result:=_umtx_op(@umtx,UMTX_OP_WAKE,nr_wakeup,nil,nil);
 end;
 
-function sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
-begin
- Result:=_sys_umtx_op(obj,op,val,uaddr1,uaddr2);
+function _umtx_lock(mtx:p_umtx):Integer; assembler; nostackframe;
+asm
+ movq  _sys_umtx_lock,%rax
+ call  fast_syscall
+end;
+
+function _umtx_unlock(mtx:p_umtx):Integer; assembler; nostackframe;
+asm
+ movq  _sys_umtx_unlock,%rax
+ call  fast_syscall
+end;
+
+function _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  _sys_umtx_op,%rax
+ call  fast_syscall
 end;
 
 end.

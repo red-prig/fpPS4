@@ -1,6 +1,7 @@
 unit trap;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -86,43 +87,57 @@ const
   'DTrace pid return trap'         // 32 T_DTRACE_RET
  );
 
-procedure fast_syscall; assembler;
+procedure fast_syscall;
 
 implementation
 
+type
+ tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
+
+procedure amd64_syscall;
+var
+ td_frame:p_trapframe;
+begin
+ //Call directly to the address or make an ID table?
+ td_frame:=curkthread^.td_frame;
+ td_frame^.tf_rax:=tsyscall(td_frame^.tf_rax)
+                           (td_frame^.tf_rdi,
+                            td_frame^.tf_rsi,
+                            td_frame^.tf_rdx,
+                            td_frame^.tf_rcx,
+                            td_frame^.tf_r8,
+                            td_frame^.tf_r9);
+end;
 
 procedure fast_syscall; assembler; nostackframe;
+label
+ rip;
 asm
- movq %rax,-16(%rsp)  //save rax
+ //prolog (debugger)
+ pushq %rbp
+ movq  %rsp,%rbp
 
- movq %gs:(0x700),%rax            //curkthread
- movq kthread.td_frame(%rax),%rax //td_frame
+ movqq %rax,-16(%rsp)  //save rax
 
- movq %rdi,trapframe.tf_rdi(%rax)
- movq %rsi,trapframe.tf_rsi(%rax)
- movq %rdx,trapframe.tf_rdx(%rax)
- movq %rcx,trapframe.tf_rcx(%rax)
- movq %r8 ,trapframe.tf_r8 (%rax)
- movq %r9 ,trapframe.tf_r9 (%rax)
- movq %rbx,trapframe.tf_rbx(%rax)
- movq %rbp,trapframe.tf_rbp(%rax)
- movq %r10,trapframe.tf_r10(%rax)
- movq %r11,trapframe.tf_r11(%rax)
- movq %r12,trapframe.tf_r12(%rax)
- movq %r13,trapframe.tf_r13(%rax)
- movq %r14,trapframe.tf_r14(%rax)
- movq %r15,trapframe.tf_r15(%rax)
- movq %rsp,trapframe.tf_rsp(%rax)
+ movqq %gs:(0x700),%rax            //curkthread
+ movqq kthread.td_frame(%rax),%rax //td_frame
 
- movq -16(%rsp),%r11 //get rax
- movq %r11,trapframe.tf_rax(%rax)
-
- pushfq    //push FLAGS
- pop  %r11 //get  FLAGS
- movq %r11,trapframe.tf_rflags(%rax)
-
- movq (%rsp),%r11 //get caller addr
- movq %r11,trapframe.tf_rip(%rax)
+ movqq %rdi,trapframe.tf_rdi(%rax)
+ movqq %rsi,trapframe.tf_rsi(%rax)
+ movqq %rdx,trapframe.tf_rdx(%rax)
+ movqq %rcx,trapframe.tf_rcx(%rax)
+ movqq %r8 ,trapframe.tf_r8 (%rax)
+ movqq %r9 ,trapframe.tf_r9 (%rax)
+ movqq %rbx,trapframe.tf_rbx(%rax)
+ movqq %rbp,trapframe.tf_rbp(%rax)
+ movqq %r10,trapframe.tf_r10(%rax)
+ movqq %r11,trapframe.tf_r11(%rax)
+ movqq %r12,trapframe.tf_r12(%rax)
+ movqq %r13,trapframe.tf_r13(%rax)
+ movqq %r14,trapframe.tf_r14(%rax)
+ movqq %r15,trapframe.tf_r15(%rax)
+ movqq %rsp,trapframe.tf_rsp(%rax)
+ movqq $rip,trapframe.tf_rip(%rax) //save caller addr
 
  movqw %fs,trapframe.tf_fs(%rax)
  movqw %gs,trapframe.tf_gs(%rax)
@@ -131,40 +146,57 @@ asm
  movqw %cs,trapframe.tf_cs(%rax)
  movqw %ss,trapframe.tf_ss(%rax)
 
- movq $0,trapframe.tf_trapno(%rax)
- movq $0,trapframe.tf_addr  (%rax)
- movq $0,trapframe.tf_flags (%rax)
- movq $0,trapframe.tf_err   (%rax)
+ movqq $0,trapframe.tf_trapno(%rax)
+ movqq $0,trapframe.tf_addr  (%rax)
+ movqq $1,trapframe.tf_flags (%rax)
+ movqq $0,trapframe.tf_err   (%rax)
 
- movq -16(%rsp),%rax //restore rax
+ movqq -16(%rsp),%r11 //get rax
+ movqq %r11,trapframe.tf_rax(%rax)
 
- movq %gs:(0x700),%rsp             //curkthread
- movq kthread.td_kstack(%rsp),%rsp //td_kstack
+ pushfq     //push FLAGS
+ popq  %r11 //get  FLAGS
+ movqq %r11,trapframe.tf_rflags(%rax)
 
- push %r11 //rip callstack (debugger)
+ movqq %gs:(0x700),%rsp             //curkthread
+ movqq kthread.td_kstack(%rsp),%rsp //td_kstack
 
- call %rax //Call directly to the address or make an ID table?
+ andq $-32,%rsp //align stack
+
+ call amd64_syscall
+ rip:
 
  //Restore preserved registers.
- movq %gs:(0x700),%rax            //curkthread
- movq kthread.td_frame(%rax),%rax //td_frame
+ movqq %gs:(0x700),%rax            //curkthread
+ movqq kthread.td_frame(%rax),%rax //td_frame
 
- movq trapframe.tf_rflags(%rax),%r11
- push %r11 //set FLAGS
- popfq     //pop FLAGS
+ movqq trapframe.tf_rflags(%rax),%r11
+ pushq %r11 //set FLAGS
+ popfq      //pop FLAGS
 
- movq trapframe.tf_rdi(%rax),%rdi
- movq trapframe.tf_rsi(%rax),%rsi
- movq trapframe.tf_rdx(%rax),%rdx
- movq trapframe.tf_rsp(%rax),%rsp
+ movqq trapframe.tf_rdi(%rax),%rdi
+ movqq trapframe.tf_rsi(%rax),%rsi
+ movqq trapframe.tf_rdx(%rax),%rdx
+ movqq trapframe.tf_rcx(%rax),%rcx
+ movqq trapframe.tf_r8 (%rax),%r8
+ movqq trapframe.tf_r9 (%rax),%r9
+ movqq trapframe.tf_rbx(%rax),%rbx
+ movqq trapframe.tf_rbp(%rax),%rbp
+ movqq trapframe.tf_r10(%rax),%r10
+ movqq trapframe.tf_r11(%rax),%r11
+ movqq trapframe.tf_r12(%rax),%r12
+ movqq trapframe.tf_r13(%rax),%r13
+ movqq trapframe.tf_r14(%rax),%r14
+ movqq trapframe.tf_r15(%rax),%r15
+ movqq trapframe.tf_rsp(%rax),%rsp
 
- //restore rip?
- movq trapframe.tf_rip(%rax),%r11
- movq %r11,(%rsp)
+ movqq trapframe.tf_rax(%rax),%rax //restore rax
 
- movq trapframe.tf_rsp(%rax),%rax //restore rax
+ //epilog (debugger)
+ popq  %rbp
 end;
 
+//testl	$TDF_ASTPENDING | TDF_NEEDRESCHED,TD_FLAGS(%rax)
 //2: /* AST scheduled. */
 //sti
 //movq %rsp,%rdi

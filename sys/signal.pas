@@ -91,6 +91,10 @@ const
  _MC_HASFPXSTATE=$4;
  _MC_FLAG_MASK  =(_MC_HASSEGS or _MC_HASBASES or _MC_HASFPXSTATE);
 
+ TF_HASSEGS    =$1;
+ TF_HASBASES   =$2;
+ TF_HASFPXSTATE=$4;
+
 type
  p_sigset_t=^sigset_t;
  sigset_t=packed record //16

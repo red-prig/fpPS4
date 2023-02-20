@@ -1,6 +1,7 @@
 unit kern_sig;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
