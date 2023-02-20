@@ -107,17 +107,17 @@ type
 
  TWorkerThreadList=specialize TList<PWorkerThread>;
 
- // Our own invention of SceUltUlthreadRuntime. Not compatible with original one
- // Original size is 4096 bytes, but we ignore this info
+ // While we keep the size correct, the content is not the same as the one in original lib
  SceUltUlthreadRuntime=packed record
-  param           :SceUltUlthreadRuntimeOptParam;
-  name            :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char;
-  maxUlThread     :Integer;
-  maxWorkerThread :Integer;
-  workerThreadList:TWorkerThreadList;
-  ulThreadCount   :QWord;
-  balancer        :QWord;
-  cs              :TRTLCriticalSection;
+  param           :SceUltUlthreadRuntimeOptParam; // 128
+  name            :array[0..SCE_ULT_MAX_NAME_LENGTH] of Char; // 160
+  maxUlThread     :Integer;              // 164
+  maxWorkerThread :Integer;              // 168
+  workerThreadList:TWorkerThreadList;    // 176
+  ulThreadCount   :QWord;                // 184
+  balancer        :QWord;                // 192
+  cs              :TRTLCriticalSection;  // 232
+  _unknown:array[0..4095-232] of Byte; // 4096
   procedure enter;
   procedure leave;
  end;
