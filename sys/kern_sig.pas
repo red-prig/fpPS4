@@ -8,6 +8,7 @@ interface
 uses
  gtailq,
  sys_kernel,
+ time,
  signal,
  signalvar;
 
@@ -66,12 +67,16 @@ Function sys_sigprocmask(how:Integer;
 
 Function sys_sigpending(oset:p_sigset_t):Integer;
 
+Function sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
+Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
+Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
+
 implementation
 
 uses
  ntapi,
  systm,
- time,
+ md_psl,
  _umtx,
  kern_umtx,
  kern_time,
@@ -81,8 +86,6 @@ const
  max_pending_per_proc=128;
 
 var
- p_p_sigqueue:sigqueue_t;
-
  p_pendingcnt     :Integer=0;
  signal_overflow  :Integer=0;
  signal_alloc_fail:Integer=0;
@@ -687,8 +690,7 @@ begin
  if (td=nil) then Exit(EFAULT);
 
  PROC_LOCK;
- pending:=p_p_sigqueue.sq_signals;
- SIGSETOR(@pending,@td^.td_sigqueue.sq_signals);
+ pending:=td^.td_sigqueue.sq_signals;
  PROC_UNLOCK;
 
  Result:=copyout(@pending,oset,sizeof(sigset_t));
@@ -738,7 +740,7 @@ begin
 
   if (sig<>0) and SIGISMEMBER(@waitset,sig) then
   begin
-   if (sigqueue_get(@td^.td_sigqueue, sig, ksi) <> 0) then
+   if (sigqueue_get(@td^.td_sigqueue,sig,ksi)<>0) then
    begin
     Result:=0;
     break;
@@ -799,19 +801,170 @@ begin
  PROC_UNLOCK;
 end;
 
+Function sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
+var
+ td:p_kthread;
+ ksi:ksiginfo_t;
+ __set:sigset_t;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(EFAULT);
+
+ Result:=copyin(oset,@__set,sizeof(sigset_t));
+ if (Result<>0) then Exit(EFAULT);
+
+ Result:=kern_sigtimedwait(td,__set,@ksi,nil);
+ if (Result<>0) then
+ begin
+  if (Result=EINTR) then
+  begin
+   Result:=ERESTART;
+  end;
+  Exit;
+ end;
+
+ Result:=copyout(@ksi.ksi_info.si_signo,sig,sizeof(Integer));
+end;
+
+Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
+var
+ td:p_kthread;
+ ts:timespec;
+ ksi:ksiginfo_t;
+ __set:sigset_t;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-EFAULT);
+
+ if (timeout<>nil) then
+ begin
+  Result:=copyin(timeout,@ts,sizeof(timespec));
+  if (Result<>0) then Exit(-EFAULT);
+  timeout:=@ts;
+ end;
+
+ Result:=copyin(oset,@__set,sizeof(sigset_t));
+ if (Result<>0) then Exit(-EFAULT);
+
+ Result:=kern_sigtimedwait(td,__set,@ksi,timeout);
+ if (Result<>0) then Exit(-Result);
+
+ if (info<>nil) then
+ begin
+  Result:=copyout(@ksi.ksi_info,info,sizeof(siginfo_t));
+  if (Result<>0) then Exit(-EFAULT);
+ end;
+
+ Result:=ksi.ksi_info.si_signo;
+end;
+
+Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
+var
+ td:p_kthread;
+ ksi:ksiginfo_t;
+ __set:sigset_t;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-EFAULT);
+
+ Result:=copyin(oset,@__set,sizeof(sigset_t));
+ if (Result<>0) then Exit(-EFAULT);
+
+ Result:=kern_sigtimedwait(td,__set,@ksi,nil);
+ if (Result<>0) then Exit(-Result);
+
+ if (info<>nil) then
+ begin
+  Result:=copyout(@ksi.ksi_info,info,sizeof(siginfo_t));
+  if (Result<>0) then Exit(-EFAULT);
+ end;
+
+ Result:=ksi.ksi_info.si_signo;
+end;
+
+procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
+begin
+ Case error of
+  0:With td^.td_frame^ do
+    begin
+     tf_rax:=td^.td_retval[0];
+     tf_rdx:=td^.td_retval[1];
+     tf_rflags:=tf_rflags and (not PSL_C);
+    end;
+  ERESTART:
+    With td^.td_frame^ do
+    begin
+     //tf_err = size of syscall cmd
+     tf_rip:=tf_rip-td^.td_frame^.tf_err;
+     tf_r10:=tf_rcx;
+     //set_pcb_flags(td->td_pcb, PCB_FULL_IRET);
+    end;
+  EJUSTRETURN:;
+  else
+    With td^.td_frame^ do
+    begin
+     tf_rax:=error;
+     tf_rflags:=tf_rflags or PSL_C;
+    end;
+ end;
+end;
+
+function postsig(sig:Integer):Integer; forward;
+
+Function kern_sigsuspend(td:p_kthread;mask:sigset_t):Integer;
+var
+ has_sig,sig:Integer;
+begin
+ PROC_LOCK;
+ kern_sigprocmask(td,SIG_SETMASK,@mask,@td^.td_oldsigmask,SIGPROCMASK_PROC_LOCKED);
+ td^.td_pflags:=td^.td_pflags or TDP_OLDMASK;
+
+ cpu_set_syscall_retval(td,EINTR);
+
+ has_sig:=0;
+ While (has_sig=0) do
+ begin
+  //while (msleep(&p->p_sigacts, &p->p_mtx, PPAUSE|PCATCH, "pause",0) == 0)
+
+  //thread_suspend_check(0);
+
+  mtx_lock(@p_sigacts.ps_mtx);
+
+  repeat
+   sig:=cursig(td,SIG_STOP_ALLOWED);
+   if (sig=0) then Break;
+   has_sig:=has_sig+postsig(sig);
+  until false;
+
+  mtx_unlock(@p_sigacts.ps_mtx);
+ end;
+
+ PROC_UNLOCK;
+ td^.td_errno:=EINTR;
+ td^.td_pflags:=td^.td_pflags or TDP_NERRNO;
+ Result:=EJUSTRETURN;
+end;
+
+//TODO check td_errno,td_oldsigmask,td_retval
+
+function postsig(sig:Integer):Integer;
+begin
+ //TODO
+end;
+
 procedure sigexit(td:p_kthread;sig:Integer);
 begin
- //
+ //TODO
 end;
 
 Function issignal(td:p_kthread;stop_allowed:Integer):Integer;
 begin
- //
+ //TODO
 end;
 
 procedure reschedule_signals(block:sigset_t;flags:Integer);
 begin
- //
+ //TODO
 end;
 
 initialization

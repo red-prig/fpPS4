@@ -15,7 +15,7 @@ uses
  kern_rwlock,
  thr_private,
  kern_sig,
- trap,
+ trap, md_psl,
  sysutils,
  vulkan,
  vDevice;

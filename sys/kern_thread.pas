@@ -114,6 +114,7 @@ type
   td_sigstk       :stack_t;
   td_pflags       :Integer;
   td_flags        :Integer;
+  td_errno        :Integer;
   td_ref          :Integer;
   td_priority     :Word;
   td_pri_class    :Word;
@@ -126,8 +127,10 @@ type
   td_fsbase       :Pointer;
   td_cpuset       :Ptruint;
   td_sigmask      :sigset_t;
+  td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
   td_frame        :p_trapframe;
+  td_retval       :array[0..1] of QWORD;
   td_kstack       :Pointer;
  end;
 
