@@ -5,6 +5,7 @@ unit signalvar;
 interface
 
 uses
+ _umtx,
  signal;
 
 type
@@ -18,7 +19,7 @@ type
   ps_siginfo   :sigset_t;
   ps_sigignore :sigset_t;
   ps_sigcatch  :sigset_t;
-  ps_mtx       :Pointer;
+  ps_mtx       :umtx;
   ps_flag      :Integer;
  end;
 
@@ -97,6 +98,8 @@ procedure SIG_CONTSIGMASK(p:p_sigset_t); inline;
 function  sigsetmasked(p,mask:p_sigset_t):Boolean; inline;
 function  sig_ffs(p:p_sigset_t):Integer; inline;
 
+procedure ksiginfo_init(ksi:p_ksiginfo); inline;
+procedure ksiginfo_init_trap(ksi:p_ksiginfo); inline;
 procedure ksiginfo_copy(src,dst:p_ksiginfo); inline;
 procedure ksiginfo_set_sigev(dst:p_ksiginfo;sigev:p_sigevent); inline;
 
@@ -207,6 +210,17 @@ begin
  Result:=0;
  if (p^.qwords[0]<>0) then Result:=BsfQWord(p^.qwords[0])+1;
  if (p^.qwords[1]<>0) then Result:=BsfQWord(p^.qwords[1])+65;
+end;
+
+procedure ksiginfo_init(ksi:p_ksiginfo); inline;
+begin
+ ksi^:=Default(ksiginfo_t);
+end;
+
+procedure ksiginfo_init_trap(ksi:p_ksiginfo); inline;
+begin
+ ksi^:=Default(ksiginfo_t);
+ ksi^.ksi_flags:=KSI_TRAP;
 end;
 
 procedure ksiginfo_copy(src,dst:p_ksiginfo); inline;

@@ -69,8 +69,12 @@ Function sys_sigpending(oset:p_sigset_t):Integer;
 implementation
 
 uses
+ ntapi,
  systm,
- kern_rwlock,
+ time,
+ _umtx,
+ kern_umtx,
+ kern_time,
  kern_thread;
 
 const
@@ -400,13 +404,23 @@ begin
  end;
 end;
 
+function mtx_lock(m:p_umtx):Integer; inline;
+begin
+ Result:=_sys_umtx_lock(m);
+end;
+
+function mtx_unlock(m:p_umtx):Integer; inline;
+begin
+ Result:=_sys_umtx_unlock(m);
+end;
+
 Function kern_sigaction(sig:Integer;
                         act,oact:p_sigaction_t):Integer;
 begin
  if (not _SIG_VALID(sig)) then Exit(EINVAL);
 
  PROC_LOCK;
- rw_wlock(p_sigacts.ps_mtx);
+ mtx_lock(@p_sigacts.ps_mtx);
 
  if (oact<>nil) then
  begin
@@ -438,7 +452,7 @@ begin
   if ((sig = SIGKILL) or (sig = SIGSTOP)) and
       (act^.u.code <> SIG_DFL) then
   begin
-   rw_wunlock(p_sigacts.ps_mtx);
+   mtx_unlock(@p_sigacts.ps_mtx);
    PROC_UNLOCK;
    Result:=EINVAL;
   end;
@@ -507,7 +521,7 @@ begin
   end;
  end;
 
- rw_wunlock(p_sigacts.ps_mtx);
+ mtx_unlock(@p_sigacts.ps_mtx);
  PROC_UNLOCK;
  Result:=0;
 end;
@@ -545,7 +559,6 @@ var
  i:Integer;
 begin
  PROC_LOCK;
- rw_wlock(p_sigacts.ps_mtx);
 
  For i:=1 to NSIG do
  begin
@@ -555,7 +568,6 @@ begin
   end;
  end;
 
- rw_wunlock(p_sigacts.ps_mtx);
  PROC_UNLOCK;
 end;
 
@@ -683,7 +695,114 @@ begin
  if (Result<>0) then Result:=EFAULT;
 end;
 
+procedure sigexit(td:p_kthread;sig:Integer); forward;
 
+Function kern_sigtimedwait(td:p_kthread;
+                           waitset:sigset_t;
+                           ksi:p_ksiginfo;
+                           timeout:ptimespec
+                          ):Integer;
+var
+ saved_mask,new_block:sigset_t;
+ rts,ets,tv:Int64;
+ sig,timevalid:Integer;
+begin
+ Result:=0;
+
+ timevalid:=0;
+ ets:=0;
+
+ if (timeout<>nil) then
+ begin
+  if (timeout^.tv_nsec >= 0) and (timeout^.tv_nsec < 1000000000) then
+  begin
+   timevalid:=1;
+   rts:=get_unit_uptime;
+   ets:=rts;
+   ets:=ets+TIMESPEC_TO_UNIT(timeout);
+  end;
+ end;
+
+ ksiginfo_init(ksi);
+
+ SIG_CANTMASK(@waitset);
+
+ PROC_LOCK;
+ saved_mask:=td^.td_sigmask;
+ SIGSETNAND(@td^.td_sigmask,@waitset);
+
+ repeat
+  mtx_lock(@p_sigacts.ps_mtx);
+  sig:=cursig(td,SIG_STOP_ALLOWED);
+  mtx_unlock(@p_sigacts.ps_mtx);
+
+  if (sig<>0) and SIGISMEMBER(@waitset,sig) then
+  begin
+   if (sigqueue_get(@td^.td_sigqueue, sig, ksi) <> 0) then
+   begin
+    Result:=0;
+    break;
+   end;
+  end;
+
+  if (Result<>0) then Break;
+
+  if (timeout<>nil) then
+  begin
+   if (timevalid=0) then
+   begin
+    Result:=EINVAL;
+    break;
+   end;
+   rts:=get_unit_uptime;
+   if (rts>=ets) then
+   begin
+    Result:=EAGAIN;
+    break;
+   end;
+   tv:=ets-rts;
+  end else
+  begin
+   tv:=NT_INFINITE;
+  end;
+
+  //Result:=msleep(ps, &p^.p_mtx, PPAUSE|PCATCH, "sigwait", -tv);
+
+  if (timeout<>nil) then
+  begin
+   if (Result=ERESTART) then
+   begin
+    Result:=EINTR;
+   end else
+   if (Result=EAGAIN) then
+   begin
+    Result:=0;
+   end;
+  end;
+
+ until false;
+
+ new_block:=saved_mask;
+ SIGSETNAND(@new_block,@td^.td_sigmask);
+ td^.td_sigmask:=saved_mask;
+
+ reschedule_signals(new_block,0);
+
+ //if (ksi^.ksi_code == SI_TIMER)
+ // itimer_accept(p, ksi^.ksi_timerid, ksi);
+
+ if (sig=SIGKILL) then
+ begin
+  sigexit(td,sig);
+ end;
+
+ PROC_UNLOCK;
+end;
+
+procedure sigexit(td:p_kthread;sig:Integer);
+begin
+ //
+end;
 
 Function issignal(td:p_kthread;stop_allowed:Integer):Integer;
 begin

@@ -225,7 +225,9 @@ uses
  hamt,
  systm,
  kern_rwlock,
- kern_umtx;
+ kern_umtx,
+ _umtx,
+ sys_umtx;
 
 var
  p_mtx:Pointer=nil;
@@ -731,7 +733,8 @@ begin
 
  if (state<>nil) then
  begin
-  kern_umtx_wake(td,Pointer(state),High(Integer),0);
+  _umtx_op(Pointer(state),UMTX_OP_WAKE,High(Integer),nil,nil);
+  //kern_umtx_wake(td,Pointer(state),High(Integer),0);
  end;
 
  //tdsigcleanup(td);
