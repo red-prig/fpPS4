@@ -91,27 +91,40 @@ procedure fast_syscall;
 
 implementation
 
+uses
+ vm_machdep;
+
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
 
 procedure amd64_syscall;
 var
+ td:p_kthread;
  td_frame:p_trapframe;
+ error:Integer;
 begin
  //Call directly to the address or make an ID table?
- td_frame:=curkthread^.td_frame;
- td_frame^.tf_rax:=tsyscall(td_frame^.tf_rax)
-                           (td_frame^.tf_rdi,
-                            td_frame^.tf_rsi,
-                            td_frame^.tf_rdx,
-                            td_frame^.tf_rcx,
-                            td_frame^.tf_r8,
-                            td_frame^.tf_r9);
+
+ td:=curkthread;
+ td_frame:=td^.td_frame;
+
+ error:=tsyscall(td_frame^.tf_rax)
+                (td_frame^.tf_rdi,
+                 td_frame^.tf_rsi,
+                 td_frame^.tf_rdx,
+                 td_frame^.tf_rcx,
+                 td_frame^.tf_r8,
+                 td_frame^.tf_r9);
+
+ if ((td^.td_pflags and TDP_NERRNO)=0) then
+ begin
+  td^.td_errno:=error;
+ end;
+
+ cpu_set_syscall_retval(td,error);
 end;
 
 procedure fast_syscall; assembler; nostackframe;
-label
- rip;
 asm
  //prolog (debugger)
  pushq %rbp
@@ -129,15 +142,12 @@ asm
  movqq %r8 ,trapframe.tf_r8 (%rax)
  movqq %r9 ,trapframe.tf_r9 (%rax)
  movqq %rbx,trapframe.tf_rbx(%rax)
- movqq %rbp,trapframe.tf_rbp(%rax)
  movqq %r10,trapframe.tf_r10(%rax)
  movqq %r11,trapframe.tf_r11(%rax)
  movqq %r12,trapframe.tf_r12(%rax)
  movqq %r13,trapframe.tf_r13(%rax)
  movqq %r14,trapframe.tf_r14(%rax)
  movqq %r15,trapframe.tf_r15(%rax)
- movqq %rsp,trapframe.tf_rsp(%rax)
- movqq $rip,trapframe.tf_rip(%rax) //save caller addr
 
  movqw %fs,trapframe.tf_fs(%rax)
  movqw %gs,trapframe.tf_gs(%rax)
@@ -149,7 +159,17 @@ asm
  movqq $0,trapframe.tf_trapno(%rax)
  movqq $0,trapframe.tf_addr  (%rax)
  movqq $1,trapframe.tf_flags (%rax)
- movqq $0,trapframe.tf_err   (%rax)
+ movqq $5,trapframe.tf_err   (%rax) //sizeof(call $32)
+
+ movqq (%rsp),%r11 //get prev rbp
+ movqq %r11,trapframe.tf_rbp(%rax)
+
+ movqq %rsp,%r11
+ lea   16(%r11),%r11 //get prev rsp
+ movqq %r11,trapframe.tf_rsp(%rax)
+
+ movqq 8(%rsp),%r11 //get prev rip
+ movqq %r11,trapframe.tf_rip(%rax)
 
  movqq -16(%rsp),%r11 //get rax
  movqq %r11,trapframe.tf_rax(%rax)
@@ -164,7 +184,6 @@ asm
  andq $-32,%rsp //align stack
 
  call amd64_syscall
- rip:
 
  //Restore preserved registers.
  movqq %gs:(0x700),%rax            //curkthread
@@ -181,7 +200,6 @@ asm
  movqq trapframe.tf_r8 (%rax),%r8
  movqq trapframe.tf_r9 (%rax),%r9
  movqq trapframe.tf_rbx(%rax),%rbx
- movqq trapframe.tf_rbp(%rax),%rbp
  movqq trapframe.tf_r10(%rax),%r10
  movqq trapframe.tf_r11(%rax),%r11
  movqq trapframe.tf_r12(%rax),%r12
@@ -189,6 +207,8 @@ asm
  movqq trapframe.tf_r14(%rax),%r14
  movqq trapframe.tf_r15(%rax),%r15
  movqq trapframe.tf_rsp(%rax),%rsp
+
+ lea  -16(%rsp),%rsp //restore rsp
 
  movqq trapframe.tf_rax(%rax),%rax //restore rax
 

@@ -57,12 +57,12 @@ begin
 
  repeat
 
-//Writeln('before: sptr:',HexStr(sptr));
-//asm
-// Movq trap_test,%rax
-// call fast_syscall
-//end;
-//Writeln('after:  sptr:',HexStr(sptr));
+ //Writeln('before: sptr:',HexStr(sptr));
+ //asm
+ // Movq trap_test,%rax
+ // call fast_syscall
+ //end;
+ //Writeln('after:  sptr:',HexStr(sptr));
 
  //e:=_umtx_op(@mtx,{UMTX_OP_MUTEX_LOCK} UMTX_OP_LOCK,td.td_tid,nil,nil);
  //e:=_umtx_op(@mtx,UMTX_OP_MUTEX_LOCK,td^.td_tid,nil,nil);

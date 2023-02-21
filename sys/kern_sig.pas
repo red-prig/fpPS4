@@ -76,11 +76,11 @@ implementation
 uses
  ntapi,
  systm,
- md_psl,
  _umtx,
  kern_umtx,
  kern_time,
- kern_thread;
+ kern_thread,
+ vm_machdep;
 
 const
  max_pending_per_proc=128;
@@ -808,10 +808,18 @@ var
  __set:sigset_t;
 begin
  td:=curkthread;
- if (td=nil) then Exit(EFAULT);
+ if (td=nil) then
+ begin
+  td^.td_retval[0]:=EFAULT;
+  Exit(0);
+ end;
 
  Result:=copyin(oset,@__set,sizeof(sigset_t));
- if (Result<>0) then Exit(EFAULT);
+ if (Result<>0) then
+ begin
+  td^.td_retval[0]:=EFAULT;
+  Exit(0);
+ end;
 
  Result:=kern_sigtimedwait(td,__set,@ksi,nil);
  if (Result<>0) then
@@ -820,10 +828,13 @@ begin
   begin
    Result:=ERESTART;
   end;
-  Exit;
+  td^.td_retval[0]:=Result;
+  Exit(0);
  end;
 
  Result:=copyout(@ksi.ksi_info.si_signo,sig,sizeof(Integer));
+ td^.td_retval[0]:=Result;
+ Result:=0;
 end;
 
 Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
@@ -834,28 +845,28 @@ var
  __set:sigset_t;
 begin
  td:=curkthread;
- if (td=nil) then Exit(-EFAULT);
+ if (td=nil) then Exit(-1);
 
  if (timeout<>nil) then
  begin
   Result:=copyin(timeout,@ts,sizeof(timespec));
-  if (Result<>0) then Exit(-EFAULT);
+  if (Result<>0) then Exit;
   timeout:=@ts;
  end;
 
  Result:=copyin(oset,@__set,sizeof(sigset_t));
- if (Result<>0) then Exit(-EFAULT);
+ if (Result<>0) then Exit;
 
  Result:=kern_sigtimedwait(td,__set,@ksi,timeout);
- if (Result<>0) then Exit(-Result);
+ if (Result<>0) then Exit;
 
  if (info<>nil) then
  begin
   Result:=copyout(@ksi.ksi_info,info,sizeof(siginfo_t));
-  if (Result<>0) then Exit(-EFAULT);
+  if (Result<>0) then Exit;
  end;
 
- Result:=ksi.ksi_info.si_signo;
+ td^.td_retval[0]:=ksi.ksi_info.si_signo;
 end;
 
 Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
@@ -865,48 +876,21 @@ var
  __set:sigset_t;
 begin
  td:=curkthread;
- if (td=nil) then Exit(-EFAULT);
+ if (td=nil) then Exit(-1);
 
  Result:=copyin(oset,@__set,sizeof(sigset_t));
- if (Result<>0) then Exit(-EFAULT);
+ if (Result<>0) then Exit;
 
  Result:=kern_sigtimedwait(td,__set,@ksi,nil);
- if (Result<>0) then Exit(-Result);
+ if (Result<>0) then Exit;
 
  if (info<>nil) then
  begin
   Result:=copyout(@ksi.ksi_info,info,sizeof(siginfo_t));
-  if (Result<>0) then Exit(-EFAULT);
+  if (Result<>0) then Exit;
  end;
 
- Result:=ksi.ksi_info.si_signo;
-end;
-
-procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
-begin
- Case error of
-  0:With td^.td_frame^ do
-    begin
-     tf_rax:=td^.td_retval[0];
-     tf_rdx:=td^.td_retval[1];
-     tf_rflags:=tf_rflags and (not PSL_C);
-    end;
-  ERESTART:
-    With td^.td_frame^ do
-    begin
-     //tf_err = size of syscall cmd
-     tf_rip:=tf_rip-td^.td_frame^.tf_err;
-     tf_r10:=tf_rcx;
-     //set_pcb_flags(td->td_pcb, PCB_FULL_IRET);
-    end;
-  EJUSTRETURN:;
-  else
-    With td^.td_frame^ do
-    begin
-     tf_rax:=error;
-     tf_rflags:=tf_rflags or PSL_C;
-    end;
- end;
+ td^.td_retval[0]:=ksi.ksi_info.si_signo;
 end;
 
 function postsig(sig:Integer):Integer; forward;
@@ -945,7 +929,8 @@ begin
  Result:=EJUSTRETURN;
 end;
 
-//TODO check td_errno,td_oldsigmask,td_retval
+
+
 
 function postsig(sig:Integer):Integer;
 begin

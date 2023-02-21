@@ -227,6 +227,7 @@ implementation
 uses
  hamt,
  systm,
+ vm_machdep,
  kern_rwlock,
  kern_umtx,
  _umtx,
@@ -285,10 +286,7 @@ begin
  data:=data+SizeOf(kthread);
  Result^.td_frame:=data;
 
- data:=VirtualAlloc(nil,16*1024,MEM_COMMIT or MEM_RESERVE,PAGE_READWRITE);
-
- data:=data+16*1024;
- Result^.td_kstack:=data;
+ cpu_thread_alloc(Result);
 
  //Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
@@ -298,14 +296,11 @@ begin
 end;
 
 procedure thread_free(td:p_kthread);
-var
- data:Pointer;
+
 begin
  umtx_thread_fini(td);
  //
- data:=td^.td_kstack;
- data:=data-16*1024;
- VirtualFree(data,0,MEM_RELEASE);
+ cpu_thread_free(td);
  //
  FreeMem(td);
 end;
@@ -401,21 +396,6 @@ begin
  begin
   thread_dec_ref(td);
  end;
-end;
-
-function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
-begin
- td^.td_cpuset:=new;
- Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));
-end;
-
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
-var
- ptls:PPointer;
-begin
- ptls:=td^.td_teb+$708;
-
- ptls^:=base;
 end;
 
 function BaseQueryInfo(td:p_kthread):Integer;
@@ -817,22 +797,9 @@ begin
  td^.td_pri_class:=_class;
 end;
 
-function sched_priority(td:p_kthread;prio:Integer):Integer;
+function sched_priority(td:p_kthread;prio:Integer):Integer; inline;
 begin
- td^.td_priority:=prio;
-
- Case prio of
-    0..255:prio:= 16;
-  256..496:prio:= 2;
-  497..526:prio:= 1;
-  527..556:prio:= 0;
-  557..586:prio:=-1;
-  587..767:prio:=-2;
-  else
-           prio:=-16;
- end;
-
- Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
+ Result:=cpu_set_priority(td,prio);
 end;
 
 procedure sched_prio(td:p_kthread;prio:Integer); inline;
