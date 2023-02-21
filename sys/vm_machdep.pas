@@ -17,6 +17,7 @@ procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
+function  cpu_getstack(td:p_kthread):QWORD;
 
 implementation
 
@@ -117,6 +118,12 @@ begin
 
  Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
 end;
+
+function cpu_getstack(td:p_kthread):QWORD;
+begin
+ Result:=td^.td_frame^.tf_rsp;
+end;
+
 
 end.
 

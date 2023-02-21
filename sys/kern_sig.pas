@@ -71,6 +71,10 @@ Function sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
 Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
 Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
 
+Function sys_sigsuspend(sigmask:p_sigset_t):Integer;
+
+Function sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
+
 implementation
 
 uses
@@ -80,10 +84,13 @@ uses
  kern_umtx,
  kern_time,
  kern_thread,
- vm_machdep;
+ vm_machdep,
+ machdep;
 
 const
  max_pending_per_proc=128;
+
+ kern_forcesigexit=1;
 
 var
  p_pendingcnt     :Integer=0;
@@ -545,7 +552,7 @@ begin
  begin
   actp:=@_act;
   Result:=copyin(act,actp,sizeof(sigaction_t));
-  if (Result<>0) then Exit(EFAULT);
+  if (Result<>0) then Exit;
  end;
 
  Result:=kern_sigaction(sig,actp,oactp);
@@ -553,7 +560,6 @@ begin
  if (oact<>nil) and (Result=0) then
  begin
   Result:=copyout(oactp,oact,sizeof(sigaction_t));
-  if (Result<>0) then Result:=EFAULT;
  end;
 end;
 
@@ -657,7 +663,7 @@ var
  setp,osetp:p_sigset_t;
 begin
  td:=curkthread;
- if (td=nil) then Exit(EFAULT);
+ if (td=nil) then Exit(-1);
 
  setp :=nil;
  osetp:=nil;
@@ -668,7 +674,7 @@ begin
  begin
   setp:=@__set;
   Result:=copyin(_set,setp,sizeof(sigset_t));
-  if (Result<>0) then Exit(EFAULT);
+  if (Result<>0) then Exit;
  end;
 
  Result:=kern_sigprocmask(td,how,setp,osetp,0);
@@ -676,7 +682,6 @@ begin
  if (oset<>nil) and (Result=0) then
  begin
   Result:=copyout(osetp,oset,sizeof(sigset_t));
-  if (Result<>0) then Result:=EFAULT;
  end;
 end;
 
@@ -687,14 +692,13 @@ var
  pending:sigset_t;
 begin
  td:=curkthread;
- if (td=nil) then Exit(EFAULT);
+ if (td=nil) then Exit(-1);
 
  PROC_LOCK;
  pending:=td^.td_sigqueue.sq_signals;
  PROC_UNLOCK;
 
  Result:=copyout(@pending,oset,sizeof(sigset_t));
- if (Result<>0) then Result:=EFAULT;
 end;
 
 procedure sigexit(td:p_kthread;sig:Integer); forward;
@@ -929,8 +933,163 @@ begin
  Result:=EJUSTRETURN;
 end;
 
+Function sys_sigsuspend(sigmask:p_sigset_t):Integer;
+var
+ td:p_kthread;
+ mask:sigset_t;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
 
+ Result:=copyin(sigmask,@mask,sizeof(sigset_t));
+ if (Result<>0) then Exit;
 
+ Result:=kern_sigsuspend(td,mask);
+end;
+
+Function kern_sigaltstack(td:p_kthread;ss:p_stack_t;oss:p_stack_t):Integer;
+var
+ oonstack:Integer;
+begin
+ oonstack:=sigonstack(cpu_getstack(td));
+
+ if (oss <> nil) then
+ begin
+  oss^:=td^.td_sigstk;
+
+  if ((td^.td_pflags and TDP_ALTSTACK)<>0) then
+  begin
+   if (oonstack<>0) then
+   begin
+    oss^.ss_flags:=SS_ONSTACK;
+   end else
+   begin
+    oss^.ss_flags:=0;
+   end;
+  end else
+  begin
+   oss^.ss_flags:=SS_DISABLE;
+  end;
+ end;
+
+ if (ss<>nil) then
+ begin
+  if (oonstack<>0) then Exit(EPERM);
+
+  if ((ss^.ss_flags and (not SS_DISABLE))<>0) then Exit(EINVAL);
+
+  if ((ss^.ss_flags and SS_DISABLE)=0) then
+  begin
+   if (ss^.ss_size<MINSIGSTKSZ) then Exit(ENOMEM);
+
+   td^.td_sigstk:=ss^;
+   td^.td_pflags:=td^.td_pflags or TDP_ALTSTACK;
+  end else
+  begin
+   td^.td_pflags:=td^.td_pflags and (not TDP_ALTSTACK);
+  end;
+ end;
+
+ Result:=0;
+end;
+
+Function sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
+var
+ td:p_kthread;
+ _ss,_oss:stack_t;
+ p_oss:p_stack_t;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ if (ss<>nil) then
+ begin
+  Result:=copyin(ss,@_ss,sizeof(stack_t));
+  if (Result<>0) then Exit;
+  ss:=@_ss;
+ end;
+
+ p_oss:=nil;
+ if (oss<>nil) then
+ begin
+  p_oss:=@_oss;
+ end;
+
+ Result:=kern_sigaltstack(td,ss,p_oss);
+ if (Result<>0) then Exit;
+
+ if (oss<>nil) then
+ begin
+  Result:=copyout(p_oss,oss,sizeof(stack_t));
+ end;
+end;
+
+procedure postsig_done(sig:Integer;td:p_kthread);
+var
+ mask:sigset_t;
+begin
+ //td->td_ru.ru_nsignals++;
+
+ mask:=p_sigacts.ps_catchmask[_SIG_IDX(sig)];
+
+ if (not SIGISMEMBER(@p_sigacts.ps_signodefer,sig)) then
+ begin
+  SIGADDSET(@mask,sig);
+ end;
+
+ kern_sigprocmask(td,SIG_BLOCK,@mask,nil,SIGPROCMASK_PROC_LOCKED or SIGPROCMASK_PS_LOCKED);
+
+ if (SIGISMEMBER(@p_sigacts.ps_sigreset,sig)) then
+ begin
+  SIGDELSET(@p_sigacts.ps_sigcatch,sig);
+  if (sig<>SIGCONT) and
+     ((sigprop(sig) and SA_IGNORE)<>0) then
+  begin
+   SIGADDSET(@p_sigacts.ps_sigignore,sig);
+  end;
+  p_sigacts.ps_sigact[_SIG_IDX(sig)]:=sig_t(SIG_DFL);
+ end;
+end;
+
+procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
+var
+ sig,code:Integer;
+begin
+ sig :=ksi^.ksi_info.si_signo;
+ code:=ksi^.ksi_info.si_code;
+
+ Assert(_SIG_VALID(sig),'invalid signal');
+
+ PROC_LOCK;
+ mtx_lock(@p_sigacts.ps_mtx);
+
+ if SIGISMEMBER(@p_sigacts.ps_sigcatch,sig) and
+    (not SIGISMEMBER(@td^.td_sigmask,sig)) then
+ begin
+  sendsig(p_sigacts.ps_sigact[_SIG_IDX(sig)],ksi,@td^.td_sigmask);
+  postsig_done(sig,td);
+  mtx_unlock(@p_sigacts.ps_mtx);
+ end else
+ begin
+  //ignoring?
+
+  if (kern_forcesigexit<>0) and
+     (SIGISMEMBER(@td^.td_sigmask,sig) or
+      (p_sigacts.ps_sigact[_SIG_IDX(sig)]=sig_t(SIG_IGN))) then
+  begin
+   SIGDELSET(@td^.td_sigmask,sig);
+   SIGDELSET(@p_sigacts.ps_sigcatch,sig);
+   SIGDELSET(@p_sigacts.ps_sigignore,sig);
+   p_sigacts.ps_sigact[_SIG_IDX(sig)]:=sig_t(SIG_DFL);
+  end;
+
+  mtx_unlock(@p_sigacts.ps_mtx);
+
+  //tdsendsignal(p, td, sig, ksi);
+ end;
+
+ PROC_UNLOCK;
+end;
 
 function postsig(sig:Integer):Integer;
 begin

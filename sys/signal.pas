@@ -195,6 +195,8 @@ type
   ss_size :size_t;  //signal stack length SIGSTKSZ
   ss_flags:Integer; //SS_DISABLE and/or SS_ONSTACK
  end;
+
+ p_stack_t=^stack_t;
  stack_t=sigaltstack;
 
 const
