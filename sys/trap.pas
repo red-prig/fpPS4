@@ -145,14 +145,14 @@ asm
  movq  %rsp,%rbp
 
  pushf
- lock inc %gs:(0x710)   //lock interrupt
+ lock incl %gs:(0x710)   //lock interrupt
  popf
 
  movqq %rax,-16(%rsp)  //save rax
 
  movqq %gs:(0x700),%rax            //curkthread
 
- and   NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
+ andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 
  movqq kthread.td_frame(%rax),%rax //td_frame
 
@@ -229,7 +229,7 @@ asm
  movqq trapframe.tf_rax(%rax),%rax //restore rax
 
  pushf
- lock dec %gs:(0x710)   //unlock interrupt
+ lock decl %gs:(0x710)   //unlock interrupt
  popf
 
  //epilog (debugger)
@@ -268,7 +268,7 @@ asm
  movqq trapframe.tf_rax(%rax),%rax //restore rax
 
  pushf
- lock dec %gs:(0x710)   //unlock interrupt
+ lock decl %gs:(0x710)   //unlock interrupt
  popf
 
  //restore rip
