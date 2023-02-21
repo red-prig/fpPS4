@@ -8,6 +8,7 @@ uses
  ntapi,
  windows,
  md_psl,
+ trap,
  sys_kernel,
  kern_thread;
 
@@ -74,9 +75,9 @@ begin
      //tf_err = size of syscall cmd
      tf_rip:=tf_rip-td^.td_frame^.tf_err;
      tf_r10:=tf_rcx;
-     //set_pcb_flags(td->td_pcb, PCB_FULL_IRET);
+     set_pcb_flags(td,PCB_FULL_IRET);
     end;
-  EJUSTRETURN:;
+  EJUSTRETURN:; //nothing
   else
     With td^.td_frame^ do
     begin

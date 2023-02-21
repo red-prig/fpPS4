@@ -11,7 +11,8 @@ uses
  sys_kernel,
  ucontext,
  signal,
- signalvar;
+ signalvar,
+ hamt;
 
 const
  TDF_BORROWING  =$00000001; // Thread is borrowing pri from another.
@@ -115,6 +116,7 @@ type
   td_pflags       :Integer;
   td_flags        :Integer;
   td_errno        :Integer;
+  pcb_flags       :Integer;
   td_ref          :Integer;
   td_priority     :Word;
   td_pri_class    :Word;
@@ -193,6 +195,7 @@ procedure thread_dec_ref(td:p_kthread);
 procedure thread_lock(td:p_kthread);
 procedure thread_unlock(td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
+procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
 
 function  curkthread:p_kthread; assembler;
 procedure set_curkthread(td:p_kthread); assembler;
@@ -225,7 +228,6 @@ implementation
 }
 
 uses
- hamt,
  systm,
  vm_machdep,
  kern_rwlock,
@@ -396,6 +398,15 @@ begin
  begin
   thread_dec_ref(td);
  end;
+end;
+
+procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
+begin
+ rw_wlock(tidhash_lock);
+
+ HAMT_traverse32(@tidhashtbl,Tfree_data_cb(cb),userdata);
+
+ rw_wunlock(tidhash_lock);
 end;
 
 function BaseQueryInfo(td:p_kthread):Integer;

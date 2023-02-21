@@ -93,6 +93,8 @@ const
  kern_forcesigexit=1;
 
 var
+ g_p_sigqueue     :sigqueue_t;
+
  p_pendingcnt     :Integer=0;
  signal_overflow  :Integer=0;
  signal_alloc_fail:Integer=0;
@@ -361,6 +363,55 @@ begin
  SIGEMPTYSET(@_set);
  SIGADDSET(@_set,signo);
  sigqueue_delete_set(sq,@_set);
+end;
+
+type
+ p_t_sdsp=^_t_sdsp;
+ _t_sdsp=record
+   worklist:p_sigqueue;
+       _set:p_sigset_t
+ end;
+
+procedure _for_sdsp(td:p_kthread;data:p_t_sdsp); register; //Tfree_data_cb
+begin
+ sigqueue_move_set(@td^.td_sigqueue,data^.worklist,data^._set);
+end;
+
+procedure sigqueue_delete_set_proc(_set:p_sigset_t);
+var
+ worklist:sigqueue_t;
+ data:_t_sdsp;
+begin
+ sigqueue_init(@worklist);
+ sigqueue_move_set(@g_p_sigqueue,@worklist,_set);
+
+ data.worklist:=@worklist;
+ data.    _set:=_set;
+
+ FOREACH_THREAD_IN_PROC(@_for_sdsp,@data);
+
+ sigqueue_flush(@worklist);
+end;
+
+procedure sigqueue_delete_proc(signo:Integer);
+var
+ _set:sigset_t;
+begin
+ SIGEMPTYSET(@_set);
+ SIGADDSET(@_set,signo);
+ sigqueue_delete_set_proc(@_set);
+end;
+
+procedure sigqueue_delete_stopmask_proc;
+var
+ _set:sigset_t;
+begin
+ SIGEMPTYSET(@_set);
+ SIGADDSET(@_set,SIGSTOP);
+ SIGADDSET(@_set,SIGTSTP);
+ SIGADDSET(@_set,SIGTTIN);
+ SIGADDSET(@_set,SIGTTOU);
+ sigqueue_delete_set_proc(@_set);
 end;
 
 ///
@@ -695,7 +746,8 @@ begin
  if (td=nil) then Exit(-1);
 
  PROC_LOCK;
- pending:=td^.td_sigqueue.sq_signals;
+ pending:=g_p_sigqueue.sq_signals;
+ SIGSETOR(@pending,@td^.td_sigqueue.sq_signals);
  PROC_UNLOCK;
 
  Result:=copyout(@pending,oset,sizeof(sigset_t));
@@ -744,7 +796,8 @@ begin
 
   if (sig<>0) and SIGISMEMBER(@waitset,sig) then
   begin
-   if (sigqueue_get(@td^.td_sigqueue,sig,ksi)<>0) then
+   if (sigqueue_get(@td^.td_sigqueue,sig,ksi)<>0) or
+      (sigqueue_get(@g_p_sigqueue,sig,ksi)<>0) then
    begin
     Result:=0;
     break;
@@ -1090,6 +1143,127 @@ begin
 
  PROC_UNLOCK;
 end;
+
+type
+ p_t_sigtd=^_t_sigtd;
+ _t_sigtd=record
+   first_td:p_kthread;
+  signal_td:p_kthread;
+        sig:Integer
+ end;
+
+procedure _for_sigtd(td:p_kthread;data:p_t_sigtd); register; //Tfree_data_cb
+begin
+ if (td=nil) or (data=nil) then Exit;
+
+ if (data^.first_td=nil) then
+ begin
+  data^.first_td:=td;
+ end;
+
+ if (data^.signal_td=nil) then
+ if (not SIGISMEMBER(@td^.td_sigmask,data^.sig)) then
+ begin
+  data^.signal_td:=td;
+ end;
+end;
+
+function sigtd(sig,prop:Integer):p_kthread;
+var
+ td:p_kthread;
+ data:_t_sigtd;
+begin
+ td:=curkthread;
+
+ if (td<>nil) then
+ if not SIGISMEMBER(@td^.td_sigmask,sig) then
+ begin
+  Exit(td);
+ end;
+
+ data:=Default(_t_sigtd);
+ data.sig:=sig;
+
+ FOREACH_THREAD_IN_PROC(Pointer(@_for_sigtd),@data);
+
+ if (data.signal_td=nil) then
+ begin
+  Result:=data.first_td;
+ end else
+ begin
+  Result:=data.signal_td;
+ end;
+end;
+
+function tdsendsignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo):Integer;
+var
+ sigqueue:p_sigqueue;
+ action:sig_t;
+ intrval:Integer;
+ prop:Integer;
+begin
+ Result:=0;
+
+ prop:=sigprop(sig);
+
+ if (td=nil) then
+ begin
+  td:=sigtd(sig,prop);
+  sigqueue:=@g_p_sigqueue;
+ end else
+ begin
+  sigqueue:=@td^.td_sigqueue;
+ end;
+
+ mtx_lock(@p_sigacts.ps_mtx);
+
+ if (SIGISMEMBER(@p_sigacts.ps_sigignore,sig)) then
+ begin
+  mtx_unlock(@p_sigacts.ps_mtx);
+
+  if (ksi<>nil) then
+  if (ksi^.ksi_flags and KSI_INS)<>0 then
+  begin
+   ksiginfo_tryfree(ksi);
+  end;
+
+  Exit;
+ end;
+
+ if (SIGISMEMBER(@td^.td_sigmask,sig)) then
+  action:=sig_t(SIG_HOLD)
+ else if (SIGISMEMBER(@p_sigacts.ps_sigcatch,sig)) then
+  action:=sig_t(SIG_CATCH)
+ else
+  action:=sig_t(SIG_DFL);
+
+ if (SIGISMEMBER(@p_sigacts.ps_sigintr,sig)) then
+  intrval:=EINTR
+ else
+  intrval:=ERESTART;
+
+ mtx_unlock(@p_sigacts.ps_mtx);
+
+ if ((prop and SA_CONT)<>0) then
+ begin
+  sigqueue_delete_stopmask_proc
+ end else
+ if ((prop and SA_STOP)<>0) then
+ begin
+  sigqueue_delete_proc(SIGCONT);
+ end;
+
+ Result:=sigqueue_add(sigqueue,sig,ksi);
+ if (Result<>0) then Exit;
+ signotify(td);
+
+ if (action=sig_t(SIG_HOLD)) and ((prop and SA_CONT)=0) then Exit;
+
+ //tdsigwakeup(td, sig, action, intrval);
+end;
+
+
+
 
 function postsig(sig:Integer):Integer;
 begin

@@ -55,6 +55,9 @@ begin
 
  set_curkthread(td);
 
+ e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
+ Writeln('  e=',e);
+
  repeat
 
  //Writeln('before: sptr:',HexStr(sptr));
@@ -193,6 +196,14 @@ begin
   mov %rax,rax
  end;
  Writeln('UserData[1]:',HexStr(rax,16));
+
+
+ rax:=0;
+ asm
+  mov %gs:(0x710),%eax
+  mov %rax,rax
+ end;
+ Writeln('UserData[2]:',HexStr(rax,8));
 
  rax:=0;
  asm

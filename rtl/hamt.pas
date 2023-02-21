@@ -376,6 +376,7 @@ var
  data:array[0..HAMT32.stack_max] of TStackNode;
  Size:QWORD;
 begin
+ if (node=nil) or (cb=nil) then Exit;
  if IsSubTrie32(node) then
  begin
   curr:=@data;
@@ -405,15 +406,13 @@ begin
     end;
    end else
    begin
-    if (cb<>nil) then
-     cb(GetValue32(curr^.cnode),userdata);
+    cb(GetValue32(curr^.cnode),userdata);
     Inc(curr^.cnode);
    end;
   until false;
  end else
  begin
-  if (cb<>nil) then
-   cb(GetValue32(node),userdata);
+  cb(GetValue32(node),userdata);
  end;
 end;
 
@@ -428,6 +427,7 @@ var
  data:array[0..HAMT64.stack_max] of TStackNode;
  Size:QWORD;
 begin
+ if (node=nil) or (cb=nil) then Exit;
  if IsSubTrie64(node) then
  begin
   curr:=@data;
@@ -457,15 +457,13 @@ begin
     end;
    end else
    begin
-    if (cb<>nil) then
-     cb(GetValue64(curr^.cnode),userdata);
+    cb(GetValue64(curr^.cnode),userdata);
     Inc(curr^.cnode);
    end;
   until false;
  end else
  begin
-  if (cb<>nil) then
-   cb(GetValue64(node),userdata);
+  cb(GetValue64(node),userdata);
  end;
 end;
 

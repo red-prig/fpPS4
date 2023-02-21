@@ -87,12 +87,21 @@ const
   'DTrace pid return trap'         // 32 T_DTRACE_RET
  );
 
+const
+ PCB_FULL_IRET=1;
+
+procedure set_pcb_flags(td:p_kthread;f:Integer);
 procedure fast_syscall;
 
 implementation
 
 uses
  vm_machdep;
+
+procedure set_pcb_flags(td:p_kthread;f:Integer); inline;
+begin
+ td^.pcb_flags:=f;
+end;
 
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
@@ -124,15 +133,27 @@ begin
  cpu_set_syscall_retval(td,error);
 end;
 
+const
+ NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+
 procedure fast_syscall; assembler; nostackframe;
+label
+ doreti;
 asm
  //prolog (debugger)
  pushq %rbp
  movq  %rsp,%rbp
 
+ pushf
+ lock inc %gs:(0x710)   //lock interrupt
+ popf
+
  movqq %rax,-16(%rsp)  //save rax
 
  movqq %gs:(0x700),%rax            //curkthread
+
+ and   NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
+
  movqq kthread.td_frame(%rax),%rax //td_frame
 
  movqq %rdi,trapframe.tf_rdi(%rax)
@@ -185,13 +206,50 @@ asm
 
  call amd64_syscall
 
- //Restore preserved registers.
  movqq %gs:(0x700),%rax            //curkthread
+
+ //Requested full context restore
+ testl	PCB_FULL_IRET,kthread.pcb_flags(%rax)
+ jnz	doreti
+
  movqq kthread.td_frame(%rax),%rax //td_frame
 
+ //Restore preserved registers.
  movqq trapframe.tf_rflags(%rax),%r11
  pushq %r11 //set FLAGS
  popfq      //pop FLAGS
+
+ movqq trapframe.tf_rdi(%rax),%rdi
+ movqq trapframe.tf_rsi(%rax),%rsi
+ movqq trapframe.tf_rdx(%rax),%rdx
+
+ movqq trapframe.tf_rsp(%rax),%rsp
+ lea  -16(%rsp),%rsp //restore rsp
+
+ movqq trapframe.tf_rax(%rax),%rax //restore rax
+
+ pushf
+ lock dec %gs:(0x710)   //unlock interrupt
+ popf
+
+ //epilog (debugger)
+ popq  %rbp
+ ret
+
+ //doreti
+ doreti:
+
+ movqq kthread.td_frame(%rax),%rax //td_frame
+
+ //Restore full.
+ movqq trapframe.tf_rflags(%rax),%r11
+ pushq %r11 //set FLAGS
+ popfq      //pop FLAGS
+
+ movqq trapframe.tf_rsp(%rax),%rsp //restore stack
+
+ movqq trapframe.tf_rip(%rax),%r11
+ pushq %r11 //save rip
 
  movqq trapframe.tf_rdi(%rax),%rdi
  movqq trapframe.tf_rsi(%rax),%rsi
@@ -200,20 +258,20 @@ asm
  movqq trapframe.tf_r8 (%rax),%r8
  movqq trapframe.tf_r9 (%rax),%r9
  movqq trapframe.tf_rbx(%rax),%rbx
+ movqq trapframe.tf_rbp(%rax),%rbp
  movqq trapframe.tf_r10(%rax),%r10
  movqq trapframe.tf_r11(%rax),%r11
  movqq trapframe.tf_r12(%rax),%r12
  movqq trapframe.tf_r13(%rax),%r13
  movqq trapframe.tf_r14(%rax),%r14
  movqq trapframe.tf_r15(%rax),%r15
- movqq trapframe.tf_rsp(%rax),%rsp
-
- lea  -16(%rsp),%rsp //restore rsp
-
  movqq trapframe.tf_rax(%rax),%rax //restore rax
 
- //epilog (debugger)
- popq  %rbp
+ pushf
+ lock dec %gs:(0x710)   //unlock interrupt
+ popf
+
+ //restore rip
 end;
 
 //testl	$TDF_ASTPENDING | TDF_NEEDRESCHED,TD_FLAGS(%rax)
