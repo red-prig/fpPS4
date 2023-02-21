@@ -20,12 +20,53 @@ const
  SCE_FIBER_CONTEXT_MINIMUM_SIZE=512;
  SCE_FIBER_MAX_NAME_LENGTH     =31;
 
+ // Our own defined state constants. Not match with the lib
  FIBER_STATE_INIT   =0;
  FIBER_STATE_RUN    =1;
  FIBER_STATE_SUSPEND=2;
 
 type
  SceFiberEntry=procedure(argInit,argRun:QWord); SysV_ABI_CDecl;
+
+ // Original struct layout from sce_module v1.75. Different sce_module version may have different struct layout.
+ {
+   SceFiberContext=packed record // Internal struct storing context
+    rsp         :QWord;               // 8
+    rbp         :QWord;               // 16
+    rip         :QWord;               // 24
+    rbx         :QWord;               // 32
+    r12         :QWord;               // 40
+    r13         :QWord;               // 48
+    r14         :QWord;               // 56
+    r15         :QWord;               // 64
+    _unknown1   :array[0..3] of Byte; // 68
+    mxcsr       :DWord;               // 72
+   end;
+
+   SceFiber=packed record
+    sig1             :DWord;                // 4 - Signature = $DEF1649C
+    state            :DWord;                // 8
+    entry            :Pointer;              // 16 - Entry function pointer
+    initValue        :QWord;                // 24
+    addrContext      :Pointer;              // 32
+    sizeContext      :QWord;                // 40
+    name             :array[0..31] of Byte; // 72
+    context          :SceFiberContext;      // 144
+    _unknown1        :array[0..87] of Byte; // 232
+    sizeContextMirror:QWord;                // 240
+    addrContextEnd   :Pointer;              // 248 - Point to the start of "stack", probably?
+    sig2             :DWord;                // 256 - Signature = $B37592A0
+   end;
+
+   SceFiberContext2=packed record // The struct that will be passed to set_context function. It is represented as array of 6 uint64s in ghidra
+    entry                  :Pointer; // 8
+    initValue              :QWord;   // 16
+    runValue               :QWord;   // 24
+    stackAddr              :Pointer; // 32 - addrContextEnd
+    returnToMainThreadEntry:Pointer; // 40
+    _unknown1              :Pointer; // 48
+   end;
+ }
 
  // While we keep the size correct, the content is not the same as the one in original lib
  SceFiber=packed record
