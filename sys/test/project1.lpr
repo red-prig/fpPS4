@@ -150,7 +150,9 @@ begin
  //SetTlsBase(Pointer(qword(1)));
 
  sig_lock;
+ sig_lock;
   sleep(1);
+ sig_unlock;
  sig_unlock;
 
  Writeln('GetTlsBase:',HexStr(GetTlsBase));

@@ -122,25 +122,31 @@ asm
  popf
 end;
 
-procedure sig_unlock;
-var
- td:p_kthread;
- count:Integer;
-begin
- asm
-  pushf
-  lock decl %gs:(0x710)   //unlock interrupt
-  popf
-  movl %gs:(0x710),%eax
-  movl %eax,count
- end;
- if (count=0) then
- begin
-  td:=curkthread;
-  if (td=nil) then Exit;
-  if (td^.td_flags and TDF_AST)=0 then Exit;
-  ast;
- end;
+procedure sig_unlock; assembler; nostackframe;
+label
+ _exit;
+asm
+ //prolog (debugger)
+ pushq %rbp
+ movq  %rsp,%rbp
+ pushq %rax
+ pushf
+
+ lock decl %gs:(0x710)   //unlock interrupt
+ jnz _exit
+
+ movqq %gs:(0x700),%rax            //curkthread
+ testl TDF_AST,kthread.td_flags(%rax)
+ je _exit
+
+ mov  $0,%rax
+ call fast_syscall
+
+ _exit:
+ //epilog (debugger)
+ popf
+ popq  %rax
+ popq  %rbp
 end;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer); inline;
@@ -162,13 +168,18 @@ begin
  td:=curkthread;
  td_frame:=td^.td_frame;
 
- error:=tsyscall(td_frame^.tf_rax)
-                (td_frame^.tf_rdi,
-                 td_frame^.tf_rsi,
-                 td_frame^.tf_rdx,
-                 td_frame^.tf_rcx,
-                 td_frame^.tf_r8,
-                 td_frame^.tf_r9);
+ error:=0;
+ if (td_frame^.tf_rax<>0) then
+ begin
+  error:=tsyscall(td_frame^.tf_rax)
+                 (td_frame^.tf_rdi,
+                  td_frame^.tf_rsi,
+                  td_frame^.tf_rdx,
+                  td_frame^.tf_rcx,
+                  td_frame^.tf_r8,
+                  td_frame^.tf_r9);
+
+ end;
 
  if ((td^.td_pflags and TDP_NERRNO)=0) then
  begin
@@ -256,11 +267,11 @@ asm
  movqq %gs:(0x700),%rax            //curkthread
 
  //Requested full context restore
- testl	PCB_FULL_IRET,kthread.pcb_flags(%rax)
- jnz	_doreti
+ testl PCB_FULL_IRET,kthread.pcb_flags(%rax)
+ jnz _doreti
 
- testl	TDF_AST,kthread.td_flags(%rax)
- jne	_ast
+ testl TDF_AST,kthread.td_flags(%rax)
+ jne _ast
 
  movqq %gs:(0x700),%rax            //curkthread
  movqq kthread.td_frame(%rax),%rax //td_frame
