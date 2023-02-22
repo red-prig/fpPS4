@@ -96,7 +96,8 @@ procedure fast_syscall;
 implementation
 
 uses
- vm_machdep;
+ vm_machdep,
+ kern_sig;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer); inline;
 begin
@@ -135,10 +136,14 @@ end;
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+ TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
 
 procedure fast_syscall; assembler; nostackframe;
 label
- doreti;
+ _after,
+ _doreti,
+ _ast,
+ _doreti_exit;
 asm
  //prolog (debugger)
  pushq %rbp
@@ -206,12 +211,18 @@ asm
 
  call amd64_syscall
 
+ _after:
+
  movqq %gs:(0x700),%rax            //curkthread
 
  //Requested full context restore
  testl	PCB_FULL_IRET,kthread.pcb_flags(%rax)
- jnz	doreti
+ jnz	_doreti
 
+ testl	TDF_AST,kthread.td_flags(%rax)
+ jne	_ast
+
+ movqq %gs:(0x700),%rax            //curkthread
  movqq kthread.td_frame(%rax),%rax //td_frame
 
  //Restore preserved registers.
@@ -236,9 +247,25 @@ asm
  popq  %rbp
  ret
 
- //doreti
- doreti:
+ //ast
+ _ast:
 
+ call ast
+ jmp _after
+
+ //doreti
+ _doreti:
+
+  movqq %gs:(0x700),%rax            //curkthread
+  testl TDF_AST,kthread.td_flags(%rax)
+  je _doreti_exit
+
+  call ast
+  jmp _doreti
+
+ _doreti_exit:
+
+ movqq %gs:(0x700),%rax            //curkthread
  movqq kthread.td_frame(%rax),%rax //td_frame
 
  //Restore full.

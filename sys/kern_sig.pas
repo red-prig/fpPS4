@@ -79,6 +79,8 @@ Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
 procedure sigqueue_init(list:p_sigqueue);
 procedure tdsigcleanup(td:p_kthread);
 
+procedure ast;
+
 implementation
 
 uses
@@ -1547,6 +1549,76 @@ procedure sigexit(td:p_kthread;sig:Integer);
 begin
  Halt(W_EXITCODE(0,sig));
  // NOTREACHED
+end;
+
+//
+
+procedure ast;
+var
+ td:p_kthread;
+ flags,sig:Integer;
+begin
+ td:=curkthread;
+
+ thread_lock(td);
+ flags:=td^.td_flags;
+
+ td^.td_flags:=td^.td_flags and (not (TDF_ASTPENDING or TDF_NEEDSIGCHK or TDF_NEEDSUSPCHK or
+     TDF_NEEDRESCHED or TDF_ALRMPEND or TDF_PROFPEND or TDF_MACPEND));
+
+ thread_unlock(td);
+
+ if ((flags and TDF_ALRMPEND)<>0) then
+ begin
+  PROC_LOCK;
+  kern_psignal(SIGVTALRM);
+  PROC_UNLOCK;
+ end;
+
+ if ((flags and TDF_PROFPEND)<>0) then
+ begin
+  PROC_LOCK;
+  kern_psignal(SIGPROF);
+  PROC_UNLOCK;
+ end;
+
+ if ((flags and TDF_NEEDRESCHED)<>0) then
+ begin
+  thread_lock(td);
+  sched_prio(td,td^.td_user_pri);
+  //mi_switch(SW_INVOL or SWT_NEEDRESCHED, NULL);
+  thread_unlock(td);
+ end;
+
+ if ((flags and TDF_NEEDSIGCHK)<>0) or
+    (p_pendingcnt > 0) or
+    (not SIGISEMPTY(@g_p_sigqueue.sq_list)) then
+ begin
+  PROC_LOCK;
+  mtx_lock(@p_sigacts.ps_mtx);
+
+  repeat
+   sig:=cursig(td,SIG_STOP_ALLOWED);
+   if (sig=0) then Exit;
+   postsig(sig);
+  until false;
+
+  mtx_unlock(@p_sigacts.ps_mtx);
+  PROC_UNLOCK;
+ end;
+
+ if ((flags and TDF_NEEDSUSPCHK)<>0) then
+ begin
+  PROC_LOCK;
+  //thread_suspend_check(0);
+  PROC_UNLOCK;
+ end;
+
+ if ((td^.td_pflags and TDP_OLDMASK)<>0) then
+ begin
+  td^.td_pflags:=td^.td_pflags and (not TDP_OLDMASK);
+  kern_sigprocmask(td,SIG_SETMASK,@td^.td_oldsigmask,nil,0);
+ end;
 end;
 
 initialization
