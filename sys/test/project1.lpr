@@ -10,6 +10,7 @@ uses
  sys_umtx,
  time,
  kern_time,
+ thr,
  kern_thread,
  kern_lock,
  kern_rwlock,
@@ -262,7 +263,7 @@ begin
  writeln(HexStr(rax,16));
  writeln;
 
- thread_exit;
+ thr_exit(nil);
 end;
 
 function _VirtualQuery(addr:Pointer):Integer;
@@ -554,6 +555,8 @@ var
 
  _time:Int64;
 
+ _thr_param:thr_param;
+
 begin
  //test_map;
 
@@ -580,19 +583,19 @@ begin
  prio._type:=RTP_PRIO_NORMAL;
  prio._prio:=700;
 
- create_thread(nil,
-               nil,
-               @test_thread,
-               nil,
-               mem,
-               64*1024,
-               mem,
-               @tid,
-               nil,
-               @prio,
-               nil
-              );
+ _thr_param:=Default(thr_param);
 
+ _thr_param.start_func:=@test_thread;
+ _thr_param.arg       :=nil;
+ _thr_param.stack_base:=mem;
+ _thr_param.stack_size:=64*1024;
+ _thr_param.tls_base  :=mem;
+ _thr_param.child_tid :=@tid;
+ _thr_param.parent_tid:=nil;
+ _thr_param.rtp       :=@prio;
+ _thr_param.name      :='test';
+
+ sys_thr_new(@_thr_param,SizeOf(_thr_param));
 
  //readln;
 

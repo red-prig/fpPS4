@@ -76,6 +76,7 @@ Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
 
 Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
 
+procedure sigqueue_init(list:p_sigqueue);
 procedure tdsigcleanup(td:p_kthread);
 
 implementation
@@ -1338,7 +1339,7 @@ begin
   //wakeup_swapper:=sleepq_abort(td,intrval);
  end else
  begin
-  if {TD_IS_RUNNING(td) and} (td<>curkthread) then
+  if TD_IS_RUNNING(td) and (td<>curkthread) then
    forward_signal(td);
  end;
 

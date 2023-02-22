@@ -15,6 +15,9 @@ uses
  hamt;
 
 const
+ TDS_INACTIVE=0;
+ TDS_RUNNING =1;
+
  TDF_BORROWING  =$00000001; // Thread is borrowing pri from another.
  TDF_INPANIC    =$00000002; // Caused a panic, let it drive crashdump.
  TDF_INMEM      =$00000004; // Thread's stack is in memory.
@@ -113,6 +116,7 @@ type
   td_lock         :Pointer;
   td_tid          :QWORD;
   td_sigstk       :stack_t;
+  td_state        :Integer;
   td_pflags       :Integer;
   td_flags        :Integer;
   td_errno        :Integer;
@@ -172,23 +176,9 @@ procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
 function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
-function  create_thread(td        :p_kthread; //calling thread
-                        ctx       :Pointer;
-                        start_func:Pointer;
-                        arg       :Pointer;
-                        stack_base:Pointer;
-                        stack_size:QWORD;
-                        tls_base  :Pointer;
-                        child_tid :PQWORD;
-                        parent_tid:PQWORD;
-                        rtp       :p_rtprio;
-                        name      :PChar
-                       ):Integer;
-
 function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 function  sys_thr_self(id:PQWORD):Integer;
-
-procedure thread_exit;
+procedure sys_thr_exit(state:PQWORD);
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
@@ -201,6 +191,7 @@ function  curkthread:p_kthread; assembler;
 procedure set_curkthread(td:p_kthread); assembler;
 
 function  SIGPENDING(td:p_kthread):Boolean; inline;
+function  TD_IS_RUNNING(td:p_kthread):Boolean; inline;
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
@@ -233,8 +224,6 @@ uses
  vm_machdep,
  kern_rwlock,
  kern_umtx,
- _umtx,
- sys_umtx,
  kern_sig;
 
 var
@@ -262,6 +251,11 @@ function SIGPENDING(td:p_kthread):Boolean; inline;
 begin
  Result:=SIGNOTEMPTY(@td^.td_sigqueue.sq_signals) and
          sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
+end;
+
+function TD_IS_RUNNING(td:p_kthread):Boolean; inline;
+begin
+ Result:=td^.td_state=TDS_RUNNING
 end;
 
 procedure PROC_LOCK;
@@ -292,7 +286,7 @@ begin
 
  cpu_thread_alloc(Result);
 
- //Result^.td_state:=TDS_INACTIVE;
+ Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
 
  //
@@ -334,8 +328,10 @@ end;
 
 procedure thread_link(td:p_kthread);
 begin
- //td^.td_state:=TDS_INACTIVE;
- //sigqueue_init(&td->td_sigqueue, p);
+ td^.td_state:=TDS_INACTIVE;
+ td^.td_flags:=TDF_INMEM;
+
+ sigqueue_init(@td^.td_sigqueue);
 
  System.InterlockedIncrement(p_numthreads);
 end;
@@ -623,6 +619,7 @@ begin
   end;
  end;
 
+ newtd^.td_state:=TDS_RUNNING;
  NtResumeThread(newtd^.td_handle,nil);
 end;
 
@@ -665,40 +662,46 @@ end;
 
 function sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 var
- td:p_kthread;
  param:thr_param;
 begin
  if (_size<0) or (_size>Sizeof(thr_param)) then Exit(EINVAL);
-
- td:=curkthread;
- if (td=nil) then Exit(EFAULT);
 
  param:=Default(thr_param);
 
  Result:=copyin(_param,@param,_size);
  if (Result<>0) then Exit(EFAULT);
 
- Result:=kern_thr_new(td,@param);
+ Result:=kern_thr_new(curkthread,@param);
 end;
 
 procedure thread_exit;
 var
  td:p_kthread;
+ rsp:QWORD;
 begin
  td:=curkthread;
  if (td=nil) then Exit;
 
  ASSERT(TAILQ_EMPTY(@td^.td_sigqueue.sq_list),'signal pending');
 
- //td^.td_state:=TDS_INACTIVE;
+ td^.td_state:=TDS_INACTIVE;
 
  thread_inc_ref(td);
-
  tidhash_remove(td);
  thread_unlink(td);
 
+ NtClose(td^.td_handle);
+
  umtx_thread_exit(td);
 
+ //switch to userstack
+ rsp:=td^.td_frame^.tf_rsp;
+ if (rsp<>0) then
+ asm
+  mov rsp,%rsp
+ end;
+
+ //free
  thread_dec_ref(td);
 
  RtlExitUserThread(0);
@@ -719,18 +722,16 @@ begin
  Result:=0;
 end;
 
-function sys_thr_exit(state:PQWORD):Integer;
+procedure sys_thr_exit(state:PQWORD);
 var
  td:p_kthread;
 begin
-
  td:=curkthread;
- if (td=nil) then Exit(EFAULT);
+ if (td=nil) then Exit;
 
  if (state<>nil) then
  begin
-  _umtx_op(Pointer(state),UMTX_OP_WAKE,High(Integer),nil,nil);
-  //kern_umtx_wake(td,Pointer(state),High(Integer),0);
+  kern_umtx_wake(td,Pointer(state),High(Integer),0);
  end;
 
  tdsigcleanup(td);
