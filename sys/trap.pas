@@ -91,6 +91,11 @@ const
  PCB_FULL_IRET=1;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
+
+procedure sig_lock;
+procedure _sig_unlock;
+procedure sig_unlock;
+
 procedure fast_syscall;
 
 implementation
@@ -98,6 +103,45 @@ implementation
 uses
  vm_machdep,
  kern_sig;
+
+const
+ NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+ TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
+
+procedure sig_lock; assembler; nostackframe;
+asm
+ pushf
+ lock incl %gs:(0x710)   //lock interrupt
+ popf
+end;
+
+procedure _sig_unlock; assembler; nostackframe;
+asm
+ pushf
+ lock decl %gs:(0x710)   //unlock interrupt
+ popf
+end;
+
+procedure sig_unlock;
+var
+ td:p_kthread;
+ count:Integer;
+begin
+ asm
+  pushf
+  lock decl %gs:(0x710)   //unlock interrupt
+  popf
+  movl %gs:(0x710),%eax
+  movl %eax,count
+ end;
+ if (count=0) then
+ begin
+  td:=curkthread;
+  if (td=nil) then Exit;
+  if (td^.td_flags and TDF_AST)=0 then Exit;
+  ast;
+ end;
+end;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer); inline;
 begin
@@ -133,10 +177,6 @@ begin
 
  cpu_set_syscall_retval(td,error);
 end;
-
-const
- NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
- TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
 
 procedure fast_syscall; assembler; nostackframe;
 label
@@ -300,18 +340,6 @@ asm
 
  //restore rip
 end;
-
-//testl	$TDF_ASTPENDING | TDF_NEEDRESCHED,TD_FLAGS(%rax)
-//2: /* AST scheduled. */
-//sti
-//movq %rsp,%rdi
-//call ast
-//jmp 1b
-//
-//3: /* Requested full context restore, use doreti for that. */
-//MEXITCOUNT
-//jmp doreti
-
 
 
 

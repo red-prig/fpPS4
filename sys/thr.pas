@@ -30,10 +30,16 @@ implementation
 uses
  trap;
 
-function thr_new(param:p_thr_param;param_size:Integer):Integer; assembler; nostackframe;
-asm
- movq  sys_thr_new,%rax
- call  fast_syscall
+function thr_new(param:p_thr_param;param_size:Integer):Integer;
+begin
+ if (curkthread=nil) then
+ begin
+  Result:=sys_thr_new(param,param_size);
+ end else
+ asm
+  movq  sys_thr_new,%rax
+  call  fast_syscall
+ end;
 end;
 
 function thr_self(id:PQWORD):Integer; assembler; nostackframe;
@@ -41,6 +47,7 @@ asm
  movq  sys_thr_self,%rax
  call  fast_syscall
 end;
+
 procedure thr_exit(state:PQWORD); assembler; nostackframe;
 asm
  movq  sys_thr_exit,%rax

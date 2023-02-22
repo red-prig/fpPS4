@@ -187,8 +187,8 @@ procedure thread_unlock(td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
 
-function  curkthread:p_kthread; assembler;
-procedure set_curkthread(td:p_kthread); assembler;
+function  curkthread:p_kthread;
+procedure set_curkthread(td:p_kthread);
 
 function  SIGPENDING(td:p_kthread):Boolean; inline;
 function  TD_IS_RUNNING(td:p_kthread):Boolean; inline;
@@ -816,7 +816,7 @@ begin
  Result:=cpu_set_priority(td,prio);
 end;
 
-procedure sched_prio(td:p_kthread;prio:Integer); inline;
+procedure sched_prio(td:p_kthread;prio:Integer);
 begin
  td^.td_base_pri:=prio;
  sched_priority(td, prio);

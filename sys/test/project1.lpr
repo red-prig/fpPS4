@@ -149,7 +149,9 @@ begin
 
  //SetTlsBase(Pointer(qword(1)));
 
- sleep(1);
+ sig_lock;
+  sleep(1);
+ sig_unlock;
 
  Writeln('GetTlsBase:',HexStr(GetTlsBase));
 
@@ -595,7 +597,7 @@ begin
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test';
 
- sys_thr_new(@_thr_param,SizeOf(_thr_param));
+ thr_new(@_thr_param,SizeOf(_thr_param));
 
  //readln;
 
