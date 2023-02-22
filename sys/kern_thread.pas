@@ -228,12 +228,14 @@ implementation
 }
 
 uses
+ gtailq,
  systm,
  vm_machdep,
  kern_rwlock,
  kern_umtx,
  _umtx,
- sys_umtx;
+ sys_umtx,
+ kern_sig;
 
 var
  p_mtx:Pointer=nil;
@@ -686,7 +688,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit;
 
- //KASSERT(TAILQ_EMPTY(&td->td_sigqueue.sq_list), ("signal pending"));
+ ASSERT(TAILQ_EMPTY(@td^.td_sigqueue.sq_list),'signal pending');
 
  //td^.td_state:=TDS_INACTIVE;
 
@@ -731,7 +733,7 @@ begin
   //kern_umtx_wake(td,Pointer(state),High(Integer),0);
  end;
 
- //tdsigcleanup(td);
+ tdsigcleanup(td);
  //thread_stopped(p);
  thread_exit();
  // NOTREACHED

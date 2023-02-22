@@ -10,7 +10,8 @@ uses
  sys_kernel,
  time,
  signal,
- signalvar;
+ signalvar,
+ kern_thread;
 
 const
  SA_KILL    =$01; // terminates process by default
@@ -56,24 +57,26 @@ const
   SA_KILL   or SA_PROC                // SIGUSR2
 );
 
-Function sys_sigaction(sig:Integer;
-                       act,oact:p_sigaction_t;
-                       flags:Integer):Integer;
+Function  sys_sigaction(sig:Integer;
+                        act,oact:p_sigaction_t;
+                        flags:Integer):Integer;
 
-Function sys_sigprocmask(how:Integer;
-                         _set:p_sigset_t;
-                         oset:p_sigset_t;
-                         flags:Integer):Integer;
+Function  sys_sigprocmask(how:Integer;
+                          _set:p_sigset_t;
+                          oset:p_sigset_t;
+                          flags:Integer):Integer;
 
-Function sys_sigpending(oset:p_sigset_t):Integer;
+Function  sys_sigpending(oset:p_sigset_t):Integer;
 
-Function sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
-Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
-Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
+Function  sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
+Function  sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
+Function  sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
 
-Function sys_sigsuspend(sigmask:p_sigset_t):Integer;
+Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
 
-Function sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
+Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
+
+procedure tdsigcleanup(td:p_kthread);
 
 implementation
 
@@ -83,7 +86,6 @@ uses
  _umtx,
  kern_umtx,
  kern_time,
- kern_thread,
  vm_machdep,
  machdep;
 
@@ -566,7 +568,7 @@ begin
       (((sigprop(sig) and SA_IGNORE)<>0) and
        (p_sigacts.ps_sigact[_SIG_IDX(sig)] = sig_t(SIG_DFL))) then
   begin
-   //sigqueue_delete_proc(p, sig);
+   sigqueue_delete_proc(sig);
    if (sig <> SIGCONT) then
    begin
     SIGADDSET(@p_sigacts.ps_sigignore, sig);
@@ -1104,6 +1106,8 @@ begin
  end;
 end;
 
+function tdsendsignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo):Integer; forward;
+
 procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
 var
  sig,code:Integer;
@@ -1138,7 +1142,7 @@ begin
 
   mtx_unlock(@p_sigacts.ps_mtx);
 
-  //tdsendsignal(p, td, sig, ksi);
+  tdsendsignal(td,sig,ksi);
  end;
 
  PROC_UNLOCK;
@@ -1194,6 +1198,23 @@ begin
   Result:=data.signal_td;
  end;
 end;
+
+procedure kern_psignal(sig:Integer);
+var
+ ksi:ksiginfo_t;
+begin
+ ksiginfo_init(@ksi);
+ ksi.ksi_info.si_signo:=sig;
+ ksi.ksi_info.si_code :=SI_KERNEL;
+ tdsendsignal(nil,sig,@ksi);
+end;
+
+function pksignal(sig:Integer;ksi:p_ksiginfo):Integer;
+begin
+ Result:=tdsendsignal(nil,sig,ksi);
+end;
+
+procedure tdsigwakeup(td:p_kthread;sig:Integer;action:sig_t;intrval:Integer); forward;
 
 function tdsendsignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo):Integer;
 var
@@ -1259,30 +1280,272 @@ begin
 
  if (action=sig_t(SIG_HOLD)) and ((prop and SA_CONT)=0) then Exit;
 
- //tdsigwakeup(td, sig, action, intrval);
+ tdsigwakeup(td,sig,action,intrval);
 end;
 
-
-
-
-function postsig(sig:Integer):Integer;
+procedure forward_signal(td:p_kthread);
 begin
  //TODO
+end;
+
+procedure tdsigwakeup(td:p_kthread;sig:Integer;action:sig_t;intrval:Integer);
+label
+ _out;
+var
+ prop:Integer;
+ wakeup_swapper:Integer;
+begin
+ wakeup_swapper:=0;
+ prop:=sigprop(sig);
+
+ PROC_LOCK;
+ thread_lock(td);
+
+ if (action=sig_t(SIG_DFL)) and ((prop and SA_KILL)<>0) and (td^.td_priority>PUSER) then
+ begin
+  sched_prio(td,PUSER);
+ end;
+
+ //TD_ON_SLEEPQ(td) ((td)->td_wchan != NULL)
+
+ if false{TD_ON_SLEEPQ(td)}  then
+ begin
+
+  if ((td^.td_flags and TDF_SINTR)=0) then
+  begin
+   goto _out;
+  end;
+
+  if ((prop and SA_CONT)<>0) and (action=sig_t(SIG_DFL)) then
+  begin
+   thread_unlock(td);
+   PROC_UNLOCK;
+   sigqueue_delete(@g_p_sigqueue,sig);
+   sigqueue_delete(@td^.td_sigqueue,sig);
+   Exit;
+  end;
+
+  if ((prop and SA_STOP)<>0) and ((td^.td_flags and TDF_SBDRY)<>0) then
+  begin
+   goto _out;
+  end;
+
+  if (td^.td_priority>PUSER) then
+  begin
+   sched_prio(td,PUSER);
+  end;
+
+  //wakeup_swapper:=sleepq_abort(td,intrval);
+ end else
+ begin
+  if {TD_IS_RUNNING(td) and} (td<>curkthread) then
+   forward_signal(td);
+ end;
+
+ _out:
+  PROC_UNLOCK;
+  thread_unlock(td);
+  //if (wakeup_swapper)
+  // kick_proc0();
+end;
+
+procedure reschedule_signals(block:sigset_t;flags:Integer);
+var
+ td:p_kthread;
+ sig:Integer;
+begin
+ if (SIGISEMPTY(@g_p_sigqueue.sq_signals)) then Exit;
+
+ SIGSETAND(@block,@g_p_sigqueue.sq_signals);
+
+ repeat
+  sig:=sig_ffs(@block);
+  if (sig=0) then Exit;
+
+  SIGDELSET(@block,sig);
+  td:=sigtd(sig,0);
+  signotify(td);
+
+  if ((flags and SIGPROCMASK_PS_LOCKED)=0) then
+  begin
+   mtx_lock(@p_sigacts.ps_mtx);
+  end;
+
+  if SIGISMEMBER(@p_sigacts.ps_sigcatch,sig) then
+  begin
+   if SIGISMEMBER(@p_sigacts.ps_sigintr,sig) then
+   begin
+    tdsigwakeup(td,sig,sig_t(SIG_CATCH),EINTR);
+   end else
+   begin
+    tdsigwakeup(td,sig,sig_t(SIG_CATCH),ERESTART);
+   end;
+  end;
+
+  if ((flags and SIGPROCMASK_PS_LOCKED)=0) then
+  begin
+   mtx_unlock(@p_sigacts.ps_mtx);
+  end;
+ until false;
+end;
+
+procedure tdsigcleanup(td:p_kthread);
+var
+ unblocked:sigset_t;
+begin
+ sigqueue_flush(@td^.td_sigqueue);
+
+ SIGFILLSET(@unblocked);
+ SIGSETNAND(@unblocked,@td^.td_sigmask);
+ SIGFILLSET(@td^.td_sigmask);
+ reschedule_signals(unblocked,0);
+end;
+
+function sigdeferstop:Integer;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ if (td^.td_flags and TDF_SBDRY)<>0 then Exit(0);
+ thread_lock(td);
+ td^.td_flags:=td^.td_flags or TDF_SBDRY;
+ thread_unlock(td);
+ Result:=1;
+end;
+
+procedure sigallowstop;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ thread_lock(td);
+ td^.td_flags:=td^.td_flags and (not TDF_SBDRY);
+ thread_unlock(td);
+end;
+
+Function issignal(td:p_kthread;stop_allowed:Integer):Integer;
+var
+ sigpending:sigset_t;
+ sig,prop:Integer;
+begin
+ repeat
+
+  sigpending:=td^.td_sigqueue.sq_signals;
+  SIGSETOR(@sigpending,@g_p_sigqueue.sq_signals);
+  SIGSETNAND(@sigpending,@td^.td_sigmask);
+
+  if (td^.td_flags and TDF_SBDRY)<>0 then
+  begin
+   SIG_STOPSIGMASK(@sigpending);
+  end;
+  if (SIGISEMPTY(@sigpending)) then
+  begin
+   Exit(0);
+  end;
+  sig:=sig_ffs(@sigpending);
+
+  if SIGISMEMBER(@p_sigacts.ps_sigignore,sig) then
+  begin
+   sigqueue_delete(@td^.td_sigqueue,sig);
+   sigqueue_delete(@g_p_sigqueue,sig);
+   continue;
+  end;
+
+  prop:=sigprop(sig);
+
+  Case ptrint(p_sigacts.ps_sigact[_SIG_IDX(sig)]) of
+
+   SIG_DFL:
+    begin
+     if ((prop and SA_STOP)<>0) then
+     begin
+      mtx_unlock(@p_sigacts.ps_mtx);
+      PROC_LOCK;
+      //sig_suspend_threads(td, p, 0);
+      //thread_suspend_switch(td);
+      PROC_UNLOCK;
+      mtx_lock(@p_sigacts.ps_mtx);
+     end else
+     if ((prop and SA_IGNORE)<>0) then
+     begin
+      //ignore
+     end else
+     begin
+      Exit(sig);
+     end;
+    end;
+
+   SIG_IGN:; //ignore
+
+   else
+    Exit(sig);
+
+  end;
+
+  sigqueue_delete(@td^.td_sigqueue,sig);
+  sigqueue_delete(@g_p_sigqueue,sig);
+ until false;
+end;
+
+function postsig(sig:Integer):Integer;
+var
+ td:p_kthread;
+ action:sig_t;
+ ksi:ksiginfo_t;
+ returnmask:sigset_t;
+begin
+ td:=curkthread;
+
+ Assert(sig<>0,'postsig');
+
+ ksiginfo_init(@ksi);
+
+ if (sigqueue_get(@td^.td_sigqueue,sig,@ksi)=0) and
+    (sigqueue_get(@g_p_sigqueue,sig,@ksi)=0) then
+ begin
+  Exit(0);
+ end;
+
+ ksi.ksi_info.si_signo:=sig;
+
+ //if (ksi.ksi_code = SI_TIMER)
+ // itimer_accept(p, ksi.ksi_timerid, &ksi);
+
+ action:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
+
+ if (action=sig_t(SIG_DFL)) then
+ begin
+  mtx_unlock(@p_sigacts.ps_mtx);
+  sigexit(td,sig);
+  // NOTREACHED
+ end else
+ begin
+  Assert((action<>sig_t(SIG_IGN)) and (not SIGISMEMBER(@td^.td_sigmask, sig)),'postsig action');
+
+  if ((td^.td_pflags and TDP_OLDMASK)<>0) then
+  begin
+   returnmask:=td^.td_oldsigmask;
+   td^.td_pflags:=td^.td_pflags and (not TDP_OLDMASK);
+  end else
+  begin
+   returnmask:=td^.td_sigmask;
+  end;
+
+  sendsig(action,@ksi,@returnmask);
+  postsig_done(sig,td);
+ end;
+ Result:=1;
+end;
+
+function W_EXITCODE(ret,sig:Integer):Integer; inline;
+begin
+ Result:=(ret shl 8) or sig;
 end;
 
 procedure sigexit(td:p_kthread;sig:Integer);
 begin
- //TODO
-end;
-
-Function issignal(td:p_kthread;stop_allowed:Integer):Integer;
-begin
- //TODO
-end;
-
-procedure reschedule_signals(block:sigset_t;flags:Integer);
-begin
- //TODO
+ Halt(W_EXITCODE(0,sig));
+ // NOTREACHED
 end;
 
 initialization
