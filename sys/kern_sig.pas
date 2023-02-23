@@ -84,6 +84,13 @@ procedure tdsignal(td:p_kthread;sig:Integer);
 procedure tdksignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo);
 procedure sigexit(td:p_kthread;sig:Integer);
 
+Function  kern_sigprocmask(td:p_kthread;
+                           how:Integer;
+                           _set:p_sigset_t;
+                           oset:p_sigset_t;
+                           flags:Integer
+                          ):Integer;
+
 procedure ast;
 
 function  ps_mtx_lock:Integer;

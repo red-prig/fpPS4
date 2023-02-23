@@ -10,7 +10,8 @@ uses
  signal,
  signalvar,
  ucontext,
- kern_thread;
+ kern_thread,
+ sys_kernel;
 
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 function  sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
@@ -151,9 +152,62 @@ begin
 end;
 
 function sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
+var
+ td:p_kthread;
+ uc:ucontext_t;
+ regs:p_trapframe;
+ ucp:p_ucontext_t;
+ ret:Integer;
+ ksi:ksiginfo_t;
 begin
- //TODO
- writeln;
+ //char *xfpustate;
+ //size_t xfpustate_len;
+
+ td:=curkthread;
+
+ Result:=copyin(sigcntxp,@uc,sizeof(ucontext_t));
+ if (Result<>0) then Exit;
+
+ ucp:=@uc;
+ if ((ucp^.uc_mcontext.mc_flags and (not _MC_FLAG_MASK))<>0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ regs:=td^.td_frame;
+
+ //if ((uc.uc_mcontext.mc_flags and _MC_HASFPXSTATE) <> 0) then
+ //begin
+ // xfpustate_len := uc.uc_mcontext.mc_xfpustate_len;
+ // if (xfpustate_len > cpu_max_ext_state_size - sizeof(struct savefpu)) {
+ //  return (EINVAL);
+ // }
+ // xfpustate := __builtin_alloca(xfpustate_len);
+ // error := copyin((const void *)uc.uc_mcontext.mc_xfpustate,
+ //     xfpustate, xfpustate_len);
+ // if (error <> 0) {
+ //  return (error);
+ // }
+ //end else
+ //begin
+ // xfpustate := NULL;
+ // xfpustate_len := 0;
+ //end;
+
+ //ret := set_fpcontext(td, &ucp^.uc_mcontext, xfpustate, xfpustate_len);
+ //if (ret <> 0) {
+ // return (ret);
+ //}
+
+ Move(ucp^.uc_mcontext.mc_rdi,regs^,sizeof(trapframe));
+
+ //pcb^.pcb_fsbase := ucp^.uc_mcontext.mc_fsbase;
+ //pcb^.pcb_gsbase := ucp^.uc_mcontext.mc_gsbase;
+
+ kern_sigprocmask(td,SIG_SETMASK,@ucp^.uc_sigmask,nil,0);
+
+ set_pcb_flags(td,PCB_FULL_IRET);
+ Result:=EJUSTRETURN;
 end;
 
 
