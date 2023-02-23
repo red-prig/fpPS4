@@ -97,10 +97,12 @@ procedure _sig_unlock;
 procedure sig_unlock;
 
 procedure fast_syscall;
+procedure sigcode;
 
 implementation
 
 uses
+ machdep,
  vm_machdep,
  kern_sig;
 
@@ -149,7 +151,7 @@ asm
  popq  %rbp
 end;
 
-procedure set_pcb_flags(td:p_kthread;f:Integer); inline;
+procedure set_pcb_flags(td:p_kthread;f:Integer);
 begin
  td^.pcb_flags:=f;
 end;
@@ -352,7 +354,15 @@ asm
  //restore rip
 end;
 
-
+procedure sigcode; assembler; nostackframe;
+asm
+ call  sigframe.sf_ahu(%rsp)
+ lea   sigframe.sf_uc(%rsp),%rdi
+ pushq $0
+ movqq sys_sigreturn,%rax
+ call  fast_syscall
+ hlt
+end;
 
 
 end.

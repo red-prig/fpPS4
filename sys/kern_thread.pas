@@ -130,7 +130,6 @@ type
   td_user_pri     :Word;
   td_name         :array[0..31] of AnsiChar;
   //
-  td_fsbase       :Pointer;
   td_cpuset       :Ptruint;
   td_sigmask      :sigset_t;
   td_oldsigmask   :sigset_t;
@@ -179,6 +178,7 @@ procedure thread_free(td:p_kthread);
 function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 function  sys_thr_self(id:PQWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
+function  sys_thr_kill(id:QWORD;sig:Integer):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
@@ -190,7 +190,7 @@ procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
 function  curkthread:p_kthread;
 procedure set_curkthread(td:p_kthread);
 
-function  SIGPENDING(td:p_kthread):Boolean; inline;
+function  SIGPENDING(td:p_kthread):Boolean;
 function  TD_IS_RUNNING(td:p_kthread):Boolean; inline;
 
 procedure PROC_LOCK;
@@ -223,6 +223,7 @@ uses
  systm,
  vm_machdep,
  kern_rwlock,
+ kern_mtx,
  kern_umtx,
  kern_sig;
 
@@ -247,7 +248,7 @@ asm
  movqq td,%gs:(0x700)
 end;
 
-function SIGPENDING(td:p_kthread):Boolean; inline;
+function SIGPENDING(td:p_kthread):Boolean;
 begin
  Result:=SIGNOTEMPTY(@td^.td_sigqueue.sq_signals) and
          sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
@@ -260,16 +261,17 @@ end;
 
 procedure PROC_LOCK;
 begin
- rw_wlock(p_mtx);
+ mtx_lock(@p_mtx);
 end;
 
 procedure PROC_UNLOCK;
 begin
- rw_wunlock(p_mtx);
+ mtx_lock(@p_mtx);
 end;
 
 procedure threadinit; inline;
 begin
+ mtx_init(@p_mtx);
  FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
 end;
 
@@ -740,6 +742,70 @@ begin
  // NOTREACHED
 end;
 
+type
+ p_t_stk=^_t_stk;
+ _t_stk=record
+   error:Integer;
+   sig:Integer;
+   td:p_kthread;
+   ksi:ksiginfo_t;
+ end;
+
+procedure _for_stk(td:p_kthread;data:p_t_stk); register; //Tfree_data_cb
+begin
+ if (td<>data^.td) then
+ begin
+  data^.error:=0;
+  if (data^.sig=0) then Exit;
+  tdksignal(td,data^.sig,@data^.ksi);
+ end;
+end;
+
+function sys_thr_kill(id:QWORD;sig:Integer):Integer;
+var
+ data:_t_stk;
+begin
+ data.td:=curkthread;
+
+ ksiginfo_init(@data.ksi);
+ data.ksi.ksi_info.si_signo:=sig;
+ data.ksi.ksi_info.si_code :=SI_LWP;
+
+ if (int64(id)=-1) then
+ begin
+  if (sig<>0) and (not _SIG_VALID(sig)) then
+  begin
+   Result:=EINVAL;
+  end else
+  begin
+   data.error:=ESRCH;
+   data.sig:=0;
+   PROC_LOCK;
+   FOREACH_THREAD_IN_PROC(@_for_stk,@data);
+   PROC_UNLOCK;
+   Result:=data.error;
+  end;
+ end else
+ begin
+  Result:=0;
+
+  data.td:=tdfind(DWORD(id));
+  if (data.td=nil) then Exit(ESRCH);
+
+  if (sig=0) then
+  begin
+   //
+  end else
+  if (not _SIG_VALID(sig)) then
+   Result:=EINVAL
+  else
+   tdksignal(data.td,sig,@data.ksi);
+
+  thread_dec_ref(data.td);
+
+  PROC_UNLOCK;
+ end;
+end;
 
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;

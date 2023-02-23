@@ -76,10 +76,18 @@ Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
 
 Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
 
+Function  sigonstack(sp:size_t):Integer;
 procedure sigqueue_init(list:p_sigqueue);
 procedure tdsigcleanup(td:p_kthread);
 
+procedure tdsignal(td:p_kthread;sig:Integer);
+procedure tdksignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo);
+procedure sigexit(td:p_kthread;sig:Integer);
+
 procedure ast;
+
+function  ps_mtx_lock:Integer;
+function  ps_mtx_unlock:Integer;
 
 implementation
 
@@ -87,7 +95,7 @@ uses
  ntapi,
  systm,
  _umtx,
- kern_umtx,
+ kern_mtx,
  kern_time,
  vm_machdep,
  machdep;
@@ -134,7 +142,7 @@ end;
 
 Function sigqueue_get(sq:p_sigqueue;signo:Integer;si:p_ksiginfo):Integer;
 var
- ksi:p_ksiginfo;
+ ksi,next:p_ksiginfo;
  count:Integer;
 begin
  count:=0;
@@ -152,6 +160,7 @@ begin
  ksi:=TAILQ_FIRST(@sq^.sq_list);
  While (ksi<>nil) do
  begin
+  next:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
   if (ksi^.ksi_info.si_signo=signo) then
   begin
    if (count=0) then
@@ -173,7 +182,7 @@ begin
     Inc(count);
    end;
   end;
-  ksi:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+  ksi:=next;
  end;
 
  if (count<=1) then
@@ -283,20 +292,21 @@ end;
 
 procedure sigqueue_flush(sq:p_sigqueue);
 var
- ksi:p_ksiginfo;
+ ksi,next:p_ksiginfo;
 begin
  Assert((sq^.sq_flags and SQ_INIT)<>0,'sigqueue not inited');
 
  ksi:=TAILQ_FIRST(@sq^.sq_list);
  while (ksi<>nil) do
  begin
+  next:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
   TAILQ_REMOVE(@sq^.sq_list,ksi,@ksi^.ksi_link);
   ksi^.ksi_sigq:=nil;
   if ksiginfo_tryfree(ksi) then
   begin
    Dec(p_pendingcnt);
   end;
-  ksi:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+  ksi:=next;
  end;
 
  SIGEMPTYSET(@sq^.sq_signals);
@@ -306,7 +316,7 @@ end;
 procedure sigqueue_move_set(src,dst:p_sigqueue;_set:p_sigset_t);
 var
  tmp:sigset_t;
- ksi:p_ksiginfo;
+ ksi,next:p_ksiginfo;
 begin
  Assert((src^.sq_flags and SQ_INIT)<>0,'sigqueue not inited');
  Assert((dst^.sq_flags and SQ_INIT)<>0,'sigqueue not inited');
@@ -314,6 +324,8 @@ begin
  ksi:=TAILQ_FIRST(@src^.sq_list);
  while (ksi<>nil) do
  begin
+  next:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+
   if SIGISMEMBER(_set,ksi^.ksi_info.si_signo) then
   begin
    TAILQ_REMOVE(@src^.sq_list,ksi,@ksi^.ksi_link);
@@ -321,7 +333,7 @@ begin
    ksi^.ksi_sigq:=dst;
   end;
 
-  ksi:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+  ksi:=next;
  end;
 
  tmp:=src^.sq_kill;
@@ -337,13 +349,15 @@ end;
 
 procedure sigqueue_delete_set(sq:p_sigqueue;_set:p_sigset_t);
 var
- ksi:p_ksiginfo;
+ ksi,next:p_ksiginfo;
 begin
  Assert((sq^.sq_flags and SQ_INIT)<>0,'sigqueue not inited');
 
  ksi:=TAILQ_FIRST(@sq^.sq_list);
  while (ksi<>nil) do
  begin
+  next:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+
   if SIGISMEMBER(_set,ksi^.ksi_info.si_signo) then
   begin
    TAILQ_REMOVE(@sq^.sq_list,ksi,@ksi^.ksi_link);
@@ -354,7 +368,7 @@ begin
    end;
   end;
 
-  ksi:=TAILQ_NEXT(ksi,@ksi^.ksi_link);
+  ksi:=next;
  end;
 
  SIGSETNAND(@sq^.sq_kill,_set);
@@ -470,14 +484,14 @@ begin
  end;
 end;
 
-function mtx_lock(m:p_umtx):Integer; inline;
+function ps_mtx_lock:Integer;
 begin
- Result:=_sys_umtx_lock(m);
+ Result:=mtx_lock(@p_sigacts.ps_mtx);
 end;
 
-function mtx_unlock(m:p_umtx):Integer; inline;
+function ps_mtx_unlock:Integer;
 begin
- Result:=_sys_umtx_unlock(m);
+ Result:=mtx_unlock(@p_sigacts.ps_mtx);
 end;
 
 Function kern_sigaction(sig:Integer;
@@ -486,108 +500,108 @@ begin
  if (not _SIG_VALID(sig)) then Exit(EINVAL);
 
  PROC_LOCK;
- mtx_lock(@p_sigacts.ps_mtx);
+ ps_mtx_lock;
 
  if (oact<>nil) then
  begin
-  oact^.sa_mask := p_sigacts.ps_catchmask[_SIG_IDX(sig)];
-  oact^.sa_flags := 0;
-  if (SIGISMEMBER(@p_sigacts.ps_sigonstack, sig)) then
-   oact^.sa_flags := oact^.sa_flags or SA_ONSTACK;
-  if (not SIGISMEMBER(@p_sigacts.ps_sigintr, sig)) then
-   oact^.sa_flags := oact^.sa_flags or SA_RESTART;
-  if (SIGISMEMBER(@p_sigacts.ps_sigreset, sig)) then
-   oact^.sa_flags := oact^.sa_flags or SA_RESETHAND;
-  if (SIGISMEMBER(@p_sigacts.ps_signodefer, sig)) then
-   oact^.sa_flags := oact^.sa_flags or SA_NODEFER;
-  if (SIGISMEMBER(@p_sigacts.ps_siginfo, sig)) then
+  oact^.sa_mask:=p_sigacts.ps_catchmask[_SIG_IDX(sig)];
+  oact^.sa_flags:=0;
+  if (SIGISMEMBER(@p_sigacts.ps_sigonstack,sig)) then
+   oact^.sa_flags:=oact^.sa_flags or SA_ONSTACK;
+  if (not SIGISMEMBER(@p_sigacts.ps_sigintr,sig)) then
+   oact^.sa_flags:=oact^.sa_flags or SA_RESTART;
+  if (SIGISMEMBER(@p_sigacts.ps_sigreset,sig)) then
+   oact^.sa_flags:=oact^.sa_flags or SA_RESETHAND;
+  if (SIGISMEMBER(@p_sigacts.ps_signodefer,sig)) then
+   oact^.sa_flags:=oact^.sa_flags or SA_NODEFER;
+  if (SIGISMEMBER(@p_sigacts.ps_siginfo,sig)) then
   begin
-   oact^.sa_flags := oact^.sa_flags or SA_SIGINFO;
-   oact^.u.sa_handler := p_sigacts.ps_sigact[_SIG_IDX(sig)];
+   oact^.sa_flags:=oact^.sa_flags or SA_SIGINFO;
+   oact^.u.sa_handler:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
   end else
   begin
-   oact^.u.sa_handler := p_sigacts.ps_sigact[_SIG_IDX(sig)];
+   oact^.u.sa_handler:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
   end;
-  if (sig = SIGCHLD and p_sigacts.ps_flag and PS_NOCLDSTOP) then
-   oact^.sa_flags := oact^.sa_flags or SA_NOCLDSTOP;
-  if (sig = SIGCHLD and p_sigacts.ps_flag and PS_NOCLDWAIT) then
-   oact^.sa_flags := oact^.sa_flags or SA_NOCLDWAIT;
+  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDSTOP) then
+   oact^.sa_flags:=oact^.sa_flags or SA_NOCLDSTOP;
+  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDWAIT) then
+   oact^.sa_flags:=oact^.sa_flags or SA_NOCLDWAIT;
  end;
  if (act<>nil) then
  begin
-  if ((sig = SIGKILL) or (sig = SIGSTOP)) and
-      (act^.u.code <> SIG_DFL) then
+  if ((sig=SIGKILL) or (sig=SIGSTOP)) and
+      (act^.u.code<>SIG_DFL) then
   begin
-   mtx_unlock(@p_sigacts.ps_mtx);
+   ps_mtx_unlock;
    PROC_UNLOCK;
    Result:=EINVAL;
   end;
 
-  p_sigacts.ps_catchmask[_SIG_IDX(sig)] := act^.sa_mask;
+  p_sigacts.ps_catchmask[_SIG_IDX(sig)]:=act^.sa_mask;
   SIG_CANTMASK(@p_sigacts.ps_catchmask[_SIG_IDX(sig)]);
   if ((act^.sa_flags and SA_SIGINFO)<>0) then
   begin
-   p_sigacts.ps_sigact[_SIG_IDX(sig)] := act^.u.sa_handler;
-   SIGADDSET(@p_sigacts.ps_siginfo, sig);
+   p_sigacts.ps_sigact[_SIG_IDX(sig)]:=act^.u.sa_handler;
+   SIGADDSET(@p_sigacts.ps_siginfo,sig);
   end else
   begin
-   p_sigacts.ps_sigact[_SIG_IDX(sig)] := act^.u.sa_handler;
-   SIGDELSET(@p_sigacts.ps_siginfo, sig);
+   p_sigacts.ps_sigact[_SIG_IDX(sig)]:=act^.u.sa_handler;
+   SIGDELSET(@p_sigacts.ps_siginfo,sig);
   end;
   if ((act^.sa_flags and SA_RESTART)=0) then
-   SIGADDSET(@p_sigacts.ps_sigintr, sig)
+   SIGADDSET(@p_sigacts.ps_sigintr,sig)
   else
-   SIGDELSET(@p_sigacts.ps_sigintr, sig);
+   SIGDELSET(@p_sigacts.ps_sigintr,sig);
   if ((act^.sa_flags and SA_ONSTACK)<>0) then
-   SIGADDSET(@p_sigacts.ps_sigonstack, sig)
+   SIGADDSET(@p_sigacts.ps_sigonstack,sig)
   else
-   SIGDELSET(@p_sigacts.ps_sigonstack, sig);
+   SIGDELSET(@p_sigacts.ps_sigonstack,sig);
   if ((act^.sa_flags and SA_RESETHAND)<>0) then
-   SIGADDSET(@p_sigacts.ps_sigreset, sig)
+   SIGADDSET(@p_sigacts.ps_sigreset,sig)
   else
-   SIGDELSET(@p_sigacts.ps_sigreset, sig);
+   SIGDELSET(@p_sigacts.ps_sigreset,sig);
   if ((act^.sa_flags and SA_NODEFER)<>0) then
-   SIGADDSET(@p_sigacts.ps_signodefer, sig)
+   SIGADDSET(@p_sigacts.ps_signodefer,sig)
   else
-   SIGDELSET(@p_sigacts.ps_signodefer, sig);
-  if (sig = SIGCHLD) then
+   SIGDELSET(@p_sigacts.ps_signodefer,sig);
+  if (sig=SIGCHLD) then
   begin
    if ((act^.sa_flags and SA_NOCLDSTOP)<>0) then
-    p_sigacts.ps_flag := p_sigacts.ps_flag or PS_NOCLDSTOP
+    p_sigacts.ps_flag:=p_sigacts.ps_flag or PS_NOCLDSTOP
    else
-    p_sigacts.ps_flag := p_sigacts.ps_flag and (not PS_NOCLDSTOP);
+    p_sigacts.ps_flag:=p_sigacts.ps_flag and (not PS_NOCLDSTOP);
    if ((act^.sa_flags and SA_NOCLDWAIT)<>0) then
    begin
-    p_sigacts.ps_flag := p_sigacts.ps_flag or PS_NOCLDWAIT;
+    p_sigacts.ps_flag:=p_sigacts.ps_flag or PS_NOCLDWAIT;
    end else
-    p_sigacts.ps_flag := p_sigacts.ps_flag and (not PS_NOCLDWAIT);
-   if (p_sigacts.ps_sigact[_SIG_IDX(SIGCHLD)] = sig_t(SIG_IGN)) then
-    p_sigacts.ps_flag := p_sigacts.ps_flag or PS_CLDSIGIGN
+    p_sigacts.ps_flag:=p_sigacts.ps_flag and (not PS_NOCLDWAIT);
+   if (p_sigacts.ps_sigact[_SIG_IDX(SIGCHLD)]=sig_t(SIG_IGN)) then
+    p_sigacts.ps_flag:=p_sigacts.ps_flag or PS_CLDSIGIGN
    else
-    p_sigacts.ps_flag := p_sigacts.ps_flag and (not PS_CLDSIGIGN);
+    p_sigacts.ps_flag:=p_sigacts.ps_flag and (not PS_CLDSIGIGN);
   end;
 
-  if (p_sigacts.ps_sigact[_SIG_IDX(sig)] = sig_t(SIG_IGN)) or
+  if (p_sigacts.ps_sigact[_SIG_IDX(sig)]=sig_t(SIG_IGN)) or
       (((sigprop(sig) and SA_IGNORE)<>0) and
-       (p_sigacts.ps_sigact[_SIG_IDX(sig)] = sig_t(SIG_DFL))) then
+       (p_sigacts.ps_sigact[_SIG_IDX(sig)]=sig_t(SIG_DFL))) then
   begin
    sigqueue_delete_proc(sig);
-   if (sig <> SIGCONT) then
+   if (sig<>SIGCONT) then
    begin
-    SIGADDSET(@p_sigacts.ps_sigignore, sig);
+    SIGADDSET(@p_sigacts.ps_sigignore,sig);
    end;
-   SIGDELSET(@p_sigacts.ps_sigcatch, sig);
+   SIGDELSET(@p_sigacts.ps_sigcatch,sig);
   end else
   begin
-   SIGDELSET(@p_sigacts.ps_sigignore, sig);
-   if (p_sigacts.ps_sigact[_SIG_IDX(sig)] = sig_t(SIG_DFL)) then
-    SIGDELSET(@p_sigacts.ps_sigcatch, sig)
+   SIGDELSET(@p_sigacts.ps_sigignore,sig);
+   if (p_sigacts.ps_sigact[_SIG_IDX(sig)]=sig_t(SIG_DFL)) then
+    SIGDELSET(@p_sigacts.ps_sigcatch,sig)
    else
-    SIGADDSET(@p_sigacts.ps_sigcatch, sig);
+    SIGADDSET(@p_sigacts.ps_sigcatch,sig);
   end;
  end;
 
- mtx_unlock(@p_sigacts.ps_mtx);
+ ps_mtx_unlock;
  PROC_UNLOCK;
  Result:=0;
 end;
@@ -623,17 +637,17 @@ procedure siginit;
 var
  i:Integer;
 begin
- PROC_LOCK;
+ mtx_init(@p_sigacts.ps_mtx);
 
  For i:=1 to NSIG do
  begin
-  if ((sigprop(i) and SA_IGNORE)<>0) and (i <> SIGCONT) then
+  if ((sigprop(i) and SA_IGNORE)<>0) and (i<>SIGCONT) then
   begin
-   SIGADDSET(@p_sigacts.ps_sigignore, i);
+   SIGADDSET(@p_sigacts.ps_sigignore,i);
   end;
  end;
 
- PROC_UNLOCK;
+ sigqueue_init(@g_p_sigqueue);
 end;
 
 procedure reschedule_signals(block:sigset_t;flags:Integer); forward;
@@ -661,16 +675,16 @@ begin
   oset^:=td^.td_sigmask;
  end;
 
- if (_set <> nil) then
+ if (_set<>nil) then
  begin
 
   Case how of
   SIG_BLOCK:
    begin
     SIG_CANTMASK(_set);
-    oset1 := td^.td_sigmask;
+    oset1:=td^.td_sigmask;
     SIGSETOR(@td^.td_sigmask, _set);
-    new_block := td^.td_sigmask;
+    new_block:=td^.td_sigmask;
     SIGSETNAND(@new_block, @oset1);
    end;
    SIG_UNBLOCK:
@@ -682,18 +696,18 @@ begin
    SIG_SETMASK:
    begin
     SIG_CANTMASK(_set);
-    oset1 := td^.td_sigmask;
+    oset1:=td^.td_sigmask;
     if ((flags and SIGPROCMASK_OLD)<>0) then
      SIGSETLO(@td^.td_sigmask, _set)
     else
-     td^.td_sigmask := _set^;
-    new_block := td^.td_sigmask;
+     td^.td_sigmask:=_set^;
+    new_block:=td^.td_sigmask;
     SIGSETNAND(@new_block, @oset1);
     signotify(td);
    end;
    else
     begin
-     Result := EINVAL;
+     Result:=EINVAL;
      goto _out;
     end;
    end;
@@ -758,8 +772,6 @@ begin
  Result:=copyout(@pending,oset,sizeof(sigset_t));
 end;
 
-procedure sigexit(td:p_kthread;sig:Integer); forward;
-
 Function kern_sigtimedwait(td:p_kthread;
                            waitset:sigset_t;
                            ksi:p_ksiginfo;
@@ -795,9 +807,9 @@ begin
  SIGSETNAND(@td^.td_sigmask,@waitset);
 
  repeat
-  mtx_lock(@p_sigacts.ps_mtx);
+  ps_mtx_lock;
   sig:=cursig(td,SIG_STOP_ALLOWED);
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
 
   if (sig<>0) and SIGISMEMBER(@waitset,sig) then
   begin
@@ -974,7 +986,7 @@ begin
 
   //thread_suspend_check(0);
 
-  mtx_lock(@p_sigacts.ps_mtx);
+  ps_mtx_lock;
 
   repeat
    sig:=cursig(td,SIG_STOP_ALLOWED);
@@ -982,7 +994,7 @@ begin
    has_sig:=has_sig+postsig(sig);
   until false;
 
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
  end;
 
  PROC_UNLOCK;
@@ -1011,7 +1023,7 @@ var
 begin
  oonstack:=sigonstack(cpu_getstack(td));
 
- if (oss <> nil) then
+ if (oss<>nil) then
  begin
   oss^:=td^.td_sigstk;
 
@@ -1121,14 +1133,14 @@ begin
  Assert(_SIG_VALID(sig),'invalid signal');
 
  PROC_LOCK;
- mtx_lock(@p_sigacts.ps_mtx);
+ ps_mtx_lock;
 
  if SIGISMEMBER(@p_sigacts.ps_sigcatch,sig) and
     (not SIGISMEMBER(@td^.td_sigmask,sig)) then
  begin
   sendsig(p_sigacts.ps_sigact[_SIG_IDX(sig)],ksi,@td^.td_sigmask);
   postsig_done(sig,td);
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
  end else
  begin
   //ignoring?
@@ -1143,7 +1155,7 @@ begin
    p_sigacts.ps_sigact[_SIG_IDX(sig)]:=sig_t(SIG_DFL);
   end;
 
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
 
   tdsendsignal(td,sig,ksi);
  end;
@@ -1239,11 +1251,11 @@ begin
   sigqueue:=@td^.td_sigqueue;
  end;
 
- mtx_lock(@p_sigacts.ps_mtx);
+ ps_mtx_lock;
 
  if (SIGISMEMBER(@p_sigacts.ps_sigignore,sig)) then
  begin
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
 
   if (ksi<>nil) then
   if (ksi^.ksi_flags and KSI_INS)<>0 then
@@ -1266,7 +1278,7 @@ begin
  else
   intrval:=ERESTART;
 
- mtx_unlock(@p_sigacts.ps_mtx);
+ ps_mtx_unlock;
 
  if ((prop and SA_CONT)<>0) then
  begin
@@ -1284,6 +1296,21 @@ begin
  if (action=sig_t(SIG_HOLD)) and ((prop and SA_CONT)=0) then Exit;
 
  tdsigwakeup(td,sig,action,intrval);
+end;
+
+procedure tdsignal(td:p_kthread;sig:Integer);
+var
+ ksi:ksiginfo_t;
+begin
+ ksiginfo_init(@ksi);
+ ksi.ksi_info.si_signo:=sig;
+ ksi.ksi_info.si_code :=SI_KERNEL;
+ tdsendsignal(td,sig,@ksi);
+end;
+
+procedure tdksignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo);
+begin
+ tdsendsignal(td,sig,ksi);
 end;
 
 procedure forward_signal(td:p_kthread);
@@ -1371,7 +1398,7 @@ begin
 
   if ((flags and SIGPROCMASK_PS_LOCKED)=0) then
   begin
-   mtx_lock(@p_sigacts.ps_mtx);
+   ps_mtx_lock;
   end;
 
   if SIGISMEMBER(@p_sigacts.ps_sigcatch,sig) then
@@ -1387,7 +1414,7 @@ begin
 
   if ((flags and SIGPROCMASK_PS_LOCKED)=0) then
   begin
-   mtx_unlock(@p_sigacts.ps_mtx);
+   ps_mtx_unlock;
   end;
  until false;
 end;
@@ -1462,12 +1489,12 @@ begin
     begin
      if ((prop and SA_STOP)<>0) then
      begin
-      mtx_unlock(@p_sigacts.ps_mtx);
+      ps_mtx_unlock;
       PROC_LOCK;
       //sig_suspend_threads(td, p, 0);
       //thread_suspend_switch(td);
       PROC_UNLOCK;
-      mtx_lock(@p_sigacts.ps_mtx);
+      ps_mtx_lock;
      end else
      if ((prop and SA_IGNORE)<>0) then
      begin
@@ -1511,19 +1538,19 @@ begin
 
  ksi.ksi_info.si_signo:=sig;
 
- //if (ksi.ksi_code = SI_TIMER)
+ //if (ksi.ksi_code=SI_TIMER)
  // itimer_accept(p, ksi.ksi_timerid, &ksi);
 
  action:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
 
  if (action=sig_t(SIG_DFL)) then
  begin
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
   sigexit(td,sig);
   // NOTREACHED
  end else
  begin
-  Assert((action<>sig_t(SIG_IGN)) and (not SIGISMEMBER(@td^.td_sigmask, sig)),'postsig action');
+  Assert((action<>sig_t(SIG_IGN)) and (not SIGISMEMBER(@td^.td_sigmask,sig)),'postsig action');
 
   if ((td^.td_pflags and TDP_OLDMASK)<>0) then
   begin
@@ -1595,7 +1622,7 @@ begin
     (not SIGISEMPTY(@g_p_sigqueue.sq_list)) then
  begin
   PROC_LOCK;
-  mtx_lock(@p_sigacts.ps_mtx);
+  ps_mtx_lock;
 
   repeat
    sig:=cursig(td,SIG_STOP_ALLOWED);
@@ -1603,7 +1630,7 @@ begin
    postsig(sig);
   until false;
 
-  mtx_unlock(@p_sigacts.ps_mtx);
+  ps_mtx_unlock;
   PROC_UNLOCK;
  end;
 

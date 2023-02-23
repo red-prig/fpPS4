@@ -16,7 +16,8 @@ uses
  kern_rwlock,
  thr_private,
  kern_sig,
- trap, md_psl,
+ trap,
+ md_psl,
  sysutils,
  vulkan,
  vDevice;
@@ -142,12 +143,26 @@ asm
  mov %gs:(0x708),%rax
 end;
 
+procedure __ex_handler(sig,code:Integer;ctx:p_ucontext_t); SysV_ABI_CDecl;
+begin
+ Writeln('__ex_handler:',sig,' ',code);
+end;
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
+ act:sigaction_t;
 begin
 
  //SetTlsBase(Pointer(qword(1)));
+
+ act:=Default(sigaction_t);
+ act.u.sa_handler:=sa_handler(@__ex_handler);
+ act.sa_flags:=SA_RESTART;
+
+ sys_sigaction(SIGUSR1,@act,nil,0);
+
+ sys_thr_kill(curkthread^.td_tid,SIGUSR1);
 
  sig_lock;
  sig_lock;
