@@ -168,6 +168,13 @@ begin
   sys_sigaction(SIGUSR1,@act,nil,0);
 
   sys_thr_kill(tid,SIGUSR1);
+ end else
+ begin
+  repeat
+   asm
+    pause
+   end;
+  until false;
  end;
 
  sig_lock;

@@ -21,6 +21,8 @@ function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 function  cpu_getstack(td:p_kthread):QWORD;
+
+procedure ipi_sigreturn;
 function  ipi_send_cpu(td:p_kthread):Integer;
 
 implementation
@@ -166,6 +168,48 @@ procedure _apc_null(dwParam:PTRUINT); stdcall;
 begin
 end;
 
+procedure ipi_sigreturn;
+var
+ _Context:array[0..SizeOf(TCONTEXT)+14] of Byte;
+ Context :PCONTEXT;
+ regs:p_trapframe;
+begin
+ regs:=curkthread^.td_frame;
+ Context:=Align(@_Context,16);
+
+ Context^:=Default(TCONTEXT);
+ Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+
+ Context^.Rdi:=regs^.tf_rdi;
+ Context^.Rsi:=regs^.tf_rsi;
+ Context^.Rdx:=regs^.tf_rdx;
+ Context^.Rcx:=regs^.tf_rcx;
+ Context^.R8 :=regs^.tf_r8 ;
+ Context^.R9 :=regs^.tf_r9 ;
+ Context^.Rax:=regs^.tf_rax;
+ Context^.Rbx:=regs^.tf_rbx;
+ Context^.Rbp:=regs^.tf_rbp;
+ Context^.R10:=regs^.tf_r10;
+ Context^.R11:=regs^.tf_r11;
+ Context^.R12:=regs^.tf_r12;
+ Context^.R13:=regs^.tf_r13;
+ Context^.R14:=regs^.tf_r14;
+ Context^.R15:=regs^.tf_r15;
+
+ Context^.Rip   :=regs^.tf_rip;
+ Context^.EFlags:=regs^.tf_rflags;
+ Context^.Rsp   :=regs^.tf_rsp;
+
+ Context^.SegGs:=KGDT64_R3_DATA  or RPL_MASK;
+ Context^.SegEs:=KGDT64_R3_DATA  or RPL_MASK;
+ Context^.SegDs:=KGDT64_R3_DATA  or RPL_MASK;
+ Context^.SegCs:=KGDT64_R3_CODE  or RPL_MASK;
+ Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
+ Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
+
+ NtContinue(Context,False);
+end;
+
 function ipi_send_cpu(td:p_kthread):Integer;
 label
  resume,
@@ -178,6 +222,7 @@ var
  w:LARGE_INTEGER;
  sf:sigframe;
  sfp:p_sigframe;
+ regs:p_trapframe;
  sp:QWORD;
  oonstack:Integer;
 begin
@@ -238,6 +283,7 @@ begin
   goto tryagain;
  end;
 
+ regs:=td^.td_frame;
  oonstack:=sigonstack(Context^.Rsp);
 
  // Save user context.
@@ -260,42 +306,46 @@ begin
   sf.sf_uc.uc_stack.ss_flags:=SS_DISABLE;
  end;
 
+ //copy frame
+ regs^.tf_rdi:=Context^.Rdi;
+ regs^.tf_rsi:=Context^.Rsi;
+ regs^.tf_rdx:=Context^.Rdx;
+ regs^.tf_rcx:=Context^.Rcx;
+ regs^.tf_r8 :=Context^.R8 ;
+ regs^.tf_r9 :=Context^.R9 ;
+ regs^.tf_rax:=Context^.Rax;
+ regs^.tf_rbx:=Context^.Rbx;
+ regs^.tf_rbp:=Context^.Rbp;
+ regs^.tf_r10:=Context^.R10;
+ regs^.tf_r11:=Context^.R11;
+ regs^.tf_r12:=Context^.R12;
+ regs^.tf_r13:=Context^.R13;
+ regs^.tf_r14:=Context^.R14;
+ regs^.tf_r15:=Context^.R15;
+
+ regs^.tf_rip   :=Context^.Rip;
+ regs^.tf_rflags:=Context^.EFlags;
+ regs^.tf_rsp   :=Context^.Rsp;
+
+ regs^.tf_cs:=_ucodesel;
+ regs^.tf_ds:=_udatasel;
+ regs^.tf_ss:=_udatasel;
+ regs^.tf_es:=_udatasel;
+ regs^.tf_fs:=_ufssel;
+ regs^.tf_gs:=_ugssel;
+ regs^.tf_flags:=TF_HASSEGS;
+ //copy frame
+
  sf.sf_uc.uc_mcontext.mc_onstack:=oonstack;
 
- sf.sf_uc.uc_mcontext.mc_rdi:=Context^.Rdi;
- sf.sf_uc.uc_mcontext.mc_rsi:=Context^.Rsi;
- sf.sf_uc.uc_mcontext.mc_rdx:=Context^.Rdx;
- sf.sf_uc.uc_mcontext.mc_rcx:=Context^.Rcx;
- sf.sf_uc.uc_mcontext.mc_r8 :=Context^.R8 ;
- sf.sf_uc.uc_mcontext.mc_r9 :=Context^.R9 ;
- sf.sf_uc.uc_mcontext.mc_rax:=Context^.Rax;
- sf.sf_uc.uc_mcontext.mc_rbx:=Context^.Rbx;
- sf.sf_uc.uc_mcontext.mc_rbp:=Context^.Rbp;
- sf.sf_uc.uc_mcontext.mc_r10:=Context^.R10;
- sf.sf_uc.uc_mcontext.mc_r11:=Context^.R11;
- sf.sf_uc.uc_mcontext.mc_r12:=Context^.R12;
- sf.sf_uc.uc_mcontext.mc_r13:=Context^.R13;
- sf.sf_uc.uc_mcontext.mc_r14:=Context^.R14;
- sf.sf_uc.uc_mcontext.mc_r15:=Context^.R15;
-
- sf.sf_uc.uc_mcontext.mc_rip   :=Context^.Rip;
- sf.sf_uc.uc_mcontext.mc_rflags:=Context^.EFlags;
- sf.sf_uc.uc_mcontext.mc_rsp   :=Context^.Rsp;
-
- sf.sf_uc.uc_mcontext.mc_cs:=_ucodesel;
- sf.sf_uc.uc_mcontext.mc_ds:=_udatasel;
- sf.sf_uc.uc_mcontext.mc_ss:=_udatasel;
- sf.sf_uc.uc_mcontext.mc_es:=_udatasel;
- sf.sf_uc.uc_mcontext.mc_fs:=_ufssel;
- sf.sf_uc.uc_mcontext.mc_gs:=_ugssel;
- sf.sf_uc.uc_mcontext.mc_flags:=TF_HASSEGS;
+ Move(regs^,sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
 
  sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
 
  sf.sf_uc.uc_mcontext.mc_fsbase:=QWORD(td^.pcb_fsbase);
  sf.sf_uc.uc_mcontext.mc_gsbase:=QWORD(td^.pcb_gsbase);
 
- sp:=QWORD(td^.td_kstack)-128;
+ sp:=QWORD(td^.td_kstack);
 
  sp:=sp-sizeof(sigframe);
 

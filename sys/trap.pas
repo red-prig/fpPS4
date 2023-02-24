@@ -238,11 +238,9 @@ begin
  cpu_set_syscall_retval(td,error);
 end;
 
-label
- _after_call;
-
 procedure fast_syscall; assembler; nostackframe;
 label
+ _after_call,
  _doreti,
  _ast,
  _doreti_exit;
@@ -407,10 +405,26 @@ asm
 end;
 
 procedure sigipi; assembler; nostackframe;
+label
+ _ast,
+ _ast_exit;
 asm
  lea   sigframe.sf_uc(%rsp),%rdi
  call  sys_sigreturn
- jmp   _after_call
+
+ //ast
+ _ast:
+
+  movqq %gs:(0x700),%rax            //curkthread
+  testl TDF_AST,kthread.td_flags(%rax)
+  je _ast_exit
+
+  call ast
+  jmp _ast
+
+ _ast_exit:
+  call ipi_sigreturn
+  hlt
 end;
 
 
