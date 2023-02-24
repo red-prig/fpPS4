@@ -184,6 +184,8 @@ function  sys_thr_self(id:PQWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
 function  sys_thr_kill(id:QWORD;sig:Integer):Integer;
 function  sys_thr_suspend(timeout:ptimespec):Integer;
+function  sys_thr_wake(id:QWORD):Integer;
+function  sys_thr_set_name(id:QWORD;pname:PChar):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
@@ -808,30 +810,7 @@ begin
    tdksignal(data.td,sig,@data.ksi);
 
   thread_dec_ref(data.td);
-
-  PROC_UNLOCK;
  end;
-end;
-
-function ntw2px(n:Integer):Integer;
-begin
- Case DWORD(n) of
-  STATUS_SUCCESS         :Result:=0;
-  STATUS_ABANDONED       :Result:=EPERM;
-  STATUS_ALERTED         :Result:=EINTR;
-  STATUS_USER_APC        :Result:=EINTR;
-  STATUS_TIMEOUT         :Result:=ETIMEDOUT;
-  STATUS_ACCESS_VIOLATION:Result:=EFAULT;
-  else
-                   Result:=EINVAL;
- end;
-end;
-
-function msleep(timo:Int64):Integer; inline;
-begin
- sig_set_alterable;
- Result:=ntw2px(NtDelayExecution(True,@timo));
- sig_reset_alterable;
 end;
 
 function kern_thr_suspend(td:p_kthread;tsp:ptimespec):Integer;
@@ -862,11 +841,11 @@ begin
  if (Result=0) and ((td^.td_flags and TDF_THRWAKEUP)=0) then
  begin
   PROC_UNLOCK; //
-  Result:=msleep(tv);
+  Result:=msleep_td(tv);
   PROC_LOCK;   //
  end;
 
- if ((td^.td_flags and TDF_THRWAKEUP)=0) then
+ if ((td^.td_flags and TDF_THRWAKEUP)<>0) then
  begin
   thread_lock(td);
   td^.td_flags:=td^.td_flags and (not TDF_THRWAKEUP);
@@ -910,8 +889,64 @@ begin
  Result:=kern_thr_suspend(td,tsp);
 end;
 
+function sys_thr_wake(id:QWORD):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
 
+ if (td<>nil) then
+ if (id=td^.td_tid) then
+ begin
+  td^.td_pflags:=td^.td_pflags or TDP_WAKEUP;
+  Exit(0);
+ end;
 
+ td:=tdfind(DWORD(id));
+ if (td=nil) then Exit(ESRCH);
+
+ thread_lock(td);
+ td^.td_flags:=td^.td_flags or TDF_THRWAKEUP;
+ thread_unlock(td);
+
+ wakeup_td(td);
+
+ thread_dec_ref(td);
+end;
+
+function sys_thr_set_name(id:QWORD;pname:PChar):Integer;
+var
+ td:p_kthread;
+ name:array[0..31] of AnsiChar;
+begin
+ Result:=0;
+
+ name[0]:=#0;
+ if (name<>nil) then
+ begin
+  Result:=copyinstr(pname,@name,32,nil);
+  if (Result<>0) then Exit(EFAULT);
+ end;
+
+ if (int64(id)=-1) then
+ begin
+  //TODO SetProcName
+  Exit;
+ end;
+
+ td:=tdfind(DWORD(id));
+ if (td=nil) then Exit(ESRCH);
+
+ thread_lock(td);
+
+ Move(name,td^.td_name,SizeOf(td^.td_name));
+ SetThreadDebugName(td^.td_handle,'ps4:'+name);
+
+ thread_unlock(td);
+
+ thread_dec_ref(td);
+end;
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 var

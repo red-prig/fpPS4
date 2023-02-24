@@ -779,27 +779,6 @@ begin
  Result:=copyout(@pending,oset,sizeof(sigset_t));
 end;
 
-function ntw2px(n:Integer):Integer;
-begin
- Case DWORD(n) of
-  STATUS_SUCCESS         :Result:=0;
-  STATUS_ABANDONED       :Result:=EPERM;
-  STATUS_ALERTED         :Result:=EINTR;
-  STATUS_USER_APC        :Result:=EINTR;
-  STATUS_TIMEOUT         :Result:=ETIMEDOUT;
-  STATUS_ACCESS_VIOLATION:Result:=EFAULT;
-  else
-                   Result:=EINVAL;
- end;
-end;
-
-function msleep(timo:Int64):Integer; inline;
-begin
- sig_set_alterable;
- Result:=ntw2px(NtDelayExecution(True,@timo));
- sig_reset_alterable;
-end;
-
 Function kern_sigtimedwait(td:p_kthread;
                            waitset:sigset_t;
                            ksi:p_ksiginfo;
@@ -871,7 +850,7 @@ begin
   end;
 
   PROC_UNLOCK; //
-  Result:=msleep(tvtohz(tv));
+  Result:=msleep_td(tvtohz(tv));
   PROC_LOCK;  //
 
   if (timeout<>nil) then
@@ -1013,7 +992,7 @@ begin
  While (has_sig=0) do
  begin
   PROC_UNLOCK; //
-  while (msleep(T_INFINITE)=0) do;
+  while (msleep_td(T_INFINITE)=0) do;
   PROC_LOCK;   //
 
   //thread_suspend_check(0);

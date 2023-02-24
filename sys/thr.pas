@@ -18,12 +18,11 @@ function  thr_self(id:PQWORD):Integer;
 procedure thr_exit(state:PQWORD);
 function  thr_kill(id:QWORD;sig:Integer):Integer;
 function  thr_suspend(timeout:ptimespec):Integer;
+function  thr_wake(id:QWORD):Integer;
+function  thr_set_name(id:QWORD;name:PChar):Integer;
 
 //int  thr_create(ucontext_t *ctx, long *id, int flags);
-
 //int  thr_kill2(pid_t pid, long id, int sig);
-//int  thr_wake(long id);
-//int  thr_set_name(long id, const char *name);
 
 implementation
 
@@ -66,6 +65,17 @@ asm
  call  fast_syscall
 end;
 
+function thr_wake(id:QWORD):Integer; assembler; nostackframe;
+asm
+ movq  sys_thr_wake,%rax
+ call  fast_syscall
+end;
+
+function thr_set_name(id:QWORD;name:PChar):Integer; assembler; nostackframe;
+asm
+ movq  sys_thr_set_name,%rax
+ call  fast_syscall
+end;
 
 end.
 

@@ -25,6 +25,14 @@ function  cpu_getstack(td:p_kthread):QWORD;
 procedure ipi_sigreturn(unlock:Integer);
 function  ipi_send_cpu(td:p_kthread):Integer;
 
+function  _umtxq_alloc:THandle; inline;
+procedure _umtxq_free(h:THandle); inline;
+function  msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
+function  wakeup_umtxq(h:THandle):Integer; inline;
+
+function  msleep_td(timo:Int64):Integer; inline;
+function  wakeup_td(td:p_kthread):Integer; inline;
+
 implementation
 
 uses
@@ -32,6 +40,62 @@ uses
  machdep,
  signal,
  kern_sig;
+
+function ntw2px(n:Integer):Integer;
+begin
+ Case DWORD(n) of
+  STATUS_SUCCESS         :Result:=0;
+  STATUS_ABANDONED       :Result:=EPERM;
+  STATUS_ALERTED         :Result:=EINTR;
+  STATUS_USER_APC        :Result:=EINTR;
+  STATUS_TIMEOUT         :Result:=ETIMEDOUT;
+  STATUS_ACCESS_VIOLATION:Result:=EFAULT;
+  else
+                   Result:=EINVAL;
+ end;
+end;
+
+function _umtxq_alloc:THandle; inline;
+var
+ n:Integer;
+begin
+ Result:=0;
+ n:=NtCreateEvent(@Result,EVENT_ALL_ACCESS,nil,SynchronizationEvent,False);
+ Assert(n=0);
+end;
+
+procedure _umtxq_free(h:THandle); inline;
+begin
+ NtClose(h);
+end;
+
+function msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
+begin
+ sig_set_alterable;
+ Result:=ntw2px(NtWaitForSingleObject(h,True,@timo));
+ sig_reset_alterable;
+end;
+
+function wakeup_umtxq(h:THandle):Integer; inline;
+begin
+ Result:=ntw2px(NtSetEvent(h,nil));
+end;
+
+function msleep_td(timo:Int64):Integer; inline;
+begin
+ sig_set_alterable;
+ Result:=ntw2px(NtDelayExecution(True,@timo));
+ sig_reset_alterable;
+end;
+
+procedure _apc_null(dwParam:PTRUINT); stdcall;
+begin
+end;
+
+function wakeup_td(td:p_kthread):Integer; inline;
+begin
+ Result:=NtQueueApcThread(td^.td_handle,@_apc_null,nil,nil,0);
+end;
 
 Const
  SYS_STACK_SIZE=16*1024;
@@ -162,10 +226,6 @@ begin
   NtReadVirtualMemory(NtCurrentProcess,@PWord(Rip)[-1],@w,SizeOf(Word),nil);
   Result:=(w=$050F);
  end;
-end;
-
-procedure _apc_null(dwParam:PTRUINT); stdcall;
-begin
 end;
 
 procedure ipi_sigreturn(unlock:Integer);

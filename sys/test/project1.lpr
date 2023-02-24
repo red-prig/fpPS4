@@ -173,7 +173,8 @@ begin
 
   sigaction(SIGUSR1,@act,nil,0);
 
-  thr_kill(tid,SIGUSR1);
+  //thr_kill(tid,SIGUSR1);
+  thr_wake(tid);
  end else
  begin
   Writeln('thr_suspend:',thr_suspend(nil));

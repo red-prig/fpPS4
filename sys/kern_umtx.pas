@@ -36,10 +36,8 @@ implementation
 uses
  HAMT,
  systm,
-
  trap,
- windows,
- ntapi;
+ vm_machdep;
 
 const
  _UMUTEX_TRY =1;
@@ -300,37 +298,17 @@ begin
  end;
 end;
 
-function ntw2px(n:Integer):Integer;
-begin
- Case DWORD(n) of
-  STATUS_SUCCESS         :Result:=0;
-  STATUS_ABANDONED       :Result:=EPERM;
-  STATUS_ALERTED         :Result:=EINTR;
-  STATUS_USER_APC        :Result:=EINTR;
-  STATUS_TIMEOUT         :Result:=ETIMEDOUT;
-  STATUS_ACCESS_VIOLATION:Result:=EFAULT;
-  else
-                   Result:=EINVAL;
- end;
-end;
-
 function umtxq_alloc:p_umtx_q;
-var
- n:Integer;
 begin
  Result:=AllocMem(SizeOf(umtx_q));
  Result^.uq_inherited_pri:=PRI_MAX;
-
- n:=NtCreateEvent(@Result^.uq_handle,EVENT_ALL_ACCESS,nil,SynchronizationEvent,False);
- Assert(n=0);
+ Result^.uq_handle:=_umtxq_alloc;
 end;
 
 procedure umtxq_free(uq:p_umtx_q);
 begin
  if (uq=nil) then Exit;
-
- NtClose(uq^.uq_handle);
-
+ _umtxq_free(uq^.uq_handle);
  FreeMem(uq);
 end;
 
@@ -358,14 +336,12 @@ end;
 
 function msleep(uq:p_umtx_q;timo:Int64):Integer; inline;
 begin
- sig_set_alterable;
- Result:=ntw2px(NtWaitForSingleObject(uq^.uq_handle,True,@timo));
- sig_reset_alterable;
+ Result:=msleep_umtxq(uq^.uq_handle,timo);
 end;
 
 function wakeup(uq:p_umtx_q):Integer; inline;
 begin
- Result:=ntw2px(NtSetEvent(uq^.uq_handle,nil));
+ Result:=wakeup_umtxq(uq^.uq_handle);
 end;
 
 function umtxq_signal(key:umtx_key;n_wake:Integer;q:Integer=UMTX_SHARED_QUEUE):ptrint;
