@@ -12,6 +12,8 @@ uses
  ucontext,
  signal,
  signalvar,
+ time,
+ kern_time,
  hamt;
 
 const
@@ -181,6 +183,7 @@ function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 function  sys_thr_self(id:PQWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
 function  sys_thr_kill(id:QWORD;sig:Integer):Integer;
+function  sys_thr_suspend(timeout:ptimespec):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
@@ -227,7 +230,8 @@ uses
  kern_rwlock,
  kern_mtx,
  kern_umtx,
- kern_sig;
+ kern_sig,
+ trap;
 
 var
  p_mtx:Pointer=nil;
@@ -268,7 +272,7 @@ end;
 
 procedure PROC_UNLOCK;
 begin
- mtx_lock(@p_mtx);
+ mtx_unlock(@p_mtx);
 end;
 
 procedure threadinit; inline;
@@ -808,6 +812,105 @@ begin
   PROC_UNLOCK;
  end;
 end;
+
+function ntw2px(n:Integer):Integer;
+begin
+ Case DWORD(n) of
+  STATUS_SUCCESS         :Result:=0;
+  STATUS_ABANDONED       :Result:=EPERM;
+  STATUS_ALERTED         :Result:=EINTR;
+  STATUS_USER_APC        :Result:=EINTR;
+  STATUS_TIMEOUT         :Result:=ETIMEDOUT;
+  STATUS_ACCESS_VIOLATION:Result:=EFAULT;
+  else
+                   Result:=EINVAL;
+ end;
+end;
+
+function msleep(timo:Int64):Integer; inline;
+begin
+ sig_set_alterable;
+ Result:=ntw2px(NtDelayExecution(True,@timo));
+ sig_reset_alterable;
+end;
+
+function kern_thr_suspend(td:p_kthread;tsp:ptimespec):Integer;
+var
+ tv:Int64;
+begin
+ if ((td^.td_pflags and TDP_WAKEUP)<>0) then
+ begin
+  td^.td_pflags:=td^.td_pflags and (not TDP_WAKEUP);
+  Exit(0);
+ end;
+
+ tv:=T_INFINITE;
+ if (tsp<>nil) then
+ begin
+  if (tsp^.tv_sec=0) and (tsp^.tv_nsec=0) then
+  begin
+   Result:=EWOULDBLOCK;
+  end else
+  begin
+   tv:=TIMESPEC_TO_UNIT(tsp);
+   tv:=tvtohz(tv);
+  end;
+ end;
+
+ PROC_LOCK;
+
+ if (Result=0) and ((td^.td_flags and TDF_THRWAKEUP)=0) then
+ begin
+  PROC_UNLOCK; //
+  Result:=msleep(tv);
+  PROC_LOCK;   //
+ end;
+
+ if ((td^.td_flags and TDF_THRWAKEUP)=0) then
+ begin
+  thread_lock(td);
+  td^.td_flags:=td^.td_flags and (not TDF_THRWAKEUP);
+  thread_unlock(td);
+  PROC_UNLOCK;
+  Exit(0);
+ end;
+
+ PROC_UNLOCK;
+
+ if (Result=EWOULDBLOCK) then
+ begin
+  Result:=ETIMEDOUT;
+ end else
+ if (Result=ERESTART) then
+ begin
+  if (tv<>T_INFINITE) then
+  begin
+   Result:=EINTR;
+  end;
+ end;
+end;
+
+function sys_thr_suspend(timeout:ptimespec):Integer;
+var
+ td:p_kthread;
+ ts:timespec;
+ tsp:ptimespec;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ tsp:=nil;
+ if (timeout<>nil) then
+ begin
+  Result:=umtx_copyin_timeout(timeout,@ts);
+  if (Result<>0) then Exit;
+  tsp:=@ts;
+ end;
+
+ Result:=kern_thr_suspend(td,tsp);
+end;
+
+
 
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;

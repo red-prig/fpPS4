@@ -29,6 +29,8 @@ function  _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):I
 
 function kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
 
+function umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
+
 implementation
 
 uses
@@ -513,7 +515,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=_do_lock_umtx(td,umtx,id,NT_INFINITE);
+  Result:=_do_lock_umtx(td,umtx,id,T_INFINITE);
   if (Result=EINTR) then
   begin
    Result:=ERESTART;
@@ -525,7 +527,7 @@ begin
   ts:=ts+tv;
 
   repeat
-   Result:=_do_lock_umtx(td,umtx,id,-tv);
+   Result:=_do_lock_umtx(td,umtx,id,tvtohz(tv));
    if (Result<>ETIMEDOUT) then Break;
 
    ts2:=get_unit_uptime;
@@ -636,7 +638,7 @@ begin
  end else
  if (timeout=nil) then
  begin
-  umtxq_sleep(uq,NT_INFINITE);
+  umtxq_sleep(uq,T_INFINITE);
 
   umtxq_lock(uq^.uq_key);
   umtxq_remove(uq);
@@ -648,7 +650,7 @@ begin
   ts:=ts+tv;
 
   repeat
-   Result:=umtxq_sleep(uq,-tv);
+   Result:=umtxq_sleep(uq,tvtohz(tv));
 
    if ((uq^.uq_flags and UQF_UMTXQ)=0) then
    begin
@@ -1465,7 +1467,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=_do_lock_umutex(td,m,flags,NT_INFINITE,mode);
+  Result:=_do_lock_umutex(td,m,flags,T_INFINITE,mode);
   if (Result=EINTR) and (mode<>_UMUTEX_WAIT) then
   begin
    Result:=ERESTART;
@@ -1477,7 +1479,7 @@ begin
   ts:=ts+tv;
 
   repeat
-   Result:=_do_lock_umutex(td,m,flags,-tv,mode);
+   Result:=_do_lock_umutex(td,m,flags,tvtohz(tv),mode);
    if (Result<>ETIMEDOUT) then Break;
 
    ts2:=get_unit_uptime;
@@ -1565,7 +1567,7 @@ begin
  begin
   if (timeout=nil) then
   begin
-   Result:=umtxq_sleep(uq,NT_INFINITE);
+   Result:=umtxq_sleep(uq,T_INFINITE);
   end else
   begin
    if ((wflags and CVWAIT_ABSTIME)=0) then
@@ -1589,7 +1591,7 @@ begin
 
    tv:=tts;
    repeat
-    Result:=umtxq_sleep(uq,-tv);
+    Result:=umtxq_sleep(uq,tvtohz(tv));
     if (Result<>ETIMEDOUT) then Break;
 
     kern_clock_gettime_unit(clockid,@cts);
@@ -1826,7 +1828,7 @@ begin
  tv:=ts;
 
  repeat
-  Result:=do_rw_rdlock(td,rwlock,fflag,-tv);
+  Result:=do_rw_rdlock(td,rwlock,fflag,tvtohz(tv));
 
   if (Result<>ETIMEDOUT) then Break;
 
@@ -1993,7 +1995,7 @@ begin
  tv:=ts;
 
  repeat
-  Result:=do_rw_wrlock(td,rwlock,fflag,-tv);
+  Result:=do_rw_wrlock(td,rwlock,fflag,tvtohz(tv));
 
   if (Result<>ETIMEDOUT) then Break;
 
@@ -2166,7 +2168,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=umtxq_sleep(uq,NT_INFINITE);
+  Result:=umtxq_sleep(uq,T_INFINITE);
  end else
  begin
   ets:=get_unit_uptime;
@@ -2174,7 +2176,7 @@ begin
   ets:=ets+tv;
 
   repeat
-   Result:=umtxq_sleep(uq,-tv);
+   Result:=umtxq_sleep(uq,tvtohz(tv));
    if (Result<>ETIMEDOUT) then Break;
 
    cts:=get_unit_uptime;
@@ -2450,7 +2452,7 @@ begin
 
  if (uaddr2=nil) then
  begin
-  Result:=do_rw_rdlock(td,obj,val,NT_INFINITE);
+  Result:=do_rw_rdlock(td,obj,val,T_INFINITE);
  end else
  begin
   Result:=umtx_copyin_timeout(uaddr2,@timeout);
@@ -2467,7 +2469,7 @@ begin
 
  if (uaddr2=nil) then
  begin
-  Result:=do_rw_wrlock(td,obj,val,NT_INFINITE);
+  Result:=do_rw_wrlock(td,obj,val,T_INFINITE);
  end else
  begin
   Result:=umtx_copyin_timeout(uaddr2,@timeout);

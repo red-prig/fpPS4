@@ -55,12 +55,18 @@ type
  end;
 
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
+function tvtohz(time:Int64):Int64; inline;
 
 implementation
 
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 begin
  Result:=(QWORD(ts^.tv_sec)*10000000)+(QWORD(ts^.tv_nsec) div 100);
+end;
+
+function tvtohz(time:Int64):Int64; inline;
+begin
+ Result:=-time;
 end;
 
 end.

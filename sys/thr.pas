@@ -6,6 +6,7 @@ unit thr;
 interface
 
 uses
+ time,
  kern_thread;
 
 type
@@ -15,14 +16,12 @@ type
 function  thr_new(param:p_thr_param;param_size:Integer):Integer;
 function  thr_self(id:PQWORD):Integer;
 procedure thr_exit(state:PQWORD);
+function  thr_kill(id:QWORD;sig:Integer):Integer;
+function  thr_suspend(timeout:ptimespec):Integer;
 
 //int  thr_create(ucontext_t *ctx, long *id, int flags);
-//int  thr_new(struct thr_param *param, int param_size);
-//int  thr_self(long *id);
-//void thr_exit(long *state);
-//int  thr_kill(long id, int sig);
+
 //int  thr_kill2(pid_t pid, long id, int sig);
-//int  thr_suspend(const struct timespec *timeout);
 //int  thr_wake(long id);
 //int  thr_set_name(long id, const char *name);
 
@@ -55,5 +54,20 @@ asm
  call  fast_syscall
 end;
 
+function thr_kill(id:QWORD;sig:Integer):Integer; assembler; nostackframe;
+asm
+ movq  sys_thr_kill,%rax
+ call  fast_syscall
+end;
+
+function thr_suspend(timeout:ptimespec):Integer; assembler; nostackframe;
+asm
+ movq  sys_thr_suspend,%rax
+ call  fast_syscall
+end;
+
+
 end.
+
+
 

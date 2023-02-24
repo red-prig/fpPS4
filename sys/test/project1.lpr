@@ -15,8 +15,8 @@ uses
  kern_lock,
  kern_rwlock,
  thr_private,
- kern_sig,
  trap,
+ sys_sig,
  md_psl,
  sysutils,
  vulkan,
@@ -159,6 +159,8 @@ procedure test_thread; sysv_abi_default;
 var
  rax:qword;
  act:sigaction_t;
+ _sig:Integer;
+ oset:sigset_t;
 begin
 
  //SetTlsBase(Pointer(qword(1)));
@@ -169,11 +171,19 @@ begin
   act.u.sa_handler:=sa_handler(@__ex_handler);
   act.sa_flags:=SA_RESTART;
 
-  sys_sigaction(SIGUSR1,@act,nil,0);
+  sigaction(SIGUSR1,@act,nil,0);
 
-  sys_thr_kill(tid,SIGUSR1);
+  thr_kill(tid,SIGUSR1);
  end else
  begin
+  Writeln('thr_suspend:',thr_suspend(nil));
+  {
+  oset.qwords[0]:=QWORD(-1);
+  oset.qwords[1]:=QWORD(-1);
+  Writeln('sigwait:',sigwait(@oset,@_sig));
+  Writeln('intr:',_sig);
+  }
+  {
   Writeln('before: sptr:',HexStr(sptr));
   repeat
    asm
@@ -182,6 +192,7 @@ begin
   until (intr<>0);
   Writeln('intr');
   Writeln('after: sptr:',HexStr(sptr));
+  }
  end;
 
  sig_lock;
