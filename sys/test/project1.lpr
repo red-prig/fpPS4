@@ -96,7 +96,7 @@ begin
 end;
 
 var
- mem:Pointer;
+ mem,mem2:Pointer;
  mseg:Pointer;
 
  lock:Integer;
@@ -148,6 +148,9 @@ begin
  Writeln('__ex_handler:',sig,' ',code);
 end;
 
+var
+ tid:QWORD;
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
@@ -156,13 +159,16 @@ begin
 
  //SetTlsBase(Pointer(qword(1)));
 
- act:=Default(sigaction_t);
- act.u.sa_handler:=sa_handler(@__ex_handler);
- act.sa_flags:=SA_RESTART;
+ if (tid<>curkthread^.td_tid) then
+ begin
+  act:=Default(sigaction_t);
+  act.u.sa_handler:=sa_handler(@__ex_handler);
+  act.sa_flags:=SA_RESTART;
 
- sys_sigaction(SIGUSR1,@act,nil,0);
+  sys_sigaction(SIGUSR1,@act,nil,0);
 
- sys_thr_kill(curkthread^.td_tid,SIGUSR1);
+  sys_thr_kill(tid,SIGUSR1);
+ end;
 
  sig_lock;
  sig_lock;
@@ -569,7 +575,6 @@ var
 
  prio:rtprio;
 
- tid:QWORD;
  ktd:p_kthread;
 
  _time:Int64;
@@ -597,6 +602,8 @@ begin
  mseg:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);
  mem:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);
 
+ mem2:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);
+
  klock(lock);
 
  prio._type:=RTP_PRIO_NORMAL;
@@ -613,6 +620,18 @@ begin
  _thr_param.parent_tid:=nil;
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test';
+
+ thr_new(@_thr_param,SizeOf(_thr_param));
+
+ _thr_param.start_func:=@test_thread;
+ _thr_param.arg       :=nil;
+ _thr_param.stack_base:=mem2;
+ _thr_param.stack_size:=64*1024;
+ _thr_param.tls_base  :=mem2;
+ _thr_param.child_tid :=nil;
+ _thr_param.parent_tid:=nil;
+ _thr_param.rtp       :=@prio;
+ _thr_param.name      :='test2';
 
  thr_new(@_thr_param,SizeOf(_thr_param));
 

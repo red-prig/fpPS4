@@ -478,7 +478,7 @@ begin
 
  if ((td^.td_pflags and TDP_ALTSTACK)<>0) then
  begin
-  Result:=ord((sp - size_t(td^.td_sigstk.ss_sp)) < td^.td_sigstk.ss_size);
+  Result:=ord((sp-size_t(td^.td_sigstk.ss_sp))<td^.td_sigstk.ss_size);
  end;
 end;
 
@@ -1322,7 +1322,8 @@ end;
 
 procedure forward_signal(td:p_kthread);
 begin
- //TODO
+ if (td=curkthread) then Exit;
+ ipi_send_cpu(td);
 end;
 
 procedure tdsigwakeup(td:p_kthread;sig:Integer;action:sig_t;intrval:Integer);
@@ -1376,7 +1377,9 @@ begin
  end else
  begin
   if TD_IS_RUNNING(td) and (td<>curkthread) then
+  begin
    forward_signal(td);
+  end;
  end;
 
  _out:
@@ -1601,6 +1604,8 @@ begin
      TDF_NEEDRESCHED or TDF_ALRMPEND or TDF_PROFPEND or TDF_MACPEND));
 
  thread_unlock(td);
+
+ NtTestAlert();
 
  if ((flags and TDF_ALRMPEND)<>0) then
  begin

@@ -135,6 +135,8 @@ type
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
   td_frame        :p_trapframe;
+  pcb_fsbase      :Pointer;
+  pcb_gsbase      :Pointer;
   td_retval       :array[0..1] of QWORD;
   td_kstack       :Pointer;
  end;

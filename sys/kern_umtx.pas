@@ -35,6 +35,7 @@ uses
  HAMT,
  systm,
 
+ trap,
  windows,
  ntapi;
 
@@ -355,7 +356,9 @@ end;
 
 function msleep(uq:p_umtx_q;timo:Int64):Integer; inline;
 begin
+ sig_set_alterable;
  Result:=ntw2px(NtWaitForSingleObject(uq^.uq_handle,True,@timo));
+ sig_reset_alterable;
 end;
 
 function wakeup(uq:p_umtx_q):Integer; inline;

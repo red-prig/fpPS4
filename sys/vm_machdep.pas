@@ -9,6 +9,7 @@ uses
  ntapi,
  windows,
  md_psl,
+ ucontext,
  trap,
  sys_kernel,
  kern_thread;
@@ -20,8 +21,18 @@ function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 function  cpu_getstack(td:p_kthread):QWORD;
+function  ipi_send_cpu(td:p_kthread):Integer;
 
 implementation
+
+uses
+ systm,
+ machdep,
+ signal,
+ kern_sig;
+
+Const
+ SYS_STACK_SIZE=16*1024;
 
 function cpu_thread_alloc(td:p_kthread):Integer;
 var
@@ -29,7 +40,7 @@ var
  size:ULONG_PTR;
 begin
  data:=nil;
- size:=16*1024;
+ size:=SYS_STACK_SIZE;
 
  Result:=NtAllocateVirtualMemory(
            NtCurrentProcess,
@@ -40,7 +51,7 @@ begin
            PAGE_READWRITE
           );
 
- data:=data+16*1024;
+ data:=data+SYS_STACK_SIZE;
  td^.td_kstack:=data;
 end;
 
@@ -50,7 +61,7 @@ var
  size:ULONG_PTR;
 begin
  data:=td^.td_kstack;
- data:=data-16*1024;
+ data:=data-SYS_STACK_SIZE;
  size:=0;
 
  Result:=NtFreeVirtualMemory(
@@ -94,13 +105,20 @@ begin
  Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));
 end;
 
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+procedure cpu_set_user_tls(td:p_kthread;base:Pointer); inline;
 var
  ptls:PPointer;
 begin
+ td^.pcb_fsbase:=base;
+
  ptls:=td^.td_teb+$708;
 
  ptls^:=base;
+end;
+
+function cpu_get_iflag(td:p_kthread):PInteger; inline;
+begin
+ Result:=td^.td_teb+$710;
 end;
 
 function cpu_set_priority(td:p_kthread;prio:Integer):Integer;
@@ -121,11 +139,193 @@ begin
  Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
 end;
 
-function cpu_getstack(td:p_kthread):QWORD;
+function cpu_getstack(td:p_kthread):QWORD; inline;
 begin
  Result:=td^.td_frame^.tf_rsp;
 end;
 
+function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
+begin
+ Result:=(rsp<=QWORD(td^.td_kstack)) and (rsp>(QWORD(td^.td_kstack)-SYS_STACK_SIZE));
+end;
+
+function IS_SYSCALL(rip:qword):Boolean;
+var
+ w:Word;
+begin
+ Result:=False;
+ if (rip<>0) then
+ begin
+  w:=0;
+  NtReadVirtualMemory(NtCurrentProcess,@PWord(Rip)[-1],@w,SizeOf(Word),nil);
+  Result:=(w=$050F);
+ end;
+end;
+
+procedure _apc_null(dwParam:PTRUINT); stdcall;
+begin
+end;
+
+function ipi_send_cpu(td:p_kthread):Integer;
+label
+ resume,
+ tryagain;
+var
+ td_handle:THandle;
+ iflag    :PInteger;
+ _Context :array[0..SizeOf(TCONTEXT)+14] of Byte;
+ Context  :PCONTEXT;
+ w:LARGE_INTEGER;
+ sf:sigframe;
+ sfp:p_sigframe;
+ sp:QWORD;
+ oonstack:Integer;
+begin
+ Result   :=0;
+ td_handle:=td^.td_handle;
+ iflag    :=cpu_get_iflag(td);
+ Context  :=Align(@_Context,16);
+
+ PROC_LOCK;
+
+ tryagain:
+
+ if (NtSuspendThread(td_handle,nil)<>STATUS_SUCCESS) then
+ begin
+  PROC_UNLOCK;
+  Exit(ESRCH);
+ end;
+
+ w.QuadPart:=0;
+ if (NtWaitForSingleObject(td_handle,False,@w)<>STATUS_TIMEOUT) then
+ begin
+  Result:=ESRCH;
+  goto resume;
+ end;
+
+ if ((iflag^ and SIG_ALTERABLE)<>0) then //alterable?
+ begin
+  NtQueueApcThread(td_handle,@_apc_null,nil,nil,0);
+  Result:=0;
+  goto resume;
+ end else
+ if (iflag^<>0) then //locked?
+ begin
+  Result:=0;
+  goto resume;
+ end;
+
+ Context^:=Default(TCONTEXT);
+ Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+
+ if (NtGetContextThread(td_handle,Context)<>STATUS_SUCCESS) then
+ begin
+  Result:=ESRCH;
+  goto resume;
+ end;
+
+ if IS_SYSTEM_STACK(td,Context^.Rsp) then //system?
+ begin
+  Result:=0;
+  goto resume;
+ end;
+
+ if IS_SYSCALL(Context^.Rip) then //system call in code without blocking
+ begin
+  NtResumeThread(td_handle,nil);
+  w.QuadPart:=-10000;
+  SwDelayExecution(False,@w); //100ms
+  goto tryagain;
+ end;
+
+ oonstack:=sigonstack(Context^.Rsp);
+
+ // Save user context.
+ sf:=Default(sigframe);
+
+ sf.sf_uc.uc_sigmask:=td^.td_sigmask;
+ sf.sf_uc.uc_stack  :=td^.td_sigstk;
+
+ if ((td^.td_pflags and TDP_ALTSTACK)<>0) then
+ begin
+  if (oonstack<>0) then
+  begin
+   sf.sf_uc.uc_stack.ss_flags:=SS_ONSTACK;
+  end else
+  begin
+   sf.sf_uc.uc_stack.ss_flags:=0;
+  end;
+ end else
+ begin
+  sf.sf_uc.uc_stack.ss_flags:=SS_DISABLE;
+ end;
+
+ sf.sf_uc.uc_mcontext.mc_onstack:=oonstack;
+
+ sf.sf_uc.uc_mcontext.mc_rdi:=Context^.Rdi;
+ sf.sf_uc.uc_mcontext.mc_rsi:=Context^.Rsi;
+ sf.sf_uc.uc_mcontext.mc_rdx:=Context^.Rdx;
+ sf.sf_uc.uc_mcontext.mc_rcx:=Context^.Rcx;
+ sf.sf_uc.uc_mcontext.mc_r8 :=Context^.R8 ;
+ sf.sf_uc.uc_mcontext.mc_r9 :=Context^.R9 ;
+ sf.sf_uc.uc_mcontext.mc_rax:=Context^.Rax;
+ sf.sf_uc.uc_mcontext.mc_rbx:=Context^.Rbx;
+ sf.sf_uc.uc_mcontext.mc_rbp:=Context^.Rbp;
+ sf.sf_uc.uc_mcontext.mc_r10:=Context^.R10;
+ sf.sf_uc.uc_mcontext.mc_r11:=Context^.R11;
+ sf.sf_uc.uc_mcontext.mc_r12:=Context^.R12;
+ sf.sf_uc.uc_mcontext.mc_r13:=Context^.R13;
+ sf.sf_uc.uc_mcontext.mc_r14:=Context^.R14;
+ sf.sf_uc.uc_mcontext.mc_r15:=Context^.R15;
+
+ sf.sf_uc.uc_mcontext.mc_rip   :=Context^.Rip;
+ sf.sf_uc.uc_mcontext.mc_rflags:=Context^.EFlags;
+ sf.sf_uc.uc_mcontext.mc_rsp   :=Context^.Rsp;
+
+ sf.sf_uc.uc_mcontext.mc_cs:=_ucodesel;
+ sf.sf_uc.uc_mcontext.mc_ds:=_udatasel;
+ sf.sf_uc.uc_mcontext.mc_ss:=_udatasel;
+ sf.sf_uc.uc_mcontext.mc_es:=_udatasel;
+ sf.sf_uc.uc_mcontext.mc_fs:=_ufssel;
+ sf.sf_uc.uc_mcontext.mc_gs:=_ugssel;
+ sf.sf_uc.uc_mcontext.mc_flags:=TF_HASSEGS;
+
+ sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
+
+ sf.sf_uc.uc_mcontext.mc_fsbase:=QWORD(td^.pcb_fsbase);
+ sf.sf_uc.uc_mcontext.mc_gsbase:=QWORD(td^.pcb_gsbase);
+
+ sp:=QWORD(td^.td_kstack)-128;
+
+ sp:=sp-sizeof(sigframe);
+
+ sfp:=p_sigframe(sp and (not $1F));
+
+ if (copyout(@sf,sfp,sizeof(sigframe))<>0) then
+ begin
+  Result:=EFAULT;
+  goto resume;
+ end;
+
+ Context^.Rsp:=QWORD(sfp);
+ Context^.Rip:=QWORD(@sigipi);
+ Context^.EFlags:=Context^.EFlags and (not (PSL_T or PSL_D));
+
+ set_pcb_flags(td,PCB_FULL_IRET);
+
+ if (NtSetContextThread(td_handle,Context)<>STATUS_SUCCESS) then
+ begin
+  Result:=ESRCH;
+  goto resume;
+ end;
+
+ resume:
+  NtResumeThread(td_handle,nil);
+  PROC_UNLOCK;
+end;
+
 
 end.
+
+
 

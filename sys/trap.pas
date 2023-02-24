@@ -89,15 +89,22 @@ const
 
 const
  PCB_FULL_IRET=1;
+ SIG_ALTERABLE=$80000000;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
 
-procedure sig_lock;
+procedure _sig_lock;
 procedure _sig_unlock;
+
+procedure sig_lock;
 procedure sig_unlock;
+
+procedure sig_set_alterable;
+procedure sig_reset_alterable;
 
 procedure fast_syscall;
 procedure sigcode;
+procedure sigipi;
 
 implementation
 
@@ -108,9 +115,10 @@ uses
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+ NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
  TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
 
-procedure sig_lock; assembler; nostackframe;
+procedure _sig_lock; assembler; nostackframe;
 asm
  pushf
  lock incl %gs:(0x710)   //lock interrupt
@@ -122,6 +130,35 @@ asm
  pushf
  lock decl %gs:(0x710)   //unlock interrupt
  popf
+end;
+
+procedure sig_lock; assembler; nostackframe;
+label
+ _exit;
+asm
+ //prolog (debugger)
+ pushq %rbp
+ movq  %rsp,%rbp
+ pushq %rax
+ pushf
+
+ movq $1,%rax
+ lock xadd %rax,%gs:(0x710) //lock interrupt
+ test %rax,%rax
+ jnz _exit
+
+ movqq %gs:(0x700),%rax            //curkthread
+ testl TDF_AST,kthread.td_flags(%rax)
+ je _exit
+
+ mov  $0,%rax
+ call fast_syscall
+
+ _exit:
+ //epilog (debugger)
+ popf
+ popq  %rax
+ popq  %rbp
 end;
 
 procedure sig_unlock; assembler; nostackframe;
@@ -149,6 +186,16 @@ asm
  popf
  popq  %rax
  popq  %rbp
+end;
+
+procedure sig_set_alterable; assembler; nostackframe;
+asm
+ lock orl SIG_ALTERABLE,%gs:(0x710)
+end;
+
+procedure sig_reset_alterable; assembler; nostackframe;
+asm
+ lock andl NOT_SIG_ALTERABLE,%gs:(0x710)
 end;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
@@ -191,9 +238,11 @@ begin
  cpu_set_syscall_retval(td,error);
 end;
 
+label
+ _after_call;
+
 procedure fast_syscall; assembler; nostackframe;
 label
- _after,
  _doreti,
  _ast,
  _doreti_exit;
@@ -228,16 +277,9 @@ asm
  movqq %r14,trapframe.tf_r14(%rax)
  movqq %r15,trapframe.tf_r15(%rax)
 
- movqw %fs,trapframe.tf_fs(%rax)
- movqw %gs,trapframe.tf_gs(%rax)
- movqw %es,trapframe.tf_es(%rax)
- movqw %ds,trapframe.tf_ds(%rax)
- movqw %cs,trapframe.tf_cs(%rax)
- movqw %ss,trapframe.tf_ss(%rax)
-
  movqq $0,trapframe.tf_trapno(%rax)
  movqq $0,trapframe.tf_addr  (%rax)
- movqq $1,trapframe.tf_flags (%rax)
+ movqq $0,trapframe.tf_flags (%rax)
  movqq $5,trapframe.tf_err   (%rax) //sizeof(call $32)
 
  movqq (%rsp),%r11 //get prev rbp
@@ -264,7 +306,7 @@ asm
 
  call amd64_syscall
 
- _after:
+ _after_call:
 
  movqq %gs:(0x700),%rax            //curkthread
 
@@ -304,7 +346,7 @@ asm
  _ast:
 
  call ast
- jmp _after
+ jmp _after_call
 
  //doreti
  _doreti:
@@ -362,6 +404,13 @@ asm
  movqq sys_sigreturn,%rax
  call  fast_syscall
  hlt
+end;
+
+procedure sigipi; assembler; nostackframe;
+asm
+ lea   sigframe.sf_uc(%rsp),%rdi
+ call  sys_sigreturn
+ jmp   _after_call
 end;
 
 

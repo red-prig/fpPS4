@@ -6,12 +6,17 @@ unit machdep;
 interface
 
 uses
- ntapi,
  signal,
  signalvar,
  ucontext,
  kern_thread,
  sys_kernel;
+
+const
+ _ucodesel=(8 shl 3) or 3;
+ _udatasel=(7 shl 3) or 3;
+ _ufssel  =(2 shl 3) or 3;
+ _ugssel  =(3 shl 3) or 3;
 
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 function  sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
@@ -39,8 +44,6 @@ begin
  td:=curkthread;
 
  sig:=ksi^.ksi_info.si_signo;
-
- //psp:=p_sigacts
 
  regs:=td^.td_frame;
  oonstack:=sigonstack(regs^.tf_rsp);
@@ -75,6 +78,14 @@ begin
 
  sf.sf_uc.uc_mcontext.mc_onstack:=oonstack;
 
+ regs^.tf_cs:=_ucodesel;
+ regs^.tf_ds:=_udatasel;
+ regs^.tf_ss:=_udatasel;
+ regs^.tf_es:=_udatasel;
+ regs^.tf_fs:=_ufssel;
+ regs^.tf_gs:=_ugssel;
+ regs^.tf_flags:=TF_HASSEGS;
+
  Move(regs^,sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
 
  sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
@@ -82,8 +93,8 @@ begin
  //get_fpcontext(td, &sf.sf_uc.uc_mcontext, xfpusave, xfpusave_len);
  //fpstate_drop(td);
 
- //sf.sf_uc.uc_mcontext.mc_fsbase = pcb->pcb_fsbase;
- //sf.sf_uc.uc_mcontext.mc_gsbase = pcb->pcb_gsbase;
+ sf.sf_uc.uc_mcontext.mc_fsbase:=QWORD(td^.pcb_fsbase);
+ sf.sf_uc.uc_mcontext.mc_gsbase:=QWORD(td^.pcb_gsbase);
 
  if ((td^.td_pflags and TDP_ALTSTACK)<>0) and
     (oonstack=0) and
@@ -103,12 +114,10 @@ begin
 
  sp:=sp-sizeof(sigframe);
 
- sfp:=p_sigframe(sp and (not $F));
+ sfp:=p_sigframe(sp and (not $1F));
 
  regs^.tf_rdi:=sig;
  regs^.tf_rdx:=QWORD(@sfp^.sf_uc);
-
- sf.sf_si:=Default(siginfo_t);
 
  if (SIGISMEMBER(@p_sigacts.ps_siginfo,sig)) then
  begin
@@ -157,8 +166,6 @@ var
  uc:ucontext_t;
  regs:p_trapframe;
  ucp:p_ucontext_t;
- ret:Integer;
- ksi:ksiginfo_t;
 begin
  //char *xfpustate;
  //size_t xfpustate_len;
