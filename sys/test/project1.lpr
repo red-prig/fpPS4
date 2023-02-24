@@ -143,8 +143,12 @@ asm
  mov %gs:(0x708),%rax
 end;
 
+threadvar
+ intr:Integer;
+
 procedure __ex_handler(sig,code:Integer;ctx:p_ucontext_t); SysV_ABI_CDecl;
 begin
+ intr:=1;
  Writeln('__ex_handler:',sig,' ',code);
 end;
 
@@ -170,11 +174,14 @@ begin
   sys_thr_kill(tid,SIGUSR1);
  end else
  begin
+  Writeln('before: sptr:',HexStr(sptr));
   repeat
    asm
     pause
    end;
-  until false;
+  until (intr<>0);
+  Writeln('intr');
+  Writeln('after: sptr:',HexStr(sptr));
  end;
 
  sig_lock;

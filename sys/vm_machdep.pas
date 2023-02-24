@@ -22,7 +22,7 @@ procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 function  cpu_getstack(td:p_kthread):QWORD;
 
-procedure ipi_sigreturn;
+procedure ipi_sigreturn(unlock:Integer);
 function  ipi_send_cpu(td:p_kthread):Integer;
 
 implementation
@@ -168,7 +168,7 @@ procedure _apc_null(dwParam:PTRUINT); stdcall;
 begin
 end;
 
-procedure ipi_sigreturn;
+procedure ipi_sigreturn(unlock:Integer);
 var
  _Context:array[0..SizeOf(TCONTEXT)+14] of Byte;
  Context :PCONTEXT;
@@ -206,6 +206,11 @@ begin
  Context^.SegCs:=KGDT64_R3_CODE  or RPL_MASK;
  Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
  Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
+
+ if (unlock<>0) then
+ begin
+  _sig_unlock;
+ end;
 
  NtContinue(Context,False);
 end;
