@@ -71,9 +71,9 @@ end;
 
 function msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
 begin
- sig_set_alterable;
+ sig_sta;
  Result:=ntw2px(NtWaitForSingleObject(h,True,@timo));
- sig_reset_alterable;
+ sig_cla;
 end;
 
 function wakeup_umtxq(h:THandle):Integer; inline;
@@ -83,9 +83,9 @@ end;
 
 function msleep_td(timo:Int64):Integer; inline;
 begin
- sig_set_alterable;
+ sig_sta;
  Result:=ntw2px(NtDelayExecution(True,@timo));
- sig_reset_alterable;
+ sig_cla;
 end;
 
 procedure _apc_null(dwParam:PTRUINT); stdcall;
@@ -172,19 +172,14 @@ begin
 end;
 
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer); inline;
-var
- ptls:PPointer;
 begin
  td^.pcb_fsbase:=base;
-
- ptls:=td^.td_teb+$708;
-
- ptls^:=base;
+ td^.td_teb^.tcb:=base;
 end;
 
 function cpu_get_iflag(td:p_kthread):PInteger; inline;
 begin
- Result:=td^.td_teb+$710;
+ Result:=@td^.td_teb^.iflag;
 end;
 
 function cpu_set_priority(td:p_kthread;prio:Integer):Integer;
@@ -269,7 +264,7 @@ begin
 
  if (unlock<>0) then
  begin
-  _sig_unlock;
+  sig_cli;
  end;
 
  NtContinue(Context,False);

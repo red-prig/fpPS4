@@ -110,11 +110,21 @@ const
  THR_SUSPENDED=$0001;
 
 type
+ p_teb=^teb;
+ teb=packed record
+  _align1:array[0..23] of QWORD;
+  wow64 :Pointer;                 //0xC0
+  _align2:array[0..198] of QWORD;
+  thread:Pointer;                 //0x700
+  tcb   :Pointer;                 //0x708
+  iflag :Integer;                 //0x710
+ end;
+
  p_kthread=^kthread;
  kthread=packed record
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
-  td_teb          :Pointer;
+  td_teb          :p_teb;
   td_lock         :Pointer;
   td_tid          :QWORD;
   td_sigstk       :stack_t;
@@ -232,8 +242,7 @@ uses
  kern_rwlock,
  kern_mtx,
  kern_umtx,
- kern_sig,
- trap;
+ kern_sig;
 
 var
  p_mtx:Pointer=nil;
@@ -248,12 +257,12 @@ var
 
 function curkthread:p_kthread; assembler; nostackframe;
 asm
- movqq %gs:(0x700),Result
+ movqq %gs:teb.thread,Result
 end;
 
 procedure set_curkthread(td:p_kthread); assembler; nostackframe;
 asm
- movqq td,%gs:(0x700)
+ movqq td,%gs:teb.thread
 end;
 
 function SIGPENDING(td:p_kthread):Boolean;
@@ -420,7 +429,6 @@ end;
 function BaseQueryInfo(td:p_kthread):Integer;
 var
  TBI:THREAD_BASIC_INFORMATION;
- pcur:PPointer;
 begin
  TBI:=Default(THREAD_BASIC_INFORMATION);
 
@@ -435,9 +443,7 @@ begin
  td^.td_teb   :=TBI.TebBaseAddress;
  td^.td_cpuset:=TBI.AffinityMask;
 
- pcur:=td^.td_teb+$700; //self
-
- pcur^:=td;
+ td^.td_teb^.thread:=td; //self
 end;
 
 procedure BaseInitializeStack(InitialTeb  :PINITIAL_TEB;

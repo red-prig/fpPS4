@@ -12,7 +12,6 @@ uses
  kern_time,
  thr,
  kern_thread,
- kern_lock,
  kern_rwlock,
  thr_private,
  trap,
@@ -630,8 +629,6 @@ begin
 
  mem2:=VirtualAlloc(nil,64*1024,MEM_COMMIT,PAGE_READWRITE);
 
- klock(lock);
-
  prio._type:=RTP_PRIO_NORMAL;
  prio._prio:=700;
 
@@ -669,8 +666,6 @@ begin
 
  //NtSuspendThread(ktd^.td_handle,nil);
  //NtResumeThread(ktd^.td_handle,nil);
-
- kunlock(lock);
 
  readln;
 

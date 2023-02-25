@@ -89,7 +89,9 @@ const
 
 const
  PCB_FULL_IRET=1;
+
  SIG_ALTERABLE=$80000000;
+ SIG_STI_LOCK =$40000000;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
 
@@ -99,8 +101,11 @@ procedure _sig_unlock;
 procedure sig_lock;
 procedure sig_unlock;
 
-procedure sig_set_alterable;
-procedure sig_reset_alterable;
+procedure sig_sta;
+procedure sig_cla;
+
+procedure sig_sti;
+procedure sig_cli;
 
 procedure fast_syscall;
 procedure sigcode;
@@ -116,19 +121,20 @@ uses
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
  NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
+ NOT_SIG_STI_LOCK =not SIG_STI_LOCK;
  TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
 
 procedure _sig_lock; assembler; nostackframe;
 asm
  pushf
- lock incl %gs:(0x710)   //lock interrupt
+ lock incl %gs:teb.iflag   //lock interrupt
  popf
 end;
 
 procedure _sig_unlock; assembler; nostackframe;
 asm
  pushf
- lock decl %gs:(0x710)   //unlock interrupt
+ lock decl %gs:teb.iflag   //unlock interrupt
  popf
 end;
 
@@ -143,11 +149,11 @@ asm
  pushf
 
  movq $1,%rax
- lock xadd %rax,%gs:(0x710) //lock interrupt
+ lock xadd %rax,%gs:teb.iflag //lock interrupt
  test %rax,%rax
  jnz _exit
 
- movqq %gs:(0x700),%rax            //curkthread
+ movqq %gs:teb.thread,%rax     //curkthread
  testl TDF_AST,kthread.td_flags(%rax)
  je _exit
 
@@ -171,10 +177,10 @@ asm
  pushq %rax
  pushf
 
- lock decl %gs:(0x710)   //unlock interrupt
+ lock decl %gs:teb.iflag   //unlock interrupt
  jnz _exit
 
- movqq %gs:(0x700),%rax            //curkthread
+ movqq %gs:teb.thread,%rax  //curkthread
  testl TDF_AST,kthread.td_flags(%rax)
  je _exit
 
@@ -188,14 +194,24 @@ asm
  popq  %rbp
 end;
 
-procedure sig_set_alterable; assembler; nostackframe;
+procedure sig_sta; assembler; nostackframe;
 asm
- lock orl SIG_ALTERABLE,%gs:(0x710)
+ lock orl SIG_ALTERABLE,%gs:teb.iflag
 end;
 
-procedure sig_reset_alterable; assembler; nostackframe;
+procedure sig_cla; assembler; nostackframe;
 asm
- lock andl NOT_SIG_ALTERABLE,%gs:(0x710)
+ lock andl NOT_SIG_ALTERABLE,%gs:teb.iflag
+end;
+
+procedure sig_sti; assembler; nostackframe;
+asm
+ lock orl SIG_STI_LOCK,%gs:teb.iflag
+end;
+
+procedure sig_cli; assembler; nostackframe;
+asm
+ lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag
 end;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
@@ -249,13 +265,11 @@ asm
  pushq %rbp
  movq  %rsp,%rbp
 
- pushf
- lock incl %gs:(0x710)   //lock interrupt
- popf
+ lock orl SIG_STI_LOCK,%gs:teb.iflag //lock interrupt
 
  movqq %rax,-16(%rsp)  //save rax
 
- movqq %gs:(0x700),%rax            //curkthread
+ movqq %gs:teb.thread,%rax //curkthread
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 
@@ -297,7 +311,7 @@ asm
  popq  %r11 //get  FLAGS
  movqq %r11,trapframe.tf_rflags(%rax)
 
- movqq %gs:(0x700),%rsp             //curkthread
+ movqq %gs:teb.thread,%rsp          //curkthread
  movqq kthread.td_kstack(%rsp),%rsp //td_kstack
 
  andq $-32,%rsp //align stack
@@ -306,7 +320,7 @@ asm
 
  _after_call:
 
- movqq %gs:(0x700),%rax            //curkthread
+ movqq %gs:teb.thread,%rax          //curkthread
 
  //Requested full context restore
  testl PCB_FULL_IRET,kthread.pcb_flags(%rax)
@@ -315,7 +329,7 @@ asm
  testl TDF_AST,kthread.td_flags(%rax)
  jne _ast
 
- movqq %gs:(0x700),%rax            //curkthread
+ movqq %gs:teb.thread,%rax         //curkthread
  movqq kthread.td_frame(%rax),%rax //td_frame
 
  //Restore preserved registers.
@@ -332,9 +346,7 @@ asm
 
  movqq trapframe.tf_rax(%rax),%rax //restore rax
 
- pushf
- lock decl %gs:(0x710)   //unlock interrupt
- popf
+ lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag //unlock interrupt
 
  //epilog (debugger)
  popq  %rbp
@@ -349,7 +361,7 @@ asm
  //doreti
  _doreti:
 
-  movqq %gs:(0x700),%rax            //curkthread
+  movqq %gs:teb.thread,%rax           //curkthread
   testl TDF_AST,kthread.td_flags(%rax)
   je _doreti_exit
 
@@ -386,7 +398,7 @@ asm
  //ast
  _ast:
 
-  movqq %gs:(0x700),%rax            //curkthread
+  movqq %gs:teb.thread,%rax           //curkthread
   testl TDF_AST,kthread.td_flags(%rax)
   je _ast_exit
 
