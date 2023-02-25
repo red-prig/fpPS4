@@ -14,6 +14,7 @@ uses
  kern_thread,
  kern_rwlock,
  thr_private,
+ sys_cpuset,
  trap,
  sys_sig,
  md_psl,
