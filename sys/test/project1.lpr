@@ -17,9 +17,7 @@ uses
  trap,
  sys_sig,
  md_psl,
- sysutils,
- vulkan,
- vDevice;
+ sysutils;
 
 var
  mtx:umutex;
@@ -399,7 +397,7 @@ var
  ViewSize:ULONG_PTR;
  hSection:THandle;
  Base1,Base2:Pointer;
- dev:TVkDeviceMemory;
+ //dev:TVkDeviceMemory;
 begin
 
  {
