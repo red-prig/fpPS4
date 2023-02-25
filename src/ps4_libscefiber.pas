@@ -39,7 +39,8 @@ type
     r13         :QWord;               // 48
     r14         :QWord;               // 56
     r15         :QWord;               // 64
-    _unknown1   :array[0..3] of Byte; // 68
+    fnstcw      :Word;                // 66
+    _unknown1   :array[0..1] of Byte; // 68
     mxcsr       :DWord;               // 72
    end;
 
