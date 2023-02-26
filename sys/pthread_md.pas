@@ -7,7 +7,8 @@ interface
 
 uses
  thr,
- kern_thread;
+ kern_thread,
+ thr_private;
 
 const
  DTV_OFFSET=8;
@@ -15,15 +16,18 @@ const
 type
  p_tcb=^tcb;
  tcb=packed record
-  tcb_self  :Pointer;
+  tcb_self  :p_tcb;
   tcb_dtv   :Pointer;
-  tcb_thread:Pointer;
+  tcb_thread:p_pthread;
   tcb_spare :Pointer;
  end;
 
 procedure _tcb_set(tcb:p_tcb);
 function  _tcb_get:p_tcb;
-function  _get_curthread:Pointer;
+function  _get_curthread:p_pthread;
+
+function  _tcb_ctor(thread:Pointer;initial:Integer):p_tcb;
+procedure _tcb_dtor(tcb:p_tcb);
 
 implementation
 
@@ -42,7 +46,7 @@ begin
  Result:=TCB_GET64;
 end;
 
-function _get_curthread:Pointer; inline;
+function _get_curthread:p_pthread; inline;
 begin
  Result:=TCB_GET64^.tcb_thread;
 end;

@@ -19,6 +19,8 @@ uses
  sys_sig,
  md_psl,
  pthread_md,
+ thr_init,
+ thr_error,
  sysutils;
 
 var
