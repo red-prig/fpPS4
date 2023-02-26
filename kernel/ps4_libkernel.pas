@@ -520,8 +520,8 @@ begin
 end;
 
 type
- p_get_authinfo=^t_get_authinfo;
- t_get_authinfo=record //0x88
+ p_authinfo=^t_authinfo;
+ t_authinfo=record //0x88
   {
   //know values of utype
   0x3800000000000006
@@ -549,7 +549,7 @@ type
   unknow:array[0..14] of qword
  end;
 
-function ps4_get_authinfo(pid:Integer;info:p_get_authinfo):Integer; SysV_ABI_CDecl;
+function ps4_get_authinfo(pid:Integer;info:p_authinfo):Integer; SysV_ABI_CDecl;
 begin
  //ignore pid
  Result:=0;

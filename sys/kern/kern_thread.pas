@@ -197,6 +197,8 @@ function  sys_thr_suspend(timeout:ptimespec):Integer;
 function  sys_thr_wake(id:QWORD):Integer;
 function  sys_thr_set_name(id:QWORD;pname:PChar):Integer;
 
+function  sys_amd64_set_fsbase(base:Pointer):Integer;
+
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
 procedure thread_lock(td:p_kthread);
@@ -952,6 +954,16 @@ begin
  thread_unlock(td);
 
  thread_dec_ref(td);
+end;
+
+function sys_amd64_set_fsbase(base:Pointer):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
+ if (td=nil) then Exit(EFAULT);
+ cpu_set_user_tls(td,base);
 end;
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;

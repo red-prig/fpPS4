@@ -24,6 +24,8 @@ function  thr_set_name(id:QWORD;name:PChar):Integer;
 //int  thr_create(ucontext_t *ctx, long *id, int flags);
 //int  thr_kill2(pid_t pid, long id, int sig);
 
+function  amd64_set_fsbase(base:Pointer):Integer;
+
 implementation
 
 uses
@@ -74,6 +76,12 @@ end;
 function thr_set_name(id:QWORD;name:PChar):Integer; assembler; nostackframe;
 asm
  movq  sys_thr_set_name,%rax
+ call  fast_syscall
+end;
+
+function amd64_set_fsbase(base:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  sys_amd64_set_fsbase,%rax
  call  fast_syscall
 end;
 

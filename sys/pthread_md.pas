@@ -6,54 +6,66 @@ unit pthread_md;
 interface
 
 uses
+ thr,
  kern_thread;
 
 const
- KSE_STACKSIZE=16384;
- DTV_OFFSET   =8;
+ DTV_OFFSET=8;
 
 type
- p_kcb=^kcb;
  p_tcb=^tcb;
-
- kcb=packed record
-  kcb_curtcb:p_tcb;
-  kcb_self  :p_kcb;
-  kcb_kse   :Pointer; //kse
-  //kcb_kmbx:kse_mailbox;
- end;
-
  tcb=packed record
   tcb_self  :Pointer;
   tcb_dtv   :Pointer;
   tcb_thread:Pointer;
   tcb_spare :Pointer;
-  //tcb_tmbx:kse_thr_mailbox
  end;
 
-function _get_curthread:Pointer;
+procedure _tcb_set(tcb:p_tcb);
+function  _tcb_get:p_tcb;
+function  _get_curthread:Pointer;
 
 implementation
 
-function _kcb_curtcb:p_tcb; assembler; nostackframe;
+function TCB_GET64:p_tcb; assembler; nostackframe;
 asm
  movqq %gs:teb.tcb,Result
 end;
 
-function _get_curthread:Pointer; inline;
-var
- tcb:p_tcb;
+procedure _tcb_set(tcb:p_tcb); inline;
 begin
- tcb:=_kcb_curtcb;
- if (tcb<>nil) then
+ amd64_set_fsbase(tcb);
+end;
+
+function _tcb_get:p_tcb; inline;
+begin
+ Result:=TCB_GET64;
+end;
+
+function _get_curthread:Pointer; inline;
+begin
+ Result:=TCB_GET64^.tcb_thread;
+end;
+
+function _tcb_ctor(thread:Pointer;initial:Integer):p_tcb;
+begin
+ if (initial<>0) then
  begin
-  Result:=tcb^.tcb_thread;
+  Result:=TCB_GET64;
  end else
  begin
-  Result:=nil;
+  //Result:=_rtld_allocate_tls(nil,sizeof(tcb),16);
+ end;
+ if (Result<>nil) then
+ begin
+  Result^.tcb_thread:=thread;
  end;
 end;
 
+procedure _tcb_dtor(tcb:p_tcb);
+begin
+ //_rtld_free_tls(tcb,sizeof(tcb),16);
+end;
 
 
 end.
