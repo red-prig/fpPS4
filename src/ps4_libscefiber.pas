@@ -56,6 +56,7 @@ type
     _unknown1        :array[0..87] of Byte; // 232
     sizeContextMirror:QWord;                // 240
     addrContextEnd   :Pointer;              // 248 - Point to the start of "stack", probably?
+    _unknown2        :DWord;                // 252
     sig2             :DWord;                // 256 - Signature = $B37592A0
    end;
 
