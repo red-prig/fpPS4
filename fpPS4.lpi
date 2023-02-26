@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="135">
+    <Units Count="138">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -620,6 +620,21 @@
         <Filename Value="src\audiodec\ps4_libsceaudiodeccpu.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit134>
+      <Unit135>
+        <Filename Value="src\ps4_libscefiber.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceFiber"/>
+      </Unit135>
+      <Unit136>
+        <Filename Value="src\ps4_libscedepth.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDepth"/>
+      </Unit136>
+      <Unit137>
+        <Filename Value="src\np\ps4_libscenptus.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpTus"/>
+      </Unit137>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

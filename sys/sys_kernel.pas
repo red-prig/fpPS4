@@ -122,17 +122,18 @@ implementation
 
 uses
  ntapi,
+ ps4_libscefiber,
  sys_pthread,
  sys_signal,
  sys_time;
 
 function SysLogPrefix : string;
-begin      
- // Add thread name and id as prefix to log messages
+begin
+ // Add thread+fiber name and id as prefix to log messages
  Result := '';
  if _get_curthread <> nil then
  begin
-  Result:='['+_get_curthread^.name + ':'+ IntToStr(_get_curthread^.ThreadId) + '] ';
+  Result:='['+_get_curthread^.name + ':'+ IntToStr(_get_curthread^.ThreadId) + '] ' + GetFiberString;
  end;
 end;
 
