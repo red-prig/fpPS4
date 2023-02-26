@@ -6,7 +6,6 @@ uses
  signal,
  ucontext,
  _umtx,
- kern_umtx,
  sys_umtx,
  time,
  kern_time,
@@ -18,10 +17,12 @@ uses
  trap,
  sys_sig,
  md_psl,
- pthread_md,
+ kern_umtx,
  thr_init,
  thr_error,
- sysutils;
+ pthread_md,
+ sysutils,
+ errno;
 
 var
  mtx:umutex;
