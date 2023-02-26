@@ -1,11 +1,9 @@
 unit kern_cpuset;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
-
-uses
- trap;
 
 type
  p_cpuset_t=^cpuset_t;
@@ -31,27 +29,47 @@ uses
 function sys_cpuset_getaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
 var
  td:p_kthread;
+ old:QWORD;
 begin
  if (cpusetsize<SizeOf(cpuset_t)) then Exit(ERANGE);
 
  if (level<>CPU_LEVEL_WHICH) then Exit(EINVAL);
- if (level<>CPU_WHICH_TID)   then Exit(EINVAL);
 
- if (int64(id)=-1) then
- begin
-  td:=curkthread;
-  thread_inc_ref(td);
- end else
- begin
-  td:=tdfind(id);
+ Case which of
+  CPU_WHICH_TID:
+    begin
+     if (int64(id)=-1) then
+     begin
+      td:=curkthread;
+      thread_inc_ref(td);
+     end else
+     begin
+      td:=tdfind(id);
+     end;
+
+     if (td=nil) then Exit(ESRCH);
+
+     old:=td^.td_cpuset;
+
+     thread_dec_ref(td);
+    end;
+  CPU_WHICH_PID:
+    begin
+     if (int64(id)=-1) or (id=g_pid) then
+     begin
+      Result:=cpuset_getproc(old);
+      if (Result<>0) then Exit(ESRCH);
+     end else
+     begin
+      Exit(ESRCH);
+     end;
+    end;
+  else
+    Exit(EINVAL);
  end;
 
- if (td=nil) then Exit(ESRCH);
-
- Result:=copyout(@td^.td_cpuset,mask,SizeOf(QWORD));
+ Result:=copyout(@old,mask,SizeOf(QWORD));
  if (Result<>0) then Result:=EFAULT;
-
- thread_dec_ref(td);
 end;
 
 function sys_cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
@@ -62,31 +80,46 @@ begin
  if (cpusetsize<SizeOf(cpuset_t)) then Exit(ERANGE);
 
  if (level<>CPU_LEVEL_WHICH) then Exit(EINVAL);
- if (level<>CPU_WHICH_TID)   then Exit(EINVAL);
-
- if (int64(id)=-1) then
- begin
-  td:=curkthread;
-  thread_inc_ref(td);
- end else
- begin
-  td:=tdfind(id);
- end;
-
- if (td=nil) then Exit(ESRCH);
 
  Result:=copyin(mask,@new,SizeOf(QWORD));
+ if (Result<>0) then Exit(EFAULT);
 
- if (Result<>0) then
- begin
-  Result:=EFAULT;
- end else
- begin
-  Result:=cpuset_setaffinity(td,new);
-  if (Result<>0) then Result:=ESRCH;
+ Case which of
+  CPU_WHICH_TID:
+    begin
+     if (int64(id)=-1) then
+     begin
+      td:=curkthread;
+      thread_inc_ref(td);
+     end else
+     begin
+      td:=tdfind(id);
+     end;
+
+     if (td=nil) then Exit(ESRCH);
+
+     Result:=cpuset_setaffinity(td,new);
+     if (Result<>0) then Result:=ESRCH;
+
+     thread_dec_ref(td);
+    end;
+  CPU_WHICH_PID:
+    begin
+     begin
+      if (int64(id)=-1) or (id=g_pid) then
+      begin
+       Result:=cpuset_setproc(new);
+       if (Result<>0) then Result:=ESRCH;
+      end else
+      begin
+       Exit(ESRCH);
+      end;
+     end;
+    end
+  else
+    Exit(EINVAL);
  end;
 
- thread_dec_ref(td);
 end;
 
 end.

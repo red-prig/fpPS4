@@ -18,6 +18,7 @@ uses
  trap,
  sys_sig,
  md_psl,
+ pthread_md,
  sysutils;
 
 var

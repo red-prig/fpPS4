@@ -14,10 +14,15 @@ uses
  sys_kernel,
  kern_thread;
 
+var
+ g_pid:DWORD=0;
+
 function  cpu_thread_alloc(td:p_kthread):Integer;
 function  cpu_thread_free(td:p_kthread):Integer;
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+function  cpuset_setproc(new:Ptruint):Integer;
+function  cpuset_getproc(var old:Ptruint):Integer;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 function  cpu_getstack(td:p_kthread):QWORD;
@@ -169,6 +174,26 @@ function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 begin
  td^.td_cpuset:=new;
  Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));
+end;
+
+function cpuset_setproc(new:Ptruint):Integer;
+begin
+ Result:=NtSetInformationProcess(NtCurrentProcess,ProcessAffinityMask,@new,SizeOf(QWORD));
+end;
+
+function cpuset_getproc(var old:Ptruint):Integer;
+var
+ info:PROCESS_BASIC_INFORMATION;
+begin
+ Result:=NtQueryInformationProcess(NtCurrentProcess,
+                                   ProcessBasicInformation,
+                                   @info,
+                                   SizeOf(PROCESS_BASIC_INFORMATION),
+                                   nil);
+ if (Result=0) then
+ begin
+  old:=info.AffinityMask;
+ end;
 end;
 
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer); inline;
@@ -434,6 +459,8 @@ begin
   PROC_UNLOCK;
 end;
 
+initialization
+ g_pid:=GetCurrentProcessId;
 
 end.
 

@@ -1,6 +1,7 @@
 unit sys_cpuset;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

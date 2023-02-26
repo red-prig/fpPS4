@@ -51,6 +51,7 @@ const
  ProcessIoCounters      =2;
  ProcessVmCounters      =3;
  ProcessTimes           =4;
+ ProcessAffinityMask    =21;
 
  FileStandardInformation  = 5;
  FilePositionInformation  =14;
@@ -144,6 +145,17 @@ type
   AffinityMask  :ULONG_PTR;
   Priority      :DWORD;
   BasePriority  :DWORD;
+ end;
+
+ PPROCESS_BASIC_INFORMATION=^PROCESS_BASIC_INFORMATION;
+ PROCESS_BASIC_INFORMATION=packed record
+  ExitStatus      :DWORD;
+  _align          :DWORD;
+  PebBaseAddress  :QWORD;
+  AffinityMask    :QWORD;
+  BasePriority    :QWORD;
+  UniqueProcessId :QWORD;
+  InheritedFromUPI:QWORD;
  end;
 
  PKERNEL_USER_TIMES=^KERNEL_USER_TIMES;
@@ -256,6 +268,13 @@ function NtQueryInformationProcess(
           ProcessInformation      :Pointer;
           ProcessInformationLength:ULONG;
           ReturnLength            :PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtSetInformationProcess(
+          ProcessHandle:THandle;
+          ProcessInformationClass:DWORD;
+          ProcessInformation:Pointer;
+          ProcessInformationLength:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetInformationThread(
