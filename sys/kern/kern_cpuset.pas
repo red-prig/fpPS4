@@ -21,8 +21,8 @@ function sys_cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_c
 implementation
 
 uses
+ errno,
  systm,
- sys_kernel,
  kern_thread,
  vm_machdep;
 

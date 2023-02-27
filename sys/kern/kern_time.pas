@@ -6,7 +6,6 @@ unit kern_time;
 interface
 
 uses
- sys_kernel,
  windows,
  ntapi,
  time;
@@ -20,6 +19,9 @@ function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
 implementation
+
+uses
+ errno;
 
 Const
  UNIT_PER_SEC         =10000000;

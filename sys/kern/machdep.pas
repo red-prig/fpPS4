@@ -9,8 +9,7 @@ uses
  signal,
  signalvar,
  ucontext,
- kern_thread,
- sys_kernel;
+ kern_thread;
 
 const
  _ucodesel=(8 shl 3) or 3;
@@ -24,6 +23,7 @@ function  sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
 implementation
 
 uses
+ errno,
  systm,
  md_psl,
  kern_sig,

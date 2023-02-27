@@ -6,7 +6,7 @@ unit sys_umtx;
 interface
 
 uses
- sys_kernel,
+ errno,
  time,
  _umtx;
 

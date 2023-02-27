@@ -11,7 +11,6 @@ uses
  md_psl,
  ucontext,
  trap,
- sys_kernel,
  kern_thread;
 
 var
@@ -27,7 +26,7 @@ procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 function  cpu_getstack(td:p_kthread):QWORD;
 
-procedure ipi_sigreturn(unlock:Integer);
+procedure ipi_sigreturn;
 function  ipi_send_cpu(td:p_kthread):Integer;
 
 function  _umtxq_alloc:THandle; inline;
@@ -41,6 +40,7 @@ function  wakeup_td(td:p_kthread):Integer; inline;
 implementation
 
 uses
+ errno,
  systm,
  machdep,
  signal,
@@ -248,7 +248,7 @@ begin
  end;
 end;
 
-procedure ipi_sigreturn(unlock:Integer);
+procedure ipi_sigreturn;
 var
  _Context:array[0..SizeOf(TCONTEXT)+14] of Byte;
  Context :PCONTEXT;
@@ -286,11 +286,6 @@ begin
  Context^.SegCs:=KGDT64_R3_CODE  or RPL_MASK;
  Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
  Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
-
- if (unlock<>0) then
- begin
-  sig_cli;
- end;
 
  NtContinue(Context,False);
 end;
@@ -364,7 +359,7 @@ begin
  begin
   NtResumeThread(td_handle,nil);
   w.QuadPart:=-10000;
-  SwDelayExecution(False,@w); //100ms
+  NtDelayExecution(False,@w); //100ms
   goto tryagain;
  end;
 

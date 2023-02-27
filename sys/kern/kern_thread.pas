@@ -8,7 +8,6 @@ interface
 uses
  ntapi,
  windows,
- sys_kernel,
  ucontext,
  signal,
  signalvar,
@@ -239,6 +238,7 @@ implementation
 
 uses
  gtailq,
+ errno,
  systm,
  vm_machdep,
  kern_rwlock,

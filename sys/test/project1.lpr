@@ -175,18 +175,19 @@ begin
 
   sigaction(SIGUSR1,@act,nil,0);
 
-  //thr_kill(tid,SIGUSR1);
-  thr_wake(tid);
+  thr_kill(tid,SIGUSR1);
+  //thr_wake(tid);
  end else
  begin
-  Writeln('thr_suspend:',thr_suspend(nil));
+  //Writeln('thr_suspend:',thr_suspend(nil));
+
   {
   oset.qwords[0]:=QWORD(-1);
   oset.qwords[1]:=QWORD(-1);
   Writeln('sigwait:',sigwait(@oset,@_sig));
   Writeln('intr:',_sig);
   }
-  {
+
   Writeln('before: sptr:',HexStr(sptr));
   repeat
    asm
@@ -195,7 +196,6 @@ begin
   until (intr<>0);
   Writeln('intr');
   Writeln('after: sptr:',HexStr(sptr));
-  }
  end;
 
  sig_lock;
@@ -611,6 +611,9 @@ var
 
 begin
  //test_map;
+
+ e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
+ Writeln('me=',e);
 
  kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
  writeln(_time/10000000:0:3);

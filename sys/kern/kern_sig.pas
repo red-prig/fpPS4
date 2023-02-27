@@ -7,7 +7,6 @@ interface
 
 uses
  gtailq,
- sys_kernel,
  time,
  signal,
  signalvar,
@@ -100,6 +99,7 @@ implementation
 
 uses
  ntapi,
+ errno,
  systm,
  kern_mtx,
  kern_time,

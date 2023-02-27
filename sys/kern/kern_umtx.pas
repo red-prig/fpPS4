@@ -10,10 +10,8 @@ uses
  kern_rwlock,
  time,
  kern_time,
-
  kern_thread,
- _umtx,
- sys_kernel;
+ _umtx;
 
 procedure _umutex_init(mtx:p_umutex); inline;
 
@@ -35,6 +33,7 @@ implementation
 
 uses
  HAMT,
+ errno,
  systm,
  trap,
  vm_machdep;

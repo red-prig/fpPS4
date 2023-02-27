@@ -258,6 +258,7 @@ procedure fast_syscall; assembler; nostackframe;
 label
  _after_call,
  _doreti,
+ _fail,
  _ast,
  _doreti_exit;
 asm
@@ -265,11 +266,18 @@ asm
  pushq %rbp
  movq  %rsp,%rbp
 
- lock orl SIG_STI_LOCK,%gs:teb.iflag //lock interrupt
+ movqq %rax,-16(%rsp) //save rax
 
- movqq %rax,-16(%rsp)  //save rax
+ lahf //load to AH
+ shr   $8,%rax
+ andl  $0xFF,%rax //filter
+ movqq %rax,-8(%rsp) //save flags
 
  movqq %gs:teb.thread,%rax //curkthread
+ test  %rax,%rax
+ jz    _fail
+
+ lock orl SIG_STI_LOCK,%gs:teb.iflag //lock interrupt
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 
@@ -307,12 +315,13 @@ asm
  movqq -16(%rsp),%r11 //get rax
  movqq %r11,trapframe.tf_rax(%rax)
 
- pushfq     //push FLAGS
- popq  %r11 //get  FLAGS
+ movqq -8(%rsp),%r11 //get flags
  movqq %r11,trapframe.tf_rflags(%rax)
 
  movqq %gs:teb.thread,%rsp          //curkthread
- movqq kthread.td_kstack(%rsp),%rsp //td_kstack
+ movqq kthread.td_kstack(%rsp),%rsp //td_kstack (Implicit lock interrupt)
+
+ lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag //unlock interrupt
 
  andq $-32,%rsp //align stack
 
@@ -329,26 +338,41 @@ asm
  testl TDF_AST,kthread.td_flags(%rax)
  jne _ast
 
- movqq %gs:teb.thread,%rax         //curkthread
- movqq kthread.td_frame(%rax),%rax //td_frame
+ movqq %gs:teb.thread,%rcx         //curkthread
+ movqq kthread.td_frame(%rcx),%rcx //td_frame
 
  //Restore preserved registers.
- movqq trapframe.tf_rflags(%rax),%r11
- pushq %r11 //set FLAGS
- popfq      //pop FLAGS
+ movqq trapframe.tf_rflags(%rcx),%rax
+ shl   $8,%rax
+ sahf  //restore flags
 
- movqq trapframe.tf_rdi(%rax),%rdi
- movqq trapframe.tf_rsi(%rax),%rsi
- movqq trapframe.tf_rdx(%rax),%rdx
+ movqq trapframe.tf_rdi(%rcx),%rdi
+ movqq trapframe.tf_rsi(%rcx),%rsi
+ movqq trapframe.tf_rdx(%rcx),%rdx
+ movqq trapframe.tf_rax(%rcx),%rax
 
- movqq trapframe.tf_rsp(%rax),%rsp
- lea  -16(%rsp),%rsp //restore rsp
+ movqq trapframe.tf_rsp(%rcx),%r11
+ lea  -16(%r11),%r11
 
- movqq trapframe.tf_rax(%rax),%rax //restore rax
+ movqq %r11,%rsp //restore rsp (Implicit unlock interrupt)
 
- lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag //unlock interrupt
+ movqq $0,%rcx
+ movqq $0,%r11
 
  //epilog (debugger)
+ popq  %rbp
+ ret
+
+ //fail:
+ _fail:
+
+ movqq -8(%rsp),%rax //get flags
+ shl   $8,%rax
+ or    $1,%ah //CF
+ sahf  //restore flags
+
+ movqq $14,%rax //EFAULT
+
  popq  %rbp
  ret
 
@@ -371,9 +395,7 @@ asm
  _doreti_exit:
 
   //Restore full.
-  xor   %rdi,%rdi
-  inc   %rdi
-  call  ipi_sigreturn //1
+  call  ipi_sigreturn
   hlt
 end;
 
@@ -406,8 +428,7 @@ asm
   jmp _ast
 
  _ast_exit:
-  xor   %rdi,%rdi
-  call  ipi_sigreturn //0
+  call  ipi_sigreturn
   hlt
 end;
 
