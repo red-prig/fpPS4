@@ -289,6 +289,7 @@ asm
  movqq   $0,trapframe.tf_rcx(%rax)
  movqq %r8 ,trapframe.tf_r8 (%rax)
  movqq %r9 ,trapframe.tf_r9 (%rax)
+ movqq %r11,trapframe.tf_rax(%rax)
  movqq %rbx,trapframe.tf_rbx(%rax)
  movqq %r10,trapframe.tf_r10(%rax)
  movqq   $0,trapframe.tf_r11(%rax)
@@ -296,14 +297,12 @@ asm
  movqq %r13,trapframe.tf_r13(%rax)
  movqq %r14,trapframe.tf_r14(%rax)
  movqq %r15,trapframe.tf_r15(%rax)
+ movqq %rcx,trapframe.tf_rflags(%rax)
 
  movqq $0,trapframe.tf_trapno(%rax)
  movqq $0,trapframe.tf_addr  (%rax)
  movqq $0,trapframe.tf_flags (%rax)
  movqq $5,trapframe.tf_err   (%rax) //sizeof(call $32)
-
- //get rax
- movqq %r11,trapframe.tf_rax(%rax)
 
  movqq (%rsp),%r11 //get prev rbp
  movqq %r11,trapframe.tf_rbp(%rax)
@@ -314,9 +313,6 @@ asm
 
  movqq 8(%rsp),%r11 //get prev rip
  movqq %r11,trapframe.tf_rip(%rax)
-
- //get flags
- movqq %rcx,trapframe.tf_rflags(%rax)
 
  movqq %gs:teb.thread,%rsp          //curkthread
  movqq kthread.td_kstack(%rsp),%rsp //td_kstack (Implicit lock interrupt)
@@ -371,6 +367,7 @@ asm
  sahf  //restore flags
 
  movqq $14,%rax //EFAULT
+ movqq  $0,%rdx
  movqq  $0,%rcx
  movqq  $0,%r11
 

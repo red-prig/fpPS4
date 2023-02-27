@@ -29,7 +29,8 @@ function  amd64_set_fsbase(base:Pointer):Integer;
 implementation
 
 uses
- trap;
+ trap,
+ thr_error;
 
 function thr_new(param:p_thr_param;param_size:Integer):Integer;
 begin
@@ -40,6 +41,7 @@ begin
  asm
   movq  sys_thr_new,%rax
   call  fast_syscall
+  jmp   cerror
  end;
 end;
 
@@ -47,30 +49,35 @@ function thr_self(id:PQWORD):Integer; assembler; nostackframe;
 asm
  movq  sys_thr_self,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 procedure thr_exit(state:PQWORD); assembler; nostackframe;
 asm
  movq  sys_thr_exit,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 function thr_kill(id:QWORD;sig:Integer):Integer; assembler; nostackframe;
 asm
  movq  sys_thr_kill,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 function thr_suspend(timeout:ptimespec):Integer; assembler; nostackframe;
 asm
  movq  sys_thr_suspend,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 function thr_wake(id:QWORD):Integer; assembler; nostackframe;
 asm
  movq  sys_thr_wake,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 function thr_set_name(id:QWORD;name:PChar):Integer; assembler; nostackframe;
@@ -83,6 +90,7 @@ function amd64_set_fsbase(base:Pointer):Integer; assembler; nostackframe;
 asm
  movq  sys_amd64_set_fsbase,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 end.

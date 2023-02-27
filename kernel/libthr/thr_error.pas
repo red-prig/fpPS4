@@ -15,6 +15,7 @@ var
 
 procedure hmqw8GlN_tI(base:Pointer;size:QWORD); //hmqw8GlN+tI
 function  __error:PInteger;
+procedure cerror;
 
 implementation
 
@@ -58,6 +59,20 @@ begin
  Result:=@g_errno;
 end;
 
+procedure cerror; assembler; nostackframe;
+label
+ _err;
+asm
+ jc _err
+ ret
+ _err:
+ push %rax
+ call __error
+ pop  %rcx
+ mov  %ecx,(%rax)
+ mov  $-1,%rax
+ mov  $-1,%rdx
+end;
 
 end.
 

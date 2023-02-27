@@ -24,16 +24,21 @@ function cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuse
 
 implementation
 
+uses
+ thr_error;
+
 function cpuset_getaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer; assembler; nostackframe;
 asm
  movq  sys_cpuset_getaffinity,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 function cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer; assembler; nostackframe;
 asm
  movq  sys_cpuset_setaffinity,%rax
  call  fast_syscall
+ jmp   cerror
 end;
 
 

@@ -613,7 +613,7 @@ begin
  //test_map;
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
- Writeln('me=',e);
+ Writeln('me=',e,' _errno:',__error^);
 
  kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
  writeln(_time/10000000:0:3);
