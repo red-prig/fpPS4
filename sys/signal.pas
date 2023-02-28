@@ -82,13 +82,19 @@ const
  SI_KERNEL =$10006;
  SI_LWP    =$10007;  // Signal sent by thr_kill
 
+ //mc_fpformat
+ _MC_FPFMT_NODEV=$10000; // device not present or configured
  _MC_FPFMT_XMM  =$10002;
- _MC_FPOWNED_FPU=$20001; // FP state came from FPU
+
+ //mc_ownedfp
+ _MC_FPOWNED_NONE=$20000; // FP state not used
+ _MC_FPOWNED_FPU =$20001; // FP state came from FPU
+ _MC_FPOWNED_PCB =$20002; // FP state came from PCB
 
  //mc_flags bits. Shall be in sync with TF_XXX.
- _MC_HASSEGS    =$1;
- _MC_HASBASES   =$2;
- _MC_HASFPXSTATE=$4;
+ _MC_HASSEGS    =$1; //mc_ds,mc_es,mc_fs,mc_gs
+ _MC_HASBASES   =$2; //mc_fsbase,mc_gsbase
+ _MC_HASFPXSTATE=$4; //xmm
  _MC_FLAG_MASK  =(_MC_HASSEGS or _MC_HASBASES or _MC_HASFPXSTATE);
 
  TF_HASSEGS    =$1;

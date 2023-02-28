@@ -43,6 +43,7 @@ uses
  errno,
  systm,
  machdep,
+ md_context,
  signal,
  kern_sig;
 
@@ -248,17 +249,39 @@ begin
  end;
 end;
 
+function alloca(size:qword):Pointer; sysv_abi_default; assembler; nostackframe;
+asm
+ movqq       %rsp,%rax
+ subq        %rdi,%rax
+ lea     -8(%rax),%rax
+ andq        $-32,%rax
+ movqq     (%rsp),%rdi
+ movqq       %rax,%rsp
+ lea    -32(%rsp),%rsp
+ jmp    %rdi
+end;
+
 procedure ipi_sigreturn;
 var
- _Context:array[0..SizeOf(TCONTEXT)+14] of Byte;
- Context :PCONTEXT;
+ td:p_kthread;
+ Context:PCONTEXT;
  regs:p_trapframe;
 begin
- regs:=curkthread^.td_frame;
- Context:=Align(@_Context,16);
+ td:=curkthread;
+ regs:=td^.td_frame;
 
- Context^:=Default(TCONTEXT);
- Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+ if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
+ begin
+  //xmm,ymm
+  Context:=alloca(GetContextSize(CONTEXT_ALLX));
+  Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
+ end else
+ begin
+  //simple
+  Context:=alloca(SizeOf(TCONTEXT)+15);
+  Context^:=Default(TCONTEXT);
+  Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+ end;
 
  Context^.Rdi:=regs^.tf_rdi;
  Context^.Rsi:=regs^.tf_rsi;
@@ -287,6 +310,15 @@ begin
  Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
  Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
 
+ //xmm,ymm
+ if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
+ begin
+  _set_fpcontext(Context,@td^.td_fpstate);
+
+  regs^.tf_flags:=regs^.tf_flags and (not TF_HASFPXSTATE);
+ end;
+ //xmm,ymm
+
  NtContinue(Context,False);
 end;
 
@@ -297,7 +329,6 @@ label
 var
  td_handle:THandle;
  iflag    :PInteger;
- _Context :array[0..SizeOf(TCONTEXT)+14] of Byte;
  Context  :PCONTEXT;
  w:LARGE_INTEGER;
  sf:sigframe;
@@ -309,7 +340,6 @@ begin
  Result   :=0;
  td_handle:=td^.td_handle;
  iflag    :=cpu_get_iflag(td);
- Context  :=Align(@_Context,16);
 
  PROC_LOCK;
 
@@ -340,8 +370,9 @@ begin
   goto resume;
  end;
 
- Context^:=Default(TCONTEXT);
- Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+ Context:=alloca(GetContextSize(CONTEXT_ALLX));
+
+ Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
 
  if (NtGetContextThread(td_handle,Context)<>STATUS_SUCCESS) then
  begin
@@ -424,6 +455,15 @@ begin
 
  sf.sf_uc.uc_mcontext.mc_fsbase:=QWORD(td^.pcb_fsbase);
  sf.sf_uc.uc_mcontext.mc_gsbase:=QWORD(td^.pcb_gsbase);
+
+ sf.sf_uc.uc_mcontext.mc_flags:=_MC_HASSEGS or _MC_HASBASES or _MC_HASFPXSTATE;
+
+ //xmm,ymm
+ _get_fpcontext(Context,@sf.sf_uc.uc_mcontext.mc_fpstate);
+
+ sf.sf_uc.uc_mcontext.mc_fpformat:=_MC_FPFMT_XMM;
+ sf.sf_uc.uc_mcontext.mc_ownedfp :=_MC_FPOWNED_FPU;
+ //xmm,ymm
 
  sp:=QWORD(td^.td_kstack);
 

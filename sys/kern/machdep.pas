@@ -29,6 +29,37 @@ uses
  kern_sig,
  trap;
 
+function get_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
+begin
+ Result:=0;
+
+ mcp^.mc_flags   :=mcp^.mc_flags or _MC_HASFPXSTATE;
+ mcp^.mc_fpformat:=_MC_FPFMT_XMM;
+ mcp^.mc_ownedfp :=_MC_FPOWNED_FPU;
+
+ Move(td^.td_fpstate,xstate^,SizeOf(mcp^.mc_fpstate));
+end;
+
+function set_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
+begin
+ Result:=0;
+
+ if (mcp^.mc_fpformat=_MC_FPFMT_NODEV) then Exit(0);
+
+ if (mcp^.mc_fpformat<>_MC_FPFMT_XMM) then Exit(EINVAL);
+
+ if (mcp^.mc_ownedfp=_MC_FPOWNED_NONE) then Exit(0);
+
+ if (mcp^.mc_ownedfp=_MC_FPOWNED_FPU) or
+    (mcp^.mc_ownedfp=_MC_FPOWNED_PCB) then
+ begin
+  Move(xstate^,td^.td_fpstate,SizeOf(mcp^.mc_fpstate));
+  Exit(0);
+ end;
+
+ Exit(EINVAL);
+end;
+
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 var
  td:p_kthread;
@@ -38,23 +69,12 @@ var
  sp:QWORD;
  sig,oonstack:Integer;
 begin
- //char *xfpusave;
- //size_t xfpusave_len;
-
  td:=curkthread;
 
  sig:=ksi^.ksi_info.si_signo;
 
  regs:=td^.td_frame;
  oonstack:=sigonstack(regs^.tf_rsp);
-
- //if (cpu_max_ext_state_size > sizeof(struct savefpu) && use_xsave) {
- // xfpusave_len = cpu_max_ext_state_size - sizeof(struct savefpu);
- // xfpusave = __builtin_alloca(xfpusave_len);
- //} else {
- // xfpusave_len = 0;
- // xfpusave = NULL;
- //}
 
  // Save user context.
  sf:=Default(sigframe);
@@ -78,21 +98,30 @@ begin
 
  sf.sf_uc.uc_mcontext.mc_onstack:=oonstack;
 
+ //set segs
  regs^.tf_cs:=_ucodesel;
  regs^.tf_ds:=_udatasel;
  regs^.tf_ss:=_udatasel;
  regs^.tf_es:=_udatasel;
  regs^.tf_fs:=_ufssel;
  regs^.tf_gs:=_ugssel;
- regs^.tf_flags:=TF_HASSEGS;
+ regs^.tf_flags:=regs^.tf_flags or TF_HASSEGS;
+ //set segs
 
  Move(regs^,sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
 
  sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
 
- //get_fpcontext(td, &sf.sf_uc.uc_mcontext, xfpusave, xfpusave_len);
- //fpstate_drop(td);
+ //xmm,ymm
+ if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
+ begin
+  get_fpcontext(td,@sf.sf_uc.uc_mcontext,@sf.sf_uc.uc_mcontext.mc_fpstate);
 
+  regs^.tf_flags:=regs^.tf_flags and (not TF_HASFPXSTATE);
+ end;
+ //xmm,ymm
+
+ sf.sf_uc.uc_mcontext.mc_flags :=sf.sf_uc.uc_mcontext.mc_flags or _MC_HASBASES;
  sf.sf_uc.uc_mcontext.mc_fsbase:=QWORD(td^.pcb_fsbase);
  sf.sf_uc.uc_mcontext.mc_gsbase:=QWORD(td^.pcb_gsbase);
 
@@ -105,12 +134,6 @@ begin
  begin
   sp:=regs^.tf_rsp-128;
  end;
-
- //if (xfpusave != NULL) {
- // sp -= xfpusave_len;
- // sp = (char *)((unsigned long)sp & ~0x3Ful);
- // sf.sf_uc.uc_mcontext.mc_xfpustate = (register_t)sp;
- //}
 
  sp:=sp-sizeof(sigframe);
 
@@ -144,13 +167,6 @@ begin
   sigexit(td,SIGILL);
  end;
 
- //if  (xfpusave != NULL && copyout(xfpusave,
- //    (void *)sf.sf_uc.uc_mcontext.mc_xfpustate, xfpusave_len)
- //    != 0)) {
- // PROC_LOCK(p);
- // sigexit(td, SIGILL);
- //}
-
  regs^.tf_rsp:=QWORD(sfp);
  regs^.tf_rip:=QWORD(@sigcode);
  regs^.tf_rflags:=regs^.tf_rflags and (not (PSL_T or PSL_D));
@@ -167,9 +183,6 @@ var
  regs:p_trapframe;
  ucp:p_ucontext_t;
 begin
- //char *xfpustate;
- //size_t xfpustate_len;
-
  td:=curkthread;
 
  Result:=copyin(sigcntxp,@uc,sizeof(ucontext_t));
@@ -183,28 +196,15 @@ begin
 
  regs:=td^.td_frame;
 
- //if ((uc.uc_mcontext.mc_flags and _MC_HASFPXSTATE) <> 0) then
- //begin
- // xfpustate_len := uc.uc_mcontext.mc_xfpustate_len;
- // if (xfpustate_len > cpu_max_ext_state_size - sizeof(struct savefpu)) {
- //  return (EINVAL);
- // }
- // xfpustate := __builtin_alloca(xfpustate_len);
- // error := copyin((const void *)uc.uc_mcontext.mc_xfpustate,
- //     xfpustate, xfpustate_len);
- // if (error <> 0) {
- //  return (error);
- // }
- //end else
- //begin
- // xfpustate := NULL;
- // xfpustate_len := 0;
- //end;
+ //xmm,ymm
+ if ((uc.uc_mcontext.mc_flags and _MC_HASFPXSTATE)<>0) then
+ begin
+  Result:=set_fpcontext(td,@ucp^.uc_mcontext,@ucp^.uc_mcontext.mc_fpstate);
+  if (Result<>0) then Exit;
 
- //ret := set_fpcontext(td, &ucp^.uc_mcontext, xfpustate, xfpustate_len);
- //if (ret <> 0) {
- // return (ret);
- //}
+  regs^.tf_flags:=regs^.tf_flags or TF_HASFPXSTATE;
+ end;
+ //xmm,ymm
 
  Move(ucp^.uc_mcontext.mc_rdi,regs^,sizeof(trapframe));
 

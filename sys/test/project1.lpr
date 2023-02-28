@@ -22,7 +22,8 @@ uses
  thr_error,
  pthread_md,
  sysutils,
- errno;
+ errno,
+ md_context;
 
 var
  mtx:umutex;
@@ -157,6 +158,13 @@ end;
 var
  tid:QWORD;
 
+var
+ xmm0:array[0..15] of Byte=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+ xmm0_ptr:Pointer=@xmm0;
+
+ ymm0:array[0..31] of Byte=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+ ymm0_ptr:Pointer=@ymm0;
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
@@ -189,11 +197,29 @@ begin
   }
 
   Writeln('before: sptr:',HexStr(sptr));
+
+  asm
+   movqq xmm0_ptr,%rax
+   movdqu (%rax),%xmm0
+
+   movqq ymm0_ptr,%rax
+   vmovdqu (%rax),%ymm0
+  end;
+
   repeat
    asm
     pause
    end;
   until (intr<>0);
+
+  asm
+   movqq xmm0_ptr,%rax
+   movdqu %xmm0,(%rax)
+
+   movqq ymm0_ptr,%rax
+   vmovdqu %ymm0,(%rax)
+  end;
+
   Writeln('intr');
   Writeln('after: sptr:',HexStr(sptr));
  end;
