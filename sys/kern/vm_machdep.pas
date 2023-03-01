@@ -104,6 +104,7 @@ begin
 end;
 
 Const
+ SYS_STACK_RSRV=64*1024;
  SYS_STACK_SIZE=16*1024;
 
 function cpu_thread_alloc(td:p_kthread):Integer;
@@ -112,6 +113,19 @@ var
  size:ULONG_PTR;
 begin
  data:=nil;
+ size:=SYS_STACK_RSRV;
+
+ Result:=NtAllocateVirtualMemory(
+           NtCurrentProcess,
+           @data,
+           0,
+           @size,
+           MEM_RESERVE,
+           PAGE_READWRITE
+          );
+ if (Result<>0) then Exit;
+
+ data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;
  size:=SYS_STACK_SIZE;
 
  Result:=NtAllocateVirtualMemory(
@@ -119,7 +133,7 @@ begin
            @data,
            0,
            @size,
-           MEM_COMMIT or MEM_RESERVE,
+           MEM_COMMIT,
            PAGE_READWRITE
           );
 
@@ -133,7 +147,7 @@ var
  size:ULONG_PTR;
 begin
  data:=td^.td_kstack;
- data:=data-SYS_STACK_SIZE;
+ data:=data-SYS_STACK_RSRV;
  size:=0;
 
  Result:=NtFreeVirtualMemory(

@@ -277,7 +277,8 @@ asm
  test  %rax,%rax
  jz    _fail
 
- lock orl SIG_STI_LOCK,%gs:teb.iflag //lock interrupt
+ movqq kthread.td_kstack(%rax),%rsp //td_kstack (Implicit lock interrupt)
+ andq  $-32,%rsp //align stack
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 
@@ -304,22 +305,14 @@ asm
  movqq $0,trapframe.tf_flags (%rax)
  movqq $5,trapframe.tf_err   (%rax) //sizeof(call $32)
 
- movqq (%rsp),%r11 //get prev rbp
+ movqq (%rbp),%r11 //get prev rbp
  movqq %r11,trapframe.tf_rbp(%rax)
 
- movqq %rsp,%r11
- lea   16(%r11),%r11 //get prev rsp
+ lea   16(%rbp),%r11 //get prev rsp
  movqq %r11,trapframe.tf_rsp(%rax)
 
- movqq 8(%rsp),%r11 //get prev rip
+ movqq 8(%rbp),%r11 //get prev rip
  movqq %r11,trapframe.tf_rip(%rax)
-
- movqq %gs:teb.thread,%rsp          //curkthread
- movqq kthread.td_kstack(%rsp),%rsp //td_kstack (Implicit lock interrupt)
-
- lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag //unlock interrupt
-
- andq $-32,%rsp //align stack
 
  call amd64_syscall
 
