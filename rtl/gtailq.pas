@@ -33,6 +33,11 @@ procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
 procedure TAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
 procedure TAILQ_REMOVE     (head,elm,field:Pointer); inline;
 
+procedure LIST_INIT        (head:Pointer); inline;
+function  LIST_EMPTY       (head:Pointer):Boolean; inline;
+function  LIST_FIRST       (head:Pointer):Pointer; inline;
+function  LIST_NEXT        (elm,field:Pointer):Pointer; inline;
+
 implementation
 
 type
@@ -68,6 +73,30 @@ function TAILQ_NEXT(elm,field:Pointer):Pointer; inline;
 begin
  Result:=p_tq_entry(field)^.pNext;
 end;
+
+//
+
+procedure LIST_INIT(head:Pointer); inline;
+begin
+ PPointer(head)^:=nil;
+end;
+
+function LIST_EMPTY(head:Pointer):Boolean; inline;
+begin
+ Result:=PPointer(head)^=nil;
+end;
+
+function LIST_FIRST(head:Pointer):Pointer; inline;
+begin
+ Result:=PPointer(head)^;
+end;
+
+function LIST_NEXT(elm,field:Pointer):Pointer; inline;
+begin
+ Result:=PPointer(field)^;
+end;
+
+//
 
 procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
 var

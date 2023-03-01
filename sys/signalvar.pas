@@ -5,7 +5,7 @@ unit signalvar;
 interface
 
 uses
- _umtx,
+ kern_mtx,
  signal;
 
 type
@@ -19,7 +19,7 @@ type
   ps_siginfo   :sigset_t;
   ps_sigignore :sigset_t;
   ps_sigcatch  :sigset_t;
-  ps_mtx       :umtx;
+  ps_mtx       :mtx;
   ps_flag      :Integer;
  end;
 

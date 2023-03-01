@@ -210,7 +210,7 @@ function  curkthread:p_kthread;
 procedure set_curkthread(td:p_kthread);
 
 function  SIGPENDING(td:p_kthread):Boolean;
-function  TD_IS_RUNNING(td:p_kthread):Boolean; inline;
+function  TD_IS_RUNNING(td:p_kthread):Boolean;
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
@@ -248,7 +248,7 @@ uses
  kern_sig;
 
 var
- p_mtx:Pointer=nil;
+ p_mtx:mtx;
 
  tidhashtbl:TSTUB_HAMT32;
  tidhash_lock:Pointer=nil;
@@ -274,24 +274,24 @@ begin
          sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
 end;
 
-function TD_IS_RUNNING(td:p_kthread):Boolean; inline;
+function TD_IS_RUNNING(td:p_kthread):Boolean;
 begin
  Result:=td^.td_state=TDS_RUNNING
 end;
 
 procedure PROC_LOCK;
 begin
- mtx_lock(@p_mtx);
+ mtx_lock(p_mtx);
 end;
 
 procedure PROC_UNLOCK;
 begin
- mtx_unlock(@p_mtx);
+ mtx_unlock(p_mtx);
 end;
 
 procedure threadinit; inline;
 begin
- mtx_init(@p_mtx);
+ mtx_init(p_mtx);
  FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
 end;
 

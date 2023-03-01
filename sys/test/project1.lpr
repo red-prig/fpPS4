@@ -23,7 +23,8 @@ uses
  pthread_md,
  sysutils,
  errno,
- md_context;
+ md_context,
+ subr_sleepqueue;
 
 var
  mtx:umutex;

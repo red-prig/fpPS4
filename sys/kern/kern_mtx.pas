@@ -5,39 +5,34 @@ unit kern_mtx;
 
 interface
 
-uses
- windows,
- ntapi;
+type
+ mtx=TRTLCriticalSection;
 
-function mtx_init(m:PPointer):Integer;
-function mtx_destroy(m:PPointer):Integer;
-function mtx_lock(m:PPointer):Integer;
-function mtx_unlock(m:PPointer):Integer;
+procedure mtx_init(var m:mtx);
+procedure mtx_destroy(var m:mtx);
+procedure mtx_lock(var m:mtx);
+procedure mtx_unlock(var m:mtx);
 
 implementation
 
-function mtx_init(m:PPointer):Integer;
+procedure mtx_init(var m:mtx); inline;
 begin
- Result:=NtCreateMutant(
-           PHandle(m),
-           MUTANT_ALL_ACCESS,
-           nil,
-           False);
+ InitCriticalSection(m);
 end;
 
-function mtx_destroy(m:PPointer):Integer;
+procedure mtx_destroy(var m:mtx); inline;
 begin
- Result:=NtClose(THandle(m^));
+ DoneCriticalSection(m);
 end;
 
-function mtx_lock(m:PPointer):Integer;
+procedure mtx_lock(var m:mtx); inline;
 begin
- Result:=NtWaitForSingleObject(THandle(m^),False,nil);
+ EnterCriticalSection(m);
 end;
 
-function mtx_unlock(m:PPointer):Integer;
+procedure mtx_unlock(var m:mtx); inline;
 begin
- Result:=NtReleaseMutant(THandle(m^),nil);
+ LeaveCriticalSection(m);
 end;
 
 

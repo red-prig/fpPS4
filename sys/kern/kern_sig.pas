@@ -92,8 +92,8 @@ Function  kern_sigprocmask(td:p_kthread;
 
 procedure ast;
 
-function  ps_mtx_lock:Integer;
-function  ps_mtx_unlock:Integer;
+procedure ps_mtx_lock;
+procedure ps_mtx_unlock;
 
 implementation
 
@@ -104,8 +104,7 @@ uses
  kern_mtx,
  kern_time,
  vm_machdep,
- machdep,
- trap;
+ machdep;
 
 const
  max_pending_per_proc=128;
@@ -491,14 +490,14 @@ begin
  end;
 end;
 
-function ps_mtx_lock:Integer;
+procedure ps_mtx_lock; inline;
 begin
- Result:=mtx_lock(@p_sigacts.ps_mtx);
+ mtx_lock(p_sigacts.ps_mtx);
 end;
 
-function ps_mtx_unlock:Integer;
+procedure ps_mtx_unlock; inline;
 begin
- Result:=mtx_unlock(@p_sigacts.ps_mtx);
+ mtx_unlock(p_sigacts.ps_mtx);
 end;
 
 Function kern_sigaction(sig:Integer;
@@ -644,7 +643,7 @@ procedure siginit;
 var
  i:Integer;
 begin
- mtx_init(@p_sigacts.ps_mtx);
+ mtx_init(p_sigacts.ps_mtx);
 
  For i:=1 to NSIG do
  begin
