@@ -26,7 +26,8 @@ uses
  md_context,
  subr_sleepqueue,
  kern_thr,
- rtprio;
+ rtprio,
+ kern_condvar;
 
 var
  mtx:umutex;

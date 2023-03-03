@@ -49,7 +49,7 @@ function  sleepq_alloc:p_sleepqueue;
 procedure sleepq_free(sq:p_sleepqueue); inline;
 procedure sleepq_lock(wchan:Pointer);
 procedure sleepq_release(wchan:Pointer);
-procedure sleepq_add(wchan,lock:Pointer;flags,queue:Integer);
+procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);
 procedure sleepq_set_timeout(wchan:Pointer;time:Int64);
 function  sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD;
 procedure sleepq_wait(wchan:Pointer;pri:Integer);
@@ -159,7 +159,7 @@ begin
  HAMT_delete64(@sc^.sc_hamt,QWORD(wchan));
 end;
 
-procedure sleepq_add(wchan,lock:Pointer;flags,queue:Integer);
+procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);
 var
  td:p_kthread;
  sq:p_sleepqueue;
