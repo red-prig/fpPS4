@@ -6,7 +6,7 @@ unit kern_sig;
 interface
 
 uses
- gtailq,
+ mqueue,
  time,
  signal,
  signalvar,

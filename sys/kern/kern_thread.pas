@@ -6,8 +6,8 @@ unit kern_thread;
 interface
 
 uses
+ mqueue,
  kern_thr,
- gtailq,
  ntapi,
  windows,
  ucontext,

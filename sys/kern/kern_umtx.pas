@@ -6,7 +6,7 @@ unit kern_umtx;
 interface
 
 uses
- gtailq,
+ mqueue,
  kern_rwlock,
  time,
  kern_time,
@@ -61,7 +61,6 @@ type
 
  //per thread local
  umtx_q=packed record
-  //pNext,pPrev:p_umtx_q; //uq_link
   uq_link:packed record
    pNext:p_umtx_q;
    pPrev:PPointer;
@@ -75,15 +74,12 @@ type
   uq_cur_queue    :p_umtxq_queue;
  end;
 
- //umtxq_head=specialize TAILQ_HEAD<p_umtx_q>;
-
  //per mutex addr
  umtxq_queue=packed record
   head:packed record
    pFirst:p_umtx_q;
    pLast :PPointer;
   end;
-  //head    :umtxq_head;
   length  :Integer;
   align   :Integer;
  end;
@@ -237,7 +233,6 @@ begin
  uh:=umtxq_queue_lookup(key,UMTX_SHARED_QUEUE);
  if (uh<>nil) then
  begin
-  //first:=uh^.head.pHead; //TAILQ_FIRST
   first :=TAILQ_FIRST(@uh^.head);
   Result:=uh^.length;
  end;
@@ -268,7 +263,6 @@ begin
 
  uh:=umtxq_queue_lookup(uq^.uq_key,q);
 
- //uh^.head.Insert_tail(uq);
  TAILQ_INSERT_TAIL(@uh^.head,uq,@uq^.uq_link);
  Inc(uh^.length);
 
@@ -284,13 +278,11 @@ begin
  begin
   uh:=uq^.uq_cur_queue;
 
-  //uh^.head.Remove(uq); //uq_link
   TAILQ_REMOVE(@uh^.head,uq,@uq^.uq_link);
   Dec(uh^.length);
 
   uq^.uq_flags:=uq^.uq_flags and (not UQF_UMTXQ);
 
-  //if (uh^.head.pHead=nil) then //TAILQ_EMPTY
   if TAILQ_EMPTY(@uh^.head) then
   begin
    Assert(uh^.length=0,'inconsistent umtxq_queue length');
@@ -357,7 +349,6 @@ begin
  if (uh<>nil) then
  begin
   repeat
-   //uq:=uh^.head.pHead; //TAILQ_FIRST
    uq:=TAILQ_FIRST(@uh^.head);
    if (uq=nil) then Break;
 
@@ -1072,7 +1063,6 @@ begin
     pri:=UPRI(uq_first^.uq_thread);
    end;
 
-   //uq_first:=uq_first^.pNext;
    uq_first:=TAILQ_NEXT(uq_first,@uq_first^.uq_link);
   end;
 
@@ -1213,7 +1203,6 @@ begin
     pri:=UPRI(uq2^.uq_thread);
    end;
    uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
-   //uq2:=uq2^.pNext;
   end;
 
   if (pri>uq^.uq_inherited_pri) then
@@ -1245,7 +1234,6 @@ begin
     pri:=UPRI(uq2^.uq_thread);
    end;
    uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
-   //uq2:=uq2^.pNext;
   end;
 
   if (pri>uq^.uq_inherited_pri) then
@@ -1326,7 +1314,6 @@ begin
    pri:=UPRI(uq2^.uq_thread);
   end;
   uq2:=TAILQ_NEXT(uq2,@uq2^.uq_link);
-  //uq2:=uq2^.pNext;
  end;
 
  if (pri>uq^.uq_inherited_pri) then

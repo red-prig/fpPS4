@@ -6,7 +6,7 @@ unit subr_sleepqueue;
 interface
 
 uses
- gtailq,
+ mqueue,
  hamt,
  kern_mtx,
  kern_thr,

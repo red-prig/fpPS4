@@ -6,7 +6,7 @@ unit kern_thr;
 interface
 
 uses
- gtailq,
+ mqueue,
  ucontext,
  signal,
  signalvar;

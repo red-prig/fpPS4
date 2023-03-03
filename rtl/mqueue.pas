@@ -1,4 +1,4 @@
-unit gtailq;
+unit mqueue;
 
 {$mode ObjFPC}{$H+}
 

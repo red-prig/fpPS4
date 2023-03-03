@@ -2,7 +2,7 @@
 uses
  windows,
  atomic,
- ntapi,
+ ntapi, mqueue,
  signal,
  ucontext,
  _umtx,
