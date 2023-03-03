@@ -11,7 +11,7 @@ uses
  md_psl,
  ucontext,
  trap,
- kern_thread;
+ kern_thr;
 
 var
  g_pid:DWORD=0;
@@ -77,6 +77,13 @@ end;
 
 function msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
 begin
+ if (timo=0) then
+ begin
+  timo:=NT_INFINITE;
+ end else
+ begin
+  timo:=-timo;
+ end;
  sig_sta;
  Result:=ntw2px(NtWaitForSingleObject(h,True,@timo));
  sig_cla;
@@ -87,8 +94,15 @@ begin
  Result:=ntw2px(NtSetEvent(h,nil));
 end;
 
-function msleep_td(timo:Int64):Integer; inline;
+function msleep_td(timo:Int64):Integer;
 begin
+ if (timo=0) then
+ begin
+  timo:=NT_INFINITE;
+ end else
+ begin
+  timo:=-timo;
+ end;
  sig_sta;
  Result:=ntw2px(NtDelayExecution(True,@timo));
  sig_cla;

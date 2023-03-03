@@ -10,8 +10,9 @@ uses
  kern_rwlock,
  time,
  kern_time,
- kern_thread,
- _umtx;
+ kern_thr,
+ _umtx,
+ rtprio;
 
 procedure _umutex_init(mtx:p_umutex); inline;
 
@@ -36,7 +37,9 @@ uses
  errno,
  systm,
  trap,
- vm_machdep;
+ vm_machdep,
+ kern_thread,
+ sched_ule;
 
 const
  _UMUTEX_TRY =1;
@@ -490,7 +493,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=_do_lock_umtx(td,umtx,id,T_INFINITE);
+  Result:=_do_lock_umtx(td,umtx,id,0);
   if (Result=EINTR) then
   begin
    Result:=ERESTART;
@@ -613,7 +616,7 @@ begin
  end else
  if (timeout=nil) then
  begin
-  umtxq_sleep(uq,T_INFINITE);
+  umtxq_sleep(uq,0);
 
   umtxq_lock(uq^.uq_key);
   umtxq_remove(uq);
@@ -1442,7 +1445,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=_do_lock_umutex(td,m,flags,T_INFINITE,mode);
+  Result:=_do_lock_umutex(td,m,flags,0,mode);
   if (Result=EINTR) and (mode<>_UMUTEX_WAIT) then
   begin
    Result:=ERESTART;
@@ -1542,7 +1545,7 @@ begin
  begin
   if (timeout=nil) then
   begin
-   Result:=umtxq_sleep(uq,T_INFINITE);
+   Result:=umtxq_sleep(uq,0);
   end else
   begin
    if ((wflags and CVWAIT_ABSTIME)=0) then
@@ -2143,7 +2146,7 @@ begin
 
  if (timeout=nil) then
  begin
-  Result:=umtxq_sleep(uq,T_INFINITE);
+  Result:=umtxq_sleep(uq,0);
  end else
  begin
   ets:=get_unit_uptime;
@@ -2427,7 +2430,7 @@ begin
 
  if (uaddr2=nil) then
  begin
-  Result:=do_rw_rdlock(td,obj,val,T_INFINITE);
+  Result:=do_rw_rdlock(td,obj,val,0);
  end else
  begin
   Result:=umtx_copyin_timeout(uaddr2,@timeout);
@@ -2444,7 +2447,7 @@ begin
 
  if (uaddr2=nil) then
  begin
-  Result:=do_rw_wrlock(td,obj,val,T_INFINITE);
+  Result:=do_rw_wrlock(td,obj,val,0);
  end else
  begin
   Result:=umtx_copyin_timeout(uaddr2,@timeout);

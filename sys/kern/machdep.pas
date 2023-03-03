@@ -9,7 +9,7 @@ uses
  signal,
  signalvar,
  ucontext,
- kern_thread;
+ kern_thr;
 
 const
  _ucodesel=(8 shl 3) or 3;

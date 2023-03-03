@@ -5,24 +5,22 @@ unit gtailq;
 interface
 
 type
-// PTAILQ_NODE=^TAILQ_NODE;
-// TAILQ_NODE=packed record
-//  pNext,pPrev:Pointer;
-//  //
-// end;
-
- generic TAILQ_HEAD<PNODE>=object
-  pHead:PNODE;
-  procedure Insert_head(Node:PNODE);
-  procedure Insert_tail(Node:PNODE);
-  procedure Remove(Node:PNODE);
+ P_TAILQ_HEAD=^TAILQ_HEAD;
+ TAILQ_HEAD=packed record
+  tqh_first:Pointer;
+  tqh_last :PPointer;
  end;
 
- generic TAILQ_ENTRY<PNODE>=object
-  pHead,pTail:PNODE;
-  procedure Insert_head(Node:PNODE);
-  procedure Insert_tail(Node:PNODE);
-  procedure Remove(Node:PNODE);
+ P_TAILQ_ENTRY=^TAILQ_ENTRY;
+ TAILQ_ENTRY=packed record
+  tqe_next:Pointer;
+  tqe_prev:PPointer;
+ end;
+
+ P_LIST_ENTRY=^LIST_ENTRY;
+ LIST_ENTRY=packed record
+  le_next:Pointer;
+  le_prev:PPointer;
  end;
 
 procedure TAILQ_INIT       (head:Pointer); inline;
@@ -37,41 +35,70 @@ procedure LIST_INIT        (head:Pointer); inline;
 function  LIST_EMPTY       (head:Pointer):Boolean; inline;
 function  LIST_FIRST       (head:Pointer):Pointer; inline;
 function  LIST_NEXT        (elm,field:Pointer):Pointer; inline;
+procedure LIST_INSERT_HEAD (head,elm,field:Pointer); inline;
+procedure LIST_REMOVE      (elm,field:Pointer); inline;
 
 implementation
 
-type
- p_tq_list=^_tq_list;
- _tq_list=packed record
-  pFirst:Pointer;
-  pLast :PPointer;
- end;
-
- p_tq_entry=^_tq_entry;
- _tq_entry=packed record
-  pNext:Pointer;
-  pPrev:PPointer;
- end;
-
 procedure TAILQ_INIT(head:Pointer); inline;
 begin
- p_tq_list(head)^.pFirst:=nil;
- p_tq_list(head)^.pLast :=@p_tq_list(head)^.pFirst;
+ P_TAILQ_HEAD(head)^.tqh_first:=nil;
+ P_TAILQ_HEAD(head)^.tqh_last :=@P_TAILQ_HEAD(head)^.tqh_first;
 end;
 
 function TAILQ_EMPTY(head:Pointer):Boolean; inline;
 begin
- Result:=p_tq_list(head)^.pFirst=nil;
+ Result:=P_TAILQ_HEAD(head)^.tqh_first=nil;
 end;
 
 function TAILQ_FIRST(head:Pointer):Pointer; inline;
 begin
- Result:=p_tq_list(head)^.pFirst;
+ Result:=P_TAILQ_HEAD(head)^.tqh_first;
 end;
 
 function TAILQ_NEXT(elm,field:Pointer):Pointer; inline;
 begin
- Result:=p_tq_entry(field)^.pNext;
+ Result:=P_TAILQ_ENTRY(field)^.tqe_next;
+end;
+
+procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ if (P_TAILQ_ENTRY(field)^.tqe_next=P_TAILQ_HEAD(head)^.tqh_first) and
+    (P_TAILQ_HEAD(head)^.tqh_first<>nil) then
+ begin
+  offset:=ptruint(field-elm);
+  P_TAILQ_ENTRY(P_TAILQ_HEAD(head)^.tqh_first+offset)^.tqe_prev:=@P_TAILQ_ENTRY(field)^.tqe_next;
+ end else
+ begin
+  P_TAILQ_HEAD(head)^.tqh_last:=@P_TAILQ_ENTRY(field)^.tqe_next;
+ end;
+ P_TAILQ_HEAD(head)^.tqh_first:=elm;
+ P_TAILQ_ENTRY(field)^.tqe_prev:=@P_TAILQ_HEAD(head)^.tqh_first;
+end;
+
+procedure TAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
+begin
+ P_TAILQ_ENTRY(field)^.tqe_next:=nil;
+ P_TAILQ_ENTRY(field)^.tqe_prev:=P_TAILQ_HEAD(head)^.tqh_last;
+ P_TAILQ_HEAD(head)^.tqh_last^:=elm;
+ P_TAILQ_HEAD(head)^.tqh_last:=@P_TAILQ_ENTRY(field)^.tqe_next;
+end;
+
+procedure TAILQ_REMOVE(head,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ if (P_TAILQ_ENTRY(field)^.tqe_next<>nil) then
+ begin
+  offset:=ptruint(field-elm);
+  P_TAILQ_ENTRY(P_TAILQ_ENTRY(field)^.tqe_next+offset)^.tqe_prev:=P_TAILQ_ENTRY(field)^.tqe_prev;
+ end else
+ begin
+  P_TAILQ_HEAD(head)^.tqh_last:=P_TAILQ_ENTRY(field)^.tqe_prev;
+ end;
+ P_TAILQ_ENTRY(field)^.tqe_prev^:=P_TAILQ_ENTRY(field)^.tqe_next;
 end;
 
 //
@@ -93,156 +120,36 @@ end;
 
 function LIST_NEXT(elm,field:Pointer):Pointer; inline;
 begin
- Result:=PPointer(field)^;
+ Result:=P_LIST_ENTRY(field)^.le_next;
+end;
+
+procedure LIST_INSERT_HEAD(head,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ if (P_LIST_ENTRY(field)^.le_next=PPointer(head)^) and (PPointer(head)^<>nil) then
+ begin
+  offset:=ptruint(field-elm);
+  P_LIST_ENTRY(PPointer(head)^+offset)^.le_prev:=@P_LIST_ENTRY(field)^.le_next;
+ end;
+ PPointer(head)^:=elm;
+ P_LIST_ENTRY(field)^.le_prev:=head;
+end;
+
+procedure LIST_REMOVE(elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ if (P_LIST_ENTRY(field)^.le_next<>nil) then
+ begin
+  offset:=ptruint(field-elm);
+  P_LIST_ENTRY(P_LIST_ENTRY(field)^.le_next+offset)^.le_prev:=P_LIST_ENTRY(field)^.le_prev;
+ end;
+ P_LIST_ENTRY(field)^.le_prev:=@P_LIST_ENTRY(field)^.le_next;
 end;
 
 //
 
-procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
-var
- offset:ptruint;
-begin
- offset:=ptruint(field-elm);
- if (p_tq_entry(field)^.pNext=p_tq_list(head)^.pFirst) and
-    (p_tq_list(head)^.pFirst<>nil) then
- begin
-  p_tq_entry(p_tq_list(head)^.pFirst+offset)^.pPrev:=@p_tq_entry(field)^.pNext;
- end else
- begin
-  p_tq_list(head)^.pLast:=@p_tq_entry(field)^.pNext;
- end;
- p_tq_list(head)^.pFirst:=elm;
- p_tq_entry(field)^.pPrev:=@p_tq_list(head)^.pFirst;
-end;
-
-procedure TAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
-begin
- p_tq_entry(field)^.pNext:=nil;
- p_tq_entry(field)^.pPrev:=p_tq_list(head)^.pLast;
- p_tq_list(head)^.pLast^:=elm;
- p_tq_list(head)^.pLast:=@p_tq_entry(field)^.pNext;
-end;
-
-procedure TAILQ_REMOVE(head,elm,field:Pointer); inline;
-var
- offset:ptruint;
-begin
- offset:=ptruint(field-elm);
- if (p_tq_entry(field)^.pNext<>nil) then
- begin
-  p_tq_entry(p_tq_entry(field)^.pNext+offset)^.pPrev:=p_tq_entry(field)^.pPrev;
- end else
- begin
-  p_tq_list(head)^.pLast:=p_tq_entry(field)^.pPrev;
- end;
- p_tq_entry(field)^.pPrev^:=p_tq_entry(field)^.pNext;
-end;
-
-procedure TAILQ_HEAD.Insert_head(Node:PNODE);
-begin
- if (pHead=nil) then
- begin
-  node^.pNext:=nil;
- end else
- begin
-  node^.pNext:=pHead;
- end;
- pHead:=node;
-end;
-
-procedure TAILQ_HEAD.Insert_tail(Node:PNODE);
-var
- pTail:PNODE;
-begin
- if (pHead=nil) then
- begin
-  node^.pNext:=nil;
-  pHead:=node;
- end else
- begin
-  pTail:=pHead;
-  repeat
-   if (pTail^.pNext=nil) then Break;
-   pTail:=pTail^.pNext;
-  until false;
-
-  pTail^.pNext:=node;
-  node^.pPrev:=pTail;
-  node^.pNext:=nil;
- end;
-end;
-
-procedure TAILQ_HEAD.Remove(Node:PNODE);
-begin
- if (node^.pPrev=nil) then
- begin
-  if (pHead=node) then
-  begin
-   pHead:=node^.pNext;
-  end;
- end else
- begin
-  node^.pPrev^.pNext:=node^.pNext;
- end;
- if (node^.pNext<>nil) then
- begin
-  node^.pNext^.pPrev:=node^.pPrev;
- end;
-end;
-
-//
-
-procedure TAILQ_ENTRY.Insert_head(Node:PNODE);
-begin
- if (pHead=nil) then
- begin
-  pTail:=node;
-  node^.pNext:=nil;
- end else
- begin
-  node^.pNext:=pHead;
- end;
- pHead:=node;
-end;
-
-procedure TAILQ_ENTRY.Insert_tail(Node:PNODE);
-begin
- if (pTail=nil) then
- begin
-  pHead:=node;
-  node^.pPrev:=nil;
- end else
- begin
-  pTail^.pNext:=node;
-  node^.pPrev:=pTail;
- end;
- node^.pNext:=nil;
- pTail:=node;
-end;
-
-procedure TAILQ_ENTRY.Remove(Node:PNODE);
-begin
- if (node^.pPrev=nil) then
- begin
-  if (pHead=node) then
-  begin
-   pHead:=node^.pNext;
-  end;
- end else
- begin
-  node^.pPrev^.pNext:=node^.pNext;
- end;
- if (node^.pNext=nil) then
- begin
-  if (pTail=node) then
-  begin
-   pTail:=node^.pPrev;
-  end;
- end else
- begin
-  node^.pNext^.pPrev:=node^.pPrev;
- end;
-end;
 
 end.
 

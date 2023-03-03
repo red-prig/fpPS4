@@ -7,7 +7,7 @@ interface
 
 uses
  thr,
- kern_thread,
+ kern_thr,
  thr_private;
 
 const

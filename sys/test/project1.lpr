@@ -24,7 +24,9 @@ uses
  sysutils,
  errno,
  md_context,
- subr_sleepqueue;
+ subr_sleepqueue,
+ kern_thr,
+ rtprio;
 
 var
  mtx:umutex;
@@ -628,7 +630,7 @@ var
  v:Integer;
  n:Integer;
 
- prio:rtprio;
+ prio:t_rtprio;
 
  ktd:p_kthread;
 

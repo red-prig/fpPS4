@@ -10,9 +10,6 @@ uses
  ntapi,
  time;
 
-const
- T_INFINITE=NT_INFINITE;
-
 function get_unit_uptime:Int64;
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;

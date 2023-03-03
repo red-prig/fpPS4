@@ -6,6 +6,7 @@ unit kern_mtx;
 interface
 
 type
+ p_mtx=^mtx;
  mtx=TRTLCriticalSection;
 
 procedure mtx_init(var m:mtx);

@@ -7,11 +7,12 @@ interface
 
 uses
  time,
+ kern_thr,
  kern_thread;
 
 type
- p_thr_param=kern_thread.p_thr_param;
- thr_param  =kern_thread.thr_param;
+ p_thr_param=kern_thr.p_thr_param;
+ thr_param  =kern_thr.thr_param;
 
 function  thr_new(param:p_thr_param;param_size:Integer):Integer;
 function  thr_self(id:PQWORD):Integer;

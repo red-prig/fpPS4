@@ -66,7 +66,7 @@ end;
 
 function tvtohz(time:Int64):Int64; inline;
 begin
- Result:=-time;
+ Result:=time;
 end;
 
 end.

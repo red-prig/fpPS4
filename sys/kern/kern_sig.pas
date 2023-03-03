@@ -10,7 +10,8 @@ uses
  time,
  signal,
  signalvar,
- kern_thread;
+ kern_thr,
+ rtprio;
 
 const
  SA_KILL    =$01; // terminates process by default
@@ -83,6 +84,8 @@ procedure tdsignal(td:p_kthread;sig:Integer);
 procedure tdksignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo);
 procedure sigexit(td:p_kthread;sig:Integer);
 
+Function  cursig(td:p_kthread;stop_allowed:Integer):Integer;
+
 Function  kern_sigprocmask(td:p_kthread;
                            how:Integer;
                            _set:p_sigset_t;
@@ -103,8 +106,10 @@ uses
  systm,
  kern_mtx,
  kern_time,
+ kern_thread,
  vm_machdep,
- machdep;
+ machdep,
+ sched_ule;
 
 const
  max_pending_per_proc=128;
@@ -991,7 +996,7 @@ begin
  While (has_sig=0) do
  begin
   PROC_UNLOCK; //
-  while (msleep_td(T_INFINITE)=0) do;
+  while (msleep_td(0)=0) do;
   PROC_LOCK;   //
 
   //thread_suspend_check(0);
@@ -1347,9 +1352,7 @@ begin
   sched_prio(td,PUSER);
  end;
 
- //TD_ON_SLEEPQ(td) ((td)->td_wchan != NULL)
-
- if false{TD_ON_SLEEPQ(td)}  then
+ if TD_ON_SLEEPQ(td)  then
  begin
 
   if ((td^.td_flags and TDF_SINTR)=0) then

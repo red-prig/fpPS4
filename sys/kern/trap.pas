@@ -7,7 +7,7 @@ interface
 
 uses
  ucontext,
- kern_thread;
+ kern_thr;
 
 const
  T_PRIVINFLT = 1; // privileged instruction

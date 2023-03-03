@@ -23,6 +23,7 @@ implementation
 uses
  errno,
  systm,
+ kern_thr,
  kern_thread,
  vm_machdep;
 
