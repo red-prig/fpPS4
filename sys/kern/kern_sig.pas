@@ -109,7 +109,8 @@ uses
  kern_thread,
  vm_machdep,
  machdep,
- sched_ule;
+ sched_ule,
+ subr_sleepqueue;
 
 const
  max_pending_per_proc=128;
@@ -1339,9 +1340,7 @@ label
  _out;
 var
  prop:Integer;
- wakeup_swapper:Integer;
 begin
- wakeup_swapper:=0;
  prop:=sigprop(sig);
 
  PROC_LOCK;
@@ -1379,7 +1378,7 @@ begin
    sched_prio(td,PUSER);
   end;
 
-  //wakeup_swapper:=sleepq_abort(td,intrval);
+  sleepq_abort(td,intrval);
  end else
  begin
   if TD_IS_RUNNING(td) and (td<>curkthread) then
@@ -1391,8 +1390,6 @@ begin
  _out:
   PROC_UNLOCK;
   thread_unlock(td);
-  //if (wakeup_swapper)
-  // kick_proc0();
 end;
 
 procedure reschedule_signals(block:sigset_t;flags:Integer);

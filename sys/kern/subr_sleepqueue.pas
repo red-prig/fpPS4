@@ -56,8 +56,9 @@ procedure sleepq_wait(wchan:Pointer;pri:Integer);
 function  sleepq_wait_sig(wchan:Pointer;pri:Integer):Integer;
 function  sleepq_timedwait(wchan:Pointer;pri:Integer):Integer;
 function  sleepq_timedwait_sig(wchan:Pointer;pri:Integer):Integer;
-function  sleepq_type_(wchan:Pointer;pri:Integer):Integer;
+function  sleepq_get_type(wchan:Pointer;pri:Integer):Integer;
 function  sleepq_signal(wchan:Pointer;flags,pri,queue:Integer):Integer;
+function  sleepq_signalto(wchan:Pointer;flags,pri,queue:Integer;std:p_kthread):Integer;
 function  sleepq_broadcast(wchan:Pointer;flags,pri,queue:Integer):Integer;
 procedure sleepq_remove(td:p_kthread;wchan:Pointer);
 function  sleepq_abort(td:p_kthread;intrval:Integer):Integer;
@@ -443,7 +444,7 @@ begin
  Exit(rvalt);
 end;
 
-function sleepq_type_(wchan:Pointer;pri:Integer):Integer;
+function sleepq_get_type(wchan:Pointer;pri:Integer):Integer;
 var
  sq:p_sleepqueue;
 begin
@@ -537,6 +538,35 @@ begin
  thread_lock(besttd);
  Result:=sleepq_resume_thread(sq,besttd,pri);
  thread_unlock(besttd);
+end;
+
+function sleepq_signalto(wchan:Pointer;flags,pri,queue:Integer;std:p_kthread):Integer;
+var
+ td:p_kthread;
+ sq:p_sleepqueue;
+begin
+ Result:=-1;
+
+ Assert(wchan<>nil,'invalid nil wait channel');
+ Assert((queue>=0) and (queue<NR_SLEEPQS));
+
+ sq:=sleepq_lookup(wchan);
+ if (sq=nil) then Exit;
+
+ Assert(sq^.sq_type=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
+
+ td:=TAILQ_FIRST(@sq^.sq_blocked[queue]);
+ While (td<>nil) and (td<>std) do
+ begin
+  td:=TAILQ_NEXT(td,@td^.td_slpq);
+ end;
+
+ if (td=std) then
+ begin
+  thread_lock(std);
+  Result:=sleepq_resume_thread(sq,std,pri);
+  thread_unlock(std);
+ end;
 end;
 
 function sleepq_broadcast(wchan:Pointer;flags,pri,queue:Integer):Integer;
