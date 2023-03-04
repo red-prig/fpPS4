@@ -26,12 +26,17 @@ Const
  POW10_7              =10000000;
  POW10_9              =1000000000;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
 function get_unit_uptime:Int64;
 var
  pc:QWORD;
  pf:QWORD;
-
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
@@ -42,11 +47,7 @@ begin
   Result:=pc;
  end else
  begin
-  //DW0*10000000/pf + SHL_32* DW1*10000000/pf
-  DW0:=(DWORD(pc shr 00)*UNIT_PER_SEC) div pf;
-  DW1:=(DWORD(pc shr 32)*UNIT_PER_SEC) div pf;
-
-  Result:=DW0+(DW1 shl 32);
+  Result:=mul_div_u64(UNIT_PER_SEC,pf,pc);
  end;
 end;
 

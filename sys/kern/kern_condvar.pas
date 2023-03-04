@@ -95,7 +95,7 @@ begin
   sleepq_lock(cvp);
  end;
 
- sleepq_wait(cvp, 0);
+ sleepq_wait(cvp,0);
 
  lc_lock(lock);
 end;
@@ -112,7 +112,7 @@ begin
 
  Inc(cvp^.cv_waiters);
 
- sleepq_add(cvp,lock,cvp^.cv_description, SLEEPQ_CONDVAR, 0);
+ sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR,0);
  if IS_SLEEPABLE(lock) then
  begin
   sleepq_release(cvp);
@@ -168,7 +168,7 @@ begin
  Inc(cvp^.cv_waiters);
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR,0);
- sleepq_set_timeout(cvp, timo);
+ sleepq_set_timeout(cvp,timo);
 
  if IS_SLEEPABLE(lock) then
  begin

@@ -642,6 +642,8 @@ var
 begin
  //test_map;
 
+ get_unit_uptime;
+
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('me=',e,' _errno:',__error^);
 
