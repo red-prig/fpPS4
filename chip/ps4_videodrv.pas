@@ -452,7 +452,7 @@ begin
     //end;
    end else
    begin
-    time:=-50000;
+    time:=-1000;
     NtDelayExecution(True,@time);
     Continue;
    end;
