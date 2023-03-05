@@ -1019,6 +1019,17 @@ begin
     else;
    end;
 
+  COLOR_10_11_11: //R:11 G:11 B:10
+   Case NUMBER_TYPE of
+    NUMBER_FLOAT  :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    else;
+   end;
+
+  COLOR_11_11_10: //R:10 G:11 B:11
+   Case NUMBER_TYPE of
+    NUMBER_FLOAT  :Result:=VK_FORMAT_UNDEFINED; //Not directly handled to a vulkan
+    else;
+   end;
 
   else;
  end;
