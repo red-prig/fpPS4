@@ -177,10 +177,6 @@ begin
 end;
 
 function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
-var
- pc,pf:QWORD;
- TimeAdjustment,TimeIncrement:DWORD;
- TimeAdjustmentDisabled:BOOL;
 begin
  if (tp=nil) then Exit(_set_errno(EINVAL));
 
@@ -200,46 +196,29 @@ begin
   CLOCK_REALTIME_PRECISE,
   CLOCK_REALTIME_FAST:
    begin
-
-    TimeAdjustment:=0;
-    TimeIncrement:=0;
-    TimeAdjustmentDisabled:=false;
-
-    _sig_lock;
-    GetSystemTimeAdjustment(TimeAdjustment,TimeIncrement,TimeAdjustmentDisabled);
-    _sig_unlock;
-
     tp^.tv_sec :=0;
-    tp^.tv_nsec:=TimeIncrement*100;
-
-    if (tp^.tv_nsec<1) then
-    begin
-     tp^.tv_nsec:=1;
-    end;
-
+    tp^.tv_nsec:=100;
    end;
 
   CLOCK_MONOTONIC,
   CLOCK_MONOTONIC_PRECISE,
   CLOCK_MONOTONIC_FAST:
    begin
-
-    SwQueryPerformanceCounter(pc,pf);
-
     tp^.tv_sec :=0;
-    tp^.tv_nsec:=(POW10_9+(pf shr 1)) div pf;
-
-    if (tp^.tv_nsec<1) then
-    begin
-     tp^.tv_nsec:=1;
-    end;
-
+    tp^.tv_nsec:=100;
    end;
 
   else
    Result:=_set_errno(EINVAL);
  end;
 
+end;
+
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
 end;
 
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
@@ -256,7 +235,6 @@ begin
    SwGetSystemTimeAsFileTime(TFILETIME(pc));
    pc:=pc-DELTA_EPOCH_IN_100NS;
    tp^.tv_sec :=pc div POW10_7;
-   //tp^.tv_nsec:=(QWORD(pc) mod POW10_7)*100;
    tp^.tv_nsec:=0;
   end;
 
@@ -279,40 +257,12 @@ begin
   CLOCK_MONOTONIC_PRECISE,
   CLOCK_MONOTONIC_FAST:
    begin
-
-    //this stabilize timers, why? idk
-    //Int64(pc):=-100*100;
-    //SwDelayExecution(False,@pc); //100ms
-
     SwQueryPerformanceCounter(pc,pf);
 
-    tp^.tv_sec :=pc div pf;
-    tp^.tv_nsec:=((pc mod pf)*POW10_9+(pf shr 1)) div pf;
+    pc:=mul_div_u64(POW10_7,pf,pc);
 
-    if (tp^.tv_nsec>=POW10_9) then
-    begin
-     Inc(tp^.tv_sec);
-     Dec(tp^.tv_nsec,POW10_9);
-    end;
-
-    //tp^.tv_nsec:=(tp^.tv_nsec shr 8) shl 8;
-    //tp^.tv_nsec:=tp^.tv_nsec shr 2;
-
-    {
-    if (old_tp.tv_sec=tp^.tv_sec) then
-    begin
-     if (old_tp.tv_nsec>tp^.tv_nsec) then
-     begin
-      DebugBreak;
-     end;
-    end else
-    if (old_tp.tv_sec>tp^.tv_sec) then
-    begin
-     DebugBreak;
-    end;
-    old_tp:=tp^;
-    }
-
+    tp^.tv_sec :=(pc div POW10_7);
+    tp^.tv_nsec:=(pc mod POW10_7)*100;
    end;
 
   CLOCK_PROCTIME:
@@ -346,21 +296,17 @@ begin
 end;
 
 function ps4_sceKernelGetTscFrequency():QWORD; SysV_ABI_CDecl;
-var
- pc:QWORD;
 begin
- SwQueryPerformanceCounter(pc,Result);
+ Result:=POW10_7;
 end;
 
 function ps4_sceKernelReadTsc():QWORD; SysV_ABI_CDecl;
 var
- pf:QWORD;
+ pc,pf:QWORD;
 begin
- //this stabilize timers, why? idk
- //Int64(pf):=-100*100;
- //SwDelayExecution(False,@pf); //100ms
+ SwQueryPerformanceCounter(pc,pf);
 
- SwQueryPerformanceCounter(Result,pf);
+ Result:=mul_div_u64(POW10_7,pf,pc);
 end;
 
 function ps4_sceKernelClockGettime(clockId:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;

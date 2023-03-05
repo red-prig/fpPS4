@@ -67,7 +67,6 @@ uses
  ps4_elf,
  ps4_pthread,
  ps4_program,
- ps4_elf_tls,
 
  ps4_videodrv,
  vMemory,

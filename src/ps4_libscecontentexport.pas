@@ -9,9 +9,6 @@ uses
 
 implementation
 
-uses
- sys_types;
-
 const
  SCE_CONTENT_EXPORT_ERROR_CANCELED                    =$809D3001;
  SCE_CONTENT_EXPORT_ERROR_NOTACCEPT                   =$809D3002;
