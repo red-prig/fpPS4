@@ -5,6 +5,7 @@ unit vImage;
 interface
 
 uses
+ TypInfo,
  Vulkan,
  vDevice,
  vPipeline,
@@ -255,7 +256,7 @@ begin
   VK_FORMAT_BC7_SRGB_BLOCK       :Result:=16;
 
   else
-   Assert(false,'TODO');
+   Assert(false,'getFormatSize:TODO:'+GetEnumName(TypeInfo(TVkFormat),ord(cformat)));
  end;
 end;
 
