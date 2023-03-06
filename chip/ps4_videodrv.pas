@@ -319,21 +319,22 @@ end;
 const
  GpuCoreClockFrequency=800000000;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
 function GetGpuTickCount:QWORD;
 var
  pc,pf:QWORD;
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
  NtQueryPerformanceCounter(@pc,@pf);
 
- //DW0*GF/pf + SHL_32* DW1*GF/pf
-
- DW0:=(DWORD(pc shr 00)*GpuCoreClockFrequency) div pf;
- DW1:=(DWORD(pc shr 32)*GpuCoreClockFrequency) div pf;
-
- Result:=DW0+(DW1 shl 32);
+ Result:=mul_div_u64(GpuCoreClockFrequency,pf,pc);
 end;
 
 Function me_eop(node:pvMeEopInfo):Boolean;
@@ -452,7 +453,7 @@ begin
     //end;
    end else
    begin
-    time:=-50000;
+    time:=-1000;
     NtDelayExecution(True,@time);
     Continue;
    end;

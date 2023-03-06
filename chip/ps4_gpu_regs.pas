@@ -1019,6 +1019,17 @@ begin
     else;
    end;
 
+  COLOR_10_11_11: //R:11 G:11 B:10
+   Case NUMBER_TYPE of
+    NUMBER_FLOAT  :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    else;
+   end;
+
+  COLOR_11_11_10: //R:10 G:11 B:11
+   Case NUMBER_TYPE of
+    NUMBER_FLOAT  :Result:=VK_FORMAT_UNDEFINED; //Not directly handled to a vulkan
+    else;
+   end;
 
   else;
  end;
@@ -1056,7 +1067,7 @@ begin
  Result.padded.Width :=(RENDER_TARGET[i].PITCH.TILE_MAX+1)*8;
  Result.padded.Height:=(RENDER_TARGET[i].SLICE.TILE_MAX+1)*8 div (RENDER_TARGET[i].PITCH.TILE_MAX+1);
 
- Assert(RENDER_TARGET[i].INFO.ENDIAN=ENDIAN_NONE);
+ Assert(RENDER_TARGET[i].INFO.ENDIAN=ENDIAN_NONE,'ENDIAN:'+IntToStr(RENDER_TARGET[i].INFO.ENDIAN));
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
 
  FORMAT     :=RENDER_TARGET[i].INFO.FORMAT;
@@ -1168,10 +1179,13 @@ begin
     end
 
    else
-    Assert(false);
+    {Assert(false)}; //TODO
   end;
 
- //end;
+ if (RENDER_TARGET[i].ATTRIB.FORCE_DST_ALPHA_1<>0) then
+ begin
+  Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_ONE);
+ end;
 
 end;
 
