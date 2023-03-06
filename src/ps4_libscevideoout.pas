@@ -1806,7 +1806,7 @@ begin
  repeat
   R:=ps4_sceKernelWaitEqueue(@eq,@ev,1,@outNum,@timo);
  until R<>1;
- if (R<0) and (R=SCE_KERNEL_ERROR_ETIMEDOUT) then
+ if (R<0) and (R<>SCE_KERNEL_ERROR_ETIMEDOUT) then
  begin
   _sig_lock;
   H.Release;
