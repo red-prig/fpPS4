@@ -5,7 +5,7 @@ unit sys_osem;
 
 interface
 
-function _osem_create_err(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
+function osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
 function _osem_delete_err(key:Integer):Integer;
 function _osem_cancel_err(key,setCount:Integer;pNumWait:PInteger):Integer;
 function _osem_post_err(key,signalCount:Integer):Integer;
@@ -19,10 +19,11 @@ uses
  trap,
  thr_error;
 
-function _osem_create_err(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer; assembler; nostackframe;
+function osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer; assembler; nostackframe;
 asm
  movq  sys_osem_create,%rax
  call  fast_syscall
+ call  cerror
 end;
 
 function _osem_delete_err(key:Integer):Integer; assembler; nostackframe;

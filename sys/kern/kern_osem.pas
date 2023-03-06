@@ -64,6 +64,7 @@ end;
 
 procedure osem_free(data:pointer);
 begin
+ mtx_destroy(p_osem(data)^.mtx);
  FreeMem(data);
 end;
 

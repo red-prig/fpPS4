@@ -39,6 +39,8 @@ var
 
  event:Thandle;
 
+ osem:Integer;
+
 procedure trap_test;
 var
  td:p_kthread;
@@ -178,12 +180,16 @@ var
  act:sigaction_t;
  _sig:Integer;
  oset:sigset_t;
+ i:Integer;
 begin
 
  //SetTlsBase(Pointer(qword(1)));
 
  if (tid<>curkthread^.td_tid) then
  begin
+  osem:=osem_create('osem test',1,1,10);
+  Writeln('osem=',osem,' _errno:',__error^);
+
   act:=Default(sigaction_t);
   act.u.sa_handler:=sa_handler(@__ex_handler);
   act.sa_flags:=SA_RESTART;
@@ -192,6 +198,14 @@ begin
 
   thr_kill(tid,SIGUSR1);
   //thr_wake(tid);
+
+  i:=_osem_wait_err(osem,1,nil);
+  Writeln('_osem_wait_err=',i,' _errno:',__error^);
+
+  i:=_osem_wait_err(osem,1,nil);
+  Writeln('_osem_wait_err=',i,' _errno:',__error^);
+
+  writeln;
  end else
  begin
   //Writeln('thr_suspend:',thr_suspend(nil));
@@ -230,6 +244,8 @@ begin
   Writeln('intr');
   Writeln('after: sptr:',HexStr(sptr));
  end;
+
+ _osem_post_err(osem,1);
 
  sig_lock;
  sig_lock;

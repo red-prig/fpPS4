@@ -244,7 +244,7 @@ begin
                  (td_frame^.tf_rdi,
                   td_frame^.tf_rsi,
                   td_frame^.tf_rdx,
-                  td_frame^.tf_rcx,
+                  td_frame^.tf_r10,
                   td_frame^.tf_r8,
                   td_frame^.tf_r9);
 
@@ -271,6 +271,7 @@ asm
  movq  %rsp,%rbp
 
  movqq %rax,%r11 //save rax
+ movqq %rcx,%r10 //save rcx
 
  lahf  //load to AH
  shr   $8,%rax

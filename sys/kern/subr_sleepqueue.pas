@@ -167,7 +167,7 @@ begin
  td:=curkthread;
 
  Assert(td^.td_sleepqueue<>nil);
- Assert(wchan<>nil,'invalid NULL wait channel');
+ Assert(wchan<>nil,'invalid nil wait channel');
  Assert((queue>=0) and (queue<NR_SLEEPQS));
 
  Assert((td^.td_pflags and TDP_NOSLEEPING)=0,'Trying sleep, but thread marked as sleeping prohibited');
@@ -220,7 +220,7 @@ var
  sq:p_sleepqueue;
 begin
  Result:=0;
- Assert(wchan<>nil,'invalid NULL wait channel');
+ Assert(wchan<>nil,'invalid nil wait channel');
  Assert((queue>=0) and (queue<NR_SLEEPQS));
  sq:=sleepq_lookup(wchan);
  if (sq=nil) then Exit;
@@ -240,7 +240,7 @@ begin
 
  sc:=SC_LOOKUP(wchan);
 
- Assert(wchan<>NULL);
+ Assert(wchan<>nil);
  if ((td^.td_pflags and TDP_WAKEUP)<>0) then
  begin
   td^.td_pflags:=td^.td_pflags and (not TDP_WAKEUP);
@@ -317,6 +317,7 @@ var
  td:p_kthread;
  sc:p_sleepqueue_chain;
  sq:p_sleepqueue;
+ r:Integer;
 begin
  td:=curkthread;
  sc:=SC_LOOKUP(wchan);
@@ -340,7 +341,13 @@ begin
  sched_sleep(td,pri);
  TD_SET_SLEEPING(td);
 
- if (sched_switch(td)=ETIMEDOUT) then
+ mtx_unlock(sc^.sc_lock); //
+ thread_unlock(td);       //
+ r:=sched_switch(td);
+ thread_lock(td);         //
+ mtx_lock(sc^.sc_lock);   //
+
+ if (r=ETIMEDOUT) then
  begin
   sleepq_timeout(td);
  end;
@@ -420,7 +427,7 @@ begin
 
  Assert((td^.td_flags and TDF_SINTR)=0);
  thread_lock(td);
- sleepq_switch(wchan, pri);
+ sleepq_switch(wchan,pri);
  Result:=sleepq_check_timeout();
  thread_unlock(td);
 end;
@@ -448,7 +455,7 @@ function sleepq_get_type(wchan:Pointer;pri:Integer):Integer;
 var
  sq:p_sleepqueue;
 begin
- Assert(wchan<>NULL);
+ Assert(wchan<>nil);
 
  sleepq_lock(wchan);
  sq:=sleepq_lookup(wchan);
@@ -605,7 +612,7 @@ var
 begin
  td:=arg;
 
- thread_lock(td);
+ //thread_lock(td);
  if (TD_IS_SLEEPING(td) and TD_ON_SLEEPQ(td)) then
  begin
   wchan:=td^.td_wchan;
@@ -634,7 +641,8 @@ begin
  begin
   td^.td_flags:=td^.td_flags or TDF_TIMOFAIL;
  end;
- thread_unlock(td);
+
+ //thread_unlock(td);
 end;
 
 procedure sleepq_remove(td:p_kthread;wchan:Pointer);

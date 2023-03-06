@@ -89,6 +89,9 @@ end;
 
 procedure sched_wakeup(td:p_kthread);
 begin
+ td^.td_flags:=td^.td_flags and (not TDF_CANSWAP);
+ TD_SET_RUNNING(td);
+
  wakeup_td(td)
 end;
 

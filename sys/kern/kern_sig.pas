@@ -496,12 +496,12 @@ begin
  end;
 end;
 
-procedure ps_mtx_lock; inline;
+procedure ps_mtx_lock;
 begin
  mtx_lock(p_sigacts.ps_mtx);
 end;
 
-procedure ps_mtx_unlock; inline;
+procedure ps_mtx_unlock;
 begin
  mtx_unlock(p_sigacts.ps_mtx);
 end;
@@ -1628,7 +1628,7 @@ begin
  begin
   thread_lock(td);
   sched_prio(td,td^.td_user_pri);
-  //mi_switch(SW_INVOL or SWT_NEEDRESCHED, NULL);
+  //mi_switch(SW_INVOL or SWT_NEEDRESCHED, nil);
   thread_unlock(td);
  end;
 
