@@ -28,7 +28,9 @@ uses
  kern_thr,
  rtprio,
  kern_condvar,
- kern_osem;
+ kern_osem,
+ kern_id,
+ sys_osem;
 
 var
  mtx:umutex;

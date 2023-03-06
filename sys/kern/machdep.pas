@@ -17,6 +17,7 @@ const
  _ufssel  =(2 shl 3) or 3;
  _ugssel  =(3 shl 3) or 3;
 
+procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 function  sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
 
@@ -28,6 +29,33 @@ uses
  md_psl,
  kern_sig,
  trap;
+
+procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
+begin
+ Case error of
+  0:With td^.td_frame^ do
+    begin
+     tf_rax:=td^.td_retval[0];
+     tf_rdx:=td^.td_retval[1];
+     tf_rflags:=tf_rflags and (not PSL_C);
+    end;
+  ERESTART:
+    With td^.td_frame^ do
+    begin
+     //tf_err = size of syscall cmd
+     tf_rip:=tf_rip-td^.td_frame^.tf_err;
+     tf_r10:=tf_rcx;
+     set_pcb_flags(td,PCB_FULL_IRET);
+    end;
+  EJUSTRETURN:; //nothing
+  else
+    With td^.td_frame^ do
+    begin
+     tf_rax:=error;
+     tf_rflags:=tf_rflags or PSL_C;
+    end;
+ end;
+end;
 
 function get_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
 begin

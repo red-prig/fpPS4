@@ -18,7 +18,6 @@ var
 
 function  cpu_thread_alloc(td:p_kthread):Integer;
 function  cpu_thread_free(td:p_kthread):Integer;
-procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpuset_setproc(new:Ptruint):Integer;
 function  cpuset_getproc(var old:Ptruint):Integer;
@@ -170,33 +169,6 @@ begin
            @size,
            MEM_RELEASE
           );
-end;
-
-procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
-begin
- Case error of
-  0:With td^.td_frame^ do
-    begin
-     tf_rax:=td^.td_retval[0];
-     tf_rdx:=td^.td_retval[1];
-     tf_rflags:=tf_rflags and (not PSL_C);
-    end;
-  ERESTART:
-    With td^.td_frame^ do
-    begin
-     //tf_err = size of syscall cmd
-     tf_rip:=tf_rip-td^.td_frame^.tf_err;
-     tf_r10:=tf_rcx;
-     set_pcb_flags(td,PCB_FULL_IRET);
-    end;
-  EJUSTRETURN:; //nothing
-  else
-    With td^.td_frame^ do
-    begin
-     tf_rax:=error;
-     tf_rflags:=tf_rflags or PSL_C;
-    end;
- end;
 end;
 
 function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;

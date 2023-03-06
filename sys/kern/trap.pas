@@ -233,6 +233,10 @@ begin
  td:=curkthread;
  td_frame:=td^.td_frame;
 
+ //cpu_fetch_syscall_args
+ td^.td_retval[0]:=0;
+ td^.td_retval[1]:=td_frame^.tf_rdx;
+
  error:=0;
  if (td_frame^.tf_rax<>0) then
  begin

@@ -6,7 +6,6 @@ unit sys_umtx;
 interface
 
 uses
- errno,
  time,
  _umtx;
 
@@ -27,6 +26,7 @@ function  _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):I
 implementation
 
 uses
+ errno,
  kern_umtx,
  trap,
  thr_error;
