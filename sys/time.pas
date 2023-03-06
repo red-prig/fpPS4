@@ -54,8 +54,9 @@ type
   tz_dstsec :DWORD;
  end;
 
-function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
-function tvtohz(time:Int64):Int64; inline;
+function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
+function  tvtohz(time:Int64):Int64; inline;
+procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 
 implementation
 
@@ -67,6 +68,12 @@ end;
 function tvtohz(time:Int64):Int64; inline;
 begin
  Result:=time;
+end;
+
+procedure usec2timespec(ts:ptimespec;timeo:DWORD);
+begin
+ ts^.tv_sec :=(timeo div 1000000);
+ ts^.tv_nsec:=(timeo mod 1000000)*1000;
 end;
 
 end.

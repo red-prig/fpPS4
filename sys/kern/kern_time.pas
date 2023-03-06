@@ -10,6 +10,7 @@ uses
  ntapi,
  time;
 
+function cputick2usec(time:QWORD):QWORD; inline;
 function get_unit_uptime:Int64;
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
@@ -25,6 +26,11 @@ Const
  DELTA_EPOCH_IN_UNIT  =116444736000000000;
  POW10_7              =10000000;
  POW10_9              =1000000000;
+
+function cputick2usec(time:QWORD):QWORD; inline;
+begin
+ Result:=time div 10;
+end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
 asm

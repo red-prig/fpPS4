@@ -34,6 +34,7 @@ implementation
 
 uses
  errno,
+ kern_mtx,
  kern_time;
 
 function IS_SLEEPABLE(lock:Pointer):Boolean; inline;
@@ -41,14 +42,14 @@ begin
  Result:=False;
 end;
 
-procedure lc_lock(lock:Pointer);
+procedure lc_lock(lock:Pointer); inline;
 begin
- //TODO
+ mtx_lock(p_mtx(lock)^);
 end;
 
-procedure lc_unlock(lock:Pointer);
+procedure lc_unlock(lock:Pointer); inline;
 begin
- //TODO
+ mtx_unlock(p_mtx(lock)^);
 end;
 
 procedure cv_init(cvp:p_cv;desc:Pchar);
