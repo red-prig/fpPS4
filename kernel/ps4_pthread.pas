@@ -30,7 +30,7 @@ function  ps4_pthread_equal(t1,t2:pthread):Integer; SysV_ABI_CDecl;
 procedure ps4_scePthreadExit(value_ptr:Pointer); SysV_ABI_CDecl;
 procedure ps4_pthread_exit(value_ptr:Pointer); SysV_ABI_CDecl;
 
-function ps4_scePthreadCancel(_pthread:pthread):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadCancel(_pthread:pthread):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_setcancelstate(state:Integer;oldstate:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_setcanceltype (_type:Integer;oldtype:PInteger):Integer; SysV_ABI_CDecl;
@@ -99,7 +99,10 @@ uses
 procedure _free_pthread(data:pthread);
 begin
  _sig_lock;
- System.CloseThread(data^.handle);
+ if (data^.handle<>0) then
+ begin
+  System.CloseThread(data^.handle);
+ end;
  FreeMem(data);
  _sig_unlock;
 end;
@@ -444,6 +447,7 @@ begin
  if _pthread=nil then
   Exit(SCE_KERNEL_ERROR_ESRCH);
  Writeln(SysLogPrefix, 'scePthreadCancel');
+ //Dirty thread termination
  if CAS(_pthread^.detachstate,PTHREAD_CREATE_DETACHED,_PREPARE_FREE) then
  begin
   _free_pthread(_pthread);
@@ -451,8 +455,10 @@ begin
  begin
   CAS(_pthread^.detachstate,PTHREAD_CREATE_JOINABLE,_PREPARE_JOIN);
   _sig_lock;
-  System.CloseThread(_pthread^.handle);
+  Windows.TerminateThread(_pthread^.handle,0);
+  _pthread^.handle:=0;
   _sig_unlock;
+  _free_pthread(_pthread);
  end;
  Result:=0;
 end;
