@@ -805,7 +805,7 @@ begin
   begin
    if audioBuffer[0]=nil then
    begin
-    audioBuffer[0]:=playerInfo.Allocate(16,chunk.nSize);
+    audioBuffer[0]:=playerInfo.Allocate(32,chunk.nSize);
    end;
    Move(chunk.pAddr^,audioBuffer[0]^,chunk.nSize);
    FreeMem(chunk.pAddr);
@@ -817,7 +817,7 @@ begin
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo.AllocateTexture(16,chunk.nSize);
+    videoBuffer[0]:=playerInfo.AllocateTexture(32,chunk.nSize);
    end;
    Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
    FreeMem(chunk.pAddr);

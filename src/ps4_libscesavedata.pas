@@ -254,6 +254,8 @@ type
 
  SceSaveDataEventCallbackFunc=procedure(event:pSceSaveDataEvent;userdata:Pointer); SysV_ABI_CDecl;
 
+ PSceSaveDataCheckBackupData=Pointer;
+
 implementation
 
 uses
@@ -677,6 +679,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSaveDataCheckBackupData(check:PSceSaveDataCheckBackupData):Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+end;
+
 procedure init_save;
 begin
  backup.queue.Create(32);
@@ -717,6 +724,7 @@ begin
  lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
  lib^.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
  lib^.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
+ lib^.set_proc($4503AA0DB9376D25,@ps4_sceSaveDataCheckBackupData);
 
  init_save;
 end;

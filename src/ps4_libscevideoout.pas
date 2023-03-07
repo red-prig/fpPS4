@@ -1780,6 +1780,55 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceVideoOutWaitVblank(hVideo:Integer):Integer; SysV_ABI_CDecl;
+var
+ H     :TVideoOut;
+ eq    :SceKernelEqueue;
+ ev    :SceKernelEvent;
+ status:PSceVideoOutVblankStatus;
+ outNum:Integer;
+ timo  :DWord;
+ R     :Integer;
+begin
+ _sig_lock;
+ H:=TVideoOut(FVideoOutMap.Acqure(hVideo));
+ _sig_unlock;
+ if (H=nil) then Exit(SCE_VIDEO_OUT_ERROR_INVALID_HANDLE);
+
+ if ps4_sceKernelCreateEqueue(@eq,'sceVideoOutWaitVblank')<0 then
+ begin
+  _sig_lock;
+  H.Release;
+  _sig_unlock;
+  Exit(SCE_VIDEO_OUT_ERROR_FATAL);
+ end;
+
+ repeat
+  R:=ps4_sceKernelWaitEqueue(@eq,@ev,1,@outNum,@timo);
+ until R<>1;
+ if (R<0) and (R<>SCE_KERNEL_ERROR_ETIMEDOUT) then
+ begin
+  _sig_lock;
+  H.Release;
+  _sig_unlock;
+  Exit(SCE_VIDEO_OUT_ERROR_FATAL);
+ end;
+
+ R:=ps4_sceKernelWaitEqueue(@eq,@ev,1,@outNum,nil);
+ if R>=0 then
+ begin
+  R:=ps4_sceKernelGetEventFilter(@ev);
+  if R=SCE_KERNEL_EVFILT_VIDEO_OUT then
+   Result:=SCE_VIDEO_OUT_ERROR_FATAL
+  else
+   Result:=0;
+ end;
+
+ _sig_lock;
+ H.Release;
+ _sig_unlock;
+end;
+
 function ps4_sceVideoOutSetWindowModeMargins(hVideo:Integer;top,bottom:Integer):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
@@ -2008,6 +2057,7 @@ begin
  lib^.set_proc($BBFF5B856400A6AF,@ps4_sceVideoOutCursorSetImageAddress);
  lib^.set_proc($1E26CEB5ECF34FA3,@ps4_sceVideoOutCursorIsUpdatePending);
  lib^.set_proc($D456412B2F0778D5,@ps4_sceVideoOutGetVblankStatus);
+ lib^.set_proc($8FA45A01495A2EFD,@ps4_sceVideoOutWaitVblank);
  lib^.set_proc($313C71ACE09E4A28,@ps4_sceVideoOutSetWindowModeMargins);
  lib^.set_proc($A63903B20C658BA7,@ps4_sceVideoOutModeSetAny_);
  lib^.set_proc($3756C4A09E12470E,@ps4_sceVideoOutConfigureOutputMode_);
