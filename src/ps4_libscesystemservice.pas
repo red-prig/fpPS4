@@ -93,6 +93,35 @@ const
  SCE_SYSTEM_PARAM_ENTER_BUTTON_ASSIGN_CIRCLE=0;
  SCE_SYSTEM_PARAM_ENTER_BUTTON_ASSIGN_CROSS =1;
 
+ //SceSystemServiceEventType
+ SCE_SYSTEM_SERVICE_EVENT_INVALID                           = -1;
+ SCE_SYSTEM_SERVICE_EVENT_ON_RESUME                         = $10000000;
+ SCE_SYSTEM_SERVICE_EVENT_GAME_LIVE_STREAMING_STATUS_UPDATE = $10000001;
+ SCE_SYSTEM_SERVICE_EVENT_SESSION_INVITATION                = $10000002;
+ SCE_SYSTEM_SERVICE_EVENT_ENTITLEMENT_UPDATE                = $10000003;
+ SCE_SYSTEM_SERVICE_EVENT_GAME_CUSTOM_DATA                  = $10000004; // deprecated
+ SCE_SYSTEM_SERVICE_EVENT_DISPLAY_SAFE_AREA_UPDATE          = $10000005; // deprecated
+ SCE_SYSTEM_SERVICE_EVENT_URL_OPEN                          = $10000006;
+ SCE_SYSTEM_SERVICE_EVENT_LAUNCH_APP                        = $10000007;
+ SCE_SYSTEM_SERVICE_EVENT_APP_LAUNCH_LINK                   = $10000008;
+ SCE_SYSTEM_SERVICE_EVENT_ADDCONTENT_INSTALL                = $10000009;
+ SCE_SYSTEM_SERVICE_EVENT_RESET_VR_POSITION                 = $1000000a;
+ SCE_SYSTEM_SERVICE_EVENT_JOIN_EVENT                        = $1000000b;
+ SCE_SYSTEM_SERVICE_EVENT_PLAYGO_LOCUS_UPDATE               = $1000000c;
+ SCE_SYSTEM_SERVICE_EVENT_PLAY_TOGETHER_HOST                = $1000000d;
+ SCE_SYSTEM_SERVICE_EVENT_SERVICE_ENTITLEMENT_UPDATE        = $1000000e;
+ SCE_SYSTEM_SERVICE_EVENT_EYE_TO_EYE_DISTANCE_UPDATE        = $1000000f;
+ SCE_SYSTEM_SERVICE_EVENT_JOIN_MATCH_EVENT                  = $10000010;
+ SCE_SYSTEM_SERVICE_EVENT_PLAY_TOGETHER_HOST_A              = $10000011; // deprecated
+ SCE_SYSTEM_SERVICE_EVENT_WEBBROWSER_CLOSED                 = $10000012;
+ SCE_SYSTEM_SERVICE_EVENT_CONTROLLER_SETTINGS_CLOSED        = $10000013;
+ SCE_SYSTEM_SERVICE_EVENT_JOIN_TEAM_ON_TEAM_MATCH_EVENT     = $10000014;
+ SCE_SYSTEM_SERVICE_EVENT_JOIN_FFA_MATCH_EVENT              = $10000015;
+ SCE_SYSTEM_SERVICE_EVENT_JOIN_FFA_TEAM_MATCH_EVENT         = $10000016;
+ SCE_SYSTEM_SERVICE_EVENT_GAME_INTENT                       = $10000017;
+ SCE_SYSTEM_SERVICE_EVENT_OPEN_SHARE_MENU                   = $30000000;
+ SCE_SYSTEM_SERVICE_EVENT_UNIFIED_ENTITLEMENT_UPDATE        = $10000018;
+
 function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer; SysV_ABI_CDecl;
 
 implementation
@@ -102,6 +131,68 @@ uses
  sys_kernel,
  sys_signal,
  sys_time;
+
+type
+ pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
+ SceSystemServiceDisplaySafeAreaInfo=packed record
+  ratio:Single; //Ratio of the safe area (0.9 or more, 1.0 or less)
+  reserved:array[0..127] of Byte;
+ end;
+
+ PSceSystemServiceStatus=^SceSystemServiceStatus;
+ SceSystemServiceStatus=packed record
+  eventNum:Integer;
+  isSystemUiOverlaid,
+  isInBackgroundExecution,
+  isCpuMode7CpuNormal,
+  isGameLiveStreamingOnAir,
+  isOutOfVrPlayArea:Boolean;
+  reserved:array[0..124] of Byte;
+ end;
+
+ pSceSystemServiceHdrToneMapLuminance=^SceSystemServiceHdrToneMapLuminance;
+ SceSystemServiceHdrToneMapLuminance=packed record
+  maxFullFrameToneMapLuminance:Single;
+  maxToneMapLuminance         :Single;
+  minToneMapLuminance         :Single;
+ end;
+
+ pSceSystemServiceEventType=^SceSystemServiceEventType;
+ SceSystemServiceEventType=packed record
+  eventType:Integer; //SceSystemServiceEventType
+  data:packed record
+   Case Byte of
+    0:(param:array[0..8191] of Char);
+    1:(urlOpen:packed record
+        source:array[0..1023] of Char;
+        url   :array[0..4095] of Char;
+       end);
+    2:(launchApp:packed record
+        size:DWORD;
+        arg :array[0..8187] of Byte;
+       end);
+    3:(appLaunchLink:packed record
+        size:DWORD;
+        arg :array[0..2019] of Byte;
+       end);
+    4:(joinEvent:packed record
+        userId      :Integer;
+        eventId     :array[0..36]   of Char;
+        bootArgument:array[0..7168] of Char;
+       end);
+    5:(serviceEntitlementUpdate:packed record
+        userId        :Integer;
+        npServiceLabel:DWORD;
+        reserved      :array[0..8183] of Byte;
+       end);
+    6:(unifiedEntitlementUpdate:packed record
+        userId        :Integer;
+        npServiceLabel:DWORD;
+        reserved      :array[0..8183] of Byte;
+       end);
+    7:(reserved:array[0..8191] of Byte);
+  end;
+ end;
 
 function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer; SysV_ABI_CDecl;
 var
@@ -278,13 +369,6 @@ begin
  Result:=0;
 end;
 
-type
- pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
- SceSystemServiceDisplaySafeAreaInfo=packed record
-  ratio:Single; //Ratio of the safe area (0.9 or more, 1.0 or less)
-  reserved:array[0..127] of Byte;
- end;
-
 function ps4_sceSystemServiceGetDisplaySafeAreaInfo(info:pSceSystemServiceDisplaySafeAreaInfo):Integer; SysV_ABI_CDecl;
 begin
  Result:=SCE_KERNEL_ERROR_UNKNOWN;
@@ -294,17 +378,16 @@ begin
  Result:=0;
 end;
 
-type
- PSceSystemServiceStatus=^SceSystemServiceStatus;
- SceSystemServiceStatus=packed record
-  eventNum:Integer;
-  isSystemUiOverlaid,
-  isInBackgroundExecution,
-  isCpuMode7CpuNormal,
-  isGameLiveStreamingOnAir,
-  isOutOfVrPlayArea:Boolean;
-  reserved:array[0..124] of Byte;
- end;
+function ps4_sceSystemServiceGetHdrToneMapLuminance(hdrToneMapLuminance:pSceSystemServiceHdrToneMapLuminance):Integer; SysV_ABI_CDecl;
+begin
+ if (hdrToneMapLuminance=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ hdrToneMapLuminance^.maxFullFrameToneMapLuminance:=1000;
+ hdrToneMapLuminance^.maxToneMapLuminance         :=1000;
+ hdrToneMapLuminance^.minToneMapLuminance         :=0.01;
+ Result:=0;
+end;
+
+//
 
 function ps4_sceSystemServiceGetStatus(status:PSceSystemServiceStatus):Integer; SysV_ABI_CDecl;
 begin
@@ -318,22 +401,13 @@ begin
  Result:=0;
 end;
 
-type
- pSceSystemServiceHdrToneMapLuminance=^SceSystemServiceHdrToneMapLuminance;
- SceSystemServiceHdrToneMapLuminance=packed record
-  maxFullFrameToneMapLuminance:Single;
-  maxToneMapLuminance         :Single;
-  minToneMapLuminance         :Single;
- end;
-
-function ps4_sceSystemServiceGetHdrToneMapLuminance(hdrToneMapLuminance:pSceSystemServiceHdrToneMapLuminance):Integer; SysV_ABI_CDecl;
+function ps4_sceSystemServiceReceiveEvent(event:pSceSystemServiceEventType):Integer; SysV_ABI_CDecl;
 begin
- if (hdrToneMapLuminance=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
- hdrToneMapLuminance^.maxFullFrameToneMapLuminance:=1000;
- hdrToneMapLuminance^.maxToneMapLuminance         :=1000;
- hdrToneMapLuminance^.minToneMapLuminance         :=0.01;
- Result:=0;
+ if (event=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
+ Result:=SCE_SYSTEM_SERVICE_ERROR_NO_EVENT;
 end;
+
+//
 
 function Load_libSceSystemService(Const name:RawByteString):TElf_node;
 var
@@ -350,8 +424,9 @@ begin
  lib^.set_proc($467DF63B93C3966A,@ps4_sceSystemServiceEnableSuspendConfirmationDialog);
  lib^.set_proc($3D0F928D7020DC43,@ps4_sceSystemServiceDisableSuspendConfirmationDialog);
  lib^.set_proc($D67DFBAB506F7396,@ps4_sceSystemServiceGetDisplaySafeAreaInfo);
- lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
  lib^.set_proc($98FA4FC6FE4266DE,@ps4_sceSystemServiceGetHdrToneMapLuminance);
+ lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
+ lib^.set_proc($EB9E8B3104AB83A5,@ps4_sceSystemServiceReceiveEvent);
 end;
 
 initialization
