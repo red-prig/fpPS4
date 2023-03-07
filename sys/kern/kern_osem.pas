@@ -442,6 +442,7 @@ function sys_osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
 var
  sem:p_osem;
  num:Integer;
+ r:Integer;
 begin
  Result:=ESRCH;
  num:=0;
@@ -456,7 +457,8 @@ begin
  begin
   if (pNumWait<>nil) then
   begin
-   Result:=copyout(@num,pNumWait,SizeOf(Integer));
+   r:=copyout(@num,pNumWait,SizeOf(Integer));
+   if (r<>0) then Result:=EFAULT;
   end;
  end;
 end;
@@ -498,6 +500,7 @@ var
  sem:p_osem;
  timeout:PDWORD;
  time:DWORD;
+ r:Integer;
 begin
  Result:=EINVAL;
  if (needCount<=0) then Exit;
@@ -522,7 +525,8 @@ begin
 
  if (pTimeout<>nil) then
  begin
-  Result:=copyout(@time,pTimeout,SizeOf(DWORD));
+  r:=copyout(@time,pTimeout,SizeOf(DWORD));
+  if (r<>0) then Result:=EFAULT;
  end;
 end;
 

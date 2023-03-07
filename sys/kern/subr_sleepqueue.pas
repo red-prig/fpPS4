@@ -341,11 +341,11 @@ begin
  sched_sleep(td,pri);
  TD_SET_SLEEPING(td);
 
- mtx_unlock(sc^.sc_lock); //
  thread_unlock(td);       //
+ mtx_unlock(sc^.sc_lock); //
  r:=sched_switch(td);
- thread_lock(td);         //
  mtx_lock(sc^.sc_lock);   //
+ thread_lock(td);         //
 
  if (r=ETIMEDOUT) then
  begin

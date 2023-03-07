@@ -180,7 +180,7 @@ var
  act:sigaction_t;
  _sig:Integer;
  oset:sigset_t;
- i:Integer;
+ i,t:Integer;
 begin
 
  //SetTlsBase(Pointer(qword(1)));
@@ -202,7 +202,8 @@ begin
   i:=_osem_wait_err(osem,1,nil);
   Writeln('_osem_wait_err=',i,' _errno:',__error^);
 
-  i:=_osem_wait_err(osem,1,nil);
+  t:=400;
+  i:=_osem_wait_err(osem,1,@t);
   Writeln('_osem_wait_err=',i,' _errno:',__error^);
 
   writeln;
@@ -245,7 +246,7 @@ begin
   Writeln('after: sptr:',HexStr(sptr));
  end;
 
- _osem_post_err(osem,1);
+ //_osem_post_err(osem,1);
 
  sig_lock;
  sig_lock;
