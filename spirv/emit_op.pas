@@ -423,6 +423,7 @@ function TEmitOp.OpExtract(pLine:PspirvOp;dst,src:PsrRegNode;id:DWORD):PSpirvOp;
 Var
  node:PSpirvOp;
 begin
+ Assert(src^.dtype.isVector);
  node:=AddSpirvOp(pLine,Op.OpCompositeExtract);
  node^.pType:=TypeList.Fetch(dst^.dtype);
  node^.pDst:=dst;
