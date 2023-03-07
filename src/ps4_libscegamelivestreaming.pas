@@ -122,6 +122,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingSetStandbyScreenResource(resource:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGameLiveStreamingSetStandbyScreenResource:',resource);
+ Result:=0;
+end;
+
 function Load_libSceGameLiveStreaming(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -139,6 +145,7 @@ begin
  lib^.set_proc($0A83CCC77EBD12A3,@ps4_sceGameLiveStreamingGetCurrentStatus);
  lib^.set_proc($94AF1D2C1369F4E1,@ps4_sceGameLiveStreamingGetCurrentStatus2);
  lib^.set_proc($DCF4A2C00CC52121,@ps4_sceGameLiveStreamingSetCameraFrameSetting);
+ lib^.set_proc($30BBD823CE85140A,@ps4_sceGameLiveStreamingSetStandbyScreenResource);
 end;
 
 initialization
