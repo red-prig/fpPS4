@@ -81,6 +81,20 @@ function  BCryptGenRandom(hAlgorithm:Pointer;
                           cbBuffer:DWORD;
                           dwFlags:DWORD):DWORD; stdcall; external 'Bcrypt';
 
+const
+ HW_PROFILE_GUIDLEN=39;
+ MAX_PROFILE_LEN   =80;
+
+type
+ P_HW_PROFILE_INFOA=^HW_PROFILE_INFOA;
+ HW_PROFILE_INFOA=packed record
+  dwDockInfo:DWORD;
+  szHwProfileGuid:array[0..HW_PROFILE_GUIDLEN-1] of Char;
+  szHwProfileName:array[0..MAX_PROFILE_LEN   -1] of Char;
+ end;
+
+function GetCurrentHwProfileA(lpHwProfileInfo:P_HW_PROFILE_INFOA):Boolean; stdcall; external 'advapi32';
+
 type
  PPROCESS_MEMORY_COUNTERS = ^_PROCESS_MEMORY_COUNTERS;
  _PROCESS_MEMORY_COUNTERS = record
