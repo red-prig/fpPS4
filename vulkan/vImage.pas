@@ -234,6 +234,7 @@ begin
   VK_FORMAT_A2B10G10R10_UNORM_PACK32:Result:=4;
 
   VK_FORMAT_B10G11R11_UFLOAT_PACK32 :Result:=4;
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32  :Result:=4;
 
   //stencil
   VK_FORMAT_S8_UINT              :Result:=1;
