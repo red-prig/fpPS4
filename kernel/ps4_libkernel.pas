@@ -962,6 +962,74 @@ begin
  end;
 end;
 
+type
+ pSceKernelOpenPsId=^SceKernelOpenPsId;
+ SceKernelOpenPsId=array[0..15] of Char;
+
+function ps4_sceKernelGetOpenPsId(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
+var
+ HW:HW_PROFILE_INFOA;
+begin
+ //sysctlbyname:machdep.openpsid
+ if (id=nil) then Exit(EINVAL);
+
+ HW:=Default(HW_PROFILE_INFOA);
+ if GetCurrentHwProfileA(@HW) then
+ begin
+  id[ 0]:=HW.szHwProfileGuid[ 1];
+  id[ 1]:=HW.szHwProfileGuid[ 2];
+  id[ 2]:=HW.szHwProfileGuid[ 3];
+  id[ 3]:=HW.szHwProfileGuid[ 4];
+  id[ 4]:=HW.szHwProfileGuid[ 5];
+  id[ 5]:=HW.szHwProfileGuid[ 6];
+  id[ 6]:=HW.szHwProfileGuid[ 7];
+  id[ 7]:=HW.szHwProfileGuid[ 8];
+  id[ 8]:=HW.szHwProfileGuid[10];
+  id[ 9]:=HW.szHwProfileGuid[11];
+  id[10]:=HW.szHwProfileGuid[12];
+  id[11]:=HW.szHwProfileGuid[13];
+  id[12]:=HW.szHwProfileGuid[15];
+  id[13]:=HW.szHwProfileGuid[16];
+  id[14]:=HW.szHwProfileGuid[17];
+  id[15]:=HW.szHwProfileGuid[18];
+ end else
+ begin
+  FillChar(id^,SizeOf(SceKernelOpenPsId),ord('0'));
+ end;
+end;
+
+function ps4_sceKernelGetOpenPsIdForSystem(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
+var
+ HW:HW_PROFILE_INFOA;
+begin
+ //sysctlbyname:machdep.openpsid_for_sys
+ if (id=nil) then Exit(EINVAL);
+
+ HW:=Default(HW_PROFILE_INFOA);
+ if GetCurrentHwProfileA(@HW) then
+ begin
+  id[ 0]:=HW.szHwProfileGuid[ 1];
+  id[ 1]:=HW.szHwProfileGuid[ 2];
+  id[ 2]:=HW.szHwProfileGuid[ 3];
+  id[ 3]:=HW.szHwProfileGuid[ 4];
+  id[ 4]:=HW.szHwProfileGuid[ 5];
+  id[ 5]:=HW.szHwProfileGuid[ 6];
+  id[ 6]:=HW.szHwProfileGuid[ 7];
+  id[ 7]:=HW.szHwProfileGuid[ 8];
+  id[ 8]:=HW.szHwProfileGuid[10];
+  id[ 9]:=HW.szHwProfileGuid[11];
+  id[10]:=HW.szHwProfileGuid[12];
+  id[11]:=HW.szHwProfileGuid[13];
+  id[12]:=HW.szHwProfileGuid[15];
+  id[13]:=HW.szHwProfileGuid[16];
+  id[14]:=HW.szHwProfileGuid[17];
+  id[15]:=HW.szHwProfileGuid[18];
+ end else
+ begin
+  FillChar(id^,SizeOf(SceKernelOpenPsId),ord('0'));
+ end;
+end;
+
 //
 
 {$I libsysmodule.inc}
@@ -1674,6 +1742,8 @@ begin
 
  //file
 
+ lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
+
  px:=Result._add_lib('libScePosix');
  px^.MapSymbol:=lib^.MapSymbol;
 
@@ -1693,6 +1763,10 @@ begin
 
  lib^.set_proc($F332D27C47D6E405,@ps4_sceCoredumpRegisterCoredumpHandler);
  lib^.set_proc($7C59213A0CED8820,@ps4_sceCoredumpUnregisterCoredumpHandler);
+
+ lib:=Result._add_lib('libSceOpenPsId');
+
+ lib^.set_proc($0CB39172BA14A9B7,@ps4_sceKernelGetOpenPsId);
 
  //
  _kernel_init;
