@@ -113,7 +113,7 @@ end;
 
 procedure ps4_sceKernelDebugOutText(dbg_id:Integer;text:Pchar); SysV_ABI_CDecl;
 begin
- Writeln(text);
+ Writeln('[DBG]:',text);
 end;
 
 //ps4 neo mode is support? (Ps4 Pro)
