@@ -16,8 +16,8 @@ uses
 type
  TEmit_SOP2=class(TEmitFetch)
   procedure emit_SOP2;
-  procedure emit_S_ADD_U32;
-  procedure emit_S_ADD_I32;
+  procedure emit_S_ADD_B32(rtype:TsrDataType);
+  procedure emit_S_SUB_B32(rtype:TsrDataType);
   procedure emit_S_ADDC_U32;
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:PsrRegNode);
@@ -26,7 +26,9 @@ type
   procedure emit_S_AND_B32;
   procedure emit_S_AND_B64;
   procedure emit_S_ANDN2_B64;
+  procedure emit_S_OR_B32;
   procedure emit_S_OR_B64;
+  procedure emit_S_XOR_B32;
   procedure emit_S_XOR_B64;
   procedure emit_S_ORN2_B64;
   procedure emit_S_NAND_B64;
@@ -39,7 +41,7 @@ type
 
 implementation
 
-procedure TEmit_SOP2.emit_S_ADD_U32;
+procedure TEmit_SOP2.emit_S_ADD_B32(rtype:TsrDataType);
 Var
  dst,car:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -47,24 +49,24 @@ begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  car:=get_scc;
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,rtype);
 
  OpIAddExt(dst,car,src[0],src[1]);
 end;
 
-procedure TEmit_SOP2.emit_S_ADD_I32;
+procedure TEmit_SOP2.emit_S_SUB_B32(rtype:TsrDataType);
 Var
- dst,car:PsrRegSlot;
+ dst,bor:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
- car:=get_scc;
+ bor:=get_scc;
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtInt32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,rtype);
 
- OpIAddExt(dst,car,src[0],src[1]);
+ OpISubExt(dst,bor,src[0],src[1]);
 end;
 
 procedure TEmit_SOP2.emit_S_ADDC_U32;
@@ -202,6 +204,21 @@ begin
  OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
 end;
 
+procedure TEmit_SOP2.emit_S_OR_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+
+ OpBitwiseOr(dst,src[0],src[1]);
+
+ OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
+end;
+
 procedure TEmit_SOP2.emit_S_OR_B64; //sdst[2] = (ssrc0[2] | ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -219,6 +236,21 @@ begin
  src2[1]:=dst[1]^.current;
 
  OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+end;
+
+procedure TEmit_SOP2.emit_S_XOR_B32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+
+ OpBitwiseXor(dst,src[0],src[1]);
+
+ OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_XOR_B64; //sdst[2] = (ssrc0[2] ^ ssrc1[2]); SCC = (sdst[2] != 0)
@@ -389,8 +421,11 @@ begin
 
  Case FSPI.SOP2.OP of
 
-  S_ADD_U32: emit_S_ADD_U32;
-  S_ADD_I32: emit_S_ADD_I32;
+  S_ADD_U32: emit_S_ADD_B32(dtUInt32);
+  S_ADD_I32: emit_S_ADD_B32(dtInt32);
+
+  S_SUB_U32: emit_S_SUB_B32(dtUInt32);
+  S_SUB_I32: emit_S_SUB_B32(dtInt32);
 
   S_ADDC_U32: emit_S_ADDC_U32;
 
@@ -404,8 +439,10 @@ begin
 
   S_ANDN2_B64: emit_S_ANDN2_B64;
 
+  S_OR_B32: emit_S_OR_B32;
   S_OR_B64: emit_S_OR_B64;
 
+  S_XOR_B32: emit_S_XOR_B32;
   S_XOR_B64: emit_S_XOR_B64;
 
   S_ORN2_B64: emit_S_ORN2_B64;
