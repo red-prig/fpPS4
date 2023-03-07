@@ -165,7 +165,7 @@ begin
 end;
 
 var
- tid:QWORD;
+ tid,tid2:QWORD;
 
 var
  xmm0:array[0..15] of Byte=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
@@ -187,6 +187,8 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
+  tid2:=curkthread^.td_tid;
+
   osem:=osem_create('osem test',1,1,10);
   Writeln('osem=',osem,' _errno:',__error^);
 
@@ -203,7 +205,7 @@ begin
   Writeln('_osem_wait_err=',i,' _errno:',__error^);
 
   t:=400;
-  i:=_osem_wait_err(osem,1,@t);
+  i:=_osem_wait_err(osem,1,nil);
   Writeln('_osem_wait_err=',i,' _errno:',__error^);
 
   writeln;
@@ -246,7 +248,10 @@ begin
   Writeln('after: sptr:',HexStr(sptr));
  end;
 
+ sleep(500);
  //_osem_post_err(osem,1);
+ thr_kill(tid2,SIGUSR1);
+ _osem_post_err(osem,1);
 
  sig_lock;
  sig_lock;

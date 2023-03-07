@@ -1633,7 +1633,7 @@ begin
  end;
 
  if ((flags and TDF_NEEDSIGCHK)<>0) or
-    (p_pendingcnt > 0) or
+    (p_pendingcnt>0) or
     (not SIGISEMPTY(@g_p_sigqueue.sq_list)) then
  begin
   PROC_LOCK;
@@ -1641,7 +1641,7 @@ begin
 
   repeat
    sig:=cursig(td,SIG_STOP_ALLOWED);
-   if (sig=0) then Exit;
+   if (sig=0) then Break;
    postsig(sig);
   until false;
 
@@ -1651,9 +1651,9 @@ begin
 
  if ((flags and TDF_NEEDSUSPCHK)<>0) then
  begin
-  PROC_LOCK;
+  //PROC_LOCK;
   //thread_suspend_check(0);
-  PROC_UNLOCK;
+  //PROC_UNLOCK;
  end;
 
  if ((td^.td_pflags and TDP_OLDMASK)<>0) then
