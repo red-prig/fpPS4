@@ -458,7 +458,7 @@ begin
   Windows.TerminateThread(_pthread^.handle,0);
   _pthread^.handle:=0;
   _sig_unlock;
-  _free_pthread(_pthread);
+  //_free_pthread(_pthread);
  end;
  Result:=0;
 end;
