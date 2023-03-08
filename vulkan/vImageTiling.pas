@@ -64,12 +64,12 @@ begin
  begin
   extend.width  :=(extend.width  +3) div 4;
   extend.height :=(extend.height +3) div 4;
-  extend.depth  :=(extend.depth  +3) div 4;
  end;
 
  Result:=extend.width*
          extend.height*
          extend.depth*
+         image.key.params.arrayLayers*
          getFormatSize(image.key.cformat);
 end;
 
@@ -274,7 +274,7 @@ var
  //tp:TilingParameters;
  tiler:Tiler1d;
  //mtm:Byte;
- size,i,x,y,z:QWORD;
+ size,i,x,y,z,a:QWORD;
 
  m_bytePerElement:Word;
  m_bitsPerElement:Word;
@@ -402,10 +402,7 @@ begin
  //m_tilesPerRow = m_paddedWidth / kMicroTileWidth;
  //m_tilesPerSlice = std::max(m_tilesPerRow * (m_paddedHeight / kMicroTileHeight), 1U);
 
- size:=tiler.m_linearWidth*
-       tiler.m_linearHeight*
-       tiler.m_linearDepth*
-       m_bytePerElement;
+ size:=tiler.m_linearSizeBytes*image.key.params.arrayLayers;
 
  buf:=TvTempBuffer.Create(size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
  buf.Fhost:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
@@ -423,17 +420,18 @@ begin
 
  m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
 
- For z:=0 to tiler.m_linearDepth-1 do
-  For y:=0 to tiler.m_linearHeight-1 do
-   For x:=0 to tiler.m_linearWidth-1 do
-    begin
-     i:=0;
-     tiler.getTiledElementBitOffset(i,x,y,z);
-     i:=i div 8;
-     pSrc:=@PByte(image.key.Addr)[i];
-     pDst:=@PByte(pData)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
-     Move(pSrc^,pDst^,m_bytePerElement);
-    end;
+ For a:=0 to image.key.params.arrayLayers-1 do
+  For z:=0 to tiler.m_linearDepth-1 do
+   For y:=0 to tiler.m_linearHeight-1 do
+    For x:=0 to tiler.m_linearWidth-1 do
+     begin
+      i:=0;
+      tiler.getTiledElementBitOffset(i,x,y,z);
+      i:=i div 8;
+      pSrc:=@PByte(image.key.Addr)[a*tiler.m_tiledSizeBytes+i];
+      pDst:=@PByte(pData)[a*tiler.m_linearSizeBytes+(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+      Move(pSrc^,pDst^,m_bytePerElement);
+     end;
 
  //Move(pData^,image.key.Addr^,size);
  //FreeMem(pData);

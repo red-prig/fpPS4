@@ -300,7 +300,7 @@ type
      pow2pad:bit1;  //memory footprint is padded to power of 2 dimensions
    mtype_L1M:bit1;
     reserved:bit1;
-       _type:bit4; //values [8..15] are 1D, 2D, 3D, Cube, 1D array, 2D array, 2D MSAA, 2D MSAA array; 0 is V#, 1-7 reserved
+       _type:bit4;  //values [8..15] are 1D, 2D, 3D, Cube, 1D array, 2D array, 2D MSAA, 2D MSAA array; 0 is V#, 1-7 reserved
         //32
             depth:bit13; //3D texture depth (0..8192)
             pitch:bit14; //texture pitch in texels (0..16383); defaults to width

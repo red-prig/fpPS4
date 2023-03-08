@@ -409,7 +409,10 @@ function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
 function _get_tsharp4_min_lod(PT:PTSharpResource4):TVkImageViewMinLodCreateInfoEXT;
 
 function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
+function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
+
 function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
+function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
 
 function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
 
@@ -1831,18 +1834,41 @@ begin
 
  if _img_is_msaa(PT^._type) then
  begin
-  Result.params.samples  :=PT^.last_level;
+  Result.params.samples  :=PT^.last_level+1;
   Result.params.mipLevels:=1;
  end else
  begin
   Result.params.samples  :=1;
-  Result.params.mipLevels:=PT^.last_level-PT^.base_level+1;
+  Result.params.mipLevels:=PT^.last_level+1;
  end;
 
  //Assert(Result.params.mipLevels=1,'TODO');
  Result.params.mipLevels:=1; /////
 
  Result.params.arrayLayers:=1;
+end;
+
+function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
+begin
+ Result:=_get_tsharp4_image_info(PTSharpResource4(PT));
+ //
+ Case PT^._type of
+  SQ_RSRC_IMG_3D:
+   begin
+    Result.params.extend.depth:=PT^.depth+1;
+   end;
+  else;
+ end;
+ //
+ Case PT^._type of
+  SQ_RSRC_IMG_1D_ARRAY     ,
+  SQ_RSRC_IMG_2D_ARRAY     ,
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:
+   begin
+    Result.params.arrayLayers:=PT^.last_array+1;
+   end
+  else;
+ end;
 end;
 
 function _get_dst_sel_swizzle(b:Byte):Byte;
@@ -1921,9 +1947,23 @@ begin
 
  Result.base_level:=0; /////
  Result.last_level:=0; /////
-
 end;
 
+function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
+begin
+ Result:=_get_tsharp4_image_view(PTSharpResource4(PT));
+ //
+ Case PT^._type of
+  SQ_RSRC_IMG_1D_ARRAY     ,
+  SQ_RSRC_IMG_2D_ARRAY     ,
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:
+   begin
+    Result.base_array:=PT^.base_array;
+    Result.last_array:=PT^.last_array;
+   end
+  else;
+ end;
+end;
 
 function _get_xy_filter(b:Byte):TVkFilter;
 begin
