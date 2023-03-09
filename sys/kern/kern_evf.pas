@@ -10,11 +10,20 @@ const
  EVF_ATTR_TH_PRIO      =$02;
  EVF_ATTR_SINGLE       =$10;
  EVF_ATTR_MULTI        =$20;
+ EVF_ATTR_SHRD         =$100;
 
  EVF_WAITMODE_AND      =$01;
  EVF_WAITMODE_OR       =$02;
  EVF_WAITMODE_CLEAR_ALL=$10;
  EVF_WAITMODE_CLEAR_PAT=$20;
+
+function sys_evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
+function sys_evf_delete(key:Integer):Integer;
+function sys_evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
+function sys_evf_clear(key:Integer;bitPattern:QWORD):Integer;
+function sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
+function sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
+function sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
 
 implementation
 
@@ -56,6 +65,9 @@ type
   rpattern:QWORD;
   waitMode:DWORD;
  end;
+
+var
+ evf_table:t_id_desc_table;
 
 function evf_alloc:p_evf; inline;
 begin
@@ -505,8 +517,219 @@ begin
 
 end;
 
+//
+
+function sys_evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
+var
+ td:p_kthread;
+ _name:array[0..31] of Char;
+ evf:p_evf;
+ key:Integer;
+begin
+ Result:=EINVAL;
+ td:=curkthread;
+
+ if ((attr and $fffffecc)<>0) or
+    ((attr and 3)=3) or
+    ((attr and $30)=$30) or
+    (name=nil) then Exit;
+
+ //process shared evf not support
+ if ((attr and EVF_ATTR_SHRD)<>0) then Exit(EPERM);
+
+ if ((attr and 3)=0) then
+ begin
+  attr:=attr or EVF_ATTR_TH_FIFO;
+ end;
+
+ if ((attr and $30)=0) then
+ begin
+  attr:=attr or EVF_ATTR_SINGLE;
+ end;
+
+ FillChar(_name,32,0);
+ if (copyinstr(name,@_name,32,nil)<>0) then Exit;
+
+ evf:=evf_alloc;
+ if (evf=nil) then Exit(ENOMEM); //EAGAIN
+
+ evf_init(evf,attr,initPattern);
+ evf^.name:=_name;
+
+ if not id_new(@evf_table,@evf^.desc,@key) then
+ begin
+  evf_free(evf);
+  Exit(EAGAIN);
+ end;
+ id_release(@evf^.desc);
+
+ td^.td_retval[0]:=key;
+
+ Result:=0;
+end;
+
+function sys_evf_delete(key:Integer):Integer;
+var
+ evf:p_evf;
+begin
+ Result:=ESRCH;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ evf_delete(evf);
+ id_release(@evf^.desc);
+
+ if not id_del(@evf_table,key) then Exit;
+
+ Result:=0;
+end;
+
+function sys_evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
+var
+ evf:p_evf;
+ num:Integer;
+ r:Integer;
+begin
+ Result:=ESRCH;
+ num:=0;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ Result:=0;
+ num:=evf_cancel(evf,setPattern);
+ id_release(@evf^.desc);
+
+ if (pNumWait<>nil) then
+ begin
+  r:=copyout(@num,pNumWait,SizeOf(Integer));
+  if (r<>0) then Result:=EFAULT;
+ end;
+end;
+
+function sys_evf_clear(key:Integer;bitPattern:QWORD):Integer;
+var
+ evf:p_evf;
+begin
+ Result:=ESRCH;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ evf_clear(evf,bitPattern);
+ id_release(@evf^.desc);
+
+ Result:=0;
+end;
+
+function sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
+var
+ evf:p_evf;
+begin
+ Result:=ESRCH;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ evf_set(evf,bitPattern);
+ id_release(@evf^.desc);
+
+ Result:=0;
+end;
+
+function sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
+var
+ evf:p_evf;
+ res:QWORD;
+ r:Integer;
+begin
+ Result:=EINVAL;
+
+ if ((waitMode and 3)=0) or
+    ((waitMode and 3)=3) or
+    ((waitMode and $30)=$30) or
+    (bitPattern=0) then Exit;
+
+ Result:=ESRCH;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ if (pRes=nil) then
+ begin
+  Result:=evf_trywait(evf,bitPattern,waitMode,nil);
+  r:=0;
+ end else
+ begin
+  res:=0;
+  Result:=evf_trywait(evf,bitPattern,waitMode,@res);
+  r:=copyout(@res,pRes,SizeOf(QWORD));
+ end;
+
+ id_release(@evf^.desc);
+
+ if (r<>0) then Result:=EFAULT;
+end;
+
+function sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
+var
+ evf:p_evf;
+ res:QWORD;
+ timeout:PDWORD;
+ time:DWORD;
+ r:Integer;
+begin
+ Result:=EINVAL;
+
+ if ((waitMode and 3)=0) or
+    ((waitMode and 3)=3) or
+    ((waitMode and $30)=$30) or
+    (bitPattern=0) then Exit;
+
+ time:=0;
+ timeout:=nil;
+
+ if (pTimeout<>nil) then
+ begin
+  Result:=copyin(pTimeout,@time,SizeOf(DWORD));
+  if (Result<>0) then Exit;
+  timeout:=@time;
+ end;
+
+ Result:=ESRCH;
+
+ evf:=p_evf(id_get(@evf_table,key));
+ if (evf=nil) then Exit;
+
+ if (pRes=nil) then
+ begin
+  Result:=evf_wait(evf,bitPattern,waitMode,nil,timeout);
+  r:=0;
+ end else
+ begin
+  res:=0;
+  Result:=evf_wait(evf,bitPattern,waitMode,@res,timeout);
+  r:=copyout(@res,pRes,SizeOf(QWORD));
+ end;
+
+ id_release(@evf^.desc);
+
+ if (r=0) and (pTimeout<>nil) then
+ begin
+  r:=copyout(@time,pTimeout,SizeOf(DWORD));
+ end;
+
+ if (r<>0) then Result:=EFAULT;
+end;
 
 
+initialization
+ id_table_init(@evf_table,1);
+
+finalization
+ id_table_fini(@evf_table);
 
 end.
+
 

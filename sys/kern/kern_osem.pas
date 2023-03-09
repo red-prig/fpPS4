@@ -387,19 +387,20 @@ begin
  Result:=EINVAL;
  td:=curkthread;
 
- if ((attr and $fffffefc)<>0) or ((attr and 3)=3) then Exit;
-
- //process shared osem not support
- if ((attr and SEMA_ATTR_SHRD)<>0) then Exit(EPERM);
+ if ((attr and $fffffefc)<>0) or
+    ((attr and 3)=3) then Exit;
 
  if (initCount<0) or
     (maxCount<=0) or
     (initCount>maxCount) or
     (name=nil) then Exit;
 
+ //process shared osem not support
+ if ((attr and SEMA_ATTR_SHRD)<>0) then Exit(EPERM);
+
  if ((attr and 3)=0) then
  begin
-  attr:=attr or 1;
+  attr:=attr or SEMA_ATTR_FIFO;
  end;
 
  FillChar(_name,32,0);

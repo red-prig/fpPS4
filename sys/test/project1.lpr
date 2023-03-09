@@ -31,7 +31,8 @@ uses
  kern_osem,
  kern_id,
  sys_osem,
- kern_evf;
+ kern_evf,
+ sys_evf;
 
 var
  mtx:umutex;
