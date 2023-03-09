@@ -30,7 +30,8 @@ uses
  kern_condvar,
  kern_osem,
  kern_id,
- sys_osem;
+ sys_osem,
+ kern_evf;
 
 var
  mtx:umutex;
@@ -207,6 +208,9 @@ begin
   t:=400;
   i:=_osem_wait_err(osem,1,nil);
   Writeln('_osem_wait_err=',i,' _errno:',__error^);
+
+  i:=_osem_delete_err(osem);
+  Writeln('_osem_delete_err=',i,' _errno:',__error^);
 
   writeln;
  end else
