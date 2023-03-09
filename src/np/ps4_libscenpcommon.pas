@@ -155,6 +155,11 @@ begin
  end;
 end;
 
+function ps4_sceNpMutexLock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexLock(mutex);
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -168,6 +173,7 @@ begin
  lib^.set_proc($80C958E9E7B0AFF7,@ps4_sceNpAllocateKernelMemoryWithAlignment);
  lib^.set_proc($3163CE92ACD8B2CD,@ps4_sceNpAllocateKernelMemoryNoAlignment);
  lib^.set_proc($B84C1A83FD1864F7,@ps4_sceNpMutexInit);
+ lib^.set_proc($F542B5BCB6507EDE,@ps4_sceNpMutexLock);
 end;
 
 initialization
