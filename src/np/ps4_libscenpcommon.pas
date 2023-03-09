@@ -53,6 +53,7 @@ type
 implementation
 
 uses
+ ps4_mutex,
  ps4_map_mm;
 
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
@@ -139,6 +140,41 @@ begin
  end;
 end;
 
+function ps4_sceNpMutexInit(mutex:PScePthreadMutex;name:PChar;isRecursive:Boolean):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_mutex_attr;
+begin
+ Result:=ps4_scePthreadMutexattrInit(@attr);
+ if Result=0 then
+ begin
+  if isRecursive then
+   Result:=ps4_scePthreadMutexattrSettype(@attr,SCE_PTHREAD_MUTEX_RECURSIVE);
+  if Result=0 then
+   Result:=ps4_scePthreadMutexInit(mutex,@attr,name);
+  ps4_scePthreadMutexattrDestroy(@attr);
+ end;
+end;
+
+function ps4_sceNpMutexLock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexLock(mutex);
+end;
+
+function ps4_sceNpMutexUnlock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexUnlock(mutex);
+end;
+
+function ps4_sceNpMutexTryLock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexTryLock(mutex);
+end;
+
+function ps4_sceNpMutexDestroy(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexDestroy(mutex);
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -151,6 +187,11 @@ begin
  lib^.set_proc($763F8EE5A0F66B44,@ps4_sceNpCmpOnlineId);
  lib^.set_proc($80C958E9E7B0AFF7,@ps4_sceNpAllocateKernelMemoryWithAlignment);
  lib^.set_proc($3163CE92ACD8B2CD,@ps4_sceNpAllocateKernelMemoryNoAlignment);
+ lib^.set_proc($B84C1A83FD1864F7,@ps4_sceNpMutexInit);
+ lib^.set_proc($F542B5BCB6507EDE,@ps4_sceNpMutexLock);
+ lib^.set_proc($A19C9BF64B6E0A90,@ps4_sceNpMutexUnlock);
+ lib^.set_proc($0EEB259A8A90FA79,@ps4_sceNpMutexTryLock);
+ lib^.set_proc($950D7506930CE0B5,@ps4_sceNpMutexDestroy);
 end;
 
 initialization
