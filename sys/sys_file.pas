@@ -16,6 +16,7 @@ uses
 
 function _sys_file_open(const path:RawByteString;flags,mode:Integer):Integer;
 function _sys_file_stat(Const path:RawByteString;stat:PSceKernelStat):Integer;
+function _sys_file_trunc(Const path:RawByteString;length:Int64):Integer;
 
 implementation
 
@@ -169,9 +170,22 @@ var
 begin
  f:=nil;
  Result:=__sys_file_open(path,O_RDONLY,0,f);
- if (Result<>0) then Exit(-Result);
+ if (Result<>0) then Exit;
 
  Result:=f.fstat(stat);
+
+ f.Destroy;
+end;
+
+function _sys_file_trunc(Const path:RawByteString;length:Int64):Integer;
+var
+ f:TFile;
+begin
+ f:=nil;
+ Result:=__sys_file_open(path,O_RDWR,0,f);
+ if (Result<>0) then Exit;
+
+ Result:=f.ftruncate(length);
 
  f.Destroy;
 end;

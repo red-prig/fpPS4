@@ -1718,6 +1718,9 @@ begin
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
 
+ lib^.set_proc($6B2AEDB3323B1818,@ps4_truncate);
+ lib^.set_proc($5A5C8403FB0B0DFD,@ps4_sceKernelTruncate);
+
  lib^.set_proc($246322A3EDB52F87,@ps4_mkdir);
  lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
 
