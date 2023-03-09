@@ -244,7 +244,7 @@ end;
 
 function osem_wait(sem:p_osem;needCount:Integer;timeout:PDWORD):Integer;
 label
- _FIFO,_LAB;
+ _FIFO,_SIGNAL;
 var
  td:p_kthread;
  node:t_osem_node;
@@ -309,10 +309,7 @@ begin
       timeout^:=0;
      end;
     end;
-    if (Result=0) then
-    begin
-     //
-    end else
+    if (Result<>0) then
     begin
      node2:=sem^.list.tqh_first;
      repeat
@@ -320,7 +317,7 @@ begin
       if (node3=nil) then
       begin
        Result:=0;
-       goto _LAB;
+       goto _SIGNAL;
       end;
       node2:=node3^.entry.tqe_next;
      until (node3=@node);
@@ -339,7 +336,7 @@ begin
      end;
     end;
 
-    _LAB:
+    _SIGNAL:
     count:=sem^.wait_count-1;
     sem^.wait_count:=count;
     if ((sem^.attr and SEMA_ATTR_DELF)<>0) then

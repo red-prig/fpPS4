@@ -41,7 +41,8 @@ var
 
  event:Thandle;
 
- osem:Integer;
+ //osem:Integer;
+ evf:Integer;
 
 procedure trap_test;
 var
@@ -191,8 +192,11 @@ begin
  begin
   tid2:=curkthread^.td_tid;
 
-  osem:=osem_create('osem test',1,1,10);
-  Writeln('osem=',osem,' _errno:',__error^);
+  evf:=evf_create('evf test',EVF_ATTR_TH_PRIO,0);
+  Writeln('evf=',evf,' _errno:',__error^);
+
+  //osem:=osem_create('osem test',1,1,10);
+  //Writeln('osem=',osem,' _errno:',__error^);
 
   act:=Default(sigaction_t);
   act.u.sa_handler:=sa_handler(@__ex_handler);
@@ -203,15 +207,21 @@ begin
   thr_kill(tid,SIGUSR1);
   //thr_wake(tid);
 
-  i:=_osem_wait_err(osem,1,nil);
-  Writeln('_osem_wait_err=',i,' _errno:',__error^);
+  i:=_evf_wait_err(evf,1,EVF_WAITMODE_OR,nil,nil);
+  Writeln('_evf_wait_err=',i,' _errno:',__error^);
 
-  t:=400;
-  i:=_osem_wait_err(osem,1,nil);
-  Writeln('_osem_wait_err=',i,' _errno:',__error^);
+  i:=_evf_wait_err(evf,2,EVF_WAITMODE_OR,nil,nil);
+  Writeln('_evf_wait_err=',i,' _errno:',__error^);
 
-  i:=_osem_delete_err(osem);
-  Writeln('_osem_delete_err=',i,' _errno:',__error^);
+  //i:=_osem_wait_err(osem,1,nil);
+  //Writeln('_osem_wait_err=',i,' _errno:',__error^);
+  //
+  //t:=400;
+  //i:=_osem_wait_err(osem,1,nil);
+  //Writeln('_osem_wait_err=',i,' _errno:',__error^);
+  //
+  //i:=_osem_delete_err(osem);
+  //Writeln('_osem_delete_err=',i,' _errno:',__error^);
 
   writeln;
  end else
@@ -256,7 +266,13 @@ begin
  sleep(500);
  //_osem_post_err(osem,1);
  thr_kill(tid2,SIGUSR1);
- _osem_post_err(osem,1);
+
+ i:=_evf_set_err(evf,2);
+
+ i:=_evf_set_err(evf,1);
+ Writeln('_evf_set_err=',i,' _errno:',__error^);
+
+ //_osem_post_err(osem,1);
 
  sig_lock;
  sig_lock;

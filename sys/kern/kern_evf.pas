@@ -342,6 +342,7 @@ var
  pattern:QWORD;
  attr:DWORD;
  _pri:Integer;
+ count:Integer;
 begin
  td:=curkthread;
 
@@ -392,7 +393,7 @@ begin
     if ((attr and EVF_ATTR_TH_FIFO)=0) then
     begin
      //PRIO
-     node.entry.tqe_next:=TAILQ_FIRST(@evf^.list);
+     node.entry.tqe_next:=@evf^.list.tqh_first;
      repeat
       node.entry.tqe_next:=p_evf_node(node.entry.tqe_next)^.entry.tqe_next;
       if (node.entry.tqe_next=nil) then goto _FIFO;
@@ -461,10 +462,10 @@ begin
     end;
     _SIGNAL:
 
-    Result:=evf^.wait_count-1;
-    evf^.wait_count:=Result;
+    count:=evf^.wait_count-1;
+    evf^.wait_count:=count;
 
-    if ((evf^.attr and EVF_ATTR_DELF)<>0) and (Result=0) then
+    if ((evf^.attr and EVF_ATTR_DELF)<>0) and (count=0) then
     begin
      cv_signal(@evf^.cv);
     end;
@@ -514,7 +515,6 @@ begin
 
   Exit(EACCES);
  end;
-
 end;
 
 //
