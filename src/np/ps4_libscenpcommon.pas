@@ -192,6 +192,13 @@ begin
  lib^.set_proc($A19C9BF64B6E0A90,@ps4_sceNpMutexUnlock);
  lib^.set_proc($0EEB259A8A90FA79,@ps4_sceNpMutexTryLock);
  lib^.set_proc($950D7506930CE0B5,@ps4_sceNpMutexDestroy);
+ // These sceNpLwMutexXxx have the same interface & functionally as sceNpMutexXxx
+ lib^.set_proc($D4289723F33210AB,@ps4_sceNpMutexInit);    // sceNpLwMutexInit
+ lib^.set_proc($D7C8FEAA4E9D4709,@ps4_sceNpMutexLock);    // sceNpLwMutexLock
+ lib^.set_proc($0901B6A32C75FE73,@ps4_sceNpMutexUnlock);  // sceNpLwMutexUnlock
+ lib^.set_proc($869D24560BB9171C,@ps4_sceNpMutexTryLock); // sceNpLwMutexTryLock
+ lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
+ //
 end;
 
 initialization
