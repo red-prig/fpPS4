@@ -207,8 +207,8 @@ begin
   thr_kill(tid,SIGUSR1);
   //thr_wake(tid);
 
-  i:=_evf_wait_err(evf,1,EVF_WAITMODE_OR,nil,nil);
-  Writeln('_evf_wait_err=',i,' _errno:',__error^);
+  i:=_evf_trywait_err(evf,1,EVF_WAITMODE_OR,nil);
+  Writeln('_evf_trywait_err=',i,' _errno:',__error^);
 
   i:=_evf_wait_err(evf,2,EVF_WAITMODE_OR,nil,nil);
   Writeln('_evf_wait_err=',i,' _errno:',__error^);

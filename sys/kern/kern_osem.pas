@@ -8,7 +8,7 @@ interface
 const
  SEMA_ATTR_FIFO=$1;
  SEMA_ATTR_PRIO=$2;
- SEMA_ATTR_SHRD=$1000;
+ SEMA_ATTR_SHRD=$100;
 
 function sys_osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
 function sys_osem_delete(key:Integer):Integer;
