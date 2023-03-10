@@ -640,6 +640,7 @@ end;
 function ps4_sceHttpAbortRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
 begin
  WriteLn(SysLogPrefix,'sceHttpAbortRequest,id=',reqId);
+ Result:=0;
 end;
 
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
