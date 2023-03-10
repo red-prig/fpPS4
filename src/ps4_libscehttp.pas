@@ -637,6 +637,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpAbortRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ WriteLn(SysLogPrefix,'sceHttpAbortRequest,id=',reqId);
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -686,6 +692,7 @@ begin
  lib^.set_proc($D12F6D4C7D2EA935,@ps4_sceHttpSetConnectTimeOut);
  lib^.set_proc($C5E8057D9281565C,@ps4_sceHttpSetSendTimeOut);
  lib^.set_proc($3C3C52E3CC4640BB,@ps4_sceHttpSetChunkedTransferEnabled);
+ lib^.set_proc($86F1BA19F04C5E0F,@ps4_sceHttpAbortRequest);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;

@@ -17,6 +17,8 @@ const
 
  SCE_NP_COMMUNICATION_PASSPHRASE_SIZE=128;
 
+ SCE_NP_ARCH_ERROR_UNKNOWN=-2141880310;
+
 type
  SceNpServiceLabel=DWORD;
  
@@ -50,9 +52,15 @@ type
   data:array[0..SCE_NP_COMMUNICATION_PASSPHRASE_SIZE-1] of Byte;
  end;
 
+ pSceNpHeap=^SceNpHeap;
+ SceNpHeap=packed record
+  mspace:Pointer;
+ end;
+
 implementation
 
 uses
+ ps4_mspace_internal,
  ps4_mutex,
  ps4_map_mm;
 
@@ -175,6 +183,22 @@ begin
  Result:=ps4_scePthreadMutexDestroy(mutex);
 end;
 
+function ps4_sceNpHeapInit(heap:pSceNpHeap;base:Pointer;capacity:size_t;name:PChar):Integer; SysV_ABI_CDecl;
+var
+ m:Pointer;
+begin
+ Result:=SCE_NP_ARCH_ERROR_UNKNOWN;
+ if heap<>nil then
+ begin
+  m:=ps4_sceLibcMspaceCreate(name,base,capacity,0);
+  if (m<>nil) then
+  begin
+   heap^.mspace:=m;
+   Result:=0;
+  end;
+ end;
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -199,6 +223,7 @@ begin
  lib^.set_proc($869D24560BB9171C,@ps4_sceNpMutexTryLock); // sceNpLwMutexTryLock
  lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
  //
+ lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
 end;
 
 initialization
