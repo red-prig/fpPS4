@@ -962,71 +962,53 @@ begin
  end;
 end;
 
+function GetCurrentHwGUID(var g:TGUID):Boolean;
+var
+ HW:HW_PROFILE_INFOA;
+begin
+ HW:=Default(HW_PROFILE_INFOA);
+ Result:=GetCurrentHwProfileA(@HW);
+ if Result then
+ begin
+  Result:=TryStringToGUID(HW.szHwProfileGuid,g);
+ end;
+end;
+
 type
  pSceKernelOpenPsId=^SceKernelOpenPsId;
- SceKernelOpenPsId=array[0..15] of Char;
+ SceKernelOpenPsId=array[0..15] of Byte;
 
 function ps4_sceKernelGetOpenPsId(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
 var
- HW:HW_PROFILE_INFOA;
+ g:TGUID;
 begin
  //sysctlbyname:machdep.openpsid
  if (id=nil) then Exit(EINVAL);
 
- HW:=Default(HW_PROFILE_INFOA);
- if GetCurrentHwProfileA(@HW) then
+ g:=Default(TGUID);
+ if GetCurrentHwGUID(g) then
  begin
-  id[ 0]:=HW.szHwProfileGuid[ 1];
-  id[ 1]:=HW.szHwProfileGuid[ 2];
-  id[ 2]:=HW.szHwProfileGuid[ 3];
-  id[ 3]:=HW.szHwProfileGuid[ 4];
-  id[ 4]:=HW.szHwProfileGuid[ 5];
-  id[ 5]:=HW.szHwProfileGuid[ 6];
-  id[ 6]:=HW.szHwProfileGuid[ 7];
-  id[ 7]:=HW.szHwProfileGuid[ 8];
-  id[ 8]:=HW.szHwProfileGuid[10];
-  id[ 9]:=HW.szHwProfileGuid[11];
-  id[10]:=HW.szHwProfileGuid[12];
-  id[11]:=HW.szHwProfileGuid[13];
-  id[12]:=HW.szHwProfileGuid[15];
-  id[13]:=HW.szHwProfileGuid[16];
-  id[14]:=HW.szHwProfileGuid[17];
-  id[15]:=HW.szHwProfileGuid[18];
+  id^:=SceKernelOpenPsId(g);
  end else
  begin
-  FillChar(id^,SizeOf(SceKernelOpenPsId),ord('0'));
+  id^:=Default(SceKernelOpenPsId);
  end;
 end;
 
 function ps4_sceKernelGetOpenPsIdForSystem(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
 var
- HW:HW_PROFILE_INFOA;
+ g:TGUID;
 begin
  //sysctlbyname:machdep.openpsid_for_sys
  if (id=nil) then Exit(EINVAL);
 
- HW:=Default(HW_PROFILE_INFOA);
- if GetCurrentHwProfileA(@HW) then
+ g:=Default(TGUID);
+ if GetCurrentHwGUID(g) then
  begin
-  id[ 0]:=HW.szHwProfileGuid[ 1];
-  id[ 1]:=HW.szHwProfileGuid[ 2];
-  id[ 2]:=HW.szHwProfileGuid[ 3];
-  id[ 3]:=HW.szHwProfileGuid[ 4];
-  id[ 4]:=HW.szHwProfileGuid[ 5];
-  id[ 5]:=HW.szHwProfileGuid[ 6];
-  id[ 6]:=HW.szHwProfileGuid[ 7];
-  id[ 7]:=HW.szHwProfileGuid[ 8];
-  id[ 8]:=HW.szHwProfileGuid[10];
-  id[ 9]:=HW.szHwProfileGuid[11];
-  id[10]:=HW.szHwProfileGuid[12];
-  id[11]:=HW.szHwProfileGuid[13];
-  id[12]:=HW.szHwProfileGuid[15];
-  id[13]:=HW.szHwProfileGuid[16];
-  id[14]:=HW.szHwProfileGuid[17];
-  id[15]:=HW.szHwProfileGuid[18];
+  id^:=SceKernelOpenPsId(g);
  end else
  begin
-  FillChar(id^,SizeOf(SceKernelOpenPsId),ord('0'));
+  id^:=Default(SceKernelOpenPsId);
  end;
 end;
 
