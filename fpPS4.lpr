@@ -39,6 +39,7 @@ uses
  ps4_libSceNpCommon,
  ps4_libSceNpManager,
  ps4_libSceNpGameIntent,
+ ps4_libSceNpAuth,
  ps4_libSceSaveData,
  ps4_libSceDialogs,
  ps4_libSceUserService,
