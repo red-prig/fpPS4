@@ -934,6 +934,18 @@ var
  f              :THandle;
  path,
  source         :RawByteString;
+
+ function getFileSize(aFileName:RawByteString):Int64;
+ var
+  info:TSearchRec;
+ begin
+  if FindFirst(aFileName,0,info)=0 then
+   Result:=Info.Size
+  else
+   Result:=-1;
+  FindClose(info);
+ end;
+
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
@@ -963,7 +975,7 @@ begin
    CreateDir(path);
    //
    source:=path+'/'+ExtractFileName(argFilename);
-   if not FileExists(source) then
+   if fileSize<>getFileSize(source) then
    begin
     f:=FileCreate(source,fmOpenWrite);
     //
