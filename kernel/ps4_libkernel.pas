@@ -446,10 +446,12 @@ begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
 end;
 
+//get sdk version of game
 function ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
 var
  P:PSceProcParam;
 begin
+ //sys_dynlib_get_proc_param
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (sdkVersion=nil) then Exit;
  P:=GetSceProcParam;
@@ -462,6 +464,31 @@ begin
   sdkVersion^:=P^.Header.SDK_version;
   Result:=0;
  end;
+end;
+
+type
+ p_sw_version=^t_sw_version;
+ t_sw_version=packed record
+  size   :QWORD; //(40)
+  str    :array[0..27] of Char;
+  version:DWORD;
+ end;
+
+//get sdk version of system
+function ps4_sceKernelGetSystemSwVersion(p:p_sw_version):Integer; SysV_ABI_CDecl;
+var
+ version:DWORD;
+begin
+ //sysctlbyname:kern.sdk_version
+ version:=$10508001; //10.50
+ ps4_sceKernelGetCompiledSdkVersion(@version); //mirror of game version?
+
+ p^.version:=version;
+ p^.str:=Format('%2x.%03x.%03x',[(version shr 24),
+                                 ((version shr 12) and $fff),
+                                 (version and $fff)]);
+
+ Result:=0;
 end;
 
 const
@@ -1210,6 +1237,7 @@ begin
  lib^.set_proc($F1C0250B3A0E8A27,@ps4_sceKernelMapSanitizerShadowMemory);
 
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
+ lib^.set_proc($32FD7350E6C7BD72,@ps4_sceKernelGetSystemSwVersion);
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
  lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
  lib^.set_proc($3210B9DD32A68D50,@ps4_sysctlbyname);
