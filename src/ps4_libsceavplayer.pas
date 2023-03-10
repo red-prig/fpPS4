@@ -959,7 +959,6 @@ begin
     Exit(-1);
    end;
    // Read data and write to dump directory
-   Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
    path:=DIRECTORY_AVPLAYER_DUMP+'/'+param_sfo.ParamSfoGetString('TITLE_ID');
    CreateDir(path);
    //
