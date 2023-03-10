@@ -1004,7 +1004,7 @@ begin
    path:=DIRECTORY_AVPLAYER_DUMP+'/'+param_sfo.ParamSfoGetString('TITLE_ID');
    CreateDir(path);
    //
-   source:=path+'/'+ExtractFileName(argFilename);
+   source:=path+'/'+IntToStr(fileSize)+'_'+ExtractFileName(argFilename);
    if fileSize<>getFileSize(source) then
    begin
     f:=FileCreate(source,fmOpenWrite);
