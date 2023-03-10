@@ -17,7 +17,7 @@ const
 
  SCE_NP_COMMUNICATION_PASSPHRASE_SIZE=128;
 
- SCE_NP_ARCH_ERROR_UNKNOWN=$8055800a;
+ SCE_NP_ARCH_ERROR_UNKNOWN=-2141880310;
 
 type
  SceNpServiceLabel=DWORD;
@@ -50,6 +50,11 @@ type
  pSceNpCommunicationPassphrase=^SceNpCommunicationPassphrase;
  SceNpCommunicationPassphrase=packed record
   data:array[0..SCE_NP_COMMUNICATION_PASSPHRASE_SIZE-1] of Byte;
+ end;
+
+ pSceNpHeap=^SceNpHeap;
+ SceNpHeap=packed record
+  mspace:Pointer;
  end;
 
 implementation
@@ -178,17 +183,17 @@ begin
  Result:=ps4_scePthreadMutexDestroy(mutex);
 end;
 
-function ps4_sceNpHeapInit(heap,base:Pointer;capacity:size_t;name:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceNpHeapInit(heap:pSceNpHeap;base:Pointer;capacity:size_t;name:PChar):Integer; SysV_ABI_CDecl;
 var
- heapPtr:pSceLibcMspace;
+ m:Pointer;
 begin
  Result:=SCE_NP_ARCH_ERROR_UNKNOWN;
  if heap<>nil then
  begin
-  heapPtr:=ps4_sceLibcMspaceCreate(name,base,capacity,0);
-  if heapPtr<>nil then
+  m:=ps4_sceLibcMspaceCreate(name,base,capacity,0);
+  if (m<>nil) then
   begin
-   pSceLibcMspace(heap^):=heapPtr;
+   heap^.mspace:=m;
    Result:=0;
   end;
  end;
