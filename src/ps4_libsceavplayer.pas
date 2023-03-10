@@ -265,6 +265,8 @@ type
   lastAudioTimeStamp  :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
+  audioChunk,
+  videoChunk          :TMemChunk;
   durationInMs        :QWord;
   streamCount         :DWord;
   videoStreamId       :Integer;
@@ -381,6 +383,28 @@ begin
  if (data<>nil) then
  begin
   data.dec_ref;
+ end;
+end;
+
+procedure _FreeChunk(var chunk:TMemChunk);
+begin
+ if chunk.pAddr<>nil then
+ begin
+  FreeMem(chunk.pAddr);
+  chunk.pAddr:=nil;
+ end;
+end;
+
+procedure _CompareAndAllocChunk(var chunk:TMemChunk;const nSize:QWord);
+begin
+ if nSize<>chunk.nSize then
+ begin
+  if chunk.pAddr<>nil then
+  begin
+   FreeMem(chunk.pAddr);
+  end;
+  chunk.pAddr:=AllocMem(nSize);
+  chunk.nSize:=nSize;
  end;
 end;
 
@@ -591,6 +615,8 @@ begin
 
  audioPackets:=TAVPacketQueue.Create;
  videoPackets:=TAVPacketQueue.Create;
+ audioChunk:=Default(TMemChunk);
+ videoChunk:=Default(TMemChunk);
 end;
 
 procedure TAvPlayerState.FreeMedia;
@@ -615,6 +641,8 @@ begin
  end;
  audioPackets.Free;
  videoPackets.Free;
+ _FreeChunk(audioChunk);
+ _FreeChunk(videoChunk);
 
  if videoCodecContext<>nil then
  begin
@@ -688,12 +716,12 @@ var
  frame    :PAVFrame;
  i, j     :Integer;
  fdata    :PSingle;
+ nsize    :QWord;
  pcmSample:SmallInt;
 begin
  Result:=Default(TMemChunk);
  if (audioStreamId<0) or ((not ignoreIsPlaying) and (not IsPlaying)) then Exit;
  frame:=av_frame_alloc;
- Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(audioCodecContext,frame);
@@ -711,18 +739,19 @@ begin
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
   sampleRate:=frame^.sample_rate;
-  Result.nSize:=sampleCount*channelCount*SizeOf(SmallInt);
-  GetMem(Result.pAddr,Result.nSize);
+  nsize:=sampleCount*channelCount*SizeOf(SmallInt);
+  _CompareAndAllocChunk(audioChunk,nsize);
   for i:=0 to sampleCount-1 do
    for j:=0 to channelCount-1 do
    begin
     fdata:=PSingle(frame^.data[j]);
     pcmSample:=Floor(fdata[i]*High(SmallInt));
-    PSmallInt(Result.pAddr)[i*channelCount+j]:=pcmSample;
+    PSmallInt(audioChunk.pAddr)[i*channelCount+j]:=pcmSample;
    end;
   break;
  end;
  av_frame_free(frame);
+ Result:=audioChunk;
 end;
 
 function TAvPlayerState.ReceiveVideo:TMemChunk;
@@ -732,6 +761,7 @@ var
  j         :Integer;
  i         :Integer;
  fdata     :PSingle;
+ nsize     :QWord;
  sample    :Single;
  pcmSamplex:Word;
  p         :PByte;
@@ -739,7 +769,6 @@ begin
  Result:=Default(TMemChunk);
  if (videoStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
- Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(videoCodecContext,frame);
@@ -754,27 +783,30 @@ begin
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
    Writeln(StdErr,'ERROR: Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
-  Result.nSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
-  GetMem(Result.pAddr,Result.nSize);
-
-  p:=Result.pAddr;
-  for i:=0 to frame^.height-1 do
+  nsize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
+  _CompareAndAllocChunk(videoChunk,nsize);
+  if lastVideoTimeStamp>=lastAudioTimeStamp then // Only copy frame when video is synced with audio
   begin
-   Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
-   p:=p+frame^.width;
-  end;
-  for i:=0 to frame^.height div 2-1 do
-  begin
-   for j:=0 to frame^.width div 2-1 do
+   p:=videoChunk.pAddr;
+   for i:=0 to frame^.height-1 do
    begin
-    p[0]:=frame^.data[1][frame^.linesize[1]*i+j];
-    p[1]:=frame^.data[2][frame^.linesize[2]*i+j];
-    p:=p+2;
+    Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
+    p:=p+frame^.width;
+   end;
+   for i:=0 to frame^.height div 2-1 do
+   begin
+    for j:=0 to frame^.width div 2-1 do
+    begin
+     p[0]:=frame^.data[1][frame^.linesize[1]*i+j];
+     p[1]:=frame^.data[2][frame^.linesize[2]*i+j];
+     p:=p+2;
+    end;
    end;
   end;
   break;
  end;
  av_frame_free(frame);
+ Result:=videoChunk;
 end;
 
 function TAvPlayerState.GetFramerate:QWord;
@@ -809,7 +841,6 @@ begin
     audioBuffer[0]:=playerInfo.Allocate(32,chunk.nSize);
    end;
    Move(chunk.pAddr^,audioBuffer[0]^,chunk.nSize);
-   FreeMem(chunk.pAddr);
   end;
   Exit(audioBuffer[0]);
  end else
@@ -821,7 +852,6 @@ begin
     videoBuffer[0]:=playerInfo.AllocateTexture(32,chunk.nSize);
    end;
    Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
-   FreeMem(chunk.pAddr);
   end;
   Exit(videoBuffer[0]);
  end;
