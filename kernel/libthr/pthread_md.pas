@@ -22,6 +22,8 @@ type
   tcb_spare :Pointer;
  end;
 
+procedure CPU_SPINWAIT;
+
 procedure _tcb_set(tcb:p_tcb);
 function  _tcb_get:p_tcb;
 function  _get_curthread:p_pthread;
@@ -30,6 +32,11 @@ function  _tcb_ctor(thread:Pointer;initial:Integer):p_tcb;
 procedure _tcb_dtor(tcb:p_tcb);
 
 implementation
+
+procedure CPU_SPINWAIT; assembler; nostackframe;
+asm
+ pause
+end;
 
 function TCB_GET64:p_tcb; assembler; nostackframe;
 asm

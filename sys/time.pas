@@ -58,6 +58,9 @@ function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 function  tvtohz(time:Int64):Int64; inline;
 procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 
+procedure TIMESPEC_ADD(dst,src,val:ptimespec);
+procedure TIMESPEC_SUB(dst,src,val:ptimespec);
+
 implementation
 
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
@@ -75,6 +78,29 @@ begin
  ts^.tv_sec :=(timeo div 1000000);
  ts^.tv_nsec:=(timeo mod 1000000)*1000;
 end;
+
+procedure TIMESPEC_ADD(dst,src,val:ptimespec);
+begin
+ dst^.tv_sec :=src^.tv_sec +val^.tv_sec;
+ dst^.tv_nsec:=src^.tv_nsec+val^.tv_nsec;
+ if (dst^.tv_nsec>=1000000000) then
+ begin
+  Inc(dst^.tv_sec);
+  Dec(dst^.tv_nsec,1000000000);
+ end;
+end;
+
+procedure TIMESPEC_SUB(dst,src,val:ptimespec);
+begin
+ dst^.tv_sec :=src^.tv_sec -val^.tv_sec;
+ dst^.tv_nsec:=src^.tv_nsec-val^.tv_nsec;
+ if (dst^.tv_nsec<0) then
+ begin
+  Dec(dst^.tv_sec);
+  Inc(dst^.tv_nsec,1000000000);
+ end;
+end;
+
 
 end.
 

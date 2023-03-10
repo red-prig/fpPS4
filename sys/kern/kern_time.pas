@@ -16,10 +16,14 @@ function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
+function sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+
 implementation
 
 uses
- errno;
+ errno,
+ systm;
 
 Const
  UNIT_PER_SEC         =10000000;
@@ -235,6 +239,28 @@ begin
 
   else
    Result:=EINVAL;
+ end;
+end;
+
+function sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+var
+ ats:timespec;
+begin
+ Result:=kern_clock_gettime(clock_id,@ats);
+ if (Result=0) then
+ begin
+  Result:=copyout(@ats,tp,sizeof(ats));
+ end;
+end;
+
+function sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+var
+ ats:timespec;
+begin
+ Result:=kern_clock_getres(clock_id,@ats);
+ if (Result=0) then
+ begin
+  Result:=copyout(@ats,tp,sizeof(ats));
  end;
 end;
 

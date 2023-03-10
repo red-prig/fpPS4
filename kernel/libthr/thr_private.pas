@@ -6,6 +6,7 @@ unit thr_private;
 interface
 
 uses
+ mqueue,
  signal,
  _umtx;
 
@@ -43,11 +44,6 @@ type
  p_pthread=^pthread;
 
  p_pthread_mutex=^pthread_mutex;
-
- pthread_mutex_entry=packed record
-  pPrev,pNext:p_pthread_mutex;
- end;
-
  pthread_mutex=packed record
   //Lock for accesses to this structure.
   m_lock      :umutex;
@@ -59,7 +55,7 @@ type
   m_yieldloops:Integer;
   magic1      :DWORD;
   //Link for all mutexes a thread currently owns.
-  m_qe        :pthread_mutex_entry;
+  m_qe        :TAILQ_ENTRY;
   //
  end;
 
@@ -103,16 +99,17 @@ type
 
  p_pthread_cleanup=^pthread_cleanup;
  pthread_cleanup=packed record
-  prev:p_pthread_cleanup;
-  routine:t_routine_proc;
+  prev       :p_pthread_cleanup;
+  routine    :t_routine_proc;
   routine_arg:Pointer;
-  onheap:Integer;
+  onheap     :Integer;
  end;
+
+ atfork_head=TAILQ_HEAD;
 
  p_pthread_atfork=^pthread_atfork;
  pthread_atfork=packed record
-  qe_prev:p_pthread_atfork;
-  qe_next:p_pthread_atfork;
+  qe     :TAILQ_ENTRY;
   prepare:TProcedure;
   parent :TProcedure;
   child  :TProcedure;
@@ -141,14 +138,10 @@ type
 
  p_sleepqueue=^sleepqueue;
 
- sleepqueue_entry=packed record
-  pPrev,pNext:p_sleepqueue;
- end;
-
  sleepqueue=packed record
-  sq_blocked:sleepqueue_entry;
+  sq_blocked:TAILQ_ENTRY;
   sq_freeq  :p_sleepqueue;
-  sq_hash   :sleepqueue_entry;
+  sq_hash   :TAILQ_ENTRY;
   sq_flink  :p_sleepqueue;
   sq_wchan  :Pointer;
   sq_type   :Integer;
@@ -166,7 +159,7 @@ type
  end;
 
  pthread_rwlock=packed record
-  lock:urwlock;
+  lock :urwlock;
   owner:Pointer; //pthread*
   magic:DWORD;
   align:DWORD;
@@ -195,9 +188,7 @@ type
   _destructor:Pointer;
  end;
 
- pthreadlist_entry=packed record
-  pPrev,pNext:p_pthread;
- end;
+ pthreadlist=TAILQ_HEAD;
 
  pthread=packed record
   tid                :Integer;
@@ -207,10 +198,10 @@ type
   locklevel          :Integer;               //How many low level locks the thread held.
   critical_count     :Integer;               //Set to non-zero when this thread has entered a critical region.
   sigblock           :Integer;               //Signal blocked counter.
-  tle                :pthreadlist_entry;     //link for all threads in process
-  gcle               :pthreadlist_entry;     //Queue entry for GC lists.
-  hle                :pthreadlist_entry;     //Hash queue entry.
-  wle                :pthreadlist_entry;     //Sleep queue entry
+  tle                :TAILQ_ENTRY;           //link for all threads in process
+  gcle               :TAILQ_ENTRY;           //Queue entry for GC lists.
+  hle                :TAILQ_ENTRY;           //Hash queue entry.
+  wle                :TAILQ_ENTRY;           //Sleep queue entry
   refcount           :Integer;               //Threads reference count.
   _align2            :Integer;
   start_routine      :Pointer;
@@ -236,8 +227,8 @@ type
   joiner             :Pointer;               //The joiner is the thread that is joining to this thread.
   flags              :Integer;               //Miscellaneous flags; only set with scheduling lock held.
   tlflags            :Integer;               //Thread list flags; only set with thread list lock held.
-  mutexq             :pthread_mutex_entry;   //Queue of currently owned NORMAL or PRIO_INHERIT type mutexes.
-  pp_mutexq          :pthread_mutex_entry;   //Queue of all owned PRIO_PROTECT mutexes.
+  mutexq             :TAILQ_ENTRY;           //Queue of currently owned NORMAL or PRIO_INHERIT type mutexes.
+  pp_mutexq          :TAILQ_ENTRY;           //Queue of all owned PRIO_PROTECT mutexes.
   ret                :Pointer;
   specific           :p_pthread_specific_elem;
   specific_data_count:Integer;
@@ -282,11 +273,21 @@ const
 
  THR_MAGIC=$d09ba115;
 
+var
+ _thr_is_smp:Integer=1;
+
+function TID(thr:p_pthread):Integer; inline;
+
 function SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
 function THR_SHOULD_GC(thr:p_pthread):Boolean; inline;
 function THR_IN_CRITICAL(thr:p_pthread):Boolean; inline;
 
 implementation
+
+function TID(thr:p_pthread):Integer; inline;
+begin
+ Result:=thr^.tid;
+end;
 
 function SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
 begin
