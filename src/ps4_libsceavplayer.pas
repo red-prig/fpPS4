@@ -30,6 +30,7 @@ var
 implementation
 
 uses
+  param_sfo,
   sys_kernel;
 
 const
@@ -931,6 +932,7 @@ var
  actualBufSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
  f              :THandle;
+ path,
  source         :RawByteString;
 begin
  if DISABLE_FMV_HACK then
@@ -957,32 +959,35 @@ begin
     Exit(-1);
    end;
    // Read data and write to dump directory
-   // TODO: Should cache the file so it can be reused later
    Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
-   CreateDir(DIRECTORY_AVPLAYER_DUMP);
+   path:=DIRECTORY_AVPLAYER_DUMP+'/'+param_sfo.ParamSfoGetString('TITLE_ID');
+   CreateDir(path);
    //
-   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
-   f:=FileCreate(source,fmOpenWrite);
-   //
-   bytesRemaining:=fileSize;
-   offset:=0;
-   while bytesRemaining>0 do
+   source:=path+'/'+ExtractFileName(argFilename);
+   if not FileExists(source) then
    begin
-    actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-    bytesRead:=player.readOffset(@buf[0],offset,actualBufSize);
-    if bytesRead<0 then
+    f:=FileCreate(source,fmOpenWrite);
+    //
+    bytesRemaining:=fileSize;
+    offset:=0;
+    while bytesRemaining>0 do
     begin
-     player.close();
-     player.unlock;
-     player.dec_ref;
-     Exit(-1);
+     actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
+     bytesRead:=player.readOffset(@buf[0],offset,actualBufSize);
+     if bytesRead<0 then
+     begin
+      player.close();
+      player.unlock;
+      player.dec_ref;
+      Exit(-1);
+     end;
+     FileWrite(f,buf,actualBufSize);
+     Dec(bytesRemaining,actualBufSize);
+     Inc(offset,actualBufSize);
     end;
-    FileWrite(f,buf,actualBufSize);
-    Dec(bytesRemaining,actualBufSize);
-    Inc(offset,actualBufSize);
+    FileClose(f);
+    player.close();
    end;
-   FileClose(f);
-   player.close();
    // Init player
    player.playerState.CreateMedia(source);
    Result:=0;
