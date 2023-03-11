@@ -57,6 +57,16 @@ type
   mspace:Pointer;
  end;
 
+type
+ PSceNpAllocator=^SceNpAllocator;
+ SceNpAllocator=record
+  // Unknown size. It has at least 4 QWords
+  alloc:function(a1,a2:QWord):Pointer; SysV_ABI_CDecl;
+  _unk1,
+  _unk2,
+  _unk3:QWord;
+ end;
+
 implementation
 
 uses
@@ -64,13 +74,6 @@ uses
  ps4_mspace_internal,
  ps4_mutex,
  ps4_map_mm;
-
-type
- PSceNpAllocator=^SceNpAllocator;
- SceNpAllocator=record
-  alloc   :function(a1,a2:QWord):Pointer; SysV_ABI_CDecl;
-  _unknown:array[0..2] of QWord; // Unknown size. It has at least 3 QWords
- end;
 
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
@@ -219,7 +222,7 @@ end;
 // sce::np::Object::operator new(unsigned long, SceNpAllocator&)
 function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(count:QWord;allocator:PSceNpAllocator):Pointer; SysV_ABI_CDecl;
 begin
- Result:=allocator^.alloc(count+$10,allocator^._unknown[2]);
+ Result:=allocator^.alloc(count+$10,allocator^._unk3);
  if Result<>nil then
  begin
   PSceNpAllocator(Result^):=allocator;
