@@ -26,13 +26,12 @@ uses
  md_context,
  subr_sleepqueue,
  kern_thr,
- rtprio,
  kern_condvar,
  kern_osem,
  kern_id,
  sys_osem,
  kern_evf,
- sys_evf,
+ sys_evf, rtprio,
  pthread;
 
 var

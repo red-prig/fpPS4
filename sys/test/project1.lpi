@@ -170,10 +170,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\kern\rtprio.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\..\rtl\mqueue.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -211,6 +207,10 @@
       </Unit>
       <Unit>
         <Filename Value="..\kern\kern_rtprio.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\rtprio.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
