@@ -58,20 +58,23 @@ type
  end;
 
 type
- PSceNpAllocator=^SceNpAllocator;
+ SceNpMallocFunc =function(size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpReallocFunc=function(ptr:Pointer;size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpFreeFunc   =procedure(ptr,userdata:Pointer); SysV_ABI_CDecl;
+
+ pSceNpAllocator=^SceNpAllocator;
  SceNpAllocator=packed record
-  // Unknown size. It has at least 4 QWords
-  alloc:function(a1,a2:QWord):Pointer; SysV_ABI_CDecl; // 8
-  _unk1,       // 16
-  _unk2,       // 24
-  _unk3:QWord; // 32
+  mallocFunc :SceNpMallocFunc;
+  reallocFunc:SceNpReallocFunc;
+  freeFunc   :SceNpFreeFunc;
+  userdata   :Pointer;
  end;
 
  PSceNpObject=^SceNpObject;
  SceNpObject=packed record
-  allocator:PSceNpAllocator; // 8
-  _unk1    :QWord;   // 16
-  entry    :Pointer; // 24
+  mem  :pSceNpAllocator; // 8
+  _unk1:QWord;   // 16
+  entry:Pointer; // 24
  end;
 
 implementation
@@ -227,15 +230,15 @@ begin
  Result:=(Result shr $1F) and Result; // Looks like bool, but True when Result<0
 end;
 
-// sce::np::Object::operator new(unsigned long, SceNpAllocator&)
-function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(count:QWord;allocator:PSceNpAllocator):Pointer; SysV_ABI_CDecl;
+//void * sce::np::Object::operator_new(size_t size,SceNpAllocator *mem)
+function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(size:size_t;mem:pSceNpAllocator):Pointer; SysV_ABI_CDecl;
 var
  npObj:PSceNpObject;
 begin
- npObj:=allocator^.alloc(count+$10,allocator^._unk3);
+ npObj:=mem^.mallocFunc(size+$10,mem^.userdata);
  if npObj<>nil then
  begin
-  npObj^.allocator:=allocator;
+  npObj^.mem:=mem;
   Result:=@npObj^.entry;
  end else
   Result:=nil;
