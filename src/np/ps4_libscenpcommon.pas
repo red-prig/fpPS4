@@ -65,6 +65,13 @@ uses
  ps4_mutex,
  ps4_map_mm;
 
+type
+ PSceNpAllocator=^SceNpAllocator;
+ SceNpAllocator=record
+  alloc   :function(a1,a2:QWord):Pointer; SysV_ABI_CDecl;
+  _unknown:array[0..2] of QWord; // Unknown size. It has at least 3 QWords
+ end;
+
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
  if (npid1=nil) or (npid2=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -209,6 +216,17 @@ begin
  Result:=Result shr $1F and Result;
 end;
 
+// sce::np::Object::operator new(unsigned long, SceNpAllocator&)
+function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(count:QWord;allocator:PSceNpAllocator):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=allocator^.alloc(count+$10,allocator^._unknown[2]);
+ if Result<>nil then
+ begin
+  PSceNpAllocator(Result^):=allocator;
+  Result:=Result+$10;
+ end;
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -235,6 +253,7 @@ begin
  //
  lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
  lib^.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
+ lib^.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
 end;
 
 initialization
