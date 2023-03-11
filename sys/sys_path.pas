@@ -583,6 +583,11 @@ begin
         if (fp^<>#0) then Inc(fp);
         Result:=MountMiscConcat('usr',fp,r);
        end;
+     $00746E6D: //mnt
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountMiscConcat('mnt',fp,r);
+       end;
      else
         Result:=PT_ERR;
     end;
