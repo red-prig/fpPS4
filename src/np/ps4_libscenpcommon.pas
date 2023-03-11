@@ -60,6 +60,7 @@ type
 implementation
 
 uses
+ ps4_event_flag,
  ps4_mspace_internal,
  ps4_mutex,
  ps4_map_mm;
@@ -199,6 +200,15 @@ begin
  end;
 end;
 
+function ps4_sceNpCreateEventFlag(ef:SceKernelEventFlag;
+                                  bitPattern:QWORD;
+                                  waitMode:DWORD;
+                                  pResultPat:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceKernelWaitEventFlag(ef,bitPattern,waitMode,pResultPat,nil);
+ Result:=Result shr $1F and Result;
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -224,6 +234,7 @@ begin
  lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
  //
  lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
+ lib^.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
 end;
 
 initialization
