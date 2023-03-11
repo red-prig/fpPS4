@@ -37,8 +37,8 @@ const
  THR_CREATE_SUSPENDED=1;
 
  //Miscellaneous definitions.
- THR_STACK_DEFAULT=(2 * 1024 * 1024);
- THR_STACK_INITIAL=(THR_STACK_DEFAULT * 2);
+ THR_STACK_DEFAULT=$20000;
+ THR_STACK_INITIAL=(THR_STACK_DEFAULT*2);
 
 type
  p_pthread=^pthread;
@@ -273,8 +273,16 @@ const
 
  THR_MAGIC=$d09ba115;
 
-var
- _thr_is_smp:Integer=1;
+ //POSIX scheduling policies
+ SCHED_FIFO =1;
+ SCHED_OTHER=2;
+ SCHED_RR   =3;
+
+type
+ p_sched_param=^sched_param;
+ sched_param=packed record
+  sched_priority:Integer;
+ end;
 
 function TID(thr:p_pthread):Integer; inline;
 

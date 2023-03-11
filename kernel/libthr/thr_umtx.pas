@@ -73,7 +73,8 @@ procedure _thr_rwl_unlock(rwlock:p_urwlock);
 implementation
 
 uses
- errno;
+ errno,
+ thr_init;
 
 function atomic_cmpset_acq_32(p:PDWORD;cmpval,newval:DWORD):DWORD; inline;
 begin
