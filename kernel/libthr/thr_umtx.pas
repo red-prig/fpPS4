@@ -8,7 +8,6 @@ uses
  _umtx,
  sys_umtx,
  time,
- _sys_time,
  thr_private,
  pthread_md;
 

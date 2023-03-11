@@ -164,8 +164,7 @@ begin
   //ret:=sysctl(mib,2,@_usrstack,@len,nil,0);
   //if (ret=-1) then
   //begin
-  // Writeln('Cannot get kern.usrstack from sysctl');
-  // Halt($229);
+  // Assert(false,'Cannot get kern.usrstack from sysctl');
   //end;
   //len:=4;
   //sysctlbyname('kern.smp.cpus',@_thr_is_smp,@len,0,0);
@@ -173,8 +172,7 @@ begin
   //_thr_page_size:=getpagesize();
   _pthread_attr_default.guardsize_attr:=_thr_page_size;
   _thr_guard_default:=_pthread_attr_default.guardsize_attr;
-  //pid:=getpid();
-  //ret:=IsSystemProcess(pid);
+  //ret:=IsSystemProcess(getpid());
   _thr_atfork_list.tqh_first:=nil;
   _pthread_attr_default.stacksize_attr:=$200000;
   //if (ret<>1) then
@@ -199,8 +197,7 @@ begin
 
  if (ret=Pointer(-1)) then //MAP_FAILED
  begin
-  Writeln('Cannot allocate red zone for initial thread');
-  Halt($1d1);
+  Assert(false,'Cannot allocate red zone for initial thread');
  end;
  thread^.attr.stackaddr_attr:=(_usrstack-_thr_stack_initial);
  thread^.attr.stacksize_attr:=_thr_stack_initial;
@@ -229,6 +226,8 @@ var
 begin
  if (_thr_initial<>nil) and (curthread=nil) then Exit;
 
+ _thr_pid:=getpid();
+
  init_private;
 
  first:=0;
@@ -238,8 +237,7 @@ begin
   //curthread:=_thr_alloc(nil);
   if (curthread=nil) then
   begin
-   Writeln('Can''t allocate initial thread');
-   Halt($19c);
+   Assert(false,'Can''t allocate initial thread');
   end;
   init_main_thread(curthread);
   first:=1;

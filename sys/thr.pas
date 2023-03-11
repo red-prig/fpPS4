@@ -14,6 +14,8 @@ type
  p_thr_param=kern_thr.p_thr_param;
  thr_param  =kern_thr.thr_param;
 
+function  getpid:Integer;
+
 function  thr_new(param:p_thr_param;param_size:Integer):Integer;
 function  thr_self(id:PQWORD):Integer;
 procedure thr_exit(state:PQWORD);
@@ -31,7 +33,13 @@ implementation
 
 uses
  trap,
- thr_error;
+ thr_error,
+ vm_machdep;
+
+function getpid:Integer;
+begin
+ Result:=g_pid;
+end;
 
 function thr_new(param:p_thr_param;param_size:Integer):Integer;
 begin

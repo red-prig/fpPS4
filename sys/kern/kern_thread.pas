@@ -16,6 +16,7 @@ uses
  time,
  kern_time,
  rtprio,
+ kern_rtprio,
  hamt;
 
 function  thread_alloc:p_kthread;
@@ -454,7 +455,7 @@ begin
  if (param^.rtp<>nil) then
  begin
   Result:=copyin(param^.rtp,@rtp,Sizeof(t_rtprio));
-  if (Result<>0) then Exit(EFAULT);
+  if (Result<>0) then Exit;
   rtpp:=@rtp;
  end;
 
@@ -463,7 +464,7 @@ begin
  if (param^.name<>nil) then
  begin
   Result:=copyinstr(param^.name,@name,32,nil);
-  if (Result<>0) then Exit(EFAULT);
+  if (Result<>0) then Exit;
  end;
 
  Result:=create_thread(td,
@@ -488,7 +489,7 @@ begin
  param:=Default(thr_param);
 
  Result:=copyin(_param,@param,_size);
- if (Result<>0) then Exit(EFAULT);
+ if (Result<>0) then Exit;
 
  Result:=kern_thr_new(curkthread,@param);
 end;
@@ -735,7 +736,7 @@ begin
  if (name<>nil) then
  begin
   Result:=copyinstr(pname,@name,32,nil);
-  if (Result<>0) then Exit(EFAULT);
+  if (Result<>0) then Exit;
  end;
 
  if (int64(id)=-1) then

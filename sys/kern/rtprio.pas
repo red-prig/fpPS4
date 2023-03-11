@@ -5,10 +5,6 @@ unit rtprio;
 
 interface
 
-uses
- errno,
- kern_thr;
-
 const
  PRI_ITHD     =1; // Interrupt thread.
  PRI_REALTIME =2; // Real time process.
@@ -30,6 +26,12 @@ const
  RTP_PRIO_IDLE     =PRI_IDLE;
  RTP_PRIO_FIFO     =PRI_FIFO;
 
+ RTP_PRIO_MIN=PRI_MIN;
+ RTP_PRIO_MAX=PRI_MAX;
+
+ RTP_LOOKUP=0;
+ RTP_SET   =1;
+
 type
  p_rtprio=^t_rtprio;
  t_rtprio=packed record
@@ -37,75 +39,41 @@ type
   _prio:Word;
  end;
 
-function  PRI_BASE(P:Integer):Integer;
+function  PRI_BASE(P:Word):Word; inline;
+function  RTP_PRIO_BASE(P:Word):Word; inline;
 
-function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
-procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
+function  rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer;
+function  _rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
 
 implementation
 
 uses
- kern_thread,
- sched_ule;
+ trap,
+ thr_error,
+ kern_rtprio;
 
-function PRI_BASE(P:Integer):Integer;
+function PRI_BASE(P:Word):Word; inline;
 begin
  Result:=P and (not PRI_FIFO_BIT);
 end;
 
-function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
-var
- newpri:Integer;
+function RTP_PRIO_BASE(P:Word):Word; inline;
 begin
-
- Case (rtp^._type and $fff7) of //RTP_PRIO_BASE
-  RTP_PRIO_IDLE:
-    begin
-     newpri:=960;
-     if (rtp^._prio<>960) then Exit(EINVAL);
-    end;
-  RTP_PRIO_NORMAL:
-    begin
-     newpri:=rtp^._prio;
-     if (newpri>959) then Exit(EINVAL);
-    end;
-  PRI_REALTIME:
-    begin
-     newpri:=rtp^._prio;
-     if (newpri>767) then Exit(EINVAL);
-    end;
-  else
-    Exit(EINVAL)
- end;
-
- thread_lock(td);
- sched_class(td,rtp^._type);
- sched_user_prio(td, newpri);
-
- if (td=curkthread) then
- begin
-  sched_prio(td,td^.td_user_pri);
- end;
-
- thread_unlock(td);
+ Result:=P and (not PRI_FIFO_BIT);
 end;
 
-procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
-begin
- thread_lock(td);
+function rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer; assembler; nostackframe;
+asm
+ movq  sys_rtprio_thread,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
 
- case (td^.td_pri_class and $fff7) of //PRI_BASE
-  PRI_REALTIME,
-  RTP_PRIO_NORMAL,
-  PRI_IDLE:
-    begin
-     rtp^._prio:=td^.td_base_user_pri;
-    end;
-  else;
- end;
- rtp^._type:=td^.td_pri_class;
-
- thread_unlock(td);
+function _rtprio(func,pid:Integer;rtp:p_rtprio):Integer; assembler; nostackframe;
+asm
+ movq  sys_rtprio,%rax
+ call  fast_syscall
+ jmp   cerror
 end;
 
 end.

@@ -20,6 +20,9 @@ function suword64(var base:QWORD;word:QWORD):DWORD; inline;
 
 implementation
 
+uses
+ errno;
+
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 begin
  if (NtReadVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,nil)=0) then
@@ -27,7 +30,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=-1;
+  Result:=EFAULT;
  end;
 end;
 
@@ -61,7 +64,7 @@ begin
   Result:=0;
  end else
  begin
-  Result:=-1;
+  Result:=EFAULT;
  end;
 end;
 

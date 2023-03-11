@@ -61,7 +61,15 @@ procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 procedure TIMESPEC_ADD(dst,src,val:ptimespec);
 procedure TIMESPEC_SUB(dst,src,val:ptimespec);
 
+function  clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function  clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+
 implementation
+
+uses
+ trap,
+ thr_error,
+ kern_time;
 
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 begin
@@ -101,6 +109,19 @@ begin
  end;
 end;
 
+function clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; assembler; nostackframe;
+asm
+ movq  sys_clock_gettime,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function clock_getres(clock_id:Integer;tp:Ptimespec):Integer; assembler; nostackframe;
+asm
+ movq  sys_clock_getres,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
 
 end.
 

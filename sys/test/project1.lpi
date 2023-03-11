@@ -206,11 +206,11 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\_sys_time.pas"/>
+        <Filename Value="..\..\kernel\libthr\pthread.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\..\kernel\libthr\pthread.pas"/>
+        <Filename Value="..\kern\kern_rtprio.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

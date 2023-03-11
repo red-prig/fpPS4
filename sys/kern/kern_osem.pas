@@ -458,7 +458,7 @@ begin
   if (pNumWait<>nil) then
   begin
    r:=copyout(@num,pNumWait,SizeOf(Integer));
-   if (r<>0) then Result:=EFAULT;
+   if (r<>0) then Result:=r;
   end;
  end;
 end;
@@ -526,7 +526,7 @@ begin
  if (pTimeout<>nil) then
  begin
   r:=copyout(@time,pTimeout,SizeOf(DWORD));
-  if (r<>0) then Result:=EFAULT;
+  if (r<>0) then Result:=r;
  end;
 end;
 

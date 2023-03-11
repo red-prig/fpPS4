@@ -33,7 +33,6 @@ uses
  sys_osem,
  kern_evf,
  sys_evf,
- _sys_time,
  pthread;
 
 var

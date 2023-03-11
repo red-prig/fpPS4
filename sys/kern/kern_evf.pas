@@ -604,7 +604,7 @@ begin
  if (pNumWait<>nil) then
  begin
   r:=copyout(@num,pNumWait,SizeOf(Integer));
-  if (r<>0) then Result:=EFAULT;
+  if (r<>0) then Result:=r;
  end;
 end;
 
@@ -669,7 +669,7 @@ begin
 
  id_release(@evf^.desc);
 
- if (r<>0) then Result:=EFAULT;
+ if (r<>0) then Result:=r;
 end;
 
 function sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
@@ -720,7 +720,7 @@ begin
   r:=copyout(@time,pTimeout,SizeOf(DWORD));
  end;
 
- if (r<>0) then Result:=EFAULT;
+ if (r<>0) then Result:=r;
 end;
 
 

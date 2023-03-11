@@ -70,7 +70,6 @@ begin
  end;
 
  Result:=copyout(@old,mask,SizeOf(QWORD));
- if (Result<>0) then Result:=EFAULT;
 end;
 
 function sys_cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
@@ -83,7 +82,7 @@ begin
  if (level<>CPU_LEVEL_WHICH) then Exit(EINVAL);
 
  Result:=copyin(mask,@new,SizeOf(QWORD));
- if (Result<>0) then Exit(EFAULT);
+ if (Result<>0) then Exit;
 
  Case which of
   CPU_WHICH_TID:
