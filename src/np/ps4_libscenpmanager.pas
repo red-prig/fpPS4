@@ -103,6 +103,14 @@ type
   reserved:array[0..31] of Byte;
  end;
 
+ PSceNpDate=^SceNpDate;
+ SceNpDate=packed record
+  year :Word;
+  month:Byte;
+  day  :Byte;
+  _pad :DWord;
+ end;
+
  SceUserServiceUserId=Integer;
 
  SceNpStateCallback=procedure(userId:SceUserServiceUserId;
@@ -461,6 +469,17 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetAccountDateOfBirth(userId:SceUserServiceUserId;
+                                        pDateOfBirth:PSceNpDate):Integer; SysV_ABI_CDecl;
+begin
+ if pDateOfBirth<>nil then
+  Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pDateOfBirth^.year :=1990;
+ pDateOfBirth^.month:=1;
+ pDateOfBirth^.day  :=1;
+ Result:=0;
+end;
+
 function Load_libSceNpManager(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -504,6 +523,7 @@ begin
  lib^.set_proc($19AC6BA7711663F3,@ps4_sceNpNotifyPlusFeature);
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
+ lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);

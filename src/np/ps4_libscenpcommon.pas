@@ -220,9 +220,10 @@ end;
 function ps4_sceNpCreateEventFlag(ef:SceKernelEventFlag;
                                   bitPattern:QWORD;
                                   waitMode:DWORD;
-                                  pResultPat:PQWORD):Boolean; SysV_ABI_CDecl;
+                                  pResultPat:PQWORD):Integer; SysV_ABI_CDecl;
 begin
- Result:=ps4_sceKernelWaitEventFlag(ef,bitPattern,waitMode,pResultPat,nil)<0;
+ Result:=ps4_sceKernelWaitEventFlag(ef,bitPattern,waitMode,pResultPat,nil);
+ Result:=Result shr $1F and Result; // Looks like bool, but True when Result<0
 end;
 
 // sce::np::Object::operator new(unsigned long, SceNpAllocator&)
