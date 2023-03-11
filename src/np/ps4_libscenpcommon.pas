@@ -59,12 +59,19 @@ type
 
 type
  PSceNpAllocator=^SceNpAllocator;
- SceNpAllocator=record
+ SceNpAllocator=packed record
   // Unknown size. It has at least 4 QWords
-  alloc:function(a1,a2:QWord):Pointer; SysV_ABI_CDecl;
-  _unk1,
-  _unk2,
-  _unk3:QWord;
+  alloc:function(a1,a2:QWord):Pointer; SysV_ABI_CDecl; // 8
+  _unk1,       // 16
+  _unk2,       // 24
+  _unk3:QWord; // 32
+ end;
+
+ PSceNpObject=^SceNpObject;
+ SceNpObject=packed record
+  allocator:PSceNpAllocator; // 8
+  _unk1    :QWord;   // 16
+  entry    :Pointer; // 24
  end;
 
 implementation
@@ -221,13 +228,16 @@ end;
 
 // sce::np::Object::operator new(unsigned long, SceNpAllocator&)
 function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(count:QWord;allocator:PSceNpAllocator):Pointer; SysV_ABI_CDecl;
+var
+ npObj:PSceNpObject;
 begin
- Result:=allocator^.alloc(count+$10,allocator^._unk3);
- if Result<>nil then
+ npObj:=allocator^.alloc(count+$10,allocator^._unk3);
+ if npObj<>nil then
  begin
-  PSceNpAllocator(Result^):=allocator;
-  Result:=Result+$10;
- end;
+  npObj^.allocator:=allocator;
+  Result:=@npObj^.entry;
+ end else
+  Result:=nil;
 end;
 
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
