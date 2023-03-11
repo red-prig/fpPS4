@@ -172,7 +172,12 @@ type
   private_2        :QWORD;
  end;
 
- td_event_msg_t=array[0..5] of DWORD;
+ td_event_msg_t=packed record
+  event :DWORD;
+  _align:Integer;
+  th_p  :QWORD;
+  data  :QWORD;
+ end;
 
  p_pthread_specific_elem=^pthread_specific_elem;
  pthread_specific_elem=packed record

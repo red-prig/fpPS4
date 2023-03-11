@@ -217,12 +217,12 @@ end;
 
 ////
 
-procedure _thr_umutex_init(mtx:p_umutex); inline;
+procedure _thr_umutex_init(mtx:p_umutex);
 begin
  mtx^:=DEFAULT_UMUTEX;
 end;
 
-procedure _thr_urwlock_init(rwl:p_urwlock); inline;
+procedure _thr_urwlock_init(rwl:p_urwlock);
 begin
  rwl^:=DEFAULT_URWLOCK;
 end;
