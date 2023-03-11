@@ -57,9 +57,30 @@ type
   mspace:Pointer;
  end;
 
+type
+ SceNpMallocFunc =function(size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpReallocFunc=function(ptr:Pointer;size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpFreeFunc   =procedure(ptr,userdata:Pointer); SysV_ABI_CDecl;
+
+ pSceNpAllocator=^SceNpAllocator;
+ SceNpAllocator=packed record
+  mallocFunc :SceNpMallocFunc;
+  reallocFunc:SceNpReallocFunc;
+  freeFunc   :SceNpFreeFunc;
+  userdata   :Pointer;
+ end;
+
+ PSceNpObject=^SceNpObject;
+ SceNpObject=packed record
+  mem  :pSceNpAllocator; // 8
+  _unk1:QWord;   // 16
+  entry:Pointer; // 24
+ end;
+
 implementation
 
 uses
+ ps4_event_flag,
  ps4_mspace_internal,
  ps4_mutex,
  ps4_map_mm;
@@ -199,6 +220,30 @@ begin
  end;
 end;
 
+function ps4_sceNpCreateEventFlag(ef:pSceKernelEventFlag;
+                                  pName:PChar;
+                                  attr:DWORD;
+                                  initPattern:QWORD
+                                  ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceKernelCreateEventFlag(ef,pName,attr,initPattern,nil);
+ Result:=(Result shr $1F) and Result; // Looks like bool, but True when Result<0
+end;
+
+//void * sce::np::Object::operator_new(size_t size,SceNpAllocator *mem)
+function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(size:size_t;mem:pSceNpAllocator):Pointer; SysV_ABI_CDecl;
+var
+ npObj:PSceNpObject;
+begin
+ npObj:=mem^.mallocFunc(size+$10,mem^.userdata);
+ if npObj<>nil then
+ begin
+  npObj^.mem:=mem;
+  Result:=@npObj^.entry;
+ end else
+  Result:=nil;
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -224,6 +269,8 @@ begin
  lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
  //
  lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
+ lib^.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
+ lib^.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
 end;
 
 initialization
