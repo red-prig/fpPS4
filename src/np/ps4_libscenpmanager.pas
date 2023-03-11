@@ -472,7 +472,7 @@ end;
 function ps4_sceNpGetAccountDateOfBirth(userId:SceUserServiceUserId;
                                         pDateOfBirth:PSceNpDate):Integer; SysV_ABI_CDecl;
 begin
- if pDateOfBirth<>nil then
+ if pDateOfBirth=nil then
   Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  pDateOfBirth^.year :=1990;
  pDateOfBirth^.month:=1;
