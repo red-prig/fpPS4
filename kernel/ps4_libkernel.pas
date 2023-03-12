@@ -94,7 +94,9 @@ Const
 procedure ps4_stack_chk_fail; SysV_ABI_CDecl;
 begin
  Writeln(StdErr,GetCurrentThreadId,':Stack overflow detected! Aborting program.');
- Halt;
+ asm
+  ud2
+ end;
 end;
 
 {$I StopNotificationReason.inc}
@@ -103,7 +105,9 @@ end;
 procedure ps4_sceKernelDebugRaiseException(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
 begin
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
- Halt;
+ asm
+  ud2
+ end;
 end;
 
 procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;

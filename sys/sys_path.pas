@@ -533,6 +533,13 @@ begin
   end;
  end;
 
+ r:='';
+ if (MountMiscConcat('mnt','',r)=PT_FILE) then
+ if DirectoryExists(r) then
+ begin
+  add_dir('mnt');
+ end;
+
  For i:=0 to 1 do
  begin
   r:='';
