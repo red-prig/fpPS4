@@ -31,8 +31,10 @@ uses
  kern_id,
  sys_osem,
  kern_evf,
- sys_evf, rtprio,
- pthread;
+ sys_evf,
+ rtprio,
+ pthread,
+ thr_stack;
 
 var
  mtx:umutex;

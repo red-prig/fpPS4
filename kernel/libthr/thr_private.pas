@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ time,
  signal,
  _umtx;
 
@@ -115,6 +116,7 @@ type
   child  :TProcedure;
  end;
 
+ p_pthread_attr=^pthread_attr;
  pthread_attr=packed record
   sched_policy  :Integer;
   sched_inherit :Integer;
@@ -289,13 +291,48 @@ type
   sched_priority:Integer;
  end;
 
-function TID(thr:p_pthread):Integer; inline;
+function  TID(thr:p_pthread):Integer; inline;
 
-function SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
-function THR_SHOULD_GC(thr:p_pthread):Boolean; inline;
-function THR_IN_CRITICAL(thr:p_pthread):Boolean; inline;
+function  SHOULD_CANCEL(thr:p_pthread):Boolean; inline;
+function  THR_SHOULD_GC(thr:p_pthread):Boolean; inline;
+function  THR_IN_CRITICAL(thr:p_pthread):Boolean; inline;
+procedure THR_CRITICAL_ENTER(thr:p_pthread); inline;
+procedure THR_CRITICAL_LEAVE(thr:p_pthread); inline;
+
+function  THR_UMUTEX_TRYLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+function  THR_UMUTEX_LOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+function  THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:ptimespec):Integer; inline;
+function  THR_UMUTEX_UNLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+
+procedure THR_LOCK_ACQUIRE(thr:p_pthread;lck:p_umutex); inline;
+procedure THR_LOCK_ACQUIRE_SPIN(thr:p_pthread;lck:p_umutex); inline;
+procedure THR_ASSERT_LOCKLEVEL(thr:p_pthread); inline;
+procedure THR_LOCK_RELEASE(thr:p_pthread;lck:p_umutex); inline;
+
+procedure THR_LOCK(curthrd:p_pthread); inline;
+procedure THR_UNLOCK(curthrd:p_pthread); inline;
+procedure THR_THREAD_LOCK(curthrd,thr:p_pthread); inline;
+procedure THR_THREAD_UNLOCK(curthrd,thr:p_pthread); inline;
+
+procedure THREAD_LIST_RDLOCK(curthrd:p_pthread); inline;
+procedure THREAD_LIST_WRLOCK(curthrd:p_pthread); inline;
+procedure THREAD_LIST_UNLOCK(curthrd:p_pthread); inline;
+
+procedure THR_LIST_ADD(thrd:p_pthread);
+procedure THR_LIST_REMOVE(thrd:p_pthread);
+procedure THR_GCLIST_ADD(thrd:p_pthread);
+procedure THR_GCLIST_REMOVE(thrd:p_pthread);
+
+procedure THR_REF_ADD(curthrd,thrd:p_pthread); inline;
+procedure THR_REF_DEL(curthrd,thrd:p_pthread); inline;
+
+function  GC_NEEDED:Boolean; inline;
 
 implementation
+
+uses
+ thr_init,
+ thr_umtx;
 
 function TID(thr:p_pthread):Integer; inline;
 begin
@@ -321,6 +358,162 @@ begin
  Result:=(thr^.locklevel>0) or
          (thr^.critical_count>0);
 end;
+
+procedure THR_CRITICAL_ENTER(thr:p_pthread); inline;
+begin
+ Inc(thr^.critical_count);
+end;
+
+procedure THR_CRITICAL_LEAVE(thr:p_pthread); inline;
+begin
+ Dec(thr^.critical_count);
+ //_thr_ast(thr);
+end;
+
+function THR_UMUTEX_TRYLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+begin
+ Result:=_thr_umutex_trylock(lck,TID(thr));
+end;
+
+function THR_UMUTEX_LOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+begin
+ Result:=_thr_umutex_lock(lck,TID(thr));
+end;
+
+function THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:ptimespec):Integer; inline;
+begin
+ Result:=_thr_umutex_timedlock(lck,TID(thr),timo);
+end;
+
+function THR_UMUTEX_UNLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
+begin
+ Result:=_thr_umutex_unlock(lck,TID(thr));
+end;
+
+procedure THR_LOCK_ACQUIRE(thr:p_pthread;lck:p_umutex); inline;
+begin
+ Inc(thr^.locklevel);
+ _thr_umutex_lock(lck,TID(thr));
+end;
+
+procedure THR_LOCK_ACQUIRE_SPIN(thr:p_pthread;lck:p_umutex); inline;
+begin
+ Inc(thr^.locklevel);
+ _thr_umutex_lock_spin(lck,TID(thr));
+end;
+
+procedure THR_ASSERT_LOCKLEVEL(thr:p_pthread); inline;
+begin
+ if (thr^.locklevel<=0) then
+ begin
+  //_thr_assert_lock_level();
+ end;
+end;
+
+procedure THR_LOCK_RELEASE(thr:p_pthread;lck:p_umutex); inline;
+begin
+ THR_ASSERT_LOCKLEVEL(thr);
+ _thr_umutex_unlock(lck,TID(thr));
+ Dec(thr^.locklevel);
+ //_thr_ast(thr);
+end;
+
+procedure THR_LOCK(curthrd:p_pthread); inline;
+begin
+ THR_LOCK_ACQUIRE(curthrd,@curthrd^.lock);
+end;
+
+procedure THR_UNLOCK(curthrd:p_pthread); inline;
+begin
+ THR_LOCK_RELEASE(curthrd,@curthrd^.lock);
+end;
+
+procedure THR_THREAD_LOCK(curthrd,thr:p_pthread); inline;
+begin
+ THR_LOCK_ACQUIRE(curthrd,@thr^.lock);
+end;
+
+procedure THR_THREAD_UNLOCK(curthrd,thr:p_pthread); inline;
+begin
+ THR_LOCK_RELEASE(curthrd,@thr^.lock);
+end;
+
+procedure THREAD_LIST_RDLOCK(curthrd:p_pthread); inline;
+begin
+ Inc(curthrd^.locklevel);
+ _thr_rwl_rdlock(@_thr_list_lock);
+end;
+
+procedure THREAD_LIST_WRLOCK(curthrd:p_pthread); inline;
+begin
+ Inc(curthrd^.locklevel);
+ _thr_rwl_wrlock(@_thr_list_lock)
+end;
+
+procedure THREAD_LIST_UNLOCK(curthrd:p_pthread); inline;
+begin
+ _thr_rwl_unlock(@_thr_list_lock);
+ Dec(curthrd^.locklevel);
+ //_thr_ast(curthrd);
+end;
+
+procedure THR_LIST_ADD(thrd:p_pthread);
+begin
+ if ((thrd^.tlflags and TLFLAGS_IN_TDLIST)=0) then
+ begin
+  TAILQ_INSERT_HEAD(@_thread_list,@thrd,@thrd^.tle);
+  //_thr_hash_add(thrd);
+  thrd^.tlflags:=thrd^.tlflags or TLFLAGS_IN_TDLIST;
+ end;
+end;
+
+procedure THR_LIST_REMOVE(thrd:p_pthread);
+begin
+ if (((thrd)^.tlflags and TLFLAGS_IN_TDLIST)<>0) then
+ begin
+  TAILQ_REMOVE(@_thread_list,@thrd,@thrd^.tle);
+  //_thr_hash_remove(thrd);
+  thrd^.tlflags:=thrd^.tlflags and (not TLFLAGS_IN_TDLIST);
+ end;
+end;
+
+procedure THR_GCLIST_ADD(thrd:p_pthread);
+begin
+ if ((thrd^.tlflags and TLFLAGS_IN_GCLIST)=0) then
+ begin
+  TAILQ_INSERT_HEAD(@_thread_gc_list,@thrd,@thrd^.gcle);
+  thrd^.tlflags:=thrd^.tlflags or TLFLAGS_IN_GCLIST;
+  Inc(_gc_count);
+ end;
+end;
+
+procedure THR_GCLIST_REMOVE(thrd:p_pthread);
+begin
+ if (((thrd)^.tlflags and TLFLAGS_IN_GCLIST)<>0) then
+ begin
+  TAILQ_REMOVE(@_thread_list,@thrd,@thrd^.gcle);
+  thrd^.tlflags:=thrd^.tlflags and (not TLFLAGS_IN_GCLIST);
+  Dec(_gc_count);
+ end;
+end;
+
+procedure THR_REF_ADD(curthrd,thrd:p_pthread); inline;
+begin
+ THR_CRITICAL_ENTER(curthrd);
+ Inc(thrd^.refcount);
+end;
+
+procedure THR_REF_DEL(curthrd,thrd:p_pthread); inline;
+begin
+ Dec(thrd^.refcount);
+ THR_CRITICAL_LEAVE(curthrd);
+end;
+
+function GC_NEEDED:Boolean; inline;
+begin
+ Result:=(_gc_count>=5);
+end;
+
 
 end.
 

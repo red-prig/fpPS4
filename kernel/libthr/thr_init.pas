@@ -91,54 +91,9 @@ var
 
  init_once:Integer=0;
 
-procedure THR_LIST_ADD(thrd:p_pthread);
-procedure THR_LIST_REMOVE(thrd:p_pthread);
-procedure THR_GCLIST_ADD(thrd:p_pthread);
-procedure THR_GCLIST_REMOVE(thrd:p_pthread);
-
 procedure _libpthread_init(curthread:p_pthread);
 
 implementation
-
-procedure THR_LIST_ADD(thrd:p_pthread);
-begin
- if ((thrd^.tlflags and TLFLAGS_IN_TDLIST)=0) then
- begin
-  TAILQ_INSERT_HEAD(@_thread_list,@thrd,@thrd^.tle);
-  //_thr_hash_add(thrd);
-  thrd^.tlflags:=thrd^.tlflags or TLFLAGS_IN_TDLIST;
- end;
-end;
-
-procedure THR_LIST_REMOVE(thrd:p_pthread);
-begin
- if (((thrd)^.tlflags and TLFLAGS_IN_TDLIST)<>0) then
- begin
-  TAILQ_REMOVE(@_thread_list,@thrd,@thrd^.tle);
-  //_thr_hash_remove(thrd);
-  thrd^.tlflags:=thrd^.tlflags and (not TLFLAGS_IN_TDLIST);
- end;
-end;
-
-procedure THR_GCLIST_ADD(thrd:p_pthread);
-begin
- if ((thrd^.tlflags and TLFLAGS_IN_GCLIST)=0) then
- begin
-  TAILQ_INSERT_HEAD(@_thread_gc_list,@thrd,@thrd^.gcle);
-  thrd^.tlflags:=thrd^.tlflags or TLFLAGS_IN_GCLIST;
-  Inc(_gc_count);
- end;
-end;
-
-procedure THR_GCLIST_REMOVE(thrd:p_pthread);
-begin
- if (((thrd)^.tlflags and TLFLAGS_IN_GCLIST)<>0) then
- begin
-  TAILQ_REMOVE(@_thread_list,@thrd,@thrd^.gcle);
-  thrd^.tlflags:=thrd^.tlflags and (not TLFLAGS_IN_GCLIST);
-  Dec(_gc_count);
- end;
-end;
 
 const
  g_user_stacksize=$10000;
