@@ -170,7 +170,7 @@ var
 begin
  f:=nil;
  Result:=__sys_file_open(path,O_RDONLY,0,f);
- if (Result<>0) then Exit;
+ if (Result<>0) then Exit(-Result);
 
  Result:=f.fstat(stat);
 
