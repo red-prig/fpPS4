@@ -23,13 +23,16 @@ type
   le_prev:PPointer;
  end;
 
-procedure TAILQ_INIT       (head:Pointer); inline;
-function  TAILQ_EMPTY      (head:Pointer):Boolean; inline;
-function  TAILQ_FIRST      (head:Pointer):Pointer; inline;
-function  TAILQ_NEXT       (elm,field:Pointer):Pointer; inline;
-procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
-procedure TAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
-procedure TAILQ_REMOVE     (head,elm,field:Pointer); inline;
+procedure TAILQ_INIT         (head:Pointer); inline;
+function  TAILQ_EMPTY        (head:Pointer):Boolean; inline;
+function  TAILQ_FIRST        (head:Pointer):Pointer; inline;
+function  TAILQ_NEXT         (elm,field:Pointer):Pointer; inline;
+function  TAILQ_PREV         (elm,headname,field:Pointer):Pointer; inline;
+procedure TAILQ_INSERT_HEAD  (head,elm,field:Pointer); inline;
+procedure TAILQ_INSERT_TAIL  (head,elm,field:Pointer); inline;
+procedure TAILQ_INSERT_AFTER (head,listelm,elm,field:Pointer); inline;
+procedure TAILQ_INSERT_BEFORE(listelm,elm,field:Pointer); inline;
+procedure TAILQ_REMOVE       (head,elm,field:Pointer); inline;
 
 procedure LIST_INIT        (head:Pointer); inline;
 function  LIST_EMPTY       (head:Pointer):Boolean; inline;
@@ -61,6 +64,11 @@ begin
  Result:=P_TAILQ_ENTRY(field)^.tqe_next;
 end;
 
+function TAILQ_PREV(elm,headname,field:Pointer):Pointer; inline;
+begin
+ Result:=P_TAILQ_HEAD(P_TAILQ_ENTRY(field)^.tqe_prev+ptruint(headname))^.tqh_last;
+end;
+
 procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
 var
  offset:ptruint;
@@ -84,6 +92,34 @@ begin
  P_TAILQ_ENTRY(field)^.tqe_prev:=P_TAILQ_HEAD(head)^.tqh_last;
  P_TAILQ_HEAD(head)^.tqh_last^:=elm;
  P_TAILQ_HEAD(head)^.tqh_last:=@P_TAILQ_ENTRY(field)^.tqe_next;
+end;
+
+procedure TAILQ_INSERT_AFTER(head,listelm,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ offset:=ptruint(field-elm);
+ P_TAILQ_ENTRY(field)^.tqe_next:=P_TAILQ_ENTRY(listelm+offset)^.tqe_next;
+ if (P_TAILQ_ENTRY(field)^.tqe_next<>nil) then
+ begin
+  P_TAILQ_ENTRY(P_TAILQ_ENTRY(field)^.tqe_next+offset)^.tqe_prev:=@P_TAILQ_ENTRY(field)^.tqe_next;
+ end else
+ begin
+  P_TAILQ_HEAD(head)^.tqh_last:=@P_TAILQ_ENTRY(field)^.tqe_next;
+ end;
+ P_TAILQ_ENTRY(listelm+offset)^.tqe_next:=(elm);
+ P_TAILQ_ENTRY(field)^.tqe_prev:=@P_TAILQ_ENTRY(listelm+offset)^.tqe_next;
+end;
+
+procedure TAILQ_INSERT_BEFORE(listelm,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ offset:=ptruint(field-elm);
+ P_TAILQ_ENTRY(field)^.tqe_prev:=P_TAILQ_ENTRY(listelm+offset)^.tqe_prev;
+ P_TAILQ_ENTRY(field)^.tqe_next:=listelm;
+ P_TAILQ_ENTRY(listelm+offset)^.tqe_prev^:=elm;
+ P_TAILQ_ENTRY(listelm+offset)^.tqe_prev:=@P_TAILQ_ENTRY(field)^.tqe_next;
 end;
 
 procedure TAILQ_REMOVE(head,elm,field:Pointer); inline;

@@ -90,6 +90,8 @@ const
  ViewShare=1;
  ViewUnmap=2;
 
+ SECTION_MAP_EXECUTE=$8;
+
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
  IO_STATUS_BLOCK=packed record

@@ -559,7 +559,7 @@ begin
   Exit(SCE_KERNEL_ERROR_EINVAL);
  end;
 
- info^:=Default(t_get_authinfo);
+ info^:=Default(t_authinfo);
 
  _set_errno(0);
  Result:=0;
