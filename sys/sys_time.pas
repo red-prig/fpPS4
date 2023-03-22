@@ -118,6 +118,13 @@ begin
  _sig_unlock;
 end;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
 procedure SwSaveTime(var pc:QWORD);
 var
  pf:QWORD;
@@ -127,50 +134,35 @@ begin
  _sig_lock;
  NtQueryPerformanceCounter(@pc,@pf);
  _sig_unlock;
+
+ pc:=mul_div_u64(POW10_7,pf,pc);
 end;
 
 function SwTimePassedUnits(ot:QWORD):QWORD;
 var
  pc:QWORD;
  pf:QWORD;
-
- //sec:QWORD;
- //uec:QWORD;
-
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
  _sig_lock;
  NtQueryPerformanceCounter(@pc,@pf);
  _sig_unlock;
+
+ pc:=mul_div_u64(POW10_7,pf,pc);
 
  if (pc>ot) then
   pc:=pc-ot
  else
   pc:=(ot+High(QWORD))+pc;
 
- //DW0*POW10_7/pf + SHL_32* DW1*POW10_7/pf
-
- DW0:=(DWORD(pc shr 00)*POW10_7) div pf;
- DW1:=(DWORD(pc shr 32)*POW10_7) div pf;
-
- Result:=DW0+(DW1 shl 32);
-
- //sec:=pc div pf;
- //uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
- //Result:=sec*POW10_7{POW10_11}+uec;
+ Result:=pc;
 end;
 
 function SwGetTimeUnits:Int64;
 var
  pc:QWORD;
  pf:QWORD;
-
- //sec:QWORD;
- //uec:QWORD;
-
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
@@ -178,16 +170,7 @@ begin
  NtQueryPerformanceCounter(@pc,@pf);
  _sig_unlock;
 
- //DW0*POW10_7/pf + SHL_32* DW1*POW10_7/pf
-
- DW0:=(DWORD(pc shr 00)*POW10_7) div pf;
- DW1:=(DWORD(pc shr 32)*POW10_7) div pf;
-
- Result:=DW0+(DW1 shl 32);
-
- //sec:=pc div pf;
- //uec:=((pc mod pf)*POW10_7{POW10_11}+(pf shr 1)) div pf;
- //Result:=sec*POW10_7{POW10_11}+uec;
+ Result:=mul_div_u64(POW10_7,pf,pc);
 end;
 
 function SwGetProcessTime(var ut:QWORD):Boolean;
@@ -283,8 +266,6 @@ end;
 function SwGetTimeUsec:QWORD;
 var
  pc,pf:QWORD;
-
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
@@ -292,12 +273,7 @@ begin
  NtQueryPerformanceCounter(@pc,@pf);
  _sig_unlock;
 
- //DW0*1000000/pf + SHL_32* DW1*1000000/pf
-
- DW0:=(DWORD(pc shr 00)*1000000) div pf;
- DW1:=(DWORD(pc shr 32)*1000000) div pf;
-
- Result:=DW0+(DW1 shl 32);
+ Result:=mul_div_u64(1000000,pf,pc);
 end;
 
 end.

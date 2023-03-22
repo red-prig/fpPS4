@@ -506,16 +506,19 @@ begin
  Result:=readv(vector,count);
 end;
 
-function TDevStd.write (data:Pointer;size:Int64):Int64;
+function TDevStd.write(data:Pointer;size:Int64):Int64;
+var
+ S:RawByteString;
 begin
- CrtOutWriteDirect(WText,data,size);
+ SetString(S,data,size);
+ S:='[TTY]:'+S;
+ CrtOutWriteDirect(WText,PChar(S),Length(S));
  Result:=size;
 end;
 
 function TDevStd.pwrite(data:Pointer;size,offset:Int64):Int64;
 begin
- CrtOutWriteDirect(WText,data,size);
- Result:=size;
+ Result:=write(data,size);
 end;
 
 function TDevStd.writev(vector:p_iovec;count:Integer):Int64;

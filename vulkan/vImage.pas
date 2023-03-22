@@ -5,6 +5,7 @@ unit vImage;
 interface
 
 uses
+ SysUtils,
  Vulkan,
  vDevice,
  vPipeline,
@@ -230,7 +231,10 @@ begin
   VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
 
   VK_FORMAT_A2R10G10B10_UNORM_PACK32:Result:=4;
+  VK_FORMAT_A2B10G10R10_UNORM_PACK32:Result:=4;
 
+  VK_FORMAT_B10G11R11_UFLOAT_PACK32 :Result:=4;
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32  :Result:=4;
 
   //stencil
   VK_FORMAT_S8_UINT              :Result:=1;
@@ -255,7 +259,7 @@ begin
   VK_FORMAT_BC7_SRGB_BLOCK       :Result:=16;
 
   else
-   Assert(false,'TODO');
+   Assert(false,'getFormatSize:TODO:'+IntToStr(ord(cformat)));
  end;
 end;
 

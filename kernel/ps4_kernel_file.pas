@@ -66,6 +66,9 @@ function ps4_ioctl(fd,cmd:Integer;param1:ptruint):Integer; SysV_ABI_CDecl;
 function ps4_stat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDecl;
 
+function ps4_truncate(path:PChar;length:Int64):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelTruncate(path:PChar;length:Int64):Integer; SysV_ABI_CDecl;
+
 function ps4_mkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelMkdir(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
@@ -645,6 +648,65 @@ function ps4_sceKernelStat(path:PChar;stat:PSceKernelStat):Integer; SysV_ABI_CDe
 begin
  _sig_lock;
  Result:=_sys_stat(path,stat);
+ _sig_unlock;
+
+ _set_errno(Result);
+ Result:=px2sce(Result);
+end;
+
+function _sys_truncate(path:PChar;length:Int64):Integer;
+var
+ fn:RawByteString;
+begin
+ Result:=0;
+
+ if (path=nil) then Exit(EINVAL);
+ if (length<=0) then Exit(EINVAL);
+
+ if (path[0]=#0) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ Writeln(SysLogPrefix,'truncate:',path,' ',length);
+
+ fn:='';
+ Result:=parse_filename(path,fn);
+
+ Case Result of
+  PT_ROOT:Exit(EACCES); //TODO
+  PT_FILE:;
+  PT_DEV :Exit(EACCES);
+  else
+          Exit(EACCES);
+ end;
+
+ if FileExists(fn) then
+ begin
+  Result:=_sys_file_trunc(fn,length);
+ end else
+ begin
+  if DirectoryExists(fn) then
+  begin
+   Result:=EISDIR;
+  end else
+  begin
+   Result:=ENOENT;
+  end;
+ end;
+end;
+
+function ps4_truncate(path:PChar;length:Int64):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_set_errno(_sys_truncate(path,length));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelTruncate(path:PChar;length:Int64):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=_sys_truncate(path,length);
  _sig_unlock;
 
  _set_errno(Result);

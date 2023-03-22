@@ -52,8 +52,15 @@ end;
 
 procedure TEmit_MUBUF.make_load_comp(dst:PsrRegSlot;dtype:TsrDataType;rsl:PsrRegNode;i:Byte);
 begin
- dst^.New(line,dtype);
- OpExtract(line,dst^.current,rsl,i);
+ if rsl^.dtype.isVector then
+ begin
+  dst^.New(line,dtype);
+  OpExtract(line,dst^.current,rsl,i);
+ end else
+ begin
+  Assert(i=0);
+  MakeCopy(dst,rsl);
+ end;
 end;
 
 function TEmit_MUBUF.emit_BUFFER_LOAD_VA(src:PPsrRegSlot;count:Byte):Boolean;

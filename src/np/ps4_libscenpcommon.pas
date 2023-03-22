@@ -9,10 +9,22 @@ uses
  np_error;
 
 const
+ SCE_NP_DEFAULT_SERVICE_LABEL=$00000000;
+ SCE_NP_INVALID_SERVICE_LABEL=$FFFFFFFF;
+
  SCE_NP_ONLINEID_MIN_LENGTH=3;
  SCE_NP_ONLINEID_MAX_LENGTH=16;
 
+ SCE_NP_COMMUNICATION_PASSPHRASE_SIZE=128;
+
+ SCE_NP_ARCH_ERROR_UNKNOWN=-2141880310;
+
 type
+ SceNpServiceLabel=DWORD;
+ 
+ pSceNpAccountId=^SceNpAccountId;
+ SceNpAccountId=QWORD;
+
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
   data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
@@ -27,9 +39,50 @@ type
   reserved:array[0..7] of Byte;
  end;
 
+ pSceNpCommunicationId=^SceNpCommunicationId;
+ SceNpCommunicationId=packed record
+  data :array[0..8] of Char;
+  term :Char;
+  num  :Byte;
+  dummy:Char;
+ end;
+
+ pSceNpCommunicationPassphrase=^SceNpCommunicationPassphrase;
+ SceNpCommunicationPassphrase=packed record
+  data:array[0..SCE_NP_COMMUNICATION_PASSPHRASE_SIZE-1] of Byte;
+ end;
+
+ pSceNpHeap=^SceNpHeap;
+ SceNpHeap=packed record
+  mspace:Pointer;
+ end;
+
+type
+ SceNpMallocFunc =function(size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpReallocFunc=function(ptr:Pointer;size:size_t;userdata:Pointer):Pointer; SysV_ABI_CDecl;
+ SceNpFreeFunc   =procedure(ptr,userdata:Pointer); SysV_ABI_CDecl;
+
+ pSceNpAllocator=^SceNpAllocator;
+ SceNpAllocator=packed record
+  mallocFunc :SceNpMallocFunc;
+  reallocFunc:SceNpReallocFunc;
+  freeFunc   :SceNpFreeFunc;
+  userdata   :Pointer;
+ end;
+
+ PSceNpObject=^SceNpObject;
+ SceNpObject=packed record
+  mem  :pSceNpAllocator; // 8
+  _unk1:QWord;   // 16
+  entry:Pointer; // 24
+ end;
+
 implementation
 
 uses
+ ps4_event_flag,
+ ps4_mspace_internal,
+ ps4_mutex,
  ps4_map_mm;
 
 function ps4_sceNpCmpNpId(npid1,npid2:PSceNpId):Integer; SysV_ABI_CDecl;
@@ -116,6 +169,81 @@ begin
  end;
 end;
 
+function ps4_sceNpMutexInit(mutex:PScePthreadMutex;name:PChar;isRecursive:Boolean):Integer; SysV_ABI_CDecl;
+var
+ attr:pthread_mutex_attr;
+begin
+ Result:=ps4_scePthreadMutexattrInit(@attr);
+ if Result=0 then
+ begin
+  if isRecursive then
+   Result:=ps4_scePthreadMutexattrSettype(@attr,SCE_PTHREAD_MUTEX_RECURSIVE);
+  if Result=0 then
+   Result:=ps4_scePthreadMutexInit(mutex,@attr,name);
+  ps4_scePthreadMutexattrDestroy(@attr);
+ end;
+end;
+
+function ps4_sceNpMutexLock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexLock(mutex);
+end;
+
+function ps4_sceNpMutexUnlock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexUnlock(mutex);
+end;
+
+function ps4_sceNpMutexTryLock(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexTryLock(mutex);
+end;
+
+function ps4_sceNpMutexDestroy(mutex:PScePthreadMutex):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_scePthreadMutexDestroy(mutex);
+end;
+
+function ps4_sceNpHeapInit(heap:pSceNpHeap;base:Pointer;capacity:size_t;name:PChar):Integer; SysV_ABI_CDecl;
+var
+ m:Pointer;
+begin
+ Result:=SCE_NP_ARCH_ERROR_UNKNOWN;
+ if heap<>nil then
+ begin
+  m:=ps4_sceLibcMspaceCreate(name,base,capacity,0);
+  if (m<>nil) then
+  begin
+   heap^.mspace:=m;
+   Result:=0;
+  end;
+ end;
+end;
+
+function ps4_sceNpCreateEventFlag(ef:pSceKernelEventFlag;
+                                  pName:PChar;
+                                  attr:DWORD;
+                                  initPattern:QWORD
+                                  ):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_sceKernelCreateEventFlag(ef,pName,attr,initPattern,nil);
+ Result:=(Result shr $1F) and Result; // Looks like bool, but True when Result<0
+end;
+
+//void * sce::np::Object::operator_new(size_t size,SceNpAllocator *mem)
+function ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator(size:size_t;mem:pSceNpAllocator):Pointer; SysV_ABI_CDecl;
+var
+ npObj:PSceNpObject;
+begin
+ npObj:=mem^.mallocFunc(size+$10,mem^.userdata);
+ if npObj<>nil then
+ begin
+  npObj^.mem:=mem;
+  Result:=@npObj^.entry;
+ end else
+  Result:=nil;
+end;
+
 function Load_libSceNpCommon(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -128,6 +256,21 @@ begin
  lib^.set_proc($763F8EE5A0F66B44,@ps4_sceNpCmpOnlineId);
  lib^.set_proc($80C958E9E7B0AFF7,@ps4_sceNpAllocateKernelMemoryWithAlignment);
  lib^.set_proc($3163CE92ACD8B2CD,@ps4_sceNpAllocateKernelMemoryNoAlignment);
+ lib^.set_proc($B84C1A83FD1864F7,@ps4_sceNpMutexInit);
+ lib^.set_proc($AFD05EB7EB3A7CA7,@ps4_sceNpMutexLock);
+ lib^.set_proc($A19C9BF64B6E0A90,@ps4_sceNpMutexUnlock);
+ lib^.set_proc($0EEB259A8A90FA79,@ps4_sceNpMutexTryLock);
+ lib^.set_proc($950D7506930CE0B5,@ps4_sceNpMutexDestroy);
+ // These sceNpLwMutexXxx have the same interface & functionally as sceNpMutexXxx
+ lib^.set_proc($D4289723F33210AB,@ps4_sceNpMutexInit);    // sceNpLwMutexInit
+ lib^.set_proc($D7C8FEAA4E9D4709,@ps4_sceNpMutexLock);    // sceNpLwMutexLock
+ lib^.set_proc($0901B6A32C75FE73,@ps4_sceNpMutexUnlock);  // sceNpLwMutexUnlock
+ lib^.set_proc($869D24560BB9171C,@ps4_sceNpMutexTryLock); // sceNpLwMutexTryLock
+ lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
+ //
+ lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
+ lib^.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
+ lib^.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
 end;
 
 initialization

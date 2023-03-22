@@ -319,21 +319,22 @@ end;
 const
  GpuCoreClockFrequency=800000000;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
 function GetGpuTickCount:QWORD;
 var
  pc,pf:QWORD;
- DW0,DW1:QWORD;
 begin
  pc:=0;
  pf:=1;
  NtQueryPerformanceCounter(@pc,@pf);
 
- //DW0*GF/pf + SHL_32* DW1*GF/pf
-
- DW0:=(DWORD(pc shr 00)*GpuCoreClockFrequency) div pf;
- DW1:=(DWORD(pc shr 32)*GpuCoreClockFrequency) div pf;
-
- Result:=DW0+(DW1 shl 32);
+ Result:=mul_div_u64(GpuCoreClockFrequency,pf,pc);
 end;
 
 Function me_eop(node:pvMeEopInfo):Boolean;
@@ -422,9 +423,47 @@ begin
  end;
 end;
 
+type
+ gfx_backoff_exp=object
+  private
+   Const
+    lower_bound = 1000;
+    upper_bound = 100000;
+   Var
+    m_nExpCur:SizeUInt;
+  public
+   Procedure Wait;
+   Procedure Reset;
+ end;
+
+Procedure gfx_backoff_exp.Wait;
+Var
+ time:Int64;
+begin
+ if (m_nExpCur<=upper_bound) then
+ begin
+  m_nExpCur:=m_nExpCur*2;
+ end;
+ time:=-m_nExpCur;
+ NtDelayExecution(True,@time);
+end;
+
+Procedure gfx_backoff_exp.Reset; inline;
+begin
+ m_nExpCur:=lower_bound;
+end;
+
+Procedure WaitSubmit; inline;
+Var
+ time:Int64;
+begin
+ time:=Int64(NT_INFINITE);
+ NtDelayExecution(True,@time);
+end;
+
 function GFX_thread(p:pointer):ptrint;
 var
- time:Int64;
+ backoff:gfx_backoff_exp;
  work_do:Boolean;
 begin
  Result:=0;
@@ -433,6 +472,7 @@ begin
 
  SetThreadDebugName(GetCurrentThreadId, 'GFX Thread');
 
+ backoff.Reset;
  repeat
   work_do:=False;
 
@@ -452,24 +492,24 @@ begin
     //end;
    end else
    begin
-    time:=-50000;
-    NtDelayExecution(True,@time);
+    backoff.Wait;
     Continue;
    end;
    work_do:=True;
+   backoff.Reset;
   end;
 
   if GFXMicroEngine.Next then
   begin
    me_node_submit(GFXMicroEngine.Current);
    work_do:=True;
+   backoff.Reset;
   end;
 
   if not work_do then
   begin
    SetEvent(FIdleEvent);
-   time:=Int64(NT_INFINITE);
-   NtDelayExecution(True,@time);
+   WaitSubmit;
   end;
 
  until false;

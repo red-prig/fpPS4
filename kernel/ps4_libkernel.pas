@@ -94,7 +94,9 @@ Const
 procedure ps4_stack_chk_fail; SysV_ABI_CDecl;
 begin
  Writeln(StdErr,GetCurrentThreadId,':Stack overflow detected! Aborting program.');
- DebugBreak;
+ asm
+  ud2
+ end;
 end;
 
 {$I StopNotificationReason.inc}
@@ -103,7 +105,9 @@ end;
 procedure ps4_sceKernelDebugRaiseException(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
 begin
  Writeln(StdErr,'RaiseException:',HexStr(dwStopReason,8),':',HexStr(dwStopId,8),':',GetStopReasonInfo(dwStopReason));
- DebugBreak;
+ asm
+  ud2
+ end;
 end;
 
 procedure ps4_sceKernelDebugRaiseExceptionOnReleaseMode(dwStopReason,dwStopId:DWORD); SysV_ABI_CDecl;
@@ -113,7 +117,7 @@ end;
 
 procedure ps4_sceKernelDebugOutText(dbg_id:Integer;text:Pchar); SysV_ABI_CDecl;
 begin
- Writeln(text);
+ Writeln('[DBG]:',text);
 end;
 
 //ps4 neo mode is support? (Ps4 Pro)
@@ -447,10 +451,12 @@ begin
  Result:=SCE_KERNEL_ERROR_EINVAL;
 end;
 
+//get sdk version of game
 function ps4_sceKernelGetCompiledSdkVersion(sdkVersion:PDWORD):Integer; SysV_ABI_CDecl;
 var
  P:PSceProcParam;
 begin
+ //sys_dynlib_get_proc_param
  Result:=SCE_KERNEL_ERROR_EINVAL;
  if (sdkVersion=nil) then Exit;
  //sys_dynlib_get_proc_param
@@ -464,6 +470,31 @@ begin
   sdkVersion^:=P^.Header.SDK_version;
   Result:=0;
  end;
+end;
+
+type
+ p_sw_version=^t_sw_version;
+ t_sw_version=packed record
+  size   :QWORD; //(40)
+  str    :array[0..27] of Char;
+  version:DWORD;
+ end;
+
+//get sdk version of system
+function ps4_sceKernelGetSystemSwVersion(p:p_sw_version):Integer; SysV_ABI_CDecl;
+var
+ version:DWORD;
+begin
+ //sysctlbyname:kern.sdk_version
+ version:=$10508001; //10.50
+ ps4_sceKernelGetCompiledSdkVersion(@version); //mirror of game version?
+
+ p^.version:=version;
+ p^.str:=Format('%2x.%03x.%03x',[(version shr 24),
+                                 ((version shr 12) and $fff),
+                                 (version and $fff)]);
+
+ Result:=0;
 end;
 
 const
@@ -602,6 +633,13 @@ begin
  _sig_lock;
  Result:=_set_errno(_sysctlbyname(name,oldp,oldlenp,newp,newlen));
  _sig_unlock;
+end;
+
+//SetFanThreshold
+function ps4_gpgi_GwE2Is(param:PByte):Integer; SysV_ABI_CDecl; //gpgi-GwE2Is
+begin
+ Writeln('SetFanThreshold:',param[5]);
+ Result:=0;
 end;
 
 //dynlib_get_obj_member(handle,8,&ptr); module param
@@ -972,6 +1010,56 @@ begin
  end;
 end;
 
+function GetCurrentHwGUID(var g:TGUID):Boolean;
+var
+ HW:HW_PROFILE_INFOA;
+begin
+ HW:=Default(HW_PROFILE_INFOA);
+ Result:=GetCurrentHwProfileA(@HW);
+ if Result then
+ begin
+  Result:=TryStringToGUID(HW.szHwProfileGuid,g);
+ end;
+end;
+
+type
+ pSceKernelOpenPsId=^SceKernelOpenPsId;
+ SceKernelOpenPsId=array[0..15] of Byte;
+
+function ps4_sceKernelGetOpenPsId(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
+var
+ g:TGUID;
+begin
+ //sysctlbyname:machdep.openpsid
+ if (id=nil) then Exit(EINVAL);
+
+ g:=Default(TGUID);
+ if GetCurrentHwGUID(g) then
+ begin
+  id^:=SceKernelOpenPsId(g);
+ end else
+ begin
+  id^:=Default(SceKernelOpenPsId);
+ end;
+end;
+
+function ps4_sceKernelGetOpenPsIdForSystem(id:pSceKernelOpenPsId):Integer; SysV_ABI_CDecl;
+var
+ g:TGUID;
+begin
+ //sysctlbyname:machdep.openpsid_for_sys
+ if (id=nil) then Exit(EINVAL);
+
+ g:=Default(TGUID);
+ if GetCurrentHwGUID(g) then
+ begin
+  id^:=SceKernelOpenPsId(g);
+ end else
+ begin
+  id^:=Default(SceKernelOpenPsId);
+ end;
+end;
+
 //
 
 {$I libsysmodule.inc}
@@ -1170,9 +1258,11 @@ begin
  lib^.set_proc($F1C0250B3A0E8A27,@ps4_sceKernelMapSanitizerShadowMemory);
 
  lib^.set_proc($581EBA7AFBBC6EC5,@ps4_sceKernelGetCompiledSdkVersion);
+ lib^.set_proc($32FD7350E6C7BD72,@ps4_sceKernelGetSystemSwVersion);
  lib^.set_proc($1BF318BF97AB5DA5,@ps4_sceKernelGetAppInfo);
  lib^.set_proc($8A031E7E9E1202FD,@ps4_get_authinfo);
  lib^.set_proc($3210B9DD32A68D50,@ps4_sysctlbyname);
+ lib^.set_proc($829822FC6C04D88B,@ps4_gpgi_GwE2Is); //gpgi-GwE2Is
 
  lib^.set_proc($C33BEA4F852A297F,@ps4_sceKernelLoadStartModule);
  lib^.set_proc($1A0DFEC962FA0D65,@ps4_sceKernelLoadStartModuleForSysmodule);
@@ -1413,6 +1503,8 @@ begin
 
  lib^.set_proc($DE483BAD3D0D408B,@ps4_scePthreadExit);
  lib^.set_proc($149AD3E4BB940405,@ps4_pthread_exit);
+
+ lib^.set_proc($A810E6A42C86B2C1,@ps4_scePthreadCancel);
 
  lib^.set_proc($959CC5792C4F974F,@ps4_pthread_setcancelstate);
  lib^.set_proc($D9D121BEF8E5AB7D,@ps4_pthread_setcanceltype);
@@ -1657,6 +1749,9 @@ begin
  lib^.set_proc($13A6A8DF8C0FC3E5,@ps4_stat);
  lib^.set_proc($795F70003DAB8880,@ps4_sceKernelStat);
 
+ lib^.set_proc($6B2AEDB3323B1818,@ps4_truncate);
+ lib^.set_proc($5A5C8403FB0B0DFD,@ps4_sceKernelTruncate);
+
  lib^.set_proc($246322A3EDB52F87,@ps4_mkdir);
  lib^.set_proc($D7F2C52E6445C713,@ps4_sceKernelMkdir);
 
@@ -1681,6 +1776,8 @@ begin
 
  //file
 
+ lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
+
  px:=Result._add_lib('libScePosix');
  px^.MapSymbol:=lib^.MapSymbol;
 
@@ -1700,6 +1797,10 @@ begin
 
  lib^.set_proc($F332D27C47D6E405,@ps4_sceCoredumpRegisterCoredumpHandler);
  lib^.set_proc($7C59213A0CED8820,@ps4_sceCoredumpUnregisterCoredumpHandler);
+
+ lib:=Result._add_lib('libSceOpenPsId');
+
+ lib^.set_proc($0CB39172BA14A9B7,@ps4_sceKernelGetOpenPsId);
 
  //
  _kernel_init;

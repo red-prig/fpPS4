@@ -5,8 +5,7 @@ unit ps4_libSceVideoRecording;
 interface
 
 uses
- ps4_program,
- sys_types;
+ ps4_program;
 
 implementation
 

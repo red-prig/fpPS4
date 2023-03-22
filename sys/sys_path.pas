@@ -533,6 +533,13 @@ begin
   end;
  end;
 
+ r:='';
+ if (MountMiscConcat('mnt','',r)=PT_FILE) then
+ if DirectoryExists(r) then
+ begin
+  add_dir('mnt');
+ end;
+
  For i:=0 to 1 do
  begin
   r:='';
@@ -582,6 +589,16 @@ begin
        begin
         if (fp^<>#0) then Inc(fp);
         Result:=MountMiscConcat('usr',fp,r);
+       end;
+     $00746E6D: //mnt
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountMiscConcat('mnt',fp,r);
+       end;
+     $00737973: //sys
+       begin
+        if (fp^<>#0) then Inc(fp);
+        Result:=MountMiscConcat('sys',fp,r);
        end;
      else
         Result:=PT_ERR;

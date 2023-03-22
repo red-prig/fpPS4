@@ -14,6 +14,7 @@ uses
  sys_types,
  sys_pthread,
  sys_path,
+ sys_kernel,
  ps4libdoc,
  ps4_libkernel,
  ps4_libSceLibcInternal,
@@ -38,6 +39,7 @@ uses
  ps4_libSceNpCommon,
  ps4_libSceNpManager,
  ps4_libSceNpGameIntent,
+ ps4_libSceNpAuth,
  ps4_libSceSaveData,
  ps4_libSceDialogs,
  ps4_libSceUserService,
@@ -53,16 +55,19 @@ uses
  ps4_libSceComposite,
  ps4_libSceSysCore,
  ps4_libSceSsl,
+ ps4_libSceFiber,
  ps4_libSceUlt,
  ps4_libSceGameLiveStreaming,
  ps4_libSceSharePlay,
  ps4_libSceVideoRecording,
  ps4_libSceContentExport,
  ps4_libSceUsbd,
+ ps4_libSceAudiodecCpu,
+ ps4_libSceDepth,
+ ps4_libSceNpTus,
  ps4_elf,
  ps4_pthread,
  ps4_program,
- ps4_elf_tls,
 
  ps4_videodrv,
  vMemory,
@@ -223,7 +228,7 @@ end;
 
 procedure print_stub(nid:QWORD;lib:PLIBRARY); MS_ABI_Default;
 begin
- Writeln(StdErr,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
+ Writeln(StdErr,SysLogPrefix,'nop nid:',lib^.strName,':',HexStr(nid,16),':',ps4libdoc.GetFunctName(nid));
  //DebugBreak;
  Sleep(INFINITE);
  //readln;

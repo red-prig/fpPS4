@@ -317,6 +317,7 @@ begin
   src:=RegsStory.get_ssrc8(SOFFSET);
   Result:=MakeRead(src,rtype);
  end;
+ Assert(Result<>nil,'fetch_ssrc8');
 end;
 
 function TEmitFetch.fetch_ssrc9(SSRC:Word;rtype:TsrDataType):PsrRegNode;
@@ -333,6 +334,7 @@ begin
   src:=RegsStory.get_ssrc9(SSRC);
   Result:=MakeRead(src,rtype);
  end;
+ Assert(Result<>nil,'fetch_ssrc9');
 end;
 
 function TEmitFetch.fetch_ssrc9_pair(SSRC:Word;src:PPsrRegNode;rtype:TsrDataType):Boolean;
@@ -361,6 +363,7 @@ var
 begin
  src:=RegsStory.get_vsrc8(VSRC);
  Result:=MakeRead(src,rtype);
+ Assert(Result<>nil,'fetch_vsrc8');
 end;
 
 function TEmitFetch.fetch_vdst8(VDST:Word;rtype:TsrDataType):PsrRegNode;
@@ -369,6 +372,7 @@ var
 begin
  src:=RegsStory.get_vdst8(VDST);
  Result:=MakeRead(src,rtype);
+ Assert(Result<>nil,'fetch_vdst8');
 end;
 
 procedure TEmitFetch.fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:PsrRegNode);
@@ -379,6 +383,7 @@ begin
  pSlot:=RegsStory.get_vsrc8(VSRC);
 
  dst:=MakeRead(pSlot,dtVec2h);
+ Assert(dst<>nil,'fetch_vsrc8_vec2h');
 
  dst0:=NewReg(dtHalf16);
  dst1:=NewReg(dtHalf16);;

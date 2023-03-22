@@ -225,6 +225,13 @@ begin
  begin
   param_sfo_file:=LoadParamSfoFile('/app0/sce_sys/param.sfo');
   param_sfo_lazy_init:=2;
+
+  if (param_sfo_file<>nil) then
+  begin
+   Writeln('TITLE   :',param_sfo.ParamSfoGetString('TITLE'));
+   Writeln('TITLE_ID:',param_sfo.ParamSfoGetString('TITLE_ID'));
+   Writeln('APP_VER :',param_sfo.ParamSfoGetString('APP_VER'));
+  end;
  end else
  begin
   wait_until_equal(param_sfo_lazy_init,1);

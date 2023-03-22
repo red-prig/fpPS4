@@ -1227,7 +1227,7 @@ SOP1 32+
 SOPC 32+
 SOPP 32
 
-SMRD 32
+SMRD 32+
 
 VOP2 32+
 VOP1 32+
@@ -1412,7 +1412,8 @@ begin
            T:=H and LAST_5BIT;
            if (T=DW_SMRD) then //5
            begin
-            pack4(TSMRD(H).OP);
+            if (TSMRD(H).IMM=0) and
+               (TSMRD(H).OFFSET=$FF) then pack8(TSMRD(H).OP) else pack4(TSMRD(H).OP);
            end else
            begin
             T:=H and LAST_4BIT;
@@ -1946,8 +1947,8 @@ begin
 
  With SPI.SMRD do
   Case IMM of
-   0:Write('s[',OFFSET,']');
-   1:Write(OFFSET);
+   0:_print_ssrc8(OFFSET,SPI.INLINE32);
+   1:Write('0x',HexStr(OFFSET,2));
   end;
 
  Writeln;

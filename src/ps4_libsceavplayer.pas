@@ -30,6 +30,7 @@ var
 implementation
 
 uses
+  param_sfo,
   sys_kernel;
 
 const
@@ -126,7 +127,12 @@ type
   numOutputVideoFrameBuffers:Integer;
   autoStart                 :Boolean;
   reserved                  :array[0..2] of Byte;
-  _align                    :DWORD;
+  audioDecoderStackSize     :DWord;
+  videoDecoderStackSize     :DWord;
+  demuxerStackSize          :DWord;
+  controllerStackSize       :DWord;
+  httpStreamingStackSize    :DWord;
+  fileStreamingStackSize    :DWord;
  end;
  PSceAvPlayerInitDataEx=^SceAvPlayerInitDataEx;
 
@@ -259,6 +265,8 @@ type
   lastAudioTimeStamp  :QWord;
   audioBuffer         :array[0..BUFFER_COUNT-1] of PSmallInt;
   videoBuffer         :array[0..BUFFER_COUNT-1] of PByte;
+  audioChunk,
+  videoChunk          :TMemChunk;
   durationInMs        :QWord;
   streamCount         :DWord;
   videoStreamId       :Integer;
@@ -375,6 +383,28 @@ begin
  if (data<>nil) then
  begin
   data.dec_ref;
+ end;
+end;
+
+procedure _FreeChunk(var chunk:TMemChunk);
+begin
+ if chunk.pAddr<>nil then
+ begin
+  FreeMem(chunk.pAddr);
+  chunk.pAddr:=nil;
+ end;
+end;
+
+procedure _CompareAndAllocChunk(var chunk:TMemChunk;const nSize:QWord);
+begin
+ if nSize<>chunk.nSize then
+ begin
+  if chunk.pAddr<>nil then
+  begin
+   FreeMem(chunk.pAddr);
+  end;
+  chunk.pAddr:=AllocMem(nSize);
+  chunk.nSize:=nSize;
  end;
 end;
 
@@ -585,6 +615,8 @@ begin
 
  audioPackets:=TAVPacketQueue.Create;
  videoPackets:=TAVPacketQueue.Create;
+ audioChunk:=Default(TMemChunk);
+ videoChunk:=Default(TMemChunk);
 end;
 
 procedure TAvPlayerState.FreeMedia;
@@ -609,6 +641,8 @@ begin
  end;
  audioPackets.Free;
  videoPackets.Free;
+ _FreeChunk(audioChunk);
+ _FreeChunk(videoChunk);
 
  if videoCodecContext<>nil then
  begin
@@ -625,9 +659,7 @@ begin
  for I:=0 to BUFFER_COUNT-1 do
  begin
   if audioBuffer[I]<>nil then
-  begin
-   FreeMem(audioBuffer[I]);
-  end;
+   playerInfo.Deallocate(audioBuffer[I]);
   if videoBuffer[I]<>nil then
    playerInfo.DeallocateTexture(videoBuffer[I]);
  end;
@@ -684,12 +716,12 @@ var
  frame    :PAVFrame;
  i, j     :Integer;
  fdata    :PSingle;
+ nsize    :QWord;
  pcmSample:SmallInt;
 begin
  Result:=Default(TMemChunk);
  if (audioStreamId<0) or ((not ignoreIsPlaying) and (not IsPlaying)) then Exit;
  frame:=av_frame_alloc;
- Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(audioCodecContext,frame);
@@ -707,18 +739,19 @@ begin
   channelCount:=frame^.channels;
   sampleCount:=frame^.nb_samples;
   sampleRate:=frame^.sample_rate;
-  Result.nSize:=sampleCount*channelCount*SizeOf(SmallInt);
-  GetMem(Result.pAddr,Result.nSize);
+  nsize:=sampleCount*channelCount*SizeOf(SmallInt);
+  _CompareAndAllocChunk(audioChunk,nsize);
   for i:=0 to sampleCount-1 do
    for j:=0 to channelCount-1 do
    begin
     fdata:=PSingle(frame^.data[j]);
     pcmSample:=Floor(fdata[i]*High(SmallInt));
-    PSmallInt(Result.pAddr)[i*channelCount+j]:=pcmSample;
+    PSmallInt(audioChunk.pAddr)[i*channelCount+j]:=pcmSample;
    end;
   break;
  end;
  av_frame_free(frame);
+ Result:=audioChunk;
 end;
 
 function TAvPlayerState.ReceiveVideo:TMemChunk;
@@ -728,6 +761,7 @@ var
  j         :Integer;
  i         :Integer;
  fdata     :PSingle;
+ nsize     :QWord;
  sample    :Single;
  pcmSamplex:Word;
  p         :PByte;
@@ -735,7 +769,6 @@ begin
  Result:=Default(TMemChunk);
  if (videoStreamId<0) or (not IsPlaying) then Exit;
  frame:=av_frame_alloc;
- Result.pAddr:=nil;
  while True do
  begin
   err:=avcodec_receive_frame(videoCodecContext,frame);
@@ -750,27 +783,30 @@ begin
   if frame^.format<>Integer(AV_PIX_FMT_YUV420P) then
    Writeln(StdErr,'ERROR: Unknown video format: ',frame^.format);
   lastVideoTimeStamp:=av_rescale_q(frame^.best_effort_timestamp,formatContext^.streams[videoStreamId]^.time_base,AV_TIME_BASE_Q);
-  Result.nSize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
-  GetMem(Result.pAddr,Result.nSize);
-
-  p:=Result.pAddr;
-  for i:=0 to frame^.height-1 do
+  nsize:=videoCodecContext^.width*videoCodecContext^.height*3 div 2;
+  _CompareAndAllocChunk(videoChunk,nsize);
+  if lastVideoTimeStamp>=lastAudioTimeStamp then // Only copy frame when video is synced with audio
   begin
-   Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
-   p:=p+frame^.width;
-  end;
-  for i:=0 to frame^.height div 2-1 do
-  begin
-   for j:=0 to frame^.width div 2-1 do
+   p:=videoChunk.pAddr;
+   for i:=0 to frame^.height-1 do
    begin
-    p[0]:=frame^.data[1][frame^.linesize[1]*i+j];
-    p[1]:=frame^.data[2][frame^.linesize[2]*i+j];
-    p:=p+2;
+    Move(frame^.data[0][frame^.linesize[0]*i],p[0],frame^.width);
+    p:=p+frame^.width;
+   end;
+   for i:=0 to frame^.height div 2-1 do
+   begin
+    for j:=0 to frame^.width div 2-1 do
+    begin
+     p[0]:=frame^.data[1][frame^.linesize[1]*i+j];
+     p[1]:=frame^.data[2][frame^.linesize[2]*i+j];
+     p:=p+2;
+    end;
    end;
   end;
   break;
  end;
  av_frame_free(frame);
+ Result:=videoChunk;
 end;
 
 function TAvPlayerState.GetFramerate:QWord;
@@ -800,11 +836,11 @@ begin
  begin
   if (chunk.pAddr<>nil) then
   begin
-   if (audioBuffer[0]<>nil) then
+   if audioBuffer[0]=nil then
    begin
-    FreeMem(audioBuffer[0]);
+    audioBuffer[0]:=playerInfo.Allocate(32,chunk.nSize);
    end;
-   audioBuffer[0]:=chunk.pAddr;
+   Move(chunk.pAddr^,audioBuffer[0]^,chunk.nSize);
   end;
   Exit(audioBuffer[0]);
  end else
@@ -813,10 +849,9 @@ begin
   begin
    if videoBuffer[0]=nil then
    begin
-    videoBuffer[0]:=playerInfo.AllocateTexture(0,chunk.nSize);
+    videoBuffer[0]:=playerInfo.AllocateTexture(32,chunk.nSize);
    end;
    Move(chunk.pAddr^,videoBuffer[0]^,chunk.nSize);
-   FreeMem(chunk.pAddr);
   end;
   Exit(videoBuffer[0]);
  end;
@@ -927,7 +962,20 @@ var
  actualBufSize  :QWord;
  buf            :array[0..BUF_SIZE-1] of Byte;
  f              :THandle;
+ path,
  source         :RawByteString;
+
+ function getFileSize(aFileName:RawByteString):Int64;
+ var
+  info:TSearchRec;
+ begin
+  if FindFirst(aFileName,0,info)=0 then
+   Result:=Info.Size
+  else
+   Result:=-1;
+  FindClose(info);
+ end;
+
 begin
  if DISABLE_FMV_HACK then
   Exit(-1);
@@ -953,32 +1001,34 @@ begin
     Exit(-1);
    end;
    // Read data and write to dump directory
-   // TODO: Should cache the file so it can be reused later
-   Writeln('TODO: Should cache media file so it can be reused later: ',argFilename);
-   CreateDir(DIRECTORY_AVPLAYER_DUMP);
+   path:=DIRECTORY_AVPLAYER_DUMP+'/'+param_sfo.ParamSfoGetString('TITLE_ID');
+   CreateDir(path);
    //
-   source:=DIRECTORY_AVPLAYER_DUMP+'/'+ExtractFileName(argFilename);
-   f:=FileCreate(source,fmOpenWrite);
-   //
-   bytesRemaining:=fileSize;
-   offset:=0;
-   while bytesRemaining>0 do
+   source:=path+'/'+IntToStr(fileSize)+'_'+ExtractFileName(argFilename);
+   if fileSize<>getFileSize(source) then
    begin
-    actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
-    bytesRead:=player.readOffset(@buf[0],offset,actualBufSize);
-    if bytesRead<0 then
+    f:=FileCreate(source,fmOpenWrite);
+    //
+    bytesRemaining:=fileSize;
+    offset:=0;
+    while bytesRemaining>0 do
     begin
-     player.close();
-     player.unlock;
-     player.dec_ref;
-     Exit(-1);
+     actualBufSize:=Min(QWORD(BUF_SIZE),bytesRemaining);
+     bytesRead:=player.readOffset(@buf[0],offset,actualBufSize);
+     if bytesRead<0 then
+     begin
+      player.close();
+      player.unlock;
+      player.dec_ref;
+      Exit(-1);
+     end;
+     FileWrite(f,buf,actualBufSize);
+     Dec(bytesRemaining,actualBufSize);
+     Inc(offset,actualBufSize);
     end;
-    FileWrite(f,buf,actualBufSize);
-    Dec(bytesRemaining,actualBufSize);
-    Inc(offset,actualBufSize);
+    FileClose(f);
+    player.close();
    end;
-   FileClose(f);
-   player.close();
    // Init player
    player.playerState.CreateMedia(source);
    Result:=0;
@@ -1032,8 +1082,7 @@ begin
  _sig_unlock;
 end;
 
-// TODO: Not working correctly for Descenders?
-function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle): LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerIsActive(handle:SceAvPlayerHandle):Boolean; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
 begin
@@ -1049,7 +1098,7 @@ begin
  player.dec_ref;
 end;
 
-function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:LongBool):Integer; SysV_ABI_CDecl;
+function ps4_sceAvPlayerSetLooping(handle:SceAvPlayerHandle;loopFlag:Boolean):Integer; SysV_ABI_CDecl;
 var
  player:TAvPlayerInfo;
 begin
@@ -1068,7 +1117,7 @@ begin
  end;
 end;
 
-function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool;
+function _sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean;
 var
  audioData:TMemChunk;
  player   :TAvPlayerInfo;
@@ -1103,14 +1152,14 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetAudioData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetAudioData(handle,frameInfo);
  _sig_unlock;
 end;
 
-function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool;
+function _sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean;
 var
  videoData:TMemChunk;
  player   :TAvPlayerInfo;
@@ -1137,13 +1186,16 @@ begin
     player.dec_ref;
     Exit(False);
    end;
-   frameInfo^.timeStamp                 :=_usec2msec(player.playerState.lastVideoTimeStamp);
-   frameInfo^.details.video.width       :=player.playerState.videoCodecContext^.width;
-   frameInfo^.details.video.height      :=player.playerState.videoCodecContext^.height;
-   frameInfo^.details.video.aspectRatio :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
-   frameInfo^.details.video.framerate   :=0;
-   frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
-   frameInfo^.pData                     :=player.playerState.Buffer(1,videoData);
+   frameInfo^.timeStamp                   :=_usec2msec(player.playerState.lastVideoTimeStamp);
+   frameInfo^.details.video.width         :=player.playerState.videoCodecContext^.width;
+   frameInfo^.details.video.height        :=player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.aspectRatio   :=player.playerState.videoCodecContext^.width/player.playerState.videoCodecContext^.height;
+   frameInfo^.details.video.framerate     :=0;
+   frameInfo^.details.video.languageCode  :=LANGUAGE_CODE_ENG;
+   frameInfo^.details.video.pitch         :=frameInfo^.details.video.width;
+   frameInfo^.details.video.lumaBitDepth  :=8;
+   frameInfo^.details.video.chromaBitDepth:=8;
+   frameInfo^.pData                       :=player.playerState.Buffer(1,videoData);
    Result:=True;
   end;
   player.unlock;
@@ -1151,18 +1203,29 @@ begin
  end;
 end;
 
-function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoDataEx(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfoEx):Boolean; SysV_ABI_CDecl;
 begin
  _sig_lock;
  Result:=_sceAvPlayerGetVideoDataEx(handle,frameInfo);
  _sig_unlock;
 end;
 
-function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):LongBool; SysV_ABI_CDecl;
+function ps4_sceAvPlayerGetVideoData(handle:SceAvPlayerHandle;frameInfo:PSceAvPlayerFrameInfo):Boolean; SysV_ABI_CDecl;
+var
+ frameInfoEx:SceAvPlayerFrameInfoEx;
 begin
- Writeln(SysLogPrefix,'sceAvPlayerGetVideoData');
- // TODO: Rely on ps4_sceAvPlayerGetVideoDataEx to get the frame
- Result:=False;
+ _sig_lock;
+ Result:=_sceAvPlayerGetVideoDataEx(handle,@frameInfoEx);
+ if Result then
+ begin
+  frameInfo^.timeStamp                 :=frameInfoEx.timeStamp;
+  frameInfo^.details.video.width       :=frameInfoEx.details.video.width;
+  frameInfo^.details.video.height      :=frameInfoEx.details.video.height;
+  frameInfo^.details.video.aspectRatio :=frameInfoEx.details.video.aspectRatio;
+  frameInfo^.details.video.languageCode:=LANGUAGE_CODE_ENG;
+  frameInfo^.pData                     :=frameInfoEx.pData;
+ end;
+ _sig_unlock;
 end;
 
 function ps4_sceAvPlayerSetAvSyncMode(handle:SceAvPlayerHandle;argSyncMode:SceAvPlayerAvSyncMode):Integer; SysV_ABI_CDecl;
@@ -1422,6 +1485,7 @@ begin
  lib^.set_proc($51B42861AC0EB1F6,@ps4_sceAvPlayerIsActive);
  lib^.set_proc($395B61B34C467E1A,@ps4_sceAvPlayerSetLooping);
  lib^.set_proc($5A7A7539572B6609,@ps4_sceAvPlayerGetAudioData);
+ lib^.set_proc($A37F915A71D58928,@ps4_sceAvPlayerGetVideoData);
  lib^.set_proc($25D92C42EF2935D4,@ps4_sceAvPlayerGetVideoDataEx);
  lib^.set_proc($93FABEC4EC5D7371,@ps4_sceAvPlayerSetAvSyncMode);
  lib^.set_proc($C3033DF608C57F56,@ps4_sceAvPlayerCurrentTime);

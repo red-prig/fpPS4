@@ -169,6 +169,7 @@ type
   Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord);
 
   Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
+  Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
   Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
   procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
  end;
@@ -695,6 +696,28 @@ begin
  FImages[i]:=b;
 end;
 
+Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
+var
+ b:TImageBindExt;
+ i:Integer;
+begin
+ Assert(PT<>nil);
+ if (PT=nil) then Exit;
+
+ //print_tsharp8(PT);
+
+ b:=Default(TImageBindExt);
+ b.fset:=fset;
+ b.bind:=bind;
+
+ b.FImage:=_get_tsharp8_image_info(PT);
+ b.FView :=_get_tsharp8_image_view(PT);
+
+ i:=Length(FImages);
+ SetLength(FImages,i+1);
+ FImages[i]:=b;
+end;
+
 procedure TvUniformBuilder.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
 var
  P:Pointer;
@@ -713,11 +736,7 @@ begin
   VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
     Case b.addr[0].rtype of
      vtTSharp4:AddTSharp4(P,fset,b.bind);
-     vtTSharp8:
-       begin
-        print_tsharp8(P);
-        Assert(false);
-       end;
+     vtTSharp8:AddTSharp8(P,fset,b.bind);
      else
       Assert(false);
     end;
