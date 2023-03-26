@@ -222,6 +222,22 @@ begin
    base_old:=base_old+VM_MIN_GPU_ADDRESS;
   end;
 
+  //set old to readonly
+  r:=NtProtectVirtualMemory(
+      NtCurrentProcess,
+      @base_old,
+      @size,
+      PAGE_READONLY,
+      nil
+     );
+
+  if (r<>0) then
+  begin
+   Writeln('failed NtProtectVirtualMemory:',r);
+   Assert(false,'pmap_protect');
+  end;
+
+  //alloc new
   r:=NtAllocateVirtualMemory(
       NtCurrentProcess,
       @base_new,
@@ -237,6 +253,10 @@ begin
    Assert(false,'pmap_protect');
   end;
 
+  //move data
+  Move(base_old^,base_new^,size);
+
+  //free old
   r:=NtFreeVirtualMemory(
       NtCurrentProcess,
       @base_old,
@@ -279,14 +299,11 @@ var
 begin
  Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
+ //dont reset gpu mem
+ if is_gpu(prot) then Exit;
+
  base:=Pointer(trunc_page(start));
  size:=trunc_page(__end-start);
-
- if is_gpu(prot) then
- begin
-  //shift
-  base:=base+VM_MIN_GPU_ADDRESS;
- end;
 
  r:=NtAllocateVirtualMemory(
      NtCurrentProcess,

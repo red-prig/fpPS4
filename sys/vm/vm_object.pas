@@ -60,8 +60,6 @@ const
  OBJPR_NOTMAPPED=$2; // Don't unmap pages.
  OBJPR_NOTWIRED =$4; // Don't remove wired pages.
 
-
-//function  vm_object_is_merges (_object:vm_object_t):Boolean;
 procedure vm_object_reference (_object:vm_object_t);
 function  vm_object_allocate  (t:objtype_t;size:vm_pindex_t):vm_object_t;
 procedure vm_object_deallocate(_object:vm_object_t);
@@ -157,19 +155,6 @@ begin
  mtx_destroy(_object^.mtx);
  FreeMem(_object);
 end;
-
-{
-function vm_object_is_merges(_object:vm_object_t):Boolean;
-begin
- if (_object=nil) then
- begin
-  Result:=True;
- end else
- begin
-  Result:=(obj_type(_object^.otype)=OBJT_DMEM);
- end;
-end;
-}
 
 procedure vm_object_reference(_object:vm_object_t);
 begin

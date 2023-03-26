@@ -5,6 +5,9 @@ unit sys_mmap;
 
 interface
 
+uses
+ vm_mmap;
+
 const
  PROT_NONE       =$00; // no permissions
  PROT_READ       =$01; // pages can be read
@@ -71,6 +74,10 @@ const
  MADV_CORE      = 9; // revert to including pages in a core file
  MADV_PROTECT   =10; // protect process from pageout kill
 
+type
+ p_query_memory_prot=vm_mmap.p_query_memory_prot;
+ t_query_memory_prot=vm_mmap.t_query_memory_prot;
+
 function mmap(_addr :Pointer;
               _len  :QWORD;
               _prot :Integer;
@@ -82,11 +89,11 @@ function munmap(addr:Pointer;len:QWORD):Integer;
 function mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function mname(addr:Pointer;len:QWORD;name:PChar):Integer;
+function query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;
 
 implementation
 
 uses
- vm_mmap,
  trap,
  thr_error;
 
@@ -126,6 +133,13 @@ end;
 function mname(addr:Pointer;len:QWORD;name:PChar):Integer; assembler; nostackframe;
 asm
  movq  sys_mname,%rax
+ call  fast_syscall
+ call  cerror
+end;
+
+function query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;  assembler; nostackframe;
+asm
+ movq  sys_query_memory_protection,%rax
  call  fast_syscall
  call  cerror
 end;

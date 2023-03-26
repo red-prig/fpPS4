@@ -5,6 +5,15 @@ unit vm_mmap;
 
 interface
 
+type
+ p_query_memory_prot=^t_query_memory_prot;
+ t_query_memory_prot=packed record
+  start:Pointer;
+  __end:Pointer;
+  prot  :Integer;
+  eflags:Integer;
+ end;
+
 function sys_mmap(_addr :Pointer;
                   _len  :QWORD;
                   _prot :Integer;
@@ -16,6 +25,7 @@ function sys_munmap(addr:Pointer;len:QWORD):Integer;
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
+function sys_query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;
 
 implementation
 
@@ -616,7 +626,36 @@ begin
  vm_map_set_name(@g_vmspace.vm_map,start,__end,@_name);
 end;
 
-
+function sys_query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;
+var
+ map:vm_map_t;
+ _addr:vm_offset_t;
+ __end:vm_offset_t;
+ entry:vm_map_entry_t;
+ data:t_query_memory_prot;
+begin
+ Result:=EINVAL;
+ _addr:=trunc_page(vm_offset_t(addr));
+ map:=@g_vmspace.vm_map;
+ __end:=vm_map_max(map);
+ if (_addr<__end) or (_addr=__end) then
+ begin
+  vm_map_lock(map);
+  if not vm_map_lookup_entry(map,_addr,@entry) then
+  begin
+   vm_map_unlock(map);
+   Result:=EACCES;
+  end else
+  begin
+   data.start:=Pointer(entry^.start);
+   data.__end:=Pointer(entry^.__end);
+   data.prot:=(entry^.max_protection and entry^.protection);
+   data.eflags:=entry^.eflags;
+   vm_map_unlock(map);
+   Result:=copyout(@data,info,SizeOf(t_query_memory_prot));
+  end;
+ end;
+end;
 
 
 end.

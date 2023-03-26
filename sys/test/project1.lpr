@@ -61,6 +61,7 @@ function _thread(parameter:pointer):ptrint;
 var
  td:p_kthread;
  p:Pointer;
+ qr:t_query_memory_prot;
 begin
  Result:=0;
  NtWaitForSingleObject(event,false,nil);
@@ -82,6 +83,9 @@ begin
 
  p:=mmap(Pointer($700000000),16*1024,PROT_CPU_ALL,MAP_ANON or MAP_FIXED,-1,0);
  Writeln(HexStr(p));
+
+ Result:=query_memory_protection(Pointer($700000000),16*1024,@qr);
+ Writeln(Result);
 
  p:=mmap(Pointer($700000000+16*1024),16*1024,PROT_CPU_ALL,MAP_ANON {or MAP_VOID} or MAP_FIXED,-1,0);
  Writeln(HexStr(p));
