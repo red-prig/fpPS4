@@ -87,6 +87,8 @@ begin
  Result:=query_memory_protection(Pointer($700000000),16*1024,@qr);
  Writeln(Result);
 
+ sceKernelSetVirtualRangeName(Pointer($700000000),16*1024,'test');
+
  p:=mmap(Pointer($700000000+16*1024),16*1024,PROT_CPU_ALL,MAP_ANON {or MAP_VOID} or MAP_FIXED,-1,0);
  Writeln(HexStr(p));
 

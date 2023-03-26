@@ -16,6 +16,9 @@ procedure _thr_stack_free(attr:p_pthread_attr);
 
 implementation
 
+uses
+ sys_mmap;
+
 type
  //Spare thread stack.
  p_stack=^t_stack;
@@ -40,12 +43,15 @@ begin
  Result:=size;
 end;
 
+const
+ _rtld_get_stack_prot=PROT_READ or PROT_WRITE;
+
 procedure _thr_stack_fix_protection(td:p_pthread);
 begin
- //mprotect(td^.attr.stackaddr_attr+
- //         round_up(td^.attr.guardsize_attr),
- //         round_up(td^.attr.stacksize_attr),
- //        _rtld_get_stack_prot);
+ mprotect(td^.attr.stackaddr_attr+
+          round_up(td^.attr.guardsize_attr),
+          round_up(td^.attr.stacksize_attr),
+         _rtld_get_stack_prot);
 end;
 
 function _thr_stack_alloc(attr:p_pthread_attr):Integer;
@@ -109,28 +115,28 @@ begin
 
   THREAD_LIST_UNLOCK(curthread);
 
-  //stackaddr:=mmap(stackaddr,
-  //                stacksize+guardsize,
-  //                _rtld_get_stack_prot,
-  //                MAP_STACK,-1,0
-  //               );
+  stackaddr:=mmap(stackaddr,
+                  stacksize+guardsize,
+                  _rtld_get_stack_prot,
+                  MAP_STACK,-1,0
+                 );
 
   r:=0;
-  if (stackaddr<>Pointer(-1)) then //MAP_FAILED
+  if (stackaddr<>MAP_FAILED) then
   begin
-   //r:=mprotect(stackaddr,guardsize,PROT_NONE);
+   r:=mprotect(stackaddr,guardsize,PROT_NONE);
   end;
 
-  if (stackaddr<>Pointer(-1)) and  //MAP_FAILED
+  if (stackaddr<>MAP_FAILED) and
      ((guardsize=0) or (r=0)) then
   begin
-   //sceKernelSetVirtualRangeName(addr,guardsize,'stack guard');
+   sceKernelSetVirtualRangeName(stackaddr,guardsize,'stack guard');
    stackaddr:=stackaddr+guardsize;
   end else
   begin
-   if (stackaddr<>Pointer(-1)) then  //MAP_FAILED
+   if (stackaddr<>MAP_FAILED) then
    begin
-    //munmap(stackaddr,stacksize+guardsize);
+    munmap(stackaddr,stacksize+guardsize);
    end;
    stackaddr:=nil;
   end;

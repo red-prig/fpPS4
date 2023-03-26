@@ -91,11 +91,16 @@ function madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;
 
+//sce
+
+function sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:PChar):Integer;
+
 implementation
 
 uses
  trap,
- thr_error;
+ thr_error,
+ errno;
 
 function mmap(_addr :Pointer;
               _len  :QWORD;
@@ -142,6 +147,17 @@ asm
  movq  sys_query_memory_protection,%rax
  call  fast_syscall
  call  cerror
+end;
+
+//sce
+
+function sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:PChar):Integer;
+begin
+ Result:=mname(addr,len,name);
+ if (Result=-1) then
+ begin
+  Result:=px2sce(_get_errno);
+ end;
 end;
 
 
