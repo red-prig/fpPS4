@@ -144,6 +144,8 @@ type
   td_intrval      :Integer;
   td_inhibitors   :Integer;
   td_timeo        :Int64;
+  //
+  td_map_def_user :Pointer;
  end;
 
  p_thr_param=^thr_param;

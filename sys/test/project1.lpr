@@ -2,7 +2,8 @@
 uses
  windows,
  atomic,
- ntapi, mqueue,
+ ntapi,
+ mqueue,
  signal,
  ucontext,
  _umtx,
@@ -34,7 +35,8 @@ uses
  sys_evf,
  rtprio,
  pthread,
- thr_stack;
+ thr_stack,
+ sys_mmap;
 
 var
  mtx:umutex;
@@ -58,6 +60,7 @@ end;
 function _thread(parameter:pointer):ptrint;
 var
  td:p_kthread;
+ p:Pointer;
 begin
  Result:=0;
  NtWaitForSingleObject(event,false,nil);
@@ -73,6 +76,24 @@ begin
  umtx_thread_init(td);
 
  set_curkthread(td);
+
+ p:=mmap(Pointer($700000000),16*1024,PROT_CPU_ALL,MAP_VOID or MAP_FIXED,-1,0);
+ Writeln(HexStr(p));
+
+ p:=mmap(Pointer($700000000),16*1024,PROT_CPU_ALL,MAP_ANON or MAP_FIXED,-1,0);
+ Writeln(HexStr(p));
+
+ p:=mmap(Pointer($700000000+16*1024),16*1024,PROT_CPU_ALL,MAP_ANON {or MAP_VOID} or MAP_FIXED,-1,0);
+ Writeln(HexStr(p));
+
+ Result:=madvise(Pointer($00700000000),4*1024,MADV_FREE);
+ Writeln(Result);
+
+ Result:=madvise(Pointer($00700000000),4*1024,MADV_WILLNEED);
+ Writeln(Result);
+
+ Result:=munmap(Pointer($700000000),16*1024*2);
+ Writeln(Result);
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('  e=',e);
@@ -770,9 +791,9 @@ begin
  readln;
  }
 
- BeginThread(@_thread);
- BeginThread(@_thread);
- BeginThread(@_thread);
+ //BeginThread(@_thread);
+ //BeginThread(@_thread);
+ //BeginThread(@_thread);
 
  NtSetEvent(event,nil);
 
