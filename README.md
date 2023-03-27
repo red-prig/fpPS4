@@ -5,11 +5,17 @@
 
 ![Book logo](/icons/logo.png) 
 
-#
-
-  PS4 compatibility layer (emulator) on Free Pascal
+### PS4 compatibility layer (emulator) on Free Pascal
  
 This project is at the beginning and started for fun.
+Please note This emulator Is extremely Work-in-progress and does not currently play AAA 3D games.
+
+We do not condone Piracy and games must be ripped from you're PS4.
+
+[All playable games are linked here](https://github.com/red-prig/fpps4-game-compatibility/issues?q=is%3Aopen+is%3Aissue+label%3Astatus-playable)
+
+### Game compatibility tracker
+https://github.com/red-prig/fpps4-game-compatibility/issues
  
 ### Building
 - Free pascal compiler: 3.3.1 (use fpcupdeluxe with trunk), x86_64 only. 
@@ -20,9 +26,6 @@ This project is at the beginning and started for fun.
 - OS: Windows 7 SP1 x64 and higher 
 - CPU: x64, AVX2 support
 - GPU: Vulkan API support
-
-### Game compatibility tracker
-https://github.com/red-prig/fpps4-game-compatibility/issues
 
 ### Control layout
 To switch to borderless full screen mode, press Alt-Enter.
