@@ -254,11 +254,15 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\vfs\vnode.pas"/>
+        <Filename Value="..\..\rtl\murmurhash.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\..\rtl\murmurhash.pas"/>
+        <Filename Value="..\vfs\vfs_vnode.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vfs\vfs_mount.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

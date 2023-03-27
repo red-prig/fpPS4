@@ -38,8 +38,9 @@ uses
  thr_stack,
  sys_mmap,
  kern_synch,
- vnode,
- murmurhash;
+ vfs_vnode,
+ murmurhash,
+ vfs_mount;
 
 var
  mtx:umutex;

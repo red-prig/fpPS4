@@ -41,21 +41,23 @@ begin
 
  len:=(len and 7);
 
- while (len<>0) do
+ if (len<>0) then
  begin
-  case len of
-   7: h:=h xor (QWORD(data2[6]) shl 48);
-   6: h:=h xor (QWORD(data2[5]) shl 40);
-   5: h:=h xor (QWORD(data2[4]) shl 32);
-   4: h:=h xor (QWORD(data2[3]) shl 24);
-   3: h:=h xor (QWORD(data2[2]) shl 16);
-   2: h:=h xor (QWORD(data2[1]) shl  8);
-   1: h:=h xor (QWORD(data2[0]));
+  while (len<>0) do
+  begin
+   case len of
+    7: h:=h xor (QWORD(data2[6]) shl 48);
+    6: h:=h xor (QWORD(data2[5]) shl 40);
+    5: h:=h xor (QWORD(data2[4]) shl 32);
+    4: h:=h xor (QWORD(data2[3]) shl 24);
+    3: h:=h xor (QWORD(data2[2]) shl 16);
+    2: h:=h xor (QWORD(data2[1]) shl  8);
+    1: h:=h xor (QWORD(data2[0]));
+   end;
+   Dec(len);
   end;
-  Dec(len);
+  h:=h*m;
  end;
-
- h:=h*m;
 
  h:=h xor (h shr r);
  h:=h*m;

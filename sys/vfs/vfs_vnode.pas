@@ -1,4 +1,4 @@
-unit vnode;
+unit vfs_vnode;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -57,6 +57,7 @@ type
 
  vtype=(VNON,VREG,VDIR,VBLK,VCHR,VLNK,VSOCK,VFIFO,VBAD,VMARKER);
 
+ pp_vnode=^p_vnode;
  p_vnode=^t_vnode;
  t_vnode=packed record
   v_type:vtype;
@@ -79,7 +80,7 @@ type
   v_vflag:QWORD;
  end;
 
- vattr=packed record
+ t_vattr=packed record
   va_type     :vtype;
   va_mode     :Word;
   va_nlink    :Word;
