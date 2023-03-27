@@ -36,7 +36,10 @@ uses
  rtprio,
  pthread,
  thr_stack,
- sys_mmap;
+ sys_mmap,
+ kern_synch,
+ vnode,
+ murmurhash;
 
 var
  mtx:umutex;
