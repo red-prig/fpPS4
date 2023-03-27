@@ -11,7 +11,7 @@ This project is at the beginning and started for fun.
 Please note This emulator Is extremely Work-in-progress and does not currently play AAA 3D games.
 
 ### How to get games
-We do not condone Piracy and games must be ripped from you're PS4.
+We do not condone Piracy and games must be ripped from your PS4.
 
 ### Game compatibility tracker
 https://github.com/red-prig/fpps4-game-compatibility/issues
