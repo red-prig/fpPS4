@@ -3,7 +3,7 @@
 
 # Donate: [<img src="https://static.boosty.to/assets/images/logo.Ffjjd.svg"/>](https://boosty.to/fpps4)
 
-![Book logo](https://i.imgur.com/KSUaG3F.png)
+![Book logo](icons/logo.png)
 
 ### PS4 compatibility layer (emulator) on Free Pascal
  
