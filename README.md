@@ -3,19 +3,20 @@
 
 # Donate: [<img src="https://static.boosty.to/assets/images/logo.Ffjjd.svg"/>](https://boosty.to/fpps4)
 
-![Book logo](/icons/logo.png) 
+![Book logo](https://i.imgur.com/KSUaG3F.png)
 
 ### PS4 compatibility layer (emulator) on Free Pascal
  
 This project is at the beginning and started for fun.
 Please note This emulator Is extremely Work-in-progress and does not currently play AAA 3D games.
 
+### How to get games
 We do not condone Piracy and games must be ripped from you're PS4.
-
-[All playable games are linked here](https://github.com/red-prig/fpps4-game-compatibility/issues?q=is%3Aopen+is%3Aissue+label%3Astatus-playable)
 
 ### Game compatibility tracker
 https://github.com/red-prig/fpps4-game-compatibility/issues
+
+[All playable games are linked here](https://github.com/red-prig/fpps4-game-compatibility/issues?q=is%3Aopen+is%3Aissue+label%3Astatus-playable)
  
 ### Building
 - Free pascal compiler: 3.3.1 (use fpcupdeluxe with trunk), x86_64 only. 
