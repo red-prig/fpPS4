@@ -1611,6 +1611,7 @@ begin
  //queue
 
  lib^.set_proc($0F439D14C8E9E3A2,@ps4_sceKernelCreateEqueue);
+ lib^.set_proc($8E91639A0002E401,@ps4_sceKernelDeleteEqueue);
  lib^.set_proc($7F3C8C2ACF648A6D,@ps4_sceKernelWaitEqueue);
 
  lib^.set_proc($E11EBF3AF2367040,@ps4_sceKernelAddUserEvent);
