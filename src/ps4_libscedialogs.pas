@@ -514,6 +514,40 @@ end;
 
 //
 
+function ps4_sceLoginDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
+function ps4_sceHmdSetupDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdSetupDialogOpen(param:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdSetupDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+end;
+
+function ps4_sceHmdSetupDialogGetResult(pResult:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdSetupDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -639,6 +673,30 @@ begin
  lib^.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
 end;
 
+function Load_libSceLoginDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceLoginDialog');
+ lib^.set_proc($A8FFC4BD0465D877,@ps4_sceLoginDialogInitialize);
+end;
+
+function Load_libSceHmdSetupDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceHmdSetupDialog');
+ lib^.set_proc($341D58DA40368C26,@ps4_sceHmdSetupDialogInitialize);
+ lib^.set_proc($34D8225784FE6A45,@ps4_sceHmdSetupDialogOpen);
+ lib^.set_proc($51DEE3DFE4432018,@ps4_sceHmdSetupDialogUpdateStatus);
+ lib^.set_proc($EA55511CC5792D8D,@ps4_sceHmdSetupDialogGetResult);
+ lib^.set_proc($FB3E0E26616B7997,@ps4_sceHmdSetupDialogTerminate);
+end;
+
 initialization
  ps4_app.RegistredPreLoad('libSceCommonDialog.prx'          ,@Load_libSceCommonDialog);
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx'           ,@Load_libSceErrorDialog);
@@ -649,6 +707,8 @@ initialization
  ps4_app.RegistredPreLoad('libSceSigninDialog.prx'          ,@Load_libSceSigninDialog);
  ps4_app.RegistredPreLoad('libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
  ps4_app.RegistredPreLoad('libSceImeDialog.prx'             ,@Load_libSceImeDialog);
+ ps4_app.RegistredPreLoad('libSceLoginDialog.prx'           ,@Load_libSceLoginDialog);
+ ps4_app.RegistredPreLoad('libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog);
 
 end.
 

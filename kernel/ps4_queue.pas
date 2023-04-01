@@ -129,6 +129,7 @@ type
  end;
 
 function ps4_sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelDeleteEqueue(eq:PSceKernelEqueue):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelWaitEqueue(
           eq:SceKernelEqueue;
@@ -313,6 +314,11 @@ begin
  _sig_lock;
  Result:=_set_sce_errno(_sceKernelCreateEqueue(outEq,name));
  _sig_unlock;
+end;
+
+function ps4_sceKernelDeleteEqueue(eq:PSceKernelEqueue):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
 end;
 
 function _post_event(eq:SceKernelEqueue;node:PKEventNode;cb:TKFetchEvent):Boolean;
