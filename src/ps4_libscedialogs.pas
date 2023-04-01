@@ -521,14 +521,12 @@ end;
 
 //
 
-// FIXME(Kaitlyn): Some of these functions have parameters, but I didn't set them up.
-
 function ps4_sceHmdSetupDialogInitialize():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceHmdSetupDialogOpen():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdSetupDialogOpen(param:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -538,7 +536,7 @@ begin
  Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
 end;
 
-function ps4_sceHmdSetupDialogGetResult():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdSetupDialogGetResult(pResult:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;

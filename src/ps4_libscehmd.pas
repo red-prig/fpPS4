@@ -12,43 +12,47 @@ uses
 
 implementation
 
+function ps4_sceHmdInitialize(param:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
 
-function ps4_sceHmdInitialize315():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdInitialize315(param:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
 function ps4_sceHmdReprojectionQueryOnionBuffSize():Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=$810;
 end;
 
 function ps4_sceHmdReprojectionQueryOnionBuffAlign():Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=$100;
 end;
 
 function ps4_sceHmdReprojectionQueryGarlicBuffSize():Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=$100000;
 end;
 
 function ps4_sceHmdReprojectionQueryGarlicBuffAlign():Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=$100;
 end;
 
-function ps4_sceHmdReprojectionSetUserEventStart():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdReprojectionSetUserEventStart(eq:Pointer;id:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceHmdReprojectionSetUserEventEnd():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdReprojectionSetUserEventEnd(eq:Pointer;id:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceHmdGetDeviceInformation():Integer; SysV_ABI_CDecl;
+function ps4_sceHmdGetDeviceInformation(info:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -63,9 +67,9 @@ begin
  Result:=0;
 end;
 
-function ps4_sceHmdReprojectionFinalize():Integer; SysV_ABI_CDecl;
+procedure ps4_sceHmdReprojectionFinalize(); SysV_ABI_CDecl;
 begin
- Result:=0;
+ //
 end;
 
 function ps4_sceHmdReprojectionClearUserEventStart():Integer; SysV_ABI_CDecl;
@@ -85,6 +89,7 @@ begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceHmd');
+ lib^.set_proc($2B82A71F44244F67,@ps4_sceHmdInitialize);
  lib^.set_proc($B3F27AE9AAFD839D,@ps4_sceHmdInitialize315);
  lib^.set_proc($90B50090DE9AD5EF,@ps4_sceHmdReprojectionQueryOnionBuffSize);
  lib^.set_proc($216C9B59B47FC6F0,@ps4_sceHmdReprojectionQueryOnionBuffAlign);

@@ -12,7 +12,12 @@ uses
 
 implementation
 
-function ps4_sceVrTrackerQueryMemory():Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerQueryMemory(param,pResult:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVrTrackerInit(param:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -30,6 +35,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceVrTracker');
  lib^.set_proc($2BBCA162BB0804F7,@ps4_sceVrTrackerQueryMemory);
+ lib^.set_proc($424465EE90114FD3,@ps4_sceVrTrackerInit);
  lib^.set_proc($201BF83F7AB5A50D,@ps4_sceVrTrackerTerm);
 end;
 

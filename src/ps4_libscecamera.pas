@@ -13,7 +13,7 @@ uses
 implementation
 
 
-function ps4_sceCameraIsAttached():Integer; SysV_ABI_CDecl;
+function ps4_sceCameraIsAttached(index:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
