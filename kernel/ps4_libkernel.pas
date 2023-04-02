@@ -530,7 +530,8 @@ type
   TitleId:array[0..9] of char;  //10
   debug_level:Byte;             //1
   slv_flags:Byte;               //1  eLoadOptions
-  unk4:array[0..44] of Byte;    //44
+  unk1:Integer;                 //4
+  unk2:array[0..4] of QWORD;    //40
  end;
 
 //sysctl to CTL_KERN(1).KERN_PROC(14).KERN_PROC_APPINFO(35)
@@ -576,7 +577,7 @@ type
   0x380000001000000f
   }
   utype:qword;
-  flags:qword;  //62 bit IsSystemProcess
+  flags:qword;  //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
   unknow:array[0..14] of qword
  end;
 
@@ -591,6 +592,7 @@ begin
  end;
 
  info^:=Default(t_authinfo);
+ info^.flags:=$2000000000000000;
 
  _set_errno(0);
  Result:=0;
