@@ -1212,6 +1212,7 @@ begin
   384+V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
 
   384+V_RCP_F32  : emit_V_RCP_F32;
+  384+V_RCP_IFLAG_F32: emit_V_RCP_F32;
 
   else
    Assert(false,'VOP3a?'+IntToStr(FSPI.VOP3a.OP));

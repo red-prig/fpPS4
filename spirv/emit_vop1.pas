@@ -274,6 +274,7 @@ begin
   V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
 
   V_RCP_F32  : emit_V_RCP_F32;
+  V_RCP_IFLAG_F32: emit_V_RCP_F32;
 
   V_FFBL_B32 : emit_V_FFBL_B32;
 

@@ -1088,6 +1088,27 @@ var
  dtype:TsrDataType;
  dst:PsrRegNode;
  src:array[0..1] of PsrRegNode;
+
+ cst:array[0..1] of PsrConst;
+
+ pLine:PSpirvOp;
+
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst^.pWriter:=ConstList.Fetch(dtype,value);
+  node^.mark_not_used;
+  node^.pDst:=nil;
+  Inc(Result);
+ end;
+
+ procedure _SetReg(src:PsrRegNode);
+ begin
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
+  Inc(Result);
+ end;
+
 begin
  Result:=0;
  dst:=node^.pDst^.AsType(ntReg);
@@ -1095,6 +1116,41 @@ begin
  src[1]:=node^.ParamNode(2)^.AsReg;
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
+
+ cst[0]:=RegDown(src[0])^.AsConst;
+ cst[1]:=RegDown(src[1])^.AsConst;
+ if (cst[0]<>nil) and (cst[1]<>nil) then
+ begin
+
+  if (cst[0]^.GetData=cst[1]^.GetData) then
+  begin
+   _SetConst(dst^.dtype,cst[0]^.GetData);
+   Exit;
+  end;
+
+  if (dst^.dtype=dtBool) and
+     (cst[0]^.dtype=dtBool) and
+     (cst[1]^.dtype=dtBool) then
+  begin
+   if (cst[0]^.AsBool=True) and (cst[1]^.AsBool=False) then
+   begin
+    src[0]:=node^.ParamNode(0)^.AsReg;
+    _SetReg(src[0]);
+    Exit;
+   end else
+   if (cst[0]^.AsBool=False) and (cst[1]^.AsBool=True) then
+   begin
+    src[0]:=node^.ParamNode(0)^.AsReg;
+    pLine:=src[0]^.pLine;
+    src[1]:=OpNotTo(src[0],@pLine);
+    src[1]^.PrepType(ord(dtBool));
+    _SetReg(src[1]);
+    Exit;
+   end;
+  end;
+
+
+ end;
 
  dtype:=LazyType3(dst^.dtype,src[0]^.dtype,src[1]^.dtype);
 
