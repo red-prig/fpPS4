@@ -40,7 +40,9 @@ uses
  kern_synch,
  vfs_vnode,
  murmurhash,
- vfs_mount;
+ vfs_subr,
+ vfs_mount,
+ vfs_default;
 
 var
  mtx:umutex;

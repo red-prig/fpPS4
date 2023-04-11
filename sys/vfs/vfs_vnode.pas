@@ -7,8 +7,11 @@ interface
 
 uses
  mqueue,
+ kern_thr,
  kern_mtx,
- time;
+ time,
+ vuio,
+ vmparam;
 
 const
  VI_MOUNT      =$0020; // Mount in progress
@@ -33,6 +36,10 @@ const
  VV_MD         =$0800; // vnode backs the md device
  VV_FORCEINSMQ =$1000; // force the insmntque to succeed
 
+ //Flags for va_vaflags.
+ VA_UTIMES_NULL=$01; // utimes argument was NULL
+ VA_EXCLUSIVE  =$02; // exclusive create request
+
  VEXEC  =&000000000100; // execute/search permission
  VWRITE =&000000000200; // write permission
  VREAD  =&000000000400; // read permission
@@ -47,19 +54,127 @@ const
  VREAD_ACL         =&000020000000; // read ACL and file mode
  VWRITE_ACL        =&000040000000; // change ACL and/or file mode
  VWRITE_OWNER      =&000100000000; // change file owner
+ VSYNCHRONIZE      =&000200000000;
 
+ VADMIN_PERMS      =VADMIN or VWRITE_ATTRIBUTES or VWRITE_ACL or VWRITE_OWNER;
+
+ //Permissions that were traditionally granted to everyone.
+ VSTAT_PERMS       =VREAD_ATTRIBUTES or VREAD_ACL;
+
+ //Permissions that allow to change the state of the file in any way.
+ VMODIFY_PERMS	   =VWRITE or VAPPEND or VADMIN_PERMS or VDELETE_CHILD or VDELETE;
+
+ // vn_open_flags
+ VN_OPEN_NOAUDIT=$00000001;
+
+ //Flags to various vnode functions.
+ SKIPSYSTEM =$0001; // vflush: skip vnodes marked VSYSTEM
+ FORCECLOSE =$0002; // vflush: force file closure
+ WRITECLOSE =$0004; // vflush: only close writable files
+ EARLYFLUSH =$0008; // vflush: early call for ffs_flushfiles
+ V_SAVE     =$0001; // vinvalbuf: sync file first
+ V_ALT      =$0002; // vinvalbuf: invalidate only alternate bufs
+ V_NORMAL   =$0004; // vinvalbuf: invalidate only regular bufs
+ V_CLEANONLY=$0008; // vinvalbuf: invalidate only clean bufs
+ REVOKEALL  =$0001; // vop_revoke: revoke all aliases
+ V_WAIT     =$0001; // vn_start_write: sleep for suspend
+ V_NOWAIT   =$0002; // vn_start_write: don't sleep for suspend
+ V_XSLEEP   =$0004; // vn_start_write: just return after sleep
+
+ VR_START_WRITE=$0001; // vfs_write_resume: start write atomically
+ VR_NO_SUSPCLR =$0002; // vfs_write_resume: do not clear suspension
+
+ VNOVAL=-1;
+
+ DEV_BSHIFT=9;
+ DEV_BSIZE =(1 shl DEV_BSHIFT);
+
+ BLKDEV_IOSIZE=PAGE_SIZE;
+ DFLTPHYS     =(64 * 1024);
+ MAXPHYS      =(128 * 1024);
 
 type
+ p_accmode_t=^accmode_t;
+ accmode_t=Integer;
+
+ pp_vnode=^p_vnode;
+ p_vnode=^t_vnode;
+
  p_vop_vector=^vop_vector;
  vop_vector=packed record
-  //
+  vop_default       :p_vop_vector;
+  vop_bypass        :Pointer;
+
+  vop_islocked      :Pointer;
+  vop_lookup        :Pointer;
+  vop_cachedlookup  :Pointer;
+  vop_create        :Pointer;
+  vop_whiteout      :Pointer;
+  vop_mknod         :Pointer;
+  vop_open          :Pointer;
+  vop_close         :Pointer;
+  vop_access        :Pointer;
+  vop_accessx       :Pointer;
+  vop_getattr       :Pointer;
+  vop_setattr       :Pointer;
+  vop_markatime     :Pointer;
+  vop_read          :Pointer;
+  vop_write         :Pointer;
+  vop_ioctl         :Pointer;
+  vop_poll          :Pointer;
+  vop_kqfilter      :Pointer;
+  vop_revoke        :Pointer;
+  vop_fsync         :Pointer;
+  vop_remove        :Pointer;
+  vop_link          :Pointer;
+  vop_rename        :Pointer;
+  vop_mkdir         :Pointer;
+  vop_rmdir         :Pointer;
+  vop_symlink       :Pointer;
+  vop_readdir       :Pointer;
+  vop_readlink      :Pointer;
+  vop_inactive      :Pointer;
+  vop_reclaim       :Pointer;
+  vop_lock1         :Pointer;
+  vop_unlock        :Pointer;
+  vop_bmap          :Pointer;
+  vop_strategy      :Pointer;
+  vop_getwritemount :Pointer;
+  vop_print         :Pointer;
+  vop_pathconf      :Pointer;
+  vop_advlock       :Pointer;
+  vop_advlockasync  :Pointer;
+  vop_advlockpurge  :Pointer;
+  vop_reallocblks   :Pointer;
+  vop_getpages      :Pointer;
+  vop_putpages      :Pointer;
+  vop_getacl        :Pointer;
+  vop_setacl        :Pointer;
+  vop_aclcheck      :Pointer;
+  vop_closeextattr  :Pointer;
+  vop_getextattr    :Pointer;
+  vop_listextattr   :Pointer;
+  vop_openextattr   :Pointer;
+  vop_deleteextattr :Pointer;
+  vop_setextattr    :Pointer;
+  vop_setlabel      :Pointer;
+  vop_vptofh        :Pointer;
+  vop_vptocnp       :Pointer;
+  vop_allocate      :Pointer;
+  vop_advise        :Pointer;
+  vop_unp_bind      :Pointer;
+  vop_unp_connect   :Pointer;
+  vop_unp_detach    :Pointer;
+  vop_is_text       :Pointer;
+  vop_set_text      :Pointer;
+  vop_unset_text    :Pointer;
+  vop_get_writecount:Pointer;
+  vop_add_writecount:Pointer;
  end;
 
  vtype=(VNON,VREG,VDIR,VBLK,VCHR,VLNK,VSOCK,VFIFO,VBAD,VMARKER);
 
- pp_vnode=^p_vnode;
- p_vnode=^t_vnode;
- t_vnode=packed record
+ t_vnode=packed object
   v_type:vtype;
   v_tag :PChar;
   v_op  :p_vop_vector;
@@ -72,18 +187,29 @@ type
 
   v_hash:DWORD;
 
-  v_usecount:DWORD;
+  v_holdcnt :Integer;
+  v_usecount:Integer;
+  v_writecount:Integer;
 
   v_lock:mtx;
+  v_interlock:mtx;
 
   v_iflag:QWORD;
   v_vflag:QWORD;
+
+  property v_mountedhere:Pointer read v_un{.vu_mount   };
+  property v_socket     :Pointer read v_un{.vu_socket  };
+  property v_rdev       :Pointer read v_un{.vu_cdev    };
+  property v_fifoinfo   :Pointer read v_un{.vu_fifoinfo};
  end;
 
+ p_vattr=^t_vattr;
  t_vattr=packed record
   va_type     :vtype;
   va_mode     :Word;
   va_nlink    :Word;
+  va_uid      :Integer;
+  va_gid      :Integer;
   va_fsid     :DWORD;
   va_fileid   :QWORD;
   va_size     :QWORD;
@@ -94,12 +220,60 @@ type
   va_birthtime:timespec;
   va_gen      :QWORD;
   va_flags    :QWORD;
+  va_rdev     :DWORD;
+  va_bytes    :QWORD;
+  va_filerev  :QWORD;
+  va_vaflags  :DWORD;
  end;
 
+procedure VI_LOCK(vp:p_vnode);
+function  VI_TRYLOCK(vp:p_vnode):Boolean;
+procedure VI_UNLOCK(vp:p_vnode);
+function  VI_MTX(vp:p_vnode):p_mtx; inline;
 
+function  IGNORE_LOCK(vp:p_vnode):Boolean; inline;
 
+var
+ rootvnode:p_vnode;
 
 implementation
+
+uses
+ errno,
+ vnode_if,
+ vnamei,
+ vfile,
+ vmount,
+ vfcntl,
+ vfs_lookup,
+ vfs_subr,
+ kern_synch;
+
+procedure VI_LOCK(vp:p_vnode);
+begin
+ mtx_lock(vp^.v_interlock);
+end;
+
+function VI_TRYLOCK(vp:p_vnode):Boolean;
+begin
+ Result:=mtx_trylock(vp^.v_interlock);
+end;
+
+procedure VI_UNLOCK(vp:p_vnode);
+begin
+ mtx_unlock(vp^.v_interlock);
+end;
+
+function VI_MTX(vp:p_vnode):p_mtx; inline;
+begin
+ Result:=@vp^.v_interlock;
+end;
+
+function IGNORE_LOCK(vp:p_vnode):Boolean; inline;
+begin
+ Result:=(vp=nil) or (vp^.v_type=VCHR) or (vp^.v_type=VBAD);
+end;
+
 
 end.
 

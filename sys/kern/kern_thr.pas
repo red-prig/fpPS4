@@ -197,6 +197,9 @@ procedure TD_SET_RUNNING(td:p_kthread);
 procedure TD_SET_RUNQ(td:p_kthread);
 procedure TD_SET_CAN_RUN(td:p_kthread);
 
+function  curthread_pflags_set(flags:Integer):Integer; inline;
+procedure curthread_pflags_restore(save:Integer); inline;
+
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
 
@@ -361,6 +364,22 @@ end;
 procedure TD_SET_CAN_RUN(td:p_kthread);
 begin
  td^.td_state:=TDS_CAN_RUN;
+end;
+
+//
+
+function curthread_pflags_set(flags:Integer):Integer; inline;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ Result:=(not flags) or (td^.td_pflags and flags);
+ td^.td_pflags:=td^.td_pflags or flags;
+end;
+
+procedure curthread_pflags_restore(save:Integer); inline;
+begin
+ curkthread^.td_pflags:=curkthread^.td_pflags and save;
 end;
 
 //

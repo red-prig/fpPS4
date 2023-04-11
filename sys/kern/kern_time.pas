@@ -10,14 +10,16 @@ uses
  ntapi,
  time;
 
-function cputick2usec(time:QWORD):QWORD; inline;
-function get_unit_uptime:Int64;
-function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
-function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
-function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+function  cputick2usec(time:QWORD):QWORD; inline;
+function  get_unit_uptime:Int64;
+procedure getnanotime(tp:Ptimespec);
 
-function sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
-function sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
+function  kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function  kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+
+function  sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function  sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
 implementation
 
@@ -124,6 +126,16 @@ begin
                           nil);
  unittime(@k.ExitTime.QuadPart);
  time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
+end;
+
+procedure getnanotime(tp:Ptimespec);
+var
+ time:Int64;
+begin
+ unittime(@time);
+ time:=time-DELTA_EPOCH_IN_UNIT;
+ tp^.tv_sec :=(time div POW10_7);
+ tp^.tv_nsec:=(time mod POW10_7)*100;
 end;
 
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;

@@ -11,10 +11,24 @@ uses
  kern_thr;
 
 const
- PRIMASK=$0ff;
- PCATCH =$100;
- PDROP  =$200;
- PBDRY  =$400;
+ PUSER=700;
+ PRI_MIN_KERN=64;
+
+ PSWP  =(PRI_MIN_KERN+ 0);
+ PVM   =(PRI_MIN_KERN+ 4);
+ PINOD =(PRI_MIN_KERN+ 8);
+ PRIBIO=(PRI_MIN_KERN+12);
+ PVFS  =(PRI_MIN_KERN+16);
+ PZERO =(PRI_MIN_KERN+20);
+ PSOCK =(PRI_MIN_KERN+24);
+ PWAIT =(PRI_MIN_KERN+28);
+ PLOCK =(PRI_MIN_KERN+32);
+ PPAUSE=(PRI_MIN_KERN+36);
+
+ PRIMASK=$0fff;
+ PCATCH =$1000;
+ PDROP  =$2000;
+ PBDRY  =$4000;
 
 function  msleep(ident   :Pointer;
                  lock    :p_mtx;
@@ -34,7 +48,7 @@ function msleep(ident   :Pointer;
                 timo    :Int64):Integer;
 var
  td:p_kthread;
- catch,flags,lock_state,pri:Integer;
+ catch,flags,pri:Integer;
 begin
  td:=curkthread;
 

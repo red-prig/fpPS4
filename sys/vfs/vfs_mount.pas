@@ -1,290 +1,458 @@
 unit vfs_mount;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
+ sysutils,
  mqueue,
- time,
+ vmount,
+ vuio,
+ vnamei,
  kern_mtx,
- vfs_vnode;
+ kern_synch,
+ kern_thr,
+ vfs_vnode,
+ vfs_subr,
+ vfs_init,
+ vfs_lookup,
+ vnode_if;
 
-const
- MAXFIDSZ=16;
+procedure vfs_ref(mp:p_mount); inline;
+procedure vfs_rel(mp:p_mount); inline;
 
- MFSNAMELEN=16; // length of type name including null
- MNAMELEN  =88; // size of on/from name bufs
+implementation
 
- //User specifiable flags, stored in mnt_flag.
- MNT_RDONLY     =$0000000000000001; // read only filesystem
- MNT_SYNCHRONOUS=$0000000000000002; // fs written synchronously
- MNT_NOEXEC     =$0000000000000004; // can't exec from filesystem
- MNT_NOSUID     =$0000000000000008; // don't honor setuid fs bits
- MNT_NFS4ACLS   =$0000000000000010; // enable NFS version 4 ACLs
- MNT_UNION      =$0000000000000020; // union with underlying fs
- MNT_ASYNC      =$0000000000000040; // fs written asynchronously
- MNT_SUIDDIR    =$0000000000100000; // special SUID dir handling
- MNT_SOFTDEP    =$0000000000200000; // using soft updates
- MNT_NOSYMFOLLOW=$0000000000400000; // do not follow symlinks
- MNT_GJOURNAL   =$0000000002000000; // GEOM journal support enabled
- MNT_MULTILABEL =$0000000004000000; // MAC support for objects
- MNT_ACLS       =$0000000008000000; // ACL support enabled
- MNT_NOATIME    =$0000000010000000; // dont update file access time
- MNT_NOCLUSTERR =$0000000040000000; // disable cluster read
- MNT_NOCLUSTERW =$0000000080000000; // disable cluster write
- MNT_SUJ        =$0000000100000000; // using journaled soft updates
+uses
+ errno,
+ vfs_vnops;
+
+procedure vfs_ref(mp:p_mount); inline;
+begin
+ MNT_REL(mp);
+end;
+
+procedure vfs_rel(mp:p_mount); inline;
+begin
+ MNT_REL(mp);
+end;
+
+procedure mount_init(mp:p_mount);
+begin
+ mtx_init(mp^.mnt_mtx);
+ mtx_init(mp^.mnt_explock);
+end;
+
+procedure mount_fini(mp:p_mount);
+begin
+ mtx_destroy(mp^.mnt_explock);
+ mtx_destroy(mp^.mnt_mtx);
+end;
+
+function vfs_mount_alloc(vp    :p_vnode;
+                         vfsp  :p_vfsconf;
+                         fspath:PChar):p_mount;
+var
+ mp:p_mount;
+begin
+ mp:=AllocMem(SizeOf(mount));
+ mount_init(mp);
+
+
+ TAILQ_INIT(@mp^.mnt_nvnodelist);
+ mp^.mnt_nvnodelistsize:=0;
+ TAILQ_INIT(@mp^.mnt_activevnodelist);
+ mp^.mnt_activevnodelistsize:=0;
+ mp^.mnt_ref:=0;
+ vfs_busy(mp, MBF_NOWAIT);
+ mp^.mnt_op:=vfsp^.vfc_vfsops;
+ mp^.mnt_vfc:=vfsp;
+ Inc(vfsp^.vfc_refcount); // XXX Unlocked
+ mp^.mnt_stat.f_type:=vfsp^.vfc_typenum;
+ Inc(mp^.mnt_gen);
+
+ strlcopy(mp^.mnt_stat.f_fstypename, vfsp^.vfc_name, MFSNAMELEN);
+
+ mp^.mnt_vnodecovered:=vp;
+
+ strlcopy(mp^.mnt_stat.f_mntonname, fspath, MNAMELEN);
+
+ mp^.mnt_iosize_max:=DFLTPHYS;
+
+ //mac_mount_init(mp);
+ //mac_mount_create(cred, mp);
+
+ mp^.mnt_hashseed:=$FEEDBABE; //arc4rand
+
+ TAILQ_INIT(@mp^.mnt_uppers);
+ Result:=mp;
+end;
+
+procedure vfs_mount_destroy(mp:p_mount);
+begin
+ MNT_ILOCK(mp);
+ mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_REFEXPIRE;
+ if ((mp^.mnt_kern_flag and MNTK_MWAIT)<>0) then
+ begin
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_MWAIT);
+  wakeup(mp);
+ end;
+ while (mp^.mnt_ref<>0) do
+ begin
+  msleep(mp, MNT_MTX(mp), PVFS, 'mntref', 0);
+ end;
+ Assert(mp^.mnt_ref=0,'invalid refcount in the drain path');
+ Assert(mp^.mnt_writeopcount=0,'vfs_mount_destroy: nonzero writeopcount');
+ Assert(mp^.mnt_secondary_writes=0,'vfs_mount_destroy: nonzero secondary_writes');
+ Dec(mp^.mnt_vfc^.vfc_refcount);
+
+ if (not TAILQ_EMPTY(@mp^.mnt_nvnodelist)) then
+ begin
+  Assert(false,'unmount: dangling vnode');
+ end;
+ Assert(TAILQ_EMPTY(@mp^.mnt_uppers),'mnt_uppers');
+ Assert(mp^.mnt_nvnodelistsize=0,'vfs_mount_destroy: nonzero nvnodelistsize');
+ Assert(mp^.mnt_activevnodelistsize=0,'vfs_mount_destroy: nonzero activevnodelistsize');
+ Assert(mp^.mnt_lockref=0,'vfs_mount_destroy: nonzero lock refcount');
+ MNT_IUNLOCK(mp);
+
+ //mac_mount_destroy(mp);
+
+ //if (mp^.mnt_opt<>nil) then
+ // vfs_freeopts(mp^.mnt_opt);
+
+ mount_fini(mp);
+ FreeMem(mp);
+end;
+
 
 {
-  * Flags set by internal operations,
-  * but visible to the user.
-  * XXX some of these are not quite right.. (I've never seen the root flag set)
-}
- MNT_LOCAL =$0000000000001000; // filesystem is stored locally
- MNT_QUOTA =$0000000000002000; // quotas are enabled on fs
- MNT_ROOTFS=$0000000000004000; // identifies the root fs
- MNT_USER  =$0000000000008000; // mounted by a user
- MNT_IGNORE=$0000000000800000; // do not show entry in df
+ * vfs_domount_first(): first file system mount (not update)
+ }
+function vfs_domount_first(vfsp:p_vfsconf;       { File system type. }
+                           fspath:PChar;         { Mount path. }
+                           vp:p_vnode;           { Vnode to be covered. }
+                           fsflags:QWORD;        { Flags common to all filesystems. }
+                           optlist:pp_vfsoptlist { Options local to the filesystem. }
+                          ):Integer;
+var
+ //va:t_vattr;
+ mp:p_mount;
+ newdp:p_vnode;
+ error:Integer;
+begin
+ mtx_assert(VFS_Giant);
+ Assert((fsflags and MNT_UPDATE)=0,'MNT_UPDATE shouldnt be here');
 
-{
-  * External filesystem command modifier flags.
-  * Unmount can use the MNT_FORCE flag.
-  * XXX: These are not STATES and really should be somewhere else.
-  * XXX: MNT_BYFSID collides with MNT_ACLS, but because MNT_ACLS is only used for
-  *      mount(2) and MNT_BYFSID is only used for unmount(2) it's harmless.
-}
- MNT_UPDATE   =$0000000000010000; // not real mount, just update
- MNT_DELEXPORT=$0000000000020000; // delete export host lists
- MNT_RELOAD   =$0000000000040000; // reload filesystem data
- MNT_FORCE    =$0000000000080000; // force unmount or readonly
- MNT_SNAPSHOT =$0000000001000000; // snapshot the filesystem
- MNT_BYFSID   =$0000000008000000; // specify filesystem by ID.
+ error:=0;
+ //error:=vinvalbuf(vp, V_SAVE, 0, 0);
+ //if (error=0) and (vp^.v_type<>VDIR) then
+ // error:=ENOTDIR;
 
-{
-  * Internal filesystem control flags stored in mnt_kern_flag.
-  *
-  * MNTK_UNMOUNT locks the mount entry so that name lookup cannot proceed
-  * past the mount point.  This keeps the subtree stable during mounts
-  * and unmounts.
-  *
-  * MNTK_UNMOUNTF permits filesystems to detect a forced unmount while
-  * dounmount() is still waiting to lock the mountpoint. This allows
-  * the filesystem to cancel operations that might otherwise deadlock
-  * with the unmount attempt (used by NFS).
-  *
-  * MNTK_NOINSMNTQ is strict subset of MNTK_UNMOUNT. They are separated
-  * to allow for failed unmount attempt to restore the syncer vnode for
-  * the mount.
-}
- MNTK_UNMOUNTF          =$00000001; // forced unmount in progress
- MNTK_ASYNC             =$00000002; // filtered async flag
- MNTK_SOFTDEP           =$00000004; // async disabled by softdep
- MNTK_NOINSMNTQ         =$00000008; // insmntque is not allowed
- MNTK_DRAINING          =$00000010; // lock draining is happening
- MNTK_REFEXPIRE         =$00000020; // refcount expiring is happening
- MNTK_EXTENDED_SHARED   =$00000040; // Allow shared locking for more ops
- MNTK_SHARED_WRITES     =$00000080; // Allow shared locking for writes
- MNTK_NO_IOPF           =$00000100; { Disallow page faults during reads
-                                      and writes. Filesystem shall properly
-                                      handle i/o state on EFAULT.}
- MNTK_VGONE_UPPER       =$00000200;
- MNTK_VGONE_WAITER      =$00000400;
- MNTK_LOOKUP_EXCL_DOTDOT=$00000800;
- MNTK_MARKER            =$00001000;
- MNTK_UNMAPPED_BUFS     =$00002000;
- MNTK_NOASYNC           =$00800000; // disable async
- MNTK_UNMOUNT           =$01000000; // unmount in progress
- MNTK_MWAIT             =$02000000; // waiting for unmount to finish
- MNTK_SUSPEND           =$08000000; // request write suspension
- MNTK_SUSPEND2          =$04000000; // block secondary writes
- MNTK_SUSPENDED         =$10000000; // write operations are suspended
- MNTK_MPSAFE            =$20000000; // Filesystem is MPSAFE.
- MNTK_LOOKUP_SHARED     =$40000000; // FS supports shared lock lookups
- MNTK_NOKNOTE           =$80000000; // Don't send KNOTEs from VOP hooks
-
-{
-  * Sysctl CTL_VFS definitions.
-  *
-  * Second level identifier specifies which filesystem. Second level
-  * identifier VFS_VFSCONF returns information about all filesystems.
-  * Second level identifier VFS_GENERIC is non-terminal.
-}
- VFS_VFSCONF=0; // get configured filesystems
- VFS_GENERIC=0; // generic filesystem information
-
-{
-  * Third level identifiers for VFS_GENERIC are given below; third
-  * level identifiers for specific filesystems are given in their
-  * mount specific header files.
-}
- VFS_MAXTYPENUM=1; // int: highest defined filesystem type
- VFS_CONF      =2; // struct: vfsconf for filesystem given as next argument
-
-{
-  * Flags for various system call interfaces.
-  *
-  * waitfor flags to vfs_sync() and getfsstat()
-}
- MNT_WAIT   =1; // synchronously wait for I/O to complete
- MNT_NOWAIT =2; // start all I/O, but do not wait for it
- MNT_LAZY   =3; // push data not written by filesystem syncer
- MNT_SUSPEND=4; // Suspend file system after sync
-
-type
- fsid_t=packed record  // filesystem id type
-  val:array[0..1] of Integer;
+ if (error=0) then
+ begin
+  VI_LOCK(vp);
+  if ((vp^.v_iflag and VI_MOUNT)=0) and (vp^.v_mountedhere=nil) then
+   vp^.v_iflag:=vp^.v_iflag or VI_MOUNT
+  else
+   error:=EBUSY;
+  VI_UNLOCK(vp);
  end;
 
-{
- * File identifier.
- * These are unique per filesystem on a single machine.
-}
- p_fid=^fid;
- fid=packed record
-  fid_len  :Word;  // length of data in bytes
-  fid_data0:Word;  // force longword alignment
-  fid_data :array[0..MAXFIDSZ-1] of Byte; // data (variable length)
+ if (error<>0) then
+ begin
+  vput(vp);
+  Exit (error);
+ end;
+ VOP_UNLOCK(vp, 0);
+
+ { Allocate and initialize the filesystem. }
+ mp:=vfs_mount_alloc(vp, vfsp, fspath);
+ { XXXMAC: pass to vfs_mount_alloc? }
+ mp^.mnt_optnew:=optlist^;
+ { Set the mount level flags. }
+ mp^.mnt_flag:=(fsflags and (MNT_UPDATEMASK or MNT_ROOTFS or MNT_RDONLY));
+
+ {
+  * Mount the filesystem.
+  * XXX The final recipients of VFS_MOUNT just overwrite the ndp they
+  * get.  No freeing of cn_pnbuf.
+  }
+ error:=vmount.VFS_MOUNT(mp);
+ if (error<>0) then
+ begin
+  vfs_unbusy(mp);
+  vfs_mount_destroy(mp);
+  VI_LOCK(vp);
+  vp^.v_iflag:=vp^.v_iflag and (not VI_MOUNT);
+  VI_UNLOCK(vp);
+  vrele(vp);
+  Exit (error);
  end;
 
- vnodelst=TAILQ_HEAD; //vnode
+ //if (mp^.mnt_opt<>nil) then
+ // vfs_freeopts(mp^.mnt_opt);
 
- p_vfsoptlist=^vfsoptlist;
- vfsoptlist=TAILQ_HEAD; //vfsopt
+ mp^.mnt_opt:=mp^.mnt_optnew;
 
- // Mount options list
- p_vfsopt=^vfsopt;
- vfsopt=packed record
-  link :TAILQ_ENTRY; //vfsopt
-  name :PChar;
-  value:Pointer;
-  len  :Integer;
-  pos  :Integer;
-  seen :Integer;
- end;
+ optlist^:=nil;
+ VFS_STATFS(mp,@mp^.mnt_stat);
 
-{
- * Operations supported on mounted filesystem.
-}
+ {
+  * Prevent external consumers of mount options from reading mnt_optnew.
+  }
+ mp^.mnt_optnew:=nil;
 
- PPInteger=^PInteger;
+ MNT_ILOCK(mp);
+ if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
+    ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC
+ else
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+ MNT_IUNLOCK(mp);
 
- vfs_cmount_t        =function (ma,data:Pointer;flags:QWORD):Integer;
- vfs_unmount_t       =function (mp:Pointer;mntflags:Integer):Integer;
- vfs_root_t          =function (mp:Pointer;flags:Integer;vpp:pp_vnode):Integer;
- vfs_quotactl_t      =function (mp:Pointer;cmds:Integer;uid:QWORD;arg:Pointer):Integer;
- vfs_statfs_t        =function (mp:Pointer;sbp:Pointer):Integer;
- vfs_sync_t          =function (mp:Pointer;waitfor:Integer):Integer;
- vfs_vget_t          =function (mp:Pointer;ino:QWORD;flags:Integer;vpp:pp_vnode):Integer;
- vfs_fhtovp_t        =function (mp:Pointer;fhp:p_fid;flags:Integer;vpp:pp_vnode):Integer;
- vfs_checkexp_t      =function (mp:Pointer;nam:Pointer;extflagsp,numsecflavors:Pinteger;secflavors:PPInteger):Integer;
- vfs_init_t          =function (cf:Pointer):Integer;
- vfs_uninit_t        =function (cf:Pointer):Integer;
- vfs_extattrctl_t    =function (mp:Pointer;cmd:Integer;filename_vp:p_vnode;attrnamespace:Integer;attrname:PChar):Integer;
- vfs_mount_t         =function (mp:Pointer):Integer;
- vfs_sysctl_t        =function (mp:Pointer;op:QWORD;req:Pointer):Integer;
- vfs_susp_clean_t    =procedure(mp:Pointer);
- vfs_notify_lowervp_t=procedure(mp:Pointer;lowervp:p_vnode);
-
- p_vfsops=^vfsops;
- vfsops=packed record
-  vfs_mount          :vfs_mount_t         ;
-  vfs_cmount         :vfs_cmount_t        ;
-  vfs_unmount        :vfs_unmount_t       ;
-  vfs_root           :vfs_root_t          ;
-  vfs_quotactl       :vfs_quotactl_t      ;
-  vfs_statfs         :vfs_statfs_t        ;
-  vfs_sync           :vfs_sync_t          ;
-  vfs_vget           :vfs_vget_t          ;
-  vfs_fhtovp         :vfs_fhtovp_t        ;
-  vfs_checkexp       :vfs_checkexp_t      ;
-  vfs_init           :vfs_init_t          ;
-  vfs_uninit         :vfs_uninit_t        ;
-  vfs_extattrctl     :vfs_extattrctl_t    ;
-  vfs_sysctl         :vfs_sysctl_t        ;
-  vfs_susp_clean     :vfs_susp_clean_t    ;
-  vfs_reclaim_lowervp:vfs_notify_lowervp_t;
-  vfs_unlink_lowervp :vfs_notify_lowervp_t;
- end;
+ vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+ //cache_purge(vp);
+ VI_LOCK(vp);
+ vp^.v_iflag:=vp^.v_iflag and (not VI_MOUNT);
+ VI_UNLOCK(vp);
+ //vp^.v_mountedhere:=mp;
+ { Place the new filesystem at the end of the mount list. }
+ mtx_lock(mountlist_mtx);
+ TAILQ_INSERT_TAIL(@mountlist, mp,@mp^.mnt_list);
+ mtx_unlock(mountlist_mtx);
+ //vfs_event_signal(nil, VQ_MOUNT, 0);
+ if (VFS_ROOT(mp,LK_EXCLUSIVE,@newdp)<>0) then
+  Assert(false,'mount: lost mount');
+ VOP_UNLOCK(newdp, 0);
+ VOP_UNLOCK(vp, 0);
+ //mountcheckdirs(vp, newdp);
+ vrele(newdp);
+ //if ((mp^.mnt_flag and MNT_RDONLY)=0)
+ // vfs_allocate_syncvnode(mp);
+ vfs_unbusy(mp);
+ Exit (0);
+end;
 
 {
-  * Filesystem configuration information. One of these exists for each
-  * type of filesystem supported by the kernel. These are searched at
-  * mount time to identify the requested filesystem.
-  *
-  * XXX: Never change the first two arguments!
-}
- p_vfsoptdecl=Pointer;
+ * vfs_domount_update(): update of mounted file system
+ }
+{
+function vfs_domount_update(
+ td:p_kthread;  { Calling thread. }
+ vp:p_vnode;  { Mount point vnode. }
+ fsflags:QWORD;  { Flags common to all filesystems. }
+ optlist:pp_vfsoptlist { Options local to the filesystem. }
+ ):Integer;
+begin
+ struct oexport_args oexport;
+ struct export_args export;
+ struct mount *mp;
+ int error, export_error;
+ uint64_t flag;
 
- p_vfsconf=^vfsconf;
- vfsconf=packed record
-  vfc_version :DWORD       ; // ABI version number
-  vfc_name    :array[0..MFSNAMELEN-1] of Char; // filesystem type name
-  vfc_vfsops  :p_vfsops    ; // filesystem operations vector
-  vfc_typenum :Integer     ; // historic filesystem type number
-  vfc_refcount:Integer     ; // number mounted of this type
-  vfc_flags   :Integer     ; // permanent flags
-  vfc_opts    :p_vfsoptdecl; // mount options
-  vfc_list    :TAILQ_ENTRY ; // list of vfscons
+ mtx_assert(@Giant, MA_OWNED);
+ ASSERT_VOP_ELOCKED(vp, __func__);
+ KASSERT((fsflags and MNT_UPDATE)<>0, ("MNT_UPDATE should be here"));
+
+ if ((vp^.v_vflag and VV_ROOT)=0) begin
+  vput(vp);
+  Exit (EINVAL);
+ end;
+ mp:=vp^.v_mount;
+ {
+  * We only allow the filesystem to be reloaded if it
+  * is currently mounted read-only.
+  }
+ flag:=mp^.mnt_flag;
+ if ((fsflags and MNT_RELOAD)<>0 and (flag and MNT_RDONLY)=0) begin
+  vput(vp);
+  Exit (EOPNOTSUPP); { Needs translation }
+ end;
+ {
+  * Only privileged root, or (if MNT_USER is set) the user that
+  * did the original mount is permitted to update it.
+  }
+ error:=vfs_suser(mp, td);
+ if (error<>0) begin
+  vput(vp);
+  Exit (error);
+ end;
+ if (vfs_busy(mp, MBF_NOWAIT)) begin
+  vput(vp);
+  Exit (EBUSY);
+ end;
+ VI_LOCK(vp);
+ if ((vp^.v_iflag and VI_MOUNT)<>0 or vp^.v_mountedhere<>nil) begin
+  VI_UNLOCK(vp);
+  vfs_unbusy(mp);
+  vput(vp);
+  Exit (EBUSY);
+ end;
+ vp^.v_iflag:= or VI_MOUNT;
+ VI_UNLOCK(vp);
+ VOP_UNLOCK(vp, 0);
+
+ MNT_ILOCK(mp);
+ mp^.mnt_flag:= and ~MNT_UPDATEMASK;
+ mp^.mnt_flag:= or fsflags and (MNT_RELOAD or MNT_FORCE or MNT_UPDATE |
+     MNT_SNAPSHOT or MNT_ROOTFS or MNT_UPDATEMASK or MNT_RDONLY);
+ if ((mp^.mnt_flag and MNT_ASYNC)=0)
+  mp^.mnt_kern_flag:= and ~MNTK_ASYNC;
+ MNT_IUNLOCK(mp);
+ mp^.mnt_optnew:=*optlist;
+ vfs_mergeopts(mp^.mnt_optnew, mp^.mnt_opt);
+
+ {
+  * Mount the filesystem.
+  * XXX The final recipients of VFS_MOUNT just overwrite the ndp they
+  * get.  No freeing of cn_pnbuf.
+  }
+ error:=VFS_MOUNT(mp);
+
+ export_error:=0;
+ if (error=0) begin
+  { Process the export option. }
+  if (vfs_copyopt(mp^.mnt_optnew, "export", &export,
+      sizeof(export))=0) begin
+   export_error:=vfs_export(mp, &export);
+  end; else if (vfs_copyopt(mp^.mnt_optnew, "export", &oexport,
+      sizeof(oexport))=0) begin
+   export.ex_flags:=oexport.ex_flags;
+   export.ex_root:=oexport.ex_root;
+   export.ex_anon:=oexport.ex_anon;
+   export.ex_addr:=oexport.ex_addr;
+   export.ex_addrlen:=oexport.ex_addrlen;
+   export.ex_mask:=oexport.ex_mask;
+   export.ex_masklen:=oexport.ex_masklen;
+   export.ex_indexfile:=oexport.ex_indexfile;
+   export.ex_numsecflavors:=0;
+   export_error:=vfs_export(mp, &export);
+  end;
+ end;
+
+ MNT_ILOCK(mp);
+ if (error=0) begin
+  mp^.mnt_flag:= and ~(MNT_UPDATE or MNT_RELOAD or MNT_FORCE |
+      MNT_SNAPSHOT);
+ end; else begin
+  {
+   * If we fail, restore old mount flags. MNT_QUOTA is special,
+   * because it is not part of MNT_UPDATEMASK, but it could have
+   * changed in the meantime if quotactl(2) was called.
+   * All in all we want current value of MNT_QUOTA, not the old
+   * one.
+   }
+  mp^.mnt_flag:=(mp^.mnt_flag and MNT_QUOTA) or (flag and ~MNT_QUOTA);
+ end;
+ if ((mp^.mnt_flag and MNT_ASYNC)<>0 &&
+     (mp^.mnt_kern_flag and MNTK_NOASYNC)=0)
+  mp^.mnt_kern_flag:= or MNTK_ASYNC;
+ else
+  mp^.mnt_kern_flag:= and ~MNTK_ASYNC;
+ MNT_IUNLOCK(mp);
+
+ if (error<>0)
+  goto end;
+
+ if (mp^.mnt_opt<>nil)
+  vfs_freeopts(mp^.mnt_opt);
+ mp^.mnt_opt:=mp^.mnt_optnew;
+ *optlist:=nil;
+ (void)VFS_STATFS(mp, &mp^.mnt_stat);
+ {
+  * Prevent external consumers of mount options from reading
+  * mnt_optnew.
+  }
+ mp^.mnt_optnew:=nil;
+
+ if ((mp^.mnt_flag and MNT_RDONLY)=0)
+  vfs_allocate_syncvnode(mp);
+ else
+  vfs_deallocate_syncvnode(mp);
+end:
+ vfs_unbusy(mp);
+ VI_LOCK(vp);
+ vp^.v_iflag:= and ~VI_MOUNT;
+ VI_UNLOCK(vp);
+ vrele(vp);
+ Exit (error<>0 ? error : export_error);
+end;
+}
+
+{
+ * vfs_domount(): actually attempt a filesystem mount.
+ }
+function vfs_domount(
+ td:p_kthread;  { Calling thread. }
+ fstype:PChar;  { Filesystem type. }
+ fspath:PChar;   { Mount path. }
+ fsflags:QWORD;  { Flags common to all filesystems. }
+ optlist:pp_vfsoptlist { Options local to the filesystem. }
+ ):Integer;
+var
+ vfsp:p_vfsconf;
+ nd:nameidata;
+ vp:p_vnode;
+ pathbuf:PChar;
+ error:Integer;
+begin
+ {
+  * Be ultra-paranoid about making sure the type and fspath
+  * variables will fit in our mp buffers, including the
+  * terminating NUL.
+  }
+ if (strlen(fstype) >= MFSNAMELEN) or (strlen(fspath) >= MNAMELEN) then
+  Exit (ENAMETOOLONG);
+
+ { Load KLDs before we lock the covered vnode to avoid reversals. }
+ vfsp:=nil;
+ if ((fsflags and MNT_UPDATE)=0) then
+ begin
+  vfsp:=vfs_byname(fstype);
+
+  if (vfsp=nil) then
+   Exit(ENODEV);
  end;
 
  {
-   * Structure per mounted filesystem.  Each mounted filesystem has an
-   * array of operations and an instance record.  The filesystems are
-   * put on a doubly linked list.
-   *
-   * Lock reference:
-   * m - mountlist_mtx
-   * i - interlock
-   * v - vnode freelist mutex
-   *
-   * Unmarked fields are considered stable as long as a ref is held.
-   *
- }
- p_mount=^mount;
- mount=packed record
-  mnt_mtx                :mtx         ;// mount structure interlock
-  mnt_gen                :Integer     ;// mount generation
-  mnt_list               :TAILQ_ENTRY ;// (m) mount list
-  mnt_op                 :p_vfsops    ;// operations on fs
-  mnt_vfc                :p_vfsconf   ;// configuration info
-  mnt_vnodecovered       :p_vnode     ;// vnode we mounted on
-  mnt_syncer             :p_vnode     ;// syncer vnode
-  mnt_ref                :Integer     ;// (i) Reference count
-  mnt_nvnodelist         :vnodelst    ;// (i) list of vnodes
-  mnt_nvnodelistsize     :Integer     ;// (i) # of vnodes
-  mnt_activevnodelist    :vnodelst    ;// (v) list of active vnodes
-  mnt_activevnodelistsize:Integer     ;// (v) # of active vnodes
-  mnt_writeopcount       :Integer     ;// (i) write syscalls pending
-  mnt_kern_flag          :Integer     ;// (i) kernel only flags
-  mnt_flag               :QWORD       ;// (i) flags shared with user
-  mnt_pad_noasync        :DWORD       ;
-  mnt_opt                :p_vfsoptlist;// current mount options
-  mnt_optnew             :p_vfsoptlist;// new options passed to fs
-  mnt_maxsymlinklen      :Integer     ;// max size of short symlink
-  //mnt_stat               :statfs      ;// cache of filesystem stats
-  mnt_data               :Pointer     ;// private data
-  mnt_time               :time_t      ;// last time written*/
-  mnt_iosize_max         :Integer     ;// max size for clusters, etc
-  //mnt_export             :p_netexport ;// export list
-  //mnt_label              :p_label     ;// MAC label for the fs
-  mnt_hashseed           :DWORD       ;// Random seed for vfs_hash
-  mnt_lockref            :Integer     ;// (i) Lock reference count
-  mnt_secondary_writes   :Integer     ;// (i) # of secondary writes
-  mnt_secondary_accwrites:Integer     ;// (i) secondary wr. starts
-  mnt_susp_owner         :Pointer     ;// (i) thread owning suspension
-  mnt_explock            :mtx         ;// vfs_export walkers lock
-  mnt_upper_link         :TAILQ_ENTRY ;// (m) we in the all uppers
-  mnt_uppers             :TAILQ_HEAD  ;// (m) upper mounts over us
- end;
+  * Get vnode to be covered or mount point's vnode in case of MNT_UPDATE.
+  }
+ NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, fspath, td);
 
- //Generic file handle
- fhandle_t=packed record
-  fh_fsid:fsid_t; // Filesystem id of mount point
-  fh_fid :fid     // Filesys specific id
- end;
+ error:=_namei(@nd);
+ if (error<>0) then
+  Exit (error);
+ if (not NDHASGIANT(@nd)) then
+  mtx_lock(VFS_Giant);
+ NDFREE(@nd, NDF_ONLY_PNBUF);
+ vp:=nd.ni_vp;
+ if ((fsflags and MNT_UPDATE)=0) then
+ begin
+  pathbuf:=AllocMem(MNAMELEN);
+  strcopy(pathbuf, fspath);
+  //error:=vn_path_to_global_path(td, vp, pathbuf, MNAMELEN);
+  { debug.disablefullpath=1 results in ENODEV }
+  //if (error=0) or (error=ENODEV) then
+  //begin
+   error:=vfs_domount_first(vfsp, pathbuf, vp, fsflags, optlist);
+  //end;
+  FreeMem(pathbuf);
+ end{ else
+  error:=vfs_domount_update(td, vp, fsflags, optlist)};
+ mtx_unlock(VFS_Giant);
+
+ ASSERT_VI_UNLOCKED (vp, {$I %LINE%});
+ ASSERT_VOP_UNLOCKED(vp, {$I %LINE%});
+
+ Exit(error);
+end;
 
 
-implementation
+
+
 
 end.
 

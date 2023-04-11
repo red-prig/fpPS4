@@ -98,6 +98,9 @@ procedure ast;
 procedure ps_mtx_lock;
 procedure ps_mtx_unlock;
 
+function  sigdeferstop:Integer;
+procedure sigallowstop;
+
 implementation
 
 uses

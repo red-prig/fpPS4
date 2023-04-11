@@ -30,6 +30,7 @@ function sys_query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_
 implementation
 
 uses
+ vcapability,
  vm,
  vm_map,
  systm,
