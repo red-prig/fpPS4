@@ -29,12 +29,12 @@ procedure v_incr_usecount(vp:p_vnode);
 procedure vhold(vp:p_vnode);
 procedure vdrop(vp:p_vnode);
 
-function  vget(vp:p_vnode;flags:Integer;td:p_kthread):Integer;
+function  vget(vp:p_vnode;flags:Integer):Integer;
 procedure vref(vp:p_vnode);
 procedure vrele(vp:p_vnode);
 procedure vput(vp:p_vnode);
 
-procedure vinactive(vp:p_vnode;td:p_kthread);
+procedure vinactive(vp:p_vnode);
 
 procedure assert_vi_locked   (vp:p_vnode;str:PChar);
 procedure assert_vi_unlocked (vp:p_vnode;str:PChar);
@@ -1824,7 +1824,7 @@ end;
  * see doomed vnodes.  If inactive processing was delayed in
  * vput try to do it here.
  }
-function vget(vp:p_vnode;flags:Integer;td:p_kthread):Integer;
+function vget(vp:p_vnode;flags:Integer):Integer;
 var
  error:Integer;
 begin
@@ -1858,7 +1858,7 @@ begin
  begin
   if (VOP_ISLOCKED(vp)=LK_EXCLUSIVE) and
      ((flags and LK_NOWAIT)=0) then
-   vinactive(vp, td);
+   vinactive(vp);
   vp^.v_iflag:=vp^.v_iflag and (not VI_OWEINACT);
  end;
  VI_UNLOCK(vp);
@@ -1970,7 +1970,7 @@ begin
  if (error=0) then
  begin
   if ((vp^.v_iflag and VI_OWEINACT)<>0) then
-   vinactive(vp, curkthread);
+   vinactive(vp);
   if (func<>VPUTX_VUNREF) then
    VOP_UNLOCK(vp, 0);
  end;
@@ -2151,7 +2151,7 @@ end;
  * OWEINACT tracks whether a vnode missed a call to inactive due to a
  * failed lock upgrade.
  }
-procedure vinactive(vp:p_vnode;td:p_kthread);
+procedure vinactive(vp:p_vnode);
 begin
  //struct vm_object *obj;
 

@@ -269,7 +269,7 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed NtFreeVirtualMemory:',r);
+    Writeln('failed NtProtectVirtualMemory:',r);
     Assert(false,'pmap_protect');
    end;
   end;

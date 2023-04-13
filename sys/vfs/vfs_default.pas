@@ -1151,7 +1151,7 @@ loop:
   // VI_UNLOCK(vp);
   // continue;
   //end;
-  error:=vget(vp, lockreq, td);
+  error:=vget(vp, lockreq);
   if (error<>0) then
   begin
    if (error=ENOENT) then

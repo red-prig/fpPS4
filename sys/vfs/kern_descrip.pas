@@ -168,7 +168,6 @@ begin
  begin
   Exit(ENFILE);
  end;
- fhold(fp);
 
  //if ((flags and O_CLOEXEC)<>0)
 

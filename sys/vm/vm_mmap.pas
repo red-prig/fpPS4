@@ -38,43 +38,53 @@ uses
  kern_thr,
  vmparam,
  vm_object,
- kern_resource;
+ kern_resource,
+ kern_mtx,
+ kern_descrip,
+ vmount,
+ vstat,
+ vfile,
+ vfcntl,
+ vfs_vnode,
+ vfs_subr,
+ vnode_if;
 
 function vm_mmap_vnode(objsize     :vm_size_t;
                        prot        :vm_prot_t;
                        maxprotp    :p_vm_prot_t;
                        flagsp      :PInteger;
-                       vp          :Pointer; //vnode
+                       vp          :p_vnode;
                        foffp       :p_vm_ooffset_t;
                        objp        :p_vm_object_t;
                        writecounted:PBoolean):Integer;
 label
  done;
 var
- //va:vattr;
+ va:t_vattr;
  obj:vm_object_t;
  foff:vm_offset_t;
- //mp:p_mount;
- error, flags, locktype, vfslocked:Integer;
+ mp:p_mount;
+ error,flags,locktype,vfslocked:Integer;
 begin
- //mp:=vp^.v_mount;
+ mp:=vp^.v_mount;
 
- //if ((maxprotp^ and VM_PROT_WRITE)<>0) and ((flagsp^ and MAP_SHARED)<>0) then
- // locktype:=LK_EXCLUSIVE
- //else
- // locktype:=LK_SHARED;
+ if ((maxprotp^ and VM_PROT_WRITE)<>0) and ((flagsp^ and MAP_SHARED)<>0) then
+  locktype:=LK_EXCLUSIVE
+ else
+  locktype:=LK_SHARED;
 
- //vfslocked:=VFS_LOCK_GIANT(mp);
- //error:=vget(vp, locktype, td);
+ vfslocked:=VFS_LOCK_GIANT(mp);
+ error:=vget(vp, locktype);
  if (error<>0) then
  begin
-  //VFS_UNLOCK_GIANT(vfslocked);
+  VFS_UNLOCK_GIANT(vfslocked);
   Exit(error);
  end;
  foff:=foffp^;
  flags:=flagsp^;
+ obj:=nil;
  //obj:=vp^.v_object;
- if {(vp^.v_type=VREG)}false then
+ if (vp^.v_type=VREG) then
  begin
   {
    * Get the proper underlying object
@@ -86,20 +96,20 @@ begin
   end;
   if (obj^.handle<>vp) then
   begin
-   //vput(vp);
+   vput(vp);
    vp:=obj^.handle;
    {
     * Bypass filesystems obey the mpsafety of the
     * underlying fs.
     }
-   //error:=vget(vp, locktype, td);
+   error:=vget(vp, locktype);
    if (error<>0) then
    begin
-    //VFS_UNLOCK_GIANT(vfslocked);
+    VFS_UNLOCK_GIANT(vfslocked);
     Exit(error);
    end;
   end;
-  if {(locktype=LK_EXCLUSIVE)}false then
+  if (locktype=LK_EXCLUSIVE) then
   begin
    writecounted^:=TRUE;
    //vnode_pager_update_writecount(obj, 0, objsize);
@@ -109,13 +119,13 @@ begin
   error:=EINVAL;
   goto done;
  end;
- //error:=VOP_GETATTR(vp, @va, cred);
+ error:=VOP_GETATTR(vp, @va);
  if (error<>0) then
   goto done;
 
  if ((flags and MAP_SHARED)<>0) then
  begin
-  if {((va.va_flags and (SF_SNAPSHOT or IMMUTABLE or APPEND))<>0)}false then
+  if ((va.va_flags and (SF_SNAPSHOT or IMMUTABLE or APPEND))<>0) then
   begin
    if ((prot and VM_PROT_WRITE)<>0) then
    begin
@@ -130,9 +140,9 @@ begin
   * we do not need to sync it.
   * Adjust object size to be the size of actual file.
   }
- //objsize:=round_page(va.va_size);
- //if (va.va_nlink=0) then
- // flags:=flags or  MAP_NOSYNC;
+ objsize:=round_page(va.va_size);
+ if (va.va_nlink=0) then
+  flags:=flags or MAP_NOSYNC;
  //obj:=vm_pager_allocate(OBJT_VNODE, vp, objsize, prot, foff, cred);
  if (obj=nil) then
  begin
@@ -142,7 +152,7 @@ begin
  objp^:=obj;
  flagsp^:=flags;
 
- //vfs_mark_atime(vp, cred);
+ vfs_mark_atime(vp);
 
 done:
  if (error<>0) and writecounted^ then
@@ -150,8 +160,8 @@ done:
   writecounted^:=FALSE;
   //vnode_pager_update_writecount(obj, objsize, 0);
  end;
- //vput(vp);
- //VFS_UNLOCK_GIANT(vfslocked);
+ vput(vp);
+ VFS_UNLOCK_GIANT(vfslocked);
  Result:=(error);
 end;
 
@@ -307,8 +317,8 @@ label
  _done;
 var
  td:p_kthread;
- //struct file *fp;
- //struct vnode *vp;
+ fp:p_file;
+ vp:p_vnode;
  addr:vm_offset_t;
  size,pageoff:vm_size_t;
  cap_maxprot,prot,maxprot:vm_prot_t;
@@ -326,7 +336,7 @@ begin
  flags:=_flags;
  pos  :=_pos;
 
- //fp:=nil;
+ fp:=nil;
 
  if ((flags and MAP_ANON)<>0) then
  begin
@@ -419,69 +429,69 @@ begin
     rights:=rights or CAP_MAPEXEC;
    end;
 
-   //Result:=fget_mmap(td,fd,rights,@cap_maxprot,@fp));
-   //if (Result<>0) then goto _done;
-   //if (fp^.f_type=DTYPE_SHM) then
-   //begin
-   // handle:=fp^.f_data;
-   // handle_type:=OBJT_SWAP;
-   // maxprot:=VM_PROT_NONE;
-   //
-   // // FREAD should always be set.
-   // if ((fp^.f_flag and FREAD)<>0) then
-   // begin
-   //  maxprot:=maxprot or VM_PROT_EXECUTE or VM_PROT_READ;
-   // end;
-   // if ((fp^.f_flag and FWRITE)<>0) then
-   // begin
-   //  maxprot:=maxprot or VM_PROT_WRITE;
-   // end;
-   // goto _map;
-   //end;
+   Result:=fget_mmap(_fd,rights,@cap_maxprot,@fp);
+   if (Result<>0) then goto _done;
+   if (fp^.f_type=DTYPE_SHM) then
+   begin
+    handle:=fp^.f_data;
+    //handle_type:=OBJT_SWAP;
+    maxprot:=VM_PROT_NONE;
 
-   //if (fp^.f_type<>DTYPE_VNODE) then
-   //begin
-   // error:=ENODEV;
-   // goto _done;
-   //end;
+    // FREAD should always be set.
+    if ((fp^.f_flag and FREAD)<>0) then
+    begin
+     maxprot:=maxprot or VM_PROT_EXECUTE or VM_PROT_READ;
+    end;
+    if ((fp^.f_flag and FWRITE)<>0) then
+    begin
+     maxprot:=maxprot or VM_PROT_WRITE;
+    end;
+    goto _map;
+   end;
 
-   //vp:=fp^.f_vnode;
+   if (fp^.f_type<>DTYPE_VNODE) then
+   begin
+    Result:=ENODEV;
+    goto _done;
+   end;
 
-   //if (vp^.v_mount<>nil) and ((vp^.v_mount^.mnt_flag and MNT_NOEXEC)<>0) then
-   // maxprot:=VM_PROT_NONE;
-   //else
-   // maxprot:=VM_PROT_EXECUTE;
+   vp:=fp^.f_vnode;
 
-   //if (fp^.f_flag and FREAD) then
-   //begin
-   // maxprot:=maxprot or VM_PROT_READ;
-   //end else
-   //if (prot and PROT_READ) then
-   //begin
-   // error:=EACCES;
-   // goto _done;
-   //end;
+   if (vp^.v_mount<>nil) and ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
+    maxprot:=VM_PROT_NONE
+   else
+    maxprot:=VM_PROT_EXECUTE;
 
-   //if ((flags and MAP_SHARED)<>0) then
-   //begin
-   // if ((fp^.f_flag and FWRITE)<>0) then
-   // begin
-   //  maxprot:=maxprot or VM_PROT_WRITE;
-   // end else
-   // if ((prot and PROT_WRITE)<>0) then
-   // begin
-   //  error:=EACCES;
-   //  goto _done;
-   // end;
-   //end else
-   //if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
-   //begin
-   // maxprot:=maxprot or VM_PROT_WRITE;
-   // cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
-   //end;
+   if ((fp^.f_flag and FREAD)<>0) then
+   begin
+    maxprot:=maxprot or VM_PROT_READ;
+   end else
+   if ((prot and VM_PROT_READ)<>0) then
+   begin
+    Result:=EACCES;
+    goto _done;
+   end;
 
-   //handle:=vp;
-   //handle_type:=OBJT_VNODE;
+   if ((flags and MAP_SHARED)<>0) then
+   begin
+    if ((fp^.f_flag and FWRITE)<>0) then
+    begin
+     maxprot:=maxprot or VM_PROT_WRITE;
+    end else
+    if ((prot and VM_PROT_WRITE)<>0) then
+    begin
+     Result:=EACCES;
+     goto _done;
+    end;
+   end else
+   if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
+   begin
+    maxprot:=maxprot or VM_PROT_WRITE;
+    cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
+   end;
+
+   handle:=vp;
+   handle_type:=OBJT_VNODE;
   end;
  end else
  begin
@@ -506,10 +516,10 @@ _map:
  end;
 
 _done:
- //if (fp<>nil) then
- //begin
- // fdrop(fp, td);
- //end;
+ if (fp<>nil) then
+ begin
+  fdrop(fp);
+ end;
 end;
 
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
