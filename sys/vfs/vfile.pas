@@ -9,7 +9,8 @@ uses
  vstat,
  vuio,
  vfs_vnode,
- kern_thr;
+ kern_thr,
+ kern_id;
 
 const
  NAME_MAX  =255;  // max bytes in a file name
@@ -105,7 +106,7 @@ type
   fo_close   :fo_close_t   ;
   fo_chmod   :fo_chmod_t   ;
   fo_chown   :fo_chown_t   ;
-  fo_flags:fo_flags_t; { DFLAG_* below }
+  fo_flags   :fo_flags_t; { DFLAG_* below }
  end;
 
  fadvise_info=packed record
@@ -117,6 +118,8 @@ type
  end;
 
  t_file=packed record
+  desc          :t_id_desc;
+  //
   f_data        :Pointer  ; { file descriptor specific data }
   f_ops         :p_fileops; { File operations }
   f_vnode       :p_vnode  ; { NULL or applicable vnode }
@@ -150,7 +153,20 @@ const
 //extern fileops socketops;
 //extern int maxfiles;  { kernel limit on number of open files }
 //extern int maxfilesperproc; { per process limit on number of open files }
-//extern volatile int openfiles; { actual number of open files }
+
+var
+ openfiles:Integer=0; { actual number of open files }
+
+function fo_read(fp:p_file;uio:p_uio;flags:Integer):Integer;
+function fo_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
+function fo_truncate(fp:p_file;length:Int64):Integer;
+function fo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
+function fo_poll(fp:p_file;events:Integer):Integer;
+function fo_stat(fp:p_file;sb:p_stat):Integer;
+function fo_close(fp:p_file):Integer;
+function fo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function fo_chmod(fp:p_file;mode:mode_t):Integer;
+function fo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 
 implementation
 
@@ -162,77 +178,58 @@ implementation
 {
  fhold(fp) (refcount_acquire(&(fp)^.f_count))
  fdrop(fp, td) (refcount_release(&(fp)^.f_count) ? _fdrop((fp), (td)) : _fnoop())
-
-static __inline int
-fo_read(file *fp, p_uio uio, ucred *active_cred, int flags)
-begin
-
- return ((*fp^.f_ops^.fo_read)(fp, uio, flags));
-end;
-
-static __inline int
-fo_write(file *fp, p_uio uio, ucred *active_cred, int flags)
-begin
-
- return ((*fp^.f_ops^.fo_write)(fp, uio, flags));
-end;
-
-static __inline int
-fo_truncate(file *fp, off_t length)
-begin
-
- return ((*fp^.f_ops^.fo_truncate)(fp, length));
-end;
-
-static __inline int
-fo_ioctl(file *fp, u_long com, void *data)
-begin
-
- return ((*fp^.f_ops^.fo_ioctl)(fp, com, data));
-end;
-
-static __inline int
-fo_poll(file *fp, int events)
-begin
-
- return ((*fp^.f_ops^.fo_poll)(fp, events));
-end;
-
-static __inline int
-fo_stat(file *fp, stat *sb)
-begin
-
- return ((*fp^.f_ops^.fo_stat)(fp, sb));
-end;
-
-static __inline int
-fo_close(file *fp, thread *td)
-begin
-
- return ((*fp^.f_ops^.fo_close)(fp, td));
-end;
-
-static __inline int
-fo_kqfilter(file *fp, knote *kn)
-begin
-
- return ((*fp^.f_ops^.fo_kqfilter)(fp, kn));
-end;
-
-static __inline int
-fo_chmod(file *fp, mode_t mode)
-begin
-
- return ((*fp^.f_ops^.fo_chmod)(fp, mode));
-end;
-
-static __inline int
-fo_chown(file *fp, uid_t uid, gid_t gid)
-begin
-
- return ((*fp^.f_ops^.fo_chown)(fp, uid, gid));
-end;
 }
+
+function fo_read(fp:p_file;uio:p_uio;flags:Integer):Integer;
+begin
+ Exit(fp^.f_ops^.fo_read(fp,uio,flags));
+end;
+
+function fo_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
+begin
+ Exit(fp^.f_ops^.fo_write(fp,uio,flags));
+end;
+
+function fo_truncate(fp:p_file;length:Int64):Integer;
+begin
+ Exit(fp^.f_ops^.fo_truncate(fp,length));
+end;
+
+function fo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
+begin
+ Exit(fp^.f_ops^.fo_ioctl(fp,com,data));
+end;
+
+function fo_poll(fp:p_file;events:Integer):Integer;
+begin
+ Exit(fp^.f_ops^.fo_poll(fp,events));
+end;
+
+function fo_stat(fp:p_file;sb:p_stat):Integer;
+begin
+ Exit(fp^.f_ops^.fo_stat(fp,sb));
+end;
+
+function fo_close(fp:p_file):Integer;
+begin
+ Exit(fp^.f_ops^.fo_close(fp));
+end;
+
+function fo_kqfilter(fp:p_file;kn:Pointer):Integer;
+begin
+ Exit(fp^.f_ops^.fo_kqfilter(fp,kn));
+end;
+
+function fo_chmod(fp:p_file;mode:mode_t):Integer;
+begin
+ Exit(fp^.f_ops^.fo_chmod(fp,mode));
+end;
+
+function fo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+begin
+ Exit(fp^.f_ops^.fo_chown(fp,uid,gid));
+end;
+
 
 
 

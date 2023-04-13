@@ -244,7 +244,7 @@ begin
       0,
       @size,
       MEM_COMMIT,
-      wprots[new_prot and VM_RWX]
+      PAGE_READWRITE
      );
 
   if (r<>0) then
@@ -255,6 +255,24 @@ begin
 
   //move data
   Move(base_old^,base_new^,size);
+
+  //prot new
+  if (PAGE_READWRITE<>wprots[new_prot and VM_RWX]) then
+  begin
+   r:=NtProtectVirtualMemory(
+       NtCurrentProcess,
+       @base_new,
+       @size,
+       wprots[new_prot and VM_RWX],
+       nil
+      );
+
+   if (r<>0) then
+   begin
+    Writeln('failed NtFreeVirtualMemory:',r);
+    Assert(false,'pmap_protect');
+   end;
+  end;
 
   //free old
   r:=NtFreeVirtualMemory(

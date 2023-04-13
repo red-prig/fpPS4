@@ -7,8 +7,9 @@ interface
 
 uses
  vfile,
+ vfs_vnode,
  kern_rwlock,
- vfs_vnode;
+ kern_id;
 
 type
 {
@@ -20,18 +21,19 @@ type
 
  p_filedesc=^t_filedesc;
  t_filedesc=packed record
-  fd_ofiles           :pp_file     ; { file structures for open files }
-  fd_ofileflags       :PChar       ; { per-process open file flags }
+  fd_ofiles:t_id_desc_table;
+  //fd_ofiles           :pp_file     ; { file structures for open files }
+  //fd_ofileflags       :PChar       ; { per-process open file flags }
   fd_cdir             :p_vnode     ; { current directory }
   fd_rdir             :p_vnode     ; { root directory }
   fd_jdir             :p_vnode     ; { jail root directory }
-  fd_nfiles           :Integer     ; { number of open files allocated }
-  fd_map              :P_NDSLOTTYPE; { bitmap of free fds }
-  fd_lastfile         :Integer     ; { high-water mark of fd_ofiles }
-  fd_freefile         :Integer     ; { approx. next free file }
+  //fd_nfiles           :Integer     ; { number of open files allocated }
+  //fd_map              :P_NDSLOTTYPE; { bitmap of free fds }
+  //fd_lastfile         :Integer     ; { high-water mark of fd_ofiles }
+  //fd_freefile         :Integer     ; { approx. next free file }
   fd_cmask            :Word        ; { mask for file creation }
-  fd_refcnt           :Word        ; { thread reference count }
-  fd_holdcnt          :Word        ; { hold count on structure + mutex }
+  //fd_refcnt           :Word        ; { thread reference count }
+  //fd_holdcnt          :Word        ; { hold count on structure + mutex }
   fd_sx               :Pointer     ; { protects members of this }
   //fd_kqlist           :kqlist      ; { list of kqueues on this filedesc }
   fd_holdleaderscount :Integer     ; { block fdfree() for shared close() }
@@ -45,7 +47,7 @@ const
  UF_EXCLOSE=$01; { auto-close on exec }
 
 var
- g_fd:t_filedesc;
+ fd_table:t_filedesc;
 
 procedure FILEDESC_LOCK_INIT(fdp:p_filedesc); inline;
 procedure FILEDESC_LOCK_DESTROY(fdp:p_filedesc); inline;
@@ -99,13 +101,17 @@ end;
 
 function fget_locked(fdp:p_filedesc;fd:Integer):p_file; inline;
 begin
- if (fd<0) or (fd>=fdp^.fd_nfiles) then
+ if (fd<0) then
   Result:=nil
  else
-  Result:=fdp^.fd_ofiles[fd];
+  Result:=p_file(id_get(@fdp^.fd_ofiles,fd));
 end;
 
+initialization
+ id_table_init(@fd_table.fd_ofiles,0);
 
+finalization
+ id_table_fini(@fd_table.fd_ofiles);
 
 end.
 

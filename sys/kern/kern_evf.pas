@@ -82,6 +82,7 @@ end;
 
 function evf_init(evf:p_evf;attr:DWORD;initPattern:QWORD):Integer;
 begin
+ evf^.desc.free:=@evf_free;
  evf^.bitPattern:=initPattern;
  mtx_init(evf^.mtx);
  cv_init(@evf^.cv,'evf cv');

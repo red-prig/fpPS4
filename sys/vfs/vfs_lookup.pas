@@ -96,7 +96,7 @@ begin
  if (lookup_shared=0) then
   cnp^.cn_flags:=cnp^.cn_flags and (not LOCKSHARED);
 
- fdp:=@g_fd;
+ fdp:=@fd_table;
 
  { We will set this ourselves if we need it. }
  cnp^.cn_flags:=cnp^.cn_flags and (not TRAILINGSLASH);
@@ -160,7 +160,7 @@ begin
    // AUDIT_ARG_ATFD1(ndp^.ni_dirfd);
    //if (cnp^.cn_flags and AUDITVNODE2)
    // AUDIT_ARG_ATFD2(ndp^.ni_dirfd);
-   error:=fgetvp_rights(td, ndp^.ni_dirfd,
+   error:=fgetvp_rights(ndp^.ni_dirfd,
        ndp^.ni_rightsneeded or CAP_LOOKUP,
        @ndp^.ni_baserights, @dp);
 
