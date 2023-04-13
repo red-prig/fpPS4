@@ -137,6 +137,8 @@ const
   fo_flags   :0
  );
 
+procedure _fdrop(data:pointer); forward;
+
 function falloc_noinstall(resultfp:pp_file):Integer;
 var
  fp:p_file;
@@ -148,11 +150,12 @@ begin
  fp:=AllocMem(SizeOf(t_file));
  if (fp=nil) then Exit(ENOMEM);
 
- fp^.f_ops  :=@badfileops;
- fp^.f_data :=nil;
- fp^.f_vnode:=nil;
- resultfp^:=fp;
+ fp^.desc.free:=@_fdrop;
+ fp^.f_ops    :=@badfileops;
+ fp^.f_data   :=nil;
+ fp^.f_vnode  :=nil;
 
+ resultfp^:=fp;
  Exit(0);
 end;
 
@@ -168,6 +171,33 @@ begin
  fhold(fp);
 
  //if ((flags and O_CLOEXEC)<>0)
+
+ Exit(0);
+end;
+
+function falloc(resultfp:pp_file;resultfd:PInteger;flags:Integer):Integer;
+var
+ fp:p_file;
+ error,fd:Integer;
+begin
+ error:=falloc_noinstall(@fp);
+ if (error<>0) then
+  Exit(error);  { no reference held on error }
+
+ error:=finstall(fp,@fd,flags);
+ if (error<>0) then
+ begin
+  _fdrop(fp);  { one reference (fp only) }
+  Exit(error);
+ end;
+
+ if (resultfp<>nil) then
+  resultfp^:=fp  { copy out result }
+ else
+  fdrop(fp);  { release local reference }
+
+ if (resultfd<>nil) then
+  resultfd^:=fd;
 
  Exit(0);
 end;
@@ -197,33 +227,6 @@ end;
 procedure fdrop(fp:p_file);
 begin
  id_release(@fp^.desc);
-end;
-
-function falloc(resultfp:pp_file;resultfd:PInteger;flags:Integer):Integer;
-var
- fp:p_file;
- error,fd:Integer;
-begin
- error:=falloc_noinstall(@fp);
- if (error<>0) then
-  Exit(error);  { no reference held on error }
-
- error:=finstall(fp,@fd,flags);
- if (error<>0) then
- begin
-  _fdrop(fp);  { one reference (fp only) }
-  Exit(error);
- end;
-
- if (resultfp<>nil) then
-  resultfp^:=fp  { copy out result }
- else
-  fdrop(fp);  { release local reference }
-
- if (resultfd<>nil) then
-  resultfd^:=fd;
-
- Exit(0);
 end;
 
 function fget_unlocked(fd:Integer):p_file;
