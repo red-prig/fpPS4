@@ -42,7 +42,8 @@ uses
  murmurhash,
  vfs_subr,
  vfs_mount,
- vfs_default;
+ vfs_default,
+ sysent;
 
 var
  mtx:umutex;

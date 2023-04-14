@@ -6,6 +6,7 @@ unit trap;
 interface
 
 uses
+ sysutils,
  ucontext,
  kern_thr;
 
@@ -114,9 +115,11 @@ procedure sigipi;
 implementation
 
 uses
+ errno,
  machdep,
  vm_machdep,
- kern_sig;
+ kern_sig,
+ sysent;
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
@@ -226,6 +229,7 @@ procedure amd64_syscall;
 var
  td:p_kthread;
  td_frame:p_trapframe;
+ scall:tsyscall;
  error:Integer;
 begin
  //Call directly to the address or make an ID table?
@@ -238,15 +242,36 @@ begin
  td^.td_retval[1]:=td_frame^.tf_rdx;
 
  error:=0;
- if (td_frame^.tf_rax<>0) then
+
+ if (td_frame^.tf_rax<=High(sysent_table)) then
  begin
-  error:=tsyscall(td_frame^.tf_rax)
-                 (td_frame^.tf_rdi,
-                  td_frame^.tf_rsi,
-                  td_frame^.tf_rdx,
-                  td_frame^.tf_r10,
-                  td_frame^.tf_r8,
-                  td_frame^.tf_r9);
+  scall:=tsyscall(sysent_table[td_frame^.tf_rax].sy_call);
+  if (scall=nil) then
+  begin
+   Writeln('Unhandled syscall:',td_frame^.tf_rax,':',sysent_table[td_frame^.tf_rax].sy_name);
+   Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
+  end;
+ end else
+ if (td_frame^.tf_rax<=$1000) then
+ begin
+  Writeln('Unhandled syscall:',td_frame^.tf_rax);
+  Assert(false,IntToStr(td_frame^.tf_rax));
+ end else
+ begin
+  scall:=tsyscall(td_frame^.tf_rax);
+ end;
+
+ if (scall=nil) then
+ begin
+  error:=ENOSYS;
+ end else
+ begin
+  error:=scall(td_frame^.tf_rdi,
+               td_frame^.tf_rsi,
+               td_frame^.tf_rdx,
+               td_frame^.tf_r10,
+               td_frame^.tf_r8,
+               td_frame^.tf_r9);
 
  end;
 
