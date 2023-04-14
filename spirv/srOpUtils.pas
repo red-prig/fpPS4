@@ -34,7 +34,8 @@ const
  OpCUBEMA =DWORD(-15);
 
 function  InsSpirvOp(pLine,pNew:PspirvOp):PspirvOp;
-Function  get_inverse_cmp_op(OpId:DWORD):DWORD;
+Function  get_inverse_left_cmp_op(OpId:DWORD):DWORD;
+Function  get_inverse_not_cmp_op(OpId:DWORD):DWORD;
 Function  is_term_op(OpId:DWORD):Boolean;
 Function  is_merge_op(OpId:DWORD):Boolean;
 Function  is_term_op(pLine:PspirvOp):Boolean;
@@ -295,7 +296,7 @@ begin
  end;
 end;
 
-Function get_inverse_cmp_op(OpId:DWORD):DWORD;
+Function get_inverse_left_cmp_op(OpId:DWORD):DWORD;
 begin
  Result:=0;
  Case OpId of
@@ -314,19 +315,54 @@ begin
   Op.OpFUnordNotEqual        :Result:=Op.OpFUnordNotEqual        ;
   Op.OpFUnordGreaterThanEqual:Result:=Op.OpFUnordLessThanEqual   ;
 
-  Op.OpSLessThan             :Result:=Op.OpSGreaterThan          ;
   Op.OpIEqual                :Result:=Op.OpIEqual                ;
+  Op.OpINotEqual             :Result:=Op.OpINotEqual             ;
+
+  Op.OpSLessThan             :Result:=Op.OpSGreaterThan          ;
   Op.OpSLessThanEqual        :Result:=Op.OpSGreaterThanEqual     ;
   Op.OpSGreaterThan          :Result:=Op.OpSLessThan             ;
-  Op.OpINotEqual             :Result:=Op.OpINotEqual             ;
   Op.OpSGreaterThanEqual     :Result:=Op.OpSLessThanEqual        ;
 
   Op.OpULessThan             :Result:=Op.OpUGreaterThan          ;
   Op.OpULessThanEqual        :Result:=Op.OpUGreaterThanEqual     ;
   Op.OpUGreaterThan          :Result:=Op.OpULessThan             ;
   Op.OpUGreaterThanEqual     :Result:=Op.OpULessThanEqual        ;
-  else
-   Assert(false);
+  else;
+ end;
+end;
+
+Function get_inverse_not_cmp_op(OpId:DWORD):DWORD;
+begin
+ Result:=0;
+ Case OpId of
+  Op.OpFOrdLessThan          :Result:=Op.OpFUnordGreaterThanEqual;
+  Op.OpFOrdEqual             :Result:=Op.OpFUnordNotEqual;
+  Op.OpFOrdLessThanEqual     :Result:=Op.OpFUnordGreaterThan;
+  Op.OpFOrdGreaterThan       :Result:=Op.OpFUnordLessThanEqual;
+  Op.OpFOrdNotEqual          :Result:=Op.OpFUnordEqual;
+  Op.OpFOrdGreaterThanEqual  :Result:=Op.OpFUnordLessThan;
+  Op.OpOrdered               :Result:=Op.OpUnordered;
+  Op.OpUnordered             :Result:=Op.OpOrdered;
+  Op.OpFUnordLessThan        :Result:=Op.OpFOrdGreaterThanEqual;
+  Op.OpFUnordEqual           :Result:=Op.OpFOrdNotEqual;
+  Op.OpFUnordLessThanEqual   :Result:=Op.OpFOrdGreaterThan;
+  Op.OpFUnordGreaterThan     :Result:=Op.OpFOrdLessThanEqual;
+  Op.OpFUnordNotEqual        :Result:=Op.OpFOrdEqual;
+  Op.OpFUnordGreaterThanEqual:Result:=Op.OpFOrdLessThan;
+
+  Op.OpIEqual                :Result:=Op.OpINotEqual;
+  Op.OpINotEqual             :Result:=Op.OpIEqual;
+
+  Op.OpSLessThan             :Result:=Op.OpSGreaterThanEqual;
+  Op.OpSLessThanEqual        :Result:=Op.OpSGreaterThan;
+  Op.OpSGreaterThan          :Result:=Op.OpSLessThanEqual;
+  Op.OpSGreaterThanEqual     :Result:=Op.OpSLessThan;
+
+  Op.OpULessThan             :Result:=Op.OpUGreaterThanEqual;
+  Op.OpULessThanEqual        :Result:=Op.OpUGreaterThan;
+  Op.OpUGreaterThan          :Result:=Op.OpULessThanEqual;
+  Op.OpUGreaterThanEqual     :Result:=Op.OpULessThan;
+  else;
  end;
 end;
 

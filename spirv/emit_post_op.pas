@@ -47,6 +47,7 @@ type
   function  OnBitwiseOr1(node:PSpirvOp):Integer;
   function  OnLogicalOr1(node:PSpirvOp):Integer;
   function  OnNot1(node:PSpirvOp):Integer;
+  function  OnLogicalNot1(node:PSpirvOp):Integer;
   function  OnBranchConditional1(node:PSpirvOp):Integer;
   //
   function  OpBitCount1(node:PSpirvOp):Integer;
@@ -103,6 +104,7 @@ begin
   Op.OpLogicalOr        :Result:=OnLogicalOr1(node);
 
   Op.OpNot              :Result:=OnNot1(node);
+  Op.OpLogicalNot       :Result:=OnLogicalNot1(node);
 
   Op.OpBranchConditional:Result:=OnBranchConditional1(node);
 
@@ -749,6 +751,54 @@ begin
  end;
 
  Result:=Result+PrepTypeParam(node^.ParamNode(0),dst^.dtype);
+end;
+
+function TEmitPostOp.OnLogicalNot1(node:PSpirvOp):Integer;
+var
+ dtype:TsrDataType;
+ dst:PsrRegNode;
+ src:PsrRegNode;
+
+ dst2:PsrRegNode;
+ srp:array[0..1] of PsrRegNode;
+ pop:PSpirvOp;
+ cmp:DWORD;
+
+ procedure _SetReg(src:PsrRegNode);
+ begin
+  dst^.pWriter:=src;
+  node^.mark_not_used;
+  node^.pDst:=nil;
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node^.pDst^.AsType(ntReg);
+ src:=RegDown(node^.ParamNode(0)^.AsReg);
+
+ if (dst=nil) or (src=nil) then Exit;
+
+ if (src^.read_count>1) then Exit;
+
+ pop:=src^.pWriter^.AsType(ntOp);
+
+ if (pop=nil) then Exit;
+
+ cmp:=pop^.OpId;
+ cmp:=get_inverse_not_cmp_op(cmp);
+
+ if (cmp=0) then Exit;
+
+ srp[0]:=pop^.ParamNode(0)^.AsReg;
+ srp[1]:=pop^.ParamNode(1)^.AsReg;
+
+ if (srp[0]=nil) or (srp[1]=nil) then Exit;
+
+ dst2:=NewReg(dtBool);
+ _Op2(pop,cmp,dst2,srp[0],srp[1]);
+
+ _SetReg(dst2);
 end;
 
 function TEmitPostOp.OnBranchConditional1(node:PSpirvOp):Integer;
