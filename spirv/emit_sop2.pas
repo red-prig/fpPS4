@@ -21,8 +21,7 @@ type
   procedure emit_S_ADDC_U32;
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:PsrRegNode);
-  procedure emit_S_LSHL_B32;
-  procedure emit_S_LSHR_B32;
+  procedure emit_S_SH(OpId:DWORD;rtype:TsrDataType);
   procedure emit_S_AND_B32;
   procedure emit_S_AND_B64;
   procedure emit_S_ANDN2_B64;
@@ -112,38 +111,20 @@ begin
  get_scc^.current^.dtype:=dtBool; //implict cast (int != 0)
 end;
 
-procedure TEmit_SOP2.emit_S_LSHL_B32;
+procedure TEmit_SOP2.emit_S_SH(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
  src[1]:=OpAndTo(src[1],31);
  src[1]^.PrepType(ord(dtUInt32));
 
- Op2(Op.OpShiftLeftLogical,src[0]^.dtype,dst,src[0],src[1]);
-
- OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
-end;
-
-procedure TEmit_SOP2.emit_S_LSHR_B32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
-begin
- dst:=get_sdst7(FSPI.SOP2.SDST);
-
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
-
- src[1]:=OpAndTo(src[1],31);
- src[1]^.PrepType(ord(dtUInt32));
-
- Op2(Op.OpShiftRightLogical,src[0]^.dtype,dst,src[0],src[1]);
+ Op2(OpId,src[0]^.dtype,dst,src[0],src[1]);
 
  OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
 end;
@@ -380,8 +361,8 @@ Var
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUint32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
  offset:=OpAndTo(src[1],31);
  count :=OpShrTo(src[1],16);
@@ -399,8 +380,8 @@ Var
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUint32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
  src[0]:=OpAndTo(src[0],31);
  src[1]:=OpAndTo(src[1],31);
@@ -408,12 +389,12 @@ begin
  src[0]^.PrepType(ord(dtUInt32));
  src[1]^.PrepType(ord(dtUInt32));
 
- one:=NewReg_q(dtUint32,1);
+ one:=NewReg_q(dtUInt32,1);
 
  src[0]:=OpShrTo(one,src[0]); //(1 << src0)
  src[0]:=OpISubTo(src[0],1);  //-1
 
- Op2(Op.OpShiftRightLogical,dtUint32,dst,src[0],src[1]);
+ Op2(Op.OpShiftRightLogical,dtUInt32,dst,src[0],src[1]);
 end;
 
 procedure TEmit_SOP2.emit_SOP2;
@@ -431,8 +412,9 @@ begin
 
   S_MUL_I32: emit_S_MUL_I32;
 
-  S_LSHL_B32: emit_S_LSHL_B32;
-  S_LSHR_B32: emit_S_LSHR_B32;
+  S_LSHL_B32: emit_S_SH(Op.OpShiftLeftLogical    ,dtUInt32);
+  S_LSHR_B32: emit_S_SH(Op.OpShiftRightLogical   ,dtUInt32);
+  S_ASHR_I32: emit_S_SH(Op.OpShiftRightArithmetic,dtInt32);
 
   S_AND_B32: emit_S_AND_B32;
   S_AND_B64: emit_S_AND_B64;
