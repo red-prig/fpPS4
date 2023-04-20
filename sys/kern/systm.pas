@@ -8,6 +8,10 @@ interface
 uses
  ntapi;
 
+const
+ IOSIZE_MAX      =High(Int64);
+ DEVFS_IOSIZE_MAX=High(Int64);
+
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;

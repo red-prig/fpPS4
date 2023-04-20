@@ -27,6 +27,8 @@ const
  MAXPATHLEN =PATH_MAX;
  MAXSYMLINKS=32;
 
+ maxfilesperproc = 44236;
+
  // configurable pathname variables
  _PC_LINK_MAX        =1;
  _PC_MAX_CANON       =2;
@@ -39,6 +41,25 @@ const
  _PC_VDISABLE        =9;
  _POSIX_VDISABLE     =$ff;
 
+ _PC_ASYNC_IO        =53;
+ _PC_PRIO_IO         =54;
+ _PC_SYNC_IO         =55;
+
+ _PC_ALLOC_SIZE_MIN    =10;
+ _PC_FILESIZEBITS      =12;
+ _PC_REC_INCR_XFER_SIZE=14;
+ _PC_REC_MAX_XFER_SIZE =15;
+ _PC_REC_MIN_XFER_SIZE =16;
+ _PC_REC_XFER_ALIGN    =17;
+ _PC_SYMLINK_MAX       =18;
+
+ _PC_ACL_EXTENDED=59;
+ _PC_ACL_PATH_MAX=60;
+ _PC_CAP_PRESENT =61;
+ _PC_INF_PRESENT =62;
+ _PC_MAC_PRESENT =63;
+ _PC_ACL_NFS4    =64;
+
  // access function
  F_OK=0; // test for existence of file
  X_OK=$01; // test for execute or search permission
@@ -46,9 +67,16 @@ const
  R_OK=$04; // test for read permission
 
  // whence values for lseek(2)
- SEEK_SET=0; // set file offset to offset
- SEEK_CUR=1; // set file offset to current plus offset
- SEEK_END=2; // set file offset to EOF plus offset
+ SEEK_SET =0; // set file offset to offset
+ SEEK_CUR =1; // set file offset to current plus offset
+ SEEK_END =2; // set file offset to EOF plus offset
+ SEEK_DATA=3; // set file offset to next data past offset
+ SEEK_HOLE=4; // set file offset to next hole past offset
+
+ // whence values for lseek(2); renamed by POSIX 1003.1
+ L_SET =SEEK_SET;
+ L_INCR=SEEK_CUR;
+ L_XTND=SEEK_END;
 
  DTYPE_VNODE     = 1; { file }
  DTYPE_SOCKET    = 2; { communications endpoint }
@@ -131,6 +159,7 @@ type
    *  DTYPE_VNODE specific fields.
    }
   f_seqcount:Integer; { Count of sequential accesses. }
+  f_exclose :Integer;
   f_nextoff :Int64;   { next expected read/write offset. }
   f_vnun    :Pointer;
   {
@@ -157,6 +186,14 @@ const
 var
  openfiles:Integer=0; { actual number of open files }
 
+ {
+  * The module initialization routine for POSIX asynchronous I/O will
+  * set this to the version of AIO that it implements.  (Zero means
+  * that it is not implemented.)  This value is used here by pathconf()
+  * and in kern_descrip.c by fpathconf().
+  }
+ async_io_version:Integer=0;
+
 function fo_read(fp:p_file;uio:p_uio;flags:Integer):Integer;
 function fo_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
 function fo_truncate(fp:p_file;length:Int64):Integer;
@@ -169,11 +206,6 @@ function fo_chmod(fp:p_file;mode:mode_t):Integer;
 function fo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 
 implementation
-
-//function foffset_get(fp:p_file):Int64; inline;
-//begin
-// Result:=(foffset_lock(fp, FOF_NOLOCK));
-//end;
 
 {
  fhold(fp) (refcount_acquire(&(fp)^.f_count))

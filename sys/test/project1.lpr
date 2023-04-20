@@ -43,7 +43,8 @@ uses
  vfs_subr,
  vfs_mount,
  vfs_default,
- sysent;
+ sysent,
+ vfs_syscalls;
 
 var
  mtx:umutex;

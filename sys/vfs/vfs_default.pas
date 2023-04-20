@@ -219,6 +219,7 @@ end;
 function vop_panic(ap:Pointer):Integer;
 begin
  Assert(false,'filesystem goof: vop_panic[%s]');
+ Exit(ENOENT);
 end;
 
 {
@@ -1036,16 +1037,14 @@ begin
      Exit(error);
     end;
     //vinvalbuf(vp, V_CLEANONLY, 0, 0);
-    {
-    if (vp^.v_object<>nil) then
-    begin
-     start:=trunc_page(ap^.a_start);
-     __end:=round_page(ap^.a_end);
-     VM_OBJECT_LOCK(vp^.v_object);
-     vm_object_page_cache(vp^.v_object, OFF_TO_IDX(start), OFF_TO_IDX(__end));
-     VM_OBJECT_UNLOCK(vp^.v_object);
-    end;
-    }
+    //if (vp^.v_object<>nil) then
+    //begin
+    // start:=trunc_page(ap^.a_start);
+    // __end:=round_page(ap^.a_end);
+    // VM_OBJECT_LOCK(vp^.v_object);
+    // vm_object_page_cache(vp^.v_object, OFF_TO_IDX(start), OFF_TO_IDX(__end));
+    // VM_OBJECT_UNLOCK(vp^.v_object);
+    //end;
     VOP_UNLOCK(vp, 0);
     VFS_UNLOCK_GIANT(vfslocked);
    end;

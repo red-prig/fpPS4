@@ -36,6 +36,8 @@ procedure vput(vp:p_vnode);
 
 procedure vinactive(vp:p_vnode);
 
+procedure vfs_notify_upper(vp:p_vnode;event:Integer);
+
 procedure assert_vi_locked   (vp:p_vnode;str:PChar);
 procedure assert_vi_unlocked (vp:p_vnode;str:PChar);
 procedure assert_vop_locked  (vp:p_vnode;str:PChar);
@@ -49,6 +51,11 @@ function  vfs_read_dirent(ap:p_vop_readdir_args;dp:p_dirent;off:QWORD):Integer;
 procedure vfs_mark_atime(vp:p_vnode);
 function  vfs_unixify_accmode(accmode:p_accmode_t):Integer;
 
+function  vcount(vp:p_vnode):Integer;
+function  count_dev(dev:Pointer):Integer; //cdev
+
+procedure vfs_msync(mp:p_mount;flags:Integer);
+
 function  __mnt_vnode_next_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 function  __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 procedure __mnt_vnode_markerfree_all(mvp:pp_vnode;mp:p_mount);
@@ -58,7 +65,8 @@ implementation
 uses
  errno,
  vfs_vnops,
- subr_uio;
+ subr_uio,
+ vm_object;
 
 {
  * List of vnodes that are ready for recycling.
@@ -282,7 +290,6 @@ end;
  }
 procedure vattr_null(vap:p_vattr);
 begin
-
  vap^.va_type:=VNON;
  vap^.va_size:=VNOVAL;
  vap^.va_bytes:=VNOVAL;
@@ -2152,9 +2159,9 @@ end;
  * failed lock upgrade.
  }
 procedure vinactive(vp:p_vnode);
+var
+ obj:vm_object_t;
 begin
- //struct vm_object *obj;
-
  ASSERT_VOP_ELOCKED(vp,'vinactive');
  ASSERT_VI_LOCKED(vp,'vinactive');
  Assert((vp^.v_iflag and VI_DOINGINACT)=0,'vinactive: recursed on VI_DOINGINACT');
@@ -2170,13 +2177,14 @@ begin
   * if there is at least one resident non-cached page, the vnode
   * cannot leave the active list without the page cleanup done.
   }
+ obj:=nil;
  //obj:=vp^.v_object;
- //if (obj<>nil) and (obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
- //begin
- // VM_OBJECT_LOCK(obj);
- // vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
- // VM_OBJECT_UNLOCK(obj);
- //end;
+ if (obj<>nil) and ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
+ begin
+  VM_OBJECT_LOCK(obj);
+  //vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
+  VM_OBJECT_UNLOCK(obj);
+ end;
  VOP_INACTIVE(vp);
  VI_LOCK(vp);
  Assert((vp^.v_iflag and VI_DOINGINACT)<>0,'vinactive: lost VI_DOINGINACT');
@@ -2350,70 +2358,90 @@ begin
  vgonel(vp);
  VI_UNLOCK(vp);
 end;
+}
 
-static void
-notify_lowervp_vfs_dummy(mp:p_mount __unused,
-    struct vnode *lowervp __unused)
+procedure notify_lowervp_vfs_dummy(mp:p_mount;lowervp:p_vnode);
 begin
 end;
+
+const
+ vgonel_vfsops:vfsops=(
+  vfs_mount          :nil;
+  vfs_cmount         :nil;
+  vfs_unmount        :nil;
+  vfs_root           :nil;
+  vfs_quotactl       :nil;
+  vfs_statfs         :nil;
+  vfs_sync           :nil;
+  vfs_vget           :nil;
+  vfs_fhtovp         :nil;
+  vfs_checkexp       :nil;
+  vfs_init           :nil;
+  vfs_uninit         :nil;
+  vfs_extattrctl     :nil;
+  vfs_sysctl         :nil;
+  vfs_susp_clean     :nil;
+  vfs_reclaim_lowervp:@notify_lowervp_vfs_dummy;
+  vfs_unlink_lowervp :@notify_lowervp_vfs_dummy
+ );
 
 {
  * Notify upper mounts about reclaimed or unlinked vnode.
  }
-void
-vfs_notify_upper(vp:p_vnode, int event)
+procedure vfs_notify_upper(vp:p_vnode;event:Integer);
+label
+ unlock;
+var
+ mp,ump,mmp:p_mount;
 begin
- static struct vfsops vgonel_vfsops:=begin
-  .vfs_reclaim_lowervp:=notify_lowervp_vfs_dummy,
-  .vfs_unlink_lowervp:=notify_lowervp_vfs_dummy,
- end;;
- mp:p_mount, *ump, *mmp;
-
  mp:=vp^.v_mount;
- if (mp=nil)
+ if (mp=nil) then
   Exit;
 
  MNT_ILOCK(mp);
- if (TAILQ_EMPTY(@mp^.mnt_uppers))
+ if TAILQ_EMPTY(@mp^.mnt_uppers) then
   goto unlock;
  MNT_IUNLOCK(mp);
- mmp:=malloc(sizeof(struct mount), M_TEMP, M_WAITOK or M_ZERO);
+ mmp:=AllocMem(SizeOf(mount));
  mmp^.mnt_op:=@vgonel_vfsops;
- mmp^.mnt_kern_flag:= or MNTK_MARKER;
+ mmp^.mnt_kern_flag:=mmp^.mnt_kern_flag or MNTK_MARKER;
  MNT_ILOCK(mp);
- mp^.mnt_kern_flag:= or MNTK_VGONE_UPPER;
- for (ump:=TAILQ_FIRST(@mp^.mnt_uppers); ump<>nil;) begin
-  if ((ump^.mnt_kern_flag and MNTK_MARKER)<>0) begin
-   ump:=TAILQ_NEXT(ump, mnt_upper_link);
+ mp^.mnt_kern_flag:=mmp^.mnt_kern_flag or MNTK_VGONE_UPPER;
+
+ ump:=TAILQ_FIRST(@mp^.mnt_uppers);
+ while (ump<>nil) do
+ begin
+  if ((ump^.mnt_kern_flag and MNTK_MARKER)<>0) then
+  begin
+   ump:=TAILQ_NEXT(ump,@ump^.mnt_upper_link);
    continue;
   end;
-  TAILQ_INSERT_AFTER(@mp^.mnt_uppers, ump, mmp, mnt_upper_link);
+  TAILQ_INSERT_AFTER(@mp^.mnt_uppers, ump, mmp,@mmp^.mnt_upper_link);
   MNT_IUNLOCK(mp);
-  switch (event) begin
-  case VFS_NOTIFY_UPPER_RECLAIM:
-   VFS_RECLAIM_LOWERVP(ump, vp);
-   break;
-  case VFS_NOTIFY_UPPER_UNLINK:
-   VFS_UNLINK_LOWERVP(ump, vp);
-   break;
-  default:
-   Assert(0, 'invalid event %d", event));
-   break;
+  case event of
+   VFS_NOTIFY_UPPER_RECLAIM:
+    VFS_RECLAIM_LOWERVP(ump, vp);
+   VFS_NOTIFY_UPPER_UNLINK:
+    VFS_UNLINK_LOWERVP(ump, vp);
+   else
+    Assert(false, 'invalid event');
   end;
   MNT_ILOCK(mp);
-  ump:=TAILQ_NEXT(mmp, mnt_upper_link);
-  TAILQ_REMOVE(@mp^.mnt_uppers, mmp, mnt_upper_link);
+  ump:=TAILQ_NEXT(mmp,@mmp^.mnt_upper_link);
+  TAILQ_REMOVE(@mp^.mnt_uppers, mmp,@mmp^.mnt_upper_link);
  end;
- free(mmp, M_TEMP);
- mp^.mnt_kern_flag:= and ~MNTK_VGONE_UPPER;
- if ((mp^.mnt_kern_flag and MNTK_VGONE_WAITER)<>0) begin
-  mp^.mnt_kern_flag:= and ~MNTK_VGONE_WAITER;
+ FreeMem(mmp);
+ mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_VGONE_UPPER);
+ if ((mp^.mnt_kern_flag and MNTK_VGONE_WAITER)<>0) then
+ begin
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_VGONE_WAITER);
   wakeup(@mp^.mnt_uppers);
  end;
 unlock:
  MNT_IUNLOCK(mp);
 end;
 
+{
 {
  * vgone, with the vp interlock held.
  }
@@ -2508,6 +2536,7 @@ end;
  }
 function vcount(vp:p_vnode):Integer;
 begin
+ Result:=0;
  //dev_lock();
  //count:=vp^.v_rdev^.si_usecount;
  //dev_unlock();
@@ -2519,6 +2548,7 @@ end;
  }
 function count_dev(dev:Pointer):Integer; //cdev
 begin
+ Result:=0;
  //dev_lock();
  //count:=dev^.si_usecount;
  //dev_unlock();
@@ -2529,15 +2559,14 @@ end;
  * perform msync on all vnodes under a mount point
  * the mount point must be locked.
  }
-
-{
-void
-vfs_msync(mp:p_mount, int flags)
+procedure vfs_msync(mp:p_mount;flags:Integer);
+var
+ vp,mvp:p_vnode;
+ obj:Pointer; //vm_object
 begin
- vp:p_vnode, *mvp;
- struct vm_object *obj;
-
- MNT_VNODE_FOREACH_ACTIVE(vp, mp, mvp) begin
+{
+ MNT_VNODE_FOREACH_ACTIVE(vp, mp, mvp)
+ begin
   obj:=vp^.v_object;
   if (obj<>nil and (obj^.flags and OBJ_MIGHTBEDIRTY)<>0 and
       (flags=MNT_WAIT or VOP_ISLOCKED(vp)=0)) begin
@@ -2562,8 +2591,8 @@ begin
   end; else
    VI_UNLOCK(vp);
  end;
-end;
 }
+end;
 
 {
 static void

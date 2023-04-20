@@ -92,6 +92,9 @@ const
 
  THR_SUSPENDED    =$0001;
 
+ // These flags are kept in p_flag.
+ P_ADVLOCK        =$00001; // Process may hold a POSIX advisory lock.
+
 type
  p_teb=^teb;
  teb=packed record
@@ -143,6 +146,7 @@ type
   td_sqqueue      :Integer;
   td_intrval      :Integer;
   td_inhibitors   :Integer;
+  td_dupfd        :Integer;
   td_timeo        :Int64;
   //
   td_map_def_user :Pointer;

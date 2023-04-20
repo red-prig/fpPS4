@@ -100,13 +100,34 @@ const
 {
  * Constants used for fcntl(2)
  }
-
 { command values }
- F_GETFL = 3; { get file status flags }
- F_SETFL = 4; { set file status flags }
- F_GETLK =11; { get record locking information }
- F_SETLK =12; { set record locking information }
- F_SETLKW=13; { F_SETLK; wait if blocked }
+ F_DUPFD  = 0; { duplicate file descriptor }
+ F_GETFD  = 1; { get file descriptor flags }
+ F_SETFD  = 2; { set file descriptor flags }
+
+ F_GETFL  = 3; { get file status flags }
+ F_SETFL  = 4; { set file status flags }
+
+ F_GETOWN = 5; { get SIGIO/SIGURG proc/pgrp }
+ F_SETOWN = 6; { set SIGIO/SIGURG proc/pgrp }
+
+ F_OGETLK = 7; { get record locking information }
+ F_OSETLK = 8; { set record locking information }
+ F_OSETLKW= 9; { F_SETLK; wait if blocked }
+ F_DUP2FD =10; { duplicate file descriptor to arg }
+
+ F_GETLK  =11; { get record locking information }
+ F_SETLK  =12; { set record locking information }
+ F_SETLKW =13; { F_SETLK; wait if blocked }
+
+ F_SETLK_REMOTE  =14; { debugging support for remote locks }
+ F_READAHEAD     =15; { read ahead }
+ F_RDAHEAD       =16; { Darwin compatible read ahead }
+ F_DUPFD_CLOEXEC =17; { Like F_DUPFD, but FD_CLOEXEC is set }
+ F_DUP2FD_CLOEXEC=18; { Like F_DUP2FD, but FD_CLOEXEC is set }
+
+{ file descriptor flags (F_GETFD, F_SETFD) }
+ FD_CLOEXEC=1;  { close-on-exec flag }
 
 { record locking flags (F_GETLK, F_SETLK, F_SETLKW) }
  F_RDLCK   =1; { shared or read lock }
@@ -120,6 +141,12 @@ const
  F_POSIX =$040; { Use POSIX semantics for lock }
  F_REMOTE=$080; { Lock owner is remote NFS client }
  F_NOINTR=$100; { Ignore signals when waiting }
+
+ // lock operations for flock(2)
+ LOCK_SH =$01; // shared file lock
+ LOCK_EX =$02; // exclusive file lock
+ LOCK_NB =$04; // don't block when locking
+ LOCK_UN =$08; // unlock file
 
  //Advice to posix_fadvise
  POSIX_FADV_NORMAL    =0; // no special treatment
@@ -136,12 +163,24 @@ const
 type
  p_flock=^t_flock;
  t_flock=packed record
-  l_start :QWORD  ; // starting offset
-  l_len   :QWORD  ; // len = 0 means until end of file
+  l_start :Int64  ; // starting offset
+  l_len   :Int64  ; // len = 0 means until end of file
   l_pid   :DWORD  ; // lock owner
   l_type  :WORD   ; // lock type: read/write, etc.
   l_whence:WORD   ; // type of l_start
   l_sysid :Integer; // remote system id or zero for local
+ end;
+
+{
+  * Old advisory file segment locking data type,
+  * before adding l_sysid.
+}
+ __oflock=packed record
+  l_start :Int64; // starting offset
+  l_len   :Int64; // len = 0 means until end of file
+  l_pid   :DWORD; // lock owner
+  l_type  :WORD ; // lock type: read/write, etc.
+  l_whence:WORD ; // type of l_start
  end;
 
 { convert from open() flags to/from fflags; convert O_RD/WR to FREAD/FWRITE }

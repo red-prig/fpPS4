@@ -54,6 +54,10 @@ type
   tz_dstsec :DWORD;
  end;
 
+function  timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
+
+procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec); inline;
+procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec); inline;
 function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 function  tvtohz(time:Int64):Int64; inline;
 procedure usec2timespec(ts:ptimespec;timeo:DWORD);
@@ -70,6 +74,29 @@ uses
  trap,
  thr_error,
  kern_time;
+
+function timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
+begin
+ if (tvp^.tv_sec=uvp^.tv_sec) then
+ begin
+  Result:=ord(tvp^.tv_nsec < uvp^.tv_nsec);
+ end else
+ begin
+  Result:=ord(tvp^.tv_sec < uvp^.tv_sec);
+ end;
+end;
+
+procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec); inline;
+begin
+ ts^.tv_sec :=tv^.tv_sec;
+ ts^.tv_nsec:=tv^.tv_usec * 1000;
+end;
+
+procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec); inline;
+begin
+ tv^.tv_sec :=ts^.tv_sec;
+ tv^.tv_usec:=ts^.tv_nsec div 1000;
+end;
 
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 begin

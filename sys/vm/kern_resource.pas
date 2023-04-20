@@ -6,7 +6,8 @@ unit kern_resource;
 interface
 
 uses
- vmparam;
+ vmparam,
+ vfile;
 
 const
  RLIMIT_CPU    = 0;  // maximum cpu time in seconds
@@ -37,6 +38,7 @@ begin
   RLIMIT_STACK  :Result:=MAXSSIZ;
   RLIMIT_MEMLOCK:Result:=pageablemem;
   RLIMIT_VMEM   :Result:=pageablemem;
+  RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;
 end;
@@ -49,6 +51,7 @@ begin
   RLIMIT_STACK  :Result:=MAXSSIZ;
   RLIMIT_MEMLOCK:Result:=pageablemem;
   RLIMIT_VMEM   :Result:=pageablemem;
+  RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;
 end;

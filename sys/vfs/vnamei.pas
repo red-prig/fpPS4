@@ -140,7 +140,7 @@ type
  ni_cnd:componentname;
 end;
 
-function NDHASGIANT(ndp:p_nameidata):Boolean; inline;
+function NDHASGIANT(ndp:p_nameidata):Integer; inline;
 
 procedure NDINIT_ALL(
  ndp:p_nameidata;
@@ -191,9 +191,9 @@ procedure NDINIT_ATVP(
 
 implementation
 
-function NDHASGIANT(ndp:p_nameidata):Boolean; inline;
+function NDHASGIANT(ndp:p_nameidata):Integer; inline;
 begin
- Result:=(ndp^.ni_cnd.cn_flags and GIANTHELD)<>0;
+ Result:=ord((ndp^.ni_cnd.cn_flags and GIANTHELD)<>0);
 end;
 
 procedure NDINIT_ALL(
@@ -216,7 +216,7 @@ begin
  ndp^.ni_strictrelative:=0;
  ndp^.ni_rightsneeded  :=rights;
  ndp^.ni_baserights    :=0;
- ndp^.ni_cnd.cn_thread:=td;
+ ndp^.ni_cnd.cn_thread :=td;
 end;
 
 procedure NDINIT(

@@ -9,10 +9,17 @@ uses
  vmount,
  vnamei,
  vfile,
+ vstat,
+ vmparam,
  vfs_vnode,
  kern_mtx;
 
 function  vn_lock(vp:p_vnode;flags:Integer):Integer;
+
+function  vn_open(ndp:p_nameidata;
+                  flagp:PInteger;
+                  cmode:Integer;
+                  fp:p_file):Integer;
 
 function  vn_open_cred(ndp:p_nameidata;
                        flagp:PInteger;
@@ -23,8 +30,28 @@ function  vn_open_cred(ndp:p_nameidata;
 function  vn_writechk(vp:p_vnode):Integer;
 function  vn_start_write(vp:p_vnode;mpp:pp_mount;flags:Integer):Integer;
 procedure vn_finished_write(mp:p_mount);
-
 function  vn_close(vp:p_vnode;flags:Integer):Integer;
+function  vn_stat(vp:p_vnode;sb:p_stat):Integer;
+
+const
+ vnops:fileops=(
+  fo_read    :nil;//@vn_io_fault;
+  fo_write   :nil;//@vn_io_fault;
+  fo_truncate:nil;//@vn_truncate;
+  fo_ioctl   :nil;//@vn_ioctl;
+  fo_poll    :nil;//@vn_poll;
+  fo_kqfilter:nil;//@vn_kqfilter;
+  fo_stat    :nil;//@vn_statfile;
+  fo_close   :nil;//@vn_closefile;
+  fo_chmod   :nil;//@vn_chmod;
+  fo_chown   :nil;//@vn_chown;
+  fo_flags   :DFLAG_PASSABLE or DFLAG_SEEKABLE
+ );
+
+function  foffset_get(fp:p_file):Int64; inline;
+function  foffset_lock(fp:p_file;flags:Integer):Int64;
+procedure foffset_lock(fp:p_file;val:Int64;flags:Integer);
+procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
 
 implementation
 
@@ -58,6 +85,14 @@ begin
  until ((flags and LK_RETRY)=0) or (Result=0);
 end;
 
+function vn_open(ndp:p_nameidata;
+                 flagp:PInteger;
+                 cmode:Integer;
+                 fp:p_file):Integer;
+begin
+ Result:=vn_open_cred(ndp, flagp, cmode, 0, fp);
+end;
+
 {
  * Common code for vnode open operations.
  * Check permissions, and call the VOP_OPEN or VOP_CREATE routine.
@@ -65,7 +100,6 @@ end;
  * Note that this does NOT free nameidata for the successful case,
  * due to the NDINIT being done elsewhere.
 }
-
 function vn_open_cred(ndp:p_nameidata;
                       flagp:PInteger;
                       cmode:Integer;
@@ -82,14 +116,14 @@ var
  fmode,error:Integer;
  accmode:accmode_t;
  mps:Integer;
- vfslocked:Boolean;
+ vfslocked:Integer;
 begin
  vap:=@vat;
 
  mps:=ndp^.ni_cnd.cn_flags and MPSAFE;
 
 restart:
- vfslocked:=False;
+ vfslocked:=0;
  fmode:=flagp^;
  if ((fmode and O_CREAT)<>0) then
  begin
@@ -381,6 +415,144 @@ begin
  vput(vp);
  vn_finished_write(mp);
  Exit(error);
+end;
+
+function vn_stat(vp:p_vnode;sb:p_stat):Integer;
+var
+ vattr:t_vattr;
+ vap:p_vattr;
+ error:Integer;
+ mode:WORD;
+begin
+ //error:=mac_vnode_check_stat(active_cred, file_cred, vp);
+ //if (error<>0) then
+ // Exit(error);
+
+ vap:=@vattr;
+
+ {
+  * Initialize defaults for new and unusual fields, so that file
+  * systems which don't support these fields don't need to know
+  * about them.
+  }
+ vap^.va_birthtime.tv_sec:=-1;
+ vap^.va_birthtime.tv_nsec:=0;
+ vap^.va_fsid:=VNOVAL;
+ vap^.va_rdev:=NODEV;
+
+ error:=VOP_GETATTR(vp, vap);
+ if (error<>0) then
+  Exit(error);
+
+ {
+  * Zero the spare stat fields
+  }
+ FillChar(sb^,SizeOf(t_stat),0);
+
+ {
+  * Copy from vattr table
+  }
+ if (vap^.va_fsid<>VNOVAL) then
+  sb^.st_dev:=vap^.va_fsid
+ else
+  sb^.st_dev:=p_mount(vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+ sb^.st_ino:=vap^.va_fileid;
+ mode:=vap^.va_mode;
+ case vap^.va_type of
+  VREG:
+   mode:=mode or S_IFREG;
+  VDIR:
+   mode:=mode or S_IFDIR;
+  VBLK:
+   mode:=mode or S_IFBLK;
+  VCHR:
+   mode:=mode or S_IFCHR;
+  VLNK:
+   mode:=mode or S_IFLNK;
+  VSOCK:
+   mode:=mode or S_IFSOCK;
+  VFIFO:
+   mode:=mode or S_IFIFO;
+  else
+   Exit(EBADF);
+ end;;
+ sb^.st_mode:=mode;
+ sb^.st_nlink:=vap^.va_nlink;
+ sb^.st_uid:=vap^.va_uid;
+ sb^.st_gid:=vap^.va_gid;
+ sb^.st_rdev:=vap^.va_rdev;
+ if (vap^.va_size > High(Int64)) then
+  Exit(EOVERFLOW);
+ sb^.st_size:=vap^.va_size;
+ sb^.st_atim:=vap^.va_atime;
+ sb^.st_mtim:=vap^.va_mtime;
+ sb^.st_ctim:=vap^.va_ctime;
+ sb^.st_birthtim:=vap^.va_birthtime;
+
+ {
+  * According to www.opengroup.org, the meaning of st_blksize is
+  *   "a filesystem-specific preferred I/O block size for this
+  *    object.  In some filesystem types, this may vary from file
+  *    to file"
+  * Use miminum/default of PAGE_SIZE (e.g. for VCHR).
+  }
+
+ if (PAGE_SIZE>vap^.va_blocksize) then
+ begin
+  sb^.st_blksize:=PAGE_SIZE;
+ end else
+ begin
+  sb^.st_blksize:=vap^.va_blocksize;
+ end;
+
+ sb^.st_flags:=vap^.va_flags;
+ //if (priv_check(td, PRIV_VFS_GENERATION)) then
+ // sb^.st_gen:=0;
+ //else
+  sb^.st_gen:=vap^.va_gen;
+
+ sb^.st_blocks:=vap^.va_bytes div S_BLKSIZE;
+ Exit(0);
+end;
+
+
+function foffset_get(fp:p_file):Int64; inline;
+begin
+ Result:=(foffset_lock(fp, FOF_NOLOCK));
+end;
+
+function foffset_lock(fp:p_file;flags:Integer):Int64;
+begin
+ Assert((flags and FOF_OFFSET)=0, 'FOF_OFFSET passed');
+
+ if ((flags and FOF_NOLOCK)<>0) then
+  Exit(fp^.f_offset);
+end;
+
+procedure foffset_lock(fp:p_file;val:Int64;flags:Integer);
+begin
+ Assert((flags and FOF_OFFSET)=0, ('FOF_OFFSET passed'));
+
+ if ((flags and FOF_NOLOCK)<>0) then
+ begin
+  if ((flags and FOF_NOUPDATE)=0) then
+   fp^.f_offset:=val;
+  if ((flags and FOF_NEXTOFF)<>0) then
+   fp^.f_nextoff:=val;
+ end;
+end;
+
+procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
+begin
+ Assert((flags and FOF_OFFSET)=0, ('FOF_OFFSET passed'));
+
+ if ((flags and FOF_NOLOCK)<>0) then
+ begin
+  if ((flags and FOF_NOUPDATE)=0) then
+   fp^.f_offset:=val;
+  if ((flags and FOF_NEXTOFF)<>0) then
+   fp^.f_nextoff:=val;
+ end;
 end;
 
 end.

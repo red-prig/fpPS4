@@ -21,6 +21,8 @@ const
  MFSNAMELEN=16; // length of type name including null
  MNAMELEN  =88; // size of on/from name bufs
 
+ STATFS_VERSION=$20030518; // current version number
+
  //User specifiable flags, stored in mnt_flag.
  MNT_RDONLY     =$0000000000000001; // read only filesystem
  MNT_SYNCHRONOUS=$0000000000000002; // fs written synchronously
@@ -39,6 +41,14 @@ const
  MNT_NOCLUSTERR =$0000000040000000; // disable cluster read
  MNT_NOCLUSTERW =$0000000080000000; // disable cluster write
  MNT_SUJ        =$0000000100000000; // using journaled soft updates
+
+ //NFS export related mount flags.
+ MNT_EXRDONLY   =$0000000000000080; // exported read only
+ MNT_EXPORTED   =$0000000000000100; // filesystem is exported
+ MNT_DEFEXPORTED=$0000000000000200; // exported to the world
+ MNT_EXPORTANON =$0000000000000400; // anon uid mapping for all
+ MNT_EXKERB     =$0000000000000800; // exported with Kerberos
+ MNT_EXPUBLIC   =$0000000020000000; // public export (WebNFS)
 
 {
   * Flags set by internal operations,
@@ -64,6 +74,17 @@ const
  MNT_FORCE    =$0000000000080000; // force unmount or readonly
  MNT_SNAPSHOT =$0000000001000000; // snapshot the filesystem
  MNT_BYFSID   =$0000000008000000; // specify filesystem by ID.
+
+ MNT_VISFLAGMASK=(MNT_RDONLY or MNT_SYNCHRONOUS or MNT_NOEXEC or
+    MNT_NOSUID or MNT_UNION or MNT_SUJ or
+    MNT_ASYNC or MNT_EXRDONLY or MNT_EXPORTED or
+    MNT_DEFEXPORTED or MNT_EXPORTANON or MNT_EXKERB or
+    MNT_LOCAL or MNT_USER or MNT_QUOTA or
+    MNT_ROOTFS or MNT_NOATIME or MNT_NOCLUSTERR or
+    MNT_NOCLUSTERW or MNT_SUIDDIR or MNT_SOFTDEP or
+    MNT_IGNORE or MNT_EXPUBLIC or MNT_NOSYMFOLLOW or
+    MNT_GJOURNAL or MNT_MULTILABEL or MNT_ACLS or
+    MNT_NFS4ACLS);
 
  MNT_UPDATEMASK=(MNT_NOSUID or MNT_NOEXEC or
     MNT_SYNCHRONOUS or MNT_UNION or MNT_ASYNC or
@@ -202,7 +223,8 @@ type
  pp_mount=^p_mount;
  p_mount=^mount;
 
- p_statfs=^statfs;
+ pp_statfs=^p_statfs;
+ p_statfs=^t_statfs;
  p_vfsconf=^vfsconf;
 
  vfs_cmount_t        =function (ma,data:Pointer;flags:QWORD):Integer;
@@ -263,7 +285,7 @@ type
   vfc_list    :TAILQ_ENTRY ; // list of vfscons
  end;
 
- statfs=packed record
+ t_statfs=packed record
   f_version    :DWORD;  // structure version number
   f_type       :DWORD;  // type of filesystem
   f_flags      :QWORD;  // copy of mount exported flags
@@ -321,7 +343,7 @@ type
   mnt_opt                :p_vfsoptlist;// current mount options
   mnt_optnew             :p_vfsoptlist;// new options passed to fs
   mnt_maxsymlinklen      :Integer     ;// max size of short symlink
-  mnt_stat               :statfs      ;// cache of filesystem stats
+  mnt_stat               :t_statfs    ;// cache of filesystem stats
   mnt_data               :Pointer     ;// private data
   mnt_time               :time_t      ;// last time written
   mnt_iosize_max         :Integer     ;// max size for clusters, etc
@@ -344,6 +366,9 @@ type
  end;
 
 const
+ VFS_NOTIFY_UPPER_RECLAIM=1;
+ VFS_NOTIFY_UPPER_UNLINK =2;
+
  VFS_VERSION=$19660120;
 
 var
@@ -351,6 +376,8 @@ var
  mountlist:TAILQ_HEAD=(tqh_first:nil;tqh_last:@mountlist.tqh_first);
 
  VFS_Giant:mtx;
+
+function  MNT_SHARED_WRITES(mp:p_mount):Boolean; inline;
 
 procedure MNT_ILOCK(mp:p_mount); inline;
 function  MNT_ITRYLOCK(mp:p_mount):Boolean; inline;
@@ -370,9 +397,25 @@ function  VFS_MOUNT(mp:p_mount):Integer;
 function  VFS_UNMOUNT(mp:p_mount;FORCE:Integer):Integer;
 function  VFS_ROOT(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
 function  VFS_STATFS(mp:p_mount;sbp:p_statfs):Integer;
+function  VFS_SYNC(mp:p_mount;WAIT:Integer):Integer;
 function  VFS_VGET(mp:p_mount;ino:QWORD;flags:Integer;vpp:pp_vnode):Integer;
+procedure VFS_RECLAIM_LOWERVP(mp:p_mount;vp:p_vnode);
+procedure VFS_UNLINK_LOWERVP(mp:p_mount;vp:p_vnode);
+procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);
+procedure VFS_KNOTE_UNLOCKED(vp:p_vnode;hint:Integer);
 
 implementation
+
+function MNT_SHARED_WRITES(mp:p_mount):Boolean; inline;
+begin
+ if (mp<>nil) then
+ begin
+  Result:=((mp^.mnt_kern_flag and MNTK_SHARED_WRITES)<>0);
+ end else
+ begin
+  Result:=False;
+ end;
+end;
 
 procedure MNT_ILOCK(mp:p_mount); inline;
 begin
@@ -484,6 +527,15 @@ begin
  VFS_EPILOGUE(_enable_stops);
 end;
 
+function VFS_SYNC(mp:p_mount;WAIT:Integer):Integer;
+var
+ _enable_stops:Boolean;
+begin
+ _enable_stops:=VFS_PROLOGUE(MP);
+ Result:=mp^.mnt_op^.vfs_sync(mp,WAIT);
+ VFS_EPILOGUE(_enable_stops);
+end;
+
 function VFS_VGET(mp:p_mount;ino:QWORD;flags:Integer;vpp:pp_vnode):Integer;
 var
  _enable_stops:Boolean;
@@ -493,6 +545,41 @@ begin
  VFS_EPILOGUE(_enable_stops);
 end;
 
+procedure VFS_RECLAIM_LOWERVP(mp:p_mount;vp:p_vnode);
+var
+ _enable_stops:Boolean;
+begin
+ if (mp^.mnt_op^.vfs_reclaim_lowervp<>nil) then
+ begin
+  _enable_stops:=VFS_PROLOGUE(MP);
+  mp^.mnt_op^.vfs_reclaim_lowervp(mp,vp);
+  VFS_EPILOGUE(_enable_stops);
+ end;
+end;
+
+procedure VFS_UNLINK_LOWERVP(mp:p_mount;vp:p_vnode);
+var
+ _enable_stops:Boolean;
+begin
+ if (mp^.mnt_op^.vfs_unlink_lowervp<>nil) then
+ begin
+  _enable_stops:=VFS_PROLOGUE(MP);
+  mp^.mnt_op^.vfs_unlink_lowervp(mp,vp);
+  VFS_EPILOGUE(_enable_stops);
+ end;
+end;
+
+procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);
+begin
+ //if ((vp^.v_vflag and VV_NOKNOTE)=0) then
+ // VN_KNOTE(vp, hint, KNF_LISTLOCKED);
+end;
+
+procedure VFS_KNOTE_UNLOCKED(vp:p_vnode;hint:Integer);
+begin
+ //if ((vp^.v_vflag and VV_NOKNOTE)=0) then
+ // VN_KNOTE(vp, hint, 0);
+end;
 
 initialization
  mtx_init(mountlist_mtx);

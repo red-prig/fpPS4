@@ -10,7 +10,6 @@ uses
  kern_thr,
  kern_mtx,
  time,
- vuio,
  vmparam;
 
 const
@@ -210,7 +209,7 @@ type
   va_nlink    :Word;
   va_uid      :Integer;
   va_gid      :Integer;
-  va_fsid     :DWORD;
+  va_fsid     :Integer;
   va_fileid   :QWORD;
   va_size     :QWORD;
   va_blocksize:QWORD;
@@ -220,7 +219,7 @@ type
   va_birthtime:timespec;
   va_gen      :QWORD;
   va_flags    :QWORD;
-  va_rdev     :DWORD;
+  va_rdev     :Integer;
   va_bytes    :QWORD;
   va_filerev  :QWORD;
   va_vaflags  :DWORD;
@@ -233,21 +232,15 @@ function  VI_MTX(vp:p_vnode):p_mtx; inline;
 
 function  IGNORE_LOCK(vp:p_vnode):Boolean; inline;
 
+procedure vn_rangelock_unlock(vp:p_vnode;cookie:Pointer);
+procedure vn_rangelock_unlock_range(vp:p_vnode;cookie:Pointer;start,__end:Int64);
+function  vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
+function  vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
+
 var
  rootvnode:p_vnode;
 
 implementation
-
-uses
- errno,
- vnode_if,
- vnamei,
- vfile,
- vmount,
- vfcntl,
- vfs_lookup,
- vfs_subr,
- kern_synch;
 
 procedure VI_LOCK(vp:p_vnode);
 begin
@@ -274,6 +267,27 @@ begin
  Result:=(vp=nil) or (vp^.v_type=VCHR) or (vp^.v_type=VBAD);
 end;
 
+procedure vn_rangelock_unlock(vp:p_vnode;cookie:Pointer);
+begin
+ //rangelock_unlock(@vp^.v_rl, (cookie), VI_MTX(vp))
+end;
+
+procedure vn_rangelock_unlock_range(vp:p_vnode;cookie:Pointer;start,__end:Int64);
+begin
+ //rangelock_unlock_range(@vp^.v_rl, (cookie), start, __end, VI_MTX(vp))
+end;
+
+function vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
+begin
+ Result:=nil;
+ //Result:=rangelock_rlock(@vp^.v_rl, start, __end, VI_MTX(vp))
+end;
+
+function vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
+begin
+ Result:=nil;
+ //Result:=rangelock_wlock(@vp^.v_rl, start, __end, VI_MTX(vp))
+end;
 
 end.
 

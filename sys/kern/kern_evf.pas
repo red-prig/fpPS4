@@ -575,13 +575,10 @@ var
 begin
  Result:=ESRCH;
 
- evf:=p_evf(id_get(@evf_table,key));
- if (evf=nil) then Exit;
+ if not id_del(@evf_table,key,@evf) then Exit;
 
  evf_delete(evf);
  id_release(@evf^.desc);
-
- if not id_del(@evf_table,key) then Exit;
 
  Result:=0;
 end;

@@ -427,13 +427,10 @@ var
 begin
  Result:=ESRCH;
 
- sem:=p_osem(id_get(@osem_table,key));
- if (sem=nil) then Exit;
+ if not id_del(@osem_table,key,@sem) then Exit;
 
  osem_delete(sem);
  id_release(@sem^.desc);
-
- if not id_del(@osem_table,key) then Exit;
 
  Result:=0;
 end;

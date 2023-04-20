@@ -425,7 +425,7 @@ begin
  error:=_namei(@nd);
  if (error<>0) then
   Exit (error);
- if (not NDHASGIANT(@nd)) then
+ if (NDHASGIANT(@nd)=0) then
   mtx_lock(VFS_Giant);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vp:=nd.ni_vp;

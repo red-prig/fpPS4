@@ -36,9 +36,9 @@ procedure id_table_init(t:p_id_desc_table;min:Integer);
 procedure id_table_fini(t:p_id_desc_table);
 
 function  id_new(t:p_id_desc_table;d:p_id_desc;pKey:PInteger):Boolean;
-function  id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer):Boolean;
+function  id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer;old:PPointer):Boolean;
 function  id_get(t:p_id_desc_table;Key:Integer):p_id_desc;
-function  id_del(t:p_id_desc_table;Key:Integer):Boolean;
+function  id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
 
 implementation
 
@@ -140,7 +140,7 @@ begin
   rw_wunlock(t^.FLock);
 end;
 
-function id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer):Boolean;
+function id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer;old:PPointer):Boolean;
 Label
  _exit;
 Var
@@ -154,10 +154,23 @@ begin
  data:=HAMT_insert32(@t^.FHAMT,Key,Pointer(d));
 
  if (data=nil) then goto _exit;
- if (data^<>Pointer(d)) then goto _exit;
 
- Inc(t^.FCount);
- id_acqure(d);
+ if (data^<>Pointer(d)) then
+ begin
+  if (old<>nil) then
+  begin
+   old^:=data^;
+   data^:=Pointer(d);
+  end else
+  begin
+   goto _exit;
+  end;
+ end else
+ if (old<>nil) then
+ begin
+  old^:=nil;
+ end;
+
  id_acqure(d);
 
  Result:=True;
@@ -190,7 +203,7 @@ begin
   rw_runlock(t^.FLock);
 end;
 
-function id_del(t:p_id_desc_table;Key:Integer):Boolean;
+function id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
 Var
  d:p_id_desc;
 begin
@@ -203,9 +216,19 @@ begin
 
  if (d<>nil) then
  begin
-  id_release(d);
+  if (old<>nil) then
+  begin
+   old^:=d;
+  end else
+  begin
+   id_release(d);
+  end;
   Dec(t^.FCount);
   Result:=True;
+ end else
+ if (old<>nil) then
+ begin
+  old^:=nil;
  end;
 
  rw_wunlock(t^.FLock);

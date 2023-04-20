@@ -20,7 +20,7 @@ type
  NDSLOTTYPE=QWORD;
 
  p_filedesc=^t_filedesc;
- t_filedesc=packed record
+ t_filedesc=packed object
   fd_ofiles:t_id_desc_table;
   //fd_ofiles           :pp_file     ; { file structures for open files }
   //fd_ofileflags       :PChar       ; { per-process open file flags }
@@ -38,6 +38,8 @@ type
   //fd_kqlist           :kqlist      ; { list of kqueues on this filedesc }
   fd_holdleaderscount :Integer     ; { block fdfree() for shared close() }
   fd_holdleaderswakeup:Integer     ; { fdfree() needs wakeup }
+  //
+  property fd_nfiles:Integer read fd_ofiles.FCount;
  end;
 
 {

@@ -68,7 +68,19 @@ const
  S_IFSOCK =&0140000; // socket
  S_ISVTX  =&0001000; // save swapped text even after use
 
+ S_ISUID  =&0004000; // set user id on execution
+ S_ISGID  =&0002000; // set group id on execution
+ S_ISTXT  =&0001000; // sticky bit
+
+ S_IFWHT  =&0160000; // whiteout
+
+ ACCESSPERMS=(S_IRWXU or S_IRWXG or S_IRWXO); // 0777
+ ALLPERMS   =(S_ISUID or S_ISGID or S_ISTXT or S_IRWXU or S_IRWXG or S_IRWXO); // 7777
+ DEFFILEMODE=(S_IRUSR or S_IWUSR or S_IRGRP or S_IWGRP or S_IROTH or S_IWOTH); // 0666
+
  S_BLKSIZE=512;      // block size used in the stat struct
+
+ NODEV=-1; // non-existent device
 
 {
  * Definitions of flags stored in file flags word.
