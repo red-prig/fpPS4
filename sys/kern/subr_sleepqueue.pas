@@ -81,7 +81,7 @@ var
 begin
  For i:=0 to SC_MASK do
  begin
-  mtx_init(sleepq_chains[i].sc_lock);
+  mtx_init(sleepq_chains[i].sc_lock,'sleepq chain');
  end;
 end;
 

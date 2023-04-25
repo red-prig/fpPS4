@@ -10,8 +10,13 @@ uses
  ntapi,
  time;
 
+procedure timevalfix(t1:ptimeval);
+procedure timevaladd(t1,t2:ptimeval);
+procedure timevalsub(t1,t2:ptimeval);
+
 function  cputick2usec(time:QWORD):QWORD; inline;
 function  get_unit_uptime:Int64;
+procedure getmicrouptime(tvp:ptimeval);
 procedure getnanotime(tp:Ptimespec);
 
 function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
@@ -32,6 +37,34 @@ Const
  DELTA_EPOCH_IN_UNIT  =116444736000000000;
  POW10_7              =10000000;
  POW10_9              =1000000000;
+
+procedure timevalfix(t1:ptimeval);
+begin
+ if (t1^.tv_usec < 0) then
+ begin
+  Dec(t1^.tv_sec);
+  Inc(t1^.tv_usec,1000000);
+ end;
+ if (t1^.tv_usec >= 1000000) then
+ begin
+  Inc(t1^.tv_sec);
+  Dec(t1^.tv_usec,1000000);
+ end;
+end;
+
+procedure timevaladd(t1,t2:ptimeval);
+begin
+ Inc(t1^.tv_sec ,t2^.tv_sec);
+ Inc(t1^.tv_usec,t2^.tv_usec);
+ timevalfix(t1);
+end;
+
+procedure timevalsub(t1,t2:ptimeval);
+begin
+ Dec(t1^.tv_sec ,t2^.tv_sec);
+ Dec(t1^.tv_usec,t2^.tv_usec);
+ timevalfix(t1);
+end;
 
 function cputick2usec(time:QWORD):QWORD; inline;
 begin
@@ -61,6 +94,15 @@ begin
  begin
   Result:=mul_div_u64(UNIT_PER_SEC,pf,pc);
  end;
+end;
+
+procedure getmicrouptime(tvp:ptimeval);
+var
+ time:Int64;
+begin
+ time:=get_unit_uptime;
+ tvp^.tv_sec :=(time div POW10_7);
+ tvp^.tv_usec:=(time mod POW10_7) div 10;
 end;
 
 type

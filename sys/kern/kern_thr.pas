@@ -150,6 +150,7 @@ type
   td_timeo        :Int64;
   //
   td_map_def_user :Pointer;
+  td_sel          :Pointer;
  end;
 
  p_thr_param=^thr_param;
@@ -399,7 +400,7 @@ begin
 end;
 
 initialization
- mtx_init(p_mtx);
+ mtx_init(p_mtx,'process lock');
 
 end.
 

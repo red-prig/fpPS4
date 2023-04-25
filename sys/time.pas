@@ -54,16 +54,33 @@ type
   tz_dstsec :DWORD;
  end;
 
+const
+ tick=100;
+ hz=10000000;
+
+function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
+function _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
+function _usec2nsec(usec:QWORD):QWORD;  //Microsecond to Nanosecond
+function _nsec2usec(nsec:QWORD):QWORD;  //Nanosecond  to Microsecond
+function _msec2nsec(msec:QWORD):QWORD;  //Milisecond  to Nanosecond
+function _nsec2msec(nsec:QWORD):QWORD;  //Nanosecond  to Milisecond
+
 function  timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
 
 procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec); inline;
 procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec); inline;
+
 function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
+function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64; inline; //Unit
+function  USEC_TO_UNIT    (usec:QWORD  ):Int64; inline; //Unit
+
 function  tvtohz(time:Int64):Int64; inline;
 procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 
 procedure TIMESPEC_ADD(dst,src,val:ptimespec);
 procedure TIMESPEC_SUB(dst,src,val:ptimespec);
+
+function  itimerfix(tv:ptimeval):Integer;
 
 function  clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function  clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
@@ -71,9 +88,40 @@ function  clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 implementation
 
 uses
+ errno,
  trap,
  thr_error,
  kern_time;
+
+function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
+begin
+ Result:=(usec+999) div 1000;
+end;
+
+function _msec2usec(msec:QWORD):QWORD;  //Milisecond to Microsecond
+begin
+ Result:=msec*1000;
+end;
+
+function _usec2nsec(usec:QWORD):QWORD;  //Microsecond to Nanosecond
+begin
+ Result:=usec*1000;
+end;
+
+function _nsec2usec(nsec:QWORD):QWORD;  //Nanosecond to Microsecond
+begin
+ Result:=(nsec+999) div 1000;
+end;
+
+function _msec2nsec(msec:QWORD):QWORD;  //Milisecond to Nanosecond
+begin
+ Result:=msec*1000000;
+end;
+
+function _nsec2msec(nsec:QWORD):QWORD;  //Nanosecond to Milisecond
+begin
+ Result:=(nsec+999999) div 1000000;
+end;
 
 function timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
 begin
@@ -101,6 +149,16 @@ end;
 function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
 begin
  Result:=(QWORD(ts^.tv_sec)*10000000)+(QWORD(ts^.tv_nsec) div 100);
+end;
+
+function TIMEVAL_TO_UNIT(tv:ptimeval):Int64; inline; //Unit
+begin
+ Result:=(QWORD(tv^.tv_sec)*10000000)+(QWORD(tv^.tv_usec)*10);
+end;
+
+function USEC_TO_UNIT(usec:QWORD):Int64; inline; //Unit
+begin
+ Result:=(usec*10);
 end;
 
 function tvtohz(time:Int64):Int64; inline;
@@ -134,6 +192,21 @@ begin
   Dec(dst^.tv_sec);
   Inc(dst^.tv_nsec,1000000000);
  end;
+end;
+
+{
+ * Check that a proposed value to load into the .it_value or
+ * .it_interval part of an interval timer is acceptable, and
+ * fix it to have at least minimal value (i.e. if it is less
+ * than the resolution of the clock, round it up.)
+ }
+function itimerfix(tv:ptimeval):Integer;
+begin
+ if (tv^.tv_sec < 0) or (tv^.tv_usec < 0) or (tv^.tv_usec >= 1000000) then
+  Exit(EINVAL);
+ if (tv^.tv_sec=0) and (tv^.tv_usec<>0) and (tv^.tv_usec < tick) then
+  tv^.tv_usec:=tick;
+ Exit(0);
 end;
 
 function clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; assembler; nostackframe;

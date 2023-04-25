@@ -51,6 +51,7 @@ type
   bitPattern:QWORD;
   mtx       :mtx;
   cv        :t_cv;
+  _align    :Integer;
   list      :TAILQ_HEAD;
   attr      :DWORD;
   wait_count:Integer;
@@ -84,7 +85,7 @@ function evf_init(evf:p_evf;attr:DWORD;initPattern:QWORD):Integer;
 begin
  evf^.desc.free:=@evf_free;
  evf^.bitPattern:=initPattern;
- mtx_init(evf^.mtx);
+ mtx_init(evf^.mtx,'evf mtx');
  cv_init(@evf^.cv,'evf cv');
  TAILQ_INIT(@evf^.list);
  evf^.wait_count:=0;

@@ -7,7 +7,10 @@ interface
 
 type
  p_mtx=^mtx;
- mtx=TRTLCriticalSection;
+ mtx=packed record
+  n:PChar;
+  c:TRTLCriticalSection;
+ end;
 
 const
  //Flags for lockinit().
@@ -41,7 +44,7 @@ const
 
  LK_TOTAL_MASK=(LK_INIT_MASK or LK_EATTR_MASK or LK_TYPE_MASK);
 
-procedure mtx_init   (var m:mtx);
+procedure mtx_init   (var m:mtx;name:PChar);
 procedure mtx_destroy(var m:mtx);
 procedure mtx_lock   (var m:mtx);
 function  mtx_trylock(var m:mtx):Boolean;
@@ -51,34 +54,35 @@ procedure mtx_assert (var m:mtx);
 
 implementation
 
-procedure mtx_init(var m:mtx); inline;
+procedure mtx_init(var m:mtx;name:PChar); inline;
 begin
- InitCriticalSection(m);
+ m.n:=name;
+ InitCriticalSection(m.c);
 end;
 
 procedure mtx_destroy(var m:mtx); inline;
 begin
- DoneCriticalSection(m);
+ DoneCriticalSection(m.c);
 end;
 
 procedure mtx_lock(var m:mtx); inline;
 begin
- EnterCriticalSection(m);
+ EnterCriticalSection(m.c);
 end;
 
 function mtx_trylock(var m:mtx):Boolean; inline;
 begin
- Result:=TryEnterCriticalSection(m)<>0;
+ Result:=TryEnterCriticalSection(m.c)<>0;
 end;
 
 procedure mtx_unlock(var m:mtx); inline;
 begin
- LeaveCriticalSection(m);
+ LeaveCriticalSection(m.c);
 end;
 
 function mtx_owned(var m:mtx):Boolean; inline;
 begin
- Result:=m.OwningThread=GetCurrentThreadId;
+ Result:=m.c.OwningThread=GetCurrentThreadId;
 end;
 
 procedure mtx_assert(var m:mtx); inline;

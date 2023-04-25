@@ -11,7 +11,8 @@ uses
  vfile,
  vuio,
  vmount,
- vfcntl;
+ vfcntl,
+ vsocketvar;
 
 type
  PPPtrUint     =^PPtrUint;
@@ -25,8 +26,6 @@ type
  acl_type_t    =Integer;
  p_acl         =Pointer;
  p_label       =Pointer;
- p_socket      =Pointer;
- pp_socket     =Pointer;
 
  p_vop_islocked_args=^vop_islocked_args;
  vop_islocked_args=packed record
@@ -643,6 +642,7 @@ begin
  a.a_cnp:=cnp;
  a.a_vap:=vap;
  Result:=vop_create_t(dvp^.v_op^.vop_create)(@a);
+ vop_create_post(@a,Result);
 end;
 
 function VOP_WHITEOUT(dvp:p_vnode;cnp:p_componentname;flags:Integer):Integer;
@@ -664,6 +664,7 @@ begin
  a.a_cnp:=cnp;
  a.a_vap:=vap;
  Result:=vop_mknod_t(dvp^.v_op^.vop_mknod)(@a);
+ vop_mknod_post(@a,Result);
 end;
 
 function VOP_OPEN(vp:p_vnode;mode:Integer;fp:p_file):Integer;
@@ -719,6 +720,7 @@ begin
  a.a_vp :=vp;
  a.a_vap:=vap;
  Result:=vop_setattr_t(vp^.v_op^.vop_setattr)(@a);
+ vop_setattr_post(@a,Result);
 end;
 
 function VOP_MARKATIME(vp:p_vnode):Integer;
@@ -801,6 +803,7 @@ begin
  a.a_vp :=vp;
  a.a_cnp:=cnp;
  Result:=vop_remove_t(dvp^.v_op^.vop_remove)(@a);
+ vop_remove_post(@a,Result);
 end;
 
 function VOP_LINK(tdvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
@@ -811,6 +814,7 @@ begin
  a.a_vp  :=vp;
  a.a_cnp :=cnp;
  Result:=vop_link_t(tdvp^.v_op^.vop_link)(@a);
+ vop_link_post(@a,Result);
 end;
 
 function VOP_RENAME(fdvp:p_vnode;fvp:p_vnode;fcnp:p_componentname;tdvp:p_vnode;tvp:p_vnode;tcnp:p_componentname):Integer;
@@ -825,6 +829,7 @@ begin
  a.a_tcnp:=tcnp;
  vop_rename_pre(@a);
  Result:=vop_rename_t(fdvp^.v_op^.vop_rename)(@a);
+ vop_rename_post(@a,Result);
 end;
 
 function VOP_MKDIR(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
@@ -836,6 +841,7 @@ begin
  a.a_cnp:=cnp;
  a.a_vap:=vap;
  Result:=vop_mkdir_t(dvp^.v_op^.vop_mkdir)(@a);
+ vop_mkdir_post(@a,Result);
 end;
 
 function VOP_RMDIR(dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
@@ -846,6 +852,7 @@ begin
  a.a_vp :=vp;
  a.a_cnp:=cnp;
  Result:=vop_rmdir_t(dvp^.v_op^.vop_rmdir)(@a);
+ vop_rmdir_post(@a,Result);
 end;
 
 function VOP_SYMLINK(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;target:PChar):Integer;
@@ -858,6 +865,7 @@ begin
  a.a_vap   :=vap;
  a.a_target:=target;
  Result:=vop_symlink_t(dvp^.v_op^.vop_symlink)(@a);
+ vop_symlink_post(@a,Result);
 end;
 
 function VOP_READDIR(vp:p_vnode;uio:p_uio;eofflag:PInteger;ncookies:PInteger;cookies:PPPtrUint):Integer;
@@ -1097,6 +1105,7 @@ begin
  a.a_attrnamespace:=attrnamespace;
  a.a_name         :=name;
  Result:=vop_deleteextattr_t(vp^.v_op^.vop_deleteextattr)(@a);
+ vop_deleteextattr_post(@a,Result);
 end;
 
 function VOP_SETEXTATTR(vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio):Integer;
@@ -1108,6 +1117,7 @@ begin
  a.a_name         :=name;
  a.a_uio          :=uio;
  Result:=vop_setextattr_t(vp^.v_op^.vop_setextattr)(@a);
+ vop_setextattr_post(@a,Result);
 end;
 
 function VOP_SETLABEL(vp:p_vnode;_label:p_label):Integer;

@@ -41,8 +41,8 @@ end;
 
 procedure mount_init(mp:p_mount);
 begin
- mtx_init(mp^.mnt_mtx);
- mtx_init(mp^.mnt_explock);
+ mtx_init(mp^.mnt_mtx    ,'struct mount mtx');
+ mtx_init(mp^.mnt_explock,'explock');
 end;
 
 procedure mount_fini(mp:p_mount);

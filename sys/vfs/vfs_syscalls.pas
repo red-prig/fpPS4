@@ -85,6 +85,7 @@ function sys_revoke(path:PChar):Integer;
 implementation
 
 uses
+ atomic,
  mqueue,
  systm,
  errno,

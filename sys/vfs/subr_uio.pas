@@ -14,7 +14,12 @@ function uiomove(cp:Pointer;n:Integer;uio:p_uio):Integer;
 function uiomove_nofault(cp:Pointer;n:Integer;uio:p_uio):Integer;
 function uiomove_faultflag(cp:Pointer;n:Integer;uio:p_uio;nofault:Integer):Integer;
 
+function copyinuio(iovp:p_iovec;iovcnt:DWORD;uiop:pp_uio):Integer;
+
 implementation
+
+uses
+ errno;
 
 function uiomove(cp:Pointer;n:Integer;uio:p_uio):Integer;
 begin
@@ -99,6 +104,46 @@ begin
 _out:
  curthread_pflags_restore(save);
  Exit(error);
+end;
+
+function copyinuio(iovp:p_iovec;iovcnt:DWORD;uiop:pp_uio):Integer;
+var
+ iov:p_iovec;
+ uio:p_uio;
+ iovlen:DWORD;
+ error,i:Integer;
+begin
+ uiop^:=nil;
+ if (iovcnt > UIO_MAXIOV) then
+  Exit(EINVAL);
+ iovlen:=iovcnt * sizeof (iovec);
+ uio:=AllocMem(iovlen + sizeof(t_uio));
+ iov:=p_iovec(uio + 1);
+ error:=copyin(iovp, iov, iovlen);
+ if (error<>0) then
+ begin
+  FreeMem(uio);
+  Exit(error);
+ end;
+ uio^.uio_iov   :=iov;
+ uio^.uio_iovcnt:=iovcnt;
+ uio^.uio_segflg:=UIO_USERSPACE;
+ uio^.uio_offset:=-1;
+ uio^.uio_resid :=0;
+
+ For i:=0 to iovcnt-1 do
+ begin
+  if (iov^.iov_len > IOSIZE_MAX - uio^.uio_resid) then
+  begin
+   FreeMem(uio);
+   Exit(EINVAL);
+  end;
+  Inc(uio^.uio_resid,iov^.iov_len);
+  Inc(iov);
+ end;
+
+ uiop^:=uio;
+ Exit(0);
 end;
 
 end.

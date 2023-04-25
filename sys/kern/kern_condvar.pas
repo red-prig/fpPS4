@@ -15,7 +15,6 @@ type
  t_cv=packed record
   cv_description:Pchar;
   cv_waiters    :Integer;
-  _align        :Integer;
  end;
 
 procedure cv_init(cvp:p_cv;desc:Pchar);

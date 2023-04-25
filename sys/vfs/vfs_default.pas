@@ -16,9 +16,10 @@ uses
  vfs_mount,
  vnamei,
  vfcntl,
+ vpoll,
+ vsocketvar,
  kern_thr,
  kern_mtx;
-
 
 function vop_eopnotsupp(ap:Pointer):Integer;
 function vop_ebadf(ap:Pointer):Integer;
@@ -176,7 +177,8 @@ uses
  errno,
  vfs_subr,
  vfs_vnops,
- vfs_lookup;
+ vfs_lookup,
+ vsys_generic;
 
 {
  * Series of placeholder functions for various error returns for
@@ -564,8 +566,7 @@ end;
  }
 function vop_nopoll(ap:p_vop_poll_args):Integer;
 begin
- Exit(EOPNOTSUPP);
- //Exit(poll_no_poll(ap^.a_events));
+ Exit(poll_no_poll(ap^.a_events));
 end;
 
 {
@@ -573,10 +574,9 @@ end;
  }
 function vop_stdpoll(ap:p_vop_poll_args):Integer;
 begin
- Exit(EOPNOTSUPP);
- //if ((ap^.a_events and (not POLLSTANDARD))<>0) then
- // Exit(vn_pollrecord(ap^.a_vp, ap^.a_td, ap^.a_events));
- //Exit(ap^.a_events and (POLLIN or POLLOUT or POLLRDNORM or POLLWRNORM));
+ if ((ap^.a_events and (not POLLSTANDARD))<>0) then
+  Exit(vn_pollrecord(ap^.a_vp, ap^.a_events));
+ Exit(ap^.a_events and (POLLIN or POLLOUT or POLLRDNORM or POLLWRNORM));
 end;
 
 {
@@ -1064,7 +1064,7 @@ end;
 
 function vop_stdunp_connect(ap:p_vop_unp_connect_args):Integer;
 begin
- //ap^.a_socket^:=ap^.a_vp^.v_socket;
+ ap^.a_socket^:=ap^.a_vp^.v_socket;
  Exit(0);
 end;
 
@@ -1127,14 +1127,12 @@ label
  loop;
 var
  vp,mvp:p_vnode;
- td:p_kthread;
  error,lockreq,allerror:Integer;
 begin
  error:=0;
  lockreq:=0;
  allerror:=0;
 
- td:=curkthread;
  lockreq:=LK_EXCLUSIVE or LK_INTERLOCK;
  if (waitfor<>MNT_WAIT) then
   lockreq:=lockreq or LK_NOWAIT;

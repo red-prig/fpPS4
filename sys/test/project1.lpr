@@ -44,7 +44,10 @@ uses
  vfs_mount,
  vfs_default,
  sysent,
- vfs_syscalls;
+ vfs_syscalls,
+ vsys_generic,
+ vsocket,
+ vsocketvar;
 
 var
  mtx:umutex;

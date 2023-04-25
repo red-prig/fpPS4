@@ -15,6 +15,7 @@ const
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
+function fubyte(var base:Byte):Byte; inline;
 function fuword32(var base:DWORD):DWORD; inline;
 function fuword64(var base:QWORD):QWORD; inline;
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
@@ -69,6 +70,14 @@ begin
  end else
  begin
   Result:=EFAULT;
+ end;
+end;
+
+function fubyte(var base:Byte):Byte; inline;
+begin
+ if (NtReadVirtualMemory(NtCurrentProcess,@base,@Result,SizeOf(Byte),nil)<>0) then
+ begin
+  Result:=BYTE(-1);
  end;
 end;
 

@@ -9,6 +9,7 @@ uses
  mqueue,
  kern_thr,
  kern_mtx,
+ vselinfo,
  time,
  vmparam;
 
@@ -173,6 +174,14 @@ type
 
  vtype=(VNON,VREG,VDIR,VBLK,VCHR,VLNK,VSOCK,VFIFO,VBAD,VMARKER);
 
+ p_vpollinfo=^vpollinfo;
+ vpollinfo=packed record
+  vpi_lock   :mtx;       // lock to protect below
+  vpi_selinfo:t_selinfo; // identity of poller(s)
+  vpi_events :Word;      // what they are looking for
+  vpi_revents:Word;      // what has happened
+ end;
+
  t_vnode=packed object
   v_type:vtype;
   v_tag :PChar;
@@ -196,10 +205,12 @@ type
   v_iflag:QWORD;
   v_vflag:QWORD;
 
-  property v_mountedhere:Pointer read v_un{.vu_mount   };
-  property v_socket     :Pointer read v_un{.vu_socket  };
-  property v_rdev       :Pointer read v_un{.vu_cdev    };
-  property v_fifoinfo   :Pointer read v_un{.vu_fifoinfo};
+  v_pollinfo:p_vpollinfo; // i Poll events, p for *v_pi
+
+  property v_mountedhere:Pointer read v_un{.vu_mount   } write v_un;
+  property v_socket     :Pointer read v_un{.vu_socket  } write v_un;
+  property v_rdev       :Pointer read v_un{.vu_cdev    } write v_un;
+  property v_fifoinfo   :Pointer read v_un{.vu_fifoinfo} write v_un;
  end;
 
  p_vattr=^t_vattr;

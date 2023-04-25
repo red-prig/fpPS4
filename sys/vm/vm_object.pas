@@ -134,7 +134,7 @@ function vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
 begin
  Result:=AllocMem(SizeOf(_vm_object));
 
- mtx_init(Result^.mtx);
+ mtx_init(Result^.mtx,'vm_object');
 
  TAILQ_INIT(@Result^.memq);
 

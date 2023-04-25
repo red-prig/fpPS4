@@ -39,6 +39,7 @@ type
   desc      :t_id_desc;
   mtx       :mtx;
   cv        :t_cv;
+  _align    :Integer;
   list      :TAILQ_HEAD;
   count     :Integer;
   attr      :DWORD;
@@ -76,7 +77,7 @@ begin
  sem^.count     :=initCount;
  sem^.init_count:=initCount;
  sem^.max_count :=max_count;
- mtx_init(sem^.mtx);
+ mtx_init(sem^.mtx,'osem mtx');
  cv_init(@sem^.cv,'osem cv');
  TAILQ_INIT(@sem^.list);
  sem^.wait_count:=0;

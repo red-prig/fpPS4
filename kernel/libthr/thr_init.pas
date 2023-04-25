@@ -95,6 +95,9 @@ procedure _libpthread_init(curthread:p_pthread);
 
 implementation
 
+uses
+ sys_mmap;
+
 const
  g_user_stacksize=$10000;
 
@@ -147,12 +150,12 @@ begin
 
  thread^.attr:=_pthread_attr_default;
 
- //ret:=mmap(_usrstack-_thr_guard_default-_thr_stack_initial)),
- //            _thr_guard_default,0,$1000,-1,0); //MAP_ANON
+ ret:=mmap(_usrstack-_thr_guard_default-_thr_stack_initial,_thr_guard_default,0,MAP_ANON,-1,0);
 
- if (ret=Pointer(-1)) then //MAP_FAILED
+ if (ret=MAP_FAILED) then
  begin
   Assert(false,'Cannot allocate red zone for initial thread');
+  Exit;
  end;
  thread^.attr.stackaddr_attr:=(_usrstack-_thr_stack_initial);
  thread^.attr.stacksize_attr:=_thr_stack_initial;

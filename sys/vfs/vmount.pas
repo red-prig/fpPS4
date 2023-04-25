@@ -582,8 +582,8 @@ begin
 end;
 
 initialization
- mtx_init(mountlist_mtx);
- mtx_init(VFS_Giant);
+ mtx_init(mountlist_mtx,'mountlist');
+ mtx_init(VFS_Giant    ,'VFS_Giant');
 
 end.
 

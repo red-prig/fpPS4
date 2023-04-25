@@ -307,7 +307,7 @@ procedure vm_map_zinit(map:vm_map_t);
 begin
  map^.nentries:=0;
  map^.size:=0;
- mtx_init(map^.lock);
+ mtx_init(map^.lock,'vm map (system)');
 end;
 
 function vmspace_pmap(vm:p_vmspace):pmap_t; inline;
@@ -433,7 +433,7 @@ end;
 procedure vm_map_init(map:vm_map_t;pmap:pmap_t;min,max:vm_offset_t);
 begin
  _vm_map_init(map, pmap, min, max);
- mtx_init(map^.lock);
+ mtx_init(map^.lock,'user map');
 end;
 
 {

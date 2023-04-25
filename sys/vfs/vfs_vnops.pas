@@ -475,7 +475,7 @@ begin
    mode:=mode or S_IFIFO;
   else
    Exit(EBADF);
- end;;
+ end;
  sb^.st_mode:=mode;
  sb^.st_nlink:=vap^.va_nlink;
  sb^.st_uid:=vap^.va_uid;

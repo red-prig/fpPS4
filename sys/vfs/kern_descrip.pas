@@ -15,7 +15,8 @@ uses
  vfcntl,
  vfilio,
  vmount,
- vfs_vnode;
+ vfs_vnode,
+ vsocketvar;
 
 const
  FGET_GETCAP=$00000001;
@@ -80,22 +81,22 @@ function  fgetvp_write(fd:Integer;
 
 function  fgetsock(fd:Integer;
                    rights:cap_rights_t;
-                   spp:PPointer; //socket **
+                   spp:pp_socket;
                    fflagp:PDWORD):Integer;
 
 procedure fdclose(fp:p_file;idx:Integer);
 function  dupfdopen(indx,dfd,mode,error:Integer):Integer;
 procedure finit(fp:p_file;flag:DWORD;_type:Word;data:Pointer;ops:p_fileops);
 
-function badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
-function badfo_truncate(fp:p_file;length:Int64):Integer;
-function badfo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
-function badfo_poll(fp:p_file;events:Integer):Integer;
-function badfo_kqfilter(fp:p_file;kn:Pointer):Integer;
-function badfo_stat(fp:p_file;sb:p_stat):Integer;
-function badfo_close(fp:p_file):Integer;
-function badfo_chmod(fp:p_file;mode:mode_t):Integer;
-function badfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+function  badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
+function  badfo_truncate(fp:p_file;length:Int64):Integer;
+function  badfo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
+function  badfo_poll(fp:p_file;events:Integer):Integer;
+function  badfo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function  badfo_stat(fp:p_file;sb:p_stat):Integer;
+function  badfo_close(fp:p_file):Integer;
+function  badfo_chmod(fp:p_file;mode:mode_t):Integer;
+function  badfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 
 const
  badfileops:fileops=(
@@ -117,12 +118,10 @@ var
   p_flag:Integer;
  end;
 
-procedure atomic_set_int(addr:PInteger;val:Integer); sysv_abi_default;
-procedure atomic_clear_int(addr:PInteger;val:Integer); sysv_abi_default;
-
 implementation
 
 uses
+ atomic,
  errno,
  systm,
  vfiledesc,
@@ -304,17 +303,6 @@ begin
  Exit(0);
 end;
 
-procedure atomic_set_int(addr:PInteger;val:Integer); assembler; nostackframe; sysv_abi_default;
-asm
- lock orl %esi,(%rdi)
-end;
-
-procedure atomic_clear_int(addr:PInteger;val:Integer); assembler; nostackframe; sysv_abi_default;
-asm
- not %esi
- lock andl %esi,(%rdi)
-end;
-
 function kern_fcntl(fd,cmd:Integer;arg:QWORD):Integer;
 label
  _break,
@@ -391,10 +379,10 @@ begin
     end;
     if ((arg and FD_CLOEXEC)<>0) then
     begin
-     fp^.f_exclose:=fp^.f_exclose or UF_EXCLOSE;
+     atomic_set_int(@fp^.f_exclose,UF_EXCLOSE);
     end else
     begin
-     fp^.f_exclose:=(fp^.f_exclose and (not UF_EXCLOSE));
+     atomic_clear_int(@fp^.f_exclose,UF_EXCLOSE);
     end;
    end;
 
@@ -724,7 +712,7 @@ begin
    begin
     Exit(EBADF);
    end;
-   fp^.f_exclose:=fp^.f_exclose or UF_EXCLOSE;
+   atomic_set_int(@fp^.f_exclose,UF_EXCLOSE);
    fdrop(fp);
   end;
   Exit(0);
@@ -1194,7 +1182,7 @@ begin
 
  if ((flags and O_CLOEXEC)<>0) then
  begin
-  fp^.f_exclose:=fp^.f_exclose or UF_EXCLOSE;
+  atomic_set_int(@fp^.f_exclose,UF_EXCLOSE);
  end;
 
  Exit(0);
@@ -1490,7 +1478,7 @@ end;
 }
 function fgetsock(fd:Integer;
                   rights:cap_rights_t;
-                  spp:PPointer; //socket **
+                  spp:pp_socket;
                   fflagp:PDWORD):Integer;
 var
  fp:p_file;
@@ -1510,9 +1498,9 @@ begin
   spp^:=fp^.f_data;
   if (fflagp<>nil) then
    fflagp^:=fp^.f_flag;
-  //SOCK_LOCK(spp^);
-  //soref(spp^);
-  //SOCK_UNLOCK(spp^);
+  SOCK_LOCK(spp^);
+  soref(spp^);
+  SOCK_UNLOCK(spp^);
  end;
  fdrop(fp);
 

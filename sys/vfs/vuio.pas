@@ -21,6 +21,7 @@ type
   UIO_NOCOPY     // don't copy, already in object
  );
 
+ pp_uio=^p_uio;
  p_uio=^t_uio;
  t_uio=packed record
   uio_iov   :p_iovec; // scatter/gather list

@@ -46,6 +46,17 @@ procedure assert_vop_elocked (vp:p_vnode;str:PChar);
 
 procedure vop_rename_fail(ap:p_vop_rename_args);
 procedure vop_rename_pre(ap:p_vop_rename_args);
+procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
+procedure vop_deleteextattr_post(ap:p_vop_deleteextattr_args;rc:Integer);
+procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
+procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer);
+procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer);
+procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer);
+procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer);
+procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
+procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
+procedure vop_setextattr_post(ap:p_vop_setextattr_args;rc:Integer);
+procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
 
 function  vfs_read_dirent(ap:p_vop_readdir_args;dp:p_dirent;off:QWORD):Integer;
 procedure vfs_mark_atime(vp:p_vnode);
@@ -55,6 +66,11 @@ function  vcount(vp:p_vnode):Integer;
 function  count_dev(dev:Pointer):Integer; //cdev
 
 procedure vfs_msync(mp:p_mount;flags:Integer);
+
+procedure destroy_vpollinfo_free(vi:p_vpollinfo);
+procedure destroy_vpollinfo(vi:p_vpollinfo);
+procedure v_addpollinfo(vp:p_vnode);
+function  vn_pollrecord(vp:p_vnode;events:Integer):Integer;
 
 function  __mnt_vnode_next_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 function  __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
@@ -66,7 +82,8 @@ uses
  errno,
  vfs_vnops,
  subr_uio,
- vm_object;
+ vm_object,
+ vsys_generic;
 
 {
  * List of vnodes that are ready for recycling.
@@ -155,16 +172,16 @@ begin
   desiredvnodes:=MAXVNODES_MAX;
  end;
  wantfreevnodes:=desiredvnodes div 4;
- mtx_init(mntid_mtx);
+ mtx_init(mntid_mtx,'mntid');
  TAILQ_INIT(@vnode_free_list);
- mtx_init(vnode_free_list_mtx);
+ mtx_init(vnode_free_list_mtx,'vnode_free_list');
  {
   * Initialize the filesystem syncer.
   }
  //syncer_workitem_pending[WI_MPSAFEQ]:=hashinit(syncer_maxdelay, M_VNODE,&syncer_mask);
  //syncer_workitem_pending[WI_GIANTQ]:=hashinit(syncer_maxdelay, M_VNODE,&syncer_mask);
  syncer_maxdelay:=syncer_mask + 1;
- mtx_init(sync_mtx);
+ mtx_init(sync_mtx,'Syncer mtx');
  cv_init(@sync_wakeup,'syncer');
 
  i:=1;
@@ -290,28 +307,28 @@ end;
  }
 procedure vattr_null(vap:p_vattr);
 begin
- vap^.va_type:=VNON;
- vap^.va_size:=VNOVAL;
- vap^.va_bytes:=VNOVAL;
- vap^.va_mode:=VNOVAL;
- vap^.va_nlink:=VNOVAL;
- vap^.va_uid:=VNOVAL;
- vap^.va_gid:=VNOVAL;
- vap^.va_fsid:=VNOVAL;
- vap^.va_fileid:=VNOVAL;
- vap^.va_blocksize:=VNOVAL;
- vap^.va_rdev:=VNOVAL;
- vap^.va_atime.tv_sec:=VNOVAL;
- vap^.va_atime.tv_nsec:=VNOVAL;
- vap^.va_mtime.tv_sec:=VNOVAL;
- vap^.va_mtime.tv_nsec:=VNOVAL;
- vap^.va_ctime.tv_sec:=VNOVAL;
- vap^.va_ctime.tv_nsec:=VNOVAL;
- vap^.va_birthtime.tv_sec:=VNOVAL;
+ vap^.va_type             :=VNON;
+ vap^.va_size             :=QWORD(VNOVAL);
+ vap^.va_bytes            :=QWORD(VNOVAL);
+ vap^.va_mode             :=WORD(VNOVAL);
+ vap^.va_nlink            :=WORD(VNOVAL);
+ vap^.va_uid              :=VNOVAL;
+ vap^.va_gid              :=VNOVAL;
+ vap^.va_fsid             :=VNOVAL;
+ vap^.va_fileid           :=QWORD(VNOVAL);
+ vap^.va_blocksize        :=QWORD(VNOVAL);
+ vap^.va_rdev             :=VNOVAL;
+ vap^.va_atime.tv_sec     :=VNOVAL;
+ vap^.va_atime.tv_nsec    :=VNOVAL;
+ vap^.va_mtime.tv_sec     :=VNOVAL;
+ vap^.va_mtime.tv_nsec    :=VNOVAL;
+ vap^.va_ctime.tv_sec     :=VNOVAL;
+ vap^.va_ctime.tv_nsec    :=VNOVAL;
+ vap^.va_birthtime.tv_sec :=VNOVAL;
  vap^.va_birthtime.tv_nsec:=VNOVAL;
- vap^.va_flags:=VNOVAL;
- vap^.va_gen:=VNOVAL;
- vap^.va_vaflags:=0;
+ vap^.va_flags            :=QWORD(VNOVAL);
+ vap^.va_gen              :=QWORD(VNOVAL);
+ vap^.va_vaflags          :=0;
 end;
 
 {
@@ -2594,21 +2611,16 @@ begin
 }
 end;
 
-{
-static void
-destroy_vpollinfo_free(struct vpollinfo *vi)
+procedure destroy_vpollinfo_free(vi:p_vpollinfo);
 begin
-
- knlist_destroy(@vi^.vpi_selinfo.si_note);
- mtx_destroy(@vi^.vpi_lock);
- uma_zfree(vnodepoll_zone, vi);
+ //knlist_destroy(@vi^.vpi_selinfo.si_note);
+ mtx_destroy(vi^.vpi_lock);
+ FreeMem(vi);
 end;
 
-static void
-destroy_vpollinfo(struct vpollinfo *vi)
+procedure destroy_vpollinfo(vi:p_vpollinfo);
 begin
-
- knlist_clear(@vi^.vpi_selinfo.si_note, 1);
+ //knlist_clear(@vi^.vpi_selinfo.si_note, 1);
  seldrain(@vi^.vpi_selinfo);
  destroy_vpollinfo_free(vi);
 end;
@@ -2616,19 +2628,18 @@ end;
 {
  * Initalize per-vnode helper structure to hold poll-related state.
  }
-void
-v_addpollinfo(vp:p_vnode)
+procedure v_addpollinfo(vp:p_vnode);
+var
+ vi:p_vpollinfo;
 begin
- struct vpollinfo *vi;
-
- if (vp^.v_pollinfo<>nil)
+ if (vp^.v_pollinfo<>nil) then
   Exit;
- vi:=uma_zalloc(vnodepoll_zone, M_WAITOK);
- mtx_init(@vi^.vpi_lock, "vnode pollinfo", nil, MTX_DEF);
- knlist_init(@vi^.vpi_selinfo.si_note, vp, vfs_knllock,
-     vfs_knlunlock, vfs_knl_assert_locked, vfs_knl_assert_unlocked);
+ vi:=AllocMem(SizeOf(vpollinfo));
+ mtx_init(vi^.vpi_lock,'vnode pollinfo');
+ //knlist_init(@vi^.vpi_selinfo.si_note, vp, vfs_knllock, vfs_knlunlock, vfs_knl_assert_locked, vfs_knl_assert_unlocked);
  VI_LOCK(vp);
- if (vp^.v_pollinfo<>nil) begin
+ if (vp^.v_pollinfo<>nil) then
+ begin
   VI_UNLOCK(vp);
   destroy_vpollinfo_free(vi);
   Exit;
@@ -2645,13 +2656,12 @@ end;
  * functions.  (These are done together, while the lock is held,
  * to avoid race conditions.)
  }
-int
-vn_pollrecord(vp:p_vnode, struct thread *td, int events)
+function vn_pollrecord(vp:p_vnode;events:Integer):Integer;
 begin
-
  v_addpollinfo(vp);
- mtx_lock(@vp^.v_pollinfo^.vpi_lock);
- if (vp^.v_pollinfo^.vpi_revents and events) begin
+ mtx_lock(vp^.v_pollinfo^.vpi_lock);
+ if ((vp^.v_pollinfo^.vpi_revents and events)<>0) then
+ begin
   {
    * This leaves events we are not interested
    * in available for the other process which
@@ -2659,18 +2669,17 @@ begin
    * (otherwise they would never have been
    * recorded).
    }
-  events:= and vp^.v_pollinfo^.vpi_revents;
-  vp^.v_pollinfo^.vpi_revents:= and ~events;
+  events:=events and vp^.v_pollinfo^.vpi_revents;
+  vp^.v_pollinfo^.vpi_revents:=vp^.v_pollinfo^.vpi_revents and (not events);
 
-  mtx_unlock(@vp^.v_pollinfo^.vpi_lock);
+  mtx_unlock(vp^.v_pollinfo^.vpi_lock);
   Exit(events);
  end;
- vp^.v_pollinfo^.vpi_events:= or events;
- selrecord(td, &vp^.v_pollinfo^.vpi_selinfo);
- mtx_unlock(@vp^.v_pollinfo^.vpi_lock);
+ vp^.v_pollinfo^.vpi_events:=vp^.v_pollinfo^.vpi_events or events;
+ selrecord(curkthread, @vp^.v_pollinfo^.vpi_selinfo);
+ mtx_unlock(vp^.v_pollinfo^.vpi_lock);
  Exit(0);
 end;
-}
 
 {
  * Routine to create and manage a filesystem syncer vnode.
@@ -2870,6 +2879,7 @@ begin
  //if ((vp^.v_rdev^.si_devsw^.d_flags and D_DISK)=0) then
  // error:=ENOTBLK;
  //dev_unlock();
+ error:=ENOTBLK;
  if (errp<>nil) then
   errp^:=error;
  Exit(error=0);
@@ -3063,154 +3073,111 @@ begin
   vhold(ap^.a_tvp);
 end;
 
+procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+ end;
+end;
+
+procedure vop_deleteextattr_post(ap:p_vop_deleteextattr_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
+ end;
+end;
+
+procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_LINK);
+  //VFS_KNOTE_LOCKED(a^.a_tdvp, NOTE_WRITE);
+ end;
+end;
+
+procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
+ end;
+end;
+
+procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+ end;
+end;
+
+procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
+ end;
+end;
+
+procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_UNLOCKED(a^.a_fdvp, NOTE_WRITE);
+  //VFS_KNOTE_UNLOCKED(a^.a_tdvp, NOTE_WRITE);
+  //VFS_KNOTE_UNLOCKED(a^.a_fvp, NOTE_RENAME);
+  if (ap^.a_tvp<>nil) then
+  begin
+   //VFS_KNOTE_UNLOCKED(a^.a_tvp, NOTE_DELETE);
+  end;
+ end;
+ if (ap^.a_tdvp<>ap^.a_fdvp) then
+  vdrop(ap^.a_fdvp);
+ if (ap^.a_tvp<>ap^.a_fvp) then
+  vdrop(ap^.a_fvp);
+ vdrop(ap^.a_tdvp);
+ if (ap^.a_tvp<>nil) then
+  vdrop(ap^.a_tvp);
+end;
+
+procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
+ end;
+end;
+
+procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
+ end;
+end;
+
+procedure vop_setextattr_post(ap:p_vop_setextattr_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
+ end;
+end;
+
+procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
+begin
+ if (rc=0) then
+ begin
+  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+ end;
+end;
+
 {
-void
-vop_strategy_pre(void *ap)
-begin
-
-end;
-
-void
-vop_lock_pre(void *ap)
-begin
-
-end;
-
-void
-vop_lock_post(void *ap, int rc)
-begin
-
-end;
-
-void
-vop_unlock_pre(void *ap)
-begin
-
-end;
-
-void
-vop_unlock_post(void *ap, int rc)
-begin
-
-end;
-
-void
-vop_create_post(void *ap, int rc)
-begin
- struct vop_create_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
-end;
-
-void
-vop_deleteextattr_post(void *ap, int rc)
-begin
- struct vop_deleteextattr_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
-end;
-
-void
-vop_link_post(void *ap, int rc)
-begin
- struct vop_link_args *a:=ap;
-
- if (!rc) begin
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_LINK);
-  VFS_KNOTE_LOCKED(a^.a_tdvp, NOTE_WRITE);
- end;
-end;
-
-void
-vop_mkdir_post(void *ap, int rc)
-begin
- struct vop_mkdir_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
-end;
-
-void
-vop_mknod_post(void *ap, int rc)
-begin
- struct vop_mknod_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
-end;
-
-void
-vop_remove_post(void *ap, int rc)
-begin
- struct vop_remove_args *a:=ap;
-
- if (!rc) begin
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
- end;
-end;
-
-void
-vop_rename_post(void *ap, int rc)
-begin
- struct vop_rename_args *a:=ap;
-
- if (!rc) begin
-  VFS_KNOTE_UNLOCKED(a^.a_fdvp, NOTE_WRITE);
-  VFS_KNOTE_UNLOCKED(a^.a_tdvp, NOTE_WRITE);
-  VFS_KNOTE_UNLOCKED(a^.a_fvp, NOTE_RENAME);
-  if (a^.a_tvp)
-   VFS_KNOTE_UNLOCKED(a^.a_tvp, NOTE_DELETE);
- end;
- if (a^.a_tdvp<>a^.a_fdvp)
-  vdrop(a^.a_fdvp);
- if (a^.a_tvp<>a^.a_fvp)
-  vdrop(a^.a_fvp);
- vdrop(a^.a_tdvp);
- if (a^.a_tvp)
-  vdrop(a^.a_tvp);
-end;
-
-void
-vop_rmdir_post(void *ap, int rc)
-begin
- struct vop_rmdir_args *a:=ap;
-
- if (!rc) begin
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
- end;
-end;
-
-void
-vop_setattr_post(void *ap, int rc)
-begin
- struct vop_setattr_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
-end;
-
-void
-vop_setextattr_post(void *ap, int rc)
-begin
- struct vop_setextattr_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
-end;
-
-void
-vop_symlink_post(void *ap, int rc)
-begin
- struct vop_symlink_args *a:=ap;
-
- if (!rc)
-  VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
-end;
-
 static struct knlist fs_knlist;
 
 static void

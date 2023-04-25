@@ -652,7 +652,7 @@ procedure siginit;
 var
  i:Integer;
 begin
- mtx_init(p_sigacts.ps_mtx);
+ mtx_init(p_sigacts.ps_mtx,'sigacts');
 
  For i:=1 to NSIG do
  begin
