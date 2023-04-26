@@ -22,22 +22,14 @@ type
  p_filedesc=^t_filedesc;
  t_filedesc=packed object
   fd_ofiles:t_id_desc_table;
-  //fd_ofiles           :pp_file     ; { file structures for open files }
-  //fd_ofileflags       :PChar       ; { per-process open file flags }
   fd_cdir             :p_vnode     ; { current directory }
   fd_rdir             :p_vnode     ; { root directory }
   fd_jdir             :p_vnode     ; { jail root directory }
-  //fd_nfiles           :Integer     ; { number of open files allocated }
-  //fd_map              :P_NDSLOTTYPE; { bitmap of free fds }
-  //fd_lastfile         :Integer     ; { high-water mark of fd_ofiles }
-  //fd_freefile         :Integer     ; { approx. next free file }
-  fd_cmask            :Word        ; { mask for file creation }
-  //fd_refcnt           :Word        ; { thread reference count }
-  //fd_holdcnt          :Word        ; { hold count on structure + mutex }
   fd_sx               :Pointer     ; { protects members of this }
   //fd_kqlist           :kqlist      ; { list of kqueues on this filedesc }
   fd_holdleaderscount :Integer     ; { block fdfree() for shared close() }
   fd_holdleaderswakeup:Integer     ; { fdfree() needs wakeup }
+  fd_cmask            :Word        ; { mask for file creation }
   //
   property fd_nfiles:Integer read fd_ofiles.FCount;
  end;
@@ -111,6 +103,7 @@ end;
 
 initialization
  id_table_init(@fd_table.fd_ofiles,0);
+ fd_table.fd_ofiles.max_key:=maxfilesperproc;
 
 finalization
  id_table_fini(@fd_table.fd_ofiles);

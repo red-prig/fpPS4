@@ -180,6 +180,16 @@ const
  VFCF_DELEGADMIN=$00800000; // supports delegated administration
  VFCF_SBDRY     =$01000000; // defer stop requests
 
+ { vfsquery flags }
+ VQ_NOTRESP    =$0001; { server down }
+ VQ_NEEDAUTH   =$0002; { server bad auth }
+ VQ_LOWDISK    =$0004; { we're low on space }
+ VQ_MOUNT      =$0008; { new filesystem arrived }
+ VQ_UNMOUNT    =$0010; { filesystem has left }
+ VQ_DEAD       =$0020; { filesystem is dead, needs force unmount }
+ VQ_ASSIST     =$0040; { filesystem needs assistance from external program }
+ VQ_NOTRESPLOCK=$0080; { server lockd down }
+
 type
  p_fsid=^fsid_t;
  fsid_t=packed record  // filesystem id type
@@ -392,6 +402,8 @@ function  VFS_LOCK_GIANT(mp:p_mount):Integer;
 procedure VFS_UNLOCK_GIANT(locked:Integer);
 procedure VFS_ASSERT_GIANT(mp:p_mount);
 
+function  VFS_PROLOGUE(mp:p_mount):Boolean; inline;
+procedure VFS_EPILOGUE(_enable_stops:Boolean); inline;
 
 function  VFS_MOUNT(mp:p_mount):Integer;
 function  VFS_UNMOUNT(mp:p_mount;FORCE:Integer):Integer;

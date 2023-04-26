@@ -15,7 +15,6 @@ uses
  kern_synch,
  kern_thr,
  vfs_vnode,
- vfs_subr,
  vfs_init,
  vfs_lookup,
  vnode_if;
@@ -27,7 +26,8 @@ implementation
 
 uses
  errno,
- vfs_vnops;
+ vfs_vnops,
+ vfs_subr;
 
 procedure vfs_ref(mp:p_mount); inline;
 begin
@@ -223,7 +223,7 @@ begin
  mtx_lock(mountlist_mtx);
  TAILQ_INSERT_TAIL(@mountlist, mp,@mp^.mnt_list);
  mtx_unlock(mountlist_mtx);
- //vfs_event_signal(nil, VQ_MOUNT, 0);
+ vfs_event_signal(nil, VQ_MOUNT, 0);
  if (VFS_ROOT(mp,LK_EXCLUSIVE,@newdp)<>0) then
   Assert(false,'mount: lost mount');
  VOP_UNLOCK(newdp, 0);

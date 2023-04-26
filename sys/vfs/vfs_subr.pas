@@ -44,6 +44,8 @@ procedure assert_vop_locked  (vp:p_vnode;str:PChar);
 procedure assert_vop_unlocked(vp:p_vnode;str:PChar);
 procedure assert_vop_elocked (vp:p_vnode;str:PChar);
 
+function  VOP_WRITE_PRE(ap:p_vop_write_args;var osize,ooffset:Int64):Integer;
+procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64);
 procedure vop_rename_fail(ap:p_vop_rename_args);
 procedure vop_rename_pre(ap:p_vop_rename_args);
 procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
@@ -57,6 +59,9 @@ procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
 procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
 procedure vop_setextattr_post(ap:p_vop_setextattr_args;rc:Integer);
 procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
+
+procedure vfs_event_init();
+procedure vfs_event_signal(fsid:p_fsid;event:DWORD;data:ptrint);
 
 function  vfs_read_dirent(ap:p_vop_readdir_args;dp:p_dirent;off:QWORD):Integer;
 procedure vfs_mark_atime(vp:p_vnode);
@@ -3050,6 +3055,40 @@ begin
   vfs_badlock('is not exclusive locked but should be', str, vp);
 end;
 
+function VOP_WRITE_PRE(ap:p_vop_write_args;var osize,ooffset:Int64):Integer;
+var
+ va:t_vattr;
+ error:Integer;
+begin
+ Result :=0;
+ osize  :=0;
+ ooffset:=0;
+ if {(not VN_KNLIST_EMPTY(ap^.a_vp))} False then
+ begin
+  error:=VOP_GETATTR(ap^.a_vp, @va);
+  if (error<>0) then Exit(error);
+  ooffset:=ap^.a_uio^.uio_offset;
+  osize:=va.va_size;
+ end;
+end;
+
+procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64);
+var
+ noffset:Int64;
+begin
+ noffset:=ap^.a_uio^.uio_offset;
+ if (noffset>ooffset) and {(not VN_KNLIST_EMPTY(ap^.a_vp))} False then
+ begin
+  if (noffset>osize) then
+  begin
+   //VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE or NOTE_EXTEND);
+  end else
+  begin
+   //VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE);
+  end;
+ end;
+end;
+
 procedure vop_rename_fail(ap:p_vop_rename_args);
 begin
  if (ap^.a_tvp<>nil) then
@@ -3177,24 +3216,19 @@ begin
  end;
 end;
 
+//static struct knlist fs_knlist;
+
+procedure vfs_event_init();
+begin
+ //knlist_init_mtx(@fs_knlist, nil);
+end;
+
+procedure vfs_event_signal(fsid:p_fsid;event:DWORD;data:ptrint);
+begin
+ //KNOTE_UNLOCKED(@fs_knlist, event);
+end;
+
 {
-static struct knlist fs_knlist;
-
-static void
-vfs_event_init(void *arg)
-begin
- knlist_init_mtx(@fs_knlist, nil);
-end;
-{ XXX - correct order? }
-SYSINIT(vfs_knlist, SI_SUB_VFS, SI_ORDER_ANY, vfs_event_init, nil);
-
-void
-vfs_event_signal(fsid_t *fsid, uint32_t event, intptr_t data __unused)
-begin
-
- KNOTE_UNLOCKED(@fs_knlist, event);
-end;
-
 static int filt_fsattach(struct knote *kn);
 static void filt_fsdetach(struct knote *kn);
 static int filt_fsevent(struct knote *kn, long hint);
