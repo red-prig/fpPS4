@@ -137,6 +137,7 @@ type
   fo_flags   :fo_flags_t; { DFLAG_* below }
  end;
 
+ p_fadvise_info=^fadvise_info;
  fadvise_info=packed record
   fa_advice   :Integer; { (f) FADV_* type. }
   fa_start    :Int64  ; { (f) Region start. }
@@ -145,7 +146,7 @@ type
   fa_prevend  :Int64  ; { (f) Previous NOREUSE end. }
  end;
 
- t_file=packed record
+ t_file=packed object
   desc          :t_id_desc;
   //
   f_data        :Pointer  ; { file descriptor specific data }
@@ -170,6 +171,8 @@ type
    * Mandatory Access control information.
    }
   f_label:Pointer; { Place-holder for MAC label. }
+  //
+  property f_advice:Pointer read f_vnun write f_vnun;
  end;
 
 const

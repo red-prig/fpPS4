@@ -28,6 +28,8 @@ function getutimes(usrtvp:ptimeval;tvpseg:uio_seg;tsp:ptimespec):Integer;
 function setfflags(vp:p_vnode;flags:Integer):Integer;
 function setutimes(vp:p_vnode;ts:ptimespec;numtimes,nilflag:Integer):Integer;
 function vn_access(vp:p_vnode;user_flags:Integer):Integer;
+function setfown(vp:p_vnode;uid:uid_t;gid:gid_t):Integer;
+function setfmode(vp:p_vnode;mode:Integer):Integer;
 
 function sys_sync():Integer;
 function sys_statfs(path:PChar;buf:p_statfs):Integer;

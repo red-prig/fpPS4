@@ -10,9 +10,10 @@ uses
  vnamei,
  vfile,
  vstat,
+ vuio,
  vmparam,
- vfs_vnode,
- kern_mtx;
+ vfilio,
+ vfs_vnode;
 
 function  vn_lock(vp:p_vnode;flags:Integer):Integer;
 
@@ -33,18 +34,28 @@ procedure vn_finished_write(mp:p_mount);
 function  vn_close(vp:p_vnode;flags:Integer):Integer;
 function  vn_stat(vp:p_vnode;sb:p_stat):Integer;
 
+function  vn_io_fault(fp:p_file;uio:p_uio;flags:Integer):Integer;
+function  vn_truncate(fp:p_file;length:Int64):Integer;
+function  vn_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
+function  vn_poll(fp:p_file;events:Integer):Integer;
+function  vn_statfile(fp:p_file;sb:p_stat):Integer;
+function  vn_closefile(fp:p_file):Integer;
+function  vn_chmod(fp:p_file;mode:mode_t):Integer;
+function  vn_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+function  vn_kqfilter(fp:p_file;kn:Pointer):Integer;
+
 const
  vnops:fileops=(
-  fo_read    :nil;//@vn_io_fault;
-  fo_write   :nil;//@vn_io_fault;
-  fo_truncate:nil;//@vn_truncate;
-  fo_ioctl   :nil;//@vn_ioctl;
-  fo_poll    :nil;//@vn_poll;
-  fo_kqfilter:nil;//@vn_kqfilter;
-  fo_stat    :nil;//@vn_statfile;
-  fo_close   :nil;//@vn_closefile;
-  fo_chmod   :nil;//@vn_chmod;
-  fo_chown   :nil;//@vn_chown;
+  fo_read    :@vn_io_fault;
+  fo_write   :@vn_io_fault;
+  fo_truncate:@vn_truncate;
+  fo_ioctl   :@vn_ioctl;
+  fo_poll    :@vn_poll;
+  fo_kqfilter:@vn_kqfilter;
+  fo_stat    :@vn_statfile;
+  fo_close   :@vn_closefile;
+  fo_chmod   :@vn_chmod;
+  fo_chown   :@vn_chown;
   fo_flags   :DFLAG_PASSABLE or DFLAG_SEEKABLE
  );
 
@@ -61,8 +72,12 @@ uses
  vfcntl,
  vfs_lookup,
  vfs_subr,
+ vfs_syscalls,
  kern_thr,
- kern_synch;
+ kern_synch,
+ kern_mtx,
+ kern_mtxpool,
+ kern_descrip;
 
 function vn_lock(vp:p_vnode;flags:Integer):Integer;
 begin
@@ -554,6 +569,596 @@ begin
    fp^.f_nextoff:=val;
  end;
 end;
+
+procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);
+begin
+ if ((flags and FOF_OFFSET)=0) then
+  uio^.uio_offset:=foffset_lock(fp, flags);
+end;
+
+procedure foffset_unlock_uio(fp:p_file;uio:p_uio;flags:Integer);
+begin
+ if ((flags and FOF_OFFSET)=0) then
+  foffset_unlock(fp, uio^.uio_offset, flags);
+end;
+
+{
+ * Heuristic to detect sequential operation.
+ }
+function sequential_heuristic(uio:p_uio;fp:p_file):Integer;
+begin
+ if ((fp^.f_flag and FRDAHEAD)<>0) then
+  Exit(fp^.f_seqcount shl IO_SEQSHIFT);
+
+ {
+  * Offset 0 is handled specially.  open() sets f_seqcount to 1 so
+  * that the first I/O is normally considered to be slightly
+  * sequential.  Seeking to offset 0 doesn't change sequentiality
+  * unless previous seeks have reduced f_seqcount to 0, in which
+  * case offset 0 is not special.
+  }
+ if ((uio^.uio_offset=0) and (fp^.f_seqcount > 0)) or
+    (uio^.uio_offset=fp^.f_nextoff) then
+ begin
+  {
+   * f_seqcount is in units of fixed-size blocks so that it
+   * depends mainly on the amount of sequential I/O and not
+   * much on the number of sequential I/O's.  The fixed size
+   * of 16384 is hard-coded here since it is (not quite) just
+   * a magic size that works well here.  This size is more
+   * closely related to the best I/O size for real disks than
+   * to any block size used by software.
+   }
+  Inc(fp^.f_seqcount,((uio^.uio_resid+(16384 - 1)) div 16384));
+  if (fp^.f_seqcount > IO_SEQMAX) then
+   fp^.f_seqcount:=IO_SEQMAX;
+  Exit(fp^.f_seqcount shl IO_SEQSHIFT);
+ end;
+
+ { Not sequential.  Quickly draw-down sequentiality. }
+ if (fp^.f_seqcount > 1) then
+  fp^.f_seqcount:=1
+ else
+  fp^.f_seqcount:=0;
+ Exit(0);
+end;
+
+function get_advice(fp:p_file;uio:p_uio):Integer;
+var
+ mtxp:p_mtx;
+ ret:Integer;
+begin
+ ret:=POSIX_FADV_NORMAL;
+ if (fp^.f_advice=nil) then
+  Exit(ret);
+ mtxp:=mtx_pool_find(mtxpool_sleep, fp);
+ mtx_lock(mtxp^);
+ if (uio^.uio_offset >= p_fadvise_info(fp^.f_advice)^.fa_start) and
+    (uio^.uio_offset + uio^.uio_resid <= p_fadvise_info(fp^.f_advice)^.fa_end) then
+  ret:=p_fadvise_info(fp^.f_advice)^.fa_advice;
+ mtx_unlock(mtxp^);
+ Exit(ret);
+end;
+
+{
+ * File table vnode read routine.
+ }
+function vn_read(fp:p_file;uio:p_uio;flags:Integer):Integer;
+var
+ td:p_kthread;
+ vp:p_vnode;
+ mtxp:p_mtx;
+ error,ioflag:Integer;
+ advice,vfslocked:Integer;
+ offset,start,__end:Int64;
+begin
+ td:=curkthread;
+
+ Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
+ Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
+ vp:=fp^.f_vnode;
+ ioflag:=0;
+ if ((fp^.f_flag and FNONBLOCK)<>0) then
+  ioflag:=ioflag or IO_NDELAY;
+ if ((fp^.f_flag and O_DIRECT)<>0) then
+  ioflag:=ioflag or IO_DIRECT;
+ advice:=get_advice(fp, uio);
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ vn_lock(vp, LK_SHARED or LK_RETRY);
+
+ case advice of
+  POSIX_FADV_NORMAL,
+  POSIX_FADV_SEQUENTIAL,
+  POSIX_FADV_NOREUSE:
+   ioflag:=ioflag or sequential_heuristic(uio, fp);
+  POSIX_FADV_RANDOM:;
+   { Disable read-ahead for random I/O. }
+  else;
+ end;
+ offset:=uio^.uio_offset;
+
+ //error:=mac_vnode_check_read(active_cred, fp^.f_cred, vp);
+ //if (error=0) then
+
+  error:=VOP_READ(vp, uio, ioflag);
+ fp^.f_nextoff:=uio^.uio_offset;
+ VOP_UNLOCK(vp, 0);
+ if (error=0) and
+    (advice=POSIX_FADV_NOREUSE) and
+    (offset<>uio^.uio_offset) then
+ begin
+  start:=offset;
+  __end:=uio^.uio_offset - 1;
+  mtxp:=mtx_pool_find(mtxpool_sleep, fp);
+  mtx_lock(mtxp^);
+  if (fp^.f_advice<>nil) and
+     (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+  begin
+   if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
+   begin
+    start:=p_fadvise_info(fp^.f_advice)^.fa_prevstart;
+   end else
+   if (p_fadvise_info(fp^.f_advice)^.fa_prevstart<>0) and
+      (p_fadvise_info(fp^.f_advice)^.fa_prevstart=__end + 1) then
+   begin
+    __end:=p_fadvise_info(fp^.f_advice)^.fa_prevend;
+   end;
+   p_fadvise_info(fp^.f_advice)^.fa_prevstart:=start;
+   p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
+  end;
+  mtx_unlock(mtxp^);
+  error:=VOP_ADVISE(vp, start, __end, POSIX_FADV_DONTNEED);
+ end;
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+{
+ * File table vnode write routine.
+ }
+function vn_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
+label
+ unlock;
+var
+ td:p_kthread;
+ vp:p_vnode;
+ mp:p_mount;
+ mtxp:p_mtx;
+ error,ioflag,lock_flags:Integer;
+ advice,vfslocked:Integer;
+ offset,start,__end:Int64;
+begin
+ td:=curkthread;
+
+ Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
+ Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
+ vp:=fp^.f_vnode;
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ //if (vp^.v_type=VREG) then
+ // bwillwrite();
+ ioflag:=IO_UNIT;
+ if (vp^.v_type=VREG) and ((fp^.f_flag and O_APPEND)<>0) then
+  ioflag:=ioflag or IO_APPEND;
+ if ((fp^.f_flag and FNONBLOCK)<>0) then
+  ioflag:=ioflag or IO_NDELAY;
+ if ((fp^.f_flag and O_DIRECT)<>0) then
+  ioflag:=ioflag or IO_DIRECT;
+ if ((fp^.f_flag and O_FSYNC)<>0) or
+    ((vp^.v_mount<>nil) and
+     ((p_mount(vp^.v_mount)^.mnt_flag and MNT_SYNCHRONOUS)<>0)) then
+  ioflag:=ioflag or IO_SYNC;
+ mp:=nil;
+ if (vp^.v_type<>VCHR) then
+ begin
+  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
+  if (error<>0) then
+   goto unlock;
+ end;
+
+ advice:=get_advice(fp, uio);
+
+ if (MNT_SHARED_WRITES(mp) or
+    ((mp=nil) and MNT_SHARED_WRITES(vp^.v_mount))) and
+    ((flags and FOF_OFFSET)<>0) then
+ begin
+  lock_flags:=LK_SHARED;
+ end else
+ begin
+  lock_flags:=LK_EXCLUSIVE;
+ end;
+
+ vn_lock(vp, lock_flags or LK_RETRY);
+ case advice of
+  POSIX_FADV_NORMAL,
+  POSIX_FADV_SEQUENTIAL,
+  POSIX_FADV_NOREUSE:
+   ioflag:=ioflag or sequential_heuristic(uio, fp);
+  POSIX_FADV_RANDOM:;
+   { XXX: Is this correct? }
+ end;
+ offset:=uio^.uio_offset;
+
+ //error:=mac_vnode_check_write(active_cred, fp^.f_cred, vp);
+ //if (error=0) then
+
+  error:=VOP_WRITE(vp, uio, ioflag);
+ fp^.f_nextoff:=uio^.uio_offset;
+ VOP_UNLOCK(vp, 0);
+ if (vp^.v_type<>VCHR) then
+  vn_finished_write(mp);
+ if (error=0) and
+    (advice=POSIX_FADV_NOREUSE) and
+    (offset<>uio^.uio_offset) then
+ begin
+  start:=offset;
+  __end:=uio^.uio_offset - 1;
+  mtxp:=mtx_pool_find(mtxpool_sleep, fp);
+  mtx_lock(mtxp^);
+  if (fp^.f_advice<>nil) and
+     (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+  begin
+   if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
+   begin
+    start:=p_fadvise_info(fp^.f_advice)^.fa_prevstart;
+   end else
+   if (p_fadvise_info(fp^.f_advice)^.fa_prevstart<>0) and
+      (p_fadvise_info(fp^.f_advice)^.fa_prevstart=__end + 1) then
+   begin
+    __end:=p_fadvise_info(fp^.f_advice)^.fa_prevend;
+   end;
+   p_fadvise_info(fp^.f_advice)^.fa_prevstart:=start;
+   p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
+  end;
+  mtx_unlock(mtxp^);
+  error:=VOP_ADVISE(vp, start, __end, POSIX_FADV_DONTNEED);
+ end;
+
+unlock:
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+function vn_io_fault(fp:p_file;uio:p_uio;flags:Integer):Integer;
+label
+ out_last;
+var
+ td:p_kthread;
+ //vm_page_t ma[io_hold_cnt + 2];
+ uio_clone:p_uio;
+ short_uio:T_uio;
+ short_iovec:array[0..0] of iovec;
+ doio:fo_rdwr_t;
+ vp:p_vnode;
+ rl_cookie:Pointer;
+ mp:p_mount;
+ //vm_page_t *prev_td_ma;
+ error,cnt,save,saveheld,prev_td_ma_cnt:Integer;
+ addr,__end:QWORD;
+ //vm_prot_t prot;
+ len,resid:QWORD;
+ adv:Int64;
+begin
+ td:=curkthread;
+
+ if (uio^.uio_rw=UIO_READ) then
+  doio:=@vn_read
+ else
+  doio:=@vn_write;
+
+ vp:=fp^.f_vnode;
+ foffset_lock_uio(fp, uio, flags);
+
+ mp:=vp^.v_mount;
+ if (uio^.uio_segflg<>UIO_USERSPACE) or
+    (vp^.v_type<>VREG) or
+    ((mp<>nil) and
+     ((mp^.mnt_kern_flag and MNTK_NO_IOPF)=0)) or
+    {(not vn_io_fault_enable)} false then
+ begin
+  error:=doio(fp, uio, flags or FOF_OFFSET);
+  goto out_last;
+ end;
+
+{
+ uio_clone:=cloneuio(uio);
+ resid:=uio^.uio_resid;
+
+ short_uio.uio_segflg:=UIO_USERSPACE;
+ short_uio.uio_rw:=uio^.uio_rw;
+ short_uio.uio_td:=uio^.uio_td;
+
+ if (uio^.uio_rw=UIO_READ) then
+ begin
+  prot:=VM_PROT_WRITE;
+  rl_cookie:=vn_rangelock_rlock(vp, uio^.uio_offset, uio^.uio_offset + uio^.uio_resid);
+ end else
+ begin
+  prot:=VM_PROT_READ;
+  if ((fp^.f_flag and O_APPEND)<>0 or (flags and FOF_OFFSET)=0) then
+   { For appenders, punt and lock the whole range. }
+   rl_cookie:=vn_rangelock_wlock(vp, 0, High(Int64))
+  else
+   rl_cookie:=vn_rangelock_wlock(vp, uio^.uio_offset, uio^.uio_offset + uio^.uio_resid);
+ end;
+
+ save:=vm_fault_disable_pagefaults();
+ error:=doio(fp, uio, flags or FOF_OFFSET, td);
+ if (error<>EFAULT) then
+  goto _out;
+
+ atomic_add_long(@vn_io_faults_cnt, 1);
+ uio_clone^.uio_segflg:=UIO_NOCOPY;
+ uiomove(nil, resid - uio^.uio_resid, uio_clone);
+ uio_clone^.uio_segflg:=uio^.uio_segflg;
+
+ saveheld:=curthread_pflags_set(TDP_UIOHELD);
+ prev_td_ma:=td^.td_ma;
+ prev_td_ma_cnt:=td^.td_ma_cnt;
+
+ while (uio_clone^.uio_resid<>0) do
+ begin
+  len:=uio_clone^.uio_iov^.iov_len;
+  if (len=0) then
+  begin
+   Assert(uio_clone^.uio_iovcnt >= 1, 'iovcnt underflow');
+   uio_clone^.uio_iov++;
+   uio_clone^.uio_iovcnt--;
+   continue;
+  end;
+  if (len > io_hold_cnt * PAGE_SIZE)
+   len:=io_hold_cnt * PAGE_SIZE;
+  addr:=(uintptr_t)uio_clone^.uio_iov^.iov_base;
+  __end:=round_page(addr + len);
+  if (__end < addr) then
+  begin
+   error:=EFAULT;
+   break;
+  end;
+  cnt:=atop(__end - trunc_page(addr));
+  {
+   * A perfectly misaligned address and length could cause
+   * both the start and the end of the chunk to use partial
+   * page.  +2 accounts for such a situation.
+   }
+  cnt:=vm_fault_quick_hold_pages(@td^.td_proc^.p_vmspace^.vm_map,  addr, len, prot, ma, io_hold_cnt + 2);
+  if (cnt=-1) then
+  begin
+   error:=EFAULT;
+   break;
+  end;
+  short_uio.uio_iov:=@short_iovec[0];
+  short_iovec[0].iov_base:=(void *)addr;
+  short_uio.uio_iovcnt:=1;
+  short_uio.uio_resid:=short_iovec[0].iov_len:=len;
+  short_uio.uio_offset:=uio_clone^.uio_offset;
+
+  td^.td_ma:=ma;
+  td^.td_ma_cnt:=cnt;
+
+  error:=doio(fp, @short_uio, flags or FOF_OFFSET);
+  vm_page_unhold_pages(ma, cnt);
+  adv:=len - short_uio.uio_resid;
+
+  uio_clone^.uio_iov^.iov_base = (char *)uio_clone^.uio_iov^.iov_base + adv;
+  uio_clone^.uio_iov^.iov_len -= adv;
+  uio_clone^.uio_resid  -= adv;
+  uio_clone^.uio_offset += adv;
+
+  uio^.uio_resid  -= adv;
+  uio^.uio_offset += adv;
+
+  if (error<>0 or adv=0)
+   break;
+ end;
+ td^.td_ma:=prev_td_ma;
+ td^.td_ma_cnt:=prev_td_ma_cnt;
+ curthread_pflags_restore(saveheld);
+_out:
+ vm_fault_enable_pagefaults(save);
+ vn_rangelock_unlock(vp, rl_cookie);
+ free(uio_clone, M_IOV);
+}
+
+out_last:
+ foffset_unlock_uio(fp, uio, flags);
+ Exit(error);
+end;
+
+{
+ * File table truncate routine.
+ }
+function vn_truncate(fp:p_file;length:Int64):Integer;
+label
+ out1,
+ _out;
+var
+ vattr:t_vattr;
+ mp:p_mount;
+ vp:p_vnode;
+ rl_cookie:Pointer;
+ vfslocked:Integer;
+ error:Integer;
+begin
+ vp:=fp^.f_vnode;
+
+ {
+  * Lock the whole range for truncation.  Otherwise split i/o
+  * might happen partly before and partly after the truncation.
+  }
+ rl_cookie:=vn_rangelock_wlock(vp, 0, High(Int64));
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
+ if (error<>0) then
+  goto out1;
+ vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+ if (vp^.v_type=VDIR) then
+ begin
+  error:=EISDIR;
+  goto _out;
+ end;
+
+ //error:=mac_vnode_check_write(active_cred, fp^.f_cred, vp);
+ //if (error<>0) then
+ // goto _out;
+
+ error:=vn_writechk(vp);
+ if (error=0) then
+ begin
+  VATTR_NULL(@vattr);
+  vattr.va_size:=length;
+  error:=VOP_SETATTR(vp, @vattr);
+ end;
+_out:
+ VOP_UNLOCK(vp, 0);
+ vn_finished_write(mp);
+out1:
+ VFS_UNLOCK_GIANT(vfslocked);
+ vn_rangelock_unlock(vp, rl_cookie);
+ Exit(error);
+end;
+
+{
+ * File table vnode ioctl routine.
+ }
+function vn_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
+var
+ vp:p_vnode;
+ vattr:t_vattr;
+ vfslocked:Integer;
+ error:Integer;
+begin
+ vp:=fp^.f_vnode;
+
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ error:=ENOTTY;
+ case vp^.v_type of
+  VREG,
+  VDIR:
+   begin
+    if (com=FIONREAD) then
+    begin
+     vn_lock(vp, LK_SHARED or LK_RETRY);
+     error:=VOP_GETATTR(vp, @vattr);
+     VOP_UNLOCK(vp, 0);
+     if (error=0) then
+      PInteger(data)^:=vattr.va_size - fp^.f_offset;
+    end else
+    if (com=FIONBIO) or (com=FIOASYNC) then { XXX }
+     error:=0
+    else
+     error:=VOP_IOCTL(vp, com, data, fp^.f_flag);
+   end;
+  else;
+ end;
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+{
+ * File table vnode poll routine.
+ }
+function vn_poll(fp:p_file;events:Integer):Integer;
+var
+ vp:p_vnode;
+ vfslocked:Integer;
+ error:Integer;
+begin
+ vp:=fp^.f_vnode;
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+
+ //vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+ //error:=mac_vnode_check_poll(active_cred, fp^.f_cred, vp);
+ //VOP_UNLOCK(vp, 0);
+ //if (error=0) then
+
+ error:=VOP_POLL(vp, events);
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+{
+ * File table vnode stat routine.
+ }
+function vn_statfile(fp:p_file;sb:p_stat):Integer;
+var
+ vp:p_vnode;
+ vfslocked:Integer;
+ error:Integer;
+begin
+ vp:=fp^.f_vnode;
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ vn_lock(vp, LK_SHARED or LK_RETRY);
+ error:=vn_stat(vp, sb);
+ VOP_UNLOCK(vp, 0);
+ VFS_UNLOCK_GIANT(vfslocked);
+
+ Exit(error);
+end;
+
+{
+ * File table vnode close routine.
+ }
+function vn_closefile(fp:p_file):Integer;
+var
+ vp:p_vnode;
+ lf:t_flock;
+ vfslocked:Integer;
+ error:Integer;
+begin
+ vp:=fp^.f_vnode;
+
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ if (fp^.f_type=DTYPE_VNODE) and ((fp^.f_flag and FHASLOCK)<>0) then
+ begin
+  lf.l_whence:=SEEK_SET;
+  lf.l_start :=0;
+  lf.l_len   :=0;
+  lf.l_type  :=F_UNLCK;
+  VOP_ADVLOCK(vp, fp, F_UNLCK, @lf, F_FLOCK);
+ end;
+
+ fp^.f_ops:=@badfileops;
+
+ error:=vn_close(vp, fp^.f_flag);
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+function vn_chmod(fp:p_file;mode:mode_t):Integer;
+var
+ vp:p_vnode;
+ error,vfslocked:Integer;
+begin
+ vp:=fp^.f_vnode;
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ error:=setfmode(vp, mode);
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+function vn_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+var
+ vp:p_vnode;
+ error,vfslocked:Integer;
+begin
+ vp:=fp^.f_vnode;
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ error:=setfown(vp, uid, gid);
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+function vn_kqfilter(fp:p_file;kn:Pointer):Integer;
+var
+ error,vfslocked:Integer;
+begin
+ vfslocked:=VFS_LOCK_GIANT(fp^.f_vnode^.v_mount);
+ error:=VOP_KQFILTER(fp^.f_vnode, kn);
+ VFS_UNLOCK_GIANT(vfslocked);
+ Exit(error);
+end;
+
+
 
 end.
 

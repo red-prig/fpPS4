@@ -43,6 +43,9 @@ function  mtx_pool_create(mtx_name:PChar;pool_size:Integer):p_mtx_pool;
 procedure mtx_pool_destroy(poolp:pp_mtx_pool);
 function  mtx_pool_alloc(pool:p_mtx_pool):p_mtx;
 
+var
+ mtxpool_sleep:p_mtx_pool;
+
 implementation
 
 const
@@ -144,7 +147,13 @@ begin
  Exit(@pool^.mtx_pool_ary[i]);
 end;
 
+procedure mtx_pool_setup_dynamic();
+begin
+ mtxpool_sleep:=mtx_pool_create('sleep mtxpool',MTX_POOL_SLEEP_SIZE);
+end;
 
+initialization
+ mtx_pool_setup_dynamic();
 
 end.
 

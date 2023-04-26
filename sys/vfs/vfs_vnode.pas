@@ -40,6 +40,29 @@ const
  VA_UTIMES_NULL=$01; // utimes argument was NULL
  VA_EXCLUSIVE  =$02; // exclusive create request
 
+ {
+ * Flags for ioflag. (high 16 bits used to ask for read-ahead and
+ * help with write clustering)
+ * NB: IO_NDELAY and IO_DIRECT are linked to fcntl.h
+ }
+ IO_UNIT      =$0001; { do I/O as atomic unit }
+ IO_APPEND    =$0002; { append write to end }
+ IO_NDELAY    =$0004; { FNDELAY flag set in file table }
+ IO_NODELOCKED=$0008; { underlying node already locked }
+ IO_ASYNC     =$0010; { bawrite rather then bdwrite }
+ IO_VMIO      =$0020; { data already in VMIO space }
+ IO_INVAL     =$0040; { invalidate after I/O }
+ IO_SYNC      =$0080; { do I/O synchronously }
+ IO_DIRECT    =$0100; { attempt to bypass buffer cache }
+ IO_EXT       =$0400; { operate on external attributes }
+ IO_NORMAL    =$0800; { operate on regular data }
+ IO_NOMACCHECK=$1000; { MAC checks unnecessary }
+ IO_BUFLOCKED =$2000; { ffs flag; indir buf is locked }
+
+ IO_SEQMAX    =$7F;   { seq heuristic max value }
+ IO_SEQSHIFT  =16;    { seq heuristic in upper 16 bits }
+
+ //Flags for accmode_t.
  VEXEC  =&000000000100; // execute/search permission
  VWRITE =&000000000200; // write permission
  VREAD  =&000000000400; // read permission
