@@ -19,15 +19,508 @@ uses
  vfs_lookup,
  vnode_if;
 
+const
+ VFS_MOUNTARG_SIZE_MAX=(1024 * 64);
+
+procedure vfs_freeopt(opts:p_vfsoptlist;opt:p_vfsopt);
+procedure vfs_freeopts(opts:p_vfsoptlist);
+procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
+function  vfs_isopt_ro(opt:PChar):Integer;
+function  vfs_isopt_rw(opt:PChar):Integer;
+function  vfs_equalopts(opt1,opt2:PChar):Integer;
+procedure vfs_sanitizeopts(opts:p_vfsoptlist);
+function  vfs_buildopts(auio:p_uio;options:pp_vfsoptlist):Integer;
+procedure vfs_mergeopts(toopts,oldopts:p_vfsoptlist);
+
+function  vfs_getopt(opts:p_vfsoptlist;name:PChar;buf:PPointer;len:PInteger):Integer;
+function  vfs_getopt_pos(opts:p_vfsoptlist;name:PChar):Integer;
+function  vfs_getopts(opts:p_vfsoptlist;name:PChar;error:PInteger):PChar;
+function  vfs_flagopt(opts:p_vfsoptlist;name:PChar;w:PQWORD;val:QWORD):Integer;
+function  vfs_setopt(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
+function  vfs_setopt_part(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
+function  vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;
+
 procedure vfs_ref(mp:p_mount); inline;
 procedure vfs_rel(mp:p_mount); inline;
+
+procedure mount_init(mp:p_mount);
+procedure mount_fini(mp:p_mount);
+
+function  vfs_mount_alloc(vp    :p_vnode;
+                          vfsp  :p_vfsconf;
+                          fspath:PChar):p_mount;
+procedure vfs_mount_destroy(mp:p_mount);
+
+function  vfs_domount(fstype:PChar;         { Filesystem type. }
+                      fspath:PChar;         { Mount path. }
+                      fsflags:QWORD;        { Flags common to all filesystems. }
+                      optlist:pp_vfsoptlist { Options local to the filesystem. }
+                     ):Integer;
+
+function  vfs_donmount(fsflags:QWORD;fsoptions:p_uio):Integer;
+
+function  dounmount(mp:p_mount;flags:Integer):Integer;
 
 implementation
 
 uses
  errno,
+ systm,
  vfs_vnops,
  vfs_subr;
+
+{
+ * ---------------------------------------------------------------------
+ * Functions for building and sanitizing the mount options
+ }
+
+{ Remove one mount option. }
+procedure vfs_freeopt(opts:p_vfsoptlist;opt:p_vfsopt);
+begin
+ TAILQ_REMOVE(opts,opt,@opt^.link);
+ FreeMem(opt^.name);
+ if (opt^.value<>nil) then
+  FreeMem(opt^.value);
+ FreeMem(opt);
+end;
+
+{ Release all resources related to the mount options. }
+procedure vfs_freeopts(opts:p_vfsoptlist);
+var
+ opt:p_vfsopt;
+begin
+ while (not TAILQ_EMPTY(opts)) do
+ begin
+  opt:=TAILQ_FIRST(opts);
+  vfs_freeopt(opts, opt);
+ end;
+ FreeMem(opts);
+end;
+
+procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
+var
+ opt,temp:p_vfsopt;
+begin
+ if (opts=nil) then
+  Exit;
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  temp:=TAILQ_NEXT(opt,@opt^.link);
+  //
+  if (strcomp(opt^.name, name)=0) then
+   vfs_freeopt(opts, opt);
+  //
+  opt:=temp;
+ end;
+end;
+
+function vfs_isopt_ro(opt:PChar):Integer;
+begin
+ if (strcomp(opt, 'ro')=0) or
+    (strcomp(opt, 'rdonly')=0) or
+    (strcomp(opt, 'norw')=0) then
+  Exit(1);
+ Exit(0);
+end;
+
+function vfs_isopt_rw(opt:PChar):Integer;
+begin
+ if (strcomp(opt, 'rw')=0) or
+    (strcomp(opt, 'noro')=0) then
+  Exit(1);
+ Exit(0);
+end;
+
+{
+ * Check if options are equal (with or without the 'no' prefix).
+ }
+function vfs_equalopts(opt1,opt2:PChar):Integer;
+var
+ p:PChar;
+begin
+ { 'opt' vs. 'opt' or 'noopt' vs. 'noopt' }
+ if (strcomp(opt1, opt2)=0) then
+  Exit(1);
+ { 'noopt' vs. 'opt' }
+ if (strlcomp(opt1, 'no', 2)=0) and
+    (strcomp(opt1 + 2, opt2)=0) then
+  Exit(1);
+ { 'opt' vs. 'noopt' }
+ if (strlcomp(opt2, 'no', 2)=0) and
+    (strcomp(opt1, opt2 + 2)=0) then
+  Exit(1);
+
+ p:=strscan(opt1, '.');
+ while (p<>nil) and
+       (strlcomp(opt1,opt2,(p+1)-opt1)=0) do
+ begin
+  Inc(p);
+  Inc(opt2,p-opt1);
+  opt1:=p;
+  { 'foo.noopt' vs. 'foo.opt' }
+  if (strlcomp(opt1, 'no', 2)=0) and
+     (strcomp(opt1 + 2, opt2)=0) then
+   Exit(1);
+  { 'foo.opt' vs. 'foo.noopt' }
+  if (strlcomp(opt2, 'no', 2)=0) and
+     (strcomp(opt1, opt2 + 2)=0) then
+   Exit(1);
+  //
+  p:=strscan(opt1, '.');
+ end;
+ { 'ro' / 'rdonly' / 'norw' / 'rw' / 'noro' }
+ if ((vfs_isopt_ro(opt1)<>0) or
+     (vfs_isopt_rw(opt1)<>0)) and
+    ((vfs_isopt_ro(opt2)<>0) or
+     (vfs_isopt_rw(opt2)<>0)) then
+  Exit(1);
+ Exit(0);
+end;
+
+{
+ * If a mount option is specified several times,
+ * (with or without the 'no' prefix) only keep
+ * the last occurence of it.
+ }
+procedure vfs_sanitizeopts(opts:p_vfsoptlist);
+var
+ opt,opt2,tmp:p_vfsopt;
+begin
+ opt:=TAILQ_LAST(opts,nil);
+ while (opt<>nil) do
+ begin
+  opt2:=TAILQ_PREV(opt,nil,@opt^.link);
+  while (opt2<>nil) do
+  begin
+   if (vfs_equalopts(opt^.name, opt2^.name)<>0) then
+   begin
+    tmp:=TAILQ_PREV(opt2,nil,@opt^.link);
+    vfs_freeopt(opts, opt2);
+    opt2:=tmp;
+   end else
+   begin
+    opt2:=TAILQ_PREV(opt2,nil,@opt^.link);
+   end;
+  end;
+  //
+  opt:=TAILQ_PREV(opt,nil,@opt^.link);
+ end;
+end;
+
+{
+ * Build a linked list of mount options from a struct uio.
+ }
+function vfs_buildopts(auio:p_uio;options:pp_vfsoptlist):Integer;
+label
+ bad;
+var
+ opts:p_vfsoptlist;
+ opt:p_vfsopt;
+ memused,namelen,optlen:QWORD;
+ i,iovcnt:DWORD;
+ error:Integer;
+begin
+ opts:=AllocMem(sizeof(vfsoptlist));
+ TAILQ_INIT(opts);
+ memused:=0;
+ iovcnt:=auio^.uio_iovcnt;
+ i:=0;
+ while (i < iovcnt) do
+ begin
+  namelen:=auio^.uio_iov[i].iov_len;
+  optlen :=auio^.uio_iov[i + 1].iov_len;
+  Inc(memused,sizeof(vfsopt)+optlen+namelen);
+  {
+   * Avoid consuming too much memory, and attempts to overflow
+   * memused.
+   }
+  if (memused > VFS_MOUNTARG_SIZE_MAX) or
+     (optlen  > VFS_MOUNTARG_SIZE_MAX) or
+     (namelen > VFS_MOUNTARG_SIZE_MAX) then
+  begin
+   error:=EINVAL;
+   goto bad;
+  end;
+
+  opt:=AllocMem(sizeof(vfsopt));
+  opt^.name :=AllocMem(namelen);
+  opt^.value:=nil;
+  opt^.len  :=0;
+  opt^.pos  :=i div 2;
+  opt^.seen :=0;
+
+  {
+   * Do this early, so jumps to 'bad' will free the current
+   * option.
+   }
+  TAILQ_INSERT_TAIL(opts,opt,@opt^.link);
+
+  if (auio^.uio_segflg=UIO_SYSSPACE) then
+  begin
+   Move(auio^.uio_iov[i].iov_base^, opt^.name^, namelen);
+  end else
+  begin
+   error:=copyin(auio^.uio_iov[i].iov_base, opt^.name, namelen);
+   if (error<>0) then
+    goto bad;
+  end;
+  { Ensure names are nil-terminated strings. }
+  if (namelen=0) or (opt^.name[namelen - 1]<>#0) then
+  begin
+   error:=EINVAL;
+   goto bad;
+  end;
+  if (optlen<>0)  then
+  begin
+   opt^.len:=optlen;
+   opt^.value:=AllocMem(optlen);
+   if (auio^.uio_segflg=UIO_SYSSPACE) then
+   begin
+    Move(auio^.uio_iov[i + 1].iov_base^, opt^.value^, optlen);
+   end else
+   begin
+    error:=copyin(auio^.uio_iov[i + 1].iov_base, opt^.value, optlen);
+    if (error<>0) then
+     goto bad;
+   end;
+  end;
+  //
+  Inc(i,2);
+ end;
+ vfs_sanitizeopts(opts);
+ options^:=opts;
+ Exit(0);
+bad:
+ vfs_freeopts(opts);
+ Exit(error);
+end;
+
+function strdup(src:PChar):PChar; inline;
+var
+ i:ptrint;
+begin
+ i:=strlen(src);
+ Result:=AllocMem(i+1);
+ Move(src^,Result^,i);
+end;
+
+{
+ * Merge the old mount options with the new ones passed
+ * in the MNT_UPDATE case.
+ *
+ * XXX: This function will keep a 'nofoo' option in the new
+ * options.  E.g, if the option's canonical name is 'foo',
+ * 'nofoo' ends up in the mount point's active options.
+ }
+procedure vfs_mergeopts(toopts,oldopts:p_vfsoptlist);
+var
+ opt,new:p_vfsopt;
+begin
+ opt:=TAILQ_FIRST(oldopts);
+ while (opt<>nil) do
+ begin
+  new:=AllocMem(sizeof(vfsopt));
+  new^.name:=strdup(opt^.name);
+  if (opt^.len<>0) then
+  begin
+   new^.value:=AllocMem(opt^.len);
+   Move(opt^.value^, new^.value^, opt^.len);
+  end else
+   new^.value:=nil;
+  new^.len :=opt^.len;
+  new^.seen:=opt^.seen;
+  TAILQ_INSERT_HEAD(toopts,new,@new^.link);
+  //
+  opt:=TAILQ_NEXT(opt,@opt^.link);
+ end;
+ vfs_sanitizeopts(toopts);
+end;
+
+
+{
+ * Get a mount option by its name.
+ *
+ * Exit0 if the option was found, ENOENT otherwise.
+ * If len is non-nil it will be filled with the length
+ * of the option. If buf is non-nil, it will be filled
+ * with the address of the option.
+ }
+function vfs_getopt(opts:p_vfsoptlist;name:PChar;buf:PPointer;len:PInteger):Integer;
+var
+ opt:p_vfsopt;
+begin
+ Assert(opts<>nil,'vfs_getopt: caller passed opts as nil');
+
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)=0) then
+  begin
+   opt^.seen:=1;
+   if (len<>nil) then
+    len^:=opt^.len;
+   if (buf<>nil) then
+    buf^:=opt^.value;
+   Exit(0);
+  end;
+  //
+  opt:=TAILQ_NEXT(opt,@opt^.link);
+ end;
+ Exit(ENOENT);
+end;
+
+function vfs_getopt_pos(opts:p_vfsoptlist;name:PChar):Integer;
+var
+ opt:p_vfsopt;
+begin
+ if (opts=nil) then
+  Exit(-1);
+
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)=0) then
+  begin
+   opt^.seen:=1;
+   Exit(opt^.pos);
+  end;
+  //
+  opt:=TAILQ_NEXT(opt,@opt^.link);
+ end;
+ Exit(-1);
+end;
+
+function vfs_getopts(opts:p_vfsoptlist;name:PChar;error:PInteger):PChar;
+var
+ opt:p_vfsopt;
+begin
+ error^:=0;
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)<>0) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   continue;
+  end;
+  opt^.seen:=1;
+  if (opt^.len=0) or
+     (PChar(opt^.value)[opt^.len - 1]<>#0) then
+  begin
+   error^:=EINVAL;
+   Exit(nil);
+  end;
+  Exit(opt^.value);
+ end;
+ error^:=ENOENT;
+ Exit(nil);
+end;
+
+function vfs_flagopt(opts:p_vfsoptlist;name:PChar;w:PQWORD;val:QWORD):Integer;
+var
+ opt:p_vfsopt;
+begin
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)=0) then
+  begin
+   opt^.seen:=1;
+   if (w<>nil) then
+    w^:=w^ or val;
+   Exit(1);
+  end;
+  //
+  opt:=TAILQ_NEXT(opt,@opt^.link);
+ end;
+ if (w<>nil) then
+  w^:=w^ and (not val);
+ Exit(0);
+end;
+
+function vfs_setopt(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
+var
+ opt:p_vfsopt;
+begin
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)<>0) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   continue;
+  end;
+  opt^.seen:=1;
+  if (opt^.value=nil) then
+   opt^.len:=len
+  else
+  begin
+   if (opt^.len<>len) then
+    Exit(EINVAL);
+   Move(value^, opt^.value^, len);
+  end;
+  Exit(0);
+ end;
+ Exit(ENOENT);
+end;
+
+function vfs_setopt_part(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
+var
+ opt:p_vfsopt;
+begin
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)<>0) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   continue;
+  end;
+  opt^.seen:=1;
+  if (opt^.value=nil) then
+   opt^.len:=len
+  else
+  begin
+   if (opt^.len < len) then
+    Exit(EINVAL);
+   opt^.len:=len;
+   Move(value^, opt^.value^, len);
+  end;
+  Exit(0);
+ end;
+ Exit(ENOENT);
+end;
+
+function strlcpy(dst,src:PChar;size:ptrint):ptrint; inline;
+begin
+ Result:=strlcopy(dst,src,size)-dst;
+end;
+
+function vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;
+var
+ opt:p_vfsopt;
+begin
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)<>0) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   continue;
+  end;
+  opt^.seen:=1;
+  if (opt^.value=nil) then
+   opt^.len:=strlen(value) + 1
+  else
+  if (strlcpy(opt^.value, value, opt^.len) >= opt^.len) then
+   Exit(EINVAL);
+  Exit(0);
+ end;
+ Exit(ENOENT);
+end;
+
+///
 
 procedure vfs_ref(mp:p_mount); inline;
 begin
@@ -57,9 +550,8 @@ function vfs_mount_alloc(vp    :p_vnode;
 var
  mp:p_mount;
 begin
- mp:=AllocMem(SizeOf(mount));
+ mp:=AllocMem(SizeOf(t_mount));
  mount_init(mp);
-
 
  TAILQ_INIT(@mp^.mnt_nvnodelist);
  mp^.mnt_nvnodelistsize:=0;
@@ -120,8 +612,8 @@ begin
 
  //mac_mount_destroy(mp);
 
- //if (mp^.mnt_opt<>nil) then
- // vfs_freeopts(mp^.mnt_opt);
+ if (mp^.mnt_opt<>nil) then
+  vfs_freeopts(mp^.mnt_opt);
 
  mount_fini(mp);
  FreeMem(mp);
@@ -192,8 +684,8 @@ begin
   Exit (error);
  end;
 
- //if (mp^.mnt_opt<>nil) then
- // vfs_freeopts(mp^.mnt_opt);
+ if (mp^.mnt_opt<>nil) then
+  vfs_freeopts(mp^.mnt_opt);
 
  mp^.mnt_opt:=mp^.mnt_optnew;
 
@@ -218,7 +710,7 @@ begin
  VI_LOCK(vp);
  vp^.v_iflag:=vp^.v_iflag and (not VI_MOUNT);
  VI_UNLOCK(vp);
- //vp^.v_mountedhere:=mp;
+ vp^.v_mountedhere:=mp;
  { Place the new filesystem at the end of the mount list. }
  mtx_lock(mountlist_mtx);
  TAILQ_INSERT_TAIL(@mountlist, mp,@mp^.mnt_list);
@@ -239,27 +731,27 @@ end;
 {
  * vfs_domount_update(): update of mounted file system
  }
-{
-function vfs_domount_update(
- td:p_kthread;  { Calling thread. }
- vp:p_vnode;  { Mount point vnode. }
- fsflags:QWORD;  { Flags common to all filesystems. }
- optlist:pp_vfsoptlist { Options local to the filesystem. }
- ):Integer;
+function vfs_domount_update(vp:p_vnode;           { Mount point vnode. }
+                            fsflags:QWORD;        { Flags common to all filesystems. }
+                            optlist:pp_vfsoptlist { Options local to the filesystem. }
+                           ):Integer;
+label
+ _end;
+var
+ //struct oexport_args oexport;
+ //struct export_args export;
+ mp:p_mount;
+ error,export_error:Integer;
+ flag:QWORD;
 begin
- struct oexport_args oexport;
- struct export_args export;
- struct mount *mp;
- int error, export_error;
- uint64_t flag;
+ mtx_assert(VFS_Giant);
+ ASSERT_VOP_ELOCKED(vp, 'vfs_domount_update');
+ Assert((fsflags and MNT_UPDATE)<>0, 'MNT_UPDATE should be here');
 
- mtx_assert(@Giant, MA_OWNED);
- ASSERT_VOP_ELOCKED(vp, __func__);
- KASSERT((fsflags and MNT_UPDATE)<>0, ("MNT_UPDATE should be here"));
-
- if ((vp^.v_vflag and VV_ROOT)=0) begin
+ if ((vp^.v_vflag and VV_ROOT)=0) then
+ begin
   vput(vp);
-  Exit (EINVAL);
+  Exit(EINVAL);
  end;
  mp:=vp^.v_mount;
  {
@@ -267,42 +759,47 @@ begin
   * is currently mounted read-only.
   }
  flag:=mp^.mnt_flag;
- if ((fsflags and MNT_RELOAD)<>0 and (flag and MNT_RDONLY)=0) begin
+ if ((fsflags and MNT_RELOAD)<>0) and ((flag and MNT_RDONLY)=0) then
+ begin
   vput(vp);
-  Exit (EOPNOTSUPP); { Needs translation }
+  Exit(EOPNOTSUPP); { Needs translation }
  end;
  {
   * Only privileged root, or (if MNT_USER is set) the user that
   * did the original mount is permitted to update it.
   }
- error:=vfs_suser(mp, td);
- if (error<>0) begin
+ error:=0;
+ //error:=vfs_suser(mp, td);
+ if (error<>0) then
+ begin
   vput(vp);
-  Exit (error);
+  Exit(error);
  end;
- if (vfs_busy(mp, MBF_NOWAIT)) begin
+ if (vfs_busy(mp, MBF_NOWAIT)<>0) then
+ begin
   vput(vp);
-  Exit (EBUSY);
+  Exit(EBUSY);
  end;
  VI_LOCK(vp);
- if ((vp^.v_iflag and VI_MOUNT)<>0 or vp^.v_mountedhere<>nil) begin
+ if ((vp^.v_iflag and VI_MOUNT)<>0) or (vp^.v_mountedhere<>nil) then
+ begin
   VI_UNLOCK(vp);
   vfs_unbusy(mp);
   vput(vp);
   Exit (EBUSY);
  end;
- vp^.v_iflag:= or VI_MOUNT;
+ vp^.v_iflag:=vp^.v_iflag or VI_MOUNT;
  VI_UNLOCK(vp);
  VOP_UNLOCK(vp, 0);
 
  MNT_ILOCK(mp);
- mp^.mnt_flag:= and ~MNT_UPDATEMASK;
- mp^.mnt_flag:= or fsflags and (MNT_RELOAD or MNT_FORCE or MNT_UPDATE |
+ mp^.mnt_flag:=mp^.mnt_flag and (not MNT_UPDATEMASK);
+ mp^.mnt_flag:=(mp^.mnt_flag or fsflags) and (MNT_RELOAD or MNT_FORCE or MNT_UPDATE or
      MNT_SNAPSHOT or MNT_ROOTFS or MNT_UPDATEMASK or MNT_RDONLY);
- if ((mp^.mnt_flag and MNT_ASYNC)=0)
-  mp^.mnt_kern_flag:= and ~MNTK_ASYNC;
+ if ((mp^.mnt_flag and MNT_ASYNC)=0) then
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
  MNT_IUNLOCK(mp);
- mp^.mnt_optnew:=*optlist;
+ mp^.mnt_optnew:=optlist^;
  vfs_mergeopts(mp^.mnt_optnew, mp^.mnt_opt);
 
  {
@@ -310,34 +807,37 @@ begin
   * XXX The final recipients of VFS_MOUNT just overwrite the ndp they
   * get.  No freeing of cn_pnbuf.
   }
- error:=VFS_MOUNT(mp);
+ error:=vmount.VFS_MOUNT(mp);
 
  export_error:=0;
- if (error=0) begin
+ if (error=0) then
+ begin
   { Process the export option. }
-  if (vfs_copyopt(mp^.mnt_optnew, "export", &export,
-      sizeof(export))=0) begin
-   export_error:=vfs_export(mp, &export);
-  end; else if (vfs_copyopt(mp^.mnt_optnew, "export", &oexport,
-      sizeof(oexport))=0) begin
-   export.ex_flags:=oexport.ex_flags;
-   export.ex_root:=oexport.ex_root;
-   export.ex_anon:=oexport.ex_anon;
-   export.ex_addr:=oexport.ex_addr;
-   export.ex_addrlen:=oexport.ex_addrlen;
-   export.ex_mask:=oexport.ex_mask;
-   export.ex_masklen:=oexport.ex_masklen;
-   export.ex_indexfile:=oexport.ex_indexfile;
-   export.ex_numsecflavors:=0;
-   export_error:=vfs_export(mp, &export);
-  end;
+  //if (vfs_copyopt(mp^.mnt_optnew, 'export', @export, sizeof(export))=0) then
+  //begin
+  // export_error:=vfs_export(mp, @export);
+  //end else
+  //if (vfs_copyopt(mp^.mnt_optnew, 'export', @oexport, sizeof(oexport))=0) then
+  //begin
+  // export.ex_flags        :=oexport.ex_flags;
+  // export.ex_root         :=oexport.ex_root;
+  // export.ex_anon         :=oexport.ex_anon;
+  // export.ex_addr         :=oexport.ex_addr;
+  // export.ex_addrlen      :=oexport.ex_addrlen;
+  // export.ex_mask         :=oexport.ex_mask;
+  // export.ex_masklen      :=oexport.ex_masklen;
+  // export.ex_indexfile    :=oexport.ex_indexfile;
+  // export.ex_numsecflavors:=0;
+  // export_error:=vfs_export(mp, @export);
+  //end;
  end;
 
  MNT_ILOCK(mp);
- if (error=0) begin
-  mp^.mnt_flag:= and ~(MNT_UPDATE or MNT_RELOAD or MNT_FORCE |
-      MNT_SNAPSHOT);
- end; else begin
+ if (error=0) then
+ begin
+  mp^.mnt_flag:=mp^.mnt_flag and (not (MNT_UPDATE or MNT_RELOAD or MNT_FORCE or MNT_SNAPSHOT));
+ end else
+ begin
   {
    * If we fail, restore old mount flags. MNT_QUOTA is special,
    * because it is not part of MNT_UPDATEMASK, but it could have
@@ -345,53 +845,54 @@ begin
    * All in all we want current value of MNT_QUOTA, not the old
    * one.
    }
-  mp^.mnt_flag:=(mp^.mnt_flag and MNT_QUOTA) or (flag and ~MNT_QUOTA);
+  mp^.mnt_flag:=(mp^.mnt_flag and MNT_QUOTA) or (flag and (not MNT_QUOTA));
  end;
- if ((mp^.mnt_flag and MNT_ASYNC)<>0 &&
-     (mp^.mnt_kern_flag and MNTK_NOASYNC)=0)
-  mp^.mnt_kern_flag:= or MNTK_ASYNC;
+ if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
+    ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC
  else
-  mp^.mnt_kern_flag:= and ~MNTK_ASYNC;
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
  MNT_IUNLOCK(mp);
 
- if (error<>0)
-  goto end;
+ if (error<>0) then
+  goto _end;
 
- if (mp^.mnt_opt<>nil)
+ if (mp^.mnt_opt<>nil) then
   vfs_freeopts(mp^.mnt_opt);
  mp^.mnt_opt:=mp^.mnt_optnew;
- *optlist:=nil;
- (void)VFS_STATFS(mp, &mp^.mnt_stat);
+ optlist^:=nil;
+ VFS_STATFS(mp, @mp^.mnt_stat);
  {
   * Prevent external consumers of mount options from reading
   * mnt_optnew.
   }
  mp^.mnt_optnew:=nil;
 
- if ((mp^.mnt_flag and MNT_RDONLY)=0)
-  vfs_allocate_syncvnode(mp);
- else
-  vfs_deallocate_syncvnode(mp);
-end:
+ //if ((mp^.mnt_flag and MNT_RDONLY)=0) then
+ // vfs_allocate_syncvnode(mp)
+ //else
+ // vfs_deallocate_syncvnode(mp);
+_end:
  vfs_unbusy(mp);
  VI_LOCK(vp);
- vp^.v_iflag:= and ~VI_MOUNT;
+ vp^.v_iflag:=vp^.v_iflag and (not VI_MOUNT);
  VI_UNLOCK(vp);
  vrele(vp);
- Exit (error<>0 ? error : export_error);
+
+ if (error<>0) then
+  Exit(error)
+ else
+  Exit(export_error);
 end;
-}
 
 {
  * vfs_domount(): actually attempt a filesystem mount.
  }
-function vfs_domount(
- td:p_kthread;  { Calling thread. }
- fstype:PChar;  { Filesystem type. }
- fspath:PChar;   { Mount path. }
- fsflags:QWORD;  { Flags common to all filesystems. }
- optlist:pp_vfsoptlist { Options local to the filesystem. }
- ):Integer;
+function vfs_domount(fstype:PChar;         { Filesystem type. }
+                     fspath:PChar;         { Mount path. }
+                     fsflags:QWORD;        { Flags common to all filesystems. }
+                     optlist:pp_vfsoptlist { Options local to the filesystem. }
+                    ):Integer;
 var
  vfsp:p_vfsconf;
  nd:nameidata;
@@ -420,7 +921,7 @@ begin
  {
   * Get vnode to be covered or mount point's vnode in case of MNT_UPDATE.
   }
- NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, fspath, td);
+ NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, fspath, curkthread);
 
  error:=_namei(@nd);
  if (error<>0) then
@@ -440,8 +941,8 @@ begin
    error:=vfs_domount_first(vfsp, pathbuf, vp, fsflags, optlist);
   //end;
   FreeMem(pathbuf);
- end{ else
-  error:=vfs_domount_update(td, vp, fsflags, optlist)};
+ end else
+  error:=vfs_domount_update(vp, fsflags, optlist);
  mtx_unlock(VFS_Giant);
 
  ASSERT_VI_UNLOCKED (vp, {$I %LINE%});
@@ -450,8 +951,361 @@ begin
  Exit(error);
 end;
 
+function vfs_donmount(fsflags:QWORD;fsoptions:p_uio):Integer;
+label
+ bail;
+var
+ optlist:p_vfsoptlist;
+ opt,tmp_opt:p_vfsopt;
+ fstype,fspath,errmsg:PChar;
+ error,fstypelen,fspathlen,errmsg_len,errmsg_pos:Integer;
+begin
+ errmsg:=nil;
+ fspath:=nil;
+ errmsg_len:=0;
+ fspathlen :=0;
+ errmsg_pos:=-1;
 
+ error:=vfs_buildopts(fsoptions, @optlist);
+ if (error<>0) then
+  Exit(error);
 
+ if (vfs_getopt(optlist, 'errmsg', @errmsg, @errmsg_len)=0) then
+  errmsg_pos:=vfs_getopt_pos(optlist, 'errmsg');
+
+ {
+  * We need these two options before the others,
+  * and they are mandatory for any filesystem.
+  * Ensure they are NUL terminated as well.
+  }
+ fstypelen:=0;
+ error:=vfs_getopt(optlist, 'fstype', @fstype, @fstypelen);
+ if (error<>0) or (fstype[fstypelen - 1]<>#0) then
+ begin
+  error:=EINVAL;
+  if (errmsg<>nil) then
+   strlcopy(errmsg, 'Invalid fstype', errmsg_len);
+  goto bail;
+ end;
+ fspathlen:=0;
+ error:=vfs_getopt(optlist, 'fspath', @fspath, @fspathlen);
+ if (error<>0) or (fspath[fspathlen - 1]<>#0) then
+ begin
+  error:=EINVAL;
+  if (errmsg<>nil) then
+   strlcopy(errmsg, 'Invalid fspath', errmsg_len);
+  goto bail;
+ end;
+
+ {
+  * We need to see if we have the 'update' option
+  * before we call vfs_domount(), since vfs_domount() has special
+  * logic based on MNT_UPDATE.  This is very important
+  * when we want to update the root filesystem.
+  }
+
+ opt:=TAILQ_FIRST(optlist);
+ while (opt<>nil) do
+ begin
+  tmp_opt:=TAILQ_NEXT(opt,@opt^.link);
+  //
+  if (strcomp(opt^.name, 'update')=0) then
+  begin
+   fsflags:=fsflags or MNT_UPDATE;
+   vfs_freeopt(optlist, opt);
+  end else
+  if (strcomp(opt^.name, 'async')=0) then
+   fsflags:=fsflags or MNT_ASYNC
+  else
+  if (strcomp(opt^.name, 'force')=0) then
+  begin
+   fsflags:=fsflags or MNT_FORCE;
+   vfs_freeopt(optlist, opt);
+  end else
+  if (strcomp(opt^.name, 'reload')=0) then
+  begin
+   fsflags:=fsflags or MNT_RELOAD;
+   vfs_freeopt(optlist, opt);
+  end else
+  if (strcomp(opt^.name, 'multilabel')=0) then
+   fsflags:=fsflags or MNT_MULTILABEL
+  else
+  if (strcomp(opt^.name, 'noasync')=0) then
+   fsflags:=fsflags and (not MNT_ASYNC)
+  else
+  if (strcomp(opt^.name, 'noatime')=0) then
+   fsflags:=fsflags or MNT_NOATIME
+  else
+  if (strcomp(opt^.name, 'atime')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonoatime');
+  end else
+  if (strcomp(opt^.name, 'noclusterr')=0) then
+   fsflags:=fsflags or MNT_NOCLUSTERR
+  else
+  if (strcomp(opt^.name, 'clusterr')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonoclusterr');
+  end else
+  if (strcomp(opt^.name, 'noclusterw')=0) then
+   fsflags:=fsflags or MNT_NOCLUSTERW
+  else if (strcomp(opt^.name, 'clusterw')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonoclusterw');
+  end else
+  if (strcomp(opt^.name, 'noexec')=0) then
+   fsflags:=fsflags or MNT_NOEXEC
+  else if (strcomp(opt^.name, 'exec')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonoexec');
+  end else
+  if (strcomp(opt^.name, 'nosuid')=0) then
+   fsflags:=fsflags or MNT_NOSUID
+  else
+  if (strcomp(opt^.name, 'suid')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonosuid');
+  end else
+  if (strcomp(opt^.name, 'nosymfollow')=0) then
+   fsflags:=fsflags or MNT_NOSYMFOLLOW
+  else
+  if (strcomp(opt^.name, 'symfollow')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('nonosymfollow');
+  end else
+  if (strcomp(opt^.name, 'noro')=0) then
+   fsflags:=fsflags and (not MNT_RDONLY)
+  else
+  if (strcomp(opt^.name, 'rw')=0) then
+   fsflags:=fsflags and (not MNT_RDONLY)
+  else
+  if (strcomp(opt^.name, 'ro')=0) then
+   fsflags:=fsflags or MNT_RDONLY
+  else
+  if (strcomp(opt^.name, 'rdonly')=0) then
+  begin
+   FreeMem(opt^.name);
+   opt^.name:=strdup('ro');
+   fsflags:=fsflags or MNT_RDONLY;
+  end else
+  if (strcomp(opt^.name, 'suiddir')=0) then
+   fsflags:=fsflags or MNT_SUIDDIR
+  else
+  if (strcomp(opt^.name, 'sync')=0) then
+   fsflags:=fsflags or MNT_SYNCHRONOUS
+  else
+  if (strcomp(opt^.name, 'union')=0) then
+   fsflags:=fsflags or MNT_UNION;
+  //
+  opt:=tmp_opt;
+ end;
+
+ {
+  * Be ultra-paranoid about making sure the type and fspath
+  * variables will fit in our mp buffers, including the
+  * terminating NUL.
+  }
+ if (fstypelen >= MFSNAMELEN - 1) or
+    (fspathlen >= MNAMELEN - 1) then
+ begin
+  error:=ENAMETOOLONG;
+  goto bail;
+ end;
+
+ error:=vfs_domount(fstype, fspath, fsflags, @optlist);
+bail:
+ { copyout the errmsg }
+ if (errmsg_pos<>-1) and
+    ((2 * errmsg_pos + 1) < fsoptions^.uio_iovcnt) and
+    (errmsg_len > 0) and
+    (errmsg<>nil) then
+ begin
+  if (fsoptions^.uio_segflg=UIO_SYSSPACE) then
+  begin
+   Move(errmsg^,
+       fsoptions^.uio_iov[2 * errmsg_pos + 1].iov_base^,
+       fsoptions^.uio_iov[2 * errmsg_pos + 1].iov_len);
+  end else
+  begin
+   copyout(errmsg,
+       fsoptions^.uio_iov[2 * errmsg_pos + 1].iov_base,
+       fsoptions^.uio_iov[2 * errmsg_pos + 1].iov_len);
+  end;
+ end;
+
+ if (optlist<>nil) then
+  vfs_freeopts(optlist);
+ Exit(error);
+end;
+
+{
+ * Do the actual filesystem unmount.
+ }
+function dounmount(mp:p_mount;flags:Integer):Integer;
+var
+ coveredvp,fsrootvp:p_vnode;
+ error:Integer;
+ async_flag:QWORD;
+ mnt_gen_r:Integer;
+begin
+ mtx_assert(VFS_Giant);
+
+ coveredvp:=mp^.mnt_vnodecovered;
+ if (coveredvp<>nil) then
+ begin
+  mnt_gen_r:=mp^.mnt_gen;
+  VI_LOCK(coveredvp);
+  vholdl(coveredvp);
+  vn_lock(coveredvp, LK_EXCLUSIVE or LK_INTERLOCK or LK_RETRY);
+  vdrop(coveredvp);
+  {
+   * Check for mp being unmounted while waiting for the
+   * covered vnode lock.
+   }
+  if (coveredvp^.v_mountedhere<>mp) or
+     (p_mount(coveredvp^.v_mountedhere)^.mnt_gen<>mnt_gen_r) then
+  begin
+   VOP_UNLOCK(coveredvp, 0);
+   Exit(EBUSY);
+  end;
+ end;
+ {
+  * Only privileged root, or (if MNT_USER is set) the user that did the
+  * original mount is permitted to unmount this filesystem.
+  }
+ error:=0;
+ //error:=vfs_suser(mp, td);
+ if (error<>0) then
+ begin
+  if (coveredvp<>nil) then
+   VOP_UNLOCK(coveredvp, 0);
+  Exit(error);
+ end;
+
+ vn_start_write(nil, @mp, V_WAIT);
+ MNT_ILOCK(mp);
+ if ((mp^.mnt_kern_flag and MNTK_UNMOUNT)<>0) or
+    (not TAILQ_EMPTY(@mp^.mnt_uppers)) then
+ begin
+  MNT_IUNLOCK(mp);
+  if (coveredvp<>nil) then
+   VOP_UNLOCK(coveredvp, 0);
+  vn_finished_write(mp);
+  Exit(EBUSY);
+ end;
+ mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_UNMOUNT or MNTK_NOINSMNTQ;
+ { Allow filesystems to detect that a forced unmount is in progress. }
+ if ((flags and MNT_FORCE)<>0) then
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_UNMOUNTF;
+ error:=0;
+ if (mp^.mnt_lockref<>0) then
+ begin
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_DRAINING;
+  error:=msleep(@mp^.mnt_lockref, MNT_MTX(mp), PVFS, 'mount drain', 0);
+ end;
+ MNT_IUNLOCK(mp);
+ Assert(mp^.mnt_lockref=0,'%s: invalid lock refcount in the drain path @ %s:%d');
+ Assert(error=0,'%s: invalid Exitvalue for msleep in the drain path @ %s:%d');
+
+ //if (mp^.mnt_flag and MNT_EXPUBLIC) then
+ // vfs_setpublicfs(nil, nil, nil);
+
+ vfs_msync(mp, MNT_WAIT);
+ MNT_ILOCK(mp);
+ async_flag:=mp^.mnt_flag and MNT_ASYNC;
+ mp^.mnt_flag:=mp^.mnt_flag and (not MNT_ASYNC);
+ mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+ MNT_IUNLOCK(mp);
+ //cache_purgevfs(mp); { remove cache entries for this file sys }
+ //vfs_deallocate_syncvnode(mp);
+ {
+  * For forced unmounts, move process cdir/rdir refs on the fs root
+  * vnode to the covered vnode.  For non-forced unmounts we want
+  * such references to cause an EBUSY error.
+  }
+ if ((flags and MNT_FORCE)<>0) and
+    (VFS_ROOT(mp, LK_EXCLUSIVE, @fsrootvp)=0) then
+ begin
+  //if (mp^.mnt_vnodecovered<>nil) and
+  //   ((mp^.mnt_flag and MNT_IGNORE)=0) then
+  // mountcheckdirs(fsrootvp, mp^.mnt_vnodecovered);
+  if (fsrootvp=rootvnode) then
+  begin
+   vrele(rootvnode);
+   rootvnode:=nil;
+  end;
+  vput(fsrootvp);
+ end;
+ error:=VFS_SYNC(mp, MNT_WAIT);
+ if ((mp^.mnt_flag and MNT_RDONLY)<>0) or
+    (error=0) or
+    ((flags and MNT_FORCE)<>0) then
+ begin
+  error:=VFS_UNMOUNT(mp, flags);
+ end;
+ vn_finished_write(mp);
+ {
+  * If we failed to flush the dirty blocks for this mount point,
+  * undo all the cdir/rdir and rootvnode changes we made above.
+  * Unless we failed to do so because the device is reporting that
+  * it doesn't exist anymore.
+  }
+ if (error and error<>ENXIO) then
+ begin
+  if ((flags and MNT_FORCE)<>0) and
+     (VFS_ROOT(mp, LK_EXCLUSIVE, @fsrootvp)=0) then
+  begin
+   //if (mp^.mnt_vnodecovered<>nil) and
+   //   ((mp^.mnt_flag and MNT_IGNORE)=0) then
+   // mountcheckdirs(mp^.mnt_vnodecovered, fsrootvp);
+   if (rootvnode=nil) then
+   begin
+    rootvnode:=fsrootvp;
+    vref(rootvnode);
+   end;
+   vput(fsrootvp);
+  end;
+  MNT_ILOCK(mp);
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_NOINSMNTQ);
+  if ((mp^.mnt_flag and MNT_RDONLY)=0) then
+  begin
+   //MNT_IUNLOCK(mp);
+   //vfs_allocate_syncvnode(mp);
+   //MNT_ILOCK(mp);
+  end;
+  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not (MNTK_UNMOUNT or MNTK_UNMOUNTF));
+  mp^.mnt_flag:=mp^.mnt_flag or async_flag;
+  if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
+     ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
+   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC;
+  if ((mp^.mnt_kern_flag and MNTK_MWAIT)<>0) then
+  begin
+   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_MWAIT);
+   wakeup(mp);
+  end;
+  MNT_IUNLOCK(mp);
+  if (coveredvp<>nil) then
+   VOP_UNLOCK(coveredvp, 0);
+  Exit(error);
+ end;
+ mtx_lock(mountlist_mtx);
+ TAILQ_REMOVE(@mountlist,mp,@mp^.mnt_list);
+ mtx_unlock(mountlist_mtx);
+ if (coveredvp<>nil) then
+ begin
+  coveredvp^.v_mountedhere:=nil;
+  vput(coveredvp);
+ end;
+ vfs_event_signal(nil, VQ_UNMOUNT, 0);
+ vfs_mount_destroy(mp);
+ Exit(0);
+end;
 
 
 end.

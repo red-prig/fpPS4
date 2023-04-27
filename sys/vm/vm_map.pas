@@ -226,6 +226,8 @@ function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
 procedure vm_map_entry_deallocate(entry:vm_map_entry_t);
 
+procedure vminit; //SYSINIT
+
 implementation
 
 var
@@ -2634,9 +2636,10 @@ begin
  vm_map_unlock(map);
 end;
 
-
-initialization
+procedure vminit;
+begin
  vmspace_alloc(VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
+end;
 
 end.
 

@@ -15,7 +15,6 @@ uses
  vfcntl,
  vfs_vnode,
  vnode_if,
- vfs_subr,
  vnamei,
  vmount,
  kern_mtx,
@@ -26,19 +25,23 @@ function _namei(ndp:p_nameidata):Integer;
 function _lookup(ndp:p_nameidata):Integer;
 procedure NDFREE(ndp:p_nameidata;flags:Integer);
 
+procedure nameiinit; //SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_SECOND, nameiinit, NULL);
+
 implementation
 
 uses
  errno,
- vfs_vnops;
+ vfs_subr,
+ vfs_vnops,
+ dead_vnops;
 
 var
- //vp_crossmp:p_vnode;
+ vp_crossmp:p_vnode;
  lookup_shared:Integer=1;
 
 procedure nameiinit;
 begin
- //getnewvnode('crossmp', nil, @dead_vnodeops, @vp_crossmp);
+ getnewvnode('crossmp', nil, @dead_vnodeops, @vp_crossmp);
  //vn_lock(vp_crossmp, LK_EXCLUSIVE);
  //VN_LOCK_ASHARE(vp_crossmp);
  //VOP_UNLOCK(vp_crossmp, 0);
@@ -662,7 +665,7 @@ unionlookup:
   * If we have a shared lock we may need to upgrade the lock for the
   * last operation.
   }
- if {(dp<>vp_crossmp) and}
+ if (dp<>vp_crossmp) and
     (VOP_ISLOCKED(dp)=LK_SHARED) and
     ((cnp^.cn_flags and ISLASTCN)<>0) and ((cnp^.cn_flags and LOCKPARENT)<>0) then
   vn_lock(dp, LK_UPGRADE or LK_RETRY);
@@ -777,12 +780,12 @@ unionlookup:
    vrele(ndp^.ni_dvp);
   VFS_UNLOCK_GIANT(dvfslocked);
   dvfslocked:=0;
-  //vref(vp_crossmp);
-  //ndp^.ni_dvp:=vp_crossmp;
+  vref(vp_crossmp);
+  ndp^.ni_dvp:=vp_crossmp;
   error:=VFS_ROOT(mp, compute_cn_lkflags(mp, cnp^.cn_lkflags, cnp^.cn_flags), @tdp);
   vfs_unbusy(mp);
-  //if (vn_lock(vp_crossmp, LK_SHARED or LK_NOWAIT))
-  // panic('vp_crossmp exclusively locked or reclaimed');
+  if (vn_lock(vp_crossmp, LK_SHARED or LK_NOWAIT)<>0) then
+   Assert(False,'vp_crossmp exclusively locked or reclaimed');
   if (error<>0) then
   begin
    dpunlocked:=1;

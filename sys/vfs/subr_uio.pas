@@ -19,7 +19,8 @@ function copyinuio(iovp:p_iovec;iovcnt:DWORD;uiop:pp_uio):Integer;
 implementation
 
 uses
- errno;
+ errno,
+ kern_synch;
 
 function uiomove(cp:Pointer;n:Integer;uio:p_uio):Integer;
 begin
@@ -73,7 +74,7 @@ begin
   case (uio^.uio_segflg) of
    UIO_USERSPACE:
     begin
-     //maybe_yield();
+     maybe_yield();
      if (uio^.uio_rw=UIO_READ) then
       error:=copyout(cp, iov^.iov_base, cnt)
      else

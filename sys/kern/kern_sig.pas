@@ -101,6 +101,8 @@ procedure ps_mtx_unlock;
 function  sigdeferstop:Integer;
 procedure sigallowstop;
 
+procedure siginit; //SYSINIT
+
 implementation
 
 uses
@@ -1665,9 +1667,6 @@ begin
   kern_sigprocmask(td,SIG_SETMASK,@td^.td_oldsigmask,nil,0);
  end;
 end;
-
-initialization
- siginit;
 
 end.
 

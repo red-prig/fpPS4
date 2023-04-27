@@ -53,6 +53,8 @@ procedure FILEDESC_SUNLOCK(fdp:p_filedesc); inline;
 
 function  fget_locked(fdp:p_filedesc;fd:Integer):p_file; inline;
 
+procedure fd_table_init; //SYSINIT
+
 implementation
 
 procedure FILEDESC_LOCK_INIT(fdp:p_filedesc); inline;
@@ -101,9 +103,11 @@ begin
   Result:=p_file(id_get(@fdp^.fd_ofiles,fd));
 end;
 
-initialization
+procedure fd_table_init;
+begin
  id_table_init(@fd_table.fd_ofiles,0);
  fd_table.fd_ofiles.max_key:=maxfilesperproc;
+end;
 
 finalization
  id_table_fini(@fd_table.fd_ofiles);

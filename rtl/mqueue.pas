@@ -44,6 +44,7 @@ type
 procedure TAILQ_INIT         (head:Pointer); inline;
 function  TAILQ_EMPTY        (head:Pointer):Boolean; inline;
 function  TAILQ_FIRST        (head:Pointer):Pointer; inline;
+function  TAILQ_LAST         (head,headname:Pointer):Pointer; inline;
 function  TAILQ_NEXT         (elm,field:Pointer):Pointer; inline;
 function  TAILQ_PREV         (elm,headname,field:Pointer):Pointer; inline;
 procedure TAILQ_INSERT_HEAD  (head,elm,field:Pointer); inline;
@@ -88,6 +89,11 @@ begin
  Result:=P_TAILQ_HEAD(head)^.tqh_first;
 end;
 
+function TAILQ_LAST(head,headname:Pointer):Pointer; inline;
+begin
+ Result:=P_TAILQ_HEAD(P_TAILQ_HEAD(head)^.tqh_last+ptruint(headname))^.tqh_last^;
+end;
+
 function TAILQ_NEXT(elm,field:Pointer):Pointer; inline;
 begin
  Result:=P_TAILQ_ENTRY(field)^.tqe_next;
@@ -95,7 +101,7 @@ end;
 
 function TAILQ_PREV(elm,headname,field:Pointer):Pointer; inline;
 begin
- Result:=P_TAILQ_HEAD(P_TAILQ_ENTRY(field)^.tqe_prev+ptruint(headname))^.tqh_last;
+ Result:=P_TAILQ_HEAD(P_TAILQ_ENTRY(field)^.tqe_prev+ptruint(headname))^.tqh_last^;
 end;
 
 procedure TAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;

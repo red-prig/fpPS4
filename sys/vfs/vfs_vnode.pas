@@ -228,6 +228,8 @@ type
   v_iflag:QWORD;
   v_vflag:QWORD;
 
+  v_actfreelist:TAILQ_ENTRY;
+
   v_pollinfo:p_vpollinfo; // i Poll events, p for *v_pi
 
   property v_mountedhere:Pointer read v_un{.vu_mount   } write v_un;

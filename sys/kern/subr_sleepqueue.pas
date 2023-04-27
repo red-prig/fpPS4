@@ -63,6 +63,8 @@ function  sleepq_broadcast(wchan:Pointer;flags,pri,queue:Integer):Integer;
 procedure sleepq_remove(td:p_kthread;wchan:Pointer);
 function  sleepq_abort(td:p_kthread;intrval:Integer):Integer;
 
+procedure init_sleepqueues; //SYSINIT
+
 implementation
 
 uses
@@ -697,12 +699,6 @@ begin
 
  Result:=sleepq_resume_thread(sq,td,0);
 end;
-
-
-
-
-initialization
- init_sleepqueues;
 
 end.
 

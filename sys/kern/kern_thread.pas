@@ -41,6 +41,8 @@ procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
 
 function  SIGPENDING(td:p_kthread):Boolean;
 
+procedure threadinit; //SYSINIT
+
 implementation
 
 {
@@ -91,7 +93,7 @@ end;
 
 //
 
-procedure threadinit; inline;
+procedure threadinit;
 begin
  FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
 end;
@@ -767,9 +769,6 @@ begin
  if (td=nil) then Exit(EFAULT);
  cpu_set_user_tls(td,base);
 end;
-
-initialization
- threadinit;
 
 end.
 

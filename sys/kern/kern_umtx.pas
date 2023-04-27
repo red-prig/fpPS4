@@ -26,9 +26,11 @@ function  _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):I
 
 //
 
-function kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
+function  kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
 
-function umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
+function  umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
+
+procedure umtxq_sysinit; //SYSINIT
 
 implementation
 
@@ -102,7 +104,7 @@ type
 var
  umtxq_chains:array[0..8] of umtxq_hamt;
 
-procedure umtxq_sysinit; inline;
+procedure umtxq_sysinit;
 begin
  FillChar(umtxq_chains,SizeOf(umtxq_chains),0);
 end;

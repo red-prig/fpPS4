@@ -47,7 +47,8 @@ uses
  vfs_syscalls,
  vsys_generic,
  vsocket,
- vsocketvar;
+ vsocketvar, vnode_if,
+ sys_sysinit;
 
 var
  mtx:umutex;
@@ -727,8 +728,7 @@ var
 
 begin
  //test_map;
-
- get_unit_uptime;
+ sys_init;
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('me=',e,' _errno:',__error^);

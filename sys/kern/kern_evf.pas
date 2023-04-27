@@ -17,13 +17,15 @@ const
  EVF_WAITMODE_CLEAR_ALL=$10;
  EVF_WAITMODE_CLEAR_PAT=$20;
 
-function sys_evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
-function sys_evf_delete(key:Integer):Integer;
-function sys_evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
-function sys_evf_clear(key:Integer;bitPattern:QWORD):Integer;
-function sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
-function sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
-function sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
+function  sys_evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
+function  sys_evf_delete(key:Integer):Integer;
+function  sys_evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
+function  sys_evf_clear(key:Integer;bitPattern:QWORD):Integer;
+function  sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
+function  sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
+function  sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
+
+procedure evf_sysinit; //SYSINIT
 
 implementation
 
@@ -722,9 +724,10 @@ begin
  if (r<>0) then Result:=r;
 end;
 
-
-initialization
+procedure evf_sysinit;
+begin
  id_table_init(@evf_table,1);
+end;
 
 finalization
  id_table_fini(@evf_table);

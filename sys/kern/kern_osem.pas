@@ -10,12 +10,14 @@ const
  SEMA_ATTR_PRIO=$2;
  SEMA_ATTR_SHRD=$100;
 
-function sys_osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
-function sys_osem_delete(key:Integer):Integer;
-function sys_osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
-function sys_osem_post(key,signalCount:Integer):Integer;
-function sys_osem_trywait(key,needCount:Integer):Integer;
-function sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
+function  sys_osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
+function  sys_osem_delete(key:Integer):Integer;
+function  sys_osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
+function  sys_osem_post(key,signalCount:Integer):Integer;
+function  sys_osem_trywait(key,needCount:Integer):Integer;
+function  sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
+
+procedure osem_sysinit; //SYSINIT
 
 implementation
 
@@ -528,8 +530,10 @@ begin
  end;
 end;
 
-initialization
+procedure osem_sysinit;
+begin
  id_table_init(@osem_table,1);
+end;
 
 finalization
  id_table_fini(@osem_table);

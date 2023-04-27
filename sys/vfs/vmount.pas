@@ -231,7 +231,7 @@ type
  PPInteger=^PInteger;
 
  pp_mount=^p_mount;
- p_mount=^mount;
+ p_mount=^t_mount;
 
  pp_statfs=^p_statfs;
  p_statfs=^t_statfs;
@@ -333,7 +333,7 @@ type
    * Unmarked fields are considered stable as long as a ref is held.
    *
  }
- mount=packed record
+ t_mount=packed record
   mnt_mtx                :mtx         ;// mount structure interlock
   mnt_gen                :Integer     ;// mount generation
   mnt_list               :TAILQ_ENTRY ;// (m) mount list
@@ -415,6 +415,8 @@ procedure VFS_RECLAIM_LOWERVP(mp:p_mount;vp:p_vnode);
 procedure VFS_UNLINK_LOWERVP(mp:p_mount;vp:p_vnode);
 procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);
 procedure VFS_KNOTE_UNLOCKED(vp:p_vnode;hint:Integer);
+
+procedure vmountinit; //SYSINIT
 
 implementation
 
@@ -593,9 +595,11 @@ begin
  // VN_KNOTE(vp, hint, 0);
 end;
 
-initialization
+procedure vmountinit;
+begin
  mtx_init(mountlist_mtx,'mountlist');
  mtx_init(VFS_Giant    ,'VFS_Giant');
+end;
 
 end.
 

@@ -85,24 +85,26 @@ function  poll_no_poll(events:Integer):Integer;
 
 //
 
-function sys_read(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
-function sys_pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function sys_readv(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
-function sys_preadv(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
-function sys_write(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
-function sys_pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function sys_writev(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
-function sys_pwritev(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
-function sys_ftruncate(fd:Integer;length:Int64):Integer;
-function sys_ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
-function sys_pselect(nd:Integer;
+function  sys_read(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
+function  sys_pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
+function  sys_readv(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
+function  sys_preadv(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function  sys_write(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
+function  sys_pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
+function  sys_writev(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
+function  sys_pwritev(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function  sys_ftruncate(fd:Integer;length:Int64):Integer;
+function  sys_ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
+function  sys_pselect(nd:Integer;
+                      uin,uou,uex:p_fd_set;
+                      uts:ptimespec;
+                      sm:p_sigset_t):Integer;
+function  sys_select(nd:Integer;
                      uin,uou,uex:p_fd_set;
-                     uts:ptimespec;
-                     sm:p_sigset_t):Integer;
-function sys_select(nd:Integer;
-                    uin,uou,uex:p_fd_set;
-                    utv:ptimeval):Integer;
-function sys_poll(fds:p_pollfd;nfds:DWORD;timeout:Integer):Integer;
+                     utv:ptimeval):Integer;
+function  sys_poll(fds:p_pollfd;nfds:DWORD;timeout:Integer):Integer;
+
+procedure selectinit(); //SYSINIT(select, SI_SUB_SYSCALLS, SI_ORDER_ANY, selectinit, NULL);
 
 implementation
 
@@ -1469,9 +1471,6 @@ procedure selectinit();
 begin
  mtxpool_select:=mtx_pool_create('select mtxpool', 128);
 end;
-
-initialization
- selectinit();
 
 end.
 

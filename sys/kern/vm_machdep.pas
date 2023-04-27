@@ -35,6 +35,7 @@ function  wakeup_umtxq(h:THandle):Integer; inline;
 
 function  msleep_td(timo:Int64):Integer; inline;
 function  wakeup_td(td:p_kthread):Integer; inline;
+procedure mi_switch; inline;
 
 implementation
 
@@ -127,6 +128,11 @@ end;
 function wakeup_td(td:p_kthread):Integer; inline;
 begin
  Result:=ntw2px(NtQueueApcThread(td^.td_handle,@_apc_null,nil,nil,0));
+end;
+
+procedure mi_switch; inline;
+begin
+ NtYieldExecution;
 end;
 
 Const

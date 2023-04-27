@@ -26,6 +26,8 @@ function  kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 function  sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function  sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
+Procedure timeinit; //SYSINIT
+
 implementation
 
 uses
@@ -318,16 +320,13 @@ begin
  end;
 end;
 
-Procedure Init;
+Procedure timeinit;
 var
  min,max,cur:ULONG;
 begin
  NtQueryTimerResolution(@min,@max,@cur);
  NtSetTimerResolution(max,True,@cur);
 end;
-
-initialization
- Init;
 
 end.
 

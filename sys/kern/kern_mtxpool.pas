@@ -43,6 +43,8 @@ function  mtx_pool_create(mtx_name:PChar;pool_size:Integer):p_mtx_pool;
 procedure mtx_pool_destroy(poolp:pp_mtx_pool);
 function  mtx_pool_alloc(pool:p_mtx_pool):p_mtx;
 
+procedure mtx_pool_setup_dynamic(); //SYSINIT(mtxpooli2, SI_SUB_MTX_POOL_DYNAMIC, SI_ORDER_FIRST, mtx_pool_setup_dynamic, NULL);
+
 var
  mtxpool_sleep:p_mtx_pool;
 
@@ -151,9 +153,6 @@ procedure mtx_pool_setup_dynamic();
 begin
  mtxpool_sleep:=mtx_pool_create('sleep mtxpool',MTX_POOL_SLEEP_SIZE);
 end;
-
-initialization
- mtx_pool_setup_dynamic();
 
 end.
 

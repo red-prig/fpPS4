@@ -36,10 +36,25 @@ function  msleep(ident   :Pointer;
                  wmesg   :PChar;
                  timo    :Int64):Integer;
 
+function  tsleep(ident   :Pointer;
+                 priority:Integer;
+                 wmesg   :PChar;
+                 timo    :Int64):Integer; inline;
+
 procedure wakeup(ident:Pointer);
 procedure wakeup_one(ident:Pointer);
 
+procedure maybe_yield();
+procedure kern_yield(prio:Integer);
+function  sys_yield():Integer;
+
 implementation
+
+uses
+ kern_thread,
+ sched_ule,
+ vm_machdep,
+ rtprio;
 
 function msleep(ident   :Pointer;
                 lock    :p_mtx;
@@ -93,6 +108,14 @@ begin
  end;
 end;
 
+function tsleep(ident   :Pointer;
+                priority:Integer;
+                wmesg   :PChar;
+                timo    :Int64):Integer; inline;
+begin
+ Result:=msleep(ident,nil,priority,wmesg,timo);
+end;
+
 procedure wakeup(ident:Pointer);
 begin
  sleepq_lock(ident);
@@ -107,7 +130,38 @@ begin
  sleepq_release(ident);
 end;
 
+procedure maybe_yield();
+begin
+ kern_yield(PRI_USER);
+end;
 
+procedure kern_yield(prio:Integer);
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ thread_lock(td);
+ if (prio=PRI_USER) then
+  prio:=td^.td_user_pri;
+ if (prio>=0) then
+  sched_prio(td, prio);
+ thread_unlock(td);
+ mi_switch();
+end;
+
+function sys_yield():Integer;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ thread_lock(td);
+ if (PRI_BASE(td^.td_pri_class)=PRI_TIMESHARE) then
+  sched_prio(td, PRI_MAX_TIMESHARE);
+ thread_unlock(td);
+ mi_switch();
+ td^.td_retval[0]:=0;
+ Exit(0);
+end;
 
 end.
 

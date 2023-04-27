@@ -729,8 +729,7 @@ end;
 
 function vop_stdkqfilter(ap:p_vop_kqfilter_args):Integer;
 begin
- Exit(EOPNOTSUPP);
- //Exit(vfs_kqfilter(ap));
+ Exit(vfs_kqfilter(ap));
 end;
 
 { XXX Needs good comment and more info in the manpage (VOP_PUTPAGES(9)). }

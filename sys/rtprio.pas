@@ -19,7 +19,10 @@ const
  PRI_MIN_TIMESHARE=256;
  PRI_MAX_TIMESHARE=767;
 
- PUSER=PRI_MIN_TIMESHARE;
+ PUSER=700;
+
+ PRI_USER     =-2; // Change to current user priority.
+ PRI_UNCHANGED=-1; // Do not change priority.
 
  RTP_PRIO_REALTIME =PRI_REALTIME;
  RTP_PRIO_NORMAL   =PRI_TIMESHARE;

@@ -151,6 +151,7 @@ type
   //
   td_map_def_user :Pointer;
   td_sel          :Pointer;
+  td_vp_reserv    :Int64;
  end;
 
  p_thr_param=^thr_param;
@@ -207,6 +208,8 @@ procedure curthread_pflags_restore(save:Integer); inline;
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
+
+procedure PROC_INIT; //SYSINIT
 
 implementation
 
@@ -399,8 +402,10 @@ begin
  mtx_unlock(p_mtx);
 end;
 
-initialization
+procedure PROC_INIT;
+begin
  mtx_init(p_mtx,'process lock');
+end;
 
 end.
 
