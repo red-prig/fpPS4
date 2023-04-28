@@ -713,6 +713,153 @@ begin
 
 end;
 
+type
+ p_test_tailq=^test_tailq;
+ test_tailq=packed record
+  stub:array[0..2] of qword;
+  entry:TAILQ_ENTRY;
+  name:PChar;
+ end;
+
+procedure tailq;
+var
+ list:TAILQ_HEAD;
+ e,n:p_test_tailq;
+begin
+ TAILQ_INIT(@list);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='one';
+ //TAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ TAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='two';
+ //TAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ TAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='thr';
+ //TAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ TAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ Writeln('TAILQ_FIRST');
+ e:=TAILQ_FIRST(@list);
+ while (e<>nil) do
+ begin
+  Writeln(e^.name);
+  e:=TAILQ_NEXT(e,@e^.entry);
+ end;
+
+ Writeln('TAILQ_LAST');
+ e:=TAILQ_LAST(@list);
+ while (e<>nil) do
+ begin
+  Writeln(e^.name);
+  e:=TAILQ_PREV(e,@e^.entry);
+ end;
+
+ Writeln('TAILQ_REMOVE');
+ e:=TAILQ_FIRST(@list);
+ while (e<>nil) do
+ begin
+  n:=TAILQ_NEXT(e,@e^.entry);
+  //
+  TAILQ_REMOVE(@list,e,@e^.entry);
+  Writeln(e^.name);
+  FreeMem(e);
+  //
+  e:=n;
+ end;
+
+ //
+
+ LIST_INIT(@list);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='one';
+ LIST_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='two';
+ LIST_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='thr';
+ LIST_INSERT_HEAD(@list,e,@e^.entry);
+
+ Writeln('LIST_FIRST');
+ e:=LIST_FIRST(@list);
+ while (e<>nil) do
+ begin
+  Writeln(e^.name);
+  e:=LIST_NEXT(e,@e^.entry);
+ end;
+
+ //REMOVE
+ Writeln('LIST_REMOVE');
+ e:=LIST_FIRST(@list);
+ while (e<>nil) do
+ begin
+  n:=LIST_NEXT(e,@e^.entry);
+  //
+  LIST_REMOVE(e,@e^.entry);
+  Writeln(e^.name);
+  FreeMem(e);
+  //
+  e:=n;
+ end;
+
+ //
+
+ STAILQ_INIT(@list);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='one';
+ STAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ //STAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='two';
+ STAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ //STAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ e:=AllocMem(SizeOf(test_tailq));
+ e^.name:='thr';
+ STAILQ_INSERT_TAIL(@list,e,@e^.entry);
+ //STAILQ_INSERT_HEAD(@list,e,@e^.entry);
+
+ Writeln('STAILQ_FIRST');
+ e:=STAILQ_FIRST(@list);
+ while (e<>nil) do
+ begin
+  Writeln(e^.name);
+  e:=STAILQ_NEXT(e,@e^.entry);
+ end;
+ writeln;
+
+ Writeln('STAILQ_LAST');
+ e:=STAILQ_LAST(@list,@p_test_tailq(nil)^.entry);
+ Writeln(e^.name);
+
+ Writeln('STAILQ_REMOVE');
+ e:=STAILQ_FIRST(@list);
+ while (e<>nil) do
+ begin
+  n:=STAILQ_NEXT(e,@e^.entry);
+  //
+  STAILQ_REMOVE(@list,e,@e^.entry);
+  Writeln(e^.name);
+  FreeMem(e);
+  //
+  e:=n;
+ end;
+
+ //
+
+ writeln;
+end;
+
 var
  ThreadHandle:THandle;
  v:Integer;
@@ -727,6 +874,8 @@ var
  _thr_param:thr_param;
 
 begin
+ tailq;
+
  //test_map;
  sys_init;
 

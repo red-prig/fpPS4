@@ -187,24 +187,24 @@ procedure vfs_sanitizeopts(opts:p_vfsoptlist);
 var
  opt,opt2,tmp:p_vfsopt;
 begin
- opt:=TAILQ_LAST(opts,nil);
+ opt:=TAILQ_LAST(opts);
  while (opt<>nil) do
  begin
-  opt2:=TAILQ_PREV(opt,nil,@opt^.link);
+  opt2:=TAILQ_PREV(opt,@opt^.link);
   while (opt2<>nil) do
   begin
    if (vfs_equalopts(opt^.name, opt2^.name)<>0) then
    begin
-    tmp:=TAILQ_PREV(opt2,nil,@opt^.link);
+    tmp:=TAILQ_PREV(opt2,@opt^.link);
     vfs_freeopt(opts, opt2);
     opt2:=tmp;
    end else
    begin
-    opt2:=TAILQ_PREV(opt2,nil,@opt^.link);
+    opt2:=TAILQ_PREV(opt2,@opt^.link);
    end;
   end;
   //
-  opt:=TAILQ_PREV(opt,nil,@opt^.link);
+  opt:=TAILQ_PREV(opt,@opt^.link);
  end;
 end;
 
