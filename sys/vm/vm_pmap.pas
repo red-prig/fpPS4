@@ -96,7 +96,8 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed NtAllocateVirtualMemory:',r);
+  Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
+  //STATUS_COMMITMENT_LIMIT = $C000012D
   Assert(false,'pmap_init');
  end;
 end;
@@ -183,7 +184,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed NtAllocateVirtualMemory:',r);
+  Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_enter_object');
  end;
 end;
@@ -233,7 +234,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed NtProtectVirtualMemory:',r);
+   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
    Assert(false,'pmap_protect');
   end;
 
@@ -249,7 +250,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed NtAllocateVirtualMemory:',r);
+   Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
    Assert(false,'pmap_protect');
   end;
 
@@ -269,7 +270,7 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed NtProtectVirtualMemory:',r);
+    Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
     Assert(false,'pmap_protect');
    end;
   end;
@@ -284,7 +285,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed NtFreeVirtualMemory:',r);
+   Writeln('failed NtFreeVirtualMemory:',HexStr(r,8));
    Assert(false,'pmap_protect');
   end;
 
@@ -300,7 +301,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed NtProtectVirtualMemory:',r);
+   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
    Assert(false,'pmap_protect');
   end;
  end;
@@ -334,7 +335,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed NtAllocateVirtualMemory:',r);
+  Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_madv_free');
  end;
 end;
@@ -368,7 +369,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed NtFreeVirtualMemory:',r);
+  Writeln('failed NtFreeVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_remove');
  end;
 end;

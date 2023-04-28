@@ -203,8 +203,8 @@ procedure TD_SET_RUNNING(td:p_kthread);
 procedure TD_SET_RUNQ(td:p_kthread);
 procedure TD_SET_CAN_RUN(td:p_kthread);
 
-function  curthread_pflags_set(flags:Integer):Integer; inline;
-procedure curthread_pflags_restore(save:Integer); inline;
+function  curthread_pflags_set(flags:Integer):Integer;
+procedure curthread_pflags_restore(save:Integer);
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
@@ -376,7 +376,7 @@ end;
 
 //
 
-function curthread_pflags_set(flags:Integer):Integer; inline;
+function curthread_pflags_set(flags:Integer):Integer;
 var
  td:p_kthread;
 begin
@@ -385,7 +385,7 @@ begin
  td^.td_pflags:=td^.td_pflags or flags;
 end;
 
-procedure curthread_pflags_restore(save:Integer); inline;
+procedure curthread_pflags_restore(save:Integer);
 begin
  curkthread^.td_pflags:=curkthread^.td_pflags and save;
 end;
