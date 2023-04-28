@@ -158,7 +158,7 @@ var
  sc:p_sleepqueue_chain;
 begin
  sc:=SC_LOOKUP(wchan);
- HAMT_delete64(@sc^.sc_hamt,QWORD(wchan));
+ HAMT_delete64(@sc^.sc_hamt,QWORD(wchan),nil);
 end;
 
 procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);

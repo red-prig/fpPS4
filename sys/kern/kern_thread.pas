@@ -211,9 +211,10 @@ procedure tidhash_remove(td:p_kthread);
 var
  data:Pointer;
 begin
+ data:=nil;
  rw_wlock(tidhash_lock);
 
- data:=HAMT_delete32(@tidhashtbl,td^.td_tid);
+ HAMT_delete32(@tidhashtbl,td^.td_tid,@data);
 
  rw_wunlock(tidhash_lock);
 

@@ -168,6 +168,7 @@ function umtx_key_remove(key:umtx_key):Boolean;
 var
  m:Pointer;
  umtxq:p_umtxq_hamt;
+ old:umtx_key;
 begin
  Result:=False;
 
@@ -182,7 +183,9 @@ begin
      (key^.uc_queue[0].length=0) and
      (key^.uc_queue[1].length=0) then
   begin
-   Result:=HAMT_delete64(@umtxq^.hamt,QWORD(m))=key;
+   old:=nil;
+   HAMT_delete64(@umtxq^.hamt,QWORD(m),@old);
+   Result:=(old=key);
   end;
 
  rw_wunlock(umtxq^.lock);

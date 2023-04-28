@@ -44,11 +44,13 @@ implementation
 
 Procedure id_acqure(d:p_id_desc);
 begin
+ if (d=nil) then Exit;
  System.InterlockedIncrement64(d^.refs);
 end;
 
 Procedure id_release(d:p_id_desc);
 begin
+ if (d=nil) then Exit;
  if (System.InterlockedDecrement64(d^.refs)=0) then
  if (d^.free<>nil) then
  begin
@@ -87,7 +89,7 @@ Var
  data:PPointer;
 begin
  Result:=False;
- if (t=nil) or (d=nil) or (pKey=nil) then Exit;
+ if (t=nil) or (pKey=nil) then Exit;
 
  rw_wlock(t^.FLock);
 
@@ -147,7 +149,7 @@ Var
  data:PPointer;
 begin
  Result:=False;
- if (t=nil) or (d=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
+ if (t=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
 
  rw_wlock(t^.FLock);
 
@@ -194,10 +196,8 @@ begin
  if (data=nil) then Goto _exit;
 
  Pointer(Result):=data^;
- if (Result<>nil) then
- begin
-  id_acqure(Result);
- end;
+
+ id_acqure(Result);
 
  _exit:
   rw_runlock(t^.FLock);
@@ -210,11 +210,10 @@ begin
  Result:=False;
  if (t=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
 
+ d:=nil;
  rw_wlock(t^.FLock);
 
- Pointer(d):=HAMT_delete32(@t^.FHAMT,Key);
-
- if (d<>nil) then
+ if HAMT_delete32(@t^.FHAMT,Key,@d) then
  begin
   if (old<>nil) then
   begin

@@ -405,6 +405,10 @@
         <Filename Value="..\sys_sysinit.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\vfs\devfs\devfs.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -415,7 +419,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs"/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\vfs\devfs"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

@@ -33,6 +33,8 @@ procedure vgonel(vp:p_vnode);
 
 procedure vhold(vp:p_vnode);
 procedure vdrop(vp:p_vnode);
+function  vrecycle(vp:p_vnode):Integer;
+procedure vgone(vp:p_vnode);
 
 function  vget(vp:p_vnode;flags:Integer):Integer;
 procedure vref(vp:p_vnode);
@@ -2360,20 +2362,20 @@ loop:
   vrele(rootvp);
  Exit(0);
 end;
+}
 
 {
  * Recycle an unused vnode to the front of the free list.
  }
-int
-vrecycle(vp:p_vnode, struct thread *td)
+function vrecycle(vp:p_vnode):Integer;
+var
+ recycled:Integer;
 begin
- int recycled;
-
- ASSERT_VOP_ELOCKED(vp, "vrecycle';
- CTR2(KTR_VFS, "%s: vp %p", {$I %LINE%}, vp);
+ ASSERT_VOP_ELOCKED(vp, 'vrecycle');
  recycled:=0;
  VI_LOCK(vp);
- if (vp^.v_usecount=0) begin
+ if (vp^.v_usecount=0)then
+ begin
   recycled:=1;
   vgonel(vp);
  end;
@@ -2385,14 +2387,12 @@ end;
  * Eliminate all activity associated with a vnode
  * in preparation for reuse.
  }
-void
-vgone(vp:p_vnode)
+procedure vgone(vp:p_vnode);
 begin
  VI_LOCK(vp);
  vgonel(vp);
  VI_UNLOCK(vp);
 end;
-}
 
 procedure notify_lowervp_vfs_dummy(mp:p_mount;lowervp:p_vnode);
 begin

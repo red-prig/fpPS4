@@ -85,7 +85,7 @@ function vfs_stdextattrctl(mp:p_mount;cmd:Integer;filename_vp:p_vnode;attrnamesp
 function vfs_stdsysctl(mp:p_mount;op:Integer;req:Pointer):Integer;
 
 const
- DIRENT_MINSIZE=SizeOf(dirent)-(dirent.MAXNAMLEN+1)+4;
+ DIRENT_MINSIZE=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+4;
 
 {
  * This vnode table stores what we want to do if the filesystem doesn't

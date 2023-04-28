@@ -959,7 +959,11 @@ begin
   selfdfree(stp, sfp);
   { If the selinfo wasn't cleared the event didn't fire. }
   if (si<>nil) then
+  begin
+   sfp:=sfn;
+   //
    continue;
+  end;
   error:=getselfd_cap(fd, @fp);
   if (error<>0) then
    Exit(error);
@@ -1124,7 +1128,11 @@ begin
   selfdfree(stp, sfp);
   { If the selinfo wasn't cleared the event didn't fire. }
   if (si<>nil) then
+  begin
+   sfp:=sfn;
+   //
    continue;
+  end;
   fp:=fget_unlocked(fd^.fd);
   if (fp=nil) or (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0) then
   begin
@@ -1133,6 +1141,9 @@ begin
    //
    fd^.revents:=POLLNVAL;
    Inc(n);
+   //
+   sfp:=sfn;
+   //
    continue;
   end;
   {

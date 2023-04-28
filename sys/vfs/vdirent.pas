@@ -18,8 +18,8 @@ const
  DT_WHT    =14; //
 
 type
- p_dirent=^dirent;
- dirent=packed object
+ p_dirent=^t_dirent;
+ t_dirent=packed object
   Const
    MAXNAMLEN=255;
   Var
@@ -32,6 +32,7 @@ type
 
 function IFTODT(mode:DWORD):DWORD; inline;
 function DTTOIF(dirtype:DWORD):DWORD; inline;
+function GENERIC_DIRSIZ(dp:p_dirent):Integer; inline;
 
 implementation
 
@@ -43,6 +44,11 @@ end;
 function DTTOIF(dirtype:DWORD):DWORD; inline;
 begin
  Result:=dirtype shl 12;
+end;
+
+function GENERIC_DIRSIZ(dp:p_dirent):Integer; inline;
+begin
+ Result:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+((dp^.d_namlen+1 + 3) and (not 3));
 end;
 
 end.

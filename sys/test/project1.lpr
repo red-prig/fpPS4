@@ -47,8 +47,10 @@ uses
  vfs_syscalls,
  vsys_generic,
  vsocket,
- vsocketvar, vnode_if,
- sys_sysinit;
+ vsocketvar,
+ vnode_if,
+ sys_sysinit,
+ devfs;
 
 var
  mtx:umutex;

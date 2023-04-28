@@ -37,7 +37,7 @@ function  HAMT_clear32(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_destroy32(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_search32(hamt:THAMT;key:DWORD):PPointer;              //mutable link to data
 function  HAMT_insert32(hamt:THAMT;key:DWORD;data:Pointer):PPointer; //mutable link to data
-function  HAMT_delete32(hamt:THAMT;key:DWORD):Pointer;               //data
+function  HAMT_delete32(hamt:THAMT;key:DWORD;old:PPointer):Boolean;  //data
 function  HAMT_traverse32(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 
 function  HAMT_create64:THAMT;
@@ -45,7 +45,7 @@ function  HAMT_clear64(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_destroy64(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_search64(hamt:THAMT;key:QWORD):PPointer;              //mutable link to data
 function  HAMT_insert64(hamt:THAMT;key:QWORD;data:Pointer):PPointer; //mutable link to data
-function  HAMT_delete64(hamt:THAMT;key:QWORD):Pointer;               //data
+function  HAMT_delete64(hamt:THAMT;key:QWORD;old:PPointer):Boolean;  //data
 function  HAMT_traverse64(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 
 type
@@ -823,13 +823,14 @@ begin
  until false;
 end;
 
-function HAMT_delete32(hamt:THAMT;key:DWORD):Pointer;
+function HAMT_delete32(hamt:THAMT;key:DWORD;old:PPointer):Boolean;
 var
  prev,node,oldnodes,newnodes:PHAMTNode32;
  keypart,Map,Size:DWORD;
  keypartbits:DWORD;
 begin
- if (hamt=nil) then Exit(nil);
+ Result:=False;
+ if (hamt=nil) then Exit;
 
  keypartbits:=HAMT32.root_bits;
 
@@ -839,14 +840,18 @@ begin
  keypart:=key and HAMT32.root_mask;
  node:=@PHAMTNode32(hamt)[keypart];
 
- if (node^.BaseValue=nil) then Exit(nil);
+ if (node^.BaseValue=nil) then Exit;
 
  repeat
   if not IsSubTrie32(node) then
   begin
    if (node^.BitMapKey=key) then
    begin
-    Result:=GetValue32(node);
+    Result:=True;
+    if (old<>nil) then
+    begin
+     old^:=GetValue32(node);
+    end;
 
     node^:=Default(THAMTNode32);
 
@@ -883,7 +888,7 @@ begin
 
     Exit;
    end else
-    Exit(nil);
+    Exit;
   end;
   //Subtree: look up in bitmap
   Assert(keypartbits<HAMT32.node_size);
@@ -891,7 +896,7 @@ begin
   keypart:=(key shr keypartbits) and HAMT32.node_mask;
 
   if BitIsNotSet32(node^.BitMapKey,keypart) then
-   Exit(nil); // bit is 0 in bitmap -> no match
+   Exit; // bit is 0 in bitmap -> no match
 
   Map:=GetMapPos32(node^.BitMapKey,keypart);
 
@@ -903,13 +908,14 @@ begin
  until false;
 end;
 
-function HAMT_delete64(hamt:THAMT;key:QWORD):Pointer;
+function HAMT_delete64(hamt:THAMT;key:QWORD;old:PPointer):Boolean;
 var
  prev,node,oldnodes,newnodes:PHAMTNode64;
  keypart,Map,Size:QWORD;
  keypartbits:QWORD;
 begin
- if (hamt=nil) then Exit(nil);
+ Result:=False;
+ if (hamt=nil) then Exit;
 
  keypartbits:=HAMT64.root_bits;
 
@@ -919,14 +925,18 @@ begin
  keypart:=key and HAMT64.root_mask;
  node:=@PHAMTNode64(hamt)[keypart];
 
- if (node^.BaseValue=nil) then Exit(nil);
+ if (node^.BaseValue=nil) then Exit;
 
  repeat
   if not IsSubTrie64(node) then
   begin
    if (node^.BitMapKey=key) then
    begin
-    Result:=GetValue64(node);
+    Result:=True;
+    if (old<>nil) then
+    begin
+     old^:=GetValue64(node);
+    end;
 
     node^:=Default(THAMTNode64);
 
@@ -963,7 +973,7 @@ begin
 
     Exit;
    end else
-    Exit(nil);
+    Exit;
   end;
   //Subtree: look up in bitmap
   Assert(keypartbits<HAMT64.node_size);
@@ -971,7 +981,7 @@ begin
   keypart:=(key shr keypartbits) and HAMT64.node_mask;
 
   if BitIsNotSet64(node^.BitMapKey,keypart) then
-   Exit(nil); // bit is 0 in bitmap -> no match
+   Exit; // bit is 0 in bitmap -> no match
 
   Map:=GetMapPos64(node^.BitMapKey,keypart);
 
