@@ -3082,7 +3082,7 @@ const
      sy_name:'sys_get_proc_type_info'
   ),
   (//[613]
-     sy_narg:1;
+     sy_narg:3;
      sy_call:nil;
      sy_name:'sys_get_resident_count'
   ),
@@ -3092,7 +3092,7 @@ const
      sy_name:'sys_prepare_to_suspend_process'
   ),
   (//[615]
-     sy_narg:1;
+     sy_narg:3;
      sy_call:nil;
      sy_name:'sys_get_resident_fmem_count'
   ),
@@ -3107,27 +3107,27 @@ const
      sy_name:'sys_set_gpo'
   ),
   (//[618]
-     sy_narg:0; //fix it
+     sy_narg:3;
      sy_call:nil;
      sy_name:'sys_get_paging_stats_of_all_objects'
   ),
   (//[619]
-     sy_narg:0; //fix it
+     sy_narg:5;
      sy_call:nil;
      sy_name:'sys_test_debug_rwmem'
   ),
   (//[620]
-     sy_narg:0; //fix it
+     sy_narg:0;
      sy_call:nil;
      sy_name:'sys_free_stack'
   ),
   (//[621]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_suspend_system'
   ),
   (//[622]
-     sy_narg:0; //fix it
+     sy_narg:5;
      sy_call:nil;
      sy_name:'sys_ipmimgr_call'
   ),
@@ -3137,22 +3137,22 @@ const
      sy_name:'sys_get_gpo'
   ),
   (//[624]
-     sy_narg:0; //fix it
+     sy_narg:0;
      sy_call:nil;
      sy_name:'sys_get_vm_map_timestamp'
   ),
   (//[625]
-     sy_narg:0; //fix it
+     sy_narg:4;
      sy_call:nil;
      sy_name:'sys_opmc_set_hw'
   ),
   (//[626]
-     sy_narg:0; //fix it
+     sy_narg:4;
      sy_call:nil;
      sy_name:'sys_opmc_get_hw'
   ),
   (//[627]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_get_cpu_usage_all'
   ),
