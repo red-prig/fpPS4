@@ -409,6 +409,18 @@ end;
 
 //
 
+function ps4_sceSystemServiceEnableSuspendNotification:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceSystemServiceDisableSuspendNotification:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
 function Load_libSceSystemService(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -427,6 +439,10 @@ begin
  lib^.set_proc($98FA4FC6FE4266DE,@ps4_sceSystemServiceGetHdrToneMapLuminance);
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
  lib^.set_proc($EB9E8B3104AB83A5,@ps4_sceSystemServiceReceiveEvent);
+
+ lib:=Result._add_lib('libSceSystemServiceSuspend');
+ lib^.set_proc($6B92A38EAE8781C5,@ps4_sceSystemServiceEnableSuspendNotification);
+ lib^.set_proc($322D2AC026FEAEFA,@ps4_sceSystemServiceDisableSuspendNotification);
 end;
 
 initialization
