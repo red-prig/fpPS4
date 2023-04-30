@@ -232,10 +232,10 @@ type
 
   v_pollinfo:p_vpollinfo; // i Poll events, p for *v_pi
 
-  property v_mountedhere:Pointer read v_un{.vu_mount   } write v_un;
-  property v_socket     :Pointer read v_un{.vu_socket  } write v_un;
-  property v_rdev       :Pointer read v_un{.vu_cdev    } write v_un;
-  property v_fifoinfo   :Pointer read v_un{.vu_fifoinfo} write v_un;
+  property v_mountedhere:Pointer read v_un{.vu_mount   } write v_un; //mount
+  property v_socket     :Pointer read v_un{.vu_socket  } write v_un; //socket
+  property v_rdev       :Pointer read v_un{.vu_cdev    } write v_un; //cdev
+  property v_fifoinfo   :Pointer read v_un{.vu_fifoinfo} write v_un; //fifoinfo
  end;
 
  p_vattr=^t_vattr;

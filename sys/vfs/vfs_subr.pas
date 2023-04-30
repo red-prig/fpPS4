@@ -110,7 +110,8 @@ uses
  vm_object,
  vsys_generic,
  dead_vnops,
- rtprio;
+ rtprio,
+ devfs;
 
 {
  * List of vnodes that are ready for recycling.
@@ -1798,11 +1799,11 @@ end;
 procedure v_incr_usecount(vp:p_vnode);
 begin
  Inc(vp^.v_usecount);
- if (vp^.v_type=VCHR) {and (vp^.v_rdev<>nil)} then
+ if (vp^.v_type=VCHR) and (vp^.v_rdev<>nil) then
  begin
-  //dev_lock();
-  //vp^.v_rdev^.si_usecount++;
-  //dev_unlock();
+  dev_lock();
+  Inc(p_cdev(vp^.v_rdev)^.si_usecount);
+  dev_unlock();
  end;
  vholdl(vp);
 end;
@@ -1814,11 +1815,11 @@ end;
 procedure v_upgrade_usecount(vp:p_vnode);
 begin
  Inc(vp^.v_usecount);
- if (vp^.v_type=VCHR) {and (vp^.v_rdev<>nil)} then
+ if (vp^.v_type=VCHR) and (vp^.v_rdev<>nil) then
  begin
-  //dev_lock();
-  //vp^.v_rdev^.si_usecount++;
-  //dev_unlock();
+  dev_lock();
+  Inc(p_cdev(vp^.v_rdev)^.si_usecount);
+  dev_unlock();
  end;
 end;
 
@@ -1832,11 +1833,11 @@ begin
  ASSERT_VI_LOCKED(vp,{$I %LINE%});
  Assert(vp^.v_usecount>0,'v_decr_usecount: negative usecount');
  Dec(vp^.v_usecount);
- if (vp^.v_type=VCHR) {and (vp^.v_rdev<>nil)} then
+ if (vp^.v_type=VCHR) and (vp^.v_rdev<>nil) then
  begin
-  //dev_lock();
-  //vp^.v_rdev^.si_usecount--;
-  //dev_unlock();
+  dev_lock();
+  Inc(p_cdev(vp^.v_rdev)^.si_usecount);
+  dev_unlock();
  end;
  vdropl(vp);
 end;
@@ -1852,11 +1853,11 @@ begin
  ASSERT_VI_LOCKED(vp,{$I %LINE%});
  Assert(vp^.v_usecount>0,'v_decr_useonly: negative usecount');
  Dec(vp^.v_usecount);
- if (vp^.v_type=VCHR) {and (vp^.v_rdev<>nil)} then
+ if (vp^.v_type=VCHR) and (vp^.v_rdev<>nil) then
  begin
-  //dev_lock();
-  //vp^.v_rdev^.si_usecount--;
-  //dev_unlock();
+  dev_lock();
+  Dec(p_cdev(vp^.v_rdev)^.si_usecount);
+  dev_unlock();
  end;
 end;
 
@@ -2562,11 +2563,9 @@ end;
  }
 function vcount(vp:p_vnode):Integer;
 begin
- Result:=0;
- //dev_lock();
- //count:=vp^.v_rdev^.si_usecount;
- //dev_unlock();
- //Exit(count);
+ dev_lock();
+ Result:=p_cdev(vp^.v_rdev)^.si_usecount;
+ dev_unlock();
 end;
 
 {
@@ -2574,11 +2573,9 @@ end;
  }
 function count_dev(dev:Pointer):Integer; //cdev
 begin
- Result:=0;
- //dev_lock();
- //count:=dev^.si_usecount;
- //dev_unlock();
- //Exit(count);
+ dev_lock();
+ Result:=p_cdev(dev)^.si_usecount;
+ dev_unlock();
 end;
 
 {
@@ -2881,19 +2878,19 @@ var
  error:Integer;
 begin
  error:=0;
- //dev_lock();
+ dev_lock();
  if (vp^.v_type<>VCHR) then
   error:=ENOTBLK
- ;//else
- //if (vp^.v_rdev=nil) then
- // error:=ENXIO
- //else
- //if (vp^.v_rdev^.si_devsw=nil) then
- // error:=ENXIO
- //else
- //if ((vp^.v_rdev^.si_devsw^.d_flags and D_DISK)=0) then
- // error:=ENOTBLK;
- //dev_unlock();
+ else
+ if (vp^.v_rdev=nil) then
+  error:=ENXIO
+ else
+ if (p_cdev(vp^.v_rdev)^.si_devsw=nil) then
+  error:=ENXIO
+ else{
+ if ((p_cdev(vp^.v_rdev)^.si_devsw^.d_flags and D_DISK)=0) then
+  error:=ENOTBLK};
+ dev_unlock();
  error:=ENOTBLK;
  if (errp<>nil) then
   errp^:=error;

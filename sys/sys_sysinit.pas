@@ -26,7 +26,8 @@ uses
  vsys_generic,
  vfs_subr,
  vfs_lookup,
- devfs;
+ devfs,
+ devfs_devs;
 
 //Daemon for a separate thread
 procedure sys_update;
@@ -52,7 +53,7 @@ begin
  selectinit;
  vntblinit;
  nameiinit;
- dirlist_mtx_init;
+ devfs_mtx_init;
  devfs_devs_init;
 end;
 

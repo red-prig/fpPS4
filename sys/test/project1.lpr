@@ -50,6 +50,7 @@ uses
  vsocketvar,
  vnode_if,
  sys_sysinit,
+ sys_fnmatch,
  devfs;
 
 var
