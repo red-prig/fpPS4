@@ -22,6 +22,17 @@ uses
 const
  VFS_MOUNTARG_SIZE_MAX=(1024 * 64);
 
+ global_opts:array[0..7] of PChar=(
+  'errmsg',
+  'fstype',
+  'fspath',
+  'ro',
+  'rw',
+  'nosuid',
+  'noexec',
+  nil
+ );
+
 procedure vfs_freeopt(opts:p_vfsoptlist;opt:p_vfsopt);
 procedure vfs_freeopts(opts:p_vfsoptlist);
 procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
@@ -32,13 +43,18 @@ procedure vfs_sanitizeopts(opts:p_vfsoptlist);
 function  vfs_buildopts(auio:p_uio;options:pp_vfsoptlist):Integer;
 procedure vfs_mergeopts(toopts,oldopts:p_vfsoptlist);
 
+procedure vfs_mount_error(mp:p_mount;fmt:PChar;const Args:Array of const); register;
+procedure vfs_opterror(opts:p_vfsoptlist;fmt:PChar;const Args:Array of const); register;
+function  vfs_filteropt(opts:p_vfsoptlist;legal:ppchar):Integer;
 function  vfs_getopt(opts:p_vfsoptlist;name:PChar;buf:PPointer;len:PInteger):Integer;
 function  vfs_getopt_pos(opts:p_vfsoptlist;name:PChar):Integer;
 function  vfs_getopts(opts:p_vfsoptlist;name:PChar;error:PInteger):PChar;
 function  vfs_flagopt(opts:p_vfsoptlist;name:PChar;w:PQWORD;val:QWORD):Integer;
+function  vfs_scanopt(opts:p_vfsoptlist;name,fmt:PChar;const Args:Array of const):Integer; register;
 function  vfs_setopt(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
 function  vfs_setopt_part(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
 function  vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;
+procedure vfs_mountedfrom(mp:p_mount;from:PChar);
 
 procedure vfs_ref(mp:p_mount); inline;
 procedure vfs_rel(mp:p_mount); inline;
@@ -337,11 +353,116 @@ begin
  vfs_sanitizeopts(toopts);
 end;
 
+{
+ * Report errors during filesystem mounting.
+ }
+procedure vfs_mount_error(mp:p_mount;fmt:PChar;const Args:Array of const); register;
+var
+ moptlist:p_vfsoptlist;
+ error,len:Integer;
+ errmsg:PChar;
+ S:RawByteString;
+begin
+ moptlist:=mp^.mnt_optnew;
+
+ error:=vfs_getopt(moptlist, 'errmsg', @errmsg, @len);
+ if (error<>0) or
+    (errmsg=nil) or
+    (len<=0) then
+  Exit;
+
+ S:=Format(fmt,Args);
+ if (len>(Length(S)+1)) then len:=Length(S)+1;
+ Move(PChar(S)^,errmsg^,len);
+end;
+
+procedure vfs_opterror(opts:p_vfsoptlist;fmt:PChar;const Args:Array of const); register;
+var
+ error,len:Integer;
+ errmsg:PChar;
+ S:RawByteString;
+begin
+ error:=vfs_getopt(opts, 'errmsg', @errmsg, @len);
+ if (error<>0) or
+    (errmsg=nil) or
+    (len<=0) then
+  Exit;
+
+ S:=Format(fmt,Args);
+ if (len>(Length(S)+1)) then len:=Length(S)+1;
+ Move(PChar(S)^,errmsg^,len);
+end;
+
+{
+ * Check that no unknown options are given
+ }
+function vfs_filteropt(opts:p_vfsoptlist;legal:ppchar):Integer;
+var
+ opt:p_vfsopt;
+ errmsg:array[0..254] of Char;
+ t:ppchar;
+ p,q:pchar;
+begin
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  p:=opt^.name;
+  q:=nil;
+  if (p[0]='n') and (p[1]='o') then
+   q:=p + 2;
+  t:=@global_opts;
+  while (t^<>nil) do
+  begin
+   if (strcomp(t^, p)=0) then
+    break;
+   if (q<>nil) then
+   begin
+    if (strcomp(t^, q)=0) then
+     break;
+   end;
+   Inc(t);
+  end;
+  if (t^<>nil) then
+   continue;
+  t:=legal;
+  while (t^<>nil) do
+  begin
+   if (strcomp(t^, p)=0) then
+    break;
+   if (q<>nil) then
+   begin
+    if (strcomp(t^, q)=0) then
+     break;
+   end;
+   Inc(t);
+  end;
+  if (t^<>nil) then
+   continue;
+  errmsg:='mount option is unknown';
+  Result:=EINVAL;
+  opt:=TAILQ_NEXT(opt,@opt^.link);
+ end;
+ if (Result<>0) then
+ begin
+  opt:=TAILQ_FIRST(opts);
+  while (opt<>nil) do
+  begin
+   if (strcomp(opt^.name, 'errmsg')=0) then
+   begin
+    strlcopy(opt^.value, errmsg, opt^.len);
+    break;
+   end;
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+  end;
+  if (opt=nil) then
+   Writeln(errmsg);
+ end;
+end;
 
 {
  * Get a mount option by its name.
  *
- * Exit0 if the option was found, ENOENT otherwise.
+ * return 0 if the option was found, ENOENT otherwise.
  * If len is non-nil it will be filled with the length
  * of the option. If buf is non-nil, it will be filled
  * with the address of the option.
@@ -439,6 +560,34 @@ begin
  Exit(0);
 end;
 
+function vfs_scanopt(opts:p_vfsoptlist;name,fmt:PChar;const Args:Array of const):Integer; register;
+var
+ opt:p_vfsopt;
+ S:RawByteString;
+begin
+ Assert(opts<>nil, 'vfs_getopt: caller passed opts as nil');
+
+ opt:=TAILQ_FIRST(opts);
+ while (opt<>nil) do
+ begin
+  if (strcomp(name, opt^.name)<>0) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   continue;
+  end;
+  opt^.seen:=1;
+  if (opt^.len=0) or (opt^.value=nil) then
+   Exit(0);
+  if (PChar(opt^.value)[opt^.len - 1]<>#0) then
+   Exit(0);
+
+  S:=Format(fmt,Args);
+  Move(PChar(S)^,opt^.value^,Length(S)+1);
+  Exit(0);
+ end;
+ Exit(0);
+end;
+
 function vfs_setopt(opts:p_vfsoptlist;name,value:PChar;len:Integer):Integer;
 var
  opt:p_vfsopt;
@@ -518,6 +667,12 @@ begin
   Exit(0);
  end;
  Exit(ENOENT);
+end;
+
+procedure vfs_mountedfrom(mp:p_mount;from:PChar);
+begin
+ FillChar(mp^.mnt_stat.f_mntfromname,sizeof(mp^.mnt_stat.f_mntfromname),0);
+ strlcopy(@mp^.mnt_stat.f_mntfromname, from, sizeof(mp^.mnt_stat.f_mntfromname));
 end;
 
 ///

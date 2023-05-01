@@ -425,6 +425,10 @@
         <Filename Value="..\sys_fnmatch.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\vfs\devfs\devfs_vfsops.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

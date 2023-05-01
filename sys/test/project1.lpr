@@ -51,7 +51,8 @@ uses
  vnode_if,
  sys_sysinit,
  sys_fnmatch,
- devfs;
+ devfs,
+ devfs_vfsops;
 
 var
  mtx:umutex;

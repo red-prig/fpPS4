@@ -10,20 +10,6 @@ uses
  devfs,
  kern_sx;
 
-//#include <sys/param.h>
-//#include <sys/systm.h>
-//#include <sys/conf.h>
-//#include <sys/kernel.h>
-//#include <sys/malloc.h>
-//#include <sys/priv.h>
-//#include <sys/dirent.h>
-//#include <sys/ioccom.h>
-//#include <sys/lock.h>
-//#include <sys/sx.h>
-//
-//#include <fs/devfs/devfs.h>
-//#include <fs/devfs/devfs_int.h>
-
 {
  * Kernel version of devfs_rule.
  }

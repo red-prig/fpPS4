@@ -24,6 +24,7 @@ procedure sx_xlock(p:p_sx);
 procedure sx_sunlock(p:p_sx);
 procedure sx_xunlock(p:p_sx);
 procedure sx_unlock(p:p_sx);
+procedure sx_destroy(p:p_sx);
 
 implementation
 
@@ -75,6 +76,11 @@ begin
   1:rw_runlock(p^.c);
   2:rw_wunlock(p^.c);
  end;
+end;
+
+procedure sx_destroy(p:p_sx);
+begin
+ //
 end;
 
 end.

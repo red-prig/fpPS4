@@ -26,13 +26,20 @@ uses
  vsys_generic,
  vfs_subr,
  vfs_lookup,
+ vfs_init,
  devfs,
- devfs_devs;
+ devfs_devs,
+ devfs_vfsops;
 
 //Daemon for a separate thread
 procedure sys_update;
 begin
  vnlru_proc;
+end;
+
+procedure module_init;
+begin
+ vfs_register(@devfs_vfsconf);
 end;
 
 //Manual order of lazy initialization
@@ -55,6 +62,7 @@ begin
  nameiinit;
  devfs_mtx_init;
  devfs_devs_init;
+ module_init;
 end;
 
 end.

@@ -42,6 +42,7 @@ procedure vrele(vp:p_vnode);
 procedure vput(vp:p_vnode);
 
 procedure vinactive(vp:p_vnode);
+function  vflush(mp:p_mount;rootrefs,flags:Integer):Integer;
 
 procedure vfs_notify_upper(vp:p_vnode;event:Integer);
 
@@ -2248,44 +2249,55 @@ end;
  * If the SKIPSYSTEM or WRITECLOSE flags are specified, rootrefs must
  * be zero.
  }
-
-{
-
-int
-vflush(mp:p_mount, int rootrefs, int flags, struct thread *td)
+function vflush(mp:p_mount;rootrefs,flags:Integer):Integer;
+label
+ loop;
+var
+ vp,mvp,rootvp:p_vnode;
+ vattr:t_vattr;
+ busy,error:Integer;
 begin
- vp:p_vnode, *mvp, *rootvp:=nil;
- struct vattr vattr;
- int busy:=0, error;
+ rootvp:=nil;
+ busy:=0;
 
- if (rootrefs > 0) begin
-  Assert((flags and (SKIPSYSTEM or WRITECLOSE))=0,
-      'vflush: bad args');
+ if (rootrefs > 0) then
+ begin
+  Assert((flags and (SKIPSYSTEM or WRITECLOSE))=0,'vflush: bad args');
   {
    * Get the filesystem root vnode. We can vput() it
    * immediately, since with rootrefs > 0, it won't go away.
    }
-  if ((error:=VFS_ROOT(mp, LK_EXCLUSIVE, &rootvp))<>0) then
+  error:=VFS_ROOT(mp, LK_EXCLUSIVE, @rootvp);
+  if (error<>0) then
   begin
    Exit(error);
   end;
   vput(rootvp);
  end;
 loop:
- MNT_VNODE_FOREACH_ALL(vp, mp, mvp) begin
+ vp:=__mnt_vnode_first_all(@mvp,mp);
+ while (vp<>nil) do
+ begin
   vholdl(vp);
   error:=vn_lock(vp, LK_INTERLOCK or LK_EXCLUSIVE);
-  if (error) begin
+  if (error<>0) then
+  begin
    vdrop(vp);
-   MNT_VNODE_FOREACH_ALL_ABORT(mp, mvp);
+   //MNT_VNODE_FOREACH_ALL_ABORT
+   MNT_ILOCK(mp);
+   __mnt_vnode_markerfree_all(@mvp,mp);
+   //MNT_VNODE_FOREACH_ALL_ABORT
    goto loop;
   end;
   {
    * Skip over a vnodes marked VV_SYSTEM.
    }
-  if ((flags and SKIPSYSTEM) and (vp^.v_vflag and VV_SYSTEM)) begin
+  if (((flags and SKIPSYSTEM)<>0) and ((vp^.v_vflag and VV_SYSTEM)<>0)) then
+  begin
    VOP_UNLOCK(vp, 0);
    vdrop(vp);
+   //
+   vp:=__mnt_vnode_next_all(@mvp,mp);
    continue;
   end;
   {
@@ -2293,30 +2305,39 @@ loop:
    * files (even if open only for reading) and regular file
    * vnodes open for writing.
    }
-  if (flags and WRITECLOSE) begin
-   if (vp^.v_object<>nil) begin
-    VM_OBJECT_LOCK(vp^.v_object);
-    vm_object_page_clean(vp^.v_object, 0, 0, 0);
-    VM_OBJECT_UNLOCK(vp^.v_object);
-   end;
-   error:=VOP_FSYNC(vp, MNT_WAIT, td);
-   if (error<>0) begin
+  if ((flags and WRITECLOSE)<>0) then
+  begin
+   //if (vp^.v_object<>nil) then
+   //begin
+   // VM_OBJECT_LOCK(vp^.v_object);
+   // vm_object_page_clean(vp^.v_object, 0, 0, 0);
+   // VM_OBJECT_UNLOCK(vp^.v_object);
+   //end;
+   error:=VOP_FSYNC(vp, MNT_WAIT);
+   if (error<>0) then
+   begin
     VOP_UNLOCK(vp, 0);
     vdrop(vp);
-    MNT_VNODE_FOREACH_ALL_ABORT(mp, mvp);
+    //MNT_VNODE_FOREACH_ALL_ABORT
+    MNT_ILOCK(mp);
+    __mnt_vnode_markerfree_all(@mvp,mp);
+    //MNT_VNODE_FOREACH_ALL_ABORT
     Exit(error);
    end;
-   error:=VOP_GETATTR(vp, &vattr, td^.td_ucred);
+   error:=VOP_GETATTR(vp, @vattr);
    VI_LOCK(vp);
 
-   if ((vp^.v_type=VNON or
-       (error=0 and vattr.va_nlink > 0)) and
-       (vp^.v_writecount=0 or vp^.v_type<>VREG)) begin
+   if ((vp^.v_type=VNON) or
+       ((error=0) and (vattr.va_nlink > 0))) and
+      ((vp^.v_writecount=0) or (vp^.v_type<>VREG)) then
+   begin
     VOP_UNLOCK(vp, 0);
     vdropl(vp);
+    //
+    vp:=__mnt_vnode_next_all(@mvp,mp);
     continue;
    end;
-  end; else
+  end else
    VI_LOCK(vp);
   {
    * With v_usecount=0, all we need to do is clear out the
@@ -2324,46 +2345,46 @@ loop:
    *
    * If FORCECLOSE is set, forcibly close the vnode.
    }
-  if (vp^.v_usecount=0 or (flags and FORCECLOSE)) begin
-   Assert(vp^.v_usecount=0 or
-       (vp^.v_type<>VCHR and vp^.v_type<>VBLK), vp,
-       'device VNODE %p is FORCECLOSED", vp));
+  if (vp^.v_usecount=0 or (flags and FORCECLOSE)) then
+  begin
+   Assert((vp^.v_usecount=0) or
+          ((vp^.v_type<>VCHR) and (vp^.v_type<>VBLK)),'device VNODE %p is FORCECLOSED');
    vgonel(vp);
-  end; else begin
-   busy++;
-
+  end else
+  begin
+   Inc(busy);
   end;
   VOP_UNLOCK(vp, 0);
   vdropl(vp);
+  //
+  vp:=__mnt_vnode_next_all(@mvp,mp);
  end;
- if (rootrefs > 0 and (flags and FORCECLOSE)=0) begin
+ if (rootrefs > 0) and ((flags and FORCECLOSE)=0) then
+ begin
   {
    * If just the root vnode is busy, and if its refcount
    * is equal to `rootrefs', then go ahead and kill it.
    }
   VI_LOCK(rootvp);
   Assert(busy > 0, 'vflush: not busy');
-  Assert(rootvp^.v_usecount >= rootrefs, rootvp,
-      'vflush: usecount %d < rootrefs %d",
-       rootvp^.v_usecount, rootrefs));
-  if (busy=1 and rootvp^.v_usecount=rootrefs) begin
-   VOP_LOCK(rootvp, LK_EXCLUSIVE|LK_INTERLOCK);
+  Assert(rootvp^.v_usecount >= rootrefs,'vflush: usecount %d < rootrefs %d');
+  if (busy=1) and (rootvp^.v_usecount=rootrefs) then
+  begin
+   VOP_LOCK(rootvp, LK_EXCLUSIVE or LK_INTERLOCK,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
    vgone(rootvp);
    VOP_UNLOCK(rootvp, 0);
    busy:=0;
-  end; else
+  end else
    VI_UNLOCK(rootvp);
  end;
- if (busy) begin
-  CTR2(KTR_VFS, "%s: failing as %d vnodes are busy", {$I %LINE%},
-      busy);
+ if (busy<>0) then
+ begin
   Exit(EBUSY);
  end;
- for (; rootrefs > 0; rootrefs--)
+ For rootrefs:=rootrefs downto 0 do
   vrele(rootvp);
  Exit(0);
 end;
-}
 
 {
  * Recycle an unused vnode to the front of the free list.

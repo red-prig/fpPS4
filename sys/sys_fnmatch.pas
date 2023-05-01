@@ -33,16 +33,10 @@ implementation
 uses
  sysutils;
 
-//#include <sys/cdefs.h>
-//#include <sys/param.h>
-//#include <sys/ctype.h>
-//#include <sys/libkern.h>
-
 {
  * Function fnmatch() as specified in POSIX 1003.2-1992, section B.6.
  * Compares a filename or pathname to a pattern.
  }
-
 function fnmatch(pattern,str:pchar;flags:Integer):Integer;
 label
  norm;
