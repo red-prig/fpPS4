@@ -63,6 +63,8 @@ function  foffset_get(fp:p_file):Int64; inline;
 function  foffset_lock(fp:p_file;flags:Integer):Int64;
 procedure foffset_lock(fp:p_file;val:Int64;flags:Integer);
 procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
+procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);
+procedure foffset_unlock_uio(fp:p_file;uio:p_uio;flags:Integer);
 
 implementation
 

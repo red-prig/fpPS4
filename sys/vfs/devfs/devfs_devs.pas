@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  kern_id,
+ kern_conf,
  devfs,
  devfs_rule;
 
@@ -46,7 +47,8 @@ uses
  kern_sx,
  vfs_vnops,
  vfs_subr,
- vnode_if;
+ vnode_if,
+ devfs_vnops;
 
 //
 

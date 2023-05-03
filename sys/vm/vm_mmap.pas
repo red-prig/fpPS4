@@ -505,10 +505,10 @@ begin
  end;
 
 _map:
- //td^.td_fpop:=fp;
+ td^.td_fpop:=fp;
  maxprot:=maxprot and cap_maxprot;
  Result:=_vm_mmap(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos);
- //td^.td_fpop:=nil;
+ td^.td_fpop:=nil;
 
  if (Result=0) then
  begin

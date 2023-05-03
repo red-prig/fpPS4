@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_conf,
  devfs,
  kern_sx;
 
@@ -73,7 +74,8 @@ implementation
 uses
  errno,
  vdirent,
- sys_fnmatch;
+ sys_fnmatch,
+ devfs_vnops;
 
 //
 
@@ -502,8 +504,7 @@ function devfs_rule_match(dk:p_devfs_krule;dm:p_devfs_mount;de:p_devfs_dirent):I
 var
  dr:p_devfs_rule;
  dev:p_cdev;
- //dsw:p_cdevsw;
- dsw:Pointer;
+ dsw:p_cdevsw;
  ref:Integer;
 begin
  dr:=@dk^.dk_rule;
@@ -525,16 +526,15 @@ begin
  begin
   if (dev=nil) then
    Exit(0);
-  dsw:=nil;
-  //dsw:=dev_refthread(dev, @ref);
+  dsw:=dev_refthread(dev, @ref);
   if (dsw=nil) then
    Exit(0);
-  //if ((dsw^.d_flags and dr^.dr_dswflags)=0) then
-  //begin
-  // dev_relthread(dev, ref);
-  // Exit(0);
-  //end;
-  //dev_relthread(dev, ref);
+  if ((dsw^.d_flags and dr^.dr_dswflags)=0) then
+  begin
+   dev_relthread(dev, ref);
+   Exit(0);
+  end;
+  dev_relthread(dev, ref);
  end;
  if ((dr^.dr_icond and DRC_PATHPTRN)<>0) then
   if (devfs_rule_matchpath(dk, dm, de)=0) then
@@ -565,7 +565,7 @@ begin
      ((de^.de_flags and (DE_DOT or DE_DOTDOT))=0)) then
  begin
   specname:=AllocMem(SPECNAMELEN + 1);
-  //pname:=devfs_fqpn(specname, dm, de, nil);
+  pname:=devfs_fqpn(specname, dm, de, nil);
  end else
   Exit(0);
 

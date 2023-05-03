@@ -85,6 +85,9 @@ function  itimerfix(tv:ptimeval):Integer;
 function  clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function  clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
+var
+ boottime:timeval;
+
 implementation
 
 uses

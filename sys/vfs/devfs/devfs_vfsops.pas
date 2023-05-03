@@ -14,10 +14,11 @@ uses
 var
  devfs_unr:p_id_desc_table;
 
-function devfs_mount(mp:p_mount):Integer;
-function devfs_unmount(mp:p_mount;mntflags:Integer):Integer;
-function devfs_root(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
-function devfs_statfs(mp:p_mount;sbp:p_statfs):Integer;
+function  devfs_mount(mp:p_mount):Integer;
+function  devfs_unmount(mp:p_mount;mntflags:Integer):Integer;
+function  devfs_root(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
+function  devfs_statfs(mp:p_mount;sbp:p_statfs):Integer;
+procedure devfs_unmount_final(fmp:p_devfs_mount);
 
 const
  devfs_opts:array[0..3] of PChar=(
@@ -53,6 +54,8 @@ var
   vfc_typenum :-1;
   vfc_refcount:0;
   vfc_flags   :VFCF_SYNTHETIC or VFCF_JAIL;
+  vfc_opts    :nil;
+  vfc_list    :(tqe_next:nil;tqe_prev:nil)
  );
 
 implementation
@@ -63,6 +66,7 @@ uses
  kern_sx,
  devfs_devs,
  devfs_rule,
+ devfs_vnops,
  vfs_mount,
  vfs_subr,
  vnode_if;
@@ -249,7 +253,7 @@ var
 begin
  dmp:=VFSTODEVFS(mp);
  sx_xlock(@dmp^.dm_lock);
- //error:=devfs_allocv(dmp^.dm_rootdir, mp, LK_EXCLUSIVE, @vp);
+ error:=devfs_allocv(dmp^.dm_rootdir, mp, LK_EXCLUSIVE, @vp);
  if (error<>0) then
   Exit(error);
  vp^.v_vflag:=vp^.v_vflag or VV_ROOT;

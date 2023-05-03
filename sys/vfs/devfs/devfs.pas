@@ -13,6 +13,7 @@ uses
  vfs_vnode,
  vmount,
  time,
+ kern_conf,
  kern_mtx,
  kern_sx;
 
@@ -106,8 +107,6 @@ const
 
 { XXX: DEVFSIO_RS_GET_INFO for refcount, active if any, etc. }
 
-//struct componentname;
-
  DE_WHITEOUT=$01;
  DE_DOT     =$02;
  DE_DOTDOT  =$04;
@@ -119,51 +118,7 @@ const
  CDP_SCHED_DTR=(1 shl 1);
  CDP_UNREF_DTR=(1 shl 2);
 
- SI_ETERNAL   =$0001; { never destroyed }
- SI_ALIAS     =$0002; { carrier of alias name }
- SI_NAMED     =$0004; { make_dev _alias  has been called }
- SI_CHEAPCLONE=$0008; { can be removed_dev'ed when vnode reclaims }
- SI_CHILD     =$0010; { child of another struct cdev *}
- SI_DEVOPEN   =$0020; { opened by device }
- SI_CONSOPEN  =$0040; { opened by console }
- SI_DUMPDEV   =$0080; { is kernel dumpdev }
- SI_CANDELETE =$0100; { can do BIO_DELETE }
- SI_CLONELIST =$0200; { on a clone list }
- SI_UNMAPPED  =$0400; { can handle unmapped I/O }
-
- SPECNAMELEN  =63;    { max length of devicename }
-
 type
- p_cdev=^t_cdev;
- t_cdev=packed record
-  si_mountpt    :p_mount;
-  si_flags      :DWORD;
-  _align1       :Integer;
-  si_atime      :timespec;
-  si_ctime      :timespec;
-  si_mtime      :timespec;
-  si_uid        :uid_t;
-  si_gid        :gid_t;
-  si_mode       :mode_t;
-  si_drv0       :Integer;
-  si_refcount   :Integer;
-  _align2       :Integer;
-  si_list       :LIST_ENTRY; //(cdev)
-  si_clone      :LIST_ENTRY; //(cdev)
-  si_children   :Pointer   ; //(cdev)
-  si_siblings   :LIST_ENTRY; //(cdev)
-  si_parent     :p_cdev;
-  si_name       :PChar;
-  si_drv1       :Pointer;
-  si_drv2       :Pointer;
-  si_devsw      :Pointer; //cdevsw
-  si_iosize_max :Integer; { maximum I/O size (for physio &al) }
-  _align3       :Integer;
-  si_usecount   :QWORD;
-  si_threadcount:QWORD;
-  __si_namebuf  :array[0..SPECNAMELEN] of AnsiChar;
- end;
-
  t_cdpd_dtr=procedure(P:Pointer);
 
  p_cdev_privdata=^t_cdev_privdata;
@@ -247,19 +202,15 @@ function  rid2rsn(rid:devfs_rid):devfs_rsnum;
 function  rid2rn (rid:devfs_rid):devfs_rnum;
 function  mkrid  (rsn:devfs_rsnum;rn:devfs_rnum):devfs_rid;
 
-function  VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
+function  VFSTODEVFS(mp:p_mount):p_devfs_mount;
 
-procedure DEVFS_DE_HOLD(de:p_devfs_dirent); inline;
-function  DEVFS_DE_DROP(de:p_devfs_dirent):Boolean; inline;
+procedure DEVFS_DE_HOLD(de:p_devfs_dirent);
+function  DEVFS_DE_DROP(de:p_devfs_dirent):Boolean;
 
-procedure DEVFS_DMP_HOLD(dmp:p_devfs_mount); inline;
-function  DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean; inline;
+procedure DEVFS_DMP_HOLD(dmp:p_devfs_mount);
+function  DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean;
 
-function  cdev2priv(c:Pointer):p_cdev_priv; inline;
-
-var
- devmtx:mtx;
- devfs_de_interlock:mtx;
+function  cdev2priv(c:Pointer):p_cdev_priv;
 
 //
 
@@ -274,15 +225,9 @@ type
 
 var
  devfs_dirlist:Pointer=nil; //dirlistent
- dirlist_mtx  :mtx;
+ dirlist_mtx  :mtx; //MTX_SYSINIT(dirlist_mtx, &dirlist_mtx, "devfs dirlist lock", MTX_DEF);
 
  devfs_generation:DWORD=0;
-
-procedure dev_lock();
-procedure dev_unlock();
-procedure dev_ref(dev:p_cdev);
-procedure dev_refl(dev:p_cdev);
-procedure dev_rel(dev:p_cdev);
 
 function  devfs_dir_find(path:PChar):Integer;
 function  devfs_dir_findent_locked(dir:PChar):p_dirlistent;
@@ -291,13 +236,13 @@ procedure devfs_dir_ref_de(dm:p_devfs_mount;de:p_devfs_dirent);
 procedure devfs_dir_unref(dir:PChar);
 procedure devfs_dir_unref_de(dm:p_devfs_mount;de:p_devfs_dirent);
 function  devfs_pathpath(p1,p2:PChar):Integer;
-procedure devfs_mtx_init; //MTX_SYSINIT(dirlist_mtx, &dirlist_mtx, "devfs dirlist lock", MTX_DEF);
-                          //MTX_SYSINIT(devfs_de_interlock, &devfs_de_interlock, "devfs interlock", MTX_DEF);
+procedure devfs_mtx_init;
 
 implementation
 
 uses
- devfs_devs;
+ devfs_devs,
+ devfs_vnops;
 
 {
  * Identifier manipulators.
@@ -344,55 +289,9 @@ begin
  Result:=(dmp^.dm_holdcnt=0);
 end;
 
-function cdev2priv(c:Pointer):p_cdev_priv; inline;
+function cdev2priv(c:Pointer):p_cdev_priv;
 begin
  Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
-end;
-
-//
-
-procedure dev_lock();
-begin
- mtx_lock(devmtx);
-end;
-
-procedure dev_unlock();
-begin
- mtx_unlock(devmtx);
-end;
-
-procedure dev_ref(dev:p_cdev);
-begin
- mtx_lock(devmtx);
- Inc(dev^.si_refcount);
- mtx_unlock(devmtx);
-end;
-
-procedure dev_refl(dev:p_cdev);
-begin
- mtx_assert(devmtx);
- Inc(dev^.si_refcount);
-end;
-
-procedure dev_rel(dev:p_cdev);
-var
- flag:Integer;
-begin
- flag:=0;
-
- dev_lock();
- Dec(dev^.si_refcount);
- Assert(dev^.si_refcount >= 0,'dev_rel(%s) gave negative count');
-
- if (dev^.si_devsw=nil) and
-    (dev^.si_refcount=0) then
- begin
-  LIST_REMOVE(dev,@dev^.si_list);
-  flag:=1;
- end;
- dev_unlock();
- if (flag<>0) then
-  devfs_free(dev);
 end;
 
 //
@@ -477,9 +376,7 @@ var
  dirname:array[0..SPECNAMELEN] of AnsiChar;
  namep:PChar;
 begin
- namep:=nil;
- //devfs_vnops
- //namep:=devfs_fqpn(dirname, dm, de, nil);
+ namep:=devfs_fqpn(dirname, dm, de, nil);
  Assert(namep<>nil,'devfs_ref_dir_de: nil namep');
 
  devfs_dir_ref(namep);
@@ -512,9 +409,7 @@ var
  dirname:array[0..SPECNAMELEN] of AnsiChar;
  namep:PChar;
 begin
- namep:=nil;
- //devfs_vnops
- //namep:=devfs_fqpn(dirname, dm, de, nil);
+ namep:=devfs_fqpn(dirname, dm, de, nil);
  Assert(namep<>nil, 'devfs_unref_dir_de: nil namep');
 
  devfs_dir_unref(namep);
@@ -541,6 +436,7 @@ begin
  mtx_init(devmtx,'cdev');
  mtx_init(dirlist_mtx,'devfs dirlist lock');
  mtx_init(devfs_de_interlock,'devfs interlock');
+ mtx_init(cdevpriv_mtx,'cdevpriv lock');
 end;
 
 

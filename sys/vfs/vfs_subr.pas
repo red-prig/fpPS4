@@ -8,6 +8,8 @@ interface
 uses
  mqueue,
  vmount,
+ vfile,
+ vstat,
  vfs_vnode,
  vnode_if,
  vdirent,
@@ -18,6 +20,9 @@ uses
  time,
  kern_time,
  kern_thr;
+
+type
+ t_insmntque1_dtr=procedure(v:p_vnode;p:Pointer);
 
 function  vfs_busy(mp:p_mount;flags:Integer):Integer;
 procedure vfs_unbusy(mp:p_mount);
@@ -86,7 +91,20 @@ procedure destroy_vpollinfo(vi:p_vpollinfo);
 procedure v_addpollinfo(vp:p_vnode);
 function  vn_pollrecord(vp:p_vnode;events:Integer):Integer;
 
+function  vn_isdisk(vp:p_vnode;errp:PInteger):Boolean;
+
+function  vaccess(_type:vtype;
+                  file_mode:mode_t;
+                  file_uid:uid_t;
+                  file_gid:gid_t;
+                  accmode:accmode_t;
+                  privused:PInteger):Integer;
+
 function  getnewvnode(tag:PChar;mp:p_mount;vops:p_vop_vector;vpp:pp_vnode):Integer;
+
+procedure insmntque_stddtr(vp:p_vnode;dtr_arg:Pointer);
+function  insmntque1(vp:p_vnode;mp:p_mount;dtr:t_insmntque1_dtr;dtr_arg:Pointer):Integer;
+function  insmntque(vp:p_vnode;mp:p_mount):Integer;
 
 function  __mnt_vnode_next_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 function  __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
@@ -112,7 +130,7 @@ uses
  vsys_generic,
  dead_vnops,
  rtprio,
- devfs;
+ kern_conf;
 
 {
  * List of vnodes that are ready for recycling.
@@ -713,12 +731,13 @@ begin
  {
   * Setup locks.
   }
- //vp^.v_vnlock:=@vp^.v_lock;
+ vp^.v_vnlock:=@vp^.v_lock;
  mtx_init(vp^.v_interlock,'vnode interlock');
  {
   * By default, don't allow shared locks unless filesystems
   * opt-in.
   }
+ mtx_init(vp^.v_vnlock^,'PVFS');
  //lockinit(vp^.v_vnlock, PVFS, tag, VLKTIMEOUT, LK_NOSHARE);
  {
   * Initialize bufobj.
@@ -803,16 +822,13 @@ begin
  MNT_IUNLOCK(mp);
 end;
 
-{
-static void
-insmntque_stddtr(vp:p_vnode, void *dtr_arg)
+procedure insmntque_stddtr(vp:p_vnode;dtr_arg:Pointer);
 begin
-
  vp^.v_data:=nil;
  vp^.v_op:=@dead_vnodeops;
  { XXX non mp-safe fs may still call insmntque with vnode
     unlocked }
- if (!VOP_ISLOCKED(vp))
+ if (VOP_ISLOCKED(vp)=0) then
   vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  vgone(vp);
  vput(vp);
@@ -821,15 +837,12 @@ end;
 {
  * Insert into list of vnodes for the new mount point, if available.
  }
-int
-insmntque1(vp:p_vnode, mp:p_mount,
- void (*dtr)(struct vnode *, void *), void *dtr_arg)
+function insmntque1(vp:p_vnode;mp:p_mount;dtr:t_insmntque1_dtr;dtr_arg:Pointer):Integer;
+var
+ locked:Integer;
 begin
- int locked;
-
- Assert(vp^.v_mount=nil,
-  'insmntque: vnode already on per mount vnode list');
- Assert(mp<>nil, vp, 'Don't call insmntque(foo, nil)');
+ Assert(vp^.v_mount=nil,'insmntque: vnode already on per mount vnode list');
+ Assert(mp<>nil, 'Dont call insmntque(foo, nil)');
 
  {
   * We acquire the vnode interlock early to ensure that the
@@ -842,44 +855,44 @@ begin
   }
  MNT_ILOCK(mp);
  VI_LOCK(vp);
- if ((mp^.mnt_kern_flag and MNTK_NOINSMNTQ)<>0 and
-     ((mp^.mnt_kern_flag and MNTK_UNMOUNTF)<>0 or
-      mp^.mnt_nvnodelistsize=0)) begin
+ if ((mp^.mnt_kern_flag and MNTK_NOINSMNTQ)<>0) and
+     (((mp^.mnt_kern_flag and MNTK_UNMOUNTF)<>0) or
+      (mp^.mnt_nvnodelistsize=0)) then
+ begin
   locked:=VOP_ISLOCKED(vp);
-  if (!locked or (locked=LK_EXCLUSIVE and
-       (vp^.v_vflag and VV_FORCEINSMQ)=0)) begin
+  if (locked=0) or
+     ((locked=LK_EXCLUSIVE) and
+      ((vp^.v_vflag and VV_FORCEINSMQ)=0)) then
+  begin
    VI_UNLOCK(vp);
    MNT_IUNLOCK(mp);
-   if (dtr<>nil)
+   if (dtr<>nil) then
     dtr(vp, dtr_arg);
    Exit(EBUSY);
   end;
  end;
  vp^.v_mount:=mp;
  MNT_REF(mp);
- TAILQ_INSERT_TAIL(@mp^.mnt_nvnodelist, vp, v_nmntvnodes);
- Assert(mp^.mnt_nvnodelistsize >= 0, vp,
-  'neg mount point vnode list size');
- mp^.mnt_nvnodelistsize++;
- Assert((vp^.v_iflag and VI_ACTIVE)=0,
-     'Activating already active vnode');
- vp^.v_iflag:= or VI_ACTIVE;
- mtx_lock(@vnode_free_list_mtx);
- TAILQ_INSERT_HEAD(@mp^.mnt_activevnodelist, vp, v_actfreelist);
- mp^.mnt_activevnodelistsize++;
- mtx_unlock(@vnode_free_list_mtx);
+ TAILQ_INSERT_TAIL(@mp^.mnt_nvnodelist,vp,@vp^.v_nmntvnodes);
+ Assert(mp^.mnt_nvnodelistsize >= 0,'neg mount point vnode list size');
+ Inc(mp^.mnt_nvnodelistsize);
+ Assert((vp^.v_iflag and VI_ACTIVE)=0,'Activating already active vnode');
+ vp^.v_iflag:=vp^.v_iflag or VI_ACTIVE;
+ mtx_lock(vnode_free_list_mtx);
+ TAILQ_INSERT_HEAD(@mp^.mnt_activevnodelist,vp,@vp^.v_actfreelist);
+ Inc(mp^.mnt_activevnodelistsize);
+ mtx_unlock(vnode_free_list_mtx);
  VI_UNLOCK(vp);
  MNT_IUNLOCK(mp);
  Exit(0);
 end;
 
-int
-insmntque(vp:p_vnode, mp:p_mount)
+function insmntque(vp:p_vnode;mp:p_mount):Integer;
 begin
-
- Exit(insmntque1(vp, mp, insmntque_stddtr, nil));
+ Exit(insmntque1(vp, mp, @insmntque_stddtr, nil));
 end;
 
+{
 {
  * Flush out and invalidate all buffers associated with a bufobj
  * Called with the underlying object locked.
@@ -2181,6 +2194,7 @@ begin
 
  //rangelock_destroy(@vp^.v_rl);
  //lockdestroy(vp^.v_vnlock);
+ mtx_destroy(vp^.v_vnlock^);
  mtx_destroy(vp^.v_interlock);
 
  mtx_destroy(vp^.v_lock);
@@ -2573,10 +2587,10 @@ begin
   * the vnode.
   }
  VI_LOCK(vp);
- //vp^.v_vnlock:=@vp^.v_lock;
- vp^.v_op  :=@dead_vnodeops;
- vp^.v_tag :='none';
- vp^.v_type:=VBAD;
+ vp^.v_vnlock:=@vp^.v_lock;
+ vp^.v_op    :=@dead_vnodeops;
+ vp^.v_tag   :='none';
+ vp^.v_type  :=VBAD;
 end;
 
 {
@@ -2925,69 +2939,73 @@ end;
  * to indicate to the caller whether privilege was used to satisfy the
  * request (obsoleted).  Returns 0 on success, or an errno on failure.
  }
-
-{
-int
-vaccess(enum vtype type, mode_t file_mode, uid_t file_uid, gid_t file_gid,
-    accmode_t accmode, struct ucred *cred, int *privused)
+function vaccess(_type:vtype;
+                 file_mode:mode_t;
+                 file_uid:uid_t;
+                 file_gid:gid_t;
+                 accmode:accmode_t;
+                 privused:PInteger):Integer;
+label
+ privcheck;
+var
+ dac_granted :accmode_t;
+ priv_granted:accmode_t;
 begin
- accmode_t dac_granted;
- accmode_t priv_granted;
-
- Assert((accmode and ~(VEXEC or VWRITE or VREAD or VADMIN or VAPPEND))=0,
-     'invalid bit in accmode');
- Assert((accmode and VAPPEND)=0 or (accmode and VWRITE),
-     'VAPPEND without VWRITE');
+ Assert((accmode and (not (VEXEC or VWRITE or VREAD or VADMIN or VAPPEND)))=0,'invalid bit in accmode');
+ Assert(((accmode and VAPPEND)=0) or ((accmode and VWRITE)<>0),'VAPPEND without VWRITE');
 
  {
   * Look for a normal, non-privileged way to access the file/directory
   * as requested.  If it exists, go with that.
   }
 
- if (privused<>nil)
-  *privused:=0;
+ if (privused<>nil) then
+  privused^:=0;
 
  dac_granted:=0;
 
  { Check the owner. }
- if (cred^.cr_uid=file_uid) begin
-  dac_granted:= or VADMIN;
-  if (file_mode and S_IXUSR)
-   dac_granted:= or VEXEC;
-  if (file_mode and S_IRUSR)
-   dac_granted:= or VREAD;
-  if (file_mode and S_IWUSR)
-   dac_granted:= or (VWRITE or VAPPEND);
-
-  if ((accmode and dac_granted)=accmode)
-   Exit(0);
-
-  goto privcheck;
- end;
+ //if (cred^.cr_uid=file_uid) then
+ //begin
+ // dac_granted:=dac_granted or VADMIN;
+ // if ((file_mode and S_IXUSR)<>0) then
+ //  dac_granted:=dac_granted or VEXEC;
+ // if ((file_mode and S_IRUSR)<>0) then
+ //  dac_granted:=dac_granted or VREAD;
+ // if ((file_mode and S_IWUSR)<>0) then
+ //  dac_granted:=dac_granted or (VWRITE or VAPPEND);
+ //
+ // if ((accmode and dac_granted)=accmode) then
+ //  Exit(0);
+ //
+ // goto privcheck;
+ //end;
 
  { Otherwise, check the groups (first match) }
- if (groupmember(file_gid, cred)) begin
-  if (file_mode and S_IXGRP)
-   dac_granted:= or VEXEC;
-  if (file_mode and S_IRGRP)
-   dac_granted:= or VREAD;
-  if (file_mode and S_IWGRP)
-   dac_granted:= or (VWRITE or VAPPEND);
+ if {(groupmember(file_gid, cred))} True then
+ begin
+  if ((file_mode and S_IXGRP)<>0) then
+   dac_granted:=dac_granted or VEXEC;
+  if ((file_mode and S_IRGRP)<>0) then
+   dac_granted:=dac_granted or VREAD;
+  if ((file_mode and S_IWGRP)<>0) then
+   dac_granted:=dac_granted or (VWRITE or VAPPEND);
 
-  if ((accmode and dac_granted)=accmode)
+  if ((accmode and dac_granted)=accmode) then
    Exit(0);
 
   goto privcheck;
  end;
 
  { Otherwise, check everyone else. }
- if (file_mode and S_IXOTH)
-  dac_granted:= or VEXEC;
- if (file_mode and S_IROTH)
-  dac_granted:= or VREAD;
- if (file_mode and S_IWOTH)
-  dac_granted:= or (VWRITE or VAPPEND);
- if ((accmode and dac_granted)=accmode)
+ if ((file_mode and S_IXOTH)<>0) then
+  dac_granted:=dac_granted or VEXEC;
+ if ((file_mode and S_IROTH)<>0) then
+  dac_granted:=dac_granted or VREAD;
+ if ((file_mode and S_IWOTH)<>0) then
+  dac_granted:=dac_granted or (VWRITE or VAPPEND);
+
+ if ((accmode and dac_granted)=accmode) then
   Exit(0);
 
 privcheck:
@@ -2999,48 +3017,58 @@ privcheck:
   }
  priv_granted:=0;
 
- if (type=VDIR) begin
+ if (_type=VDIR) then
+ begin
   {
    * For directories, use PRIV_VFS_LOOKUP to satisfy VEXEC
    * requests, instead of PRIV_VFS_EXEC.
    }
-  if ((accmode and VEXEC) and ((dac_granted and VEXEC)=0) and
-      !priv_check_cred(cred, PRIV_VFS_LOOKUP, 0))
-   priv_granted:= or VEXEC;
- end; else begin
+  if ((accmode and VEXEC)<>0) and
+     ((dac_granted and VEXEC)=0) {and
+     (priv_check_cred(cred, PRIV_VFS_LOOKUP, 0)=0)} then
+   priv_granted:=priv_granted or VEXEC;
+ end else
+ begin
   {
    * Ensure that at least one execute bit is on. Otherwise,
    * a privileged user will always succeed, and we don't want
    * this to happen unless the file really is executable.
    }
-  if ((accmode and VEXEC) and ((dac_granted and VEXEC)=0) and
-      (file_mode and (S_IXUSR or S_IXGRP or S_IXOTH))<>0 and
-      !priv_check_cred(cred, PRIV_VFS_EXEC, 0))
-   priv_granted:= or VEXEC;
+  if ((accmode and VEXEC)<>0) and
+     ((dac_granted and VEXEC)=0) and
+     ((file_mode and (S_IXUSR or S_IXGRP or S_IXOTH))<>0) {and
+     (priv_check_cred(cred, PRIV_VFS_EXEC, 0)=0)} then
+   priv_granted:=priv_granted or VEXEC;
  end;
 
- if ((accmode and VREAD) and ((dac_granted and VREAD)=0) and
-     !priv_check_cred(cred, PRIV_VFS_READ, 0))
-  priv_granted:= or VREAD;
+ if ((accmode and VREAD)<>0) and
+    ((dac_granted and VREAD)=0) {and
+     (priv_check_cred(cred, PRIV_VFS_READ, 0)=0)} then
+  priv_granted:=priv_granted or VREAD;
 
- if ((accmode and VWRITE) and ((dac_granted and VWRITE)=0) and
-     !priv_check_cred(cred, PRIV_VFS_WRITE, 0))
-  priv_granted:= or (VWRITE or VAPPEND);
+ if ((accmode and VWRITE)<>0) and
+    ((dac_granted and VWRITE)=0) {and
+    (priv_check_cred(cred, PRIV_VFS_WRITE, 0)=0)} then
+  priv_granted:=priv_granted or (VWRITE or VAPPEND);
 
- if ((accmode and VADMIN) and ((dac_granted and VADMIN)=0) and
-     !priv_check_cred(cred, PRIV_VFS_ADMIN, 0))
-  priv_granted:= or VADMIN;
+ if ((accmode and VADMIN)<>0) and
+    ((dac_granted and VADMIN)=0) {and
+    (priv_check_cred(cred, PRIV_VFS_ADMIN, 0)=0)} then
+  priv_granted:=priv_granted or VADMIN;
 
- if ((accmode and (priv_granted or dac_granted))=accmode) begin
+ if ((accmode and (priv_granted or dac_granted))=accmode) then
+ begin
   { XXX audit: privilege used }
-  if (privused<>nil)
-   *privused:=1;
+  if (privused<>nil) then
+   privused^:=1;
   Exit(0);
  end;
 
- Exit((accmode and VADMIN) ? EPERM : EACCES);
+ if ((accmode and VADMIN)<>0) then
+  Exit(EPERM)
+ else
+  Exit(EACCES);
 end;
-}
 
 procedure vfs_badlock(msg,str:PChar;vp:p_vnode);
 begin

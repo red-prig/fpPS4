@@ -94,6 +94,7 @@ const
 
  // These flags are kept in p_flag.
  P_ADVLOCK        =$00001; // Process may hold a POSIX advisory lock.
+ P_CONTROLT       =$00002; // Has a controlling terminal.
 
 type
  p_teb=^teb;
@@ -149,6 +150,7 @@ type
   td_dupfd        :Integer;
   td_timeo        :Int64;
   //
+  td_fpop         :Pointer;
   td_map_def_user :Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
@@ -210,6 +212,11 @@ procedure PROC_LOCK;
 procedure PROC_UNLOCK;
 
 procedure PROC_INIT; //SYSINIT
+
+var
+ p_leader:packed record
+  p_flag:Integer;
+ end;
 
 implementation
 

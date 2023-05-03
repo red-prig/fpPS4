@@ -326,6 +326,8 @@ var
 begin
  NtQueryTimerResolution(@min,@max,@cur);
  NtSetTimerResolution(max,True,@cur);
+
+ getmicrouptime(@boottime);
 end;
 
 end.

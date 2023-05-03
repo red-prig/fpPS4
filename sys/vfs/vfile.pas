@@ -172,7 +172,8 @@ type
    }
   f_label:Pointer; { Place-holder for MAC label. }
   //
-  property f_advice:Pointer read f_vnun write f_vnun;
+  property f_cdevpriv:Pointer read f_vnun write f_vnun;
+  property f_advice  :Pointer read f_vnun write f_vnun;
  end;
 
 const

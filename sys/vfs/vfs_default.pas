@@ -537,7 +537,15 @@ var
 begin
  vp:=ap^.a_vp;
 
- Exit(EOPNOTSUPP);
+ if (ap^.a_flags and LK_INTERLOCK)<>0 then
+ begin
+  mtx_unlock(VI_MTX(vp)^);
+  Exit(0);
+ end;
+
+ mtx_lock(vp^.v_vnlock^);
+ Exit(0);
+
  //Exit(_lockmgr_args(vp^.v_vnlock, ap^.a_flags, VI_MTX(vp),
  //    LK_WMESG_DEFAULT, LK_PRIO_DEFAULT, LK_TIMO_DEFAULT, ap^.a_file,
  //    ap^.a_line));
@@ -550,14 +558,27 @@ var
 begin
  vp:=ap^.a_vp;
 
- Exit(EOPNOTSUPP);
+ if (ap^.a_flags and LK_INTERLOCK)<>0 then
+ begin
+  mtx_unlock(VI_MTX(vp)^);
+  Exit(0);
+ end;
+
+ mtx_unlock(vp^.v_vnlock^);
+ Exit(0);
+
  //Exit(lockmgr(vp^.v_vnlock, ap^.a_flags or LK_RELEASE, VI_MTX(vp)));
 end;
 
 { See above. }
 function vop_stdislocked(ap:p_vop_islocked_args):Integer;
 begin
- Exit(EOPNOTSUPP);
+
+ if mtx_owned(ap^.a_vp^.v_vnlock^) then
+  Exit(LK_EXCLUSIVE)
+ else
+  Exit(0);
+
  //Exit(lockstatus(ap^.a_vp^.v_vnlock));
 end;
 

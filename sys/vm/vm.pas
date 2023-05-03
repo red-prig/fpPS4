@@ -28,6 +28,9 @@ type
  p_vm_paddr_t=^vm_paddr_t;
  vm_paddr_t=DWORD;
 
+ p_vm_memattr_t=^vm_memattr_t;
+ vm_memattr_t=Byte;
+
 const
  VM_INHERIT_SHARE  =vm_inherit_t(0);
  VM_INHERIT_COPY   =vm_inherit_t(1);

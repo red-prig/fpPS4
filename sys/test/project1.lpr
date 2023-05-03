@@ -52,7 +52,8 @@ uses
  sys_sysinit,
  sys_fnmatch,
  devfs,
- devfs_vfsops;
+ devfs_vfsops,
+ devfs_vnops;
 
 var
  mtx:umutex;

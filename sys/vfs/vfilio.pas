@@ -22,6 +22,14 @@ const
  FIOSEEKDATA=$C0046661;
  FIOSEEKHOLE=$C0046662;
 
+type
+ p_fiodgname_arg=^t_fiodgname_arg;
+ t_fiodgname_arg=packed record
+  len:Integer;
+  _align:Integer;
+  buf:Pointer;
+ end;
+
 implementation
 
 end.

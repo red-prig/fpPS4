@@ -224,6 +224,7 @@ type
 
   v_lock:mtx;
   v_interlock:mtx;
+  v_vnlock:p_mtx;
 
   v_iflag:QWORD;
   v_vflag:QWORD;

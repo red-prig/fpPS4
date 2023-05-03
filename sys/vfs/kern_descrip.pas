@@ -21,14 +21,14 @@ uses
 const
  FGET_GETCAP=$00000001;
 
-function sys_getdtablesize():Integer;
-function sys_dup2(from,_to:Integer):Integer;
-function sys_dup(u_fd:Integer):Integer;
-function sys_fcntl(fd,cmd:Integer;arg:QWORD):Integer;
-function sys_close(fd:Integer):Integer;
-function sys_fstat(fd:Integer;sb:p_stat):Integer;
-function sys_fpathconf(fd,name:Integer):Integer;
-function sys_flock(fd,how:Integer):Integer;
+function  sys_getdtablesize():Integer;
+function  sys_dup2(from,_to:Integer):Integer;
+function  sys_dup(u_fd:Integer):Integer;
+function  sys_fcntl(fd,cmd:Integer;arg:QWORD):Integer;
+function  sys_close(fd:Integer):Integer;
+function  sys_fstat(fd:Integer;sb:p_stat):Integer;
+function  sys_fpathconf(fd,name:Integer):Integer;
+function  sys_flock(fd,how:Integer):Integer;
 
 function  fget_unlocked(fd:Integer):p_file;
 function  falloc_noinstall(resultfp:pp_file):Integer;
@@ -112,11 +112,6 @@ const
   fo_chown   :@badfo_chown;
   fo_flags   :0
  );
-
-var
- p_leader:packed record
-  p_flag:Integer;
- end;
 
 implementation
 
