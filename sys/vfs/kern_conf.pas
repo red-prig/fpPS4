@@ -164,6 +164,20 @@ const
  MAKEDEV_ETERNAL  =$10;
  MAKEDEV_CHECKNAME=$20;
 
+ UID_ROOT    =0;
+ UID_BIN     =3;
+ UID_UUCP    =66;
+ UID_NOBODY  =65534;
+
+ GID_WHEEL   =0;
+ GID_KMEM    =2;
+ GID_TTY     =4;
+ GID_OPERATOR=5;
+ GID_BIN     =7;
+ GID_GAMES   =13;
+ GID_DIALER  =68;
+ GID_NOBODY  =65534;
+
 function dev2unit(d:p_cdev):Integer; inline;
 function devtoname(dev:p_cdev):PChar;
 
@@ -851,22 +865,22 @@ begin
  while (from='/') do Inc(from);
 
  _to:=@dev^.__si_namebuf;
- while (from^<>'0') do
+ while (from^<>#0) do
  begin
   { Treat multiple sequential slashes as single. }
   while (from[0]='/') and (from[1]='/') do
    Inc(from);
   { Trailing slash is considered invalid. }
-  if (from[0]='/') and (from[1]='0') then
+  if (from[0]='/') and (from[1]=#0) then
    Exit(EINVAL);
   _to^:=from^;
   //
   Inc(from);
   Inc(_to);
  end;
- _to^:='0';
+ _to^:=#0;
 
- if (dev^.__si_namebuf[0]='0') then
+ if (dev^.__si_namebuf[0]=#0) then
   Exit(EINVAL);
 
  { Disallow '.' and '..' components. }
@@ -874,7 +888,7 @@ begin
  while true do
  begin
   q:=s;
-  while (q^<>'/') and (q^<>'0') do Inc(q);
+  while (q^<>'/') and (q^<>#0) do Inc(q);
 
   if (q - s=1) and (s[0]='.') then
    Exit(EINVAL);

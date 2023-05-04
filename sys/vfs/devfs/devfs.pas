@@ -425,8 +425,11 @@ begin
     Exit(1)
    else
     Exit(0);
-  end else if (p1^=#0) then
+  end else
+  if (p1^=#0) then
    Exit(1);
+  Inc(p1);
+  Inc(p2);
  until false;
  { NOTREACHED }
 end;

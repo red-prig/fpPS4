@@ -113,6 +113,8 @@ const
   fo_flags   :0
  );
 
+procedure fildesc_drvinit(); //SYSINIT(fildescdev, SI_SUB_DRIVERS, SI_ORDER_MIDDLE, fildesc_drvinit, NULL);
+
 implementation
 
 uses
@@ -125,7 +127,8 @@ uses
  vfs_vnops,
  vnode_if,
  kern_resource,
- kern_mtx;
+ kern_mtx,
+ kern_conf;
 
 function badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
 begin
@@ -1501,6 +1504,56 @@ begin
 
  Exit(error);
 end;
+
+{
+ * File Descriptor pseudo-device driver (/dev/fd/).
+ *
+ * Opening minor device N dup()s the file (if any) connected to file
+ * descriptor N belonging to the calling process.  Note that this driver
+ * consists of only the ``open()'' routine, because all subsequent
+ * references to this file will be direct to the other driver.
+ *
+ * XXX: we could give this one a cloning event handler if necessary.
+ }
+
+{ ARGSUSED }
+function fdopen(dev:p_cdev;mode,_type:Integer):Integer;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ {
+  * XXX Kludge: set curthread^.td_dupfd to contain the value of the
+  * the file descriptor being sought for duplication. The error
+  * Exitensures that the vnode for this device will be released
+  * by vn_open. Open will detect this special error and take the
+  * actions in dupfdopen below. Other callers of vn_open or VOP_OPEN
+  * will simply report the error.
+  }
+ td^.td_dupfd:=dev2unit(dev);
+ Exit(ENODEV);
+end;
+
+const
+ fildesc_cdevsw:t_cdevsw=(
+  d_version    :D_VERSION;
+  d_flags      :0;
+  d_name       :'FD';
+  d_open       :@fdopen;
+ );
+
+procedure fildesc_drvinit();
+var
+ dev:p_cdev;
+begin
+ dev:=make_dev_credf(MAKEDEV_ETERNAL, @fildesc_cdevsw, 0, UID_ROOT, GID_WHEEL, &0666, 'fd/0',[]);
+ make_dev_alias(dev, 'stdin',[]);
+ dev:=make_dev_credf(MAKEDEV_ETERNAL, @fildesc_cdevsw, 1, UID_ROOT, GID_WHEEL, &0666, 'fd/1',[]);
+ make_dev_alias(dev, 'stdout',[]);
+ dev:=make_dev_credf(MAKEDEV_ETERNAL, @fildesc_cdevsw, 2, UID_ROOT, GID_WHEEL, &0666, 'fd/2',[]);
+ make_dev_alias(dev, 'stderr',[]);
+end;
+
 
 end.
 

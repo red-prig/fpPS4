@@ -29,7 +29,8 @@ uses
  vfs_init,
  devfs,
  devfs_devs,
- devfs_vfsops;
+ devfs_vfsops,
+ kern_descrip;
 
 //Daemon for a separate thread
 procedure sys_update;
@@ -63,6 +64,7 @@ begin
  devfs_mtx_init;
  devfs_devs_init;
  module_init;
+ fildesc_drvinit;
 end;
 
 end.

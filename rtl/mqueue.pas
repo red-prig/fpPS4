@@ -90,6 +90,7 @@ procedure SLIST_INSERT_AFTER(slistelm,elm,field:Pointer); inline;
 procedure SLIST_INSERT_HEAD (head,elm,field:Pointer); inline;
 procedure SLIST_REMOVE_AFTER(elm,field:Pointer); inline;
 procedure SLIST_REMOVE_HEAD (head,field:Pointer); inline;
+procedure SLIST_REMOVE      (head,elm,field:Pointer); inline;
 
 implementation
 
