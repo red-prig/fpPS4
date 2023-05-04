@@ -34,7 +34,7 @@ type
   sq_blocked   :array[0..NR_SLEEPQS-1] of TAILQ_HEAD;
   sq_blockedcnt:array[0..NR_SLEEPQS-1] of DWORD;
   sq_hash      :LIST_ENTRY;
-  sq_free      :p_sleepqueue;
+  sq_free      :LIST_HEAD; //sleepqueue;
   sq_wchan     :Pointer;
   sq_type      :Integer;
  end;

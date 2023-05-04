@@ -14,7 +14,6 @@ uses
 
 var
  cdevp_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@cdevp_list.tqh_first);
- devfs_inos:t_id_desc_table;
 
 function  devfs_alloc(flags:Integer):p_cdev;
 function  devfs_dev_exists(name:PChar):Integer;
@@ -49,6 +48,9 @@ uses
  vfs_subr,
  vnode_if,
  devfs_vnops;
+
+var
+ devfs_inos:t_id_desc_table;
 
 //
 

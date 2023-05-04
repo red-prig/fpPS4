@@ -151,7 +151,7 @@ type
   cdp_dtr_cb    :t_cdpd_dtr;
   cdp_dtr_cb_arg:Pointer;
 
-  cdp_fdpriv:Pointer; //cdev_privdata
+  cdp_fdpriv:LIST_HEAD; //cdev_privdata
  end;
 
  devfs_dlist_head=TAILQ_HEAD; //devfs_dirent
@@ -224,7 +224,7 @@ type
  end;
 
 var
- devfs_dirlist:Pointer=nil; //dirlistent
+ devfs_dirlist:LIST_HEAD=(lh_first:nil); //dirlistent
  dirlist_mtx  :mtx; //MTX_SYSINIT(dirlist_mtx, &dirlist_mtx, "devfs dirlist lock", MTX_DEF);
 
  devfs_generation:DWORD=0;

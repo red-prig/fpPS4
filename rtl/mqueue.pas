@@ -18,6 +18,11 @@ type
   tqe_prev:PPointer;
  end;
 
+ P_LIST_HEAD=^LIST_HEAD;
+ LIST_HEAD=packed record
+  lh_first:Pointer;
+ end;
+
  P_LIST_ENTRY=^LIST_ENTRY;
  LIST_ENTRY=packed record
   le_next:Pointer;
@@ -35,6 +40,10 @@ type
   stqe_next:Pointer;
  end;
 
+ P_SLIST_HEAD=^SLIST_HEAD;
+ SLIST_HEAD=packed record
+  slh_first:Pointer;
+ end;
 
  P_SLIST_ENTRY=^SLIST_ENTRY;
  SLIST_ENTRY=packed record
@@ -52,6 +61,7 @@ procedure TAILQ_INSERT_TAIL  (head,elm,field:Pointer); inline;
 procedure TAILQ_INSERT_AFTER (head,listelm,elm,field:Pointer); inline;
 procedure TAILQ_INSERT_BEFORE(listelm,elm,field:Pointer); inline;
 procedure TAILQ_REMOVE       (head,elm,field:Pointer); inline;
+procedure TAILQ_CONCAT       (head1,head2,field:Pointer); inline;
 
 procedure LIST_INIT        (head:Pointer); inline;
 function  LIST_EMPTY       (head:Pointer):Boolean; inline;
@@ -60,17 +70,26 @@ function  LIST_NEXT        (elm,field:Pointer):Pointer; inline;
 procedure LIST_INSERT_HEAD (head,elm,field:Pointer); inline;
 procedure LIST_REMOVE      (elm,field:Pointer); inline;
 
-procedure STAILQ_INIT(head:Pointer); inline;
-function  STAILQ_EMPTY(head:Pointer):Boolean; inline;
-function  STAILQ_FIRST(head:Pointer):Pointer; inline;
-function  STAILQ_LAST(head,field:Pointer):Pointer; inline;
-function  STAILQ_NEXT(elm,field:Pointer):Pointer; inline;
+procedure STAILQ_INIT        (head:Pointer); inline;
+function  STAILQ_EMPTY       (head:Pointer):Boolean; inline;
+function  STAILQ_FIRST       (head:Pointer):Pointer; inline;
+function  STAILQ_LAST        (head,field:Pointer):Pointer; inline;
+function  STAILQ_NEXT        (elm,field:Pointer):Pointer; inline;
 procedure STAILQ_INSERT_AFTER(head,tqelm,elm,field:Pointer); inline;
-procedure STAILQ_INSERT_HEAD(head,elm,field:Pointer); inline;
-procedure STAILQ_INSERT_TAIL(head,elm,field:Pointer); inline;
+procedure STAILQ_INSERT_HEAD (head,elm,field:Pointer); inline;
+procedure STAILQ_INSERT_TAIL (head,elm,field:Pointer); inline;
 procedure STAILQ_REMOVE_AFTER(head,elm,field:Pointer); inline;
-procedure STAILQ_REMOVE_HEAD(head,elm,field:Pointer); inline;
-procedure STAILQ_REMOVE(head,elm,field:Pointer); inline;
+procedure STAILQ_REMOVE_HEAD (head,field:Pointer); inline;
+procedure STAILQ_REMOVE      (head,elm,field:Pointer); inline;
+
+procedure SLIST_INIT        (head:Pointer); inline;
+function  SLIST_EMPTY       (head:Pointer):Boolean; inline;
+function  SLIST_FIRST       (head:Pointer):Pointer; inline;
+function  SLIST_NEXT        (elm,field:Pointer):Pointer; inline;
+procedure SLIST_INSERT_AFTER(slistelm,elm,field:Pointer); inline;
+procedure SLIST_INSERT_HEAD (head,elm,field:Pointer); inline;
+procedure SLIST_REMOVE_AFTER(elm,field:Pointer); inline;
+procedure SLIST_REMOVE_HEAD (head,field:Pointer); inline;
 
 implementation
 
@@ -173,21 +192,32 @@ begin
  P_TAILQ_ENTRY(field)^.tqe_prev^:=P_TAILQ_ENTRY(field)^.tqe_next;
 end;
 
+procedure TAILQ_CONCAT(head1,head2,field:Pointer); inline;
+begin
+ if (P_TAILQ_HEAD(head2)^.tqh_first<>nil) then
+ begin
+  P_TAILQ_HEAD(head1)^.tqh_last^:=P_TAILQ_HEAD(head2)^.tqh_first;
+  P_TAILQ_ENTRY(P_TAILQ_HEAD(head2)^.tqh_first+ptruint(field))^.tqe_prev:=P_TAILQ_HEAD(head1)^.tqh_last;
+  P_TAILQ_HEAD(head1)^.tqh_last:=P_TAILQ_HEAD(head2)^.tqh_last;
+  TAILQ_INIT(head2);
+ end;
+end;
+
 //
 
 procedure LIST_INIT(head:Pointer); inline;
 begin
- PPointer(head)^:=nil;
+ P_LIST_HEAD(head)^.lh_first:=nil;
 end;
 
 function LIST_EMPTY(head:Pointer):Boolean; inline;
 begin
- Result:=PPointer(head)^=nil;
+ Result:=P_LIST_HEAD(head)^.lh_first=nil;
 end;
 
 function LIST_FIRST(head:Pointer):Pointer; inline;
 begin
- Result:=PPointer(head)^;
+ Result:=P_LIST_HEAD(head)^.lh_first;
 end;
 
 function LIST_NEXT(elm,field:Pointer):Pointer; inline;
@@ -199,13 +229,13 @@ procedure LIST_INSERT_HEAD(head,elm,field:Pointer); inline;
 var
  offset:ptruint;
 begin
- P_LIST_ENTRY(field)^.le_next:=PPointer(head)^;
+ P_LIST_ENTRY(field)^.le_next:=P_LIST_HEAD(head)^.lh_first;
  if (P_LIST_ENTRY(field)^.le_next<>nil) then
  begin
   offset:=ptruint(field-elm);
-  P_LIST_ENTRY(PPointer(head)^+offset)^.le_prev:=@P_LIST_ENTRY(field)^.le_next;
+  P_LIST_ENTRY(P_LIST_HEAD(head)^.lh_first+offset)^.le_prev:=@P_LIST_ENTRY(field)^.le_next;
  end;
- PPointer(head)^:=elm;
+ P_LIST_HEAD(head)^.lh_first:=elm;
  P_LIST_ENTRY(field)^.le_prev:=head;
 end;
 
@@ -297,12 +327,9 @@ begin
  end;
 end;
 
-procedure STAILQ_REMOVE_HEAD(head,elm,field:Pointer); inline;
-var
- offset:ptruint;
+procedure STAILQ_REMOVE_HEAD(head,field:Pointer); inline;
 begin
- offset:=ptruint(field-elm);
- P_STAILQ_HEAD(head)^.stqh_first:=P_STAILQ_ENTRY(P_STAILQ_HEAD(head)^.stqh_first+offset)^.stqe_next;
+ P_STAILQ_HEAD(head)^.stqh_first:=P_STAILQ_ENTRY(P_STAILQ_HEAD(head)^.stqh_first+ptruint(field))^.stqe_next;
  if (P_STAILQ_HEAD(head)^.stqh_first=nil) then
  begin
   P_STAILQ_HEAD(head)^.stqh_last:=@P_STAILQ_HEAD(head)^.stqh_first;
@@ -314,18 +341,88 @@ var
  offset:ptruint;
  curelm:Pointer;
 begin
+ offset:=ptruint(field-elm);
  if (P_STAILQ_HEAD(head)^.stqh_first=elm) then
  begin
-  STAILQ_REMOVE_HEAD(head,elm,field);
+  STAILQ_REMOVE_HEAD(head,Pointer(offset));
  end else
  begin
-  offset:=ptruint(field-elm);
   curelm:=P_STAILQ_HEAD(head)^.stqh_first;
   while (P_STAILQ_ENTRY(curelm+offset)^.stqe_next<>elm) do
   begin
    curelm:=P_STAILQ_ENTRY(curelm+offset)^.stqe_next;
   end;
   STAILQ_REMOVE_AFTER(head,curelm,curelm+offset);
+ end;
+end;
+
+//
+
+procedure SLIST_INIT(head:Pointer); inline;
+begin
+ P_SLIST_HEAD(head)^.slh_first:=nil;
+end;
+
+function SLIST_EMPTY(head:Pointer):Boolean; inline;
+begin
+ Result:=P_SLIST_HEAD(head)^.slh_first=nil;
+end;
+
+function SLIST_FIRST(head:Pointer):Pointer; inline;
+begin
+ Result:=P_SLIST_HEAD(head)^.slh_first;
+end;
+
+function SLIST_NEXT(elm,field:Pointer):Pointer; inline;
+begin
+ Result:=P_SLIST_ENTRY(field)^.sle_next;
+end;
+
+procedure SLIST_INSERT_AFTER(slistelm,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ offset:=ptruint(field-elm);
+ P_SLIST_ENTRY(field)^.sle_next:=P_SLIST_ENTRY(slistelm+offset)^.sle_next;
+ P_SLIST_ENTRY(slistelm+offset)^.sle_next:=elm;
+end;
+
+procedure SLIST_INSERT_HEAD(head,elm,field:Pointer); inline;
+begin
+ P_SLIST_ENTRY(field)^.sle_next:=P_SLIST_HEAD(head)^.slh_first;
+ P_SLIST_HEAD(head)^.slh_first:=elm;
+end;
+
+procedure SLIST_REMOVE_AFTER(elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ offset:=ptruint(field-elm);
+ P_SLIST_ENTRY(field)^.sle_next:=P_SLIST_ENTRY(P_SLIST_ENTRY(field)^.sle_next+offset)^.sle_next;
+end;
+
+procedure SLIST_REMOVE_HEAD(head,field:Pointer); inline;
+begin
+ P_SLIST_HEAD(head)^.slh_first:=P_SLIST_ENTRY(P_SLIST_HEAD(head)^.slh_first+ptruint(field))^.sle_next;
+end;
+
+procedure SLIST_REMOVE(head,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+ curelm:Pointer;
+begin
+ offset:=ptruint(field-elm);
+ if (P_SLIST_HEAD(head)^.slh_first=elm) then
+ begin
+  SLIST_REMOVE_HEAD(head,Pointer(offset));
+ end else
+ begin
+  curelm:=P_SLIST_HEAD(head)^.slh_first;
+  while (P_SLIST_ENTRY(curelm+offset)^.sle_next<>elm) do
+  begin
+   curelm:=P_SLIST_ENTRY(curelm+offset)^.sle_next;
+  end;
+  SLIST_REMOVE_AFTER(curelm,curelm+offset);
  end;
 end;
 
