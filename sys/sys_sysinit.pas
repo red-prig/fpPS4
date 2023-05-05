@@ -30,6 +30,7 @@ uses
  devfs,
  devfs_devs,
  devfs_vfsops,
+ fdesc_vfsops,
  kern_descrip,
  vfs_mountroot;
 
@@ -42,7 +43,9 @@ end;
 procedure module_init;
 begin
  vfs_register(@devfs_vfsconf);
+ vfs_register(@fdescfs_vfsconf);
  vfs_mountroot.vfs_mountroot();
+ fildesc_drvinit;
 end;
 
 //Manual order of lazy initialization
@@ -66,7 +69,6 @@ begin
  devfs_mtx_init;
  devfs_devs_init;
  module_init;
- fildesc_drvinit;
 end;
 
 end.

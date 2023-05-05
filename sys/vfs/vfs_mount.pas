@@ -1103,7 +1103,7 @@ begin
   }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, fspath, curkthread);
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit (error);
  if (NDHASGIANT(@nd)=0) then

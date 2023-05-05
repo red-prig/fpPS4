@@ -21,8 +21,8 @@ uses
  kern_thr,
  kern_descrip;
 
-function _namei(ndp:p_nameidata):Integer;
-function _lookup(ndp:p_nameidata):Integer;
+function  nd_namei(ndp:p_nameidata):Integer;
+function  nd_lookup(ndp:p_nameidata):Integer;
 procedure NDFREE(ndp:p_nameidata;flags:Integer);
 
 procedure nameiinit; //SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_SECOND, nameiinit, NULL);
@@ -77,7 +77,7 @@ begin
  Result:=AllocMem(vfile.MAXPATHLEN);
 end;
 
-function _namei(ndp:p_nameidata):Integer;
+function nd_namei(ndp:p_nameidata):Integer;
 var
  fdp:p_filedesc; { pointer to file descriptor state }
  cp:PChar;  { pointer into pathname argument }
@@ -216,7 +216,7 @@ begin
   if (vfslocked<>0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or GIANTHELD;
   ndp^.ni_startdir:=dp;
-  error:=_lookup(ndp);
+  error:=nd_lookup(ndp);
   if (error<>0) then
   begin
    namei_cleanup_cnp(cnp);
@@ -403,7 +403,7 @@ end;
  *     if WANTPARENT set, Exitunlocked parent in ni_dvp
  }
 
-function _lookup(ndp:p_nameidata):Integer;
+function nd_lookup(ndp:p_nameidata):Integer;
 var
  cp             :PChar  ;  { pointer into pathname argument }
  dp             :p_vnode;  { the directory we are searching }

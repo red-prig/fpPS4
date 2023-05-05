@@ -40,6 +40,8 @@ function  id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer;old:PPointer):Boolean
 function  id_get(t:p_id_desc_table;Key:Integer):p_id_desc;
 function  id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
 
+function  id_get_spaces(t:p_id_desc_table):Integer;
+
 implementation
 
 Procedure id_acqure(d:p_id_desc);
@@ -205,12 +207,13 @@ end;
 
 function id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
 Var
- d:p_id_desc;
+ d,rel:p_id_desc;
 begin
  Result:=False;
  if (t=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
 
  d:=nil;
+ rel:=nil;
  rw_wlock(t^.FLock);
 
  if HAMT_delete32(@t^.FHAMT,Key,@d) then
@@ -220,7 +223,7 @@ begin
    old^:=d;
   end else
   begin
-   id_release(d);
+   rel:=d;
   end;
   Dec(t^.FCount);
   Result:=True;
@@ -231,6 +234,29 @@ begin
  end;
 
  rw_wunlock(t^.FLock);
+ //
+ id_release(rel);
+end;
+
+function id_get_spaces(t:p_id_desc_table):Integer;
+var
+ i,last:Integer;
+begin
+ Result:=0;
+ if (t=nil) then Exit;
+
+ rw_rlock(t^.FLock);
+
+ last:=t^.FPos;
+ For i:=0 to last do
+ begin
+  if (HAMT_search32(@t^.FHAMT,i)=nil) then
+  begin
+   Inc(Result);
+  end;
+ end;
+
+ rw_runlock(t^.FLock);
 end;
 
 end.

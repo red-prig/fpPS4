@@ -24,6 +24,8 @@ uses
 type
  t_insmntque1_dtr=procedure(v:p_vnode;p:Pointer);
 
+function  makedev(x,y:Integer):Integer;
+
 function  vfs_busy(mp:p_mount;flags:Integer):Integer;
 procedure vfs_unbusy(mp:p_mount);
 function  vfs_getvfs(fsid:p_fsid):p_mount;
@@ -315,7 +317,7 @@ begin
  Exit(nil);
 end;
 
-function makedev(x,y:Integer):Integer; inline;
+function makedev(x,y:Integer):Integer;
 begin
  Result:=(x shl 8) or y;
 end;

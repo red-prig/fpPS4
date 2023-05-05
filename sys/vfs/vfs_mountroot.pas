@@ -221,13 +221,13 @@ begin
   { Remount old root under /.mount or /mnt }
   fspath:='/.mount';
   NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, fspath, curkthread);
-  error:=_namei(@nd);
+  error:=nd_namei(@nd);
   if (error<>0) then
   begin
    NDFREE(@nd, NDF_ONLY_PNBUF);
    fspath:='/mnt';
    NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, fspath, curkthread);
-   error:=_namei(@nd);
+   error:=nd_namei(@nd);
   end;
   if (error=0) then
   begin
@@ -259,7 +259,7 @@ begin
 
  { Remount devfs under /dev }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, '/dev', curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error=0) then
  begin
   vp:=nd.ni_vp;
@@ -334,15 +334,22 @@ end;
 procedure vfs_mountroot();
 var
  mp:p_mount;
+ //opt:p_vfsoptlist;
  error:Integer;
 begin
+ mtx_lock(VFS_Giant);
+
  error:=vfs_mountroot_devfs(@mp);
 
- if (error<>0) then
- begin
-  error:=vfs_mountroot_shuffle(mp);
- end;
+ //opt:=nil;
+ //vfs_domount('fdescfs','/dev/fd',MNT_RDONLY,@opt);
 
+ //if (error=0) then
+ //begin
+ // error:=vfs_mountroot_shuffle(mp);
+ //end;
+
+ mtx_unlock(VFS_Giant);
 end;
 
 end.

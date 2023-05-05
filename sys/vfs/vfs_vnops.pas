@@ -150,7 +150,7 @@ restart:
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
   //bwillwrite();
-  error:=_namei(ndp);
+  error:=nd_namei(ndp);
   if (error<>0) then
    Exit(error);
   vfslocked:=NDHASGIANT(ndp);
@@ -222,7 +222,7 @@ restart:
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
 
-  error:=_namei(ndp);
+  error:=nd_namei(ndp);
   if (error<>0) then
    Exit(error);
   if (mps=0) then

@@ -30,6 +30,7 @@ function setutimes(vp:p_vnode;ts:ptimespec;numtimes,nilflag:Integer):Integer;
 function vn_access(vp:p_vnode;user_flags:Integer):Integer;
 function setfown(vp:p_vnode;uid:uid_t;gid:gid_t):Integer;
 function setfmode(vp:p_vnode;mode:Integer):Integer;
+function getvnode(fd:Integer;rights:cap_rights_t;fpp:pp_file):Integer;
 
 function sys_sync():Integer;
 function sys_statfs(path:PChar;buf:p_statfs):Integer;
@@ -152,7 +153,7 @@ var
  nd:t_nameidata;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -212,8 +213,6 @@ begin
  end;
  Exit(error);
 end;
-
-function getvnode(fd:Integer;rights:cap_rights_t;fpp:pp_file):Integer; forward;
 
 function kern_fstatfs(fd:Integer;buf:p_statfs):Integer;
 label
@@ -504,7 +503,7 @@ var
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or AUDITVNODE1 or MPSAFE, pathseg, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -593,7 +592,7 @@ begin
  if (error<>0) then
   Exit(error);
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   goto _error;
  vfslocked:=NDHASGIANT(@nd);
@@ -934,7 +933,7 @@ begin
 restart:
  //bwillwrite();
  NDINIT_AT(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, pathseg, path, fd, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1026,7 +1025,7 @@ begin
 restart:
  //bwillwrite();
  NDINIT_ATRIGHTS(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_MKFIFO, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1145,7 +1144,7 @@ begin
  //bwillwrite();
  NDINIT_AT(@nd, LOOKUP, follow or MPSAFE or AUDITVNODE1, segflg, path1, fd1, curkthread);
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1165,7 +1164,7 @@ begin
   Exit(error);
  end;
  NDINIT_AT(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE2, segflg, path2, fd2, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error=0) then
  begin
   lvfslocked:=NDHASGIANT(@nd);
@@ -1255,7 +1254,7 @@ begin
  restart:
  //bwillwrite();
  NDINIT_AT(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, segflg, path2, fd, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   goto _out;
  vfslocked:=NDHASGIANT(@nd);
@@ -1343,7 +1342,7 @@ begin
  restart:
  //bwillwrite();
  NDINIT_AT(@nd, DELETE, LOCKPARENT or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, fd, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
  begin
   if (error=EINVAL) then
@@ -1583,7 +1582,7 @@ var
  error:Integer;
 begin
  NDINIT_ATRIGHTS(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FSTAT, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   goto out1;
  vfslocked:=NDHASGIANT(@nd);
@@ -1636,7 +1635,7 @@ begin
       path, fd, CAP_FSTAT, curkthread);
  end;
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1719,7 +1718,7 @@ var
 begin
  td:=curkthread;
  NDINIT(@nd, LOOKUP, LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1 or flags, pathseg, path, td);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1761,7 +1760,7 @@ begin
  td:=curkthread;
  NDINIT_AT(@nd, LOOKUP, NOFOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, fd, td);
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1865,7 +1864,7 @@ var
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1886,7 +1885,7 @@ var
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -1959,7 +1958,7 @@ begin
  end;
 
  NDINIT_ATRIGHTS(@nd, LOOKUP,  follow or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FCHMOD, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2058,7 +2057,7 @@ begin
 
  NDINIT_ATRIGHTS(@nd, LOOKUP, follow or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FCHOWN, curkthread);
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2205,7 +2204,7 @@ begin
   Exit(error);
  NDINIT_ATRIGHTS(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FUTIMES, curkthread);
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2247,7 +2246,7 @@ begin
  if (error<>0) then
   Exit(error);
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2308,7 +2307,7 @@ begin
  if (length < 0) then
   Exit(EINVAL);
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2426,7 +2425,7 @@ begin
  NDINIT_ATRIGHTS(@fromnd, DELETE, LOCKPARENT or LOCKLEAF or SAVESTART or
      MPSAFE or AUDITVNODE1, pathseg, old, oldfd, CAP_DELETE, curkthread);
 
- error:=_namei(@fromnd);
+ error:=nd_namei(@fromnd);
  if (error<>0) then
   Exit(error);
  fvfslocked:=NDHASGIANT(@fromnd);
@@ -2455,7 +2454,7 @@ begin
  if (fromnd.ni_vp^.v_type=VDIR) then
   tond.ni_cnd.cn_flags:=tond.ni_cnd.cn_flags or WILLBEDIR;
 
- error:=_namei(@tond);
+ error:=nd_namei(@tond);
  if (error<>0) then
  begin
   { Translate error code for rename('dir1', 'dir2/.'). }
@@ -2567,7 +2566,7 @@ restart:
      AUDITVNODE1, segflg, path, fd, CAP_MKDIR, curkthread);
  nd.ni_cnd.cn_flags:=nd.ni_cnd.cn_flags or WILLBEDIR;
 
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2650,7 +2649,7 @@ restart:
  //bwillwrite();
  NDINIT_ATRIGHTS(@nd, DELETE, LOCKPARENT or LOCKLEAF or MPSAFE or
      AUDITVNODE1, pathseg, path, fd, CAP_RMDIR, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
@@ -2856,7 +2855,7 @@ var
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,
      UIO_USERSPACE, path, curkthread);
- error:=_namei(@nd);
+ error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
