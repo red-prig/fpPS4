@@ -275,7 +275,7 @@ function  vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
 function  vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
 
 var
- rootvnode:p_vnode;
+ rootvnode:p_vnode=nil;
 
 implementation
 

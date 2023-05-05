@@ -12,6 +12,7 @@ const
  IOSIZE_MAX      =High(Int64);
  DEVFS_IOSIZE_MAX=High(Int64);
 
+function copystr(from,_to:Pointer;maxlen:ptruint;lencopied:pptruint):Integer;
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
@@ -26,7 +27,18 @@ function suword64(var base:QWORD;word:QWORD):DWORD; inline;
 implementation
 
 uses
+ sysutils,
  errno;
+
+function copystr(from,_to:Pointer;maxlen:ptruint;lencopied:pptruint):Integer;
+begin
+ strlcopy(_to,from,maxlen);
+ if (lencopied<>nil) then
+ begin
+  lencopied^:=strlen(_to);
+ end;
+ Result:=0;
+end;
 
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
 begin

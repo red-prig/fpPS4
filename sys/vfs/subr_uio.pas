@@ -58,7 +58,7 @@ begin
  end;
  save:=curthread_pflags_set(newflags);
 
- while (n > 0 and uio^.uio_resid) do
+ while (n > 0) and (uio^.uio_resid<>0) do
  begin
   iov:=uio^.uio_iov;
   cnt:=iov^.iov_len;
@@ -88,17 +88,16 @@ begin
       Move(cp^, iov^.iov_base^, cnt)
      else
       Move(iov^.iov_base^, cp^, cnt);
-     break;
     end;
    UIO_NOCOPY:;
    else;
   end;
 
-  iov^.iov_base:=iov^.iov_base + cnt;
-  Dec(iov^.iov_len,cnt);
-  Dec(uio^.uio_resid,cnt);
+  Inc(iov^.iov_base  ,cnt);
+  Dec(iov^.iov_len   ,cnt);
+  Dec(uio^.uio_resid ,cnt);
   Inc(uio^.uio_offset,cnt);
-  cp:=cp + cnt;
+  Inc(cp,cnt);
   Dec(n,cnt);
  end;
 

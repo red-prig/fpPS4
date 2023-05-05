@@ -1,6 +1,7 @@
 
 uses
  windows,
+ dateutils,
  atomic,
  ntapi,
  mqueue,
@@ -53,7 +54,11 @@ uses
  sys_fnmatch,
  devfs,
  devfs_vfsops,
- devfs_vnops;
+ devfs_vnops,
+ vfs_mountroot,
+ vstat,
+ vfcntl,
+ vdirent;
 
 var
  mtx:umutex;
@@ -223,6 +228,96 @@ var
  ymm0:array[0..31] of Byte=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
  ymm0_ptr:Pointer=@ymm0;
 
+function ts_to_str(ts:timespec):RawByteString;
+var
+ D:TDateTime;
+begin
+ D:=UnixToDateTime(ts.tv_sec);
+ D:=UniversalTimeToLocal(D);
+ Result:=DateTimeToStr(D);
+end;
+
+function IncludeUnixTrailing(Const Path:RawByteString):RawByteString;
+Var
+ L:Integer;
+begin
+ Result:=Path;
+ L:=Length(Result);
+ If (L=0) or (Path[L]<>'/') then
+ begin
+  SetLength(Result,L+1);
+  Result[L+1]:='/';
+ end;
+end;
+
+procedure test_dirs(const p:RawByteString;s:Byte);
+var
+ td:p_kthread;
+ sb:t_stat;
+ buf:array[0..511] of Byte;
+ dir:p_dirent;
+ fd:Integer;
+ err:Integer;
+ c:Integer;
+begin
+ td:=curkthread;
+ err:=sys_stat(PChar(p),@sb);
+ if (err<>0) then
+ begin
+  Writeln(Space(s),p,' | (',err,')');
+ end else
+ begin
+  Write(Space(s),p,' | ',ts_to_str(sb.st_mtim),' |');
+
+  if ((sb.st_mode and S_IFDIR)<>0) then
+  begin
+   Write(' DIR');
+   Assert(sb.st_size=512);
+
+   fd:=sys_open(PChar(p),O_RDONLY or O_DIRECTORY,0);
+
+   if (fd<0) then
+   begin
+    Write(' | (',fd,')');
+    Exit;
+   end else
+   begin
+    Writeln;
+   end;
+   Writeln(Space(s),'->');
+
+   repeat
+    FillChar(buf,512,0);
+    dir:=@buf;
+    err:=sys_getdents(fd,dir,512);
+    if (err<0) then Break;
+
+    c:=td^.td_retval[0];
+    if (c=0) then Break;
+
+    while (dir<(@buf+c)) do
+    begin
+     case RawByteString(dir^.d_name) of
+      '.':;
+      '..':;
+      else
+       //Writeln(dir^.d_name);
+       test_dirs(IncludeUnixTrailing(p)+RawByteString(dir^.d_name),s+1);
+     end;
+
+     PByte(dir):=PByte(dir)+dir^.d_reclen;
+    end;
+
+   until false;
+
+   Writeln(Space(s),'<-');
+  end else
+  begin
+   Writeln(' ',sb.st_size);
+  end;
+ end;
+end;
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
@@ -236,6 +331,10 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
+  Writeln('[--test_dirs--]');
+  test_dirs('/',1);
+  Writeln('[--test_dirs--]');
+
   tid2:=curkthread^.td_tid;
 
   evf:=evf_create('evf test',EVF_ATTR_TH_PRIO,0);

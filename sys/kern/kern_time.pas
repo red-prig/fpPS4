@@ -10,10 +10,6 @@ uses
  ntapi,
  time;
 
-procedure timevalfix(t1:ptimeval);
-procedure timevaladd(t1,t2:ptimeval);
-procedure timevalsub(t1,t2:ptimeval);
-
 function  cputick2usec(time:QWORD):QWORD; inline;
 function  get_unit_uptime:Int64;
 procedure getmicrouptime(tvp:ptimeval);
@@ -39,34 +35,6 @@ Const
  DELTA_EPOCH_IN_UNIT  =116444736000000000;
  POW10_7              =10000000;
  POW10_9              =1000000000;
-
-procedure timevalfix(t1:ptimeval);
-begin
- if (t1^.tv_usec < 0) then
- begin
-  Dec(t1^.tv_sec);
-  Inc(t1^.tv_usec,1000000);
- end;
- if (t1^.tv_usec >= 1000000) then
- begin
-  Inc(t1^.tv_sec);
-  Dec(t1^.tv_usec,1000000);
- end;
-end;
-
-procedure timevaladd(t1,t2:ptimeval);
-begin
- Inc(t1^.tv_sec ,t2^.tv_sec);
- Inc(t1^.tv_usec,t2^.tv_usec);
- timevalfix(t1);
-end;
-
-procedure timevalsub(t1,t2:ptimeval);
-begin
- Dec(t1^.tv_sec ,t2^.tv_sec);
- Dec(t1^.tv_usec,t2^.tv_usec);
- timevalfix(t1);
-end;
 
 function cputick2usec(time:QWORD):QWORD; inline;
 begin

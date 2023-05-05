@@ -33,6 +33,22 @@ const
   nil
  );
 
+type
+ { A memory allocation which must be freed when we are done }
+ p_mntaarg=^t_mntaarg;
+ t_mntaarg=packed record
+  next:SLIST_ENTRY; //mntaarg
+ end;
+
+ { The header for the mount arguments }
+ p_mntarg=^t_mntarg;
+ t_mntarg=packed record
+      v:p_iovec;
+    len:Integer;
+  error:Integer;
+   list:SLIST_HEAD; //mntaarg
+ end;
+
 procedure vfs_freeopt(opts:p_vfsoptlist;opt:p_vfsopt);
 procedure vfs_freeopts(opts:p_vfsoptlist);
 procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
@@ -76,6 +92,13 @@ function  vfs_domount(fstype:PChar;         { Filesystem type. }
 function  vfs_donmount(fsflags:QWORD;fsoptions:p_uio):Integer;
 
 function  dounmount(mp:p_mount;flags:Integer):Integer;
+
+function  mount_argb(ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
+function  mount_argf(ma:p_mntarg;name,fmt:PChar;const Args:Array of const):p_mntarg; register;
+function  mount_argsu(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
+function  mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
+procedure free_mntarg(ma:p_mntarg);
+function  kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
 
 implementation
 
@@ -211,12 +234,12 @@ begin
   begin
    if (vfs_equalopts(opt^.name, opt2^.name)<>0) then
    begin
-    tmp:=TAILQ_PREV(opt2,@opt^.link);
+    tmp:=TAILQ_PREV(opt2,@opt2^.link);
     vfs_freeopt(opts, opt2);
     opt2:=tmp;
    end else
    begin
-    opt2:=TAILQ_PREV(opt2,@opt^.link);
+    opt2:=TAILQ_PREV(opt2,@opt2^.link);
    end;
   end;
   //
@@ -643,7 +666,8 @@ end;
 
 function strlcpy(dst,src:PChar;size:ptrint):ptrint; inline;
 begin
- Result:=strlcopy(dst,src,size)-dst;
+ strlcopy(dst,src,size);
+ Result:=strlen(dst);
 end;
 
 function vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;
@@ -720,11 +744,11 @@ begin
  mp^.mnt_stat.f_type:=vfsp^.vfc_typenum;
  Inc(mp^.mnt_gen);
 
- strlcopy(mp^.mnt_stat.f_fstypename, vfsp^.vfc_name, MFSNAMELEN);
+ strlcopy(@mp^.mnt_stat.f_fstypename, @vfsp^.vfc_name, MFSNAMELEN);
 
  mp^.mnt_vnodecovered:=vp;
 
- strlcopy(mp^.mnt_stat.f_mntonname, fspath, MNAMELEN);
+ strlcopy(@mp^.mnt_stat.f_mntonname, fspath, MNAMELEN);
 
  mp^.mnt_iosize_max:=DFLTPHYS;
 
@@ -941,7 +965,7 @@ begin
   VI_UNLOCK(vp);
   vfs_unbusy(mp);
   vput(vp);
-  Exit (EBUSY);
+  Exit(EBUSY);
  end;
  vp^.v_iflag:=vp^.v_iflag or VI_MOUNT;
  VI_UNLOCK(vp);
@@ -951,6 +975,7 @@ begin
  mp^.mnt_flag:=mp^.mnt_flag and (not MNT_UPDATEMASK);
  mp^.mnt_flag:=(mp^.mnt_flag or fsflags) and (MNT_RELOAD or MNT_FORCE or MNT_UPDATE or
      MNT_SNAPSHOT or MNT_ROOTFS or MNT_UPDATEMASK or MNT_RDONLY);
+
  if ((mp^.mnt_flag and MNT_ASYNC)=0) then
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
  MNT_IUNLOCK(mp);
@@ -1050,7 +1075,7 @@ function vfs_domount(fstype:PChar;         { Filesystem type. }
                     ):Integer;
 var
  vfsp:p_vfsconf;
- nd:nameidata;
+ nd:t_nameidata;
  vp:p_vnode;
  pathbuf:PChar;
  error:Integer;
@@ -1461,6 +1486,153 @@ begin
  vfs_mount_destroy(mp);
  Exit(0);
 end;
+
+{
+ * Add a boolean argument.
+ *
+ * flag is the boolean value.
+ * name must start with 'no'.
+ }
+function mount_argb(ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
+begin
+ Assert((name[0]='n') and (name[1]='o'),'mount_argb(...,%s): name must start with no');
+
+ Exit(mount_arg(ma, name + (ord(flag<>0)*2), nil, 0));
+end;
+
+{
+ * Add an argument printf style
+ }
+function mount_argf(ma:p_mntarg;name,fmt:PChar;const Args:Array of const):p_mntarg; register;
+var
+ maa:p_mntaarg;
+ len:Integer;
+ sb:RawByteString;
+begin
+ if (ma=nil) then
+ begin
+  ma:=AllocMem(sizeof(t_mntarg));
+  SLIST_INIT(@ma^.list);
+ end;
+ if (ma^.error<>0) then
+  Exit(ma);
+
+ ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
+ ma^.v[ma^.len].iov_base:=name;
+ ma^.v[ma^.len].iov_len :=strlen(name) + 1;
+ Inc(ma^.len);
+
+ sb:=Format(fmt,Args);
+ len:=Length(sb) + 1;
+ maa:=AllocMem(sizeof(t_mntaarg) + len);
+ SLIST_INSERT_HEAD(@ma^.list,maa,@maa^.next);
+ Move(PChar(sb)^, (maa + 1)^, len);
+
+ ma^.v[ma^.len].iov_base:=maa + 1;
+ ma^.v[ma^.len].iov_len :=len;
+ Inc(ma^.len);
+
+ Exit(ma);
+end;
+
+{
+ * Add an argument which is a userland string.
+ }
+function mount_argsu(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
+var
+ maa:p_mntaarg;
+ tbuf:Pointer;
+begin
+ if (val=nil) then
+  Exit(ma);
+ if (ma=nil) then
+ begin
+  ma:=AllocMem(sizeof(t_mntarg));
+  SLIST_INIT(@ma^.list);
+ end;
+ if (ma^.error<>0) then
+  Exit(ma);
+ maa:=AllocMem(sizeof(t_mntaarg) + len);
+ SLIST_INSERT_HEAD(@ma^.list,maa,@maa^.next);
+ tbuf:=Pointer(maa + 1);
+ ma^.error:=copyinstr(val, tbuf, len, nil);
+ Exit(mount_arg(ma, name, tbuf, -1));
+end;
+
+{
+ * Plain argument.
+ *
+ * If length is -1, treat value as a C string.
+ }
+function mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
+begin
+ if (ma=nil) then
+ begin
+  ma:=AllocMem(sizeof(t_mntarg));
+  SLIST_INIT(@ma^.list);
+ end;
+ if (ma^.error<>0) then
+  Exit(ma);
+
+ ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
+ ma^.v[ma^.len].iov_base:=name;
+ ma^.v[ma^.len].iov_len :=strlen(name) + 1;
+ Inc(ma^.len);
+
+ ma^.v[ma^.len].iov_base:=val;
+ if (len < 0) then
+  ma^.v[ma^.len].iov_len:=strlen(val) + 1
+ else
+  ma^.v[ma^.len].iov_len:=len;
+ Inc(ma^.len);
+
+ Exit(ma);
+end;
+
+{
+ * Free a mntarg structure
+ }
+procedure free_mntarg(ma:p_mntarg);
+var
+ maa:p_mntaarg;
+begin
+ while (not SLIST_EMPTY(@ma^.list)) do
+ begin
+  maa:=SLIST_FIRST(@ma^.list);
+  SLIST_REMOVE_HEAD(@ma^.list,@p_mntaarg(nil)^.next);
+  FreeMem(maa);
+ end;
+ FreeMem(ma^.v);
+ FreeMem(ma);
+end;
+
+{
+ * Mount a filesystem
+ }
+function kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
+var
+ auio:t_uio;
+ error:Integer;
+begin
+ Assert(ma<>nil, 'kernel_mount nil ma');
+ Assert(ma^.v<>nil, 'kernel_mount nil ma^.v');
+ Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (%d)');
+
+ auio.uio_iov:=ma^.v;
+ auio.uio_iovcnt:=ma^.len;
+ auio.uio_segflg:=UIO_SYSSPACE;
+
+ error:=ma^.error;
+ if (error=0) then
+  error:=vfs_donmount(flags, @auio);
+ free_mntarg(ma);
+ Exit(error);
+end;
+
+
+
+
+
 
 
 end.

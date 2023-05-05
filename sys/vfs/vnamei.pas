@@ -100,45 +100,45 @@ type
 {
  * Encapsulation of namei parameters.
  }
- p_nameidata=^nameidata;
- nameidata=packed record
- {
-  * Arguments to namei/lookup.
-  }
- ni_dirp:PChar;  { pathname pointer }
- ni_segflg:uio_seg; { location of pathname }
- _align1  :Integer;
- ni_rightsneeded:cap_rights_t; { rights required to look up vnode }
- {
-  * Arguments to lookup.
-  }
- ni_startdir:p_vnode; { starting directory }
- ni_rootdir :p_vnode; { logical root directory }
- ni_topdir  :p_vnode; { logical top directory }
- ni_dirfd   :Integer;  { starting directory for *at functions }
- ni_strictrelative:Integer; { relative lookup only; no '..' }
- {
-  * Results: returned from namei
-  }
- ni_baserights:cap_rights_t; { rights the *at base has (or -1) }
- {
-  * Results: returned from/manipulated by lookup
-  }
- ni_vp :p_vnode;  { vnode of result }
- ni_dvp:p_vnode;  { vnode of intermediate directory }
- {
-  * Shared between namei and lookup/commit routines.
-  }
- ni_pathlen:QWORD;  { remaining chars in path }
- ni_next   :PChar;  { next location in pathname }
- ni_loopcnt:QWORD;  { count of symlinks encountered }
- {
-  * Lookup parameters: this structure describes the subset of
-  * information from the nameidata structure that is passed
-  * through the VOP interface.
-  }
- ni_cnd:componentname;
-end;
+ p_nameidata=^t_nameidata;
+ t_nameidata=packed record
+  {
+   * Arguments to namei/lookup.
+   }
+  ni_dirp:PChar;  { pathname pointer }
+  ni_segflg:uio_seg; { location of pathname }
+  _align1  :Integer;
+  ni_rightsneeded:cap_rights_t; { rights required to look up vnode }
+  {
+   * Arguments to lookup.
+   }
+  ni_startdir:p_vnode; { starting directory }
+  ni_rootdir :p_vnode; { logical root directory }
+  ni_topdir  :p_vnode; { logical top directory }
+  ni_dirfd   :Integer;  { starting directory for *at functions }
+  ni_strictrelative:Integer; { relative lookup only; no '..' }
+  {
+   * Results: returned from namei
+   }
+  ni_baserights:cap_rights_t; { rights the *at base has (or -1) }
+  {
+   * Results: returned from/manipulated by lookup
+   }
+  ni_vp :p_vnode;  { vnode of result }
+  ni_dvp:p_vnode;  { vnode of intermediate directory }
+  {
+   * Shared between namei and lookup/commit routines.
+   }
+  ni_pathlen:QWORD;  { remaining chars in path }
+  ni_next   :PChar;  { next location in pathname }
+  ni_loopcnt:QWORD;  { count of symlinks encountered }
+  {
+   * Lookup parameters: this structure describes the subset of
+   * information from the nameidata structure that is passed
+   * through the VOP interface.
+   }
+  ni_cnd:componentname;
+ end;
 
 function NDHASGIANT(ndp:p_nameidata):Integer; inline;
 

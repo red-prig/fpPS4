@@ -61,7 +61,6 @@ const
 
 function  foffset_get(fp:p_file):Int64; inline;
 function  foffset_lock(fp:p_file;flags:Integer):Int64;
-procedure foffset_lock(fp:p_file;val:Int64;flags:Integer);
 procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
 procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);
 procedure foffset_unlock_uio(fp:p_file;uio:p_uio;flags:Integer);
@@ -319,16 +318,19 @@ function vn_start_write_locked(mp:p_mount;flags:Integer):Integer;
 label
  unlock;
 var
+ td:p_kthread;
  error:Integer;
 begin
  mtx_assert(MNT_MTX(mp)^);
  error:=0;
 
+ td:=curkthread;
  {
   * Check on status of suspension.
   }
- if ((curkthread^.td_pflags and TDP_IGNSUSP)=0) or
-    (mp^.mnt_susp_owner<>curkthread) then
+ if (td<>nil) then
+ if ((td^.td_pflags and TDP_IGNSUSP)=0) or
+    (mp^.mnt_susp_owner<>td) then
  begin
   while ((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0) do
   begin
@@ -342,6 +344,7 @@ begin
     goto unlock;
   end;
  end;
+
  if ((flags and V_XSLEEP)<>0) then
   goto unlock;
  Inc(mp^.mnt_writeopcount);
@@ -495,9 +498,9 @@ begin
  end;
  sb^.st_mode:=mode;
  sb^.st_nlink:=vap^.va_nlink;
- sb^.st_uid:=vap^.va_uid;
- sb^.st_gid:=vap^.va_gid;
- sb^.st_rdev:=vap^.va_rdev;
+ sb^.st_uid  :=vap^.va_uid;
+ sb^.st_gid  :=vap^.va_gid;
+ sb^.st_rdev :=vap^.va_rdev;
  if (vap^.va_size > High(Int64)) then
   Exit(EOVERFLOW);
  sb^.st_size:=vap^.va_size;
@@ -539,37 +542,55 @@ begin
 end;
 
 function foffset_lock(fp:p_file;flags:Integer):Int64;
+var
+ mtxp:p_mtx;
 begin
+ Result:=0;
  Assert((flags and FOF_OFFSET)=0, 'FOF_OFFSET passed');
 
- if ((flags and FOF_NOLOCK)<>0) then
-  Exit(fp^.f_offset);
-end;
+ mtxp:=mtx_pool_find(mtxpool_sleep, fp);
+ mtx_lock(mtxp^);
 
-procedure foffset_lock(fp:p_file;val:Int64;flags:Integer);
-begin
- Assert((flags and FOF_OFFSET)=0, ('FOF_OFFSET passed'));
-
- if ((flags and FOF_NOLOCK)<>0) then
+ if ((flags and FOF_NOLOCK)=0) then
  begin
-  if ((flags and FOF_NOUPDATE)=0) then
-   fp^.f_offset:=val;
-  if ((flags and FOF_NEXTOFF)<>0) then
-   fp^.f_nextoff:=val;
+  while ((fp^.f_vnread_flags and FOFFSET_LOCKED)<>0) do
+  begin
+   fp^.f_vnread_flags:=fp^.f_vnread_flags or FOFFSET_LOCK_WAITING;
+   msleep(@fp^.f_vnread_flags, mtxp, PUSER, 'vofflock', 0);
+  end;
+  fp^.f_vnread_flags:=fp^.f_vnread_flags or FOFFSET_LOCKED;
  end;
+ Result:=fp^.f_offset;
+
+ mtx_unlock(mtxp^);
 end;
 
 procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
+var
+ mtxp:p_mtx;
 begin
- Assert((flags and FOF_OFFSET)=0, ('FOF_OFFSET passed'));
+ Assert((flags and FOF_OFFSET)=0,'FOF_OFFSET passed');
 
- if ((flags and FOF_NOLOCK)<>0) then
+ mtxp:=mtx_pool_find(mtxpool_sleep, fp);
+ mtx_lock(mtxp^);
+
+ if ((flags and FOF_NOUPDATE)=0) then
+  fp^.f_offset:=val;
+
+ if ((flags and FOF_NEXTOFF)<>0) then
+  fp^.f_nextoff:=val;
+
+ if ((flags and FOF_NOLOCK)=0) then
  begin
-  if ((flags and FOF_NOUPDATE)=0) then
-   fp^.f_offset:=val;
-  if ((flags and FOF_NEXTOFF)<>0) then
-   fp^.f_nextoff:=val;
+  Assert((fp^.f_vnread_flags and FOFFSET_LOCKED)<>0,'Lost FOFFSET_LOCKED');
+
+  if ((fp^.f_vnread_flags and FOFFSET_LOCK_WAITING)<>0) then
+   wakeup(@fp^.f_vnread_flags);
+
+  fp^.f_vnread_flags:=0;
  end;
+
+ mtx_unlock(mtxp^);
 end;
 
 procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);

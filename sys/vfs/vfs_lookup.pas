@@ -67,7 +67,7 @@ end;
  *  if symbolic link, massage name in buffer and continue
  * end;
  }
-procedure namei_cleanup_cnp(cnp:p_componentname);
+procedure namei_cleanup_cnp(cnp:p_componentname); inline;
 begin
  FreeMem(cnp^.cn_pnbuf);
 end;
@@ -92,10 +92,10 @@ begin
  cnp:=@ndp^.ni_cnd;
  td:=cnp^.cn_thread;
 
- Assert(((cnp^.cn_flags and MPSAFE)<>0) or mtx_owned(VFS_Giant),('NOT MPSAFE and Giant not held'));
+ Assert(((cnp^.cn_flags and MPSAFE)<>0) or mtx_owned(VFS_Giant),'NOT MPSAFE and Giant not held');
 
  Assert((cnp^.cn_nameiop and (not OPMASK))=0,'namei: nameiop contaminated with flags');
- Assert((cnp^.cn_flags and OPMASK)=0,('namei: flags contaminated with nameiops'));
+ Assert((cnp^.cn_flags and OPMASK)=0,'namei: flags contaminated with nameiops');
  if (lookup_shared=0) then
   cnp^.cn_flags:=cnp^.cn_flags and (not LOCKSHARED);
 
@@ -113,8 +113,7 @@ begin
 
  if (ndp^.ni_segflg=UIO_SYSSPACE) then
  begin
-  ndp^.ni_pathlen:=strlcopy(ndp^.ni_dirp,cnp^.cn_pnbuf,MAXPATHLEN)-ndp^.ni_dirp;
-  error:=0;
+  error:=copystr(ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);
  end else
  begin
   error:=copyinstr(ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);
@@ -141,14 +140,6 @@ begin
  ndp^.ni_rootdir:=fdp^.fd_rdir;
  ndp^.ni_topdir:=fdp^.fd_jdir;
 
- {
-  * If we are auditing the kernel pathname, save the user pathname.
-  }
- //if ((cnp^.cn_flags and AUDITVNODE1)<>0) then
- // AUDIT_ARG_UPATH1(td, ndp^.ni_dirfd, cnp^.cn_pnbuf);
- //if ((cnp^.cn_flags and AUDITVNODE2)<>0) then
- // AUDIT_ARG_UPATH2(td, ndp^.ni_dirfd, cnp^.cn_pnbuf);
-
  dp:=nil;
  if (cnp^.cn_pnbuf[0]<>'/') then
  begin
@@ -159,13 +150,10 @@ begin
   end else
   if (ndp^.ni_dirfd<>AT_FDCWD) then
   begin
-   //if (cnp^.cn_flags and AUDITVNODE1)
-   // AUDIT_ARG_ATFD1(ndp^.ni_dirfd);
-   //if (cnp^.cn_flags and AUDITVNODE2)
-   // AUDIT_ARG_ATFD2(ndp^.ni_dirfd);
    error:=fgetvp_rights(ndp^.ni_dirfd,
-       ndp^.ni_rightsneeded or CAP_LOOKUP,
-       @ndp^.ni_baserights, @dp);
+                        ndp^.ni_rightsneeded or CAP_LOOKUP,
+                        @ndp^.ni_baserights,
+                        @dp);
 
   end;
   if (error<>0) or (dp<>nil) then
@@ -276,15 +264,16 @@ begin
   else
    cp:=cnp^.cn_pnbuf;
 
-  aiov.iov_base:=cp;
-  aiov.iov_len:=MAXPATHLEN;
-  auio.uio_iov:=@aiov;
+  aiov.iov_base  :=cp;
+  aiov.iov_len   :=MAXPATHLEN;
+  auio.uio_iov   :=@aiov;
   auio.uio_iovcnt:=1;
   auio.uio_offset:=0;
-  auio.uio_rw:=UIO_READ;
+  auio.uio_rw    :=UIO_READ;
   auio.uio_segflg:=UIO_SYSSPACE;
-  auio.uio_td:=td;
-  auio.uio_resid:=MAXPATHLEN;
+  auio.uio_td    :=td;
+  auio.uio_resid :=MAXPATHLEN;
+
   error:=VOP_READLINK(ndp^.ni_vp, @auio);
   if (error<>0) then
   begin
@@ -313,8 +302,8 @@ begin
    FreeMem(cnp^.cn_pnbuf);
    cnp^.cn_pnbuf:=cp;
   end else
-   cnp^.cn_pnbuf[linklen]:='0';
-  ndp^.ni_pathlen += linklen;
+   cnp^.cn_pnbuf[linklen]:=#0;
+  Inc(ndp^.ni_pathlen,linklen);
   vput(ndp^.ni_vp);
   dp:=ndp^.ni_dvp;
  end;
@@ -459,7 +448,7 @@ begin
      (cnp^.cn_nameiop<>LOOKUP)) then
   docache:=0;
  _rdonly:=cnp^.cn_flags and RDONLY;
- cnp^.cn_flags:= cnp^.cn_flags and (not ISSYMLINK);
+ cnp^.cn_flags:=cnp^.cn_flags and (not ISSYMLINK);
  ndp^.ni_dvp:=nil;
  {
   * We use shared locks until we hit the parent of the last cn then
@@ -567,12 +556,6 @@ dirloop:
   end;
   ndp^.ni_vp:=dp;
 
-  //if (cnp^.cn_flags and AUDITVNODE1) then
-  // AUDIT_ARG_VNODE1(dp);
-  //else
-  //if (cnp^.cn_flags and AUDITVNODE2) then
-  // AUDIT_ARG_VNODE2(dp);
-
   if ((cnp^.cn_flags and (LOCKPARENT or LOCKLEAF))=0) then
    VOP_UNLOCK(dp, 0);
   { XXX This should probably move to the top of function. }
@@ -669,6 +652,7 @@ unionlookup:
     (VOP_ISLOCKED(dp)=LK_SHARED) and
     ((cnp^.cn_flags and ISLASTCN)<>0) and ((cnp^.cn_flags and LOCKPARENT)<>0) then
   vn_lock(dp, LK_UPGRADE or LK_RETRY);
+
  if ((dp^.v_iflag and VI_DOOMED)<>0) then
  begin
   error:=ENOENT;
@@ -893,13 +877,9 @@ nextname:
   ni_dvp_unlocked:=1;
  end;
 
- //if (cnp^.cn_flags and AUDITVNODE1) then
- // AUDIT_ARG_VNODE1(dp);
- //else if (cnp^.cn_flags and AUDITVNODE2) then
- // AUDIT_ARG_VNODE2(dp);
-
  if ((cnp^.cn_flags and LOCKLEAF)=0) then
   VOP_UNLOCK(dp, 0);
+
 success:
  {
   * Because of lookup_shared we may have the vnode shared locked, but

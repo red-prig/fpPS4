@@ -79,10 +79,13 @@ function sys_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar):Integer;
 function sys_mkdir(path:PChar;mode:Integer):Integer;
 function sys_mkdirat(fd:Integer;path:PChar;mode:Integer):Integer;
 function sys_rmdir(path:PChar):Integer;
-function sys_getdirentries(fd:Integer;buf:PChar;count:DWORD;basep:PInt64):Integer;
-function sys_getdents(fd:Integer;buf:PChar;count:DWORD):Integer;
+function sys_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
+function sys_getdents(fd:Integer;buf:Pointer;count:DWORD):Integer;
 function sys_umask(newmask:Integer):Integer;
 function sys_revoke(path:PChar):Integer;
+
+function kern_symlink(path,link:PChar;segflg:uio_seg):Integer;
+function kern_unlink(path:PChar;pathseg:uio_seg):Integer;
 
 implementation
 
@@ -146,7 +149,7 @@ var
  sb:t_statfs;
  vfslocked:Integer;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=_namei(@nd);
@@ -496,7 +499,7 @@ end;
 function kern_chdir(path:PChar;pathseg:uio_seg):Integer;
 var
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vp:p_vnode;
  vfslocked:Integer;
 begin
@@ -582,7 +585,7 @@ label
  e_vunlock;
 var
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  error:=EPERM;
@@ -728,7 +731,7 @@ var
  nfp:p_file;
  _type,indx,error,error_open:Integer;
  lf:t_flock;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
  rights_needed:cap_rights_t;
 begin
@@ -925,7 +928,7 @@ var
  mp:p_mount;
  vattr:t_vattr;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
 restart:
@@ -985,7 +988,7 @@ var
  vattr:t_vattr;
  error:Integer;
  whiteout:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  whiteout:=0;
@@ -1134,7 +1137,7 @@ function kern_linkat(fd1,fd2:Integer;path1,path2:PChar;segflg:uio_seg;follow:Int
 var
  vp:p_vnode;
  mp:p_mount;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
  lvfslocked:Integer;
  error:Integer;
@@ -1236,7 +1239,7 @@ var
  vattr:t_vattr;
  syspath:PChar;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  if (segflg=UIO_SYSSPACE) then
@@ -1326,7 +1329,7 @@ var
  mp:p_mount;
  vp:p_vnode;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  sb:t_stat;
  vfslocked:Integer;
 
@@ -1575,7 +1578,7 @@ label
  out1;
 var
  vp:p_vnode;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
  error:Integer;
 begin
@@ -1616,7 +1619,7 @@ function kern_statat_vnhook(flag,fd:Integer;
                             sbp:p_stat;
                             hook:t_statat_hook_cb):Integer;
 var
- nd:nameidata;
+ nd:t_nameidata;
  sb:t_stat;
  error, vfslocked:Integer;
 begin
@@ -1656,7 +1659,6 @@ end;
 function kern_statat(flag,fd:Integer;path:PChar;
                      pathseg:uio_seg;sbp:p_stat):Integer;
 begin
-
  Exit(kern_statat_vnhook(flag, fd, path, pathseg, sbp, nil));
 end;
 
@@ -1712,7 +1714,7 @@ end;
 function kern_pathconf(path:PChar;pathseg:uio_seg;name:Integer;flags:QWORD):Integer;
 var
  td:p_kthread;
- nd:nameidata;
+ nd:t_nameidata;
  error,vfslocked:Integer;
 begin
  td:=curkthread;
@@ -1750,7 +1752,7 @@ var
  aiov:iovec;
  auio:t_uio;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  if (count > IOSIZE_MAX) then
@@ -1859,7 +1861,7 @@ end;
 function sys_chflags(path:PChar;flags:Integer):Integer;
 var
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
@@ -1880,7 +1882,7 @@ end;
 function sys_lchflags(path:PChar;flags:Integer):Integer;
 var
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
@@ -1944,7 +1946,7 @@ end;
 function kern_fchmodat(fd:Integer;path:PChar;pathseg:uio_seg;mode,flag:Integer):Integer;
 var
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
  follow:Integer;
 begin
@@ -2043,7 +2045,7 @@ end;
 
 function kern_fchownat(fd:Integer;path:PChar;pathseg:uio_seg;uid,gid,flag:Integer):Integer;
 var
- nd:nameidata;
+ nd:t_nameidata;
  error,vfslocked,follow:Integer;
 begin
  if (flag and AT_SYMLINK_NOFOLLOW)<>0 then
@@ -2194,7 +2196,7 @@ end;
 function kern_utimesat(fd:Integer;path:PChar;pathseg:uio_seg;
                        tptr:ptimeval;tptrseg:uio_seg):Integer;
 var
- nd:nameidata;
+ nd:t_nameidata;
  ts:array[0..1] of timespec;
  error,vfslocked:Integer;
 begin
@@ -2238,7 +2240,7 @@ function kern_lutimes(path:PChar;pathseg:uio_seg;
 var
  ts:array[0..1] of timespec;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  error:=getutimes(tptr, tptrseg, ts);
@@ -2300,7 +2302,7 @@ var
  vp:p_vnode;
  rl_cookie:Pointer;
  vattr:t_vattr;
- nd:nameidata;
+ nd:t_nameidata;
  error,vfslocked:Integer;
 begin
  if (length < 0) then
@@ -2413,7 +2415,7 @@ label
 var
  mp:p_mount;
  tvp,fvp,tdvp:p_vnode;
- fromnd,tond:nameidata;
+ fromnd,tond:t_nameidata;
  tvfslocked:Integer;
  fvfslocked:Integer;
  error:Integer;
@@ -2556,7 +2558,7 @@ var
  vp:p_vnode;
  vattr:t_vattr;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
 restart:
@@ -2641,7 +2643,7 @@ var
  mp:p_mount;
  vp:p_vnode;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
 restart:
@@ -2720,7 +2722,7 @@ begin
  Exit(kern_rmdir(path, UIO_USERSPACE));
 end;
 
-function kern_getdirentries(fd:Integer;buf:PChar;count:DWORD;basep:PInt64):Integer;
+function kern_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 label
  unionread,
  fail;
@@ -2781,9 +2783,9 @@ unionread:
   VFS_UNLOCK_GIANT(vfslocked);
   goto fail;
  end;
- if (count=auio.uio_resid and
-     (vp^.v_vflag and VV_ROOT) and
-     (p_mount(vp^.v_mount)^.mnt_flag and MNT_UNION)) then
+ if (count=auio.uio_resid) and
+    ((vp^.v_vflag and VV_ROOT)<>0) and
+    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
  begin
   tvp:=vp;
   vp:=p_mount(vp^.v_mount)^.mnt_vnodecovered;
@@ -2808,7 +2810,7 @@ end;
 {
  * Read a block of directory entries in a filesystem independent format.
  }
-function sys_getdirentries(fd:Integer;buf:PChar;count:DWORD;basep:PInt64):Integer;
+function sys_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 var
  base:Int64;
  error:Integer;
@@ -2821,7 +2823,7 @@ begin
  Exit(error);
 end;
 
-function sys_getdents(fd:Integer;buf:PChar;count:DWORD):Integer;
+function sys_getdents(fd:Integer;buf:Pointer;count:DWORD):Integer;
 begin
  Exit(sys_getdirentries(fd,buf,count,nil));
 end;
@@ -2849,7 +2851,7 @@ var
  vp:p_vnode;
  vattr:t_vattr;
  error:Integer;
- nd:nameidata;
+ nd:t_nameidata;
  vfslocked:Integer;
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,

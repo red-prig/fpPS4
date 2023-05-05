@@ -528,6 +528,42 @@ begin
  { NOTREACHED }
 end;
 
+function lockmgr(lk:p_mtx;flags:Integer;ilk:p_mtx):Integer;
+var
+ op:Integer;
+begin
+
+ op:=(flags and LK_TYPE_MASK);
+ case op of
+  LK_SHARED,
+  LK_EXCLUSIVE:
+   begin
+    mtx_lock(lk^);
+   end;
+  LK_RELEASE:
+   begin
+    mtx_unlock(lk^);
+   end;
+  LK_UPGRADE:
+   begin
+    if not mtx_owned(lk^) then
+    begin
+     mtx_lock(lk^);
+    end;
+   end;
+   LK_DOWNGRADE:;//
+  else
+   Assert(false);
+ end;
+
+ if ((flags and LK_INTERLOCK)<>0) then
+ begin
+  mtx_unlock(ilk^);
+ end;
+
+ Result:=0;
+end;
+
 {
  * Standard lock, unlock and islocked functions.
  }
@@ -537,14 +573,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- if (ap^.a_flags and LK_INTERLOCK)<>0 then
- begin
-  mtx_unlock(VI_MTX(vp)^);
-  Exit(0);
- end;
-
- mtx_lock(vp^.v_vnlock^);
- Exit(0);
+ Result:=lockmgr(vp^.v_vnlock,ap^.a_flags,VI_MTX(vp));
 
  //Exit(_lockmgr_args(vp^.v_vnlock, ap^.a_flags, VI_MTX(vp),
  //    LK_WMESG_DEFAULT, LK_PRIO_DEFAULT, LK_TIMO_DEFAULT, ap^.a_file,
@@ -558,14 +587,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- if (ap^.a_flags and LK_INTERLOCK)<>0 then
- begin
-  mtx_unlock(VI_MTX(vp)^);
-  Exit(0);
- end;
-
- mtx_unlock(vp^.v_vnlock^);
- Exit(0);
+ Result:=lockmgr(vp^.v_vnlock,ap^.a_flags or LK_RELEASE,VI_MTX(vp));
 
  //Exit(lockmgr(vp^.v_vnlock, ap^.a_flags or LK_RELEASE, VI_MTX(vp)));
 end;
@@ -778,7 +800,7 @@ var
  off:QWORD;
  fileno:DWORD;
  va:t_vattr;
- nd:nameidata;
+ nd:t_nameidata;
  td:p_kthread;
  dp:p_dirent;
  mvp:p_vnode;

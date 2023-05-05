@@ -30,7 +30,8 @@ uses
  devfs,
  devfs_devs,
  devfs_vfsops,
- kern_descrip;
+ kern_descrip,
+ vfs_mountroot;
 
 //Daemon for a separate thread
 procedure sys_update;
@@ -41,6 +42,7 @@ end;
 procedure module_init;
 begin
  vfs_register(@devfs_vfsconf);
+ vfs_mountroot.vfs_mountroot();
 end;
 
 //Manual order of lazy initialization

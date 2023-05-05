@@ -388,13 +388,18 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
+ if (td=nil) then Exit;
  Result:=(not flags) or (td^.td_pflags and flags);
  td^.td_pflags:=td^.td_pflags or flags;
 end;
 
 procedure curthread_pflags_restore(save:Integer);
+var
+ td:p_kthread;
 begin
- curkthread^.td_pflags:=curkthread^.td_pflags and save;
+ td:=curkthread;
+ if (td=nil) then Exit;
+ td^.td_pflags:=td^.td_pflags and save;
 end;
 
 //
