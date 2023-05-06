@@ -6,6 +6,8 @@ unit sysent;
 interface
 
 function nosys:Integer;
+function nosup:Integer;
+function nzero:Integer;
 
 type
  t_sysent=packed record
@@ -363,12 +365,12 @@ const
   ),
   (//[69]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosup;
      sy_name:'sys_sbrk'
   ),
   (//[70]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosup;
      sy_name:'sys_sstk'
   ),
   (//[71]
@@ -1293,13 +1295,13 @@ const
   ),
   (//[255]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_read'
   ),
   (//[256]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_write'
   ),
   (//[257]
      sy_narg:0;
@@ -1538,32 +1540,32 @@ const
   ),
   (//[304]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldload'
   ),
   (//[305]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldunload'
   ),
   (//[306]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldfind'
   ),
   (//[307]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldnext'
   ),
   (//[308]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldstat'
   ),
   (//[309]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldfirstmod'
   ),
   (//[310]
@@ -1588,23 +1590,23 @@ const
   ),
   (//[314]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_return'
   ),
   (//[315]
      sy_narg:3;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_suspend'
   ),
   (//[316]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_cancel'
   ),
   (//[317]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_error'
   ),
   (//[318]
      sy_narg:0;
@@ -1703,7 +1705,7 @@ const
   ),
   (//[337]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldsym'
   ),
   (//[338]
@@ -1813,8 +1815,8 @@ const
   ),
   (//[359]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_waitcomplete'
   ),
   (//[360]
      sy_narg:3;
@@ -1888,7 +1890,7 @@ const
   ),
   (//[374]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___setugid'
   ),
   (//[375]
@@ -1912,9 +1914,9 @@ const
      sy_name:'sys_nmount'
   ),
   (//[379]
-     sy_narg:0;
-     sy_call:@nosys;
-     sy_name:'nosys'
+     sy_narg:4;
+     sy_call:nil;
+     sy_name:'sys_mtypeprotect'
   ),
   (//[380]
      sy_narg:0;
@@ -1938,32 +1940,32 @@ const
   ),
   (//[384]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_get_proc'
   ),
   (//[385]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_set_proc'
   ),
   (//[386]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_get_fd'
   ),
   (//[387]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_get_file'
   ),
   (//[388]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_set_fd'
   ),
   (//[389]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_set_file'
   ),
   (//[390]
@@ -1988,7 +1990,7 @@ const
   ),
   (//[394]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_mac_syscall'
   ),
   (//[395]
@@ -2018,62 +2020,62 @@ const
   ),
   (//[400]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_close'
   ),
   (//[401]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_post'
   ),
   (//[402]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_wait'
   ),
   (//[403]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_trywait'
   ),
   (//[404]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_init'
   ),
   (//[405]
      sy_narg:5;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_open'
   ),
   (//[406]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_unlink'
   ),
   (//[407]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_getvalue'
   ),
   (//[408]
      sy_narg:1;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_destroy'
   ),
   (//[409]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_get_pid'
   ),
   (//[410]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_get_link'
   ),
   (//[411]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_set_link'
   ),
   (//[412]
@@ -2093,7 +2095,7 @@ const
   ),
   (//[415]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys___mac_execve'
   ),
   (//[416]
@@ -2223,8 +2225,8 @@ const
   ),
   (//[441]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_ksem_timedwait'
   ),
   (//[442]
      sy_narg:1;
@@ -2238,7 +2240,7 @@ const
   ),
   (//[444]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_kldunloadf'
   ),
   (//[445]
@@ -2343,8 +2345,8 @@ const
   ),
   (//[465]
      sy_narg:2;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_aio_fsync'
   ),
   (//[466]
      sy_narg:3;
@@ -2588,37 +2590,37 @@ const
   ),
   (//[514]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_cap_new'
   ),
   (//[515]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_cap_getrights'
   ),
   (//[516]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_cap_enter'
   ),
   (//[517]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_cap_getmode'
   ),
   (//[518]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_pdfork'
   ),
   (//[519]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_pdkill'
   ),
   (//[520]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_pdgetpid'
   ),
   (//[521]
@@ -2643,27 +2645,27 @@ const
   ),
   (//[525]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_rctl_get_racct'
   ),
   (//[526]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_rctl_get_rules'
   ),
   (//[527]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_rctl_get_limits'
   ),
   (//[528]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_rctl_add_rule'
   ),
   (//[529]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_rctl_remove_rule'
   ),
   (//[530]
@@ -2678,8 +2680,8 @@ const
   ),
   (//[532]
      sy_narg:5;
-     sy_call:@nosys;
-     sy_name:'lkmressys'
+     sy_call:nil;
+     sy_name:'sys_regmgr_call'
   ),
   (//[533]
      sy_narg:3;
@@ -2703,7 +2705,7 @@ const
   ),
   (//[537]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_dl_notify_event'
   ),
   (//[538]
@@ -2757,7 +2759,7 @@ const
      sy_name:'sys_query_memory_protection'
   ),
   (//[548]
-     sy_narg:4;
+     sy_narg:5;
      sy_call:nil;
      sy_name:'sys_batch_map'
   ),
@@ -2888,57 +2890,57 @@ const
   ),
   (//[574]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_create'
   ),
   (//[575]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_delete'
   ),
   (//[576]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_enter'
   ),
   (//[577]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_exit'
   ),
   (//[578]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_xenter'
   ),
   (//[579]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_sblock_xexit'
   ),
   (//[580]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_eport_create'
   ),
   (//[581]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_eport_delete'
   ),
   (//[582]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_eport_trigger'
   ),
   (//[583]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_eport_open'
   ),
   (//[584]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_eport_close'
   ),
   (//[585]
@@ -2963,12 +2965,12 @@ const
   ),
   (//[589]
      sy_narg:6;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_dynlib_dlopen'
   ),
   (//[590]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_dynlib_dlclose'
   ),
   (//[591]
@@ -3003,7 +3005,7 @@ const
   ),
   (//[597]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_dynlib_prepare_dlclose'
   ),
   (//[598]
@@ -3097,7 +3099,7 @@ const
      sy_name:'sys_get_resident_fmem_count'
   ),
   (//[616]
-     sy_narg:1;
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_thr_get_name'
   ),
@@ -3113,7 +3115,7 @@ const
   ),
   (//[619]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_test_debug_rwmem'
   ),
   (//[620]
@@ -3127,7 +3129,7 @@ const
      sy_name:'sys_suspend_system'
   ),
   (//[622]
-     sy_narg:5;
+     sy_narg:6;
      sy_call:nil;
      sy_name:'sys_ipmimgr_call'
   ),
@@ -3147,7 +3149,7 @@ const
      sy_name:'sys_opmc_set_hw'
   ),
   (//[626]
-     sy_narg:4;
+     sy_narg:5;
      sy_call:nil;
      sy_name:'sys_opmc_get_hw'
   ),
@@ -3162,47 +3164,47 @@ const
      sy_name:'sys_mmap_dmem'
   ),
   (//[629]
-     sy_narg:0; //fix it
+     sy_narg:4;
      sy_call:nil;
      sy_name:'sys_physhm_open'
   ),
   (//[630]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_physhm_unlink'
   ),
   (//[631]
-     sy_narg:0; //fix it
+     sy_narg:0;
      sy_call:nil;
      sy_name:'sys_resume_internal_hdd'
   ),
   (//[632]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_thr_suspend_ucontext'
   ),
   (//[633]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_thr_resume_ucontext'
   ),
   (//[634]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_thr_get_ucontext'
   ),
   (//[635]
-     sy_narg:0; //fix it
-     sy_call:nil;
+     sy_narg:2;
+     sy_call:@nosys;
      sy_name:'sys_thr_set_ucontext'
   ),
   (//[636]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_set_timezone_info'
   ),
   (//[637]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_set_phys_fmem_limit'
   ),
@@ -3217,8 +3219,8 @@ const
      sy_name:'sys_localtime_to_utc'
   ),
   (//[640]
-     sy_narg:0; //fix it
-     sy_call:nil;
+     sy_narg:8;
+     sy_call:@nzero;
      sy_name:'sys_set_uevt'
   ),
   (//[641]
@@ -3227,7 +3229,7 @@ const
      sy_name:'sys_get_cpu_usage_proc'
   ),
   (//[642]
-     sy_narg:0; //fix it
+     sy_narg:4;
      sy_call:nil;
      sy_name:'sys_get_map_statistics'
   ),
@@ -3238,16 +3240,16 @@ const
   ),
   (//[644]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_extend_page_table_pool'
   ),
   (//[645]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@nosys;
      sy_name:'sys_extend_page_table_pool2'
   ),
   (//[646]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_get_kernel_mem_statistics'
   ),
@@ -3267,17 +3269,17 @@ const
      sy_name:'sys_dynlib_get_obj_member'
   ),
   (//[650]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_budget_get_ptype_of_budget'
   ),
   (//[651]
-     sy_narg:0; //fix it
+     sy_narg:1;
      sy_call:nil;
      sy_name:'sys_prepare_to_resume_process'
   ),
   (//[652]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_process_terminate'
   ),
@@ -3297,7 +3299,7 @@ const
      sy_name:'sys_blockpool_unmap'
   ),
   (//[656]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_dynlib_get_info_for_libdbg'
   ),
@@ -3322,8 +3324,8 @@ const
      sy_name:'sys_dynlib_get_info2'
   ),
   (//[661]
-     sy_narg:0; //fix it
-     sy_call:nil;
+     sy_narg:4;
+     sy_call:@nosys;
      sy_name:'sys_aio_submit'
   ),
   (//[662]
@@ -3342,8 +3344,8 @@ const
      sy_name:'sys_aio_multi_poll'
   ),
   (//[665]
-     sy_narg:0; //fix it
-     sy_call:nil;
+     sy_narg:2;
+     sy_call:@nosys;
      sy_name:'sys_aio_get_data'
   ),
   (//[666]
@@ -3352,13 +3354,13 @@ const
      sy_name:'sys_aio_multi_cancel'
   ),
   (//[667]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_get_bio_usage_all'
   ),
   (//[668]
-     sy_narg:0; //fix it
-     sy_call:nil;
+     sy_narg:2;
+     sy_call:@nosys;
      sy_name:'sys_aio_create'
   ),
   (//[669]
@@ -3377,32 +3379,32 @@ const
      sy_name:'sys_get_page_table_stats'
   ),
   (//[672]
-     sy_narg:0; //fix it
+     sy_narg:3;
      sy_call:nil;
      sy_name:'sys_dynlib_get_list_for_libdbg'
   ),
   (//[673]
-     sy_narg:0; //fix it
+     sy_narg:4;
      sy_call:nil;
      sy_name:'sys_blockpool_move'
   ),
   (//[674]
-     sy_narg:0; //fix it
+     sy_narg:5;
      sy_call:nil;
      sy_name:'sys_virtual_query_all'
   ),
   (//[675]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_reserve_2mb_page'
   ),
   (//[676]
-     sy_narg:0; //fix it
+     sy_narg:0;
      sy_call:nil;
      sy_name:'sys_cpumode_yield'
   ),
   (//[677]
-     sy_narg:0; //fix it
+     sy_narg:2;
      sy_call:nil;
      sy_name:'sys_get_phys_page_size'
   )
@@ -3416,6 +3418,16 @@ uses
 function nosys:Integer;
 begin
  Result:=ENOSYS;
+end;
+
+function nosup:Integer;
+begin
+ Result:=ENOTSUP;
+end;
+
+function nzero:Integer;
+begin
+ Result:=0;
 end;
 
 end.
