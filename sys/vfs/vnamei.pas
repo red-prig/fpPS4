@@ -101,13 +101,12 @@ type
  * Encapsulation of namei parameters.
  }
  p_nameidata=^t_nameidata;
- t_nameidata=packed record
+ t_nameidata=record
   {
    * Arguments to namei/lookup.
    }
   ni_dirp:PChar;  { pathname pointer }
   ni_segflg:uio_seg; { location of pathname }
-  _align1  :Integer;
   ni_rightsneeded:cap_rights_t; { rights required to look up vnode }
   {
    * Arguments to lookup.
@@ -207,6 +206,7 @@ procedure NDINIT_ALL(
  rights:cap_rights_t;
  td:p_kthread); inline;
 begin
+ ndp^:=Default(t_nameidata);
  ndp^.ni_cnd.cn_nameiop:=op;
  ndp^.ni_cnd.cn_flags  :=flags;
  ndp^.ni_segflg        :=segflg;

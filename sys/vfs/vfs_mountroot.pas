@@ -10,7 +10,7 @@ uses
  vmount;
 
 procedure vfs_mountroot();
-function  vfs_mountroot_simple(fstype,fspath,from,opts:PChar):Integer;
+function  vfs_mountroot_simple(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 
 implementation
 
@@ -304,7 +304,7 @@ begin
  Exit(0);
 end;
 
-function vfs_mountroot_simple(fstype,fspath,from,opts:PChar):Integer;
+function vfs_mountroot_simple(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 const
  ERRMSGL=255;
 var
@@ -328,7 +328,7 @@ begin
  ma:=mount_arg(ma, 'errmsg', PChar(errmsg), ERRMSGL);
 
  ma:=parse_mountroot_options(ma, opts);
- Result:=kernel_mount(ma, MNT_ROOTFS);
+ Result:=kernel_mount(ma,flags);
 end;
 
 procedure vfs_mountroot();
@@ -343,6 +343,9 @@ begin
 
  //opt:=nil;
  //vfs_domount('fdescfs','/dev/fd',MNT_RDONLY,@opt);
+
+ //error:=vfs_mountroot_simple('fdescfs','/dev/fd','',nil,0);
+ //error:=vfs_mountroot_simple('fdescfs','/fd','',nil,0);
 
  //if (error=0) then
  //begin

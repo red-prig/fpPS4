@@ -113,7 +113,7 @@ begin
 
  VOP_UNLOCK(rvp, 0);
  { XXX -- don't mark as local to work around fts() problems }
- {mp^.mnt_flag:= or MNT_LOCAL;}
+ {mp^.mnt_flag:=mp^.mnt_flag or MNT_LOCAL;}
  MNT_ILOCK(mp);
  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_MPSAFE;
  MNT_IUNLOCK(mp);

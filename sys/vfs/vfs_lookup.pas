@@ -79,7 +79,6 @@ end;
 
 function nd_namei(ndp:p_nameidata):Integer;
 var
- fdp:p_filedesc; { pointer to file descriptor state }
  cp:PChar;  { pointer into pathname argument }
  dp:p_vnode; { the directory we are searching }
  aiov:iovec;  { uio for reading symbolic links }
@@ -96,10 +95,9 @@ begin
 
  Assert((cnp^.cn_nameiop and (not OPMASK))=0,'namei: nameiop contaminated with flags');
  Assert((cnp^.cn_flags and OPMASK)=0,'namei: flags contaminated with nameiops');
+
  if (lookup_shared=0) then
   cnp^.cn_flags:=cnp^.cn_flags and (not LOCKSHARED);
-
- fdp:=@fd_table;
 
  { We will set this ourselves if we need it. }
  cnp^.cn_flags:=cnp^.cn_flags and (not TRAILINGSLASH);
@@ -136,9 +134,9 @@ begin
  {
   * Get starting point for the translation.
   }
- FILEDESC_SLOCK(fdp);
- ndp^.ni_rootdir:=fdp^.fd_rdir;
- ndp^.ni_topdir:=fdp^.fd_jdir;
+ FILEDESC_SLOCK(@fd_table);
+ ndp^.ni_rootdir:=fd_table.fd_rdir;
+ ndp^.ni_topdir :=fd_table.fd_jdir;
 
  dp:=nil;
  if (cnp^.cn_pnbuf[0]<>'/') then
@@ -158,7 +156,7 @@ begin
   end;
   if (error<>0) or (dp<>nil) then
   begin
-   FILEDESC_SUNLOCK(fdp);
+   FILEDESC_SUNLOCK(@fd_table);
    if (error=0) and (dp^.v_type<>VDIR) then
    begin
     vfslocked:=VFS_LOCK_GIANT(dp^.v_mount);
@@ -175,9 +173,9 @@ begin
  end;
  if (dp=nil) then
  begin
-  dp:=fdp^.fd_cdir;
+  dp:=fd_table.fd_cdir;
   VREF(dp);
-  FILEDESC_SUNLOCK(fdp);
+  FILEDESC_SUNLOCK(@fd_table);
   if (ndp^.ni_startdir<>nil) then
   begin
    vfslocked:=VFS_LOCK_GIANT(ndp^.ni_startdir^.v_mount);

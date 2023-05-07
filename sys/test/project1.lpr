@@ -65,7 +65,8 @@ uses
  vdirent,
  fdesc,
  fdesc_vfsops,
- fdesc_vnops;
+ fdesc_vnops,
+ kern_descrip;
 
 var
  mtx:umutex;
@@ -268,7 +269,7 @@ var
  c:Integer;
 begin
  td:=curkthread;
- err:=sys_stat(PChar(p),@sb);
+ err:=sys_lstat(PChar(p),@sb);
  if (err<>0) then
  begin
   Writeln(Space(s),p,' | (',err,')');
@@ -281,16 +282,19 @@ begin
    Write(' DIR');
    Assert(sb.st_size=512);
 
-   fd:=sys_open(PChar(p),O_RDONLY or O_DIRECTORY,0);
+   err:=sys_open(PChar(p),O_RDONLY or O_DIRECTORY,0);
 
-   if (fd<0) then
+   if (err<>0) then
    begin
-    Write(' | (',fd,')');
+    Write(' | (',err,')');
     Exit;
    end else
    begin
     Writeln;
    end;
+
+   fd:=td^.td_retval[0];
+
    Writeln(Space(s),'->');
 
    repeat
@@ -317,10 +321,24 @@ begin
 
    until false;
 
+   sys_close(fd);
+
    Writeln(Space(s),'<-');
   end else
   begin
-   Writeln(' ',sb.st_size);
+   Case (sb.st_mode and S_IFMT) of
+    S_IFIFO :Write(' IFO');
+    S_IFCHR :Write(' CHR');
+    S_IFDIR :Write(' DIR');
+    S_IFBLK :Write(' BLK');
+    S_IFREG :Write(' REG');
+    S_IFLNK :Write(' LNK');
+    S_IFSOCK:Write(' SCK');
+    else
+             Write(' ',(sb.st_mode and S_IFMT));
+   end;
+
+   Writeln(' | ',sb.st_size);
   end;
  end;
 end;

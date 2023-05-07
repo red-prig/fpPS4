@@ -280,6 +280,7 @@ end;
 
 function fdunwrap(fd:Integer;rights:cap_rights_t;fpp:pp_file):Integer;
 var
+ fp_fromcap:p_file;
  err:Integer;
 begin
 
@@ -289,12 +290,19 @@ begin
 
  if (fpp^^.f_type=DTYPE_CAPABILITY) then
  begin
-  err:=cap_funwrap(fpp^, rights, fpp);
+  fp_fromcap:=nil;
+  err:=cap_funwrap(fpp^, rights, @fp_fromcap);
   if (err<>0) then
   begin
    fdrop(fpp^);
    fpp^:=nil;
    Exit(err);
+  end;
+  if (fpp^<>fp_fromcap) then
+  begin
+   fhold(fp_fromcap);
+   fdrop(fpp^);
+   fpp^:=fp_fromcap;
   end;
  end;
 
@@ -800,7 +808,6 @@ begin
   begin
    //mq_fdclose(td, fd, fp_object);
   end;
-  fdrop(fp_object);
  end;
 
  Exit(closef(fp));
@@ -861,7 +868,6 @@ begin
 
    VFS_UNLOCK_GIANT(vfslocked);
   end;
-  fdrop(fp_object);
  end;
  Exit(fdrop(fp));
 end;
@@ -1226,7 +1232,7 @@ begin
 
  System.InterlockedDecrement(openfiles);
 
- //FreeMem(fp^.f_advice);
+ FreeMem(fp^.f_advice);
  FreeMem(fp);
 end;
 

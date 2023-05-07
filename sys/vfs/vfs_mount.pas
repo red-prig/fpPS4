@@ -1086,7 +1086,7 @@ begin
   * terminating NUL.
   }
  if (strlen(fstype) >= MFSNAMELEN) or (strlen(fspath) >= MNAMELEN) then
-  Exit (ENAMETOOLONG);
+  Exit(ENAMETOOLONG);
 
  { Load KLDs before we lock the covered vnode to avoid reversals. }
  vfsp:=nil;
@@ -1105,7 +1105,7 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
-  Exit (error);
+  Exit(error);
  if (NDHASGIANT(@nd)=0) then
   mtx_lock(VFS_Giant);
  NDFREE(@nd, NDF_ONLY_PNBUF);
