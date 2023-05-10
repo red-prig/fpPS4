@@ -19,7 +19,7 @@ uses
  errno,
  vuio,
  vnamei,
- vfs_vnode,
+ vnode,
  vnode_if,
  vfiledesc,
  vfs_subr,
@@ -68,7 +68,10 @@ var
  val,val_arg:PChar;
  opts:PChar;
 begin
- if (options=nil) or (options[0]=#0) then
+ if (options=nil) then
+  Exit(ma);
+
+ if (options[0]=#0) then
   Exit(ma);
 
  p:=strdup(options);
@@ -165,11 +168,11 @@ begin
  mpp^:=mp;
  set_rootvnode();
 
- error:=kern_symlink('/', 'dev', UIO_SYSSPACE);
- if (error<>0) then
- begin
-  Writeln('kern_symlink /dev / returns ',error);
- end;
+ //error:=kern_symlink('/', 'dev', UIO_SYSSPACE);
+ //if (error<>0) then
+ //begin
+ // Writeln('kern_symlink /dev / returns ',error);
+ //end;
 
  Exit(error);
 end;
@@ -296,9 +299,9 @@ begin
  begin
   vfs_unbusy(mpdevfs);
   { Unlink the no longer needed /dev/dev ^. / symlink }
-  error:=kern_unlink('/dev/dev', UIO_SYSSPACE);
-  if (error<>0) then
-   Writeln('mountroot: unable to unlink /dev/dev ', error);
+  //error:=kern_unlink('/dev/dev', UIO_SYSSPACE);
+  //if (error<>0) then
+  // Writeln('mountroot: unable to unlink /dev/dev ', error);
  end;
 
  Exit(0);
@@ -332,26 +335,23 @@ begin
 end;
 
 procedure vfs_mountroot();
+label
+ _end;
 var
  mp:p_mount;
- //opt:p_vfsoptlist;
  error:Integer;
 begin
  mtx_lock(VFS_Giant);
 
  error:=vfs_mountroot_devfs(@mp);
+ if (error<>0) then goto _end;
 
- //opt:=nil;
- //vfs_domount('fdescfs','/dev/fd',MNT_RDONLY,@opt);
+ error:=vfs_mountroot_simple('nullfs','/','',nil,MNT_RDONLY or MNT_ROOTFS);
+ if (error<>0) then goto _end;
 
- //error:=vfs_mountroot_simple('fdescfs','/dev/fd','',nil,0);
- //error:=vfs_mountroot_simple('fdescfs','/fd','',nil,0);
+ error:=vfs_mountroot_shuffle(mp);
 
- //if (error=0) then
- //begin
- // error:=vfs_mountroot_shuffle(mp);
- //end;
-
+_end:
  mtx_unlock(VFS_Giant);
 end;
 

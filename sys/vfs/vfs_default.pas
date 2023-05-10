@@ -7,7 +7,7 @@ interface
 
 uses
  sysutils,
- vfs_vnode,
+ vnode,
  vnode_if,
  vdirent,
  vuio,
@@ -17,7 +17,6 @@ uses
  vnamei,
  vfcntl,
  vpoll,
- vsocketvar,
  kern_thr,
  kern_mtx;
 
@@ -573,6 +572,8 @@ var
 begin
  vp:=ap^.a_vp;
 
+ //Writeln('vop_std  lock:',HexStr(ap^.a_vp^.v_vnlock));
+
  Result:=lockmgr(vp^.v_vnlock,ap^.a_flags,VI_MTX(vp));
 
  //Exit(_lockmgr_args(vp^.v_vnlock, ap^.a_flags, VI_MTX(vp),
@@ -587,6 +588,8 @@ var
 begin
  vp:=ap^.a_vp;
 
+ //Writeln('vop_stdunlock:',HexStr(ap^.a_vp^.v_vnlock));
+
  Result:=lockmgr(vp^.v_vnlock,ap^.a_flags or LK_RELEASE,VI_MTX(vp));
 
  //Exit(lockmgr(vp^.v_vnlock, ap^.a_flags or LK_RELEASE, VI_MTX(vp)));
@@ -595,6 +598,8 @@ end;
 { See above. }
 function vop_stdislocked(ap:p_vop_islocked_args):Integer;
 begin
+
+ //Writeln('vop_stdislocked:',HexStr(ap^.a_vp^.v_vnlock),':',mtx_owned(ap^.a_vp^.v_vnlock^));
 
  if mtx_owned(ap^.a_vp^.v_vnlock^) then
   Exit(LK_EXCLUSIVE)

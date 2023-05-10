@@ -13,7 +13,7 @@ uses
  vfile,
  vfiledesc,
  vfcntl,
- vfs_vnode,
+ vnode,
  vnode_if,
  vnamei,
  vmount,
@@ -316,13 +316,20 @@ end;
 
 function compute_cn_lkflags(mp:p_mount;lkflags,cnflags:Integer):Integer;
 begin
- if (mp=nil) or (((lkflags and LK_SHARED)<>0) and
+ if (mp=nil) then
+ begin
+  lkflags:=lkflags and (not LK_SHARED);
+  lkflags:=lkflags or LK_EXCLUSIVE;
+  Exit(lkflags);
+ end;
+
+ if (((lkflags and LK_SHARED)<>0) and
     (((mp^.mnt_kern_flag and MNTK_LOOKUP_SHARED)=0) or
     (((cnflags and ISDOTDOT)<>0) and
     ((mp^.mnt_kern_flag and MNTK_LOOKUP_EXCL_DOTDOT)<>0)))) then
  begin
   lkflags:=lkflags and (not LK_SHARED);
-  lkflags:=lkflags or  LK_EXCLUSIVE;
+  lkflags:=lkflags or LK_EXCLUSIVE;
  end;
  Exit(lkflags);
 end;
@@ -348,11 +355,12 @@ begin
   }
  if ((flags and ISOPEN)<>0) then
  begin
-  if (mp<>nil) and
-     ((mp^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
+  if (mp<>nil) then
+  if ((mp^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
+  begin
    Exit(0)
-  else
-   Exit(1);
+  end;
+  Exit(1);
  end;
 
  {
@@ -674,8 +682,8 @@ unionlookup:
 
   if (error=ENOENT) and
      ((dp^.v_vflag and VV_ROOT)<>0) and
-     (dp^.v_mount<>nil) and
-     ((p_mount(dp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+     (dp^.v_mount<>nil) then
+  if ((p_mount(dp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
   begin
    tdp:=dp;
    dp:=p_mount(dp^.v_mount)^.mnt_vnodecovered;
@@ -684,9 +692,7 @@ unionlookup:
    VREF(dp);
    vput(tdp);
    VFS_UNLOCK_GIANT(tvfslocked);
-   vn_lock(dp,
-       compute_cn_lkflags(dp^.v_mount, cnp^.cn_lkflags or
-       LK_RETRY, cnp^.cn_flags));
+   vn_lock(dp,compute_cn_lkflags(dp^.v_mount, cnp^.cn_lkflags or LK_RETRY, cnp^.cn_flags));
    goto unionlookup;
   end;
 
@@ -883,8 +889,8 @@ success:
   * Because of lookup_shared we may have the vnode shared locked, but
   * the caller may want it to be exclusively locked.
   }
- if (needs_exclusive_leaf(dp^.v_mount, cnp^.cn_flags) and
-     VOP_ISLOCKED(dp)<>LK_EXCLUSIVE) then
+ if (needs_exclusive_leaf(dp^.v_mount, cnp^.cn_flags)<>0) and
+    (VOP_ISLOCKED(dp)<>LK_EXCLUSIVE) then
  begin
   vn_lock(dp, LK_UPGRADE or LK_RETRY);
   if ((dp^.v_iflag and VI_DOOMED)<>0) then

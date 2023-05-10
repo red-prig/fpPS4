@@ -114,8 +114,11 @@ var
  superpage_offset:vm_offset_t;
 begin
  if (size < NBPDR) then Exit;
- //if (_object<>nil) and ((_object^.flags and OBJ_COLORED)<>0) then
+ //if (_object<>nil) then
+ //if ((_object^.flags and OBJ_COLORED)<>0) then
+ //begin
  // offset:=offset+ptoa(_object^.pg_color);
+ //end;
  superpage_offset:=offset and PDRMASK;
  if (size - ((NBPDR - superpage_offset) and PDRMASK) < NBPDR) or
     ((addr^ and PDRMASK)=superpage_offset) then

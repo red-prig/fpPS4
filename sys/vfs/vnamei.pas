@@ -9,7 +9,7 @@ uses
  vcapability,
  vfcntl,
  vuio,
- vfs_vnode,
+ vnode,
  kern_thr;
 
 const

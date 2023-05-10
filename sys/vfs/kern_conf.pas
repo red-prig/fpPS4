@@ -10,7 +10,7 @@ uses
  vmount,
  vfile,
  vuio,
- vfs_vnode,
+ vnode,
  time,
  vm,
  vm_object,
@@ -1159,6 +1159,7 @@ function make_dev_physpath_alias(flags:Integer;
                                  pdev,old_alias:p_cdev;
                                  physpath:PChar):Integer;
 label
+ _ret,
  _out;
 var
  devfspath:PChar;
@@ -1203,8 +1204,11 @@ begin
  R:=Format('%s/%s',[physpath,pdev^.si_name]);
  Move(PChar(R)^,devfspath^,Length(R)+1);
 
- if (old_alias<>nil) and (strcomp(old_alias^.si_name, devfspath)=0) then
+ if (old_alias=nil) then goto _ret;
+
+ if (strcomp(old_alias^.si_name, devfspath)=0) then
  begin
+  _ret:
   { Retain the existing alias. }
   cdev^:=old_alias;
   old_alias:=nil;
@@ -1271,8 +1275,9 @@ begin
 
  csw:=dev^.si_devsw;
  dev^.si_devsw:=nil; { already nil for SI_ALIAS }
- while (csw<>nil) and (csw^.d_purge<>nil) and (dev^.si_threadcount<>0) do
+ while (csw<>nil) and (dev^.si_threadcount<>0) do
  begin
+  if (csw^.d_purge=nil) then Break;
   csw^.d_purge(dev);
   msleep(csw, @devmtx, PRIBIO, 'devprg', hz div 10);
   if (dev^.si_threadcount<>0) then

@@ -11,7 +11,7 @@ uses
  kern_mtx,
  kern_synch,
  kern_sig,
- vfs_vnode;
+ vnode;
 
 const
  DFLTPHYS=(64*1024);
@@ -240,7 +240,7 @@ type
  vfs_cmount_t        =function (ma,data:Pointer;flags:QWORD):Integer;
  vfs_unmount_t       =function (mp:p_mount;mntflags:Integer):Integer;
  vfs_root_t          =function (mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
- vfs_quotactl_t      =function (mp:p_mount;cmds:Integer;uid:Integer;arg:Pointer):Integer;
+ vfs_quotactl_t      =function (mp:p_mount;cmds,uid:Integer;arg:Pointer):Integer;
  vfs_statfs_t        =function (mp:p_mount;sbp:p_statfs):Integer;
  vfs_sync_t          =function (mp:p_mount;waitfor:Integer):Integer;
  vfs_vget_t          =function (mp:p_mount;ino:DWORD;flags:Integer;vpp:pp_vnode):Integer;
@@ -256,23 +256,21 @@ type
 
  p_vfsops=^vfsops;
  vfsops=packed record
-  vfs_mount          :vfs_mount_t         ;
-  vfs_cmount         :vfs_cmount_t        ;
-  vfs_unmount        :vfs_unmount_t       ;
-  vfs_root           :vfs_root_t          ;
-  vfs_quotactl       :vfs_quotactl_t      ;
-  vfs_statfs         :vfs_statfs_t        ;
-  vfs_sync           :vfs_sync_t          ;
-  vfs_vget           :vfs_vget_t          ;
-  vfs_fhtovp         :vfs_fhtovp_t        ;
-  vfs_checkexp       :vfs_checkexp_t      ;
-  vfs_init           :vfs_init_t          ;
-  vfs_uninit         :vfs_uninit_t        ;
-  vfs_extattrctl     :vfs_extattrctl_t    ;
-  vfs_sysctl         :vfs_sysctl_t        ;
-  vfs_susp_clean     :vfs_susp_clean_t    ;
-  vfs_reclaim_lowervp:vfs_notify_lowervp_t;
-  vfs_unlink_lowervp :vfs_notify_lowervp_t;
+  vfs_mount     :vfs_mount_t     ;
+  vfs_cmount    :vfs_cmount_t    ;
+  vfs_unmount   :vfs_unmount_t   ;
+  vfs_root      :vfs_root_t      ;
+  vfs_quotactl  :vfs_quotactl_t  ;
+  vfs_statfs    :vfs_statfs_t    ;
+  vfs_sync      :vfs_sync_t      ;
+  vfs_vget      :vfs_vget_t      ;
+  vfs_fhtovp    :vfs_fhtovp_t    ;
+  vfs_checkexp  :vfs_checkexp_t  ;
+  vfs_init      :vfs_init_t      ;
+  vfs_uninit    :vfs_uninit_t    ;
+  vfs_extattrctl:vfs_extattrctl_t;
+  vfs_sysctl    :vfs_sysctl_t    ;
+  vfs_susp_clean:vfs_susp_clean_t;
  end;
 
 {
@@ -286,7 +284,7 @@ type
 
  vfsconf=packed record
   vfc_version :DWORD       ; // ABI version number
-  vfc_name    :array[0..MFSNAMELEN-1] of Char; // filesystem type name
+  vfc_name    :array[0..MFSNAMELEN-1+4] of Char; // filesystem type name
   vfc_vfsops  :p_vfsops    ; // filesystem operations vector
   vfc_typenum :Integer     ; // historic filesystem type number
   vfc_refcount:Integer     ; // number mounted of this type
@@ -397,12 +395,12 @@ function  MNT_MTX(mp:p_mount):p_mtx; inline;
 procedure MNT_REF(mp:p_mount); inline;
 procedure MNT_REL(mp:p_mount); inline;
 
-function  VFS_NEEDSGIANT(mp:p_mount):Boolean; inline;
+function  VFS_NEEDSGIANT(mp:p_mount):Boolean;
 function  VFS_LOCK_GIANT(mp:p_mount):Integer;
 procedure VFS_UNLOCK_GIANT(locked:Integer);
 procedure VFS_ASSERT_GIANT(mp:p_mount);
 
-function  VFS_PROLOGUE(mp:p_mount):Boolean; inline;
+function  VFS_PROLOGUE(mp:p_mount):Boolean;
 procedure VFS_EPILOGUE(_enable_stops:Boolean); inline;
 
 function  VFS_MOUNT(mp:p_mount):Integer;
@@ -411,8 +409,9 @@ function  VFS_ROOT(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
 function  VFS_STATFS(mp:p_mount;sbp:p_statfs):Integer;
 function  VFS_SYNC(mp:p_mount;WAIT:Integer):Integer;
 function  VFS_VGET(mp:p_mount;ino:QWORD;flags:Integer;vpp:pp_vnode):Integer;
-procedure VFS_RECLAIM_LOWERVP(mp:p_mount;vp:p_vnode);
-procedure VFS_UNLINK_LOWERVP(mp:p_mount;vp:p_vnode);
+function  VFS_QUOTACTL(mp:p_mount;c,u:Integer;a:Pointer):Integer;
+function  VFS_FHTOVP(mp:p_mount;fidp:p_fid;flags:Integer;vpp:pp_vnode):Integer;
+function  VFS_EXTATTRCTL(mp:p_mount;c:Integer;fn:p_vnode;ns:Integer;n:PChar):Integer;
 procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);
 procedure VFS_KNOTE_UNLOCKED(vp:p_vnode;hint:Integer);
 
@@ -464,9 +463,15 @@ begin
  end;
 end;
 
-function VFS_NEEDSGIANT(mp:p_mount):Boolean; inline;
+function VFS_NEEDSGIANT(mp:p_mount):Boolean;
 begin
- Result:=(mp<>nil) and ((mp^.mnt_kern_flag and MNTK_MPSAFE)=0) ;
+ if (mp<>nil) then
+ begin
+  Result:=((mp^.mnt_kern_flag and MNTK_MPSAFE)=0);
+ end else
+ begin
+  Result:=False;
+ end;
 end;
 
 function VFS_LOCK_GIANT(mp:p_mount):Integer;
@@ -491,9 +496,15 @@ begin
   mtx_assert(VFS_Giant);
 end;
 
-function VFS_PROLOGUE(mp:p_mount):Boolean; inline;
+function VFS_PROLOGUE(mp:p_mount):Boolean;
 begin
- Result:=(mp<>nil) and ((mp^.mnt_vfc^.vfc_flags and VFCF_SBDRY)<>0) and (sigdeferstop<>0);
+ if (mp<>nil) then
+ begin
+  Result:=((mp^.mnt_vfc^.vfc_flags and VFCF_SBDRY)<>0) and (sigdeferstop<>0);
+ end else
+ begin
+  Result:=False;
+ end;
 end;
 
 procedure VFS_EPILOGUE(_enable_stops:Boolean); inline;
@@ -559,28 +570,31 @@ begin
  VFS_EPILOGUE(_enable_stops);
 end;
 
-procedure VFS_RECLAIM_LOWERVP(mp:p_mount;vp:p_vnode);
+function VFS_QUOTACTL(mp:p_mount;c,u:Integer;a:Pointer):Integer;
 var
  _enable_stops:Boolean;
 begin
- if (mp^.mnt_op^.vfs_reclaim_lowervp<>nil) then
- begin
-  _enable_stops:=VFS_PROLOGUE(MP);
-  mp^.mnt_op^.vfs_reclaim_lowervp(mp,vp);
-  VFS_EPILOGUE(_enable_stops);
- end;
+ _enable_stops:=VFS_PROLOGUE(MP);
+ Result:=mp^.mnt_op^.vfs_quotactl(mp,c,u,a);
+ VFS_EPILOGUE(_enable_stops);
 end;
 
-procedure VFS_UNLINK_LOWERVP(mp:p_mount;vp:p_vnode);
+function VFS_FHTOVP(mp:p_mount;fidp:p_fid;flags:Integer;vpp:pp_vnode):Integer;
 var
  _enable_stops:Boolean;
 begin
- if (mp^.mnt_op^.vfs_unlink_lowervp<>nil) then
- begin
-  _enable_stops:=VFS_PROLOGUE(MP);
-  mp^.mnt_op^.vfs_unlink_lowervp(mp,vp);
-  VFS_EPILOGUE(_enable_stops);
- end;
+ _enable_stops:=VFS_PROLOGUE(MP);
+ Result:=mp^.mnt_op^.vfs_fhtovp(mp,fidp,flags,vpp);
+ VFS_EPILOGUE(_enable_stops);
+end;
+
+function VFS_EXTATTRCTL(mp:p_mount;c:Integer;fn:p_vnode;ns:Integer;n:PChar):Integer;
+var
+ _enable_stops:Boolean;
+begin
+ _enable_stops:=VFS_PROLOGUE(MP);
+ Result:=mp^.mnt_op^.vfs_extattrctl(mp,c,fn,ns,n);
+ VFS_EPILOGUE(_enable_stops);
 end;
 
 procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);

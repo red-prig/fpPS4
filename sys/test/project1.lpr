@@ -39,7 +39,6 @@ uses
  thr_stack,
  sys_mmap,
  kern_synch,
- vfs_vnode,
  murmurhash,
  hamt,
  vfs_subr,
@@ -63,10 +62,15 @@ uses
  vstat,
  vfcntl,
  vdirent,
- fdesc,
  fdesc_vfsops,
  fdesc_vnops,
- kern_descrip;
+ fdescfs,
+ kern_descrip,
+ vnode,
+ nullfs,
+ null_subr,
+ null_vnops,
+ null_vfsops;
 
 var
  mtx:umutex;

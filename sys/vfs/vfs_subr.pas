@@ -10,7 +10,7 @@ uses
  vmount,
  vfile,
  vstat,
- vfs_vnode,
+ vnode,
  vnode_if,
  vdirent,
  vfcntl,
@@ -45,13 +45,13 @@ procedure vgone(vp:p_vnode);
 
 function  vget(vp:p_vnode;flags:Integer):Integer;
 procedure vref(vp:p_vnode);
+function  vrefcnt(vp:p_vnode):Integer;
 procedure vrele(vp:p_vnode);
 procedure vput(vp:p_vnode);
+procedure vunref(vp:p_vnode);
 
 procedure vinactive(vp:p_vnode);
 function  vflush(mp:p_mount;rootrefs,flags:Integer):Integer;
-
-procedure vfs_notify_upper(vp:p_vnode;event:Integer);
 
 procedure assert_vi_locked   (vp:p_vnode;str:PChar);
 procedure assert_vi_unlocked (vp:p_vnode;str:PChar);
@@ -122,18 +122,6 @@ procedure __mnt_vnode_markerfree_active(mvp:pp_vnode;mp:p_mount);
 procedure vntblinit;    //SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_FIRST, vntblinit, NULL);
 procedure vnlru_proc(); //SYSINIT(vnlru, SI_SUB_KTHREAD_UPDATE, SI_ORDER_FIRST, kproc_start, @vnlru_kp);
 
-implementation
-
-uses
- errno,
- vfs_vnops,
- subr_uio,
- vm_object,
- vsys_generic,
- dead_vnops,
- rtprio,
- kern_conf;
-
 {
  * List of vnodes that are ready for recycling.
  }
@@ -179,6 +167,18 @@ var
  wantfreevnodes:Integer=0;
  freevnodes    :Integer=0;
  vnlru_nowhere :Integer=0;
+
+implementation
+
+uses
+ errno,
+ vfs_vnops,
+ subr_uio,
+ vm_object,
+ vsys_generic,
+ dead_vnops,
+ rtprio,
+ kern_conf;
 
 {
  * Macros to control when a vnode is freed and recycled.  All require
@@ -406,8 +406,9 @@ begin
  while (count<>0) do
  begin
   vp:=TAILQ_FIRST(@mp^.mnt_nvnodelist);
-  while (vp<>nil) and (vp^.v_type=VMARKER) do
+  while (vp<>nil) do
   begin
+   if (vp^.v_type<>VMARKER) then Break;
    vp:=TAILQ_NEXT(vp,@vp^.v_nmntvnodes);
   end;
   if (vp=nil) then
@@ -705,7 +706,7 @@ var
  td:p_kthread;
  vp:p_vnode;
  //struct bufobj *bo;
- error:Integer;
+ error,susp:Integer;
 begin
  vp:=nil;
  td:=curkthread;
@@ -723,7 +724,13 @@ begin
   }
  if (freevnodes > wantfreevnodes) then
   vnlru_free(1);
- error:=getnewvnode_wait(ord((mp<>nil) and ((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0)));
+
+ susp:=ord(False);
+ if (mp<>nil) then
+ begin
+  susp:=ord(((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0));
+ end;
+ error:=getnewvnode_wait(susp);
 
  System.InterlockedIncrement64(numvnodes);
  mtx_unlock(vnode_free_list_mtx);
@@ -785,7 +792,7 @@ begin
   * E.g., nilfs uses vfs_hash_index() on the lower vnode for
   * its own hashing.
   }
- vp^.v_hash:=ptrint(vp) shr vnsz2log;
+ vp^.v_hash:=ptruint(vp) shr vnsz2log;
 
  vpp^:=vp;
  Exit(0);
@@ -2233,7 +2240,8 @@ begin
   }
  obj:=nil;
  //obj:=vp^.v_object;
- if (obj<>nil) and ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
+ if (obj<>nil) then
+ if ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
  begin
   VM_OBJECT_LOCK(obj);
   //vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
@@ -2432,87 +2440,6 @@ begin
  VI_UNLOCK(vp);
 end;
 
-procedure notify_lowervp_vfs_dummy(mp:p_mount;lowervp:p_vnode);
-begin
-end;
-
-const
- vgonel_vfsops:vfsops=(
-  vfs_mount          :nil;
-  vfs_cmount         :nil;
-  vfs_unmount        :nil;
-  vfs_root           :nil;
-  vfs_quotactl       :nil;
-  vfs_statfs         :nil;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :nil;
-  vfs_uninit         :nil;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
-  vfs_reclaim_lowervp:@notify_lowervp_vfs_dummy;
-  vfs_unlink_lowervp :@notify_lowervp_vfs_dummy
- );
-
-{
- * Notify upper mounts about reclaimed or unlinked vnode.
- }
-procedure vfs_notify_upper(vp:p_vnode;event:Integer);
-label
- unlock;
-var
- mp,ump,mmp:p_mount;
-begin
- mp:=vp^.v_mount;
- if (mp=nil) then
-  Exit;
-
- MNT_ILOCK(mp);
- if TAILQ_EMPTY(@mp^.mnt_uppers) then
-  goto unlock;
- MNT_IUNLOCK(mp);
- mmp:=AllocMem(SizeOf(t_mount));
- mmp^.mnt_op:=@vgonel_vfsops;
- mmp^.mnt_kern_flag:=mmp^.mnt_kern_flag or MNTK_MARKER;
- MNT_ILOCK(mp);
- mp^.mnt_kern_flag:=mmp^.mnt_kern_flag or MNTK_VGONE_UPPER;
-
- ump:=TAILQ_FIRST(@mp^.mnt_uppers);
- while (ump<>nil) do
- begin
-  if ((ump^.mnt_kern_flag and MNTK_MARKER)<>0) then
-  begin
-   ump:=TAILQ_NEXT(ump,@ump^.mnt_upper_link);
-   continue;
-  end;
-  TAILQ_INSERT_AFTER(@mp^.mnt_uppers, ump, mmp,@mmp^.mnt_upper_link);
-  MNT_IUNLOCK(mp);
-  case event of
-   VFS_NOTIFY_UPPER_RECLAIM:
-    VFS_RECLAIM_LOWERVP(ump, vp);
-   VFS_NOTIFY_UPPER_UNLINK:
-    VFS_UNLINK_LOWERVP(ump, vp);
-   else
-    Assert(false, 'invalid event');
-  end;
-  MNT_ILOCK(mp);
-  ump:=TAILQ_NEXT(mmp,@mmp^.mnt_upper_link);
-  TAILQ_REMOVE(@mp^.mnt_uppers, mmp,@mmp^.mnt_upper_link);
- end;
- FreeMem(mmp);
- mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_VGONE_UPPER);
- if ((mp^.mnt_kern_flag and MNTK_VGONE_WAITER)<>0) then
- begin
-  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_VGONE_WAITER);
-  wakeup(@mp^.mnt_uppers);
- end;
-unlock:
- MNT_IUNLOCK(mp);
-end;
-
 {
  * vgone, with the vp interlock held.
  }
@@ -2540,7 +2467,6 @@ begin
  active:=vp^.v_usecount;
  oweinact:=(vp^.v_iflag and VI_OWEINACT);
  VI_UNLOCK(vp);
- vfs_notify_upper(vp, VFS_NOTIFY_UPPER_RECLAIM);
 
  {
   * Clean out any buffers associated with the vnode.
@@ -3074,6 +3000,7 @@ end;
 
 procedure vfs_badlock(msg,str:PChar;vp:p_vnode);
 begin
+ Writeln(msg,' ',str);
  Assert(false,RawByteString(msg)+' '+RawByteString(str));
 end;
 
@@ -3573,8 +3500,12 @@ begin
  mp:=vp^.v_mount;
  VFS_ASSERT_GIANT(mp);
  ASSERT_VOP_LOCKED(vp,'vfs_mark_atime');
- if (mp<>nil) and ((mp^.mnt_flag and (MNT_NOATIME or MNT_RDONLY))=0) then
+
+ if (mp<>nil) then
+ if ((mp^.mnt_flag and (MNT_NOATIME or MNT_RDONLY))=0) then
+ begin
   VOP_MARKATIME(vp);
+ end;
 end;
 
 {
@@ -3642,9 +3573,11 @@ begin
  MNT_ILOCK(mp);
  Assert(mvp^^.v_mount=mp, 'marker vnode mount list mismatch');
  vp:=TAILQ_NEXT(mvp^,@mvp^^.v_nmntvnodes);
- while (vp<>nil) and
-       ((vp^.v_type=VMARKER) or ((vp^.v_iflag and VI_DOOMED)<>0)) do
+ while (vp<>nil) do
+ begin
+  if not ((vp^.v_type=VMARKER) or ((vp^.v_iflag and VI_DOOMED)<>0)) then Break;
   vp:=TAILQ_NEXT(vp,@vp^.v_nmntvnodes);
+ end;
 
  { Check if we are done }
  if (vp=nil) then

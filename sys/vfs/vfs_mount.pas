@@ -14,7 +14,7 @@ uses
  kern_mtx,
  kern_synch,
  kern_thr,
- vfs_vnode,
+ vnode,
  vfs_init,
  vfs_lookup,
  vnode_if;
@@ -103,6 +103,7 @@ function  kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
 implementation
 
 uses
+ murmurhash,
  errno,
  systm,
  vfs_vnops,
@@ -723,6 +724,18 @@ begin
  mtx_destroy(mp^.mnt_mtx);
 end;
 
+var
+ mnt_hashseed:QWORD=QWORD($FEEDBABEFEEDBABE);
+
+function get_mnt_hashseed:DWORD;
+var
+ i:QWORD;
+begin
+ i:=MurmurHash64A(@mnt_hashseed,SizeOf(mnt_hashseed),mnt_hashseed);
+ mnt_hashseed:=i;
+ Result:=DWORD(i);
+end;
+
 function vfs_mount_alloc(vp    :p_vnode;
                          vfsp  :p_vfsconf;
                          fspath:PChar):p_mount;
@@ -755,7 +768,8 @@ begin
  //mac_mount_init(mp);
  //mac_mount_create(cred, mp);
 
- mp^.mnt_hashseed:=$FEEDBABE; //arc4rand
+ //arc4rand(&mp->mnt_hashseed, sizeof mp->mnt_hashseed, 0);
+ mp^.mnt_hashseed:=get_mnt_hashseed;
 
  TAILQ_INIT(@mp^.mnt_uppers);
  Result:=mp;

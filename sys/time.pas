@@ -69,16 +69,16 @@ procedure timevalfix(t1:ptimeval);
 procedure timevaladd(t1,t2:ptimeval);
 procedure timevalsub(t1,t2:ptimeval);
 
-function  timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
+function  timespeccmp_lt(tvp,uvp:ptimespec):Integer;
 
-procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec); inline;
-procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec); inline;
+procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec);
+procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec);
 
-function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
-function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64; inline; //Unit
-function  USEC_TO_UNIT    (usec:QWORD  ):Int64; inline; //Unit
+function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; //Unit
+function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64; //Unit
+function  USEC_TO_UNIT    (usec:QWORD  ):Int64; //Unit
 
-function  tvtohz(time:Int64):Int64; inline;
+function  tvtohz(time:Int64):Int64;
 procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 
 procedure TIMESPEC_ADD(dst,src,val:ptimespec);
@@ -158,7 +158,7 @@ begin
  timevalfix(t1);
 end;
 
-function timespeccmp_lt(tvp,uvp:ptimespec):Integer; inline;
+function timespeccmp_lt(tvp,uvp:ptimespec):Integer;
 begin
  if (tvp^.tv_sec=uvp^.tv_sec) then
  begin
@@ -169,34 +169,34 @@ begin
  end;
 end;
 
-procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec); inline;
+procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec);
 begin
  ts^.tv_sec :=tv^.tv_sec;
  ts^.tv_nsec:=tv^.tv_usec * 1000;
 end;
 
-procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec); inline;
+procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec);
 begin
  tv^.tv_sec :=ts^.tv_sec;
  tv^.tv_usec:=ts^.tv_nsec div 1000;
 end;
 
-function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; inline; //Unit
+function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; //Unit
 begin
  Result:=(QWORD(ts^.tv_sec)*10000000)+(QWORD(ts^.tv_nsec) div 100);
 end;
 
-function TIMEVAL_TO_UNIT(tv:ptimeval):Int64; inline; //Unit
+function TIMEVAL_TO_UNIT(tv:ptimeval):Int64; //Unit
 begin
  Result:=(QWORD(tv^.tv_sec)*10000000)+(QWORD(tv^.tv_usec)*10);
 end;
 
-function USEC_TO_UNIT(usec:QWORD):Int64; inline; //Unit
+function USEC_TO_UNIT(usec:QWORD):Int64; //Unit
 begin
  Result:=(usec*10);
 end;
 
-function tvtohz(time:Int64):Int64; inline;
+function tvtohz(time:Int64):Int64;
 begin
  Result:=time;
 end;

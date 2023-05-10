@@ -15,7 +15,7 @@ uses
  vfcntl,
  vfilio,
  vmount,
- vfs_vnode,
+ vnode,
  vsocketvar;
 
 const

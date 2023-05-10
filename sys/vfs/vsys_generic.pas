@@ -18,7 +18,7 @@ uses
  vuio,
  vfile,
  vcapability,
- vfs_vnode,
+ vnode,
  vfcntl,
  vfilio,
  vfiledesc,
@@ -1134,7 +1134,7 @@ begin
    continue;
   end;
   fp:=fget_unlocked(fd^.fd);
-  if (fp=nil) or (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0) then
+  if (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0) then
   begin
    if (fp<>nil) then
     fdrop(fp);
@@ -1208,7 +1208,7 @@ begin
   end else
   begin
    fp:=fget_unlocked(fds^.fd);
-   if ((fp=nil) or (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0)) then
+   if (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0) then
    begin
     fds^.revents:=POLLNVAL;
     Inc(n);

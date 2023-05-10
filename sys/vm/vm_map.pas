@@ -482,10 +482,16 @@ end;
 procedure vm_map_entry_set_max_free(entry:vm_map_entry_t);
 begin
  entry^.max_free:=entry^.adj_free;
- if (entry^.left<>nil) and (entry^.left^.max_free>entry^.max_free) then
+ if (entry^.left<>nil) then
+ if (entry^.left^.max_free>entry^.max_free) then
+ begin
   entry^.max_free:=entry^.left^.max_free;
- if (entry^.right<>nil) and (entry^.right^.max_free>entry^.max_free) then
+ end;
+ if (entry^.right<>nil) then
+ if (entry^.right^.max_free>entry^.max_free) then
+ begin
   entry^.max_free:=entry^.right^.max_free;
+ end;
 end;
 
 {
@@ -999,6 +1005,8 @@ function vm_map_findspace(map   :vm_map_t;
                           start :vm_offset_t;
                           length:vm_size_t;
                           addr  :p_vm_offset_t):Integer;
+label
+ _nxt;
 var
  entry:vm_map_entry_t;
  st:vm_offset_t;
@@ -1052,7 +1060,11 @@ begin
 
  { With max_free, can immediately tell if no solution. }
  entry:=map^.root^.right;
- if (entry=nil) or (length>entry^.max_free) then
+
+ if (entry=nil) then
+  Exit(1);
+
+ if (length>entry^.max_free) then
   Exit(1);
 
  {
@@ -1062,16 +1074,20 @@ begin
   }
  while (entry<>nil) do
  begin
-  if (entry^.left<>nil) and (entry^.left^.max_free>=length) then
+  if (entry^.left<>nil) then
   begin
+   if not (entry^.left^.max_free>=length) then goto _nxt;
    entry:=entry^.left;
   end else
-  if (entry^.adj_free>=length) then
   begin
-   addr^:=entry^.__end;
-   Exit(0);
-  end else
-   entry:=entry^.right;
+   _nxt:
+   if (entry^.adj_free>=length) then
+   begin
+    addr^:=entry^.__end;
+    Exit(0);
+   end else
+    entry:=entry^.right;
+  end;
  end;
 
  { Can't get here, so panic if we do. }
@@ -1124,11 +1140,16 @@ label
 var
  alignment,initial_addr,start:vm_offset_t;
 begin
- if (find_space=VMFS_OPTIMAL_SPACE) and
-     ((_object=nil) or
-     ((_object^.flags and OBJ_COLORED)=0)) then
+ if (find_space=VMFS_OPTIMAL_SPACE) then
  begin
-  find_space:=VMFS_ANY_SPACE;
+  if (_object=nil) then
+  begin
+   find_space:=VMFS_ANY_SPACE;
+  end else
+  if ((_object^.flags and OBJ_COLORED)=0) then
+  begin
+   find_space:=VMFS_ANY_SPACE;
+  end;
  end;
  if ((find_space shr 8)<>0) then
  begin
@@ -2123,6 +2144,7 @@ end;
  }
 function vm_map_growstack(addr:vm_offset_t):Integer;
 label
+ _or,
  _out;
 var
  next_entry, prev_entry:vm_map_entry_t;
@@ -2340,12 +2362,15 @@ begin
 
   grow_amount:=addr - stack_entry^.__end;
   { Grow the underlying object if applicable. }
-  if ((stack_entry^._object=nil) or
-    vm_object_coalesce(stack_entry^._object,
-                       stack_entry^.offset,
-                       vm_size_t(stack_entry^.__end - stack_entry^.start),
-                       vm_size_t(grow_amount), false)) then
+
+  if (stack_entry^._object=nil) then goto _or;
+
+  if vm_object_coalesce(stack_entry^._object,
+                        stack_entry^.offset,
+                        vm_size_t(stack_entry^.__end - stack_entry^.start),
+                        vm_size_t(grow_amount), false) then
   begin
+   _or:
    map^.size:=map^.size+(addr - stack_entry^.__end);
    { Update the current entry. }
    stack_entry^.__end:=addr;

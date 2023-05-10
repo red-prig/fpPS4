@@ -6,7 +6,7 @@ unit devfs_vfsops;
 interface
 
 uses
- vfs_vnode,
+ vnode,
  vmount,
  devfs,
  kern_id;
@@ -41,8 +41,6 @@ const
   vfs_extattrctl     :nil;
   vfs_sysctl         :nil;
   vfs_susp_clean     :nil;
-  vfs_reclaim_lowervp:nil;
-  vfs_unlink_lowervp :nil;
  );
 
 var

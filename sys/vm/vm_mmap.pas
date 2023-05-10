@@ -45,7 +45,7 @@ uses
  vstat,
  vfile,
  vfcntl,
- vfs_vnode,
+ vnode,
  vfs_subr,
  vnode_if;
 
@@ -457,10 +457,13 @@ begin
 
    vp:=fp^.f_vnode;
 
-   if (vp^.v_mount<>nil) and ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
-    maxprot:=VM_PROT_NONE
-   else
-    maxprot:=VM_PROT_EXECUTE;
+   maxprot:=VM_PROT_EXECUTE;
+
+   if (vp^.v_mount<>nil) then
+   if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
+   begin
+    maxprot:=VM_PROT_NONE;
+   end;
 
    if ((fp^.f_flag and FREAD)<>0) then
    begin

@@ -16,7 +16,7 @@ uses
  vstat,
  vuio,
  vfcntl,
- vfs_vnode,
+ vnode,
  vnamei,
  vnode_if,
  vfs_default,
@@ -71,7 +71,7 @@ function  devfs_stat_f(fp:p_file;sb:p_stat):Integer;
 function  devfs_symlink(ap:p_vop_symlink_args):Integer;
 function  devfs_truncate_f(fp:p_file;length:Int64):Integer;
 function  devfs_write_f(fp:p_file;uio:p_uio;flags:Integer):Integer;
-function  dev2udev(x:p_cdev):DWORD;
+function  dev2udev(x:p_cdev):Integer;
 
 const
  devfs_vnodeops:vop_vector=(
@@ -370,6 +370,7 @@ begin
  sx_xunlock(@dmp^.dm_lock);
  vn_lock(vp, locked or LK_RETRY);
  sx_xlock(@dmp^.dm_lock);
+
  if DEVFS_DMP_DROP(dmp) then
  begin
   sx_xunlock(@dmp^.dm_lock);
@@ -640,8 +641,13 @@ loop:
   Inc(dev^.si_usecount,vp^.v_usecount);
   { Special casing of ttys for deadfs.  Probably redundant. }
   dsw:=dev^.si_devsw;
-  if (dsw<>nil) and ((dsw^.d_flags and D_TTY)<>0) then
+
+  if (dsw<>nil) then
+  if ((dsw^.d_flags and D_TTY)<>0) then
+  begin
    vp^.v_vflag:=vp^.v_vflag or VV_ISTTY;
+  end;
+
   dev_unlock();
   VI_UNLOCK(vp);
   if ((dev^.si_flags and SI_ETERNAL)<>0) then
@@ -739,7 +745,8 @@ begin
   }
  oldvp:=nil;
  //sx_xlock(@proctree_lock);
- //if (td<>nil) and (vp=td^.td_proc^.p_session^.s_ttyvp) then
+ //if (td<>nil) then
+ //if (vp=td^.td_proc^.p_session^.s_ttyvp) then
  //begin
  // SESS_LOCK(td^.td_proc^.p_session);
  // VI_LOCK(vp);
@@ -1041,6 +1048,8 @@ begin
 end;
 
 function devfs_lookupx(ap:p_vop_lookup_args;dm_unlock:PInteger):Integer;
+label
+ _or;
 var
  td:p_kthread;
  cnp:p_componentname;
@@ -1157,15 +1166,23 @@ begin
 
   dev_lock();
   dde:=@cdev2priv(cdev)^.cdp_dirents[dmp^.dm_idx];
-  if (dde<>nil) and (dde^<>nil) then
+
+  if (dde<>nil) then
+  if (dde^<>nil) then
+  begin
    de:=dde^;
+  end;
+
   dev_unlock();
   dev_rel(cdev);
   break;
  end;
 
- if (de=nil) or ((de^.de_flags and DE_WHITEOUT)<>0) then
+ if (de=nil) then goto _or;
+
+ if ((de^.de_flags and DE_WHITEOUT)<>0) then
  begin
+  _or:
   if ((nameiop=CREATE) or (nameiop=RENAME)) and
      ((flags and (LOCKPARENT or WANTPARENT))<>0) and
      ((flags and ISLASTCN)<>0) then
@@ -1943,7 +1960,7 @@ begin
  Exit(error);
 end;
 
-function dev2udev(x:p_cdev):DWORD;
+function dev2udev(x:p_cdev):Integer;
 begin
  if (x=nil) then
   Exit(NODEV);

@@ -10,7 +10,7 @@ uses
  mqueue,
  vfile,
  vdirent,
- vfs_vnode,
+ vnode,
  vmount,
  time,
  kern_conf,

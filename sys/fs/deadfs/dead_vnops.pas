@@ -6,7 +6,7 @@ unit dead_vnops;
 interface
 
 uses
- vfs_vnode,
+ vnode,
  vfs_default,
  vnode_if;
 

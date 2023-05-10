@@ -135,6 +135,7 @@ var
  c:p_capability;
  error:Integer;
 begin
+ if (fp_cap=nil) then Exit(EINVAL);
  if (fp_cap^.f_type<>DTYPE_CAPABILITY) then
  begin
   fpp^:=fp_cap;

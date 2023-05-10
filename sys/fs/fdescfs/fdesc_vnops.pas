@@ -8,10 +8,10 @@ interface
 uses
  mqueue,
  vmount,
- vfs_vnode,
+ vnode,
  vfs_default,
  vnode_if,
- fdesc;
+ fdescfs;
 
 {
  * /dev/fd Filesystem
@@ -156,6 +156,7 @@ end;
 
 function fdesc_allocvp(ftype:fdntype;fd_fd,ix:Integer;mp:p_mount;vpp:pp_vnode):Integer;
 label
+ _or,
  loop;
 var
  fmp:p_fdescmount;
@@ -174,7 +175,14 @@ loop:
   * protected by the hashmtx.
   }
  fmp:=p_fdescmount(mp^.mnt_data);
- if (fmp=nil) or ((fmp^.flags and FMNT_UNMOUNTF)<>0) then
+
+ if (fmp=nil) then
+ begin
+  mtx_unlock(fdesc_hashmtx);
+  Exit(-1);
+ end;
+
+ if ((fmp^.flags and FMNT_UNMOUNTF)<>0) then
  begin
   mtx_unlock(fdesc_hashmtx);
   Exit(-1);
@@ -230,8 +238,12 @@ loop:
   * protected by the hashmtx.
   }
  fmp:=p_fdescmount(mp^.mnt_data);
- if (fmp=nil) or ((fmp^.flags and FMNT_UNMOUNTF)<>0) then
+
+ if (fmp=nil) then goto _or;
+
+ if ((fmp^.flags and FMNT_UNMOUNTF)<>0) then
  begin
+  _or:
   mtx_unlock(fdesc_hashmtx);
   vgone(vp);
   vput(vp);

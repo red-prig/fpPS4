@@ -8,7 +8,7 @@ interface
 uses
  vstat,
  vuio,
- vfs_vnode,
+ vnode,
  kern_thr,
  kern_id;
 

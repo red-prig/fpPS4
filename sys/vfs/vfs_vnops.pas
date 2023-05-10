@@ -13,7 +13,7 @@ uses
  vuio,
  vmparam,
  vfilio,
- vfs_vnode;
+ vnode;
 
 function  vn_lock(vp:p_vnode;flags:Integer):Integer;
 
@@ -414,13 +414,15 @@ var
  mp:p_mount;
  error, lock_flags:Integer;
 begin
+ lock_flags:=LK_EXCLUSIVE;
+
  if (vp^.v_type<>VFIFO) and
     ((flags and FWRITE)=0) and
-    (vp^.v_mount<>nil) and
-    ((p_mount(vp^.v_mount)^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
-  lock_flags:=LK_SHARED
- else
-  lock_flags:=LK_EXCLUSIVE;
+    (vp^.v_mount<>nil) then
+ if ((p_mount(vp^.v_mount)^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
+ begin
+  lock_flags:=LK_SHARED;
+ end;
 
  VFS_ASSERT_GIANT(vp^.v_mount);
 
@@ -714,8 +716,8 @@ begin
   __end:=uio^.uio_offset - 1;
   mtxp:=mtx_pool_find(mtxpool_sleep, fp);
   mtx_lock(mtxp^);
-  if (fp^.f_advice<>nil) and
-     (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+  if (fp^.f_advice<>nil) then
+  if (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
   begin
    if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
    begin
@@ -761,15 +763,26 @@ begin
  // bwillwrite();
  ioflag:=IO_UNIT;
  if (vp^.v_type=VREG) and ((fp^.f_flag and O_APPEND)<>0) then
+ begin
   ioflag:=ioflag or IO_APPEND;
+ end;
  if ((fp^.f_flag and FNONBLOCK)<>0) then
+ begin
   ioflag:=ioflag or IO_NDELAY;
+ end;
  if ((fp^.f_flag and O_DIRECT)<>0) then
+ begin
   ioflag:=ioflag or IO_DIRECT;
- if ((fp^.f_flag and O_FSYNC)<>0) or
-    ((vp^.v_mount<>nil) and
-     ((p_mount(vp^.v_mount)^.mnt_flag and MNT_SYNCHRONOUS)<>0)) then
+ end;
+ if ((fp^.f_flag and O_FSYNC)<>0) then
+ begin
   ioflag:=ioflag or IO_SYNC;
+ end;
+ if (vp^.v_mount<>nil) then
+ if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_SYNCHRONOUS)<>0) then
+ begin
+  ioflag:=ioflag or IO_SYNC;
+ end;
  mp:=nil;
  if (vp^.v_type<>VCHR) then
  begin
@@ -817,8 +830,8 @@ begin
   __end:=uio^.uio_offset - 1;
   mtxp:=mtx_pool_find(mtxpool_sleep, fp);
   mtx_lock(mtxp^);
-  if (fp^.f_advice<>nil) and
-     (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+  if (fp^.f_advice<>nil) then
+  if (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
   begin
    if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
    begin
@@ -872,10 +885,15 @@ begin
  foffset_lock_uio(fp, uio, flags);
 
  mp:=vp^.v_mount;
+ if (mp<>nil) then
+ if ((mp^.mnt_kern_flag and MNTK_NO_IOPF)=0) then
+ begin
+  error:=doio(fp, uio, flags or FOF_OFFSET);
+  goto out_last;
+ end;
+
  if (uio^.uio_segflg<>UIO_USERSPACE) or
     (vp^.v_type<>VREG) or
-    ((mp<>nil) and
-     ((mp^.mnt_kern_flag and MNTK_NO_IOPF)=0)) or
     {(not vn_io_fault_enable)} false then
  begin
   error:=doio(fp, uio, flags or FOF_OFFSET);

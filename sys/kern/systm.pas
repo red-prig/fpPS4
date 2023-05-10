@@ -9,8 +9,8 @@ uses
  ntapi;
 
 const
- IOSIZE_MAX      =High(Int64);
- DEVFS_IOSIZE_MAX=High(Int64);
+ IOSIZE_MAX      =High(Integer);
+ DEVFS_IOSIZE_MAX=High(Integer);
 
 function copystr(from,_to:Pointer;maxlen:ptruint;lencopied:pptruint):Integer;
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;

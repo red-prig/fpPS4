@@ -41,7 +41,7 @@ implementation
 uses
  time,
  vdirent,
- vfs_vnode,
+ vnode,
  kern_mtx,
  kern_sx,
  vfs_vnops,
@@ -145,7 +145,11 @@ begin
   end;
   break;
  end;
- Assert((de=nil) or ((de^.de_flags and DE_DOOMED)=0),'devfs_find: Exiting a doomed entry');
+
+ if (de<>nil) then
+ begin
+  Assert((de^.de_flags and DE_DOOMED)=0,'devfs_find: Exiting a doomed entry');
+ end;
  Exit(de);
 end;
 

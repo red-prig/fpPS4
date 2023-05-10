@@ -18,7 +18,7 @@ uses
  vfilio,
  vdisk,
  vfs_mount,
- vfs_vnode,
+ vnode,
  vfs_vnops,
  vfs_subr,
  vfs_lookup;
@@ -100,8 +100,7 @@ uses
  kern_synch,
  kern_descrip,
  vnode_if,
- sys_capability,
- vm_object;
+ sys_capability;
 
 {
  * Sync each mounted filesystem.
@@ -1395,7 +1394,6 @@ begin
   //if (error)
   // goto _out;
 
-  vfs_notify_upper(vp, VFS_NOTIFY_UPPER_UNLINK);
   error:=VOP_REMOVE(nd.ni_dvp, vp, @nd.ni_cnd);
 
   _out:
@@ -2694,7 +2692,6 @@ restart:
    Exit(error);
   goto restart;
  end;
- vfs_notify_upper(vp, VFS_NOTIFY_UPPER_UNLINK);
  error:=VOP_RMDIR(nd.ni_dvp, nd.ni_vp, @nd.ni_cnd);
  vn_finished_write(mp);
  _out:

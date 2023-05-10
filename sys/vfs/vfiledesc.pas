@@ -7,7 +7,7 @@ interface
 
 uses
  vfile,
- vfs_vnode,
+ vnode,
  kern_rwlock,
  kern_id;
 

@@ -8,8 +8,8 @@ interface
 uses
  vmount,
  vfs_mount,
- vfs_vnode,
- fdesc;
+ vnode,
+ fdescfs;
 
 {
  * /dev/fd Filesystem
@@ -37,8 +37,6 @@ const
   vfs_extattrctl     :nil;
   vfs_sysctl         :nil;
   vfs_susp_clean     :nil;
-  vfs_reclaim_lowervp:nil;
-  vfs_unlink_lowervp :nil;
  );
 
  //VFS_SET(fdesc_vfsops, fdescfs, VFCF_SYNTHETIC);
