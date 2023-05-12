@@ -114,10 +114,26 @@ uses
  vmount,
  vfs_subr,
  vfs_vnops,
+ vfs_cache,
  kern_mtx;
 
 type
  ppp_vnode=^pp_vnode;
+
+function MOUNTTONULLMOUNT(mp:p_mount):p_null_mount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
+function VTONULL(vp:p_vnode):p_null_node; inline;
+begin
+ Result:=vp^.v_data;
+end;
+
+function NULLTOV(xp:p_null_node):p_vnode; inline;
+begin
+ Result:=xp^.null_vnode;
+end;
 
 function null_bypass(ap:p_vop_generic_args):Integer;
 label
@@ -257,6 +273,13 @@ var
 begin
  vp:=ap^.a_vp;
  lvp:=NULLVPTOLOWERVP(vp);
+
+ if (lvp=nil) then
+ begin
+  Inc(ap^.a_vp^.v_writecount,ap^.a_inc);
+  Exit(0);
+ end;
+
  Assert(vp^.v_writecount + ap^.a_inc >= 0,'wrong writecount inc');
  if (vp^.v_writecount > 0) and (vp^.v_writecount + ap^.a_inc=0) then
   error:=VOP_ADD_WRITECOUNT(lvp, -1)
@@ -298,7 +321,14 @@ begin
  ldvp:=NULLVPTOLOWERVP(dvp);
  vp:=nil;
  lvp:=nil;
- error:=VOP_LOOKUP(ldvp, @lvp, cnp);
+
+ if (ldvp<>nil) then
+ begin
+  error:=VOP_LOOKUP(ldvp, @lvp, cnp);
+ end else
+ begin
+  error:=ENOENT;
+ end;
 
  if (error=EJUSTRETURN) and
     ((flags and ISLASTCN)<>0) and
@@ -330,6 +360,9 @@ var
 begin
  vp:=ap^.a_vp;
  ldvp:=NULLVPTOLOWERVP(vp);
+
+ if (ldvp=nil) then Exit(0);
+
  retval:=null_bypass(Pointer(ap));
  //if (retval=0) then
  // vp^.v_object:=ldvp^.v_object;
@@ -385,6 +418,8 @@ begin
   end;
  end;
 
+ if (NULLVPTOLOWERVP(vp)=nil) then Exit(0);
+
  Exit(null_bypass(Pointer(ap)));
 end;
 
@@ -395,6 +430,8 @@ function null_getattr(ap:p_vop_getattr_args):Integer;
 var
  error:Integer;
 begin
+ if (NULLVPTOLOWERVP(ap^.a_vp)=nil) then Exit(0);
+
  error:=null_bypass(Pointer(ap));
 
  if (error<>0) then
@@ -434,6 +471,8 @@ begin
   end;
  end;
 
+ if (NULLVPTOLOWERVP(vp)=nil) then Exit(0);
+
  Exit(null_bypass(Pointer(ap)));
 end;
 
@@ -464,6 +503,8 @@ begin
   end;
  end;
 
+ if (NULLVPTOLOWERVP(vp)=nil) then Exit(0);
+
  Exit(null_bypass(Pointer(ap)));
 end;
 
@@ -485,17 +526,25 @@ begin
  if (vrefcnt(vp) > 1) then
  begin
   lvp:=NULLVPTOLOWERVP(vp);
-  VREF(lvp);
+  if (lvp<>nil) then
+   VREF(lvp);
   vreleit:=1;
  end else
   vreleit:=0;
 
- tnn:=VTONULL(vp);
- tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
+ if (lvp<>nil) then
+ begin
+  tnn:=VTONULL(vp);
+  tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
 
- retval:=null_bypass(@ap^.a_gen);
- if (vreleit<>0) then
-  vrele(lvp);
+  retval:=null_bypass(Pointer(ap));
+
+  if (vreleit<>0) then
+   vrele(lvp);
+ end else
+ begin
+  retval:=0;
+ end;
 
  Exit(retval);
 end;
@@ -544,6 +593,8 @@ begin
   tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
  end;
 
+ if (tnn^.null_lowervp=nil) then Exit(0);
+
  Exit(null_bypass(Pointer(ap)));
 end;
 
@@ -552,6 +603,9 @@ var
  tnn:p_null_node;
 begin
  tnn:=VTONULL(ap^.a_vp);
+
+ if (tnn^.null_lowervp=nil) then Exit(0);
+
  tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
  Exit(null_bypass(Pointer(ap)));
 end;
@@ -573,7 +627,7 @@ begin
  flags:=ap^.a_flags;
 
  if ((flags and LK_INTERLOCK)=0) then
-  begin
+ begin
   VI_LOCK(vp);
   flags:=flags or LK_INTERLOCK;
   ap^.a_flags:=flags;
@@ -707,6 +761,9 @@ begin
  vp:=ap^.a_vp;
  xp:=VTONULL(vp);
  lvp:=NULLVPTOLOWERVP(vp);
+
+ if (lvp=nil) then Exit(0);
+
  mp:=vp^.v_mount;
  xmp:=MOUNTTONULLMOUNT(mp);
 
@@ -740,7 +797,7 @@ begin
  xp:=VTONULL(vp);
  lowervp:=xp^.null_lowervp;
 
- Assert((lowervp<>nil) and (vp^.v_vnlock<>@vp^.v_lock),'Reclaiming incomplete null vnode');
+ Assert((vp^.v_vnlock<>@vp^.v_lock),'Reclaiming incomplete null vnode');
 
  null_hashrem(xp);
  {
@@ -762,12 +819,16 @@ begin
   * forced unmount, undo the reference now.
   }
  if (vp^.v_writecount > 0) then
+ if (lowervp<>nil) then
   VOP_ADD_WRITECOUNT(lowervp, -1);
 
- if ((xp^.null_flags and NULLV_NOUNLOCK)<>0) then
-  vunref(lowervp)
- else
-  vput(lowervp);
+ if (lowervp<>nil) then
+ begin
+  if ((xp^.null_flags and NULLV_NOUNLOCK)<>0) then
+   vunref(lowervp)
+  else
+   vput(lowervp);
+ end;
 
  FreeMem(xp);
 
@@ -821,6 +882,9 @@ var
  lvp:p_vnode;
 begin
  lvp:=NULLVPTOLOWERVP(ap^.a_vp);
+
+ if (lvp=nil) then Exit(EOPNOTSUPP);
+
  Exit(VOP_VPTOFH(lvp, ap^.a_fhp));
 end;
 
@@ -839,13 +903,20 @@ begin
 
  locked:=VOP_ISLOCKED(vp);
  lvp:=NULLVPTOLOWERVP(vp);
+
+ if (lvp=nil) then
+ begin
+  ap^.a_buf[0]:='/';
+  ap^.a_buf[1]:=#0;
+  ap^.a_buflen^:=1;
+  Exit(0);
+ end;
+
  vhold(lvp);
  VOP_UNLOCK(vp, 0); { vp is held by vn_vptocnp_locked that called us }
  ldvp:=lvp;
  vref(lvp);
- error:=0;
- Assert(False,'TODO vn_vptocnp');
- //error:=vn_vptocnp(@ldvp, ap^.a_buf, ap^.a_buflen);
+ error:=vn_vptocnp(@ldvp, ap^.a_buf, PDWORD(ap^.a_buflen));
  vdrop(lvp);
  if (error<>0) then
  begin
@@ -878,6 +949,8 @@ function null_link(ap:p_vop_link_args):Integer;
 begin
  if (ap^.a_tdvp^.v_mount<>ap^.a_vp^.v_mount) then
   Exit(EXDEV);
+
+ if (NULLVPTOLOWERVP(ap^.a_vp)=nil) then Exit(0);
 
  Exit(null_bypass(Pointer(ap)));
 end;

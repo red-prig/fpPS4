@@ -32,6 +32,7 @@ uses
  devfs_vfsops,
  fdesc_vfsops,
  null_vfsops,
+ ufs,
  kern_descrip,
  vfs_mountroot;
 
@@ -46,6 +47,7 @@ begin
  vfs_register(@devfs_vfsconf);
  vfs_register(@fdescfs_vfsconf);
  vfs_register(@nullfs_vfsconf);
+ vfs_register(@ufs_vfsconf);
  vfs_mountroot.vfs_mountroot();
  fildesc_drvinit;
 end;

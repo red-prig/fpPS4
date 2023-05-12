@@ -55,6 +55,8 @@ end;
 
 procedure sx_xlock(p:p_sx);
 begin
+ //Writeln('  sx_xlock:',HexStr(p));
+
  rw_wlock(p^.c);
  PDWORD(@p^.m)[0]:=System.GetCurrentThreadId;
  PDWORD(@p^.m)[1]:=2;
@@ -67,11 +69,15 @@ end;
 
 procedure sx_xunlock(p:p_sx);
 begin
+ //Writeln('sx_xunlock:',HexStr(p));
+
  rw_wunlock(p^.c);
 end;
 
 procedure sx_unlock(p:p_sx);
 begin
+ //Writeln(' sx_unlock:',HexStr(p));
+
  case PDWORD(@p^.m)[1] of
   1:rw_runlock(p^.c);
   2:rw_wunlock(p^.c);

@@ -107,7 +107,8 @@ uses
  errno,
  systm,
  vfs_vnops,
- vfs_subr;
+ vfs_subr,
+ vfs_cache;
 
 {
  * ---------------------------------------------------------------------
@@ -427,13 +428,17 @@ var
  t:ppchar;
  p,q:pchar;
 begin
+ Result:=0;
+
  opt:=TAILQ_FIRST(opts);
  while (opt<>nil) do
  begin
   p:=opt^.name;
   q:=nil;
+
   if (p[0]='n') and (p[1]='o') then
    q:=p + 2;
+
   t:=@global_opts;
   while (t^<>nil) do
   begin
@@ -447,7 +452,12 @@ begin
    Inc(t);
   end;
   if (t^<>nil) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   //
    continue;
+  end;
+
   t:=legal;
   while (t^<>nil) do
   begin
@@ -461,9 +471,15 @@ begin
    Inc(t);
   end;
   if (t^<>nil) then
+  begin
+   opt:=TAILQ_NEXT(opt,@opt^.link);
+   //
    continue;
+  end;
+
   errmsg:='mount option is unknown';
   Result:=EINVAL;
+  //
   opt:=TAILQ_NEXT(opt,@opt^.link);
  end;
  if (Result<>0) then
@@ -812,7 +828,6 @@ begin
  FreeMem(mp);
 end;
 
-
 {
  * vfs_domount_first(): first file system mount (not update)
  }
@@ -849,7 +864,7 @@ begin
  if (error<>0) then
  begin
   vput(vp);
-  Exit (error);
+  Exit(error);
  end;
  VOP_UNLOCK(vp, 0);
 
@@ -1120,23 +1135,26 @@ begin
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  if (NDHASGIANT(@nd)=0) then
   mtx_lock(VFS_Giant);
+
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vp:=nd.ni_vp;
  if ((fsflags and MNT_UPDATE)=0) then
  begin
   pathbuf:=AllocMem(MNAMELEN);
   strcopy(pathbuf, fspath);
-  //error:=vn_path_to_global_path(td, vp, pathbuf, MNAMELEN);
+  error:=vn_path_to_global_path(vp, pathbuf, MNAMELEN);
   { debug.disablefullpath=1 results in ENODEV }
-  //if (error=0) or (error=ENODEV) then
-  //begin
+  if (error=0) or (error=ENODEV) then
+  begin
    error:=vfs_domount_first(vfsp, pathbuf, vp, fsflags, optlist);
-  //end;
+  end;
   FreeMem(pathbuf);
  end else
   error:=vfs_domount_update(vp, fsflags, optlist);
+
  mtx_unlock(VFS_Giant);
 
  ASSERT_VI_UNLOCKED (vp, {$I %LINE%});
@@ -1203,99 +1221,120 @@ begin
  begin
   tmp_opt:=TAILQ_NEXT(opt,@opt^.link);
   //
-  if (strcomp(opt^.name, 'update')=0) then
-  begin
-   fsflags:=fsflags or MNT_UPDATE;
-   vfs_freeopt(optlist, opt);
-  end else
-  if (strcomp(opt^.name, 'async')=0) then
-   fsflags:=fsflags or MNT_ASYNC
-  else
-  if (strcomp(opt^.name, 'force')=0) then
-  begin
-   fsflags:=fsflags or MNT_FORCE;
-   vfs_freeopt(optlist, opt);
-  end else
-  if (strcomp(opt^.name, 'reload')=0) then
-  begin
-   fsflags:=fsflags or MNT_RELOAD;
-   vfs_freeopt(optlist, opt);
-  end else
-  if (strcomp(opt^.name, 'multilabel')=0) then
-   fsflags:=fsflags or MNT_MULTILABEL
-  else
-  if (strcomp(opt^.name, 'noasync')=0) then
-   fsflags:=fsflags and (not MNT_ASYNC)
-  else
-  if (strcomp(opt^.name, 'noatime')=0) then
-   fsflags:=fsflags or MNT_NOATIME
-  else
-  if (strcomp(opt^.name, 'atime')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonoatime');
-  end else
-  if (strcomp(opt^.name, 'noclusterr')=0) then
-   fsflags:=fsflags or MNT_NOCLUSTERR
-  else
-  if (strcomp(opt^.name, 'clusterr')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonoclusterr');
-  end else
-  if (strcomp(opt^.name, 'noclusterw')=0) then
-   fsflags:=fsflags or MNT_NOCLUSTERW
-  else if (strcomp(opt^.name, 'clusterw')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonoclusterw');
-  end else
-  if (strcomp(opt^.name, 'noexec')=0) then
-   fsflags:=fsflags or MNT_NOEXEC
-  else if (strcomp(opt^.name, 'exec')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonoexec');
-  end else
-  if (strcomp(opt^.name, 'nosuid')=0) then
-   fsflags:=fsflags or MNT_NOSUID
-  else
-  if (strcomp(opt^.name, 'suid')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonosuid');
-  end else
-  if (strcomp(opt^.name, 'nosymfollow')=0) then
-   fsflags:=fsflags or MNT_NOSYMFOLLOW
-  else
-  if (strcomp(opt^.name, 'symfollow')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('nonosymfollow');
-  end else
-  if (strcomp(opt^.name, 'noro')=0) then
-   fsflags:=fsflags and (not MNT_RDONLY)
-  else
-  if (strcomp(opt^.name, 'rw')=0) then
-   fsflags:=fsflags and (not MNT_RDONLY)
-  else
-  if (strcomp(opt^.name, 'ro')=0) then
-   fsflags:=fsflags or MNT_RDONLY
-  else
-  if (strcomp(opt^.name, 'rdonly')=0) then
-  begin
-   FreeMem(opt^.name);
-   opt^.name:=strdup('ro');
-   fsflags:=fsflags or MNT_RDONLY;
-  end else
-  if (strcomp(opt^.name, 'suiddir')=0) then
-   fsflags:=fsflags or MNT_SUIDDIR
-  else
-  if (strcomp(opt^.name, 'sync')=0) then
-   fsflags:=fsflags or MNT_SYNCHRONOUS
-  else
-  if (strcomp(opt^.name, 'union')=0) then
-   fsflags:=fsflags or MNT_UNION;
+  case RawByteString(opt^.name) of
+   'update':
+     begin
+      fsflags:=fsflags or MNT_UPDATE;
+      vfs_freeopt(optlist, opt);
+     end;
+   'async':
+     begin
+      fsflags:=fsflags or MNT_ASYNC;
+     end;
+   'force':
+     begin
+      fsflags:=fsflags or MNT_FORCE;
+      vfs_freeopt(optlist, opt);
+     end;
+   'reload':
+     begin
+      fsflags:=fsflags or MNT_RELOAD;
+      vfs_freeopt(optlist, opt);
+     end;
+   'multilabel':
+     begin
+      fsflags:=fsflags or MNT_MULTILABEL;
+     end;
+   'noasync':
+     begin
+      fsflags:=fsflags and (not MNT_ASYNC)
+     end;
+   'noatime':
+     begin
+      fsflags:=fsflags or MNT_NOATIME;
+     end;
+   'atime':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonoatime');
+     end;
+   'noclusterr':
+     begin
+      fsflags:=fsflags or MNT_NOCLUSTERR;
+     end;
+   'clusterr':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonoclusterr');
+     end;
+   'noclusterw':
+     begin
+      fsflags:=fsflags or MNT_NOCLUSTERW;
+     end;
+   'clusterw':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonoclusterw');
+     end;
+   'noexec':
+     begin
+      fsflags:=fsflags or MNT_NOEXEC;
+     end;
+   'exec':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonoexec');
+     end;
+   'nosuid':
+     begin
+      fsflags:=fsflags or MNT_NOSUID;
+     end;
+   'suid':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonosuid');
+     end;
+   'nosymfollow':
+     begin
+      fsflags:=fsflags or MNT_NOSYMFOLLOW;
+     end;
+   'symfollow':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('nonosymfollow');
+     end;
+   'noro':
+     begin
+      fsflags:=fsflags and (not MNT_RDONLY);
+     end;
+   'rw':
+     begin
+      fsflags:=fsflags and (not MNT_RDONLY);
+     end;
+   'ro':
+     begin
+      fsflags:=fsflags or MNT_RDONLY;
+     end;
+   'rdonly':
+     begin
+      FreeMem(opt^.name);
+      opt^.name:=strdup('ro');
+      fsflags:=fsflags or MNT_RDONLY;
+     end;
+   'suiddir':
+     begin
+      fsflags:=fsflags or MNT_SUIDDIR;
+     end;
+   'sync':
+     begin
+      fsflags:=fsflags or MNT_SYNCHRONOUS;
+     end;
+   'union':
+     begin
+      fsflags:=fsflags or MNT_UNION;
+     end;
+   else;
+  end;
   //
   opt:=tmp_opt;
  end;
@@ -1588,6 +1627,8 @@ begin
  if (ma^.error<>0) then
   Exit(ma);
 
+ if (val=nil) or (len=0) then Exit(ma);
+
  ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
  ma^.v[ma^.len].iov_base:=name;
  ma^.v[ma^.len].iov_len :=strlen(name) + 1;
@@ -1639,6 +1680,7 @@ begin
  error:=ma^.error;
  if (error=0) then
   error:=vfs_donmount(flags, @auio);
+
  free_mntarg(ma);
  Exit(error);
 end;

@@ -162,6 +162,7 @@ begin
   * Check the mount and unmount operations.
   }
  vfsops:=vfc^.vfc_vfsops;
+
  Assert(vfsops^.vfs_mount<>nil,'Filesystem %s has no mount op');
  Assert(vfsops^.vfs_unmount<>nil,'Filesystem %s has no unmount op');
 

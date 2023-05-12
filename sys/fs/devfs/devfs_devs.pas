@@ -54,6 +54,11 @@ var
 
 //
 
+function cdev2priv(c:Pointer):p_cdev_priv; inline;
+begin
+ Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
+end;
+
 function devfs_alloc(flags:Integer):p_cdev;
 var
  cdp:p_cdev_priv;
@@ -456,7 +461,7 @@ begin
  cdp:=TAILQ_FIRST(@cdevp_list);
  while (cdp<>nil) do
  begin
-  Assert(cdp^.cdp_dirents<>nil, ('nil cdp_dirents'));
+  Assert(cdp^.cdp_dirents<>nil,'nil cdp_dirents');
 
   {
    * If we are unmounting, or the device has been destroyed,

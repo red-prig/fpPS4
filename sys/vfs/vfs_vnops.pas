@@ -135,7 +135,6 @@ var
  vfslocked:Integer;
 begin
  vap:=@vat;
-
  mps:=ndp^.ni_cnd.cn_flags and MPSAFE;
 
 restart:
@@ -145,17 +144,22 @@ restart:
  begin
   ndp^.ni_cnd.cn_nameiop:=CREATE;
   ndp^.ni_cnd.cn_flags:=ISOPEN or LOCKPARENT or LOCKLEAF or MPSAFE;
+
   if ((fmode and O_EXCL)=0) and ((fmode and O_NOFOLLOW)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or FOLLOW;
+
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
+
   //bwillwrite();
   error:=nd_namei(ndp);
   if (error<>0) then
    Exit(error);
+
   vfslocked:=NDHASGIANT(ndp);
   if (mps=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not MPSAFE);
+
   if (ndp^.ni_vp=nil) then
   begin
    vattr_null(vap);
@@ -163,6 +167,7 @@ restart:
    vap^.va_mode:=cmode;
    if ((fmode and O_EXCL)<>0) then
     vap^.va_vaflags:=vap^.va_vaflags or VA_EXCLUSIVE;
+
    if (vn_start_write(ndp^.ni_dvp, @mp, V_NOWAIT)<>0) then
    begin
     NDFREE(ndp, NDF_ONLY_PNBUF);
@@ -176,8 +181,8 @@ restart:
 
    //error:=mac_vnode_check_create(cred, ndp^.ni_dvp, &ndp^.ni_cnd, vap);
    //if (error=0) then
-
     error:=VOP_CREATE(ndp^.ni_dvp, @ndp^.ni_vp, @ndp^.ni_cnd, vap);
+
    vput(ndp^.ni_dvp);
    vn_finished_write(mp);
    if (error<>0) then
@@ -194,6 +199,7 @@ restart:
     vrele(ndp^.ni_dvp)
    else
     vput(ndp^.ni_dvp);
+
    ndp^.ni_dvp:=nil;
    vp:=ndp^.ni_vp;
    if ((fmode and O_EXCL)<>0) then
@@ -219,32 +225,39 @@ restart:
 
   if ((fmode and FWRITE)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or LOCKSHARED;
+
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
 
   error:=nd_namei(ndp);
   if (error<>0) then
    Exit(error);
+
   if (mps=0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not MPSAFE);
+
   vfslocked:=NDHASGIANT(ndp);
   vp:=ndp^.ni_vp;
  end;
+
  if (vp^.v_type=VLNK) then
  begin
   error:=EMLINK;
   goto bad;
  end;
+
  if (vp^.v_type=VSOCK) then
  begin
   error:=EOPNOTSUPP;
   goto bad;
  end;
+
  if (vp^.v_type<>VDIR) and ((fmode and O_DIRECTORY)<>0) then
  begin
   error:=ENOTDIR;
   goto bad;
  end;
+
  accmode:=0;
  if ((fmode and (FWRITE or O_TRUNC))<>0) then
  begin
@@ -255,10 +268,13 @@ restart:
   end;
   accmode:=accmode or VWRITE;
  end;
+
  if ((fmode and FREAD)<>0) then
   accmode:=accmode or VREAD;
+
  if ((fmode and FEXEC)<>0) then
   accmode:=accmode or VEXEC;
+
  if ((fmode and O_APPEND)<>0) and ((fmode and FWRITE)<>0) then
   accmode:=accmode or VAPPEND;
 
@@ -478,7 +494,9 @@ begin
   sb^.st_dev:=vap^.va_fsid
  else
   sb^.st_dev:=p_mount(vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+
  sb^.st_ino:=vap^.va_fileid;
+
  mode:=vap^.va_mode;
  case vap^.va_type of
   VREG:
@@ -498,13 +516,16 @@ begin
   else
    Exit(EBADF);
  end;
+
  sb^.st_mode:=mode;
  sb^.st_nlink:=vap^.va_nlink;
  sb^.st_uid  :=vap^.va_uid;
  sb^.st_gid  :=vap^.va_gid;
  sb^.st_rdev :=vap^.va_rdev;
+
  if (vap^.va_size > High(Int64)) then
   Exit(EOVERFLOW);
+
  sb^.st_size:=vap^.va_size;
  sb^.st_atim:=vap^.va_atime;
  sb^.st_mtim:=vap^.va_mtime;

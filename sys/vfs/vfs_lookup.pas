@@ -213,6 +213,7 @@ begin
   end;
   if (vfslocked<>0) then
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or GIANTHELD;
+
   ndp^.ni_startdir:=dp;
   error:=nd_lookup(ndp);
   if (error<>0) then
@@ -447,12 +448,15 @@ begin
  ni_dvp_unlocked:=0;
  ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not GIANTHELD);
  _wantparent:=cnp^.cn_flags and (LOCKPARENT or WANTPARENT);
+
  Assert((cnp^.cn_nameiop=LOOKUP) or (wantparent<>0),'CREATE, DELETE, RENAME require LOCKPARENT or WANTPARENT.');
+
  docache:=(cnp^.cn_flags and NOCACHE) xor NOCACHE;
  if (cnp^.cn_nameiop=DELETE) or
     ((_wantparent and cnp^.cn_nameiop<>CREATE) and
      (cnp^.cn_nameiop<>LOOKUP)) then
   docache:=0;
+
  _rdonly:=cnp^.cn_flags and RDONLY;
  cnp^.cn_flags:=cnp^.cn_flags and (not ISSYMLINK);
  ndp^.ni_dvp:=nil;
@@ -467,9 +471,7 @@ begin
 
  dp:=ndp^.ni_startdir;
  ndp^.ni_startdir:=nil;
- vn_lock(dp,
-     compute_cn_lkflags(dp^.v_mount, cnp^.cn_lkflags or LK_RETRY,
-     cnp^.cn_flags));
+ vn_lock(dp,compute_cn_lkflags(dp^.v_mount,cnp^.cn_lkflags or LK_RETRY,cnp^.cn_flags));
 
 dirloop:
  {
@@ -492,7 +494,7 @@ dirloop:
   goto bad;
  end;
 
- ndp^.ni_pathlen:=ndp^.ni_pathlen - cnp^.cn_namelen;
+ Dec(ndp^.ni_pathlen,cnp^.cn_namelen);
  ndp^.ni_next:=cp;
 
  {
@@ -517,6 +519,7 @@ dirloop:
  cnp^.cn_flags:=cnp^.cn_flags or MAKEENTRY;
  if (cp^=#0) and (docache=0) then
   cnp^.cn_flags:=cnp^.cn_flags and (not MAKEENTRY);
+
  if (cnp^.cn_namelen=2) and
     (cnp^.cn_nameptr[1]='.') and
     (cnp^.cn_nameptr[0]='.') then
@@ -572,7 +575,7 @@ dirloop:
 
  {
   * Handle '..': five special cases.
-  * 0. If doing a capability lookup, ExitENOTCAPABLE (this is a
+  * 0. If doing a capability lookup, return ENOTCAPABLE (this is a
   *    fairly conservative design choice, but it's the only one that we
   *    are satisfied guarantees the property we're looking for).
   * 1. Exitan error if this is the last component of
@@ -629,9 +632,7 @@ dirloop:
    VREF(dp);
    vput(tdp);
    VFS_UNLOCK_GIANT(tvfslocked);
-   vn_lock(dp,
-       compute_cn_lkflags(dp^.v_mount, cnp^.cn_lkflags or
-       LK_RETRY, ISDOTDOT));
+   vn_lock(dp,compute_cn_lkflags(dp^.v_mount,cnp^.cn_lkflags or LK_RETRY,ISDOTDOT));
   end;
  end;
 
@@ -657,7 +658,9 @@ unionlookup:
  if (dp<>vp_crossmp) and
     (VOP_ISLOCKED(dp)=LK_SHARED) and
     ((cnp^.cn_flags and ISLASTCN)<>0) and ((cnp^.cn_flags and LOCKPARENT)<>0) then
+ begin
   vn_lock(dp, LK_UPGRADE or LK_RETRY);
+ end;
 
  if ((dp^.v_iflag and VI_DOOMED)<>0) then
  begin
@@ -759,21 +762,26 @@ unionlookup:
  begin
   if (vfs_busy(mp, 0)<>0) then
    continue;
+
   vput(dp);
   VFS_UNLOCK_GIANT(vfslocked);
   vfslocked:=VFS_LOCK_GIANT(mp);
+
   if (dp<>ndp^.ni_dvp) then
    vput(ndp^.ni_dvp)
   else
    vrele(ndp^.ni_dvp);
+
   VFS_UNLOCK_GIANT(dvfslocked);
   dvfslocked:=0;
   vref(vp_crossmp);
   ndp^.ni_dvp:=vp_crossmp;
   error:=VFS_ROOT(mp, compute_cn_lkflags(mp, cnp^.cn_lkflags, cnp^.cn_flags), @tdp);
   vfs_unbusy(mp);
+
   if (vn_lock(vp_crossmp, LK_SHARED or LK_NOWAIT)<>0) then
    Assert(False,'vp_crossmp exclusively locked or reclaimed');
+
   if (error<>0) then
   begin
    dpunlocked:=1;
@@ -837,6 +845,7 @@ nextname:
    vput(ndp^.ni_dvp)
   else
    vrele(ndp^.ni_dvp);
+
   VFS_UNLOCK_GIANT(dvfslocked);
   dvfslocked:=vfslocked; { dp becomes dvp in dirloop }
   vfslocked:=0;
@@ -872,6 +881,7 @@ nextname:
    vput(ndp^.ni_dvp)
   else
    vrele(ndp^.ni_dvp);
+
   VFS_UNLOCK_GIANT(dvfslocked);
   dvfslocked:=0;
  end else
@@ -900,9 +910,15 @@ success:
   end;
  end;
  if (vfslocked<>0) and (dvfslocked<>0) then
+ begin
   VFS_UNLOCK_GIANT(dvfslocked); { Only need one }
+ end;
+
  if (vfslocked<>0) or (dvfslocked<>0) then
+ begin
   ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or GIANTHELD;
+ end;
+
  Exit(0);
 
 bad2:
@@ -916,6 +932,7 @@ bad2:
 bad:
  if (dpunlocked=0) then
   vput(dp);
+
  VFS_UNLOCK_GIANT(vfslocked);
  VFS_UNLOCK_GIANT(dvfslocked);
  ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not GIANTHELD);

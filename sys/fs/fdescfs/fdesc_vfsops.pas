@@ -62,6 +62,16 @@ uses
  kern_id,
  fdesc_vnops;
 
+function VFSTOFDESC(mp:p_mount):p_fdescmount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
+function VTOFDESC(vp:p_vnode):p_fdescnode; inline;
+begin
+ Result:=vp^.v_data;
+end;
+
 {
  * Compatibility shim for old mount(2) system call.
  }

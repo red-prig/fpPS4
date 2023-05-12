@@ -485,6 +485,18 @@
         <Filename Value="..\fs\nullfs\null_vfsops.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\fs\ufs\ufs.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\fs\ufs\ufs_vnops.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vfs\vfs_cache.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -495,7 +507,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);.."/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs"/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

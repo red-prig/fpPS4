@@ -70,7 +70,8 @@ uses
  nullfs,
  null_subr,
  null_vnops,
- null_vfsops;
+ null_vfsops,
+ ufs;
 
 var
  mtx:umutex;
@@ -262,7 +263,9 @@ begin
  end;
 end;
 
-procedure test_dirs(const p:RawByteString;s:Byte);
+procedure test_dirs(const dirp,namep:RawByteString;s:Byte);
+label
+ _next;
 var
  td:p_kthread;
  sb:t_stat;
@@ -273,20 +276,29 @@ var
  c:Integer;
 begin
  td:=curkthread;
- err:=sys_lstat(PChar(p),@sb);
+ err:=sys_lstat(PChar(dirp+namep),@sb);
+
+ //if (err=45) then
+ //begin
+ // sb.st_size:=512;
+ // sb.st_mode:=S_IFMT;
+ // goto _next;
+ //end;
+
  if (err<>0) then
  begin
-  Writeln(Space(s),p,' | (',err,')');
+  Writeln(Space(s),namep,' | (',err,')');
  end else
  begin
-  Write(Space(s),p,' | ',ts_to_str(sb.st_mtim),' |');
+  Write(Space(s),namep,' | ',ts_to_str(sb.st_mtim),' |');
+  _next:
 
   if ((sb.st_mode and S_IFDIR)<>0) then
   begin
    Write(' DIR');
    Assert(sb.st_size=512);
 
-   err:=sys_open(PChar(p),O_RDONLY or O_DIRECTORY,0);
+   err:=sys_open(PChar(dirp+namep),O_RDONLY or O_DIRECTORY,0);
 
    if (err<>0) then
    begin
@@ -317,7 +329,7 @@ begin
       '..':;
       else
        //Writeln(dir^.d_name);
-       test_dirs(IncludeUnixTrailing(p)+RawByteString(dir^.d_name),s+1);
+       test_dirs(IncludeUnixTrailing(dirp+namep),RawByteString(dir^.d_name),s+2);
      end;
 
      PByte(dir):=PByte(dir)+dir^.d_reclen;
@@ -361,7 +373,7 @@ begin
  if (tid<>curkthread^.td_tid) then
  begin
   Writeln('[--test_dirs--]');
-  test_dirs('/',1);
+  test_dirs('','/',1);
   Writeln('[--test_dirs--]');
 
   tid2:=curkthread^.td_tid;
@@ -454,6 +466,7 @@ begin
  sig_unlock;
  sig_unlock;
 
+{
  Writeln('GetTlsBase:',HexStr(GetTlsBase));
 
  rax:=0;
@@ -565,6 +578,7 @@ begin
 
  writeln(HexStr(rax,16));
  writeln;
+ }
 
  thr_exit(nil);
 end;

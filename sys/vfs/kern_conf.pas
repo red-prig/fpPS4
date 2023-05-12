@@ -288,6 +288,11 @@ begin
  Result:=dev^.si_name;
 end;
 
+function cdev2priv(c:Pointer):p_cdev_priv; inline;
+begin
+ Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
+end;
+
 procedure dev_lock();
 begin
  mtx_lock(devmtx);

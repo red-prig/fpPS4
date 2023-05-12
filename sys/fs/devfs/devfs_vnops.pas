@@ -246,6 +246,16 @@ uses
  kern_mtxpool,
  subr_uio;
 
+function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
+function cdev2priv(c:Pointer):p_cdev_priv; inline;
+begin
+ Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
+end;
+
 function devfs_fp_check(fp:p_file;devp:pp_cdev;dswp:pp_cdevsw;ref:PInteger):Integer;
 begin
  dswp^:=devvn_refthread(fp^.f_vnode, devp, ref);
@@ -291,6 +301,7 @@ begin
  fp:=curkthread^.td_fpop;
  if (fp=nil) then
   Exit(ENOENT);
+
  cdp:=cdev2priv(fp^.f_data);
  p:=AllocMem(sizeof(t_cdev_privdata));
  p^.cdpd_data:=priv;
@@ -608,7 +619,9 @@ loop:
   vpp^:=vp;
   Exit(0);
  end;
+
  mtx_unlock(devfs_de_interlock);
+
  if (de^.de_dirent^.d_type=DT_CHR) then
  begin
   if ((de^.de_cdp^.cdp_flags and CDP_ACTIVE)=0) then
@@ -621,6 +634,7 @@ loop:
  begin
   dev:=nil;
  end;
+
  error:=getnewvnode('devfs', mp, @devfs_vnodeops, @vp);
  if (error<>0) then
  begin
@@ -650,8 +664,10 @@ loop:
 
   dev_unlock();
   VI_UNLOCK(vp);
+
   if ((dev^.si_flags and SI_ETERNAL)<>0) then
    vp^.v_vflag:=vp^.v_vflag or VV_ETERNALDEV;
+
   vp^.v_op:=@devfs_specops;
  end else
  if (de^.de_dirent^.d_type=DT_DIR) then
@@ -662,21 +678,28 @@ loop:
  begin
   vp^.v_type:=VLNK;
  end else
-begin
+ begin
   vp^.v_type:=VBAD;
  end;
+
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY or LK_NOWITNESS);
  //VN_LOCK_ASHARE(vp);
+
  mtx_lock(devfs_de_interlock);
+
  vp^.v_data:=de;
  de^.de_vnode:=vp;
+
  mtx_unlock(devfs_de_interlock);
+
  error:=insmntque1(vp, mp, @devfs_insmntque_dtr, de);
+
  if (error<>0) then
  begin
   devfs_allocv_drop_refs(1, dmp, de);
   Exit(error);
  end;
+
  if (devfs_allocv_drop_refs(0, dmp, de)<>0) then
  begin
   vput(vp);
@@ -860,14 +883,15 @@ var
  dmp:p_devfs_mount;
  dev:p_cdev;
 
- procedure fix(var aa:timespec); inline;
+procedure fix(var src,dst:timespec); inline;
+begin
+ if (src.tv_sec <= 3600) then
  begin
-  if (aa.tv_sec <= 3600) then
-  begin
-   aa.tv_sec :=boottime.tv_sec;
-   aa.tv_nsec:=boottime.tv_usec * 1000;
-  end;
+  src.tv_sec :=boottime.tv_sec;
+  src.tv_nsec:=boottime.tv_usec * 1000;
  end;
+ dst:=src;
+end;
 
 begin
  vp:=ap^.a_vp;
@@ -887,9 +911,11 @@ begin
   de:=de^.de_dir;
   Assert(de<>nil,'nil dir dirent in devfs_getattr vp=%p');
  end;
- vap^.va_uid:=de^.de_uid;
- vap^.va_gid:=de^.de_gid;
+
+ vap^.va_uid :=de^.de_uid;
+ vap^.va_gid :=de^.de_gid;
  vap^.va_mode:=de^.de_mode;
+
  if (vp^.v_type=VLNK) then
   vap^.va_size:=strlen(de^.de_symlink)
  else
@@ -899,36 +925,34 @@ begin
   vap^.va_bytes:=DEV_BSIZE;
  end else
   vap^.va_size:=0;
+
  if (vp^.v_type<>VDIR) then
   vap^.va_bytes:=0;
+
  vap^.va_blocksize:=DEV_BSIZE;
  vap^.va_type:=vp^.v_type;
 
  if (vp^.v_type<>VCHR) then
  begin
-  fix(de^.de_atime);
-  vap^.va_atime:=de^.de_atime;
-  fix(de^.de_mtime);
-  vap^.va_mtime:=de^.de_mtime;
-  fix(de^.de_ctime);
-  vap^.va_ctime:=de^.de_ctime;
+  fix(de^.de_atime,vap^.va_atime);
+  fix(de^.de_mtime,vap^.va_mtime);
+  fix(de^.de_ctime,vap^.va_ctime);
  end else
  begin
   dev:=vp^.v_rdev;
-  fix(dev^.si_atime);
-  vap^.va_atime:=dev^.si_atime;
-  fix(dev^.si_mtime);
-  vap^.va_mtime:=dev^.si_mtime;
-  fix(dev^.si_ctime);
-  vap^.va_ctime:=dev^.si_ctime;
+
+  fix(dev^.si_atime,vap^.va_atime);
+  fix(dev^.si_mtime,vap^.va_mtime);
+  fix(dev^.si_ctime,vap^.va_ctime);
 
   vap^.va_rdev:=cdev2priv(dev)^.cdp_inode;
  end;
- vap^.va_gen:=0;
- vap^.va_flags:=0;
+
+ vap^.va_gen    :=0;
+ vap^.va_flags  :=0;
  vap^.va_filerev:=0;
- vap^.va_nlink:=de^.de_links;
- vap^.va_fileid:=de^.de_inode;
+ vap^.va_nlink  :=de^.de_links;
+ vap^.va_fileid :=de^.de_inode;
 
  Exit(error);
 end;
@@ -1051,7 +1075,6 @@ function devfs_lookupx(ap:p_vop_lookup_args;dm_unlock:PInteger):Integer;
 label
  _or;
 var
- td:p_kthread;
  cnp:p_componentname;
  dvp:p_vnode;
  vpp:pp_vnode;
@@ -1067,7 +1090,6 @@ begin
  vpp:=ap^.a_vpp;
  dvp:=ap^.a_dvp;
  pname:=cnp^.cn_nameptr;
- td:=cnp^.cn_thread;
  flags:=cnp^.cn_flags;
  nameiop:=cnp^.cn_nameiop;
  dmp:=VFSTODEVFS(dvp^.v_mount);
@@ -1220,13 +1242,18 @@ var
  dm_unlock:Integer;
 begin
  if (devfs_populate_vp(ap^.a_dvp)<>0) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  dmp:=VFSTODEVFS(ap^.a_dvp^.v_mount);
  dm_unlock:=1;
  j:=devfs_lookupx(ap, @dm_unlock);
+
  if (dm_unlock=1) then
+ begin
   sx_xunlock(@dmp^.dm_lock);
+ end;
  Exit(j);
 end;
 
@@ -1243,10 +1270,11 @@ var
 begin
  {
   * The only type of node we should be creating here is a
-  * character device, for anything else ExitEOPNOTSUPP.
+  * character device, for anything else return EOPNOTSUPP.
   }
  if (ap^.a_vap^.va_type<>VCHR) then
   Exit(EOPNOTSUPP);
+
  dvp:=ap^.a_dvp;
  dmp:=VFSTODEVFS(dvp^.v_mount);
 
@@ -1409,7 +1437,7 @@ end;
  }
 function devfs_print(ap:p_vop_print_args):Integer;
 begin
- Writeln(Format('\tdev %s\n',[devtoname(ap^.a_vp^.v_rdev)]));
+ Writeln(Format('dev %s',[devtoname(ap^.a_vp^.v_rdev)]));
  Exit(0);
 end;
 
@@ -1746,14 +1774,13 @@ var
  de:p_devfs_dirent;
  vap:p_vattr;
  vp:p_vnode;
- //struct thread *td;
  c,error:Integer;
  uid:uid_t;
  gid:gid_t;
 begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
- //td:=curkthread;
+
  if (vap^.va_type<>VNON) or
     (vap^.va_nlink<>WORD(VNOVAL)) or
     (vap^.va_fsid<>VNOVAL) or
@@ -1964,6 +1991,7 @@ function dev2udev(x:p_cdev):Integer;
 begin
  if (x=nil) then
   Exit(NODEV);
+
  Exit(cdev2priv(x)^.cdp_inode);
 end;
 

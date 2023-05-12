@@ -6,12 +6,9 @@ unit null_subr;
 interface
 
 uses
- mqueue,
  vmount,
  vnode,
- nullfs,
- kern_mtx,
- subr_hash;
+ nullfs;
 
 {
  * null layer cache:
@@ -30,52 +27,94 @@ procedure null_insmntque_dtr(vp:p_vnode;xp:Pointer);
 function  null_nodeget(mp:p_mount;lowervp:p_vnode;vpp:pp_vnode):Integer;
 procedure null_hashrem(xp:p_null_node);
 
-
-type
- p_null_node_hashhead=^t_null_node_hashhead;
- t_null_node_hashhead=LIST_HEAD; //null_node
-
-var
- null_node_hashtbl:p_null_node_hashhead=nil;
- null_hash_mask   :QWORD=0;
- null_hashmtx:mtx;
-
 implementation
 
 uses
+ hamt,
+ mqueue,
  errno,
  vfs_subr,
  vfs_vnops,
  dead_vnops,
  vnode_if,
- null_vnops;
+ null_vnops,
+ kern_mtx;
+
+var
+ null_node_hashtbl:TSTUB_HAMT32;
+ null_hashmtx:mtx;
+
+function MOUNTTONULLMOUNT(mp:p_mount):p_null_mount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
+function VTONULL(vp:p_vnode):p_null_node; inline;
+begin
+ Result:=vp^.v_data;
+end;
+
+function NULLTOV(xp:p_null_node):p_vnode; inline;
+begin
+ Result:=xp^.null_vnode;
+end;
 
 function vfs_hash_index(vp:p_vnode):DWORD;
 begin
+ if (vp=nil) then Exit(0);
  Result:=(vp^.v_hash + p_mount(vp^.v_mount)^.mnt_hashseed);
 end;
 
-function NULL_NHASH(vp:p_vnode):Pointer;
+function NULL_NHASH(vp:p_vnode;force:Boolean):Pointer;
+var
+ data:PPointer;
 begin
- Result:=@null_node_hashtbl[vfs_hash_index(vp) and null_hash_mask];
+ Result:=nil;
+ data:=HAMT_search32(@null_node_hashtbl,vfs_hash_index(vp));
+ if (data<>nil) then
+ begin
+  Result:=data^;
+ end else
+ if force then
+ begin
+  Result:=AllocMem(SizeOf(LIST_HEAD));
+  if (Result=nil) then Exit;
+  data:=HAMT_insert32(@null_node_hashtbl,vfs_hash_index(vp),Result);
+  if (data=nil) then
+  begin
+   FreeMem(Result);
+   Result:=nil;
+  end else
+  if (data^<>Result) then
+  begin
+   FreeMem(Result);
+   Result:=data^;
+  end;
+ end;
 end;
 
 {
  * Initialise cache headers
  }
 function nullfs_init(vfsp:p_vfsconf):Integer;
-const
- desiredvnodes=64;
 begin
- null_node_hashtbl:=hashinit(desiredvnodes, @null_hash_mask);
+ FillChar(null_node_hashtbl,SizeOf(null_node_hashtbl),0);
  mtx_init(null_hashmtx, 'nullhs');
  Exit(0);
+end;
+
+procedure free_hash_data_cb(data,userdata:Pointer); register;
+begin
+ if (data<>nil) then
+ begin
+  FreeMem(data);
+ end;
 end;
 
 function nullfs_uninit(vfsp:p_vfsconf):Integer;
 begin
  mtx_destroy(null_hashmtx);
- hashdestroy(null_node_hashtbl, null_hash_mask);
+ HAMT_clear32(@null_node_hashtbl,@free_hash_data_cb,nil);
  Exit(0);
 end;
 
@@ -97,8 +136,14 @@ begin
   * the lower vnode.  If found, the increment the nil_node
   * reference count (but NOT the lower vnode's VREF counter).
   }
- hd:=NULL_NHASH(lowervp);
  mtx_lock(null_hashmtx);
+
+ hd:=NULL_NHASH(lowervp,false);
+ if (hd=nil) then
+ begin
+  mtx_unlock(null_hashmtx);
+  Exit(nil);
+ end;
 
  a:=LIST_FIRST(hd);
  while (a<>nil) do
@@ -132,8 +177,15 @@ var
  oxp:p_null_node;
  ovp:p_vnode;
 begin
- hd:=NULL_NHASH(xp^.null_lowervp);
  mtx_lock(null_hashmtx);
+
+ hd:=NULL_NHASH(xp^.null_lowervp,true);
+ if (hd=nil) then
+ begin
+  mtx_unlock(null_hashmtx);
+  Exit(nil);
+ end;
+
  oxp:=LIST_FIRST(hd);
  while (oxp<>nil) do
  begin
@@ -192,7 +244,11 @@ var
  error:Integer;
 begin
  ASSERT_VOP_LOCKED(lowervp, 'lowervp');
- Assert(lowervp^.v_usecount >= 1,'Unreferenced vnode %p');
+
+ if (lowervp<>nil) then
+ begin
+  Assert(lowervp^.v_usecount >= 1,'Unreferenced vnode %p');
+ end;
 
  { Lookup the hash firstly. }
  vpp^:=null_hashget(mp, lowervp);
@@ -207,6 +263,7 @@ begin
   * the nilfs vnode.  Upgrade the lock now if hash failed to
   * provide ready to use vnode.
   }
+ if (lowervp<>nil) then
  if (VOP_ISLOCKED(lowervp)<>LK_EXCLUSIVE) then
  begin
   Assert((MOUNTTONULLMOUNT(mp)^.nullm_flags and NULLM_CACHE)<>0,'lowervp %p is not excl locked and cache is disabled');
@@ -242,9 +299,17 @@ begin
  xp^.null_lowervp:=lowervp;
  xp^.null_flags  :=0;
 
- vp^.v_type  :=lowervp^.v_type;
  vp^.v_data  :=xp;
- vp^.v_vnlock:=lowervp^.v_vnlock;
+
+ if (lowervp=nil) then
+ begin
+  vp^.v_type  :=VDIR;
+  vp^.v_vnlock:=@vp^.v_lock;
+ end else
+ begin
+  vp^.v_type  :=lowervp^.v_type;
+  vp^.v_vnlock:=lowervp^.v_vnlock;
+ end;
 
  error:=insmntque1(vp, mp, @null_insmntque_dtr, xp);
  if (error<>0) then
@@ -269,9 +334,24 @@ end;
  * Remove node from hash.
  }
 procedure null_hashrem(xp:p_null_node);
+var
+ hd:Pointer;
+ data:PPointer;
 begin
  mtx_lock(null_hashmtx);
  LIST_REMOVE(xp,@xp^.null_hash);
+
+ data:=HAMT_search32(@null_node_hashtbl,vfs_hash_index(xp^.null_lowervp));
+ if (data<>nil) then
+ begin
+  hd:=data^;
+  if LIST_EMPTY(hd) then
+  if HAMT_delete32(@null_node_hashtbl,vfs_hash_index(xp^.null_lowervp),nil) then
+  begin
+   FreeMem(hd);
+  end;
+ end;
+
  mtx_unlock(null_hashmtx);
 end;
 

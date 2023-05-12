@@ -84,9 +84,9 @@ type
   {
    * Arguments to lookup.
    }
-  cn_nameiop:Integer; { namei operation }
-  cn_lkflags:Integer; { Lock flags LK_EXCLUSIVE or LK_SHARED }
-  cn_flags  :QWORD;   { flags to namei }
+  cn_nameiop:Integer;   { namei operation }
+  cn_lkflags:Integer;   { Lock flags LK_EXCLUSIVE or LK_SHARED }
+  cn_flags  :QWORD;     { flags to namei }
   cn_thread :p_kthread; { thread requesting lookup }
   {
    * Shared between lookup and commit routines.
@@ -105,16 +105,16 @@ type
   {
    * Arguments to namei/lookup.
    }
-  ni_dirp:PChar;  { pathname pointer }
-  ni_segflg:uio_seg; { location of pathname }
+  ni_dirp:PChar;                { pathname pointer }
+  ni_segflg:uio_seg;            { location of pathname }
   ni_rightsneeded:cap_rights_t; { rights required to look up vnode }
   {
    * Arguments to lookup.
    }
-  ni_startdir:p_vnode; { starting directory }
-  ni_rootdir :p_vnode; { logical root directory }
-  ni_topdir  :p_vnode; { logical top directory }
-  ni_dirfd   :Integer;  { starting directory for *at functions }
+  ni_startdir:p_vnode;       { starting directory }
+  ni_rootdir :p_vnode;       { logical root directory }
+  ni_topdir  :p_vnode;       { logical top directory }
+  ni_dirfd   :Integer;       { starting directory for *at functions }
   ni_strictrelative:Integer; { relative lookup only; no '..' }
   {
    * Results: returned from namei

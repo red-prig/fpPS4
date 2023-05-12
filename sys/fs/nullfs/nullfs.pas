@@ -32,31 +32,27 @@ type
   null_flags  :DWORD;
  end;
 
-function MOUNTTONULLMOUNT(mp:p_mount):p_null_mount;
-function VTONULL(vp:p_vnode):p_null_node;
-function NULLTOV(xp:p_null_node):p_vnode;
 function NULLVPTOLOWERVP(vp:p_vnode):p_vnode;
 
 implementation
 
-function MOUNTTONULLMOUNT(mp:p_mount):p_null_mount;
-begin
- Result:=mp^.mnt_data;
-end;
-
-function VTONULL(vp:p_vnode):p_null_node;
+function VTONULL(vp:p_vnode):p_null_node; inline;
 begin
  Result:=vp^.v_data;
 end;
 
-function NULLTOV(xp:p_null_node):p_vnode;
-begin
- Result:=xp^.null_vnode;
-end;
-
 function NULLVPTOLOWERVP(vp:p_vnode):p_vnode;
+var
+ xp:p_null_node;
 begin
- Result:=VTONULL(vp)^.null_lowervp;
+ xp:=VTONULL(vp);
+ if (xp<>nil) then
+ begin
+  Result:=xp^.null_lowervp;
+ end else
+ begin
+  Result:=nil;
+ end;
 end;
 
 end.

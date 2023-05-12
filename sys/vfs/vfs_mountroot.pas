@@ -177,6 +177,56 @@ begin
  Exit(error);
 end;
 
+procedure mount_print;
+var
+ m:p_mount;
+
+ procedure print_vp(vp:p_vnode;const prefix:RawByteString);
+ var
+  m:p_mount;
+ begin
+  Write(prefix,':');
+  if (vp=nil) then
+  begin
+   Writeln(' nil');
+   Exit;
+  end;
+  Write(' v_tag:',vp^.v_tag);
+  m:=vp^.v_mount;
+  Writeln(
+   ' fstype:',m^.mnt_stat.f_fstypename,
+   ' mntfrom:',m^.mnt_stat.f_mntfromname,
+   ' mnton:',m^.mnt_stat.f_mntonname
+  );
+ end;
+
+begin
+ Writeln('[mount_print]->');
+
+ mtx_lock(mountlist_mtx);
+
+ print_vp(rootvnode,'root');
+
+ print_vp(fd_table.fd_cdir,'cdir');
+ print_vp(fd_table.fd_rdir,'rdir');
+ print_vp(fd_table.fd_jdir,'jdir');
+
+ m:=TAILQ_FIRST(@mountlist);
+ while (m<>nil) do
+ begin
+  Writeln(
+   ' fstype:',m^.mnt_stat.f_fstypename,
+   ' mntfrom:',m^.mnt_stat.f_mntfromname,
+   ' mnton:',m^.mnt_stat.f_mntonname
+  );
+
+  m:=TAILQ_NEXT(m,@m^.mnt_list);
+ end;
+
+ mtx_unlock(mountlist_mtx);
+
+ Writeln('<-[mount_print]');
+end;
 
 function vfs_mountroot_shuffle(mpdevfs:p_mount):Integer;
 var
@@ -219,50 +269,13 @@ begin
  set_rootvnode();
  //cache_purgevfs(rootvnode^.v_mount);
 
- if (mporoot<>mpdevfs) then
- begin
-  { Remount old root under /.mount or /mnt }
-  fspath:='/.mount';
-  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, fspath, curkthread);
-  error:=nd_namei(@nd);
-  if (error<>0) then
-  begin
-   NDFREE(@nd, NDF_ONLY_PNBUF);
-   fspath:='/mnt';
-   NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, fspath, curkthread);
-   error:=nd_namei(@nd);
-  end;
-  if (error=0) then
-  begin
-   vp:=nd.ni_vp;
-
-   if (vp^.v_type=VDIR) then
-    error:=0
-   else
-    error:=ENOTDIR;
-
-   //if (error=0) then
-   // error:=vinvalbuf(vp, V_SAVE, 0, 0);
-
-   if (error=0) then
-   begin
-    //cache_purge(vp);
-    mporoot^.mnt_vnodecovered:=vp;
-    vp^.v_mountedhere:=mporoot;
-    strlcopy(@mporoot^.mnt_stat.f_mntonname, fspath, MNAMELEN);
-    VOP_UNLOCK(vp, 0);
-   end else
-    vput(vp);
-  end;
-  NDFREE(@nd, NDF_ONLY_PNBUF);
-
-  if (error<>0) then
-   Writeln('mountroot: unable to remount previous root under /.mount or /mnt ', error);
- end;
+ mount_print;
 
  { Remount devfs under /dev }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, '/dev', curkthread);
+
  error:=nd_namei(@nd);
+
  if (error=0) then
  begin
   vp:=nd.ni_vp;
@@ -346,10 +359,27 @@ begin
  error:=vfs_mountroot_devfs(@mp);
  if (error<>0) then goto _end;
 
- error:=vfs_mountroot_simple('nullfs','/','',nil,MNT_RDONLY or MNT_ROOTFS);
+ mount_print;
+
+ //error:=vfs_mountroot_simple('nullfs','/','/',nil,{MNT_ROOTFS}0);
+
+ error:=vfs_mountroot_simple('ufs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
 
+ //error:=vfs_mountroot_simple('devfs','/dev','/dev',nil,MNT_ROOTFS);
+ //if (error<>0) then goto _end;
+
+ mount_print;
+
  error:=vfs_mountroot_shuffle(mp);
+
+ //error:=vfs_mountroot_simple('ufs','/app0/test','/app0/test',nil,0);
+ //if (error<>0) then goto _end;
+
+ error:=vfs_mountroot_simple('devfs','/app0',nil,nil,0);
+ if (error<>0) then goto _end;
+
+ mount_print;
 
 _end:
  mtx_unlock(VFS_Giant);

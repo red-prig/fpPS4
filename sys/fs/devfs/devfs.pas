@@ -156,12 +156,11 @@ type
 
  devfs_dlist_head=TAILQ_HEAD; //devfs_dirent
 
- t_devfs_dirent=packed record
+ t_devfs_dirent=record
   de_cdp    :p_cdev_priv;
   de_inode  :Integer;
   de_flags  :Integer;
   de_holdcnt:Integer;
-  _align    :Integer;
   de_dirent :p_dirent;
   de_list   :TAILQ_ENTRY;
   de_dlist  :devfs_dlist_head;
@@ -179,7 +178,7 @@ type
  end;
 
  p_devfs_mount=^t_devfs_mount;
- t_devfs_mount=packed record
+ t_devfs_mount=record
   dm_idx       :DWORD         ;
   dm_mount     :p_mount       ;
   dm_rootdir   :p_devfs_dirent;
@@ -202,15 +201,11 @@ function  rid2rsn(rid:devfs_rid):devfs_rsnum;
 function  rid2rn (rid:devfs_rid):devfs_rnum;
 function  mkrid  (rsn:devfs_rsnum;rn:devfs_rnum):devfs_rid;
 
-function  VFSTODEVFS(mp:p_mount):p_devfs_mount;
-
 procedure DEVFS_DE_HOLD(de:p_devfs_dirent);
 function  DEVFS_DE_DROP(de:p_devfs_dirent):Boolean;
 
 procedure DEVFS_DMP_HOLD(dmp:p_devfs_mount);
 function  DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean;
-
-function  cdev2priv(c:Pointer):p_cdev_priv;
 
 //
 
@@ -262,36 +257,26 @@ begin
  Result:=rn or (rsn shl 16);
 end;
 
-function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
-begin
- Result:=mp^.mnt_data;
-end;
-
-procedure DEVFS_DE_HOLD(de:p_devfs_dirent); inline;
+procedure DEVFS_DE_HOLD(de:p_devfs_dirent);
 begin
  Inc(de^.de_holdcnt);
 end;
 
-function DEVFS_DE_DROP(de:p_devfs_dirent):Boolean; inline;
+function DEVFS_DE_DROP(de:p_devfs_dirent):Boolean;
 begin
  Dec(de^.de_holdcnt);
  Result:=(de^.de_holdcnt=0);
 end;
 
-procedure DEVFS_DMP_HOLD(dmp:p_devfs_mount); inline;
+procedure DEVFS_DMP_HOLD(dmp:p_devfs_mount);
 begin
  Inc(dmp^.dm_holdcnt);
 end;
 
-function DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean; inline;
+function DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean;
 begin
  Dec(dmp^.dm_holdcnt);
  Result:=(dmp^.dm_holdcnt=0);
-end;
-
-function cdev2priv(c:Pointer):p_cdev_priv;
-begin
- Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
 end;
 
 //

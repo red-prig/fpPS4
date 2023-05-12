@@ -69,6 +69,11 @@ uses
  vfs_subr,
  vnode_if;
 
+function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
 function new_unrhdr(min,max:Integer):p_id_desc_table;
 begin
  Result:=AllocMem(SizeOf(t_id_desc_table));
@@ -100,7 +105,6 @@ var
  error:Integer;
  fmp:p_devfs_mount;
  rvp:p_vnode;
- //struct thread *td:=curthread;
  {injail,}rsnum:Integer;
 begin
 
@@ -220,8 +224,8 @@ begin
  flags:=0;
 
  fmp:=VFSTODEVFS(mp);
- Assert(fmp^.dm_mount<>nil,
-  ('devfs_unmount unmounted devfs_mount'));
+ Assert(fmp^.dm_mount<>nil,'devfs_unmount unmounted devfs_mount');
+
  { There is 1 extra root vnode reference from devfs_mount(). }
  error:=vflush(mp, 1, flags);
  if (error<>0) then
@@ -250,10 +254,12 @@ var
  dmp:p_devfs_mount;
 begin
  dmp:=VFSTODEVFS(mp);
+
  sx_xlock(@dmp^.dm_lock);
  error:=devfs_allocv(dmp^.dm_rootdir, mp, LK_EXCLUSIVE, @vp);
  if (error<>0) then
   Exit(error);
+
  vp^.v_vflag:=vp^.v_vflag or VV_ROOT;
  vpp^:=vp;
  Exit(0);

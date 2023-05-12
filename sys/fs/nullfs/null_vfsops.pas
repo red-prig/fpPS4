@@ -69,6 +69,21 @@ uses
  kern_mtx,
  kern_synch;
 
+function MOUNTTONULLMOUNT(mp:p_mount):p_null_mount; inline;
+begin
+ Result:=mp^.mnt_data;
+end;
+
+function VTONULL(vp:p_vnode):p_null_node; inline;
+begin
+ Result:=vp^.v_data;
+end;
+
+function NULLTOV(xp:p_null_node):p_vnode; inline;
+begin
+ Result:=xp^.null_vnode;
+end;
+
 {
  * Mount null layer
  }
@@ -81,6 +96,8 @@ var
  isvnunlocked,len:Integer;
  nd:t_nameidata;
  ndp:p_nameidata;
+ lvp:p_vnode;
+ lmp:p_mount;
 begin
  error:=0;
  isvnunlocked:=0;
@@ -122,6 +139,7 @@ begin
   VOP_UNLOCK(mp^.mnt_vnodecovered, 0);
   isvnunlocked:=1;
  end;
+
  {
   * Find lower node
   }
@@ -156,16 +174,26 @@ begin
 
  xmp:=AllocMem(sizeof(t_null_mount));
 
- {
-  * Save reference to underlying FS
-  }
- xmp^.nullm_vfs:=lowerrootvp^.v_mount;
+ if (lowerrootvp=nil) then
+ begin
+  xmp^.nullm_vfs:=nil;
+
+  vp:=nil;
+  error:=0;
+ end else
+ begin
+  {
+   * Save reference to underlying FS
+   }
+  xmp^.nullm_vfs:=lowerrootvp^.v_mount;
+ end;
 
  {
   * Save reference.  Each mount also holds
   * a reference on the root vnode.
   }
  error:=null_nodeget(mp, lowerrootvp, @vp);
+
  {
   * Make sure the node alias worked
   }
@@ -188,11 +216,16 @@ begin
   }
  VOP_UNLOCK(vp, 0);
 
- if ((p_mount(NULLVPTOLOWERVP(nullm_rootvp)^.v_mount)^.mnt_flag and MNT_LOCAL)<>0) then
+ lvp:=NULLVPTOLOWERVP(nullm_rootvp);
+ if (lvp<>nil) then
  begin
-  MNT_ILOCK(mp);
-  mp^.mnt_flag:=mp^.mnt_flag or MNT_LOCAL;
-  MNT_IUNLOCK(mp);
+  lmp:=lvp^.v_mount;
+  if ((lmp^.mnt_flag and MNT_LOCAL)<>0) then
+  begin
+   MNT_ILOCK(mp);
+   mp^.mnt_flag:=mp^.mnt_flag or MNT_LOCAL;
+   MNT_IUNLOCK(mp);
+  end;
  end;
 
  xmp^.nullm_flags:=xmp^.nullm_flags or NULLM_CACHE;
@@ -203,14 +236,18 @@ begin
  MNT_ILOCK(mp);
  if ((xmp^.nullm_flags and NULLM_CACHE)<>0) then
  begin
-  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or
-   (p_mount(lowerrootvp^.v_mount)^.mnt_kern_flag and (MNTK_MPSAFE or MNTK_SHARED_WRITES or MNTK_LOOKUP_SHARED or MNTK_EXTENDED_SHARED));
+  if (lowerrootvp<>nil) then
+  begin
+   lmp:=lowerrootvp^.v_mount;
+   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or (lmp^.mnt_kern_flag and (MNTK_MPSAFE or MNTK_SHARED_WRITES or MNTK_LOOKUP_SHARED or MNTK_EXTENDED_SHARED));
+  end;
  end;
  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_LOOKUP_EXCL_DOTDOT;
  MNT_IUNLOCK(mp);
- mp^.mnt_data:= xmp;
+ mp^.mnt_data:=xmp;
  vfs_getnewfsid(mp);
  if ((xmp^.nullm_flags and NULLM_CACHE)<>0) then
+ if (xmp^.nullm_vfs<>nil) then
  begin
   MNT_ILOCK(xmp^.nullm_vfs);
   TAILQ_INSERT_TAIL(@xmp^.nullm_vfs^.mnt_uppers,mp,@mp^.mnt_upper_link);
@@ -246,6 +283,8 @@ begin
   }
  mntdata:=mp^.mnt_data;
  ump:=mntdata^.nullm_vfs;
+
+ if (ump<>nil) then
  if ((mntdata^.nullm_flags and NULLM_CACHE)<>0) then
  begin
   MNT_ILOCK(ump);
@@ -257,6 +296,7 @@ begin
   TAILQ_REMOVE(@ump^.mnt_uppers,mp,@mp^.mnt_upper_link);
   MNT_IUNLOCK(ump);
  end;
+
  mp^.mnt_data:=nil;
 
  FreeMem(mntdata);
@@ -266,11 +306,15 @@ end;
 function nullfs_root(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
 var
  vp:p_vnode;
+ xmp:p_null_mount;
 begin
  {
-  * Exitlocked reference to root.
+  * Return locked reference to root.
   }
- vp:=MOUNTTONULLMOUNT(mp)^.nullm_rootvp;
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
+
+ vp:=xmp^.nullm_rootvp;
  VREF(vp);
 
  //ASSERT_VOP_UNLOCKED(vp, 'root vnode is locked');
@@ -280,18 +324,39 @@ begin
 end;
 
 function nullfs_quotactl(mp:p_mount;cmd,uid:Integer;arg:Pointer):Integer;
+var
+ xmp:p_null_mount;
 begin
- Exit(VFS_QUOTACTL(MOUNTTONULLMOUNT(mp)^.nullm_vfs, cmd, uid, arg));
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
+
+ Exit(VFS_QUOTACTL(xmp^.nullm_vfs, cmd, uid, arg));
 end;
 
 function nullfs_statfs(mp:p_mount;sbp:p_statfs):Integer;
 var
  error:Integer;
  mstat:t_statfs;
+ xmp:p_null_mount;
 begin
- FillChar(mstat,sizeof(mstat),0);
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
 
- error:=VFS_STATFS(MOUNTTONULLMOUNT(mp)^.nullm_vfs, @mstat);
+ if (xmp^.nullm_vfs=nil) then
+ begin
+  sbp^.f_flags :=0;
+  sbp^.f_bsize :=DEV_BSIZE;
+  sbp^.f_iosize:=DEV_BSIZE;
+  sbp^.f_blocks:=2;
+  sbp^.f_bfree :=0;
+  sbp^.f_bavail:=0;
+  sbp^.f_files :=0;
+  sbp^.f_ffree :=0;
+  Exit(0);
+ end;
+
+ mstat:=Default(t_statfs);
+ error:=VFS_STATFS(xmp^.nullm_vfs, @mstat);
  if (error<>0) then
   Exit(error);
 
@@ -319,12 +384,20 @@ end;
 
 function nullfs_vget(mp:p_mount;ino:DWORD;flags:Integer;vpp:pp_vnode):Integer;
 var
+ xmp:p_null_mount;
  error:Integer;
 begin
- Assert((flags and LK_TYPE_MASK)<>0,
-     ('nullfs_vget: no lock requested'));
+ Assert((flags and LK_TYPE_MASK)<>0,'nullfs_vget: no lock requested');
 
- error:=VFS_VGET(MOUNTTONULLMOUNT(mp)^.nullm_vfs, ino, flags, vpp);
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
+
+ if (xmp^.nullm_vfs=nil) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ error:=VFS_VGET(xmp^.nullm_vfs, ino, flags, vpp);
  if (error<>0) then
   Exit(error);
 
@@ -333,17 +406,36 @@ end;
 
 function nullfs_fhtovp(mp:p_mount;fidp:p_fid;flags:Integer;vpp:pp_vnode):Integer;
 var
+ xmp:p_null_mount;
  error:Integer;
 begin
- error:=VFS_FHTOVP(MOUNTTONULLMOUNT(mp)^.nullm_vfs, fidp, flags, vpp);
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
+
+ if (xmp^.nullm_vfs=nil) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ error:=VFS_FHTOVP(xmp^.nullm_vfs, fidp, flags, vpp);
  if (error<>0) then
   Exit(error);
  Exit(null_nodeget(mp, vpp^, vpp));
 end;
 
 function nullfs_extattrctl(mp:p_mount;cmd:Integer;filename_vp:p_vnode;namespace:Integer;attrname:PChar):Integer;
+var
+ xmp:p_null_mount;
 begin
- Exit(VFS_EXTATTRCTL(MOUNTTONULLMOUNT(mp)^.nullm_vfs, cmd, filename_vp, namespace, attrname));
+ xmp:=MOUNTTONULLMOUNT(mp);
+ if (xmp=nil) then Exit(EOPNOTSUPP);
+
+ if (xmp^.nullm_vfs=nil) then
+ begin
+  Exit(ENOENT);
+ end;
+
+ Exit(VFS_EXTATTRCTL(xmp^.nullm_vfs, cmd, filename_vp, namespace, attrname));
 end;
 
 end.

@@ -3464,6 +3464,7 @@ var
 begin
  if (dp^.d_reclen > ap^.a_uio^.uio_resid) then
   Exit(ENAMETOOLONG);
+
  error:=uiomove(dp, dp^.d_reclen, ap^.a_uio);
  if (error<>0) then
  begin
@@ -3476,13 +3477,15 @@ begin
   end;
   Exit(error);
  end;
+
  if (ap^.a_ncookies=nil) then
   Exit(0);
 
  Assert(ap^.a_cookies<>nil,'nil ap^.a_cookies value with non-nil ap^.a_ncookies!');
 
  ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
- (ap^.a_cookies^)[ap^.a_ncookies^]:=off;
+ ap^.a_cookies^[ap^.a_ncookies^]:=off;
+
  Inc(ap^.a_ncookies^);
  Exit(0);
 end;

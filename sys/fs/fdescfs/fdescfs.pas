@@ -36,9 +36,6 @@ type
   fd_ix   :Integer;    { filesystem index }
  end;
 
-function VFSTOFDESC(mp:p_mount):p_fdescmount;
-function VTOFDESC  (vp:p_vnode):p_fdescnode;
-
 function fdesc_init(vfsp:p_vfsconf):Integer;
 function fdesc_uninit(vfsp:p_vfsconf):Integer;
 function FD_NHASH(ix:Integer):Pointer;
@@ -57,16 +54,6 @@ var
  fdhash   :QWORD=0;
 
 implementation
-
-function VFSTOFDESC(mp:p_mount):p_fdescmount;
-begin
- Result:=mp^.mnt_data;
-end;
-
-function VTOFDESC(vp:p_vnode):p_fdescnode;
-begin
- Result:=vp^.v_data;
-end;
 
 {
  * Initialise cache headers
