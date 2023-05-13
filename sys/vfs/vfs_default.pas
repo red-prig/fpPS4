@@ -61,15 +61,9 @@ function vop_stdputpages(ap:p_vop_putpages_args):Integer;
 function vop_stdvptofh(ap:p_vop_vptofh_args):Integer;
 function vop_stdvptocnp(ap:p_vop_vptocnp_args):Integer;
 function vop_stdallocate(ap:p_vop_allocate_args):Integer;
-function vop_stdadvise(ap:p_vop_advise_args):Integer;
 function vop_stdunp_bind(ap:p_vop_unp_bind_args):Integer;
 function vop_stdunp_connect(ap:p_vop_unp_connect_args):Integer;
 function vop_stdunp_detach(ap:p_vop_unp_detach_args):Integer;
-function vop_stdis_text(ap:p_vop_is_text_args):Integer;
-function vop_stdset_text(ap:p_vop_set_text_args):Integer;
-function vop_stdunset_text(ap:p_vop_unset_text_args):Integer;
-function vop_stdget_writecount(ap:p_vop_get_writecount_args):Integer;
-function vop_stdadd_writecount(ap:p_vop_add_writecount_args):Integer;
 
 function vfs_stdroot(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
 function vfs_stdstatfs(mp:p_mount;sbp:p_statfs):Integer;
@@ -105,7 +99,6 @@ const
 
   vop_islocked      :@vop_stdislocked      ;
   vop_lookup        :@vop_nolookup         ;
-  vop_cachedlookup  :nil                   ;
   vop_create        :nil                   ;
   vop_whiteout      :nil                   ;
   vop_mknod         :nil                   ;
@@ -159,15 +152,9 @@ const
   vop_vptofh        :@vop_stdvptofh        ;
   vop_vptocnp       :@vop_stdvptocnp       ;
   vop_allocate      :@vop_stdallocate      ;
-  vop_advise        :@vop_stdadvise        ;
   vop_unp_bind      :@vop_stdunp_bind      ;
   vop_unp_connect   :@vop_stdunp_connect   ;
   vop_unp_detach    :@vop_stdunp_detach    ;
-  vop_is_text       :@vop_stdis_text       ;
-  vop_set_text      :@vop_stdset_text      ;
-  vop_unset_text    :@vop_stdunset_text    ;
-  vop_get_writecount:@vop_stdget_writecount;
-  vop_add_writecount:@vop_stdadd_writecount
 );
 
 implementation
@@ -1048,61 +1035,6 @@ begin
  Exit(error);
 end;
 
-function vop_stdadvise(ap:p_vop_advise_args):Integer;
-var
- vp:p_vnode;
- start, __end:QWORD;
- error, vfslocked:Integer;
-begin
- vp:=ap^.a_vp;
- case (ap^.a_advice) of
-  POSIX_FADV_WILLNEED:
-   begin
-    {
-     * Do nothing for now.  Filesystems should provide a
-     * custom method which starts an asynchronous read of
-     * the requested region.
-     }
-    error:=0;
-   end;
-  POSIX_FADV_DONTNEED:
-   begin
-    {
-     * Flush any open FS buffers and then remove pages
-     * from the backing VM object.  Using vinvalbuf() here
-     * is a bit heavy-handed as it flushes all buffers for
-     * the given vnode, not just the buffers covering the
-     * requested range.
-     }
-    error:=0;
-    vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
-    vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
-    if ((vp^.v_iflag and VI_DOOMED)<>0) then
-    begin
-     VOP_UNLOCK(vp, 0);
-     VFS_UNLOCK_GIANT(vfslocked);
-     Exit(error);
-    end;
-    //vinvalbuf(vp, V_CLEANONLY, 0, 0);
-    //if (vp^.v_object<>nil) then
-    //begin
-    // start:=trunc_page(ap^.a_start);
-    // __end:=round_page(ap^.a_end);
-    // VM_OBJECT_LOCK(vp^.v_object);
-    // vm_object_page_cache(vp^.v_object, OFF_TO_IDX(start), OFF_TO_IDX(__end));
-    // VM_OBJECT_UNLOCK(vp^.v_object);
-    //end;
-    VOP_UNLOCK(vp, 0);
-    VFS_UNLOCK_GIANT(vfslocked);
-   end;
- else
-  begin
-   error:=EINVAL;
-  end;
- end;
- Exit(error);
-end;
-
 function vop_stdunp_bind(ap:p_vop_unp_bind_args):Integer;
 begin
  ap^.a_vp^.v_un:=ap^.a_socket;
@@ -1118,35 +1050,6 @@ end;
 function vop_stdunp_detach(ap:p_vop_unp_detach_args):Integer;
 begin
  ap^.a_vp^.v_un:=nil;
- Exit(0);
-end;
-
-function vop_stdis_text(ap:p_vop_is_text_args):Integer;
-begin
- Exit(ord((ap^.a_vp^.v_vflag and VV_TEXT)<>0));
-end;
-
-function vop_stdset_text(ap:p_vop_set_text_args):Integer;
-begin
- ap^.a_vp^.v_vflag:=ap^.a_vp^.v_vflag or VV_TEXT;
- Exit(0);
-end;
-
-function vop_stdunset_text(ap:p_vop_unset_text_args):Integer;
-begin
- ap^.a_vp^.v_vflag:=ap^.a_vp^.v_vflag and (not VV_TEXT);
- Exit(0);
-end;
-
-function vop_stdget_writecount(ap:p_vop_get_writecount_args):Integer;
-begin
- ap^.a_writecount^:=ap^.a_vp^.v_writecount;
- Exit(0);
-end;
-
-function vop_stdadd_writecount(ap:p_vop_add_writecount_args):Integer;
-begin
- Inc(ap^.a_vp^.v_writecount,ap^.a_inc);
  Exit(0);
 end;
 

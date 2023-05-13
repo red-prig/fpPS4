@@ -41,7 +41,6 @@ const
 
   vop_islocked      :nil;
   vop_lookup        :@ufs_lookup;
-  vop_cachedlookup  :nil;
   vop_create        :nil;
   vop_whiteout      :nil;
   vop_mknod         :nil;//@devfs_mknod;
@@ -95,15 +94,9 @@ const
   vop_vptofh        :nil;
   vop_vptocnp       :nil;//@devfs_vptocnp;
   vop_allocate      :nil;
-  vop_advise        :nil;
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
-  vop_is_text       :nil;
-  vop_set_text      :nil;
-  vop_unset_text    :nil;
-  vop_get_writecount:nil;
-  vop_add_writecount:nil;
  );
 
 implementation

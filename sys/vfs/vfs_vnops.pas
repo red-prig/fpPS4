@@ -304,12 +304,12 @@ restart:
  if (error<>0) then
   goto bad;
 
- if (fmode and FWRITE)<>0 then
-  VOP_ADD_WRITECOUNT(vp, 1);
  flagp^:=fmode;
  ASSERT_VOP_LOCKED(vp, 'vn_open_cred');
+
  if (mps=0) then
   VFS_UNLOCK_GIANT(ord(vfslocked));
+
  Exit(0);
 bad:
  NDFREE(ndp, NDF_ONLY_PNBUF);
@@ -323,9 +323,6 @@ end;
 function vn_writechk(vp:p_vnode):Integer;
 begin
  ASSERT_VOP_LOCKED(vp, 'vn_writechk');
-
- if (VOP_IS_TEXT(vp)<>0) then
-  Exit(ETXTBSY);
 
  Exit(0);
 end;
@@ -447,7 +444,6 @@ begin
  if ((flags and FWRITE)<>0) then
  begin
   Assert(vp^.v_writecount > 0,'vn_close: negative writecount');
-  VOP_ADD_WRITECOUNT(vp, -1);
  end;
  error:=VOP_CLOSE(vp, flags);
  vput(vp);
@@ -753,7 +749,6 @@ begin
    p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
   end;
   mtx_unlock(mtxp^);
-  error:=VOP_ADVISE(vp, start, __end, POSIX_FADV_DONTNEED);
  end;
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
@@ -867,7 +862,6 @@ begin
    p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
   end;
   mtx_unlock(mtxp^);
-  error:=VOP_ADVISE(vp, start, __end, POSIX_FADV_DONTNEED);
  end;
 
 unlock:

@@ -171,7 +171,6 @@ type
 
   vop_islocked      :Pointer;
   vop_lookup        :Pointer;
-  vop_cachedlookup  :Pointer;
   vop_create        :Pointer;
   vop_whiteout      :Pointer;
   vop_mknod         :Pointer;
@@ -225,15 +224,9 @@ type
   vop_vptofh        :Pointer;
   vop_vptocnp       :Pointer;
   vop_allocate      :Pointer;
-  vop_advise        :Pointer;
   vop_unp_bind      :Pointer;
   vop_unp_connect   :Pointer;
   vop_unp_detach    :Pointer;
-  vop_is_text       :Pointer;
-  vop_set_text      :Pointer;
-  vop_unset_text    :Pointer;
-  vop_get_writecount:Pointer;
-  vop_add_writecount:Pointer;
  end;
 
  vtype=(VNON,VREG,VDIR,VBLK,VCHR,VLNK,VSOCK,VFIFO,VBAD,VMARKER);

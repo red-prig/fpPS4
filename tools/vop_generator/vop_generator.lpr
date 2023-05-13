@@ -243,8 +243,15 @@ begin
     Case state of
      0:begin //open
         Case Name of
-         'vop_spare4':state:=2; //skip
-         'vop_spare5':state:=2; //skip
+         'vop_cachedlookup'  :state:=2; //skip
+         'vop_advise'        :state:=2; //skip
+         'vop_is_text'       :state:=2; //skip
+         'vop_set_text'      :state:=2; //skip
+         'vop_unset_text'    :state:=2; //skip
+         'vop_get_writecount':state:=2; //skip
+         'vop_add_writecount':state:=2; //skip
+         'vop_spare4'        :state:=2; //skip
+         'vop_spare5'        :state:=2; //skip
          else
           begin
            Enum:=TEnum.Create;

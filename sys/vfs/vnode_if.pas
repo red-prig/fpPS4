@@ -43,14 +43,6 @@ type
   a_cnp:p_componentname;
  end;
 
- p_vop_cachedlookup_args=^vop_cachedlookup_args;
- vop_cachedlookup_args=record
-  a_gen:p_vnodeop_desc;
-  a_dvp:p_vnode;
-  a_vpp:pp_vnode;
-  a_cnp:p_componentname;
- end;
-
  p_vop_create_args=^vop_create_args;
  vop_create_args=record
   a_gen:p_vnodeop_desc;
@@ -477,15 +469,6 @@ type
   a_len   :PPtrUint;
  end;
 
- p_vop_advise_args=^vop_advise_args;
- vop_advise_args=record
-  a_gen   :p_vnodeop_desc;
-  a_vp    :p_vnode;
-  a_start :PtrUint;
-  a___end :PtrUint;
-  a_advice:Integer;
- end;
-
  p_vop_unp_bind_args=^vop_unp_bind_args;
  vop_unp_bind_args=record
   a_gen   :p_vnodeop_desc;
@@ -506,236 +489,183 @@ type
   a_vp :p_vnode;
  end;
 
- p_vop_is_text_args=^vop_is_text_args;
- vop_is_text_args=record
-  a_gen:p_vnodeop_desc;
-  a_vp :p_vnode;
- end;
+ vop_islocked_t     =function(ap:p_vop_islocked_args):Integer;
+ vop_lookup_t       =function(ap:p_vop_lookup_args):Integer;
+ vop_create_t       =function(ap:p_vop_create_args):Integer;
+ vop_whiteout_t     =function(ap:p_vop_whiteout_args):Integer;
+ vop_mknod_t        =function(ap:p_vop_mknod_args):Integer;
+ vop_open_t         =function(ap:p_vop_open_args):Integer;
+ vop_close_t        =function(ap:p_vop_close_args):Integer;
+ vop_access_t       =function(ap:p_vop_access_args):Integer;
+ vop_accessx_t      =function(ap:p_vop_accessx_args):Integer;
+ vop_getattr_t      =function(ap:p_vop_getattr_args):Integer;
+ vop_setattr_t      =function(ap:p_vop_setattr_args):Integer;
+ vop_markatime_t    =function(ap:p_vop_markatime_args):Integer;
+ vop_read_t         =function(ap:p_vop_read_args):Integer;
+ vop_write_t        =function(ap:p_vop_write_args):Integer;
+ vop_ioctl_t        =function(ap:p_vop_ioctl_args):Integer;
+ vop_poll_t         =function(ap:p_vop_poll_args):Integer;
+ vop_kqfilter_t     =function(ap:p_vop_kqfilter_args):Integer;
+ vop_revoke_t       =function(ap:p_vop_revoke_args):Integer;
+ vop_fsync_t        =function(ap:p_vop_fsync_args):Integer;
+ vop_remove_t       =function(ap:p_vop_remove_args):Integer;
+ vop_link_t         =function(ap:p_vop_link_args):Integer;
+ vop_rename_t       =function(ap:p_vop_rename_args):Integer;
+ vop_mkdir_t        =function(ap:p_vop_mkdir_args):Integer;
+ vop_rmdir_t        =function(ap:p_vop_rmdir_args):Integer;
+ vop_symlink_t      =function(ap:p_vop_symlink_args):Integer;
+ vop_readdir_t      =function(ap:p_vop_readdir_args):Integer;
+ vop_readlink_t     =function(ap:p_vop_readlink_args):Integer;
+ vop_inactive_t     =function(ap:p_vop_inactive_args):Integer;
+ vop_reclaim_t      =function(ap:p_vop_reclaim_args):Integer;
+ vop_lock1_t        =function(ap:p_vop_lock1_args):Integer;
+ vop_unlock_t       =function(ap:p_vop_unlock_args):Integer;
+ vop_bmap_t         =function(ap:p_vop_bmap_args):Integer;
+ vop_strategy_t     =function(ap:p_vop_strategy_args):Integer;
+ vop_getwritemount_t=function(ap:p_vop_getwritemount_args):Integer;
+ vop_print_t        =function(ap:p_vop_print_args):Integer;
+ vop_pathconf_t     =function(ap:p_vop_pathconf_args):Integer;
+ vop_advlock_t      =function(ap:p_vop_advlock_args):Integer;
+ vop_advlockasync_t =function(ap:p_vop_advlockasync_args):Integer;
+ vop_advlockpurge_t =function(ap:p_vop_advlockpurge_args):Integer;
+ vop_reallocblks_t  =function(ap:p_vop_reallocblks_args):Integer;
+ vop_getpages_t     =function(ap:p_vop_getpages_args):Integer;
+ vop_putpages_t     =function(ap:p_vop_putpages_args):Integer;
+ vop_getacl_t       =function(ap:p_vop_getacl_args):Integer;
+ vop_setacl_t       =function(ap:p_vop_setacl_args):Integer;
+ vop_aclcheck_t     =function(ap:p_vop_aclcheck_args):Integer;
+ vop_closeextattr_t =function(ap:p_vop_closeextattr_args):Integer;
+ vop_getextattr_t   =function(ap:p_vop_getextattr_args):Integer;
+ vop_listextattr_t  =function(ap:p_vop_listextattr_args):Integer;
+ vop_openextattr_t  =function(ap:p_vop_openextattr_args):Integer;
+ vop_deleteextattr_t=function(ap:p_vop_deleteextattr_args):Integer;
+ vop_setextattr_t   =function(ap:p_vop_setextattr_args):Integer;
+ vop_setlabel_t     =function(ap:p_vop_setlabel_args):Integer;
+ vop_vptofh_t       =function(ap:p_vop_vptofh_args):Integer;
+ vop_vptocnp_t      =function(ap:p_vop_vptocnp_args):Integer;
+ vop_allocate_t     =function(ap:p_vop_allocate_args):Integer;
+ vop_unp_bind_t     =function(ap:p_vop_unp_bind_args):Integer;
+ vop_unp_connect_t  =function(ap:p_vop_unp_connect_args):Integer;
+ vop_unp_detach_t   =function(ap:p_vop_unp_detach_args):Integer;
 
- p_vop_set_text_args=^vop_set_text_args;
- vop_set_text_args=record
-  a_gen:p_vnodeop_desc;
-  a_vp :p_vnode;
- end;
-
- p_vop_unset_text_args=^vop_unset_text_args;
- vop_unset_text_args=record
-  a_gen:p_vnodeop_desc;
-  a_vp :p_vnode;
- end;
-
- p_vop_get_writecount_args=^vop_get_writecount_args;
- vop_get_writecount_args=record
-  a_gen       :p_vnodeop_desc;
-  a_vp        :p_vnode;
-  a_writecount:PInteger;
- end;
-
- p_vop_add_writecount_args=^vop_add_writecount_args;
- vop_add_writecount_args=record
-  a_gen:p_vnodeop_desc;
-  a_vp :p_vnode;
-  a_inc:Integer;
- end;
-
- vop_islocked_t      =function(ap:p_vop_islocked_args):Integer;
- vop_lookup_t        =function(ap:p_vop_lookup_args):Integer;
- vop_cachedlookup_t  =function(ap:p_vop_cachedlookup_args):Integer;
- vop_create_t        =function(ap:p_vop_create_args):Integer;
- vop_whiteout_t      =function(ap:p_vop_whiteout_args):Integer;
- vop_mknod_t         =function(ap:p_vop_mknod_args):Integer;
- vop_open_t          =function(ap:p_vop_open_args):Integer;
- vop_close_t         =function(ap:p_vop_close_args):Integer;
- vop_access_t        =function(ap:p_vop_access_args):Integer;
- vop_accessx_t       =function(ap:p_vop_accessx_args):Integer;
- vop_getattr_t       =function(ap:p_vop_getattr_args):Integer;
- vop_setattr_t       =function(ap:p_vop_setattr_args):Integer;
- vop_markatime_t     =function(ap:p_vop_markatime_args):Integer;
- vop_read_t          =function(ap:p_vop_read_args):Integer;
- vop_write_t         =function(ap:p_vop_write_args):Integer;
- vop_ioctl_t         =function(ap:p_vop_ioctl_args):Integer;
- vop_poll_t          =function(ap:p_vop_poll_args):Integer;
- vop_kqfilter_t      =function(ap:p_vop_kqfilter_args):Integer;
- vop_revoke_t        =function(ap:p_vop_revoke_args):Integer;
- vop_fsync_t         =function(ap:p_vop_fsync_args):Integer;
- vop_remove_t        =function(ap:p_vop_remove_args):Integer;
- vop_link_t          =function(ap:p_vop_link_args):Integer;
- vop_rename_t        =function(ap:p_vop_rename_args):Integer;
- vop_mkdir_t         =function(ap:p_vop_mkdir_args):Integer;
- vop_rmdir_t         =function(ap:p_vop_rmdir_args):Integer;
- vop_symlink_t       =function(ap:p_vop_symlink_args):Integer;
- vop_readdir_t       =function(ap:p_vop_readdir_args):Integer;
- vop_readlink_t      =function(ap:p_vop_readlink_args):Integer;
- vop_inactive_t      =function(ap:p_vop_inactive_args):Integer;
- vop_reclaim_t       =function(ap:p_vop_reclaim_args):Integer;
- vop_lock1_t         =function(ap:p_vop_lock1_args):Integer;
- vop_unlock_t        =function(ap:p_vop_unlock_args):Integer;
- vop_bmap_t          =function(ap:p_vop_bmap_args):Integer;
- vop_strategy_t      =function(ap:p_vop_strategy_args):Integer;
- vop_getwritemount_t =function(ap:p_vop_getwritemount_args):Integer;
- vop_print_t         =function(ap:p_vop_print_args):Integer;
- vop_pathconf_t      =function(ap:p_vop_pathconf_args):Integer;
- vop_advlock_t       =function(ap:p_vop_advlock_args):Integer;
- vop_advlockasync_t  =function(ap:p_vop_advlockasync_args):Integer;
- vop_advlockpurge_t  =function(ap:p_vop_advlockpurge_args):Integer;
- vop_reallocblks_t   =function(ap:p_vop_reallocblks_args):Integer;
- vop_getpages_t      =function(ap:p_vop_getpages_args):Integer;
- vop_putpages_t      =function(ap:p_vop_putpages_args):Integer;
- vop_getacl_t        =function(ap:p_vop_getacl_args):Integer;
- vop_setacl_t        =function(ap:p_vop_setacl_args):Integer;
- vop_aclcheck_t      =function(ap:p_vop_aclcheck_args):Integer;
- vop_closeextattr_t  =function(ap:p_vop_closeextattr_args):Integer;
- vop_getextattr_t    =function(ap:p_vop_getextattr_args):Integer;
- vop_listextattr_t   =function(ap:p_vop_listextattr_args):Integer;
- vop_openextattr_t   =function(ap:p_vop_openextattr_args):Integer;
- vop_deleteextattr_t =function(ap:p_vop_deleteextattr_args):Integer;
- vop_setextattr_t    =function(ap:p_vop_setextattr_args):Integer;
- vop_setlabel_t      =function(ap:p_vop_setlabel_args):Integer;
- vop_vptofh_t        =function(ap:p_vop_vptofh_args):Integer;
- vop_vptocnp_t       =function(ap:p_vop_vptocnp_args):Integer;
- vop_allocate_t      =function(ap:p_vop_allocate_args):Integer;
- vop_advise_t        =function(ap:p_vop_advise_args):Integer;
- vop_unp_bind_t      =function(ap:p_vop_unp_bind_args):Integer;
- vop_unp_connect_t   =function(ap:p_vop_unp_connect_args):Integer;
- vop_unp_detach_t    =function(ap:p_vop_unp_detach_args):Integer;
- vop_is_text_t       =function(ap:p_vop_is_text_args):Integer;
- vop_set_text_t      =function(ap:p_vop_set_text_args):Integer;
- vop_unset_text_t    =function(ap:p_vop_unset_text_args):Integer;
- vop_get_writecount_t=function(ap:p_vop_get_writecount_args):Integer;
- vop_add_writecount_t=function(ap:p_vop_add_writecount_args):Integer;
-
-function VOP_ISLOCKED      (vp:p_vnode):Integer;
-function VOP_LOOKUP        (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
-function VOP_CACHEDLOOKUP  (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
-function VOP_CREATE        (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
-function VOP_WHITEOUT      (dvp:p_vnode;cnp:p_componentname;flags:Integer):Integer;
-function VOP_MKNOD         (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
-function VOP_OPEN          (vp:p_vnode;mode:Integer;fp:p_file):Integer;
-function VOP_CLOSE         (vp:p_vnode;fflag:Integer):Integer;
-function VOP_ACCESS        (vp:p_vnode;accmode:accmode_t):Integer;
-function VOP_ACCESSX       (vp:p_vnode;accmode:accmode_t):Integer;
-function VOP_GETATTR       (vp:p_vnode;vap:p_vattr):Integer;
-function VOP_SETATTR       (vp:p_vnode;vap:p_vattr):Integer;
-function VOP_MARKATIME     (vp:p_vnode):Integer;
-function VOP_READ          (vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
-function VOP_WRITE         (vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
-function VOP_IOCTL         (vp:p_vnode;command:PtrUint;data:Pointer;fflag:Integer):Integer;
-function VOP_POLL          (vp:p_vnode;events:Integer):Integer;
-function VOP_KQFILTER      (vp:p_vnode;kn:p_knote):Integer;
-function VOP_REVOKE        (vp:p_vnode;flags:Integer):Integer;
-function VOP_FSYNC         (vp:p_vnode;waitfor:Integer):Integer;
-function VOP_REMOVE        (dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
-function VOP_LINK          (tdvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
-function VOP_RENAME        (fdvp:p_vnode;fvp:p_vnode;fcnp:p_componentname;tdvp:p_vnode;tvp:p_vnode;tcnp:p_componentname):Integer;
-function VOP_MKDIR         (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
-function VOP_RMDIR         (dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
-function VOP_SYMLINK       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;target:PChar):Integer;
-function VOP_READDIR       (vp:p_vnode;uio:p_uio;eofflag:PInteger;ncookies:PInteger;cookies:PPPtrUint):Integer;
-function VOP_READLINK      (vp:p_vnode;uio:p_uio):Integer;
-function VOP_INACTIVE      (vp:p_vnode):Integer;
-function VOP_RECLAIM       (vp:p_vnode):Integer;
-function VOP_LOCK          (vp:p_vnode;flags:Integer;_file:PChar;line:Integer):Integer;
-function VOP_UNLOCK        (vp:p_vnode;flags:Integer):Integer;
-function VOP_BMAP          (vp:p_vnode;bn:daddr_t;bop:pp_bufobj;bnp:p_daddr_t;runp:PInteger;runb:PInteger):Integer;
-function VOP_STRATEGY      (vp:p_vnode;bp:p_buf):Integer;
-function VOP_GETWRITEMOUNT (vp:p_vnode;mpp:pp_mount):Integer;
-function VOP_PRINT         (vp:p_vnode):Integer;
-function VOP_PATHCONF      (vp:p_vnode;name:Integer;retval:PPtrUint):Integer;
-function VOP_ADVLOCK       (vp:p_vnode;id:Pointer;op:Integer;fl:p_flock;flags:Integer):Integer;
-function VOP_ADVLOCKASYNC  (vp:p_vnode;id:Pointer;op:Integer;fl:p_flock;flags:Integer;task:p_task;cookiep:PPointer):Integer;
-function VOP_ADVLOCKPURGE  (vp:p_vnode):Integer;
-function VOP_REALLOCBLKS   (vp:p_vnode;buflist:p_cluster_save):Integer;
-function VOP_GETPAGES      (vp:p_vnode;m:p_vm_page_t;count:Integer;reqpage:Integer;offset:PtrUint):Integer;
-function VOP_PUTPAGES      (vp:p_vnode;m:p_vm_page_t;count:Integer;sync:Integer;rtvals:PInteger;offset:PtrUint):Integer;
-function VOP_GETACL        (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
-function VOP_SETACL        (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
-function VOP_ACLCHECK      (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
-function VOP_CLOSEEXTATTR  (vp:p_vnode;commit:Integer):Integer;
-function VOP_GETEXTATTR    (vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio;size:PPtrUint):Integer;
-function VOP_LISTEXTATTR   (vp:p_vnode;attrnamespace:Integer;uio:p_uio;size:PPtrUint):Integer;
-function VOP_OPENEXTATTR   (vp:p_vnode):Integer;
-function VOP_DELETEEXTATTR (vp:p_vnode;attrnamespace:Integer;name:PChar):Integer;
-function VOP_SETEXTATTR    (vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio):Integer;
-function VOP_SETLABEL      (vp:p_vnode;_label:p_label):Integer;
-function VOP_VPTOFH        (vp:p_vnode;fhp:p_fid):Integer;
-function VOP_VPTOCNP       (vp:p_vnode;vpp:pp_vnode;buf:PChar;buflen:PInteger):Integer;
-function VOP_ALLOCATE      (vp:p_vnode;offset:PPtrUint;len:PPtrUint):Integer;
-function VOP_ADVISE        (vp:p_vnode;start:PtrUint;__end:PtrUint;advice:Integer):Integer;
-function VOP_UNP_BIND      (vp:p_vnode;socket:p_socket):Integer;
-function VOP_UNP_CONNECT   (vp:p_vnode;socket:pp_socket):Integer;
-function VOP_UNP_DETACH    (vp:p_vnode):Integer;
-function VOP_IS_TEXT       (vp:p_vnode):Integer;
-function VOP_SET_TEXT      (vp:p_vnode):Integer;
-function VOP_UNSET_TEXT    (vp:p_vnode):Integer;
-function VOP_GET_WRITECOUNT(vp:p_vnode;writecount:PInteger):Integer;
-function VOP_ADD_WRITECOUNT(vp:p_vnode;inc:Integer):Integer;
+function VOP_ISLOCKED     (vp:p_vnode):Integer;
+function VOP_LOOKUP       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
+function VOP_CREATE       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
+function VOP_WHITEOUT     (dvp:p_vnode;cnp:p_componentname;flags:Integer):Integer;
+function VOP_MKNOD        (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
+function VOP_OPEN         (vp:p_vnode;mode:Integer;fp:p_file):Integer;
+function VOP_CLOSE        (vp:p_vnode;fflag:Integer):Integer;
+function VOP_ACCESS       (vp:p_vnode;accmode:accmode_t):Integer;
+function VOP_ACCESSX      (vp:p_vnode;accmode:accmode_t):Integer;
+function VOP_GETATTR      (vp:p_vnode;vap:p_vattr):Integer;
+function VOP_SETATTR      (vp:p_vnode;vap:p_vattr):Integer;
+function VOP_MARKATIME    (vp:p_vnode):Integer;
+function VOP_READ         (vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
+function VOP_WRITE        (vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
+function VOP_IOCTL        (vp:p_vnode;command:PtrUint;data:Pointer;fflag:Integer):Integer;
+function VOP_POLL         (vp:p_vnode;events:Integer):Integer;
+function VOP_KQFILTER     (vp:p_vnode;kn:p_knote):Integer;
+function VOP_REVOKE       (vp:p_vnode;flags:Integer):Integer;
+function VOP_FSYNC        (vp:p_vnode;waitfor:Integer):Integer;
+function VOP_REMOVE       (dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
+function VOP_LINK         (tdvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
+function VOP_RENAME       (fdvp:p_vnode;fvp:p_vnode;fcnp:p_componentname;tdvp:p_vnode;tvp:p_vnode;tcnp:p_componentname):Integer;
+function VOP_MKDIR        (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
+function VOP_RMDIR        (dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
+function VOP_SYMLINK      (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;target:PChar):Integer;
+function VOP_READDIR      (vp:p_vnode;uio:p_uio;eofflag:PInteger;ncookies:PInteger;cookies:PPPtrUint):Integer;
+function VOP_READLINK     (vp:p_vnode;uio:p_uio):Integer;
+function VOP_INACTIVE     (vp:p_vnode):Integer;
+function VOP_RECLAIM      (vp:p_vnode):Integer;
+function VOP_LOCK         (vp:p_vnode;flags:Integer;_file:PChar;line:Integer):Integer;
+function VOP_UNLOCK       (vp:p_vnode;flags:Integer):Integer;
+function VOP_BMAP         (vp:p_vnode;bn:daddr_t;bop:pp_bufobj;bnp:p_daddr_t;runp:PInteger;runb:PInteger):Integer;
+function VOP_STRATEGY     (vp:p_vnode;bp:p_buf):Integer;
+function VOP_GETWRITEMOUNT(vp:p_vnode;mpp:pp_mount):Integer;
+function VOP_PRINT        (vp:p_vnode):Integer;
+function VOP_PATHCONF     (vp:p_vnode;name:Integer;retval:PPtrUint):Integer;
+function VOP_ADVLOCK      (vp:p_vnode;id:Pointer;op:Integer;fl:p_flock;flags:Integer):Integer;
+function VOP_ADVLOCKASYNC (vp:p_vnode;id:Pointer;op:Integer;fl:p_flock;flags:Integer;task:p_task;cookiep:PPointer):Integer;
+function VOP_ADVLOCKPURGE (vp:p_vnode):Integer;
+function VOP_REALLOCBLKS  (vp:p_vnode;buflist:p_cluster_save):Integer;
+function VOP_GETPAGES     (vp:p_vnode;m:p_vm_page_t;count:Integer;reqpage:Integer;offset:PtrUint):Integer;
+function VOP_PUTPAGES     (vp:p_vnode;m:p_vm_page_t;count:Integer;sync:Integer;rtvals:PInteger;offset:PtrUint):Integer;
+function VOP_GETACL       (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
+function VOP_SETACL       (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
+function VOP_ACLCHECK     (vp:p_vnode;_type:acl_type_t;aclp:p_acl):Integer;
+function VOP_CLOSEEXTATTR (vp:p_vnode;commit:Integer):Integer;
+function VOP_GETEXTATTR   (vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio;size:PPtrUint):Integer;
+function VOP_LISTEXTATTR  (vp:p_vnode;attrnamespace:Integer;uio:p_uio;size:PPtrUint):Integer;
+function VOP_OPENEXTATTR  (vp:p_vnode):Integer;
+function VOP_DELETEEXTATTR(vp:p_vnode;attrnamespace:Integer;name:PChar):Integer;
+function VOP_SETEXTATTR   (vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio):Integer;
+function VOP_SETLABEL     (vp:p_vnode;_label:p_label):Integer;
+function VOP_VPTOFH       (vp:p_vnode;fhp:p_fid):Integer;
+function VOP_VPTOCNP      (vp:p_vnode;vpp:pp_vnode;buf:PChar;buflen:PInteger):Integer;
+function VOP_ALLOCATE     (vp:p_vnode;offset:PPtrUint;len:PPtrUint):Integer;
+function VOP_UNP_BIND     (vp:p_vnode;socket:p_socket):Integer;
+function VOP_UNP_CONNECT  (vp:p_vnode;socket:pp_socket):Integer;
+function VOP_UNP_DETACH   (vp:p_vnode):Integer;
 
 const
- vop_islocked_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_islocked_args(nil)^.a_vp)),Byte(-1));
- vop_lookup_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_lookup_args(nil)^.a_dvp)),Byte(-1));
- vop_cachedlookup_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_cachedlookup_args(nil)^.a_dvp)),Byte(-1));
- vop_create_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_create_args(nil)^.a_dvp)),Byte(-1));
- vop_whiteout_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_whiteout_args(nil)^.a_dvp)),Byte(-1));
- vop_mknod_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_mknod_args(nil)^.a_dvp)),Byte(-1));
- vop_open_vp_offsets          :array[0..1] of Byte=(Byte(ptrint(@p_vop_open_args(nil)^.a_vp)),Byte(-1));
- vop_close_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_close_args(nil)^.a_vp)),Byte(-1));
- vop_access_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_access_args(nil)^.a_vp)),Byte(-1));
- vop_accessx_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_accessx_args(nil)^.a_vp)),Byte(-1));
- vop_getattr_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_getattr_args(nil)^.a_vp)),Byte(-1));
- vop_setattr_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_setattr_args(nil)^.a_vp)),Byte(-1));
- vop_markatime_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_markatime_args(nil)^.a_vp)),Byte(-1));
- vop_read_vp_offsets          :array[0..1] of Byte=(Byte(ptrint(@p_vop_read_args(nil)^.a_vp)),Byte(-1));
- vop_write_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_write_args(nil)^.a_vp)),Byte(-1));
- vop_ioctl_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_ioctl_args(nil)^.a_vp)),Byte(-1));
- vop_poll_vp_offsets          :array[0..1] of Byte=(Byte(ptrint(@p_vop_poll_args(nil)^.a_vp)),Byte(-1));
- vop_kqfilter_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_kqfilter_args(nil)^.a_vp)),Byte(-1));
- vop_revoke_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_revoke_args(nil)^.a_vp)),Byte(-1));
- vop_fsync_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_fsync_args(nil)^.a_vp)),Byte(-1));
- vop_remove_vp_offsets        :array[0..2] of Byte=(Byte(ptrint(@p_vop_remove_args(nil)^.a_dvp)),Byte(ptrint(@p_vop_remove_args(nil)^.a_vp)),Byte(-1));
- vop_link_vp_offsets          :array[0..2] of Byte=(Byte(ptrint(@p_vop_link_args(nil)^.a_tdvp)),Byte(ptrint(@p_vop_link_args(nil)^.a_vp)),Byte(-1));
- vop_rename_vp_offsets        :array[0..4] of Byte=(Byte(ptrint(@p_vop_rename_args(nil)^.a_fdvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_fvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_tdvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_tvp)),Byte(-1));
- vop_mkdir_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_mkdir_args(nil)^.a_dvp)),Byte(-1));
- vop_rmdir_vp_offsets         :array[0..2] of Byte=(Byte(ptrint(@p_vop_rmdir_args(nil)^.a_dvp)),Byte(ptrint(@p_vop_rmdir_args(nil)^.a_vp)),Byte(-1));
- vop_symlink_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_symlink_args(nil)^.a_dvp)),Byte(-1));
- vop_readdir_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_readdir_args(nil)^.a_vp)),Byte(-1));
- vop_readlink_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_readlink_args(nil)^.a_vp)),Byte(-1));
- vop_inactive_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_inactive_args(nil)^.a_vp)),Byte(-1));
- vop_reclaim_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_reclaim_args(nil)^.a_vp)),Byte(-1));
- vop_lock1_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_lock1_args(nil)^.a_vp)),Byte(-1));
- vop_unlock_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_unlock_args(nil)^.a_vp)),Byte(-1));
- vop_bmap_vp_offsets          :array[0..1] of Byte=(Byte(ptrint(@p_vop_bmap_args(nil)^.a_vp)),Byte(-1));
- vop_strategy_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_strategy_args(nil)^.a_vp)),Byte(-1));
- vop_getwritemount_vp_offsets :array[0..1] of Byte=(Byte(ptrint(@p_vop_getwritemount_args(nil)^.a_vp)),Byte(-1));
- vop_print_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_print_args(nil)^.a_vp)),Byte(-1));
- vop_pathconf_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_pathconf_args(nil)^.a_vp)),Byte(-1));
- vop_advlock_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlock_args(nil)^.a_vp)),Byte(-1));
- vop_advlockasync_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlockasync_args(nil)^.a_vp)),Byte(-1));
- vop_advlockpurge_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlockpurge_args(nil)^.a_vp)),Byte(-1));
- vop_reallocblks_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_reallocblks_args(nil)^.a_vp)),Byte(-1));
- vop_getpages_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_getpages_args(nil)^.a_vp)),Byte(-1));
- vop_putpages_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_putpages_args(nil)^.a_vp)),Byte(-1));
- vop_getacl_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_getacl_args(nil)^.a_vp)),Byte(-1));
- vop_setacl_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_setacl_args(nil)^.a_vp)),Byte(-1));
- vop_aclcheck_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_aclcheck_args(nil)^.a_vp)),Byte(-1));
- vop_closeextattr_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_closeextattr_args(nil)^.a_vp)),Byte(-1));
- vop_getextattr_vp_offsets    :array[0..1] of Byte=(Byte(ptrint(@p_vop_getextattr_args(nil)^.a_vp)),Byte(-1));
- vop_listextattr_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_listextattr_args(nil)^.a_vp)),Byte(-1));
- vop_openextattr_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_openextattr_args(nil)^.a_vp)),Byte(-1));
- vop_deleteextattr_vp_offsets :array[0..1] of Byte=(Byte(ptrint(@p_vop_deleteextattr_args(nil)^.a_vp)),Byte(-1));
- vop_setextattr_vp_offsets    :array[0..1] of Byte=(Byte(ptrint(@p_vop_setextattr_args(nil)^.a_vp)),Byte(-1));
- vop_setlabel_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_setlabel_args(nil)^.a_vp)),Byte(-1));
- vop_vptofh_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptofh_args(nil)^.a_vp)),Byte(-1));
- vop_vptocnp_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptocnp_args(nil)^.a_vp)),Byte(-1));
- vop_allocate_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_allocate_args(nil)^.a_vp)),Byte(-1));
- vop_advise_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_advise_args(nil)^.a_vp)),Byte(-1));
- vop_unp_bind_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_bind_args(nil)^.a_vp)),Byte(-1));
- vop_unp_connect_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_connect_args(nil)^.a_vp)),Byte(-1));
- vop_unp_detach_vp_offsets    :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_detach_args(nil)^.a_vp)),Byte(-1));
- vop_is_text_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_is_text_args(nil)^.a_vp)),Byte(-1));
- vop_set_text_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_set_text_args(nil)^.a_vp)),Byte(-1));
- vop_unset_text_vp_offsets    :array[0..1] of Byte=(Byte(ptrint(@p_vop_unset_text_args(nil)^.a_vp)),Byte(-1));
- vop_get_writecount_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_get_writecount_args(nil)^.a_vp)),Byte(-1));
- vop_add_writecount_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_add_writecount_args(nil)^.a_vp)),Byte(-1));
+ vop_islocked_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_islocked_args(nil)^.a_vp)),Byte(-1));
+ vop_lookup_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_lookup_args(nil)^.a_dvp)),Byte(-1));
+ vop_create_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_create_args(nil)^.a_dvp)),Byte(-1));
+ vop_whiteout_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_whiteout_args(nil)^.a_dvp)),Byte(-1));
+ vop_mknod_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_mknod_args(nil)^.a_dvp)),Byte(-1));
+ vop_open_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_open_args(nil)^.a_vp)),Byte(-1));
+ vop_close_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_close_args(nil)^.a_vp)),Byte(-1));
+ vop_access_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_access_args(nil)^.a_vp)),Byte(-1));
+ vop_accessx_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_accessx_args(nil)^.a_vp)),Byte(-1));
+ vop_getattr_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_getattr_args(nil)^.a_vp)),Byte(-1));
+ vop_setattr_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_setattr_args(nil)^.a_vp)),Byte(-1));
+ vop_markatime_vp_offsets    :array[0..1] of Byte=(Byte(ptrint(@p_vop_markatime_args(nil)^.a_vp)),Byte(-1));
+ vop_read_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_read_args(nil)^.a_vp)),Byte(-1));
+ vop_write_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_write_args(nil)^.a_vp)),Byte(-1));
+ vop_ioctl_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_ioctl_args(nil)^.a_vp)),Byte(-1));
+ vop_poll_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_poll_args(nil)^.a_vp)),Byte(-1));
+ vop_kqfilter_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_kqfilter_args(nil)^.a_vp)),Byte(-1));
+ vop_revoke_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_revoke_args(nil)^.a_vp)),Byte(-1));
+ vop_fsync_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_fsync_args(nil)^.a_vp)),Byte(-1));
+ vop_remove_vp_offsets       :array[0..2] of Byte=(Byte(ptrint(@p_vop_remove_args(nil)^.a_dvp)),Byte(ptrint(@p_vop_remove_args(nil)^.a_vp)),Byte(-1));
+ vop_link_vp_offsets         :array[0..2] of Byte=(Byte(ptrint(@p_vop_link_args(nil)^.a_tdvp)),Byte(ptrint(@p_vop_link_args(nil)^.a_vp)),Byte(-1));
+ vop_rename_vp_offsets       :array[0..4] of Byte=(Byte(ptrint(@p_vop_rename_args(nil)^.a_fdvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_fvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_tdvp)),Byte(ptrint(@p_vop_rename_args(nil)^.a_tvp)),Byte(-1));
+ vop_mkdir_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_mkdir_args(nil)^.a_dvp)),Byte(-1));
+ vop_rmdir_vp_offsets        :array[0..2] of Byte=(Byte(ptrint(@p_vop_rmdir_args(nil)^.a_dvp)),Byte(ptrint(@p_vop_rmdir_args(nil)^.a_vp)),Byte(-1));
+ vop_symlink_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_symlink_args(nil)^.a_dvp)),Byte(-1));
+ vop_readdir_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_readdir_args(nil)^.a_vp)),Byte(-1));
+ vop_readlink_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_readlink_args(nil)^.a_vp)),Byte(-1));
+ vop_inactive_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_inactive_args(nil)^.a_vp)),Byte(-1));
+ vop_reclaim_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_reclaim_args(nil)^.a_vp)),Byte(-1));
+ vop_lock1_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_lock1_args(nil)^.a_vp)),Byte(-1));
+ vop_unlock_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_unlock_args(nil)^.a_vp)),Byte(-1));
+ vop_bmap_vp_offsets         :array[0..1] of Byte=(Byte(ptrint(@p_vop_bmap_args(nil)^.a_vp)),Byte(-1));
+ vop_strategy_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_strategy_args(nil)^.a_vp)),Byte(-1));
+ vop_getwritemount_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_getwritemount_args(nil)^.a_vp)),Byte(-1));
+ vop_print_vp_offsets        :array[0..1] of Byte=(Byte(ptrint(@p_vop_print_args(nil)^.a_vp)),Byte(-1));
+ vop_pathconf_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_pathconf_args(nil)^.a_vp)),Byte(-1));
+ vop_advlock_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlock_args(nil)^.a_vp)),Byte(-1));
+ vop_advlockasync_vp_offsets :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlockasync_args(nil)^.a_vp)),Byte(-1));
+ vop_advlockpurge_vp_offsets :array[0..1] of Byte=(Byte(ptrint(@p_vop_advlockpurge_args(nil)^.a_vp)),Byte(-1));
+ vop_reallocblks_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_reallocblks_args(nil)^.a_vp)),Byte(-1));
+ vop_getpages_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_getpages_args(nil)^.a_vp)),Byte(-1));
+ vop_putpages_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_putpages_args(nil)^.a_vp)),Byte(-1));
+ vop_getacl_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_getacl_args(nil)^.a_vp)),Byte(-1));
+ vop_setacl_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_setacl_args(nil)^.a_vp)),Byte(-1));
+ vop_aclcheck_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_aclcheck_args(nil)^.a_vp)),Byte(-1));
+ vop_closeextattr_vp_offsets :array[0..1] of Byte=(Byte(ptrint(@p_vop_closeextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_getextattr_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_getextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_listextattr_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_listextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_openextattr_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_openextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_deleteextattr_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_deleteextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_setextattr_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_setextattr_args(nil)^.a_vp)),Byte(-1));
+ vop_setlabel_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_setlabel_args(nil)^.a_vp)),Byte(-1));
+ vop_vptofh_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptofh_args(nil)^.a_vp)),Byte(-1));
+ vop_vptocnp_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptocnp_args(nil)^.a_vp)),Byte(-1));
+ vop_allocate_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_allocate_args(nil)^.a_vp)),Byte(-1));
+ vop_unp_bind_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_bind_args(nil)^.a_vp)),Byte(-1));
+ vop_unp_connect_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_connect_args(nil)^.a_vp)),Byte(-1));
+ vop_unp_detach_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_unp_detach_args(nil)^.a_vp)),Byte(-1));
 
  vop_default_desc:t_vnodeop_desc=(
   vdesc_name                :'default';
@@ -759,14 +689,6 @@ const
   vdesc_vp_offsets          :@vop_lookup_vp_offsets;
   vdesc_flags               :0;
   vdesc_vpp_offset          :Integer(ptrint(@p_vop_lookup_args(nil)^.a_vpp));
- );
-
- vop_cachedlookup_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_cachedlookup';
-  vdesc_call                :@p_vop_vector(nil)^.vop_cachedlookup;
-  vdesc_vp_offsets          :@vop_cachedlookup_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :Integer(ptrint(@p_vop_cachedlookup_args(nil)^.a_vpp));
  );
 
  vop_create_desc:t_vnodeop_desc=(
@@ -1193,14 +1115,6 @@ const
   vdesc_vpp_offset          :-1;
  );
 
- vop_advise_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_advise';
-  vdesc_call                :@p_vop_vector(nil)^.vop_advise;
-  vdesc_vp_offsets          :@vop_advise_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
  vop_unp_bind_desc:t_vnodeop_desc=(
   vdesc_name                :'vop_unp_bind';
   vdesc_call                :@p_vop_vector(nil)^.vop_unp_bind;
@@ -1221,46 +1135,6 @@ const
   vdesc_name                :'vop_unp_detach';
   vdesc_call                :@p_vop_vector(nil)^.vop_unp_detach;
   vdesc_vp_offsets          :@vop_unp_detach_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_is_text_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_is_text';
-  vdesc_call                :@p_vop_vector(nil)^.vop_is_text;
-  vdesc_vp_offsets          :@vop_is_text_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_set_text_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_set_text';
-  vdesc_call                :@p_vop_vector(nil)^.vop_set_text;
-  vdesc_vp_offsets          :@vop_set_text_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_unset_text_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_unset_text';
-  vdesc_call                :@p_vop_vector(nil)^.vop_unset_text;
-  vdesc_vp_offsets          :@vop_unset_text_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_get_writecount_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_get_writecount';
-  vdesc_call                :@p_vop_vector(nil)^.vop_get_writecount;
-  vdesc_vp_offsets          :@vop_get_writecount_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_add_writecount_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_add_writecount';
-  vdesc_call                :@p_vop_vector(nil)^.vop_add_writecount;
-  vdesc_vp_offsets          :@vop_add_writecount_vp_offsets;
   vdesc_flags               :0;
   vdesc_vpp_offset          :-1;
  );
@@ -1324,23 +1198,6 @@ begin
  a.a_cnp:=cnp;
  s:=VFS_PROLOGUE(dvp^.v_mount);
  Result:=vop_lookup_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_CACHEDLOOKUP(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
-var
- c:Pointer;
- a:vop_cachedlookup_args;
- s:Boolean;
-begin
- c:=get_vp_cb(dvp,vop_cachedlookup_desc.vdesc_call);
- Assert(c<>nil,'VOP_CACHEDLOOKUP');
- a.a_gen:=@vop_cachedlookup_desc;
- a.a_dvp:=dvp;
- a.a_vpp:=vpp;
- a.a_cnp:=cnp;
- s:=VFS_PROLOGUE(dvp^.v_mount);
- Result:=vop_cachedlookup_t(c)(@a);
  VFS_EPILOGUE(s);
 end;
 
@@ -2262,24 +2119,6 @@ begin
  VFS_EPILOGUE(s);
 end;
 
-function VOP_ADVISE(vp:p_vnode;start:PtrUint;__end:PtrUint;advice:Integer):Integer;
-var
- c:Pointer;
- a:vop_advise_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_advise_desc.vdesc_call);
- Assert(c<>nil,'VOP_ADVISE');
- a.a_gen   :=@vop_advise_desc;
- a.a_vp    :=vp;
- a.a_start :=start;
- a.a___end :=__end;
- a.a_advice:=advice;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_advise_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
 function VOP_UNP_BIND(vp:p_vnode;socket:p_socket):Integer;
 var
  c:Pointer;
@@ -2324,83 +2163,6 @@ begin
  a.a_vp :=vp;
  s:=VFS_PROLOGUE(vp^.v_mount);
  Result:=vop_unp_detach_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_IS_TEXT(vp:p_vnode):Integer;
-var
- c:Pointer;
- a:vop_is_text_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_is_text_desc.vdesc_call);
- Assert(c<>nil,'VOP_IS_TEXT');
- a.a_gen:=@vop_is_text_desc;
- a.a_vp :=vp;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_is_text_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_SET_TEXT(vp:p_vnode):Integer;
-var
- c:Pointer;
- a:vop_set_text_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_set_text_desc.vdesc_call);
- Assert(c<>nil,'VOP_SET_TEXT');
- a.a_gen:=@vop_set_text_desc;
- a.a_vp :=vp;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_set_text_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_UNSET_TEXT(vp:p_vnode):Integer;
-var
- c:Pointer;
- a:vop_unset_text_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_unset_text_desc.vdesc_call);
- Assert(c<>nil,'VOP_UNSET_TEXT');
- a.a_gen:=@vop_unset_text_desc;
- a.a_vp :=vp;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_unset_text_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_GET_WRITECOUNT(vp:p_vnode;writecount:PInteger):Integer;
-var
- c:Pointer;
- a:vop_get_writecount_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_get_writecount_desc.vdesc_call);
- Assert(c<>nil,'VOP_GET_WRITECOUNT');
- a.a_gen       :=@vop_get_writecount_desc;
- a.a_vp        :=vp;
- a.a_writecount:=writecount;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_get_writecount_t(c)(@a);
- VFS_EPILOGUE(s);
-end;
-
-function VOP_ADD_WRITECOUNT(vp:p_vnode;inc:Integer):Integer;
-var
- c:Pointer;
- a:vop_add_writecount_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_add_writecount_desc.vdesc_call);
- Assert(c<>nil,'VOP_ADD_WRITECOUNT');
- a.a_gen:=@vop_add_writecount_desc;
- a.a_vp :=vp;
- a.a_inc:=inc;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_add_writecount_t(c)(@a);
  VFS_EPILOGUE(s);
 end;
 

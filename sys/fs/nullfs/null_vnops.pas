@@ -11,7 +11,6 @@ uses
  vfs_default;
 
 function null_bypass(ap:p_vop_generic_args):Integer;
-function null_add_writecount(ap:p_vop_add_writecount_args):Integer;
 function null_lookup(ap:p_vop_lookup_args):Integer;
 function null_open(ap:p_vop_open_args):Integer;
 function null_setattr(ap:p_vop_setattr_args):Integer;
@@ -38,7 +37,6 @@ const
 
   vop_islocked      :@vop_stdislocked;
   vop_lookup        :@null_lookup;
-  vop_cachedlookup  :nil;
   vop_create        :nil;
   vop_whiteout      :nil;
   vop_mknod         :nil;
@@ -92,15 +90,9 @@ const
   vop_vptofh        :@null_vptofh;
   vop_vptocnp       :@null_vptocnp;
   vop_allocate      :nil;
-  vop_advise        :nil;
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
-  vop_is_text       :nil;
-  vop_set_text      :nil;
-  vop_unset_text    :nil;
-  vop_get_writecount:nil;
-  vop_add_writecount:@null_add_writecount;
  );
 
 implementation
@@ -263,33 +255,6 @@ begin
  end;
 
 _out:
- Exit(error);
-end;
-
-function null_add_writecount(ap:p_vop_add_writecount_args):Integer;
-var
- lvp,vp:p_vnode;
- error:Integer;
-begin
- vp:=ap^.a_vp;
- lvp:=NULLVPTOLOWERVP(vp);
-
- if (lvp=nil) then
- begin
-  Inc(ap^.a_vp^.v_writecount,ap^.a_inc);
-  Exit(0);
- end;
-
- Assert(vp^.v_writecount + ap^.a_inc >= 0,'wrong writecount inc');
- if (vp^.v_writecount > 0) and (vp^.v_writecount + ap^.a_inc=0) then
-  error:=VOP_ADD_WRITECOUNT(lvp, -1)
- else
- if (vp^.v_writecount=0) and (vp^.v_writecount + ap^.a_inc > 0) then
-  error:=VOP_ADD_WRITECOUNT(lvp, 1)
- else
-  error:=0;
- if (error=0) then
-  Inc(vp^.v_writecount,ap^.a_inc);
  Exit(error);
 end;
 
@@ -812,15 +777,6 @@ begin
  //vp^.v_object:=nil;
  vp^.v_vnlock:=@vp^.v_lock;
  VI_UNLOCK(vp);
-
- {
-  * If we were opened for write, we leased one write reference
-  * to the lower vnode.  If this is a reclamation due to the
-  * forced unmount, undo the reference now.
-  }
- if (vp^.v_writecount > 0) then
- if (lowervp<>nil) then
-  VOP_ADD_WRITECOUNT(lowervp, -1);
 
  if (lowervp<>nil) then
  begin
