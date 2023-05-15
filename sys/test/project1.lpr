@@ -276,6 +276,17 @@ var
  c:Integer;
 begin
  td:=curkthread;
+
+ case RawByteString(namep) of
+  '.',
+  '..':
+    begin
+     Writeln(Space(s),namep,' |');
+     Exit;
+    end;
+  else;
+ end;
+
  err:=sys_lstat(PChar(dirp+namep),@sb);
 
  //if (err=45) then
@@ -324,13 +335,7 @@ begin
 
     while (dir<(@buf+c)) do
     begin
-     case RawByteString(dir^.d_name) of
-      '.':;
-      '..':;
-      else
-       //Writeln(dir^.d_name);
-       test_dirs(IncludeUnixTrailing(dirp+namep),RawByteString(dir^.d_name),s+2);
-     end;
+     test_dirs(IncludeUnixTrailing(dirp+namep),RawByteString(dir^.d_name),s+2);
 
      PByte(dir):=PByte(dir)+dir^.d_reclen;
     end;
@@ -372,6 +377,16 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
+
+  Writeln('sys_mkdir=',sys_mkdir('/test',&777));
+  Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
+
+  Writeln('sys_rmdir=',sys_rmdir('/test/test'));
+
+  Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
+
+  Writeln('sys_unlink=',sys_unlink('/test/test2'));
+
   Writeln('[--test_dirs--]');
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');

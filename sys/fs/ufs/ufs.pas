@@ -12,6 +12,7 @@ uses
  vdirent,
  vfile,
  time,
+ kern_mtx,
  kern_sx;
 
 type
@@ -40,7 +41,6 @@ type
  end;
 
  t_ufs_dirent=record
-  //ufs_cdp    :p_cdev_priv;
   ufs_inode  :Integer;
   ufs_flags  :Integer;
   ufs_ref    :Integer;
@@ -67,6 +67,7 @@ type
   ufs_generation:DWORD       ;
   ufs_ref       :Integer     ;
   ufs_lock      :t_sx        ;
+  ufs_path      :PChar       ; //host path
  end;
 
 function ufs_init(cf:p_vfsconf):Integer;
@@ -75,6 +76,7 @@ function ufs_uinit(cf:p_vfsconf):Integer;
 function ufs_mount(mp:p_mount):Integer;
 function ufs_root(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
 function ufs_unmount(mp:p_mount;mntflags:Integer):Integer;
+function ufs_statfs(mp:p_mount;sbp:p_statfs):Integer;
 
 const
  _ufs_vfsops:vfsops=(
@@ -83,7 +85,7 @@ const
   vfs_unmount        :@ufs_unmount;
   vfs_root           :@ufs_root;
   vfs_quotactl       :nil;
-  vfs_statfs         :nil; //@devfs_statfs;
+  vfs_statfs         :@ufs_statfs;
   vfs_sync           :nil;
   vfs_vget           :nil;
   vfs_fhtovp         :nil;
@@ -120,15 +122,18 @@ function  ufs_mp_drop(p:p_ufs_mount):Boolean;
 
 function  ufs_allocv(de:p_ufs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer;
 
+var
+ ufs_interlock:mtx;
+
 const
  UFS_ROOTINO=0;
 
- DE_WHITEOUT=$01;
- DE_DOT     =$02;
- DE_DOTDOT  =$04;
- DE_DOOMED  =$08;
- DE_COVERED =$10;
- DE_USER    =$20;
+ UFS_WHITEOUT=$01;
+ UFS_DOT     =$02;
+ UFS_DOTDOT  =$04;
+ UFS_DOOMED  =$08;
+ UFS_COVERED =$10;
+ UFS_USER    =$20;
 
 implementation
 
@@ -139,12 +144,10 @@ uses
  vfs_vnops,
  vnode_if,
  ufs_vnops,
- kern_mtx,
  kern_id;
 
 var
  ufs_inos:t_id_desc_table;
- ufs_interlock:mtx;
 
 function ufs_alloc_cdp_inode():Integer;
 begin
@@ -210,6 +213,7 @@ Result:=False;
  if (System.InterlockedDecrement(p^.ufs_ref)=0) then
  begin
   sx_destroy(@p^.ufs_lock);
+  FreeMem(p^.ufs_path);
   FreeMem(p);
   Result:=True;
  end;
@@ -220,7 +224,7 @@ var
  not_found:Integer;
 begin
  not_found:=0;
- if ((de^.ufs_flags and DE_DOOMED)<>0) then
+ if ((de^.ufs_flags and UFS_DOOMED)<>0) then
   not_found:=1;
 
  ufs_de_drop(de);
@@ -260,7 +264,7 @@ var
 begin
  dmp:=VFSTOUFS(mp);
 
- if ((de^.ufs_flags and DE_DOOMED)<>0) then
+ if ((de^.ufs_flags and UFS_DOOMED)<>0) then
  begin
   sx_xunlock(@dmp^.ufs_lock);
   Exit(ENOENT);
@@ -306,7 +310,7 @@ loop:
  end;
  mtx_unlock(ufs_interlock);
 
- error:=getnewvnode('ufs', mp, @ufs_vnodeops, @vp);
+ error:=getnewvnode('ufs', mp, @ufs_vnodeops_root, @vp);
  if (error<>0) then
  begin
   ufs_allocv_drop_refs(1, dmp, de);
@@ -377,6 +381,8 @@ var
  error:Integer;
  fmp:p_ufs_mount;
  rvp:p_vnode;
+ path:PChar;
+ plen:Integer;
 begin
 
  //if (devfs_unr=nil) then
@@ -384,18 +390,35 @@ begin
 
  error:=0;
 
+ if ((mp^.mnt_flag and MNT_UPDATE)<>0) then
+ begin
+  Exit(0);
+ end;
+
  if (mp^.mnt_optnew<>nil) then
  begin
   //if (vfs_filteropt(mp^.mnt_optnew, ufs_opts)<>0) then
   // Exit(EINVAL);
  end;
 
- if ((mp^.mnt_flag and MNT_UPDATE)<>0) then
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
-  Exit(0);
+  path:=nil;
+  plen:=0;
+ end else
+ begin
+  if (mp^.mnt_optnew=nil) then Exit(EINVAL);
+  if (vfs_getopt(mp^.mnt_optnew, 'from', @path, @plen)<>0) then Exit(EINVAL);
  end;
 
  fmp:=AllocMem(sizeof(t_ufs_mount));
+
+ if (path<>nil) and (plen<>0) then
+ begin
+  fmp^.ufs_path:=AllocMem(plen+1);
+  Move(path^,fmp^.ufs_path^,plen);
+ end;
+
  //fmp^.dm_idx:=alloc_unr(devfs_unr);
  sx_init(@fmp^.ufs_lock, 'ufsmount');
  fmp^.ufs_ref:=1;
@@ -411,10 +434,7 @@ begin
  fmp^.ufs_rootdir:=ufs_vmkdir(fmp, nil, 0, nil, UFS_ROOTINO);
 
  sx_xlock(@fmp^.ufs_lock);
-
- ufs_vmkdir(fmp,'dev' ,3,fmp^.ufs_rootdir,ufs_alloc_cdp_inode);
- ufs_vmkdir(fmp,'app0',4,fmp^.ufs_rootdir,ufs_alloc_cdp_inode);
-
+ ufs_vmkdir(fmp,'dev',3,fmp^.ufs_rootdir,ufs_alloc_cdp_inode);
  sx_xunlock(@fmp^.ufs_lock);
 
  error:=ufs_root(mp, LK_EXCLUSIVE, @rvp);
@@ -452,9 +472,6 @@ begin
  sx_xlock(@fmp^.ufs_lock);
 
  fmp^.ufs_mount:=nil;
-
- ufs_mp_hold(fmp);
-
  mp^.mnt_data:=nil;
 
  //idx:=fmp^.dm_idx;
@@ -465,6 +482,19 @@ begin
 
  ufs_mp_drop(fmp);
 
+ Exit(0);
+end;
+
+function ufs_statfs(mp:p_mount;sbp:p_statfs):Integer;
+begin
+ sbp^.f_flags :=0;
+ sbp^.f_bsize :=DEV_BSIZE;
+ sbp^.f_iosize:=DEV_BSIZE;
+ sbp^.f_blocks:=2;
+ sbp^.f_bfree :=0;
+ sbp^.f_bavail:=0;
+ sbp^.f_files :=0;
+ sbp^.f_ffree :=0;
  Exit(0);
 end;
 

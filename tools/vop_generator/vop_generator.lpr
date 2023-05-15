@@ -250,6 +250,7 @@ begin
          'vop_unset_text'    :state:=2; //skip
          'vop_get_writecount':state:=2; //skip
          'vop_add_writecount':state:=2; //skip
+         'vop_setlabel'      :state:=2; //skip
          'vop_spare4'        :state:=2; //skip
          'vop_spare5'        :state:=2; //skip
          else

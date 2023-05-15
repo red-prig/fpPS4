@@ -211,10 +211,9 @@ function  DEVFS_DMP_DROP(dmp:p_devfs_mount):Boolean;
 
 type
  p_dirlistent=^t_dirlistent;
- t_dirlistent=packed record
+ t_dirlistent=record
   dir   :PChar;
   refcnt:Integer;
-  _align:Integer;
   link  :LIST_ENTRY; //dirlistent
  end;
 

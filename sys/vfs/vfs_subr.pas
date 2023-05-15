@@ -2484,11 +2484,13 @@ begin
   }
  if (active<>0) then
   VOP_CLOSE(vp, FNONBLOCK);
+
  if (oweinact<>0) or (active<>0) then
  begin
   VI_LOCK(vp);
   if ((vp^.v_iflag and VI_DOINGINACT)=0) then
    vinactive(vp);
+
   VI_UNLOCK(vp);
  end;
  //if (vp^.v_type=VSOCK) then
@@ -2498,6 +2500,7 @@ begin
   }
  if (VOP_RECLAIM(vp)<>0) then
   Assert(false,'vgone: cannot reclaim');
+
  //if (mp<>nil) then
  // vn_finished_secondary_write(mp);
  //Assert(vp^.v_object=nil,'vop_reclaim left v_object vp=%p, tag=%s'));

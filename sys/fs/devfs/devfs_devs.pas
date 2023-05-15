@@ -276,22 +276,28 @@ begin
    Exit;
 
   de_dot:=TAILQ_FIRST(@de^.de_dlist);
-  Assert(de_dot<>nil, ('devfs_rmdir_empty: . missing'));
+  Assert(de_dot<>nil, 'devfs_rmdir_empty: . missing');
+
   de_dotdot:=TAILQ_NEXT(de_dot,@de_dot^.de_list);
-  Assert(de_dotdot<>nil, ('devfs_rmdir_empty: .. missing'));
-  { Exitif the directory is not empty. }
+  Assert(de_dotdot<>nil, 'devfs_rmdir_empty: .. missing');
+
+  { Exit if the directory is not empty. }
   if (TAILQ_NEXT(de_dotdot,@de_dotdot^.de_list)<>nil) then
    Exit;
 
   dd:=devfs_parent_dirent(de);
-  Assert(dd<>nil, ('devfs_rmdir_empty: nil dd'));
+  Assert(dd<>nil, 'devfs_rmdir_empty: nil dd');
+
   TAILQ_REMOVE(@de^.de_dlist,de_dot,@de_dot^.de_list);
   TAILQ_REMOVE(@de^.de_dlist,de_dotdot,@de_dotdot^.de_list);
   TAILQ_REMOVE(@dd^.de_dlist,de,@de^.de_list);
+
   DEVFS_DE_HOLD(dd);
-  devfs_delete(dm, de, DEVFS_DEL_NORECURSE);
-  devfs_delete(dm, de_dot, DEVFS_DEL_NORECURSE);
-  devfs_delete(dm, de_dotdot, DEVFS_DEL_NORECURSE);
+
+  devfs_delete(dm, de       ,DEVFS_DEL_NORECURSE);
+  devfs_delete(dm, de_dot   ,DEVFS_DEL_NORECURSE);
+  devfs_delete(dm, de_dotdot,DEVFS_DEL_NORECURSE);
+
   if (DEVFS_DE_DROP(dd)) then
   begin
    devfs_dirent_free(dd);

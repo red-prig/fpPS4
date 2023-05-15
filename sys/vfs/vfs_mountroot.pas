@@ -361,8 +361,6 @@ begin
 
  mount_print;
 
- //error:=vfs_mountroot_simple('nullfs','/','/',nil,{MNT_ROOTFS}0);
-
  error:=vfs_mountroot_simple('ufs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
 
@@ -376,8 +374,12 @@ begin
  //error:=vfs_mountroot_simple('ufs','/app0/test','/app0/test',nil,0);
  //if (error<>0) then goto _end;
 
- error:=vfs_mountroot_simple('devfs','/app0',nil,nil,0);
- if (error<>0) then goto _end;
+ error:=kern_mkdir('null',UIO_SYSSPACE,&777);
+ if (error=0) then
+ begin
+  error:=vfs_mountroot_simple('nullfs','/null','/dev',nil,0);
+  //error:=vfs_mountroot_simple('devfs','/app0',nil,nil,0);
+ end;
 
  mount_print;
 

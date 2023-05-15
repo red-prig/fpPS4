@@ -230,18 +230,27 @@ begin
  error:=vflush(mp, 1, flags);
  if (error<>0) then
   Exit(error);
+
  sx_xlock(@fmp^.dm_lock);
+
  devfs_cleanup(fmp);
  devfs_rules_cleanup(fmp);
+
  fmp^.dm_mount:=nil;
- Inc(fmp^.dm_holdcnt);
+
+ Dec(fmp^.dm_holdcnt);
  hold:=fmp^.dm_holdcnt;
+
  mp^.mnt_data:=nil;
  idx:=fmp^.dm_idx;
+
  sx_xunlock(@fmp^.dm_lock);
+
  free_unr(devfs_unr, idx);
+
  if (hold=0) then
   devfs_unmount_final(fmp);
+
  Exit(0);
 end;
 

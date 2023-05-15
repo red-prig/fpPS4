@@ -438,13 +438,6 @@ type
   a_uio          :p_uio;
  end;
 
- p_vop_setlabel_args=^vop_setlabel_args;
- vop_setlabel_args=record
-  a_gen  :p_vnodeop_desc;
-  a_vp   :p_vnode;
-  a_label:p_label;
- end;
-
  p_vop_vptofh_args=^vop_vptofh_args;
  vop_vptofh_args=record
   a_gen:p_vnodeop_desc;
@@ -540,7 +533,6 @@ type
  vop_openextattr_t  =function(ap:p_vop_openextattr_args):Integer;
  vop_deleteextattr_t=function(ap:p_vop_deleteextattr_args):Integer;
  vop_setextattr_t   =function(ap:p_vop_setextattr_args):Integer;
- vop_setlabel_t     =function(ap:p_vop_setlabel_args):Integer;
  vop_vptofh_t       =function(ap:p_vop_vptofh_args):Integer;
  vop_vptocnp_t      =function(ap:p_vop_vptocnp_args):Integer;
  vop_allocate_t     =function(ap:p_vop_allocate_args):Integer;
@@ -599,7 +591,6 @@ function VOP_LISTEXTATTR  (vp:p_vnode;attrnamespace:Integer;uio:p_uio;size:PPtrU
 function VOP_OPENEXTATTR  (vp:p_vnode):Integer;
 function VOP_DELETEEXTATTR(vp:p_vnode;attrnamespace:Integer;name:PChar):Integer;
 function VOP_SETEXTATTR   (vp:p_vnode;attrnamespace:Integer;name:PChar;uio:p_uio):Integer;
-function VOP_SETLABEL     (vp:p_vnode;_label:p_label):Integer;
 function VOP_VPTOFH       (vp:p_vnode;fhp:p_fid):Integer;
 function VOP_VPTOCNP      (vp:p_vnode;vpp:pp_vnode;buf:PChar;buflen:PInteger):Integer;
 function VOP_ALLOCATE     (vp:p_vnode;offset:PPtrUint;len:PPtrUint):Integer;
@@ -659,7 +650,6 @@ const
  vop_openextattr_vp_offsets  :array[0..1] of Byte=(Byte(ptrint(@p_vop_openextattr_args(nil)^.a_vp)),Byte(-1));
  vop_deleteextattr_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_deleteextattr_args(nil)^.a_vp)),Byte(-1));
  vop_setextattr_vp_offsets   :array[0..1] of Byte=(Byte(ptrint(@p_vop_setextattr_args(nil)^.a_vp)),Byte(-1));
- vop_setlabel_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_setlabel_args(nil)^.a_vp)),Byte(-1));
  vop_vptofh_vp_offsets       :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptofh_args(nil)^.a_vp)),Byte(-1));
  vop_vptocnp_vp_offsets      :array[0..1] of Byte=(Byte(ptrint(@p_vop_vptocnp_args(nil)^.a_vp)),Byte(-1));
  vop_allocate_vp_offsets     :array[0..1] of Byte=(Byte(ptrint(@p_vop_allocate_args(nil)^.a_vp)),Byte(-1));
@@ -1079,14 +1069,6 @@ const
   vdesc_name                :'vop_setextattr';
   vdesc_call                :@p_vop_vector(nil)^.vop_setextattr;
   vdesc_vp_offsets          :@vop_setextattr_vp_offsets;
-  vdesc_flags               :0;
-  vdesc_vpp_offset          :-1;
- );
-
- vop_setlabel_desc:t_vnodeop_desc=(
-  vdesc_name                :'vop_setlabel';
-  vdesc_call                :@p_vop_vector(nil)^.vop_setlabel;
-  vdesc_vp_offsets          :@vop_setlabel_vp_offsets;
   vdesc_flags               :0;
   vdesc_vpp_offset          :-1;
  );
@@ -2050,22 +2032,6 @@ begin
  Result:=vop_setextattr_t(c)(@a);
  VFS_EPILOGUE(s);
  vop_setextattr_post(@a,Result);
-end;
-
-function VOP_SETLABEL(vp:p_vnode;_label:p_label):Integer;
-var
- c:Pointer;
- a:vop_setlabel_args;
- s:Boolean;
-begin
- c:=get_vp_cb(vp,vop_setlabel_desc.vdesc_call);
- Assert(c<>nil,'VOP_SETLABEL');
- a.a_gen  :=@vop_setlabel_desc;
- a.a_vp   :=vp;
- a.a_label:=_label;
- s:=VFS_PROLOGUE(vp^.v_mount);
- Result:=vop_setlabel_t(c)(@a);
- VFS_EPILOGUE(s);
 end;
 
 function VOP_VPTOFH(vp:p_vnode;fhp:p_fid):Integer;

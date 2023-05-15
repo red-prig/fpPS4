@@ -86,7 +86,6 @@ const
   vop_openextattr   :nil;
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
-  vop_setlabel      :nil;
   vop_vptofh        :@null_vptofh;
   vop_vptocnp       :@null_vptocnp;
   vop_allocate      :nil;

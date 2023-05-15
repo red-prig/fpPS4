@@ -846,7 +846,7 @@ const
   (//[165]
      sy_narg:2;
      sy_call:nil;
-     sy_name:'sysarch'
+     sy_name:'sys_sysarch'
   ),
   (//[166]
      sy_narg:3;

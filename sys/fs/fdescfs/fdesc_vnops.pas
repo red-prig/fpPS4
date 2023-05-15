@@ -79,7 +79,6 @@ const
   vop_openextattr   :nil;
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
-  vop_setlabel      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :nil;
   vop_allocate      :nil;

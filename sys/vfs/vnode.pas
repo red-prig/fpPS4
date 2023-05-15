@@ -220,7 +220,6 @@ type
   vop_openextattr   :Pointer;
   vop_deleteextattr :Pointer;
   vop_setextattr    :Pointer;
-  vop_setlabel      :Pointer;
   vop_vptofh        :Pointer;
   vop_vptocnp       :Pointer;
   vop_allocate      :Pointer;

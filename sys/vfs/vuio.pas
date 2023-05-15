@@ -23,10 +23,9 @@ type
 
  pp_uio=^p_uio;
  p_uio=^t_uio;
- t_uio=packed record
+ t_uio=record
   uio_iov   :p_iovec; // scatter/gather list
   uio_iovcnt:Integer; // length of scatter/gather list
-  _align    :Integer;
   uio_offset:Int64;   // offset in target object
   uio_resid :Int64;   // remaining bytes to process
   uio_segflg:uio_seg; // address space

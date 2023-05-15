@@ -126,7 +126,7 @@ begin
  {
   * Get argument
   }
- error:=vfs_getopt(mp^.mnt_optnew, {'target'} 'fspath', @target, @len);
+ error:=vfs_getopt(mp^.mnt_optnew, {'target'} 'from', @target, @len);
  if (error<>0) or (target[len - 1]<>#0) then
   Exit(EINVAL);
 

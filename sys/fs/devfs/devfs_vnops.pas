@@ -66,7 +66,6 @@ function  devfs_revoke(ap:p_vop_revoke_args):Integer;
 function  devfs_rioctl(ap:p_vop_ioctl_args):Integer;
 function  devfs_rread(ap:p_vop_read_args):Integer;
 function  devfs_setattr(ap:p_vop_setattr_args):Integer;
-function  devfs_setlabel(ap:p_vop_setlabel_args):Integer;
 function  devfs_stat_f(fp:p_file;sb:p_stat):Integer;
 function  devfs_symlink(ap:p_vop_symlink_args):Integer;
 function  devfs_truncate_f(fp:p_file;length:Int64):Integer;
@@ -129,7 +128,6 @@ const
   vop_openextattr   :nil;
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
-  vop_setlabel      :@devfs_setlabel;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
   vop_allocate      :nil;
@@ -193,7 +191,6 @@ const
   vop_openextattr   :nil;
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
-  vop_setlabel      :@devfs_setlabel;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
   vop_allocate      :nil;
@@ -1616,20 +1613,24 @@ begin
  if (de^.de_cdp=nil) then
  begin
   TAILQ_REMOVE(@dd^.de_dlist,de,@de^.de_list);
+
   if (de^.de_dirent^.d_type=DT_LNK) then
   begin
    de_cov:=devfs_find(dd, de^.de_dirent^.d_name, de^.de_dirent^.d_namlen, 0);
    if (de_cov<>nil) then
     de_cov^.de_flags:=de_cov^.de_flags and (not DE_COVERED);
   end;
+
   { We need to unlock dvp because devfs_delete() may lock it. }
   VOP_UNLOCK(vp, 0);
   if (dvp<>vp) then
    VOP_UNLOCK(dvp, 0);
+
   devfs_delete(dmp, de, 0);
   sx_xunlock(@dmp^.dm_lock);
   if (dvp<>vp) then
    vn_lock(dvp, LK_EXCLUSIVE or LK_RETRY);
+
   vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  end else
  begin
@@ -1708,7 +1709,7 @@ begin
  dev_lock();
  Dec(cdp^.cdp_inuse);
  if ((cdp^.cdp_flags and CDP_ACTIVE)=0) and (cdp^.cdp_inuse=0) then
-begin
+ begin
   TAILQ_REMOVE(@cdevp_list,cdp,@cdp^.cdp_list);
   dev_unlock();
   dev_rel(@cdp^.cdp_c);
@@ -1860,20 +1861,6 @@ begin
  Exit(0);
 end;
 
-function devfs_setlabel(ap:p_vop_setlabel_args):Integer;
-var
- vp:p_vnode;
- de:p_devfs_dirent;
-begin
- vp:=ap^.a_vp;
- de:=vp^.v_data;
-
- //mac_vnode_relabel(ap^.a_cred, vp, ap^.a_label);
- //mac_devfs_update(vp^.v_mount, de, vp);
-
- Exit(0);
-end;
-
 function devfs_stat_f(fp:p_file;sb:p_stat):Integer;
 begin
  Exit(vnops.fo_stat(fp, sb));
@@ -1890,9 +1877,25 @@ begin
  //error:=priv_check(curkthread, PRIV_DEVFS_SYMLINK);
  if (error<>0) then
   Exit(error);
+
  dmp:=VFSTODEVFS(ap^.a_dvp^.v_mount);
+
  if (devfs_populate_vp(ap^.a_dvp)<>0) then
   Exit(ENOENT);
+
+ de_cov:=devfs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
+
+ if (de_cov<>nil) then
+ begin
+  if ((de_cov^.de_flags and DE_USER)<>0) then
+  begin
+   sx_xunlock(@dmp^.dm_lock);
+   Exit(EEXIST);
+  end;
+
+  Assert((de_cov^.de_flags and DE_COVERED)=0,'devfs_symlink: entry %p already covered');
+  de_cov^.de_flags:=de_cov^.de_flags or DE_COVERED;
+ end;
 
  dd:=ap^.a_dvp^.v_data;
  de:=devfs_newdirent(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
@@ -1903,24 +1906,12 @@ begin
  de^.de_inode:=devfs_alloc_cdp_inode;
  de^.de_dir  :=dd;
  de^.de_dirent^.d_type:=DT_LNK;
+
  i:=strlen(ap^.a_target) + 1;
  de^.de_symlink:=AllocMem(i);
  Move(ap^.a_target^, de^.de_symlink^, i);
 
  //mac_devfs_create_symlink(ap^.a_cnp^.cn_cred, dmp^.dm_mount, dd, de);
-
- de_cov:=devfs_find(dd, de^.de_dirent^.d_name, de^.de_dirent^.d_namlen, 0);
- if (de_cov<>nil) then
- begin
-  if ((de_cov^.de_flags and DE_USER)<>0) then
-  begin
-   devfs_delete(dmp, de, DEVFS_DEL_NORECURSE);
-   sx_xunlock(@dmp^.dm_lock);
-   Exit(EEXIST);
-  end;
-  Assert((de_cov^.de_flags and DE_COVERED)=0,'devfs_symlink: entry %p already covered');
-  de_cov^.de_flags:=de_cov^.de_flags or DE_COVERED;
- end;
 
  de_dotdot:=TAILQ_FIRST(@dd^.de_dlist);  { '.' }
  de_dotdot:=TAILQ_NEXT(de_dotdot,@de_dotdot^.de_list); { '..' }

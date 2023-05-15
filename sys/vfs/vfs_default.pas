@@ -148,7 +148,6 @@ const
   vop_openextattr   :nil                   ;
   vop_deleteextattr :nil                   ;
   vop_setextattr    :nil                   ;
-  vop_setlabel      :nil                   ;
   vop_vptofh        :@vop_stdvptofh        ;
   vop_vptocnp       :@vop_stdvptocnp       ;
   vop_allocate      :@vop_stdallocate      ;
@@ -283,13 +282,13 @@ begin
   iov.iov_base:=dirbuf;
   iov.iov_len:=dirbuflen;
 
-  uio.uio_iov:=@iov;
+  uio.uio_iov   :=@iov;
   uio.uio_iovcnt:=1;
   uio.uio_offset:=off^;
-  uio.uio_resid:=dirbuflen;
+  uio.uio_resid :=dirbuflen;
   uio.uio_segflg:=UIO_SYSSPACE;
-  uio.uio_rw:=UIO_READ;
-  uio.uio_td:=curkthread;
+  uio.uio_rw    :=UIO_READ;
+  uio.uio_td    :=curkthread;
 
   eofflag^:=0;
 
@@ -985,15 +984,15 @@ begin
    cur:=len;
   if (offset < fsize) then
   begin
-   aiov.iov_base:=buf;
-   aiov.iov_len:=cur;
-   auio.uio_iov:=@aiov;
+   aiov.iov_base  :=buf;
+   aiov.iov_len   :=cur;
+   auio.uio_iov   :=@aiov;
    auio.uio_iovcnt:=1;
    auio.uio_offset:=offset;
-   auio.uio_resid:=cur;
+   auio.uio_resid :=cur;
    auio.uio_segflg:=UIO_SYSSPACE;
-   auio.uio_rw:=UIO_READ;
-   auio.uio_td:=td;
+   auio.uio_rw    :=UIO_READ;
+   auio.uio_td    :=td;
    error:=VOP_READ(vp, @auio, 0);
    if (error<>0) then
     break;
@@ -1006,15 +1005,15 @@ begin
    FillChar(buf^,cur,0);
   end;
 
-  aiov.iov_base:=buf;
-  aiov.iov_len:=cur;
-  auio.uio_iov:=@aiov;
+  aiov.iov_base  :=buf;
+  aiov.iov_len   :=cur;
+  auio.uio_iov   :=@aiov;
   auio.uio_iovcnt:=1;
   auio.uio_offset:=offset;
-  auio.uio_resid:=cur;
+  auio.uio_resid :=cur;
   auio.uio_segflg:=UIO_SYSSPACE;
-  auio.uio_rw:=UIO_WRITE;
-  auio.uio_td:=td;
+  auio.uio_rw    :=UIO_WRITE;
+  auio.uio_td    :=td;
 
   error:=VOP_WRITE(vp, @auio, 0);
   if (error<>0) then

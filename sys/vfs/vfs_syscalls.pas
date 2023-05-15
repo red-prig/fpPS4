@@ -75,6 +75,7 @@ function sys_lutimes(path:PChar;tptr:ptimeval):Integer;
 function sys_futimes(fd:Integer;tptr:ptimeval):Integer;
 function sys_truncate(path:PChar;length:Int64):Integer;
 function sys_fsync(fd:Integer):Integer;
+function sys_fdatasync(fd:Integer):Integer;
 function sys_rename(from,_to:PChar):Integer;
 function sys_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar):Integer;
 function sys_mkdir(path:PChar;mode:Integer):Integer;
@@ -85,8 +86,46 @@ function sys_getdents(fd:Integer;buf:Pointer;count:DWORD):Integer;
 function sys_umask(newmask:Integer):Integer;
 function sys_revoke(path:PChar):Integer;
 
+function kern_statfs(path:PChar;pathseg:uio_seg;buf:p_statfs):Integer;
+function kern_fstatfs(fd:Integer;buf:p_statfs):Integer;
+function kern_getfsstat(buf:pp_statfs;bufsize:QWORD;bufseg:uio_seg;flags:Integer):Integer;
+function kern_chdir(path:PChar;pathseg:uio_seg):Integer;
+function kern_openat(fd:Integer;path:PChar;pathseg:uio_seg;flags,mode:Integer):Integer;
+function kern_open(path:PChar;pathseg:uio_seg;flags,mode:Integer):Integer;
+function kern_mkfifoat(fd:Integer;path:PChar;pathseg:uio_seg;mode:Integer):Integer;
+function kern_mknodat(fd:Integer;path:PChar;pathseg:uio_seg;mode,dev:Integer):Integer;
+function kern_mknod(path:PChar;pathseg:uio_seg;mode,dev:Integer):Integer;
+function kern_linkat(fd1,fd2:Integer;path1,path2:PChar;segflg:uio_seg;follow:Integer):Integer;
+function kern_link(path,link:PChar;segflg:uio_seg):Integer;
+function kern_symlinkat(path1:PChar;fd:Integer;path2:PChar;segflg:uio_seg):Integer;
 function kern_symlink(path,link:PChar;segflg:uio_seg):Integer;
+function kern_unlinkat(fd:Integer;path:PChar;pathseg:uio_seg;oldinum:Integer):Integer;
 function kern_unlink(path:PChar;pathseg:uio_seg):Integer;
+function kern_accessat(fd:Integer;path:PChar;pathseg:uio_seg;flags,mode:Integer):Integer;
+function kern_access(path:PChar;pathseg:uio_seg;mode:Integer):Integer;
+function kern_statat(flag,fd:Integer;path:PChar;pathseg:uio_seg;sbp:p_stat):Integer;
+function kern_stat(path:PChar;pathseg:uio_seg;sbp:p_stat):Integer;
+function kern_lstat(path:PChar;pathseg:uio_seg;sbp:p_stat):Integer;
+function kern_pathconf(path:PChar;pathseg:uio_seg;name:Integer;flags:QWORD):Integer;
+function kern_readlinkat(fd:Integer;path:PChar;pathseg:uio_seg;buf:PChar;bufseg:uio_seg;count:QWORD):Integer;
+function kern_readlink(path:PChar;pathseg:uio_seg;buf:PChar;bufseg:uio_seg;count:QWORD):Integer;
+function kern_fchmodat(fd:Integer;path:PChar;pathseg:uio_seg;mode,flag:Integer):Integer;
+function kern_chmod(path:PChar;pathseg:uio_seg;mode:Integer):Integer;
+function kern_chown(path:PChar;pathseg:uio_seg;uid,gid:Integer):Integer;
+function kern_lchown(path:PChar;pathseg:uio_seg;uid,gid:Integer):Integer;
+function kern_utimesat(fd:Integer;path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_utimes(path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_lutimes(path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_futimes(fd:Integer;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_truncate(path:PChar;pathseg:uio_seg;length:Int64):Integer;
+function kern_fsync(fd:Integer;fullsync:Boolean):Integer;
+function kern_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar;pathseg:uio_seg):Integer;
+function kern_rename(from,_to:PChar;pathseg:uio_seg):Integer;
+function kern_mkdirat(fd:Integer;path:PChar;segflg:uio_seg;mode:Integer):Integer;
+function kern_mkdir(path:PChar;segflg:uio_seg;mode:Integer):Integer;
+function kern_rmdirat(fd:Integer;path:PChar;pathseg:uio_seg):Integer;
+function kern_rmdir(path:PChar;pathseg:uio_seg):Integer;
+function kern_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 
 implementation
 
@@ -1126,7 +1165,7 @@ begin
  Exit(kern_mkfifoat(fd, path, UIO_USERSPACE, mode));
 end;
 
-function can_hardlink(vp:p_vnode):Integer;
+function can_hardlink(vp:p_vnode):Integer; inline;
 begin
  Exit(EPERM);
 end;
@@ -1146,6 +1185,7 @@ begin
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vp:=nd.ni_vp;
@@ -1413,8 +1453,6 @@ function kern_unlink(path:PChar;pathseg:uio_seg):Integer;
 begin
  Exit(kern_unlinkat(AT_FDCWD, path, pathseg, 0));
 end;
-
-function kern_rmdirat(fd:Integer;path:PChar;pathseg:uio_seg):Integer; forward;
 
 function sys_unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 begin
@@ -2361,7 +2399,7 @@ end;
 {
  * Sync an open file.
  }
-function sys_fsync(fd:Integer):Integer;
+function kern_fsync(fd:Integer;fullsync:Boolean):Integer;
 label
  drop;
 var
@@ -2403,6 +2441,16 @@ drop:
  VFS_UNLOCK_GIANT(vfslocked);
  fdrop(fp);
  Exit(error);
+end;
+
+function sys_fsync(fd:Integer):Integer;
+begin
+ Exit(kern_fsync(fd, true));
+end;
+
+function sys_fdatasync(fd:Integer):Integer;
+begin
+ Exit(kern_fsync(fd, false));
 end;
 
 function kern_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar;pathseg:uio_seg):Integer;
@@ -2736,11 +2784,14 @@ var
 begin
  td:=curkthread;
  auio.uio_resid:=count;
+
  if (auio.uio_resid > IOSIZE_MAX) then
   Exit(EINVAL);
+
  error:=getvnode(fd, CAP_READ or CAP_SEEK, @fp);
  if (error<>0) then
   Exit(error);
+
  if ((fp^.f_flag and FREAD)=0) then
  begin
   fdrop(fp);
@@ -2770,8 +2821,8 @@ unionread:
 
  //error:=mac_vnode_check_readdir(td^.td_ucred, vp);
  //if (error=0) then
-
   error:=VOP_READDIR(vp, @auio, @eofflag, nil, nil);
+
  foffset:=auio.uio_offset;
  if (error<>0) then
  begin
@@ -2814,8 +2865,10 @@ begin
  error:=kern_getdirentries(fd, buf, count, @base);
  if (error<>0) then
   Exit(error);
+
  if (basep<>nil) then
   error:=copyout(@base, basep, sizeof(Int64));
+
  Exit(error);
 end;
 
