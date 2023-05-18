@@ -360,15 +360,15 @@ end;
 procedure vattr_null(vap:p_vattr);
 begin
  vap^.va_type             :=VNON;
- vap^.va_size             :=QWORD(VNOVAL);
- vap^.va_bytes            :=QWORD(VNOVAL);
- vap^.va_mode             :=WORD(VNOVAL);
- vap^.va_nlink            :=WORD(VNOVAL);
+ vap^.va_size             :=VNOVAL;
+ vap^.va_bytes            :=VNOVAL;
+ vap^.va_mode             :=VNOVAL;
+ vap^.va_nlink            :=VNOVAL;
  vap^.va_uid              :=VNOVAL;
  vap^.va_gid              :=VNOVAL;
  vap^.va_fsid             :=VNOVAL;
- vap^.va_fileid           :=QWORD(VNOVAL);
- vap^.va_blocksize        :=QWORD(VNOVAL);
+ vap^.va_fileid           :=VNOVAL;
+ vap^.va_blocksize        :=VNOVAL;
  vap^.va_rdev             :=VNOVAL;
  vap^.va_atime.tv_sec     :=VNOVAL;
  vap^.va_atime.tv_nsec    :=VNOVAL;
@@ -378,8 +378,8 @@ begin
  vap^.va_ctime.tv_nsec    :=VNOVAL;
  vap^.va_birthtime.tv_sec :=VNOVAL;
  vap^.va_birthtime.tv_nsec:=VNOVAL;
- vap^.va_flags            :=QWORD(VNOVAL);
- vap^.va_gen              :=QWORD(VNOVAL);
+ vap^.va_flags            :=VNOVAL;
+ vap^.va_gen              :=VNOVAL;
  vap^.va_vaflags          :=0;
 end;
 
@@ -2034,10 +2034,12 @@ begin
 
  if (vp^.v_usecount > 0) then
   vp^.v_iflag:=vp^.v_iflag and (not VI_OWEINACT);
+
  if (error=0) then
  begin
   if ((vp^.v_iflag and VI_OWEINACT)<>0) then
    vinactive(vp);
+
   if (func<>VPUTX_VUNREF) then
    VOP_UNLOCK(vp, 0);
  end;
@@ -2405,8 +2407,12 @@ loop:
  begin
   Exit(EBUSY);
  end;
- For rootrefs:=rootrefs downto 0 do
+
+ while (rootrefs > 0) do
+ begin
   vrele(rootvp);
+  Dec(rootrefs);
+ end;
  Exit(0);
 end;
 
@@ -2567,6 +2573,8 @@ begin
     if ((vp^.v_vflag and VV_NOSYNC)<>0) then
     begin { unlinked }
      vput(vp);
+     //
+     vp:=__mnt_vnode_next_active(@mvp,mp);
      continue;
     end;
 
@@ -2585,7 +2593,7 @@ begin
   end else
    VI_UNLOCK(vp);
   //
-  vp:=__mnt_vnode_next_active(@mvp,mp)
+  vp:=__mnt_vnode_next_active(@mvp,mp);
  end;
 end;
 
@@ -3474,17 +3482,18 @@ begin
   if (ap^.a_ncookies<>nil) then
   begin
    if (ap^.a_cookies<>nil) then
+   begin
     FreeMem(ap^.a_cookies);
+   end;
    ap^.a_cookies:=nil;
    ap^.a_ncookies^:=0;
   end;
   Exit(error);
  end;
 
- if (ap^.a_ncookies=nil) then
-  Exit(0);
+ if (ap^.a_ncookies=nil) then Exit(0);
 
- Assert(ap^.a_cookies<>nil,'nil ap^.a_cookies value with non-nil ap^.a_ncookies!');
+ Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
 
  ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
  ap^.a_cookies^[ap^.a_ncookies^]:=off;
@@ -3590,7 +3599,6 @@ begin
  begin
   __mnt_vnode_markerfree_all(mvp, mp);
   { MNT_IUNLOCK(mp); -- done in above function }
-  mtx_assert(MNT_MTX(mp)^);
   Exit(nil);
  end;
  TAILQ_REMOVE(@mp^.mnt_nvnodelist,mvp^,@mvp^^.v_nmntvnodes);
@@ -3612,7 +3620,9 @@ begin
  vp:=TAILQ_FIRST(@mp^.mnt_nvnodelist);
  while (vp<>nil) and
        ((vp^.v_type=VMARKER) or ((vp^.v_iflag and VI_DOOMED)<>0)) do
+ begin
   vp:=TAILQ_NEXT(vp,@vp^.v_nmntvnodes);
+ end;
 
  { Check if we are done }
  if (vp=nil) then
@@ -3688,7 +3698,9 @@ restart:
   Assert(vp^.v_type<>VMARKER, 'locked marker %p');
   Assert((vp^.v_mount=mp) or (vp^.v_mount=nil),'alien vnode on the active list %p %p');
   if (vp^.v_mount=mp) and ((vp^.v_iflag and VI_DOOMED)=0) then
+  begin
    break;
+  end;
   nvp:=TAILQ_NEXT(vp,@vp^.v_actfreelist);
   VI_UNLOCK(vp);
   vp:=nvp;

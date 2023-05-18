@@ -509,7 +509,7 @@ begin
    }
   if (error=EINVAL) then
   begin
-   if (vap^.va_flags<>QWORD(VNOVAL)) then
+   if (vap^.va_flags<>VNOVAL) then
     error:=EOPNOTSUPP
    else
     error:=0;

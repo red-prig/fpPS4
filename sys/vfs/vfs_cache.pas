@@ -145,7 +145,7 @@ begin
  {
   * Re-lookup the vnode by path to detect a possible rename.
   * As a side effect, the vnode is relocked.
-  * If vnode was renamed, ExitENOENT.
+  * If vnode was renamed, return ENOENT.
   }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, path, curkthread);
 

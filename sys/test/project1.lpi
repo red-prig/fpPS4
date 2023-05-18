@@ -497,6 +497,10 @@
         <Filename Value="..\vfs\vfs_cache.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\fs\ufs\md_vnops.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

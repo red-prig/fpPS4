@@ -19,55 +19,38 @@ type
  pp_ufs_dirent=^p_ufs_dirent;
  p_ufs_dirent=^t_ufs_dirent;
 
- p_ufs_priv=^t_ufs_priv;
- t_ufs_priv=packed record
-  ufs_list:TAILQ_ENTRY;
-
-  //ufs_inode:DWORD;
-  //ufs_flags:DWORD;
-
-  //ufs_inuse    :DWORD;
-  //ufs_maxdirent:DWORD;
-
-  ufs_dirents:pp_ufs_dirent;
-  ufs_dirent0:p_ufs_dirent;
-
-  //ufs_dtr_list:TAILQ_ENTRY;
-
-  //ufs_dtr_cb    :t_cdpd_dtr;
-  //ufs_dtr_cb_arg:Pointer;
-
-  //ufs_fdpriv:LIST_HEAD;
- end;
-
  t_ufs_dirent=record
   ufs_inode  :Integer;
-  ufs_flags  :Integer;
+  ufs_flags  :Integer;      //UFS_*
   ufs_ref    :Integer;
   ufs_dirent :p_dirent;
   ufs_list   :TAILQ_ENTRY;
-  ufs_dlist  :TAILQ_HEAD;
-  ufs_dir    :p_ufs_dirent;
+  ufs_dlist  :TAILQ_HEAD;   //dir list
+  ufs_dir    :p_ufs_dirent; //parent
   ufs_links  :Integer;
-  ufs_mode   :mode_t;
+  ufs_mode   :mode_t;       //S_IFMT
   ufs_uid    :uid_t;
   ufs_gid    :gid_t;
-  ufs_atime  :timespec;
-  ufs_mtime  :timespec;
-  ufs_ctime  :timespec;
+  ufs_atime  :timespec;     // time of last access
+  ufs_mtime  :timespec;     // time of last data modification
+  ufs_ctime  :timespec;     // time of last file status change
+  ufs_btime  :timespec;     // time of file creation
   ufs_vnode  :p_vnode;
   ufs_symlink:PChar;
+  ufs_md_fp  :Pointer; //host data
  end;
 
  p_ufs_mount=^t_ufs_mount;
  t_ufs_mount=record
-  ufs_idx       :DWORD       ;
-  ufs_mount     :p_mount     ;
+  //ufs_idx       :DWORD;
+  ufs_mount     :p_mount;
   ufs_rootdir   :p_ufs_dirent;
-  ufs_generation:DWORD       ;
-  ufs_ref       :Integer     ;
-  ufs_lock      :t_sx        ;
-  ufs_path      :PChar       ; //host path
+  ufs_generation:DWORD;
+  ufs_ref       :Integer;
+  ufs_lock      :t_sx;
+  ufs_vnops     :p_vop_vector;
+  ufs_path      :PChar;   //host path
+  ufs_md_fp     :Pointer; //host data
  end;
 
 function ufs_init(cf:p_vfsconf):Integer;
@@ -116,7 +99,6 @@ procedure ufs_free_cdp_inode(ino:Integer);
 procedure ufs_de_hold(p:p_ufs_dirent);
 function  ufs_de_drop(p:p_ufs_dirent):Boolean;
 
-
 procedure ufs_mp_hold(p:p_ufs_mount);
 function  ufs_mp_drop(p:p_ufs_mount):Boolean;
 
@@ -126,7 +108,7 @@ var
  ufs_interlock:mtx;
 
 const
- UFS_ROOTINO=0;
+ UFS_ROOTINO =1;
 
  UFS_WHITEOUT=$01;
  UFS_DOT     =$02;
@@ -144,6 +126,7 @@ uses
  vfs_vnops,
  vnode_if,
  ufs_vnops,
+ md_vnops,
  kern_id;
 
 var
@@ -171,7 +154,7 @@ end;
 function ufs_init(cf:p_vfsconf):Integer;
 begin
  Result:=0;
- id_table_init(@ufs_inos,1);
+ id_table_init(@ufs_inos,UFS_ROOTINO+1);
  mtx_init(ufs_interlock,'ufs_interlock');
 end;
 
@@ -197,6 +180,7 @@ begin
  Result:=False;
  if (System.InterlockedDecrement(p^.ufs_ref)=0) then
  begin
+  md_free_dirent(p);
   FreeMem(p);
   Result:=True;
  end;
@@ -212,6 +196,7 @@ begin
 Result:=False;
  if (System.InterlockedDecrement(p^.ufs_ref)=0) then
  begin
+  md_unmount(p);
   sx_destroy(@p^.ufs_lock);
   FreeMem(p^.ufs_path);
   FreeMem(p);
@@ -310,28 +295,14 @@ loop:
  end;
  mtx_unlock(ufs_interlock);
 
- error:=getnewvnode('ufs', mp, @ufs_vnodeops_root, @vp);
+ error:=getnewvnode('ufs', mp, dmp^.ufs_vnops, @vp);
  if (error<>0) then
  begin
   ufs_allocv_drop_refs(1, dmp, de);
   Exit(error);
  end;
 
- if (de^.ufs_dirent^.d_type=DT_CHR) then
- begin
-  vp^.v_type:=VCHR;
- end else
- if (de^.ufs_dirent^.d_type=DT_DIR) then
- begin
-  vp^.v_type:=VDIR;
- end else
- if (de^.ufs_dirent^.d_type=DT_LNK) then
- begin
-  vp^.v_type:=VLNK;
- end else
-begin
-  vp^.v_type:=VBAD;
- end;
+ vp^.v_type:=iftovt_tab[de^.ufs_dirent^.d_type];
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY or LK_NOWITNESS);
  //VN_LOCK_ASHARE(vp);
@@ -385,8 +356,8 @@ var
  plen:Integer;
 begin
 
- //if (devfs_unr=nil) then
- // devfs_unr:=new_unrhdr(0, High(Integer));
+ //if (ufs_unr=nil) then
+ // ufs_unr:=new_unrhdr(0, High(Integer));
 
  error:=0;
 
@@ -409,17 +380,26 @@ begin
  begin
   if (mp^.mnt_optnew=nil) then Exit(EINVAL);
   if (vfs_getopt(mp^.mnt_optnew, 'from', @path, @plen)<>0) then Exit(EINVAL);
+  if (path=nil) then Exit(EINVAL);
+  if (plen=2) then
+  begin
+   if (path[0]='/') or (path[0]='\') then
+   begin
+    path[0]:=#0;
+    plen:=1;
+   end;
+  end;
  end;
 
  fmp:=AllocMem(sizeof(t_ufs_mount));
 
- if (path<>nil) and (plen<>0) then
+ if (path<>nil) then
  begin
-  fmp^.ufs_path:=AllocMem(plen+1);
+  fmp^.ufs_path:=AllocMem(plen);
   Move(path^,fmp^.ufs_path^,plen);
  end;
 
- //fmp^.dm_idx:=alloc_unr(devfs_unr);
+ //fmp^.ufs_idx:=alloc_ufs_unr);
  sx_init(@fmp^.ufs_lock, 'ufsmount');
  fmp^.ufs_ref:=1;
 
@@ -431,24 +411,53 @@ begin
  mp^.mnt_data:=fmp;
  vfs_getnewfsid(mp);
 
- fmp^.ufs_rootdir:=ufs_vmkdir(fmp, nil, 0, nil, UFS_ROOTINO);
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  fmp^.ufs_vnops:=@ufs_vnodeops_root;
 
- sx_xlock(@fmp^.ufs_lock);
- ufs_vmkdir(fmp,'dev',3,fmp^.ufs_rootdir,ufs_alloc_cdp_inode);
- sx_xunlock(@fmp^.ufs_lock);
+  fmp^.ufs_rootdir:=ufs_vmkdir(fmp, nil, 0, nil, UFS_ROOTINO);
+
+  sx_xlock(@fmp^.ufs_lock);
+  ufs_vmkdir(fmp,'dev',3,fmp^.ufs_rootdir,0);
+  sx_xunlock(@fmp^.ufs_lock);
+ end else
+ begin
+  fmp^.ufs_vnops:=@md_vnodeops_host;
+
+  error:=md_mount(fmp);
+  if (error<>0) then
+  begin
+   sx_xlock(@fmp^.ufs_lock);
+   ufs_purge(fmp,fmp^.ufs_rootdir);
+   sx_xunlock(@fmp^.ufs_lock);
+   sx_destroy(@fmp^.ufs_lock);
+   //free_unr(ufs_unr, fmp^.ufs_idx);
+   FreeMem(fmp);
+   Exit(error);
+  end;
+
+  fmp^.ufs_rootdir:=md_vmkdir(fmp, nil, 0, nil, UFS_ROOTINO);
+ end;
 
  error:=ufs_root(mp, LK_EXCLUSIVE, @rvp);
  if (error<>0) then
  begin
+  md_unmount(fmp);
+  ufs_purge(fmp,fmp^.ufs_rootdir);
   sx_destroy(@fmp^.ufs_lock);
-  //free_unr(devfs_unr, fmp^.dm_idx);
+  //free_unr(ufs_unr, fmp^.ufs_idx);
   FreeMem(fmp);
   Exit(error);
  end;
 
  VOP_UNLOCK(rvp, 0);
 
- vfs_mountedfrom(mp, 'ufs');
+ if (path=nil) then
+ begin
+  path:='ufs';
+ end;
+
+ vfs_mountedfrom(mp,path);
 
  Exit(0);
 end;
@@ -474,11 +483,11 @@ begin
  fmp^.ufs_mount:=nil;
  mp^.mnt_data:=nil;
 
- //idx:=fmp^.dm_idx;
+ //idx:=fmp^.ufs_idx;
 
  sx_xunlock(@fmp^.ufs_lock);
 
- //free_unr(devfs_unr, idx);
+ //free_unr(ufs_unr, idx);
 
  ufs_mp_drop(fmp);
 

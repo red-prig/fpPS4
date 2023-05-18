@@ -24,17 +24,16 @@ function  sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 
 Procedure timeinit; //SYSINIT
 
+Const
+ UNIT_PER_SEC         =10000000;
+ DELTA_EPOCH_IN_UNIT  =116444736000000000;
+ POW10_9              =1000000000;
+
 implementation
 
 uses
  errno,
  systm;
-
-Const
- UNIT_PER_SEC         =10000000;
- DELTA_EPOCH_IN_UNIT  =116444736000000000;
- POW10_7              =10000000;
- POW10_9              =1000000000;
 
 function cputick2usec(time:QWORD):QWORD; inline;
 begin
@@ -71,8 +70,8 @@ var
  time:Int64;
 begin
  time:=get_unit_uptime;
- tvp^.tv_sec :=(time div POW10_7);
- tvp^.tv_usec:=(time mod POW10_7) div 10;
+ tvp^.tv_sec :=(time div UNIT_PER_SEC);
+ tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
 end;
 
 type
@@ -146,8 +145,8 @@ var
 begin
  unittime(@time);
  time:=time-DELTA_EPOCH_IN_UNIT;
- tp^.tv_sec :=(time div POW10_7);
- tp^.tv_nsec:=(time mod POW10_7)*100;
+ tp^.tv_sec :=(time div UNIT_PER_SEC);
+ tp^.tv_nsec:=(time mod UNIT_PER_SEC)*100;
 end;
 
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
@@ -196,7 +195,7 @@ begin
   begin
    unittime(@user);
    user:=user-DELTA_EPOCH_IN_UNIT;
-   user:=user-(user mod POW10_7);
+   user:=user-(user mod UNIT_PER_SEC);
    time^:=user;
   end;
 
@@ -223,8 +222,8 @@ begin
  Result:=kern_clock_gettime_unit(clock_id,@time);
  if (Result=0) then
  begin
-  tp^.tv_sec :=(time div POW10_7);
-  tp^.tv_nsec:=(time mod POW10_7)*100;
+  tp^.tv_sec :=(time div UNIT_PER_SEC);
+  tp^.tv_nsec:=(time mod UNIT_PER_SEC)*100;
  end;
 end;
 

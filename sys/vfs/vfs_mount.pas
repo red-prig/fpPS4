@@ -98,7 +98,13 @@ function  mount_argf(ma:p_mntarg;name,fmt:PChar;const Args:Array of const):p_mnt
 function  mount_argsu(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 function  mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 procedure free_mntarg(ma:p_mntarg);
+
 function  kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
+function  kern_unmount(path:PChar;flags:Integer):Integer;
+
+function  sys_nmount(iovp:p_iovec;iovcnt:DWORD;flags:QWORD):Integer;
+function  sys_mount(ftype,fpath:PChar;flags:QWORD;data:Pointer):Integer;
+function  sys_unmount(path:PChar;flags:Integer):Integer;
 
 implementation
 
@@ -106,6 +112,7 @@ uses
  murmurhash,
  errno,
  systm,
+ subr_uio,
  vfs_vnops,
  vfs_subr,
  vfs_cache;
@@ -712,8 +719,8 @@ end;
 
 procedure vfs_mountedfrom(mp:p_mount;from:PChar);
 begin
- FillChar(mp^.mnt_stat.f_mntfromname,sizeof(mp^.mnt_stat.f_mntfromname),0);
- strlcopy(@mp^.mnt_stat.f_mntfromname, from, sizeof(mp^.mnt_stat.f_mntfromname));
+ mp^.mnt_stat.f_mntfromname:=Default(t_mname);
+ strlcopy(@mp^.mnt_stat.f_mntfromname,from,sizeof(mp^.mnt_stat.f_mntfromname));
 end;
 
 ///
@@ -889,7 +896,7 @@ begin
   vp^.v_iflag:=vp^.v_iflag and (not VI_MOUNT);
   VI_UNLOCK(vp);
   vrele(vp);
-  Exit (error);
+  Exit(error);
  end;
 
  if (mp^.mnt_opt<>nil) then
@@ -906,11 +913,13 @@ begin
  mp^.mnt_optnew:=nil;
 
  MNT_ILOCK(mp);
+
  if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
     ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC
  else
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+
  MNT_IUNLOCK(mp);
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
@@ -923,9 +932,12 @@ begin
  mtx_lock(mountlist_mtx);
  TAILQ_INSERT_TAIL(@mountlist, mp,@mp^.mnt_list);
  mtx_unlock(mountlist_mtx);
+
  vfs_event_signal(nil, VQ_MOUNT, 0);
+
  if (VFS_ROOT(mp,LK_EXCLUSIVE,@newdp)<>0) then
   Assert(false,'mount: lost mount');
+
  VOP_UNLOCK(newdp, 0);
  VOP_UNLOCK(vp, 0);
  //mountcheckdirs(vp, newdp);
@@ -1106,7 +1118,7 @@ var
  vfsp:p_vfsconf;
  nd:t_nameidata;
  vp:p_vnode;
- pathbuf:PChar;
+ pathbuf:t_mname;
  error:Integer;
 begin
  {
@@ -1143,15 +1155,14 @@ begin
  vp:=nd.ni_vp;
  if ((fsflags and MNT_UPDATE)=0) then
  begin
-  pathbuf:=AllocMem(MNAMELEN);
-  strcopy(pathbuf, fspath);
-  error:=vn_path_to_global_path(vp, pathbuf, MNAMELEN);
+  pathbuf:=Default(t_mname);
+  strcopy(@pathbuf, fspath);
+  error:=vn_path_to_global_path(vp, @pathbuf, MNAMELEN);
   { debug.disablefullpath=1 results in ENODEV }
   if (error=0) or (error=ENODEV) then
   begin
-   error:=vfs_domount_first(vfsp, pathbuf, vp, fsflags, optlist);
+   error:=vfs_domount_first(vfsp, @pathbuf, vp, fsflags, optlist);
   end;
-  FreeMem(pathbuf);
  end else
   error:=vfs_domount_update(vp, fsflags, optlist);
 
@@ -1418,6 +1429,7 @@ begin
  begin
   if (coveredvp<>nil) then
    VOP_UNLOCK(coveredvp, 0);
+
   Exit(error);
  end;
 
@@ -1429,13 +1441,16 @@ begin
   MNT_IUNLOCK(mp);
   if (coveredvp<>nil) then
    VOP_UNLOCK(coveredvp, 0);
+
   vn_finished_write(mp);
   Exit(EBUSY);
  end;
  mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_UNMOUNT or MNTK_NOINSMNTQ;
+
  { Allow filesystems to detect that a forced unmount is in progress. }
  if ((flags and MNT_FORCE)<>0) then
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_UNMOUNTF;
+
  error:=0;
  if (mp^.mnt_lockref<>0) then
  begin
@@ -1475,6 +1490,7 @@ begin
   end;
   vput(fsrootvp);
  end;
+
  error:=VFS_SYNC(mp, MNT_WAIT);
  if ((mp^.mnt_flag and MNT_RDONLY)<>0) or
     (error=0) or
@@ -1489,7 +1505,7 @@ begin
   * Unless we failed to do so because the device is reporting that
   * it doesn't exist anymore.
   }
- if (error and error<>ENXIO) then
+ if (error<>0) and (error<>ENXIO) then
  begin
   if ((flags and MNT_FORCE)<>0) and
      (VFS_ROOT(mp, LK_EXCLUSIVE, @fsrootvp)=0) then
@@ -1516,7 +1532,9 @@ begin
   mp^.mnt_flag:=mp^.mnt_flag or async_flag;
   if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
      ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
+  begin
    mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC;
+  end;
   if ((mp^.mnt_kern_flag and MNTK_MWAIT)<>0) then
   begin
    mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_MWAIT);
@@ -1525,6 +1543,7 @@ begin
   MNT_IUNLOCK(mp);
   if (coveredvp<>nil) then
    VOP_UNLOCK(coveredvp, 0);
+
   Exit(error);
  end;
  mtx_lock(mountlist_mtx);
@@ -1685,10 +1704,277 @@ begin
  Exit(error);
 end;
 
+function kern_unmount(path:PChar;flags:Integer):Integer;
+var
+ nd:t_nameidata;
+ mp:p_mount;
+
+ pathbuf:t_mname;
+
+ error,vfslocked:Integer;
+begin
+ pathbuf:=Default(t_mname);
+ strlcopy(@pathbuf,path,MNAMELEN);
+
+ mtx_lock(VFS_Giant);
+
+ {
+  * Try to find global path for path argument.
+  }
+ NDINIT(@nd, LOOKUP,
+        FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,
+        UIO_SYSSPACE, path, curkthread);
+
+ if (nd_namei(@nd)=0) then
+ begin
+  vfslocked:=NDHASGIANT(@nd);
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+
+  error:=vn_path_to_global_path(nd.ni_vp,@pathbuf,MNAMELEN);
+
+  if (error=0) or (error=ENODEV) then
+   vput(nd.ni_vp);
+
+  VFS_UNLOCK_GIANT(vfslocked);
+ end;
+
+ mtx_lock(mountlist_mtx);
+ mp:=TAILQ_LAST(@mountlist);
+ while (mp<>nil) do
+ begin
+  if (strcomp(@mp^.mnt_stat.f_mntonname, @pathbuf)=0) then
+   break;
+  mp:=TAILQ_PREV(mp,@mp^.mnt_list);
+ end;
+ mtx_unlock(mountlist_mtx);
+
+ if (mp=nil) then
+ begin
+  mtx_unlock(VFS_Giant);
+  Exit(EINVAL);
+ end;
+
+ error:=dounmount(mp, flags);
+
+ mtx_unlock(VFS_Giant);
+ Exit(error);
+end;
+
+///
+
+{
+ * Mount a filesystem.
+ }
+function sys_nmount(iovp:p_iovec;iovcnt:DWORD;flags:QWORD):Integer;
+var
+ auio:p_uio;
+ error:Integer;
+begin
+ //priv_check(param_1,683);
+
+ {
+  * Filter out MNT_ROOTFS.  We do not want clients of nmount() in
+  * userspace to set this flag, but we must filter it out if we want
+  * MNT_UPDATE on the root file system to work.
+  * MNT_ROOTFS should only be set by the kernel when mounting its
+  * root file system.
+  }
+ flags:=flags and (not MNT_ROOTFS);
+
+ {
+  * Check that we have an even number of iovec's
+  * and that we have at least two options.
+  }
+ if ((iovcnt and 1)<>0) or (iovcnt < 4) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ error:=copyinuio(iovp, iovcnt, @auio);
+ if (error<>0) then
+ begin
+  Exit(error);
+ end;
+ error:=vfs_donmount(flags, auio);
+
+ FreeMem(auio);
+ Exit(error);
+end;
 
 
+{
+ * Old mount API.
+ }
+function sys_mount(ftype,fpath:PChar;flags:QWORD;data:Pointer):Integer;
+var
+ fstype:PChar;
+ vfsp:p_vfsconf;
+ ma:p_mntarg;
+ error:Integer;
+begin
 
+ //priv_check(param_1,683);
 
+ vfsp:=nil;
+ ma:=nil;
+
+ {
+  * Filter out MNT_ROOTFS.  We do not want clients of mount() in
+  * userspace to set this flag, but we must filter it out if we want
+  * MNT_UPDATE on the root file system to work.
+  * MNT_ROOTFS should only be set by the kernel when mounting its
+  * root file system.
+  }
+ flags:=flags and (not MNT_ROOTFS);
+
+ fstype:=AllocMem(MFSNAMELEN);
+
+ error:=copyinstr(ftype, fstype, MFSNAMELEN, nil);
+ if (error<>0) then
+ begin
+  FreeMem(fstype);
+  Exit(error);
+ end;
+
+ mtx_lock(VFS_Giant);
+ vfsp:=vfs_byname_kld(fstype, @error);
+ FreeMem(fstype);
+
+ if (vfsp=nil) then
+ begin
+  mtx_unlock(VFS_Giant);
+  Exit(ENOENT);
+ end;
+
+ if (vfsp^.vfc_vfsops^.vfs_cmount=nil) then
+ begin
+  mtx_unlock(VFS_Giant);
+  Exit(EOPNOTSUPP);
+ end;
+
+ ma:=mount_argsu(ma, 'fstype', ftype, MFSNAMELEN);
+ ma:=mount_argsu(ma, 'fspath', fpath, MNAMELEN);
+ ma:=mount_argb (ma, flags and MNT_RDONLY, 'noro');
+ ma:=mount_argb (ma, ord((flags and MNT_NOSUID)=0), 'nosuid');
+ ma:=mount_argb (ma, ord((flags and MNT_NOEXEC)=0), 'noexec');
+
+ error:=vfsp^.vfc_vfsops^.vfs_cmount(ma, data, flags);
+
+ mtx_unlock(VFS_Giant);
+ Exit(error);
+end;
+
+{
+ * Unmount a filesystem.
+ *
+ * Note: unmount takes a path to the vnode mounted on as argument, not
+ * special file (as before).
+ }
+function sys_unmount(path:PChar;flags:Integer):Integer;
+var
+ nd:t_nameidata;
+ mp:p_mount;
+ pathbuf:t_mname;
+ error,id0,id1,vfslocked:Integer;
+begin
+ //priv_check(param_1,683);
+
+ //if (jailed(td^.td_ucred)) or (usermount=0) then
+ //begin
+ // error:=priv_check(td, PRIV_VFS_UNMOUNT);
+ // if (error<>0) then
+ //  Exit(error);
+ //end;
+
+ pathbuf:=Default(t_mname);
+ error:=copyinstr(path, @pathbuf, MNAMELEN, nil);
+ if (error<>0) then
+ begin
+  Exit(error);
+ end;
+ mtx_lock(VFS_Giant);
+ if ((flags and MNT_BYFSID)<>0) then
+ begin
+  { Decode the filesystem ID. }
+  if (sscanf(pathbuf, 'FSID:%d:%d', [@id0, @id1])<>2) then
+  begin
+   mtx_unlock(VFS_Giant);
+   Exit(EINVAL);
+  end;
+
+  mtx_lock(mountlist_mtx);
+  mp:=TAILQ_LAST(@mountlist);
+  while (mp<>nil) do
+  begin
+   if (mp^.mnt_stat.f_fsid.val[0]=id0) and
+      (mp^.mnt_stat.f_fsid.val[1]=id1) then
+    break;
+   mp:=TAILQ_PREV(mp,@mp^.mnt_list);
+  end;
+  mtx_unlock(mountlist_mtx);
+ end else
+ begin
+  {
+   * Try to find global path for path argument.
+   }
+  NDINIT(@nd, LOOKUP,
+         FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,
+         UIO_SYSSPACE, @pathbuf, curkthread);
+
+  if (nd_namei(@nd)=0) then
+  begin
+   vfslocked:=NDHASGIANT(@nd);
+   NDFREE(@nd, NDF_ONLY_PNBUF);
+
+   error:=vn_path_to_global_path(nd.ni_vp,@pathbuf,MNAMELEN);
+
+   if (error=0) or (error=ENODEV) then
+    vput(nd.ni_vp);
+
+   VFS_UNLOCK_GIANT(vfslocked);
+  end;
+
+  mtx_lock(mountlist_mtx);
+  mp:=TAILQ_LAST(@mountlist);
+  while (mp<>nil) do
+  begin
+   if (strcomp(@mp^.mnt_stat.f_mntonname, @pathbuf)=0) then
+    break;
+   mp:=TAILQ_PREV(mp,@mp^.mnt_list);
+  end;
+  mtx_unlock(mountlist_mtx);
+ end;
+
+ if (mp=nil) then
+ begin
+  {
+   * Previously we returned ENOENT for a nonexistent path and
+   * EINVAL for a non-mountpoint.  We cannot tell these apart
+   * now, so in the !MNT_BYFSID case return the more likely
+   * EINVAL for compatibility.
+   }
+  mtx_unlock(VFS_Giant);
+
+  if ((flags and MNT_BYFSID)<>0) then
+   Exit(ENOENT)
+  else
+   Exit(EINVAL);
+ end;
+
+ {
+  * Don't allow unmounting the root filesystem.
+  }
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  mtx_unlock(VFS_Giant);
+  Exit(EINVAL);
+ end;
+
+ error:=dounmount(mp, flags);
+
+ mtx_unlock(VFS_Giant);
+ Exit(error);
+end;
 
 
 end.

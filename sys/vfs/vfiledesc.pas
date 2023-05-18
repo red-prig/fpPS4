@@ -105,8 +105,7 @@ end;
 
 procedure fd_table_init;
 begin
- id_table_init(@fd_table.fd_ofiles,0);
- fd_table.fd_ofiles.max_key:=maxfilesperproc;
+ id_table_init(@fd_table.fd_ofiles,0,maxfilesperproc);
 end;
 
 finalization

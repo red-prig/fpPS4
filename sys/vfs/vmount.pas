@@ -273,6 +273,9 @@ type
   vfs_susp_clean:vfs_susp_clean_t;
  end;
 
+ t_fsnamelen=array[0..MFSNAMELEN-1] of AnsiChar;
+ t_mname    =array[0..MNAMELEN-1]   of AnsiChar;
+
 {
   * Filesystem configuration information. One of these exists for each
   * type of filesystem supported by the kernel. These are searched at
@@ -282,9 +285,9 @@ type
 }
  p_vfsoptdecl=Pointer;
 
- vfsconf=packed record
+ vfsconf=record
   vfc_version :DWORD       ; // ABI version number
-  vfc_name    :array[0..MFSNAMELEN-1+4] of Char; // filesystem type name
+  vfc_name    :t_fsnamelen ; // filesystem type name
   vfc_vfsops  :p_vfsops    ; // filesystem operations vector
   vfc_typenum :Integer     ; // historic filesystem type number
   vfc_refcount:Integer     ; // number mounted of this type
@@ -312,10 +315,10 @@ type
   f_namemax    :DWORD;  // maximum filename length
   f_owner      :DWORD;  // user that mounted the filesystem
   f_fsid       :fsid_t; // filesystem id
-  f_charspare  :array[0..79]           of char;   // spare string space
-  f_fstypename :array[0..MFSNAMELEN-1] of char;   // filesystem type name
-  f_mntfromname:array[0..MNAMELEN-1]   of char;   // mounted filesystem
-  f_mntonname  :array[0..MNAMELEN-1]   of char;   // directory on which mounted
+  f_charspare  :array[0..79] of AnsiChar; // spare string space
+  f_fstypename :t_fsnamelen; // filesystem type name
+  f_mntfromname:t_mname;     // mounted filesystem
+  f_mntonname  :t_mname;     // directory on which mounted
  end;
 
  {

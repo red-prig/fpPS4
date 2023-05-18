@@ -347,6 +347,7 @@ begin
  dirbuflen:=DEV_BSIZE;
  if (dirbuflen < va.va_blocksize) then
   dirbuflen:=va.va_blocksize;
+
  dirbuf:=AllocMem(dirbuflen);
 
  off:=0;
@@ -357,7 +358,7 @@ begin
    goto _out;
 
   if (dp^.d_type<>DT_WHT) and
-     (StrComp(PChar(@dp^.d_name),PChar(dirname))=0) then
+     (Strcomp(PChar(@dp^.d_name),PChar(dirname))=0) then
   begin
    found:=1;
    goto _out;
@@ -847,6 +848,7 @@ begin
  dirbuflen:=DEV_BSIZE;
  if (dirbuflen < va.va_blocksize) then
   dirbuflen:=va.va_blocksize;
+
  dirbuf:=AllocMem(dirbuflen);
 
  if (dvp^^.v_type<>VDIR) then
@@ -870,7 +872,7 @@ begin
    begin
     VOP_UNLOCK(dvp^, 0);
     vn_lock(mvp, LK_EXCLUSIVE or LK_RETRY);
-    if (dirent_exists(mvp, dp^.d_name)<>0) then
+    if (dirent_exists(mvp, dp^.d_name)=0) then
     begin
      error:=ENOENT;
      VOP_UNLOCK(mvp, 0);
@@ -880,7 +882,7 @@ begin
     VOP_UNLOCK(mvp, 0);
     vn_lock(dvp^, LK_EXCLUSIVE or LK_RETRY);
    end;
-   i -= dp^.d_namlen;
+   Dec(i,dp^.d_namlen);
 
    if (i < 0) then
    begin

@@ -77,8 +77,7 @@ end;
 function new_unrhdr(min,max:Integer):p_id_desc_table;
 begin
  Result:=AllocMem(SizeOf(t_id_desc_table));
- id_table_init(Result,min);
- Result^.max_key:=max;
+ id_table_init(Result,min,max);
 end;
 
 function alloc_unr(p:p_id_desc_table):Integer;
@@ -187,6 +186,9 @@ begin
  error:=devfs_root(mp, LK_EXCLUSIVE, @rvp);
  if (error<>0) then
  begin
+  sx_xlock(@fmp^.dm_lock);
+  devfs_purge(fmp,fmp^.dm_rootdir);
+  sx_xunlock(@fmp^.dm_lock);
   sx_destroy(@fmp^.dm_lock);
   free_unr(devfs_unr, fmp^.dm_idx);
   FreeMem(fmp);

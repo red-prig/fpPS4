@@ -378,8 +378,15 @@ begin
  if (error=0) then
  begin
   error:=vfs_mountroot_simple('nullfs','/null','/dev',nil,0);
-  //error:=vfs_mountroot_simple('devfs','/app0',nil,nil,0);
  end;
+
+ error:=kern_mkdir('app0',UIO_SYSSPACE,&777);
+ if (error=0) then
+ begin
+  error:=vfs_mountroot_simple('ufs','/app0','/',nil,0);
+ end;
+
+ //error:=kern_unmount('/app0',0);
 
  mount_print;
 

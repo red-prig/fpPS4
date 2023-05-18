@@ -410,15 +410,17 @@ end;
 
 procedure vn_finished_write(mp:p_mount);
 begin
- if (mp=nil) then
-  Exit;
+ if (mp=nil) then Exit;
  MNT_ILOCK(mp);
  MNT_REL(mp);
+
  Dec(mp^.mnt_writeopcount);
  if (mp^.mnt_writeopcount < 0) then
   Assert(false,'vn_finished_write: neg cnt');
+
  if ((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0) and (mp^.mnt_writeopcount<=0) then
   wakeup(@mp^.mnt_writeopcount);
+
  MNT_IUNLOCK(mp);
 end;
 
@@ -469,8 +471,9 @@ begin
   * systems which don't support these fields don't need to know
   * about them.
   }
- vap^.va_birthtime.tv_sec:=-1;
+ vap^.va_birthtime.tv_sec :=-1;
  vap^.va_birthtime.tv_nsec:=0;
+
  vap^.va_fsid:=VNOVAL;
  vap^.va_rdev:=NODEV;
 

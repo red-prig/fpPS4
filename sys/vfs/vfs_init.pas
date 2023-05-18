@@ -12,6 +12,7 @@ uses
  vmount;
 
 function vfs_byname(name:PChar):p_vfsconf;
+function vfs_byname_kld(fstype:PChar;error:PInteger):p_vfsconf;
 function vfs_register(vfc:p_vfsconf):Integer;
 function vfs_unregister(vfc:p_vfsconf):Integer;
 
@@ -69,6 +70,43 @@ begin
   if (strcomp(name, vfsp^.vfc_name)=0) then Exit(vfsp);
   vfsp:=TAILQ_NEXT(vfsp,@vfsp^.vfc_list);
  end;
+end;
+
+function vfs_byname_kld(fstype:PChar;error:PInteger):p_vfsconf;
+var
+ vfsp:p_vfsconf;
+ fileid,loaded:Integer;
+begin
+ vfsp:=vfs_byname(fstype);
+ if (vfsp<>nil) then Exit(vfsp);
+
+ error^:=ENODEV;
+
+ {
+  { Try to load the respective module. }
+  error^:=kern_kldload(td, fstype, @fileid);
+
+  loaded:=(error^=0);
+
+  if (error^=EEXIST)
+   error^:=0;
+
+  if (error^<>0) then
+   Exit(nil);
+
+  { Look up again to see if the VFS was loaded. }
+  vfsp:=vfs_byname(fstype);
+  if (vfsp=nil)
+  begin
+   if (loaded<>0) then
+    kern_kldunload(td, fileid, LINKER_UNLOAD_FORCE);
+
+   error^:=ENODEV;
+   Exit(nil);
+  end;
+ }
+
+ Exit(vfsp);
 end;
 
 { Register a new filesystem type in the global table }

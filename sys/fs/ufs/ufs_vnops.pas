@@ -9,13 +9,9 @@ uses
  mqueue,
  time,
  vfile,
- vfilio,
- vttycom,
  vmount,
  vdirent,
- vstat,
  vuio,
- vfcntl,
  vnode,
  vnamei,
  vnode_if,
@@ -25,21 +21,21 @@ uses
  kern_mtx,
  kern_sx;
 
-function ufs_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
+function  ufs_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
+procedure ufs_purge(dm:p_ufs_mount;dd:p_ufs_dirent);
 
-function ufs_lookup(ap:p_vop_lookup_args):Integer;
-function ufs_access(ap:p_vop_access_args):Integer;
-function ufs_getattr(ap:p_vop_getattr_args):Integer;
-function ufs_setattr(ap:p_vop_setattr_args):Integer;
-function ufs_readdir(ap:p_vop_readdir_args):Integer;
-function ufs_rread(ap:p_vop_read_args):Integer;
-function ufs_readlink(ap:p_vop_readlink_args):Integer;
-function ufs_symlink(ap:p_vop_symlink_args):Integer;
-function ufs_revoke(ap:p_vop_revoke_args):Integer;
-function ufs_remove(ap:p_vop_remove_args):Integer;
-function ufs_rmdir(ap:p_vop_rmdir_args):Integer;
-function ufs_mkdir(ap:p_vop_mkdir_args):Integer;
-function ufs_reclaim(ap:p_vop_reclaim_args):Integer;
+function  ufs_lookup(ap:p_vop_lookup_args):Integer;
+function  ufs_access(ap:p_vop_access_args):Integer;
+function  ufs_getattr(ap:p_vop_getattr_args):Integer;
+function  ufs_setattr(ap:p_vop_setattr_args):Integer;
+function  ufs_readdir(ap:p_vop_readdir_args):Integer;
+function  ufs_rread(ap:p_vop_read_args):Integer;
+function  ufs_readlink(ap:p_vop_readlink_args):Integer;
+function  ufs_symlink(ap:p_vop_symlink_args):Integer;
+function  ufs_remove(ap:p_vop_remove_args):Integer;
+function  ufs_rmdir(ap:p_vop_rmdir_args):Integer;
+function  ufs_mkdir(ap:p_vop_mkdir_args):Integer;
+function  ufs_reclaim(ap:p_vop_reclaim_args):Integer;
 
 const
  ufs_vnodeops_root:vop_vector=(
@@ -63,7 +59,7 @@ const
   vop_ioctl         :nil;
   vop_poll          :nil;
   vop_kqfilter      :nil;
-  vop_revoke        :@ufs_revoke;
+  vop_revoke        :nil;
   vop_fsync         :nil;
   vop_remove        :@ufs_remove;
   vop_link          :nil;
@@ -98,7 +94,7 @@ const
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
   vop_vptofh        :nil;
-  vop_vptocnp       :nil;//@devfs_vptocnp;
+  vop_vptocnp       :nil;//@ufs_vptocnp;
   vop_allocate      :nil;
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
@@ -110,12 +106,8 @@ implementation
 uses
  sysutils,
  errno,
- systm,
  kern_thr,
  vfs_subr,
- vsys_generic,
- kern_descrip,
- kern_mtxpool,
  subr_uio;
 
 const
@@ -136,12 +128,10 @@ begin
   Exit(nil);
 
  de:=TAILQ_FIRST(@de^.ufs_dlist); { '.' }
- if (de=nil) then
-  Exit(nil);
+ if (de=nil) then Exit(nil);
 
  de:=TAILQ_NEXT(de,@de^.ufs_list);  { '..' }
- if (de=nil) then
-  Exit(nil);
+ if (de=nil) then Exit(nil);
 
  Exit(de^.ufs_dir);
 end;
@@ -166,11 +156,15 @@ begin
  vfs_timestamp(@de^.ufs_ctime);
  de^.ufs_mtime  :=de^.ufs_ctime;
  de^.ufs_atime  :=de^.ufs_ctime;
+ de^.ufs_btime  :=de^.ufs_ctime;
+
  de^.ufs_links  :=1;
  de^.ufs_ref    :=1;
 
  Exit(de);
 end;
+
+function _ufs_rmdir(dm:p_ufs_mount;de:p_ufs_dirent):Integer; forward;
 
 {
  * The caller needs to hold the dm for the duration of the call since
@@ -181,6 +175,8 @@ var
  dd:p_ufs_dirent;
  vp:p_vnode;
 begin
+ if (dm=nil) or (de=nil) then Exit;
+
  Assert((de^.ufs_flags and UFS_DOOMED)=0,'ufs_delete doomed dirent');
  de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
 
@@ -205,17 +201,22 @@ begin
   mtx_unlock(ufs_interlock);
   vholdl(vp);
   sx_unlock(@dm^.ufs_lock);
+
   if ((flags and UFS_DEL_VNLOCKED)=0) then
    vn_lock(vp, LK_EXCLUSIVE or LK_INTERLOCK or LK_RETRY)
   else
    VI_UNLOCK(vp);
+
   vgone(vp);
+
   if ((flags and UFS_DEL_VNLOCKED)=0) then
    VOP_UNLOCK(vp, 0);
+
   vdrop(vp);
   sx_xlock(@dm^.ufs_lock);
  end else
   mtx_unlock(ufs_interlock);
+
  if (de^.ufs_symlink<>nil) then
  begin
   FreeMem(de^.ufs_symlink);
@@ -232,7 +233,14 @@ begin
 
  if (dd<>nil) then
  begin
-  ufs_de_drop(dd);
+  if ufs_de_drop(dd) then
+  begin
+   //
+  end else
+  if ((flags and UFS_DEL_NORECURSE)=0) then
+  begin
+   _ufs_rmdir(dm, de);
+  end;
  end;
 
 end;
@@ -242,6 +250,7 @@ var
  de_dot,de_dotdot:p_ufs_dirent;
 begin
  Result:=0;
+ if (dm=nil) or (de=nil) then Exit;
 
  sx_assert(@dm^.ufs_lock);
 
@@ -262,10 +271,13 @@ begin
 end;
 
 function _ufs_rmdir(dm:p_ufs_mount;de:p_ufs_dirent):Integer;
+label
+ next;
 var
  dd,de_dot,de_dotdot:p_ufs_dirent;
 begin
  Result:=0;
+ if (dm=nil) or (de=nil) then Exit;
 
  sx_assert(@dm^.ufs_lock);
 
@@ -274,28 +286,77 @@ begin
  if ((de^.ufs_flags and UFS_DOOMED)<>0) or (de=dm^.ufs_rootdir) then
   Exit(EBUSY);
 
+ dd       :=nil;
+ de_dot   :=nil;
+ de_dotdot:=nil;
+
  de_dot:=TAILQ_FIRST(@de^.ufs_dlist);
- Assert(de_dot<>nil, 'ufs_rmdir: . missing');
+ if (de_dot=nil) then
+ begin
+  //goto
+ end;
 
  de_dotdot:=TAILQ_NEXT(de_dot,@de_dot^.ufs_list);
- Assert(de_dotdot<>nil, 'ufs_rmdir: .. missing');
+ if (de_dotdot=nil) then
+ begin
+  //goto
+ end;
 
  { Exit if the directory is not empty. }
  if (TAILQ_NEXT(de_dotdot,@de_dotdot^.ufs_list)<>nil) then
   Exit(ENOTEMPTY);
 
  dd:=ufs_parent_dirent(de);
- Assert(dd<>nil, 'ufs_rmdir: nil dd');
 
- TAILQ_REMOVE(@de^.ufs_dlist,de_dot,@de_dot^.ufs_list);
- TAILQ_REMOVE(@de^.ufs_dlist,de_dotdot,@de_dotdot^.ufs_list);
- TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
+ next:
+
+ if (de_dot<>nil) then
+ begin
+  TAILQ_REMOVE(@de^.ufs_dlist,de_dot,@de_dot^.ufs_list);
+ end;
+ if (de_dotdot<>nil) then
+ begin
+  TAILQ_REMOVE(@de^.ufs_dlist,de_dotdot,@de_dotdot^.ufs_list);
+ end;
+ if (dd<>nil) then
+ begin
+  TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
+ end;
 
  ufs_de_hold(dd);
  ufs_delete(dm, de       ,UFS_DEL_NORECURSE);
  ufs_delete(dm, de_dot   ,UFS_DEL_NORECURSE);
  ufs_delete(dm, de_dotdot,UFS_DEL_NORECURSE);
  ufs_de_drop(dd);
+end;
+
+procedure ufs_purge(dm:p_ufs_mount;dd:p_ufs_dirent);
+var
+ de:p_ufs_dirent;
+begin
+ sx_assert(@dm^.ufs_lock);
+
+ ufs_de_hold(dd);
+ repeat
+  de:=TAILQ_LAST(@dd^.ufs_dlist);
+  if (de=nil) then break;
+
+  TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
+
+  if ((de^.ufs_flags and (UFS_DOT or UFS_DOTDOT))<>0) then
+   ufs_delete(dm, de, UFS_DEL_NORECURSE)
+  else
+  if (de^.ufs_dirent^.d_type=DT_DIR) then
+   ufs_purge(dm, de)
+  else
+   ufs_delete(dm, de, UFS_DEL_NORECURSE);
+
+ until false;
+
+ ufs_de_drop(dd);
+
+ if ((dd^.ufs_flags and UFS_DOOMED)=0) then
+  ufs_delete(dm, dd, UFS_DEL_NORECURSE);
 end;
 
 function ufs_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
@@ -391,7 +452,6 @@ function ufs_lookupx(ap:p_vop_lookup_args;dm_unlock:PInteger):Integer;
 label
  _or;
 var
- td:p_kthread;
  cnp:p_componentname;
  dvp:p_vnode;
  vpp:pp_vnode;
@@ -405,7 +465,6 @@ begin
  vpp:=ap^.a_vpp;
  dvp:=ap^.a_dvp;
  pname:=cnp^.cn_nameptr;
- td:=cnp^.cn_thread;
  flags:=cnp^.cn_flags;
  nameiop:=cnp^.cn_nameiop;
  dmp:=VFSTOUFS(dvp^.v_mount);
@@ -413,11 +472,6 @@ begin
  vpp^:=nil;
 
  dm_unlock^:=0;
-
- //if (p_mount(dvp^.v_mount)^.mnt_flag and MNT_ROOTFS)<>0 then
- // Writeln(' MNT_ROOTFS')
- //else
- // Writeln('!MNT_ROOTFS');
 
  //if ((flags and ISLASTCN)<>0) and (nameiop=RENAME) then
  // Exit(EOPNOTSUPP);
@@ -532,20 +586,18 @@ end;
 
 function ufs_lookup(ap:p_vop_lookup_args):Integer;
 var
- j:Integer;
  dmp:p_ufs_mount;
  dm_unlock:Integer;
 begin
  dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
  dm_unlock:=1;
 
- j:=ufs_lookupx(ap, @dm_unlock);
+ Result:=ufs_lookupx(ap, @dm_unlock);
 
  if (dm_unlock=1) then
  begin
   sx_xunlock(@dmp^.ufs_lock);
  end;
- Exit(j);
 end;
 
 function ufs_access(ap:p_vop_access_args):Integer;
@@ -557,9 +609,6 @@ begin
  vp:=ap^.a_vp;
 
  de:=vp^.v_data;
-
- if (vp^.v_type=VDIR) then
-  de:=de^.ufs_dir;
 
  error:=vaccess(vp^.v_type, de^.ufs_mode, de^.ufs_uid, de^.ufs_gid, ap^.a_accmode, nil);
  if (error=0) then
@@ -582,11 +631,6 @@ var
 
  procedure fix(var src,dst:timespec); inline;
  begin
-  if (src.tv_sec <= 3600) then
-  begin
-   src.tv_sec :=boottime.tv_sec;
-   src.tv_nsec:=boottime.tv_usec * 1000;
-  end;
   dst:=src;
  end;
 
@@ -596,34 +640,36 @@ begin
  vap:=ap^.a_vap;
 
  de:=vp^.v_data;
- if (vp^.v_type=VDIR) then
- begin
-  de:=de^.ufs_dir;
- end;
 
  vap^.va_uid :=de^.ufs_uid;
  vap^.va_gid :=de^.ufs_gid;
  vap^.va_mode:=de^.ufs_mode;
 
- if (vp^.v_type=VLNK) then
-  vap^.va_size:=strlen(de^.ufs_symlink)
- else
- if (vp^.v_type=VDIR) then
- begin
-  vap^.va_size :=DEV_BSIZE;
-  vap^.va_bytes:=DEV_BSIZE;
- end else
-  vap^.va_size:=0;
-
- if (vp^.v_type<>VDIR) then
-  vap^.va_bytes:=0;
+ case vp^.v_type of
+  VLNK:
+   begin
+    vap^.va_size :=strlen(de^.ufs_symlink);
+    vap^.va_bytes:=0;
+   end;
+  VDIR:
+   begin
+    vap^.va_size :=DEV_BSIZE;
+    vap^.va_bytes:=DEV_BSIZE;
+   end;
+  else
+   begin
+    vap^.va_size :=0;
+    vap^.va_bytes:=0;
+   end;
+ end;
 
  vap^.va_blocksize:=DEV_BSIZE;
  vap^.va_type:=vp^.v_type;
 
- fix(de^.ufs_atime,vap^.va_atime);
- fix(de^.ufs_mtime,vap^.va_mtime);
- fix(de^.ufs_ctime,vap^.va_ctime);
+ vap^.va_atime    :=de^.ufs_atime;
+ vap^.va_mtime    :=de^.ufs_mtime;
+ vap^.va_ctime    :=de^.ufs_ctime;
+ vap^.va_birthtime:=de^.ufs_btime;
 
  vap^.va_gen    :=0;
  vap^.va_flags  :=0;
@@ -646,32 +692,30 @@ begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
 
- if (vap^.va_type<>VNON) or
-    (vap^.va_nlink<>WORD(VNOVAL)) or
-    (vap^.va_fsid<>VNOVAL) or
-    (vap^.va_fileid<>QWORD(VNOVAL)) or
-    (vap^.va_blocksize<>QWORD(VNOVAL)) or
-    ((vap^.va_flags<>QWORD(VNOVAL)) and (vap^.va_flags<>0)) or
-    (vap^.va_rdev<>VNOVAL) or
-    (vap^.va_bytes<>QWORD(VNOVAL)) or
-    (vap^.va_gen<>QWORD(VNOVAL)) then
+ if (vap^.va_type     <>VNON) or
+    (vap^.va_nlink    <>VNOVAL) or
+    (vap^.va_fsid     <>VNOVAL) or
+    (vap^.va_fileid   <>VNOVAL) or
+    (vap^.va_blocksize<>VNOVAL) or
+    ((vap^.va_flags   <>VNOVAL) and (vap^.va_flags<>0)) or
+    (vap^.va_rdev     <>VNOVAL) or
+    (vap^.va_bytes    <>VNOVAL) or
+    (vap^.va_gen      <>VNOVAL) then
  begin
   Exit(EINVAL);
  end;
 
  de:=vp^.v_data;
- if (vp^.v_type=VDIR) then
-  de:=de^.ufs_dir;
 
  error:=0;
  c:=0;
 
- if (vap^.va_uid=uid_t(VNOVAL)) then
+ if (vap^.va_uid=VNOVAL) then
   uid:=de^.ufs_uid
  else
   uid:=vap^.va_uid;
 
- if (vap^.va_gid=gid_t(VNOVAL)) then
+ if (vap^.va_gid=VNOVAL) then
   gid:=de^.ufs_gid
  else
   gid:=vap^.va_gid;
@@ -690,7 +734,7 @@ begin
   c:=1;
  end;
 
- if (vap^.va_mode<>WORD(VNOVAL)) then
+ if (vap^.va_mode<>VNOVAL) then
  begin
   //if (ap^.a_cred^.cr_uid<>de^.de_uid) then
   //begin
@@ -777,23 +821,16 @@ begin
    continue;
   end;
 
-  if (dd^.ufs_dirent^.d_type=DT_DIR) then
-   de:=dd^.ufs_dir
-  else
-   de:=dd;
-
   dp:=dd^.ufs_dirent;
 
-  if (dp^.d_reclen > uio^.uio_resid) then
-   break;
+  if (dp^.d_reclen > uio^.uio_resid) then break;
 
-  dp^.d_fileno:=de^.ufs_inode;
+  dp^.d_fileno:=dd^.ufs_inode;
 
   if (off >= uio^.uio_offset) then
   begin
    error:=vfs_read_dirent(ap, dp, off);
-   if (error<>0) then
-    break;
+   if (error<>0) then break;
   end;
 
   Inc(off,dp^.d_reclen);
@@ -846,7 +883,6 @@ begin
  sx_xlock(@dmp^.ufs_lock);
 
  dd:=ap^.a_dvp^.v_data;
-
  de_cov:=ufs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
 
  if (de_cov<>nil) then
@@ -871,21 +907,6 @@ begin
  TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);
 
  Exit(ufs_allocv(de, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp));
-end;
-
-function ufs_revoke(ap:p_vop_revoke_args):Integer;
-var
- vp:p_vnode;
-begin
- vp:=ap^.a_vp;
-
- Assert((ap^.a_flags and REVOKEALL)<>0,'ufs_revoke !REVOKEALL');
-
- vhold(vp);
- vgone(vp);
- vdrop(vp);
-
- Exit(0);
 end;
 
 function ufs_remove(ap:p_vop_remove_args):Integer;
@@ -935,7 +956,7 @@ begin
   _ufs_rmdir(dmp, de);
  end else
  begin
-  ufs_delete(dmp, de, 0);
+  ufs_delete(dmp, de, UFS_DEL_NORECURSE);
  end;
 
  sx_xunlock(@dmp^.ufs_lock);
@@ -994,7 +1015,7 @@ end;
 
 function ufs_mkdir(ap:p_vop_mkdir_args):Integer;
 var
- dvp,vp:p_vnode;
+ dvp:p_vnode;
  cnp:p_componentname;
  vap:p_vattr;
  dmp:p_ufs_mount;
@@ -1021,7 +1042,7 @@ begin
   Exit(EEXIST);
  end;
 
- de:=ufs_vmkdir(dmp,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,dd,ufs_alloc_cdp_inode);
+ de:=ufs_vmkdir(dmp,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,dd,0);
 
  de^.ufs_mode :=vap^.va_mode;
 

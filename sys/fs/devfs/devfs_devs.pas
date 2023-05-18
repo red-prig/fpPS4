@@ -341,17 +341,22 @@ begin
   mtx_unlock(devfs_de_interlock);
   vholdl(vp);
   sx_unlock(@dm^.dm_lock);
+
   if ((flags and DEVFS_DEL_VNLOCKED)=0) then
    vn_lock(vp, LK_EXCLUSIVE or LK_INTERLOCK or LK_RETRY)
   else
    VI_UNLOCK(vp);
+
   vgone(vp);
+
   if ((flags and DEVFS_DEL_VNLOCKED)=0) then
    VOP_UNLOCK(vp, 0);
+
   vdrop(vp);
   sx_xlock(@dm^.dm_lock);
  end else
   mtx_unlock(devfs_de_interlock);
+
  if (de^.de_symlink<>nil) then
  begin
   FreeMem(de^.de_symlink);
@@ -396,11 +401,12 @@ begin
    * devfs_dir_unref_de().
    }
   de:=TAILQ_LAST(@dd^.de_dlist);
-  if (de=nil) then
-   break;
+  if (de=nil) then break;
+
   TAILQ_REMOVE(@dd^.de_dlist,de,@de^.de_list);
   if ((de^.de_flags and DE_USER)<>0) then
    devfs_dir_unref_de(dm, dd);
+
   if ((de^.de_flags and (DE_DOT or DE_DOTDOT))<>0) then
    devfs_delete(dm, de, DEVFS_DEL_NORECURSE)
   else
@@ -408,7 +414,9 @@ begin
    devfs_purge(dm, de)
   else
    devfs_delete(dm, de, DEVFS_DEL_NORECURSE);
+
  until false;
+
  if DEVFS_DE_DROP(dd) then
   devfs_dirent_free(dd)
  else
@@ -528,7 +536,6 @@ begin
    continue;
   end;
 
-
   Inc(cdp^.cdp_inuse);
   dev_unlock();
 
@@ -540,12 +547,13 @@ begin
   repeat
    q:=s;
    while (q^<>'/') and (q^<>#0) do Inc(q);
-   if (q^<>'/') then
-    break;
+   if (q^<>'/') then break;
+
    de:=devfs_find(dd, s, q - s, 0);
    if (de=nil) then
-    de:=devfs_vmkdir(dm, s, q - s, dd, 0)
-   else
+   begin
+    de:=devfs_vmkdir(dm, s, q - s, dd, 0);
+   end else
    if (de^.de_dirent^.d_type=DT_LNK) then
    begin
     de:=devfs_find(dd, s, q - s, DT_DIR);
@@ -557,6 +565,7 @@ begin
    dd:=de;
    Assert((dd^.de_dirent^.d_type=DT_DIR) and ((dd^.de_flags and (DE_DOT or DE_DOTDOT))=0),'invalid directory');
   until false;
+
   de_flags:=0;
   de:=devfs_find(dd, s, q - s, DT_LNK);
   if (de<>nil) then

@@ -344,17 +344,17 @@ begin
  vp:=ap^.a_vp;
  vap:=ap^.a_vap;
 
- if ((vap^.va_flags<>QWORD(VNOVAL)) or
-     (vap^.va_uid<>Integer(VNOVAL)) or
-     (vap^.va_gid<>Integer(VNOVAL)) or
+ if ((vap^.va_flags       <>VNOVAL) or
+     (vap^.va_uid         <>VNOVAL) or
+     (vap^.va_gid         <>VNOVAL) or
      (vap^.va_atime.tv_sec<>VNOVAL) or
      (vap^.va_mtime.tv_sec<>VNOVAL) or
-     (vap^.va_mode<>Word(VNOVAL))
+     (vap^.va_mode        <>VNOVAL)
     ) and
     ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
   Exit(EROFS);
 
- if (vap^.va_size<>QWORD(VNOVAL)) then
+ if (vap^.va_size<>VNOVAL) then
  begin
   case (vp^.v_type) of
    VDIR:
@@ -366,7 +366,7 @@ begin
    VSOCK,
    VFIFO:
     begin
-     if (vap^.va_flags<>QWORD(VNOVAL)) then
+     if (vap^.va_flags<>VNOVAL) then
       Exit(EOPNOTSUPP);
      Exit(0);
     end;

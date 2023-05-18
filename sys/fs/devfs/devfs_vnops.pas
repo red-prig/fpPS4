@@ -50,7 +50,6 @@ function  devfs_getattr(ap:p_vop_getattr_args):Integer;
 function  devfs_ioctl_f(fp:p_file;com:QWORD;data:Pointer):Integer;
 function  devfs_kqfilter_f(fp:p_file;kn:Pointer):Integer;
 function  devfs_prison_check(de:p_devfs_dirent):Integer;
-function  devfs_lookupx(ap:p_vop_lookup_args;dm_unlock:PInteger):Integer;
 function  devfs_lookup(ap:p_vop_lookup_args):Integer;
 function  devfs_mknod(ap:p_vop_mknod_args):Integer;
 function  devfs_open(ap:p_vop_open_args):Integer;
@@ -569,6 +568,7 @@ begin
   sx_xunlock(@dmp^.dm_lock);
   Exit(ENOENT);
  end;
+
 loop:
  DEVFS_DE_HOLD(de);
  DEVFS_DMP_HOLD(dmp);
@@ -899,18 +899,23 @@ begin
  vap^.va_gid :=de^.de_gid;
  vap^.va_mode:=de^.de_mode;
 
- if (vp^.v_type=VLNK) then
-  vap^.va_size:=strlen(de^.de_symlink)
- else
- if (vp^.v_type=VDIR) then
- begin
-  vap^.va_size :=DEV_BSIZE;
-  vap^.va_bytes:=DEV_BSIZE;
- end else
-  vap^.va_size:=0;
-
- if (vp^.v_type<>VDIR) then
-  vap^.va_bytes:=0;
+ case vp^.v_type of
+  VLNK:
+   begin
+    vap^.va_size :=strlen(de^.de_symlink);
+    vap^.va_bytes:=0;
+   end;
+  VDIR:
+   begin
+    vap^.va_size :=DEV_BSIZE;
+    vap^.va_bytes:=DEV_BSIZE;
+   end;
+  else
+   begin
+    vap^.va_size :=0;
+    vap^.va_bytes:=0;
+   end;
+ end;
 
  vap^.va_blocksize:=DEV_BSIZE;
  vap^.va_type:=vp^.v_type;
@@ -1220,7 +1225,6 @@ end;
 
 function devfs_lookup(ap:p_vop_lookup_args):Integer;
 var
- j:Integer;
  dmp:p_devfs_mount;
  dm_unlock:Integer;
 begin
@@ -1231,13 +1235,12 @@ begin
 
  dmp:=VFSTODEVFS(ap^.a_dvp^.v_mount);
  dm_unlock:=1;
- j:=devfs_lookupx(ap, @dm_unlock);
+ Result:=devfs_lookupx(ap, @dm_unlock);
 
  if (dm_unlock=1) then
  begin
   sx_xunlock(@dmp^.dm_lock);
  end;
- Exit(j);
 end;
 
 function devfs_mknod(ap:p_vop_mknod_args):Integer;
@@ -1768,15 +1771,15 @@ begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
 
- if (vap^.va_type<>VNON) or
-    (vap^.va_nlink<>WORD(VNOVAL)) or
-    (vap^.va_fsid<>VNOVAL) or
-    (vap^.va_fileid<>QWORD(VNOVAL)) or
-    (vap^.va_blocksize<>QWORD(VNOVAL)) or
-    ((vap^.va_flags<>QWORD(VNOVAL)) and (vap^.va_flags<>0)) or
-    (vap^.va_rdev<>VNOVAL) or
-    (vap^.va_bytes<>QWORD(VNOVAL)) or
-    (vap^.va_gen<>QWORD(VNOVAL)) then
+ if (vap^.va_type     <>VNON) or
+    (vap^.va_nlink    <>VNOVAL) or
+    (vap^.va_fsid     <>VNOVAL) or
+    (vap^.va_fileid   <>VNOVAL) or
+    (vap^.va_blocksize<>VNOVAL) or
+    ((vap^.va_flags   <>VNOVAL) and (vap^.va_flags<>0)) or
+    (vap^.va_rdev     <>VNOVAL) or
+    (vap^.va_bytes    <>VNOVAL) or
+    (vap^.va_gen      <>VNOVAL) then
  begin
   Exit(EINVAL);
  end;
@@ -1788,12 +1791,12 @@ begin
  error:=0;
  c:=0;
 
- if (vap^.va_uid=uid_t(VNOVAL)) then
+ if (vap^.va_uid=VNOVAL) then
   uid:=de^.de_uid
  else
   uid:=vap^.va_uid;
 
- if (vap^.va_gid=gid_t(VNOVAL)) then
+ if (vap^.va_gid=VNOVAL) then
   gid:=de^.de_gid
  else
   gid:=vap^.va_gid;
@@ -1812,7 +1815,7 @@ begin
   c:=1;
  end;
 
- if (vap^.va_mode<>WORD(VNOVAL)) then
+ if (vap^.va_mode<>VNOVAL) then
  begin
   //if (ap^.a_cred^.cr_uid<>de^.de_uid) then
   //begin
@@ -1883,6 +1886,7 @@ begin
  if (devfs_populate_vp(ap^.a_dvp)<>0) then
   Exit(ENOENT);
 
+ dd:=ap^.a_dvp^.v_data;
  de_cov:=devfs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
 
  if (de_cov<>nil) then
@@ -1897,7 +1901,6 @@ begin
   de_cov^.de_flags:=de_cov^.de_flags or DE_COVERED;
  end;
 
- dd:=ap^.a_dvp^.v_data;
  de:=devfs_newdirent(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
  de^.de_flags:=DE_USER;
  de^.de_uid  :=0;

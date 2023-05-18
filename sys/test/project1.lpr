@@ -301,7 +301,7 @@ begin
   Writeln(Space(s),namep,' | (',err,')');
  end else
  begin
-  Write(Space(s),namep,' | ',ts_to_str(sb.st_mtim),' |');
+  Write(Space(s),namep,' | ',ts_to_str(sb.st_birthtim {st_mtim}),' |');
   _next:
 
   if ((sb.st_mode and S_IFDIR)<>0) then
@@ -378,14 +378,11 @@ begin
  if (tid<>curkthread^.td_tid) then
  begin
 
-  Writeln('sys_mkdir=',sys_mkdir('/test',&777));
-  Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
-
-  Writeln('sys_rmdir=',sys_rmdir('/test/test'));
-
-  Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
-
-  Writeln('sys_unlink=',sys_unlink('/test/test2'));
+  //Writeln('sys_mkdir=',sys_mkdir('/test',&777));
+  //Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
+  //Writeln('sys_rmdir=',sys_rmdir('/test/test'));
+  //Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
+  //Writeln('sys_unlink=',sys_unlink('/test/test2'));
 
   Writeln('[--test_dirs--]');
   test_dirs('','/',1);

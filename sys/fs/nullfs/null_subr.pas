@@ -151,7 +151,7 @@ begin
   if (a^.null_lowervp=lowervp) and (NULLTOV(a)^.v_mount=mp) then
   begin
    {
-    * Since we have the lower node locked the nilfs
+    * Since we have the lower node locked the nullfs
     * node can not be in the process of recycling.  If
     * it had been recycled before we grabed the lower
     * lock it would not have been found on the hash.
@@ -230,12 +230,12 @@ begin
 end;
 
 {
- * Make a new or get existing nilfs node.
+ * Make a new or get existing nullfs node.
  * Vp is the alias vnode, lowervp is the lower vnode.
  *
  * The lowervp assumed to be locked and having 'spare' reference. This routine
- * vrele lowervp if nilfs node was taken from hash. Otherwise it 'transfers'
- * the caller's 'spare' reference to created nilfs vnode.
+ * vrele lowervp if nullfs node was taken from hash. Otherwise it 'transfers'
+ * the caller's 'spare' reference to created nullfs vnode.
  }
 function null_nodeget(mp:p_mount;lowervp:p_vnode;vpp:pp_vnode):Integer;
 var
@@ -260,7 +260,7 @@ begin
 
  {
   * The insmntque1() call below requires the exclusive lock on
-  * the nilfs vnode.  Upgrade the lock now if hash failed to
+  * the nullfs vnode.  Upgrade the lock now if hash failed to
   * provide ready to use vnode.
   }
  if (lowervp<>nil) then

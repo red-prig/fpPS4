@@ -140,12 +140,15 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- thread_lock(td);
- if (prio=PRI_USER) then
-  prio:=td^.td_user_pri;
- if (prio>=0) then
-  sched_prio(td, prio);
- thread_unlock(td);
+ if (td<>nil) then
+ begin
+  thread_lock(td);
+  if (prio=PRI_USER) then
+   prio:=td^.td_user_pri;
+  if (prio>=0) then
+   sched_prio(td, prio);
+  thread_unlock(td);
+ end;
  mi_switch();
 end;
 
@@ -154,12 +157,15 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- thread_lock(td);
- if (PRI_BASE(td^.td_pri_class)=PRI_TIMESHARE) then
-  sched_prio(td, PRI_MAX_TIMESHARE);
- thread_unlock(td);
+ if (td<>nil) then
+ begin
+  thread_lock(td);
+  if (PRI_BASE(td^.td_pri_class)=PRI_TIMESHARE) then
+   sched_prio(td, PRI_MAX_TIMESHARE);
+  thread_unlock(td);
+  td^.td_retval[0]:=0;
+ end;
  mi_switch();
- td^.td_retval[0]:=0;
  Exit(0);
 end;
 

@@ -1674,6 +1674,7 @@ begin
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  error:=vn_stat(nd.ni_vp, @sb);
  if (error=0) then
@@ -1686,8 +1687,8 @@ begin
  VFS_UNLOCK_GIANT(vfslocked);
  if (error<>0) then
   Exit(error);
- sbp^:=sb;
 
+ sbp^:=sb;
  Exit(0);
 end;
 
@@ -2905,12 +2906,14 @@ var
 begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,
      UIO_USERSPACE, path, curkthread);
+
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  NDFREE(@nd, NDF_ONLY_PNBUF);
+
  if (vp^.v_type<>VCHR) or (vp^.v_rdev=nil) then
  begin
   error:=EINVAL;

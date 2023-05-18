@@ -1238,7 +1238,7 @@ var
 begin
 
  mtx_assert(devmtx);
- Assert((dev^.si_flags and SI_NAMED)<>0,'WARNING: Driver mistake: destroy_dev on %dn');
+ Assert((dev^.si_flags and SI_NAMED)<>0 ,'WARNING: Driver mistake: destroy_dev on %dn');
  Assert((dev^.si_flags and SI_ETERNAL)=0,'WARNING: Driver mistake: destroy_dev on eternal %dn');
 
  cdp:=cdev2priv(dev);

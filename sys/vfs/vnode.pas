@@ -239,28 +239,31 @@ type
  end;
 
  t_vnode=packed object
-  v_type:vtype;
-  v_tag :PChar;
-  v_op  :p_vop_vector;
-  v_data:Pointer;
 
+  //Fields which define the identity of the vnode
+  v_type:vtype;         // u vnode type
+  v_tag :PChar;         // u type of underlying data
+  v_op  :p_vop_vector;  // u vnode operations vector
+  v_data:Pointer;       // u private data for fs
+
+  //Filesystem instance stuff
   v_mount:Pointer;          //mount
   v_nmntvnodes:TAILQ_ENTRY; //vnode
 
-  v_un:Pointer;
+  v_un:Pointer; //Type specific fields, only one applies to any given vnode
 
   v_hash:DWORD;
 
-  v_holdcnt :Integer;
-  v_usecount:Integer;
-  v_writecount:Integer;
+  v_holdcnt :Integer;    //i prevents recycling.
+  v_usecount:Integer;    //i ref count of users
+  v_writecount:Integer;  //v ref count of writers
 
-  v_lock:mtx;
-  v_interlock:mtx;
-  v_vnlock:p_mtx;
+  v_lock:mtx;            // u (if fs don't have one)
+  v_interlock:mtx;       // lock for "i" things
+  v_vnlock:p_mtx;        //u pointer to vnode lock
 
-  v_iflag:QWORD;
-  v_vflag:QWORD;
+  v_iflag:QWORD;         //i vnode flags (see below)
+  v_vflag:QWORD;         //v vnode flags
 
   v_actfreelist:TAILQ_ENTRY;
 
@@ -273,27 +276,34 @@ type
  end;
 
  p_vattr=^t_vattr;
- t_vattr=packed record
+ t_vattr=record
   va_type     :vtype;
-  va_mode     :Word;
-  va_nlink    :Word;
+  va_mode     :SmallInt;
+  va_nlink    :SmallInt;
   va_uid      :Integer;
   va_gid      :Integer;
-  va_fsid     :Integer;
-  va_fileid   :QWORD;
-  va_size     :QWORD;
-  va_blocksize:QWORD;
+  va_fsid     :Int64;
+  va_fileid   :Integer;
+  va_size     :Int64;
+  va_blocksize:Integer;
   va_atime    :timespec;
   va_mtime    :timespec;
   va_ctime    :timespec;
   va_birthtime:timespec;
-  va_gen      :QWORD;
-  va_flags    :QWORD;
+  va_gen      :Integer;
+  va_flags    :Integer;
   va_rdev     :Integer;
-  va_bytes    :QWORD;
-  va_filerev  :QWORD;
-  va_vaflags  :DWORD;
+  va_bytes    :Int64;
+  va_filerev  :Int64;
+  va_vaflags  :Integer;
+  va_spare    :Integer;
  end;
+
+const
+ iftovt_tab:array[0..15] of vtype=(
+  VNON, VFIFO, VCHR, VNON, VDIR, VNON, VBLK, VNON,
+  VREG, VNON, VLNK, VNON, VSOCK, VNON, VNON, VBAD
+ );
 
 function  VOPARG_OFFSETTO(s_offset:Integer;struct_p:Pointer):Pointer;
 function  VCALL(c:Pointer):Integer;

@@ -648,7 +648,7 @@ unionlookup:
  //end;
 
  ndp^.ni_dvp:=dp;
- ndp^.ni_vp:=nil;
+ ndp^.ni_vp :=nil;
  ASSERT_VOP_LOCKED(dp, 'lookup');
  Assert(vfslocked=0,'lookup: vfslocked %d');
  {

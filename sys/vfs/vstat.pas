@@ -108,6 +108,11 @@ const
  IMMUTABLE=(UF_IMMUTABLE or SF_IMMUTABLE);
  NOUNLINK =(UF_NOUNLINK or SF_NOUNLINK);
 
+ vttoif_tab:array[0..9] of Integer=(
+  0, S_IFREG, S_IFDIR, S_IFBLK, S_IFCHR, S_IFLNK,
+  S_IFSOCK, S_IFIFO, S_IFMT, S_IFMT
+ );
+
 implementation
 
 end.

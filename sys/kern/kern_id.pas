@@ -32,7 +32,7 @@ type
 Procedure id_acqure (d:p_id_desc);
 Procedure id_release(d:p_id_desc);
 
-procedure id_table_init(t:p_id_desc_table;min:Integer);
+procedure id_table_init(t:p_id_desc_table;min:Integer;max:Integer=def_max_key);
 procedure id_table_fini(t:p_id_desc_table);
 
 function  id_new(t:p_id_desc_table;d:p_id_desc;pKey:PInteger):Boolean;
@@ -68,12 +68,12 @@ begin
  end;
 end;
 
-procedure id_table_init(t:p_id_desc_table;min:Integer);
+procedure id_table_init(t:p_id_desc_table;min:Integer;max:Integer=def_max_key);
 begin
  if (t=nil) then Exit;
  FillChar(t^,SizeOf(t_id_desc_table),0);
  t^.min_key:=min;
- t^.max_key:=def_max_key;
+ t^.max_key:=max;
  t^.FPos   :=min;
 end;
 
