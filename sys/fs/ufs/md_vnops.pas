@@ -28,10 +28,13 @@ function md_mount(mp:p_ufs_mount):Integer;
 function md_unmount(mp:p_ufs_mount):Integer;
 function md_free_dirent(de:p_ufs_dirent):Integer;
 
-function md_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
+function md_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent):p_ufs_dirent;
 
 function md_lookup(ap:p_vop_lookup_args):Integer;
 function md_readdir(ap:p_vop_readdir_args):Integer;
+function md_inactive(ap:p_vop_inactive_args):Integer;
+function md_reclaim(ap:p_vop_reclaim_args):Integer;
+function md_getattr(ap:p_vop_getattr_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -43,11 +46,11 @@ const
   vop_create        :nil;
   vop_whiteout      :nil;
   vop_mknod         :nil;
-  vop_open          :nil;
-  vop_close         :nil;
+  vop_open          :nil; //TODO
+  vop_close         :nil; //TODO
   vop_access        :nil; //parent
   vop_accessx       :nil;
-  vop_getattr       :@ufs_getattr;
+  vop_getattr       :@md_getattr;
   vop_setattr       :@ufs_setattr;
   vop_markatime     :nil;
   vop_read          :nil; //parent
@@ -56,17 +59,17 @@ const
   vop_poll          :nil;
   vop_kqfilter      :nil;
   vop_revoke        :nil;
-  vop_fsync         :nil;
-  vop_remove        :@ufs_remove;
-  vop_link          :nil;
-  vop_rename        :nil;
-  vop_mkdir         :@ufs_mkdir;
-  vop_rmdir         :@ufs_rmdir;
-  vop_symlink       :@ufs_symlink;
+  vop_fsync         :nil; //TODO
+  vop_remove        :nil; //TODO
+  vop_link          :nil; //TODO
+  vop_rename        :nil; //TODO
+  vop_mkdir         :nil; //TODO
+  vop_rmdir         :nil; //TODO
+  vop_symlink       :nil; //TODO
   vop_readdir       :@md_readdir;
   vop_readlink      :@ufs_readlink;
-  vop_inactive      :nil;
-  vop_reclaim       :@ufs_reclaim;
+  vop_inactive      :@md_inactive;
+  vop_reclaim       :@md_reclaim;
   vop_lock1         :nil;
   vop_unlock        :nil;
   vop_bmap          :nil;
@@ -123,17 +126,22 @@ begin
  Result:=mp^.mnt_data;
 end;
 
-procedure INIT_OBJ(var OBJ:TOBJ_ATTR;fd:THandle;FileName:PWideChar);
+function INIT_UNICODE(FileName:PWideChar):UNICODE_STRING;
+begin
+ Result.Length       :=strlen(FileName)*SizeOf(WideChar);
+ Result.MaximumLength:=Result.Length+1;
+ Result.Buffer       :=FileName;
+end;
+
+procedure INIT_OBJ(var OBJ:TOBJ_ATTR;fd:THandle;attr:ULONG;FileName:PWideChar);
 begin
  OBJ.OATTR.Length:=SizeOf(OBJECT_ATTRIBUTES);
 
  OBJ.OATTR.RootDirectory:=fd;
  OBJ.OATTR.ObjectName   :=@OBJ.UPATH;
- OBJ.OATTR.Attributes   :=OBJ_CASE_INSENSITIVE;
+ OBJ.OATTR.Attributes   :=attr;
 
- OBJ.UPATH.Length       :=strlen(FileName)*SizeOf(WideChar);
- OBJ.UPATH.MaximumLength:=OBJ.UPATH.Length+1;
- OBJ.UPATH.Buffer       :=FileName;
+ OBJ.UPATH:=INIT_UNICODE(FileName);
 end;
 
 function ntf2px(n:Integer):Integer; inline;
@@ -189,6 +197,11 @@ begin
  end;
 end;
 
+function get_inode(i:LARGE_INTEGER):Integer; inline;
+begin
+ Result:=(i.LowPart+i.HighPart); //simple hash
+end;
+
 function md_mount(mp:p_ufs_mount):Integer;
 var
  w:WideString;
@@ -201,7 +214,7 @@ begin
  w:='\??\'+w;
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,0,PWideChar(w));
+ INIT_OBJ(OBJ,0,OBJ_CASE_INSENSITIVE,PWideChar(w));
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
@@ -220,31 +233,112 @@ end;
 
 function md_unmount(mp:p_ufs_mount):Integer;
 begin
- NtClose(THandle(mp^.ufs_md_fp));
+ if (mp^.ufs_md_fp<>nil) then
+ begin
+  NtClose(THandle(mp^.ufs_md_fp));
+ end;
  Result:=0;
 end;
 
 function md_free_dirent(de:p_ufs_dirent):Integer;
 begin
- NtClose(THandle(de^.ufs_md_fp));
+ if (de^.ufs_md_fp<>nil) then
+ begin
+  NtClose(THandle(de^.ufs_md_fp));
+ end;
  Result:=0;
 end;
 
-function md_update_dirent(de:p_ufs_dirent):Integer;
+function md_open_dirent(de:p_ufs_dirent):Integer;
 var
+ u:RawByteString;
+ w:WideString;
+ OBJ:TOBJ_ATTR;
+ BLK:IO_STATUS_BLOCK;
+ F:Thandle;
+ R:DWORD;
+begin
+ SetString(u,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UTF8Decode(u);
+
+ OBJ:=Default(TOBJ_ATTR);
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtOpenFile(@F,
+               SYNCHRONIZE or FILE_LIST_DIRECTORY or FILE_READ_ATTRIBUTES or FILE_WRITE_ATTRIBUTES,
+               @OBJ,
+               @BLK,
+               FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+               FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT or FILE_DIRECTORY_FILE
+ );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ de^.ufs_md_fp:=Pointer(F);
+end;
+
+function md_open_dirent_file(de:p_ufs_dirent;fdr:PHandle):Integer;
+var
+ u:RawByteString;
+ w:WideString;
+ OBJ:TOBJ_ATTR;
+ BLK:IO_STATUS_BLOCK;
+ F:Thandle;
+ R:DWORD;
+begin
+ SetString(u,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UTF8Decode(u);
+
+ OBJ:=Default(TOBJ_ATTR);
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtOpenFile(@F,
+               SYNCHRONIZE or FILE_READ_DATA or FILE_READ_ATTRIBUTES or FILE_WRITE_ATTRIBUTES,
+               @OBJ,
+               @BLK,
+               FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+               FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT
+ );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ fdr^:=F;
+end;
+
+function md_update_dirent(de:p_ufs_dirent):Integer;
+label
+ _exit;
+var
+ FP,RL:THandle;
+
  FBI:FILE_BASIC_INFORMATION;
- //FSI:FILE_STANDARD_INFORMATION;
+ FSI:FILE_STANDARD_INFORMATION;
+ FII:FILE_INTERNAL_INFORMATION;
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
 begin
- //ufs_inode (4) = FileInternalInformation (8) ??? hash it?
+ if (de=nil) then Exit(0);
+
+ if (de^.ufs_md_fp=nil) then
+ begin
+  Result:=md_open_dirent_file(de,@FP);
+  if (Result<>0) then Exit;
+  RL:=FP;
+ end else
+ begin
+  FP:=THandle(de^.ufs_md_fp);
+  RL:=0;
+ end;
 
  FBI:=Default(FILE_BASIC_INFORMATION);
- //FSI:=Default(FILE_STANDARD_INFORMATION);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtQueryInformationFile(
-     THandle(de^.ufs_md_fp),
+     FP,
      @BLK,
      @FBI,
      SizeOf(FBI),
@@ -252,18 +346,20 @@ begin
     );
 
  Result:=ntf2px(R);
- if (Result<>0) then Exit;
+ if (Result<>0) then goto _exit;
 
  de^.ufs_atime:=get_unix_file_time(FBI.LastAccessTime);
  de^.ufs_mtime:=get_unix_file_time(FBI.LastWriteTime);
  de^.ufs_ctime:=get_unix_file_time(FBI.ChangeTime);
  de^.ufs_btime:=get_unix_file_time(FBI.CreationTime);
 
- {
+ ////
+
+ FSI:=Default(FILE_STANDARD_INFORMATION);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtQueryInformationFile(
-     THandle(de^.ufs_md_fp),
+     FP,
      @BLK,
      @FSI,
      SizeOf(FSI),
@@ -271,10 +367,42 @@ begin
     );
 
  Result:=ntf2px(R);
- if (Result<>0) then Exit;
+ if (Result<>0) then goto _exit;
 
- de^.ufs_links:=FSI.NumberOfLinks;
- }
+ if (de^.ufs_dirent^.d_type<>DT_DIR) then
+ begin
+  de^.ufs_links:=FSI.NumberOfLinks;
+  de^.ufs_size :=Int64(FSI.EndOfFile);
+  de^.ufs_bytes:=Int64(FSI.AllocationSize);
+ end;
+
+ ////
+
+ if (de^.ufs_inode=0) then
+ begin
+  FII:=Default(FILE_INTERNAL_INFORMATION);
+  BLK:=Default(IO_STATUS_BLOCK);
+
+  R:=NtQueryInformationFile(
+      FP,
+      @BLK,
+      @FII,
+      SizeOf(FII),
+      FileInternalInformation
+     );
+
+  Result:=ntf2px(R);
+  if (Result<>0) then goto _exit;
+
+  de^.ufs_inode:=get_inode(FII.IndexNumber);
+  de^.ufs_dirent^.d_fileno:=de^.ufs_inode;
+ end;
+
+_exit:
+ if (RL<>0) then
+ begin
+  NtClose(RL);
+ end;
 end;
 
 function md_newdirent(name:PChar;namelen:Integer):p_ufs_dirent;
@@ -297,10 +425,13 @@ begin
  de^.ufs_links  :=1;
  de^.ufs_ref    :=1;
 
+ sx_init(@de^.ufs_md_lock, 'md_lock');
+ TAILQ_INIT(@de^.ufs_dlist);
+
  Exit(de);
 end;
 
-function md_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
+function md_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent):p_ufs_dirent;
 var
  nd:p_ufs_dirent;
  error:Integer;
@@ -308,37 +439,261 @@ begin
  { Create the new directory }
  nd:=md_newdirent(name, namelen);
 
- TAILQ_INIT(@nd^.ufs_dlist);
-
  nd^.ufs_dirent^.d_type:=DT_DIR;
- nd^.ufs_mode :=&0555;
+ nd^.ufs_mode :=&0777;
  nd^.ufs_links:=2;
- nd^.ufs_dir  :=nd;
-
- if (inode<>0) then
-  nd^.ufs_inode:=inode
- else
-  nd^.ufs_inode:=ufs_alloc_cdp_inode;
+ nd^.ufs_dir  :=dotdot;
 
  if (dotdot=nil) then
  begin
+  //move root handle
   nd^.ufs_md_fp:=dmp^.ufs_md_fp;
  end else
  begin
-  //nd^.ufs_md_fp:=???
-  sx_assert(@dmp^.ufs_lock);
+  error:=md_open_dirent(nd);
+  if (error<>0) then
+  begin
+   ufs_de_drop(nd);
+   Exit(nil);
+  end;
+
+  sx_assert(@dotdot^.ufs_md_lock);
   TAILQ_INSERT_TAIL(@dotdot^.ufs_dlist,nd,@nd^.ufs_list);
   Inc(dotdot^.ufs_links);
+  ufs_de_hold(dotdot);
  end;
 
  error:=md_update_dirent(nd);
- Assert(error=0);
+ if (error<>0) then
+ begin
+  ufs_de_drop(nd);
+  Exit(nil);
+ end;
 
  Exit(nd);
 end;
 
+function md_find_cache(dd:p_ufs_dirent;name:PChar;namelen:Integer;_type:Integer):p_ufs_dirent;
+var
+ de:p_ufs_dirent;
+begin
+ sx_assert(@dd^.ufs_md_lock);
 
-function md_lookupx(dmp:p_ufs_mount;ap:p_vop_lookup_args):Integer;
+ de:=TAILQ_FIRST(@dd^.ufs_dlist);
+ while (de<>nil) do
+ begin
+  if (namelen<>de^.ufs_dirent^.d_namlen) then
+  begin
+   de:=TAILQ_NEXT(de,@de^.ufs_list);
+   continue;
+  end;
+  if (_type<>0) and (_type<>de^.ufs_dirent^.d_type) then
+  begin
+   de:=TAILQ_NEXT(de,@de^.ufs_list);
+   continue;
+  end;
+
+  if (CompareByte(name^, de^.ufs_dirent^.d_name, namelen)<>0) then
+  begin
+   de:=TAILQ_NEXT(de,@de^.ufs_list);
+   continue;
+  end;
+  break;
+ end;
+
+ Exit(de);
+end;
+
+function md_lookup_dirent(dd:p_ufs_dirent;name:PChar;namelen:Integer):p_ufs_dirent;
+var
+ u:RawByteString;
+ w:WideString;
+
+ nd:p_ufs_dirent;
+ de:p_dirent;
+
+ UNAME:UNICODE_STRING;
+ NT_DIRENT:TNT_DIRENT;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ sx_assert(@dd^.ufs_md_lock);
+
+ Result:=nil;
+ SetString(u,name,namelen);
+ w:=UTF8Decode(u);
+
+ UNAME:=INIT_UNICODE(PWideChar(w));
+ NT_DIRENT:=Default(TNT_DIRENT);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryDirectoryFile(
+           THandle(dd^.ufs_md_fp),
+           0,
+           nil,
+           nil,
+           @BLK,
+           @NT_DIRENT,
+           SizeOf(NT_DIRENT),
+           FileIdFullDirectoryInformation,
+           True,
+           @UNAME,
+           True
+          );
+
+ if (R<>0) then Exit;
+
+ { Create the new directory }
+ nd:=md_newdirent(name, namelen);
+
+ nd^.ufs_mode :=&0777;
+ nd^.ufs_links:=1; //read link???
+ nd^.ufs_dir  :=dd;
+
+ if ((NT_DIRENT.Info.FileAttributes and FILE_ATTRIBUTE_DIRECTORY)=0) then
+ begin
+  nd^.ufs_size :=Int64(NT_DIRENT.Info.EndOfFile);
+  nd^.ufs_bytes:=Int64(NT_DIRENT.Info.AllocationSize);
+ end;
+
+ nd^.ufs_inode:=get_inode(NT_DIRENT.Info.FileId);
+
+ nd^.ufs_atime:=get_unix_file_time(NT_DIRENT.Info.LastAccessTime);
+ nd^.ufs_mtime:=get_unix_file_time(NT_DIRENT.Info.LastWriteTime);
+ nd^.ufs_ctime:=get_unix_file_time(NT_DIRENT.Info.ChangeTime);
+ nd^.ufs_btime:=get_unix_file_time(NT_DIRENT.Info.CreationTime);
+
+ de:=nd^.ufs_dirent;
+
+ de^.d_fileno:=nd^.ufs_inode;
+ de^.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
+
+ if (de^.d_type=DT_DIR) then
+ begin
+  R:=md_open_dirent(nd);
+  if (R<>0) then
+  begin
+   ufs_de_drop(nd);
+   Exit(nil);
+  end;
+ end;
+
+ TAILQ_INSERT_TAIL(@dd^.ufs_dlist,nd,@nd^.ufs_list);
+ Inc(dd^.ufs_links);
+ ufs_de_hold(dd);
+
+ Exit(nd);
+end;
+
+procedure md_delete_cache(de:p_ufs_dirent);
+var
+ dd:p_ufs_dirent;
+ vp:p_vnode;
+begin
+ if (de=nil) then Exit;
+
+ Assert((de^.ufs_flags and UFS_DOOMED)=0,'ufs_delete doomed dirent');
+ de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
+
+ dd:=de^.ufs_dir; //parent
+ if (dd<>nil) then
+ begin
+  ufs_de_hold(dd);
+  sx_xlock(@dd^.ufs_md_lock);
+ end;
+
+ mtx_lock(ufs_interlock);
+ vp:=de^.ufs_vnode;
+ if (vp<>nil) then
+ begin
+  VI_LOCK(vp);
+  mtx_unlock(ufs_interlock);
+  vholdl(vp);
+
+  if (dd<>nil) then
+  begin
+   sx_unlock(@dd^.ufs_md_lock);
+  end;
+
+  vn_lock(vp, LK_EXCLUSIVE or LK_INTERLOCK or LK_RETRY);
+
+  vgone(vp);
+
+  VOP_UNLOCK(vp, 0);
+
+  vdrop(vp);
+
+  if (dd<>nil) then
+  begin
+   sx_xlock(@dd^.ufs_md_lock);
+  end;
+ end else
+  mtx_unlock(ufs_interlock);
+
+ if (de^.ufs_symlink<>nil) then
+ begin
+  FreeMem(de^.ufs_symlink);
+  de^.ufs_symlink:=nil;
+ end;
+
+ if (dd<>nil) then
+ begin
+  TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
+  sx_unlock(@dd^.ufs_md_lock);
+  ufs_de_drop(dd);
+  ufs_de_drop(dd);
+ end;
+
+ ufs_de_drop(de);
+end;
+
+function md_inactive(ap:p_vop_inactive_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+begin
+ vp:=ap^.a_vp;
+
+ mtx_lock(ufs_interlock);
+ de:=vp^.v_data;
+ if (de<>nil) then
+ begin
+  de^.ufs_vnode:=nil;
+  vp^.v_data:=nil;
+ end;
+ mtx_unlock(ufs_interlock);
+
+ md_delete_cache(de);
+
+ Exit(0);
+end;
+
+function md_reclaim(ap:p_vop_reclaim_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+begin
+ vp:=ap^.a_vp;
+
+ mtx_lock(ufs_interlock);
+ de:=vp^.v_data;
+ if (de<>nil) then
+ begin
+  de^.ufs_vnode:=nil;
+  vp^.v_data:=nil;
+ end;
+ mtx_unlock(ufs_interlock);
+
+ md_delete_cache(de);
+
+ //vnode_destroy_vobject(vp);
+
+ Exit(0);
+end;
+
+function md_lookupx(ap:p_vop_lookup_args):Integer;
+label
+ _error;
 var
  cnp:p_componentname;
  dvp:p_vnode;
@@ -347,6 +702,7 @@ var
  dde:p_ufs_dirent;
  error,flags,nameiop,dvplocked:Integer;
  pname:PChar;
+ dmp:p_ufs_mount;
 begin
  cnp:=ap^.a_cnp;
  vpp:=ap^.a_vpp;
@@ -357,32 +713,102 @@ begin
  dd:=dvp^.v_data;
  vpp^:=nil;
 
- ////////
+ if (dvp^.v_type<>VDIR) then
+  Exit(ENOTDIR);
 
- Exit(ENOENT);
+ if (((flags and ISDOTDOT)<>0) and ((dvp^.v_vflag and VV_ROOT)<>0)) then
+  Exit(EIO);
+
+ error:=VOP_ACCESS(dvp, VEXEC);
+ if (error<>0) then
+  Exit(error);
+
+ if (cnp^.cn_namelen=1) and (pname^='.') then
+ begin
+  if ((flags and ISLASTCN) and nameiop<>LOOKUP) then
+   Exit(EINVAL);
+
+  vpp^:=dvp;
+  VREF(dvp);
+
+  Exit(0);
+ end;
+
+ de:=md_find_cache(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
+
+ if (de=nil) then
+ begin
+  de:=md_lookup_dirent(dd, cnp^.cn_nameptr, cnp^.cn_namelen);
+ end;
+
+ if (de=nil) then
+ begin
+  Case nameiop of
+   CREATE:
+    begin
+     //if not last
+     if ((flags and ISLASTCN)=0) then Exit(ENOENT);
+    end;
+
+   LOOKUP,
+   DELETE,
+   RENAME:Exit(ENOENT);
+   else;
+  end;
+  goto _error;
+ end;
+
+ if ((de^.ufs_flags and UFS_WHITEOUT)<>0) then
+ begin
+  _error:
+  if ((nameiop=CREATE) or (nameiop=RENAME)) and
+     ((flags and (LOCKPARENT or WANTPARENT))<>0) and
+     ((flags and ISLASTCN)<>0) then
+  begin
+   cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
+   Exit(EJUSTRETURN);
+  end;
+  Exit(ENOENT);
+ end;
+
+ if (cnp^.cn_nameiop=DELETE) and ((flags and ISLASTCN)<>0) then
+ begin
+  error:=VOP_ACCESS(dvp, VWRITE);
+  if (error<>0) then
+   Exit(error);
+
+  if (vpp^=dvp) then
+  begin
+   VREF(dvp);
+   vpp^:=dvp;
+   Exit(0);
+  end;
+ end;
+
+ dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
+ sx_xlock(@dmp^.ufs_lock);
+ error:=ufs_allocv(de, dvp^.v_mount, cnp^.cn_lkflags and LK_TYPE_MASK, vpp);
+
+ Exit(error);
 end;
 
 function md_lookup(ap:p_vop_lookup_args):Integer;
 var
- dmp:p_ufs_mount;
+ dd:p_ufs_dirent;
 begin
- dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
- sx_xlock(@dmp^.ufs_lock);
- Result:=md_lookupx(dmp,ap);
- sx_xunlock(@dmp^.ufs_lock);
+ dd:=ap^.a_dvp^.v_data;
+ sx_xlock(@dd^.ufs_md_lock);
+
+ Result:=md_lookupx(ap);
+
+ sx_xunlock(@dd^.ufs_md_lock);
 end;
 
 function md_readdir(ap:p_vop_readdir_args):Integer;
 var
  uio:p_uio;
-
- //mp:p_mount;
- //dmp:p_ufs_mount;
-
  dd:p_ufs_dirent;
-
  dt:t_dirent;
-
  off:Int64;
 
  NT_DIRENT:TNT_DIRENT;
@@ -397,14 +823,12 @@ begin
  if (uio^.uio_offset < 0) then
   Exit(EINVAL);
 
- //mp:=ap^.a_vp^.v_mount;
- //dmp:=VFSTOUFS(mp);
-
  dd:=ap^.a_vp^.v_data;
-
  off:=0;
-
  restart:=True;
+
+ sx_xlock(@dd^.ufs_md_lock);
+
  repeat
   NT_DIRENT:=Default(TNT_DIRENT);
   BLK:=Default(IO_STATUS_BLOCK);
@@ -427,7 +851,7 @@ begin
   if (R=STATUS_NO_MORE_FILES) then Break;
 
   Result:=ntf2px(R);
-  if (Result<>0) then Exit;
+  if (Result<>0) then Break;
 
   dt:=Default(t_dirent);
   dt.d_reclen:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+NT_DIRENT.Info.FileNameLength;
@@ -436,7 +860,7 @@ begin
 
   if (off >= uio^.uio_offset) then
   begin
-   dt.d_fileno:=NT_DIRENT.Info.FileIndex; // FileId ????
+   dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
    //dt.d_reclen
    dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
    dt.d_namlen:=NT_DIRENT.Info.FileNameLength-1;
@@ -449,9 +873,25 @@ begin
   Inc(off,dt.d_reclen);
  until false;
 
+ sx_xunlock(@dd^.ufs_md_lock);
  uio^.uio_offset:=off;
 
  Exit(0);
+end;
+
+function md_getattr(ap:p_vop_getattr_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+
+begin
+ vp:=ap^.a_vp;
+ de:=vp^.v_data;
+
+ Result:=md_update_dirent(de);
+ if (Result<>0) then Exit;
+
+ Result:=ufs_getattr(ap);
 end;
 
 end.

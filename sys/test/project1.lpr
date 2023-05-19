@@ -281,7 +281,7 @@ begin
   '.',
   '..':
     begin
-     Writeln(Space(s),namep,' |');
+     Writeln(Space(s),namep:20,' |');
      Exit;
     end;
   else;
@@ -289,19 +289,12 @@ begin
 
  err:=sys_lstat(PChar(dirp+namep),@sb);
 
- //if (err=45) then
- //begin
- // sb.st_size:=512;
- // sb.st_mode:=S_IFMT;
- // goto _next;
- //end;
-
  if (err<>0) then
  begin
-  Writeln(Space(s),namep,' | (',err,')');
+  Writeln(Space(s),namep:20,' | (',err,')');
  end else
  begin
-  Write(Space(s),namep,' | ',ts_to_str(sb.st_birthtim {st_mtim}),' |');
+  Write(Space(s),namep:20,' | ',ts_to_str(sb.st_birthtim {st_mtim}):19,' |');
   _next:
 
   if ((sb.st_mode and S_IFDIR)<>0) then

@@ -2413,11 +2413,13 @@ begin
  error:=getvnode(fd, CAP_FSYNC, @fp);
  if (error<>0) then
   Exit(error);
+
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
  if (error<>0) then
   goto drop;
+
  if MNT_SHARED_WRITES(mp) or
     ((mp=nil) and MNT_SHARED_WRITES(vp^.v_mount)) then
  begin

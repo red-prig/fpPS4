@@ -1059,7 +1059,7 @@ begin
  Exit(error);
 end;
 
-function devfs_lookupx(ap:p_vop_lookup_args;dm_unlock:PInteger):Integer;
+function devfs_lookupx(ap:p_vop_lookup_args;dm_unlock:PBoolean):Integer;
 label
  _or;
 var
@@ -1111,12 +1111,14 @@ begin
   if ((flags and ISLASTCN)<>0) and (nameiop<>LOOKUP) then
    Exit(EINVAL);
   de:=devfs_parent_dirent(dd);
-  if (de=nil) then
-   Exit(ENOENT);
+  if (de=nil) then Exit(ENOENT);
+
   dvplocked:=VOP_ISLOCKED(dvp);
   VOP_UNLOCK(dvp, 0);
+
   error:=devfs_allocv(de, dvp^.v_mount, cnp^.cn_lkflags and LK_TYPE_MASK, vpp);
-  dm_unlock^:=0;
+  dm_unlock^:=False;
+
   vn_lock(dvp, dvplocked or LK_RETRY);
   Exit(error);
  end;
@@ -1126,16 +1128,14 @@ begin
  while (de=nil) do
  begin { While(...) so we can use break }
 
-  if (nameiop=DELETE) then
-   Exit(ENOENT);
+  if (nameiop=DELETE) then Exit(ENOENT);
 
   {
    * OK, we didn't have an entry for the name we were asked for
    * so we try to see if anybody can create it on demand.
    }
   pname:=devfs_fqpn(specname, dmp, dd, cnp);
-  if (pname=nil) then
-   break;
+  if (pname=nil) then break;
 
   cdev:=nil;
   DEVFS_DMP_HOLD(dmp);
@@ -1150,24 +1150,28 @@ begin
   else
   if (devfs_populate_vp(dvp)<>0) then
   begin
-   dm_unlock^:=0;
+   dm_unlock^:=false;
    sx_xlock(@dmp^.dm_lock);
+
    if (DEVFS_DMP_DROP(dmp)) then
    begin
     sx_xunlock(@dmp^.dm_lock);
     devfs_unmount_final(dmp);
    end else
     sx_xunlock(@dmp^.dm_lock);
+
    dev_rel(cdev);
    Exit(ENOENT);
   end;
   if DEVFS_DMP_DROP(dmp) then
   begin
-   dm_unlock^:=0;
+   dm_unlock^:=false;
    sx_xunlock(@dmp^.dm_lock);
    devfs_unmount_final(dmp);
+
    if (cdev<>nil) then
     dev_rel(cdev);
+
    Exit(ENOENT);
   end;
 
@@ -1218,15 +1222,17 @@ begin
    Exit(0);
   end;
  end;
+
  error:=devfs_allocv(de, dvp^.v_mount, cnp^.cn_lkflags and LK_TYPE_MASK, vpp);
- dm_unlock^:=0;
+ dm_unlock^:=false;
+
  Exit(error);
 end;
 
 function devfs_lookup(ap:p_vop_lookup_args):Integer;
 var
  dmp:p_devfs_mount;
- dm_unlock:Integer;
+ dm_unlock:Boolean;
 begin
  if (devfs_populate_vp(ap^.a_dvp)<>0) then
  begin
@@ -1234,10 +1240,11 @@ begin
  end;
 
  dmp:=VFSTODEVFS(ap^.a_dvp^.v_mount);
- dm_unlock:=1;
+ dm_unlock:=True;
+
  Result:=devfs_lookupx(ap, @dm_unlock);
 
- if (dm_unlock=1) then
+ if (dm_unlock) then
  begin
   sx_xunlock(@dmp^.dm_lock);
  end;
@@ -1315,19 +1322,18 @@ begin
  dev:=vp^.v_rdev;
  fp:=ap^.a_fp;
 
- if (vp^.v_type=VBLK) then
-  Exit(ENXIO);
-
- if (dev=nil) then
-  Exit(ENXIO);
+ if (vp^.v_type=VBLK) then Exit(ENXIO);
+ if (dev=nil) then Exit(ENXIO);
 
  { Make this field valid before any I/O in d_open. }
  if (dev^.si_iosize_max=0) then
+ begin
   dev^.si_iosize_max:=DFLTPHYS;
+ end;
 
  dsw:=dev_refthread(dev, @ref);
- if (dsw=nil) then
-  Exit(ENXIO);
+ if (dsw=nil) then Exit(ENXIO);
+
  if (fp=nil) and (dsw^.d_fdopen<>nil) then
  begin
   dev_relthread(dev, ref);
@@ -1351,14 +1357,14 @@ begin
  { cleanup any cdevpriv upon error }
  if (error<>0) then
   devfs_clear_cdevpriv();
+
  td^.td_fpop:=fpop;
 
  vn_lock(vp, vlocked or LK_RETRY);
  dev_relthread(dev, ref);
  if (error<>0) then
  begin
-  if (error=ERESTART) then
-   error:=EINTR;
+  if (error=ERESTART) then error:=EINTR;
   Exit(error);
  end;
 
@@ -1366,7 +1372,10 @@ begin
   Exit(error);
 
  if (fp^.f_ops=@badfileops) then
+ begin
   finit(fp, fp^.f_flag, DTYPE_VNODE, dev, @devfs_ops_f);
+ end;
+
  mtxp:=mtx_pool_find(mtxpool_sleep, fp);
 
  {

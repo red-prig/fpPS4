@@ -31,12 +31,15 @@ type
   ufs_mode   :mode_t;       //S_IFMT
   ufs_uid    :uid_t;
   ufs_gid    :gid_t;
+  ufs_size   :Int64;        // file size in bytes
+  ufs_bytes  :Int64;        // bytes of disk space held by file
   ufs_atime  :timespec;     // time of last access
   ufs_mtime  :timespec;     // time of last data modification
   ufs_ctime  :timespec;     // time of last file status change
   ufs_btime  :timespec;     // time of file creation
   ufs_vnode  :p_vnode;
   ufs_symlink:PChar;
+  ufs_md_lock:t_sx;
   ufs_md_fp  :Pointer; //host data
  end;
 
@@ -181,6 +184,7 @@ begin
  if (System.InterlockedDecrement(p^.ufs_ref)=0) then
  begin
   md_free_dirent(p);
+  sx_destroy(@p^.ufs_md_lock);
   FreeMem(p);
   Result:=True;
  end;
@@ -348,6 +352,9 @@ begin
 end;
 
 function ufs_mount(mp:p_mount):Integer;
+label
+ _err,
+ _mount_err;
 var
  error:Integer;
  fmp:p_ufs_mount;
@@ -425,25 +432,26 @@ begin
   fmp^.ufs_vnops:=@md_vnodeops_host;
 
   error:=md_mount(fmp);
-  if (error<>0) then
-  begin
-   sx_xlock(@fmp^.ufs_lock);
-   ufs_purge(fmp,fmp^.ufs_rootdir);
-   sx_xunlock(@fmp^.ufs_lock);
-   sx_destroy(@fmp^.ufs_lock);
-   //free_unr(ufs_unr, fmp^.ufs_idx);
-   FreeMem(fmp);
-   Exit(error);
-  end;
+  if (error<>0) then goto _mount_err;
 
-  fmp^.ufs_rootdir:=md_vmkdir(fmp, nil, 0, nil, UFS_ROOTINO);
+  fmp^.ufs_rootdir:=md_vmkdir(fmp, nil, 0, nil);
+ end;
+
+ if (fmp^.ufs_rootdir=nil) then
+ begin
+  error:=EINVAL; //??
+  goto _err;
  end;
 
  error:=ufs_root(mp, LK_EXCLUSIVE, @rvp);
  if (error<>0) then
  begin
+  _err:
   md_unmount(fmp);
+  _mount_err:
+  sx_xlock(@fmp^.ufs_lock);
   ufs_purge(fmp,fmp^.ufs_rootdir);
+  sx_xunlock(@fmp^.ufs_lock);
   sx_destroy(@fmp^.ufs_lock);
   //free_unr(ufs_unr, fmp^.ufs_idx);
   FreeMem(fmp);
