@@ -120,6 +120,8 @@ const
  UFS_COVERED =$10;
  UFS_USER    =$20;
 
+ UFS_DEFAULT_MODE=&0755;
+
 implementation
 
 uses
@@ -512,7 +514,7 @@ begin
  sbp^.f_bavail:=0;
  sbp^.f_files :=0;
  sbp^.f_ffree :=0;
- Exit(0);
+ Exit(md_statfs(mp,sbp));
 end;
 
 end.

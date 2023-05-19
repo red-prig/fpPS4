@@ -82,6 +82,8 @@ const
  FileEndOfFileInformation      =20;
  FileIdFullDirectoryInformation=38;
 
+ FileFsFullSizeInformation=7;
+
  MemoryBasicInformation=0;
 
  //EVENT_TYPE
@@ -287,6 +289,15 @@ type
   align          :ULONG;
   FileId         :LARGE_INTEGER;
   FileName       :record end; //WCHAR
+ end;
+
+ PFILE_FS_FULL_SIZE_INFORMATION=^FILE_FS_FULL_SIZE_INFORMATION;
+ FILE_FS_FULL_SIZE_INFORMATION=packed record
+  TotalAllocationUnits          :LARGE_INTEGER;
+  CallerAvailableAllocationUnits:LARGE_INTEGER;
+  ActualAvailableAllocationUnits:LARGE_INTEGER;
+  SectorsPerAllocationUnit      :ULONG;
+  BytesPerSector                :ULONG;
  end;
 
  PREPARSE_DATA_BUFFER=^REPARSE_DATA_BUFFER;
@@ -561,6 +572,11 @@ function NtWriteFile(
           Key          :PULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtFlushBuffersFile(
+          FileHandle        :THandle;
+          IoStatusBlock     :PIO_STATUS_BLOCK
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtSetInformationFile(
           FileHandle          :THandle;
           IoStatusBlock       :PIO_STATUS_BLOCK;
@@ -632,6 +648,14 @@ function NtQueryEaFile(
           EaListLength     :ULONG;
           EaIndex          :PULONG;
           RestartScan      :Boolean
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtQueryVolumeInformationFile(
+          FileHandle        :THandle;
+          IoStatusBlock     :PIO_STATUS_BLOCK;
+          FsInformation     :Pointer;
+          Length            :ULONG;
+          FsInformationClass:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 

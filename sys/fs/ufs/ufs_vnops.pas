@@ -357,7 +357,7 @@ begin
  nd:=ufs_newdirent(name, namelen);
 
  nd^.ufs_dirent^.d_type:=DT_DIR;
- nd^.ufs_mode :=&0777;
+ nd^.ufs_mode :=UFS_DEFAULT_MODE;
  nd^.ufs_links:=2;
  nd^.ufs_dir  :=nd;
 
@@ -709,7 +709,9 @@ begin
   c:=1;
  end;
 
- if (vap^.va_atime.tv_sec<>VNOVAL) or (vap^.va_mtime.tv_sec<>VNOVAL) then
+ if (vap^.va_atime.tv_sec<>VNOVAL) or
+    (vap^.va_mtime.tv_sec<>VNOVAL) or
+    (vap^.va_birthtime.tv_sec<>VNOVAL) then
  begin
   { See the comment in ufs_vnops::ufs_setattr(). }
   error:=VOP_ACCESS(vp, VADMIN);
@@ -726,6 +728,10 @@ begin
   if (vap^.va_mtime.tv_sec<>VNOVAL) then
   begin
    de^.ufs_mtime:=vap^.va_mtime;
+  end;
+  if (vap^.va_birthtime.tv_sec<>VNOVAL) then
+  begin
+   de^.ufs_btime:=vap^.va_birthtime;
   end;
   c:=1;
  end;
@@ -826,6 +832,8 @@ var
  de:p_ufs_dirent;
 begin
  de:=ap^.a_vp^.v_data;
+ if (de^.ufs_dirent^.d_type<>DT_LNK) then Exit(EINVAL);
+
  Exit(uiomove(de^.ufs_symlink, strlen(de^.ufs_symlink), ap^.a_uio));
 end;
 
@@ -858,7 +866,7 @@ begin
  de^.ufs_flags:=UFS_USER;
  de^.ufs_uid  :=0;
  de^.ufs_gid  :=0;
- de^.ufs_mode :=&0777;
+ de^.ufs_mode :=UFS_DEFAULT_MODE;
  de^.ufs_inode:=ufs_alloc_cdp_inode;
  de^.ufs_dir  :=dd;
  de^.ufs_dirent^.d_type:=DT_LNK;
@@ -933,7 +941,6 @@ end;
 function ufs_rmdir(ap:p_vop_rmdir_args):Integer;
 var
  dvp,vp:p_vnode;
- dd:p_ufs_dirent;
  de:p_ufs_dirent;
  dmp:p_ufs_mount;
 begin
@@ -945,7 +952,7 @@ begin
  ASSERT_VOP_ELOCKED(vp,  'ufs_remove');
 
  sx_xlock(@dmp^.ufs_lock);
- dd:=ap^.a_dvp^.v_data;
+
  de:=vp^.v_data;
 
  Result:=_ufs_dir_status(dmp, de);

@@ -245,11 +245,11 @@ begin
  begin
   if (dswp^<>nil) then
    dev_relthread(devp^, ref^);
+
   Exit(ENXIO);
  end;
  Assert(devp^^.si_refcount > 0,'devfs: un-referenced struct cdev');
- if (dswp^=nil) then
-  Exit(ENXIO);
+ if (dswp^=nil) then Exit(ENXIO);
  curkthread^.td_fpop:=fp;
  Exit(0);
 end;
@@ -261,8 +261,8 @@ var
  error:Integer;
 begin
  fp:=curkthread^.td_fpop;
- if (fp=nil) then
-  Exit(EBADF);
+ if (fp=nil) then Exit(EBADF);
+
  p:=fp^.f_cdevpriv;
  if (p<>nil) then
  begin
@@ -270,6 +270,7 @@ begin
   datap^:=p^.cdpd_data;
  end else
   error:=ENOENT;
+
  Exit(error);
 end;
 
@@ -281,8 +282,7 @@ var
  error:Integer;
 begin
  fp:=curkthread^.td_fpop;
- if (fp=nil) then
-  Exit(ENOENT);
+ if (fp=nil) then Exit(ENOENT);
 
  cdp:=cdev2priv(fp^.f_data);
  p:=AllocMem(sizeof(t_cdev_privdata));
@@ -334,8 +334,8 @@ var
  fp:p_file;
 begin
  fp:=curkthread^.td_fpop;
- if (fp=nil) then
-  Exit;
+ if (fp=nil) then Exit;
+
  devfs_fpdrop(fp);
 end;
 
@@ -778,8 +778,8 @@ begin
   * vnodes descends to one, we are on last close.
   }
  dsw:=dev_refthread(dev, @ref);
- if (dsw=nil) then
-  Exit(ENXIO);
+ if (dsw=nil) then Exit(ENXIO);
+
  VI_LOCK(vp);
  if ((vp^.v_iflag and VI_DOOMED)<>0) then
  begin
@@ -809,17 +809,18 @@ end;
 
 function devfs_close_f(fp:p_file):Integer;
 var
- error:Integer;
+ td:p_kthread;
  fpop:p_file;
 begin
+ td:=curkthread;
  {
   * NB: td may be nil if this descriptor is closed due to
   * garbage collection from a closed UNIX domain socket.
   }
- fpop:=curkthread^.td_fpop;
- curkthread^.td_fpop:=fp;
- error:=vnops.fo_close(fp);
- curkthread^.td_fpop:=fpop;
+ fpop:=td^.td_fpop;
+ td^.td_fpop:=fp;
+ Result:=vnops.fo_close(fp);
+ td^.td_fpop:=fpop;
 
  {
   * The f_cdevpriv cannot be assigned non-nil value while we
@@ -827,7 +828,6 @@ begin
   }
  if (fp^.f_cdevpriv<>nil) then
   devfs_fpdrop(fp);
- Exit(error);
 end;
 
 function devfs_fsync(ap:p_vop_fsync_args):Integer;
@@ -961,8 +961,7 @@ begin
  td:=curkthread;
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
 
  if (com=FIODTYPE) then
  begin
@@ -1030,8 +1029,8 @@ begin
  td:=curkthread;
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  error:=dsw^.d_kqfilter(dev, kn);
  td^.td_fpop:=fpop;
  dev_relthread(dev, ref);
@@ -1419,8 +1418,8 @@ begin
  td:=curkthread;
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
- if (error<>0) then
-  Exit(poll_no_poll(events));
+ if (error<>0) then Exit(poll_no_poll(events));
+
  error:=dsw^.d_poll(dev, events);
  td^.td_fpop:=fpop;
  dev_relthread(dev, ref);
@@ -1450,8 +1449,8 @@ begin
  td:=curkthread;
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  resid:=uio^.uio_resid;
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT);
  if ((ioflag and O_DIRECT)<>0) then
@@ -1564,6 +1563,8 @@ var
  de:p_devfs_dirent;
 begin
  de:=ap^.a_vp^.v_data;
+ if (de^.de_dirent^.d_type<>DT_LNK) then Exit(EINVAL);
+
  Exit(uiomove(de^.de_symlink, strlen(de^.de_symlink), ap^.a_uio));
 end;
 
@@ -1949,12 +1950,14 @@ var
  fpop:p_file;
 begin
  td:=curkthread;
+
  if (uio^.uio_resid > DEVFS_IOSIZE_MAX) then
   Exit(EINVAL);
+
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT or O_FSYNC);
  if ((ioflag and O_DIRECT)<>0) then
@@ -1978,8 +1981,7 @@ end;
 
 function dev2udev(x:p_cdev):Integer;
 begin
- if (x=nil) then
-  Exit(NODEV);
+ if (x=nil) then Exit(NODEV);
 
  Exit(cdev2priv(x)^.cdp_inode);
 end;

@@ -280,6 +280,7 @@ begin
     FreeMem(cp);
    break;
   end;
+
   linklen:=MAXPATHLEN - auio.uio_resid;
   if (linklen=0) then
   begin
@@ -288,6 +289,7 @@ begin
    error:=ENOENT;
    break;
   end;
+
   if (linklen + ndp^.ni_pathlen >= MAXPATHLEN) then
   begin
    if (ndp^.ni_pathlen > 1) then
@@ -295,17 +297,22 @@ begin
    error:=ENAMETOOLONG;
    break;
   end;
+
   if (ndp^.ni_pathlen > 1) then
   begin
-   Move((cp + linklen)^,ndp^.ni_next^,ndp^.ni_pathlen);
+   Move(ndp^.ni_next^,(cp + linklen)^,ndp^.ni_pathlen);
    FreeMem(cnp^.cn_pnbuf);
    cnp^.cn_pnbuf:=cp;
   end else
+  begin
    cnp^.cn_pnbuf[linklen]:=#0;
+  end;
+
   Inc(ndp^.ni_pathlen,linklen);
   vput(ndp^.ni_vp);
   dp:=ndp^.ni_dvp;
  end;
+
  namei_cleanup_cnp(cnp);
  vput(ndp^.ni_vp);
  ndp^.ni_vp:=nil;

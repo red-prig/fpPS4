@@ -484,7 +484,7 @@ begin
  {
   * Zero the spare stat fields
   }
- FillChar(sb^,SizeOf(t_stat),0);
+ sb^:=Default(t_stat);
 
  {
   * Copy from vattr table
@@ -498,25 +498,18 @@ begin
 
  mode:=vap^.va_mode;
  case vap^.va_type of
-  VREG:
-   mode:=mode or S_IFREG;
-  VDIR:
-   mode:=mode or S_IFDIR;
-  VBLK:
-   mode:=mode or S_IFBLK;
-  VCHR:
-   mode:=mode or S_IFCHR;
-  VLNK:
-   mode:=mode or S_IFLNK;
-  VSOCK:
-   mode:=mode or S_IFSOCK;
-  VFIFO:
-   mode:=mode or S_IFIFO;
+   VREG:mode:=mode or S_IFREG;
+   VDIR:mode:=mode or S_IFDIR;
+   VBLK:mode:=mode or S_IFBLK;
+   VCHR:mode:=mode or S_IFCHR;
+   VLNK:mode:=mode or S_IFLNK;
+  VSOCK:mode:=mode or S_IFSOCK;
+  VFIFO:mode:=mode or S_IFIFO;
   else
    Exit(EBADF);
  end;
 
- sb^.st_mode:=mode;
+ sb^.st_mode :=mode;
  sb^.st_nlink:=vap^.va_nlink;
  sb^.st_uid  :=vap^.va_uid;
  sb^.st_gid  :=vap^.va_gid;

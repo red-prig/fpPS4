@@ -1858,8 +1858,7 @@ var
  vattr:t_vattr;
 begin
  { We can't support the value matching VNOVAL. }
- if (flags=VNOVAL) then
-  Exit(EOPNOTSUPP);
+ if (flags=VNOVAL) then Exit(EOPNOTSUPP);
 
  {
   * Prevent non-root users from setting flags on devices.  When
@@ -1876,9 +1875,10 @@ begin
  end;
 
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+
  VATTR_NULL(@vattr);
  vattr.va_flags:=flags;
 
@@ -2201,9 +2201,10 @@ var
  vattr:t_vattr;
 begin
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+
  setbirthtime:=0;
  if (numtimes < 3) and
     (VOP_GETATTR(vp, @vattr)=0) and
@@ -2213,10 +2214,13 @@ begin
  VATTR_NULL(@vattr);
  vattr.va_atime:=ts[0];
  vattr.va_mtime:=ts[1];
+
  if (setbirthtime<>0) then
   vattr.va_birthtime:=ts[1];
+
  if (numtimes > 2) then
   vattr.va_birthtime:=ts[2];
+
  if (nilflag<>0) then
   vattr.va_vaflags:=vattr.va_vaflags or VA_UTIMES_NULL;
 
@@ -2224,6 +2228,7 @@ begin
 
  if (error=0) then
   error:=VOP_SETATTR(vp, @vattr);
+
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);
  Exit(error);
@@ -2237,13 +2242,13 @@ var
  error,vfslocked:Integer;
 begin
  error:=getutimes(tptr, tptrseg, ts);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  NDINIT_ATRIGHTS(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FUTIMES, curkthread);
 
  error:=nd_namei(@nd);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  error:=setutimes(nd.ni_vp, ts, 2, ord(tptr=nil));
@@ -2280,12 +2285,12 @@ var
  vfslocked:Integer;
 begin
  error:=getutimes(tptr, tptrseg, ts);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  error:=setutimes(nd.ni_vp, ts, 2, ord(tptr=nil));
@@ -2404,21 +2409,22 @@ function kern_fsync(fd:Integer;fullsync:Boolean):Integer;
 label
  drop;
 var
+ td:p_kthread;
  vp:p_vnode;
  mp:p_mount;
  fp:p_file;
  vfslocked:Integer;
  error,lock_flags:Integer;
 begin
+ td:=curkthread;
+
  error:=getvnode(fd, CAP_FSYNC, @fp);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
 
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
- if (error<>0) then
-  goto drop;
+ if (error<>0) then goto drop;
 
  if MNT_SHARED_WRITES(mp) or
     ((mp=nil) and MNT_SHARED_WRITES(vp^.v_mount)) then
@@ -2430,6 +2436,8 @@ begin
  end;
  vn_lock(vp, lock_flags or LK_RETRY);
 
+ td^.td_fpop:=fp;
+
  //if (vp^.v_object<>nil) then
  //begin
  // VM_OBJECT_LOCK(vp^.v_object);
@@ -2437,6 +2445,8 @@ begin
  // VM_OBJECT_UNLOCK(vp^.v_object);
  //end;
  error:=VOP_FSYNC(vp, MNT_WAIT);
+
+ td^.td_fpop:=nil;
 
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);

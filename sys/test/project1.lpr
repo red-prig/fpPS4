@@ -71,7 +71,8 @@ uses
  null_subr,
  null_vnops,
  null_vfsops,
- ufs;
+ ufs,
+ vmount;
 
 var
  mtx:umutex;
@@ -268,6 +269,8 @@ label
  _next;
 var
  td:p_kthread;
+ fs:t_statfs;
+
  sb:t_stat;
  buf:array[0..511] of Byte;
  dir:p_dirent;
@@ -288,6 +291,7 @@ begin
  end;
 
  err:=sys_lstat(PChar(dirp+namep),@sb);
+ //err:=sys_stat(PChar(dirp+namep),@sb);
 
  if (err<>0) then
  begin
@@ -314,6 +318,7 @@ begin
    end;
 
    fd:=td^.td_retval[0];
+   //sys_fstatfs(fd,@fs);
 
    Writeln(Space(s),'->');
 
