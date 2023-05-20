@@ -68,12 +68,14 @@ const
  ProcessTimes           =4;
  ProcessAffinityMask    =21;
 
+ //FileInformationClass
  FileBasicInformation          = 4;
  FileStandardInformation       = 5;
  FileInternalInformation       = 6;
  FileEaInformation             = 7;
  FileAccessInformation         = 8;
  FileNamesInformation          =12;
+ FileDispositionInformation    =13;
  FilePositionInformation       =14;
  FileModeInformation           =16;
  FileAlignmentInformation      =17;
@@ -126,6 +128,9 @@ const
  OBJ_OPENLINK        =$00000100;
  OBJ_VALID_ATTRIBUTES=$000001F2;
 
+ //ACCESS_MASK
+ FILE_CAN_DELETE=$10000;
+
  // Create disposition
  FILE_SUPERSEDE                =$00000000;
  FILE_OPEN                     =$00000001;
@@ -174,8 +179,18 @@ const
  FILE_WRITE_TO_END_OF_FILE     =$ffffffff;
  FILE_USE_FILE_POINTER_POSITION=$fffffffe;
 
+ // FsControlCode
+ FSCTL_SET_REPARSE_POINT=$000900A4;
  FSCTL_GET_REPARSE_POINT=$000900A8;
+
+ // ReparseTag
  IO_REPARSE_TAG_SYMLINK =$A000000C;
+
+ // ReparseFlags
+ SYMLINK_FLAG_RELATIVE  =1;
+
+ // Privileges
+ SE_CREATE_SYMBOLIC_LINK_PRIVILEGE=35;
 
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
@@ -766,6 +781,20 @@ function NtQueryVirtualMemory(
           Length                :ULONG_PTR;
           ResultLength          :PULONG_PTR
          ):DWORD; stdcall; external 'ntdll';
+
+//
+
+function RtlAcquirePrivilege(
+          Privilege             :PULONG;
+          NumPriv               :ULONG;
+          Flags                 :ULONG;
+          ReturnedState         :PPointer
+         ):DWORD; stdcall; external 'ntdll';
+
+function RtlReleasePrivilege(
+          ReturnedState:Pointer
+         ):DWORD; stdcall; external 'ntdll';
+
 
 implementation
 

@@ -118,7 +118,7 @@ const
  UFS_DOTDOT  =$04;
  UFS_DOOMED  =$08;
  UFS_COVERED =$10;
- UFS_USER    =$20;
+ //UFS_USER    =$20;
 
  UFS_DEFAULT_MODE=&0755;
 

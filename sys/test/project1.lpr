@@ -383,6 +383,9 @@ begin
   //Writeln('sys_unlink=',sys_unlink('/test/test2'));
 
   Writeln('[--test_dirs--]');
+
+  //sys_symlink('/app0/lib','/app0/link_lib');
+
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');
 

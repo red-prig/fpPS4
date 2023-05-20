@@ -186,11 +186,8 @@ begin
  begin
   dd:=ufs_parent_dirent(de);
   if (dd<>nil) then
-   ufs_de_hold(dd);
-
-  if (de^.ufs_flags and UFS_USER)<>0 then
   begin
-   Assert(dd<>nil,'ufs_delete: nil dd');
+   ufs_de_hold(dd);
   end;
  end else
   dd:=nil;
@@ -846,8 +843,7 @@ var
 begin
  error:=0;
  //error:=priv_check(curkthread, PRIV_DEVFS_SYMLINK);
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
 
  dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
 
@@ -863,7 +859,7 @@ begin
  end;
 
  de:=ufs_newdirent(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
- de^.ufs_flags:=UFS_USER;
+ de^.ufs_flags:=0;
  de^.ufs_uid  :=0;
  de^.ufs_gid  :=0;
  de^.ufs_mode :=UFS_DEFAULT_MODE;

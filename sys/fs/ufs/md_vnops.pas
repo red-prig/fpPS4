@@ -39,6 +39,7 @@ function md_reclaim(ap:p_vop_reclaim_args):Integer;
 function md_getattr(ap:p_vop_getattr_args):Integer;
 
 function md_readlink(ap:p_vop_readlink_args):Integer;
+function md_symlink(ap:p_vop_symlink_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -69,7 +70,7 @@ const
   vop_rename        :nil; //TODO
   vop_mkdir         :nil; //TODO
   vop_rmdir         :nil; //TODO
-  vop_symlink       :nil; //TODO
+  vop_symlink       :@md_symlink;
   vop_readdir       :@md_readdir;
   vop_readlink      :@md_readlink;
   vop_inactive      :@md_inactive;
@@ -141,7 +142,7 @@ end;
 function INIT_UNICODE(FileName:PWideChar):UNICODE_STRING;
 begin
  Result.Length       :=strlen(FileName)*SizeOf(WideChar);
- Result.MaximumLength:=Result.Length+1;
+ Result.MaximumLength:=Result.Length+SizeOf(WideChar);
  Result.Buffer       :=FileName;
 end;
 
@@ -230,11 +231,18 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
-               SYNCHRONIZE or FILE_LIST_DIRECTORY or FILE_READ_ATTRIBUTES or FILE_WRITE_ATTRIBUTES,
+               SYNCHRONIZE or
+               FILE_LIST_DIRECTORY or
+               FILE_READ_ATTRIBUTES or
+               FILE_WRITE_ATTRIBUTES,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
-               FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT or FILE_DIRECTORY_FILE
+               FILE_SHARE_READ or
+               FILE_SHARE_WRITE or
+               FILE_SHARE_DELETE,
+               FILE_OPEN_FOR_BACKUP_INTENT or
+               FILE_SYNCHRONOUS_IO_NONALERT or
+               FILE_DIRECTORY_FILE
  );
 
  Result:=ntf2px(R);
@@ -317,11 +325,18 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
-               SYNCHRONIZE or FILE_LIST_DIRECTORY or FILE_READ_ATTRIBUTES or FILE_WRITE_ATTRIBUTES,
+               SYNCHRONIZE or
+               FILE_LIST_DIRECTORY or
+               FILE_READ_ATTRIBUTES or
+               FILE_WRITE_ATTRIBUTES,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
-               FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT or FILE_DIRECTORY_FILE
+               FILE_SHARE_READ or
+               FILE_SHARE_WRITE or
+               FILE_SHARE_DELETE,
+               FILE_OPEN_FOR_BACKUP_INTENT or
+               FILE_SYNCHRONOUS_IO_NONALERT or
+               FILE_DIRECTORY_FILE
  );
 
  Result:=ntf2px(R);
@@ -355,10 +370,15 @@ begin
  end;
 
  R:=NtOpenFile(@F,
-               SYNCHRONIZE or FILE_READ_DATA or FILE_READ_ATTRIBUTES or FILE_WRITE_ATTRIBUTES,
+               SYNCHRONIZE or
+               FILE_READ_DATA or
+               FILE_READ_ATTRIBUTES or
+               FILE_WRITE_ATTRIBUTES,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+               FILE_SHARE_READ or
+               FILE_SHARE_WRITE or
+               FILE_SHARE_DELETE,
                opt
  );
 
@@ -374,7 +394,7 @@ var
  mp:p_mount;
  W,R:WideString;
 begin
- Result:=EACCES;
+ Result:=ERESTART;
  mtx_lock(mountlist_mtx);
 
  mp:=TAILQ_FIRST(@mountlist);
@@ -453,21 +473,36 @@ begin
  //only symlink
  if (NT_SYMLINK.info.ReparseTag<>IO_REPARSE_TAG_SYMLINK) then
  begin
-  Exit(EACCES);
+  Exit(ERESTART);
  end;
 
  P:=@NT_SYMLINK.info.SymbolicLinkReparseBuffer.PathBuffer;
  P:=Pointer(P)+NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameOffset;
 
- nt_abs:=(PQWORD(P)^=$005C003F003F005C); // "\??\"
-
- if nt_abs then
+ if (PQWORD(P)^=$005C003F003F005C) then // "\??\"
  begin
   P:=P+4;
   Dec(NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength,8);
+  SetString(W,P,NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength div 2);
+  nt_abs:=True;
+ end else
+ if (PWORD(P)^=$005C) then // "\"
+ begin
+  SetString(W,P,NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength div 2);
+  U:=UTF8Encode(W);
+  U:=ExpandFileName(U);
+  W:=UTF8Decode(U);
+  nt_abs:=True;
+ end else
+ if (PWORD(P)[1]=$003A) then // "C:"
+ begin
+  SetString(W,P,NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength div 2);
+  nt_abs:=True;
+ end else
+ begin
+  SetString(W,P,NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength div 2);
+  nt_abs:=False;
  end;
-
- SetString(W,P,NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength div 2);
 
  if nt_abs then
  begin
@@ -484,8 +519,9 @@ begin
  Move(PAnsiChar(U)^, de^.ufs_symlink^, Length(U));
 end;
 
-function md_update_dirent(de:p_ufs_dirent):Integer;
+function md_update_dirent(de:p_ufs_dirent;prev:PFILE_BASIC_INFORMATION):Integer;
 label
+ _retry,
  _exit;
 var
  FP,RL:THandle;
@@ -496,7 +532,8 @@ var
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
 begin
- if (de=nil) then Exit(0);
+ Result:=0;
+ if (de=nil) then Exit;
 
  if (de^.ufs_md_fp=nil) then
  begin
@@ -509,19 +546,27 @@ begin
   RL:=0;
  end;
 
- FBI:=Default(FILE_BASIC_INFORMATION);
- BLK:=Default(IO_STATUS_BLOCK);
+ if (prev<>nil) then
+ begin
+  //just copy
+  FBI:=prev^;
+ end else
+ begin
+  //load time and file type
+  FBI:=Default(FILE_BASIC_INFORMATION);
+  BLK:=Default(IO_STATUS_BLOCK);
 
- R:=NtQueryInformationFile(
-     FP,
-     @BLK,
-     @FBI,
-     SizeOf(FBI),
-     FileBasicInformation
-    );
+  R:=NtQueryInformationFile(
+      FP,
+      @BLK,
+      @FBI,
+      SizeOf(FBI),
+      FileBasicInformation
+     );
 
- Result:=ntf2px(R);
- if (Result<>0) then goto _exit;
+  Result:=ntf2px(R);
+  if (Result<>0) then goto _exit;
+ end;
 
  de^.ufs_atime:=get_unix_file_time(FBI.LastAccessTime);
  de^.ufs_mtime:=get_unix_file_time(FBI.LastWriteTime);
@@ -530,15 +575,28 @@ begin
 
  ////
 
+ _retry:
+
  if (de^.ufs_dirent^.d_type=DT_LNK) then
  begin
+  //load symlink info
   if (de^.ufs_symlink=nil) then
   begin
    Result:=md_update_symlink(de,FP);
+
+   if (Result=ERESTART) then
+   begin
+    Result:=0;
+    //update type
+    de^.ufs_dirent^.d_type:=NT_FA_TO_DT(FBI.FileAttributes,0);
+    goto _retry;
+   end;
    if (Result<>0) then goto _exit;
   end;
  end else
+ if (de^.ufs_dirent^.d_type<>DT_DIR) then
  begin
+  //load size
   FSI:=Default(FILE_STANDARD_INFORMATION);
   BLK:=Default(IO_STATUS_BLOCK);
 
@@ -553,18 +611,16 @@ begin
   Result:=ntf2px(R);
   if (Result<>0) then goto _exit;
 
-  if (de^.ufs_dirent^.d_type<>DT_DIR) then
-  begin
-   de^.ufs_links:=FSI.NumberOfLinks;
-   de^.ufs_size :=Int64(FSI.EndOfFile);
-   de^.ufs_bytes:=Int64(FSI.AllocationSize);
-  end;
+  de^.ufs_links:=FSI.NumberOfLinks;
+  de^.ufs_size :=Int64(FSI.EndOfFile);
+  de^.ufs_bytes:=Int64(FSI.AllocationSize);
  end;
 
  ////
 
  if (de^.ufs_inode=0) then
  begin
+  //load inode
   FII:=Default(FILE_INTERNAL_INFORMATION);
   BLK:=Default(IO_STATUS_BLOCK);
 
@@ -648,7 +704,7 @@ begin
   ufs_de_hold(dotdot);
  end;
 
- error:=md_update_dirent(nd);
+ error:=md_update_dirent(nd,nil);
  if (error<>0) then
  begin
   ufs_de_drop(nd);
@@ -689,44 +745,15 @@ begin
  Exit(de);
 end;
 
-function md_lookup_dirent(dd:p_ufs_dirent;name:PChar;namelen:Integer):p_ufs_dirent;
+function md_new_cache(dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION):p_ufs_dirent;
 var
- u:RawByteString;
- w:WideString;
-
  nd:p_ufs_dirent;
  de:p_dirent;
-
- UNAME:UNICODE_STRING;
- NT_DIRENT:TNT_DIRENT;
- BLK:IO_STATUS_BLOCK;
- R:DWORD;
+ R:Integer;
 begin
  sx_assert(@dd^.ufs_md_lock);
 
  Result:=nil;
- SetString(u,name,namelen);
- w:=UTF8Decode(u);
-
- UNAME:=INIT_UNICODE(PWideChar(w));
- NT_DIRENT:=Default(TNT_DIRENT);
- BLK:=Default(IO_STATUS_BLOCK);
-
- R:=NtQueryDirectoryFile(
-           THandle(dd^.ufs_md_fp),
-           0,
-           nil,
-           nil,
-           @BLK,
-           @NT_DIRENT,
-           SizeOf(NT_DIRENT),
-           FileIdFullDirectoryInformation,
-           True,
-           @UNAME,
-           True
-          );
-
- if (R<>0) then Exit;
 
  nd:=md_newdirent(name, namelen);
 
@@ -734,29 +761,34 @@ begin
  nd^.ufs_links:=1; //read link???
  nd^.ufs_dir  :=dd;
 
- if ((NT_DIRENT.Info.FileAttributes and FILE_ATTRIBUTE_DIRECTORY)=0) then
- begin
-  nd^.ufs_size :=Int64(NT_DIRENT.Info.EndOfFile);
-  nd^.ufs_bytes:=Int64(NT_DIRENT.Info.AllocationSize);
- end;
-
- if ((NT_DIRENT.Info.FileAttributes and FILE_ATTRIBUTE_READONLY)=0) then
+ if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)=0) then
  begin
   nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
  end;
 
- nd^.ufs_inode:=get_inode(NT_DIRENT.Info.FileId);
-
- nd^.ufs_atime:=get_unix_file_time(NT_DIRENT.Info.LastAccessTime);
- nd^.ufs_mtime:=get_unix_file_time(NT_DIRENT.Info.LastWriteTime);
- nd^.ufs_ctime:=get_unix_file_time(NT_DIRENT.Info.ChangeTime);
- nd^.ufs_btime:=get_unix_file_time(NT_DIRENT.Info.CreationTime);
-
  de:=nd^.ufs_dirent;
 
  de^.d_fileno:=nd^.ufs_inode;
- de^.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
+ de^.d_type  :=NT_FA_TO_DT(prev^.FileAttributes,IO_REPARSE_TAG_SYMLINK);
 
+ if (de^.d_type=DT_DIR) then
+ begin
+  R:=md_open_dirent(nd);
+  if (R<>0) then
+  begin
+   ufs_de_drop(nd);
+   Exit(nil);
+  end;
+ end;
+
+ R:=md_update_dirent(nd,prev);
+ if (R<>0) then
+ begin
+  ufs_de_drop(nd);
+  Exit(nil);
+ end;
+
+ //link->dir
  if (de^.d_type=DT_DIR) then
  begin
   R:=md_open_dirent(nd);
@@ -772,6 +804,31 @@ begin
  ufs_de_hold(dd);
 
  Exit(nd);
+end;
+
+function md_lookup_dirent(dd:p_ufs_dirent;name:PChar;namelen:Integer):p_ufs_dirent;
+var
+ u:RawByteString;
+ w:WideString;
+
+ FBI:FILE_BASIC_INFORMATION;
+ OBJ:TOBJ_ATTR;
+ R:DWORD;
+begin
+ sx_assert(@dd^.ufs_md_lock);
+
+ Result:=nil;
+ SetString(u,name,namelen);
+ w:=UTF8Decode(u);
+
+ OBJ:=Default(TOBJ_ATTR);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+
+ R:=NtQueryAttributesFile(@OBJ,@FBI);
+
+ if (R<>0) then Exit;
+
+ Result:=md_new_cache(dd,name,namelen,@FBI);
 end;
 
 procedure md_delete_cache(de:p_ufs_dirent);
@@ -1107,7 +1164,7 @@ begin
  vp:=ap^.a_vp;
  de:=vp^.v_data;
 
- Result:=md_update_dirent(de);
+ Result:=md_update_dirent(de,nil);
  if (Result<>0) then Exit;
 
  Result:=ufs_getattr(ap);
@@ -1120,15 +1177,175 @@ begin
  de:=ap^.a_vp^.v_data;
  if (de^.ufs_dirent^.d_type<>DT_LNK) then Exit(EINVAL);
 
+ sx_xlock(@de^.ufs_md_lock);
+
  if (de^.ufs_symlink=nil) then //not cached
  begin
-  Result:=md_update_dirent(de);
+  Result:=md_update_dirent(de,nil);
   if (Result<>0) then Exit;
  end;
+
+ sx_xunlock(@de^.ufs_md_lock);
 
  Exit(uiomove(de^.ufs_symlink, strlen(de^.ufs_symlink), ap^.a_uio));
 end;
 
+function md_symlink(ap:p_vop_symlink_args):Integer;
+const
+ REPARSE_DATA_OFFSET=ptrint(@REPARSE_DATA_BUFFER(nil^).GenericReparseBuffer);
+label
+ _del,
+ _err;
+var
+ len,error:Integer;
+ dd:p_ufs_dirent;
+ de:p_ufs_dirent;
+ dmp:p_ufs_mount;
+
+ Privilege:DWORD;
+ PrivState:Pointer;
+
+ w:WideString;
+ u:RawByteString;
+
+ OBJ:TOBJ_ATTR;
+ BLK:IO_STATUS_BLOCK;
+ NT_SYMLINK:T_NT_SYMLINK;
+ FBI:FILE_BASIC_INFORMATION;
+
+ FD:THandle;
+ R:DWORD;
+ del_on_close:Boolean;
+begin
+ error:=0;
+ //error:=priv_check(curkthread, PRIV_DEVFS_SYMLINK);
+ if (error<>0) then Exit(error);
+
+ len:=strlen(ap^.a_target);
+ if (len<=0) then Exit(EINVAL);
+ if (len>MAX_PATH) then Exit(ENAMETOOLONG);
+
+ //get Privilege
+ Privilege:=SE_CREATE_SYMBOLIC_LINK_PRIVILEGE;
+ R:=RtlAcquirePrivilege(@Privilege,1,0,@PrivState);
+
+ if (R<>0) then Exit(EPERM);
+
+ dd:=ap^.a_dvp^.v_data;
+
+ SetString(u,ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
+ w:=UTF8Decode(u);
+
+ OBJ:=Default(TOBJ_ATTR);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtCreateFile(@FD,
+                 FILE_READ_ATTRIBUTES or
+                 FILE_WRITE_ATTRIBUTES or
+                 FILE_CAN_DELETE or
+                 SYNCHRONIZE,
+                 @OBJ,
+                 @BLK,
+                 nil,
+                 FILE_ATTRIBUTE_NORMAL,
+                 0,
+                 FILE_CREATE,
+                 FILE_SYNCHRONOUS_IO_NONALERT or
+                 FILE_OPEN_REPARSE_POINT or
+                 FILE_NON_DIRECTORY_FILE {FILE_DIRECTORY_FILE}, //target dir or file ???
+                 nil,0);
+
+ Result:=ntf2px(R);
+ if (Result<>0) then goto _err;
+
+ NT_SYMLINK:=Default(T_NT_SYMLINK);
+
+ NT_SYMLINK.info.ReparseTag       :=IO_REPARSE_TAG_SYMLINK;
+ NT_SYMLINK.info.ReparseDataLength:=(SizeOf(REPARSE_DATA_BUFFER)-REPARSE_DATA_OFFSET)+(len*4);
+
+ NT_SYMLINK.info.SymbolicLinkReparseBuffer.PrintNameOffset     :=0;
+ NT_SYMLINK.info.SymbolicLinkReparseBuffer.PrintNameLength     :=(len*2);
+ NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameOffset:=(len*2);
+ NT_SYMLINK.info.SymbolicLinkReparseBuffer.SubstituteNameLength:=(len*2);
+
+ if (ap^.a_target[0]<>'/') then //is relative
+ begin
+  NT_SYMLINK.info.SymbolicLinkReparseBuffer.Flags              :=SYMLINK_FLAG_RELATIVE;
+ end;
+
+ SetString(u,ap^.a_target,len);
+ w:=UTF8Decode(u);
+
+ Move(PWideChar(w)^,NT_SYMLINK.Name[0]  ,len*2);
+ Move(PWideChar(w)^,NT_SYMLINK.Name[len],len*2);
+
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ //need SE_CREATE_SYMBOLIC_LINK_PRIVILEGE
+ R:=NtFsControlFile(FD,
+                    0,
+                    nil,
+                    nil,
+                    @BLK,
+                    FSCTL_SET_REPARSE_POINT,
+                    @NT_SYMLINK,
+                    NT_SYMLINK.info.ReparseDataLength+REPARSE_DATA_OFFSET,
+                    nil,
+                    0);
+
+ Result:=ntf2px(R);
+ if (Result<>0) then
+ begin
+  //mark delete on close handle
+  _del:
+  del_on_close:=true;
+  NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+  NtClose(FD);
+  _err:
+  RtlReleasePrivilege(PrivState);
+  Exit;
+ end;
+
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     FD,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then goto _del;
+
+ NtClose(FD);
+ RtlReleasePrivilege(PrivState);
+
+ //
+
+ sx_xlock(@dd^.ufs_md_lock);
+
+ //clear cache
+ de:=md_find_cache(dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,0);
+ md_unlink_cache(de);
+
+ //new dirent
+ de:=md_new_cache(dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI);
+
+ sx_xunlock(@dd^.ufs_md_lock);
+
+ if (de=nil) then //if new fail
+ begin
+  Exit(EEXIST);
+ end;
+
+ dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
+ sx_xlock(@dmp^.ufs_lock);
+ Exit(ufs_allocv(de, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
+end;
 
 
 end.

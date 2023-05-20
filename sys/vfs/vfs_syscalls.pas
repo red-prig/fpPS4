@@ -1287,23 +1287,24 @@ begin
  begin
   syspath:=AllocMem(SizeOf(MAXPATHLEN));
   error:=copyinstr(path1, syspath, MAXPATHLEN, nil);
-  if (error<>0) then
-   goto _out;
+  if (error<>0) then goto _out;
  end;
  restart:
  //bwillwrite();
  NDINIT_AT(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, segflg, path2, fd, curkthread);
  error:=nd_namei(@nd);
- if (error<>0) then
-  goto _out;
+ if (error<>0) then goto _out;
+
  vfslocked:=NDHASGIANT(@nd);
  if (nd.ni_vp<>nil) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
+
   if (nd.ni_vp=nd.ni_dvp) then
    vrele(nd.ni_dvp)
   else
    vput(nd.ni_dvp);
+
   vrele(nd.ni_vp);
   VFS_UNLOCK_GIANT(vfslocked);
   error:=EEXIST;
@@ -1315,8 +1316,8 @@ begin
   vput(nd.ni_dvp);
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
-  if (error<>0) then
-   goto _out;
+  if (error<>0) then goto _out;
+
   goto restart;
  end;
  VATTR_NULL(@vattr);
@@ -1330,6 +1331,7 @@ begin
  error:=VOP_SYMLINK(nd.ni_dvp, @nd.ni_vp, @nd.ni_cnd, @vattr, syspath);
  if (error=0) then
   vput(nd.ni_vp);
+
 out2:
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(nd.ni_dvp);
@@ -1338,6 +1340,7 @@ out2:
 _out:
  if (segflg<>UIO_SYSSPACE) then
   FreeMem(syspath);
+
  Exit(error);
 end;
 
@@ -2487,6 +2490,7 @@ begin
  error:=nd_namei(@fromnd);
  if (error<>0) then
   Exit(error);
+
  fvfslocked:=NDHASGIANT(@fromnd);
  tvfslocked:=0;
 
@@ -2500,6 +2504,7 @@ begin
  fvp:=fromnd.ni_vp;
  if (error=0) then
   error:=vn_start_write(fvp, @mp, V_WAIT or PCATCH);
+
  if (error<>0) then
  begin
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
@@ -2507,9 +2512,11 @@ begin
   vrele(fvp);
   goto out1;
  end;
+
  NDINIT_ATRIGHTS(@tond, RENAME, LOCKPARENT or LOCKLEAF or NOCACHE or
      SAVESTART or MPSAFE or AUDITVNODE2, pathseg, new, newfd, CAP_CREATE,
      curkthread);
+
  if (fromnd.ni_vp^.v_type=VDIR) then
   tond.ni_cnd.cn_flags:=tond.ni_cnd.cn_flags or WILLBEDIR;
 
@@ -2525,6 +2532,7 @@ begin
   vn_finished_write(mp);
   goto out1;
  end;
+
  tvfslocked:=NDHASGIANT(@tond);
  tdvp:=tond.ni_dvp;
  tvp:=tond.ni_vp;
@@ -2567,12 +2575,14 @@ begin
  begin
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
   NDFREE(@tond, NDF_ONLY_PNBUF);
+
   if (tvp<>nil) then
    vput(tvp);
   if (tdvp=tvp) then
    vrele(tdvp)
   else
    vput(tdvp);
+
   vrele(fromnd.ni_dvp);
   vrele(fvp);
  end;
@@ -2581,6 +2591,7 @@ begin
 out1:
  if (fromnd.ni_startdir<>nil) then
   vrele(fromnd.ni_startdir);
+
  VFS_UNLOCK_GIANT(fvfslocked);
  VFS_UNLOCK_GIANT(tvfslocked);
  if (error=-1) then
@@ -2628,6 +2639,7 @@ restart:
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  if (vp<>nil) then
@@ -2642,6 +2654,7 @@ restart:
    vrele(nd.ni_dvp)
   else
    vput(nd.ni_dvp);
+
   vrele(vp);
   VFS_UNLOCK_GIANT(vfslocked);
   Exit(EEXIST);
@@ -2654,6 +2667,7 @@ restart:
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
    Exit(error);
+
   goto restart;
  end;
  VATTR_NULL(@vattr);
@@ -2670,6 +2684,7 @@ _out:
  vput(nd.ni_dvp);
  if (error=0) then
   vput(nd.ni_vp);
+
  vn_finished_write(mp);
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
@@ -2708,9 +2723,11 @@ restart:
  //bwillwrite();
  NDINIT_ATRIGHTS(@nd, DELETE, LOCKPARENT or LOCKLEAF or MPSAFE or
      AUDITVNODE1, pathseg, path, fd, CAP_RMDIR, curkthread);
+
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  if (vp^.v_type<>VDIR) then
@@ -2743,14 +2760,17 @@ restart:
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
   vput(vp);
+
   if (nd.ni_dvp=vp) then
    vrele(nd.ni_dvp)
   else
    vput(nd.ni_dvp);
+
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
    Exit(error);
+
   goto restart;
  end;
  error:=VOP_RMDIR(nd.ni_dvp, nd.ni_vp, @nd.ni_cnd);
@@ -2758,10 +2778,12 @@ restart:
  _out:
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(vp);
+
  if (nd.ni_dvp=vp) then
   vrele(nd.ni_dvp)
  else
   vput(nd.ni_dvp);
+
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
 end;
@@ -2922,6 +2944,7 @@ begin
  error:=nd_namei(@nd);
  if (error<>0) then
   Exit(error);
+
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  NDFREE(@nd, NDF_ONLY_PNBUF);
