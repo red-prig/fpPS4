@@ -381,11 +381,11 @@ begin
   //Writeln('sys_rmdir=',sys_rmdir('/test/test'));
   //Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
   //Writeln('sys_unlink=',sys_unlink('/test/test2'));
+  //sys_symlink('lib/x86_64-win64/_umtx.o','/app0/link_lib');
+  //sys_link('/app0/test.txt','/app0/lib/test_link.txt');
+  //sys_mkdir('/app0/new',&777);
 
   Writeln('[--test_dirs--]');
-
-  //sys_symlink('/app0/lib','/app0/link_lib');
-
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');
 

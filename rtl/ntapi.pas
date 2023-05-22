@@ -8,37 +8,38 @@ uses
  Windows;
 
 const
- STATUS_SUCCESS              =$00000000;
- STATUS_WAIT_0               =$00000000;
- STATUS_ABANDONED            =$00000080; //EPERM
- STATUS_ABANDONED_WAIT_0     =$00000080;
- STATUS_USER_APC             =$000000C0; //EINTR
- STATUS_KERNEL_APC           =$00000100; //EINTR
- STATUS_ALERTED              =$00000101; //EINTR
- STATUS_TIMEOUT              =$00000102; //ETIMEDOUT
- STATUS_PENDING              =$00000103; //EWOULDBLOCK
- STATUS_NO_YIELD_PERFORMED   =$40000024;
- STATUS_NO_MORE_FILES        =$80000006;
- STATUS_ACCESS_VIOLATION     =$C0000005; //EFAULT
- STATUS_INVALID_HANDLE       =$C0000008; //EBADF
- STATUS_INVALID_PARAMETER    =$C000000D; //EINVAL
- STATUS_NO_SUCH_FILE         =$C000000F; //ENOENT
- STATUS_END_OF_FILE          =$C0000011;
- STATUS_NO_MEMORY            =$C0000017; //ENOMEM
- STATUS_ACCESS_DENIED        =$C0000022; //EPERM
- STATUS_DISK_CORRUPT_ERROR   =$C0000032; //EIO
- STATUS_OBJECT_NAME_NOT_FOUND=$C0000034; //ENOENT
- STATUS_OBJECT_NAME_COLLISION=$C0000035; //EEXIST
- STATUS_DISK_FULL            =$C000007F; //ENOSPC
- STATUS_FILE_IS_A_DIRECTORY  =$C00000BA; //EISDIR
- STATUS_DIRECTORY_NOT_EMPTY  =$C0000101; //ENOTEMPTY
- STATUS_FILE_CORRUPT_ERROR   =$C0000102; //EIO
- STATUS_NOT_A_DIRECTORY      =$C0000103; //ENOTDIR
- STATUS_NAME_TOO_LONG        =$C0000106; //ENAMETOOLONG
- STATUS_COMMITMENT_LIMIT     =$C000012D; //ENOMEM
- STATUS_IO_DEVICE_ERROR      =$C0000185; //EIO
- STATUS_TOO_MANY_LINKS       =$C0000265; //EMLINK
-
+ STATUS_SUCCESS                =$00000000;
+ STATUS_WAIT_0                 =$00000000;
+ STATUS_ABANDONED              =$00000080; //EPERM
+ STATUS_ABANDONED_WAIT_0       =$00000080;
+ STATUS_USER_APC               =$000000C0; //EINTR
+ STATUS_KERNEL_APC             =$00000100; //EINTR
+ STATUS_ALERTED                =$00000101; //EINTR
+ STATUS_TIMEOUT                =$00000102; //ETIMEDOUT
+ STATUS_PENDING                =$00000103; //EWOULDBLOCK
+ STATUS_NO_YIELD_PERFORMED     =$40000024;
+ STATUS_NO_MORE_FILES          =$80000006;
+ STATUS_ACCESS_VIOLATION       =$C0000005; //EFAULT
+ STATUS_INVALID_HANDLE         =$C0000008; //EBADF
+ STATUS_INVALID_PARAMETER      =$C000000D; //EINVAL
+ STATUS_NO_SUCH_FILE           =$C000000F; //ENOENT
+ STATUS_END_OF_FILE            =$C0000011;
+ STATUS_NO_MEMORY              =$C0000017; //ENOMEM
+ STATUS_ACCESS_DENIED          =$C0000022; //EPERM
+ STATUS_DISK_CORRUPT_ERROR     =$C0000032; //EIO
+ STATUS_OBJECT_NAME_NOT_FOUND  =$C0000034; //ENOENT
+ STATUS_OBJECT_NAME_COLLISION  =$C0000035; //EEXIST
+ STATUS_DISK_FULL              =$C000007F; //ENOSPC
+ STATUS_FILE_IS_A_DIRECTORY    =$C00000BA; //EISDIR
+ STATUS_DIRECTORY_NOT_EMPTY    =$C0000101; //ENOTEMPTY
+ STATUS_FILE_CORRUPT_ERROR     =$C0000102; //EIO
+ STATUS_NOT_A_DIRECTORY        =$C0000103; //ENOTDIR
+ STATUS_NAME_TOO_LONG          =$C0000106; //ENAMETOOLONG
+ STATUS_PAGEFILE_QUOTA_EXCEEDED=$C000012C; //ENOMEM
+ STATUS_COMMITMENT_LIMIT       =$C000012D; //ENOMEM
+ STATUS_IO_DEVICE_ERROR        =$C0000185; //EIO
+ STATUS_TOO_MANY_LINKS         =$C0000265; //EMLINK
+ STATUS_COMMITMENT_MINIMUM     =$C00002C8; //ENOMEM
 
  NT_INFINITE=$8000000000000000;
 
@@ -74,6 +75,7 @@ const
  FileInternalInformation       = 6;
  FileEaInformation             = 7;
  FileAccessInformation         = 8;
+ FileLinkInformation           =11;
  FileNamesInformation          =12;
  FileDispositionInformation    =13;
  FilePositionInformation       =14;
@@ -203,7 +205,7 @@ type
  PUNICODE_STRING=^UNICODE_STRING;
  UNICODE_STRING=packed record
   Length       :USHORT; //size in byte
-  MaximumLength:USHORT;
+  MaximumLength:USHORT; //size in byte
   _Align       :DWORD;
   Buffer       :PWSTR;
  end;
@@ -271,7 +273,7 @@ type
 
  PFILE_NAME_INFORMATION=^FILE_NAME_INFORMATION;
  FILE_NAME_INFORMATION=packed record
-  FileNameLength:ULONG;
+  FileNameLength:ULONG;      //size in byte
   FileName      :record end; //WCHAR
  end;
 
@@ -288,6 +290,15 @@ type
   NameInformation     :FILE_NAME_INFORMATION;
  end;
 
+ PFILE_LINK_INFORMATION=^FILE_LINK_INFORMATION;
+ FILE_LINK_INFORMATION=packed record
+  ReplaceIfExists:Boolean;
+  _align:array[0..6] of Byte;
+  RootDirectory  :THandle;
+  FileNameLength :ULONG;      //size in byte
+  FileName       :record end; //WCHAR
+ end;
+
  PFILE_ID_FULL_DIR_INFORMATION=^FILE_ID_FULL_DIR_INFORMATION;
  FILE_ID_FULL_DIR_INFORMATION=packed record
   NextEntryOffset:ULONG;
@@ -299,7 +310,7 @@ type
   EndOfFile      :LARGE_INTEGER;
   AllocationSize :LARGE_INTEGER;
   FileAttributes :ULONG;
-  FileNameLength :ULONG;
+  FileNameLength :ULONG;      //size in byte
   EaSize         :ULONG;
   align          :ULONG;
   FileId         :LARGE_INTEGER;
@@ -322,18 +333,18 @@ type
   Reserved         :USHORT;
   case byte of
    0:(SymbolicLinkReparseBuffer:packed record
-       SubstituteNameOffset:USHORT;
-       SubstituteNameLength:USHORT;
-       PrintNameOffset     :USHORT;
-       PrintNameLength     :USHORT;
+       SubstituteNameOffset:USHORT;  //offset in byte
+       SubstituteNameLength:USHORT;  //size in byte
+       PrintNameOffset     :USHORT;  //offset in byte
+       PrintNameLength     :USHORT;  //size in byte
        Flags               :ULONG;
        PathBuffer          :record end; //WCHAR
       end);
    1:(MountPointReparseBuffer:packed record
-       SubstituteNameOffset:USHORT;
-       SubstituteNameLength:USHORT;
-       PrintNameOffset     :USHORT;
-       PrintNameLength     :USHORT;
+       SubstituteNameOffset:USHORT;  //offset in byte
+       SubstituteNameLength:USHORT;  //size in byte
+       PrintNameOffset     :USHORT;  //offset in byte
+       PrintNameLength     :USHORT;  //size in byte
        PathBuffer          :record end; //WCHAR
       end);
    2:(GenericReparseBuffer:packed record

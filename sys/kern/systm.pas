@@ -59,7 +59,8 @@ begin
  Result:=0;
  i:=0;
  ch:=#0;
- repeat
+ while (len>0) do
+ begin
   Result:=copyin(udaddr,@ch,1);
   if (Result<>0) then Break;
   PChar(kaddr)^:=ch;
@@ -67,7 +68,8 @@ begin
   if (ch=#0) then Break;
   Inc(udaddr);
   Inc(kaddr);
- until false;
+  Dec(len);
+ end;
  if (lencopied<>nil) then
  begin
   lencopied^:=i;

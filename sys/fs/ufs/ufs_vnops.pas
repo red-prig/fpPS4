@@ -838,7 +838,7 @@ function ufs_symlink(ap:p_vop_symlink_args):Integer;
 var
  i,error:Integer;
  dd:p_ufs_dirent;
- de,de_cov:p_ufs_dirent;
+ de:p_ufs_dirent;
  dmp:p_ufs_mount;
 begin
  error:=0;
@@ -850,9 +850,9 @@ begin
  sx_xlock(@dmp^.ufs_lock);
 
  dd:=ap^.a_dvp^.v_data;
- de_cov:=ufs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
+ de:=ufs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
 
- if (de_cov<>nil) then
+ if (de<>nil) then
  begin
   sx_xunlock(@dmp^.ufs_lock);
   Exit(EEXIST);
@@ -982,7 +982,6 @@ var
  vap:p_vattr;
  dmp:p_ufs_mount;
  dd:p_ufs_dirent;
- de_cov:p_ufs_dirent;
  de:p_ufs_dirent;
 begin
  dvp:=ap^.a_dvp;
@@ -996,15 +995,21 @@ begin
 
  dd:=dvp^.v_data;
 
- de_cov:=ufs_find(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
+ de:=ufs_find(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
 
- if (de_cov<>nil) then
+ if (de<>nil) then
  begin
   sx_xunlock(@dmp^.ufs_lock);
   Exit(EEXIST);
  end;
 
  de:=ufs_vmkdir(dmp,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,dd,0);
+
+ if (de=nil) then
+ begin
+  sx_xunlock(@dmp^.ufs_lock);
+  Exit(ENOMEM);
+ end;
 
  de^.ufs_mode :=vap^.va_mode;
 

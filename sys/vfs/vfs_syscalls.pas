@@ -1167,7 +1167,9 @@ end;
 
 function can_hardlink(vp:p_vnode):Integer; inline;
 begin
- Exit(EPERM);
+ //error = priv_check_cred(cred, PRIV_VFS_LINK, 0);
+ //Exit(EPERM);
+ Exit(0);
 end;
 
 function kern_linkat(fd1,fd2:Integer;path1,path2:PChar;segflg:uio_seg;follow:Integer):Integer;
@@ -1213,6 +1215,7 @@ begin
     vrele(nd.ni_dvp)
    else
     vput(nd.ni_dvp);
+
    vrele(nd.ni_vp);
    error:=EEXIST;
   end else
@@ -1285,7 +1288,7 @@ begin
   syspath:=path1;
  end else
  begin
-  syspath:=AllocMem(SizeOf(MAXPATHLEN));
+  syspath:=AllocMem(MAXPATHLEN);
   error:=copyinstr(path1, syspath, MAXPATHLEN, nil);
   if (error<>0) then goto _out;
  end;
