@@ -382,8 +382,12 @@ begin
   //Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
   //Writeln('sys_unlink=',sys_unlink('/test/test2'));
   //sys_symlink('lib/x86_64-win64/_umtx.o','/app0/link_lib');
-  //sys_link('/app0/test.txt','/app0/lib/test_link.txt');
-  //sys_mkdir('/app0/new',&777);
+
+  sys_link('/app0/test.txt','/app0/lib/test_link.txt');
+  sys_unlink('/app0/lib/test_link.txt');
+
+  sys_mkdir('/app0/new',&777);
+  sys_rmdir('/app0/new');
 
   Writeln('[--test_dirs--]');
   test_dirs('','/',1);

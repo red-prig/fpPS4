@@ -2529,6 +2529,7 @@ begin
   { Translate error code for rename('dir1', 'dir2/.'). }
   if (error=EISDIR) and (fvp^.v_type=VDIR) then
    error:=EINVAL;
+
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
   vrele(fromnd.ni_dvp);
   vrele(fvp);
@@ -2597,8 +2598,8 @@ out1:
 
  VFS_UNLOCK_GIANT(fvfslocked);
  VFS_UNLOCK_GIANT(tvfslocked);
- if (error=-1) then
-  Exit(0);
+ if (error=-1) then Exit(0);
+
  Exit(error);
 end;
 

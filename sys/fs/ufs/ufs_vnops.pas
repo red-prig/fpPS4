@@ -914,7 +914,9 @@ begin
  VOP_UNLOCK(vp, 0);
 
  if (dvp<>vp) then
+ begin
   VOP_UNLOCK(dvp, 0);
+ end;
 
  if (de^.ufs_dirent^.d_type=DT_DIR) then
  begin
@@ -927,7 +929,9 @@ begin
  sx_xunlock(@dmp^.ufs_lock);
 
  if (dvp<>vp) then
+ begin
   vn_lock(dvp, LK_EXCLUSIVE or LK_RETRY);
+ end;
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
 
@@ -961,14 +965,18 @@ begin
  VOP_UNLOCK(vp, 0);
 
  if (dvp<>vp) then
+ begin
   VOP_UNLOCK(dvp, 0);
+ end;
 
  _ufs_rmdir(dmp, de);
 
  sx_xunlock(@dmp^.ufs_lock);
 
  if (dvp<>vp) then
+ begin
   vn_lock(dvp, LK_EXCLUSIVE or LK_RETRY);
+ end;
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
 

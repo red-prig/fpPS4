@@ -43,6 +43,8 @@ function md_symlink(ap:p_vop_symlink_args):Integer;
 function md_link(ap:p_vop_link_args):Integer;
 
 function md_mkdir(ap:p_vop_mkdir_args):Integer;
+function md_remove(ap:p_vop_remove_args):Integer;
+function md_rmdir(ap:p_vop_rmdir_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -68,11 +70,11 @@ const
   vop_kqfilter      :nil;
   vop_revoke        :nil;
   vop_fsync         :nil; //TODO
-  vop_remove        :nil; //TODO
+  vop_remove        :@md_remove;
   vop_link          :@md_link;
   vop_rename        :nil; //TODO
   vop_mkdir         :@md_mkdir;
-  vop_rmdir         :nil; //TODO
+  vop_rmdir         :@md_rmdir;
   vop_symlink       :@md_symlink;
   vop_readdir       :@md_readdir;
   vop_readlink      :@md_readlink;
@@ -394,6 +396,7 @@ begin
 
  R:=NtOpenFile(@F,
                SYNCHRONIZE or
+               FILE_CAN_DELETE or
                FILE_LIST_DIRECTORY or
                FILE_READ_ATTRIBUTES or
                FILE_WRITE_ATTRIBUTES,
@@ -442,6 +445,7 @@ begin
 
  R:=NtOpenFile(@F,
                SYNCHRONIZE or
+               FILE_CAN_DELETE or
                FILE_READ_DATA or
                FILE_READ_ATTRIBUTES or
                FILE_WRITE_ATTRIBUTES,
@@ -598,7 +602,7 @@ label
  _retry,
  _exit;
 var
- FP,RL:THandle;
+ FD,RL:THandle;
 
  FBI:FILE_BASIC_INFORMATION;
  FSI:FILE_STANDARD_INFORMATION;
@@ -611,12 +615,12 @@ begin
 
  if (de^.ufs_md_fp=nil) then
  begin
-  Result:=md_open_dirent_file(de,(de^.ufs_dirent^.d_type=DT_LNK),@FP);
+  Result:=md_open_dirent_file(de,(de^.ufs_dirent^.d_type=DT_LNK),@FD);
   if (Result<>0) then Exit;
-  RL:=FP;
+  RL:=FD;
  end else
  begin
-  FP:=THandle(de^.ufs_md_fp);
+  FD:=THandle(de^.ufs_md_fp);
   RL:=0;
  end;
 
@@ -631,7 +635,7 @@ begin
   BLK:=Default(IO_STATUS_BLOCK);
 
   R:=NtQueryInformationFile(
-      FP,
+      FD,
       @BLK,
       @FBI,
       SizeOf(FBI),
@@ -656,7 +660,7 @@ begin
   //load symlink info
   if (de^.ufs_symlink=nil) then
   begin
-   Result:=md_update_symlink(de,FP);
+   Result:=md_update_symlink(de,FD);
 
    if (Result=ERESTART) then
    begin
@@ -675,7 +679,7 @@ begin
   BLK:=Default(IO_STATUS_BLOCK);
 
   R:=NtQueryInformationFile(
-      FP,
+      FD,
       @BLK,
       @FSI,
       SizeOf(FSI),
@@ -699,7 +703,7 @@ begin
   BLK:=Default(IO_STATUS_BLOCK);
 
   R:=NtQueryInformationFile(
-      FP,
+      FD,
       @BLK,
       @FII,
       SizeOf(FII),
@@ -1575,6 +1579,101 @@ begin
 
  sx_xlock(@dmp^.ufs_lock);
  Exit(ufs_allocv(de, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
+end;
+
+function md_remove(ap:p_vop_remove_args):Integer;
+var
+ dvp,vp:p_vnode;
+ dd,de:p_ufs_dirent;
+
+ FD,RL:THandle;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+
+ del_on_close:Boolean;
+begin
+ dvp:=ap^.a_dvp;
+ vp:=ap^.a_vp;
+
+ dd:=dvp^.v_data;
+ de:=vp^.v_data;
+
+ sx_xlock(@dd^.ufs_md_lock);
+
+ if (de^.ufs_md_fp=nil) then
+ begin
+  Result:=md_open_dirent_file(de,True,@FD);
+  if (Result<>0) then Exit;
+  RL:=FD;
+ end else
+ begin
+  FD:=THandle(de^.ufs_md_fp);
+  RL:=0;
+ end;
+
+ BLK:=Default(IO_STATUS_BLOCK);
+ del_on_close:=true;
+
+ R:=NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+
+ Result:=ntf2px(R);
+ if (Result<>0) then
+ begin
+  sx_xunlock(@dd^.ufs_md_lock);
+  if (RL<>0) then
+  begin
+   NtClose(RL);
+  end;
+  Exit;
+ end;
+
+ de^.ufs_md_fp:=nil;
+ NtClose(FD); //<-deleted
+
+ sx_xunlock(@dd^.ufs_md_lock);
+ Exit(0);
+end;
+
+function md_rmdir(ap:p_vop_rmdir_args):Integer;
+var
+ dvp,vp:p_vnode;
+ dd,de:p_ufs_dirent;
+ dmp:p_ufs_mount;
+
+ FD:THandle;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+
+ del_on_close:Boolean;
+begin
+ dvp:=ap^.a_dvp;
+ vp:=ap^.a_vp;
+
+ dd:=dvp^.v_data;
+ de:=vp^.v_data;
+
+ if (de^.ufs_dirent^.d_type<>DT_DIR) then Exit(ENOTDIR);
+
+ sx_xlock(@dd^.ufs_md_lock);
+
+ FD:=THandle(de^.ufs_md_fp);
+ BLK:=Default(IO_STATUS_BLOCK);
+ del_on_close:=true;
+
+ R:=NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+
+ Result:=ntf2px(R);
+ if (Result<>0) then
+ begin
+  sx_xunlock(@dd^.ufs_md_lock);
+  Exit;
+ end;
+
+ de^.ufs_md_fp:=nil;
+ NtClose(FD); //<-deleted
+
+ sx_xunlock(@dd^.ufs_md_lock);
+ Exit(0);
 end;
 
 
