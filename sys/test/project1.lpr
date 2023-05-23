@@ -264,12 +264,45 @@ begin
  end;
 end;
 
+procedure test_files;
+var
+ td:p_kthread;
+ fs:t_statfs;
+ fd:Integer;
+ err:Integer;
+begin
+ td:=curkthread;
+
+ Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
+
+ fd:=td^.td_retval[0];
+
+ Writeln('sys_fstatfs=',sys_fstatfs(fd,@fs));
+
+ //sys_close(fd);
+
+ Writeln('sys_mkdir=',sys_mkdir('/test',&777));
+ Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
+ Writeln('sys_rmdir=',sys_rmdir('/test/test'));
+ Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
+ Writeln('sys_unlink=',sys_unlink('/test/test2'));
+
+ Writeln('sys_mkdir=',sys_mkdir('/app0/new',&777));
+ Writeln('sys_link=',sys_link('/app0/test.txt','/app0/new/test_link.txt'));
+ Writeln('sys_rename=',sys_rename('/app0/new/test_link.txt','/app0/renamed'));
+ Writeln('sys_unlink=',sys_unlink('/app0/renamed'));
+
+ Writeln('sys_rename=',sys_rename('/app0/new','/app0/renamed'));
+ Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
+
+ readln;
+end;
+
 procedure test_dirs(const dirp,namep:RawByteString;s:Byte);
 label
  _next;
 var
  td:p_kthread;
- fs:t_statfs;
 
  sb:t_stat;
  buf:array[0..511] of Byte;
@@ -318,7 +351,6 @@ begin
    end;
 
    fd:=td^.td_retval[0];
-   //sys_fstatfs(fd,@fs);
 
    Writeln(Space(s),'->');
 
@@ -375,26 +407,7 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
-
-  //Writeln('sys_mkdir=',sys_mkdir('/test',&777));
-  //Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
-  //Writeln('sys_rmdir=',sys_rmdir('/test/test'));
-  //Writeln('sys_symlink=',sys_symlink('/app0','/test/test2'));
-  //Writeln('sys_unlink=',sys_unlink('/test/test2'));
-  //sys_symlink('lib/x86_64-win64/_umtx.o','/app0/link_lib');
-
-  //Writeln('sys_mkdir=',sys_mkdir('/app0/new',&777));
-  //Writeln('sys_link=',sys_link('/app0/test.txt','/app0/new/test_link.txt'));
-  //Writeln('sys_rename=',sys_rename('/app0/new/test_link.txt','/app0/renamed'));
-  //Writeln('sys_unlink=',sys_unlink('/app0/renamed'));
-
-  //readln;
-
-  //Writeln('sys_rename=',sys_rename('/app0/new','/app0/renamed'));
-  //Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
-
-  //readln;
-
+  test_files;
   Writeln('[--test_dirs--]');
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');

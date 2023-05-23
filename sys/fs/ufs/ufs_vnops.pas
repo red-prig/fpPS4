@@ -350,7 +350,6 @@ end;
 function ufs_vmkdir(dmp:p_ufs_mount;name:PChar;namelen:Integer;dotdot:p_ufs_dirent;inode:DWORD):p_ufs_dirent;
 var
  nd,de:p_ufs_dirent;
- mp:p_mount;
 begin
  { Create the new directory }
  nd:=ufs_newdirent(name, namelen);
@@ -365,11 +364,9 @@ begin
  else
   nd^.ufs_inode:=ufs_alloc_cdp_inode;
 
- mp:=dmp^.ufs_mount;
-
- if (dmp^.ufs_rootdir=nil) and ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ if (dotdot=nil) then
  begin
-  //
+  nd^.ufs_flags:=UFS_DROOT;
  end else
  begin
   {
@@ -435,8 +432,6 @@ begin
 end;
 
 function ufs_lookupx(ap:p_vop_lookup_args;dm_unlock:PBoolean):Integer;
-label
- _error;
 var
  cnp:p_componentname;
  dvp:p_vnode;
@@ -485,8 +480,7 @@ begin
 
   de:=ufs_parent_dirent(dd);
 
-  if (de=nil) then
-   Exit(ENOENT);
+  if (de=nil) then Exit(ENOENT);
 
   dvplocked:=VOP_ISLOCKED(dvp);
   VOP_UNLOCK(dvp, 0);
@@ -507,26 +501,14 @@ begin
    CREATE,
    RENAME:
     begin
-     //if not last
-     if ((flags and ISLASTCN)=0) then Exit(ENOENT);
+     if ((flags and (LOCKPARENT or WANTPARENT))<>0) and
+        ((flags and ISLASTCN)<>0) then
+     begin
+      cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
+      Exit(EJUSTRETURN);
+     end;
     end;
-
-   LOOKUP,
-   DELETE:Exit(ENOENT);
    else;
-  end;
-  goto _error;
- end;
-
- if ((de^.ufs_flags and UFS_WHITEOUT)<>0) then
- begin
-  _error:
-  if ((nameiop=CREATE) or (nameiop=RENAME)) and
-     ((flags and (LOCKPARENT or WANTPARENT))<>0) and
-     ((flags and ISLASTCN)<>0) then
-  begin
-   cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
-   Exit(EJUSTRETURN);
   end;
   Exit(ENOENT);
  end;
@@ -782,13 +764,6 @@ begin
  dd:=TAILQ_FIRST(@de^.ufs_dlist);
  while (dd<>nil) do
  begin
-
-  if ((dd^.ufs_flags and (UFS_COVERED or UFS_WHITEOUT))<>0) then
-  begin
-   dd:=TAILQ_NEXT(dd,@dd^.ufs_list);
-   continue;
-  end;
-
   dp:=dd^.ufs_dirent;
 
   if (dp^.d_reclen > uio^.uio_resid) then break;
@@ -882,7 +857,7 @@ function ufs_remove(ap:p_vop_remove_args):Integer;
 var
  dvp,vp:p_vnode;
  dd:p_ufs_dirent;
- de,de_cov:p_ufs_dirent;
+ de:p_ufs_dirent;
  dmp:p_ufs_mount;
 begin
  dvp:=ap^.a_dvp;
@@ -904,13 +879,6 @@ begin
    sx_xunlock(@dmp^.ufs_lock);
    Exit;
   end;
- end;
-
- if (de^.ufs_dirent^.d_type=DT_LNK) then
- begin
-  de_cov:=ufs_find(dd, de^.ufs_dirent^.d_name, de^.ufs_dirent^.d_namlen, 0);
-  if (de_cov<>nil) then
-   de_cov^.ufs_flags:=de_cov^.ufs_flags and (not UFS_COVERED);
  end;
 
  VOP_UNLOCK(vp, 0);

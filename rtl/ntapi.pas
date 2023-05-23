@@ -42,6 +42,7 @@ const
  STATUS_IO_DEVICE_ERROR        =$C0000185; //EIO
  STATUS_TOO_MANY_LINKS         =$C0000265; //EMLINK
  STATUS_COMMITMENT_MINIMUM     =$C00002C8; //ENOMEM
+ STATUS_OBJECT_PATH_NOT_FOUND  =$C000003A; //ENOENT
  STATUS_CANT_CROSS_RM_BOUNDARY =$C0190038; //EXDEV
 
  NT_INFINITE=$8000000000000000;
@@ -181,8 +182,8 @@ const
  FILE_EXISTS                   =$00000004;
  FILE_DOES_NOT_EXIST           =$00000005;
 
- // Special ByteOffset parameters
- FILE_WRITE_TO_END_OF_FILE     =$ffffffff;
+ // Special ByteOffset parameters (NtWriteFile)
+ FILE_WRITE_TO_END_OF_FILE     =$ffffffff; //O_APPEND
  FILE_USE_FILE_POINTER_POSITION=$fffffffe;
 
  // FsControlCode

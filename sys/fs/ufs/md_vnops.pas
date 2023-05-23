@@ -48,6 +48,7 @@ function md_rmdir(ap:p_vop_rmdir_args):Integer;
 function md_rename(ap:p_vop_rename_args):Integer;
 
 function md_open(ap:p_vop_open_args):Integer;
+function md_create(ap:p_vop_create_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -56,7 +57,7 @@ const
 
   vop_islocked      :nil;
   vop_lookup        :@md_lookup;
-  vop_create        :nil;
+  vop_create        :@md_create;
   vop_whiteout      :nil;
   vop_mknod         :nil;
   vop_open          :@md_open;
@@ -132,6 +133,7 @@ implementation
 uses
  sysutils,
  errno,
+ vfcntl,
  kern_thr,
  vfs_subr,
  subr_uio,
@@ -139,6 +141,19 @@ uses
 
 const
  UFS_SET_READONLY=(not &0222);
+
+ FILE_DIR_ACCESS=SYNCHRONIZE or
+                 FILE_LIST_DIRECTORY or
+                 FILE_WRITE_DATA or
+                 FILE_ADD_FILE or
+                 FILE_ADD_SUBDIRECTORY or
+                 FILE_TRAVERSE or
+                 FILE_READ_ATTRIBUTES or
+                 FILE_WRITE_ATTRIBUTES;
+
+ FILE_SHARE_ALL=FILE_SHARE_READ or
+                FILE_SHARE_WRITE or
+                FILE_SHARE_DELETE;
 
 type
  TOBJ_ATTR=packed record
@@ -209,6 +224,7 @@ begin
   STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
   STATUS_IO_DEVICE_ERROR       :Result:=EIO;
   STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
+  STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
   STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
   else
                                 Result:=EINVAL;
@@ -301,7 +317,7 @@ begin
  if (p=nil) or (len<=0) then exit;
  hs:='';
  SetLength(hs,len);
- i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len);
+ i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len,True);
  if (i>0) then
  begin
   SetLength(hs,i-1);
@@ -320,17 +336,6 @@ begin
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then Exit;
  Result:=0;
 end;
-
-const
- FILE_DIR_ACCESS=SYNCHRONIZE or
-                 FILE_LIST_DIRECTORY or
-                 FILE_WRITE_DATA or
-                 FILE_ADD_FILE or
-                 FILE_ADD_SUBDIRECTORY or
-                 FILE_TRAVERSE or
-                 FILE_DELETE_CHILD or
-                 FILE_READ_ATTRIBUTES or
-                 FILE_WRITE_ATTRIBUTES;
 
 function md_mount(mp:p_ufs_mount):Integer;
 var
@@ -351,9 +356,7 @@ begin
                FILE_DIR_ACCESS,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or
-               FILE_SHARE_WRITE or
-               FILE_SHARE_DELETE,
+               FILE_SHARE_ALL,
                FILE_OPEN_FOR_BACKUP_INTENT or
                FILE_SYNCHRONOUS_IO_NONALERT or
                FILE_DIRECTORY_FILE
@@ -366,11 +369,13 @@ begin
 end;
 
 function md_unmount(mp:p_ufs_mount):Integer;
+var
+ fd:THandle;
 begin
- if (mp^.ufs_md_fp<>nil) then
+ fd:=THandle(System.InterlockedExchange(mp^.ufs_md_fp,nil));
+ if (fd<>0) then
  begin
-  NtClose(THandle(mp^.ufs_md_fp));
-  mp^.ufs_md_fp:=nil;
+  NtClose(fd);
  end;
  Result:=0;
 end;
@@ -415,11 +420,16 @@ begin
 end;
 
 function md_free_dirent(de:p_ufs_dirent):Integer;
+var
+ fd:THandle;
 begin
- if (de^.ufs_md_fp<>nil) then
+ if ((de^.ufs_flags and UFS_DROOT)=0) then //if not root dir
  begin
-  NtClose(THandle(de^.ufs_md_fp));
-  de^.ufs_md_fp:=nil;
+  fd:=THandle(System.InterlockedExchange(de^.ufs_md_fp,nil));
+  if (fd<>0) then
+  begin
+   NtClose(fd);
+  end;
  end;
  Result:=0;
 end;
@@ -442,9 +452,7 @@ begin
                FILE_DIR_ACCESS,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or
-               FILE_SHARE_WRITE or
-               FILE_SHARE_DELETE,
+               FILE_SHARE_ALL,
                FILE_OPEN_FOR_BACKUP_INTENT or
                FILE_SYNCHRONOUS_IO_NONALERT or
                FILE_DIRECTORY_FILE
@@ -492,9 +500,7 @@ begin
                FILE_WRITE_ATTRIBUTES,
                @OBJ,
                @BLK,
-               FILE_SHARE_READ or
-               FILE_SHARE_WRITE or
-               FILE_SHARE_DELETE,
+               FILE_SHARE_ALL,
                opt
  );
 
@@ -807,6 +813,7 @@ begin
  if (dotdot=nil) then
  begin
   //move root handle
+  nd^.ufs_flags:=UFS_DROOT;
   nd^.ufs_md_fp:=dmp^.ufs_md_fp;
  end else
  begin
@@ -1023,14 +1030,16 @@ begin
  if (de=nil) then Exit;
 
  //clear fd
- if (de^.ufs_md_fp<>nil) then
- begin
-  NtClose(THandle(de^.ufs_md_fp));
-  de^.ufs_md_fp:=nil;
- end;
+ md_free_dirent(de);
 
- dd:=de^.ufs_dir; //parent
- de^.ufs_dir:=nil;
+ dd:=System.InterlockedExchange(de^.ufs_dir,nil); //parent
+
+ if ((de^.ufs_flags and UFS_CREATE)<>0) then
+ begin
+  //unlink soft
+  de^.ufs_dir:=nil;
+  ufs_de_drop(dd);
+ end;
 
  if (dd<>nil) then
  begin
@@ -1100,8 +1109,6 @@ begin
 end;
 
 function md_lookupx(ap:p_vop_lookup_args):Integer;
-label
- _error;
 var
  cnp:p_componentname;
  dvp:p_vnode;
@@ -1154,29 +1161,17 @@ begin
    CREATE,
    RENAME:
     begin
-     //if not last
-     if ((flags and ISLASTCN)=0) then Exit;
-     Result:=0;
+     if (Result=ENOENT) and
+        ((flags and (LOCKPARENT or WANTPARENT))<>0) and
+        ((flags and ISLASTCN)<>0) then
+     begin
+      cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
+      Exit(EJUSTRETURN);
+     end;
     end;
-
-   LOOKUP,
-   DELETE:Exit;
    else;
   end;
-  goto _error;
- end;
-
- if ((de^.ufs_flags and UFS_WHITEOUT)<>0) then
- begin
-  _error:
-  if ((nameiop=CREATE) or (nameiop=RENAME)) and
-     ((flags and (LOCKPARENT or WANTPARENT))<>0) and
-     ((flags and ISLASTCN)<>0) then
-  begin
-   cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
-   Exit(EJUSTRETURN);
-  end;
-  Exit(ENOENT);
+  Exit;
  end;
 
  if (cnp^.cn_nameiop=DELETE) and ((flags and ISLASTCN)<>0) then
@@ -1522,7 +1517,8 @@ begin
  i:=Utf8ToUnicode(@NT_LINK.Name,
                   MAX_PATH,
                   cnp^.cn_nameptr,
-                  cnp^.cn_namelen);
+                  cnp^.cn_namelen,
+                  True);
 
  if (i<=0) then
  begin
@@ -1773,7 +1769,8 @@ begin
  i:=Utf8ToUnicode(@NT_RENAME.Name,
                   MAX_PATH,
                   cnp_t^.cn_nameptr,
-                  cnp_t^.cn_namelen);
+                  cnp_t^.cn_namelen,
+                  True);
 
  if (i<=0) then
  begin
@@ -1809,61 +1806,179 @@ begin
  NtClose(FD);
 end;
 
+Function GetDesiredAccess(flags:Integer):DWORD;
+begin
+ Result:=SYNCHRONIZE or
+         FILE_READ_ATTRIBUTES or
+         FILE_WRITE_ATTRIBUTES;
+
+ if ((flags and FREAD)<>0) then
+ begin
+  Result:=Result or FILE_READ_DATA;
+ end;
+
+ if ((flags and FWRITE)<>0) then
+ begin
+  Result:=Result or FILE_WRITE_DATA or FILE_APPEND_DATA;
+ end;
+end;
+
+Function GetCreationDisposition(flags:Integer):DWORD;
+begin
+ Result:=0;
+ if ((flags and O_CREAT)<>0) then
+ begin
+  if ((flags and O_EXCL)<>0) then
+  begin
+   Result:=FILE_CREATE;
+  end else
+  if ((flags and O_TRUNC)<>0) then
+  begin
+   Result:=FILE_OVERWRITE;
+  end else
+  begin
+   Result:=FILE_OPEN_IF;
+  end;
+ end else
+ if ((flags and O_TRUNC)<>0) then
+ begin
+  Result:=FILE_OVERWRITE_IF;
+ end else
+ begin
+  Result:=FILE_OPEN;
+ end;
+end;
+
+function md_create(ap:p_vop_create_args):Integer;
+var
+ dvp:p_vnode;
+ cnp:p_componentname;
+ vap:p_vattr;
+ dmp:p_ufs_mount;
+
+ dd:p_ufs_dirent;
+ nd:p_ufs_dirent;
+begin
+ dvp:=ap^.a_dvp;
+ cnp:=ap^.a_cnp;
+ vap:=ap^.a_vap;
+
+ dd:=dvp^.v_data;
+ if (dd=nil) then Exit(EPERM);
+
+ nd:=md_newdirent(cnp^.cn_nameptr,cnp^.cn_namelen);
+ if (nd=nil) then Exit(ENOMEM);
+
+ nd^.ufs_flags:=UFS_CREATE;
+ nd^.ufs_mode :=vap^.va_mode;
+ nd^.ufs_dir  :=dd;
+
+ nd^.ufs_dirent^.d_type:=DT_REG;
+
+ //link soft
+ ufs_de_hold(dd);
+
+ dmp:=VFSTOUFS(dvp^.v_mount);
+ sx_xlock(@dmp^.ufs_lock);
+ Exit(ufs_allocv(nd, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
+end;
+
 function md_open(ap:p_vop_open_args):Integer;
 var
- td:p_kthread;
  vp:p_vnode;
  fp:p_file;
- mode:Integer;
- error,vlocked:Integer;
- fpop:p_file;
+ flags:Integer;
+ DA:DWORD;
+ CD:DWORD;
+
+ dd:p_ufs_dirent;
+ de:p_ufs_dirent;
+
+ w:WideString;
+ OBJ:TOBJ_ATTR;
+ BLK:IO_STATUS_BLOCK;
+
+ FD:THandle;
+ R:DWORD;
 begin
- td:=curkthread;
  vp:=ap^.a_vp;
  fp:=ap^.a_fp;
- mode:=ap^.a_mode;
+ flags:=ap^.a_mode;
+
+ if (fp=nil) or (vp=nil) then Exit(EPERM);
+
+ //fp^.f_data:=dev;
 
  case vp^.v_type of
   VREG:;
   VLNK:Exit(0);
   VDIR:Exit(0);
   else
-   Exit(ENXIO);
+   Exit(EPERM);
  end;
 
- if (fp=nil) then Exit(ENXIO);
+ de:=vp^.v_data;
+ if (de=nil) then Exit(EPERM);
 
- vlocked:=VOP_ISLOCKED(vp);
- VOP_UNLOCK(vp, 0);
+ dd:=de^.ufs_dir;
+ if (dd=nil) then Exit(EPERM);
 
- fpop:=td^.td_fpop;
- td^.td_fpop:=fp;
- if (fp<>nil) then
+ sx_xlock(@dd^.ufs_md_lock);
+
+ w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+
+ OBJ:=Default(TOBJ_ATTR);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ writeln;
+ writeln(HexStr(flags,8));
+
+ DA:=GetDesiredAccess(flags);
+ CD:=GetCreationDisposition(flags);
+
+ R:=NtCreateFile(@FD,
+                 DA,
+                 @OBJ,
+                 @BLK,
+                 nil,
+                 FILE_ATTRIBUTE_NORMAL,
+                 FILE_SHARE_ALL,
+                 CD,
+                 FILE_SYNCHRONOUS_IO_NONALERT or
+                 FILE_NON_DIRECTORY_FILE,
+                 nil,
+                 0);
+
+ writeln(HexStr(R,8));
+
+ Result:=ntf2px(R);
+ if (Result<>0) then
  begin
-  //fp^.f_data:=dev;
-  fp^.f_vnode:=vp;
+  md_unlink_cache(de);
+  sx_xunlock(@dd^.ufs_md_lock);
+  Exit;
  end;
 
- //error:=open
+ de^.ufs_md_fp:=Pointer(FD);
 
- td^.td_fpop:=fpop;
-
- vn_lock(vp, vlocked or LK_RETRY);
-
- if (error<>0) then
+ Result:=md_update_dirent(de,nil);
+ if (Result<>0) then
  begin
-  if (error=ERESTART) then error:=EINTR;
-  Exit(error);
+  md_unlink_cache(de);
+  sx_xunlock(@dd^.ufs_md_lock);
+  Exit;
  end;
 
- if (fp=nil) then Exit(error);
+ if ((de^.ufs_flags and UFS_CREATE)<>0) then
+ begin
+  de^.ufs_flags:=de^.ufs_flags and (not UFS_CREATE);
+  //link cache
+  TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);
+  Inc(dd^.ufs_links);
+ end;
 
- //if (fp^.f_ops=@badfileops) then
- //begin
- // finit(fp, fp^.f_flag, DTYPE_VNODE, dev, @devfs_ops_f);
- //end;
-
- Exit(error);
+ sx_xunlock(@dd^.ufs_md_lock);
 end;
 
 

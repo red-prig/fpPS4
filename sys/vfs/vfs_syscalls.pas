@@ -766,7 +766,7 @@ var
  vp:p_vnode;
  cmode:Integer;
  nfp:p_file;
- _type,indx,error,error_open:Integer;
+ l_type,indx,error,error_open:Integer;
  lf:t_flock;
  nd:t_nameidata;
  vfslocked:Integer;
@@ -834,6 +834,7 @@ begin
    error:=finstall(fp, @indx, flags);
    if (error<>0) then
     goto bad_unlocked;
+
    error:=dupfdopen(indx, td^.td_dupfd, flags, error_open);
    if (error=0) then
     goto success;
@@ -878,16 +879,21 @@ begin
   lf.l_whence:=SEEK_SET;
   lf.l_start:=0;
   lf.l_len:=0;
+
   if ((flags and O_EXLOCK)<>0) then
    lf.l_type:=F_WRLCK
   else
    lf.l_type:=F_RDLCK;
-  _type:=F_FLOCK;
+
+  l_type:=F_FLOCK;
+
   if ((flags and FNONBLOCK)=0) then
-   _type:=_type or F_WAIT;
-  error:=VOP_ADVLOCK(vp, fp, F_SETLK, @lf, _type);
+   l_type:=l_type or F_WAIT;
+
+  error:=VOP_ADVLOCK(vp, fp, F_SETLK, @lf, l_type);
   if (error<>0) then
    goto bad;
+
   atomic_set_int(@fp^.f_flag, FHASLOCK);
  end;
  if ((flags and O_TRUNC)<>0) then
@@ -933,6 +939,7 @@ bad:
 bad_unlocked:
  if (indx<>-1) then
   fdclose(fp, indx);
+
  fdrop(fp);
  td^.td_retval[0]:=QWORD(-1);
  Exit(error);

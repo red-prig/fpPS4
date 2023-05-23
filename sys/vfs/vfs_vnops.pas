@@ -129,7 +129,7 @@ var
  mp:p_mount;
  vat:t_vattr;
  vap:p_vattr;
- fmode,error:Integer;
+ ofmode,fmode,error:Integer;
  accmode:accmode_t;
  mps:Integer;
  vfslocked:Integer;
@@ -139,7 +139,9 @@ begin
 
 restart:
  vfslocked:=0;
- fmode:=flagp^;
+ ofmode:=flagp^;
+ fmode:=ofmode;
+
  if ((fmode and O_CREAT)<>0) then
  begin
   ndp^.ni_cnd.cn_nameiop:=CREATE;
@@ -165,6 +167,7 @@ restart:
    vattr_null(vap);
    vap^.va_type:=VREG;
    vap^.va_mode:=cmode;
+
    if ((fmode and O_EXCL)<>0) then
     vap^.va_vaflags:=vap^.va_vaflags or VA_EXCLUSIVE;
 
@@ -174,8 +177,8 @@ restart:
     vput(ndp^.ni_dvp);
     VFS_UNLOCK_GIANT(ord(vfslocked));
     error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
-    if (error<>0) then
-     Exit(error);
+    if (error<>0) then Exit(error);
+
     goto restart;
    end;
 
@@ -185,12 +188,14 @@ restart:
 
    vput(ndp^.ni_dvp);
    vn_finished_write(mp);
+
    if (error<>0) then
    begin
     VFS_UNLOCK_GIANT(ord(vfslocked));
     NDFREE(ndp, NDF_ONLY_PNBUF);
     Exit(error);
    end;
+
    fmode:=fmode and (not O_TRUNC);
    vp:=ndp^.ni_vp;
   end else
@@ -202,17 +207,18 @@ restart:
 
    ndp^.ni_dvp:=nil;
    vp:=ndp^.ni_vp;
+
    if ((fmode and O_EXCL)<>0) then
    begin
     error:=EEXIST;
     goto bad;
    end;
+
    fmode:=fmode and (not O_CREAT);
   end;
  end else
  begin
   ndp^.ni_cnd.cn_nameiop:=LOOKUP;
-
   ndp^.ni_cnd.cn_flags:=ISOPEN or LOCKLEAF or MPSAFE;
 
   if ((fmode and O_NOFOLLOW)<>0) then
@@ -240,32 +246,34 @@ restart:
   vp:=ndp^.ni_vp;
  end;
 
- if (vp^.v_type=VLNK) then
- begin
-  error:=EMLINK;
-  goto bad;
- end;
-
- if (vp^.v_type=VSOCK) then
- begin
-  error:=EOPNOTSUPP;
-  goto bad;
- end;
-
- if (vp^.v_type<>VDIR) and ((fmode and O_DIRECTORY)<>0) then
- begin
-  error:=ENOTDIR;
-  goto bad;
+ case vp^.v_type of
+  VLNK:
+   begin
+    error:=EMLINK;
+    goto bad;
+   end;
+  VSOCK:
+   begin
+    error:=EOPNOTSUPP;
+    goto bad;
+   end;
+  VDIR:
+   if ((fmode and (FWRITE or O_TRUNC))<>0) then
+   begin
+    error:=EISDIR;
+    goto bad;
+   end;
+  else
+   if ((fmode and O_DIRECTORY)<>0) then
+   begin
+    error:=ENOTDIR;
+    goto bad;
+   end;
  end;
 
  accmode:=0;
  if ((fmode and (FWRITE or O_TRUNC))<>0) then
  begin
-  if (vp^.v_type=VDIR) then
-  begin
-   error:=EISDIR;
-   goto bad;
-  end;
   accmode:=accmode or VWRITE;
  end;
 
@@ -287,22 +295,20 @@ restart:
   if ((accmode and VWRITE)<>0) then
   begin
    error:=vn_writechk(vp);
-   if (error<>0) then
-    goto bad;
+   if (error<>0) then goto bad;
   end;
   if (accmode<>0) then
   begin
    error:=VOP_ACCESS(vp, accmode);
-   if (error<>0) then
-    goto bad;
+   if (error<>0) then goto bad;
   end;
  end;
+
  if (vp^.v_type=VFIFO) and (VOP_ISLOCKED(vp)<>LK_EXCLUSIVE) then
   vn_lock(vp, LK_UPGRADE or LK_RETRY);
 
- error:=VOP_OPEN(vp, fmode, fp);
- if (error<>0) then
-  goto bad;
+ error:=VOP_OPEN(vp, ofmode, fp);
+ if (error<>0) then goto bad;
 
  flagp^:=fmode;
  ASSERT_VOP_LOCKED(vp, 'vn_open_cred');
@@ -1042,6 +1048,7 @@ begin
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
  if (error<>0) then
   goto out1;
+
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  if (vp^.v_type=VDIR) then
  begin

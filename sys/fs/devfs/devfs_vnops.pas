@@ -1446,6 +1446,7 @@ var
 begin
  if (uio^.uio_resid > DEVFS_IOSIZE_MAX) then
   Exit(EINVAL);
+
  td:=curkthread;
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
@@ -1453,6 +1454,7 @@ begin
 
  resid:=uio^.uio_resid;
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT);
+
  if ((ioflag and O_DIRECT)<>0) then
   ioflag:=ioflag or IO_DIRECT;
 
@@ -1960,8 +1962,10 @@ begin
 
  Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT or O_FSYNC);
+
  if ((ioflag and O_DIRECT)<>0) then
   ioflag:=ioflag or IO_DIRECT;
+
  foffset_lock_uio(fp, uio, flags or FOF_NOLOCK);
 
  resid:=uio^.uio_resid;
