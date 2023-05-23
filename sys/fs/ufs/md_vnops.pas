@@ -47,6 +47,8 @@ function md_remove(ap:p_vop_remove_args):Integer;
 function md_rmdir(ap:p_vop_rmdir_args):Integer;
 function md_rename(ap:p_vop_rename_args):Integer;
 
+function md_open(ap:p_vop_open_args):Integer;
+
 const
  md_vnodeops_host:vop_vector=(
   vop_default       :@ufs_vnodeops_root;
@@ -57,7 +59,7 @@ const
   vop_create        :nil;
   vop_whiteout      :nil;
   vop_mknod         :nil;
-  vop_open          :nil; //TODO
+  vop_open          :@md_open;
   vop_close         :nil; //TODO
   vop_access        :nil; //parent
   vop_accessx       :nil;
@@ -109,6 +111,20 @@ const
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
+ );
+
+ md_ops_f:fileops=(
+  fo_read    :nil;
+  fo_write   :nil;
+  fo_truncate:nil;
+  fo_ioctl   :nil;
+  fo_poll    :nil;
+  fo_kqfilter:nil;
+  fo_stat    :nil;
+  fo_close   :nil;
+  fo_chmod   :nil;
+  fo_chown   :nil;
+  fo_flags   :DFLAG_PASSABLE or DFLAG_SEEKABLE
  );
 
 implementation
@@ -1006,6 +1022,13 @@ var
 begin
  if (de=nil) then Exit;
 
+ //clear fd
+ if (de^.ufs_md_fp<>nil) then
+ begin
+  NtClose(THandle(de^.ufs_md_fp));
+  de^.ufs_md_fp:=nil;
+ end;
+
  dd:=de^.ufs_dir; //parent
  de^.ufs_dir:=nil;
 
@@ -1652,13 +1675,6 @@ begin
   Exit;
  end;
 
- //clear fd
- if (de^.ufs_md_fp<>nil) then
- begin
-  NtClose(THandle(de^.ufs_md_fp));
-  de^.ufs_md_fp:=nil;
- end;
-
  //clear cache
  md_unlink_cache(de);
 
@@ -1702,13 +1718,6 @@ begin
   sx_xunlock(@dd^.ufs_md_lock);
   NtClose(FD);
   Exit;
- end;
-
- //clear fd
- if (de^.ufs_md_fp<>nil) then
- begin
-  NtClose(THandle(de^.ufs_md_fp));
-  de^.ufs_md_fp:=nil;
  end;
 
  //clear cache
@@ -1799,6 +1808,64 @@ begin
 
  NtClose(FD);
 end;
+
+function md_open(ap:p_vop_open_args):Integer;
+var
+ td:p_kthread;
+ vp:p_vnode;
+ fp:p_file;
+ mode:Integer;
+ error,vlocked:Integer;
+ fpop:p_file;
+begin
+ td:=curkthread;
+ vp:=ap^.a_vp;
+ fp:=ap^.a_fp;
+ mode:=ap^.a_mode;
+
+ case vp^.v_type of
+  VREG:;
+  VLNK:Exit(0);
+  VDIR:Exit(0);
+  else
+   Exit(ENXIO);
+ end;
+
+ if (fp=nil) then Exit(ENXIO);
+
+ vlocked:=VOP_ISLOCKED(vp);
+ VOP_UNLOCK(vp, 0);
+
+ fpop:=td^.td_fpop;
+ td^.td_fpop:=fp;
+ if (fp<>nil) then
+ begin
+  //fp^.f_data:=dev;
+  fp^.f_vnode:=vp;
+ end;
+
+ //error:=open
+
+ td^.td_fpop:=fpop;
+
+ vn_lock(vp, vlocked or LK_RETRY);
+
+ if (error<>0) then
+ begin
+  if (error=ERESTART) then error:=EINTR;
+  Exit(error);
+ end;
+
+ if (fp=nil) then Exit(error);
+
+ //if (fp^.f_ops=@badfileops) then
+ //begin
+ // finit(fp, fp^.f_flag, DTYPE_VNODE, dev, @devfs_ops_f);
+ //end;
+
+ Exit(error);
+end;
+
 
 end.
 
