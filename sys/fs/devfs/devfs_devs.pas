@@ -391,6 +391,8 @@ procedure devfs_purge(dm:p_devfs_mount;dd:p_devfs_dirent);
 var
  de:p_devfs_dirent;
 begin
+ if (dm=nil) or (dd=nil) then Exit;
+
  sx_assert(@dm^.dm_lock);
 
  DEVFS_DE_HOLD(dd);

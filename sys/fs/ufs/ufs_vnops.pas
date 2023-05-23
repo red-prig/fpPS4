@@ -94,7 +94,7 @@ const
   vop_deleteextattr :nil;
   vop_setextattr    :nil;
   vop_vptofh        :nil;
-  vop_vptocnp       :nil;//@ufs_vptocnp;
+  vop_vptocnp       :nil;
   vop_allocate      :nil;
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
@@ -321,6 +321,8 @@ procedure ufs_purge(dm:p_ufs_mount;dd:p_ufs_dirent);
 var
  de:p_ufs_dirent;
 begin
+ if (dm=nil) or (dd=nil) then Exit;
+
  sx_assert(@dm^.ufs_lock);
 
  ufs_de_hold(dd);
@@ -502,15 +504,15 @@ begin
  if (de=nil) then
  begin
   Case nameiop of
-   CREATE:
+   CREATE,
+   RENAME:
     begin
      //if not last
      if ((flags and ISLASTCN)=0) then Exit(ENOENT);
     end;
 
    LOOKUP,
-   DELETE,
-   RENAME:Exit(ENOENT);
+   DELETE:Exit(ENOENT);
    else;
   end;
   goto _error;

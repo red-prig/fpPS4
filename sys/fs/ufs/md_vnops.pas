@@ -45,6 +45,7 @@ function md_link(ap:p_vop_link_args):Integer;
 function md_mkdir(ap:p_vop_mkdir_args):Integer;
 function md_remove(ap:p_vop_remove_args):Integer;
 function md_rmdir(ap:p_vop_rmdir_args):Integer;
+function md_rename(ap:p_vop_rename_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -72,7 +73,7 @@ const
   vop_fsync         :nil; //TODO
   vop_remove        :@md_remove;
   vop_link          :@md_link;
-  vop_rename        :nil; //TODO
+  vop_rename        :@md_rename;
   vop_mkdir         :@md_mkdir;
   vop_rmdir         :@md_rmdir;
   vop_symlink       :@md_symlink;
@@ -144,6 +145,8 @@ type
   Name:array[0..MAX_PATH] of WCHAR;
  end;
 
+ T_NT_RENAME=T_NT_LINK;
+
 function VFSTOUFS(mp:p_mount):p_ufs_mount; inline;
 begin
  Result:=mp^.mnt_data;
@@ -170,26 +173,29 @@ end;
 function ntf2px(n:Integer):Integer; inline;
 begin
  Case DWORD(n) of
-  STATUS_SUCCESS              :Result:=0;
-  STATUS_PENDING              :Result:=EWOULDBLOCK;
-  STATUS_ACCESS_VIOLATION     :Result:=EFAULT;
-  STATUS_INVALID_HANDLE       :Result:=EBADF;
-  STATUS_NO_SUCH_FILE         :Result:=ENOENT;
-  STATUS_NO_MEMORY            :Result:=ENOMEM;
-  STATUS_ACCESS_DENIED        :Result:=EPERM;
-  STATUS_DISK_CORRUPT_ERROR   :Result:=EIO;
-  STATUS_OBJECT_NAME_NOT_FOUND:Result:=ENOENT;
-  STATUS_OBJECT_NAME_COLLISION:Result:=EEXIST;
-  STATUS_DISK_FULL            :Result:=ENOSPC;
-  STATUS_FILE_IS_A_DIRECTORY  :Result:=EISDIR;
-  STATUS_DIRECTORY_NOT_EMPTY  :Result:=ENOTEMPTY;
-  STATUS_FILE_CORRUPT_ERROR   :Result:=EIO;
-  STATUS_NOT_A_DIRECTORY      :Result:=ENOTDIR;
-  STATUS_NAME_TOO_LONG        :Result:=ENAMETOOLONG;
-  STATUS_IO_DEVICE_ERROR      :Result:=EIO;
-  STATUS_TOO_MANY_LINKS       :Result:=EMLINK;
+  STATUS_SUCCESS               :Result:=0;
+  STATUS_PENDING               :Result:=EWOULDBLOCK;
+  STATUS_ACCESS_VIOLATION      :Result:=EFAULT;
+  STATUS_INVALID_HANDLE        :Result:=EBADF;
+  STATUS_NO_SUCH_FILE          :Result:=ENOENT;
+  STATUS_NO_MEMORY             :Result:=ENOMEM;
+  STATUS_ACCESS_DENIED         :Result:=EACCES;
+  STATUS_DISK_CORRUPT_ERROR    :Result:=EIO;
+  STATUS_OBJECT_NAME_NOT_FOUND :Result:=ENOENT;
+  STATUS_OBJECT_NAME_COLLISION :Result:=EEXIST;
+  STATUS_SHARING_VIOLATION     :Result:=EACCES;
+  STATUS_DISK_FULL             :Result:=ENOSPC;
+  STATUS_FILE_IS_A_DIRECTORY   :Result:=EISDIR;
+  STATUS_NOT_SAME_DEVICE       :Result:=EXDEV;
+  STATUS_DIRECTORY_NOT_EMPTY   :Result:=ENOTEMPTY;
+  STATUS_FILE_CORRUPT_ERROR    :Result:=EIO;
+  STATUS_NOT_A_DIRECTORY       :Result:=ENOTDIR;
+  STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
+  STATUS_IO_DEVICE_ERROR       :Result:=EIO;
+  STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
+  STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
   else
-                               Result:=EINVAL;
+                                Result:=EINVAL;
  end;
 end;
 
@@ -287,6 +293,29 @@ begin
  end;
 end;
 
+function md_mount_is_valid(vp:p_vnode):Integer;
+var
+ mp:p_mount;
+begin
+ Result:=EXDEV;
+ mp:=vp^.v_mount;
+ if (mp=nil) then Exit;
+ if (mp^.mnt_vfc<>@ufs_vfsconf) then Exit;
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then Exit;
+ Result:=0;
+end;
+
+const
+ FILE_DIR_ACCESS=SYNCHRONIZE or
+                 FILE_LIST_DIRECTORY or
+                 FILE_WRITE_DATA or
+                 FILE_ADD_FILE or
+                 FILE_ADD_SUBDIRECTORY or
+                 FILE_TRAVERSE or
+                 FILE_DELETE_CHILD or
+                 FILE_READ_ATTRIBUTES or
+                 FILE_WRITE_ATTRIBUTES;
+
 function md_mount(mp:p_ufs_mount):Integer;
 var
  w:WideString;
@@ -303,10 +332,7 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
-               SYNCHRONIZE or
-               FILE_LIST_DIRECTORY or
-               FILE_READ_ATTRIBUTES or
-               FILE_WRITE_ATTRIBUTES,
+               FILE_DIR_ACCESS,
                @OBJ,
                @BLK,
                FILE_SHARE_READ or
@@ -328,6 +354,7 @@ begin
  if (mp^.ufs_md_fp<>nil) then
  begin
   NtClose(THandle(mp^.ufs_md_fp));
+  mp^.ufs_md_fp:=nil;
  end;
  Result:=0;
 end;
@@ -376,6 +403,7 @@ begin
  if (de^.ufs_md_fp<>nil) then
  begin
   NtClose(THandle(de^.ufs_md_fp));
+  de^.ufs_md_fp:=nil;
  end;
  Result:=0;
 end;
@@ -395,11 +423,7 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
-               SYNCHRONIZE or
-               FILE_CAN_DELETE or
-               FILE_LIST_DIRECTORY or
-               FILE_READ_ATTRIBUTES or
-               FILE_WRITE_ATTRIBUTES,
+               FILE_DIR_ACCESS,
                @OBJ,
                @BLK,
                FILE_SHARE_READ or
@@ -447,6 +471,7 @@ begin
                SYNCHRONIZE or
                FILE_CAN_DELETE or
                FILE_READ_DATA or
+               FILE_WRITE_DATA or
                FILE_READ_ATTRIBUTES or
                FILE_WRITE_ATTRIBUTES,
                @OBJ,
@@ -921,6 +946,8 @@ begin
  de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
 
  dd:=de^.ufs_dir; //parent
+ de^.ufs_dir:=nil;
+
  if (dd<>nil) then
  begin
   ufs_de_hold(dd);
@@ -980,6 +1007,8 @@ begin
  if (de=nil) then Exit;
 
  dd:=de^.ufs_dir; //parent
+ de^.ufs_dir:=nil;
+
  if (dd<>nil) then
  begin
   ufs_de_hold(dd);
@@ -1099,7 +1128,8 @@ begin
  if (de=nil) then
  begin
   Case nameiop of
-   CREATE:
+   CREATE,
+   RENAME:
     begin
      //if not last
      if ((flags and ISLASTCN)=0) then Exit;
@@ -1107,8 +1137,7 @@ begin
     end;
 
    LOOKUP,
-   DELETE,
-   RENAME:Exit;
+   DELETE:Exit;
    else;
   end;
   goto _error;
@@ -1223,7 +1252,7 @@ begin
    Continue;
   end;
 
-  dt.d_reclen:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+i; //zero include
+  dt.d_reclen:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+((i + 3) and (not 3)); //zero include
 
   if (dt.d_reclen > uio^.uio_resid) then break;
 
@@ -1447,6 +1476,9 @@ var
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
 begin
+ Result:=md_mount_is_valid(ap^.a_tdvp);
+ if (Result<>0) then Exit;
+
  cnp:=ap^.a_cnp;
  dd:=ap^.a_tdvp^.v_data;
  de:=ap^.a_vp^.v_data;
@@ -1565,6 +1597,10 @@ begin
 
  NtClose(FD);
 
+ //clear cache
+ de:=md_find_cache(dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,0);
+ md_unlink_cache(de);
+
  de:=md_vmkdir(dmp,cnp^.cn_nameptr,cnp^.cn_namelen,dd);
 
  if (de=nil) then
@@ -1586,7 +1622,7 @@ var
  dvp,vp:p_vnode;
  dd,de:p_ufs_dirent;
 
- FD,RL:THandle;
+ FD:THandle;
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
 
@@ -1600,16 +1636,8 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
- if (de^.ufs_md_fp=nil) then
- begin
-  Result:=md_open_dirent_file(de,True,@FD);
-  if (Result<>0) then Exit;
-  RL:=FD;
- end else
- begin
-  FD:=THandle(de^.ufs_md_fp);
-  RL:=0;
- end;
+ Result:=md_open_dirent_file(de,True,@FD);
+ if (Result<>0) then Exit;
 
  BLK:=Default(IO_STATUS_BLOCK);
  del_on_close:=true;
@@ -1620,25 +1648,29 @@ begin
  if (Result<>0) then
  begin
   sx_xunlock(@dd^.ufs_md_lock);
-  if (RL<>0) then
-  begin
-   NtClose(RL);
-  end;
+  NtClose(FD);
   Exit;
  end;
 
- de^.ufs_md_fp:=nil;
+ //clear fd
+ if (de^.ufs_md_fp<>nil) then
+ begin
+  NtClose(THandle(de^.ufs_md_fp));
+  de^.ufs_md_fp:=nil;
+ end;
+
+ //clear cache
+ md_unlink_cache(de);
+
  NtClose(FD); //<-deleted
 
  sx_xunlock(@dd^.ufs_md_lock);
- Exit(0);
 end;
 
 function md_rmdir(ap:p_vop_rmdir_args):Integer;
 var
  dvp,vp:p_vnode;
  dd,de:p_ufs_dirent;
- dmp:p_ufs_mount;
 
  FD:THandle;
  BLK:IO_STATUS_BLOCK;
@@ -1656,7 +1688,9 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
- FD:=THandle(de^.ufs_md_fp);
+ Result:=md_open_dirent_file(de,True,@FD);
+ if (Result<>0) then Exit;
+
  BLK:=Default(IO_STATUS_BLOCK);
  del_on_close:=true;
 
@@ -1666,16 +1700,105 @@ begin
  if (Result<>0) then
  begin
   sx_xunlock(@dd^.ufs_md_lock);
+  NtClose(FD);
   Exit;
  end;
 
- de^.ufs_md_fp:=nil;
+ //clear fd
+ if (de^.ufs_md_fp<>nil) then
+ begin
+  NtClose(THandle(de^.ufs_md_fp));
+  de^.ufs_md_fp:=nil;
+ end;
+
+ //clear cache
+ md_unlink_cache(de);
+
  NtClose(FD); //<-deleted
 
  sx_xunlock(@dd^.ufs_md_lock);
- Exit(0);
 end;
 
+function md_rename(ap:p_vop_rename_args):Integer;
+label
+ _exit;
+var
+ dd_f,dd_t:p_ufs_dirent;
+ de_f,de_t:p_ufs_dirent;
+ cnp_t:p_componentname;
+
+ FD:THandle;
+ NT_RENAME:T_NT_RENAME;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+ i:Integer;
+
+begin
+ Result:=md_mount_is_valid(ap^.a_tdvp);
+ if (Result<>0) then Exit;
+
+ dd_f:=ap^.a_fdvp^.v_data;
+ dd_t:=ap^.a_tdvp^.v_data;
+ de_f:=ap^.a_fvp^.v_data;
+ cnp_t:=ap^.a_tcnp;
+
+ de_t:=nil;
+ if (ap^.a_tvp<>nil) then
+ begin
+  de_t:=ap^.a_tvp^.v_data;
+ end;
+
+ sx_xlock(@dd_f^.ufs_md_lock);
+ if (dd_f<>dd_t) then
+ begin
+  sx_xlock(@dd_t^.ufs_md_lock);
+ end;
+
+ Result:=md_open_dirent_file(de_f,True,@FD);
+ if (Result<>0) then Exit;
+
+ NT_RENAME:=Default(T_NT_RENAME);
+ NT_RENAME.info.ReplaceIfExists:=True;
+ NT_RENAME.info.RootDirectory  :=THandle(dd_t^.ufs_md_fp);
+
+ i:=Utf8ToUnicode(@NT_RENAME.Name,
+                  MAX_PATH,
+                  cnp_t^.cn_nameptr,
+                  cnp_t^.cn_namelen);
+
+ if (i<=0) then
+ begin
+  Result:=ENAMETOOLONG;
+  goto _exit;
+ end;
+
+ NT_RENAME.info.FileNameLength:=(i-1)*SizeOf(WideChar); //zero exclude
+
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtSetInformationFile(FD,
+                         @BLK,
+                         @NT_RENAME,
+                         NT_RENAME.info.FileNameLength+24,
+                         FileRenameInformation);
+
+ Result:=ntf2px(R);
+
+ if (Result<>0) then goto _exit;
+
+ //clear cache
+ md_unlink_cache(de_f);
+ md_unlink_cache(de_t);
+
+ _exit:
+ sx_xunlock(@dd_f^.ufs_md_lock);
+ if (dd_f<>dd_t) then
+ begin
+  sx_xunlock(@dd_t^.ufs_md_lock);
+ end;
+
+ NtClose(FD);
+end;
 
 end.
 
