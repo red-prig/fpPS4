@@ -251,6 +251,15 @@ begin
          'vop_get_writecount':state:=2; //skip
          'vop_add_writecount':state:=2; //skip
          'vop_setlabel'      :state:=2; //skip
+         'vop_getacl'        :state:=2; //skip
+         'vop_setacl'        :state:=2; //skip
+         'vop_aclcheck'      :state:=2; //skip
+         'vop_closeextattr'  :state:=2; //skip
+         'vop_getextattr'    :state:=2; //skip
+         'vop_listextattr'   :state:=2; //skip
+         'vop_openextattr'   :state:=2; //skip
+         'vop_deleteextattr' :state:=2; //skip
+         'vop_setextattr'    :state:=2; //skip
          'vop_spare4'        :state:=2; //skip
          'vop_spare5'        :state:=2; //skip
          else
@@ -357,9 +366,9 @@ begin
  S:=S+' p_task        =Pointer;'#13#10;
  S:=S+' p_cluster_save=Pointer;'#13#10;
  S:=S+' p_vm_page_t   =Pointer;'#13#10;
- S:=S+' acl_type_t    =Integer;'#13#10;
- S:=S+' p_acl         =Pointer;'#13#10;
- S:=S+' p_label       =Pointer;'#13#10;
+ //S:=S+' acl_type_t    =Integer;'#13#10;
+ //S:=S+' p_acl         =Pointer;'#13#10;
+ //S:=S+' p_label       =Pointer;'#13#10;
  S:=S+#13#10;
  FileWrite(F,Pchar(S)^,Length(S));
 

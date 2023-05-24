@@ -64,7 +64,6 @@ procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64
 procedure vop_rename_fail(ap:p_vop_rename_args);
 procedure vop_rename_pre(ap:p_vop_rename_args);
 procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
-procedure vop_deleteextattr_post(ap:p_vop_deleteextattr_args;rc:Integer);
 procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
 procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer);
 procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer);
@@ -72,7 +71,6 @@ procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer);
 procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer);
 procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
 procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
-procedure vop_setextattr_post(ap:p_vop_setextattr_args;rc:Integer);
 procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
 
 procedure vfs_event_init();
@@ -3116,14 +3114,6 @@ begin
  end;
 end;
 
-procedure vop_deleteextattr_post(ap:p_vop_deleteextattr_args;rc:Integer);
-begin
- if (rc=0) then
- begin
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
- end;
-end;
-
 procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
 begin
  if (rc=0) then
@@ -3189,14 +3179,6 @@ begin
 end;
 
 procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
-begin
- if (rc=0) then
- begin
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
- end;
-end;
-
-procedure vop_setextattr_post(ap:p_vop_setextattr_args;rc:Integer);
 begin
  if (rc=0) then
  begin

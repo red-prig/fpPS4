@@ -211,15 +211,6 @@ type
   vop_reallocblks   :Pointer;
   vop_getpages      :Pointer;
   vop_putpages      :Pointer;
-  vop_getacl        :Pointer;
-  vop_setacl        :Pointer;
-  vop_aclcheck      :Pointer;
-  vop_closeextattr  :Pointer;
-  vop_getextattr    :Pointer;
-  vop_listextattr   :Pointer;
-  vop_openextattr   :Pointer;
-  vop_deleteextattr :Pointer;
-  vop_setextattr    :Pointer;
   vop_vptofh        :Pointer;
   vop_vptocnp       :Pointer;
   vop_allocate      :Pointer;

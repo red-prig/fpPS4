@@ -97,35 +97,12 @@ const
   vop_reallocblks   :nil;
   vop_getpages      :nil;
   vop_putpages      :nil;
-  vop_getacl        :nil;
-  vop_setacl        :nil;
-  vop_aclcheck      :nil;
-  vop_closeextattr  :nil;
-  vop_getextattr    :nil;
-  vop_listextattr   :nil;
-  vop_openextattr   :nil;
-  vop_deleteextattr :nil;
-  vop_setextattr    :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :nil;
   vop_allocate      :nil;
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
- );
-
- md_ops_f:fileops=(
-  fo_read    :nil;
-  fo_write   :nil;
-  fo_truncate:nil;
-  fo_ioctl   :nil;
-  fo_poll    :nil;
-  fo_kqfilter:nil;
-  fo_stat    :nil;
-  fo_close   :nil;
-  fo_chmod   :nil;
-  fo_chown   :nil;
-  fo_flags   :DFLAG_PASSABLE or DFLAG_SEEKABLE
  );
 
 implementation

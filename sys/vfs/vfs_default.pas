@@ -139,15 +139,6 @@ const
   vop_reallocblks   :nil                   ;
   vop_getpages      :@vop_stdgetpages      ;
   vop_putpages      :@vop_stdputpages      ;
-  vop_getacl        :nil                   ;
-  vop_setacl        :nil                   ;
-  vop_aclcheck      :nil                   ;
-  vop_closeextattr  :nil                   ;
-  vop_getextattr    :nil                   ;
-  vop_listextattr   :nil                   ;
-  vop_openextattr   :nil                   ;
-  vop_deleteextattr :nil                   ;
-  vop_setextattr    :nil                   ;
   vop_vptofh        :@vop_stdvptofh        ;
   vop_vptocnp       :@vop_stdvptocnp       ;
   vop_allocate      :@vop_stdallocate      ;
