@@ -662,8 +662,12 @@ begin
    * to any block size used by software.
    }
   Inc(fp^.f_seqcount,((uio^.uio_resid+(16384 - 1)) div 16384));
+
   if (fp^.f_seqcount > IO_SEQMAX) then
+  begin
    fp^.f_seqcount:=IO_SEQMAX;
+  end;
+
   Exit(fp^.f_seqcount shl IO_SEQSHIFT);
  end;
 
@@ -672,22 +676,28 @@ begin
   fp^.f_seqcount:=1
  else
   fp^.f_seqcount:=0;
+
  Exit(0);
 end;
 
 function get_advice(fp:p_file;uio:p_uio):Integer;
 var
  mtxp:p_mtx;
+ f_advice:p_fadvise_info;
  ret:Integer;
 begin
  ret:=POSIX_FADV_NORMAL;
- if (fp^.f_advice=nil) then
-  Exit(ret);
+ if (fp^.f_advice=nil) then Exit(ret);
+
  mtxp:=mtx_pool_find(mtxpool_sleep, fp);
  mtx_lock(mtxp^);
- if (uio^.uio_offset >= p_fadvise_info(fp^.f_advice)^.fa_start) and
-    (uio^.uio_offset + uio^.uio_resid <= p_fadvise_info(fp^.f_advice)^.fa_end) then
-  ret:=p_fadvise_info(fp^.f_advice)^.fa_advice;
+
+ f_advice:=fp^.f_advice;
+
+ if (uio^.uio_offset >= f_advice^.fa_start) and
+    (uio^.uio_offset + uio^.uio_resid <= f_advice^.fa_end) then
+  ret:=f_advice^.fa_advice;
+
  mtx_unlock(mtxp^);
  Exit(ret);
 end;
@@ -703,17 +713,25 @@ var
  error,ioflag:Integer;
  advice,vfslocked:Integer;
  offset,start,__end:Int64;
+ f_advice:p_fadvise_info;
 begin
  td:=curkthread;
 
  Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
  Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
  vp:=fp^.f_vnode;
+
  ioflag:=0;
+
  if ((fp^.f_flag and FNONBLOCK)<>0) then
+ begin
   ioflag:=ioflag or IO_NDELAY;
+ end;
  if ((fp^.f_flag and O_DIRECT)<>0) then
+ begin
   ioflag:=ioflag or IO_DIRECT;
+ end;
+
  advice:=get_advice(fp, uio);
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  vn_lock(vp, LK_SHARED or LK_RETRY);
@@ -741,23 +759,27 @@ begin
  begin
   start:=offset;
   __end:=uio^.uio_offset - 1;
+
   mtxp:=mtx_pool_find(mtxpool_sleep, fp);
   mtx_lock(mtxp^);
-  if (fp^.f_advice<>nil) then
-  if (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+
+  f_advice:=fp^.f_advice;
+  if (f_advice<>nil) then
+  if (f_advice^.fa_advice=POSIX_FADV_NOREUSE) then
   begin
-   if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
+   if (start<>0) and (f_advice^.fa_prevend + 1=start) then
    begin
-    start:=p_fadvise_info(fp^.f_advice)^.fa_prevstart;
+    start:=f_advice^.fa_prevstart;
    end else
-   if (p_fadvise_info(fp^.f_advice)^.fa_prevstart<>0) and
-      (p_fadvise_info(fp^.f_advice)^.fa_prevstart=__end + 1) then
+   if (f_advice^.fa_prevstart<>0) and
+      (f_advice^.fa_prevstart=__end + 1) then
    begin
-    __end:=p_fadvise_info(fp^.f_advice)^.fa_prevend;
+    __end:=f_advice^.fa_prevend;
    end;
-   p_fadvise_info(fp^.f_advice)^.fa_prevstart:=start;
-   p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
+   f_advice^.fa_prevstart:=start;
+   f_advice^.fa_prevend  :=__end;
   end;
+
   mtx_unlock(mtxp^);
  end;
  VFS_UNLOCK_GIANT(vfslocked);
@@ -778,6 +800,7 @@ var
  error,ioflag,lock_flags:Integer;
  advice,vfslocked:Integer;
  offset,start,__end:Int64;
+ f_advice:p_fadvise_info;
 begin
  td:=curkthread;
 
@@ -787,7 +810,9 @@ begin
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  //if (vp^.v_type=VREG) then
  // bwillwrite();
+
  ioflag:=IO_UNIT;
+
  if (vp^.v_type=VREG) and ((fp^.f_flag and O_APPEND)<>0) then
  begin
   ioflag:=ioflag or IO_APPEND;
@@ -804,6 +829,7 @@ begin
  begin
   ioflag:=ioflag or IO_SYNC;
  end;
+
  if (vp^.v_mount<>nil) then
  if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_SYNCHRONOUS)<>0) then
  begin
@@ -846,31 +872,37 @@ begin
   error:=VOP_WRITE(vp, uio, ioflag);
  fp^.f_nextoff:=uio^.uio_offset;
  VOP_UNLOCK(vp, 0);
+
  if (vp^.v_type<>VCHR) then
   vn_finished_write(mp);
+
  if (error=0) and
     (advice=POSIX_FADV_NOREUSE) and
     (offset<>uio^.uio_offset) then
  begin
   start:=offset;
   __end:=uio^.uio_offset - 1;
+
   mtxp:=mtx_pool_find(mtxpool_sleep, fp);
   mtx_lock(mtxp^);
-  if (fp^.f_advice<>nil) then
-  if (p_fadvise_info(fp^.f_advice)^.fa_advice=POSIX_FADV_NOREUSE) then
+
+  f_advice:=fp^.f_advice;
+  if (f_advice<>nil) then
+  if (f_advice^.fa_advice=POSIX_FADV_NOREUSE) then
   begin
-   if (start<>0) and (p_fadvise_info(fp^.f_advice)^.fa_prevend + 1=start) then
+   if (start<>0) and (f_advice^.fa_prevend + 1=start) then
    begin
-    start:=p_fadvise_info(fp^.f_advice)^.fa_prevstart;
+    start:=f_advice^.fa_prevstart;
    end else
-   if (p_fadvise_info(fp^.f_advice)^.fa_prevstart<>0) and
-      (p_fadvise_info(fp^.f_advice)^.fa_prevstart=__end + 1) then
+   if (f_advice^.fa_prevstart<>0) and
+      (f_advice^.fa_prevstart=__end + 1) then
    begin
-    __end:=p_fadvise_info(fp^.f_advice)^.fa_prevend;
+    __end:=f_advice^.fa_prevend;
    end;
-   p_fadvise_info(fp^.f_advice)^.fa_prevstart:=start;
-   p_fadvise_info(fp^.f_advice)^.fa_prevend  :=__end;
+   f_advice^.fa_prevstart:=start;
+   f_advice^.fa_prevend  :=__end;
   end;
+
   mtx_unlock(mtxp^);
  end;
 

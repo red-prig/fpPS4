@@ -270,11 +270,19 @@ var
  fs:t_statfs;
  fd_1,fd_2:Integer;
  err:Integer;
+
+ buf:Pointer;
 begin
  td:=curkthread;
 
  Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT or O_TRUNC,&777));
  fd_1:=td^.td_retval[0];
+
+ buf:=AllocMem(64*1024);
+
+ sys_read(fd_1,buf,64*1024);
+
+ FreeMem(buf);
 
  Writeln('sys_fstatfs=',sys_fstatfs(fd_1,@fs));
 

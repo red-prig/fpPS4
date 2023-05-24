@@ -53,6 +53,9 @@ function md_close(ap:p_vop_close_args):Integer;
 function md_fsync(ap:p_vop_fsync_args):Integer;
 function md_setattr(ap:p_vop_setattr_args):Integer;
 
+function md_read(ap:p_vop_read_args):Integer;
+function md_write(ap:p_vop_write_args):Integer;
+
 const
  md_vnodeops_host:vop_vector=(
   vop_default       :@ufs_vnodeops_root;
@@ -70,8 +73,8 @@ const
   vop_getattr       :@md_getattr;
   vop_setattr       :@md_setattr;
   vop_markatime     :nil;
-  vop_read          :nil; //parent
-  vop_write         :nil;
+  vop_read          :@md_read;
+  vop_write         :@md_write;
   vop_ioctl         :nil;
   vop_poll          :nil;
   vop_kqfilter      :nil;
@@ -114,6 +117,7 @@ uses
  sysutils,
  errno,
  vfcntl,
+ vstat,
  kern_thr,
  vfs_subr,
  subr_uio,
@@ -1790,6 +1794,28 @@ begin
  end;
 end;
 
+Function GetFileAttrtibute(flags,mode:Integer):DWORD; inline;
+begin
+ Result:=FILE_ATTRIBUTE_NORMAL;
+ if ((flags and O_CREAT)<>0) then
+ begin
+  if ((mode and S_IWUSR)=0) then
+  begin
+   Result:=Result or FILE_ATTRIBUTE_READONLY;
+  end;
+ end;
+end;
+
+Function GetCreateOptions(flags:Integer):DWORD; inline;
+begin
+ Result:=FILE_SYNCHRONOUS_IO_NONALERT or
+         FILE_NON_DIRECTORY_FILE;
+ if ((flags and (O_FSYNC or O_DSYNC))<>0) then
+ begin
+  Result:=Result or FILE_WRITE_THROUGH;
+ end;
+end;
+
 function md_create(ap:p_vop_create_args):Integer;
 var
  dvp:p_vnode;
@@ -1829,8 +1855,8 @@ var
  vp:p_vnode;
  fp:p_file;
  flags:Integer;
- DA:DWORD;
- CD:DWORD;
+
+ DA,FA,CD,CO:DWORD;
 
  dd:p_ufs_dirent;
  de:p_ufs_dirent;
@@ -1874,18 +1900,19 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
 
  DA:=GetDesiredAccess(flags);
+ FA:=GetFileAttrtibute(flags,de^.ufs_mode);
  CD:=GetCreationDisposition(flags);
+ CO:=GetCreateOptions(flags);
 
  R:=NtCreateFile(@FD,
                  DA,
                  @OBJ,
                  @BLK,
                  nil,
-                 FILE_ATTRIBUTE_NORMAL,
+                 FA,
                  FILE_SHARE_ALL,
                  CD,
-                 FILE_SYNCHRONOUS_IO_NONALERT or
-                 FILE_NON_DIRECTORY_FILE,
+                 CO,
                  nil,
                  0);
 
@@ -2181,6 +2208,28 @@ begin
 
 end;
 
+function md_io(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
+begin
+
+ Exit(0);
+end;
+
+function md_read(ap:p_vop_read_args):Integer;
+begin
+ if (ap^.a_vp^.v_type=VDIR) then
+ begin
+  Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
+ end;
+
+ Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+end;
+
+function md_write(ap:p_vop_write_args):Integer;
+begin
+ if (ap^.a_vp^.v_type=VDIR) then Exit(EBADF);
+
+ Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+end;
 
 end.
 
