@@ -2422,15 +2422,12 @@ function kern_fsync(fd:Integer;fullsync:Boolean):Integer;
 label
  drop;
 var
- td:p_kthread;
  vp:p_vnode;
  mp:p_mount;
  fp:p_file;
  vfslocked:Integer;
  error,lock_flags:Integer;
 begin
- td:=curkthread;
-
  error:=getvnode(fd, CAP_FSYNC, @fp);
  if (error<>0) then Exit(error);
 
@@ -2449,17 +2446,13 @@ begin
  end;
  vn_lock(vp, lock_flags or LK_RETRY);
 
- td^.td_fpop:=fp;
-
  //if (vp^.v_object<>nil) then
  //begin
  // VM_OBJECT_LOCK(vp^.v_object);
  // vm_object_page_clean(vp^.v_object, 0, 0, 0);
  // VM_OBJECT_UNLOCK(vp^.v_object);
  //end;
- error:=VOP_FSYNC(vp, MNT_WAIT);
-
- td^.td_fpop:=nil;
+ error:=VOP_FSYNC(vp, MNT_WAIT or ((ord(fullsync) and 1) shl 1));
 
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);

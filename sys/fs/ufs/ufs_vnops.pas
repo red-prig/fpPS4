@@ -682,6 +682,7 @@ begin
     (vap^.va_birthtime.tv_sec<>VNOVAL) then
  begin
   { See the comment in ufs_vnops::ufs_setattr(). }
+
   error:=VOP_ACCESS(vp, VADMIN);
   if (error<>0) then
   begin
@@ -689,6 +690,7 @@ begin
    error:=VOP_ACCESS(vp, VWRITE);
    if (error<>0) then Exit(error);
   end;
+
   if (vap^.va_atime.tv_sec<>VNOVAL) then
   begin
    de^.ufs_atime:=vap^.va_atime;

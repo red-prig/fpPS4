@@ -50,6 +50,8 @@ function md_rename(ap:p_vop_rename_args):Integer;
 function md_create(ap:p_vop_create_args):Integer;
 function md_open(ap:p_vop_open_args):Integer;
 function md_close(ap:p_vop_close_args):Integer;
+function md_fsync(ap:p_vop_fsync_args):Integer;
+function md_setattr(ap:p_vop_setattr_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -66,7 +68,7 @@ const
   vop_access        :nil; //parent
   vop_accessx       :nil;
   vop_getattr       :@md_getattr;
-  vop_setattr       :@ufs_setattr;
+  vop_setattr       :@md_setattr;
   vop_markatime     :nil;
   vop_read          :nil; //parent
   vop_write         :nil;
@@ -74,7 +76,7 @@ const
   vop_poll          :nil;
   vop_kqfilter      :nil;
   vop_revoke        :nil;
-  vop_fsync         :nil; //TODO
+  vop_fsync         :@md_fsync;
   vop_remove        :@md_remove;
   vop_link          :@md_link;
   vop_rename        :@md_rename;
@@ -210,11 +212,17 @@ begin
  end;
 end;
 
-function get_unix_file_time(time:LARGE_INTEGER):timespec;
+function get_unix_file_time(time:LARGE_INTEGER):timespec; inline;
 begin
  Int64(time):=Int64(time)-DELTA_EPOCH_IN_UNIT;
  Result.tv_sec :=(Int64(time) div UNIT_PER_SEC);
  Result.tv_nsec:=(Int64(time) mod UNIT_PER_SEC)*100;
+end;
+
+function get_win_file_time(time:timespec):LARGE_INTEGER; inline;
+begin
+ Int64(Result):=(time.tv_sec*UNIT_PER_SEC)+(time.tv_nsec div 100);
+ Int64(Result):=Int64(Result)+DELTA_EPOCH_IN_UNIT;
 end;
 
 function NT_FA_TO_DT(a,e:ULONG):Byte;
@@ -1767,7 +1775,7 @@ begin
   end else
   if ((flags and O_TRUNC)<>0) then
   begin
-   Result:=FILE_OVERWRITE;
+   Result:=FILE_OVERWRITE_IF;
   end else
   begin
    Result:=FILE_OPEN_IF;
@@ -1775,7 +1783,7 @@ begin
  end else
  if ((flags and O_TRUNC)<>0) then
  begin
-  Result:=FILE_OVERWRITE_IF;
+  Result:=FILE_OVERWRITE;
  end else
  begin
   Result:=FILE_OPEN;
@@ -1886,7 +1894,6 @@ begin
  begin
   md_unlink_cache(de);
   sx_xunlock(@dd^.ufs_md_lock);
-  NtClose(FD);
   Exit;
  end;
 
@@ -1933,6 +1940,245 @@ begin
  end;
 
  Result:=0;
+end;
+
+function md_fsync(ap:p_vop_fsync_args):Integer;
+var
+ vp:p_vnode;
+ FD:THandle;
+ fullsync:Boolean;
+
+ BLK:IO_STATUS_BLOCK;
+begin
+ vp:=ap^.a_vp;
+ FD:=THandle(vp^.v_un);
+ fullsync:=((ap^.a_waitfor and 2)<>0);
+
+ if (FD=0) then Exit(EINVAL);
+
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ //result doesn't matter
+ NtFlushBuffersFile(FD,@BLK);
+
+ if fullsync then
+ begin
+  //atime
+  //mtime
+ end;
+
+ Result:=0;
+end;
+
+function md_setattr(ap:p_vop_setattr_args):Integer;
+label
+ _err;
+var
+ de:p_ufs_dirent;
+ vap:p_vattr;
+ vp:p_vnode;
+ error:Integer;
+ uid:uid_t;
+ gid:gid_t;
+
+ change_time,change_size:Boolean;
+
+ FD,RL:THandle;
+
+ FBI:FILE_BASIC_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ SIZE:Int64;
+ R:DWORD;
+
+ procedure _settime(var dst:LARGE_INTEGER;var src:timespec); inline;
+ begin
+  if (src.tv_sec<>-1) and (src.tv_nsec<>-1) then
+  begin
+   dst:=get_win_file_time(src);
+  end;
+ end;
+
+begin
+ Result:=0;
+
+ vap:=ap^.a_vap;
+ vp:=ap^.a_vp;
+
+ if (vap^.va_type     <>VNON) or
+    (vap^.va_nlink    <>VNOVAL) or
+    (vap^.va_fsid     <>VNOVAL) or
+    (vap^.va_fileid   <>VNOVAL) or
+    (vap^.va_blocksize<>VNOVAL) or
+    ((vap^.va_flags   <>VNOVAL) and (vap^.va_flags<>0)) or
+    (vap^.va_rdev     <>VNOVAL) or
+    (vap^.va_bytes    <>VNOVAL) or
+    (vap^.va_gen      <>VNOVAL) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ de:=vp^.v_data;
+
+ error:=0;
+ change_time:=False;
+ change_size:=False;
+
+ if (vap^.va_uid=VNOVAL) then
+  uid:=de^.ufs_uid
+ else
+  uid:=vap^.va_uid;
+
+ if (vap^.va_gid=VNOVAL) then
+  gid:=de^.ufs_gid
+ else
+  gid:=vap^.va_gid;
+
+ if (uid<>de^.ufs_uid) or (gid<>de^.ufs_gid) then
+ begin
+  //if ((ap^.a_cred^.cr_uid<>de^.de_uid) or uid<>de^.de_uid or
+  //    (gid<>de^.de_gid and !groupmember(gid, ap^.a_cred))) then
+  //begin
+  // error:=priv_check(td, PRIV_VFS_CHOWN);
+  // if (error<>) then
+  //  Exit(error);
+  //end;
+  de^.ufs_uid:=uid;
+  de^.ufs_gid:=gid;
+ end;
+
+ if (vap^.va_mode<>VNOVAL) then
+ begin
+  //if (ap^.a_cred^.cr_uid<>de^.de_uid) then
+  //begin
+  // error:=priv_check(td, PRIV_VFS_ADMIN);
+  // if (error<>0) then
+  //  Exit(error);
+  //end;
+  de^.ufs_mode:=vap^.va_mode;
+ end;
+
+ if (vap^.va_atime.tv_sec<>VNOVAL) or
+    (vap^.va_mtime.tv_sec<>VNOVAL) or
+    (vap^.va_birthtime.tv_sec<>VNOVAL) then
+ begin
+  { See the comment in ufs_vnops::ufs_setattr(). }
+
+  error:=VOP_ACCESS(vp, VADMIN);
+  if (error<>0) then
+  begin
+   if ((vap^.va_vaflags and VA_UTIMES_NULL)=0) then Exit(error);
+   error:=VOP_ACCESS(vp, VWRITE);
+   if (error<>0) then Exit(error);
+  end;
+
+  if (vap^.va_atime.tv_sec<>VNOVAL) then
+  begin
+   de^.ufs_atime:=vap^.va_atime;
+  end;
+  if (vap^.va_mtime.tv_sec<>VNOVAL) then
+  begin
+   de^.ufs_mtime:=vap^.va_mtime;
+  end;
+  if (vap^.va_birthtime.tv_sec<>VNOVAL) then
+  begin
+   de^.ufs_btime:=vap^.va_birthtime;
+  end;
+
+  change_time:=True;
+ end;
+
+ if (vap^.va_size<>VNOVAL) then
+ begin
+  change_size:=True;
+ end;
+
+ if change_time or change_size then
+ begin
+
+  if (vp^.v_un<>nil) then
+  begin
+   FD:=THandle(vp^.v_un);
+   RL:=0;
+  end else
+  if (de^.ufs_md_fp<>nil) then
+  begin
+   FD:=THandle(de^.ufs_md_fp);
+   RL:=0;
+  end else
+  begin
+   Result:=md_open_dirent_file(de,True,@FD);
+   if (Result<>0) then Exit;
+   RL:=FD;
+  end;
+
+  if change_time then
+  begin
+   BLK:=Default(IO_STATUS_BLOCK);
+
+   R:=NtQueryInformationFile(
+       FD,
+       @BLK,
+       @FBI,
+       SizeOf(FBI),
+       FileBasicInformation);
+
+   Result:=ntf2px(R);
+   if (Result<>0) then goto _err;
+
+   //update
+   de^.ufs_ctime:=get_unix_file_time(FBI.ChangeTime);
+
+   _settime(FBI.LastAccessTime,de^.ufs_atime);
+   _settime(FBI.LastWriteTime ,de^.ufs_mtime);
+   _settime(FBI.CreationTime  ,de^.ufs_btime);
+
+   BLK:=Default(IO_STATUS_BLOCK);
+
+   R:=NtSetInformationFile(
+       FD,
+       @BLK,
+       @FBI,
+       SizeOf(FBI),
+       FileBasicInformation);
+
+   Result:=ntf2px(R);
+   if (Result<>0) then goto _err;
+  end;
+
+  if change_size then
+  begin
+   SIZE:=vap^.va_size;
+
+   R:=NtSetInformationFile(
+       FD,
+       @BLK,
+       @SIZE,
+       SizeOf(Int64),
+       FileEndOfFileInformation);
+
+   if (R<>0) then
+   begin
+    R:=NtSetInformationFile(
+        FD,
+        @BLK,
+        @SIZE,
+        SizeOf(Int64),
+        FileAllocationInformation);
+   end;
+
+   Result:=ntf2px(R);
+   if (Result<>0) then goto _err;
+
+   de^.ufs_size:=SIZE;
+  end;
+
+  _err:
+  if (RL<>0) then
+  begin
+   NtClose(RL);
+  end;
+ end;
+
 end;
 
 

@@ -273,10 +273,13 @@ var
 begin
  td:=curkthread;
 
- Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
+ Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT or O_TRUNC,&777));
  fd_1:=td^.td_retval[0];
 
  Writeln('sys_fstatfs=',sys_fstatfs(fd_1,@fs));
+
+ Writeln('sys_fsync=',sys_fsync(fd_1));
+ Writeln('sys_fdatasync=',sys_fdatasync(fd_1));
 
  Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
  fd_2:=td^.td_retval[0];
