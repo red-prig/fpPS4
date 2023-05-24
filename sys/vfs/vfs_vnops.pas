@@ -310,6 +310,11 @@ restart:
  error:=VOP_OPEN(vp, ofmode, fp);
  if (error<>0) then goto bad;
 
+ if ((fmode and FWRITE)<>0) then
+ begin
+  VOP_ADD_WRITECOUNT(vp, 1);
+ end;
+
  flagp^:=fmode;
  ASSERT_VOP_LOCKED(vp, 'vn_open_cred');
 
@@ -366,12 +371,14 @@ begin
 
  if ((flags and V_XSLEEP)<>0) then
   goto unlock;
+
  Inc(mp^.mnt_writeopcount);
 unlock:
  if (error<>0) or ((flags and V_XSLEEP)<>0) then
   MNT_REL(mp);
+
  MNT_IUNLOCK(mp);
- Exit (error);
+ Exit(error);
 end;
 
 function vn_start_write(vp:p_vnode;mpp:pp_mount;flags:Integer):Integer;
@@ -452,6 +459,7 @@ begin
  if ((flags and FWRITE)<>0) then
  begin
   Assert(vp^.v_writecount > 0,'vn_close: negative writecount');
+  VOP_ADD_WRITECOUNT(vp, -1);
  end;
  error:=VOP_CLOSE(vp, flags);
  vput(vp);

@@ -214,6 +214,7 @@ begin
   STATUS_DISK_CORRUPT_ERROR    :Result:=EIO;
   STATUS_OBJECT_NAME_NOT_FOUND :Result:=ENOENT;
   STATUS_OBJECT_NAME_COLLISION :Result:=EEXIST;
+  STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
   STATUS_SHARING_VIOLATION     :Result:=EACCES;
   STATUS_DISK_FULL             :Result:=ENOSPC;
   STATUS_FILE_IS_A_DIRECTORY   :Result:=EISDIR;
@@ -224,7 +225,6 @@ begin
   STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
   STATUS_IO_DEVICE_ERROR       :Result:=EIO;
   STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
-  STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
   STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
   else
                                 Result:=EINVAL;
@@ -958,70 +958,6 @@ begin
  Result:=md_new_cache(dd,name,namelen,@FBI,nd);
 end;
 
-procedure md_delete_cache(de:p_ufs_dirent);
-var
- dd:p_ufs_dirent;
- vp:p_vnode;
-begin
- if (de=nil) then Exit;
-
- Assert((de^.ufs_flags and UFS_DOOMED)=0,'ufs_delete doomed dirent');
- de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
-
- dd:=de^.ufs_dir; //parent
- de^.ufs_dir:=nil;
-
- if (dd<>nil) then
- begin
-  ufs_de_hold(dd);
-  sx_xlock(@dd^.ufs_md_lock);
- end;
-
- mtx_lock(ufs_interlock);
- vp:=de^.ufs_vnode;
- if (vp<>nil) then
- begin
-  VI_LOCK(vp);
-  mtx_unlock(ufs_interlock);
-  vholdl(vp);
-
-  if (dd<>nil) then
-  begin
-   sx_unlock(@dd^.ufs_md_lock);
-  end;
-
-  vn_lock(vp, LK_EXCLUSIVE or LK_INTERLOCK or LK_RETRY);
-
-  vgone(vp);
-
-  VOP_UNLOCK(vp, 0);
-
-  vdrop(vp);
-
-  if (dd<>nil) then
-  begin
-   sx_xlock(@dd^.ufs_md_lock);
-  end;
- end else
-  mtx_unlock(ufs_interlock);
-
- if (de^.ufs_symlink<>nil) then
- begin
-  FreeMem(de^.ufs_symlink);
-  de^.ufs_symlink:=nil;
- end;
-
- if (dd<>nil) then
- begin
-  TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
-  sx_unlock(@dd^.ufs_md_lock);
-  ufs_de_drop(dd); //prev hold
-  ufs_de_drop(dd); //list hold
- end;
-
- ufs_de_drop(de);
-end;
-
 procedure md_unlink_cache(de:p_ufs_dirent);
 var
  dd:p_ufs_dirent;
@@ -1039,6 +975,7 @@ begin
   //unlink soft
   de^.ufs_dir:=nil;
   ufs_de_drop(dd);
+  Exit;
  end;
 
  if (dd<>nil) then
@@ -1059,6 +996,26 @@ begin
  end;
 end;
 
+procedure md_delete_cache(de:p_ufs_dirent);
+var
+ s:Pointer;
+begin
+ if (de=nil) then Exit;
+
+ Assert((de^.ufs_flags and UFS_DOOMED)=0,'ufs_delete doomed dirent');
+ de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
+
+ md_unlink_cache(de);
+
+ s:=System.InterlockedExchange(de^.ufs_symlink,nil);
+ if (s<>nil) then
+ begin
+  FreeMem(s);
+ end;
+
+ ufs_de_drop(de);
+end;
+
 function md_inactive(ap:p_vop_inactive_args):Integer;
 var
  vp:p_vnode;
@@ -1070,16 +1027,11 @@ begin
  mp:=vp^.v_mount;
  if ((mp^.mnt_flag and MNT_RDONLY)=0) then
  begin
-  mtx_lock(ufs_interlock);
-  de:=vp^.v_data;
+  de:=System.InterlockedExchange(vp^.v_data,nil);
   if (de<>nil) then
   begin
-   de^.ufs_vnode:=nil;
-   vp^.v_data:=nil;
+   md_delete_cache(de);
   end;
-  mtx_unlock(ufs_interlock);
-
-  md_delete_cache(de);
  end;
 
  Exit(0);
@@ -1092,16 +1044,11 @@ var
 begin
  vp:=ap^.a_vp;
 
- mtx_lock(ufs_interlock);
- de:=vp^.v_data;
+ de:=System.InterlockedExchange(vp^.v_data,nil);
  if (de<>nil) then
  begin
-  de^.ufs_vnode:=nil;
-  vp^.v_data:=nil;
+  md_delete_cache(de);
  end;
- mtx_unlock(ufs_interlock);
-
- md_delete_cache(de);
 
  //vnode_destroy_vobject(vp);
 
@@ -1148,6 +1095,7 @@ begin
   Exit(0);
  end;
 
+ Result:=0;
  de:=md_find_cache(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
 
  if (de=nil) then
@@ -1806,7 +1754,7 @@ begin
  NtClose(FD);
 end;
 
-Function GetDesiredAccess(flags:Integer):DWORD;
+Function GetDesiredAccess(flags:Integer):DWORD; inline;
 begin
  Result:=SYNCHRONIZE or
          FILE_READ_ATTRIBUTES or
@@ -1823,7 +1771,7 @@ begin
  end;
 end;
 
-Function GetCreationDisposition(flags:Integer):DWORD;
+Function GetCreationDisposition(flags:Integer):DWORD; inline;
 begin
  Result:=0;
  if ((flags and O_CREAT)<>0) then
@@ -1893,6 +1841,7 @@ var
 
  dd:p_ufs_dirent;
  de:p_ufs_dirent;
+ dc:p_ufs_dirent;
 
  w:WideString;
  OBJ:TOBJ_ATTR;
@@ -1931,9 +1880,6 @@ begin
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
  BLK:=Default(IO_STATUS_BLOCK);
 
- writeln;
- writeln(HexStr(flags,8));
-
  DA:=GetDesiredAccess(flags);
  CD:=GetCreationDisposition(flags);
 
@@ -1950,11 +1896,10 @@ begin
                  nil,
                  0);
 
- writeln(HexStr(R,8));
-
  Result:=ntf2px(R);
  if (Result<>0) then
  begin
+  NtClose(FD);
   md_unlink_cache(de);
   sx_xunlock(@dd^.ufs_md_lock);
   Exit;
@@ -1972,6 +1917,10 @@ begin
 
  if ((de^.ufs_flags and UFS_CREATE)<>0) then
  begin
+  //clear cache
+  dc:=md_find_cache(dd,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen,0);
+  md_unlink_cache(dc);
+  //
   de^.ufs_flags:=de^.ufs_flags and (not UFS_CREATE);
   //link cache
   TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);

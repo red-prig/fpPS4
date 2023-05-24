@@ -315,6 +315,8 @@ function  VI_MTX(vp:p_vnode):p_mtx; inline;
 
 function  IGNORE_LOCK(vp:p_vnode):Boolean;
 
+procedure VOP_ADD_WRITECOUNT(vp:p_vnode;i:Integer);
+
 procedure vn_rangelock_unlock(vp:p_vnode;cookie:Pointer);
 procedure vn_rangelock_unlock_range(vp:p_vnode;cookie:Pointer;start,__end:Int64);
 function  vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
@@ -411,6 +413,11 @@ function IGNORE_LOCK(vp:p_vnode):Boolean;
 begin
  if (vp=nil) then Exit(True);
  Result:=(vp^.v_type=VCHR) or (vp^.v_type=VBAD);
+end;
+
+procedure VOP_ADD_WRITECOUNT(vp:p_vnode;i:Integer);
+begin
+ System.InterlockedExchangeAdd(vp^.v_writecount,i);
 end;
 
 procedure vn_rangelock_unlock(vp:p_vnode;cookie:Pointer);

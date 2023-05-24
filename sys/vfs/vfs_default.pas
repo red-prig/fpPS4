@@ -615,7 +615,7 @@ begin
 end;
 
 {
- * Exitour mount point, as we will take charge of the writes.
+ * Exit our mount point, as we will take charge of the writes.
  }
 function vop_stdgetwritemount(ap:p_vop_getwritemount_args):Integer;
 var

@@ -727,7 +727,7 @@ end;
 
 procedure vfs_ref(mp:p_mount); inline;
 begin
- MNT_REL(mp);
+ MNT_REF(mp);
 end;
 
 procedure vfs_rel(mp:p_mount); inline;

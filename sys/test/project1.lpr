@@ -279,7 +279,7 @@ begin
 
  Writeln('sys_fstatfs=',sys_fstatfs(fd,@fs));
 
- //sys_close(fd);
+ Writeln('sys_close=',sys_close(fd));
 
  Writeln('sys_mkdir=',sys_mkdir('/test',&777));
  Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
@@ -294,6 +294,8 @@ begin
 
  Writeln('sys_rename=',sys_rename('/app0/new','/app0/renamed'));
  Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
+
+ Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
 
  readln;
 end;
@@ -411,6 +413,8 @@ begin
   Writeln('[--test_dirs--]');
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');
+
+  readln;
 
   tid2:=curkthread^.td_tid;
 

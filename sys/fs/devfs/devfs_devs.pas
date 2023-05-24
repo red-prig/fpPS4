@@ -185,7 +185,6 @@ end;
 
 function devfs_parent_dirent(de:p_devfs_dirent):p_devfs_dirent;
 begin
-
  if (de^.de_dirent^.d_type<>DT_DIR) then
   Exit(de^.de_dir);
 
@@ -193,12 +192,10 @@ begin
   Exit(nil);
 
  de:=TAILQ_FIRST(@de^.de_dlist); { '.' }
- if (de=nil) then
-  Exit(nil);
+ if (de=nil) then Exit(nil);
 
  de:=TAILQ_NEXT(de,@de^.de_list);  { '..' }
- if (de=nil) then
-  Exit(nil);
+ if (de=nil) then Exit(nil);
 
  Exit(de^.de_dir);
 end;

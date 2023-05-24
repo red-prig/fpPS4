@@ -128,10 +128,10 @@ begin
   Exit(nil);
 
  de:=TAILQ_FIRST(@de^.ufs_dlist); { '.' }
- if (de=nil) then Exit(de^.ufs_dir);
+ if (de=nil) then Exit(nil);
 
  de:=TAILQ_NEXT(de,@de^.ufs_list);  { '..' }
- if (de=nil) then Exit(de^.ufs_dir);
+ if (de=nil) then Exit(nil);
 
  Exit(de^.ufs_dir);
 end;
@@ -174,7 +174,7 @@ function _ufs_rmdir(dm:p_ufs_mount;de:p_ufs_dirent):Integer; forward;
  }
 procedure ufs_delete(dm:p_ufs_mount;de:p_ufs_dirent;flags:Integer);
 var
- dd:p_ufs_dirent;
+ dd,dd2:p_ufs_dirent;
  vp:p_vnode;
 begin
  if (dm=nil) or (de=nil) then Exit;
@@ -185,12 +185,15 @@ begin
  if ((flags and UFS_DEL_NORECURSE)=0) then
  begin
   dd:=ufs_parent_dirent(de);
-  if (dd<>nil) then
-  begin
-   ufs_de_hold(dd);
-  end;
  end else
+ begin
   dd:=nil;
+ end;
+
+ if (dd<>nil) then
+ begin
+  ufs_de_hold(dd);
+ end;
 
  mtx_lock(ufs_interlock);
  vp:=de^.ufs_vnode;
@@ -229,9 +232,15 @@ begin
   de^.ufs_inode:=0;
  end;
 
+ dd2:=de^.ufs_dir;
+ if (dd2<>nil) then
+ begin
+  Dec(dd2^.ufs_links);
+  TAILQ_REMOVE(@dd2^.ufs_dlist,de,@de^.ufs_list);
+ end;
+
  if (dd<>nil) then
  begin
-  TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
   if ufs_de_drop(dd) then
   begin
    //
@@ -311,9 +320,9 @@ begin
  next:
 
  ufs_de_hold(dd);
- ufs_delete(dm, de       ,UFS_DEL_NORECURSE);
  ufs_delete(dm, de_dot   ,UFS_DEL_NORECURSE);
  ufs_delete(dm, de_dotdot,UFS_DEL_NORECURSE);
+ ufs_delete(dm, de       ,UFS_DEL_NORECURSE);
  ufs_de_drop(dd);
 end;
 
