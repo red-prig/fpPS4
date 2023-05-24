@@ -47,8 +47,9 @@ function md_remove(ap:p_vop_remove_args):Integer;
 function md_rmdir(ap:p_vop_rmdir_args):Integer;
 function md_rename(ap:p_vop_rename_args):Integer;
 
-function md_open(ap:p_vop_open_args):Integer;
 function md_create(ap:p_vop_create_args):Integer;
+function md_open(ap:p_vop_open_args):Integer;
+function md_close(ap:p_vop_close_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -61,7 +62,7 @@ const
   vop_whiteout      :nil;
   vop_mknod         :nil;
   vop_open          :@md_open;
-  vop_close         :nil; //TODO
+  vop_close         :@md_close;
   vop_access        :nil; //parent
   vop_accessx       :nil;
   vop_getattr       :@md_getattr;
@@ -114,6 +115,7 @@ uses
  kern_thr,
  vfs_subr,
  subr_uio,
+ kern_descrip,
  kern_time;
 
 const
@@ -621,12 +623,12 @@ begin
  Move(PAnsiChar(U)^, de^.ufs_symlink^, Length(U));
 end;
 
-function md_update_dirent(de:p_ufs_dirent;prev:PFILE_BASIC_INFORMATION):Integer;
+function md_update_dirent(FD:THandle;de:p_ufs_dirent;prev:PFILE_BASIC_INFORMATION):Integer;
 label
  _retry,
  _exit;
 var
- FD,RL:THandle;
+ RL:THandle;
 
  FBI:FILE_BASIC_INFORMATION;
  FSI:FILE_STANDARD_INFORMATION;
@@ -637,6 +639,10 @@ begin
  Result:=0;
  if (de=nil) then Exit;
 
+ if (FD<>0) then
+ begin
+  RL:=0;
+ end else
  if (de^.ufs_md_fp=nil) then
  begin
   Result:=md_open_dirent_file(de,(de^.ufs_dirent^.d_type=DT_LNK),@FD);
@@ -807,7 +813,7 @@ begin
   ufs_de_hold(dotdot);
  end;
 
- error:=md_update_dirent(nd,nil);
+ error:=md_update_dirent(0,nd,nil);
  if (error<>0) then
  begin
   ufs_de_drop(nd);
@@ -883,7 +889,7 @@ begin
   end;
  end;
 
- Result:=md_update_dirent(nd,prev);
+ Result:=md_update_dirent(0,nd,prev);
  if (Result<>0) then
  begin
   ufs_de_drop(nd);
@@ -979,6 +985,8 @@ var
 begin
  if (de=nil) then Exit;
 
+ Assert(de^.ufs_ref>0);
+
  Assert((de^.ufs_flags and UFS_DOOMED)=0,'ufs_delete doomed dirent');
  de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
 
@@ -1004,7 +1012,7 @@ begin
  mp:=vp^.v_mount;
  if ((mp^.mnt_flag and MNT_RDONLY)=0) then
  begin
-  de:=System.InterlockedExchange(vp^.v_data,nil);
+  de:=ufs_relv(vp);
   if (de<>nil) then
   begin
    md_delete_cache(de);
@@ -1021,7 +1029,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- de:=System.InterlockedExchange(vp^.v_data,nil);
+ de:=ufs_relv(vp);
  if (de<>nil) then
  begin
   md_delete_cache(de);
@@ -1227,7 +1235,7 @@ begin
  vp:=ap^.a_vp;
  de:=vp^.v_data;
 
- Result:=md_update_dirent(de,nil);
+ Result:=md_update_dirent(THandle(vp^.v_un),de,nil);
  if (Result<>0) then Exit;
 
  Result:=ufs_getattr(ap);
@@ -1244,7 +1252,7 @@ begin
 
  if (de^.ufs_symlink=nil) then //not cached
  begin
-  Result:=md_update_dirent(de,nil);
+  Result:=md_update_dirent(0,de,nil);
   if (Result<>0) then Exit;
  end;
 
@@ -1833,7 +1841,7 @@ begin
 
  if (fp=nil) or (vp=nil) then Exit(EPERM);
 
- //fp^.f_data:=dev;
+ vp^.v_un:=nil;
 
  case vp^.v_type of
   VREG:;
@@ -1876,27 +1884,31 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then
  begin
-  NtClose(FD);
   md_unlink_cache(de);
   sx_xunlock(@dd^.ufs_md_lock);
+  NtClose(FD);
   Exit;
  end;
 
- de^.ufs_md_fp:=Pointer(FD);
-
- Result:=md_update_dirent(de,nil);
+ Result:=md_update_dirent(FD,de,nil);
  if (Result<>0) then
  begin
   md_unlink_cache(de);
   sx_xunlock(@dd^.ufs_md_lock);
+  NtClose(FD);
   Exit;
  end;
 
+ vp^.v_un:=Pointer(FD);
+
  if ((de^.ufs_flags and UFS_CREATE)<>0) then
  begin
-  //clear cache
-  dc:=md_find_cache(dd,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen,0);
-  md_unlink_cache(dc);
+  if ((flags and O_EXCL)<>0) then
+  begin
+   //clear cache
+   dc:=md_find_cache(dd,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen,0);
+   md_unlink_cache(dc);
+  end;
   //
   de^.ufs_flags:=de^.ufs_flags and (not UFS_CREATE);
   //link cache
@@ -1905,6 +1917,22 @@ begin
  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
+end;
+
+function md_close(ap:p_vop_close_args):Integer;
+var
+ vp:p_vnode;
+ FD:THandle;
+begin
+ vp:=ap^.a_vp;
+
+ FD:=THandle(System.InterlockedExchange(vp^.v_un,nil));
+ if (FD<>0) then
+ begin
+  NtClose(FD);
+ end;
+
+ Result:=0;
 end;
 
 

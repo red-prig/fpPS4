@@ -268,18 +268,21 @@ procedure test_files;
 var
  td:p_kthread;
  fs:t_statfs;
- fd:Integer;
+ fd_1,fd_2:Integer;
  err:Integer;
 begin
  td:=curkthread;
 
  Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
+ fd_1:=td^.td_retval[0];
 
- fd:=td^.td_retval[0];
+ Writeln('sys_fstatfs=',sys_fstatfs(fd_1,@fs));
 
- Writeln('sys_fstatfs=',sys_fstatfs(fd,@fs));
+ Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
+ fd_2:=td^.td_retval[0];
 
- Writeln('sys_close=',sys_close(fd));
+ Writeln('sys_close=',sys_close(fd_2));
+ Writeln('sys_close=',sys_close(fd_1));
 
  Writeln('sys_mkdir=',sys_mkdir('/test',&777));
  Writeln('sys_mkdir=',sys_mkdir('/test/test',&777));
@@ -296,6 +299,8 @@ begin
  Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
 
  Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
+
+ Writeln('sys_rmdir=',sys_rmdir('/test'));
 
  readln;
 end;

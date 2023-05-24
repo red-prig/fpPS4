@@ -1029,7 +1029,7 @@ end;
 
 function vop_stdunp_bind(ap:p_vop_unp_bind_args):Integer;
 begin
- ap^.a_vp^.v_un:=ap^.a_socket;
+ ap^.a_vp^.v_socket:=ap^.a_socket;
  Exit(0);
 end;
 

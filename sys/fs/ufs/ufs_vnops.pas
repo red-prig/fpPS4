@@ -110,20 +110,8 @@ begin
  Result:=mp^.mnt_data;
 end;
 
-function ufs_parent_dirent(de:p_ufs_dirent):p_ufs_dirent;
+function ufs_parent_dirent(de:p_ufs_dirent):p_ufs_dirent; inline;
 begin
- if (de^.ufs_dirent^.d_type<>DT_DIR) then
-  Exit(de^.ufs_dir);
-
- if ((de^.ufs_flags and (UFS_DOT or UFS_DOTDOT))<>0) then
-  Exit(nil);
-
- de:=TAILQ_FIRST(@de^.ufs_dlist); { '.' }
- if (de=nil) then Exit(nil);
-
- de:=TAILQ_NEXT(de,@de^.ufs_list);  { '..' }
- if (de=nil) then Exit(nil);
-
  Exit(de^.ufs_dir);
 end;
 
@@ -226,6 +214,7 @@ begin
  dd2:=de^.ufs_dir;
  if (dd2<>nil) then
  begin
+  de^.ufs_dir:=nil;
   Dec(dd2^.ufs_links);
   TAILQ_REMOVE(@dd2^.ufs_dlist,de,@de^.ufs_list);
  end;
@@ -310,6 +299,10 @@ begin
 
  next:
 
+ Assert(de_dot^.ufs_dir=de);
+ Assert(de_dotdot^.ufs_dir=de);
+ Assert(de^.ufs_dir=dd);
+
  ufs_de_hold(dd);
  ufs_delete(dm, de_dot   ,UFS_DEL_NORECURSE);
  ufs_delete(dm, de_dotdot,UFS_DEL_NORECURSE);
@@ -357,7 +350,7 @@ begin
  nd^.ufs_dirent^.d_type:=DT_DIR;
  nd^.ufs_mode :=UFS_DEFAULT_MODE;
  nd^.ufs_links:=2;
- nd^.ufs_dir  :=nd;
+ nd^.ufs_dir  :=dotdot;
 
  if (inode<>0) then
   nd^.ufs_inode:=inode
@@ -386,17 +379,11 @@ begin
   de^.ufs_dirent^.d_type:=DT_DIR;
   de^.ufs_flags:=de^.ufs_flags or UFS_DOTDOT;
   TAILQ_INSERT_TAIL(@nd^.ufs_dlist,de,@de^.ufs_list);
+  de^.ufs_dir:=nd;
 
-  if (dotdot=nil) then
-  begin
-   de^.ufs_dir:=nd;
-  end else
-  begin
-   de^.ufs_dir:=dotdot;
-   sx_assert(@dmp^.ufs_lock);
-   TAILQ_INSERT_TAIL(@dotdot^.ufs_dlist,nd,@nd^.ufs_list);
-   Inc(dotdot^.ufs_links);
-  end;
+  sx_assert(@dmp^.ufs_lock);
+  TAILQ_INSERT_TAIL(@dotdot^.ufs_dlist,nd,@nd^.ufs_list);
+  Inc(dotdot^.ufs_links);
  end;
 
  Exit(nd);
@@ -997,18 +984,10 @@ end;
 function ufs_reclaim(ap:p_vop_reclaim_args):Integer;
 var
  vp:p_vnode;
- de:p_ufs_dirent;
 begin
  vp:=ap^.a_vp;
 
- mtx_lock(ufs_interlock);
- de:=vp^.v_data;
- if (de<>nil) then
- begin
-  de^.ufs_vnode:=nil;
-  vp^.v_data:=nil;
- end;
- mtx_unlock(ufs_interlock);
+ ufs_relv(vp);
 
  //vnode_destroy_vobject(vp);
 

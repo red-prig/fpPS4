@@ -23,6 +23,7 @@ type
   ufs_inode  :Integer;
   ufs_flags  :Integer;      //UFS_*
   ufs_ref    :Integer;
+  ufs_vref   :Integer;
   ufs_dirent :p_dirent;
   ufs_list   :TAILQ_ENTRY;
   ufs_dlist  :TAILQ_HEAD;   //dir list
@@ -105,6 +106,7 @@ function  ufs_de_drop(p:p_ufs_dirent):Boolean;
 procedure ufs_mp_hold(p:p_ufs_mount);
 function  ufs_mp_drop(p:p_ufs_mount):Boolean;
 
+function  ufs_relv(vp:p_vnode):p_ufs_dirent;
 function  ufs_allocv(de:p_ufs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer;
 
 var
@@ -237,11 +239,27 @@ var
 begin
  de:=p_ufs_dirent(arg);
  mtx_lock(ufs_interlock);
- vp^.v_data:=nil;
+ ufs_relv(vp);
  de^.ufs_vnode:=nil;
  mtx_unlock(ufs_interlock);
  vgone(vp);
  vput(vp);
+end;
+
+function ufs_relv(vp:p_vnode):p_ufs_dirent;
+var
+ de:p_ufs_dirent;
+begin
+ Result:=nil;
+ if (vp=nil) then Exit;
+ de:=System.InterlockedExchange(vp^.v_data,nil);
+ if (de<>nil) then
+ begin
+  if (System.InterlockedDecrement(de^.ufs_vref)=0) then
+  begin
+   Result:=de;
+  end;
+ end;
 end;
 
 function ufs_allocv(de:p_ufs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer;
@@ -266,7 +284,13 @@ loop:
 
  mtx_lock(ufs_interlock);
 
- vp:=de^.ufs_vnode;
+ vp:=nil;
+ //cache only dir
+ if (de^.ufs_dirent^.d_type=DT_DIR) then
+ begin
+  vp:=de^.ufs_vnode;
+ end;
+
  if (vp<>nil) then
  begin
   VI_LOCK(vp);
@@ -312,8 +336,16 @@ loop:
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY or LK_NOWITNESS);
  //VN_LOCK_ASHARE(vp);
  mtx_lock(ufs_interlock);
+
+ System.InterlockedIncrement(de^.ufs_vref);
  vp^.v_data:=de;
- de^.ufs_vnode:=vp;
+
+ //cache only dir
+ if (de^.ufs_dirent^.d_type=DT_DIR) then
+ begin
+  de^.ufs_vnode:=vp;
+ end;
+
  mtx_unlock(ufs_interlock);
 
  error:=insmntque1(vp, mp, @ufs_insmntque_dtr, de);
