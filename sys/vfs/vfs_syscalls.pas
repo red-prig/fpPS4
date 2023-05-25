@@ -267,12 +267,14 @@ begin
  error:=getvnode(fd, CAP_FSTATFS, @fp);
  if (error<>0) then
   Exit(error);
+
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  vn_lock(vp, LK_SHARED or LK_RETRY);
  mp:=vp^.v_mount;
  if (mp<>nil) then
   vfs_ref(mp);
+
  VOP_UNLOCK(vp, 0);
  fdrop(fp);
  if (mp=nil) then
@@ -314,6 +316,7 @@ begin
 _out:
  if (mp<>nil) then
   vfs_unbusy(mp);
+
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
 end;

@@ -438,10 +438,10 @@ begin
 end;
 
 function vop_stdadvlockpurge(ap:p_vop_advlockpurge_args):Integer;
-var
- vp:p_vnode;
+//var
+// vp:p_vnode;
 begin
- vp:=ap^.a_vp;
+ //vp:=ap^.a_vp;
 
  Exit(EOPNOTSUPP);
  //lf_purgelocks(vp, @vp^.v_lockf);

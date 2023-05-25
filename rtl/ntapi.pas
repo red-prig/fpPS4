@@ -31,9 +31,13 @@ const
  STATUS_OBJECT_NAME_COLLISION  =$C0000035; //EEXIST
  STATUS_OBJECT_PATH_NOT_FOUND  =$C000003A; //ENOENT
  STATUS_SHARING_VIOLATION      =$C0000043; //EACCES
+ STATUS_FILE_LOCK_CONFLICT     =$C0000054; //EWOULDBLOCK
+ STATUS_LOCK_NOT_GRANTED       =$C0000055; //EWOULDBLOCK
+ STATUS_RANGE_NOT_LOCKED       =$C000007E; //ENOLCK
  STATUS_DISK_FULL              =$C000007F; //ENOSPC
  STATUS_FILE_IS_A_DIRECTORY    =$C00000BA; //EISDIR
  STATUS_NOT_SAME_DEVICE        =$C00000D4; //EXDEV
+ STATUS_INSUFFICIENT_RESOURCES =$C000009A; //ENOMEM
  STATUS_DIRECTORY_NOT_EMPTY    =$C0000101; //ENOTEMPTY
  STATUS_FILE_CORRUPT_ERROR     =$C0000102; //EIO
  STATUS_NOT_A_DIRECTORY        =$C0000103; //ENOTDIR
@@ -182,9 +186,12 @@ const
  FILE_EXISTS                   =$00000004;
  FILE_DOES_NOT_EXIST           =$00000005;
 
- // Special ByteOffset parameters (NtWriteFile)
+ // Special ByteOffset parameters (NtWriteFile LowPart)
  FILE_WRITE_TO_END_OF_FILE     =$ffffffff; //O_APPEND
  FILE_USE_FILE_POINTER_POSITION=$fffffffe;
+
+ FILE_WRITE_TO_END_OF_FILE_L     :LARGE_INTEGER=(LowPart:FILE_WRITE_TO_END_OF_FILE     ;HighPart:-1);
+ FILE_USE_FILE_POINTER_POSITION_L:LARGE_INTEGER=(LowPart:FILE_USE_FILE_POINTER_POSITION;HighPart:-1);
 
  // FsControlCode
  FSCTL_SET_REPARSE_POINT=$000900A4;
@@ -609,6 +616,27 @@ function NtWriteFile(
 function NtFlushBuffersFile(
           FileHandle        :THandle;
           IoStatusBlock     :PIO_STATUS_BLOCK
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtLockFile(
+          FileHandle     :THandle;
+          Event          :THandle;
+          ApcRoutine     :Pointer;
+          ApcContext     :Pointer;
+          IoStatusBlock  :PIO_STATUS_BLOCK;
+          ByteOffset     :PLARGE_INTEGER;
+          Length         :PLARGE_INTEGER;
+          Key            :ULONG;
+          FailImmediately:Boolean;
+          ExclusiveLock  :Boolean
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtUnlockFile(
+          FileHandle     :THandle;
+          IoStatusBlock  :PIO_STATUS_BLOCK;
+          ByteOffset     :PLARGE_INTEGER;
+          Length         :PLARGE_INTEGER;
+          Key            :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetInformationFile(

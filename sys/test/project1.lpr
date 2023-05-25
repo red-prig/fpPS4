@@ -271,25 +271,35 @@ var
  fd_1,fd_2:Integer;
  err:Integer;
 
- buf:Pointer;
+ buf:PChar;
 begin
  td:=curkthread;
 
- Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT or O_TRUNC,&777));
+ Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT or O_TRUNC{ or O_APPEND} or O_EXLOCK,&777));
  fd_1:=td^.td_retval[0];
 
  buf:=AllocMem(64*1024);
 
- sys_read(fd_1,buf,64*1024);
+ FillChar(buf^,64*1024,'0');
+
+ Writeln('sys_pwrite=',sys_pwrite(fd_1,buf,64*1024,0));
+
+ FillChar(buf^,64*1024,'1');
+
+ Writeln('sys_pwrite=',sys_pwrite(fd_1,buf,64*1024,0));
+
+ FillChar(buf^,64*1024,0);
+
+ Writeln('sys_pread=',sys_pread(fd_1,buf,64*1024,0));
 
  FreeMem(buf);
 
- Writeln('sys_fstatfs=',sys_fstatfs(fd_1,@fs));
+ //Writeln('sys_fstatfs=',sys_fstatfs(fd_1,@fs));
 
  Writeln('sys_fsync=',sys_fsync(fd_1));
  Writeln('sys_fdatasync=',sys_fdatasync(fd_1));
 
- Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT,&777));
+ Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR{ or O_CREAT},&777));
  fd_2:=td^.td_retval[0];
 
  Writeln('sys_close=',sys_close(fd_2));
@@ -309,7 +319,7 @@ begin
  Writeln('sys_rename=',sys_rename('/app0/new','/app0/renamed'));
  Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
 
- Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
+ //Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
 
  Writeln('sys_rmdir=',sys_rmdir('/test'));
 

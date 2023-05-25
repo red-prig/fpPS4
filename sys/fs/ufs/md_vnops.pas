@@ -18,7 +18,6 @@ uses
  vnamei,
  vnode_if,
  vfs_default,
- vfs_vnops,
  ufs,
  ufs_vnops,
  kern_mtx,
@@ -55,6 +54,9 @@ function md_setattr(ap:p_vop_setattr_args):Integer;
 
 function md_read(ap:p_vop_read_args):Integer;
 function md_write(ap:p_vop_write_args):Integer;
+
+function md_advlock(ap:p_vop_advlock_args):Integer;
+function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
 
 const
  md_vnodeops_host:vop_vector=(
@@ -97,9 +99,9 @@ const
   vop_getwritemount :nil;
   vop_print         :nil;
   vop_pathconf      :@vop_stdpathconf;
-  vop_advlock       :nil;
+  vop_advlock       :@md_advlock;
   vop_advlockasync  :nil;
-  vop_advlockpurge  :nil;
+  vop_advlockpurge  :@md_advlockpurge;
   vop_reallocblks   :nil;
   vop_getpages      :nil;
   vop_putpages      :nil;
@@ -118,10 +120,8 @@ uses
  errno,
  vfcntl,
  vstat,
- kern_thr,
  vfs_subr,
  subr_uio,
- kern_descrip,
  kern_time;
 
 const
@@ -191,9 +191,11 @@ begin
  Case DWORD(n) of
   STATUS_SUCCESS               :Result:=0;
   STATUS_PENDING               :Result:=EWOULDBLOCK;
+  STATUS_NO_MORE_FILES         :Result:=0;
   STATUS_ACCESS_VIOLATION      :Result:=EFAULT;
   STATUS_INVALID_HANDLE        :Result:=EBADF;
   STATUS_NO_SUCH_FILE          :Result:=ENOENT;
+  STATUS_END_OF_FILE           :Result:=0;
   STATUS_NO_MEMORY             :Result:=ENOMEM;
   STATUS_ACCESS_DENIED         :Result:=EACCES;
   STATUS_DISK_CORRUPT_ERROR    :Result:=EIO;
@@ -201,9 +203,13 @@ begin
   STATUS_OBJECT_NAME_COLLISION :Result:=EEXIST;
   STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
   STATUS_SHARING_VIOLATION     :Result:=EACCES;
+  STATUS_FILE_LOCK_CONFLICT    :Result:=EWOULDBLOCK;
+  STATUS_LOCK_NOT_GRANTED      :Result:=EWOULDBLOCK;
+  STATUS_RANGE_NOT_LOCKED      :Result:=ENOLCK;
   STATUS_DISK_FULL             :Result:=ENOSPC;
   STATUS_FILE_IS_A_DIRECTORY   :Result:=EISDIR;
   STATUS_NOT_SAME_DEVICE       :Result:=EXDEV;
+  STATUS_INSUFFICIENT_RESOURCES:Result:=ENOMEM;
   STATUS_DIRECTORY_NOT_EMPTY   :Result:=ENOTEMPTY;
   STATUS_FILE_CORRUPT_ERROR    :Result:=EIO;
   STATUS_NOT_A_DIRECTORY       :Result:=ENOTDIR;
@@ -486,7 +492,7 @@ begin
                SYNCHRONIZE or
                FILE_CAN_DELETE or
                FILE_READ_DATA or
-               FILE_WRITE_DATA or
+               //FILE_WRITE_DATA or
                FILE_READ_ATTRIBUTES or
                FILE_WRITE_ATTRIBUTES,
                @OBJ,
@@ -879,7 +885,7 @@ begin
  nd^.ufs_mode :=UFS_DEFAULT_MODE;
  nd^.ufs_dir  :=dd;
 
- if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)=0) then
+ if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)<>0) then
  begin
   nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
  end;
@@ -1247,7 +1253,12 @@ begin
  vp:=ap^.a_vp;
  de:=vp^.v_data;
 
+ sx_xlock(@de^.ufs_md_lock);
+
  Result:=md_update_dirent(THandle(vp^.v_un),de,nil);
+
+ sx_xunlock(@de^.ufs_md_lock);
+
  if (Result<>0) then Exit;
 
  Result:=ufs_getattr(ap);
@@ -1265,10 +1276,11 @@ begin
  if (de^.ufs_symlink=nil) then //not cached
  begin
   Result:=md_update_dirent(0,de,nil);
-  if (Result<>0) then Exit;
  end;
 
  sx_xunlock(@de^.ufs_md_lock);
+
+ if (Result<>0) then Exit;
 
  Exit(uiomove(de^.ufs_symlink, strlen(de^.ufs_symlink), ap^.a_uio));
 end;
@@ -1797,12 +1809,10 @@ end;
 Function GetFileAttrtibute(flags,mode:Integer):DWORD; inline;
 begin
  Result:=FILE_ATTRIBUTE_NORMAL;
- if ((flags and O_CREAT)<>0) then
+ if ((flags and O_CREAT)<>0) and
+    ((mode and S_IWUSR)=0) then
  begin
-  if ((mode and S_IWUSR)=0) then
-  begin
-   Result:=Result or FILE_ATTRIBUTE_READONLY;
-  end;
+  Result:=Result or FILE_ATTRIBUTE_READONLY;
  end;
 end;
 
@@ -2208,28 +2218,262 @@ begin
 
 end;
 
-function md_io(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
-begin
+type
+ t_uio_cb=function(
+  FileHandle   :THandle;
+  Event        :THandle;
+  ApcRoutine   :Pointer;
+  ApcContext   :Pointer;
+  IoStatusBlock:PIO_STATUS_BLOCK;
+  Buffer       :Pointer;
+  Length       :ULONG;
+  ByteOffset   :PLARGE_INTEGER;
+  Key          :PULONG
+ ):DWORD; stdcall;
 
- Exit(0);
+function md_io(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
+var
+ de:p_ufs_dirent;
+ F:Thandle;
+ iocb:t_uio_cb;
+
+ append:Boolean;
+ locked:Boolean;
+
+ iov:p_iovec;
+ cnt:Integer;
+
+ OFFSET:Int64;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ Result:=0;
+ de:=vp^.v_data;
+ F:=THandle(vp^.v_un);
+
+ case uio^.uio_rw of
+  UIO_READ :iocb:=@NtReadFile;
+  UIO_WRITE:iocb:=@NtWriteFile;
+  else
+            Exit(EINVAL);
+ end;
+
+ append:=(uio^.uio_rw=UIO_WRITE) and ((ioflag and IO_APPEND)<>0);
+
+ locked:=((ioflag and IO_UNIT)<>0) and (not append);
+
+ if locked then
+ begin
+  sx_xlock(@de^.ufs_md_lock);
+ end;
+
+ while (uio^.uio_iovcnt<>0) or (uio^.uio_resid<>0) do
+ begin
+  iov:=uio^.uio_iov;
+  cnt:=iov^.iov_len;
+
+  if (cnt=0) then
+  begin
+   Inc(uio^.uio_iov);
+   Dec(uio^.uio_iovcnt);
+   continue;
+  end;
+
+  if append then
+  begin
+   OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
+  end else
+  begin
+   OFFSET:=uio^.uio_offset;
+  end;
+
+  BLK:=Default(IO_STATUS_BLOCK);
+
+  R:=iocb(F,0,nil,nil,@BLK,iov^.iov_base,cnt,@OFFSET,nil);
+
+  if (R=STATUS_PENDING) then
+  begin
+   R:=NtWaitForSingleObject(F,False,nil);
+  end;
+
+  Result:=ntf2px(R);
+
+  if (Int64(BLK.Information)<cnt) then
+  begin
+   //partial
+   cnt:=BLK.Information;
+   if (cnt<>0) then
+   begin
+    Inc(iov^.iov_base  ,cnt);
+    Dec(iov^.iov_len   ,cnt);
+    Dec(uio^.uio_resid ,cnt);
+
+    if not append then
+    begin
+     Inc(uio^.uio_offset,cnt);
+    end;
+   end;
+   Break;
+  end;
+
+  if (Result<>0) then Break;
+
+  Inc(iov^.iov_base  ,cnt);
+  Dec(iov^.iov_len   ,cnt);
+  Dec(uio^.uio_resid ,cnt);
+
+  if not append then
+  begin
+   Inc(uio^.uio_offset,cnt);
+  end;
+
+  Inc(uio^.uio_iov);
+  Dec(uio^.uio_iovcnt);
+ end;
+
+ if locked then
+ begin
+  sx_xunlock(@de^.ufs_md_lock);
+ end;
 end;
 
 function md_read(ap:p_vop_read_args):Integer;
 begin
- if (ap^.a_vp^.v_type=VDIR) then
- begin
-  Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
+ case ap^.a_vp^.v_type of
+  VDIR:Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
+  VREG:Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+  else
+       Exit(EBADF);
  end;
-
- Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
 end;
 
 function md_write(ap:p_vop_write_args):Integer;
 begin
- if (ap^.a_vp^.v_type=VDIR) then Exit(EBADF);
-
- Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+ case ap^.a_vp^.v_type of
+  VREG:Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+  else
+       Exit(EBADF);
+ end;
 end;
+
+function md_advlock(ap:p_vop_advlock_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+ fp:p_file;
+ fl:p_flock;
+ op:Integer;
+ wf:Integer;
+
+ offset,size:Int64;
+
+ F:THandle;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ vp:=ap^.a_vp;
+ if (vp^.v_type<>VREG) then Exit(EBADF);
+
+ de:=vp^.v_data;
+ fp:=ap^.a_id;
+ fl:=ap^.a_fl;
+ op:=ap^.a_op;
+ wf:=ap^.a_flags;
+
+ F:=THandle(vp^.v_un);
+
+ case op of
+  F_SETLK:;
+  else
+   Exit(ENOTSUP);
+ end;
+
+ case fl^.l_type of
+  F_RDLCK:;
+  F_UNLCK:;
+  F_WRLCK:;
+  else
+   Exit(ENOTSUP);
+ end;
+
+ case fl^.l_whence of
+  SEEK_SET:offset:=fl^.l_start;
+  SEEK_CUR:offset:=fp^.f_offset+fl^.l_start;
+  SEEK_END:
+   begin
+    sx_xlock(@de^.ufs_md_lock);
+
+    Result:=md_update_dirent(F,de,nil);
+
+    offset:=de^.ufs_size+fl^.l_start;
+
+    sx_xunlock(@de^.ufs_md_lock);
+
+    if (Result<>0) then Exit;
+   end;
+  else
+       Exit(ENOTSUP);
+ end;
+
+ size:=fl^.l_len;
+ if (size=0) then
+ begin
+  size:=-1;
+ end;
+
+ case fl^.l_type of
+  F_RDLCK:
+   begin
+    R:=NtLockFile(
+        F,
+        0,
+        nil,
+        nil,
+        @BLK,
+        @offset,
+        @size,
+        0,
+        ((wf and F_WAIT)=0),
+        False
+       );
+   end;
+  F_WRLCK:
+   begin
+    R:=NtLockFile(
+        F,
+        0,
+        nil,
+        nil,
+        @BLK,
+        @offset,
+        @size,
+        0,
+        ((wf and F_WAIT)=0),
+        True
+       );
+   end;
+  F_UNLCK:
+   begin
+    R:=NtUnlockFile(
+        F,
+        @BLK,
+        @offset,
+        @size,
+        0
+       );
+   end
+  else;
+ end;
+
+ Result:=ntf2px(R);
+end;
+
+function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
+begin
+ //Locks are automatically released on NtClose
+ Result:=0;
+end;
+
 
 end.
 

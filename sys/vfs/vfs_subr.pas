@@ -2902,21 +2902,21 @@ begin
  dac_granted:=0;
 
  { Check the owner. }
- //if (cred^.cr_uid=file_uid) then
- //begin
- // dac_granted:=dac_granted or VADMIN;
- // if ((file_mode and S_IXUSR)<>0) then
- //  dac_granted:=dac_granted or VEXEC;
- // if ((file_mode and S_IRUSR)<>0) then
- //  dac_granted:=dac_granted or VREAD;
- // if ((file_mode and S_IWUSR)<>0) then
- //  dac_granted:=dac_granted or (VWRITE or VAPPEND);
- //
- // if ((accmode and dac_granted)=accmode) then
- //  Exit(0);
- //
- // goto privcheck;
- //end;
+ if {(cred^.cr_uid=file_uid)} True then
+ begin
+  dac_granted:=dac_granted or VADMIN;
+  if ((file_mode and S_IXUSR)<>0) then
+   dac_granted:=dac_granted or VEXEC;
+  if ((file_mode and S_IRUSR)<>0) then
+   dac_granted:=dac_granted or VREAD;
+  if ((file_mode and S_IWUSR)<>0) then
+   dac_granted:=dac_granted or (VWRITE or VAPPEND);
+
+  if ((accmode and dac_granted)=accmode) then
+   Exit(0);
+
+  goto privcheck;
+ end;
 
  { Otherwise, check the groups (first match) }
  if {(groupmember(file_gid, cred))} True then
