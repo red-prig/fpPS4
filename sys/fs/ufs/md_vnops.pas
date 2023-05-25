@@ -1273,6 +1273,7 @@ begin
 
  sx_xlock(@de^.ufs_md_lock);
 
+ Result:=0;
  if (de^.ufs_symlink=nil) then //not cached
  begin
   Result:=md_update_dirent(0,de,nil);
