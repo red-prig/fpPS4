@@ -427,7 +427,7 @@ begin
  if (namelen > MAXLOGNAME) then
   namelen:=MAXLOGNAME;
 
- login:='user';
+ login:='root';
  len:=strlen(@login);
 
  if (len > namelen) then
