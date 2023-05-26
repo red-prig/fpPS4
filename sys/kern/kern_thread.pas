@@ -6,6 +6,7 @@ unit kern_thread;
 interface
 
 uses
+ sysutils,
  mqueue,
  kern_thr,
  ntapi,
@@ -14,7 +15,6 @@ uses
  signal,
  signalvar,
  time,
- kern_time,
  rtprio,
  kern_rtprio,
  hamt;
@@ -23,12 +23,13 @@ function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
 function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
-function  sys_thr_self(id:PQWORD):Integer;
+function  sys_thr_self(id:PDWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
-function  sys_thr_kill(id:QWORD;sig:Integer):Integer;
+function  sys_thr_kill(id:DWORD;sig:Integer):Integer;
 function  sys_thr_suspend(timeout:ptimespec):Integer;
-function  sys_thr_wake(id:QWORD):Integer;
-function  sys_thr_set_name(id:QWORD;pname:PChar):Integer;
+function  sys_thr_wake(id:DWORD):Integer;
+function  sys_thr_set_name(id:DWORD;pname:PChar):Integer;
+function  sys_thr_get_name(id:DWORD;pname:PChar):Integer;
 
 function  sys_amd64_set_fsbase(base:Pointer):Integer;
 
@@ -69,6 +70,7 @@ uses
  errno,
  systm,
  vm_machdep,
+ md_thread,
  kern_rwlock,
  kern_mtx,
  kern_umtx,
@@ -297,8 +299,8 @@ function create_thread(td        :p_kthread; //calling thread
                        stack_base:Pointer;
                        stack_size:QWORD;
                        tls_base  :Pointer;
-                       child_tid :PQWORD;
-                       parent_tid:PQWORD;
+                       child_tid :PDWORD;
+                       parent_tid:PDWORD;
                        rtp       :p_rtprio;
                        name      :PChar
                       ):Integer;
@@ -401,13 +403,13 @@ begin
 
  if (child_tid<>nil) then
  begin
-  n:=suword64(child_tid^,newtd^.td_tid);
+  n:=suword32(child_tid^,newtd^.td_tid);
   if (n<>0) then Goto _term;
  end;
 
  if (parent_tid<>nil) then
  begin
-  n:=suword64(parent_tid^,newtd^.td_tid);
+  n:=suword32(parent_tid^,newtd^.td_tid);
   if (n<>0) then Goto _term;
  end;
 
@@ -420,7 +422,7 @@ begin
 
  if (name<>nil) then
  begin
-  Move(name^,newtd^.td_name,SizeOf(newtd^.td_name));
+  Move(name^,newtd^.td_name,SizeOf(t_td_name));
  end;
  SetThreadDebugName(newtd^.td_handle,'ps4:'+newtd^.td_name);
 
@@ -450,7 +452,7 @@ function kern_thr_new(td:p_kthread;param:p_thr_param):Integer;
 var
  rtp:t_rtprio;
  rtpp:p_rtprio;
- name:array[0..31] of AnsiChar;
+ name:t_td_name;
 begin
  Result:=0;
  rtpp:=nil;
@@ -462,7 +464,7 @@ begin
   rtpp:=@rtp;
  end;
 
- name[0]:=#0;
+ name:=Default(t_td_name);
 
  if (param^.name<>nil) then
  begin
@@ -530,7 +532,7 @@ begin
  RtlExitUserThread(0);
 end;
 
-function sys_thr_self(id:PQWORD):Integer;
+function sys_thr_self(id:PDWORD):Integer;
 var
  td:p_kthread;
 begin
@@ -539,7 +541,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(EFAULT);
 
- Result:=suword64(id^,td^.td_tid);
+ Result:=suword32(id^,td^.td_tid);
  if (Result<>0) then Exit(EFAULT);
 
  Result:=0;
@@ -582,7 +584,7 @@ begin
  end;
 end;
 
-function sys_thr_kill(id:QWORD;sig:Integer):Integer;
+function sys_thr_kill(id:DWORD;sig:Integer):Integer;
 var
  data:_t_stk;
 begin
@@ -592,7 +594,7 @@ begin
  data.ksi.ksi_info.si_signo:=sig;
  data.ksi.ksi_info.si_code :=SI_LWP;
 
- if (int64(id)=-1) then
+ if (Integer(id)=-1) then
  begin
   if (sig<>0) and (not _SIG_VALID(sig)) then
   begin
@@ -702,7 +704,7 @@ begin
  Result:=kern_thr_suspend(td,tsp);
 end;
 
-function sys_thr_wake(id:QWORD):Integer;
+function sys_thr_wake(id:DWORD):Integer;
 var
  td:p_kthread;
 begin
@@ -728,21 +730,21 @@ begin
  thread_dec_ref(td);
 end;
 
-function sys_thr_set_name(id:QWORD;pname:PChar):Integer;
+function sys_thr_set_name(id:DWORD;pname:PChar):Integer;
 var
  td:p_kthread;
- name:array[0..31] of AnsiChar;
+ name:t_td_name;
 begin
  Result:=0;
 
- name[0]:=#0;
+ name:=Default(t_td_name);
  if (name<>nil) then
  begin
   Result:=copyinstr(pname,@name,32,nil);
   if (Result<>0) then Exit;
  end;
 
- if (int64(id)=-1) then
+ if (Integer(id)=-1) then
  begin
   //TODO SetProcName
   Exit;
@@ -753,10 +755,45 @@ begin
 
  thread_lock(td);
 
- Move(name,td^.td_name,SizeOf(td^.td_name));
+ td^.td_name:=name;
  SetThreadDebugName(td^.td_handle,'ps4:'+name);
 
  thread_unlock(td);
+
+ thread_dec_ref(td);
+end;
+
+function strnlen(s:PChar;maxlen:ptrint):ptrint;
+var
+ len:size_t;
+begin
+ For len:=0 to maxlen-1 do
+ begin
+  if (s^=#0) then Break;
+  Inc(s);
+ end;
+ Exit(len);
+end;
+
+function sys_thr_get_name(id:DWORD;pname:PChar):Integer;
+var
+ td:p_kthread;
+ name:t_td_name;
+ len:ptrint;
+begin
+ Result:=0;
+
+ td:=tdfind(DWORD(id));
+ if (td=nil) then Exit(ESRCH);
+
+ thread_lock(td);
+
+ name:=td^.td_name;
+
+ thread_unlock(td);
+
+ len:=strnlen(name,31);
+ Result:=copyout(@name,pname,len+1);
 
  thread_dec_ref(td);
 end;

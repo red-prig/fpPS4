@@ -31,7 +31,7 @@ uses
  kern_condvar,
  kern_osem,
  kern_id,
-  sys_osem,
+ sys_osem,
  kern_evf,
  sys_evf,
  rtprio,
@@ -72,7 +72,10 @@ uses
  null_vnops,
  null_vfsops,
  ufs,
- vmount;
+ vmount,
+ kern_prot,
+ kern_resource,
+ md_proc;
 
 var
  mtx:umutex;
@@ -1091,6 +1094,10 @@ begin
 
  //test_map;
  sys_init;
+
+ Writeln(get_proc_prio());
+ Writeln(set_proc_prio(14));
+ Writeln(get_proc_prio());
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('me=',e,' _errno:',__error^);

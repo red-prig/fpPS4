@@ -76,6 +76,8 @@ Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
 
 Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
 
+function  sys_kill(pid,signum:Integer):Integer;
+
 Function  sigonstack(sp:size_t):Integer;
 procedure sigqueue_init(list:p_sigqueue);
 procedure tdsigcleanup(td:p_kthread);
@@ -112,7 +114,11 @@ uses
  kern_mtx,
  kern_time,
  kern_thread,
+ kern_exit,
+ kern_prot,
  vm_machdep,
+ md_thread,
+ md_proc,
  machdep,
  sched_ule,
  subr_sleepqueue;
@@ -1115,6 +1121,103 @@ begin
  end;
 end;
 
+function pksignal(sig:Integer;ksi:p_ksiginfo):Integer; forward;
+
+{
+ * Common code for kill process group/broadcast kill.
+ * cp is calling process.
+ }
+function killpg1(sig,pgid,all:Integer;ksi:p_ksiginfo):Integer;
+var
+ err:Integer;
+begin
+ Result:=ESRCH;
+
+ if (all<>0) then
+ begin
+  //broadcast
+  PROC_LOCK;
+
+  err:=p_cansignal(sig);
+  if (err=0) then
+  begin
+   if (sig<>0) then pksignal(sig, ksi);
+   Result:=err;
+  end else
+  if (Result=ESRCH) then
+  begin
+   Result:=err;
+  end;
+
+  PROC_UNLOCK;
+ end else
+ begin
+  if (pgid=0) then
+  begin
+   //zero pgid means send to my process group.
+  end else
+  begin
+   Exit(ESRCH);
+  end;
+
+  PROC_LOCK;
+
+  err:=p_cansignal(sig);
+  if (err=0) then
+  begin
+   if (sig<>0) then pksignal(sig, ksi);
+   Result:=err;
+  end else
+  if (Result=ESRCH) then
+  begin
+   Result:=err;
+  end;
+
+  PROC_UNLOCK;
+ end;
+end;
+
+function sys_kill(pid,signum:Integer):Integer;
+var
+ ksi:ksiginfo_t;
+ error:Integer;
+begin
+ if (signum > _SIG_MAXSIG) then
+  Exit(EINVAL);
+
+ ksiginfo_init(@ksi);
+ ksi.ksi_info.si_signo:=signum;
+ ksi.ksi_info.si_code:=SI_USER;
+ ksi.ksi_info.si_pid :=pid;
+
+ if (pid > 0) then
+ begin
+  { kill single process }
+  if (pid<>g_pid) then Exit(ESRCH);
+
+  PROC_LOCK;
+
+  error:=p_cansignal(signum);
+
+  if (error=0) and (signum<>0) then
+   pksignal(signum, @ksi);
+
+  PROC_UNLOCK;
+
+  Exit(error);
+ end;
+
+ case pid of
+  -1:  { broadcast signal }
+   Exit(killpg1(signum, 0, 1, @ksi));
+   0:  { signal own process group }
+   Exit(killpg1(signum, 0, 0, @ksi));
+  else { negative explicit process group }
+   Exit(killpg1(signum, -pid, 0, @ksi));
+  end;
+ { NOTREACHED }
+end;
+
 procedure postsig_done(sig:Integer;td:p_kthread);
 var
  mask:sigset_t;
@@ -1585,14 +1688,9 @@ begin
  Result:=1;
 end;
 
-function W_EXITCODE(ret,sig:Integer):Integer; inline;
-begin
- Result:=(ret shl 8) or sig;
-end;
-
 procedure sigexit(td:p_kthread;sig:Integer);
 begin
- Halt(W_EXITCODE(0,sig));
+ exit1(W_EXITCODE(0,sig));
  // NOTREACHED
 end;
 

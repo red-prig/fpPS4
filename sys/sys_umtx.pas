@@ -89,28 +89,28 @@ end;
 
 function _umtx_lock(mtx:p_umtx):Integer; assembler; nostackframe;
 asm
- movq  _sys_umtx_lock,%rax
+ movq  sys__umtx_lock,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
 function _umtx_unlock(mtx:p_umtx):Integer; assembler; nostackframe;
 asm
- movq  _sys_umtx_unlock,%rax
+ movq  sys__umtx_unlock,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
 function _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;
 asm
- movq  _sys_umtx_op,%rax
+ movq  sys__umtx_op,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
 function _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;
 asm
- movq  _sys_umtx_op,%rax
+ movq  sys__umtx_op,%rax
  call  fast_syscall
 end;
 

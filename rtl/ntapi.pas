@@ -51,6 +51,7 @@ const
 
  NT_INFINITE=$8000000000000000;
 
+ //ThreadInformationClass
  ThreadBasicInformation          =  0;
  ThreadTimes                     =  1;
  ThreadPriority                  =  2;
@@ -70,12 +71,23 @@ const
  ThreadIsIoPending               = 16;
  ThreadHideFromDebugger          = 17;
 
+ //ProcessInformationClass
  ProcessBasicInformation=0;
  ProcessQuotaLimits     =1;
  ProcessIoCounters      =2;
  ProcessVmCounters      =3;
  ProcessTimes           =4;
+ ProcessPriorityClass   =18;
  ProcessAffinityMask    =21;
+
+ //ntapi PriorityClass
+ PROCESS_PRIORITY_CLASS_UNKNOWN     =0;
+ PROCESS_PRIORITY_CLASS_IDLE        =1;
+ PROCESS_PRIORITY_CLASS_NORMAL      =2;
+ PROCESS_PRIORITY_CLASS_HIGH        =3;
+ PROCESS_PRIORITY_CLASS_REALTIME    =4;
+ PROCESS_PRIORITY_CLASS_BELOW_NORMAL=5;
+ PROCESS_PRIORITY_CLASS_ABOVE_NORMAL=6;
 
  //FileInformationClass
  FileBasicInformation          = 4;
@@ -416,6 +428,12 @@ type
   BasePriority    :QWORD;
   UniqueProcessId :QWORD;
   InheritedFromUPI:QWORD;
+ end;
+
+ PPROCESS_PRIORITY_CLASS=^PROCESS_PRIORITY_CLASS;
+ PROCESS_PRIORITY_CLASS=packed record
+  Foreground   :Boolean;
+  PriorityClass:Byte;
  end;
 
  PKERNEL_USER_TIMES=^KERNEL_USER_TIMES;

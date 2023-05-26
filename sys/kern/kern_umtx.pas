@@ -20,9 +20,9 @@ procedure umtx_thread_init(td:p_kthread);
 procedure umtx_thread_exit(td:p_kthread);
 procedure umtx_thread_fini(td:p_kthread);
 
-function  _sys_umtx_lock(mtx:p_umtx):Integer;
-function  _sys_umtx_unlock(mtx:p_umtx):Integer;
-function  _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function  sys__umtx_lock(mtx:p_umtx):Integer;
+function  sys__umtx_unlock(mtx:p_umtx):Integer;
+function  sys__umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 
 //
 
@@ -2453,7 +2453,7 @@ begin
  Result:=do_rw_unlock(td,obj);
 end;
 
-function _sys_umtx_lock(mtx:p_umtx):Integer;
+function sys__umtx_lock(mtx:p_umtx):Integer;
 var
  td:p_kthread;
 begin
@@ -2463,7 +2463,7 @@ begin
  Result:=_do_lock_umtx(td,mtx,td^.td_tid,0);
 end;
 
-function _sys_umtx_unlock(mtx:p_umtx):Integer;
+function sys__umtx_unlock(mtx:p_umtx):Integer;
 var
  td:p_kthread;
 begin
@@ -2495,7 +2495,7 @@ begin
  Result:=do_sem_wake(td,obj)
 end;
 
-function _sys_umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function sys__umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
  td:p_kthread;
 begin

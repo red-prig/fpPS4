@@ -13,18 +13,6 @@ uses
  trap,
  kern_thr;
 
-var
- g_pid:DWORD=0;
-
-function  cpu_thread_alloc(td:p_kthread):Integer;
-function  cpu_thread_free(td:p_kthread):Integer;
-function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
-function  cpuset_setproc(new:Ptruint):Integer;
-function  cpuset_getproc(var old:Ptruint):Integer;
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
-function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
-function  cpu_getstack(td:p_kthread):QWORD;
-
 procedure ipi_sigreturn;
 function  ipi_send_cpu(td:p_kthread):Integer;
 
@@ -45,7 +33,8 @@ uses
  machdep,
  md_context,
  signal,
- kern_sig;
+ kern_sig,
+ md_thread;
 
 function ntw2px(n:Integer):Integer; inline;
 begin
@@ -135,119 +124,9 @@ begin
  NtYieldExecution;
 end;
 
-Const
- SYS_STACK_RSRV=64*1024;
- SYS_STACK_SIZE=16*1024;
-
-function cpu_thread_alloc(td:p_kthread):Integer;
-var
- data:Pointer;
- size:ULONG_PTR;
-begin
- data:=nil;
- size:=SYS_STACK_RSRV;
-
- Result:=NtAllocateVirtualMemory(
-           NtCurrentProcess,
-           @data,
-           0,
-           @size,
-           MEM_RESERVE,
-           PAGE_READWRITE
-          );
- if (Result<>0) then Exit;
-
- data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;
- size:=SYS_STACK_SIZE;
-
- Result:=NtAllocateVirtualMemory(
-           NtCurrentProcess,
-           @data,
-           0,
-           @size,
-           MEM_COMMIT,
-           PAGE_READWRITE
-          );
-
- data:=data+SYS_STACK_SIZE;
- td^.td_kstack:=data;
-end;
-
-function cpu_thread_free(td:p_kthread):Integer;
-var
- data:Pointer;
- size:ULONG_PTR;
-begin
- data:=td^.td_kstack;
- data:=data-SYS_STACK_RSRV;
- size:=0;
-
- Result:=NtFreeVirtualMemory(
-           NtCurrentProcess,
-           @data,
-           @size,
-           MEM_RELEASE
-          );
-end;
-
-function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
-begin
- td^.td_cpuset:=new;
- Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));
-end;
-
-function cpuset_setproc(new:Ptruint):Integer;
-begin
- Result:=NtSetInformationProcess(NtCurrentProcess,ProcessAffinityMask,@new,SizeOf(QWORD));
-end;
-
-function cpuset_getproc(var old:Ptruint):Integer;
-var
- info:PROCESS_BASIC_INFORMATION;
-begin
- Result:=NtQueryInformationProcess(NtCurrentProcess,
-                                   ProcessBasicInformation,
-                                   @info,
-                                   SizeOf(PROCESS_BASIC_INFORMATION),
-                                   nil);
- if (Result=0) then
- begin
-  old:=info.AffinityMask;
- end;
-end;
-
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer); inline;
-begin
- td^.pcb_fsbase:=base;
- td^.td_teb^.tcb:=base;
-end;
-
 function cpu_get_iflag(td:p_kthread):PInteger; inline;
 begin
  Result:=@td^.td_teb^.iflag;
-end;
-
-function cpu_set_priority(td:p_kthread;prio:Integer):Integer;
-begin
- td^.td_priority:=prio;
-
- Case prio of
-    0..255:prio:= 16;
-  256..496:prio:= 2;
-  497..526:prio:= 1;
-  527..556:prio:= 0;
-  557..586:prio:=-1;
-  587..767:prio:=-2;
-  else
-           prio:=-16;
- end;
-
- Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
-end;
-
-function cpu_getstack(td:p_kthread):QWORD; inline;
-begin
- Result:=td^.td_frame^.tf_rsp;
 end;
 
 function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
@@ -512,9 +391,6 @@ begin
   NtResumeThread(td_handle,nil);
   PROC_UNLOCK;
 end;
-
-initialization
- g_pid:=GetCurrentProcessId;
 
 end.
 

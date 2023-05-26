@@ -21,7 +21,7 @@ uses
  errno,
  kern_thread,
  sched_ule,
- vm_machdep;
+ md_proc;
 
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 var

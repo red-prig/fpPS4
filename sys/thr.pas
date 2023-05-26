@@ -34,7 +34,7 @@ implementation
 uses
  trap,
  thr_error,
- vm_machdep;
+ md_proc;
 
 function getpid:Integer;
 begin

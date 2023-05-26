@@ -42,8 +42,8 @@ type
   _prio:Word;
  end;
 
-function  PRI_BASE(P:Word):Word; inline;
-function  RTP_PRIO_BASE(P:Word):Word; inline;
+function  PRI_BASE(P:Word):Word;
+function  RTP_PRIO_BASE(P:Word):Word;
 
 function  rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer;
 function  _rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
@@ -55,12 +55,12 @@ uses
  thr_error,
  kern_rtprio;
 
-function PRI_BASE(P:Word):Word; inline;
+function PRI_BASE(P:Word):Word;
 begin
  Result:=P and (not PRI_FIFO_BIT);
 end;
 
-function RTP_PRIO_BASE(P:Word):Word; inline;
+function RTP_PRIO_BASE(P:Word):Word;
 begin
  Result:=P and (not PRI_FIFO_BIT);
 end;

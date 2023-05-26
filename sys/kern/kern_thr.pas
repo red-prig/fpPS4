@@ -107,6 +107,8 @@ type
   iflag :Integer;                 //0x710
  end;
 
+ t_td_name=array[0..31] of AnsiChar;
+
  p_kthread=^kthread;
  kthread=record
   td_umtxq        :Pointer; //p_umtx_q
@@ -128,7 +130,7 @@ type
   td_base_user_pri:Word;
   td_lend_user_pri:Word;
   td_user_pri     :Word;
-  td_name         :array[0..31] of AnsiChar;
+  td_name         :t_td_name;
   //
   td_cpuset       :Ptruint;
   td_sigmask      :sigset_t;
@@ -164,8 +166,8 @@ type
   stack_size:Ptruint;
   tls_base  :Pointer;
   tls_size  :Ptruint;
-  child_tid :PQWORD;
-  parent_tid:PQWORD;
+  child_tid :PDWORD;
+  parent_tid:PDWORD;
   flags     :Integer;
   align     :Integer;
   rtp       :Pointer;
@@ -388,7 +390,7 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- if (td=nil) then Exit;
+ if (td=nil) then Exit(0);
  Result:=(not flags) or (td^.td_pflags and flags);
  td^.td_pflags:=td^.td_pflags or flags;
 end;

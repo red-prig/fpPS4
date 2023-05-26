@@ -25,7 +25,8 @@ uses
  systm,
  kern_thr,
  kern_thread,
- vm_machdep;
+ md_thread,
+ md_proc;
 
 function sys_cpuset_getaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
 var
@@ -39,7 +40,7 @@ begin
  Case which of
   CPU_WHICH_TID:
     begin
-     if (int64(id)=-1) then
+     if (Integer(id)=-1) then
      begin
       td:=curkthread;
       thread_inc_ref(td);
@@ -56,7 +57,7 @@ begin
     end;
   CPU_WHICH_PID:
     begin
-     if (int64(id)=-1) or (id=g_pid) then
+     if (Integer(id)=-1) or (id=g_pid) then
      begin
       Result:=cpuset_getproc(old);
       if (Result<>0) then Exit(ESRCH);
@@ -87,7 +88,7 @@ begin
  Case which of
   CPU_WHICH_TID:
     begin
-     if (int64(id)=-1) then
+     if (Integer(id)=-1) then
      begin
       td:=curkthread;
       thread_inc_ref(td);
@@ -106,7 +107,7 @@ begin
   CPU_WHICH_PID:
     begin
      begin
-      if (int64(id)=-1) or (id=g_pid) then
+      if (Integer(id)=-1) or (id=g_pid) then
       begin
        Result:=cpuset_setproc(new);
        if (Result<>0) then Result:=ESRCH;

@@ -47,6 +47,8 @@ procedure wakeup_one(ident:Pointer);
 procedure maybe_yield();
 procedure kern_yield(prio:Integer);
 function  sys_yield():Integer;
+function  sys_sched_yield():Integer;
+function  sys_cpumode_yield():Integer;
 
 implementation
 
@@ -167,6 +169,16 @@ begin
  end;
  mi_switch();
  Exit(0);
+end;
+
+function sys_sched_yield():Integer;
+begin
+ Result:=sys_yield;
+end;
+
+function sys_cpumode_yield():Integer;
+begin
+ Result:=sys_yield;
 end;
 
 end.
