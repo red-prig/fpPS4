@@ -1,6 +1,7 @@
 unit kern_rtprio;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -65,9 +66,9 @@ begin
  thread_lock(td);
 
  case PRI_BASE(td^.td_pri_class) of
-  PRI_REALTIME,
+  RTP_PRIO_REALTIME,
   RTP_PRIO_NORMAL,
-  PRI_IDLE:
+  RTP_PRIO_IDLE:
     begin
      rtp^._prio:=td^.td_base_user_pri;
     end;

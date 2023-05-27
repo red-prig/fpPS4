@@ -15,8 +15,8 @@ const
  CPU_WHICH_TID   =1; // Specifies a thread id.
  CPU_WHICH_PID   =2; // Specifies a process id.
 
-function sys_cpuset_getaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
-function sys_cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
 
 implementation
 
@@ -28,7 +28,7 @@ uses
  md_thread,
  md_proc;
 
-function sys_cpuset_getaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
 var
  td:p_kthread;
  old:QWORD;
@@ -40,7 +40,7 @@ begin
  Case which of
   CPU_WHICH_TID:
     begin
-     if (Integer(id)=-1) then
+     if (id=-1) then
      begin
       td:=curkthread;
       thread_inc_ref(td);
@@ -57,7 +57,7 @@ begin
     end;
   CPU_WHICH_PID:
     begin
-     if (Integer(id)=-1) or (id=g_pid) then
+     if (id=-1) or (id=g_pid) then
      begin
       Result:=cpuset_getproc(old);
       if (Result<>0) then Exit(ESRCH);
@@ -73,7 +73,7 @@ begin
  Result:=copyout(@old,mask,SizeOf(QWORD));
 end;
 
-function sys_cpuset_setaffinity(level,which:Integer;id,cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
 var
  td:p_kthread;
  new:QWORD;
@@ -88,7 +88,7 @@ begin
  Case which of
   CPU_WHICH_TID:
     begin
-     if (Integer(id)=-1) then
+     if (id=-1) then
      begin
       td:=curkthread;
       thread_inc_ref(td);
@@ -107,7 +107,7 @@ begin
   CPU_WHICH_PID:
     begin
      begin
-      if (Integer(id)=-1) or (id=g_pid) then
+      if (id=-1) or (id=g_pid) then
       begin
        Result:=cpuset_setproc(new);
        if (Result<>0) then Result:=ESRCH;

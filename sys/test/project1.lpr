@@ -75,7 +75,8 @@ uses
  vmount,
  kern_prot,
  kern_resource,
- md_proc;
+ md_proc,
+ kern_ksched;
 
 var
  mtx:umutex;
@@ -322,7 +323,7 @@ begin
  Writeln('sys_rename=',sys_rename('/app0/new','/app0/renamed'));
  Writeln('sys_rmdir=',sys_rmdir('/app0/renamed'));
 
- //Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
+ Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
 
  Writeln('sys_rmdir=',sys_rmdir('/test'));
 
