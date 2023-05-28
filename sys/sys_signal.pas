@@ -9,9 +9,9 @@ uses
  sys_types,
  atomic,
  LFQueue,
+ signal,
+ ucontext,
  sys_context;
-
-{$I signal.inc}
 
 type
  p_ksiginfo_t=^ksiginfo_t;
@@ -56,10 +56,6 @@ Const
  SL_ALERTABLE=1;
  SL_NOINTRRUP=2;
 
-function _SIG_IDX(sig:Integer):DWORD;        inline;
-function _SIG_VALID(sig:Integer):Boolean;    inline;
-function _SIG_VALID_32(sig:Integer):Boolean; inline;
-
 Procedure sigqueue_init(sq:p_sigqueue_t);
 
 function  _sig_pending(sq:p_sigqueue_t):DWORD; inline;
@@ -94,22 +90,6 @@ Var
  ps_sigact:array[0..31] of sigaction_t;
 
  pf_deadlock:QWORD;
-
-
-function _SIG_IDX(sig:Integer):DWORD; inline;
-begin
- Result:=sig-1;
-end;
-
-function _SIG_VALID(sig:Integer):Boolean; inline;
-begin
- Result:=(sig<=_SIG_MAXSIG) and (sig>0);
-end;
-
-function _SIG_VALID_32(sig:Integer):Boolean; inline;
-begin
- Result:=(sig<=32) and (sig>0);
-end;
 
 procedure ksiginfo_list.Insert(Node:p_ksiginfo_t);
 begin
@@ -355,46 +335,6 @@ begin
  Result:=0;
 end;
 
-function _get_sig_str(signum:Integer):RawByteString;
-begin
- case signum of
-  SIGHUP   :Result:='SIGHUP';
-  SIGINT   :Result:='SIGINT';
-  SIGQUIT  :Result:='SIGQUIT';
-  SIGILL   :Result:='SIGILL';
-  SIGTRAP  :Result:='SIGTRAP';
-  SIGABRT  :Result:='SIGABRT';
-  SIGEMT   :Result:='SIGEMT';
-  SIGFPE   :Result:='SIGFPE';
-  SIGKILL  :Result:='SIGKILL';
-  SIGBUS   :Result:='SIGBUS';
-  SIGSEGV  :Result:='SIGSEGV';
-  SIGSYS   :Result:='SIGSYS';
-  SIGPIPE  :Result:='SIGPIPE';
-  SIGALRM  :Result:='SIGALRM';
-  SIGTERM  :Result:='SIGTERM';
-  SIGURG   :Result:='SIGURG';
-  SIGSTOP  :Result:='SIGSTOP';
-  SIGTSTP  :Result:='SIGTSTP';
-  SIGCONT  :Result:='SIGCONT';
-  SIGCHLD  :Result:='SIGCHLD';
-  SIGTTIN  :Result:='SIGTTIN';
-  SIGTTOU  :Result:='SIGTTOU';
-  SIGIO    :Result:='SIGIO';
-  SIGXCPU  :Result:='SIGXCPU';
-  SIGXFSZ  :Result:='SIGXFSZ';
-  SIGVTALRM:Result:='SIGVTALRM';
-  SIGPROF  :Result:='SIGPROF';
-  SIGWINCH :Result:='SIGWINCH';
-  SIGINFO  :Result:='SIGINFO';
-  SIGUSR1  :Result:='SIGUSR1';
-  SIGUSR2  :Result:='SIGUSR2';
-  SIGTHR   :Result:='SIGTHR';
-  else
-   Str(signum,Result);
-  end;
-end;
-
 function __sigaction(signum:Integer;act,oldact:p_sigaction_t):Integer;
 var
  idx:DWORD;
@@ -416,7 +356,7 @@ begin
   SIGKILL,
   SIGSTOP:
     begin
-     case tmp.__sigaction_u.__code of
+     case tmp.u.code of
       SIG_DFL:;
       else
        Exit(EINVAL);
@@ -451,7 +391,7 @@ end;
 function _sig_act_type(sig:Integer;var act:sigaction_t):Integer;
 begin
  Result:=0;
- Case act.__sigaction_u.__code  of
+ Case act.u.code  of
   SIG_DFL:Case _sig_dfl(sig) of
            SIG_IGN:Result:=SIG_IGN;
            SIG_ERR:Result:=SIG_ERR;
@@ -580,7 +520,7 @@ var
  signo:Integer;
  sact:sigaction_t;
  info:siginfo_t;
- ucontext:_ucontext_t;
+ ucontext:ucontext_t;
  old:sigset_t;
  errno:QWORD;
  //_rsp:QWORD;
@@ -629,7 +569,7 @@ begin
        t^.sig._mask:=sact.sa_mask;
       end;
 
-      ucontext:=Default(_ucontext_t);
+      ucontext:=Default(ucontext_t);
       _copy_ctx_from_sys(ectx^.CONTEXT,@ucontext);
       ucontext.uc_sigmask:=t^.sig._mask;
       ucontext.uc_mcontext.mc_err:=errno;
@@ -652,11 +592,11 @@ begin
       if ((sact.sa_flags and SA_SIGINFO)=0) then
       begin
        //sa_handler
-       sact.__sigaction_u.__sa_handler(info.si_signo,info.si_code,@ucontext);
+       sact.u.sa_handler(info.si_signo,info.si_code,@ucontext);
       end else
       begin
        //sa_sigaction
-       sact.__sigaction_u.__sa_sigaction(info.si_signo,@info,@ucontext);
+       sact.u.sa_sigaction(info.si_signo,@info,@ucontext);
       end;
 
       if (_lock<>t^.sig._lock) then

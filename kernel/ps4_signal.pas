@@ -6,6 +6,7 @@ interface
 
 uses
  Windows,
+ signal,
  sys_signal;
 
 function ps4_sigemptyset(_set:p_sigset_t):Integer; SysV_ABI_CDecl;
@@ -91,7 +92,7 @@ begin
  act:=Default(sigaction_t);
  old:=Default(sigaction_t);
 
- act.__sigaction_u.__sa_handler:=func;
+ act.u.sa_handler:=func;
  act.sa_flags:=SA_RESTART;
 
  ret:=__sigaction(sig,@act,@old);
@@ -102,7 +103,7 @@ begin
   Exit(sig_t(SIG_ERR));
  end;
 
- Result:=old.__sigaction_u.__sa_handler;
+ Result:=old.u.sa_handler;
 end;
 
 var
@@ -130,7 +131,7 @@ begin
  begin
 
   act:=Default(sigaction_t);
-  act.__sigaction_u.__sa_handler:=@__ex_handler;
+  act.u.sa_handler:=@__ex_handler;
   act.sa_flags:=SA_RESTART;
 
   Result:=px2sce(__sigaction(signum,@act,nil));

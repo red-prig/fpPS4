@@ -12,9 +12,11 @@
 *.prx
 *.sprx
 *.dump
+*.h
 link.res
 lib/
 backup/
 shader_dump/*
 avplayer_dump/*
 savedata/*
+tools/vop_generator/vnode_if.*
