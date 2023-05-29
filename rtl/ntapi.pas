@@ -80,6 +80,9 @@ const
  ProcessPriorityClass   =18;
  ProcessAffinityMask    =21;
 
+ //SystemInformationClass
+ SystemTimeAdjustmentInformation=28;
+
  //ntapi PriorityClass
  PROCESS_PRIORITY_CLASS_UNKNOWN     =0;
  PROCESS_PRIORITY_CLASS_IDLE        =1;
@@ -444,6 +447,13 @@ type
   UserTime  :LARGE_INTEGER;
  end;
 
+ PSYSTEM_QUERY_TIME_ADJUST_INFORMATION=^SYSTEM_QUERY_TIME_ADJUST_INFORMATION;
+ SYSTEM_QUERY_TIME_ADJUST_INFORMATION=packed record
+  TimeAdjustment:ULONG;
+  TimeIncrement :ULONG;
+  Enable        :ULONG;
+ end;
+
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
 
 function NtCreateThread(
@@ -497,24 +507,24 @@ function NtQueueApcThread(
 function NtYieldExecution():DWORD; stdcall; external 'ntdll';
 
 function NtDelayExecution(
-          Alertable:Boolean;
+          Alertable   :Boolean;
           DelayInterval:PLARGE_INTEGER
          ):DWORD; stdcall; external 'ntdll';
 
 function NtWaitForSingleObject(
           ObjectHandle:THandle;
-          Alertable:Boolean;
-          TimeOut:PLARGE_INTEGER
+          Alertable   :Boolean;
+          TimeOut     :PLARGE_INTEGER
          ):DWORD; stdcall; external 'ntdll';
 
 function NtGetContextThread(
           ThreadHandle:THandle;
-          Context:PCONTEXT
+          Context     :PCONTEXT
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetContextThread(
           ThreadHandle:THandle;
-          Context:PCONTEXT
+          Context     :PCONTEXT
          ):DWORD; stdcall; external 'ntdll';
 
 function NtAlertResumeThread(
@@ -549,16 +559,16 @@ function NtQueryInformationProcess(
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetInformationProcess(
-          ProcessHandle:THandle;
-          ProcessInformationClass:DWORD;
-          ProcessInformation:Pointer;
+          ProcessHandle           :THandle;
+          ProcessInformationClass :DWORD;
+          ProcessInformation      :Pointer;
           ProcessInformationLength:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtSetInformationThread(
-          ThreadHandle:THandle;
-          ThreadInformationClass:DWORD;
-          ThreadInformation:Pointer;
+          ThreadHandle           :THandle;
+          ThreadInformationClass :DWORD;
+          ThreadInformation      :Pointer;
           ThreadInformationLength:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
@@ -580,8 +590,15 @@ function NtQueryTimerResolution(
 
 function NtSetTimerResolution(
           DesiredResolution:ULONG;
-          SetResolution:Boolean;
+          SetResolution    :Boolean;
           CurrentResolution:PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtQuerySystemInformation(
+          SystemInformationClass :ULONG;
+          SystemInformation      :Pointer;
+          SystemInformationLength:ULONG;
+          ReturnLength           :PULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtCreateFile(

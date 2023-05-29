@@ -17,6 +17,7 @@ procedure calcru(user,syst:PInt64);
 procedure get_process_cputime(time:PInt64);
 procedure get_thread_cputime(time:PInt64);
 procedure gettimezone(z:Ptimezone);
+procedure getadjtime(tv:ptimeval);
 
 function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function  kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
@@ -136,15 +137,30 @@ begin
   if (tzi<>TIME_ZONE_ID_INVALID) then
   begin
    z^.tz_minuteswest:=TZInfo.Bias;
-   if (tzi=TIME_ZONE_ID_DAYLIGHT) then
-    z^.tz_dsttime:=1
-   else
-    z^.tz_dsttime:=0;
+   z^.tz_dsttime    :=ord(tzi=TIME_ZONE_ID_DAYLIGHT);
   end else
   begin
    z^.tz_minuteswest:=0;
    z^.tz_dsttime    :=0;
   end;
+ end;
+end;
+
+procedure getadjtime(tv:ptimeval);
+var
+ STA:SYSTEM_QUERY_TIME_ADJUST_INFORMATION;
+ R:DWORD;
+begin
+ tv^:=Default(timeval);
+ STA:=Default(SYSTEM_QUERY_TIME_ADJUST_INFORMATION);
+
+ R:=NtQuerySystemInformation(SystemTimeAdjustmentInformation,@STA,SizeOf(STA),nil);
+ if (R<>0) then Exit;
+
+ if not Boolean(STA.Enable) then
+ begin
+  tv^.tv_sec :=(STA.TimeAdjustment div 10000000);
+  tv^.tv_usec:=(STA.TimeAdjustment mod 10000000) div 10;
  end;
 end;
 

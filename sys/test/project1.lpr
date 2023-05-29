@@ -1088,6 +1088,7 @@ var
  ktd:p_kthread;
 
  _time:Int64;
+ _tv:timeval;
 
  _thr_param:thr_param;
 
@@ -1106,6 +1107,9 @@ begin
 
  kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
  writeln(_time/10000000:0:3);
+
+ sys_adjtime(nil,@_tv);
+ writeln(_tv.tv_sec,',',_tv.tv_usec);
 
  e:=NtCreateEvent(
          @event,

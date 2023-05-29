@@ -12,6 +12,7 @@ Procedure timeinit; //SYSINIT
 
 procedure getmicrouptime(tvp:ptimeval);
 procedure getnanotime(tp:Ptimespec);
+procedure getmicrotime(tvp:ptimeval);
 
 function  sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
 function  sys_clock_settime(clock_id:Integer;tp:Ptimespec):Integer;
@@ -19,6 +20,7 @@ function  sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
 function  sys_nanosleep(rqtp,rmtp:ptimespec):Integer;
 function  sys_gettimeofday(tp:ptimeval;tzp:ptimezone):Integer;
 function  sys_settimeofday(tv:ptimeval;tzp:ptimezone):Integer;
+function  sys_adjtime(delta,olddelta:ptimeval):Integer;
 
 implementation
 
@@ -51,6 +53,16 @@ begin
  time:=time-DELTA_EPOCH_IN_UNIT;
  tp^.tv_sec :=(time div UNIT_PER_SEC);
  tp^.tv_nsec:=(time mod UNIT_PER_SEC)*100;
+end;
+
+procedure getmicrotime(tvp:ptimeval);
+var
+ time:Int64;
+begin
+ unittime(@time);
+ time:=time-DELTA_EPOCH_IN_UNIT;
+ tvp^.tv_sec :=(time div UNIT_PER_SEC);
+ tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
 end;
 
 function sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
@@ -163,7 +175,7 @@ begin
 
  if (tp<>nil) then
  begin
-  getmicrouptime(@atv);
+  getmicrotime(@atv);
   error:=copyout(@atv, tp, sizeof (timeval));
  end;
  if (error=0) and (tzp<>nil) then
@@ -195,6 +207,56 @@ begin
  //error:=priv_check(td, PRIV_SETTIMEOFDAY);
  Exit(EPERM);
 end;
+
+function kern_adjtime(delta,olddelta:ptimeval):Integer;
+var
+ atv:timeval;
+begin
+ if (olddelta<>nil) then
+ begin
+  getadjtime(@atv);
+  if (atv.tv_usec<0) then
+  begin
+   Inc(atv.tv_usec,1000000);
+   Dec(atv.tv_sec);
+  end;
+  olddelta^:=atv;
+ end;
+ if (delta<>nil) then
+ begin
+  //error:=priv_check(td, PRIV_ADJTIME)
+  Exit(EPERM);
+ end;
+ Exit(0);
+end;
+
+function sys_adjtime(delta,olddelta:ptimeval):Integer;
+var
+ _delta,_olddelta:timeval;
+ deltap:ptimeval;
+ error:Integer;
+begin
+ if (delta<>nil) then
+ begin
+  error:=copyin(delta, @_delta, sizeof(timeval));
+  if (error<>0) then Exit(error);
+  deltap:=@_delta;
+ end else
+ begin
+  deltap:=nil;
+ end;
+
+ error:=kern_adjtime(deltap, @_olddelta);
+
+ if (olddelta<>nil) and (error=0) then
+ begin
+  error:=copyout(@_olddelta, olddelta, sizeof(timeval));
+ end;
+
+ Exit(error);
+end;
+
+
 
 end.
 

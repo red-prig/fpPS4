@@ -6,6 +6,14 @@ unit time;
 interface
 
 const
+ {
+  * Names of the interval timers, and structure
+  * defining a timer setting.
+  }
+ ITIMER_REAL   =0;
+ ITIMER_VIRTUAL=1;
+ ITIMER_PROF   =2;
+
  CLOCK_REALTIME         =0;
  CLOCK_VIRTUAL          =1;
  CLOCK_PROF             =2;
@@ -36,6 +44,12 @@ type
  timeval=packed record
   tv_sec :Int64;
   tv_usec:Int64;   //microsecond
+ end;
+
+ Pitimerval=^itimerval;
+ itimerval=packed record
+  it_interval:timeval; { timer interval }
+  it_value   :timeval; { current value }
  end;
 
  Ptimezone=^timezone;
