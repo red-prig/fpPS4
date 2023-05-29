@@ -116,7 +116,7 @@ uses
  subr_uio,
  kern_sig,
  kern_thread,
- kern_time,
+ md_time,
  sys_capability;
 
 var

@@ -11,8 +11,8 @@ const
 function sys_getpid():Integer;
 function sys_getppid():Integer;
 function sys_getpgrp():Integer;
-function sys_getpgid():Integer;
-function sys_getsid():Integer;
+function sys_getpgid(pid:Integer):Integer;
+function sys_getsid(pid:Integer):Integer;
 function sys_getuid():Integer;
 function sys_geteuid():Integer;
 function sys_getgid():Integer;
@@ -84,12 +84,18 @@ begin
 end;
 
 { Get an arbitary pid's process group id }
-function sys_getpgid():Integer;
+function sys_getpgid(pid:Integer):Integer;
 var
  td:p_kthread;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
+
+ if (pid<>0) and (pid<>g_pid) then
+ begin
+  Exit(ESRCH);
+ end;
+
  td^.td_retval[0]:=0; //psevodo group id
  Exit(0);
 end;
@@ -97,12 +103,18 @@ end;
 {
  * Get an arbitary pid's session id.
  }
-function sys_getsid():Integer;
+function sys_getsid(pid:Integer):Integer;
 var
  td:p_kthread;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
+
+ if (pid<>0) and (pid<>g_pid) then
+ begin
+  Exit(ESRCH);
+ end;
+
  td^.td_retval[0]:=0; //psevodo session id
  Exit(0);
 end;

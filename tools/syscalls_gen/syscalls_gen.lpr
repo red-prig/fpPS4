@@ -82,6 +82,25 @@ begin
  end;
 end;
 
+procedure print_decl(FuncDecl:TFuncDecl);
+var
+ i:Integer;
+begin
+ Write(FuncDecl.fhead,' ',FuncDecl.fname,'(');
+ if (FuncDecl.Count<>0) then
+ For i:=0 to FuncDecl.Count-1 do
+ begin
+  Write(FuncDecl.Strings[i]);
+ end;
+ Write(')');
+
+ if (FuncDecl.fretv<>'') then
+ begin
+  Write(':',FuncDecl.fretv);
+ end;
+ Writeln(';');
+end;
+
 Procedure load_pas(const fname:RawByteString);
 var
  F:THandle;
@@ -89,8 +108,6 @@ var
  buf:PChar;
 
  state:TState;
-
- i:Integer;
 
  token:RawByteString;
 
@@ -101,6 +118,12 @@ var
   S:=Trim(S);
   if (S='') then S:=' ';
   token:=Trim(token)+S;
+ end;
+
+ procedure add_param(S:RawByteString);
+ begin
+  S:=Trim(S);
+  if (S<>'') then FuncDecl.Add(S);
  end;
 
 begin
@@ -155,7 +178,7 @@ begin
      begin
       Case mwPasLex.TokenID of
        tkProcedure,
-       tkFunction :
+       tkFunction:
        begin
         FuncDecl:=TFuncDecl.Create;
         FuncDecl.NameValueSeparator:=':';
@@ -172,7 +195,7 @@ begin
      begin
       //Writeln(mwPasLex.TokenID);
       Case mwPasLex.TokenID of
-       tkIdentifier :
+       tkIdentifier:
          begin
           token:=mwPasLex.Token;
           if (LowerCase(Copy(token,1,4))='sys_') then
@@ -193,7 +216,7 @@ begin
      begin
       Case mwPasLex.TokenID of
        tkRoundOpen:state:=sParamName;
-       tkColon    :
+       tkColon:
          begin
           token:='';
           state:=sReturn;
@@ -207,12 +230,23 @@ begin
      begin
       //Writeln(mwPasLex.TokenID,':*',mwPasLex.Token,'*');
       Case mwPasLex.TokenID of
-       tkColon     :
+       tkComma:
          begin
-          state:=sParamType;
           add_to_param(mwPasLex.Token);
+          add_param(token);
+          token:='';
          end;
-       tkRoundClose:state:=sAfterParam;
+       tkColon:
+         begin
+          add_to_param(mwPasLex.Token);
+          state:=sParamType;
+         end;
+       tkRoundClose:
+         begin
+          add_param(token);
+          token:='';
+          state:=sAfterParam;
+         end;
        else
         add_to_param(mwPasLex.Token);
       end;
@@ -221,15 +255,16 @@ begin
      begin
       //Writeln(mwPasLex.TokenID,':*',mwPasLex.Token,'*');
       Case mwPasLex.TokenID of
-       tkSemiColon :
+       tkSemiColon:
          begin
-          FuncDecl.Add(token);
+          add_to_param(mwPasLex.Token);
+          add_param(token);
           token:='';
           state:=sParamName;
          end;
        tkRoundClose:
          begin
-          FuncDecl.Add(token);
+          add_param(token);
           token:='';
           state:=sAfterParam;
          end;
@@ -278,27 +313,11 @@ begin
 
       if (Sysentu.NFind(lowercase(FuncDecl.fname))<>nil) then
       begin
+
+       //print_decl(FuncDecl);
+
        AddSysFunc(FuncDecl);
        FuncDecl:=nil;
-       {
-       Write(FuncDecl.fhead,' ',FuncDecl.fname,'(');
-       if (FuncDecl.Count<>0) then
-       For i:=0 to FuncDecl.Count-1 do
-       begin
-        Write(FuncDecl.Strings[i]);
-        if (i<>FuncDecl.Count-1) then
-        begin
-         Write(';');
-        end;
-       end;
-       Write(')');
-
-       if (FuncDecl.fretv<>'') then
-       begin
-        Write(':',FuncDecl.fretv);
-       end;
-       Writeln(';');
-       }
       end;
 
      end;
@@ -369,6 +388,12 @@ begin
   begin
    if (sysent_func[i]<>nil) then
    begin
+    if (sysent_table[i].sy_narg<>sysent_func[i].Count) then
+    begin
+     Writeln('Wrong narg[',i:3,']:',sysent_table[i].sy_narg,'<>',sysent_func[i].Count,':');
+     Write(' ');
+     print_decl(sysent_func[i]);
+    end;
     Inc(f);
    end else
    begin
@@ -389,6 +414,7 @@ begin
  AddExclude('backup');
 
  LoadSysent;
+
  LoadRecrusive('..\..\sys','');
 
  LoadStats;

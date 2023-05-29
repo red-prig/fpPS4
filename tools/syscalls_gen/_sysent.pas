@@ -1,3 +1,5 @@
+//This file contains the ps4 syscall table template
+
 unit _sysent;
 
 {$mode ObjFPC}{$H+}

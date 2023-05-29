@@ -34,7 +34,7 @@ implementation
 uses
  errno,
  kern_mtx,
- kern_time;
+ md_time;
 
 function IS_SLEEPABLE(lock:Pointer):Boolean; inline;
 begin

@@ -58,6 +58,10 @@ const
  tick=100;
  hz=10000000;
 
+ UNIT_PER_SEC         =10000000;
+ DELTA_EPOCH_IN_UNIT  =116444736000000000;
+ POW10_9              =1000000000;
+
 function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
 function _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
 function _usec2nsec(usec:QWORD):QWORD;  //Microsecond to Nanosecond
@@ -74,10 +78,12 @@ function  timespeccmp_lt(tvp,uvp:ptimespec):Integer;
 procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec);
 procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec);
 
-function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64; //Unit
-function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64; //Unit
-function  USEC_TO_UNIT    (usec:QWORD  ):Int64; //Unit
+function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64;   //Unit
+procedure UNIT_TO_TIMESPEC(ts:ptimespec;u:Int64); //Unit
+function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64;   //Unit
+function  USEC_TO_UNIT    (usec:QWORD  ):Int64;   //Unit
 
+function  cputick2usec(time:QWORD):QWORD; inline;
 function  tvtohz(time:Int64):Int64;
 procedure usec2timespec(ts:ptimespec;timeo:DWORD);
 
@@ -186,6 +192,12 @@ begin
  Result:=(QWORD(ts^.tv_sec)*10000000)+(QWORD(ts^.tv_nsec) div 100);
 end;
 
+procedure UNIT_TO_TIMESPEC(ts:ptimespec;u:Int64); //Unit
+begin
+ ts^.tv_sec :=(u div 10000000);
+ ts^.tv_nsec:=(u mod 10000000)*100;
+end;
+
 function TIMEVAL_TO_UNIT(tv:ptimeval):Int64; //Unit
 begin
  Result:=(QWORD(tv^.tv_sec)*10000000)+(QWORD(tv^.tv_usec)*10);
@@ -194,6 +206,11 @@ end;
 function USEC_TO_UNIT(usec:QWORD):Int64; //Unit
 begin
  Result:=(usec*10);
+end;
+
+function cputick2usec(time:QWORD):QWORD; inline;
+begin
+ Result:=time div 10;
 end;
 
 function tvtohz(time:Int64):Int64;

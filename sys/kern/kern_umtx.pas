@@ -9,7 +9,6 @@ uses
  mqueue,
  kern_rwlock,
  time,
- kern_time,
  kern_thr,
  _umtx,
  rtprio;
@@ -39,6 +38,7 @@ uses
  errno,
  systm,
  trap,
+ md_time,
  vm_machdep,
  kern_thread,
  sched_ule;

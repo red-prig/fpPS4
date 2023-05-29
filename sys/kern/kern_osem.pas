@@ -26,7 +26,7 @@ uses
  errno,
  systm,
  time,
- kern_time,
+ md_time,
  kern_mtx,
  kern_thr,
  kern_condvar,

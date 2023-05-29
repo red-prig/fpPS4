@@ -11,6 +11,7 @@ uses
  sys_umtx,
  time,
  kern_time,
+ md_time,
  thr,
  kern_thread,
  kern_rwlock,

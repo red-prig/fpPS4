@@ -57,14 +57,9 @@ const
   SA_KILL   or SA_PROC                // SIGUSR2
 );
 
-Function  sys_sigaction(sig:Integer;
-                        act,oact:p_sigaction_t;
-                        flags:Integer):Integer;
+Function  sys_sigaction(sig:Integer;act,oact:p_sigaction_t):Integer;
 
-Function  sys_sigprocmask(how:Integer;
-                          _set:p_sigset_t;
-                          oset:p_sigset_t;
-                          flags:Integer):Integer;
+Function  sys_sigprocmask(how:Integer;_set,oset:p_sigset_t):Integer;
 
 Function  sys_sigpending(oset:p_sigset_t):Integer;
 
@@ -112,7 +107,7 @@ uses
  errno,
  systm,
  kern_mtx,
- kern_time,
+ md_time,
  kern_thread,
  kern_exit,
  kern_prot,
@@ -629,9 +624,7 @@ begin
  Result:=0;
 end;
 
-Function sys_sigaction(sig:Integer;
-                       act,oact:p_sigaction_t;
-                       flags:Integer):Integer;
+Function sys_sigaction(sig:Integer;act,oact:p_sigaction_t):Integer;
 var
  _act,_oact:sigaction_t;
  actp,oactp:p_sigaction_t;
@@ -745,10 +738,7 @@ begin
   end;
 end;
 
-Function sys_sigprocmask(how:Integer;
-                         _set:p_sigset_t;
-                         oset:p_sigset_t;
-                         flags:Integer):Integer;
+Function sys_sigprocmask(how:Integer;_set,oset:p_sigset_t):Integer;
 var
  td:p_kthread;
 
