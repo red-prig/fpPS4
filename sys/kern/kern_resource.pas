@@ -25,9 +25,25 @@ const
  RLIMIT_AS     =RLIMIT_VMEM; // standard name for RLIMIT_VMEM
  RLIMIT_NPTS   =11;  // pseudo-terminals
  RLIMIT_SWAP   =12;  // swap used
+ RLIM_NLIMITS  =13;  // number of resource limits
 
-function lim_max(which:Integer):QWORD;
-function lim_cur(which:Integer):QWORD;
+ RLIM_INFINITY =(QWORD(1) shl 63)-1;
+
+ maxprocperuid =4*1024;
+
+type
+ p_rlimit=^t_rlimit;
+ t_rlimit=packed record
+  rlim_cur:QWORD; //current (soft) limit
+  rlim_max:QWORD; //maximum value for rlim_cur
+ end;
+
+function  lim_max(which:Integer):QWORD;
+function  lim_cur(which:Integer):QWORD;
+procedure lim_rlimit(which:Integer;rlp:p_rlimit);
+
+function  sys_getrlimit(which:Integer;rlp:p_rlimit):Integer;
+function  sys_setrlimit(which:Integer;rlp:p_rlimit):Integer;
 
 const
  RUSAGE_SELF    = 0;
@@ -71,17 +87,19 @@ implementation
 
 uses
  errno,
+ systm,
  kern_thr,
  md_proc;
 
 function lim_max(which:Integer):QWORD;
 begin
- Result:=0;
+ Result:=RLIM_INFINITY;
  Case which of
   RLIMIT_DATA   :Result:=MAXDSIZ;
   RLIMIT_STACK  :Result:=MAXSSIZ;
   RLIMIT_MEMLOCK:Result:=pageablemem;
   RLIMIT_VMEM   :Result:=pageablemem;
+  RLIMIT_NPROC  :Result:=maxprocperuid;
   RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;
@@ -89,15 +107,45 @@ end;
 
 function lim_cur(which:Integer):QWORD;
 begin
- Result:=0;
+ Result:=RLIM_INFINITY;
  Case which of
   RLIMIT_DATA   :Result:=MAXDSIZ;
   RLIMIT_STACK  :Result:=MAXSSIZ;
   RLIMIT_MEMLOCK:Result:=pageablemem;
   RLIMIT_VMEM   :Result:=pageablemem;
+  RLIMIT_NPROC  :Result:=maxprocperuid;
   RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;
+end;
+
+procedure lim_rlimit(which:Integer;rlp:p_rlimit);
+begin
+ rlp^.rlim_cur:=lim_max(which);
+ rlp^.rlim_max:=lim_cur(which);
+end;
+
+function sys_getrlimit(which:Integer;rlp:p_rlimit):Integer;
+var
+ rlim:t_rlimit;
+begin
+ if (which >= RLIM_NLIMITS) then
+  Exit(EINVAL);
+
+ lim_rlimit(which, @rlim);
+
+ Result:=copyout(@rlim, rlp, sizeof(t_rlimit));
+end;
+
+function sys_setrlimit(which:Integer;rlp:p_rlimit):Integer;
+var
+ alim:t_rlimit;
+begin
+ Result:=copyin(rlp, @alim, sizeof(t_rlimit));
+ if (Result<>0) then Exit;
+
+ //error:=kern_setrlimit(td, uap^.which, @alim);
+ Exit(0);
 end;
 
 function cur_proc_get_nice():Integer; inline;

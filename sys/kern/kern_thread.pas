@@ -25,7 +25,8 @@ procedure thread_free(td:p_kthread);
 function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
 function  sys_thr_self(id:PDWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
-function  sys_thr_kill(id:DWORD;sig:Integer):Integer;
+function  sys_thr_kill(id,sig:Integer):Integer;
+function  sys_thr_kill2(pid,id,sig:Integer):Integer;
 function  sys_thr_suspend(timeout:ptimespec):Integer;
 function  sys_thr_wake(id:DWORD):Integer;
 function  sys_thr_set_name(id:DWORD;pname:PChar):Integer;
@@ -70,6 +71,7 @@ uses
  errno,
  systm,
  vm_machdep,
+ md_proc,
  md_thread,
  kern_rwlock,
  kern_mtx,
@@ -584,7 +586,7 @@ begin
  end;
 end;
 
-function sys_thr_kill(id:DWORD;sig:Integer):Integer;
+function sys_thr_kill(id,sig:Integer):Integer;
 var
  data:_t_stk;
 begin
@@ -593,8 +595,9 @@ begin
  ksiginfo_init(@data.ksi);
  data.ksi.ksi_info.si_signo:=sig;
  data.ksi.ksi_info.si_code :=SI_LWP;
+ data.ksi.ksi_info.si_pid  :=g_pid;
 
- if (Integer(id)=-1) then
+ if (id=-1) then //all
  begin
   if (sig<>0) and (not _SIG_VALID(sig)) then
   begin
@@ -626,6 +629,16 @@ begin
 
   thread_dec_ref(data.td);
  end;
+end;
+
+function sys_thr_kill2(pid,id,sig:Integer):Integer;
+begin
+ if (pid<>0) and (pid<>g_pid) then
+ begin
+  Exit(ESRCH);
+ end;
+
+ Result:=sys_thr_kill(id,sig);
 end;
 
 function kern_thr_suspend(td:p_kthread;tsp:ptimespec):Integer;

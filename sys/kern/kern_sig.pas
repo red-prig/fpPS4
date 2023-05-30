@@ -72,6 +72,7 @@ Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
 Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
 
 function  sys_kill(pid,signum:Integer):Integer;
+function  sys_sigqueue(pid,signum:Integer;value:Pointer):Integer;
 
 Function  sigonstack(sp:size_t):Integer;
 procedure sigqueue_init(list:p_sigqueue);
@@ -1208,6 +1209,50 @@ begin
  { NOTREACHED }
 end;
 
+function sys_sigqueue(pid,signum:Integer;value:Pointer):Integer;
+var
+ ksi:ksiginfo_t;
+ error:Integer;
+begin
+ if (signum > _SIG_MAXSIG) then
+  Exit(EINVAL);
+
+ {
+  * Specification says sigqueue can only send signal to
+  * single process.
+  }
+ if (pid <= 0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (pid<>0) and (pid<>g_pid) then
+ begin
+  Exit(ESRCH);
+ end;
+
+ error:=p_cansignal(signum);
+
+ if (error=0) and (signum<>0) then
+ begin
+  ksiginfo_init(@ksi);
+  ksi.ksi_flags:=KSI_SIGQ;
+  ksi.ksi_info.si_signo:=signum;
+  ksi.ksi_info.si_code :=SI_QUEUE;
+  ksi.ksi_info.si_pid  :=g_pid;
+  ksi.ksi_info.si_value.sival_ptr:=value;
+
+  PROC_LOCK();
+  error:=pksignal(signum, @ksi);
+  PROC_UNLOCK();
+ end;
+
+ Exit(error);
+end;
+
+
+
+
 procedure postsig_done(sig:Integer;td:p_kthread);
 var
  mask:sigset_t;
@@ -1239,10 +1284,9 @@ function tdsendsignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo):Integer; forward;
 
 procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
 var
- sig,code:Integer;
+ sig:Integer;
 begin
  sig :=ksi^.ksi_info.si_signo;
- code:=ksi^.ksi_info.si_code;
 
  Assert(_SIG_VALID(sig),'invalid signal');
 
@@ -1335,6 +1379,7 @@ begin
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
  ksi.ksi_info.si_code :=SI_KERNEL;
+ ksi.ksi_info.si_pid  :=g_pid;
  tdsendsignal(nil,sig,@ksi);
 end;
 
@@ -1419,6 +1464,7 @@ begin
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
  ksi.ksi_info.si_code :=SI_KERNEL;
+ ksi.ksi_info.si_pid  :=g_pid;
  tdsendsignal(td,sig,@ksi);
 end;
 
