@@ -22,6 +22,10 @@ function  sys_gettimeofday(tp:ptimeval;tzp:ptimezone):Integer;
 function  sys_settimeofday(tv:ptimeval;tzp:ptimezone):Integer;
 function  sys_adjtime(delta,olddelta:ptimeval):Integer;
 
+function  sys_localtime_to_utc(time:time_t;tz_type:Integer;utc_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+function  sys_utc_to_localtime(time:time_t;local_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+function  sys_set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
+
 implementation
 
 uses
@@ -256,6 +260,20 @@ begin
  Exit(error);
 end;
 
+function sys_localtime_to_utc(time:time_t;tz_type:Integer;utc_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+begin
+ Exit(ERANGE); //no time zone info
+end;
+
+function sys_utc_to_localtime(time:time_t;local_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+begin
+ Exit(ERANGE); //no time zone info
+end;
+
+function sys_set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
+begin
+ Exit(EPERM); //sceSblACMgrIsSystemUcred
+end;
 
 
 end.
