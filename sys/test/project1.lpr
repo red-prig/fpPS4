@@ -75,6 +75,7 @@ uses
  ufs,
  vmount,
  kern_prot,
+ _resource,
  kern_resource,
  md_proc,
  kern_ksched;
@@ -1092,6 +1093,8 @@ var
 
  _thr_param:thr_param;
 
+ ru:t_rusage;
+
 begin
  tailq;
 
@@ -1101,6 +1104,9 @@ begin
  Writeln(get_proc_prio());
  Writeln(set_proc_prio(14));
  Writeln(get_proc_prio());
+
+ Writeln(sys_getrusage(RUSAGE_SELF,@ru));
+ Writeln(sys_getrusage(RUSAGE_THREAD,@ru));
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('me=',e,' _errno:',__error^);

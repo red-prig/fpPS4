@@ -13,8 +13,9 @@ Procedure md_timeinit;
 
 function  get_unit_uptime:Int64;
 procedure unittime(time:PInt64);
-procedure calcru(user,syst:PInt64);
+procedure calcru_proc(user,syst:PInt64);
 procedure get_process_cputime(time:PInt64);
+procedure calcru_thread(user,syst:PInt64);
 procedure get_thread_cputime(time:PInt64);
 procedure gettimezone(z:Ptimezone);
 procedure getadjtime(tv:ptimeval);
@@ -83,7 +84,7 @@ begin
  _unittime(time);
 end;
 
-procedure calcru(user,syst:PInt64);
+procedure calcru_proc(user,syst:PInt64);
 var
  k:KERNEL_USER_TIMES;
 begin
@@ -110,6 +111,21 @@ begin
 
  unittime(@k.ExitTime.QuadPart);
  time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
+end;
+
+procedure calcru_thread(user,syst:PInt64);
+var
+ k:KERNEL_USER_TIMES;
+begin
+ k:=Default(KERNEL_USER_TIMES);
+ NtQueryInformationThread(NtCurrentThread,
+                          ThreadTimes,
+                          @k,
+                          SizeOf(KERNEL_USER_TIMES),
+                          nil);
+ unittime(@k.ExitTime.QuadPart);
+ user^:=k.ExitTime.QuadPart-k.UserTime.QuadPart;
+ syst^:=k.ExitTime.QuadPart-k.KernelTime.QuadPart;
 end;
 
 procedure get_thread_cputime(time:PInt64);
@@ -159,8 +175,8 @@ begin
 
  if not Boolean(STA.Enable) then
  begin
-  tv^.tv_sec :=(STA.TimeAdjustment div 10000000);
-  tv^.tv_usec:=(STA.TimeAdjustment mod 10000000) div 10;
+  tv^.tv_sec :=(STA.TimeAdjustment div UNIT_PER_SEC);
+  tv^.tv_usec:=(STA.TimeAdjustment mod UNIT_PER_SEC) div 10;
  end;
 end;
 
@@ -182,13 +198,13 @@ begin
 
   CLOCK_VIRTUAL:
    begin
-    calcru(@user,@syst);
+    calcru_proc(@user,@syst);
     time^:=user;
    end;
 
   CLOCK_PROF:
    begin
-    calcru(@user,@syst);
+    calcru_proc(@user,@syst);
     time^:=user+syst;
    end;
 

@@ -6,37 +6,9 @@ unit kern_resource;
 interface
 
 uses
- time,
  vmparam,
- vfile;
-
-const
- RLIMIT_CPU    = 0;  // maximum cpu time in seconds
- RLIMIT_FSIZE  = 1;  // maximum file size
- RLIMIT_DATA   = 2;  // data size
- RLIMIT_STACK  = 3;  // stack size
- RLIMIT_CORE   = 4;  // core file size
- RLIMIT_RSS    = 5;  // resident set size
- RLIMIT_MEMLOCK= 6;  // locked-in-memory address space
- RLIMIT_NPROC  = 7;  // number of processes
- RLIMIT_NOFILE = 8;  // number of open files
- RLIMIT_SBSIZE = 9;  // maximum size of all socket buffers
- RLIMIT_VMEM   =10;  // virtual process size (incl. mmap)
- RLIMIT_AS     =RLIMIT_VMEM; // standard name for RLIMIT_VMEM
- RLIMIT_NPTS   =11;  // pseudo-terminals
- RLIMIT_SWAP   =12;  // swap used
- RLIM_NLIMITS  =13;  // number of resource limits
-
- RLIM_INFINITY =(QWORD(1) shl 63)-1;
-
- maxprocperuid =4*1024;
-
-type
- p_rlimit=^t_rlimit;
- t_rlimit=packed record
-  rlim_cur:QWORD; //current (soft) limit
-  rlim_max:QWORD; //maximum value for rlim_cur
- end;
+ vfile,
+ _resource;
 
 function  lim_max(which:Integer):QWORD;
 function  lim_cur(which:Integer):QWORD;
@@ -45,43 +17,10 @@ procedure lim_rlimit(which:Integer;rlp:p_rlimit);
 function  sys_getrlimit(which:Integer;rlp:p_rlimit):Integer;
 function  sys_setrlimit(which:Integer;rlp:p_rlimit):Integer;
 
-const
- RUSAGE_SELF    = 0;
- RUSAGE_CHILDREN=-1;
- RUSAGE_THREAD  = 1;
+function  sys_getpriority(which,who:Integer):Integer;
+function  sys_setpriority(which,who,prio:Integer):Integer;
 
-type
- p_rusage=^t_rusage;
- t_rusage=packed record
-  ru_utime   :timeval; // user time used
-  ru_stime   :timeval; // system time used
-  ru_maxrss  :DWORD;   // max resident set size
-  ru_ixrss   :DWORD;   // integral shared memory size *
-  ru_idrss   :DWORD;   // integral unshared data
-  ru_isrss   :DWORD;   // integral unshared stack
-  ru_minflt  :DWORD;   // page reclaims
-  ru_majflt  :DWORD;   // page faults
-  ru_nswap   :DWORD;   // swaps
-  ru_inblock :DWORD;   // block input operations
-  ru_oublock :DWORD;   // block output operations
-  ru_msgsnd  :DWORD;   // messages sent
-  ru_msgrcv  :DWORD;   // messages received
-  ru_nsignals:DWORD;   // signals received
-  ru_nvcsw   :DWORD;   // voluntary context switches
-  ru_nivcsw  :DWORD;   // involuntary
- end;
-
-const
- //Process priority specifications to get/setpriority.
- PRIO_MIN=-20;
- PRIO_MAX= 20;
-
- PRIO_PROCESS=0;
- PRIO_PGRP   =1;
- PRIO_USER   =2;
-
-function sys_getpriority(which,who:Integer):Integer;
-function sys_setpriority(which,who,prio:Integer):Integer;
+function  sys_getrusage(who:Integer;rusage:p_rusage):Integer;
 
 implementation
 
@@ -89,7 +28,8 @@ uses
  errno,
  systm,
  kern_thr,
- md_proc;
+ md_proc,
+ md_resource;
 
 function lim_max(which:Integer):QWORD;
 begin
@@ -268,7 +208,18 @@ begin
  Exit(error);
 end;
 
+function sys_getrusage(who:Integer;rusage:p_rusage):Integer;
+var
+ ru:t_rusage;
+begin
+ Result:=kern_getrusage(who, @ru);
+ if (Result=0) then
+ begin
+  Result:=copyout(@ru, rusage, sizeof(t_rusage));
+ end;
+end;
 
 
 end.
+
 

@@ -43,6 +43,7 @@ function  tsleep(ident   :Pointer;
 
 procedure wakeup(ident:Pointer);
 procedure wakeup_one(ident:Pointer);
+function  mi_switch(flags:Integer):Integer;
 
 procedure maybe_yield();
 procedure kern_yield(prio:Integer);
@@ -132,6 +133,37 @@ begin
  sleepq_release(ident);
 end;
 
+function mi_switch(flags:Integer):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
+
+ if (td<>nil) then
+ begin
+  if (flags and SW_VOL)<>0 then
+  begin
+   System.InterlockedIncrement64(td^.td_ru.ru_nvcsw);
+   System.InterlockedIncrement64(p_nvcsw);
+  end else
+  begin
+   System.InterlockedIncrement64(td^.td_ru.ru_nivcsw);
+   System.InterlockedIncrement64(p_nivcsw);
+  end;
+ end;
+
+ case (flags and SW_TYPE_MASK) of
+  SWT_RELINQUISH,
+  SWT_NEEDRESCHED:
+    md_yield;
+  SWT_SLEEPQ,
+  SWT_SLEEPQTIMO:
+    Result:=sched_switch(td);
+ end;
+
+end;
+
 procedure maybe_yield();
 begin
  kern_yield(PRI_USER);
@@ -151,7 +183,7 @@ begin
    sched_prio(td, prio);
   thread_unlock(td);
  end;
- mi_switch();
+ mi_switch(SW_VOL or SWT_RELINQUISH);
 end;
 
 function sys_yield():Integer;
@@ -167,7 +199,7 @@ begin
   thread_unlock(td);
   td^.td_retval[0]:=0;
  end;
- mi_switch();
+ mi_switch(SW_VOL or SWT_RELINQUISH);
  Exit(0);
 end;
 

@@ -122,7 +122,8 @@ uses
  vstat,
  vfs_subr,
  subr_uio,
- kern_time;
+ kern_time,
+ kern_thr;
 
 const
  UFS_SET_READONLY=(not &0222);
@@ -226,12 +227,12 @@ function get_unix_file_time(time:LARGE_INTEGER):timespec; inline;
 begin
  Int64(time):=Int64(time)-DELTA_EPOCH_IN_UNIT;
  Result.tv_sec :=(Int64(time) div UNIT_PER_SEC);
- Result.tv_nsec:=(Int64(time) mod UNIT_PER_SEC)*100;
+ Result.tv_nsec:=(Int64(time) mod UNIT_PER_SEC)*NSEC_PER_UNIT;
 end;
 
 function get_win_file_time(time:timespec):LARGE_INTEGER; inline;
 begin
- Int64(Result):=(time.tv_sec*UNIT_PER_SEC)+(time.tv_nsec div 100);
+ Int64(Result):=(time.tv_sec*UNIT_PER_SEC)+(time.tv_nsec div NSEC_PER_UNIT);
  Int64(Result):=Int64(Result)+DELTA_EPOCH_IN_UNIT;
 end;
 
@@ -2234,9 +2235,12 @@ type
 
 function md_io(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
 var
+ td:p_kthread;
+
  de:p_ufs_dirent;
  F:Thandle;
  iocb:t_uio_cb;
+ ioin:PInt64;
 
  append:Boolean;
  locked:Boolean;
@@ -2251,6 +2255,16 @@ begin
  Result:=0;
  de:=vp^.v_data;
  F:=THandle(vp^.v_un);
+
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ case uio^.uio_rw of
+  UIO_READ :ioin:=@td^.td_ru.ru_inblock;
+  UIO_WRITE:ioin:=@td^.td_ru.ru_oublock;
+  else
+            Exit(EINVAL);
+ end;
 
  case uio^.uio_rw of
   UIO_READ :iocb:=@NtReadFile;
@@ -2298,6 +2312,8 @@ begin
   end;
 
   Result:=ntf2px(R);
+
+  System.InterlockedIncrement64(ioin^);
 
   if (Int64(BLK.Information)<cnt) then
   begin

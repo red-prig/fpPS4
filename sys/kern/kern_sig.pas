@@ -112,6 +112,7 @@ uses
  kern_thread,
  kern_exit,
  kern_prot,
+ kern_synch,
  vm_machdep,
  md_thread,
  md_proc,
@@ -856,9 +857,10 @@ begin
    tv:=NT_INFINITE;
   end;
 
-  PROC_UNLOCK; //
-  Result:=msleep_td(tvtohz(tv));
-  PROC_LOCK;  //
+  //PROC_UNLOCK; //
+  Result:=msleep(@p_sigacts,@proc_mtx,PPAUSE or PCATCH,'sigwait',tvtohz(tv));
+  //Result:=msleep_td(tvtohz(tv));
+  //PROC_LOCK;  //
 
   if (timeout<>nil) then
   begin
@@ -998,9 +1000,10 @@ begin
  has_sig:=0;
  While (has_sig=0) do
  begin
-  PROC_UNLOCK; //
-  while (msleep_td(0)=0) do;
-  PROC_LOCK;   //
+  //PROC_UNLOCK; //
+  //while (msleep_td(0)=0) do;
+  //PROC_LOCK;   //
+  while (msleep(@p_sigacts,@proc_mtx,PPAUSE or PCATCH,'pause',0)=0) do;
 
   //thread_suspend_check(0);
 
@@ -1257,7 +1260,8 @@ procedure postsig_done(sig:Integer;td:p_kthread);
 var
  mask:sigset_t;
 begin
- //td->td_ru.ru_nsignals++;
+ InterlockedIncrement64(p_nsignals);
+ InterlockedIncrement64(td^.td_ru.ru_nsignals);
 
  mask:=p_sigacts.ps_catchmask[_SIG_IDX(sig)];
 
@@ -1767,7 +1771,7 @@ begin
  begin
   thread_lock(td);
   sched_prio(td,td^.td_user_pri);
-  //mi_switch(SW_INVOL or SWT_NEEDRESCHED, nil);
+  mi_switch(SW_INVOL or SWT_NEEDRESCHED);
   thread_unlock(td);
  end;
 

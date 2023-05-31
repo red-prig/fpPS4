@@ -12,6 +12,7 @@ uses
  vm_object,
  kern_mtx,
  kern_thr,
+ _resource,
  kern_resource;
 
 type

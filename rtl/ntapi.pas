@@ -433,6 +433,32 @@ type
   InheritedFromUPI:QWORD;
  end;
 
+ PIO_COUNTERS=^IO_COUNTERS;
+ IO_COUNTERS=packed record
+  ReadOperationCount :SIZE_T;
+  WriteOperationCount:SIZE_T;
+  OtherOperationCount:SIZE_T;
+  ReadTransferCount  :SIZE_T;
+  WriteTransferCount :SIZE_T;
+  OtherTransferCount :SIZE_T;
+ end;
+
+ PVM_COUNTERS=^VM_COUNTERS;
+ VM_COUNTERS=packed record
+  PeakVirtualSize           :SIZE_T;
+  VirtualSize               :SIZE_T;
+  PageFaultCount            :ULONG;
+  _align                    :ULONG;
+  PeakWorkingSetSize        :SIZE_T;
+  WorkingSetSize            :SIZE_T;
+  QuotaPeakPagedPoolUsage   :SIZE_T;
+  QuotaPagedPoolUsage       :SIZE_T;
+  QuotaPeakNonPagedPoolUsage:SIZE_T;
+  QuotaNonPagedPoolUsage    :SIZE_T;
+  PagefileUsage             :SIZE_T;
+  PeakPagefileUsage         :SIZE_T;
+ end;
+
  PPROCESS_PRIORITY_CLASS=^PROCESS_PRIORITY_CLASS;
  PROCESS_PRIORITY_CLASS=packed record
   Foreground   :Boolean;

@@ -126,6 +126,7 @@ uses
  vfs_subr,
  vfs_vnops,
  vnode_if,
+ _resource,
  kern_resource,
  kern_mtx,
  kern_conf;

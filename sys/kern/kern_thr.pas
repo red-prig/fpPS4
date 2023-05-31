@@ -9,7 +9,8 @@ uses
  mqueue,
  ucontext,
  signal,
- signalvar;
+ signalvar,
+ kern_mtx;
 
 const
  TDS_INACTIVE =0;
@@ -49,6 +50,8 @@ const
  TDF_ALRMPEND   =$10000000; // Pending SIGVTALRM needs to be posted.
  TDF_PROFPEND   =$20000000; // Pending SIGPROF needs to be posted.
  TDF_MACPEND    =$40000000; // AST-based MAC event pending.
+
+ TDF_SLICEEND   =TDF_SCHED2; // Thread time slice is over.
 
  //
 
@@ -95,6 +98,27 @@ const
  // These flags are kept in p_flag.
  P_ADVLOCK        =$00001; // Process may hold a POSIX advisory lock.
  P_CONTROLT       =$00002; // Has a controlling terminal.
+
+ // Types and flags for mi_switch().
+ SW_TYPE_MASK     =$ff; // First 8 bits are switch type
+ SWT_NONE          = 0; // Unspecified switch.
+ SWT_PREEMPT       = 1; // Switching due to preemption.
+ SWT_OWEPREEMPT    = 2; // Switching due to opepreempt.
+ SWT_TURNSTILE     = 3; // Turnstile contention.
+ SWT_SLEEPQ        = 4; // Sleepq wait.
+ SWT_SLEEPQTIMO    = 5; // Sleepq timeout wait.
+ SWT_RELINQUISH    = 6; // yield call.
+ SWT_NEEDRESCHED   = 7; // NEEDRESCHED was set.
+ SWT_IDLE          = 8; // Switching from the idle thread.
+ SWT_IWAIT         = 9; // Waiting for interrupts.
+ SWT_SUSPEND       =10; // Thread suspended.
+ SWT_REMOTEPREEMPT =11; // Remote processor preempted.
+ SWT_REMOTEWAKEIDLE=12; // Remote processor preempted idle.
+ SWT_COUNT         =13; // Number of switch types.
+ // Flags
+ SW_VOL    =$0100; // Voluntary switch.
+ SW_INVOL  =$0200; // Involuntary switch.
+ SW_PREEMPT=$0400; // The invol switch is a preemption
 
 type
  p_teb=^teb;
@@ -150,6 +174,13 @@ type
   td_intrval      :Integer;
   td_inhibitors   :Integer;
   td_dupfd        :Integer;
+  td_ru           :packed record
+   ru_inblock     :Int64;
+   ru_oublock     :Int64;
+   ru_nsignals    :Int64;
+   ru_nvcsw       :Int64;
+   ru_nivcsw      :Int64;
+  end;
   td_timeo        :Int64;
   //
   td_fpop         :Pointer;
@@ -220,13 +251,14 @@ var
   p_flag:Integer;
  end;
 
-implementation
-
-uses
- kern_mtx;
-
 var
- p_mtx:mtx;
+ proc_mtx:mtx;
+
+ p_nsignals:Int64=0;
+ p_nvcsw   :Int64=0;
+ p_nivcsw  :Int64=0;
+
+implementation
 
 function curkthread:p_kthread; assembler; nostackframe;
 asm
@@ -408,17 +440,17 @@ end;
 
 procedure PROC_LOCK;
 begin
- mtx_lock(p_mtx);
+ mtx_lock(proc_mtx);
 end;
 
 procedure PROC_UNLOCK;
 begin
- mtx_unlock(p_mtx);
+ mtx_unlock(proc_mtx);
 end;
 
 procedure PROC_INIT;
 begin
- mtx_init(p_mtx,'process lock');
+ mtx_init(proc_mtx,'process lock');
 end;
 
 end.

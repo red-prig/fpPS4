@@ -72,7 +72,8 @@ uses
  signalvar,
  kern_thread,
  kern_sig,
- sched_ule;
+ sched_ule,
+ kern_synch;
 
 var
  sleepq_chains:array[0..SC_MASK] of sleepqueue_chain;
@@ -345,7 +346,7 @@ begin
 
  thread_unlock(td);       //
  mtx_unlock(sc^.sc_lock); //
- r:=sched_switch(td);
+ r:=mi_switch(SW_VOL or SWT_SLEEPQ);
  mtx_lock(sc^.sc_lock);   //
  thread_lock(td);         //
 

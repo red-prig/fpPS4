@@ -38,6 +38,7 @@ uses
  kern_thr,
  vmparam,
  vm_object,
+ _resource,
  kern_resource,
  kern_mtx,
  kern_descrip,

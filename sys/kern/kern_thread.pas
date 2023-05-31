@@ -77,6 +77,7 @@ uses
  kern_mtx,
  kern_umtx,
  kern_sig,
+ kern_synch,
  sched_ule,
  subr_sleepqueue;
 
@@ -668,9 +669,10 @@ begin
 
  if (Result=0) and ((td^.td_flags and TDF_THRWAKEUP)=0) then
  begin
-  PROC_UNLOCK; //
-  Result:=msleep_td(tv);
-  PROC_LOCK;   //
+  //PROC_UNLOCK; //
+  //Result:=msleep_td(tv);
+  //PROC_LOCK;   //
+  Result:=msleep(td,@proc_mtx,PCATCH,'lthr',tv);
  end;
 
  if ((td^.td_flags and TDF_THRWAKEUP)<>0) then

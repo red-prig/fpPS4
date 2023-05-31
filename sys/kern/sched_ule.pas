@@ -97,9 +97,13 @@ begin
 end;
 
 function sched_switch(td:p_kthread):Integer;
+var
+ td_timeo:Int64;
 begin
- Result:=msleep_td(td^.td_timeo);
- td^.td_timeo:=0;
+ td^.td_flags:=td^.td_flags and (not (TDF_NEEDRESCHED or TDF_SLICEEND));
+
+ td_timeo:=System.InterlockedExchange64(td^.td_timeo,0);
+ Result:=msleep_td(td_timeo);
 end;
 
 function setrunnable(td:p_kthread):Integer;
