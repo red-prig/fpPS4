@@ -33,6 +33,9 @@ function  sys_thr_set_name(id:DWORD;pname:PChar):Integer;
 function  sys_thr_get_name(id:DWORD;pname:PChar):Integer;
 
 function  sys_amd64_set_fsbase(base:Pointer):Integer;
+function  sys_amd64_get_fsbase(base:PPointer):Integer;
+function  sys_amd64_set_gsbase(base:Pointer):Integer;
+function  sys_amd64_get_gsbase(base:PPointer):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
@@ -819,8 +822,38 @@ var
 begin
  Result:=0;
  td:=curkthread;
- if (td=nil) then Exit(EFAULT);
+ if (td=nil) then Exit(-1);
  cpu_set_user_tls(td,base);
+end;
+
+function sys_amd64_get_fsbase(base:PPointer):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
+ if (td=nil) or (base=nil) then Exit(-1);
+ base^:=td^.pcb_fsbase;
+end;
+
+function sys_amd64_set_gsbase(base:Pointer):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+ td^.pcb_gsbase:=base;
+end;
+
+function sys_amd64_get_gsbase(base:PPointer):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+ td:=curkthread;
+ if (td=nil) or (base=nil) then Exit(-1);
+ base^:=td^.pcb_gsbase;
 end;
 
 end.

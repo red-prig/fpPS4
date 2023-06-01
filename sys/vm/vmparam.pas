@@ -15,6 +15,9 @@ const
  NBPDR  =$1fffff;
  PDRMASK=$1fffff;
 
+ MAXPAGESIZES=3; // maximum number of supported page sizes
+ IOPAGES     =2; // pages of i/o permission bitmap
+
  //Virtual memory related constants, all in bytes
  MAXTSIZ =(128  *1024*1024); // max text size
  DFLDSIZ =(128  *1024*1024); // initial data size limit

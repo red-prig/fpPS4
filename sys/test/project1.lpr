@@ -78,7 +78,10 @@ uses
  _resource,
  kern_resource,
  md_proc,
- kern_ksched;
+ kern_ksched,
+ kern_uuid,
+ kern_gpo,
+ sys_machdep;
 
 var
  mtx:umutex;
