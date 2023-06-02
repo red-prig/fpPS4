@@ -555,30 +555,48 @@ type
  p_authinfo=^t_authinfo;
  t_authinfo=record //0x88
   {
-  //know values of utype
-  0x3800000000000006
-  0x380000000000000f
-  0x3800000000000010
+  //know values of app_type
+  0x3800000000000003   sceSblACMgrIsVdecProxyProcess
+  0x3800000000000006   sceSblACMgrIsCoredumpProcess
+  0x3800000000000007   sceSblACMgrIsSyscoreProcess
+  0x3800000000000009   sceSblACMgrHasUseHp3dPipeCapability
+  0x380000000000000f   sceSblACMgrIsShelluiProcess
+  0x3800000000000010   sceSblACMgrIsShellcoreProces
   0x3800000000000015
   0x3800000000000016
   0x3800000000000017
   0x3800000000000018
+  0x380000000000001e   sceSblACMgrIsFirstImageWriterProcess
+  0x380000000000001f   sceSblACMgrIsAvcontrolProcess
+  0x3800000000000022   sceSblACMgrIsMinisyscoreProcess
+  0x3800000000000021   sceSblACMgrIsSafemodeProcess
+  0x3800000000000026   sceSblACMgrIsSoftwagnerProcess
+  0x380000000000002d   sceSblACMgrIsSafemodeProcess
+  0x380000000000002e   sceSblACMgrIsMinisyscoreProcess
   0x3800000000000033
   0x3800000000000034
   0x3800000000000035
   0x3800000000000036
-  0x3800000000010003
-  0x3800000010000001
-  0x3800000010000002
+  0x3800000000010002   sceSblACMgrIsMountfusefsProcess
+  0x3800000000010003   sceSblACMgrIsDebuggerProcess
+  0x3800000000020001   sceSblACMgrIsGaikaiControllerDaemonProcess
+  0x3800000010000001   sceSblACMgrIsVideoplayerProcess
+  0x3800000010000002   sceSblACMgrIsVideoplayerProcess
   0x3800000010000003
   0x3800000010000004
-  0x3800000010000005
-  0x3800000010000009
+  0x3800000010000005   sceSblACMgrIsBdjavaProcess
+  0x3800000010000009   sceSblACMgrIsDiskplayeruiProcess
   0x380000001000000f
+  0x3800800000000002   sceSblACMgrIsVtrmadminProcess
+  0x380100000000002c   sceSblACMgrHasUseHp3dPipeCapability
+
+  0x38X1XXXXXXXXXXXX   sceSblACMgrIsDiagProcess
+  0x38X2XXXXXXXXXXXX   sceSblACMgrIsDiagProcess
   }
-  utype:qword;
-  flags:qword;  //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
-  unknow:array[0..14] of qword
+  app_type :qword;
+  app_flags:qword;  //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
+  app_cap  :qword;
+  unknow:array[0..13] of qword
  end;
 
 function ps4_get_authinfo(pid:Integer;info:p_authinfo):Integer; SysV_ABI_CDecl;
@@ -592,7 +610,8 @@ begin
  end;
 
  info^:=Default(t_authinfo);
- info^.flags:=$2000000000000000;
+ info^.app_type :=$3800000000000000;
+ info^.app_flags:=$2000000000000000;
 
  _set_errno(0);
  Result:=0;
