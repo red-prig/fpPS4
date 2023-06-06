@@ -222,6 +222,7 @@ function ps4_sceKernelGetModuleInfo2(handle:Integer;info:pSceKernelModuleInfo):I
 var
  node:TElf_node;
 begin
+ Result:=0;
  //Almost the same sceKernelGetModuleInfo
  if (info=nil) then Exit(SCE_KERNEL_ERROR_EFAULT);
  _sig_lock;
@@ -233,9 +234,14 @@ begin
   Exit(SCE_KERNEL_ERROR_ESRCH);
  end;
  info^:=node.GetModuleInfo;
+
+ if (info^.segmentCount=0) then
+ begin
+  Result:=SCE_KERNEL_ERROR_EPERM;
+ end;
+
  node.Release;
  _sig_unlock;
- Result:=0;
 end;
 
 function ps4_sceKernelGetModuleInfoForUnwind(addr:Pointer;flags:DWORD;info:pSceModuleInfoForUnwind):Integer; SysV_ABI_CDecl;
