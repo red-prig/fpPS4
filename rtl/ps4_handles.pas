@@ -175,7 +175,8 @@ begin
  Result:=False;
  if (Key<min_key) or (Key>max_key) then Exit;
  rwlock_wrlock(FLock);
- Pointer(data):=HAMT_delete32(FHAMT,Key);
+ data:=nil;
+ HAMT_delete32(FHAMT,Key,@data);
  if Assigned(data) then
  begin
   data.Release;

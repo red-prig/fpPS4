@@ -376,8 +376,9 @@ procedure _DeletePlayer(const handle:SceAvPlayerHandle);
 var
  data:TAvPlayerInfo;
 begin
+ data:=nil;
  spin_lock(hamt_lock);
-  data:=TAvPlayerInfo(HAMT_delete64(@AvHandleHamt,handle));
+  HAMT_delete64(@AvHandleHamt,handle,@data);
  spin_unlock(hamt_lock);
 
  if (data<>nil) then

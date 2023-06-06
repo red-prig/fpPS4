@@ -158,7 +158,7 @@ end;
 procedure _DeleteDecoder(const handle:SceAudiodecHandle);
 begin
  spin_lock(hamt_lock);
-  HAMT_delete32(@AudiodecHamt,handle);
+  HAMT_delete32(@AudiodecHamt,handle,nil);
  spin_unlock(hamt_lock);
 end;
 
