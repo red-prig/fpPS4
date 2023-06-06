@@ -32,6 +32,7 @@ type
   procedure emit_V_SUBB_U32;
 
   procedure emit_V_CNDMASK_B32;
+  procedure emit_V_MUL_LEGACY_F32;
   procedure emit_V2_F32(OpId:DWORD);
   procedure emit_V_SUBREV_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
@@ -231,6 +232,35 @@ begin
  emit_src_neg_bit(@src,2);
 
  OpSelect(dst,src[0],src[1],src[2]);
+end;
+
+procedure TEmit_VOP3.emit_V_MUL_LEGACY_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+ zero:PsrRegNode;
+ cmp:PsrRegNode;
+ mul:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_bit(@src,2);
+ emit_src_neg_bit(@src,2);
+
+ zero:=NewReg_s(dtFloat32,0);
+ cmp:=get_legacy_cmp(src[0],src[1],zero);
+
+ //
+ mul:=NewReg(dtFloat32);
+ _Op2(line,Op.OpFMul,mul,src[0],src[1]);
+
+ OpSelect(dst,mul,zero,cmp); //false,true,cond
+
+ emit_dst_omod_f(dst);
+ emit_dst_clamp_f(dst);
 end;
 
 procedure TEmit_VOP3.emit_V2_F32(OpId:DWORD);
@@ -1181,6 +1211,8 @@ begin
 
   256+V_MIN_F32:emit_V_MMX_F32(GlslOp.FMin);
   256+V_MAX_F32:emit_V_MMX_F32(GlslOp.FMax);
+
+  256+V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
   256+V_MUL_F32: emit_V2_F32(Op.OpFMul);
 
