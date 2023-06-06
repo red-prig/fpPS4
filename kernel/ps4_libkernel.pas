@@ -1261,7 +1261,6 @@ begin
  lib^.set_proc($7FB28139A7F2B17A,@ps4_sceKernelGetModuleInfoFromAddr);
  lib^.set_proc($1D93BBC4EA2CE317,@ps4_sceKernelGetModuleInfoInternal);
  lib^.set_proc($914A60AD722BCFB4,@ps4_sceKernelGetModuleInfo);
- lib^.set_proc($420B0A1147E4A8C0,@ps4_sceKernelGetModuleInfo2);
  lib^.set_proc($4694092552938853,@ps4_sceKernelGetModuleInfoForUnwind);
 
  lib^.set_proc($4F3E113540816C62,@ps4__sceKernelRtldThreadAtexitIncrement);
@@ -1293,7 +1292,6 @@ begin
  lib^.set_proc($1A0DFEC962FA0D65,@ps4_sceKernelLoadStartModuleForSysmodule);
 
  lib^.set_proc($22EC6752E5E4E818,@ps4_sceKernelGetModuleList);
- lib^.set_proc($673CC2DD91950247,@ps4_sceKernelGetModuleList2);
  lib^.set_proc($BBE9A55245A95376,@ps4_sceKernelGetModuleListInternal);
 
  lib^.set_proc($2F01BC8379E2AB00,@ps4_sceKernelDlsym);
@@ -1812,11 +1810,15 @@ begin
 
  lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
 
+ //
+
  px:=Result._add_lib('libScePosix');
  px^.MapSymbol:=lib^.MapSymbol;
 
  px:=Result._add_lib('libkernel_cpumode_platform');
  px^.MapSymbol:=lib^.MapSymbol;
+
+ //
 
  lib:=Result._add_lib('libkernel_unity');
 
@@ -1827,14 +1829,25 @@ begin
  px:=Result._add_lib('libkernel_exception');
  px^.MapSymbol:=lib^.MapSymbol;
 
+ //
+
  lib:=Result._add_lib('libSceCoredump');
 
  lib^.set_proc($F332D27C47D6E405,@ps4_sceCoredumpRegisterCoredumpHandler);
  lib^.set_proc($7C59213A0CED8820,@ps4_sceCoredumpUnregisterCoredumpHandler);
 
+ //
+
  lib:=Result._add_lib('libSceOpenPsId');
 
  lib^.set_proc($0CB39172BA14A9B7,@ps4_sceKernelGetOpenPsId);
+
+ //
+
+ lib:=Result._add_lib('libkernel_module_info');
+
+ lib^.set_proc($420B0A1147E4A8C0,@ps4_sceKernelGetModuleInfo2);
+ lib^.set_proc($673CC2DD91950247,@ps4_sceKernelGetModuleList2);
 
  //
  _kernel_init;
