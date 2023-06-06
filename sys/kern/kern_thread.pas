@@ -19,6 +19,10 @@ uses
  kern_rtprio,
  hamt;
 
+type
+ p_kthread_iterator=^kthread_iterator;
+ kthread_iterator=THAMT_Iterator32;
+
 function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
@@ -42,7 +46,11 @@ procedure thread_dec_ref(td:p_kthread);
 procedure thread_lock(td:p_kthread);
 procedure thread_unlock(td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
-procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
+
+function  FOREACH_THREAD_START(i:p_kthread_iterator):Boolean;
+procedure FOREACH_THREAD_FINISH();
+function  THREAD_NEXT(i:p_kthread_iterator):Boolean;
+function  THREAD_GET(i:p_kthread_iterator):p_kthread;
 
 function  SIGPENDING(td:p_kthread):Boolean;
 
@@ -232,13 +240,32 @@ begin
  end;
 end;
 
-procedure FOREACH_THREAD_IN_PROC(cb,userdata:Pointer);
+function FOREACH_THREAD_START(i:p_kthread_iterator):Boolean;
 begin
  rw_wlock(tidhash_lock);
 
- HAMT_traverse32(@tidhashtbl,Tfree_data_cb(cb),userdata);
+ Result:=HAMT_first32(@tidhashtbl,i);
 
+ if not Result then //space
+ begin
+  rw_wunlock(tidhash_lock);
+ end;
+end;
+
+procedure FOREACH_THREAD_FINISH();
+begin
  rw_wunlock(tidhash_lock);
+end;
+
+function THREAD_NEXT(i:p_kthread_iterator):Boolean;
+begin
+ Result:=HAMT_next32(i);
+end;
+
+function THREAD_GET(i:p_kthread_iterator):p_kthread;
+begin
+ Result:=nil;
+ HAMT_get_value32(i,@Result);
 end;
 
 function BaseQueryInfo(td:p_kthread):Integer;
@@ -571,35 +598,18 @@ begin
  // NOTREACHED
 end;
 
-type
- p_t_stk=^_t_stk;
- _t_stk=record
-   error:Integer;
-   sig:Integer;
-   td:p_kthread;
-   ksi:ksiginfo_t;
- end;
-
-procedure _for_stk(td:p_kthread;data:p_t_stk); register; //Tfree_data_cb
-begin
- if (td<>data^.td) then
- begin
-  data^.error:=0;
-  if (data^.sig=0) then Exit;
-  tdksignal(td,data^.sig,@data^.ksi);
- end;
-end;
-
 function sys_thr_kill(id,sig:Integer):Integer;
 var
- data:_t_stk;
+ td,ttd:p_kthread;
+ ksi:ksiginfo_t;
+ i:kthread_iterator;
 begin
- data.td:=curkthread;
+ td:=curkthread;
 
- ksiginfo_init(@data.ksi);
- data.ksi.ksi_info.si_signo:=sig;
- data.ksi.ksi_info.si_code :=SI_LWP;
- data.ksi.ksi_info.si_pid  :=g_pid;
+ ksiginfo_init(@ksi);
+ ksi.ksi_info.si_signo:=sig;
+ ksi.ksi_info.si_code :=SI_LWP;
+ ksi.ksi_info.si_pid  :=g_pid;
 
  if (id=-1) then //all
  begin
@@ -608,19 +618,31 @@ begin
    Result:=EINVAL;
   end else
   begin
-   data.error:=ESRCH;
-   data.sig:=0;
+   Result:=ESRCH;
    PROC_LOCK;
-   FOREACH_THREAD_IN_PROC(@_for_stk,@data);
+
+   if FOREACH_THREAD_START(@i) then
+   begin
+    repeat
+     ttd:=THREAD_GET(@i);
+     if (ttd<>td) then
+     begin
+      Result:=0;
+      if (sig=0) then Break;
+      tdksignal(ttd,sig,@ksi);
+     end;
+    until not THREAD_NEXT(@i);
+    FOREACH_THREAD_FINISH();
+   end;
+
    PROC_UNLOCK;
-   Result:=data.error;
   end;
  end else
  begin
   Result:=0;
 
-  data.td:=tdfind(DWORD(id));
-  if (data.td=nil) then Exit(ESRCH);
+  td:=tdfind(DWORD(id));
+  if (td=nil) then Exit(ESRCH);
 
   if (sig=0) then
   begin
@@ -629,9 +651,9 @@ begin
   if (not _SIG_VALID(sig)) then
    Result:=EINVAL
   else
-   tdksignal(data.td,sig,@data.ksi);
+   tdksignal(td,sig,@ksi);
 
-  thread_dec_ref(data.td);
+  thread_dec_ref(td);
  end;
 end;
 

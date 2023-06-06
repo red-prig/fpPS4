@@ -404,30 +404,25 @@ begin
  sigqueue_delete_set(sq,@_set);
 end;
 
-type
- p_t_sdsp=^_t_sdsp;
- _t_sdsp=record
-   worklist:p_sigqueue;
-       _set:p_sigset_t
- end;
-
-procedure _for_sdsp(td:p_kthread;data:p_t_sdsp); register; //Tfree_data_cb
-begin
- sigqueue_move_set(@td^.td_sigqueue,data^.worklist,data^._set);
-end;
-
 procedure sigqueue_delete_set_proc(_set:p_sigset_t);
 var
+ td0:p_kthread;
  worklist:sigqueue_t;
- data:_t_sdsp;
+ i:kthread_iterator;
 begin
  sigqueue_init(@worklist);
  sigqueue_move_set(@g_p_sigqueue,@worklist,_set);
 
- data.worklist:=@worklist;
- data.    _set:=_set;
+ if FOREACH_THREAD_START(@i) then
+ begin
+  repeat
+   td0:=THREAD_GET(@i);
 
- FOREACH_THREAD_IN_PROC(@_for_sdsp,@data);
+   sigqueue_move_set(@td0^.td_sigqueue,@worklist,_set);
+
+  until not THREAD_NEXT(@i);
+  FOREACH_THREAD_FINISH();
+ end;
 
  sigqueue_flush(@worklist);
 end;
@@ -1325,34 +1320,12 @@ begin
  PROC_UNLOCK;
 end;
 
-type
- p_t_sigtd=^_t_sigtd;
- _t_sigtd=record
-   first_td:p_kthread;
-  signal_td:p_kthread;
-        sig:Integer
- end;
-
-procedure _for_sigtd(td:p_kthread;data:p_t_sigtd); register; //Tfree_data_cb
-begin
- if (td=nil) or (data=nil) then Exit;
-
- if (data^.first_td=nil) then
- begin
-  data^.first_td:=td;
- end;
-
- if (data^.signal_td=nil) then
- if (not SIGISMEMBER(@td^.td_sigmask,data^.sig)) then
- begin
-  data^.signal_td:=td;
- end;
-end;
-
 function sigtd(sig,prop:Integer):p_kthread;
 var
  td:p_kthread;
- data:_t_sigtd;
+ first_td :p_kthread;
+ signal_td:p_kthread;
+ i:kthread_iterator;
 begin
  td:=curkthread;
 
@@ -1362,17 +1335,35 @@ begin
   Exit(td);
  end;
 
- data:=Default(_t_sigtd);
- data.sig:=sig;
+ first_td :=nil;
+ signal_td:=nil;
 
- FOREACH_THREAD_IN_PROC(Pointer(@_for_sigtd),@data);
-
- if (data.signal_td=nil) then
+ if FOREACH_THREAD_START(@i) then
  begin
-  Result:=data.first_td;
+  repeat
+   td:=THREAD_GET(@i);
+
+   if (first_td=nil) then
+   begin
+    first_td:=td;
+   end;
+
+   if (not SIGISMEMBER(@td^.td_sigmask,sig)) then
+   begin
+    signal_td:=td;
+    Break;
+   end;
+
+  until not THREAD_NEXT(@i);
+  FOREACH_THREAD_FINISH();
+ end;
+
+ if (signal_td=nil) then
+ begin
+  Result:=first_td;
  end else
  begin
-  Result:=data.signal_td;
+  Result:=signal_td;
  end;
 end;
 

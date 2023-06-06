@@ -127,42 +127,11 @@ begin
  thread_dec_ref(td1);
 end;
 
-procedure _for_lookup_rtprio(td:p_kthread;rtp:p_rtprio); register; //Tfree_data_cb
-var
- _rtp2:t_rtprio;
-begin
- if (td=nil) or (rtp=nil) then Exit;
-
- pri_to_rtp(td,@_rtp2);
- if (_rtp2._type<rtp^._type) or
-    ((_rtp2._type=rtp^._type) and
-     (_rtp2._prio<rtp^._prio)) then
- begin
-  rtp^:=_rtp2;
- end;
-end;
-
-procedure _for_set_rtprio(td:p_kthread;rtp:p_rtprio); register; //Tfree_data_cb
-var
- err:Integer;
-begin
- if (td=nil) or (rtp=nil) then Exit;
-
- if (rtp^._type<>$FFFF) then
- begin
-  err:=rtp_to_pri(rtp,td);
-  if (err<>0) then
-  begin
-   rtp^._type:=$FFFF;
-   rtp^._prio:=err;
-  end;
- end;
-end;
-
 function sys_rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
 var
- td:p_kthread;
- _rtp:t_rtprio;
+ td,tdp:p_kthread;
+ rtp1,rtp2:t_rtprio;
+ i:kthread_iterator;
 begin
  if (pid<>0) and (pid<>g_pid) then Exit(ESRCH);
 
@@ -170,41 +139,78 @@ begin
 
  if (func=RTP_SET) then
  begin
-  Result:=copyin(rtp,@_rtp,sizeof(t_rtprio))
+  Result:=copyin(rtp,@rtp1,sizeof(t_rtprio))
  end else
  begin
   Result:=0;
-  _rtp:=Default(t_rtprio);
+  rtp1:=Default(t_rtprio);
  end;
 
  case func of
   RTP_LOOKUP:
    begin
+
+    PROC_LOCK;
+
     if (pid=0) then
     begin
-     pri_to_rtp(td,@_rtp);
+     pri_to_rtp(td,@rtp1);
     end else
     begin
-     _rtp._type:=RTP_PRIO_IDLE;
-     _rtp._prio:=RTP_PRIO_MAX;
-     FOREACH_THREAD_IN_PROC(@_for_lookup_rtprio,@_rtp);
+     rtp1._type:=RTP_PRIO_IDLE;
+     rtp1._prio:=RTP_PRIO_MAX;
+
+     if FOREACH_THREAD_START(@i) then
+     begin
+      repeat
+       tdp:=THREAD_GET(@i);
+
+       pri_to_rtp(tdp,@rtp2);
+
+       if (rtp2._type<rtp1._type) or
+          ((rtp2._type=rtp1._type) and
+           (rtp2._prio<rtp1._prio)) then
+       begin
+        rtp1:=rtp2;
+       end;
+
+      until not THREAD_NEXT(@i);
+      FOREACH_THREAD_FINISH();
+     end;
+
     end;
-    Result:=copyout(@_rtp,rtp,sizeof(t_rtprio));
+
+    PROC_UNLOCK;
+
+    Result:=copyout(@rtp1,rtp,sizeof(t_rtprio));
    end;
   RTP_SET:
    begin
     if (Result<>0) then Exit;
+
+    PROC_LOCK;
+
     if (pid=0) then
     begin
-     Result:=rtp_to_pri(@_rtp,td);
+     Result:=rtp_to_pri(@rtp1,td);
     end else
     begin
-     FOREACH_THREAD_IN_PROC(@_for_set_rtprio,@_rtp);
-     if (_rtp._type=$FFFF) then
+
+     if FOREACH_THREAD_START(@i) then
      begin
-      Result:=_rtp._prio;
+      repeat
+       tdp:=THREAD_GET(@i);
+
+       Result:=rtp_to_pri(@rtp1,tdp);
+       if (Result<>0) then Break;
+
+      until not THREAD_NEXT(@i);
+      FOREACH_THREAD_FINISH();
      end;
+
     end;
+
+    PROC_UNLOCK;
    end;
   else
    Result:=EINVAL;

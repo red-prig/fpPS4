@@ -444,12 +444,12 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
-  test_files;
-  Writeln('[--test_dirs--]');
-  test_dirs('','/',1);
-  Writeln('[--test_dirs--]');
-
-  readln;
+  //test_files;
+  //Writeln('[--test_dirs--]');
+  //test_dirs('','/',1);
+  //Writeln('[--test_dirs--]');
+  //
+  //readln;
 
   tid2:=curkthread^.td_tid;
 
