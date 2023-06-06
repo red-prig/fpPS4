@@ -165,6 +165,7 @@ type
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   td_retval       :array[0..1] of QWORD;
+  td_ksttop       :Pointer;
   td_kstack       :Pointer;
   //
   td_sleepqueue   :Pointer;

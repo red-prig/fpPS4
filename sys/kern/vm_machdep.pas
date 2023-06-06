@@ -147,16 +147,10 @@ begin
  end;
 end;
 
-function alloca(size:qword):Pointer; sysv_abi_default; assembler; nostackframe;
-asm
- movqq       %rsp,%rax
- subq        %rdi,%rax
- lea     -8(%rax),%rax
- andq        $-32,%rax
- movqq     (%rsp),%rdi
- movqq       %rax,%rsp
- lea    -32(%rsp),%rsp
- jmp    %rdi
+function get_top_mem_td(td:p_kthread;size,align:qword):Pointer;
+begin
+ Result:=System.Align(td^.td_ksttop,align);
+ if ((Result+size)>=SPtr) then Exit(nil);
 end;
 
 procedure ipi_sigreturn;
@@ -164,6 +158,7 @@ var
  td:p_kthread;
  Context:PCONTEXT;
  regs:p_trapframe;
+ save:Pointer;
 begin
  td:=curkthread;
  regs:=td^.td_frame;
@@ -171,12 +166,14 @@ begin
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
   //xmm,ymm
-  Context:=alloca(GetContextSize(CONTEXT_ALLX));
+  Context:=get_top_mem_td(td,GetContextSize(CONTEXT_ALLX),16);
+  Assert(Context<>nil);
   Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
  end else
  begin
   //simple
-  Context:=alloca(SizeOf(TCONTEXT)+15);
+  Context:=get_top_mem_td(td,SizeOf(TCONTEXT),16);
+  Assert(Context<>nil);
   Context^:=Default(TCONTEXT);
   Context^.ContextFlags:=CONTEXT_INTEGER or CONTEXT_CONTROL;
  end;
@@ -268,8 +265,8 @@ begin
   goto resume;
  end;
 
- Context:=alloca(GetContextSize(CONTEXT_ALLX));
-
+ Context:=get_top_mem_td(td,GetContextSize(CONTEXT_ALLX),16);
+ Assert(Context<>nil);
  Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
 
  if (NtGetContextThread(td_handle,Context)<>STATUS_SUCCESS) then

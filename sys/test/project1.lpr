@@ -444,12 +444,12 @@ begin
 
  if (tid<>curkthread^.td_tid) then
  begin
-  //test_files;
-  //Writeln('[--test_dirs--]');
-  //test_dirs('','/',1);
-  //Writeln('[--test_dirs--]');
-  //
-  //readln;
+  test_files;
+  Writeln('[--test_dirs--]');
+  test_dirs('','/',1);
+  Writeln('[--test_dirs--]');
+
+  readln;
 
   tid2:=curkthread^.td_tid;
 
@@ -1104,18 +1104,18 @@ begin
  //test_map;
  sys_init;
 
- Writeln(get_proc_prio());
- Writeln(set_proc_prio(14));
- Writeln(get_proc_prio());
+ //Writeln(get_proc_prio());
+ //Writeln(set_proc_prio(14));
+ //Writeln(get_proc_prio());
 
- Writeln(sys_getrusage(RUSAGE_SELF,@ru));
- Writeln(sys_getrusage(RUSAGE_THREAD,@ru));
+ //Writeln(sys_getrusage(RUSAGE_SELF,@ru));
+ //Writeln(sys_getrusage(RUSAGE_THREAD,@ru));
 
  e:=_umtx_op(nil,UMTX_OP_RW_WRLOCK,0,nil,nil);
  Writeln('me=',e,' _errno:',__error^);
 
- kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
- writeln(_time/10000000:0:3);
+ //kern_clock_gettime_unit(CLOCK_PROCTIME,@_time);
+ //writeln(_time/10000000:0:3);
 
  sys_adjtime(nil,@_tv);
  writeln(_tv.tv_sec,',',_tv.tv_usec);
@@ -1192,7 +1192,7 @@ begin
  readln;
  }
 
- //BeginThread(@_thread);
+ BeginThread(@_thread);
  //BeginThread(@_thread);
  //BeginThread(@_thread);
 

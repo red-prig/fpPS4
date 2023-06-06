@@ -53,6 +53,8 @@ begin
            PAGE_READWRITE
           );
 
+ td^.td_ksttop:=data;
+
  data:=data+SYS_STACK_SIZE;
  td^.td_kstack:=data;
 end;
