@@ -16,6 +16,7 @@ Const
 
 function  cpu_thread_alloc(td:p_kthread):Integer;
 function  cpu_thread_free(td:p_kthread):Integer;
+function  cpu_thread_finished(td:p_kthread):Boolean;
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
@@ -74,6 +75,27 @@ begin
            @size,
            MEM_RELEASE
           );
+end;
+
+function cpu_thread_finished(td:p_kthread):Boolean;
+var
+ R:DWORD;
+ T:QWORD;
+begin
+ Result:=True;
+ if (td=nil) then Exit;
+ if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit;
+
+ T:=0;
+ R:=NtWaitForSingleObject(td^.td_handle,False,@T);
+
+ Result:=(R=STATUS_WAIT_0);
+
+ if Result then
+ begin
+  NtClose(td^.td_handle);
+  td^.td_handle:=0;
+ end;
 end;
 
 function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;

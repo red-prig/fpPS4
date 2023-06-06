@@ -23,6 +23,8 @@ type
  p_kthread_iterator=^kthread_iterator;
  kthread_iterator=THAMT_Iterator32;
 
+procedure thread_reap();
+
 function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
@@ -85,7 +87,6 @@ uses
  md_proc,
  md_thread,
  kern_rwlock,
- kern_mtx,
  kern_umtx,
  kern_sig,
  kern_synch,
@@ -96,10 +97,13 @@ var
  tidhashtbl:TSTUB_HAMT32;
  tidhash_lock:Pointer=nil;
 
+ zombie_threads:TAILQ_HEAD=(tqh_first:nil;tqh_last:@zombie_threads.tqh_first);
+ zombie_lock:Pointer=nil;
+
  p_numthreads:Integer=0;
 
- const
-  max_threads_per_proc=1500;
+const
+ max_threads_per_proc=1500;
 
 function SIGPENDING(td:p_kthread):Boolean;
 begin
@@ -114,10 +118,57 @@ begin
  FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
 end;
 
+{
+ * Place an unused thread on the zombie list.
+ * Use the slpq as that must be unused by now.
+ }
+procedure thread_zombie(td:p_kthread);
+begin
+ rw_wlock(zombie_lock);
+ TAILQ_INSERT_HEAD(@zombie_threads,td,@td^.td_slpq);
+ rw_wunlock(zombie_lock);
+end;
+
+{
+ * Reap zombie resources.
+ }
+procedure thread_reap();
+var
+ td_first,td_next:p_kthread;
+begin
+ if rw_try_wlock(zombie_lock) then
+ begin
+  if (not TAILQ_EMPTY(@zombie_threads)) then
+  begin
+   td_first:=TAILQ_FIRST(@zombie_threads);
+
+   while (td_first<>nil) do
+   begin
+    td_next:=TAILQ_NEXT(td_first,@td_first^.td_slpq);
+
+    if cpu_thread_finished(td_first) then
+    begin
+     TAILQ_REMOVE(@zombie_threads,@td_first,@td_first^.td_slpq);
+     thread_free(td_first);
+    end else
+    begin
+     Break;
+    end;
+
+    td_first:=td_next;
+   end;
+  end;
+
+  rw_wunlock(zombie_lock);
+ end;
+end;
+
 function thread_alloc:p_kthread;
 var
  data:Pointer;
 begin
+ thread_reap();
+
  data:=AllocMem(SizeOf(kthread)+SizeOf(trapframe));
 
  Result:=data;
@@ -153,7 +204,7 @@ procedure thread_dec_ref(td:p_kthread);
 begin
  if (System.InterlockedDecrement(td^.td_ref)=0) then
  begin
-  thread_free(td);
+  thread_zombie(td);
  end;
 end;
 
@@ -242,19 +293,19 @@ end;
 
 function FOREACH_THREAD_START(i:p_kthread_iterator):Boolean;
 begin
- rw_wlock(tidhash_lock);
+ rw_rlock(tidhash_lock);
 
  Result:=HAMT_first32(@tidhashtbl,i);
 
  if not Result then //space
  begin
-  rw_wunlock(tidhash_lock);
+  rw_runlock(tidhash_lock);
  end;
 end;
 
 procedure FOREACH_THREAD_FINISH();
 begin
- rw_wunlock(tidhash_lock);
+ rw_runlock(tidhash_lock);
 end;
 
 function THREAD_NEXT(i:p_kthread_iterator):Boolean;
@@ -326,7 +377,7 @@ begin
 end;
 
 function create_thread(td        :p_kthread; //calling thread
-                       ctx       :Pointer;
+                       ctx       :p_mcontext_t;
                        start_func:Pointer;
                        arg       :Pointer;
                        stack_base:Pointer;
@@ -354,11 +405,13 @@ var
 
  n:Integer;
 begin
-
+ Result:=0;
  if (p_numthreads>=max_threads_per_proc) then
  begin
   Exit(EPROCLIM);
  end;
+
+ thread_reap();
 
  if (rtp<>nil) then
  begin
@@ -535,7 +588,6 @@ end;
 procedure thread_exit;
 var
  td:p_kthread;
- rsp:QWORD;
 begin
  td:=curkthread;
  if (td=nil) then Exit;
@@ -544,20 +596,10 @@ begin
 
  td^.td_state:=TDS_INACTIVE;
 
- thread_inc_ref(td);
  tidhash_remove(td);
  thread_unlink(td);
 
- NtClose(td^.td_handle);
-
  umtx_thread_exit(td);
-
- //switch to userstack
- rsp:=td^.td_frame^.tf_rsp;
- if (rsp<>0) then
- asm
-  mov rsp,%rsp
- end;
 
  //free
  thread_dec_ref(td);
@@ -594,6 +636,7 @@ begin
 
  tdsigcleanup(td);
  //thread_stopped(p);
+ thread_reap();
  thread_exit();
  // NOTREACHED
 end;
@@ -605,6 +648,8 @@ var
  i:kthread_iterator;
 begin
  td:=curkthread;
+
+ thread_reap();
 
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
@@ -671,6 +716,10 @@ function kern_thr_suspend(td:p_kthread;tsp:ptimespec):Integer;
 var
  tv:Int64;
 begin
+ Result:=0;
+
+ thread_reap();
+
  if ((td^.td_pflags and TDP_WAKEUP)<>0) then
  begin
   td^.td_pflags:=td^.td_pflags and (not TDP_WAKEUP);
@@ -751,6 +800,8 @@ begin
  Result:=0;
  td:=curkthread;
 
+ thread_reap();
+
  if (td<>nil) then
  if (id=td^.td_tid) then
  begin
@@ -776,6 +827,8 @@ var
  name:t_td_name;
 begin
  Result:=0;
+
+ thread_reap();
 
  name:=Default(t_td_name);
  if (name<>nil) then
@@ -822,6 +875,8 @@ var
  len:ptrint;
 begin
  Result:=0;
+
+ thread_reap();
 
  td:=tdfind(DWORD(id));
  if (td=nil) then Exit(ESRCH);

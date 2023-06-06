@@ -332,7 +332,7 @@ begin
 
  Writeln('sys_rmdir=',sys_rmdir('/test'));
 
- readln;
+ //readln;
 end;
 
 procedure test_dirs(const dirp,namep:RawByteString;s:Byte);
@@ -449,7 +449,7 @@ begin
   test_dirs('','/',1);
   Writeln('[--test_dirs--]');
 
-  readln;
+  //readln;
 
   tid2:=curkthread^.td_tid;
 
