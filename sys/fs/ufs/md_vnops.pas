@@ -315,7 +315,7 @@ begin
  if (p=nil) or (len<=0) then exit;
  hs:='';
  SetLength(hs,len);
- i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len,True);
+ i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len);
  if (i>0) then
  begin
   SetLength(hs,i-1);
@@ -1476,8 +1476,7 @@ begin
  i:=Utf8ToUnicode(@NT_LINK.Name,
                   MAX_PATH,
                   cnp^.cn_nameptr,
-                  cnp^.cn_namelen,
-                  True);
+                  cnp^.cn_namelen);
 
  if (i<=0) then
  begin
@@ -1728,8 +1727,7 @@ begin
  i:=Utf8ToUnicode(@NT_RENAME.Name,
                   MAX_PATH,
                   cnp_t^.cn_nameptr,
-                  cnp_t^.cn_namelen,
-                  True);
+                  cnp_t^.cn_namelen);
 
  if (i<=0) then
  begin

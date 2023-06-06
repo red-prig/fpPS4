@@ -16,8 +16,8 @@ uses
 procedure ipi_sigreturn;
 function  ipi_send_cpu(td:p_kthread):Integer;
 
-function  _umtxq_alloc:THandle; inline;
-procedure _umtxq_free(h:THandle); inline;
+function  _umtxq_alloc:THandle;
+procedure _umtxq_free(h:THandle);
 function  msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
 function  wakeup_umtxq(h:THandle):Integer; inline;
 
@@ -63,7 +63,7 @@ begin
  end;
 end;
 
-function _umtxq_alloc:THandle; inline;
+function _umtxq_alloc:THandle;
 var
  n:Integer;
 begin
@@ -72,7 +72,7 @@ begin
  Assert(n=0);
 end;
 
-procedure _umtxq_free(h:THandle); inline;
+procedure _umtxq_free(h:THandle);
 begin
  NtClose(h);
 end;

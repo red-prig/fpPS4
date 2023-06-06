@@ -31,18 +31,6 @@ function  umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
 
 procedure umtxq_sysinit; //SYSINIT
 
-implementation
-
-uses
- HAMT,
- errno,
- systm,
- trap,
- md_time,
- vm_machdep,
- kern_thread,
- sched_ule;
-
 const
  _UMUTEX_TRY =1;
  _UMUTEX_WAIT=2;
@@ -95,6 +83,19 @@ type
   uc_refs :Integer;
  end;
 
+implementation
+
+uses
+ HAMT,
+ errno,
+ systm,
+ trap,
+ md_time,
+ vm_machdep,
+ kern_thread,
+ sched_ule;
+
+type
  p_umtxq_hamt=^umtxq_hamt;
  umtxq_hamt=packed record
   hamt:TSTUB_HAMT64;
@@ -297,28 +298,24 @@ begin
  end;
 end;
 
-function umtxq_alloc:p_umtx_q;
+procedure umtxq_init(uq:p_umtx_q;td:p_kthread);
 begin
- Result:=AllocMem(SizeOf(umtx_q));
- Result^.uq_inherited_pri:=PRI_MAX;
- Result^.uq_handle:=_umtxq_alloc;
+ uq^.uq_inherited_pri:=PRI_MAX;
+ uq^.uq_handle:=_umtxq_alloc;
+ uq^.uq_thread:=td;
 end;
 
 procedure umtxq_free(uq:p_umtx_q);
 begin
  if (uq=nil) then Exit;
  _umtxq_free(uq^.uq_handle);
- FreeMem(uq);
+ uq^.uq_handle:=0;
+ uq^.uq_thread:=nil;
 end;
 
 procedure umtx_thread_init(td:p_kthread);
-var
- uq:p_umtx_q;
 begin
- uq:=umtxq_alloc;
- uq^.uq_thread:=td;
-
- td^.td_umtxq :=uq;
+ umtxq_init(td^.td_umtxq,td);
 end;
 
 procedure umtx_thread_exit(td:p_kthread);

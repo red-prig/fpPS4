@@ -14,7 +14,7 @@ Const
  SYS_STACK_RSRV=64*1024;
  SYS_STACK_SIZE=16*1024;
 
-function  cpu_thread_alloc(td:p_kthread):Integer;
+function  cpu_thread_alloc():p_kthread;
 function  cpu_thread_free(td:p_kthread):Integer;
 function  cpu_thread_finished(td:p_kthread):Boolean;
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
@@ -24,40 +24,70 @@ function  cpu_getstack(td:p_kthread):QWORD; inline;
 
 implementation
 
-function cpu_thread_alloc(td:p_kthread):Integer;
+uses
+ ucontext,
+ kern_umtx;
+
+function cpu_thread_alloc():p_kthread;
 var
+ td:p_kthread;
  data:Pointer;
  size:ULONG_PTR;
+ R:DWORD;
 begin
+ Result:=nil;
+
  data:=nil;
  size:=SYS_STACK_RSRV;
 
- Result:=NtAllocateVirtualMemory(
-           NtCurrentProcess,
-           @data,
-           0,
-           @size,
-           MEM_RESERVE,
-           PAGE_READWRITE
-          );
- if (Result<>0) then Exit;
+ R:=NtAllocateVirtualMemory(
+     NtCurrentProcess,
+     @data,
+     0,
+     @size,
+     MEM_RESERVE,
+     PAGE_READWRITE
+    );
+ if (R<>0) then Exit;
 
+ //header
+ size:=SizeOf(kthread)+SizeOf(trapframe)+SizeOf(umtx_q);
+ size:=System.Align(size,4*1024);
+
+ R:=NtAllocateVirtualMemory(
+     NtCurrentProcess,
+     @data,
+     0,
+     @size,
+     MEM_COMMIT,
+     PAGE_READWRITE
+    );
+ if (R<>0) then Exit;
+
+ td:=data;
+ td^.td_frame:=Pointer(td+1);
+ td^.td_umtxq:=Pointer(td^.td_frame+1);
+
+ //footer
  data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;
  size:=SYS_STACK_SIZE;
 
- Result:=NtAllocateVirtualMemory(
-           NtCurrentProcess,
-           @data,
-           0,
-           @size,
-           MEM_COMMIT,
-           PAGE_READWRITE
-          );
+ R:=NtAllocateVirtualMemory(
+     NtCurrentProcess,
+     @data,
+     0,
+     @size,
+     MEM_COMMIT,
+     PAGE_READWRITE
+    );
+ if (R<>0) then Exit;
 
  td^.td_ksttop:=data;
 
  data:=data+SYS_STACK_SIZE;
  td^.td_kstack:=data;
+
+ Result:=td;
 end;
 
 function cpu_thread_free(td:p_kthread):Integer;
@@ -65,8 +95,7 @@ var
  data:Pointer;
  size:ULONG_PTR;
 begin
- data:=td^.td_kstack;
- data:=data-SYS_STACK_RSRV;
+ data:=td;
  size:=0;
 
  Result:=NtFreeVirtualMemory(

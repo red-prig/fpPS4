@@ -164,19 +164,10 @@ begin
 end;
 
 function thread_alloc:p_kthread;
-var
- data:Pointer;
 begin
  thread_reap();
 
- data:=AllocMem(SizeOf(kthread)+SizeOf(trapframe));
-
- Result:=data;
-
- data:=data+SizeOf(kthread);
- Result^.td_frame:=data;
-
- cpu_thread_alloc(Result);
+ Result:=cpu_thread_alloc();
 
  Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
@@ -191,8 +182,6 @@ begin
  sleepq_free(td^.td_sleepqueue);
  umtx_thread_fini(td);
  cpu_thread_free(td);
- //
- FreeMem(td);
 end;
 
 procedure thread_inc_ref(td:p_kthread);

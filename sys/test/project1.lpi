@@ -572,7 +572,7 @@
     </CodeGeneration>
     <Linking>
       <Debugging>
-        <DebugInfoType Value="dsDwarf3"/>
+        <DebugInfoType Value="dsDwarf2"/>
       </Debugging>
       <LinkSmart Value="True"/>
     </Linking>
