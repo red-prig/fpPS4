@@ -117,7 +117,7 @@ implementation
 uses
  errno,
  machdep,
- vm_machdep,
+ md_context,
  kern_sig,
  sysent;
 

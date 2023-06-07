@@ -122,7 +122,6 @@ uses
  vstat,
  vfs_subr,
  subr_uio,
- kern_time,
  kern_thr;
 
 const

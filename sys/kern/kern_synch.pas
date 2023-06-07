@@ -56,7 +56,7 @@ implementation
 uses
  kern_thread,
  sched_ule,
- vm_machdep,
+ md_sleep,
  rtprio;
 
 function msleep(ident   :Pointer;

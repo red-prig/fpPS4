@@ -233,7 +233,7 @@ var
  nd:t_nameidata;
  mporoot,mpnroot:p_mount;
  vp,vporoot,vpdevfs:p_vnode;
- fspath:PChar;
+ //fspath:PChar;
  error:Integer;
 begin
  mpnroot:=TAILQ_NEXT(mpdevfs,@mpdevfs^.mnt_list);

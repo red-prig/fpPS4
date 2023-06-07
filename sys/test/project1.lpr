@@ -80,7 +80,7 @@ uses
  md_proc,
  kern_ksched,
  kern_uuid,
- kern_gpo,
+ kern_gpo, md_sleep,
  sys_machdep;
 
 var

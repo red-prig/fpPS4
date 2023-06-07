@@ -10,8 +10,7 @@ uses
  time,
  signal,
  signalvar,
- kern_thr,
- rtprio;
+ kern_thr;
 
 const
  SA_KILL    =$01; // terminates process by default
@@ -113,8 +112,7 @@ uses
  kern_exit,
  kern_prot,
  kern_synch,
- vm_machdep,
- md_thread,
+ md_context,
  md_proc,
  machdep,
  sched_ule,

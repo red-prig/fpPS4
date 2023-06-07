@@ -57,6 +57,8 @@ var
  iargs   :t_i386_ioperm_args;
 begin
  Result:=0;
+ i386base:=0;
+ a64base :=0;
 
  //read
  case op of

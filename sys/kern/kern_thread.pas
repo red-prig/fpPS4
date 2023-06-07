@@ -84,7 +84,8 @@ implementation
 uses
  errno,
  systm,
- vm_machdep,
+ md_sleep,
+ md_context,
  machdep,
  md_proc,
  md_thread,

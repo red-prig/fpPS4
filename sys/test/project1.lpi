@@ -122,10 +122,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\kern\vm_machdep.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\kern\kern_cpuset.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -543,6 +539,10 @@
       </Unit>
       <Unit>
         <Filename Value="..\sys_machdep.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\kern\md_sleep.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

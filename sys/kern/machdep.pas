@@ -38,7 +38,8 @@ uses
  systm,
  md_psl,
  kern_sig,
- trap;
+ trap,
+ md_context;
 
 //clearing memory without AVX optimizations
 procedure bzero(ptr:Pointer;size:ptrint);
@@ -207,14 +208,13 @@ begin
  //xmm,ymm
  if ((tp^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
-  get_fpcontext(td,mcp,@mcp^.mc_fpstate);
+  Result:=get_fpcontext(td,mcp,@mcp^.mc_fpstate);
  end else
  begin
-  //get md
+  Result:=md_get_fpcontext(td,mcp,@mcp^.mc_fpstate);
  end;
+ if (Result<>0) then Exit;
  //xmm,ymm
-
- mcp^.mc_fpformat:=_MC_FPFMT_XMM;
 
  mcp^.mc_fsbase:=ptruint(td^.pcb_fsbase);
  mcp^.mc_gsbase:=ptruint(td^.pcb_gsbase);

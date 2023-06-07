@@ -89,9 +89,8 @@ uses
  HAMT,
  errno,
  systm,
- trap,
  md_time,
- vm_machdep,
+ md_sleep,
  kern_thread,
  sched_ule;
 
@@ -1548,6 +1547,7 @@ begin
    end else
    begin
     ets:=TIMESPEC_TO_UNIT(timeout);
+    tts:=ets;
 
     cts:=0;
     Result:=kern_clock_gettime_unit(clockid,@cts);

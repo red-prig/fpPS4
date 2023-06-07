@@ -24,7 +24,7 @@ function  setrunnable(td:p_kthread):Integer;
 implementation
 
 uses
- vm_machdep,
+ md_sleep,
  md_thread;
 
 procedure sched_fork_thread(td,childtd:p_kthread);

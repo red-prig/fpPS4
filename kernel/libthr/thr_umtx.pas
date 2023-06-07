@@ -75,6 +75,11 @@ uses
  errno,
  thr_init;
 
+function TID(thr:p_pthread):Integer; inline;
+begin
+ Result:=thr^.tid;
+end;
+
 function atomic_cmpset_acq_32(p:PDWORD;cmpval,newval:DWORD):DWORD; inline;
 begin
  Result:=System.InterlockedCompareExchange(p^,newval,cmpval);
