@@ -9,8 +9,6 @@ uses
  sysutils,
  mqueue,
  kern_thr,
- ntapi,
- windows,
  ucontext,
  signal,
  signalvar,
@@ -581,7 +579,7 @@ begin
  //free
  thread_dec_ref(td);
 
- RtlExitUserThread(0);
+ cpu_sched_throw;
 end;
 
 function sys_thr_self(id:PDWORD):Integer;

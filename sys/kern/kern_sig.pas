@@ -103,7 +103,6 @@ procedure siginit; //SYSINIT
 implementation
 
 uses
- ntapi,
  errno,
  systm,
  kern_mtx,
@@ -847,7 +846,7 @@ begin
    tv:=ets-rts;
   end else
   begin
-   tv:=NT_INFINITE;
+   tv:=0;
   end;
 
   //PROC_UNLOCK; //
@@ -1740,7 +1739,7 @@ begin
 
  thread_unlock(td);
 
- NtTestAlert();
+ md_test_alert;
 
  if ((flags and TDF_ALRMPEND)<>0) then
  begin

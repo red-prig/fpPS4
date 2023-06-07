@@ -82,6 +82,8 @@ procedure _set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
 
 function  md_get_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
 
+procedure md_test_alert;
+
 procedure ipi_sigreturn;
 function  ipi_send_cpu(td:p_kthread):Integer;
 
@@ -388,9 +390,15 @@ begin
  //xmm,ymm
  _get_fpcontext(Context,xstate);
 
+ mcp^.mc_flags   :=mcp^.mc_flags or _MC_HASFPXSTATE;
  mcp^.mc_fpformat:=_MC_FPFMT_XMM;
  mcp^.mc_ownedfp :=_MC_FPOWNED_FPU;
  //xmm,ymm
+end;
+
+procedure md_test_alert;
+begin
+ NtTestAlert();
 end;
 
 procedure ipi_sigreturn;

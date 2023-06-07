@@ -24,6 +24,7 @@ function  cpu_thread_create(td:p_kthread;
                             arg       :Pointer):Integer;
 procedure cpu_thread_terminate(td:p_kthread);
 function  cpu_sched_add(td:p_kthread):Integer;
+procedure cpu_sched_throw;
 function  cpu_thread_finished(td:p_kthread):Boolean;
 
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
@@ -253,6 +254,11 @@ begin
  begin
   td^.td_state:=TDS_INACTIVE;
  end;
+end;
+
+procedure cpu_sched_throw;
+begin
+ RtlExitUserThread(0);
 end;
 
 function cpu_thread_finished(td:p_kthread):Boolean;
