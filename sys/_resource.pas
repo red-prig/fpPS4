@@ -61,6 +61,7 @@ type
   ru_nvcsw   :QWORD;   // voluntary context switches
   ru_nivcsw  :QWORD;   // involuntary
  end;
+ {$IF sizeof(t_rusage)<>144}{$STOP sizeof(t_rusage)<>144}{$ENDIF}
 
 const
  //Process priority specifications to get/setpriority.

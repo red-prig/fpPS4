@@ -13,6 +13,7 @@ type
   prot  :Integer;
   eflags:Integer;
  end;
+ {$IF sizeof(t_query_memory_prot)<>24}{$STOP sizeof(t_query_memory_prot)<>24}{$ENDIF}
 
 function sys_mmap(_addr :Pointer;
                   _len  :QWORD;

@@ -41,6 +41,7 @@ type
   _type:Word;
   _prio:Word;
  end;
+ {$IF sizeof(t_rtprio)<>4}{$STOP sizeof(t_rtprio)<>4}{$ENDIF}
 
 function  PRI_BASE(P:Word):Word;
 function  RTP_PRIO_BASE(P:Word):Word;

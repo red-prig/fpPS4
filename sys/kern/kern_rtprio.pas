@@ -28,6 +28,7 @@ function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 var
  newpri:Integer;
 begin
+ Result:=0;
 
  Case RTP_PRIO_BASE(rtp^._type) of
   RTP_PRIO_IDLE:

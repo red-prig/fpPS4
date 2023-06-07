@@ -60,15 +60,15 @@ type
 
  p_vmspace=^vmspace;
  vmspace=packed record
-   vm_map      :_vm_map; // VM address map
-   vm_swrss   :segsz_t; // resident set size before last swap
-   vm_tsize   :segsz_t; // text size (pages) XXX
-   vm_dsize   :segsz_t; // data size (pages) XXX
-   vm_ssize   :segsz_t; // stack size (pages)
-   vm_taddr   :caddr_t; // (c) user virtual address of text
-   vm_daddr   :caddr_t; // (c) user virtual address of data
-   vm_maxsaddr:caddr_t; // user VA at max stack growth
-   vm_pmap    :_pmap;   // private physical map
+  vm_map      :_vm_map; // VM address map
+  vm_swrss   :segsz_t; // resident set size before last swap
+  vm_tsize   :segsz_t; // text size (pages) XXX
+  vm_dsize   :segsz_t; // data size (pages) XXX
+  vm_ssize   :segsz_t; // stack size (pages)
+  vm_taddr   :caddr_t; // (c) user virtual address of text
+  vm_daddr   :caddr_t; // (c) user virtual address of data
+  vm_maxsaddr:caddr_t; // user VA at max stack growth
+  vm_pmap    :_pmap;   // private physical map
  end;
 
 const
@@ -149,71 +149,71 @@ procedure vm_map_modflags(map:vm_map_t;_set,clear:vm_flags_t);
 var
  g_vmspace:vmspace;
 
-function vm_map_lookup_entry(
-           map        :vm_map_t;
-           address    :vm_offset_t;
-           entry      :p_vm_map_entry_t):Boolean;
+function  vm_map_lookup_entry(
+            map        :vm_map_t;
+            address    :vm_offset_t;
+            entry      :p_vm_map_entry_t):Boolean;
 
 procedure vm_map_lookup_done(map:vm_map_t;entry:vm_map_entry_t);
 
-function vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
-                       vaddr      :vm_offset_t;
-                       fault_typea:vm_prot_t;
-                       out_entry  :p_vm_map_entry_t;  { OUT }
-                       _object    :p_vm_object_t;     { OUT }
-                       pindex     :p_vm_pindex_t;     { OUT }
-                       out_prot   :p_vm_prot_t        { OUT }
-                      ):Integer;
+function  vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
+                        vaddr      :vm_offset_t;
+                        fault_typea:vm_prot_t;
+                        out_entry  :p_vm_map_entry_t;  { OUT }
+                        _object    :p_vm_object_t;     { OUT }
+                        pindex     :p_vm_pindex_t;     { OUT }
+                        out_prot   :p_vm_prot_t        { OUT }
+                       ):Integer;
 
-function vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
-                              vaddr      :vm_offset_t;
-                              fault_typea:vm_prot_t;
-                              out_entry  :p_vm_map_entry_t;  { OUT }
-                              _object    :p_vm_object_t;     { OUT }
-                              pindex     :p_vm_pindex_t;     { OUT }
-                              out_prot   :p_vm_prot_t;       { OUT }
-                              wired      :PBoolean           { OUT }
-                             ):Integer;
+function  vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
+                               vaddr      :vm_offset_t;
+                               fault_typea:vm_prot_t;
+                               out_entry  :p_vm_map_entry_t;  { OUT }
+                               _object    :p_vm_object_t;     { OUT }
+                               pindex     :p_vm_pindex_t;     { OUT }
+                               out_prot   :p_vm_prot_t;       { OUT }
+                               wired      :PBoolean           { OUT }
+                              ):Integer;
 
-function vm_map_protect(map     :vm_map_t;
-                        start   :vm_offset_t;
-                        __end   :vm_offset_t;
-                        new_prot:vm_prot_t;
-                        set_max :Boolean):Integer;
+function  vm_map_protect(map     :vm_map_t;
+                         start   :vm_offset_t;
+                         __end   :vm_offset_t;
+                         new_prot:vm_prot_t;
+                         set_max :Boolean):Integer;
 
-function vm_map_madvise(map     :vm_map_t;
-                        start   :vm_offset_t;
-                        __end   :vm_offset_t;
-                        behav   :Integer):Integer;
+function  vm_map_madvise(map     :vm_map_t;
+                         start   :vm_offset_t;
+                         __end   :vm_offset_t;
+                         behav   :Integer):Integer;
 
-function vm_map_find(map       :vm_map_t;
-                     _object   :vm_object_t;
-                     offset    :vm_ooffset_t;
-                     addr      :p_vm_offset_t;
-                     length    :vm_size_t;
-                     find_space:Integer;
-                     prot      :vm_prot_t;
-                     max       :vm_prot_t;
-                     cow       :Integer):Integer;
+function  vm_map_find(map       :vm_map_t;
+                      _object   :vm_object_t;
+                      offset    :vm_ooffset_t;
+                      addr      :p_vm_offset_t;
+                      length    :vm_size_t;
+                      find_space:Integer;
+                      prot      :vm_prot_t;
+                      max       :vm_prot_t;
+                      cow       :Integer):Integer;
 
-function vm_map_fixed(map    :vm_map_t;
-                      _object:vm_object_t;
-                      offset :vm_ooffset_t;
-                      start  :vm_offset_t;
-                      length :vm_size_t;
-                      prot   :vm_prot_t;
-                      max    :vm_prot_t;
-                      cow    :Integer;
-                      overwr :Integer):Integer;
+function  vm_map_fixed(map    :vm_map_t;
+                       _object:vm_object_t;
+                       offset :vm_ooffset_t;
+                       start  :vm_offset_t;
+                       length :vm_size_t;
+                       prot   :vm_prot_t;
+                       max    :vm_prot_t;
+                       cow    :Integer;
+                       overwr :Integer):Integer;
 
-function vm_map_stack(map      :vm_map_t;
-                      addrbos  :vm_offset_t;
-                      max_ssize:vm_size_t;
-                      prot     :vm_prot_t;
-                      max      :vm_prot_t;
-                      cow      :Integer):Integer;
+function  vm_map_stack(map      :vm_map_t;
+                       addrbos  :vm_offset_t;
+                       max_ssize:vm_size_t;
+                       prot     :vm_prot_t;
+                       max      :vm_prot_t;
+                       cow      :Integer):Integer;
 
-function vm_map_growstack(addr:vm_offset_t):Integer;
+function  vm_map_growstack(addr:vm_offset_t):Integer;
 
 procedure vm_map_lock(map:vm_map_t);
 function  vm_map_trylock(map:vm_map_t):Boolean;

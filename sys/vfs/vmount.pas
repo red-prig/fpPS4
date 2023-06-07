@@ -320,6 +320,7 @@ type
   f_mntfromname:t_mname;     // mounted filesystem
   f_mntonname  :t_mname;     // directory on which mounted
  end;
+ {$IF sizeof(t_statfs)<>472}{$STOP sizeof(t_statfs)<>472}{$ENDIF}
 
  {
    * Structure per mounted filesystem.  Each mounted filesystem has an

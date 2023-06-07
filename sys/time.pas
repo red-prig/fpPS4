@@ -39,27 +39,32 @@ type
   tv_sec :Int64;       /// seconds
   tv_nsec:Int64;       /// nanoseconds
  end;
+ {$IF sizeof(timespec)<>16}{$STOP sizeof(timespec)<>16}{$ENDIF}
 
  Ptimeval=^timeval;
  timeval=packed record
   tv_sec :Int64;
   tv_usec:Int64;   //microsecond
  end;
+ {$IF sizeof(timeval)<>16}{$STOP sizeof(timeval)<>16}{$ENDIF}
 
  Pitimerval=^itimerval;
  itimerval=packed record
   it_interval:timeval; { timer interval }
   it_value   :timeval; { current value }
  end;
+ {$IF sizeof(itimerval)<>32}{$STOP sizeof(itimerval)<>32}{$ENDIF}
 
  Ptimezone=^timezone;
  timezone=packed record
   tz_minuteswest:Integer;
   tz_dsttime    :Integer;
  end;
+ {$IF sizeof(timezone)<>8}{$STOP sizeof(timezone)<>8}{$ENDIF}
 
- time_t=QWORD;
  ptime_t=^time_t;
+ time_t=QWORD;
+ {$IF sizeof(time_t)<>8}{$STOP sizeof(time_t)<>8}{$ENDIF}
 
  ptimesec=^timesec;
  timesec=packed record
@@ -67,6 +72,7 @@ type
   tz_secwest:DWORD;
   tz_dstsec :DWORD;
  end;
+ {$IF sizeof(timesec)<>16}{$STOP sizeof(timesec)<>16}{$ENDIF}
 
 const
  tick=100;

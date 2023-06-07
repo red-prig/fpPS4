@@ -53,6 +53,8 @@ const
 
  TDF_SLICEEND   =TDF_SCHED2; // Thread time slice is over.
 
+ TDF_SUSP_CTX   =$80000000;  // Sony extension
+
  //
 
  TDP_OLDMASK      =$00000001; // Need to restore mask after suspend.
@@ -206,6 +208,7 @@ type
   name      :PChar;
   spare     :array[0..1] of Pointer;
  end;
+ {$IF sizeof(thr_param)<>104}{$STOP sizeof(thr_param)<>104}{$ENDIF}
 
 function  curkthread:p_kthread;
 procedure set_curkthread(td:p_kthread);

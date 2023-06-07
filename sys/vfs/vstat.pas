@@ -41,6 +41,7 @@ type
    st_lspare  :DWORD     ;
    st_birthtim:timespec  ;      // time of file creation
  end;
+ {$IF sizeof(t_stat)<>120}{$STOP sizeof(t_stat)<>120}{$ENDIF}
 
 const
  S_IRWXU  =&0000700; // RWX mask for owner

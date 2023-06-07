@@ -11,6 +11,7 @@ uses
 type
  p_uuid=^t_uuid;
  t_uuid=TGuid;
+ {$IF sizeof(t_uuid)<>16}{$STOP sizeof(t_uuid)<>16}{$ENDIF}
 
 function sys_uuidgen(store:p_uuid;count:Integer):Integer;
 
@@ -24,8 +25,6 @@ function kern_uuidgen(store:p_uuid;count:ptrint):p_uuid;
 var
  n:ptrint;
 begin
- Assert(SizeOf(t_uuid)=16);
-
  For n:=0 to count-1 do
  begin
   CreateGUID(store[n]);

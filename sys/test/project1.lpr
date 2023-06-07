@@ -80,8 +80,10 @@ uses
  md_proc,
  kern_ksched,
  kern_uuid,
- kern_gpo, md_sleep,
- sys_machdep;
+ kern_gpo,
+ md_sleep,
+ sys_machdep,
+ kern_context;
 
 var
  mtx:umutex;

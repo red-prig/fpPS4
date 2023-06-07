@@ -109,6 +109,7 @@ type
    0:(bits:array[0.._SIG_WORDS-1] of DWORD);
    1:(qwords:array[0..(_SIG_WORDS div 2)-1] of QWORD);
  end;
+ {$IF sizeof(sigset_t)<>16}{$STOP sizeof(sigset_t)<>16}{$ENDIF}
 
  sigval=packed record //8
   Case Byte of
@@ -119,6 +120,7 @@ type
    2:(sigval_int:Integer);
    3:(sigval_ptr:Pointer);
  end;
+ {$IF sizeof(sigval)<>8}{$STOP sizeof(sigval)<>8}{$ENDIF}
 
  p_sigevent=^sigevent;
  sigevent=packed record
@@ -177,6 +179,7 @@ type
   end;
 
  end;
+ {$IF sizeof(siginfo_t)<>80}{$STOP sizeof(siginfo_t)<>80}{$ENDIF}
 
  sa_handler  =procedure(sig,code:Integer;ctx:Pointer); SysV_ABI_CDecl;
  sa_sigaction=procedure(sig:Integer;info:p_siginfo_t;ctx:Pointer); SysV_ABI_CDecl;
@@ -196,15 +199,18 @@ type
   sa_flags:Integer;  //SA_SIGINFO
   sa_mask :sigset_t; //signal mask to apply     (signal mask inside signal)
  end;
+ {$IF sizeof(sigaction_t)<>28}{$STOP sizeof(sigaction_t)<>28}{$ENDIF}
 
  sigaltstack=packed record
   ss_sp   :Pointer; //signal stack base
   ss_size :size_t;  //signal stack length SIGSTKSZ
   ss_flags:Integer; //SS_DISABLE and/or SS_ONSTACK
+  _align  :Integer;
  end;
 
  p_stack_t=^stack_t;
  stack_t=sigaltstack;
+ {$IF sizeof(stack_t)<>24}{$STOP sizeof(stack_t)<>24}{$ENDIF}
 
 const
  SA_NOCLDSTOP=$0008;   // do not generate SIGCHLD on child stop

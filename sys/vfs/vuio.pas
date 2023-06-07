@@ -11,6 +11,7 @@ type
   iov_base:Pointer; //Base address.
   iov_len :Ptruint; //Length.
  end;
+ {$IF sizeof(iovec)<>16}{$STOP sizeof(iovec)<>16}{$ENDIF}
 
  uio_rw=(UIO_READ,UIO_WRITE);
 

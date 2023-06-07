@@ -26,7 +26,7 @@ const
  SC_MASK     =(SC_TABLESIZE-1);
  SC_SHIFT    =8;
 
- NR_SLEEPQS=2;
+ NR_SLEEPQS  =2;
 
 type
  p_sleepqueue=^sleepqueue;

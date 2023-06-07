@@ -65,6 +65,7 @@ type
 
   sc_spare:array[0..5] of QWORD; //6(qword) 12(int)
  end;
+ {$IF sizeof(sigcontext)<>1216}{$STOP sizeof(sigcontext)<>1216}{$ENDIF}
 
  p_trapframe=^trapframe;
  trapframe=packed record
@@ -158,6 +159,7 @@ type
 
   mc_spare:array[0..5] of QWORD; //6(qword) 12(int)
  end;
+ {$IF sizeof(mcontext_t)<>1152}{$STOP sizeof(mcontext_t)<>1152}{$ENDIF}
 
  p_ucontext_t=^ucontext_t;
  ucontext_t=packed record  //size=0x500(1280)
@@ -169,13 +171,14 @@ type
   //[sigcontext]
 
   //<-UC_COPY_SIZE=1216
-  uc_link:p_ucontext_t; //__ucontext
-  uc_stack:sigaltstack; //__stack_t
-  uc_flags:Integer;
+  uc_link:p_ucontext_t; //(not used)
+  uc_stack:stack_t;     //
+  uc_flags:Integer;     //(not used)
 
   __spare:array[0..1] of QWORD; //2(qword) 4(int)
   _align2:array[0..2] of DWORD; //3(int)
  end;
+ {$IF sizeof(ucontext_t)<>1280}{$STOP sizeof(ucontext_t)<>1280}{$ENDIF}
 
  p_sigframe=^sigframe;
  sigframe=packed record
