@@ -242,6 +242,7 @@ begin
  td^.td_retval[1]:=td_frame^.tf_rdx;
 
  error:=0;
+ scall:=nil;
 
  if (td_frame^.tf_rax<=High(sysent_table)) then
  begin

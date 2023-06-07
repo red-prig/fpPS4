@@ -191,6 +191,8 @@ const
 
  UCF_SWAPPED=$00000001; // Used by swapcontext(3)
 
+ GET_MC_CLEAR_RET=1;
+
 implementation
 
 end.

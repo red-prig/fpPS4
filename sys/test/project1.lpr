@@ -1095,6 +1095,7 @@ var
  _tv:timeval;
 
  _thr_param:thr_param;
+ _uctx:ucontext_t;
 
  ru:t_rusage;
 
@@ -1152,7 +1153,7 @@ begin
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test';
 
- thr_new(@_thr_param,SizeOf(_thr_param));
+ //thr_new(@_thr_param,SizeOf(_thr_param));
 
  _thr_param.start_func:=@test_thread;
  _thr_param.arg       :=nil;
@@ -1164,7 +1165,15 @@ begin
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test2';
 
- thr_new(@_thr_param,SizeOf(_thr_param));
+ //thr_new(@_thr_param,SizeOf(_thr_param));
+
+ _uctx:=Default(ucontext_t);
+ _uctx.uc_mcontext.mc_len:=sizeof(mcontext_t);
+
+ _uctx.uc_mcontext.mc_rsp:=qword(_thr_param.stack_base)+_thr_param.stack_size-8;
+ _uctx.uc_mcontext.mc_rip:=qword(@test_thread);
+
+ thr_create(@_uctx,nil,0);
 
  //readln;
 

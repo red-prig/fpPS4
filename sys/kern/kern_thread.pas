@@ -29,6 +29,7 @@ function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
 function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
+function  sys_thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
 function  sys_thr_self(id:PDWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
 function  sys_thr_kill(id,sig:Integer):Integer;
@@ -84,6 +85,7 @@ uses
  errno,
  systm,
  vm_machdep,
+ machdep,
  md_proc,
  md_thread,
  kern_rwlock,
@@ -308,61 +310,10 @@ begin
  HAMT_get_value32(i,@Result);
 end;
 
-function BaseQueryInfo(td:p_kthread):Integer;
-var
- TBI:THREAD_BASIC_INFORMATION;
+procedure before_start(td:p_kthread);
 begin
- TBI:=Default(THREAD_BASIC_INFORMATION);
-
- Result:=NtQueryInformationThread(
-           td^.td_handle,
-           ThreadBasicInformation,
-           @TBI,
-           SizeOf(THREAD_BASIC_INFORMATION),
-           nil);
- if (Result<>0) then Exit;
-
- td^.td_teb   :=TBI.TebBaseAddress;
- td^.td_cpuset:=TBI.AffinityMask;
-
- td^.td_teb^.thread:=td; //self
-end;
-
-procedure BaseInitializeStack(InitialTeb  :PINITIAL_TEB;
-                              StackAddress:Pointer;
-                              StackSize   :Ptruint); inline;
-begin
- InitialTeb^.PreviousStackBase :=nil;
- InitialTeb^.PreviousStackLimit:=nil;
- InitialTeb^.StackBase         :=StackAddress+StackSize;  //start addr
- InitialTeb^.StackLimit        :=StackAddress;            //lo addr
- InitialTeb^.AllocatedStackBase:=StackAddress;            //lo addr
-end;
-
-procedure BaseInitializeContext(Context     :PCONTEXT;
-                                Parameter   :Pointer;
-                                StartAddress:Pointer;
-                                StackAddress:Pointer); inline;
-begin
- Context^:=Default(TCONTEXT);
-
- Context^.Rsp:=ptruint(StackAddress);
- Context^.Rbp:=ptruint(StackAddress);
- Context^.Rdi:=ptruint(Parameter);
- Context^.Rip:=ptruint(StartAddress);
-
- Context^.SegGs:=KGDT64_R3_DATA  or RPL_MASK;
- Context^.SegEs:=KGDT64_R3_DATA  or RPL_MASK;
- Context^.SegDs:=KGDT64_R3_DATA  or RPL_MASK;
- Context^.SegCs:=KGDT64_R3_CODE  or RPL_MASK;
- Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
- Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
-
- Context^.EFlags:=$3000 or EFLAGS_INTERRUPT_MASK;
-
- Context^.MxCsr:=INITIAL_MXCSR;
-
- Context^.ContextFlags:=CONTEXT_THREAD;
+ //init this
+ ipi_sigreturn; //switch
 end;
 
 function create_thread(td        :p_kthread; //calling thread
@@ -377,20 +328,9 @@ function create_thread(td        :p_kthread; //calling thread
                        rtp       :p_rtprio;
                        name      :PChar
                       ):Integer;
-label
- _term;
 var
  newtd:p_kthread;
-
- _ClientId  :array[0..SizeOf(TCLIENT_ID  )+14] of Byte;
- _InitialTeb:array[0..SizeOf(TINITIAL_TEB)+14] of Byte;
- _Context   :array[0..SizeOf(TCONTEXT    )+14] of Byte;
-
- ClientId  :PCLIENT_ID;
- InitialTeb:PINITIAL_TEB;
- Context   :PCONTEXT;
-
- Stack:Pointer;
+ stack:stack_t;
 
  n:Integer;
 begin
@@ -422,39 +362,42 @@ begin
   end;
  end;
 
- if (ctx<>nil) then Exit(EINVAL);
+ if (stack_size<$1000) then
+ begin
+  if (ctx<>nil) then
+  begin
+   stack_size:=$1000;
+  end else
+  begin
+   Exit(EINVAL);
+  end;
+ end;
 
- if (ptruint(stack_base)<$1000) or (stack_size<$1000) then Exit(EINVAL);
+ if (ptruint(stack_base)<$1000) then
+ begin
+  if (ctx<>nil) then
+  begin
+   stack_base:=Pointer(ctx^.mc_rsp-stack_size);
+
+   //re check
+   if (ptruint(stack_base)<$1000) then
+   begin
+    Exit(EINVAL);
+   end;
+  end else
+  begin
+   Exit(EINVAL);
+  end;
+ end;
 
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
 
- ClientId  :=Align(@_ClientId  ,16);
- InitialTeb:=Align(@_InitialTeb,16);
- Context   :=Align(@_Context   ,16);
-
- ClientId^.UniqueProcess:=NtCurrentProcess;
- ClientId^.UniqueThread :=NtCurrentThread;
-
- BaseInitializeStack(InitialTeb,stack_base,stack_size);
-
- Stack:=InitialTeb^.StackBase;
- Stack:=Pointer((ptruint(Stack) and (not $F)){-Sizeof(Pointer)});
-
- BaseInitializeContext(Context,
-                       arg,
-                       start_func,
-                       Stack);
-
- n:=NtCreateThread(
-           @newtd^.td_handle,
-           THREAD_ALL_ACCESS,
-           nil,
-           NtCurrentProcess,
-           ClientId,
-           Context,
-           InitialTeb,
-           True);
+ n:=cpu_thread_create(newtd,
+                      stack_base,
+                      stack_size,
+                      @before_start,
+                      Pointer(newtd));
 
  if (n<>0) then
  begin
@@ -462,30 +405,47 @@ begin
   Exit(EINVAL);
  end;
 
- newtd^.td_tid:=DWORD(ClientId^.UniqueThread);
-
- if (BaseQueryInfo(newtd)<>0) then
- begin
-  _term:
-  NtTerminateThread(newtd^.td_handle,n);
-  NtClose(newtd^.td_handle);
-
-  thread_free(newtd);
-  Exit(EFAULT);
- end;
-
- cpu_set_user_tls(newtd,tls_base);
-
  if (child_tid<>nil) then
  begin
   n:=suword32(child_tid^,newtd^.td_tid);
-  if (n<>0) then Goto _term;
+  if (n<>0) then
+  begin
+   cpu_thread_terminate(newtd);
+   thread_free(newtd);
+   Exit(EFAULT);
+  end;
  end;
 
  if (parent_tid<>nil) then
  begin
   n:=suword32(parent_tid^,newtd^.td_tid);
-  if (n<>0) then Goto _term;
+  if (n<>0) then
+  begin
+   cpu_thread_terminate(newtd);
+   thread_free(newtd);
+   Exit(EFAULT);
+  end;
+ end;
+
+ if (ctx<>nil) then
+ begin
+  // old way to set user context
+  n:=set_mcontext(newtd,ctx);
+  if (n<>0) then
+  begin
+   cpu_thread_terminate(newtd);
+   thread_free(newtd);
+   Exit(n);
+  end;
+ end else
+ begin
+  // Set up our machine context.
+  stack.ss_sp  :=stack_base;
+  stack.ss_size:=stack_size;
+  // Set upcall address to user thread entry function.
+  cpu_set_upcall_kse(newtd,start_func,arg,@stack);
+  // Setup user TLS address and TLS pointer register.
+  cpu_set_user_tls(newtd,tls_base);
  end;
 
  if (td<>nil) then
@@ -519,8 +479,13 @@ begin
   end;
  end;
 
- newtd^.td_state:=TDS_RUNNING;
- NtResumeThread(newtd^.td_handle,nil);
+ n:=cpu_sched_add(newtd);
+ if (n<>0) then
+ begin
+  cpu_thread_terminate(newtd);
+  thread_free(newtd);
+  Exit(EFAULT);
+ end;
 end;
 
 function kern_thr_new(td:p_kthread;param:p_thr_param):Integer;
@@ -572,6 +537,28 @@ begin
  if (Result<>0) then Exit;
 
  Result:=kern_thr_new(curkthread,@param);
+end;
+
+function sys_thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
+var
+ _ctx:ucontext_t;
+begin
+ Result:=copyin(ctx,@_ctx,sizeof(ucontext_t));
+ if (Result<>0) then Exit;
+
+ //flags ignored
+ Result:=create_thread(curkthread,
+                       @_ctx.uc_mcontext,
+                       nil,
+                       nil,
+                       nil,
+                       0,
+                       nil,
+                       id,
+                       nil,
+                       nil,
+                       nil);
+
 end;
 
 procedure thread_exit;

@@ -158,7 +158,6 @@ var
  td:p_kthread;
  Context:PCONTEXT;
  regs:p_trapframe;
- save:Pointer;
 begin
  td:=curkthread;
  regs:=td^.td_frame;

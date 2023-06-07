@@ -7,6 +7,7 @@ interface
 
 uses
  time,
+ ucontext,
  kern_thr,
  kern_thread;
 
@@ -17,6 +18,7 @@ type
 function  getpid:Integer;
 
 function  thr_new(param:p_thr_param;param_size:Integer):Integer;
+function  thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
 function  thr_self(id:PQWORD):Integer;
 procedure thr_exit(state:PQWORD);
 function  thr_kill(id:QWORD;sig:Integer):Integer;
@@ -24,7 +26,6 @@ function  thr_suspend(timeout:ptimespec):Integer;
 function  thr_wake(id:QWORD):Integer;
 function  thr_set_name(id:QWORD;name:PChar):Integer;
 
-//int  thr_create(ucontext_t *ctx, long *id, int flags);
 //int  thr_kill2(pid_t pid, long id, int sig);
 
 function  amd64_set_fsbase(base:Pointer):Integer;
@@ -46,6 +47,19 @@ begin
  if (curkthread=nil) then
  begin
   Result:=sys_thr_new(param,param_size);
+ end else
+ asm
+  movq  sys_thr_new,%rax
+  call  fast_syscall
+  jmp   cerror
+ end;
+end;
+
+function thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
+begin
+ if (curkthread=nil) then
+ begin
+  Result:=sys_thr_create(ctx,id,flags);
  end else
  asm
   movq  sys_thr_new,%rax
