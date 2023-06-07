@@ -19,7 +19,7 @@ uses
  sys_cpuset,
  trap,
  sys_sig,
- md_psl,
+ kern_psl,
  kern_umtx,
  thr_init,
  thr_error,

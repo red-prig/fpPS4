@@ -93,7 +93,7 @@ uses
  errno,
  systm,
  trap,
- md_psl,
+ kern_psl,
  signal,
  kern_sig,
  md_thread;

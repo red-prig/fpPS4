@@ -36,7 +36,7 @@ implementation
 uses
  errno,
  systm,
- md_psl,
+ kern_psl,
  kern_sig,
  trap,
  md_context;

@@ -1,4 +1,4 @@
-unit md_psl;
+unit kern_psl;
 
 {$mode ObjFPC}{$H+}
 
