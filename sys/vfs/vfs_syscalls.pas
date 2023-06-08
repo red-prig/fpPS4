@@ -33,9 +33,9 @@ function setfmode(vp:p_vnode;mode:Integer):Integer;
 function getvnode(fd:Integer;rights:cap_rights_t;fpp:pp_file):Integer;
 
 function sys_sync():Integer;
-function sys_statfs(path:PChar;buf:p_statfs):Integer;
-function sys_fstatfs(fd:Integer;buf:p_statfs):Integer;
-function sys_getfsstat(buf:p_statfs;bufsize:QWORD;flags:Integer):Integer;
+function sys_statfs(path:PChar;buf:Pointer):Integer;
+function sys_fstatfs(fd:Integer;buf:Pointer):Integer;
+function sys_getfsstat(buf:Pointer;bufsize:QWORD;flags:Integer):Integer;
 function sys_fchdir(fd:Integer):Integer;
 function sys_chdir(path:PChar):Integer;
 function sys_chroot(path:PChar):Integer;
@@ -45,7 +45,7 @@ function sys_mknod(path:PChar;mode,dev:Integer):Integer;
 function sys_mknodat(fd:Integer;path:PChar;mode,dev:Integer):Integer;
 function sys_mkfifo(path:PChar;mode:Integer):Integer;
 function sys_mkfifoat(fd:Integer;path:PChar;mode:Integer):Integer;
-function sys_link(path,link:PChar):Integer;
+function sys_link(name1,name2:PChar):Integer;
 function sys_linkat(fd1:Integer;path1:PChar;fd2:Integer;path2:PChar;flag:Integer):Integer;
 function sys_symlink(path,link:PChar):Integer;
 function sys_symlinkat(path1:PChar;fd:Integer;path2:PChar):Integer;
@@ -53,9 +53,9 @@ function sys_unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 function sys_unlink(path:PChar):Integer;
 function sys_lseek(fd:Integer;offset:Int64;whence:Integer):Integer;
 function sys_access(path:PChar;flags:Integer):Integer;
-function sys_stat(path:PChar;ub:p_stat):Integer;
-function sys_fstatat(fd:Integer;path:PChar;buf:p_stat;flag:Integer):Integer;
-function sys_lstat(path:PChar;ub:p_stat):Integer;
+function sys_stat(path:PChar;ub:Pointer):Integer;
+function sys_fstatat(fd:Integer;path:PChar;buf:Pointer;flag:Integer):Integer;
+function sys_lstat(path:PChar;ub:Pointer):Integer;
 function sys_pathconf(path:PChar;name:Integer):Integer;
 function sys_readlink(path,buf:PChar;count:QWORD):Integer;
 function sys_chflags(path:PChar;flags:Integer):Integer;
@@ -69,10 +69,10 @@ function sys_chown(path:PChar;uid,gid:Integer):Integer;
 function sys_fchownat(fd:Integer;path:PChar;uid,gid,flag:Integer):Integer;
 function sys_lchown(path:PChar;uid,gid:Integer):Integer;
 function sys_fchown(fd,uid,gid:Integer):Integer;
-function sys_utimes(path:PChar;tptr:ptimeval):Integer;
-function sys_futimesat(fd:Integer;path:PChar;times:ptimeval):Integer;
-function sys_lutimes(path:PChar;tptr:ptimeval):Integer;
-function sys_futimes(fd:Integer;tptr:ptimeval):Integer;
+function sys_utimes(path:PChar;tptr:Pointer):Integer;
+function sys_futimesat(fd:Integer;path:PChar;times:Pointer):Integer;
+function sys_lutimes(path:PChar;tptr:Pointer):Integer;
+function sys_futimes(fd:Integer;tptr:Pointer):Integer;
 function sys_truncate(path:PChar;length:Int64):Integer;
 function sys_fsync(fd:Integer):Integer;
 function sys_fdatasync(fd:Integer):Integer;
@@ -239,7 +239,7 @@ end;
 {
  * Get filesystem statistics.
  }
-function sys_statfs(path:PChar;buf:p_statfs):Integer;
+function sys_statfs(path:PChar;buf:Pointer):Integer;
 var
  sf:t_statfs;
  error:Integer;
@@ -324,7 +324,7 @@ end;
 {
  * Get filesystem statistics.
  }
-function sys_fstatfs(fd:Integer;buf:p_statfs):Integer;
+function sys_fstatfs(fd:Integer;buf:Pointer):Integer;
 var
  sf:t_statfs;
  error:Integer;
@@ -469,7 +469,7 @@ end;
 {
  * Get statistics on all filesystems.
  }
-function sys_getfsstat(buf:p_statfs;bufsize:QWORD;flags:Integer):Integer;
+function sys_getfsstat(buf:Pointer;bufsize:QWORD;flags:Integer):Integer;
 begin
  Exit(kern_getfsstat(@buf, bufsize, UIO_USERSPACE, flags));
 end;
@@ -1261,9 +1261,9 @@ end;
 {
  * Make a hard file link.
  }
-function sys_link(path,link:PChar):Integer;
+function sys_link(name1,name2:PChar):Integer;
 begin
- Exit(kern_link(path, link, UIO_USERSPACE));
+ Exit(kern_link(name1,name2,UIO_USERSPACE));
 end;
 
 function sys_linkat(fd1:Integer;path1:PChar;fd2:Integer;path2:PChar;flag:Integer):Integer;
@@ -1722,7 +1722,7 @@ end;
 {
  * Get file status; this version follows links.
  }
-function sys_stat(path:PChar;ub:p_stat):Integer;
+function sys_stat(path:PChar;ub:Pointer):Integer;
 var
  sb:t_stat;
  error:Integer;
@@ -1733,7 +1733,7 @@ begin
  Exit(error);
 end;
 
-function sys_fstatat(fd:Integer;path:PChar;buf:p_stat;flag:Integer):Integer;
+function sys_fstatat(fd:Integer;path:PChar;buf:Pointer;flag:Integer):Integer;
 var
  sb:p_stat;
  error:Integer;
@@ -1752,7 +1752,7 @@ end;
 {
  * Get file status; this version does not follow links.
  }
-function sys_lstat(path:PChar;ub:p_stat):Integer;
+function sys_lstat(path:PChar;ub:Pointer):Integer;
 var
  sb:t_stat;
  error:Integer;
@@ -2282,12 +2282,12 @@ end;
 {
  * Set the access and modification times of a file.
  }
-function sys_utimes(path:PChar;tptr:ptimeval):Integer;
+function sys_utimes(path:PChar;tptr:Pointer):Integer;
 begin
  Exit(kern_utimes(path, UIO_USERSPACE, tptr, UIO_USERSPACE));
 end;
 
-function sys_futimesat(fd:Integer;path:PChar;times:ptimeval):Integer;
+function sys_futimesat(fd:Integer;path:PChar;times:Pointer):Integer;
 begin
  Exit(kern_utimesat(fd, path, UIO_USERSPACE, times, UIO_USERSPACE));
 end;
@@ -2318,7 +2318,7 @@ end;
 {
  * Set the access and modification times of a file.
  }
-function sys_lutimes(path:PChar;tptr:ptimeval):Integer;
+function sys_lutimes(path:PChar;tptr:Pointer):Integer;
 begin
  Exit(kern_lutimes(path, UIO_USERSPACE, tptr, UIO_USERSPACE));
 end;
@@ -2348,7 +2348,7 @@ end;
 {
  * Set the access and modification times of a file.
  }
-function sys_futimes(fd:Integer;tptr:ptimeval):Integer;
+function sys_futimes(fd:Integer;tptr:Pointer):Integer;
 begin
  Exit(kern_futimes(fd, tptr, UIO_USERSPACE));
 end;

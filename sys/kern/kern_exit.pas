@@ -58,7 +58,7 @@ function W_EXITCODE(ret,sig:Integer):Integer; inline;
 procedure exit1(rv:Integer);
 
 procedure sys_sys_exit(rval:Integer);
-function  sys_wait4(pid:Integer;status:PInteger;options:Integer;rusage:p_rusage):Integer;
+function  sys_wait4(pid:Integer;status:PInteger;options:Integer;rusage:Pointer):Integer;
 
 implementation
 
@@ -160,7 +160,7 @@ end;
 {
  * The dirty work is handled by kern_wait().
  }
-function sys_wait4(pid:Integer;status:PInteger;options:Integer;rusage:p_rusage):Integer;
+function sys_wait4(pid:Integer;status:PInteger;options:Integer;rusage:Pointer):Integer;
 var
  ru:t_rusage;
  rup:p_rusage;

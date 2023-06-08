@@ -26,13 +26,13 @@ procedure thread_reap();
 function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
-function  sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
-function  sys_thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
+function  sys_thr_new(_param:Pointer;_size:Integer):Integer;
+function  sys_thr_create(ctx:Pointer;id:PDWORD;flags:Integer):Integer;
 function  sys_thr_self(id:PDWORD):Integer;
 procedure sys_thr_exit(state:PQWORD);
 function  sys_thr_kill(id,sig:Integer):Integer;
 function  sys_thr_kill2(pid,id,sig:Integer):Integer;
-function  sys_thr_suspend(timeout:ptimespec):Integer;
+function  sys_thr_suspend(timeout:Pointer):Integer;
 function  sys_thr_wake(id:DWORD):Integer;
 function  sys_thr_set_name(id:DWORD;pname:PChar):Integer;
 function  sys_thr_get_name(id:DWORD;pname:PChar):Integer;
@@ -524,7 +524,7 @@ begin
                        @name);
 end;
 
-function sys_thr_new(_param:p_thr_param;_size:Integer):Integer;
+function sys_thr_new(_param:Pointer;_size:Integer):Integer;
 var
  param:thr_param;
 begin
@@ -538,7 +538,7 @@ begin
  Result:=kern_thr_new(curkthread,@param);
 end;
 
-function sys_thr_create(ctx:p_ucontext_t;id:PDWORD;flags:Integer):Integer;
+function sys_thr_create(ctx:Pointer;id:PDWORD;flags:Integer):Integer;
 var
  _ctx:ucontext_t;
 begin
@@ -748,7 +748,7 @@ begin
  end;
 end;
 
-function sys_thr_suspend(timeout:ptimespec):Integer;
+function sys_thr_suspend(timeout:Pointer):Integer;
 var
  td:p_kthread;
  ts:timespec;

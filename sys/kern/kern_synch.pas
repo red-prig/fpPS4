@@ -94,7 +94,10 @@ begin
 
  sleepq_lock(ident);
 
- mtx_unlock(lock^);
+ if (lock<>nil) then
+ begin
+  mtx_unlock(lock^);
+ end;
 
  sleepq_add(ident,lock,wmesg,flags,0);
 

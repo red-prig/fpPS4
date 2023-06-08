@@ -26,7 +26,7 @@ function  sys_dup2(from,_to:Integer):Integer;
 function  sys_dup(u_fd:Integer):Integer;
 function  sys_fcntl(fd,cmd:Integer;arg:QWORD):Integer;
 function  sys_close(fd:Integer):Integer;
-function  sys_fstat(fd:Integer;sb:p_stat):Integer;
+function  sys_fstat(fd:Integer;sb:Pointer):Integer;
 function  sys_fpathconf(fd,name:Integer):Integer;
 function  sys_flock(fd,how:Integer):Integer;
 
@@ -914,7 +914,7 @@ end;
 {
  * Exitstatus information about a file descriptor.
  }
-function sys_fstat(fd:Integer;sb:p_stat):Integer;
+function sys_fstat(fd:Integer;sb:Pointer):Integer;
 var
  ub:t_stat;
  error:Integer;

@@ -102,7 +102,7 @@ procedure free_mntarg(ma:p_mntarg);
 function  kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
 function  kern_unmount(path:PChar;flags:Integer):Integer;
 
-function  sys_nmount(iovp:p_iovec;iovcnt:DWORD;flags:QWORD):Integer;
+function  sys_nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer;
 function  sys_mount(ftype,fpath:PChar;flags:QWORD;data:Pointer):Integer;
 function  sys_unmount(path:PChar;flags:Integer):Integer;
 
@@ -1765,7 +1765,7 @@ end;
 {
  * Mount a filesystem.
  }
-function sys_nmount(iovp:p_iovec;iovcnt:DWORD;flags:QWORD):Integer;
+function sys_nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer;
 var
  auio:p_uio;
  error:Integer;

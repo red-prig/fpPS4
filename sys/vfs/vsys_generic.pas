@@ -87,22 +87,17 @@ function  poll_no_poll(events:Integer):Integer;
 
 function  sys_read(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
 function  sys_pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function  sys_readv(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
-function  sys_preadv(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function  sys_readv(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
+function  sys_preadv(fd:Integer;iovp:Pointer;iovcnt:DWORD;offset:Int64):Integer;
 function  sys_write(fd:Integer;buf:Pointer;nbyte:QWORD):Integer;
 function  sys_pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function  sys_writev(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
-function  sys_pwritev(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function  sys_writev(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
+function  sys_pwritev(fd:Integer;iovp:Pointer;iovcnt:DWORD;offset:Int64):Integer;
 function  sys_ftruncate(fd:Integer;length:Int64):Integer;
 function  sys_ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
-function  sys_pselect(nd:Integer;
-                      uin,uou,uex:p_fd_set;
-                      uts:ptimespec;
-                      sm:p_sigset_t):Integer;
-function  sys_select(nd:Integer;
-                     uin,uou,uex:p_fd_set;
-                     utv:ptimeval):Integer;
-function  sys_poll(fds:p_pollfd;nfds:DWORD;timeout:Integer):Integer;
+function  sys_pselect(nd:Integer;uin,uou,uex,uts,sm:Pointer):Integer;
+function  sys_select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
+function  sys_poll(fds:Pointer;nfds:DWORD;timeout:Integer):Integer;
 
 procedure selectinit(); //SYSINIT(select, SI_SUB_SYSCALLS, SI_ORDER_ANY, selectinit, NULL);
 
@@ -230,7 +225,7 @@ end;
 {
  * Scatter read system call.
  }
-function sys_readv(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
+function sys_readv(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
 var
  auio:p_uio;
  error:Integer;
@@ -246,7 +241,7 @@ end;
 {
  * Scatter positioned read system call.
  }
-function sys_preadv(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function sys_preadv(fd:Integer;iovp:Pointer;iovcnt:DWORD;offset:Int64):Integer;
 var
  auio:p_uio;
  error:Integer;
@@ -335,7 +330,7 @@ end;
 {
  * Gather write system call.
  }
-function sys_writev(fd:Integer;iovp:p_iovec;iovcnt:DWORD):Integer;
+function sys_writev(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
 var
  auio:p_uio;
  error:Integer;
@@ -351,7 +346,7 @@ end;
 {
  * Gather positioned write system call.
  }
-function sys_pwritev(fd:Integer;iovp:p_iovec;iovcnt:DWORD;offset:Int64):Integer;
+function sys_pwritev(fd:Integer;iovp:Pointer;iovcnt:DWORD;offset:Int64):Integer;
 var
  auio:p_uio;
  error:Integer;
@@ -603,10 +598,7 @@ begin
  Exit(error);
 end;
 
-function sys_pselect(nd:Integer;
-                     uin,uou,uex:p_fd_set;
-                     uts:ptimespec;
-                     sm:p_sigset_t):Integer;
+function sys_pselect(nd:Integer;uin,uou,uex,uts,sm:Pointer):Integer;
 var
  ts:timespec;
  tv:timeval;
@@ -635,9 +627,7 @@ begin
  Exit(kern_pselect(nd, uin, uou, uex, tvp, uset, NFDBITS));
 end;
 
-function sys_select(nd:Integer;
-                    uin,uou,uex:p_fd_set;
-                    utv:ptimeval):Integer;
+function sys_select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 var
  tv:timeval;
  tvp:ptimeval;
@@ -1027,7 +1017,7 @@ begin
  Exit(0);
 end;
 
-function sys_poll(fds:p_pollfd;nfds:DWORD;timeout:Integer):Integer;
+function sys_poll(fds:Pointer;nfds:DWORD;timeout:Integer):Integer;
 label
  done,
  _out;

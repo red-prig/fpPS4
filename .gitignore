@@ -20,3 +20,5 @@ shader_dump/*
 avplayer_dump/*
 savedata/*
 tools/vop_generator/vnode_if.*
+tools/syscalls_gen/sysent.pas
+tools/syscalls_gen/sycalls.pas

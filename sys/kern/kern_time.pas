@@ -14,16 +14,16 @@ procedure getmicrouptime(tvp:ptimeval);
 procedure getnanotime(tp:Ptimespec);
 procedure getmicrotime(tvp:ptimeval);
 
-function  sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
-function  sys_clock_settime(clock_id:Integer;tp:Ptimespec):Integer;
-function  sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
-function  sys_nanosleep(rqtp,rmtp:ptimespec):Integer;
-function  sys_gettimeofday(tp:ptimeval;tzp:ptimezone):Integer;
-function  sys_settimeofday(tv:ptimeval;tzp:ptimezone):Integer;
-function  sys_adjtime(delta,olddelta:ptimeval):Integer;
+function  sys_clock_gettime(clock_id:Integer;tp:Pointer):Integer;
+function  sys_clock_settime(clock_id:Integer;tp:Pointer):Integer;
+function  sys_clock_getres(clock_id:Integer;tp:Pointer):Integer;
+function  sys_nanosleep(rqtp,rmtp:Pointer):Integer;
+function  sys_gettimeofday(tp,tzp:Pointer):Integer;
+function  sys_settimeofday(tv,tzp:Pointer):Integer;
+function  sys_adjtime(delta,olddelta:Pointer):Integer;
 
-function  sys_localtime_to_utc(time:time_t;tz_type:Integer;utc_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
-function  sys_utc_to_localtime(time:time_t;local_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+function  sys_localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
+function  sys_utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  sys_set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 
 implementation
@@ -69,7 +69,7 @@ begin
  tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
 end;
 
-function sys_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function sys_clock_gettime(clock_id:Integer;tp:Pointer):Integer;
 var
  ats:timespec;
 begin
@@ -80,7 +80,7 @@ begin
  end;
 end;
 
-function sys_clock_settime(clock_id:Integer;tp:Ptimespec):Integer;
+function sys_clock_settime(clock_id:Integer;tp:Pointer):Integer;
 var
  ats:timespec;
 begin
@@ -91,7 +91,7 @@ begin
  Exit(EPERM);
 end;
 
-function sys_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+function sys_clock_getres(clock_id:Integer;tp:Pointer):Integer;
 var
  ats:timespec;
 begin
@@ -143,7 +143,7 @@ begin
  until false;
 end;
 
-function sys_nanosleep(rqtp,rmtp:ptimespec):Integer;
+function sys_nanosleep(rqtp,rmtp:Pointer):Integer;
 var
  rmt,rqt:timespec;
  error,error2:Integer;
@@ -169,7 +169,7 @@ begin
  Exit(error);
 end;
 
-function sys_gettimeofday(tp:ptimeval;tzp:ptimezone):Integer;
+function sys_gettimeofday(tp,tzp:Pointer):Integer;
 var
  atv:timeval;
  rtz:timezone;
@@ -190,7 +190,7 @@ begin
  Exit(error);
 end;
 
-function sys_settimeofday(tv:ptimeval;tzp:ptimezone):Integer;
+function sys_settimeofday(tv,tzp:Pointer):Integer;
 var
  atv:timeval;
  atz:timezone;
@@ -234,7 +234,7 @@ begin
  Exit(0);
 end;
 
-function sys_adjtime(delta,olddelta:ptimeval):Integer;
+function sys_adjtime(delta,olddelta:Pointer):Integer;
 var
  _delta,_olddelta:timeval;
  deltap:ptimeval;
@@ -260,12 +260,12 @@ begin
  Exit(error);
 end;
 
-function sys_localtime_to_utc(time:time_t;tz_type:Integer;utc_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+function sys_localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
 begin
  Exit(ERANGE); //no time zone info
 end;
 
-function sys_utc_to_localtime(time:time_t;local_time:ptime_t;tsec:ptimesec;dstsec:PInteger):Integer;
+function sys_utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 begin
  Exit(ERANGE); //no time zone info
 end;

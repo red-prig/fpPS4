@@ -344,16 +344,20 @@ begin
  sched_sleep(td,pri);
  TD_SET_SLEEPING(td);
 
+ //unlock before wait
  thread_unlock(td);       //
  mtx_unlock(sc^.sc_lock); //
+
  r:=mi_switch(SW_VOL or SWT_SLEEPQ);
+
+ //if (r=ETIMEDOUT) then
+ //begin
+  sleepq_timeout(td);
+ //end;
+
+ //lock after wait
  mtx_lock(sc^.sc_lock);   //
  thread_lock(td);         //
-
- if (r=ETIMEDOUT) then
- begin
-  sleepq_timeout(td);
- end;
 
  Assert(TD_IS_RUNNING(td),'running but not TDS_RUNNING');
 end;
@@ -615,7 +619,7 @@ var
 begin
  td:=arg;
 
- //thread_lock(td);
+ thread_lock(td);
  if (TD_IS_SLEEPING(td) and TD_ON_SLEEPQ(td)) then
  begin
   wchan:=td^.td_wchan;
@@ -645,7 +649,7 @@ begin
   td^.td_flags:=td^.td_flags or TDF_TIMOFAIL;
  end;
 
- //thread_unlock(td);
+ thread_unlock(td);
 end;
 
 procedure sleepq_remove(td:p_kthread;wchan:Pointer);

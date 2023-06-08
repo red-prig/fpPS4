@@ -26,7 +26,7 @@ function sys_munmap(addr:Pointer;len:QWORD):Integer;
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
-function sys_query_memory_protection(addr:Pointer;info:p_query_memory_prot):Integer;
+function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
 implementation
 
@@ -642,7 +642,7 @@ begin
  vm_map_set_name(@g_vmspace.vm_map,start,__end,@_name);
 end;
 
-function sys_query_memory_protection(addr:Pointer;info:p_query_memory_prot):Integer;
+function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 var
  map:vm_map_t;
  _addr:vm_offset_t;

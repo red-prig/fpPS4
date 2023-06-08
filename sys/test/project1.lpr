@@ -5,6 +5,7 @@ uses
  atomic,
  ntapi,
  mqueue,
+ syscalls,
  signal,
  ucontext,
  _umtx,
@@ -46,7 +47,7 @@ uses
  vfs_mount,
  vfs_default,
  sysent,
-  vfs_syscalls,
+ vfs_syscalls,
  vsys_generic,
  vsocket,
  vsocketvar,
@@ -440,6 +441,8 @@ var
  _sig:Integer;
  oset:sigset_t;
  i,t:Integer;
+
+ uctx:ucontext_t;
 begin
 
  //SetTlsBase(Pointer(qword(1)));
@@ -467,8 +470,20 @@ begin
 
   sigaction(SIGUSR1,@act,nil,0);
 
+
+  i:=syscalls.thr_suspend_ucontext(tid);
+  Writeln('thr_suspend_ucontext:',i);
+
+  i:=syscalls.thr_get_ucontext(tid,@uctx);
+  Writeln('thr_get_ucontext:',i);
+
+  i:=syscalls.thr_resume_ucontext(tid);
+  Writeln('thr_resume_ucontext:',i);
+
   thr_kill(tid,SIGUSR1);
   //thr_wake(tid);
+
+  thr_kill(tid,SIGUSR1);
 
   i:=_evf_trywait_err(evf,1,EVF_WAITMODE_OR,nil);
   Writeln('_evf_trywait_err=',i,' _errno:',__error^);
@@ -508,11 +523,18 @@ begin
    vmovdqu (%rax),%ymm0
   end;
 
-  repeat
-   asm
-    pause
-   end;
-  until (intr<>0);
+  syscalls.getcontext(@uctx);
+
+  oset.qwords[0]:=QWORD(-1);
+  oset.qwords[1]:=QWORD(-1);
+  Writeln('sigwait:',sigwait(@oset,@_sig));
+  Writeln('_errno:',__error^);
+
+  //repeat
+  // asm
+  //  pause
+  // end;
+  //until (intr<>0);
 
   asm
    movqq xmm0_ptr,%rax
@@ -1155,7 +1177,7 @@ begin
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test';
 
- //thr_new(@_thr_param,SizeOf(_thr_param));
+ thr_new(@_thr_param,SizeOf(_thr_param));
 
  _thr_param.start_func:=@test_thread;
  _thr_param.arg       :=nil;
@@ -1167,15 +1189,15 @@ begin
  _thr_param.rtp       :=@prio;
  _thr_param.name      :='test2';
 
- //thr_new(@_thr_param,SizeOf(_thr_param));
+ thr_new(@_thr_param,SizeOf(_thr_param));
 
- _uctx:=Default(ucontext_t);
- _uctx.uc_mcontext.mc_len:=sizeof(mcontext_t);
-
- _uctx.uc_mcontext.mc_rsp:=qword(_thr_param.stack_base)+_thr_param.stack_size-8;
- _uctx.uc_mcontext.mc_rip:=qword(@test_thread);
-
- thr_create(@_uctx,nil,0);
+ //_uctx:=Default(ucontext_t);
+ //_uctx.uc_mcontext.mc_len:=sizeof(mcontext_t);
+ //
+ //_uctx.uc_mcontext.mc_rsp:=qword(_thr_param.stack_base)+_thr_param.stack_size-8;
+ //_uctx.uc_mcontext.mc_rip:=qword(@test_thread);
+ //
+ //thr_create(@_uctx,nil,0);
 
  //readln;
 

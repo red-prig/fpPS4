@@ -20,8 +20,8 @@ const
  CPU_WHICH_IRQ   =4; // Specifies an irq #.
  CPU_WHICH_JAIL  =5; // Specifies a jail id.
 
-function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
-function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:Pointer):Integer;
+function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:Pointer):Integer;
 
 function sys_cpuset(setid:PInteger):Integer;
 function sys_cpuset_setid(which,id,setid:Integer):Integer;
@@ -37,7 +37,7 @@ uses
  md_thread,
  md_proc;
 
-function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_getaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:Pointer):Integer;
 var
  td:p_kthread;
  old:QWORD;
@@ -104,7 +104,7 @@ begin
  Result:=copyout(@old,mask,SizeOf(QWORD));
 end;
 
-function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:p_cpuset_t):Integer;
+function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:Pointer):Integer;
 var
  td:p_kthread;
  new:QWORD;

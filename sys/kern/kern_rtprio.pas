@@ -12,8 +12,8 @@ uses
 function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
 procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
 
-function  sys_rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer;
-function  sys_rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
+function  sys_rtprio_thread(func,tid:Integer;rtp:Pointer):Integer;
+function  sys_rtprio(func,pid:Integer;rtp:Pointer):Integer;
 
 implementation
 
@@ -80,7 +80,7 @@ begin
  thread_unlock(td);
 end;
 
-function sys_rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer;
+function sys_rtprio_thread(func,tid:Integer;rtp:Pointer):Integer;
 var
  td,td1:p_kthread;
  _rtp:t_rtprio;
@@ -128,7 +128,7 @@ begin
  thread_dec_ref(td1);
 end;
 
-function sys_rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
+function sys_rtprio(func,pid:Integer;rtp:Pointer):Integer;
 var
  td,tdp:p_kthread;
  rtp1,rtp2:t_rtprio;

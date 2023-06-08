@@ -56,22 +56,18 @@ const
   SA_KILL   or SA_PROC                // SIGUSR2
 );
 
-Function  sys_sigaction(sig:Integer;act,oact:p_sigaction_t):Integer;
-
-Function  sys_sigprocmask(how:Integer;_set,oset:p_sigset_t):Integer;
-
-Function  sys_sigpending(oset:p_sigset_t):Integer;
-
-Function  sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
-Function  sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
-Function  sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
-
-Function  sys_sigsuspend(sigmask:p_sigset_t):Integer;
-
-Function  sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
-
+Function  sys_sigaction(sig:Integer;act,oact:Pointer):Integer;
+Function  sys_sigprocmask(how:Integer;_set,oset:Pointer):Integer;
+Function  sys_sigpending(oset:Pointer):Integer;
+Function  sys_sigwait(oset:Pointer;sig:PInteger):Integer;
+Function  sys_sigtimedwait(oset,info,timeout:Pointer):Integer;
+Function  sys_sigwaitinfo(oset,info:Pointer):Integer;
+Function  sys_sigsuspend(sigmask:Pointer):Integer;
+Function  sys_sigaltstack(ss,oss:Pointer):Integer;
 function  sys_kill(pid,signum:Integer):Integer;
 function  sys_sigqueue(pid,signum:Integer;value:Pointer):Integer;
+
+//
 
 Function  sigonstack(sp:size_t):Integer;
 procedure sigqueue_init(list:p_sigqueue);
@@ -619,7 +615,7 @@ begin
  Result:=0;
 end;
 
-Function sys_sigaction(sig:Integer;act,oact:p_sigaction_t):Integer;
+Function sys_sigaction(sig:Integer;act,oact:Pointer):Integer;
 var
  _act,_oact:sigaction_t;
  actp,oactp:p_sigaction_t;
@@ -733,7 +729,7 @@ begin
   end;
 end;
 
-Function sys_sigprocmask(how:Integer;_set,oset:p_sigset_t):Integer;
+Function sys_sigprocmask(how:Integer;_set,oset:Pointer):Integer;
 var
  td:p_kthread;
 
@@ -763,7 +759,7 @@ begin
  end;
 end;
 
-Function sys_sigpending(oset:p_sigset_t):Integer;
+Function sys_sigpending(oset:Pointer):Integer;
 var
  td:p_kthread;
 
@@ -886,7 +882,7 @@ begin
  PROC_UNLOCK;
 end;
 
-Function sys_sigwait(oset:p_sigset_t;sig:PInteger):Integer;
+Function sys_sigwait(oset:Pointer;sig:PInteger):Integer;
 var
  td:p_kthread;
  ksi:ksiginfo_t;
@@ -913,6 +909,10 @@ begin
   begin
    Result:=ERESTART;
   end;
+  if (Result=ERESTART) then
+  begin
+   Exit;
+  end;
   td^.td_retval[0]:=Result;
   Exit(0);
  end;
@@ -922,7 +922,7 @@ begin
  Result:=0;
 end;
 
-Function sys_sigtimedwait(oset:p_sigset_t;info:p_siginfo_t;timeout:ptimespec):Integer;
+Function sys_sigtimedwait(oset,info,timeout:Pointer):Integer;
 var
  td:p_kthread;
  ts:timespec;
@@ -954,7 +954,7 @@ begin
  td^.td_retval[0]:=ksi.ksi_info.si_signo;
 end;
 
-Function sys_sigwaitinfo(oset:p_sigset_t;info:p_siginfo_t):Integer;
+Function sys_sigwaitinfo(oset,info:Pointer):Integer;
 var
  td:p_kthread;
  ksi:ksiginfo_t;
@@ -1017,7 +1017,7 @@ begin
  Result:=EJUSTRETURN;
 end;
 
-Function sys_sigsuspend(sigmask:p_sigset_t):Integer;
+Function sys_sigsuspend(sigmask:Pointer):Integer;
 var
  td:p_kthread;
  mask:sigset_t;
@@ -1077,7 +1077,7 @@ begin
  Result:=0;
 end;
 
-Function sys_sigaltstack(ss:p_stack_t;oss:p_stack_t):Integer;
+Function sys_sigaltstack(ss,oss:Pointer):Integer;
 var
  td:p_kthread;
  _ss,_oss:stack_t;

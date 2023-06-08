@@ -8,11 +8,11 @@ interface
 uses
  ucontext;
 
-function sys_getcontext(ucp:p_ucontext_t):Integer;
-function sys_setcontext(ucp:p_ucontext_t):Integer;
-function sys_swapcontext(oucp,ucp:p_ucontext_t):Integer;
+function sys_getcontext(ucp:Pointer):Integer;
+function sys_setcontext(ucp:Pointer):Integer;
+function sys_swapcontext(oucp,ucp:Pointer):Integer;
 
-function sys_thr_get_ucontext(tid:Integer;ucp:p_ucontext_t):Integer;
+function sys_thr_get_ucontext(tid:Integer;ucp:Pointer):Integer;
 function sys_thr_suspend_ucontext(tid:Integer):Integer;
 function sys_thr_resume_ucontext(tid:Integer):Integer;
 
@@ -38,7 +38,7 @@ const
  UC_COPY_SIZE=ptrint(@ucontext_t(nil^).uc_link);
  {$IF UC_COPY_SIZE<>1216}{$STOP UC_COPY_SIZE<>1216}{$ENDIF}
 
-function sys_getcontext(ucp:p_ucontext_t):Integer;
+function sys_getcontext(ucp:Pointer):Integer;
 var
  td:p_kthread;
  uc:ucontext_t;
@@ -48,17 +48,18 @@ begin
 
  if (ucp=nil) then Exit(EINVAL);
 
+ bzero(@uc,SizeOf(ucontext_t));
+
  get_mcontext(td, @uc.uc_mcontext, GET_MC_CLEAR_RET);
 
  PROC_LOCK();
  uc.uc_sigmask:=td^.td_sigmask;
  PROC_UNLOCK();
 
- bzero(@uc.__spare, sizeof(uc.__spare));
  Result:=copyout(@uc, ucp, UC_COPY_SIZE);
 end;
 
-function sys_setcontext(ucp:p_ucontext_t):Integer;
+function sys_setcontext(ucp:Pointer):Integer;
 var
  td:p_kthread;
  uc:ucontext_t;
@@ -81,7 +82,7 @@ begin
  if (Result=0) then Exit(EJUSTRETURN);
 end;
 
-function sys_swapcontext(oucp,ucp:p_ucontext_t):Integer;
+function sys_swapcontext(oucp,ucp:Pointer):Integer;
 var
  td:p_kthread;
  uc:ucontext_t;
@@ -91,8 +92,9 @@ begin
 
  if (oucp=nil) or (ucp=nil) then Exit(EINVAL);
 
+ bzero(@uc,SizeOf(ucontext_t));
+
  get_mcontext(td, @uc.uc_mcontext, GET_MC_CLEAR_RET);
- bzero(@uc.__spare, sizeof(uc.__spare));
 
  PROC_LOCK();
  uc.uc_sigmask:=td^.td_sigmask;
@@ -115,7 +117,7 @@ begin
  if (Result=0) then Exit(EJUSTRETURN);
 end;
 
-function sys_thr_get_ucontext(tid:Integer;ucp:p_ucontext_t):Integer;
+function sys_thr_get_ucontext(tid:Integer;ucp:Pointer):Integer;
 var
  tdf:p_kthread;
  uc:ucontext_t;
@@ -199,13 +201,13 @@ begin
   begin
    tdf^.td_flags:=tdf^.td_flags or (TDF_ASTPENDING or TDF_SUSP_CTX);
 
-   if TD_IS_RUNNING(td) then
+   if TD_IS_RUNNING(tdf) then
    begin
-    forward_signal(td);
+    forward_signal(tdf);
    end;
 
    repeat
-    if (tdf^.td_state<>TDS_RUNQ) and
+    if (tdf^.td_state<>TDS_RUNNING) and
        ((tdf^.td_inhibitors and TDI_SLEEPING)=0) then
     begin
      Result:=0;
@@ -216,6 +218,7 @@ begin
     thread_dec_ref(tdf);
     PROC_UNLOCK;
 
+    pause('ususp',1);
     pause('ususp',1);
 
     tdf2:=tdfind(tid);

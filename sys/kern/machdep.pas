@@ -30,7 +30,10 @@ function  get_mcontext2(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
 function  set_mcontext(td:p_kthread;mcp:p_mcontext_t):Integer;
 
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
-function  sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
+
+//
+
+function  sys_sigreturn(sigcntxp:Pointer):Integer;
 
 implementation
 
@@ -458,7 +461,7 @@ begin
  ps_mtx_lock;
 end;
 
-function sys_sigreturn(sigcntxp:p_ucontext_t):Integer;
+function sys_sigreturn(sigcntxp:Pointer):Integer;
 var
  td:p_kthread;
  uc:ucontext_t;

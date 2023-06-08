@@ -14,13 +14,13 @@ function  lim_max(which:Integer):QWORD;
 function  lim_cur(which:Integer):QWORD;
 procedure lim_rlimit(which:Integer;rlp:p_rlimit);
 
-function  sys_getrlimit(which:Integer;rlp:p_rlimit):Integer;
-function  sys_setrlimit(which:Integer;rlp:p_rlimit):Integer;
+function  sys_getrlimit(which:Integer;rlp:Pointer):Integer;
+function  sys_setrlimit(which:Integer;rlp:Pointer):Integer;
 
 function  sys_getpriority(which,who:Integer):Integer;
 function  sys_setpriority(which,who,prio:Integer):Integer;
 
-function  sys_getrusage(who:Integer;rusage:p_rusage):Integer;
+function  sys_getrusage(who:Integer;rusage:Pointer):Integer;
 
 implementation
 
@@ -65,7 +65,7 @@ begin
  rlp^.rlim_max:=lim_cur(which);
 end;
 
-function sys_getrlimit(which:Integer;rlp:p_rlimit):Integer;
+function sys_getrlimit(which:Integer;rlp:Pointer):Integer;
 var
  rlim:t_rlimit;
 begin
@@ -77,7 +77,7 @@ begin
  Result:=copyout(@rlim, rlp, sizeof(t_rlimit));
 end;
 
-function sys_setrlimit(which:Integer;rlp:p_rlimit):Integer;
+function sys_setrlimit(which:Integer;rlp:Pointer):Integer;
 var
  alim:t_rlimit;
 begin
@@ -208,7 +208,7 @@ begin
  Exit(error);
 end;
 
-function sys_getrusage(who:Integer;rusage:p_rusage):Integer;
+function sys_getrusage(who:Integer;rusage:Pointer):Integer;
 var
  ru:t_rusage;
 begin

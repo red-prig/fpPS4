@@ -13,7 +13,7 @@ type
  t_uuid=TGuid;
  {$IF sizeof(t_uuid)<>16}{$STOP sizeof(t_uuid)<>16}{$ENDIF}
 
-function sys_uuidgen(store:p_uuid;count:Integer):Integer;
+function sys_uuidgen(store:Pointer;count:Integer):Integer;
 
 implementation
 
@@ -33,7 +33,7 @@ begin
  Exit(store);
 end;
 
-function sys_uuidgen(store:p_uuid;count:Integer):Integer;
+function sys_uuidgen(store:Pointer;count:Integer):Integer;
 var
  kstore:p_uuid;
 begin

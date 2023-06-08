@@ -26,13 +26,13 @@ type
   rr_interval:timespec;
  end;
 
-function sys_sched_setparam(pid:Integer;param:p_sched_param):Integer;
-function sys_sched_getparam(pid:Integer;param:p_sched_param):Integer;
-function sys_sched_setscheduler(pid,policy:Integer;param:p_sched_param):Integer;
+function sys_sched_setparam(pid:Integer;param:Pointer):Integer;
+function sys_sched_getparam(pid:Integer;param:Pointer):Integer;
+function sys_sched_setscheduler(pid,policy:Integer;param:Pointer):Integer;
 function sys_sched_getscheduler(pid:Integer):Integer;
 function sys_sched_get_priority_max(policy:Integer):Integer;
 function sys_sched_get_priority_min(policy:Integer):Integer;
-function sys_sched_rr_get_interval(pid:Integer;interval:ptimespec):Integer;
+function sys_sched_rr_get_interval(pid:Integer;interval:Pointer):Integer;
 
 implementation
 
@@ -147,7 +147,7 @@ end;
 
 /////////
 
-function sys_sched_setparam(pid:Integer;param:p_sched_param):Integer;
+function sys_sched_setparam(pid:Integer;param:Pointer):Integer;
 var
  td:p_kthread;
  e:Integer;
@@ -174,7 +174,7 @@ begin
  Exit(e);
 end;
 
-function sys_sched_getparam(pid:Integer;param:p_sched_param):Integer;
+function sys_sched_getparam(pid:Integer;param:Pointer):Integer;
 var
  td:p_kthread;
  e:Integer;
@@ -201,7 +201,7 @@ begin
  Exit(e);
 end;
 
-function sys_sched_setscheduler(pid,policy:Integer;param:p_sched_param):Integer;
+function sys_sched_setscheduler(pid,policy:Integer;param:Pointer):Integer;
 var
  td:p_kthread;
  e:Integer;
@@ -304,7 +304,7 @@ begin
  Exit(e);
 end;
 
-function sys_sched_rr_get_interval(pid:Integer;interval:ptimespec):Integer;
+function sys_sched_rr_get_interval(pid:Integer;interval:Pointer):Integer;
 var
  td:p_kthread;
  time:timespec;
