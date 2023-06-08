@@ -24,6 +24,7 @@ function  setrunnable(td:p_kthread):Integer;
 implementation
 
 uses
+ atomic,
  md_sleep,
  md_thread;
 
@@ -98,12 +99,12 @@ end;
 
 function sched_switch(td:p_kthread):Integer;
 var
- td_timeo:Int64;
+ slptick:Int64;
 begin
- td^.td_flags:=td^.td_flags and (not (TDF_NEEDRESCHED or TDF_SLICEEND));
+ atomic_clear_int(@td^.td_flags,TDF_NEEDRESCHED or TDF_SLICEEND);
 
- td_timeo:=System.InterlockedExchange64(td^.td_timeo,0);
- Result:=msleep_td(td_timeo);
+ slptick:=System.InterlockedExchange64(td^.td_slptick,0);
+ Result:=msleep_td(slptick);
 end;
 
 function setrunnable(td:p_kthread):Integer;

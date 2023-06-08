@@ -95,6 +95,8 @@ const
  TDI_LOCK         =$0008; // Stopped on a lock.
  TDI_IWAIT        =$0010; // Awaiting interrupt.
 
+ TDI_SUSP_CTX     =$0020; // Sony extension
+
  THR_SUSPENDED    =$0001;
 
  // These flags are kept in p_flag.
@@ -117,6 +119,7 @@ const
  SWT_REMOTEPREEMPT =11; // Remote processor preempted.
  SWT_REMOTEWAKEIDLE=12; // Remote processor preempted idle.
  SWT_COUNT         =13; // Number of switch types.
+
  // Flags
  SW_VOL    =$0100; // Voluntary switch.
  SW_INVOL  =$0200; // Involuntary switch.
@@ -184,7 +187,7 @@ type
    ru_nvcsw       :Int64;
    ru_nivcsw      :Int64;
   end;
-  td_timeo        :Int64;
+  td_slptick      :Int64;
   //
   td_fpop         :Pointer;
   td_map_def_user :Pointer;

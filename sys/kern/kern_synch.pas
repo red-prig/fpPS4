@@ -41,6 +41,8 @@ function  tsleep(ident   :Pointer;
                  wmesg   :PChar;
                  timo    :Int64):Integer; inline;
 
+function  pause(wmesg:PChar;timo:Int64):Integer;
+
 procedure wakeup(ident:Pointer);
 procedure wakeup_one(ident:Pointer);
 function  mi_switch(flags:Integer):Integer;
@@ -59,6 +61,9 @@ uses
  md_sleep,
  rtprio;
 
+var
+ pause_wchan:Integer=0;
+
 function msleep(ident   :Pointer;
                 lock    :p_mtx;
                 priority:Integer;
@@ -76,7 +81,10 @@ begin
  if (TD_ON_SLEEPQ(td)) then
   sleepq_remove(td,td^.td_wchan);
 
- flags:=SLEEPQ_SLEEP;
+ if (ident=@pause_wchan) then
+  flags:=SLEEPQ_PAUSE
+ else
+  flags:=SLEEPQ_SLEEP;
 
  if (catch<>0) then
   flags:=flags or SLEEPQ_INTERRUPTIBLE;
@@ -119,6 +127,14 @@ begin
  Result:=msleep(ident,nil,priority,wmesg,timo);
 end;
 
+function pause(wmesg:PChar;timo:Int64):Integer;
+begin
+ // silently convert invalid timeouts
+ if (timo < 1) then timo:=1;
+
+ Result:=(tsleep(@pause_wchan, 0, wmesg, timo));
+end;
+
 procedure wakeup(ident:Pointer);
 begin
  sleepq_lock(ident);
@@ -156,10 +172,21 @@ begin
  case (flags and SW_TYPE_MASK) of
   SWT_RELINQUISH,
   SWT_NEEDRESCHED:
+   begin
     md_yield;
+   end;
   SWT_SLEEPQ,
   SWT_SLEEPQTIMO:
+   begin
+    if (td=nil) then Exit(-1);
     Result:=sched_switch(td);
+   end;
+  SWT_SUSPEND:
+   begin
+    if (td=nil) then Exit(-1);
+    td^.td_slptick:=0; //infinite
+    Result:=sched_switch(td);
+   end;
  end;
 
 end;

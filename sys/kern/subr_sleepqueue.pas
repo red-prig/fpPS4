@@ -215,7 +215,7 @@ begin
  Assert(td^.td_sleepqueue=nil);
  Assert(wchan<>nil);
 
- td^.td_timeo:=time;
+ td^.td_slptick:=time;
 end;
 
 function sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD;

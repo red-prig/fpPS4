@@ -26,6 +26,7 @@ procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);
 
 function  get_mcontext(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
+function  get_mcontext2(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
 function  set_mcontext(td:p_kthread;mcp:p_mcontext_t):Integer;
 
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
@@ -223,6 +224,57 @@ begin
 
  Result:=0;
 end;
+
+//sce ext
+
+function get_mcontext2(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
+var
+ tp:p_trapframe;
+begin
+ tp:=td^.td_frame;
+
+ mcp^.mc_onstack:=sigonstack(tp^.tf_rsp);
+
+ mcp^.mc_r15   :=tp^.tf_r15;
+ mcp^.mc_r14   :=tp^.tf_r14;
+ mcp^.mc_r13   :=tp^.tf_r13;
+ mcp^.mc_r12   :=tp^.tf_r12;
+ mcp^.mc_r11   :=tp^.tf_r11;
+ mcp^.mc_r10   :=tp^.tf_r10;
+ mcp^.mc_r9    :=tp^.tf_r9;
+ mcp^.mc_r8    :=tp^.tf_r8;
+ mcp^.mc_rdi   :=tp^.tf_rdi;
+ mcp^.mc_rsi   :=tp^.tf_rsi;
+ mcp^.mc_rbp   :=tp^.tf_rbp;
+ mcp^.mc_rbx   :=tp^.tf_rbx;
+ mcp^.mc_rcx   :=tp^.tf_rcx;
+ mcp^.mc_rflags:=tp^.tf_rflags;
+ mcp^.mc_rax   :=tp^.tf_rax;
+ mcp^.mc_rdx   :=tp^.tf_rdx;
+ mcp^.mc_rip   :=tp^.tf_rip;
+ mcp^.mc_cs    :=tp^.tf_cs;
+ mcp^.mc_rsp   :=tp^.tf_rsp;
+ mcp^.mc_ss    :=tp^.tf_ss;
+ mcp^.mc_ds    :=tp^.tf_ds;
+ mcp^.mc_es    :=tp^.tf_es;
+ mcp^.mc_fs    :=tp^.tf_fs;
+ mcp^.mc_gs    :=tp^.tf_gs;
+ mcp^.mc_flags :=tp^.tf_flags;
+ mcp^.mc_len   :=sizeof(mcontext_t);
+
+ //xmm,ymm
+ get_fpcontext(td,mcp,@mcp^.mc_fpstate);
+ //xmm,ymm
+
+ mcp^.mc_fsbase:=ptruint(td^.pcb_fsbase);
+ mcp^.mc_gsbase:=ptruint(td^.pcb_gsbase);
+
+ bzero(@mcp^.mc_spare,sizeof(mcp^.mc_spare));
+
+ Result:=0;
+end;
+
+//sce ext
 
 function set_mcontext(td:p_kthread;mcp:p_mcontext_t):Integer;
 var

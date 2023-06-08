@@ -79,6 +79,7 @@ procedure tdsigcleanup(td:p_kthread);
 
 procedure tdsignal(td:p_kthread;sig:Integer);
 procedure tdksignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo);
+procedure forward_signal(td:p_kthread);
 procedure sigexit(td:p_kthread;sig:Integer);
 
 Function  cursig(td:p_kthread;stop_allowed:Integer):Integer;
@@ -1732,10 +1733,19 @@ begin
  td:=curkthread;
 
  thread_lock(td);
+
  flags:=td^.td_flags;
 
- td^.td_flags:=td^.td_flags and (not (TDF_ASTPENDING or TDF_NEEDSIGCHK or TDF_NEEDSUSPCHK or
-     TDF_NEEDRESCHED or TDF_ALRMPEND or TDF_PROFPEND or TDF_MACPEND));
+ td^.td_flags:=flags and
+  (not (
+   TDF_ASTPENDING  or
+   TDF_NEEDSUSPCHK or
+   TDF_NEEDRESCHED or
+   TDF_NEEDSIGCHK  or
+   TDF_ALRMPEND    or
+   TDF_PROFPEND    or
+   TDF_MACPEND
+  ));
 
  thread_unlock(td);
 
@@ -1759,8 +1769,8 @@ begin
  begin
   thread_lock(td);
   sched_prio(td,td^.td_user_pri);
-  mi_switch(SW_INVOL or SWT_NEEDRESCHED);
   thread_unlock(td);
+  mi_switch(SW_INVOL or SWT_NEEDRESCHED);
  end;
 
  if ((flags and TDF_NEEDSIGCHK)<>0) or
@@ -1792,6 +1802,34 @@ begin
   td^.td_pflags:=td^.td_pflags and (not TDP_OLDMASK);
   kern_sigprocmask(td,SIG_SETMASK,@td^.td_oldsigmask,nil,0);
  end;
+
+ if ((flags and TDF_SUSP_CTX)<>0) then
+ begin
+  // context suspend
+  thread_lock(td);
+
+  //recheck?
+  if ((td^.td_flags and TDF_SUSP_CTX)<>0) then
+  begin
+   td^.td_flags:=td^.td_flags and (not TDF_SUSP_CTX);
+   td^.td_state:=TDS_INHIBITED;
+   td^.td_inhibitors:=td^.td_inhibitors or TDI_SUSP_CTX;
+   thread_unlock(td);
+
+   mi_switch(SW_VOL or SWT_SUSPEND);
+  end else
+  begin
+   thread_unlock(td);
+  end;
+ end;
+
+ if ((td^.td_flags and TDF_ASTPENDING)=0) then
+ begin
+  thread_lock(td);
+  td^.td_flags:=td^.td_flags and (not TDF_UNUSED09); //sony ext????
+  thread_unlock(td);
+ end;
+
 end;
 
 end.

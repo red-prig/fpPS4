@@ -12,10 +12,10 @@ uses
 
 function  _umtxq_alloc:THandle;
 procedure _umtxq_free(h:THandle);
-function  msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
+function  msleep_umtxq(h:THandle;timo:Int64):Integer;
 function  wakeup_umtxq(h:THandle):Integer; inline;
 
-function  msleep_td(timo:Int64):Integer; inline;
+function  msleep_td(timo:Int64):Integer;
 function  wakeup_td(td:p_kthread):Integer; inline;
 procedure md_yield; inline;
 
@@ -66,7 +66,7 @@ begin
  NtClose(h);
 end;
 
-function msleep_umtxq(h:THandle;timo:Int64):Integer; inline;
+function msleep_umtxq(h:THandle;timo:Int64):Integer;
 begin
  if (timo=0) then
  begin
@@ -85,7 +85,7 @@ begin
  Result:=ntw2px(NtSetEvent(h,nil));
 end;
 
-function msleep_td(timo:Int64):Integer; inline;
+function msleep_td(timo:Int64):Integer;
 begin
  if (timo=0) then
  begin
