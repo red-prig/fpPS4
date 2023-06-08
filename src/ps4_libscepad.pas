@@ -12,7 +12,8 @@ uses
   Classes,
   SysUtils,
   xinput,
-  formController;
+  formController,
+  SDL2;
 
 implementation
 
@@ -284,12 +285,30 @@ var
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
 var
  controllerIndex:Integer;
+ game_controller:PSDL_GameController;
 begin
  Writeln(SysLogPrefix,'scePadInit');
 
+
+ //init SDL2 Joystick
+ if SDL_Numjoysticks() < 1 then
+ begin
+  Writeln('SDL2 Error: No Joysticks Connected!');
+ end else
+ begin
+  Writeln('Number of Joysticks connected: ', SDL_Numjoysticks());
+  game_controller:=SDL_GameControllerOpen(0);
+  Writeln('-------------------------------------------------------------------------------------------------------------------------');
+  Writeln('-------------------------------------------------------------------------------------------------------------------------');
+  Writeln('SDL2: Game Controller loaded!');
+  Writeln('Controller Name: ', SDL_GameControllerName(game_controller));
+  Writeln('-------------------------------------------------------------------------------------------------------------------------');
+  Writeln('-------------------------------------------------------------------------------------------------------------------------');
+ end;
+
  // init xinput
- for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
-   xinput_controllers_connected[controllerIndex] := false;
+ //for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+ //  xinput_controllers_connected[controllerIndex] := false;
 
  Result:=0;
 end;
@@ -316,6 +335,7 @@ var
  mPoint,delta:TPoint;
  cs:TXInputState;
  controllerIndex,stateResult:DWORD;
+ event:TSDL_Event;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
  begin
@@ -351,56 +371,59 @@ begin
   Exit;
  end;
 
- // xinput - Check connected controllers every couple of seconds
- if GetTickCount64 > xinput_last_poll + 10000 then
+ //// xinput - Check connected controllers every couple of seconds
+ //if GetTickCount64 > xinput_last_poll + 10000 then
+ //begin
+ //  for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+ //    xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, cs) <> ERROR_DEVICE_NOT_CONNECTED;
+ //
+ //  xinput_last_poll := GetTickCount64;
+ //end;
+
+ //for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
+ for controllerIndex := 0 to SDL_Numjoysticks() - 1 do
  begin
-   for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
-     xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, cs) <> ERROR_DEVICE_NOT_CONNECTED;
-
-   xinput_last_poll := GetTickCount64;
- end;
-
- // xinput for controllers
- for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
- begin
-  if not MappableInputs.XInputEnabled then break;
-  if not xinput_controllers_connected[controllerIndex] then
-     continue;
-  ZeroMemory(@cs, SizeOf(cs));
-  stateResult := XInputGetState(controllerIndex, cs);
-
-  if stateResult = ERROR_SUCCESS then
-  begin
-   if MappableInputs.PS4IsPressed(miCross, cs) then
+  //if not MappableInputs.XInputEnabled then break;
+  //if not xinput_controllers_connected[controllerIndex] then
+  //   continue;
+  //ZeroMemory(@cs, SizeOf(cs));
+  //stateResult := XInputGetState(controllerIndex, cs);
+  //
+  //if stateResult = ERROR_SUCCESS then
+   while SDL_PollEvent(@event) <> 0 do
+   if event.type_ = SDL_CONTROLLERBUTTONDOWN then
+   begin
+   Writeln('event detected');
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_A then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
-   if MappableInputs.PS4IsPressed(miCircle, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_B  then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
-   if MappableInputs.PS4IsPressed(miSquare, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_X then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
-   if MappableInputs.PS4IsPressed(miTriangle, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_Y then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
 
-   if MappableInputs.PS4IsPressed(miOptions, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_BACK then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
-   if MappableInputs.PS4IsPressed(miTouchPad, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_START then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
-   if MappableInputs.PS4IsPressed(miL1, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
-   if MappableInputs.PS4IsPressed(miR1, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
-   if MappableInputs.PS4IsPressed(miL3, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_LEFTSTICK then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
-   if MappableInputs.PS4IsPressed(miR3, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_RIGHTSTICK then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
 
-   if MappableInputs.PS4IsPressed(miDPadUp, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_UP then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
-   if MappableInputs.PS4IsPressed(miDPadDown, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_DOWN then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
-   if MappableInputs.PS4IsPressed(miDPadLeft, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_LEFT then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;  
-   if MappableInputs.PS4IsPressed(miDPadRight, cs) then
+   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
 
    data^.leftStick.x:=Trunc(128+(MappableInputs.GetAnalog(miLJoyRight, cs)-MappableInputs.GetAnalog(miLJoyLeft, cs))*127);
@@ -412,10 +435,10 @@ begin
    data^.analogButtons.l2:=Trunc(MappableInputs.GetAnalog(miL2, cs)*255);
    data^.analogButtons.r2:=Trunc(MappableInputs.GetAnalog(miR2, cs)*255);
 
-   if MappableInputs.PS4IsPressed(miL2, cs) then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;    
-   if MappableInputs.PS4IsPressed(miR2, cs) then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
+   //if MappableInputs.PS4IsPressed(miL2, cs) then
+   // data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;    
+   //if MappableInputs.PS4IsPressed(miR2, cs) then
+   // data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
   end;
  end;
 

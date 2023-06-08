@@ -79,7 +79,8 @@ uses
  vImageTiling,
  vFlip,
 
- trace_manager;
+ trace_manager,
+ SDL2;
 
 function ParseCmd:Boolean;
 var
@@ -440,6 +441,8 @@ begin
 end;
 
 begin
+ SDL_Init(SDL_INIT_GAMECONTROLLER);
+ Writeln('SDL2 Game-Controller subsystem initialized!');
  DefaultSystemCodePage:=CP_UTF8;
  DefaultUnicodeCodePage:=CP_UTF8;
  DefaultFileSystemCodePage:=CP_UTF8;
@@ -475,7 +478,8 @@ begin
  _pthread_run_entry(@main,GetSceUserMainThreadName,GetSceUserMainThreadStackSize);
 
  ps4_libSceVideoOut.App_Run;
-
+ SDL_Quit;
+ Writeln('SDL2 Game-Controller subsystem exited!');
  //KillALLThreads TODO
  //readln;
 end.

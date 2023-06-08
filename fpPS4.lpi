@@ -651,7 +651,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);kernel;src\ajm;sys"/>
       <Libraries Value="static"/>
-      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs;src\libcinternal;ffmpeg;src\audiodec"/>
+      <OtherUnitFiles Value="rtl;sys;vulkan;chip;spirv;kernel;src;src\ajm;src\audio;src\np;src\playgo;shaders;src\inputs;src\libcinternal;ffmpeg;src\audiodec;D:\fpcupdeluxe\fpc\units\SDL2\"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
