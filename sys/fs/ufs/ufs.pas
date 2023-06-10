@@ -136,11 +136,12 @@ uses
  kern_id;
 
 var
+ ufs_desc:t_id_desc=(refs:0;free:nil);
  ufs_inos:t_id_desc_table;
 
 function ufs_alloc_cdp_inode():Integer;
 begin
- if id_new(@ufs_inos,nil,@Result) then
+ if id_new(@ufs_inos,@ufs_desc,@Result) then
  begin
   //
  end else

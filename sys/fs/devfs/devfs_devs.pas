@@ -50,6 +50,7 @@ uses
  devfs_vnops;
 
 var
+ devfs_desc:t_id_desc=(refs:0;free:nil);
  devfs_inos:t_id_desc_table;
 
 //
@@ -664,7 +665,7 @@ end;
 
 function devfs_alloc_cdp_inode():ino_t;
 begin
- if id_new(@devfs_inos,nil,@Result) then
+ if id_new(@devfs_inos,@devfs_desc,@Result) then
  begin
   //
  end else

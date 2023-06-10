@@ -69,6 +69,9 @@ uses
  vfs_subr,
  vnode_if;
 
+var
+ unr_desc:t_id_desc=(refs:0;free:nil);
+
 function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
 begin
  Result:=mp^.mnt_data;
@@ -82,7 +85,7 @@ end;
 
 function alloc_unr(p:p_id_desc_table):Integer;
 begin
- if id_new(p,nil,@Result) then
+ if id_new(p,@unr_desc,@Result) then
  begin
   //
  end else
