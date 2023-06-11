@@ -306,10 +306,6 @@ begin
   Writeln('-------------------------------------------------------------------------------------------------------------------------');
  end;
 
- // init xinput
- //for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
- //  xinput_controllers_connected[controllerIndex] := false;
-
  Result:=0;
 end;
 
@@ -370,54 +366,21 @@ begin
   Result:=0;
   Exit;
  end;
-
- //// xinput - Check connected controllers every couple of seconds
- //if GetTickCount64 > xinput_last_poll + 10000 then
- //begin
- //  for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
- //    xinput_controllers_connected[controllerIndex] := XInputGetState(controllerIndex, cs) <> ERROR_DEVICE_NOT_CONNECTED;
- //
- //  xinput_last_poll := GetTickCount64;
- //end;
-
- //for controllerIndex := 0 to XUSER_MAX_COUNT - 1 do
  for controllerIndex := 0 to SDL_Numjoysticks() - 1 do
- begin
-  //if not MappableInputs.XInputEnabled then break;
-  //if not xinput_controllers_connected[controllerIndex] then
-  //   continue;
-  //ZeroMemory(@cs, SizeOf(cs));
-  //stateResult := XInputGetState(controllerIndex, cs);
-  //
-  //if stateResult = ERROR_SUCCESS then
-
-   while SDL_PollEvent(@event) <> 0 do
+  while SDL_PollEvent(@event) <> 0 do
    begin
-
    if event.type_ = SDL_CONTROLLERBUTTONDOWN then
-   begin
-   Writeln('event detected');
-
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_BACK then
+   Writeln(event.cbutton.button,' pressed');
+   if event.type_ = SDL_CONTROLLERAXISMOTION then
+   Writeln(event.caxis.axis,' moved');
+   end;
+ begin
+  //Options and Touchpad
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_BACK) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_START then
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_START) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
-   data^.leftStick.x:=Trunc(128+(MappableInputs.GetAnalog(miLJoyRight, cs)-MappableInputs.GetAnalog(miLJoyLeft, cs))*127);
-   data^.leftStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
-
-   data^.rightStick.x:=Trunc(128+(MappableInputs.GetAnalog(miRJoyRight, cs)-MappableInputs.GetAnalog(miRJoyLeft, cs))*127);
-   data^.rightStick.y:=Trunc(128+(MappableInputs.GetAnalog(miRJoyDown, cs)-MappableInputs.GetAnalog(miRJoyUp, cs))*127);
-
-   data^.analogButtons.l2:=Trunc(MappableInputs.GetAnalog(miL2, cs)*255);
-   data^.analogButtons.r2:=Trunc(MappableInputs.GetAnalog(miR2, cs)*255);
-
-   //if MappableInputs.PS4IsPressed(miL2, cs) then
-   // data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L2;    
-   //if MappableInputs.PS4IsPressed(miR2, cs) then
-   // data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
-  end;
- end;
   //Hats(D-PAD)
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
@@ -443,10 +406,23 @@ begin
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
+
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_LEFTSTICK) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSTICK) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
+
+  //Left and Right Axes
+  data^.leftStick.x:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_LEFTX));
+  data^.leftStick.y:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_LEFTY));
+
+  data^.rightStick.x:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_RIGHTX));
+  data^.rightStick.y:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_RIGHTY));
+
+  //Left and Right Triggers (L2 and R2)
+  //SDL has no support to define L2 and R2 as buttons, so keep that in mind for future
+  data^.analogButtons.l2:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT)*255);
+  data^.analogButtons.r2:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)*255);
  end;
 
  //mouse as touch pad
