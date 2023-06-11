@@ -281,11 +281,11 @@ var
  last_mouse_init:Integer=0;
  xinput_last_poll:Long=0;
  xinput_controllers_connected:Array[0..XUSER_MAX_COUNT-1] of Boolean;
+ game_controller:PSDL_GameController;
 
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
 var
  controllerIndex:Integer;
- game_controller:PSDL_GameController;
 begin
  Writeln(SysLogPrefix,'scePadInit');
 
@@ -390,41 +390,18 @@ begin
   //stateResult := XInputGetState(controllerIndex, cs);
   //
   //if stateResult = ERROR_SUCCESS then
+
    while SDL_PollEvent(@event) <> 0 do
+   begin
+
    if event.type_ = SDL_CONTROLLERBUTTONDOWN then
    begin
    Writeln('event detected');
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_A then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_B  then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_X then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_Y then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
 
    if event.cbutton.button = SDL_CONTROLLER_BUTTON_BACK then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
    if event.cbutton.button = SDL_CONTROLLER_BUTTON_START then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
-
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_LEFTSTICK then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_RIGHTSTICK then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
-
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_UP then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_DOWN then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_LEFT then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;  
-   if event.cbutton.button = SDL_CONTROLLER_BUTTON_DPAD_RIGHT then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
 
    data^.leftStick.x:=Trunc(128+(MappableInputs.GetAnalog(miLJoyRight, cs)-MappableInputs.GetAnalog(miLJoyLeft, cs))*127);
    data^.leftStick.y:=Trunc(128+(MappableInputs.GetAnalog(miLJoyDown, cs)-MappableInputs.GetAnalog(miLJoyUp, cs))*127);
@@ -440,6 +417,36 @@ begin
    //if MappableInputs.PS4IsPressed(miR2, cs) then
    // data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
   end;
+ end;
+  //Hats(D-PAD)
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
+
+  //Cross, Circle, Square and Triangle
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_A) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_B) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_X) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_Y) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
+
+  //L1, R1 and L3, R3
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_LEFTSTICK) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSTICK) = 1 then
+    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
  end;
 
  //mouse as touch pad
