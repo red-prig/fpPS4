@@ -46,15 +46,7 @@ type
 function  PRI_BASE(P:Word):Word;
 function  RTP_PRIO_BASE(P:Word):Word;
 
-function  rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer;
-function  _rtprio(func,pid:Integer;rtp:p_rtprio):Integer;
-
 implementation
-
-uses
- trap,
- thr_error,
- kern_rtprio;
 
 function PRI_BASE(P:Word):Word;
 begin
@@ -64,20 +56,6 @@ end;
 function RTP_PRIO_BASE(P:Word):Word;
 begin
  Result:=P and (not PRI_FIFO_BIT);
-end;
-
-function rtprio_thread(func,tid:Integer;rtp:p_rtprio):Integer; assembler; nostackframe;
-asm
- movq  sys_rtprio_thread,%rax
- call  fast_syscall
- jmp   cerror
-end;
-
-function _rtprio(func,pid:Integer;rtp:p_rtprio):Integer; assembler; nostackframe;
-asm
- movq  sys_rtprio,%rax
- call  fast_syscall
- jmp   cerror
 end;
 
 end.

@@ -70,7 +70,7 @@ uses
  vnode_if;
 
 var
- unr_desc:t_id_desc=(refs:0;free:nil);
+ unr_desc:t_id_desc=(free:nil;refs:0);
 
 function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
 begin

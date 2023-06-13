@@ -78,19 +78,6 @@ type
  p_query_memory_prot=vm_mmap.p_query_memory_prot;
  t_query_memory_prot=vm_mmap.t_query_memory_prot;
 
-function mmap(_addr :Pointer;
-              _len  :QWORD;
-              _prot :Integer;
-              _flags:Integer;
-              _fd   :Integer;
-              _pos  :QWORD):Pointer;
-
-function munmap(addr:Pointer;len:QWORD):Integer;
-function mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
-function madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
-function mname(addr:Pointer;len:QWORD;name:PChar):Integer;
-function query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;
-
 //sce
 
 function sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:PChar):Integer;
@@ -98,56 +85,8 @@ function sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:PChar):Integer
 implementation
 
 uses
- trap,
- thr_error,
+ syscalls,
  errno;
-
-function mmap(_addr :Pointer;
-              _len  :QWORD;
-              _prot :Integer;
-              _flags:Integer;
-              _fd   :Integer;
-              _pos  :QWORD):Pointer; assembler; nostackframe;
-asm
- movq  vm_mmap.sys_mmap,%rax
- call  fast_syscall
- call  cerror
-end;
-
-function munmap(addr:Pointer;len:QWORD):Integer; assembler; nostackframe;
-asm
- movq  sys_munmap,%rax
- call  fast_syscall
- call  cerror
-end;
-
-function mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer; assembler; nostackframe;
-asm
- movq  sys_mprotect,%rax
- call  fast_syscall
- call  cerror
-end;
-
-function madvise(addr:Pointer;len:QWORD;behav:Integer):Integer; assembler; nostackframe;
-asm
- movq  sys_madvise,%rax
- call  fast_syscall
- call  cerror
-end;
-
-function mname(addr:Pointer;len:QWORD;name:PChar):Integer; assembler; nostackframe;
-asm
- movq  sys_mname,%rax
- call  fast_syscall
- call  cerror
-end;
-
-function query_memory_protection(addr:Pointer;len:QWORD;info:p_query_memory_prot):Integer;  assembler; nostackframe;
-asm
- movq  sys_query_memory_protection,%rax
- call  fast_syscall
- call  cerror
-end;
 
 //sce
 

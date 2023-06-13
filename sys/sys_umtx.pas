@@ -18,15 +18,13 @@ function  umtx_unlock(var umtx:umtx;id:QWORD):Integer; inline;
 function  umtx_wait(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
 function  umtx_wake(var umtx:umtx;nr_wakeup:Integer):Integer; inline;
 
-function  _umtx_lock(mtx:p_umtx):Integer;
-function  _umtx_unlock(mtx:p_umtx):Integer;
-function  _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 function  _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 
 implementation
 
 uses
  errno,
+ syscalls,
  kern_umtx,
  trap,
  thr_error;
@@ -85,27 +83,6 @@ end;
 function umtx_wake(var umtx:umtx;nr_wakeup:Integer):Integer; inline;
 begin
  Result:=_umtx_op(@umtx,UMTX_OP_WAKE,nr_wakeup,nil,nil);
-end;
-
-function _umtx_lock(mtx:p_umtx):Integer; assembler; nostackframe;
-asm
- movq  sys__umtx_lock,%rax
- call  fast_syscall
- jmp   cerror
-end;
-
-function _umtx_unlock(mtx:p_umtx):Integer; assembler; nostackframe;
-asm
- movq  sys__umtx_unlock,%rax
- call  fast_syscall
- jmp   cerror
-end;
-
-function _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;
-asm
- movq  sys__umtx_op,%rax
- call  fast_syscall
- jmp   cerror
 end;
 
 function _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;

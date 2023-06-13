@@ -6,6 +6,7 @@ interface
 
 uses
  mqueue,
+ syscalls,
  pthread_md,
  thr_private,
  thr_init;

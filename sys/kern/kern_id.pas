@@ -15,8 +15,8 @@ Const
 type
  p_id_desc=^t_id_desc;
  t_id_desc=packed record
-  refs:QWORD;
   free:procedure(data:pointer);
+  refs:Integer;
  end;
 
  p_id_desc_table=^t_id_desc_table;
@@ -31,6 +31,8 @@ type
   max_key:Integer;      //max key [min_key,max_key)
  end;
 
+ t_filter_cb=function(d:p_id_desc):Boolean of object;
+
 Procedure id_acqure (d:p_id_desc);
 Procedure id_release(d:p_id_desc);
 
@@ -39,21 +41,21 @@ procedure id_table_fini(t:p_id_desc_table);
 
 function  id_new(t:p_id_desc_table;d:p_id_desc;pKey:PInteger):Boolean;
 function  id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer;old:PPointer):Boolean;
-function  id_get(t:p_id_desc_table;Key:Integer):p_id_desc;
-function  id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
+function  id_get(t:p_id_desc_table;Key:Integer;cb:t_filter_cb=nil):p_id_desc;
+function  id_del(t:p_id_desc_table;Key:Integer;old:PPointer;cb:t_filter_cb=nil):Boolean;
 
 implementation
 
 Procedure id_acqure(d:p_id_desc);
 begin
  if (d=nil) then Exit;
- System.InterlockedIncrement64(d^.refs);
+ System.InterlockedIncrement(d^.refs);
 end;
 
 Procedure id_release(d:p_id_desc);
 begin
  if (d=nil) then Exit;
- if (System.InterlockedDecrement64(d^.refs)=0) then
+ if (System.InterlockedDecrement(d^.refs)=0) then
  if (d^.free<>nil) then
  begin
   d^.free(d);
@@ -251,7 +253,7 @@ begin
   rw_wunlock(t^.FLock);
 end;
 
-function id_get(t:p_id_desc_table;Key:Integer):p_id_desc;
+function id_get(t:p_id_desc_table;Key:Integer;cb:t_filter_cb=nil):p_id_desc;
 Var
  data:PPointer;
 Label
@@ -267,16 +269,24 @@ begin
 
  Pointer(Result):=data^;
 
+ if (cb<>nil) then
+ begin
+  if not cb(Result) then Goto _exit; //filtred
+ end;
+
  id_acqure(Result); //ref for further use
 
  _exit:
   rw_runlock(t^.FLock);
 end;
 
-function id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
+function id_del(t:p_id_desc_table;Key:Integer;old:PPointer;cb:t_filter_cb=nil):Boolean;
 Var
+ data:PPointer;
  d,rel:p_id_desc;
  p:Integer;
+Label
+ _exit;
 begin
  Result:=False;
  if (t=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
@@ -284,6 +294,15 @@ begin
  d:=nil;
  rel:=nil;
  rw_wlock(t^.FLock);
+
+ if (cb<>nil) then
+ begin
+  data:=HAMT_search32(@t^.FHAMT,Key);
+  if (data=nil) then Goto _exit; //not found
+  d:=data^;
+  if not cb(d) then Goto _exit; //filtred
+  d:=nil;
+ end;
 
  if HAMT_delete32(@t^.FHAMT,Key,@d) then
  begin
@@ -336,7 +355,8 @@ begin
   old^:=nil;
  end;
 
- rw_wunlock(t^.FLock);
+ _exit:
+  rw_wunlock(t^.FLock);
  //
  id_release(rel);
 end;

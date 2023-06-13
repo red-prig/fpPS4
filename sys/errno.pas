@@ -8,8 +8,8 @@ interface
 {$I sce_errno.inc}
 {$I errno.inc}
 
-function px2sce(e:Integer):Integer; inline;
-function sce2px(e:Integer):Integer; inline;
+function px2sce(e:Integer):Integer;
+function sce2px(e:Integer):Integer;
 
 function _get_errno:Integer; inline;
 function _set_errno(r:Integer):Integer;
@@ -20,7 +20,7 @@ implementation
 uses
  thr_error;
 
-function px2sce(e:Integer):Integer; inline;
+function px2sce(e:Integer):Integer;
 begin
  if (e=0) then
   Result:=0
@@ -28,7 +28,7 @@ begin
   Result:=e-$7ffe0000;
 end;
 
-function sce2px(e:Integer):Integer; inline;
+function sce2px(e:Integer):Integer;
 begin
  if (e=0) then
   Result:=0

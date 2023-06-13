@@ -146,7 +146,7 @@ type
   fa_prevend  :Int64  ; { (f) Previous NOREUSE end. }
  end;
 
- t_file=packed object
+ t_file=object
   desc          :t_id_desc;
   //
   f_data        :Pointer  ; { file descriptor specific data }

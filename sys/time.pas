@@ -117,19 +117,13 @@ procedure TIMESPEC_SUB(dst,src,val:ptimespec);
 
 function  itimerfix(tv:ptimeval):Integer;
 
-function  clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
-function  clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
-
 var
  boottime:timeval;
 
 implementation
 
 uses
- errno,
- trap,
- thr_error,
- kern_time;
+ errno;
 
 function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
 begin
@@ -292,19 +286,6 @@ begin
  Exit(0);
 end;
 
-function clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; assembler; nostackframe;
-asm
- movq  sys_clock_gettime,%rax
- call  fast_syscall
- jmp   cerror
-end;
-
-function clock_getres(clock_id:Integer;tp:Ptimespec):Integer; assembler; nostackframe;
-asm
- movq  sys_clock_getres,%rax
- call  fast_syscall
- jmp   cerror
-end;
 
 end.
 

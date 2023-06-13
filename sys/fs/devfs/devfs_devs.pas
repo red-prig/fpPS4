@@ -50,7 +50,7 @@ uses
  devfs_vnops;
 
 var
- devfs_desc:t_id_desc=(refs:0;free:nil);
+ devfs_desc:t_id_desc=(free:nil;refs:0);
  devfs_inos:t_id_desc_table;
 
 //

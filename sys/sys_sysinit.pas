@@ -17,8 +17,7 @@ uses
  kern_thread,
  kern_sig,
  kern_umtx,
- kern_osem,
- kern_evf,
+ kern_namedobj,
  vmount,
  vfiledesc,
  vm_map,
@@ -61,8 +60,7 @@ begin
  threadinit;
  siginit;
  umtxq_sysinit;
- osem_sysinit;
- evf_sysinit;
+ named_table_init;
  vmountinit;
  fd_table_init;
  vminit;

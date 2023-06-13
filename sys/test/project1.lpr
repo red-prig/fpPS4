@@ -19,7 +19,6 @@ uses
  thr_private,
  sys_cpuset,
  trap,
- sys_sig,
  kern_psl,
  kern_umtx,
  thr_init,
@@ -33,9 +32,7 @@ uses
  kern_condvar,
  kern_osem,
  kern_id,
- sys_osem,
  kern_evf,
- sys_evf,
  rtprio,
  pthread,
  thr_stack,
@@ -84,7 +81,8 @@ uses
  kern_gpo,
  md_sleep,
  sys_machdep,
- kern_context;
+ kern_context,
+ kern_namedobj;
 
 var
  mtx:umutex;
@@ -132,7 +130,7 @@ begin
  p:=mmap(Pointer($700000000),16*1024,PROT_CPU_ALL,MAP_ANON or MAP_FIXED,-1,0);
  Writeln(HexStr(p));
 
- Result:=query_memory_protection(Pointer($700000000),16*1024,@qr);
+ Result:=query_memory_protection(Pointer($700000000),@qr);
  Writeln(Result);
 
  sceKernelSetVirtualRangeName(Pointer($700000000),16*1024,'test');
@@ -468,7 +466,7 @@ begin
   act.u.sa_handler:=sa_handler(@__ex_handler);
   act.sa_flags:=SA_RESTART;
 
-  sigaction(SIGUSR1,@act,nil,0);
+  sigaction(SIGUSR1,@act,nil);
 
 
   i:=syscalls.thr_suspend_ucontext(tid);
@@ -485,10 +483,10 @@ begin
 
   thr_kill(tid,SIGUSR1);
 
-  i:=_evf_trywait_err(evf,1,EVF_WAITMODE_OR,nil);
+  i:=evf_trywait(evf,1,EVF_WAITMODE_OR,nil);
   Writeln('_evf_trywait_err=',i,' _errno:',__error^);
 
-  i:=_evf_wait_err(evf,2,EVF_WAITMODE_OR,nil,nil);
+  i:=evf_wait(evf,2,EVF_WAITMODE_OR,nil,nil);
   Writeln('_evf_wait_err=',i,' _errno:',__error^);
 
   //i:=_osem_wait_err(osem,1,nil);
@@ -552,9 +550,9 @@ begin
  //_osem_post_err(osem,1);
  thr_kill(tid2,SIGUSR1);
 
- i:=_evf_set_err(evf,2);
+ i:=evf_set(evf,2);
 
- i:=_evf_set_err(evf,1);
+ i:=evf_set(evf,1);
  Writeln('_evf_set_err=',i,' _errno:',__error^);
 
  //_osem_post_err(osem,1);

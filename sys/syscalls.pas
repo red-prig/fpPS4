@@ -149,7 +149,7 @@ function  thr_set_name(id:DWORD;pname:PChar):Integer;
 function  rtprio_thread(func,tid:Integer;rtp:Pointer):Integer;
 function  pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
 function  pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function  mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Integer;
+function  mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Pointer;
 function  lseek(fd:Integer;offset:Int64;whence:Integer):Integer;
 function  truncate(path:PChar;length:Int64):Integer;
 function  ftruncate(fd:Integer;length:Int64):Integer;
@@ -186,6 +186,8 @@ function  osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
 function  osem_trywait(key,needCount:Integer):Integer;
 function  osem_post(key,signalCount:Integer):Integer;
 function  osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
+function  namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
+function  namedobj_delete(id,objt:Integer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
@@ -1199,7 +1201,7 @@ asm
  jmp   cerror
 end;
 
-function mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Integer; assembler; nostackframe;
+function mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Pointer; assembler; nostackframe;
 asm
  movq  $477,%rax
  call  fast_syscall
@@ -1454,6 +1456,20 @@ end;
 function osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer; assembler; nostackframe;
 asm
  movq  $556,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $557,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function namedobj_delete(id,objt:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $558,%rax
  call  fast_syscall
  jmp   cerror
 end;

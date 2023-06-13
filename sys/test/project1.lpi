@@ -58,10 +58,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\sys_sig.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\sys_signal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -174,15 +170,7 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\sys_osem.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\kern\kern_evf.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="..\sys_evf.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -543,6 +531,14 @@
       </Unit>
       <Unit>
         <Filename Value="..\kern\kern_context.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\kern\kern_named_id.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\kern\kern_namedobj.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

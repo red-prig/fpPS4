@@ -17,8 +17,6 @@ function  sys_osem_post(key,signalCount:Integer):Integer;
 function  sys_osem_trywait(key,needCount:Integer):Integer;
 function  sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
 
-procedure osem_sysinit; //SYSINIT
-
 implementation
 
 uses
@@ -30,15 +28,18 @@ uses
  kern_mtx,
  kern_thr,
  kern_condvar,
- kern_id;
+ kern_named_id,
+ kern_namedobj;
 
 const
  SEMA_ATTR_DELF=$1000;
 
+ SEMA_OBJT     =$120;
+
 type
  p_osem=^t_osem;
  t_osem=packed record
-  desc      :t_id_desc;
+  desc      :t_id_named_desc;
   mtx       :mtx;
   cv        :t_cv;
   _align    :Integer;
@@ -48,7 +49,6 @@ type
   init_count:Integer;
   max_count :Integer;
   wait_count:Integer;
-  name      :array[0..31] of Char;
  end;
 
  p_osem_node=^t_osem_node;
@@ -58,9 +58,6 @@ type
   count :Integer;
   retval:Integer;
  end;
-
-var
- osem_table:t_id_desc_table;
 
 function osem_alloc:p_osem; inline;
 begin
@@ -75,7 +72,8 @@ end;
 
 function osem_init(sem:p_osem;attr:DWORD;initCount,max_count:Integer):Integer;
 begin
- sem^.desc.free :=@osem_free;
+ sem^.desc.desc.free:=@osem_free;
+ sem^.desc.objt :=SEMA_OBJT;
  sem^.count     :=initCount;
  sem^.init_count:=initCount;
  sem^.max_count :=max_count;
@@ -380,12 +378,14 @@ end;
 function sys_osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
 var
  td:p_kthread;
- _name:array[0..31] of Char;
+ _name:t_id_name;
  sem:p_osem;
  key:Integer;
 begin
  Result:=EINVAL;
+
  td:=curkthread;
+ if (td=nil) then Exit(-1);
 
  if ((attr and $fffffefc)<>0) or
     ((attr and 3)=3) then Exit;
@@ -403,21 +403,21 @@ begin
   attr:=attr or SEMA_ATTR_FIFO;
  end;
 
- FillChar(_name,32,0);
+ _name:=Default(t_id_name);
  if (copyinstr(name,@_name,32,nil)<>0) then Exit;
 
  sem:=osem_alloc;
  if (sem=nil) then Exit(ENOMEM); //EAGAIN
 
  osem_init(sem,attr,initCount,maxCount);
- sem^.name:=_name;
+ sem^.desc.name:=_name;
 
- if not id_new(@osem_table,@sem^.desc,@key) then
+ if not id_name_new(@named_table,@sem^.desc,@key) then
  begin
   osem_free(sem);
   Exit(EAGAIN);
  end;
- id_release(@sem^.desc);
+ id_release(sem);
 
  td^.td_retval[0]:=key;
 
@@ -430,10 +430,10 @@ var
 begin
  Result:=ESRCH;
 
- if not id_del(@osem_table,key,@sem) then Exit;
+ if not id_name_del(@named_table,key,SEMA_OBJT,@sem) then Exit;
 
  osem_delete(sem);
- id_release(@sem^.desc);
+ id_release(sem);
 
  Result:=0;
 end;
@@ -447,11 +447,11 @@ begin
  Result:=ESRCH;
  num:=0;
 
- sem:=p_osem(id_get(@osem_table,key));
+ sem:=id_name_get(@named_table,key,SEMA_OBJT);
  if (sem=nil) then Exit;
 
  Result:=osem_cancel(sem,setCount,@num);
- id_release(@sem^.desc);
+ id_release(sem);
 
  if (Result=0) then
  begin
@@ -472,11 +472,11 @@ begin
 
  Result:=ESRCH;
 
- sem:=p_osem(id_get(@osem_table,key));
+ sem:=id_name_get(@named_table,key,SEMA_OBJT);
  if (sem=nil) then Exit;
 
  Result:=osem_post(sem,signalCount);
- id_release(@sem^.desc);
+ id_release(sem);
 end;
 
 function sys_osem_trywait(key,needCount:Integer):Integer;
@@ -488,11 +488,11 @@ begin
 
  Result:=ESRCH;
 
- sem:=p_osem(id_get(@osem_table,key));
+ sem:=id_name_get(@named_table,key,SEMA_OBJT);
  if (sem=nil) then Exit;
 
  Result:=osem_trywait(sem,needCount);
- id_release(@sem^.desc);
+ id_release(sem);
 end;
 
 function sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
@@ -517,11 +517,11 @@ begin
 
  Result:=ESRCH;
 
- sem:=p_osem(id_get(@osem_table,key));
+ sem:=id_name_get(@named_table,key,SEMA_OBJT);
  if (sem=nil) then Exit;
 
  Result:=osem_wait(sem,needCount,timeout);
- id_release(@sem^.desc);
+ id_release(sem);
 
  if (pTimeout<>nil) then
  begin
@@ -530,13 +530,6 @@ begin
  end;
 end;
 
-procedure osem_sysinit;
-begin
- id_table_init(@osem_table,1);
-end;
-
-finalization
- id_table_fini(@osem_table);
 
 end.
 

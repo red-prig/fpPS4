@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ syscalls,
  time,
  pthread,
  pthread_md,

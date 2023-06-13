@@ -5,6 +5,7 @@ unit thr_umtx;
 interface
 
 uses
+ syscalls,
  _umtx,
  sys_umtx,
  time,

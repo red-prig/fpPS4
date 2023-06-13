@@ -25,8 +25,6 @@ function  sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
 function  sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
 function  sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
 
-procedure evf_sysinit; //SYSINIT
-
 implementation
 
 uses
@@ -38,7 +36,8 @@ uses
  kern_mtx,
  kern_thr,
  kern_condvar,
- kern_id;
+ kern_named_id,
+ kern_namedobj;
 
 const
  EVF_ATTR_DELF      =$1000;
@@ -46,10 +45,12 @@ const
  EVF_WAITMODE_CANCEL=$100;
  EVF_WAITMODE_DELETE=$200;
 
+ EVF_OBJT           =$110;
+
 type
  p_evf=^t_evf;
  t_evf=packed record
-  desc      :t_id_desc;
+  desc      :t_id_named_desc;
   bitPattern:QWORD;
   mtx       :mtx;
   cv        :t_cv;
@@ -57,7 +58,6 @@ type
   list      :TAILQ_HEAD;
   attr      :DWORD;
   wait_count:Integer;
-  name      :array[0..31] of Char;
  end;
 
  p_evf_node=^t_evf_node;
@@ -68,9 +68,6 @@ type
   rpattern:QWORD;
   waitMode:DWORD;
  end;
-
-var
- evf_table:t_id_desc_table;
 
 function evf_alloc:p_evf; inline;
 begin
@@ -85,7 +82,8 @@ end;
 
 function evf_init(evf:p_evf;attr:DWORD;initPattern:QWORD):Integer;
 begin
- evf^.desc.free:=@evf_free;
+ evf^.desc.desc.free:=@evf_free;
+ evf^.desc.objt:=EVF_OBJT;
  evf^.bitPattern:=initPattern;
  mtx_init(evf^.mtx,'evf mtx');
  cv_init(@evf^.cv,'evf cv');
@@ -526,12 +524,14 @@ end;
 function sys_evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
 var
  td:p_kthread;
- _name:array[0..31] of Char;
+ _name:t_id_name;
  evf:p_evf;
  key:Integer;
 begin
  Result:=EINVAL;
+
  td:=curkthread;
+ if (td=nil) then Exit(-1);
 
  if ((attr and $fffffecc)<>0) or
     ((attr and 3)=3) or
@@ -551,21 +551,21 @@ begin
   attr:=attr or EVF_ATTR_SINGLE;
  end;
 
- FillChar(_name,32,0);
+ _name:=Default(t_id_name);
  if (copyinstr(name,@_name,32,nil)<>0) then Exit;
 
  evf:=evf_alloc;
  if (evf=nil) then Exit(ENOMEM); //EAGAIN
 
  evf_init(evf,attr,initPattern);
- evf^.name:=_name;
+ evf^.desc.name:=_name;
 
- if not id_new(@evf_table,@evf^.desc,@key) then
+ if not id_name_new(@named_table,evf,@key) then
  begin
   evf_free(evf);
   Exit(EAGAIN);
  end;
- id_release(@evf^.desc);
+ id_release(evf);
 
  td^.td_retval[0]:=key;
 
@@ -578,10 +578,10 @@ var
 begin
  Result:=ESRCH;
 
- if not id_del(@evf_table,key,@evf) then Exit;
+ if not id_name_del(@named_table,key,EVF_OBJT,@evf) then Exit;
 
  evf_delete(evf);
- id_release(@evf^.desc);
+ id_release(evf);
 
  Result:=0;
 end;
@@ -595,12 +595,12 @@ begin
  Result:=ESRCH;
  num:=0;
 
- evf:=p_evf(id_get(@evf_table,key));
+ evf:=id_name_get(@named_table,key,EVF_OBJT);
  if (evf=nil) then Exit;
 
  Result:=0;
  num:=evf_cancel(evf,setPattern);
- id_release(@evf^.desc);
+ id_release(evf);
 
  if (pNumWait<>nil) then
  begin
@@ -615,11 +615,11 @@ var
 begin
  Result:=ESRCH;
 
- evf:=p_evf(id_get(@evf_table,key));
+ evf:=id_name_get(@named_table,key,EVF_OBJT);
  if (evf=nil) then Exit;
 
  evf_clear(evf,bitPattern);
- id_release(@evf^.desc);
+ id_release(evf);
 
  Result:=0;
 end;
@@ -630,11 +630,11 @@ var
 begin
  Result:=ESRCH;
 
- evf:=p_evf(id_get(@evf_table,key));
+ evf:=id_name_get(@named_table,key,EVF_OBJT);
  if (evf=nil) then Exit;
 
  evf_set(evf,bitPattern);
- id_release(@evf^.desc);
+ id_release(evf);
 
  Result:=0;
 end;
@@ -654,7 +654,7 @@ begin
 
  Result:=ESRCH;
 
- evf:=p_evf(id_get(@evf_table,key));
+ evf:=id_name_get(@named_table,key,EVF_OBJT);
  if (evf=nil) then Exit;
 
  if (pRes=nil) then
@@ -668,7 +668,7 @@ begin
   r:=copyout(@res,pRes,SizeOf(QWORD));
  end;
 
- id_release(@evf^.desc);
+ id_release(evf);
 
  if (r<>0) then Result:=r;
 end;
@@ -700,7 +700,7 @@ begin
 
  Result:=ESRCH;
 
- evf:=p_evf(id_get(@evf_table,key));
+ evf:=id_name_get(@named_table,key,EVF_OBJT);
  if (evf=nil) then Exit;
 
  if (pRes=nil) then
@@ -714,7 +714,7 @@ begin
   r:=copyout(@res,pRes,SizeOf(QWORD));
  end;
 
- id_release(@evf^.desc);
+ id_release(evf);
 
  if (r=0) and (pTimeout<>nil) then
  begin
@@ -724,13 +724,6 @@ begin
  if (r<>0) then Result:=r;
 end;
 
-procedure evf_sysinit;
-begin
- id_table_init(@evf_table,1);
-end;
-
-finalization
- id_table_fini(@evf_table);
 
 end.
 

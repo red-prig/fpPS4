@@ -31,6 +31,7 @@ uses
  kern_descrip,
  vfs_syscalls,
  vsys_generic,
+ kern_namedobj,
  kern_resource;
 
 function nosys:Integer;
@@ -2833,12 +2834,12 @@ const
   ),
   (//[557]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_namedobj_create;
      sy_name:'sys_namedobj_create'
   ),
   (//[558]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_namedobj_delete;
      sy_name:'sys_namedobj_delete'
   ),
   (//[559]

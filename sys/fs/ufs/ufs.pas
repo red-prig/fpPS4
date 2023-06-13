@@ -136,7 +136,7 @@ uses
  kern_id;
 
 var
- ufs_desc:t_id_desc=(refs:0;free:nil);
+ ufs_desc:t_id_desc=(free:nil;refs:0);
  ufs_inos:t_id_desc_table;
 
 function ufs_alloc_cdp_inode():Integer;
