@@ -21,12 +21,14 @@ type
 
  p_id_desc_table=^t_id_desc_table;
  t_id_desc_table=packed record
-  FLock  :Pointer;
-  FHAMT  :TSTUB_HAMT32;
-  FCount :Integer;
-  FPos   :Integer;
-  min_key:Integer;
-  max_key:Integer;
+  FLock  :Pointer;      //table lock
+  FHAMT  :TSTUB_HAMT32; //hamt by id
+  FCount :Integer;      //count alloc id
+  FSpace :Integer;      //count free id
+  FLast  :Integer;      //last free id
+  FPos   :Integer;      //max uses pos
+  min_key:Integer;      //min key [min_key,max_key)
+  max_key:Integer;      //max key [min_key,max_key)
  end;
 
 Procedure id_acqure (d:p_id_desc);
@@ -39,8 +41,6 @@ function  id_new(t:p_id_desc_table;d:p_id_desc;pKey:PInteger):Boolean;
 function  id_set(t:p_id_desc_table;d:p_id_desc;Key:Integer;old:PPointer):Boolean;
 function  id_get(t:p_id_desc_table;Key:Integer):p_id_desc;
 function  id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
-
-function  id_get_spaces(t:p_id_desc_table):Integer;
 
 implementation
 
@@ -72,9 +72,17 @@ procedure id_table_init(t:p_id_desc_table;min:Integer;max:Integer=def_max_key);
 begin
  if (t=nil) then Exit;
  FillChar(t^,SizeOf(t_id_desc_table),0);
- t^.min_key:=min;
- t^.max_key:=max;
- t^.FPos   :=min;
+ if (min>max) then
+ begin
+  t^.min_key:=max;
+  t^.max_key:=min;
+ end else
+ begin
+  t^.min_key:=min;
+  t^.max_key:=max;
+ end;
+ t^.FPos :=t^.min_key;
+ t^.FLast:=-1;
 end;
 
 procedure id_table_fini(t:p_id_desc_table);
@@ -85,9 +93,10 @@ end;
 
 function id_new(t:p_id_desc_table;d:p_id_desc;pKey:PInteger):Boolean;
 Label
- _data,_exit;
+ _insert,
+ _exit;
 Var
- i,m:Integer;
+ i:Integer;
  data:PPointer;
 begin
  Result:=False;
@@ -95,48 +104,90 @@ begin
 
  rw_wlock(t^.FLock);
 
- m:=(t^.max_key-t^.min_key);
- if (t^.FCount>=m+1) then goto _exit;
+ i:=(t^.max_key-t^.min_key);
+ if (t^.FCount>=i) then goto _exit; //limit reached
 
- if (t^.FPos<t^.min_key) or
-    (t^.FPos>t^.max_key) then
+ if (t^.FPos<t^.min_key) then
  begin
-  t^.FPos:=t^.min_key;
+  t^.FPos:=t^.min_key; //fixup
  end;
 
- if (t^.FCount=0) then
+ if (t^.FPos>t^.max_key) then
  begin
-  pKey^:=t^.FPos;
-  Inc(t^.FPos);
+  t^.FPos:=t^.max_key; //fixup
+ end;
 
-  data:=HAMT_insert32(@t^.FHAMT,pKey^,Pointer(d));
+ if (t^.FSpace<>0) then
+ begin
+  if (t^.FPos=t^.min_key) then
+  begin
+   t^.FSpace:=0; //fixup
+  end else
+  if (t^.FLast=-1) or //no last free
+     ((t^.FLast<t^.FPos) and (t^.FSpace<>1)) then
+  begin
+   //find space id (not an efficient linear search)
+   For i:=t^.min_key to t^.FPos-1 do
+   begin
+    if (i<>t^.FLast) then //not last free
+    begin
+     if (HAMT_search32(@t^.FHAMT,i)=nil) then
+     begin
+      //found
+      if (t^.FSpace<>0) then
+      begin
+       Dec(t^.FSpace);
+      end;
+      goto _insert;
+     end;
+    end;
+   end;
+   //not found
+  end;
+ end;
 
-  if (data=nil) then goto _exit;
-  if (data^<>Pointer(d)) then goto _exit;
+ i:=t^.FPos;
+
+ if (i=t^.max_key) then //limit
+ begin
+  //check last free
+  i:=t^.FLast;
+  if (i=-1) then goto _exit;
+  if (t^.FSpace<>0) then
+  begin
+   Dec(t^.FSpace);
+  end;
  end else
  begin
-  For i:=0 to m do
+  Inc(t^.FPos);
+
+  if (i=t^.FLast) and //last free?
+     (t^.FPos<t^.max_key) then //bound?
   begin
-   pKey^:=t^.FPos;
+   //skip last free
+   i:=t^.FPos;
+   Inc(t^.FSpace);
    Inc(t^.FPos);
-
-   if (t^.FPos>t^.max_key) then
-   begin
-    t^.FPos:=t^.min_key;
-   end;
-
-   data:=HAMT_insert32(@t^.FHAMT,pKey^,Pointer(d));
-
-   if (data=nil) then goto _exit;
-   if (data^=Pointer(d)) then goto _data;
   end;
-  goto _exit;
  end;
 
- _data:
+ _insert:
+  pKey^:=i;
+  data:=HAMT_insert32(@t^.FHAMT,pKey^,Pointer(d));
+
+  if (data=nil) then goto _exit; //nomem
+  if (data^<>Pointer(d)) then goto _exit; //wtf
+
   Inc(t^.FCount);
-  id_acqure(d);
-  id_acqure(d);
+
+  if (i=t^.FLast) then
+  begin
+   //reset last free
+   t^.FLast:=-1;
+  end;
+
+  id_acqure(d); //table ref
+  id_acqure(d); //ref for further use
 
   Result:=True;
 
@@ -157,22 +208,39 @@ begin
 
  data:=HAMT_insert32(@t^.FHAMT,Key,Pointer(d));
 
- if (data=nil) then goto _exit;
+ if (data=nil) then goto _exit; //nomem
 
- if (data^<>Pointer(d)) then
+ if (data^<>Pointer(d)) then //another
  begin
-  if (old<>nil) then
+  if (old<>nil) then //swap
   begin
    old^:=data^;
    data^:=Pointer(d);
   end else
   begin
-   goto _exit;
+   goto _exit; //not set
   end;
  end else
- if (old<>nil) then
- begin
-  old^:=nil;
+ begin //new
+  if (old<>nil) then
+  begin
+   old^:=nil; //not old value
+  end;
+  //
+  Inc(t^.FCount);
+  if (Key=t^.FLast) then
+  begin
+   //reset last free
+   t^.FLast:=-1;
+  end;
+  if (Key<t^.FPos) then
+  begin
+   //in the space of use
+   if (t^.FSpace<>0) then
+   begin
+    Dec(t^.FSpace);
+   end;
+  end;
  end;
 
  id_acqure(d);
@@ -195,11 +263,11 @@ begin
  rw_rlock(t^.FLock);
 
  data:=HAMT_search32(@t^.FHAMT,Key);
- if (data=nil) then Goto _exit;
+ if (data=nil) then Goto _exit; //not found
 
  Pointer(Result):=data^;
 
- id_acqure(Result);
+ id_acqure(Result); //ref for further use
 
  _exit:
   rw_runlock(t^.FLock);
@@ -208,6 +276,7 @@ end;
 function id_del(t:p_id_desc_table;Key:Integer;old:PPointer):Boolean;
 Var
  d,rel:p_id_desc;
+ p:Integer;
 begin
  Result:=False;
  if (t=nil) or (Key<t^.min_key) or (Key>t^.max_key) then Exit;
@@ -218,6 +287,7 @@ begin
 
  if HAMT_delete32(@t^.FHAMT,Key,@d) then
  begin
+  //deleted
   if (old<>nil) then
   begin
    old^:=d;
@@ -225,11 +295,44 @@ begin
   begin
    rel:=d;
   end;
+
   Dec(t^.FCount);
+
+  t^.FLast:=Key;
+
+  p:=t^.FPos-1;
+
+  if (p=Key) and
+     (p>=t^.min_key) and
+     (p<=t^.max_key) then
+  begin
+   //dec max uses
+   t^.FPos:=p;
+   Dec(p);
+
+   while (p>=t^.min_key) do
+   begin
+    if (HAMT_search32(@t^.FHAMT,p)<>nil) then Break; //found
+    //dec space
+    if (t^.FSpace<>0) then
+    begin
+     Dec(t^.FSpace);
+    end;
+    t^.FPos:=p;
+    Dec(p);
+   end;
+
+  end else
+  begin
+   //insert space
+   Inc(t^.FSpace);
+  end;
+
   Result:=True;
  end else
  if (old<>nil) then
  begin
+  //not found
   old^:=nil;
  end;
 
@@ -238,26 +341,6 @@ begin
  id_release(rel);
 end;
 
-function id_get_spaces(t:p_id_desc_table):Integer;
-var
- i,last:Integer;
-begin
- Result:=0;
- if (t=nil) then Exit;
-
- rw_rlock(t^.FLock);
-
- last:=t^.FPos;
- For i:=0 to last do
- begin
-  if (HAMT_search32(@t^.FHAMT,i)=nil) then
-  begin
-   Inc(Result);
-  end;
- end;
-
- rw_runlock(t^.FLock);
-end;
 
 end.
 

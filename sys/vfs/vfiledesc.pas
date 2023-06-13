@@ -31,7 +31,9 @@ type
   fd_holdleaderswakeup:Integer     ; { fdfree() needs wakeup }
   fd_cmask            :Word        ; { mask for file creation }
   //
-  property fd_nfiles:Integer read fd_ofiles.FCount;
+  property fd_nfiles  :Integer read fd_ofiles.FCount;
+  property fd_lastfile:Integer read fd_ofiles.FPos;
+  property fd_freefd  :Integer read fd_ofiles.FSpace;
  end;
 
 {

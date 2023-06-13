@@ -194,9 +194,8 @@ var
  lim:Integer;
  freefd:Integer;
 begin
- lim:=fd_table.fd_nfiles;
-
- freefd:=id_get_spaces(@fd_table.fd_ofiles);
+ lim   :=fd_table.fd_nfiles;
+ freefd:=fd_table.fd_freefd;
 
  sbp^.f_flags :=0;
  sbp^.f_bsize :=DEV_BSIZE;

@@ -959,6 +959,88 @@ begin
 
 end;
 
+procedure id_test;
+var
+ table:t_id_desc_table;
+ desc :t_id_desc;
+ key  :Integer;
+ res  :Boolean;
+
+ procedure print_table;
+ begin
+  Writeln('table.FCount=',table.FCount);
+  Writeln('table.FSpace=',table.FSpace);
+  Writeln('table.FLast =',table.FLast );
+  Writeln('table.FPos  =',table.FPos  );
+ end;
+
+begin
+ id_table_init(@table,1,5);
+
+ desc:=Default(t_id_desc);
+ key:=0;
+
+ //
+
+ res:=id_new(@table,@desc,@key);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ res:=id_new(@table,@desc,@key);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ res:=id_new(@table,@desc,@key);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ res:=id_new(@table,@desc,@key);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ key:=3;
+ res:=id_del(@table,key,nil);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ key:=4;
+ res:=id_del(@table,key,nil);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ //
+
+ res:=id_new(@table,@desc,@key);
+
+ Writeln(res,' ',key);
+
+ print_table;
+
+ id_table_fini(@table);
+end;
+
 type
  p_test_tailq=^test_tailq;
  test_tailq=packed record
@@ -1124,7 +1206,8 @@ var
  ru:t_rusage;
 
 begin
- tailq;
+ //tailq;
+ id_test;
 
  //test_map;
  sys_init;

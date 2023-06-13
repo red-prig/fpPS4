@@ -723,9 +723,9 @@ begin
  td:=curkthread;
  ndu:=nd;
 
- //lf:=fd_table.fd_lastfile;
- //if (nd > lf + 1)
- // nd:=lf + 1;
+ lf:=fd_table.fd_lastfile;
+ if (nd > lf + 1) then
+  nd:=lf + 1;
 
  error:=select_check_badfd(fd_in, nd, ndu, abi_nfdbits);
  if (error<>0) then
@@ -1187,11 +1187,11 @@ begin
  FILEDESC_SLOCK(@fd_table);
  While (i < nfd) do
  begin
-  //if (fds^.fd >= fd_table.fd_nfiles) then
-  //begin
-  // fds^.revents:=POLLNVAL;
-  // Inc(n);
-  //end else
+  if (fds^.fd >= fd_table.fd_nfiles) then
+  begin
+   fds^.revents:=POLLNVAL;
+   Inc(n);
+  end else
   if (fds^.fd < 0) then
   begin
    fds^.revents:=0;
