@@ -384,7 +384,7 @@ begin
   //Hats(D-PAD)
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) = 1 then
+  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT) = 1 then
     data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;
