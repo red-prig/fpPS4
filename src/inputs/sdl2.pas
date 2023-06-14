@@ -4,14 +4,14 @@ unit sdl2;
  Clipped headers from "SDL2-for-Pascal"
 }
 
+{$mode objfpc}{$H+}
+
 interface
 
   {$IFDEF WINDOWS}
     uses
       dynlibs,
-      {$IFDEF FPC}
       ctypes,
-      {$ENDIF}
       Windows;
   {$ENDIF}
 
@@ -29,12 +29,6 @@ interface
       {$ENDIF}
   {$ENDIF}
 
-  {$IF DEFINED(UNIX) AND DEFINED(ANDROID) AND DEFINED(FPC)}
-    uses
-      ctypes,
-      UnixType;
-  {$ENDIF}
-
 const
 
   {$IFDEF WINDOWS}
@@ -44,24 +38,13 @@ const
   {$IFDEF UNIX}
     {$IFDEF DARWIN}
       SDL_LibName = 'libSDL2.dylib';
-      {$IFDEF FPC}
-        {$LINKLIB libSDL2}
-      {$ENDIF}
     {$ELSE}
-      {$IFDEF FPC}
-        SDL_LibName = 'libSDL2.so';
-      {$ELSE}
-        SDL_LibName = 'libSDL2.so.0';
-      {$ENDIF}
-      {$MESSAGE HINT 'Known MESA bug may generate float-point exception in software graphics mode! See https://github.com/PascalGameDevelopment/SDL2-for-Pascal/issues/56 for reference.'}
+      SDL_LibName = 'libSDL2.so';
     {$ENDIF}
   {$ENDIF}
 
   {$IFDEF MACOS}
     SDL_LibName = 'SDL2';
-    {$IFDEF FPC}
-      {$linklib libSDL2}
-    {$ENDIF}
   {$ENDIF}
 
 type
@@ -217,106 +200,177 @@ const
   SDL_CONTROLLER_AXIS_TRIGGERRIGHT = TSDL_GameControllerAxis(5);
   SDL_CONTROLLER_AXIS_MAX = TSDL_GameControllerAxis(6);
 
-////
-
-function SDL_InitSubSystem(flags: TSDL_Init): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_InitSubSystem' {$ENDIF} {$ENDIF};
-
-
+function  SDL_InitSubSystem(flags: TSDL_Init): cint; cdecl;
 procedure SDL_QuitSubSystem(flags: TSDL_Init); cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_QuitSubSystem' {$ENDIF} {$ENDIF};
 
-//////
-
-procedure SDL_LockJoysticks(); cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_LockJoysticks' {$ENDIF} {$ENDIF};
-
-procedure SDL_UnlockJoysticks(); cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_UnlockJoysticks' {$ENDIF} {$ENDIF};
-
-function SDL_NumJoysticks(): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_NumJoysticks' {$ENDIF} {$ENDIF};
+var
+ SDL_LockJoysticks  :procedure(); cdecl;
+ SDL_UnlockJoysticks:procedure(); cdecl;
+ SDL_NumJoysticks   :function(): cint; cdecl;
 
 ////
 
-function SDL_GameControllerOpen(joystick_index: cint): PSDL_GameController cdecl; external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerOpen' {$ENDIF} {$ENDIF};
-
-procedure SDL_GameControllerClose(gamecontroller: PSDL_GameController) cdecl; external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerClose' {$ENDIF} {$ENDIF};
+ SDL_GameControllerOpen:function(joystick_index: cint): PSDL_GameController cdecl;
+ SDL_GameControllerClose:procedure(gamecontroller: PSDL_GameController) cdecl;
 
 //
 
-function SDL_GameControllerNumMappings():cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerNumMappings' {$ENDIF} {$ENDIF};
+ SDL_GameControllerNumMappings:function():cint; cdecl;
+ SDL_GameControllerName:function(gamecontroller: PSDL_GameController): PAnsiChar cdecl;
+ SDL_GameControllerGetVendor:function(gamecontroller: PSDL_GameController): cuint16; cdecl;
+ SDL_GameControllerGetProduct:function(gamecontroller: PSDL_GameController): cuint16; cdecl;
+ SDL_GameControllerGetProductVersion:function(gamecontroller: PSDL_GameController): cuint16; cdecl;
+ SDL_GameControllerGetFirmwareVersion:function(gamecontroller: PSDL_GameController): cuint16; cdecl;
+ SDL_GameControllerGetSerial:function(gamecontroller: PSDL_GameController): PAnsiChar; cdecl;
+ SDL_GameControllerPath:function(gamecontroller: PSDL_GameController): PAnsiChar; cdecl;
+ SDL_GameControllerHasRumble:function(gamecontroller: PSDL_GameController): Boolean; cdecl;
+ SDL_GameControllerGetButton:function(gamecontroller: PSDL_GameController; button: TSDL_GameControllerButton): cuint8 cdecl;
+ SDL_GameControllerGetNumTouchpads:function(gamecontroller: PSDL_GameController): cint; cdecl;
+ SDL_GameControllerGetNumTouchpadFingers:function(gamecontroller: PSDL_GameController; touchpad: cint): cint; cdecl;
 
-function SDL_GameControllerName(gamecontroller: PSDL_GameController): PAnsiChar cdecl; external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerName' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetVendor(gamecontroller: PSDL_GameController): cuint16; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetVendor' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetProduct(gamecontroller: PSDL_GameController): cuint16; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetProduct' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetProductVersion(gamecontroller: PSDL_GameController): cuint16; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetProductVersion' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetFirmwareVersion(gamecontroller: PSDL_GameController): cuint16; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetFirmwareVersion' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetSerial(gamecontroller: PSDL_GameController): PAnsiChar; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetSerial' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerPath(gamecontroller: PSDL_GameController): PAnsiChar; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerPath' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerHasRumble(gamecontroller: PSDL_GameController): Boolean; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerHasRumble' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetButton(gamecontroller: PSDL_GameController; button: TSDL_GameControllerButton): cuint8 cdecl; external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetButton' {$ENDIF} {$ENDIF};
-
-
-function SDL_GameControllerGetNumTouchpads(gamecontroller: PSDL_GameController): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetNumTouchpads' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetNumTouchpadFingers(gamecontroller: PSDL_GameController; touchpad: cint): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetNumTouchpadFingers' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerGetTouchpadFinger(
+ SDL_GameControllerGetTouchpadFinger:function(
   gamecontroller: PSDL_GameController;
   touchpad, finger: cint;
   state: pcuint8;
   x, y, pressure: pcfloat
-): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetTouchpadFinger' {$ENDIF} {$ENDIF};
+ ): cint; cdecl;
 
-function SDL_GameControllerGetAxis(gamecontroller: PSDL_GameController; axis: TSDL_GameControllerAxis): cint16 cdecl; external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerGetAxis' {$ENDIF} {$ENDIF};
+ SDL_GameControllerGetAxis:function(gamecontroller: PSDL_GameController; axis: TSDL_GameControllerAxis): cint16 cdecl;
 
-function SDL_GameControllerRumble(
+ SDL_GameControllerRumble:function(
   gamecontroller: PSDL_GameController;
   low_frequency_rumble, high_frequency_rumble: cuint16;
   duration_ms: cuint32
-): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerRumble' {$ENDIF} {$ENDIF};
+ ): cint; cdecl;
 
-function SDL_GameControllerHasRumbleTriggers(gamecontroller: PSDL_GameController): Boolean; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerHasRumbleTriggers' {$ENDIF} {$ENDIF};
+ SDL_GameControllerHasRumbleTriggers:function(gamecontroller: PSDL_GameController): Boolean; cdecl;
 
-function SDL_GameControllerRumbleTriggers(
+ SDL_GameControllerRumbleTriggers:function(
   gamecontroller: PSDL_GameController;
   left_rumble, right_rumble: cuint16;
   duration_ms: cuint32
-): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerRumbleTriggers' {$ENDIF} {$ENDIF};
+ ): cint; cdecl;
 
-
-
-function SDL_GameControllerHasLED(gamecontroller: PSDL_GameController): Boolean; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerHasLED' {$ENDIF} {$ENDIF};
-
-function SDL_GameControllerSetLED(gamecontroller: PSDL_GameController; red, green, blue: cuint8): cint; cdecl;
-  external SDL_LibName {$IFDEF DELPHI} {$IFDEF MACOS} name '_SDL_GameControllerSetLED' {$ENDIF} {$ENDIF};
-
+ SDL_GameControllerHasLED:function(gamecontroller: PSDL_GameController): Boolean; cdecl;
+ SDL_GameControllerSetLED:function(gamecontroller: PSDL_GameController; red, green, blue: cuint8): cint; cdecl;
 
 implementation
+
+var
+ init_flags:TSDL_Init=0;
+ lib_handle:TLibHandle=NilHandle;
+
+ ///
+ _SDL_InitSubSystem:function (flags: TSDL_Init): cint; cdecl;
+ _SDL_QuitSubSystem:procedure(flags: TSDL_Init); cdecl;
+ ///
+
+function SDL_InitSubSystem(flags: TSDL_Init): cint; cdecl;
+begin
+ if (lib_handle=NilHandle) then
+ begin
+  lib_handle:=SafeLoadLibrary(SDL_LibName);
+  if (lib_handle=NilHandle) then Exit(-1);
+ end;
+
+ Pointer(_SDL_InitSubSystem):=GetProcedureAddress(lib_handle,'SDL_InitSubSystem');
+ Pointer(_SDL_QuitSubSystem):=GetProcedureAddress(lib_handle,'SDL_QuitSubSystem');
+
+ if (_SDL_InitSubSystem=nil) then
+ begin
+  UnloadLibrary(lib_handle);
+  lib_handle:=NilHandle;
+  init_flags:=0;
+ end;
+
+ Result:=_SDL_InitSubSystem(flags);
+
+ if (Result=0) then
+ begin
+  init_flags:=init_flags or flags;
+ end;
+
+ if ((flags and SDL_INIT_JOYSTICK)<>0) then
+ begin
+  Pointer(SDL_LockJoysticks  ):=GetProcedureAddress(lib_handle,'SDL_LockJoysticks');
+  Pointer(SDL_UnlockJoysticks):=GetProcedureAddress(lib_handle,'SDL_UnlockJoysticks');
+  Pointer(SDL_NumJoysticks   ):=GetProcedureAddress(lib_handle,'SDL_NumJoysticks');
+ end;
+
+ if ((flags and SDL_INIT_GAMECONTROLLER)<>0) then
+ begin
+  Pointer(SDL_GameControllerOpen                 ):=GetProcedureAddress(lib_handle,'SDL_GameControllerOpen');
+  Pointer(SDL_GameControllerClose                ):=GetProcedureAddress(lib_handle,'SDL_GameControllerClose');
+  Pointer(SDL_GameControllerNumMappings          ):=GetProcedureAddress(lib_handle,'SDL_GameControllerNumMappings');
+  Pointer(SDL_GameControllerName                 ):=GetProcedureAddress(lib_handle,'SDL_GameControllerName');
+  Pointer(SDL_GameControllerGetVendor            ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetVendor');
+  Pointer(SDL_GameControllerGetProduct           ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetProduct');
+  Pointer(SDL_GameControllerGetProductVersion    ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetProductVersion');
+  Pointer(SDL_GameControllerGetFirmwareVersion   ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetFirmwareVersion');
+  Pointer(SDL_GameControllerGetSerial            ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetSerial');
+  Pointer(SDL_GameControllerPath                 ):=GetProcedureAddress(lib_handle,'SDL_GameControllerPath');
+  Pointer(SDL_GameControllerHasRumble            ):=GetProcedureAddress(lib_handle,'SDL_GameControllerHasRumble');
+  Pointer(SDL_GameControllerGetButton            ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetButton');
+  Pointer(SDL_GameControllerGetNumTouchpads      ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetNumTouchpads');
+  Pointer(SDL_GameControllerGetNumTouchpadFingers):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetNumTouchpadFingers');
+  Pointer(SDL_GameControllerGetTouchpadFinger    ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetTouchpadFinger');
+  Pointer(SDL_GameControllerGetAxis              ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetAxis');
+  Pointer(SDL_GameControllerRumble               ):=GetProcedureAddress(lib_handle,'SDL_GameControllerRumble');
+  Pointer(SDL_GameControllerHasRumbleTriggers    ):=GetProcedureAddress(lib_handle,'SDL_GameControllerHasRumbleTriggers');
+  Pointer(SDL_GameControllerRumbleTriggers       ):=GetProcedureAddress(lib_handle,'SDL_GameControllerRumbleTriggers');
+  Pointer(SDL_GameControllerHasLED               ):=GetProcedureAddress(lib_handle,'SDL_GameControllerHasLED');
+  Pointer(SDL_GameControllerSetLED               ):=GetProcedureAddress(lib_handle,'SDL_GameControllerSetLED');
+ end;
+end;
+
+procedure SDL_QuitSubSystem(flags: TSDL_Init); cdecl;
+begin
+ init_flags:=init_flags and (not flags);
+
+ if (_SDL_QuitSubSystem<>nil) then
+ begin
+  _SDL_QuitSubSystem(flags);
+ end;
+
+ if (init_flags=0) then
+ begin
+  UnloadLibrary(lib_handle);
+  lib_handle:=NilHandle;
+ end;
+
+ if ((flags and SDL_INIT_JOYSTICK)<>0) then
+ begin
+  Pointer(SDL_LockJoysticks  ):=nil;
+  Pointer(SDL_UnlockJoysticks):=nil;
+  Pointer(SDL_NumJoysticks   ):=nil;
+ end;
+
+ if ((flags and SDL_INIT_GAMECONTROLLER)<>0) then
+ begin
+  Pointer(SDL_GameControllerOpen                 ):=nil;
+  Pointer(SDL_GameControllerClose                ):=nil;
+  Pointer(SDL_GameControllerNumMappings          ):=nil;
+  Pointer(SDL_GameControllerName                 ):=nil;
+  Pointer(SDL_GameControllerGetVendor            ):=nil;
+  Pointer(SDL_GameControllerGetProduct           ):=nil;
+  Pointer(SDL_GameControllerGetProductVersion    ):=nil;
+  Pointer(SDL_GameControllerGetFirmwareVersion   ):=nil;
+  Pointer(SDL_GameControllerGetSerial            ):=nil;
+  Pointer(SDL_GameControllerPath                 ):=nil;
+  Pointer(SDL_GameControllerHasRumble            ):=nil;
+  Pointer(SDL_GameControllerGetButton            ):=nil;
+  Pointer(SDL_GameControllerGetNumTouchpads      ):=nil;
+  Pointer(SDL_GameControllerGetNumTouchpadFingers):=nil;
+  Pointer(SDL_GameControllerGetTouchpadFinger    ):=nil;
+  Pointer(SDL_GameControllerGetAxis              ):=nil;
+  Pointer(SDL_GameControllerRumble               ):=nil;
+  Pointer(SDL_GameControllerHasRumbleTriggers    ):=nil;
+  Pointer(SDL_GameControllerRumbleTriggers       ):=nil;
+  Pointer(SDL_GameControllerHasLED               ):=nil;
+  Pointer(SDL_GameControllerSetLED               ):=nil;
+ end;
+end;
+
 
 
 end.
