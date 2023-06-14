@@ -332,9 +332,9 @@ begin
   Writeln('----------------------------------------------------------------------------------------');
   Writeln('----------------------------------------------------------------------------------------');
   Writeln('Controller Path: ', SDL_GameControllerPath(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Player Index: ', SDL_GameControllerGetPlayerIndex(game_controller));
+  //Writeln('----------------------------------------------------------------------------------------');
+  //Writeln('----------------------------------------------------------------------------------------');
+  //Writeln('Player Index: ', SDL_GameControllerGetPlayerIndex(game_controller));
   Writeln('----------------------------------------------------------------------------------------');
   Writeln('----------------------------------------------------------------------------------------');
   Writeln('Modifiable LED: ', SDL_GameControllerHasLED(game_controller));
@@ -370,7 +370,7 @@ var
  mPoint,delta:TPoint;
  cs:TXInputState;
  controllerIndex,stateResult:DWORD;
- event:TSDL_Event;
+ //event:TSDL_Event;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
  begin
@@ -405,14 +405,16 @@ begin
   Result:=0;
   Exit;
  end;
- for controllerIndex := 0 to SDL_Numjoysticks() - 1 do
-  while SDL_PollEvent(@event) <> 0 do
-   begin
-   if event.type_ = SDL_CONTROLLERBUTTONDOWN then
-   Writeln(event.cbutton.button,' pressed');
-   if event.type_ = SDL_CONTROLLERAXISMOTION then
-   Writeln(event.caxis.axis,' moved');
-   end;
+
+ //for controllerIndex := 0 to SDL_Numjoysticks() - 1 do
+ // while SDL_PollEvent(@event) <> 0 do
+ // begin
+ //  if event.type_ = SDL_CONTROLLERBUTTONDOWN then
+ //  Writeln(event.cbutton.button,' pressed');
+ //  if event.type_ = SDL_CONTROLLERAXISMOTION then
+ //  Writeln(event.caxis.axis,' moved');
+ // end;
+
  begin
   //Options and Touchpad
   if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_BACK) = 1 then
