@@ -423,8 +423,6 @@ type
   Size:QWORD;
   Magic:QWORD;
   SDK_version:QWORD;
-  param1:Integer;
-  param2:Integer;
  end;
 
  PTLS_index=^TLS_index;
