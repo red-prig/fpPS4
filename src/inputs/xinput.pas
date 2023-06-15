@@ -2,11 +2,18 @@ unit XInput;
 
 interface
 
+uses
+ dynlibs;
+
 type
   BOOL = longbool;
 
 const
-  XINPUT_DLL = 'xinput1_3.dll';
+  XINPUT_DLL:array[0..2] of PChar=(
+   'XInput1_4.dll',
+   'XInput1_3.dll',
+   'XInput9_1_0.dll'
+  );
 
   // Device types available in XINPUT_CAPABILITIES
   XINPUT_DEVTYPE_GAMEPAD          = $01;
@@ -162,44 +169,106 @@ type
     HidCode: Byte;
   end;
 
-function XInputGetState(
+function  XInput_Init: Integer; stdcall;
+procedure XInput_Quit; stdcall;
+
+var
+ XInputGetState:function(
     dwUserIndex: DWORD;      // [in] Index of the gamer associated with the device
     out pState: TXInputState // [out] Receives the current state
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
-function XInputSetState(
+ XInputSetState:function(
     dwUserIndex: DWORD;                 // [in] Index of the gamer associated with the device
     const pVibration: TXInputVibration  // [in, out] The vibration information to send to the controller
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
-function XInputGetCapabilities(
+ XInputGetCapabilities:function(
     dwUserIndex: DWORD;                     // [in] Index of the gamer associated with the device
     dwFlags: DWORD;                         // [in] Input flags that identify the device type
     out pCapabilities: TXInputCapabilities  // [out] Receives the capabilities
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
-procedure XInputEnable(
+ XInputEnable:procedure(
     enable: BOOL     // [in] Indicates whether xinput is enabled or disabled.
-); stdcall; external XINPUT_DLL;
+ ); stdcall;
 
-function XInputGetDSoundAudioDeviceGuids(
+ XInputGetDSoundAudioDeviceGuids:function(
     dwUserIndex: DWORD;           // [in] Index of the gamer associated with the device
     out pDSoundRenderGuid: TGUID; // [out] DSound device ID for render
     out pDSoundCaptureGuid: TGUID // [out] DSound device ID for capture
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
-function XInputGetBatteryInformation(
+ XInputGetBatteryInformation:function(
     dwUserIndex: DWORD;          // [in]  Index of the gamer associated with the device
     devType: Byte;               // [in]  Which device on this user index
     out pBatteryInformation: TXInputBatteryInformation // [out] Contains the level and types of batteries
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
-function XInputGetKeystroke(
+ XInputGetKeystroke:function(
     dwUserIndex: DWORD;               // [in]  Index of the gamer associated with the device
     dwReserved: DWORD;                // [in]  Reserved for future use
     var pKeystroke: TXInputKeystroke  // [out] Pointer to an XINPUT_KEYSTROKE structure that receives an input event.
- ): DWORD; stdcall; external XINPUT_DLL;
+ ): DWORD; stdcall;
 
 implementation
 
+var
+ lib_handle:TLibHandle=NilHandle;
+
+function XInput_Init:Integer; stdcall;
+var
+ i:Integer;
+begin
+ if (lib_handle<>NilHandle) then Exit(0);
+
+ For i:=0 to High(XINPUT_DLL) do
+ begin
+  lib_handle:=SafeLoadLibrary(XINPUT_DLL[i]);
+  if (lib_handle<>NilHandle) then Break;
+ end;
+
+ if (lib_handle=NilHandle) then Exit(-1);
+
+ Pointer(XInputGetState):=GetProcedureAddress(lib_handle,100);
+
+ if (XInputGetState=nil) then
+ begin
+  Pointer(XInputGetState):=GetProcedureAddress(lib_handle,'XInputGetState');
+ end;
+
+ if (XInputGetState=nil) then
+ begin
+  UnloadLibrary(lib_handle);
+  lib_handle:=NilHandle;
+  Exit(-1);
+ end;
+
+ Pointer(XInputSetState                 ):=GetProcedureAddress(lib_handle,'XInputSetState');
+ Pointer(XInputGetCapabilities          ):=GetProcedureAddress(lib_handle,'XInputGetCapabilities');
+ Pointer(XInputEnable                   ):=GetProcedureAddress(lib_handle,'XInputEnable');
+ Pointer(XInputGetDSoundAudioDeviceGuids):=GetProcedureAddress(lib_handle,'XInputGetDSoundAudioDeviceGuids');
+ Pointer(XInputGetBatteryInformation    ):=GetProcedureAddress(lib_handle,'XInputGetBatteryInformation');
+ Pointer(XInputGetKeystroke             ):=GetProcedureAddress(lib_handle,'XInputGetKeystroke');
+end;
+
+procedure XInput_Quit; stdcall;
+begin
+ if (lib_handle=NilHandle) then Exit;
+
+ UnloadLibrary(lib_handle);
+ lib_handle:=NilHandle;
+
+ Pointer(XInputGetState                 ):=nil;
+ Pointer(XInputSetState                 ):=nil;
+ Pointer(XInputGetCapabilities          ):=nil;
+ Pointer(XInputEnable                   ):=nil;
+ Pointer(XInputGetDSoundAudioDeviceGuids):=nil;
+ Pointer(XInputGetBatteryInformation    ):=nil;
+ Pointer(XInputGetKeystroke             ):=nil;
+end;
+
+
 end.
+
+
