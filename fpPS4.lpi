@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="139">
+    <Units Count="140">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -640,6 +640,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpAuth"/>
       </Unit138>
+      <Unit139>
+        <Filename Value="src\inputs\sce_pad_types.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit139>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -281,6 +281,7 @@ begin
   UnloadLibrary(lib_handle);
   lib_handle:=NilHandle;
   init_flags:=0;
+  Exit(-1);
  end;
 
  Result:=_SDL_InitSubSystem(flags);
