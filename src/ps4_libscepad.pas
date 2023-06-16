@@ -13,7 +13,9 @@ uses
   SysUtils,
   xinput,
   formController,
-  SDL2;
+
+  sce_pad_interface,
+  sdl2_pad_interface;
 
 implementation
 
@@ -29,86 +31,59 @@ var
  last_mouse_init:Integer=0;
  xinput_last_poll:Long=0;
  xinput_controllers_connected:Array[0..XUSER_MAX_COUNT-1] of Boolean;
- game_controller:PSDL_GameController;
+
+ ScePadInterface:TAbstractScePadInterface=nil;
 
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
-var
- controllerIndex:Integer;
 begin
  Writeln(SysLogPrefix,'scePadInit');
 
+ ScePadInterface:=TSdl2PadInterface;
 
- //init SDL2 Joystick
- if SDL_Numjoysticks() < 1 then
- begin
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('SDL2 Error: No Joysticks Connected!');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
- end else
- begin
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Number of Joysticks connected: ', SDL_Numjoysticks());
-
-  game_controller:=SDL_GameControllerOpen(0);
-  //Manipulate the below RGB values to change LED color
-  SDL_GameControllerSetLED(game_controller, 255, 0, 120);
-
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('SDL2: Game Controller loaded!');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Controller Name: ', SDL_GameControllerName(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('USB Vendor ID: ', SDL_GameControllerGetVendor(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('USB Product ID: ', SDL_GameControllerGetProduct(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Product Version: ', SDL_GameControllerGetProductVersion(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Firmware Version: ', SDL_GameControllerGetFirmwareVersion(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Serial Number: ', SDL_GameControllerGetSerial(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Controller Path: ', SDL_GameControllerPath(game_controller));
-  //Writeln('----------------------------------------------------------------------------------------');
-  //Writeln('----------------------------------------------------------------------------------------');
-  //Writeln('Player Index: ', SDL_GameControllerGetPlayerIndex(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Modifiable LED: ', SDL_GameControllerHasLED(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('Modifiable Rumble: ', SDL_GameControllerHasRumble(game_controller));
-  Writeln('----------------------------------------------------------------------------------------');
-  Writeln('----------------------------------------------------------------------------------------');
- end;
-
- Result:=0;
+ Result:=ScePadInterface.Init;
 end;
 
 function ps4_scePadOpen(userID,_type,index:Integer;param:Pointer):Integer; SysV_ABI_CDecl;
+var
+ sce_handle:TScePadHandle;
+ key:Integer;
 begin
- //Writeln('scePadOpen:',userID);
- Result:=222;
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
+ if (_type<>SCE_PAD_PORT_TYPE_STANDARD) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+
+ sce_handle:=nil;
+ Result:=ScePadInterface.Open(index,sce_handle);
+ if (Result<>0) then Exit;
+
+ key:=0;
+ if pad_handles.New(sce_handle,key) then
+ begin
+  sce_handle.handle:=key;
+  sce_handle.Release;
+  Result:=key;
+ end else
+ begin
+  Result:=SCE_PAD_ERROR_FATAL;
+ end;
 end;
 
 function ps4_scePadGetHandle(userID,_type,index:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=222;
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
+ if (_type<>SCE_PAD_PORT_TYPE_STANDARD) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+
+ Result:=ScePadInterface.GetHandle(index);
 end;
 
 function ps4_scePadClose(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
+ if not pad_handles.Delete(handle) then Exit(SCE_PAD_ERROR_INVALID_HANDLE);
+
  Result:=0;
 end;
 
@@ -118,7 +93,8 @@ var
  mPoint,delta:TPoint;
  cs:TXInputState;
  controllerIndex,stateResult:DWORD;
- //event:TSDL_Event;
+
+ sce_handle:TScePadHandle;
 
  function GetAsyncKeyState(vKey:longint):Boolean; inline;
  begin
@@ -126,12 +102,21 @@ var
  end;
 
 begin
- Result:=SCE_PAD_ERROR_INVALID_ARG;
- if (data=nil) then Exit;
- //Writeln(SizeOf(TPadData));  //184
+ Result:=0;
+ if (data=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
  data^:=Default(ScePadData);
 
  _sig_lock;
+
+ sce_handle:=TScePadHandle(pad_handles.Acqure(handle));
+
+ if (sce_handle=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_PAD_ERROR_INVALID_HANDLE);
+ end;
 
  //connect data
 
@@ -140,79 +125,24 @@ begin
  data^.connected:=True;
  data^.connectedCount:=1;
 
- data^.leftStick.x :=$80;
- data^.leftStick.y :=$80;
- data^.rightStick.x:=$80;
- data^.rightStick.y:=$80;
+ data^.leftStick.x   :=$80;
+ data^.leftStick.y   :=$80;
+ data^.rightStick.x  :=$80;
+ data^.rightStick.y  :=$80;
+ data^.orientation.w :=1;
+ data^.acceleration.y:=1;
 
  //only in active windows
 
  if (MainWindows<>GetForegroundWindow) then
  begin
+  sce_handle.Release;
   _sig_unlock;
   Result:=0;
   Exit;
  end;
 
- //for controllerIndex := 0 to SDL_Numjoysticks() - 1 do
- // while SDL_PollEvent(@event) <> 0 do
- // begin
- //  if event.type_ = SDL_CONTROLLERBUTTONDOWN then
- //  Writeln(event.cbutton.button,' pressed');
- //  if event.type_ = SDL_CONTROLLERAXISMOTION then
- //  Writeln(event.caxis.axis,' moved');
- // end;
-
- begin
-  //Options and Touchpad
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_BACK) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_START) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
-
-  //Hats(D-PAD)
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_UP;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_DOWN;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_LEFT;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_RIGHT;
-
-  //Cross, Circle, Square and Triangle
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_A) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CROSS;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_B) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_CIRCLE;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_X) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_SQUARE;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_Y) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TRIANGLE;
-
-  //L1, R1 and L3, R3
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L1;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R1;
-
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_LEFTSTICK) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_L3;
-  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_RIGHTSTICK) = 1 then
-    data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
-
-  //Left and Right Axes
-  data^.leftStick.x:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_LEFTX));
-  data^.leftStick.y:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_LEFTY));
-
-  data^.rightStick.x:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_RIGHTX));
-  data^.rightStick.y:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_RIGHTY));
-
-  //Left and Right Triggers (L2 and R2)
-  //SDL has no support to define L2 and R2 as buttons, so keep that in mind for future
-  data^.analogButtons.l2:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT)*255);
-  data^.analogButtons.r2:=Trunc(SDL_GameControllerGetAxis(game_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)*255);
- end;
+ sce_handle.ReadState(data);
 
  //mouse as touch pad
 
@@ -325,6 +255,7 @@ begin
  if GetAsyncKeyState(VK_C) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R3;
 
+ sce_handle.Release;
  _sig_unlock;
  Result:=0;
 end;
@@ -332,6 +263,9 @@ end;
 function ps4_scePadRead(handle:Integer;data:PScePadData;num:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
+ if (data=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
  if (num<>0) then
  begin
   ps4_scePadReadState(handle,data);
@@ -341,23 +275,26 @@ end;
 
 function ps4_scePadSetVibration(handle:Integer;pParam:PScePadVibrationParam):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 
-function ps4_scePadResetLightBar(handle:Integer):Integer; assembler; nostackframe;
-asm
- xor %rax,%rax
+function ps4_scePadResetLightBar(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+ Result:=0;
 end;
 
 function ps4_scePadGetControllerInformation(handle:Integer;
                                             pInfo:PScePadControllerInformation
                                             ):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  if (pInfo=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  pInfo^:=Default(ScePadControllerInformation);
  pInfo^.touchPadInfo.pixelDensity := 1;
- pInfo^.touchPadInfo.resolution.x := 256;
- pInfo^.touchPadInfo.resolution.y := 256;
+ pInfo^.touchPadInfo.resolution.x := 1920;
+ pInfo^.touchPadInfo.resolution.y := 950;
  pInfo^.stickInfo.deadZoneLeft    := 2;
  pInfo^.stickInfo.deadZoneRight   := 2;
  pInfo^.connectionType := SCE_PAD_CONNECTION_TYPE_LOCAL;
@@ -371,6 +308,7 @@ function ps4_scePadDeviceClassGetExtendedInformation(handle:Integer;
                                                      pExtInfo:pScePadDeviceClassExtendedInformation
                                                      ):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  if (pExtInfo=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  pExtInfo^:=Default(ScePadDeviceClassExtendedInformation);
  pExtInfo^.deviceClass:=SCE_PAD_DEVICE_CLASS_STANDARD;
@@ -382,6 +320,7 @@ function ps4_scePadDeviceClassParseData(handle:Integer;
                                         pDeviceClassData:pScePadDeviceClassData
                                         ):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  if (pData=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  if (pDeviceClassData=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
  pDeviceClassData^:=Default(ScePadDeviceClassData);
@@ -392,26 +331,31 @@ end;
 
 function ps4_scePadSetMotionSensorState(handle:Integer;bEnable:Boolean):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 
 function ps4_scePadSetLightBar(handle:Integer;pParam:PScePadLightBarParam):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 
 function ps4_scePadResetOrientation(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 
 function ps4_scePadSetTiltCorrectionState(handle:Integer;bEnable:BOOL):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 
 function ps4_scePadSetAngularVelocityDeadbandState(handle:Integer;bEnable:BOOL):Integer; SysV_ABI_CDecl;
 begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  Result:=0;
 end;
 

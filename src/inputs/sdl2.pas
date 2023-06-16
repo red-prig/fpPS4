@@ -208,13 +208,17 @@ var
  SDL_UnlockJoysticks:procedure(); cdecl;
  SDL_NumJoysticks   :function(): cint; cdecl;
 
-////
+ SDL_JoystickGetDeviceGUID:function(device_index: cint): TSDL_JoystickGUID; cdecl;
+ SDL_JoystickGetGUID      :function(joystick: PSDL_Joystick): TSDL_JoystickGUID; cdecl;
 
- SDL_GameControllerOpen:function(joystick_index: cint): PSDL_GameController cdecl;
+////
+ SDL_IsGameController   :function(joystick_index: cint): Boolean cdecl;
+ SDL_GameControllerOpen :function(joystick_index: cint): PSDL_GameController cdecl;
  SDL_GameControllerClose:procedure(gamecontroller: PSDL_GameController) cdecl;
 
+ SDL_GameControllerGetJoystick:function(gamecontroller: PSDL_GameController): PSDL_Joystick cdecl;
+ SDL_GameControllerGetAttached:function(gamecontroller: PSDL_GameController): Boolean cdecl;
 //
-
  SDL_GameControllerNumMappings:function():cint; cdecl;
  SDL_GameControllerName:function(gamecontroller: PSDL_GameController): PAnsiChar cdecl;
  SDL_GameControllerGetVendor:function(gamecontroller: PSDL_GameController): cuint16; cdecl;
@@ -285,23 +289,26 @@ begin
  end;
 
  Result:=_SDL_InitSubSystem(flags);
+ if (Result<>0) then Exit;
 
- if (Result=0) then
- begin
-  init_flags:=init_flags or flags;
- end;
+ init_flags:=init_flags or flags;
 
  if ((flags and SDL_INIT_JOYSTICK)<>0) then
  begin
-  Pointer(SDL_LockJoysticks  ):=GetProcedureAddress(lib_handle,'SDL_LockJoysticks');
-  Pointer(SDL_UnlockJoysticks):=GetProcedureAddress(lib_handle,'SDL_UnlockJoysticks');
-  Pointer(SDL_NumJoysticks   ):=GetProcedureAddress(lib_handle,'SDL_NumJoysticks');
+  Pointer(SDL_LockJoysticks        ):=GetProcedureAddress(lib_handle,'SDL_LockJoysticks');
+  Pointer(SDL_UnlockJoysticks      ):=GetProcedureAddress(lib_handle,'SDL_UnlockJoysticks');
+  Pointer(SDL_NumJoysticks         ):=GetProcedureAddress(lib_handle,'SDL_NumJoysticks');
+  Pointer(SDL_JoystickGetDeviceGUID):=GetProcedureAddress(lib_handle,'SDL_JoystickGetDeviceGUID');
+  Pointer(SDL_JoystickGetGUID      ):=GetProcedureAddress(lib_handle,'SDL_JoystickGetGUID');
  end;
 
  if ((flags and SDL_INIT_GAMECONTROLLER)<>0) then
  begin
+  Pointer(SDL_IsGameController                   ):=GetProcedureAddress(lib_handle,'SDL_IsGameController');
   Pointer(SDL_GameControllerOpen                 ):=GetProcedureAddress(lib_handle,'SDL_GameControllerOpen');
   Pointer(SDL_GameControllerClose                ):=GetProcedureAddress(lib_handle,'SDL_GameControllerClose');
+  Pointer(SDL_GameControllerGetJoystick          ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetJoystick');
+  Pointer(SDL_GameControllerGetAttached          ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetAttached');
   Pointer(SDL_GameControllerNumMappings          ):=GetProcedureAddress(lib_handle,'SDL_GameControllerNumMappings');
   Pointer(SDL_GameControllerName                 ):=GetProcedureAddress(lib_handle,'SDL_GameControllerName');
   Pointer(SDL_GameControllerGetVendor            ):=GetProcedureAddress(lib_handle,'SDL_GameControllerGetVendor');
@@ -326,6 +333,8 @@ end;
 
 procedure SDL_QuitSubSystem(flags: TSDL_Init); cdecl;
 begin
+ if (lib_handle=NilHandle) then Exit;
+
  init_flags:=init_flags and (not flags);
 
  if (_SDL_QuitSubSystem<>nil) then
@@ -341,15 +350,20 @@ begin
 
  if ((flags and SDL_INIT_JOYSTICK)<>0) then
  begin
-  Pointer(SDL_LockJoysticks  ):=nil;
-  Pointer(SDL_UnlockJoysticks):=nil;
-  Pointer(SDL_NumJoysticks   ):=nil;
+  Pointer(SDL_LockJoysticks        ):=nil;
+  Pointer(SDL_UnlockJoysticks      ):=nil;
+  Pointer(SDL_NumJoysticks         ):=nil;
+  Pointer(SDL_JoystickGetDeviceGUID):=nil;
+  Pointer(SDL_JoystickGetGUID      ):=nil;
  end;
 
  if ((flags and SDL_INIT_GAMECONTROLLER)<>0) then
  begin
+  Pointer(SDL_IsGameController                   ):=nil;
   Pointer(SDL_GameControllerOpen                 ):=nil;
   Pointer(SDL_GameControllerClose                ):=nil;
+  Pointer(SDL_GameControllerGetJoystick          ):=nil;
+  Pointer(SDL_GameControllerGetAttached          ):=nil;
   Pointer(SDL_GameControllerNumMappings          ):=nil;
   Pointer(SDL_GameControllerName                 ):=nil;
   Pointer(SDL_GameControllerGetVendor            ):=nil;
