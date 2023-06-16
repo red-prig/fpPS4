@@ -23,27 +23,40 @@ type
   class var
    sdl2_init:Boolean;
    sdl2_open:array[0..15] of TSdl2PadHandle;
-  class function Init:Integer; override;
-  class function Done:Integer; override;
-  class function Open(index:Integer;var handle:TScePadHandle):Integer; override;
-  class function GetHandle(index:Integer):Integer; override;
-  class function FindOpened(device_index:Integer;prev:PSDL_GameController):Boolean;
-  class function FindDevice(prev:PSDL_GameController):PSDL_GameController;
+  class procedure pre_init;
+  class function  Init:Integer; override;
+  class function  Done:Integer; override;
+  class function  Open(index:Integer;var handle:TScePadHandle):Integer; override;
+  class function  GetHandle(index:Integer):Integer; override;
+  class function  FindOpened(device_index:Integer;prev:PSDL_GameController):Boolean;
+  class function  FindDevice(prev:PSDL_GameController):PSDL_GameController;
  end;
 
 implementation
 
-class function TSdl2PadInterface.Init:Integer;
+class procedure TSdl2PadInterface.pre_init;
+var
+ i:Integer;
 begin
- Result:=SDL_InitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
- if (Result<>0) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+ i:=SDL_InitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
+ if (i<>0) then Exit;
  Writeln('SDL2 Game-Controller subsystem initialized!');
  sdl2_init:=True;
 end;
 
+class function TSdl2PadInterface.Init:Integer;
+begin
+ if (sdl2_init) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_PAD_ERROR_NOT_INITIALIZED;
+ end;
+end;
+
 class function TSdl2PadInterface.Done:Integer;
 begin
- sdl2_init:=false;
  SDL_QuitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
  Writeln('SDL2 Game-Controller subsystem exited!');
  Result:=0;
@@ -303,7 +316,7 @@ end;
 
 initialization
  //sdl2 needs to be initialized on the main thread, otherwise it just doesn't work. :(
- TSdl2PadInterface.Init;
+ TSdl2PadInterface.pre_init;
 
 finalization
  TSdl2PadInterface.Done;
