@@ -202,9 +202,9 @@ begin
  if not FileExists(filePath) then exit;
 
  iniFile := TIniFile.Create(filePath);
- Self.XInputEnabled := iniFile.ReadBool('XInput', 'XInputEnabled', True); 
- Self.XInputDeadzoneLeft := iniFile.ReadInteger('XInput', 'XInputDeadzoneLeft', XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
- Self.XInputDeadzoneRight := iniFile.ReadInteger('XInput', 'XInputDeadzoneRight', XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);  
+ Self.XInputEnabled         := iniFile.ReadBool   ('XInput', 'XInputEnabled'        , True);
+ Self.XInputDeadzoneLeft    := iniFile.ReadInteger('XInput', 'XInputDeadzoneLeft'   , XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+ Self.XInputDeadzoneRight   := iniFile.ReadInteger('XInput', 'XInputDeadzoneRight'  , XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
  Self.XInputDeadzoneTrigger := iniFile.ReadInteger('XInput', 'XInputDeadzoneTrigger', XINPUT_GAMEPAD_TRIGGER_THRESHOLD);
  for i := 1 to NUM_PS4_BUTTONS do
  begin
@@ -225,9 +225,9 @@ begin
  Result := False;
 
  iniFile := TIniFile.Create(filePath);
- iniFile.WriteBool('XInput', 'XInputEnabled', Self.XInputEnabled);
- iniFile.WriteInteger('XInput', 'XInputDeadzoneLeft',  Self.XInputDeadzoneLeft);
- iniFile.WriteInteger('XInput', 'XInputDeadzoneRight', Self.XInputDeadzoneRight);  
+ iniFile.WriteBool   ('XInput', 'XInputEnabled'        , Self.XInputEnabled);
+ iniFile.WriteInteger('XInput', 'XInputDeadzoneLeft'   , Self.XInputDeadzoneLeft);
+ iniFile.WriteInteger('XInput', 'XInputDeadzoneRight'  , Self.XInputDeadzoneRight);
  iniFile.WriteInteger('XInput', 'XInputDeadzoneTrigger', Self.XInputDeadzoneTrigger);
  for i := 1 to NUM_PS4_BUTTONS do
  begin
@@ -242,14 +242,14 @@ end;
 function TMappableInputs.XInputIsTriggered(input: EnumXInputButtons; state: TXInputState): boolean;
 begin
  case (input) of
-  xiLJoyUp: Result := state.Gamepad.sThumbLY > self.XInputDeadzoneLeft;
-  xiLJoyDown: Result := state.Gamepad.sThumbLY < -self.XInputDeadzoneLeft;
-  xiLJoyLeft: Result := state.Gamepad.sThumbLX < -self.XInputDeadzoneLeft;
+  xiLJoyUp   : Result := state.Gamepad.sThumbLY > self.XInputDeadzoneLeft;
+  xiLJoyDown : Result := state.Gamepad.sThumbLY < -self.XInputDeadzoneLeft;
+  xiLJoyLeft : Result := state.Gamepad.sThumbLX < -self.XInputDeadzoneLeft;
   xiLJoyRight: Result := state.Gamepad.sThumbLX > self.XInputDeadzoneLeft;
 
-  xiRJoyUp: Result := state.Gamepad.sThumbRY > self.XInputDeadzoneRight;
-  xiRJoyDown: Result := state.Gamepad.sThumbRY < -self.XInputDeadzoneRight;
-  xiRJoyLeft: Result := state.Gamepad.sThumbRX < -self.XInputDeadzoneRight;
+  xiRJoyUp   : Result := state.Gamepad.sThumbRY > self.XInputDeadzoneRight;
+  xiRJoyDown : Result := state.Gamepad.sThumbRY < -self.XInputDeadzoneRight;
+  xiRJoyLeft : Result := state.Gamepad.sThumbRX < -self.XInputDeadzoneRight;
   xiRJoyRight: Result := state.Gamepad.sThumbRX > self.XInputDeadzoneRight;
 
   xiA: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_A) <> 0;
@@ -257,14 +257,14 @@ begin
   xiX: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_X) <> 0;
   xiY: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_Y) <> 0;
 
-  xiDPadUp: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_UP) <> 0;
-  xiDPadDown: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_DOWN) <> 0;
-  xiDPadLeft: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_LEFT) <> 0;
+  xiDPadUp   : Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_UP) <> 0;
+  xiDPadDown : Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_DOWN) <> 0;
+  xiDPadLeft : Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_LEFT) <> 0;
   xiDPadRight: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_DPAD_RIGHT) <> 0;
 
   xiSelect: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_BACK) <> 0;
-  xiGuide: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_GUIDE) <> 0;
-  xiStart: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_START) <> 0;
+  xiGuide : Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_GUIDE) <> 0;
+  xiStart : Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_START) <> 0;
 
   xiL1: Result := (state.Gamepad.wButtons and XINPUT_GAMEPAD_LEFT_SHOULDER) <> 0;
   xiL2: Result := state.Gamepad.bLeftTrigger > self.XInputDeadzoneTrigger;
@@ -280,20 +280,20 @@ initialization
 
  MappableInputs := TMappableInputs.Create;
 
- MappableInputs.XInputButtonsNames[Ord(xiUnbound)] := 'Unbound';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyUp)] := 'LJOY_UP';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyDown)] := 'LJOY_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiLJoyLeft)] := 'LJOY_LEFT';
+ MappableInputs.XInputButtonsNames[Ord(xiUnbound  )] := 'Unbound';
+ MappableInputs.XInputButtonsNames[Ord(xiLJoyUp   )] := 'LJOY_UP';
+ MappableInputs.XInputButtonsNames[Ord(xiLJoyDown )] := 'LJOY_DOWN';
+ MappableInputs.XInputButtonsNames[Ord(xiLJoyLeft )] := 'LJOY_LEFT';
  MappableInputs.XInputButtonsNames[Ord(xiLJoyRight)] := 'LJOY_RIGHT';
 
- MappableInputs.XInputButtonsNames[Ord(xiRJoyUp)] := 'RJOY_UP';
- MappableInputs.XInputButtonsNames[Ord(xiRJoyDown)] := 'RJOY_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiRJoyLeft)] := 'RJOY_LEFT';
+ MappableInputs.XInputButtonsNames[Ord(xiRJoyUp   )] := 'RJOY_UP';
+ MappableInputs.XInputButtonsNames[Ord(xiRJoyDown )] := 'RJOY_DOWN';
+ MappableInputs.XInputButtonsNames[Ord(xiRJoyLeft )] := 'RJOY_LEFT';
  MappableInputs.XInputButtonsNames[Ord(xiRJoyRight)] := 'RJOY_RIGHT';
 
- MappableInputs.XInputButtonsNames[Ord(xiDPadUp)] := 'DPAD_UP';
- MappableInputs.XInputButtonsNames[Ord(xiDPadDown)] := 'DPAD_DOWN';
- MappableInputs.XInputButtonsNames[Ord(xiDPadLeft)] := 'DPAD_LEFT';
+ MappableInputs.XInputButtonsNames[Ord(xiDPadUp   )] := 'DPAD_UP';
+ MappableInputs.XInputButtonsNames[Ord(xiDPadDown )] := 'DPAD_DOWN';
+ MappableInputs.XInputButtonsNames[Ord(xiDPadLeft )] := 'DPAD_LEFT';
  MappableInputs.XInputButtonsNames[Ord(xiDPadRight)] := 'DPAD_RIGHT';
 
  MappableInputs.XInputButtonsNames[Ord(xiA)] := 'A';
@@ -302,8 +302,8 @@ initialization
  MappableInputs.XInputButtonsNames[Ord(xiY)] := 'Y';
 
  MappableInputs.XInputButtonsNames[Ord(xiSelect)] := 'SELECT';
- MappableInputs.XInputButtonsNames[Ord(xiGuide)] := 'GUIDE';
- MappableInputs.XInputButtonsNames[Ord(xiStart)] := 'START';
+ MappableInputs.XInputButtonsNames[Ord(xiGuide )] := 'GUIDE';
+ MappableInputs.XInputButtonsNames[Ord(xiStart )] := 'START';
 
  MappableInputs.XInputButtonsNames[Ord(xiL1)] := 'L1';
  MappableInputs.XInputButtonsNames[Ord(xiL2)] := 'L2';
@@ -315,35 +315,37 @@ initialization
 
  // Default mapping
  MappableInputs.XInputEnabled := True;    
- MappableInputs.XInputDeadzoneLeft :=  XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
- MappableInputs.XInputDeadzoneRight := XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+ MappableInputs.XInputDeadzoneLeft    := XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+ MappableInputs.XInputDeadzoneRight   := XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
  MappableInputs.XInputDeadzoneTrigger := XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
- MappableInputs.SetXInputMapping(miUnbound, xiUnbound);
- MappableInputs.SetXInputMapping(miLJoyUp, xiLJoyUp);
- MappableInputs.SetXInputMapping(miLJoyDown, xiLJoyDown);
- MappableInputs.SetXInputMapping(miLJoyLeft, xiLJoyLeft);
+ MappableInputs.SetXInputMapping(miUnbound  , xiUnbound);
+ MappableInputs.SetXInputMapping(miLJoyUp   , xiLJoyUp);
+ MappableInputs.SetXInputMapping(miLJoyDown , xiLJoyDown);
+ MappableInputs.SetXInputMapping(miLJoyLeft , xiLJoyLeft);
  MappableInputs.SetXInputMapping(miLJoyRight, xiLJoyRight);
- MappableInputs.SetXInputMapping(miRJoyUp, xiRJoyUp);
- MappableInputs.SetXInputMapping(miRJoyDown, xiRJoyDown);
- MappableInputs.SetXInputMapping(miRJoyLeft, xiRJoyLeft);
+ MappableInputs.SetXInputMapping(miRJoyUp   , xiRJoyUp);
+ MappableInputs.SetXInputMapping(miRJoyDown , xiRJoyDown);
+ MappableInputs.SetXInputMapping(miRJoyLeft , xiRJoyLeft);
  MappableInputs.SetXInputMapping(miRJoyRight, xiRJoyRight);
- MappableInputs.SetXInputMapping(miDPadUp, xiDPadUp);
- MappableInputs.SetXInputMapping(miDPadDown, xiDPadDown);
- MappableInputs.SetXInputMapping(miDPadLeft, xiDPadLeft);
+ MappableInputs.SetXInputMapping(miDPadUp   , xiDPadUp);
+ MappableInputs.SetXInputMapping(miDPadDown , xiDPadDown);
+ MappableInputs.SetXInputMapping(miDPadLeft , xiDPadLeft);
  MappableInputs.SetXInputMapping(miDPadRight, xiDPadRight);
- MappableInputs.SetXInputMapping(miCross, xiA);
- MappableInputs.SetXInputMapping(miCircle, xiB);
- MappableInputs.SetXInputMapping(miSquare, xiX);
- MappableInputs.SetXInputMapping(miTriangle, xiY);
- MappableInputs.SetXInputMapping(miShare, xiUnbound);
- MappableInputs.SetXInputMapping(miTouchPad, xiSelect);
- MappableInputs.SetXInputMapping(miOptions, xiStart);
- MappableInputs.SetXInputMapping(miL1, xiL1);
- MappableInputs.SetXInputMapping(miL2, xiL2);
- MappableInputs.SetXInputMapping(miL3, xiL3);
- MappableInputs.SetXInputMapping(miR1, xiR1);
- MappableInputs.SetXInputMapping(miR2, xiR2);
- MappableInputs.SetXInputMapping(miR3, xiR3);
+ MappableInputs.SetXInputMapping(miCross    , xiA);
+ MappableInputs.SetXInputMapping(miCircle   , xiB);
+ MappableInputs.SetXInputMapping(miSquare   , xiX);
+ MappableInputs.SetXInputMapping(miTriangle , xiY);
+ MappableInputs.SetXInputMapping(miShare    , xiUnbound);
+ MappableInputs.SetXInputMapping(miTouchPad , xiSelect);
+ MappableInputs.SetXInputMapping(miOptions  , xiStart);
+ MappableInputs.SetXInputMapping(miL1       , xiL1);
+ MappableInputs.SetXInputMapping(miL2       , xiL2);
+ MappableInputs.SetXInputMapping(miL3       , xiL3);
+ MappableInputs.SetXInputMapping(miR1       , xiR1);
+ MappableInputs.SetXInputMapping(miR2       , xiR2);
+ MappableInputs.SetXInputMapping(miR3       , xiR3);
 
  MappableInputs.LoadFromFile(XINPUT_CONFIG_FILE);
 end.
+
+
