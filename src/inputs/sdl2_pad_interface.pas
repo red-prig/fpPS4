@@ -12,36 +12,45 @@ uses
 
 type
  TSdl2PadHandle=class(TScePadHandle)
-  index:Integer;
-  connectedCount:Integer;
-  game_controller:PSDL_GameController;
+  var
+   connectedCount:Integer;
+   game_controller:PSDL_GameController;
   function   ReadState(data:PScePadData):Integer; override;
-  destructor Destroy; override;
  end;
 
  TSdl2PadInterface=class(TScePadInterface)
   class var
    sdl2_init:Boolean;
-   sdl2_open:array[0..15] of TSdl2PadHandle;
-  class procedure pre_init;
+  class procedure Load;         override;
+  class procedure Unload;       override;
   class function  Init:Integer; override;
   class function  Done:Integer; override;
   class function  Open(index:Integer;var handle:TScePadHandle):Integer; override;
-  class function  GetHandle(index:Integer):Integer; override;
   class function  FindOpened(device_index:Integer;prev:PSDL_GameController):Boolean;
   class function  FindDevice(prev:PSDL_GameController):PSDL_GameController;
  end;
 
 implementation
 
-class procedure TSdl2PadInterface.pre_init;
+class procedure TSdl2PadInterface.Load;
 var
  i:Integer;
 begin
  i:=SDL_InitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
- if (i<>0) then Exit;
+ if (i<>0) then
+ begin
+  Writeln('SDL2 Game-Controller not initialized!');
+  Exit;
+ end;
  Writeln('SDL2 Game-Controller subsystem initialized!');
  sdl2_init:=True;
+end;
+
+class procedure TSdl2PadInterface.Unload;
+begin
+ if not sdl2_init then Exit;
+ SDL_QuitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
+ Writeln('SDL2 Game-Controller subsystem exited!');
 end;
 
 class function TSdl2PadInterface.Init:Integer;
@@ -57,8 +66,6 @@ end;
 
 class function TSdl2PadInterface.Done:Integer;
 begin
- SDL_QuitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
- Writeln('SDL2 Game-Controller subsystem exited!');
  Result:=0;
 end;
 
@@ -84,15 +91,20 @@ end;
 class function TSdl2PadInterface.FindOpened(device_index:Integer;prev:PSDL_GameController):Boolean;
 var
  i:Integer;
+ h:TSdl2PadHandle;
 begin
  Result:=False;
  For i:=0 to 15 do
-  if (sdl2_open[i]<>nil) then
-  if (sdl2_open[i].game_controller<>nil) then
-  if (sdl2_open[i].game_controller<>prev) then
+  if (pad_opened[i]<>nil) then
+  if (pad_opened[i].InheritsFrom(TSdl2PadHandle)) then
   begin
-   Result:=Compare(device_index,sdl2_open[i].game_controller);
-   if Result then Break;
+   h:=TSdl2PadHandle(pad_opened[i]);
+   if (h.game_controller<>nil) then
+   if (h.game_controller<>prev) then
+   begin
+    Result:=Compare(device_index,h.game_controller);
+    if Result then Break;
+   end;
   end;
 end;
 
@@ -139,7 +151,7 @@ begin
  Result:=0;
  if not sdl2_init then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
  if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
- if (sdl2_open[index]<>nil) then Exit(SCE_PAD_ERROR_ALREADY_OPENED);
+ if (pad_opened[index]<>nil) then Exit(SCE_PAD_ERROR_ALREADY_OPENED);
 
  game_controller:=FindDevice(nil);
 
@@ -147,7 +159,7 @@ begin
  TSdl2PadHandle(handle).index:=index;
  TSdl2PadHandle(handle).game_controller:=game_controller;
 
- sdl2_open[index]:=TSdl2PadHandle(handle);
+ pad_opened[index]:=handle;
 
  //Manipulate the below RGB values to change LED color
  SDL_GameControllerSetLED(game_controller, 255, 0, 120);
@@ -191,16 +203,6 @@ begin
  Writeln('Modifiable Rumble: ', SDL_GameControllerHasRumble(game_controller));
  Writeln('----------------------------------------------------------------------------------------');
  Writeln('----------------------------------------------------------------------------------------');
-end;
-
-class function TSdl2PadInterface.GetHandle(index:Integer):Integer;
-begin
- if not sdl2_init then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
-
- if (sdl2_open[index]=nil) then Exit(SCE_PAD_ERROR_NO_HANDLE);
-
- Result:=sdl2_open[index].handle;
 end;
 
 function AxisToAnalog(i:Integer):Byte;
@@ -308,18 +310,12 @@ begin
  end;
 end;
 
-destructor TSdl2PadHandle.Destroy;
-begin
- TSdl2PadInterface.sdl2_open[index]:=nil;
- inherited;
-end;
-
 initialization
  //sdl2 needs to be initialized on the main thread, otherwise it just doesn't work. :(
- TSdl2PadInterface.pre_init;
+ TSdl2PadInterface.Load;
 
 finalization
- TSdl2PadInterface.Done;
+ TSdl2PadInterface.Unload;
 
 end.
 

@@ -12,20 +12,24 @@ type
  TScePadHandle=class(TClassHandle)
   var
    handle:Integer;
-  function ReadState(data:PScePadData):Integer; virtual;
+   index:Integer;
+  function   ReadState(data:PScePadData):Integer; virtual;
+  destructor Destroy; override;
  end;
 
  TScePadInterface=class
-  class function Init:Integer; virtual;
-  class function Done:Integer; virtual;
-  class function Open(index:Integer;var handle:TScePadHandle):Integer; virtual;
-  class function GetHandle(index:Integer):Integer; virtual;
+  class procedure Load;         virtual;
+  class procedure Unload;       virtual;
+  class function  Init:Integer; virtual;
+  class function  Done:Integer; virtual;
+  class function  Open(index:Integer;var handle:TScePadHandle):Integer; virtual;
  end;
 
  TAbstractScePadInterface=class of TScePadInterface;
 
 var
  pad_handles:TIntegerHandles;
+ pad_opened :array[0..15] of TScePadHandle;
 
 implementation
 
@@ -33,6 +37,26 @@ function TScePadHandle.ReadState(data:PScePadData):Integer;
 begin
  Result:=SCE_PAD_ERROR_INVALID_HANDLE;
 end;
+
+destructor TScePadHandle.Destroy;
+begin
+ if (index>=0) and (index<16) then
+ begin
+  pad_opened[index]:=nil;
+ end;
+ inherited;
+end;
+
+class procedure TScePadInterface.Load;
+begin
+ //
+end;
+
+class procedure TScePadInterface.Unload;
+begin
+ //
+end;
+
 
 class function TScePadInterface.Init:Integer;
 begin
@@ -48,11 +72,6 @@ class function TScePadInterface.Open(index:Integer;var handle:TScePadHandle):Int
 begin
  handle:=nil;
  Result:=SCE_PAD_ERROR_NOT_INITIALIZED;
-end;
-
-class function TScePadInterface.GetHandle(index:Integer):Integer;
-begin
- Result:=SCE_PAD_ERROR_NO_HANDLE;
 end;
 
 initialization
