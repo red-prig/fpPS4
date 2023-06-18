@@ -17,6 +17,7 @@ uses
   kbm_pad_interface;
 
 Procedure select_pad_interface(const name:RawByteString);
+Procedure select_led_color    (const name:RawByteString);
 
 implementation
 
@@ -46,6 +47,18 @@ begin
  if not ScePadInterface.Load then
  begin
   ScePadInterface:=TKbmPadInterface; //reset to kbm
+ end;
+end;
+
+Procedure select_led_color(const name:RawByteString);
+var
+ clr:DWord;
+begin
+ if TryStrToDWord(name,clr) then
+ begin
+  DefaultPadLightBar.r:=(clr shr 16) and $FF;
+  DefaultPadLightBar.g:=(clr shr  8) and $FF;
+  DefaultPadLightBar.b:=(clr shr  0) and $FF;
  end;
 end;
 

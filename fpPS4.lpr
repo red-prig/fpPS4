@@ -100,6 +100,7 @@ begin
   Writeln('  -s <name>   //Savedata path');
   Writeln('  -w          //Fullscreen mode');
   Writeln('  -pad <name> //Gamepad interface selection (xinput,sdl2,keyboard) default:xinput');
+  Writeln('  -led <clr>  //Initial LED color of Gamepad ($rrggbb)');
 
   Writeln('  -h <name>   //enable hack');
   Writeln('     DEPTH_DISABLE_HACK   //Disables depth buffer');
@@ -125,6 +126,7 @@ begin
       '-h':n:=4;
       '-w':ps4_libSceVideoOut.FULLSCREEN_MODE:=True;
     '-pad':n:=5;
+    '-led':n:=6;
    else
      if (n<>-1) then
      begin
@@ -151,6 +153,9 @@ begin
          end;
        5:begin
           select_pad_interface(Trim(ParamStr(i)));
+         end;
+       6:begin
+          select_led_color(Trim(ParamStr(i)));
          end;
        4:begin
           case UpperCase(ParamStr(i)) of
