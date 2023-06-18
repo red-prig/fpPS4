@@ -272,7 +272,7 @@ begin
 
     if SDL_GameControllerGetTouchpadFinger(
         game_controller,
-        0,f,
+        0,i,
         @state,
         @x,@y,@pressure)=0 then
     begin
