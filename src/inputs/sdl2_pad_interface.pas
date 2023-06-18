@@ -252,8 +252,12 @@ var
  x,y,pressure:Single;
  state:Byte;
  new:PSDL_GameController;
+ event:TSDL_Event;
 begin
  Result:=0;
+
+ //loop events
+ while (SDL_PollEvent(@event)<>0) do;
 
  if not SDL_GameControllerGetAttached(game_controller) then
  begin
