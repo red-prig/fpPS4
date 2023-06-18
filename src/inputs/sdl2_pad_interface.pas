@@ -22,7 +22,7 @@ type
  TSdl2PadInterface=class(TScePadInterface)
   class var
    sdl2_init:Boolean;
-  class procedure Load;         override;
+  class function  Load:Boolean; override;
   class procedure Unload;       override;
   class function  Init:Integer; override;
   class function  Done:Integer; override;
@@ -33,25 +33,30 @@ type
 
 implementation
 
-class procedure TSdl2PadInterface.Load;
+class function TSdl2PadInterface.Load:Boolean;
 var
  i:Integer;
 begin
  i:=SDL_InitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
- if (i<>0) then
+ sdl2_init:=(i=0);
+
+ if sdl2_init then
+ begin
+  Writeln('SDL2 Game-Controller subsystem initialized!');
+ end else
  begin
   Writeln('SDL2 Game-Controller not initialized!');
-  Exit;
  end;
- Writeln('SDL2 Game-Controller subsystem initialized!');
- sdl2_init:=True;
+
+ Result:=sdl2_init;
 end;
 
 class procedure TSdl2PadInterface.Unload;
 begin
  if not sdl2_init then Exit;
  SDL_QuitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
- Writeln('SDL2 Game-Controller subsystem exited!');
+ sdl2_init:=False;
+ Writeln('SDL2 Game-Controller subsystem quit!');
 end;
 
 class function TSdl2PadInterface.Init:Integer;

@@ -31,7 +31,7 @@
         <PackageName Value="LCL"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="143">
+    <Units Count="144">
       <Unit0>
         <Filename Value="fpPS4.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -656,6 +656,10 @@
         <Filename Value="src\inputs\kbm_pad_interface.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit142>
+      <Unit143>
+        <Filename Value="src\inputs\xinput_pad_interface.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit143>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

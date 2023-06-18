@@ -18,7 +18,7 @@ type
  end;
 
  TScePadInterface=class
-  class procedure Load;         virtual;
+  class function  Load:Boolean; virtual;
   class procedure Unload;       virtual;
   class function  Init:Integer; virtual;
   class function  Done:Integer; virtual;
@@ -47,9 +47,9 @@ begin
  inherited;
 end;
 
-class procedure TScePadInterface.Load;
+class function TScePadInterface.Load:Boolean;
 begin
- //
+ Result:=True;
 end;
 
 class procedure TScePadInterface.Unload;

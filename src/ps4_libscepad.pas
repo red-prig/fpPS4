@@ -11,11 +11,10 @@ uses
   sys_signal,
   Classes,
   SysUtils,
-  xinput,
-  formController,
 
   sce_pad_interface,
   sdl2_pad_interface,
+  xinput_pad_interface,
   kbm_pad_interface;
 
 implementation
@@ -23,14 +22,9 @@ implementation
 uses
  sce_pad_types,
  ps4_libSceVideoOut,
- uMappableInputs,
  sys_kernel;
 
 var
-
- xinput_last_poll:Long=0;
- xinput_controllers_connected:Array[0..XUSER_MAX_COUNT-1] of Boolean;
-
  ScePadInterface:TAbstractScePadInterface=nil;
 
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
@@ -93,11 +87,7 @@ end;
 
 function ps4_scePadReadState(handle:Integer;data:PScePadData):Integer; SysV_ABI_CDecl;
 var
- cs:TXInputState;
- controllerIndex,stateResult:DWORD;
-
  sce_handle:TScePadHandle;
-
 begin
  Result:=0;
  if (data=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
@@ -119,7 +109,7 @@ begin
 
  data^.timestamp:=Sysutils.GetTickCount64;
 
- data^.connected:=True;
+ data^.connected     :=True;
  data^.connectedCount:=1;
 
  data^.leftStick.x   :=$80;
