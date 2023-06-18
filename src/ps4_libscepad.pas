@@ -7,7 +7,6 @@ interface
 uses
   windows,
   ps4_program,
-  spinlock,
   sys_signal,
   Classes,
   SysUtils,
@@ -17,6 +16,8 @@ uses
   xinput_pad_interface,
   kbm_pad_interface;
 
+Procedure select_pad_interface(const name:RawByteString);
+
 implementation
 
 uses
@@ -24,16 +25,42 @@ uses
  ps4_libSceVideoOut,
  sys_kernel;
 
+Const
+ DefaultPadInterface:TAbstractScePadInterface=TXInputPadInterface;
+
 var
  ScePadInterface:TAbstractScePadInterface=nil;
 
  DefaultPadLightBar:ScePadLightBarParam;
 
+Procedure select_pad_interface(const name:RawByteString);
+begin
+ case lowercase(name) of
+  'xinput'  :ScePadInterface:=TXInputPadInterface;
+  'sdl2'    :ScePadInterface:=TSdl2PadInterface;
+  'keyboard':ScePadInterface:=TKbmPadInterface;
+  else
+             ScePadInterface:=DefaultPadInterface; //default
+ end;
+
+ if not ScePadInterface.Load then
+ begin
+  ScePadInterface:=TKbmPadInterface; //reset to kbm
+ end;
+end;
+
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'scePadInit');
 
- ScePadInterface:=TSdl2PadInterface;
+ if (ScePadInterface=nil) then
+ begin
+  ScePadInterface:=DefaultPadInterface; //default
+  if not ScePadInterface.Load then
+  begin
+   ScePadInterface:=TKbmPadInterface; //reset to kbm
+  end;
+ end;
 
  Result:=ScePadInterface.Init;
 end;
