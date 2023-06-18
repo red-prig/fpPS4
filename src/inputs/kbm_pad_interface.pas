@@ -42,6 +42,11 @@ begin
  pad_opened[index]:=handle;
 end;
 
+function GetAsyncKeyState(vKey:longint):Boolean; inline;
+begin
+ Result:=(Windows.GetKeyState(vKey) and $8000)<>0;
+end;
+
 class function TMouseAsTouchpad.ReadState(data:PScePadData):Integer;
 var
  mPoint,delta:TPoint;
@@ -79,11 +84,9 @@ begin
   end;
 
  spin_unlock(last_mouse_lock);
-end;
 
-function GetAsyncKeyState(vKey:longint):Boolean; inline;
-begin
- Result:=(Windows.GetKeyState(vKey) and $8000)<>0;
+ if GetAsyncKeyState(VK_LBUTTON) then
+  data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 end;
 
 function TKbmPadHandle.ReadState(data:PScePadData):Integer;
@@ -121,9 +124,6 @@ begin
   data^.rightStick.x:=$FF;
 
  //
-
- if GetAsyncKeyState(VK_LBUTTON) then
-  data^.buttons:=data^.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
  if GetAsyncKeyState(VK_RETURN) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_OPTIONS;
