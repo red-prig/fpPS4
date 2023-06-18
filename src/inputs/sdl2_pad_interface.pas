@@ -8,7 +8,8 @@ uses
  sysutils,
  sdl2,
  sce_pad_types,
- sce_pad_interface;
+ sce_pad_interface,
+ kbm_pad_interface;
 
 type
  TSdl2PadHandle=class(TScePadHandle)
@@ -224,6 +225,9 @@ end;
 
 function TSdl2PadHandle.ReadState(data:PScePadData):Integer;
 var
+ i,f,t,n:Integer;
+ x,y,pressure:Single;
+ state:Byte;
  new:PSDL_GameController;
 begin
  Result:=0;
@@ -247,6 +251,47 @@ begin
 
  data^.connected:=True;
  data^.connectedCount:=Byte(connectedCount);
+
+ t:=SDL_GameControllerGetNumTouchpads(game_controller);
+
+ if (t=0) then
+ begin
+  //no touchpad? use mouse
+  TMouseAsTouchpad.ReadState(data);
+ end else
+ begin
+  //use ony first touchpad
+  f:=SDL_GameControllerGetNumTouchpadFingers(game_controller,0);
+
+  n:=0;
+  data^.touchData.touchNum:=0;
+
+  if (f<>0) then
+   For i:=0 to f-1 do
+   begin
+
+    if SDL_GameControllerGetTouchpadFinger(
+        game_controller,
+        0,f,
+        @state,
+        @x,@y,@pressure)=0 then
+    begin
+
+     if (x>1919) then x:=1919;
+     if (y>941)  then y:=941;
+
+     data^.touchData.touch[n].id:=n;
+     data^.touchData.touch[n].x :=Word(Trunc(x));
+     data^.touchData.touch[n].y :=Word(Trunc(y));
+
+     Inc(n);
+     data^.touchData.touchNum:=n;
+
+     if (n=SCE_PAD_MAX_TOUCH_NUM) then Break;
+    end;
+   end;
+ end;
+
 
  //Options and Touchpad
  if SDL_GameControllerGetButton(game_controller, SDL_CONTROLLER_BUTTON_START) = 1 then
