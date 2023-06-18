@@ -27,6 +27,8 @@ uses
 var
  ScePadInterface:TAbstractScePadInterface=nil;
 
+ DefaultPadLightBar:ScePadLightBarParam;
+
 function ps4_scePadInit():Integer; SysV_ABI_CDecl;
 begin
  Writeln(SysLogPrefix,'scePadInit');
@@ -49,6 +51,8 @@ begin
  sce_handle:=nil;
  Result:=ScePadInterface.Open(index,sce_handle);
  if (Result<>0) then Exit;
+
+ sce_handle.SetLightBar(@DefaultPadLightBar);
 
  key:=0;
  if pad_handles.New(sce_handle,key) then
@@ -155,10 +159,50 @@ begin
  Result:=0;
 end;
 
-function ps4_scePadResetLightBar(handle:Integer):Integer; SysV_ABI_CDecl;
+function ps4_scePadSetLightBar(handle:Integer;pParam:PScePadLightBarParam):Integer; SysV_ABI_CDecl;
+var
+ sce_handle:TScePadHandle;
 begin
  if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- Result:=0;
+
+ if (pParam=nil) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+
+ _sig_lock;
+
+ sce_handle:=TScePadHandle(pad_handles.Acqure(handle));
+
+ if (sce_handle=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_PAD_ERROR_INVALID_HANDLE);
+ end;
+
+ Result:=sce_handle.SetLightBar(pParam);
+
+ sce_handle.Release;
+ _sig_unlock;
+end;
+
+function ps4_scePadResetLightBar(handle:Integer):Integer; SysV_ABI_CDecl;
+var
+ sce_handle:TScePadHandle;
+begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+
+ _sig_lock;
+
+ sce_handle:=TScePadHandle(pad_handles.Acqure(handle));
+
+ if (sce_handle=nil) then
+ begin
+  _sig_unlock;
+  Exit(SCE_PAD_ERROR_INVALID_HANDLE);
+ end;
+
+ Result:=sce_handle.ResetLightBar();
+
+ sce_handle.Release;
+ _sig_unlock;
 end;
 
 function ps4_scePadGetControllerInformation(handle:Integer;
@@ -211,12 +255,6 @@ begin
  Result:=0;
 end;
 
-function ps4_scePadSetLightBar(handle:Integer;pParam:PScePadLightBarParam):Integer; SysV_ABI_CDecl;
-begin
- if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- Result:=0;
-end;
-
 function ps4_scePadResetOrientation(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
  if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
@@ -251,12 +289,12 @@ begin
  lib^.set_proc($6277605EA41557B7,@ps4_scePadReadState);
  lib^.set_proc($AB570735F1B270B2,@ps4_scePadRead);
  lib^.set_proc($C8556739D1B1BD96,@ps4_scePadSetVibration);
+ lib^.set_proc($451E27A2F50410D6,@ps4_scePadSetLightBar);
  lib^.set_proc($0EC703D62F475F5C,@ps4_scePadResetLightBar);
  lib^.set_proc($8233FDFCA433A149,@ps4_scePadGetControllerInformation);
  lib^.set_proc($01CB25A4DD631D1F,@ps4_scePadDeviceClassGetExtendedInformation);
  lib^.set_proc($2073EA71B734CC20,@ps4_scePadDeviceClassParseData);
  lib^.set_proc($72556F2F86439EDC,@ps4_scePadSetMotionSensorState);
- lib^.set_proc($451E27A2F50410D6,@ps4_scePadSetLightBar);
  lib^.set_proc($AC866747A792A6F9,@ps4_scePadResetOrientation);
  lib^.set_proc($BC32CCA092DD7BC2,@ps4_scePadSetTiltCorrectionState);
  lib^.set_proc($AF8E260317521BE5,@ps4_scePadSetAngularVelocityDeadbandState);

@@ -16,7 +16,10 @@ type
   var
    connectedCount:Integer;
    game_controller:PSDL_GameController;
-  function   ReadState(data:PScePadData):Integer; override;
+   LED:ScePadLightBarParam;
+  function   SetLightBar(data:pScePadLightBarParam):Integer; override;
+  function   ResetLightBar():Integer;                        override;
+  function   ReadState(data:PScePadData):Integer;            override;
  end;
 
  TSdl2PadInterface=class(TScePadInterface)
@@ -167,9 +170,6 @@ begin
 
  pad_opened[index]:=handle;
 
- //Manipulate the below RGB values to change LED color
- SDL_GameControllerSetLED(game_controller, 255, 0, 120);
-
  Writeln('----------------------------------------------------------------------------------------');
  Writeln('----------------------------------------------------------------------------------------');
  Writeln('SDL2: Game Controller loaded!');
@@ -228,6 +228,24 @@ begin
  Result:=Byte((abs(i)*255) div 32767);
 end;
 
+function TSdl2PadHandle.SetLightBar(data:pScePadLightBarParam):Integer;
+begin
+ LED:=data^;
+ if (game_controller<>nil) then
+ begin
+  SDL_GameControllerSetLED(game_controller, LED.r, LED.g, LED.b);
+ end;
+end;
+
+function TSdl2PadHandle.ResetLightBar():Integer;
+begin
+ LED:=Default(ScePadLightBarParam);
+ if (game_controller<>nil) then
+ begin
+  SDL_GameControllerSetLED(game_controller, LED.r, LED.g, LED.b);
+ end;
+end;
+
 function TSdl2PadHandle.ReadState(data:PScePadData):Integer;
 var
  i,f,t,n:Integer;
@@ -251,6 +269,8 @@ begin
    SDL_GameControllerClose(game_controller);
    game_controller:=new;
    Inc(connectedCount);
+   //
+   SDL_GameControllerSetLED(game_controller, LED.r, LED.g, LED.b);
   end;
  end;
 

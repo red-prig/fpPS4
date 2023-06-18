@@ -13,7 +13,9 @@ type
   var
    handle:Integer;
    index:Integer;
-  function   ReadState(data:PScePadData):Integer; virtual;
+  function   ReadState(data:PScePadData):Integer;            virtual;
+  function   SetLightBar(data:pScePadLightBarParam):Integer; virtual;
+  function   ResetLightBar():Integer;                        virtual;
   destructor Destroy; override;
  end;
 
@@ -36,6 +38,16 @@ implementation
 function TScePadHandle.ReadState(data:PScePadData):Integer;
 begin
  Result:=SCE_PAD_ERROR_INVALID_HANDLE;
+end;
+
+function TScePadHandle.SetLightBar(data:pScePadLightBarParam):Integer;
+begin
+ Result:=0;
+end;
+
+function TScePadHandle.ResetLightBar():Integer;
+begin
+ Result:=0;
 end;
 
 destructor TScePadHandle.Destroy;
