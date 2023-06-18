@@ -40,6 +40,8 @@ class function TSdl2PadInterface.Load:Boolean;
 var
  i:Integer;
 begin
+ if sdl2_init then Exit(True);
+
  i:=SDL_InitSubSystem(SDL_INIT_JOYSTICK or SDL_INIT_GAMECONTROLLER);
  sdl2_init:=(i=0);
 
@@ -383,10 +385,6 @@ begin
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
  end;
 end;
-
-initialization
- //sdl2 needs to be initialized on the main thread, otherwise it just doesn't work. :(
- TSdl2PadInterface.Load;
 
 finalization
  TSdl2PadInterface.Unload;

@@ -39,6 +39,8 @@ class function TXInputPadInterface.Load:Boolean;
 var
  i:Integer;
 begin
+ if xinput_init then Exit(True);
+
  i:=XInput.XInput_Init();
  xinput_init:=(i=0);
 
@@ -178,6 +180,9 @@ begin
  if MappableInputs.PS4IsPressed(miR2, cs) then
   data^.buttons:=data^.buttons or SCE_PAD_BUTTON_R2;
 end;
+
+finalization
+ TXInputPadInterface.Unload;
 
 end.
 
