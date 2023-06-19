@@ -99,16 +99,23 @@ begin
   Exit(SCE_PAD_ERROR_INVALID_ARG);
  end;
 
+ _sig_lock;
+
  sce_handle:=FindPadByParam(userID,_type,index);
  if (sce_handle<>nil) then
  begin
   sce_handle.Release;
+  _sig_unlock;
   Exit(SCE_PAD_ERROR_ALREADY_OPENED);
  end;
 
  sce_handle:=nil;
  Result:=ScePadInterface.Open(sce_handle);
- if (Result<>0) then Exit;
+ if (Result<>0) then
+ begin
+  _sig_unlock;
+  Exit;
+ end;
 
  sce_handle.SetLightBar(@DefaultPadLightBar);
 
@@ -129,6 +136,8 @@ begin
  begin
   Result:=SCE_PAD_ERROR_FATAL;
  end;
+
+ _sig_unlock;
 end;
 
 function ps4_scePadGetHandle(userID,_type,index:Integer):Integer; SysV_ABI_CDecl;
