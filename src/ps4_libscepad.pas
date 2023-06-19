@@ -85,11 +85,29 @@ var
 begin
  if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
 
- if (_type<>SCE_PAD_PORT_TYPE_STANDARD) then Exit(SCE_PAD_ERROR_INVALID_ARG);
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ case _type of
+  SCE_PAD_PORT_TYPE_STANDARD      :;
+  SCE_PAD_PORT_TYPE_SPECIAL       :;
+  SCE_PAD_PORT_TYPE_REMOTE_CONTROL:;
+  else
+   Exit(SCE_PAD_ERROR_INVALID_ARG);
+ end;
+
+ if (_type=SCE_PAD_PORT_TYPE_REMOTE_CONTROL) and
+    (userID<>$FF) then {SCE_USER_SERVICE_USER_ID_SYSTEM}
+ begin
+  Exit(SCE_PAD_ERROR_INVALID_ARG);
+ end;
+
+ sce_handle:=FindPadByParam(userID,_type,index);
+ if (sce_handle<>nil) then
+ begin
+  sce_handle.Release;
+  Exit(SCE_PAD_ERROR_ALREADY_OPENED);
+ end;
 
  sce_handle:=nil;
- Result:=ScePadInterface.Open(index,sce_handle);
+ Result:=ScePadInterface.Open(sce_handle);
  if (Result<>0) then Exit;
 
  sce_handle.SetLightBar(@DefaultPadLightBar);
@@ -97,8 +115,15 @@ begin
  key:=0;
  if pad_handles.New(sce_handle,key) then
  begin
+  sce_handle.userID:=userID;
+  sce_handle._type :=_type;
+  sce_handle.index :=index;
   sce_handle.handle:=key;
+  //
+  SavePadHandle(sce_handle);
+  //
   sce_handle.Release;
+  //
   Result:=key;
  end else
  begin
@@ -107,16 +132,18 @@ begin
 end;
 
 function ps4_scePadGetHandle(userID,_type,index:Integer):Integer; SysV_ABI_CDecl;
+var
+ sce_handle:TScePadHandle;
 begin
  if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
 
- if (_type<>SCE_PAD_PORT_TYPE_STANDARD) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ sce_handle:=FindPadByParam(userID,_type,index);
 
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
+ if (sce_handle=nil) then Exit(SCE_PAD_ERROR_NO_HANDLE);
 
- if (pad_opened[index]=nil) then Exit(SCE_PAD_ERROR_NO_HANDLE);
+ Result:=sce_handle.handle;
 
- Result:=pad_opened[index].handle;
+ sce_handle.Release;
 end;
 
 function ps4_scePadClose(handle:Integer):Integer; SysV_ABI_CDecl;

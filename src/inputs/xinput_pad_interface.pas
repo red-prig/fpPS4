@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ spinlock,
  XInput,
  sce_pad_types,
  sce_pad_interface,
@@ -14,6 +15,7 @@ uses
 type
  TXInputPadHandle=class(TScePadHandle)
   var
+   UserIndex     :Integer;
    connected     :Boolean;
    connectedCount:Byte;
   function ReadState(data:PScePadData):Integer; override;
@@ -26,7 +28,9 @@ type
   class procedure Unload;       override;
   class function  Init:Integer; override;
   class function  Done:Integer; override;
-  class function  Open(index:Integer;var handle:TScePadHandle):Integer; override;
+  class function  FindOpened(UserIndex,prev:Integer):Boolean;
+  class function  FindDevice(prev:Integer):Integer;
+  class function  Open(var handle:TScePadHandle):Integer; override;
  end;
 
 implementation
@@ -79,40 +83,128 @@ begin
  Result:=0;
 end;
 
-class function TXInputPadInterface.Open(index:Integer;var handle:TScePadHandle):Integer;
+class function TXInputPadInterface.FindOpened(UserIndex,prev:Integer):Boolean;
+var
+ i:Integer;
+ h:TXInputPadHandle;
+begin
+ Result:=False;
+ spin_lock(pad_lock);
+ For i:=0 to 15 do
+  if (pad_opened[i]<>nil) then
+  if (pad_opened[i].InheritsFrom(TXInputPadHandle)) then
+  begin
+   h:=TXInputPadHandle(pad_opened[i]);
+   if (h.UserIndex<>prev) then
+   begin
+    Result:=(UserIndex=h.UserIndex);
+    if Result then Break;
+   end;
+  end;
+ spin_unlock(pad_lock);
+end;
+
+class function TXInputPadInterface.FindDevice(prev:Integer):Integer;
+var
+ cs:TXInputState;
+ i:Integer;
+ first,compared:Integer;
+begin
+ Result:=-1;
+ first:=-1;
+ compared:=-1;
+ cs:=Default(TXInputState);
+ For i:=0 to XUSER_MAX_COUNT-1 do
+  if (XInputGetState(i, cs)=0) then
+  if not FindOpened(i,prev) then
+  begin
+   if (first=-1) then first:=i;
+   if (prev=-1) then
+   begin
+    compared:=i;
+    Break;
+   end else
+   if (i=prev) then
+   begin
+    compared:=i;
+    Break;
+   end;
+  end;
+ //
+ if (compared=-1) then compared:=first;
+ if (compared<>-1) then
+ begin
+  Result:=compared;
+ end;
+end;
+
+class function TXInputPadInterface.Open(var handle:TScePadHandle):Integer;
+var
+ UserIndex:Integer;
 begin
  Result:=0;
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
- if (pad_opened[index]<>nil) then Exit(SCE_PAD_ERROR_ALREADY_OPENED);
+
+ UserIndex:=FindDevice(-1);
 
  handle:=TXInputPadHandle.Create;
- TXInputPadHandle(handle).index:=index;
-
- pad_opened[index]:=handle;
+ TXInputPadHandle(handle).UserIndex:=UserIndex;
 end;
 
 function TXInputPadHandle.ReadState(data:PScePadData):Integer;
 var
  cs:TXInputState;
- controllerIndex:DWORD;
+ new:Integer;
  stateResult:DWORD;
+
+ procedure DoConnect(new:DWORD); inline;
+ begin
+  UserIndex:=new;
+  if not connected then
+  begin
+   connected:=True;
+   Inc(connectedCount);
+  end;
+ end;
+
 begin
  Result:=0;
 
- if (index>=XUSER_MAX_COUNT) then
+ if (UserIndex=-1) then //not attached
  begin
-  data^.connected     :=False;
-  data^.connectedCount:=0;
-  Exit;
+  new:=TXInputPadInterface.FindDevice(UserIndex);
+  if (new<>-1) then
+  begin
+   //connect
+   DoConnect(new);
+  end else
+  begin
+   //not connected
+   data^.connected     :=False;
+   data^.connectedCount:=0;
+   Exit;
+  end;
  end;
 
  cs:=Default(TXInputState);
- stateResult:=XInputGetState(index, cs);
+ stateResult:=XInputGetState(UserIndex, cs);
 
  if (stateResult=ERROR_DEVICE_NOT_CONNECTED) then
  begin
   //disconnect
   connected:=False;
+  //
+  new:=TXInputPadInterface.FindDevice(UserIndex);
+  if (new<>-1) then
+  begin
+   //connect
+   DoConnect(new);
+  end else
+  begin
+   //not connected
+   data^.connected     :=False;
+   data^.connectedCount:=0;
+   Exit;
+  end;
   //
   data^.connected     :=connected;
   data^.connectedCount:=connectedCount;
@@ -120,11 +212,7 @@ begin
  end else
  begin
   //connect
-  if not connected then
-  begin
-   connected:=True;
-   Inc(connectedCount);
-  end;
+  DoConnect(UserIndex);
  end;
 
  data^.connected     :=connected;

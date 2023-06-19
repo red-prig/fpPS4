@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ spinlock,
  sdl2,
  sce_pad_types,
  sce_pad_interface,
@@ -29,7 +30,7 @@ type
   class procedure Unload;       override;
   class function  Init:Integer; override;
   class function  Done:Integer; override;
-  class function  Open(index:Integer;var handle:TScePadHandle):Integer; override;
+  class function  Open(var handle:TScePadHandle):Integer; override;
   class function  FindOpened(device_index:Integer;prev:PSDL_GameController):Boolean;
   class function  FindDevice(prev:PSDL_GameController):PSDL_GameController;
  end;
@@ -105,6 +106,7 @@ var
  h:TSdl2PadHandle;
 begin
  Result:=False;
+ spin_lock(pad_lock);
  For i:=0 to 15 do
   if (pad_opened[i]<>nil) then
   if (pad_opened[i].InheritsFrom(TSdl2PadHandle)) then
@@ -117,6 +119,7 @@ begin
     if Result then Break;
    end;
   end;
+ spin_unlock(pad_lock);
 end;
 
 class function TSdl2PadInterface.FindDevice(prev:PSDL_GameController):PSDL_GameController;
@@ -155,22 +158,17 @@ begin
  SDL_UnlockJoysticks;
 end;
 
-class function TSdl2PadInterface.Open(index:Integer;var handle:TScePadHandle):Integer;
+class function TSdl2PadInterface.Open(var handle:TScePadHandle):Integer;
 var
  game_controller:PSDL_GameController;
 begin
  Result:=0;
  if not sdl2_init then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
- if (pad_opened[index]<>nil) then Exit(SCE_PAD_ERROR_ALREADY_OPENED);
 
  game_controller:=FindDevice(nil);
 
  handle:=TSdl2PadHandle.Create;
- TSdl2PadHandle(handle).index:=index;
  TSdl2PadHandle(handle).game_controller:=game_controller;
-
- pad_opened[index]:=handle;
 
  Writeln('----------------------------------------------------------------------------------------');
  Writeln('----------------------------------------------------------------------------------------');

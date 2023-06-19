@@ -6,13 +6,16 @@ interface
 
 uses
  sce_pad_types,
- ps4_handles;
+ ps4_handles,
+ spinlock;
 
 type
  TScePadHandle=class(TClassHandle)
   var
+   userID:Integer;
+   _type :Integer;
+   index :Integer;
    handle:Integer;
-   index:Integer;
   function   ReadState(data:PScePadData):Integer;            virtual;
   function   SetLightBar(data:pScePadLightBarParam):Integer; virtual;
   function   ResetLightBar():Integer;                        virtual;
@@ -24,7 +27,7 @@ type
   class procedure Unload;       virtual;
   class function  Init:Integer; virtual;
   class function  Done:Integer; virtual;
-  class function  Open(index:Integer;var handle:TScePadHandle):Integer; virtual;
+  class function  Open(var handle:TScePadHandle):Integer; virtual;
  end;
 
  TAbstractScePadInterface=class of TScePadInterface;
@@ -32,8 +35,48 @@ type
 var
  pad_handles:TIntegerHandles;
  pad_opened :array[0..15] of TScePadHandle;
+ pad_lock   :Pointer;
+
+function  FindPadByParam(userID,_type,index:Integer):TScePadHandle;
+Procedure SavePadHandle(handle:TScePadHandle);
 
 implementation
+
+function FindPadByParam(userID,_type,index:Integer):TScePadHandle;
+var
+ i:Integer;
+begin
+ Result:=nil;
+ spin_lock(pad_lock);
+ For i:=Low(pad_opened) to High(pad_opened) do
+  if (pad_opened[i]<>nil) then
+  if (pad_opened[i].userID=userID) and
+     (pad_opened[i]._type =_type ) and
+     (pad_opened[i].index =index ) then
+  begin
+   Result:=pad_opened[i];
+   Result.Acqure;
+   spin_unlock(pad_lock);
+   Exit;
+  end;
+ spin_unlock(pad_lock);
+end;
+
+Procedure SavePadHandle(handle:TScePadHandle);
+var
+ i:Integer;
+begin
+ spin_lock(pad_lock);
+ For i:=Low(pad_opened) to High(pad_opened) do
+  if (pad_opened[i]=nil) then
+  begin
+   pad_opened[i]:=handle;
+   spin_unlock(pad_lock);
+   Exit;
+  end;
+ spin_unlock(pad_lock);
+end;
+
 
 function TScePadHandle.ReadState(data:PScePadData):Integer;
 begin
@@ -51,11 +94,16 @@ begin
 end;
 
 destructor TScePadHandle.Destroy;
+var
+ i:Integer;
 begin
- if (index>=0) and (index<16) then
- begin
-  pad_opened[index]:=nil;
- end;
+ For i:=Low(pad_opened) to High(pad_opened) do
+  if (pad_opened[i]=Self) then
+  begin
+   pad_opened[i]:=nil;
+   Break;
+  end;
+ //
  inherited;
 end;
 
@@ -80,7 +128,7 @@ begin
  Result:=0;
 end;
 
-class function TScePadInterface.Open(index:Integer;var handle:TScePadHandle):Integer;
+class function TScePadInterface.Open(var handle:TScePadHandle):Integer;
 begin
  handle:=nil;
  Result:=SCE_PAD_ERROR_NOT_INITIALIZED;

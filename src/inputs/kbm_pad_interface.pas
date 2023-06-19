@@ -17,7 +17,7 @@ type
  end;
 
  TKbmPadInterface=class(TScePadInterface)
-  class function Open(index:Integer;var handle:TScePadHandle):Integer; override;
+  class function Open(var handle:TScePadHandle):Integer; override;
  end;
 
  TMouseAsTouchpad=class
@@ -30,16 +30,10 @@ type
 
 implementation
 
-class function TKbmPadInterface.Open(index:Integer;var handle:TScePadHandle):Integer;
+class function TKbmPadInterface.Open(var handle:TScePadHandle):Integer;
 begin
  Result:=0;
- if (index<0) or (index>15) then Exit(SCE_PAD_ERROR_INVALID_ARG);
- if (pad_opened[index]<>nil) then Exit(SCE_PAD_ERROR_ALREADY_OPENED);
-
  handle:=TKbmPadHandle.Create;
- TKbmPadHandle(handle).index:=index;
-
- pad_opened[index]:=handle;
 end;
 
 function GetAsyncKeyState(vKey:longint):Boolean; inline;
