@@ -135,7 +135,7 @@ begin
 end;
 
 initialization
- pad_handles:=TIntegerHandles.Create(0);
+ pad_handles:=TIntegerHandles.Create(1);
  pad_handles.max_key:=16;
 
 end.

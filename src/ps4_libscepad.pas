@@ -99,6 +99,8 @@ begin
   Exit(SCE_PAD_ERROR_INVALID_ARG);
  end;
 
+ Writeln('scePadOpen:[userID=',userID,' type=',_type,' index=',index,']');
+
  _sig_lock;
 
  sce_handle:=FindPadByParam(userID,_type,index);
@@ -210,6 +212,8 @@ begin
  end;
 
  sce_handle.ReadState(data);
+
+ //data^.connected     :=True;
 
  sce_handle.Release;
  _sig_unlock;
