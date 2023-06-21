@@ -82,7 +82,8 @@ uses
  md_sleep,
  sys_machdep,
  kern_context,
- kern_namedobj;
+ kern_namedobj,
+ sys_event;
 
 var
  mtx:umutex;

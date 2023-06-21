@@ -8,6 +8,7 @@ interface
 {$CALLING SysV_ABI_CDecl}
 
 uses
+ sys_event,
  vnode,
  vnamei,
  vfile,

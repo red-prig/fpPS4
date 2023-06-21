@@ -8,6 +8,7 @@ interface
 uses
  kern_thr,
  kern_id,
+ sys_event,
  vfile,
  vstat,
  vuio,
@@ -92,7 +93,7 @@ function  badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
 function  badfo_truncate(fp:p_file;length:Int64):Integer;
 function  badfo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 function  badfo_poll(fp:p_file;events:Integer):Integer;
-function  badfo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function  badfo_kqfilter(fp:p_file;kn:p_knote):Integer;
 function  badfo_stat(fp:p_file;sb:p_stat):Integer;
 function  badfo_close(fp:p_file):Integer;
 function  badfo_chmod(fp:p_file;mode:mode_t):Integer;
@@ -151,7 +152,7 @@ begin
  Exit(0);
 end;
 
-function badfo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function badfo_kqfilter(fp:p_file;kn:p_knote):Integer;
 begin
  Exit(EBADF);
 end;

@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ sys_event,
  vmount,
  vfile,
  vuio,
@@ -75,7 +76,7 @@ type
  d_read_t       =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
  d_write_t      =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
  d_poll_t       =Function (dev:p_cdev;events:Integer):Integer;
- d_kqfilter_t   =Function (dev:p_cdev;kn:Pointer):Integer; //knote
+ d_kqfilter_t   =Function (dev:p_cdev;kn:p_knote):Integer;
  d_mmap_t       =Function (dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
  d_mmap_single_t=Function (cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer):Integer;
  d_purge_t      =Procedure(dev:p_cdev);

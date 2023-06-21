@@ -6,6 +6,7 @@ unit vfs_vnops;
 interface
 
 uses
+ sys_event,
  vmount,
  vnamei,
  vfile,
@@ -42,7 +43,7 @@ function  vn_statfile(fp:p_file;sb:p_stat):Integer;
 function  vn_closefile(fp:p_file):Integer;
 function  vn_chmod(fp:p_file;mode:mode_t):Integer;
 function  vn_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
-function  vn_kqfilter(fp:p_file;kn:Pointer):Integer;
+function  vn_kqfilter(fp:p_file;kn:p_knote):Integer;
 
 const
  vnops:fileops=(
@@ -1247,7 +1248,7 @@ begin
  Exit(error);
 end;
 
-function vn_kqfilter(fp:p_file;kn:Pointer):Integer;
+function vn_kqfilter(fp:p_file;kn:p_knote):Integer;
 var
  error,vfslocked:Integer;
 begin

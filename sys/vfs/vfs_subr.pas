@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  vmount,
+ sys_event,
  vfile,
  vstat,
  vnode,

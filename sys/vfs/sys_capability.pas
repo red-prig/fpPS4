@@ -6,6 +6,7 @@ unit sys_capability;
 interface
 
 uses
+ sys_event,
  vcapability,
  vfile,
  vuio,
@@ -44,7 +45,7 @@ function capability_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
 function capability_truncate(fp:p_file;length:Int64):Integer;
 function capability_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 function capability_poll(fp:p_file;events:Integer):Integer;
-function capability_kqfilter(fp:p_file;kn:Pointer):Integer;
+function capability_kqfilter(fp:p_file;kn:p_knote):Integer;
 function capability_stat(fp:p_file;sb:p_stat):Integer;
 function capability_chmod(fp:p_file;mode:mode_t):Integer;
 function capability_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
@@ -299,7 +300,7 @@ begin
  Exit(ENOSYS);
 end;
 
-function capability_kqfilter(fp:p_file;kn:Pointer):Integer;
+function capability_kqfilter(fp:p_file;kn:p_knote):Integer;
 begin
  Assert(False,'capability_kqfilter');
  Exit(ENOSYS);

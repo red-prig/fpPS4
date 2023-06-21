@@ -348,6 +348,7 @@ begin
  S:=S+#13#10;
 
  S:=S+'uses'#13#10;
+ S:=S+' sys_event,'#13#10;
  S:=S+' vnode,'#13#10;
  S:=S+' vnamei,'#13#10;
  S:=S+' vfile,'#13#10;

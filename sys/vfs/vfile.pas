@@ -6,6 +6,7 @@ unit vfile;
 interface
 
 uses
+ sys_event,
  vstat,
  vuio,
  vnode,
@@ -91,6 +92,10 @@ const
  DTYPE_DEV       =11; { Device specific fd type }
  DTYPE_CAPABILITY=12; { capability }
  DTYPE_PROCDESC  =13; { process descriptor }
+ DTYPE_JITSHM    =14; { shared memory for JIT compiler }
+ DTYPE_IPCSOCKET =15; { unix domain socket }
+ DTYPE_PHYSHM    =16; { PS4 physical shared memory }
+ DTYPE_BLOCKPOOL =17; { PlayStation blockpool }
 
  FOF_OFFSET  =$01; { Use the offset in uio argument }
  FOF_NOLOCK  =$02; { Do not take FOFFSET_LOCK }
@@ -101,8 +106,6 @@ const
  DFLAG_SEEKABLE=$02; { seekable / nonsequential }
 
 type
- p_knote=Pointer;
-
  mode_t=Integer;
  uid_t =Integer;
  gid_t =Integer;
@@ -205,7 +208,7 @@ function fo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 function fo_poll(fp:p_file;events:Integer):Integer;
 function fo_stat(fp:p_file;sb:p_stat):Integer;
 function fo_close(fp:p_file):Integer;
-function fo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function fo_kqfilter(fp:p_file;kn:p_knote):Integer;
 function fo_chmod(fp:p_file;mode:mode_t):Integer;
 function fo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 
@@ -251,7 +254,7 @@ begin
  Exit(fp^.f_ops^.fo_close(fp));
 end;
 
-function fo_kqfilter(fp:p_file;kn:Pointer):Integer;
+function fo_kqfilter(fp:p_file;kn:p_knote):Integer;
 begin
  Exit(fp^.f_ops^.fo_kqfilter(fp,kn));
 end;

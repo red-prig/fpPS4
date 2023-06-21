@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  time,
+ sys_event,
  vfile,
  vfilio,
  vttycom,
@@ -48,7 +49,7 @@ function  devfs_close_f(fp:p_file):Integer;
 function  devfs_fsync(ap:p_vop_fsync_args):Integer;
 function  devfs_getattr(ap:p_vop_getattr_args):Integer;
 function  devfs_ioctl_f(fp:p_file;com:QWORD;data:Pointer):Integer;
-function  devfs_kqfilter_f(fp:p_file;kn:Pointer):Integer;
+function  devfs_kqfilter_f(fp:p_file;kn:p_knote):Integer;
 function  devfs_prison_check(de:p_devfs_dirent):Integer;
 function  devfs_lookup(ap:p_vop_lookup_args):Integer;
 function  devfs_mknod(ap:p_vop_mknod_args):Integer;
@@ -1000,7 +1001,7 @@ begin
 end;
 
 { ARGSUSED }
-function devfs_kqfilter_f(fp:p_file;kn:Pointer):Integer;
+function devfs_kqfilter_f(fp:p_file;kn:p_knote):Integer;
 var
  td:p_kthread;
  dev:p_cdev;
