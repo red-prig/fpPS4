@@ -159,12 +159,15 @@ type
  p_knote=^t_knote;
  p_kqueue=Pointer;
 
- klist =SLIST_HEAD; //knote
- kqlist=SLIST_HEAD; //kqueue
+ p_klist=^t_klist;
+ t_klist =SLIST_HEAD; //knote
+
+ p_kqlist=^t_kqlist;
+ t_kqlist=SLIST_HEAD; //kqueue
 
  p_knlist=^t_knlist;
  t_knlist=packed record
-  kl_list           :klist;
+  kl_list           :t_klist;
   kl_lock           :procedure(arg:Pointer); // lock function
   kl_unlock         :procedure(arg:Pointer);
   kl_assert_locked  :procedure(arg:Pointer);

@@ -83,7 +83,8 @@ uses
  sys_machdep,
  kern_context,
  kern_namedobj,
- sys_event;
+ sys_event,
+ sys_eventvar;
 
 var
  mtx:umutex;
