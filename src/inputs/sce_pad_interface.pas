@@ -39,6 +39,7 @@ var
 
 function  FindPadByParam(userID,_type,index:Integer):TScePadHandle;
 Procedure SavePadHandle(handle:TScePadHandle);
+Procedure ClearPadHandle(handle:TScePadHandle);
 
 implementation
 
@@ -56,8 +57,7 @@ begin
   begin
    Result:=pad_opened[i];
    Result.Acqure;
-   spin_unlock(pad_lock);
-   Exit;
+   Break;
   end;
  spin_unlock(pad_lock);
 end;
@@ -71,12 +71,24 @@ begin
   if (pad_opened[i]=nil) then
   begin
    pad_opened[i]:=handle;
-   spin_unlock(pad_lock);
-   Exit;
+   Break;
   end;
  spin_unlock(pad_lock);
 end;
 
+Procedure ClearPadHandle(handle:TScePadHandle);
+var
+ i:Integer;
+begin
+ spin_lock(pad_lock);
+ For i:=Low(pad_opened) to High(pad_opened) do
+  if (pad_opened[i]=handle) then
+  begin
+   pad_opened[i]:=nil;
+   Break;
+  end;
+ spin_unlock(pad_lock);
+end;
 
 function TScePadHandle.ReadState(data:PScePadData):Integer;
 begin
@@ -94,15 +106,8 @@ begin
 end;
 
 destructor TScePadHandle.Destroy;
-var
- i:Integer;
 begin
- For i:=Low(pad_opened) to High(pad_opened) do
-  if (pad_opened[i]=Self) then
-  begin
-   pad_opened[i]:=nil;
-   Break;
-  end;
+ ClearPadHandle(Self);
  //
  inherited;
 end;

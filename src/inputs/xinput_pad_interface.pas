@@ -115,6 +115,7 @@ begin
  compared:=-1;
  cs:=Default(TXInputState);
  For i:=0 to XUSER_MAX_COUNT-1 do
+ begin
   if (XInputGetState(i, cs)=0) then
   if not FindOpened(i,prev) then
   begin
@@ -130,6 +131,7 @@ begin
     Break;
    end;
   end;
+ end;
  //
  if (compared=-1) then compared:=first;
  if (compared<>-1) then
@@ -151,6 +153,8 @@ begin
 end;
 
 function TXInputPadHandle.ReadState(data:PScePadData):Integer;
+label
+ _retry;
 var
  cs:TXInputState;
  new:Integer;
@@ -185,6 +189,7 @@ begin
   end;
  end;
 
+ _retry:
  cs:=Default(TXInputState);
  stateResult:=XInputGetState(UserIndex, cs);
 
@@ -198,6 +203,7 @@ begin
   begin
    //connect
    DoConnect(new);
+   goto _retry;
   end else
   begin
    //not connected

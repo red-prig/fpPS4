@@ -159,7 +159,7 @@ type
  end;
 
  ScePadStickInformation=packed record
-  deadZoneLeft:Byte;
+  deadZoneLeft :Byte;
   deadZoneRight:Byte;
  end;
 

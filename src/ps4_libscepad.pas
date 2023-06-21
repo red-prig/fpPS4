@@ -90,22 +90,27 @@ begin
   SCE_PAD_PORT_TYPE_SPECIAL       :;
   SCE_PAD_PORT_TYPE_REMOTE_CONTROL:;
   else
-   Exit(SCE_PAD_ERROR_INVALID_ARG);
+   begin
+    //Writeln('scePadOpen:SCE_PAD_ERROR_INVALID_ARG:1');
+    Exit(SCE_PAD_ERROR_INVALID_ARG);
+   end;
  end;
 
  if (_type=SCE_PAD_PORT_TYPE_REMOTE_CONTROL) and
     (userID<>$FF) then {SCE_USER_SERVICE_USER_ID_SYSTEM}
  begin
+  //Writeln('scePadOpen:SCE_PAD_ERROR_INVALID_ARG:2');
   Exit(SCE_PAD_ERROR_INVALID_ARG);
  end;
 
- Writeln('scePadOpen:[userID=',userID,' type=',_type,' index=',index,']');
+ //Writeln('scePadOpen:[userID=',userID,' type=',_type,' index=',index,']');
 
  _sig_lock;
 
  sce_handle:=FindPadByParam(userID,_type,index);
  if (sce_handle<>nil) then
  begin
+  //Writeln('scePadOpen:SCE_PAD_ERROR_ALREADY_OPENED');
   sce_handle.Release;
   _sig_unlock;
   Exit(SCE_PAD_ERROR_ALREADY_OPENED);
@@ -115,6 +120,7 @@ begin
  Result:=ScePadInterface.Open(sce_handle);
  if (Result<>0) then
  begin
+  //Writeln('scePadOpen:',HexStr(Result,8));
   _sig_unlock;
   Exit;
  end;
@@ -138,6 +144,8 @@ begin
  begin
   Result:=SCE_PAD_ERROR_FATAL;
  end;
+
+ //Writeln('scePadOpen:',Result);
 
  _sig_unlock;
 end;
