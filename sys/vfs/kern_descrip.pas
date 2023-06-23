@@ -99,6 +99,9 @@ function  badfo_close(fp:p_file):Integer;
 function  badfo_chmod(fp:p_file;mode:mode_t):Integer;
 function  badfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 
+function  invfo_chmod(fp:p_file;mode:mode_t):Integer;
+function  invfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+
 const
  badfileops:fileops=(
   fo_read    :@badfo_readwrite;
@@ -130,7 +133,8 @@ uses
  _resource,
  kern_resource,
  kern_mtx,
- kern_conf;
+ kern_conf,
+ kern_event;
 
 function badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
 begin
@@ -175,6 +179,16 @@ end;
 function badfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
 begin
  Exit(EBADF);
+end;
+
+function invfo_chmod(fp:p_file;mode:mode_t):Integer;
+begin
+ Exit(EINVAL);
+end;
+
+function invfo_chown(fp:p_file;uid:uid_t;gid:gid_t):Integer;
+begin
+ Exit(EINVAL);
 end;
 
 {
@@ -772,7 +786,7 @@ begin
   }
  if (delfp<>nil) then
  begin
-  //knote_fdclose(td, new);
+  knote_fdclose(new);
   if (delfp^.f_type=DTYPE_MQUEUE) then
   begin
    //mq_fdclose(td, new, delfp);
@@ -798,7 +812,7 @@ begin
   * knote_fdclose to prevent a race of the fd getting opened, a knote
   * added, and deleteing a knote for the new fd.
   }
- //knote_fdclose(fd);
+ knote_fdclose(fd);
 
  {
   * When we're closing an fd with a capability, we need to notify

@@ -13,8 +13,8 @@ uses
  vfiledesc;
 
 const
- KQ_NEVENTS=  8; // minimize copy{in,out} calls
- KQEXTENT  =256; // linear growth by this amount
+ KQ_NEVENTS  =  8;  // minimize copy{in,out} calls
+ KQEXTENT    =256;  // linear growth by this amount
 
  KQ_SEL      =$01;
  KQ_SLEEP    =$02;
@@ -25,8 +25,7 @@ const
  KQ_TASKDRAIN=$40;  // waiting for task to drain
 
 type
- p_sigio=Pointer;
-
+ pp_kqueue=^p_kqueue;
  p_kqueue=^t_kqueue;
  t_kqueue=record
   kq_lock      :mtx;
@@ -35,8 +34,8 @@ type
   kq_head      :TAILQ_HEAD;  // (knote) list of pending event
   kq_count     :Integer;     // number of pending events
   kq_sel       :t_selinfo;
-  kq_sigio     :p_sigio;
-  kq_fdp       :p_filedesc;
+  //kq_sigio     :p_sigio; (sigio)
+  //kq_fdp       :p_filedesc;
   kq_state     :Integer;
   kq_knlistsize:Integer;     // size of knlist
   kq_knlist    :p_klist;     // list of knotes

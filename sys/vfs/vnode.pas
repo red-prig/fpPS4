@@ -299,6 +299,11 @@ const
 function  VOPARG_OFFSETTO(s_offset:Integer;struct_p:Pointer):Pointer;
 function  VCALL(c:Pointer):Integer;
 
+function  VN_KNLIST_EMPTY(vp:p_vnode):Boolean;
+procedure VN_KNOTE(vp:p_vnode;a:Integer;b:QWORD);
+procedure VN_KNOTE_LOCKED(vp:p_vnode;b:QWORD);
+procedure VN_KNOTE_UNLOCKED(vp:p_vnode;b:QWORD);
+
 procedure VI_LOCK(vp:p_vnode);
 function  VI_TRYLOCK(vp:p_vnode):Boolean;
 procedure VI_UNLOCK(vp:p_vnode);
@@ -319,7 +324,9 @@ var
 implementation
 
 uses
- vmount;
+ vmount,
+ sys_event,
+ kern_event;
 
 function VOPARG_OFFSETTO(s_offset:Integer;struct_p:Pointer):Pointer;
 begin
@@ -378,6 +385,31 @@ begin
  s:=VFS_PROLOGUE(ap^.a_vp^.v_mount);
  Result:=vop_bypass_t(c)(ap);
  VFS_EPILOGUE(s);
+end;
+
+// We don't need to lock the knlist
+function VN_KNLIST_EMPTY(vp:p_vnode):Boolean;
+begin
+ if (vp^.v_pollinfo=nil) then Exit(True);
+ Result:=M_KNLIST_EMPTY(@vp^.v_pollinfo^.vpi_selinfo.si_note)
+end;
+
+procedure VN_KNOTE(vp:p_vnode;a:Integer;b:QWORD);
+begin
+ if (not VN_KNLIST_EMPTY(vp)) then
+ begin
+  KNOTE(@vp^.v_pollinfo^.vpi_selinfo.si_note,b,a or KNF_NOKQLOCK);
+ end;
+end;
+
+procedure VN_KNOTE_LOCKED(vp:p_vnode;b:QWORD);
+begin
+ VN_KNOTE(vp, b, KNF_LISTLOCKED);
+end;
+
+procedure VN_KNOTE_UNLOCKED(vp:p_vnode;b:QWORD);
+begin
+ VN_KNOTE(vp, b, 0);
 end;
 
 procedure VI_LOCK(vp:p_vnode);

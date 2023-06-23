@@ -26,6 +26,7 @@ uses
  vfs_subr,
  vfs_lookup,
  vfs_init,
+ kern_event,
  devfs,
  devfs_devs,
  devfs_vfsops,
@@ -68,6 +69,8 @@ begin
  selectinit;
  vntblinit;
  nameiinit;
+ knote_init();
+ vfs_event_init;
  devfs_mtx_init;
  devfs_devs_init;
  module_init;

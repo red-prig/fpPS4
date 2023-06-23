@@ -9,16 +9,17 @@ uses
  mqueue;
 
 const
- EVFILT_READ                =(-1) ;
- EVFILT_WRITE               =(-2) ;
- EVFILT_AIO                 =(-3) ;   // attached to aio requests
- EVFILT_VNODE               =(-4) ;   // attached to vnodes
- EVFILT_PROC                =(-5) ;   // attached to struct proc
- EVFILT_SIGNAL              =(-6) ;   // attached to struct proc
- EVFILT_TIMER               =(-7) ;   // timers
- EVFILT_FS                  =(-9) ;   // filesystem events
- EVFILT_LIO                 =(-10);   // attached to lio requests
- EVFILT_USER                =(-11);   // User events
+ EVFILT_READ                =(-1);
+ EVFILT_WRITE               =(-2);
+ EVFILT_AIO                 =(-3);   // attached to aio requests
+ EVFILT_VNODE               =(-4);   // attached to vnodes
+ EVFILT_PROC                =(-5);   // attached to struct proc
+ EVFILT_SIGNAL              =(-6);   // attached to struct proc
+ EVFILT_TIMER               =(-7);   // timers
+ //EVFILT_NETDEV            =(-8);      no longer supported
+ EVFILT_FS                  =(-9);   // filesystem events
+ EVFILT_LIO                 =(-10);  // attached to lio requests
+ EVFILT_USER                =(-11);  // User events
  EVFILT_POLLING             =(-12);
  EVFILT_DISPLAY             =(-13);
  EVFILT_GRAPHICS_CORE       =(-14);
@@ -30,7 +31,8 @@ const
  EVFILT_GPU_EXCEPTION       =(-20);
  EVFILT_GPU_SYSTEM_EXCEPTION=(-21);
  EVFILT_GPU_DBGGC_EV        =(-22);
- EVFILT_SYSCOUNT            =(22) ;
+ EVFILT_CPUMODE             =(-23);
+ EVFILT_SYSCOUNT            =(23);
 
 // actions
  EV_ADD     =$0001;  // add event to kq (implies enable)
@@ -157,7 +159,6 @@ type
  SceKernelEvent=t_kevent;
 
  p_knote=^t_knote;
- p_kqueue=Pointer;
 
  p_klist=^t_klist;
  t_klist =SLIST_HEAD; //knote
@@ -182,8 +183,8 @@ type
   _align  :Integer;
   f_attach:function (kn:p_knote):Integer;
   f_detach:procedure(kn:p_knote);
-  f_event :function (kn:p_knote;hint:DWORD):Integer;
-  f_touch :procedure(kn:p_knote;kev:p_kevent;_type:DWORD);
+  f_event :function (kn:p_knote;hint:QWORD):Integer;
+  f_touch :procedure(kn:p_knote;kev:p_kevent;_type:QWORD);
  end;
  {$IF sizeof(t_filterops)<>40}{$STOP sizeof(t_filterops)<>40}{$ENDIF}
 
@@ -192,7 +193,7 @@ type
   kn_selnext:SLIST_ENTRY; // (knote) for struct selinfo
   kn_knlist :p_knlist;    // f_attach populated
   kn_tqe    :TAILQ_ENTRY; // (knote)
-  kn_kq     :p_kqueue;    // which queue we are on
+  kn_kq     :Pointer;     // (kqueue) which queue we are on
   kn_kevent :t_kevent;
   kn_status :Integer;     // protected by kq lock
   kn_sfflags:Integer;     // saved filter flags
@@ -239,12 +240,6 @@ begin
  (kevp)^.data  :=(e);
  (kevp)^.udata :=(f);
 end;
-
-//KNOTE(list, hist, flags)   knote(list, hist, flags)
-//KNOTE_LOCKED(list, hint)   knote(list, hint, KNF_LISTLOCKED)
-//KNOTE_UNLOCKED(list, hint) knote(list, hint, 0)
-//KNLIST_EMPTY(list)         SLIST_EMPTY(&(list)->kl_list)
-
 
 
 end.

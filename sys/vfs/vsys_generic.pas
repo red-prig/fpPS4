@@ -75,6 +75,8 @@ procedure selfdalloc(td:p_kthread;cookie:Pointer);
 procedure selfdfree(stp:p_seltd;sfp:p_selfd);
 procedure seldrain(sip:p_selinfo);
 procedure selrecord(selector:p_kthread;sip:p_selinfo);
+procedure selwakeup(sip:p_selinfo);
+procedure selwakeuppri(sip:p_selinfo;pri:Integer);
 function  dofileread(fd:Integer;fp:p_file;auio:p_uio;offset:Int64;flags:Integer):Integer;
 function  dofilewrite(fd:Integer;fp:p_file;auio:p_uio;offset:Int64;flags:Integer):Integer;
 procedure doselwakeup(sip:p_selinfo;pri:Integer);

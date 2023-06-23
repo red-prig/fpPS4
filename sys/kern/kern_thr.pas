@@ -102,6 +102,7 @@ const
  // These flags are kept in p_flag.
  P_ADVLOCK        =$00001; // Process may hold a POSIX advisory lock.
  P_CONTROLT       =$00002; // Has a controlling terminal.
+ P_WEXIT          =$02000; // Working on exiting.
 
  // Types and flags for mi_switch().
  SW_TYPE_MASK     =$ff; // First 8 bits are switch type

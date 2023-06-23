@@ -84,7 +84,8 @@ uses
  kern_context,
  kern_namedobj,
  sys_event,
- sys_eventvar;
+ sys_eventvar,
+ kern_event;
 
 var
  mtx:umutex;

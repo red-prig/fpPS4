@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ sys_event,
  time,
  signal,
  signalvar,
@@ -97,6 +98,21 @@ procedure sigallowstop;
 
 procedure siginit; //SYSINIT
 
+//
+
+function  filt_sigattach(kn:p_knote):Integer;
+procedure filt_sigdetach(kn:p_knote);
+function  filt_signal(kn:p_knote;hint:QWORD):Integer;
+
+const
+ sig_filtops:t_filterops=(
+  f_isfd  :0;
+  _align  :0;
+  f_attach:@filt_sigattach;
+  f_detach:@filt_sigdetach;
+  f_event :@filt_signal;
+ );
+
 implementation
 
 uses
@@ -108,6 +124,7 @@ uses
  kern_exit,
  kern_prot,
  kern_synch,
+ kern_event,
  md_context,
  md_proc,
  machdep,
@@ -120,9 +137,9 @@ const
  kern_forcesigexit=1;
 
 var
- g_p_sigqueue     :sigqueue_t;
+ g_p_sigqueue     :sigqueue_t; //Sigs not delivered to a td.
+ g_p_pendingcnt   :Integer=0;  //how many signals are pending
 
- p_pendingcnt     :Integer=0;
  signal_overflow  :Integer=0;
  signal_alloc_fail:Integer=0;
 
@@ -184,7 +201,7 @@ begin
     ksiginfo_copy(ksi,si);
     if ksiginfo_tryfree(ksi) then
     begin
-     Dec(p_pendingcnt);
+     Dec(g_p_pendingcnt);
     end;
    end;
    if (count>1) then
@@ -221,7 +238,7 @@ begin
  ksi^.ksi_sigq:=nil;
  if ((ksi^.ksi_flags and KSI_EXT)=0)then
  begin
-  Dec(p_pendingcnt);
+  Dec(g_p_pendingcnt);
  end;
 
  kp:=TAILQ_FIRST(@sq^.sq_list);
@@ -263,7 +280,7 @@ begin
   goto out_set_bit;
  end;
 
- if (p_pendingcnt>=max_pending_per_proc) then
+ if (g_p_pendingcnt>=max_pending_per_proc) then
  begin
   Inc(signal_overflow);
   Result:=EAGAIN;
@@ -276,7 +293,7 @@ begin
    Result:=EAGAIN;
   end else
   begin
-   Inc(p_pendingcnt);
+   Inc(g_p_pendingcnt);
    ksiginfo_copy(si,ksi);
    ksi^.ksi_info.si_signo:=signo;
    if ((si^.ksi_flags and KSI_HEAD)<>0) then
@@ -318,7 +335,7 @@ begin
   ksi^.ksi_sigq:=nil;
   if ksiginfo_tryfree(ksi) then
   begin
-   Dec(p_pendingcnt);
+   Dec(g_p_pendingcnt);
   end;
   ksi:=next;
  end;
@@ -378,7 +395,7 @@ begin
    ksi^.ksi_sigq:=nil;
    if ksiginfo_tryfree(ksi) then
    begin
-    Dec(p_pendingcnt)
+    Dec(g_p_pendingcnt)
    end;
   end;
 
@@ -1392,6 +1409,7 @@ var
 begin
  Result:=0;
 
+ KNOTE_LOCKED(@g_p_klist, NOTE_SIGNAL or sig);
  prop:=sigprop(sig);
 
  if (td=nil) then
@@ -1774,7 +1792,7 @@ begin
  end;
 
  if ((flags and TDF_NEEDSIGCHK)<>0) or
-    (p_pendingcnt>0) or
+    (g_p_pendingcnt>0) or
     (not SIGISEMPTY(@g_p_sigqueue.sq_list)) then
  begin
   PROC_LOCK;
@@ -1831,6 +1849,37 @@ begin
  end;
 
 end;
+
+//
+
+function filt_sigattach(kn:p_knote):Integer;
+begin
+ kn^.kn_ptr.p_proc:=nil;
+ kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  // automatically set
+
+ knlist_add(@g_p_klist, kn, 0);
+
+ Exit(0);
+end;
+
+procedure filt_sigdetach(kn:p_knote);
+begin
+ knlist_remove(@g_p_klist, kn, 0);
+end;
+
+function filt_signal(kn:p_knote;hint:QWORD):Integer;
+begin
+ if ((hint and NOTE_SIGNAL)<>0) then
+ begin
+  hint:=hint and (not NOTE_SIGNAL);
+
+  if (kn^.kn_id=hint) then
+   Inc(kn^.kn_kevent.data);
+ end;
+
+ Exit(ord(kn^.kn_data<>0));
+end;
+
 
 end.
 

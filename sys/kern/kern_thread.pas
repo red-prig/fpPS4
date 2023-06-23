@@ -671,7 +671,11 @@ begin
   if (not _SIG_VALID(sig)) then
    Result:=EINVAL
   else
+  begin
+   PROC_LOCK;
    tdksignal(td,sig,@ksi);
+   PROC_UNLOCK;
+  end;
 
   thread_dec_ref(td);
  end;

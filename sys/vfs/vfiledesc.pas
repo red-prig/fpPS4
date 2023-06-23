@@ -6,9 +6,11 @@ unit vfiledesc;
 interface
 
 uses
+ mqueue,
+ sys_event,
  vfile,
  vnode,
- kern_rwlock,
+ kern_sx,
  kern_id;
 
 type
@@ -21,15 +23,15 @@ type
 
  p_filedesc=^t_filedesc;
  t_filedesc=packed object
-  fd_ofiles:t_id_desc_table;
-  fd_cdir             :p_vnode     ; { current directory }
-  fd_rdir             :p_vnode     ; { root directory }
-  fd_jdir             :p_vnode     ; { jail root directory }
-  fd_sx               :Pointer     ; { protects members of this }
-  //fd_kqlist           :kqlist      ; { list of kqueues on this filedesc }
-  fd_holdleaderscount :Integer     ; { block fdfree() for shared close() }
-  fd_holdleaderswakeup:Integer     ; { fdfree() needs wakeup }
-  fd_cmask            :Word        ; { mask for file creation }
+  fd_ofiles           :t_id_desc_table;
+  fd_cdir             :p_vnode        ; { current directory }
+  fd_rdir             :p_vnode        ; { root directory }
+  fd_jdir             :p_vnode        ; { jail root directory }
+  fd_sx               :t_sx           ; { protects members of this }
+  fd_kqlist           :t_kqlist       ; { list of kqueues on this filedesc }
+  fd_holdleaderscount :Integer        ; { block fdfree() for shared close() }
+  fd_holdleaderswakeup:Integer        ; { fdfree() needs wakeup }
+  fd_cmask            :Word           ; { mask for file creation }
   //
   property fd_nfiles  :Integer read fd_ofiles.FCount;
   property fd_lastfile:Integer read fd_ofiles.FPos;
@@ -45,13 +47,13 @@ const
 var
  fd_table:t_filedesc;
 
-procedure FILEDESC_LOCK_INIT(fdp:p_filedesc); inline;
+procedure FILEDESC_LOCK_INIT   (fdp:p_filedesc); inline;
 procedure FILEDESC_LOCK_DESTROY(fdp:p_filedesc); inline;
-function  FILEDESC_LOCK(fdp:p_filedesc):PPointer; inline;
-procedure FILEDESC_XLOCK(fdp:p_filedesc); inline;
-procedure FILEDESC_XUNLOCK(fdp:p_filedesc); inline;
-procedure FILEDESC_SLOCK(fdp:p_filedesc); inline;
-procedure FILEDESC_SUNLOCK(fdp:p_filedesc); inline;
+function  FILEDESC_LOCK        (fdp:p_filedesc):p_sx; inline;
+procedure FILEDESC_XLOCK       (fdp:p_filedesc); inline;
+procedure FILEDESC_XUNLOCK     (fdp:p_filedesc); inline;
+procedure FILEDESC_SLOCK       (fdp:p_filedesc); inline;
+procedure FILEDESC_SUNLOCK     (fdp:p_filedesc); inline;
 
 function  fget_locked(fdp:p_filedesc;fd:Integer):p_file; inline;
 
@@ -61,7 +63,7 @@ implementation
 
 procedure FILEDESC_LOCK_INIT(fdp:p_filedesc); inline;
 begin
- fdp^.fd_sx:=nil;
+ sx_init(@fdp^.fd_sx,'filedesc structure');
 end;
 
 procedure FILEDESC_LOCK_DESTROY(fdp:p_filedesc); inline;
@@ -69,29 +71,29 @@ begin
  //
 end;
 
-function FILEDESC_LOCK(fdp:p_filedesc):PPointer; inline;
+function FILEDESC_LOCK(fdp:p_filedesc):p_sx; inline;
 begin
  Result:=@fdp^.fd_sx;
 end;
 
 procedure FILEDESC_XLOCK(fdp:p_filedesc); inline;
 begin
- rw_wlock(fdp^.fd_sx);
+ sx_xlock(@fdp^.fd_sx);
 end;
 
 procedure FILEDESC_XUNLOCK(fdp:p_filedesc); inline;
 begin
- rw_wunlock(fdp^.fd_sx);
+ sx_xunlock(@fdp^.fd_sx);
 end;
 
 procedure FILEDESC_SLOCK(fdp:p_filedesc); inline;
 begin
- rw_rlock(fdp^.fd_sx);
+ sx_slock(@fdp^.fd_sx);
 end;
 
 procedure FILEDESC_SUNLOCK(fdp:p_filedesc); inline;
 begin
- rw_runlock(fdp^.fd_sx);
+ sx_sunlock(@fdp^.fd_sx);
 end;
 
  //FILEDESC_LOCK_ASSERT(fdp) sx_assert(@(fdp)^.fd_sx, SX_LOCKED or SX_NOTRECURSED)
@@ -108,6 +110,8 @@ end;
 procedure fd_table_init;
 begin
  id_table_init(@fd_table.fd_ofiles,0,maxfilesperproc);
+ FILEDESC_LOCK_INIT(@fd_table);
+ TAILQ_INIT(@fd_table.fd_kqlist);
 end;
 
 finalization

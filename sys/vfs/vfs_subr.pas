@@ -74,7 +74,7 @@ procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
 procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
 procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
 
-procedure vfs_event_init();
+procedure vfs_event_init(); //SYSINIT(vfs_knlist, SI_SUB_VFS, SI_ORDER_ANY, vfs_event_init, NULL);
 procedure vfs_event_signal(fsid:p_fsid;event:DWORD;data:ptrint);
 function  vfs_kqfilter(ap:p_vop_kqfilter_args):Integer;
 
@@ -121,6 +121,19 @@ procedure __mnt_vnode_markerfree_active(mvp:pp_vnode;mp:p_mount);
 procedure vntblinit;    //SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_FIRST, vntblinit, NULL);
 procedure vnlru_proc(); //SYSINIT(vnlru, SI_SUB_KTHREAD_UPDATE, SI_ORDER_FIRST, kproc_start, @vnlru_kp);
 
+function  filt_fsattach(kn:p_knote):Integer;
+procedure filt_fsdetach(kn:p_knote);
+function  filt_fsevent(kn:p_knote;hint:QWORD):Integer;
+
+const
+ fs_filtops:t_filterops=(
+  f_isfd  :0;
+  _align  :0;
+  f_attach:@filt_fsattach;
+  f_detach:@filt_fsdetach;
+  f_event :@filt_fsevent;
+ );
+
 {
  * List of vnodes that are ready for recycling.
  }
@@ -150,6 +163,7 @@ var
  rushjob:Integer;
  stat_rush_requests:Integer;
 
+ fs_knlist:t_knlist;
 
 const
  SYNCER_SHUTDOWN_SPEEDUP=4;
@@ -177,7 +191,8 @@ uses
  vsys_generic,
  dead_vnops,
  rtprio,
- kern_conf;
+ kern_conf,
+ kern_event;
 
 {
  * Macros to control when a vnode is freed and recycled.  All require
@@ -1484,7 +1499,7 @@ static struct kproc_desc up_kp:=begin
  "syncer",
  sched_sync,
  &updateproc
-end;;
+end;
 SYSINIT(syncer, SI_SUB_KTHREAD_UPDATE, SI_ORDER_FIRST, kproc_start, &up_kp);
 
 static int
@@ -2598,17 +2613,22 @@ end;
 
 procedure destroy_vpollinfo_free(vi:p_vpollinfo);
 begin
- //knlist_destroy(@vi^.vpi_selinfo.si_note);
+ knlist_destroy(@vi^.vpi_selinfo.si_note);
  mtx_destroy(vi^.vpi_lock);
  FreeMem(vi);
 end;
 
 procedure destroy_vpollinfo(vi:p_vpollinfo);
 begin
- //knlist_clear(@vi^.vpi_selinfo.si_note, 1);
+ knlist_clear(@vi^.vpi_selinfo.si_note, 1);
  seldrain(@vi^.vpi_selinfo);
  destroy_vpollinfo_free(vi);
 end;
+
+procedure vfs_knllock(arg:Pointer);             forward;
+procedure vfs_knlunlock(arg:Pointer);           forward;
+procedure vfs_knl_assert_locked(arg:Pointer);   forward;
+procedure vfs_knl_assert_unlocked(arg:Pointer); forward;
 
 {
  * Initalize per-vnode helper structure to hold poll-related state.
@@ -2621,7 +2641,7 @@ begin
   Exit;
  vi:=AllocMem(SizeOf(vpollinfo));
  mtx_init(vi^.vpi_lock,'vnode pollinfo');
- //knlist_init(@vi^.vpi_selinfo.si_note, vp, vfs_knllock, vfs_knlunlock, vfs_knl_assert_locked, vfs_knl_assert_unlocked);
+ knlist_init(@vi^.vpi_selinfo.si_note, vp, @vfs_knllock, @vfs_knlunlock, @vfs_knl_assert_locked, @vfs_knl_assert_unlocked);
  VI_LOCK(vp);
  if (vp^.v_pollinfo<>nil) then
  begin
@@ -2685,7 +2705,7 @@ static struct vop_vector sync_vnodeops:=begin
  .vop_lock1:=vop_stdlock, { lock }
  .vop_unlock:=vop_stdunlock, { unlock }
  .vop_islocked:=vop_stdislocked, { islocked }
-end;;
+end;
 
 {
  * Create a new filesystem syncer vnode for the specified mount point.
@@ -3058,7 +3078,7 @@ begin
  Result :=0;
  osize  :=0;
  ooffset:=0;
- if {(not VN_KNLIST_EMPTY(ap^.a_vp))} False then
+ if (not VN_KNLIST_EMPTY(ap^.a_vp)) then
  begin
   error:=VOP_GETATTR(ap^.a_vp, @va);
   if (error<>0) then Exit(error);
@@ -3072,14 +3092,14 @@ var
  noffset:Int64;
 begin
  noffset:=ap^.a_uio^.uio_offset;
- if (noffset>ooffset) and {(not VN_KNLIST_EMPTY(ap^.a_vp))} False then
+ if (noffset>ooffset) and (not VN_KNLIST_EMPTY(ap^.a_vp)) then
  begin
   if (noffset>osize) then
   begin
-   //VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE or NOTE_EXTEND);
+   VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE or NOTE_EXTEND);
   end else
   begin
-   //VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE);
+   VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_WRITE);
   end;
  end;
 end;
@@ -3111,7 +3131,7 @@ procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE);
  end;
 end;
 
@@ -3119,8 +3139,8 @@ procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_LINK);
-  //VFS_KNOTE_LOCKED(a^.a_tdvp, NOTE_WRITE);
+  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_LINK);
+  VFS_KNOTE_LOCKED(ap^.a_tdvp, NOTE_WRITE);
  end;
 end;
 
@@ -3128,7 +3148,7 @@ procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE or NOTE_LINK);
  end;
 end;
 
@@ -3136,7 +3156,7 @@ procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE);
  end;
 end;
 
@@ -3144,8 +3164,8 @@ procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE);
+  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_DELETE);
  end;
 end;
 
@@ -3153,29 +3173,35 @@ procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_UNLOCKED(a^.a_fdvp, NOTE_WRITE);
-  //VFS_KNOTE_UNLOCKED(a^.a_tdvp, NOTE_WRITE);
-  //VFS_KNOTE_UNLOCKED(a^.a_fvp, NOTE_RENAME);
+  VFS_KNOTE_UNLOCKED(ap^.a_fdvp, NOTE_WRITE);
+  VFS_KNOTE_UNLOCKED(ap^.a_tdvp, NOTE_WRITE);
+  VFS_KNOTE_UNLOCKED(ap^.a_fvp, NOTE_RENAME);
   if (ap^.a_tvp<>nil) then
   begin
-   //VFS_KNOTE_UNLOCKED(a^.a_tvp, NOTE_DELETE);
+   VFS_KNOTE_UNLOCKED(ap^.a_tvp, NOTE_DELETE);
   end;
  end;
  if (ap^.a_tdvp<>ap^.a_fdvp) then
+ begin
   vdrop(ap^.a_fdvp);
+ end;
  if (ap^.a_tvp<>ap^.a_fvp) then
+ begin
   vdrop(ap^.a_fvp);
+ end;
  vdrop(ap^.a_tdvp);
  if (ap^.a_tvp<>nil) then
+ begin
   vdrop(ap^.a_tvp);
+ end;
 end;
 
 procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE or NOTE_LINK);
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_DELETE);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE or NOTE_LINK);
+  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_DELETE);
  end;
 end;
 
@@ -3183,7 +3209,7 @@ procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_vp, NOTE_ATTRIB);
+  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_ATTRIB);
  end;
 end;
 
@@ -3191,58 +3217,39 @@ procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
 begin
  if (rc=0) then
  begin
-  //VFS_KNOTE_LOCKED(a^.a_dvp, NOTE_WRITE);
+  VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE);
  end;
 end;
 
-//static struct knlist fs_knlist;
-
 procedure vfs_event_init();
 begin
- //knlist_init_mtx(@fs_knlist, nil);
+ knlist_init_mtx(@fs_knlist, nil);
 end;
 
 procedure vfs_event_signal(fsid:p_fsid;event:DWORD;data:ptrint);
 begin
- //KNOTE_UNLOCKED(@fs_knlist, event);
+ KNOTE_UNLOCKED(@fs_knlist, event);
 end;
 
-{
-static int filt_fsattach(struct knote *kn);
-static void filt_fsdetach(struct knote *kn);
-static int filt_fsevent(struct knote *kn, long hint);
-
-struct filterops fs_filtops:=begin
- .f_isfd:=0,
- .f_attach:=filt_fsattach,
- .f_detach:=filt_fsdetach,
- .f_event:=filt_fsevent
-end;;
-
-static int
-filt_fsattach(struct knote *kn)
+function filt_fsattach(kn:p_knote):Integer;
 begin
-
- kn^.kn_flags:= or EV_CLEAR;
+ kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;
  knlist_add(@fs_knlist, kn, 0);
  Exit(0);
 end;
 
-static void
-filt_fsdetach(struct knote *kn)
+procedure filt_fsdetach(kn:p_knote);
 begin
-
  knlist_remove(@fs_knlist, kn, 0);
 end;
 
-static int
-filt_fsevent(struct knote *kn, long hint)
+function filt_fsevent(kn:p_knote;hint:QWORD):Integer;
 begin
-
- kn^.kn_fflags:= or hint;
- Exit(kn^.kn_fflags<>0);
+ kn^.kn_fflags:=kn^.kn_fflags or hint;
+ Exit(ord(kn^.kn_fflags<>0));
 end;
 
+{
 static int
 sysctl_vfs_ctl(SYSCTL_HANDLER_ARGS)
 begin
@@ -3270,9 +3277,7 @@ begin
  Exit(error);
 end;
 
-SYSCTL_PROC(_vfs, OID_AUTO, ctl, CTLTYPE_OPAQUE or CTLFLAG_WR,
-    nil, 0, sysctl_vfs_ctl, "",
-    "Sysctl by fsid';
+SYSCTL_PROC(_vfs, OID_AUTO, ctl, CTLTYPE_OPAQUE or CTLFLAG_WR, nil, 0, sysctl_vfs_ctl, "", "Sysctl by fsid';
 
 {
  * Function to initialize a va_filerev field sensibly.
@@ -3286,97 +3291,99 @@ begin
  getbinuptime(@bt);
  Exit(((u_quad_t)bt.sec shl 32LL) or (bt.frac shr 32LL));
 end;
-
-static int filt_vfsread(struct knote *kn, long hint);
-static int filt_vfswrite(struct knote *kn, long hint);
-static int filt_vfsvnode(struct knote *kn, long hint);
-static void filt_vfsdetach(struct knote *kn);
-static struct filterops vfsread_filtops:=begin
- .f_isfd:=1,
- .f_detach:=filt_vfsdetach,
- .f_event:=filt_vfsread
-end;;
-static struct filterops vfswrite_filtops:=begin
- .f_isfd:=1,
- .f_detach:=filt_vfsdetach,
- .f_event:=filt_vfswrite
-end;;
-static struct filterops vfsvnode_filtops:=begin
- .f_isfd:=1,
- .f_detach:=filt_vfsdetach,
- .f_event:=filt_vfsvnode
-end;;
-
-static void
-vfs_knllock(void *arg)
-begin
- vp:p_vnode:=arg;
-
- vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
-end;
-
-static void
-vfs_knlunlock(void *arg)
-begin
- vp:p_vnode:=arg;
-
- VOP_UNLOCK(vp, 0);
-end;
-
-static void
-vfs_knl_assert_locked(void *arg)
-begin
-
-end;
-
-static void
-vfs_knl_assert_unlocked(void *arg)
-begin
-
-end;
 }
+
+procedure filt_vfsdetach(kn:p_knote);                    forward;
+function  filt_vfsread  (kn:p_knote;hint:QWORD):Integer; forward;
+function  filt_vfswrite (kn:p_knote;hint:QWORD):Integer; forward;
+function  filt_vfsvnode (kn:p_knote;hint:QWORD):Integer; forward;
+
+const
+ vfsread_filtops:t_filterops=(
+  f_isfd  :1;
+  _align  :0;
+  f_attach:nil;
+  f_detach:@filt_vfsdetach;
+  f_event :@filt_vfsread;
+ );
+
+ vfswrite_filtops:t_filterops=(
+  f_isfd  :1;
+  _align  :0;
+  f_attach:nil;
+  f_detach:@filt_vfsdetach;
+  f_event :@filt_vfswrite;
+ );
+
+ vfsvnode_filtops:t_filterops=(
+  f_isfd  :1;
+  _align  :0;
+  f_attach:nil;
+  f_detach:@filt_vfsdetach;
+  f_event :@filt_vfsvnode;
+ );
+
+procedure vfs_knllock(arg:Pointer);
+begin
+ vn_lock(p_vnode(arg), LK_EXCLUSIVE or LK_RETRY);
+end;
+
+procedure vfs_knlunlock(arg:Pointer);
+begin
+ VOP_UNLOCK(p_vnode(arg), 0);
+end;
+
+procedure vfs_knl_assert_locked(arg:Pointer);
+begin
+ //
+end;
+
+procedure vfs_knl_assert_unlocked(arg:Pointer);
+begin
+ //
+end;
 
 function vfs_kqfilter(ap:p_vop_kqfilter_args):Integer;
 var
  vp:p_vnode;
- //struct knote *kn;
- //struct knlist *knl;
+ kn:p_knote;
+ knl:p_knlist;
 begin
  vp:=ap^.a_vp;
- //kn:=ap^.a_kn;
+ kn:=ap^.a_kn;
 
- //case (kn^.kn_filter) of
- // EVFILT_READ:
- //  kn^.kn_fop:=@vfsread_filtops;
- // EVFILT_WRITE:
- //  kn^.kn_fop:=@vfswrite_filtops;
- // EVFILT_VNODE:
- //  kn^.kn_fop:=@vfsvnode_filtops;
- // else
- //  Exit(EINVAL);
- //end;
+ case (kn^.kn_filter) of
+  EVFILT_READ:
+   kn^.kn_fop:=@vfsread_filtops;
+  EVFILT_WRITE:
+   kn^.kn_fop:=@vfswrite_filtops;
+  EVFILT_VNODE:
+   kn^.kn_fop:=@vfsvnode_filtops;
+  else
+   Exit(EINVAL);
+ end;
 
- //kn^.kn_hook:=vp;
+ kn^.kn_hook:=vp;
 
  v_addpollinfo(vp);
  if (vp^.v_pollinfo=nil) then
   Exit(ENOMEM);
 
- //knl:=@vp^.v_pollinfo^.vpi_selinfo.si_note;
+ knl:=@vp^.v_pollinfo^.vpi_selinfo.si_note;
  vhold(vp);
- //knlist_add(knl, kn, 0);
+ knlist_add(knl, kn, 0);
 
  Exit(0);
 end;
 
 {
-{
  * Detach knote from vnode
  }
-static void
-filt_vfsdetach(struct knote *kn)
+procedure filt_vfsdetach(kn:p_knote);
+var
+ vp:p_vnode;
 begin
- vp:p_vnode:=(struct vnode *)kn^.kn_hook;
+ vp:=kn^.kn_hook;
 
  Assert(vp^.v_pollinfo<>nil, 'Missing v_pollinfo');
  knlist_remove(@vp^.v_pollinfo^.vpi_selinfo.si_note, kn, 0);
@@ -3384,39 +3391,44 @@ begin
 end;
 
 {ARGSUSED}
-static int
-filt_vfsread(struct knote *kn, long hint)
+function filt_vfsread(kn:p_knote;hint:QWORD):Integer;
+var
+ vp:p_vnode;
+ va:t_vattr;
+ res:Integer;
 begin
- vp:p_vnode:=(struct vnode *)kn^.kn_hook;
- struct vattr va;
- int res;
+ vp:=kn^.kn_hook;
 
  {
   * filesystem is gone, so set the EOF flag and schedule
   * the knote for deletion.
   }
- if (hint=NOTE_REVOKE) begin
+ if (hint=NOTE_REVOKE) then
+ begin
   VI_LOCK(vp);
-  kn^.kn_flags:= or (EV_EOF or EV_ONESHOT);
+  kn^.kn_flags:=kn^.kn_flags or (EV_EOF or EV_ONESHOT);
   VI_UNLOCK(vp);
   Exit(1);
  end;
 
- if (VOP_GETATTR(vp, &va, curthread^.td_ucred))
+ if (VOP_GETATTR(vp, @va)<>0) then
+ begin
   Exit(0);
+ end;
 
  VI_LOCK(vp);
- kn^.kn_data:=va.va_size - kn^.kn_fp^.f_offset;
- res:=(kn^.kn_data<>0);
+ kn^.kn_data:=va.va_size - p_file(kn^.kn_fp)^.f_offset;
+ res:=ord(kn^.kn_data<>0);
  VI_UNLOCK(vp);
  Exit(res);
 end;
 
 {ARGSUSED}
-static int
-filt_vfswrite(struct knote *kn, long hint)
+function filt_vfswrite(kn:p_knote;hint:QWORD):Integer;
+var
+ vp:p_vnode;
 begin
- vp:p_vnode:=(struct vnode *)kn^.kn_hook;
+ vp:=kn^.kn_hook;
 
  VI_LOCK(vp);
 
@@ -3424,33 +3436,38 @@ begin
   * filesystem is gone, so set the EOF flag and schedule
   * the knote for deletion.
   }
- if (hint=NOTE_REVOKE)
-  kn^.kn_flags:= or (EV_EOF or EV_ONESHOT);
+ if (hint=NOTE_REVOKE) then
+ begin
+  kn^.kn_flags:=kn^.kn_flags or (EV_EOF or EV_ONESHOT);
+ end;
 
  kn^.kn_data:=0;
  VI_UNLOCK(vp);
  Exit(1);
 end;
 
-static int
-filt_vfsvnode(struct knote *kn, long hint)
+function filt_vfsvnode(kn:p_knote;hint:QWORD):Integer;
+var
+ vp:p_vnode;
+ res:Integer;
 begin
- vp:p_vnode:=(struct vnode *)kn^.kn_hook;
- int res;
+ vp:=kn^.kn_hook;
 
  VI_LOCK(vp);
- if (kn^.kn_sfflags and hint)
-  kn^.kn_fflags:= or hint;
- if (hint=NOTE_REVOKE) begin
-  kn^.kn_flags:= or EV_EOF;
+ if ((kn^.kn_sfflags and hint)<>0) then
+ begin
+  kn^.kn_fflags:=kn^.kn_fflags or hint;
+ end;
+ if (hint=NOTE_REVOKE) then
+ begin
+  kn^.kn_flags:=kn^.kn_flags or EV_EOF;
   VI_UNLOCK(vp);
   Exit(1);
  end;
- res:=(kn^.kn_fflags<>0);
+ res:=ord(kn^.kn_fflags<>0);
  VI_UNLOCK(vp);
  Exit(res);
 end;
-}
 
 function vfs_read_dirent(ap:p_vop_readdir_args;dp:p_dirent;off:QWORD):Integer;
 var
@@ -3663,7 +3680,7 @@ var
  vp,nvp:p_vnode;
 begin
  mtx_assert(vnode_free_list_mtx);
- Assert((mvp^)^.v_mount=mp, 'marker vnode mount list mismatch');
+ Assert(mvp^^.v_mount=mp, 'marker vnode mount list mismatch');
 restart:
  vp:=TAILQ_NEXT(mvp^,@mvp^^.v_actfreelist);
  TAILQ_REMOVE(@mp^.mnt_activevnodelist,mvp^,@mvp^^.v_actfreelist);

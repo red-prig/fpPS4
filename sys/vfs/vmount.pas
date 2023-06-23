@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  time,
+ sys_event,
  kern_mtx,
  kern_synch,
  kern_sig,
@@ -603,14 +604,14 @@ end;
 
 procedure VFS_KNOTE_LOCKED(vp:p_vnode;hint:Integer);
 begin
- //if ((vp^.v_vflag and VV_NOKNOTE)=0) then
- // VN_KNOTE(vp, hint, KNF_LISTLOCKED);
+ if ((vp^.v_vflag and VV_NOKNOTE)=0) then
+  VN_KNOTE(vp, hint, KNF_LISTLOCKED);
 end;
 
 procedure VFS_KNOTE_UNLOCKED(vp:p_vnode;hint:Integer);
 begin
- //if ((vp^.v_vflag and VV_NOKNOTE)=0) then
- // VN_KNOTE(vp, hint, 0);
+ if ((vp^.v_vflag and VV_NOKNOTE)=0) then
+  VN_KNOTE(vp, hint, 0);
 end;
 
 procedure vmountinit;
