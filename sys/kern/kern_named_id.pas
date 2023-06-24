@@ -12,7 +12,7 @@ type
  t_id_name=array[0..31] of AnsiChar;
 
  p_id_named_desc=^t_id_named_desc;
- t_id_named_desc=packed record
+ t_id_named_desc=packed object
   desc:t_id_desc;
   objt:Integer;
   name:t_id_name;

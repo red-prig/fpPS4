@@ -21,6 +21,7 @@ uses
  kern_uuid,
  vfs_cache,
  vfs_mount,
+ kern_event,
  kern_synch,
  kern_cpuset,
  kern_ksched,
@@ -754,7 +755,7 @@ const
   ),
   (//[141]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_kqueueex;
      sy_name:'sys_kqueueex'
   ),
   (//[142]
@@ -1859,12 +1860,12 @@ const
   ),
   (//[362]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@sys_kqueue;
      sy_name:'sys_kqueue'
   ),
   (//[363]
      sy_narg:6;
-     sy_call:nil;
+     sy_call:@sys_kevent;
      sy_name:'sys_kevent'
   ),
   (//[364]

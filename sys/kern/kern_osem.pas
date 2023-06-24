@@ -38,8 +38,7 @@ const
 
 type
  p_osem=^t_osem;
- t_osem=packed record
-  desc      :t_id_named_desc;
+ t_osem=packed object(t_id_named_desc)
   mtx       :mtx;
   cv        :t_cv;
   _align    :Integer;
@@ -72,8 +71,8 @@ end;
 
 function osem_init(sem:p_osem;attr:DWORD;initCount,max_count:Integer):Integer;
 begin
- sem^.desc.desc.free:=@osem_free;
- sem^.desc.objt :=SEMA_OBJT;
+ sem^.desc.free :=@osem_free;
+ sem^.objt      :=SEMA_OBJT;
  sem^.count     :=initCount;
  sem^.init_count:=initCount;
  sem^.max_count :=max_count;
@@ -410,7 +409,7 @@ begin
  if (sem=nil) then Exit(ENOMEM); //EAGAIN
 
  osem_init(sem,attr,initCount,maxCount);
- sem^.desc.name:=_name;
+ sem^.name:=_name;
 
  if not id_name_new(@named_table,@sem^.desc,@key) then
  begin

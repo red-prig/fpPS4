@@ -25,6 +25,8 @@ const
  KQ_TASKDRAIN=$40;  // waiting for task to drain
 
 type
+ t_kq_name=array[0..31] of AnsiChar;
+
  pp_kqueue=^p_kqueue;
  p_kqueue=^t_kqueue;
  t_kqueue=record
@@ -42,6 +44,7 @@ type
   kq_knhashmask:QWORD;       // size of knhash
   kq_knhash    :p_klist;     // hash table for knotes
   //kq_task:task;
+  kq_name      :t_kq_name;
  end;
 
 

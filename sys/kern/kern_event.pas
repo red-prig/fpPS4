@@ -92,6 +92,7 @@ procedure KNOTE_UNLOCKED(list:p_knlist;hint:QWORD);
 function  M_KNLIST_EMPTY(list:p_knlist):Boolean;
 
 function  sys_kqueue():Integer;
+function  sys_kqueueex(name:PChar):Integer;
 function  sys_kevent(fd:Integer;
                      changelist:Pointer;
                      nchanges:Integer;
@@ -753,21 +754,17 @@ begin
  end;
 end;
 
-function sys_kqueue():Integer;
-label
- done2;
+function kern_kqueue(pfd:PInteger;name:PAnsiChar):Integer;
 var
- td:p_kthread;
  kq:p_kqueue;
  fp:p_file;
  fd,error:Integer;
 begin
- td:=curkthread;
- if (td=nil) then Exit(-1);
+ Result:=0;
 
  //fdp:=td^.td_proc^.p_fd;
  error:=falloc(@fp, @fd, 0);
- if (error<>0) then goto done2;
+ if (error<>0) then Exit(error);
 
  { An extra reference on `nfp' has been held for us by falloc(). }
  kq:=AllocMem(SizeOf(t_kqueue));
@@ -778,6 +775,11 @@ begin
  knlist_init_mtx(@kq^.kq_sel.si_note, @kq^.kq_lock);
  //TASK_INIT(@kq^.kq_task, 0, kqueue_task, kq);
 
+ if (name<>nil) then
+ begin
+  kq^.kq_name:=name;
+ end;
+
  FILEDESC_XLOCK(@fd_table);
  TAILQ_INSERT_HEAD(@fd_table.fd_kqlist, kq, @kq^.kq_list);
  FILEDESC_XUNLOCK(@fd_table);
@@ -785,9 +787,47 @@ begin
  finit(fp, FREAD or FWRITE, DTYPE_KQUEUE, kq, @kqueueops);
  fdrop(fp);
 
- td^.td_retval[0]:=fd;
-done2:
+ pfd^:=fd;
+
  Exit(error);
+end;
+
+function sys_kqueue():Integer;
+var
+ td:p_kthread;
+ fd:Integer;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ Result:=kern_kqueue(@fd,nil);
+
+ if (Result=0) then
+ begin
+  td^.td_retval[0]:=fd;
+ end;
+end;
+
+function sys_kqueueex(name:PChar):Integer;
+var
+ td:p_kthread;
+ fd:Integer;
+ _name:t_kq_name;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ _name:=Default(t_kq_name);
+
+ Result:=copyinstr(name,@_name,SizeOf(t_kq_name),nil);
+ if (Result<>0) then Exit;
+
+ Result:=kern_kqueue(@fd,@_name);
+
+ if (Result=0) then
+ begin
+  td^.td_retval[0]:=fd;
+ end;
 end;
 
 type

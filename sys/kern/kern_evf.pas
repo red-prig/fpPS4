@@ -49,8 +49,7 @@ const
 
 type
  p_evf=^t_evf;
- t_evf=packed record
-  desc      :t_id_named_desc;
+ t_evf=packed object(t_id_named_desc)
   bitPattern:QWORD;
   mtx       :mtx;
   cv        :t_cv;
@@ -82,8 +81,8 @@ end;
 
 function evf_init(evf:p_evf;attr:DWORD;initPattern:QWORD):Integer;
 begin
- evf^.desc.desc.free:=@evf_free;
- evf^.desc.objt:=EVF_OBJT;
+ evf^.desc.free:=@evf_free;
+ evf^.objt:=EVF_OBJT;
  evf^.bitPattern:=initPattern;
  mtx_init(evf^.mtx,'evf mtx');
  cv_init(@evf^.cv,'evf cv');
@@ -558,7 +557,7 @@ begin
  if (evf=nil) then Exit(ENOMEM); //EAGAIN
 
  evf_init(evf,attr,initPattern);
- evf^.desc.name:=_name;
+ evf^.name:=_name;
 
  if not id_name_new(@named_table,evf,@key) then
  begin

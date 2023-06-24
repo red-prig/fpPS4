@@ -10,8 +10,7 @@ uses
 
 type
  p_namedobj=^t_namedobj;
- t_namedobj=packed record
-  desc:t_id_named_desc;
+ t_namedobj=packed object(t_id_named_desc)
   objp:Pointer;
  end;
 
@@ -63,9 +62,9 @@ begin
  obj:=AllocMem(SizeOf(t_namedobj));
  if (obj=nil) then Exit(ENOMEM);
 
- obj^.desc.desc.free:=@namedobj_free;
- obj^.desc.objt:=Word(objt) or NAMED_OBJT;
- obj^.desc.name:=name;
+ obj^.desc.free:=@namedobj_free;
+ obj^.objt:=Word(objt) or NAMED_OBJT;
+ obj^.name:=name;
  obj^.objp:=objp;
 
  if not id_name_new(@named_table,obj,@key) then

@@ -74,6 +74,7 @@ function  mkdir(path:PChar;mode:Integer):Integer;
 function  rmdir(path:PChar):Integer;
 function  utimes(path:PChar;tptr:Pointer):Integer;
 function  adjtime(delta,olddelta:Pointer):Integer;
+function  kqueueex(name:PChar):Integer;
 function  setsid():Integer;
 function  sysarch(op:Integer;parms:Pointer):Integer;
 function  rtprio(func,pid:Integer;rtp:Pointer):Integer;
@@ -122,6 +123,8 @@ Function  sigtimedwait(oset,info,timeout:Pointer):Integer;
 Function  sigwaitinfo(oset,info:Pointer):Integer;
 function  getresuid(ruid,euid,suid:PInteger):Integer;
 function  getresgid(rgid,egid,sgid:PInteger):Integer;
+function  kqueue():Integer;
+function  kevent(fd:Integer;changelist:Pointer;nchanges:Integer;eventlist:Pointer;nevents:Integer;timeout:Pointer):Integer;
 function  nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer;
 function  lchflags(path:PChar;flags:Integer):Integer;
 function  uuidgen(store:Pointer;count:Integer):Integer;
@@ -676,6 +679,13 @@ asm
  jmp   cerror
 end;
 
+function kqueueex(name:PChar):Integer; assembler; nostackframe;
+asm
+ movq  $141,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function setsid():Integer; assembler; nostackframe;
 asm
  movq  $147,%rax
@@ -1008,6 +1018,20 @@ end;
 function getresgid(rgid,egid,sgid:PInteger):Integer; assembler; nostackframe;
 asm
  movq  $361,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function kqueue():Integer; assembler; nostackframe;
+asm
+ movq  $362,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function kevent(fd:Integer;changelist:Pointer;nchanges:Integer;eventlist:Pointer;nevents:Integer;timeout:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $363,%rax
  call  fast_syscall
  jmp   cerror
 end;
