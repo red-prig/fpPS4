@@ -91,6 +91,10 @@ procedure KNOTE_LOCKED  (list:p_knlist;hint:QWORD);
 procedure KNOTE_UNLOCKED(list:p_knlist;hint:QWORD);
 function  M_KNLIST_EMPTY(list:p_knlist):Boolean;
 
+function  kqueue_add_filteropts(filt:Integer;filtops:p_filterops):Integer;
+function  kqueue_del_filteropts(filt:Integer):Integer;
+function  kqfd_register(fd:Integer;kev:p_kevent):Integer;
+
 function  sys_kqueue():Integer;
 function  sys_kqueueex(name:PChar):Integer;
 function  sys_kevent(fd:Integer;
@@ -604,9 +608,9 @@ end;
  * XXX: EVFILT_TIMER should perhaps live in kern_time.c beside the
  * interval timer support code.
  }
-function timertoticks(data:Int64):Integer;
+function timertoticks(data:Int64):Int64;
 begin
- Exit(tvtohz(data));
+ Exit(tvtohz(data*1000*UNIT_PER_USEC));
 end;
 
 procedure filt_timerexpire(knx:Pointer);

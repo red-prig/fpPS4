@@ -139,6 +139,7 @@ type
 
  t_td_name=array[0..31] of AnsiChar;
 
+ pp_kthread=^p_kthread;
  p_kthread=^kthread;
  kthread=record
   td_umtxq        :Pointer; //p_umtx_q
@@ -245,6 +246,9 @@ procedure TD_CLR_IWAIT(td:p_kthread);
 procedure TD_SET_RUNNING(td:p_kthread);
 procedure TD_SET_RUNQ(td:p_kthread);
 procedure TD_SET_CAN_RUN(td:p_kthread);
+
+procedure THREAD_NO_SLEEPING();
+procedure THREAD_SLEEPING_OK();
 
 function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
@@ -421,6 +425,24 @@ end;
 procedure TD_SET_CAN_RUN(td:p_kthread);
 begin
  td^.td_state:=TDS_CAN_RUN;
+end;
+
+procedure THREAD_NO_SLEEPING();
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ Assert((td^.td_pflags and TDP_NOSLEEPING)=0,'nested no sleeping');
+ td^.td_pflags:=td^.td_pflags or TDP_NOSLEEPING;
+end;
+
+procedure THREAD_SLEEPING_OK();
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ Assert((td^.td_pflags and TDP_NOSLEEPING)<>0,'nested sleeping ok');
+ td^.td_pflags:=td^.td_pflags and (not TDP_NOSLEEPING);
 end;
 
 //

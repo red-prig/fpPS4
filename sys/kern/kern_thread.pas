@@ -26,14 +26,14 @@ procedure thread_reap();
 function  thread_alloc:p_kthread;
 procedure thread_free(td:p_kthread);
 
-function  sys_thr_new(_param:Pointer;_size:Integer):Integer;
-function  sys_thr_create(ctx:Pointer;id:PDWORD;flags:Integer):Integer;
-function  sys_thr_self(id:PDWORD):Integer;
-procedure sys_thr_exit(state:PQWORD);
-function  sys_thr_kill(id,sig:Integer):Integer;
-function  sys_thr_kill2(pid,id,sig:Integer):Integer;
-function  sys_thr_suspend(timeout:Pointer):Integer;
-function  sys_thr_wake(id:DWORD):Integer;
+function  sys_thr_new     (_param:Pointer;_size:Integer):Integer;
+function  sys_thr_create  (ctx:Pointer;id:PDWORD;flags:Integer):Integer;
+function  sys_thr_self    (id:PDWORD):Integer;
+procedure sys_thr_exit    (state:PQWORD);
+function  sys_thr_kill    (id,sig:Integer):Integer;
+function  sys_thr_kill2   (pid,id,sig:Integer):Integer;
+function  sys_thr_suspend (timeout:Pointer):Integer;
+function  sys_thr_wake    (id:DWORD):Integer;
 function  sys_thr_set_name(id:DWORD;pname:PChar):Integer;
 function  sys_thr_get_name(id:DWORD;pname:PChar):Integer;
 
@@ -44,18 +44,21 @@ function  sys_amd64_get_gsbase(base:PPointer):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
-procedure thread_lock(td:p_kthread);
-procedure thread_unlock(td:p_kthread);
+procedure thread_lock   (td:p_kthread);
+procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 
-function  FOREACH_THREAD_START(i:p_kthread_iterator):Boolean;
+function  FOREACH_THREAD_START (i:p_kthread_iterator):Boolean;
 procedure FOREACH_THREAD_FINISH();
 function  THREAD_NEXT(i:p_kthread_iterator):Boolean;
-function  THREAD_GET(i:p_kthread_iterator):p_kthread;
+function  THREAD_GET (i:p_kthread_iterator):p_kthread;
 
 function  SIGPENDING(td:p_kthread):Boolean;
 
 procedure threadinit; //SYSINIT
+
+function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
+procedure kthread_exit();
 
 implementation
 
@@ -487,6 +490,78 @@ begin
  end;
 end;
 
+function kthread_add(func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
+var
+ td:p_kthread;
+ newtd:p_kthread;
+ stack_base:Pointer;
+ stack_size:QWORD;
+
+ n:Integer;
+begin
+ Result:=0;
+
+ if (func=nil) or
+    (newtdp=nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ thread_reap();
+
+ td:=curkthread;
+
+ newtd:=thread_alloc;
+ if (newtd=nil) then Exit(ENOMEM);
+
+ stack_base:=newtd^.td_kstack;
+ stack_size:=(ptruint(newtd^.td_kstack)-ptruint(newtd^.td_ksttop));
+
+ n:=cpu_thread_create(newtd,
+                      stack_base,
+                      stack_size,
+                      func,
+                      arg);
+
+ if (n<>0) then
+ begin
+  thread_free(newtd);
+  Exit(EINVAL);
+ end;
+
+ if (td<>nil) then
+ begin
+  newtd^.td_sigmask:=td^.td_sigmask;
+ end;
+
+ thread_link(newtd);
+
+ newtd^.td_pflags:=newtd^.td_pflags or TDP_KTHREAD;
+
+ if (name<>nil) then
+ begin
+  Move(name^,newtd^.td_name,SizeOf(t_td_name));
+ end;
+ SetThreadDebugName(newtd^.td_handle,newtd^.td_name);
+
+ sched_fork_thread(td,newtd);
+
+ tidhash_add(newtd);
+
+ thread_inc_ref(newtd);
+
+ n:=cpu_sched_add(newtd);
+ if (n<>0) then
+ begin
+  cpu_thread_terminate(newtd);
+  thread_dec_ref(newtd);
+  thread_free(newtd);
+  Exit(EFAULT);
+ end;
+
+ newtdp^:=@newtd;
+end;
+
 function kern_thr_new(td:p_kthread;param:p_thr_param):Integer;
 var
  rtp:t_rtprio;
@@ -611,6 +686,13 @@ begin
 
  tdsigcleanup(td);
  //thread_stopped(p);
+ thread_reap();
+ thread_exit();
+ // NOTREACHED
+end;
+
+procedure kthread_exit();
+begin
  thread_reap();
  thread_exit();
  // NOTREACHED
