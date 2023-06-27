@@ -10,9 +10,9 @@ uses
 
 Procedure timeinit; //SYSINIT
 
-procedure getmicrouptime(tvp:ptimeval);
-procedure getnanotime(tp:Ptimespec);
-procedure getmicrotime(tvp:ptimeval);
+procedure getmicrouptime(tvp:p_timeval);
+procedure getnanotime(tp:p_timespec);
+procedure getmicrotime(tvp:p_timeval);
 
 function  sys_clock_gettime(clock_id:Integer;tp:Pointer):Integer;
 function  sys_clock_settime(clock_id:Integer;tp:Pointer):Integer;
@@ -40,7 +40,7 @@ begin
  getmicrouptime(@boottime);
 end;
 
-procedure getmicrouptime(tvp:ptimeval);
+procedure getmicrouptime(tvp:p_timeval);
 var
  time:Int64;
 begin
@@ -49,7 +49,7 @@ begin
  tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
 end;
 
-procedure getnanotime(tp:Ptimespec);
+procedure getnanotime(tp:p_timespec);
 var
  time:Int64;
 begin
@@ -59,7 +59,7 @@ begin
  tp^.tv_nsec:=(time mod UNIT_PER_SEC)*100;
 end;
 
-procedure getmicrotime(tvp:ptimeval);
+procedure getmicrotime(tvp:p_timeval);
 var
  time:Int64;
 begin
@@ -105,7 +105,7 @@ end;
 var
  nanowait:Integer=0;
 
-function kern_nanosleep(rqt,rmt:ptimespec):Integer;
+function kern_nanosleep(rqt,rmt:p_timespec):Integer;
 var
  ts,ts2,tv:Int64;
  error:Integer;
@@ -212,7 +212,7 @@ begin
  Exit(EPERM);
 end;
 
-function kern_adjtime(delta,olddelta:ptimeval):Integer;
+function kern_adjtime(delta,olddelta:p_timeval):Integer;
 var
  atv:timeval;
 begin
@@ -237,7 +237,7 @@ end;
 function sys_adjtime(delta,olddelta:Pointer):Integer;
 var
  _delta,_olddelta:timeval;
- deltap:ptimeval;
+ deltap:p_timeval;
  error:Integer;
 begin
  if (delta<>nil) then

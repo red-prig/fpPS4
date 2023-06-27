@@ -34,28 +34,35 @@ const
  CLOCK_EXT_RAW_NETWORK  =19; // ORBIS only
 
 type
- Ptimespec=^timespec;
+ p_bintime=^bintime;
+ bintime=packed record
+  sec :Int64;
+  frac:Int64;
+ end;
+ {$IF sizeof(bintime)<>16}{$STOP sizeof(bintime)<>16}{$ENDIF}
+
+ p_timespec=^timespec;
  timespec=packed record
   tv_sec :Int64;       /// seconds
   tv_nsec:Int64;       /// nanoseconds
  end;
  {$IF sizeof(timespec)<>16}{$STOP sizeof(timespec)<>16}{$ENDIF}
 
- Ptimeval=^timeval;
+ p_timeval=^timeval;
  timeval=packed record
   tv_sec :Int64;
   tv_usec:Int64;   //microsecond
  end;
  {$IF sizeof(timeval)<>16}{$STOP sizeof(timeval)<>16}{$ENDIF}
 
- Pitimerval=^itimerval;
+ p_itimerval=^itimerval;
  itimerval=packed record
   it_interval:timeval; { timer interval }
   it_value   :timeval; { current value }
  end;
  {$IF sizeof(itimerval)<>32}{$STOP sizeof(itimerval)<>32}{$ENDIF}
 
- Ptimezone=^timezone;
+ p_timezone=^timezone;
  timezone=packed record
   tz_minuteswest:Integer;
   tz_dsttime    :Integer;
@@ -93,29 +100,32 @@ function _nsec2usec(nsec:QWORD):QWORD;  //Nanosecond  to Microsecond
 function _msec2nsec(msec:QWORD):QWORD;  //Milisecond  to Nanosecond
 function _nsec2msec(nsec:QWORD):QWORD;  //Nanosecond  to Milisecond
 
-procedure timevalfix(t1:ptimeval);
-procedure timevaladd(t1,t2:ptimeval);
-procedure timevalsub(t1,t2:ptimeval);
+procedure bintime2timespec(bt:p_bintime;ts:p_timespec);
+procedure timespec2bintime(ts:p_timespec;bt:p_bintime);
 
-function  timespeccmp_lt(tvp,uvp:ptimespec):Integer;
+procedure timevalfix(t1:p_timeval);
+procedure timevaladd(t1,t2:p_timeval);
+procedure timevalsub(t1,t2:p_timeval);
 
-procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec);
-procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec);
+function  timespeccmp_lt(tvp,uvp:p_timespec):Integer;
 
-function  TIMESPEC_TO_UNIT(ts:ptimespec):Int64;   //Unit
-procedure UNIT_TO_TIMESPEC(ts:ptimespec;u:Int64); //Unit
-function  TIMEVAL_TO_UNIT (tv:ptimeval ):Int64;   //Unit
-procedure UNIT_TO_TIMEVAL (tv:ptimeval;u:Int64);  //Unit
-function  USEC_TO_UNIT    (usec:QWORD  ):Int64;   //Unit
+procedure TIMEVAL_TO_TIMESPEC(tv:p_timeval;ts:p_timespec);
+procedure TIMESPEC_TO_TIMEVAL(tv:p_timeval;ts:p_timespec);
+
+function  TIMESPEC_TO_UNIT(ts:p_timespec):Int64;   //Unit
+procedure UNIT_TO_TIMESPEC(ts:p_timespec;u:Int64); //Unit
+function  TIMEVAL_TO_UNIT (tv:p_timeval ):Int64;   //Unit
+procedure UNIT_TO_TIMEVAL (tv:p_timeval;u:Int64);  //Unit
+function  USEC_TO_UNIT    (usec:QWORD  ):Int64;    //Unit
 
 function  cputick2usec(time:QWORD):QWORD; inline;
 function  tvtohz(time:Int64):Int64;
-procedure usec2timespec(ts:ptimespec;timeo:DWORD);
+procedure usec2timespec(ts:p_timespec;timeo:DWORD);
 
-procedure TIMESPEC_ADD(dst,src,val:ptimespec);
-procedure TIMESPEC_SUB(dst,src,val:ptimespec);
+procedure TIMESPEC_ADD(dst,src,val:p_timespec);
+procedure TIMESPEC_SUB(dst,src,val:p_timespec);
 
-function  itimerfix(tv:ptimeval):Integer;
+function  itimerfix(tv:p_timeval):Integer;
 
 var
  boottime:timeval;
@@ -155,7 +165,19 @@ begin
  Result:=(nsec+999999) div 1000000;
 end;
 
-procedure timevalfix(t1:ptimeval);
+procedure bintime2timespec(bt:p_bintime;ts:p_timespec);
+begin
+ ts^.tv_sec :=bt^.sec;
+ ts^.tv_nsec:=(QWORD(1000000000)*DWORD(bt^.frac shr 32)) shr 32;
+end;
+
+procedure timespec2bintime(ts:p_timespec;bt:p_bintime);
+begin
+ bt^.sec :=ts^.tv_sec;
+ bt^.frac:=ts^.tv_nsec*QWORD(18446744073);
+end;
+
+procedure timevalfix(t1:p_timeval);
 begin
  if (t1^.tv_usec < 0) then
  begin
@@ -169,21 +191,21 @@ begin
  end;
 end;
 
-procedure timevaladd(t1,t2:ptimeval);
+procedure timevaladd(t1,t2:p_timeval);
 begin
  Inc(t1^.tv_sec ,t2^.tv_sec);
  Inc(t1^.tv_usec,t2^.tv_usec);
  timevalfix(t1);
 end;
 
-procedure timevalsub(t1,t2:ptimeval);
+procedure timevalsub(t1,t2:p_timeval);
 begin
  Dec(t1^.tv_sec ,t2^.tv_sec);
  Dec(t1^.tv_usec,t2^.tv_usec);
  timevalfix(t1);
 end;
 
-function timespeccmp_lt(tvp,uvp:ptimespec):Integer;
+function timespeccmp_lt(tvp,uvp:p_timespec):Integer;
 begin
  if (tvp^.tv_sec=uvp^.tv_sec) then
  begin
@@ -194,35 +216,35 @@ begin
  end;
 end;
 
-procedure TIMEVAL_TO_TIMESPEC(tv:ptimeval;ts:ptimespec);
+procedure TIMEVAL_TO_TIMESPEC(tv:p_timeval;ts:p_timespec);
 begin
  ts^.tv_sec :=tv^.tv_sec;
  ts^.tv_nsec:=tv^.tv_usec * 1000;
 end;
 
-procedure TIMESPEC_TO_TIMEVAL(tv:ptimeval;ts:ptimespec);
+procedure TIMESPEC_TO_TIMEVAL(tv:p_timeval;ts:p_timespec);
 begin
  tv^.tv_sec :=ts^.tv_sec;
  tv^.tv_usec:=ts^.tv_nsec div 1000;
 end;
 
-function TIMESPEC_TO_UNIT(ts:ptimespec):Int64; //Unit
+function TIMESPEC_TO_UNIT(ts:p_timespec):Int64; //Unit
 begin
  Result:=(QWORD(ts^.tv_sec)*UNIT_PER_SEC)+(QWORD(ts^.tv_nsec) div NSEC_PER_UNIT);
 end;
 
-procedure UNIT_TO_TIMESPEC(ts:ptimespec;u:Int64); //Unit
+procedure UNIT_TO_TIMESPEC(ts:p_timespec;u:Int64); //Unit
 begin
  ts^.tv_sec :=(u div UNIT_PER_SEC);
  ts^.tv_nsec:=(u mod UNIT_PER_SEC)*NSEC_PER_UNIT;
 end;
 
-function TIMEVAL_TO_UNIT(tv:ptimeval):Int64; //Unit
+function TIMEVAL_TO_UNIT(tv:p_timeval):Int64; //Unit
 begin
  Result:=(QWORD(tv^.tv_sec)*UNIT_PER_SEC)+(QWORD(tv^.tv_usec)*UNIT_PER_USEC);
 end;
 
-procedure UNIT_TO_TIMEVAL(tv:ptimeval;u:Int64); //Unit
+procedure UNIT_TO_TIMEVAL(tv:p_timeval;u:Int64); //Unit
 begin
  tv^.tv_sec :=(u div UNIT_PER_SEC);
  tv^.tv_usec:=(u mod UNIT_PER_SEC) div UNIT_PER_USEC;
@@ -243,13 +265,13 @@ begin
  Result:=time;
 end;
 
-procedure usec2timespec(ts:ptimespec;timeo:DWORD);
+procedure usec2timespec(ts:p_timespec;timeo:DWORD);
 begin
  ts^.tv_sec :=(timeo div 1000000);
  ts^.tv_nsec:=(timeo mod 1000000)*1000;
 end;
 
-procedure TIMESPEC_ADD(dst,src,val:ptimespec);
+procedure TIMESPEC_ADD(dst,src,val:p_timespec);
 begin
  dst^.tv_sec :=src^.tv_sec +val^.tv_sec;
  dst^.tv_nsec:=src^.tv_nsec+val^.tv_nsec;
@@ -260,7 +282,7 @@ begin
  end;
 end;
 
-procedure TIMESPEC_SUB(dst,src,val:ptimespec);
+procedure TIMESPEC_SUB(dst,src,val:p_timespec);
 begin
  dst^.tv_sec :=src^.tv_sec -val^.tv_sec;
  dst^.tv_nsec:=src^.tv_nsec-val^.tv_nsec;
@@ -277,7 +299,7 @@ end;
  * fix it to have at least minimal value (i.e. if it is less
  * than the resolution of the clock, round it up.)
  }
-function itimerfix(tv:ptimeval):Integer;
+function itimerfix(tv:p_timeval):Integer;
 begin
  if (tv^.tv_sec < 0) or (tv^.tv_usec < 0) or (tv^.tv_usec >= 1000000) then
   Exit(EINVAL);

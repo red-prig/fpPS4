@@ -94,7 +94,7 @@ begin
  Exit(0);
 end;
 
-function ksched_rr_get_interval(ksched:p_ksched;td:p_kthread;time:Ptimespec):Integer;
+function ksched_rr_get_interval(ksched:p_ksched;td:p_kthread;time:p_timespec):Integer;
 begin
  time^:=ksched^.rr_interval;
  Exit(0);
@@ -284,7 +284,7 @@ begin
  Exit(error);
 end;
 
-function kern_sched_rr_get_interval(td:p_kthread;pid:Integer;ts:ptimespec):Integer;
+function kern_sched_rr_get_interval(td:p_kthread;pid:Integer;ts:p_timespec):Integer;
 var
  e:Integer;
 begin

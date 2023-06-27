@@ -27,7 +27,7 @@ function  sys__umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):I
 
 function  kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
 
-function  umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
+function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer;
 
 procedure umtxq_sysinit; //SYSINIT
 
@@ -476,7 +476,7 @@ begin
  until false;
 end;
 
-function do_lock_umtx(td:p_kthread;umtx:p_umtx;id:QWORD;timeout:ptimespec):Integer;
+function do_lock_umtx(td:p_kthread;umtx:p_umtx;id:QWORD;timeout:p_timespec):Integer;
 var
  tv,ts,ts2:Int64;
 begin
@@ -572,7 +572,7 @@ end;
 function do_wait(td      :p_kthread;
                  addr    :Pointer;
                  id      :QWORD;
-                 timeout :ptimespec;
+                 timeout :p_timespec;
                  compat32:Integer;
                  priv    :Integer
                 ):Integer;
@@ -1421,7 +1421,7 @@ begin
  end;
 end;
 
-function do_lock_umutex(td:p_kthread;m:p_umutex;timeout:ptimespec;mode:Integer):Integer;
+function do_lock_umutex(td:p_kthread;m:p_umutex;timeout:p_timespec;mode:Integer):Integer;
 var
  flags:DWORD;
  tv,ts,ts2:Int64;
@@ -1486,7 +1486,7 @@ end;
 
 ////
 
-function do_cv_wait(td:p_kthread;cv:p_ucond;m:p_umutex;timeout:ptimespec;wflags:QWORD):Integer;
+function do_cv_wait(td:p_kthread;cv:p_ucond;m:p_umutex;timeout:p_timespec;wflags:QWORD):Integer;
 label
  _exit;
 var
@@ -1784,7 +1784,7 @@ begin
   umtx_key_release(uq^.uq_key);
 end;
 
-function do_rw_rdlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimespec):Integer;
+function do_rw_rdlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:p_timespec):Integer;
 var
  ts,ts2,tv:Int64;
 begin
@@ -1951,7 +1951,7 @@ begin
   umtx_key_release(uq^.uq_key);
 end;
 
-function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:ptimespec):Integer;
+function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:p_timespec):Integer;
 var
  ts,ts2,tv:Int64;
 begin
@@ -2100,7 +2100,7 @@ end;
 
 ////
 
-function do_sem_wait(td:p_kthread;sem:p__usem;timeout:ptimespec):Integer;
+function do_sem_wait(td:p_kthread;sem:p__usem;timeout:p_timespec):Integer;
 var
  uq:p_umtx_q;
  count:DWORD;
@@ -2202,7 +2202,7 @@ end;
 
 ////
 
-function umtx_copyin_timeout(addr:Pointer;tsp:ptimespec):Integer;
+function umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer;
 begin
  Result:=copyin(addr,tsp,SizeOf(timespec));
  if (Result=0) then
@@ -2221,7 +2221,7 @@ end;
 
 function __umtx_op_lock_umtx(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2241,7 +2241,7 @@ end;
 
 function __umtx_op_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2256,7 +2256,7 @@ end;
 
 function __umtx_op_wait_uint(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2271,7 +2271,7 @@ end;
 
 function __umtx_op_wait_uint_private(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2333,7 +2333,7 @@ end;
 
 function __umtx_op_lock_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2353,7 +2353,7 @@ end;
 
 function __umtx_op_wait_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2388,7 +2388,7 @@ end;
 
 function __umtx_op_cv_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  ts:=nil;
@@ -2472,7 +2472,7 @@ end;
 
 function __umtx_op_sem_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
 var
- ts:ptimespec;
+ ts:p_timespec;
  timeout:timespec;
 begin
  if (ptrint(obj)<$1000) then Exit(EFAULT);

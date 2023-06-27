@@ -24,9 +24,9 @@ uses
  vfs_lookup;
 
 function chroot_refuse_vdir_fds():Integer;
-function getutimes(usrtvp:ptimeval;tvpseg:uio_seg;tsp:ptimespec):Integer;
+function getutimes(usrtvp:p_timeval;tvpseg:uio_seg;tsp:p_timespec):Integer;
 function setfflags(vp:p_vnode;flags:Integer):Integer;
-function setutimes(vp:p_vnode;ts:ptimespec;numtimes,nilflag:Integer):Integer;
+function setutimes(vp:p_vnode;ts:p_timespec;numtimes,nilflag:Integer):Integer;
 function vn_access(vp:p_vnode;user_flags:Integer):Integer;
 function setfown(vp:p_vnode;uid:uid_t;gid:gid_t):Integer;
 function setfmode(vp:p_vnode;mode:Integer):Integer;
@@ -113,10 +113,10 @@ function kern_fchmodat(fd:Integer;path:PChar;pathseg:uio_seg;mode,flag:Integer):
 function kern_chmod(path:PChar;pathseg:uio_seg;mode:Integer):Integer;
 function kern_chown(path:PChar;pathseg:uio_seg;uid,gid:Integer):Integer;
 function kern_lchown(path:PChar;pathseg:uio_seg;uid,gid:Integer):Integer;
-function kern_utimesat(fd:Integer;path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
-function kern_utimes(path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
-function kern_lutimes(path:PChar;pathseg:uio_seg;tptr:ptimeval;tptrseg:uio_seg):Integer;
-function kern_futimes(fd:Integer;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_utimesat(fd:Integer;path:PChar;pathseg:uio_seg;tptr:p_timeval;tptrseg:uio_seg):Integer;
+function kern_utimes(path:PChar;pathseg:uio_seg;tptr:p_timeval;tptrseg:uio_seg):Integer;
+function kern_lutimes(path:PChar;pathseg:uio_seg;tptr:p_timeval;tptrseg:uio_seg):Integer;
+function kern_futimes(fd:Integer;tptr:p_timeval;tptrseg:uio_seg):Integer;
 function kern_truncate(path:PChar;pathseg:uio_seg;length:Int64):Integer;
 function kern_fsync(fd:Integer;fullsync:Boolean):Integer;
 function kern_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar;pathseg:uio_seg):Integer;
@@ -2174,10 +2174,10 @@ end;
 {
  * Common implementation code for utimes(), lutimes(), and futimes().
  }
-function getutimes(usrtvp:ptimeval;tvpseg:uio_seg;tsp:ptimespec):Integer;
+function getutimes(usrtvp:p_timeval;tvpseg:uio_seg;tsp:p_timespec):Integer;
 var
  tv:array[0..1] of timeval;
- tvp:ptimeval;
+ tvp:p_timeval;
  error:Integer;
 begin
  if (usrtvp=nil) then
@@ -2210,7 +2210,7 @@ end;
 {
  * Common implementation code for utimes(), lutimes(), and futimes().
  }
-function setutimes(vp:p_vnode;ts:ptimespec;numtimes,nilflag:Integer):Integer;
+function setutimes(vp:p_vnode;ts:p_timespec;numtimes,nilflag:Integer):Integer;
 var
  error,setbirthtime:Integer;
  mp:p_mount;
@@ -2251,7 +2251,7 @@ begin
 end;
 
 function kern_utimesat(fd:Integer;path:PChar;pathseg:uio_seg;
-                       tptr:ptimeval;tptrseg:uio_seg):Integer;
+                       tptr:p_timeval;tptrseg:uio_seg):Integer;
 var
  nd:t_nameidata;
  ts:array[0..1] of timespec;
@@ -2274,7 +2274,7 @@ begin
 end;
 
 function kern_utimes(path:PChar;pathseg:uio_seg;
-                     tptr:ptimeval;tptrseg:uio_seg):Integer;
+                     tptr:p_timeval;tptrseg:uio_seg):Integer;
 begin
  Exit(kern_utimesat(AT_FDCWD, path, pathseg, tptr, tptrseg));
 end;
@@ -2293,7 +2293,7 @@ begin
 end;
 
 function kern_lutimes(path:PChar;pathseg:uio_seg;
-                      tptr:ptimeval;tptrseg:uio_seg):Integer;
+                      tptr:p_timeval;tptrseg:uio_seg):Integer;
 var
  ts:array[0..1] of timespec;
  error:Integer;
@@ -2323,7 +2323,7 @@ begin
  Exit(kern_lutimes(path, UIO_USERSPACE, tptr, UIO_USERSPACE));
 end;
 
-function kern_futimes(fd:Integer;tptr:ptimeval;tptrseg:uio_seg):Integer;
+function kern_futimes(fd:Integer;tptr:p_timeval;tptrseg:uio_seg):Integer;
 var
  ts:array[0..1] of timespec;
  fp:p_file;

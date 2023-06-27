@@ -796,7 +796,7 @@ end;
 Function kern_sigtimedwait(td:p_kthread;
                            waitset:sigset_t;
                            ksi:p_ksiginfo;
-                           timeout:ptimespec
+                           timeout:p_timespec
                           ):Integer;
 var
  saved_mask,new_block:sigset_t;

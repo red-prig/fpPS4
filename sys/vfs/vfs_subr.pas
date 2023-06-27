@@ -31,7 +31,7 @@ function  vfs_busy(mp:p_mount;flags:Integer):Integer;
 procedure vfs_unbusy(mp:p_mount);
 function  vfs_getvfs(fsid:p_fsid):p_mount;
 procedure vfs_getnewfsid(mp:p_mount);
-procedure vfs_timestamp(tsp:Ptimespec);
+procedure vfs_timestamp(tsp:p_timespec);
 procedure vattr_null(vap:p_vattr);
 procedure v_incr_usecount(vp:p_vnode);
 
@@ -363,7 +363,7 @@ end;
 {
  * Get a current timestamp.
  }
-procedure vfs_timestamp(tsp:Ptimespec);
+procedure vfs_timestamp(tsp:p_timespec);
 begin
  getnanotime(tsp);
 end;

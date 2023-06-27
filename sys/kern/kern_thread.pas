@@ -819,7 +819,7 @@ begin
  Result:=sys_thr_kill(id,sig);
 end;
 
-function kern_thr_suspend(td:p_kthread;tsp:ptimespec):Integer;
+function kern_thr_suspend(td:p_kthread;tsp:p_timespec):Integer;
 var
  tv:Int64;
 begin
@@ -884,7 +884,7 @@ function sys_thr_suspend(timeout:Pointer):Integer;
 var
  td:p_kthread;
  ts:timespec;
- tsp:ptimespec;
+ tsp:p_timespec;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);

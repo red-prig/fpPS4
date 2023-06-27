@@ -568,12 +568,12 @@ end;
 
 function kern_select(nd:Integer;
                      fd_in,fd_ou,fd_ex:p_fd_set;
-                     tvp:ptimeval;
+                     tvp:p_timeval;
                      abi_nfdbits:Integer):Integer; forward;
 
 function kern_pselect(nd:Integer;
                       uin,uou,uex:p_fd_set;
-                      tvp:ptimeval;
+                      tvp:p_timeval;
                       uset:p_sigset_t;
                       abi_nfdbits:Integer):Integer;
 var
@@ -604,7 +604,7 @@ function sys_pselect(nd:Integer;uin,uou,uex,uts,sm:Pointer):Integer;
 var
  ts:timespec;
  tv:timeval;
- tvp:ptimeval;
+ tvp:p_timeval;
  _set:sigset_t;
  uset:p_sigset_t;
  error:Integer;
@@ -632,7 +632,7 @@ end;
 function sys_select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 var
  tv:timeval;
- tvp:ptimeval;
+ tvp:p_timeval;
  error:Integer;
 begin
  if (utv<>nil) then
@@ -687,7 +687,7 @@ end;
 
 function kern_select(nd:Integer;
                      fd_in,fd_ou,fd_ex:p_fd_set;
-                     tvp:ptimeval;
+                     tvp:p_timeval;
                      abi_nfdbits:Integer):Integer;
 label
  done;

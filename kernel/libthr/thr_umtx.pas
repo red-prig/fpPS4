@@ -39,32 +39,32 @@ function _thr_umutex_trylock(mtx:p_umutex;id:DWORD):Integer;
 function _thr_umutex_trylock2(mtx:p_umutex;id:DWORD):Integer;
 function _thr_umutex_lock(mtx:p_umutex;id:DWORD):Integer;
 function _thr_umutex_lock_spin(mtx:p_umutex;id:DWORD):Integer;
-function _thr_umutex_timedlock(mtx:p_umutex;id:DWORD;timeout:ptimespec):Integer;
+function _thr_umutex_timedlock(mtx:p_umutex;id:DWORD;timeout:p_timespec):Integer;
 function _thr_umutex_unlock(mtx:p_umutex;id:DWORD):Integer;
 function _thr_rwlock_tryrdlock(rwlock:p_urwlock;flags:Integer):Integer;
 function _thr_rwlock_trywrlock(rwlock:p_urwlock):Integer;
-function _thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:ptimespec):Integer;
-function _thr_rwlock_wrlock(rwlock:p_urwlock;tsp:ptimespec):Integer;
+function _thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:p_timespec):Integer;
+function _thr_rwlock_wrlock(rwlock:p_urwlock;tsp:p_timespec):Integer;
 function _thr_rwlock_unlock(rwlock:p_urwlock):Integer;
 
 procedure _thr_umutex_init(mtx:p_umutex);
 procedure _thr_urwlock_init(rwl:p_urwlock);
 function  __thr_umutex_lock(mtx:p_umutex;id:DWORD):Integer;
 function  __thr_umutex_lock_spin(mtx:p_umutex;id:DWORD):Integer;
-function  __thr_umutex_timedlock(mtx:p_umutex;id:DWORD;ets:ptimespec):Integer;
+function  __thr_umutex_timedlock(mtx:p_umutex;id:DWORD;ets:p_timespec):Integer;
 function  __thr_umutex_unlock(mtx:p_umutex;id:DWORD):Integer;
 function  __thr_umutex_trylock(mtx:p_umutex):Integer;
 function  __thr_umutex_set_ceiling(mtx:p_umutex;ceiling:DWORD;oldceiling:PDWORD):Integer;
-function  _thr_umtx_wait(mtx:Pointer;id:QWORD;timeout:ptimespec):Integer;
-function  _thr_umtx_wait_uint(mtx:Pointer;id:DWORD;timeout:ptimespec;shared:Integer):Integer;
-function  _thr_umtx_timedwait_uint(mtx:Pointer;id:DWORD;clockid:Integer;abstime:ptimespec;shared:Integer):Integer;
+function  _thr_umtx_wait(mtx:Pointer;id:QWORD;timeout:p_timespec):Integer;
+function  _thr_umtx_wait_uint(mtx:Pointer;id:DWORD;timeout:p_timespec;shared:Integer):Integer;
+function  _thr_umtx_timedwait_uint(mtx:Pointer;id:DWORD;clockid:Integer;abstime:p_timespec;shared:Integer):Integer;
 function  _thr_umtx_wake(mtx:Pointer;nr_wakeup,shared:Integer):Integer;
 procedure _thr_ucond_init(cv:p_ucond);
-function  _thr_ucond_wait(cv:p_ucond;m:p_umutex;timeout:ptimespec;flags:Integer):Integer;
+function  _thr_ucond_wait(cv:p_ucond;m:p_umutex;timeout:p_timespec;flags:Integer):Integer;
 function  _thr_ucond_signal(cv:p_ucond):Integer;
 function  _thr_ucond_broadcast(cv:p_ucond):Integer;
-function  __thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:ptimespec):Integer;
-function  __thr_rwlock_wrlock(rwlock:p_urwlock;tsp:ptimespec):Integer;
+function  __thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:p_timespec):Integer;
+function  __thr_rwlock_wrlock(rwlock:p_urwlock;tsp:p_timespec):Integer;
 function  __thr_rwlock_unlock(rwlock:p_urwlock):Integer;
 procedure _thr_rwl_rdlock(rwlock:p_urwlock);
 procedure _thr_rwl_wrlock(rwlock:p_urwlock);
@@ -125,7 +125,7 @@ begin
  Exit(__thr_umutex_lock_spin(mtx,id));
 end;
 
-function _thr_umutex_timedlock(mtx:p_umutex;id:DWORD;timeout:ptimespec):Integer;
+function _thr_umutex_timedlock(mtx:p_umutex;id:DWORD;timeout:p_timespec):Integer;
 begin
  if (_thr_umutex_trylock2(mtx,id)=0) then
   Exit(0);
@@ -177,14 +177,14 @@ begin
  Exit(EBUSY);
 end;
 
-function _thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:ptimespec):Integer;
+function _thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:p_timespec):Integer;
 begin
  if (_thr_rwlock_tryrdlock(rwlock,flags)=0) then
   Exit(0);
  Exit(__thr_rwlock_rdlock(rwlock,flags,tsp));
 end;
 
-function _thr_rwlock_wrlock(rwlock:p_urwlock;tsp:ptimespec):Integer;
+function _thr_rwlock_wrlock(rwlock:p_urwlock;tsp:p_timespec):Integer;
 begin
  if (_thr_rwlock_trywrlock(rwlock)=0) then
   Exit(0);
@@ -291,7 +291,7 @@ begin
  Exit(_umtx_op_err(mtx,UMTX_OP_MUTEX_LOCK,0,nil,nil));
 end;
 
-function __thr_umutex_timedlock(mtx:p_umutex;id:DWORD;ets:ptimespec):Integer;
+function __thr_umutex_timedlock(mtx:p_umutex;id:DWORD;ets:p_timespec):Integer;
 var
  timo,cts:timespec;
  owner:DWORD;
@@ -386,7 +386,7 @@ begin
  Exit(_umtx_op_err(mtx,UMTX_OP_SET_CEILING,ceiling,oldceiling,nil));
 end;
 
-function _thr_umtx_wait(mtx:Pointer;id:QWORD;timeout:ptimespec):Integer;
+function _thr_umtx_wait(mtx:Pointer;id:QWORD;timeout:p_timespec):Integer;
 begin
  if (timeout<>nil) and
     ((timeout^.tv_sec<0) or ((timeout^.tv_sec=0) and (timeout^.tv_nsec<=0))) then
@@ -394,7 +394,7 @@ begin
  Exit(_umtx_op_err(mtx,UMTX_OP_WAIT,id,nil,timeout));
 end;
 
-function _thr_umtx_wait_uint(mtx:Pointer;id:DWORD;timeout:ptimespec;shared:Integer):Integer;
+function _thr_umtx_wait_uint(mtx:Pointer;id:DWORD;timeout:p_timespec;shared:Integer):Integer;
 begin
  if (timeout<>nil) and
     ((timeout^.tv_sec<0) or ((timeout^.tv_sec=0) and (timeout^.tv_nsec<=0))) then
@@ -406,10 +406,10 @@ begin
   Exit(_umtx_op_err(mtx,UMTX_OP_WAIT_UINT_PRIVATE,id,nil,timeout));
 end;
 
-function _thr_umtx_timedwait_uint(mtx:Pointer;id:DWORD;clockid:Integer;abstime:ptimespec;shared:Integer):Integer;
+function _thr_umtx_timedwait_uint(mtx:Pointer;id:DWORD;clockid:Integer;abstime:p_timespec;shared:Integer):Integer;
 var
  ts,ts2:timespec;
- tsp:ptimespec;
+ tsp:p_timespec;
 begin
  if (abstime<>nil) then
  begin
@@ -441,7 +441,7 @@ begin
  FillChar(cv^,SizeOf(ucond),0);
 end;
 
-function _thr_ucond_wait(cv:p_ucond;m:p_umutex;timeout:ptimespec;flags:Integer):Integer;
+function _thr_ucond_wait(cv:p_ucond;m:p_umutex;timeout:p_timespec;flags:Integer):Integer;
 var
  curthread:p_pthread;
 begin
@@ -469,12 +469,12 @@ begin
  Exit(_umtx_op_err(cv,UMTX_OP_CV_BROADCAST,0,nil,nil));
 end;
 
-function __thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:ptimespec):Integer; inline;
+function __thr_rwlock_rdlock(rwlock:p_urwlock;flags:Integer;tsp:p_timespec):Integer; inline;
 begin
  Exit(_umtx_op_err(rwlock,UMTX_OP_RW_RDLOCK,flags,nil,tsp));
 end;
 
-function __thr_rwlock_wrlock(rwlock:p_urwlock;tsp:ptimespec):Integer; inline;
+function __thr_rwlock_wrlock(rwlock:p_urwlock;tsp:p_timespec):Integer; inline;
 begin
  Exit(_umtx_op_err(rwlock,UMTX_OP_RW_WRLOCK,0,nil,tsp));
 end;

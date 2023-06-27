@@ -13,9 +13,9 @@ procedure umtx_init(var umtx:umtx); inline;
 function  umtx_owner(var umtx:umtx):QWORD; inline;
 function  umtx_lock(var umtx:umtx;id:QWORD):Integer; inline;
 function  umtx_trylock(var umtx:umtx;id:QWORD):Integer; inline;
-function  umtx_timedlock(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
+function  umtx_timedlock(var umtx:umtx;id:QWORD;timeout:p_timespec):Integer; inline;
 function  umtx_unlock(var umtx:umtx;id:QWORD):Integer; inline;
-function  umtx_wait(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
+function  umtx_wait(var umtx:umtx;id:QWORD;timeout:p_timespec):Integer; inline;
 function  umtx_wake(var umtx:umtx;nr_wakeup:Integer):Integer; inline;
 
 function  _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
@@ -57,7 +57,7 @@ begin
  end;
 end;
 
-function umtx_timedlock(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
+function umtx_timedlock(var umtx:umtx;id:QWORD;timeout:p_timespec):Integer; inline;
 begin
  Result:=0;
  if (System.InterlockedCompareExchange64(umtx.u_owner,id,UMTX_UNOWNED)=0) then
@@ -75,7 +75,7 @@ begin
  end;
 end;
 
-function umtx_wait(var umtx:umtx;id:QWORD;timeout:ptimespec):Integer; inline;
+function umtx_wait(var umtx:umtx;id:QWORD;timeout:p_timespec):Integer; inline;
 begin
  Result:=_umtx_op(@umtx,UMTX_OP_WAIT,id,nil,timeout)
 end;

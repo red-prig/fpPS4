@@ -24,7 +24,7 @@ procedure _cv_wait_unlock(cvp:p_cv;lock:Pointer);
 function  _cv_wait_sig(cvp:p_cv;lock:Pointer):Integer;
 function  _cv_timedwait(cvp:p_cv;lock:Pointer;timo:Int64):Integer;
 function  _cv_timedwait_sig(cvp:p_cv;lock:Pointer;timo:Int64):Integer;
-function  _cv_timedwait_sig_proctime(cvp:p_cv;lock:Pointer;timeout:ptimespec):Integer;
+function  _cv_timedwait_sig_proctime(cvp:p_cv;lock:Pointer;timeout:p_timespec):Integer;
 procedure cv_signal(cvp:p_cv);
 procedure cv_signalto(cvp:p_cv;td:p_kthread);
 procedure cv_broadcastpri(cvp:p_cv;pri:Integer);
@@ -217,7 +217,7 @@ begin
  lc_lock(lock);
 end;
 
-function _cv_timedwait_sig_proctime(cvp:p_cv;lock:Pointer;timeout:ptimespec):Integer;
+function _cv_timedwait_sig_proctime(cvp:p_cv;lock:Pointer;timeout:p_timespec):Integer;
 var
  tv,ts,ts2:Int64;
 begin

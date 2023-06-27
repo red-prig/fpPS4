@@ -301,7 +301,7 @@ procedure THR_CRITICAL_LEAVE(thr:p_pthread); inline;
 
 function  THR_UMUTEX_TRYLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
 function  THR_UMUTEX_LOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
-function  THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:ptimespec):Integer; inline;
+function  THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:p_timespec):Integer; inline;
 function  THR_UMUTEX_UNLOCK(thr:p_pthread;lck:p_umutex):Integer; inline;
 
 procedure THR_LOCK_ACQUIRE(thr:p_pthread;lck:p_umutex); inline;
@@ -380,7 +380,7 @@ begin
  Result:=_thr_umutex_lock(lck,TID(thr));
 end;
 
-function THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:ptimespec):Integer; inline;
+function THR_UMUTEX_TIMEDLOCK(thr:p_pthread;lck:p_umutex;timo:p_timespec):Integer; inline;
 begin
  Result:=_thr_umutex_timedlock(lck,TID(thr),timo);
 end;

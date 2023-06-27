@@ -17,12 +17,12 @@ procedure calcru_proc(user,syst:PInt64);
 procedure get_process_cputime(time:PInt64);
 procedure calcru_thread(user,syst:PInt64);
 procedure get_thread_cputime(time:PInt64);
-procedure gettimezone(z:Ptimezone);
-procedure getadjtime(tv:ptimeval);
+procedure gettimezone(z:p_timezone);
+procedure getadjtime(tv:p_timeval);
 
 function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
-function  kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
-function  kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+function  kern_clock_gettime(clock_id:Integer;tp:p_timespec):Integer;
+function  kern_clock_getres(clock_id:Integer;tp:p_timespec):Integer;
 
 implementation
 
@@ -142,7 +142,7 @@ begin
  time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
 end;
 
-procedure gettimezone(z:Ptimezone);
+procedure gettimezone(z:p_timezone);
 var
  TZInfo:TTimeZoneInformation;
  tzi:DWORD;
@@ -162,7 +162,7 @@ begin
  end;
 end;
 
-procedure getadjtime(tv:ptimeval);
+procedure getadjtime(tv:p_timeval);
 var
  STA:SYSTEM_QUERY_TIME_ADJUST_INFORMATION;
  R:DWORD;
@@ -245,7 +245,7 @@ begin
  end;
 end;
 
-function kern_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer;
+function kern_clock_gettime(clock_id:Integer;tp:p_timespec):Integer;
 var
  time:Int64;
 begin
@@ -258,7 +258,7 @@ begin
  end;
 end;
 
-function kern_clock_getres(clock_id:Integer;tp:Ptimespec):Integer;
+function kern_clock_getres(clock_id:Integer;tp:p_timespec):Integer;
 begin
  Result:=0;
 

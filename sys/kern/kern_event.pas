@@ -37,7 +37,7 @@ procedure kqueue_task      (arg:Pointer;pending:Integer);
 function  kqueue_scan      (kq:p_kqueue;
                             maxevents:Integer;
                             k_ops:p_kevent_copyops;
-                            tsp:ptimespec;
+                            tsp:p_timespec;
                             keva:p_kevent):Integer;
 procedure kqueue_wakeup    (kq:p_kqueue);
 function  kqueue_fo_find   (filt:Integer):p_filterops;
@@ -117,7 +117,9 @@ uses
  kern_sx,
  vfs_subr,
  subr_hash,
- vsys_generic;
+ vsys_generic,
+ kern_callout,
+ kern_timeout;
 
 //static MALLOC_DEFINE(M_KQUEUE, 'kqueue', 'memory for kqueue system');
 
@@ -616,9 +618,9 @@ end;
 procedure filt_timerexpire(knx:Pointer);
 var
  kn:p_knote;
+ calloutp:p_callout;
 begin
  kn:=knx;
- //struct callout *calloutp;
 
  Inc(kn^.kn_kevent.data);
  KNOTE_ACTIVATE(kn, 0); { XXX - handle locking }
@@ -632,8 +634,8 @@ begin
   }
  if ((kn^.kn_flags and EV_ONESHOT)<>EV_ONESHOT) then
  begin
-  //calloutp:=kn^.kn_hook;
-  //callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata) - 1, @filt_timerexpire, kn);
+  calloutp:=kn^.kn_hook;
+  callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata) - 1, @filt_timerexpire, kn);
  end;
 end;
 
@@ -641,9 +643,9 @@ end;
  * data contains amount of time to sleep, in milliseconds
  }
 function filt_timerattach(kn:p_knote):Integer;
+var
+ calloutp:p_callout;
 begin
- //struct callout *calloutp;
-
  System.InterlockedIncrement(kq_ncallouts);
 
  if (kq_ncallouts >= kq_calloutmax) then
@@ -655,21 +657,21 @@ begin
  kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  { automatically set }
  kn^.kn_status:=kn^.kn_status and (not KN_DETACHED);  { knlist_add usually sets it }
 
- //calloutp:=malloc(sizeof(calloutp), M_KQUEUE, M_WAITOK);
- //callout_init(calloutp, CALLOUT_MPSAFE);
- //kn^.kn_hook:=calloutp;
- //callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata), @filt_timerexpire, kn);
+ calloutp:=AllocMem(SizeOf(t_callout));
+ callout_init(calloutp, CALLOUT_MPSAFE);
+ kn^.kn_hook:=calloutp;
+ callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata), @filt_timerexpire, kn);
 
  Exit(0);
 end;
 
 procedure filt_timerdetach(kn:p_knote);
+var
+ calloutp:p_callout;
 begin
- //struct callout *calloutp;
-
- //calloutp:=(struct callout *)kn^.kn_hook;
- //callout_drain(calloutp);
- //free(calloutp, M_KQUEUE);
+ calloutp:=kn^.kn_hook;
+ callout_drain(calloutp);
+ FreeMem(calloutp);
 
  System.InterlockedDecrement(kq_ncallouts);
  kn^.kn_status:=kn^.kn_status or KN_DETACHED; { knlist_remove usually clears it }
@@ -842,7 +844,7 @@ type
   nchanges  :Integer;
   eventlist :p_kevent;
   nevents   :Integer;
-  timeout   :ptimespec;
+  timeout   :p_timespec;
  end;
 
 {
@@ -887,7 +889,7 @@ function kern_kevent(fd:Integer;
                      nchanges:Integer;
                      nevents:Integer;
                      k_ops:p_kevent_copyops;
-                     timeout:ptimespec):Integer;
+                     timeout:p_timespec):Integer;
 label
  done_norel,
  done;
@@ -966,7 +968,7 @@ function sys_kevent(fd:Integer;
                     timeout:Pointer):Integer;
 var
  ts:timespec;
- tsp:Ptimespec;
+ tsp:p_timespec;
  error:Integer;
  uap:t_kevent_args;
  k_ops:t_kevent_copyops;
@@ -1507,7 +1509,7 @@ end;
 function kqueue_scan(kq:p_kqueue;
                      maxevents:Integer;
                      k_ops:p_kevent_copyops;
-                     tsp:ptimespec;
+                     tsp:p_timespec;
                      keva:p_kevent):Integer;
 label
  done,
