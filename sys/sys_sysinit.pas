@@ -16,6 +16,7 @@ uses
  kern_thr,
  kern_thread,
  kern_sig,
+ kern_timeout,
  kern_umtx,
  kern_namedobj,
  vmount,
@@ -61,6 +62,7 @@ begin
  threadinit;
  siginit;
  umtxq_sysinit;
+ kern_timeout_init;
  named_table_init;
  vmountinit;
  fd_table_init;
@@ -69,7 +71,7 @@ begin
  selectinit;
  vntblinit;
  nameiinit;
- knote_init();
+ knote_init;
  vfs_event_init;
  devfs_mtx_init;
  devfs_devs_init;

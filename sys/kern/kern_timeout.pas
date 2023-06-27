@@ -6,11 +6,7 @@ unit kern_timeout;
 interface
 
 uses
- windows,
-
  mqueue,
- LFQueue,
- md_sleep,
  kern_synch,
  subr_sleepqueue,
  kern_thr,
@@ -18,20 +14,18 @@ uses
  kern_rwlock,
  kern_callout;
 
-type
- p_callout_cpu=^t_callout_cpu;
- t_callout_cpu=record
-  cc_lock    :mtx;
-  cc_curr    :p_callout;
-  cc_calllist:TAILQ_HEAD;
-  cc_callfree:TAILQ_HEAD;
-  cc_cancel  :Integer;
-  cc_waiting :Integer;
- end;
+procedure kern_timeout_init();
+
+procedure CC_LOCK(cc:p_callout_cpu);
+procedure CC_UNLOCK(cc:p_callout_cpu);
+procedure CC_LOCK_ASSERT(cc:p_callout_cpu);
+function  callout_lock():p_callout_cpu;
+procedure callout_cc_del(c:p_callout;cc:p_callout_cpu);
 
 procedure callout_init (c:p_callout;mpsafe:Integer);
 procedure _callout_init_lock(c:p_callout;lock:Pointer;flags:Integer);
-procedure callout_done(c:p_callout);
+
+procedure softclock_call_cc(c:p_callout;cc:p_callout_cpu);
 
 function  _callout_stop_safe(c:p_callout;safe:Integer):Integer;
 function  callout_reset_on(c:p_callout;to_ticks:Int64;ftn:t_callout_func;arg:Pointer):Integer;
@@ -46,13 +40,10 @@ function  callout_reset_curcpu(c:p_callout;on_tick:Int64;fn:t_callout_func;arg:P
 implementation
 
 uses
- kern_thread;
+ md_timeout;
 
 var
  timeout_cpu:t_callout_cpu;
-
- timeout_thr:p_kthread=nil;
- timeout_new:TIntrusiveMPSCQueue;
 
  rw_giant:Pointer=nil;
 
@@ -63,21 +54,10 @@ begin
  TAILQ_INIT(@cc^.cc_callfree);
 end;
 
-procedure kern_timeout_callwheel_init();
+procedure kern_timeout_init();
 begin
  callout_cpu_init(@timeout_cpu);
-end;
-
-procedure softclock(arg:Pointer); forward;
-
-procedure start_softclock();
-var
- r:Integer;
-begin
- timeout_new.Create;
-
- r:=kthread_add(@softclock,nil,@timeout_thr,'softclock');
- Assert(r=0,'softclock');
+ md_start_softclock();
 end;
 
 procedure callout_init(c:p_callout;mpsafe:Integer);
@@ -91,8 +71,6 @@ begin
   c^.c_lock :=@rw_giant;
   c^.c_flags:=CALLOUT_RWLOCK;
  end;
- //
- c^.c_timer:=CreateWaitableTimer(nil,true,nil);
 end;
 
 procedure _callout_init_lock(c:p_callout;lock:Pointer;flags:Integer);
@@ -103,13 +81,6 @@ begin
  Assert((lock<>nil) or ((flags and CALLOUT_RETURNUNLOCKED)=0),'callout_init_lock: CALLOUT_RETURNUNLOCKED with no lock');
  Assert(lock=nil,'invalid lock');
  c^.c_flags:=flags and (CALLOUT_RETURNUNLOCKED or CALLOUT_SHAREDLOCK);
- //
- c^.c_timer:=CreateWaitableTimer(nil,true,nil);
-end;
-
-procedure callout_done(c:p_callout);
-begin
- CloseHandle(c^.c_timer);
 end;
 
 procedure CC_LOCK(cc:p_callout_cpu); inline;
@@ -133,20 +104,6 @@ begin
  CC_LOCK(Result);
 end;
 
-Procedure wt_timer_add(c:p_callout;cc:p_callout_cpu); forward;
-
-procedure callout_new_inserted(c:p_callout;cc:p_callout_cpu);
-begin
- if (timeout_thr=curkthread) then
- begin
-  wt_timer_add(c,cc);
- end else
- begin
-  timeout_new.Push(c);
-  wakeup_td(timeout_thr);
- end;
-end;
-
 procedure callout_cc_add(c:p_callout;cc:p_callout_cpu;to_ticks:Int64;func:t_callout_func;arg:Pointer);
 begin
  CC_LOCK_ASSERT(cc);
@@ -163,11 +120,12 @@ begin
 
  TAILQ_INSERT_TAIL(@cc^.cc_calllist,c,@c^.c_links);
 
- callout_new_inserted(c,cc);
+ md_callout_new_inserted(c,cc);
 end;
 
 procedure callout_cc_del(c:p_callout;cc:p_callout_cpu);
 begin
+ md_callout_done(c);
  if ((c^.c_flags and CALLOUT_LOCAL_ALLOC)=0) then Exit;
  c^.c_func:=nil;
  TAILQ_INSERT_TAIL(@cc^.cc_callfree,c,@c^.c_links);
@@ -295,71 +253,6 @@ begin
  end;
 end;
 
-procedure wt_event(arg:Pointer;dwTimerLowValue,dwTimerHighValue:DWORD); stdcall;
-var
- c:p_callout;
- cc:p_callout_cpu;
-begin
- if (arg=nil) then Exit;
- c:=arg;
- cc:=callout_lock();
- softclock_call_cc(c,cc);
- CC_UNLOCK(cc);
-end;
-
-Procedure wt_timer_add(c:p_callout;cc:p_callout_cpu);
-var
- f:Int64;
- b:Boolean;
-begin
- f:=-c^.c_time;
- b:=false;
-
- if ((c^.c_flags and CALLOUT_PENDING)<>0) then
- begin
-  b:=SetWaitableTimer(c^.c_timer,f,0,@wt_event,c,false);
- end;
-
- if not b then
- begin
-  if (cc^.cc_waiting<>0) then
-  begin
-   cc^.cc_waiting:=0;
-   CC_UNLOCK(cc);
-   wakeup(@cc^.cc_waiting);
-   CC_LOCK(cc);
-  end;
-
-  Assert(((c^.c_flags and CALLOUT_LOCAL_ALLOC)=0) or (c^.c_flags=CALLOUT_LOCAL_ALLOC),'corrupted callout');
-
-  if ((c^.c_flags and CALLOUT_LOCAL_ALLOC)<>0) then
-  begin
-   callout_cc_del(c, cc);
-  end;
- end;
-end;
-
-procedure softclock(arg:Pointer);
-var
- c:p_callout;
- cc:p_callout_cpu;
-begin
- repeat
-  cc:=nil;
-  c:=nil;
-
-  while timeout_new.Pop(c) do
-  begin
-   CC_LOCK(cc);
-   wt_timer_add(c,cc);
-   CC_UNLOCK(cc);
-  end;
-
-  msleep_td(0);
- until false;
- kthread_exit();
-end;
-
 {
  * New interface; clients allocate their own callout structures.
  *
@@ -385,7 +278,7 @@ begin
 
  cc:=callout_lock();
 
- CancelWaitableTimer(c^.c_timer);
+ md_callout_reset(c);
 
  if (cc^.cc_curr=c) then
  begin
@@ -441,7 +334,7 @@ begin
  again:
  cc:=callout_lock();
 
- CancelWaitableTimer(c^.c_timer);
+ md_callout_stop(c);
 
  if ((c^.c_flags and CALLOUT_PENDING)=0) then
  begin

@@ -7,7 +7,8 @@ interface
 
 uses
  mqueue,
- LFQueue;
+ LFQueue,
+ kern_mtx;
 
 type
  t_callout_func=procedure(arg:Pointer);
@@ -32,6 +33,17 @@ const
  CALLOUT_RETURNUNLOCKED=$0010; // handler returns with mtx unlocked
  CALLOUT_SHAREDLOCK    =$0020; // callout lock held in shared mode
  CALLOUT_RWLOCK        =$0040; // callout used rw lock
+
+type
+ p_callout_cpu=^t_callout_cpu;
+ t_callout_cpu=record
+  cc_lock    :mtx;
+  cc_curr    :p_callout;
+  cc_calllist:TAILQ_HEAD;
+  cc_callfree:TAILQ_HEAD;
+  cc_cancel  :Integer;
+  cc_waiting :Integer;
+ end;
 
 implementation
 

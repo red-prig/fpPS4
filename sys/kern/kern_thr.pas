@@ -129,14 +129,25 @@ const
 type
  p_teb=^teb;
  teb=packed record
-  _align1:array[0..23] of QWORD;
-  wow64 :Pointer;                 //0xC0
+  SEH    :Pointer;
+  stack  :Pointer;
+  sttop  :Pointer;
+  _align1:array[0..20] of QWORD;
+  wow64  :Pointer;                 //0xC0
   _align2:array[0..198] of QWORD;
-  thread:Pointer;                 //0x700
-  tcb   :Pointer;                 //0x708
-  iflag :Integer;                 //0x710
+  thread :Pointer;                 //0x700
+  tcb    :Pointer;                 //0x708
+  iflag  :Integer;                 //0x710
  end;
 
+const
+ teb_wow64 =ptruint(@teb(nil^).wow64);
+ teb_thread=ptruint(@teb(nil^).thread);
+
+ {$IF teb_wow64 <>$0C0}{$STOP teb_wow64 <>$0C0}{$ENDIF}
+ {$IF teb_thread<>$700}{$STOP teb_thread<>$700}{$ENDIF}
+
+type
  t_td_name=array[0..31] of AnsiChar;
 
  pp_kthread=^p_kthread;

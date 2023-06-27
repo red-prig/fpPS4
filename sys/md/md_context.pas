@@ -344,7 +344,7 @@ end;
 
 function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
 begin
- Result:=(rsp<=QWORD(td^.td_kstack)) and (rsp>(QWORD(td^.td_kstack)-SYS_STACK_SIZE));
+ Result:=(rsp<=QWORD(td^.td_kstack)) and (rsp>(QWORD(td^.td_ksttop)));
 end;
 
 function IS_SYSCALL(rip:qword):Boolean;
@@ -363,7 +363,11 @@ end;
 function get_top_mem_td(td:p_kthread;size,align:qword):Pointer;
 begin
  Result:=System.Align(td^.td_ksttop,align);
- if ((Result+size)>=SPtr) then Exit(nil);
+
+ if (SPtr>td^.td_ksttop) and (SPtr<=td^.td_kstack) then
+ begin
+  if ((Result+size)>=SPtr) then Exit(nil);
+ end;
 end;
 
 procedure _apc_null(dwParam:PTRUINT); stdcall;

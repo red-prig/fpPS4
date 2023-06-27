@@ -117,9 +117,16 @@ end;
 
 //
 
+function _thread_null(parameter:pointer):ptrint; register;
+begin
+ Result:=0;
+end;
+
 procedure threadinit;
 begin
  FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
+ //init internals
+ BeginThread(@_thread_null);
 end;
 
 {
@@ -312,6 +319,44 @@ begin
  HAMT_get_value32(i,@Result);
 end;
 
+procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
+var
+ td:p_kthread;
+ sttop:Pointer;
+ stack:Pointer;
+ name:shortstring;
+begin
+ //check stack limits
+ td:=curkthread;
+ if (td<>nil) then
+ begin
+  //in kstack?
+  if (SPtr>td^.td_ksttop) and (SPtr<=td^.td_kstack) then
+  begin
+   //save
+   sttop:=td^.td_teb^.sttop;
+   stack:=td^.td_teb^.stack;
+   //set kstack
+   td^.td_teb^.sttop:=td^.td_ksttop;
+   td^.td_teb^.stack:=td^.td_kstack;
+  end else
+  begin
+   //dont change
+   td:=nil;
+  end;
+ end;
+
+ name:=shortstring(prefix)+shortstring(newtd^.td_name);
+ SetThreadDebugName(newtd^.td_tid,name);
+
+ if (td<>nil) then
+ begin
+  //restore
+  td^.td_teb^.sttop:=sttop;
+  td^.td_teb^.stack:=stack;
+ end;
+end;
+
 procedure before_start(td:p_kthread);
 begin
  //init this
@@ -461,7 +506,7 @@ begin
  begin
   Move(name^,newtd^.td_name,SizeOf(t_td_name));
  end;
- SetThreadDebugName(newtd^.td_handle,'ps4:'+newtd^.td_name);
+ KernSetThreadDebugName(newtd,'ps4:');
 
  sched_fork_thread(td,newtd);
 
@@ -494,8 +539,7 @@ function kthread_add(func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
 var
  td:p_kthread;
  newtd:p_kthread;
- stack_base:Pointer;
- stack_size:QWORD;
+ stack:stack_t;
 
  n:Integer;
 begin
@@ -514,12 +558,12 @@ begin
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
 
- stack_base:=newtd^.td_kstack;
- stack_size:=(ptruint(newtd^.td_kstack)-ptruint(newtd^.td_ksttop));
+ stack.ss_sp  :=newtd^.td_ksttop;
+ stack.ss_size:=(ptruint(newtd^.td_kstack)-ptruint(newtd^.td_ksttop));
 
  n:=cpu_thread_create(newtd,
-                      stack_base,
-                      stack_size,
+                      stack.ss_sp,
+                      stack.ss_size,
                       func,
                       arg);
 
@@ -528,6 +572,8 @@ begin
   thread_free(newtd);
   Exit(EINVAL);
  end;
+
+ cpu_set_upcall_kse(newtd,func,arg,@stack);
 
  if (td<>nil) then
  begin
@@ -542,7 +588,7 @@ begin
  begin
   Move(name^,newtd^.td_name,SizeOf(t_td_name));
  end;
- SetThreadDebugName(newtd^.td_handle,newtd^.td_name);
+ KernSetThreadDebugName(newtd,'kern:');
 
  sched_fork_thread(td,newtd);
 
@@ -910,7 +956,7 @@ begin
  thread_lock(td);
 
  td^.td_name:=name;
- SetThreadDebugName(td^.td_handle,'ps4:'+name);
+ KernSetThreadDebugName(td,'ps4:');
 
  thread_unlock(td);
 
