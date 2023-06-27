@@ -608,6 +608,28 @@ function NtQueryPerformanceCounter(
           Frequency:PLARGE_INTEGER
          ):DWORD; stdcall; external 'ntdll';
 
+function NtCreateTimer(
+          TimerHandle     :PHandle;
+          DesiredAccess   :ACCESS_MASK;
+          ObjectAttributes:Pointer;
+          TimerType       :DWORD
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtSetTimer(
+          TimerHandle     :THandle;
+          DueTime         :PLARGE_INTEGER;
+          TimerApcRoutine :Pointer;
+          TimerContext    :Pointer;
+          ResumeTimer     :Boolean;
+          Period          :LONG;
+          PreviousState   :PBOOLEAN
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtCancelTimer(
+          TimerHandle     :THandle;
+          CurrentState    :PBOOLEAN
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtQueryTimerResolution(
           MinimumResolution:PULONG;
           MaximumResolution:PULONG;

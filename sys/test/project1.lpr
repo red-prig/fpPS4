@@ -446,6 +446,7 @@ begin
  writeln('_timerexpire');
 
  callout_reset_curcpu(calloutp, 1000*1000*UNIT_PER_USEC-1, @_timerexpire, calloutp);
+ //callout_drain(calloutp);
 end;
 
 procedure test_thread; sysv_abi_default;

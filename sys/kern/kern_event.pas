@@ -259,10 +259,15 @@ function  filt_procattach (kn:p_knote):Integer;                  forward;
 procedure filt_procdetach (kn:p_knote);                          forward;
 function  filt_proc       (kn:p_knote;hint:QWORD):Integer;       forward;
 function  filt_fileattach (kn:p_knote):Integer;                  forward;
-procedure filt_timerexpire(knx:Pointer);                         forward;
+
 function  filt_timerattach(kn:p_knote):Integer;                  forward;
 procedure filt_timerdetach(kn:p_knote);                          forward;
 function  filt_timer      (kn:p_knote;hint:QWORD):Integer;       forward;
+
+function  filt_hr_timerattach(kn:p_knote):Integer;               forward;
+procedure filt_hr_timerdetach(kn:p_knote);                       forward;
+function  filt_hr_timer      (kn:p_knote;hint:QWORD):Integer;    forward;
+
 function  filt_userattach (kn:p_knote):Integer;                  forward;
 procedure filt_userdetach (kn:p_knote);                          forward;
 function  filt_user       (kn:p_knote;hint:QWORD):Integer;       forward;
@@ -300,6 +305,14 @@ const
   f_event :@filt_timer;
  );
 
+ ht_timer_filtops:t_filterops=(
+  f_isfd  :0;
+  _align  :0;
+  f_attach:@filt_hr_timerattach;
+  f_detach:@filt_hr_timerdetach;
+  f_event :@filt_hr_timer;
+ );
+
  user_filtops:t_filterops=(
   f_isfd  :0;
   _align  :0;
@@ -333,29 +346,29 @@ type
  }
 var
  sysfilt_ops:array[0..EVFILT_SYSCOUNT-1] of t_sysfilt_ops=(
-  (fop:@file_filtops ;ref:0),   { EVFILT_READ                 }
-  (fop:@file_filtops ;ref:0),   { EVFILT_WRITE                }
-  (fop:@null_filtops ;ref:0),   { EVFILT_AIO                  }
-  (fop:@file_filtops ;ref:0),   { EVFILT_VNODE                }
-  (fop:@proc_filtops ;ref:0),   { EVFILT_PROC                 }
-  (fop:@sig_filtops  ;ref:0),   { EVFILT_SIGNAL               }
-  (fop:@timer_filtops;ref:0),   { EVFILT_TIMER                }
-  (fop:@null_filtops ;ref:0),   { former EVFILT_NETDEV        }
-  (fop:@fs_filtops   ;ref:0),   { EVFILT_FS                   }
-  (fop:@null_filtops ;ref:0),   { EVFILT_LIO                  }
-  (fop:@user_filtops ;ref:0),   { EVFILT_USER                 }
-  (fop:nil           ;ref:0),   { EVFILT_POLLING              } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_DISPLAY              } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_GRAPHICS_CORE        } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_HRTIMER              } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_UVD_TRAP             } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_VCE_TRAP             } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_SDMA_TRAP            } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_REG_EV               } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_GPU_EXCEPTION        } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_GPU_SYSTEM_EXCEPTION } //SCE
-  (fop:nil           ;ref:0),   { EVFILT_GPU_DBGGC_EV         } //SCE
-  (fop:nil           ;ref:0)    { EVFILT_CPUMODE              } //SCE
+  (fop:@file_filtops    ;ref:0),   { EVFILT_READ                 }
+  (fop:@file_filtops    ;ref:0),   { EVFILT_WRITE                }
+  (fop:@null_filtops    ;ref:0),   { EVFILT_AIO                  }
+  (fop:@file_filtops    ;ref:0),   { EVFILT_VNODE                }
+  (fop:@proc_filtops    ;ref:0),   { EVFILT_PROC                 }
+  (fop:@sig_filtops     ;ref:0),   { EVFILT_SIGNAL               }
+  (fop:@timer_filtops   ;ref:0),   { EVFILT_TIMER                }
+  (fop:@null_filtops    ;ref:0),   { former EVFILT_NETDEV        }
+  (fop:@fs_filtops      ;ref:0),   { EVFILT_FS                   }
+  (fop:@null_filtops    ;ref:0),   { EVFILT_LIO                  }
+  (fop:@user_filtops    ;ref:0),   { EVFILT_USER                 }
+  (fop:nil              ;ref:0),   { EVFILT_POLLING              } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_DISPLAY              } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_GRAPHICS_CORE        } //SCE
+  (fop:@ht_timer_filtops;ref:0),   { EVFILT_HRTIMER              } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_UVD_TRAP             } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_VCE_TRAP             } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_SDMA_TRAP            } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_REG_EV               } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_GPU_EXCEPTION        } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_GPU_SYSTEM_EXCEPTION } //SCE
+  (fop:nil              ;ref:0),   { EVFILT_GPU_DBGGC_EV         } //SCE
+  (fop:nil              ;ref:0)    { EVFILT_CPUMODE              } //SCE
  );
 
 {
@@ -654,7 +667,7 @@ begin
   Exit(ENOMEM);
  end;
 
- kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  { automatically set }
+ kn^.kn_flags :=kn^.kn_flags or EV_CLEAR;             { automatically set }
  kn^.kn_status:=kn^.kn_status and (not KN_DETACHED);  { knlist_add usually sets it }
 
  calloutp:=AllocMem(SizeOf(t_callout));
@@ -681,6 +694,69 @@ function filt_timer(kn:p_knote;hint:QWORD):Integer;
 begin
  Exit(ord(kn^.kn_data<>0));
 end;
+
+//
+
+procedure filt_hr_timerexpire(knx:Pointer);
+var
+ kn:p_knote;
+ calloutp:p_callout;
+begin
+ kn:=knx;
+
+ Inc(kn^.kn_kevent.data);
+ KNOTE_ACTIVATE(kn, 0);
+end;
+
+function filt_hr_timerattach(kn:p_knote):Integer;
+var
+ calloutp:p_callout;
+ hr_time:bintime;
+ hr_ts:timespec;
+begin
+ Result:=copyin(Pointer(kn^.kn_sdata),@hr_time,SizeOf(hr_time));
+ if (Result<>0) then Exit;
+
+ Result:=EINVAL;
+
+ if ((kn^.kn_kevent.flags and EV_ONESHOT)=0) then Exit(EINVAL);
+ if (hr_time.sec>=100) then Exit(EINVAL);
+
+ if (hr_time.sec=0) and (hr_time.frac<QWORD(1844674407370955)) then
+ begin
+  hr_time.frac:=1844674407370955;
+ end;
+
+ bintime2timespec(@hr_time,@hr_ts);
+
+ kn^.kn_flags :=kn^.kn_flags or EV_CLEAR;             { automatically set }
+ kn^.kn_status:=kn^.kn_status and (not KN_DETACHED);  { knlist_add usually sets it }
+
+ calloutp:=AllocMem(SizeOf(t_callout));
+ callout_init(calloutp, CALLOUT_MPSAFE);
+ kn^.kn_hook:=calloutp;
+ callout_reset_curcpu(calloutp, TIMESPEC_TO_UNIT(@hr_ts), @filt_hr_timerexpire, kn);
+
+ Exit(0);
+end;
+
+procedure filt_hr_timerdetach(kn:p_knote);
+var
+ calloutp:p_callout;
+begin
+ calloutp:=kn^.kn_hook;
+ callout_drain(calloutp);
+ FreeMem(calloutp);
+
+ kn^.kn_status:=kn^.kn_status or KN_DETACHED; { knlist_remove usually clears it }
+end;
+
+function filt_hr_timer(kn:p_knote;hint:QWORD):Integer;
+begin
+ Exit(ord(kn^.kn_data<>0));
+end;
+
+//
 
 function filt_userattach(kn:p_knote):Integer;
 begin
@@ -759,6 +835,8 @@ begin
    Assert(false,'filt_usertouch() - invalid type ('+IntToStr(_type)+')');
  end;
 end;
+
+//
 
 function kern_kqueue(pfd:PInteger;name:PAnsiChar):Integer;
 var

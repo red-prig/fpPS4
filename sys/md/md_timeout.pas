@@ -6,8 +6,8 @@ unit md_timeout;
 interface
 
 uses
- windows,
-
+ ntapi,
+ //
  LFQueue,
  md_sleep,
  kern_synch,
@@ -57,17 +57,23 @@ end;
 Procedure wt_timer_add(c:p_callout;cc:p_callout_cpu);
 var
  f:Int64;
- b:Boolean;
+ n:Integer;
 begin
  f:=-c^.c_time;
- b:=false;
+ n:=-1;
 
  if ((c^.c_flags and CALLOUT_PENDING)<>0) then
  begin
-  b:=SetWaitableTimer(c^.c_timer,f,0,@wt_event,c,false);
+  n:=NtSetTimer(c^.c_timer,
+                @f,
+                @wt_event,
+                c,
+                false,
+                0,
+                nil);
  end;
 
- if not b then
+ if (n<>0) then
  begin
   if (cc^.cc_waiting<>0) then
   begin
@@ -123,13 +129,20 @@ begin
 end;
 
 procedure md_callout_reset(c:p_callout);
+var
+ n:Integer;
 begin
  if (c^.c_timer=0) then
  begin
-  c^.c_timer:=CreateWaitableTimer(nil,true,nil);
+  n:=NtCreateTimer(
+      @c^.c_timer,
+      EVENT_ALL_ACCESS,
+      nil,
+      0);
+  Assert(n=0,'NtCreateTimer');
  end else
  begin
-  CancelWaitableTimer(c^.c_timer);
+  NtCancelTimer(c^.c_timer,nil);
  end;
 end;
 
@@ -137,7 +150,7 @@ procedure md_callout_stop(c:p_callout);
 begin
  if (c^.c_timer<>0) then
  begin
-  CancelWaitableTimer(c^.c_timer);
+  NtCancelTimer(c^.c_timer,nil);
  end;
 end;
 
@@ -145,7 +158,7 @@ procedure md_callout_done(c:p_callout);
 begin
  if (c^.c_timer<>0) then
  begin
-  CloseHandle(c^.c_timer);
+  NtClose(c^.c_timer);
   c^.c_timer:=0;
  end;
 end;
