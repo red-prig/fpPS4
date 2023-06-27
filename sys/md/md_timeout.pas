@@ -87,6 +87,8 @@ begin
 end;
 
 procedure md_callout_new_inserted(c:p_callout;cc:p_callout_cpu);
+var
+ n:Integer;
 begin
  if (timeout_thr=curkthread) then
  begin
@@ -94,7 +96,8 @@ begin
  end else
  begin
   timeout_new.Push(c);
-  wakeup_td(timeout_thr);
+  n:=wakeup_td(timeout_thr);
+  Assert(n=0,'md_callout_new_inserted');
  end;
 end;
 
@@ -109,7 +112,7 @@ begin
 
   while timeout_new.Pop(c) do
   begin
-   CC_LOCK(cc);
+   cc:=callout_lock();
    wt_timer_add(c,cc);
    CC_UNLOCK(cc);
   end;

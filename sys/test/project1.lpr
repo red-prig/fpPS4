@@ -437,6 +437,17 @@ begin
  end;
 end;
 
+procedure _timerexpire(arg:Pointer); sysv_abi_default;
+var
+ calloutp:p_callout;
+begin
+ calloutp:=arg;
+
+ writeln('_timerexpire');
+
+ callout_reset_curcpu(calloutp, 1000*1000*UNIT_PER_USEC-1, @_timerexpire, calloutp);
+end;
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
@@ -446,7 +457,16 @@ var
  i,t:Integer;
 
  uctx:ucontext_t;
+
+ calloutp:p_callout;
 begin
+
+ if (tid<>curkthread^.td_tid) then
+ begin
+  calloutp:=AllocMem(SizeOf(t_callout));
+  callout_init(calloutp, CALLOUT_MPSAFE);
+  callout_reset_curcpu(calloutp, 1000*1000*UNIT_PER_USEC, @_timerexpire, calloutp);
+ end;
 
  //SetTlsBase(Pointer(qword(1)));
 

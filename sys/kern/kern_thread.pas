@@ -605,7 +605,7 @@ begin
   Exit(EFAULT);
  end;
 
- newtdp^:=@newtd;
+ newtdp^:=newtd;
 end;
 
 function kern_thr_new(td:p_kthread;param:p_thr_param):Integer;

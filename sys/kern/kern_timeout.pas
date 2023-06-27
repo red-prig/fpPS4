@@ -34,8 +34,8 @@ function  callout_drain(c:p_callout):Integer;
 function  callout_stop(c:p_callout):Integer;
 procedure callout_init_mtx(c:p_callout;var mtx:mtx;flags:Integer);
 procedure callout_init_rw(c:p_callout;var rw:Pointer;flags:Integer);
-function  callout_reset(c:p_callout;on_tick:Int64;fn:t_callout_func;arg:Pointer):Integer;
-function  callout_reset_curcpu(c:p_callout;on_tick:Int64;fn:t_callout_func;arg:Pointer):Integer;
+function  callout_reset(c:p_callout;on_tick:Int64;fn,arg:Pointer):Integer;
+function  callout_reset_curcpu(c:p_callout;on_tick:Int64;fn,arg:Pointer):Integer;
 
 implementation
 
@@ -200,7 +200,7 @@ begin
  if ((c^.c_flags and CALLOUT_LOCAL_ALLOC)<>0) then
   c^.c_flags:=CALLOUT_LOCAL_ALLOC
  else
-  c^.c_flags:=c^.c_flags or (not CALLOUT_PENDING);
+  c^.c_flags:=c^.c_flags and (not CALLOUT_PENDING);
 
  cc^.cc_curr  :=c;
  cc^.cc_cancel:=0;
@@ -424,14 +424,14 @@ begin
  _callout_init_lock(c,@rw,flags or CALLOUT_RWLOCK);
 end;
 
-function callout_reset(c:p_callout;on_tick:Int64;fn:t_callout_func;arg:Pointer):Integer;
+function callout_reset(c:p_callout;on_tick:Int64;fn,arg:Pointer):Integer;
 begin
- Result:=callout_reset_on(c,on_tick,fn,arg);
+ Result:=callout_reset_on(c,on_tick,t_callout_func(fn),arg);
 end;
 
-function callout_reset_curcpu(c:p_callout;on_tick:Int64;fn:t_callout_func;arg:Pointer):Integer;
+function callout_reset_curcpu(c:p_callout;on_tick:Int64;fn,arg:Pointer):Integer;
 begin
- Result:=callout_reset_on(c,on_tick,fn,arg);
+ Result:=callout_reset_on(c,on_tick,t_callout_func(fn),arg);
 end;
 
 
