@@ -233,12 +233,13 @@ procedure vntblinit;
 var
  i:DWORD;
 begin
- desiredvnodes:=106497;
+ desiredvnodes:=10000;
  if (desiredvnodes > MAXVNODES_MAX) then
  begin
   desiredvnodes:=MAXVNODES_MAX;
  end;
  wantfreevnodes:=desiredvnodes div 4;
+
  mtx_init(mntid_mtx,'mntid');
  mtx_init(vnode_free_list_mtx,'vnode_free_list');
  {
@@ -273,16 +274,22 @@ begin
    Exit(ENOENT);
   end;
   if ((flags and MBF_MNTLSTLOCK)<>0) then
+  begin
    mtx_unlock(mountlist_mtx);
+  end;
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_MWAIT;
   msleep(mp, MNT_MTX(mp), PVFS or PDROP,'vfs_busy', 0);
   if ((flags and MBF_MNTLSTLOCK)<>0) then
+  begin
    mtx_lock(mountlist_mtx);
+  end;
   MNT_ILOCK(mp);
  end;
 
  if ((flags and MBF_MNTLSTLOCK)<>0) then
+ begin
   mtx_unlock(mountlist_mtx);
+ end;
 
  Inc(mp^.mnt_lockref);
  MNT_IUNLOCK(mp);
@@ -559,47 +566,48 @@ var
 begin
  //EVENTHANDLER_REGISTER(shutdown_pre_sync, kproc_shutdown, p, SHUTDOWN_PRI_FIRST);
 
- while FALSE do
+ //kproc_suspend_check(p);
+ mtx_lock(vnode_free_list_mtx);
+ if (freevnodes > wantfreevnodes) then
  begin
-  //kproc_suspend_check(p);
-  mtx_lock(vnode_free_list_mtx);
-  if (freevnodes > wantfreevnodes) then
-   vnlru_free(freevnodes - wantfreevnodes);
-  if (numvnodes <= desiredvnodes * 9 div 10) then
+  vnlru_free(freevnodes - wantfreevnodes);
+ end;
+ if (numvnodes <= desiredvnodes * 9 div 10) then
+ begin
+  vnlruproc_sig:=0;
+  wakeup(@vnlruproc_sig);
+  //
+  mtx_unlock(vnode_free_list_mtx);
+  Exit;
+ end;
+ mtx_unlock(vnode_free_list_mtx);
+
+ done:=0;
+ mtx_lock(mountlist_mtx);
+ mp:=TAILQ_FIRST(@mountlist);
+ While (mp<>nil) do
+ begin
+  if (vfs_busy(mp, MBF_NOWAIT or MBF_MNTLSTLOCK)<>0) then
   begin
-   vnlruproc_sig:=0;
-   wakeup(@vnlruproc_sig);
-   msleep(@vnlruproc_sig, @vnode_free_list_mtx, PVFS or PDROP, 'vlruwt', hz);
+   nmp:=TAILQ_NEXT(mp,@mp^.mnt_list);
    continue;
   end;
-  mtx_unlock(vnode_free_list_mtx);
-  done:=0;
+  vfslocked:=VFS_LOCK_GIANT(mp);
+  Inc(done,vlrureclaim(mp));
+  VFS_UNLOCK_GIANT(vfslocked);
   mtx_lock(mountlist_mtx);
-  mp:=TAILQ_FIRST(@mountlist);
-  While (mp<>nil) do
-  begin
-   if (vfs_busy(mp, MBF_NOWAIT or MBF_MNTLSTLOCK)<>0) then
-   begin
-    nmp:=TAILQ_NEXT(mp,@mp^.mnt_list);
-    continue;
-   end;
-   vfslocked:=VFS_LOCK_GIANT(mp);
-   Inc(done,vlrureclaim(mp));
-   VFS_UNLOCK_GIANT(vfslocked);
-   mtx_lock(mountlist_mtx);
-   nmp:=TAILQ_NEXT(mp,@mp^.mnt_list);
-   vfs_unbusy(mp);
-   //
-   mp:=nmp
-  end;
-  mtx_unlock(mountlist_mtx);
-  if (done=0) then
-  begin
-   Inc(vnlru_nowhere);
-   tsleep(@vnlruproc_sig, PPAUSE, 'vlrup', hz * 3);
-  end else
-   kern_yield(PRI_UNCHANGED);
+  nmp:=TAILQ_NEXT(mp,@mp^.mnt_list);
+  vfs_unbusy(mp);
+  //
+  mp:=nmp
  end;
+ mtx_unlock(mountlist_mtx);
+
+ if (done=0) then
+ begin
+  Inc(vnlru_nowhere);
+ end;
+
 end;
 
 function vtryrecycle(vp:p_vnode):Integer;
@@ -649,7 +657,8 @@ end;
 function getnewvnode_wait(suspended:Integer):Integer;
 begin
  mtx_assert(vnode_free_list_mtx);
- if (numvnodes > desiredvnodes) then
+
+ if (curkthread<>nil) and (numvnodes > desiredvnodes) then
  begin
   if (suspended<>0) then
   begin
@@ -658,7 +667,9 @@ begin
     * deadlock here, so allocate new vnode anyway.
     }
    if (freevnodes > wantfreevnodes) then
+   begin
     vnlru_free(freevnodes - wantfreevnodes);
+   end;
    Exit(0);
   end;
   if (vnlruproc_sig=0) then
@@ -737,7 +748,9 @@ begin
   * Lend our context to reclaim vnodes if they've exceeded the max.
   }
  if (freevnodes > wantfreevnodes) then
+ begin
   vnlru_free(1);
+ end;
 
  susp:=ord(False);
  if (mp<>nil) then
@@ -2001,7 +2014,9 @@ begin
  if (vp^.v_usecount > 1) or (((vp^.v_iflag and VI_DOINGINACT)<>0) and (vp^.v_usecount=1)) then
  begin
   if (func=VPUTX_VPUT) then
+  begin
    VOP_UNLOCK(vp, 0);
+  end;
   v_decr_usecount(vp);
   Exit;
  end;
@@ -2052,10 +2067,14 @@ begin
  if (error=0) then
  begin
   if ((vp^.v_iflag and VI_OWEINACT)<>0) then
+  begin
    vinactive(vp);
+  end;
 
   if (func<>VPUTX_VUNREF) then
+  begin
    VOP_UNLOCK(vp, 0);
+  end;
  end;
  vdropl(vp);
 end;
@@ -2148,14 +2167,19 @@ var
  active:Integer;
 begin
  ASSERT_VI_LOCKED(vp,'vdropl');
+
  if (vp^.v_holdcnt <= 0) then
+ begin
   Assert(false,'vdrop: holdcnt');
+ end;
+
  Dec(vp^.v_holdcnt);
  if (vp^.v_holdcnt > 0) then
  begin
   VI_UNLOCK(vp);
   Exit;
  end;
+
  if ((vp^.v_iflag and VI_DOOMED)=0) then
  begin
   {
@@ -2189,6 +2213,7 @@ begin
   VI_UNLOCK(vp);
   Exit;
  end;
+
  {
   * The vnode has been marked for destruction, so free it.
   }
@@ -2226,7 +2251,7 @@ begin
 
  //mtx_destroy(BO_MTX(bo));
 
- FreeMem(vp);
+ //FreeMem(vp);
 end;
 
 {
@@ -2476,8 +2501,8 @@ begin
  {
   * Don't vgonel if we're already doomed.
   }
- if ((vp^.v_iflag and VI_DOOMED)<>0) then
-  Exit;
+ if ((vp^.v_iflag and VI_DOOMED)<>0) then Exit;
+
  vp^.v_iflag:=vp^.v_iflag or VI_DOOMED;
 
  {
@@ -2503,13 +2528,18 @@ begin
   * deactivated before being reclaimed.
   }
  if (active<>0) then
+ begin
   VOP_CLOSE(vp, FNONBLOCK);
+ end;
 
  if (oweinact<>0) or (active<>0) then
  begin
   VI_LOCK(vp);
+
   if ((vp^.v_iflag and VI_DOINGINACT)=0) then
+  begin
    vinactive(vp);
+  end;
 
   VI_UNLOCK(vp);
  end;
@@ -2519,7 +2549,9 @@ begin
   * Reclaim the vnode.
   }
  if (VOP_RECLAIM(vp)<>0) then
+ begin
   Assert(false,'vgone: cannot reclaim');
+ end;
 
  //if (mp<>nil) then
  // vn_finished_secondary_write(mp);

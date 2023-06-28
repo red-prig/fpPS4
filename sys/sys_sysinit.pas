@@ -5,18 +5,19 @@ unit sys_sysinit;
 
 interface
 
-procedure sys_update;
 procedure sys_init;
 
 implementation
 
 uses
+ time,
  kern_time,
  subr_sleepqueue,
  kern_thr,
  kern_thread,
  kern_sig,
  kern_timeout,
+ kern_synch,
  kern_umtx,
  kern_namedobj,
  vmount,
@@ -37,10 +38,25 @@ uses
  kern_descrip,
  vfs_mountroot;
 
+var
+ daemon_thr:p_kthread;
+
 //Daemon for a separate thread
-procedure sys_update;
+procedure sys_daemon(arg:Pointer);
 begin
- vnlru_proc;
+ repeat
+  vnlru_proc;
+  pause('sys_daemon',hz);
+ until false;
+ kthread_exit();
+end;
+
+procedure sys_daemon_init;
+var
+ n:Integer;
+begin
+ n:=kthread_add(@sys_daemon,nil,@daemon_thr,'sys_daemon');
+ Assert(n=0,'sys_daemon');
 end;
 
 procedure module_init;
@@ -76,6 +92,7 @@ begin
  devfs_mtx_init;
  devfs_devs_init;
  module_init;
+ sys_daemon_init;
 end;
 
 end.

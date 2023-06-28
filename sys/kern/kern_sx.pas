@@ -48,6 +48,8 @@ end;
 
 procedure sx_slock(p:p_sx);
 begin
+ //Writeln('    sx_slock:',HexStr(p));
+
  rw_rlock(p^.c);
  PDWORD(@p^.m)[0]:=0;
  PDWORD(@p^.m)[1]:=1;
@@ -55,7 +57,7 @@ end;
 
 procedure sx_xlock(p:p_sx);
 begin
- //Writeln('  sx_xlock:',HexStr(p));
+ //Writeln('    sx_xlock:',HexStr(p));
 
  rw_wlock(p^.c);
  PDWORD(@p^.m)[0]:=System.GetCurrentThreadId;
@@ -64,12 +66,14 @@ end;
 
 procedure sx_sunlock(p:p_sx);
 begin
+ //Writeln('  sx_sunlock:',HexStr(p));
+
  rw_runlock(p^.c);
 end;
 
 procedure sx_xunlock(p:p_sx);
 begin
- //Writeln('sx_xunlock:',HexStr(p));
+ //Writeln('  sx_xunlock:',HexStr(p));
 
  rw_wunlock(p^.c);
 end;

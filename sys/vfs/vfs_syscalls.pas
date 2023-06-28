@@ -2690,7 +2690,9 @@ _out:
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(nd.ni_dvp);
  if (error=0) then
+ begin
   vput(nd.ni_vp);
+ end;
 
  vn_finished_write(mp);
  VFS_UNLOCK_GIANT(vfslocked);

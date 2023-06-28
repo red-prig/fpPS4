@@ -249,7 +249,7 @@ begin
   offset:=ptruint(field-elm);
   P_LIST_ENTRY(P_LIST_ENTRY(field)^.le_next+offset)^.le_prev:=P_LIST_ENTRY(field)^.le_prev;
  end;
- P_LIST_ENTRY(field)^.le_prev:=@P_LIST_ENTRY(field)^.le_next;
+ P_LIST_ENTRY(field)^.le_prev^:=P_LIST_ENTRY(field)^.le_next;
 end;
 
 //

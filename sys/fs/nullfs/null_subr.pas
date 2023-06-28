@@ -336,19 +336,25 @@ end;
 procedure null_hashrem(xp:p_null_node);
 var
  hd:Pointer;
+ idx:DWORD;
  data:PPointer;
 begin
  mtx_lock(null_hashmtx);
+
  LIST_REMOVE(xp,@xp^.null_hash);
 
- data:=HAMT_search32(@null_node_hashtbl,vfs_hash_index(xp^.null_lowervp));
- if (data<>nil) then
+ if (xp^.null_lowervp^.v_mount<>nil) then
  begin
-  hd:=data^;
-  if LIST_EMPTY(hd) then
-  if HAMT_delete32(@null_node_hashtbl,vfs_hash_index(xp^.null_lowervp),nil) then
+  idx:=vfs_hash_index(xp^.null_lowervp);
+  data:=HAMT_search32(@null_node_hashtbl,idx);
+  if (data<>nil) then
   begin
-   FreeMem(hd);
+   hd:=data^;
+   if LIST_EMPTY(hd) then
+   if HAMT_delete32(@null_node_hashtbl,idx,nil) then
+   begin
+    FreeMem(hd);
+   end;
   end;
  end;
 

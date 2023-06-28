@@ -241,7 +241,6 @@ begin
  de:=p_ufs_dirent(arg);
  mtx_lock(ufs_interlock);
  ufs_relv(vp);
- de^.ufs_vnode:=nil;
  mtx_unlock(ufs_interlock);
  vgone(vp);
  vput(vp);
@@ -256,6 +255,8 @@ begin
  de:=System.InterlockedExchange(vp^.v_data,nil);
  if (de<>nil) then
  begin
+  de^.ufs_vnode:=nil;
+  vp^.v_data:=nil;
   if (System.InterlockedDecrement(de^.ufs_vref)=0) then
   begin
    Result:=de;

@@ -750,7 +750,12 @@ var
 begin
  vp:=ap^.a_vp;
  xp:=VTONULL(vp);
+
+ if (xp=nil) then Exit(EINVAL);
+
  lowervp:=xp^.null_lowervp;
+
+ if (lowervp=nil) then Exit(EINVAL);
 
  Assert((vp^.v_vnlock<>@vp^.v_lock),'Reclaiming incomplete null vnode');
 

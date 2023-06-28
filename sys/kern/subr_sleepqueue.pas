@@ -21,6 +21,7 @@ const
  SLEEPQ_LK           =$04;  // Used by a lockmgr.
  SLEEPQ_INTERRUPTIBLE=$100; // Sleep is interruptible.
  SLEEPQ_STOP_ON_BDRY =$200; // Stop sleeping thread
+ SLEEPQ_HAMT         =$400;
 
  SC_TABLESIZE=128;
  SC_MASK     =(SC_TABLESIZE-1);
@@ -181,12 +182,12 @@ begin
  begin
   sq:=td^.td_sleepqueue;
   sq^.sq_wchan:=wchan;
-  sq^.sq_type :=flags and SLEEPQ_TYPE;
+  sq^.sq_type :=(flags and SLEEPQ_TYPE) or SLEEPQ_HAMT;
   HAMT_INSERT(wchan,sq);
  end else
  begin
   Assert(wchan=sq^.sq_wchan);
-  Assert((flags and SLEEPQ_TYPE)=sq^.sq_type);
+  Assert((flags and SLEEPQ_TYPE)=(sq^.sq_type and SLEEPQ_TYPE));
   sq:=td^.td_sleepqueue;
   LIST_INSERT_HEAD(@sq^.sq_free,sq,@sq^.sq_hash);
  end;
@@ -471,7 +472,7 @@ begin
   sleepq_release(wchan);
   Exit(-1);
  end;
- Result:=sq^.sq_type;
+ Result:=sq^.sq_type and SLEEPQ_TYPE;
  sleepq_release(wchan);
 end;
 
@@ -497,7 +498,7 @@ begin
 
  sq:=td^.td_sleepqueue;
 
- if (sq^.sq_hash.le_next=nil) then
+ if ((sq^.sq_type and SLEEPQ_HAMT)<>0) then
  begin
   HAMT_REMOVE(sq^.sq_wchan);
  end else
@@ -535,7 +536,7 @@ begin
  sq:=sleepq_lookup(wchan);
  if (sq=nil) then Exit;
 
- Assert(sq^.sq_type=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
+ Assert((sq^.sq_type and SLEEPQ_TYPE)=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
 
  besttd:=nil;
  td:=TAILQ_FIRST(@sq^.sq_blocked[queue]);
@@ -567,7 +568,7 @@ begin
  sq:=sleepq_lookup(wchan);
  if (sq=nil) then Exit;
 
- Assert(sq^.sq_type=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
+ Assert((sq^.sq_type and SLEEPQ_TYPE)=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
 
  td:=TAILQ_FIRST(@sq^.sq_blocked[queue]);
  While (td<>nil) and (td<>std) do
@@ -596,7 +597,7 @@ begin
  sq:=sleepq_lookup(wchan);
  if (sq=nil) then Exit;
 
- Assert(sq^.sq_type=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
+ Assert((sq^.sq_type and SLEEPQ_TYPE)=(flags and SLEEPQ_TYPE),'mismatch between sleep/wakeup and cv_*');
 
  td:=TAILQ_FIRST(@sq^.sq_blocked[queue]);
  While (td<>nil) do
