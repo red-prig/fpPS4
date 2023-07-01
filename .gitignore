@@ -11,6 +11,9 @@
 *.bat
 *.prx
 *.sprx
+*.bin
+*.elf
+*.self
 *.dump
 *.h
 link.res
