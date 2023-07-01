@@ -20,6 +20,24 @@ type
    size:Int64;
   end;
   size:Int64;
+  //
+  dyn_adr:p_elf64_dyn;
+  dyn_cnt:Int64;
+  //
+  tls_addr:Pointer;
+  tls_size:Int64;
+  //
+  sce_dynlib_addr:Pointer;
+  sce_dynlib_size:Int64;
+  //
+  proc_param_addr:PSceProcParam;
+  proc_param_size:Int64;
+  //
+  module_param_addr:PsceModuleParam;
+  module_param_size:Int64;
+  //
+  eh_frame_hdr_addr:Pointer;
+  eh_frame_hdr_size:Int64;
  end;
 
 function maxInt64(a,b:Int64):Int64; inline;
@@ -77,10 +95,8 @@ Var
  elf_phdr :p_elf64_phdr;
  MinSeg   :Int64;
  MaxSeg   :Int64;
- src_ofs_s:Int64;
- dst_ofs_s:Int64;
- src_ofs_e:Int64;
- dst_ofs_e:Int64;
+ src_ofs  :Int64;
+ dst_ofs  :Int64;
  mem_size :Int64;
 begin
  Result:=0;
@@ -170,22 +186,17 @@ begin
       MinSeg:=High(Int64);
       MaxSeg:=0;
 
-      count:=elf_hdr^.e_phnum;
+      count:=self_hdr^.Num_Segments;
 
       if (count<>0) then
       For i:=0 to count-1 do
-      begin
-       s:=elf_phdr[i].p_offset;
-       if (s<>0) then
+       if ((self_segs[i].flags and SELF_PROPS_BLOCKED)<>0) then
        begin
+        s:=self_segs[i].offset;
         MinSeg:=MinInt64(s,MinSeg);
+        s:=s+minInt64(self_segs[i].filesz,self_segs[i].filesz);
+        MaxSeg:=MaxInt64(s,MaxSeg);
        end;
-       s:=s+elf_phdr[i].p_filesz;
-       MaxSeg:=MaxInt64(s,MaxSeg);
-      end;
-
-      n:=ptruint(elf_hdr)-ptruint(self_hdr);        //offset to hdr
-      s:=MaxInt64(obj^.size,n)-n;                   //get size
 
       MinSeg:=MinInt64(MinSeg,s);
       MaxSeg:=MinInt64(MaxSeg,s);
@@ -217,23 +228,12 @@ begin
 
          mem_size:=minInt64(self_segs[i].filesz,self_segs[i].memsz);
 
-         src_ofs_s:=self_segs[i].offset;  //start offset
-         dst_ofs_s:=elf_phdr[s].p_offset; //start offset
+         src_ofs:=self_segs[i].offset;  //start offset
+         dst_ofs:=elf_phdr[s].p_offset; //start offset
 
-         src_ofs_e:=src_ofs_s+mem_size;   //end offset
-         dst_ofs_e:=dst_ofs_s+mem_size;   //end offset
-
-         src_ofs_s:=MinInt64(src_ofs_s,obj^.size); //bound self
-         src_ofs_e:=MinInt64(src_ofs_s,obj^.size); //bound self
-
-         dst_ofs_s:=MinInt64(dst_ofs_s,obj^.elf.size); //bound elf
-         dst_ofs_e:=MinInt64(dst_ofs_s,obj^.elf.size); //bound elf
-
-         mem_size:=minInt64(src_ofs_e-src_ofs_s,dst_ofs_e-dst_ofs_s); //min of two size
-
-         Move( (Pointer(self_hdr)    +src_ofs_s)^, //src
-               (Pointer(obj^.elf.hdr)+dst_ofs_s)^, //dst
-               mem_size);                          //size
+         Move( (Pointer(self_hdr)    +src_ofs)^, //src
+               (Pointer(obj^.elf.hdr)+dst_ofs)^, //dst
+               mem_size);                        //size
         end;
       end;
 
@@ -357,6 +357,25 @@ begin
  Writeln();
 end;
 
+procedure print_hex(m:PBYTE;s,e:ptruint);
+begin
+ Writeln(' Offset(h)|00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F');
+ Write  (' ---------+-----------------------------------------------');
+
+ for s:=s to e-1 do
+ begin
+   if ((s mod 16)=0) then
+   begin
+    Writeln();
+    Write(' 0x',HexStr(s-(s mod 16),7),'|');
+   end;
+  Write(HexStr(m^,2),' ');
+  Inc(m);
+ end;
+
+ Writeln;
+end;
+
 procedure print_self_metadata(obj:p_elf_obj);
 label
  _not_exist;
@@ -375,21 +394,7 @@ begin
 
   m:=Pointer(Pointer(obj^.self.hdr)+s);
 
-  Writeln(' Offset(h)|00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F');
-  Write  (' ---------+-----------------------------------------------');
-
-  for s:=s to e-1 do
-  begin
-    if ((s mod 16)=0) then
-    begin
-     Writeln();
-     Write(' 0x',HexStr(s-(s mod 16),7),'|');
-    end;
-   Write(HexStr(m^,2),' ');
-   Inc(m);
-  end;
-
-  Writeln;
+  print_hex(m,s,e);
  end else
  begin
   _not_exist:
@@ -537,7 +542,8 @@ var
 begin
  if (obj^.is_encrypted<>0) then
  begin
-  Writeln('ELF Header:','is_encrypted');
+  Writeln('Elf is_encrypted');
+  Writeln;
   Exit;
  end;
 
@@ -581,25 +587,25 @@ function get_pt_name(p_type:DWORD):RawByteString;
 begin
  Result:='';
  Case p_type  of
-  PT_NULL            :Result:='NULL';
-  PT_LOAD            :Result:='LOAD';
-  PT_DYNAMIC         :Result:='DYNAMIC';
-  PT_INTERP          :Result:='INTERP';
-  PT_NOTE            :Result:='NOTE';
-  PT_SHLIB           :Result:='SHLIB';
-  PT_PHDR            :Result:='PHDR';
-  PT_TLS             :Result:='TLS';
-  PT_SCE_RELA        :Result:='SCE_RELA';
-  PT_SCE_DYNLIBDATA  :Result:='SCE_DYNLIBDATA';
-  PT_SCE_PROCPARAM   :Result:='SCE_PROCPARAM';
+  PT_NULL            :Result:='NULL            ';
+  PT_LOAD            :Result:='LOAD            ';
+  PT_DYNAMIC         :Result:='DYNAMIC         ';
+  PT_INTERP          :Result:='INTERP          ';
+  PT_NOTE            :Result:='NOTE            ';
+  PT_SHLIB           :Result:='SHLIB           ';
+  PT_PHDR            :Result:='PHDR            ';
+  PT_TLS             :Result:='TLS             ';
+  PT_SCE_RELA        :Result:='SCE_RELA        ';
+  PT_SCE_DYNLIBDATA  :Result:='SCE_DYNLIBDATA  ';
+  PT_SCE_PROCPARAM   :Result:='SCE_PROCPARAM   ';
   PT_SCE_MODULE_PARAM:Result:='SCE_MODULE_PARAM';
-  PT_SCE_RELRO       :Result:='SCE_RELRO';
-  PT_GNU_EH_FRAME    :Result:='GNU_EH_FRAME';
-  PT_GNU_STACK       :Result:='GNU_STACK';
-  PT_SCE_COMMENT     :Result:='SCE_COMMENT';
-  PT_SCE_VERSION     :Result:='SCE_VERSION';
-  PT_SCE_SEGSYM      :Result:='SCE_SEGSYM';
-  else               Result:='0x'+HexStr(p_type,8);
+  PT_SCE_RELRO       :Result:='SCE_RELRO       ';
+  PT_GNU_EH_FRAME    :Result:='GNU_EH_FRAME    ';
+  PT_GNU_STACK       :Result:='GNU_STACK       ';
+  PT_SCE_COMMENT     :Result:='SCE_COMMENT     ';
+  PT_SCE_VERSION     :Result:='SCE_VERSION     ';
+  PT_SCE_SEGSYM      :Result:='SCE_SEGSYM      ';
+  else               Result:='0x'+HexStr(p_type,8)+'      ';
  end;
 end;
 
@@ -618,11 +624,11 @@ var
  elf_hdr :p_elf64_hdr;
  elf_phdr:p_elf64_phdr;
  i,count:Integer;
- str:RawByteString;
 begin
  if (obj^.is_encrypted<>0) then
  begin
-  Writeln('ELF Header:','is_encrypted');
+  Writeln('Elf is_encrypted');
+  Writeln;
   Exit;
  end;
 
@@ -642,12 +648,7 @@ begin
   if (count<>0) then
   For i:=0 to count-1 do
   begin
-
-   str:=get_pt_name(elf_phdr^.p_type);
-   str:=str+space(16-Length(str));
-
-   Write(' ',str,' ');
-
+   Write(' ',get_pt_name(elf_phdr^.p_type),' ');
    Write(get_p_flags_str(elf_phdr^.p_flags),'   ');
 
    Write('0x'+HexStr(elf_phdr^.p_offset,8),' ');
@@ -669,6 +670,233 @@ begin
  Writeln();
 end;
 
+procedure scan_phdr(obj:p_elf_obj);
+var
+ elf_hdr :p_elf64_hdr;
+ elf_phdr:p_elf64_phdr;
+ i,count:Integer;
+begin
+ if (obj^.is_encrypted<>0) then Exit;
+ if (obj^.elf.hdr=nil) then Exit;
+
+ elf_hdr :=obj^.elf.hdr;
+ elf_phdr:=get_elf_phdr(elf_hdr);
+ count:=elf_hdr^.e_phnum;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+
+  case elf_phdr^.p_type of
+   PT_DYNAMIC:
+     begin
+      obj^.dyn_adr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+      obj^.dyn_cnt:=elf_phdr^.p_filesz div sizeof(Elf64_Dyn);
+     end;
+
+   PT_TLS:
+     begin
+      obj^.tls_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+      obj^.tls_size:=elf_phdr^.p_filesz;
+     end;
+
+   PT_SCE_DYNLIBDATA:
+     begin
+      obj^.sce_dynlib_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+      obj^.sce_dynlib_size:=elf_phdr^.p_filesz;
+     end;
+
+   PT_SCE_PROCPARAM:
+     begin
+      obj^.proc_param_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+      obj^.proc_param_size:=elf_phdr^.p_filesz;
+     end;
+
+   PT_SCE_MODULE_PARAM:
+     begin
+      obj^.module_param_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+      obj^.module_param_size:=elf_phdr^.p_filesz;
+     end;
+
+   PT_GNU_EH_FRAME:
+    begin
+     obj^.eh_frame_hdr_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
+     obj^.eh_frame_hdr_size:=elf_phdr^.p_filesz;
+    end;
+
+   PT_LOAD,
+   PT_SCE_RELRO:
+    begin
+
+    end;
+
+
+  end;
+
+  Inc(elf_phdr);
+ end;
+
+end;
+
+function get_dt_name(d_tag:DWORD):RawByteString;
+begin
+ Result:='';
+ Case d_tag  of
+  DT_NULL                     :Result:='NULL                    ';
+  DT_NEEDED                   :Result:='NEEDED                  ';
+  DT_PLTRELSZ                 :Result:='PLTRELSZ                ';
+  DT_PLTGOT                   :Result:='PLTGOT                  ';
+  DT_HASH                     :Result:='HASH                    ';
+  DT_STRTAB                   :Result:='STRTAB                  ';
+  DT_SYMTAB                   :Result:='SYMTAB                  ';
+  DT_RELA                     :Result:='RELA                    ';
+  DT_RELASZ                   :Result:='RELASZ                  ';
+  DT_RELAENT                  :Result:='RELAENT                 ';
+  DT_STRSZ                    :Result:='STRSZ                   ';
+  DT_SYMENT                   :Result:='SYMENT                  ';
+  DT_INIT                     :Result:='INIT                    ';
+  DT_FINI                     :Result:='FINI                    ';
+  DT_SONAME                   :Result:='SONAME                  ';
+  DT_RPATH                    :Result:='RPATH                   ';
+  DT_SYMBOLIC                 :Result:='SYMBOLIC                ';
+  DT_REL                      :Result:='REL                     ';
+  DT_RELSZ                    :Result:='RELSZ                   ';
+  DT_RELENT                   :Result:='RELENT                  ';
+  DT_PLTREL                   :Result:='PLTREL                  ';
+  DT_DEBUG                    :Result:='DEBUG                   ';
+  DT_TEXTREL                  :Result:='TEXTREL                 ';
+  DT_JMPREL                   :Result:='JMPREL                  ';
+  DT_BIND_NOW                 :Result:='BIND_NOW                ';
+  DT_INIT_ARRAY               :Result:='INIT_ARRAY              ';
+  DT_FINI_ARRAY               :Result:='FINI_ARRAY              ';
+  DT_INIT_ARRAYSZ             :Result:='INIT_ARRAYSZ            ';
+  DT_FINI_ARRAYSZ             :Result:='FINI_ARRAYSZ            ';
+  DT_RUNPATH                  :Result:='RUNPATH                 ';
+  DT_FLAGS                    :Result:='FLAGS                   ';
+  DT_ENCODING                 :Result:='ENCODING                ';
+  DT_PREINIT_ARRAY            :Result:='PREINIT_ARRAY           ';
+  DT_PREINIT_ARRAYSZ          :Result:='PREINIT_ARRAYSZ         ';
+  DT_SCE_IDTABENTSZ           :Result:='SCE_IDTABENTSZ          ';
+  DT_SCE_FINGERPRINT          :Result:='SCE_FINGERPRINT         ';
+  DT_SCE_ORIGINAL_FILENAME    :Result:='SCE_ORIGINAL_FILENAME   ';
+  DT_SCE_MODULE_INFO          :Result:='SCE_MODULE_INFO         ';
+  DT_SCE_NEEDED_MODULE        :Result:='SCE_NEEDED_MODULE       ';
+  DT_SCE_MODULE_ATTR          :Result:='SCE_MODULE_ATTR         ';
+  DT_SCE_EXPORT_LIB           :Result:='SCE_EXPORT_LIB          ';
+  DT_SCE_IMPORT_LIB           :Result:='SCE_IMPORT_LIB          ';
+  DT_SCE_EXPORT_LIB_ATTR      :Result:='SCE_EXPORT_LIB_ATTR     ';
+  DT_SCE_IMPORT_LIB_ATTR      :Result:='SCE_IMPORT_LIB_ATTR     ';
+  DT_SCE_STUB_MODULE_NAME     :Result:='SCE_STUB_MODULE_NAME    ';
+  DT_SCE_STUB_MODULE_VERSION  :Result:='SCE_STUB_MODULE_VERSION ';
+  DT_SCE_STUB_LIBRARY_NAME    :Result:='SCE_STUB_LIBRARY_NAME   ';
+  DT_SCE_STUB_LIBRARY_VERSION :Result:='SCE_STUB_LIBRARY_VERSION';
+  DT_SCE_HASH                 :Result:='SCE_HASH                ';
+  DT_SCE_PLTGOT               :Result:='SCE_PLTGOT              ';
+  DT_SCE_JMPREL               :Result:='SCE_JMPREL              ';
+  DT_SCE_PLTREL               :Result:='SCE_PLTREL              ';
+  DT_SCE_PLTRELSZ             :Result:='SCE_PLTRELSZ            ';
+  DT_SCE_RELA                 :Result:='SCE_RELA                ';
+  DT_SCE_RELASZ               :Result:='SCE_RELASZ              ';
+  DT_SCE_RELAENT              :Result:='SCE_RELAENT             ';
+  DT_SCE_STRTAB               :Result:='SCE_STRTAB              ';
+  DT_SCE_STRSZ                :Result:='SCE_STRSZ               ';
+  DT_SCE_SYMTAB               :Result:='SCE_SYMTAB              ';
+  DT_SCE_SYMENT               :Result:='SCE_SYMENT              ';
+  DT_SCE_HASHSZ               :Result:='SCE_HASHSZ              ';
+  DT_SCE_SYMTABSZ             :Result:='SCE_SYMTABSZ            ';
+  DT_SCE_HIOS                 :Result:='SCE_HIOS                ';
+  DT_GNU_HASH                 :Result:='GNU_HASH                ';
+  DT_VERSYM                   :Result:='VERSYM                  ';
+  DT_RELACOUNT                :Result:='RELACOUNT               ';
+  DT_RELCOUNT                 :Result:='RELCOUNT                ';
+  DT_FLAGS_1                  :Result:='FLAGS_1                 ';
+  DT_VERDEF                   :Result:='VERDEF                  ';
+  DT_VERDEFNUM                :Result:='VERDEFNUM               ';
+  else                         Result:='0x'+HexStr(d_tag,8)+'              ';
+ end;
+end;
+
+procedure print_elf_dynamic(obj:p_elf_obj);
+var
+ s,e:ptruint;
+ dyn_adr:p_elf64_dyn;
+ i,count:Integer;
+begin
+ if (obj^.is_encrypted<>0) then
+ begin
+  Writeln('Elf is_encrypted');
+  Writeln;
+  Exit;
+ end;
+
+ if (obj^.dyn_adr<>nil) then
+ begin
+  dyn_adr:=obj^.dyn_adr;
+  count  :=obj^.dyn_cnt;
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(dyn_adr)-Pointer(obj^.elf.hdr));
+  e:=s+(count*sizeof(Elf64_Dyn));
+
+  Writeln('Dynamic section:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  Writeln(' Tag                      Name/Value');
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   Write(' ',get_dt_name(dyn_adr^.d_tag),' ');
+
+   Write('0x'+HexStr(dyn_adr^.d_un.d_val,18),' ');
+
+   Writeln;
+
+   Inc(dyn_adr);
+  end;
+
+ end else
+ begin
+  Writeln('Dynamic section:','not exist');
+ end;
+ Writeln();
+end;
+
+procedure print_elf_tls(obj:p_elf_obj);
+label
+ _not_exist;
+var
+ s,e:ptruint;
+ m:PBYTE;
+begin
+ if (obj^.is_encrypted<>0) then
+ begin
+  Writeln('Elf is_encrypted');
+  Writeln;
+  Exit;
+ end;
+
+ if (obj^.tls_addr<>nil) then
+ begin
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(obj^.tls_addr)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.tls_size;
+
+  if (s>=e) then goto _not_exist;
+
+  Writeln('TLS data:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  m:=obj^.tls_addr;
+
+  print_hex(m,s,e);
+ end else
+ begin
+  _not_exist:
+  Writeln('TLS data:','not exist');
+ end;
+ Writeln;
+end;
+
+
 type
  t_print_param=(
   pp_file_size,
@@ -677,7 +905,9 @@ type
   pp_self_authinfo,
   pp_self_metadata,
   pp_file_header,
-  pp_program_headers
+  pp_program_headers,
+  pp_dynamic,
+  pp_tls
  );
  t_print_param_set=Set of t_print_param;
 
@@ -701,7 +931,9 @@ begin
                                      pp_self_authinfo,
                                      pp_self_metadata,
                                      pp_file_header,
-                                     pp_program_headers];
+                                     pp_program_headers,
+                                     pp_dynamic,
+                                     pp_tls];
 
    '-F','--file_size'      :print_param:=print_param+[pp_file_size      ];
    '-H','--self_header'    :print_param:=print_param+[pp_self_header    ];
@@ -710,6 +942,8 @@ begin
    '-M','--self_metadata'  :print_param:=print_param+[pp_self_metadata  ];
    '-h','--file-header'    :print_param:=print_param+[pp_file_header    ];
    '-l','--program-headers':print_param:=print_param+[pp_program_headers];
+   '-d','--dynamic'        :print_param:=print_param+[pp_dynamic];
+   '-t','--tls'            :print_param:=print_param+[pp_tls];
    else
     FileName:=S;
   end;
@@ -734,6 +968,11 @@ begin
   if (pp_self_metadata   in print_param) then print_self_metadata(@obj);
   if (pp_file_header     in print_param) then print_elf_header   (@obj);
   if (pp_program_headers in print_param) then print_elf_phdr     (@obj);
+
+  scan_phdr(@obj);
+
+  if (pp_dynamic         in print_param) then print_elf_dynamic  (@obj);
+  if (pp_tls             in print_param) then print_elf_tls      (@obj);
  end else
  begin
   Writeln('Error(',r,') load file:',FileName);
