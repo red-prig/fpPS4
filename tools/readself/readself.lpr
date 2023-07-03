@@ -1033,7 +1033,7 @@ begin
   R_X86_64_GOT32              :Result:='R_X86_64_GOT32              ';
   R_X86_64_PLT32              :Result:='R_X86_64_PLT32              ';
   R_X86_64_COPY               :Result:='R_X86_64_COPY               ';
-  //R_X86_64_GLOB_DAT           :Result:='R_X86_64_GLOB_DAT           ';
+  R_X86_64_GLOB_DAT           :Result:='R_X86_64_GLOB_DAT           ';
   R_X86_64_JUMP_SLOT          :Result:='R_X86_64_JUMP_SLOT          ';
   R_X86_64_RELATIVE           :Result:='R_X86_64_RELATIVE           ';
   R_X86_64_GOTPCREL           :Result:='R_X86_64_GOTPCREL           ';
@@ -1161,7 +1161,104 @@ begin
  Writeln;
 end;
 
+function get_st_type_str(st_type:Byte):RawByteString;
+begin
+ Case st_type of
+  STT_NOTYPE :Result:='NOTYPE ';
+  STT_OBJECT :Result:='OBJECT ';
+  STT_FUN    :Result:='FUN    ';
+  STT_SECTION:Result:='SECTION';
+  STT_FILE   :Result:='FILE   ';
+  STT_COMMON :Result:='COMMON ';
+  STT_TLS    :Result:='TLS    ';
+  STT_LOOS   :Result:='LOOS   ';
+  STT_SCE    :Result:='SCE    ';
+  else
+   Result:=IntToStr(st_type)+'      ';
+ end;
+end;
 
+function get_st_bind_str(st_bind:Byte):RawByteString;
+begin
+ Case st_bind of
+  STB_LOCAL :Result:='LOCAL ';
+  STB_GLOBAL:Result:='GLOBAL';
+  STB_WEAK  :Result:='WEAK  ';
+  else
+   Result:=IntToStr(st_bind)+'     ';
+ end;
+end;
+
+function get_st_vis_str(st_vis:Byte):RawByteString;
+begin
+ case st_vis of
+  STV_DEFAULT  :Result:='DEFAULT  ';
+  STV_INTERNAL :Result:='INTERNAL ';
+  STV_HIDDEN   :Result:='HIDDEN   ';
+  STV_PROTECTED:Result:='PROTECTED';
+  else          Result:=IntToStr(st_vis)+'        ';
+ end;
+end;
+
+function get_st_shndx_str(st_shndx:Word):RawByteString;
+begin
+ case st_shndx of
+  SHN_UNDEF  :Result:='SHN_UNDEF';
+  else        Result:='0x'+HexStr(st_shndx,4)+'   ';
+ end;
+end;
+
+procedure print_elf_symtab(obj:p_elf_obj);
+var
+ s,e:ptruint;
+ entry:p_elf64_sym;
+ i,count:Integer;
+ str:PAnsiChar;
+begin
+ if (obj^.dt_symtab_addr<>nil) then
+ begin
+  entry:=obj^.dt_symtab_addr;
+  count:=obj^.dt_symtab_size div sizeof(elf64_sym);
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(entry)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.dt_symtab_size;
+
+  Writeln('Symbol table ''.symtab'':0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  Writeln('  Num Value      Size Type    Bind   Vis       Ndx       Name');
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   Write(' ',i:4,' ');
+
+   Write('0x',HexStr(entry^.st_value,8),' ');
+
+   Write(entry^.st_size:4,' ');
+
+   Write(get_st_type_str(ELF64_ST_TYPE(entry^.st_info)),' ');
+
+   Write(get_st_bind_str(ELF64_ST_BIND(entry^.st_info)),' ');
+
+   Write(get_st_vis_str(ELF64_ST_VISIBILITY(entry^.st_other)),' ');
+
+   Write(get_st_shndx_str(entry^.st_shndx),' ');
+
+   str:=@obj^.dt_strtab_addr[entry^.st_name];
+
+   Write(str);
+
+   writeln;
+
+   Inc(entry);
+  end;
+
+ end else
+ begin
+  Writeln('Symbol table ''.symtab''','not exist');
+ end;
+ Writeln();
+end;
 
 function get_vaddr_by_offset(obj:p_elf_obj;offset:Int64):Int64;
 var
@@ -1596,6 +1693,7 @@ type
   pp_program_headers,
   pp_dynamic,
   pp_relocs,
+  pp_symbols,
   pp_sce_procparam,
   pp_sce_moduleparam,
   pp_tls
@@ -1625,6 +1723,7 @@ begin
                                      pp_program_headers,
                                      pp_dynamic,
                                      pp_relocs,
+                                     pp_symbols,
                                      pp_sce_procparam,
                                      pp_sce_moduleparam,
                                      pp_tls];
@@ -1638,6 +1737,7 @@ begin
    '-l','--program-headers':print_param:=print_param+[pp_program_headers];
    '-d','--dynamic'        :print_param:=print_param+[pp_dynamic        ];
    '-r','--relocs'         :print_param:=print_param+[pp_relocs         ];
+   '-s','--symbols'        :print_param:=print_param+[pp_symbols        ];
    '-p','--sce_procparam'  :print_param:=print_param+[pp_sce_procparam  ];
    '-m','--sce_moduleparam':print_param:=print_param+[pp_sce_moduleparam];
    '-t','--tls'            :print_param:=print_param+[pp_tls            ];
@@ -1678,6 +1778,7 @@ begin
 
    if (pp_dynamic         in print_param) then print_elf_dynamic        (@obj);
    if (pp_relocs          in print_param) then print_elf_rela           (@obj);
+   if (pp_symbols         in print_param) then print_elf_symtab         (@obj);
    if (pp_sce_procparam   in print_param) then print_elf_sce_procparam  (@obj);
    if (pp_sce_moduleparam in print_param) then print_elf_sce_moduleparam(@obj);
    if (pp_tls             in print_param) then print_elf_tls            (@obj);
