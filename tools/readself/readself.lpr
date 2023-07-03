@@ -21,8 +21,11 @@ type
   end;
   size:Int64;
   //
-  dyn_adr:p_elf64_dyn;
-  dyn_cnt:Int64;
+  min_offset:Int64;
+  max_offset:Int64;
+  //
+  dyn_addr:p_elf64_dyn;
+  dyn_size:Int64;
   //
   tls_addr:Pointer;
   tls_size:Int64;
@@ -38,6 +41,18 @@ type
   //
   eh_frame_hdr_addr:Pointer;
   eh_frame_hdr_size:Int64;
+  //
+  dt_symtab_addr:p_elf64_sym;
+  dt_symtab_size:Int64;
+  //
+  dt_strtab_addr:PAnsiChar;
+  dt_strtab_size:Int64;
+  //
+  dt_rela_addr:p_elf64_rela;
+  dt_rela_size:Int64;
+  //
+  dt_rela_plt_addr:p_elf64_rela;
+  dt_rela_plt_size:Int64;
  end;
 
 function maxInt64(a,b:Int64):Int64; inline;
@@ -80,6 +95,20 @@ begin
  begin
   Result:=elf_hdr^.e_phoff;
  end;
+end;
+
+procedure fixup_offset_size(var offset,size:Int64;max:Int64);
+var
+ s,e:Int64;
+begin
+ s:=offset;
+ e:=s+size;
+
+ s:=MinInt64(s,max);
+ e:=MinInt64(e,max);
+
+ offset:=s;
+ size  :=(e-s);
 end;
 
 function load_self(Const name:RawByteString;obj:p_elf_obj):Integer;
@@ -192,14 +221,12 @@ begin
       For i:=0 to count-1 do
        if ((self_segs[i].flags and SELF_PROPS_BLOCKED)<>0) then
        begin
-        s:=self_segs[i].offset;
+        s:=SELF_SEGMENT_INDEX(self_segs[i].flags);
+        s:=elf_phdr[s].p_offset;
         MinSeg:=MinInt64(s,MinSeg);
         s:=s+minInt64(self_segs[i].filesz,self_segs[i].filesz);
         MaxSeg:=MaxInt64(s,MaxSeg);
        end;
-
-      MinSeg:=MinInt64(MinSeg,s);
-      MaxSeg:=MinInt64(MaxSeg,s);
 
       obj^.self.MinSeg:=MinSeg;
       obj^.self.MaxSeg:=MaxSeg;
@@ -230,6 +257,9 @@ begin
 
          src_ofs:=self_segs[i].offset;  //start offset
          dst_ofs:=elf_phdr[s].p_offset; //start offset
+
+         fixup_offset_size(src_ofs,mem_size,obj^.size);
+         fixup_offset_size(dst_ofs,mem_size,MaxSeg);
 
          Move( (Pointer(self_hdr)    +src_ofs)^, //src
                (Pointer(obj^.elf.hdr)+dst_ofs)^, //dst
@@ -540,13 +570,6 @@ var
  s,e:ptruint;
  elf_hdr:p_elf64_hdr;
 begin
- if (obj^.is_encrypted<>0) then
- begin
-  Writeln('Elf is_encrypted');
-  Writeln;
-  Exit;
- end;
-
  if (obj^.elf.hdr<>nil) then
  begin
   elf_hdr:=obj^.elf.hdr;
@@ -625,13 +648,6 @@ var
  elf_phdr:p_elf64_phdr;
  i,count:Integer;
 begin
- if (obj^.is_encrypted<>0) then
- begin
-  Writeln('Elf is_encrypted');
-  Writeln;
-  Exit;
- end;
-
  if (obj^.elf.hdr<>nil) then
  begin
   elf_hdr :=obj^.elf.hdr;
@@ -672,68 +688,141 @@ end;
 
 procedure scan_phdr(obj:p_elf_obj);
 var
- elf_hdr :p_elf64_hdr;
- elf_phdr:p_elf64_phdr;
+ elf_hdr:p_elf64_hdr;
+ entry:p_elf64_phdr;
  i,count:Integer;
 begin
- if (obj^.is_encrypted<>0) then Exit;
  if (obj^.elf.hdr=nil) then Exit;
 
  elf_hdr :=obj^.elf.hdr;
- elf_phdr:=get_elf_phdr(elf_hdr);
+ entry:=get_elf_phdr(elf_hdr);
  count:=elf_hdr^.e_phnum;
+
+ obj^.min_offset:=High(Int64);
+ obj^.max_offset:=0;
 
  if (count<>0) then
  For i:=0 to count-1 do
  begin
 
-  case elf_phdr^.p_type of
+  case entry^.p_type of
+   PT_LOAD,
+   PT_SCE_RELA:
+     begin
+      obj^.min_offset:=MinInt64(obj^.min_offset,entry^.p_offset);
+      obj^.max_offset:=MaxInt64(obj^.max_offset,entry^.p_offset+entry^.p_filesz);
+     end;
+
    PT_DYNAMIC:
      begin
-      obj^.dyn_adr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-      obj^.dyn_cnt:=elf_phdr^.p_filesz div sizeof(Elf64_Dyn);
+      obj^.dyn_addr:=Pointer(elf_hdr)+entry^.p_offset;
+      obj^.dyn_size:=entry^.p_filesz;
      end;
 
    PT_TLS:
      begin
-      obj^.tls_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-      obj^.tls_size:=elf_phdr^.p_filesz;
+      obj^.tls_addr:=Pointer(elf_hdr)+entry^.p_offset;
+      obj^.tls_size:=entry^.p_filesz;
      end;
 
    PT_SCE_DYNLIBDATA:
      begin
-      obj^.sce_dynlib_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-      obj^.sce_dynlib_size:=elf_phdr^.p_filesz;
+      obj^.sce_dynlib_addr:=Pointer(elf_hdr)+entry^.p_offset;
+      obj^.sce_dynlib_size:=entry^.p_filesz;
      end;
 
    PT_SCE_PROCPARAM:
      begin
-      obj^.proc_param_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-      obj^.proc_param_size:=elf_phdr^.p_filesz;
+      obj^.proc_param_addr:=Pointer(elf_hdr)+entry^.p_offset;
+      obj^.proc_param_size:=entry^.p_filesz;
      end;
 
    PT_SCE_MODULE_PARAM:
      begin
-      obj^.module_param_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-      obj^.module_param_size:=elf_phdr^.p_filesz;
+      obj^.module_param_addr:=Pointer(elf_hdr)+entry^.p_offset;
+      obj^.module_param_size:=entry^.p_filesz;
      end;
 
    PT_GNU_EH_FRAME:
     begin
-     obj^.eh_frame_hdr_addr:=Pointer(elf_hdr)+elf_phdr^.p_offset;
-     obj^.eh_frame_hdr_size:=elf_phdr^.p_filesz;
+     obj^.eh_frame_hdr_addr:=Pointer(elf_hdr)+entry^.p_offset;
+     obj^.eh_frame_hdr_size:=entry^.p_filesz;
     end;
 
-   PT_LOAD,
-   PT_SCE_RELRO:
+   PT_SCE_COMMENT:
     begin
-
+     //
     end;
-
 
   end;
 
-  Inc(elf_phdr);
+  Inc(entry);
+ end;
+
+end;
+
+procedure scan_dynamic(obj:p_elf_obj);
+var
+ entry:p_elf64_dyn;
+ i,count:Integer;
+begin
+ if (obj^.dyn_addr=nil) then Exit;
+
+ entry:=obj^.dyn_addr;
+ count:=obj^.dyn_size div sizeof(elf64_dyn);
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+
+  case entry^.d_tag of
+
+   DT_SCE_SYMTAB:
+    begin
+     obj^.dt_symtab_addr:=obj^.sce_dynlib_addr+entry^.d_un.d_ptr;
+    end;
+   DT_SCE_SYMTABSZ:
+    begin
+     obj^.dt_symtab_size:=entry^.d_un.d_val;
+    end;
+
+   DT_SCE_STRTAB:
+    begin
+     obj^.dt_strtab_addr:=obj^.sce_dynlib_addr+entry^.d_un.d_ptr;
+    end;
+
+   DT_STRSZ,
+   DT_SCE_STRSZ:
+    begin
+     obj^.dt_strtab_size:=entry^.d_un.d_ptr;
+    end;
+
+   DT_SCE_RELA:
+    begin
+     obj^.dt_rela_addr:=obj^.sce_dynlib_addr+entry^.d_un.d_ptr;
+    end;
+
+   DT_RELASZ,
+   DT_SCE_RELASZ:
+    begin
+     obj^.dt_rela_size:=entry^.d_un.d_val;
+    end;
+
+   DT_SCE_JMPREL:
+    begin
+     obj^.dt_rela_plt_addr:=obj^.sce_dynlib_addr+entry^.d_un.d_ptr;
+    end;
+
+   DT_PLTRELSZ,
+   DT_SCE_PLTRELSZ:
+    begin
+     obj^.dt_rela_plt_size:=entry^.d_un.d_val;
+    end;
+
+   else;
+  end;
+
+  Inc(entry);
  end;
 
 end;
@@ -816,27 +905,51 @@ begin
  end;
 end;
 
+function get_lib_attr_str(id:DWord):RawByteString;
+begin
+ Case id of
+  $01:Result:='AUTO_EXPORT';
+  $02:Result:='WEAK_EXPORT';
+  $08:Result:='LOOSE_IMPORT';
+  $09:Result:='AUTO_EXPORT|LOOSE_IMPORT';
+  $10:Result:='WEAK_EXPORT|LOOSE_IMPORT';
+  else
+      Result:='0x'+HexStr(id,8);
+ end;
+end;
+
+function get_mod_attr_str(id:DWord):RawByteString;
+begin
+ Case id of
+  $00:Result:='NONE';
+  $01:Result:='SCE_CANT_STOP';
+  $02:Result:='SCE_EXCLUSIVE_LOAD';
+  $04:Result:='SCE_EXCLUSIVE_START';
+  $08:Result:='SCE_CAN_RESTART';
+  $10:Result:='SCE_CAN_RELOCATE';
+  $20:Result:='SCE_CANT_SHARE';
+  else
+      Result:='0x'+HexStr(id,8);
+ end;
+end;
+
 procedure print_elf_dynamic(obj:p_elf_obj);
 var
  s,e:ptruint;
- dyn_adr:p_elf64_dyn;
+ entry:p_elf64_dyn;
  i,count:Integer;
+ mu:TModuleValue;
+ lu:TLibraryValue;
+ str:PAnsiChar;
 begin
- if (obj^.is_encrypted<>0) then
+ if (obj^.dyn_addr<>nil) then
  begin
-  Writeln('Elf is_encrypted');
-  Writeln;
-  Exit;
- end;
-
- if (obj^.dyn_adr<>nil) then
- begin
-  dyn_adr:=obj^.dyn_adr;
-  count  :=obj^.dyn_cnt;
+  entry:=obj^.dyn_addr;
+  count:=obj^.dyn_size div sizeof(elf64_dyn);
 
   s:=get_elf_hdr_offset(obj);
-  s:=s+(Pointer(dyn_adr)-Pointer(obj^.elf.hdr));
-  e:=s+(count*sizeof(Elf64_Dyn));
+  s:=s+(Pointer(entry)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.dyn_size;
 
   Writeln('Dynamic section:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
 
@@ -845,13 +958,63 @@ begin
   For i:=0 to count-1 do
   begin
 
-   Write(' ',get_dt_name(dyn_adr^.d_tag),' ');
+   Write(' ',get_dt_name(entry^.d_tag),' ');
 
-   Write('0x'+HexStr(dyn_adr^.d_un.d_val,18),' ');
+   case entry^.d_tag of
+    DT_SONAME,
+    DT_SCE_IMPORT_LIB,
+    DT_SCE_EXPORT_LIB,
+    DT_SCE_NEEDED_MODULE,
+    DT_SCE_MODULE_INFO,
+    DT_SCE_ORIGINAL_FILENAME,
+    DT_NEEDED:
+      begin
+       mu.value:=entry^.d_un.d_val;
+       str:=@obj^.dt_strtab_addr[mu.name_offset];
+       Write(mu.id:2,':',str);
+      end;
+
+    DT_SCE_MODULE_ATTR:
+      begin
+       mu.value:=entry^.d_un.d_val;
+       Write(mu.id:2,':',get_mod_attr_str(mu.name_offset));
+      end;
+
+    DT_SCE_EXPORT_LIB_ATTR,
+    DT_SCE_IMPORT_LIB_ATTR:
+      begin
+       lu.value:=entry^.d_un.d_val;
+       Write(mu.id:2,':',get_lib_attr_str(lu.name_offset));
+      end;
+
+    DT_SCE_FINGERPRINT:
+     begin
+      print_bytes(obj^.sce_dynlib_addr+entry^.d_un.d_val,20);
+     end;
+
+    DT_INIT_ARRAYSZ,
+    DT_FINI_ARRAYSZ,
+    DT_SCE_HASHSZ,
+    DT_SCE_SYMTABSZ,
+    DT_STRSZ,
+    DT_SCE_STRSZ,
+    DT_RELASZ,
+    DT_SCE_RELASZ,
+    DT_PLTRELSZ,
+    DT_SCE_PLTRELSZ,
+    DT_SYMENT,
+    DT_SCE_SYMENT:
+     begin
+      Write(entry^.d_un.d_val);
+     end;
+
+    else
+      Write('0x'+HexStr(entry^.d_un.d_val,18));
+   end;
 
    Writeln;
 
-   Inc(dyn_adr);
+   Inc(entry);
   end;
 
  end else
@@ -861,6 +1024,538 @@ begin
  Writeln();
 end;
 
+function get_r_info_str(r_type:DWORD):RawByteString;
+begin
+ Case r_type of
+  R_X86_64_NONE               :Result:='R_X86_64_NONE               ';
+  R_X86_64_64                 :Result:='R_X86_64_64                 ';
+  R_X86_64_PC32               :Result:='R_X86_64_PC32               ';
+  R_X86_64_GOT32              :Result:='R_X86_64_GOT32              ';
+  R_X86_64_PLT32              :Result:='R_X86_64_PLT32              ';
+  R_X86_64_COPY               :Result:='R_X86_64_COPY               ';
+  //R_X86_64_GLOB_DAT           :Result:='R_X86_64_GLOB_DAT           ';
+  R_X86_64_JUMP_SLOT          :Result:='R_X86_64_JUMP_SLOT          ';
+  R_X86_64_RELATIVE           :Result:='R_X86_64_RELATIVE           ';
+  R_X86_64_GOTPCREL           :Result:='R_X86_64_GOTPCREL           ';
+  R_X86_64_32                 :Result:='R_X86_64_32                 ';
+  R_X86_64_32S                :Result:='R_X86_64_32S                ';
+  R_X86_64_16                 :Result:='R_X86_64_16                 ';
+  R_X86_64_PC16               :Result:='R_X86_64_PC16               ';
+  R_X86_64_8                  :Result:='R_X86_64_8                  ';
+  R_X86_64_PC8                :Result:='R_X86_64_PC8                ';
+  R_X86_64_DTPMOD64           :Result:='R_X86_64_DTPMOD64           ';
+  R_X86_64_DTPOFF64           :Result:='R_X86_64_DTPOFF64           ';
+  R_X86_64_TPOFF64            :Result:='R_X86_64_TPOFF64            ';
+  R_X86_64_TLSGD              :Result:='R_X86_64_TLSGD              ';
+  R_X86_64_TLSLD              :Result:='R_X86_64_TLSLD              ';
+  R_X86_64_DTPOFF32           :Result:='R_X86_64_DTPOFF32           ';
+  R_X86_64_GOTTPOFF           :Result:='R_X86_64_GOTTPOFF           ';
+  R_X86_64_TPOFF32            :Result:='R_X86_64_TPOFF32            ';
+  R_X86_64_PC64               :Result:='R_X86_64_PC64               ';
+  R_X86_64_GOTOFF64           :Result:='R_X86_64_GOTOFF64           ';
+  R_X86_64_GOTPC32            :Result:='R_X86_64_GOTPC32            ';
+  R_X86_64_GOT64              :Result:='R_X86_64_GOT64              ';
+  R_X86_64_GOTPCREL64         :Result:='R_X86_64_GOTPCREL64         ';
+  R_X86_64_GOTPC64            :Result:='R_X86_64_GOTPC64            ';
+  R_X86_64_GOTPLT64           :Result:='R_X86_64_GOTPLT64           ';
+  R_X86_64_PLTOFF64           :Result:='R_X86_64_PLTOFF64           ';
+  R_X86_64_SIZE32             :Result:='R_X86_64_SIZE32             ';
+  R_X86_64_SIZE64             :Result:='R_X86_64_SIZE64             ';
+  R_X86_64_GOTPC32_TLSDESC    :Result:='R_X86_64_GOTPC32_TLSDESC    ';
+  R_X86_64_TLSDESC_CALL       :Result:='R_X86_64_TLSDESC_CALL       ';
+  R_X86_64_TLSDESC            :Result:='R_X86_64_TLSDESC            ';
+  R_X86_64_IRELATIVE          :Result:='R_X86_64_IRELATIVE          ';
+  R_X86_64_RELATIVE64         :Result:='R_X86_64_RELATIVE64         ';
+  R_X86_64_ORBIS_GOTPCREL_LOAD:Result:='R_X86_64_ORBIS_GOTPCREL_LOAD';
+
+  else
+                               Result:='0x'+HexStr(r_type,8)+'                  ';
+ end;
+end;
+
+procedure print_elf_rela(obj:p_elf_obj);
+var
+ s,e:ptruint;
+ entry:p_elf64_rela;
+ i,count:Integer;
+ idx:DWORD;
+ sym:p_elf64_sym;
+ str:PAnsiChar;
+begin
+ if (obj^.dt_rela_addr<>nil) then
+ begin
+  entry:=obj^.dt_rela_addr;
+  count:=obj^.dt_rela_size div sizeof(elf64_rela);
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(entry)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.dt_rela_size;
+
+  Writeln('Relocation section ''.rela.dyn'':0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  Writeln(' Offset     Addend     Type                         Sym. Name');
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   Write(' 0x',HexStr(entry^.r_offset,8),' ');
+
+   Write('0x',HexStr(entry^.r_addend,8),' ');
+
+   Write(get_r_info_str(ELF64_R_TYPE(entry^.r_info)),' ');
+
+   idx:=ELF64_R_SYM(entry^.r_info);
+   sym:=@obj^.dt_symtab_addr[idx];
+   str:=@obj^.dt_strtab_addr[sym^.st_name];
+
+   Write(str);
+
+   writeln;
+
+   Inc(entry);
+  end;
+
+ end else
+ begin
+  Writeln('Relocation section ''.rela.dyn''','not exist');
+ end;
+ Writeln();
+
+ if (obj^.dt_rela_plt_addr<>nil) then
+ begin
+  entry:=obj^.dt_rela_plt_addr;
+  count:=obj^.dt_rela_plt_size div sizeof(elf64_rela);
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(entry)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.dt_rela_size;
+
+  Writeln('Relocation section ''.rela.plt'':0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  Writeln(' Offset     Addend     Type                         Sym. Name');
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   Write(' 0x',HexStr(entry^.r_offset,8),' ');
+
+   Write('0x',HexStr(entry^.r_addend,8),' ');
+
+   Write(get_r_info_str(ELF64_R_TYPE(entry^.r_info)),' ');
+
+   idx:=ELF64_R_SYM(entry^.r_info);
+   sym:=@obj^.dt_symtab_addr[idx];
+   str:=@obj^.dt_strtab_addr[sym^.st_name];
+
+   Write(str);
+
+   writeln;
+
+   Inc(entry);
+  end;
+
+ end else
+ begin
+  Writeln('Relocation section ''.rela.plt''','not exist')
+ end;
+ Writeln;
+end;
+
+
+
+function get_vaddr_by_offset(obj:p_elf_obj;offset:Int64):Int64;
+var
+ elf_hdr:p_elf64_hdr;
+ entry:p_elf64_phdr;
+ i,count:Integer;
+begin
+ Result:=-1;
+ if (obj^.elf.hdr=nil) then Exit;
+
+ elf_hdr :=obj^.elf.hdr;
+ entry:=get_elf_phdr(elf_hdr);
+ count:=elf_hdr^.e_phnum;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  case entry^.p_type of
+   PT_LOAD,
+   PT_SCE_RELA:
+     begin
+      if (offset>=entry^.p_offset) and (offset<(entry^.p_offset+entry^.p_filesz)) then
+      begin
+       offset:=offset-entry^.p_offset; //delta
+       Result:=entry^.p_vaddr+offset;
+       Break;
+      end;
+     end;
+  end;
+  Inc(entry);
+ end;
+end;
+
+function get_rela_by_offset(obj:p_elf_obj;offset:Int64):Int64;
+var
+ pvaddr:Int64;
+ entry:p_elf64_rela;
+ i,count:Integer;
+begin
+ Result:=-1;
+ if (obj^.dt_rela_addr=nil) then Exit;
+
+ pvaddr:=get_vaddr_by_offset(obj,offset);
+ if (pvaddr=-1) then Exit;
+
+ entry:=obj^.dt_rela_addr;
+ count:=obj^.dt_rela_size div SizeOf(elf64_rela);
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+
+  if (entry^.r_offset=pvaddr) then
+  begin
+
+   case ELF64_R_TYPE(entry^.r_info) of
+    R_X86_64_RELATIVE:
+      begin
+       Result:=entry^.r_addend;
+       Break;
+      end;
+    else;
+   end;
+
+  end;
+
+  Inc(entry);
+ end;
+
+end;
+
+function upgrade_ptr(pp:Pointer;obj:p_elf_obj):Pointer;
+var
+ offset:Int64;
+begin
+ Result:=nil;
+ offset:=Int64(pp)-Int64(obj^.elf.hdr);
+ offset:=get_rela_by_offset(obj,offset);
+ if (offset<>-1) then
+ begin
+  Result:=Pointer(obj^.elf.hdr)+offset+obj^.min_offset;
+ end else
+ if (PInt64(pp)^<>0) then
+ begin
+  Result:=Pointer(obj^.elf.hdr)+PInt64(pp)^+obj^.min_offset;
+ end;
+ if (Result<>nil) then
+ begin
+  if (Result>=(Pointer(obj^.elf.hdr)+obj^.elf.size)) then Result:=nil;
+ end;
+end;
+
+procedure WOfsstr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
+var
+ p:PChar;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  p:='null';
+ end;
+
+ Writeln(prefix,p);
+end;
+
+procedure WOfsDwr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
+var
+ p:PDWORD;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln(prefix,'null');
+ end else
+ begin
+  Writeln(prefix,'0x',HexStr(p^,8));
+ end;
+end;
+
+procedure WOfsQwr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
+var
+ p:PQWORD;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln(prefix,'null');
+ end else
+ begin
+  Writeln(prefix,'0x',HexStr(p^,16));
+ end;
+end;
+
+procedure W_sceLibcMallocReplace(pp:PPointer;obj:p_elf_obj);
+var
+ p:PsceLibcMallocReplace;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceLibcMallocReplace            :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceLibcMallocReplace            :');
+
+ if (Pointer(@p^.Size                   )+SizeOf(p^.Size                   )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
+ if (Pointer(@p^.Unknown1               )+SizeOf(p^.Unknown1               )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
+
+ if (Pointer(@p^.user_malloc_init       )+SizeOf(p^.user_malloc_init       )<=e) then WOfsQwr('     user_malloc_init               :',@p^.user_malloc_init       ,obj);
+ if (Pointer(@p^.user_malloc_finalize   )+SizeOf(p^.user_malloc_finalize   )<=e) then WOfsQwr('     user_malloc_finalize           :',@p^.user_malloc_finalize   ,obj);
+ if (Pointer(@p^.user_malloc            )+SizeOf(p^.user_malloc            )<=e) then WOfsQwr('     user_malloc                    :',@p^.user_malloc            ,obj);
+ if (Pointer(@p^.user_free              )+SizeOf(p^.user_free              )<=e) then WOfsQwr('     user_free                      :',@p^.user_free              ,obj);
+ if (Pointer(@p^.user_calloc            )+SizeOf(p^.user_calloc            )<=e) then WOfsQwr('     user_calloc                    :',@p^.user_calloc            ,obj);
+ if (Pointer(@p^.user_realloc           )+SizeOf(p^.user_realloc           )<=e) then WOfsQwr('     user_realloc                   :',@p^.user_realloc           ,obj);
+ if (Pointer(@p^.user_memalign          )+SizeOf(p^.user_memalign          )<=e) then WOfsQwr('     user_memalign                  :',@p^.user_memalign          ,obj);
+ if (Pointer(@p^.user_reallocalign      )+SizeOf(p^.user_reallocalign      )<=e) then WOfsQwr('     user_reallocalign              :',@p^.user_reallocalign      ,obj);
+ if (Pointer(@p^.user_posix_memalign    )+SizeOf(p^.user_posix_memalign    )<=e) then WOfsQwr('     user_posix_memalign            :',@p^.user_posix_memalign    ,obj);
+ if (Pointer(@p^.user_malloc_stats      )+SizeOf(p^.user_malloc_stats      )<=e) then WOfsQwr('     user_malloc_stats              :',@p^.user_malloc_stats      ,obj);
+ if (Pointer(@p^.user_malloc_stats_fast )+SizeOf(p^.user_malloc_stats_fast )<=e) then WOfsQwr('     user_malloc_stats_fast         :',@p^.user_malloc_stats_fast ,obj);
+ if (Pointer(@p^.user_malloc_usable_size)+SizeOf(p^.user_malloc_usable_size)<=e) then WOfsQwr('     user_malloc_usable_size        :',@p^.user_malloc_usable_size,obj);
+end;
+
+procedure W_sceLibcNewReplace(pp:PPointer;obj:p_elf_obj);
+var
+ p:PsceLibcNewReplace;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceLibcNewReplace               :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceLibcNewReplace               :');
+
+ if (Pointer(@p^.Size               )+SizeOf(p^.Size               )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
+ if (Pointer(@p^.Unknown1           )+SizeOf(p^.Unknown1           )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
+
+ if (Pointer(@p^.user_new_1         )+SizeOf(p^.user_new_1         )<=e) then WOfsQwr('     user_new_1                     :',@p^.user_new_1         ,obj);
+ if (Pointer(@p^.user_new_2         )+SizeOf(p^.user_new_2         )<=e) then WOfsQwr('     user_new_2                     :',@p^.user_new_2         ,obj);
+ if (Pointer(@p^.user_new_array_1   )+SizeOf(p^.user_new_array_1   )<=e) then WOfsQwr('     user_new_array_1               :',@p^.user_new_array_1   ,obj);
+ if (Pointer(@p^.user_new_array_2   )+SizeOf(p^.user_new_array_2   )<=e) then WOfsQwr('     user_new_array_2               :',@p^.user_new_array_2   ,obj);
+ if (Pointer(@p^.user_delete_1      )+SizeOf(p^.user_delete_1      )<=e) then WOfsQwr('     user_delete_1                  :',@p^.user_delete_1      ,obj);
+ if (Pointer(@p^.user_delete_2      )+SizeOf(p^.user_delete_2      )<=e) then WOfsQwr('     user_delete_2                  :',@p^.user_delete_2      ,obj);
+ if (Pointer(@p^.user_delete_array_1)+SizeOf(p^.user_delete_array_1)<=e) then WOfsQwr('     user_delete_array_1            :',@p^.user_delete_array_1,obj);
+ if (Pointer(@p^.user_delete_array_2)+SizeOf(p^.user_delete_array_2)<=e) then WOfsQwr('     user_delete_array_2            :',@p^.user_delete_array_2,obj);
+ if (Pointer(@p^.user_delete_3      )+SizeOf(p^.user_delete_3      )<=e) then WOfsQwr('     user_delete_3                  :',@p^.user_delete_3      ,obj);
+ if (Pointer(@p^.user_delete_4      )+SizeOf(p^.user_delete_4      )<=e) then WOfsQwr('     user_delete_4                  :',@p^.user_delete_4      ,obj);
+ if (Pointer(@p^.user_delete_array_3)+SizeOf(p^.user_delete_array_3)<=e) then WOfsQwr('     user_delete_array_3            :',@p^.user_delete_array_3,obj);
+ if (Pointer(@p^.user_delete_array_4)+SizeOf(p^.user_delete_array_4)<=e) then WOfsQwr('     user_delete_array_4            :',@p^.user_delete_array_4,obj);
+end;
+
+procedure W_sceLibcMallocReplaceForTls(pp:PPointer;obj:p_elf_obj);
+var
+ p:PsceLibcMallocReplaceForTls;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceLibcMallocReplaceForTls      :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceLibcMallocReplaceForTls      :');
+
+ if (Pointer(@p^.Size                       )+SizeOf(p^.Size                       )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
+ if (Pointer(@p^.Unknown1                   )+SizeOf(p^.Unknown1                   )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
+
+ if (Pointer(@p^.user_malloc_init_for_tls   )+SizeOf(p^.user_malloc_init_for_tls   )<=e) then WOfsQwr('     user_malloc_init_for_tls       :',@p^.user_malloc_init_for_tls   ,obj);
+ if (Pointer(@p^.user_malloc_fini_for_tls   )+SizeOf(p^.user_malloc_fini_for_tls   )<=e) then WOfsQwr('     user_malloc_fini_for_tls       :',@p^.user_malloc_fini_for_tls   ,obj);
+ if (Pointer(@p^.user_malloc_for_tls        )+SizeOf(p^.user_malloc_for_tls        )<=e) then WOfsQwr('     user_malloc_for_tls            :',@p^.user_malloc_for_tls        ,obj);
+ if (Pointer(@p^.user_posix_memalign_for_tls)+SizeOf(p^.user_posix_memalign_for_tls)<=e) then WOfsQwr('     user_posix_memalign_for_tls    :',@p^.user_posix_memalign_for_tls,obj);
+ if (Pointer(@p^.user_free_for_tls          )+SizeOf(p^.user_free_for_tls          )<=e) then WOfsQwr('     user_free_for_tls              :',@p^.user_free_for_tls          ,obj);
+end;
+
+procedure W_sceLibcParam(pp:PPointer;obj:p_elf_obj);
+var
+ p:PSceLibcParam;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceLibcParam                    :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceLibcParam                    :');
+
+ if (Pointer(@p^.Size                             )+SizeOf(p^.Size                             )<=e) then Writeln('   Size                             :0x',HexStr(p^.Size,8)   );
+ if (Pointer(@p^.entry_count                      )+SizeOf(p^.entry_count                      )<=e) then Writeln('   entry_count                      :',p^.entry_count        );
+ if (Pointer(@p^.SceLibcInternalHeap              )+SizeOf(p^.SceLibcInternalHeap              )<=e) then Writeln('   SceLibcInternalHeap              :',p^.SceLibcInternalHeap);
+
+ if (Pointer(@p^.sceLibcHeapSize                  )+SizeOf(p^.sceLibcHeapSize                  )<=e) then WOfsDwr('   sceLibcHeapSize                  :',@p^.sceLibcHeapSize                  ,obj);
+ if (Pointer(@p^.sceLibcHeapDelayedAlloc          )+SizeOf(p^.sceLibcHeapDelayedAlloc          )<=e) then WOfsDwr('   sceLibcHeapDelayedAlloc          :',@p^.sceLibcHeapDelayedAlloc          ,obj);
+ if (Pointer(@p^.sceLibcHeapExtendedAlloc         )+SizeOf(p^.sceLibcHeapExtendedAlloc         )<=e) then WOfsDwr('   sceLibcHeapExtendedAlloc         :',@p^.sceLibcHeapExtendedAlloc         ,obj);
+ if (Pointer(@p^.sceLibcHeapInitialSize           )+SizeOf(p^.sceLibcHeapInitialSize           )<=e) then WOfsDwr('   sceLibcHeapInitialSize           :',@p^.sceLibcHeapInitialSize           ,obj);
+
+ if (Pointer(@p^._sceLibcMallocReplace            )+SizeOf(p^._sceLibcMallocReplace            )<=e) then W_sceLibcMallocReplace(@p^._sceLibcMallocReplace,obj);
+ if (Pointer(@p^._sceLibcNewReplace               )+SizeOf(p^._sceLibcNewReplace               )<=e) then W_sceLibcNewReplace   (@p^._sceLibcNewReplace   ,obj);
+
+ if (Pointer(@p^.sceLibcHeapHighAddressAlloc      )+SizeOf(p^.sceLibcHeapHighAddressAlloc      )<=e) then WOfsQwr('   sceLibcHeapHighAddressAlloc      :',@p^.sceLibcHeapHighAddressAlloc      ,obj);
+ if (Pointer(@p^.Need_sceLibc                     )+SizeOf(p^.Need_sceLibc                     )<=e) then WOfsDwr('   Need_sceLibc                     :',@p^.Need_sceLibc                     ,obj);
+ if (Pointer(@p^.sceLibcHeapMemoryLock            )+SizeOf(p^.sceLibcHeapMemoryLock            )<=e) then WOfsQwr('   sceLibcHeapMemoryLock            :',@p^.sceLibcHeapMemoryLock            ,obj);
+ if (Pointer(@p^.sceKernelInternalMemorySize      )+SizeOf(p^.sceKernelInternalMemorySize      )<=e) then WOfsDwr('   sceKernelInternalMemorySize      :',@p^.sceKernelInternalMemorySize      ,obj);
+
+ if (Pointer(@p^._sceLibcMallocReplaceForTls      )+SizeOf(p^._sceLibcMallocReplaceForTls      )<=e) then W_sceLibcMallocReplaceForTls(@p^._sceLibcMallocReplaceForTls,obj);
+
+ if (Pointer(@p^.sceLibcMaxSystemSize             )+SizeOf(p^.sceLibcMaxSystemSize             )<=e) then WOfsQwr('   sceLibcMaxSystemSize             :',@p^.sceLibcMaxSystemSize             ,obj);
+ if (Pointer(@p^.sceLibcHeapDebugFlags            )+SizeOf(p^.sceLibcHeapDebugFlags            )<=e) then WOfsQwr('   sceLibcHeapDebugFlags            :',@p^.sceLibcHeapDebugFlags            ,obj);
+ if (Pointer(@p^.sceLibcStdThreadStackSize        )+SizeOf(p^.sceLibcStdThreadStackSize        )<=e) then WOfsDwr('   sceLibcStdThreadStackSize        :',@p^.sceLibcStdThreadStackSize        ,obj);
+
+
+ if (Pointer(@p^.sceKernelInternalMemoryDebugFlags)+SizeOf(p^.sceKernelInternalMemoryDebugFlags)<=e) then WOfsDwr('   sceKernelInternalMemoryDebugFlags:',@p^.sceKernelInternalMemoryDebugFlags,obj);
+ if (Pointer(@p^.sceLibcWorkerThreadNum           )+SizeOf(p^.sceLibcWorkerThreadNum           )<=e) then WOfsDwr('   sceLibcWorkerThreadNum           :',@p^.sceLibcWorkerThreadNum           ,obj);
+ if (Pointer(@p^.sceLibcWorkerThreadPriority      )+SizeOf(p^.sceLibcWorkerThreadPriority      )<=e) then WOfsDwr('   sceLibcWorkerThreadPriority      :',@p^.sceLibcWorkerThreadPriority      ,obj);
+ if (Pointer(@p^.sceLibcThreadUnnamedObjects      )+SizeOf(p^.sceLibcThreadUnnamedObjects      )<=e) then WOfsDwr('   sceLibcThreadUnnamedObjects      :',@p^.sceLibcThreadUnnamedObjects      ,obj);
+end;
+
+procedure W_sceKernelMemParam(pp:PPointer;obj:p_elf_obj);
+var
+ p:PSceKernelMemParam;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceKernelMemParam               :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceKernelMemParam               :');
+
+ if (Pointer(@p^.Size                         )+SizeOf(p^.Size                         )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size,8));
+
+ if (Pointer(@p^.sceKernelExtendedPageTable   )+SizeOf(p^.sceKernelExtendedPageTable   )<=e) then WOfsQwr('     sceKernelExtendedPageTable     :',@p^.sceKernelExtendedPageTable   ,obj);
+ if (Pointer(@p^.sceKernelFlexibleMemorySize  )+SizeOf(p^.sceKernelFlexibleMemorySize  )<=e) then WOfsQwr('     sceKernelFlexibleMemorySize    :',@p^.sceKernelFlexibleMemorySize  ,obj);
+ if (Pointer(@p^.sceKernelExtendedMemory1     )+SizeOf(p^.sceKernelExtendedMemory1     )<=e) then WOfsQwr('     sceKernelExtendedMemory1       :',@p^.sceKernelExtendedMemory1     ,obj);
+ if (Pointer(@p^.sceKernelExtendedGpuPageTable)+SizeOf(p^.sceKernelExtendedGpuPageTable)<=e) then WOfsQwr('     sceKernelExtendedGpuPageTable  :',@p^.sceKernelExtendedGpuPageTable,obj);
+ if (Pointer(@p^.sceKernelExtendedMemory2     )+SizeOf(p^.sceKernelExtendedMemory2     )<=e) then WOfsQwr('     sceKernelExtendedMemory2       :',@p^.sceKernelExtendedMemory2     ,obj);
+ if (Pointer(@p^.sceKernelExtendedCpuPageTable)+SizeOf(p^.sceKernelExtendedCpuPageTable)<=e) then WOfsQwr('     sceKernelExtendedCpuPageTable  :',@p^.sceKernelExtendedCpuPageTable,obj);
+end;
+
+procedure W_sceKernelFsParam(pp:PPointer;obj:p_elf_obj);
+var
+ p:PSceKernelFsParam;
+ e:Pointer;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln('   _sceKernelFsParam                :','null');
+  Exit;
+ end;
+
+ e:=Pointer(p)+p^.Size;
+
+ Writeln('   _sceKernelFsParam                :');
+
+ if (Pointer(@p^.Size               )+SizeOf(p^.Size             )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size,8));
+
+ if (Pointer(@p^.sceKernelFsDupDent)+SizeOf(p^.sceKernelFsDupDent)<=e) then WOfsQwr('     sceKernelFsDupDent             :',@p^.sceKernelFsDupDent,obj);
+end;
+
+procedure print_elf_sce_procparam(obj:p_elf_obj);
+var
+ s,e:ptruint;
+
+ pa:PSceProcParam;
+ pe:Pointer;
+begin
+ if (obj^.proc_param_addr<>nil) then
+ begin
+  pa:=obj^.proc_param_addr;
+  pe:=Pointer(pa)+obj^.proc_param_size;
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(pa)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.proc_param_size;
+
+  Writeln('SCE proc param:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  if (Pointer(@pa^.Size                      )+SizeOf(pa^.Size                      )<=pe) then Writeln(' Size                               :0x',HexStr(pa^.Size              ,8));
+  if (Pointer(@pa^.Magic                     )+SizeOf(pa^.Magic                     )<=pe) then Writeln(' Magic                              :0x',HexStr(pa^.Magic             ,8));
+  if (Pointer(@pa^.Entry_count               )+SizeOf(pa^.Entry_count               )<=pe) then Writeln(' Entry_count                        :0x',HexStr(pa^.Entry_count       ,8));
+  if (Pointer(@pa^.SDK_version               )+SizeOf(pa^.SDK_version               )<=pe) then Writeln(' SDK_version                        :0x',HexStr(pa^.SDK_version       ,8));
+  if (Pointer(@pa^.sceProcessName            )+SizeOf(pa^.sceProcessName            )<=pe) then WOfsstr(' sceProcessName                     :',@pa^.sceProcessName            ,obj);
+  if (Pointer(@pa^.sceUserMainThreadName     )+SizeOf(pa^.sceUserMainThreadName     )<=pe) then WOfsstr(' sceUserMainThreadName              :',@pa^.sceUserMainThreadName     ,obj);
+  if (Pointer(@pa^.sceUserMainThreadPriority )+SizeOf(pa^.sceUserMainThreadPriority )<=pe) then WOfsDwr(' sceUserMainThreadPriority          :',@pa^.sceUserMainThreadPriority ,obj);
+  if (Pointer(@pa^.sceUserMainThreadStackSize)+SizeOf(pa^.sceUserMainThreadStackSize)<=pe) then WOfsDwr(' sceUserMainThreadStackSize         :',@pa^.sceUserMainThreadStackSize,obj);
+
+  if (Pointer(@pa^._sceLibcParam             )+SizeOf(pa^._sceLibcParam             )<=pe) then W_sceLibcParam     (@pa^._sceLibcParam     ,obj);
+  if (Pointer(@pa^._sceKernelMemParam        )+SizeOf(pa^._sceKernelMemParam        )<=pe) then W_sceKernelMemParam(@pa^._sceKernelMemParam,obj);
+  if (Pointer(@pa^._sceKernelFsParam         )+SizeOf(pa^._sceKernelFsParam         )<=pe) then W_sceKernelFsParam (@pa^._sceKernelFsParam ,obj);
+
+  if (Pointer(@pa^.sceProcessPreloadEnabled  )+SizeOf(pa^.sceProcessPreloadEnabled  )<=pe) then WOfsDwr(' sceProcessPreloadEnabled           :',@pa^.sceProcessPreloadEnabled  ,obj);
+ end else
+ begin
+  Writeln('SCE proc param:','not exist');
+ end;
+ Writeln;
+end;
+
+procedure print_elf_sce_moduleparam(obj:p_elf_obj);
+var
+ s,e:ptruint;
+
+ pa:PsceModuleParam;
+ pe:Pointer;
+begin
+ if (obj^.module_param_addr<>nil) then
+ begin
+  pa:=obj^.module_param_addr;
+  pe:=Pointer(pa)+obj^.module_param_size;
+
+  s:=get_elf_hdr_offset(obj);
+  s:=s+(Pointer(pa)-Pointer(obj^.elf.hdr));
+  e:=s+obj^.module_param_size;
+
+  Writeln('SCE module param:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
+
+  if (Pointer(@pa^.Size       )+SizeOf(pa^.Size       )<=pe) then Writeln(' Size       :0x',HexStr(pa^.Size       ,8));
+  if (Pointer(@pa^.Magic      )+SizeOf(pa^.Magic      )<=pe) then Writeln(' Magic      :0x',HexStr(pa^.Magic      ,8));
+  if (Pointer(@pa^.SDK_version)+SizeOf(pa^.SDK_version)<=pe) then Writeln(' SDK_version:0x',HexStr(pa^.SDK_version,8));
+ end else
+ begin
+  Writeln('SCE module param:','not exist');
+ end;
+ Writeln;
+end;
+
 procedure print_elf_tls(obj:p_elf_obj);
 label
  _not_exist;
@@ -868,13 +1563,6 @@ var
  s,e:ptruint;
  m:PBYTE;
 begin
- if (obj^.is_encrypted<>0) then
- begin
-  Writeln('Elf is_encrypted');
-  Writeln;
-  Exit;
- end;
-
  if (obj^.tls_addr<>nil) then
  begin
   s:=get_elf_hdr_offset(obj);
@@ -907,6 +1595,9 @@ type
   pp_file_header,
   pp_program_headers,
   pp_dynamic,
+  pp_relocs,
+  pp_sce_procparam,
+  pp_sce_moduleparam,
   pp_tls
  );
  t_print_param_set=Set of t_print_param;
@@ -933,6 +1624,9 @@ begin
                                      pp_file_header,
                                      pp_program_headers,
                                      pp_dynamic,
+                                     pp_relocs,
+                                     pp_sce_procparam,
+                                     pp_sce_moduleparam,
                                      pp_tls];
 
    '-F','--file_size'      :print_param:=print_param+[pp_file_size      ];
@@ -942,8 +1636,11 @@ begin
    '-M','--self_metadata'  :print_param:=print_param+[pp_self_metadata  ];
    '-h','--file-header'    :print_param:=print_param+[pp_file_header    ];
    '-l','--program-headers':print_param:=print_param+[pp_program_headers];
-   '-d','--dynamic'        :print_param:=print_param+[pp_dynamic];
-   '-t','--tls'            :print_param:=print_param+[pp_tls];
+   '-d','--dynamic'        :print_param:=print_param+[pp_dynamic        ];
+   '-r','--relocs'         :print_param:=print_param+[pp_relocs         ];
+   '-p','--sce_procparam'  :print_param:=print_param+[pp_sce_procparam  ];
+   '-m','--sce_moduleparam':print_param:=print_param+[pp_sce_moduleparam];
+   '-t','--tls'            :print_param:=print_param+[pp_tls            ];
    else
     FileName:=S;
   end;
@@ -966,13 +1663,26 @@ begin
   if (pp_self_segs       in print_param) then print_self_segs    (@obj);
   if (pp_self_authinfo   in print_param) then print_self_authinfo(@obj);
   if (pp_self_metadata   in print_param) then print_self_metadata(@obj);
-  if (pp_file_header     in print_param) then print_elf_header   (@obj);
-  if (pp_program_headers in print_param) then print_elf_phdr     (@obj);
 
-  scan_phdr(@obj);
+  if (obj.is_encrypted<>0) then
+  begin
+   Writeln('Elf is_encrypted');
+   Writeln;
+  end else
+  begin
+   if (pp_file_header     in print_param) then print_elf_header   (@obj);
+   if (pp_program_headers in print_param) then print_elf_phdr     (@obj);
 
-  if (pp_dynamic         in print_param) then print_elf_dynamic  (@obj);
-  if (pp_tls             in print_param) then print_elf_tls      (@obj);
+   scan_phdr(@obj);
+   scan_dynamic(@obj);
+
+   if (pp_dynamic         in print_param) then print_elf_dynamic        (@obj);
+   if (pp_relocs          in print_param) then print_elf_rela           (@obj);
+   if (pp_sce_procparam   in print_param) then print_elf_sce_procparam  (@obj);
+   if (pp_sce_moduleparam in print_param) then print_elf_sce_moduleparam(@obj);
+   if (pp_tls             in print_param) then print_elf_tls            (@obj);
+  end;
+
  end else
  begin
   Writeln('Error(',r,') load file:',FileName);
