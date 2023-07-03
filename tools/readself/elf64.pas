@@ -441,20 +441,26 @@ const
 type
  TModuleValue=packed record
   case Byte of
-   0:(value:Int64);
+   0:(value      :Int64);
    1:(name_offset:DWORD;
-      version_minor:Byte;
-      version_major:Byte;
-      id:Word);
+      version    :Word;
+      id         :Word);
  end;
 
  TLibraryValue=packed record
   case Byte of
-   0:(value:Int64);
+   0:(value      :Int64);
    1:(name_offset:DWORD;
-      version_minor:Byte;
-      version_major:Byte;
-      id:Word);
+      version    :Word;
+      id         :Word);
+ end;
+
+ TLibraryAttr=packed record
+  case Byte of
+   0:(value:Int64);
+   1:(attr :WORD;
+      align:DWORD;
+      id   :Word);
  end;
 
  PTLS_index=^TLS_index;

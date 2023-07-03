@@ -341,6 +341,13 @@ begin
  end;
 end;
 
+function get_sdk_version_str(version:QWORD):RawByteString;
+begin
+ Result:=Format('%.*x.%.*x.%.*x',[2,(version shr 24),
+                                  3,((version shr 12) and $fff),
+                                  3,(version and $fff)]);
+end;
+
 procedure print_self_authinfo(obj:p_elf_obj);
 label
  _not_exist;
@@ -372,8 +379,8 @@ begin
 
   Writeln(' AuthorityID    :0x',HexStr(authinfo^.AuthorityID,16));
   Writeln(' Program_Type   :0x',HexStr(authinfo^.Program_Type,2),' ',get_program_type_str(authinfo^.Program_Type));
-  Writeln(' Program_Version:0x',HexStr(authinfo^.Program_Version,16));
-  Writeln(' System_Version :0x',HexStr(authinfo^.System_Version,16));
+  Writeln(' Program_Version:',get_sdk_version_str(authinfo^.Program_Version));
+  Writeln(' System_Version :',get_sdk_version_str(authinfo^.System_Version ));
 
   Write  (' Digest_SHA_256 :');
   print_bytes(@authinfo^.Digest_SHA_256,32);
@@ -939,7 +946,7 @@ var
  entry:p_elf64_dyn;
  i,count:Integer;
  mu:TModuleValue;
- lu:TLibraryValue;
+ la:TLibraryAttr;
  str:PAnsiChar;
 begin
  if (obj^.dyn_addr<>nil) then
@@ -983,8 +990,8 @@ begin
     DT_SCE_EXPORT_LIB_ATTR,
     DT_SCE_IMPORT_LIB_ATTR:
       begin
-       lu.value:=entry^.d_un.d_val;
-       Write(mu.id:2,':',get_lib_attr_str(lu.name_offset));
+       la.value:=entry^.d_un.d_val;
+       Write(la.id:2,':',get_lib_attr_str(la.attr));
       end;
 
     DT_SCE_FINGERPRINT:
@@ -1203,8 +1210,8 @@ end;
 function get_st_shndx_str(st_shndx:Word):RawByteString;
 begin
  case st_shndx of
-  SHN_UNDEF  :Result:='SHN_UNDEF';
-  else        Result:='0x'+HexStr(st_shndx,4)+'   ';
+  SHN_UNDEF  :Result:='UNDEF';
+  else        Result:='0x'+HexStr(st_shndx,3);
  end;
 end;
 
@@ -1226,7 +1233,7 @@ begin
 
   Writeln('Symbol table ''.symtab'':0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
 
-  Writeln('  Num Value      Size Type    Bind   Vis       Ndx       Name');
+  Writeln('  Num Value      Size Type    Bind   Vis       Ndx   Name');
   if (count<>0) then
   For i:=0 to count-1 do
   begin
@@ -1607,7 +1614,7 @@ begin
   if (Pointer(@pa^.Size                      )+SizeOf(pa^.Size                      )<=pe) then Writeln(' Size                               :0x',HexStr(pa^.Size              ,8));
   if (Pointer(@pa^.Magic                     )+SizeOf(pa^.Magic                     )<=pe) then Writeln(' Magic                              :0x',HexStr(pa^.Magic             ,8));
   if (Pointer(@pa^.Entry_count               )+SizeOf(pa^.Entry_count               )<=pe) then Writeln(' Entry_count                        :0x',HexStr(pa^.Entry_count       ,8));
-  if (Pointer(@pa^.SDK_version               )+SizeOf(pa^.SDK_version               )<=pe) then Writeln(' SDK_version                        :0x',HexStr(pa^.SDK_version       ,8));
+  if (Pointer(@pa^.SDK_version               )+SizeOf(pa^.SDK_version               )<=pe) then Writeln(' SDK_version                        :',get_sdk_version_str(pa^.SDK_version));
   if (Pointer(@pa^.sceProcessName            )+SizeOf(pa^.sceProcessName            )<=pe) then WOfsstr(' sceProcessName                     :',@pa^.sceProcessName            ,obj);
   if (Pointer(@pa^.sceUserMainThreadName     )+SizeOf(pa^.sceUserMainThreadName     )<=pe) then WOfsstr(' sceUserMainThreadName              :',@pa^.sceUserMainThreadName     ,obj);
   if (Pointer(@pa^.sceUserMainThreadPriority )+SizeOf(pa^.sceUserMainThreadPriority )<=pe) then WOfsDwr(' sceUserMainThreadPriority          :',@pa^.sceUserMainThreadPriority ,obj);
@@ -1645,7 +1652,7 @@ begin
 
   if (Pointer(@pa^.Size       )+SizeOf(pa^.Size       )<=pe) then Writeln(' Size       :0x',HexStr(pa^.Size       ,8));
   if (Pointer(@pa^.Magic      )+SizeOf(pa^.Magic      )<=pe) then Writeln(' Magic      :0x',HexStr(pa^.Magic      ,8));
-  if (Pointer(@pa^.SDK_version)+SizeOf(pa^.SDK_version)<=pe) then Writeln(' SDK_version:0x',HexStr(pa^.SDK_version,8));
+  if (Pointer(@pa^.SDK_version)+SizeOf(pa^.SDK_version)<=pe) then Writeln(' SDK_version:',get_sdk_version_str(pa^.SDK_version));
  end else
  begin
   Writeln('SCE module param:','not exist');
