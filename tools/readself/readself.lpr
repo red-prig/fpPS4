@@ -2,7 +2,9 @@ program readself;
 
 uses
  sysutils,
- elf64;
+ elf64,
+ elf_nid_utils,
+ ps4libdoc;
 
 type
  p_elf_obj=^elf_obj;
@@ -1688,6 +1690,182 @@ begin
  Writeln;
 end;
 
+type
+ p_nid_info=^t_nid_info;
+ t_nid_info=record
+  sym:elf64_sym;
+  enc:RawByteString;
+  dst:RawByteString;
+  nid:QWORD;
+  lib:WORD;
+ end;
+
+procedure convert_info_name(info:p_nid_info);
+var
+ nModId,nLibId:WORD;
+begin
+ nLibId:=0;
+
+ case ELF64_ST_TYPE(info^.sym.st_info) of
+  STT_NOTYPE: //original string
+   begin
+    info^.nid:=ps4_nid_hash(info^.enc);
+    info^.dst:=info^.enc;
+    info^.enc:=EncodeValue64(info^.nid);
+   end;
+  STT_SCE:    //base64 string without specifying the module and library
+   begin
+    DecodeValue64(PChar(info^.enc),Length(info^.enc),info^.nid);
+    info^.dst:=GetFunctName(info^.nid);
+   end;
+  else        //base64 string specifying the module and library
+   begin
+    DecodeEncName(PChar(info^.enc),nModId,nLibId,info^.nid);
+    info^.dst:=GetFunctName(info^.nid);
+   end;
+ end;
+
+ info^.lib:=nLibId;
+end;
+
+function get_st_type_short(st_type:Byte):RawByteString;
+begin
+ Case st_type of
+  STT_NOTYPE :Result:='NTP';
+  STT_OBJECT :Result:='OBJ';
+  STT_FUN    :Result:='FUN';
+  STT_SECTION:Result:='SEC';
+  STT_FILE   :Result:='FIL';
+  STT_COMMON :Result:='CMN';
+  STT_TLS    :Result:='TLS';
+  STT_SCE    :Result:='SCE';
+  else
+              Result:=HexStr(st_type,3);
+ end;
+end;
+
+function get_st_bind_short(st_bind:Byte):RawByteString;
+begin
+ Case st_bind of
+  STB_LOCAL :Result:='L';
+  STB_GLOBAL:Result:='G';
+  STB_WEAK  :Result:='W';
+  else
+             Result:=HexStr(st_bind,1);
+ end;
+end;
+
+type
+ TLIBRARY=record
+  Name  :RawByteString;
+  Import:Boolean
+ end;
+
+procedure print_string_dump(obj:p_elf_obj);
+var
+ d_entry:p_elf64_dyn;
+ s_entry:p_elf64_sym;
+ i,count:Integer;
+ lu:TLibraryValue;
+ str:PAnsiChar;
+
+ lib:TLIBRARY;
+
+ lib_array:array of TLIBRARY;
+
+ nid_info:t_nid_info;
+
+ procedure set_lib(id:Word;lib:TLIBRARY); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(lib_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(lib_array,i);
+  end;
+  lib_array[id]:=lib;
+ end;
+
+begin
+ SetLength(lib_array,0);
+
+ if (obj^.dyn_addr<>nil) then
+ begin
+  d_entry:=obj^.dyn_addr;
+  count:=obj^.dyn_size div sizeof(elf64_dyn);
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   case d_entry^.d_tag of
+
+    DT_SCE_IMPORT_LIB,
+    DT_SCE_EXPORT_LIB:
+      begin
+       lu.value:=d_entry^.d_un.d_val;
+       str:=@obj^.dt_strtab_addr[lu.name_offset];
+
+       lib.Name  :=str;
+       lib.Import:=(d_entry^.d_tag=DT_SCE_IMPORT_LIB);
+
+       set_lib(lu.id,lib);
+      end;
+
+    else;
+   end;
+
+   Inc(d_entry);
+  end;
+
+ end;
+
+ if (obj^.dt_symtab_addr<>nil) then
+ begin
+  s_entry:=obj^.dt_symtab_addr;
+  count:=obj^.dt_symtab_size div sizeof(elf64_sym);
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   str:=@obj^.dt_strtab_addr[s_entry^.st_name];
+
+   if (Trim(str)<>'') then
+   begin
+    nid_info:=Default(t_nid_info);
+    nid_info.sym:=s_entry^;
+    nid_info.enc:=str;
+
+    convert_info_name(@nid_info);
+
+    Case lib_array[nid_info.lib].Import of
+     True :Write('I|');
+     False:Write('E|');
+    end;
+
+    Write(get_st_type_short(ELF64_ST_TYPE(s_entry^.st_info)),'|');
+    Write(get_st_bind_short(ELF64_ST_BIND(s_entry^.st_info)),'|');
+
+    Write('0x',HexStr(nid_info.nid,16),'|');
+
+    Write(BaseEncName(PChar(nid_info.enc)),'|');
+
+    Write(lib_array[nid_info.lib].Name,'|');
+
+    Write(nid_info.dst);
+
+    writeln;
+   end;
+
+   Inc(s_entry);
+  end;
+
+ end;
+
+ Writeln();
+end;
 
 type
  t_print_param=(
@@ -1703,7 +1881,8 @@ type
   pp_symbols,
   pp_sce_procparam,
   pp_sce_moduleparam,
-  pp_tls
+  pp_tls,
+  pp_string_dump
  );
  t_print_param_set=Set of t_print_param;
 
@@ -1725,15 +1904,14 @@ begin
                                      pp_self_header,
                                      pp_self_segs,
                                      pp_self_authinfo,
-                                     pp_self_metadata,
                                      pp_file_header,
                                      pp_program_headers,
                                      pp_dynamic,
                                      pp_relocs,
                                      pp_symbols,
                                      pp_sce_procparam,
-                                     pp_sce_moduleparam,
-                                     pp_tls];
+                                     pp_sce_moduleparam
+                                     ];
 
    '-F','--file_size'      :print_param:=print_param+[pp_file_size      ];
    '-H','--self_header'    :print_param:=print_param+[pp_self_header    ];
@@ -1745,9 +1923,10 @@ begin
    '-d','--dynamic'        :print_param:=print_param+[pp_dynamic        ];
    '-r','--relocs'         :print_param:=print_param+[pp_relocs         ];
    '-s','--symbols'        :print_param:=print_param+[pp_symbols        ];
-   '-p','--sce_procparam'  :print_param:=print_param+[pp_sce_procparam  ];
+   '-P','--sce_procparam'  :print_param:=print_param+[pp_sce_procparam  ];
    '-m','--sce_moduleparam':print_param:=print_param+[pp_sce_moduleparam];
    '-t','--tls'            :print_param:=print_param+[pp_tls            ];
+   '-p','--string-dump'    :print_param:=print_param+[pp_string_dump    ];
    else
     FileName:=S;
   end;
@@ -1789,6 +1968,10 @@ begin
    if (pp_sce_procparam   in print_param) then print_elf_sce_procparam  (@obj);
    if (pp_sce_moduleparam in print_param) then print_elf_sce_moduleparam(@obj);
    if (pp_tls             in print_param) then print_elf_tls            (@obj);
+
+
+   if (pp_string_dump     in print_param) then print_string_dump        (@obj);
+
   end;
 
  end else
@@ -1798,6 +1981,6 @@ begin
 
  free_elf_obj(@obj);
 
- readln;
+ //readln;
 end.
 
