@@ -1900,18 +1900,18 @@ begin
  begin
   S:=Trim(ParamStr(i));
   case S of
-   '-a','-all'        :print_param:=[pp_file_size,
-                                     pp_self_header,
-                                     pp_self_segs,
-                                     pp_self_authinfo,
-                                     pp_file_header,
-                                     pp_program_headers,
-                                     pp_dynamic,
-                                     pp_relocs,
-                                     pp_symbols,
-                                     pp_sce_procparam,
-                                     pp_sce_moduleparam
-                                     ];
+   '-a','--all'            :print_param:=[pp_file_size,
+                                          pp_self_header,
+                                          pp_self_segs,
+                                          pp_self_authinfo,
+                                          pp_file_header,
+                                          pp_program_headers,
+                                          pp_dynamic,
+                                          pp_relocs,
+                                          pp_symbols,
+                                          pp_sce_procparam,
+                                          pp_sce_moduleparam
+                                         ];
 
    '-F','--file_size'      :print_param:=print_param+[pp_file_size      ];
    '-H','--self_header'    :print_param:=print_param+[pp_self_header    ];
@@ -1939,6 +1939,29 @@ var
 
 begin
  parse_param;
+
+ if (ParamCount<=1) or (FileName='') then
+ begin
+  Writeln('Usage: readself <option(s)> elf/self-file');
+  Writeln(' Display information about the contents of ELF/SELF format files');
+  Writeln(' Options are:');
+  Writeln('  -a --all             Equivalent to: -F -H -S -A -h -l -d -r -s -P -m');
+  Writeln('  -F --file_size       Display the file size');
+  Writeln('  -H --self_header     Display the SELF file header');
+  Writeln('  -S --self_segs       Display the segments header');
+  Writeln('  -A --self_authinfo   Display the SELF authinfo');
+  Writeln('  -M --self_metadata   Display the SELF metadata');
+  Writeln('  -h --file-header     Display the ELF file header');
+  Writeln('  -l --program-headers Display the program headers');
+  Writeln('  -d --dynamic         Display the dynamic section');
+  Writeln('  -r --relocs          Display the relocations');
+  Writeln('  -s --symbols         Display the symbol table');
+  Writeln('  -P --sce_procparam   Display the sce proc param');
+  Writeln('  -m --sce_moduleparam Display the sce module param');
+  Writeln('  -t --tls             Display the tls data');
+  Writeln('  -p --string-dump     Dump the contents of symbols');
+  Exit;
+ end;
 
  r:=load_self(FileName,@obj);
 
