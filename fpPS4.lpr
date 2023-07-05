@@ -65,6 +65,10 @@ uses
  ps4_libSceAudiodecCpu,
  ps4_libSceDepth,
  ps4_libSceNpTus,
+ ps4_libSceLoginService,
+ ps4_libSceHmd,
+ ps4_libSceVrTracker,
+ ps4_libSceCamera,
  ps4_elf,
  ps4_pthread,
  ps4_program,
@@ -90,13 +94,15 @@ begin
   Writeln('Copyright (c) 2021-2023 by red-prig');
   Writeln('PS4 compatibility layer (emulator) written with Free Pascal '+{$I %FPCVERSION%});
   Writeln(' Parameters:');
-  Writeln('  -e <name>  //Decrypted ELF or SELF file name');
-  Writeln('  -f <name>  //Folder of app   (/app0)');
-  Writeln('  -p <name>  //Folder of patch (/app1)');
-  Writeln('  -s <name>  //Savedata path');
-  Writeln('  -w         //Fullscreen mode');
+  Writeln('  -e <name>   //Decrypted ELF or SELF file name');
+  Writeln('  -f <name>   //Folder of app   (/app0)');
+  Writeln('  -p <name>   //Folder of patch (/app1)');
+  Writeln('  -s <name>   //Savedata path');
+  Writeln('  -w          //Fullscreen mode');
+  Writeln('  -pad <name> //Gamepad interface selection (xinput,sdl2,keyboard) default:xinput');
+  Writeln('  -led <clr>  //Initial LED color of Gamepad ($rrggbb)');
 
-  Writeln('  -h <name>  //enable hack');
+  Writeln('  -h <name>   //enable hack');
   Writeln('     DEPTH_DISABLE_HACK   //Disables depth buffer');
   Writeln('     COMPUTE_DISABLE_HACK //Disables compute shaders');
   Writeln('     MEMORY_BOUND_HACK    //Limits the amount of GPU allocated memory (iGPU)');
@@ -113,12 +119,14 @@ begin
  For i:=1 to ParamCount do
  begin
   case LowerCase(ParamStr(i)) of
-    '-e':n:=0;
-    '-f':n:=1;
-    '-p':n:=2;
-    '-s':n:=3;
-    '-h':n:=4;
-    '-w':ps4_libSceVideoOut.FULLSCREEN_MODE:=True;
+      '-e':n:=0;
+      '-f':n:=1;
+      '-p':n:=2;
+      '-s':n:=3;
+      '-h':n:=4;
+      '-w':ps4_libSceVideoOut.FULLSCREEN_MODE:=True;
+    '-pad':n:=5;
+    '-led':n:=6;
    else
      if (n<>-1) then
      begin
@@ -142,6 +150,12 @@ begin
          end;
        3:begin
           ps4_app.save_path:=Trim(ParamStr(i));
+         end;
+       5:begin
+          select_pad_interface(Trim(ParamStr(i)));
+         end;
+       6:begin
+          select_led_color(Trim(ParamStr(i)));
          end;
        4:begin
           case UpperCase(ParamStr(i)) of
@@ -471,7 +485,6 @@ begin
  _pthread_run_entry(@main,GetSceUserMainThreadName,GetSceUserMainThreadStackSize);
 
  ps4_libSceVideoOut.App_Run;
-
  //KillALLThreads TODO
  //readln;
 end.

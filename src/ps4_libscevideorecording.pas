@@ -5,7 +5,8 @@ unit ps4_libSceVideoRecording;
 interface
 
 uses
- ps4_program;
+ ps4_program,
+ ps4_libkernel;
 
 implementation
 
@@ -20,11 +21,19 @@ const
  SCE_VIDEO_RECORDING_INFO_GUARD_AREA      =$A008;
  SCE_VIDEO_RECORDING_INFO_USER_META       =$A009;
 
- SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE  =$80A80003;
-
  SCE_VIDEO_RECORDING_STATUS_NONE   =0;
  SCE_VIDEO_RECORDING_STATUS_RUNNING=1;
  SCE_VIDEO_RECORDING_STATUS_PAUSED =2;
+
+ SCE_VIDEO_RECORDING_CHAPTER_CHANGE  =0;
+ SCE_VIDEO_RECORDING_CHAPTER_PROHIBIT=1;
+
+ SCE_VIDEO_RECORDING_USER_META_CONSTANT=$0001;
+ SCE_VIDEO_RECORDING_USER_META_TIMELINE=$0002;
+ SCE_VIDEO_RECORDING_USER_META_VARIABLE=$0003;
+ SCE_VIDEO_RECORDING_USER_META_DEBUG   =$8000;
+
+ SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE=-2136473597; //0x80a80003
 
 type
  SceVideoRecordingInfoGuardArea=packed record
@@ -50,20 +59,70 @@ type
  PSceVideoRecordingParam2=^SceVideoRecordingParam2;
 
 function ps4_sceVideoRecordingSetInfo(info:Integer;pInfo:Pointer;infoLen:size_t):Integer; SysV_ABI_CDecl;
+var
+ SDK_VERSION:DWORD;
+ ret2:Integer;
 begin
  Writeln('sceVideoRecordingSetInfo,info=',info,',infoLen=',infoLen);
- if (info=SCE_VIDEO_RECORDING_INFO_SUBTITLE) or
-    (info=SCE_VIDEO_RECORDING_INFO_DESCRIPTION) or
-    (info=SCE_VIDEO_RECORDING_INFO_COMMENTS) or
-    (info=SCE_VIDEO_RECORDING_INFO_KEYWORDS) or
-    (info=SCE_VIDEO_RECORDING_INFO_CHAPTER) or
-    (info=SCE_VIDEO_RECORDING_INFO_COPYRIGHT) or
-    (info=SCE_VIDEO_RECORDING_INFO_PERMISSION_LEVEL) or
-    (info=SCE_VIDEO_RECORDING_INFO_GUARD_AREA) or
-    (info=SCE_VIDEO_RECORDING_INFO_USER_META) then
-  Result:=infoLen
- else
-  Result:=SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE;
+
+ if (info<$9004) then
+ begin
+  case info of
+   SCE_VIDEO_RECORDING_INFO_SUBTITLE   ,
+   SCE_VIDEO_RECORDING_INFO_DESCRIPTION,
+   SCE_VIDEO_RECORDING_INFO_COMMENTS   ,
+   SCE_VIDEO_RECORDING_INFO_KEYWORDS   ,
+   SCE_VIDEO_RECORDING_INFO_COPYRIGHT  :Exit(infoLen);
+
+   SCE_VIDEO_RECORDING_INFO_CHAPTER    :Exit(0);
+
+    3,
+    4,
+    5,
+    9,
+   10,
+   11,
+   12:Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+
+   $8001,
+   $8002,
+   $8003,
+   $8004,
+   $8005:Exit(0); //debug?
+
+   else
+    Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+  end;
+ end else
+ begin
+  case info of
+   $A004,
+   $A006,
+   $A00C,
+   $9004:Exit(0); //???
+
+   $A005,
+   $A00A,
+   $A00B:Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+
+   SCE_VIDEO_RECORDING_INFO_PERMISSION_LEVEL,
+   SCE_VIDEO_RECORDING_INFO_GUARD_AREA      :Exit(0);
+
+   SCE_VIDEO_RECORDING_INFO_USER_META:
+     begin
+      SDK_VERSION:=0;
+      ret2:=ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
+      if ((ret2 < 0) or ($24fffff < SDK_VERSION)) and
+         ((infoLen < 176) or
+          (PSceVideoRecordingInfoUserMeta(pInfo)^.size < 176) or
+          ((PSceVideoRecordingInfoUserMeta(pInfo)^.flags or $ffff7ffc)<>0)
+         ) then Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+      Exit(0);
+     end;
+   else
+    Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+  end;
+ end;
 end;
 
 function ps4_sceVideoRecordingClose(discard:Integer):Integer; SysV_ABI_CDecl;

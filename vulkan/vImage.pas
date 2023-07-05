@@ -501,10 +501,12 @@ var
 begin
  For i:=0 to High(FImages) do
  begin
-  vkDestroyImageView(Device.FHandle,FImages[i].FView,nil);
+  if (FImages[i].FView<>VK_NULL_HANDLE) then
+   vkDestroyImageView(Device.FHandle,FImages[i].FView,nil);
   FImages[i].Free;
  end;
- vkDestroySwapchainKHR(Device.FHandle,FHandle,nil);
+ if (FHandle<>VK_NULL_HANDLE) then
+  vkDestroySwapchainKHR(Device.FHandle,FHandle,nil);
 end;
 
 Destructor TvCustomImage.Destroy;

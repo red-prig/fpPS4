@@ -45,7 +45,11 @@ Const
  SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_DOWNLOAD_SUSPENDED=3;
  SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED         =4;
 
+ SCE_APP_CONTENT_ENTITLEMENT_KEY_SIZE=16;
+
 type
+ SceNpServiceLabel=DWORD;
+
  PSceAppContentInitParam=^SceAppContentInitParam;
  SceAppContentInitParam=packed record
   reserved:array[0..31] of Byte;
@@ -73,6 +77,9 @@ type
  pSceAppContentMountPoint=^SceAppContentMountPoint;
  SceAppContentMountPoint=array[0..SCE_APP_CONTENT_MOUNTPOINT_DATA_MAXSIZE-1] of AnsiChar;
 
+ pSceAppContentEntitlementKey=^SceAppContentEntitlementKey;
+ SceAppContentEntitlementKey=array[0..SCE_APP_CONTENT_ENTITLEMENT_KEY_SIZE-1] of AnsiChar;
+
 function ps4_sceAppContentInitialize(initParam:PSceAppContentInitParam;bootParam:PSceAppContentBootParam):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceAppContentInitialize');
@@ -94,7 +101,7 @@ begin
  end;
 end;
 
-function ps4_sceAppContentGetAddcontInfoList(serviceLabel:DWORD; //SceNpServiceLabel
+function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
                                              list:pSceAppContentAddcontInfo;
                                              listNum:DWORD;
                                              hitNum:PDWORD):Integer; SysV_ABI_CDecl;
@@ -107,7 +114,7 @@ begin
  end;
 end;
 
-function ps4_sceAppContentGetAddcontInfo(serviceLabel:DWORD; //SceNpServiceLabel
+function ps4_sceAppContentGetAddcontInfo(serviceLabel:SceNpServiceLabel;
                                          entitlementLabel:pSceNpUnifiedEntitlementLabel;
                                          info:pSceAppContentAddcontInfo
                                         ):Integer; SysV_ABI_CDecl;
@@ -159,6 +166,16 @@ begin
  _sig_unlock;
 end;
 
+function ps4_sceAppContentGetEntitlementKey(serviceLabel:SceNpServiceLabel;
+                                            entitlementLabel:pSceNpUnifiedEntitlementLabel;
+                                            key:pSceAppContentEntitlementKey
+                                           ):Integer; SysV_ABI_CDecl;
+begin
+ if (entitlementLabel=nil) or (key=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ Result:=0;
+end;
+
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -178,6 +195,7 @@ begin
  lib^.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
  lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
+ lib^.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
 end;
 
 

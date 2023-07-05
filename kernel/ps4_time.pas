@@ -36,6 +36,8 @@ function ps4_gettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
 function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 function ps4_clock_gettime(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
 
+function ps4_sceKernelClockGetres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
+
 function ps4_sceKernelGettimeofday(tv:Ptimeval):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelGettimezone(tz:Ptimezone):Integer; SysV_ABI_CDecl;
 
@@ -173,7 +175,8 @@ end;
 
 function ps4_sceKernelSettimeofday(tv:Ptimeval;tz:Ptimezone):Integer; SysV_ABI_CDecl;
 begin
- Result:=_set_errno(px2sce(EPERM));
+ _set_errno(EPERM);
+ Result:=px2sce(EPERM);
 end;
 
 function ps4_clock_getres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
@@ -212,6 +215,15 @@ begin
    Result:=_set_errno(EINVAL);
  end;
 
+end;
+
+function ps4_sceKernelClockGetres(clock_id:Integer;tp:Ptimespec):Integer; SysV_ABI_CDecl;
+begin
+ Result:=ps4_clock_getres(clock_id,tp);
+ if (Result<>0) then
+ begin
+  Result:=px2sce(PInteger(_error)^);
+ end;
 end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;

@@ -241,6 +241,7 @@ end;
 
 Const
  Need_sceLibcInternal:QWORD=1;
+ Need_sceLibc:QWORD=1;
 
  _Stdin :QWORD=0;
  _Stdout:QWORD=1;
@@ -317,6 +318,7 @@ begin
  lib^.Fget_proc_cb:=@_get_proc_libSceLibcInternal;
 
  lib^.set_proc($653E0E0C3D93B3DA,@Need_sceLibcInternal);
+ lib^.set_proc($3F7DF43F774517AF,@Need_sceLibc);
 
  //lib^.set_proc($D530E8FC89AA9097,@_Stdin );
  //lib^.set_proc($DAC5B3858A851F81,@_Stdout);

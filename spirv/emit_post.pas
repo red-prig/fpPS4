@@ -433,6 +433,8 @@ begin
   Op.OpSelect            :Result:=EnumLineRegs(@RegSTStrict,node);
   Op.OpIAddCarry         ,
   Op.OpISubBorrow        ,
+  Op.OpUMulExtended      ,
+  Op.OpSMulExtended      ,
   Op.OpCompositeConstruct:Result:=EnumLineRegs(@RegVTStrict,node);
   else;
  end;

@@ -20,7 +20,7 @@ type
   procedure emit_V_AND_B32;
   procedure emit_V_OR_B32;
   procedure emit_V_XOR_B32;
-  procedure emit_V_SH(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_SHNRM(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SHREV(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_ADD_I32;
   procedure emit_V_SUB_I32;
@@ -119,7 +119,7 @@ begin
  OpBitwiseXor(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_SH(OpId:DWORD;rtype:TsrDataType);
+procedure TEmit_VOP2.emit_V_SHNRM(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -127,7 +127,7 @@ begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,rtype);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUInt32);
 
  src[1]:=OpAndTo(src[1],31);
  src[1]^.PrepType(ord(dtUInt32));
@@ -142,7 +142,7 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUInt32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,rtype);
 
  src[0]:=OpAndTo(src[0],31);
@@ -160,7 +160,7 @@ begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  car:=get_vcc0;
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUInt32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
 
  OpIAddExt(dst,car,src[0],src[1]);
@@ -510,12 +510,12 @@ begin
   V_OR_B32     : emit_V_OR_B32;
   V_XOR_B32    : emit_V_XOR_B32;
 
-  V_LSHL_B32   : emit_V_SH(Op.OpShiftLeftLogical,dtUint32);
-  V_LSHLREV_B32: emit_V_SHREV(Op.OpShiftLeftLogical,dtUint32);
-  V_LSHR_B32   : emit_V_SH(Op.OpShiftRightLogical,dtUint32);
-  V_LSHRREV_B32: emit_V_SHREV(Op.OpShiftRightLogical,dtUint32);
-  V_ASHR_I32   : emit_V_SH(Op.OpShiftRightLogical,dtInt32);
-  V_ASHRREV_I32: emit_V_SHREV(Op.OpShiftRightLogical,dtInt32);
+  V_LSHL_B32   : emit_V_SHNRM(Op.OpShiftLeftLogical    ,dtUint32);
+  V_LSHLREV_B32: emit_V_SHREV(Op.OpShiftLeftLogical    ,dtUint32);
+  V_LSHR_B32   : emit_V_SHNRM(Op.OpShiftRightLogical   ,dtUint32);
+  V_LSHRREV_B32: emit_V_SHREV(Op.OpShiftRightLogical   ,dtUint32);
+  V_ASHR_I32   : emit_V_SHNRM(Op.OpShiftRightArithmetic,dtInt32);
+  V_ASHRREV_I32: emit_V_SHREV(Op.OpShiftRightArithmetic,dtInt32);
 
   V_ADD_I32    : emit_V_ADD_I32;
   V_SUB_I32    : emit_V_SUB_I32;
