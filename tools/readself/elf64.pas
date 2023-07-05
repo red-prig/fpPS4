@@ -589,16 +589,18 @@ type
   Size:QWORD;
   sceKernelExtendedPageTable   :PQWORD;
   sceKernelFlexibleMemorySize  :PQWORD;
-  sceKernelExtendedMemory1     :PQWORD;
+  sceKernelExtendedMemory1     :PByte;
   sceKernelExtendedGpuPageTable:PQWORD;
-  sceKernelExtendedMemory2     :PQWORD;
+  sceKernelExtendedMemory2     :PByte;
   sceKernelExtendedCpuPageTable:PQWORD;
  end;
 
  PSceKernelFsParam=^TSceKernelFsParam;
  TSceKernelFsParam=packed record
   Size:QWORD;
-  sceKernelFsDupDent:PQWORD;
+  sceKernelFsDupDent    :PDWORD;
+  sceWorkspaceUpdateMode:Pointer;
+  sceTraceAprNameMode   :Pointer;
  end;
 
  PSceProcParam=^TSceProcParam;
@@ -615,6 +617,7 @@ type
   _sceKernelMemParam        :PSceKernelMemParam;
   _sceKernelFsParam         :PSceKernelFsParam;
   sceProcessPreloadEnabled  :PDWORD;
+  Unknown1                  :QWORD;
  end;
 
  PsceModuleParam=^TsceModuleParam;

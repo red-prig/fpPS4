@@ -345,9 +345,7 @@ end;
 
 function get_sdk_version_str(version:QWORD):RawByteString;
 begin
- Result:=Format('%.*x.%.*x.%.*x',[2,(version shr 24),
-                                  3,((version shr 12) and $fff),
-                                  3,(version and $fff)]);
+ Result:=HexStr((version shr 24),2)+'.'+HexStr(((version shr 12) and $fff),3)+'.'+HexStr((version and $fff),3);
 end;
 
 procedure print_self_authinfo(obj:p_elf_obj);
@@ -381,8 +379,8 @@ begin
 
   Writeln(' AuthorityID    :0x',HexStr(authinfo^.AuthorityID,16));
   Writeln(' Program_Type   :0x',HexStr(authinfo^.Program_Type,2),' ',get_program_type_str(authinfo^.Program_Type));
-  Writeln(' Program_Version:',get_sdk_version_str(authinfo^.Program_Version));
-  Writeln(' System_Version :',get_sdk_version_str(authinfo^.System_Version ));
+  Writeln(' Program_Version:',get_sdk_version_str(authinfo^.Program_Version shr 16));
+  Writeln(' System_Version :',get_sdk_version_str(authinfo^.System_Version  shr 16));
 
   Write  (' Digest_SHA_256 :');
   print_bytes(@authinfo^.Digest_SHA_256,32);
@@ -393,6 +391,55 @@ begin
   _not_exist:
   Writeln('SELF authinfo:','not exist');
  end;
+ Writeln();
+end;
+
+function get_program_type_dump(pt:Byte):RawByteString;
+begin
+ Result:='';
+ Case pt  of
+  SELF_PT_FAKE         :Result:='FAKE         ';
+  SELF_PT_NPDRM_EXEC   :Result:='NPDRM_EXEC   ';
+  SELF_PT_NPDRM_DYNLIB :Result:='NPDRM_DYNLIB ';
+  SELF_PT_SYSTEM_EXEC  :Result:='SYSTEM_EXEC  ';
+  SELF_PT_SYSTEM_DYNLIB:Result:='SYSTEM_DYNLIB';
+  SELF_PT_HOST_KERNEL  :Result:='HOST_KERNEL  ';
+  SELF_PT_SECURE_MODULE:Result:='SECURE_MODULE';
+  SELF_PT_SECURE_KERNEL:Result:='SECURE_KERNEL';
+  else                  Result:='0x'+HexStr(pt,2)+'         ';
+ end;
+end;
+
+procedure dump_self_authinfo(obj:p_elf_obj);
+var
+ s,e,len:ptruint;
+ elf_hdr:p_elf64_hdr;
+ authinfo:p_self_authinfo;
+begin
+ if (obj^.self.hdr=nil) then Exit;
+
+ elf_hdr:=obj^.self.elf_hdr;
+ s:=SizeOf(t_self_header);
+ s:=s+(obj^.self.hdr^.Num_Segments*SizeOf(t_self_segment));
+ s:=s+get_elf_phdr_offset(elf_hdr);
+ s:=s+(elf_hdr^.e_phnum*SizeOf(elf64_phdr));
+ s:=AlignUp(s,SELF_SEGMENT_BLOCK_ALIGNMENT);
+
+ e:=obj^.self.hdr^.Header_Size;
+
+ if (s>=e) then Exit;
+
+ len:=(e-s);
+
+ if (len<SizeOf(t_self_authinfo)) then Exit;
+
+ authinfo:=Pointer(Pointer(obj^.self.hdr)+s);
+
+ Write(HexStr(authinfo^.AuthorityID,16),'|');
+ Write(get_program_type_dump(authinfo^.Program_Type),'|');
+ Write(get_sdk_version_str(authinfo^.Program_Version shr 16),'|');
+ Write(get_sdk_version_str(authinfo^.System_Version  shr 16));
+
  Writeln();
 end;
 
@@ -1374,6 +1421,21 @@ begin
  Writeln(prefix,p);
 end;
 
+procedure WOfsByt(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
+var
+ p:PByte;
+begin
+ p:=upgrade_ptr(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln(prefix,'null');
+ end else
+ begin
+  Writeln(prefix,'0x',HexStr(p^,2));
+ end;
+end;
+
 procedure WOfsDwr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
 var
  p:PDWORD;
@@ -1567,9 +1629,9 @@ begin
 
  if (Pointer(@p^.sceKernelExtendedPageTable   )+SizeOf(p^.sceKernelExtendedPageTable   )<=e) then WOfsQwr('     sceKernelExtendedPageTable     :',@p^.sceKernelExtendedPageTable   ,obj);
  if (Pointer(@p^.sceKernelFlexibleMemorySize  )+SizeOf(p^.sceKernelFlexibleMemorySize  )<=e) then WOfsQwr('     sceKernelFlexibleMemorySize    :',@p^.sceKernelFlexibleMemorySize  ,obj);
- if (Pointer(@p^.sceKernelExtendedMemory1     )+SizeOf(p^.sceKernelExtendedMemory1     )<=e) then WOfsQwr('     sceKernelExtendedMemory1       :',@p^.sceKernelExtendedMemory1     ,obj);
+ if (Pointer(@p^.sceKernelExtendedMemory1     )+SizeOf(p^.sceKernelExtendedMemory1     )<=e) then WOfsByt('     sceKernelExtendedMemory1       :',@p^.sceKernelExtendedMemory1     ,obj);
  if (Pointer(@p^.sceKernelExtendedGpuPageTable)+SizeOf(p^.sceKernelExtendedGpuPageTable)<=e) then WOfsQwr('     sceKernelExtendedGpuPageTable  :',@p^.sceKernelExtendedGpuPageTable,obj);
- if (Pointer(@p^.sceKernelExtendedMemory2     )+SizeOf(p^.sceKernelExtendedMemory2     )<=e) then WOfsQwr('     sceKernelExtendedMemory2       :',@p^.sceKernelExtendedMemory2     ,obj);
+ if (Pointer(@p^.sceKernelExtendedMemory2     )+SizeOf(p^.sceKernelExtendedMemory2     )<=e) then WOfsByt('     sceKernelExtendedMemory2       :',@p^.sceKernelExtendedMemory2     ,obj);
  if (Pointer(@p^.sceKernelExtendedCpuPageTable)+SizeOf(p^.sceKernelExtendedCpuPageTable)<=e) then WOfsQwr('     sceKernelExtendedCpuPageTable  :',@p^.sceKernelExtendedCpuPageTable,obj);
 end;
 
@@ -1592,7 +1654,7 @@ begin
 
  if (Pointer(@p^.Size               )+SizeOf(p^.Size             )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size,8));
 
- if (Pointer(@p^.sceKernelFsDupDent)+SizeOf(p^.sceKernelFsDupDent)<=e) then WOfsQwr('     sceKernelFsDupDent             :',@p^.sceKernelFsDupDent,obj);
+ if (Pointer(@p^.sceKernelFsDupDent)+SizeOf(p^.sceKernelFsDupDent)<=e) then WOfsDwr('     sceKernelFsDupDent             :',@p^.sceKernelFsDupDent,obj);
 end;
 
 procedure print_elf_sce_procparam(obj:p_elf_obj);
@@ -1882,7 +1944,8 @@ type
   pp_sce_procparam,
   pp_sce_moduleparam,
   pp_tls,
-  pp_string_dump
+  pp_string_dump,
+  pp_authinfo_dump
  );
  t_print_param_set=Set of t_print_param;
 
@@ -1927,6 +1990,7 @@ begin
    '-m','--sce_moduleparam':print_param:=print_param+[pp_sce_moduleparam];
    '-t','--tls'            :print_param:=print_param+[pp_tls            ];
    '-p','--string-dump'    :print_param:=print_param+[pp_string_dump    ];
+   '-i','--authinfo-dump'  :print_param:=print_param+[pp_authinfo_dump  ];
    else
     FileName:=S;
   end;
@@ -1960,6 +2024,7 @@ begin
   Writeln('  -m --sce_moduleparam Display the sce module param');
   Writeln('  -t --tls             Display the tls data');
   Writeln('  -p --string-dump     Dump the contents of symbols');
+  Writeln('  -i --authinfo-dump   Dump the Program Identification Header');
   Exit;
  end;
 
@@ -1973,10 +2038,23 @@ begin
   if (pp_self_authinfo   in print_param) then print_self_authinfo(@obj);
   if (pp_self_metadata   in print_param) then print_self_metadata(@obj);
 
+  if (pp_authinfo_dump   in print_param) then dump_self_authinfo (@obj);
+
   if (obj.is_encrypted<>0) then
   begin
-   Writeln('Elf is_encrypted');
-   Writeln;
+   if ([pp_file_header,
+        pp_program_headers,
+        pp_dynamic,
+        pp_relocs,
+        pp_symbols,
+        pp_sce_procparam,
+        pp_sce_moduleparam,
+        pp_tls,
+        pp_string_dump]*print_param<>[]) then
+   begin
+    Writeln('Elf is_encrypted');
+    Writeln;
+   end;
   end else
   begin
    if (pp_file_header     in print_param) then print_elf_header   (@obj);
@@ -1992,9 +2070,7 @@ begin
    if (pp_sce_moduleparam in print_param) then print_elf_sce_moduleparam(@obj);
    if (pp_tls             in print_param) then print_elf_tls            (@obj);
 
-
    if (pp_string_dump     in print_param) then print_string_dump        (@obj);
-
   end;
 
  end else
