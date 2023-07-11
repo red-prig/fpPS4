@@ -61,14 +61,20 @@ type
  p_vmspace=^vmspace;
  vmspace=packed record
   vm_map      :_vm_map; // VM address map
-  vm_swrss   :segsz_t; // resident set size before last swap
-  vm_tsize   :segsz_t; // text size (pages) XXX
-  vm_dsize   :segsz_t; // data size (pages) XXX
-  vm_ssize   :segsz_t; // stack size (pages)
-  vm_taddr   :caddr_t; // (c) user virtual address of text
-  vm_daddr   :caddr_t; // (c) user virtual address of data
-  vm_maxsaddr:caddr_t; // user VA at max stack growth
-  vm_pmap    :_pmap;   // private physical map
+  //
+  sv_usrstack :caddr_t;	// USRSTACK
+  sv_psstrings:caddr_t;	// PS_STRINGS
+  ps_strings  :Pointer;
+  //
+  vm_swrss    :segsz_t; // resident set size before last swap
+  vm_tsize    :segsz_t; // text size (pages) XXX
+  vm_dsize    :segsz_t; // data size (pages) XXX
+  vm_ssize    :segsz_t; // stack size (pages)
+  vm_taddr    :caddr_t; // (c) user virtual address of text
+  vm_daddr    :caddr_t; // (c) user virtual address of data
+  vm_maxsaddr :caddr_t; // user VA at max stack growth
+  //
+  vm_pmap     :_pmap;   // private physical map
  end;
 
 const
@@ -154,6 +160,16 @@ function  vm_map_lookup_entry(
             address    :vm_offset_t;
             entry      :p_vm_map_entry_t):Boolean;
 
+function vm_map_insert(
+           map        :vm_map_t;
+           _object    :vm_object_t;
+           offset     :vm_ooffset_t;
+           start      :vm_offset_t;
+           __end      :vm_offset_t;
+           prot       :vm_prot_t;
+           max        :vm_prot_t;
+           cow        :Integer):Integer;
+
 procedure vm_map_lookup_done(map:vm_map_t;entry:vm_map_entry_t);
 
 function  vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
@@ -214,14 +230,17 @@ function  vm_map_stack(map      :vm_map_t;
                        cow      :Integer):Integer;
 
 function  vm_map_growstack(addr:vm_offset_t):Integer;
+function  vmspace_exec(minuser,maxuser:vm_offset_t):Integer;
 
 procedure vm_map_lock(map:vm_map_t);
 function  vm_map_trylock(map:vm_map_t):Boolean;
 procedure vm_map_unlock(map:vm_map_t);
 
 function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
+procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -365,6 +384,7 @@ var
  entry,next:vm_map_entry_t;
 begin
  td:=curkthread;
+ if (td=nil) then Exit;
  entry:=td^.td_map_def_user;
  td^.td_map_def_user:=nil;
  while (entry<>nil) do
@@ -793,15 +813,15 @@ procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t); forward;
  * If object is non-nil, ref count must be bumped by caller
  * prior to making call to account for the new entry.
  }
- function vm_map_insert(
-            map        :vm_map_t;
-            _object    :vm_object_t;
-            offset     :vm_ooffset_t;
-            start      :vm_offset_t;
-            __end      :vm_offset_t;
-            prot       :vm_prot_t;
-            max        :vm_prot_t;
-            cow        :Integer):Integer;
+function vm_map_insert(
+           map        :vm_map_t;
+           _object    :vm_object_t;
+           offset     :vm_ooffset_t;
+           start      :vm_offset_t;
+           __end      :vm_offset_t;
+           prot       :vm_prot_t;
+           max        :vm_prot_t;
+           cow        :Integer):Integer;
 label
  charged;
 var
@@ -913,10 +933,13 @@ charged:
    prev_entry^.__end:=__end;
    //change size
 
-   pmap_enter_object(map^.pmap,
-                     start,
-                     __end,
-                     prot);
+   if (cow<>-1) then
+   begin
+    pmap_enter_object(map^.pmap,
+                      start,
+                      __end,
+                      prot);
+   end;
 
    vm_map_entry_resize_free(map, prev_entry);
    vm_map_simplify_entry(map, prev_entry);
@@ -975,12 +998,18 @@ charged:
   * panic can result from merging such entries.
   }
  if ((cow and (MAP_STACK_GROWS_DOWN or MAP_STACK_GROWS_UP))=0) then
+ begin
   vm_map_simplify_entry(map, new_entry);
+ end;
 
- pmap_enter_object(map^.pmap,
-                   start,
-                   __end,
-                   prot);
+ if (cow<>-1) then
+ begin
+  pmap_enter_object(map^.pmap,
+                    start,
+                    __end,
+                    prot);
+
+ end;
 
  Result:=KERN_SUCCESS;
 end;
@@ -1387,13 +1416,17 @@ function vm_map_protect(map     :vm_map_t;
    Result:=VM_PROT_ALL;
  end;
 
+label
+ _continue;
 var
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
  old_prot:vm_prot_t;
 begin
  if (start=__end) then
+ begin
   Exit(KERN_SUCCESS);
+ end;
 
  vm_map_lock(map);
 
@@ -1442,25 +1475,26 @@ begin
      (((new_prot and (not current^.protection)) and VM_PROT_WRITE)=0) or
      ENTRY_CHARGED(current) then
   begin
-   continue;
+   goto _continue;
   end;
 
   obj:=current^._object;
 
   if (obj=nil) or ((current^.eflags and MAP_ENTRY_NEEDS_COPY)<>0) then
   begin
-   continue;
+   goto _continue;
   end;
 
   VM_OBJECT_LOCK(obj);
   if (obj^.otype<>OBJT_DEFAULT) then
   begin
    VM_OBJECT_UNLOCK(obj);
-   continue;
+   goto _continue;
   end;
 
   VM_OBJECT_UNLOCK(obj);
 
+  _continue:
   current:=current^.next
  end;
 
@@ -1584,7 +1618,10 @@ begin
   while (current<>@map^.header) and (current^.start<__end) do
   begin
    if (current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0 then
+   begin
+    current:=current^.next;
     continue;
+   end;
 
    vm_map_clip_end(map, current, __end);
 
@@ -1638,7 +1675,10 @@ begin
   while (current<>@map^.header) and (current^.start<__end) do
   begin
    if (current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0 then
+   begin
+    current:=current^.next;
     continue;
+   end;
 
    pstart:=OFF_TO_IDX(current^.offset);
    pend  :=pstart + atop(current^.__end - current^.start);
@@ -1653,7 +1693,10 @@ begin
     pend:=pend-atop(current^.__end - __end);
 
    if (pstart>=pend) then
+   begin
+    current:=current^.next;
     continue;
+   end;
 
    //vm_object_madvise(current^._object, pstart, p__end, behav);
 
@@ -2395,6 +2438,20 @@ _out:
  Result:=rv;
 end;
 
+function vmspace_exec(minuser,maxuser:vm_offset_t):Integer;
+begin
+ Assert((curkthread^.td_pflags and TDP_EXECVMSPC)=0, 'vmspace_exec recursed');
+
+ //if (p=curkthread^.td_proc) then
+ //begin
+ // pmap_activate(curthread);
+ //end;
+
+ curkthread^.td_pflags:=curkthread^.td_pflags or TDP_EXECVMSPC;
+
+ Exit(0);
+end;
+
 {
  * vm_map_lookup:
  *
@@ -2651,6 +2708,8 @@ begin
   vm_map_clip_end(map,current,__end);
   MoveChar0(name^,current^.name,32);
 
+  vm_map_simplify_entry(map, current);
+
   current:=current^.next;
  end;
 end;
@@ -2663,8 +2722,22 @@ begin
 end;
 
 procedure vminit;
+var
+ i:Integer;
 begin
- vmspace_alloc(VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
+ vmspace_alloc(PROC_IMAGE_AREA_START,VM_MAXUSER_ADDRESS);
+
+ //exclude addr
+ if Length(exclude_mem)<>0 then
+ begin
+  vm_map_lock(@g_vmspace.vm_map);
+  For i:=0 to High(exclude_mem) do
+  begin
+   vm_map_insert  (@g_vmspace.vm_map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1);
+   vm_map_set_name(@g_vmspace.vm_map,         exclude_mem[i].start, exclude_mem[i].__end, '(exclude)');
+  end;
+  vm_map_unlock(@g_vmspace.vm_map);
+ end;
 end;
 
 end.

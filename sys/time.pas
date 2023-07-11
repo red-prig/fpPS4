@@ -93,6 +93,8 @@ const
 
  hz=UNIT_PER_SEC;
 
+ TSC_freq             =1593844360;
+
 function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
 function _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
 function _usec2nsec(usec:QWORD):QWORD;  //Microsecond to Nanosecond

@@ -1862,7 +1862,6 @@ end;
 function md_open(ap:p_vop_open_args):Integer;
 var
  vp:p_vnode;
- fp:p_file;
  flags:Integer;
 
  DA,FA,CD,CO:DWORD;
@@ -1879,10 +1878,9 @@ var
  R:DWORD;
 begin
  vp:=ap^.a_vp;
- fp:=ap^.a_fp;
  flags:=ap^.a_mode;
 
- if (fp=nil) or (vp=nil) then Exit(EPERM);
+ if (vp=nil) then Exit(EPERM);
 
  vp^.v_un:=nil;
 

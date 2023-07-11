@@ -87,7 +87,8 @@ uses
  sys_eventvar,
  kern_event,
  kern_callout,
- kern_timeout;
+ kern_timeout,
+ kern_exec;
 
 var
  mtx:umutex;
@@ -287,6 +288,8 @@ var
  err:Integer;
 
  buf:PChar;
+
+ argv0:PChar;
 begin
  td:=curkthread;
 
@@ -339,6 +342,10 @@ begin
  Writeln('sys_rmdir=',sys_rmdir('/test'));
 
  //readln;
+
+ argv0:='/app0/basic-sample_debug.elf';
+
+ err:=sys_execve(argv0,@argv0,nil);
 end;
 
 procedure test_dirs(const dirp,namep:RawByteString;s:Byte);
@@ -462,12 +469,12 @@ var
  calloutp:p_callout;
 begin
 
- if (tid<>curkthread^.td_tid) then
- begin
-  calloutp:=AllocMem(SizeOf(t_callout));
-  callout_init(calloutp, CALLOUT_MPSAFE);
-  callout_reset_curcpu(calloutp, 1000*1000*UNIT_PER_USEC, @_timerexpire, calloutp);
- end;
+ //if (tid<>curkthread^.td_tid) then
+ //begin
+ // calloutp:=AllocMem(SizeOf(t_callout));
+ // callout_init(calloutp, CALLOUT_MPSAFE);
+ // callout_reset_curcpu(calloutp, 1000*1000*UNIT_PER_USEC, @_timerexpire, calloutp);
+ //end;
 
  //SetTlsBase(Pointer(qword(1)));
 

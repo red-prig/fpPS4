@@ -89,6 +89,8 @@ procedure fdclose(fp:p_file;idx:Integer);
 function  dupfdopen(indx,dfd,mode,error:Integer):Integer;
 procedure finit(fp:p_file;flag:DWORD;_type:Word;data:Pointer;ops:p_fileops);
 
+procedure fdcloseexec();
+
 function  badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
 function  badfo_truncate(fp:p_file;length:Int64):Integer;
 function  badfo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
@@ -533,9 +535,9 @@ begin
         goto _break2;
        end;
        PROC_LOCK();
-       p_leader.p_flag:=p_leader.p_flag or P_ADVLOCK;
+       p_proc.p_flag:=p_proc.p_flag or P_ADVLOCK;
        PROC_UNLOCK();
-       error:=VOP_ADVLOCK(vp, @p_leader, F_SETLK, flp, flg);
+       error:=VOP_ADVLOCK(vp, @p_proc, F_SETLK, flp, flg);
       end;
      F_WRLCK:
       begin
@@ -545,13 +547,13 @@ begin
         goto _break2;
        end;
        PROC_LOCK();
-       p_leader.p_flag:=p_leader.p_flag or P_ADVLOCK;
+       p_proc.p_flag:=p_proc.p_flag or P_ADVLOCK;
        PROC_UNLOCK();
-       error:=VOP_ADVLOCK(vp, @p_leader, F_SETLK, flp, flg);
+       error:=VOP_ADVLOCK(vp, @p_proc, F_SETLK, flp, flg);
       end;
      F_UNLCK:
       begin
-       error:=VOP_ADVLOCK(vp, @p_leader, F_UNLCK, flp, flg);
+       error:=VOP_ADVLOCK(vp, @p_proc, F_UNLCK, flp, flg);
       end;
      F_UNLCKSYS:
       begin
@@ -564,7 +566,7 @@ begin
         error:=EINVAL;
          goto _break2;
        end;
-       error:=VOP_ADVLOCK(vp, @p_leader, F_UNLCKSYS, flp, flg);
+       error:=VOP_ADVLOCK(vp, @p_proc, F_UNLCKSYS, flp, flg);
       end;
      else
       error:=EINVAL;
@@ -615,7 +617,7 @@ begin
      }
     vp:=fp^.f_vnode;
     vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
-    error:=VOP_ADVLOCK(vp, @p_leader, F_GETLK, flp, F_POSIX);
+    error:=VOP_ADVLOCK(vp, @p_proc, F_GETLK, flp, F_POSIX);
     VFS_UNLOCK_GIANT(vfslocked);
     vfslocked:=0;
    end;
@@ -702,7 +704,7 @@ begin
  {
   * Verify we have a valid descriptor to dup from and possibly to
   * dup to. Unlike dup() and dup2(), fcntl()'s F_DUPFD should
-  * ExitEINVAL when the new descriptor is out of bounds.
+  * Return EINVAL when the new descriptor is out of bounds.
   }
  if (old < 0) then
   Exit(EBADF);
@@ -873,13 +875,13 @@ begin
   begin
    vp:=fp_object^.f_vnode;
    vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
-   if ((p_leader.p_flag and P_ADVLOCK)<>0) then
+   if ((p_proc.p_flag and P_ADVLOCK)<>0) then
    begin
     lf.l_whence:=SEEK_SET;
     lf.l_start :=0;
     lf.l_len   :=0;
     lf.l_type  :=F_UNLCK;
-    VOP_ADVLOCK(vp, @p_leader, F_UNLCK, @lf, F_POSIX);
+    VOP_ADVLOCK(vp, @p_proc, F_UNLCK, @lf, F_POSIX);
    end;
 
    VFS_UNLOCK_GIANT(vfslocked);
@@ -1526,6 +1528,56 @@ begin
 
  Exit(error);
 end;
+
+
+{
+* Close any files on exec?
+}
+procedure fdcloseexec();
+var
+ i,count:Integer;
+ fp:p_file;
+begin
+ FILEDESC_XLOCK(@fd_table);
+
+ count:=fd_table.fd_lastfile;
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  fp:=p_file(id_get(@fd_table.fd_ofiles,i));
+
+  if (fp<>nil) then
+  begin
+   if (fp^.f_type=DTYPE_MQUEUE) or
+      ((fp^.f_exclose and UF_EXCLOSE)<>0) then
+   begin
+    fdrop(fp);
+
+    knote_fdclose(i);
+
+    fp:=nil;
+    if id_del(@fd_table.fd_ofiles,i,@fp) then
+    if (fp<>nil) then
+    begin
+     if (fp^.f_type=DTYPE_MQUEUE) then
+     begin
+      //mq_fdclose(td, i, fp);
+     end;
+
+     FILEDESC_XUNLOCK(@fd_table);
+     closef(fp);
+     FILEDESC_XLOCK(@fd_table);
+    end;
+
+   end;
+
+  end;
+
+ end;
+
+ FILEDESC_XUNLOCK(@fd_table);
+end;
+
 
 {
  * File Descriptor pseudo-device driver (/dev/fd/).

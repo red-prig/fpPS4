@@ -83,7 +83,7 @@ procedure knlist_destroy (knl:p_knlist);
 
 procedure knlist_clear   (knl:p_knlist;islocked:Integer);
 procedure knlist_delete  (knl:p_knlist;islocked:Integer);
-procedure knote_fdclose(fd:Integer);
+procedure knote_fdclose  (fd:Integer);
 
 procedure knote(list:p_knlist;hint:QWORD;lockflags:Integer);
 
@@ -427,7 +427,7 @@ begin
 
  if (Integer(kn^.kn_id)<>g_pid) then Exit(ESRCH);
 
- if ((p_leader.p_flag and P_WEXIT)<>0) then
+ if ((p_proc.p_flag and P_WEXIT)<>0) then
  begin
   immediate:=1;
  end;
@@ -2576,7 +2576,7 @@ begin
  mtx_init(filterops_lock,'protect sysfilt_ops');
  mtx_init(knlist_lock   ,'knlist lock for lockless objects');
  //
- knlist_init_mtx(@g_p_klist,@proc_mtx);
+ knlist_init_mtx(@g_p_klist,@p_proc.p_mtx);
 end;
 
 function knote_alloc():p_knote;

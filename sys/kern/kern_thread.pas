@@ -853,7 +853,7 @@ begin
   //PROC_UNLOCK; //
   //Result:=msleep_td(tv);
   //PROC_LOCK;   //
-  Result:=msleep(td,@proc_mtx,PCATCH,'lthr',tv);
+  Result:=msleep(td,@p_proc.p_mtx,PCATCH,'lthr',tv);
  end;
 
  if ((td^.td_flags and TDF_THRWAKEUP)<>0) then

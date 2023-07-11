@@ -10,6 +10,7 @@ uses
  ucontext,
  signal,
  signalvar,
+ sys_event,
  kern_mtx;
 
 const
@@ -103,6 +104,8 @@ const
  P_ADVLOCK        =$00001; // Process may hold a POSIX advisory lock.
  P_CONTROLT       =$00002; // Has a controlling terminal.
  P_WEXIT          =$02000; // Working on exiting.
+ P_EXEC           =$04000; // Process called exec.
+ P_INEXEC       =$4000000; // Process is in execve().
 
  // Types and flags for mi_switch().
  SW_TYPE_MASK     =$ff; // First 8 bits are switch type
@@ -226,6 +229,16 @@ type
  end;
  {$IF sizeof(thr_param)<>104}{$STOP sizeof(thr_param)<>104}{$ENDIF}
 
+ {
+  * pargs, used to hold a copy of the command line, if it had a sane length.
+  }
+ p_pargs=^t_pargs;
+ t_pargs=packed record
+  ar_ref   :Integer;  // Reference count.
+  ar_length:Integer;  // Length.
+  ar_args  :AnsiChar; // Arguments.
+ end;
+
 function  curkthread:p_kthread;
 procedure set_curkthread(td:p_kthread);
 
@@ -269,19 +282,37 @@ procedure PROC_UNLOCK;
 
 procedure PROC_INIT; //SYSINIT
 
+function  pargs_alloc(len:Integer):p_pargs;
+procedure pargs_free(pa:p_pargs);
+procedure pargs_hold(pa:p_pargs);
+procedure pargs_drop(pa:p_pargs);
+
+const
+ MAXCOMLEN=19;
+
 var
- p_leader:packed record
-  p_flag:Integer;
+ p_proc:record
+  p_mtx:mtx;
+
+  p_flag :Integer;
+  p_osrel:Integer;
+
+  p_nsignals:Int64;
+  p_nvcsw   :Int64;
+  p_nivcsw  :Int64;
+
+  p_comm   :array[0..MAXCOMLEN] of AnsiChar;
+  prog_name:array[0..1023] of AnsiChar;
+
+  p_klist:t_knlist;
+
+  p_args:p_pargs;
  end;
 
-var
- proc_mtx:mtx;
-
- p_nsignals:Int64=0;
- p_nvcsw   :Int64=0;
- p_nivcsw  :Int64=0;
-
 implementation
+
+uses
+ kern_event;
 
 function curkthread:p_kthread; assembler; nostackframe;
 asm
@@ -481,18 +512,52 @@ end;
 
 procedure PROC_LOCK;
 begin
- mtx_lock(proc_mtx);
+ mtx_lock(p_proc.p_mtx);
 end;
 
 procedure PROC_UNLOCK;
 begin
- mtx_unlock(proc_mtx);
+ mtx_unlock(p_proc.p_mtx);
 end;
 
 procedure PROC_INIT;
 begin
- mtx_init(proc_mtx,'process lock');
+ FillChar(p_proc,SizeOf(p_proc),0);
+ mtx_init(p_proc.p_mtx,'process lock');
+
+ knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
 end;
+
+//
+
+function pargs_alloc(len:Integer):p_pargs;
+begin
+ Result:=AllocMem(sizeof(t_pargs) + len);
+ Result^.ar_ref   :=1;
+ Result^.ar_length:=len;
+end;
+
+procedure pargs_free(pa:p_pargs);
+begin
+ FreeMem(pa);
+end;
+
+procedure pargs_hold(pa:p_pargs);
+begin
+ if (pa=nil) then Exit;
+ System.InterlockedIncrement(pa^.ar_ref);
+end;
+
+procedure pargs_drop(pa:p_pargs);
+begin
+ if (pa=nil) then Exit;
+ if (System.InterlockedDecrement(pa^.ar_ref)=0) then
+ begin
+  pargs_free(pa);
+ end;
+end;
+
+
 
 end.
 

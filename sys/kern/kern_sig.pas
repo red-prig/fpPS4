@@ -864,7 +864,7 @@ begin
   end;
 
   //PROC_UNLOCK; //
-  Result:=msleep(@p_sigacts,@proc_mtx,PPAUSE or PCATCH,'sigwait',tvtohz(tv));
+  Result:=msleep(@p_sigacts,@p_proc.p_mtx,PPAUSE or PCATCH,'sigwait',tvtohz(tv));
   //Result:=msleep_td(tvtohz(tv));
   //PROC_LOCK;  //
 
@@ -1013,7 +1013,7 @@ begin
   //PROC_UNLOCK; //
   //while (msleep_td(0)=0) do;
   //PROC_LOCK;   //
-  while (msleep(@p_sigacts,@proc_mtx,PPAUSE or PCATCH,'pause',0)=0) do;
+  while (msleep(@p_sigacts,@p_proc.p_mtx,PPAUSE or PCATCH,'pause',0)=0) do;
 
   //thread_suspend_check(0);
 
@@ -1270,7 +1270,7 @@ procedure postsig_done(sig:Integer;td:p_kthread);
 var
  mask:sigset_t;
 begin
- InterlockedIncrement64(p_nsignals);
+ InterlockedIncrement64(p_proc.p_nsignals);
  InterlockedIncrement64(td^.td_ru.ru_nsignals);
 
  mask:=p_sigacts.ps_catchmask[_SIG_IDX(sig)];

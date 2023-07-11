@@ -5,6 +5,12 @@ unit vmparam;
 
 interface
 
+type
+ t_addr_range=packed record
+  start:QWORD;
+  __end:QWORD;
+ end;
+
 const
  PAGE_SHIFT=14;
  PAGE_SIZE =1 shl PAGE_SHIFT; //16384
@@ -18,23 +24,48 @@ const
  MAXPAGESIZES=3; // maximum number of supported page sizes
  IOPAGES     =2; // pages of i/o permission bitmap
 
+ pagesizes:array[0..2] of QWORD=(PAGE_SIZE,0,0);
+
  //Virtual memory related constants, all in bytes
- MAXTSIZ =(128  *1024*1024); // max text size
- DFLDSIZ =(128  *1024*1024); // initial data size limit
+ MAXTSIZ =(2048 *1024*1024); // max text size
+ DFLDSIZ =(2048 *1024*1024); // initial data size limit
  MAXDSIZ =(32768*1024*1024); // max data size
  DFLSSIZ =(8    *1024*1024); // initial stack size limit
- MAXSSIZ =(512  *1024*1024); // max stack size
- SGROWSIZ=       (128*1024); // amount to grow stack
+ MAXSSIZ =(2    *1024*1024); // max stack size
+ SGROWSIZ=        (16*1024); // amount to grow stack
 
- USRSTACK=$80000000;
+ PROC_IMAGE_AREA_START=$00010000000; //(original:0x400000-0x80000000)
+ PROC_IMAGE_AREA___END=$00070000000;
 
- VM_MINUSER_ADDRESS=$00700000000;
- VM_MAXUSER_ADDRESS=$10000000000;
+ DL_AREA_START        =$00080000000; //(original:0x80000000-0x200000000)
+ DL_AREA___END        =$00100000000;
 
- VM_MIN_GPU_ADDRESS=$10000000000;
- VM_MAX_GPU_ADDRESS=$20000000000;
+ ET_DYN_LOAD_ADDR_USR =$00080000000;
+ ET_DYN_LOAD_ADDR_SYS =$00800000000;
+
+ USRSTACK             =$007EFFF8000;
+
+ VM_MINUSER_ADDRESS   =$00200000000;
+ VM_MAXUSER_ADDRESS   =$10000000000;
+
+ VM_MIN_GPU_ADDRESS   =$10000000000;
+ VM_MAX_GPU_ADDRESS   =$20000000000;
 
  pageablemem=VM_MAXUSER_ADDRESS-VM_MINUSER_ADDRESS;
+
+ pmap_mem:array[0..3] of t_addr_range=(
+  (start:PROC_IMAGE_AREA_START;__end:PROC_IMAGE_AREA___END),
+  (start:DL_AREA_START        ;__end:DL_AREA___END        ),
+  (start:VM_MINUSER_ADDRESS   ;__end:VM_MAXUSER_ADDRESS   ),
+  (start:VM_MIN_GPU_ADDRESS   ;__end:VM_MAX_GPU_ADDRESS   )
+ );
+
+ exclude_mem:array[0..1] of t_addr_range=(
+  (start:PROC_IMAGE_AREA___END;__end:DL_AREA_START     ),
+  (start:DL_AREA___END        ;__end:VM_MINUSER_ADDRESS)
+ );
+
+ //t_addr_range
 
 { --(Znullptr)--
  Process Address Space (40b)
@@ -45,8 +76,10 @@ const
  FC`0000`0000 System Reserved
  FF`FFFF`FFFF
 
+                               0x1 00000000  (win image)
+                            0x7FF8 xxxxxxxx  (win  dll)
  -- System Managed
- SCE_KERNEL_PROC_IMAGE_AREA  = 0x0`00400000 - 0x0`80000000
+ SCE_KERNEL_PROC_IMAGE_AREA  = 0x0`00400000 - 0x0`80000000  (ET_SCE_DYNEXEC)
  SCE_KERNEL_DL_AREA          = 0x0`80000000 - 0x2`00000000
  SCE_KERNEL_HEAP_AREA        = 0x2`00000000 - 0x7`00000000
  SCE_KERNEL_STACK_AREA       = 0x7`E0000000 - 0x7`F0000000

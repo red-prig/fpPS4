@@ -555,7 +555,7 @@ begin
  if (error<>EACCES) then
   Exit(error);
 
- if ((p_leader.p_flag and P_CONTROLT)=0) then
+ if ((p_proc.p_flag and P_CONTROLT)=0) then
   Exit(error);
 
  Exit(error);

@@ -164,11 +164,11 @@ begin
   if (flags and SW_VOL)<>0 then
   begin
    System.InterlockedIncrement64(td^.td_ru.ru_nvcsw);
-   System.InterlockedIncrement64(p_nvcsw);
+   System.InterlockedIncrement64(p_proc.p_nvcsw);
   end else
   begin
    System.InterlockedIncrement64(td^.td_ru.ru_nivcsw);
-   System.InterlockedIncrement64(p_nivcsw);
+   System.InterlockedIncrement64(p_proc.p_nivcsw);
   end;
  end;
 

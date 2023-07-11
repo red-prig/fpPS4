@@ -28,6 +28,8 @@ function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
+function vm_mmap_to_errno(rv:Integer):Integer; inline;
+
 implementation
 
 uses

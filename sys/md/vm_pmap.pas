@@ -80,26 +80,35 @@ procedure pmap_pinit(maps:p_pmap);
 var
  base:Pointer;
  size:QWORD;
- r:Integer;
+ i,r:Integer;
 begin
- base:=Pointer(trunc_page(VM_MINUSER_ADDRESS));
- size:=trunc_page(VM_MAX_GPU_ADDRESS-VM_MINUSER_ADDRESS);
 
- r:=NtAllocateVirtualMemory(
-     NtCurrentProcess,
-     @base,
-     0,
-     @size,
-     MEM_RESERVE,
-     PAGE_NOACCESS
-    );
-
- if (r<>0) then
+ if Length(pmap_mem)<>0 then
  begin
-  Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
-  //STATUS_COMMITMENT_LIMIT = $C000012D
-  Assert(false,'pmap_init');
+  For i:=0 to High(pmap_mem) do
+  begin
+   base:=Pointer(trunc_page(pmap_mem[i].start));
+   size:=trunc_page(pmap_mem[i].__end-pmap_mem[i].start);
+
+   r:=NtAllocateVirtualMemory(
+       NtCurrentProcess,
+       @base,
+       0,
+       @size,
+       MEM_RESERVE,
+       PAGE_NOACCESS
+      );
+
+   if (r<>0) then
+   begin
+    Writeln('failed NtAllocateVirtualMemory(',HexStr(base),',',HexStr(base+size),'):',HexStr(r,8));
+    //STATUS_COMMITMENT_LIMIT = $C000012D
+    Assert(false,'pmap_init');
+   end;
+
+  end;
  end;
+
 end;
 
 {
@@ -201,13 +210,14 @@ var
  base_new:Pointer;
  base_old:Pointer;
  size:QWORD;
- r:Integer;
+ r,old:Integer;
 begin
  Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(new_prot,2),':',HexStr(old_prot,2));
 
  base_new:=Pointer(trunc_page(start));
  base_old:=base_new;
  size:=trunc_page(__end-start);
+ old:=0;
 
  if (is_gpu(new_prot)<>is_gpu(old_prot)) then
  begin
@@ -232,7 +242,7 @@ begin
       @base_old,
       @size,
       PAGE_READONLY,
-      nil
+      @old
      );
 
   if (r<>0) then
@@ -268,7 +278,7 @@ begin
        @base_new,
        @size,
        wprots[new_prot and VM_RWX],
-       nil
+       @old
       );
 
    if (r<>0) then
@@ -299,7 +309,7 @@ begin
       @base_new,
       @size,
       wprots[new_prot and VM_RWX],
-      nil
+      @old
      );
 
   if (r<>0) then

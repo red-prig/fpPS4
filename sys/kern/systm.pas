@@ -19,10 +19,12 @@ function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
 function fubyte(var base:Byte):Byte; inline;
 function fuword32(var base:DWORD):DWORD; inline;
 function fuword64(var base:QWORD):QWORD; inline;
+function fuword(var base:Pointer):Pointer; inline;
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
 function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD; inline;
 function suword32(var base:DWORD;word:DWORD):DWORD; inline;
 function suword64(var base:QWORD;word:QWORD):DWORD; inline;
+function suword(var base:Pointer;word:Pointer):DWORD; inline;
 
 implementation
 
@@ -111,6 +113,14 @@ begin
  end;
 end;
 
+function fuword(var base:Pointer):Pointer; inline;
+begin
+ if (NtReadVirtualMemory(NtCurrentProcess,@base,@Result,SizeOf(Pointer),nil)<>0) then
+ begin
+  Result:=Pointer(QWORD(-1));
+ end;
+end;
+
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; inline;
 begin
  Result:=System.InterlockedCompareExchange(base,newval,oldval);
@@ -135,6 +145,17 @@ end;
 function suword64(var base:QWORD;word:QWORD):DWORD; inline;
 begin
  if (NtWriteVirtualMemory(NtCurrentProcess,@base,@word,SizeOf(QWORD),nil)=0) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=DWORD(-1);
+ end;
+end;
+
+function suword(var base:Pointer;word:Pointer):DWORD; inline;
+begin
+ if (NtWriteVirtualMemory(NtCurrentProcess,@base,@word,SizeOf(Pointer),nil)=0) then
  begin
   Result:=0;
  end else

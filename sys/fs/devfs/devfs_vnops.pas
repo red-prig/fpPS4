@@ -697,7 +697,7 @@ begin
  if (error<>EACCES) then
   Exit(error);
  { We do, however, allow access to the controlling terminal }
- if ((p_leader.p_flag and P_CONTROLT)=0) then
+ if ((p_proc.p_flag and P_CONTROLT)=0) then
   Exit(error);
  //if (ap^.a_td^.td_proc^.p_session^.s_ttydp=de^.de_cdp) then
  // Exit(0);
@@ -1034,7 +1034,7 @@ begin
  if (error=0) then
   Exit(0);
  { We do, however, allow access to the controlling terminal }
- if ((p_leader.p_flag and P_CONTROLT)=0) then
+ if ((p_proc.p_flag and P_CONTROLT)=0) then
   Exit(error);
  //if (td^.td_proc^.p_session^.s_ttydp=cdp) then
  // Exit(0);

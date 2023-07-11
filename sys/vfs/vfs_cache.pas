@@ -45,7 +45,9 @@ begin
  //if (disablefullpath) then Exit(ENODEV);
 
  if (vn=nil) then
+ begin
   Exit(EINVAL);
+ end;
 
  buf:=AllocMem(MAXPATHLEN);
 

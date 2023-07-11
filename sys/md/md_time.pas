@@ -282,7 +282,7 @@ begin
   CLOCK_EXT_RAW_NETWORK:
    begin
     tp^.tv_sec :=0;
-    tp^.tv_nsec:=100;
+    tp^.tv_nsec:=80;
    end;
 
   CLOCK_SECOND:

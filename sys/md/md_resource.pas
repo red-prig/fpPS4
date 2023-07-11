@@ -46,9 +46,9 @@ begin
  Case who of
   RUSAGE_SELF:
     begin
-     rup^.ru_nsignals:=p_nsignals;
-     rup^.ru_nvcsw   :=p_nvcsw;
-     rup^.ru_nivcsw  :=p_nivcsw;
+     rup^.ru_nsignals:=p_proc.p_nsignals;
+     rup^.ru_nvcsw   :=p_proc.p_nvcsw;
+     rup^.ru_nivcsw  :=p_proc.p_nivcsw;
 
      rup^.ru_ixrss   :=pgtok(g_vmspace.vm_tsize);
      rup^.ru_idrss   :=pgtok(g_vmspace.vm_dsize);
