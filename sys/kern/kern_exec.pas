@@ -1004,13 +1004,69 @@ begin
  end;
 end;
 
+function digest_dynamic(lib:p_lib_info):Integer;
+begin
+ Result:=0;
+
+ /////////////
+end;
+
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
  lib:p_lib_info;
 
+ init_proc_addr:Pointer;
+ fini_proc_addr:Pointer;
+
+ count:Integer;
 begin
  Result:=0;
 
+ dynlibs_info.proc_param_addr:=imgp^.proc_param_addr;
+ dynlibs_info.proc_param_size:=imgp^.proc_param_size;
+
+ lib:=dynlibs_info.libprogram;
+
+ if (imgp^.dyn_exist=0) then
+ begin
+  TAILQ_INSERT_TAIL(@dynlibs_info.lib_list,lib,@lib^.entry);
+  Inc(dynlibs_info.obj_count);
+  Exit;
+ end;
+
+ Result:=digest_dynamic(lib);
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'dynlib_proc_initialize_step2:','digest_dynamic()=',Result);
+  Exit;
+ end;
+
+ if (lib^.rel_data=nil) then
+ begin
+  count:=0;
+ end else
+ begin
+  count:=(lib^.rel_data^.pltrela_size div sizeof(elf64_rela))+(lib^.rel_data^.rela_size div sizeof(elf64_rela));
+ end;
+
+ lib^.relo_bits_process:=AllocMem((count+7) div 8);
+
+ TAILQ_INSERT_TAIL(@dynlibs_info.lib_list,lib,@lib^.entry);
+ Inc(dynlibs_info.obj_count);
+
+ init_proc_addr:=lib^.init_proc_addr;
+ fini_proc_addr:=lib^.fini_proc_addr;
+
+ lib^.fini_proc_addr:=nil;
+ lib^.init_proc_addr:=nil;
+
+ initlist_add_objects(dynlibs_info.fini_proc_list,
+                      dynlibs_info.lib_list.tqh_first,
+                      dynlibs_info.lib_list.tqh_last^,
+                      dynlibs_info.init_proc_list);
+
+ lib^.init_proc_addr:=init_proc_addr;
+ lib^.fini_proc_addr:=fini_proc_addr;
 
  ///
 end;
@@ -1382,7 +1438,7 @@ begin
   }
  i:=imgp^.args^.begin_envv - imgp^.args^.begin_argv;
  { Cache arguments if they fit inside our allowance }
- if (ps_arg_cache_limit >= i + sizeof(t_pargs)) then
+ if (ps_arg_cache_limit >= (i + sizeof(t_pargs))) then
  begin
   newargs:=pargs_alloc(i);
   Move(imgp^.args^.begin_argv^,newargs^.ar_args,i);

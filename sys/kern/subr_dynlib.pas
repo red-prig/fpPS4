@@ -210,7 +210,7 @@ type
 
  p_lib_info=^t_lib_info;
  t_lib_info=record
-  next:p_lib_info;
+  entry:TAILQ_ENTRY;
 
   lib_path   :PAnsiChar;
   lib_dirname:PAnsiChar;
@@ -246,8 +246,8 @@ type
   //lib_modules:TAILQ_HEAD; //Lib_Entry
   names      :TAILQ_HEAD; //Name_Entry
 
-  init_addr:Pointer;
-  fini_addr:Pointer;
+  init_proc_addr:Pointer;
+  fini_proc_addr:Pointer;
 
   eh_frame_hdr_addr:Pointer;
   eh_frame_hdr_size:QWORD;
@@ -259,7 +259,10 @@ type
 
   //t_rtld_bits rtld_flags;
 
-  is_tls:Integer;
+  is_tls      :Integer;
+  init_scanned:Integer;
+  init_done   :Integer;
+  init_fini   :Integer;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -312,6 +315,9 @@ type
   needed     :TAILQ_HEAD; //p_Needed_Entry
   init_list  :TAILQ_HEAD; //p_Objlist_Entry
   fini_list  :TAILQ_HEAD; //p_Objlist_Entry
+
+  init_proc_list:TAILQ_HEAD; //p_Objlist_Entry
+  fini_proc_list:TAILQ_HEAD; //p_Objlist_Entry
 
   d_tls_offset:QWORD;
   d_tls_size  :QWORD;
@@ -368,6 +374,15 @@ procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
 
 procedure release_per_file_info_obj(lib:p_lib_info);
 function  acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
+
+procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
+                               obj :p_lib_info;
+                               tail:p_lib_info;
+                               var init_proc_list:TAILQ_HEAD);
+
+procedure initlist_add_neededs(var fini_proc_list:TAILQ_HEAD;
+                               needed:p_Needed_Entry;
+                               var init_proc_list:TAILQ_HEAD);
 
 var
  dynlibs_info:t_dynlibs_info;
@@ -1485,6 +1500,68 @@ begin
 
  FreeMem(lib);
 end;
+
+procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
+                               obj :p_lib_info;
+                               tail:p_lib_info;
+                               var init_proc_list:TAILQ_HEAD);
+var
+ proc_entry:p_Objlist_Entry;
+begin
+ if (obj^.init_scanned<>0) or (obj^.init_done<>0) then Exit;
+ obj^.init_scanned:=1;
+
+ if (obj<>tail) then
+ begin
+  initlist_add_objects(fini_proc_list,obj^.entry.tqe_next,tail,init_proc_list);
+ end;
+
+ if (obj^.needed.tqh_first<>nil) then
+ begin
+  initlist_add_neededs(fini_proc_list,obj^.needed.tqh_first,init_proc_list);
+ end;
+
+ if (obj^.init_proc_addr<>nil) then
+ begin
+  proc_entry:=AllocMem(SizeOf(Objlist_Entry));
+
+  proc_entry^.obj:=obj;
+
+  TAILQ_INSERT_TAIL(@init_proc_list,proc_entry,@proc_entry^.link);
+ end;
+
+ if (obj^.fini_proc_addr<>nil) and (obj^.init_fini=0) then
+ begin
+  proc_entry:=AllocMem(SizeOf(Objlist_Entry));
+
+  proc_entry^.obj:=obj;
+
+  TAILQ_INSERT_TAIL(@fini_proc_list,proc_entry,@proc_entry^.link);
+
+  obj^.init_fini:=1;
+ end;
+end;
+
+procedure initlist_add_neededs(var fini_proc_list:TAILQ_HEAD;
+                               needed:p_Needed_Entry;
+                               var init_proc_list:TAILQ_HEAD);
+var
+ obj:p_lib_info;
+begin
+ if (needed^.link.tqe_next<>nil) then
+ begin
+  initlist_add_neededs(fini_proc_list,needed^.link.tqe_next,init_proc_list);
+ end;
+
+ obj:=needed^.obj;
+ if (obj<>nil) then
+ begin
+  initlist_add_objects(fini_proc_list,obj,obj,init_proc_list);
+ end;
+end;
+
+
+
 
 end.
 
