@@ -297,6 +297,8 @@ var
   p_flag :Integer;
   p_osrel:Integer;
 
+  p_sdk_version:Integer;
+
   p_nsignals:Int64;
   p_nvcsw   :Int64;
   p_nivcsw  :Int64;

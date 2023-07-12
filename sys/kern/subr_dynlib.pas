@@ -98,8 +98,10 @@ type
 
   dyn_offset          :QWORD;
   dyn_filesz          :QWORD;
-  sce_dynlib_data_ptr :Pointer;
+
+  sce_dynlib_data_addr:QWORD;
   sce_dynlib_data_size:QWORD;
+
   sce_comment_offset  :QWORD;
   sce_comment_filesz  :QWORD;
 
@@ -108,6 +110,8 @@ type
 
   relro_addr:Pointer;
   relro_size:QWORD;
+
+  hdr_e_type:Integer;
  end;
 
 const
@@ -156,6 +160,54 @@ const
  ps_arg_cache_limit=$400;
 
 type
+ p_rel_data=^t_rel_data;
+ t_rel_data=record
+  //entry:TAILQ_ENTRY;
+  //vm_obj:vm_object_t;
+  //refs:Integer;
+  //full_size:QWORD;
+
+  symtab_addr:p_elf64_sym;
+  symtab_size:QWORD;
+
+  strtab_addr:pchar;
+  strtab_size:QWORD;
+
+  pltrela_addr:p_elf64_rela;
+  pltrela_size:QWORD;
+
+  rela_addr:p_elf64_rela;
+  rela_size:QWORD;
+
+  hash_addr:Pointer;
+  hash_size:QWORD;
+
+  dynamic_addr:p_elf64_dyn;
+  dynamic_size:QWORD;
+
+  sce_comment_addr:PByte;
+  sce_comment_size:QWORD;
+
+  sce_dynlib_addr:Pointer;
+  sce_dynlib_size:QWORD;
+
+  execpath:pchar;
+
+  buckets:PQWORD;
+  buckets_size:QWORD;
+
+  chains:PQWORD;
+  chains_size:QWORD;
+
+  hashsize:DWORD;
+  dynsymcount:DWORD;
+
+  original_filename:pchar;
+
+  //void * sce_dynlib_data;
+  //void * elf_hdr;
+ end;
+
  p_lib_info=^t_lib_info;
  t_lib_info=record
   next:p_lib_info;
@@ -189,11 +241,10 @@ type
 
   pltgot:Pointer;
 
-  needed:TAILQ_ENTRY;
-
-  //t_lib_table * lib_table[2];
-
-  names    :TAILQ_HEAD; //Name_Entry
+  needed     :TAILQ_HEAD; //Needed_Entry
+  lib_table  :TAILQ_HEAD; //Lib_Entry
+  //lib_modules:TAILQ_HEAD; //Lib_Entry
+  names      :TAILQ_HEAD; //Name_Entry
 
   init_addr:Pointer;
   fini_addr:Pointer;
@@ -208,12 +259,14 @@ type
 
   //t_rtld_bits rtld_flags;
 
+  is_tls:Integer;
+
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
 
-  //relo_bits_process:PByte;
+  relo_bits_process:PByte;
 
-  //t_rel_data * rel_data
+  rel_data:p_rel_data;
 
   fingerprint:array[0..19] of Byte;
 
@@ -222,16 +275,31 @@ type
 
  p_Objlist_Entry=^Objlist_Entry;
  Objlist_Entry=record
-  link:p_Objlist_Entry;
+  link:TAILQ_ENTRY;
   obj :p_lib_info;
  end;
 
  p_Needed_Entry=^Needed_Entry;
  Needed_Entry=record
-  link :p_Needed_Entry;
+  link :TAILQ_ENTRY;
   obj  :p_lib_info;
   flags:QWORD;
-  name:record end; //pchar
+  name :Char;
+ end;
+
+ p_Name_Entry=^Name_Entry;
+ Name_Entry=record
+  link:TAILQ_ENTRY;
+  name:Char;
+ end;
+
+ p_Lib_Entry=^Lib_Entry;
+ Lib_Entry=record
+  link       :TAILQ_ENTRY;
+  name_offset:DWORD;
+  version    :WORD;
+  id         :WORD;
+  attr       :WORD;
  end;
 
  p_dynlibs_info=^t_dynlibs_info;
@@ -287,6 +355,7 @@ function  is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype_caller:Integ
 function  trans_prot(flags:Elf64_Word):Byte;
 
 function  obj_new():p_lib_info;
+procedure obj_free(lib:p_lib_info);
 
 function  elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
                                   hdr_size :QWORD;
@@ -296,6 +365,9 @@ function  elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
                                   eh_frame_size:PQWORD):Integer;
 
 procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
+
+procedure release_per_file_info_obj(lib:p_lib_info);
+function  acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
 
 var
  dynlibs_info:t_dynlibs_info;
@@ -689,7 +761,7 @@ begin
    PT_SCE_DYNLIBDATA:
      begin
       imgp^.sce_dynlib_data_id  :=i;
-      imgp^.sce_dynlib_data_ptr :=Pointer(phdr[i].p_offset);
+      imgp^.sce_dynlib_data_addr:=phdr[i].p_offset;
       imgp^.sce_dynlib_data_size:=phdr[i].p_filesz;
 
       if (phdr[i].p_memsz<>0) then
@@ -879,7 +951,7 @@ function elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
 label
  __result;
 var
- ret1,ret2:Integer;
+ ret1:Integer;
  h,res,pos:PByte;
  enc:Byte;
  offset:QWORD;
@@ -970,6 +1042,449 @@ begin
  Move(path^,lib^.lib_path^,size);
 end;
 
+function preprocess_dt_entries(new:p_lib_info;hdr_e_type:Integer):Integer;
+label
+ _unsupp;
+var
+ dt_ent:p_elf64_dyn;
+ i,count:Integer;
+
+ SCE_SYMTABSZ         :Boolean;
+ SCE_HASHSZ           :Boolean;
+ SCE_SYMENT           :Boolean;
+ SCE_SYMTAB           :Boolean;
+ SCE_STRSZ            :Boolean;
+ SCE_STRTAB           :Boolean;
+ SCE_RELAENT          :Boolean;
+ SCE_PLTREL           :Boolean;
+ SCE_RELASZ           :Boolean;
+ SCE_RELA             :Boolean;
+ SCE_PLTRELSZ         :Boolean;
+ SCE_JMPREL           :Boolean;
+ SCE_PLTGOT           :Boolean;
+ SCE_HASH             :Boolean;
+ SCE_MODULE_INFO      :Boolean;
+ SCE_ORIGINAL_FILENAME:Boolean;
+ SCE_FINGERPRINT      :Boolean;
+begin
+ Result:=0;
+
+ dt_ent:=new^.rel_data^.dynamic_addr;
+ count :=new^.rel_data^.dynamic_size div sizeof(elf64_dyn);
+
+ SCE_SYMTABSZ         :=False;
+ SCE_HASHSZ           :=False;
+ SCE_SYMENT           :=False;
+ SCE_SYMTAB           :=False;
+ SCE_STRSZ            :=False;
+ SCE_STRTAB           :=False;
+ SCE_RELAENT          :=False;
+ SCE_PLTREL           :=False;
+ SCE_RELASZ           :=False;
+ SCE_RELA             :=False;
+ SCE_PLTRELSZ         :=False;
+ SCE_JMPREL           :=False;
+ SCE_PLTGOT           :=False;
+ SCE_HASH             :=False;
+ SCE_MODULE_INFO      :=False;
+ SCE_ORIGINAL_FILENAME:=False;
+ SCE_FINGERPRINT      :=False;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  case dt_ent^.d_tag of
+   DT_NULL,
+   DT_NEEDED,
+   DT_INIT,
+   DT_FINI,
+   DT_SONAME,
+   DT_SYMBOLIC,
+   DT_DEBUG,
+   DT_TEXTREL,
+   DT_INIT_ARRAY,
+   DT_FINI_ARRAY,
+   DT_INIT_ARRAYSZ,
+   DT_FINI_ARRAYSZ,
+   DT_FLAGS,
+   DT_PREINIT_ARRAY,
+   DT_PREINIT_ARRAYSZ,
+   DT_SCE_NEEDED_MODULE,
+   DT_SCE_MODULE_ATTR,
+   DT_SCE_EXPORT_LIB,
+   DT_SCE_IMPORT_LIB,
+   DT_SCE_EXPORT_LIB_ATTR,
+   DT_SCE_IMPORT_LIB_ATTR,
+   DT_RELACOUNT,
+   DT_FLAGS_1:; //ignore
+
+   DT_PLTRELSZ,
+   DT_SCE_PLTRELSZ:
+     begin
+      SCE_PLTRELSZ:=true;
+      new^.rel_data^.pltrela_size:=dt_ent^.d_un.d_val;
+     end;
+
+   DT_PLTREL,
+   DT_SCE_PLTREL:
+     begin
+      SCE_PLTREL:=true;
+      if (dt_ent^.d_un.d_val<>7) then
+      begin
+       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_PLTREL entry',' found in ',new^.lib_path);
+       Exit(EINVAL);
+      end;
+     end;
+
+   DT_RELASZ,
+   DT_SCE_RELASZ:
+     begin
+      SCE_RELASZ:=true;
+      new^.rel_data^.rela_size:=dt_ent^.d_un.d_val;
+     end;
+
+   DT_RELAENT,
+   DT_SCE_RELAENT:
+     begin
+      SCE_RELAENT:=true;
+      if (dt_ent^.d_un.d_val<>24) then
+      begin
+       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_RELAENT entry',' found in ',new^.lib_path);
+       Exit(EINVAL);
+      end;
+     end;
+
+   DT_STRSZ,
+   DT_SCE_STRSZ:
+     begin
+      SCE_STRSZ:=true;
+      new^.rel_data^.strtab_size:=dt_ent^.d_un.d_val;
+     end;
+
+   DT_SYMENT,
+   DT_SCE_SYMENT:
+     begin
+      SCE_SYMENT:=true;
+      if (dt_ent^.d_un.d_val<>24) then
+      begin
+       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_SYMENT entry',' found in ',new^.lib_path);
+       Exit(EINVAL);
+      end;
+     end;
+
+   DT_SCE_FINGERPRINT:
+     begin
+      SCE_FINGERPRINT:=true;
+     end;
+
+   DT_SCE_ORIGINAL_FILENAME:
+     begin
+      SCE_ORIGINAL_FILENAME:=true;
+     end;
+
+   DT_SCE_MODULE_INFO:
+     begin
+      SCE_MODULE_INFO:=true;
+     end;
+
+   DT_SCE_PLTGOT:
+     begin
+      SCE_PLTGOT:=true;
+     end;
+
+   DT_SCE_HASH:
+     begin
+      SCE_HASH:=true;
+      new^.rel_data^.hash_addr:=Pointer(dt_ent^.d_un.d_val);
+     end;
+
+   DT_SCE_JMPREL:
+     begin
+      SCE_JMPREL:=true;
+      new^.rel_data^.pltrela_addr:=Pointer(dt_ent^.d_un.d_val);
+     end;
+
+   DT_SCE_RELA:
+     begin
+      SCE_RELA:=true;
+      new^.rel_data^.rela_addr:=Pointer(dt_ent^.d_un.d_val);
+     end;
+
+   DT_SCE_STRTAB:
+     begin
+      SCE_STRTAB:=true;
+      new^.rel_data^.strtab_addr:=Pointer(dt_ent^.d_un.d_val);
+     end;
+
+   DT_SCE_SYMTAB:
+     begin
+      SCE_SYMTAB:=true;
+      new^.rel_data^.symtab_addr:=Pointer(dt_ent^.d_un.d_val);
+     end;
+
+   DT_SCE_HASHSZ:
+     begin
+      SCE_HASHSZ:=true;
+      new^.rel_data^.hash_size:=dt_ent^.d_un.d_val;
+     end;
+
+   DT_SCE_SYMTABSZ:
+     begin
+      SCE_SYMTABSZ:=true;
+      new^.rel_data^.symtab_size:=dt_ent^.d_un.d_val;
+     end;
+
+   DT_PLTGOT,
+   DT_RPATH,
+   DT_BIND_NOW,
+   DT_RUNPATH,
+   DT_ENCODING,
+   $61000008,
+   $6100000a,
+   $6100000b,
+   $6100000c,
+   $6100000e,
+   $61000010,
+   $61000012,
+   $61000014,
+   $61000016,
+   $61000018,
+   $6100001a,
+   $6100001b,
+   $6100001c,
+   DT_SCE_STUB_MODULE_NAME,
+   $6100001e,
+   DT_SCE_STUB_MODULE_VERSION,
+   $61000020,
+   DT_SCE_STUB_LIBRARY_NAME,
+   $61000022,
+   DT_SCE_STUB_LIBRARY_VERSION,
+   $61000024,
+   $61000026,
+   $61000028,
+   $6100002a,
+   $6100002c,
+   $6100002e,
+   $61000030,
+   $61000032,
+   $61000034,
+   $61000036,
+   $61000038,
+   $6100003a,
+   $6100003c,
+   $6100003e:
+     begin
+      _unsupp:
+      Writeln(StdErr,'preprocess_dt_entries:','Unsupported DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      Exit(ENOEXEC);
+     end;
+
+   DT_HASH,
+   DT_STRTAB,
+   DT_SYMTAB,
+   DT_RELA,
+   DT_JMPREL:
+     begin
+      Writeln(StdErr,'preprocess_dt_entries:','ORBIS object file does not support DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      Exit(EINVAL);
+     end;
+
+   else
+     goto _unsupp;
+  end;
+
+  Inc(dt_ent);
+ end;
+
+ if (SCE_HASHSZ) and (SCE_SYMTABSZ) then
+ begin
+   if  ( (hdr_e_type=ET_SCE_DYNAMIC) and ((not SCE_ORIGINAL_FILENAME) or (not SCE_MODULE_INFO)) ) or
+       (not SCE_FINGERPRINT) or
+       (not SCE_HASH) or
+       (not SCE_PLTGOT) or
+       (not SCE_JMPREL) or
+       (not SCE_PLTREL) or
+       (not SCE_PLTRELSZ) or
+       (not SCE_RELA) or
+       (not SCE_RELASZ) or
+       (not SCE_RELAENT) or
+       (not SCE_STRTAB) or
+       (not SCE_STRSZ) or
+       (not SCE_SYMTAB) or
+       (not SCE_SYMENT) then
+   begin
+    Writeln(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have required tabs.');
+    Exit(EINVAL);
+   end;
+ end else
+ begin
+  Writeln(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have DT_SCE_SYMTABSZ or DT_SCE_HASHSZ tabs.');
+  Exit(EINVAL);
+ end;
+
+end;
+
+procedure release_per_file_info_obj(lib:p_lib_info);
+begin
+ if (lib^.rel_data<>nil) then
+ begin
+  FreeMem(lib^.rel_data);
+  lib^.rel_data:=nil;
+ end;
+end;
+
+function acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
+var
+ full_size:QWORD;
+ src,dst:Pointer;
+begin
+ Result:=0;
+
+ full_size:=sizeOf(t_rel_data)+1+
+            AlignUp(imgp^.sce_dynlib_data_size,8)+
+            AlignUp(imgp^.sce_comment_filesz,8)+
+            strlen(imgp^.execpath);
+
+ new^.rel_data:=AllocMem(full_size);
+
+ dst:=Pointer(new^.rel_data+1);
+
+ src:=Pointer(imgp^.image_header)+imgp^.sce_dynlib_data_addr;
+
+ Move(src^,dst^,imgp^.sce_dynlib_data_size);
+
+ new^.rel_data^.sce_dynlib_addr:=dst;
+ new^.rel_data^.sce_dynlib_size:=imgp^.sce_dynlib_data_size;
+
+ dst:=dst+AlignUp(imgp^.sce_dynlib_data_size,8);
+
+ if (imgp^.sce_comment_filesz<>0) then
+ begin
+  src:=Pointer(imgp^.image_header)+imgp^.sce_comment_offset;
+
+  Move(src^,dst^,imgp^.sce_comment_filesz);
+
+  new^.rel_data^.sce_comment_addr:=dst;
+  new^.rel_data^.sce_comment_size:=imgp^.sce_comment_filesz;
+
+  dst:=dst+AlignUp(imgp^.sce_comment_filesz,8);
+ end;
+
+ Move(imgp^.execpath^,dst^,sizeOf(t_rel_data)+1);
+
+ new^.rel_data^.execpath:=dst;
+
+ src:=new^.rel_data^.sce_dynlib_addr;
+
+ new^.rel_data^.dynamic_addr:=src+imgp^.dyn_offset;
+ new^.rel_data^.dynamic_size:=imgp^.dyn_filesz;
+
+ Result:=preprocess_dt_entries(new,imgp^.hdr_e_type);
+
+ if (Result<>0) then
+ begin
+  FreeMem(new^.rel_data);
+  new^.rel_data:=nil;
+  Exit;
+ end;
+
+ src:=new^.rel_data^.sce_dynlib_addr;
+
+ new^.rel_data^.symtab_addr :=Pointer(QWORD(src)+QWORD(new^.rel_data^.symtab_addr ));
+ new^.rel_data^.strtab_addr :=Pointer(QWORD(src)+QWORD(new^.rel_data^.strtab_addr ));
+ new^.rel_data^.pltrela_addr:=Pointer(QWORD(src)+QWORD(new^.rel_data^.pltrela_addr));
+ new^.rel_data^.rela_addr   :=Pointer(QWORD(src)+QWORD(new^.rel_data^.rela_addr   ));
+ new^.rel_data^.hash_addr   :=Pointer(QWORD(src)+QWORD(new^.rel_data^.hash_addr   ));
+
+ src:=new^.rel_data^.hash_addr;
+
+ new^.rel_data^.hashsize    :=PDWORD(src)^;
+ new^.rel_data^.buckets_size:=new^.rel_data^.hashsize shl 2;
+
+ new^.rel_data^.buckets    :=Pointer(QWORD(src) + 8);
+ new^.rel_data^.dynsymcount:=PDWORD (QWORD(src) + 4)^;
+ new^.rel_data^.chains_size:=new^.rel_data^.dynsymcount shl 2;
+
+ new^.rel_data^.chains:=Pointer(QWORD(src) + (new^.rel_data^.hashsize + 2) * 4);
+
+end;
+
+procedure obj_free(lib:p_lib_info);
+var
+ needed:p_Needed_Entry;
+ names:p_Name_Entry;
+ dag:p_Objlist_Entry;
+ libs:p_Lib_Entry;
+begin
+
+ if (lib^.is_tls<>0) and (lib^.tls_offset=dynlibs_info.d_tls_offset) then
+ begin
+  dynlibs_info.d_tls_offset:=lib^.tls_offset - lib^.tls_size;
+  dynlibs_info.d_tls_size:=0;
+ end;
+
+ needed:=TAILQ_FIRST(@lib^.needed);
+ while (needed<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.needed,needed,@needed^.link);
+  FreeMem(needed);
+  needed:=TAILQ_FIRST(@lib^.needed);
+ end;
+
+ names:=TAILQ_FIRST(@lib^.names);
+ while (names<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.names,names,@names^.link);
+  FreeMem(names);
+  names:=TAILQ_FIRST(@lib^.names);
+ end;
+
+ dag:=TAILQ_FIRST(@lib^.dldags);
+ while (dag<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.dldags,dag,@dag^.link);
+  FreeMem(dag);
+  dag:=TAILQ_FIRST(@lib^.dldags);
+ end;
+
+ dag:=TAILQ_FIRST(@lib^.dagmembers);
+ while (dag<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.dagmembers,dag,@dag^.link);
+  FreeMem(dag);
+  dag:=TAILQ_FIRST(@lib^.dagmembers);
+ end;
+
+ if (lib^.lib_dirname<>nil) then
+ begin
+  FreeMem(lib^.lib_dirname);
+  lib^.lib_dirname:=nil;
+ end;
+
+ if (lib^.lib_path<>nil) then
+ begin
+  FreeMem(lib^.lib_path);
+  lib^.lib_path:=nil;
+ end;
+
+ if (lib^.relo_bits_process<>nil) then
+ begin
+  FreeMem(lib^.relo_bits_process);
+  lib^.relo_bits_process:=nil
+ end;
+
+ libs:=TAILQ_FIRST(@lib^.lib_table);
+ while (libs<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.lib_table,libs,@libs^.link);
+  FreeMem(libs);
+  libs:=TAILQ_FIRST(@lib^.lib_table);
+ end;
+
+ release_per_file_info_obj(lib);
+
+ FreeMem(lib);
+end;
 
 end.
 

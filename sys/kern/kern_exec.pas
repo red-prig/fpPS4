@@ -51,7 +51,8 @@ uses
  _resource,
  kern_resource,
  sys_event,
- kern_event;
+ kern_event,
+ machdep;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -874,25 +875,27 @@ begin
 
 end;
 
-function scan_dyn(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
+function scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
 var
  hdr:p_elf64_hdr;
- dyn_offset:QWORD;
+ p_offset:QWORD;
+ p_filesz:QWORD;
  i:Integer;
 begin
  Result:=0;
 
  hdr:=imgp^.image_header;
 
- dyn_offset:=phdr[imgp^.dyn_id].p_offset;
+ p_offset:=phdr[imgp^.dyn_id].p_offset;
+ p_filesz:=phdr[imgp^.dyn_id].p_filesz;
 
  if (count<>0) then
  For i:=0 to count-1 do
  begin
 
-  if (phdr[i].p_offset <= dyn_offset) and
+  if (phdr[i].p_offset <= p_offset) and
      (imgp^.dyn_id<>i) and
-     ( (phdr[imgp^.dyn_id].p_filesz + dyn_offset) <= (phdr[i].p_offset + phdr[i].p_filesz)) then
+     ( (p_filesz + p_offset) <= (phdr[i].p_offset + phdr[i].p_filesz)) then
   begin
    if (i<>-1) then
    begin
@@ -904,7 +907,6 @@ begin
    break;
   end;
 
-  Inc(phdr);
  end;
 
  Result:=EINVAL;
@@ -983,7 +985,52 @@ begin
  lib^.loaded:=4;
 
  dynlibs_info.libprogram:=lib;
+
+ if (imgp^.dyn_exist=0) then
+ begin
+  dynlibs_info.dyn_non_exist:=1;
+  lib^.rel_data:=nil;
+  //
+ end else
+ begin
+  dynlibs_info.dyn_non_exist:=0;
+
+  Result:=acquire_per_file_info_obj(imgp,lib);
+
+  if (Result<>0) then
+  begin
+   obj_free(dynlibs_info.libprogram);
+  end;
+ end;
 end;
+
+function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
+var
+ lib:p_lib_info;
+
+begin
+ Result:=0;
+
+
+ ///
+end;
+
+function dynlib_copy_executable_sdk_version():Integer;
+var
+ proc_param:pSceProcParam;
+begin
+ proc_param:=dynlibs_info.proc_param_addr;
+ //
+ if (proc_param=nil) then
+ begin
+  p_proc.p_sdk_version:=0;
+  Result:=0;
+ end else
+ begin
+  Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
+ end;
+end;
+
 
 function exec_self_imgact(imgp:p_image_params):Integer;
 var
@@ -1018,6 +1065,8 @@ begin
   Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_machine:',hdr^.e_machine);
   Exit(ENOEXEC);
  end;
+
+ imgp^.hdr_e_type:=hdr^.e_type;
 
  phdr:=get_elf_phdr(hdr);
 
@@ -1056,7 +1105,7 @@ begin
   //
  end else
  begin
-  Result:=scan_dyn(imgp,phdr,hdr^.e_phnum);
+  Result:=scan_dyn_offset(imgp,phdr,hdr^.e_phnum);
   if (Result<>0) then Exit;
  end;
 
@@ -1086,17 +1135,17 @@ begin
   Exit;
  end;
 
- //////Result:=dynlib_proc_initialize_step2(imgp);
+ Result:=dynlib_proc_initialize_step2(imgp);
  if (Result<>0) then
  begin
   Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' dynlib_proc_initialize_step1:',Result);
   Exit;
  end;
 
- //////Result:=dynlib_copy_executable_sdk_version(imgp);
+ Result:=dynlib_copy_executable_sdk_version();
  if (Result<>0) then
  begin
-  Writeln(StdErr,'exec_self_imgact:','sdk version is not found in');
+  Writeln(StdErr,'exec_self_imgact:','sdk version is not found in ',imgp^.execpath);
   Exit;
  end;
 end;
@@ -1187,7 +1236,7 @@ label
  done2;
 var
  nd:t_nameidata;
- stack_base:Pointer; //register_t *
+ stack_base:Pointer;
  i,error:Integer;
  image_params:t_image_params;
  imgp:p_image_params;
@@ -1200,7 +1249,6 @@ var
 
  newargs,oldargs:p_pargs;
 begin
- //int (*img_first)(struct image_params *);
 
  textvp:=nil;
  binvp :=nil;
@@ -1216,6 +1264,7 @@ begin
   }
  attr:=Default(t_vattr);
  imgp^.attr:=@attr;
+ imgp^.args:=args;
 
  {
   * Translate the file name. namei() returns a vnode pointer
@@ -1392,7 +1441,7 @@ begin
  PROC_UNLOCK();
 
  { Set values passed into the program in registers. }
- ///////////exec_setregs(td, imgp, (u_long)(uintptr_t)stack_base);
+ exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base));
 
  vfs_mark_atime(imgp^.vp);
 

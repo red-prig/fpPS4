@@ -1495,7 +1495,7 @@ begin
   VM_OBJECT_UNLOCK(obj);
 
   _continue:
-  current:=current^.next
+  current:=current^.next;
  end;
 
  {

@@ -35,6 +35,8 @@ procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 
 function  sys_sigreturn(sigcntxp:Pointer):Integer;
 
+procedure exec_setregs(td:p_kthread;entry,stack:QWORD);
+
 implementation
 
 uses
@@ -502,6 +504,37 @@ begin
  set_pcb_flags(td,PCB_FULL_IRET);
  Result:=EJUSTRETURN;
 end;
+
+procedure exec_setregs(td:p_kthread;entry,stack:QWORD);
+var
+ regs:p_trapframe;
+begin
+ regs:=td^.td_frame;
+
+ td^.pcb_fsbase:=nil;
+ td^.pcb_gsbase:=nil;
+
+ td^.td_teb^.tcb:=nil;
+
+ set_pcb_flags(td,PCB_FULL_IRET);
+
+ bzero(regs, sizeof(trapframe));
+
+ regs^.tf_rip   :=entry;
+ regs^.tf_rsp   :=((stack - 8) and (not $F)) + 8;
+ regs^.tf_rdi   :=stack; // argv
+ regs^.tf_rflags:=PSL_USER or (regs^.tf_rflags and PSL_T);
+ regs^.tf_ss    :=_udatasel;
+ regs^.tf_cs    :=_ucodesel;
+ regs^.tf_ds    :=_udatasel;
+ regs^.tf_es    :=_udatasel;
+ regs^.tf_fs    :=_ufssel;
+ regs^.tf_gs    :=_ugssel;
+ regs^.tf_flags :=TF_HASSEGS;
+
+ td^.td_retval[1]:=0;
+end;
+
 
 
 end.
