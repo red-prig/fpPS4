@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  kern_thr,
+ vfile,
  vnode,
  vm_object,
  vuio,
@@ -259,10 +260,11 @@ type
 
   //t_rtld_bits rtld_flags;
 
-  is_tls      :Integer;
+  tls_done    :Integer;
   init_scanned:Integer;
   init_done   :Integer;
   init_fini   :Integer;
+  textrel     :Integer;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -298,11 +300,10 @@ type
 
  p_Lib_Entry=^Lib_Entry;
  Lib_Entry=record
-  link       :TAILQ_ENTRY;
-  name_offset:DWORD;
-  version    :WORD;
-  id         :WORD;
-  attr       :WORD;
+  link  :TAILQ_ENTRY;
+  dval  :TLibraryValue;
+  attr  :WORD;
+  export:WORD;
  end;
 
  p_dynlibs_info=^t_dynlibs_info;
@@ -319,9 +320,9 @@ type
   init_proc_list:TAILQ_HEAD; //p_Objlist_Entry
   fini_proc_list:TAILQ_HEAD; //p_Objlist_Entry
 
-  d_tls_offset:QWORD;
-  d_tls_size  :QWORD;
-  d_tls_count :QWORD;
+  tls_last_offset:QWORD;
+  tls_last_size  :QWORD;
+  d_tls_count    :QWORD;
 
   tls_count   :Integer;
   tls_max     :Integer;
@@ -339,18 +340,18 @@ type
  end;
 
 const
- M2MB_NOTDYN_FIXED=0;
- M2MB_DISABLE     =1;
- M2MB_READONLY    =2;
- M2MB_ENABLE      =3;
+ M2MB_NOTDYN_FIXED=0; //Default    =0     (ATTRIBUTE2:0x00000)
+ M2MB_DISABLE     =1; //NotUsed    =32768 (ATTRIBUTE2:0x08000)
+ M2MB_READONLY    =2; //Text_rodata=65536 (ATTRIBUTE2:0x10000)
+ M2MB_ENABLE      =3; //All_section=98304 (ATTRIBUTE2:0x18000)
 
 const
  g_self_fixed:Integer=0;
  g_mode_2mb  :Integer=M2MB_NOTDYN_FIXED;
  budget_ptype_caller:Integer=0;
 
-function maxInt64(a,b:Int64):Int64; inline;
-function minInt64(a,b:Int64):Int64; inline;
+function  maxInt64(a,b:Int64):Int64; inline;
+function  minInt64(a,b:Int64):Int64; inline;
 
 function  get_elf_phdr(elf_hdr:p_elf64_hdr):p_elf64_phdr; inline;
 procedure exec_load_free(imgp:p_image_params);
@@ -362,6 +363,12 @@ function  trans_prot(flags:Elf64_Word):Byte;
 
 function  obj_new():p_lib_info;
 procedure obj_free(lib:p_lib_info);
+
+function  obj_get_str(lib:p_lib_info;offset:Int64):pchar;
+procedure object_add_name(obj:p_lib_info;name:pchar);
+
+function  Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
+function  Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
 
 function  elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
                                   hdr_size :QWORD;
@@ -383,6 +390,8 @@ procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
 procedure initlist_add_neededs(var fini_proc_list:TAILQ_HEAD;
                                needed:p_Needed_Entry;
                                var init_proc_list:TAILQ_HEAD);
+
+function  digest_dynamic(lib:p_lib_info):Integer;
 
 var
  dynlibs_info:t_dynlibs_info;
@@ -661,6 +670,7 @@ begin
  text_id     :=-1;
  data_id     :=-1;
  sce_relro_id:=-1;
+ imgp^.dyn_id:=-1;
 
  if (count<>0) then
  For i:=0 to count-1 do
@@ -947,9 +957,13 @@ function obj_new():p_lib_info;
 begin
  Result:=AllocMem(SizeOf(t_lib_info));
 
+ TAILQ_INIT(@Result^.needed);
+ TAILQ_INIT(@Result^.lib_table);
+ //lib_modules
+ TAILQ_INIT(@Result^.names);
+
  TAILQ_INIT(@Result^.dldags);
  TAILQ_INIT(@Result^.dagmembers);
- TAILQ_INIT(@Result^.names);
 
  //Result^.rel_data:=(t_rel_data *)0x0;
 
@@ -1355,6 +1369,8 @@ var
 begin
  Result:=0;
 
+ if (imgp^.dyn_exist=0) then Exit(EINVAL);
+
  full_size:=sizeOf(t_rel_data)+1+
             AlignUp(imgp^.sce_dynlib_data_size,8)+
             AlignUp(imgp^.sce_comment_filesz,8)+
@@ -1424,6 +1440,15 @@ begin
 
 end;
 
+procedure free_tls_offset(lib:p_lib_info);
+begin
+ if (lib^.tls_done<>0) and (lib^.tls_offset=dynlibs_info.tls_last_offset) then
+ begin
+  dynlibs_info.tls_last_offset:=lib^.tls_offset - lib^.tls_size;
+  dynlibs_info.tls_last_size  :=0;
+ end;
+end;
+
 procedure obj_free(lib:p_lib_info);
 var
  needed:p_Needed_Entry;
@@ -1432,11 +1457,7 @@ var
  libs:p_Lib_Entry;
 begin
 
- if (lib^.is_tls<>0) and (lib^.tls_offset=dynlibs_info.d_tls_offset) then
- begin
-  dynlibs_info.d_tls_offset:=lib^.tls_offset - lib^.tls_size;
-  dynlibs_info.d_tls_size:=0;
- end;
+ free_tls_offset(lib);
 
  needed:=TAILQ_FIRST(@lib^.needed);
  while (needed<>nil) do
@@ -1501,6 +1522,100 @@ begin
  FreeMem(lib);
 end;
 
+function obj_get_str(lib:p_lib_info;offset:Int64):pchar;
+begin
+ if (lib^.rel_data^.strtab_size<=offset) then
+ begin
+  Writeln(StdErr,'obj_get_str:','offset=',HexStr(offset,8),' is out of range of string table of ',lib^.lib_path);
+  Exit(nil);
+ end;
+
+ Result:=lib^.rel_data^.strtab_addr+offset;
+end;
+
+procedure object_add_name(obj:p_lib_info;name:pchar);
+var
+ len:Integer;
+ entry:p_Name_Entry;
+begin
+ len:=strlen(name);
+ entry:=AllocMem(SizeOf(Name_Entry)+len);
+ Move(name^,entry^.name,len);
+ //
+ TAILQ_INSERT_TAIL(@obj^.names,entry,@entry^.link);
+end;
+
+function Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
+var
+ len:Integer;
+begin
+ len:=strlen(str);
+ Result:=AllocMem(SizeOf(Needed_Entry)+len);
+ Result^.obj :=lib;
+ Move(str^,Result^.name,len);
+end;
+
+function Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
+begin
+ Result:=AllocMem(SizeOf(Lib_Entry));
+ QWORD(Result^.dval):=d_val;
+ Result^.export:=ord(d_tag=DT_SCE_IMPORT_LIB);
+end;
+
+function rtld_dirname(path,bname:pchar):Integer;
+var
+ endp:pchar;
+begin
+ Result:=0;
+
+ { Empty or NULL string gets treated as "." }
+ if (path=nil) or (path^=#0) then
+ begin
+  bname[0]:='.';
+  bname[1]:=#0;
+  Exit(0);
+ end;
+
+ { Strip trailing slashes }
+ endp:=path + strlen(path) - 1;
+ while (endp > path) and ((endp^='/') or (endp^='\')) do Dec(endp);
+
+ { Find the start of the dir }
+ while (endp > path) and ((endp^<>'/') and (endp^<>'\')) do Dec(endp);
+
+ { Either the dir is "/" or there are no slashes }
+ if (endp=path) then
+ begin
+  if ((endp^='/') or (endp^='\')) then
+  begin
+   bname[0]:='/';
+  end else
+  begin
+   bname[0]:='.';
+  end;
+  bname[1]:=#0;
+  Exit(0);
+ end else
+ begin
+  repeat
+   Dec(endp);
+  until not ((endp > path) and ((endp^='/') or (endp^='\')));
+ end;
+
+ if ((endp - path + 2) > PATH_MAX) then
+ begin
+  Writeln(StdErr,'Filename is too long:',path);
+  Exit(-1);
+ end;
+
+ Move(path^, bname^, endp - path + 1);
+ bname[endp - path + 1]:=#0;
+
+ Result:=0;
+end;
+
+
+
 procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
                                obj :p_lib_info;
                                tail:p_lib_info;
@@ -1561,6 +1676,303 @@ begin
 end;
 
 
+function digest_dynamic(lib:p_lib_info):Integer;
+var
+ dt_ent:p_elf64_dyn;
+ i,count:Integer;
+
+ str:pchar;
+
+ needed:p_Needed_Entry;
+ lib_entry:p_Lib_Entry;
+
+ addr:Pointer;
+ dval:QWORD;
+
+ dyn_soname:p_elf64_dyn;
+ dt_fingerprint:Int64;
+begin
+ Result:=0;
+
+ dyn_soname:=nil;
+ dt_fingerprint:=-1;
+
+ if (lib^.rel_data<>nil) then
+ begin
+  dt_ent:=lib^.rel_data^.dynamic_addr;
+  count :=lib^.rel_data^.dynamic_size div sizeof(elf64_dyn);
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   case dt_ent^.d_tag of
+    DT_NULL,
+    DT_PLTRELSZ,
+    DT_HASH,
+    DT_STRTAB,
+    DT_SYMTAB,
+    DT_RELA,
+    DT_RELASZ,
+    DT_RELAENT,
+    DT_STRSZ,
+    DT_SYMENT,
+    DT_PLTREL,
+    DT_DEBUG,
+    DT_JMPREL,
+    DT_INIT_ARRAY,
+    DT_FINI_ARRAY,
+    DT_INIT_ARRAYSZ,
+    DT_FINI_ARRAYSZ,
+    DT_PREINIT_ARRAY,
+    DT_PREINIT_ARRAYSZ,
+    DT_SCE_HASH,
+    DT_SCE_JMPREL,
+    DT_SCE_PLTREL,
+    DT_SCE_PLTRELSZ,
+    DT_SCE_RELA,
+    DT_SCE_RELASZ,
+    DT_SCE_RELAENT,
+    DT_SCE_STRTAB,
+    DT_SCE_STRSZ,
+    DT_SCE_SYMTAB,
+    DT_SCE_SYMENT,
+    DT_SCE_HASHSZ,
+    DT_SCE_SYMTABSZ,
+    DT_RELACOUNT:;  //ignore
+
+    DT_SONAME:
+     begin
+      dyn_soname:=dt_ent;
+     end;
+
+    DT_PLTGOT,
+    DT_SCE_PLTGOT:
+     begin
+      //pltgot
+     end;
+
+    DT_NEEDED:
+      begin
+       str:=obj_get_str(lib,dt_ent^.d_un.d_val);
+
+       if (str=nil) then
+       begin
+        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        Exit(EINVAL);
+       end;
+
+       needed:=Needed_new(lib,str);
+       TAILQ_INSERT_TAIL(@lib^.needed,needed,@Needed^.link);
+      end;
+
+    DT_INIT:
+      begin
+       addr:=lib^.relocbase+dt_ent^.d_un.d_val;
+       lib^.init_proc_addr:=addr;
+
+       if (lib^.map_base>addr) or ((addr+8)>(lib^.map_base+lib^.text_size)) then
+       begin
+        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        Exit(ENOEXEC);
+       end;
+      end;
+
+    DT_FINI:
+      begin
+       addr:=lib^.relocbase+dt_ent^.d_un.d_val;
+       lib^.fini_proc_addr:=addr;
+
+       if (lib^.map_base>addr) or ((addr+8)>(lib^.map_base+lib^.text_size)) then
+       begin
+        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        Exit(ENOEXEC);
+       end;
+      end;
+
+    DT_SYMBOLIC:
+      begin
+       Writeln(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
+       Exit(EINVAL);
+      end;
+
+    DT_TEXTREL:
+      begin
+       lib^.textrel:=1;
+      end;
+
+    DT_FLAGS:
+      begin
+       dval:=dt_ent^.d_un.d_val;
+
+       if ((dval and DF_SYMBOLIC)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
+        Exit(EINVAL);
+       end;
+
+       if ((dval and DF_BIND_NOW)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DF_BIND_NOW is obsolete.');
+        Exit(EINVAL);
+       end;
+
+       if ((dval and DF_TEXTREL)<>0) then
+       begin
+        lib^.textrel:=1;
+       end;
+      end;
+
+    DT_SCE_FINGERPRINT:
+      begin
+       dt_fingerprint:=dt_ent^.d_un.d_val;
+
+       if (lib^.rel_data=nil) or
+          ((dt_fingerprint + 20)>lib^.rel_data^.sce_dynlib_size) then
+       begin
+        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        Exit(ENOEXEC);
+       end;
+      end;
+
+    DT_SCE_ORIGINAL_FILENAME:
+      begin
+       str:=obj_get_str(lib,dt_ent^.d_un.d_val);
+
+       if (str=nil) then
+       begin
+        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        Exit(EINVAL);
+       end;
+
+       lib^.rel_data^.original_filename:=str;
+      end;
+
+    DT_SCE_MODULE_INFO,
+    DT_SCE_NEEDED_MODULE:
+      begin
+       //need_module
+      end;
+
+    DT_SCE_MODULE_ATTR:
+      begin
+       //dval
+      end;
+
+    DT_SCE_EXPORT_LIB,
+    DT_SCE_IMPORT_LIB:
+      begin
+       lib_entry:=Lib_new(dt_ent^.d_tag,dt_ent^.d_un.d_val);
+       TAILQ_INSERT_TAIL(@lib^.lib_table,lib_entry,@lib_entry^.link);
+      end;
+
+    DT_SCE_EXPORT_LIB_ATTR,
+    DT_SCE_IMPORT_LIB_ATTR:
+      begin
+       dval:=dt_ent^.d_un.d_val;
+
+       lib_entry:=lib^.lib_table.tqh_first;
+       while (lib_entry<>nil) do
+       begin
+        if (TLibraryAttr(dval).id=lib_entry^.dval.id) then
+        begin
+         Break;
+        end;
+        lib_entry:=lib_entry^.link.tqe_next;
+       end;
+
+       if (lib_entry=nil) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_LIB_ATTR entry ',TLibraryAttr(dval).id);
+        Exit(EINVAL);
+       end;
+
+       lib_entry^.attr:=TLibraryAttr(dval).attr;
+      end;
+
+    DT_FLAGS_1:
+      begin
+       dval:=dt_ent^.d_un.d_val;
+
+       if ((dval and DF_1_BIND_NOW)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DF_1_BIND_NOW is obsolete.');
+        Exit(EINVAL);
+       end;
+
+       if ((dval and DF_1_NODELETE)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DF_1_NODELETE is obsolete.');
+        Exit(EINVAL);
+       end;
+
+       if ((dval and DF_1_LOADFLTR)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DF_1_LOADFLTR is obsolete.');
+        Exit(EINVAL);
+       end;
+
+       if ((dval and DF_1_NOOPEN)<>0) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','DF_1_NOOPEN is obsolete.');
+        Exit(EINVAL);
+       end;
+      end;
+
+    else
+      begin
+       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',lib^.lib_path);
+       Exit(ENOEXEC);
+      end;
+
+   end; //case
+
+   Inc(dt_ent);
+  end; //for
+
+ end;
+
+ addr:=lib^.rel_data^.sce_dynlib_addr;
+
+ if (dt_fingerprint=-1) then
+ begin
+  if (addr<>nil) then
+  begin
+   Move(addr^,lib^.fingerprint,20);
+  end;
+ end else
+ begin
+  if (addr<>nil) then
+  begin
+   Move((addr+dt_fingerprint)^,lib^.fingerprint,20);
+  end;
+ end;
+
+ if (lib^.lib_path<>nil) then
+ begin
+  lib^.lib_dirname:=AllocMem(strlen(lib^.lib_path)+1);
+  //
+  Result:=rtld_dirname(lib^.lib_path,lib^.lib_dirname);
+  if (Result<>0) then
+  begin
+   Exit(EINVAL);
+  end;
+ end;
+
+ if (dyn_soname<>nil) then
+ begin
+  str:=obj_get_str(lib,dyn_soname^.d_un.d_val);
+
+  if (str=nil) then
+  begin
+   Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+   Exit(EINVAL);
+  end;
+
+  object_add_name(lib,str);
+ end;
+
+end;
 
 
 end.

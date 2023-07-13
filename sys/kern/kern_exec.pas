@@ -884,6 +884,8 @@ var
 begin
  Result:=0;
 
+ if (imgp^.dyn_id=-1) then Exit;
+
  hdr:=imgp^.image_header;
 
  p_offset:=phdr[imgp^.dyn_id].p_offset;
@@ -927,13 +929,13 @@ begin
  TAILQ_INIT(@dynlibs_info.fini_list);
  TAILQ_INIT(@dynlibs_info.lib_list);
 
- dynlibs_info.obj_count   :=0;
- dynlibs_info.d_tls_offset:=0;
- dynlibs_info.d_tls_size  :=0;
- dynlibs_info.d_tls_count :=0;
- dynlibs_info.tls_count   :=1;
- dynlibs_info.tls_max     :=1;
- //dynlibs_info.bits        :=0;
+ dynlibs_info.obj_count      :=0;
+ dynlibs_info.tls_last_offset:=0;
+ dynlibs_info.tls_last_size  :=0;
+ dynlibs_info.d_tls_count    :=0;
+ dynlibs_info.tls_count      :=1;
+ dynlibs_info.tls_max        :=1;
+ //dynlibs_info.bits         :=0;
 
  lib:=obj_new();
  lib^.relocbase:=imgp^.reloc_base;
@@ -1004,16 +1006,9 @@ begin
  end;
 end;
 
-function digest_dynamic(lib:p_lib_info):Integer;
-begin
- Result:=0;
-
- /////////////
-end;
-
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
- lib:p_lib_info;
+ lib,tail:p_lib_info;
 
  init_proc_addr:Pointer;
  fini_proc_addr:Pointer;
@@ -1060,9 +1055,15 @@ begin
  lib^.fini_proc_addr:=nil;
  lib^.init_proc_addr:=nil;
 
+ tail:=TAILQ_LAST(@dynlibs_info.lib_list);
+ if (tail=nil) then
+ begin
+  tail:=dynlibs_info.lib_list.tqh_first;
+ end;
+
  initlist_add_objects(dynlibs_info.fini_proc_list,
                       dynlibs_info.lib_list.tqh_first,
-                      dynlibs_info.lib_list.tqh_last^,
+                      tail,
                       dynlibs_info.init_proc_list);
 
  lib^.init_proc_addr:=init_proc_addr;
