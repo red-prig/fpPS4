@@ -303,8 +303,9 @@ var
   p_nvcsw   :Int64;
   p_nivcsw  :Int64;
 
-  p_comm   :array[0..MAXCOMLEN] of AnsiChar;
-  prog_name:array[0..1023] of AnsiChar;
+  p_comm           :array[0..MAXCOMLEN] of AnsiChar;
+  prog_name        :array[0..1023] of AnsiChar;
+  p_randomized_path:array[0..7] of AnsiChar;
 
   p_klist:t_knlist;
 
@@ -528,6 +529,8 @@ begin
  mtx_init(p_proc.p_mtx,'process lock');
 
  knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
+
+ p_proc.p_randomized_path:='system';
 end;
 
 //

@@ -386,6 +386,12 @@ begin
   error:=vfs_mountroot_simple('ufs','/app0','/',nil,0);
  end;
 
+ error:=kern_mkdir('system',UIO_SYSSPACE,&777);
+ if (error=0) then
+ begin
+  error:=vfs_mountroot_simple('ufs','/system','/system',nil,0);
+ end;
+
  //error:=kern_unmount('/app0',0);
 
  mount_print;

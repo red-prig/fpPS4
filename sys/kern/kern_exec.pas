@@ -6,12 +6,14 @@ unit kern_exec;
 interface
 
 uses
+ sysutils,
  mqueue,
  kern_thr,
  vnode,
  vuio,
  vcapability,
  elf64,
+ kern_rtld,
  subr_dynlib;
 
 function  exec_alloc_args(args:p_image_args):Integer;
@@ -613,6 +615,7 @@ function self_load_section(imgp:p_image_params;
                            use_mode_2mb:Boolean;
                            name:pchar):Integer;
 var
+ map:vm_map_t;
  vaddr_lo:QWORD;
  vaddr_hi:QWORD;
  base    :Pointer;
@@ -648,23 +651,28 @@ begin
 
  base:=Pointer(imgp^.image_header)+offset;
 
- vm_map_lock(@g_vmspace.vm_map);
+ map:=@g_vmspace.vm_map;
 
- Result:=vm_map_insert(@g_vmspace.vm_map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
+ vm_map_lock(map);
+
+ //remove prev if exist
+ vm_map_delete(map,vaddr_lo,vaddr_hi);
+
+ Result:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
  if (Result<>0) then
  begin
-  vm_map_unlock(@g_vmspace.vm_map);
+  vm_map_unlock(map);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
   Exit(vm_mmap_to_errno(Result));
  end;
 
- vm_map_set_name_locked(@g_vmspace.vm_map,vaddr_lo,vaddr_hi,name);
+ vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
  Result:=copyout(base,Pointer(vaddr),filesz);
  if (Result<>0) then
  begin
-  vm_map_unlock(@g_vmspace.vm_map);
+  vm_map_unlock(map);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
     id,', ',HexStr(base),'->',HexStr(vaddr,8),':',HexStr(filesz,8));
@@ -672,16 +680,16 @@ begin
   Exit;
  end;
 
- Result:=vm_map_protect(@g_vmspace.vm_map,vaddr_lo,vaddr_hi,prot,False);
+ Result:=vm_map_protect(map,vaddr_lo,vaddr_hi,prot,False);
  if (Result<>0) then
  begin
-  vm_map_unlock(@g_vmspace.vm_map);
+  vm_map_unlock(map);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
   Exit(vm_mmap_to_errno(Result));
  end;
 
- vm_map_unlock(@g_vmspace.vm_map);
+ vm_map_unlock(map);
 end;
 
 
@@ -1012,8 +1020,6 @@ var
 
  init_proc_addr:Pointer;
  fini_proc_addr:Pointer;
-
- count:Integer;
 begin
  Result:=0;
 
@@ -1024,8 +1030,7 @@ begin
 
  if (imgp^.dyn_exist=0) then
  begin
-  TAILQ_INSERT_TAIL(@dynlibs_info.lib_list,lib,@lib^.entry);
-  Inc(dynlibs_info.obj_count);
+  dynlibs_add_obj(lib);
   Exit;
  end;
 
@@ -1036,18 +1041,9 @@ begin
   Exit;
  end;
 
- if (lib^.rel_data=nil) then
- begin
-  count:=0;
- end else
- begin
-  count:=(lib^.rel_data^.pltrela_size div sizeof(elf64_rela))+(lib^.rel_data^.rela_size div sizeof(elf64_rela));
- end;
+ init_relo_bits_process(lib);
 
- lib^.relo_bits_process:=AllocMem((count+7) div 8);
-
- TAILQ_INSERT_TAIL(@dynlibs_info.lib_list,lib,@lib^.entry);
- Inc(dynlibs_info.obj_count);
+ dynlibs_add_obj(lib);
 
  init_proc_addr:=lib^.init_proc_addr;
  fini_proc_addr:=lib^.fini_proc_addr;
@@ -1086,6 +1082,41 @@ begin
  begin
   Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
  end;
+end;
+
+function dynlib_proc_initialize_step3(imgp:p_image_params):Integer;
+var
+ lib:p_lib_info;
+ str:RawByteString;
+begin
+ Result:=0;
+
+ lib:=nil;
+
+ //if (td_proc->sdk_version < 0x5000000) {
+ //  *(byte *)&dynlibs_info->bits = *(byte *)&dynlibs_info->bits | 0x20;
+ //}
+ //if (imgp->dyn_exist == 0) goto _dyn_not_exist;
+
+ str:='/libkernel.sprx';
+ lib:=preload_prx_modules(str);
+ dynlibs_info.libkernel:=lib;
+
+ if (lib=nil) then
+ begin
+  Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
+ end;
+
+ str:='/libSceLibcInternal.sprx';
+ lib:=preload_prx_modules(str);
+
+ if (lib=nil) then
+ begin
+  Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
+ end;
+
+
+ writeln;
 end;
 
 
@@ -1496,6 +1527,8 @@ begin
  newargs:=nil;
 
  PROC_UNLOCK();
+
+ dynlib_proc_initialize_step3(imgp);
 
  { Set values passed into the program in registers. }
  exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base));

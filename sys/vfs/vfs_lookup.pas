@@ -1095,10 +1095,14 @@ begin
   FreeMem(ndp^.ni_cnd.cn_pnbuf);
   ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not HASBUF);
  end;
+
  if ((flags and NDF_NO_VP_UNLOCK)=0) and
     ((ndp^.ni_cnd.cn_flags and LOCKLEAF)<>0) and
     (ndp^.ni_vp<>nil) then
+ begin
   unlock_vp:=1;
+ end;
+
  if (((flags and NDF_NO_VP_RELE)=0) and (ndp^.ni_vp<>nil)) then
  begin
   if (unlock_vp<>0) then
@@ -1106,15 +1110,24 @@ begin
    vput(ndp^.ni_vp);
    unlock_vp:=0;
   end else
+  begin
    vrele(ndp^.ni_vp);
+  end;
   ndp^.ni_vp:=nil;
  end;
+
  if (unlock_vp<>0) then
+ begin
   VOP_UNLOCK(ndp^.ni_vp, 0);
+ end;
+
  if ((flags and NDF_NO_DVP_UNLOCK)=0) and
     ((ndp^.ni_cnd.cn_flags and LOCKPARENT)<>0) and
     (ndp^.ni_dvp<>ndp^.ni_vp) then
+ begin
   unlock_dvp:=1;
+ end;
+
  if ((flags and NDF_NO_DVP_RELE)=0) and
     ((ndp^.ni_cnd.cn_flags and (LOCKPARENT or WANTPARENT))<>0) then
  begin
@@ -1123,11 +1136,17 @@ begin
    vput(ndp^.ni_dvp);
    unlock_dvp:=0;
   end else
+  begin
    vrele(ndp^.ni_dvp);
+  end;
   ndp^.ni_dvp:=nil;
  end;
+
  if (unlock_dvp<>0) then
+ begin
   VOP_UNLOCK(ndp^.ni_dvp, 0);
+ end;
+
  if ((flags and NDF_NO_STARTDIR_RELE)=0) and
     ((ndp^.ni_cnd.cn_flags and SAVESTART)<>0) then
  begin

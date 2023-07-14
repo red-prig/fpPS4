@@ -423,13 +423,11 @@ begin
   if (mp^.mnt_optnew=nil) then Exit(EINVAL);
   if (vfs_getopt(mp^.mnt_optnew, 'from', @path, @plen)<>0) then Exit(EINVAL);
   if (path=nil) then Exit(EINVAL);
-  if (plen=2) then
+
+  while (plen>0) and ((path[0]='/') or (path[0]='\')) do
   begin
-   if (path[0]='/') or (path[0]='\') then
-   begin
-    path[0]:=#0;
-    plen:=1;
-   end;
+   Inc(path);
+   Dec(plen);
   end;
  end;
 
