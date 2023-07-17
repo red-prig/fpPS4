@@ -1526,7 +1526,7 @@ begin
    * When restricting access, update the physical map.  Worry
    * about copy-on-write here.
    }
-  if ((old_prot and (not current^.protection))<>0) then
+  if (old_prot<>current^.protection) then
   begin
    pmap_protect(map^.pmap, current^.start,
        current^.__end,

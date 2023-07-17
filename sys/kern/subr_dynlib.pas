@@ -1829,7 +1829,7 @@ begin
    p_filesz:=phdr^.p_filesz;
    p_offset:=phdr^.p_offset;
 
-   if (p_type=PT_SCE_RELRO) and (budget_ptype_caller=0) then
+   if (p_type=PT_SCE_RELRO) then
    begin
 
     if (_2mb_mode=false) then
@@ -1837,7 +1837,7 @@ begin
      used_mode_2m:=false;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,1,0);
+     used_mode_2m:=is_used_mode_2mb(phdr,1,budget_ptype_caller);
     end;
 
     Result:=self_load_section(imgp,
@@ -1858,7 +1858,7 @@ begin
      used_mode_2m:=false;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,0,budget_ptype_caller);
+     used_mode_2m:=is_used_mode_2mb(phdr,1,budget_ptype_caller);
     end;
 
     Result:=self_load_section(imgp,
@@ -2205,6 +2205,7 @@ begin
    err:=copyout(@kaddr,addr,SizeOf(Pointer));
    if (err<>0) then
    begin
+    Writeln(StdErr,'relro:0x',HexStr(obj^.relro_addr),'..0x',HexStr(obj^.relro_addr+obj^.relro_size));
     Writeln(StdErr,'dynlib_initialize_pltgot_each:','ERROR in .pltrela: where=0x',HexStr(addr));
     Result:=ENOEXEC;
     Break;
