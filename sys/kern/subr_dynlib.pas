@@ -10,7 +10,8 @@ uses
  mqueue,
  elf64,
  kern_thr,
- kern_rtld;
+ kern_rtld,
+ kern_named_id;
 
 type
  p_rel_data=^t_rel_data;
@@ -62,7 +63,7 @@ type
  end;
 
  p_lib_info=^t_lib_info;
- t_lib_info=record
+ t_lib_info=object(t_id_named_desc)
   entry:TAILQ_ENTRY;
 
   lib_path   :PAnsiChar;
@@ -92,7 +93,7 @@ type
   tls_offset   :QWORD;
   tls_align    :QWORD;
 
-  pltgot:Pointer;
+  //pltgot:Pointer;
 
   needed     :TAILQ_HEAD; //Needed_Entry
   lib_table  :TAILQ_HEAD; //Lib_Entry
@@ -117,6 +118,8 @@ type
   init_done   :Integer;
   init_fini   :Integer;
   textrel     :Integer;
+  init_plt    :Integer;
+  is_system   :Integer;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -155,7 +158,7 @@ type
   link  :TAILQ_ENTRY;
   dval  :TLibraryValue;
   attr  :WORD;
-  export:WORD;
+  import:WORD;
  end;
 
  p_dynlibs_info=^t_dynlibs_info;
@@ -165,7 +168,7 @@ type
   libkernel  :p_lib_info;
   obj_count  :Integer;
   list_global:TAILQ_HEAD; //p_Objlist_Entry
-  needed     :TAILQ_HEAD; //p_Needed_Entry
+  needed     :TAILQ_HEAD; //p_Objlist_Entry
   init_list  :TAILQ_HEAD; //p_Objlist_Entry
   fini_list  :TAILQ_HEAD; //p_Objlist_Entry
 
@@ -231,6 +234,17 @@ procedure dynlibs_add_obj(lib:p_lib_info);
 
 procedure init_relo_bits_process(lib:p_lib_info);
 
+function  scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
+procedure scan_load_size (imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
+
+function  self_load_section(imgp:p_image_params;
+                            id,vaddr,offset,memsz,filesz:QWORD;
+                            prot:Byte;
+                            use_mode_2mb:Boolean;
+                            name:pchar):Integer;
+
+function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
+
 function  do_load_object(path:pchar):p_lib_info;
 function  preload_prx_modules(const path:RawByteString):p_lib_info;
 
@@ -244,7 +258,20 @@ uses
  systm,
  vm,
  vmparam,
- vm_map;
+ vm_map,
+ vm_mmap,
+ vm_object,
+ vuio,
+ vstat,
+ vfcntl,
+ vnode,
+ vmount,
+ vnamei,
+ vfs_lookup,
+ vfs_subr,
+ vnode_if,
+ _resource,
+ kern_resource;
 
 function scan_phdr(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
 var
@@ -942,10 +969,10 @@ begin
 
  if (imgp^.dyn_exist=0) then Exit(EINVAL);
 
- full_size:=sizeOf(t_rel_data)+1+
+ full_size:=sizeOf(t_rel_data)+
             AlignUp(imgp^.sce_dynlib_data_size,8)+
-            AlignUp(imgp^.sce_comment_filesz,8)+
-            strlen(imgp^.execpath);
+            AlignUp(imgp^.sce_comment_filesz  ,8)+
+            strlen(imgp^.execpath)+1;
 
  new^.rel_data:=AllocMem(full_size);
 
@@ -972,7 +999,7 @@ begin
   dst:=dst+AlignUp(imgp^.sce_comment_filesz,8);
  end;
 
- Move(imgp^.execpath^,dst^,sizeOf(t_rel_data)+1);
+ Move(imgp^.execpath^,dst^,strlen(imgp^.execpath));
 
  new^.rel_data^.execpath:=dst;
 
@@ -1127,6 +1154,7 @@ begin
   begin
    Exit(True);
   end;
+  entry:=TAILQ_NEXT(entry,@entry^.link);
  end;
  Result:=False;
 end;
@@ -1145,7 +1173,7 @@ function Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
 begin
  Result:=AllocMem(SizeOf(Lib_Entry));
  QWORD(Result^.dval):=d_val;
- Result^.export:=ord(d_tag=DT_SCE_IMPORT_LIB);
+ Result^.import:=ord(d_tag=DT_SCE_IMPORT_LIB);
 end;
 
 procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
@@ -1527,11 +1555,677 @@ begin
  lib^.relo_bits_process:=AllocMem((count+7) div 8);
 end;
 
+function scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
+var
+ p_offset:QWORD;
+ p_filesz:QWORD;
+ i:Integer;
+begin
+ Result:=0;
+
+ if (imgp^.dyn_id=-1) then Exit;
+
+ p_offset:=phdr[imgp^.dyn_id].p_offset;
+ p_filesz:=phdr[imgp^.dyn_id].p_filesz;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+
+  if (phdr[i].p_offset <= p_offset) and
+     (imgp^.dyn_id<>i) and
+     ( (p_filesz + p_offset) <= (phdr[i].p_offset + phdr[i].p_filesz)) then
+  begin
+   if (i<>-1) then
+   begin
+    imgp^.dyn_id    :=i;
+    imgp^.dyn_offset:=imgp^.dyn_offset - phdr[i].p_offset;
+    Exit(0);
+   end;
+   break;
+  end;
+
+ end;
+
+ Result:=EINVAL;
+end;
+
+procedure scan_load_size(imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
+var
+ i:Integer;
+ use_mode_2mb:Boolean;
+
+ size    :QWORD;
+ vaddr   :QWORD;
+ vaddr_lo:QWORD;
+ vaddr_hi:QWORD;
+begin
+ max_size:=0;
+ mx2_size:=0;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  if ((phdr^.p_type=PT_SCE_RELRO) or
+      (phdr^.p_type=PT_LOAD)) and
+     (phdr^.p_memsz<>0) then
+  begin
+   vaddr:=phdr^.p_vaddr;
+
+   if (imgp^.image_header^.e_type=ET_SCE_DYNEXEC) then
+   begin
+    vaddr:=vaddr + QWORD(imgp^.reloc_base);
+   end;
+
+   vaddr_lo:=vaddr and $ffffffffffffc000;
+   vaddr_hi:=phdr^.p_memsz + vaddr;
+
+   size:=((vaddr_hi - vaddr_lo) + $3fff) and $ffffffffffffc000;
+
+   max_size:=max_size + size;
+
+   use_mode_2mb:=is_used_mode_2mb(phdr,dynlib,budget);
+
+   if (use_mode_2mb) then
+   begin
+    vaddr_lo:=(vaddr_lo + $1fffff) and $ffffffffffe00000;
+    vaddr_hi:=(vaddr_lo + size   ) and $ffffffffffe00000;
+
+    size:=0;
+    if (vaddr_lo <= vaddr_hi) then
+    begin
+     size:=vaddr_hi - vaddr_lo;
+    end;
+
+    mx2_size:=mx2_size + size;
+   end;
+
+  end;
+
+  Inc(phdr);
+ end;
+end;
+
+function self_load_section(imgp:p_image_params;
+                           id,vaddr,offset,memsz,filesz:QWORD;
+                           prot:Byte;
+                           use_mode_2mb:Boolean;
+                           name:pchar):Integer;
+var
+ map:vm_map_t;
+ vaddr_lo:QWORD;
+ vaddr_hi:QWORD;
+ base    :Pointer;
+begin
+ Result:=0;
+
+ if (memsz<filesz) then
+ begin
+  Writeln(StdErr,'[KERNEL] self_load_section: memsz',HexStr(memsz,8),') < filesz(',HexStr(filesz,8),') at segment ',id);
+  Exit(ENOEXEC);
+ end;
+
+ if ((prot and 6)=6) then
+ begin
+  Writeln(StdErr,'[KERNEL] self_load_section: writeable text segment ',id,', ',HexStr(vaddr,8));
+  Exit(ENOEXEC);
+ end;
+
+ if ((vaddr and $3fff)<>0) then
+ begin
+  Writeln(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
+  Exit(ENOEXEC);
+ end;
+
+ vaddr_lo:=vaddr and $ffffffffffffc000;
+ vaddr_hi:=(memsz + vaddr + $3fff) and $ffffffffffffc000;
+
+ if (use_mode_2mb) then
+ begin
+  vaddr_lo:=(vaddr + $1fffff) and $ffffffffffe00000;
+  vaddr_hi:=(vaddr + memsz + $3fff) and $ffffffffffe00000;
+ end;
+
+ base:=Pointer(imgp^.image_header)+offset;
+
+ map:=@g_vmspace.vm_map;
+
+ vm_map_lock(map);
+
+ //remove prev if exist
+ vm_map_delete(map,vaddr_lo,vaddr_hi);
+
+ Result:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
+ if (Result<>0) then
+ begin
+  vm_map_unlock(map);
+  //
+  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
+  Exit(vm_mmap_to_errno(Result));
+ end;
+
+ vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
+
+ Result:=copyout(base,Pointer(vaddr),filesz);
+ if (Result<>0) then
+ begin
+  vm_map_unlock(map);
+  //
+  Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
+    id,', ',HexStr(base),'->',HexStr(vaddr,8),':',HexStr(filesz,8));
+  readln;
+  Exit;
+ end;
+
+ Result:=vm_map_protect(map,vaddr_lo,vaddr_hi,prot,False);
+ if (Result<>0) then
+ begin
+  vm_map_unlock(map);
+  //
+  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
+  Exit(vm_mmap_to_errno(Result));
+ end;
+
+ vm_map_unlock(map);
+end;
+
+function is_system_path(path:pchar):Boolean;
+var
+ f:RawByteString;
+begin
+ f:='/'+p_proc.p_randomized_path;
+ Result:=StrLComp(pchar(f),path,Length(f))=0;
+end;
+
+function is_libc_or_fios(path:pchar):Boolean;
+var
+ f:RawByteString;
+begin
+ f:=ExtractFileName(path);
+ f:=ChangeFileExt(f,'');
+ case f of
+  'libc',
+  'libSceFios2':
+    Result:=True;
+  else
+    Result:=False;
+ end;
+end;
+
+function vm_reserved(map        :vm_map_t;
+                     addr       :p_vm_offset_t;
+                     size       :vm_size_t):Integer;
+begin
+ if (p_proc.p_sce_replay_exec<>0) then
+ begin
+  addr^:=$fc0000000;
+ end;
+
+ Result:=_vm_mmap(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0);
+end;
+
+function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
+var
+ i:Integer;
+
+ hdr:p_elf64_hdr;
+
+ total_size:QWORD;
+ data_size :QWORD;
+ data_addr :QWORD;
+ text_addr :QWORD;
+ text_size :QWORD;
+
+ p_memsz   :QWORD;
+ p_vaddr   :QWORD;
+ p_filesz  :QWORD;
+ p_offset  :QWORD;
+
+ addr:QWORD;
+ size:QWORD;
+
+ p_type   :Elf64_Word;
+ p_flags  :Byte;
+ _2mb_mode:Boolean;
+ used_mode_2m:Boolean;
+
+ fname:RawByteString;
+begin
+ Result:=0;
+
+ fname:=ExtractFileName(imgp^.execpath);
+
+ total_size:=0;
+ data_size :=0;
+ data_addr :=0;
+ text_addr :=0;
+ text_size :=0;
+
+ if (budget_ptype_caller=0) then
+ begin
+  _2mb_mode:=((g_mode_2mb or 1)=3);
+ end else
+ begin
+  _2mb_mode:=False;
+ end;
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  p_type :=phdr^.p_type;
+  p_memsz:=phdr^.p_memsz;
+
+  if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
+  begin
+
+   p_flags:=VM_PROT_READ or VM_PROT_WRITE;
+   if (p_type<>PT_SCE_RELRO) then
+   begin
+    p_flags:=trans_prot(phdr^.p_flags);
+   end;
+
+   p_vaddr:=delta+phdr^.p_vaddr;
+
+   p_filesz:=phdr^.p_filesz;
+   p_offset:=phdr^.p_offset;
+
+   if (p_type=PT_SCE_RELRO) and (budget_ptype_caller=0) then
+   begin
+
+    if (_2mb_mode=false) then
+    begin
+     used_mode_2m:=false;
+    end else
+    begin
+     used_mode_2m:=is_used_mode_2mb(phdr,1,0);
+    end;
+
+    Result:=self_load_section(imgp,
+                              i,
+                              p_vaddr,
+                              p_offset,
+                              p_memsz,
+                              p_filesz,
+                              p_flags,
+                              used_mode_2m,
+                              pchar(fname));
+
+   end else
+   begin
+
+    if (_2mb_mode=false) then
+    begin
+     used_mode_2m:=false;
+    end else
+    begin
+     used_mode_2m:=is_used_mode_2mb(phdr,0,budget_ptype_caller);
+    end;
+
+    Result:=self_load_section(imgp,
+                              i,
+                              p_vaddr,
+                              p_offset,
+                              p_memsz,
+                              p_filesz,
+                              p_flags,
+                              used_mode_2m,
+                              pchar(fname));
+   end;
+   if (Result<>0) then Exit;
+
+   addr:=(p_vaddr and QWORD($ffffffffffffc000));
+   size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
+
+   if (p_type=PT_SCE_RELRO) then
+   begin
+    imgp^.relro_addr:=Pointer(addr);
+    imgp^.relro_size:=size;
+   end else
+   if ((phdr^.p_flags and PF_X)<>0) and (text_size < size) then
+   begin
+    text_size:=size;
+    text_addr:=addr;
+   end else
+   begin
+    data_size:=size;
+    data_addr:=addr;
+   end;
+
+   total_size:=total_size+size;
+  end;
+
+  Inc(phdr);
+ end;
+
+ if (data_addr=0) and (data_size=0) then
+ begin
+  data_addr:=text_addr;
+  data_size:=text_size;
+ end;
+
+ if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
+ begin
+  Result:=vm_map_protect(@g_vmspace.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.reloc_base)+imgp^.relro_size,VM_PROT_READ,False);
+  Result:=vm_mmap_to_errno(Result);
+  if (Result<>0) then Exit;
+ end;
+
+ addr:=imgp^.min_addr;
+
+ imgp^.dyn_vaddr    :=Pointer(imgp^.dyn_vaddr    )+addr;
+ imgp^.entry_addr   :=Pointer(imgp^.entry_addr   )+addr;
+ imgp^.tls_init_addr:=Pointer(imgp^.tls_init_addr)+addr;
+
+ if (imgp^.eh_frame_hdr_addr<>nil) then
+ begin
+  imgp^.eh_frame_hdr_addr:=Pointer(imgp^.eh_frame_hdr_addr)+addr;
+ end;
+
+ if (imgp^.module_param_addr<>nil) then
+ begin
+  imgp^.module_param_addr:=Pointer(imgp^.module_param_addr)+addr;
+ end;
+
+ if (elf64_get_eh_frame_info(new^.eh_frame_hdr_addr,
+                             new^.eh_frame_hdr_size,
+                             delta,
+                             text_size + text_addr,
+                             @new^.eh_frame_addr,
+                             @new^.eh_frame_size)<>0) then
+ begin
+  new^.eh_frame_addr:=nil;
+  new^.eh_frame_size:=0;
+ end;
+
+ hdr:=imgp^.image_header;
+
+ new^.map_base    :=Pointer(addr);
+ new^.map_size    :=imgp^.max_addr - imgp^.min_addr;
+ new^.text_size   :=text_size;
+ new^.data_addr   :=Pointer(data_addr);
+ new^.data_size   :=data_size;
+ new^.relocbase   :=Pointer(addr);
+ new^.entry_addr  :=Pointer(delta + hdr^.e_entry);
+ new^.module_param:=imgp^.module_param_addr;
+ new^.relro_addr  :=imgp^.relro_addr;
+ new^.relro_size  :=imgp^.relro_size;
+
+end;
+
 function self_load_shared_object(path:pchar;new:p_lib_info):Integer;
+label
+ _fail_dealloc;
+var
+ nd:t_nameidata;
+ error:Integer;
+ budget:Integer;
+
+ image_params:t_image_params;
+ imgp:p_image_params;
+ attr:t_vattr;
+ vp:p_vnode;
+
+ hdr :p_elf64_hdr;
+ phdr:p_elf64_phdr;
+
+ map:vm_map_t;
+
+ addr,delta:QWORD;
 begin
  Result:=-1;
+ if (path=nil) then Exit;
 
- //////////
+ error:=0;
+ imgp:=@image_params;
+ image_params:=Default(t_image_params);
+
+ attr:=Default(t_vattr);
+ imgp^.attr:=@attr;
+ imgp^.execpath:=path;
+
+ NDINIT(@nd, LOOKUP, ISOPEN or LOCKLEAF or FOLLOW or SAVENAME or MPSAFE or AUDITVNODE1, UIO_SYSSPACE, path, curkthread);
+
+ error:=nd_namei(@nd);
+ if (error<>0) then
+ begin
+  if (error<>EACCES) then Exit(error);
+  Writeln(StdErr,'self_load_shared_object:','namei() error (path=',path,')');
+  Exit(error);
+ end;
+
+ vp:=nd.ni_vp;
+ imgp^.vp:=vp;
+
+ { Get file attributes }
+ error:=VOP_GETATTR(vp, imgp^.attr);
+ if (error<>0) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Exit(error);
+ end;
+
+ if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) or
+    ((attr.va_mode and (S_IXUSR or S_IXGRP or S_IXOTH))=0) or
+    (attr.va_type<>VREG) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Writeln(StdErr,'self_load_shared_object:','mount flag / attribute error (path=',path,')');
+  Exit(EACCES);
+ end;
+
+ if (attr.va_size<32) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Exit(ENOEXEC);
+ end;
+
+ error:=VOP_ACCESS(vp, VEXEC);
+ if (error<>0) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Writeln(StdErr,'self_load_shared_object:','VOP_ACCESS() error (path=',path,')');
+  Exit(error);
+ end;
+
+ if (vp^.v_writecount<>0) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Exit(ETXTBSY);
+ end;
+
+ error:=VOP_OPEN(vp, FREAD, nil);
+ if (error<>0) then
+ begin
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  Writeln(StdErr,'self_load_shared_object:','VOP_OPEN() error (path=',path,')');
+  Exit(error);
+ end;
+
+ error:=rtld_load_self(imgp);
+ if (error<>0) then goto _fail_dealloc;
+
+ hdr:=imgp^.image_header;
+
+ if (hdr=nil) then Exit(EINVAL);
+
+ Case hdr^.e_type of
+  ET_SCE_DYNAMIC:
+  else
+   begin
+    Writeln(StdErr,'self_load_shared_object:',imgp^.execpath,' Unsupported ELF e_type:',HexStr(hdr^.e_type,4));
+    error:=ENOEXEC;
+    goto _fail_dealloc;
+   end;
+ end;
+
+ budget:=budget_ptype_caller;
+
+ if is_system_path(path) then
+ begin
+  if not is_libc_or_fios(path) then
+  begin
+   budget:=2;
+  end;
+ end;
+
+ imgp^.hdr_e_type:=hdr^.e_type;
+
+ phdr:=get_elf_phdr(hdr);
+
+ error:=scan_phdr(imgp,phdr,hdr^.e_phnum);
+ if (error<>0) then
+ begin
+  Writeln(StdErr,'self_load_shared_object:','found illegal segment header in ',imgp^.execpath);
+  goto _fail_dealloc;
+ end;
+
+ if (imgp^.dyn_exist=0) then
+ begin
+  Writeln(StdErr,'self_load_shared_object:','illegal ELF file image',imgp^.execpath);
+  error:=ENOEXEC;
+  goto _fail_dealloc;
+ end;
+
+ rtld_load_auth(imgp);
+
+ new^.tls_size         :=imgp^.tls_size;
+ new^.tls_align        :=imgp^.tls_align;
+ new^.tls_init_size    :=imgp^.tls_init_size;
+ new^.tls_init_addr    :=imgp^.tls_init_addr;
+ new^.eh_frame_hdr_addr:=imgp^.eh_frame_hdr_addr;
+ new^.eh_frame_hdr_size:=imgp^.eh_frame_hdr_size;
+
+ error:=scan_dyn_offset(imgp,phdr,hdr^.e_phnum);
+ if (error<>0) then
+ begin
+  goto _fail_dealloc;
+ end;
+
+ addr:=ET_DYN_LOAD_ADDR_USR;
+ if (budget=2) then
+ begin
+  addr:=ET_DYN_LOAD_ADDR_SYS;
+ end;
+
+ map:=@g_vmspace.vm_map;
+
+ error:=vm_reserved(map,@addr,imgp^.max_addr-imgp^.min_addr);
+ if (error<>0) then
+ begin
+  Writeln(StdErr,'self_load_shared_object:','failed to allocate VA for ',imgp^.execpath);
+  goto _fail_dealloc;
+ end;
+
+ delta:=addr-imgp^.min_addr;
+ imgp^.min_addr:=addr;
+ imgp^.max_addr:=imgp^.max_addr+delta;
+
+ new^.tls_init_addr    :=new^.tls_init_addr    +delta;
+ new^.eh_frame_hdr_addr:=new^.eh_frame_hdr_addr+delta;
+
+ error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta);
+ if (error<>0) then
+ begin
+  goto _fail_dealloc;
+ end;
+
+ if (budget=2) then
+ begin
+  new^.is_system:=1;
+ end;
+
+ error:=acquire_per_file_info_obj(imgp,new);
+ if (error<>0) then
+ begin
+  Writeln(StdErr,'self_load_shared_object:','acquire_per_file_info_obj()=',error);
+  goto _fail_dealloc;
+ end;
+
+ _fail_dealloc:
+  rtld_free_self(imgp);
+  NDFREE(@nd, NDF_ONLY_PNBUF);
+  VOP_CLOSE(vp, FREAD);
+  vput(vp);
+
+ Exit(error);
+end;
+
+function dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
+var
+ map:vm_map_t;
+ addr:Pointer;
+ entry:p_elf64_rela;
+
+ kaddr:QWORD;
+
+ i,count,err:Integer;
+begin
+ Result:=0;
+
+ if (obj^.init_plt<>0) then Exit;
+
+ map:=@g_vmspace.vm_map;
+
+ addr:=obj^.relro_addr;
+
+ if (addr<>nil) and (obj^.relro_size<>0) then
+ begin
+  Result:=vm_map_protect(map,QWORD(addr),QWORD(addr)+obj^.relro_size,VM_PROT_RW,False);
+  if (Result<>0) then
+  begin
+   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
+   Exit;
+  end;
+ end;
+
+ entry:=obj^.rel_data^.pltrela_addr;
+ count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
+
+ if (entry<>nil) and (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   kaddr:=i or QWORD($effffffe00000000);
+
+   addr:=Pointer(obj^.relocbase) + entry^.r_offset;
+
+   if (
+       (addr < obj^.data_addr) or
+       ((obj^.data_addr + obj^.data_size) < (addr + 8))
+      ) and
+      ( (obj^.relro_addr=nil) or
+        (obj^.relro_addr>addr) or
+        (obj^.relro_size=0) or
+        ((obj^.relro_size + obj^.relro_addr) < (addr + 8))
+      ) then
+   begin
+    Result:=ENOEXEC;
+    Break;
+   end;
+
+   err:=copyout(@kaddr,addr,SizeOf(Pointer));
+   if (err<>0) then
+   begin
+    Writeln(StdErr,'dynlib_initialize_pltgot_each:','ERROR in .pltrela: where=0x',HexStr(addr));
+    Result:=ENOEXEC;
+    Break;
+   end;
+
+   Inc(entry);
+  end;
+
+ addr:=obj^.relro_addr;
+
+ if (addr<>nil) and (obj^.relro_size<>0) then
+ begin
+  err:=vm_map_protect(map,QWORD(addr),QWORD(addr)+obj^.relro_size,VM_PROT_READ,False);
+  if (err<>0) then
+  begin
+   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
+   Exit;
+  end;
+ end;
+
+ obj^.init_plt:=1;
 end;
 
 function do_load_object(path:pchar):p_lib_info;
@@ -1605,7 +2299,7 @@ begin
   goto _error;
  end;
 
- //err:=dynlib_initialize_pltgot_each(new);
+ err:=dynlib_initialize_pltgot_each(new);
  if (err<>0) then
  begin
   Writeln(StdErr,'do_load_object:','dynlib_initialize_pltgot_each() failed rv=',err);
@@ -1665,10 +2359,6 @@ begin
  end;
 
  fname:=path;
- if (fname[1]='/') then //relative?
- begin
-  fname:=p_proc.p_randomized_path+fname;
- end;
 
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 
@@ -1677,6 +2367,24 @@ begin
 
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+
+ fname:=path;
+
+ if (fname[1]<>'/') then
+ begin
+  fname:='/'+fname;
+ end;
+ fname:=p_proc.p_randomized_path+fname;
+
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ fname:=ChangeFileExt(fname,'.sprx');
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ fname:=ChangeFileExt(fname,'.prx');
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
 
  Exit(nil);
  _do_load:

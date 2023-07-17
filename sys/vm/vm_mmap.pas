@@ -5,6 +5,11 @@ unit vm_mmap;
 
 interface
 
+uses
+ vm,
+ vm_map,
+ vm_object;
+
 type
  p_query_memory_prot=^t_query_memory_prot;
  t_query_memory_prot=packed record
@@ -30,17 +35,24 @@ function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
 
+function _vm_mmap(map        :vm_map_t;
+                  addr       :p_vm_offset_t;
+                  size       :vm_size_t;
+                  prot       :vm_prot_t;
+                  maxprot    :vm_prot_t;
+                  flags      :Integer;
+                  handle_type:objtype_t;
+                  handle     :Pointer;
+                  foff       :vm_ooffset_t):Integer;
+
 implementation
 
 uses
  vcapability,
- vm,
- vm_map,
  systm,
  errno,
  kern_thr,
  vmparam,
- vm_object,
  _resource,
  kern_resource,
  kern_mtx,

@@ -22,15 +22,16 @@ procedure named_table_init; //SYSINIT
 function  sys_namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
 function  sys_namedobj_delete(id,objt:Integer):Integer;
 
+const
+ NAMED_OBJT=$1000;
+ NAMED_DYNL=$2000;
+
 implementation
 
 uses
  errno,
  systm,
  kern_thr;
-
-const
- NAMED_OBJT=$1000;
 
 procedure named_table_init;
 begin

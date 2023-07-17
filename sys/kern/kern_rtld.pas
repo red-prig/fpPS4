@@ -172,9 +172,10 @@ function  maxInt64(a,b:Int64):Int64; inline;
 function  minInt64(a,b:Int64):Int64; inline;
 
 function  get_elf_phdr(elf_hdr:p_elf64_hdr):p_elf64_phdr; inline;
-procedure exec_load_free(imgp:p_image_params);
-function  exec_load_self(imgp:p_image_params):Integer;
-procedure exec_load_authinfo(imgp:p_image_params);
+
+procedure rtld_free_self(imgp:p_image_params);
+function  rtld_load_self(imgp:p_image_params):Integer;
+procedure rtld_load_auth(imgp:p_image_params);
 
 function  is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype_caller:Integer):Boolean;
 
@@ -254,7 +255,7 @@ begin
  end;
 end;
 
-procedure exec_load_free(imgp:p_image_params);
+procedure rtld_free_self(imgp:p_image_params);
 begin
  FreeMem(imgp^.image_header);
  FreeMem(imgp^.image_self);
@@ -263,7 +264,7 @@ begin
  imgp^.elf_size:=0;
 end;
 
-function exec_load_self(imgp:p_image_params):Integer;
+function rtld_load_self(imgp:p_image_params):Integer;
 Var
  vp:p_vnode;
  obj_size:Int64;
@@ -395,6 +396,26 @@ begin
         fixup_offset_size(src_ofs,mem_size,obj_size);
         fixup_offset_size(dst_ofs,mem_size,MaxSeg);
 
+        if (src_ofs>=obj_size) then
+        begin
+         Assert(false,'src_ofs>=obj_size');
+        end;
+
+        if ((src_ofs+mem_size)>=obj_size) then
+        begin
+         Assert(false,'(src_ofs+mem_size)>=obj_size');
+        end;
+
+        if (dst_ofs>=MaxSeg) then
+        begin
+         Assert(false,'dst_ofs>=MaxSeg');
+        end;
+
+        if ((dst_ofs+mem_size)>=MaxSeg) then
+        begin
+         Assert(false,'(dst_ofs+mem_size)>=MaxSeg');
+        end;
+
         Move( (Pointer(self_hdr)          +src_ofs)^, //src
               (Pointer(imgp^.image_header)+dst_ofs)^, //dst
               mem_size);                              //size
@@ -410,7 +431,7 @@ begin
 
 end;
 
-procedure exec_load_authinfo(imgp:p_image_params);
+procedure rtld_load_auth(imgp:p_image_params);
 var
  hdr:p_elf64_hdr;
  authinfo:p_self_authinfo;

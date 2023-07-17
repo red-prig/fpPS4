@@ -298,6 +298,7 @@ var
   p_osrel:Integer;
 
   p_sdk_version:Integer;
+  p_sce_replay_exec:Integer;
 
   p_nsignals:Int64;
   p_nvcsw   :Int64;

@@ -54,7 +54,9 @@ uses
  kern_resource,
  sys_event,
  kern_event,
- machdep;
+ machdep,
+ kern_named_id,
+ kern_namedobj;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -501,7 +503,7 @@ function exec_check_permissions(imgp:p_image_params):Integer;
 var
  vp:p_vnode;
  attr:p_vattr;
- error,writecount:Integer;
+ error:Integer;
 begin
  vp:=imgp^.vp;
  attr:=imgp^.attr;
@@ -540,8 +542,7 @@ begin
   * Check number of open-for-writes on the file and deny execution
   * if there are any.
   }
- writecount:=vp^.v_writecount;
- if (writecount<>0) then Exit(ETXTBSY);
+ if (vp^.v_writecount<>0) then Exit(ETXTBSY);
 
  {
   * Call filesystem specific open routine (which does nothing in the
@@ -552,147 +553,6 @@ begin
 
  Exit(error);
 end;
-
-procedure scan_load_size(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer;var max_size,mx2_size:QWORD);
-var
- i:Integer;
- use_mode_2mb:Boolean;
-
- size    :QWORD;
- vaddr   :QWORD;
- vaddr_lo:QWORD;
- vaddr_hi:QWORD;
-begin
- max_size:=0;
- mx2_size:=0;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-  if ((phdr^.p_type=PT_SCE_RELRO) or
-      (phdr^.p_type=PT_LOAD)) and
-     (phdr^.p_memsz<>0) then
-  begin
-   vaddr:=phdr^.p_vaddr;
-
-   if (imgp^.image_header^.e_type=ET_SCE_DYNEXEC) then
-   begin
-    vaddr:=vaddr + QWORD(imgp^.reloc_base);
-   end;
-
-   vaddr_lo:=vaddr and $ffffffffffffc000;
-   vaddr_hi:=phdr^.p_memsz + vaddr;
-
-   size:=((vaddr_hi - vaddr_lo) + $3fff) and $ffffffffffffc000;
-
-   max_size:=max_size + size;
-
-   use_mode_2mb:=is_used_mode_2mb(phdr,0,budget_ptype_caller);
-
-   if (use_mode_2mb) then
-   begin
-    vaddr_lo:=(vaddr_lo + $1fffff) and $ffffffffffe00000;
-    vaddr_hi:=(vaddr_lo + size   ) and $ffffffffffe00000;
-
-    size:=0;
-    if (vaddr_lo <= vaddr_hi) then
-    begin
-     size:=vaddr_hi - vaddr_lo;
-    end;
-
-    mx2_size:=mx2_size + size;
-   end;
-
-  end;
-
-  Inc(phdr);
- end;
-end;
-
-function self_load_section(imgp:p_image_params;
-                           id,vaddr,offset,memsz,filesz:QWORD;
-                           prot:Byte;
-                           use_mode_2mb:Boolean;
-                           name:pchar):Integer;
-var
- map:vm_map_t;
- vaddr_lo:QWORD;
- vaddr_hi:QWORD;
- base    :Pointer;
-begin
- Result:=0;
-
- if (memsz<filesz) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: memsz',HexStr(memsz,8),') < filesz(',HexStr(filesz,8),') at segment ',id);
-  Exit(ENOEXEC);
- end;
-
- if ((prot and 6)=6) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: writeable text segment ',id,', ',HexStr(vaddr,8));
-  Exit(ENOEXEC);
- end;
-
- if ((vaddr and $3fff)<>0) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
-  Exit(ENOEXEC);
- end;
-
- vaddr_lo:=vaddr and $ffffffffffffc000;
- vaddr_hi:=(memsz + vaddr + $3fff) and $ffffffffffffc000;
-
- if (use_mode_2mb) then
- begin
-  vaddr_lo:=(vaddr + $1fffff) and $ffffffffffe00000;
-  vaddr_hi:=(vaddr + memsz + $3fff) and $ffffffffffe00000;
- end;
-
- base:=Pointer(imgp^.image_header)+offset;
-
- map:=@g_vmspace.vm_map;
-
- vm_map_lock(map);
-
- //remove prev if exist
- vm_map_delete(map,vaddr_lo,vaddr_hi);
-
- Result:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
-  Exit(vm_mmap_to_errno(Result));
- end;
-
- vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
-
- Result:=copyout(base,Pointer(vaddr),filesz);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
-    id,', ',HexStr(base),'->',HexStr(vaddr,8),':',HexStr(filesz,8));
-  readln;
-  Exit;
- end;
-
- Result:=vm_map_protect(map,vaddr_lo,vaddr_hi,prot,False);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
-  Exit(vm_mmap_to_errno(Result));
- end;
-
- vm_map_unlock(map);
-end;
-
-
 
 function scan_load_sections(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
 var
@@ -705,13 +565,14 @@ var
  data_addr :QWORD;
  text_addr :QWORD;
  text_size :QWORD;
+
  p_memsz   :QWORD;
  p_vaddr   :QWORD;
  p_filesz  :QWORD;
  p_offset  :QWORD;
 
- seg_addr:QWORD;
- seg_size:QWORD;
+ addr:QWORD;
+ size:QWORD;
 
  p_type   :Elf64_Word;
  p_flags  :Byte;
@@ -722,10 +583,10 @@ var
 begin
  Result:=0;
 
- data_addr :=0;
- text_addr :=0;
  total_size:=0;
  data_size :=0;
+ data_addr :=0;
+ text_addr :=0;
  text_size :=0;
 
  hdr:=imgp^.image_header;
@@ -807,25 +668,25 @@ begin
    end;
    if (Result<>0) then Exit;
 
-   seg_addr:=(p_vaddr and QWORD($ffffffffffffc000));
-   seg_size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
+   addr:=(p_vaddr and QWORD($ffffffffffffc000));
+   size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
 
    if (p_type=PT_SCE_RELRO) then
    begin
-    imgp^.relro_addr:=Pointer(seg_addr);
-    imgp^.relro_size:=seg_size;
+    imgp^.relro_addr:=Pointer(addr);
+    imgp^.relro_size:=size;
    end else
-   if ((phdr^.p_flags and PF_X)<>0) and (text_size < seg_size) then
+   if ((phdr^.p_flags and PF_X)<>0) and (text_size < size) then
    begin
-    text_size:=seg_size;
-    text_addr:=seg_addr;
+    text_size:=size;
+    text_addr:=addr;
    end else
    begin
-    data_size:=seg_size;
-    data_addr:=seg_addr;
+    data_size:=size;
+    data_addr:=addr;
    end;
 
-   total_size:=total_size+seg_size;
+   total_size:=total_size+size;
   end;
 
   Inc(phdr);
@@ -849,14 +710,14 @@ begin
  g_vmspace.vm_dsize:=data_size shr PAGE_SHIFT;
  g_vmspace.vm_daddr:=Pointer(data_addr);
 
- seg_addr:=0;
+ addr:=0;
  if (hdr^.e_type=ET_SCE_DYNEXEC) then
  begin
-  seg_addr:=text_addr;
+  addr:=text_addr;
  end;
 
- imgp^.entry_addr:=Pointer(seg_addr + hdr^.e_entry);
- imgp^.reloc_base:=Pointer(seg_addr);
+ imgp^.entry_addr:=Pointer(addr + hdr^.e_entry);
+ imgp^.reloc_base:=Pointer(addr);
 
  auxargs:=AllocMem(SizeOf(t_elf64_auxargs));
 
@@ -875,51 +736,12 @@ begin
 
  MoveChar0(imgp^.execpath^,p_proc.prog_name,1024);
 
- if (imgp^.reloc_base<>nil) and (imgp^.relro_size<>0) then
+ if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
  begin
-  Result:=vm_map_protect(@g_vmspace.vm_map,QWORD(imgp^.reloc_base),QWORD(imgp^.reloc_base)+imgp^.relro_size,VM_PROT_READ,False);
+  Result:=vm_map_protect(@g_vmspace.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.relro_addr)+imgp^.relro_size,VM_PROT_READ,False);
   Result:=vm_mmap_to_errno(Result);
  end;
 
-end;
-
-function scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-var
- hdr:p_elf64_hdr;
- p_offset:QWORD;
- p_filesz:QWORD;
- i:Integer;
-begin
- Result:=0;
-
- if (imgp^.dyn_id=-1) then Exit;
-
- hdr:=imgp^.image_header;
-
- p_offset:=phdr[imgp^.dyn_id].p_offset;
- p_filesz:=phdr[imgp^.dyn_id].p_filesz;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-
-  if (phdr[i].p_offset <= p_offset) and
-     (imgp^.dyn_id<>i) and
-     ( (p_filesz + p_offset) <= (phdr[i].p_offset + phdr[i].p_filesz)) then
-  begin
-   if (i<>-1) then
-   begin
-    imgp^.dyn_id    :=i;
-    imgp^.dyn_offset:=imgp^.dyn_offset - phdr[i].p_offset;
-    if (hdr^.e_type<>ET_EXEC) then Exit(0);
-    Exit(ENOEXEC);
-   end;
-   break;
-  end;
-
- end;
-
- Result:=EINVAL;
 end;
 
 function dynlib_proc_initialize_step1(imgp:p_image_params):Integer;
@@ -1085,9 +907,13 @@ begin
 end;
 
 function dynlib_proc_initialize_step3(imgp:p_image_params):Integer;
+label
+ _dyn_not_exist;
 var
  lib:p_lib_info;
  str:RawByteString;
+ entry:p_Objlist_Entry;
+ key:Integer;
 begin
  Result:=0;
 
@@ -1096,9 +922,10 @@ begin
  //if (td_proc->sdk_version < 0x5000000) {
  //  *(byte *)&dynlibs_info->bits = *(byte *)&dynlibs_info->bits | 0x20;
  //}
- //if (imgp->dyn_exist == 0) goto _dyn_not_exist;
 
- str:='/libkernel.sprx';
+ if (imgp^.dyn_exist=0) then goto _dyn_not_exist;
+
+ str:='libkernel.sprx';
  lib:=preload_prx_modules(str);
  dynlibs_info.libkernel:=lib;
 
@@ -1107,7 +934,7 @@ begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
- str:='/libSceLibcInternal.sprx';
+ str:='libSceLibcInternal.sprx';
  lib:=preload_prx_modules(str);
 
  if (lib=nil) then
@@ -1115,8 +942,73 @@ begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
+ lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ while (lib<>nil) do
+ begin
+  entry:=AllocMem(SizeOf(Objlist_Entry));
+  entry^.obj:=lib;
 
- writeln;
+  TAILQ_INSERT_TAIL(@dynlibs_info.needed,entry,@entry^.link);
+
+  Inc(lib^.ref_count);
+
+  //
+
+  entry:=AllocMem(SizeOf(Objlist_Entry));
+  entry^.obj:=lib;
+
+  TAILQ_INSERT_TAIL(@lib^.dagmembers,entry,@entry^.link);
+
+  //
+
+  entry:=AllocMem(SizeOf(Objlist_Entry));
+  entry^.obj:=lib;
+
+  TAILQ_INSERT_TAIL(@lib^.dldags,entry,@entry^.link);
+
+  //
+
+  lib:=TAILQ_NEXT(lib,@lib^.entry);
+ end;
+
+ //dynlibs_info.sceKernelReportUnpatchedFunctionCall:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
+ //dynlibs_info.__freeze:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'__freeze','libkernel_sysc_se', 0);
+ //dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
+ //dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
+
+ lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ while (lib<>nil) do
+ begin
+  dynlib_initialize_pltgot_each(lib);
+  //
+  lib:=TAILQ_NEXT(lib,@lib^.entry);
+ end;
+
+ imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
+
+ _dyn_not_exist:
+
+ lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ while (lib<>nil) do
+ begin
+
+  lib^.desc.free:=nil;
+  lib^.objt:=NAMED_DYNL;
+  lib^.name:='';
+
+  key:=-1;
+  if not id_name_new(@named_table,lib,@key) then
+  begin
+   Assert(False,'ID for PRX cannot be assigned.');
+  end;
+
+  lib^.id:=key;
+  id_release(lib);
+
+  //
+  lib:=TAILQ_NEXT(lib,@lib^.entry);
+ end;
+
 end;
 
 
@@ -1171,11 +1063,11 @@ begin
   Exit(ENOEXEC);
  end;
 
- exec_load_authinfo(imgp);
+ rtld_load_auth(imgp);
 
  if (hdr^.e_type=ET_SCE_REPLAY_EXEC) then
  begin
-  //(mmap_flags + 4) | 2;
+  p_proc.p_sce_replay_exec:=1;
  end;
 
  if (hdr^.e_type=ET_SCE_DYNEXEC) then
@@ -1186,6 +1078,11 @@ begin
   imgp^.tls_init_addr    :=reloc_base+QWORD(imgp^.tls_init_addr    );
   imgp^.eh_frame_hdr_addr:=reloc_base+QWORD(imgp^.eh_frame_hdr_addr);
   imgp^.proc_param_addr  :=reloc_base+QWORD(imgp^.proc_param_addr  );
+ end;
+
+ if (hdr^.e_type=ET_EXEC) then
+ begin
+  Exit(ENOEXEC);
  end;
 
  if (imgp^.dyn_exist=0) then
@@ -1207,8 +1104,7 @@ begin
 
  max_size:=0;
  mx2_size:=0;
-
- scan_load_size(imgp,phdr,hdr^.e_phnum,max_size,mx2_size);
+ scan_load_size(imgp,phdr,hdr^.e_phnum,0,budget_ptype_caller,max_size,mx2_size);
 
  Result:=scan_load_sections(imgp,phdr,hdr^.e_phnum);
  if (Result<>0) then
@@ -1404,7 +1300,7 @@ begin
  // vm_object_reference(imgp^.object);
  //end;
 
- error:=exec_load_self(imgp);
+ error:=rtld_load_self(imgp);
  if (error<>0) then goto exec_fail_dealloc;
 
  p_proc.p_osrel:=0;
@@ -1565,7 +1461,7 @@ exec_fail_dealloc:
  {
   * free various allocated resources
   }
- exec_load_free(imgp);
+ rtld_free_self(imgp);
 
  if (imgp^.vp<>nil) then
  begin
