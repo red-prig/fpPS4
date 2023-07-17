@@ -611,7 +611,7 @@ begin
    p_flags:=VM_PROT_READ or VM_PROT_WRITE;
    if (p_type<>PT_SCE_RELRO) then
    begin
-    p_flags:=trans_prot(phdr^.p_flags);
+    p_flags:=convert_prot(phdr^.p_flags);
    end;
 
    p_vaddr:=phdr^.p_vaddr;
@@ -757,7 +757,7 @@ begin
  TAILQ_INIT(@dynlibs_info.needed);
  TAILQ_INIT(@dynlibs_info.init_list);
  TAILQ_INIT(@dynlibs_info.fini_list);
- TAILQ_INIT(@dynlibs_info.lib_list);
+ TAILQ_INIT(@dynlibs_info.obj_list);
 
  dynlibs_info.obj_count      :=0;
  dynlibs_info.tls_last_offset:=0;
@@ -873,14 +873,14 @@ begin
  lib^.fini_proc_addr:=nil;
  lib^.init_proc_addr:=nil;
 
- tail:=TAILQ_LAST(@dynlibs_info.lib_list);
+ tail:=TAILQ_LAST(@dynlibs_info.obj_list);
  if (tail=nil) then
  begin
-  tail:=dynlibs_info.lib_list.tqh_first;
+  tail:=dynlibs_info.obj_list.tqh_first;
  end;
 
  initlist_add_objects(dynlibs_info.fini_proc_list,
-                      dynlibs_info.lib_list.tqh_first,
+                      dynlibs_info.obj_list.tqh_first,
                       tail,
                       dynlibs_info.init_proc_list);
 
@@ -906,16 +906,16 @@ begin
  end;
 end;
 
-function dynlib_proc_initialize_step3(imgp:p_image_params):Integer;
+procedure dynlib_proc_initialize_step3(imgp:p_image_params);
 label
  _dyn_not_exist;
 var
  lib:p_lib_info;
  str:RawByteString;
- entry:p_Objlist_Entry;
+ err:Integer;
  key:Integer;
 begin
- Result:=0;
+ err:=0;
 
  lib:=nil;
 
@@ -926,7 +926,7 @@ begin
  if (imgp^.dyn_exist=0) then goto _dyn_not_exist;
 
  str:='libkernel.sprx';
- lib:=preload_prx_modules(str);
+ lib:=preload_prx_modules(pchar(str),err);
  dynlibs_info.libkernel:=lib;
 
  if (lib=nil) then
@@ -935,40 +935,26 @@ begin
  end;
 
  str:='libSceLibcInternal.sprx';
- lib:=preload_prx_modules(str);
+ lib:=preload_prx_modules(pchar(str),err);
 
  if (lib=nil) then
  begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
- lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do
  begin
-  entry:=AllocMem(SizeOf(Objlist_Entry));
-  entry^.obj:=lib;
-
-  TAILQ_INSERT_TAIL(@dynlibs_info.needed,entry,@entry^.link);
+  objlist_push_tail(dynlibs_info.needed,lib);
 
   Inc(lib^.ref_count);
 
-  //
-
-  entry:=AllocMem(SizeOf(Objlist_Entry));
-  entry^.obj:=lib;
-
-  TAILQ_INSERT_TAIL(@lib^.dagmembers,entry,@entry^.link);
+  objlist_push_tail(lib^.dagmembers,lib);
+  objlist_push_tail(lib^.dldags    ,lib);
 
   //
 
-  entry:=AllocMem(SizeOf(Objlist_Entry));
-  entry^.obj:=lib;
-
-  TAILQ_INSERT_TAIL(@lib^.dldags,entry,@entry^.link);
-
-  //
-
-  lib:=TAILQ_NEXT(lib,@lib^.entry);
+  lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
  //dynlibs_info.sceKernelReportUnpatchedFunctionCall:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
@@ -976,19 +962,19 @@ begin
  //dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
  //dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
 
- lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do
  begin
   dynlib_initialize_pltgot_each(lib);
   //
-  lib:=TAILQ_NEXT(lib,@lib^.entry);
+  lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
  imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
 
  _dyn_not_exist:
 
- lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do
  begin
 
@@ -1006,7 +992,7 @@ begin
   id_release(lib);
 
   //
-  lib:=TAILQ_NEXT(lib,@lib^.entry);
+  lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
 end;

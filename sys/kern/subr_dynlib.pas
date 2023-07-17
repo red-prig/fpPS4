@@ -64,7 +64,7 @@ type
 
  p_lib_info=^t_lib_info;
  t_lib_info=object(t_id_named_desc)
-  entry:TAILQ_ENTRY;
+  link:TAILQ_ENTRY;
 
   lib_path   :PAnsiChar;
   lib_dirname:PAnsiChar;
@@ -113,13 +113,15 @@ type
 
   //t_rtld_bits rtld_flags;
 
-  tls_done    :Integer;
-  init_scanned:Integer;
-  init_done   :Integer;
-  init_fini   :Integer;
-  textrel     :Integer;
-  init_plt    :Integer;
-  is_system   :Integer;
+  tls_done     :Integer;
+  init_scanned :Integer;
+  init_done    :Integer;
+  init_fini    :Integer;
+  textrel      :Integer;
+  init_plt     :Integer;
+  is_system    :Integer;
+  dag_inited   :Integer;
+  jmpslots_done:Integer;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -163,7 +165,7 @@ type
 
  p_dynlibs_info=^t_dynlibs_info;
  t_dynlibs_info=record
-  lib_list   :TAILQ_HEAD; //p_lib_info
+  obj_list   :TAILQ_HEAD; //p_lib_info
   libprogram :p_lib_info;
   libkernel  :p_lib_info;
   obj_count  :Integer;
@@ -195,10 +197,14 @@ type
  end;
 
 function  scan_phdr(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-function  trans_prot(flags:Elf64_Word):Byte;
+function  convert_prot(flags:Elf64_Word):Byte;
 
 function  obj_new():p_lib_info;
 procedure obj_free(lib:p_lib_info);
+
+procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
+function  objlist_find(var list:TAILQ_HEAD;obj:p_lib_info):p_Objlist_Entry;
+procedure objlist_remove(var list:TAILQ_HEAD;obj:p_lib_info);
 
 function  obj_get_str(lib:p_lib_info;offset:Int64):pchar;
 procedure object_add_name(obj:p_lib_info;name:pchar);
@@ -243,10 +249,24 @@ function  self_load_section(imgp:p_image_params;
                             use_mode_2mb:Boolean;
                             name:pchar):Integer;
 
+function  change_relro_protection(obj:p_lib_info;prot:Integer):Integer;
+function  change_relro_protection_all(prot:Integer):Integer;
+
+procedure init_dag (root:p_lib_info);
+procedure ref_dag  (root:p_lib_info);
+procedure unref_dag(root:p_lib_info);
+
 function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
 
-function  do_load_object(path:pchar):p_lib_info;
-function  preload_prx_modules(const path:RawByteString):p_lib_info;
+procedure rtld_munmap(base:Pointer;size:QWORD);
+
+function  do_load_object(path:pchar;var err:Integer):p_lib_info;
+procedure unload_object(root:p_lib_info);
+
+function  relocate_object(lib:p_lib_info):Integer;
+
+function  preload_prx_modules(path:pchar;var err:Integer):p_lib_info;
+function  load_prx(path:pchar;var plib:p_lib_info):Integer;
 
 var
  dynlibs_info:t_dynlibs_info;
@@ -543,7 +563,7 @@ begin
  Result:=0;
 end;
 
-function trans_prot(flags:Elf64_Word):Byte;
+function convert_prot(flags:Elf64_Word):Byte;
 begin
  Result:=0;
  if ((flags and PF_X)<>0) then Result:=Result or VM_PROT_EXECUTE;
@@ -1120,6 +1140,42 @@ begin
  FreeMem(lib);
 end;
 
+procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
+var
+ entry:p_Objlist_Entry;
+begin
+ entry:=AllocMem(SizeOf(Objlist_Entry));
+ entry^.obj:=obj;
+ //
+ TAILQ_INSERT_TAIL(@list,entry,@entry^.link);
+end;
+
+function objlist_find(var list:TAILQ_HEAD;obj:p_lib_info):p_Objlist_Entry;
+var
+ elm:p_Objlist_Entry;
+begin
+ elm:=TAILQ_FIRST(@dynlibs_info.list_global);
+ while (elm<>nil) do
+ begin
+  if (elm^.obj=obj) then Exit(elm);
+  //
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+ Result:=nil;
+end;
+
+procedure objlist_remove(var list:TAILQ_HEAD;obj:p_lib_info);
+var
+ elm:p_Objlist_Entry;
+begin
+ elm:=objlist_find(list,obj);
+ if (elm<>nil) then
+ begin
+  TAILQ_REMOVE(@list,elm,@elm^.link);
+  FreeMem(elm);
+ end;
+end;
+
 function obj_get_str(lib:p_lib_info;offset:Int64):pchar;
 begin
  if (lib^.rel_data^.strtab_size<=offset) then
@@ -1180,15 +1236,13 @@ procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
                                obj :p_lib_info;
                                tail:p_lib_info;
                                var init_proc_list:TAILQ_HEAD);
-var
- proc_entry:p_Objlist_Entry;
 begin
  if (obj^.init_scanned<>0) or (obj^.init_done<>0) then Exit;
  obj^.init_scanned:=1;
 
  if (obj<>tail) then
  begin
-  initlist_add_objects(fini_proc_list,obj^.entry.tqe_next,tail,init_proc_list);
+  initlist_add_objects(fini_proc_list,obj^.link.tqe_next,tail,init_proc_list);
  end;
 
  if (obj^.needed.tqh_first<>nil) then
@@ -1198,20 +1252,12 @@ begin
 
  if (obj^.init_proc_addr<>nil) then
  begin
-  proc_entry:=AllocMem(SizeOf(Objlist_Entry));
-
-  proc_entry^.obj:=obj;
-
-  TAILQ_INSERT_TAIL(@init_proc_list,proc_entry,@proc_entry^.link);
+  objlist_push_tail(init_proc_list,obj);
  end;
 
  if (obj^.fini_proc_addr<>nil) and (obj^.init_fini=0) then
  begin
-  proc_entry:=AllocMem(SizeOf(Objlist_Entry));
-
-  proc_entry^.obj:=obj;
-
-  TAILQ_INSERT_TAIL(@fini_proc_list,proc_entry,@proc_entry^.link);
+  objlist_push_tail(fini_proc_list,obj);
 
   obj^.init_fini:=1;
  end;
@@ -1536,7 +1582,7 @@ end;
 
 procedure dynlibs_add_obj(lib:p_lib_info);
 begin
- TAILQ_INSERT_TAIL(@dynlibs_info.lib_list,lib,@lib^.entry);
+ TAILQ_INSERT_TAIL(@dynlibs_info.obj_list,lib,@lib^.link);
  Inc(dynlibs_info.obj_count);
 end;
 
@@ -1821,7 +1867,7 @@ begin
    p_flags:=VM_PROT_READ or VM_PROT_WRITE;
    if (p_type<>PT_SCE_RELRO) then
    begin
-    p_flags:=trans_prot(phdr^.p_flags);
+    p_flags:=convert_prot(phdr^.p_flags);
    end;
 
    p_vaddr:=delta+phdr^.p_vaddr;
@@ -2150,9 +2196,158 @@ begin
  Exit(error);
 end;
 
-function dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
+function change_relro_protection(obj:p_lib_info;prot:Integer):Integer;
 var
  map:vm_map_t;
+ addr:Pointer;
+ size:QWORD;
+begin
+ map:=@g_vmspace.vm_map;
+
+ addr:=obj^.relro_addr;
+ size:=obj^.relro_size;
+
+ if (addr<>nil) and (size<>0) then
+ begin
+  Result:=vm_map_protect(map,QWORD(addr),QWORD(addr)+size,prot,False);
+  if (Result<>0) then
+  begin
+   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
+  end;
+ end;
+end;
+
+function change_relro_protection_all(prot:Integer):Integer;
+var
+ lib:p_lib_info;
+begin
+ Result:=0;
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (lib<>nil) do
+ begin
+  Result:=change_relro_protection(lib,prot);
+  if (Result<>0) then Exit;
+  //
+  lib:=TAILQ_NEXT(lib,@lib^.link);
+ end;
+end;
+
+type
+ t_DoneList=record
+  objs:array of p_lib_info;
+  num_used:DWORD;
+ end;
+
+procedure donelist_init(var dlp:t_DoneList); inline;
+begin
+ SetLength(dlp.objs,dynlibs_info.obj_count);
+ dlp.num_used:=0;
+end;
+
+function donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean; inline;
+var
+ i:DWORD;
+begin
+ if (dlp.num_used<>0) then
+ For i:=0 to dlp.num_used-1 do
+ begin
+  if (dlp.objs[i]=obj) then Exit(True);
+ end;
+
+ if (dlp.num_used < Length(dlp.objs)) then
+ begin
+  dlp.objs[dlp.num_used]:=obj;
+  Inc(dlp.num_used);
+ end;
+
+ Result:=False;
+end;
+
+procedure init_dag(root:p_lib_info);
+label
+ _continue;
+var
+ needed:p_Needed_Entry;
+ elm:p_Objlist_Entry;
+ donelist:t_DoneList;
+begin
+ if (root^.dag_inited<>0) then Exit;
+
+ donelist:=Default(t_DoneList);
+ donelist_init(donelist);
+
+ // Root object belongs to own DAG.
+ objlist_push_tail(root^.dldags,     root);
+ objlist_push_tail(root^.dagmembers, root);
+ donelist_check(donelist, root);
+
+ {
+ * Add dependencies of root object to DAG in breadth order
+ * by exploiting the fact that each new object get added
+ * to the tail of the dagmembers list.
+ }
+ elm:=TAILQ_FIRST(@root^.dagmembers);
+ while (elm<>nil) do
+ begin
+
+  needed:=TAILQ_FIRST(@elm^.obj^.needed);
+  while (needed<>nil) do
+  begin
+   if (needed^.obj=nil) then
+   begin
+    goto _continue;
+   end;
+
+   if donelist_check(donelist,needed^.obj) then
+   begin
+    goto _continue;
+   end;
+
+   objlist_push_tail(needed^.obj^.dldags, root);
+   objlist_push_tail(root^.dagmembers, needed^.obj);
+
+   _continue:
+   needed:=TAILQ_NEXT(needed,@needed^.link);
+  end;
+
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+
+ root^.dag_inited:=1;
+end;
+
+procedure ref_dag(root:p_lib_info);
+var
+ elm:p_Objlist_Entry;
+begin
+ Assert(root^.dag_inited<>0,'DAG is not initialized');
+
+ elm:=TAILQ_FIRST(@root^.dagmembers);
+ while (elm<>nil) do
+ begin
+  Inc(elm^.obj^.ref_count);
+  //
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+end;
+
+procedure unref_dag(root:p_lib_info);
+var
+ elm:p_Objlist_Entry;
+begin
+ Assert(root^.dag_inited<>0,'DAG is not initialized');
+
+ elm:=TAILQ_FIRST(@root^.dagmembers);
+ while (elm<>nil) do
+ begin
+  Inc(elm^.obj^.ref_count);
+  //
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+end;
+
+function dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
+var
  addr:Pointer;
  entry:p_elf64_rela;
 
@@ -2164,19 +2359,8 @@ begin
 
  if (obj^.init_plt<>0) then Exit;
 
- map:=@g_vmspace.vm_map;
-
- addr:=obj^.relro_addr;
-
- if (addr<>nil) and (obj^.relro_size<>0) then
- begin
-  Result:=vm_map_protect(map,QWORD(addr),QWORD(addr)+obj^.relro_size,VM_PROT_RW,False);
-  if (Result<>0) then
-  begin
-   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
-   Exit;
-  end;
- end;
+ Result:=change_relro_protection(obj,VM_PROT_RW);
+ if (Result<>0) then Exit;
 
  entry:=obj^.rel_data^.pltrela_addr;
  count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
@@ -2214,22 +2398,26 @@ begin
    Inc(entry);
   end;
 
- addr:=obj^.relro_addr;
-
- if (addr<>nil) and (obj^.relro_size<>0) then
- begin
-  err:=vm_map_protect(map,QWORD(addr),QWORD(addr)+obj^.relro_size,VM_PROT_READ,False);
-  if (err<>0) then
-  begin
-   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
-   Exit;
-  end;
- end;
+ err:=change_relro_protection(obj,VM_PROT_READ);
 
  obj^.init_plt:=1;
 end;
 
-function do_load_object(path:pchar):p_lib_info;
+procedure rtld_munmap(base:Pointer;size:QWORD);
+var
+ map:vm_map_t;
+begin
+ if (base<>nil) and (size<>0) then
+ begin
+  map:=@g_vmspace.vm_map;
+  //
+  vm_map_lock(map);
+  vm_map_delete(map,QWORD(base),QWORD(base) + size);
+  vm_map_unlock(map);
+ end;
+end;
+
+function do_load_object(path:pchar;var err:Integer):p_lib_info;
 label
  _inc_max,
  _error;
@@ -2237,11 +2425,8 @@ var
  fname:RawByteString;
  new:p_lib_info;
  lib:p_lib_info;
- i,err:Integer;
+ i:Integer;
  tls_max:Integer;
- map_base:Pointer;
- map_size:QWORD;
- map:vm_map_t;
 begin
  Result:=nil;
 
@@ -2274,19 +2459,19 @@ begin
   end else
   begin
    i:=1;
-   lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+   lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
    while (lib<>nil) do
    begin
     while (lib^.tls_index=i) do
     begin
      i:=i+1;
-     lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+     lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
      if (tls_max < i) then
      begin
       goto _inc_max;
      end;
     end;
-    lib:=TAILQ_NEXT(lib,@lib^.entry);
+    lib:=TAILQ_NEXT(lib,@lib^.link);
    end;
   end;
  end;
@@ -2321,24 +2506,73 @@ begin
 
  _error:
 
- map_base:=new^.map_base;
- map_size:=new^.map_size;
-
- if (map_base<>nil) then
- begin
-  map:=@g_vmspace.vm_map;
-
-  vm_map_lock(map);
-  vm_map_delete(map,QWORD(map_base),QWORD(map_base) + map_size);
-  vm_map_unlock(map);
- end;
+ rtld_munmap(new^.map_base,new^.map_size);
 
  obj_free(new);
 
  Exit(nil);
 end;
 
-function preload_prx_modules(const path:RawByteString):p_lib_info;
+procedure unlink_object(root:p_lib_info);
+var
+ elm,next:p_Objlist_Entry;
+begin
+ if (root^.ref_count<>0) then Exit;
+
+ //Remove the object from the RTLD_GLOBAL list.
+ objlist_remove(dynlibs_info.list_global, root);
+
+ //Remove the object from all objects' DAG lists.
+ elm:=TAILQ_FIRST(@root^.dagmembers);
+ while (elm<>nil) do
+ begin
+  next:=TAILQ_NEXT(elm,@elm^.link);
+  //
+  objlist_remove(elm^.obj^.dldags, root);
+  if (elm^.obj<>root) then
+  begin
+   unlink_object(elm^.obj);
+  end;
+  //
+  elm:=next;
+ end;
+end;
+
+procedure unload_object(root:p_lib_info);
+var
+ obj,next:p_lib_info;
+begin
+ Assert(root^.ref_count=0,'unload_object ref_count');
+
+ {
+  * Pass over the DAG removing unreferenced objects from
+  * appropriate lists.
+ }
+ unlink_object(root);
+
+ // Unmap all objects that are no longer referenced.
+
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
+ begin
+  next:=TAILQ_NEXT(obj,@obj^.link);
+  //
+  rtld_munmap(obj^.map_base, obj^.map_size);
+
+  TAILQ_REMOVE(@dynlibs_info.obj_list,obj,@obj^.link);
+
+  Dec(dynlibs_info.obj_count);
+
+  //dynlib_notify_event(td,lib->id,0x80);
+
+  obj_free(obj);
+  //
+  obj:=next;
+ end;
+
+end;
+
+function preload_prx_modules(path:pchar;var err:Integer):p_lib_info;
 label
  _do_load;
 var
@@ -2346,17 +2580,18 @@ var
  fname:RawByteString;
 begin
  Result:=nil;
+ err:=0;
 
  fname:=ExtractFileName(path);
 
- lib:=TAILQ_FIRST(@dynlibs_info.lib_list);
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do
  begin
   if object_match_name(lib,pchar(fname)) then
   begin
    Exit(lib);
   end;
-  lib:=TAILQ_NEXT(lib,@lib^.entry);
+  lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
  fname:=path;
@@ -2386,12 +2621,125 @@ begin
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 
-
+ err:=ENOENT;
  Exit(nil);
+
  _do_load:
 
- Result:=do_load_object(pchar(fname));
+ Result:=do_load_object(pchar(fname),err);
 end;
+
+//kern_reloc
+function reloc_non_plt(obj:p_lib_info):Integer;
+begin
+ Result:=0;
+ //////
+end;
+
+function reloc_jmplots(obj:p_lib_info):Integer;
+begin
+ Result:=0;
+ //////
+end;
+
+function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
+begin
+ Result:=reloc_non_plt(obj);
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',obj^.lib_path,' rv=',Result);
+  Exit;
+ end;
+
+ Result:=reloc_jmplots(obj);
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
+  Exit;
+ end;
+end;
+
+function relocate_object(lib:p_lib_info):Integer;
+var
+ obj:p_lib_info;
+begin
+ Result:=change_relro_protection_all(VM_PROT_RW);
+ if (Result<>0) then Exit;
+
+ Result:=relocate_one_object(lib,ord(lib^.jmpslots_done=0));
+
+ if (Result=0) then
+ begin
+  obj:=dynlibs_info.libprogram;
+
+  while (obj<>nil) do
+  begin
+   if (obj<>lib) then
+   begin
+    Result:=relocate_one_object(obj,ord(lib^.jmpslots_done=0));
+   end;
+   obj:=obj^.link.tqe_next;
+  end;
+
+ end;
+
+ change_relro_protection_all(VM_PROT_READ);
+end;
+
+function load_prx(path:pchar;var plib:p_lib_info):Integer;
+var
+ lib:p_lib_info;
+ err:Integer;
+begin
+ Result:=0;
+ err:=0;
+
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (lib<>nil) do
+ begin
+  if (StrLComp(lib^.lib_path,path,$400)=0) then
+  begin
+   Exit(0);
+  end;
+  //
+  lib:=TAILQ_NEXT(lib,@lib^.link);
+ end;
+
+ lib:=preload_prx_modules(path,err);
+ if (lib=nil) then Exit(err);
+
+ if (objlist_find(dynlibs_info.list_global,lib)=nil) then
+ begin
+  objlist_push_tail(dynlibs_info.list_global,lib);
+ end;
+
+ if (lib^.ref_count=0) then
+ begin
+  init_dag(lib);
+  ref_dag(lib);
+
+  err:=relocate_object(lib);
+  if (err<>0) then
+  begin
+   unref_dag(lib);
+   if (lib^.ref_count=0) then
+   begin
+    unload_object(lib);
+   end;
+   Writeln(StdErr,'load_prx:','Fail to relocate ',path);
+   Exit(err);
+  end;
+ end else
+ begin
+  ref_dag(lib);
+ end;
+
+ plib:=lib;
+ Result:=0;
+end;
+
+
+
 
 end.
 
