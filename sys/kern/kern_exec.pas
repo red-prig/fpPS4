@@ -55,6 +55,7 @@ uses
  sys_event,
  kern_event,
  machdep,
+ kern_dlsym,
  kern_named_id,
  kern_namedobj;
 
@@ -867,6 +868,10 @@ begin
 
  dynlibs_add_obj(lib);
 
+ dynlibs_info.sym_zero.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
+ dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
+ dynlibs_info.sym_zero.st_value:=-Int64(lib^.relocbase);
+
  init_proc_addr:=lib^.init_proc_addr;
  fini_proc_addr:=lib^.fini_proc_addr;
 
@@ -957,10 +962,10 @@ begin
   lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
- //dynlibs_info.sceKernelReportUnpatchedFunctionCall:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
- //dynlibs_info.__freeze:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'__freeze','libkernel_sysc_se', 0);
- //dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
- //dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info,dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
+ dynlibs_info.sceKernelReportUnpatchedFunctionCall:=do_dlsym(dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
+ dynlibs_info.__freeze:=do_dlsym(dynlibs_info.libkernel,'__freeze','libkernel_sysc_se', 0);
+ dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
+ dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
 
  lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do

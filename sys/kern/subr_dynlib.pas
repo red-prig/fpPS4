@@ -163,6 +163,17 @@ type
   import:WORD;
  end;
 
+ t_DoneList=record
+  objs:array of p_lib_info;
+  num_used:DWORD;
+ end;
+
+ p_SymCache=^t_SymCache;
+ t_SymCache=record
+  sym:p_elf64_sym;
+  obj:p_lib_info;
+ end;
+
  p_dynlibs_info=^t_dynlibs_info;
  t_dynlibs_info=record
   obj_list   :TAILQ_HEAD; //p_lib_info
@@ -192,12 +203,11 @@ type
   sysc_s00:Pointer;
   sysc_e00:Pointer;
 
+  sym_zero:elf64_sym;
+
   dyn_non_exist:Integer;
 
  end;
-
-function  scan_phdr(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-function  convert_prot(flags:Elf64_Word):Byte;
 
 function  obj_new():p_lib_info;
 procedure obj_free(lib:p_lib_info);
@@ -212,13 +222,6 @@ function  object_match_name(obj:p_lib_info;name:pchar):Boolean;
 
 function  Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
 function  Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
-
-function  elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
-                                  hdr_size :QWORD;
-                                  hdr_vaddr:QWORD;
-                                  data_size:QWORD;
-                                  eh_frame_addr:PPointer;
-                                  eh_frame_size:PQWORD):Integer;
 
 procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
 
@@ -240,14 +243,8 @@ procedure dynlibs_add_obj(lib:p_lib_info);
 
 procedure init_relo_bits_process(lib:p_lib_info);
 
-function  scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-procedure scan_load_size (imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
-
-function  self_load_section(imgp:p_image_params;
-                            id,vaddr,offset,memsz,filesz:QWORD;
-                            prot:Byte;
-                            use_mode_2mb:Boolean;
-                            name:pchar):Integer;
+procedure donelist_init(var dlp:t_DoneList); inline;
+function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean; inline;
 
 function  change_relro_protection(obj:p_lib_info;prot:Integer):Integer;
 function  change_relro_protection_all(prot:Integer):Integer;
@@ -257,8 +254,6 @@ procedure ref_dag  (root:p_lib_info);
 procedure unref_dag(root:p_lib_info);
 
 function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
-
-procedure rtld_munmap(base:Pointer;size:QWORD);
 
 function  do_load_object(path:pchar;var err:Integer):p_lib_info;
 procedure unload_object(root:p_lib_info);
@@ -290,286 +285,8 @@ uses
  vfs_lookup,
  vfs_subr,
  vnode_if,
- _resource,
- kern_resource;
-
-function scan_phdr(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-var
- i:Integer;
- text_id     :Integer;
- data_id     :Integer;
- sce_relro_id:Integer;
- vaddr:QWORD;
- memsz:QWORD;
-begin
- if (imgp=nil) then Exit(EINVAL);
- if (phdr=nil) then Exit(EINVAL);
- if (count=0)  then Exit(EINVAL);
-
- imgp^.min_addr:=High(Int64);
- imgp^.max_addr:=0;
-
- text_id     :=-1;
- data_id     :=-1;
- sce_relro_id:=-1;
- imgp^.dyn_id:=-1;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-
-  case phdr[i].p_type of
-   PT_LOAD,
-   PT_SCE_RELRO:
-     begin
-      vaddr:=phdr[i].p_vaddr;
-
-      if ((phdr[i].p_align and PAGE_MASK)<>0) or
-         ((vaddr and PAGE_MASK)<>0) or
-         ((phdr[i].p_offset and PAGE_MASK)<>0) then
-      begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,'segment #',i,' is not page aligned');
-       Exit(ENOEXEC);
-      end;
-
-      memsz:=phdr[i].p_memsz;
-
-      if (memsz<=phdr[i].p_filesz) and (phdr[i].p_filesz<>memsz) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if (memsz > $7fffffff) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if ((phdr[i].p_offset shr $20)<>0) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      imgp^.min_addr:=MinInt64(imgp^.min_addr,vaddr);
-
-      vaddr:=(vaddr+memsz+$3fff) and QWORD($ffffffffffffc000);
-
-      imgp^.max_addr:=MaxInt64(imgp^.max_addr,vaddr);
-
-      if (phdr[i].p_type=PT_SCE_RELRO) then
-      begin
-       sce_relro_id:=i;
-      end else
-      if ((phdr[i].p_flags and PF_X)=0) then
-      begin
-       if (data_id=-1) then data_id:=i;
-      end else
-      begin
-       text_id:=i;
-      end;
-     end;
-
-   PT_DYNAMIC:
-     begin
-      imgp^.dyn_exist :=1;
-      imgp^.dyn_id    :=i;
-      imgp^.dyn_vaddr :=Pointer(phdr[i].p_vaddr);
-      imgp^.dyn_offset:=phdr[i].p_offset;
-      imgp^.dyn_filesz:=phdr[i].p_filesz;
-
-      memsz:=phdr[i].p_memsz;
-
-      if (memsz<=phdr[i].p_filesz) and (phdr[i].p_filesz<>memsz) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if (memsz > $7fffffff) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if ((phdr[i].p_offset shr $20)<>0) then
-      begin
-       Exit(ENOEXEC);
-      end;
-     end;
-
-   PT_TLS:
-     begin
-      imgp^.tls_size     :=phdr[i].p_memsz;
-      imgp^.tls_align    :=phdr[i].p_align;
-      imgp^.tls_init_size:=phdr[i].p_filesz;
-      imgp^.tls_init_addr:=Pointer(phdr[i].p_vaddr);
-
-      memsz:=phdr[i].p_memsz;
-
-      if (memsz<=phdr[i].p_filesz) and (phdr[i].p_filesz<>memsz) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if (memsz > $7fffffff) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if ((phdr[i].p_offset shr $20)<>0) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if (phdr[i].p_align > 32) then
-      begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,'alignment of segment #',i,' it must be less than 32.');
-       Exit(ENOEXEC);
-      end;
-     end;
-
-   PT_SCE_DYNLIBDATA:
-     begin
-      imgp^.sce_dynlib_data_id  :=i;
-      imgp^.sce_dynlib_data_addr:=phdr[i].p_offset;
-      imgp^.sce_dynlib_data_size:=phdr[i].p_filesz;
-
-      if (phdr[i].p_memsz<>0) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if (phdr[i].p_filesz > $7fffffff) then
-      begin
-       Exit(ENOEXEC);
-      end;
-
-      if ((phdr[i].p_offset shr $20)<>0) then
-      begin
-       Exit(ENOEXEC);
-      end;
-     end;
-
-   PT_SCE_PROCPARAM:
-     begin
-      imgp^.proc_param_addr:=Pointer(phdr[i].p_vaddr);
-      imgp^.proc_param_size:=phdr[i].p_filesz;
-     end;
-
-   PT_SCE_MODULE_PARAM:
-     begin
-      imgp^.module_param_addr:=Pointer(phdr[i].p_vaddr);
-      imgp^.module_param_size:=phdr[i].p_filesz;
-     end;
-
-   PT_GNU_EH_FRAME:
-    begin
-     imgp^.eh_frame_hdr_addr:=Pointer(phdr[i].p_vaddr);
-     imgp^.eh_frame_hdr_size:=phdr[i].p_memsz;
-
-     memsz:=phdr[i].p_memsz;
-
-     if (memsz<=phdr[i].p_filesz) and (phdr[i].p_filesz<>memsz) then
-     begin
-      Exit(ENOEXEC);
-     end;
-
-     if (memsz > $7fffffff) then
-     begin
-      Exit(ENOEXEC);
-     end;
-
-     if ((phdr[i].p_offset shr $20)<>0) then
-     begin
-      Exit(ENOEXEC);
-     end;
-    end;
-
-   PT_SCE_COMMENT:
-    begin
-     imgp^.sce_comment_id    :=i;
-     imgp^.sce_comment_offset:=phdr[i].p_offset;
-     imgp^.sce_comment_filesz:=phdr[i].p_filesz;
-
-     if (phdr[i].p_memsz<>0) then
-     begin
-      Exit(ENOEXEC);
-     end;
-
-     if (phdr[i].p_filesz > $7fffffff) then
-     begin
-      Exit(ENOEXEC);
-     end;
-
-     if ((phdr[i].p_offset shr $20)<>0) then
-     begin
-      Exit(ENOEXEC);
-     end;
-    end;
-
-  end;
-
- end;
-
- if (imgp^.min_addr=High(Int64)) then
- begin
-  Exit(EINVAL);
- end;
-
- if (imgp^.max_addr=0) then
- begin
-  Exit(EINVAL);
- end;
-
- if (imgp^.dyn_exist<>0) then
- begin
-  if (imgp^.sce_dynlib_data_size=0) then
-  begin
-   Exit(EINVAL);
-  end;
-
-  if (imgp^.dyn_filesz=0) then
-  begin
-   Exit(EINVAL);
-  end;
- end;
-
- if (sce_relro_id<>-1) then
- begin
-  vaddr:=phdr[sce_relro_id].p_vaddr;
-
-  if (vaddr=0) then
-  begin
-   Exit(EINVAL);
-  end;
-
-  memsz:=phdr[sce_relro_id].p_memsz;
-
-  if (memsz=0) then
-  begin
-   Exit(EINVAL);
-  end;
-
-  if (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+$1fffff) and $ffffffffffe00000)<>vaddr) and
-     (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+$003fff) and $ffffffffffffc000)<>vaddr) then
-  begin
-   Exit(EINVAL);
-  end;
-
-  if (((vaddr+memsz+$1fffff) and $ffffffffffe00000)<>phdr[data_id].p_vaddr) and
-     (((vaddr+memsz+$003fff) and $ffffffffffffc000)<>phdr[data_id].p_vaddr) then
-  begin
-   Exit(EINVAL);
-  end;
- end;
-
- Result:=0;
-end;
-
-function convert_prot(flags:Elf64_Word):Byte;
-begin
- Result:=0;
- if ((flags and PF_X)<>0) then Result:=Result or VM_PROT_EXECUTE;
- if ((flags and PF_W)<>0) then Result:=Result or VM_PROT_WRITE;
- if ((flags and PF_R)<>0) then Result:=Result or VM_PROT_READ;
-end;
+ kern_reloc,
+ kern_dlsym;
 
 function obj_new():p_lib_info;
 begin
@@ -587,97 +304,6 @@ begin
 
  //puVar1:=&(Result^.rtld_flags).field_0x1;
  //*puVar1:=*puVar1 | 2;
-end;
-
-function elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
-                                 hdr_size :QWORD;
-                                 hdr_vaddr:QWORD;
-                                 data_size:QWORD;
-                                 eh_frame_addr:PPointer;
-                                 eh_frame_size:PQWORD):Integer;
-label
- __result;
-var
- ret1:Integer;
- h,res,pos:PByte;
- enc:Byte;
- offset:QWORD;
- size:QWORD;
- fde_count:DWORD;
- _end:DWORD;
-begin
- enc:=0;
- ret1:=copyin(@hdr^.eh_frame_ptr_enc,@enc,1);
- if (ret1<>0) then Exit(-1);
-
- h:=Pointer(hdr + 1);
-
- offset:=0;
- res:=nil;
- case enc of
-  DW_EH_PE_udata4:
-    begin
-     ret1:=copyin(h,@offset,4);
-     if (ret1<>0) then Exit(-1);
-
-     res:=Pointer(Integer(offset) + hdr_vaddr);
-    end;
-  DW_EH_PE_pcrel or DW_EH_PE_sdata4:
-    begin
-     ret1:=copyin(h,@offset,4);
-     if (ret1<>0) then Exit(-1);
-
-     res:=h + Integer(offset);
-    end;
-  else
-    Exit(-1)
- end;
-
- size:=0;
- if (res=nil) then
- begin
-   __result:
-   eh_frame_addr^:=res;
-   eh_frame_size^:=size;
-  Exit(0);
- end;
-
- fde_count:=0;
- ret1:=copyin(res,@fde_count,4);
- if (ret1<>0) then Exit(-1);
-
- pos:=res;
- size:=0;
-
- repeat
-
-  offset:=fde_count;
-  if (offset=$ffffffff) then
-  begin
-   ret1:=copyin(pos + 4,@offset,8);
-   if (ret1<>0) then break;
-   offset:=offset + 12;
-  end else
-  begin
-   if (fde_count=0) then
-   begin
-    size:=size + 4;
-    goto __result;
-   end;
-   offset:=offset + 4;
-  end;
-
-  _end:=offset + size;
-
-  if (data_size <= (QWORD(res) + _end)) then goto __result;
-  pos:=pos + offset;
-
-  ret1:=copyin(pos,@fde_count,4);
-  size:=_end;
-
- until (ret1<>0);
-
- Result:=-1;
 end;
 
 procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
@@ -1601,215 +1227,6 @@ begin
  lib^.relo_bits_process:=AllocMem((count+7) div 8);
 end;
 
-function scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-var
- p_offset:QWORD;
- p_filesz:QWORD;
- i:Integer;
-begin
- Result:=0;
-
- if (imgp^.dyn_id=-1) then Exit;
-
- p_offset:=phdr[imgp^.dyn_id].p_offset;
- p_filesz:=phdr[imgp^.dyn_id].p_filesz;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-
-  if (phdr[i].p_offset <= p_offset) and
-     (imgp^.dyn_id<>i) and
-     ( (p_filesz + p_offset) <= (phdr[i].p_offset + phdr[i].p_filesz)) then
-  begin
-   if (i<>-1) then
-   begin
-    imgp^.dyn_id    :=i;
-    imgp^.dyn_offset:=imgp^.dyn_offset - phdr[i].p_offset;
-    Exit(0);
-   end;
-   break;
-  end;
-
- end;
-
- Result:=EINVAL;
-end;
-
-procedure scan_load_size(imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
-var
- i:Integer;
- use_mode_2mb:Boolean;
-
- size    :QWORD;
- vaddr   :QWORD;
- vaddr_lo:QWORD;
- vaddr_hi:QWORD;
-begin
- max_size:=0;
- mx2_size:=0;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-  if ((phdr^.p_type=PT_SCE_RELRO) or
-      (phdr^.p_type=PT_LOAD)) and
-     (phdr^.p_memsz<>0) then
-  begin
-   vaddr:=phdr^.p_vaddr;
-
-   if (imgp^.image_header^.e_type=ET_SCE_DYNEXEC) then
-   begin
-    vaddr:=vaddr + QWORD(imgp^.reloc_base);
-   end;
-
-   vaddr_lo:=vaddr and $ffffffffffffc000;
-   vaddr_hi:=phdr^.p_memsz + vaddr;
-
-   size:=((vaddr_hi - vaddr_lo) + $3fff) and $ffffffffffffc000;
-
-   max_size:=max_size + size;
-
-   use_mode_2mb:=is_used_mode_2mb(phdr,dynlib,budget);
-
-   if (use_mode_2mb) then
-   begin
-    vaddr_lo:=(vaddr_lo + $1fffff) and $ffffffffffe00000;
-    vaddr_hi:=(vaddr_lo + size   ) and $ffffffffffe00000;
-
-    size:=0;
-    if (vaddr_lo <= vaddr_hi) then
-    begin
-     size:=vaddr_hi - vaddr_lo;
-    end;
-
-    mx2_size:=mx2_size + size;
-   end;
-
-  end;
-
-  Inc(phdr);
- end;
-end;
-
-function self_load_section(imgp:p_image_params;
-                           id,vaddr,offset,memsz,filesz:QWORD;
-                           prot:Byte;
-                           use_mode_2mb:Boolean;
-                           name:pchar):Integer;
-var
- map:vm_map_t;
- vaddr_lo:QWORD;
- vaddr_hi:QWORD;
- base    :Pointer;
-begin
- Result:=0;
-
- if (memsz<filesz) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: memsz',HexStr(memsz,8),') < filesz(',HexStr(filesz,8),') at segment ',id);
-  Exit(ENOEXEC);
- end;
-
- if ((prot and 6)=6) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: writeable text segment ',id,', ',HexStr(vaddr,8));
-  Exit(ENOEXEC);
- end;
-
- if ((vaddr and $3fff)<>0) then
- begin
-  Writeln(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
-  Exit(ENOEXEC);
- end;
-
- vaddr_lo:=vaddr and $ffffffffffffc000;
- vaddr_hi:=(memsz + vaddr + $3fff) and $ffffffffffffc000;
-
- if (use_mode_2mb) then
- begin
-  vaddr_lo:=(vaddr + $1fffff) and $ffffffffffe00000;
-  vaddr_hi:=(vaddr + memsz + $3fff) and $ffffffffffe00000;
- end;
-
- base:=Pointer(imgp^.image_header)+offset;
-
- map:=@g_vmspace.vm_map;
-
- vm_map_lock(map);
-
- //remove prev if exist
- vm_map_delete(map,vaddr_lo,vaddr_hi);
-
- Result:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
-  Exit(vm_mmap_to_errno(Result));
- end;
-
- vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
-
- Result:=copyout(base,Pointer(vaddr),filesz);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
-    id,', ',HexStr(base),'->',HexStr(vaddr,8),':',HexStr(filesz,8));
-  readln;
-  Exit;
- end;
-
- Result:=vm_map_protect(map,vaddr_lo,vaddr_hi,prot,False);
- if (Result<>0) then
- begin
-  vm_map_unlock(map);
-  //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
-  Exit(vm_mmap_to_errno(Result));
- end;
-
- vm_map_unlock(map);
-end;
-
-function is_system_path(path:pchar):Boolean;
-var
- f:RawByteString;
-begin
- f:='/'+p_proc.p_randomized_path;
- Result:=StrLComp(pchar(f),path,Length(f))=0;
-end;
-
-function is_libc_or_fios(path:pchar):Boolean;
-var
- f:RawByteString;
-begin
- f:=ExtractFileName(path);
- f:=ChangeFileExt(f,'');
- case f of
-  'libc',
-  'libSceFios2':
-    Result:=True;
-  else
-    Result:=False;
- end;
-end;
-
-function vm_reserved(map        :vm_map_t;
-                     addr       :p_vm_offset_t;
-                     size       :vm_size_t):Integer;
-begin
- if (p_proc.p_sce_replay_exec<>0) then
- begin
-  addr^:=$fc0000000;
- end;
-
- Result:=_vm_mmap(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0);
-end;
-
 function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
 var
  i:Integer;
@@ -2014,8 +1431,6 @@ var
  hdr :p_elf64_hdr;
  phdr:p_elf64_phdr;
 
- map:vm_map_t;
-
  addr,delta:QWORD;
 begin
  Result:=-1;
@@ -2153,9 +1568,7 @@ begin
   addr:=ET_DYN_LOAD_ADDR_SYS;
  end;
 
- map:=@g_vmspace.vm_map;
-
- error:=vm_reserved(map,@addr,imgp^.max_addr-imgp^.min_addr);
+ error:=rtld_mmap(@addr,imgp^.max_addr-imgp^.min_addr);
  if (error<>0) then
  begin
   Writeln(StdErr,'self_load_shared_object:','failed to allocate VA for ',imgp^.execpath);
@@ -2231,12 +1644,6 @@ begin
   lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 end;
-
-type
- t_DoneList=record
-  objs:array of p_lib_info;
-  num_used:DWORD;
- end;
 
 procedure donelist_init(var dlp:t_DoneList); inline;
 begin
@@ -2401,20 +1808,6 @@ begin
  err:=change_relro_protection(obj,VM_PROT_READ);
 
  obj^.init_plt:=1;
-end;
-
-procedure rtld_munmap(base:Pointer;size:QWORD);
-var
- map:vm_map_t;
-begin
- if (base<>nil) and (size<>0) then
- begin
-  map:=@g_vmspace.vm_map;
-  //
-  vm_map_lock(map);
-  vm_map_delete(map,QWORD(base),QWORD(base) + size);
-  vm_map_unlock(map);
- end;
 end;
 
 function do_load_object(path:pchar;var err:Integer):p_lib_info;
@@ -2627,36 +2020,6 @@ begin
  _do_load:
 
  Result:=do_load_object(pchar(fname),err);
-end;
-
-//kern_reloc
-function reloc_non_plt(obj:p_lib_info):Integer;
-begin
- Result:=0;
- //////
-end;
-
-function reloc_jmplots(obj:p_lib_info):Integer;
-begin
- Result:=0;
- //////
-end;
-
-function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
-begin
- Result:=reloc_non_plt(obj);
- if (Result<>0) then
- begin
-  Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',obj^.lib_path,' rv=',Result);
-  Exit;
- end;
-
- Result:=reloc_jmplots(obj);
- if (Result<>0) then
- begin
-  Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
-  Exit;
- end;
 end;
 
 function relocate_object(lib:p_lib_info):Integer;
