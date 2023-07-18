@@ -760,15 +760,16 @@ begin
  TAILQ_INIT(@dynlibs_info.fini_list);
  TAILQ_INIT(@dynlibs_info.obj_list);
 
- dynlibs_info.obj_count      :=0;
- dynlibs_info.tls_last_offset:=0;
- dynlibs_info.tls_last_size  :=0;
- dynlibs_info.d_tls_count    :=0;
- dynlibs_info.tls_count      :=1;
- dynlibs_info.tls_max        :=1;
- //dynlibs_info.bits         :=0;
+ dynlibs_info.obj_count       :=0;
+ dynlibs_info.tls_last_offset :=0;
+ dynlibs_info.tls_last_size   :=0;
+ dynlibs_info.tls_static_space:=0;
+ dynlibs_info.tls_count       :=1;
+ dynlibs_info.tls_max         :=1;
+ //dynlibs_info.bits          :=0;
 
  lib:=obj_new();
+ lib^.mainprog:=1;
  lib^.relocbase:=imgp^.reloc_base;
 
  text_addr:=g_vmspace.vm_taddr;
@@ -864,7 +865,7 @@ begin
   Exit;
  end;
 
- init_relo_bits_process(lib);
+ init_relo_bits(lib);
 
  dynlibs_add_obj(lib);
 
@@ -1026,7 +1027,7 @@ begin
   ET_SCE_DYNEXEC    :
   else
    begin
-    Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_type:',HexStr(hdr^.e_type,4));
+    Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_type:0x',HexStr(hdr^.e_type,4));
     Exit(ENOEXEC);
    end;
  end;

@@ -208,6 +208,7 @@ function  self_load_section(imgp:p_image_params;
 
 function  is_system_path(path:pchar):Boolean;
 function  is_libc_or_fios(path:pchar):Boolean;
+function  dynlib_basename(path:pchar):pchar;
 
 implementation
 
@@ -472,10 +473,18 @@ begin
  if (imgp=nil) then Exit;
 
  imgp^.authinfo:=Default(t_authinfo);
- imgp^.authinfo.app_type_id:=QWORD($3100000000000001);
 
- if (imgp^.image_header=nil) then Exit;
- if (imgp^.image_self  =nil) then Exit;
+ if (imgp^.image_header=nil) or
+    (imgp^.image_self  =nil) then
+ begin
+  case ExtractFileExt(imgp^.execpath) of
+   '.sprx','.prx' :imgp^.authinfo.app_type_id:=QWORD($3900000000000002);
+   '.sdll','.sexe':imgp^.authinfo.app_type_id:=QWORD($3901000000000001);
+   else
+                   imgp^.authinfo.app_type_id:=QWORD($3100000000000001);
+  end;
+  Exit;
+ end;
 
  hdr:=imgp^.image_header;
  s:=SizeOf(t_self_header);
@@ -1178,6 +1187,20 @@ begin
     Result:=True;
   else
     Result:=False;
+ end;
+end;
+
+function dynlib_basename(path:pchar):pchar;
+var
+ idx:pchar;
+begin
+ idx:=strrscan(path,'/');
+ if (idx=nil) then
+ begin
+  Result:=path;
+ end else
+ begin
+  Result:=idx+1;
  end;
 end;
 

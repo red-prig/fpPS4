@@ -636,7 +636,7 @@ function SELF_WINDOW(i:Int64):Integer; inline;
 function SELF_BLOCK_SIZE(i:Int64):Int64; inline;
 function SELF_SEGMENT_INDEX(i:Int64):Integer; inline;
 
-function ELF64_R_SYM(i:QWORD):DWORD; inline;
+function ELF64_R_SYM (i:QWORD):DWORD; inline;
 function ELF64_R_TYPE(i:QWORD):DWORD; inline;
 function ELF64_ST_BIND(i:Byte):Byte; inline;
 function ELF64_ST_TYPE(i:Byte):Byte; inline;

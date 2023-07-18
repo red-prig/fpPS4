@@ -113,10 +113,11 @@ type
 
   //t_rtld_bits rtld_flags;
 
+  mainprog     :Integer;
   tls_done     :Integer;
   init_scanned :Integer;
   init_done    :Integer;
-  init_fini    :Integer;
+  on_fini_list :Integer;
   textrel      :Integer;
   init_plt     :Integer;
   is_system    :Integer;
@@ -126,7 +127,7 @@ type
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
 
-  relo_bits_process:PByte;
+  relo_bits:PByte;
 
   rel_data:p_rel_data;
 
@@ -188,9 +189,9 @@ type
   init_proc_list:TAILQ_HEAD; //p_Objlist_Entry
   fini_proc_list:TAILQ_HEAD; //p_Objlist_Entry
 
-  tls_last_offset:QWORD;
-  tls_last_size  :QWORD;
-  d_tls_count    :QWORD;
+  tls_last_offset :QWORD;
+  tls_last_size   :QWORD;
+  tls_static_space:QWORD;
 
   tls_count   :Integer;
   tls_max     :Integer;
@@ -228,6 +229,9 @@ procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
 procedure release_per_file_info_obj(lib:p_lib_info);
 function  acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
 
+function  allocate_tls_offset(obj:p_lib_info):Boolean;
+procedure free_tls_offset(obj:p_lib_info);
+
 procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
                                obj :p_lib_info;
                                tail:p_lib_info;
@@ -241,13 +245,17 @@ function  digest_dynamic(lib:p_lib_info):Integer;
 
 procedure dynlibs_add_obj(lib:p_lib_info);
 
-procedure init_relo_bits_process(lib:p_lib_info);
+procedure init_relo_bits (obj:p_lib_info);
+function  check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
+procedure set_relo_bits(obj:p_lib_info;i:Integer);
 
 procedure donelist_init(var dlp:t_DoneList); inline;
 function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean; inline;
 
 function  change_relro_protection(obj:p_lib_info;prot:Integer):Integer;
 function  change_relro_protection_all(prot:Integer):Integer;
+
+function  relocate_text_or_data_segment(obj:p_lib_info;src,dst:Pointer;size:QWORD):Integer;
 
 procedure init_dag (root:p_lib_info);
 procedure ref_dag  (root:p_lib_info);
@@ -548,7 +556,7 @@ begin
    $6100003e:
      begin
       _unsupp:
-      Writeln(StdErr,'preprocess_dt_entries:','Unsupported DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      Writeln(StdErr,'preprocess_dt_entries:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
       Exit(ENOEXEC);
      end;
 
@@ -558,7 +566,7 @@ begin
    DT_RELA,
    DT_JMPREL:
      begin
-      Writeln(StdErr,'preprocess_dt_entries:','ORBIS object file does not support DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      Writeln(StdErr,'preprocess_dt_entries:','ORBIS object file does not support DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
       Exit(EINVAL);
      end;
 
@@ -684,11 +692,50 @@ begin
 
 end;
 
-procedure free_tls_offset(lib:p_lib_info);
+function allocate_tls_offset(obj:p_lib_info):Boolean;
+var
+ off:Int64;
 begin
- if (lib^.tls_done<>0) and (lib^.tls_offset=dynlibs_info.tls_last_offset) then
+ if (obj^.tls_done<>0) then
  begin
-  dynlibs_info.tls_last_offset:=lib^.tls_offset - lib^.tls_size;
+  Exit(True);
+ end;
+
+ off:=obj^.tls_size;
+ if (off=0) then
+ begin
+  obj^.tls_done:=1;
+  Exit(True);
+ end;
+
+ if (obj^.tls_index=1) then
+ begin
+  off:=off + -1;
+ end else
+ begin
+  off:=off + -1 + dynlibs_info.tls_last_offset;
+ end;
+
+ off:=(off + obj^.tls_align) and (-obj^.tls_align);
+
+ if ((dynlibs_info.tls_static_space<>0) and (dynlibs_info.tls_static_space < off)) then
+ begin
+  Exit(False);
+ end;
+
+ obj^.tls_offset:=off;
+
+ dynlibs_info.tls_last_offset:=off;
+ dynlibs_info.tls_last_size  :=obj^.tls_size;
+
+ Result:=True;
+end;
+
+procedure free_tls_offset(obj:p_lib_info);
+begin
+ if (obj^.tls_done<>0) and (obj^.tls_offset=dynlibs_info.tls_last_offset) then
+ begin
+  dynlibs_info.tls_last_offset:=obj^.tls_offset - obj^.tls_size;
   dynlibs_info.tls_last_size  :=0;
  end;
 end;
@@ -747,10 +794,10 @@ begin
   lib^.lib_path:=nil;
  end;
 
- if (lib^.relo_bits_process<>nil) then
+ if (lib^.relo_bits<>nil) then
  begin
-  FreeMem(lib^.relo_bits_process);
-  lib^.relo_bits_process:=nil
+  FreeMem(lib^.relo_bits);
+  lib^.relo_bits:=nil
  end;
 
  libs:=TAILQ_FIRST(@lib^.lib_table);
@@ -806,7 +853,7 @@ function obj_get_str(lib:p_lib_info;offset:Int64):pchar;
 begin
  if (lib^.rel_data^.strtab_size<=offset) then
  begin
-  Writeln(StdErr,'obj_get_str:','offset=',HexStr(offset,8),' is out of range of string table of ',lib^.lib_path);
+  Writeln(StdErr,'obj_get_str:','offset=0x',HexStr(offset,8),' is out of range of string table of ',lib^.lib_path);
   Exit(nil);
  end;
 
@@ -881,11 +928,11 @@ begin
   objlist_push_tail(init_proc_list,obj);
  end;
 
- if (obj^.fini_proc_addr<>nil) and (obj^.init_fini=0) then
+ if (obj^.fini_proc_addr<>nil) and (obj^.on_fini_list=0) then
  begin
   objlist_push_tail(fini_proc_list,obj);
 
-  obj^.init_fini:=1;
+  obj^.on_fini_list:=1;
  end;
 end;
 
@@ -1153,7 +1200,7 @@ begin
 
     else
       begin
-       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag ',HexStr(dt_ent^.d_tag,8),' found in ',lib^.lib_path);
+       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',lib^.lib_path);
        Exit(ENOEXEC);
       end;
 
@@ -1212,19 +1259,40 @@ begin
  Inc(dynlibs_info.obj_count);
 end;
 
-procedure init_relo_bits_process(lib:p_lib_info);
+procedure init_relo_bits(obj:p_lib_info);
 var
  count:Integer;
 begin
- if (lib^.rel_data=nil) then
+ if (obj^.rel_data=nil) then
  begin
   count:=0;
  end else
  begin
-  count:=(lib^.rel_data^.pltrela_size div sizeof(elf64_rela))+(lib^.rel_data^.rela_size div sizeof(elf64_rela));
+  count:=(obj^.rel_data^.pltrela_size div sizeof(elf64_rela))+(obj^.rel_data^.rela_size div sizeof(elf64_rela));
  end;
 
- lib^.relo_bits_process:=AllocMem((count+7) div 8);
+ if (count=0) then
+ begin
+  obj^.relo_bits:=nil;
+ end else
+ begin
+  obj^.relo_bits:=AllocMem((count+7) div 8);
+ end;
+
+end;
+
+function check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
+begin
+ if (obj^.relo_bits=nil) then Exit(False);
+
+ Result:=((obj^.relo_bits[i shr 3] shr (i and 7)) and 1)<>0;
+end;
+
+procedure set_relo_bits(obj:p_lib_info;i:Integer);
+begin
+ if (obj^.relo_bits=nil) then Exit;
+
+ obj^.relo_bits[i shr 3]:=obj^.relo_bits[i shr 3] or (1 shl (i and 7))
 end;
 
 function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
@@ -1513,7 +1581,7 @@ begin
   ET_SCE_DYNAMIC:
   else
    begin
-    Writeln(StdErr,'self_load_shared_object:',imgp^.execpath,' Unsupported ELF e_type:',HexStr(hdr^.e_type,4));
+    Writeln(StdErr,'self_load_shared_object:',imgp^.execpath,' Unsupported ELF e_type:0x',HexStr(hdr^.e_type,4));
     error:=ENOEXEC;
     goto _fail_dealloc;
    end;
@@ -1642,6 +1710,37 @@ begin
   if (Result<>0) then Exit;
   //
   lib:=TAILQ_NEXT(lib,@lib^.link);
+ end;
+end;
+
+function relocate_text_or_data_segment(obj:p_lib_info;src,dst:Pointer;size:QWORD):Integer;
+var
+ map:vm_map_t;
+begin
+ if (obj^.textrel=0) or
+    (obj^.map_base > dst) or
+    ((obj^.map_base + obj^.text_size) < (dst + size)) then
+ begin
+  Result:=copyout(src,dst,size);
+ end else
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  map:=@g_vmspace.vm_map;
+  //
+  vm_map_lock(map);
+  //
+  Result:=change_relro_protection(obj,VM_PROT_RW);
+  if (Result<>0) then Exit;
+
+  Result:=copyout(src,dst,size);
+
+  change_relro_protection(obj,VM_PROT_READ);
+  //
+  vm_map_unlock(map);
+ end else
+ begin
+  Writeln(StdErr,'relocate_text_or_data_segment:','text relocation is prohibited.');
+  Exit(ENOEXEC);
  end;
 end;
 
@@ -1892,7 +1991,7 @@ begin
   goto _error;
  end;
 
- init_relo_bits_process(lib);
+ init_relo_bits(lib);
  dynlibs_add_obj(new);
  new^.loaded:=1;
  Exit(new);
