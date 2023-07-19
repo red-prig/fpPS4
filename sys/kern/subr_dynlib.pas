@@ -249,8 +249,8 @@ procedure init_relo_bits (obj:p_lib_info);
 function  check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
 procedure set_relo_bits(obj:p_lib_info;i:Integer);
 
-procedure donelist_init(var dlp:t_DoneList); inline;
-function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean; inline;
+procedure donelist_init(var dlp:t_DoneList);
+function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean;
 
 function  change_relro_protection(obj:p_lib_info;prot:Integer):Integer;
 function  change_relro_protection_all(prot:Integer):Integer;
@@ -1150,14 +1150,14 @@ begin
       begin
        dval:=dt_ent^.d_un.d_val;
 
-       lib_entry:=lib^.lib_table.tqh_first;
+       lib_entry:=TAILQ_FIRST(@lib^.lib_table);
        while (lib_entry<>nil) do
        begin
         if (TLibraryAttr(dval).id=lib_entry^.dval.id) then
         begin
          Break;
         end;
-        lib_entry:=lib_entry^.link.tqe_next;
+        lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
        end;
 
        if (lib_entry=nil) then

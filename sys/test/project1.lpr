@@ -88,9 +88,15 @@ uses
  kern_event,
  kern_callout,
  kern_timeout,
- kern_exec;
+ kern_exec,
+ vmparam;
+
+const
+ PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
 
 var
+ PAGE_MAP:array[0..PAGE_MAP_COUNT-1] of DWORD;
+
  mtx:umutex;
  rwl:urwlock;
  e:Integer;
@@ -1239,6 +1245,11 @@ var
 begin
  //tailq;
  id_test;
+
+ PAGE_MAP[200]:=3;
+ writeln(PAGE_MAP[200]);
+ writeln(PAGE_MAP_COUNT-1);
+ writeln(sizeof(PAGE_MAP));
 
  //test_map;
  sys_init;

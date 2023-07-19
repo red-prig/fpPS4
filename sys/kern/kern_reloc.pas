@@ -159,7 +159,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -168,7 +168,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -180,7 +180,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -189,7 +189,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -209,7 +209,7 @@ begin
             Result:=copyout(@data,where,SizeOf(Pointer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -247,7 +247,7 @@ begin
              Result:=check_addr(defobj,data,SizeOf(Integer));
              if (Result<>0) then
              begin
-              Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(data32,8),' ref=',dynlib_basename(defobj^.lib_path));
+              Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
               Exit;
              end;
             end;
@@ -255,7 +255,7 @@ begin
             Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(data32,8),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -267,7 +267,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -276,7 +276,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -297,7 +297,7 @@ begin
             Result:=copyout(@data32,where,SizeOf(Integer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -327,14 +327,14 @@ begin
   Result:=check_addr(defobj,data,SizeOf(Pointer));
   if (Result<>0) then
   begin
-   Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(data),' ref=',dynlib_basename(defobj^.lib_path));
+   Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
    Exit;
   end;
 
   Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
   if (Result<>0) then
   begin
-   Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(data),' [',r_type,']');
+   Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
    Exit(ENOEXEC);
   end;
 
@@ -343,11 +343,102 @@ begin
  goto _next;
 end;
 
+function reloc_jmpslot(obj:p_lib_info;i:Integer;cache:p_SymCache;flags:Integer):Integer;
+var
+ idofs:Integer;
+ entry:p_elf64_rela;
 
-function reloc_jmplots(obj:p_lib_info):Integer;
+ where:Pointer;
+ data:Pointer;
+
+ def:p_elf64_sym;
+ defobj:p_lib_info;
 begin
  Result:=0;
- //////
+
+ if (i<0) or (i>=(obj^.rel_data^.pltrela_size div SizeOf(elf64_rela))) then
+ begin
+  Exit(1);
+ end;
+
+ idofs:=obj^.rel_data^.rela_size div SizeOf(elf64_rela);
+ idofs:=idofs+i;
+
+ if check_relo_bits(obj,idofs) then Exit;
+
+ entry:=obj^.rel_data^.pltrela_addr+i;
+
+ if (ELF64_R_TYPE(entry^.r_info)<>R_X86_64_JUMP_SLOT) then
+ begin
+  Writeln(StdErr,'reloc_jmpslot:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',obj^.lib_path);
+  Exit(3);
+ end;
+
+ where:=(obj^.relocbase + entry^.r_offset);
+
+ defobj:=nil;
+ def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,cache);
+
+ if (def=nil) then
+ begin
+  Exit(1);
+ end;
+
+ if (flags=1) and
+    (obj^.jmpslots_done=0) and
+    (defobj^.jmpslots_done=0) then
+ begin
+  Exit(5);
+ end;
+
+ if (ELF64_ST_VISIBILITY(def^.st_other)=STV_HIDDEN) and
+    (defobj<>obj) then
+ begin
+  Exit(2);
+ end;
+
+ data:=defobj^.relocbase + entry^.r_addend + def^.st_value;
+
+ Result:=copyout(@data,where,SizeOf(Pointer));
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'reloc_jmpslot:','copyout() failed. where=0x',HexStr(where));
+  Exit(4);
+ end;
+
+ set_relo_bits(obj,idofs);
+
+ if (flags=0) then Exit;
+
+ //dl_debug_flags
+end;
+
+function reloc_jmpslots(obj:p_lib_info):Integer;
+var
+ cache:array of t_SymCache;
+
+ i,count:Integer;
+begin
+ Result:=0;
+
+ cache:=nil;
+ SetLength(cache,obj^.rel_data^.dynsymcount);
+
+ count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
+
+ if (obj^.rel_data^.pltrela_addr<>nil) and (count<>0) then
+ For i:=0 to count-1 do
+  begin
+   Result:=reloc_jmpslot(obj,i,@cache[0],0);
+   case Result of
+    3:Exit(EINVAL);
+    4:Exit(ENOEXEC);
+    5:Exit(ENOEXEC);
+    else;
+   end;
+  end;
+
+ Result:=0;
 end;
 
 function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
@@ -359,7 +450,7 @@ begin
   Exit;
  end;
 
- Result:=reloc_jmplots(obj);
+ Result:=reloc_jmpslots(obj);
  if (Result<>0) then
  begin
   Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
