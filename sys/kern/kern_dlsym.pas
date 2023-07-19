@@ -51,9 +51,78 @@ begin
 end;
 
 function symlook_obj(req:p_SymLook;obj:p_lib_info):Integer;
-begin
- ///////
+label
+ _next;
+var
+ i:Integer;
+ symnum:Integer;
+ symp:p_elf64_sym;
+ strp:pchar;
 
+ ST_TYPE:Integer;
+begin
+ Result:=0;
+
+ //linear search
+ For i:=0 to obj^.rel_data^.dynsymcount-1 do
+ begin
+  symnum:=obj^.rel_data^.chains[i];
+  if (symnum<>0) then
+  begin
+   symp:=obj^.rel_data^.symtab_addr+symnum;
+   strp:=obj^.rel_data^.strtab_addr+symp^.st_name;
+
+   ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+   Case ST_TYPE of
+    STT_NOTYPE,
+    STT_OBJECT,
+    STT_FUN,
+    STT_SCE:
+      begin
+       if (symp^.st_value<>0) then
+       begin
+        if (symp^.st_shndx<>SHN_UNDEF) or
+           ((ST_TYPE=STT_FUN) and
+            ((req^.flags and SYMLOOK_IN_PLT)=0)
+           ) then
+        begin
+         if (StrLComp(req^.name,strp,strlen(req^.name))=0) then
+         begin
+          goto _next;
+         end;
+        end;
+       end;
+      end;
+    STT_TLS:
+      begin
+       if (symp^.st_shndx<>SHN_UNDEF) or
+          ((ST_TYPE=STT_FUN) and
+           ((req^.flags and SYMLOOK_IN_PLT)=0)
+          ) then
+       begin
+        if (StrLComp(req^.name,strp,strlen(req^.name))=0) then
+        begin
+         goto _next;
+        end;
+       end;
+      end;
+    else;
+   end;
+
+  end;
+ end;
+
+ Exit(ESRCH);
+
+ _next:
+
+ req^.sym_out:=symp;
+ req^.defobj_out:=obj;
+
+ //needed_filtees/needed_aux_filtees->symlook_needed not used
+
+ Result:=0;
 end;
 
 function symlook_list(req:p_SymLook;var objlist:TAILQ_HEAD;var dlp:t_DoneList):Integer;
@@ -203,6 +272,53 @@ begin
   Exit(ESRCH);
 end;
 
+function symlook_default(req:p_SymLook;refobj:p_lib_info):Integer;
+var
+ donelist:t_DoneList;
+ elm:p_Objlist_Entry;
+ req1:t_SymLook;
+begin
+ donelist:=Default(t_DoneList);
+ donelist_init(donelist);
+ req1:=req^;
+
+ symlook_global(req,donelist);
+
+ elm:=TAILQ_FIRST(@refobj^.dagmembers);
+ while (elm<>nil) do
+ begin
+
+  if (req^.sym_out<>nil) then
+  begin
+   if (ELF64_ST_BIND(req^.sym_out^.st_info)<>STB_WEAK) then
+   begin
+    Break;
+   end;
+  end;
+
+  Result:=symlook_list(@req1,elm^.obj^.dagmembers,donelist);
+
+  if (Result=0) then
+  begin
+   if (req^.sym_out=nil) or
+      (ELF64_ST_BIND(req1.sym_out^.st_info)<>STB_WEAK) then
+   begin
+    req^.sym_out   :=req1.sym_out;
+    req^.defobj_out:=req1.defobj_out;
+    Assert(req^.defobj_out<>nil,'req->defobj_out is NULL #2');
+   end;
+  end;
+
+  //
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+
+ if (req^.sym_out<>nil) then
+  Exit(0)
+ else
+  Exit(ESRCH);
+end;
+
 function do_dlsym(obj:p_lib_info;symbol,modname:pchar;flags:DWORD):Pointer;
 var
  req:t_SymLook;
@@ -227,6 +343,7 @@ begin
    begin
     offset:=lib_entry^.dval.name_offset;
     req.libname:=obj_get_str(obj,offset);
+    Break;
    end;
    lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
   end;
@@ -284,9 +401,87 @@ begin
 end;
 
 function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
+var
+ req:t_SymLook;
+ def:p_elf64_sym;
+ ref:p_elf64_sym;
+ defobj:p_lib_info;
+ str:pchar;
+ err:Integer;
 begin
  Result:=nil;
- ////
+
+ if (refobj^.rel_data^.dynsymcount<=symnum) then Exit(nil);
+
+ if (cache<>nil) then
+ begin
+  if (cache[symnum].sym<>nil) then
+  begin
+   defobj_out:=cache[symnum].obj;
+   Exit(cache[symnum].sym);
+  end;
+ end;
+
+ def:=nil;
+ defobj_out:=nil;
+
+ err:=refobj^.rel_data^.symtab_size div SizeOf(elf64_sym);
+ if (symnum<=err) then Exit(nil);
+
+ ref:=refobj^.rel_data^.symtab_addr + symnum;
+
+ str:=obj_get_str(refobj,ref^.st_name);
+
+ if (ELF64_ST_BIND(ref^.st_info)=STB_LOCAL) then
+ begin
+  def   :=ref;
+  defobj:=refobj;
+ end else
+ begin
+  if (ELF64_ST_TYPE(ref^.st_info)=STT_SECTION) then
+  begin
+   Writeln(StdErr,'find_symdef:',refobj^.lib_path,': Bogus symbol table entry ',symnum);
+  end;
+
+  req:=Default(t_SymLook);
+
+  req.symbol:=str;
+  req.flags :=(flags or SYMLOOK_MANGLED);
+  req.obj   :=refobj;
+
+  //convert_mangled_name_to_long
+  //req.libname
+  //req.name
+
+  err:=symlook_default(@req, refobj);
+  if (err=0) then
+  begin
+   def   :=req.sym_out;
+   defobj:=req.defobj_out;
+  end;
+ end;
+
+ if (def=nil) then
+ begin
+  if (ELF64_ST_BIND(ref^.st_info)=STB_WEAK) then
+  begin
+   def   :=@dynlibs_info.sym_zero;
+   defobj:=dynlibs_info.libprogram;
+  end;
+ end;
+
+ if (def<>nil) then
+ begin
+  defobj_out:=defobj;
+
+  if (cache<>nil) then
+  begin
+   cache[symnum].sym:=def;
+   cache[symnum].obj:=defobj;
+  end;
+ end;
+
+ Exit(def);
 end;
 
 

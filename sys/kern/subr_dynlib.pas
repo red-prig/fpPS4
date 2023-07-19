@@ -47,13 +47,13 @@ type
 
   execpath:pchar;
 
-  buckets:PQWORD;
+  buckets:PDWORD;
   buckets_size:QWORD;
 
-  chains:PQWORD;
+  chains:PDWORD;
   chains_size:QWORD;
 
-  hashsize:DWORD;
+  nbuckets:DWORD;
   dynsymcount:DWORD;
 
   original_filename:pchar;
@@ -199,7 +199,7 @@ type
   proc_param_addr:pSceProcParam;
   proc_param_size:QWORD;
 
-  sceKernelReportUnpatchedFunctionCall:Pointer;
+  rep_unpf:Pointer;
   __freeze:Pointer;
   sysc_s00:Pointer;
   sysc_e00:Pointer;
@@ -681,14 +681,14 @@ begin
 
  src:=new^.rel_data^.hash_addr;
 
- new^.rel_data^.hashsize    :=PDWORD(src)^;
- new^.rel_data^.buckets_size:=new^.rel_data^.hashsize shl 2;
+ new^.rel_data^.nbuckets    :=PDWORD(src)^;
+ new^.rel_data^.buckets_size:=new^.rel_data^.nbuckets shl 2;
 
  new^.rel_data^.buckets    :=Pointer(QWORD(src) + 8);
  new^.rel_data^.dynsymcount:=PDWORD (QWORD(src) + 4)^;
  new^.rel_data^.chains_size:=new^.rel_data^.dynsymcount shl 2;
 
- new^.rel_data^.chains:=Pointer(QWORD(src) + (new^.rel_data^.hashsize + 2) * 4);
+ new^.rel_data^.chains:=Pointer(QWORD(src) + (new^.rel_data^.nbuckets + 2) * 4);
 
 end;
 
@@ -1744,13 +1744,13 @@ begin
  end;
 end;
 
-procedure donelist_init(var dlp:t_DoneList); inline;
+procedure donelist_init(var dlp:t_DoneList);
 begin
  SetLength(dlp.objs,dynlibs_info.obj_count);
  dlp.num_used:=0;
 end;
 
-function donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean; inline;
+function donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean;
 var
  i:DWORD;
 begin

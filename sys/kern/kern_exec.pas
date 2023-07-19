@@ -963,7 +963,7 @@ begin
   lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
- dynlibs_info.sceKernelReportUnpatchedFunctionCall:=do_dlsym(dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
+ dynlibs_info.rep_unpf:=do_dlsym(dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
  dynlibs_info.__freeze:=do_dlsym(dynlibs_info.libkernel,'__freeze','libkernel_sysc_se', 0);
  dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
  dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
