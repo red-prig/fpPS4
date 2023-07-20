@@ -55,9 +55,7 @@ uses
  sys_event,
  kern_event,
  machdep,
- kern_dlsym,
- kern_named_id,
- kern_namedobj;
+ kern_dlsym;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -755,7 +753,7 @@ begin
  Result:=0;
 
  TAILQ_INIT(@dynlibs_info.list_global);
- TAILQ_INIT(@dynlibs_info.needed);
+ TAILQ_INIT(@dynlibs_info.list_main);
  TAILQ_INIT(@dynlibs_info.init_list);
  TAILQ_INIT(@dynlibs_info.fini_list);
  TAILQ_INIT(@dynlibs_info.obj_list);
@@ -920,6 +918,7 @@ var
  str:RawByteString;
  err:Integer;
  key:Integer;
+ flags:DWORD;
 begin
  err:=0;
 
@@ -931,8 +930,11 @@ begin
 
  if (imgp^.dyn_exist=0) then goto _dyn_not_exist;
 
+ flags:=$40; //priv libs?
+ if (budget_ptype_caller=0) then flags:=flags or $20; //vm_map_wire
+
  str:='libkernel.sprx';
- lib:=preload_prx_modules(pchar(str),err);
+ lib:=preload_prx_modules(pchar(str),flags,err);
  dynlibs_info.libkernel:=lib;
 
  if (lib=nil) then
@@ -941,7 +943,7 @@ begin
  end;
 
  str:='libSceLibcInternal.sprx';
- lib:=preload_prx_modules(pchar(str),err);
+ lib:=preload_prx_modules(pchar(str),flags,err);
 
  if (lib=nil) then
  begin
@@ -951,7 +953,7 @@ begin
  lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (lib<>nil) do
  begin
-  objlist_push_tail(dynlibs_info.needed,lib);
+  objlist_push_tail(dynlibs_info.list_main,lib);
 
   Inc(lib^.ref_count);
 
@@ -984,18 +986,10 @@ begin
  while (lib<>nil) do
  begin
 
-  lib^.desc.free:=nil;
-  lib^.objt:=NAMED_DYNL;
-  lib^.name:='';
-
-  key:=-1;
-  if not id_name_new(@named_table,lib,@key) then
+  if not alloc_obj_id(lib) then
   begin
    Assert(False,'ID for PRX cannot be assigned.');
   end;
-
-  lib^.id:=key;
-  id_release(lib);
 
   //
   lib:=TAILQ_NEXT(lib,@lib^.link);

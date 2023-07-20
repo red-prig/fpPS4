@@ -89,6 +89,7 @@ uses
  kern_callout,
  kern_timeout,
  kern_exec,
+ kern_dynlib,
  vmparam;
 
 const

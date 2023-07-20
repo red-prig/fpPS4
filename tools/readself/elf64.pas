@@ -150,11 +150,16 @@ Const
  DT_VERDEF                   =$6ffffffc;
  DT_VERDEFNUM                =$6ffffffd;
 
- DF_ORIGIN    =$1;
- DF_SYMBOLIC  =$2;
- DF_TEXTREL   =$4;
- DF_BIND_NOW  =$8;
+ DF_ORIGIN    =$01;
+ DF_SYMBOLIC  =$02;
+ DF_TEXTREL   =$04;
+ DF_BIND_NOW  =$08;
  DF_STATIC_TLS=$10;
+
+ DF_1_BIND_NOW=$01;
+ DF_1_NODELETE=$08;
+ DF_1_LOADFLTR=$10;
+ DF_1_NOOPEN  =$40;
 
  SHT_SYMTAB=2;
  SHT_STRTAB=3;
@@ -631,7 +636,7 @@ function SELF_WINDOW(i:Int64):Integer; inline;
 function SELF_BLOCK_SIZE(i:Int64):Int64; inline;
 function SELF_SEGMENT_INDEX(i:Int64):Integer; inline;
 
-function ELF64_R_SYM(i:QWORD):DWORD; inline;
+function ELF64_R_SYM (i:QWORD):DWORD; inline;
 function ELF64_R_TYPE(i:QWORD):DWORD; inline;
 function ELF64_ST_BIND(i:Byte):Byte; inline;
 function ELF64_ST_TYPE(i:Byte):Byte; inline;

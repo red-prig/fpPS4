@@ -1,6 +1,7 @@
 unit kern_dlsym;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -8,8 +9,6 @@ uses
  sysutils,
  mqueue,
  elf64,
- kern_thr,
- kern_rtld,
  subr_dynlib;
 
 const
@@ -23,8 +22,8 @@ type
  p_SymLook=^t_SymLook;
  t_SymLook=record
   name      :pchar;
-  modname   :pchar;
   libname   :pchar;
+  modname   :pchar;
   symbol    :pchar;
   hash      :QWORD;
   flags     :DWORD;
@@ -129,7 +128,7 @@ function symlook_list(req:p_SymLook;var objlist:TAILQ_HEAD;var dlp:t_DoneList):I
 label
  _symlook_obj;
 var
- libname:pchar;
+ modname:pchar;
  req1:t_SymLook;
  elm:p_Objlist_Entry;
  def:p_elf64_sym;
@@ -142,17 +141,17 @@ begin
 
  if ((req^.flags and SYMLOOK_MANGLED)=0) then
  begin
-  libname:=req^.libname;
+  modname:=req^.modname;
  end else
  if (req^.symbol=nil) then
  begin
-  libname:=nil;
+  modname:=nil;
  end else
  begin
-  libname:=strrscan(req^.symbol,'#');
-  if (libname<>nil) then
+  modname:=strrscan(req^.symbol,'#');
+  if (modname<>nil) then
   begin
-   libname:=libname+1;
+   modname:=modname+1;
   end;
  end;
 
@@ -165,7 +164,7 @@ begin
  begin
   if not donelist_check(dlp,elm^.obj) then
   begin
-   if (libname=nil) then
+   if (modname=nil) then
    begin
     _symlook_obj:
     req1:=req^;
@@ -182,14 +181,14 @@ begin
     end;
    end else
    begin
-    lib_entry:=TAILQ_FIRST(@elm^.obj^.lib_table);
+    lib_entry:=TAILQ_FIRST(@elm^.obj^.mod_table);
     while (lib_entry<>nil) do
     begin
      if (lib_entry^.dval.id=0) then //export?
      begin
       offset:=lib_entry^.dval.name_offset;
       str:=obj_get_str(elm^.obj,offset);
-      if (StrComp(str,libname)=0) then
+      if (StrComp(str,modname)=0) then
       begin
        goto _symlook_obj;
       end;
@@ -224,7 +223,7 @@ begin
     (ELF64_ST_BIND(req^.sym_out^.st_info)=STB_WEAK) then
  begin
 
-  Result:=symlook_list(@req1, dynlibs_info.needed, donelist);
+  Result:=symlook_list(@req1, dynlibs_info.list_main, donelist);
 
   if (Result=0) then
   begin
@@ -330,19 +329,19 @@ var
 begin
  Result:=nil;
 
- if TAILQ_EMPTY(@obj^.lib_table) then
+ if TAILQ_EMPTY(@obj^.mod_table) then
  begin
-  req.libname:=nil;
+  req.modname:=nil;
  end else
  begin
-  req.libname:=nil;
-  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+  req.modname:=nil;
+  lib_entry:=TAILQ_FIRST(@obj^.mod_table);
   while (lib_entry<>nil) do
   begin
    if (lib_entry^.dval.id=0) then //export?
    begin
     offset:=lib_entry^.dval.name_offset;
-    req.libname:=obj_get_str(obj,offset);
+    req.modname:=obj_get_str(obj,offset);
     Break;
    end;
    lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
@@ -353,17 +352,17 @@ begin
 
  if ((flags and SYMLOOK_BASE64)=0) then
  begin
-  req.modname:=modname;
+  req.libname:=modname;
   if (modname=nil) then
   begin
-   req.modname:=req.libname;
+   req.libname:=req.modname;
   end;
   base64:=convert_raw_symbol_str_to_base64(symbol);
   symbol:=pchar(base64);
  end else
  begin
-  req.modname:=nil;
   req.libname:=nil;
+  req.modname:=nil;
  end;
 
  req.symbol    :=nil;

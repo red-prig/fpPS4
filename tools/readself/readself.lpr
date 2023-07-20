@@ -1407,6 +1407,23 @@ begin
  end;
 end;
 
+function upgrade_ptrv(pp:Pointer;obj:p_elf_obj):Pointer;
+var
+ offset:Int64;
+begin
+ Result:=nil;
+ offset:=Int64(pp)-Int64(obj^.elf.hdr);
+ offset:=get_rela_by_offset(obj,offset);
+ if (offset<>-1) then
+ begin
+  Result:=Pointer(offset)+$1000000;
+ end else
+ if (PInt64(pp)^<>0) then
+ begin
+  Result:=PPointer(pp)^+$1000000;
+ end;
+end;
+
 procedure WOfsstr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
 var
  p:PChar;
@@ -1466,6 +1483,21 @@ begin
  end;
 end;
 
+procedure WOfsPtr(const prefix:RawByteString;pp:PPointer;obj:p_elf_obj);
+var
+ p:PQWORD;
+begin
+ p:=upgrade_ptrv(pp,obj);
+
+ if (p=nil) then
+ begin
+  Writeln(prefix,'null');
+ end else
+ begin
+  Writeln(prefix,'0x',HexStr(p),' (vaddr)');
+ end;
+end;
+
 procedure W_sceLibcMallocReplace(pp:PPointer;obj:p_elf_obj);
 var
  p:PsceLibcMallocReplace;
@@ -1486,18 +1518,18 @@ begin
  if (Pointer(@p^.Size                   )+SizeOf(p^.Size                   )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
  if (Pointer(@p^.Unknown1               )+SizeOf(p^.Unknown1               )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
 
- if (Pointer(@p^.user_malloc_init       )+SizeOf(p^.user_malloc_init       )<=e) then WOfsQwr('     user_malloc_init               :',@p^.user_malloc_init       ,obj);
- if (Pointer(@p^.user_malloc_finalize   )+SizeOf(p^.user_malloc_finalize   )<=e) then WOfsQwr('     user_malloc_finalize           :',@p^.user_malloc_finalize   ,obj);
- if (Pointer(@p^.user_malloc            )+SizeOf(p^.user_malloc            )<=e) then WOfsQwr('     user_malloc                    :',@p^.user_malloc            ,obj);
- if (Pointer(@p^.user_free              )+SizeOf(p^.user_free              )<=e) then WOfsQwr('     user_free                      :',@p^.user_free              ,obj);
- if (Pointer(@p^.user_calloc            )+SizeOf(p^.user_calloc            )<=e) then WOfsQwr('     user_calloc                    :',@p^.user_calloc            ,obj);
- if (Pointer(@p^.user_realloc           )+SizeOf(p^.user_realloc           )<=e) then WOfsQwr('     user_realloc                   :',@p^.user_realloc           ,obj);
- if (Pointer(@p^.user_memalign          )+SizeOf(p^.user_memalign          )<=e) then WOfsQwr('     user_memalign                  :',@p^.user_memalign          ,obj);
- if (Pointer(@p^.user_reallocalign      )+SizeOf(p^.user_reallocalign      )<=e) then WOfsQwr('     user_reallocalign              :',@p^.user_reallocalign      ,obj);
- if (Pointer(@p^.user_posix_memalign    )+SizeOf(p^.user_posix_memalign    )<=e) then WOfsQwr('     user_posix_memalign            :',@p^.user_posix_memalign    ,obj);
- if (Pointer(@p^.user_malloc_stats      )+SizeOf(p^.user_malloc_stats      )<=e) then WOfsQwr('     user_malloc_stats              :',@p^.user_malloc_stats      ,obj);
- if (Pointer(@p^.user_malloc_stats_fast )+SizeOf(p^.user_malloc_stats_fast )<=e) then WOfsQwr('     user_malloc_stats_fast         :',@p^.user_malloc_stats_fast ,obj);
- if (Pointer(@p^.user_malloc_usable_size)+SizeOf(p^.user_malloc_usable_size)<=e) then WOfsQwr('     user_malloc_usable_size        :',@p^.user_malloc_usable_size,obj);
+ if (Pointer(@p^.user_malloc_init       )+SizeOf(p^.user_malloc_init       )<=e) then WOfsPtr('     user_malloc_init               :',@p^.user_malloc_init       ,obj);
+ if (Pointer(@p^.user_malloc_finalize   )+SizeOf(p^.user_malloc_finalize   )<=e) then WOfsPtr('     user_malloc_finalize           :',@p^.user_malloc_finalize   ,obj);
+ if (Pointer(@p^.user_malloc            )+SizeOf(p^.user_malloc            )<=e) then WOfsPtr('     user_malloc                    :',@p^.user_malloc            ,obj);
+ if (Pointer(@p^.user_free              )+SizeOf(p^.user_free              )<=e) then WOfsPtr('     user_free                      :',@p^.user_free              ,obj);
+ if (Pointer(@p^.user_calloc            )+SizeOf(p^.user_calloc            )<=e) then WOfsPtr('     user_calloc                    :',@p^.user_calloc            ,obj);
+ if (Pointer(@p^.user_realloc           )+SizeOf(p^.user_realloc           )<=e) then WOfsPtr('     user_realloc                   :',@p^.user_realloc           ,obj);
+ if (Pointer(@p^.user_memalign          )+SizeOf(p^.user_memalign          )<=e) then WOfsPtr('     user_memalign                  :',@p^.user_memalign          ,obj);
+ if (Pointer(@p^.user_reallocalign      )+SizeOf(p^.user_reallocalign      )<=e) then WOfsPtr('     user_reallocalign              :',@p^.user_reallocalign      ,obj);
+ if (Pointer(@p^.user_posix_memalign    )+SizeOf(p^.user_posix_memalign    )<=e) then WOfsPtr('     user_posix_memalign            :',@p^.user_posix_memalign    ,obj);
+ if (Pointer(@p^.user_malloc_stats      )+SizeOf(p^.user_malloc_stats      )<=e) then WOfsPtr('     user_malloc_stats              :',@p^.user_malloc_stats      ,obj);
+ if (Pointer(@p^.user_malloc_stats_fast )+SizeOf(p^.user_malloc_stats_fast )<=e) then WOfsPtr('     user_malloc_stats_fast         :',@p^.user_malloc_stats_fast ,obj);
+ if (Pointer(@p^.user_malloc_usable_size)+SizeOf(p^.user_malloc_usable_size)<=e) then WOfsPtr('     user_malloc_usable_size        :',@p^.user_malloc_usable_size,obj);
 end;
 
 procedure W_sceLibcNewReplace(pp:PPointer;obj:p_elf_obj);
@@ -1520,18 +1552,18 @@ begin
  if (Pointer(@p^.Size               )+SizeOf(p^.Size               )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
  if (Pointer(@p^.Unknown1           )+SizeOf(p^.Unknown1           )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
 
- if (Pointer(@p^.user_new_1         )+SizeOf(p^.user_new_1         )<=e) then WOfsQwr('     user_new_1                     :',@p^.user_new_1         ,obj);
- if (Pointer(@p^.user_new_2         )+SizeOf(p^.user_new_2         )<=e) then WOfsQwr('     user_new_2                     :',@p^.user_new_2         ,obj);
- if (Pointer(@p^.user_new_array_1   )+SizeOf(p^.user_new_array_1   )<=e) then WOfsQwr('     user_new_array_1               :',@p^.user_new_array_1   ,obj);
- if (Pointer(@p^.user_new_array_2   )+SizeOf(p^.user_new_array_2   )<=e) then WOfsQwr('     user_new_array_2               :',@p^.user_new_array_2   ,obj);
- if (Pointer(@p^.user_delete_1      )+SizeOf(p^.user_delete_1      )<=e) then WOfsQwr('     user_delete_1                  :',@p^.user_delete_1      ,obj);
- if (Pointer(@p^.user_delete_2      )+SizeOf(p^.user_delete_2      )<=e) then WOfsQwr('     user_delete_2                  :',@p^.user_delete_2      ,obj);
- if (Pointer(@p^.user_delete_array_1)+SizeOf(p^.user_delete_array_1)<=e) then WOfsQwr('     user_delete_array_1            :',@p^.user_delete_array_1,obj);
- if (Pointer(@p^.user_delete_array_2)+SizeOf(p^.user_delete_array_2)<=e) then WOfsQwr('     user_delete_array_2            :',@p^.user_delete_array_2,obj);
- if (Pointer(@p^.user_delete_3      )+SizeOf(p^.user_delete_3      )<=e) then WOfsQwr('     user_delete_3                  :',@p^.user_delete_3      ,obj);
- if (Pointer(@p^.user_delete_4      )+SizeOf(p^.user_delete_4      )<=e) then WOfsQwr('     user_delete_4                  :',@p^.user_delete_4      ,obj);
- if (Pointer(@p^.user_delete_array_3)+SizeOf(p^.user_delete_array_3)<=e) then WOfsQwr('     user_delete_array_3            :',@p^.user_delete_array_3,obj);
- if (Pointer(@p^.user_delete_array_4)+SizeOf(p^.user_delete_array_4)<=e) then WOfsQwr('     user_delete_array_4            :',@p^.user_delete_array_4,obj);
+ if (Pointer(@p^.user_new_1         )+SizeOf(p^.user_new_1         )<=e) then WOfsPtr('     user_new_1                     :',@p^.user_new_1         ,obj);
+ if (Pointer(@p^.user_new_2         )+SizeOf(p^.user_new_2         )<=e) then WOfsPtr('     user_new_2                     :',@p^.user_new_2         ,obj);
+ if (Pointer(@p^.user_new_array_1   )+SizeOf(p^.user_new_array_1   )<=e) then WOfsPtr('     user_new_array_1               :',@p^.user_new_array_1   ,obj);
+ if (Pointer(@p^.user_new_array_2   )+SizeOf(p^.user_new_array_2   )<=e) then WOfsPtr('     user_new_array_2               :',@p^.user_new_array_2   ,obj);
+ if (Pointer(@p^.user_delete_1      )+SizeOf(p^.user_delete_1      )<=e) then WOfsPtr('     user_delete_1                  :',@p^.user_delete_1      ,obj);
+ if (Pointer(@p^.user_delete_2      )+SizeOf(p^.user_delete_2      )<=e) then WOfsPtr('     user_delete_2                  :',@p^.user_delete_2      ,obj);
+ if (Pointer(@p^.user_delete_array_1)+SizeOf(p^.user_delete_array_1)<=e) then WOfsPtr('     user_delete_array_1            :',@p^.user_delete_array_1,obj);
+ if (Pointer(@p^.user_delete_array_2)+SizeOf(p^.user_delete_array_2)<=e) then WOfsPtr('     user_delete_array_2            :',@p^.user_delete_array_2,obj);
+ if (Pointer(@p^.user_delete_3      )+SizeOf(p^.user_delete_3      )<=e) then WOfsPtr('     user_delete_3                  :',@p^.user_delete_3      ,obj);
+ if (Pointer(@p^.user_delete_4      )+SizeOf(p^.user_delete_4      )<=e) then WOfsPtr('     user_delete_4                  :',@p^.user_delete_4      ,obj);
+ if (Pointer(@p^.user_delete_array_3)+SizeOf(p^.user_delete_array_3)<=e) then WOfsPtr('     user_delete_array_3            :',@p^.user_delete_array_3,obj);
+ if (Pointer(@p^.user_delete_array_4)+SizeOf(p^.user_delete_array_4)<=e) then WOfsPtr('     user_delete_array_4            :',@p^.user_delete_array_4,obj);
 end;
 
 procedure W_sceLibcMallocReplaceForTls(pp:PPointer;obj:p_elf_obj);
@@ -1554,11 +1586,11 @@ begin
  if (Pointer(@p^.Size                       )+SizeOf(p^.Size                       )<=e) then Writeln('     Size                           :0x',HexStr(p^.Size    ,8));
  if (Pointer(@p^.Unknown1                   )+SizeOf(p^.Unknown1                   )<=e) then Writeln('     Unknown1                       :0x',HexStr(p^.Unknown1,8));
 
- if (Pointer(@p^.user_malloc_init_for_tls   )+SizeOf(p^.user_malloc_init_for_tls   )<=e) then WOfsQwr('     user_malloc_init_for_tls       :',@p^.user_malloc_init_for_tls   ,obj);
- if (Pointer(@p^.user_malloc_fini_for_tls   )+SizeOf(p^.user_malloc_fini_for_tls   )<=e) then WOfsQwr('     user_malloc_fini_for_tls       :',@p^.user_malloc_fini_for_tls   ,obj);
- if (Pointer(@p^.user_malloc_for_tls        )+SizeOf(p^.user_malloc_for_tls        )<=e) then WOfsQwr('     user_malloc_for_tls            :',@p^.user_malloc_for_tls        ,obj);
- if (Pointer(@p^.user_posix_memalign_for_tls)+SizeOf(p^.user_posix_memalign_for_tls)<=e) then WOfsQwr('     user_posix_memalign_for_tls    :',@p^.user_posix_memalign_for_tls,obj);
- if (Pointer(@p^.user_free_for_tls          )+SizeOf(p^.user_free_for_tls          )<=e) then WOfsQwr('     user_free_for_tls              :',@p^.user_free_for_tls          ,obj);
+ if (Pointer(@p^.user_malloc_init_for_tls   )+SizeOf(p^.user_malloc_init_for_tls   )<=e) then WOfsPtr('     user_malloc_init_for_tls       :',@p^.user_malloc_init_for_tls   ,obj);
+ if (Pointer(@p^.user_malloc_fini_for_tls   )+SizeOf(p^.user_malloc_fini_for_tls   )<=e) then WOfsPtr('     user_malloc_fini_for_tls       :',@p^.user_malloc_fini_for_tls   ,obj);
+ if (Pointer(@p^.user_malloc_for_tls        )+SizeOf(p^.user_malloc_for_tls        )<=e) then WOfsPtr('     user_malloc_for_tls            :',@p^.user_malloc_for_tls        ,obj);
+ if (Pointer(@p^.user_posix_memalign_for_tls)+SizeOf(p^.user_posix_memalign_for_tls)<=e) then WOfsPtr('     user_posix_memalign_for_tls    :',@p^.user_posix_memalign_for_tls,obj);
+ if (Pointer(@p^.user_free_for_tls          )+SizeOf(p^.user_free_for_tls          )<=e) then WOfsPtr('     user_free_for_tls              :',@p^.user_free_for_tls          ,obj);
 end;
 
 procedure W_sceLibcParam(pp:PPointer;obj:p_elf_obj);
@@ -1817,13 +1849,12 @@ begin
  end;
 end;
 
+procedure print_string_dump(obj:p_elf_obj);
 type
  TLIBRARY=record
   Name  :RawByteString;
-  Import:Boolean
+  Import:Boolean;
  end;
-
-procedure print_string_dump(obj:p_elf_obj);
 var
  d_entry:p_elf64_dyn;
  s_entry:p_elf64_sym;
@@ -1929,6 +1960,193 @@ begin
  Writeln();
 end;
 
+procedure print_libinfo_dump(obj:p_elf_obj);
+type
+ TLIBRARY=record
+  Name  :RawByteString;
+  vers  :DWORD;
+  attr  :DWORD;
+  Import:Boolean;
+ end;
+var
+ d_entry:p_elf64_dyn;
+ i,count:Integer;
+ lu:TLibraryValue;
+ la:TLibraryAttr;
+ str:PAnsiChar;
+
+ lib:TLIBRARY;
+
+ lib_array:array of TLIBRARY;
+ mod_array:array of TLIBRARY;
+
+ procedure set_lib(id:Word;lib:TLIBRARY); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(lib_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(lib_array,i);
+  end;
+  lib_array[id]:=lib;
+ end;
+
+ procedure set_lib_attr(id:Word;attr:DWORD); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(lib_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(lib_array,i);
+  end;
+  lib_array[id].attr:=attr;
+ end;
+
+ procedure set_mod(id:Word;lib:TLIBRARY); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(mod_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(mod_array,i);
+  end;
+  mod_array[id]:=lib;
+ end;
+
+ procedure set_mod_attr(id:Word;attr:DWORD); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(mod_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(mod_array,i);
+  end;
+  mod_array[id].attr:=attr;
+ end;
+
+begin
+ SetLength(lib_array,0);
+
+ if (obj^.dyn_addr<>nil) then
+ begin
+  d_entry:=obj^.dyn_addr;
+  count:=obj^.dyn_size div sizeof(elf64_dyn);
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+
+   case d_entry^.d_tag of
+
+    DT_SCE_MODULE_INFO,
+    DT_SCE_NEEDED_MODULE:
+      begin
+       lu.value:=d_entry^.d_un.d_val;
+       str:=@obj^.dt_strtab_addr[lu.name_offset];
+
+       lib.Name  :=str;
+       lib.vers  :=lu.version;
+       lib.attr  :=0;
+       lib.Import:=(d_entry^.d_tag=DT_SCE_NEEDED_MODULE);
+
+       set_mod(lu.id,lib);
+      end;
+
+    DT_SCE_IMPORT_LIB,
+    DT_SCE_EXPORT_LIB:
+      begin
+       lu.value:=d_entry^.d_un.d_val;
+       str:=@obj^.dt_strtab_addr[lu.name_offset];
+
+       lib.Name  :=str;
+       lib.vers  :=lu.version;
+       lib.attr  :=0;
+       lib.Import:=(d_entry^.d_tag=DT_SCE_IMPORT_LIB);
+
+       set_lib(lu.id,lib);
+      end;
+
+    DT_SCE_MODULE_ATTR:
+      begin
+       la.value:=d_entry^.d_un.d_val;
+       set_mod_attr(la.id,la.attr);
+      end;
+
+    DT_SCE_EXPORT_LIB_ATTR,
+    DT_SCE_IMPORT_LIB_ATTR:
+      begin
+       la.value:=d_entry^.d_un.d_val;
+       set_lib_attr(la.id,la.attr);
+      end
+
+    else;
+   end;
+
+   Inc(d_entry);
+  end;
+ end;
+
+ count:=Length(mod_array);
+ if (count<>0) then
+ begin
+  Writeln('Modinfo table');
+  Writeln('  Id Type   Ver  Attr Name');
+
+  For i:=0 to count-1 do
+   if (mod_array[i].Name<>'') then
+   begin
+    Write(' ',i:3,' ');
+
+    Case mod_array[i].Import of
+     True :Write('Import ');
+     False:Write('Export ');
+    end;
+
+    Write(HexStr(mod_array[i].vers,4),' ');
+
+    Write(HexStr(mod_array[i].attr,4),' ');
+
+    Writeln(mod_array[i].Name);
+   end;
+ end;
+
+ Writeln();
+
+ count:=Length(lib_array);
+ if (count<>0) then
+ begin
+  Writeln('Libinfo table');
+  Writeln('  Id Type   Ver  Attr Name');
+
+  For i:=0 to count-1 do
+   if (lib_array[i].Name<>'') then
+   begin
+    Write(' ',i:3,' ');
+
+    Case lib_array[i].Import of
+     True :Write('Import ');
+     False:Write('Export ');
+    end;
+
+    Write(HexStr(lib_array[i].vers,4),' ');
+
+    Write(HexStr(lib_array[i].attr,4),' ');
+
+    Writeln(lib_array[i].Name);
+   end;
+ end;
+
+ Writeln();
+end;
+
 type
  t_print_param=(
   pp_file_size,
@@ -1945,7 +2163,8 @@ type
   pp_sce_moduleparam,
   pp_tls,
   pp_string_dump,
-  pp_authinfo_dump
+  pp_authinfo_dump,
+  pp_libinfo_dump
  );
  t_print_param_set=Set of t_print_param;
 
@@ -1991,6 +2210,7 @@ begin
    '-t','--tls'            :print_param:=print_param+[pp_tls            ];
    '-p','--string-dump'    :print_param:=print_param+[pp_string_dump    ];
    '-i','--authinfo-dump'  :print_param:=print_param+[pp_authinfo_dump  ];
+   '-L','--libinfo-dump'   :print_param:=print_param+[pp_libinfo_dump   ];
    else
     FileName:=S;
   end;
@@ -2025,6 +2245,7 @@ begin
   Writeln('  -t --tls             Display the tls data');
   Writeln('  -p --string-dump     Dump the contents of symbols');
   Writeln('  -i --authinfo-dump   Dump the Program Identification Header');
+  Writeln('  -L --libinfo-dump    Dump the names of libs');
   Exit;
  end;
 
@@ -2069,8 +2290,8 @@ begin
    if (pp_sce_procparam   in print_param) then print_elf_sce_procparam  (@obj);
    if (pp_sce_moduleparam in print_param) then print_elf_sce_moduleparam(@obj);
    if (pp_tls             in print_param) then print_elf_tls            (@obj);
-
    if (pp_string_dump     in print_param) then print_string_dump        (@obj);
+   if (pp_libinfo_dump    in print_param) then print_libinfo_dump       (@obj);
   end;
 
  end else

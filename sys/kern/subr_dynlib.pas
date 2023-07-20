@@ -11,7 +11,8 @@ uses
  elf64,
  kern_thr,
  kern_rtld,
- kern_named_id;
+ kern_named_id,
+ kern_sx;
 
 type
  p_rel_data=^t_rel_data;
@@ -97,7 +98,7 @@ type
 
   needed     :TAILQ_HEAD; //Needed_Entry
   lib_table  :TAILQ_HEAD; //Lib_Entry
-  //lib_modules:TAILQ_HEAD; //Lib_Entry
+  mod_table  :TAILQ_HEAD; //Lib_Entry
   names      :TAILQ_HEAD; //Name_Entry
 
   init_proc_addr:Pointer;
@@ -177,12 +178,14 @@ type
 
  p_dynlibs_info=^t_dynlibs_info;
  t_dynlibs_info=record
+  lock       :t_sx;
+
   obj_list   :TAILQ_HEAD; //p_lib_info
   libprogram :p_lib_info;
   libkernel  :p_lib_info;
   obj_count  :Integer;
   list_global:TAILQ_HEAD; //p_Objlist_Entry
-  needed     :TAILQ_HEAD; //p_Objlist_Entry
+  list_main  :TAILQ_HEAD; //p_Objlist_Entry
   init_list  :TAILQ_HEAD; //p_Objlist_Entry
   fini_list  :TAILQ_HEAD; //p_Objlist_Entry
 
@@ -207,8 +210,10 @@ type
   sym_zero:elf64_sym;
 
   dyn_non_exist:Integer;
-
  end;
+
+procedure dynlibs_lock;
+procedure dynlibs_unlock;
 
 function  obj_new():p_lib_info;
 procedure obj_free(lib:p_lib_info);
@@ -222,7 +227,7 @@ procedure object_add_name(obj:p_lib_info;name:pchar);
 function  object_match_name(obj:p_lib_info;name:pchar):Boolean;
 
 function  Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
-function  Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
+function  Lib_new(d_val:QWORD;import:Word):p_Lib_Entry;
 
 procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
 
@@ -263,13 +268,22 @@ procedure unref_dag(root:p_lib_info);
 
 function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
 
-function  do_load_object(path:pchar;var err:Integer):p_lib_info;
+function  do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 procedure unload_object(root:p_lib_info);
 
 function  relocate_object(lib:p_lib_info):Integer;
+function  dynlib_load_relocate():Integer;
 
-function  preload_prx_modules(path:pchar;var err:Integer):p_lib_info;
-function  load_prx(path:pchar;var plib:p_lib_info):Integer;
+function  preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
+function  load_prx(path:pchar;flags:DWORD;var plib:p_lib_info):Integer;
+
+function  alloc_obj_id(lib:p_lib_info):Boolean;
+function  free_obj_id (id:Integer):Boolean;
+function  find_obj_id (id:Integer):p_lib_info;
+
+function  find_obj_by_handle(id:Integer):p_lib_info;
+
+function  dynlib_load_needed_shared_objects():Integer;
 
 var
  dynlibs_info:t_dynlibs_info;
@@ -294,7 +308,17 @@ uses
  vfs_subr,
  vnode_if,
  kern_reloc,
- kern_dlsym;
+ kern_namedobj;
+
+procedure dynlibs_lock;
+begin
+ sx_xlock(@dynlibs_info.lock);
+end;
+
+procedure dynlibs_unlock;
+begin
+ sx_xunlock(@dynlibs_info.lock);
+end;
 
 function obj_new():p_lib_info;
 begin
@@ -302,7 +326,7 @@ begin
 
  TAILQ_INIT(@Result^.needed);
  TAILQ_INIT(@Result^.lib_table);
- //lib_modules
+ TAILQ_INIT(@Result^.mod_table);
  TAILQ_INIT(@Result^.names);
 
  TAILQ_INIT(@Result^.dldags);
@@ -808,6 +832,14 @@ begin
   libs:=TAILQ_FIRST(@lib^.lib_table);
  end;
 
+ libs:=TAILQ_FIRST(@lib^.mod_table);
+ while (libs<>nil) do
+ begin
+  TAILQ_REMOVE(@lib^.mod_table,libs,@libs^.link);
+  FreeMem(libs);
+  libs:=TAILQ_FIRST(@lib^.mod_table);
+ end;
+
  release_per_file_info_obj(lib);
 
  FreeMem(lib);
@@ -898,11 +930,11 @@ begin
  Move(str^,Result^.name,len);
 end;
 
-function Lib_new(d_tag:DWORD;d_val:QWORD):p_Lib_Entry;
+function Lib_new(d_val:QWORD;import:Word):p_Lib_Entry;
 begin
  Result:=AllocMem(SizeOf(Lib_Entry));
  QWORD(Result^.dval):=d_val;
- Result^.import:=ord(d_tag=DT_SCE_IMPORT_LIB);
+ Result^.import:=import;
 end;
 
 procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
@@ -1130,18 +1162,37 @@ begin
     DT_SCE_MODULE_INFO,
     DT_SCE_NEEDED_MODULE:
       begin
-       //need_module
+       lib_entry:=Lib_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_NEEDED_MODULE));
+       TAILQ_INSERT_TAIL(@lib^.mod_table,lib_entry,@lib_entry^.link);
       end;
 
     DT_SCE_MODULE_ATTR:
       begin
-       //dval
+       dval:=dt_ent^.d_un.d_val;
+
+       lib_entry:=TAILQ_FIRST(@lib^.mod_table);
+       while (lib_entry<>nil) do
+       begin
+        if (TLibraryAttr(dval).id=lib_entry^.dval.id) then
+        begin
+         Break;
+        end;
+        lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+       end;
+
+       if (lib_entry=nil) then
+       begin
+        Writeln(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_MODULE_ATTR entry ',TLibraryAttr(dval).id);
+        Exit(EINVAL);
+       end;
+
+       lib_entry^.attr:=TLibraryAttr(dval).attr;
       end;
 
     DT_SCE_EXPORT_LIB,
     DT_SCE_IMPORT_LIB:
       begin
-       lib_entry:=Lib_new(dt_ent^.d_tag,dt_ent^.d_un.d_val);
+       lib_entry:=Lib_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_IMPORT_LIB));
        TAILQ_INSERT_TAIL(@lib^.lib_table,lib_entry,@lib_entry^.link);
       end;
 
@@ -1483,7 +1534,7 @@ begin
 
 end;
 
-function self_load_shared_object(path:pchar;new:p_lib_info):Integer;
+function self_load_shared_object(path:pchar;new:p_lib_info;wire:Integer):Integer;
 label
  _fail_dealloc;
 var
@@ -1909,7 +1960,7 @@ begin
  obj^.init_plt:=1;
 end;
 
-function do_load_object(path:pchar;var err:Integer):p_lib_info;
+function do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
  _inc_max,
  _error;
@@ -1924,7 +1975,7 @@ begin
 
  new:=obj_new();
 
- err:=self_load_shared_object(path,new);
+ err:=self_load_shared_object(path,new,ord((flags and $20)<>0));
  if (err<>0) then
  begin
   goto _error;
@@ -2064,7 +2115,7 @@ begin
 
 end;
 
-function preload_prx_modules(path:pchar;var err:Integer):p_lib_info;
+function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
  _do_load;
 var
@@ -2118,7 +2169,7 @@ begin
 
  _do_load:
 
- Result:=do_load_object(pchar(fname),err);
+ Result:=do_load_object(pchar(fname),flags,err);
 end;
 
 function relocate_object(lib:p_lib_info):Integer;
@@ -2140,18 +2191,32 @@ begin
    begin
     Result:=relocate_one_object(obj,ord(lib^.jmpslots_done=0));
    end;
-   obj:=obj^.link.tqe_next;
+   obj:=TAILQ_NEXT(obj,@obj^.link);
   end;
-
  end;
 
  change_relro_protection_all(VM_PROT_READ);
 end;
 
-function load_prx(path:pchar;var plib:p_lib_info):Integer;
+function dynlib_load_relocate():Integer;
+var
+ elm:p_Objlist_Entry;
+begin
+ elm:=TAILQ_FIRST(@dynlibs_info.list_main);
+ while (elm<>nil) do
+ begin
+  allocate_tls_offset(elm^.obj);
+  //
+  elm:=TAILQ_NEXT(elm,@elm^.link);
+ end;
+ //
+ Result:=relocate_object(dynlibs_info.libprogram);
+end;
+
+function load_prx(path:pchar;flags:DWORD;var plib:p_lib_info):Integer;
 var
  lib:p_lib_info;
- err:Integer;
+ err,pflags:Integer;
 begin
  Result:=0;
  err:=0;
@@ -2167,7 +2232,11 @@ begin
   lib:=TAILQ_NEXT(lib,@lib^.link);
  end;
 
- lib:=preload_prx_modules(path,err);
+ pflags:=2;
+ if ((flags and $00001)<>0) then pflags:=pflags or $20; //vm_map_wire
+ if ((flags and $10000)<>0) then pflags:=pflags or $40; //priv libs?
+
+ lib:=preload_prx_modules(path,pflags,err);
  if (lib=nil) then Exit(err);
 
  if (objlist_find(dynlibs_info.list_global,lib)=nil) then
@@ -2177,6 +2246,16 @@ begin
 
  if (lib^.ref_count=0) then
  begin
+  if ((flags and $20000)<>0) then //reset jmpslots_done?
+  begin
+   lib^.jmpslots_done:=0;
+  end;
+
+  if ((flags and $40000)<>0) then //reset on_fini_list?
+  begin
+   lib^.on_fini_list:=0;
+  end;
+
   init_dag(lib);
   ref_dag(lib);
 
@@ -2200,7 +2279,167 @@ begin
  Result:=0;
 end;
 
+function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
+begin
+ ////////
+end;
 
+function dynlib_unlink_imported_symbols(root:p_lib_info;libname:pchar):Integer;
+var
+ obj:p_lib_info;
+begin
+ Result:=change_relro_protection_all(VM_PROT_RW);
+ if (Result<>0) then Exit;
+
+ if (Result=0) then
+ begin
+  obj:=dynlibs_info.libprogram;
+
+  while (obj<>nil) do
+  begin
+   //dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
+
+
+
+
+   obj:=TAILQ_NEXT(obj,@obj^.link);
+  end;
+ end;
+
+ change_relro_protection_all(VM_PROT_READ);
+end;
+
+
+function unload_prx(lib:p_lib_info):Integer;
+var
+ lib_entry:p_Lib_Entry;
+ str:pchar;
+begin
+ if (lib^.ref_count=0) then
+ begin
+  Assert(False,'Invalid shared object handle');
+ end;
+ unref_dag(lib);
+
+ lib_entry:=TAILQ_FIRST(@lib^.mod_table);
+ while (lib_entry<>nil) do
+ begin
+  if (lib_entry^.dval.id=0) then
+  begin
+   str:=obj_get_str(lib,lib_entry^.dval.name_offset);
+
+   if (str<>nil) then
+   begin
+    Result:=dynlib_unlink_imported_symbols(lib,str);
+   end;
+
+
+
+   ////
+  end;
+
+
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+
+end;
+
+function alloc_obj_id(lib:p_lib_info):Boolean;
+var
+ key:Integer;
+begin
+ Result:=False;
+ if (lib^.id>0) then Exit(True);
+
+ lib^.desc.free:=nil;
+ lib^.objt:=NAMED_DYNL;
+ lib^.name:='';
+
+ key:=-1;
+ if id_name_new(@named_table,lib,@key) then
+ begin
+  lib^.id:=(key+1);
+  id_release(lib);
+  Result:=True;
+ end;
+end;
+
+function free_obj_id(id:Integer):Boolean;
+var
+ key:Integer;
+begin
+ if (id<=0) then Exit(True);
+
+ key:=id-1;
+ Result:=id_name_del(@named_table,key,NAMED_DYNL,nil);
+end;
+
+function find_obj_id(id:Integer):p_lib_info;
+var
+ key:Integer;
+begin
+ key:=id-1;
+
+ Result:=id_name_get(@named_table,key,NAMED_DYNL);
+ if (Result=nil) then Exit;
+
+ id_release(Result);
+end;
+
+function find_obj_by_handle(id:Integer):p_lib_info;
+var
+ lib:p_lib_info;
+begin
+ Result:=nil;
+
+ lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (lib<>nil) do
+ begin
+  if (lib^.id=id) then
+  begin
+   Exit(lib);
+  end;
+  //
+  lib:=TAILQ_NEXT(lib,@lib^.link);
+ end;
+end;
+
+function dynlib_load_needed_shared_objects():Integer;
+var
+ obj:p_lib_info;
+ needed:PPointer;
+ i:Integer;
+begin
+ obj:=dynlibs_info.libprogram;
+
+ if (obj<>nil) then
+ begin
+  i:=0;
+  repeat
+   needed:=@obj^.needed.tqh_first;
+   obj:=TAILQ_NEXT(obj,@obj^.link);
+   i:=(i+1)-ord(needed^=nil);
+  until (obj=nil);
+
+  if (i<0) then
+  begin
+   Writeln(StdErr,'dynlib_load_needed_shared_objects:','load_needed_objects() fails');
+   Exit(EINVAL);
+  end;
+ end;
+
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
+ begin
+  init_dag(obj);
+  ref_dag(obj);
+  //
+  obj:=TAILQ_NEXT(obj,@obj^.link);
+ end;
+
+ Result:=0;
+end;
 
 
 end.

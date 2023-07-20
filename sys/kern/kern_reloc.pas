@@ -7,13 +7,12 @@ interface
 
 uses
  sysutils,
- mqueue,
  elf64,
- kern_thr,
  kern_rtld,
  subr_dynlib;
 
 function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
+function check_copy_relocations(obj:p_lib_info):Integer;
 
 implementation
 
@@ -450,13 +449,41 @@ begin
   Exit;
  end;
 
- Result:=reloc_jmpslots(obj);
- if (Result<>0) then
+ if (jmpslots=1) then
  begin
-  Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
-  Exit;
+  Result:=reloc_jmpslots(obj);
+  if (Result<>0) then
+  begin
+   Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
+   Exit;
+  end;
  end;
 end;
+
+function check_copy_relocations(obj:p_lib_info):Integer;
+var
+ rela:p_elf64_rela;
+ i,count:Integer;
+begin
+ Result:=0;
+ if (obj=nil) then Exit;
+ if (obj^.rel_data=nil) then Exit;
+
+ rela :=obj^.rel_data^.rela_addr;
+ count:=obj^.rel_data^.rela_size div SizeOf(elf64_rela);
+
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  if (ELF64_R_TYPE(rela^.r_info)=R_X86_64_COPY) then
+  begin
+   Writeln(StdErr,'check_copy_relocations:','R_X86_64_COPY found in ',obj^.lib_path);
+   Exit(EINVAL);
+  end;
+  Inc(rela);
+ end;
+end;
+
 
 end.
 
