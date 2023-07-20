@@ -32,7 +32,7 @@ type
   sym_out   :p_elf64_sym;
  end;
 
-function do_dlsym(obj:p_lib_info;symbol,modname:pchar;flags:DWORD):Pointer;
+function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
 function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
 
 implementation
@@ -133,8 +133,6 @@ var
  elm:p_Objlist_Entry;
  def:p_elf64_sym;
  defobj:p_lib_info;
- lib_entry:p_Lib_Entry;
- offset:QWORD;
  str:pchar;
 begin
  Result:=0;
@@ -164,7 +162,7 @@ begin
  begin
   if not donelist_check(dlp,elm^.obj) then
   begin
-   if (modname=nil) then
+   if (modname=nil) then //any module?
    begin
     _symlook_obj:
     req1:=req^;
@@ -181,20 +179,10 @@ begin
     end;
    end else
    begin
-    lib_entry:=TAILQ_FIRST(@elm^.obj^.mod_table);
-    while (lib_entry<>nil) do
+    str:=get_mod_name(elm^.obj,0); //export=0
+    if (StrComp(str,modname)=0) then
     begin
-     if (lib_entry^.dval.id=0) then //export?
-     begin
-      offset:=lib_entry^.dval.name_offset;
-      str:=obj_get_str(elm^.obj,offset);
-      if (StrComp(str,modname)=0) then
-      begin
-       goto _symlook_obj;
-      end;
-      Break;
-     end;
-     lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+     goto _symlook_obj;
     end;
    end;
   end;
@@ -222,7 +210,6 @@ begin
  if (req^.defobj_out=nil) or
     (ELF64_ST_BIND(req^.sym_out^.st_info)=STB_WEAK) then
  begin
-
   Result:=symlook_list(@req1, dynlibs_info.list_main, donelist);
 
   if (Result=0) then
@@ -235,7 +222,6 @@ begin
     Assert(req^.defobj_out<>nil,'req->defobj_out is NULL #1');
    end;
   end;
-
  end;
 
  //Search all DAGs whose roots are RTLD_GLOBAL objects.
@@ -318,42 +304,23 @@ begin
   Exit(ESRCH);
 end;
 
-function do_dlsym(obj:p_lib_info;symbol,modname:pchar;flags:DWORD):Pointer;
+function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
 var
  req:t_SymLook;
- lib_entry:p_Lib_Entry;
- offset:QWORD;
  base64:RawByteString;
  donelist:t_DoneList;
  err:Integer;
 begin
  Result:=nil;
 
- if TAILQ_EMPTY(@obj^.mod_table) then
- begin
-  req.modname:=nil;
- end else
- begin
-  req.modname:=nil;
-  lib_entry:=TAILQ_FIRST(@obj^.mod_table);
-  while (lib_entry<>nil) do
-  begin
-   if (lib_entry^.dval.id=0) then //export?
-   begin
-    offset:=lib_entry^.dval.name_offset;
-    req.modname:=obj_get_str(obj,offset);
-    Break;
-   end;
-   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
-  end;
- end;
-
+ req:=Default(t_SymLook);
+ req.modname:=get_mod_name(obj,0); //export=0
  req.flags:=flags or SYMLOOK_DLSYM;
 
  if ((flags and SYMLOOK_BASE64)=0) then
  begin
-  req.libname:=modname;
-  if (modname=nil) then
+  req.libname:=libname;
+  if (libname=nil) then
   begin
    req.libname:=req.modname;
   end;
@@ -365,11 +332,8 @@ begin
   req.modname:=nil;
  end;
 
- req.symbol    :=nil;
  req.name      :=symbol;
  //req.hash      :=elf_hash(@req);
- req.defobj_out:=nil;
- req.sym_out   :=nil;
  req.obj       :=obj;
 
  donelist:=Default(t_DoneList);
@@ -407,6 +371,7 @@ var
  defobj:p_lib_info;
  str:pchar;
  err:Integer;
+ ST_BIND:Integer;
 begin
  Result:=nil;
 
@@ -431,13 +396,14 @@ begin
 
  str:=obj_get_str(refobj,ref^.st_name);
 
- if (ELF64_ST_BIND(ref^.st_info)=STB_LOCAL) then
+ ST_BIND:=ELF64_ST_BIND(ref^.st_info);
+ if (ST_BIND=STB_LOCAL) then
  begin
   def   :=ref;
   defobj:=refobj;
  end else
  begin
-  if (ELF64_ST_TYPE(ref^.st_info)=STT_SECTION) then
+  if (ST_BIND=STT_SECTION) then
   begin
    Writeln(StdErr,'find_symdef:',refobj^.lib_path,': Bogus symbol table entry ',symnum);
   end;

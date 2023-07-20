@@ -37,7 +37,7 @@ function sys_dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
 label
  _exit;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  flags:Integer;
  ptr:Pointer;
 
@@ -56,8 +56,8 @@ begin
 
  dynlibs_lock;
 
- lib:=find_obj_by_handle(handle);
- if (lib=nil) then
+ obj:=find_obj_by_handle(handle);
+ if (obj=nil) then
  begin
   Result:=ESRCH;
   goto _exit;
@@ -70,7 +70,7 @@ begin
   flags:=SYMLOOK_BASE64;
  end;
 
- ptr:=do_dlsym(lib,@fsym,nil,flags);
+ ptr:=do_dlsym(obj,@fsym,nil,flags);
 
  if (ptr=nil) then
  begin
@@ -119,7 +119,7 @@ var
  len:ptruint;
  fname:array[0..1024-1] of char;
 
- lib:p_lib_info;
+ obj:p_lib_info;
  key:Integer;
  allocs:Boolean;
 begin
@@ -140,32 +140,32 @@ begin
 
  dynlibs_lock;
 
- lib:=nil;
- Result:=load_prx(@fname,flags or ord(budget_ptype_caller=0),lib);
+ obj:=nil;
+ Result:=load_prx(@fname,flags or ord(budget_ptype_caller=0),obj);
  if (Result=0) then
  begin
-  allocs:=(lib^.id<=0);
+  allocs:=(obj^.id<=0);
 
-  if (lib^.ref_count < 2) then
+  if (obj^.ref_count < 2) then
   begin
-   if not alloc_obj_id(lib) then
+   if not alloc_obj_id(obj) then
    begin
-    //unload_prx(lib);
+    unload_prx(obj);
     Result:=EAGAIN;
     goto _exit;
    end;
   end;
-  key:=lib^.id;
+  key:=obj^.id;
 
   Result:=copyout(@key,pRes,SizeOf(Integer));
   if (Result<>0) then
   begin
    if allocs then
    begin
-    free_obj_id(lib^.id);
-    lib^.id:=0;
+    free_obj_id(obj^.id);
+    obj^.id:=0;
    end;
-   //unload_prx(lib);
+   unload_prx(obj);
    Result:=EFAULT;
   end;
  end;
@@ -178,7 +178,7 @@ end;
 
 function sys_dynlib_load_prx(handle:Integer):Integer;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  ref,id:Integer;
 begin
  if not_dynamic then
@@ -189,15 +189,16 @@ begin
 
  dynlibs_lock;
 
- lib:=find_obj_id(handle);
- if (lib=nil) then
+ obj:=find_obj_id(handle);
+ if (obj=nil) then
  begin
   Result:=ESRCH;
  end else
  begin
-  ref:=lib^.ref_count;
-  id :=lib^.id;
-  //Result:=unload_prx(lib);
+  ref:=obj^.ref_count;
+  id :=obj^.id;
+  //
+  Result:=unload_prx(obj);
   //
   if (ref=1) then
   begin

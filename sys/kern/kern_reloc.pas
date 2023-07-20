@@ -13,6 +13,7 @@ uses
 
 function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
 function check_copy_relocations(obj:p_lib_info):Integer;
+function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
 
 implementation
 
@@ -97,7 +98,7 @@ begin
     R_X86_64_COPY:
       if (obj^.mainprog=0) then
       begin
-       Writeln(StdErr,'reloc_non_plt:','Unexpected R_X86_64_COPY relocation in shared library');
+       Writeln(StdErr,'reloc_non_plt:','Unexpected R_X86_64_COPY relocation in shared library ',dynlib_basename(obj^.lib_path));
        Exit(ENOEXEC);
       end; //R_X86_64_COPY
 
@@ -369,7 +370,7 @@ begin
 
  if (ELF64_R_TYPE(entry^.r_info)<>R_X86_64_JUMP_SLOT) then
  begin
-  Writeln(StdErr,'reloc_jmpslot:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',obj^.lib_path);
+  Writeln(StdErr,'reloc_jmpslot:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
   Exit(3);
  end;
 
@@ -445,7 +446,7 @@ begin
  Result:=reloc_non_plt(obj);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',obj^.lib_path,' rv=',Result);
+  Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
   Exit;
  end;
 
@@ -454,7 +455,7 @@ begin
   Result:=reloc_jmpslots(obj);
   if (Result<>0) then
   begin
-   Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',obj^.lib_path,' rv=',Result);
+   Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
    Exit;
   end;
  end;
@@ -477,10 +478,205 @@ begin
  begin
   if (ELF64_R_TYPE(rela^.r_info)=R_X86_64_COPY) then
   begin
-   Writeln(StdErr,'check_copy_relocations:','R_X86_64_COPY found in ',obj^.lib_path);
+   Writeln(StdErr,'check_copy_relocations:','R_X86_64_COPY found in ',dynlib_basename(obj^.lib_path));
    Exit(EINVAL);
   end;
   Inc(rela);
+ end;
+end;
+
+function dynlib_unlink_non_plt_reloc_each(root,obj:p_lib_info):Integer;
+var
+ rela:p_elf64_rela;
+
+ where:Pointer;
+ data:Pointer;
+
+ data32:Integer;
+ r_type:Integer;
+
+ i,count:Integer;
+begin
+ Result:=0;
+ Assert(root<>nil,'Bad dynamic library is specified.');
+
+ rela :=obj^.rel_data^.rela_addr;
+ count:=obj^.rel_data^.rela_size div SizeOf(elf64_rela);
+
+ if (rela<>nil) and (count<>0) then
+ For i:=0 to count-1 do
+  if check_relo_bits(obj,i) then
+  begin
+   where:=Pointer(obj^.relocbase)+rela^.r_offset;
+
+   r_type:=ELF64_R_TYPE(rela^.r_info);
+
+   case r_type of
+
+    R_X86_64_NONE:; //ignore
+
+    R_X86_64_COPY:
+      if (obj^.mainprog=0) then
+      begin
+       Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unexpected R_X86_64_COPY relocation in dynamic library ',dynlib_basename(obj^.lib_path));
+       Exit(-1);
+      end; //R_X86_64_COPY
+
+    R_X86_64_64,
+    R_X86_64_GLOB_DAT,
+    R_X86_64_RELATIVE,
+    R_X86_64_TPOFF64:
+      begin
+       data:=Pointer(QWORD($840000000));
+
+       Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
+       if (Result<>0) then
+       begin
+        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        Exit(-1);
+       end;
+
+       reset_relo_bits(obj,i);
+      end; //64
+
+    R_X86_64_PC32,
+    R_X86_64_TPOFF32:
+     begin
+      data32:=Integer($40000000);
+
+      Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
+      if (Result<>0) then
+      begin
+       Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+       Exit(-1);
+      end;
+
+      reset_relo_bits(obj,i);
+     end; //32
+
+    R_X86_64_DTPMOD64,
+    R_X86_64_DTPOFF64:
+      begin
+       data:=nil;
+
+       Result:=copyout(@data,where,SizeOf(Pointer));
+       if (Result<>0) then
+       begin
+        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        Exit(-1);
+       end;
+
+       reset_relo_bits(obj,i);
+      end; //64
+
+    R_X86_64_DTPOFF32:
+      begin
+       data32:=0;
+
+       Result:=copyout(@data32,where,SizeOf(Integer));
+       if (Result<>0) then
+       begin
+        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        Exit(-1);
+       end;
+
+       reset_relo_bits(obj,i);
+      end; //32
+
+    else
+      begin
+       Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unsupported reloc type=',r_type);
+       Exit(-1);
+      end;
+
+   end;
+  end; //case
+
+end;
+
+function dynlib_unlink_plt_reloc_each(root,obj:p_lib_info):Integer;
+var
+ i,count,idofs:Integer;
+
+ entry:p_elf64_rela;
+
+ def:p_elf64_sym;
+ defobj:p_lib_info;
+
+ where:Pointer;
+ data:QWORD;
+
+ str:pchar;
+begin
+ Result:=0;
+
+ count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
+ idofs:=obj^.rel_data^.rela_size    div SizeOf(elf64_rela);
+
+ if (obj^.rel_data^.pltrela_addr<>nil) and (count<>0) then
+ For i:=0 to count-1 do
+  if check_relo_bits(obj,idofs+i) then
+  begin
+   entry:=obj^.rel_data^.pltrela_addr+i;
+
+   if (ELF64_R_TYPE(entry^.r_info)<>R_X86_64_JUMP_SLOT) then
+   begin
+    Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
+    Exit(-1);
+   end;
+
+   defobj:=nil;
+   def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,nil);
+
+   if (def=nil) then
+   begin
+    if (ELF64_R_SYM(entry^.r_info)<=(obj^.rel_data^.symtab_size div SizeOf(elf64_sym))) then
+    begin
+     def:=nil;
+     str:='';
+    end else
+    begin
+     def:=obj^.rel_data^.symtab_addr + ELF64_R_SYM(entry^.r_info);
+     str:=obj_get_str(obj,def^.st_name);
+    end;
+
+    Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','failed to lookup symbol symp=0x',HexStr(def),' name=',str);
+    Exit(-1);
+   end else
+   if (defobj=root) then
+   begin
+    where:=Pointer(obj^.relocbase) + entry^.r_offset;
+
+    data:=i or QWORD($effffffe00000000);
+
+    Result:=copyout(@data,where,SizeOf(Pointer));
+    if (Result<>0) then
+    begin
+     Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+     Exit(-1);
+    end;
+
+    reset_relo_bits(obj,idofs+i);
+   end;
+
+  end;
+
+end;
+
+function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
+begin
+ Result:=dynlib_unlink_non_plt_reloc_each(root,obj);
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_non_plt_reloc_each() fails ',Result);
+  Exit;
+ end;
+
+ Result:=dynlib_unlink_plt_reloc_each(root,obj);
+ if (Result<>0) then
+ begin
+  Writeln(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_plt_reloc_each() fails ',Result);
+  Exit;
  end;
 end;
 

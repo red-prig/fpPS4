@@ -745,7 +745,7 @@ end;
 
 function dynlib_proc_initialize_step1(imgp:p_image_params):Integer;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  text_addr:Pointer;
  eh_frame_addr:Pointer;
  eh_frame_size:QWORD;
@@ -766,28 +766,28 @@ begin
  dynlibs_info.tls_max         :=1;
  //dynlibs_info.bits          :=0;
 
- lib:=obj_new();
- lib^.mainprog:=1;
- lib^.relocbase:=imgp^.reloc_base;
+ obj:=obj_new();
+ obj^.mainprog:=1;
+ obj^.relocbase:=imgp^.reloc_base;
 
  text_addr:=g_vmspace.vm_taddr;
 
- lib^.map_base:=text_addr;
+ obj^.map_base:=text_addr;
 
- lib^.text_size:=g_vmspace.vm_tsize * PAGE_SIZE;
- lib^.data_addr:=g_vmspace.vm_daddr;
- lib^.data_size:=g_vmspace.vm_dsize * PAGE_SIZE;
+ obj^.text_size:=g_vmspace.vm_tsize * PAGE_SIZE;
+ obj^.data_addr:=g_vmspace.vm_daddr;
+ obj^.data_size:=g_vmspace.vm_dsize * PAGE_SIZE;
 
- lib^.map_size :=((QWORD(lib^.data_addr) + lib^.data_size + $3fff) and QWORD($ffffffffffffc000)) - QWORD(text_addr);
+ obj^.map_size :=((QWORD(obj^.data_addr) + obj^.data_size + $3fff) and QWORD($ffffffffffffc000)) - QWORD(text_addr);
 
- lib^.relro_addr:=imgp^.relro_addr;
- lib^.relro_size:=imgp^.relro_size;
+ obj^.relro_addr:=imgp^.relro_addr;
+ obj^.relro_size:=imgp^.relro_size;
 
- lib^.tls_index    :=1;
- lib^.tls_size     :=imgp^.tls_size;
- lib^.tls_align    :=imgp^.tls_align;
- lib^.tls_init_size:=imgp^.tls_init_size;
- lib^.tls_init_addr:=imgp^.tls_init_addr;
+ obj^.tls_index    :=1;
+ obj^.tls_size     :=imgp^.tls_size;
+ obj^.tls_align    :=imgp^.tls_align;
+ obj^.tls_init_size:=imgp^.tls_init_size;
+ obj^.tls_init_addr:=imgp^.tls_init_addr;
 
  eh_frame_addr:=nil;
  eh_frame_size:=0;
@@ -795,7 +795,7 @@ begin
  if (elf64_get_eh_frame_info(imgp^.eh_frame_hdr_addr,
                              imgp^.eh_frame_hdr_size,
                              0,
-                             lib^.text_size + QWORD(text_addr),
+                             obj^.text_size + QWORD(text_addr),
                              @eh_frame_addr,
                              @eh_frame_size)<>0) then
  begin
@@ -803,31 +803,31 @@ begin
   eh_frame_size:=0;
  end;
 
- lib^.eh_frame_hdr_addr:=imgp^.eh_frame_hdr_addr;
- lib^.eh_frame_hdr_size:=imgp^.eh_frame_hdr_size;
- lib^.eh_frame_addr    :=eh_frame_addr;
- lib^.eh_frame_size    :=eh_frame_size;
+ obj^.eh_frame_hdr_addr:=imgp^.eh_frame_hdr_addr;
+ obj^.eh_frame_hdr_size:=imgp^.eh_frame_hdr_size;
+ obj^.eh_frame_addr    :=eh_frame_addr;
+ obj^.eh_frame_size    :=eh_frame_size;
 
- lib^.entry_addr       :=imgp^.entry_addr;
+ obj^.entry_addr       :=imgp^.entry_addr;
 
- _set_lib_path(lib,imgp^.execpath);
+ obj_set_lib_path(obj,imgp^.execpath);
 
- //*(byte *)&lib^.rtld_flags:=*(byte *)&lib^.rtld_flags | 1;
+ //*(byte *)&obj^.rtld_flags:=*(byte *)&obj^.rtld_flags | 1;
 
- lib^.loaded:=4;
+ obj^.loaded:=4;
 
- dynlibs_info.libprogram:=lib;
+ dynlibs_info.libprogram:=obj;
 
  if (imgp^.dyn_exist=0) then
  begin
   dynlibs_info.dyn_non_exist:=1;
-  lib^.rel_data:=nil;
+  obj^.rel_data:=nil;
   //
  end else
  begin
   dynlibs_info.dyn_non_exist:=0;
 
-  Result:=acquire_per_file_info_obj(imgp,lib);
+  Result:=acquire_per_file_info_obj(imgp,obj);
 
   if (Result<>0) then
   begin
@@ -838,7 +838,7 @@ end;
 
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
- lib,tail:p_lib_info;
+ obj,tail:p_lib_info;
 
  init_proc_addr:Pointer;
  fini_proc_addr:Pointer;
@@ -848,34 +848,34 @@ begin
  dynlibs_info.proc_param_addr:=imgp^.proc_param_addr;
  dynlibs_info.proc_param_size:=imgp^.proc_param_size;
 
- lib:=dynlibs_info.libprogram;
+ obj:=dynlibs_info.libprogram;
 
  if (imgp^.dyn_exist=0) then
  begin
-  dynlibs_add_obj(lib);
+  dynlibs_add_obj(obj);
   Exit;
  end;
 
- Result:=digest_dynamic(lib);
+ Result:=digest_dynamic(obj);
  if (Result<>0) then
  begin
   Writeln(StdErr,'dynlib_proc_initialize_step2:','digest_dynamic()=',Result);
   Exit;
  end;
 
- init_relo_bits(lib);
+ init_relo_bits(obj);
 
- dynlibs_add_obj(lib);
+ dynlibs_add_obj(obj);
 
  dynlibs_info.sym_zero.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
- dynlibs_info.sym_zero.st_value:=-Int64(lib^.relocbase);
+ dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
 
- init_proc_addr:=lib^.init_proc_addr;
- fini_proc_addr:=lib^.fini_proc_addr;
+ init_proc_addr:=obj^.init_proc_addr;
+ fini_proc_addr:=obj^.fini_proc_addr;
 
- lib^.fini_proc_addr:=nil;
- lib^.init_proc_addr:=nil;
+ obj^.fini_proc_addr:=nil;
+ obj^.init_proc_addr:=nil;
 
  tail:=TAILQ_LAST(@dynlibs_info.obj_list);
  if (tail=nil) then
@@ -888,8 +888,8 @@ begin
                       tail,
                       dynlibs_info.init_proc_list);
 
- lib^.init_proc_addr:=init_proc_addr;
- lib^.fini_proc_addr:=fini_proc_addr;
+ obj^.init_proc_addr:=init_proc_addr;
+ obj^.fini_proc_addr:=fini_proc_addr;
 
  ///
 end;
@@ -914,15 +914,14 @@ procedure dynlib_proc_initialize_step3(imgp:p_image_params);
 label
  _dyn_not_exist;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  str:RawByteString;
  err:Integer;
- key:Integer;
  flags:DWORD;
 begin
  err:=0;
 
- lib:=nil;
+ obj:=nil;
 
  //if (td_proc->sdk_version < 0x5000000) {
  //  *(byte *)&dynlibs_info->bits = *(byte *)&dynlibs_info->bits | 0x20;
@@ -934,35 +933,34 @@ begin
  if (budget_ptype_caller=0) then flags:=flags or $20; //vm_map_wire
 
  str:='libkernel.sprx';
- lib:=preload_prx_modules(pchar(str),flags,err);
- dynlibs_info.libkernel:=lib;
+ obj:=preload_prx_modules(pchar(str),flags,err);
+ dynlibs_info.libkernel:=obj;
 
- if (lib=nil) then
+ if (obj=nil) then
  begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
  str:='libSceLibcInternal.sprx';
- lib:=preload_prx_modules(pchar(str),flags,err);
+ obj:=preload_prx_modules(pchar(str),flags,err);
 
- if (lib=nil) then
+ if (obj=nil) then
  begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  objlist_push_tail(dynlibs_info.list_main,lib);
+  objlist_push_tail(dynlibs_info.list_main,obj);
 
-  Inc(lib^.ref_count);
+  Inc(obj^.ref_count);
 
-  objlist_push_tail(lib^.dagmembers,lib);
-  objlist_push_tail(lib^.dldags    ,lib);
+  objlist_push_tail(obj^.dagmembers,obj);
+  objlist_push_tail(obj^.dldags    ,obj);
 
   //
-
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
  dynlibs_info.rep_unpf:=do_dlsym(dynlibs_info.libkernel,'sceKernelReportUnpatchedFunctionCall',nil,0);
@@ -970,33 +968,30 @@ begin
  dynlibs_info.sysc_s00:=do_dlsym(dynlibs_info.libkernel,'sysc_s00','libkernel_sysc_se', 0);
  dynlibs_info.sysc_e00:=do_dlsym(dynlibs_info.libkernel,'sysc_e00','libkernel_sysc_se', 0);
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  dynlib_initialize_pltgot_each(lib);
+  dynlib_initialize_pltgot_each(obj);
   //
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
  imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
 
  _dyn_not_exist:
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-
-  if not alloc_obj_id(lib) then
+  if not alloc_obj_id(obj) then
   begin
    Assert(False,'ID for PRX cannot be assigned.');
   end;
-
   //
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
 end;
-
 
 function exec_self_imgact(imgp:p_image_params):Integer;
 var

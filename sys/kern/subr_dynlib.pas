@@ -216,22 +216,26 @@ procedure dynlibs_lock;
 procedure dynlibs_unlock;
 
 function  obj_new():p_lib_info;
-procedure obj_free(lib:p_lib_info);
+procedure obj_free(obj:p_lib_info);
 
 procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
 function  objlist_find(var list:TAILQ_HEAD;obj:p_lib_info):p_Objlist_Entry;
 procedure objlist_remove(var list:TAILQ_HEAD;obj:p_lib_info);
 
-function  obj_get_str(lib:p_lib_info;offset:Int64):pchar;
-procedure object_add_name(obj:p_lib_info;name:pchar);
+function  obj_get_str      (obj:p_lib_info;offset:Int64):pchar;
+procedure object_add_name  (obj:p_lib_info;name:pchar);
 function  object_match_name(obj:p_lib_info;name:pchar):Boolean;
+procedure obj_set_lib_path (obj:p_lib_info;path:PAnsiChar);
 
-function  Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
-function  Lib_new(d_val:QWORD;import:Word):p_Lib_Entry;
+function  Needed_new(obj:p_lib_info;str:pchar):p_Needed_Entry;
 
-procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
+function  Lib_Entry_new(d_val:QWORD;import:Word):p_Lib_Entry;
+procedure Lib_Entry_free(lib:p_Lib_Entry);
 
-procedure release_per_file_info_obj(lib:p_lib_info);
+function  get_mod_name(obj:p_lib_info;id:Word):pchar;
+function  get_lib_name(obj:p_lib_info;id:Word):pchar;
+
+procedure release_per_file_info_obj(obj:p_lib_info);
 function  acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
 
 function  allocate_tls_offset(obj:p_lib_info):Boolean;
@@ -246,13 +250,14 @@ procedure initlist_add_neededs(var fini_proc_list:TAILQ_HEAD;
                                needed:p_Needed_Entry;
                                var init_proc_list:TAILQ_HEAD);
 
-function  digest_dynamic(lib:p_lib_info):Integer;
+function  digest_dynamic(obj:p_lib_info):Integer;
 
-procedure dynlibs_add_obj(lib:p_lib_info);
+procedure dynlibs_add_obj(obj:p_lib_info);
 
 procedure init_relo_bits (obj:p_lib_info);
 function  check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
-procedure set_relo_bits(obj:p_lib_info;i:Integer);
+procedure set_relo_bits  (obj:p_lib_info;i:Integer);
+procedure reset_relo_bits(obj:p_lib_info;i:Integer);
 
 procedure donelist_init(var dlp:t_DoneList);
 function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean;
@@ -271,13 +276,14 @@ function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
 function  do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 procedure unload_object(root:p_lib_info);
 
-function  relocate_object(lib:p_lib_info):Integer;
+function  relocate_object(root:p_lib_info):Integer;
 function  dynlib_load_relocate():Integer;
 
 function  preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
-function  load_prx(path:pchar;flags:DWORD;var plib:p_lib_info):Integer;
+function  load_prx(path:pchar;flags:DWORD;var pobj:p_lib_info):Integer;
+function  unload_prx(obj:p_lib_info):Integer;
 
-function  alloc_obj_id(lib:p_lib_info):Boolean;
+function  alloc_obj_id(obj:p_lib_info):Boolean;
 function  free_obj_id (id:Integer):Boolean;
 function  find_obj_id (id:Integer):p_lib_info;
 
@@ -336,15 +342,6 @@ begin
 
  //puVar1:=&(Result^.rtld_flags).field_0x1;
  //*puVar1:=*puVar1 | 2;
-end;
-
-procedure _set_lib_path(lib:p_lib_info;path:PAnsiChar);
-var
- size:int64;
-begin
- size:=strlen(path);
- lib^.lib_path:=AllocMem(size+1);
- Move(path^,lib^.lib_path^,size);
 end;
 
 function preprocess_dt_entries(new:p_lib_info;hdr_e_type:Integer):Integer;
@@ -629,12 +626,12 @@ begin
 
 end;
 
-procedure release_per_file_info_obj(lib:p_lib_info);
+procedure release_per_file_info_obj(obj:p_lib_info);
 begin
- if (lib^.rel_data<>nil) then
+ if (obj^.rel_data<>nil) then
  begin
-  FreeMem(lib^.rel_data);
-  lib^.rel_data:=nil;
+  FreeMem(obj^.rel_data);
+  obj^.rel_data:=nil;
  end;
 end;
 
@@ -764,85 +761,84 @@ begin
  end;
 end;
 
-procedure obj_free(lib:p_lib_info);
+procedure obj_free(obj:p_lib_info);
 var
  needed:p_Needed_Entry;
  names:p_Name_Entry;
  dag:p_Objlist_Entry;
- libs:p_Lib_Entry;
+ Lib_Entry:p_Lib_Entry;
 begin
+ free_tls_offset(obj);
 
- free_tls_offset(lib);
-
- needed:=TAILQ_FIRST(@lib^.needed);
+ needed:=TAILQ_FIRST(@obj^.needed);
  while (needed<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.needed,needed,@needed^.link);
+  TAILQ_REMOVE(@obj^.needed,needed,@needed^.link);
   FreeMem(needed);
-  needed:=TAILQ_FIRST(@lib^.needed);
+  needed:=TAILQ_FIRST(@obj^.needed);
  end;
 
- names:=TAILQ_FIRST(@lib^.names);
+ names:=TAILQ_FIRST(@obj^.names);
  while (names<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.names,names,@names^.link);
+  TAILQ_REMOVE(@obj^.names,names,@names^.link);
   FreeMem(names);
-  names:=TAILQ_FIRST(@lib^.names);
+  names:=TAILQ_FIRST(@obj^.names);
  end;
 
- dag:=TAILQ_FIRST(@lib^.dldags);
+ dag:=TAILQ_FIRST(@obj^.dldags);
  while (dag<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.dldags,dag,@dag^.link);
+  TAILQ_REMOVE(@obj^.dldags,dag,@dag^.link);
   FreeMem(dag);
-  dag:=TAILQ_FIRST(@lib^.dldags);
+  dag:=TAILQ_FIRST(@obj^.dldags);
  end;
 
- dag:=TAILQ_FIRST(@lib^.dagmembers);
+ dag:=TAILQ_FIRST(@obj^.dagmembers);
  while (dag<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.dagmembers,dag,@dag^.link);
+  TAILQ_REMOVE(@obj^.dagmembers,dag,@dag^.link);
   FreeMem(dag);
-  dag:=TAILQ_FIRST(@lib^.dagmembers);
+  dag:=TAILQ_FIRST(@obj^.dagmembers);
  end;
 
- if (lib^.lib_dirname<>nil) then
+ if (obj^.lib_dirname<>nil) then
  begin
-  FreeMem(lib^.lib_dirname);
-  lib^.lib_dirname:=nil;
+  FreeMem(obj^.lib_dirname);
+  obj^.lib_dirname:=nil;
  end;
 
- if (lib^.lib_path<>nil) then
+ if (obj^.lib_path<>nil) then
  begin
-  FreeMem(lib^.lib_path);
-  lib^.lib_path:=nil;
+  FreeMem(obj^.lib_path);
+  obj^.lib_path:=nil;
  end;
 
- if (lib^.relo_bits<>nil) then
+ if (obj^.relo_bits<>nil) then
  begin
-  FreeMem(lib^.relo_bits);
-  lib^.relo_bits:=nil
+  FreeMem(obj^.relo_bits);
+  obj^.relo_bits:=nil
  end;
 
- libs:=TAILQ_FIRST(@lib^.lib_table);
- while (libs<>nil) do
+ Lib_Entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (Lib_Entry<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.lib_table,libs,@libs^.link);
-  FreeMem(libs);
-  libs:=TAILQ_FIRST(@lib^.lib_table);
+  TAILQ_REMOVE(@obj^.lib_table,Lib_Entry,@Lib_Entry^.link);
+  Lib_Entry_free(Lib_Entry);
+  Lib_Entry:=TAILQ_FIRST(@obj^.lib_table);
  end;
 
- libs:=TAILQ_FIRST(@lib^.mod_table);
- while (libs<>nil) do
+ Lib_Entry:=TAILQ_FIRST(@obj^.mod_table);
+ while (Lib_Entry<>nil) do
  begin
-  TAILQ_REMOVE(@lib^.mod_table,libs,@libs^.link);
-  FreeMem(libs);
-  libs:=TAILQ_FIRST(@lib^.mod_table);
+  TAILQ_REMOVE(@obj^.mod_table,Lib_Entry,@Lib_Entry^.link);
+  Lib_Entry_free(Lib_Entry);
+  Lib_Entry:=TAILQ_FIRST(@obj^.mod_table);
  end;
 
- release_per_file_info_obj(lib);
+ release_per_file_info_obj(obj);
 
- FreeMem(lib);
+ FreeMem(obj);
 end;
 
 procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
@@ -881,15 +877,15 @@ begin
  end;
 end;
 
-function obj_get_str(lib:p_lib_info;offset:Int64):pchar;
+function obj_get_str(obj:p_lib_info;offset:Int64):pchar;
 begin
- if (lib^.rel_data^.strtab_size<=offset) then
+ if (obj^.rel_data^.strtab_size<=offset) then
  begin
-  Writeln(StdErr,'obj_get_str:','offset=0x',HexStr(offset,8),' is out of range of string table of ',lib^.lib_path);
+  Writeln(StdErr,'obj_get_str:','offset=0x',HexStr(offset,8),' is out of range of string table of ',obj^.lib_path);
   Exit(nil);
  end;
 
- Result:=lib^.rel_data^.strtab_addr+offset;
+ Result:=obj^.rel_data^.strtab_addr+offset;
 end;
 
 procedure object_add_name(obj:p_lib_info;name:pchar);
@@ -920,21 +916,74 @@ begin
  Result:=False;
 end;
 
-function Needed_new(lib:p_lib_info;str:pchar):p_Needed_Entry;
+procedure obj_set_lib_path(obj:p_lib_info;path:PAnsiChar);
+var
+ size:int64;
+begin
+ size:=strlen(path);
+ obj^.lib_path:=AllocMem(size+1);
+ Move(path^,obj^.lib_path^,size);
+end;
+
+function Needed_new(obj:p_lib_info;str:pchar):p_Needed_Entry;
 var
  len:Integer;
 begin
  len:=strlen(str);
  Result:=AllocMem(SizeOf(Needed_Entry)+len);
- Result^.obj :=lib;
+ Result^.obj :=obj;
  Move(str^,Result^.name,len);
 end;
 
-function Lib_new(d_val:QWORD;import:Word):p_Lib_Entry;
+function Lib_Entry_new(d_val:QWORD;import:Word):p_Lib_Entry;
 begin
  Result:=AllocMem(SizeOf(Lib_Entry));
  QWORD(Result^.dval):=d_val;
  Result^.import:=import;
+end;
+
+procedure Lib_Entry_free(lib:p_Lib_Entry);
+begin
+ //
+ FreeMem(lib);
+end;
+
+function get_mod_name(obj:p_lib_info;id:Word):pchar;
+var
+ lib_entry:p_Lib_Entry;
+ offset:QWORD;
+begin
+ Result:=nil;
+ lib_entry:=TAILQ_FIRST(@obj^.mod_table);
+ while (lib_entry<>nil) do
+ begin
+  if (lib_entry^.dval.id=id) then
+  begin
+   offset:=lib_entry^.dval.name_offset;
+   Result:=obj_get_str(obj,offset);
+   Exit;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+end;
+
+function get_lib_name(obj:p_lib_info;id:Word):pchar;
+var
+ lib_entry:p_Lib_Entry;
+ offset:QWORD;
+begin
+ Result:=nil;
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (lib_entry^.dval.id=id) then
+  begin
+   offset:=lib_entry^.dval.name_offset;
+   Result:=obj_get_str(obj,offset);
+   Exit;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
 end;
 
 procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
@@ -986,8 +1035,7 @@ begin
  end;
 end;
 
-
-function digest_dynamic(lib:p_lib_info):Integer;
+function digest_dynamic(obj:p_lib_info):Integer;
 var
  dt_ent:p_elf64_dyn;
  i,count:Integer;
@@ -1008,10 +1056,10 @@ begin
  dyn_soname:=nil;
  dt_fingerprint:=-1;
 
- if (lib^.rel_data<>nil) then
+ if (obj^.rel_data<>nil) then
  begin
-  dt_ent:=lib^.rel_data^.dynamic_addr;
-  count :=lib^.rel_data^.dynamic_size div sizeof(elf64_dyn);
+  dt_ent:=obj^.rel_data^.dynamic_addr;
+  count :=obj^.rel_data^.dynamic_size div sizeof(elf64_dyn);
 
   if (count<>0) then
   For i:=0 to count-1 do
@@ -1065,7 +1113,7 @@ begin
 
     DT_NEEDED:
       begin
-       str:=obj_get_str(lib,dt_ent^.d_un.d_val);
+       str:=obj_get_str(obj,dt_ent^.d_un.d_val);
 
        if (str=nil) then
        begin
@@ -1073,16 +1121,16 @@ begin
         Exit(EINVAL);
        end;
 
-       needed:=Needed_new(lib,str);
-       TAILQ_INSERT_TAIL(@lib^.needed,needed,@Needed^.link);
+       needed:=Needed_new(obj,str);
+       TAILQ_INSERT_TAIL(@obj^.needed,needed,@Needed^.link);
       end;
 
     DT_INIT:
       begin
-       addr:=lib^.relocbase+dt_ent^.d_un.d_val;
-       lib^.init_proc_addr:=addr;
+       addr:=obj^.relocbase+dt_ent^.d_un.d_val;
+       obj^.init_proc_addr:=addr;
 
-       if (lib^.map_base>addr) or ((addr+8)>(lib^.map_base+lib^.text_size)) then
+       if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
         Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
@@ -1091,10 +1139,10 @@ begin
 
     DT_FINI:
       begin
-       addr:=lib^.relocbase+dt_ent^.d_un.d_val;
-       lib^.fini_proc_addr:=addr;
+       addr:=obj^.relocbase+dt_ent^.d_un.d_val;
+       obj^.fini_proc_addr:=addr;
 
-       if (lib^.map_base>addr) or ((addr+8)>(lib^.map_base+lib^.text_size)) then
+       if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
         Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
@@ -1109,7 +1157,7 @@ begin
 
     DT_TEXTREL:
       begin
-       lib^.textrel:=1;
+       obj^.textrel:=1;
       end;
 
     DT_FLAGS:
@@ -1130,7 +1178,7 @@ begin
 
        if ((dval and DF_TEXTREL)<>0) then
        begin
-        lib^.textrel:=1;
+        obj^.textrel:=1;
        end;
       end;
 
@@ -1138,8 +1186,8 @@ begin
       begin
        dt_fingerprint:=dt_ent^.d_un.d_val;
 
-       if (lib^.rel_data=nil) or
-          ((dt_fingerprint + 20)>lib^.rel_data^.sce_dynlib_size) then
+       if (obj^.rel_data=nil) or
+          ((dt_fingerprint + 20)>obj^.rel_data^.sce_dynlib_size) then
        begin
         Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
@@ -1148,7 +1196,7 @@ begin
 
     DT_SCE_ORIGINAL_FILENAME:
       begin
-       str:=obj_get_str(lib,dt_ent^.d_un.d_val);
+       str:=obj_get_str(obj,dt_ent^.d_un.d_val);
 
        if (str=nil) then
        begin
@@ -1156,21 +1204,21 @@ begin
         Exit(EINVAL);
        end;
 
-       lib^.rel_data^.original_filename:=str;
+       obj^.rel_data^.original_filename:=str;
       end;
 
     DT_SCE_MODULE_INFO,
     DT_SCE_NEEDED_MODULE:
       begin
-       lib_entry:=Lib_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_NEEDED_MODULE));
-       TAILQ_INSERT_TAIL(@lib^.mod_table,lib_entry,@lib_entry^.link);
+       lib_entry:=Lib_Entry_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_NEEDED_MODULE));
+       TAILQ_INSERT_TAIL(@obj^.mod_table,lib_entry,@lib_entry^.link);
       end;
 
     DT_SCE_MODULE_ATTR:
       begin
        dval:=dt_ent^.d_un.d_val;
 
-       lib_entry:=TAILQ_FIRST(@lib^.mod_table);
+       lib_entry:=TAILQ_FIRST(@obj^.mod_table);
        while (lib_entry<>nil) do
        begin
         if (TLibraryAttr(dval).id=lib_entry^.dval.id) then
@@ -1192,8 +1240,8 @@ begin
     DT_SCE_EXPORT_LIB,
     DT_SCE_IMPORT_LIB:
       begin
-       lib_entry:=Lib_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_IMPORT_LIB));
-       TAILQ_INSERT_TAIL(@lib^.lib_table,lib_entry,@lib_entry^.link);
+       lib_entry:=Lib_Entry_new(dt_ent^.d_un.d_val,ord(dt_ent^.d_tag=DT_SCE_IMPORT_LIB));
+       TAILQ_INSERT_TAIL(@obj^.lib_table,lib_entry,@lib_entry^.link);
       end;
 
     DT_SCE_EXPORT_LIB_ATTR,
@@ -1201,7 +1249,7 @@ begin
       begin
        dval:=dt_ent^.d_un.d_val;
 
-       lib_entry:=TAILQ_FIRST(@lib^.lib_table);
+       lib_entry:=TAILQ_FIRST(@obj^.lib_table);
        while (lib_entry<>nil) do
        begin
         if (TLibraryAttr(dval).id=lib_entry^.dval.id) then
@@ -1251,7 +1299,7 @@ begin
 
     else
       begin
-       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',lib^.lib_path);
+       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',obj^.lib_path);
        Exit(ENOEXEC);
       end;
 
@@ -1262,27 +1310,27 @@ begin
 
  end;
 
- addr:=lib^.rel_data^.sce_dynlib_addr;
+ addr:=obj^.rel_data^.sce_dynlib_addr;
 
  if (dt_fingerprint=-1) then
  begin
   if (addr<>nil) then
   begin
-   Move(addr^,lib^.fingerprint,20);
+   Move(addr^,obj^.fingerprint,20);
   end;
  end else
  begin
   if (addr<>nil) then
   begin
-   Move((addr+dt_fingerprint)^,lib^.fingerprint,20);
+   Move((addr+dt_fingerprint)^,obj^.fingerprint,20);
   end;
  end;
 
- if (lib^.lib_path<>nil) then
+ if (obj^.lib_path<>nil) then
  begin
-  lib^.lib_dirname:=AllocMem(strlen(lib^.lib_path)+1);
+  obj^.lib_dirname:=AllocMem(strlen(obj^.lib_path)+1);
   //
-  Result:=rtld_dirname(lib^.lib_path,lib^.lib_dirname);
+  Result:=rtld_dirname(obj^.lib_path,obj^.lib_dirname);
   if (Result<>0) then
   begin
    Exit(EINVAL);
@@ -1291,7 +1339,7 @@ begin
 
  if (dyn_soname<>nil) then
  begin
-  str:=obj_get_str(lib,dyn_soname^.d_un.d_val);
+  str:=obj_get_str(obj,dyn_soname^.d_un.d_val);
 
   if (str=nil) then
   begin
@@ -1299,14 +1347,14 @@ begin
    Exit(EINVAL);
   end;
 
-  object_add_name(lib,str);
+  object_add_name(obj,str);
  end;
 
 end;
 
-procedure dynlibs_add_obj(lib:p_lib_info);
+procedure dynlibs_add_obj(obj:p_lib_info);
 begin
- TAILQ_INSERT_TAIL(@dynlibs_info.obj_list,lib,@lib^.link);
+ TAILQ_INSERT_TAIL(@dynlibs_info.obj_list,obj,@obj^.link);
  Inc(dynlibs_info.obj_count);
 end;
 
@@ -1344,6 +1392,13 @@ begin
  if (obj^.relo_bits=nil) then Exit;
 
  obj^.relo_bits[i shr 3]:=obj^.relo_bits[i shr 3] or (1 shl (i and 7))
+end;
+
+procedure reset_relo_bits(obj:p_lib_info;i:Integer);
+begin
+ if (obj^.relo_bits=nil) then Exit;
+
+ obj^.relo_bits[i shr 3]:=obj^.relo_bits[i shr 3] and (not (1 shl (i and 7)))
 end;
 
 function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
@@ -1751,16 +1806,16 @@ end;
 
 function change_relro_protection_all(prot:Integer):Integer;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
 begin
  Result:=0;
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  Result:=change_relro_protection(lib,prot);
+  Result:=change_relro_protection(obj,prot);
   if (Result<>0) then Exit;
   //
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 end;
 
@@ -1967,7 +2022,7 @@ label
 var
  fname:RawByteString;
  new:p_lib_info;
- lib:p_lib_info;
+ obj:p_lib_info;
  i:Integer;
  tls_max:Integer;
 begin
@@ -1984,7 +2039,7 @@ begin
  fname:=ExtractFileName(path);
  object_add_name(new,pchar(fname));
 
- _set_lib_path(new,path);
+ obj_set_lib_path(new,path);
 
  if (new^.tls_size=0) then
  begin
@@ -2002,19 +2057,19 @@ begin
   end else
   begin
    i:=1;
-   lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
-   while (lib<>nil) do
+   obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+   while (obj<>nil) do
    begin
-    while (lib^.tls_index=i) do
+    while (obj^.tls_index=i) do
     begin
      i:=i+1;
-     lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
+     obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
      if (tls_max < i) then
      begin
       goto _inc_max;
      end;
     end;
-    lib:=TAILQ_NEXT(lib,@lib^.link);
+    obj:=TAILQ_NEXT(obj,@obj^.link);
    end;
   end;
  end;
@@ -2042,7 +2097,7 @@ begin
   goto _error;
  end;
 
- init_relo_bits(lib);
+ init_relo_bits(obj);
  dynlibs_add_obj(new);
  new^.loaded:=1;
  Exit(new);
@@ -2119,7 +2174,7 @@ function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
  _do_load;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  fname:RawByteString;
 begin
  Result:=nil;
@@ -2127,14 +2182,14 @@ begin
 
  fname:=ExtractFileName(path);
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  if object_match_name(lib,pchar(fname)) then
+  if object_match_name(obj,pchar(fname)) then
   begin
-   Exit(lib);
+   Exit(obj);
   end;
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
  fname:=path;
@@ -2172,14 +2227,14 @@ begin
  Result:=do_load_object(pchar(fname),flags,err);
 end;
 
-function relocate_object(lib:p_lib_info):Integer;
+function relocate_object(root:p_lib_info):Integer;
 var
  obj:p_lib_info;
 begin
  Result:=change_relro_protection_all(VM_PROT_RW);
  if (Result<>0) then Exit;
 
- Result:=relocate_one_object(lib,ord(lib^.jmpslots_done=0));
+ Result:=relocate_one_object(root,ord(root^.jmpslots_done=0));
 
  if (Result=0) then
  begin
@@ -2187,9 +2242,9 @@ begin
 
   while (obj<>nil) do
   begin
-   if (obj<>lib) then
+   if (obj<>root) then
    begin
-    Result:=relocate_one_object(obj,ord(lib^.jmpslots_done=0));
+    Result:=relocate_one_object(obj,ord(root^.jmpslots_done=0));
    end;
    obj:=TAILQ_NEXT(obj,@obj^.link);
   end;
@@ -2213,95 +2268,110 @@ begin
  Result:=relocate_object(dynlibs_info.libprogram);
 end;
 
-function load_prx(path:pchar;flags:DWORD;var plib:p_lib_info):Integer;
+function load_prx(path:pchar;flags:DWORD;var pobj:p_lib_info):Integer;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
  err,pflags:Integer;
 begin
  Result:=0;
  err:=0;
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  if (StrLComp(lib^.lib_path,path,$400)=0) then
+  if (StrLComp(obj^.lib_path,path,$400)=0) then
   begin
    Exit(0);
   end;
   //
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
  pflags:=2;
  if ((flags and $00001)<>0) then pflags:=pflags or $20; //vm_map_wire
  if ((flags and $10000)<>0) then pflags:=pflags or $40; //priv libs?
 
- lib:=preload_prx_modules(path,pflags,err);
- if (lib=nil) then Exit(err);
+ obj:=preload_prx_modules(path,pflags,err);
+ if (obj=nil) then Exit(err);
 
- if (objlist_find(dynlibs_info.list_global,lib)=nil) then
+ if (objlist_find(dynlibs_info.list_global,obj)=nil) then
  begin
-  objlist_push_tail(dynlibs_info.list_global,lib);
+  objlist_push_tail(dynlibs_info.list_global,obj);
  end;
 
- if (lib^.ref_count=0) then
+ if (obj^.ref_count=0) then
  begin
   if ((flags and $20000)<>0) then //reset jmpslots_done?
   begin
-   lib^.jmpslots_done:=0;
+   obj^.jmpslots_done:=0;
   end;
 
   if ((flags and $40000)<>0) then //reset on_fini_list?
   begin
-   lib^.on_fini_list:=0;
+   obj^.on_fini_list:=0;
   end;
 
-  init_dag(lib);
-  ref_dag(lib);
+  init_dag(obj);
+  ref_dag(obj);
 
-  err:=relocate_object(lib);
+  err:=relocate_object(obj);
   if (err<>0) then
   begin
-   unref_dag(lib);
-   if (lib^.ref_count=0) then
+   unref_dag(obj);
+   if (obj^.ref_count=0) then
    begin
-    unload_object(lib);
+    unload_object(obj);
    end;
    Writeln(StdErr,'load_prx:','Fail to relocate ',path);
    Exit(err);
   end;
  end else
  begin
-  ref_dag(lib);
+  ref_dag(obj);
  end;
 
- plib:=lib;
+ pobj:=obj;
  Result:=0;
 end;
 
-function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
-begin
- ////////
-end;
-
-function dynlib_unlink_imported_symbols(root:p_lib_info;libname:pchar):Integer;
+function dynlib_unlink_imported_symbols(root:p_lib_info;modname:pchar):Integer;
 var
  obj:p_lib_info;
+ lib_entry:p_Lib_Entry;
+ offset:QWORD;
+ str:pchar;
 begin
  Result:=change_relro_protection_all(VM_PROT_RW);
  if (Result<>0) then Exit;
 
  if (Result=0) then
  begin
-  obj:=dynlibs_info.libprogram;
-
+  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
   while (obj<>nil) do
   begin
-   //dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
-
-
-
-
+   if (obj<>root) then
+   begin
+    lib_entry:=TAILQ_FIRST(@obj^.mod_table);
+    while (lib_entry<>nil) do
+    begin
+     if (lib_entry^.dval.id<>0) then //import
+     begin
+      offset:=lib_entry^.dval.name_offset;
+      str:=obj_get_str(obj,offset);
+      //
+      if (modname<>nil) then
+      if (StrComp(str,modname)=0) then //used module
+      begin
+       Result:=dynlib_unlink_imported_symbols_each(root,obj);
+       //ended
+       Break;
+      end;
+     end;
+     //
+     lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+    end;
+   end;
+   //
    obj:=TAILQ_NEXT(obj,@obj^.link);
   end;
  end;
@@ -2309,58 +2379,51 @@ begin
  change_relro_protection_all(VM_PROT_READ);
 end;
 
-
-function unload_prx(lib:p_lib_info):Integer;
+function unload_prx(obj:p_lib_info):Integer;
 var
- lib_entry:p_Lib_Entry;
- str:pchar;
+ modname:pchar;
 begin
- if (lib^.ref_count=0) then
+ if (obj^.ref_count=0) then
  begin
   Assert(False,'Invalid shared object handle');
+  Exit(EINVAL);
  end;
- unref_dag(lib);
 
- lib_entry:=TAILQ_FIRST(@lib^.mod_table);
- while (lib_entry<>nil) do
+ unref_dag(obj);
+
+ if (obj^.ref_count<>1) then
  begin
-  if (lib_entry^.dval.id=0) then
-  begin
-   str:=obj_get_str(lib,lib_entry^.dval.name_offset);
-
-   if (str<>nil) then
-   begin
-    Result:=dynlib_unlink_imported_symbols(lib,str);
-   end;
-
-
-
-   ////
-  end;
-
-
-  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+  Exit(0);
  end;
 
+ modname:=get_mod_name(obj,0); //export=0
 
+ if (modname<>nil) then
+ begin
+  Result:=dynlib_unlink_imported_symbols(obj,modname);
+ end;
+
+ unload_object(obj);
+
+ Result:=0;
 end;
 
-function alloc_obj_id(lib:p_lib_info):Boolean;
+function alloc_obj_id(obj:p_lib_info):Boolean;
 var
  key:Integer;
 begin
  Result:=False;
- if (lib^.id>0) then Exit(True);
+ if (obj^.id>0) then Exit(True);
 
- lib^.desc.free:=nil;
- lib^.objt:=NAMED_DYNL;
- lib^.name:='';
+ obj^.desc.free:=nil;
+ obj^.objt:=NAMED_DYNL;
+ obj^.name:='';
 
  key:=-1;
- if id_name_new(@named_table,lib,@key) then
+ if id_name_new(@named_table,obj,@key) then
  begin
-  lib^.id:=(key+1);
-  id_release(lib);
+  obj^.id:=(key+1);
+  id_release(obj);
   Result:=True;
  end;
 end;
@@ -2389,19 +2452,19 @@ end;
 
 function find_obj_by_handle(id:Integer):p_lib_info;
 var
- lib:p_lib_info;
+ obj:p_lib_info;
 begin
  Result:=nil;
 
- lib:=TAILQ_FIRST(@dynlibs_info.obj_list);
- while (lib<>nil) do
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
  begin
-  if (lib^.id=id) then
+  if (obj^.id=id) then
   begin
-   Exit(lib);
+   Exit(obj);
   end;
   //
-  lib:=TAILQ_NEXT(lib,@lib^.link);
+  obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 end;
 
