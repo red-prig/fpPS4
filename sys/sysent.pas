@@ -13,6 +13,7 @@ uses
  kern_evf,
  kern_gpo,
  kern_sig,
+ kern_exec,
  kern_exit,
  kern_osem,
  kern_prot,
@@ -24,6 +25,7 @@ uses
  kern_event,
  kern_synch,
  kern_cpuset,
+ kern_dynlib,
  kern_ksched,
  kern_rtprio,
  kern_thread,
@@ -345,7 +347,7 @@ const
   ),
   (//[59]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_execve;
      sy_name:'sys_execve'
   ),
   (//[60]
@@ -3005,32 +3007,32 @@ const
   ),
   (//[591]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_dlsym;
      sy_name:'sys_dynlib_dlsym'
   ),
   (//[592]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_list;
      sy_name:'sys_dynlib_get_list'
   ),
   (//[593]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_info;
      sy_name:'sys_dynlib_get_info'
   ),
   (//[594]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_dynlib_load_prx;
      sy_name:'sys_dynlib_load_prx'
   ),
   (//[595]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_unload_prx;
      sy_name:'sys_dynlib_unload_prx'
   ),
   (//[596]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@sys_dynlib_do_copy_relocations;
      sy_name:'sys_dynlib_do_copy_relocations'
   ),
   (//[597]
@@ -3040,12 +3042,12 @@ const
   ),
   (//[598]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_proc_param;
      sy_name:'sys_dynlib_get_proc_param'
   ),
   (//[599]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@sys_dynlib_process_needed_and_relocate;
      sy_name:'sys_dynlib_process_needed_and_relocate'
   ),
   (//[600]
@@ -3090,7 +3092,7 @@ const
   ),
   (//[608]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_info_ex;
      sy_name:'sys_dynlib_get_info_ex'
   ),
   (//[609]
@@ -3295,7 +3297,7 @@ const
   ),
   (//[649]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_obj_member;
      sy_name:'sys_dynlib_get_obj_member'
   ),
   (//[650]
@@ -3330,7 +3332,7 @@ const
   ),
   (//[656]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_info_for_libdbg;
      sy_name:'sys_dynlib_get_info_for_libdbg'
   ),
   (//[657]
@@ -3345,12 +3347,12 @@ const
   ),
   (//[659]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_list2;
      sy_name:'sys_dynlib_get_list2'
   ),
   (//[660]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_info2;
      sy_name:'sys_dynlib_get_info2'
   ),
   (//[661]
@@ -3410,7 +3412,7 @@ const
   ),
   (//[672]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dynlib_get_list_for_libdbg;
      sy_name:'sys_dynlib_get_list_for_libdbg'
   ),
   (//[673]

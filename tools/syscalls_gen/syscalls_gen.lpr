@@ -203,6 +203,8 @@ begin
     'pinteger':;
     'pbyte':;
     'pint64':;
+    'ppointer':;
+    'ppchar':;
     else
       Writeln('*',t,'*',' in ',FuncDecl.fname,' (',FuncDecl.funit,')');
    end;

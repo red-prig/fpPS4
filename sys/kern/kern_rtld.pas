@@ -525,6 +525,7 @@ end;
 function rtld_dirname(path,bname:pchar):Integer;
 var
  endp:pchar;
+ chr:char;
 begin
  Result:=0;
 
@@ -536,17 +537,25 @@ begin
   Exit(0);
  end;
 
+ if (StrLComp(path,'/host/',Length('/host/'))=0) then
+ begin
+  chr:='/';
+ end else
+ begin
+  chr:='\';
+ end;
+
  { Strip trailing slashes }
  endp:=path + strlen(path) - 1;
- while (endp > path) and ((endp^='/') or (endp^='\')) do Dec(endp);
+ while (endp > path) and (endp^=chr) do Dec(endp);
 
  { Find the start of the dir }
- while (endp > path) and ((endp^<>'/') and (endp^<>'\')) do Dec(endp);
+ while (endp > path) and (endp^<>chr) do Dec(endp);
 
  { Either the dir is "/" or there are no slashes }
  if (endp=path) then
  begin
-  if ((endp^='/') or (endp^='\')) then
+  if (endp^=chr) then
   begin
    bname[0]:='/';
   end else
@@ -559,7 +568,7 @@ begin
  begin
   repeat
    Dec(endp);
-  until not ((endp > path) and ((endp^='/') or (endp^='\')));
+  until not ((endp > path) and (endp^=chr));
  end;
 
  if ((endp - path + 2) > PATH_MAX) then
@@ -1193,8 +1202,17 @@ end;
 function dynlib_basename(path:pchar):pchar;
 var
  idx:pchar;
+ chr:char;
 begin
- idx:=strrscan(path,'/');
+ if (StrLComp(path,'/host/',Length('/host/'))=0) then
+ begin
+  chr:='/';
+ end else
+ begin
+  chr:='\';
+ end;
+
+ idx:=strrscan(path,chr);
  if (idx=nil) then
  begin
   Result:=path;

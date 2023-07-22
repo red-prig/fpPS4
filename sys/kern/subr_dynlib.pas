@@ -119,6 +119,7 @@ type
   init_scanned :Integer;
   init_done    :Integer;
   on_fini_list :Integer;
+  not_get_proc :Integer;
   textrel      :Integer;
   init_plt     :Integer;
   is_system    :Integer;
@@ -2301,14 +2302,14 @@ begin
 
  if (obj^.ref_count=0) then
  begin
-  if ((flags and $20000)<>0) then //reset jmpslots_done?
+  if ((flags and $20000)<>0) then //set jmpslots_done?
   begin
-   obj^.jmpslots_done:=0;
+   obj^.jmpslots_done:=1;
   end;
 
-  if ((flags and $40000)<>0) then //reset on_fini_list?
+  if ((flags and $40000)<>0) then //set not_get_proc?
   begin
-   obj^.on_fini_list:=0;
+   obj^.not_get_proc:=1;
   end;
 
   init_dag(obj);

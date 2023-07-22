@@ -42,6 +42,7 @@ function  ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
 function  revoke(path:PChar):Integer;
 function  symlink(path,link:PChar):Integer;
 function  readlink(path,buf:PChar;count:QWORD):Integer;
+function  execve(fname:pchar;argv,envv:ppchar):Integer;
 function  umask(newmask:Integer):Integer;
 function  chroot(path:PChar):Integer;
 function  munmap(addr:Pointer;len:QWORD):Integer;
@@ -192,6 +193,15 @@ function  osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
 function  namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
 function  namedobj_delete(id,objt:Integer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
+function  dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
+function  dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
+function  dynlib_get_info(handle:Integer;info:Pointer):Integer;
+function  dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer;
+function  dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer;
+function  dynlib_do_copy_relocations():Integer;
+function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
+function  dynlib_process_needed_and_relocate():Integer;
+function  dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
@@ -201,7 +211,12 @@ function  thr_get_ucontext(tid:Integer;ucp:Pointer):Integer;
 function  set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
+function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
+function  dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
+function  dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
+function  dynlib_get_info2(handle:Integer;info:Pointer):Integer;
+function  dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  cpumode_yield():Integer;
 
 implementation
@@ -451,6 +466,13 @@ end;
 function readlink(path,buf:PChar;count:QWORD):Integer; assembler; nostackframe;
 asm
  movq  $58,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function execve(fname:pchar;argv,envv:ppchar):Integer; assembler; nostackframe;
+asm
+ movq  $59,%rax
  call  fast_syscall
  jmp   cerror
 end;
@@ -1505,6 +1527,69 @@ asm
  jmp   cerror
 end;
 
+function dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer; assembler; nostackframe;
+asm
+ movq  $591,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
+asm
+ movq  $592,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_info(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $593,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $594,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $595,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_do_copy_relocations():Integer; assembler; nostackframe;
+asm
+ movq  $596,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer; assembler; nostackframe;
+asm
+ movq  $598,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_process_needed_and_relocate():Integer; assembler; nostackframe;
+asm
+ movq  $599,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $608,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function thr_get_name(id:DWORD;pname:PChar):Integer; assembler; nostackframe;
 asm
  movq  $616,%rax
@@ -1568,9 +1653,44 @@ asm
  jmp   cerror
 end;
 
+function dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer; assembler; nostackframe;
+asm
+ movq  $649,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $656,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function fdatasync(fd:Integer):Integer; assembler; nostackframe;
 asm
  movq  $658,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
+asm
+ movq  $659,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_info2(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $660,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
+asm
+ movq  $672,%rax
  call  fast_syscall
  jmp   cerror
 end;
