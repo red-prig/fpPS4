@@ -113,7 +113,7 @@ var
 begin
  td:=curkthread;
 
- Writeln('trap_test: ',' curkthread:',HexStr(curkthread),' sptr:',HexStr(sptr),' ',HexStr(td^.td_frame^.tf_rip,16));
+ Writeln('trap_test: ',' curkthread:',HexStr(curkthread),' sptr:',HexStr(sptr),' ',HexStr(td^.td_frame.tf_rip,16));
 end;
 
 function _thread(parameter:pointer):ptrint;

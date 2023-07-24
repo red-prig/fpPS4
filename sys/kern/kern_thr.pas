@@ -181,13 +181,19 @@ type
   td_sigmask      :sigset_t;
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
-  td_frame        :p_trapframe;
+  td_frame        :trapframe;
   td_fpstate      :array[0..103] of QWORD;
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   td_retval       :array[0..1] of QWORD;
-  td_ksttop       :Pointer;
-  td_kstack       :Pointer;
+  td_ustack       :packed record
+   stack          :Pointer;
+   sttop          :Pointer;
+  end;
+  td_kstack       :packed record
+   stack          :Pointer;
+   sttop          :Pointer;
+  end;
   //
   td_sleepqueue   :Pointer;
   td_slpq         :TAILQ_ENTRY;

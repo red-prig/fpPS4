@@ -344,7 +344,7 @@ end;
 
 function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
 begin
- Result:=(rsp<=QWORD(td^.td_kstack)) and (rsp>(QWORD(td^.td_ksttop)));
+ Result:=(rsp<=QWORD(td^.td_kstack.stack)) and (rsp>(QWORD(td^.td_kstack.sttop)));
 end;
 
 function IS_SYSCALL(rip:qword):Boolean;
@@ -362,9 +362,9 @@ end;
 
 function get_top_mem_td(td:p_kthread;size,align:qword):Pointer;
 begin
- Result:=System.Align(td^.td_ksttop,align);
+ Result:=System.Align(td^.td_kstack.sttop,align);
 
- if (SPtr>td^.td_ksttop) and (SPtr<=td^.td_kstack) then
+ if (SPtr>td^.td_kstack.sttop) and (SPtr<=td^.td_kstack.stack) then
  begin
   if ((Result+size)>=SPtr) then Exit(nil);
  end;
@@ -412,7 +412,14 @@ var
  regs:p_trapframe;
 begin
  td:=curkthread;
- regs:=td^.td_frame;
+ if (td=nil) then Exit;
+
+ //teb stack
+ td^.td_teb^.sttop:=td^.td_kstack.sttop;
+ td^.td_teb^.stack:=td^.td_kstack.stack;
+ //teb stack
+
+ regs:=@td^.td_frame;
 
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
@@ -464,6 +471,18 @@ begin
   regs^.tf_flags:=regs^.tf_flags and (not TF_HASFPXSTATE);
  end;
  //xmm,ymm
+
+ //teb stack
+ if (sigonstack(regs^.tf_rsp)<>0) then
+ begin
+  td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
+  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
+ end else
+ begin
+  td^.td_teb^.stack:=td^.td_ustack.stack;
+  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+ end;
+ //teb stack
 
  NtContinue(Context,False);
 end;
@@ -540,7 +559,7 @@ begin
   goto tryagain;
  end;
 
- regs:=td^.td_frame;
+ regs:=@td^.td_frame;
  oonstack:=sigonstack(Context^.Rsp);
 
  // Save user context.
@@ -611,7 +630,7 @@ begin
  sf.sf_uc.uc_mcontext.mc_ownedfp :=_MC_FPOWNED_FPU;
  //xmm,ymm
 
- sp:=QWORD(td^.td_kstack);
+ sp:=QWORD(td^.td_kstack.stack);
 
  sp:=sp-sizeof(sigframe);
 
@@ -634,6 +653,18 @@ begin
   Result:=ESRCH;
   goto resume;
  end;
+
+ //teb stack
+ if (sigonstack(regs^.tf_rsp)<>0) then
+ begin
+  td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
+  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
+ end else
+ begin
+  td^.td_teb^.stack:=td^.td_ustack.stack;
+  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+ end;
+ //teb stack
 
  resume:
   NtResumeThread(td_handle,nil);

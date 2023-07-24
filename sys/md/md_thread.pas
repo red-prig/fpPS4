@@ -59,7 +59,7 @@ begin
  if (R<>0) then Exit;
 
  //header
- size:=SizeOf(kthread)+SizeOf(trapframe)+SizeOf(umtx_q);
+ size:=SizeOf(kthread)+SizeOf(umtx_q);
  size:=System.Align(size,4*1024);
 
  R:=NtAllocateVirtualMemory(
@@ -73,8 +73,7 @@ begin
  if (R<>0) then Exit;
 
  td:=data;
- td^.td_frame:=Pointer(td+1);
- td^.td_umtxq:=Pointer(td^.td_frame+1);
+ td^.td_umtxq:=Pointer(td+1);
 
  //footer
  data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;
@@ -90,10 +89,10 @@ begin
     );
  if (R<>0) then Exit;
 
- td^.td_ksttop:=data;
+ td^.td_kstack.sttop:=data;
 
  data:=data+SYS_STACK_SIZE;
- td^.td_kstack:=data;
+ td^.td_kstack.stack:=data;
 
  Result:=td;
 end;
@@ -201,7 +200,7 @@ begin
  BaseInitializeStack(InitialTeb,stack_base,stack_size);
 
  //use kernel stack to init
- Stack:=td^.td_kstack;
+ Stack:=td^.td_kstack.stack;
  Stack:=Pointer((ptruint(Stack) and (not $F)));
 
  BaseInitializeContext(Context,

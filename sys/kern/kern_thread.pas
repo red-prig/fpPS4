@@ -321,40 +321,10 @@ end;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 var
- td:p_kthread;
- sttop:Pointer;
- stack:Pointer;
  name:shortstring;
 begin
- //check stack limits
- td:=curkthread;
- if (td<>nil) then
- begin
-  //in kstack?
-  if (SPtr>td^.td_ksttop) and (SPtr<=td^.td_kstack) then
-  begin
-   //save
-   sttop:=td^.td_teb^.sttop;
-   stack:=td^.td_teb^.stack;
-   //set kstack
-   td^.td_teb^.sttop:=td^.td_ksttop;
-   td^.td_teb^.stack:=td^.td_kstack;
-  end else
-  begin
-   //dont change
-   td:=nil;
-  end;
- end;
-
  name:=shortstring(prefix)+shortstring(newtd^.td_name);
  SetThreadDebugName(newtd^.td_tid,name);
-
- if (td<>nil) then
- begin
-  //restore
-  td^.td_teb^.sttop:=sttop;
-  td^.td_teb^.stack:=stack;
- end;
 end;
 
 procedure before_start(td:p_kthread);
@@ -439,6 +409,11 @@ begin
 
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
+
+ //user stack
+ newtd^.td_ustack.stack:=stack_base+stack_size;
+ newtd^.td_ustack.sttop:=stack_base;
+ //user stack
 
  n:=cpu_thread_create(newtd,
                       stack_base,
@@ -558,8 +533,13 @@ begin
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
 
- stack.ss_sp  :=newtd^.td_ksttop;
- stack.ss_size:=(ptruint(newtd^.td_kstack)-ptruint(newtd^.td_ksttop));
+ stack.ss_sp  :=newtd^.td_kstack.sttop;
+ stack.ss_size:=(ptruint(newtd^.td_kstack.stack)-ptruint(newtd^.td_kstack.sttop));
+
+ //user stack
+ newtd^.td_ustack.stack:=newtd^.td_kstack.stack;
+ newtd^.td_ustack.sttop:=newtd^.td_kstack.sttop;
+ //user stack
 
  n:=cpu_thread_create(newtd,
                       stack.ss_sp,

@@ -235,11 +235,9 @@ begin
  //Call directly to the address or make an ID table?
 
  td:=curkthread;
- td_frame:=td^.td_frame;
+ td_frame:=@td^.td_frame;
 
- //cpu_fetch_syscall_args
- td^.td_retval[0]:=0;
- td^.td_retval[1]:=td_frame^.tf_rdx;
+ cpu_fetch_syscall_args(td);
 
  error:=0;
  scall:=nil;
@@ -308,42 +306,40 @@ asm
  test  %rax,%rax
  jz    _fail
 
- movqq kthread.td_kstack(%rax),%rsp //td_kstack (Implicit lock interrupt)
+ movqq kthread.td_kstack.stack(%rax),%rsp //td_kstack (Implicit lock interrupt)
  andq  $-32,%rsp //align stack
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 
- movqq kthread.td_frame(%rax),%rax //td_frame
+ movqq %rdi,kthread.td_frame.tf_rdi   (%rax)
+ movqq %rsi,kthread.td_frame.tf_rsi   (%rax)
+ movqq %rdx,kthread.td_frame.tf_rdx   (%rax)
+ movqq   $0,kthread.td_frame.tf_rcx   (%rax)
+ movqq %r8 ,kthread.td_frame.tf_r8    (%rax)
+ movqq %r9 ,kthread.td_frame.tf_r9    (%rax)
+ movqq %r11,kthread.td_frame.tf_rax   (%rax)
+ movqq %rbx,kthread.td_frame.tf_rbx   (%rax)
+ movqq %r10,kthread.td_frame.tf_r10   (%rax)
+ movqq   $0,kthread.td_frame.tf_r11   (%rax)
+ movqq %r12,kthread.td_frame.tf_r12   (%rax)
+ movqq %r13,kthread.td_frame.tf_r13   (%rax)
+ movqq %r14,kthread.td_frame.tf_r14   (%rax)
+ movqq %r15,kthread.td_frame.tf_r15   (%rax)
+ movqq %rcx,kthread.td_frame.tf_rflags(%rax)
 
- movqq %rdi,trapframe.tf_rdi(%rax)
- movqq %rsi,trapframe.tf_rsi(%rax)
- movqq %rdx,trapframe.tf_rdx(%rax)
- movqq   $0,trapframe.tf_rcx(%rax)
- movqq %r8 ,trapframe.tf_r8 (%rax)
- movqq %r9 ,trapframe.tf_r9 (%rax)
- movqq %r11,trapframe.tf_rax(%rax)
- movqq %rbx,trapframe.tf_rbx(%rax)
- movqq %r10,trapframe.tf_r10(%rax)
- movqq   $0,trapframe.tf_r11(%rax)
- movqq %r12,trapframe.tf_r12(%rax)
- movqq %r13,trapframe.tf_r13(%rax)
- movqq %r14,trapframe.tf_r14(%rax)
- movqq %r15,trapframe.tf_r15(%rax)
- movqq %rcx,trapframe.tf_rflags(%rax)
-
- movqq $0,trapframe.tf_trapno(%rax)
- movqq $0,trapframe.tf_addr  (%rax)
- movqq $0,trapframe.tf_flags (%rax)
- movqq $5,trapframe.tf_err   (%rax) //sizeof(call $32)
+ movqq $0  ,kthread.td_frame.tf_trapno(%rax)
+ movqq $0  ,kthread.td_frame.tf_addr  (%rax)
+ movqq $0  ,kthread.td_frame.tf_flags (%rax)
+ movqq $5  ,kthread.td_frame.tf_err   (%rax) //sizeof(call $32)
 
  movqq (%rbp),%r11 //get prev rbp
- movqq %r11,trapframe.tf_rbp(%rax)
+ movqq %r11,kthread.td_frame.tf_rbp(%rax)
 
  lea   16(%rbp),%r11 //get prev rsp
- movqq %r11,trapframe.tf_rsp(%rax)
+ movqq %r11,kthread.td_frame.tf_rsp(%rax)
 
  movqq 8(%rbp),%r11 //get prev rip
- movqq %r11,trapframe.tf_rip(%rax)
+ movqq %r11,kthread.td_frame.tf_rip(%rax)
 
  call amd64_syscall
 
@@ -358,19 +354,17 @@ asm
  testl TDF_AST,kthread.td_flags(%rcx)
  jne _ast
 
- movqq kthread.td_frame(%rcx),%rcx //td_frame
-
  //Restore preserved registers.
- movqq trapframe.tf_rflags(%rcx),%rax
+ movqq kthread.td_frame.tf_rflags(%rcx),%rax
  shl   $8,%rax
  sahf  //restore flags
 
- movqq trapframe.tf_rdi(%rcx),%rdi
- movqq trapframe.tf_rsi(%rcx),%rsi
- movqq trapframe.tf_rdx(%rcx),%rdx
- movqq trapframe.tf_rax(%rcx),%rax
+ movqq kthread.td_frame.tf_rdi(%rcx),%rdi
+ movqq kthread.td_frame.tf_rsi(%rcx),%rsi
+ movqq kthread.td_frame.tf_rdx(%rcx),%rdx
+ movqq kthread.td_frame.tf_rax(%rcx),%rax
 
- movqq trapframe.tf_rsp(%rcx),%r11
+ movqq kthread.td_frame.tf_rsp(%rcx),%r11
  lea  -16(%r11),%r11
 
  movqq %r11,%rsp //restore rsp (Implicit unlock interrupt)

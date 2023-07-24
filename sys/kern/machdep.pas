@@ -22,6 +22,7 @@ Procedure bmove(src,dst:Pointer;size:ptrint);
 
 function  cpu_getstack(td:p_kthread):QWORD;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+procedure cpu_fetch_syscall_args(td:p_kthread);
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);
 
@@ -72,7 +73,7 @@ end;
 
 function cpu_getstack(td:p_kthread):QWORD;
 begin
- Result:=td^.td_frame^.tf_rsp;
+ Result:=td^.td_frame.tf_rsp;
 end;
 
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
@@ -82,31 +83,54 @@ begin
  set_pcb_flags(td,PCB_FULL_IRET);
 end;
 
+procedure cpu_fetch_syscall_args(td:p_kthread);
+begin
+ td^.td_retval[0]:=0;
+ td^.td_retval[1]:=td^.td_frame.tf_rdx;
+
+ //teb stack
+ td^.td_teb^.sttop:=td^.td_kstack.sttop;
+ td^.td_teb^.stack:=td^.td_kstack.stack;
+ //teb stack
+end;
+
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 begin
  Case error of
-  0:With td^.td_frame^ do
+  0:With td^.td_frame do
     begin
      tf_rax:=td^.td_retval[0];
      tf_rdx:=td^.td_retval[1];
      tf_rflags:=tf_rflags and (not PSL_C);
     end;
   ERESTART:
-    With td^.td_frame^ do
+    With td^.td_frame do
     begin
      //tf_err = size of syscall cmd
-     tf_rip:=tf_rip-td^.td_frame^.tf_err;
+     tf_rip:=tf_rip-td^.td_frame.tf_err;
      tf_r10:=tf_rcx;
      set_pcb_flags(td,PCB_FULL_IRET);
     end;
   EJUSTRETURN:; //nothing
   else
-    With td^.td_frame^ do
+    With td^.td_frame do
     begin
      tf_rax:=error;
      tf_rflags:=tf_rflags or PSL_C;
     end;
  end;
+
+ //teb stack
+ if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+ begin
+  td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
+  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
+ end else
+ begin
+  td^.td_teb^.stack:=td^.td_ustack.stack;
+  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+ end;
+ //teb stack
 end;
 
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);
@@ -115,21 +139,21 @@ begin
   * Set the trap frame to point at the beginning of the uts
   * function.
   }
- td^.td_frame^.tf_rbp:=0;
- td^.td_frame^.tf_rsp:=(ptruint(stack^.ss_sp) + stack^.ss_size) and (not $F);
- Dec(td^.td_frame^.tf_rsp,8);
- td^.td_frame^.tf_rip:=ptruint(entry);
- td^.td_frame^.tf_ds:=_udatasel;
- td^.td_frame^.tf_es:=_udatasel;
- td^.td_frame^.tf_fs:=_ufssel;
- td^.td_frame^.tf_gs:=_ugssel;
- td^.td_frame^.tf_flags:=TF_HASSEGS;
+ td^.td_frame.tf_rbp:=0;
+ td^.td_frame.tf_rsp:=(ptruint(stack^.ss_sp) + stack^.ss_size) and (not $F);
+ Dec(td^.td_frame.tf_rsp,8);
+ td^.td_frame.tf_rip:=ptruint(entry);
+ td^.td_frame.tf_ds:=_udatasel;
+ td^.td_frame.tf_es:=_udatasel;
+ td^.td_frame.tf_fs:=_ufssel;
+ td^.td_frame.tf_gs:=_ugssel;
+ td^.td_frame.tf_flags:=TF_HASSEGS;
 
  {
   * Pass the address of the mailbox for this kse to the uts
   * function as a parameter on the stack.
   }
- td^.td_frame^.tf_rdi:=ptruint(arg);
+ td^.td_frame.tf_rdi:=ptruint(arg);
 end;
 
 function get_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
@@ -157,7 +181,7 @@ begin
     (mcp^.mc_ownedfp=_MC_FPOWNED_PCB) then
  begin
   bmove(xstate,@td^.td_fpstate,SizeOf(mcp^.mc_fpstate));
-  td^.td_frame^.tf_flags:=td^.td_frame^.tf_flags or TF_HASFPXSTATE;
+  td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_HASFPXSTATE;
   Exit(0);
  end;
 
@@ -168,7 +192,7 @@ function get_mcontext(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
 var
  tp:p_trapframe;
 begin
- tp:=td^.td_frame;
+ tp:=@td^.td_frame;
 
  PROC_LOCK();
  mcp^.mc_onstack:=sigonstack(tp^.tf_rsp);
@@ -236,7 +260,7 @@ function get_mcontext2(td:p_kthread;mcp:p_mcontext_t;flags:Integer):Integer;
 var
  tp:p_trapframe;
 begin
- tp:=td^.td_frame;
+ tp:=@td^.td_frame;
 
  mcp^.mc_onstack:=sigonstack(tp^.tf_rsp);
 
@@ -286,15 +310,13 @@ var
  tp:p_trapframe;
  rflags:QWORD;
 begin
- tp:=td^.td_frame;
+ tp:=@td^.td_frame;
 
  if (mcp^.mc_len<>sizeof(mcontext_t)) or
     ((mcp^.mc_flags and (not _MC_FLAG_MASK))<>0) then
  begin
   Exit(EINVAL);
  end;
-
- tp:=td^.td_frame;
 
  //xmm,ymm
  if ((mcp^.mc_rflags and _MC_HASFPXSTATE)<>0) then
@@ -359,7 +381,7 @@ begin
 
  sig:=ksi^.ksi_info.si_signo;
 
- regs:=td^.td_frame;
+ regs:=@td^.td_frame;
  oonstack:=sigonstack(regs^.tf_rsp);
 
  // Save user context.
@@ -481,7 +503,7 @@ begin
   Exit(EINVAL);
  end;
 
- regs:=td^.td_frame;
+ regs:=@td^.td_frame;
 
  //xmm,ymm
  if ((uc.uc_mcontext.mc_flags and _MC_HASFPXSTATE)<>0) then
@@ -509,7 +531,7 @@ procedure exec_setregs(td:p_kthread;entry,stack:QWORD);
 var
  regs:p_trapframe;
 begin
- regs:=td^.td_frame;
+ regs:=@td^.td_frame;
 
  td^.pcb_fsbase:=nil;
  td^.pcb_gsbase:=nil;

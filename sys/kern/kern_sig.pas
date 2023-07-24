@@ -1747,8 +1747,20 @@ procedure ast;
 var
  td:p_kthread;
  flags,sig:Integer;
+ //
+ sttop:Pointer;
+ stack:Pointer;
 begin
  td:=curkthread;
+ if (td=nil) then Exit;
+
+ //teb stack
+ sttop:=td^.td_teb^.sttop;
+ stack:=td^.td_teb^.stack;
+ //
+ td^.td_teb^.sttop:=td^.td_kstack.sttop;
+ td^.td_teb^.stack:=td^.td_kstack.stack;
+ //teb stack
 
  thread_lock(td);
 
@@ -1848,6 +1860,10 @@ begin
   thread_unlock(td);
  end;
 
+ //teb stack
+ td^.td_teb^.sttop:=sttop;
+ td^.td_teb^.stack:=stack;
+ //teb stack
 end;
 
 //
