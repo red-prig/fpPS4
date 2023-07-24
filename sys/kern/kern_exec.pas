@@ -212,11 +212,6 @@ err_exit:
 end;
 
 
-function Align8(v:Pointer):Pointer; inline;
-begin
- Result:=Pointer((Int64(v)+7) and (not Int64(-8)));
-end;
-
 {
  * Destroy old address space, and allocate a new stack
  * The new stack is only SGROWSIZ large because it is grown
@@ -381,14 +376,14 @@ begin
   * Prepare the pagesizes array.
   }
  Dec(destp,sizeof(pagesizes));
- destp:=Align8(destp);
+ destp:=AlignUp(destp,8);
 
  imgp^.pagesizes:=destp;
  copyout(@pagesizes, destp, sizeof(pagesizes));
  imgp^.pagesizeslen:=Length(pagesizes);
 
  Dec(destp,ARG_MAX-imgp^.args^.stringspace);
- destp:=Align8(destp);
+ destp:=AlignUp(destp,8);
 
  {
   * If we have a valid auxargs ptr, prepare some room
@@ -1408,7 +1403,7 @@ begin
  dynlib_proc_initialize_step3(imgp);
 
  { Set values passed into the program in registers. }
- exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base));
+ exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base), QWORD(g_vmspace.sv_usrstack));
 
  vfs_mark_atime(imgp^.vp);
 

@@ -1007,7 +1007,7 @@ begin
  Result:=0;
  td:=curkthread;
  if (td=nil) then Exit(-1);
- td^.pcb_gsbase:=base;
+ cpu_set_gsbase(td,base);
 end;
 
 function sys_amd64_get_gsbase(base:PPointer):Integer;

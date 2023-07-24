@@ -2157,6 +2157,7 @@ begin
  begin
   bot:=round_page(addrbos + (max_ssize div 2) - (init_ssize div 2));
  end;
+
  top:=bot + init_ssize;
  rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow);
 
@@ -2165,6 +2166,7 @@ begin
  begin
   if (prev_entry<>@map^.header) then
    vm_map_clip_end(map, prev_entry, bot);
+
   new_entry:=prev_entry^.next;
   if (new_entry^.__end<>top) or (new_entry^.start<>bot) then
    Assert(false,'Bad entry start/end for new stack entry');
@@ -2172,6 +2174,7 @@ begin
   new_entry^.avail_ssize:=max_ssize - init_ssize;
   if ((orient and MAP_STACK_GROWS_DOWN)<>0) then
    new_entry^.eflags:=new_entry^.eflags or MAP_ENTRY_GROWS_DOWN;
+
   if ((orient and MAP_STACK_GROWS_UP)<>0) then
    new_entry^.eflags:=new_entry^.eflags or MAP_ENTRY_GROWS_UP;
  end;

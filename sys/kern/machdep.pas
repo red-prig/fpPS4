@@ -22,6 +22,7 @@ Procedure bmove(src,dst:Pointer;size:ptrint);
 
 function  cpu_getstack(td:p_kthread):QWORD;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+procedure cpu_set_gsbase(td:p_kthread;base:Pointer);
 procedure cpu_fetch_syscall_args(td:p_kthread);
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);
@@ -36,7 +37,7 @@ procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 
 function  sys_sigreturn(sigcntxp:Pointer):Integer;
 
-procedure exec_setregs(td:p_kthread;entry,stack:QWORD);
+procedure exec_setregs(td:p_kthread;entry,stack_base,stack_top:QWORD);
 
 implementation
 
@@ -80,6 +81,13 @@ procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 begin
  td^.pcb_fsbase:=base;
  td^.td_teb^.tcb:=base;
+ set_pcb_flags(td,PCB_FULL_IRET);
+end;
+
+procedure cpu_set_gsbase(td:p_kthread;base:Pointer);
+begin
+ td^.pcb_gsbase:=base;
+ td^.td_teb^.gsbase:=base;
  set_pcb_flags(td,PCB_FULL_IRET);
 end;
 
@@ -360,8 +368,8 @@ begin
 
  if ((mcp^.mc_flags and _MC_HASBASES)<>0) then
  begin
-  td^.pcb_fsbase:=Pointer(mcp^.mc_fsbase);
-  td^.pcb_gsbase:=Pointer(mcp^.mc_gsbase);
+  cpu_set_user_tls(td,Pointer(mcp^.mc_fsbase));
+  cpu_set_gsbase  (td,Pointer(mcp^.mc_gsbase));
  end;
 
  set_pcb_flags(td,PCB_FULL_IRET);
@@ -517,8 +525,8 @@ begin
 
  if ((ucp^.uc_mcontext.mc_flags and _MC_HASBASES)<>0) then
  begin
-  td^.pcb_fsbase:=Pointer(ucp^.uc_mcontext.mc_fsbase);
-  td^.pcb_gsbase:=Pointer(ucp^.uc_mcontext.mc_gsbase);
+  cpu_set_user_tls(td,Pointer(ucp^.uc_mcontext.mc_fsbase));
+  cpu_set_gsbase  (td,Pointer(ucp^.uc_mcontext.mc_gsbase));
  end;
 
  kern_sigprocmask(td,SIG_SETMASK,@ucp^.uc_sigmask,nil,0);
@@ -527,24 +535,22 @@ begin
  Result:=EJUSTRETURN;
 end;
 
-procedure exec_setregs(td:p_kthread;entry,stack:QWORD);
+procedure exec_setregs(td:p_kthread;entry,stack_base,stack_top:QWORD);
 var
  regs:p_trapframe;
 begin
  regs:=@td^.td_frame;
 
- td^.pcb_fsbase:=nil;
- td^.pcb_gsbase:=nil;
-
- td^.td_teb^.tcb:=nil;
+ cpu_set_user_tls(td,nil);
+ cpu_set_gsbase  (td,nil);
 
  set_pcb_flags(td,PCB_FULL_IRET);
 
  bzero(regs, sizeof(trapframe));
 
  regs^.tf_rip   :=entry;
- regs^.tf_rsp   :=((stack - 8) and (not $F)) + 8;
- regs^.tf_rdi   :=stack; // argv
+ regs^.tf_rsp   :=((stack_base - 8) and (not $F)) + 8;
+ regs^.tf_rdi   :=stack_base; // argv
  regs^.tf_rflags:=PSL_USER or (regs^.tf_rflags and PSL_T);
  regs^.tf_ss    :=_udatasel;
  regs^.tf_cs    :=_ucodesel;
@@ -553,6 +559,11 @@ begin
  regs^.tf_fs    :=_ufssel;
  regs^.tf_gs    :=_ugssel;
  regs^.tf_flags :=TF_HASSEGS;
+
+ //teb stack
+ td^.td_teb^.sttop:=Pointer(stack_top );
+ td^.td_teb^.stack:=Pointer(stack_base);
+ //teb stack
 
  td^.td_retval[1]:=0;
 end;

@@ -17,6 +17,8 @@ Const
 function  cpu_thread_alloc():p_kthread;
 function  cpu_thread_free(td:p_kthread):Integer;
 
+function  BaseQueryInfo(td:p_kthread):Integer;
+
 function  cpu_thread_create(td:p_kthread;
                             stack_base:Pointer;
                             stack_size:QWORD;

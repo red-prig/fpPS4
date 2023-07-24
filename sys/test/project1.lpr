@@ -15,6 +15,7 @@ uses
  md_time,
  thr,
  kern_thread,
+ md_thread,
  kern_rwlock,
  thr_private,
  sys_cpuset,
@@ -133,9 +134,10 @@ begin
 
  //sched_priority(@td,700);
 
- umtx_thread_init(td);
+ BaseQueryInfo(td);
 
  set_curkthread(td);
+
 
  p:=mmap(Pointer($700000000),16*1024,PROT_CPU_ALL,MAP_VOID or MAP_FIXED,-1,0);
  Writeln(HexStr(p));
@@ -603,7 +605,25 @@ begin
  sig_unlock;
  sig_unlock;
 
-{
+ {
+ rax:=0;
+ asm
+  mov %gs:(0x1C0),%rax
+ end;
+ Writeln('SpareBytes1[0]:',HexStr(rax,16));
+
+ rax:=0;
+ asm
+  mov %gs:(0x1C8),%rax
+ end;
+ Writeln('SpareBytes1[1]:',HexStr(rax,16));
+
+ rax:=0;
+ asm
+  mov %gs:(0x1D0),%rax
+ end;
+ Writeln('SpareBytes1[2]:',HexStr(rax,16));
+
  Writeln('GetTlsBase:',HexStr(GetTlsBase));
 
  rax:=0;
@@ -1249,8 +1269,10 @@ begin
 
  PAGE_MAP[200]:=3;
  writeln(PAGE_MAP[200]);
- writeln(PAGE_MAP_COUNT-1);
- writeln(sizeof(PAGE_MAP));
+ writeln('0x',HexStr(PAGE_MAP_COUNT-1,8));
+ writeln('0x',HexStr(sizeof(PAGE_MAP),8));
+ writeln('0x',HexStr(PAGE_MAP_COUNT div (64*1024 div 4),8));
+ writeln('0x',HexStr((64*1024 div 4),8));
 
  //test_map;
  sys_init;
