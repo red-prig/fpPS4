@@ -8,7 +8,8 @@ interface
 uses
  mqueue,
  vm,
- kern_mtx;
+ kern_mtx,
+ kern_synch;
 
 type
  obj_type=(
@@ -60,29 +61,40 @@ const
  OBJPR_NOTMAPPED=$2; // Don't unmap pages.
  OBJPR_NOTWIRED =$4; // Don't remove wired pages.
 
-procedure vm_object_reference (_object:vm_object_t);
+procedure vm_object_reference (obj:vm_object_t);
 function  vm_object_allocate  (t:objtype_t;size:vm_pindex_t):vm_object_t;
-procedure vm_object_deallocate(_object:vm_object_t);
-procedure vm_object_clear_flag(_object:vm_object_t;bits:Word);
+procedure vm_object_deallocate(obj:vm_object_t);
+procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
 
-procedure vm_object_pip_add(_object:vm_object_t;i:word);
-procedure vm_object_pip_subtract(_object:vm_object_t;i:word);
-procedure vm_object_pip_wakeup(_object:vm_object_t);
+procedure vm_object_pip_add     (obj:vm_object_t;i:word);
+procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
+procedure vm_object_pip_wakeup  (obj:vm_object_t);
 
-procedure VM_OBJECT_LOCK   (_object:vm_object_t);
-function  VM_OBJECT_TRYLOCK(_object:vm_object_t):Boolean;
-procedure VM_OBJECT_UNLOCK (_object:vm_object_t);
-function  VM_OBJECT_LOCKED (_object:vm_object_t):Boolean;
-procedure VM_OBJECT_LOCK_ASSERT(_object:vm_object_t);
+function  vm_object_page_clean(obj:vm_object_t;
+                               start,__end:vm_ooffset_t;
+                               flags:Integer):Boolean;
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+procedure vm_object_page_remove(obj:vm_object_t;
+                                start:vm_pindex_t;
+                                __end:vm_pindex_t;
+                                options:Integer);
 
-function vm_object_coalesce(prev_object:vm_object_t;
-                            prev_offset:vm_ooffset_t;
-                            prev_size  :vm_ooffset_t;
-                            next_size  :vm_ooffset_t;
-                            reserved   :Boolean):Boolean;
+procedure vm_object_collapse(obj:vm_object_t);
+
+procedure VM_OBJECT_LOCK       (obj:vm_object_t);
+function  VM_OBJECT_TRYLOCK    (obj:vm_object_t):Boolean;
+procedure VM_OBJECT_UNLOCK     (obj:vm_object_t);
+function  VM_OBJECT_LOCKED     (obj:vm_object_t):Boolean;
+procedure VM_OBJECT_LOCK_ASSERT(obj:vm_object_t);
+
+function  IDX_TO_OFF(x:DWORD):QWORD; inline;
+function  OFF_TO_IDX(x:QWORD):DWORD; inline;
+
+function  vm_object_coalesce(prev_object:vm_object_t;
+                             prev_offset:vm_ooffset_t;
+                             prev_size  :vm_ooffset_t;
+                             next_size  :vm_ooffset_t;
+                             reserved   :Boolean):Boolean;
 
 implementation
 
@@ -99,35 +111,35 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-procedure VM_OBJECT_LOCK(_object:vm_object_t);
+procedure VM_OBJECT_LOCK(obj:vm_object_t);
 begin
- mtx_lock(_object^.mtx);
+ mtx_lock(obj^.mtx);
 end;
 
-function VM_OBJECT_TRYLOCK(_object:vm_object_t):Boolean;
+function VM_OBJECT_TRYLOCK(obj:vm_object_t):Boolean;
 begin
- Result:=mtx_trylock(_object^.mtx);
+ Result:=mtx_trylock(obj^.mtx);
 end;
 
-procedure VM_OBJECT_UNLOCK(_object:vm_object_t);
+procedure VM_OBJECT_UNLOCK(obj:vm_object_t);
 begin
- mtx_unlock(_object^.mtx);
+ mtx_unlock(obj^.mtx);
 end;
 
-function VM_OBJECT_LOCKED(_object:vm_object_t):Boolean;
+function VM_OBJECT_LOCKED(obj:vm_object_t):Boolean;
 begin
- Result:=(mtx_owned(_object^.mtx));
+ Result:=(mtx_owned(obj^.mtx));
 end;
 
-procedure VM_OBJECT_LOCK_ASSERT(_object:vm_object_t);
+procedure VM_OBJECT_LOCK_ASSERT(obj:vm_object_t);
 begin
- Assert(mtx_owned(_object^.mtx));
+ Assert(mtx_owned(obj^.mtx));
 end;
 
-procedure vm_object_clear_flag(_object:vm_object_t;bits:Word);
+procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
 begin
- VM_OBJECT_LOCK_ASSERT(_object);
- _object^.flags:=_object^.flags and (not bits);
+ VM_OBJECT_LOCK_ASSERT(obj);
+ obj^.flags:=obj^.flags and (not bits);
 end;
 
 function vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
@@ -144,71 +156,123 @@ begin
  Result^.ref_count :=1;
 end;
 
-procedure _vm_object_deallocate(_object:vm_object_t);
+procedure _vm_object_deallocate(obj:vm_object_t);
 begin
- Case _object^.otype of
+ Case obj^.otype of
   OBJT_DEFAULT:;
   OBJT_VNODE  :;
   OBJT_DMEM   :;
   OBJT_DEAD   :;
  end;
- mtx_destroy(_object^.mtx);
- FreeMem(_object);
+ mtx_destroy(obj^.mtx);
+ FreeMem(obj);
 end;
 
-procedure vm_object_reference(_object:vm_object_t);
+procedure vm_object_reference(obj:vm_object_t);
 begin
- if (_object=nil) then Exit;
+ if (obj=nil) then Exit;
 
- System.InterlockedIncrement(_object^.ref_count);
+ System.InterlockedIncrement(obj^.ref_count);
 end;
 
-procedure vm_object_deallocate(_object:vm_object_t);
+procedure vm_object_deallocate(obj:vm_object_t);
 begin
- if (_object=nil) then Exit;
+ if (obj=nil) then Exit;
 
- if (System.InterlockedDecrement(_object^.ref_count)=0) then
+ if (System.InterlockedDecrement(obj^.ref_count)=0) then
  begin
-  _vm_object_deallocate(_object);
+  _vm_object_deallocate(obj);
  end;
 end;
 
-procedure vm_object_destroy(_object:vm_object_t);
+procedure vm_object_destroy(obj:vm_object_t);
 begin
- vm_object_deallocate(_object);
+ vm_object_deallocate(obj);
 end;
 
-procedure vm_object_pip_add(_object:vm_object_t;i:word);
+procedure vm_object_pip_add(obj:vm_object_t;i:word);
 begin
- if (_object=nil) then Exit;
+ if (obj=nil) then Exit;
 
- VM_OBJECT_LOCK_ASSERT(_object);
- _object^.paging_in_progress:=_object^.paging_in_progress+i;
+ VM_OBJECT_LOCK_ASSERT(obj);
+ obj^.paging_in_progress:=obj^.paging_in_progress+i;
 end;
 
-procedure vm_object_pip_subtract(_object:vm_object_t;i:word);
+procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
 begin
- if (_object=nil) then Exit;
+ if (obj=nil) then Exit;
 
- VM_OBJECT_LOCK_ASSERT(_object);
- _object^.paging_in_progress:=_object^.paging_in_progress-i;
+ VM_OBJECT_LOCK_ASSERT(obj);
+ obj^.paging_in_progress:=obj^.paging_in_progress-i;
 end;
 
-procedure vm_object_pip_wakeup(_object:vm_object_t);
+procedure vm_object_pip_wakeup(obj:vm_object_t);
 begin
- if (_object=nil) then Exit;
+ if (obj=nil) then Exit;
 
- VM_OBJECT_LOCK_ASSERT(_object);
- Dec(_object^.paging_in_progress);
- if ((_object^.flags and OBJ_PIPWNT)<>0) and (_object^.paging_in_progress=0) then
+ VM_OBJECT_LOCK_ASSERT(obj);
+ Dec(obj^.paging_in_progress);
+ if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.paging_in_progress=0) then
  begin
-  vm_object_clear_flag(_object, OBJ_PIPWNT);
-  //wakeup(_object);
+  vm_object_clear_flag(obj, OBJ_PIPWNT);
+  wakeup(obj);
  end;
 end;
 
+{
+ vm_object_page_clean
 
-procedure vm_object_page_remove(_object:vm_object_t;
+ Clean all dirty pages in the specified range of object.  Leaves page
+ on whatever queue it is currently on.   If NOSYNC is set then do not
+ write out pages with VPO_NOSYNC set (originally comes from MAP_NOSYNC),
+ leaving the object dirty.
+
+ When stuffing pages asynchronously, allow clustering.  XXX we need a
+ synchronous clustering mode implementation.
+
+ Odd semantics: if start == end, we clean everything.
+
+ The object must be locked.
+
+ Returns FALSE if some page from the range was not written, as
+ reported by the pager, and TRUE otherwise.
+}
+
+function  vm_object_page_clean(obj:vm_object_t;
+                               start,__end:vm_ooffset_t;
+                               flags:Integer):Boolean;
+begin
+ Result:=True;
+end;
+
+{
+ vm_object_page_remove:
+
+ For the given object, either frees or invalidates each of the
+ specified pages.  In general, a page is freed.  However, if a page is
+ wired for any reason other than the existence of a managed, wired
+ mapping, then it may be invalidated but not removed from the object.
+ Pages are specified by the given range ["start", "end") and the option
+ OBJPR_CLEANONLY.  As a special case, if "end" is zero, then the range
+ extends from "start" to the end of the object.  If the option
+ OBJPR_CLEANONLY is specified, then only the non-dirty pages within the
+ specified range are affected.  If the option OBJPR_NOTMAPPED is
+ specified, then the pages within the specified range must have no
+ mappings.  Otherwise, if this option is not specified, any mappings to
+ the specified pages are removed before the pages are freed or
+ invalidated.
+
+ In general, this operation should only be performed on objects that
+ contain managed pages.  There are, however, two exceptions.  First, it
+ is performed on the kernel and kmem objects by vm_map_entry_delete().
+ Second, it is used by msync(..., MS_INVALIDATE) to invalidate device-
+ backed pages.  In both of these cases, the option OBJPR_CLEANONLY must
+ not be specified and the option OBJPR_NOTMAPPED must be specified.
+
+ The object must be locked.
+}
+
+procedure vm_object_page_remove(obj:vm_object_t;
                                 start:vm_pindex_t;
                                 __end:vm_pindex_t;
                                 options:Integer);
@@ -216,10 +280,40 @@ begin
 
 end;
 
-procedure vm_object_collapse(_object:vm_object_t);
+{
+ vm_object_collapse:
+
+ Collapse an object with the object backing it.
+ Pages in the backing object are moved into the
+ parent, and the backing object is deallocated.
+}
+
+procedure vm_object_collapse(obj:vm_object_t);
 begin
  //
 end;
+
+{
+ Routine:	vm_object_coalesce
+ Function:	Coalesces two objects backing up adjoining
+ 		regions of memory into a single object.
+
+ returns TRUE if objects were combined.
+
+ NOTE:	Only works at the moment if the second object is NULL -
+ 	if it's not, which object do we lock first?
+
+ Parameters:
+ 	prev_object	First object to coalesce
+ 	prev_offset	Offset into prev_object
+ 	prev_size	Size of reference to prev_object
+ 	next_size	Size of reference to the second object
+ 	reserved	Indicator that extension region has
+ 			swap accounted for
+
+ Conditions:
+ The object must *not* be locked.
+}
 
 function vm_object_coalesce(prev_object:vm_object_t;
                             prev_offset:vm_ooffset_t;
@@ -267,12 +361,13 @@ begin
   * Extend the object if necessary.
   }
  if (next_pindex + next_size > prev_object^.size) then
+ begin
   prev_object^.size:=next_pindex + next_size;
+ end;
 
  VM_OBJECT_UNLOCK(prev_object);
  Result:=(TRUE);
 end;
-
 
 end.
 

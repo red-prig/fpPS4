@@ -432,26 +432,30 @@ begin
    if (vp^.v_type<>VMARKER) then Break;
    vp:=TAILQ_NEXT(vp,@vp^.v_nmntvnodes);
   end;
+
   if (vp=nil) then
    break;
+
   TAILQ_REMOVE     (@mp^.mnt_nvnodelist,vp,@vp^.v_nmntvnodes);
   TAILQ_INSERT_TAIL(@mp^.mnt_nvnodelist,vp,@vp^.v_nmntvnodes);
   Dec(count);
+
   if (not VI_TRYLOCK(vp)) then
    goto next_iter;
+
   {
    * If it's been deconstructed already, it's still
    * referenced, or it exceeds the trigger, skip it.
    }
-  //if (vp^.v_usecount<>0) or
-  //   ((vlru_allow_cache_src=0) and
-  //    (not LIST_EMPTY(@vp^.v_cache_src))) or
-  //    ((vp^.v_iflag and VI_DOOMED)<>0) or
-  //    ((vp^.v_object<>nil) and (vp^.v_object^.resident_page_count > trigger)) then
-  //begin
-  // VI_UNLOCK(vp);
-  // goto next_iter;
-  //end;
+  if (vp^.v_usecount<>0) or
+     {((vlru_allow_cache_src=0) and (not LIST_EMPTY(@vp^.v_cache_src))) or}
+     ((vp^.v_iflag and VI_DOOMED)<>0) {or
+     ((vp^.v_object<>nil) and (vp^.v_object^.resident_page_count > trigger))} then
+  begin
+   VI_UNLOCK(vp);
+   goto next_iter;
+  end;
+
   MNT_IUNLOCK(mp);
   vholdl(vp);
   if (VOP_LOCK(vp, LK_INTERLOCK or LK_EXCLUSIVE or LK_NOWAIT,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%})<>0) then
@@ -472,15 +476,14 @@ begin
    * interlock, the other thread will be unable to drop the
    * vnode lock before our VOP_LOCK() call fails.
    }
-  //if (vp^.v_usecount) or
-  //   ((vlru_allow_cache_src=0) and
-  //    (not LIST_EMPTY(@vp^.v_cache_src))) or
-  //   ((vp^.v_object<>nil) and
-  //    (vp^.v_object^.resident_page_count > trigger)) then
-  //begin
-  // VOP_UNLOCK(vp, LK_INTERLOCK);
-  // goto next_iter_mntunlocked;
-  //end;
+  if (vp^.v_usecount<>0) {or
+     ((vlru_allow_cache_src=0) and (not LIST_EMPTY(@vp^.v_cache_src))) or
+     ((vp^.v_object<>nil) and (vp^.v_object^.resident_page_count > trigger))} then
+  begin
+   VOP_UNLOCK(vp, LK_INTERLOCK);
+   goto next_iter_mntunlocked;
+  end;
+
   Assert((vp^.v_iflag and VI_DOOMED)=0,'VI_DOOMED unexpectedly detected in vlrureclaim()');
   //atomic_add_long(@recycles_count, 1);
   vgonel(vp);
@@ -1012,22 +1015,33 @@ begin
 #endif
  Exit(0);
 end;
+}
 
 {
  * Flush out and invalidate all buffers associated with a vnode.
  * Called with the underlying object locked.
  }
-int
-vinvalbuf(vp:p_vnode, int flags, int slpflag, int slptimeo)
+function vinvalbuf(vp:p_vnode;flags,slpflag,slptimeo:Integer):Integer;
 begin
+ ASSERT_VOP_LOCKED(vp, 'vinvalbuf');
 
- CTR3(KTR_VFS, "%s: vp %p with flags %d", {$I %LINE%}, vp, flags);
- ASSERT_VOP_LOCKED(vp, "vinvalbuf';
- if (vp^.v_object<>nil and vp^.v_object^.handle<>vp)
+ if (vp^.v_object<>nil) then
+ if (vm_object_t(vp^.v_object)^.handle<>vp) then
+ begin
   Exit(0);
- Exit(bufobj_invalbuf(@vp^.v_bufobj, flags, slpflag, slptimeo));
+ end;
+
+ if (vp^.v_object<>nil) then
+ begin
+  vm_object_deallocate(vp^.v_object);
+  vp^.v_object:=nil;
+ end;
+
+ //Exit(bufobj_invalbuf(@vp^.v_bufobj, flags, slpflag, slptimeo));
+ Result:=0;
 end;
 
+{
 {
  * Flush out buffers on the specified list.
  *
@@ -2062,7 +2076,9 @@ begin
  end;
 
  if (vp^.v_usecount > 0) then
+ begin
   vp^.v_iflag:=vp^.v_iflag and (not VI_OWEINACT);
+ end;
 
  if (error=0) then
  begin
@@ -2237,7 +2253,9 @@ begin
  //mac_vnode_destroy(vp);
 
  if (vp^.v_pollinfo<>nil) then
+ begin
   destroy_vpollinfo(vp^.v_pollinfo);
+ end;
 
  { XXX Elsewhere we detect an already freed vnode via nil v_op. }
  vp^.v_op:=nil;
@@ -2251,7 +2269,7 @@ begin
 
  //mtx_destroy(BO_MTX(bo));
 
- //FreeMem(vp);
+ FreeMem(vp);
 end;
 
 {
@@ -2279,13 +2297,12 @@ begin
   * if there is at least one resident non-cached page, the vnode
   * cannot leave the active list without the page cleanup done.
   }
- obj:=nil;
- //obj:=vp^.v_object;
+ obj:=vp^.v_object;
  if (obj<>nil) then
  if ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
  begin
   VM_OBJECT_LOCK(obj);
-  //vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
+  vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
   VM_OBJECT_UNLOCK(obj);
  end;
  VOP_INACTIVE(vp);
@@ -2372,12 +2389,12 @@ loop:
    }
   if ((flags and WRITECLOSE)<>0) then
   begin
-   //if (vp^.v_object<>nil) then
-   //begin
-   // VM_OBJECT_LOCK(vp^.v_object);
-   // vm_object_page_clean(vp^.v_object, 0, 0, 0);
-   // VM_OBJECT_UNLOCK(vp^.v_object);
-   //end;
+   if (vp^.v_object<>nil) then
+   begin
+    VM_OBJECT_LOCK(vp^.v_object);
+    vm_object_page_clean(vp^.v_object, 0, 0, 0);
+    VM_OBJECT_UNLOCK(vp^.v_object);
+   end;
    error:=VOP_FSYNC(vp, MNT_WAIT);
    if (error<>0) then
    begin
@@ -2518,10 +2535,14 @@ begin
   * If the flush fails, just toss the buffers.
   }
  mp:=nil;
+
  //if (not TAILQ_EMPTY(@vp^.v_bufobj.bo_dirty.bv_hd)) then
  // vn_start_secondary_write(vp, &mp, V_WAIT);
- //if (vinvalbuf(vp, V_SAVE, 0, 0)<>0) then
- // vinvalbuf(vp, 0, 0, 0);
+
+ if (vinvalbuf(vp, V_SAVE, 0, 0)<>0) then
+ begin
+  vinvalbuf(vp, 0, 0, 0);
+ end;
 
  {
   * If purging an active vnode, it must be closed and
@@ -2543,8 +2564,10 @@ begin
 
   VI_UNLOCK(vp);
  end;
+
  //if (vp^.v_type=VSOCK) then
  // vfs_unp_reclaim(vp);
+
  {
   * Reclaim the vnode.
   }
@@ -2555,7 +2578,9 @@ begin
 
  //if (mp<>nil) then
  // vn_finished_secondary_write(mp);
+
  //Assert(vp^.v_object=nil,'vop_reclaim left v_object vp=%p, tag=%s'));
+
  {
   * Clear the advisory locks and wake up waiting threads.
   }
@@ -2603,13 +2628,12 @@ end;
 procedure vfs_msync(mp:p_mount;flags:Integer);
 var
  vp,mvp:p_vnode;
- obj:Pointer; //vm_object
+ obj:vm_object_t;
 begin
  vp:=__mnt_vnode_first_active(@mvp,mp);
  While (vp<>nil) do
  begin
-  obj:=nil;
-  //obj:=vp^.v_object;
+  obj:=vp^.v_object;
   if (obj<>nil) and
      {((obj^.flags and OBJ_MIGHTBEDIRTY)<>0)} False and
      ((flags=MNT_WAIT) or (VOP_ISLOCKED(vp)=0)) then
@@ -2624,20 +2648,25 @@ begin
      continue;
     end;
 
-    obj:=nil;
-    //obj:=vp^.v_object;
+    obj:=vp^.v_object;
     if (obj<>nil) then
     begin
-     //VM_OBJECT_LOCK(obj);
-     //vm_object_page_clean(obj, 0, 0,
-     //    flags=MNT_WAIT ?
-     //    OBJPC_SYNC : OBJPC_NOSYNC);
-     //VM_OBJECT_UNLOCK(obj);
+     VM_OBJECT_LOCK(obj);
+     if (flags=MNT_WAIT) then
+     begin
+      vm_object_page_clean(obj, 0, 0, OBJPC_SYNC);
+     end else
+     begin
+      vm_object_page_clean(obj, 0, 0, OBJPC_NOSYNC);
+     end;
+     VM_OBJECT_UNLOCK(obj);
     end;
     vput(vp);
    end;
   end else
+  begin
    VI_UNLOCK(vp);
+  end;
   //
   vp:=__mnt_vnode_next_active(@mvp,mp);
  end;

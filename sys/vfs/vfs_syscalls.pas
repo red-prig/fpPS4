@@ -139,7 +139,8 @@ uses
  kern_synch,
  kern_descrip,
  vnode_if,
- sys_capability;
+ sys_capability,
+ vm_object;
 
 {
  * Sync each mounted filesystem.
@@ -2449,12 +2450,13 @@ begin
  end;
  vn_lock(vp, lock_flags or LK_RETRY);
 
- //if (vp^.v_object<>nil) then
- //begin
- // VM_OBJECT_LOCK(vp^.v_object);
- // vm_object_page_clean(vp^.v_object, 0, 0, 0);
- // VM_OBJECT_UNLOCK(vp^.v_object);
- //end;
+ if (vp^.v_object<>nil) then
+ begin
+  VM_OBJECT_LOCK(vp^.v_object);
+  vm_object_page_clean(vp^.v_object, 0, 0, 0);
+  VM_OBJECT_UNLOCK(vp^.v_object);
+ end;
+
  error:=VOP_FSYNC(vp, MNT_WAIT or ((ord(fullsync) and 1) shl 1));
 
  VOP_UNLOCK(vp, 0);

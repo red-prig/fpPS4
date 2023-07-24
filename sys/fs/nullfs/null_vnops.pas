@@ -319,8 +319,12 @@ begin
  if (ldvp=nil) then Exit(0);
 
  retval:=null_bypass(Pointer(ap));
- //if (retval=0) then
- // vp^.v_object:=ldvp^.v_object;
+
+ if (retval=0) then
+ begin
+  vp^.v_object:=ldvp^.v_object;
+ end;
+
  Exit(retval);
 end;
 
@@ -732,7 +736,7 @@ begin
    * deleted, then free up the vnode so as not to tie up
    * the lower vnodes.
    }
-  //vp^.v_object:=nil;
+  vp^.v_object:=nil;
   vrecycle(vp);
  end;
  Exit(0);
@@ -769,7 +773,7 @@ begin
 
  VI_LOCK(vp);
  vp^.v_data:=nil;
- //vp^.v_object:=nil;
+ vp^.v_object:=nil;
  vp^.v_vnlock:=@vp^.v_lock;
  VI_UNLOCK(vp);
 

@@ -1427,11 +1427,13 @@ var
  _2mb_mode:Boolean;
  used_mode_2m:Boolean;
 
- fname:RawByteString;
+ fname:PChar;
+
+ cache:Pointer;
 begin
  Result:=0;
 
- fname:=ExtractFileName(imgp^.execpath);
+ fname:=dynlib_basename(imgp^.execpath);
 
  total_size:=0;
  data_size :=0;
@@ -1446,6 +1448,8 @@ begin
  begin
   _2mb_mode:=False;
  end;
+
+ cache:=nil;
 
  if (count<>0) then
  For i:=0 to count-1 do
@@ -1486,7 +1490,8 @@ begin
                               p_filesz,
                               p_flags,
                               used_mode_2m,
-                              pchar(fname));
+                              fname,
+                              cache);
 
    end else
    begin
@@ -1507,9 +1512,14 @@ begin
                               p_filesz,
                               p_flags,
                               used_mode_2m,
-                              pchar(fname));
+                              fname,
+                              cache);
    end;
-   if (Result<>0) then Exit;
+   if (Result<>0) then
+   begin
+    FreeMem(cache);
+    Exit;
+   end;
 
    addr:=(p_vaddr and QWORD($ffffffffffffc000));
    size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
@@ -1534,6 +1544,8 @@ begin
 
   Inc(phdr);
  end;
+
+ FreeMem(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin
@@ -1587,7 +1599,6 @@ begin
  new^.module_param:=imgp^.module_param_addr;
  new^.relro_addr  :=imgp^.relro_addr;
  new^.relro_size  :=imgp^.relro_size;
-
 end;
 
 function self_load_shared_object(path:pchar;new:p_lib_info;wire:Integer):Integer;
@@ -1757,6 +1768,8 @@ begin
  new^.tls_init_addr    :=new^.tls_init_addr    +delta;
  new^.eh_frame_hdr_addr:=new^.eh_frame_hdr_addr+delta;
 
+ imgp^.obj:=vm_object_allocate(OBJT_DEFAULT,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
+
  error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta);
  if (error<>0) then
  begin
@@ -1780,6 +1793,8 @@ begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
   VOP_CLOSE(vp, FREAD);
   vput(vp);
+
+  vm_object_deallocate(imgp^.obj);
 
  Exit(error);
 end;
@@ -2021,7 +2036,7 @@ label
  _inc_max,
  _error;
 var
- fname:RawByteString;
+ fname:pchar;
  new:p_lib_info;
  obj:p_lib_info;
  i:Integer;
@@ -2037,8 +2052,8 @@ begin
   goto _error;
  end;
 
- fname:=ExtractFileName(path);
- object_add_name(new,pchar(fname));
+ fname:=dynlib_basename(path);
+ object_add_name(new,fname);
 
  obj_set_lib_path(new,path);
 

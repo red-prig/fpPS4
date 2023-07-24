@@ -198,13 +198,13 @@ function  elf64_get_eh_frame_info(hdr:p_eh_frame_hdr;
 
 
 function  scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
-procedure scan_load_size(imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
 
 function  self_load_section(imgp:p_image_params;
                             id,vaddr,offset,memsz,filesz:QWORD;
                             prot:Byte;
                             use_mode_2mb:Boolean;
-                            name:pchar):Integer;
+                            name:pchar;
+                            var cache:Pointer):Integer;
 
 function  is_system_path(path:pchar):Boolean;
 function  is_libc_or_fios(path:pchar):Boolean;
@@ -222,7 +222,8 @@ uses
  vm,
  vmparam,
  vm_map,
- vm_mmap;
+ vm_mmap,
+ kern_patcher;
 
 function maxInt64(a,b:Int64):Int64; inline;
 begin
@@ -1037,67 +1038,12 @@ begin
  Result:=EINVAL;
 end;
 
-procedure scan_load_size(imgp:p_image_params;phdr:p_elf64_phdr;count,dynlib,budget:Integer;var max_size,mx2_size:QWORD);
-var
- i:Integer;
- use_mode_2mb:Boolean;
-
- size    :QWORD;
- vaddr   :QWORD;
- vaddr_lo:QWORD;
- vaddr_hi:QWORD;
-begin
- max_size:=0;
- mx2_size:=0;
-
- if (count<>0) then
- For i:=0 to count-1 do
- begin
-  if ((phdr^.p_type=PT_SCE_RELRO) or
-      (phdr^.p_type=PT_LOAD)) and
-     (phdr^.p_memsz<>0) then
-  begin
-   vaddr:=phdr^.p_vaddr;
-
-   if (imgp^.image_header^.e_type=ET_SCE_DYNEXEC) then
-   begin
-    vaddr:=vaddr + QWORD(imgp^.reloc_base);
-   end;
-
-   vaddr_lo:=vaddr and $ffffffffffffc000;
-   vaddr_hi:=phdr^.p_memsz + vaddr;
-
-   size:=((vaddr_hi - vaddr_lo) + $3fff) and $ffffffffffffc000;
-
-   max_size:=max_size + size;
-
-   use_mode_2mb:=is_used_mode_2mb(phdr,dynlib,budget);
-
-   if (use_mode_2mb) then
-   begin
-    vaddr_lo:=(vaddr_lo + $1fffff) and $ffffffffffe00000;
-    vaddr_hi:=(vaddr_lo + size   ) and $ffffffffffe00000;
-
-    size:=0;
-    if (vaddr_lo <= vaddr_hi) then
-    begin
-     size:=vaddr_hi - vaddr_lo;
-    end;
-
-    mx2_size:=mx2_size + size;
-   end;
-
-  end;
-
-  Inc(phdr);
- end;
-end;
-
 function self_load_section(imgp:p_image_params;
                            id,vaddr,offset,memsz,filesz:QWORD;
                            prot:Byte;
                            use_mode_2mb:Boolean;
-                           name:pchar):Integer;
+                           name:pchar;
+                           var cache:Pointer):Integer;
 var
  map:vm_map_t;
  vaddr_lo:QWORD;
@@ -1142,7 +1088,7 @@ begin
  //remove prev if exist
  vm_map_delete(map,vaddr_lo,vaddr_hi);
 
- Result:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
+ Result:=vm_map_insert(map,imgp^.obj,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
  if (Result<>0) then
  begin
   vm_map_unlock(map);
@@ -1153,7 +1099,17 @@ begin
 
  vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
- Result:=copyout(base,Pointer(vaddr),filesz);
+ memsz:=vaddr_hi-vaddr_lo;
+ cache:=ReAllocMem(cache,memsz);
+ FillChar(cache^,memsz,0);
+ Move(Pointer(vaddr_lo)^,cache^,filesz);
+
+ if ((prot and VM_PROT_EXECUTE)<>0) then
+ begin
+  patcher_process_section(imgp^.obj,cache,Pointer(vaddr_lo),filesz);
+ end;
+
+ Result:=copyout(base,cache,filesz);
  if (Result<>0) then
  begin
   vm_map_unlock(map);

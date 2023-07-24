@@ -574,6 +574,8 @@ var
  used_mode_2m:Boolean;
 
  auxargs:p_elf64_auxargs;
+
+ cache:Pointer;
 begin
  Result:=0;
 
@@ -592,6 +594,8 @@ begin
  begin
   _2mb_mode:=False;
  end;
+
+ cache:=nil;
 
  if (count<>0) then
  For i:=0 to count-1 do
@@ -637,7 +641,8 @@ begin
                               p_filesz,
                               p_flags,
                               used_mode_2m,
-                              'executable');
+                              'executable',
+                              cache);
 
    end else
    begin
@@ -658,9 +663,14 @@ begin
                               p_filesz,
                               p_flags,
                               used_mode_2m,
-                              'executable');
+                              'executable',
+                              cache);
    end;
-   if (Result<>0) then Exit;
+   if (Result<>0) then
+   begin
+    FreeMem(cache);
+    Exit;
+   end;
 
    addr:=(p_vaddr and QWORD($ffffffffffffc000));
    size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
@@ -685,6 +695,8 @@ begin
 
   Inc(phdr);
  end;
+
+ FreeMem(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin
@@ -993,9 +1005,6 @@ var
  hdr :p_elf64_hdr;
  phdr:p_elf64_phdr;
  reloc_base:Pointer;
-
- max_size:QWORD;
- mx2_size:QWORD;
 begin
  Result:=0;
 
@@ -1078,9 +1087,7 @@ begin
 
  if (Result<>0) then Exit;
 
- max_size:=0;
- mx2_size:=0;
- scan_load_size(imgp,phdr,hdr^.e_phnum,0,budget_ptype_caller,max_size,mx2_size);
+ imgp^.obj:=vm_object_allocate(OBJT_DEFAULT,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
 
  Result:=scan_load_sections(imgp,phdr,hdr^.e_phnum);
  if (Result<>0) then
@@ -1270,7 +1277,7 @@ begin
  error:=exec_check_permissions(imgp);
  if (error<>0) then goto exec_fail_dealloc;
 
- //imgp^.object:=imgp^.vp^.v_object;
+ //imgp^.obj:=imgp^.vp^.v_object;
  //if (imgp^.object<>nil) then
  //begin
  // vm_object_reference(imgp^.object);
@@ -1454,10 +1461,7 @@ exec_fail_dealloc:
   vput(imgp^.vp);
  end;
 
- //if (imgp^.object<>nil) then
- //begin
- // vm_object_deallocate(imgp^.object);
- //end;
+ vm_object_deallocate(imgp^.obj);
 
  FreeMem(imgp^.freepath);
 

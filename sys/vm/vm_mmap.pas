@@ -99,7 +99,7 @@ begin
  foff:=foffp^;
  flags:=flagsp^;
  obj:=nil;
- //obj:=vp^.v_object;
+ obj:=vp^.v_object;
  if (vp^.v_type=VREG) then
  begin
   {
@@ -158,7 +158,9 @@ begin
   }
  objsize:=round_page(va.va_size);
  if (va.va_nlink=0) then
+ begin
   flags:=flags or MAP_NOSYNC;
+ end;
  //obj:=vm_pager_allocate(OBJT_VNODE, vp, objsize, prot, foff, cred);
  if (obj=nil) then
  begin
@@ -203,14 +205,14 @@ function _vm_mmap(map        :vm_map_t;
                   handle     :Pointer;
                   foff       :vm_ooffset_t):Integer;
 var
- _object:vm_object_t;
+ vm_obj:vm_object_t;
  docow,error,findspace,rv:Integer;
  fitit:Boolean;
  writecounted:Boolean;
 begin
  if (size=0) then Exit(0);
 
- _object:=nil;
+ vm_obj:=nil;
 
  size:=round_page(size);
 
@@ -238,7 +240,7 @@ begin
  Case handle_type of
   OBJT_VNODE:
    begin
-    error:=vm_mmap_vnode(size,prot,@maxprot,@flags, handle,@foff,@_object,@writecounted);
+    error:=vm_mmap_vnode(size,prot,@maxprot,@flags, handle,@foff,@vm_obj,@writecounted);
    end;
   OBJT_DEFAULT:
    begin
@@ -258,7 +260,7 @@ begin
 
  if ((flags and MAP_ANON)<>0) then
  begin
-  _object:=nil;
+  vm_obj:=nil;
   docow:=0;
   if (handle=nil) then foff:=0;
  end else
@@ -300,10 +302,10 @@ begin
   begin
    findspace:=VMFS_OPTIMAL_SPACE;
   end;
-  rv:=vm_map_find(map, _object, foff, addr, size, findspace, prot, maxprot, docow);
+  rv:=vm_map_find(map, vm_obj, foff, addr, size, findspace, prot, maxprot, docow);
  end else
  begin
-  rv:=vm_map_fixed(map, _object, foff, addr^, size, prot, maxprot, docow,
+  rv:=vm_map_fixed(map, vm_obj, foff, addr^, size, prot, maxprot, docow,
        ord((flags and MAP_NO_OVERWRITE)=0));
  end;
 
@@ -314,10 +316,10 @@ begin
  begin
   if (writecounted) then
   begin
-   //vnode_pager_release_writecount(_object, 0, size);
+   //vnode_pager_release_writecount(vm_obj, 0, size);
   end;
 
-  vm_object_deallocate(_object);
+  vm_object_deallocate(vm_obj);
  end;
  Exit(vm_mmap_to_errno(rv));
 end;

@@ -33,7 +33,7 @@ type
   avail_ssize   :vm_offset_t;    // amt can grow if this is a stack
   adj_free      :vm_offset_t;    // amount of adjacent free space
   max_free      :vm_offset_t;    // max free space in subtree
-  _object       :vm_map_object;  // object I point to
+  vm_obj        :vm_map_object;  // object I point to
   offset        :vm_ooffset_t;   // offset into object
   eflags        :vm_eflags_t;    // map entry flags
   protection    :vm_prot_t;      // protection code
@@ -162,7 +162,7 @@ function  vm_map_lookup_entry(
 
 function vm_map_insert(
            map        :vm_map_t;
-           _object    :vm_object_t;
+           vm_obj     :vm_object_t;
            offset     :vm_ooffset_t;
            start      :vm_offset_t;
            __end      :vm_offset_t;
@@ -176,7 +176,7 @@ function  vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
                         vaddr      :vm_offset_t;
                         fault_typea:vm_prot_t;
                         out_entry  :p_vm_map_entry_t;  { OUT }
-                        _object    :p_vm_object_t;     { OUT }
+                        vm_obj     :p_vm_object_t;     { OUT }
                         pindex     :p_vm_pindex_t;     { OUT }
                         out_prot   :p_vm_prot_t        { OUT }
                        ):Integer;
@@ -185,7 +185,7 @@ function  vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
                                vaddr      :vm_offset_t;
                                fault_typea:vm_prot_t;
                                out_entry  :p_vm_map_entry_t;  { OUT }
-                               _object    :p_vm_object_t;     { OUT }
+                               vm_obj     :p_vm_object_t;     { OUT }
                                pindex     :p_vm_pindex_t;     { OUT }
                                out_prot   :p_vm_prot_t;       { OUT }
                                wired      :PBoolean           { OUT }
@@ -203,7 +203,7 @@ function  vm_map_madvise(map     :vm_map_t;
                          behav   :Integer):Integer;
 
 function  vm_map_find(map       :vm_map_t;
-                      _object   :vm_object_t;
+                      vm_obj    :vm_object_t;
                       offset    :vm_ooffset_t;
                       addr      :p_vm_offset_t;
                       length    :vm_size_t;
@@ -213,7 +213,7 @@ function  vm_map_find(map       :vm_map_t;
                       cow       :Integer):Integer;
 
 function  vm_map_fixed(map    :vm_map_t;
-                       _object:vm_object_t;
+                       vm_obj :vm_object_t;
                        offset :vm_ooffset_t;
                        start  :vm_offset_t;
                        length :vm_size_t;
@@ -293,11 +293,17 @@ end;
 procedure VM_MAP_RANGE_CHECK(map:vm_map_t;var start,__end:vm_offset_t);
 begin
  if (start<vm_map_min(map)) then
+ begin
   start:=vm_map_min(map);
+ end;
  if (__end>vm_map_max(map)) then
+ begin
   __end:=vm_map_max(map);
+ end;
  if (start>__end) then
+ begin
   start:=__end;
+ end;
 end;
 
 function ENTRY_CHARGED(e:vm_map_entry_t):Boolean; inline;
@@ -683,7 +689,9 @@ var
 begin
  VM_MAP_ASSERT_LOCKED(map);
  if (entry<>map^.root) then
+ begin
   vm_map_entry_splay(entry^.start, map^.root);
+ end;
  if (entry^.left=nil) then
  begin
   root:=entry^.right;
@@ -728,7 +736,9 @@ begin
   * root and making the change there.
   }
  if (entry<>map^.root) then
+ begin
   map^.root:=vm_map_entry_splay(entry^.start, map^.root);
+ end;
 
  if (entry^.next=@map^.header) then
  begin
@@ -792,7 +802,9 @@ begin
   begin
    entry^:=cur;
    if (cur^.__end>address) then
+   begin
     Exit(TRUE);
+   end;
   end else
    entry^:=cur^.prev;
  end;
@@ -815,7 +827,7 @@ procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t); forward;
  }
 function vm_map_insert(
            map        :vm_map_t;
-           _object    :vm_object_t;
+           vm_obj     :vm_object_t;
            offset     :vm_ooffset_t;
            start      :vm_offset_t;
            __end      :vm_offset_t;
@@ -838,14 +850,18 @@ begin
   * Check that the start and end points are not bogus.
   }
  if (start<map^.min_offset) or (__end>map^.max_offset) or (start>=__end) then
+ begin
   Exit(KERN_INVALID_ADDRESS);
+ end;
 
  {
   * Find the entry prior to the proposed starting address; if it's part
   * of an existing entry, this range is bogus.
   }
  if vm_map_lookup_entry(map,start,@temp_entry) then
+ begin
   Exit(KERN_NO_SPACE);
+ end;
 
  prev_entry:=temp_entry;
 
@@ -854,7 +870,9 @@ begin
   }
  if (prev_entry^.next<>@map^.header) and
     (prev_entry^.next^.start<__end) then
+ begin
   Exit(KERN_NO_SPACE);
+ end;
 
  protoeflags:=0;
  charge_prev_obj:=FALSE;
@@ -866,8 +884,9 @@ begin
  begin
   protoeflags:=protoeflags or MAP_ENTRY_NOFAULT;
 
-  Assert(_object=nil,'vm_map_insert: paradoxical MAP_NOFAULT request');
+  Assert(vm_obj=nil,'vm_map_insert: paradoxical MAP_NOFAULT request');
  end;
+
  if ((cow and MAP_DISABLE_SYNCER)<>0) then
   protoeflags:=protoeflags or MAP_ENTRY_NOSYNC;
 
@@ -886,17 +905,17 @@ begin
   goto charged;
 
  if ((cow and MAP_ACC_CHARGED)<>0) or (((prot and VM_PROT_WRITE)<>0) and
-     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (_object=nil))) then
+     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (vm_obj=nil))) then
  begin
-  Assert((_object=nil) or
+  Assert((vm_obj=nil) or
          ((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0),'OVERCOMMIT: vm_map_insert o %p", object');
-  if (_object=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
+  if (vm_obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
    charge_prev_obj:=TRUE;
  end;
 
 charged:
 
- if (_object<>nil) then
+ if (vm_obj<>nil) then
  begin
   {
    * OBJ_ONEMAPPING must be cleared unless this mapping
@@ -905,16 +924,18 @@ charged:
    * reference counting is insufficient to recognize
    * aliases with precision.)
    }
-  VM_OBJECT_LOCK(_object);
-  if (_object^.ref_count>1) then
-   vm_object_clear_flag(_object, OBJ_ONEMAPPING);
-  VM_OBJECT_UNLOCK(_object);
+  VM_OBJECT_LOCK(vm_obj);
+  if (vm_obj^.ref_count>1) then
+  begin
+   vm_object_clear_flag(vm_obj, OBJ_ONEMAPPING);
+  end;
+  VM_OBJECT_UNLOCK(vm_obj);
  end else
  if ((prev_entry<>@map^.header) and
    (prev_entry^.eflags=protoeflags) and
    ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP))=0) and
    (prev_entry^.__end=start) and
-     vm_object_coalesce(prev_entry^._object,
+     vm_object_coalesce(prev_entry^.vm_obj,
          prev_entry^.offset,
          vm_size_t(prev_entry^.__end - prev_entry^.start),
          vm_size_t(__end - prev_entry^.__end), charge_prev_obj)) then
@@ -924,7 +945,6 @@ charged:
    * can extend the previous map entry to include the
    * new range as well.
    }
-  // (_object=nil)
   if ((prev_entry^.inheritance=inheritance) and
       (prev_entry^.protection=prot) and
       (prev_entry^.max_protection=max)) then
@@ -952,10 +972,10 @@ charged:
    * must bump the ref count on the ext__ended object to
    * account for it.  object may be nil.
    }
-  _object:=prev_entry^._object;
+  vm_obj:=prev_entry^.vm_obj;
   offset:=prev_entry^.offset + (prev_entry^.__end - prev_entry^.start);
-  vm_object_reference(_object);
-  if (_object<>nil) and
+  vm_object_reference(vm_obj);
+  if (vm_obj<>nil) and
      ((prev_entry^.eflags and MAP_ENTRY_NEEDS_COPY)=0) then
   begin
    { Object already accounts for this uid. }
@@ -976,13 +996,15 @@ charged:
  new_entry^.__end:=__end;
 
  new_entry^.eflags:=protoeflags;
- new_entry^._object:=_object;
+ new_entry^.vm_obj:=vm_obj;
  new_entry^.offset:=offset;
  new_entry^.avail_ssize:=0;
 
  new_entry^.inheritance:=inheritance;
  new_entry^.protection:=prot;
  new_entry^.max_protection:=max;
+
+ vm_object_reference(vm_obj);
 
  Assert(not ENTRY_CHARGED(new_entry),'OVERCOMMIT: vm_map_insert leaks vm_map %p", new_entry');
 
@@ -1125,7 +1147,7 @@ begin
 end;
 
 function vm_map_fixed(map    :vm_map_t;
-                      _object:vm_object_t;
+                      vm_obj :vm_object_t;
                       offset :vm_ooffset_t;
                       start  :vm_offset_t;
                       length :vm_size_t;
@@ -1143,7 +1165,7 @@ begin
  begin
   vm_map_delete(map, start, __end);
  end;
- Result:=vm_map_insert(map, _object, offset, start, __end, prot, max, cow);
+ Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow);
  vm_map_unlock(map);
 end;
 
@@ -1157,7 +1179,7 @@ end;
  * prior to making call to account for the new entry.
  }
 function vm_map_find(map       :vm_map_t;
-                     _object   :vm_object_t;
+                     vm_obj    :vm_object_t;
                      offset    :vm_ooffset_t;
                      addr      :p_vm_offset_t;
                      length    :vm_size_t;
@@ -1172,11 +1194,11 @@ var
 begin
  if (find_space=VMFS_OPTIMAL_SPACE) then
  begin
-  if (_object=nil) then
+  if (vm_obj=nil) then
   begin
    find_space:=VMFS_ANY_SPACE;
   end else
-  if ((_object^.flags and OBJ_COLORED)=0) then
+  if ((vm_obj^.flags and OBJ_COLORED)=0) then
   begin
    find_space:=VMFS_ANY_SPACE;
   end;
@@ -1207,7 +1229,7 @@ again:
 
    case find_space of
     VMFS_SUPER_SPACE,
-    VMFS_OPTIMAL_SPACE: pmap_align_superpage(_object, offset, addr, length);
+    VMFS_OPTIMAL_SPACE: pmap_align_superpage(vm_obj, offset, addr, length);
     VMFS_ANY_SPACE:;
    else
     if ((addr^ and (alignment - 1))<>0) then
@@ -1219,7 +1241,7 @@ again:
 
    start:=addr^;
   end;
-  Result:=vm_map_insert(map, _object, offset, start, start + length, prot, max, cow);
+  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow);
  until not ((Result=KERN_NO_SPACE) and
             (find_space<>VMFS_NO_SPACE) and
             (find_space<>VMFS_ANY_SPACE));
@@ -1251,8 +1273,8 @@ begin
  begin
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
-     (prev^._object=entry^._object) and
-     ((prev^._object=nil) or (prev^.offset + prevsize=entry^.offset)) and
+     (prev^.vm_obj=entry^.vm_obj) and
+     ((prev^.vm_obj=nil) or (prev^.offset + prevsize=entry^.offset)) and
      (prev^.eflags=entry^.eflags) and
      (prev^.protection=entry^.protection) and
      (prev^.max_protection=entry^.max_protection) and
@@ -1279,7 +1301,7 @@ begin
     * the writemappings value should not be adjusted
     * when the entry is disposed of.
     }
-   vm_object_deallocate(prev^._object);
+   vm_object_deallocate(prev^.vm_obj);
    vm_map_entry_dispose(map, prev);
   end;
  end;
@@ -1289,8 +1311,8 @@ begin
  begin
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
-     (next^._object=entry^._object) and
-     ((entry^._object=nil) or (entry^.offset + esize=next^.offset)) and
+     (next^.vm_obj=entry^.vm_obj) and
+     ((entry^.vm_obj=nil) or (entry^.offset + esize=next^.offset)) and
      (next^.eflags=entry^.eflags) and
      (next^.protection=entry^.protection) and
      (next^.max_protection=entry^.max_protection) and
@@ -1301,7 +1323,7 @@ begin
    //change
    vm_map_entry_resize_free(map, entry);
 
-   vm_object_deallocate(next^._object);
+   vm_object_deallocate(next^.vm_obj);
    vm_map_entry_dispose(map, next);
   end;
  end;
@@ -1335,7 +1357,7 @@ begin
 
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
  begin
-  vm_object_reference(new_entry^._object);
+  vm_object_reference(new_entry^.vm_obj);
  end;
 end;
 
@@ -1377,7 +1399,7 @@ begin
 
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
  begin
-  vm_object_reference(new_entry^._object);
+  vm_object_reference(new_entry^.vm_obj);
  end;
 end;
 
@@ -1478,7 +1500,7 @@ begin
    goto _continue;
   end;
 
-  obj:=current^._object;
+  obj:=current^.vm_obj;
 
   if (obj=nil) or ((current^.eflags and MAP_ENTRY_NEEDS_COPY)<>0) then
   begin
@@ -1698,9 +1720,9 @@ begin
     continue;
    end;
 
-   //vm_object_madvise(current^._object, pstart, p__end, behav);
+   //vm_object_madvise(current^.vm_obj, pstart, p__end, behav);
 
-   if (current^._object=nil) then
+   if (current^.vm_obj=nil) then
    begin
     Case behav of
      MADV_WILLNEED:
@@ -1801,7 +1823,7 @@ var
  current:vm_map_entry_t;
  entry  :vm_map_entry_t;
  size   :vm_size_t;
- _object:vm_object_t;
+ vm_obj :vm_object_t;
  offset :vm_ooffset_t;
  last_timestamp:DWORD;
  failed:Boolean;
@@ -1861,30 +1883,32 @@ begin
 
   if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
   begin
-   smap:=vm_map_t(current^._object);
+   smap:=vm_map_t(current^.vm_obj);
    vm_map_lock(smap);
    vm_map_lookup_entry(smap, offset, @tentry);
    tsize:=tentry^.__end - offset;
    if (tsize<size) then
     size:=tsize;
-   _object:=tentry^._object;
+   vm_obj:=tentry^.vm_obj;
    offset:=tentry^.offset + (offset - tentry^.start);
    vm_map_unlock(smap);
   end else
   begin
-   _object:=current^._object;
+   vm_obj:=current^.vm_obj;
   end;
-  vm_object_reference(_object);
+  vm_object_reference(vm_obj);
   last_timestamp:=map^.timestamp;
   vm_map_unlock(map);
   //if (not vm_object_sync(_object, offset, size, syncio, invalidate)) then
   // failed:=TRUE;
   start:=start+size;
-  vm_object_deallocate(_object);
+  vm_object_deallocate(vm_obj);
   vm_map_lock(map);
   if (last_timestamp=map^.timestamp) or
      (not vm_map_lookup_entry(map, start, @current)) then
+  begin
    current:=current^.next;
+  end;
  end;
 
  vm_map_unlock(map);
@@ -1898,7 +1922,9 @@ end;
 procedure vm_map_entry_deallocate(entry:vm_map_entry_t);
 begin
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
-  vm_object_deallocate(entry^._object);
+ begin
+  vm_object_deallocate(entry^.vm_obj);
+ end;
  Freemem(entry);
 end;
 
@@ -1909,26 +1935,26 @@ end;
  }
 procedure vm_map_entry_delete(map:vm_map_t;entry:vm_map_entry_t);
 var
- _object:vm_object_t;
+ vm_obj:vm_object_t;
  offidxstart,offidx_end,count:vm_pindex_t;
  size:vm_ooffset_t;
 begin
  vm_map_entry_unlink(map, entry);
- _object:=entry^._object;
+ vm_obj:=entry^.vm_obj;
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
 
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
-    (_object<>nil) then
+    (vm_obj<>nil) then
  begin
   count:=OFF_TO_IDX(size);
   offidxstart:=OFF_TO_IDX(entry^.offset);
   offidx_end:=offidxstart + count;
-  VM_OBJECT_LOCK(_object);
-  if (_object^.ref_count<>1) and
-      (((_object^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
+  VM_OBJECT_LOCK(vm_obj);
+  if (vm_obj^.ref_count<>1) and
+      (((vm_obj^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
   begin
-   //vm_object_collapse(_object);
+   vm_object_collapse(vm_obj);
 
    {
     * The option OBJPR_NOTMAPPED can be passed here
@@ -1936,17 +1962,19 @@ begin
     * pmap_remove() on the only mapping to this range
     * of pages.
     }
-   //vm_object_page_remove(_object, offidxstart, offidx_end, OBJPR_NOTMAPPED);
+   vm_object_page_remove(vm_obj, offidxstart, offidx_end, OBJPR_NOTMAPPED);
 
-   if (offidx_end>=_object^.size) and
-      (offidxstart<_object^.size) then
+   if (offidx_end>=vm_obj^.size) and
+      (offidxstart<vm_obj^.size) then
    begin
-    _object^.size:=offidxstart;
+    vm_obj^.size:=offidxstart;
    end;
   end;
-  VM_OBJECT_UNLOCK(_object);
+  VM_OBJECT_UNLOCK(vm_obj);
  end else
-  entry^._object:=nil;
+ begin
+  entry^.vm_obj:=nil;
+ end;
 
  begin
   entry^.next:=curkthread^.td_map_def_user;
@@ -2410,9 +2438,9 @@ begin
   grow_amount:=addr - stack_entry^.__end;
   { Grow the underlying object if applicable. }
 
-  if (stack_entry^._object=nil) then goto _or;
+  if (stack_entry^.vm_obj=nil) then goto _or;
 
-  if vm_object_coalesce(stack_entry^._object,
+  if vm_object_coalesce(stack_entry^.vm_obj,
                         stack_entry^.offset,
                         vm_size_t(stack_entry^.__end - stack_entry^.start),
                         vm_size_t(grow_amount), false) then
@@ -2481,7 +2509,7 @@ function vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
                        vaddr      :vm_offset_t;
                        fault_typea:vm_prot_t;
                        out_entry  :p_vm_map_entry_t;  { OUT }
-                       _object    :p_vm_object_t;     { OUT }
+                       vm_obj     :p_vm_object_t;     { OUT }
                        pindex     :p_vm_pindex_t;     { OUT }
                        out_prot   :p_vm_prot_t        { OUT }
                       ):Integer;
@@ -2520,7 +2548,7 @@ RetryLookup:
  begin
   old_map:=map;
 
-  map:=vm_map_t(entry^._object);
+  map:=vm_map_t(entry^.vm_obj);
   var_map^:=map;
   vm_map_unlock(old_map);
   goto RetryLookup;
@@ -2571,7 +2599,7 @@ RetryLookup:
     * object.
     }
 
-   //vm_object_shadow(@entry^._object, @entry^.offset, size);
+   //vm_object_shadow(@entry^.vm_obj, @entry^.offset, size);
 
    entry^.eflags:=entry^.eflags and (not MAP_ENTRY_NEEDS_COPY);
   end else
@@ -2589,7 +2617,7 @@ RetryLookup:
   * copy-on-write or empty, it has been fixed up.
   }
  pindex^:=OFF_TO_IDX((vaddr - entry^.start) + entry^.offset);
- _object^:=entry^._object;
+ vm_obj^:=entry^.vm_obj;
 
  out_prot^:=prot;
  Result:=(KERN_SUCCESS);
@@ -2605,7 +2633,7 @@ function vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
                               vaddr      :vm_offset_t;
                               fault_typea:vm_prot_t;
                               out_entry  :p_vm_map_entry_t;  { OUT }
-                              _object    :p_vm_object_t;     { OUT }
+                              vm_obj     :p_vm_object_t;     { OUT }
                               pindex     :p_vm_pindex_t;     { OUT }
                               out_prot   :p_vm_prot_t;       { OUT }
                               wired      :PBoolean           { OUT }
@@ -2626,7 +2654,9 @@ begin
   * Lookup the faulting address.
   }
  if (not vm_map_lookup_entry(map, vaddr, out_entry)) then
+ begin
   Exit(KERN_INVALID_ADDRESS);
+ end;
 
  entry:=out_entry^;
 
@@ -2634,7 +2664,9 @@ begin
   * Fail if the entry refers to a submap.
   }
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+ begin
   Exit(KERN_FAILURE);
+ end;
 
  {
   * Check whether this task is allowed to have this page.
@@ -2642,7 +2674,9 @@ begin
  prot:=entry^.protection;
  fault_type:=fault_type and (VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE);
  if ((fault_type and prot)<>fault_type) then
+ begin
   Exit(KERN_PROTECTION_FAILURE);
+ end;
 
  if ((entry^.eflags and MAP_ENTRY_NEEDS_COPY)<>0) then
  begin
@@ -2650,7 +2684,9 @@ begin
    * Fail if the entry was copy-on-write for a write fault.
    }
   if ((fault_type and VM_PROT_WRITE)<>0) then
+  begin
    Exit(KERN_FAILURE);
+  end;
   {
    * We're attempting to read a copy-on-write page --
    * don't allow writes.
@@ -2661,15 +2697,17 @@ begin
  {
   * Fail if an object should be created.
   }
- if (entry^._object=nil) then
+ if (entry^.vm_obj=nil) then
+ begin
   Exit(KERN_FAILURE);
+ end;
 
  {
   * Return the object/offset from this entry.  If the entry was
   * copy-on-write or empty, it has been fixed up.
   }
  pindex^:=OFF_TO_IDX((vaddr - entry^.start) + entry^.offset);
- _object^:=entry^._object;
+ vm_obj^:=entry^.vm_obj;
 
  out_prot^:=prot;
  Result:=(KERN_SUCCESS);

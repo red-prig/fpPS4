@@ -433,7 +433,9 @@ begin
   Assert(false,'vn_finished_write: neg cnt');
 
  if ((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0) and (mp^.mnt_writeopcount<=0) then
+ begin
   wakeup(@mp^.mnt_writeopcount);
+ end;
 
  MNT_IUNLOCK(mp);
 end;
@@ -615,7 +617,9 @@ begin
   Assert((fp^.f_vnread_flags and FOFFSET_LOCKED)<>0,'Lost FOFFSET_LOCKED');
 
   if ((fp^.f_vnread_flags and FOFFSET_LOCK_WAITING)<>0) then
+  begin
    wakeup(@fp^.f_vnread_flags);
+  end;
 
   fp^.f_vnread_flags:=0;
  end;
