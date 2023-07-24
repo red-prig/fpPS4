@@ -89,6 +89,9 @@ function sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):
 function sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function sys_dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
 function sys_dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
+function sys_dl_get_info(pid,handle:Integer;pout:PPointer):Integer;
+function sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer;
+function sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
 
 implementation
 
@@ -530,7 +533,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_info_ex:','this is not dynamic linked program.');
+  Writeln(StdErr,'copyout_module_handle_list:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -671,6 +674,23 @@ begin
  begin
   Result:=copyout(@dynlibs_info.proc_param_size,psize,SizeOf(QWORD));
  end;
+end;
+
+function sys_dl_get_info(pid,handle:Integer;pout:PPointer):Integer;
+begin
+ Exit(EPERM);  //sceSblACMgrIsDebuggerProcess || sceSblACMgrIsCoredumpProcess || sceSblACMgrIsSyscoreProcess
+end;
+
+function sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer;
+begin
+ Exit(EPERM);  //sceSblACMgrIsDebuggerProcess || sceSblACMgrIsCoredumpProcess || sceSblACMgrIsSyscoreProcess
+end;
+
+function sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
+begin
+ //sce_comment_addr
+ //sce_comment_size
+ Exit(EPERM);  //sceSblACMgrIsDebuggerProcess || sceSblACMgrIsCoredumpProcess || sceSblACMgrIsSyscoreProcess
 end;
 
 

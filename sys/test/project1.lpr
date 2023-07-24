@@ -506,7 +506,7 @@ begin
   act.u.sa_handler:=sa_handler(@__ex_handler);
   act.sa_flags:=SA_RESTART;
 
-  sigaction(SIGUSR1,@act,nil);
+  _sigaction(SIGUSR1,@act,nil);
 
 
   i:=syscalls.thr_suspend_ucontext(tid);

@@ -13,9 +13,9 @@ const
  DEVFS_IOSIZE_MAX=High(Integer);
 
 function copystr(from,_to:Pointer;maxlen:ptruint;lencopied:pptruint):Integer;
-function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
+function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
+function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer;
 function fubyte(var base:Byte):Byte; inline;
 function fuword32(var base:DWORD):DWORD; inline;
 function fuword64(var base:QWORD):QWORD; inline;
@@ -42,7 +42,7 @@ begin
  Result:=0;
 end;
 
-function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; inline;
+function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
 begin
  if (NtReadVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,nil)=0) then
  begin
@@ -78,7 +78,7 @@ begin
  end;
 end;
 
-function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; inline;
+function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer;
 begin
  if (NtWriteVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,nil)=0) then
  begin

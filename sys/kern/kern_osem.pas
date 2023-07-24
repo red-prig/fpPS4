@@ -16,6 +16,8 @@ function  sys_osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
 function  sys_osem_post(key,signalCount:Integer):Integer;
 function  sys_osem_trywait(key,needCount:Integer):Integer;
 function  sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
+function  sys_osem_open(name:PChar):Integer;
+function  sys_osem_close(key:Integer):Integer;
 
 implementation
 
@@ -394,8 +396,11 @@ begin
     (initCount>maxCount) or
     (name=nil) then Exit;
 
- //process shared osem not support
- if ((attr and SEMA_ATTR_SHRD)<>0) then Exit(EPERM);
+ if ((attr and SEMA_ATTR_SHRD)<>0) then
+ begin
+  Writeln(StdErr,'sys_evf_create:','process shared osem not support');
+  Exit(EPERM);
+ end;
 
  if ((attr and 3)=0) then
  begin
@@ -403,7 +408,8 @@ begin
  end;
 
  _name:=Default(t_id_name);
- if (copyinstr(name,@_name,32,nil)<>0) then Exit;
+ Result:=copyinstr(name,@_name,32,nil);
+ if (Result<>0) then Exit;
 
  sem:=osem_alloc;
  if (sem=nil) then Exit(ENOMEM); //EAGAIN
@@ -527,6 +533,18 @@ begin
   r:=copyout(@time,pTimeout,SizeOf(DWORD));
   if (r<>0) then Result:=r;
  end;
+end;
+
+function sys_osem_open(name:PChar):Integer;
+begin
+ Writeln(StdErr,'sys_osem_open:','process shared osem not support');
+ Exit(EPERM);
+end;
+
+function sys_osem_close(key:Integer):Integer;
+begin
+ Writeln(StdErr,'sys_osem_close:','process shared osem not support');
+ Exit(EPERM);
 end;
 
 

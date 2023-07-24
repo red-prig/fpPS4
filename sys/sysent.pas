@@ -2727,12 +2727,12 @@ const
   ),
   (//[535]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_dl_get_list;
      sy_name:'sys_dl_get_list'
   ),
   (//[536]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_dl_get_info;
      sy_name:'sys_dl_get_info'
   ),
   (//[537]
@@ -2752,12 +2752,12 @@ const
   ),
   (//[540]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_evf_open;
      sy_name:'sys_evf_open'
   ),
   (//[541]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_evf_close;
      sy_name:'sys_evf_close'
   ),
   (//[542]
@@ -2807,12 +2807,12 @@ const
   ),
   (//[551]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_osem_open;
      sy_name:'sys_osem_open'
   ),
   (//[552]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_osem_close;
      sy_name:'sys_osem_close'
   ),
   (//[553]
@@ -3072,7 +3072,7 @@ const
   ),
   (//[604]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_dl_get_metadata;
      sy_name:'sys_dl_get_metadata'
   ),
   (//[605]

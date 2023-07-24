@@ -24,6 +24,8 @@ function  sys_evf_clear(key:Integer;bitPattern:QWORD):Integer;
 function  sys_evf_set(key:Integer;bitPattern:QWORD):Integer;
 function  sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
 function  sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
+function  sys_evf_open(name:PChar):Integer;
+function  sys_evf_close(key:Integer):Integer;
 
 implementation
 
@@ -537,8 +539,11 @@ begin
     ((attr and $30)=$30) or
     (name=nil) then Exit;
 
- //process shared evf not support
- if ((attr and EVF_ATTR_SHRD)<>0) then Exit(EPERM);
+ if ((attr and EVF_ATTR_SHRD)<>0) then
+ begin
+  Writeln(StdErr,'sys_evf_create:','process shared evf not support');
+  Exit(EPERM);
+ end;
 
  if ((attr and 3)=0) then
  begin
@@ -551,7 +556,8 @@ begin
  end;
 
  _name:=Default(t_id_name);
- if (copyinstr(name,@_name,32,nil)<>0) then Exit;
+ Result:=copyinstr(name,@_name,32,nil);
+ if (Result<>0) then Exit;
 
  evf:=evf_alloc;
  if (evf=nil) then Exit(ENOMEM); //EAGAIN
@@ -721,6 +727,18 @@ begin
  end;
 
  if (r<>0) then Result:=r;
+end;
+
+function sys_evf_open(name:PChar):Integer;
+begin
+ Writeln(StdErr,'sys_evf_open:','process shared evf not support');
+ Exit(EPERM);
+end;
+
+function sys_evf_close(key:Integer):Integer;
+begin
+ Writeln(StdErr,'sys_evf_close:','process shared evf not support');
+ Exit(EPERM);
 end;
 
 

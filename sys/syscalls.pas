@@ -38,11 +38,11 @@ function  getgid():Integer;
 function  getlogin(namebuf:PChar;namelen:DWORD):Integer;
 function  setlogin(namebuf:PChar):Integer;
 Function  sigaltstack(ss,oss:Pointer):Integer;
-function  ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
+function  _ioctl(fd:Integer;com:QWORD;data:Pointer):Integer;
 function  revoke(path:PChar):Integer;
 function  symlink(path,link:PChar):Integer;
 function  readlink(path,buf:PChar;count:QWORD):Integer;
-function  execve(fname:pchar;argv,envv:ppchar):Integer;
+function  _execve(fname:pchar;argv,envv:ppchar):Integer;
 function  umask(newmask:Integer):Integer;
 function  chroot(path:PChar):Integer;
 function  munmap(addr:Pointer;len:QWORD):Integer;
@@ -53,7 +53,7 @@ function  setgroups(gidsetsize:DWORD;gidset:PInteger):Integer;
 function  getpgrp():Integer;
 function  setpgid(pid,pgid:Integer):Integer;
 function  getdtablesize():Integer;
-function  dup2(from,_to:Integer):Integer;
+function  _dup2(from,_to:Integer):Integer;
 function  _fcntl(fd,cmd:Integer;arg:QWORD):Integer;
 function  select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 function  fsync(fd:Integer):Integer;
@@ -75,7 +75,7 @@ function  mkdir(path:PChar;mode:Integer):Integer;
 function  rmdir(path:PChar):Integer;
 function  utimes(path:PChar;tptr:Pointer):Integer;
 function  adjtime(delta,olddelta:Pointer):Integer;
-function  kqueueex(name:PChar):Integer;
+function  __sys_kqueueex(name:PChar):Integer;
 function  setsid():Integer;
 function  sysarch(op:Integer;parms:Pointer):Integer;
 function  rtprio(func,pid:Integer;rtp:Pointer):Integer;
@@ -83,13 +83,13 @@ function  setgid(gid:Integer):Integer;
 function  setegid(egid:Integer):Integer;
 function  seteuid(euid:Integer):Integer;
 function  stat(path:PChar;ub:Pointer):Integer;
-function  fstat(fd:Integer;sb:Pointer):Integer;
+function  _fstat(fd:Integer;sb:Pointer):Integer;
 function  lstat(path:PChar;ub:Pointer):Integer;
 function  pathconf(path:PChar;name:Integer):Integer;
 function  _fpathconf(fd,name:Integer):Integer;
 function  getrlimit(which:Integer;rlp:Pointer):Integer;
 function  setrlimit(which:Integer;rlp:Pointer):Integer;
-function  getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
+function  _getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 function  futimes(fd:Integer;tptr:Pointer):Integer;
 function  getpgid(pid:Integer):Integer;
 function  poll(fds:Pointer;nfds:DWORD;timeout:Integer):Integer;
@@ -117,7 +117,7 @@ function  sched_yield():Integer;
 function  sched_get_priority_max(policy:Integer):Integer;
 function  sched_get_priority_min(policy:Integer):Integer;
 function  sched_rr_get_interval(pid:Integer;interval:Pointer):Integer;
-Function  sigprocmask(how:Integer;_set,oset:Pointer):Integer;
+Function  _sigprocmask(how:Integer;_set,oset:Pointer):Integer;
 Function  _sigsuspend(sigmask:Pointer):Integer;
 Function  sigpending(oset:Pointer):Integer;
 Function  sigtimedwait(oset,info,timeout:Pointer):Integer;
@@ -132,7 +132,7 @@ function  uuidgen(store:Pointer;count:Integer):Integer;
 function  getfsstat(buf:Pointer;bufsize:QWORD;flags:Integer):Integer;
 function  statfs(path:PChar;buf:Pointer):Integer;
 function  _fstatfs(fd:Integer;buf:Pointer):Integer;
-Function  sigaction(sig:Integer;act,oact:Pointer):Integer;
+Function  _sigaction(sig:Integer;act,oact:Pointer):Integer;
 function  sigreturn(sigcntxp:Pointer):Integer;
 function  getcontext(ucp:Pointer):Integer;
 function  setcontext(ucp:Pointer):Integer;
@@ -176,8 +176,12 @@ function  renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar):Integer;
 function  symlinkat(path1:PChar;fd:Integer;path2:PChar):Integer;
 function  unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 function  pselect(nd:Integer;uin,uou,uex,uts,sm:Pointer):Integer;
+function  __sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer;
+function  __sys_dl_get_info(pid,handle:Integer;pout:PPointer):Integer;
 function  evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
 function  evf_delete(key:Integer):Integer;
+function  evf_open(name:PChar):Integer;
+function  evf_close(key:Integer):Integer;
 function  evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
 function  evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD):Integer;
 function  evf_set(key:Integer;bitPattern:QWORD):Integer;
@@ -186,21 +190,24 @@ function  evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
 function  query_memory_protection(addr:Pointer;info:Pointer):Integer;
 function  osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
 function  osem_delete(key:Integer):Integer;
+function  __sys_osem_open(name:PChar):Integer;
+function  __sys_osem_close(key:Integer):Integer;
 function  osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
 function  osem_trywait(key,needCount:Integer):Integer;
 function  osem_post(key,signalCount:Integer):Integer;
 function  osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
-function  namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
-function  namedobj_delete(id,objt:Integer):Integer;
+function  __sys_namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
+function  __sys_namedobj_delete(id,objt:Integer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function  dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
 function  dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  dynlib_get_info(handle:Integer;info:Pointer):Integer;
-function  dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer;
-function  dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer;
+function  __sys_dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer;
+function  __sys_dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer;
 function  dynlib_do_copy_relocations():Integer;
 function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 function  dynlib_process_needed_and_relocate():Integer;
+function  __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
 function  dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
@@ -212,11 +219,11 @@ function  set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
-function  dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
+function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
-function  dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
-function  dynlib_get_info2(handle:Integer;info:Pointer):Integer;
-function  dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
+function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
+function  __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer;
+function  __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  cpumode_yield():Integer;
 
 implementation
@@ -442,7 +449,7 @@ asm
  jmp   cerror
 end;
 
-function ioctl(fd:Integer;com:QWORD;data:Pointer):Integer; assembler; nostackframe;
+function _ioctl(fd:Integer;com:QWORD;data:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $54,%rax
  call  fast_syscall
@@ -470,7 +477,7 @@ asm
  jmp   cerror
 end;
 
-function execve(fname:pchar;argv,envv:ppchar):Integer; assembler; nostackframe;
+function _execve(fname:pchar;argv,envv:ppchar):Integer; assembler; nostackframe;
 asm
  movq  $59,%rax
  call  fast_syscall
@@ -547,7 +554,7 @@ asm
  jmp   cerror
 end;
 
-function dup2(from,_to:Integer):Integer; assembler; nostackframe;
+function _dup2(from,_to:Integer):Integer; assembler; nostackframe;
 asm
  movq  $90,%rax
  call  fast_syscall
@@ -701,7 +708,7 @@ asm
  jmp   cerror
 end;
 
-function kqueueex(name:PChar):Integer; assembler; nostackframe;
+function __sys_kqueueex(name:PChar):Integer; assembler; nostackframe;
 asm
  movq  $141,%rax
  call  fast_syscall
@@ -757,7 +764,7 @@ asm
  jmp   cerror
 end;
 
-function fstat(fd:Integer;sb:Pointer):Integer; assembler; nostackframe;
+function _fstat(fd:Integer;sb:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $189,%rax
  call  fast_syscall
@@ -799,7 +806,7 @@ asm
  jmp   cerror
 end;
 
-function getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer; assembler; nostackframe;
+function _getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer; assembler; nostackframe;
 asm
  movq  $196,%rax
  call  fast_syscall
@@ -995,7 +1002,7 @@ asm
  jmp   cerror
 end;
 
-Function sigprocmask(how:Integer;_set,oset:Pointer):Integer; assembler; nostackframe;
+Function _sigprocmask(how:Integer;_set,oset:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $340,%rax
  call  fast_syscall
@@ -1100,7 +1107,7 @@ asm
  jmp   cerror
 end;
 
-Function sigaction(sig:Integer;act,oact:Pointer):Integer; assembler; nostackframe;
+Function _sigaction(sig:Integer;act,oact:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $416,%rax
  call  fast_syscall
@@ -1408,6 +1415,20 @@ asm
  jmp   cerror
 end;
 
+function __sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer; assembler; nostackframe;
+asm
+ movq  $535,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_dl_get_info(pid,handle:Integer;pout:PPointer):Integer; assembler; nostackframe;
+asm
+ movq  $536,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer; assembler; nostackframe;
 asm
  movq  $538,%rax
@@ -1418,6 +1439,20 @@ end;
 function evf_delete(key:Integer):Integer; assembler; nostackframe;
 asm
  movq  $539,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function evf_open(name:PChar):Integer; assembler; nostackframe;
+asm
+ movq  $540,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function evf_close(key:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $541,%rax
  call  fast_syscall
  jmp   cerror
 end;
@@ -1478,6 +1513,20 @@ asm
  jmp   cerror
 end;
 
+function __sys_osem_open(name:PChar):Integer; assembler; nostackframe;
+asm
+ movq  $551,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_osem_close(key:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $552,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer; assembler; nostackframe;
 asm
  movq  $553,%rax
@@ -1506,14 +1555,14 @@ asm
  jmp   cerror
 end;
 
-function namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer; assembler; nostackframe;
+function __sys_namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer; assembler; nostackframe;
 asm
  movq  $557,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
-function namedobj_delete(id,objt:Integer):Integer; assembler; nostackframe;
+function __sys_namedobj_delete(id,objt:Integer):Integer; assembler; nostackframe;
 asm
  movq  $558,%rax
  call  fast_syscall
@@ -1548,14 +1597,14 @@ asm
  jmp   cerror
 end;
 
-function dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer; assembler; nostackframe;
+function __sys_dynlib_load_prx(moduleFileName:pchar;flags:DWORD;pRes:PInteger;unused:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $594,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
-function dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer; assembler; nostackframe;
+function __sys_dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $595,%rax
  call  fast_syscall
@@ -1579,6 +1628,13 @@ end;
 function dynlib_process_needed_and_relocate():Integer; assembler; nostackframe;
 asm
  movq  $599,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer; assembler; nostackframe;
+asm
+ movq  $604,%rax
  call  fast_syscall
  jmp   cerror
 end;
@@ -1660,7 +1716,7 @@ asm
  jmp   cerror
 end;
 
-function dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
+function __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $656,%rax
  call  fast_syscall
@@ -1674,21 +1730,21 @@ asm
  jmp   cerror
 end;
 
-function dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
+function __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
 asm
  movq  $659,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
-function dynlib_get_info2(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
+function __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $660,%rax
  call  fast_syscall
  jmp   cerror
 end;
 
-function dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
+function __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
 asm
  movq  $672,%rax
  call  fast_syscall

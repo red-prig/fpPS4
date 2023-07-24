@@ -114,17 +114,17 @@ type
 
   //t_rtld_bits rtld_flags;
 
-  mainprog     :Integer;
-  tls_done     :Integer;
-  init_scanned :Integer;
-  init_done    :Integer;
-  on_fini_list :Integer;
-  not_get_proc :Integer;
-  textrel      :Integer;
-  init_plt     :Integer;
-  is_system    :Integer;
-  dag_inited   :Integer;
-  jmpslots_done:Integer;
+  mainprog     :Byte;
+  tls_done     :Byte;
+  init_scanned :Byte;
+  init_done    :Byte;
+  on_fini_list :Byte;
+  not_get_proc :Byte;
+  textrel      :Byte;
+  init_plt     :Byte;
+  is_system    :Byte;
+  dag_inited   :Byte;
+  jmpslots_done:Byte;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
