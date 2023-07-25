@@ -107,6 +107,8 @@ procedure insmntque_stddtr(vp:p_vnode;dtr_arg:Pointer);
 function  insmntque1(vp:p_vnode;mp:p_mount;dtr:t_insmntque1_dtr;dtr_arg:Pointer):Integer;
 function  insmntque(vp:p_vnode;mp:p_mount):Integer;
 
+function  vinvalbuf(vp:p_vnode;flags,slpflag,slptimeo:Integer):Integer;
+
 function  __mnt_vnode_next_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 function  __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 procedure __mnt_vnode_markerfree_all(mvp:pp_vnode;mp:p_mount);
@@ -725,7 +727,7 @@ begin
 end;
 
 {
- * Exitthe next vnode from the free list.
+ * Return the next vnode from the free list.
  }
 function getnewvnode(tag:PChar;mp:p_mount;vops:p_vop_vector;vpp:pp_vnode):Integer;
 label
@@ -868,7 +870,9 @@ begin
  { XXX non mp-safe fs may still call insmntque with vnode
     unlocked }
  if (VOP_ISLOCKED(vp)=0) then
+ begin
   vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+ end;
  vgone(vp);
  vput(vp);
 end;
@@ -895,8 +899,8 @@ begin
  MNT_ILOCK(mp);
  VI_LOCK(vp);
  if ((mp^.mnt_kern_flag and MNTK_NOINSMNTQ)<>0) and
-     (((mp^.mnt_kern_flag and MNTK_UNMOUNTF)<>0) or
-      (mp^.mnt_nvnodelistsize=0)) then
+    (((mp^.mnt_kern_flag and MNTK_UNMOUNTF)<>0) or
+     (mp^.mnt_nvnodelistsize=0)) then
  begin
   locked:=VOP_ISLOCKED(vp);
   if (locked=0) or
@@ -906,7 +910,9 @@ begin
    VI_UNLOCK(vp);
    MNT_IUNLOCK(mp);
    if (dtr<>nil) then
+   begin
     dtr(vp, dtr_arg);
+   end;
    Exit(EBUSY);
   end;
  end;
@@ -1941,7 +1947,9 @@ begin
  Assert((flags and LK_TYPE_MASK)<>0,'vget: invalid lock operation');
 
  if ((flags and LK_INTERLOCK)=0) then
+ begin
   VI_LOCK(vp);
+ end;
 
  vholdl(vp);
 
@@ -1951,8 +1959,10 @@ begin
   vdrop(vp);
   Exit(error);
  end;
+
  if ((vp^.v_iflag and VI_DOOMED)<>0) and ((flags and LK_RETRY)=0) then
   Assert(false,'vget: vn_lock failed to Exit ENOENT');
+
  VI_LOCK(vp);
  { Upgrade our holdcnt to a usecount. }
  v_upgrade_usecount(vp);
@@ -1966,7 +1976,10 @@ begin
  begin
   if (VOP_ISLOCKED(vp)=LK_EXCLUSIVE) and
      ((flags and LK_NOWAIT)=0) then
+  begin
    vinactive(vp);
+  end;
+
   vp^.v_iflag:=vp^.v_iflag and (not VI_OWEINACT);
  end;
  VI_UNLOCK(vp);
@@ -3169,10 +3182,12 @@ procedure vop_rename_fail(ap:p_vop_rename_args);
 begin
  if (ap^.a_tvp<>nil) then
   vput(ap^.a_tvp);
+
  if (ap^.a_tdvp=ap^.a_tvp) then
   vrele(ap^.a_tdvp)
  else
   vput(ap^.a_tdvp);
+
  vrele(ap^.a_fdvp);
  vrele(ap^.a_fvp);
 end;
@@ -3181,9 +3196,12 @@ procedure vop_rename_pre(ap:p_vop_rename_args);
 begin
  if (ap^.a_tdvp<>ap^.a_fdvp) then
   vhold(ap^.a_fdvp);
+
  if (ap^.a_tvp<>ap^.a_fvp) then
   vhold(ap^.a_fvp);
+
  vhold(ap^.a_tdvp);
+
  if (ap^.a_tvp<>nil) then
   vhold(ap^.a_tvp);
 end;

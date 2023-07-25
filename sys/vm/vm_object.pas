@@ -61,14 +61,18 @@ const
  OBJPR_NOTMAPPED=$2; // Don't unmap pages.
  OBJPR_NOTWIRED =$4; // Don't remove wired pages.
 
-procedure vm_object_reference (obj:vm_object_t);
-function  vm_object_allocate  (t:objtype_t;size:vm_pindex_t):vm_object_t;
-procedure vm_object_deallocate(obj:vm_object_t);
-procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
+procedure vm_object_reference   (obj:vm_object_t);
+function  vm_object_allocate    (t:objtype_t;size:vm_pindex_t):vm_object_t;
+procedure vm_object_deallocate  (obj:vm_object_t);
+
+procedure vm_object_set_flag    (obj:vm_object_t;bits:Word);
+procedure vm_object_clear_flag  (obj:vm_object_t;bits:Word);
 
 procedure vm_object_pip_add     (obj:vm_object_t;i:word);
 procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
 procedure vm_object_pip_wakeup  (obj:vm_object_t);
+procedure vm_object_pip_wakeupn (obj:vm_object_t;i:word);
+procedure vm_object_pip_wait    (obj:vm_object_t;waitid:pchar);
 
 function  vm_object_page_clean(obj:vm_object_t;
                                start,__end:vm_ooffset_t;
@@ -79,8 +83,9 @@ procedure vm_object_page_remove(obj:vm_object_t;
                                 __end:vm_pindex_t;
                                 options:Integer);
 
-procedure vm_object_collapse(obj:vm_object_t);
+procedure vm_object_collapse   (obj:vm_object_t);
 
+function  VM_OBJECT_MTX        (obj:vm_object_t):p_mtx;
 procedure VM_OBJECT_LOCK       (obj:vm_object_t);
 function  VM_OBJECT_TRYLOCK    (obj:vm_object_t):Boolean;
 procedure VM_OBJECT_UNLOCK     (obj:vm_object_t);
@@ -99,7 +104,9 @@ function  vm_object_coalesce(prev_object:vm_object_t;
 implementation
 
 uses
- vmparam;
+ vmparam,
+ vnode,
+ vfs_subr;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
@@ -109,6 +116,11 @@ end;
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
+end;
+
+function VM_OBJECT_MTX(obj:vm_object_t):p_mtx;
+begin
+ Result:=@obj^.mtx;
 end;
 
 procedure VM_OBJECT_LOCK(obj:vm_object_t);
@@ -136,6 +148,12 @@ begin
  Assert(mtx_owned(obj^.mtx));
 end;
 
+procedure vm_object_set_flag(obj:vm_object_t;bits:Word);
+begin
+ VM_OBJECT_LOCK_ASSERT(obj);
+ obj^.flags:=obj^.flags or bits;
+end;
+
 procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
 begin
  VM_OBJECT_LOCK_ASSERT(obj);
@@ -154,9 +172,14 @@ begin
  Result^.size      :=size;
  Result^.generation:=1;
  Result^.ref_count :=1;
+
+ if (t=OBJT_DEFAULT) then
+ begin
+  Result^.flags:=OBJ_ONEMAPPING;
+ end;
 end;
 
-procedure _vm_object_deallocate(obj:vm_object_t);
+procedure vm_object_destroy(obj:vm_object_t);
 begin
  Case obj^.otype of
   OBJT_DEFAULT:;
@@ -175,19 +198,77 @@ begin
  System.InterlockedIncrement(obj^.ref_count);
 end;
 
+{
+ vm_object_terminate actually destroys the specified object, freeing
+ up all previously used resources.
+
+ The object must be locked.
+ This routine may block.
+}
+procedure vm_object_terminate(obj:vm_object_t);
+var
+ vp:p_vnode;
+begin
+ VM_OBJECT_LOCK_ASSERT(obj);
+
+ {
+  * Make sure no one uses us.
+  }
+ vm_object_set_flag(obj, OBJ_DEAD);
+
+ {
+  * wait for the pageout daemon to be done with the obj
+  }
+ vm_object_pip_wait(obj, 'objtrm');
+
+ Assert(obj^.paging_in_progress=0,'vm_object_terminate: pageout in progress');
+
+ {
+  * Clean and free the pages, as appropriate. All references to the
+  * obj are gone, so we don't need to lock it.
+  }
+ if (obj^.otype=OBJT_VNODE) then
+ begin
+  vp:=obj^.handle;
+
+  {
+   * Clean pages and flush buffers.
+   }
+  vm_object_page_clean(obj, 0, 0, OBJPC_SYNC);
+  VM_OBJECT_UNLOCK(obj);
+
+  vinvalbuf(vp, V_SAVE, 0, 0);
+
+  VM_OBJECT_LOCK(obj);
+ end;
+
+ Assert(obj^.ref_count=0,'vm_object_terminate: obj with references');
+
+ VM_OBJECT_UNLOCK(obj);
+
+ vm_object_destroy(obj);
+end;
+
 procedure vm_object_deallocate(obj:vm_object_t);
+var
+ ref:Integer;
 begin
  if (obj=nil) then Exit;
 
- if (System.InterlockedDecrement(obj^.ref_count)=0) then
- begin
-  _vm_object_deallocate(obj);
- end;
-end;
+ ref:=System.InterlockedDecrement(obj^.ref_count);
 
-procedure vm_object_destroy(obj:vm_object_t);
-begin
- vm_object_deallocate(obj);
+ if (ref=1) then
+ begin
+  VM_OBJECT_LOCK(obj);
+  vm_object_set_flag(obj, OBJ_ONEMAPPING);
+  VM_OBJECT_UNLOCK(obj);
+ end else
+ if (ref=0) then
+ if ((obj^.flags and OBJ_DEAD)=0) then
+ begin
+  VM_OBJECT_LOCK(obj);
+  vm_object_terminate(obj);
+ end;
 end;
 
 procedure vm_object_pip_add(obj:vm_object_t;i:word);
@@ -216,6 +297,31 @@ begin
  begin
   vm_object_clear_flag(obj, OBJ_PIPWNT);
   wakeup(obj);
+ end;
+end;
+
+procedure vm_object_pip_wakeupn(obj:vm_object_t;i:word);
+begin
+ if (obj=nil) then Exit;
+
+ VM_OBJECT_LOCK_ASSERT(obj);
+ Dec(obj^.paging_in_progress,i);
+ if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.paging_in_progress=0) then
+ begin
+  vm_object_clear_flag(obj, OBJ_PIPWNT);
+  wakeup(obj);
+ end;
+end;
+
+procedure vm_object_pip_wait(obj:vm_object_t;waitid:pchar);
+begin
+ if (obj=nil) then Exit;
+
+ VM_OBJECT_LOCK_ASSERT(obj);
+ while (obj^.paging_in_progress<>0) do
+ begin
+  obj^.flags:=obj^.flags or OBJ_PIPWNT;
+  msleep(obj, VM_OBJECT_MTX(obj), PVM, waitid, 0);
  end;
 end;
 
@@ -277,7 +383,9 @@ procedure vm_object_page_remove(obj:vm_object_t;
                                 __end:vm_pindex_t;
                                 options:Integer);
 begin
-
+ //OBJPR_CLEANONLY=$1; // Don't remove dirty pages.
+ //OBJPR_NOTMAPPED=$2; // Don't unmap pages.
+ //OBJPR_NOTWIRED =$4; // Don't remove wired pages.
 end;
 
 {
@@ -346,15 +454,6 @@ begin
  begin
   VM_OBJECT_UNLOCK(prev_object);
   Exit(FALSE);
- end;
-
- {
-  * Remove any pages that may still be in the object from a previous
-  * deallocation.
-  }
- if (next_pindex<prev_object^.size) then
- begin
-  vm_object_page_remove(prev_object,next_pindex,next_pindex+next_size,0);
  end;
 
  {

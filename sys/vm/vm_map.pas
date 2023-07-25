@@ -1598,7 +1598,9 @@ begin
   MADV_CORE:
    begin
     if (start=__end) then
+    begin
      Exit(KERN_SUCCESS);
+    end;
     modify_map:=1;
     vm_map_lock(map);
    end;
@@ -1607,7 +1609,9 @@ begin
   MADV_FREE:
   begin
    if (start=__end) then
+   begin
     Exit(KERN_SUCCESS);
+   end;
    vm_map_lock(map);
   end;
  else
@@ -1622,7 +1626,9 @@ begin
  if (vm_map_lookup_entry(map,start,@entry)) then
  begin
   if (modify_map<>0) then
+  begin
    vm_map_clip_start(map, entry, start);
+  end;
  end else
  begin
   entry:=entry^.next;

@@ -223,6 +223,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
+ vm_pmap,
  kern_patcher;
 
 function maxInt64(a,b:Int64):Int64; inline;
@@ -1088,7 +1089,7 @@ begin
  //remove prev if exist
  vm_map_delete(map,vaddr_lo,vaddr_hi);
 
- Result:=vm_map_insert(map,imgp^.obj,0,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
+ Result:=vm_map_insert(map,imgp^.obj,offset,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
  if (Result<>0) then
  begin
   vm_map_unlock(map);
@@ -1102,20 +1103,21 @@ begin
  memsz:=vaddr_hi-vaddr_lo;
  cache:=ReAllocMem(cache,memsz);
  FillChar(cache^,memsz,0);
- Move(Pointer(vaddr_lo)^,cache^,filesz);
+ Move(base^,cache^,filesz);
 
  if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
+  Writeln('P_X:',HexStr(offset,8),' ',HexStr(memsz,8),' ',HexStr(filesz,8));
   patcher_process_section(imgp^.obj,cache,Pointer(vaddr_lo),filesz);
  end;
 
- Result:=copyout(base,cache,filesz);
+ Result:=copyout(Pointer(vaddr_lo),cache,memsz);
  if (Result<>0) then
  begin
   vm_map_unlock(map);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
-    id,', ',HexStr(base),'->',HexStr(vaddr,8),':',HexStr(filesz,8));
+    id,', ',HexStr(base),'->',HexStr(vaddr_lo,8),':',HexStr(memsz,8));
   readln;
   Exit;
  end;
@@ -1127,6 +1129,11 @@ begin
   //
   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
   Exit(vm_mmap_to_errno(Result));
+ end;
+
+ if ((prot and VM_PROT_EXECUTE)<>0) then
+ begin
+  md_cacheflush(Pointer(vaddr_lo),memsz,ICACHE);
  end;
 
  vm_map_unlock(map);

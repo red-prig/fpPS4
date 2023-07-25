@@ -54,6 +54,13 @@ procedure pmap_remove(pmap :pmap_t;
                       __end:vm_offset_t;
                       prot :vm_prot_t);
 
+const
+ ICACHE=1; //Flush the instruction cache.
+ DCACHE=2; //Write back to memory and invalidate the affected valid cache lines.
+ BCACHE=ICACHE or DCACHE;
+
+procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
+
 implementation
 
 function atop(x:QWORD):DWORD; inline;
@@ -384,6 +391,18 @@ begin
  begin
   Writeln('failed NtFreeVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_remove');
+ end;
+end;
+
+procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
+begin
+ if ((cache and ICACHE)<>0) then
+ begin
+  FlushInstructionCache(NtCurrentProcess,addr,nbytes);
+ end;
+ if ((cache and DCACHE)<>0) then
+ begin
+  FlushViewOfFile(addr,nbytes);
  end;
 end;
 

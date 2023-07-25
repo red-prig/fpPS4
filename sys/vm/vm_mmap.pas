@@ -549,20 +549,27 @@ var
 begin
  size:=len;
  if (size=0) then
+ begin
   Exit(EINVAL);
+ end;
 
  pageoff:=(vm_size_t(addr) and PAGE_MASK);
  addr:=addr-pageoff;
  size:=size+pageoff;
  size:=round_page(size);
+
  if (addr + size < addr) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * Check for illegal addresses.  Watch out for address wrap...
   }
  if (qword(addr) < vm_map_min(@g_vmspace.vm_map)) or (qword(addr) + size > vm_map_max(@g_vmspace.vm_map)) then
+ begin
   Exit(EINVAL);
+ end;
 
  vm_map_lock(@g_vmspace.vm_map);
 
@@ -585,8 +592,11 @@ begin
  addr:=addr-pageoff;
  size:=size+pageoff;
  size:=round_page(size);
+
  if (addr + size < addr) then
+ begin
   Exit(EINVAL);
+ end;
 
  case (vm_map_protect(@g_vmspace.vm_map, QWORD(addr), QWORD(addr) + size, prot, FALSE)) of
   KERN_SUCCESS           :Exit(0);
@@ -621,9 +631,14 @@ begin
   }
  if (vm_offset_t(addr) < vm_map_min(@g_vmspace.vm_map)) or
     (vm_offset_t(addr) + len > vm_map_max(@g_vmspace.vm_map)) then
+ begin
   Exit(EINVAL);
+ end;
+
  if (vm_offset_t(addr) + len) < vm_offset_t(addr) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * Since this routine is only advisory, we default to conservative
@@ -633,7 +648,9 @@ begin
  __end:=round_page(vm_offset_t(addr) + len);
 
  if (vm_map_madvise(@g_vmspace.vm_map, start, __end, behav))<>0 then
+ begin
   Exit(EINVAL);
+ end;
 
  Exit(0);
 end;
@@ -645,9 +662,14 @@ var
 begin
  if (vm_offset_t(addr) < vm_map_min(@g_vmspace.vm_map)) or
     (vm_offset_t(addr) + len > vm_map_max(@g_vmspace.vm_map)) then
+ begin
   Exit(EINVAL);
+ end;
+
  if (vm_offset_t(addr) + len) < vm_offset_t(addr) then
+ begin
   Exit(EINVAL);
+ end;
 
  Result:=copyinstr(name,@_name,32,nil);
  if (Result<>0) then Exit;
