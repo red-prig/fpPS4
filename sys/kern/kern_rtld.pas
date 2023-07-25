@@ -1107,11 +1107,11 @@ begin
 
  if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
-  Writeln('P_X:',HexStr(offset,8),' ',HexStr(memsz,8),' ',HexStr(filesz,8));
+  Writeln('P_X:vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
   patcher_process_section(imgp^.obj,cache,Pointer(vaddr_lo),filesz);
  end;
 
- Result:=copyout(Pointer(vaddr_lo),cache,memsz);
+ Result:=copyout(cache,Pointer(vaddr_lo),memsz);
  if (Result<>0) then
  begin
   vm_map_unlock(map);

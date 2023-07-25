@@ -871,7 +871,6 @@ begin
  end;
 
  init_relo_bits(obj);
-
  dynlibs_add_obj(obj);
 
  dynlibs_info.sym_zero.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;

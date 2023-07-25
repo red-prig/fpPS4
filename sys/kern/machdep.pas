@@ -561,8 +561,8 @@ begin
  regs^.tf_flags :=TF_HASSEGS;
 
  //teb stack
- td^.td_teb^.sttop:=Pointer(stack_top );
- td^.td_teb^.stack:=Pointer(stack_base);
+ td^.td_ustack.stack:=Pointer(stack_top );
+ td^.td_ustack.sttop:=Pointer(stack_base);
  //teb stack
 
  td^.td_retval[1]:=0;

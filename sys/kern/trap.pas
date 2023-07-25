@@ -116,6 +116,7 @@ implementation
 
 uses
  errno,
+ vmparam,
  machdep,
  md_context,
  kern_sig,
@@ -222,6 +223,20 @@ begin
  td^.pcb_flags:=f;
 end;
 
+function is_guest_addr(addr:QWORD):Boolean;
+var
+ i:Integer;
+begin
+ Result:=False;
+ For i:=0 to High(pmap_mem) do
+ begin
+  if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
+  begin
+   Exit(True);
+  end;
+ end;
+end;
+
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
 
@@ -248,12 +263,28 @@ begin
   if (scall=nil) then
   begin
    Writeln('Unhandled syscall:',td_frame^.tf_rax,':',sysent_table[td_frame^.tf_rax].sy_name);
+
+   Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
+   Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
+   Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
+   Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
+   Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
+   Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+
    Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
   end;
  end else
  if (td_frame^.tf_rax<=$1000) then
  begin
   Writeln('Unhandled syscall:',td_frame^.tf_rax);
+
+  Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
+  Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
+  Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
+  Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
+  Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
+  Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+
   Assert(false,IntToStr(td_frame^.tf_rax));
  end else
  begin
@@ -265,12 +296,24 @@ begin
   error:=ENOSYS;
  end else
  begin
+  if (td_frame^.tf_rax<=High(sysent_table)) then
+  if is_guest_addr(td_frame^.tf_rip) then
+  begin
+   Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
+   Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
+   Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
+   Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
+   Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
+   Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
+   Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+  end;
+
   error:=scall(td_frame^.tf_rdi,
                td_frame^.tf_rsi,
                td_frame^.tf_rdx,
                td_frame^.tf_r10,
-               td_frame^.tf_r8,
-               td_frame^.tf_r9);
+               td_frame^.tf_r8 ,
+               td_frame^.tf_r9 );
 
  end;
 

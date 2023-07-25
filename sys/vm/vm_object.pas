@@ -23,15 +23,16 @@ type
  p_vm_object_t=^vm_object_t;
  vm_object_t=^_vm_object;
  _vm_object=packed record
-  mtx:mtx;
-  memq:TAILQ_HEAD;                    // list of resident pages
-  root:Pointer;                       // root of the resident page splay tree
-  size:vm_pindex_t;                   // Object size
-  generation:Integer;                 // generation ID
-  ref_count:Integer;                  // How many refs??
-  otype:objtype_t;                    // type of pager
-  flags:Word;                         // see below
-  handle:Pointer;
+  mtx               :mtx;
+  memq              :TAILQ_HEAD;              // list of resident pages
+  patchq            :TAILQ_HEAD;              // list of patches
+  root              :Pointer;                 // root of the resident page splay tree
+  size              :vm_pindex_t;             // Object size
+  generation        :Integer;                 // generation ID
+  ref_count         :Integer;                 // How many refs??
+  otype             :objtype_t;               // type of pager
+  flags             :Word;                    // see below
+  handle            :Pointer;
   paging_in_progress:Integer;
   un_pager:packed record
    vnp:packed record
@@ -167,6 +168,7 @@ begin
  mtx_init(Result^.mtx,'vm_object');
 
  TAILQ_INIT(@Result^.memq);
+ TAILQ_INIT(@Result^.patchq);
 
  Result^.otype     :=t;
  Result^.size      :=size;

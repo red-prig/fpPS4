@@ -5,14 +5,29 @@ unit kern_patcher;
 
 interface
 
+uses
+ mqueue,
+ kern_stub;
+
+type
+ t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall);
+
+ p_patch_node=^t_patch_node;
+ t_patch_node=record
+  link :TAILQ_ENTRY;
+  vaddr:Pointer;
+  ptype:t_patch_type;
+  stub :p_stub_chunk;
+ end;
+
+procedure add_patch_link (_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
+procedure free_patch_link(_obj:Pointer;node:p_patch_node);
+
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
 
 implementation
 
 uses
- windows,
-
- mqueue,
  hamt,
  kern_rwlock,
  kern_thr,
@@ -21,8 +36,36 @@ uses
  vm_mmap,
  vm_object,
  vm_pmap,
- trap,
- kern_stub;
+ trap;
+
+procedure add_patch_link(_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
+var
+ obj:vm_object_t;
+ node:p_patch_node;
+begin
+ Writeln('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
+
+ obj:=_obj;
+ node:=AllocMem(SizeOf(t_patch_node));
+ node^.vaddr:=vaddr;
+ node^.ptype:=ptype;
+ node^.stub :=stub;
+
+ p_inc_ref(stub);
+
+ TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
+end;
+
+procedure free_patch_link(_obj:Pointer;node:p_patch_node);
+var
+ obj:vm_object_t;
+begin
+ obj:=_obj;
+ TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
+
+ p_dec_ref(node^.stub);
+ FreeMem(node);
+end;
 
 {
 64 48 A1 [0000000000000000] mov rax,fs:[$0000000000000000] -> 65 48 A1 [0807000000000000] mov rax,gs:[$0000000000000708]
@@ -206,16 +249,18 @@ c3                     RET
 }
 
 type
+ p_patch_base_long=^t_patch_base_long;
  t_patch_base_long=packed record
   len :Byte ; //12
   inst:array[0..2] of Byte;
-  addr:QWORD; //teb_tcb/teb_gsbase
+  addr:Int64; //teb_tcb/teb_gsbase
  end;
 
+ p_patch_base_short=^t_patch_base_short;
  t_patch_base_short=packed record
   len :Byte ; //9
   inst:array[0..4] of Byte;
-  addr:DWORD; //teb_tcb/teb_gsbase
+  addr:Integer; //teb_tcb/teb_gsbase
  end;
 
  t_patch_inst=packed record
@@ -223,6 +268,19 @@ type
    0:(A:t_patch_base_long);
    1:(B:t_patch_base_short);
    2:(C:array[0..11] of Byte);
+ end;
+
+ p_jmpq64_trampoline=^t_jmpq64_trampoline;
+ t_jmpq64_trampoline=packed record
+  inst  :Word;  //FF 25
+  offset:DWORD; //00
+  addr  :QWORD;
+ end;
+
+ p_call32_trampoline=^t_call32_trampoline;
+ t_call32_trampoline=packed record
+  inst:Byte;    //E8
+  addr:Integer;
  end;
 
 const
@@ -264,7 +322,10 @@ const
   (A:(len:12;inst:($65,$48,$A1        );addr:teb_gsbase))
  );
 
-function IndexInstr(var pbuf:Pointer;pend:Pointer):Integer;
+ c_jmpq64_trampoline:t_jmpq64_trampoline=(inst:$25FF;offset:0;addr:0);
+ c_call32_trampoline:t_call32_trampoline=(inst:$E8;addr:0);
+
+function IndexInstr(var pbuf:Pointer;pend:Pointer;var offset:Int64):Integer;
 var
  psrc:Pointer;
  W:DWORD;
@@ -367,8 +428,16 @@ begin
     0..15,
    17..32:
           begin
-           if (PBYTE(psrc)[4]<>$25) or
-              (PDWORD(@PBYTE(psrc)[5])^<>$00000000) then
+           if (PBYTE(psrc)[4]<>$25) then
+           begin
+            Inc(psrc,4);
+            Continue;
+           end;
+
+           offset:=PInteger(@PBYTE(psrc)[5])^;
+
+           if (offset>+65536) or
+              (offset<-65536) then
            begin
             Inc(psrc,4);
             Continue;
@@ -377,7 +446,10 @@ begin
        16,
        33:
           begin
-           if (PQWORD(@PBYTE(psrc)[3])^<>$0000000000000000) then
+           offset:=PInt64(@PBYTE(psrc)[3])^;
+
+           if (offset>+65536) or
+              (offset<-65536) then
            begin
             Inc(psrc,4);
             Continue;
@@ -385,32 +457,34 @@ begin
           end;
        34:
           begin
+           offset:=0;
+
            if (PDWORD(@PBYTE(psrc)[4])^<>$050FCA89) then
            begin
             Inc(psrc,4);
             Continue;
            end;
 
-           Write(HexStr(PBYTE(psrc)[0],2),' ');
-           Write(HexStr(PBYTE(psrc)[1],2),' ');
-           Write(HexStr(PBYTE(psrc)[2],2),' ');
-           Write(HexStr(PBYTE(psrc)[3],2),' ');
-           Write(HexStr(PBYTE(psrc)[4],2),' ');
-           Write(HexStr(PBYTE(psrc)[5],2),' ');
-           Write(HexStr(PBYTE(psrc)[6],2),' ');
-           Write(HexStr(PBYTE(psrc)[7],2),' ');
-           Write(HexStr(PBYTE(psrc)[8],2),' ');
-           Write(HexStr(PBYTE(psrc)[9],2),' ');
+           //Write(HexStr(PBYTE(psrc)[0],2),' ');
+           //Write(HexStr(PBYTE(psrc)[1],2),' ');
+           //Write(HexStr(PBYTE(psrc)[2],2),' ');
+           //Write(HexStr(PBYTE(psrc)[3],2),' ');
+           //Write(HexStr(PBYTE(psrc)[4],2),' ');
+           //Write(HexStr(PBYTE(psrc)[5],2),' ');
+           //Write(HexStr(PBYTE(psrc)[6],2),' ');
+           //Write(HexStr(PBYTE(psrc)[7],2),' ');
+           //Write(HexStr(PBYTE(psrc)[8],2),' ');
+           //Write(HexStr(PBYTE(psrc)[9],2),' ');
 
            Case PBYTE(psrc)[8] of
             $41,
             $48,
             $5f,
             $72,
-            $c3:Writeln('True');
+            $c3:{Writeln('True')};
             else
              begin
-              Writeln('False');
+              //Writeln('False');
               Inc(psrc,4);
               Continue;
              end;
@@ -430,25 +504,66 @@ begin
  Result:=-1;
 end;
 
+procedure _fast_syscall; assembler; nostackframe;
+asm
+ mov %rax,%rax
+ jmp fast_syscall
+end;
+
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
 var
- obj:vm_object_t;
  addr:Pointer;
  pend:Pointer;
+
+ offset:Int64;
+
  i,len:Integer;
 
  fs_count:Integer;
  gs_count:Integer;
  sv_count:Integer;
 
- procedure do_patch_base(P:PByte;i:Integer); inline;
+ procedure do_patch_base_zero(addr:PByte;i:Integer;ptype:t_patch_type);
+ var
+  v:Pointer;
  begin
-  Move(patch_table[i].C[1],P^,patch_table[i].C[0]);
+  Move(patch_table[i].C[1],addr^,patch_table[i].C[0]);
+
+  v:=vaddr+(Int64(addr)-Int64(data));
+  add_patch_link(_obj,v,ptype,nil);
+ end;
+
+ procedure do_patch_syscall(addr:PByte);
+ var
+  v:Pointer;
+  stub:p_stub_chunk;
+
+  jmpq64_trampoline:t_jmpq64_trampoline;
+  call32_trampoline:t_call32_trampoline;
+
+  d:Int64;
+ begin
+  v:=vaddr+(Int64(addr)-Int64(data));
+
+  stub:=p_alloc(v,SizeOf(t_jmpq64_trampoline));
+
+  d:=Int64(@stub^.body)-(Int64(v)+SizeOf(t_call32_trampoline));
+  Assert(d<High(Integer),'do_patch_syscall');
+
+  jmpq64_trampoline:=c_jmpq64_trampoline;
+  call32_trampoline:=c_call32_trampoline;
+
+  jmpq64_trampoline.addr:=QWORD(@_fast_syscall);
+  call32_trampoline.addr:=Integer(d);
+
+  p_jmpq64_trampoline(@stub^.body)^:=jmpq64_trampoline;
+  p_call32_trampoline(addr)^:=call32_trampoline;
+
+  add_patch_link(_obj,v,pt_syscall,stub);
  end;
 
 begin
  Assert(_obj<>nil,'patcher_process_section');
- obj:=_obj;
 
  fs_count:=0;
  gs_count:=0;
@@ -457,29 +572,42 @@ begin
  addr:=data;
  pend:=addr+filesz;
  repeat
-  i:=IndexInstr(addr,pend);
+  offset:=0;
+  i:=IndexInstr(addr,pend,offset);
 
   if (i=-1) then Break;
 
   Case i of
-    0..16:
+    0..33:
           begin
-           Inc(fs_count);
-           //
            len:=patch_table[i].C[0];
-           do_patch_base(addr,i);
-          end;
-   17..33:
-          begin
-           Inc(gs_count);
            //
-           len:=patch_table[i].C[0];
-           do_patch_base(addr,i);
+
+           if (offset=0) then
+           begin
+            Case i of
+              0..16:
+                    begin
+                     Inc(fs_count);
+                     do_patch_base_zero(addr,i,pt_fsbase);
+                    end;
+             17..33:
+                    begin
+                     Inc(gs_count);
+                     do_patch_base_zero(addr,i,pt_gsbase);
+                    end
+             else;
+            end;
+           end else
+           begin
+            Writeln('patch with offset:',offset);
+           end;
           end;
        34:
           begin
            Inc(sv_count);
            //
+           do_patch_syscall(addr+3);
            len:=9;
           end
    else
@@ -490,7 +618,7 @@ begin
 
  until false;
 
- Writeln('[patcher_vaddr]:0x',HexStr(vaddr));
+ Writeln('[patcher_vaddr]:0x',HexStr(qword(vaddr),12),'..',HexStr(qword(vaddr)+filesz,12));
  Writeln('  fs_count:',fs_count);
  Writeln('  gs_count:',gs_count);
  Writeln('  sv_count:',sv_count);

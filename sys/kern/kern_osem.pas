@@ -398,7 +398,7 @@ begin
 
  if ((attr and SEMA_ATTR_SHRD)<>0) then
  begin
-  Writeln(StdErr,'sys_evf_create:','process shared osem not support');
+  Writeln(StdErr,'sys_evf_create:','process shared osem not supported');
   Exit(EPERM);
  end;
 
@@ -537,13 +537,13 @@ end;
 
 function sys_osem_open(name:PChar):Integer;
 begin
- Writeln(StdErr,'sys_osem_open:','process shared osem not support');
+ Writeln(StdErr,'sys_osem_open:','process shared osem not supported');
  Exit(EPERM);
 end;
 
 function sys_osem_close(key:Integer):Integer;
 begin
- Writeln(StdErr,'sys_osem_close:','process shared osem not support');
+ Writeln(StdErr,'sys_osem_close:','process shared osem not supported');
  Exit(EPERM);
 end;
 

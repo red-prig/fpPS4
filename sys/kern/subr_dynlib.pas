@@ -2113,7 +2113,7 @@ begin
   goto _error;
  end;
 
- init_relo_bits(obj);
+ init_relo_bits(new);
  dynlibs_add_obj(new);
  new^.loaded:=1;
  Exit(new);

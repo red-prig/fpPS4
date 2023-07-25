@@ -87,6 +87,15 @@ begin
  vm_map_unlock(map);
 end;
 
+function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+var
+ tmp:PtrUInt;
+begin
+ if (alignment=0) then Exit(addr);
+ tmp:=addr+PtrUInt(alignment-1);
+ Result:=tmp-(tmp mod alignment)
+end;
+
 procedure split_chunk(chunk:p_stub_chunk;used_size:Integer);
 var
  chunk_size:Integer;
@@ -94,9 +103,9 @@ var
 begin
  chunk_size:=chunk^.curr_size;
 
- if ((used_size+SizeOf(stub_chunk)*2)>chunk_size) then Exit;
+ if (AlignUp(used_size+SizeOf(stub_chunk)*2,SizeOf(Pointer))>chunk_size) then Exit;
 
- used_size:=used_size+SizeOf(stub_chunk);
+ used_size:=AlignUp(used_size+SizeOf(stub_chunk),SizeOf(Pointer));
 
  next:=Pointer(chunk)+used_size;
 
@@ -175,7 +184,7 @@ function p_alloc(vaddr:Pointer;size:Integer):p_stub_chunk;
 var
  chunk:p_stub_chunk;
 begin
- Assert(size>(segment_size-SizeOf(stub_chunk)),'p_alloc to big');
+ Assert(size<=(segment_size-SizeOf(stub_chunk)),'p_alloc to big');
 
  rw_wlock(chunk_lock);
 

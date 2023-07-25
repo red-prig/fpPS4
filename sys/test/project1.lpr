@@ -354,7 +354,7 @@ begin
 
  argv0:='/app0/basic-sample_debug.elf';
 
- err:=sys_execve(argv0,@argv0,nil);
+ err:=_execve(argv0,@argv0,nil);
 end;
 
 procedure test_dirs(const dirp,namep:RawByteString;s:Byte);
