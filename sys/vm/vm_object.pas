@@ -108,7 +108,7 @@ uses
  vmparam,
  vnode,
  vfs_subr,
- kern_patcher;
+ vm_patch_link;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin

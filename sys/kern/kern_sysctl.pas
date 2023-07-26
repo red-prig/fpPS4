@@ -33,9 +33,8 @@ const
  KERN_PROC_SDK_VERSION =36; //SDK version of the executable file
  KERN_PROC_IDTABLE     =37; //ID table information
 
+ KERN_PROC_SANITIZER   =41; //kern_sanitizer (Sanitizing mode)
  KERN_PROC_TEXT_SEGMENT=44; //kern_dynlib_get_libkernel_text_segment
-
-
 
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
@@ -65,6 +64,7 @@ type
  t_oid_handler=function(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 
  t_sysctl_oid=record
+  oid_name   :PInteger;
   oid_handler:t_oid_handler;
  end;
 
@@ -85,7 +85,8 @@ uses
  vmparam,
  kern_thr,
  kern_sx,
- md_arc4random;
+ md_arc4random,
+ md_proc;
 
 var
  sysctllock   :t_sx;
@@ -122,8 +123,9 @@ begin
  Result:=req^.oldfunc(req,p,s);
 end;
 
-function SYSCTL_HANDLE(noid:p_sysctl_oid;func:Pointer):Integer; inline;
+function SYSCTL_HANDLE(noid:p_sysctl_oid;name:PInteger;func:Pointer):Integer; inline;
 begin
+ noid^.oid_name   :=name+1;
  noid^.oid_handler:=t_oid_handler(func);
  Result:=0
 end;
@@ -217,12 +219,102 @@ begin
  Result:=SYSCTL_OUT(req,@data,len);
 end;
 
+const
+ //eLoadOptions
+ LOAD_OPTIONS_DEFAULT                         =$0000;
+ LOAD_OPTIONS_LOAD_SUSPENDED                  =$0001;
+ LOAD_OPTIONS_USE_SYSTEM_LIBRARY_VERIFICATION =$0002;
+ LOAD_OPTIONS_SLV_MODE_WARN                   =$0004;
+ LOAD_OPTIONS_ARG_STACK_SIZE                  =$0008;
+ LOAD_OPTIONS_FULL_DEBUG_REQUIRED             =$0010;
+
+ //mmap_flags
+ //bit 1 -> is_big_app
+ //bit 2 -> first find addr is (1 shl 33) ->
+ //          _sceKernelMapFlexibleMemory
+ //          _sceKernelMapDirectMemory
+ //          sceKernelMapDirectMemory2
+
+ //excp_flags
+ //bit 1 -> use in [libkernel_exception] ->
+ //      -> sceKernelInstallExceptionHandler
+ //      -> sceKernelRemoveExceptionHandler
+ //      -> sceKernelAddGpuExceptionEvent
+ //      -> sceKernelDeleteGpuExceptionEvent
+ //      -> sceKernelBacktraceSelf
+ //bit 2 -> sys_mdbg_service
+
+type
+ TCUSANAME=array[0..9] of AnsiChar;
+
+ PSCE_APP_ENV=^TSCE_APP_ENV;
+ TSCE_APP_ENV=packed record
+  AppId      :Integer;       //4
+  mmap_flags :Integer;       //4
+  excp_flags :Integer;       //4
+  AppType    :Integer;       //4    5?
+  CUSANAME   :TCUSANAME;     //10
+  debug_level:Byte;          //1
+  slv_flags  :Byte;          //1  eLoadOptions
+  f_1c       :Byte;
+  f_1d       :Byte;
+  f_1e       :Byte;
+  f_1f       :Byte;
+  f_20       :QWORD;
+  f_28       :Integer;
+  f_2c       :Integer;
+  f_30       :Integer;
+  f_34       :Integer;
+  f_38       :QWORD;
+  f_40       :QWORD;
+ end;
+ {$IF sizeof(TSCE_APP_ENV)<>72}{$STOP sizeof(TSCE_APP_ENV)<>72}{$ENDIF}
+
+var
+ G_APPINFO:TSCE_APP_ENV;
+
+function sysctl_kern_proc_appinfo(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ pid:Integer;
+
+ APPINFO:TSCE_APP_ENV;
+begin
+ if (req^.oldlen > 72) then Exit(EINVAL);
+
+ pid:=PInteger(arg1)^;
+
+ if (pid<>g_pid) then Exit(EINVAL);
+
+ //sceSblACMgrIsSystemUcred()!=0 -> any proc
+ //sceSblACMgrIsSystemUcred()==0 -> cur proc
+
+ Result:=SYSCTL_OUT(req,@G_APPINFO,SizeOf(TSCE_APP_ENV));
+
+ if (Result=0) and (req^.newlen=SizeOf(TSCE_APP_ENV)) then
+ begin
+  Result:=SYSCTL_IN(req,@APPINFO,SizeOf(TSCE_APP_ENV));
+  if (Result=0) then
+  begin
+   G_APPINFO:=APPINFO;
+  end;
+ end;
+
+end;
+
 function sysctl_kern_proc(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
  Result:=ENOENT;
 
- Writeln(StdErr,'sysctl_kern_proc:',name[0]);
+ case name[0] of
+  KERN_PROC_APPINFO:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_proc_appinfo);
+
+  else
+   begin
+    Writeln(StdErr,'Unhandled sysctl_kern_proc:',name[0]);
+    Assert(False);
+   end;
+ end;
 end;
 
 function sysctl_kern(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
@@ -233,10 +325,11 @@ begin
  case name[0] of
   KERN_PROC:Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
 
-  KERN_ARND:Result:=SYSCTL_HANDLE(noid,@sysctl_kern_arandom);
+  KERN_ARND:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_arandom);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern:',name[0]);
+    Assert(False);
    end;
  end;
 end;
@@ -253,7 +346,8 @@ begin
   CTL_KERN:Result:=sysctl_kern(name+1,namelen-1,noid,req);
   else
    begin
-    Writeln(StdErr,'Unhandled sysctl_find_oid:',name[0]);
+    Writeln(StdErr,'Unhandled sysctl_root:',name[0]);
+    Assert(False);
    end;
  end;
 end;
@@ -264,6 +358,7 @@ function sysctl_root(oidp:p_sysctl_oid;
                      req :p_sysctl_req):Integer;
 var
  oid:t_sysctl_oid;
+ indx:Integer;
 begin
  oid:=Default(t_sysctl_oid);
 
@@ -271,6 +366,12 @@ begin
  if (Result<>0) then Exit;
 
  if (oid.oid_handler=nil) then Exit(EINVAL);
+ if (oid.oid_name   =nil) then Exit(EINVAL);
+
+ indx:=oid.oid_name-arg1;
+
+ arg1:=arg1 + indx;
+ arg2:=arg2 - indx;
 
  //if ((oid.oid_kind and CTLTYPE)=CTLTYPE_NODE) then
  //begin

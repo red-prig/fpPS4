@@ -44,7 +44,8 @@ begin
       ((relro_addr + obj^.relro_size) < (where + size))
     ) then
  begin
-  Exit(ENOEXEC);
+  //dont check with special callbacks
+  //Exit(ENOEXEC);
  end;
 
  Result:=0;

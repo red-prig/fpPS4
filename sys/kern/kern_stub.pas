@@ -42,7 +42,7 @@ uses
 
 var
  chunk_alloc:TSTUB_HAMT64;
- chunk_free :TAILQ_HEAD=(tqh_first:nil;tqh_last:@chunk_free .tqh_first);
+ chunk_free :TAILQ_HEAD=(tqh_first:nil;tqh_last:@chunk_free.tqh_first);
 
  chunk_lock :Pointer=nil;
 
@@ -169,7 +169,7 @@ begin
   if (entry^.curr_size>=(size+SizeOf(stub_chunk))) then
   begin
    delta:=abs(Int64(vaddr)-Int64(@entry^.body));
-   if (delta<High(Integer)) then
+   if (vaddr=nil) or (delta<High(Integer)) then
    begin
     TAILQ_REMOVE(@chunk_free,entry,@entry^.link);
     Exit(entry);

@@ -209,6 +209,7 @@ type
   sysc_e00:Pointer;
 
   sym_zero:elf64_sym;
+  sym_nops:elf64_sym;
 
   dyn_non_exist:Integer;
  end;
@@ -2200,7 +2201,7 @@ begin
  Result:=nil;
  err:=0;
 
- fname:=ExtractFileName(path);
+ fname:=dynlib_basename(path);
 
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) do
@@ -2238,6 +2239,8 @@ begin
 
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ Writeln(StdErr,' prx module not found:',path);
 
  err:=ENOENT;
  Exit(nil);

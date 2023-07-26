@@ -39,7 +39,8 @@ implementation
 
 uses
  errno,
- elf_nid_utils;
+ elf_nid_utils,
+ kern_stub;
 
 function convert_raw_symbol_str_to_base64(symbol:pchar):RawByteString;
 var
@@ -363,6 +364,45 @@ begin
  end;
 end;
 
+//48 8D 3D 00 00 00 00 lea rdi,[rip+$00000000]   lea (%rip),%rdi
+
+type
+ p_jmpq64_trampoline=^t_jmpq64_trampoline;
+ t_jmpq64_trampoline=packed record
+  lea:array[0..6] of Byte;
+  //
+  inst  :Word;  //FF 25
+  offset:DWORD; //00
+  addr  :QWORD;
+  str   :PChar;
+ end;
+
+const
+ c_jmpq64_trampoline:t_jmpq64_trampoline=(lea:($48,$8D,$3D,$F9,$FF,$FF,$FF);inst:$25FF;offset:0;addr:0);
+
+procedure _unresolve_symbol(data:p_jmpq64_trampoline);
+begin
+ Writeln('_unresolve_symbol:',data^.str);
+ readln;
+end;
+
+function get_unresolve_ptr(str:PChar):Pointer;
+var
+ stub:p_stub_chunk;
+begin
+ stub:=p_alloc(nil,SizeOf(t_jmpq64_trampoline));
+
+ p_jmpq64_trampoline(@stub^.body)^:=c_jmpq64_trampoline;
+ p_jmpq64_trampoline(@stub^.body)^.addr:=QWORD(@_unresolve_symbol);
+ p_jmpq64_trampoline(@stub^.body)^.str:=str;
+
+ Result:=@stub^.body;
+end;
+
+
+
+//kern_stub
+
 function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
 var
  req:t_SymLook;
@@ -370,8 +410,14 @@ var
  ref:p_elf64_sym;
  defobj:p_lib_info;
  str:pchar;
+ count:Integer;
  err:Integer;
  ST_BIND:Integer;
+
+ nModuleId,nLibraryId:WORD;
+ nNid:QWORD;
+
+ fname:RawByteString;
 begin
  Result:=nil;
 
@@ -389,8 +435,8 @@ begin
  def:=nil;
  defobj_out:=nil;
 
- err:=refobj^.rel_data^.symtab_size div SizeOf(elf64_sym);
- if (symnum<=err) then Exit(nil);
+ count:=refobj^.rel_data^.symtab_size div SizeOf(elf64_sym);
+ if (symnum>=count) then Exit(nil);
 
  ref:=refobj^.rel_data^.symtab_addr + symnum;
 
@@ -411,8 +457,19 @@ begin
   req:=Default(t_SymLook);
 
   req.symbol:=str;
-  req.flags :=(flags or SYMLOOK_MANGLED);
+  req.flags :=(flags{ or SYMLOOK_MANGLED});
   req.obj   :=refobj;
+
+  if DecodeEncName(str,nModuleId,nLibraryId,nNid) then
+  begin
+   req.modname:=get_mod_name(refobj,nModuleId);
+   req.libname:=get_lib_name(refobj,nLibraryId);
+
+   fname:=BaseEncName(str);
+
+   req.name:=pchar(fname);
+  end;
+
 
   //convert_mangled_name_to_long
   //req.libname
@@ -432,6 +489,15 @@ begin
   begin
    def   :=@dynlibs_info.sym_zero;
    defobj:=dynlibs_info.libprogram;
+  end else
+  begin
+   dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
+   dynlibs_info.sym_nops.st_shndx:=SHN_UNDEF;
+   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(get_unresolve_ptr(str));
+
+   def   :=@dynlibs_info.sym_nops;
+   defobj:=dynlibs_info.libprogram;
+
   end;
  end;
 

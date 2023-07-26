@@ -9,92 +9,15 @@ uses
  mqueue,
  kern_stub;
 
-type
- t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall);
-
- p_patch_node=^t_patch_node;
- t_patch_node=record
-  link :TAILQ_ENTRY;
-  vaddr:Pointer;
-  ptype:t_patch_type;
-  stub :p_stub_chunk;
- end;
-
-procedure add_patch_link (_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
-procedure free_patch_link(_obj:Pointer;node:p_patch_node);
-procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
-
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
 
 implementation
 
 uses
- hamt,
- kern_rwlock,
  kern_thr,
- vm,
- vmparam,
- vm_map,
- vm_mmap,
- vm_object,
  vm_pmap,
+ vm_patch_link,
  trap;
-
-procedure add_patch_link(_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
-var
- obj:vm_object_t;
- node:p_patch_node;
-begin
- Writeln('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
-
- obj:=_obj;
- node:=AllocMem(SizeOf(t_patch_node));
- node^.vaddr:=vaddr;
- node^.ptype:=ptype;
- node^.stub :=stub;
-
- p_inc_ref(stub);
-
- TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
-end;
-
-procedure free_patch_link(_obj:Pointer;node:p_patch_node);
-var
- obj:vm_object_t;
-begin
- obj:=_obj;
- TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
-
- p_dec_ref(node^.stub);
- FreeMem(node);
-end;
-
-function OFF_TO_IDX(x:Pointer):DWORD; inline;
-begin
- Result:=QWORD(x) shr PAGE_SHIFT;
-end;
-
-procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
-var
- obj:vm_object_t;
- entry,next:p_patch_node;
-begin
- obj:=_obj;
-
- entry:=TAILQ_FIRST(@obj^.patchq);
- while (entry<>nil) do
- begin
-  next:=TAILQ_NEXT(entry,@entry^.link);
-  //
-  if ((start=0) or (OFF_TO_IDX(entry^.vaddr)>=start)) and
-     ((__end=0) or (OFF_TO_IDX(entry^.vaddr)<=__end)) then
-  begin
-   free_patch_link(_obj,entry);
-  end;
-  //
-  entry:=next;
- end;
-end;
 
 {
 64 48 A1 [0000000000000000] mov rax,fs:[$0000000000000000] -> 65 48 A1 [0807000000000000] mov rax,gs:[$0000000000000708]
@@ -533,10 +456,32 @@ begin
  Result:=-1;
 end;
 
-procedure _fast_syscall; assembler; nostackframe;
-asm
- mov %rax,%rax
- jmp fast_syscall
+procedure vm_add_syscall_patch(_obj,vaddr,addr_out:Pointer);
+var
+ stub:p_stub_chunk;
+
+ jmpq64_trampoline:t_jmpq64_trampoline;
+ call32_trampoline:t_call32_trampoline;
+
+ delta:Int64;
+begin
+ stub:=p_alloc(vaddr,SizeOf(t_jmpq64_trampoline));
+
+ delta:=Int64(@stub^.body)-(Int64(vaddr)+SizeOf(t_call32_trampoline));
+ Assert(delta<High(Integer),'vm_add_syscall_patch');
+
+ jmpq64_trampoline:=c_jmpq64_trampoline;
+ call32_trampoline:=c_call32_trampoline;
+
+ jmpq64_trampoline.addr:=QWORD(@fast_syscall);
+ call32_trampoline.addr:=Integer(delta);
+
+ p_jmpq64_trampoline(@stub^.body)^:=jmpq64_trampoline;
+ p_call32_trampoline(addr_out)^:=call32_trampoline;
+
+ md_cacheflush(@stub^.body,SizeOf(t_jmpq64_trampoline),ICACHE);
+
+ vm_add_patch_link(_obj,vaddr,pt_syscall,stub);
 end;
 
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
@@ -559,36 +504,16 @@ var
   Move(patch_table[i].C[1],addr^,patch_table[i].C[0]);
 
   v:=vaddr+(Int64(addr)-Int64(data));
-  add_patch_link(_obj,v,ptype,nil);
+  vm_add_patch_link(_obj,v,ptype,nil);
  end;
 
  procedure do_patch_syscall(addr:PByte);
  var
   v:Pointer;
-  stub:p_stub_chunk;
-
-  jmpq64_trampoline:t_jmpq64_trampoline;
-  call32_trampoline:t_call32_trampoline;
-
-  d:Int64;
  begin
   v:=vaddr+(Int64(addr)-Int64(data));
 
-  stub:=p_alloc(v,SizeOf(t_jmpq64_trampoline));
-
-  d:=Int64(@stub^.body)-(Int64(v)+SizeOf(t_call32_trampoline));
-  Assert(d<High(Integer),'do_patch_syscall');
-
-  jmpq64_trampoline:=c_jmpq64_trampoline;
-  call32_trampoline:=c_call32_trampoline;
-
-  jmpq64_trampoline.addr:=QWORD(@_fast_syscall);
-  call32_trampoline.addr:=Integer(d);
-
-  p_jmpq64_trampoline(@stub^.body)^:=jmpq64_trampoline;
-  p_call32_trampoline(addr)^:=call32_trampoline;
-
-  add_patch_link(_obj,v,pt_syscall,stub);
+  vm_add_syscall_patch(_obj,v,addr);
  end;
 
 begin
@@ -629,7 +554,7 @@ begin
             end;
            end else
            begin
-            Writeln('patch with offset:',offset);
+            //Writeln('patch with offset:',offset);
            end;
           end;
        34:
