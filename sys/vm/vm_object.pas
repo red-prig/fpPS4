@@ -107,7 +107,8 @@ implementation
 uses
  vmparam,
  vnode,
- vfs_subr;
+ vfs_subr,
+ kern_patcher;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
@@ -224,6 +225,8 @@ begin
  vm_object_pip_wait(obj, 'objtrm');
 
  Assert(obj^.paging_in_progress=0,'vm_object_terminate: pageout in progress');
+
+ vm_object_patch_remove(obj,0,0);
 
  {
   * Clean and free the pages, as appropriate. All references to the
@@ -385,9 +388,7 @@ procedure vm_object_page_remove(obj:vm_object_t;
                                 __end:vm_pindex_t;
                                 options:Integer);
 begin
- //OBJPR_CLEANONLY=$1; // Don't remove dirty pages.
- //OBJPR_NOTMAPPED=$2; // Don't unmap pages.
- //OBJPR_NOTWIRED =$4; // Don't remove wired pages.
+ vm_object_patch_remove(obj,start,__end);
 end;
 
 {

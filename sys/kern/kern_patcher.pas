@@ -22,6 +22,7 @@ type
 
 procedure add_patch_link (_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
 procedure free_patch_link(_obj:Pointer;node:p_patch_node);
+procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
 
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
 
@@ -32,6 +33,7 @@ uses
  kern_rwlock,
  kern_thr,
  vm,
+ vmparam,
  vm_map,
  vm_mmap,
  vm_object,
@@ -65,6 +67,33 @@ begin
 
  p_dec_ref(node^.stub);
  FreeMem(node);
+end;
+
+function OFF_TO_IDX(x:Pointer):DWORD; inline;
+begin
+ Result:=QWORD(x) shr PAGE_SHIFT;
+end;
+
+procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
+var
+ obj:vm_object_t;
+ entry,next:p_patch_node;
+begin
+ obj:=_obj;
+
+ entry:=TAILQ_FIRST(@obj^.patchq);
+ while (entry<>nil) do
+ begin
+  next:=TAILQ_NEXT(entry,@entry^.link);
+  //
+  if ((start=0) or (OFF_TO_IDX(entry^.vaddr)>=start)) and
+     ((__end=0) or (OFF_TO_IDX(entry^.vaddr)<=__end)) then
+  begin
+   free_patch_link(_obj,entry);
+  end;
+  //
+  entry:=next;
+ end;
 end;
 
 {

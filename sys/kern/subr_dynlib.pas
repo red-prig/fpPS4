@@ -2044,6 +2044,8 @@ var
 begin
  Result:=nil;
 
+ Writeln(' do_load_object:',dynlib_basename(path));
+
  new:=obj_new();
 
  err:=self_load_shared_object(path,new,ord((flags and $20)<>0));
@@ -2158,6 +2160,8 @@ var
 begin
  Assert(root^.ref_count=0,'unload_object ref_count');
 
+ Writeln(' unload_object:',dynlib_basename(root^.lib_path));
+
  {
   * Pass over the DAG removing unreferenced objects from
   * appropriate lists.
@@ -2225,7 +2229,7 @@ begin
  begin
   fname:='/'+fname;
  end;
- fname:=p_proc.p_randomized_path+fname;
+ fname:='/'+p_proc.p_randomized_path+fname;
 
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 

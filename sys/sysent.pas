@@ -28,6 +28,7 @@ uses
  kern_dynlib,
  kern_ksched,
  kern_rtprio,
+ kern_sysctl,
  kern_thread,
  sys_machdep,
  kern_context,
@@ -1062,7 +1063,7 @@ const
   ),
   (//[202]
      sy_narg:6;
-     sy_call:nil;
+     sy_call:@sys___sysctl;
      sy_name:'sys___sysctl'
   ),
   (//[203]

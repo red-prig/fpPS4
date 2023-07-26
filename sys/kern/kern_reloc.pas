@@ -443,6 +443,8 @@ end;
 
 function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
 begin
+ Writeln(' relocate:',dynlib_basename(obj^.lib_path));
+
  Result:=reloc_non_plt(obj);
  if (Result<>0) then
  begin

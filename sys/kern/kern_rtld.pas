@@ -524,6 +524,19 @@ begin
  end;
 end;
 
+function get_char_sep(path:pchar):char; inline;
+const
+ c_host='/host/';
+begin
+ if (StrLComp(path,c_host,Length(c_host))=0) then
+ begin
+  Result:='\';
+ end else
+ begin
+  Result:='/';
+ end;
+end;
+
 function rtld_dirname(path,bname:pchar):Integer;
 var
  endp:pchar;
@@ -539,13 +552,7 @@ begin
   Exit(0);
  end;
 
- if (StrLComp(path,'/host/',Length('/host/'))=0) then
- begin
-  chr:='/';
- end else
- begin
-  chr:='\';
- end;
+ chr:=get_char_sep(path);
 
  { Strip trailing slashes }
  endp:=path + strlen(path) - 1;
@@ -1140,26 +1147,10 @@ begin
 end;
 
 function is_system_path(path:pchar):Boolean;
-var
- f:RawByteString;
 begin
- f:='/'+p_proc.p_randomized_path;
- Result:=StrLComp(pchar(f),path,Length(f))=0;
-end;
-
-function is_libc_or_fios(path:pchar):Boolean;
-var
- f:RawByteString;
-begin
- f:=ExtractFileName(path);
- f:=ChangeFileExt(f,'');
- case f of
-  'libc',
-  'libSceFios2':
-    Result:=True;
-  else
-    Result:=False;
- end;
+ if (path=nil)     then Exit(False);
+ if (path[0]<>'/') then Exit(False);
+ Result:=StrLComp(p_proc.p_randomized_path,@path[1],Length(p_proc.p_randomized_path))=0;
 end;
 
 function dynlib_basename(path:pchar):pchar;
@@ -1167,13 +1158,7 @@ var
  idx:pchar;
  chr:char;
 begin
- if (StrLComp(path,'/host/',Length('/host/'))=0) then
- begin
-  chr:='/';
- end else
- begin
-  chr:='\';
- end;
+ chr:=get_char_sep(path);
 
  idx:=strrscan(path,chr);
  if (idx=nil) then
@@ -1184,6 +1169,26 @@ begin
   Result:=idx+1;
  end;
 end;
+
+function is_libc_or_fios(path:pchar):Boolean;
+const
+ c_libc='libc.';
+ c_libSceFios2='libSceFios2.';
+var
+ f:pchar;
+begin
+ f:=dynlib_basename(path);
+
+ if (StrLComp(f,c_libc,Length(c_libc))=0) or
+    (StrLComp(f,c_libSceFios2,Length(c_libSceFios2))=0) then
+ begin
+  Result:=True;
+ end else
+ begin
+  Result:=False;
+ end;
+end;
+
 
 end.
 

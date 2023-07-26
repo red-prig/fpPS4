@@ -13,6 +13,7 @@ uses
  time,
  kern_time,
  subr_sleepqueue,
+ kern_sysctl,
  kern_thr,
  kern_thread,
  kern_sig,
@@ -74,6 +75,7 @@ procedure sys_init;
 begin
  timeinit;
  init_sleepqueues;
+ sysctl_register_all;
  PROC_INIT;
  threadinit;
  siginit;

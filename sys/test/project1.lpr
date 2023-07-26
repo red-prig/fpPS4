@@ -91,7 +91,8 @@ uses
  kern_timeout,
  kern_exec,
  kern_dynlib,
- vmparam;
+ vmparam,
+ kern_sysctl;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
