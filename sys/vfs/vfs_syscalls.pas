@@ -127,6 +127,11 @@ function kern_rmdirat(fd:Integer;path:PChar;pathseg:uio_seg):Integer;
 function kern_rmdir(path:PChar;pathseg:uio_seg):Integer;
 function kern_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 
+/////
+
+function sys_is_in_sandbox():Integer;
+function sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
+
 implementation
 
 uses
@@ -346,6 +351,7 @@ end;
 
 function kern_getfsstat(buf:pp_statfs;bufsize:QWORD;bufseg:uio_seg;flags:Integer):Integer;
 var
+ td:p_kthread;
  mp,nmp:p_mount;
  sfsp,sp:p_statfs;
  sb:t_statfs;
@@ -353,6 +359,9 @@ var
  vfslocked:Integer;
  error:Integer;
 begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  maxcount:=bufsize div sizeof(t_statfs);
  if (bufsize=0) then
  begin
@@ -460,10 +469,12 @@ begin
   mp:=nmp;
  end;
  mtx_unlock(mountlist_mtx);
+
  if (sfsp<>nil) and (count>maxcount) then
-  curkthread^.td_retval[0]:=maxcount
+  td^.td_retval[0]:=maxcount
  else
-  curkthread^.td_retval[0]:=count;
+  td^.td_retval[0]:=count;
+
  Exit(0);
 end;
 
@@ -777,6 +788,8 @@ var
  rights_needed:cap_rights_t;
 begin
  td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  indx:=-1;
  rights_needed:=CAP_LOOKUP;
 
@@ -984,15 +997,20 @@ restart:
  NDINIT_AT(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, pathseg, path, fd, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
+
  vfslocked:=NDHASGIANT(@nd);
  if (nd.ni_vp<>nil) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
+
   if (nd.ni_vp=nd.ni_dvp) then
    vrele(nd.ni_dvp)
   else
    vput(nd.ni_dvp);
+
   vrele(nd.ni_vp);
   VFS_UNLOCK_GIANT(vfslocked);
   Exit(EEXIST);
@@ -1004,7 +1022,9 @@ restart:
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   goto restart;
  end;
  VATTR_NULL(@vattr);
@@ -1017,7 +1037,9 @@ restart:
 
  error:=VOP_MKNOD(nd.ni_dvp, @nd.ni_vp, @nd.ni_cnd, @vattr);
  if (error=0) then
+ begin
   vput(nd.ni_vp);
+ end;
 
 _out:
  vput(nd.ni_dvp);
@@ -1076,16 +1098,20 @@ restart:
  NDINIT_ATRIGHTS(@nd, CREATE, LOCKPARENT or SAVENAME or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_MKFIFO, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  if (vp<>nil) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
+
   if (vp=nd.ni_dvp) then
    vrele(nd.ni_dvp)
   else
    vput(nd.ni_dvp);
+
   vrele(vp);
   VFS_UNLOCK_GIANT(vfslocked);
   Exit(EEXIST);
@@ -1116,7 +1142,9 @@ restart:
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   goto restart;
  end;
 
@@ -1127,10 +1155,14 @@ restart:
  begin
   if (whiteout<>0) then
    error:=VOP_WHITEOUT(nd.ni_dvp, @nd.ni_cnd, CREATE)
-  else begin
+  else
+  begin
    error:=VOP_MKNOD(nd.ni_dvp, @nd.ni_vp, @nd.ni_cnd, @vattr);
+
    if (error=0) then
+   begin
     vput(nd.ni_vp);
+   end;
   end;
  end;
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1498,6 +1530,7 @@ label
  drop,
  _break;
 var
+ td:p_kthread;
  fp:p_file;
  vp:p_vnode;
  vattr:t_vattr;
@@ -1505,9 +1538,15 @@ var
  error,noneg:Integer;
  vfslocked:Integer;
 begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  error:=fget(fd, CAP_SEEK, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
+
  if ((fp^.f_ops^.fo_flags and DFLAG_SEEKABLE)=0) then
  begin
   fdrop(fp);
@@ -1570,7 +1609,8 @@ begin
  if (error<>0) then
   goto drop;
  VFS_KNOTE_UNLOCKED(vp, 0);
- curkthread^.td_retval[0]:=offset;
+ td^.td_retval[0]:=offset;
+
 drop:
  fdrop(fp);
  VFS_UNLOCK_GIANT(vfslocked);
@@ -1771,6 +1811,8 @@ var
  error,vfslocked:Integer;
 begin
  td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  NDINIT(@nd, LOOKUP, LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1 or flags, pathseg, path, td);
  error:=nd_namei(@nd);
  if (error<>0) then
@@ -1809,18 +1851,24 @@ var
  vfslocked:Integer;
 begin
  if (count > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
 
  td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  NDINIT_AT(@nd, LOOKUP, NOFOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, fd, td);
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
+
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
-
 
  //error:=mac_vnode_check_readlink(td^.td_ucred, vp);
  //if (error<>0) then
@@ -1920,7 +1968,9 @@ begin
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vfslocked:=NDHASGIANT(@nd);
  error:=setfflags(nd.ni_vp, flags);
@@ -1941,7 +1991,9 @@ begin
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  error:=setfflags(nd.ni_vp, flags);
@@ -2014,7 +2066,9 @@ begin
  NDINIT_ATRIGHTS(@nd, LOOKUP,  follow or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FCHMOD, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  error:=setfmode(nd.ni_vp, mode);
@@ -2113,7 +2167,9 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
  error:=setfown(nd.ni_vp, uid, gid);
@@ -2368,7 +2424,9 @@ begin
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
  rl_cookie:=vn_rangelock_wlock(vp, 0, High(Int64));
@@ -2829,6 +2887,8 @@ var
  tvp:p_vnode;
 begin
  td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  auio.uio_resid:=count;
 
  if (auio.uio_resid > IOSIZE_MAX) then
@@ -2927,9 +2987,14 @@ end;
  * Set the mode mask for creation of filesystem nodes.
  }
 function sys_umask(newmask:Integer):Integer;
+var
+ td:p_kthread;
 begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
  FILEDESC_XLOCK(@fd_table);
- curkthread^.td_retval[0]:=fd_table.fd_cmask;
+ td^.td_retval[0]:=fd_table.fd_cmask;
  fd_table.fd_cmask:=newmask and ALLPERMS;
  FILEDESC_XUNLOCK(@fd_table);
  Exit(0);
@@ -2954,7 +3019,9 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
@@ -2972,7 +3039,9 @@ begin
 
  error:=VOP_GETATTR(vp, @vattr);
  if (error<>0) then
+ begin
   goto _out;
+ end;
  //if (td^.td_ucred^.cr_uid<>vattr.va_uid) then
  //begin
  // error:=priv_check(td, PRIV_VFS_ADMIN);
@@ -2980,7 +3049,9 @@ begin
  //  goto _out;
  //end;
  if (vcount(vp) > 1) then
+ begin
   VOP_REVOKE(vp, REVOKEALL);
+ end;
 _out:
  vput(vp);
  VFS_UNLOCK_GIANT(vfslocked);
@@ -3001,7 +3072,9 @@ begin
  error:=0;
  fp:=fget_unlocked(fd);
  if (fp=nil) then
+ begin
   Exit(EBADF);
+ end;
 
  {
   * If the file descriptor is for a capability, test rights and use the
@@ -3040,6 +3113,68 @@ begin
  fpp^:=fp;
  Exit(0);
 end;
+
+//////////
+
+function sys_is_in_sandbox():Integer;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ td^.td_retval[0]:=1; //only in sandbox
+end;
+
+function sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
+var
+ src_len:Integer;
+ ran_len:Integer;
+ dst_len:QWORD;
+ data:array[0..255] of AnsiChar;
+begin
+ FillChar(data,SizeOf(data),0);
+ dst_len:=0;
+ src_len:=0;
+
+ if (src=nil) then
+ begin
+  if (dst=nil) or (plen=nil) then
+  begin
+   //
+  end else
+  begin
+   dst_len:=fuword64(plen^);
+  end;
+ end else
+ begin
+  //priv_check(td,0x2af);
+  Exit(EPERM);
+ end;
+
+ MoveChar0(p_proc.p_randomized_path,data,Length(p_proc.p_randomized_path));
+ ran_len:=StrLen(@data);
+
+ if (0 < dst_len) and (0 < ran_len) then
+ begin
+  if (dst_len < ran_len) then
+  begin
+   Result:=copyout(@data,dst,dst_len);
+  end else
+  begin
+   Result:=copyout(@data,dst,ran_len);
+  end;
+  if (Result<>0) then Exit;
+ end;
+
+ if (plen<>nil) then
+ begin
+  dst_len:=ran_len;
+  Result:=suword64(plen^,dst_len);
+ end;
+end;
+
+
 
 end.
 

@@ -55,7 +55,8 @@ uses
  sys_event,
  kern_event,
  machdep,
- kern_dlsym;
+ kern_dlsym,
+ kern_authinfo;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -1412,6 +1413,9 @@ begin
  exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base), QWORD(g_vmspace.sv_usrstack));
 
  vfs_mark_atime(imgp^.vp);
+
+ //copy authinfo
+ g_authinfo:=imgp^.authinfo;
 
  {
   * Free any resources malloc'd earlier that we didn't use.

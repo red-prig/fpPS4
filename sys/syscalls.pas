@@ -177,6 +177,7 @@ function  renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar):Integer;
 function  symlinkat(path1:PChar;fd:Integer;path2:PChar):Integer;
 function  unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 function  pselect(nd:Integer;uin,uou,uex,uts,sm:Pointer):Integer;
+function  __sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 function  __sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer;
 function  __sys_dl_get_info(pid,handle:Integer;pout:PPointer):Integer;
 function  evf_create(name:PChar;attr:DWORD;initPattern:QWORD):Integer;
@@ -203,6 +204,8 @@ function  budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;
 function  budget_delete(key:Integer):Integer;
 function  budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer;
 function  budget_set(key:Integer):Integer;
+function  is_in_sandbox():Integer;
+function  get_authinfo(pid:Integer;info:Pointer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function  dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
 function  dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
@@ -212,6 +215,7 @@ function  __sys_dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Intege
 function  dynlib_do_copy_relocations():Integer;
 function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 function  dynlib_process_needed_and_relocate():Integer;
+function  __sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
 function  __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
 function  dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer;
 function  budget_getid():Integer;
@@ -1430,6 +1434,13 @@ asm
  jmp   cerror
 end;
 
+function __sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer; assembler; nostackframe;
+asm
+ movq  $532,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function __sys_dl_get_list(pid:Integer;pArray:PInteger;numArray:Integer;pActualNum:PInteger):Integer; assembler; nostackframe;
 asm
  movq  $535,%rax
@@ -1612,6 +1623,20 @@ asm
  jmp   cerror
 end;
 
+function is_in_sandbox():Integer; assembler; nostackframe;
+asm
+ movq  $585,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function get_authinfo(pid:Integer;info:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $587,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function mname(addr:Pointer;len:QWORD;name:PChar):Integer; assembler; nostackframe;
 asm
  movq  $588,%rax
@@ -1671,6 +1696,13 @@ end;
 function dynlib_process_needed_and_relocate():Integer; assembler; nostackframe;
 asm
  movq  $599,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer; assembler; nostackframe;
+asm
+ movq  $602,%rax
  call  fast_syscall
  jmp   cerror
 end;

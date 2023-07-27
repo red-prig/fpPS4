@@ -24,9 +24,9 @@ const
 
 
 //CTL_KERN identifiers
- KERN_PROC   =14;
-
- KERN_ARND   =37;
+ KERN_PROC    =14;
+ KERN_USRSTACK=33;
+ KERN_ARND    =37;
 
 //KERN_PROC subtypes
  KERN_PROC_APPINFO     =35; //Application information
@@ -36,6 +36,12 @@ const
  KERN_PROC_SANITIZER   =41; //kern_sanitizer (Sanitizing mode)
  KERN_PROC_TEXT_SEGMENT=44; //kern_dynlib_get_libkernel_text_segment
 
+
+ KERN_SMP              =$100; //(OID_AUTO) Kernel SMP
+
+
+//kern.smp
+ KERN_CPUS=1; //(OID_AUTO) Number of CPUs online
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
@@ -82,7 +88,9 @@ implementation
 uses
  errno,
  systm,
+ vfile,
  vmparam,
+ vm_map,
  kern_thr,
  kern_sx,
  md_arc4random,
@@ -91,6 +99,8 @@ uses
 var
  sysctllock   :t_sx;
  sysctlmemlock:t_sx;
+
+ smp_cpus:Integer=7;
 
 procedure sysctl_register_all();
 begin
@@ -301,6 +311,73 @@ begin
 
 end;
 
+function sysctl_kern_usrstack(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+begin
+ Result:=SYSCTL_OUT(req,@g_vmspace.sv_usrstack,SizeOf(Pointer));
+end;
+
+function sysctl_handle_int(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ tmpout:Integer;
+begin
+ if (arg1<>nil) then
+ begin
+  tmpout:=PInteger(arg1)^;
+ end else
+ begin
+  tmpout:=arg2;
+ end;
+
+ Result:=SYSCTL_OUT(req,@tmpout,SizeOf(Integer));
+
+ if (Result<>0) or (req^.newptr=nil) then Exit;
+
+ if (arg1=nil) then Exit(EPERM);
+
+ Result:=SYSCTL_IN(req, arg1, sizeof(Integer));
+end;
+
+function name2oid(name:pchar;oid,len:PInteger):Integer;
+begin
+ Result:=0;
+
+ case RawByteString(name) of
+  'kern.smp.cpus':
+    begin
+     oid[0]:=CTL_KERN;
+     oid[1]:=KERN_SMP;
+     oid[2]:=KERN_CPUS;
+     len^  :=3;
+    end;
+
+  else
+   Writeln(StdErr,'Unhandled name2oid:',name);
+   Assert(False);
+   Result:=ENOENT;
+ end;
+end;
+
+function sysctl_sysctl_name2oid(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ new:array[0..MAXPATHLEN] of AnsiChar;
+ oid:array[0..CTL_MAXNAME-1] of Integer;
+ len:Integer;
+begin
+ if (req^.newlen=0) then Exit(ENOENT);
+
+ if (req^.newlen >= MAXPATHLEN) then Exit(ENAMETOOLONG);
+
+ FillChar(new,SizeOf(new),0);
+
+ Result:=SYSCTL_IN(req, @new, req^.newlen);
+ if (Result<>0) then Exit;
+
+ Result:=name2oid(@new, @oid, @len);
+ if (Result<>0) then Exit;
+
+ Result:=SYSCTL_OUT(req, @oid, len*sizeof(Integer));
+end;
+
 function sysctl_kern_proc(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
@@ -323,12 +400,29 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  KERN_PROC:Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
+  KERN_PROC    :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
 
-  KERN_ARND:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_arandom);
+  KERN_USRSTACK:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_usrstack);
+  KERN_ARND    :Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_arandom);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
+function sysctl_sysctl(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+  3:Result:=SYSCTL_HANDLE(noid,name,@sysctl_sysctl_name2oid);
+
+  else
+   begin
+    Writeln(StdErr,'Unhandled sysctl_sysctl:',name[0]);
     Assert(False);
    end;
  end;
@@ -343,7 +437,8 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  CTL_KERN:Result:=sysctl_kern(name+1,namelen-1,noid,req);
+  CTL_UNSPEC:Result:=sysctl_sysctl(name+1,namelen-1,noid,req);
+  CTL_KERN  :Result:=sysctl_kern  (name+1,namelen-1,noid,req);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_root:',name[0]);

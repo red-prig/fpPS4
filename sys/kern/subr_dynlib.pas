@@ -1762,6 +1762,8 @@ begin
   goto _fail_dealloc;
  end;
 
+ Writeln(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+(imgp^.max_addr-imgp^.min_addr),12),':',imgp^.execpath);
+
  delta:=addr-imgp^.min_addr;
  imgp^.min_addr:=addr;
  imgp^.max_addr:=imgp^.max_addr+delta;

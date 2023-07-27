@@ -28,6 +28,7 @@ uses
  kern_cpuset,
  kern_dynlib,
  kern_ksched,
+ kern_regmgr,
  kern_rtprio,
  kern_sysctl,
  kern_thread,
@@ -36,6 +37,7 @@ uses
  kern_descrip,
  vfs_syscalls,
  vsys_generic,
+ kern_authinfo,
  kern_namedobj,
  kern_resource;
 
@@ -2714,7 +2716,7 @@ const
   ),
   (//[532]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_regmgr_call;
      sy_name:'sys_regmgr_call'
   ),
   (//[533]
@@ -2979,7 +2981,7 @@ const
   ),
   (//[585]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@sys_is_in_sandbox;
      sy_name:'sys_is_in_sandbox'
   ),
   (//[586]
@@ -2989,7 +2991,7 @@ const
   ),
   (//[587]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_get_authinfo;
      sy_name:'sys_get_authinfo'
   ),
   (//[588]
@@ -3064,7 +3066,7 @@ const
   ),
   (//[602]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_randomized_path;
      sy_name:'sys_randomized_path'
   ),
   (//[603]
