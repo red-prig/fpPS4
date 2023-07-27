@@ -199,6 +199,10 @@ function  osem_post(key,signalCount:Integer):Integer;
 function  osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
 function  __sys_namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
 function  __sys_namedobj_delete(id,objt:Integer):Integer;
+function  budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer;
+function  budget_delete(key:Integer):Integer;
+function  budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer;
+function  budget_set(key:Integer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function  dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
 function  dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
@@ -210,6 +214,8 @@ function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 function  dynlib_process_needed_and_relocate():Integer;
 function  __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
 function  dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer;
+function  budget_getid():Integer;
+function  budget_get_ptype(pid:Integer):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
@@ -220,6 +226,7 @@ function  set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
+function  budget_get_ptype_of_budget(key:Integer):Integer;
 function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
 function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
@@ -1577,6 +1584,34 @@ asm
  jmp   cerror
 end;
 
+function budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $568,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function budget_delete(key:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $569,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer; assembler; nostackframe;
+asm
+ movq  $570,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function budget_set(key:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $571,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function mname(addr:Pointer;len:QWORD;name:PChar):Integer; assembler; nostackframe;
 asm
  movq  $588,%rax
@@ -1654,6 +1689,20 @@ asm
  jmp   cerror
 end;
 
+function budget_getid():Integer; assembler; nostackframe;
+asm
+ movq  $609,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function budget_get_ptype(pid:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $610,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function thr_get_name(id:DWORD;pname:PChar):Integer; assembler; nostackframe;
 asm
  movq  $616,%rax
@@ -1720,6 +1769,13 @@ end;
 function dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer; assembler; nostackframe;
 asm
  movq  $649,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function budget_get_ptype_of_budget(key:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $650,%rax
  call  fast_syscall
  jmp   cerror
 end;

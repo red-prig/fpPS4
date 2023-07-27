@@ -92,7 +92,8 @@ uses
  kern_exec,
  kern_dynlib,
  vmparam,
- kern_sysctl;
+ kern_sysctl,
+ kern_budget;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);

@@ -24,6 +24,7 @@ uses
  vfs_mount,
  kern_event,
  kern_synch,
+ kern_budget,
  kern_cpuset,
  kern_dynlib,
  kern_ksched,
@@ -2893,22 +2894,22 @@ const
   ),
   (//[568]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_budget_create;
      sy_name:'sys_budget_create'
   ),
   (//[569]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_budget_delete;
      sy_name:'sys_budget_delete'
   ),
   (//[570]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_budget_get;
      sy_name:'sys_budget_get'
   ),
   (//[571]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_budget_set;
      sy_name:'sys_budget_set'
   ),
   (//[572]
@@ -3098,12 +3099,12 @@ const
   ),
   (//[609]
      sy_narg:0;
-     sy_call:nil;
+     sy_call:@sys_budget_getid;
      sy_name:'sys_budget_getid'
   ),
   (//[610]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_budget_get_ptype;
      sy_name:'sys_budget_get_ptype'
   ),
   (//[611]
@@ -3303,7 +3304,7 @@ const
   ),
   (//[650]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_budget_get_ptype_of_budget;
      sy_name:'sys_budget_get_ptype_of_budget'
   ),
   (//[651]
