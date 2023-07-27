@@ -9,6 +9,41 @@ interface
 const
  CTL_MAXNAME=24; // largest number of components supported
 
+ CTLTYPE       =$f; // Mask for the type
+ CTLTYPE_NODE  =1;  // name is a node
+ CTLTYPE_INT   =2;  // name describes an integer
+ CTLTYPE_STRING=3;  // name describes a string
+ CTLTYPE_S64   =4;  // name describes a signed 64-bit number
+ CTLTYPE_OPAQUE=5;  // name describes a structure
+ CTLTYPE_STRUCT=CTLTYPE_OPAQUE; // name describes a structure
+ CTLTYPE_UINT  =6;  // name describes an unsigned integer
+ CTLTYPE_LONG  =7;  // name describes a long
+ CTLTYPE_ULONG =8;  // name describes an unsigned long
+ CTLTYPE_U64   =9;  // name describes an unsigned 64-bit number
+
+ CTLFLAG_RD     =$80000000; // Allow reads of variable
+ CTLFLAG_WR     =$40000000; // Allow writes to the variable
+ CTLFLAG_RW     =(CTLFLAG_RD or CTLFLAG_WR);
+ CTLFLAG_ANYBODY=$10000000; // All users can set this var
+ CTLFLAG_SECURE =$08000000; // Permit set only if securelevel<=0
+ CTLFLAG_PRISON =$04000000; // Prisoned roots can fiddle
+ CTLFLAG_DYN    =$02000000; // Dynamic oid - can be freed
+ CTLFLAG_SKIP   =$01000000; // Skip this sysctl when listing
+ CTLMASK_SECURE =$00F00000; // Secure level
+ CTLFLAG_TUN    =$00080000; // Tunable variable
+ CTLFLAG_RDTUN  =(CTLFLAG_RD or CTLFLAG_TUN);
+ CTLFLAG_RWTUN  =(CTLFLAG_RW or CTLFLAG_TUN);
+ CTLFLAG_MPSAFE =$00040000; // Handler is MP safe
+ CTLFLAG_VNET   =$00020000; // Prisons with vnet can fiddle
+ CTLFLAG_DYING  =$00010000; // oid is being removed
+ CTLFLAG_CAPRD  =$00008000; // Can be read in capability mode
+ CTLFLAG_CAPWR  =$00004000; // Can be written in capability mode
+ CTLFLAG_CAPRW  =(CTLFLAG_CAPRD or CTLFLAG_CAPWR);
+
+ OID_AUTO=(-1);
+
+ CTL_AUTO_START=$100;
+
 //Top-level identifiers
  CTL_UNSPEC  = 0; // unused
  CTL_KERN    = 1; // "high kernel": proc, limits
@@ -41,7 +76,22 @@ const
 
 
 //kern.smp
- KERN_CPUS=1; //(OID_AUTO) Number of CPUs online
+ KERN_CPUS=$100; //(OID_AUTO) Number of CPUs online
+
+//CTL_HW identifiers
+ HW_MACHINE     = 1; // string: machine class
+ HW_MODEL       = 2; // string: specific machine model
+ HW_NCPU        = 3; // int: number of cpus
+ HW_BYTEORDER   = 4; // int: machine byte order
+ HW_PHYSMEM     = 5; // int: total memory
+ HW_USERMEM     = 6; // int: non-kernel memory
+ HW_PAGESIZE    = 7; // int: software page size
+ HW_DISKNAMES   = 8; // strings: disk drive names
+ HW_DISKSTATS   = 9; // struct: diskstats[]
+ HW_FLOATINGPT  =10; // int: has HW floating point?
+ HW_MACHINE_ARCH=11; // string: machine architecture
+ HW_REALMEM     =12; // int: 'real' memory
+ HW_MAXID       =13; // number of valid hw ids
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
@@ -70,6 +120,9 @@ type
  t_oid_handler=function(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 
  t_sysctl_oid=record
+  oid_arg1   :Pointer;
+  oid_arg2   :Integer;
+  oid_kind   :DWORD;
   oid_name   :PInteger;
   oid_handler:t_oid_handler;
  end;
@@ -99,8 +152,6 @@ uses
 var
  sysctllock   :t_sx;
  sysctlmemlock:t_sx;
-
- smp_cpus:Integer=7;
 
 procedure sysctl_register_all();
 begin
@@ -133,9 +184,58 @@ begin
  Result:=req^.oldfunc(req,p,s);
 end;
 
-function SYSCTL_HANDLE(noid:p_sysctl_oid;name:PInteger;func:Pointer):Integer; inline;
+function SYSCTL_HANDLE(noid:p_sysctl_oid;
+                       name:PInteger;
+                       kind:DWORD;
+                       func:Pointer):Integer; inline;
 begin
  noid^.oid_name   :=name+1;
+ noid^.oid_kind   :=kind;
+ noid^.oid_arg1   :=nil;
+ noid^.oid_arg2   :=0;
+ noid^.oid_handler:=t_oid_handler(func);
+ Result:=0
+end;
+
+function SYSCTL_HANDLE(noid:p_sysctl_oid;
+                       name:PInteger;
+                       kind:DWORD;
+                       arg1:Pointer;
+                       func:Pointer):Integer; inline;
+begin
+ noid^.oid_name   :=name+1;
+ noid^.oid_kind   :=kind;
+ noid^.oid_arg1   :=arg1;
+ noid^.oid_arg2   :=0;
+ noid^.oid_handler:=t_oid_handler(func);
+ Result:=0
+end;
+
+function SYSCTL_HANDLE(noid:p_sysctl_oid;
+                       name:PInteger;
+                       kind:DWORD;
+                       arg2:Integer;
+                       func:Pointer):Integer; inline;
+begin
+ noid^.oid_name   :=name+1;
+ noid^.oid_kind   :=kind;
+ noid^.oid_arg1   :=nil;
+ noid^.oid_arg2   :=arg2;
+ noid^.oid_handler:=t_oid_handler(func);
+ Result:=0
+end;
+
+function SYSCTL_HANDLE(noid:p_sysctl_oid;
+                       name:PInteger;
+                       kind:DWORD;
+                       arg1:Pointer;
+                       arg2:Integer;
+                       func:Pointer):Integer; inline;
+begin
+ noid^.oid_name   :=name+1;
+ noid^.oid_kind   :=kind;
+ noid^.oid_arg1   :=arg1;
+ noid^.oid_arg2   :=arg2;
  noid^.oid_handler:=t_oid_handler(func);
  Result:=0
 end;
@@ -384,11 +484,29 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  KERN_PROC_APPINFO:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_proc_appinfo);
+  KERN_PROC_APPINFO:Result:=SYSCTL_HANDLE(noid,name,$C0040001,@sysctl_kern_proc_appinfo);
 
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern_proc:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
+function sysctl_kern_smp(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+const
+  smp_cpus=8;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+  KERN_CPUS:Result:=SYSCTL_HANDLE(noid,name,$80048002,smp_cpus,@sysctl_handle_int);
+
+  else
+   begin
+    Writeln(StdErr,'Unhandled sysctl_kern_smp:',name[0]);
     Assert(False);
    end;
  end;
@@ -402,8 +520,10 @@ begin
  case name[0] of
   KERN_PROC    :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
 
-  KERN_USRSTACK:Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_usrstack);
-  KERN_ARND    :Result:=SYSCTL_HANDLE(noid,name,@sysctl_kern_arandom);
+  KERN_USRSTACK:Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
+  KERN_ARND    :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);
+
+  KERN_SMP     :Result:=sysctl_kern_smp(name+1,namelen-1,noid,req);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern:',name[0]);
@@ -418,11 +538,27 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  3:Result:=SYSCTL_HANDLE(noid,name,@sysctl_sysctl_name2oid);
+  3:Result:=SYSCTL_HANDLE(noid,name,$D004C002,@sysctl_sysctl_name2oid);
 
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_sysctl:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
+function sysctl_hw(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+  HW_PAGESIZE:Result:=SYSCTL_HANDLE(noid,name,$80048002,PAGE_SIZE,@sysctl_handle_int);
+
+  else
+   begin
+    Writeln(StdErr,'Unhandled sysctl_hw:',name[0]);
     Assert(False);
    end;
  end;
@@ -439,6 +575,7 @@ begin
  case name[0] of
   CTL_UNSPEC:Result:=sysctl_sysctl(name+1,namelen-1,noid,req);
   CTL_KERN  :Result:=sysctl_kern  (name+1,namelen-1,noid,req);
+  CTL_HW    :Result:=sysctl_hw    (name+1,namelen-1,noid,req);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_root:',name[0]);
@@ -463,20 +600,38 @@ begin
  if (oid.oid_handler=nil) then Exit(EINVAL);
  if (oid.oid_name   =nil) then Exit(EINVAL);
 
+ // Is this sysctl writable?
+ if (req^.newptr<>nil) and ((oid.oid_kind and CTLFLAG_WR)=0) then
+ begin
+  Exit(EPERM);
+ end;
+
+ // Is this sysctl writable by only privileged users?
+ if (req^.newptr<>nil) and ((oid.oid_kind and CTLFLAG_ANYBODY)=0) then
+ begin
+  //if (oid^.oid_kind and CTLFLAG_PRISON)
+  // priv:=PRIV_SYSCTL_WRITEJAIL;
+  //else
+  // priv:=PRIV_SYSCTL_WRITE;
+  //
+  //error:=priv_check(req^.td, priv);
+  //
+  //if (error<>0) then Ext(error);
+
+  Exit(EPERM);
+ end;
+
  indx:=oid.oid_name-arg1;
 
- arg1:=arg1 + indx;
- arg2:=arg2 - indx;
-
- //if ((oid.oid_kind and CTLTYPE)=CTLTYPE_NODE) then
- //begin
- // arg1:=arg1 + indx;
- // arg2:=arg2 - indx;
- //end else
- //begin
- // arg1:=oid.oid_arg1;
- // arg2:=oid.oid_arg2;
- //end;
+ if ((oid.oid_kind and CTLTYPE)=CTLTYPE_NODE) then
+ begin
+  arg1:=arg1 + indx;
+  arg2:=arg2 - indx;
+ end else
+ begin
+  arg1:=oid.oid_arg1;
+  arg2:=oid.oid_arg2;
+ end;
 
  Result:=oid.oid_handler(@oid, arg1, arg2, req);
 
