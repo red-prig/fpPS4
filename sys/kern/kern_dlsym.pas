@@ -66,8 +66,9 @@ begin
  //linear search
  For i:=0 to obj^.rel_data^.dynsymcount-1 do
  begin
-  symnum:=obj^.rel_data^.chains[i];
-  if (symnum<>0) then
+  symnum:=i;
+  //symnum:=obj^.rel_data^.chains[i];
+  //if (symnum<>0) then
   begin
    symp:=obj^.rel_data^.symtab_addr+symnum;
    strp:=obj^.rel_data^.strtab_addr+symp^.st_name;
@@ -75,6 +76,7 @@ begin
    ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
 
    Case ST_TYPE of
+    STT_SECTION:;
     STT_NOTYPE,
     STT_OBJECT,
     STT_FUN,
@@ -400,10 +402,6 @@ begin
 
  Result:=@stub^.body;
 end;
-
-
-
-//kern_stub
 
 function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
 var
