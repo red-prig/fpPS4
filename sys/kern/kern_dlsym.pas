@@ -371,10 +371,11 @@ type
  t_jmpq64_trampoline=packed record
   lea:array[0..6] of Byte;
   //
-  inst  :Word;  //FF 25
-  offset:DWORD; //00
-  addr  :QWORD;
-  str   :PChar;
+  inst   :Word;  //FF 25
+  offset :DWORD; //00
+  addr   :QWORD;
+  str    :PChar;
+  libname:PChar;
  end;
 
 const
@@ -382,11 +383,11 @@ const
 
 procedure _unresolve_symbol(data:p_jmpq64_trampoline);
 begin
- Writeln('_unresolve_symbol:',data^.str);
+ Writeln('_unresolve_symbol:',data^.str,':',data^.libname);
  readln;
 end;
 
-function get_unresolve_ptr(str:PChar):Pointer;
+function get_unresolve_ptr(str,libname:PChar):Pointer;
 var
  stub:p_stub_chunk;
 begin
@@ -395,6 +396,7 @@ begin
  p_jmpq64_trampoline(@stub^.body)^:=c_jmpq64_trampoline;
  p_jmpq64_trampoline(@stub^.body)^.addr:=QWORD(@_unresolve_symbol);
  p_jmpq64_trampoline(@stub^.body)^.str:=str;
+ p_jmpq64_trampoline(@stub^.body)^.libname:=libname;
 
  Result:=@stub^.body;
 end;
@@ -493,7 +495,7 @@ begin
   begin
    dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
    dynlibs_info.sym_nops.st_shndx:=SHN_UNDEF;
-   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(get_unresolve_ptr(str));
+   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(get_unresolve_ptr(str,req.libname));
 
    def   :=@dynlibs_info.sym_nops;
    defobj:=dynlibs_info.libprogram;

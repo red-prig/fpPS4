@@ -69,6 +69,7 @@ const
  KERN_PROC_IDTABLE     =37; //ID table information
 
  KERN_PROC_SANITIZER   =41; //kern_sanitizer (Sanitizing mode)
+ KERN_PROC_PTC         =43; //Process time counter (value at program start)
  KERN_PROC_TEXT_SEGMENT=44; //kern_dynlib_get_libkernel_text_segment
 
 
@@ -416,6 +417,11 @@ begin
  Result:=SYSCTL_OUT(req,@g_vmspace.sv_usrstack,SizeOf(Pointer));
 end;
 
+function sysctl_kern_proc_ptc(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+begin
+ Result:=SYSCTL_OUT(req,@p_proc.p_ptc,SizeOf(Int64));
+end;
+
 function sysctl_handle_int(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 var
  tmpout:Integer;
@@ -447,6 +453,13 @@ begin
      oid[0]:=CTL_KERN;
      oid[1]:=KERN_SMP;
      oid[2]:=KERN_CPUS;
+     len^  :=3;
+    end;
+  'kern.proc.ptc':
+    begin
+     oid[0]:=CTL_KERN;
+     oid[1]:=KERN_PROC;
+     oid[2]:=KERN_PROC_PTC;
      len^  :=3;
     end;
 
@@ -485,7 +498,7 @@ begin
 
  case name[0] of
   KERN_PROC_APPINFO:Result:=SYSCTL_HANDLE(noid,name,$C0040001,@sysctl_kern_proc_appinfo);
-
+  KERN_PROC_PTC    :Result:=SYSCTL_HANDLE(noid,name,$90040009,@sysctl_kern_proc_ptc);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern_proc:',name[0]);

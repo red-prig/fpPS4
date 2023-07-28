@@ -17,7 +17,8 @@ uses
  kern_thr,
  vm_pmap,
  vm_patch_link,
- trap;
+ trap,
+ x86_index_instr;
 
 {
 64 48 A1 [0000000000000000] mov rax,fs:[$0000000000000000] -> 65 48 A1 [0807000000000000] mov rax,gs:[$0000000000000708]
@@ -37,6 +38,25 @@ uses
 64 4C 8B 2C 25 [00000000]   mov r13,fs:[$00000000]         -> 65 4C 8B 2C 25 [08070000]   mov r13,gs:[$00000708]
 64 4C 8B 34 25 [00000000]   mov r14,fs:[$00000000]         -> 65 4C 8B 34 25 [08070000]   mov r14,gs:[$00000708]
 64 4C 8B 3C 25 [00000000]   mov r15,fs:[$00000000]         -> 65 4C 8B 3C 25 [08070000]   mov r15,gs:[$00000708]
+}
+
+{
+90488B80 [11111111]  mov rax,[rax+$11111111]
+90488B89 [11111111]  mov rcx,[rcx+$11111111]
+90488B92 [11111111]  mov rdx,[rdx+$11111111]
+90488B9B [11111111]  mov rbx,[rbx+$11111111]
+488BA424 [11111111]  mov rsp,[rsp+$11111111]
+90488BAD [11111111]  mov rbp,[rbp+$11111111]
+90488BB6 [11111111]  mov rsi,[rsi+$11111111]
+90488BBF [11111111]  mov rdi,[rdi+$11111111]
+904D8B80 [11111111]  mov r8 ,[r8 +$11111111]
+904D8B89 [11111111]  mov r9 ,[r9 +$11111111]
+904D8B92 [11111111]  mov r10,[r10+$11111111]
+904D8B9B [11111111]  mov r11,[r11+$11111111]
+4D8BA424 [11111111]  mov r12,[r12+$11111111]
+904D8BAD [11111111]  mov r13,[r13+$11111111]
+904D8BB6 [11111111]  mov r14,[r14+$11111111]
+904D8BBF [11111111]  mov r15,[r15+$11111111]
 }
 
 {
@@ -201,6 +221,7 @@ c3                     RET
 }
 
 type
+ {
  p_patch_base_long=^t_patch_base_long;
  t_patch_base_long=packed record
   len :Byte ; //12
@@ -221,6 +242,7 @@ type
    1:(B:t_patch_base_short);
    2:(C:array[0..11] of Byte);
  end;
+ }
 
  p_jmpq64_trampoline=^t_jmpq64_trampoline;
  t_jmpq64_trampoline=packed record
@@ -235,8 +257,28 @@ type
   addr:Integer;
  end;
 
+ p_mov_rel_base32=^t_mov_rel_base32;
+ t_mov_rel_base32=packed record
+  inst:array[0..4] of Byte;
+  addr:Integer; //teb_tcb/teb_gsbase
+ end;
+
+ p_mov_rel32=^t_mov_rel32;
+ t_mov_rel32=packed record
+  inst:array[0..3] of Byte;
+  addr:Integer; //offset
+ end;
+
+ p_base_data_trampoline=^t_base_data_trampoline;
+ t_base_data_trampoline=packed record
+  bseg:t_mov_rel_base32;
+  data:t_mov_rel32;
+  bjmp:t_jmpq64_trampoline;
+ end;
+
 const
- patch_table:array[0..33] of t_patch_inst=(
+  {
+  patch_table:array[0..33] of t_patch_inst=(
   (B:(len: 9;inst:($65,$48,$8B,$04,$25);addr:teb_tcb   )),
   (B:(len: 9;inst:($65,$48,$8B,$0C,$25);addr:teb_tcb   )),
   (B:(len: 9;inst:($65,$48,$8B,$14,$25);addr:teb_tcb   )),
@@ -273,196 +315,131 @@ const
   (B:(len: 9;inst:($65,$4C,$8B,$3C,$25);addr:teb_gsbase)),
   (A:(len:12;inst:($65,$48,$A1        );addr:teb_gsbase))
  );
+ }
+
+ patch_fs_table:array[0..15] of t_mov_rel_base32=(
+  (inst:($65,$48,$8B,$04,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$0C,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$14,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$1C,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$24,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$2C,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$34,$25);addr:teb_tcb),
+  (inst:($65,$48,$8B,$3C,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$04,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$0C,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$14,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$1C,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$24,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$2C,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$34,$25);addr:teb_tcb),
+  (inst:($65,$4C,$8B,$3C,$25);addr:teb_tcb)
+ );
+
+ patch_gs_table:array[0..15] of t_mov_rel_base32=(
+  (inst:($65,$48,$8B,$04,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$0C,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$14,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$1C,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$24,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$2C,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$34,$25);addr:teb_gsbase),
+  (inst:($65,$48,$8B,$3C,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$04,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$0C,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$14,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$1C,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$24,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$2C,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$34,$25);addr:teb_gsbase),
+  (inst:($65,$4C,$8B,$3C,$25);addr:teb_gsbase)
+ );
+
+ patch_mov_rel_table:array[0..15] of t_mov_rel32=(
+  (inst:($90,$48,$8B,$80);addr:0),
+  (inst:($90,$48,$8B,$89);addr:0),
+  (inst:($90,$48,$8B,$92);addr:0),
+  (inst:($90,$48,$8B,$9B);addr:0),
+  (inst:($48,$8B,$A4,$24);addr:0),
+  (inst:($90,$48,$8B,$AD);addr:0),
+  (inst:($90,$48,$8B,$B6);addr:0),
+  (inst:($90,$48,$8B,$BF);addr:0),
+  (inst:($90,$4D,$8B,$80);addr:0),
+  (inst:($90,$4D,$8B,$89);addr:0),
+  (inst:($90,$4D,$8B,$92);addr:0),
+  (inst:($90,$4D,$8B,$9B);addr:0),
+  (inst:($4D,$8B,$A4,$24);addr:0),
+  (inst:($90,$4D,$8B,$AD);addr:0),
+  (inst:($90,$4D,$8B,$B6);addr:0),
+  (inst:($90,$4D,$8B,$BF);addr:0)
+ );
 
  c_jmpq64_trampoline:t_jmpq64_trampoline=(inst:$25FF;offset:0;addr:0);
  c_call32_trampoline:t_call32_trampoline=(inst:$E8;addr:0);
+ c_jmpl32_trampoline:t_call32_trampoline=(inst:$E9;addr:0);
 
-function IndexInstr(var pbuf:Pointer;pend:Pointer;var offset:Int64):Integer;
+procedure patch_original(const info:t_instr_index_info;delta:Integer;addr_out:Pointer);
 var
- psrc:Pointer;
- W:DWORD;
+ trampoline:t_call32_trampoline;
 begin
- Result:=-1;
- psrc:=pbuf;
- while (psrc<pend) do
- begin
-  W:=PDWORD(psrc)^;
+ //fill nop
+ FillChar(addr_out^,info.inlen,$90);
 
-  Case W of
-   $048B4864:Result:= 0; //fs_rax
-   $0C8B4864:Result:= 1; //fs_rcx
-   $148B4864:Result:= 2; //fs_rdx
-   $1C8B4864:Result:= 3; //fs_rbx
-   $248B4864:Result:= 4; //fs_rsp
-   $2C8B4864:Result:= 5; //fs_rbp
-   $348B4864:Result:= 6; //fs_rsi
-   $3C8B4864:Result:= 7; //fs_rdi
-   $048B4C64:Result:= 8; //fs_r8
-   $0C8B4C64:Result:= 9; //fs_r9
-   $148B4C64:Result:=10; //fs_r10
-   $1C8B4C64:Result:=11; //fs_r11
-   $248B4C64:Result:=12; //fs_r12
-   $2C8B4C64:Result:=13; //fs_r13
-   $348B4C64:Result:=14; //fs_r14
-   $3C8B4C64:Result:=15; //fs_r15
-   $00A14864:Result:=16; //fs_rax64
-
-   $048B4865:Result:=17; //gs_rax
-   $0C8B4865:Result:=18; //gs_rcx
-   $148B4865:Result:=19; //gs_rdx
-   $1C8B4865:Result:=20; //gs_rbx
-   $248B4865:Result:=21; //gs_rsp
-   $2C8B4865:Result:=22; //gs_rbp
-   $348B4865:Result:=23; //gs_rsi
-   $3C8B4865:Result:=24; //gs_rdi
-   $048B4C65:Result:=25; //gs_r8
-   $0C8B4C65:Result:=26; //gs_r9
-   $148B4C65:Result:=27; //gs_r10
-   $1C8B4C65:Result:=28; //gs_r11
-   $248B4C65:Result:=29; //gs_r12
-   $2C8B4C65:Result:=30; //gs_r13
-   $348B4C65:Result:=31; //gs_r14
-   $3C8B4C65:Result:=32; //gs_r15
-   $00A14865:Result:=33; //gs_rax64
-
-   $49000000,
-   $49000001,
-   $49000002:Result:=34; //syscall
-
-   //shft 8
-   $8B486400..$8B4864FF, //fs
-   $8B4C6400..$8B4C64FF, //fs
-   $A1486400..$A14864FF, //fs
-
-   $8B486500..$8B4865FF, //gs
-   $8B4C6500..$8B4C65FF, //gs
-   $A1486500..$A14865FF, //gs
-
-   $00000000..$000002FF: //sv
-    begin
-     Inc(psrc,1);
-     Continue;
-    end;
-
-   //shft 16
-   $48640000..$4864FFFF, //fs
-   $4C640000..$4C64FFFF, //fs
-
-   $48650000..$4865FFFF, //gs
-   $4C650000..$4C65FFFF, //gs
-
-   $00000300..$0002FFFF: //sv
-    begin
-     Inc(psrc,2);
-     Continue;
-    end;
-
-   //shft 24
-   $64000000..$64FFFFFF, //fs
-
-   $65000000..$65FFFFFF, //gs
-
-   $00030000..$00A14863, //sv
-   $00A14866..$02FFFFFF: //sv
-    begin
-     Inc(psrc,3);
-     Continue;
-    end;
-
-   else
-    begin
-     Inc(psrc,4);
-     Continue;
-    end;
-  end;
-
-  Case Result of
-    0..15,
-   17..32:
-          begin
-           if (PBYTE(psrc)[4]<>$25) then
-           begin
-            Inc(psrc,4);
-            Continue;
-           end;
-
-           offset:=PInteger(@PBYTE(psrc)[5])^;
-
-           if (offset>+65536) or
-              (offset<-65536) then
-           begin
-            Inc(psrc,4);
-            Continue;
-           end;
-          end;
-       16,
-       33:
-          begin
-           offset:=PInt64(@PBYTE(psrc)[3])^;
-
-           if (offset>+65536) or
-              (offset<-65536) then
-           begin
-            Inc(psrc,4);
-            Continue;
-           end;
-          end;
-       34:
-          begin
-           offset:=0;
-
-           if (PDWORD(@PBYTE(psrc)[4])^<>$050FCA89) then
-           begin
-            Inc(psrc,4);
-            Continue;
-           end;
-
-           //Write(HexStr(PBYTE(psrc)[0],2),' ');
-           //Write(HexStr(PBYTE(psrc)[1],2),' ');
-           //Write(HexStr(PBYTE(psrc)[2],2),' ');
-           //Write(HexStr(PBYTE(psrc)[3],2),' ');
-           //Write(HexStr(PBYTE(psrc)[4],2),' ');
-           //Write(HexStr(PBYTE(psrc)[5],2),' ');
-           //Write(HexStr(PBYTE(psrc)[6],2),' ');
-           //Write(HexStr(PBYTE(psrc)[7],2),' ');
-           //Write(HexStr(PBYTE(psrc)[8],2),' ');
-           //Write(HexStr(PBYTE(psrc)[9],2),' ');
-
-           Case PBYTE(psrc)[8] of
-            $41,
-            $48,
-            $5f,
-            $72,
-            $c3:{Writeln('True')};
-            else
-             begin
-              //Writeln('False');
-              Inc(psrc,4);
-              Continue;
-             end;
-           end;
-          end;
-   else;
-  end;
-
-  if (Result<>-1) then
-  begin
-   pbuf:=psrc;
-   exit;
-  end;
-
-  Inc(psrc);
+ case info.instr of
+  I_MOV_BASE32:trampoline:=c_jmpl32_trampoline;
+  I_MOV_BASE64:trampoline:=c_jmpl32_trampoline;
+  I_SYSCALL   :trampoline:=c_call32_trampoline;
+  else;
  end;
- Result:=-1;
+
+ trampoline.addr:=delta;
+ p_call32_trampoline(addr_out)^:=trampoline;
 end;
 
-procedure vm_add_syscall_patch(_obj,vaddr,addr_out:Pointer);
+procedure vm_add_mov_base_patch(const info:t_instr_index_info;_obj,vaddr,addr_out:Pointer);
 var
  stub:p_stub_chunk;
 
- jmpq64_trampoline:t_jmpq64_trampoline;
- call32_trampoline:t_call32_trampoline;
+ trampoline:t_base_data_trampoline;
 
+ delta:Int64;
+begin
+ stub:=p_alloc(vaddr,SizeOf(t_base_data_trampoline));
+
+ delta:=Int64(@stub^.body)-(Int64(vaddr)+SizeOf(t_call32_trampoline));
+ Assert(delta<High(Integer),'vm_add_mov_base_patch');
+
+ patch_original(info,Integer(delta),addr_out);
+
+ case info.sbase of
+  FSBASE:trampoline.bseg:=patch_fs_table[info.inreg];
+  GSBASE:trampoline.bseg:=patch_gs_table[info.inreg];
+  else;
+ end;
+
+ Assert(info.osize=4,'info.osize=4');
+
+ trampoline.data:=patch_mov_rel_table[info.inreg];
+ trampoline.data.addr:=Integer(info.offst);
+
+ trampoline.bjmp:=c_jmpq64_trampoline;
+ trampoline.bjmp.addr:=(Int64(vaddr)+SizeOf(t_call32_trampoline));
+
+ p_base_data_trampoline(@stub^.body)^:=trampoline;
+
+ md_cacheflush(@stub^.body,SizeOf(trampoline),ICACHE);
+
+ case info.sbase of
+  FSBASE:vm_add_patch_link(_obj,vaddr,pt_fsbase,stub);
+  GSBASE:vm_add_patch_link(_obj,vaddr,pt_gsbase,stub);
+  else;
+ end;
+end;
+
+procedure vm_add_syscall_patch(const info:t_instr_index_info;_obj,vaddr,addr_out:Pointer);
+var
+ stub:p_stub_chunk;
+ trampoline:t_jmpq64_trampoline;
  delta:Int64;
 begin
  stub:=p_alloc(vaddr,SizeOf(t_jmpq64_trampoline));
@@ -470,18 +447,25 @@ begin
  delta:=Int64(@stub^.body)-(Int64(vaddr)+SizeOf(t_call32_trampoline));
  Assert(delta<High(Integer),'vm_add_syscall_patch');
 
- jmpq64_trampoline:=c_jmpq64_trampoline;
- call32_trampoline:=c_call32_trampoline;
+ patch_original(info,Integer(delta),addr_out);
 
- jmpq64_trampoline.addr:=QWORD(@fast_syscall);
- call32_trampoline.addr:=Integer(delta);
+ trampoline:=c_jmpq64_trampoline;
+ trampoline.addr:=QWORD(@fast_syscall);
+ p_jmpq64_trampoline(@stub^.body)^:=trampoline;
 
- p_jmpq64_trampoline(@stub^.body)^:=jmpq64_trampoline;
- p_call32_trampoline(addr_out)^:=call32_trampoline;
-
- md_cacheflush(@stub^.body,SizeOf(t_jmpq64_trampoline),ICACHE);
+ md_cacheflush(@stub^.body,SizeOf(trampoline),ICACHE);
 
  vm_add_patch_link(_obj,vaddr,pt_syscall,stub);
+end;
+
+procedure vm_add_patch(const info:t_instr_index_info;_obj,vaddr,addr_out:Pointer);
+begin
+ case info.instr of
+  I_MOV_BASE32:vm_add_mov_base_patch(info,_obj,vaddr,addr_out);
+  I_MOV_BASE64:vm_add_mov_base_patch(info,_obj,vaddr,addr_out);
+  I_SYSCALL   :vm_add_syscall_patch (info,_obj,vaddr,addr_out);
+  else;
+ end;
 end;
 
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
@@ -489,14 +473,16 @@ var
  addr:Pointer;
  pend:Pointer;
 
- offset:Int64;
+ info:t_instr_index_info;
 
- i,len:Integer;
+ len:Integer;
+ b:Boolean;
 
  fs_count:Integer;
  gs_count:Integer;
  sv_count:Integer;
 
+ {
  procedure do_patch_base_zero(addr:PByte;i:Integer;ptype:t_patch_type);
  var
   v:Pointer;
@@ -515,6 +501,16 @@ var
 
   vm_add_syscall_patch(_obj,v,addr);
  end;
+ }
+
+  procedure do_patch_syscall(addr:PByte);
+  var
+   v:Pointer;
+  begin
+   v:=vaddr+(Int64(addr)-Int64(data));
+
+   vm_add_patch(info,_obj,v,addr);
+  end;
 
 begin
  Assert(_obj<>nil,'patcher_process_section');
@@ -526,49 +522,22 @@ begin
  addr:=data;
  pend:=addr+filesz;
  repeat
-  offset:=0;
-  i:=IndexInstr(addr,pend,offset);
+  info:=Default(t_instr_index_info);
 
-  if (i=-1) then Break;
+  b:=IndexInstr(addr,pend,info);
 
-  Case i of
-    0..33:
-          begin
-           len:=patch_table[i].C[0];
-           //
+  if (not b) then Break;
 
-           if (offset=0) then
-           begin
-            Case i of
-              0..16:
-                    begin
-                     Inc(fs_count);
-                     do_patch_base_zero(addr,i,pt_fsbase);
-                    end;
-             17..33:
-                    begin
-                     Inc(gs_count);
-                     do_patch_base_zero(addr,i,pt_gsbase);
-                    end
-             else;
-            end;
-           end else
-           begin
-            //Writeln('patch with offset:',offset);
-           end;
-          end;
-       34:
-          begin
-           Inc(sv_count);
-           //
-           do_patch_syscall(addr+3);
-           len:=9;
-          end
-   else
-    Assert(False);
+  do_patch_syscall(addr);
+
+  case info.instr of
+   I_MOV_BASE32:Inc(fs_count);
+   I_MOV_BASE64:Inc(gs_count);
+   I_SYSCALL   :Inc(sv_count);
+   else;
   end;
 
-  Inc(addr,len);
+  Inc(addr,info.inlen);
 
  until false;
 

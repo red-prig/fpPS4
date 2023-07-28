@@ -11,6 +11,12 @@ uses
 
 Procedure md_timeinit;
 
+function  rdtsc:Int64; assembler;
+function  tsc_calibrate:Int64;
+
+function  get_proc_time:Int64;
+function  get_proc_time_freq:Int64;
+
 function  get_unit_uptime:Int64;
 procedure unittime(time:PInt64);
 procedure calcru_proc(user,syst:PInt64);
@@ -35,6 +41,72 @@ var
 begin
  NtQueryTimerResolution(@min,@max,@cur);
  NtSetTimerResolution(max,True,@cur);
+end;
+
+function rdtsc:Int64; assembler; nostackframe;
+asm
+ rdtsc
+ shl $0x20,%rdx
+ or  %rdx,%rax
+end;
+
+
+function tsc_calibrate:Int64;
+const
+ samples=20;
+var
+ i:Integer;
+
+ tsc_freq :Int64;
+ qpc_begin:Int64;
+ tsc_begin:Int64;
+ qpc_end  :Int64;
+ tsc_end  :Int64;
+ qpc_freq :Int64;
+begin
+ tsc_freq:=0;
+ qpc_freq:=get_proc_time_freq;
+
+ For i:=0 to samples-1 do
+ begin
+  qpc_begin:=get_proc_time;
+  tsc_begin:=rdtsc;
+
+  Sleep(2);
+
+  qpc_end:=get_proc_time;
+  tsc_end:=rdtsc;
+
+  tsc_freq:=tsc_freq + (tsc_end - tsc_begin) * qpc_freq div (qpc_end - qpc_begin);
+ end;
+
+ tsc_freq:=tsc_freq div samples;
+
+ Result:=tsc_freq;
+end;
+
+function get_proc_time:Int64;
+var
+ pc:QWORD;
+ pf:QWORD;
+begin
+ pc:=0;
+ pf:=1;
+ NtQueryPerformanceCounter(@pc,@pf);
+
+ Result:=pc;
+end;
+
+function get_proc_time_freq:Int64;
+var
+ pc:QWORD;
+ pf:QWORD;
+begin
+ pc:=0;
+ pf:=1;
+ NtQueryPerformanceCounter(@pc,@pf);
+
+ Result:=pf;
 end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;

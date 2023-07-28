@@ -844,6 +844,11 @@ begin
  end;
 end;
 
+procedure null_init; assembler; nostackframe;
+asm
+ //
+end;
+
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
  obj,tail:p_lib_info;
@@ -895,8 +900,8 @@ begin
                       tail,
                       dynlibs_info.init_proc_list);
 
- obj^.init_proc_addr:=init_proc_addr;
- obj^.fini_proc_addr:=fini_proc_addr;
+ obj^.init_proc_addr:=@null_init;//init_proc_addr;
+ obj^.fini_proc_addr:=@null_init;//fini_proc_addr;
 
  ///
 end;

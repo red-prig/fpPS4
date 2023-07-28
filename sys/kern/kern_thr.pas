@@ -315,6 +315,8 @@ var
   p_sdk_version:Integer;
   p_sce_replay_exec:Integer;
 
+  p_ptc:Int64;
+
   p_nsignals:Int64;
   p_nvcsw   :Int64;
   p_nivcsw  :Int64;
@@ -331,7 +333,8 @@ var
 implementation
 
 uses
- kern_event;
+ kern_event,
+ md_time;
 
 function curkthread:p_kthread; assembler; nostackframe;
 asm
@@ -539,6 +542,7 @@ begin
  mtx_unlock(p_proc.p_mtx);
 end;
 
+
 procedure PROC_INIT;
 begin
  FillChar(p_proc,SizeOf(p_proc),0);
@@ -547,6 +551,8 @@ begin
  knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
 
  p_proc.p_randomized_path:='system';
+
+ p_proc.p_ptc:=rdtsc;
 end;
 
 //
