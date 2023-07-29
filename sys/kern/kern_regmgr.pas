@@ -52,7 +52,7 @@ begin
  end;
 
  case op of
-  $19:begin
+  $19:begin //sceRegMgrNonSysGetInt
        Result:=copyin(pvalue,@data,16);
        if (Result<>0) then
        begin

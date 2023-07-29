@@ -66,6 +66,9 @@ const
  KERN_SMP     =$100; //(OID_AUTO) Kernel SMP
  KERN_SCHED   =$101; //(OID_AUTO) Scheduler
 
+//CTL_VM subtypes
+ KERN_VM_PS4DEV=1;   //vm parameters for PS4 (DevKit only)
+
 //KERN_PROC subtypes
  KERN_PROC_APPINFO     =35; //Application information
  KERN_PROC_SDK_VERSION =36; //SDK version of the executable file
@@ -98,6 +101,10 @@ const
 
 //MACHDEP subtypes
  MACHDEP_TSC_FREQ=$100; //(OID_AUTO) Time Stamp Counter frequency
+
+//KERN_VM_PS4DEV subtypes
+ KERN_VM_PS4DEV_TRCMEM_TOTAL=$100; //(OID_AUTO) trace memory total
+ KERN_VM_PS4DEV_TRCMEM_AVAIL=$101; //(OID_AUTO) trace memory available
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
@@ -508,7 +515,21 @@ begin
      oid[0]:=CTL_MACHDEP;
      oid[1]:=MACHDEP_TSC_FREQ;
      len^  :=2;
-    end
+    end;
+  'vm.ps4dev.trcmem_total':
+    begin
+     oid[0]:=CTL_VM;
+     oid[1]:=KERN_VM_PS4DEV;
+     oid[2]:=KERN_VM_PS4DEV_TRCMEM_TOTAL;
+     len^  :=3;
+    end;
+  'vm.ps4dev.trcmem_avail':
+    begin
+     oid[0]:=CTL_VM;
+     oid[1]:=KERN_VM_PS4DEV;
+     oid[2]:=KERN_VM_PS4DEV_TRCMEM_AVAIL;
+     len^  :=3;
+    end;
 
   else
    Writeln(StdErr,'Unhandled name2oid:',name);
