@@ -11,8 +11,8 @@ uses
 
 Procedure md_timeinit;
 
-function  rdtsc:Int64; assembler;
-function  tsc_calibrate:Int64;
+function  rdtsc:QWORD; assembler;
+function  tsc_calibrate:QWORD;
 
 function  get_proc_time:Int64;
 function  get_proc_time_freq:Int64;
@@ -43,7 +43,7 @@ begin
  NtSetTimerResolution(max,True,@cur);
 end;
 
-function rdtsc:Int64; assembler; nostackframe;
+function rdtsc:QWORD; assembler; nostackframe;
 asm
  rdtsc
  shl $0x20,%rdx
@@ -51,24 +51,24 @@ asm
 end;
 
 
-function tsc_calibrate:Int64;
+function tsc_calibrate:QWORD;
 const
- samples=20;
+ samples=40;
 var
  i:Integer;
 
- tsc_freq :Int64;
- qpc_begin:Int64;
- tsc_begin:Int64;
- qpc_end  :Int64;
- tsc_end  :Int64;
- qpc_freq :Int64;
+ tsc_freq :QWORD;
+ qpc_begin:QWORD;
+ tsc_begin:QWORD;
+ qpc_end  :QWORD;
+ tsc_end  :QWORD;
+ qpc_freq :QWORD;
 begin
  tsc_freq:=0;
- qpc_freq:=get_proc_time_freq;
 
  For i:=0 to samples-1 do
  begin
+  qpc_freq :=get_proc_time_freq;
   qpc_begin:=get_proc_time;
   tsc_begin:=rdtsc;
 

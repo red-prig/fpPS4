@@ -3081,7 +3081,7 @@ const
   ),
   (//[605]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_workaround8849;
      sy_name:'sys_workaround8849'
   ),
   (//[606]
@@ -3116,7 +3116,7 @@ const
   ),
   (//[612]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_get_proc_type_info;
      sy_name:'sys_get_proc_type_info'
   ),
   (//[613]

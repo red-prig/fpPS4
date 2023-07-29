@@ -223,20 +223,6 @@ begin
  td^.pcb_flags:=f;
 end;
 
-function is_guest_addr(addr:QWORD):Boolean;
-var
- i:Integer;
-begin
- Result:=False;
- For i:=0 to High(pmap_mem) do
- begin
-  if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
-  begin
-   Exit(True);
-  end;
- end;
-end;
-
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
 

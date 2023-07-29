@@ -2198,23 +2198,25 @@ label
  _do_load;
 var
  obj:p_lib_info;
+ pbase:pchar;
  fname:RawByteString;
 begin
  Result:=nil;
  err:=0;
 
- fname:=dynlib_basename(path);
+ pbase:=dynlib_basename(path);
 
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) do
  begin
-  if object_match_name(obj,pchar(fname)) then
+  if object_match_name(obj,pbase) then
   begin
    Exit(obj);
   end;
   obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
+ //try original
  fname:=path;
 
  if rtld_file_exists(pchar(fname)) then goto _do_load;
@@ -2226,7 +2228,8 @@ begin
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 
 
- fname:=path;
+ //try /system/*
+ fname:=pbase;
 
  if (fname[1]<>'/') then
  begin
@@ -2242,7 +2245,7 @@ begin
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 
- Writeln(StdErr,' prx module not found:',path);
+ Writeln(StdErr,' prx_module_not_found:',dynlib_basename(path));
 
  err:=ENOENT;
  Exit(nil);

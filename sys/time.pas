@@ -93,7 +93,7 @@ const
 
  hz=UNIT_PER_SEC;
 
- TSC_freq             =1593844360;
+ PS4_TSC_FREQ         =1593844360;
 
 function _usec2msec(usec:QWORD):QWORD;  //Microsecond to Milisecond
 function _msec2usec(msec:QWORD):QWORD;  //Milisecond  to Microsecond
@@ -131,6 +131,7 @@ function  itimerfix(tv:p_timeval):Integer;
 
 var
  boottime:timeval;
+ tsc_freq:QWORD=0;
 
 implementation
 

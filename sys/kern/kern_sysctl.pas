@@ -96,6 +96,9 @@ const
  HW_REALMEM     =12; // int: 'real' memory
  HW_MAXID       =13; // number of valid hw ids
 
+//MACHDEP subtypes
+ MACHDEP_TSC_FREQ=$100; //(OID_AUTO) Time Stamp Counter frequency
+
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
 type
@@ -149,6 +152,7 @@ uses
  vm_map,
  kern_thr,
  kern_sx,
+ time,
  md_arc4random,
  md_proc;
 
@@ -316,6 +320,11 @@ begin
  Exit(ENOENT); //sceSblACMgrIsSystemUcred
 end;
 
+function sysctl_kern_usrstack(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+begin
+ Result:=SYSCTL_OUT(req,@g_vmspace.sv_usrstack,SizeOf(Pointer));
+end;
+
 function sysctl_kern_arandom(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 var
  len:Integer;
@@ -414,9 +423,12 @@ begin
 
 end;
 
-function sysctl_kern_usrstack(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+function sysctl_kern_proc_sanitizer(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ Sanitizer:Integer;
 begin
- Result:=SYSCTL_OUT(req,@g_vmspace.sv_usrstack,SizeOf(Pointer));
+ Sanitizer:=0;
+ Result:=SYSCTL_OUT(req,@Sanitizer,SizeOf(Integer));
 end;
 
 function sysctl_kern_proc_ptc(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
@@ -445,6 +457,26 @@ begin
  Result:=SYSCTL_IN(req, arg1, sizeof(Integer));
 end;
 
+function sysctl_handle_64(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ tmpout:QWORD;
+begin
+ if (arg1=nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ tmpout:=PInteger(arg1)^;
+
+ Result:=SYSCTL_OUT(req,@tmpout,SizeOf(QWORD));
+
+ if (Result<>0) or (req^.newptr=nil) then Exit;
+
+ if (arg1=nil) then Exit(EPERM);
+
+ Result:=SYSCTL_IN(req, arg1, sizeof(QWORD));
+end;
+
 function name2oid(name:pchar;oid,len:PInteger):Integer;
 begin
  Result:=0;
@@ -471,6 +503,12 @@ begin
      oid[2]:=KERN_SCHED_CPUSETSIZE;
      len^  :=3;
     end;
+  'machdep.tsc_freq':
+    begin
+     oid[0]:=CTL_MACHDEP;
+     oid[1]:=MACHDEP_TSC_FREQ;
+     len^  :=2;
+    end
 
   else
    Writeln(StdErr,'Unhandled name2oid:',name);
@@ -506,8 +544,9 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  KERN_PROC_APPINFO:Result:=SYSCTL_HANDLE(noid,name,$C0040001,@sysctl_kern_proc_appinfo);
-  KERN_PROC_PTC    :Result:=SYSCTL_HANDLE(noid,name,$90040009,@sysctl_kern_proc_ptc);
+  KERN_PROC_APPINFO  :Result:=SYSCTL_HANDLE(noid,name,$C0040001,@sysctl_kern_proc_appinfo);
+  KERN_PROC_SANITIZER:Result:=SYSCTL_HANDLE(noid,name,$80040001,@sysctl_kern_proc_sanitizer);
+  KERN_PROC_PTC      :Result:=SYSCTL_HANDLE(noid,name,$90040009,@sysctl_kern_proc_ptc);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern_proc:',name[0]);
@@ -603,6 +642,36 @@ begin
  end;
 end;
 
+function sysctl_machdep_tsc_freq(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ freq:QWORD;
+begin
+ freq:=System.InterlockedExchangeAdd64(tsc_freq,0);
+ if (freq=0) then Exit(EOPNOTSUPP);
+
+ Result:=sysctl_handle_64(oidp, @freq, 0, req);
+ if (Result=0) and (req^.newptr<>nil) then
+ begin
+  System.InterlockedExchange64(tsc_freq,freq);
+ end;
+end;
+
+function sysctl_machdep(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+  MACHDEP_TSC_FREQ:Result:=SYSCTL_HANDLE(noid,name,$C0000009,@sysctl_machdep_tsc_freq);
+
+  else
+   begin
+    Writeln(StdErr,'Unhandled sysctl_machdep:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
 function sysctl_find_oid(name   :PInteger;
                          namelen:DWORD;
                          noid   :p_sysctl_oid;
@@ -612,9 +681,10 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  CTL_UNSPEC:Result:=sysctl_sysctl(name+1,namelen-1,noid,req);
-  CTL_KERN  :Result:=sysctl_kern  (name+1,namelen-1,noid,req);
-  CTL_HW    :Result:=sysctl_hw    (name+1,namelen-1,noid,req);
+  CTL_UNSPEC :Result:=sysctl_sysctl (name+1,namelen-1,noid,req);
+  CTL_KERN   :Result:=sysctl_kern   (name+1,namelen-1,noid,req);
+  CTL_HW     :Result:=sysctl_hw     (name+1,namelen-1,noid,req);
+  CTL_MACHDEP:Result:=sysctl_machdep(name+1,namelen-1,noid,req);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_root:',name[0]);

@@ -217,9 +217,11 @@ function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 function  dynlib_process_needed_and_relocate():Integer;
 function  __sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
 function  __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
+function  __sys_workaround8849(key:DWORD):Integer;
 function  dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer;
 function  budget_getid():Integer;
 function  budget_get_ptype(pid:Integer):Integer;
+function  __sys_get_proc_type_info(dst:Pointer):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
@@ -1714,6 +1716,13 @@ asm
  jmp   cerror
 end;
 
+function __sys_workaround8849(key:DWORD):Integer; assembler; nostackframe;
+asm
+ movq  $605,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function dynlib_get_info_ex(handle,flags:Integer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $608,%rax
@@ -1731,6 +1740,13 @@ end;
 function budget_get_ptype(pid:Integer):Integer; assembler; nostackframe;
 asm
  movq  $610,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_get_proc_type_info(dst:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $612,%rax
  call  fast_syscall
  jmp   cerror
 end;

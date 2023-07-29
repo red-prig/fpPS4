@@ -93,7 +93,23 @@ const
  SCE_KERNEl_GNM_TESS_AREA    = 0xF`F0000000 - 0xF`F0040000
 }
 
+function is_guest_addr(addr:QWORD):Boolean;
+
 implementation
+
+function is_guest_addr(addr:QWORD):Boolean;
+var
+ i:Integer;
+begin
+ Result:=False;
+ For i:=0 to High(pmap_mem) do
+ begin
+  if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
+  begin
+   Exit(True);
+  end;
+ end;
+end;
 
 end.
 

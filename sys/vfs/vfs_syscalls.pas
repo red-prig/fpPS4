@@ -145,6 +145,7 @@ uses
  kern_descrip,
  vnode_if,
  sys_capability,
+ vmparam,
  vm_object;
 
 {
@@ -802,19 +803,26 @@ begin
  if ((flags and O_EXEC)<>0) then
  begin
   if ((flags and O_ACCMODE)<>0) then
+  begin
    Exit(EINVAL);
+  end;
  end else
  if ((flags and O_ACCMODE)=O_ACCMODE) then
+ begin
   Exit(EINVAL)
- else
+ end else
+ begin
   flags:=FFLAGS(flags);
+ end;
 
  {
   * allocate the file descriptor, but don't install a descriptor yet
   }
  error:=falloc_noinstall(@nfp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  { An extra reference on `nfp' has been held for us by falloc_noinstall(). }
  fp:=nfp;
  { Set the flags early so the finit in devfs can pick them up. }
@@ -831,7 +839,9 @@ begin
    * pretending we know what we do.
    }
   if (error=ENXIO) and (fp^.f_ops<>@badfileops) then
+  begin
    goto success;
+  end;
 
   {
    * handle special fdopen() case.  bleh.  dupfdopen() is
@@ -850,11 +860,15 @@ begin
    error_open:=error;
    error:=finstall(fp, @indx, flags);
    if (error<>0) then
+   begin
     goto bad_unlocked;
+   end;
 
    error:=dupfdopen(indx, td^.td_dupfd, flags, error_open);
    if (error=0) then
+   begin
     goto success;
+   end;
   end;
   {
    * Clean up the descriptor, but only if another thread hadn't
@@ -905,11 +919,15 @@ begin
   l_type:=F_FLOCK;
 
   if ((flags and FNONBLOCK)=0) then
+  begin
    l_type:=l_type or F_WAIT;
+  end;
 
   error:=VOP_ADVLOCK(vp, fp, F_SETLK, @lf, l_type);
   if (error<>0) then
+  begin
    goto bad;
+  end;
 
   atomic_set_int(@fp^.f_flag, FHASLOCK);
  end;
@@ -917,7 +935,9 @@ begin
  begin
   error:=fo_truncate(fp, 0);
   if (error<>0) then
+  begin
    goto bad;
+  end;
  end;
  VFS_UNLOCK_GIANT(vfslocked);
 success:
@@ -935,12 +955,16 @@ success:
     }
    error:=kern_capwrap(fp, nd.ni_baserights, @indx);
    if (error<>0) then
+   begin
     goto bad_unlocked;
+   end;
   end else
   begin
    error:=finstall(fp, @indx, flags);
    if (error<>0) then
+   begin
     goto bad_unlocked;
+   end;
   end;
  end;
 
@@ -955,7 +979,9 @@ bad:
  VFS_UNLOCK_GIANT(vfslocked);
 bad_unlocked:
  if (indx<>-1) then
+ begin
   fdclose(fp, indx);
+ end;
 
  fdrop(fp);
  td^.td_retval[0]:=QWORD(-1);
@@ -973,12 +999,24 @@ end;
  }
 function sys_open(path:PChar;flags,mode:Integer):Integer;
 begin
- Exit(kern_open(path, UIO_USERSPACE, flags, mode));
+ Result:=kern_open(path, UIO_USERSPACE, flags, mode);
+ //
+ if (curkthread<>nil) then
+ if is_guest_addr(curkthread^.td_frame.tf_rip) then
+ begin
+  Writeln('sys_open("',path,'",0x',HexStr(flags,4),',0',OctStr(mode,3),'):',Result);
+ end;
 end;
 
 function sys_openat(fd:Integer;path:PChar;flags,mode:Integer):Integer;
 begin
- Exit(kern_openat(fd, path, UIO_USERSPACE, flags, mode));
+ Result:=kern_openat(fd, path, UIO_USERSPACE, flags, mode);
+ //
+ if (curkthread<>nil) then
+ if is_guest_addr(curkthread^.td_frame.tf_rip) then
+ begin
+  Writeln('sys_openat(',fd,',"',path,'",0x',HexStr(flags,4),',0',OctStr(mode,3),'):',Result);
+ end;
 end;
 
 function kern_mkfifoat(fd:Integer;path:PChar;pathseg:uio_seg;mode:Integer):Integer;
