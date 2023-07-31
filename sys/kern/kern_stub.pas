@@ -54,7 +54,7 @@ begin
  Result:=nil;
  map:=@g_vmspace.vm_map;
 
- err:=_vm_mmap(map,
+ err:=vm_mmap2(map,
                @start,
                segment_size,
                VM_PROT_RWX,

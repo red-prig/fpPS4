@@ -630,10 +630,10 @@ begin
 
  if (p_proc.p_sce_replay_exec<>0) then
  begin
-  addr^:=$fc0000000;
+  addr^:=SCE_REPLAY_EXEC_START;
  end;
 
- Result:=_vm_mmap(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0);
+ Result:=vm_mmap2(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0);
 end;
 
 procedure rtld_munmap(base:Pointer;size:QWORD);

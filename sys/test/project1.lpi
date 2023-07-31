@@ -625,6 +625,14 @@
         <Filename Value="..\..\rtl\x86_index_instr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\dev\dev_null.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\dev\dev_tty.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -635,7 +643,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);.."/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md"/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

@@ -37,7 +37,10 @@ uses
  null_vfsops,
  ufs,
  kern_descrip,
- vfs_mountroot;
+ vfs_mountroot,
+ kern_conf,
+ dev_null,
+ dev_tty;
 
 var
  daemon_thr:p_kthread;
@@ -68,6 +71,9 @@ begin
  vfs_register(@ufs_vfsconf);
  vfs_mountroot.vfs_mountroot();
  fildesc_drvinit;
+ //
+ null_modevent(0,MOD_LOAD);
+ ttyconsdev_init();
 end;
 
 //Manual order of lazy initialization

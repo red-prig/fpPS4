@@ -18,6 +18,12 @@ uses
  kern_mtx;
 
 const
+ //modeventtype
+ MOD_LOAD    =0;
+ MOD_UNLOAD  =1;
+ MOD_SHUTDOWN=2;
+ MOD_QUIESCE =3;
+
  SI_ETERNAL   =$0001; { never destroyed }
  SI_ALIAS     =$0002; { carrier of alias name }
  SI_NAMED     =$0004; { make_dev _alias  has been called }
@@ -64,8 +70,6 @@ type
   si_snapdata   :Pointer; //snapdata
   __si_namebuf  :array[0..SPECNAMELEN] of AnsiChar;
  end;
-
- p_vm_paddr_t=Pointer;
 
  d_open_t       =Function (dev:p_cdev;oflags,devtype:Integer):Integer;
  d_fdopen_t     =Function (dev:p_cdev;oflags:Integer;fp:p_file):Integer;
@@ -190,6 +194,11 @@ var
 
  cdevp_free_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@cdevp_free_list.tqh_first);
  cdevsw_gt_post_list:SLIST_HEAD=(slh_first:nil);
+
+function  _nullop():Integer;
+function  _eopnotsupp():Integer;
+function  _enxio():Integer;
+function  _enodev():Integer;
 
 procedure dev_lock();
 procedure dev_unlock();
@@ -474,22 +483,22 @@ begin
  SLIST_INSERT_HEAD(@cdevsw_gt_post_list,csw,@csw^.d_postfree_list);
 end;
 
-function nullop():Integer;
+function _nullop():Integer;
 begin
  Exit(0);
 end;
 
-function eopnotsupp():Integer;
+function _eopnotsupp():Integer;
 begin
  Exit(EOPNOTSUPP);
 end;
 
-function enxio():Integer;
+function _enxio():Integer;
 begin
  Exit(ENXIO);
 end;
 
-function enodev():Integer;
+function _enodev():Integer;
 begin
  Exit(ENODEV);
 end;
@@ -504,19 +513,19 @@ const
   d_version    :D_VERSION;
   d_flags      :0;
   d_name       :'dead';
-  d_open       :d_open_t(@enxio);
+  d_open       :d_open_t(@_enxio);
   d_fdopen     :nil;
-  d_close      :d_close_t(@enxio);
-  d_read       :d_read_t(@enxio);
-  d_write      :d_write_t(@enxio);
-  d_ioctl      :d_ioctl_t(@enxio);
-  d_poll       :d_poll_t(@enodev);
-  d_mmap       :d_mmap_t(@enodev);
+  d_close      :d_close_t(@_enxio);
+  d_read       :d_read_t(@_enxio);
+  d_write      :d_write_t(@_enxio);
+  d_ioctl      :d_ioctl_t(@_enxio);
+  d_poll       :d_poll_t(@_enodev);
+  d_mmap       :d_mmap_t(@_enodev);
   d_strategy   :@dead_strategy;
-  d_dump       :dumper_t(@enxio);
-  d_kqfilter   :d_kqfilter_t(@enxio);
+  d_dump       :dumper_t(@_enxio);
+  d_kqfilter   :d_kqfilter_t(@_enxio);
   d_purge      :nil;
-  d_mmap_single:d_mmap_single_t(@enodev);
+  d_mmap_single:d_mmap_single_t(@_enodev);
  );
 
 procedure no_strategy(bp:Pointer);
@@ -536,7 +545,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_open(dev, oflags, devtype);
  mtx_unlock(VFS_Giant);
@@ -551,7 +562,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_fdopen(dev, oflags, fp);
  mtx_unlock(VFS_Giant);
@@ -566,7 +579,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_close(dev, fflag, devtype);
  mtx_unlock(VFS_Giant);
@@ -600,7 +615,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_ioctl(dev, cmd, data, fflag);
  mtx_unlock(VFS_Giant);
@@ -615,7 +632,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_read(dev, uio, ioflag);
  mtx_unlock(VFS_Giant);
@@ -630,7 +649,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_write(dev, uio, ioflag);
  mtx_unlock(VFS_Giant);
@@ -645,7 +666,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_poll(dev, events);
  mtx_unlock(VFS_Giant);
@@ -660,7 +683,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_kqfilter(dev, kn);
  mtx_unlock(VFS_Giant);
@@ -675,7 +700,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_mmap(dev, offset, paddr, nprot, memattr);
  mtx_unlock(VFS_Giant);
@@ -690,7 +717,9 @@ var
 begin
  dsw:=dev_refthread(dev, @ref);
  if (dsw=nil) then
+ begin
   Exit(ENXIO);
+ end;
  mtx_lock(VFS_Giant);
  retval:=dsw^.d_gianttrick^.d_mmap_single(dev, offset, size, obj, nprot);
  mtx_unlock(VFS_Giant);
@@ -708,8 +737,7 @@ begin
  //if (cold) then Exit;
  namelen:=strlen(dev^.si_name);
  data:=AllocMem(namelen + sizeof(prefix));
- if (data=nil) then
-  Exit;
+ if (data=nil) then Exit;
  Move(prefix^, data^, sizeof(prefix) - 1);
  Move(dev^.si_name^, (data + sizeof(prefix) - 1)^, namelen + 1);
  //devctl_notify_f('DEVFS', 'CDEV', ev, data, mflags);
@@ -784,37 +812,43 @@ var
 begin
  mtx_assert(devmtx);
  if ((devsw^.d_flags and D_INIT)<>0) then
+ begin
   Exit(0);
+ end;
  if ((devsw^.d_flags and D_NEEDGIANT)<>0) then
  begin
   dev_unlock();
   dsw2:=AllocMem(sizeof(t_cdevsw));
   dev_lock();
   if (dsw2=nil) and ((devsw^.d_flags and D_INIT)=0) then
+  begin
    Exit(ENOMEM);
+  end;
  end else
   dsw2:=nil;
  if ((devsw^.d_flags and D_INIT)<>0) then
  begin
   if (dsw2<>nil) then
+  begin
    cdevsw_free_devlocked(dsw2);
+  end;
   Exit(0);
  end;
 
  if (devsw^.d_version<>D_VERSION_03) then
  begin
   Writeln('WARNING: Device driver has wrong version');
-  devsw^.d_open       :=d_open_t(@enxio);
-  devsw^.d_close      :=d_close_t(@enxio);
-  devsw^.d_read       :=d_read_t(@enxio);
-  devsw^.d_write      :=d_write_t(@enxio);
-  devsw^.d_ioctl      :=d_ioctl_t(@enxio);
-  devsw^.d_poll       :=d_poll_t(@enodev);
-  devsw^.d_mmap       :=d_mmap_t(@enodev);
-  devsw^.d_mmap_single:=d_mmap_single_t(@enodev);
+  devsw^.d_open       :=d_open_t(@_enxio);
+  devsw^.d_close      :=d_close_t(@_enxio);
+  devsw^.d_read       :=d_read_t(@_enxio);
+  devsw^.d_write      :=d_write_t(@_enxio);
+  devsw^.d_ioctl      :=d_ioctl_t(@_enxio);
+  devsw^.d_poll       :=d_poll_t(@_enodev);
+  devsw^.d_mmap       :=d_mmap_t(@_enodev);
+  devsw^.d_mmap_single:=d_mmap_single_t(@_enodev);
   devsw^.d_strategy   :=@dead_strategy;
-  devsw^.d_dump       :=dumper_t(@enxio);
-  devsw^.d_kqfilter   :=d_kqfilter_t(@enxio);
+  devsw^.d_dump       :=dumper_t(@_enxio);
+  devsw^.d_kqfilter   :=d_kqfilter_t(@_enxio);
  end;
 
  if ((devsw^.d_flags and D_NEEDGIANT)<>0) then
@@ -827,19 +861,19 @@ begin
   end;
  end;
 
- FIXUP(@devsw^.d_open,        @nullop,      @giant_open);
- FIXUP(@devsw^.d_fdopen,      nil,          @giant_fdopen);
- FIXUP(@devsw^.d_close,       @nullop,      @giant_close);
- FIXUP(@devsw^.d_read,        @enodev,      @giant_read);
- FIXUP(@devsw^.d_write,       @enodev,      @giant_write);
- FIXUP(@devsw^.d_ioctl,       @enodev,      @giant_ioctl);
- FIXUP(@devsw^.d_poll,        @no_poll,     @giant_poll);
- FIXUP(@devsw^.d_mmap,        @enodev,      @giant_mmap);
- FIXUP(@devsw^.d_strategy,    @no_strategy, @giant_strategy);
- FIXUP(@devsw^.d_kqfilter,    @enodev,      @giant_kqfilter);
- FIXUP(@devsw^.d_mmap_single, @enodev,      @giant_mmap_single);
+ FIXUP(@devsw^.d_open,        @_nullop,      @giant_open);
+ FIXUP(@devsw^.d_fdopen,      nil,           @giant_fdopen);
+ FIXUP(@devsw^.d_close,       @_nullop,      @giant_close);
+ FIXUP(@devsw^.d_read,        @_enodev,      @giant_read);
+ FIXUP(@devsw^.d_write,       @_enodev,      @giant_write);
+ FIXUP(@devsw^.d_ioctl,       @_enodev,      @giant_ioctl);
+ FIXUP(@devsw^.d_poll,        @no_poll,      @giant_poll);
+ FIXUP(@devsw^.d_mmap,        @_enodev,      @giant_mmap);
+ FIXUP(@devsw^.d_strategy,    @no_strategy,  @giant_strategy);
+ FIXUP(@devsw^.d_kqfilter,    @_enodev,      @giant_kqfilter);
+ FIXUP(@devsw^.d_mmap_single, @_enodev,      @giant_mmap_single);
 
- if (devsw^.d_dump=nil) then devsw^.d_dump:=dumper_t(@enodev);
+ if (devsw^.d_dump=nil) then devsw^.d_dump:=dumper_t(@_enodev);
 
  LIST_INIT(@devsw^.d_devs);
 
@@ -927,7 +961,9 @@ begin
  Assert(((flags and MAKEDEV_WAITOK)=0) or ((flags and MAKEDEV_NOWAIT)=0),'make_dev_credv: both WAITOK and NOWAIT specified');
  dev_new:=devfs_alloc(flags);
  if (dev_new=nil) then
+ begin
   Exit(ENOMEM);
+ end;
  dev_lock();
  res:=prep_cdevsw(devsw, flags);
  if (res<>0) then
@@ -957,7 +993,9 @@ begin
   end;
  end;
  if ((flags and MAKEDEV_REF)<>0) then
+ begin
   dev_refl(dev);
+ end;
  if ((flags and MAKEDEV_ETERNAL)<>0) then
   dev^.si_flags:=dev^.si_flags or SI_ETERNAL;
  if ((dev^.si_flags and SI_CHEAPCLONE)<>0) and
@@ -1104,7 +1142,9 @@ begin
 
  dev:=devfs_alloc(flags);
  if (dev=nil) then
+ begin
   Exit(ENOMEM);
+ end;
  dev_lock();
  dev^.si_flags:=dev^.si_flags or SI_ALIAS;
  error:=prep_devname(dev, fmt, Args);
@@ -1188,7 +1228,9 @@ begin
   Inc(physpath,4);
   Dec(physpath_len,4);
   if (physpath_len=0) then
+  begin
    goto _out;
+  end;
  end;
 
  max_parentpath_len:=SPECNAMELEN - physpath_len - 1;
@@ -1225,9 +1267,13 @@ begin
  end;
 _out:
  if (old_alias<>nil) then
+ begin
   destroy_dev(old_alias);
+ end;
  if (devfspath<>nil) then
+ begin
   FreeMem(devfspath);
+ end;
  Exit(ret);
 end;
 
@@ -1346,8 +1392,8 @@ var
 begin
  mtx_assert(devmtx);
  cdp:=cdev2priv(dev);
- if ((cdp^.cdp_flags and CDP_UNREF_DTR)<>0) then
-  Exit;
+ if ((cdp^.cdp_flags and CDP_UNREF_DTR)<>0) then Exit;
+
  cdp^.cdp_flags:=cdp^.cdp_flags or CDP_UNREF_DTR;
  dev_refl(dev);
  devfs_destroy(dev);

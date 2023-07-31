@@ -35,7 +35,7 @@ function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
 
-function _vm_mmap(map        :vm_map_t;
+function vm_mmap2(map        :vm_map_t;
                   addr       :p_vm_offset_t;
                   size       :vm_size_t;
                   prot       :vm_prot_t;
@@ -186,16 +186,24 @@ end;
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
 begin
  Case rv of
-  KERN_SUCCESS:Result:=0;
+  KERN_SUCCESS           :Result:=0;
   KERN_INVALID_ADDRESS,
-  KERN_NO_SPACE:Result:=ENOMEM;
+  KERN_NO_SPACE          :Result:=ENOMEM;
   KERN_PROTECTION_FAILURE:Result:=EACCES;
+  KERN_RESOURCE_SHORTAGE :
+   begin
+    Result:=ENOMEM;
+    if (p_proc.p_sdk_version < $3500000) then
+    begin
+     Result:=EINVAL;
+    end;
+   end;
   else
    Result:=EINVAL;
  end;
 end;
 
-function _vm_mmap(map        :vm_map_t;
+function vm_mmap2(map        :vm_map_t;
                   addr       :p_vm_offset_t;
                   size       :vm_size_t;
                   prot       :vm_prot_t;
@@ -356,6 +364,21 @@ begin
 
  fp:=nil;
 
+ if (size = 0) and
+    {(sv_flags > -1) and}
+    (p_proc.p_osrel > $c3567) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if ((flags and (MAP_VOID or MAP_ANON))<>0) then
+ begin
+  if (pos<>0) or (_fd<>-1) then
+  begin
+   Exit(EINVAL);
+  end;
+ end;
+
  if ((flags and MAP_ANON)<>0) then
  begin
   pos:=0;
@@ -410,16 +433,22 @@ begin
   end;
  end else
  begin
-  if (addr=0) or
-     ((addr >= round_page(QWORD(g_vmspace.vm_taddr))) and
-      (addr <  round_page(QWORD(g_vmspace.vm_daddr) + lim_max(RLIMIT_DATA)))) then
+  if (addr=0) then
   begin
-   addr:=round_page(QWORD(g_vmspace.vm_daddr) + lim_max(RLIMIT_DATA));
+   if (p_proc.p_sce_replay_exec=0) then
+   begin
+    addr:=SCE_USR_HEAP_START;
+   end;
+  end else
+  if ((addr and QWORD($fffffffdffffffff))=0) then
+  begin
+   addr:=SCE_USR_HEAP_START;
   end;
  end;
 
  if ((flags and MAP_VOID)=0) then
  begin
+  //not MAP_VOID
   if ((flags and MAP_ANON)<>0) then
   begin
    //Mapping blank space is trivial.
@@ -516,6 +545,7 @@ begin
   end;
  end else
  begin
+  //MAP_VOID
   handle:=nil;
   handle_type:=OBJT_DEFAULT;
   maxprot:=0;
@@ -528,7 +558,7 @@ begin
 _map:
  td^.td_fpop:=fp;
  maxprot:=maxprot and cap_maxprot;
- Result:=_vm_mmap(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos);
+ Result:=vm_mmap2(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos);
  td^.td_fpop:=nil;
 
  if (Result=0) then
@@ -598,7 +628,9 @@ begin
   Exit(EINVAL);
  end;
 
- case (vm_map_protect(@g_vmspace.vm_map, QWORD(addr), QWORD(addr) + size, prot, FALSE)) of
+ Result:=vm_map_protect(@g_vmspace.vm_map, QWORD(addr), QWORD(addr) + size, prot, FALSE);
+
+ case Result of
   KERN_SUCCESS           :Exit(0);
   KERN_PROTECTION_FAILURE:Exit(EACCES);
   KERN_RESOURCE_SHORTAGE :Exit(ENOMEM);

@@ -306,6 +306,7 @@ var
 begin
  td:=curkthread;
 
+ {
  Writeln('sys_open=',sys_open('/app0/test.txt',O_RDWR or O_CREAT or O_TRUNC{ or O_APPEND} or O_EXLOCK,&777));
  fd_1:=td^.td_retval[0];
 
@@ -353,6 +354,7 @@ begin
  Writeln('sys_unlink=',sys_unlink('/app0/test.txt'));
 
  Writeln('sys_rmdir=',sys_rmdir('/test'));
+ }
 
  //readln;
 

@@ -23,7 +23,7 @@ const
  EVFILT_POLLING             =(-12);
  EVFILT_DISPLAY             =(-13);
  EVFILT_GRAPHICS_CORE       =(-14);
- EVFILT_HRTIMER             =(-15);
+ EVFILT_HRTIMER             =(-15);  // High resolution timers
  EVFILT_UVD_TRAP            =(-16);
  EVFILT_VCE_TRAP            =(-17);
  EVFILT_SDMA_TRAP           =(-18);
