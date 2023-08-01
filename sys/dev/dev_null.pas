@@ -13,9 +13,9 @@ const
 
 var
  zero_region:Pointer;
- _zero_region:array[0..ZERO_REGION_SIZE-1] of Byte;
 
 procedure init_zero_region;
+procedure free_zero_region;
 
 Function null_modevent(_mod,_type:Integer):Integer; //DEV_MODULE(nil, null_modevent, nil);
 
@@ -109,7 +109,9 @@ begin
     end;
    end;
   else
+  begin
    error:=ENOIOCTL;
+  end;
  end;
 
  Exit(error);
@@ -132,19 +134,34 @@ begin
     end;
    end;
   else
+  begin
    error:=ENOIOCTL;
+  end;
  end;
 
  Exit(error);
 end;
 
 procedure init_zero_region;
+var
+ buf:Pointer;
 begin
  if (zero_region=nil) then
  begin
-  FillChar(_zero_region,SizeOf(_zero_region),0);
-  zero_region:=@_zero_region;
+  buf:=AllocMem(ZERO_REGION_SIZE);
+  if (System.InterlockedCompareExchange(zero_region,buf,nil)<>nil) then
+  begin
+   FreeMem(buf);
+  end;
  end;
+end;
+
+procedure free_zero_region;
+var
+ buf:Pointer;
+begin
+ buf:=System.InterlockedExchange(zero_region,nil);
+ FreeMem(buf);
 end;
 
 { ARGSUSED }
@@ -188,6 +205,7 @@ begin
    begin
     destroy_dev(null_dev);
     destroy_dev(zero_dev);
+    free_zero_region;
    end;
 
   MOD_SHUTDOWN:;

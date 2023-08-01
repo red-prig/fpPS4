@@ -205,6 +205,7 @@ function  budget_delete(key:Integer):Integer;
 function  budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer;
 function  budget_set(key:Integer):Integer;
 function  is_in_sandbox():Integer;
+function  dmem_container(d_pool_id:Integer):Integer;
 function  get_authinfo(pid:Integer;info:Pointer):Integer;
 function  mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function  dynlib_dlsym(handle:Integer;symbol:pchar;addrp:ppointer):Integer;
@@ -1628,6 +1629,13 @@ end;
 function is_in_sandbox():Integer; assembler; nostackframe;
 asm
  movq  $585,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function dmem_container(d_pool_id:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $586,%rax
  call  fast_syscall
  jmp   cerror
 end;

@@ -95,7 +95,8 @@ uses
  kern_sysctl,
  kern_budget,
  kern_regmgr,
- kern_authinfo;
+ kern_authinfo,
+ kern_dmem;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);

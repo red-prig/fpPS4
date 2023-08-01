@@ -40,7 +40,8 @@ uses
  vfs_mountroot,
  kern_conf,
  dev_null,
- dev_tty;
+ dev_tty,
+ dev_dmem;
 
 var
  daemon_thr:p_kthread;
@@ -74,6 +75,7 @@ begin
  //
  null_modevent(0,MOD_LOAD);
  ttyconsdev_init();
+ dmemdev_init();
 end;
 
 //Manual order of lazy initialization

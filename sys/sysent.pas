@@ -13,6 +13,7 @@ uses
  kern_evf,
  kern_gpo,
  kern_sig,
+ kern_dmem,
  kern_exec,
  kern_exit,
  kern_osem,
@@ -2986,7 +2987,7 @@ const
   ),
   (//[586]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_dmem_container;
      sy_name:'sys_dmem_container'
   ),
   (//[587]

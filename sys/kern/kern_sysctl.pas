@@ -414,6 +414,12 @@ begin
 
  if (pid<>g_pid) then Exit(EINVAL);
 
+ //G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 1;
+ if (p_proc.p_sce_replay_exec<>0) then
+ begin
+  G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 2;
+ end;
+
  //sceSblACMgrIsSystemUcred()!=0 -> any proc
  //sceSblACMgrIsSystemUcred()==0 -> cur proc
 
@@ -425,6 +431,10 @@ begin
   if (Result=0) then
   begin
    G_APPINFO:=APPINFO;
+   if (p_proc.p_sce_replay_exec<>0) then
+   begin
+    G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 2;
+   end;
   end;
  end;
 

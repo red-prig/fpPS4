@@ -33,7 +33,7 @@ var
  }
 Function ttydev_open(dev:p_cdev;oflags,devtype:Integer):Integer;
 begin
- Writeln('ttydev_open(',dev^.si_name,',',oflags,',',devtype,')');
+ Writeln('ttydev_open("',dev^.si_name,'",',oflags,',',devtype,')');
  Result:=0;
 end;
 
@@ -110,7 +110,7 @@ begin
   else;
  end;
 
- Writeln('ttydev_ioctl(0',dev^.si_name,',0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8));
+ Writeln('ttydev_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8),')');
  //error:=tty_ioctl(tp, cmd, data, fflag, td);
 
  //done:
@@ -343,27 +343,27 @@ const
  * will be logged in the kernel message buffer.
  }
 
- function tty_makedev(fmt:PChar;const Args:Array of const):p_cdev; register;
- var
-  dev:p_cdev;
-  uid:uid_t;
-  gid:gid_t;
-  mode:mode_t;
- begin
-  // User device.
-  uid :=0;
-  gid :=GID_TTY;
-  mode:=S_IRUSR or S_IWUSR or S_IWGRP;
+function tty_makedev(fmt:PChar;const Args:Array of const):p_cdev; register;
+var
+ dev:p_cdev;
+ uid:uid_t;
+ gid:gid_t;
+ mode:mode_t;
+begin
+ // User device.
+ uid :=0;
+ gid :=GID_TTY;
+ mode:=S_IRUSR or S_IWUSR or S_IWGRP;
 
-  dev:=make_dev_cred(@ttydev_cdevsw, 0, uid, gid, mode, fmt, Args);
+ dev:=make_dev_cred(@ttydev_cdevsw, 0, uid, gid, mode, fmt, Args);
 
-  Result:=dev;
- end;
+ Result:=dev;
+end;
 
 procedure ttyconsdev_init();
 begin
  dev_console:=make_dev_credf(MAKEDEV_ETERNAL, @ttyconsdev_cdevsw, 0, UID_ROOT, GID_WHEEL, &600, 'console',[]);
-
+ //
  tty_makedev('deci_stderr',[]);
  tty_makedev('deci_stdin' ,[]);
  tty_makedev('deci_stdout',[]);

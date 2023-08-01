@@ -56,7 +56,8 @@ uses
  kern_event,
  machdep,
  kern_dlsym,
- kern_authinfo;
+ kern_authinfo,
+ vfs_syscalls;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -1197,6 +1198,13 @@ begin
  Exit(0);
 end;
 
+procedure init_tty;
+begin
+ kern_openat(STDIN_FILENO ,'/dev/deci_stdin' ,UIO_SYSSPACE,O_RDWR,0);
+ kern_openat(STDOUT_FILENO,'/dev/deci_stdout',UIO_SYSSPACE,O_RDWR,0);
+ kern_openat(STDERR_FILENO,'/dev/deci_stderr',UIO_SYSSPACE,O_RDWR,0);
+end;
+
 const
  fexecv_proc_title='(fexecv)';
 
@@ -1421,6 +1429,9 @@ begin
 
  //copy authinfo
  g_authinfo:=imgp^.authinfo;
+
+ //init std tty
+ init_tty;
 
  {
   * Free any resources malloc'd earlier that we didn't use.

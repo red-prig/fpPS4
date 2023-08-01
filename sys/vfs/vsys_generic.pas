@@ -126,7 +126,9 @@ var
 begin
  error:=fget_read(fd, CAP_READ or CAP_SEEK, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=dofileread(fd, fp, auio, -1, 0);
  fdrop(fp);
  Exit(error);
@@ -139,7 +141,9 @@ var
 begin
  error:=fget_read(fd, CAP_READ, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  if ((fp^.f_ops^.fo_flags and DFLAG_SEEKABLE)=0) then
   error:=ESPIPE
  else
@@ -147,6 +151,7 @@ begin
   error:=EINVAL
  else
   error:=dofileread(fd, fp, auio, offset, FOF_OFFSET);
+
  fdrop(fp);
  Exit(error);
 end;
@@ -158,7 +163,9 @@ var
 begin
  error:=fget_write(fd, CAP_WRITE or CAP_SEEK, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=dofilewrite(fd, fp, auio, -1, 0);
  fdrop(fp);
  Exit(error);
@@ -171,7 +178,9 @@ var
 begin
  error:=fget_write(fd, CAP_WRITE, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  if ((fp^.f_ops^.fo_flags and DFLAG_SEEKABLE)=0) then
   error:=ESPIPE
  else
@@ -179,6 +188,7 @@ begin
   error:=EINVAL
  else
   error:=dofilewrite(fd, fp, auio, offset, FOF_OFFSET);
+
  fdrop(fp);
  Exit(error);
 end;
@@ -234,7 +244,9 @@ var
 begin
  error:=copyinuio(iovp, iovcnt, @auio);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=kern_readv(fd, auio);
  FreeMem(auio);
  Exit(error);
@@ -250,7 +262,9 @@ var
 begin
  error:=copyinuio(iovp, iovcnt, @auio);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=kern_preadv(fd, auio, offset);
  FreeMem(auio);
  Exit(error);
@@ -282,7 +296,9 @@ begin
  if (error<>0) then
  begin
   if (auio^.uio_resid<>cnt) and ((error=ERESTART) or (error=EINTR) or (error=EWOULDBLOCK)) then
+  begin
    error:=0;
+  end;
  end;
  Dec(cnt,auio^.uio_resid);
 
@@ -339,7 +355,9 @@ var
 begin
  error:=copyinuio(iovp, iovcnt, @auio);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=kern_writev(fd, auio);
  FreeMem(auio);
  Exit(error);
@@ -355,7 +373,9 @@ var
 begin
  error:=copyinuio(iovp, iovcnt, @auio);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=kern_pwritev(fd, auio, offset);
  FreeMem(auio);
  Exit(error);
@@ -385,7 +405,9 @@ begin
  if (error<>0) then
  begin
   if (auio^.uio_resid<>cnt) and ((error=ERESTART) or (error=EINTR) or (error=EWOULDBLOCK)) then
+  begin
    error:=0;
+  end;
   { Socket layer is responsible for issuing SIGPIPE. }
   if (fp^.f_type<>DTYPE_SOCKET) and (error=EPIPE) then
   begin
@@ -412,10 +434,14 @@ var
  error:Integer;
 begin
  if (length < 0) then
+ begin
   Exit(EINVAL);
+ end;
  error:=fget(fd, CAP_FTRUNCATE, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  if ((fp^.f_flag and FWRITE)=0) then
  begin
   fdrop(fp);
@@ -441,7 +467,9 @@ var
 begin
  error:=fget(fd, CAP_IOCTL, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  if ((fp^.f_flag and (FREAD or FWRITE))=0) then
  begin
   fdrop(fp);
@@ -461,19 +489,23 @@ begin
   FIONBIO:
    begin
     tmp:=PInteger(data)^;
+
     if (tmp<>0) then
      atomic_set_int(@fp^.f_flag, FNONBLOCK)
     else
      atomic_clear_int(@fp^.f_flag, FNONBLOCK);
+
     data:=@tmp;
    end;
   FIOASYNC:
    begin
     tmp:=PInteger(data)^;
+
     if (tmp<>0) then
      atomic_set_int(@fp^.f_flag, FASYNC)
     else
      atomic_clear_int(@fp^.f_flag, FASYNC);
+
     data:=@tmp;
    end;
  end;
@@ -490,6 +522,7 @@ var
  smalldata:array[0..SYS_IOCTL_SMALL_SIZE-1] of Byte; //__aligned(SYS_IOCTL_SMALL_ALIGN)
  arg,error:Integer;
  size:DWORD;
+ kern_data:Pointer;
 begin
  if (com > $ffffffff) then
  begin
@@ -506,7 +539,9 @@ begin
     ((com and (IOC_VOID or IOC_IN or IOC_OUT))=0) or
     (((com and (IOC_IN or IOC_OUT))<>0) and (size=0)) or
     (((com and IOC_VOID)<>0) and (size > 0) and (size<>sizeof(Integer))) then
+ begin
   Exit(ENOTTY);
+ end;
 
  if (size > 0) then
  begin
@@ -514,22 +549,26 @@ begin
   begin
    { Integer argument. }
    arg:=ptrint(data);
-   data:=@arg;
+   kern_data:=@arg;
    size:=0;
   end else
   begin
    if (size > SYS_IOCTL_SMALL_SIZE) then
-    data:=AllocMem(size)
+    kern_data:=AllocMem(size)
    else
-    data:=@smalldata;
+    kern_data:=@smalldata;
   end;
  end else
-  data:=@data;
+ begin
+  kern_data:=@curkthread^.td_frame.tf_rsi;
+ end;
  if ((com and IOC_IN)<>0) then
  begin
-  error:=copyin(data, data, size);
+  error:=copyin(data, kern_data, size);
   if (error<>0) then
+  begin
    goto _out;
+  end;
  end else
  if ((com and IOC_OUT)<>0) then
  begin
@@ -537,17 +576,21 @@ begin
    * Zero the buffer so the user always
    * gets back something deterministic.
    }
-  FillChar(data,size,0);
+  FillChar(kern_data^,size,0);
  end;
 
- error:=kern_ioctl(fd, com, data);
+ error:=kern_ioctl(fd, com, kern_data);
 
  if (error=0) and ((com and IOC_OUT)<>0) then
-  error:=copyout(data, data, size);
+ begin
+  error:=copyout(kern_data, data, size);
+ end;
 
 _out:
  if (size > SYS_IOCTL_SMALL_SIZE) then
-  FreeMem(data);
+ begin
+  FreeMem(kern_data);
+ end;
  Exit(error);
 end;
 
@@ -561,7 +604,9 @@ begin
   * of specific filesystem implementations.
   }
  if (events and (not POLLSTANDARD))<>0 then
+ begin
   Exit(POLLNVAL);
+ end;
 
  Exit(events and (POLLIN or POLLOUT or POLLRDNORM or POLLWRNORM));
 end;
@@ -585,7 +630,9 @@ begin
  begin
   error:=kern_sigprocmask(td, SIG_SETMASK, uset, @td^.td_oldsigmask, 0);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   td^.td_pflags:=td^.td_pflags or TDP_OLDMASK;
   {
    * Make sure that ast() is called on Exitto
@@ -613,19 +660,27 @@ begin
  begin
   error:=copyin(uts, @ts, sizeof(ts));
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   TIMESPEC_TO_TIMEVAL(@tv, @ts);
   tvp:=@tv;
  end else
+ begin
   tvp:=nil;
+ end;
  if (sm<>nil) then
  begin
   error:=copyin(sm, @_set, sizeof(_set));
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   uset:=@_set;
  end else
+ begin
   uset:=nil;
+ end;
  Exit(kern_pselect(nd, uin, uou, uex, tvp, uset, NFDBITS));
 end;
 
@@ -639,7 +694,9 @@ begin
  begin
   error:=copyin(utv, @tv, sizeof(tv));
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   tvp:=@tv;
  end else
   tvp:=nil;
@@ -663,7 +720,9 @@ var
  bits:Byte;
 begin
  if (nd >= ndu) or (fd_in=nil) then
+ begin
   Exit(0);
+ end;
 
  oaddr:=nil;
  bits:=0; { silence gcc }
@@ -675,12 +734,16 @@ begin
   begin
    res:=fubyte(addr^);
    if (res=-1) then
+   begin
     Exit(EFAULT);
+   end;
    oaddr:=addr;
    bits:=res;
   end;
   if ((bits and (1 shl (i mod NBBY)))<>0) then
+  begin
    Exit(EBADF);
+  end;
  end;
  Exit(0);
 end;
@@ -714,7 +777,9 @@ var
   begin
    error2:=copyout(@obits[x], name, ncpubytes);
    if (error2<>0) then
+   begin
     error:=error2;
+   end;
   end;
  end;
 
@@ -731,13 +796,19 @@ begin
 
  error:=select_check_badfd(fd_in, nd, ndu, abi_nfdbits);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=select_check_badfd(fd_ou, nd, ndu, abi_nfdbits);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=select_check_badfd(fd_ex, nd, ndu, abi_nfdbits);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  {
   * Allocate just enough bits for the non-nil fd_sets.  Use the
@@ -749,11 +820,17 @@ begin
  nbufbytes:=0;
 
  if (fd_in<>nil) then
+ begin
   Inc(nbufbytes,2 * ncpbytes);
+ end;
  if (fd_ou<>nil) then
+ begin
   Inc(nbufbytes,2 * ncpbytes);
+ end;
  if (fd_ex<>nil) then
+ begin
   Inc(nbufbytes,2 * ncpbytes);
+ end;
 
  if (nbufbytes <= sizeof(s_selbits)) then
   selbits:=@s_selbits[0]
@@ -789,12 +866,16 @@ begin
  repeat
   error:=selscan(td, @ibits, @obits, nd);
   if (error<>0) or (td^.td_retval[0]<>0) then
+  begin
    break;
+  end;
   if (atv<>0) then
   begin
    rtv:=get_unit_uptime;
    if (rtv>=atv) then
+   begin
     break;
+   end;
    ttv:=atv-rtv;
 
    if (ttv>24*60*60*hz) then
@@ -804,19 +885,27 @@ begin
   end;
   error:=seltdwait(td, timo);
   if (error<>0) then
+  begin
    break;
+  end;
   error:=selrescan(td, @ibits, @obits);
   if (error<>0) or (td^.td_retval[0]<>0) then
+  begin
    break;
+  end;
  until false;
  seltdclear(td);
 
 done:
  { select is not restarted after signals... }
  if (error=ERESTART) then
+ begin
   error:=EINTR;
+ end;
  if (error=EWOULDBLOCK) then
+ begin
   error:=0;
+ end;
 
  if (error=0) then
  begin
@@ -826,7 +915,9 @@ done:
  end;
 
  if (selbits<>@s_selbits[0]) then
+ begin
   FreeMem(selbits);
+ end;
 
  Exit(error);
 end;
@@ -902,7 +993,9 @@ var
 begin
  fp:=fget_unlocked(fd);
  if (fp=nil) then
+ begin
   Exit(EBADF);
+ end;
  {
   * If the file descriptor is for a capability, test rights and use
   * the file descriptor references by the capability.
@@ -958,7 +1051,9 @@ begin
   end;
   error:=getselfd_cap(fd, @fp);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   idx:=fd div NFDBITS;
   bit:=fd_mask(1) shl (fd mod NFDBITS);
   ev:=fo_poll(fp, selflags(ibits, idx, bit));
@@ -1032,16 +1127,22 @@ var
  ni:QWORD;
 begin
  if (nfds > maxfilesperproc) and (nfds > FD_SETSIZE) then
+ begin
   Exit(EINVAL);
+ end;
  td:=curkthread;
  ni:=nfds * sizeof(t_pollfd);
+
  if (ni > sizeof(smallbits)) then
   bits:=AllocMem(ni)
  else
   bits:=@smallbits;
+
  error:=copyin(fds, bits, ni);
  if (error<>0) then
+ begin
   goto done;
+ end;
  if (timeout<>INFTIM) then
  begin
   atv:=USEC_TO_UNIT(_msec2usec(timeout));
@@ -1072,28 +1173,40 @@ begin
   end;
   error:=seltdwait(td, timo);
   if (error<>0) then
+  begin
    break;
+  end;
   error:=pollrescan(td);
   if (error<>0) or (td^.td_retval[0]<>0) then
+  begin
    break;
+  end;
  until false;
  seltdclear(td);
 
 done:
  { poll is not restarted after signals... }
  if (error=ERESTART) then
+ begin
   error:=EINTR;
+ end;
  if (error=EWOULDBLOCK) then
+ begin
   error:=0;
+ end;
  if (error=0) then
  begin
   error:=_pollout(td, bits, fds, nfds);
   if (error<>0) then
+  begin
    goto _out;
+  end;
  end;
 _out:
  if (ni > sizeof(smallbits)) then
+ begin
   FreeMem(bits);
+ end;
  Exit(error);
 end;
 
@@ -1129,7 +1242,9 @@ begin
   if (cap_funwrap(fp, CAP_POLL_EVENT, @fp)<>0) then
   begin
    if (fp<>nil) then
+   begin
     fdrop(fp);
+   end;
    //
    fd^.revents:=POLLNVAL;
    Inc(n);
@@ -1144,7 +1259,9 @@ begin
    }
   fd^.revents:=fo_poll(fp, fd^.events);
   if (fd^.revents<>0) then
+  begin
    Inc(n);
+  end;
   //
   fdrop(fp);
   //
@@ -1168,9 +1285,13 @@ begin
  begin
   error:=copyout(@fds^.revents, @ufds^.revents, sizeof(ufds^.revents));
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   if (fds^.revents<>0) then
+  begin
    Inc(n);
+  end;
   Inc(fds);
   Inc(ufds);
  end;
@@ -1217,14 +1338,20 @@ begin
      * set simultaneously with POLLHUP.
      }
     if ((fds^.revents and POLLHUP)<>0) then
+    begin
      fds^.revents:=fds^.revents and (not POLLOUT);
+    end;
 
     if (fds^.revents<>0) then
+    begin
      Inc(n);
+    end;
    end;
    //
    if (fp<>nil) then
+   begin
     fdrop(fp);
+   end;
   end;
   //
   Inc(i);
@@ -1245,11 +1372,15 @@ var
 begin
  stp:=td^.td_sel;
  if (stp^.st_free1=nil) then
+ begin
   stp^.st_free1:=AllocMem(SizeOf(t_selfd));
+ end;
  stp^.st_free1^.sf_td:=stp;
  stp^.st_free1^.sf_cookie:=cookie;
  if (stp^.st_free2=nil) then
+ begin
   stp^.st_free2:=AllocMem(SizeOf(t_selfd));
+ end;
  stp^.st_free2^.sf_td:=stp;
  stp^.st_free2^.sf_cookie:=cookie;
 end;
@@ -1259,7 +1390,9 @@ begin
  STAILQ_REMOVE(@stp^.st_selq,sfp,@sfp^.sf_link);
  mtx_lock(sfp^.sf_mtx^);
  if (sfp^.sf_si<>nil) then
+ begin
   TAILQ_REMOVE(@sfp^.sf_si^.si_tdlist,sfp,@sfp^.sf_threads);
+ end;
  mtx_unlock(sfp^.sf_mtx^);
  FreeMem(sfp);
 end;
@@ -1292,19 +1425,23 @@ begin
   * Don't record when doing a rescan.
   }
  if ((stp^.st_flags and SELTD_RESCAN)<>0) then
+ begin
   Exit;
+ end;
  {
   * Grab one of the preallocated descriptors.
   }
  sfp:=stp^.st_free1;
  if (sfp<>nil) then
+ begin
   stp^.st_free1:=nil
- else
+ end else
  begin
   sfp:=stp^.st_free2;
   if (sfp<>nil) then
+  begin
    stp^.st_free2:=nil
-  else
+  end else
   begin
    Assert(false,'selrecord: No free selfd on selq');
    Exit;
@@ -1312,7 +1449,9 @@ begin
  end;
  mtxp:=sip^.si_mtx;
  if (mtxp=nil) then
+ begin
   mtxp:=mtx_pool_find(mtxpool_select, sip);
+ end;
  {
   * Initialize the sfp and queue it in the thread.
   }
@@ -1359,7 +1498,9 @@ var
 begin
  { If it's not initialized there can't be any waiters. }
  if (sip^.si_mtx=nil) then
+ begin
   Exit;
+ end;
  {
   * Locking the selinfo locks all selfds associated with it.
   }
@@ -1393,7 +1534,9 @@ var
 begin
  stp:=td^.td_sel;
  if (stp<>nil) then
+ begin
   goto _out;
+ end;
  stp:=AllocMem(sizeof(t_seltd));
  td^.td_sel:=stp;
  mtx_init(stp^.st_mtx, 'sellck');
@@ -1423,10 +1566,12 @@ begin
   mtx_unlock(stp^.st_mtx);
   Exit(0);
  end;
+
  if (timo > 0) then
   error:=_cv_timedwait_sig(@stp^.st_wait, @stp^.st_mtx, timo)
  else
   error:=_cv_wait_sig(@stp^.st_wait, @stp^.st_mtx);
+
  mtx_unlock(stp^.st_mtx);
 
  Exit(error);
@@ -1438,11 +1583,17 @@ var
 begin
  stp:=td^.td_sel;
  if (stp=nil) then
+ begin
   Exit;
+ end;
  if (stp^.st_free1<>nil) then
+ begin
   FreeMem(stp^.st_free1);
+ end;
  if (stp^.st_free2<>nil) then
+ begin
   FreeMem(stp^.st_free2);
+ end;
  td^.td_sel:=nil;
  FreeMem(stp);
 end;

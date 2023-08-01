@@ -1,0 +1,82 @@
+unit dev_dmem;
+
+{$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
+
+interface
+
+uses
+ kern_conf;
+
+procedure dmemdev_init();
+
+implementation
+
+uses
+ errno,
+ vuio,
+ subr_uio,
+ vm,
+ kern_dmem;
+
+Const
+ SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
+
+Function dmem_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
+begin
+ Result:=0;
+
+ Writeln('dmem_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(fflag,8),')');
+
+ case cmd of
+  $4008800A: //sceKernelGetDirectMemorySize
+            begin
+             PQWORD(data)^:=SCE_KERNEL_MAIN_DMEM_SIZE;
+            end;
+  else
+   Assert(False);
+ end;
+
+end;
+
+Function dmem_mmap(dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
+begin
+ Result:=0;
+
+ Writeln('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
+ Assert(False);
+end;
+
+const
+ dmem_cdevsw:t_cdevsw=(
+  d_version    :D_VERSION;
+  d_flags      :0;
+  d_name       :'dmem';
+  d_open       :nil;
+  d_fdopen     :nil;
+  d_close      :nil;
+  d_read       :nil;
+  d_write      :nil;
+  d_ioctl      :@dmem_ioctl;
+  d_poll       :nil;
+  d_mmap       :@dmem_mmap;
+  d_strategy   :nil;
+  d_dump       :nil;
+  d_kqfilter   :nil;
+  d_purge      :nil;
+  d_mmap_single:nil;
+ );
+
+procedure dmemdev_init();
+var
+ i:Integer;
+begin
+ For i:=0 to 2 do
+ begin
+  make_dev(@dmem_cdevsw,i,0,0,&777,'dmem%d',[i]);
+ end;
+end;
+
+
+end.
+

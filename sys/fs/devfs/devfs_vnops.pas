@@ -227,7 +227,9 @@ begin
  if (devp^<>fp^.f_data) then
  begin
   if (dswp^<>nil) then
+  begin
    dev_relthread(devp^, ref^);
+  end;
 
   Exit(ENXIO);
  end;
@@ -252,7 +254,9 @@ begin
   error:=0;
   datap^:=p^.cdpd_data;
  end else
+ begin
   error:=ENOENT;
+ end;
 
  Exit(error);
 end;
@@ -390,7 +394,9 @@ begin
 
  error:=devfs_populate_vp(vp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  i:=buflen^;
  dd:=vp^.v_data;
@@ -500,7 +506,9 @@ var
 begin
  not_found:=0;
  if ((de^.de_flags and DE_DOOMED)<>0) then
+ begin
   not_found:=1;
+ end;
  if DEVFS_DE_DROP(de) then
  begin
   Assert(not_found=1,'DEVFS de dropped but not doomed');
@@ -632,7 +640,9 @@ loop:
   VI_UNLOCK(vp);
 
   if ((dev^.si_flags and SI_ETERNAL)<>0) then
+  begin
    vp^.v_vflag:=vp^.v_vflag or VV_ETERNALDEV;
+  end;
 
   vp^.v_op:=@devfs_specops;
  end else
@@ -689,16 +699,22 @@ begin
 
  de:=vp^.v_data;
  if (vp^.v_type=VDIR) then
+ begin
   de:=de^.de_dir;
+ end;
 
  error:=vaccess(vp^.v_type, de^.de_mode, de^.de_uid, de^.de_gid, ap^.a_accmode, nil);
  if (error=0) then
+ begin
   Exit(0);
+ end;
  if (error<>EACCES) then
   Exit(error);
  { We do, however, allow access to the controlling terminal }
  if ((p_proc.p_flag and P_CONTROLT)=0) then
+ begin
   Exit(error);
+ end;
  //if (ap^.a_td^.td_proc^.p_session^.s_ttydp=de^.de_cdp) then
  // Exit(0);
  Exit(error);
@@ -721,7 +737,9 @@ begin
   * XXX: insmntque1() failure.
   }
  if (vp^.v_data=nil) then
+ begin
   Exit(0);
+ end;
 
  {
   * Hack: a tty device that is a controlling terminal
@@ -750,7 +768,9 @@ begin
  //end;
  //sx_xunlock(@proctree_lock);
  if (oldvp<>nil) then
+ begin
   vrele(oldvp);
+ end;
  {
   * We do not want to really close the device if it
   * is still in use unless we are trying to close it
@@ -865,7 +885,9 @@ begin
 
  error:=devfs_populate_vp(vp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  dmp:=VFSTODEVFS(vp^.v_mount);
  sx_xunlock(@dmp^.dm_lock);
@@ -958,10 +980,12 @@ begin
   fgn:=data;
   p:=devtoname(dev);
   i:=strlen(p) + 1;
+
   if (i > fgn^.len) then
    error:=EINVAL
   else
    error:=copyout(p, fgn^.buf, i);
+
   td^.td_fpop:=fpop;
   dev_relthread(dev, ref);
   Exit(error);
@@ -970,7 +994,9 @@ begin
  td^.td_fpop:=nil;
  dev_relthread(dev, ref);
  if (error=ENOIOCTL) then
+ begin
   error:=ENOTTY;
+ end;
  if (error=0) and (com=TIOCSCTTY) then
  begin
   vp:=fp^.f_vnode;
@@ -995,7 +1021,9 @@ begin
 
   { Get rid of reference to old control tty }
   if (vpold<>nil) then
+  begin
    vrele(vpold);
+  end;
  end;
  Exit(error);
 end;
@@ -1032,10 +1060,14 @@ begin
  error:=0;
  //error:=prison_check(td^.td_ucred, dcr);
  if (error=0) then
+ begin
   Exit(0);
+ end;
  { We do, however, allow access to the controlling terminal }
  if ((p_proc.p_flag and P_CONTROLT)=0) then
+ begin
   Exit(error);
+ end;
  //if (td^.td_proc^.p_session^.s_ttydp=cdp) then
  // Exit(0);
  Exit(error);
@@ -1067,22 +1099,32 @@ begin
  vpp^:=nil;
 
  if ((flags and ISLASTCN)<>0) and (nameiop=RENAME) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  if (dvp^.v_type<>VDIR) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  if (((flags and ISDOTDOT)<>0) and ((dvp^.v_vflag and VV_ROOT)<>0)) then
+ begin
   Exit(EIO);
+ end;
 
  error:=VOP_ACCESS(dvp, VEXEC);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (cnp^.cn_namelen=1) and (pname^='.') then
  begin
   if ((flags and ISLASTCN) and nameiop<>LOOKUP) then
+  begin
    Exit(EINVAL);
+  end;
   vpp^:=dvp;
   VREF(dvp);
   Exit(0);
@@ -1091,7 +1133,9 @@ begin
  if ((flags and ISDOTDOT)<>0) then
  begin
   if ((flags and ISLASTCN)<>0) and (nameiop<>LOOKUP) then
+  begin
    Exit(EINVAL);
+  end;
   de:=devfs_parent_dirent(dd);
   if (de=nil) then Exit(ENOENT);
 
@@ -1152,7 +1196,9 @@ begin
    devfs_unmount_final(dmp);
 
    if (cdev<>nil) then
+   begin
     dev_rel(cdev);
+   end;
 
    Exit(ENOENT);
   end;
@@ -1190,13 +1236,17 @@ begin
  end;
 
  if (devfs_prison_check(de)<>0) then
+ begin
   Exit(ENOENT);
+ end;
 
  if (cnp^.cn_nameiop=DELETE) and ((flags and ISLASTCN)<>0) then
  begin
   error:=VOP_ACCESS(dvp, VWRITE);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
   if (vpp^=dvp) then
   begin
    VREF(dvp);
@@ -1428,7 +1478,9 @@ var
  fpop:p_file;
 begin
  if (uio^.uio_resid > DEVFS_IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
 
  td:=curkthread;
  fpop:=td^.td_fpop;
@@ -1444,7 +1496,9 @@ begin
  foffset_lock_uio(fp, uio, flags or FOF_NOLOCK);
  error:=dsw^.d_read(dev, uio, ioflag);
  if (uio^.uio_resid<>resid) or ((error=0) and (resid<>0)) then
+ begin
   vfs_timestamp(@dev^.si_atime);
+ end;
  td^.td_fpop:=fpop;
  dev_relthread(dev, ref);
 
@@ -1466,11 +1520,15 @@ begin
  tmp_ncookies:=nil;
 
  if (ap^.a_vp^.v_type<>VDIR) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  uio:=ap^.a_uio;
  if (uio^.uio_offset < 0) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * XXX: This is a temporary hack to get around this filesystem not
@@ -1616,18 +1674,24 @@ begin
   begin
    de_cov:=devfs_find(dd, de^.de_dirent^.d_name, de^.de_dirent^.d_namlen, 0);
    if (de_cov<>nil) then
+   begin
     de_cov^.de_flags:=de_cov^.de_flags and (not DE_COVERED);
+   end;
   end;
 
   { We need to unlock dvp because devfs_delete() may lock it. }
   VOP_UNLOCK(vp, 0);
   if (dvp<>vp) then
+  begin
    VOP_UNLOCK(dvp, 0);
+  end;
 
   devfs_delete(dmp, de, 0);
   sx_xunlock(@dmp^.dm_lock);
   if (dvp<>vp) then
+  begin
    vn_lock(dvp, LK_EXCLUSIVE or LK_RETRY);
+  end;
 
   vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  end else
@@ -1712,7 +1776,9 @@ begin
   dev_unlock();
   dev_rel(@cdp^.cdp_c);
  end else
+ begin
   dev_unlock();
+ end;
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  Exit(0);
@@ -1781,7 +1847,9 @@ begin
 
  de:=vp^.v_data;
  if (vp^.v_type=VDIR) then
+ begin
   de:=de^.de_dir;
+ end;
 
  error:=0;
  c:=0;
@@ -1874,12 +1942,16 @@ begin
  error:=0;
  //error:=priv_check(curkthread, PRIV_DEVFS_SYMLINK);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  dmp:=VFSTODEVFS(ap^.a_dvp^.v_mount);
 
  if (devfs_populate_vp(ap^.a_dvp)<>0) then
+ begin
   Exit(ENOENT);
+ end;
 
  dd:=ap^.a_dvp^.v_data;
  de_cov:=devfs_find(dd, ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen, 0);
@@ -1937,7 +2009,9 @@ begin
  td:=curkthread;
 
  if (uio^.uio_resid > DEVFS_IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
 
  fpop:=td^.td_fpop;
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
@@ -1947,7 +2021,9 @@ begin
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT or O_FSYNC);
 
  if ((ioflag and O_DIRECT)<>0) then
+ begin
   ioflag:=ioflag or IO_DIRECT;
+ end;
 
  foffset_lock_uio(fp, uio, flags or FOF_NOLOCK);
 

@@ -105,6 +105,10 @@ const
  DFLAG_PASSABLE=$01; { may be passed via unix sockets. }
  DFLAG_SEEKABLE=$02; { seekable / nonsequential }
 
+ STDIN_FILENO =0; // standard input file descriptor
+ STDOUT_FILENO=1; // standard output file descriptor
+ STDERR_FILENO=2; // standard error file descriptor
+
 type
  mode_t=Integer;
  uid_t =Integer;
