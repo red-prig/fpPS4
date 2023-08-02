@@ -199,6 +199,7 @@ function  _nullop():Integer;
 function  _eopnotsupp():Integer;
 function  _enxio():Integer;
 function  _enodev():Integer;
+function  _einval():Integer;
 
 procedure dev_lock();
 procedure dev_unlock();
@@ -501,6 +502,11 @@ end;
 function _enodev():Integer;
 begin
  Exit(ENODEV);
+end;
+
+function _einval():Integer;
+begin
+ Exit(EINVAL);
 end;
 
 procedure dead_strategy(bp:Pointer);
@@ -896,7 +902,9 @@ begin
  len:=Length(R);
 
  if (len > sizeof(dev^.__si_namebuf) - 1) then
+ begin
   Exit(ENAMETOOLONG);
+ end;
 
  Move(PChar(R)^,dev^.__si_namebuf,len);
 
@@ -909,10 +917,14 @@ begin
  begin
   { Treat multiple sequential slashes as single. }
   while (from[0]='/') and (from[1]='/') do
+  begin
    Inc(from);
+  end;
   { Trailing slash is considered invalid. }
   if (from[0]='/') and (from[1]=#0) then
+  begin
    Exit(EINVAL);
+  end;
   _to^:=from^;
   //
   Inc(from);
@@ -921,7 +933,9 @@ begin
  _to^:=#0;
 
  if (dev^.__si_namebuf[0]=#0) then
+ begin
   Exit(EINVAL);
+ end;
 
  { Disallow '.' and '..' components. }
  s:=@dev^.__si_namebuf;
@@ -931,16 +945,24 @@ begin
   while (q^<>'/') and (q^<>#0) do Inc(q);
 
   if (q - s=1) and (s[0]='.') then
+  begin
    Exit(EINVAL);
+  end;
   if (q - s=2) and (s[0]='.') and (s[1]='.') then
+  begin
    Exit(EINVAL);
+  end;
   if (q^<>'/') then
+  begin
    break;
+  end;
   s:=q + 1;
  end;
 
  if (devfs_dev_exists(dev^.__si_namebuf)<>0) then
+ begin
   Exit(EEXIST);
+ end;
 
  Exit(0);
 end;

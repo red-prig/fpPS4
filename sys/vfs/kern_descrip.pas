@@ -1217,7 +1217,9 @@ var
 begin
  error:=falloc_noinstall(@fp);
  if (error<>0) then
+ begin
   Exit(error);  { no reference held on error }
+ end;
 
  error:=finstall(fp,@fd,flags);
  if (error<>0) then
@@ -1232,7 +1234,9 @@ begin
   fdrop(fp);  { release local reference }
 
  if (resultfd<>nil) then
+ begin
   resultfd^:=fd;
+ end;
 
  Exit(0);
 end;

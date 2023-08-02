@@ -60,9 +60,19 @@ begin
         goto _err;
        end;
 
-       Writeln(' enc:0x',HexStr(qword(data.enc),16),' val1:0x',HexStr(data.val1,8),' val12:0x',HexStr(data.val2,8));
+       case qword(data.enc) of
+        QWORD($0C82671ADF0EEB34):data.val2:=0; //_malloc_init_lv2
+        QWORD($1AC46343411B3F40):data.val2:=0; //libSceSysmodule  (bit 1,2 -> load debug lib)
+        QWORD($503F69BDE385A6AC):data.val2:=0; //libSceSysmodule  (print errors?)
+        QWORD($2D946F62AEF8F878):data.val2:=0; //libSceSysmodule  (preload module?)
+        QWORD($1BE26343C3D71F40):data.val2:=0; //libkernel
+        QWORD($68436EECF1CFD447):data.val2:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
 
-       data.val2:=0;
+        else
+         begin
+          Writeln(' enc:0x',HexStr(qword(data.enc),16),' val1:0x',HexStr(data.val1,8),' val12:0x',HexStr(data.val2,8));
+         end;
+       end;
 
        Result:=copyout(@data,pvalue,vlen);
        if (Result<>0) then

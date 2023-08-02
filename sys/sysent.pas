@@ -3322,7 +3322,7 @@ const
   ),
   (//[653]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_blockpool_open;
      sy_name:'sys_blockpool_open'
   ),
   (//[654]

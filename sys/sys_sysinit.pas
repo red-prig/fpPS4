@@ -24,6 +24,7 @@ uses
  vmount,
  vfiledesc,
  vm_map,
+ kern_dmem,
  kern_mtxpool,
  vsys_generic,
  vfs_subr,
@@ -93,6 +94,7 @@ begin
  vmountinit;
  fd_table_init;
  vminit;
+ init_dmem_map;
  mtx_pool_setup_dynamic;
  selectinit;
  vntblinit;

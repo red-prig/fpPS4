@@ -234,6 +234,7 @@ function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):I
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
 function  budget_get_ptype_of_budget(key:Integer):Integer;
+function  blockpool_open(flags:Integer):Integer;
 function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
 function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
@@ -1832,6 +1833,13 @@ end;
 function budget_get_ptype_of_budget(key:Integer):Integer; assembler; nostackframe;
 asm
  movq  $650,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function blockpool_open(flags:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $653,%rax
  call  fast_syscall
  jmp   cerror
 end;

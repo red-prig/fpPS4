@@ -17,10 +17,17 @@ uses
  vuio,
  subr_uio,
  vm,
+ dmem_map,
  kern_dmem;
 
-Const
- SCE_KERNEL_MAIN_DMEM_SIZE=$180000000; //6GB
+type
+ PAvailableDirectMemorySize=^TAvailableDirectMemorySize;
+ TAvailableDirectMemorySize=packed record
+  start:QWORD; //in,out
+  __end:QWORD; //in
+  align:QWORD; //in
+  osize:QWORD; //out
+ end;
 
 Function dmem_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
@@ -32,6 +39,13 @@ begin
   $4008800A: //sceKernelGetDirectMemorySize
             begin
              PQWORD(data)^:=SCE_KERNEL_MAIN_DMEM_SIZE;
+            end;
+  $C0208016: //sceKernelAvailableDirectMemorySize
+            begin
+             with PAvailableDirectMemorySize(data)^ do
+             begin
+              Result:=dmem_map_query_available(@dmem,start,__end,align,start,osize);
+             end;
             end;
   else
    Assert(False);

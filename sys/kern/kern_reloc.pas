@@ -173,7 +173,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_DTPMOD64
 
          R_X86_64_DTPOFF64:
@@ -194,7 +195,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_DTPOFF64
 
          R_X86_64_TPOFF64:
@@ -214,7 +216,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_TPOFF64
 
         else;
@@ -260,7 +263,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_PC32
 
          R_X86_64_DTPOFF32:
@@ -281,7 +285,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_DTPOFF32
 
 
@@ -302,7 +307,8 @@ begin
              Exit(ENOEXEC);
             end;
 
-            set_relo_bits(obj,i);
+            if (def<>@dynlibs_info.sym_nops) then
+             set_relo_bits(obj,i);
            end; //R_X86_64_TPOFF32
 
          else;
@@ -339,7 +345,8 @@ begin
    Exit(ENOEXEC);
   end;
 
-  set_relo_bits(obj,i);
+  if (def<>@dynlibs_info.sym_nops) then
+   set_relo_bits(obj,i);
 
  goto _next;
 end;
@@ -407,7 +414,8 @@ begin
   Exit(4);
  end;
 
- set_relo_bits(obj,idofs);
+ if (def<>@dynlibs_info.sym_nops) then
+  set_relo_bits(obj,idofs);
 
  if (flags=0) then Exit;
 

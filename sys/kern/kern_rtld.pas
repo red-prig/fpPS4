@@ -394,7 +394,7 @@ begin
         s:=SELF_SEGMENT_INDEX(self_segs[i].flags);
         s:=elf_phdr[s].p_offset;
         MinSeg:=MinInt64(s,MinSeg);
-        s:=s+minInt64(self_segs[i].filesz,self_segs[i].filesz);
+        s:=s+minInt64(self_segs[i].filesz,self_segs[i].memsz);
         MaxSeg:=MaxInt64(s,MaxSeg);
        end;
 
@@ -436,9 +436,9 @@ begin
          Assert(false,'src_ofs>=obj_size');
         end;
 
-        if ((src_ofs+mem_size)>=obj_size) then
+        if ((src_ofs+mem_size)>obj_size) then
         begin
-         Assert(false,'(src_ofs+mem_size)>=obj_size');
+         Assert(false,'(src_ofs+mem_size)>obj_size');
         end;
 
         if (dst_ofs>=MaxSeg) then
@@ -446,9 +446,9 @@ begin
          Assert(false,'dst_ofs>=MaxSeg');
         end;
 
-        if ((dst_ofs+mem_size)>=MaxSeg) then
+        if ((dst_ofs+mem_size)>MaxSeg) then
         begin
-         Assert(false,'(dst_ofs+mem_size)>=MaxSeg');
+         Assert(false,'(dst_ofs+mem_size)>MaxSeg');
         end;
 
         Move( (Pointer(self_hdr)          +src_ofs)^, //src
@@ -633,7 +633,7 @@ begin
   addr^:=SCE_REPLAY_EXEC_START;
  end;
 
- Result:=vm_mmap2(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0);
+ Result:=vm_mmap2(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE or (21 shl MAP_ALIGNMENT_BIT),OBJT_DEFAULT,nil,0);
 end;
 
 procedure rtld_munmap(base:Pointer;size:QWORD);

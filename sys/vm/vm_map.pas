@@ -54,8 +54,8 @@ type
   root:vm_map_entry_t;      // Root of a binary search tree
   pmap:pmap_t;              // (c) Physical map
   busy:Integer;
-  property  min_offset:vm_offset_t read header.start;
-  property  max_offset:vm_offset_t read header.__end;
+  property  min_offset:vm_offset_t read header.start write header.start;
+  property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
 
  p_vmspace=^vmspace;
@@ -212,6 +212,8 @@ function  vm_map_find(map       :vm_map_t;
                       max       :vm_prot_t;
                       cow       :Integer):Integer;
 
+procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t);
+
 function  vm_map_fixed(map    :vm_map_t;
                        vm_obj :vm_object_t;
                        offset :vm_ooffset_t;
@@ -253,6 +255,11 @@ implementation
 var
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
+
+function OFF_TO_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=QWORD(x) shr PAGE_SHIFT;
+end;
 
 function VMFS_ALIGNED_SPACE(x:QWORD):QWORD; inline; // find a range with fixed alignment
 begin
@@ -331,13 +338,6 @@ begin
  FillChar(g_vmspace,SizeOf(vmspace),0);
 end;
 
-procedure vm_map_zinit(map:vm_map_t);
-begin
- map^.nentries:=0;
- map^.size:=0;
- mtx_init(map^.lock,'vm map (system)');
-end;
-
 function vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 begin
  Result:=@vm^.vm_pmap;
@@ -381,7 +381,9 @@ function vm_map_trylock(map:vm_map_t):Boolean;
 begin
  Result:=mtx_trylock(map^.lock);
  if Result then
+ begin
   Inc(map^.timestamp);
+ end;
 end;
 
 procedure vm_map_process_deferred;
@@ -449,8 +451,8 @@ begin
  map^.header.next:=@map^.header;
  map^.header.prev:=@map^.header;
  map^.pmap:=pmap;
- map^.header.start:=min;
- map^.header.__end:=max;
+ map^.min_offset:=min;
+ map^.max_offset:=max;
  map^.header.adj_free:=(max-min);
  map^.header.max_free:=(max-min);
  map^.flags:=0;
@@ -601,7 +603,9 @@ begin
     root:=y;
    end;
   end else
+  begin
    break;
+  end;
  until false;
 
  {
@@ -639,7 +643,7 @@ begin
 end;
 
 {
- * vm_map_entry_beginun,end;link:
+ * vm_map_entry_{un,}link:
  *
  * Insert/remove entries from maps.
  }
@@ -649,6 +653,7 @@ procedure vm_map_entry_link(
            entry      :vm_map_entry_t);
 begin
  VM_MAP_ASSERT_LOCKED(map);
+
  Inc(map^.nentries);
  entry^.prev:=after_where;
  entry^.next:=after_where^.next;
@@ -658,7 +663,9 @@ begin
  if (after_where<>@map^.header) then
  begin
   if (after_where<>map^.root) then
+  begin
    vm_map_entry_splay(after_where^.start, map^.root);
+  end;
   entry^.right:=after_where^.right;
   entry^.left:=after_where;
   after_where^.right:=nil;
@@ -680,7 +687,6 @@ begin
  map^.root:=entry;
 end;
 
-
 procedure vm_map_entry_unlink(
            map        :vm_map_t;
            entry      :vm_map_entry_t);
@@ -688,6 +694,7 @@ var
  next,prev,root:vm_map_entry_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
+
  if (entry<>map^.root) then
  begin
   vm_map_entry_splay(entry^.start, map^.root);
@@ -806,12 +813,12 @@ begin
     Exit(TRUE);
    end;
   end else
+  begin
    entry^:=cur^.prev;
+  end;
  end;
  Result:=(FALSE);
 end;
-
-procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t); forward;
 
 {
  * vm_map_insert:
@@ -1068,9 +1075,13 @@ begin
   * address wrap.
   }
  if (start<map^.min_offset) then
+ begin
   start:=map^.min_offset;
+ end;
  if (start + length>map^.max_offset) or (start + length<start) then
+ begin
   Exit(1);
+ end;
 
  { Empty tree means wide open address space. }
  if (map^.root=nil) then
@@ -1114,10 +1125,14 @@ begin
  entry:=map^.root^.right;
 
  if (entry=nil) then
+ begin
   Exit(1);
+ end;
 
  if (length>entry^.max_free) then
+ begin
   Exit(1);
+ end;
 
  {
   * Search the right subtree in the order: left subtree, root,
@@ -1138,7 +1153,9 @@ begin
     addr^:=entry^.__end;
     Exit(0);
    end else
+   begin
     entry:=entry^.right;
+   end;
   end;
  end;
 
@@ -1208,7 +1225,9 @@ begin
   Assert((find_space and $ff)=0,'bad VMFS flags');
   alignment:=vm_offset_t(1) shl (find_space shr 8);
  end else
+ begin
   alignment:=0;
+ end;
  initial_addr:=addr^;
 again:
  start:=initial_addr;
@@ -1266,7 +1285,9 @@ var
  prevsize, esize:vm_size_t;
 begin
  if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) then
+ begin
   Exit;
+ end;
 
  prev:=entry^.prev;
  if (prev<>@map^.header) then
@@ -1285,7 +1306,9 @@ begin
    entry^.offset:=prev^.offset;
    //change
    if (entry^.prev<>@map^.header) then
+   begin
     vm_map_entry_resize_free(map, entry^.prev);
+   end;
 
    {
     * If the backing object is a vnode object,
@@ -1371,7 +1394,9 @@ end;
 procedure vm_map_clip_start(map:vm_map_t;entry:vm_map_entry_t;start:vm_offset_t);
 begin
  if (start>entry^.start) then
+ begin
   _vm_map_clip_start(map,entry,start);
+ end;
 end;
 
 {
@@ -1413,7 +1438,9 @@ end;
 procedure vm_map_clip_end(map:vm_map_t;entry:vm_map_entry_t;__end:vm_offset_t);
 begin
  if (__end<entry^.__end) then
+ begin
   _vm_map_clip_end(map,entry,__end);
+ end;
 end;
 
 {
@@ -1782,7 +1809,9 @@ begin
   Exit(KERN_INVALID_ARGUMENT);
  end;
  if (start=__end) then
+ begin
   Exit(KERN_SUCCESS);
+ end;
  vm_map_lock(map);
  VM_MAP_RANGE_CHECK(map, start, __end);
 
@@ -1791,7 +1820,9 @@ begin
   entry:=temp_entry;
   vm_map_clip_start(map, entry, start);
  end else
+ begin
   entry:=temp_entry^.next;
+ end;
 
  while ((entry<>@map^.header) and (entry^.start<__end)) do
  begin
@@ -2002,7 +2033,9 @@ var
 begin
  VM_MAP_ASSERT_LOCKED(map);
  if (start=__end) then
+ begin
   Exit(KERN_SUCCESS);
+ end;
 
  {
   * Find the start of the region, and clip it
@@ -2077,24 +2110,32 @@ var
  tmp_entry:vm_map_entry_t;
 begin
  if (not vm_map_lookup_entry(map, start, @tmp_entry)) then
+ begin
   Exit(FALSE);
+ end;
 
  entry:=tmp_entry;
 
  while (start<__end) do
  begin
   if (entry=@map^.header) then
+  begin
    Exit (FALSE);
+  end;
   {
    * No holes allowed!
    }
   if (start<entry^.start) then
+  begin
    Exit(FALSE);
+  end;
   {
    * Check protection associated with entry.
    }
   if ((entry^.protection and protection)<>protection) then
+  begin
    Exit(FALSE);
+  end;
   { go to next entry }
   start:=entry^.__end;
   entry:=entry^.next;
@@ -2127,7 +2168,9 @@ begin
  if (addrbos<vm_map_min(map)) or
     (addrbos>vm_map_max(map)) or
     (addrbos + max_ssize<addrbos) then
+ begin
   Exit(KERN_NO_SPACE);
+ end;
 
  growsize:=sgrowsiz;
 
@@ -2199,18 +2242,26 @@ begin
  if (rv=KERN_SUCCESS) then
  begin
   if (prev_entry<>@map^.header) then
+  begin
    vm_map_clip_end(map, prev_entry, bot);
+  end;
 
   new_entry:=prev_entry^.next;
   if (new_entry^.__end<>top) or (new_entry^.start<>bot) then
+  begin
    Assert(false,'Bad entry start/end for new stack entry');
+  end;
 
   new_entry^.avail_ssize:=max_ssize - init_ssize;
   if ((orient and MAP_STACK_GROWS_DOWN)<>0) then
+  begin
    new_entry^.eflags:=new_entry^.eflags or MAP_ENTRY_GROWS_DOWN;
+  end;
 
   if ((orient and MAP_STACK_GROWS_UP)<>0) then
+  begin
    new_entry^.eflags:=new_entry^.eflags or MAP_ENTRY_GROWS_UP;
+  end;
  end;
 
  vm_map_unlock(map);
@@ -2293,8 +2344,11 @@ begin
     stack_entry:=prev_entry
    else
     stack_entry:=next_entry;
+
   end else
+  begin
    stack_entry:=prev_entry;
+  end;
  end;
 
  if (stack_entry=next_entry) then
@@ -2371,7 +2425,9 @@ begin
  growsize:=sgrowsiz;
  grow_amount:=roundup(grow_amount, growsize);
  if (grow_amount>stack_entry^.avail_ssize) then
+ begin
   grow_amount:=stack_entry^.avail_ssize;
+ end;
  if (is_procstack<>0) and (ctob(g_vmspace.vm_ssize) + grow_amount>stacklim) then
  begin
   grow_amount:=trunc_page(stacklim) - ctob(g_vmspace.vm_ssize);
@@ -2402,7 +2458,9 @@ begin
    stack_entry^.avail_ssize:=max_grow;
    addr:=__end;
    if (stack_guard_page<>0) then
+   begin
     addr:=addr+PAGE_SIZE;
+   end;
   end;
 
   rv:=vm_map_insert(map, nil, 0, addr, stack_entry^.start,
@@ -2412,7 +2470,9 @@ begin
   if (rv=KERN_SUCCESS) then
   begin
    if (prev_entry<>@map^.header) then
+   begin
     vm_map_clip_end(map, prev_entry, addr);
+   end;
    new_entry:=prev_entry^.next;
    Assert(new_entry=stack_entry^.prev, 'foo');
    Assert(new_entry^.__end=stack_entry^.start, 'foo');
@@ -2438,7 +2498,9 @@ begin
    stack_entry^.avail_ssize:=__end - stack_entry^.__end;
    addr:=__end;
    if (stack_guard_page<>0) then
+   begin
     addr:=addr-PAGE_SIZE;
+   end;
   end;
 
   grow_amount:=addr - stack_entry^.__end;
@@ -2460,13 +2522,19 @@ begin
    rv:=KERN_SUCCESS;
 
    if (next_entry<>@map^.header) then
+   begin
     vm_map_clip_start(map, next_entry, addr);
+   end;
   end else
+  begin
    rv:=KERN_FAILURE;
+  end;
  end;
 
  if (rv=KERN_SUCCESS) and (is_procstack<>0) then
+ begin
   g_vmspace.vm_ssize:=g_vmspace.vm_ssize+btoc(grow_amount);
+ end;
 
  vm_map_unlock(map);
 

@@ -281,7 +281,9 @@ begin
 
   { Exit if the directory is not empty. }
   if (TAILQ_NEXT(de_dotdot,@de_dotdot^.de_list)<>nil) then
+  begin
    Exit;
+  end;
 
   dd:=devfs_parent_dirent(de);
   Assert(dd<>nil, 'devfs_rmdir_empty: nil dd');
@@ -329,7 +331,9 @@ begin
    devfs_dir_unref_de(dm, dd);
   end;
  end else
+ begin
   dd:=nil;
+ end;
 
  mtx_lock(devfs_de_interlock);
  vp:=de^.de_vnode;
@@ -353,7 +357,9 @@ begin
   vdrop(vp);
   sx_xlock(@dm^.dm_lock);
  end else
+ begin
   mtx_unlock(devfs_de_interlock);
+ end;
 
  if (de^.de_symlink<>nil) then
  begin
