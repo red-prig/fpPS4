@@ -10,7 +10,7 @@ uses
  kern_stub;
 
 type
- t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall);
+ t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall,pt_unresolve);
 
  p_patch_node=^t_patch_node;
  t_patch_node=record
@@ -20,8 +20,11 @@ type
   stub :p_stub_chunk;
  end;
 
-procedure vm_add_patch_link(_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
+procedure vm_add_patch_link     (_obj,vaddr:Pointer;ptype:t_patch_type;stub:p_stub_chunk);
+procedure vm_free_patch_link    (_obj:Pointer;node:p_patch_node);
 procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
+function  vm_get_patch_link     (_obj,vaddr:Pointer):p_stub_chunk;
+procedure vm_rem_patch_link     (_obj,vaddr:Pointer);
 
 implementation
 
@@ -81,6 +84,61 @@ begin
   //
   if ((start=0) or (OFF_TO_IDX(entry^.vaddr)>=start)) and
      ((__end=0) or (OFF_TO_IDX(entry^.vaddr)<=__end)) then
+  begin
+   vm_free_patch_link(_obj,entry);
+  end;
+  //
+  entry:=next;
+ end;
+
+ VM_OBJECT_UNLOCK(obj);
+end;
+
+function vm_get_patch_link(_obj,vaddr:Pointer):p_stub_chunk;
+var
+ obj:vm_object_t;
+ entry,next:p_patch_node;
+begin
+ Result:=nil;
+ obj:=_obj;
+
+ VM_OBJECT_LOCK(obj);
+
+ entry:=TAILQ_FIRST(@obj^.patchq);
+ while (entry<>nil) do
+ begin
+  next:=TAILQ_NEXT(entry,@entry^.link);
+  //
+  if (entry^.vaddr=vaddr) then
+  begin
+   Result:=entry^.stub;
+   p_inc_ref(Result);
+   //
+   VM_OBJECT_UNLOCK(obj);
+   Exit;
+  end;
+  //
+  entry:=next;
+ end;
+
+ VM_OBJECT_UNLOCK(obj);
+end;
+
+procedure vm_rem_patch_link(_obj,vaddr:Pointer);
+var
+ obj:vm_object_t;
+ entry,next:p_patch_node;
+begin
+ obj:=_obj;
+
+ VM_OBJECT_LOCK(obj);
+
+ entry:=TAILQ_FIRST(@obj^.patchq);
+ while (entry<>nil) do
+ begin
+  next:=TAILQ_NEXT(entry,@entry^.link);
+  //
+  if (entry^.vaddr=vaddr) then
   begin
    vm_free_patch_link(_obj,entry);
   end;

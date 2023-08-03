@@ -301,10 +301,30 @@ end;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 var
+ td:p_kthread;
+ backup:array[0..1] of QWORD;
  name:shortstring;
 begin
  name:=shortstring(prefix)+shortstring(newtd^.td_name);
+
+ td:=curkthread;
+ if (td<>nil) then
+ begin
+  //prevent bullshit in ntdll:__chkstk
+  backup[0]:=PQWORD(td^.td_kstack.stack)[-1];
+  backup[1]:=PQWORD(td^.td_kstack.stack)[-2];
+  PQWORD(td^.td_kstack.stack)[-1]:=0;
+  PQWORD(td^.td_kstack.stack)[-2]:=0;
+ end;
+
  SetThreadDebugName(newtd^.td_tid,name);
+
+ if (td<>nil) then
+ begin
+  //restore stack
+  PQWORD(td^.td_kstack.stack)[-1]:=backup[0];
+  PQWORD(td^.td_kstack.stack)[-2]:=backup[1];
+ end;
 end;
 
 procedure before_start(td:p_kthread);

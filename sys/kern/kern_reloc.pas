@@ -45,7 +45,7 @@ begin
     ) then
  begin
   //dont check with special callbacks
-  //Exit(ENOEXEC);
+  Exit(ENOEXEC);
  end;
 
  Result:=0;
@@ -131,7 +131,7 @@ begin
         Exit;
        end;
 
-       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0]);
+       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0],where);
 
        if (def<>nil) then
         case r_type of
@@ -236,7 +236,7 @@ begin
         Exit;
        end;
 
-       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0]);
+       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0],where);
 
        if (def<>nil) then
         case r_type of
@@ -248,12 +248,13 @@ begin
             if (def<>sym_zero) then
             begin
              data:=Pointer(QWORD(data32));
-             Result:=check_addr(defobj,data,SizeOf(Integer));
-             if (Result<>0) then
-             begin
-              Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
-              Exit;
-             end;
+             //dont check with special callbacks
+             //Result:=check_addr(defobj,data,SizeOf(Integer));
+             //if (Result<>0) then
+             //begin
+             // Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+             // Exit;
+             //end;
             end;
 
             Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
@@ -331,12 +332,12 @@ begin
  Exit(0);
  _move64:
 
-  Result:=check_addr(defobj,data,SizeOf(Pointer));
-  if (Result<>0) then
-  begin
-   Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
-   Exit;
-  end;
+  //Result:=check_addr(defobj,data,SizeOf(Pointer));
+  //if (Result<>0) then
+  //begin
+  // Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+  // Exit;
+  //end;
 
   Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
   if (Result<>0) then
@@ -385,7 +386,7 @@ begin
  where:=(obj^.relocbase + entry^.r_offset);
 
  defobj:=nil;
- def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,cache);
+ def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,cache,where);
 
  if (def=nil) then
  begin
@@ -637,7 +638,7 @@ begin
    end;
 
    defobj:=nil;
-   def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,nil);
+   def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,nil,nil);
 
    if (def=nil) then
    begin

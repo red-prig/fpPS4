@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ hamt,
  elf64,
  kern_thr,
  kern_rtld,
@@ -17,10 +18,7 @@ uses
 type
  p_rel_data=^t_rel_data;
  t_rel_data=record
-  //entry:TAILQ_ENTRY;
-  //vm_obj:vm_object_t;
-  //refs:Integer;
-  //full_size:QWORD;
+  obj        :Pointer;
 
   symtab_addr:p_elf64_sym;
   symtab_size:QWORD;
@@ -58,9 +56,6 @@ type
   dynsymcount:DWORD;
 
   original_filename:pchar;
-
-  //void * sce_dynlib_data;
-  //void * elf_hdr;
  end;
 
  p_lib_info=^t_lib_info;
@@ -158,12 +153,21 @@ type
   name:Char;
  end;
 
+ p_sym_hash_entry=^t_sym_hash_entry;
+ t_sym_hash_entry=record
+  nid   :QWORD;
+  mod_id:WORD;
+  lib_id:WORD;
+  sym   :elf64_sym;
+ end;
+
  p_Lib_Entry=^Lib_Entry;
  Lib_Entry=record
   link  :TAILQ_ENTRY;
   dval  :TLibraryValue;
   attr  :WORD;
   import:WORD;
+  hamt  :THAMT;
  end;
 
  t_DoneList=record
@@ -234,8 +238,11 @@ function  Needed_new(obj:p_lib_info;str:pchar):p_Needed_Entry;
 function  Lib_Entry_new(d_val:QWORD;import:Word):p_Lib_Entry;
 procedure Lib_Entry_free(lib:p_Lib_Entry);
 
-function  get_mod_name(obj:p_lib_info;id:Word):pchar;
-function  get_lib_name(obj:p_lib_info;id:Word):pchar;
+function  get_mod_name_by_id   (obj:p_lib_info;id:Word):pchar;
+function  get_lib_name_by_id   (obj:p_lib_info;id:Word):pchar;
+
+function  get_lib_entry_by_id  (obj:p_lib_info;id:Word):p_Lib_Entry;
+function  get_lib_entry_by_name(obj:p_lib_info;name:pchar):p_Lib_Entry;
 
 procedure release_per_file_info_obj(obj:p_lib_info);
 function  acquire_per_file_info_obj(imgp:p_image_params;new:p_lib_info):Integer;
@@ -274,6 +281,12 @@ procedure ref_dag  (root:p_lib_info);
 procedure unref_dag(root:p_lib_info);
 
 function  dynlib_initialize_pltgot_each(obj:p_lib_info):Integer;
+
+function  DecodeSym(obj:p_lib_info;
+                    str:pchar;
+                    ST_TYPE:Integer;
+                    var mod_id,lib_id:WORD;
+                    var nid:QWORD):Boolean;
 
 function  do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 procedure unload_object(root:p_lib_info);
@@ -316,7 +329,8 @@ uses
  vfs_subr,
  vnode_if,
  kern_reloc,
- kern_namedobj;
+ kern_namedobj,
+ elf_nid_utils;
 
 procedure dynlibs_lock;
 begin
@@ -632,6 +646,8 @@ procedure release_per_file_info_obj(obj:p_lib_info);
 begin
  if (obj^.rel_data<>nil) then
  begin
+  vm_object_deallocate(obj^.rel_data^.obj);
+  //
   FreeMem(obj^.rel_data);
   obj^.rel_data:=nil;
  end;
@@ -713,6 +729,8 @@ begin
 
  new^.rel_data^.chains:=Pointer(QWORD(src) + (new^.rel_data^.nbuckets + 2) * 4);
 
+ new^.rel_data^.obj:=imgp^.obj;
+ vm_object_reference(imgp^.obj);
 end;
 
 function allocate_tls_offset(obj:p_lib_info):Boolean;
@@ -944,13 +962,23 @@ begin
  Result^.import:=import;
 end;
 
+procedure free_sym_hash_entry(data,userdata:Pointer); register;
+begin
+ FreeMem(data);
+end;
+
 procedure Lib_Entry_free(lib:p_Lib_Entry);
 begin
+ if (lib=nil) then Exit;
+ if (lib^.hamt<>nil) then
+ begin
+  HAMT_destroy64(lib^.hamt,@free_sym_hash_entry,nil);
+ end;
  //
  FreeMem(lib);
 end;
 
-function get_mod_name(obj:p_lib_info;id:Word):pchar;
+function get_mod_name_by_id(obj:p_lib_info;id:Word):pchar;
 var
  lib_entry:p_Lib_Entry;
  offset:QWORD;
@@ -969,7 +997,7 @@ begin
  end;
 end;
 
-function get_lib_name(obj:p_lib_info;id:Word):pchar;
+function get_lib_name_by_id(obj:p_lib_info;id:Word):pchar;
 var
  lib_entry:p_Lib_Entry;
  offset:QWORD;
@@ -983,6 +1011,43 @@ begin
    offset:=lib_entry^.dval.name_offset;
    Result:=obj_get_str(obj,offset);
    Exit;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+end;
+
+function get_lib_entry_by_id(obj:p_lib_info;id:Word):p_Lib_Entry;
+var
+ lib_entry:p_Lib_Entry;
+begin
+ Result:=nil;
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (lib_entry^.dval.id=id) then
+  begin
+   Exit(lib_entry);
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+end;
+
+function get_lib_entry_by_name(obj:p_lib_info;name:pchar):p_Lib_Entry;
+var
+ lib_entry:p_Lib_Entry;
+ offset:QWORD;
+ str:pchar;
+begin
+ Result:=nil;
+ if (name=nil) then Exit;
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  offset:=lib_entry^.dval.name_offset;
+  str:=obj_get_str(obj,offset);
+  if (StrComp(str,name)=0) then
+  begin
+   Exit(lib_entry);
   end;
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
@@ -1771,7 +1836,7 @@ begin
  new^.tls_init_addr    :=new^.tls_init_addr    +delta;
  new^.eh_frame_hdr_addr:=new^.eh_frame_hdr_addr+delta;
 
- imgp^.obj:=vm_object_allocate(OBJT_DEFAULT,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
+ imgp^.obj:=vm_object_allocate(OBJT_SELF,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
 
  error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta);
  if (error<>0) then
@@ -2034,6 +2099,154 @@ begin
  obj^.init_plt:=1;
 end;
 
+function DecodeSym(obj:p_lib_info;
+                   str:pchar;
+                   ST_TYPE:Integer;
+                   var mod_id,lib_id:WORD;
+                   var nid:QWORD):Boolean;
+var
+ Lib_Entry:p_Lib_Entry;
+begin
+ Result:=False;
+
+ mod_id:=0; //export=0
+ lib_id:=0;
+ nid   :=0;
+
+ case ST_TYPE of
+  STT_NOTYPE:
+   begin
+    nid:=ps4_nid_hash(str);
+
+    Lib_Entry:=get_lib_entry_by_name(obj,get_mod_name_by_id(obj,0));
+    if (Lib_Entry<>nil) then
+    begin
+     lib_id:=Lib_Entry^.dval.id;
+    end;
+   end;
+  STT_SCE:
+   begin
+    Result:=DecodeValue64(str,strlen(str),nid);
+    if (not Result) then Exit;
+
+    Lib_Entry:=get_lib_entry_by_name(obj,get_mod_name_by_id(obj,0));
+    if (Lib_Entry<>nil) then
+    begin
+     lib_id:=Lib_Entry^.dval.id;
+    end;
+   end;
+  STT_OBJECT,
+  STT_FUN,
+  STT_TLS:
+   begin
+    Result:=DecodeEncName(str,mod_id,lib_id,nid);
+   end
+  else;
+ end;
+
+end;
+
+procedure init_sym_hash(obj:p_lib_info);
+var
+ i,count:Integer;
+
+ symtab_addr:p_elf64_sym;
+ strtab_addr:pchar;
+ strtab_size:QWORD;
+
+ symp:p_elf64_sym;
+ strp:pchar;
+
+ ST_TYPE:Integer;
+
+ mod_id:WORD;
+ lib_id:WORD;
+ nid   :QWORD;
+
+ Lib_Entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ data:PPointer;
+begin
+ count:=obj^.rel_data^.symtab_size div SizeOf(elf64_sym);
+ if (count=0) then Exit;
+
+ symtab_addr:=obj^.rel_data^.symtab_addr;
+ strtab_addr:=obj^.rel_data^.strtab_addr;
+ strtab_size:=obj^.rel_data^.strtab_size;
+
+ For i:=0 to count-1 do
+ begin
+  symp:=symtab_addr+i;
+
+  if (symp^.st_name>=strtab_size) then
+  begin
+   Continue; //skip
+  end;
+
+  strp:=strtab_addr+symp^.st_name;
+
+  ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+  Case ST_TYPE of
+   STT_SECTION:;
+   STT_NOTYPE,
+   STT_OBJECT,
+   STT_FUN,
+   STT_SCE:
+     begin
+      if (symp^.st_value=0) or
+         (symp^.st_shndx=SHN_UNDEF) then
+      begin
+       Continue; //skip
+      end;
+     end;
+   STT_TLS:
+     begin
+      if (symp^.st_shndx=SHN_UNDEF) then
+      begin
+       Continue; //skip
+      end;
+     end;
+   else
+    Continue; //skip
+  end; //case
+
+  mod_id:=0;
+  lib_id:=0;
+  nid   :=0;
+
+  if DecodeSym(obj,strp,ST_TYPE,mod_id,lib_id,nid) then
+  begin
+   Lib_Entry:=get_lib_entry_by_id(obj,lib_id);
+   if (Lib_Entry<>nil) then
+   if (Lib_Entry^.import=0) then //export
+   begin
+    h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+    //
+    h_entry^.nid   :=nid;
+    h_entry^.mod_id:=mod_id;
+    h_entry^.lib_id:=lib_id;
+    h_entry^.sym   :=symp^;
+    //
+    if (Lib_Entry^.hamt=nil) then
+    begin
+     Lib_Entry^.hamt:=HAMT_create64;
+    end;
+    //
+    data:=HAMT_insert64(Lib_Entry^.hamt,nid,h_entry);
+    Assert(data<>nil,'NOMEM');
+    if (data^<>h_entry) then //is another exists
+    begin
+     FreeMem(h_entry);
+    end;
+   end;
+  end;
+
+ end; //for
+
+
+end;
+
 function do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
  _inc_max,
@@ -2119,6 +2332,7 @@ begin
  end;
 
  init_relo_bits(new);
+ init_sym_hash(new);
  dynlibs_add_obj(new);
  new^.loaded:=1;
  Exit(new);
@@ -2424,7 +2638,7 @@ begin
   Exit(0);
  end;
 
- modname:=get_mod_name(obj,0); //export=0
+ modname:=get_mod_name_by_id(obj,0); //export=0
 
  if (modname<>nil) then
  begin

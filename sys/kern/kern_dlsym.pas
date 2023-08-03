@@ -21,11 +21,10 @@ const
 type
  p_SymLook=^t_SymLook;
  t_SymLook=record
-  name      :pchar;
   libname   :pchar;
   modname   :pchar;
   symbol    :pchar;
-  hash      :QWORD;
+  nid       :QWORD;
   flags     :DWORD;
   obj       :p_lib_info;
   defobj_out:p_lib_info;
@@ -33,87 +32,70 @@ type
  end;
 
 function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
-function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
+function find_symdef(symnum:QWORD;
+                     refobj:p_lib_info;
+                     var defobj_out:p_lib_info;
+                     flags:DWORD;
+                     cache:p_SymCache;
+                     where:Pointer):p_elf64_sym;
 
 implementation
 
 uses
+ hamt,
  errno,
  elf_nid_utils,
- kern_stub;
-
-function convert_raw_symbol_str_to_base64(symbol:pchar):RawByteString;
-var
- nid:QWORD;
-begin
- nid:=ps4_nid_hash(symbol);
- Result:=EncodeValue64(nid);
-end;
+ kern_stub,
+ vm_patch_link;
 
 function symlook_obj(req:p_SymLook;obj:p_lib_info):Integer;
 label
  _next;
 var
- i:Integer;
- symnum:Integer;
+ Lib_Entry:p_Lib_Entry;
+ data:PPointer;
+ h_entry:p_sym_hash_entry;
  symp:p_elf64_sym;
- strp:pchar;
-
  ST_TYPE:Integer;
 begin
  Result:=0;
 
- //linear search
- For i:=0 to obj^.rel_data^.dynsymcount-1 do
- begin
-  symnum:=i;
-  //symnum:=obj^.rel_data^.chains[i];
-  //if (symnum<>0) then
-  begin
-   symp:=obj^.rel_data^.symtab_addr+symnum;
-   strp:=obj^.rel_data^.strtab_addr+symp^.st_name;
+ Lib_Entry:=get_lib_entry_by_name(obj,req^.libname);
+ if (Lib_Entry=nil) then Exit(ESRCH);
 
-   ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+ data:=HAMT_search64(Lib_Entry^.hamt,req^.nid);
+ if (data=nil) then Exit(ESRCH);
 
-   Case ST_TYPE of
-    STT_SECTION:;
-    STT_NOTYPE,
-    STT_OBJECT,
-    STT_FUN,
-    STT_SCE:
+ h_entry:=data^;
+ if (h_entry=nil) then Exit(ESRCH);
+
+ symp:=@h_entry^.sym;
+
+ ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+ Case ST_TYPE of
+  STT_SECTION:;
+  STT_NOTYPE,
+  STT_OBJECT,
+  STT_FUN,
+  STT_SCE:
+     if (symp^.st_value<>0) then
+     begin
+      if (symp^.st_shndx<>SHN_UNDEF) or
+         ((ST_TYPE=STT_FUN) and
+          ((req^.flags and SYMLOOK_IN_PLT)=0)
+         ) then
       begin
-       if (symp^.st_value<>0) then
-       begin
-        if (symp^.st_shndx<>SHN_UNDEF) or
-           ((ST_TYPE=STT_FUN) and
-            ((req^.flags and SYMLOOK_IN_PLT)=0)
-           ) then
-        begin
-         if (StrLComp(req^.name,strp,strlen(req^.name))=0) then
-         begin
-          goto _next;
-         end;
-        end;
-       end;
+       goto _next;
       end;
-    STT_TLS:
-      begin
-       if (symp^.st_shndx<>SHN_UNDEF) or
-          ((ST_TYPE=STT_FUN) and
-           ((req^.flags and SYMLOOK_IN_PLT)=0)
-          ) then
-       begin
-        if (StrLComp(req^.name,strp,strlen(req^.name))=0) then
-        begin
-         goto _next;
-        end;
-       end;
-      end;
-    else;
-   end;
-
-  end;
- end;
+     end;
+  STT_TLS:
+     if (symp^.st_shndx<>SHN_UNDEF) then
+     begin
+      goto _next;
+     end;
+  else;
+ end; //case
 
  Exit(ESRCH);
 
@@ -182,7 +164,7 @@ begin
     end;
    end else
    begin
-    str:=get_mod_name(elm^.obj,0); //export=0
+    str:=get_mod_name_by_id(elm^.obj,0); //export=0
     if (StrComp(str,modname)=0) then
     begin
      goto _symlook_obj;
@@ -317,27 +299,26 @@ begin
  Result:=nil;
 
  req:=Default(t_SymLook);
- req.modname:=get_mod_name(obj,0); //export=0
  req.flags:=flags or SYMLOOK_DLSYM;
 
  if ((flags and SYMLOOK_BASE64)=0) then
  begin
+  req.modname:=get_mod_name_by_id(obj,0); //export=0
   req.libname:=libname;
   if (libname=nil) then
   begin
    req.libname:=req.modname;
   end;
-  base64:=convert_raw_symbol_str_to_base64(symbol);
-  symbol:=pchar(base64);
+  req.nid:=ps4_nid_hash(symbol);
  end else
  begin
   req.libname:=nil;
   req.modname:=nil;
+  DecodeValue64(symbol,strlen(symbol),req.nid);
  end;
 
- req.name      :=symbol;
- //req.hash      :=elf_hash(@req);
- req.obj       :=obj;
+ req.symbol:=symbol;
+ req.obj :=obj;
 
  donelist:=Default(t_DoneList);
  donelist_init(donelist);
@@ -389,7 +370,7 @@ begin
  readln;
 end;
 
-function get_unresolve_ptr(str,libname:PChar):Pointer;
+function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;str,libname:PChar):Pointer;
 var
  stub:p_stub_chunk;
 begin
@@ -401,9 +382,17 @@ begin
  p_jmpq64_trampoline(@stub^.body)^.libname:=libname;
 
  Result:=@stub^.body;
+
+ vm_add_patch_link(refobj^.rel_data^.obj,where,pt_unresolve,stub);
 end;
 
-function find_symdef(symnum:QWORD;refobj:p_lib_info;var defobj_out:p_lib_info;flags:DWORD;cache:p_SymCache):p_elf64_sym;
+function find_symdef(symnum:QWORD;
+                     refobj:p_lib_info;
+                     var defobj_out:p_lib_info;
+                     flags:DWORD;
+                     cache:p_SymCache;
+                     where:Pointer):p_elf64_sym;
+
 var
  req:t_SymLook;
  def:p_elf64_sym;
@@ -414,8 +403,10 @@ var
  err:Integer;
  ST_BIND:Integer;
 
- nModuleId,nLibraryId:WORD;
- nNid:QWORD;
+ mod_id,lib_id:WORD;
+
+ ptr:Pointer;
+ stub:p_stub_chunk;
 
  fname:RawByteString;
 begin
@@ -457,23 +448,22 @@ begin
   req:=Default(t_SymLook);
 
   req.symbol:=str;
-  req.flags :=(flags{ or SYMLOOK_MANGLED});
+  req.flags :=flags;
   req.obj   :=refobj;
 
-  if DecodeEncName(str,nModuleId,nLibraryId,nNid) then
+  mod_id:=0;
+  lib_id:=0;
+
+  if DecodeSym(refobj,
+               str,
+               ELF64_ST_TYPE(ref^.st_info),
+               mod_id,
+               lib_id,
+               req.nid) then
   begin
-   req.modname:=get_mod_name(refobj,nModuleId);
-   req.libname:=get_lib_name(refobj,nLibraryId);
-
-   fname:=BaseEncName(str);
-
-   req.name:=pchar(fname);
+   req.modname:=get_mod_name_by_id(refobj,mod_id);
+   req.libname:=get_lib_name_by_id(refobj,lib_id);
   end;
-
-
-  //convert_mangled_name_to_long
-  //req.libname
-  //req.name
 
   err:=symlook_default(@req, refobj);
   if (err=0) then
@@ -490,15 +480,29 @@ begin
    def   :=@dynlibs_info.sym_zero;
    defobj:=dynlibs_info.libprogram;
   end else
+  if (where<>nil) then
   begin
+   stub:=vm_get_patch_link(refobj^.rel_data^.obj,where);
+
+   if (stub<>nil) then
+   begin
+    ptr:=@stub^.body;
+    p_dec_ref(stub);
+   end else
+   begin
+    ptr:=get_unresolve_ptr(refobj,where,str,req.libname);
+   end;
+
    dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
    dynlibs_info.sym_nops.st_shndx:=SHN_UNDEF;
-   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(get_unresolve_ptr(str,req.libname));
+   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(ptr);
 
    def   :=@dynlibs_info.sym_nops;
    defobj:=dynlibs_info.libprogram;
-
   end;
+ end else
+ begin
+  vm_rem_patch_link(refobj^.rel_data^.obj,where);
  end;
 
  if (def<>nil) then

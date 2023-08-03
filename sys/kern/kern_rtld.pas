@@ -87,7 +87,7 @@ type
  p_authinfo=^t_authinfo;
  t_authinfo=packed record
   app_type_id:QWORD;
-  app_flags  :QWORD;
+  app_flags  :QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
   app_cap    :QWORD;
   unknow1    :array[0..1] of QWORD;
   s_prog_attr:QWORD;
@@ -475,6 +475,7 @@ begin
  if (imgp=nil) then Exit;
 
  imgp^.authinfo:=Default(t_authinfo);
+ imgp^.authinfo.app_flags:=QWORD($2000000000000000); //IsGameProcess1
 
  if (imgp^.image_header=nil) or
     (imgp^.image_self  =nil) then

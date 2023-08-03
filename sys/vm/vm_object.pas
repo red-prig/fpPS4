@@ -13,10 +13,19 @@ uses
 
 type
  obj_type=(
-  OBJT_DEFAULT,
-  OBJT_VNODE,
-  OBJT_DMEM,
-  OBJT_DEAD);
+   OBJT_DEFAULT  ,//0
+   OBJT_SWAP     ,//1
+   OBJT_VNODE    ,//2
+   OBJT_DEVICE   ,//3
+   OBJT_PHYS     ,//4
+   OBJT_DEAD     ,//5
+   OBJT_SG       ,//6
+   OBJT_JITSHM   ,//7
+   OBJT_SELF     ,//8
+   OBJT_TRCMEM   ,//9
+   OBJT_PHYSHM   ,//10
+   OBJT_BLOCKPOOL //11
+  );
 
  objtype_t=obj_type;
 
@@ -186,9 +195,6 @@ procedure vm_object_destroy(obj:vm_object_t);
 begin
  Case obj^.otype of
   OBJT_DEFAULT:;
-  OBJT_VNODE  :;
-  OBJT_DMEM   :;
-  OBJT_DEAD   :;
  end;
  mtx_destroy(obj^.mtx);
  FreeMem(obj);
