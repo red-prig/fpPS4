@@ -292,11 +292,11 @@ end;
 function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
 var
  req:t_SymLook;
- base64:RawByteString;
  donelist:t_DoneList;
  err:Integer;
 begin
  Result:=nil;
+ if (obj=nil) then Exit;
 
  req:=Default(t_SymLook);
  req.flags:=flags or SYMLOOK_DLSYM;

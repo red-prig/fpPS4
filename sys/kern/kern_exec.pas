@@ -989,7 +989,10 @@ begin
   obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
- imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
+ if (dynlibs_info.libkernel<>nil) then
+ begin
+  imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
+ end;
 
  _dyn_not_exist:
 
