@@ -42,7 +42,9 @@ uses
  kern_conf,
  dev_null,
  dev_tty,
- dev_dmem;
+ dev_dmem,
+ dev_dipsw,
+ dev_rng;
 
 var
  daemon_thr:p_kthread;
@@ -77,6 +79,8 @@ begin
  null_modevent(0,MOD_LOAD);
  ttyconsdev_init();
  dmemdev_init();
+ dipsw_init();
+ rng_init();
 end;
 
 //Manual order of lazy initialization
