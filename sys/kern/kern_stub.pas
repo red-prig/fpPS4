@@ -9,15 +9,19 @@ uses
  mqueue;
 
 const
- m_header_alloc=Integer($C3C3C3C3);
- m_header_free =Integer($C3C3C390);
+ m_header=WORD($C3C3);
+
+ m_free__chunk=1;
+ m_first_chunk=2;
+ m_last__chunk=4;
 
  segment_size  =64*1024;
 
 type
  p_stub_chunk=^stub_chunk;
  stub_chunk=packed record
-  head     :Integer;
+  head     :WORD;
+  flags    :WORD;
   prev_size:Integer;
   curr_size:Integer;
   refs     :Integer;
@@ -68,7 +72,8 @@ begin
 
  Result:=start;
 
- Result^.head         :=m_header_free;
+ Result^.head         :=m_header;
+ Result^.flags        :=m_free__chunk or m_first_chunk or m_last__chunk;
  Result^.prev_size    :=0;
  Result^.curr_size    :=segment_size;
  Result^.refs         :=0;
@@ -96,6 +101,18 @@ begin
  Result:=tmp-(tmp mod alignment)
 end;
 
+procedure fix_next_size(chunk:p_stub_chunk);
+var
+ next:p_stub_chunk;
+begin
+ if (chunk^.curr_size<segment_size) and
+    ((chunk^.flags and m_last__chunk)=0) then
+ begin
+  next:=Pointer(chunk)+chunk^.curr_size;
+  next^.prev_size:=chunk^.curr_size;
+ end;
+end;
+
 procedure split_chunk(chunk:p_stub_chunk;used_size:Integer);
 var
  chunk_size:Integer;
@@ -111,14 +128,23 @@ begin
 
  chunk^.curr_size:=used_size;
 
- next^.head         :=m_header_free;
+ next^.head         :=m_header;
+ next^.flags        :=m_free__chunk;
  next^.prev_size    :=used_size;
  next^.curr_size    :=chunk_size-used_size;
  next^.refs         :=0;
  next^.link.tqe_next:=nil;
  next^.link.tqe_prev:=nil;
 
+ if ((chunk^.flags and m_last__chunk)<>0) then
+ begin
+  chunk^.flags:=chunk^.flags and (not m_last__chunk);
+  next^.flags:=next^.flags or m_last__chunk;
+ end;
+
  TAILQ_INSERT_TAIL(@chunk_free,next,@next^.link);
+
+ fix_next_size(next);
 end;
 
 procedure merge_chunk(var chunk:p_stub_chunk);
@@ -126,23 +152,34 @@ var
  prev,next:p_stub_chunk;
 begin
 
- if (chunk^.prev_size<>0) then
+ if (chunk^.prev_size<>0) and
+    ((chunk^.flags and m_first_chunk)=0) then
  begin
   prev:=Pointer(chunk)-chunk^.prev_size;
-  if (prev^.head=m_header_free) then
+  if ((prev^.flags and m_free__chunk)<>0) then
   begin
    Assert(prev^.curr_size=chunk^.prev_size,'invalid prev chunk curr_size');
    Assert(prev^.refs=0                    ,'invalid prev chunk refs');
 
    prev^.curr_size:=prev^.curr_size+chunk^.curr_size;
+
+   if ((chunk^.flags and m_last__chunk)<>0) then
+   begin
+    prev^.flags:=prev^.flags or m_last__chunk;
+   end;
+
+   chunk^:=Default(stub_chunk);
    chunk:=prev;
+
+   fix_next_size(chunk);
   end;
  end;
 
- if (chunk^.curr_size<segment_size) then
+ if (chunk^.curr_size<segment_size) and
+    ((chunk^.flags and m_last__chunk)=0) then
  begin
   next:=Pointer(chunk)+chunk^.curr_size;
-  if (next^.head=m_header_free) then
+  if ((next^.flags and m_free__chunk)<>0) then
   begin
    Assert(next^.prev_size=chunk^.curr_size,'invalid next chunk prev_size');
    Assert(next^.refs=0                    ,'invalid next chunk refs');
@@ -150,6 +187,15 @@ begin
    TAILQ_REMOVE(@chunk_free,next,@next^.link);
 
    chunk^.curr_size:=chunk^.curr_size+next^.curr_size;
+
+   if ((next^.flags and m_last__chunk)<>0) then
+   begin
+    chunk^.flags:=chunk^.flags or m_last__chunk;
+   end;
+
+   next^:=Default(stub_chunk);
+
+   fix_next_size(chunk);
   end;
  end;
 end;
@@ -198,7 +244,8 @@ begin
 
  split_chunk(chunk,size);
 
- chunk^.head:=m_header_alloc;
+ chunk^.flags:=chunk^.flags and (not m_free__chunk);
+
  HAMT_insert64(@chunk_alloc,QWORD(chunk),chunk);
 
  rw_wunlock(chunk_lock);
@@ -219,11 +266,13 @@ begin
  end;
 
  HAMT_delete64(@chunk_alloc,QWORD(chunk),nil);
- chunk^.head:=m_header_free;
+
+ chunk^.flags:=chunk^.flags or m_free__chunk;
 
  merge_chunk(chunk);
 
- if (chunk^.curr_size>=segment_size) then
+ if (chunk^.curr_size>=segment_size) and
+    ((chunk^.flags and (m_first_chunk or m_last__chunk))=(m_first_chunk or m_last__chunk)) then
  begin
   free_segment(chunk);
  end else
