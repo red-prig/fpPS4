@@ -58,6 +58,7 @@ function  _fcntl(fd,cmd:Integer;arg:QWORD):Integer;
 function  select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 function  fsync(fd:Integer):Integer;
 function  setpriority(which,who,prio:Integer):Integer;
+function  __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
 function  getpriority(which,who:Integer):Integer;
 function  gettimeofday(tp,tzp:Pointer):Integer;
 function  getrusage(who:Integer;rusage:Pointer):Integer;
@@ -601,6 +602,13 @@ end;
 function setpriority(which,who,prio:Integer):Integer; assembler; nostackframe;
 asm
  movq  $96,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer; assembler; nostackframe;
+asm
+ movq  $99,%rax
  call  fast_syscall
  jmp   cerror
 end;

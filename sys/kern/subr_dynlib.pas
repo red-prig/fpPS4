@@ -155,6 +155,7 @@ type
 
  p_sym_hash_entry=^t_sym_hash_entry;
  t_sym_hash_entry=record
+  link  :TAILQ_ENTRY;
   nid   :QWORD;
   mod_id:WORD;
   lib_id:WORD;
@@ -168,6 +169,7 @@ type
   attr  :WORD;
   import:WORD;
   hamt  :THAMT;
+  syms  :TAILQ_HEAD;
  end;
 
  t_DoneList=record
@@ -2231,14 +2233,22 @@ begin
     if (Lib_Entry^.hamt=nil) then
     begin
      Lib_Entry^.hamt:=HAMT_create64;
+     TAILQ_INIT(@Lib_Entry^.syms);
     end;
     //
     data:=HAMT_insert64(Lib_Entry^.hamt,nid,h_entry);
     Assert(data<>nil,'NOMEM');
-    if (data^<>h_entry) then //is another exists
+    //
+    if (data^<>h_entry) then
     begin
+      //is another exists
      FreeMem(h_entry);
+    end else
+    begin
+     //new
+     TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
     end;
+    //
    end;
   end;
 

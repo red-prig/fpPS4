@@ -8,8 +8,6 @@ interface
 uses
  sysutils,
  mqueue,
- elf64,
- kern_thr,
  kern_rtld,
  subr_dynlib,
  kern_dlsym,

@@ -645,6 +645,10 @@
         <Filename Value="..\vm\dmem_map.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\kern\kern_bnet.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -655,7 +659,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);.."/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev"/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev;..\.."/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

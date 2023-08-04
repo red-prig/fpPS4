@@ -13,6 +13,7 @@ uses
  kern_evf,
  kern_gpo,
  kern_sig,
+ kern_bnet,
  kern_dmem,
  kern_exec,
  kern_exit,
@@ -552,7 +553,7 @@ const
   ),
   (//[99]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_netcontrol;
      sy_name:'sys_netcontrol'
   ),
   (//[100]

@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ mqueue,
  ucontext,
  kern_thr;
 
@@ -116,11 +117,17 @@ implementation
 
 uses
  errno,
+ systm,
  vmparam,
  machdep,
  md_context,
  kern_sig,
- sysent;
+ sysent,
+ subr_dynlib,
+ elf_nid_utils,
+ ps4libdoc,
+ kern_rtld,
+ hamt;
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
@@ -223,6 +230,253 @@ begin
  td^.pcb_flags:=f;
 end;
 
+function fuptr(var base:Pointer):Pointer;
+begin
+ Result:=nil;
+ copyin(@base,@Result,SizeOf(Pointer));
+end;
+
+function fuptr(var base:QWORD):QWORD;
+begin
+ Result:=0;
+ copyin(@base,@Result,SizeOf(QWORD));
+end;
+
+function CaptureBacktrace(rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
+var
+ adr:Pointer;
+begin
+ Result:=0;
+ while (rbp<>nil) and
+       (rbp<>Pointer(QWORD(-1))) do
+ begin
+  adr:=fuptr(rbp[1]);
+  rbp:=fuptr(rbp[0]);
+
+  if (adr<>nil) then
+  begin
+   if (skipframes<>0) then
+   begin
+    Dec(skipframes);
+   end else
+   if (count<>0) then
+   begin
+    frames[0]:=adr;
+    Dec(count);
+    Inc(frames);
+    Inc(Result);
+   end;
+  end else
+  begin
+   Break;
+  end;
+
+ end;
+end;
+
+type
+ TLQRec=record
+  Base   :Pointer;
+  Addr   :Pointer;
+  LastAdr:Pointer;
+  LastNid:QWORD;
+ end;
+
+Function trav_proc(h_entry:p_sym_hash_entry;var r:TLQRec):Integer;
+var
+ adr:Pointer;
+begin
+ Result:=0;
+ adr:=r.Base+fuptr(h_entry^.sym.st_value);
+ if (adr<=r.Addr) then
+ if (adr>r.LastAdr) then
+ begin
+  r.LastAdr:=adr;
+  r.LastNid:=fuptr(h_entry^.nid);
+  Result:=1;
+ end;
+end;
+
+Function find_proc_lib_entry(lib_entry:p_Lib_Entry;var r:TLQRec):Integer;
+var
+ h_entry:p_sym_hash_entry;
+begin
+ Result:=0;
+ h_entry:=fuptr(lib_entry^.syms.tqh_first);
+ while (h_entry<>nil) do
+ begin
+  Result:=Result+trav_proc(h_entry,r);
+  h_entry:=fuptr(h_entry^.link.tqe_next);
+ end;
+end;
+
+Function find_proc_obj(obj:p_lib_info;var r:TLQRec):Integer;
+var
+ lib_entry:p_Lib_Entry;
+begin
+ Result:=0;
+ lib_entry:=fuptr(obj^.lib_table.tqh_first);
+ while (lib_entry<>nil) do
+ begin
+  Result:=Result+find_proc_lib_entry(lib_entry,r);
+  lib_entry:=fuptr(lib_entry^.link.tqe_next);
+ end;
+end;
+
+type
+ TDynlibLineInfo=record
+  func     :shortstring;
+  source   :shortstring;
+  base_addr:ptruint;
+  func_addr:ptruint;
+ end;
+
+function GetDynlibLineInfo(addr:ptruint;var info:TDynlibLineInfo):boolean;
+var
+ obj:p_lib_info;
+ r:TLQRec;
+ adr:QWORD;
+begin
+ Result:=False;
+ dynlibs_lock;
+
+ obj:=fuptr(dynlibs_info.obj_list.tqh_first);
+ while (obj<>nil) do
+ begin
+  if (Pointer(addr)>=obj^.map_base) and
+     (Pointer(addr)<(obj^.map_base+obj^.map_size)) then
+  begin
+   r:=Default(TLQRec);
+   r.Addr:=Pointer(addr);
+   r.Base:=fuptr(obj^.map_base);
+
+   info.base_addr:=QWORD(r.Base);
+   info.source:=dynlib_basename(obj^.lib_path);
+
+   if (find_proc_obj(obj,r)<>0) then
+   begin
+    info.func:=ps4libdoc.GetFunctName(r.LastNid);
+    if (info.func='Unknow') then
+    begin
+     info.func:=EncodeValue64(r.LastNid);
+    end;
+    info.func_addr:=QWORD(r.LastAdr);
+    Result:=True;
+   end else
+   begin
+    info.func_addr:=0;
+
+    adr:=QWORD(obj^.init_proc_addr);
+    if (adr<=QWORD(r.Addr)) then
+    if (adr>info.func_addr) then
+    begin
+     info.func:='dtInit';
+     info.func_addr:=adr;
+     Result:=True;
+    end;
+
+    adr:=QWORD(obj^.fini_proc_addr);
+    if (adr<=QWORD(r.Addr)) then
+    if (adr>info.func_addr) then
+    begin
+     info.func:='dtFini';
+     info.func_addr:=adr;
+     Result:=True;
+    end;
+
+    adr:=QWORD(obj^.entry_addr);
+    if (adr<=QWORD(r.Addr)) then
+    if (adr>info.func_addr) then
+    begin
+     info.func:='Entry';
+     info.func_addr:=adr;
+     Result:=True;
+    end;
+
+   end;
+
+   dynlibs_unlock;
+   Exit;
+  end;
+  //
+  obj:=fuptr(obj^.link.tqe_next);
+ end;
+
+ dynlibs_unlock;
+end;
+
+function find_obj_by_handle(id:Integer):p_lib_info;
+var
+ obj:p_lib_info;
+begin
+ Result:=nil;
+
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
+ begin
+  if (obj^.id=id) then
+  begin
+   Exit(obj);
+  end;
+  //
+  obj:=TAILQ_NEXT(obj,@obj^.link);
+ end;
+end;
+
+procedure print_frame(var f:text;frame:Pointer);
+var
+ info:TDynlibLineInfo;
+ offset1:QWORD;
+ offset2:QWORD;
+ //line:longint;
+begin
+ if is_guest_addr(ptruint(frame)) then
+ begin
+  info:=Default(TDynlibLineInfo);
+
+  if GetDynlibLineInfo(ptruint(frame),info) then
+  begin
+   offset1:=QWORD(frame)-QWORD(info.base_addr);
+   offset2:=QWORD(frame)-QWORD(info.func_addr);
+
+   Writeln(f,' offset $',HexStr(offset1,6),' ',info.source,':',info.func,'+$',HexStr(offset2,6));
+
+  end else
+  begin
+   Writeln(f,' 0x',HexStr(frame),' ',info.source);
+  end;
+ end else
+ begin
+  Writeln(f,BackTraceStrFunc(frame));
+ end;
+
+ //if GetLineInfo(ptruint(frame),func,source,line) then
+ //begin
+ // Writeln(f,' 0x',HexStr(frame),':',func,':',source);
+ //end};
+
+ //Writeln(f,BackTraceStrFunc(frame));
+end;
+
+procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
+var
+ i,count:sizeint;
+ frames:array [0..255] of codepointer;
+begin
+ count:=max_frame_dump;
+ count:=20;
+
+ print_frame(f,rip);
+
+ count:=CaptureBacktrace(rbp,skipframes,count,@frames[0]);
+
+ if (count<>0) then
+ for i:=0 to count-1 do
+ begin
+  print_frame(f,frames[i]);
+ end;
+end;
+
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
 
@@ -257,6 +511,8 @@ begin
    Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
    Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
 
+   print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
+
    Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
   end;
  end else
@@ -270,6 +526,8 @@ begin
   Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
   Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
   Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+
+  print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
 
   Assert(false,IntToStr(td_frame^.tf_rax));
  end else
@@ -286,12 +544,12 @@ begin
   if is_guest_addr(td_frame^.tf_rip) then
   begin
    Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
-   Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
-   Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
-   Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
-   Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
-   Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
-   Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+   //Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
+   //Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
+   //Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
+   //Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
+   //Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
+   //Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
   end;
 
   error:=scall(td_frame^.tf_rdi,
