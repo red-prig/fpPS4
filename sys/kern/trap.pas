@@ -109,6 +109,8 @@ procedure sig_cla;
 procedure sig_sti;
 procedure sig_cli;
 
+procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
+
 procedure fast_syscall;
 procedure sigcode;
 procedure sigipi;
@@ -428,7 +430,6 @@ var
  info:TDynlibLineInfo;
  offset1:QWORD;
  offset2:QWORD;
- //line:longint;
 begin
  if is_guest_addr(ptruint(frame)) then
  begin
@@ -440,7 +441,6 @@ begin
    offset2:=QWORD(frame)-QWORD(info.func_addr);
 
    Writeln(f,' offset $',HexStr(offset1,6),' ',info.source,':',info.func,'+$',HexStr(offset2,6));
-
   end else
   begin
    Writeln(f,' 0x',HexStr(frame),' ',info.source);
@@ -450,12 +450,6 @@ begin
   Writeln(f,BackTraceStrFunc(frame));
  end;
 
- //if GetLineInfo(ptruint(frame),func,source,line) then
- //begin
- // Writeln(f,' 0x',HexStr(frame),':',func,':',source);
- //end};
-
- //Writeln(f,BackTraceStrFunc(frame));
 end;
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);

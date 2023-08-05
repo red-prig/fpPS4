@@ -58,8 +58,11 @@ function  _fcntl(fd,cmd:Integer;arg:QWORD):Integer;
 function  select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 function  fsync(fd:Integer):Integer;
 function  setpriority(which,who,prio:Integer):Integer;
+function  socket(domain,stype,protocol:Integer):Integer;
 function  __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
 function  getpriority(which,who:Integer):Integer;
+function  __sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer;
+function  __sys_socketclose(fd:Integer):Integer;
 function  gettimeofday(tp,tzp:Pointer):Integer;
 function  getrusage(who:Integer;rusage:Pointer):Integer;
 function  _readv(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
@@ -606,6 +609,13 @@ asm
  jmp   cerror
 end;
 
+function socket(domain,stype,protocol:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $97,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer; assembler; nostackframe;
 asm
  movq  $99,%rax
@@ -616,6 +626,20 @@ end;
 function getpriority(which,who:Integer):Integer; assembler; nostackframe;
 asm
  movq  $100,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $113,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function __sys_socketclose(fd:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $114,%rax
  call  fast_syscall
  jmp   cerror
 end;

@@ -542,7 +542,7 @@ begin
  if ((attr and EVF_ATTR_SHRD)<>0) then
  begin
   Writeln(StdErr,'sys_evf_create:','process shared evf not supported');
-  Exit(EPERM);
+  //Exit(EPERM);
  end;
 
  if ((attr and 3)=0) then

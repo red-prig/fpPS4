@@ -62,8 +62,8 @@ type
  vmspace=packed record
   vm_map      :_vm_map; // VM address map
   //
-  sv_usrstack :caddr_t;	// USRSTACK
-  sv_psstrings:caddr_t;	// PS_STRINGS
+  sv_usrstack :caddr_t; // USRSTACK
+  sv_psstrings:caddr_t; // PS_STRINGS
   ps_strings  :Pointer;
   //
   vm_swrss    :segsz_t; // resident set size before last swap

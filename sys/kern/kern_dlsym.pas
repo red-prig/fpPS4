@@ -46,7 +46,9 @@ uses
  errno,
  elf_nid_utils,
  kern_stub,
- vm_patch_link;
+ vm_patch_link,
+ trap,
+ ps4libdoc;
 
 function symlook_obj(req:p_SymLook;obj:p_lib_info):Integer;
 label
@@ -357,7 +359,7 @@ type
   inst   :Word;  //FF 25
   offset :DWORD; //00
   addr   :QWORD;
-  str    :PChar;
+  nid    :QWORD;
   libname:PChar;
  end;
 
@@ -365,12 +367,21 @@ const
  c_jmpq64_trampoline:t_jmpq64_trampoline=(lea:($48,$8D,$3D,$F9,$FF,$FF,$FF);inst:$25FF;offset:0;addr:0);
 
 procedure _unresolve_symbol(data:p_jmpq64_trampoline);
+var
+ str:shortstring;
 begin
- Writeln('_unresolve_symbol:',data^.str,':',data^.libname);
+ str:=ps4libdoc.GetFunctName(data^.nid);
+ if (str='Unknow') then
+ begin
+  str:=EncodeValue64(data^.nid);
+ end;
+
+ Writeln(StdErr,'_unresolve_symbol:',str,':',data^.libname);
+ print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  readln;
 end;
 
-function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;str,libname:PChar):Pointer;
+function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;nid:QWORD;libname:PChar):Pointer;
 var
  stub:p_stub_chunk;
 begin
@@ -378,7 +389,7 @@ begin
 
  p_jmpq64_trampoline(@stub^.body)^:=c_jmpq64_trampoline;
  p_jmpq64_trampoline(@stub^.body)^.addr:=QWORD(@_unresolve_symbol);
- p_jmpq64_trampoline(@stub^.body)^.str:=str;
+ p_jmpq64_trampoline(@stub^.body)^.nid:=nid;
  p_jmpq64_trampoline(@stub^.body)^.libname:=libname;
 
  Result:=@stub^.body;
@@ -490,7 +501,7 @@ begin
     p_dec_ref(stub);
    end else
    begin
-    ptr:=get_unresolve_ptr(refobj,where,str,req.libname);
+    ptr:=get_unresolve_ptr(refobj,where,req.nid,req.libname);
    end;
 
    dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;

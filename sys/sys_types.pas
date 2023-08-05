@@ -387,7 +387,7 @@ const
  DW_EH_PE_omit   =$ff; // no data follows
 
  DW_EH_PE_absptr =$00;
- DW_EH_PE_pcrel	 =$10;
+ DW_EH_PE_pcrel  =$10;
  DW_EH_PE_datarel=$30;
 
  DW_EH_PE_uleb128=$01;

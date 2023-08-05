@@ -411,22 +411,22 @@ begin
 end;
 
 {
- Routine:	vm_object_coalesce
- Function:	Coalesces two objects backing up adjoining
- 		regions of memory into a single object.
+ Routine: vm_object_coalesce
+ Function: Coalesces two objects backing up adjoining
+   regions of memory into a single object.
 
  returns TRUE if objects were combined.
 
- NOTE:	Only works at the moment if the second object is NULL -
- 	if it's not, which object do we lock first?
+ NOTE: Only works at the moment if the second object is NULL -
+  if it's not, which object do we lock first?
 
  Parameters:
- 	prev_object	First object to coalesce
- 	prev_offset	Offset into prev_object
- 	prev_size	Size of reference to prev_object
- 	next_size	Size of reference to the second object
- 	reserved	Indicator that extension region has
- 			swap accounted for
+  prev_object First object to coalesce
+  prev_offset Offset into prev_object
+  prev_size Size of reference to prev_object
+  next_size Size of reference to the second object
+  reserved Indicator that extension region has
+    swap accounted for
 
  Conditions:
  The object must *not* be locked.

@@ -97,7 +97,8 @@ uses
  kern_regmgr,
  kern_authinfo,
  kern_dmem,
- kern_bnet;
+ kern_bnet,
+ uipc_syscalls;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
@@ -1364,7 +1365,8 @@ begin
  //NtSuspendThread(ktd^.td_handle,nil);
  //NtResumeThread(ktd^.td_handle,nil);
 
- readln;
+ sleep(-1);
+ //readln;
 
  FillChar(mseg^,64*1024,$11);
 

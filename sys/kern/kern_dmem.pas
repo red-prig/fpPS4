@@ -78,16 +78,16 @@ end;
 
 const
  blockpool_ops:fileops=(
-  fo_read    :fo_rdwr_t(@_enxio);
-  fo_write   :fo_rdwr_t(@_enxio);
+  fo_read    :fo_rdwr_t    (@_enxio);
+  fo_write   :fo_rdwr_t    (@_enxio);
   fo_truncate:fo_truncate_t(@_enxio);
   fo_ioctl   :@blockpool_ioctl;
-  fo_poll    :fo_poll_t(@_eopnotsupp);
+  fo_poll    :fo_poll_t    (@_eopnotsupp);
   fo_kqfilter:fo_kqfilter_t(@_eopnotsupp);
   fo_stat    :@blockpool_stat;
   fo_close   :@blockpool_close;
-  fo_chmod   :fo_chmod_t(@_einval);
-  fo_chown   :fo_chown_t(@_einval);
+  fo_chmod   :fo_chmod_t   (@_einval);
+  fo_chown   :fo_chown_t   (@_einval);
   fo_flags   :0;
  );
 

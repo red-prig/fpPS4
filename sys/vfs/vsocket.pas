@@ -20,18 +20,12 @@ type
  socklen_t  =DWORD;
 
 const
-{
- * Types
- }
+//socket types
  SOCK_STREAM   =1; { stream socket }
  SOCK_DGRAM    =2; { datagram socket }
  SOCK_RAW      =3; { raw-protocol interface }
- SOCK_RDM      =4; { reliably-delivered message }
- SOCK_SEQPACKET=5; { sequenced packet stream }
 
-{
- * Option flags per-socket.
- }
+//socket options
  SO_DEBUG       =$0001; { turn on debugging info recording }
  SO_ACCEPTCONN  =$0002; { socket has had listen() }
  SO_REUSEADDR   =$0004; { allow local address reuse }
@@ -49,9 +43,7 @@ const
  SO_NO_OFFLOAD  =$4000; { socket cannot be offloaded }
  SO_NO_DDP      =$8000; { disable direct data placement }
 
-{
- * Additional options, not kept in so_options.
- }
+//Additional options, not kept in so_options.
  SO_SNDBUF       =$1001; { send buffer size }
  SO_RCVBUF       =$1002; { receive buffer size }
  SO_SNDLOWAT     =$1003; { send low-water mark }
@@ -105,6 +97,13 @@ const
  AF_INET  =2;
  AF_INET6 =28;
  AF_MAX   =38;
+
+ PF_UNSPEC=AF_UNSPEC;
+ PF_LOCAL =AF_LOCAL;
+ PF_UNIX  =PF_LOCAL;
+ PF_INET  =AF_INET;
+ PF_INET6 =AF_INET6;
+ PF_MAX   =AF_MAX;
 
 type
 {
@@ -196,9 +195,9 @@ type
  }
  p_cmsghdr=^t_cmsghdr;
  t_cmsghdr=packed record
-  cmsg_len:socklen_t;  { data byte count, including hdr }
-  cmsg_level:Integer;  { originating protocol }
-  cmsg_type:Integer;   { protocol-specific type }
+  cmsg_len  :socklen_t; { data byte count, including hdr }
+  cmsg_level:Integer;   { originating protocol }
+  cmsg_type :Integer;   { protocol-specific type }
   { followed by u_char  cmsg_data[]; }
  end;
 

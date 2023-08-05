@@ -22,6 +22,8 @@ uses
 const
  FGET_GETCAP=$00000001;
 
+function  kern_close(fd:Integer):Integer;
+
 function  sys_getdtablesize():Integer;
 function  sys_dup2(from,_to:Integer):Integer;
 function  sys_dup(u_fd:Integer):Integer;

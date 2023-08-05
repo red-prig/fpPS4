@@ -41,7 +41,8 @@ uses
  vsys_generic,
  kern_authinfo,
  kern_namedobj,
- kern_resource;
+ kern_resource,
+ uipc_syscalls;
 
 function nosys:Integer;
 function nosup:Integer;
@@ -543,7 +544,7 @@ const
   ),
   (//[97]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_socket;
      sy_name:'sys_socket'
   ),
   (//[98]
@@ -623,12 +624,12 @@ const
   ),
   (//[113]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_socketex;
      sy_name:'sys_socketex'
   ),
   (//[114]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_socketclose;
      sy_name:'sys_socketclose'
   ),
   (//[115]
