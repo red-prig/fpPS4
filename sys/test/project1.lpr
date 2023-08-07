@@ -98,7 +98,8 @@ uses
  kern_authinfo,
  kern_dmem,
  kern_bnet,
- uipc_syscalls;
+ uipc_syscalls,
+ kern_ipmimgr;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);

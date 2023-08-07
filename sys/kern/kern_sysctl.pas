@@ -59,9 +59,10 @@ const
 
 
 //CTL_KERN identifiers
- KERN_PROC    =14;
- KERN_USRSTACK=33;
- KERN_ARND    =37;
+ KERN_PROC      =14;
+ KERN_USRSTACK  =33;
+ KERN_ARND      =37;
+ KERN_SDKVERSION=38; //SDK version
 
  KERN_SMP     =$100; //(OID_AUTO) Kernel SMP
  KERN_SCHED   =$101; //(OID_AUTO) Scheduler
@@ -540,6 +541,12 @@ begin
      oid[2]:=KERN_VM_PS4DEV_TRCMEM_AVAIL;
      len^  :=3;
     end;
+  'kern.sdk_version':
+    begin
+     oid[0]:=CTL_KERN;
+     oid[1]:=KERN_SDKVERSION;
+     len^  :=2;
+    end;
 
   else
    Writeln(StdErr,'Unhandled name2oid:',name);
@@ -621,18 +628,21 @@ begin
 end;
 
 function sysctl_kern(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+const
+ system_sdk_version=$10010001;
 begin
  if (namelen=0) then Exit(ENOTDIR);
  Result:=ENOENT;
 
  case name[0] of
-  KERN_PROC    :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
+  KERN_PROC      :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
 
-  KERN_USRSTACK:Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
-  KERN_ARND    :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);
+  KERN_USRSTACK  :Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
+  KERN_ARND      :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);
+  KERN_SDKVERSION:Result:=SYSCTL_HANDLE(noid,name,$80048006,system_sdk_version,@sysctl_handle_int);
 
-  KERN_SMP     :Result:=sysctl_kern_smp  (name+1,namelen-1,noid,req);
-  KERN_SCHED   :Result:=sysctl_kern_sched(name+1,namelen-1,noid,req);
+  KERN_SMP       :Result:=sysctl_kern_smp  (name+1,namelen-1,noid,req);
+  KERN_SCHED     :Result:=sysctl_kern_sched(name+1,namelen-1,noid,req);
   else
    begin
     Writeln(StdErr,'Unhandled sysctl_kern:',name[0]);

@@ -37,6 +37,7 @@ uses
  sys_machdep,
  kern_context,
  kern_descrip,
+ kern_ipmimgr,
  vfs_syscalls,
  vsys_generic,
  kern_authinfo,
@@ -3169,7 +3170,7 @@ const
   ),
   (//[622]
      sy_narg:6;
-     sy_call:nil;
+     sy_call:@sys_ipmimgr_call;
      sy_name:'sys_ipmimgr_call'
   ),
   (//[623]

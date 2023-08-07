@@ -474,12 +474,23 @@ end;
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
 
+var
+ sys_args_idx:array[0..5] of Byte=(
+  Byte(ptruint(@p_trapframe(nil)^.tf_rdi) div SizeOf(QWORD)),
+  Byte(ptruint(@p_trapframe(nil)^.tf_rsi) div SizeOf(QWORD)),
+  Byte(ptruint(@p_trapframe(nil)^.tf_rdx) div SizeOf(QWORD)),
+  Byte(ptruint(@p_trapframe(nil)^.tf_r10) div SizeOf(QWORD)),
+  Byte(ptruint(@p_trapframe(nil)^.tf_r8 ) div SizeOf(QWORD)),
+  Byte(ptruint(@p_trapframe(nil)^.tf_r9 ) div SizeOf(QWORD))
+ );
+
 procedure amd64_syscall;
 var
  td:p_kthread;
  td_frame:p_trapframe;
  scall:tsyscall;
  error:Integer;
+ i,count:Integer;
 begin
  //Call directly to the address or make an ID table?
 
@@ -498,28 +509,32 @@ begin
   begin
    Writeln('Unhandled syscall:',td_frame^.tf_rax,':',sysent_table[td_frame^.tf_rax].sy_name);
 
-   Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
-   Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
-   Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
-   Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
-   Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
-   Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+   count:=sysent_table[td_frame^.tf_rax].sy_narg;
+   Assert(count<=6);
+
+   if (count<>0) then
+   For i:=0 to count-1 do
+   begin
+    Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+   end;
 
    print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
 
-   Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
+   //Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
   end;
  end else
  if (td_frame^.tf_rax<=$1000) then
  begin
   Writeln('Unhandled syscall:',td_frame^.tf_rax);
 
-  Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
-  Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
-  Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
-  Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
-  Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
-  Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+  count:=sysent_table[td_frame^.tf_rax].sy_narg;
+  Assert(count<=6);
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+  end;
 
   print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
 
@@ -538,12 +553,16 @@ begin
   if is_guest_addr(td_frame^.tf_rip) then
   begin
    Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
-   //Writeln(' [1]:0x',HexStr(td_frame^.tf_rdi,16));
-   //Writeln(' [2]:0x',HexStr(td_frame^.tf_rsi,16));
-   //Writeln(' [3]:0x',HexStr(td_frame^.tf_rdx,16));
-   //Writeln(' [4]:0x',HexStr(td_frame^.tf_r10,16));
-   //Writeln(' [5]:0x',HexStr(td_frame^.tf_r8 ,16));
-   //Writeln(' [6]:0x',HexStr(td_frame^.tf_r9 ,16));
+
+   //count:=sysent_table[td_frame^.tf_rax].sy_narg;
+   //Assert(count<=6);
+   //
+   //if (count<>0) then
+   //For i:=0 to count-1 do
+   //begin
+   // Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+   //end;
+
   end;
 
   error:=scall(td_frame^.tf_rdi,

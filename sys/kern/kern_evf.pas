@@ -541,7 +541,7 @@ begin
 
  if ((attr and EVF_ATTR_SHRD)<>0) then
  begin
-  Writeln(StdErr,'sys_evf_create:','process shared evf not supported');
+  Writeln(StdErr,'sys_evf_create:',name,':process shared evf not supported');
   //Exit(EPERM);
  end;
 
@@ -730,9 +730,17 @@ begin
 end;
 
 function sys_evf_open(name:PChar):Integer;
+var
+ td:p_kthread;
 begin
- Writeln(StdErr,'sys_evf_open:','process shared evf not supported');
- Exit(EPERM);
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ Writeln(StdErr,'sys_evf_open:',name,':process shared evf not supported');
+ //Exit(EPERM);
+
+ td^.td_retval[0]:=333;
+ Result:=0;
 end;
 
 function sys_evf_close(key:Integer):Integer;

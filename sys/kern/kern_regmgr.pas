@@ -20,7 +20,8 @@ implementation
 uses
  errno,
  systm,
- kern_thr;
+ kern_thr,
+ trap;
 
 type
  t_encoded_id=packed record
@@ -32,6 +33,7 @@ type
 
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 label
+ _copyout_value,
  _err;
 var
  kret:DWORD;
@@ -40,6 +42,8 @@ var
   enc :t_encoded_id;
   val1:DWORD;
   val2:DWORD;
+  slen:DWORD;
+  dstr:array[0..2055] of AnsiChar;
  end;
 
 begin
@@ -52,7 +56,9 @@ begin
  end;
 
  case op of
-  $19:begin //sceRegMgrNonSysGetInt
+
+  $19: //sceRegMgrNonSysGetInt
+      begin
        Result:=copyin(pvalue,@data,16);
        if (Result<>0) then
        begin
@@ -70,10 +76,13 @@ begin
 
         else
          begin
-          Writeln(' enc:0x',HexStr(qword(data.enc),16),' val1:0x',HexStr(data.val1,8),' val12:0x',HexStr(data.val2,8));
+          Writeln(' enc:0x',HexStr(qword(data.enc),16));
+          print_backtrace(stderr,Pointer(curkthread^.td_frame.tf_rip),Pointer(curkthread^.td_frame.tf_rbp),0);
+          Assert(False);
          end;
        end;
 
+       _copyout_value:
        Result:=copyout(@data,pvalue,vlen);
        if (Result<>0) then
        begin
@@ -81,9 +90,38 @@ begin
         goto _err;
        end;
       end;
+
+  $1B: //sceRegMgrNonSysGetStr
+      begin
+       Result:=copyin(pvalue,@data,$818);
+       if (Result<>0) then
+       begin
+        kret:=$800d020f;
+        goto _err;
+       end;
+
+       case qword(data.enc) of
+        QWORD($6B976DF7F847EA43): //sceNpUtilGetEnv
+          begin
+           data.dstr:='np';
+          end;
+        else
+         begin
+          Writeln(' enc:0x',HexStr(qword(data.enc),16));
+          print_backtrace(stderr,Pointer(curkthread^.td_frame.tf_rip),Pointer(curkthread^.td_frame.tf_rbp),0);
+          Assert(False);
+         end;
+       end;
+
+       vlen:=$818;
+       goto _copyout_value;
+      end
+
+
   else
       begin
        Writeln('Unhandled regmgr op:0x',HexStr(op,4));
+       print_backtrace(stderr,Pointer(curkthread^.td_frame.tf_rip),Pointer(curkthread^.td_frame.tf_rbp),0);
        Assert(False);
       end;
  end;

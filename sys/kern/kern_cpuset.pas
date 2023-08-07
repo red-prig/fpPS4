@@ -7,7 +7,7 @@ interface
 
 type
  p_cpuset_t=^cpuset_t;
- cpuset_t  =array[0..1] of QWORD;
+ cpuset_t  =array[0..0] of QWORD;
 
 const
  CPU_LEVEL_ROOT   =1; // All system cpus.
