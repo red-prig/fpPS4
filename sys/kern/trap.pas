@@ -338,6 +338,7 @@ var
  obj:p_lib_info;
  r:TLQRec;
  adr:QWORD;
+ len:ptruint;
 begin
  Result:=False;
  dynlibs_lock;
@@ -353,7 +354,11 @@ begin
    r.Base:=fuptr(obj^.map_base);
 
    info.base_addr:=QWORD(r.Base);
-   info.source:=dynlib_basename(obj^.lib_path);
+
+   len:=0;
+   copyinstr(@obj^.name,@info.source[1],SizeOf(obj^.name),@len);
+   if (len<>0) then Dec(len);
+   SetLength(info.source,len);
 
    if (find_proc_obj(obj,r)<>0) then
    begin
@@ -520,7 +525,7 @@ begin
 
    print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
 
-   //Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
+   Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
   end;
  end else
  if (td_frame^.tf_rax<=$1000) then

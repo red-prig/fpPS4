@@ -1159,6 +1159,8 @@ var
  idx:pchar;
  chr:char;
 begin
+ if (path=nil) then Exit(nil);
+
  chr:=get_char_sep(path);
 
  idx:=strrscan(path,chr);

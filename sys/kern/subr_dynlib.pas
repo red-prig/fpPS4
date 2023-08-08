@@ -16,6 +16,15 @@ uses
  kern_sx;
 
 type
+ TLIBRARY=object
+  lib:Pointer;
+  function set_symb(nid:QWORD;info:Byte;value:Pointer):Boolean;
+  function set_proc(nid:QWORD;value:Pointer):Boolean;
+  function set_data(nid:QWORD;value:Pointer):Boolean;
+  function set_weak(nid:QWORD;value:Pointer):Boolean;
+  function get_value(nid:QWORD):Pointer;
+ end;
+
  p_rel_data=^t_rel_data;
  t_rel_data=record
   obj        :Pointer;
@@ -120,6 +129,7 @@ type
   is_system    :Byte;
   dag_inited   :Byte;
   jmpslots_done:Byte;
+  internal     :Byte;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -131,6 +141,11 @@ type
   fingerprint:array[0..19] of Byte;
 
   module_param:pSceModuleParam;
+
+  procedure init_rel_data;
+  function  add_str(str:pchar):QWORD;
+  function  add_lib(lib_name:pchar):TLIBRARY;
+  procedure add_mod(mod_name:pchar);
  end;
 
  p_Objlist_Entry=^Objlist_Entry;
@@ -220,10 +235,26 @@ type
   dyn_non_exist:Integer;
  end;
 
+const
+ IF_PRELOAD =1;
+ IF_POSTLOAD=2;
+
+type
+ t_int_load=function(name:pchar):p_lib_info;
+
+ p_int_file=^t_int_file;
+ t_int_file=record
+  link:SLIST_ENTRY;
+  name:pchar;
+  icbs:t_int_load;
+  flag:ptruint;
+ end;
+
 procedure dynlibs_lock;
 procedure dynlibs_unlock;
 
 function  obj_new():p_lib_info;
+function  obj_new_int(mod_name:pchar):p_lib_info;
 procedure obj_free(obj:p_lib_info);
 
 procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
@@ -305,11 +336,16 @@ function  free_obj_id (id:Integer):Boolean;
 function  find_obj_id (id:Integer):p_lib_info;
 
 function  find_obj_by_handle(id:Integer):p_lib_info;
+function  find_obj_by_name  (name:pchar):p_lib_info;
 
 function  dynlib_load_needed_shared_objects():Integer;
 
 var
  dynlibs_info:t_dynlibs_info;
+
+ dynlibs_intf:SLIST_HEAD=(slh_first:nil);
+
+Procedure reg_int_file(var stub:t_int_file;name:pchar;icbs:t_int_load;flag:ptruint=IF_PRELOAD);
 
 implementation
 
@@ -344,6 +380,170 @@ begin
  sx_xunlock(@dynlibs_info.lock);
 end;
 
+Procedure reg_int_file(var stub:t_int_file;name:pchar;icbs:t_int_load;flag:ptruint=IF_PRELOAD);
+begin
+ stub.name:=name;
+ stub.icbs:=icbs;
+ stub.flag:=flag;
+ //
+ SLIST_INSERT_HEAD(@dynlibs_intf,@stub,@stub.link);
+end;
+
+procedure t_lib_info.init_rel_data;
+begin
+ if (rel_data=nil) then
+ begin
+  rel_data:=AllocMem(SizeOf(t_rel_data));
+ end;
+end;
+
+function t_lib_info.add_str(str:pchar):QWORD;
+var
+ len,size:QWORD;
+begin
+ init_rel_data;
+
+ len:=strlen(str)+1;
+ size:=rel_data^.strtab_size;
+
+ rel_data^.strtab_addr:=ReAllocMem(rel_data^.strtab_addr,size+len);
+
+ Result:=size;
+
+ Move(str^,rel_data^.strtab_addr[size],len);
+
+ rel_data^.strtab_size:=size+len;
+end;
+
+function t_lib_info.add_lib(lib_name:pchar):TLIBRARY;
+label
+ rep;
+var
+ lib_entry:p_Lib_Entry;
+ v:TLibraryValue;
+begin
+ Result.lib:=nil;
+
+ v:=Default(TLibraryValue);
+
+ rep:
+ lib_entry:=TAILQ_FIRST(@lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (lib_entry^.dval.id=v.id) then
+  begin
+   Inc(v.id);
+   goto rep;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+ lib_entry:=Lib_Entry_new(QWORD(v),0);
+ lib_entry^.dval.name_offset:=add_str(lib_name);
+
+ TAILQ_INSERT_TAIL(@lib_table,lib_entry,@lib_entry^.link);
+
+ Result.lib:=lib_entry;
+end;
+
+procedure t_lib_info.add_mod(mod_name:pchar);
+label
+ rep;
+var
+ mod_entry:p_Lib_Entry;
+ v:TLibraryValue;
+begin
+ v:=Default(TLibraryValue);
+
+ rep:
+ mod_entry:=TAILQ_FIRST(@mod_table);
+ while (mod_entry<>nil) do
+ begin
+  if (mod_entry^.dval.id=v.id) then
+  begin
+   Inc(v.id);
+   goto rep;
+  end;
+  mod_entry:=TAILQ_NEXT(mod_entry,@mod_entry^.link)
+ end;
+
+ mod_entry:=Lib_Entry_new(QWORD(v),0);
+ mod_entry^.dval.name_offset:=add_str(mod_name);
+
+ TAILQ_INSERT_TAIL(@mod_table,mod_entry,@mod_entry^.link);
+end;
+
+function TLIBRARY.set_symb(nid:QWORD;info:Byte;value:Pointer):Boolean;
+var
+ lib_entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ data:PPointer;
+begin
+ lib_entry:=lib;
+ //
+ h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+ //
+ h_entry^.nid   :=nid;
+ h_entry^.mod_id:=0; //export
+ h_entry^.lib_id:=lib_entry^.dval.id;
+ //
+ h_entry^.sym.st_info :=info;
+ h_entry^.sym.st_value:=Elf64_Addr(value);
+
+ //
+ if (Lib_Entry^.hamt=nil) then
+ begin
+  Lib_Entry^.hamt:=HAMT_create64;
+  TAILQ_INIT(@Lib_Entry^.syms);
+ end;
+ //
+ data:=HAMT_insert64(Lib_Entry^.hamt,nid,h_entry);
+ if (data=nil) then Exit(False); //NOMEM
+ //
+ if (data^<>h_entry) then
+ begin
+   //is another exists
+  FreeMem(h_entry);
+  Result:=False;
+ end else
+ begin
+  //new
+  TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
+  Result:=True;
+ end;
+end;
+
+function TLIBRARY.set_proc(nid:QWORD;value:Pointer):Boolean;
+begin
+ Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_FUN,value);
+end;
+
+function TLIBRARY.set_data(nid:QWORD;value:Pointer):Boolean;
+begin
+ Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_OBJECT,value);
+end;
+
+function TLIBRARY.set_weak(nid:QWORD;value:Pointer):Boolean;
+begin
+ Result:=set_symb(nid,(STB_WEAK shl 4) or STT_FUN,value);
+end;
+
+function TLIBRARY.get_value(nid:QWORD):Pointer;
+var
+ lib_entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ data:PPointer;
+begin
+ lib_entry:=lib;
+ //
+ if (Lib_Entry^.hamt=nil) then Exit(nil);
+ data:=HAMT_search64(Lib_Entry^.hamt,nid);
+ if (data=nil) then Exit(nil);
+ h_entry:=data^;
+ if (h_entry=nil) then Exit(nil);
+ Result:=Pointer(h_entry^.sym.st_value);
+end;
+
 function obj_new():p_lib_info;
 begin
  Result:=AllocMem(SizeOf(t_lib_info));
@@ -360,6 +560,13 @@ begin
 
  //puVar1:=&(Result^.rtld_flags).field_0x1;
  //*puVar1:=*puVar1 | 2;
+end;
+
+function obj_new_int(mod_name:pchar):p_lib_info;
+begin
+ Result:=obj_new();
+ Result^.internal:=1;
+ Result^.add_mod(mod_name);
 end;
 
 function preprocess_dt_entries(new:p_lib_info;hdr_e_type:Integer):Integer;
@@ -2344,6 +2551,7 @@ begin
  init_relo_bits(new);
  init_sym_hash(new);
  dynlibs_add_obj(new);
+
  new^.loaded:=1;
  Exit(new);
 
@@ -2417,6 +2625,65 @@ begin
 
 end;
 
+const
+ internal_module_param:TsceModuleParam=(
+  Size       :SizeOf(TsceModuleParam);
+  Magic      :$23C13F4BF;
+  SDK_version:$010010001;
+ );
+
+function preload_prx_internal(name:pchar;flag:ptruint):p_lib_info;
+var
+ entry:p_int_file;
+ path:pchar;
+begin
+ Result:=nil;
+
+ entry:=SLIST_FIRST(@dynlibs_intf);
+ while (entry<>nil) do
+ begin
+  if ((entry^.flag and flag)<>0) then
+  if (entry^.icbs<>nil) then
+  if (StrComp(name,entry^.name)=0) then
+  begin
+   Result:=entry^.icbs(entry^.name);
+   if (Result<>nil) then
+   begin
+
+    //fix module_param
+    if (Result^.module_param=nil) then
+    begin
+     Result^.module_param:=@internal_module_param;
+    end;
+
+    //fix name
+    path:=dynlib_basename(Result^.lib_path);
+    if (path=nil) then
+    begin
+     path:=entry^.name;
+    end;
+
+    //reg name
+    obj_set_lib_path(Result,path);
+    object_add_name(Result,dynlib_basename(Result^.lib_path));
+
+    ///Result^.lib_dirname neded???
+
+    //reg lib
+    dynlibs_add_obj(Result);
+    //
+    Result^.internal:=1;
+    Result^.loaded:=1;
+
+    //
+    Exit;
+   end;
+  end;
+  entry:=SLIST_NEXT(entry,@entry^.link);
+ end;
+
+end;
+
 function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
  _do_load;
@@ -2439,6 +2706,13 @@ begin
   end;
   obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
+
+ //try internal preload
+ fname:=pbase;
+ fname:=ChangeFileExt(fname,'.prx');
+
+ Result:=preload_prx_internal(pchar(fname),IF_PRELOAD);
+ if (Result<>nil) then Exit;
 
  //try original
  fname:=path;
@@ -2468,6 +2742,13 @@ begin
 
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ //try internal postload
+ fname:=pbase;
+ fname:=ChangeFileExt(fname,'.prx');
+
+ Result:=preload_prx_internal(pchar(fname),IF_POSTLOAD);
+ if (Result<>nil) then Exit;
 
  Writeln(StdErr,' prx_module_not_found:',dynlib_basename(path));
 
@@ -2669,7 +2950,7 @@ begin
 
  obj^.desc.free:=nil;
  obj^.objt:=NAMED_DYNL;
- obj^.name:='';
+ obj^.name:=dynlib_basename(obj^.lib_path);
 
  key:=-1;
  if id_name_new(@named_table,obj,@key) then
@@ -2712,6 +2993,26 @@ begin
  while (obj<>nil) do
  begin
   if (obj^.id=id) then
+  begin
+   Exit(obj);
+  end;
+  //
+  obj:=TAILQ_NEXT(obj,@obj^.link);
+ end;
+end;
+
+function find_obj_by_name(name:pchar):p_lib_info;
+var
+ obj:p_lib_info;
+ str:pchar;
+begin
+ Result:=nil;
+
+ obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
+ while (obj<>nil) do
+ begin
+  str:=get_mod_name_by_id(obj,0);
+  if (StrComp(str,name)=0) then
   begin
    Exit(obj);
   end;

@@ -32,6 +32,7 @@ type
  end;
 
 function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
+function name_dlsym(name,symbol:pchar;addrp:ppointer):Integer;
 function find_symdef(symnum:QWORD;
                      refobj:p_lib_info;
                      var defobj_out:p_lib_info;
@@ -44,6 +45,7 @@ implementation
 uses
  hamt,
  errno,
+ systm,
  elf_nid_utils,
  kern_stub,
  vm_patch_link,
@@ -347,6 +349,46 @@ begin
  begin
   Result:=req.defobj_out^.relocbase + req.sym_out^.st_value;
  end;
+end;
+
+function name_dlsym(name,symbol:pchar;addrp:ppointer):Integer;
+label
+ _exit;
+var
+ obj:p_lib_info;
+ flags:Integer;
+ ptr:Pointer;
+
+ fname:array[0..31] of char;
+ fsymb:array[0..2560-1] of char;
+begin
+ Result:=copyinstr(name,@fname,sizeof(fname),nil);
+ if (Result<>0) then Exit;
+
+ Result:=copyinstr(symbol,@fsymb,sizeof(fsymb),nil);
+ if (Result<>0) then Exit;
+
+ dynlibs_lock;
+
+ obj:=find_obj_by_name(@fname);
+ if (obj=nil) then
+ begin
+  Result:=ESRCH;
+  goto _exit;
+ end;
+
+ ptr:=do_dlsym(obj,@fsymb,nil,0);
+
+ if (ptr=nil) then
+ begin
+  Result:=ESRCH;
+  goto _exit;
+ end;
+
+ Result:=copyout(@ptr,addrp,SizeOf(Pointer));
+
+ _exit:
+  dynlibs_unlock;
 end;
 
 //48 8D 3D 00 00 00 00 lea rdi,[rip+$00000000]   lea (%rip),%rdi

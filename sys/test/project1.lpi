@@ -665,6 +665,11 @@
         <Filename Value="..\kern\kern_ipmimgr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="ps4_libsceipmi.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceIpmi"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

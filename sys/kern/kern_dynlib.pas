@@ -114,7 +114,6 @@ var
  flags:Integer;
  ptr:Pointer;
 
- len:ptruint;
  fsym:array[0..2560-1] of char;
 begin
  if not_dynamic then
@@ -123,8 +122,7 @@ begin
   Exit(EPERM);
  end;
 
- len:=0;
- Result:=copyinstr(symbol,@fsym,sizeof(fsym),@len);
+ Result:=copyinstr(symbol,@fsym,sizeof(fsym),nil);
  if (Result<>0) then Exit;
 
  dynlibs_lock;

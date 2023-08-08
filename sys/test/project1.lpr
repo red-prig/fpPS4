@@ -99,7 +99,10 @@ uses
  kern_dmem,
  kern_bnet,
  uipc_syscalls,
- kern_ipmimgr;
+ kern_ipmimgr{,
+ ps4_libSceSystemService,
+ ps4_libSceIpmi,
+ ps4_libSceDialogs};
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
