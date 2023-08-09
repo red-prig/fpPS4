@@ -22,6 +22,23 @@ uses
 
 var
  gc_mmap_ptr:Pointer=nil;
+ gc_AreSubmitsAllowed:Integer=0; //0=true,1=false (0xfe0100000)
+
+type
+ p_SetGsRingSizes=^t_SetGsRingSizes;
+ t_SetGsRingSizes=packed record
+  psize_1:DWORD;
+  psize_2:DWORD;
+  p__zero:DWORD;
+ end;
+
+ p_SetMipStatsReport=^t_SetMipStatsReport;
+ t_SetMipStatsReport=packed record
+  p_type:DWORD;
+  param1:DWORD;
+  param2:DWORD;
+  param3:DWORD;
+ end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
@@ -30,10 +47,41 @@ begin
  Writeln('gc_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
-  0:;
+  $C004811F: //sceGnmGetNumTcaUnits
+            begin
+             Exit(19);
+            end;
+
+  $C00C8110: //sceGnmSetGsRingSizes
+            begin
+             Writeln('SetGsRingSizes(0x',HexStr(p_SetGsRingSizes(data)^.psize_1,8),',0x'
+                                        ,HexStr(p_SetGsRingSizes(data)^.psize_2,8),')');
+            end;
+
+  $C0848119: //*MipStatsReport
+            begin
+             case PInteger(data)^ of
+              $10001:
+                     begin
+                      Writeln('MipStatsReport(0x',HexStr(p_SetMipStatsReport(data)^.param1,8),',0x'
+                                                 ,HexStr(p_SetMipStatsReport(data)^.param2,8),',0x'
+                                                 ,HexStr(p_SetMipStatsReport(data)^.param3,8),')');
+                     end;
+
+              $18001:; //diag?
+
+              else
+               Exit(EINVAL);
+             end;
+            end;
+  $C008811B: //sceGnmAreSubmitsAllowed
+            begin
+             PPointer(data)^:=@gc_AreSubmitsAllowed;
+            end;
+
   else
    begin
-    print_backtrace(stderr,Pointer(curkthread^.td_frame.tf_rip),Pointer(curkthread^.td_frame.tf_rbp),0);
+    print_backtrace_c(stderr);
     Assert(False);
     Result:=EINVAL;
    end;

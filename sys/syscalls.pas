@@ -220,6 +220,7 @@ function  __sys_dynlib_unload_prx(handle:Integer;args:QWORD;argp:Pointer):Intege
 function  dynlib_do_copy_relocations():Integer;
 function  dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 function  dynlib_process_needed_and_relocate():Integer;
+function  mdbg_service(op:Integer;arg1,arg2:Pointer):Integer;
 function  __sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
 function  __sys_dl_get_metadata(pid,handle:Integer;pout:Pointer;size:Integer;pactual_size:PInteger):Integer;
 function  __sys_workaround8849(key:DWORD):Integer;
@@ -1740,6 +1741,13 @@ end;
 function dynlib_process_needed_and_relocate():Integer; assembler; nostackframe;
 asm
  movq  $599,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function mdbg_service(op:Integer;arg1,arg2:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $601,%rax
  call  fast_syscall
  jmp   cerror
 end;

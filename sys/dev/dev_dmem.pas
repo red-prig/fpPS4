@@ -18,7 +18,8 @@ uses
  subr_uio,
  vm,
  dmem_map,
- kern_dmem;
+ kern_dmem,
+ trap;
 
 type
  PAvailableDirectMemorySize=^TAvailableDirectMemorySize;
@@ -48,7 +49,10 @@ begin
              end;
             end;
   else
-   Assert(False);
+   begin
+    print_backtrace_c(stderr);
+    Assert(False);
+   end;
  end;
 
 end;
@@ -58,6 +62,8 @@ begin
  Result:=0;
 
  Writeln('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
+
+ print_backtrace_c(stderr);
  Assert(False);
 end;
 

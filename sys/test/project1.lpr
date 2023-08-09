@@ -100,6 +100,7 @@ uses
  kern_bnet,
  uipc_syscalls,
  kern_ipmimgr,
+ kern_mdbg,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs;

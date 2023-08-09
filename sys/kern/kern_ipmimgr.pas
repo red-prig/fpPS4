@@ -256,7 +256,7 @@ begin
     begin
      Result:=0;
      dst:=-1;
-     print_backtrace(stderr,Pointer(curkthread^.td_frame.tf_rip),Pointer(curkthread^.td_frame.tf_rbp),0);
+     print_backtrace_c(stderr);
      Assert(False);
     end;
  end;

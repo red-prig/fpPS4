@@ -17,6 +17,7 @@ uses
  kern_dmem,
  kern_exec,
  kern_exit,
+ kern_mdbg,
  kern_osem,
  kern_prot,
  kern_time,
@@ -3065,7 +3066,7 @@ const
   ),
   (//[601]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_mdbg_service;
      sy_name:'sys_mdbg_service'
   ),
   (//[602]

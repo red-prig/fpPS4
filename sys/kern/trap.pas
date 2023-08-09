@@ -110,6 +110,7 @@ procedure sig_sti;
 procedure sig_cli;
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
+procedure print_backtrace_c(var f:text);
 
 procedure fast_syscall;
 procedure sigcode;
@@ -474,6 +475,16 @@ begin
  begin
   print_frame(f,frames[i]);
  end;
+end;
+
+procedure print_backtrace_c(var f:text);
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit;
+ //
+ print_backtrace(stderr,Pointer(td^.td_frame.tf_rip),Pointer(td^.td_frame.tf_rbp),0);
 end;
 
 type
