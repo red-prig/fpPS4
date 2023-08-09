@@ -123,13 +123,7 @@ begin
   *
   * XXX assumes VM_PROT_*=PROT_*
   }
- if (dsw^.d_mmap_single=nil) then
- begin
-  error:=ENODEV;
- end else
- begin
-  error:=dsw^.d_mmap_single(cdev, foff, objsize, objp, prot);
- end;
+ error:=dsw^.d_mmap_single(cdev, foff, objsize, objp, prot);
 
  dev_relthread(cdev, ref);
 

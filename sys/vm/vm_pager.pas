@@ -20,7 +20,8 @@ procedure vm_pager_deallocate(obj:vm_object_t);
 implementation
 
 uses
- vmparam;
+ vmparam,
+ device_pager;
 
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
@@ -37,7 +38,7 @@ begin
   OBJT_DEFAULT  :Result:=vm_object_allocate(otype,OFF_TO_IDX(size));
   //OBJT_SWAP     :;
   //OBJT_VNODE    :;
-  //OBJT_DEVICE   :;
+  OBJT_DEVICE   :Result:=dev_pager_alloc(handle,size,prot,off);
   //OBJT_PHYS     :;
   //OBJT_DEAD     :;
   //OBJT_SG       :;
@@ -51,20 +52,26 @@ begin
  end;
 end;
 
+procedure default_dealloc(obj:vm_object_t); inline;
+begin
+ obj^.handle:=nil;
+ obj^.otype:=OBJT_DEAD;
+end;
+
 procedure vm_pager_deallocate(obj:vm_object_t);
 begin
  if (obj=nil) then Exit;
 
  case obj^.otype of
-  OBJT_DEFAULT  :;
+  OBJT_DEFAULT  :default_dealloc(obj);
   OBJT_SWAP     :;
   OBJT_VNODE    :;
-  OBJT_DEVICE   :;
+  OBJT_DEVICE   :dev_pager_dealloc(obj);
   OBJT_PHYS     :;
   OBJT_DEAD     :;
   OBJT_SG       :;
   OBJT_JITSHM   :;
-  OBJT_SELF     :;
+  OBJT_SELF     :default_dealloc(obj);
   OBJT_TRCMEM   :;
   OBJT_PHYSHM   :;
   OBJT_BLOCKPOOL:;

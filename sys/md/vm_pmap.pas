@@ -28,7 +28,7 @@ function  btoc(x:QWORD):QWORD; inline;
 
 procedure pmap_pinit(maps:p_pmap);
 
-procedure pmap_align_superpage(_object:vm_object_t;
+procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
                                addr  :p_vm_offset_t;
                                size  :vm_size_t);
@@ -122,7 +122,7 @@ end;
 * Increase the starting virtual address of the given mapping if a
 * different alignment might result in more superpage mappings.
 }
-procedure pmap_align_superpage(_object:vm_object_t;
+procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
                                addr  :p_vm_offset_t;
                                size  :vm_size_t);
@@ -130,11 +130,11 @@ var
  superpage_offset:vm_offset_t;
 begin
  if (size < NBPDR) then Exit;
- //if (_object<>nil) then
- //if ((_object^.flags and OBJ_COLORED)<>0) then
- //begin
- // offset:=offset+ptoa(_object^.pg_color);
- //end;
+ if (obj<>nil) then
+ if ((obj^.flags and OBJ_COLORED)<>0) then
+ begin
+  offset:=offset+ptoa(obj^.pg_color);
+ end;
  superpage_offset:=offset and PDRMASK;
  if (size - ((NBPDR - superpage_offset) and PDRMASK) < NBPDR) or
     ((addr^ and PDRMASK)=superpage_offset) then

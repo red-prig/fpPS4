@@ -40,6 +40,7 @@ type
   generation        :Integer;                 // generation ID
   ref_count         :Integer;                 // How many refs??
   otype             :objtype_t;               // type of pager
+  pg_color          :Word;
   flags             :Word;                    // see below
   handle            :Pointer;
   paging_in_progress:Integer;

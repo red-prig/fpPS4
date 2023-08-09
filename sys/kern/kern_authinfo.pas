@@ -116,6 +116,11 @@ var
  g_authinfo:t_authinfo;
  g_appinfo :t_appinfo;
 
+function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
+function sceSblACMgrIsVideoplayerProcess(info:p_authinfo):Boolean;
+function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
+function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
+
 function sys_get_proc_type_info(dst:Pointer):Integer;
 function sys_get_authinfo(pid:Integer;info:Pointer):Integer;
 
@@ -126,6 +131,18 @@ uses
  systm,
  md_proc,
  kern_rtld;
+
+function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
+var
+ app_type:QWORD;
+begin
+ app_type:=info^.app_type;
+ if ((app_type<>QWORD($3800000000000009)) and (app_type<>QWORD($380100000000002c))) then
+ begin
+  Exit(false);
+ end;
+ Exit(true);
+end;
 
 function sceSblACMgrIsVideoplayerProcess(info:p_authinfo):Boolean;
 begin
