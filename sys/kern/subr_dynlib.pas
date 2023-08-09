@@ -357,6 +357,7 @@ uses
  vm_map,
  vm_mmap,
  vm_object,
+ vm_pager,
  vuio,
  vstat,
  vfcntl,
@@ -2045,7 +2046,11 @@ begin
  new^.tls_init_addr    :=new^.tls_init_addr    +delta;
  new^.eh_frame_hdr_addr:=new^.eh_frame_hdr_addr+delta;
 
- imgp^.obj:=vm_object_allocate(OBJT_SELF,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
+ imgp^.obj:=vm_pager_allocate(OBJT_SELF,
+                              imgp^.vp,
+                              imgp^.max_addr-imgp^.min_addr,
+                              1,
+                              0);
 
  error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta);
  if (error<>0) then
@@ -2674,6 +2679,8 @@ begin
     //
     Result^.internal:=1;
     Result^.loaded:=1;
+
+    Writeln(' preload_prx_internal:',path);
 
     //
     Exit;

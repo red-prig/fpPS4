@@ -117,6 +117,7 @@ uses
  vmparam,
  vnode,
  vfs_subr,
+ vm_pager,
  vm_patch_link;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
@@ -193,9 +194,6 @@ end;
 
 procedure vm_object_destroy(obj:vm_object_t);
 begin
- Case obj^.otype of
-  OBJT_DEFAULT:;
- end;
  mtx_destroy(obj^.mtx);
  FreeMem(obj);
 end;
@@ -255,6 +253,7 @@ begin
 
  Assert(obj^.ref_count=0,'vm_object_terminate: obj with references');
 
+ vm_pager_deallocate(obj);
  VM_OBJECT_UNLOCK(obj);
 
  vm_object_destroy(obj);

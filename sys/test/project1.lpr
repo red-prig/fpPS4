@@ -99,10 +99,10 @@ uses
  kern_dmem,
  kern_bnet,
  uipc_syscalls,
- kern_ipmimgr{,
+ kern_ipmimgr,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
- ps4_libSceDialogs};
+ ps4_libSceDialogs;
 
 const
  PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
@@ -366,6 +366,8 @@ begin
  //readln;
 
  argv0:='/app0/basic-sample_debug.elf';
+ argv0:='/app0/simple.elf';
+ //argv0:='/app0/videoout_basic.elf';
 
  err:=_execve(argv0,@argv0,nil);
 end;

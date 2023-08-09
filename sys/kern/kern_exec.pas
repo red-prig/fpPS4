@@ -38,8 +38,9 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- vnamei,
  vm_object,
+ vm_pager,
+ vnamei,
  vfs_lookup,
  vmount,
  vfile,
@@ -1096,7 +1097,11 @@ begin
 
  if (Result<>0) then Exit;
 
- imgp^.obj:=vm_object_allocate(OBJT_DEFAULT,OFF_TO_IDX(imgp^.max_addr-imgp^.min_addr));
+ imgp^.obj:=vm_pager_allocate(OBJT_SELF,
+                              imgp^.vp,
+                              imgp^.max_addr-imgp^.min_addr,
+                              1,
+                              0);
 
  Result:=scan_load_sections(imgp,phdr,hdr^.e_phnum);
  if (Result<>0) then
@@ -1432,6 +1437,15 @@ begin
 
  //copy authinfo
  g_authinfo:=imgp^.authinfo;
+
+ //copy appinfo
+ g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 1; //is_big_app ???
+ if (p_proc.p_sce_replay_exec<>0) then
+ begin
+  g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 2; //is_system ???
+ end;
+
+ //TODO load CUSANAME
 
  //init std tty
  init_tty;

@@ -533,7 +533,8 @@ begin
    def   :=@dynlibs_info.sym_zero;
    defobj:=dynlibs_info.libprogram;
   end else
-  if (where<>nil) then
+  if (where<>nil) and
+     (ELF64_ST_TYPE(ref^.st_info)<>STT_OBJECT) then
   begin
    stub:=vm_get_patch_link(refobj^.rel_data^.obj,where);
 

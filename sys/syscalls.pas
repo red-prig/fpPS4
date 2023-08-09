@@ -229,7 +229,7 @@ function  budget_get_ptype(pid:Integer):Integer;
 function  __sys_get_proc_type_info(dst:Pointer):Integer;
 function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
-function  ipmimgr_call(op,arg:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer;
+function  ipmimgr_call(op,kid:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
 function  thr_suspend_ucontext(tid:Integer):Integer;
 function  thr_resume_ucontext(tid:Integer):Integer;
@@ -1807,7 +1807,7 @@ asm
  jmp   cerror
 end;
 
-function ipmimgr_call(op,arg:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer; assembler; nostackframe;
+function ipmimgr_call(op,kid:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer; assembler; nostackframe;
 asm
  movq  $622,%rax
  call  fast_syscall

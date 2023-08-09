@@ -161,6 +161,7 @@ uses
  kern_thr,
  kern_sx,
  time,
+ kern_authinfo,
  md_arc4random,
  md_proc;
 
@@ -349,65 +350,11 @@ begin
  Result:=SYSCTL_OUT(req,@data,len);
 end;
 
-const
- //eLoadOptions
- LOAD_OPTIONS_DEFAULT                         =$0000;
- LOAD_OPTIONS_LOAD_SUSPENDED                  =$0001;
- LOAD_OPTIONS_USE_SYSTEM_LIBRARY_VERIFICATION =$0002;
- LOAD_OPTIONS_SLV_MODE_WARN                   =$0004;
- LOAD_OPTIONS_ARG_STACK_SIZE                  =$0008;
- LOAD_OPTIONS_FULL_DEBUG_REQUIRED             =$0010;
-
- //mmap_flags
- //bit 1 -> is_big_app
- //bit 2 -> first find addr is (1 shl 33) ->
- //          _sceKernelMapFlexibleMemory
- //          _sceKernelMapDirectMemory
- //          sceKernelMapDirectMemory2
-
- //excp_flags
- //bit 1 -> use in [libkernel_exception] ->
- //      -> sceKernelInstallExceptionHandler
- //      -> sceKernelRemoveExceptionHandler
- //      -> sceKernelAddGpuExceptionEvent
- //      -> sceKernelDeleteGpuExceptionEvent
- //      -> sceKernelBacktraceSelf
- //bit 2 -> sys_mdbg_service
-
-type
- TCUSANAME=array[0..9] of AnsiChar;
-
- PSCE_APP_ENV=^TSCE_APP_ENV;
- TSCE_APP_ENV=packed record
-  AppId      :Integer;       //4
-  mmap_flags :Integer;       //4
-  excp_flags :Integer;       //4
-  AppType    :Integer;       //4    5?
-  CUSANAME   :TCUSANAME;     //10
-  debug_level:Byte;          //1
-  slv_flags  :Byte;          //1  eLoadOptions
-  f_1c       :Byte;
-  f_1d       :Byte;
-  f_1e       :Byte;
-  f_1f       :Byte;
-  f_20       :QWORD;
-  f_28       :Integer;
-  f_2c       :Integer;
-  f_30       :Integer;
-  f_34       :Integer;
-  f_38       :QWORD;
-  f_40       :QWORD;
- end;
- {$IF sizeof(TSCE_APP_ENV)<>72}{$STOP sizeof(TSCE_APP_ENV)<>72}{$ENDIF}
-
-var
- G_APPINFO:TSCE_APP_ENV;
-
 function sysctl_kern_proc_appinfo(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 var
  pid:Integer;
-
- APPINFO:TSCE_APP_ENV;
+ flags:Integer;
+ appinfo:t_appinfo;
 begin
  if (req^.oldlen > 72) then Exit(EINVAL);
 
@@ -415,27 +362,19 @@ begin
 
  if (pid<>g_pid) then Exit(EINVAL);
 
- //G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 1;
- if (p_proc.p_sce_replay_exec<>0) then
- begin
-  G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 2;
- end;
-
  //sceSblACMgrIsSystemUcred()!=0 -> any proc
  //sceSblACMgrIsSystemUcred()==0 -> cur proc
 
- Result:=SYSCTL_OUT(req,@G_APPINFO,SizeOf(TSCE_APP_ENV));
+ Result:=SYSCTL_OUT(req,@g_appinfo,SizeOf(t_appinfo));
 
- if (Result=0) and (req^.newlen=SizeOf(TSCE_APP_ENV)) then
+ if (Result=0) and (req^.newlen=SizeOf(t_appinfo)) then
  begin
-  Result:=SYSCTL_IN(req,@APPINFO,SizeOf(TSCE_APP_ENV));
+  Result:=SYSCTL_IN(req,@appinfo,SizeOf(t_appinfo));
   if (Result=0) then
   begin
-   G_APPINFO:=APPINFO;
-   if (p_proc.p_sce_replay_exec<>0) then
-   begin
-    G_APPINFO.mmap_flags:=G_APPINFO.mmap_flags or 2;
-   end;
+   flags:=g_appinfo.mmap_flags;
+   g_appinfo:=appinfo;
+   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or (flags and 2)
   end;
  end;
 

@@ -670,6 +670,14 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceIpmi"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\dev\dev_gc.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vm\vm_pager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -13,16 +13,12 @@ function sys_budget_get_ptype(pid:Integer):Integer;
 function sys_budget_get_ptype_of_budget(key:Integer):Integer;
 function sys_budget_getid():Integer;
 
-function sys_get_proc_type_info(dst:Pointer):Integer;
-
 implementation
 
 uses
  errno,
- systm,
  kern_thr,
- md_proc,
- kern_rtld;
+ md_proc;
 
 function sys_budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer;
 begin
@@ -74,41 +70,6 @@ end;
 function sys_budget_getid():Integer;
 begin
  Exit(ENOSYS); //sceSblACMgrIsSystemUcred
-end;
-
-type
- p_proc_type_info=^t_proc_type_info;
- t_proc_type_info=packed record
-  size  :QWORD;
-  bptype:DWORD;
-  pflags:DWORD;
- end;
- {$IF sizeof(t_proc_type_info)<>16}{$STOP sizeof(t_proc_type_info)<>16}{$ENDIF}
-
-function sys_get_proc_type_info(dst:Pointer):Integer;
-var
- info:t_proc_type_info;
-begin
- info:=Default(t_proc_type_info);
-
- Result:=copyin(dst,@info.size,SizeOf(QWORD));
- if (Result<>0) then Exit;
-
- if (Result<>SizeOf(t_proc_type_info)) then Exit(EINVAL);
-
- info.bptype:=budget_ptype_caller;
- info.pflags:=0;
-
- //sceSblACMgrIsJitCompilerProcess()         -> | 0x01
- //sceSblACMgrIsJitApplicationProcess()      -> | 0x02
- //sceSblACMgrIsVideoplayerProcess()         -> | 0x04
- //sceSblACMgrIsDiskplayeruiProcess()        -> | 0x08
- //sceSblACMgrHasUseVideoServiceCapability() -> | 0x10
- //sceSblACMgrIsWebcoreProcess()             -> | 0x20
- //is_libkernel_sys()                        -> | 0x40
- //sceSblACMgrHasSceProgramAttribute()       -> | 0x80
-
- Result:=copyout(@info,dst,SizeOf(t_proc_type_info));
 end;
 
 

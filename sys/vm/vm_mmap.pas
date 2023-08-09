@@ -63,7 +63,92 @@ uses
  vfcntl,
  vnode,
  vfs_subr,
- vnode_if;
+ vnode_if,
+ kern_conf,
+ vm_pager;
+
+function vm_mmap_cdev(objsize     :vm_size_t;
+                      prot        :vm_prot_t;
+                      maxprotp    :p_vm_prot_t;
+                      flagsp      :PInteger;
+                      cdev        :p_cdev;
+                      foff        :p_vm_ooffset_t;
+                      objp        :p_vm_object_t):Integer;
+var
+ obj:vm_object_t;
+ dsw:p_cdevsw;
+ error,flags,ref:Integer;
+begin
+ flags:=flagsp^;
+
+ dsw:=dev_refthread(cdev, @ref);
+ if (dsw=nil) then
+ begin
+  Exit(ENXIO);
+ end;
+
+ if ((dsw^.d_flags and D_MMAP_ANON)<>0) then
+ begin
+  dev_relthread(cdev, ref);
+  maxprotp^:=VM_PROT_ALL;
+  flagsp^:=flagsp^ or MAP_ANON;
+  Exit(0);
+ end;
+ {
+  * cdevs do not provide private mappings of any kind.
+  }
+ if ((maxprotp^ and VM_PROT_WRITE)=0) and
+    ((prot and VM_PROT_WRITE)<>0) then
+ begin
+  dev_relthread(cdev, ref);
+  Exit(EACCES);
+ end;
+
+ if ((flags and (MAP_PRIVATE{ or MAP_COPY}))<>0) then
+ begin
+  dev_relthread(cdev, ref);
+  Exit(EINVAL);
+ end;
+ {
+  * Force device mappings to be shared.
+  }
+ flags:=flags or MAP_SHARED;
+
+ {
+ * First, try d_mmap_single().  If that is not implemented
+ * (returns ENODEV), fall back to using the device pager.
+ * Note that d_mmap_single() must return a reference to the
+ * object (it needs to bump the reference count of the object
+ * it returns somehow).
+  *
+  * XXX assumes VM_PROT_*=PROT_*
+  }
+ if (dsw^.d_mmap_single=nil) then
+ begin
+  error:=ENODEV;
+ end else
+ begin
+  error:=dsw^.d_mmap_single(cdev, foff, objsize, objp, prot);
+ end;
+
+ dev_relthread(cdev, ref);
+
+ if (error<>ENODEV) then
+ begin
+  Exit(error);
+ end;
+
+ obj:=vm_pager_allocate(OBJT_DEVICE, cdev, objsize, prot, foff^);
+
+ if (obj=nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ objp^:=obj;
+ flagsp^:=flags;
+ Exit(0);
+end;
 
 function vm_mmap_vnode(objsize     :vm_size_t;
                        prot        :vm_prot_t;
@@ -74,6 +159,7 @@ function vm_mmap_vnode(objsize     :vm_size_t;
                        objp        :p_vm_object_t;
                        writecounted:PBoolean):Integer;
 label
+ mark_atime,
  done;
 var
  va:t_vattr;
@@ -100,44 +186,58 @@ begin
  flags:=flagsp^;
  obj:=nil;
  obj:=vp^.v_object;
- if (vp^.v_type=VREG) then
- begin
-  {
-   * Get the proper underlying object
-   }
-  if (obj=nil) then
-  begin
-   error:=EINVAL;
-   goto done;
-  end;
-  if (obj^.handle<>vp) then
-  begin
-   vput(vp);
-   vp:=obj^.handle;
-   {
-    * Bypass filesystems obey the mpsafety of the
-    * underlying fs.
-    }
-   error:=vget(vp, locktype);
-   if (error<>0) then
-   begin
-    VFS_UNLOCK_GIANT(vfslocked);
-    Exit(error);
-   end;
-  end;
-  if (locktype=LK_EXCLUSIVE) then
-  begin
-   writecounted^:=TRUE;
-   //vnode_pager_update_writecount(obj, 0, objsize);
-  end;
- end else
- begin
-  error:=EINVAL;
-  goto done;
+
+ case vp^.v_type of
+  VREG:
+       begin
+        {
+         * Get the proper underlying object
+         }
+        if (obj=nil) then
+        begin
+         error:=EINVAL;
+         goto done;
+        end;
+        if (obj^.handle<>vp) then
+        begin
+         vput(vp);
+         vp:=obj^.handle;
+         {
+          * Bypass filesystems obey the mpsafety of the
+          * underlying fs.
+          }
+         error:=vget(vp, locktype);
+         if (error<>0) then
+         begin
+          VFS_UNLOCK_GIANT(vfslocked);
+          Exit(error);
+         end;
+        end;
+        if (locktype=LK_EXCLUSIVE) then
+        begin
+         writecounted^:=TRUE;
+         //vnode_pager_update_writecount(obj, 0, objsize);
+        end;
+       end;
+  VCHR:
+       begin
+        error:=vm_mmap_cdev(objsize, prot, maxprotp, flagsp, vp^.v_rdev, foffp, objp);
+        if (error=0) then goto mark_atime;
+        goto done;
+       end
+
+  else
+       begin
+        error:=EINVAL;
+        goto done;
+       end;
  end;
+
  error:=VOP_GETATTR(vp, @va);
  if (error<>0) then
+ begin
   goto done;
+ end;
 
  if ((flags and MAP_SHARED)<>0) then
  begin
@@ -161,7 +261,7 @@ begin
  begin
   flags:=flags or MAP_NOSYNC;
  end;
- //obj:=vm_pager_allocate(OBJT_VNODE, vp, objsize, prot, foff, cred);
+ obj:=vm_pager_allocate(OBJT_VNODE, vp, objsize, prot, foff);
  if (obj=nil) then
  begin
   error:=ENOMEM;
@@ -170,6 +270,7 @@ begin
  objp^:=obj;
  flagsp^:=flags;
 
+mark_atime:
  vfs_mark_atime(vp);
 
 done:
@@ -181,6 +282,29 @@ done:
  vput(vp);
  VFS_UNLOCK_GIANT(vfslocked);
  Result:=(error);
+end;
+
+function vm_mmap_shm(objsize     :vm_size_t;
+                     prot        :vm_prot_t;
+                     maxprotp    :p_vm_prot_t;
+                     flagsp      :PInteger;
+                     shmfd       :Pointer; //shmfd
+                     foff        :p_vm_ooffset_t;
+                     objp        :p_vm_object_t):Integer;
+var
+ error:Integer;
+begin
+ if ((flagsp^ and MAP_SHARED)<>0) and
+    ((maxprotp^ and VM_PROT_WRITE)=0) and
+    ((prot and VM_PROT_WRITE)<>0) then
+ begin
+  Exit(EACCES);
+ end;
+
+ //error:=shm_mmap(shmfd, objsize, foff, objp);
+ error:=EOPNOTSUPP;
+
+ Exit(error);
 end;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
@@ -224,7 +348,7 @@ begin
 
  size:=round_page(size);
 
- if (g_vmspace.vm_map.size + size) > lim_cur(RLIMIT_VMEM) then
+ if (map^.size + size) > lim_cur(RLIMIT_VMEM) then
  begin
   Exit(ENOMEM);
  end;
@@ -246,9 +370,17 @@ begin
  writecounted:=False;
 
  Case handle_type of
+  OBJT_DEVICE:
+   begin
+    error:=vm_mmap_cdev(size,prot,@maxprot,@flags,handle,@foff,@vm_obj);
+   end;
   OBJT_VNODE:
    begin
-    error:=vm_mmap_vnode(size,prot,@maxprot,@flags, handle,@foff,@vm_obj,@writecounted);
+    error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@vm_obj,@writecounted);
+   end;
+  OBJT_SWAP:
+   begin
+    error:=vm_mmap_shm(size,prot,@maxprot,@flags,handle,@foff,@vm_obj);
    end;
   OBJT_DEFAULT:
    begin
@@ -260,11 +392,11 @@ begin
      error:=EINVAL;
     end;
    end;
-   else
-    error:=EINVAL;
-  end;
+  else
+   error:=EINVAL;
+ end;
 
-  if (error<>0) then Exit(error);
+ if (error<>0) then Exit(error);
 
  if ((flags and MAP_ANON)<>0) then
  begin
@@ -478,10 +610,11 @@ begin
 
    Result:=fget_mmap(_fd,rights,@cap_maxprot,@fp);
    if (Result<>0) then goto _done;
+
    if (fp^.f_type=DTYPE_SHM) then
    begin
     handle:=fp^.f_data;
-    //handle_type:=OBJT_SWAP;
+    handle_type:=OBJT_SWAP;
     maxprot:=VM_PROT_NONE;
 
     // FREAD should always be set.
@@ -601,10 +734,8 @@ begin
   Exit(EINVAL);
  end;
 
- vm_map_lock(@g_vmspace.vm_map);
-
+ vm_map_lock  (@g_vmspace.vm_map);
  vm_map_delete(@g_vmspace.vm_map, qword(addr), qword(addr) + size);
-
  vm_map_unlock(@g_vmspace.vm_map);
 
  // vm_map_delete returns nothing but KERN_SUCCESS anyway

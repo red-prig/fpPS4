@@ -15,8 +15,6 @@ const
  m_first_chunk=2;
  m_last__chunk=4;
 
- segment_size  =64*1024;
-
 type
  p_stub_chunk=^stub_chunk;
  stub_chunk=packed record
@@ -40,6 +38,7 @@ uses
  hamt,
  kern_rwlock,
  vm,
+ vmparam,
  vm_map,
  vm_mmap,
  vm_object;
@@ -50,32 +49,51 @@ var
 
  chunk_lock :Pointer=nil;
 
-function alloc_segment(start:Pointer):p_stub_chunk;
+function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+var
+ tmp:PtrUInt;
+begin
+ if (alignment=0) then Exit(addr);
+ tmp:=addr+PtrUInt(alignment-1);
+ Result:=tmp-(tmp mod alignment)
+end;
+
+function alloc_segment(start,size:QWORD):p_stub_chunk;
 var
  map:vm_map_t;
  err:Integer;
 begin
  Result:=nil;
+
+ size:=AlignUp(size+SizeOf(stub_chunk),PAGE_SIZE);
+
  map:=@g_vmspace.vm_map;
+
+ if (start=0) then
+ begin
+  start:=SCE_REPLAY_EXEC_START;
+ end;
 
  err:=vm_mmap2(map,
                @start,
-               segment_size,
+               size,
                VM_PROT_RWX,
                VM_PROT_RWX,
-               MAP_ANON or MAP_PRIVATE or (16 shl MAP_ALIGNMENT_BIT),
+               MAP_ANON or MAP_PRIVATE,
                OBJT_DEFAULT,
                nil,
                0);
 
  if (err<>0) then Exit;
 
- Result:=start;
+ vm_map_set_name(map,start,size,'#patch');
+
+ Result:=Pointer(start);
 
  Result^.head         :=m_header;
  Result^.flags        :=m_free__chunk or m_first_chunk or m_last__chunk;
  Result^.prev_size    :=0;
- Result^.curr_size    :=segment_size;
+ Result^.curr_size    :=size;
  Result^.refs         :=0;
  Result^.link.tqe_next:=nil;
  Result^.link.tqe_prev:=nil;
@@ -88,25 +106,15 @@ begin
  map:=@g_vmspace.vm_map;
 
  vm_map_lock  (map);
- vm_map_delete(map, qword(chunk), qword(chunk) + segment_size);
+ vm_map_delete(map, qword(chunk), qword(chunk) + chunk^.curr_size);
  vm_map_unlock(map);
-end;
-
-function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
-var
- tmp:PtrUInt;
-begin
- if (alignment=0) then Exit(addr);
- tmp:=addr+PtrUInt(alignment-1);
- Result:=tmp-(tmp mod alignment)
 end;
 
 procedure fix_next_size(chunk:p_stub_chunk);
 var
  next:p_stub_chunk;
 begin
- if (chunk^.curr_size<segment_size) and
-    ((chunk^.flags and m_last__chunk)=0) then
+ if ((chunk^.flags and m_last__chunk)=0) then
  begin
   next:=Pointer(chunk)+chunk^.curr_size;
   next^.prev_size:=chunk^.curr_size;
@@ -175,8 +183,7 @@ begin
   end;
  end;
 
- if (chunk^.curr_size<segment_size) and
-    ((chunk^.flags and m_last__chunk)=0) then
+ if ((chunk^.flags and m_last__chunk)=0) then
  begin
   next:=Pointer(chunk)+chunk^.curr_size;
   if ((next^.flags and m_free__chunk)<>0) then
@@ -230,15 +237,13 @@ function p_alloc(vaddr:Pointer;size:Integer):p_stub_chunk;
 var
  chunk:p_stub_chunk;
 begin
- Assert(size<=(segment_size-SizeOf(stub_chunk)),'p_alloc to big');
-
  rw_wlock(chunk_lock);
 
  chunk:=find_free_chunk(vaddr,size);
 
  if (chunk=nil) then
  begin
-  chunk:=alloc_segment(vaddr);
+  chunk:=alloc_segment(QWORD(vaddr),size);
   Assert(chunk<>nil,'p_alloc NOMEM');
  end;
 
@@ -271,8 +276,7 @@ begin
 
  merge_chunk(chunk);
 
- if (chunk^.curr_size>=segment_size) and
-    ((chunk^.flags and (m_first_chunk or m_last__chunk))=(m_first_chunk or m_last__chunk)) then
+ if ((chunk^.flags and (m_first_chunk or m_last__chunk))=(m_first_chunk or m_last__chunk)) then
  begin
   free_segment(chunk);
  end else

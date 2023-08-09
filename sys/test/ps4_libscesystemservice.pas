@@ -129,8 +129,7 @@ uses
  errno,
  time,
  md_time,
- trap,
- kern_dlsym;
+ trap;
 
 type
  pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
@@ -419,23 +418,6 @@ begin
  Result:=0;
 end;
 
-type
- t_sceSysmoduleLoadModuleInternal=function(id:DWORD):DWORD;
-
-procedure init();
-var
- ptr:t_sceSysmoduleLoadModuleInternal;
-begin
- ptr:=nil;
- name_dlsym('libSceSysmodule','sceSysmoduleLoadModuleInternal',@ptr);
- if (ptr<>nil) then
- begin
-  ptr($80000052);
- end;
-
- Writeln('init');
-end;
-
 //
 
 function Load_libSceSystemService(name:pchar):p_lib_info;
@@ -443,8 +425,6 @@ var
  lib:TLIBRARY;
 begin
  Result:=obj_new_int('libSceSystemService');
-
- Result^.init_proc_addr:=@init;
 
  lib:=Result^.add_lib('libSceSystemService');
  lib.set_proc($7D9A38F2E9FB2CAE,@ps4_sceSystemServiceParamGetInt);

@@ -12,7 +12,8 @@ uses
  vnode,
  vm_object,
  vuio,
- elf64;
+ elf64,
+ kern_authinfo;
 
 const
  AT_NULL        = 0; // Terminates the vector.
@@ -83,17 +84,6 @@ type
   flags :QWORD;
   entry :QWORD;
  end;
-
- p_authinfo=^t_authinfo;
- t_authinfo=packed record
-  app_type_id:QWORD;
-  app_flags  :QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
-  app_cap    :QWORD;
-  unknow1    :array[0..1] of QWORD;
-  s_prog_attr:QWORD;
-  unknow2    :array[0..10] of QWORD;
- end;
- {$IF sizeof(t_authinfo)<>136}{$STOP sizeof(t_authinfo)<>136}{$ENDIF}
 
  p_image_params=^t_image_params;
  t_image_params=packed record
@@ -481,10 +471,10 @@ begin
     (imgp^.image_self  =nil) then
  begin
   case ExtractFileExt(imgp^.execpath) of
-   '.sprx','.prx' :imgp^.authinfo.app_type_id:=QWORD($3900000000000002);
-   '.sdll','.sexe':imgp^.authinfo.app_type_id:=QWORD($3901000000000001);
+   '.sprx','.prx' :imgp^.authinfo.app_type:=QWORD($3900000000000002);
+   '.sdll','.sexe':imgp^.authinfo.app_type:=QWORD($3901000000000001);
    else
-                   imgp^.authinfo.app_type_id:=QWORD($3100000000000001);
+                   imgp^.authinfo.app_type:=QWORD($3100000000000001);
   end;
   Exit;
  end;
@@ -498,7 +488,7 @@ begin
 
  authinfo:=Pointer(Pointer(imgp^.image_self)+s);
 
- imgp^.authinfo.app_type_id:=authinfo^.AuthorityID;
+ imgp^.authinfo.app_type:=authinfo^.AuthorityID;
 end;
 
 function is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype_caller:Integer):Boolean;
