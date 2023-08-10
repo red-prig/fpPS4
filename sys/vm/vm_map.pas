@@ -170,6 +170,11 @@ function vm_map_insert(
            max        :vm_prot_t;
            cow        :Integer):Integer;
 
+function vm_map_findspace(map   :vm_map_t;
+                          start :vm_offset_t;
+                          length:vm_size_t;
+                          addr  :p_vm_offset_t):Integer;
+
 procedure vm_map_lookup_done(map:vm_map_t;entry:vm_map_entry_t);
 
 function  vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
@@ -1925,7 +1930,9 @@ begin
    vm_map_lookup_entry(smap, offset, @tentry);
    tsize:=tentry^.__end - offset;
    if (tsize<size) then
+   begin
     size:=tsize;
+   end;
    vm_obj:=tentry^.vm_obj;
    offset:=tentry^.offset + (offset - tentry^.start);
    vm_map_unlock(smap);
@@ -2032,6 +2039,7 @@ var
  next       :vm_map_entry_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
+
  if (start=__end) then
  begin
   Exit(KERN_SUCCESS);
@@ -2672,7 +2680,6 @@ RetryLookup:
     * -- one just moved from the map to the new
     * object.
     }
-
    //vm_object_shadow(@entry^.vm_obj, @entry^.offset, size);
 
    entry^.eflags:=entry^.eflags and (not MAP_ENTRY_NEEDS_COPY);
@@ -2807,7 +2814,6 @@ var
  entry:vm_map_entry_t;
 begin
  VM_MAP_RANGE_CHECK(map, start, __end);
-
 
  if (vm_map_lookup_entry(map, start,@entry)) then
  begin

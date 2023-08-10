@@ -44,7 +44,8 @@ uses
  kern_authinfo,
  kern_namedobj,
  kern_resource,
- uipc_syscalls;
+ uipc_syscalls,
+ kern_blockpool;
 
 function nosys:Integer;
 function nosup:Integer;
@@ -3201,7 +3202,7 @@ const
   ),
   (//[628]
      sy_narg:6;
-     sy_call:nil;
+     sy_call:@sys_mmap_dmem;
      sy_name:'sys_mmap_dmem'
   ),
   (//[629]

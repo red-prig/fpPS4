@@ -97,6 +97,7 @@ uses
  kern_regmgr,
  kern_authinfo,
  kern_dmem,
+ kern_blockpool,
  kern_bnet,
  uipc_syscalls,
  kern_ipmimgr,

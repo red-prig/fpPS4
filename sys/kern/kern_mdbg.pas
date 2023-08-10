@@ -16,7 +16,7 @@ uses
 
 type
  t_SetProcessProperty=packed record //0x48
-  f_0:Pointer;
+  f_0:QWORD;
   f_1:Pointer;
   f_2:Pointer;
   f_3:Pointer;

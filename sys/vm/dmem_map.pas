@@ -1,6 +1,7 @@
 unit dmem_map;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -26,6 +27,8 @@ Const
  SCE_KERNEL_UC_GARLIC_VOLATILE    = 8;
  SCE_KERNEL_UC_GARLIC_NONVOLATILE = 9;
 
+ max_valid=QWORD($5000000000);
+
 type
  pp_dmem_map_entry=^p_dmem_map_entry;
  p_dmem_map_entry=^t_dmem_map_entry;
@@ -36,7 +39,6 @@ type
   right         :p_dmem_map_entry; // right child in binary search tree
   start         :DWORD;            // start address
   __end         :DWORD;            // end address
-  avail_ssize   :DWORD;            // amt can grow if this is a stack
   adj_free      :DWORD;            // amount of adjacent free space
   max_free      :DWORD;            // max free space in subtree
   m_type        :DWORD;            // memory type
@@ -71,12 +73,14 @@ function  dmem_map_lookup_entry(
             entry      :pp_dmem_map_entry):Boolean;
 
 function  dmem_map_insert(
-            map        :p_dmem_map;
-            start      :DWORD;
-            __end      :DWORD;
-            m_type     :DWORD):Integer;
+            map   :p_dmem_map;
+            vaddr :DWORD;
+            start :DWORD;
+            __end :DWORD;
+            m_type:DWORD):Integer;
 
 Function  dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var oaddr,osize:QWORD):Integer;
+Function  dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;
 
 function  dmem_map_findspace(map   :p_dmem_map;
                              start :DWORD;
@@ -94,6 +98,11 @@ procedure dmem_map_simplify_entry(map:p_dmem_map;entry:p_dmem_map_entry);
 procedure dmem_map_entry_delete(map:p_dmem_map;entry:p_dmem_map_entry);
 
 function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD):Integer;
+
+function  dmem_map_mtype(map  :p_dmem_map;
+                         start:DWORD;
+                         __end:DWORD;
+                         new  :DWORD):Integer;
 
 implementation
 
@@ -177,8 +186,8 @@ var
 begin
  td:=curkthread;
  if (td=nil) then Exit;
- entry:=td^.td_map_def_user;
- td^.td_map_def_user:=nil;
+ entry:=td^.td_dmap_def_user;
+ td^.td_dmap_def_user:=nil;
  while (entry<>nil) do
  begin
   next:=entry^.next;
@@ -489,14 +498,16 @@ begin
    entry^:=cur^.prev;
   end;
  end;
+
  Result:=(FALSE);
 end;
 
 function dmem_map_insert(
-           map        :p_dmem_map;
-           start      :DWORD;
-           __end      :DWORD;
-           m_type     :DWORD):Integer;
+           map   :p_dmem_map;
+           vaddr :DWORD;
+           start :DWORD;
+           __end :DWORD;
+           m_type:DWORD):Integer;
 var
  new_entry :p_dmem_map_entry;
  prev_entry:p_dmem_map_entry;
@@ -546,7 +557,7 @@ begin
    prev_entry^.__end:=__end;
    //change size
 
-   //pmap_enter_object
+   //dmem_rmap_enter(map,start,__end);
 
    dmem_map_entry_resize_free(map, prev_entry);
    dmem_map_simplify_entry(map, prev_entry);
@@ -556,12 +567,6 @@ begin
  end;
 
  {
-  * NOTE: if conditionals fail, object can be nil here.  This occurs
-  * in things like the buffer map where we manage kva but do not manage
-  * backing objects.
-  }
-
- {
   * Create a new entry
   }
  new_entry:=dmem_map_entry_create(map);
@@ -569,7 +574,6 @@ begin
  new_entry^.__end:=__end;
 
  new_entry^.m_type:=m_type;
- new_entry^.avail_ssize:=0;
 
  {
   * Insert the new entry into the list
@@ -579,14 +583,12 @@ begin
 
  dmem_map_simplify_entry(map, new_entry);
 
- //pmap_enter_object
+ //dmem_rmap_enter(map,start,__end);
 
  Result:=0;
 end;
 
 Function dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var oaddr,osize:QWORD):Integer;
-const
- max_valid=QWORD($5000000000);
 var
  entry:p_dmem_map_entry;
 
@@ -663,6 +665,101 @@ begin
 
  oaddr:=r_addr;
  osize:=r_size;
+end;
+
+Function dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;
+var
+ adr_dw:DWORD;
+begin
+ Result:=0;
+
+ if (Int64(__end or start) < 0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (Int64(len) < 1) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (mtype>10) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if not IsPowerOfTwo(align) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (( (align and QWORD($8000000000003fff)) or QWORD(len and QWORD($3fff)) )<>0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (align=0) then align:=1;
+
+ start:=(not (start shr 63)) and start;
+
+ if (__end>max_valid) then __end:=max_valid;
+
+ if (__end <= start) then
+ begin
+  Exit(EAGAIN);
+ end;
+
+ if (__end < len) then
+ begin
+  Exit(EAGAIN);
+ end;
+
+ if ((__end - len) < start) then
+ begin
+  Exit(EAGAIN);
+ end;
+
+ if (((align - 1) + __end) < __end) then
+ begin
+  Exit(EAGAIN);
+ end;
+
+ dmem_map_lock(map);
+
+ repeat
+  adr_dw:=0;
+
+  if (dmem_map_findspace(map, OFF_TO_IDX(start), OFF_TO_IDX(len), @adr_dw)<>0) then
+  begin
+   dmem_map_unlock(map);
+   Exit(EAGAIN);
+  end;
+
+  start:=IDX_TO_OFF(adr_dw);
+
+  start:=AlignUp(start,align);
+
+  if (start>=__end) then
+  begin
+   dmem_map_unlock(map);
+   Exit(EAGAIN);
+  end;
+
+  if ((start+len)>__end) then
+  begin
+   dmem_map_unlock(map);
+   Exit(EAGAIN);
+  end;
+
+  Result:=dmem_map_insert(map,0,OFF_TO_IDX(start),OFF_TO_IDX(start+len),mtype);
+ until (Result<>EAGAIN);
+
+ dmem_map_unlock(map);
+
+ if (Result=0) then
+ begin
+  oaddr:=start;
+ end;
 end;
 
 function dmem_map_findspace(map   :p_dmem_map;
@@ -783,7 +880,7 @@ begin
  begin
   dmem_map_delete(map, start, __end);
  end;
- Result:= dmem_map_insert(map, start, __end, m_type);
+ Result:=dmem_map_insert(map, 0, start, __end, m_type);
  dmem_map_unlock(map);
 end;
 
@@ -900,8 +997,8 @@ begin
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
 
- entry^.next:=curkthread^.td_map_def_user;
- curkthread^.td_map_def_user:=entry;
+ entry^.next:=curkthread^.td_dmap_def_user;
+ curkthread^.td_dmap_def_user:=entry;
 end;
 
 function dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD):Integer;
@@ -911,6 +1008,7 @@ var
  next       :p_dmem_map_entry;
 begin
  DMEM_MAP_ASSERT_LOCKED(map);
+
  if (start=__end) then
  begin
   Exit(0);
@@ -938,7 +1036,7 @@ begin
 
   next:=entry^.next;
 
-  //pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
+  //dmem_rmap_remove(map,entry^.start,entry^.__end);
 
   {
    * Delete the entry only after removing all pmap
@@ -951,6 +1049,82 @@ begin
  end;
  Result:=(0);
 end;
+
+function dmem_map_mtype(map  :p_dmem_map;
+                        start:DWORD;
+                        __end:DWORD;
+                        new  :DWORD):Integer;
+
+var
+ current,entry:p_dmem_map_entry;
+ old:DWORD;
+begin
+ if (start=__end) then
+ begin
+  Exit(0);
+ end;
+
+ dmem_map_lock(map);
+
+ DMEM_MAP_RANGE_CHECK(map, start, __end);
+
+ if (dmem_map_lookup_entry(map, start, @entry)) then
+ begin
+  //
+ end else
+ begin
+  Exit(EACCES);
+ end;
+
+ current:=entry;
+ while (current<>@map^.header) and (current^.start<__end) do
+ begin
+  current:=current^.next;
+ end;
+
+ if (current^.__end<__end) then
+ begin
+  Exit(EACCES);
+ end;
+
+ if (new=DWORD(-1)) then Exit(0);
+
+ dmem_map_clip_start(map, entry, start);
+
+ current:=entry;
+ while (current<>@map^.header) and (current^.start<__end) do
+ begin
+  dmem_map_clip_end(map, current, __end);
+
+  current:=current^.next;
+ end;
+
+ {
+  * Go back and fix up protections. [Note that clipping is not
+  * necessary the second time.]
+  }
+ current:=entry;
+ while ((current<>@map^.header) and (current^.start<__end)) do
+ begin
+  old:=current^.m_type;
+  current^.m_type:=new;
+
+  if (old<>current^.m_type) then
+  begin
+   //
+  end;
+
+  dmem_map_simplify_entry(map, current);
+
+  current:=current^.next;
+ end;
+
+ dmem_map_unlock(map);
+
+ Result:=0;
+end;
+
+
 
 end.
 

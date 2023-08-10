@@ -20,12 +20,12 @@ type
  end;
  {$IF sizeof(t_query_memory_prot)<>24}{$STOP sizeof(t_query_memory_prot)<>24}{$ENDIF}
 
-function sys_mmap(_addr :Pointer;
-                  _len  :QWORD;
-                  _prot :Integer;
-                  _flags:Integer;
-                  _fd   :Integer;
-                  _pos  :QWORD):Integer;
+ function sys_mmap(vaddr:Pointer;
+                   vlen :QWORD;
+                   prot :Integer;
+                   flags:Integer;
+                   fd   :Integer;
+                   pos  :QWORD):Pointer;
 
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
@@ -458,12 +458,12 @@ begin
  Exit(vm_mmap_to_errno(rv));
 end;
 
-function sys_mmap(_addr :Pointer;
-                  _len  :QWORD;
-                  _prot :Integer;
-                  _flags:Integer;
-                  _fd   :Integer;
-                  _pos  :QWORD):Integer;
+function sys_mmap(vaddr:Pointer;
+                  vlen :QWORD;
+                  prot :Integer;
+                  flags:Integer;
+                  fd   :Integer;
+                  pos  :QWORD):Pointer;
 label
  _map,
  _done;
@@ -473,20 +473,18 @@ var
  vp:p_vnode;
  addr:vm_offset_t;
  size,pageoff:vm_size_t;
- cap_maxprot,prot,maxprot:vm_prot_t;
+ cap_maxprot,maxprot:vm_prot_t;
  handle:Pointer;
  handle_type:obj_type;
- align,flags:Integer;
- pos:QWORD;
+ align:Integer;
  rights:cap_rights_t;
 begin
  td:=curkthread;
+ if (td=nil) then Exit(Pointer(-1));
 
- addr :=vm_offset_t(_addr);
- size :=_len;
- prot :=_prot and VM_PROT_ALL;
- flags:=_flags;
- pos  :=_pos;
+ addr:=vm_offset_t(vaddr);
+ size:=vlen;
+ prot:=prot and VM_PROT_ALL;
 
  fp:=nil;
 
@@ -494,14 +492,14 @@ begin
     {(sv_flags > -1) and}
     (p_proc.p_osrel > $c3567) then
  begin
-  Exit(EINVAL);
+  Exit(Pointer(EINVAL));
  end;
 
  if ((flags and (MAP_VOID or MAP_ANON))<>0) then
  begin
-  if (pos<>0) or (_fd<>-1) then
+  if (pos<>0) or (fd<>-1) then
   begin
-   Exit(EINVAL);
+   Exit(Pointer(EINVAL));
   end;
  end;
 
@@ -512,10 +510,10 @@ begin
 
  if ((flags and MAP_STACK)<>0) then
  begin
-  if (_fd<>-1) or
-     ((_prot and (VM_PROT_READ or VM_PROT_WRITE))<>(VM_PROT_READ or VM_PROT_WRITE)) then
+  if (fd<>-1) or
+     ((prot and (VM_PROT_READ or VM_PROT_WRITE))<>(VM_PROT_READ or VM_PROT_WRITE)) then
   begin
-   Exit(EINVAL);
+   Exit(Pointer(EINVAL));
   end;
   flags:=flags or MAP_ANON;
   pos:=0;
@@ -535,7 +533,7 @@ begin
     (((align shr MAP_ALIGNMENT_SHIFT)>=sizeof(Pointer)*NBBY) or
     ((align shr MAP_ALIGNMENT_SHIFT) < PAGE_SHIFT)) then
  begin
-  Exit(EINVAL);
+  Exit(Pointer(EINVAL));
  end;
 
  if ((flags and MAP_FIXED)<>0) then
@@ -543,19 +541,19 @@ begin
   addr:=addr-pageoff;
   if (addr and PAGE_MASK)<>0 then
   begin
-   Exit(EINVAL);
+   Exit(Pointer(EINVAL));
   end;
 
   //Address range must be all in user VM space.
   if (addr < vm_map_min(@g_vmspace.vm_map)) or
      (addr + size > vm_map_max(@g_vmspace.vm_map)) then
   begin
-   Exit(EINVAL);
+   Exit(Pointer(EINVAL));
   end;
 
   if (addr+size<addr) then
   begin
-   Exit(EINVAL);
+   Exit(Pointer(EINVAL));
   end;
  end else
  begin
@@ -602,8 +600,8 @@ begin
     rights:=rights or CAP_MAPEXEC;
    end;
 
-   Result:=fget_mmap(_fd,rights,@cap_maxprot,@fp);
-   if (Result<>0) then goto _done;
+   Result:=Pointer(fget_mmap(fd,rights,@cap_maxprot,@fp));
+   if (Result<>nil) then goto _done;
 
    if (fp^.f_type=DTYPE_SHM) then
    begin
@@ -625,7 +623,7 @@ begin
 
    if (fp^.f_type<>DTYPE_VNODE) then
    begin
-    Result:=ENODEV;
+    Result:=Pointer(ENODEV);
     goto _done;
    end;
 
@@ -645,7 +643,7 @@ begin
    end else
    if ((prot and VM_PROT_READ)<>0) then
    begin
-    Result:=EACCES;
+    Result:=Pointer(EACCES);
     goto _done;
    end;
 
@@ -657,7 +655,7 @@ begin
     end else
     if ((prot and VM_PROT_WRITE)<>0) then
     begin
-     Result:=EACCES;
+     Result:=Pointer(EACCES);
      goto _done;
     end;
    end else
@@ -685,13 +683,10 @@ begin
 _map:
  td^.td_fpop:=fp;
  maxprot:=maxprot and cap_maxprot;
- Result:=vm_mmap2(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos);
+ Result:=Pointer(vm_mmap2(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos));
  td^.td_fpop:=nil;
 
- if (Result=0) then
- begin
-  td^.td_retval[0]:=(addr+pageoff);
- end;
+ td^.td_retval[0]:=(addr+pageoff);
 
 _done:
  if (fp<>nil) then
@@ -781,7 +776,9 @@ begin
   * Check for illegal behavior
   }
  if (behav < 0) or (behav > MADV_CORE) then
+ begin
   Exit(EINVAL);
+ end;
  {
   * Check for illegal addresses.  Watch out for address wrap... Note
   * that VM_*_ADDRESS are not constants due to casts (argh).

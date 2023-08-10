@@ -128,7 +128,7 @@ implementation
 uses
  errno,
  time,
- md_time,
+ syscalls,
  trap;
 
 type
@@ -305,13 +305,13 @@ begin
 
   SCE_SYSTEM_SERVICE_PARAM_ID_TIME_ZONE:
    begin
-    gettimezone(@z);
+    gettimeofday(nil,@z);
     value^:=z.tz_minuteswest;
    end;
 
   SCE_SYSTEM_SERVICE_PARAM_ID_SUMMERTIME:
    begin
-    gettimezone(@z);
+    gettimeofday(nil,@z);
     value^:=z.tz_dsttime;
    end;
 

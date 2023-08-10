@@ -20,7 +20,7 @@ type
   app_flags  :QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
   app_cap    :QWORD;
   unknow1    :array[0..1] of QWORD;
-  s_prog_attr:QWORD;
+  sce_prg_atr:QWORD;
   unknow2    :array[0..10] of QWORD;
  end;
  {$IF sizeof(t_authinfo)<>136}{$STOP sizeof(t_authinfo)<>136}{$ENDIF}
@@ -158,7 +158,7 @@ function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
 var
  sce_prog_attr:QWORD;
 begin
- sce_prog_attr:=info^.s_prog_attr;
+ sce_prog_attr:=info^.sce_prg_atr;
  if ((sce_prog_attr and $1000000)=0) then
  begin
   if ((sce_prog_attr and $2000000)<>0) then
@@ -166,10 +166,6 @@ begin
    Exit(true);
   end;
   //sceSblRcMgrIsAllowULDebugger
-  if (((sce_prog_attr shr (3*8)) and 1)=0) then
-  begin
-   Exit(false);
-  end;
  end;
  //sceSblRcMgrIsSoftwagnerQafForAcmgr
  Exit(false);

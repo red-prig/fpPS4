@@ -222,6 +222,8 @@ type
   //
   td_fpop         :Pointer;
   td_map_def_user :Pointer;
+  td_dmap_def_user:Pointer;
+  td_rmap_def_user:Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
  end;
@@ -328,6 +330,8 @@ var
   p_klist:t_knlist;
 
   p_args:p_pargs;
+
+  p_dmem_aliasing:Integer;
  end;
 
 implementation

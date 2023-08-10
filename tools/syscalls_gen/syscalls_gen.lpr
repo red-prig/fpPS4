@@ -61,12 +61,6 @@ var
  i:Integer;
  s:Boolean;
 begin
-
- if (lowercase(f.fname)='sys_mmap') then
- begin
-  f.fretv:='Pointer';
- end;
-
  s:=False;
  For i:=0 to high(sysent_table) do
  begin

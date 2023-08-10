@@ -61,6 +61,20 @@ const
 
 procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 
+const
+ MD_PAGE_SIZE        = 4*1024;
+ MD_ALLOC_GRANULARITY=64*1024;
+
+ MD_PROT_NONE=PAGE_NOACCESS;
+ MD_PROT_R   =PAGE_READONLY;
+ MD_PROT_RW  =PAGE_READWRITE;
+ MD_PROT_X   =PAGE_EXECUTE;
+ MD_PROT_RX  =PAGE_EXECUTE_READ;
+ MD_PROT_RWX =PAGE_EXECUTE_READWRITE;
+
+function md_mmap (vaddr:Pointer;vlen:QWORD;prot:Integer):Pointer;
+function md_unmap(vaddr:Pointer;vlen:QWORD):Integer;
+
 implementation
 
 function atop(x:QWORD):DWORD; inline;
@@ -83,6 +97,63 @@ begin
  Result:=((x+PAGE_MASK) shr PAGE_SHIFT);
 end;
 
+function md_alloc_page(x:QWORD):QWORD; inline;
+begin
+ Result:=x and (not (MD_ALLOC_GRANULARITY-1));
+end;
+
+function md_up_page(x:QWORD):QWORD; inline;
+begin
+ Result:=(x+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+end;
+
+function md_mmap(vaddr:Pointer;vlen:QWORD;prot:Integer):Pointer;
+var
+ base:Pointer;
+ size:QWORD;
+ r:Integer;
+begin
+ Result:=nil;
+
+ base:=Pointer(md_alloc_page(QWORD(vaddr)));
+ size:=md_up_page(vlen);
+
+ r:=NtAllocateVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     0,
+     @size,
+     MEM_COMMIT or MEM_RESERVE,
+     prot
+    );
+
+ if (r=0) then
+ begin
+  Result:=base;
+ end;
+end;
+
+function md_unmap(vaddr:Pointer;vlen:QWORD):Integer;
+var
+ base:Pointer;
+ size:QWORD;
+ r:Integer;
+begin
+ Result:=0;
+
+ base:=Pointer(md_alloc_page(QWORD(vaddr)));
+ size:=0;
+
+ r:=NtFreeVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     MEM_RELEASE
+    );
+
+ Result:=r;
+end;
+
 procedure pmap_pinit(maps:p_pmap);
 var
  base:Pointer;
@@ -94,7 +165,7 @@ begin
  begin
   For i:=0 to High(pmap_mem) do
   begin
-   base:=Pointer(trunc_page(pmap_mem[i].start));
+   base:=Pointer(md_alloc_page(pmap_mem[i].start));
    size:=trunc_page(pmap_mem[i].__end-pmap_mem[i].start);
 
    r:=NtAllocateVirtualMemory(

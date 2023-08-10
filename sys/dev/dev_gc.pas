@@ -27,9 +27,9 @@ var
 type
  p_SetGsRingSizes=^t_SetGsRingSizes;
  t_SetGsRingSizes=packed record
-  psize_1:DWORD;
-  psize_2:DWORD;
-  p__zero:DWORD;
+  esgsRingSize:DWORD;
+  gsvsRingSize:DWORD;
+  zero        :DWORD;
  end;
 
  p_SetMipStatsReport=^t_SetMipStatsReport;
@@ -54,8 +54,8 @@ begin
 
   $C00C8110: //sceGnmSetGsRingSizes
             begin
-             Writeln('SetGsRingSizes(0x',HexStr(p_SetGsRingSizes(data)^.psize_1,8),',0x'
-                                        ,HexStr(p_SetGsRingSizes(data)^.psize_2,8),')');
+             Writeln('SetGsRingSizes(0x',HexStr(p_SetGsRingSizes(data)^.esgsRingSize,8),',0x'
+                                        ,HexStr(p_SetGsRingSizes(data)^.gsvsRingSize,8),')');
             end;
 
   $C0848119: //*MipStatsReport

@@ -232,6 +232,7 @@ function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
 function  ipmimgr_call(op,kid:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
+function  mmap_dmem(addr:PPointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Integer;
 function  thr_suspend_ucontext(tid:Integer):Integer;
 function  thr_resume_ucontext(tid:Integer):Integer;
 function  thr_get_ucontext(tid:Integer;ucp:Pointer):Integer;
@@ -1825,6 +1826,13 @@ end;
 function get_gpo(pbits:PByte):Integer; assembler; nostackframe;
 asm
  movq  $623,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function mmap_dmem(addr:PPointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Integer; assembler; nostackframe;
+asm
+ movq  $628,%rax
  call  fast_syscall
  jmp   cerror
 end;
