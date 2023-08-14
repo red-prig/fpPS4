@@ -102,6 +102,7 @@ uses
  uipc_syscalls,
  kern_ipmimgr,
  kern_mdbg,
+ md_trap,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs;

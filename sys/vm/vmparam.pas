@@ -109,7 +109,7 @@ var
  i:Integer;
 begin
  Result:=False;
- For i:=0 to High(pmap_mem) do
+ For i:=0 to High(pmap_mem)-1 do //exclude ext GPU_ADDRESS
  begin
   if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
   begin

@@ -1101,7 +1101,15 @@ begin
 
  memsz:=vaddr_hi-vaddr_lo;
  cache:=ReAllocMem(cache,memsz);
- FillChar(cache^,memsz,0);
+
+ if ((prot and VM_PROT_EXECUTE)<>0) then
+ begin
+  FillChar(cache^,memsz,$90);
+ end else
+ begin
+  FillChar(cache^,memsz,0);
+ end;
+
  Move(base^,cache^,filesz);
 
  if ((prot and VM_PROT_EXECUTE)<>0) then

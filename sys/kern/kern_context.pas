@@ -77,6 +77,13 @@ begin
   begin
    kern_sigprocmask(td, SIG_SETMASK, @uc.uc_sigmask, nil, 0);
   end;
+
+  //teb wow64
+  if ((uc.uc_flags and 2)<>0) then
+  begin
+   td^.td_teb^.wow64:=Pointer(uc.__spare[0]);
+  end;
+  //teb wow64
  end;
 
  if (Result=0) then Exit(EJUSTRETURN);
@@ -111,6 +118,13 @@ begin
    begin
     kern_sigprocmask(td, SIG_SETMASK, @uc.uc_sigmask, nil, 0);
    end;
+
+   //teb wow64
+   if ((uc.uc_flags and 2)<>0) then
+   begin
+    td^.td_teb^.wow64:=Pointer(uc.__spare[0]);
+   end;
+   //teb wow64
   end;
  end;
 

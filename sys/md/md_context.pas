@@ -630,6 +630,11 @@ begin
  sf.sf_uc.uc_mcontext.mc_ownedfp :=_MC_FPOWNED_FPU;
  //xmm,ymm
 
+ //teb wow64
+ sf.sf_uc.uc_flags  :=2;
+ sf.sf_uc.__spare[0]:=QWORD(td^.td_teb^.wow64);
+ //teb wow64
+
  sp:=QWORD(td^.td_kstack.stack);
 
  sp:=sp-sizeof(sigframe);
@@ -665,6 +670,10 @@ begin
   td^.td_teb^.sttop:=td^.td_ustack.sttop;
  end;
  //teb stack
+
+ //teb wow64
+ td^.td_teb^.wow64:=nil;
+ //teb wow64
 
  resume:
   NtResumeThread(td_handle,nil);

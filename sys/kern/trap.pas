@@ -35,6 +35,9 @@ const
  T_RESERVED  =30; // reserved (unknown)
  T_DTRACE_RET=32; // DTrace pid return
 
+ T_CONTINUE=33;
+ T_SET_CTX =34;
+
   // XXX most of the following codes aren't used, but could be.
 
   // definitions for <sys/signal.h>
@@ -116,6 +119,8 @@ procedure fast_syscall;
 procedure sigcode;
 procedure sigipi;
 
+procedure trap(frame:p_trapframe);
+
 implementation
 
 uses
@@ -129,8 +134,7 @@ uses
  subr_dynlib,
  elf_nid_utils,
  ps4libdoc,
- kern_rtld,
- hamt;
+ x86_fpdbgdisas;
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
@@ -734,7 +738,7 @@ end;
 procedure sigcode; assembler; nostackframe;
 asm
  call  sigframe.sf_ahu(%rsp)
- lea   sigframe.sf_uc(%rsp),%rdi
+ lea   sigframe.sf_uc (%rsp),%rdi
  pushq $0
  movqq sys_sigreturn,%rax
  call  fast_syscall
@@ -762,6 +766,57 @@ asm
  _ast_exit:
   call  ipi_sigreturn
   hlt
+end;
+
+procedure parse_instr(tf_rip:Pointer);
+var
+ err:Integer;
+ data:array[0..15] of Byte;
+
+ dec:TX86AsmDecoder;
+
+ ptr:Pointer;
+ AProcess: TDbgProcess;
+ dis:TX86Disassembler;
+ din:TInstruction;
+ str1,str2:RawByteString;
+begin
+ err:=copyin(tf_rip,@data,SizeOf(data));
+ if (err<>0) then Exit;
+
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ ptr:=@data;
+
+ AProcess:=TDbgProcess.Create;
+ AProcess.Mode:=dm64;
+ dec:=TX86AsmDecoder.Create(AProcess);
+ dec.Disassemble(ptr,str1,str2);
+
+ ptr:=@data;
+ dis.Disassemble(dm64,ptr,din);
+
+end;
+
+procedure trap(frame:p_trapframe);
+begin
+
+ case frame^.tf_trapno of
+  T_PAGEFLT:
+    begin
+
+     parse_instr(Pointer(frame^.tf_rip));
+
+
+
+     print_backtrace_c(stderr);
+     writeln;
+
+    end;
+
+ end;
+
 end;
 
 
