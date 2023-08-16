@@ -1,6 +1,7 @@
 unit md_resource;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

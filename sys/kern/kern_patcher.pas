@@ -6,7 +6,6 @@ unit kern_patcher;
 interface
 
 uses
- mqueue,
  kern_stub;
 
 procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
@@ -475,7 +474,6 @@ var
 
  info:t_instr_index_info;
 
- len:Integer;
  b:Boolean;
 
  fs_count:Integer;

@@ -1207,6 +1207,8 @@ begin
  a.a_vp    :=vp;
  a.a_uio   :=uio;
  a.a_ioflag:=ioflag;
+ osize  :=0;
+ ooffset:=0;
  VOP_WRITE_PRE(@a,osize,ooffset);
  s:=VFS_PROLOGUE(vp^.v_mount);
  Result:=vop_write_t(c)(@a);

@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- kern_thr,
  kern_mtx,
  vselinfo,
  time,
@@ -309,7 +308,7 @@ procedure VN_KNOTE_UNLOCKED(vp:p_vnode;b:QWORD);
 procedure VI_LOCK(vp:p_vnode);
 function  VI_TRYLOCK(vp:p_vnode):Boolean;
 procedure VI_UNLOCK(vp:p_vnode);
-function  VI_MTX(vp:p_vnode):p_mtx; inline;
+function  VI_MTX(vp:p_vnode):p_mtx;
 
 function  IGNORE_LOCK(vp:p_vnode):Boolean;
 
@@ -429,7 +428,7 @@ begin
  mtx_unlock(vp^.v_interlock);
 end;
 
-function VI_MTX(vp:p_vnode):p_mtx; inline;
+function VI_MTX(vp:p_vnode):p_mtx;
 begin
  Result:=@vp^.v_interlock;
 end;

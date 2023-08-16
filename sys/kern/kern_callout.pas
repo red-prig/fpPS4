@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- LFQueue,
  kern_mtx;
 
 type

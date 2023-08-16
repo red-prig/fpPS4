@@ -1,6 +1,5 @@
 unit vfilio;
 
-
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
 

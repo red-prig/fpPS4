@@ -196,7 +196,7 @@ end;
 
 function OFLAGS(fflags:Integer):Integer; inline;
 begin
- Result:=oflags-1;
+ Result:=fflags-1;
 end;
 
 end.

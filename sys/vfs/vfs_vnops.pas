@@ -149,19 +149,27 @@ restart:
   ndp^.ni_cnd.cn_flags:=ISOPEN or LOCKPARENT or LOCKLEAF or MPSAFE;
 
   if ((fmode and O_EXCL)=0) and ((fmode and O_NOFOLLOW)=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or FOLLOW;
+  end;
 
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
+  end;
 
   //bwillwrite();
   error:=nd_namei(ndp);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   vfslocked:=NDHASGIANT(ndp);
   if (mps=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not MPSAFE);
+  end;
 
   if (ndp^.ni_vp=nil) then
   begin
@@ -170,7 +178,9 @@ restart:
    vap^.va_mode:=cmode;
 
    if ((fmode and O_EXCL)<>0) then
+   begin
     vap^.va_vaflags:=vap^.va_vaflags or VA_EXCLUSIVE;
+   end;
 
    if (vn_start_write(ndp^.ni_dvp, @mp, V_NOWAIT)<>0) then
    begin
@@ -231,17 +241,25 @@ restart:
   end;
 
   if ((fmode and FWRITE)=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or LOCKSHARED;
+  end;
 
   if ((vn_open_flags and VN_OPEN_NOAUDIT)=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or AUDITVNODE1;
+  end;
 
   error:=nd_namei(ndp);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   if (mps=0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not MPSAFE);
+  end;
 
   vfslocked:=NDHASGIANT(ndp);
   vp:=ndp^.ni_vp;
@@ -279,13 +297,19 @@ restart:
  end;
 
  if ((fmode and FREAD)<>0) then
+ begin
   accmode:=accmode or VREAD;
+ end;
 
  if ((fmode and FEXEC)<>0) then
+ begin
   accmode:=accmode or VEXEC;
+ end;
 
  if ((fmode and O_APPEND)<>0) and ((fmode and FWRITE)<>0) then
+ begin
   accmode:=accmode or VAPPEND;
+ end;
 
  //error:=mac_vnode_check_open(cred, vp, accmode);
  //if (error) then
@@ -306,7 +330,9 @@ restart:
  end;
 
  if (vp^.v_type=VFIFO) and (VOP_ISLOCKED(vp)<>LK_EXCLUSIVE) then
+ begin
   vn_lock(vp, LK_UPGRADE or LK_RETRY);
+ end;
 
  error:=VOP_OPEN(vp, ofmode, fp);
  if (error<>0) then goto bad;
@@ -320,7 +346,9 @@ restart:
  ASSERT_VOP_LOCKED(vp, 'vn_open_cred');
 
  if (mps=0) then
+ begin
   VFS_UNLOCK_GIANT(ord(vfslocked));
+ end;
 
  Exit(0);
 bad:
@@ -366,17 +394,23 @@ begin
    end;
    error:=msleep(@mp^.mnt_flag, MNT_MTX(mp), (PUSER - 1) or (flags and PCATCH), 'suspfs', 0);
    if (error<>0) then
+   begin
     goto unlock;
+   end;
   end;
  end;
 
  if ((flags and V_XSLEEP)<>0) then
+ begin
   goto unlock;
+ end;
 
  Inc(mp^.mnt_writeopcount);
 unlock:
  if (error<>0) or ((flags and V_XSLEEP)<>0) then
+ begin
   MNT_REL(mp);
+ end;
 
  MNT_IUNLOCK(mp);
  Exit(error);
@@ -399,13 +433,17 @@ begin
   begin
    mpp^:=nil;
    if (error<>EOPNOTSUPP) then
+   begin
     Exit(error);
+   end;
    Exit(0);
   end;
  end;
  mp:=mpp^;
  if (mp=nil) then
+ begin
   Exit(0);
+ end;
 
  {
   * VOP_GETWRITEMOUNT() Exits with the mp refcount held through
@@ -416,7 +454,9 @@ begin
   }
  MNT_ILOCK(mp);
  if (vp=nil) then
+ begin
   MNT_REF(mp);
+ end;
 
  Exit(vn_start_write_locked(mp, flags));
 end;
@@ -430,7 +470,9 @@ begin
 
  Dec(mp^.mnt_writeopcount);
  if (mp^.mnt_writeopcount < 0) then
+ begin
   Assert(false,'vn_finished_write: neg cnt');
+ end;
 
  if ((mp^.mnt_kern_flag and MNTK_SUSPEND)<>0) and (mp^.mnt_writeopcount<=0) then
  begin
@@ -496,7 +538,9 @@ begin
 
  error:=VOP_GETATTR(vp, vap);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  {
   * Zero the spare stat fields
@@ -533,7 +577,9 @@ begin
  sb^.st_rdev :=vap^.va_rdev;
 
  if (vap^.va_size > High(Int64)) then
+ begin
   Exit(EOVERFLOW);
+ end;
 
  sb^.st_size:=vap^.va_size;
  sb^.st_atim:=vap^.va_atime;
@@ -607,10 +653,14 @@ begin
  mtx_lock(mtxp^);
 
  if ((flags and FOF_NOUPDATE)=0) then
+ begin
   fp^.f_offset:=val;
+ end;
 
  if ((flags and FOF_NEXTOFF)<>0) then
+ begin
   fp^.f_nextoff:=val;
+ end;
 
  if ((flags and FOF_NOLOCK)=0) then
  begin
@@ -630,13 +680,17 @@ end;
 procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);
 begin
  if ((flags and FOF_OFFSET)=0) then
+ begin
   uio^.uio_offset:=foffset_lock(fp, flags);
+ end;
 end;
 
 procedure foffset_unlock_uio(fp:p_file;uio:p_uio;flags:Integer);
 begin
  if ((flags and FOF_OFFSET)=0) then
+ begin
   foffset_unlock(fp, uio^.uio_offset, flags);
+ end;
 end;
 
 {
@@ -645,7 +699,9 @@ end;
 function sequential_heuristic(uio:p_uio;fp:p_file):Integer;
 begin
  if ((fp^.f_flag and FRDAHEAD)<>0) then
+ begin
   Exit(fp^.f_seqcount shl IO_SEQSHIFT);
+ end;
 
  {
   * Offset 0 is handled specially.  open() sets f_seqcount to 1 so
@@ -701,7 +757,9 @@ begin
 
  if (uio^.uio_offset >= f_advice^.fa_start) and
     (uio^.uio_offset + uio^.uio_resid <= f_advice^.fa_end) then
+ begin
   ret:=f_advice^.fa_advice;
+ end;
 
  mtx_unlock(mtxp^);
  Exit(ret);
@@ -1092,7 +1150,9 @@ begin
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
  if (error<>0) then
+ begin
   goto out1;
+ end;
 
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  if (vp^.v_type=VDIR) then
@@ -1145,7 +1205,9 @@ begin
      error:=VOP_GETATTR(vp, @vattr);
      VOP_UNLOCK(vp, 0);
      if (error=0) then
+     begin
       PInteger(data)^:=vattr.va_size - fp^.f_offset;
+     end;
     end else
     if (com=FIONBIO) or (com=FIOASYNC) then { XXX }
      error:=0

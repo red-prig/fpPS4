@@ -235,10 +235,7 @@ begin
 end;
 
 procedure ufs_insmntque_dtr(vp:p_vnode;arg:Pointer);
-var
- de:p_ufs_dirent;
 begin
- de:=p_ufs_dirent(arg);
  mtx_lock(ufs_interlock);
  ufs_relv(vp);
  mtx_unlock(ufs_interlock);

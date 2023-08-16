@@ -128,7 +128,9 @@ begin
  TAILQ_REMOVE(opts,opt,@opt^.link);
  FreeMem(opt^.name);
  if (opt^.value<>nil) then
+ begin
   FreeMem(opt^.value);
+ end;
  FreeMem(opt);
 end;
 
@@ -149,15 +151,16 @@ procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
 var
  opt,temp:p_vfsopt;
 begin
- if (opts=nil) then
-  Exit;
+ if (opts=nil) then Exit;
  opt:=TAILQ_FIRST(opts);
  while (opt<>nil) do
  begin
   temp:=TAILQ_NEXT(opt,@opt^.link);
   //
   if (strcomp(opt^.name, name)=0) then
+  begin
    vfs_freeopt(opts, opt);
+  end;
   //
   opt:=temp;
  end;
@@ -168,7 +171,9 @@ begin
  if (strcomp(opt, 'ro')=0) or
     (strcomp(opt, 'rdonly')=0) or
     (strcomp(opt, 'norw')=0) then
+ begin
   Exit(1);
+ end;
  Exit(0);
 end;
 
@@ -176,7 +181,9 @@ function vfs_isopt_rw(opt:PChar):Integer;
 begin
  if (strcomp(opt, 'rw')=0) or
     (strcomp(opt, 'noro')=0) then
+ begin
   Exit(1);
+ end;
  Exit(0);
 end;
 
@@ -189,15 +196,21 @@ var
 begin
  { 'opt' vs. 'opt' or 'noopt' vs. 'noopt' }
  if (strcomp(opt1, opt2)=0) then
+ begin
   Exit(1);
+ end;
  { 'noopt' vs. 'opt' }
  if (strlcomp(opt1, 'no', 2)=0) and
     (strcomp(opt1 + 2, opt2)=0) then
+ begin
   Exit(1);
+ end;
  { 'opt' vs. 'noopt' }
  if (strlcomp(opt2, 'no', 2)=0) and
     (strcomp(opt1, opt2 + 2)=0) then
+ begin
   Exit(1);
+ end;
 
  p:=strscan(opt1, '.');
  while (p<>nil) and
@@ -222,7 +235,9 @@ begin
      (vfs_isopt_rw(opt1)<>0)) and
     ((vfs_isopt_ro(opt2)<>0) or
      (vfs_isopt_rw(opt2)<>0)) then
+ begin
   Exit(1);
+ end;
  Exit(0);
 end;
 
@@ -311,7 +326,9 @@ begin
   begin
    error:=copyin(auio^.uio_iov[i].iov_base, opt^.name, namelen);
    if (error<>0) then
+   begin
     goto bad;
+   end;
   end;
   { Ensure names are nil-terminated strings. }
   if (namelen=0) or (opt^.name[namelen - 1]<>#0) then
@@ -330,7 +347,9 @@ begin
    begin
     error:=copyin(auio^.uio_iov[i + 1].iov_base, opt^.value, optlen);
     if (error<>0) then
+    begin
      goto bad;
+    end;
    end;
   end;
   //
@@ -375,7 +394,9 @@ begin
    new^.value:=AllocMem(opt^.len);
    Move(opt^.value^, new^.value^, opt^.len);
   end else
+  begin
    new^.value:=nil;
+  end;
   new^.len :=opt^.len;
   new^.seen:=opt^.seen;
   TAILQ_INSERT_HEAD(toopts,new,@new^.link);
@@ -401,7 +422,9 @@ begin
  if (error<>0) or
     (errmsg=nil) or
     (len<=0) then
+ begin
   Exit;
+ end;
 
  S:=Format(fmt,Args);
  if (len>(Length(S)+1)) then len:=Length(S)+1;
@@ -418,7 +441,9 @@ begin
  if (error<>0) or
     (errmsg=nil) or
     (len<=0) then
+ begin
   Exit;
+ end;
 
  S:=Format(fmt,Args);
  if (len>(Length(S)+1)) then len:=Length(S)+1;
@@ -444,17 +469,17 @@ begin
   q:=nil;
 
   if (p[0]='n') and (p[1]='o') then
+  begin
    q:=p + 2;
+  end;
 
   t:=@global_opts;
   while (t^<>nil) do
   begin
-   if (strcomp(t^, p)=0) then
-    break;
+   if (strcomp(t^, p)=0) then break;
    if (q<>nil) then
    begin
-    if (strcomp(t^, q)=0) then
-     break;
+    if (strcomp(t^, q)=0) then break;
    end;
    Inc(t);
   end;
@@ -468,12 +493,10 @@ begin
   t:=legal;
   while (t^<>nil) do
   begin
-   if (strcomp(t^, p)=0) then
-    break;
+   if (strcomp(t^, p)=0) then break;
    if (q<>nil) then
    begin
-    if (strcomp(t^, q)=0) then
-     break;
+    if (strcomp(t^, q)=0) then break;
    end;
    Inc(t);
   end;
@@ -502,7 +525,9 @@ begin
    opt:=TAILQ_NEXT(opt,@opt^.link);
   end;
   if (opt=nil) then
+  begin
    Writeln(errmsg);
+  end;
  end;
 end;
 
@@ -527,9 +552,13 @@ begin
   begin
    opt^.seen:=1;
    if (len<>nil) then
+   begin
     len^:=opt^.len;
+   end;
    if (buf<>nil) then
+   begin
     buf^:=opt^.value;
+   end;
    Exit(0);
   end;
   //
@@ -543,7 +572,9 @@ var
  opt:p_vfsopt;
 begin
  if (opts=nil) then
+ begin
   Exit(-1);
+ end;
 
  opt:=TAILQ_FIRST(opts);
  while (opt<>nil) do
@@ -596,14 +627,18 @@ begin
   begin
    opt^.seen:=1;
    if (w<>nil) then
+   begin
     w^:=w^ or val;
+   end;
    Exit(1);
   end;
   //
   opt:=TAILQ_NEXT(opt,@opt^.link);
  end;
  if (w<>nil) then
+ begin
   w^:=w^ and (not val);
+ end;
  Exit(0);
 end;
 
@@ -624,9 +659,13 @@ begin
   end;
   opt^.seen:=1;
   if (opt^.len=0) or (opt^.value=nil) then
+  begin
    Exit(0);
+  end;
   if (PChar(opt^.value)[opt^.len - 1]<>#0) then
+  begin
    Exit(0);
+  end;
 
   S:=Format(fmt,Args);
   Move(PChar(S)^,opt^.value^,Length(S)+1);
@@ -649,11 +688,14 @@ begin
   end;
   opt^.seen:=1;
   if (opt^.value=nil) then
-   opt^.len:=len
-  else
+  begin
+   opt^.len:=len;
+  end else
   begin
    if (opt^.len<>len) then
+   begin
     Exit(EINVAL);
+   end;
    Move(value^, opt^.value^, len);
   end;
   Exit(0);
@@ -675,11 +717,14 @@ begin
   end;
   opt^.seen:=1;
   if (opt^.value=nil) then
-   opt^.len:=len
-  else
+  begin
+   opt^.len:=len;
+  end else
   begin
    if (opt^.len < len) then
+   begin
     Exit(EINVAL);
+   end;
    opt^.len:=len;
    Move(value^, opt^.value^, len);
   end;
@@ -708,10 +753,13 @@ begin
   end;
   opt^.seen:=1;
   if (opt^.value=nil) then
-   opt^.len:=strlen(value) + 1
-  else
+  begin
+   opt^.len:=strlen(value) + 1;
+  end else
   if (strlcpy(opt^.value, value, opt^.len) >= opt^.len) then
+  begin
    Exit(EINVAL);
+  end;
   Exit(0);
  end;
  Exit(ENOENT);
@@ -829,7 +877,9 @@ begin
  //mac_mount_destroy(mp);
 
  if (mp^.mnt_opt<>nil) then
+ begin
   vfs_freeopts(mp^.mnt_opt);
+ end;
 
  mount_fini(mp);
  FreeMem(mp);
@@ -861,10 +911,12 @@ begin
  if (error=0) then
  begin
   VI_LOCK(vp);
+
   if ((vp^.v_iflag and VI_MOUNT)=0) and (vp^.v_mountedhere=nil) then
    vp^.v_iflag:=vp^.v_iflag or VI_MOUNT
   else
    error:=EBUSY;
+
   VI_UNLOCK(vp);
  end;
 
@@ -900,7 +952,9 @@ begin
  end;
 
  if (mp^.mnt_opt<>nil) then
+ begin
   vfs_freeopts(mp^.mnt_opt);
+ end;
 
  mp^.mnt_opt:=mp^.mnt_optnew;
 
@@ -936,7 +990,9 @@ begin
  vfs_event_signal(nil, VQ_MOUNT, 0);
 
  if (VFS_ROOT(mp,LK_EXCLUSIVE,@newdp)<>0) then
+ begin
   Assert(false,'mount: lost mount');
+ end;
 
  VOP_UNLOCK(newdp, 0);
  VOP_UNLOCK(vp, 0);
@@ -1018,7 +1074,9 @@ begin
      MNT_SNAPSHOT or MNT_ROOTFS or MNT_UPDATEMASK or MNT_RDONLY);
 
  if ((mp^.mnt_flag and MNT_ASYNC)=0) then
+ begin
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+ end;
  MNT_IUNLOCK(mp);
  mp^.mnt_optnew:=optlist^;
  vfs_mergeopts(mp^.mnt_optnew, mp^.mnt_opt);
@@ -1068,18 +1126,24 @@ begin
    }
   mp^.mnt_flag:=(mp^.mnt_flag and MNT_QUOTA) or (flag and (not MNT_QUOTA));
  end;
+
  if ((mp^.mnt_flag and MNT_ASYNC)<>0) and
     ((mp^.mnt_kern_flag and MNTK_NOASYNC)=0) then
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_ASYNC
  else
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+
  MNT_IUNLOCK(mp);
 
  if (error<>0) then
+ begin
   goto _end;
+ end;
 
  if (mp^.mnt_opt<>nil) then
+ begin
   vfs_freeopts(mp^.mnt_opt);
+ end;
  mp^.mnt_opt:=mp^.mnt_optnew;
  optlist^:=nil;
  VFS_STATFS(mp, @mp^.mnt_stat);
@@ -1127,7 +1191,9 @@ begin
   * terminating NUL.
   }
  if (strlen(fstype) >= MFSNAMELEN) or (strlen(fspath) >= MNAMELEN) then
+ begin
   Exit(ENAMETOOLONG);
+ end;
 
  { Load KLDs before we lock the covered vnode to avoid reversals. }
  vfsp:=nil;
@@ -1136,7 +1202,9 @@ begin
   vfsp:=vfs_byname(fstype);
 
   if (vfsp=nil) then
+  begin
    Exit(ENODEV);
+  end;
  end;
 
  {
@@ -1146,10 +1214,14 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (NDHASGIANT(@nd)=0) then
+ begin
   mtx_lock(VFS_Giant);
+ end;
 
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vp:=nd.ni_vp;
@@ -1164,7 +1236,9 @@ begin
    error:=vfs_domount_first(vfsp, @pathbuf, vp, fsflags, optlist);
   end;
  end else
+ begin
   error:=vfs_domount_update(vp, fsflags, optlist);
+ end;
 
  mtx_unlock(VFS_Giant);
 
@@ -1191,10 +1265,14 @@ begin
 
  error:=vfs_buildopts(fsoptions, @optlist);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (vfs_getopt(optlist, 'errmsg', @errmsg, @errmsg_len)=0) then
+ begin
   errmsg_pos:=vfs_getopt_pos(optlist, 'errmsg');
+ end;
 
  {
   * We need these two options before the others,
@@ -1207,7 +1285,9 @@ begin
  begin
   error:=EINVAL;
   if (errmsg<>nil) then
+  begin
    strlcopy(errmsg, 'Invalid fstype', errmsg_len);
+  end;
   goto bail;
  end;
  fspathlen:=0;
@@ -1216,7 +1296,9 @@ begin
  begin
   error:=EINVAL;
   if (errmsg<>nil) then
+  begin
    strlcopy(errmsg, 'Invalid fspath', errmsg_len);
+  end;
   goto bail;
  end;
 
@@ -1384,7 +1466,9 @@ bail:
  end;
 
  if (optlist<>nil) then
+ begin
   vfs_freeopts(optlist);
+ end;
  Exit(error);
 end;
 
@@ -1428,7 +1512,9 @@ begin
  if (error<>0) then
  begin
   if (coveredvp<>nil) then
+  begin
    VOP_UNLOCK(coveredvp, 0);
+  end;
 
   Exit(error);
  end;
@@ -1440,7 +1526,9 @@ begin
  begin
   MNT_IUNLOCK(mp);
   if (coveredvp<>nil) then
+  begin
    VOP_UNLOCK(coveredvp, 0);
+  end;
 
   vn_finished_write(mp);
   Exit(EBUSY);
@@ -1449,7 +1537,9 @@ begin
 
  { Allow filesystems to detect that a forced unmount is in progress. }
  if ((flags and MNT_FORCE)<>0) then
+ begin
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_UNMOUNTF;
+ end;
 
  error:=0;
  if (mp^.mnt_lockref<>0) then
@@ -1542,7 +1632,9 @@ begin
   end;
   MNT_IUNLOCK(mp);
   if (coveredvp<>nil) then
+  begin
    VOP_UNLOCK(coveredvp, 0);
+  end;
 
   Exit(error);
  end;
@@ -1587,7 +1679,9 @@ begin
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
+ begin
   Exit(ma);
+ end;
 
  ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
  ma^.v[ma^.len].iov_base:=name;
@@ -1616,14 +1710,18 @@ var
  tbuf:Pointer;
 begin
  if (val=nil) then
+ begin
   Exit(ma);
+ end;
  if (ma=nil) then
  begin
   ma:=AllocMem(sizeof(t_mntarg));
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
+ begin
   Exit(ma);
+ end;
  maa:=AllocMem(sizeof(t_mntaarg) + len);
  SLIST_INSERT_HEAD(@ma^.list,maa,@maa^.next);
  tbuf:=Pointer(maa + 1);
@@ -1644,7 +1742,9 @@ begin
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
+ begin
   Exit(ma);
+ end;
 
  if (val=nil) or (len=0) then Exit(ma);
 
@@ -1654,10 +1754,12 @@ begin
  Inc(ma^.len);
 
  ma^.v[ma^.len].iov_base:=val;
+
  if (len < 0) then
   ma^.v[ma^.len].iov_len:=strlen(val) + 1
  else
   ma^.v[ma^.len].iov_len:=len;
+
  Inc(ma^.len);
 
  Exit(ma);
@@ -1698,7 +1800,9 @@ begin
 
  error:=ma^.error;
  if (error=0) then
+ begin
   error:=vfs_donmount(flags, @auio);
+ end;
 
  free_mntarg(ma);
  Exit(error);
@@ -1733,7 +1837,9 @@ begin
   error:=vn_path_to_global_path(nd.ni_vp,@pathbuf,MNAMELEN);
 
   if (error=0) or (error=ENODEV) then
+  begin
    vput(nd.ni_vp);
+  end;
 
   VFS_UNLOCK_GIANT(vfslocked);
  end;
@@ -1743,7 +1849,9 @@ begin
  while (mp<>nil) do
  begin
   if (strcomp(@mp^.mnt_stat.f_mntonname, @pathbuf)=0) then
+  begin
    break;
+  end;
   mp:=TAILQ_PREV(mp,@mp^.mnt_list);
  end;
  mtx_unlock(mountlist_mtx);
@@ -1908,7 +2016,9 @@ begin
   begin
    if (mp^.mnt_stat.f_fsid.val[0]=id0) and
       (mp^.mnt_stat.f_fsid.val[1]=id1) then
+   begin
     break;
+   end;
    mp:=TAILQ_PREV(mp,@mp^.mnt_list);
   end;
   mtx_unlock(mountlist_mtx);
@@ -1929,7 +2039,9 @@ begin
    error:=vn_path_to_global_path(nd.ni_vp,@pathbuf,MNAMELEN);
 
    if (error=0) or (error=ENODEV) then
+   begin
     vput(nd.ni_vp);
+   end;
 
    VFS_UNLOCK_GIANT(vfslocked);
   end;
@@ -1939,7 +2051,9 @@ begin
   while (mp<>nil) do
   begin
    if (strcomp(@mp^.mnt_stat.f_mntonname, @pathbuf)=0) then
+   begin
     break;
+   end;
    mp:=TAILQ_PREV(mp,@mp^.mnt_list);
   end;
   mtx_unlock(mountlist_mtx);

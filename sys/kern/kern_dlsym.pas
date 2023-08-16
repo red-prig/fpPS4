@@ -356,7 +356,6 @@ label
  _exit;
 var
  obj:p_lib_info;
- flags:Integer;
  ptr:Pointer;
 
  fname:array[0..31] of char;
@@ -460,8 +459,6 @@ var
 
  ptr:Pointer;
  stub:p_stub_chunk;
-
- fname:RawByteString;
 begin
  Result:=nil;
 

@@ -1,6 +1,7 @@
 unit signalvar;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

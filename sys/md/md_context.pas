@@ -1,6 +1,7 @@
 unit md_context;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -95,8 +96,7 @@ uses
  trap,
  kern_psl,
  signal,
- kern_sig,
- md_thread;
+ kern_sig;
 
 const
  _ucodesel=(8 shl 3) or 3;
@@ -535,6 +535,12 @@ begin
   goto resume;
  end;
 
+ if (td^.td_teb^.jit_rsp<>nil) then //jit call?
+ begin
+  Result:=0;
+  goto resume;
+ end;
+
  Context:=get_top_mem_td(td,GetContextSize(CONTEXT_ALLX),16);
  Assert(Context<>nil);
  Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
@@ -545,7 +551,8 @@ begin
   goto resume;
  end;
 
- if IS_SYSTEM_STACK(td,Context^.Rsp) then //system?
+ if IS_SYSTEM_STACK(td,Context^.Rsp) or //system?
+    IS_TRAP_FUNC(Context^.Rip) then     //trap func?
  begin
   Result:=0;
   goto resume;
@@ -630,11 +637,6 @@ begin
  sf.sf_uc.uc_mcontext.mc_ownedfp :=_MC_FPOWNED_FPU;
  //xmm,ymm
 
- //teb wow64
- sf.sf_uc.uc_flags  :=2;
- sf.sf_uc.__spare[0]:=QWORD(td^.td_teb^.wow64);
- //teb wow64
-
  sp:=QWORD(td^.td_kstack.stack);
 
  sp:=sp-sizeof(sigframe);
@@ -670,10 +672,6 @@ begin
   td^.td_teb^.sttop:=td^.td_ustack.sttop;
  end;
  //teb stack
-
- //teb wow64
- td^.td_teb^.wow64:=nil;
- //teb wow64
 
  resume:
   NtResumeThread(td_handle,nil);

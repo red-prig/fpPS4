@@ -200,7 +200,10 @@ begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
+
  vfslocked:=NDHASGIANT(@nd);
  mp:=nd.ni_vp^.v_mount;
  vfs_ref(mp);
@@ -230,7 +233,7 @@ begin
   goto _out;
  if {(priv_check(td, PRIV_VFS_GENERATION))} True then
  begin
-  Move(sp^, sb, sizeof(sb));
+  sb:=sp^;
   sb.f_fsid.val[0]:=0;
   sb.f_fsid.val[1]:=0;
   //prison_enforce_statfs(td^.td_ucred, mp, @sb);
@@ -273,14 +276,18 @@ var
 begin
  error:=getvnode(fd, CAP_FSTATFS, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  vn_lock(vp, LK_SHARED or LK_RETRY);
  mp:=vp^.v_mount;
  if (mp<>nil) then
+ begin
   vfs_ref(mp);
+ end;
 
  VOP_UNLOCK(vp, 0);
  fdrop(fp);
@@ -310,10 +317,12 @@ begin
  sp^.f_flags:=mp^.mnt_flag and MNT_VISFLAGMASK;
  error:=VFS_STATFS(mp, sp);
  if (error<>0) then
+ begin
   goto _out;
+ end;
  if {(priv_check(td, PRIV_VFS_GENERATION))} True then
  begin
-  Move(sp^, sb, sizeof(sb));
+  sb:=sp^;
   sb.f_fsid.val[0]:=0;
   sb.f_fsid.val[1]:=0;
   //prison_enforce_statfs(td^.td_ucred, mp, @sb);
@@ -322,7 +331,9 @@ begin
  buf^:=sp^;
 _out:
  if (mp<>nil) then
+ begin
   vfs_unbusy(mp);
+ end;
 
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
@@ -383,7 +394,9 @@ begin
   end;
   mtx_unlock(mountlist_mtx);
   if (maxcount > count) then
+  begin
    maxcount:=count;
+  end;
   sfsp:=AllocMem(maxcount*sizeof(t_statfs));
   buf^:=sfsp;
  end;
@@ -503,7 +516,9 @@ var
 begin
  error:=getvnode(fd, CAP_FCHDIR, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vp:=fp^.f_vnode;
  VREF(vp);
  fdrop(fp);
@@ -515,7 +530,9 @@ begin
  while (error=0) and (mp<>nil) do
  begin
   if (vfs_busy(mp, 0)<>0) then
+  begin
    continue;
+  end;
   tvfslocked:=VFS_LOCK_GIANT(mp);
   error:=VFS_ROOT(mp, LK_SHARED, @tdp);
   vfs_unbusy(mp);
@@ -559,7 +576,9 @@ begin
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or AUDITVNODE1 or MPSAFE, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  error:=change_dir(nd.ni_vp);
  if (error<>0) then
@@ -606,12 +625,16 @@ begin
  begin
   fp:=fget_locked(@fd_table, fd);
   if (fp=nil) then
+  begin
    continue;
+  end;
   if (fp^.f_type=DTYPE_VNODE) then
   begin
    vp:=fp^.f_vnode;
    if (vp^.v_type=VDIR) then
+   begin
     Exit(EPERM);
+   end;
   end;
  end;
  Exit(0);
@@ -644,7 +667,9 @@ begin
  error:=EPERM;
  //error:=priv_check(td, PRIV_VFS_CHROOT);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
@@ -652,10 +677,12 @@ begin
  vfslocked:=NDHASGIANT(@nd);
  error:=change_dir(nd.ni_vp);
  if (error<>0) then
+ begin
   goto e_vunlock;
 
  //if ((error:=mac_vnode_check_chroot(td^.td_ucred, nd.ni_vp)))
  // goto e_vunlock;
+ end;
 
  VOP_UNLOCK(nd.ni_vp, 0);
  error:=change_root(nd.ni_vp);
@@ -682,7 +709,9 @@ var
 begin
  ASSERT_VOP_LOCKED(vp, 'change_dir(): vp not locked');
  if (vp^.v_type<>VDIR) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  //error:=mac_vnode_check_chdir(td^.td_ucred, vp);
  //if (error<>0) then
@@ -1129,7 +1158,9 @@ begin
  end;
 
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
 restart:
  //bwillwrite();
@@ -1267,7 +1298,9 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1309,8 +1342,9 @@ begin
 
      // error:=mac_vnode_check_link(td^.td_ucred, nd.ni_dvp, vp, @nd.ni_cnd);
      //if (error=0) then
-
+    begin
      error:=VOP_LINK(nd.ni_dvp, vp, @nd.ni_cnd);
+    end;
     VOP_UNLOCK(vp, 0);
     vput(nd.ni_dvp);
    end;
@@ -1340,7 +1374,9 @@ end;
 function sys_linkat(fd1:Integer;path1:PChar;fd2:Integer;path2:PChar;flag:Integer):Integer;
 begin
  if ((flag and (not AT_SYMLINK_FOLLOW))<>0) then
+ begin
   Exit(EINVAL);
+ end;
 
  if ((flag and AT_SYMLINK_FOLLOW)<>0) then
  begin
@@ -1414,7 +1450,9 @@ begin
 
  error:=VOP_SYMLINK(nd.ni_dvp, @nd.ni_vp, @nd.ni_cnd, @vattr, syspath);
  if (error=0) then
+ begin
   vput(nd.ni_vp);
+ end;
 
 out2:
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1423,7 +1461,9 @@ out2:
  VFS_UNLOCK_GIANT(vfslocked);
 _out:
  if (segflg<>UIO_SYSSPACE) then
+ begin
   FreeMem(syspath);
+ end;
 
  Exit(error);
 end;
@@ -1498,7 +1538,9 @@ begin
    * XXX: can this only be a VDIR case?
    }
   if ((vp^.v_vflag and VV_ROOT)<>0) then
+  begin
    error:=EBUSY;
+  end;
  end;
  if (error=0) then
  begin
@@ -1506,14 +1548,18 @@ begin
   begin
    NDFREE(@nd, NDF_ONLY_PNBUF);
    vput(nd.ni_dvp);
+
    if (vp=nd.ni_dvp) then
     vrele(vp)
    else
     vput(vp);
+
    VFS_UNLOCK_GIANT(vfslocked);
    error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
    if (error<>0) then
+   begin
     Exit(error);
+   end;
    goto restart;
   end;
 
@@ -1528,10 +1574,12 @@ begin
  end;
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(nd.ni_dvp);
+
  if (vp=nd.ni_dvp) then
   vrele(vp)
  else
   vput(vp);
+
  VFS_UNLOCK_GIANT(vfslocked);
  Exit(error);
 end;
@@ -1544,7 +1592,9 @@ end;
 function sys_unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 begin
  if ((flag and (not AT_REMOVEDIR))<>0) then
+ begin
   Exit(EINVAL);
+ end;
 
  if ((flag and AT_REMOVEDIR)<>0) then
   Exit(kern_rmdirat(fd, path, UIO_USERSPACE))
@@ -1715,7 +1765,9 @@ begin
  NDINIT_ATRIGHTS(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, fd, CAP_FSTAT, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   goto out1;
+ end;
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
 
@@ -1754,7 +1806,9 @@ var
  error, vfslocked:Integer;
 begin
  if (flag and (not AT_SYMLINK_NOFOLLOW))<>0 then
+ begin
   Exit(EINVAL);
+ end;
 
  if ((flag and AT_SYMLINK_NOFOLLOW)<>0) then
  begin
@@ -1768,20 +1822,26 @@ begin
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=NDHASGIANT(@nd);
  error:=vn_stat(nd.ni_vp, @sb);
  if (error=0) then
  begin
   if (hook<>nil) then
+  begin
    hook(nd.ni_vp, @sb);
+  end;
  end;
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(nd.ni_vp);
  VFS_UNLOCK_GIANT(vfslocked);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  sbp^:=sb;
  Exit(0);
@@ -1808,7 +1868,9 @@ var
 begin
  error:=kern_stat(path, UIO_USERSPACE, @sb);
  if (error=0) then
+ begin
   error:=copyout(@sb, ub, sizeof(sb));
+ end;
  Exit(error);
 end;
 
@@ -1819,7 +1881,9 @@ var
 begin
  error:=kern_statat(flag, fd, path, UIO_USERSPACE, @sb);
  if (error=0) then
+ begin
   error:=copyout(@sb, buf, sizeof(sb));
+ end;
  Exit(error);
 end;
 
@@ -1838,7 +1902,9 @@ var
 begin
  error:=kern_lstat(path, UIO_USERSPACE, @sb);
  if (error=0) then
+ begin
   error:=copyout(@sb, ub, sizeof(sb));
+ end;
  Exit(error);
 end;
 
@@ -1854,7 +1920,9 @@ begin
  NDINIT(@nd, LOOKUP, LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1 or flags, pathseg, path, td);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
 
@@ -1974,7 +2042,9 @@ begin
   error:=EPERM;
   //error:=priv_check(td, PRIV_VFS_CHFLAGS_DEV);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
  end;
 
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
@@ -1987,8 +2057,9 @@ begin
 
  //error:=mac_vnode_check_setflags(td^.td_ucred, vp, vattr.va_flags);
  //if (error=0) then
-
+ begin
   error:=VOP_SETATTR(vp, @vattr);
+ end;
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);
  Exit(error);
@@ -2051,7 +2122,9 @@ var
 begin
  error:=getvnode(fd, CAP_FCHFLAGS, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=VFS_LOCK_GIANT(fp^.f_vnode^.v_mount);
 
@@ -2072,15 +2145,18 @@ var
 begin
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  VATTR_NULL(@vattr);
  vattr.va_mode:=mode and ALLPERMS;
 
  //error:=mac_vnode_check_setmode(cred, vp, vattr.va_mode);
  //if (error=0) then
-
+ begin
   error:=VOP_SETATTR(vp, @vattr);
+ end;
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);
  Exit(error);
@@ -2131,7 +2207,9 @@ end;
 function sys_fchmodat(fd:Integer;path:PChar;mode,flag:Integer):Integer;
 begin
  if ((flag and (not AT_SYMLINK_NOFOLLOW))<>0) then
+ begin
   Exit(EINVAL);
+ end;
 
  Exit(kern_fchmodat(fd, path, UIO_USERSPACE, mode, flag));
 end;
@@ -2154,7 +2232,9 @@ var
 begin
  error:=fget(fd, CAP_FCHMOD, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=fo_chmod(fp, mode);
  fdrop(fp);
  Exit(error);
@@ -2172,17 +2252,19 @@ begin
  error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
 
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
  VATTR_NULL(@vattr);
  vattr.va_uid:=uid;
  vattr.va_gid:=gid;
 
- //error:=mac_vnode_check_setowner(cred, vp, vattr.va_uid,
- //    vattr.va_gid);
+ //error:=mac_vnode_check_setowner(cred, vp, vattr.va_uid, vattr.va_gid);
  //if (error=0) then
-
+ begin
   error:=VOP_SETATTR(vp, @vattr);
+ end;
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);
  Exit(error);
@@ -2232,7 +2314,9 @@ end;
 function sys_fchownat(fd:Integer;path:PChar;uid,gid,flag:Integer):Integer;
 begin
  if ((flag and (not AT_SYMLINK_NOFOLLOW))<>0) then
+ begin
   Exit(EINVAL);
+ end;
 
  Exit(kern_fchownat(fd, path, UIO_USERSPACE, uid, gid, flag));
 end;
@@ -2260,7 +2344,9 @@ var
 begin
  error:=fget(fd, CAP_FCHOWN, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=fo_chown(fp, uid, gid);
  fdrop(fp);
  Exit(error);
@@ -2288,13 +2374,17 @@ begin
   begin
    error:=copyin(usrtvp, @tv, sizeof(tv));
    if (error<>0) then
+   begin
     Exit(error);
+   end;
    tvp:=tv;
   end;
 
   if (tvp[0].tv_usec < 0) or (tvp[0].tv_usec >= 1000000) or
      (tvp[1].tv_usec < 0) or (tvp[1].tv_usec >= 1000000) then
+  begin
    Exit(EINVAL);
+  end;
 
   TIMEVAL_TO_TIMESPEC(@tvp[0], @tsp[0]);
   TIMEVAL_TO_TIMESPEC(@tvp[1], @tsp[1]);
@@ -2320,25 +2410,35 @@ begin
  if (numtimes < 3) and
     (VOP_GETATTR(vp, @vattr)=0) and
     (timespeccmp_lt(@ts[1], @vattr.va_birthtime)<>0) then //<
+ begin
   setbirthtime:=1;
+ end;
 
  VATTR_NULL(@vattr);
  vattr.va_atime:=ts[0];
  vattr.va_mtime:=ts[1];
 
  if (setbirthtime<>0) then
+ begin
   vattr.va_birthtime:=ts[1];
+ end;
 
  if (numtimes > 2) then
+ begin
   vattr.va_birthtime:=ts[2];
+ end;
 
  if (nilflag<>0) then
+ begin
   vattr.va_vaflags:=vattr.va_vaflags or VA_UTIMES_NULL;
 
  //error:=mac_vnode_check_setutimes(td^.td_ucred, vp, vattr.va_atime, vattr.va_mtime);
+ end;
 
  if (error=0) then
+ begin
   error:=VOP_SETATTR(vp, @vattr);
+ end;
 
  VOP_UNLOCK(vp, 0);
  vn_finished_write(mp);
@@ -2427,11 +2527,15 @@ var
 begin
  error:=getutimes(tptr, tptrseg, ts);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  error:=getvnode(fd, CAP_FUTIMES, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  vfslocked:=VFS_LOCK_GIANT(fp^.f_vnode^.v_mount);
 
  error:=setutimes(fp^.f_vnode, ts, 2, ord(tptr=nil));
@@ -2458,7 +2562,9 @@ var
  error,vfslocked:Integer;
 begin
  if (length < 0) then
+ begin
   Exit(EINVAL);
+ end;
  NDINIT(@nd, LOOKUP, FOLLOW or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
@@ -2593,7 +2699,9 @@ begin
 
  error:=nd_namei(@fromnd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  fvfslocked:=NDHASGIANT(@fromnd);
  tvfslocked:=0;
@@ -2603,11 +2711,15 @@ begin
 
  VOP_UNLOCK(fromnd.ni_dvp, 0);
  if (fromnd.ni_dvp<>fromnd.ni_vp) then
+ begin
   VOP_UNLOCK(fromnd.ni_vp, 0);
+ end;
 
  fvp:=fromnd.ni_vp;
  if (error=0) then
+ begin
   error:=vn_start_write(fvp, @mp, V_WAIT or PCATCH);
+ end;
 
  if (error<>0) then
  begin
@@ -2622,14 +2734,18 @@ begin
      curkthread);
 
  if (fromnd.ni_vp^.v_type=VDIR) then
+ begin
   tond.ni_cnd.cn_flags:=tond.ni_cnd.cn_flags or WILLBEDIR;
+ end;
 
  error:=nd_namei(@tond);
  if (error<>0) then
  begin
   { Translate error code for rename('dir1', 'dir2/.'). }
   if (error=EISDIR) and (fvp^.v_type=VDIR) then
+  begin
    error:=EINVAL;
+  end;
 
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
   vrele(fromnd.ni_dvp);
@@ -2664,11 +2780,12 @@ begin
   * are links to the same vnode), then there is nothing to do.
   }
  if (fvp=tvp) then
+ begin
   error:=-1;
+ end;
 
  //else
- // error:=mac_vnode_check_rename_to(td^.td_ucred, tdvp,
- //     tond.ni_vp, fromnd.ni_dvp=tdvp, @tond.ni_cnd);
+ // error:=mac_vnode_check_rename_to(td^.td_ucred, tdvp, tond.ni_vp, fromnd.ni_dvp=tdvp, @tond.ni_cnd);
 
  _out:
  if (error=0) then
@@ -2682,7 +2799,10 @@ begin
   NDFREE(@tond, NDF_ONLY_PNBUF);
 
   if (tvp<>nil) then
+  begin
    vput(tvp);
+  end;
+
   if (tdvp=tvp) then
    vrele(tdvp)
   else
@@ -2695,7 +2815,9 @@ begin
  vn_finished_write(mp);
 out1:
  if (fromnd.ni_startdir<>nil) then
+ begin
   vrele(fromnd.ni_startdir);
+ end;
 
  VFS_UNLOCK_GIANT(fvfslocked);
  VFS_UNLOCK_GIANT(tvfslocked);
@@ -2743,7 +2865,9 @@ restart:
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
@@ -2771,7 +2895,9 @@ restart:
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   goto restart;
  end;
@@ -2833,7 +2959,9 @@ restart:
 
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vfslocked:=NDHASGIANT(@nd);
  vp:=nd.ni_vp;
@@ -2876,7 +3004,9 @@ restart:
   VFS_UNLOCK_GIANT(vfslocked);
   error:=vn_start_write(nil, @mp, V_XSLEEP or PCATCH);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   goto restart;
  end;
@@ -2930,11 +3060,15 @@ begin
  auio.uio_resid:=count;
 
  if (auio.uio_resid > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
 
  error:=getvnode(fd, CAP_READ or CAP_SEEK, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if ((fp^.f_flag and FREAD)=0) then
  begin
@@ -2965,7 +3099,9 @@ unionread:
 
  //error:=mac_vnode_check_readdir(td^.td_ucred, vp);
  //if (error=0) then
+ begin
   error:=VOP_READDIR(vp, @auio, @eofflag, nil, nil);
+ end;
 
  foffset:=auio.uio_offset;
  if (error<>0) then
@@ -3008,10 +3144,14 @@ var
 begin
  error:=kern_getdirentries(fd, buf, count, @base);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (basep<>nil) then
+ begin
   error:=copyout(@base, basep, sizeof(Int64));
+ end;
 
  Exit(error);
 end;
@@ -3166,14 +3306,12 @@ end;
 
 function sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
 var
- src_len:Integer;
  ran_len:Integer;
  dst_len:QWORD;
  data:array[0..255] of AnsiChar;
 begin
  FillChar(data,SizeOf(data),0);
  dst_len:=0;
- src_len:=0;
 
  if (src=nil) then
  begin

@@ -1,4 +1,4 @@
-unit md_trap;
+unit md_exception;
 
 {$mode objfpc}{$H+}
 
@@ -11,12 +11,11 @@ uses
   ntapi,
   machdep,
   md_context,
-  //SysConst,
-  //SysUtils,
   kern_thr,
   trap,
   signal,
   ucontext,
+  vm,
   vmparam;
 
 function AddVectoredExceptionHandler(FirstHandler: DWORD; VectoredHandler: pointer): pointer; stdcall;
@@ -87,12 +86,23 @@ end;
 const
  FPC_EXCEPTION_CODE=$E0465043;
 
+function translate_pageflt_err(v:QWORD):QWORD; inline;
+begin
+ Result:=VM_PROT_NONE;
+ case v of
+  0:Result:=VM_PROT_READ;
+  2:Result:=VM_PROT_WRITE;
+  8:Result:=VM_PROT_EXECUTE;
+ end;
+end;
+
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 var
  ExceptionCode:DWORD;
  td:p_kthread;
  tf_addr:QWORD;
  uc:ucontext_t;
+ rv:Integer;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
 
@@ -104,6 +114,8 @@ begin
  td^.td_frame.tf_trapno:=0;
 
  ExceptionCode:=p^.ExceptionRecord^.ExceptionCode;
+
+ rv:=-1;
 
  case ExceptionCode of
   FPC_EXCEPTION_CODE:;
@@ -117,23 +129,20 @@ begin
      set_mcontext(td, @uc.uc_mcontext);
 
      td^.td_frame.tf_trapno:=T_PAGEFLT;
+     td^.td_frame.tf_err   :=translate_pageflt_err(p^.ExceptionRecord^.ExceptionInformation[0]);
      td^.td_frame.tf_addr  :=tf_addr;
 
-     trap.trap(@td^.td_frame);
+     rv:=trap.trap(@td^.td_frame);
     end;
 
   else;
  end;
 
- case td^.td_frame.tf_trapno of
-  T_CONTINUE:Exit(EXCEPTION_CONTINUE_EXECUTION);
-  T_SET_CTX :
-    begin
-     get_mcontext(td, @uc.uc_mcontext, TF_HASFPXSTATE);
-     _set_ucontext(p^.ContextRecord,@uc);
-     Exit(EXCEPTION_CONTINUE_EXECUTION);
-    end
-  else;
+ if (rv=0) then
+ begin
+  get_mcontext(td, @uc.uc_mcontext, TF_HASFPXSTATE);
+  _set_ucontext(p^.ContextRecord,@uc);
+  Exit(EXCEPTION_CONTINUE_EXECUTION);
  end;
 
 end;

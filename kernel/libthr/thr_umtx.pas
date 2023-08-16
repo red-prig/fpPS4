@@ -1,6 +1,7 @@
 unit thr_umtx;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

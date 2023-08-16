@@ -1,6 +1,7 @@
 unit vfs_cache;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 

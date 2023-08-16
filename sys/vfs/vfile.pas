@@ -10,7 +10,6 @@ uses
  vstat,
  vuio,
  vnode,
- kern_thr,
  kern_id;
 
 const

@@ -35,7 +35,6 @@ function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 implementation
 
 uses
- ucontext,
  kern_umtx;
 
 function cpu_thread_alloc():p_kthread;

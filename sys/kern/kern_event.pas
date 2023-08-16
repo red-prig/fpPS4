@@ -700,7 +700,6 @@ end;
 procedure filt_hr_timerexpire(knx:Pointer);
 var
  kn:p_knote;
- calloutp:p_callout;
 begin
  kn:=knx;
 

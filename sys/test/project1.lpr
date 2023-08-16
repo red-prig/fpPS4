@@ -102,17 +102,12 @@ uses
  uipc_syscalls,
  kern_ipmimgr,
  kern_mdbg,
- md_trap,
+ md_exception,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs;
 
-const
- PAGE_MAP_COUNT=(qword(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
-
 var
- PAGE_MAP:array[0..PAGE_MAP_COUNT-1] of DWORD;
-
  mtx:umutex;
  rwl:urwlock;
  e:Integer;
@@ -1284,13 +1279,6 @@ var
 begin
  //tailq;
  id_test;
-
- PAGE_MAP[200]:=3;
- writeln(PAGE_MAP[200]);
- writeln('0x',HexStr(PAGE_MAP_COUNT-1,8));
- writeln('0x',HexStr(sizeof(PAGE_MAP),8));
- writeln('0x',HexStr(PAGE_MAP_COUNT div (64*1024 div 4),8));
- writeln('0x',HexStr((64*1024 div 4),8));
 
  //test_map;
  sys_init;

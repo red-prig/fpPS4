@@ -11,7 +11,7 @@ interface
 function px2sce(e:Integer):Integer;
 function sce2px(e:Integer):Integer;
 
-function _get_errno:Integer; inline;
+function _get_errno:Integer;
 function _set_errno(r:Integer):Integer;
 function _set_sce_errno(r:Integer):Integer;
 
@@ -36,7 +36,7 @@ begin
   Result:=e+$7ffe0000;
 end;
 
-function _get_errno:Integer; inline;
+function _get_errno:Integer;
 begin
  Result:=__error^;
 end;

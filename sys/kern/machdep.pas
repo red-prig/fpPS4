@@ -521,13 +521,6 @@ begin
  end;
  //xmm,ymm
 
- //teb wow64
- if ((uc.uc_flags and 2)<>0) then
- begin
-  td^.td_teb^.wow64:=Pointer(uc.__spare[0]);
- end;
- //teb wow64
-
  bmove(@ucp^.uc_mcontext.mc_rdi,regs,sizeof(trapframe));
 
  if ((ucp^.uc_mcontext.mc_flags and _MC_HASBASES)<>0) then

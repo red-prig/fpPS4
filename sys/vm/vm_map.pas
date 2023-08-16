@@ -236,7 +236,7 @@ function  vm_map_stack(map      :vm_map_t;
                        max      :vm_prot_t;
                        cow      :Integer):Integer;
 
-function  vm_map_growstack(addr:vm_offset_t):Integer;
+function  vm_map_growstack(map:vm_map_t;addr:vm_offset_t):Integer;
 function  vmspace_exec(minuser,maxuser:vm_offset_t):Integer;
 
 procedure vm_map_lock(map:vm_map_t);
@@ -2282,14 +2282,13 @@ end;
  * stack range (this is strange, but preserves compatibility with
  * the grow function in vm_machdep.c).
  }
-function vm_map_growstack(addr:vm_offset_t):Integer;
+function vm_map_growstack(map:vm_map_t;addr:vm_offset_t):Integer;
 label
  _or,
  _out;
 var
  next_entry, prev_entry:vm_map_entry_t;
  new_entry, stack_entry:vm_map_entry_t;
- map:vm_map_t;
  __end:vm_offset_t;
  growsize:vm_size_t;
  grow_amount, max_grow:QWORD;
@@ -2305,10 +2304,8 @@ var
  end;
 
 begin
- map:=@g_vmspace.vm_map;
-
  stacklim:=lim_cur(RLIMIT_STACK);
- vmemlim:=lim_cur(RLIMIT_VMEM);
+ vmemlim :=lim_cur(RLIMIT_VMEM);
 
  vm_map_lock(map);
 
@@ -2724,9 +2721,6 @@ var
  map:vm_map_t;
  prot:vm_prot_t;
  fault_type:vm_prot_t;
- eobject:vm_object_t;
- size:vm_size_t;
- old_map:vm_map_t;
 begin
  map:=var_map^;
  fault_type:=fault_typea;

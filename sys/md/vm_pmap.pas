@@ -12,6 +12,14 @@ uses
  vmparam,
  vm_object;
 
+const
+ PAGE_MAP_COUNT=(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
+ PAGE_MAP_MASK =PAGE_MAP_COUNT-1;
+ PAGE_BUSY_FLAG=DWORD($80000000);
+
+var
+ PAGE_MAP:PDWORD=nil;
+
 type
  p_pmap=^_pmap;
  _pmap=packed object
@@ -26,7 +34,7 @@ function  ptoa(x:DWORD):QWORD; inline;
 function  ctob(x:QWORD):QWORD; inline;
 function  btoc(x:QWORD):QWORD; inline;
 
-procedure pmap_pinit(maps:p_pmap);
+procedure pmap_pinit(pmap:p_pmap);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -154,7 +162,7 @@ begin
  Result:=r;
 end;
 
-procedure pmap_pinit(maps:p_pmap);
+procedure pmap_pinit(pmap:p_pmap);
 var
  base:Pointer;
  size:QWORD;
@@ -187,6 +195,9 @@ begin
   end;
  end;
 
+ PAGE_MAP:=md_mmap(nil,PAGE_MAP_COUNT*SizeOf(DWORD),MD_PROT_RW);
+
+ Assert(PAGE_MAP<>nil,'pmap_init');
 end;
 
 {
@@ -214,6 +225,59 @@ begin
   addr^:=(addr^ and (not PDRMASK)) + superpage_offset
  else
   addr^:=((addr^ + PDRMASK) and (not PDRMASK)) + superpage_offset;
+end;
+
+//PAGE_MAP
+
+function IDX_TO_OFF(x:DWORD):QWORD; inline;
+begin
+ Result:=QWORD(x) shl PAGE_SHIFT;
+end;
+
+function OFF_TO_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=QWORD(x) shr PAGE_SHIFT;
+end;
+
+procedure pmap_mark(start,__end,__off:vm_offset_t);
+begin
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ __off:=OFF_TO_IDX(__off);
+ while (start<__end) do
+ begin
+  PAGE_MAP[start and PAGE_MAP_MASK]:=__off;
+  Inc(__off);
+  Inc(start);
+ end;
+ WriteBarrier;
+end;
+
+procedure pmap_unmark(start,__end:vm_offset_t);
+begin
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ while (start<__end) do
+ begin
+  PAGE_MAP[start and PAGE_MAP_MASK]:=0;
+  Inc(start);
+ end;
+ WriteBarrier;
+end;
+
+procedure pmap_mark_busy(start,__end:vm_offset_t);
+var
+ i:vm_offset_t;
+begin
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ while (start<__end) do
+ begin
+  i:=start and PAGE_MAP_MASK;
+  PAGE_MAP[i]:=PAGE_MAP[i] or PAGE_BUSY_FLAG;
+  Inc(start);
+ end;
+ WriteBarrier;
 end;
 
 const
@@ -277,6 +341,90 @@ begin
   Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_enter_object');
  end;
+
+ pmap_mark(start,__end,QWORD(base));
+end;
+
+procedure pmap_move(pmap    :pmap_t;
+                    start   :vm_offset_t;
+                    ofs_old :vm_offset_t;
+                    ofs_new :vm_offset_t;
+                    size    :vm_offset_t;
+                    new_prot:vm_prot_t);
+var
+ r,old:Integer;
+begin
+ old:=0;
+
+ pmap_mark_busy(start,start+size);
+
+ //set old to readonly
+ r:=NtProtectVirtualMemory(
+     NtCurrentProcess,
+     @ofs_old,
+     @size,
+     PAGE_READONLY,
+     @old
+    );
+
+ if (r<>0) then
+ begin
+  Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
+  Assert(false,'pmap_move');
+ end;
+
+ //alloc new
+ r:=NtAllocateVirtualMemory(
+     NtCurrentProcess,
+     @ofs_new,
+     0,
+     @size,
+     MEM_COMMIT,
+     PAGE_READWRITE
+    );
+
+ if (r<>0) then
+ begin
+  Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
+  Assert(false,'pmap_move');
+ end;
+
+ //move data
+ Move(Pointer(ofs_old)^,Pointer(ofs_new)^,size);
+
+ //prot new
+ if (PAGE_READWRITE<>wprots[new_prot and VM_RWX]) then
+ begin
+  r:=NtProtectVirtualMemory(
+      NtCurrentProcess,
+      @ofs_new,
+      @size,
+      wprots[new_prot and VM_RWX],
+      @old
+     );
+
+  if (r<>0) then
+  begin
+   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
+   Assert(false,'pmap_move');
+  end;
+ end;
+
+ pmap_mark(start,start+size,ofs_new);
+
+ //free old
+ r:=NtFreeVirtualMemory(
+     NtCurrentProcess,
+     @ofs_old,
+     @size,
+     MEM_DECOMMIT
+    );
+
+ if (r<>0) then
+ begin
+  Writeln('failed NtFreeVirtualMemory:',HexStr(r,8));
+  Assert(false,'pmap_move');
+ end;
 end;
 
 procedure pmap_protect(pmap    :pmap_t;
@@ -314,71 +462,7 @@ begin
    base_old:=base_old+VM_MIN_GPU_ADDRESS;
   end;
 
-  //set old to readonly
-  r:=NtProtectVirtualMemory(
-      NtCurrentProcess,
-      @base_old,
-      @size,
-      PAGE_READONLY,
-      @old
-     );
-
-  if (r<>0) then
-  begin
-   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
-   Assert(false,'pmap_protect');
-  end;
-
-  //alloc new
-  r:=NtAllocateVirtualMemory(
-      NtCurrentProcess,
-      @base_new,
-      0,
-      @size,
-      MEM_COMMIT,
-      PAGE_READWRITE
-     );
-
-  if (r<>0) then
-  begin
-   Writeln('failed NtAllocateVirtualMemory:',HexStr(r,8));
-   Assert(false,'pmap_protect');
-  end;
-
-  //move data
-  Move(base_old^,base_new^,size);
-
-  //prot new
-  if (PAGE_READWRITE<>wprots[new_prot and VM_RWX]) then
-  begin
-   r:=NtProtectVirtualMemory(
-       NtCurrentProcess,
-       @base_new,
-       @size,
-       wprots[new_prot and VM_RWX],
-       @old
-      );
-
-   if (r<>0) then
-   begin
-    Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
-    Assert(false,'pmap_protect');
-   end;
-  end;
-
-  //free old
-  r:=NtFreeVirtualMemory(
-      NtCurrentProcess,
-      @base_old,
-      @size,
-      MEM_DECOMMIT
-     );
-
-  if (r<>0) then
-  begin
-   Writeln('failed NtFreeVirtualMemory:',HexStr(r,8));
-   Assert(false,'pmap_protect');
-  end;
+  pmap_move(pmap,start,vm_offset_t(base_old),vm_offset_t(base_new),size,new_prot);
 
  end else
  begin
@@ -444,6 +528,8 @@ begin
 
  base:=Pointer(trunc_page(start));
  size:=trunc_page(__end-start);
+
+ pmap_unmark(start,__end);
 
  if is_gpu(prot) then
  begin

@@ -35,9 +35,6 @@ const
  T_RESERVED  =30; // reserved (unknown)
  T_DTRACE_RET=32; // DTrace pid return
 
- T_CONTINUE=33;
- T_SET_CTX =34;
-
   // XXX most of the following codes aren't used, but could be.
 
   // definitions for <sys/signal.h>
@@ -119,16 +116,33 @@ procedure fast_syscall;
 procedure sigcode;
 procedure sigipi;
 
-procedure trap(frame:p_trapframe);
+type
+ t_jit_frame=packed record
+  call:Pointer;
+  addr:Pointer;
+  reta:Pointer;
+ end;
+
+procedure jit_call;
+
+function  IS_TRAP_FUNC(rip:qword):Boolean; inline;
+
+function  trap(frame:p_trapframe):Integer;
+function  trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
 
 implementation
 
 uses
  errno,
  systm,
+ vm,
  vmparam,
+ vm_map,
+ vm_pmap,
+ vm_fault,
  machdep,
  md_context,
+ signal,
  kern_sig,
  sysent,
  subr_dynlib,
@@ -619,7 +633,7 @@ asm
 
  lahf  //load to AH
  shr   $8,%rax
- andl  $0xFF,%rax //filter
+ andl  $0xFF,%rax //filter flags
  movqq %rax,%rcx  //save flags
 
  movqq %gs:teb.thread,%rax //curkthread
@@ -696,7 +710,7 @@ asm
  popq  %rbp
  ret
 
- //fail:
+ //fail (curkthread=nil)
  _fail:
 
  movqq %rcx,%rax //get flags
@@ -715,8 +729,8 @@ asm
  //ast
  _ast:
 
- call ast
- jmp _after_call
+  call ast
+  jmp _after_call
 
  //doreti
  _doreti:
@@ -768,6 +782,214 @@ asm
   hlt
 end;
 
+////
+
+{
+ jit prolog
+ movqq %rsp,%gs:teb.jit_rsp  teb.jit_rsp:=rsp
+ jitcall
+}
+
+procedure jit_call; assembler; nostackframe;
+label
+ _after_call,
+ _doreti,
+ _fail,
+ _ast,
+ _doreti_exit;
+asm
+ //%rsp must be saved in %gs:teb.jit_rsp upon enter (Implicit lock interrupt)
+
+ //save %rax
+ movqq %rax,%gs:teb.jit_rax
+
+ lahf  //load flags to AH
+
+ movqq %gs:teb.thread,%rsp //curkthread
+ test  %rsp,%rsp
+ jz    _fail
+
+ shr   $8,%rax
+ andl  $0xFF,%rax //filter flags
+ movqq %rax,kthread.td_frame.tf_rflags(%rsp) //save flags
+
+ movqq %gs:teb.jit_rax,%rax //load %rax
+ movqq %rax,kthread.td_frame.tf_rax(%rsp) //save %rax
+
+ movqq %gs:teb.jit_rsp,%rax //load %rsp
+ movqq %rax,kthread.td_frame.tf_rsp(%rsp) //save %rsp
+
+ movqq %rsp,%rax //move td to %rax
+ movqq kthread.td_kstack.stack(%rax),%rsp //td_kstack (Implicit lock interrupt)
+ andq  $-32,%rsp //align stack
+
+ andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
+
+ //clear teb.jit_rsp
+ xor   %rax,%rax
+ movqq %rax,%gs:teb.jit_rsp
+
+ movqq %rdi,kthread.td_frame.tf_rdi(%rax)
+ movqq %rsi,kthread.td_frame.tf_rsi(%rax)
+ movqq %rdx,kthread.td_frame.tf_rdx(%rax)
+ movqq %rcx,kthread.td_frame.tf_rcx(%rax)
+ movqq %r8 ,kthread.td_frame.tf_r8 (%rax)
+ movqq %r9 ,kthread.td_frame.tf_r9 (%rax)
+ movqq %rbx,kthread.td_frame.tf_rbx(%rax)
+ movqq %rbp,kthread.td_frame.tf_rbp(%rax)
+ movqq %r10,kthread.td_frame.tf_r10(%rax)
+ movqq %r11,kthread.td_frame.tf_r11(%rax)
+ movqq %r12,kthread.td_frame.tf_r12(%rax)
+ movqq %r13,kthread.td_frame.tf_r13(%rax)
+ movqq %r14,kthread.td_frame.tf_r14(%rax)
+ movqq %r15,kthread.td_frame.tf_r15(%rax)
+
+ movqq %gs:teb.jitcall,%rdi                //get struct
+
+ movqq t_jit_frame.reta(%rdi),%rsi         //get ret addr
+ movqq %rsi,kthread.td_frame.tf_rip(%rax)  //save ret
+
+ movqq t_jit_frame.addr(%rdi),%rsi         //get src addr
+ movqq %rsi,kthread.td_frame.tf_addr(%rax) //save addr
+
+ movqq $0  ,kthread.td_frame.tf_trapno(%rax)
+ movqq $0  ,kthread.td_frame.tf_flags (%rax)
+ movqq $0  ,kthread.td_frame.tf_err   (%rax)
+
+ //clear teb.jitcall
+ xor   %rax,%rax
+ movqq %rax,%gs:teb.jitcall
+
+ call  t_jit_frame.call(%rdi) //call jit code
+
+ _after_call:
+
+ movqq %gs:teb.thread,%rcx //curkthread
+
+ //Requested full context restore
+ testl PCB_FULL_IRET,kthread.pcb_flags(%rcx)
+ jnz _doreti
+
+ testl TDF_AST,kthread.td_flags(%rcx)
+ jne _ast
+
+ //Restore preserved registers.
+ movqq kthread.td_frame.tf_rip(%rcx),%rax //get ret addr
+ movqq %rax,%gs:teb.jitcall               //save ret
+
+ //get flags
+ movqq kthread.td_frame.tf_rflags(%rcx),%rax
+ shl   $8,%rax
+ sahf  //restore flags
+
+ movqq kthread.td_frame.tf_rdi(%rcx),%rdi
+ movqq kthread.td_frame.tf_rsi(%rcx),%rsi
+ movqq kthread.td_frame.tf_rdx(%rcx),%rdx
+ movqq kthread.td_frame.tf_r8 (%rcx),%r8
+ movqq kthread.td_frame.tf_r9 (%rcx),%r9
+ movqq kthread.td_frame.tf_rax(%rcx),%rax
+ movqq kthread.td_frame.tf_rbx(%rcx),%rbx
+ movqq kthread.td_frame.tf_rbp(%rcx),%rbp
+ movqq kthread.td_frame.tf_r10(%rcx),%r10
+ movqq kthread.td_frame.tf_r11(%rcx),%r11
+ movqq kthread.td_frame.tf_r12(%rcx),%r12
+ movqq kthread.td_frame.tf_r13(%rcx),%r13
+ movqq kthread.td_frame.tf_r14(%rcx),%r14
+ movqq kthread.td_frame.tf_r15(%rcx),%r15
+ movqq kthread.td_frame.tf_rsp(%rcx),%rsp
+
+ //last restore
+ movqq kthread.td_frame.tf_rcx(%rcx),%rcx
+
+ //ret
+ jmpq  %gs:teb.jitcall
+
+ //fail (curkthread=nil)
+ _fail:
+
+ movqq %gs:teb.jitcall       ,%rax //get struct
+ movqq t_jit_frame.reta(%rax),%rax //get ret addr
+ movqq %rax,%gs:teb.jitcall        //save ret
+
+ sahf  //restore flags from AH
+
+ movqq %gs:teb.jit_rax,%rax //restore %rax
+ xchgq %gs:teb.jit_rsp,%rsp //restore %rsp (and also set teb.jit_rsp=0)
+
+ //ret
+ jmpq  %gs:teb.jitcall
+
+ //ast
+ _ast:
+
+  call ast
+  jmp _after_call
+
+ //doreti
+ _doreti:
+
+  //%rcx=curkthread
+  testl TDF_AST,kthread.td_flags(%rcx)
+  je _doreti_exit
+
+  call ast
+  jmp _doreti
+
+ _doreti_exit:
+
+  //Restore full.
+  call  ipi_sigreturn
+  hlt
+end;
+
+function IS_TRAP_FUNC(rip:qword):Boolean; inline;
+begin
+ Result:=(
+          (rip>=QWORD(@fast_syscall)) and
+          (rip<=(QWORD(@fast_syscall)+$1A9)) //fast_syscall func size
+         ) or
+         (
+          (rip>=QWORD(@jit_call)) and
+          (rip<=(QWORD(@jit_call)+$235)) //jit_call func size
+         );
+end;
+
+{
+ //low addr (rsi)
+ mov rsi,rdi
+ and rsi,PAGE_MASK
+ //high addr (rdi)
+ shr rdi,PAGE_SHIFT
+ and rdi,PAGE_MAP_MASK
+ //uplift (rdi)
+ mov rax,PAGE_MAP
+ mov edi,[rdi*4+rax]
+ //combine (rdi|rsi)
+ shl rdi,PAGE_SHIFT
+ or  rdi,rsi
+}
+
+//rax,rdi,rsi
+function uplift(addr,stub:Pointer):Pointer; assembler; nostackframe;
+asm
+ //low addr (rsi)
+ mov %rdi,%rsi
+ and PAGE_MASK,%rsi
+ //high addr (rdi)
+ shr PAGE_SHIFT   ,%rdi
+ and PAGE_MAP_MASK,%rdi
+ //uplift (rdi)
+ mov PAGE_MAP,%rax
+ mov (%rax,%rdi,4),%edi
+ //combine (rdi|rsi)
+ shl PAGE_SHIFT,%rdi
+ or  %rsi,%rdi
+ //result
+ mov %rdi,%rax
+end;
+
+{$ASMMODE Intel}
+
 procedure parse_instr(tf_rip:Pointer);
 var
  err:Integer;
@@ -784,6 +1006,10 @@ begin
  err:=copyin(tf_rip,@data,SizeOf(data));
  if (err<>0) then Exit;
 
+ writeln(HexStr(@PAGE_MAP));
+
+ ptr:=uplift(tf_rip,nil);
+
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
@@ -799,16 +1025,21 @@ begin
 
 end;
 
-procedure trap(frame:p_trapframe);
+function IS_USERMODE(td:p_kthread;frame:p_trapframe):Integer; inline;
 begin
+ Result:=ord((frame^.tf_rsp>QWORD(td^.td_kstack.stack)) or (frame^.tf_rsp<=(QWORD(td^.td_kstack.sttop))));
+end;
+
+function trap(frame:p_trapframe):Integer;
+begin
+ Result:=0;
 
  case frame^.tf_trapno of
   T_PAGEFLT:
     begin
+     Result:=trap_pfault(frame,IS_USERMODE(curkthread,frame));
 
-     parse_instr(Pointer(frame^.tf_rip));
-
-
+     //parse_instr(Pointer(frame^.tf_rip));
 
      print_backtrace_c(stderr);
      writeln;
@@ -818,6 +1049,61 @@ begin
  end;
 
 end;
+
+function trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
+var
+ td:p_kthread;
+ eva,va:vm_offset_t;
+ map:vm_map_t;
+ rv:Integer;
+begin
+ Result:=SIGSEGV;
+
+ td:=curkthread;
+ eva:=frame^.tf_addr;
+ va:=trunc_page(eva);
+
+ if (usermode=0) then
+ begin
+  //frame^.tf_rip:=pcb_onfault;
+  //Exit(0);
+  //else
+  //trap_fatal
+ end;
+
+ if is_guest_addr(eva) then
+ begin
+  map:=@g_vmspace.vm_map;
+
+  rv:=vm_fault.vm_fault(map,frame^.tf_addr,frame^.tf_err,VM_FAULT_NORMAL);
+
+  if (rv=0) then
+  begin
+   if vm_check_patch(map,frame^.tf_rip) then
+   begin
+    //retry again?
+   end else
+   if vm_try_jit_patch(map,frame^.tf_rip)=0 then
+   begin
+    //ret
+   end else
+   begin
+    Assert(false,'TODO');
+   end;
+  end;
+
+  case rv of
+   KERN_PROTECTION_FAILURE:Result:=SIGBUS;
+   else
+                           Result:=SIGSEGV;
+  end;
+
+
+ end;
+
+
+end;
+
 
 
 end.

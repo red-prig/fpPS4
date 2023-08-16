@@ -334,7 +334,7 @@ begin
  Result:=msleep_umtxq(uq^.uq_handle,timo);
 end;
 
-function wakeup(uq:p_umtx_q):Integer; inline;
+function wakeup(uq:p_umtx_q):Integer;
 begin
  Result:=wakeup_umtxq(uq^.uq_handle);
 end;

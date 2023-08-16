@@ -690,6 +690,26 @@
         <Filename Value="..\kern\kern_blockpool.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\elf_nid_utils.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vm\rmem_map.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\rtl\x86_fpdbgdisas.pp"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\md\md_exception.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vm\vm_fault.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -718,6 +738,17 @@
       </Debugging>
       <LinkSmart Value="True"/>
     </Linking>
+    <Other>
+      <CustomOptions Value="-vm5024
+-vm4055
+-vm4056
+-vm2005
+-vm3177
+-vm4082
+-vm5028
+-vm6060
+-vm7103"/>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions>

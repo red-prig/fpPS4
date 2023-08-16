@@ -2,6 +2,7 @@ unit ps4_libSceIpmi;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
+{$WARN 4110 off}
 
 interface
 

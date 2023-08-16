@@ -79,7 +79,9 @@ begin
  pri  :=priority and PRIMASK;
 
  if (TD_ON_SLEEPQ(td)) then
+ begin
   sleepq_remove(td,td^.td_wchan);
+ end;
 
  if (ident=@pause_wchan) then
   flags:=SLEEPQ_PAUSE
@@ -102,7 +104,9 @@ begin
  sleepq_add(ident,lock,wmesg,flags,0);
 
  if (timo<>0) then
+ begin
   sleepq_set_timeout(ident,timo);
+ end;
 
  if (timo<>catch) then
   Result:=sleepq_timedwait_sig(ident,pri)

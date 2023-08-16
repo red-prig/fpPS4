@@ -845,7 +845,6 @@ end;
 function ufs_remove(ap:p_vop_remove_args):Integer;
 var
  dvp,vp:p_vnode;
- dd:p_ufs_dirent;
  de:p_ufs_dirent;
  dmp:p_ufs_mount;
 begin
@@ -857,7 +856,6 @@ begin
  ASSERT_VOP_ELOCKED(vp,  'ufs_remove');
 
  sx_xlock(@dmp^.ufs_lock);
- dd:=ap^.a_dvp^.v_data;
  de:=vp^.v_data;
 
  if (de^.ufs_dirent^.d_type=DT_DIR) then

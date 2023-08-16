@@ -1,6 +1,7 @@
 unit elf_nid_utils;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -36,6 +37,7 @@ const
 var
  i,nIndex:Integer;
 begin
+ Result:='';
  SetLength(Result,nEncLenMax);
  For i:=nEncLenMax downto 1 do
  begin

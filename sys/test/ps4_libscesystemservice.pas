@@ -2,6 +2,7 @@ unit ps4_libSceSystemService;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
+{$WARN 4110 off}
 
 interface
 
