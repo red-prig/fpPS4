@@ -969,25 +969,6 @@ end;
  or  rdi,rsi
 }
 
-//rax,rdi,rsi
-function uplift(addr,stub:Pointer):Pointer; assembler; nostackframe;
-asm
- //low addr (rsi)
- mov %rdi,%rsi
- and PAGE_MASK,%rsi
- //high addr (rdi)
- shr PAGE_SHIFT   ,%rdi
- and PAGE_MAP_MASK,%rdi
- //uplift (rdi)
- mov PAGE_MAP,%rax
- mov (%rax,%rdi,4),%edi
- //combine (rdi|rsi)
- shl PAGE_SHIFT,%rdi
- or  %rsi,%rdi
- //result
- mov %rdi,%rax
-end;
-
 {$ASMMODE Intel}
 
 procedure parse_instr(tf_rip:Pointer);
@@ -1075,21 +1056,15 @@ begin
  begin
   map:=@g_vmspace.vm_map;
 
-  rv:=vm_fault.vm_fault(map,frame^.tf_addr,frame^.tf_err,VM_FAULT_NORMAL);
+  rv:=vm_fault.vm_fault(map,
+                        frame^.tf_addr,
+                        frame^.tf_rip,
+                        frame^.tf_err,
+                        VM_FAULT_NORMAL);
 
   if (rv=0) then
   begin
-   if vm_check_patch(map,frame^.tf_rip) then
-   begin
-    //retry again?
-   end else
-   if vm_try_jit_patch(map,frame^.tf_rip)=0 then
-   begin
-    //ret
-   end else
-   begin
-    Assert(false,'TODO');
-   end;
+   //
   end;
 
   case rv of

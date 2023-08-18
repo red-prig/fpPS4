@@ -28,6 +28,7 @@ type
  end;
 
 function  p_alloc  (vaddr:Pointer;size:Integer):p_stub_chunk;
+function  p_alloc_m(vaddr:Pointer;size:Integer;mask:DWORD):p_stub_chunk;
 procedure p_free   (chunk:p_stub_chunk);
 procedure p_inc_ref(chunk:p_stub_chunk);
 procedure p_dec_ref(chunk:p_stub_chunk);
@@ -41,6 +42,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
+ vm_pmap,
  vm_object;
 
 var
@@ -56,6 +58,31 @@ begin
  if (alignment=0) then Exit(addr);
  tmp:=addr+PtrUInt(alignment-1);
  Result:=tmp-(tmp mod alignment)
+end;
+
+function is_near_valid(vaddr,body:Pointer):Boolean;
+var
+ delta:Int64;
+begin
+ delta:=abs(Int64(vaddr)-Int64(body));
+ Result:=(delta<High(Integer));
+end;
+
+const
+ XMASK:array[0..1] of DWORD=(
+  $FF000000, //0xNN XX XX XX  4-byte instruction overlap
+  $FFFF0000  //0xNN NN XX XX  3-byte instruction overlap
+ );
+
+function is_mask_valid(vaddr,body:Pointer;mask:DWORD):Boolean;
+var
+ delta:Int64;
+ x:DWORD;
+begin
+ delta:=abs(Int64(vaddr)-Int64(body));
+ if not (delta<High(Integer)) then Exit(False);
+ X:=XMASK[mask and 1];
+ Result:=(DWORD(delta) and X)=(DWORD(mask) and X);
 end;
 
 function alloc_segment(start,size:QWORD):p_stub_chunk;
@@ -86,7 +113,10 @@ begin
 
  if (err<>0) then Exit;
 
- vm_map_set_name(map,start,size,'#patch');
+ vm_map_lock(map);
+ vm_map_set_name_locked(map,start,start+size,'#patch');
+ pmap_mark_flags(start,start+size,PAGE_PATCH_FLAG);
+ vm_map_unlock(map);
 
  Result:=Pointer(start);
 
@@ -169,6 +199,9 @@ begin
    Assert(prev^.curr_size=chunk^.prev_size,'invalid prev chunk curr_size');
    Assert(prev^.refs=0                    ,'invalid prev chunk refs');
 
+   TAILQ_REMOVE(@chunk_free,prev,@prev^.link);
+   prev^.link:=Default(TAILQ_ENTRY);
+
    prev^.curr_size:=prev^.curr_size+chunk^.curr_size;
 
    if ((chunk^.flags and m_last__chunk)<>0) then
@@ -192,6 +225,7 @@ begin
    Assert(next^.refs=0                    ,'invalid next chunk refs');
 
    TAILQ_REMOVE(@chunk_free,next,@next^.link);
+   next^.link:=Default(TAILQ_ENTRY);
 
    chunk^.curr_size:=chunk^.curr_size+next^.curr_size;
 
@@ -210,7 +244,6 @@ end;
 function find_free_chunk(vaddr:Pointer;size:Integer):p_stub_chunk;
 var
  entry,next:p_stub_chunk;
- delta:Int64;
 begin
  Result:=nil;
  entry:=TAILQ_FIRST(@chunk_free);
@@ -221,10 +254,35 @@ begin
   //
   if (entry^.curr_size>=(size+SizeOf(stub_chunk))) then
   begin
-   delta:=abs(Int64(vaddr)-Int64(@entry^.body));
-   if (vaddr=nil) or (delta<High(Integer)) then
+   if (vaddr=nil) or is_near_valid(vaddr,@entry^.body) then
    begin
     TAILQ_REMOVE(@chunk_free,entry,@entry^.link);
+    entry^.link:=Default(TAILQ_ENTRY);
+    Exit(entry);
+   end;
+  end;
+  //
+  entry:=next;
+ end;
+end;
+
+function find_free_chunk_m(vaddr:Pointer;size:Integer;mask:DWORD):p_stub_chunk;
+var
+ entry,next:p_stub_chunk;
+begin
+ Result:=nil;
+ entry:=TAILQ_FIRST(@chunk_free);
+
+ while (entry<>nil) do
+ begin
+  next:=TAILQ_NEXT(entry,@entry^.link);
+  //
+  if (entry^.curr_size>=(size+SizeOf(stub_chunk))) then
+  begin
+   if is_mask_valid(vaddr,@entry^.body,mask) then
+   begin
+    TAILQ_REMOVE(@chunk_free,entry,@entry^.link);
+    entry^.link:=Default(TAILQ_ENTRY);
     Exit(entry);
    end;
   end;
@@ -245,6 +303,20 @@ begin
  begin
   chunk:=alloc_segment(QWORD(vaddr),size);
   Assert(chunk<>nil,'p_alloc NOMEM');
+
+  if (vaddr<>nil) then
+  if (not is_near_valid(vaddr,@chunk^.body)) then
+  if (QWORD(vaddr)>High(Integer)) then
+  begin
+   free_segment(chunk);
+   chunk:=alloc_segment(AlignUp(QWORD(vaddr)-High(Integer),PAGE_SIZE),size);
+   Assert(chunk<>nil,'p_alloc NOMEM');
+  end;
+
+  if (vaddr<>nil) then
+  begin
+   Assert(is_near_valid(vaddr,@chunk^.body),'p_alloc is_near_valid');
+  end;
  end;
 
  split_chunk(chunk,size);
@@ -257,6 +329,55 @@ begin
 
  Result:=chunk;
 end;
+
+//
+
+function p_alloc_m(vaddr:Pointer;size:Integer;mask:DWORD):p_stub_chunk;
+var
+ chunk:p_stub_chunk;
+ x:Integer;
+begin
+ rw_wlock(chunk_lock);
+
+ chunk:=find_free_chunk_m(vaddr,size,mask);
+
+ if (chunk=nil) then
+ begin
+  x:=Integer(mask and XMASK[mask and 1]);
+
+  if (x<0) and (QWORD(vaddr)<abs(x)) then
+  begin
+   Result:=nil;
+   rw_wunlock(chunk_lock);
+  end;
+
+  chunk:=alloc_segment(QWORD(Int64(vaddr)+x),size);
+  if (chunk=nil) then
+  begin
+   Result:=nil;
+   rw_wunlock(chunk_lock);
+  end;
+
+  if not is_mask_valid(vaddr,@chunk^.body,mask) then
+  begin
+   free_segment(chunk);
+   Result:=nil;
+   rw_wunlock(chunk_lock);
+  end;
+ end;
+
+ split_chunk(chunk,size);
+
+ chunk^.flags:=chunk^.flags and (not m_free__chunk);
+
+ HAMT_insert64(@chunk_alloc,QWORD(chunk),chunk);
+
+ rw_wunlock(chunk_lock);
+
+ Result:=chunk;
+end;
+
+//
 
 procedure p_free(chunk:p_stub_chunk);
 begin

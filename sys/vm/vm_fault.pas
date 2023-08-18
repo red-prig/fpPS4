@@ -9,22 +9,28 @@ uses
  kern_thr,
  vm,
  vm_map,
+ vm_pmap,
  vm_object;
 
-function vm_try_jit_patch(map:vm_map_t;vaddr:vm_offset_t):Integer;
-
-function vm_check_patch(map:vm_map_t;vaddr:vm_offset_t):Boolean;
-
 function vm_fault(map        :vm_map_t;
-                  vaddr      :vm_offset_t;
+                  mem_addr   :vm_offset_t;
+                  rip_addr   :vm_offset_t;
                   fault_type :vm_prot_t;
                   fault_flags:Integer):Integer;
+
+function vm_try_jit_patch(map:vm_map_t;vaddr:vm_offset_t):Integer;
 
 implementation
 
 uses
  systm,
- x86_fpdbgdisas;
+ x86_fpdbgdisas,
+ kern_stub;
+
+function vm_check_patch(map:vm_map_t;vaddr:vm_offset_t):Boolean;
+begin
+ Result:=(pmap_get_raw(vaddr) and PAGE_PATCH_FLAG)<>0;
+end;
 
 function vm_try_jit_patch(map:vm_map_t;vaddr:vm_offset_t):Integer;
 var
@@ -35,8 +41,19 @@ var
  din:TInstruction;
  ptr:Pointer;
 
+ chunk:p_stub_chunk;
+
  rv:Integer;
+ mask:DWORD;
 begin
+ Result:=0;
+
+ if vm_check_patch(map,vaddr) then
+ begin
+  vm_map_unlock(map);
+  Exit(0);
+ end;
+
  err:=copyin(Pointer(vaddr),@data,SizeOf(data));
  if (err<>0) then Exit(KERN_PROTECTION_FAILURE);
 
@@ -46,28 +63,16 @@ begin
  ptr:=@data;
  dis.Disassemble(dm64,ptr,din);
 
- Result:=0;
-end;
+ mask:=data[4];
+ mask:=mask shl 24;
 
-function vm_check_patch(map:vm_map_t;vaddr:vm_offset_t):Boolean;
-var
- entry:vm_map_entry_t;
-begin
- Result:=False;
+ chunk:=p_alloc_m(Pointer(vaddr),5,mask);
 
- vm_map_lock(map);
-
- entry:=nil;
- if vm_map_lookup_entry(map, vaddr, @entry) then
- begin
-  Result:=(entry^.name='#patch'); //TODO create flag
- end;
-
- vm_map_unlock(map);
 end;
 
 function vm_fault(map        :vm_map_t;
-                  vaddr      :vm_offset_t;
+                  mem_addr   :vm_offset_t;
+                  rip_addr   :vm_offset_t;
                   fault_type :vm_prot_t;
                   fault_flags:Integer):Integer;
 label
@@ -84,7 +89,7 @@ begin
  RetryFault:
 
  Result:=vm_map_lookup(@map,
-                       vaddr,
+                       mem_addr,
                        fault_type,
                        @entry,
                        @obj,
@@ -96,7 +101,7 @@ begin
   if growstack and
     (Result=KERN_INVALID_ADDRESS) then
   begin
-   Result:=vm_map_growstack(map, vaddr);
+   Result:=vm_map_growstack(map, mem_addr);
    vm_map_lookup_done(map,entry);
    if (Result<>KERN_SUCCESS) then
    begin
@@ -116,10 +121,12 @@ begin
    vm_map_lookup_done(map,entry);
    Exit(KERN_FAILURE);
   end;
-  Assert(false,'vm_fault: fault on nofault entry 0x'+HexStr(vaddr,16));
+  Assert(false,'vm_fault: fault on nofault entry 0x'+HexStr(mem_addr,16));
  end;
 
  //Next, various actions with a vm map
+
+ vm_try_jit_patch(map,rip_addr);
 
  vm_map_lookup_done(map,entry);
 end;

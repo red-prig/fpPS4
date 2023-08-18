@@ -15,10 +15,16 @@ uses
 const
  PAGE_MAP_COUNT=(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
  PAGE_MAP_MASK =PAGE_MAP_COUNT-1;
- PAGE_BUSY_FLAG=DWORD($80000000);
+ PAGE_BUSY_FLAG =DWORD($80000000);
+ PAGE_PATCH_FLAG=DWORD($40000000);
 
 var
  PAGE_MAP:PDWORD=nil;
+
+procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
+function  pmap_get_raw(addr:vm_offset_t):DWORD;
+
+function  uplift(addr,stub:Pointer):Pointer;
 
 type
  p_pmap=^_pmap;
@@ -265,7 +271,7 @@ begin
  WriteBarrier;
 end;
 
-procedure pmap_mark_busy(start,__end:vm_offset_t);
+procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
 var
  i:vm_offset_t;
 begin
@@ -274,10 +280,38 @@ begin
  while (start<__end) do
  begin
   i:=start and PAGE_MAP_MASK;
-  PAGE_MAP[i]:=PAGE_MAP[i] or PAGE_BUSY_FLAG;
+  PAGE_MAP[i]:=PAGE_MAP[i] or flags;
   Inc(start);
  end;
  WriteBarrier;
+end;
+
+function pmap_get_raw(addr:vm_offset_t):DWORD;
+begin
+ addr:=OFF_TO_IDX(addr);
+ addr:=addr and PAGE_MAP_MASK;
+ Result:=PAGE_MAP[addr];
+end;
+
+//rax,rdi,rsi
+function uplift(addr,stub:Pointer):Pointer; assembler; nostackframe;
+asm
+ //low addr (rsi)
+ mov %rdi,%rsi
+ and PAGE_MASK,%rsi
+ //high addr (rdi)
+ shr PAGE_SHIFT   ,%rdi
+ and PAGE_MAP_MASK,%rdi
+ //uplift (rdi)
+ mov PAGE_MAP,%rax
+ mov (%rax,%rdi,4),%edi
+ //filter (rdi)
+ and PAGE_MAP_MASK,%rdi
+ //combine (rdi|rsi)
+ shl PAGE_SHIFT,%rdi
+ or  %rsi,%rdi
+ //result
+ mov %rdi,%rax
 end;
 
 const
@@ -356,7 +390,7 @@ var
 begin
  old:=0;
 
- pmap_mark_busy(start,start+size);
+ pmap_mark_flags(start,start+size,PAGE_BUSY_FLAG);
 
  //set old to readonly
  r:=NtProtectVirtualMemory(
