@@ -406,7 +406,7 @@ begin
  stub:=p_alloc(vaddr,SizeOf(t_base_data_trampoline));
 
  delta:=Int64(@stub^.body)-(Int64(vaddr)+SizeOf(t_call32_trampoline));
- Assert(delta<High(Integer),'vm_add_mov_base_patch');
+ Assert(abs(delta)<High(Integer),'vm_add_mov_base_patch');
 
  patch_original(info,Integer(delta),addr_out);
 
@@ -444,7 +444,7 @@ begin
  stub:=p_alloc(vaddr,SizeOf(t_jmpq64_trampoline));
 
  delta:=Int64(@stub^.body)-(Int64(vaddr)+SizeOf(t_call32_trampoline));
- Assert(delta<High(Integer),'vm_add_syscall_patch');
+ Assert(abs(delta)<High(Integer),'vm_add_syscall_patch');
 
  patch_original(info,Integer(delta),addr_out);
 

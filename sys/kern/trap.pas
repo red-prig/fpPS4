@@ -116,14 +116,37 @@ procedure fast_syscall;
 procedure sigcode;
 procedure sigipi;
 
+procedure jit_call;
+
 type
+ p_jit_frame=^t_jit_frame;
  t_jit_frame=packed record
   call:Pointer;
   addr:Pointer;
   reta:Pointer;
  end;
 
-procedure jit_call;
+ p_jit_prolog=^t_jit_prolog;
+ t_jit_prolog=packed record
+  mov0   :array[0..4] of Byte;
+  jit_rsp:DWORD;
+  mov1   :array[0..1] of Byte;
+  jframe :Pointer;
+  jmp    :array[0..1] of Byte;
+  jmp_ofs:DWORD;
+  jitcall:Pointer;
+ end;
+
+const
+ c_jit_prolog:t_jit_prolog=(
+  mov0   :($65,$48,$89,$24,$25);
+  jit_rsp:DWORD(QWORD(@p_teb(nil)^.jit_rsp));
+  mov1   :($48,$BC);
+  jframe :nil;
+  jmp    :($FF,$25);
+  jmp_ofs:0;
+  jitcall:@jit_call;
+ );
 
 function  IS_TRAP_FUNC(rip:qword):Boolean; inline;
 
@@ -785,11 +808,18 @@ end;
 ////
 
 {
- jit prolog
- movqq %rsp,%gs:teb.jit_rsp  teb.jit_rsp:=rsp
- jitcall
+ //jit prolog
+ asm
+  6548892425 [C8010000]   movqq %rsp,%gs:teb.jit_rsp //Implicit lock interrupt
+  48BC [0000000000000000] movqq $0,%rsp              //Move p_jit_frame to %rsp
+  FF25       [00000000]   jmp   (%rip)               //Jump to jit_call
+  [addr64 jit_call]
+ end;
 }
 
+//input:
+// 1: %gs:teb.jit_rsp (original %rsp)
+// 2: %rsp            (jitcall  addr)
 procedure jit_call; assembler; nostackframe;
 label
  _after_call,
@@ -799,6 +829,9 @@ label
  _doreti_exit;
 asm
  //%rsp must be saved in %gs:teb.jit_rsp upon enter (Implicit lock interrupt)
+
+ //save jitcall
+ movqq %rsp,%gs:teb.jitcall
 
  //save %rax
  movqq %rax,%gs:teb.jit_rax
@@ -824,10 +857,6 @@ asm
  andq  $-32,%rsp //align stack
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
-
- //clear teb.jit_rsp
- xor   %rax,%rax
- movqq %rax,%gs:teb.jit_rsp
 
  movqq %rdi,kthread.td_frame.tf_rdi(%rax)
  movqq %rsi,kthread.td_frame.tf_rsi(%rax)
@@ -856,9 +885,10 @@ asm
  movqq $0  ,kthread.td_frame.tf_flags (%rax)
  movqq $0  ,kthread.td_frame.tf_err   (%rax)
 
- //clear teb.jitcall
+ //clear teb.jitcall,teb.jit_rsp
  xor   %rax,%rax
  movqq %rax,%gs:teb.jitcall
+ movqq %rax,%gs:teb.jit_rsp
 
  call  t_jit_frame.call(%rdi) //call jit code
 
@@ -1068,6 +1098,7 @@ begin
   end;
 
   case rv of
+                         0:Result:=0;
    KERN_PROTECTION_FAILURE:Result:=SIGBUS;
    else
                            Result:=SIGSEGV;

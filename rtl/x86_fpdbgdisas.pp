@@ -342,7 +342,7 @@ type
   { TX86Disassembler }
 
   TX86Disassembler = object
-  private
+  public
     ProcessMode: TFPDMode;
     Code: PByte;
     CodeIdx: Byte;
@@ -899,9 +899,9 @@ end;
 procedure TX86Disassembler.DecodeModRM;
 begin
   Include(Flags, flagModRM);
-  ModRM.Mode :=  (Code[ModRMIdx] shr 6) and 3;
-  ModRM.Index := (Code[ModRMIdx] shr 3) and 7;
-  ModRM.RM :=    (Code[ModRMIdx]      ) and 7;
+  ModRM.Mode := (Code[ModRMIdx] shr 6) and 3;
+  ModRM.Index:= (Code[ModRMIdx] shr 3) and 7;
+  ModRM.RM   := (Code[ModRMIdx]      ) and 7;
 end;
 
 procedure TX86Disassembler.ClearSIMDPrefix;
@@ -998,7 +998,6 @@ begin
   Instruction^.Operand[OperIdx].ByteCount2 := AByteCount2;
   Instruction^.Operand[OperIdx].FormatFlags := AFormatFlags;
   Instruction^.Operand[OperIdx].RegValue := RegValue;
-  //Instruction^.Operand[OperIdx].StrValue := AStrValue;
 
   Instruction^.Operand[OperIdx].Flags := AFlags;
 end;
@@ -1180,7 +1179,7 @@ end;
 
 procedure TX86Disassembler.AddOpcReg(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte);
 begin
-  AddReg(AType, ASize, AIndex + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags]);
+  AddReg(AType, ASize, AIndex + REXOFFSET[rexR in Flags] + VEXOFFSET[evexR in Flags]);
 end;
 
 procedure TX86Disassembler.AddModReg(AType: TRegisterType; ASize: TOperandSize);
@@ -1253,10 +1252,12 @@ procedure TX86Disassembler.AddModRM(AReqTypes: TModRMTypes; ASize: TOperandSize;
     );
   begin
     case ModRM.Mode of
-      0: begin
-        if ModRM.RM = 6 // disp16 -> exception to the regs
-        then AddOperand(RegValue(regNone),  ASize, 2, [hvfSigned, hvfIncludeHexchar], [ofMemory])
-        else AddOperand(REGS16_REG[ModRM.RM], ASize, 0, [], [ofMemory]);
+      0:
+      begin
+        if (ModRM.RM = 6) then // disp16 -> exception to the regs
+         AddOperand(RegValue(regNone),  ASize, 2, [hvfSigned, hvfIncludeHexchar], [ofMemory])
+        else
+         AddOperand(REGS16_REG[ModRM.RM], ASize, 0, [], [ofMemory]);
       end;
       1: AddOperand(REGS16_REG[ModRM.RM], ASize, 1, [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar], [ofMemory]);
       2: AddOperand(REGS16_REG[ModRM.RM], ASize, 2, [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar], [ofMemory]);
@@ -1276,17 +1277,18 @@ begin
   DecodeModRM;
 
   // Check for reg (ProcessMode = 3) first;
-  if ModRM.Mode = 3
-  then begin
-    if modReg in AReqTypes
-    then AddReg(AType, ASize, ModRM.RM + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags])
-    else AddReg(regInvalid, ASize, ModRM.RM + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags]);
+  if (ModRM.Mode = 3) then
+  begin
+    if modReg in AReqTypes then
+     AddReg(AType, ASize, ModRM.RM + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags])
+    else
+     AddReg(regInvalid, ASize, ModRM.RM + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags]);
     Exit;
   end;
 
   // Check if mem is allowed
-  if not (modMem in AReqTypes)
-  then begin
+  if not (modMem in AReqTypes) then
+  begin
     AddOperand(RegValue(regInvalid), OPERAND_BYTES[ASize], [], [ofMemory]);
     Exit;
   end;
@@ -1295,14 +1297,14 @@ begin
 
   // Here only mem access
   AddrSize := AddressSize;
-  if AddrSize = as16
-  then begin
+  if AddrSize = as16 then
+  begin
     Mem16;
     Exit;
   end;
 
-  if ModRM.RM = 4
-  then begin
+  if ModRM.RM = 4 then
+  begin
     // sib folows
     Include(Flags, flagSib);
     sib.Scale := Code[ModRMIdx+1] shr 6;
@@ -1310,57 +1312,62 @@ begin
     sib.Base  := Code[ModRMIdx+1] and $7;
 
     // base
-    if (ModRM.Mode = 0) and (sib.Base = 5)
-    then begin
+    if (ModRM.Mode = 0) and (sib.Base = 5) then
+    begin
       // disp32
       Oper.Size := 4;
-      if (sib.Index <> 4) or (rexX in Flags)
-      then Oper.Flags := [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar] // [reg + base]
-      else Oper.Flags := [hvfSigned, hvfIncludeHexchar];                   // [base]
-    end
-    else begin
+      if (sib.Index <> 4) or (rexX in Flags) then
+       Oper.Flags := [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar] // [reg + base]
+      else
+       Oper.Flags := [hvfSigned, hvfIncludeHexchar];                   // [base]
+    end else
+    begin
       Oper.RegValue := RegValue(regGeneral, ADDRESS_SIZE[AddrSize], sib.Base + REXOFFSET[rexB in Flags]);
     end;
 
     // reg
-    if (rexX in Flags) or (sib.Index <> 4)
-    then begin
+    if (rexX in Flags) or (sib.Index <> 4) then
+    begin
       // get index
       AddRegValue(Oper.RegValue, regGeneral, ADDRESS_SIZE[AddrSize], sib.Index + REXOFFSET[rexX in Flags], 1 shl sib.Scale);
     end;
-  end
-  else begin
+  end else
+  begin
     // no sib
     Oper.RegValue := RegValue(regGeneral, ADDRESS_SIZE[AddrSize], ModRM.RM + REXOFFSET[rexB in Flags]);
   end;
 
   case ModRM.Mode of
-    0: begin
+    0:
+    begin
       // exceptions to std encoding
-      if ModRM.RM = 5
-      then begin
+      if (ModRM.RM = 5) then
+      begin
         // disp32
-        if AddrSize = as64
-        then begin
+        if AddrSize = as64 then
+        begin
           Oper.RegValue := RegValue(regRip, os64);
           Oper.Flags := [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar];
-        end
-        else begin
+        end else
+        begin
           Oper.RegValue := RegValue(regNone);
           Oper.Flags := [hvfSigned, hvfIncludeHexchar];
         end;
         Oper.Size := 4;
       end;
     end;
-    1: begin
+    1:
+    begin
       Oper.Size := 1;
       Oper.Flags := [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar];
     end;
-    2: begin
+    2:
+    begin
       Oper.Size := 4;
       Oper.Flags := [hvfSigned, hvfPrefixPositive, hvfIncludeHexchar];
     end;
   end;
+
   AddOperand(Oper.RegValue, ASize, Oper.Size, Oper.Flags, [ofMemory]);
 end;
 

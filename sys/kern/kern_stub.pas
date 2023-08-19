@@ -27,6 +27,9 @@ type
   body     :record end;
  end;
 
+function  is_near_valid(vaddr,body:Pointer):Boolean;
+function  is_mask_valid(vaddr,body:Pointer;mask:DWORD):Boolean;
+
 function  p_alloc  (vaddr:Pointer;size:Integer):p_stub_chunk;
 function  p_alloc_m(vaddr:Pointer;size:Integer;mask:DWORD):p_stub_chunk;
 procedure p_free   (chunk:p_stub_chunk);
@@ -64,7 +67,7 @@ function is_near_valid(vaddr,body:Pointer):Boolean;
 var
  delta:Int64;
 begin
- delta:=abs(Int64(vaddr)-Int64(body));
+ delta:=abs(Int64(body)-Int64(vaddr));
  Result:=(delta<High(Integer));
 end;
 
@@ -79,8 +82,8 @@ var
  delta:Int64;
  x:DWORD;
 begin
- delta:=abs(Int64(vaddr)-Int64(body));
- if not (delta<High(Integer)) then Exit(False);
+ delta:=Int64(body)-Int64(vaddr);
+ if not (abs(delta)<High(Integer)) then Exit(False);
  X:=XMASK[mask and 1];
  Result:=(DWORD(delta) and X)=(DWORD(mask) and X);
 end;
