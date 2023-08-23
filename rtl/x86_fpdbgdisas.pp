@@ -1179,7 +1179,7 @@ end;
 
 procedure TX86Disassembler.AddOpcReg(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte);
 begin
-  AddReg(AType, ASize, AIndex + REXOFFSET[rexR in Flags] + VEXOFFSET[evexR in Flags]);
+  AddReg(AType, ASize, AIndex + REXOFFSET[rexB in Flags] + VEXOFFSET[evexX in Flags]);
 end;
 
 procedure TX86Disassembler.AddModReg(AType: TRegisterType; ASize: TOperandSize);

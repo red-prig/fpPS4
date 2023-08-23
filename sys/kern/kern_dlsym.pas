@@ -435,7 +435,7 @@ begin
 
  Result:=@stub^.body;
 
- vm_add_patch_link(refobj^.rel_data^.obj,where,pt_unresolve,stub);
+ vm_add_patch_link(refobj^.rel_data^.obj,where,SizeOf(Pointer),pt_unresolve,stub);
 end;
 
 function find_symdef(symnum:QWORD;

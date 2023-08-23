@@ -455,7 +455,7 @@ end;
 
 function entry_cross(entry:p_rmem_map_entry;start,__end:DWORD):Boolean;
 begin
- Result:=(__end>=entry^.start) and (start<=entry^.__end);
+ Result:=(__end>entry^.start) and (start<entry^.__end);
 end;
 
 function entry_vaddr(prev:p_rmem_map_entry;vaddr:DWORD):Boolean; inline;

@@ -256,6 +256,9 @@ type
   addr:Integer;
  end;
 
+ p_jmp32_trampoline=^t_jmp32_trampoline;
+ t_jmp32_trampoline=t_call32_trampoline;
+
  p_mov_rel_base32=^t_mov_rel_base32;
  t_mov_rel_base32=packed record
   inst:array[0..4] of Byte;
@@ -375,7 +378,7 @@ const
 
  c_jmpq64_trampoline:t_jmpq64_trampoline=(inst:$25FF;offset:0;addr:0);
  c_call32_trampoline:t_call32_trampoline=(inst:$E8;addr:0);
- c_jmpl32_trampoline:t_call32_trampoline=(inst:$E9;addr:0);
+ c_jmpl32_trampoline:t_jmp32_trampoline =(inst:$E9;addr:0);
 
 procedure patch_original(const info:t_instr_index_info;delta:Integer;addr_out:Pointer);
 var
@@ -429,8 +432,8 @@ begin
  md_cacheflush(@stub^.body,SizeOf(trampoline),ICACHE);
 
  case info.sbase of
-  FSBASE:vm_add_patch_link(_obj,vaddr,pt_fsbase,stub);
-  GSBASE:vm_add_patch_link(_obj,vaddr,pt_gsbase,stub);
+  FSBASE:vm_add_patch_link(_obj,vaddr,info.inlen,pt_fsbase,stub);
+  GSBASE:vm_add_patch_link(_obj,vaddr,info.inlen,pt_gsbase,stub);
   else;
  end;
 end;
@@ -454,7 +457,7 @@ begin
 
  md_cacheflush(@stub^.body,SizeOf(trampoline),ICACHE);
 
- vm_add_patch_link(_obj,vaddr,pt_syscall,stub);
+ vm_add_patch_link(_obj,vaddr,info.inlen,pt_syscall,stub);
 end;
 
 procedure vm_add_patch(const info:t_instr_index_info;_obj,vaddr,addr_out:Pointer);

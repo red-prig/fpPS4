@@ -976,64 +976,12 @@ function IS_TRAP_FUNC(rip:qword):Boolean; inline;
 begin
  Result:=(
           (rip>=QWORD(@fast_syscall)) and
-          (rip<=(QWORD(@fast_syscall)+$1A9)) //fast_syscall func size
+          (rip<=(QWORD(@fast_syscall)+$1AA)) //fast_syscall func size
          ) or
          (
           (rip>=QWORD(@jit_call)) and
-          (rip<=(QWORD(@jit_call)+$235)) //jit_call func size
+          (rip<=(QWORD(@jit_call)+$23C)) //jit_call func size
          );
-end;
-
-{
- //low addr (rsi)
- mov rsi,rdi
- and rsi,PAGE_MASK
- //high addr (rdi)
- shr rdi,PAGE_SHIFT
- and rdi,PAGE_MAP_MASK
- //uplift (rdi)
- mov rax,PAGE_MAP
- mov edi,[rdi*4+rax]
- //combine (rdi|rsi)
- shl rdi,PAGE_SHIFT
- or  rdi,rsi
-}
-
-{$ASMMODE Intel}
-
-procedure parse_instr(tf_rip:Pointer);
-var
- err:Integer;
- data:array[0..15] of Byte;
-
- dec:TX86AsmDecoder;
-
- ptr:Pointer;
- AProcess: TDbgProcess;
- dis:TX86Disassembler;
- din:TInstruction;
- str1,str2:RawByteString;
-begin
- err:=copyin(tf_rip,@data,SizeOf(data));
- if (err<>0) then Exit;
-
- writeln(HexStr(@PAGE_MAP));
-
- ptr:=uplift(tf_rip,nil);
-
- dis:=Default(TX86Disassembler);
- din:=Default(TInstruction);
-
- ptr:=@data;
-
- AProcess:=TDbgProcess.Create;
- AProcess.Mode:=dm64;
- dec:=TX86AsmDecoder.Create(AProcess);
- dec.Disassemble(ptr,str1,str2);
-
- ptr:=@data;
- dis.Disassemble(dm64,ptr,din);
-
 end;
 
 function IS_USERMODE(td:p_kthread;frame:p_trapframe):Integer; inline;
@@ -1049,8 +997,6 @@ begin
   T_PAGEFLT:
     begin
      Result:=trap_pfault(frame,IS_USERMODE(curkthread,frame));
-
-     //parse_instr(Pointer(frame^.tf_rip));
 
      print_backtrace_c(stderr);
      writeln;

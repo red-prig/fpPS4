@@ -96,21 +96,20 @@ begin
  end;
 end;
 
-function ProcessException(p:PExceptionPointers):longint; stdcall;
+function ProcessException3(p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
  ExceptionCode:DWORD;
  td:p_kthread;
  tf_addr:QWORD;
  uc:ucontext_t;
+ backup:trapframe;
  rv:Integer;
 begin
- Result:=EXCEPTION_CONTINUE_SEARCH;
-
+ Result:=-1;
  td:=curkthread;
- if (td=nil) then Exit;
 
- if not is_guest_addr(QWORD(p^.ExceptionRecord^.ExceptionAddress)) then Exit;
-
+ //Context backup to return correctly
+ backup:=td^.td_frame;
  td^.td_frame.tf_trapno:=0;
 
  ExceptionCode:=p^.ExceptionRecord^.ExceptionCode;
@@ -123,6 +122,9 @@ begin
   STATUS_ACCESS_VIOLATION:
     begin
      tf_addr:=p^.ExceptionRecord^.ExceptionInformation[1];
+
+     //Writeln(HexStr(p^.ContextRecord^.Rip,16));
+     //Writeln(HexStr(Get_pc_addr));
 
      uc:=Default(ucontext_t);
      _get_ucontext(p^.ContextRecord,@uc);
@@ -142,9 +144,36 @@ begin
  begin
   get_mcontext(td, @uc.uc_mcontext, TF_HASFPXSTATE);
   _set_ucontext(p^.ContextRecord,@uc);
-  Exit(EXCEPTION_CONTINUE_EXECUTION);
+  Result:=0;
  end;
 
+ td^.td_frame:=backup;
+end;
+
+function ProcessException2(p:PExceptionPointers):longint; assembler; nostackframe; SysV_ABI_CDecl;
+asm
+ movq ProcessException3,%rax
+ call fast_syscall
+end;
+
+function ProcessException(p:PExceptionPointers):longint; stdcall;
+begin
+ Result:=EXCEPTION_CONTINUE_SEARCH;
+
+ if (curkthread=nil) then Exit;
+
+ if not is_guest_addr(QWORD(p^.ExceptionRecord^.ExceptionAddress)) then Exit;
+
+ //It looks like there is a small stack inside the exception, so you need to switch the context
+ Result:=ProcessException2(p);
+
+ if (Result=0) then
+ begin
+  Result:=EXCEPTION_CONTINUE_EXECUTION;
+ end else
+ begin
+  Result:=EXCEPTION_CONTINUE_SEARCH;
+ end;
 end;
 
 var
