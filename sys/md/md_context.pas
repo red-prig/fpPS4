@@ -78,6 +78,9 @@ function  _get_ctx_flags(src:p_ucontext_t):DWORD;
 procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
 procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
 
+procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
+procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
+
 procedure _get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
 procedure _set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
 
@@ -178,6 +181,20 @@ begin
  Result:=Result and (not CONTEXT_AMD64);
 end;
 
+function _get_ctx_flags(src:p_trapframe):DWORD;
+begin
+ Result:=CONTEXT_INTEGER or CONTEXT_CONTROL;
+ if ((src^.tf_flags and _MC_HASSEGS)<>0) then
+ begin
+  Result:=Result or CONTEXT_SEGMENTS;
+ end;
+ if ((src^.tf_flags and _MC_HASFPXSTATE)<>0) then
+ begin
+  Result:=Result or CONTEXT_FLOATING_POINT or CONTEXT_XSTATE;
+ end;
+ Result:=Result and (not CONTEXT_AMD64);
+end;
+
 procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
 var
  context_ex:PCONTEXT_EX;
@@ -217,6 +234,94 @@ begin
  dst^.FltSave:=uc_xsave^;
           xs^:=uc_xstate^;
 end;
+
+procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
+var
+ flags:DWORD;
+begin
+ if (src=nil) or (dst=nil) then Exit;
+
+ flags:=src^.ContextFlags and (not CONTEXT_AMD64);
+
+ if ((flags and CONTEXT_INTEGER)<>0) then
+ begin
+  dst^.tf_rax:=src^.Rax;
+  dst^.tf_rbx:=src^.Rbx;
+  dst^.tf_rcx:=src^.Rcx;
+  dst^.tf_rdx:=src^.Rdx;
+  dst^.tf_rsi:=src^.Rsi;
+  dst^.tf_rdi:=src^.Rdi;
+  dst^.tf_r8 :=src^.R8 ;
+  dst^.tf_r9 :=src^.R9 ;
+  dst^.tf_r10:=src^.R10;
+  dst^.tf_r11:=src^.R11;
+  dst^.tf_r12:=src^.R12;
+  dst^.tf_r13:=src^.R13;
+  dst^.tf_r14:=src^.R14;
+  dst^.tf_r15:=src^.R15;
+  dst^.tf_rbp:=src^.Rbp;
+ end;
+
+ if ((flags and CONTEXT_CONTROL)<>0) then
+ begin
+  dst^.tf_rsp   :=src^.Rsp;
+  dst^.tf_rip   :=src^.Rip;
+  dst^.tf_rflags:=src^.EFlags;
+ end;
+
+ if ((flags and CONTEXT_XSTATE)<>0) then
+ begin
+  _get_fpcontext(src,xstate);
+
+  dst^.tf_flags:=dst^.tf_flags or _MC_HASFPXSTATE;
+ end;
+end;
+
+procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
+var
+ flags:DWORD;
+begin
+ if (src=nil) or (dst=nil) then Exit;
+
+ flags:=_get_ctx_flags(src);
+
+ flags:=flags and dst^.ContextFlags; //filter
+ dst^.ContextFlags:=flags or CONTEXT_AMD64; //update
+
+ if ((flags and CONTEXT_INTEGER)<>0) then
+ begin
+  dst^.Rax:=src^.tf_rax;
+  dst^.Rbx:=src^.tf_rbx;
+  dst^.Rcx:=src^.tf_rcx;
+  dst^.Rdx:=src^.tf_rdx;
+  dst^.Rsi:=src^.tf_rsi;
+  dst^.Rdi:=src^.tf_rdi;
+  dst^.R8 :=src^.tf_r8;
+  dst^.R9 :=src^.tf_r9;
+  dst^.R10:=src^.tf_r10;
+  dst^.R11:=src^.tf_r11;
+  dst^.R12:=src^.tf_r12;
+  dst^.R13:=src^.tf_r13;
+  dst^.R14:=src^.tf_r14;
+  dst^.R15:=src^.tf_r15;
+  dst^.Rbp:=src^.tf_rbp;
+ end;
+
+ if ((flags and CONTEXT_CONTROL)<>0) then
+ begin
+  dst^.Rsp   :=src^.tf_rsp;
+  dst^.Rip   :=src^.tf_rip;
+  dst^.EFlags:=src^.tf_rflags;
+ end;
+
+ if ((flags and CONTEXT_FLOATING_POINT)<>0) or
+    ((flags and CONTEXT_XSTATE)<>0) then
+ begin
+  _set_fpcontext(dst,xstate);
+ end;
+end;
+
+//
 
 procedure _get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
 var

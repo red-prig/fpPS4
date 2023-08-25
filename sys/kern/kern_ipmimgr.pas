@@ -256,7 +256,7 @@ begin
     begin
      Result:=0;
      dst:=-1;
-     print_backtrace_c(stderr);
+     print_backtrace_td(stderr);
      Assert(False);
     end;
  end;

@@ -64,7 +64,8 @@ implementation
 
 uses
  errno,
- systm;
+ systm,
+ md_proc;
 
 function _WSTATUS(x:Integer):Integer; inline;
 begin
@@ -123,7 +124,7 @@ end;
 
 procedure exit1(rv:Integer);
 begin
- Halt(rv);
+ md_halt(rv);
 end;
 
 procedure sys_sys_exit(rval:Integer);

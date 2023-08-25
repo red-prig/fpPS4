@@ -110,7 +110,7 @@ procedure sig_sti;
 procedure sig_cli;
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
-procedure print_backtrace_c(var f:text);
+procedure print_backtrace_td(var f:text);
 
 procedure fast_syscall;
 procedure sigcode;
@@ -161,7 +161,6 @@ uses
  vm,
  vmparam,
  vm_map,
- vm_pmap,
  vm_fault,
  machdep,
  md_context,
@@ -170,8 +169,7 @@ uses
  sysent,
  subr_dynlib,
  elf_nid_utils,
- ps4libdoc,
- x86_fpdbgdisas;
+ ps4libdoc;
 
 const
  NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
@@ -493,10 +491,13 @@ begin
    Writeln(f,' 0x',HexStr(frame),' ',info.source);
   end;
  end else
+ if (BackTraceStrFunc<>nil) then
  begin
   Writeln(f,BackTraceStrFunc(frame));
+ end else
+ begin
+  Writeln(f,' 0x',HexStr(frame));
  end;
-
 end;
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
@@ -518,7 +519,7 @@ begin
  end;
 end;
 
-procedure print_backtrace_c(var f:text);
+procedure print_backtrace_td(var f:text);
 var
  td:p_kthread;
 begin
@@ -998,7 +999,7 @@ begin
     begin
      Result:=trap_pfault(frame,IS_USERMODE(curkthread,frame));
 
-     print_backtrace_c(stderr);
+     print_backtrace_td(stderr);
      writeln;
 
     end;

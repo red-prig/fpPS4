@@ -892,7 +892,7 @@ begin
   SIG_ERR:
     begin
      DebugBreak;
-     Halt(0);
+     md_halt(0);
     end;
   else;
  end;

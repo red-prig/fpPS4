@@ -600,6 +600,11 @@ function NtSetInformationThread(
           ThreadInformationLength:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtTerminateProcess(
+          ProcessHandle:THandle;
+          ExitStatus   :DWORD
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtContinue(
           Context:PCONTEXT;
           RaiseAlert:Boolean

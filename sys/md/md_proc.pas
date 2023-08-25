@@ -18,6 +18,8 @@ function  cpuset_getproc(var old:Ptruint):Integer;
 function  get_proc_prio():Integer;
 function  set_proc_prio(n:Integer):Integer;
 
+Procedure md_halt(errnum:TExitCode); noreturn;
+
 implementation
 
 function cpuset_setproc(new:Ptruint):Integer;
@@ -91,6 +93,11 @@ begin
                                  ProcessPriorityClass,
                                  @info,
                                  SizeOf(info));
+end;
+
+Procedure md_halt(errnum:TExitCode); noreturn;
+begin
+ NtTerminateProcess(NtCurrentProcess, errnum);
 end;
 
 initialization

@@ -257,6 +257,11 @@ asm
  mov %gs:(0x708),%rax
 end;
 
+function Get_SEH:Pointer; assembler; nostackframe;
+asm
+ mov %gs:(0),%rax
+end;
+
 threadvar
  intr:Integer;
 
@@ -478,6 +483,24 @@ begin
  //callout_drain(calloutp);
 end;
 
+
+{
+Type
+  TBacktraceStrFunc = Function (Addr: CodePointer): ShortString;
+  TErrorProc = Procedure (ErrNo : Longint; Address : CodePointer; Frame : Pointer);
+  TAbstractErrorProc = Procedure;
+  TAssertErrorProc = Procedure(const msg,fname:ShortString;lineno:longint;erroraddr:pointer);
+  TSafeCallErrorProc = Procedure(error : HResult;addr : pointer);
+
+
+const
+  BacktraceStrFunc  : TBacktraceStrFunc = @SysBacktraceStr;
+  ErrorProc         : TErrorProc = nil;
+  AbstractErrorProc : TAbstractErrorProc = nil;
+  AssertErrorProc   : TAssertErrorProc = @SysAssert;
+  SafeCallErrorProc : TSafeCallErrorProc = nil;
+}
+
 procedure test_thread; sysv_abi_default;
 var
  rax:qword;
@@ -490,6 +513,12 @@ var
 
  calloutp:p_callout;
 begin
+
+ writeln('Get_SEH:0x',HexStr(Get_SEH));
+
+ //PPointer(nil)^:=nil;
+
+ //Assert(false,'test assert');
 
  //if (tid<>curkthread^.td_tid) then
  //begin

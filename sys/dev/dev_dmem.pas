@@ -69,7 +69,7 @@ begin
 
   else
    begin
-    print_backtrace_c(stderr);
+    print_backtrace_td(stderr);
     Assert(False);
     Result:=EINVAL;
    end;
@@ -83,7 +83,7 @@ begin
 
  Writeln('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
 
- print_backtrace_c(stderr);
+ print_backtrace_td(stderr);
  Assert(False);
 end;
 

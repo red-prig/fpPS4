@@ -34,7 +34,7 @@ begin
             end;
   else
    begin
-    print_backtrace_c(stderr);
+    print_backtrace_td(stderr);
     Assert(False);
    end;
  end;

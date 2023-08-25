@@ -77,7 +77,7 @@ begin
         else
          begin
           Writeln(' enc:0x',HexStr(qword(data.enc),16));
-          print_backtrace_c(stderr);
+          print_backtrace_td(stderr);
           Assert(False);
          end;
        end;
@@ -108,7 +108,7 @@ begin
         else
          begin
           Writeln(' enc:0x',HexStr(qword(data.enc),16));
-          print_backtrace_c(stderr);
+          print_backtrace_td(stderr);
           Assert(False);
          end;
        end;
@@ -121,7 +121,7 @@ begin
   else
       begin
        Writeln('Unhandled regmgr op:0x',HexStr(op,4));
-       print_backtrace_c(stderr);
+       print_backtrace_td(stderr);
        Assert(False);
       end;
  end;
