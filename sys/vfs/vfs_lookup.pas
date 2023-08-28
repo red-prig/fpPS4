@@ -97,7 +97,9 @@ begin
  Assert((cnp^.cn_flags and OPMASK)=0,'namei: flags contaminated with nameiops');
 
  if (lookup_shared=0) then
+ begin
   cnp^.cn_flags:=cnp^.cn_flags and (not LOCKSHARED);
+ end;
 
  { We will set this ourselves if we need it. }
  cnp^.cn_flags:=cnp^.cn_flags and (not TRAILINGSLASH);
@@ -107,7 +109,9 @@ begin
   * name into the buffer.
   }
  if ((cnp^.cn_flags and HASBUF)=0) then
+ begin
   cnp^.cn_pnbuf:=zalloc_namei;
+ end;
 
  if (ndp^.ni_segflg=UIO_SYSSPACE) then
  begin
@@ -121,7 +125,9 @@ begin
   * Don't allow empty pathnames.
   }
  if (error=0) and (cnp^.cn_pnbuf^=#0) then
+ begin
   error:=ENOENT;
+ end;
 
  if (error<>0) then
  begin
@@ -211,11 +217,15 @@ begin
    vfslocked:=VFS_LOCK_GIANT(dp^.v_mount);
    VREF(dp);
   end;
+
   if (vfslocked<>0) then
+  begin
    ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or GIANTHELD;
+  end;
 
   ndp^.ni_startdir:=dp;
   error:=nd_lookup(ndp);
+
   if (error<>0) then
   begin
    namei_cleanup_cnp(cnp);
@@ -232,14 +242,18 @@ begin
    begin
     namei_cleanup_cnp(cnp);
    end else
+   begin
     cnp^.cn_flags:=cnp^.cn_flags or HASBUF;
+   end;
 
    if ((cnp^.cn_flags and MPSAFE)=0) then
    begin
     VFS_UNLOCK_GIANT(vfslocked);
    end else
    if (vfslocked<>0) then
+   begin
     ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags or GIANTHELD;
+   end;
 
    Exit(0);
   end;
@@ -277,7 +291,9 @@ begin
   if (error<>0) then
   begin
    if (ndp^.ni_pathlen > 1) then
+   begin
     FreeMem(cp);
+   end;
    break;
   end;
 
@@ -285,7 +301,9 @@ begin
   if (linklen=0) then
   begin
    if (ndp^.ni_pathlen>1) then
+   begin
     FreeMem(cp);
+   end;
    error:=ENOENT;
    break;
   end;
@@ -293,7 +311,9 @@ begin
   if (linklen + ndp^.ni_pathlen >= MAXPATHLEN) then
   begin
    if (ndp^.ni_pathlen > 1) then
+   begin
     FreeMem(cp);
+   end;
    error:=ENAMETOOLONG;
    break;
   end;
@@ -350,11 +370,15 @@ begin
   * force an exclusive lock for leaf nodes.
   }
  if ((flags and (ISLASTCN or LOCKLEAF))<>(ISLASTCN or LOCKLEAF)) then
+ begin
   Exit(0);
+ end;
 
  { Always use exclusive locks if LOCKSHARED isn't set. }
  if ((flags and LOCKSHARED)=0) then
+ begin
   Exit(1);
+ end;
 
  {
   * For lookups during open(), if the mount point supports
@@ -462,7 +486,9 @@ begin
  if (cnp^.cn_nameiop=DELETE) or
     ((_wantparent and cnp^.cn_nameiop<>CREATE) and
      (cnp^.cn_nameiop<>LOOKUP)) then
+ begin
   docache:=0;
+ end;
 
  _rdonly:=cnp^.cn_flags and RDONLY;
  cnp^.cn_flags:=cnp^.cn_flags and (not ISSYMLINK);
@@ -525,7 +551,9 @@ dirloop:
 
  cnp^.cn_flags:=cnp^.cn_flags or MAKEENTRY;
  if (cp^=#0) and (docache=0) then
+ begin
   cnp^.cn_flags:=cnp^.cn_flags and (not MAKEENTRY);
+ end;
 
  if (cnp^.cn_namelen=2) and
     (cnp^.cn_nameptr[1]='.') and
@@ -573,10 +601,15 @@ dirloop:
   ndp^.ni_vp:=dp;
 
   if ((cnp^.cn_flags and (LOCKPARENT or LOCKLEAF))=0) then
+  begin
    VOP_UNLOCK(dp, 0);
+  end;
+
   { XXX This should probably move to the top of function. }
   if ((cnp^.cn_flags and SAVESTART)<>0) then
+  begin
    Assert(false,'lookup: SAVESTART');
+  end;
   goto success;
  end;
 
@@ -610,6 +643,7 @@ dirloop:
    error:=EINVAL;
    goto bad;
   end;
+
   while (true) do
   begin
 
@@ -626,7 +660,9 @@ dirloop:
     goto nextname;
    end;
    if ((dp^.v_vflag and VV_ROOT)=0) then
+   begin
     break;
+   end;
    if ((dp^.v_iflag and VI_DOOMED)<>0) then { forced unmount }
    begin
     error:=ENOENT;
@@ -679,7 +715,9 @@ unionlookup:
   * lock, adjust our lkflags.
   }
  if (needs_exclusive_leaf(dp^.v_mount, cnp^.cn_flags)<>0) then
+ begin
   cnp^.cn_lkflags:=LK_EXCLUSIVE;
+ end;
 
  lkflags_save:=cnp^.cn_lkflags;
  cnp^.cn_lkflags:=compute_cn_lkflags(dp^.v_mount, cnp^.cn_lkflags, cnp^.cn_flags);
@@ -707,7 +745,9 @@ unionlookup:
   end;
 
   if (error<>EJUSTRETURN) then
+  begin
    goto bad;
+  end;
   {
    * At this point, we know we're at the end of the
    * pathname.  If creating / renaming, we can consider
@@ -727,7 +767,9 @@ unionlookup:
    goto bad;
   end;
   if ((cnp^.cn_flags and LOCKPARENT)=0) then
+  begin
    VOP_UNLOCK(dp, 0);
+  end;
   {
    * We Exitwith ni_vp nil to indicate that the entry
    * doesn't currently exist, leaving a pointer to the
@@ -740,7 +782,9 @@ unionlookup:
   end;
   goto success;
  end else
+ begin
   cnp^.cn_lkflags:=lkflags_save;
+ end;
 
  {
   * Take into account any additional components consumed by
@@ -767,11 +811,16 @@ unionlookup:
        (mp<>nil) and
        ((cnp^.cn_flags and NOCROSSMOUNT)=0) do
  begin
+
   if (vfs_busy(mp, 0)<>0) then
+  begin
    continue;
+  end;
 
   vput(dp);
+
   VFS_UNLOCK_GIANT(vfslocked);
+
   vfslocked:=VFS_LOCK_GIANT(mp);
 
   if (dp<>ndp^.ni_dvp) then
@@ -780,14 +829,18 @@ unionlookup:
    vrele(ndp^.ni_dvp);
 
   VFS_UNLOCK_GIANT(dvfslocked);
+
   dvfslocked:=0;
   vref(vp_crossmp);
   ndp^.ni_dvp:=vp_crossmp;
   error:=VFS_ROOT(mp, compute_cn_lkflags(mp, cnp^.cn_lkflags, cnp^.cn_flags), @tdp);
+
   vfs_unbusy(mp);
 
   if (vn_lock(vp_crossmp, LK_SHARED or LK_NOWAIT)<>0) then
+  begin
    Assert(False,'vp_crossmp exclusively locked or reclaimed');
+  end;
 
   if (error<>0) then
   begin
@@ -848,6 +901,7 @@ nextname:
    Inc(cnp^.cn_nameptr);
    Dec(ndp^.ni_pathlen);
   end;
+
   if (ndp^.ni_dvp<>dp) then
    vput(ndp^.ni_dvp)
   else
@@ -884,6 +938,7 @@ nextname:
  if (_wantparent=0) then
  begin
   ni_dvp_unlocked:=2;
+
   if (ndp^.ni_dvp<>dp) then
    vput(ndp^.ni_dvp)
   else
@@ -899,7 +954,9 @@ nextname:
  end;
 
  if ((cnp^.cn_flags and LOCKLEAF)=0) then
+ begin
   VOP_UNLOCK(dp, 0);
+ end;
 
 success:
  {
@@ -938,7 +995,9 @@ bad2:
  end;
 bad:
  if (dpunlocked=0) then
+ begin
   vput(dp);
+ end;
 
  VFS_UNLOCK_GIANT(vfslocked);
  VFS_UNLOCK_GIANT(dvfslocked);

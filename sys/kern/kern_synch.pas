@@ -124,6 +124,8 @@ begin
   Result:=0;
  end;
 
+ sleepq_release(ident);
+
  if (lock<>nil) and ((priority and PDROP)=0) then
  begin
   mtx_lock(lock^);
