@@ -26,9 +26,9 @@ const
  PPAUSE=(PRI_MIN_KERN+36);
 
  PRIMASK=$0fff;
- PCATCH =$1000;
- PDROP  =$2000;
- PBDRY  =$4000;
+ PCATCH =$1000; //OR'd with pri for tsleep to check signals
+ PDROP  =$2000; //OR'd with pri to stop re-entry of interlock mutex
+ PBDRY  =$4000; //for PCATCH stop is done on the user boundary
 
 function  msleep(ident   :Pointer;
                  lock    :p_mtx;
@@ -93,17 +93,27 @@ begin
   flags:=flags or SLEEPQ_INTERRUPTIBLE;
  end;
 
- if (priority and PBDRY)<>0 then
+ if ((priority and PBDRY)<>0) then
  begin
   flags:=flags or SLEEPQ_STOP_ON_BDRY;
  end;
 
  sleepq_lock(ident);
 
- if (lock<>nil) then
+ if (lock<>nil) then //not LC_SLEEPABLE
  begin
   mtx_unlock(lock^);
  end;
+
+ {
+  * We put ourselves on the sleep queue and start our timeout
+  * before calling thread_suspend_check, as we could stop there,
+  * and a wakeup or a SIGCONT (or both) could occur while we were
+  * stopped without resuming us.  Thus, we must be ready for sleep
+  * when cursig() is called.  If the wakeup happens while we're
+  * stopped, then td will no longer be on a sleep queue upon
+  * return from cursig().
+ }
 
  sleepq_add(ident,lock,wmesg,flags,0);
 
@@ -124,7 +134,7 @@ begin
   Result:=0;
  end;
 
- sleepq_release(ident);
+ //sleepq_release in sleepq_switch
 
  if (lock<>nil) and ((priority and PDROP)=0) then
  begin
