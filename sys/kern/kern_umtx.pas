@@ -437,17 +437,36 @@ begin
  repeat
   owner:=fuword64(umtx^.u_owner);
 
-  if (owner=QWORD(-1)) then Exit(EFAULT);
+  if (owner=QWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
 
   owner:=casuword64(umtx^.u_owner,UMTX_UNOWNED,id);
 
-  if (owner=UMTX_UNOWNED) then Exit(0);
+  if (owner=UMTX_UNOWNED) then
+  begin
+   Exit(0);
+  end;
+
+  if (owner=QWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
 
   if (owner=UMTX_CONTESTED) then
   begin
    owner:=casuword64(umtx^.u_owner,UMTX_CONTESTED,id or UMTX_CONTESTED);
 
-   if (owner=UMTX_CONTESTED) then Exit(0);
+   if (owner=UMTX_CONTESTED) then
+   begin
+    Exit(0);
+   end;
+
+   if (owner=QWORD(-1)) then
+   begin
+    Exit(EFAULT);
+   end;
 
    Continue;
   end;
@@ -462,6 +481,17 @@ begin
   umtxq_unlock(uq^.uq_key);
 
   old:=casuword64(umtx^.u_owner,owner,owner or UMTX_CONTESTED);
+
+  if (old=QWORD(-1)) then
+  begin
+   umtxq_lock(uq^.uq_key);
+   umtxq_remove(uq);
+   umtxq_unlock(uq^.uq_key);
+
+   umtx_key_release(uq^.uq_key);
+
+   Exit(EFAULT);
+  end;
 
   if (old=owner) then
   begin
@@ -527,7 +557,10 @@ begin
 
  owner:=fuword64(umtx^.u_owner);
 
- if (owner=QWORD(-1)) then Exit(EFAULT);
+ if (owner=QWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  if ((owner and (not UMTX_CONTESTED))<>id) then
  begin
@@ -538,7 +571,16 @@ begin
  begin
   old:=casuword64(umtx^.u_owner,owner,UMTX_UNOWNED);
 
-  if (old=owner) then Exit(0);
+  if (old=QWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  if (old=owner) then
+  begin
+   Exit(0);
+  end;
+
   owner:=old;
  end;
 
@@ -565,7 +607,15 @@ begin
 
  umtx_key_release(key);
 
- if (old<>owner) then Exit(EINVAL);
+ if (old=QWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
+
+ if (old<>owner) then
+ begin
+  Exit(EINVAL);
+ end;
 end;
 
 
@@ -684,7 +734,10 @@ begin
  repeat
   owner:=fuword32(m^.m_owner);
 
-  if (owner=DWORD(-1)) then Exit(EFAULT);
+  if (owner=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
 
   if (mode=_UMUTEX_WAIT) then
   begin
@@ -701,6 +754,11 @@ begin
     Exit(0);
    end;
 
+   if (owner=DWORD(-1)) then
+   begin
+    Exit(EFAULT);
+   end;
+
    if (owner=UMUTEX_CONTESTED) then
    begin
     owner:=casuword32(m^.m_owner,UMUTEX_CONTESTED,id or UMUTEX_CONTESTED);
@@ -708,6 +766,11 @@ begin
     if (owner=UMUTEX_CONTESTED) then
     begin
      Exit(0);
+    end;
+
+    if (owner=DWORD(-1)) then
+    begin
+     Exit(EFAULT);
     end;
 
     Continue;
@@ -735,6 +798,17 @@ begin
 
    old:=casuword32(m^.m_owner,owner,owner or UMUTEX_CONTESTED);
 
+   if (old=DWORD(-1)) then
+   begin
+    umtxq_lock(uq^.uq_key);
+    umtxq_remove(uq);
+    umtxq_unlock(uq^.uq_key);
+
+    umtx_key_release(uq^.uq_key);
+
+    Exit(EFAULT);
+   end;
+
    if (old=owner) then
    begin
     Result:=umtxq_sleep(uq,timo);
@@ -744,7 +818,7 @@ begin
    umtxq_remove(uq);
    umtxq_unlock(uq^.uq_key);
 
-   umtx_key_release(uq^.uq_key)
+   umtx_key_release(uq^.uq_key);
   end;
 
  until false;
@@ -762,7 +836,10 @@ begin
 
  owner:=fuword32(m^.m_owner);
 
- if (owner=DWORD(-1)) then Exit(EFAULT);
+ if (owner=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  if ((owner and (not UMUTEX_CONTESTED))<>id) then
  begin
@@ -773,7 +850,16 @@ begin
  begin
   old:=casuword32(m^.m_owner,owner,UMUTEX_UNOWNED);
 
-  if (old=owner) then Exit(0);
+  if (old=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  if (old=owner) then
+  begin
+   Exit(0);
+  end;
+
   owner:=old;
  end;
 
@@ -800,7 +886,15 @@ begin
 
  umtx_key_release(key);
 
- if (old<>owner) then Exit(EINVAL);
+ if (old=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
+
+ if (old<>owner) then
+ begin
+  Exit(EINVAL);
+ end;
 end;
 
 function do_wake_umutex(td:p_kthread;m:p_umutex):Integer;
@@ -814,7 +908,10 @@ begin
 
  owner:=fuword32(m^.m_owner);
 
- if (owner=DWORD(-1)) then Exit(EFAULT);
+ if (owner=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  if ((owner and (not UMUTEX_CONTESTED))<>0) then
  begin
@@ -887,6 +984,7 @@ begin
    old:=casuword32(m^.m_owner,owner,owner or UMUTEX_CONTESTED);
    if (old=owner) then Break;
    owner:=old;
+   if (old=DWORD(-1)) then Break;
   end;
  end else
  if (count=1) then
@@ -905,6 +1003,7 @@ begin
    old:=casuword32(m^.m_owner,owner,owner or UMUTEX_CONTESTED);
    if (old=owner) then Break;
    owner:=old;
+   if (old=DWORD(-1)) then Break;
   end;
 
  end;
@@ -938,7 +1037,11 @@ begin
  if (uq^.uq_key=nil) then Exit(EFAULT);
 
  owner:=fuword32(m^.m_owner);
- if (owner=DWORD(-1)) then Exit(EFAULT);
+
+ if (owner=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  repeat
   owner:=casuword32(m^.m_owner,UMUTEX_UNOWNED,id);
@@ -949,6 +1052,11 @@ begin
    goto _exit;
   end;
 
+  if (owner=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
+
   if (owner=UMUTEX_CONTESTED) then
   begin
    owner:=casuword32(m^.m_owner,UMUTEX_CONTESTED,id or UMUTEX_CONTESTED);
@@ -957,6 +1065,11 @@ begin
    begin
     Result:=0;
     goto _exit;
+   end;
+
+   if (owner=DWORD(-1)) then
+   begin
+    Exit(EFAULT);
    end;
 
    Continue;
@@ -982,6 +1095,16 @@ begin
   umtxq_unlock(uq^.uq_key);
 
   old:=casuword32(m^.m_owner,owner,owner or UMUTEX_CONTESTED);
+
+  if (old=DWORD(-1)) then
+  begin
+   umtxq_lock(uq^.uq_key);
+   umtxq_remove(uq);
+   umtxq_unlock(uq^.uq_key);
+
+   Result:=EFAULT;
+   goto _exit;
+  end;
 
   if (old=owner) then
   begin
@@ -1019,7 +1142,10 @@ begin
 
  owner:=fuword32(m^.m_owner);
 
- if (owner=DWORD(-1)) then Exit(EFAULT);
+ if (owner=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  if ((owner and (not UMUTEX_CONTESTED))<>id) then
  begin
@@ -1030,7 +1156,16 @@ begin
  begin
   old:=casuword32(m^.m_owner,owner,UMUTEX_UNOWNED);
 
-  if (old=owner) then Exit(0);
+  if (old=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  if (old=owner) then
+  begin
+   Exit(0);
+  end;
+
   owner:=old;
  end;
 
@@ -1092,7 +1227,15 @@ begin
 
  umtx_key_release(key);
 
- if (old<>owner) then Exit(EINVAL);
+ if (old=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
+
+ if (old<>owner) then
+ begin
+  Exit(EINVAL);
+ end;
 end;
 
 //
@@ -1147,14 +1290,22 @@ begin
 
   umtxq_unlock(uq^.uq_key);
 
-  owner:=casuword32(m^.m_owner,UMUTEX_UNOWNED,id);
+  //owner:=casuword32(m^.m_owner,UMUTEX_UNOWNED,id);
+  owner:=casuword32(m^.m_owner,UMUTEX_CONTESTED,id or UMUTEX_CONTESTED);
 
-  if (owner=UMUTEX_UNOWNED) then
+  //if (owner=UMUTEX_UNOWNED) then
+  if (owner=UMUTEX_CONTESTED) then
   begin
    Result:=0;
    goto _exit;
   end;
 
+  if (owner=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  {
   if (owner=UMUTEX_CONTESTED) then
   begin
    owner:=casuword32(m^.m_owner,UMUTEX_CONTESTED,id or UMUTEX_CONTESTED);
@@ -1167,6 +1318,7 @@ begin
 
    Continue;
   end;
+  }
 
   if ((flags and UMUTEX_ERROR_CHECK)<>0) and
      ((owner and (not UMUTEX_CONTESTED))=id) then
@@ -1270,7 +1422,10 @@ begin
 
  owner:=fuword32(m^.m_owner);
 
- if (owner=DWORD(-1)) then Exit(EFAULT);
+ if (owner=DWORD(-1)) then
+ begin
+  Exit(EFAULT);
+ end;
 
  if ((owner and (not UMUTEX_CONTESTED))<>id) then
  begin
@@ -1364,6 +1519,11 @@ begin
   end;
 
   owner:=casuword32(m^.m_owner,UMUTEX_CONTESTED,id or UMUTEX_CONTESTED);
+
+  if (owner=DWORD(-1)) then
+  begin
+   Exit(EFAULT);
+  end;
 
   if (owner=UMUTEX_CONTESTED) then
   begin
@@ -1697,6 +1857,7 @@ begin
     Result:=EFAULT;
     goto _exit;
    end;
+
    if (oldstate=state) then
    begin
     Result:=0;
@@ -1769,6 +1930,7 @@ begin
      Result:=EFAULT;
      Break;
     end;
+
     if (oldstate=state) then
     begin
      Break;
@@ -1846,6 +2008,7 @@ begin
     Result:=EFAULT;
     goto _exit;
    end;
+
    if (oldstate=state) then
    begin
     Result:=0;
@@ -1879,6 +2042,7 @@ begin
     Result:=EFAULT;
     goto _exit;
    end;
+
    if (oldstate=state) then
    begin
     goto _sleep;
@@ -1931,6 +2095,7 @@ begin
      Result:=EFAULT;
      goto _exit;
     end;
+
     if (oldstate=state) then
     begin
      Break;
@@ -2013,6 +2178,7 @@ begin
     Result:=EFAULT;
     goto _exit;
    end;
+
    if (oldstate<>state) then
    begin
     state:=oldstate;

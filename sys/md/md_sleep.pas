@@ -16,7 +16,7 @@ function  msleep_umtxq(h:THandle;timo:Int64):Integer;
 function  wakeup_umtxq(h:THandle):Integer; inline;
 
 function  msleep_td(timo:Int64):Integer;
-function  wakeup_td(td:p_kthread):Integer; inline;
+function  wakeup_td(td:p_kthread):Integer;
 procedure md_yield;
 
 implementation
@@ -103,7 +103,7 @@ procedure _apc_null(dwParam:PTRUINT); stdcall;
 begin
 end;
 
-function wakeup_td(td:p_kthread):Integer; inline;
+function wakeup_td(td:p_kthread):Integer;
 begin
  Result:=ntw2px(NtQueueApcThread(td^.td_handle,@_apc_null,nil,nil,0));
 end;

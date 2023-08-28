@@ -89,10 +89,14 @@ begin
   flags:=SLEEPQ_SLEEP;
 
  if (catch<>0) then
+ begin
   flags:=flags or SLEEPQ_INTERRUPTIBLE;
+ end;
 
  if (priority and PBDRY)<>0 then
+ begin
   flags:=flags or SLEEPQ_STOP_ON_BDRY;
+ end;
 
  sleepq_lock(ident);
 

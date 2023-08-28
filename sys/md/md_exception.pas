@@ -106,11 +106,10 @@ var
  ExceptionCode:DWORD;
  td:p_kthread;
  tf_addr:QWORD;
- uc:ucontext_t;
  backup:trapframe;
  rv:Integer;
 begin
- Result:=-1;
+ Result:=1;
  td:=curkthread;
 
  //Context backup to return correctly
@@ -128,8 +127,6 @@ begin
 
      //Writeln(HexStr(p^.ContextRecord^.Rip,16));
      //Writeln(HexStr(Get_pc_addr));
-
-     uc:=Default(ucontext_t);
 
      _get_frame(p^.ContextRecord,@td^.td_frame,@td^.td_fpstate);
 
@@ -149,6 +146,7 @@ begin
   Result:=0;
  end;
 
+ //simple ret
  td^.pcb_flags:=td^.pcb_flags and (not PCB_FULL_IRET);
 
  td^.td_frame:=backup;
@@ -178,14 +176,12 @@ begin
  //Writeln('rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
  //Writeln('rsp:0x',HexStr(get_frame));
 
- if (curkthread=nil) then Exit;
-
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
 
- if not is_guest_addr(QWORD(p^.ExceptionRecord^.ExceptionAddress)) then Exit;
+ if (curkthread=nil) then Exit;
 
  //It looks like there is a small stack inside the exception, so you need to switch the context
  Result:=ProcessException2(p);
@@ -201,16 +197,9 @@ end;
 
 function UnhandledException(p:PExceptionPointers):longint; stdcall;
 var
+ td:p_kthread;
  rec:PExceptionRecord;
-
- adr: Pointer;
- Exc: PExceptObject;
- Frames: PPointer;
- FrameCount: Longint;
  code: Longint;
-
- str:shortstring;
-
  ExObj:Exception;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
@@ -219,6 +208,9 @@ begin
   FPC_EXCEPTION_CODE      :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
+
+ td:=curkthread;
+ if (td=nil) then Exit;
 
  rec:=p^.ExceptionRecord;
 

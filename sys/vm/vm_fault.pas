@@ -165,8 +165,11 @@ type
   addr:Integer;
  end;
 
+ t_data16=array[0..15] of Byte;
+
 const
  c_jmpl32_trampoline:t_jmp32_trampoline=(inst:$E9;addr:0);
+ c_data16:t_data16=($90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90);
 
 function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 var
@@ -189,6 +192,39 @@ begin
  vm_add_patch_link(obj,Pointer(vaddr),vsize,pt_jit,stub);
 end;
 
+procedure copy_xchg(src,dst:Pointer;vsize:Integer);
+var
+ data:t_data16;
+begin
+ case vsize of
+  0:;
+  1..3:
+   begin
+    data:=c_data16; //init
+    PDWORD(@data)^:=PDWORD(dst)^; //read mask
+    Move(src^,data,vsize);        //set new
+    System.InterlockedExchange(PDWORD(dst)^,PDWORD(@data)^);
+   end;
+  4:
+   begin
+    System.InterlockedExchange(PDWORD(dst)^,PDWORD(src)^);
+   end;
+  5..7:
+   begin
+    data:=c_data16; //init
+    PQWORD(@data)^:=PQWORD(dst)^; //read mask
+    Move(src^,data,vsize);        //set new
+    System.InterlockedExchange64(PQWORD(dst)^,PQWORD(@data)^);
+   end;
+  8:
+   begin
+    System.InterlockedExchange64(PQWORD(dst)^,PQWORD(src)^);
+   end;
+  else
+    Assert(false,'copy_xchg');
+ end;
+end;
+
 procedure patch_original(map:vm_map_t;
                          vaddr:vm_offset_t;
                          vsize:Integer;
@@ -200,19 +236,14 @@ var
  start   :vm_offset_t;
  __end   :vm_offset_t;
  new_prot:vm_prot_t;
- err:Integer;
 begin
-
  entry:=nil;
  if not vm_map_lookup_entry(map,vaddr,@entry) then
  begin
   Assert(False,'patch_original');
  end;
 
- trampoline:=c_jmpl32_trampoline;
- trampoline.addr:=delta;
-
- new_prot:=entry^.protection or VM_PROT_WRITE;
+ new_prot:=entry^.protection or VM_PROT_READ or VM_PROT_WRITE;
 
  if (new_prot<>entry^.protection) then
  begin
@@ -226,9 +257,12 @@ begin
                entry^.protection);
  end;
 
- err:=copyout(@trampoline,Pointer(vaddr),vsize);
+ trampoline:=c_jmpl32_trampoline;
+ trampoline.addr:=delta;
 
- if (err<>0) then Assert(False,'patch_original');
+ copy_xchg(@trampoline,Pointer(vaddr),vsize);
+
+ md_cacheflush(Pointer(vaddr),vsize,ICACHE);
 
  if (new_prot<>entry^.protection) then
  begin
@@ -242,12 +276,31 @@ begin
  vm_add_jit_patch_link(entry^.vm_obj,vaddr,vsize,stub);
 end;
 
+type
+ p_jit_code=^t_jit_code;
+ t_jit_code=record
+  frame :t_jit_frame;
+  prolog:p_stub_chunk;
+  o_len :Byte;
+  o_data:t_data16;
+ end;
+
+//function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
+
+function generate_jit(var dis:TX86Disassembler;
+                      var din:TInstruction):Pointer;
+begin
+
+
+
+end;
+
 function vm_try_jit_patch(map:vm_map_t;
                           mem_addr:vm_offset_t;
                           rip_addr:vm_offset_t):Integer;
 var
  err:Integer;
- data:array[0..15] of Byte;
+ data:t_data16;
 
  dis:TX86Disassembler;
  din:TInstruction;
@@ -263,6 +316,8 @@ var
 
  rv:Integer;
  mask:DWORD;
+
+ info:t_patch_info;
 begin
  Result:=0;
 
@@ -274,13 +329,15 @@ begin
  end;
 
  //Is the exception already patched?
- if vm_patch_exist(Pointer(rip_addr),1) then
+ if vm_patch_exist(Pointer(rip_addr),0) then
  begin
   vm_map_unlock(map);
   Exit(0);
  end;
 
- err:=copyin(Pointer(rip_addr),@data,SizeOf(data));
+ data:=c_data16;
+
+ err:=copyin_nofault(Pointer(rip_addr),@data,SizeOf(data));
  if (err<>0) then Exit(KERN_PROTECTION_FAILURE);
 
  dis:=Default(TX86Disassembler);
@@ -393,6 +450,7 @@ begin
  //Next, various actions with a vm map
 
  if (Result=KERN_SUCCESS) then
+ if is_guest_addr(rip_addr) then
  begin
   Result:=vm_try_jit_patch(map,mem_addr,rip_addr);
  end;

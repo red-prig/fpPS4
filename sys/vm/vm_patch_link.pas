@@ -12,17 +12,22 @@ uses
 type
  t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall,pt_unresolve,pt_jit);
 
- p_patch_node=^t_patch_node;
- t_patch_node=record
-  link :TAILQ_ENTRY;
-  page :TAILQ_ENTRY;
+ p_patch_info=^t_patch_info;
+ t_patch_info=record
   vaddr:Pointer;
   vsize:Integer;
   ptype:t_patch_type;
   stub :p_stub_chunk;
  end;
 
-function  vm_get_patch_link(vaddr:Pointer;vsize:Integer):p_stub_chunk;
+ p_patch_node=^t_patch_node;
+ t_patch_node=record
+  link:TAILQ_ENTRY;
+  page:TAILQ_ENTRY;
+  info:t_patch_info;
+ end;
+
+function  vm_get_patch_link(vaddr:Pointer;vsize:Integer):t_patch_info;
 function  vm_patch_exist(vaddr:Pointer;vsize:Integer):Boolean;
 
 procedure vm_add_patch_link     (_obj,vaddr:Pointer;vsize:Integer;ptype:t_patch_type;stub:p_stub_chunk);
@@ -59,13 +64,13 @@ var
 begin
  rw_wlock(hamt_lock);
 
- data:=HAMT_search32(@hamt_page,OFF_TO_IDX(node^.vaddr));
+ data:=HAMT_search32(@hamt_page,OFF_TO_IDX(node^.info.vaddr));
 
  if (data=nil) then
  begin
   page:=AllocMem(SizeOf(t_patch_page));
   TAILQ_INIT(page);
-  data:=HAMT_insert32(@hamt_page,OFF_TO_IDX(node^.vaddr),page);
+  data:=HAMT_insert32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),page);
  end;
 
  page:=data^;
@@ -82,7 +87,7 @@ var
 begin
  rw_wlock(hamt_lock);
 
- data:=HAMT_search32(@hamt_page,OFF_TO_IDX(node^.vaddr));
+ data:=HAMT_search32(@hamt_page,OFF_TO_IDX(node^.info.vaddr));
 
  if (data=nil) then
  begin
@@ -96,48 +101,108 @@ begin
 
  if TAILQ_EMPTY(page) then
  begin
-  HAMT_delete32(@hamt_page,OFF_TO_IDX(node^.vaddr),nil);
+  HAMT_delete32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),nil);
   FreeMem(page);
  end;
 
  rw_wunlock(hamt_lock);
 end;
 
-function vm_get_patch_link(vaddr:Pointer;vsize:Integer):p_stub_chunk;
+function info_cross(info:p_patch_info;vaddr:Pointer;vsize:Integer):Boolean; inline;
+begin
+ Result:=((vaddr+vsize)>info^.vaddr) and (vaddr<(info^.vaddr+info^.vsize));
+end;
+
+function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer):t_patch_info;
 var
- data:PPointer;
- page:p_patch_page;
  entry,next:p_patch_node;
 begin
- Result:=nil;
-
- rw_wlock(hamt_lock);
-
- data:=HAMT_search32(@hamt_page,OFF_TO_IDX(vaddr));
-
- if (data=nil) then
- begin
-  rw_wunlock(hamt_lock);
-  Exit;
- end;
-
- page:=data^;
+ Result:=Default(t_patch_info);
+ if (page=nil) then Exit;
 
  entry:=TAILQ_FIRST(page);
  while (entry<>nil) do
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if ((vaddr+vsize)>entry^.vaddr) and (vaddr<(entry^.vaddr+entry^.vsize)) then
+  if (entry^.info.vaddr=vaddr) then
   begin
-   Result:=entry^.stub;
-   p_inc_ref(Result);
-   //
-   rw_wunlock(hamt_lock);
-   Exit;
+   Result:=entry^.info;
+   p_inc_ref(Result.stub);
   end;
   //
   entry:=next;
+ end;
+end;
+
+function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer;vsize:Integer):t_patch_info;
+var
+ entry,next:p_patch_node;
+begin
+ Result:=Default(t_patch_info);
+ if (page=nil) then Exit;
+
+ entry:=TAILQ_FIRST(page);
+ while (entry<>nil) do
+ begin
+  next:=TAILQ_NEXT(entry,@entry^.link);
+  //
+  if info_cross(@entry^.info,vaddr,vsize) then
+  begin
+   Result:=entry^.info;
+   p_inc_ref(Result.stub);
+  end;
+  //
+  entry:=next;
+ end;
+end;
+
+function vm_get_patch_link(vaddr:Pointer;vsize:Integer):t_patch_info;
+var
+ off1,off2:DWORD;
+ data:PPointer;
+ page:p_patch_page;
+ entry,next:p_patch_node;
+begin
+ Result:=Default(t_patch_info);
+
+ off1:=OFF_TO_IDX(vaddr);
+
+ rw_wlock(hamt_lock);
+
+ data:=HAMT_search32(@hamt_page,off1);
+
+ if (data=nil) then
+ begin
+  page:=nil;
+ end else
+ begin
+  page:=data^;
+ end;
+
+ if (vsize=0) then
+ begin
+  Result:=_vm_get_patch_link(page,vaddr);
+ end else
+ begin
+  Result:=_vm_get_patch_link(page,vaddr,vsize);
+
+  off2:=OFF_TO_IDX(vaddr+vsize-1);
+
+  if (Result.stub=nil) and (off1<>off2) then
+  begin
+   data:=HAMT_search32(@hamt_page,off2);
+
+   if (data=nil) then
+   begin
+    page:=nil;
+   end else
+   begin
+    page:=data^;
+   end;
+
+   Result:=_vm_get_patch_link(page,vaddr,vsize);
+  end;
  end;
 
  rw_wunlock(hamt_lock);
@@ -145,13 +210,13 @@ end;
 
 function vm_patch_exist(vaddr:Pointer;vsize:Integer):Boolean;
 var
- stub:p_stub_chunk;
+ info:t_patch_info;
 begin
- stub:=vm_get_patch_link(vaddr,vsize);
+ info:=vm_get_patch_link(vaddr,vsize);
 
- if (stub<>nil) then
+ if (info.stub<>nil) then
  begin
-  p_dec_ref(stub);
+  p_dec_ref(info.stub);
   Result:=True;
  end else
  begin
@@ -168,10 +233,10 @@ begin
 
  obj:=_obj;
  node:=AllocMem(SizeOf(t_patch_node));
- node^.vaddr:=vaddr;
- node^.vsize:=vsize;
- node^.ptype:=ptype;
- node^.stub :=stub;
+ node^.info.vaddr:=vaddr;
+ node^.info.vsize:=vsize;
+ node^.info.ptype:=ptype;
+ node^.info.stub :=stub;
 
  p_inc_ref(stub);
 
@@ -191,7 +256,7 @@ begin
 
  hamt_remove_link(node);
 
- p_dec_ref(node^.stub);
+ p_dec_ref(node^.info.stub);
  FreeMem(node);
 end;
 
@@ -209,8 +274,8 @@ begin
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if ((start=0) or (OFF_TO_IDX(entry^.vaddr)>=start)) and
-     ((__end=0) or (OFF_TO_IDX(entry^.vaddr)<=__end)) then
+  if ((start=0) or (OFF_TO_IDX(entry^.info.vaddr)>=start)) and
+     ((__end=0) or (OFF_TO_IDX(entry^.info.vaddr)< __end)) then
   begin
    vm_free_patch_link(_obj,entry);
   end;
@@ -236,9 +301,9 @@ begin
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if (entry^.vaddr=vaddr) then
+  if (entry^.info.vaddr=vaddr) then
   begin
-   Result:=entry^.stub;
+   Result:=entry^.info.stub;
    p_inc_ref(Result);
    //
    VM_OBJECT_UNLOCK(obj);
@@ -265,7 +330,7 @@ begin
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if (entry^.vaddr=vaddr) then
+  if (entry^.info.vaddr=vaddr) then
   begin
    vm_free_patch_link(_obj,entry);
   end;

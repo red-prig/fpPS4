@@ -69,18 +69,21 @@ begin
    continue;
   end;
   if (cnt > n) then
+  begin
    cnt:=n;
+  end;
 
   case (uio^.uio_segflg) of
    UIO_USERSPACE:
     begin
      maybe_yield();
+
      if (uio^.uio_rw=UIO_READ) then
       error:=copyout(cp, iov^.iov_base, cnt)
      else
       error:=copyin(iov^.iov_base, cp, cnt);
-     if (error<>0) then
-      goto _out;
+
+     if (error<>0) then goto _out;
     end;
    UIO_SYSSPACE:
     begin
@@ -115,7 +118,9 @@ var
 begin
  uiop^:=nil;
  if (iovcnt > UIO_MAXIOV) then
+ begin
   Exit(EINVAL);
+ end;
  iovlen:=iovcnt * sizeof (iovec);
  uio:=AllocMem(iovlen + sizeof(t_uio));
  iov:=p_iovec(uio + 1);

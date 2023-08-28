@@ -157,7 +157,7 @@ implementation
 
 uses
  errno,
- systm,
+ md_systm,
  vm,
  vmparam,
  vm_map,
@@ -167,6 +167,7 @@ uses
  signal,
  kern_sig,
  sysent,
+ kern_named_id,
  subr_dynlib,
  elf_nid_utils,
  ps4libdoc;
@@ -275,13 +276,13 @@ end;
 function fuptr(var base:Pointer):Pointer;
 begin
  Result:=nil;
- copyin(@base,@Result,SizeOf(Pointer));
+ md_copyin(@base,@Result,SizeOf(Pointer),nil);
 end;
 
 function fuptr(var base:QWORD):QWORD;
 begin
  Result:=0;
- copyin(@base,@Result,SizeOf(QWORD));
+ md_copyin(@base,@Result,SizeOf(QWORD),nil);
 end;
 
 function CaptureBacktrace(rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
@@ -368,7 +369,7 @@ end;
 type
  TDynlibLineInfo=record
   func     :shortstring;
-  source   :shortstring;
+  source   :t_id_name;
   base_addr:ptruint;
   func_addr:ptruint;
  end;
@@ -378,7 +379,6 @@ var
  obj:p_lib_info;
  r:TLQRec;
  adr:QWORD;
- len:ptruint;
 begin
  Result:=False;
  dynlibs_lock;
@@ -395,10 +395,8 @@ begin
 
    info.base_addr:=QWORD(r.Base);
 
-   len:=0;
-   copyinstr(@obj^.name,@info.source[1],SizeOf(obj^.name),@len);
-   if (len<>0) then Dec(len);
-   SetLength(info.source,len);
+   info.source:=Default(t_id_name);
+   md_copyin(@obj^.name,@info.source,SizeOf(t_id_name),nil);
 
    if (find_proc_obj(obj,r)<>0) then
    begin
@@ -1008,10 +1006,30 @@ begin
 
 end;
 
+procedure trap_fatal(frame:p_trapframe;eva:vm_offset_t);
+var
+ trapno:Integer;
+ msg,msg2:pchar;
+begin
+ trapno:=frame^.tf_trapno;
+
+ if (trapno <= MAX_TRAP_MSG) then
+  msg:=trap_msg[trapno]
+ else
+  msg:='UNKNOWN';
+
+ if Boolean(IS_USERMODE(curkthread,frame)) then
+  msg2:='user'
+ else
+  msg2:='kernel';
+
+ Writeln(StdErr,'Fatal trap ',trapno,': ',msg,' while in ',msg2,' mode');
+end;
+
 function trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
 var
  td:p_kthread;
- eva,va:vm_offset_t;
+ eva:vm_offset_t;
  map:vm_map_t;
  rv:Integer;
 begin
@@ -1019,14 +1037,10 @@ begin
 
  td:=curkthread;
  eva:=frame^.tf_addr;
- va:=trunc_page(eva);
 
- if (usermode=0) then
+ if ((td^.td_pflags and TDP_NOFAULTING)<>0) then
  begin
-  //frame^.tf_rip:=pcb_onfault;
-  //Exit(0);
-  //else
-  //trap_fatal
+  Exit(SIGSEGV);
  end;
 
  if is_guest_addr(eva) then
@@ -1039,21 +1053,30 @@ begin
                         frame^.tf_err,
                         VM_FAULT_NORMAL);
 
-  if (rv=0) then
-  begin
-   //
-  end;
-
   case rv of
-                         0:Result:=0;
+                         0:Exit(0);
    KERN_PROTECTION_FAILURE:Result:=SIGBUS;
    else
                            Result:=SIGSEGV;
   end;
 
-
+ end else
+ begin
+  Result:=SIGSEGV;
  end;
 
+ //if (usermode=0) then
+ begin
+  if (td^.pcb_onfault<>nil) then
+  begin
+   frame^.tf_rip:=QWORD(td^.pcb_onfault);
+   Exit(0);
+  end else
+  begin
+   trap_fatal(frame, eva);
+   Exit(-1);
+  end;
+ end;
 
 end;
 

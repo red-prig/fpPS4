@@ -227,6 +227,7 @@ type
   td_rmap_def_user:Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
+  pcb_onfault     :Pointer;
  end;
 
  p_thr_param=^thr_param;
@@ -294,6 +295,7 @@ procedure THREAD_SLEEPING_OK();
 
 function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
+procedure curthread_set_pcb_onfault(v:Pointer);
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
@@ -533,6 +535,15 @@ begin
  td:=curkthread;
  if (td=nil) then Exit;
  td^.td_pflags:=td^.td_pflags and save;
+end;
+
+procedure curthread_set_pcb_onfault(v:Pointer);
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit;
+ td^.pcb_onfault:=v;
 end;
 
 //

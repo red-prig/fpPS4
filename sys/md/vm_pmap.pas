@@ -15,16 +15,27 @@ uses
 const
  PAGE_MAP_COUNT=(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
  PAGE_MAP_MASK =PAGE_MAP_COUNT-1;
- PAGE_BUSY_FLAG =DWORD($80000000);
- PAGE_PATCH_FLAG=DWORD($40000000);
+
+ PAGE_PROT_EXECUTE=DWORD($80000000);
+ PAGE_PROT_WRITE  =DWORD($40000000);
+ PAGE_PROT_READ   =DWORD($20000000);
+
+ PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
+
+ PAGE_PROT_SHIFT  =29;
+
+ PAGE_BUSY_FLAG   =DWORD($10000000);
+ PAGE_PATCH_FLAG  =DWORD($08000000);
 
 var
  PAGE_MAP:PDWORD=nil;
 
 procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
-function  pmap_get_raw(addr:vm_offset_t):DWORD;
+function  pmap_get_raw   (addr:vm_offset_t):DWORD;
+function  pmap_get_page  (addr:vm_offset_t):DWORD;
+function  pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
 
-function  uplift(addr,stub:Pointer):Pointer;
+function  uplift(addr:Pointer):Pointer;
 
 type
  p_pmap=^_pmap;
@@ -226,11 +237,16 @@ begin
  superpage_offset:=offset and PDRMASK;
  if (size - ((NBPDR - superpage_offset) and PDRMASK) < NBPDR) or
     ((addr^ and PDRMASK)=superpage_offset) then
+ begin
   Exit;
+ end;
  if ((addr^ and PDRMASK) < superpage_offset) then
+ begin
   addr^:=(addr^ and (not PDRMASK)) + superpage_offset
- else
+ end else
+ begin
   addr^:=((addr^ + PDRMASK) and (not PDRMASK)) + superpage_offset;
+ end;
 end;
 
 //PAGE_MAP
@@ -245,14 +261,14 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-procedure pmap_mark(start,__end,__off:vm_offset_t);
+procedure pmap_mark(start,__end,__off:vm_offset_t;flags:DWORD);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  __off:=OFF_TO_IDX(__off);
  while (start<__end) do
  begin
-  PAGE_MAP[start and PAGE_MAP_MASK]:=__off;
+  PAGE_MAP[start and PAGE_MAP_MASK]:=__off or flags;
   Inc(__off);
   Inc(start);
  end;
@@ -293,8 +309,35 @@ begin
  Result:=PAGE_MAP[addr];
 end;
 
+function pmap_get_page(addr:vm_offset_t):DWORD;
+begin
+ addr:=OFF_TO_IDX(addr);
+ addr:=addr and PAGE_MAP_MASK;
+ Result:=PAGE_MAP[addr];
+ Result:=Result and PAGE_MAP_MASK;
+end;
+
+function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
+var
+ page1,page2:DWORD;
+begin
+ page1:=OFF_TO_IDX(addr  ) and PAGE_MAP_MASK;
+ page2:=OFF_TO_IDX(addr+h) and PAGE_MAP_MASK;
+ if (page1=page2) then
+ begin
+  Result:=False;
+ end else
+ begin
+  page1:=PAGE_MAP[page1] and PAGE_MAP_MASK;
+  page2:=PAGE_MAP[page2] and PAGE_MAP_MASK;
+  Result:=(page1<>page2);
+ end;
+end;
+
 //rax,rdi,rsi
-function uplift(addr,stub:Pointer):Pointer; assembler; nostackframe;
+function uplift(addr:Pointer):Pointer; assembler; nostackframe;
+label
+ _exit;
 asm
  //low addr (rsi)
  mov %rdi,%rsi
@@ -307,10 +350,12 @@ asm
  mov (%rax,%rdi,4),%edi
  //filter (rdi)
  and PAGE_MAP_MASK,%rdi
+ jz _exit
  //combine (rdi|rsi)
  shl PAGE_SHIFT,%rdi
  or  %rsi,%rdi
  //result
+ _exit:
  mov %rdi,%rax
 end;
 
@@ -376,7 +421,7 @@ begin
   Assert(false,'pmap_enter_object');
  end;
 
- pmap_mark(start,__end,QWORD(base));
+ pmap_mark(start,__end,QWORD(base),(prot and VM_RWX) shl PAGE_PROT_SHIFT);
 end;
 
 procedure pmap_move(pmap    :pmap_t;
@@ -444,7 +489,7 @@ begin
   end;
  end;
 
- pmap_mark(start,start+size,ofs_new);
+ pmap_mark(start,start+size,ofs_new,(new_prot and VM_RWX) shl PAGE_PROT_SHIFT);
 
  //free old
  r:=NtFreeVirtualMemory(

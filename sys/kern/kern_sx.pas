@@ -48,7 +48,7 @@ end;
 
 procedure sx_slock(p:p_sx);
 begin
- //Writeln('    sx_slock:',HexStr(p));
+ //Writeln('    sx_slock:',HexStr(p),':',p^.n);
 
  rw_rlock(p^.c);
  PDWORD(@p^.m)[0]:=0;
@@ -57,7 +57,7 @@ end;
 
 procedure sx_xlock(p:p_sx);
 begin
- //Writeln('    sx_xlock:',HexStr(p));
+ //Writeln('    sx_xlock:',HexStr(p),':',p^.n);
 
  rw_wlock(p^.c);
  PDWORD(@p^.m)[0]:=System.GetCurrentThreadId;
@@ -66,25 +66,40 @@ end;
 
 procedure sx_sunlock(p:p_sx);
 begin
- //Writeln('  sx_sunlock:',HexStr(p));
+ //Writeln('  sx_sunlock:',HexStr(p),':',p^.n);
 
  rw_runlock(p^.c);
 end;
 
 procedure sx_xunlock(p:p_sx);
 begin
- //Writeln('  sx_xunlock:',HexStr(p));
+ //Writeln('  sx_xunlock:',HexStr(p),':',p^.n);
+
+ Assert(PDWORD(@p^.m)[0]=System.GetCurrentThreadId,'sx_unlock');
+
+ PDWORD(@p^.m)[0]:=0;
+ PDWORD(@p^.m)[1]:=0;
 
  rw_wunlock(p^.c);
 end;
 
 procedure sx_unlock(p:p_sx);
 begin
- //Writeln(' sx_unlock:',HexStr(p));
+ //Writeln(' sx_unlock:',HexStr(p),':',p^.n);
 
  case PDWORD(@p^.m)[1] of
   1:rw_runlock(p^.c);
-  2:rw_wunlock(p^.c);
+  2:
+    begin
+     Assert(PDWORD(@p^.m)[0]=System.GetCurrentThreadId,'sx_unlock');
+
+     PDWORD(@p^.m)[0]:=0;
+     PDWORD(@p^.m)[1]:=0;
+
+     rw_wunlock(p^.c);
+    end;
+  else
+    Assert(false,'sx_unlock');
  end;
 end;
 

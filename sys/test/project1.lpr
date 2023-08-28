@@ -103,6 +103,7 @@ uses
  kern_ipmimgr,
  kern_mdbg,
  md_exception,
+ systm,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs;
@@ -515,6 +516,8 @@ var
 begin
 
  writeln('Get_SEH:0x',HexStr(Get_SEH));
+
+ //writeln('copyin:',copyin(mem2+64*1024*4-(sizeof(ucontext_t) div 2),@uctx,sizeof(ucontext_t)));
 
  //PPointer(nil)^:=nil;
 
