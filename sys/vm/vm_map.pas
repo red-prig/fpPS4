@@ -160,7 +160,7 @@ function  vm_map_lookup_entry(
             address    :vm_offset_t;
             entry      :p_vm_map_entry_t):Boolean;
 
-function vm_map_insert(
+function  vm_map_insert(
            map        :vm_map_t;
            vm_obj     :vm_object_t;
            offset     :vm_ooffset_t;
@@ -170,10 +170,10 @@ function vm_map_insert(
            max        :vm_prot_t;
            cow        :Integer):Integer;
 
-function vm_map_findspace(map   :vm_map_t;
-                          start :vm_offset_t;
-                          length:vm_size_t;
-                          addr  :p_vm_offset_t):Integer;
+function  vm_map_findspace(map   :vm_map_t;
+                           start :vm_offset_t;
+                           length:vm_size_t;
+                           addr  :p_vm_offset_t):Integer;
 
 procedure vm_map_lookup_done(map:vm_map_t;entry:vm_map_entry_t);
 
@@ -202,10 +202,10 @@ function  vm_map_protect(map     :vm_map_t;
                          new_prot:vm_prot_t;
                          set_max :Boolean):Integer;
 
-function  vm_map_madvise(map     :vm_map_t;
-                         start   :vm_offset_t;
-                         __end   :vm_offset_t;
-                         behav   :Integer):Integer;
+function  vm_map_madvise(map  :vm_map_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         behav:Integer):Integer;
 
 function  vm_map_find(map       :vm_map_t;
                       vm_obj    :vm_object_t;
@@ -1290,7 +1290,8 @@ var
  next,prev:vm_map_entry_t;
  prevsize, esize:vm_size_t;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) then
+ if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) or
+    (entry^.inheritance=VM_INHERIT_HOLE) then
  begin
   Exit;
  end;
@@ -1384,7 +1385,8 @@ begin
 
  vm_map_entry_link(map, entry^.prev, new_entry);
 
- if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+ if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
+    (entry^.inheritance<>VM_INHERIT_HOLE) then
  begin
   vm_object_reference(new_entry^.vm_obj);
  end;
@@ -1428,7 +1430,8 @@ begin
 
  vm_map_entry_link(map, entry, new_entry);
 
- if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+ if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
+    (entry^.inheritance<>VM_INHERIT_HOLE) then
  begin
   vm_object_reference(new_entry^.vm_obj);
  end;
@@ -1487,7 +1490,7 @@ begin
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
- if (vm_map_lookup_entry(map, start,@entry)) then
+ if (vm_map_lookup_entry(map, start, @entry)) then
  begin
   vm_map_clip_start(map, entry, start);
  end else
@@ -1501,7 +1504,8 @@ begin
  current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
-  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
+     (current^.inheritance=VM_INHERIT_HOLE) then
   begin
    vm_map_unlock(map);
    Exit(KERN_INVALID_ARGUMENT);
@@ -1591,6 +1595,7 @@ begin
   vm_map_simplify_entry(map, current);
   current:=current^.next;
  end;
+
  vm_map_unlock(map);
  Result:=(KERN_SUCCESS);
 end;
@@ -1603,10 +1608,10 @@ end;
  * the vm_map_entry structure, or those effecting the underlying
  * objects.
  }
-function vm_map_madvise(map     :vm_map_t;
-                        start   :vm_offset_t;
-                        __end   :vm_offset_t;
-                        behav   :Integer):Integer;
+function vm_map_madvise(map  :vm_map_t;
+                        start:vm_offset_t;
+                        __end:vm_offset_t;
+                        behav:Integer):Integer;
 var
  current,entry:vm_map_entry_t;
  modify_map:Integer;
@@ -1635,7 +1640,6 @@ begin
      Exit(KERN_SUCCESS);
     end;
     modify_map:=1;
-    vm_map_lock(map);
    end;
   MADV_WILLNEED,
   MADV_DONTNEED,
@@ -1645,11 +1649,12 @@ begin
    begin
     Exit(KERN_SUCCESS);
    end;
-   vm_map_lock(map);
   end;
  else
   Exit(KERN_INVALID_ARGUMENT);
  end;
+
+ vm_map_lock(map);
 
  {
   * Locate starting entry and clip if necessary.
@@ -1678,7 +1683,8 @@ begin
   current:=entry;
   while (current<>@map^.header) and (current^.start<__end) do
   begin
-   if (current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0 then
+   if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
+      (current^.inheritance=VM_INHERIT_HOLE) then
    begin
     current:=current^.next;
     continue;
@@ -1735,7 +1741,8 @@ begin
   current:=entry;
   while (current<>@map^.header) and (current^.start<__end) do
   begin
-   if (current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0 then
+   if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
+      (current^.inheritance=VM_INHERIT_HOLE) then
    begin
     current:=current^.next;
     continue;
@@ -1807,17 +1814,21 @@ var
  entry     :vm_map_entry_t;
  temp_entry:vm_map_entry_t;
 begin
- case (new_inheritance) of
-  VM_INHERIT_NONE,
-  VM_INHERIT_COPY,
-  VM_INHERIT_SHARE:;
+ case new_inheritance of
+  VM_INHERIT_SHARE,
+  VM_INHERIT_COPY ,
+  VM_INHERIT_NONE ,
+  VM_INHERIT_PATCH,
+  VM_INHERIT_HOLE :;
  else
   Exit(KERN_INVALID_ARGUMENT);
  end;
+
  if (start=__end) then
  begin
   Exit(KERN_SUCCESS);
  end;
+
  vm_map_lock(map);
  VM_MAP_RANGE_CHECK(map, start, __end);
 
@@ -1837,6 +1848,7 @@ begin
   vm_map_simplify_entry(map, entry);
   entry:=entry^.next;
  end;
+
  vm_map_unlock(map);
  Result:=(KERN_SUCCESS);
 end;
@@ -1917,6 +1929,13 @@ begin
  current:=entry;
  while (current<>@map^.header) and (current^.start<__end) do
  begin
+
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   current:=current^.next;
+   continue;
+  end;
+
   offset:=current^.offset + (start - current^.start);
 
   if (__end<=current^.__end) then
@@ -1941,6 +1960,7 @@ begin
   begin
    vm_obj:=current^.vm_obj;
   end;
+
   vm_object_reference(vm_obj);
   last_timestamp:=map^.timestamp;
   vm_map_unlock(map);
@@ -1984,6 +2004,11 @@ var
  offidxstart,offidx_end,count:vm_pindex_t;
  size:vm_ooffset_t;
 begin
+ if (entry^.inheritance=VM_INHERIT_HOLE) then
+ begin
+  Exit();
+ end;
+
  vm_map_entry_unlink(map, entry);
  vm_obj:=entry^.vm_obj;
  size:=entry^.__end - entry^.start;
@@ -2063,6 +2088,12 @@ begin
   }
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
+
+  if (entry^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   entry:=entry^.next;
+   continue;
+  end;
 
   vm_map_clip_end(map, entry, __end);
 
@@ -2808,6 +2839,11 @@ var
  current:vm_map_entry_t;
  entry:vm_map_entry_t;
 begin
+ if (start=__end) then
+ begin
+  Exit();
+ end;
+
  VM_MAP_RANGE_CHECK(map, start, __end);
 
  if (vm_map_lookup_entry(map, start,@entry)) then
@@ -2836,6 +2872,11 @@ var
  current:vm_map_entry_t;
  entry:vm_map_entry_t;
 begin
+ if (start=__end) then
+ begin
+  Exit();
+ end;
+
  VM_MAP_RANGE_CHECK(map, start, __end);
 
  if (vm_map_lookup_entry(map, start,@entry)) then
@@ -2869,6 +2910,7 @@ end;
 
 procedure vminit;
 var
+ map:vm_map_t;
  i:Integer;
 begin
  vmspace_alloc(PROC_IMAGE_AREA_START,VM_MAXUSER_ADDRESS);
@@ -2876,13 +2918,14 @@ begin
  //exclude addr
  if Length(exclude_mem)<>0 then
  begin
-  vm_map_lock(@g_vmspace.vm_map);
+  map:=@g_vmspace.vm_map;
+  vm_map_lock(map);
   For i:=0 to High(exclude_mem) do
   begin
-   vm_map_insert  (@g_vmspace.vm_map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1);
-   vm_map_set_name(@g_vmspace.vm_map,         exclude_mem[i].start, exclude_mem[i].__end, '(exclude)');
+   vm_map_insert         (map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1);
+   vm_map_set_name_locked(map,         exclude_mem[i].start, exclude_mem[i].__end, '#hole', VM_INHERIT_HOLE);
   end;
-  vm_map_unlock(@g_vmspace.vm_map);
+  vm_map_unlock(map);
  end;
 end;
 
