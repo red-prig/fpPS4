@@ -117,8 +117,8 @@ begin
  if (err<>0) then Exit;
 
  vm_map_lock(map);
- vm_map_set_name_locked(map,start,start+size,'#patch');
- pmap_mark_flags(start,start+size,PAGE_PATCH_FLAG);
+ vm_map_set_name_locked(map,start,start+size,'#patch',VM_INHERIT_PATCH);
+ //pmap_mark_flags(start,start+size,PAGE_PATCH_FLAG);
  vm_map_unlock(map);
 
  Result:=Pointer(start);

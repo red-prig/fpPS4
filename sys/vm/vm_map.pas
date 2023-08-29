@@ -248,6 +248,7 @@ function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Intege
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
+procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -2821,7 +2822,37 @@ begin
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
   vm_map_clip_end(map,current,__end);
+
   MoveChar0(name^,current^.name,32);
+
+  vm_map_simplify_entry(map, current);
+
+  current:=current^.next;
+ end;
+end;
+
+procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
+var
+ current:vm_map_entry_t;
+ entry:vm_map_entry_t;
+begin
+ VM_MAP_RANGE_CHECK(map, start, __end);
+
+ if (vm_map_lookup_entry(map, start,@entry)) then
+ begin
+  vm_map_clip_start(map, entry, start);
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ current:=entry;
+ while ((current<>@map^.header) and (current^.start<__end)) do
+ begin
+  vm_map_clip_end(map,current,__end);
+
+  MoveChar0(name^,current^.name,32);
+  current^.inheritance:=i;
 
   vm_map_simplify_entry(map, current);
 

@@ -13,8 +13,8 @@ uses
  vm_object;
 
 const
- PAGE_MAP_COUNT=(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
- PAGE_MAP_MASK =PAGE_MAP_COUNT-1;
+ PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
+ PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
 
  PAGE_PROT_EXECUTE=DWORD($80000000);
  PAGE_PROT_WRITE  =DWORD($40000000);
@@ -24,8 +24,10 @@ const
 
  PAGE_PROT_SHIFT  =29;
 
- PAGE_BUSY_FLAG   =DWORD($10000000);
- PAGE_PATCH_FLAG  =DWORD($08000000);
+ PAGE_OFS_MASK    =(1 shl PAGE_PROT_SHIFT)-1; //Possible addressing in 8TB
+
+ //PAGE_BUSY_FLAG   =DWORD($10000000);
+ //PAGE_PATCH_FLAG  =DWORD($08000000);
 
 var
  PAGE_MAP:PDWORD=nil;
@@ -268,7 +270,7 @@ begin
  __off:=OFF_TO_IDX(__off);
  while (start<__end) do
  begin
-  PAGE_MAP[start and PAGE_MAP_MASK]:=__off or flags;
+  PAGE_MAP[start and PAGE_MAP_MASK]:=(__off and PAGE_OFS_MASK) or flags;
   Inc(__off);
   Inc(start);
  end;
@@ -314,7 +316,7 @@ begin
  addr:=OFF_TO_IDX(addr);
  addr:=addr and PAGE_MAP_MASK;
  Result:=PAGE_MAP[addr];
- Result:=Result and PAGE_MAP_MASK;
+ Result:=Result and PAGE_OFS_MASK;
 end;
 
 function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
@@ -328,8 +330,8 @@ begin
   Result:=False;
  end else
  begin
-  page1:=PAGE_MAP[page1] and PAGE_MAP_MASK;
-  page2:=PAGE_MAP[page2] and PAGE_MAP_MASK;
+  page1:=PAGE_MAP[page1] and PAGE_OFS_MASK;
+  page2:=PAGE_MAP[page2] and PAGE_OFS_MASK;
   Result:=(page1<>page2);
  end;
 end;
@@ -349,7 +351,7 @@ asm
  mov PAGE_MAP,%rax
  mov (%rax,%rdi,4),%edi
  //filter (rdi)
- and PAGE_MAP_MASK,%rdi
+ and PAGE_OFS_MASK,%rdi
  jz _exit
  //combine (rdi|rsi)
  shl PAGE_SHIFT,%rdi
@@ -404,6 +406,7 @@ begin
   //shift
   base:=base+VM_MIN_GPU_ADDRESS;
   prot:=prot or ((prot and VM_PROT_GPU_ALL) shr 4);
+  Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+(__end-start),11),':',HexStr(prot,2));
  end;
 
  r:=NtAllocateVirtualMemory(
@@ -435,7 +438,7 @@ var
 begin
  old:=0;
 
- pmap_mark_flags(start,start+size,PAGE_BUSY_FLAG);
+ //pmap_mark_flags(start,start+size,PAGE_BUSY_FLAG);
 
  //set old to readonly
  r:=NtProtectVirtualMemory(
