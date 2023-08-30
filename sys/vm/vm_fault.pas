@@ -187,6 +187,10 @@ begin
  Result:=addr-(addr mod alignment);
 end;
 
+const
+ //EBFE jmp -$02
+ pause_stub:DWORD=$9090FEEB;
+
 procedure copy_xchg(src,dst:Pointer;vsize:Integer);
 var
  data:t_data16;
@@ -215,8 +219,19 @@ begin
    begin
     System.InterlockedExchange64(PQWORD(dst)^,PQWORD(src)^);
    end;
+  9..16:
+   begin
+    System.InterlockedExchange(PDWORD(dst)^,pause_stub);
+
+    Move(PDWORD(src)[1],PDWORD(dst)[1],vsize-SizeOf(DWORD));
+
+    System.InterlockedExchange(PDWORD(dst)^,PDWORD(src)^);
+   end;
   else
+   begin
+    Writeln('copy_xchg:',vsize);
     Assert(false,'copy_xchg');
+   end;
  end;
 end;
 
@@ -275,15 +290,15 @@ end;
 type
  tcopy_cb=procedure(vaddr:Pointer); //rdi
 
-//rdi,rsi
-procedure copyout_xmm(vaddr:Pointer;cb:tcopy_cb);
+//rdi,rsi,edx
+procedure copyout_mov(vaddr:Pointer;cb:tcopy_cb;size:Integer);
 var
- data:array[0..15] of Byte;
+ data:array[0..31] of Byte;
 begin
- if pmap_test_cross(QWORD(vaddr),15) then
+ if pmap_test_cross(QWORD(vaddr),size-1) then
  begin
   cb(@data); //xmm->data
-  copyout(@data,vaddr,16);
+  copyout(@data,vaddr,size);
  end else
  begin
   vaddr:=uplift(vaddr);
@@ -291,14 +306,14 @@ begin
  end;
 end;
 
-//rdi,rsi
-procedure copyin_xmm(vaddr:Pointer;cb:tcopy_cb);
+//rdi,rsi,edx
+procedure copyin_mov(vaddr:Pointer;cb:tcopy_cb;size:Integer);
 var
- data:array[0..15] of Byte;
+ data:array[0..31] of Byte;
 begin
- if pmap_test_cross(QWORD(vaddr),15) then
+ if pmap_test_cross(QWORD(vaddr),size-1) then
  begin
-  copyin(vaddr,@data,16);
+  copyin(vaddr,@data,size);
   cb(@data); //data->xmm
  end else
  begin
@@ -325,6 +340,22 @@ begin
  end;
 end;
 
+function get_lea_id(memop:t_memop_type):Byte;
+begin
+ case memop of
+  moCopyout:Result:=1;
+  moCopyin :Result:=2;
+ end;
+end;
+
+function get_reg_id(memop:t_memop_type):Byte;
+begin
+ case memop of
+  moCopyout:Result:=2;
+  moCopyin :Result:=1;
+ end;
+end;
+
 type
  p_jit_code=^t_jit_code;
  t_jit_code=record
@@ -348,6 +379,22 @@ type
 
   jit_code:p_jit_code;
  end;
+
+function GetTargetOfs(var ctx:t_jit_context;id:Byte;var ofs:Int64):Boolean;
+var
+ i:Integer;
+begin
+ Result:=True;
+ i:=ctx.din.Operand[id].CodeIndex;
+ case ctx.din.Operand[id].ByteCount of
+   1: ofs:=PShortint(@ctx.Code[i])^;
+   2: ofs:=PSmallint(@ctx.Code[i])^;
+   4: ofs:=PInteger (@ctx.Code[i])^;
+   8: ofs:=PInt64   (@ctx.Code[i])^;
+   else
+      Result:=False;
+ end;
+end;
 
 procedure build_lea(var ctx:t_jit_context;id:Byte);
 var
@@ -388,21 +435,127 @@ begin
   end;
  end;
 
- i:=ctx.din.Operand[id].CodeIndex;
- case ctx.din.Operand[id].ByteCount of
-   1: ofs:=PShortint(@ctx.Code[i])^;
-   2: ofs:=PSmallint(@ctx.Code[i])^;
-   4: ofs:=PInteger (@ctx.Code[i])^;
-   8: ofs:=PInt64   (@ctx.Code[i])^;
-   else
-      Exit;
- end;
-
- with ctx.builder do
+ ofs:=0;
+ if GetTargetOfs(ctx,id,ofs) then
  begin
-  lea(adr,[adr+ofs]);
+  with ctx.builder do
+  begin
+   lea(adr,[adr+ofs]);
+  end;
  end;
 end;
+
+//
+
+procedure build_mov(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
+var
+ i,copy_size:Integer;
+ imm:Int64;
+ link:t_jit_i_link;
+ dst:t_jit_reg;
+begin
+
+ case ctx.din.Operand[id].Size of
+  os32:
+   begin
+    copy_size:=4;
+    dst:=t_jit_builder.esi;
+   end;
+  os64:
+   begin
+    copy_size:=8;
+    dst:=t_jit_builder.rsi;
+   end
+  else
+   begin
+    Writeln('build_mov (',ctx.din.Operand[id].Size,')');
+    Assert(false,'build_mov (size)');
+   end;
+ end;
+
+ if (ctx.din.Operand[1].Size<>ctx.din.Operand[2].Size) then
+ begin
+  Writeln(ctx.din.OpCode.Opcode,' ',
+          ctx.din.OpCode.Suffix,' ',
+          ctx.din.Operand[1].Size,' ',
+          ctx.din.Operand[2].Size);
+
+  Assert(false,'TODO');
+ end;
+
+ case memop of
+  moCopyout:
+   begin
+    with ctx.builder do
+    begin
+     //input:rdi
+
+     link:=leaj(rsi,[rip+$FFFF],-1);
+
+     movi(edx,copy_size);
+
+     call(@copyout_mov); //rdi,rsi,edx
+
+     reta;
+
+     //input:rdi
+
+     link._label:=_label;
+
+     imm:=0;
+     if GetTargetOfs(ctx,id,imm) then
+     begin
+      //imm const
+      movi(dst,imm);
+      movq([rdi],dst); //TODO movi([rdi],imm);
+     end else
+     begin
+      movq(rax,[GS+Integer(teb_thread)]);
+
+      i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
+      Assert(i<>0,'build_mov');
+
+      movq(dst,[rax+i]);
+      movq([rdi],dst);
+     end;
+
+     reta;
+
+    end;
+   end;
+  moCopyin:
+   begin
+    with ctx.builder do
+    begin
+     //input:rdi
+
+     link:=movj(rsi,[rip+$FFFF],-1);
+
+     movi(edx,copy_size);
+
+     call(@copyin_mov); //rdi,rsi,edx
+
+     reta;
+
+     //input:rdi
+
+     link._label:=_label;
+
+     movq(rax,[GS+Integer(teb_thread)]);
+
+     i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
+     Assert(i<>0,'build_mov');
+
+     movq(dst,[rdi]);
+     movq([rax+i],dst);
+
+     reta;
+    end;
+   end;
+ end;
+end;
+
+//
 
 procedure build_vmovdqu(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
 var
@@ -418,7 +571,14 @@ begin
 
      link:=leaj(rsi,[rip+$FFFF],-1);
 
-     call(@copyout_xmm); //rdi,rsi
+     case ctx.din.Operand[id].RegValue[0].ASize of
+      os128:movi(edx,16);
+      os256:movi(edx,32);
+      else
+       Assert(false);
+     end;
+
+     call(@copyout_mov); //rdi,rsi,edx
 
      reta;
 
@@ -442,7 +602,14 @@ begin
 
      link:=movj(rsi,[rip+$FFFF],-1);
 
-     call(@copyin_xmm); //rdi,rsi
+     case ctx.din.Operand[id].RegValue[0].ASize of
+      os128:movi(edx,16);
+      os256:movi(edx,32);
+      else
+       Assert(false);
+     end;
+
+     call(@copyin_mov); //rdi,rsi,edx
 
      reta;
 
@@ -475,7 +642,14 @@ begin
 
      link:=leaj(rsi,[rip+$FFFF],-1);
 
-     call(@copyout_xmm); //rdi,rsi
+     case ctx.din.Operand[id].RegValue[0].ASize of
+      os128:movi(edx,16);
+      os256:movi(edx,32);
+      else
+       Assert(false);
+     end;
+
+     call(@copyout_mov); //rdi,rsi,edx
 
      reta;
 
@@ -499,7 +673,14 @@ begin
 
      link:=movj(rsi,[rip+$FFFF],-1);
 
-     call(@copyin_xmm); //rdi,rsi
+     case ctx.din.Operand[id].RegValue[0].ASize of
+      os128:movi(edx,16);
+      os256:movi(edx,32);
+      else
+       Assert(false);
+     end;
+
+     call(@copyin_mov); //rdi,rsi,edx
 
      reta;
 
@@ -589,47 +770,35 @@ var
  jit_size,size,i:Integer;
 begin
 
- ctx.builder.call(@test_jit); ///test
+ ctx.builder.call(@test_jit); //test
 
  case ctx.din.OpCode.Opcode of
   OPmov:
    begin
     case ctx.din.OpCode.Suffix of
 
+     OPSnone:
+      begin
+       memop:=classif_memop(ctx.din);
+
+       build_lea(ctx,get_lea_id(memop));
+       build_mov(ctx,get_reg_id(memop),memop);
+      end;
+
      OPSx_dqu:
       begin
        memop:=classif_memop(ctx.din);
 
-       case memop of
-        moCopyout:
-         begin
-          build_lea(ctx,1);
-          build_vmovdqu(ctx,2,memop);
-         end;
-        moCopyin:
-         begin
-          build_lea(ctx,2);
-          build_vmovdqu(ctx,1,memop);
-         end;
-       end;
+       build_lea(ctx,get_lea_id(memop));
+       build_vmovdqu(ctx,get_reg_id(memop),memop);
       end;
 
      OPSx_dqa:
       begin
        memop:=classif_memop(ctx.din);
 
-       case memop of
-        moCopyout:
-         begin
-          build_lea(ctx,1);
-          build_vmovdqa(ctx,2,memop);
-         end;
-        moCopyin:
-         begin
-          build_lea(ctx,2);
-          build_vmovdqa(ctx,1,memop);
-         end;
-       end;
+       build_lea(ctx,get_lea_id(memop));
+       build_vmovdqa(ctx,get_reg_id(memop),memop);
       end
 
      else
@@ -645,18 +814,8 @@ begin
        begin
         memop:=classif_memop(ctx.din);
 
-        case memop of
-         moCopyout:
-          begin
-           build_lea(ctx,1);
-           build_vmovups(ctx,2,memop);
-          end;
-         moCopyin:
-          begin
-           build_lea(ctx,2);
-           build_vmovups(ctx,1,memop);
-          end;
-        end;
+        build_lea(ctx,get_lea_id(memop));
+        build_vmovups(ctx,get_reg_id(memop),memop);
        end;
 
      else
@@ -667,7 +826,11 @@ begin
   else
    begin
     _err:
-    Writeln('Unhandled jit:',ctx.din.OpCode.Opcode,' ',ctx.din.OpCode.Suffix);
+    Writeln('Unhandled jit:',
+            ctx.din.OpCode.Opcode,' ',
+            ctx.din.OpCode.Suffix,' ',
+            ctx.din.Operand[1].Size,' ',
+            ctx.din.Operand[2].Size);
     Assert(false);
    end;
  end;
@@ -806,6 +969,20 @@ begin
  chunk_prolog:=nil;
 
  case vsize of
+  1..2:
+    begin
+     //Not possible
+     chunk_prolog:=nil;
+    end;
+  3:
+    begin
+     //Overlapping jmp instructions [00 11 22] [MM MM]
+     mask:=PWORD(@ctx.Code[3])^;
+     mask:=mask shl 16;
+     mask:=mask or 1;
+
+     chunk_prolog:=p_alloc_m(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog),mask);
+    end;
   4:
     begin
      //Overlapping jmp instructions [00 11 22 33] [MM]
@@ -822,9 +999,9 @@ begin
     end;
   14..16:
     begin
-     //Far 64bit jmpq 0(%rip)
+     //Far 64bit jmpq 0(%rip) TODO
 
-     Assert(false,'vm_try_jit_patch (far jmp TODO)');
+     chunk_prolog:=p_alloc(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog));
     end;
   else
     Assert(false,'vm_try_jit_patch (vsize)');
