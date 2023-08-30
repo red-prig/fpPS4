@@ -148,6 +148,8 @@ const
   jitcall:@jit_call;
  );
 
+procedure switch_to_jit(frame:p_jit_frame);
+
 function  IS_TRAP_FUNC(rip:qword):Boolean; inline;
 
 function  trap(frame:p_trapframe):Integer;
@@ -816,6 +818,30 @@ end;
  end;
 }
 
+procedure switch_to_jit(frame:p_jit_frame);
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit;
+
+ td^.td_teb^.jit_rsp:=Pointer(td^.td_frame.tf_rsp);
+ td^.td_frame.tf_rsp:=QWORD(frame);
+ td^.td_frame.tf_rip:=QWORD(@jit_call);
+end;
+
+type
+ t_proc=Procedure();
+
+procedure jit_frame_call(frame:p_jit_frame);
+begin
+ cpu_init_jit(curkthread);
+
+ t_proc(frame^.call)();
+
+ cpu_fini_jit(curkthread);
+end;
+
 //input:
 // 1: %gs:teb.jit_rsp (original %rsp)
 // 2: %rsp            (jitcall  addr)
@@ -889,7 +915,7 @@ asm
  movqq %rax,%gs:teb.jitcall
  movqq %rax,%gs:teb.jit_rsp
 
- call  t_jit_frame.call(%rdi) //call jit code
+ call  jit_frame_call //call jit code
 
  _after_call:
 

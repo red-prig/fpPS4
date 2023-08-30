@@ -30,16 +30,6 @@ uses
  ucontext,
  vm_patch_link;
 
-{
-TRegValue = object
- AType : TRegisterType;
- ASize : TOperandSize;
- AIndex: Byte;
- AScale: Byte;
- //
- function StrValue:RawByteString;
-end;
-}
 
 function GetFrameOffset(RegValue:TRegValue): Pointer;
 begin
@@ -122,10 +112,6 @@ begin
         begin
           Result := nil; //Format('ymm%u', [AIndex]);
         end;
-        os512:
-        begin
-          Result := nil; //Format('zmm%u', [AIndex]);
-        end;
       else;
       end;
     end;
@@ -154,19 +140,19 @@ begin
  Result:=Integer(ptruint(GetFrameOffset(RegValue)));
 end;
 
-function vm_check_patch(map:vm_map_t;vaddr:vm_offset_t):Boolean;
+function vm_check_patch_entry(map:vm_map_t;vaddr:vm_offset_t;p_entry:p_vm_map_entry_t):Boolean;
 var
  entry:vm_map_entry_t;
 begin
  if (vm_map_lookup_entry(map,vaddr,@entry)) then
  begin
+  p_entry^:=entry;
   Result:=(entry^.inheritance=VM_INHERIT_PATCH);
  end else
  begin
-  Result:=False;
+  p_entry^:=nil;
+  Result:=True;
  end;
-
- //Result:=(pmap_get_raw(vaddr) and PAGE_PATCH_FLAG)<>0;
 end;
 
 procedure test_jit;
@@ -199,13 +185,6 @@ end;
 function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 begin
  Result:=addr-(addr mod alignment);
-end;
-
-procedure vm_add_jit_patch_link(obj:vm_map_object;vaddr:vm_offset_t;vsize:Integer;stub:p_stub_chunk);
-begin
- Assert(obj<>nil,'vm_add_jit_patch_link');
-
- vm_add_patch_link(obj,Pointer(vaddr),vsize,pt_jit,stub);
 end;
 
 procedure copy_xchg(src,dst:Pointer;vsize:Integer);
@@ -242,23 +221,16 @@ begin
 end;
 
 procedure patch_original(map:vm_map_t;
+                         entry:vm_map_entry_t;
                          vaddr:vm_offset_t;
                          vsize:Integer;
-                         stub:p_stub_chunk;
                          delta:Integer);
 var
  trampoline:t_jmp32_trampoline;
- entry:vm_map_entry_t;
  start   :vm_offset_t;
  __end   :vm_offset_t;
  new_prot:vm_prot_t;
 begin
- entry:=nil;
- if not vm_map_lookup_entry(map,vaddr,@entry) then
- begin
-  Assert(False,'patch_original');
- end;
-
  new_prot:=entry^.protection or VM_PROT_READ or VM_PROT_WRITE;
 
  if (new_prot<>entry^.protection) then
@@ -288,8 +260,6 @@ begin
                entry^.protection,
                new_prot);
  end;
-
- vm_add_jit_patch_link(entry^.vm_obj,vaddr,vsize,stub);
 end;
 
 type
@@ -603,37 +573,54 @@ function vm_try_jit_patch(map:vm_map_t;
                           rip_addr:vm_offset_t):Integer;
 var
  err:Integer;
+ vsize:Integer;
+
+ entry:vm_map_entry_t;
+ obj:vm_map_object;
 
  ctx:t_jit_context;
  ptr:Pointer;
 
  chunk_prolog:p_stub_chunk;
- chunk_jit:p_stub_chunk;
+ chunk_jit   :p_stub_chunk;
 
  jit_prolog:p_jit_prolog;
- //jit_frame:p_jit_frame;
+
  delta:Int64;
 
  rip_addr_jmp:vm_offset_t;
 
- rv:Integer;
  mask:DWORD;
 
  info:t_patch_info;
 begin
  Result:=0;
 
+ info:=vm_get_patch_link(Pointer(rip_addr),0,pt_jit_frame);
+
+ //Is the exception already patched?
+ if (info.stub<>nil) then
+ begin
+  ctx.jit_code:=@info.stub^.body;
+  if (ctx.jit_code^.prolog=nil) then
+  begin
+   //Prologue not created? Switch code on exit
+   switch_to_jit(@ctx.jit_code^.frame);
+   Exit(0);
+  end;
+
+  p_dec_ref(info.stub); //release (vm_get_patch_link)
+  Exit(0);
+ end;
+
  //Did the exception happen inside a patch? just going out
- if vm_check_patch(map,rip_addr) then
+ if vm_check_patch_entry(map,rip_addr,@entry) then
  begin
   Exit(0);
  end;
 
- //Is the exception already patched?
- if vm_patch_exist(Pointer(rip_addr),0) then
- begin
-  Exit(0);
- end;
+ obj:=entry^.vm_obj;
+ Assert(obj<>nil,'vm_try_jit_patch (obj=nil)');
 
  Writeln('mmaped addr 0x',HexStr(mem_addr,16),' to 0x',HexStr(uplift(Pointer(mem_addr))));
 
@@ -646,60 +633,78 @@ begin
  ptr:=@ctx.Code;
  ctx.dis.Disassemble(dm64,ptr,ctx.din);
 
- if vm_patch_exist(Pointer(rip_addr+ctx.dis.CodeIdx),1) then
+ vsize:=ctx.dis.CodeIdx;
+
+ info:=vm_get_patch_link(Pointer(rip_addr-1),1,pt_jit_frame);
+
+ if (info.stub<>nil) then
  begin
-  Assert(False,'patch on next instruction TODO');
+
+  //Overlap?
+  if (info.vsize<5) then
+  begin
+   Assert(False,'Overlap patch on prev instruction TODO');
+  end;
+
+  p_dec_ref(info.stub); //release (vm_get_patch_link)
  end;
 
- if vm_patch_exist(Pointer(rip_addr-1),1) then
- begin
-  Assert(False,'patch on prev instruction TODO');
+ rip_addr_jmp:=rip_addr+SizeOf(t_jmp32_trampoline);
+
+ chunk_prolog:=nil;
+
+ case vsize of
+  4:
+    begin
+     //Overlapping jmp instructions [00 11 22 33] [MM]
+     mask:=ctx.Code[4];
+     mask:=mask shl 24;
+
+     chunk_prolog:=p_alloc_m(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog),mask);
+    end;
+  5:
+    begin
+     //Near 32bit jmp instructions
+
+     chunk_prolog:=p_alloc(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog));
+    end;
+  else
+    Assert(false,'vm_try_jit_patch (vsize)');
  end;
 
- //OPCODE: OPMOV
- //SUFFIX: OPSX_DQU
+ ctx.rip_addr:=rip_addr;
+ chunk_jit:=generate_jit(ctx);
 
- if (ctx.dis.CodeIdx=4) then
+ if (chunk_prolog=nil) then
  begin
-  mask:=ctx.Code[4];
-  mask:=mask shl 24;
-
-  rip_addr_jmp:=rip_addr+SizeOf(t_jmp32_trampoline);
-
-  chunk_prolog:=p_alloc_m(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog),mask);
-
-  if (chunk_prolog=nil) then Exit(KERN_NO_SPACE);
-
-  ctx.rip_addr:=rip_addr;
-
-  chunk_jit:=generate_jit(ctx);
-
-  //Writeln('vm_check_patch:',vm_check_patch(map,vm_offset_t(ctx.jit_code)));
-
-  //jit_frame:=AllocMem(SizeOf(t_jit_frame));
-  //jit_frame^.call:=@test_jit;
-  //jit_frame^.addr:=Pointer(rip_addr);
-  //jit_frame^.reta:=Pointer(rip_addr+ctx.dis.CodeIdx);
-
+  //Prologue not created?
+ end else
+ begin
   jit_prolog:=@chunk_prolog^.body;
   jit_prolog^:=c_jit_prolog;
-
-  //jit_prolog^.jframe:=jit_frame;
   jit_prolog^.jframe:=@ctx.jit_code^.frame;
 
   ctx.jit_code^.prolog:=chunk_prolog;
 
   delta:=Int64(jit_prolog)-(Int64(rip_addr_jmp));
 
-  Assert(is_mask_valid(Pointer(rip_addr_jmp),jit_prolog,mask),'vm_try_jit_patch');
+  if (vsize<5) then
+  begin
+   Assert(is_mask_valid(Pointer(rip_addr_jmp),jit_prolog,mask),'vm_try_jit_patch (is_mask_valid)');
+  end else
+  begin
+   Assert(is_near_valid(Pointer(rip_addr_jmp),jit_prolog),'vm_try_jit_patch (is_near_valid)');
+  end;
 
-  patch_original(map,rip_addr,ctx.dis.CodeIdx,chunk_jit,Integer(delta));
- end else
- begin
-  Assert(False,'TODO');
+  patch_original(map,entry,rip_addr,vsize,Integer(delta));
+
+  vm_add_patch_link(obj,Pointer(rip_addr),vsize,pt_jit_prolog,chunk_prolog);
  end;
 
+ vm_add_patch_link(obj,Pointer(rip_addr),vsize,pt_jit_frame,chunk_jit);
 
+ //Switch code on exit
+ switch_to_jit(@ctx.jit_code^.frame);
 end;
 
 function vm_fault(map        :vm_map_t;

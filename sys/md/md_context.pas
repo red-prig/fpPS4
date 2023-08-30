@@ -56,6 +56,9 @@ type
   YmmContext:TYMMCONTEXT;
  end;
 
+ TXmmSaveArea = Windows.TXmmSaveArea;
+ PXmmSaveArea = Windows.PXmmSaveArea;
+
  PCONTEXT_CHUNK=^TCONTEXT_CHUNK;
  TCONTEXT_CHUNK=packed record
   Offset:LONG;

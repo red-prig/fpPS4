@@ -23,6 +23,8 @@ Procedure bmove(src,dst:Pointer;size:ptrint);
 function  cpu_getstack(td:p_kthread):QWORD;
 procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
 procedure cpu_set_gsbase(td:p_kthread;base:Pointer);
+procedure cpu_init_jit(td:p_kthread);
+procedure cpu_fini_jit(td:p_kthread);
 procedure cpu_fetch_syscall_args(td:p_kthread);
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);
@@ -89,6 +91,29 @@ begin
  td^.pcb_gsbase:=base;
  td^.td_teb^.gsbase:=base;
  set_pcb_flags(td,PCB_FULL_IRET);
+end;
+
+procedure cpu_init_jit(td:p_kthread);
+begin
+ //teb stack
+ td^.td_teb^.sttop:=td^.td_kstack.sttop;
+ td^.td_teb^.stack:=td^.td_kstack.stack;
+ //teb stack
+end;
+
+procedure cpu_fini_jit(td:p_kthread);
+begin
+ //teb stack
+ if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+ begin
+  td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
+  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
+ end else
+ begin
+  td^.td_teb^.stack:=td^.td_ustack.stack;
+  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+ end;
+ //teb stack
 end;
 
 procedure cpu_fetch_syscall_args(td:p_kthread);

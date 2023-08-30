@@ -10,7 +10,7 @@ uses
  kern_stub;
 
 type
- t_patch_type=(pt_fsbase,pt_gsbase,pt_syscall,pt_unresolve,pt_jit);
+ t_patch_type=(pt_none,pt_fsbase,pt_gsbase,pt_syscall,pt_unresolve,pt_jit_prolog,pt_jit_frame);
 
  p_patch_info=^t_patch_info;
  t_patch_info=record
@@ -27,7 +27,7 @@ type
   info:t_patch_info;
  end;
 
-function  vm_get_patch_link(vaddr:Pointer;vsize:Integer):t_patch_info;
+function  vm_get_patch_link(vaddr:Pointer;vsize:Integer;ptype:t_patch_type):t_patch_info;
 function  vm_patch_exist(vaddr:Pointer;vsize:Integer):Boolean;
 
 procedure vm_add_patch_link     (_obj,vaddr:Pointer;vsize:Integer;ptype:t_patch_type;stub:p_stub_chunk);
@@ -113,7 +113,7 @@ begin
  Result:=((vaddr+vsize)>info^.vaddr) and (vaddr<(info^.vaddr+info^.vsize));
 end;
 
-function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer):t_patch_info;
+function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer;ptype:t_patch_type):t_patch_info;
 var
  entry,next:p_patch_node;
 begin
@@ -125,7 +125,8 @@ begin
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if (entry^.info.vaddr=vaddr) then
+  if (entry^.info.vaddr=vaddr) and
+     ((ptype=pt_none) or (entry^.info.ptype=ptype)) then
   begin
    Result:=entry^.info;
    p_inc_ref(Result.stub);
@@ -135,7 +136,7 @@ begin
  end;
 end;
 
-function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer;vsize:Integer):t_patch_info;
+function _vm_get_patch_link(page:p_patch_page;vaddr:Pointer;vsize:Integer;ptype:t_patch_type):t_patch_info;
 var
  entry,next:p_patch_node;
 begin
@@ -147,7 +148,8 @@ begin
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if info_cross(@entry^.info,vaddr,vsize) then
+  if info_cross(@entry^.info,vaddr,vsize) and
+     ((ptype=pt_none) or (entry^.info.ptype=ptype)) then
   begin
    Result:=entry^.info;
    p_inc_ref(Result.stub);
@@ -157,12 +159,11 @@ begin
  end;
 end;
 
-function vm_get_patch_link(vaddr:Pointer;vsize:Integer):t_patch_info;
+function vm_get_patch_link(vaddr:Pointer;vsize:Integer;ptype:t_patch_type):t_patch_info;
 var
  off1,off2:DWORD;
  data:PPointer;
  page:p_patch_page;
- entry,next:p_patch_node;
 begin
  Result:=Default(t_patch_info);
 
@@ -182,10 +183,10 @@ begin
 
  if (vsize=0) then
  begin
-  Result:=_vm_get_patch_link(page,vaddr);
+  Result:=_vm_get_patch_link(page,vaddr,ptype);
  end else
  begin
-  Result:=_vm_get_patch_link(page,vaddr,vsize);
+  Result:=_vm_get_patch_link(page,vaddr,vsize,ptype);
 
   off2:=OFF_TO_IDX(vaddr+vsize-1);
 
@@ -201,7 +202,7 @@ begin
     page:=data^;
    end;
 
-   Result:=_vm_get_patch_link(page,vaddr,vsize);
+   Result:=_vm_get_patch_link(page,vaddr,vsize,ptype);
   end;
  end;
 
@@ -212,7 +213,7 @@ function vm_patch_exist(vaddr:Pointer;vsize:Integer):Boolean;
 var
  info:t_patch_info;
 begin
- info:=vm_get_patch_link(vaddr,vsize);
+ info:=vm_get_patch_link(vaddr,vsize,pt_none);
 
  if (info.stub<>nil) then
  begin

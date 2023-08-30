@@ -249,13 +249,14 @@ var
  entry,next:p_stub_chunk;
 begin
  Result:=nil;
+ size:=size+SizeOf(stub_chunk);
  entry:=TAILQ_FIRST(@chunk_free);
 
  while (entry<>nil) do
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if (entry^.curr_size>=(size+SizeOf(stub_chunk))) then
+  if (entry^.curr_size>=size) then
   begin
    if (vaddr=nil) or is_near_valid(vaddr,@entry^.body) then
    begin
@@ -274,13 +275,14 @@ var
  entry,next:p_stub_chunk;
 begin
  Result:=nil;
+ size:=size+SizeOf(stub_chunk);
  entry:=TAILQ_FIRST(@chunk_free);
 
  while (entry<>nil) do
  begin
   next:=TAILQ_NEXT(entry,@entry^.link);
   //
-  if (entry^.curr_size>=(size+SizeOf(stub_chunk))) then
+  if (entry^.curr_size>=size) then
   begin
    if is_mask_valid(vaddr,@entry^.body,mask) then
    begin
