@@ -84,6 +84,7 @@ type
 
   TDbgProcess=class
    Mode: TFPDMode;
+   Constructor Create(M: TFPDMode);
    function ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData):Boolean; virtual;
    function ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData;out APartSize:Cardinal):Boolean; virtual;
   end;
@@ -4715,6 +4716,11 @@ begin
 end;
 
 { TDbgProcess }
+
+Constructor TDbgProcess.Create(M: TFPDMode);
+begin
+ Mode:=M;
+end;
 
 function TDbgProcess.ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData):Boolean;
 begin

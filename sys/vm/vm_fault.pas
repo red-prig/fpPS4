@@ -157,7 +157,7 @@ end;
 
 procedure test_jit;
 begin
- writeln('test');
+ writeln('test_jit');
 end;
 
 type
@@ -224,9 +224,8 @@ procedure patch_original(map:vm_map_t;
                          entry:vm_map_entry_t;
                          vaddr:vm_offset_t;
                          vsize:Integer;
-                         delta:Integer);
+                         vsrc :Pointer);
 var
- trampoline:t_jmp32_trampoline;
  start   :vm_offset_t;
  __end   :vm_offset_t;
  new_prot:vm_prot_t;
@@ -245,10 +244,7 @@ begin
                entry^.protection);
  end;
 
- trampoline:=c_jmpl32_trampoline;
- trampoline.addr:=delta;
-
- copy_xchg(@trampoline,Pointer(vaddr),vsize);
+ copy_xchg(vsrc,Pointer(vaddr),vsize);
 
  md_cacheflush(Pointer(vaddr),vsize,ICACHE);
 
@@ -260,6 +256,20 @@ begin
                entry^.protection,
                new_prot);
  end;
+end;
+
+procedure patch_original(map:vm_map_t;
+                         entry:vm_map_entry_t;
+                         vaddr:vm_offset_t;
+                         vsize:Integer;
+                         delta:Integer);
+var
+ trampoline:t_jmp32_trampoline;
+begin
+ trampoline:=c_jmpl32_trampoline;
+ trampoline.addr:=delta;
+
+ patch_original(map,entry,vaddr,vsize,@trampoline);
 end;
 
 type
@@ -451,6 +461,63 @@ begin
  end;
 end;
 
+procedure build_vmovups(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
+var
+ link:t_jit_i_link;
+ dst:t_jit_reg;
+begin
+ case memop of
+  moCopyout:
+   begin
+    with ctx.builder do
+    begin
+     //input:rdi
+
+     link:=leaj(rsi,[rip+$FFFF],-1);
+
+     call(@copyout_xmm); //rdi,rsi
+
+     reta;
+
+     //input:rdi
+
+     link._label:=_label;
+
+     dst:=Default(t_jit_reg);
+     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+
+     vmovups([rdi],dst);
+
+     reta;
+    end;
+   end;
+  moCopyin:
+   begin
+    with ctx.builder do
+    begin
+     //input:rdi
+
+     link:=movj(rsi,[rip+$FFFF],-1);
+
+     call(@copyin_xmm); //rdi,rsi
+
+     reta;
+
+     //input:rdi
+
+     link._label:=_label;
+
+     dst:=Default(t_jit_reg);
+     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+
+     vmovups(dst,[rdi]);
+
+     reta;
+    end;
+   end;
+ end;
+end;
+
 procedure build_vmovdqa(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
 var
  dst:t_jit_reg;
@@ -491,10 +558,35 @@ begin
  end;
 end;
 
+procedure print_disassemble(addr:Pointer;vsize:Integer);
+var
+ proc:TDbgProcess;
+ adec:TX86AsmDecoder;
+ ptr,fin:Pointer;
+ ACodeBytes,ACode:RawByteString;
+begin
+ ptr:=addr;
+ fin:=addr+vsize;
+
+ proc:=TDbgProcess.Create(dm64);
+ adec:=TX86AsmDecoder.Create(proc);
+
+ while (ptr<fin) do
+ begin
+  adec.Disassemble(ptr,ACodeBytes,ACode);
+  Writeln(ACodeBytes:32,' ',ACode);
+ end;
+
+ adec.Free;
+ proc.Free;
+end;
+
 function generate_jit(var ctx:t_jit_context):p_stub_chunk;
+label
+ _err;
 var
  memop:t_memop_type;
- code_size,size:Integer;
+ jit_size,size,i:Integer;
 begin
 
  ctx.builder.call(@test_jit); ///test
@@ -540,16 +632,48 @@ begin
        end;
       end
 
-     else;
+     else
+      goto _err;
     end; //case
    end; //OPmov
 
-  else;
-   Assert(false);
+  OPmovu:
+   begin
+    case ctx.din.OpCode.Suffix of
+
+     OPSx_ps:
+       begin
+        memop:=classif_memop(ctx.din);
+
+        case memop of
+         moCopyout:
+          begin
+           build_lea(ctx,1);
+           build_vmovups(ctx,2,memop);
+          end;
+         moCopyin:
+          begin
+           build_lea(ctx,2);
+           build_vmovups(ctx,1,memop);
+          end;
+        end;
+       end;
+
+     else
+      goto _err;
+    end; //case
+   end; //OPmovu
+
+  else
+   begin
+    _err:
+    Writeln('Unhandled jit:',ctx.din.OpCode.Opcode,' ',ctx.din.OpCode.Suffix);
+    Assert(false);
+   end;
  end;
 
- code_size:=ctx.builder.GetMemSize;
- size:=SizeOf(t_jit_code)+code_size;
+ jit_size:=ctx.builder.GetMemSize;
+ size:=SizeOf(t_jit_code)+jit_size;
 
  Result:=p_alloc(nil,size);
 
@@ -561,9 +685,26 @@ begin
  ctx.jit_code^.frame.reta:=Pointer(ctx.rip_addr+ctx.dis.CodeIdx);
 
  ctx.jit_code^.o_len :=ctx.dis.CodeIdx;
- ctx.jit_code^.o_data:=ctx.Code;
+ ctx.jit_code^.o_data:=c_data16;
 
- ctx.builder.SaveTo(@ctx.jit_code^.code,code_size);
+ Move(ctx.Code,ctx.jit_code^.o_data,ctx.dis.CodeIdx);
+
+ ctx.builder.SaveTo(@ctx.jit_code^.code,jit_size);
+
+ Writeln('--------------------------------':32,' ','print patch');
+ print_disassemble(@ctx.jit_code^.code,ctx.builder.GetInstructionsSize);
+
+ if (Length(ctx.builder.AData))<>0 then
+ begin
+  Writeln('--------------------------------':32,' ','print data');
+  For i:=0 to High(ctx.builder.AData) do
+  begin
+   Writeln('[0x'+HexStr(ctx.builder.AData[i])+']':32,' data:',i);
+  end;
+  Writeln('--------------------------------':32,' ','print data');
+ end;
+
+ Writeln;
 
  ///
 end;
@@ -577,6 +718,8 @@ var
 
  entry:vm_map_entry_t;
  obj:vm_map_object;
+
+ tmp_jit:p_jit_code;
 
  ctx:t_jit_context;
  ptr:Pointer;
@@ -601,12 +744,12 @@ begin
  //Is the exception already patched?
  if (info.stub<>nil) then
  begin
-  ctx.jit_code:=@info.stub^.body;
-  if (ctx.jit_code^.prolog=nil) then
+  tmp_jit:=@info.stub^.body;
+
+  if (tmp_jit^.prolog=nil) then
   begin
    //Prologue not created? Switch code on exit
-   switch_to_jit(@ctx.jit_code^.frame);
-   Exit(0);
+   switch_to_jit(@tmp_jit^.frame);
   end;
 
   p_dec_ref(info.stub); //release (vm_get_patch_link)
@@ -635,6 +778,9 @@ begin
 
  vsize:=ctx.dis.CodeIdx;
 
+ print_disassemble(@ctx.Code,vsize);
+
+ //Get prev patch
  info:=vm_get_patch_link(Pointer(rip_addr-1),1,pt_jit_frame);
 
  if (info.stub<>nil) then
@@ -643,7 +789,13 @@ begin
   //Overlap?
   if (info.vsize<5) then
   begin
-   Assert(False,'Overlap patch on prev instruction TODO');
+   //delete patch
+
+   tmp_jit:=@info.stub^.body;
+
+   patch_original(map,entry,QWORD(info.vaddr),tmp_jit^.o_len,@tmp_jit^.o_data);
+
+   vm_rem_patch_link(obj,info.vaddr);
   end;
 
   p_dec_ref(info.stub); //release (vm_get_patch_link)
@@ -662,11 +814,17 @@ begin
 
      chunk_prolog:=p_alloc_m(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog),mask);
     end;
-  5:
+  5..13:
     begin
      //Near 32bit jmp instructions
 
      chunk_prolog:=p_alloc(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog));
+    end;
+  14..16:
+    begin
+     //Far 64bit jmpq 0(%rip)
+
+     Assert(false,'vm_try_jit_patch (far jmp TODO)');
     end;
   else
     Assert(false,'vm_try_jit_patch (vsize)');

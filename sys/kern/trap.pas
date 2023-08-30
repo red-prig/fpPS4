@@ -150,7 +150,7 @@ const
 
 procedure switch_to_jit(frame:p_jit_frame);
 
-function  IS_TRAP_FUNC(rip:qword):Boolean; inline;
+function  IS_TRAP_FUNC(rip:qword):Boolean;
 
 function  trap(frame:p_trapframe):Integer;
 function  trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
@@ -287,7 +287,7 @@ begin
  md_copyin(@base,@Result,SizeOf(QWORD),nil);
 end;
 
-function CaptureBacktrace(rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
+function CaptureBacktrace(td:p_kthread;rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
 var
  adr:Pointer;
 begin
@@ -314,6 +314,13 @@ begin
   end else
   begin
    Break;
+  end;
+
+  if (td<>nil) and
+     IS_TRAP_FUNC(QWORD(adr)) then
+  begin
+   adr:=Pointer(td^.td_frame.tf_rip);
+   rbp:=Pointer(td^.td_frame.tf_rbp);
   end;
 
  end;
@@ -485,10 +492,10 @@ begin
    offset1:=QWORD(frame)-QWORD(info.base_addr);
    offset2:=QWORD(frame)-QWORD(info.func_addr);
 
-   Writeln(f,' offset $',HexStr(offset1,6),' ',info.source,':',info.func,'+$',HexStr(offset2,6));
+   Writeln(f,'  offset $00X',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
   end else
   begin
-   Writeln(f,' 0x',HexStr(frame),' ',info.source);
+   Writeln(f,'  0x',HexStr(frame),' ',info.source);
   end;
  end else
  if (BackTraceStrFunc<>nil) then
@@ -496,7 +503,7 @@ begin
   Writeln(f,BackTraceStrFunc(frame));
  end else
  begin
-  Writeln(f,' 0x',HexStr(frame));
+  Writeln(f,'  0x',HexStr(frame));
  end;
 end;
 
@@ -506,11 +513,11 @@ var
  frames:array [0..255] of codepointer;
 begin
  count:=max_frame_dump;
- count:=20;
+ count:=30;
 
  print_frame(f,rip);
 
- count:=CaptureBacktrace(rbp,skipframes,count,@frames[0]);
+ count:=CaptureBacktrace(curkthread,rbp,skipframes,count,@frames[0]);
 
  if (count<>0) then
  for i:=0 to count-1 do
@@ -997,7 +1004,7 @@ asm
   hlt
 end;
 
-function IS_TRAP_FUNC(rip:qword):Boolean; inline;
+function IS_TRAP_FUNC(rip:qword):Boolean;
 begin
  Result:=(
           (rip>=QWORD(@fast_syscall)) and
@@ -1005,7 +1012,7 @@ begin
          ) or
          (
           (rip>=QWORD(@jit_call)) and
-          (rip<=(QWORD(@jit_call)+$23C)) //jit_call func size
+          (rip<=(QWORD(@jit_call)+$240)) //jit_call func size
          );
 end;
 
@@ -1023,8 +1030,8 @@ begin
     begin
      Result:=trap_pfault(frame,IS_USERMODE(curkthread,frame));
 
-     print_backtrace_td(stderr);
-     writeln;
+     //print_backtrace_td(stderr);
+     //writeln;
 
     end;
 

@@ -201,6 +201,8 @@ type
   //
   Procedure reta;
   //
+  Function  GetInstructionsSize:Integer;
+  Function  GetDataSize:Integer;
   Function  GetMemSize:Integer;
   Procedure RebuldInstructionOffset;
   Procedure LinkData;
@@ -247,6 +249,8 @@ type
   procedure vmovdqa (reg:t_jit_reg ;mem:t_jit_regs);
   procedure vmovdqa (mem:t_jit_regs;reg:t_jit_reg);
   procedure vmovntdq(mem:t_jit_regs;reg:t_jit_reg);
+  procedure vmovups (reg:t_jit_reg ;mem:t_jit_regs);
+  procedure vmovups (mem:t_jit_regs;reg:t_jit_reg);
   procedure vmovdqa (reg0:t_jit_reg;reg1:t_jit_reg);
  end;
 
@@ -728,6 +732,16 @@ begin
  ji.EmitByte($C3);
 
  _add(ji);
+end;
+
+Function t_jit_builder.GetInstructionsSize:Integer;
+begin
+ Result:=AInstructionSize;
+end;
+
+Function t_jit_builder.GetDataSize:Integer;
+begin
+ Result:=Length(AData)*SizeOf(QWORD);
 end;
 
 Function t_jit_builder.GetMemSize:Integer;
@@ -1662,6 +1676,16 @@ end;
 procedure t_jit_builder.vmovntdq(mem:t_jit_regs;reg:t_jit_reg);
 begin
  _vmov($E7,1,reg,mem);
+end;
+
+procedure t_jit_builder.vmovups(reg:t_jit_reg;mem:t_jit_regs);
+begin
+ _vmov($10,0,reg,mem);
+end;
+
+procedure t_jit_builder.vmovups(mem:t_jit_regs;reg:t_jit_reg);
+begin
+ _vmov($11,0,reg,mem);
 end;
 
 procedure t_jit_builder.vmovdqa(reg0:t_jit_reg;reg1:t_jit_reg);
