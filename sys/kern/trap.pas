@@ -288,6 +288,8 @@ begin
 end;
 
 function CaptureBacktrace(td:p_kthread;rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
+label
+ _next;
 var
  adr:Pointer;
 begin
@@ -297,6 +299,8 @@ begin
  begin
   adr:=fuptr(rbp[1]);
   rbp:=fuptr(rbp[0]);
+
+  _next:
 
   if (adr<>nil) then
   begin
@@ -321,6 +325,7 @@ begin
   begin
    adr:=Pointer(td^.td_frame.tf_rip);
    rbp:=Pointer(td^.td_frame.tf_rbp);
+   goto _next;
   end;
 
  end;
@@ -495,7 +500,15 @@ begin
    Writeln(f,'  offset $00X',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
   end else
   begin
-   Writeln(f,'  0x',HexStr(frame),' ',info.source);
+   if (info.base_addr<>0) then
+   begin
+    offset1:=QWORD(frame)-QWORD(info.base_addr);
+
+    Writeln(f,'  offset $00X',HexStr(offset1,6),'  ',info.source);
+   end else
+   begin
+    Writeln(f,'  $',HexStr(frame),'  ',info.source);
+   end;
   end;
  end else
  if (BackTraceStrFunc<>nil) then
@@ -503,7 +516,7 @@ begin
   Writeln(f,BackTraceStrFunc(frame));
  end else
  begin
-  Writeln(f,'  0x',HexStr(frame));
+  Writeln(f,'  $',HexStr(frame));
  end;
 end;
 

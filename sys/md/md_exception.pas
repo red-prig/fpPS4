@@ -254,7 +254,9 @@ begin
    write(stderr,msg);
  Writeln(stderr,' (',FName,', line ',LineNo,').');
  print_backtrace(stderr,Get_pc_addr,get_frame,0);
- DebugBreak;
+ asm
+  int3
+ end;
  md_halt(217);
 end;
 

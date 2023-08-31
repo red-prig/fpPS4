@@ -79,6 +79,14 @@ begin
              PPointer(data)^:=@gc_AreSubmitsAllowed;
             end;
 
+  $C010810B: //get cu mask
+            begin
+             PInteger(data)[0]:=$10; //& 0x3ff   GC SE0 Redundant CU: 0x10
+             PInteger(data)[1]:=$10; //& 0x3ff   GC SE1 Redundant CU: 0x10
+             PInteger(data)[2]:=$00; //& 0x3ff   GC SE2 Redundant CU: 0x00
+             PInteger(data)[3]:=$00; //& 0x3ff   GC SE3 Redundant CU: 0x00
+            end;
+
   else
    begin
     print_backtrace_td(stderr);

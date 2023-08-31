@@ -369,7 +369,7 @@ begin
 
  //readln;
 
- argv0:='/app0/basic-sample_debug.elf';
+ //argv0:='/app0/basic-sample_debug.elf';
  argv0:='/app0/simple.elf';
  //argv0:='/app0/videoout_basic.elf';
 

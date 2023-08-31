@@ -12,6 +12,8 @@ uses
  vmparam,
  vm_object;
 
+{$DEFINE GPU_REMAP}
+
 const
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
  PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
@@ -401,6 +403,7 @@ begin
  base:=Pointer(trunc_page(start));
  size:=trunc_page(__end-start);
 
+ {$IFDEF GPU_REMAP}
  if is_gpu(prot) then
  begin
   //shift
@@ -408,6 +411,7 @@ begin
   prot:=prot or ((prot and VM_PROT_GPU_ALL) shr 4);
   Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+(__end-start),11),':',HexStr(prot,2));
  end;
+ {$ENDIF}
 
  r:=NtAllocateVirtualMemory(
      NtCurrentProcess,
@@ -527,6 +531,7 @@ begin
  size:=trunc_page(__end-start);
  old:=0;
 
+ {$IFDEF GPU_REMAP}
  if (is_gpu(new_prot)<>is_gpu(old_prot)) then
  begin
   //realloc
@@ -546,21 +551,30 @@ begin
 
   pmap_move(pmap,start,vm_offset_t(base_old),vm_offset_t(base_new),size,new_prot);
 
- end else
- begin
-  r:=NtProtectVirtualMemory(
-      NtCurrentProcess,
-      @base_new,
-      @size,
-      wprots[new_prot and VM_RWX],
-      @old
-     );
+  Exit;
+ end;
+ {$ENDIF}
 
-  if (r<>0) then
-  begin
-   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
-   Assert(false,'pmap_protect');
-  end;
+ {$IFDEF GPU_REMAP}
+ if is_gpu(new_prot) then
+ begin
+  //shift
+  base_new:=base_new+VM_MIN_GPU_ADDRESS;
+ end;
+ {$ENDIF}
+
+ r:=NtProtectVirtualMemory(
+     NtCurrentProcess,
+     @base_new,
+     @size,
+     wprots[new_prot and VM_RWX],
+     @old
+    );
+
+ if (r<>0) then
+ begin
+  Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
+  Assert(false,'pmap_protect');
  end;
 end;
 
@@ -613,11 +627,13 @@ begin
 
  pmap_unmark(start,__end);
 
+ {$IFDEF GPU_REMAP}
  if is_gpu(prot) then
  begin
   //shift
   base:=base+VM_MIN_GPU_ADDRESS;
  end;
+ {$ENDIF}
 
  r:=NtFreeVirtualMemory(
      NtCurrentProcess,

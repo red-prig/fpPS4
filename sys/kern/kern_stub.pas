@@ -8,6 +8,8 @@ interface
 uses
  mqueue;
 
+{.$DEFINE chunk_alloc}
+
 const
  m_header=WORD($C3C3);
 
@@ -39,17 +41,21 @@ procedure p_dec_ref(chunk:p_stub_chunk);
 implementation
 
 uses
+ {$IFDEF chunk_alloc}
  hamt,
+ {$ENDIF}
  kern_rwlock,
  vm,
  vmparam,
  vm_map,
  vm_mmap,
- vm_pmap,
  vm_object;
 
 var
+ {$IFDEF chunk_alloc}
  chunk_alloc:TSTUB_HAMT64;
+ {$ENDIF}
+
  chunk_free :TAILQ_HEAD=(tqh_first:nil;tqh_last:@chunk_free.tqh_first);
 
  chunk_lock :Pointer=nil;
@@ -118,7 +124,6 @@ begin
 
  vm_map_lock(map);
  vm_map_set_name_locked(map,start,start+size,'#patch',VM_INHERIT_PATCH);
- //pmap_mark_flags(start,start+size,PAGE_PATCH_FLAG);
  vm_map_unlock(map);
 
  Result:=Pointer(start);
@@ -328,7 +333,9 @@ begin
 
  chunk^.flags:=chunk^.flags and (not m_free__chunk);
 
+ {$IFDEF chunk_alloc}
  HAMT_insert64(@chunk_alloc,QWORD(chunk),chunk);
+ {$ENDIF}
 
  rw_wunlock(chunk_lock);
 
@@ -375,7 +382,9 @@ begin
 
  chunk^.flags:=chunk^.flags and (not m_free__chunk);
 
+ {$IFDEF chunk_alloc}
  HAMT_insert64(@chunk_alloc,QWORD(chunk),chunk);
+ {$ENDIF}
 
  rw_wunlock(chunk_lock);
 
@@ -390,6 +399,7 @@ begin
 
  rw_wlock(chunk_lock);
 
+ {$IFDEF chunk_alloc}
  if (HAMT_search64(@chunk_alloc,QWORD(chunk))=nil) then
  begin
   rw_wunlock(chunk_lock);
@@ -397,6 +407,8 @@ begin
  end;
 
  HAMT_delete64(@chunk_alloc,QWORD(chunk),nil);
+
+ {$ENDIF}
 
  chunk^.flags:=chunk^.flags or m_free__chunk;
 
