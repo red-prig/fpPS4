@@ -58,6 +58,20 @@ begin
      Result:=SetProcessProperty(arg1);
     end;
 
+  3: //sceKernelDebugRaiseException
+    begin
+     Writeln('sceKernelDebugRaiseException:',HexStr(DWORD(arg1),8));
+     print_backtrace_td(stderr);
+     Assert(False);
+     Result:=EINVAL;
+    end;
+
+  4: //sceKernelDebugRaiseExceptionOnReleaseMode
+    begin
+     Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:',HexStr(DWORD(arg1),8));
+     Result:=0;
+    end;
+
   else
     begin
      print_backtrace_td(stderr);

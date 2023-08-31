@@ -2992,7 +2992,9 @@ begin
   }
 
  if (privused<>nil) then
+ begin
   privused^:=0;
+ end;
 
  dac_granted:=0;
 
@@ -3008,7 +3010,9 @@ begin
    dac_granted:=dac_granted or (VWRITE or VAPPEND);
 
   if ((accmode and dac_granted)=accmode) then
+  begin
    Exit(0);
+  end;
 
   goto privcheck;
  end;
@@ -3024,7 +3028,9 @@ begin
    dac_granted:=dac_granted or (VWRITE or VAPPEND);
 
   if ((accmode and dac_granted)=accmode) then
+  begin
    Exit(0);
+  end;
 
   goto privcheck;
  end;
@@ -3038,7 +3044,9 @@ begin
   dac_granted:=dac_granted or (VWRITE or VAPPEND);
 
  if ((accmode and dac_granted)=accmode) then
+ begin
   Exit(0);
+ end;
 
 privcheck:
  {
@@ -3058,7 +3066,9 @@ privcheck:
   if ((accmode and VEXEC)<>0) and
      ((dac_granted and VEXEC)=0) {and
      (priv_check_cred(cred, PRIV_VFS_LOOKUP, 0)=0)} then
+  begin
    priv_granted:=priv_granted or VEXEC;
+  end;
  end else
  begin
   {
@@ -3070,29 +3080,39 @@ privcheck:
      ((dac_granted and VEXEC)=0) and
      ((file_mode and (S_IXUSR or S_IXGRP or S_IXOTH))<>0) {and
      (priv_check_cred(cred, PRIV_VFS_EXEC, 0)=0)} then
+  begin
    priv_granted:=priv_granted or VEXEC;
+  end;
  end;
 
  if ((accmode and VREAD)<>0) and
     ((dac_granted and VREAD)=0) {and
      (priv_check_cred(cred, PRIV_VFS_READ, 0)=0)} then
+ begin
   priv_granted:=priv_granted or VREAD;
+ end;
 
  if ((accmode and VWRITE)<>0) and
     ((dac_granted and VWRITE)=0) {and
     (priv_check_cred(cred, PRIV_VFS_WRITE, 0)=0)} then
+ begin
   priv_granted:=priv_granted or (VWRITE or VAPPEND);
+ end;
 
  if ((accmode and VADMIN)<>0) and
     ((dac_granted and VADMIN)=0) {and
     (priv_check_cred(cred, PRIV_VFS_ADMIN, 0)=0)} then
+ begin
   priv_granted:=priv_granted or VADMIN;
+ end;
 
  if ((accmode and (priv_granted or dac_granted))=accmode) then
  begin
   { XXX audit: privilege used }
   if (privused<>nil) then
+  begin
    privused^:=1;
+  end;
   Exit(0);
  end;
 

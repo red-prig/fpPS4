@@ -370,8 +370,8 @@ begin
  //readln;
 
  //argv0:='/app0/basic-sample_debug.elf';
- argv0:='/app0/simple.elf';
- //argv0:='/app0/videoout_basic.elf';
+ //argv0:='/app0/simple.elf';
+ argv0:='/app0/videoout_basic.elf';
 
  err:=_execve(argv0,@argv0,nil);
 end;
