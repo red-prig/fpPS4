@@ -286,7 +286,7 @@ begin
     addr:=SCE_REPLAY_EXEC_START;
    end;
   end else
-  if (p_proc.p_sce_replay_exec=0) and
+  if (p_proc.p_sce_replay_exec<>0) and
      (addr<QWORD($ff0000001)) and
      ((length+addr)>QWORD($7efffffff)) then
   begin

@@ -22,7 +22,6 @@ type
  TRegisterTypeSet=Set of TRegisterType;
 
  t_jit_regs =array of t_jit_reg;
- t_jit_int64=array of Int64;
 
  t_jit_link_type=(lnkNone,lnkData,lnkLabel);
 
@@ -74,6 +73,11 @@ type
 
  t_jit_builder=object
   Const
+   ah  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:0),(AType:regNone)));
+   ch  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:1),(AType:regNone)));
+   dh  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:2),(AType:regNone)));
+   bh  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:3),(AType:regNone)));
+
    al  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 0),(AType:regNone)));
    cl  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 1),(AType:regNone)));
    dl  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 2),(AType:regNone)));
@@ -208,32 +212,38 @@ type
   Procedure LinkData;
   Function  SaveTo(ptr:PByte;size:Integer):Integer;
   //
-  procedure _mov    (op:Byte;reg:t_jit_reg;mem:t_jit_regs);
+  procedure _mov    (op,op8:Byte;reg:t_jit_reg;mem:t_jit_regs);
   procedure _mov    (op,op8:Byte;reg0:t_jit_reg;reg1:t_jit_reg);
-  procedure _addi   (op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
+  procedure _movi   (op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
+  procedure _movi   (op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+  procedure _movi8  (op,index:Byte;reg:t_jit_reg;imm:Byte);
+  procedure _movi8  (op,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Byte);
   procedure _push   (op,index:Byte;size:TOperandSize;mem:t_jit_regs);
   procedure _push   (op:Byte;reg:t_jit_reg);
   procedure _pushi  (size:TOperandSize;imm:Integer);
   procedure movq    (reg0:t_jit_reg ;reg1:t_jit_reg);
   procedure movi    (reg:t_jit_reg  ;imm:Int64);
   procedure movq    (reg:t_jit_reg  ;mem:t_jit_regs);
-  procedure movq    (reg:t_jit_reg  ;mem:t_jit_int64);
   procedure movq    (mem:t_jit_regs ;reg:t_jit_reg);
-  procedure movq    (mem:t_jit_int64;reg:t_jit_reg);
-  procedure lea     (reg:t_jit_reg  ;mem:t_jit_regs);
-  procedure lea     (reg:t_jit_reg  ;mem:t_jit_int64);
+  procedure leaq    (reg:t_jit_reg  ;mem:t_jit_regs);
   procedure addq    (mem:t_jit_regs ;reg:t_jit_reg);
-  procedure addq    (mem:t_jit_int64;reg:t_jit_reg);
   procedure addq    (reg:t_jit_reg  ;mem:t_jit_regs);
-  procedure addq    (reg:t_jit_reg  ;mem:t_jit_int64);
   procedure addq    (reg0:t_jit_reg ;reg1:t_jit_reg);
   procedure addi    (reg:t_jit_reg  ;imm:Int64);
+  procedure addi8   (reg:t_jit_reg  ;imm:Byte);
   procedure subq    (mem:t_jit_regs ;reg:t_jit_reg);
-  procedure subq    (mem:t_jit_int64;reg:t_jit_reg);
   procedure subq    (reg:t_jit_reg  ;mem:t_jit_regs);
-  procedure subq    (reg:t_jit_reg  ;mem:t_jit_int64);
   procedure subq    (reg0:t_jit_reg ;reg1:t_jit_reg);
   procedure subi    (reg:t_jit_reg  ;imm:Int64);
+  procedure subi8   (reg:t_jit_reg  ;imm:Byte);
+  procedure xorq    (reg0:t_jit_reg ;reg1:t_jit_reg);
+  procedure cmpq    (mem:t_jit_regs ;reg:t_jit_reg);
+  procedure cmpq    (reg:t_jit_reg  ;mem:t_jit_regs);
+  procedure cmpq    (reg0:t_jit_reg ;reg1:t_jit_reg);
+  procedure cmpi    (reg:t_jit_reg  ;imm:Int64);
+  procedure cmpi    (size:TOperandSize;mem:t_jit_regs;imm:Int64);
+  procedure cmpi8   (reg:t_jit_reg;imm:Byte);
+  procedure cmpi8   (size:TOperandSize;mem:t_jit_regs;imm:Byte);
   procedure push16  (mem:t_jit_regs);
   procedure push64  (mem:t_jit_regs);
   procedure push    (reg:t_jit_reg);
@@ -252,6 +262,8 @@ type
   procedure vmovups (reg:t_jit_reg ;mem:t_jit_regs);
   procedure vmovups (mem:t_jit_regs;reg:t_jit_reg);
   procedure vmovdqa (reg0:t_jit_reg;reg1:t_jit_reg);
+  procedure sahf;
+  procedure lahf;
  end;
 
 operator + (A,B:t_jit_reg):t_jit_reg;
@@ -435,23 +447,6 @@ begin
   For i:=1 to High(mem) do
   begin
    Result:=Result+mem[i];
-  end;
- end;
-end;
-
-function Sums(mem:t_jit_int64):t_jit_reg;
-var
- i:Integer;
-begin
- Result:=Default(t_jit_reg);
- if (Length(mem)=0) then
- begin
-  //
- end else
- begin
-  For i:=0 to High(mem) do
-  begin
-   Result.AOffset:=Result.AOffset+mem[i];
   end;
  end;
 end;
@@ -697,7 +692,7 @@ function t_jit_builder.movj(reg:t_jit_reg;mem:t_jit_regs;_label_id:Integer):t_ji
 var
  i:Integer;
 begin
- _mov($8B,reg,mem); //MOV r64, r/m64
+ movq(reg,mem);
 
  i:=High(AInstructions);
 
@@ -712,7 +707,7 @@ function t_jit_builder.leaj(reg:t_jit_reg;mem:t_jit_regs;_label_id:Integer):t_ji
 var
  i:Integer;
 begin
- _mov($8D,reg,mem); //LEA r64,m
+ leaq(reg,mem);
 
  i:=High(AInstructions);
 
@@ -822,7 +817,7 @@ end;
 
 type
  t_modrm_info=object
-  rexB,rexX,rexR:Boolean;
+  rexF,rexB,rexX,rexR:Boolean;
 
   ModRM:record
    Mode,Index,RM:Byte;
@@ -837,6 +832,7 @@ type
   procedure build(Index:Byte;mreg:t_jit_reg);
   procedure build(reg,mreg:t_jit_reg);
   procedure emit(var ji:t_jit_instruction);
+  procedure emit8(var ji:t_jit_instruction);
  end;
 
 procedure t_modrm_info.build(Index:Byte;mreg:t_jit_reg);
@@ -962,14 +958,37 @@ begin
  AOffset:=mreg.AOffset;
 end;
 
+function get_force_rex(const reg:t_jit_reg):Boolean; inline;
+begin
+ Result:=False;
+ if (reg.ARegValue[0].AType=regGeneral) then
+ if (reg.ARegValue[0].ASize=os8) then
+  case reg.ARegValue[0].AIndex of
+   4..7:Result:=True;
+   else;
+  end;
+end;
+
 procedure t_modrm_info.build(reg,mreg:t_jit_reg);
 begin
  ModRM.Index:=reg.ARegValue[0].AIndex;
- if (ModRM.Index>=8) then
- begin
-  rexR:=true;
-  Dec(ModRM.Index,8);
+
+ case reg.ARegValue[0].AType of
+  regGeneralH:
+   begin
+    ModRM.Index:=ModRM.Index+4;
+   end;
+  else
+   begin
+    if (ModRM.Index>=8) then
+    begin
+     rexR:=true;
+     Dec(ModRM.Index,8);
+    end;
+   end;
  end;
+
+ rexF:=get_force_rex(reg);
 
  build(ModRM.Index,mreg);
 end;
@@ -1007,20 +1026,33 @@ begin
  end;
 end;
 
-procedure t_jit_builder._mov(op:Byte;reg:t_jit_reg;mem:t_jit_regs);
+procedure t_modrm_info.emit8(var ji:t_jit_instruction);
+begin
+ ji.EmitModRM(ModRM.Mode,ModRM.Index,ModRM.RM);
+
+ if (ModRM.RM=4) then
+ begin
+  ji.EmitSIB(SIB.Scale,SIB.Index,SIB.Base);
+ end;
+
+ ji.EmitByte(AOffset); //1
+end;
+
+procedure t_jit_builder._mov(op,op8:Byte;reg:t_jit_reg;mem:t_jit_regs);
 var
  mreg:t_jit_reg;
 
  rexW:Boolean;
+ Prefix:Byte;
 
  modrm_info:t_modrm_info;
 
  ji:t_jit_instruction;
 begin
  Assert(is_one_reg(reg));
- Assert(is_reg_size(reg,[os16,os32,os64]));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64]));
 
- Assert(is_reg_type(reg,[regGeneral]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH]));
 
  Assert(reg.ARegValue[0].AScale<=1);
 
@@ -1033,9 +1065,23 @@ begin
  ji:=default_jit_instruction;
 
  rexW:=False;
- if (reg.ARegValue[0].ASize=os64) then
- begin
-  rexW:=True;
+ Prefix:=0;
+
+ case reg.ARegValue[0].ASize of
+   os8:
+       begin
+        op:=op8;
+       end;
+  os16:
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -1044,9 +1090,9 @@ begin
 
  ji.EmitSelector(mreg.ASegment);
 
- if (reg.ARegValue[0].ASize=os16) then
+ if (Prefix<>0) then
  begin
-  ji.EmitByte($66); //Operand-size override prefix (16)
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
  if (mreg.ARegValue[0].ASize=os32) then
@@ -1054,12 +1100,8 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- if modrm_info.rexB or modrm_info.rexX or modrm_info.rexR or rexW then
+ if modrm_info.rexF or modrm_info.rexB or modrm_info.rexX or modrm_info.rexR or rexW then
  begin
-  //rexB   $4x bit 0:  Extension of the ModR/M r/m field, SIB base field, or Opcode reg field
-  //rexX   $4x bit 1:  Extension of the SIB index field
-  //rexR   $4x bit 2:  Extension of the ModR/M reg field
-  //rexW   $4x bit 3:  64 Bit Operand Size
   ji.EmitREX(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,rexW);
  end;
 
@@ -1072,7 +1114,7 @@ end;
 
 procedure t_jit_builder._mov(op,op8:Byte;reg0:t_jit_reg;reg1:t_jit_reg);
 var
- rexB,rexR,rexW:Boolean;
+ rexF,rexB,rexR,rexW:Boolean;
 
  ModRM:record
   Index,RM:Byte;
@@ -1096,8 +1138,11 @@ begin
 
  Assert(reg0.ARegValue[0].ASize=reg1.ARegValue[0].ASize);
 
+ Assert(get_force_rex(reg0)=get_force_rex(reg1));
+
  ji:=default_jit_instruction;
 
+ rexF:=false;
  rexB:=false;
  rexR:=false;
  rexW:=false;
@@ -1134,12 +1179,14 @@ begin
   Dec(ModRM.RM,8);
  end;
 
+ rexF:=get_force_rex(reg0);
+
  if (Prefix<>0) then
  begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
- if rexB or rexR or rexW then
+ if rexF or rexB or rexR or rexW then
  begin
   ji.EmitREX(rexB,False,rexR,rexW);
  end;
@@ -1153,9 +1200,9 @@ end;
 
 ////
 
-procedure t_jit_builder._addi(op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
+procedure t_jit_builder._movi(op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
 var
- rexB,rexW:Boolean;
+ rexF,rexB,rexW:Boolean;
 
  RM,Prefix:Byte;
 
@@ -1170,6 +1217,7 @@ begin
 
  ji:=default_jit_instruction;
 
+ rexF:=false;
  rexB:=false;
  rexW:=false;
  Prefix:=0;
@@ -1180,6 +1228,8 @@ begin
   rexB:=true;
   Dec(RM,8);
  end;
+
+ rexF:=get_force_rex(reg);
 
  case reg.ARegValue[0].ASize of
    os8:
@@ -1203,7 +1253,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
- if rexB or rexW then
+ if rexF or rexB or rexW then
  begin
   ji.EmitREX(rexB,False,False,rexW);
  end;
@@ -1219,6 +1269,203 @@ begin
   os64:ji.EmitInt32(imm);
   else;
  end;
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._movi(op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+var
+ mreg:t_jit_reg;
+
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(size in [os8,os16,os32,os64]);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ case size of
+   os8:
+       begin
+        op:=op8;
+       end;
+  os16:
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build(Index,mreg);
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if modrm_info.rexF or modrm_info.rexB or modrm_info.rexX or modrm_info.rexR or rexW then
+ begin
+  ji.EmitREX(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,rexW);
+ end;
+
+ ji.EmitByte(op);
+
+ modrm_info.emit(ji);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._movi8(op,index:Byte;reg:t_jit_reg;imm:Byte);
+var
+ rexF,rexB,rexW:Boolean;
+
+ RM,Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(is_one_reg(reg));
+ Assert(is_reg_size(reg,[os16,os32,os64]));
+
+ Assert(is_reg_type(reg,[regGeneral]));
+
+ Assert(reg.ARegValue[0].AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexF:=false;
+ rexB:=false;
+ rexW:=false;
+ Prefix:=0;
+
+ RM:=reg.ARegValue[0].AIndex;
+ if (RM>=8) then
+ begin
+  rexB:=true;
+  Dec(RM,8);
+ end;
+
+ rexF:=get_force_rex(reg);
+
+ case reg.ARegValue[0].ASize of
+  os16:
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if rexF or rexB or rexW then
+ begin
+  ji.EmitREX(rexB,False,False,rexW);
+ end;
+
+ ji.EmitByte(op);
+
+ ji.EmitModRM(3,index,RM);
+
+ ji.EmitByte(imm);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._movi8(op,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Byte);
+var
+ mreg:t_jit_reg;
+
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(size in [os16,os32,os64]);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ case size of
+  os16:
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build(Index,mreg);
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if modrm_info.rexF or modrm_info.rexB or modrm_info.rexX or modrm_info.rexR or rexW then
+ begin
+  ji.EmitREX(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,rexW);
+ end;
+
+ ji.EmitByte(op);
+
+ modrm_info.emit8(ji);
 
  _add(ji);
 end;
@@ -1259,7 +1506,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- if modrm_info.rexB or modrm_info.rexX or modrm_info.rexR then
+ if modrm_info.rexF or modrm_info.rexB or modrm_info.rexX or modrm_info.rexR then
  begin
   ji.EmitREX(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,False);
  end;
@@ -1375,7 +1622,7 @@ end;
 
 procedure t_jit_builder.movi(reg:t_jit_reg;imm:Int64);
 var
- rexB,rexW:Boolean;
+ rexF,rexB,rexW:Boolean;
 
  Index,Prefix,op:Byte;
 
@@ -1390,6 +1637,7 @@ begin
 
  ji:=default_jit_instruction;
 
+ rexF:=false;
  rexB:=false;
  rexW:=false;
  Prefix:=0;
@@ -1400,6 +1648,8 @@ begin
   rexB:=true;
   Dec(Index,8);
  end;
+
+ rexF:=get_force_rex(reg);
 
  case reg.ARegValue[0].ASize of
    os8:
@@ -1428,7 +1678,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
- if rexB or rexW then
+ if rexF or rexB or rexW then
  begin
   ji.EmitREX(rexB,False,False,rexW);
  end;
@@ -1448,56 +1698,33 @@ end;
 
 procedure t_jit_builder.movq(reg:t_jit_reg;mem:t_jit_regs);
 begin
- _mov($8B,reg,mem); //MOV r64, r/m64
-end;
-
-procedure t_jit_builder.movq(reg:t_jit_reg;mem:t_jit_int64);
-begin
- movq(reg,[Sums(mem)]);
+ _mov($8B,$8A,reg,mem); //MOV r64, r/m64
 end;
 
 procedure t_jit_builder.movq(mem:t_jit_regs;reg:t_jit_reg);
 begin
- _mov($89,reg,mem); //MOV r/m64, r64
-end;
-
-procedure t_jit_builder.movq(mem:t_jit_int64;reg:t_jit_reg);
-begin
- movq([Sums(mem)],reg);
+ _mov($89,$88,reg,mem); //MOV r/m64, r64
 end;
 
 //
 
-procedure t_jit_builder.lea(reg:t_jit_reg;mem:t_jit_regs);
+procedure t_jit_builder.leaq(reg:t_jit_reg;mem:t_jit_regs);
 begin
- _mov($8D,reg,mem); //LEA r64,m
-end;
+ Assert(is_reg_size(reg,[os16,os32,os64]));
 
-procedure t_jit_builder.lea(reg:t_jit_reg;mem:t_jit_int64);
-begin
- lea(reg,[Sums(mem)]);
+ _mov($8D,$8D,reg,mem); //LEA r64,m
 end;
 
 //
 
 procedure t_jit_builder.addq(mem:t_jit_regs;reg:t_jit_reg);
 begin
- _mov($01,reg,mem); //ADD r/m64, r64
-end;
-
-procedure t_jit_builder.addq(mem:t_jit_int64;reg:t_jit_reg);
-begin
- addq([Sums(mem)],reg);
+ _mov($01,$00,reg,mem); //ADD r/m64, r64
 end;
 
 procedure t_jit_builder.addq(reg:t_jit_reg;mem:t_jit_regs);
 begin
- _mov($03,reg,mem); //ADD r64, r/m64
-end;
-
-procedure t_jit_builder.addq(reg:t_jit_reg;mem:t_jit_int64);
-begin
- addq(reg,[Sums(mem)]);
+ _mov($03,$02,reg,mem); //ADD r64, r/m64
 end;
 
 procedure t_jit_builder.addq(reg0:t_jit_reg;reg1:t_jit_reg);
@@ -1507,29 +1734,24 @@ end;
 
 procedure t_jit_builder.addi(reg:t_jit_reg;imm:Int64);
 begin
- _addi($81,$80,0,reg,imm);
+ _movi($81,$80,0,reg,imm);
+end;
+
+procedure t_jit_builder.addi8(reg:t_jit_reg;imm:Byte);
+begin
+ _movi8($83,0,reg,imm);
 end;
 
 //
 
 procedure t_jit_builder.subq(mem:t_jit_regs;reg:t_jit_reg);
 begin
- _mov($29,reg,mem); //SUB r/m64, r64
-end;
-
-procedure t_jit_builder.subq(mem:t_jit_int64;reg:t_jit_reg);
-begin
- addq([Sums(mem)],reg);
+ _mov($29,$28,reg,mem); //SUB r/m64, r64
 end;
 
 procedure t_jit_builder.subq(reg:t_jit_reg;mem:t_jit_regs);
 begin
- _mov($2B,reg,mem); //SUB r64, r/m64
-end;
-
-procedure t_jit_builder.subq(reg:t_jit_reg;mem:t_jit_int64);
-begin
- addq(reg,[Sums(mem)]);
+ _mov($2B,$2A,reg,mem); //SUB r64, r/m64
 end;
 
 procedure t_jit_builder.subq(reg0:t_jit_reg;reg1:t_jit_reg);
@@ -1539,8 +1761,58 @@ end;
 
 procedure t_jit_builder.subi(reg:t_jit_reg;imm:Int64);
 begin
- _addi($81,$80,5,reg,imm);
+ _movi($81,$80,5,reg,imm);
 end;
+
+procedure t_jit_builder.subi8(reg:t_jit_reg;imm:Byte);
+begin
+ _movi8($83,5,reg,imm);
+end;
+
+///
+
+procedure t_jit_builder.xorq(reg0:t_jit_reg;reg1:t_jit_reg);
+begin
+ _mov($31,$30,reg0,reg1);
+end;
+
+///
+
+procedure t_jit_builder.cmpq(mem:t_jit_regs;reg:t_jit_reg);
+begin
+ _mov($39,$38,reg,mem);
+end;
+
+procedure t_jit_builder.cmpq(reg:t_jit_reg;mem:t_jit_regs);
+begin
+ _mov($3B,$3A,reg,mem);
+end;
+
+procedure t_jit_builder.cmpq(reg0:t_jit_reg;reg1:t_jit_reg);
+begin
+ _mov($39,$38,reg0,reg1);
+end;
+
+procedure t_jit_builder.cmpi(reg:t_jit_reg;imm:Int64);
+begin
+ _movi($81,$80,7,reg,imm);
+end;
+
+procedure t_jit_builder.cmpi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+begin
+ _movi($81,$80,7,size,mem,imm);
+end;
+
+procedure t_jit_builder.cmpi8(reg:t_jit_reg;imm:Byte);
+begin
+ _movi8($83,7,reg,imm);
+end;
+
+procedure t_jit_builder.cmpi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+begin
+ _movi8($83,7,size,mem,imm);
+end;
+
 
 ///
 
@@ -1762,7 +2034,27 @@ begin
  _add(ji);
 end;
 
+procedure t_jit_builder.sahf;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
 
+ ji.EmitByte($9E);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder.lahf;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($9F);
+
+ _add(ji);
+end;
 
 end.
 

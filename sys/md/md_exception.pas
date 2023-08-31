@@ -178,6 +178,7 @@ begin
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
+  EXCEPTION_BREAKPOINT    :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
 
@@ -206,6 +207,7 @@ begin
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
+  EXCEPTION_BREAKPOINT    :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
 
@@ -252,6 +254,7 @@ begin
    write(stderr,msg);
  Writeln(stderr,' (',FName,', line ',LineNo,').');
  print_backtrace(stderr,Get_pc_addr,get_frame,0);
+ DebugBreak;
  md_halt(217);
 end;
 

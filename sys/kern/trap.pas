@@ -662,10 +662,8 @@ asm
  movqq %rax,%r11 //save rax
  movqq %rcx,%r10 //save rcx
 
- lahf  //load to AH
- shr   $8,%rax
- andl  $0xFF,%rax //filter flags
- movqq %rax,%rcx  //save flags
+ lahf           //load to AH
+ movb  %ah,%ch  //save flags to CH
 
  movqq %gs:teb.thread,%rax //curkthread
  test  %rax,%rax
@@ -675,6 +673,9 @@ asm
  andq  $-32,%rsp //align stack
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
+
+ movqq $0  ,kthread.td_frame.tf_rflags(%rax) //clear
+ movb  %ch ,kthread.td_frame.tf_rflags(%rax) //save flags
 
  movqq %rdi,kthread.td_frame.tf_rdi   (%rax)
  movqq %rsi,kthread.td_frame.tf_rsi   (%rax)
@@ -690,7 +691,6 @@ asm
  movqq %r13,kthread.td_frame.tf_r13   (%rax)
  movqq %r14,kthread.td_frame.tf_r14   (%rax)
  movqq %r15,kthread.td_frame.tf_r15   (%rax)
- movqq %rcx,kthread.td_frame.tf_rflags(%rax)
 
  movqq $0  ,kthread.td_frame.tf_trapno(%rax)
  movqq $0  ,kthread.td_frame.tf_addr  (%rax)
@@ -720,8 +720,9 @@ asm
  jne _ast
 
  //Restore preserved registers.
- movqq kthread.td_frame.tf_rflags(%rcx),%rax
- shl   $8,%rax
+
+ //get flags
+ movb  kthread.td_frame.tf_rflags(%rcx),%ah
  sahf  //restore flags
 
  movqq kthread.td_frame.tf_rdi(%rcx),%rdi
@@ -744,10 +745,9 @@ asm
  //fail (curkthread=nil)
  _fail:
 
- movqq %rcx,%rax //get flags
- shl   $8,%rax
- or    $1,%ah //CF
- sahf  //restore flags
+ movb  %ch,%ah //get flags
+ or    $1,%ah  //set CF
+ sahf          //restore flags
 
  movqq $14,%rax //EFAULT
  movqq  $0,%rdx
@@ -874,9 +874,8 @@ asm
  test  %rsp,%rsp
  jz    _fail
 
- shr   $8,%rax
- andl  $0xFF,%rax //filter flags
- movqq %rax,kthread.td_frame.tf_rflags(%rsp) //save flags
+ movqq $0 ,kthread.td_frame.tf_rflags(%rsp) //clear
+ movb  %ah,kthread.td_frame.tf_rflags(%rsp) //save flags
 
  movqq %gs:teb.jit_rax,%rax //load %rax
  movqq %rax,kthread.td_frame.tf_rax(%rsp) //save %rax
@@ -940,8 +939,7 @@ asm
  movqq %rax,%gs:teb.jitcall               //save ret
 
  //get flags
- movqq kthread.td_frame.tf_rflags(%rcx),%rax
- shl   $8,%rax
+ movb  kthread.td_frame.tf_rflags(%rcx),%ah
  sahf  //restore flags
 
  movqq kthread.td_frame.tf_rdi(%rcx),%rdi
@@ -1008,11 +1006,11 @@ function IS_TRAP_FUNC(rip:qword):Boolean;
 begin
  Result:=(
           (rip>=QWORD(@fast_syscall)) and
-          (rip<=(QWORD(@fast_syscall)+$1AA)) //fast_syscall func size
+          (rip<=(QWORD(@fast_syscall)+$19C)) //fast_syscall func size
          ) or
          (
           (rip>=QWORD(@jit_call)) and
-          (rip<=(QWORD(@jit_call)+$240)) //jit_call func size
+          (rip<=(QWORD(@jit_call)+$23C)) //jit_call func size
          );
 end;
 

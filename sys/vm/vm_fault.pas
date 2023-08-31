@@ -85,10 +85,10 @@ begin
         os8:
         begin
           case RegValue.AIndex of
-            0:Result := @p_kthread(nil)^.td_frame.tf_rax+1;
-            1:Result := @p_kthread(nil)^.td_frame.tf_rcx+1;
-            2:Result := @p_kthread(nil)^.td_frame.tf_rdx+1;
-            3:Result := @p_kthread(nil)^.td_frame.tf_rbx+1;
+            0:Result := (@p_kthread(nil)^.td_frame.tf_rax)+1;
+            1:Result := (@p_kthread(nil)^.td_frame.tf_rcx)+1;
+            2:Result := (@p_kthread(nil)^.td_frame.tf_rdx)+1;
+            3:Result := (@p_kthread(nil)^.td_frame.tf_rbx)+1;
             else;
           end;
         end;
@@ -408,7 +408,7 @@ begin
  adr:=t_jit_builder.rdi;
  adr.ARegValue[0].ASize:=RegValue[0].ASize;
 
- tdr:=t_jit_builder.rsi;
+ tdr:=t_jit_builder.rcx;
 
  with ctx.builder do
  begin
@@ -417,13 +417,16 @@ begin
   i:=GetFrameOffsetInt(RegValue[0]);
   Assert(i<>0,'build_lea');
 
-  //xor adr,adr needed
+  if (RegValue[0].ASize<>os64) then
+  begin
+   xorq(rdi,rdi);
+  end;
 
   movq(adr,[tdr+i]);
 
   if (RegValue[0].AScale>1) then
   begin
-   lea(adr,[adr*RegValue[0].AScale])
+   leaq(adr,[adr*RegValue[0].AScale])
   end;
 
   if (RegValue[1].AType<>regNone) then
@@ -440,48 +443,55 @@ begin
  begin
   with ctx.builder do
   begin
-   lea(adr,[adr+ofs]);
+   leaq(adr,[adr+ofs]);
   end;
  end;
 end;
 
 //
 
-procedure build_mov(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
-var
- i,copy_size:Integer;
- imm:Int64;
- link:t_jit_i_link;
- dst:t_jit_reg;
+procedure get_size_info(Size:TOperandSize;var byte_size:Integer;var reg:t_jit_reg);
 begin
-
- case ctx.din.Operand[id].Size of
+ case Size of
+   os8:
+   begin
+    byte_size:=1;
+    reg:=t_jit_builder.sil;
+   end;
+  os16:
+   begin
+    byte_size:=2;
+    reg:=t_jit_builder.si;
+   end;
   os32:
    begin
-    copy_size:=4;
-    dst:=t_jit_builder.esi;
+    byte_size:=4;
+    reg:=t_jit_builder.esi;
    end;
   os64:
    begin
-    copy_size:=8;
-    dst:=t_jit_builder.rsi;
-   end
+    byte_size:=8;
+    reg:=t_jit_builder.rsi;
+   end;
   else
    begin
-    Writeln('build_mov (',ctx.din.Operand[id].Size,')');
-    Assert(false,'build_mov (size)');
+    Writeln('get_size_info (',Size,')');
+    Assert(false,'get_size_info (size)');
    end;
  end;
+end;
 
- if (ctx.din.Operand[1].Size<>ctx.din.Operand[2].Size) then
- begin
-  Writeln(ctx.din.OpCode.Opcode,' ',
-          ctx.din.OpCode.Suffix,' ',
-          ctx.din.Operand[1].Size,' ',
-          ctx.din.Operand[2].Size);
+procedure build_mov(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
+var
+ i,copy_size,reg_size:Integer;
+ imm:Int64;
+ link:t_jit_i_link;
+ mem,reg:t_jit_reg;
+begin
 
-  Assert(false,'TODO');
- end;
+ get_size_info(ctx.din.Operand[get_lea_id(memop)].Size,copy_size,mem);
+
+ get_size_info(ctx.din.Operand[id].Size,reg_size,reg);
 
  case memop of
   moCopyout:
@@ -490,33 +500,54 @@ begin
     begin
      //input:rdi
 
-     link:=leaj(rsi,[rip+$FFFF],-1);
+     if (copy_size=1) then
+     begin
+      call(@uplift); //input:rdi output:rax=rdi
+     end else
+     begin
+      link:=leaj(rsi,[rip+$FFFF],-1);
 
-     movi(edx,copy_size);
+      movi(edx,copy_size);
 
-     call(@copyout_mov); //rdi,rsi,edx
+      call(@copyout_mov); //rdi,rsi,edx
 
-     reta;
+      reta;
 
-     //input:rdi
+      //input:rdi
 
-     link._label:=_label;
+      link._label:=_label;
+     end;
 
      imm:=0;
      if GetTargetOfs(ctx,id,imm) then
      begin
       //imm const
-      movi(dst,imm);
-      movq([rdi],dst); //TODO movi([rdi],imm);
+
+      if (copy_size>reg_size) or (imm=0) then
+      begin
+       xorq(rsi,rsi);
+      end;
+
+      if (imm<>0) then
+      begin
+       movi(reg,imm);
+      end;
+
+      movq([rdi],mem); //TODO movi([rdi],imm);
      end else
      begin
-      movq(rax,[GS+Integer(teb_thread)]);
+      movq(rcx,[GS+Integer(teb_thread)]);
 
       i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
       Assert(i<>0,'build_mov');
 
-      movq(dst,[rax+i]);
-      movq([rdi],dst);
+      if (copy_size>reg_size) then
+      begin
+       xorq(rsi,rsi);
+      end;
+
+      movq(reg,[rcx+i]);
+      movq([rdi],mem);
      end;
 
      reta;
@@ -529,31 +560,208 @@ begin
     begin
      //input:rdi
 
-     link:=movj(rsi,[rip+$FFFF],-1);
+     if (copy_size=1) then
+     begin
+      call(@uplift); //input:rdi output:rax=rdi
+     end else
+     begin
+      link:=movj(rsi,[rip+$FFFF],-1);
 
-     movi(edx,copy_size);
+      movi(edx,copy_size);
 
-     call(@copyin_mov); //rdi,rsi,edx
+      call(@copyin_mov); //rdi,rsi,edx
 
-     reta;
+      reta;
 
-     //input:rdi
+      //input:rdi
 
-     link._label:=_label;
+      link._label:=_label;
+     end;
 
-     movq(rax,[GS+Integer(teb_thread)]);
+     movq(rcx,[GS+Integer(teb_thread)]);
 
      i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
      Assert(i<>0,'build_mov');
 
-     movq(dst,[rdi]);
-     movq([rax+i],dst);
+     if (copy_size<reg_size) then
+     begin
+      xorq(rsi,rsi);
+     end;
+
+     movq(mem,[rdi]);
+     movq([rcx+i],reg);
 
      reta;
     end;
    end;
+ end; //case
+end;
+
+//
+
+Const
+ rflags_offset=Integer(ptruint(@p_kthread(nil)^.td_frame.tf_rflags));
+
+procedure build_load_flags(var ctx:t_jit_context);
+begin
+ //input rcx:curkthread
+
+ with ctx.builder do
+ begin
+  movq(ah,[rcx+rflags_offset]);
+  sahf
  end;
 end;
+
+procedure build_save_flags(var ctx:t_jit_context);
+begin
+ //input rcx:curkthread
+
+ with ctx.builder do
+ begin
+  lahf;
+  movq([rcx+rflags_offset],ah);
+ end;
+end;
+
+//
+
+procedure build_cmp(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
+var
+ i,copy_size,reg_size:Integer;
+ imm:Int64;
+ link:t_jit_i_link;
+ mem,reg:t_jit_reg;
+begin
+
+ get_size_info(ctx.din.Operand[get_lea_id(memop)].Size,copy_size,mem);
+
+ get_size_info(ctx.din.Operand[id].Size,reg_size,reg);
+
+ with ctx.builder do
+ begin
+
+  case memop of
+   moCopyout:
+    begin
+     with ctx.builder do
+     begin
+      //input:rdi
+
+      if (copy_size=1) then
+      begin
+       call(@uplift); //input:rdi output:rax=rdi
+      end else
+      begin
+       link:=leaj(rsi,[rip+$FFFF],-1);
+
+       movi(edx,copy_size);
+
+       call(@copyout_mov); //rdi,rsi,edx
+
+       reta;
+
+       //input:rdi
+
+       link._label:=_label;
+      end;
+
+      movq(rcx,[GS+Integer(teb_thread)]);
+
+      //load flags
+      build_load_flags(ctx);
+      //load flags
+
+      imm:=0;
+      if GetTargetOfs(ctx,id,imm) then
+      begin
+       //imm const
+
+       if (reg_size=1) and (copy_size<>1) then
+       begin
+        cmpi8(mem.ARegValue[0].ASize,[rdi],imm);
+       end else
+       begin
+        cmpi(mem.ARegValue[0].ASize,[rdi],imm);
+       end;
+
+      end else
+      begin
+       i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
+       Assert(i<>0,'build_cmp');
+
+       if (copy_size>reg_size) then
+       begin
+        xorq(rsi,rsi);
+       end;
+
+       movq(reg,[rcx+i]);
+       cmpq([rdi],mem);
+      end;
+
+      //save flags
+      build_save_flags(ctx);
+      //save flags
+
+      reta;
+     end;
+    end;
+   moCopyin:
+    begin
+     with ctx.builder do
+     begin
+
+      //input:rdi
+
+      if (copy_size=1) then
+      begin
+       call(@uplift); //input:rdi output:rax=rdi
+      end else
+      begin
+       link:=leaj(rsi,[rip+$FFFF],-1);
+
+       movi(edx,copy_size);
+
+       call(@copyout_mov); //rdi,rsi,edx
+
+       reta;
+
+       //input:rdi
+
+       link._label:=_label;
+      end;
+
+      movq(rcx,[GS+Integer(teb_thread)]);
+
+      i:=GetFrameOffsetInt(ctx.din.Operand[id].RegValue[0]);
+      Assert(i<>0,'build_cmp');
+
+      //load flags
+      build_load_flags(ctx);
+      //load flags
+
+      if (copy_size<reg_size) then
+      begin
+       xorq(rsi,rsi);
+      end;
+
+      movq(reg,[rcx+i]);
+      cmpq(mem,[rdi]);
+
+      //save flags
+      build_save_flags(ctx);
+      //save flags
+
+      reta;
+
+     end;
+    end;
+  end; //case
+
+ end;
+
+end;
+
 
 //
 
@@ -625,7 +833,7 @@ begin
      reta;
     end;
    end;
- end;
+ end; //case
 end;
 
 procedure build_vmovups(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
@@ -696,7 +904,7 @@ begin
      reta;
     end;
    end;
- end;
+ end; //case
 end;
 
 procedure build_vmovdqa(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
@@ -736,7 +944,7 @@ begin
      reta;
     end;
    end;
- end;
+ end; //case
 end;
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
@@ -770,7 +978,7 @@ var
  jit_size,size,i:Integer;
 begin
 
- ctx.builder.call(@test_jit); //test
+ //ctx.builder.call(@test_jit); //test
 
  case ctx.din.OpCode.Opcode of
   OPmov:
@@ -805,6 +1013,23 @@ begin
       goto _err;
     end; //case
    end; //OPmov
+
+  OPcmp:
+   begin
+    case ctx.din.OpCode.Suffix of
+
+     OPSnone:
+      begin
+       memop:=classif_memop(ctx.din);
+
+       build_lea(ctx,get_lea_id(memop));
+       build_cmp(ctx,get_reg_id(memop),memop);
+      end;
+
+     else
+      goto _err;
+    end; //case
+   end; //OPcmp
 
   OPmovu:
    begin
