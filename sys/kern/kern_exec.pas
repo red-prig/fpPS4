@@ -993,6 +993,9 @@ begin
  if (dynlibs_info.libkernel<>nil) then
  begin
   imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
+
+  p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
+  p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
  end;
 
  _dyn_not_exist:

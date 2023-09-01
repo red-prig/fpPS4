@@ -7,6 +7,7 @@ interface
 
 uses
  vmparam,
+ vm_object,
  kern_mtx;
 
 Const
@@ -33,15 +34,15 @@ type
  pp_dmem_map_entry=^p_dmem_map_entry;
  p_dmem_map_entry=^t_dmem_map_entry;
  t_dmem_map_entry=packed record
-  prev          :p_dmem_map_entry; // previous entry
-  next          :p_dmem_map_entry; // next entry
-  left          :p_dmem_map_entry; // left child in binary search tree
-  right         :p_dmem_map_entry; // right child in binary search tree
-  start         :DWORD;            // start address
-  __end         :DWORD;            // end address
-  adj_free      :DWORD;            // amount of adjacent free space
-  max_free      :DWORD;            // max free space in subtree
-  m_type        :DWORD;            // memory type
+  prev    :p_dmem_map_entry; // previous entry
+  next    :p_dmem_map_entry; // next entry
+  left    :p_dmem_map_entry; // left child in binary search tree
+  right   :p_dmem_map_entry; // right child in binary search tree
+  start   :DWORD;            // start address
+  __end   :DWORD;            // end address
+  adj_free:DWORD;            // amount of adjacent free space
+  max_free:DWORD;            // max free space in subtree
+  m_type  :DWORD;            // memory type
  end;
 
  p_dmem_map=^t_dmem_map;
@@ -99,10 +100,17 @@ procedure dmem_map_entry_delete(map:p_dmem_map;entry:p_dmem_map_entry);
 
 function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD):Integer;
 
-function  dmem_map_mtype(map  :p_dmem_map;
-                         start:DWORD;
-                         __end:DWORD;
-                         new  :DWORD):Integer;
+function  dmem_map_set_mtype(map  :p_dmem_map;
+                             start:DWORD;
+                             __end:DWORD;
+                             new  :DWORD):Integer;
+
+function  dmem_map_get_mtype(map  :p_dmem_map;
+                             obj   :vm_object_t;
+                             offset:QWORD;
+                             pstart:PQWORD;
+                             p__end:PQWORD;
+                             pmtype:PInteger):Integer;
 
 implementation
 
@@ -1050,10 +1058,10 @@ begin
  Result:=(0);
 end;
 
-function dmem_map_mtype(map  :p_dmem_map;
-                        start:DWORD;
-                        __end:DWORD;
-                        new  :DWORD):Integer;
+function dmem_map_set_mtype(map  :p_dmem_map;
+                            start:DWORD;
+                            __end:DWORD;
+                            new  :DWORD):Integer;
 
 var
  current,entry:p_dmem_map_entry;
@@ -1073,6 +1081,7 @@ begin
   //
  end else
  begin
+  dmem_map_unlock(map);
   Exit(EACCES);
  end;
 
@@ -1084,6 +1093,7 @@ begin
 
  if (current^.__end<__end) then
  begin
+  dmem_map_unlock(map);
   Exit(EACCES);
  end;
 
@@ -1124,6 +1134,44 @@ begin
  Result:=0;
 end;
 
+function dmem_map_get_mtype(map  :p_dmem_map;
+                            obj   :vm_object_t;
+                            offset:QWORD;
+                            pstart:PQWORD;
+                            p__end:PQWORD;
+                            pmtype:PInteger):Integer;
+var
+ entry:p_dmem_map_entry;
+begin
+
+ if ((obj^.flags and OBJ_DMEM_EXT)=0) then
+ begin
+  Exit(ENODEV);
+ end;
+
+ if (Int64(offset)<0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ dmem_map_lock(map);
+
+ if (dmem_map_lookup_entry(map, offset, @entry)) then
+ begin
+  pstart^:=entry^.start;
+  p__end^:=entry^.__end;
+  pmtype^:=entry^.m_type;
+
+  Result:=0;
+ end else
+ begin
+  Result:=ENOENT;
+ end;
+
+ dmem_map_unlock(map);
+
+ Result:=0;
+end;
 
 
 end.

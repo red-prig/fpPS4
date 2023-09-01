@@ -158,7 +158,7 @@ function  thr_set_name(id:DWORD;pname:PChar):Integer;
 function  rtprio_thread(func,tid:Integer;rtp:Pointer):Integer;
 function  pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
 function  pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
-function  mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Pointer;
+function  mmap(vaddr:Pointer;vlen:QWORD;prot:Integer;flags:Integer;fd:Integer;pos:QWORD):Pointer;
 function  lseek(fd:Integer;offset:Int64;whence:Integer):Integer;
 function  truncate(path:PChar;length:Int64):Integer;
 function  ftruncate(fd:Integer;length:Int64):Integer;
@@ -208,6 +208,7 @@ function  budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;
 function  budget_delete(key:Integer):Integer;
 function  budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer;
 function  budget_set(key:Integer):Integer;
+function  virtual_query(addr:Pointer;flags:DWORD;info:Pointer;infoSize:QWORD):Integer;
 function  is_in_sandbox():Integer;
 function  dmem_container(d_pool_id:Integer):Integer;
 function  get_authinfo(pid:Integer;info:Pointer):Integer;
@@ -232,13 +233,14 @@ function  thr_get_name(id:DWORD;pname:PChar):Integer;
 function  set_gpo(uiBits:DWORD):Integer;
 function  ipmimgr_call(op,kid:Integer;res:PInteger;params:Pointer;paramsSize:QWORD):Integer;
 function  get_gpo(pbits:PByte):Integer;
-function  mmap_dmem(addr:PPointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Integer;
+function  mmap_dmem(vaddr:Pointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Pointer;
 function  thr_suspend_ucontext(tid:Integer):Integer;
 function  thr_resume_ucontext(tid:Integer):Integer;
 function  thr_get_ucontext(tid:Integer;ucp:Pointer):Integer;
 function  set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
+function  set_chicken_switches(flags:Integer):Integer;
 function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
 function  budget_get_ptype_of_budget(key:Integer):Integer;
 function  blockpool_open(flags:Integer):Integer;
@@ -1312,7 +1314,7 @@ asm
  jmp   cerror
 end;
 
-function mmap(_addr:Pointer;_len:QWORD;_prot:Integer;_flags:Integer;_fd:Integer;_pos:QWORD):Pointer; assembler; nostackframe;
+function mmap(vaddr:Pointer;vlen:QWORD;prot:Integer;flags:Integer;fd:Integer;pos:QWORD):Pointer; assembler; nostackframe;
 asm
  movq  $477,%rax
  call  fast_syscall
@@ -1662,6 +1664,13 @@ asm
  jmp   cerror
 end;
 
+function virtual_query(addr:Pointer;flags:DWORD;info:Pointer;infoSize:QWORD):Integer; assembler; nostackframe;
+asm
+ movq  $572,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function is_in_sandbox():Integer; assembler; nostackframe;
 asm
  movq  $585,%rax
@@ -1830,7 +1839,7 @@ asm
  jmp   cerror
 end;
 
-function mmap_dmem(addr:PPointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Integer; assembler; nostackframe;
+function mmap_dmem(vaddr:Pointer;length:QWORD;mtype:DWORD;prot:DWORD;flags:DWORD;phaddr:QWORD):Pointer; assembler; nostackframe;
 asm
  movq  $628,%rax
  call  fast_syscall
@@ -1875,6 +1884,13 @@ end;
 function localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer; assembler; nostackframe;
 asm
  movq  $639,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function set_chicken_switches(flags:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $643,%rax
  call  fast_syscall
  jmp   cerror
 end;

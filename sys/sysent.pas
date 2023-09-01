@@ -2922,7 +2922,7 @@ const
   ),
   (//[572]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_virtual_query;
      sy_name:'sys_virtual_query'
   ),
   (//[573]
@@ -3277,7 +3277,7 @@ const
   ),
   (//[643]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_set_chicken_switches;
      sy_name:'sys_set_chicken_switches'
   ),
   (//[644]

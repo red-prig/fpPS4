@@ -96,11 +96,11 @@ const
  //MAP_ENTRY_NEEDS_WAKEUP =$0200; // waiters in transition
  MAP_ENTRY_NOCOREDUMP   =$0400; // don't include in a core
 
- MAP_ENTRY_GROWS_DOWN=$1000; // Top-down stacks
- MAP_ENTRY_GROWS_UP  =$2000; // Bottom-up stacks
+ MAP_ENTRY_GROWS_DOWN   =$1000; // Top-down stacks
+ MAP_ENTRY_GROWS_UP     =$2000; // Bottom-up stacks
 
- MAP_ENTRY_WIRE_SKIPPED=$4000;
- MAP_ENTRY_VN_WRITECNT =$8000; // writeable vnode mapping
+ MAP_ENTRY_WIRE_SKIPPED =$4000;
+ MAP_ENTRY_VN_WRITECNT  =$8000; // writeable vnode mapping
 
  //vm_flags_t values
  //MAP_WIREFUTURE =$01; // wire all future pages
@@ -1288,12 +1288,28 @@ end;
 procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t);
 var
  next,prev:vm_map_entry_t;
- prevsize, esize:vm_size_t;
+ prevsize,esize:vm_size_t;
+ obj:vm_map_object;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) or
+ if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) or //0x20000 MAP_ENTRY_IN_TRANSITION
     (entry^.inheritance=VM_INHERIT_HOLE) then
  begin
   Exit;
+ end;
+
+ obj:=entry^.vm_obj;
+
+ if (obj<>nil) then
+ begin
+  if (p_proc.p_sdk_version<=$1ffffff) and
+     ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+  begin
+   Exit;
+  end;
+  if (obj^.otype=OBJT_BLOCKPOOL) then
+  begin
+   Exit;
+  end;
  end;
 
  prev:=entry^.prev;

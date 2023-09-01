@@ -19,6 +19,7 @@ uses
  vm,
  dmem_map,
  kern_dmem,
+ vm_object,
  trap;
 
 type
@@ -82,6 +83,18 @@ begin
  Result:=0;
 
  Writeln('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
+
+ print_backtrace_td(stderr);
+ Assert(False);
+end;
+
+Function dmem_mmap_single2(dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer):Integer;
+//byte *maxprotp,uint *flagsp
+begin
+
+ Result:=0;
+
+ Writeln('dmem_mmap_single2("',dev^.si_name,'",0x',HexStr(offset^,8),',0x',HexStr(size,8),',',nprot,')');
 
  print_backtrace_td(stderr);
  Assert(False);
