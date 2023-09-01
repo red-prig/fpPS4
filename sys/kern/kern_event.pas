@@ -1107,7 +1107,9 @@ var
 begin
  error:=0;
  if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ begin
   Exit(EINVAL);
+ end;
 
  mtx_lock(filterops_lock);
  if (sysfilt_ops[not filt].fop=@null_filtops) or
@@ -1131,12 +1133,17 @@ end;
 function kqueue_fo_find(filt:Integer):p_filterops;
 begin
  if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ begin
   Exit(nil);
+ end;
 
  mtx_lock(filterops_lock);
+
  Inc(sysfilt_ops[not filt].ref);
+
  if (sysfilt_ops[not filt].fop=nil) then
  begin
+  Writeln(stderr,'kqueue_fo_find:',filt);
   sysfilt_ops[not filt].fop:=@null_filtops;
  end;
  mtx_unlock(filterops_lock);
@@ -1147,7 +1154,9 @@ end;
 procedure kqueue_fo_release(filt:Integer);
 begin
  if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ begin
   Exit;
+ end;
 
  mtx_lock(filterops_lock);
  Assert(sysfilt_ops[not filt].ref>0,'filter object refcount not valid on release');

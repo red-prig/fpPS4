@@ -148,6 +148,7 @@ begin
   else
     With td^.td_frame do
     begin
+     Writeln(stderr,'syscall error:',error);
      tf_rax:=error;
      tf_rflags:=tf_rflags or PSL_C;
     end;

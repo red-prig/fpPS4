@@ -417,7 +417,7 @@ begin
   str:=EncodeValue64(data^.nid);
  end;
 
- Writeln(StdErr,'_unresolve_symbol:',str,':',data^.libname);
+ Writeln(StdErr,'_unresolve_symbol:0x',HexStr(data^.nid,16),':',str,':',data^.libname);
  print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  readln;
 end;

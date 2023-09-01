@@ -73,6 +73,7 @@ begin
         QWORD($2D946F62AEF8F878):data.val2:=0; //libSceSysmodule  (preload module?)
         QWORD($1BE26343C3D71F40):data.val2:=0; //libkernel
         QWORD($68436EECF1CFD447):data.val2:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
+        QWORD($29B56169422AA3DD):data.val2:=0; //sceVideoOutOpen  debug video modes?
 
         else
          begin

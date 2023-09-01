@@ -106,7 +106,8 @@ uses
  systm,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
- ps4_libSceDialogs;
+ ps4_libSceDialogs,
+ ps4_libSceAvSetting;
 
 var
  mtx:umutex;
