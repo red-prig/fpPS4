@@ -188,7 +188,7 @@ var
  err:Integer;
 begin
  Result:=0;
- addr^:=9;
+ addr^:=0;
 
  if (((phaddr shr 36) > 4) or ((max_valid - phaddr) < length)) then
  begin
@@ -731,8 +731,6 @@ begin
   end;
 
  end;
-
- Writeln(Sizeof(qinfo));
 
  Result:=copyout(@qinfo,info,size);
 end;

@@ -114,10 +114,14 @@ begin
  Result:=0;
 
  if (rqt^.tv_nsec < 0) or (rqt^.tv_nsec >= 1000000000) then
+ begin
   Exit(EINVAL);
+ end;
 
  if (rqt^.tv_sec < 0) or ((rqt^.tv_sec=0) and (rqt^.tv_nsec=0)) then
+ begin
   Exit(0);
+ end;
 
  ts:=get_unit_uptime;
  tv:=TIMESPEC_TO_UNIT(rqt);
@@ -165,7 +169,9 @@ begin
  begin
   error2:=copyout(@rmt, rmtp, sizeof(timespec));
   if (error2<>0) then
+  begin
    error:=error2;
+  end;
  end;
  Exit(error);
 end;

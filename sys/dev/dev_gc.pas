@@ -87,6 +87,17 @@ begin
              PInteger(data)[3]:=$00; //& 0x3ff   GC SE3 Redundant CU: 0x00
             end;
 
+  $C0048116: //sceGnmSubmitDone
+            begin
+             Writeln('sceGnmSubmitDone');
+            end;
+
+  $C0048114: //sceGnmFlushGarlic
+            begin
+             Writeln('sceGnmFlushGarlic');
+            end
+
+
   else
    begin
     print_backtrace_td(stderr);

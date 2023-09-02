@@ -292,10 +292,28 @@ label
  _next;
 var
  adr:Pointer;
+
+ procedure push; inline;
+ begin
+  if (skipframes<>0) then
+  begin
+   Dec(skipframes);
+  end else
+  if (count<>0) then
+  begin
+   frames[0]:=adr;
+   Dec(count);
+   Inc(frames);
+   Inc(Result);
+  end;
+ end;
+
 begin
  Result:=0;
+
  while (rbp<>nil) and
-       (rbp<>Pointer(QWORD(-1))) do
+       (rbp<>Pointer(QWORD(-1))) and
+       (count<>0) do
  begin
   adr:=fuptr(rbp[1]);
   rbp:=fuptr(rbp[0]);
@@ -304,17 +322,7 @@ begin
 
   if (adr<>nil) then
   begin
-   if (skipframes<>0) then
-   begin
-    Dec(skipframes);
-   end else
-   if (count<>0) then
-   begin
-    frames[0]:=adr;
-    Dec(count);
-    Inc(frames);
-    Inc(Result);
-   end;
+   push;
   end else
   begin
    Break;

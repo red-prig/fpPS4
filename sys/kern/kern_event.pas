@@ -209,10 +209,14 @@ begin
 
  kn^.kn_status:=kn^.kn_status or KN_ACTIVE;
  if ((kn^.kn_status and (KN_QUEUED or KN_DISABLED))=0) then
+ begin
   knote_enqueue(kn);
+ end;
 
  if (islock=0) then
+ begin
   KQ_UNLOCK(kn^.kn_kq);
+ end;
 end;
 
 procedure KN_LIST_LOCK(kn:p_knote); inline;
