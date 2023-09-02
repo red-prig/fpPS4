@@ -41,11 +41,54 @@ type
   arg6 :QWORD;
  end;
 
+ p_resolution_status=^t_resolution_status;
+ t_resolution_status=packed record
+  width           :DWORD;
+  heigth          :DWORD;
+  paneWidth       :DWORD;
+  paneHeight      :DWORD;
+  refreshHz       :DWORD;
+  screenSizeInInch:DWORD;
+  padding:array[0..19] of Byte;
+ end;
+
+ //SCE_VIDEO_OUT_REFRESH_RATE_UNKNOWN  = 0,
+ //SCE_VIDEO_OUT_REFRESH_RATE_23_98HZ  = 1,
+ //SCE_VIDEO_OUT_REFRESH_RATE_50HZ     = 2,
+ //SCE_VIDEO_OUT_REFRESH_RATE_59_94HZ  = 3,
+ //SCE_VIDEO_OUT_REFRESH_RATE_29_97HZ  = 6,
+ //SCE_VIDEO_OUT_REFRESH_RATE_89_91HZ  = 35, 0x23
+ //SCE_VIDEO_OUT_REFRESH_RATE_119_88HZ = 13, 0xD
+
+ //refreshRate =    0                                SCE_VIDEO_OUT_REFRESH_RATE_UNKNOWN
+ //refreshRate =    3; result.refreshHz = 0x426fc28f SCE_VIDEO_OUT_REFRESH_RATE_59_94HZ
+ //refreshRate =    2, result.refreshHz = 0x42480000 SCE_VIDEO_OUT_REFRESH_RATE_50HZ
+ //refreshRate =    1, result.refreshHz = 0x41bfd70a SCE_VIDEO_OUT_REFRESH_RATE_23_98HZ
+ //refreshRate =    4, result.refreshHz = 0x41c00000
+ //refreshRate =    5, result.refreshHz = 0x41f00000
+ //refreshRate =    6, result.refreshHz = 0x41efc28f SCE_VIDEO_OUT_REFRESH_RATE_29_97HZ
+ //refreshRate =    7, result.refreshHz = 0x41c80000
+ //refreshRate =    9, result.refreshHz = 0x42700000
+ //refreshRate =   10, result.refreshHz = 0x42400000
+ //refreshRate =  0xb, result.refreshHz = 0x423fcccd
+ //refreshRate =  0xc, result.refreshHz = 0x42c80000
+ //refreshRate =  0xd, result.refreshHz = 0x42efc28f SCE_VIDEO_OUT_REFRESH_RATE_119_88HZ
+ //refreshRate =  0xe, result.refreshHz = 0x42f00000
+ //refreshRate =  0xf, result.refreshHz = 0x43480000
+ //refreshRate = 0x10, result.refreshHz = 0x436fc28f
+ //refreshRate = 0x11, result.refreshHz = 0x43700000
+ //refreshRate = 0x14, result.refreshHz = 0x413fd70a
+ //refreshRate = 0x15, result.refreshHz = 0x41400000
+ //refreshRate = 0x16, result.refreshHz = 0x416fd70a
+ //refreshRate = 0x17, result.refreshHz = 0x41700000
+ //refreshRate = 0x23, result.refreshHz = 0x42b3d1ec SCE_VIDEO_OUT_REFRESH_RATE_89_91HZ
+
 Function dce_flip_control(dev:p_cdev;data:p_flip_control_args):Integer;
 var
  poff:PQWORD;
  plen:PQWORD;
  len:QWORD;
+ status:t_resolution_status;
 begin
  Result:=0;
 
@@ -54,7 +97,7 @@ begin
  case data^.id of
   0:  //video open
     begin
-     if ((data^.arg6=0) and (data^.arg2=0)) then
+     if (data^.arg6=0) and (data^.arg2=0) then
      begin
 
       plen:=Pointer(data^.arg5);
@@ -66,10 +109,26 @@ begin
      Exit(EINVAL);
     end;
 
+  5: //UnregisterBufferAttribute
+    begin
+     if (data^.arg4=0) and (data^.arg5=0) and (data^.arg6=0) then
+     begin
+      //arg2 -> canary
+      //arg3 -> fid
+
+      Writeln('dce_flip_control(UnregisterBufferAttribute):',data^.arg2,' ',data^.arg3);
+
+      Exit(0);
+     end;
+     Exit(EINVAL);
+    end;
+
   9:
     begin //get page info
-     if ((data^.arg5=0) and (data^.arg6=0)) then
+     if (data^.arg5=0) and (data^.arg6=0) then
      begin
+      //arg2 -> canary
+
       poff:=Pointer(data^.arg3); //output offset  //4000..3FFC000
       plen:=Pointer(data^.arg4); //output len     //4000
 
@@ -89,21 +148,55 @@ begin
 
   12:
     begin
-     if ((data^.arg5=0) and (data^.arg6=0)) then
+     if (data^.arg5=0) and (data^.arg6=0) then
      begin
       if (data^.arg4=$30) or (data^.arg4=$40) then
       begin
+       //arg2 -> canary
+
+       poff:=Pointer(data^.arg3);
+
+       len:=0;
+
        Writeln('dce_flip_control(',data^.id,'):wait?');
 
-       Exit(0);
+       Result:=copyout(@len,poff,data^.arg4);
+
+       Exit;
       end;
+     end;
+     Exit(EINVAL);
+    end;
+
+  19: //sceVideoOutGetResolutionStatus
+    begin
+     if (data^.arg4=44) then
+     begin
+      //arg2 -> canary
+      //arg3 = &result;
+      //arg4 = 44;
+
+      plen:=Pointer(data^.arg3);
+
+      status:=Default(t_resolution_status);
+      status.width           :=1920;
+      status.heigth          :=1080;
+      status.paneWidth       :=1920;
+      status.paneHeight      :=1080;
+      status.refreshHz       :=$426fc28f;
+      status.screenSizeInInch:=32;
+
+      Result:=copyout(@status,plen,data^.arg4);
+
+      Exit;
      end;
      Exit(EINVAL);
     end;
 
   31: //set vaddr
     begin
-     //data^.arg3 <- subtype 0..13
+     //arg2 -> canary
+     //arg3 <- subtype 0..13
 
      if (data^.arg3>13) then Exit(EINVAL);
 

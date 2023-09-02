@@ -94,7 +94,8 @@ uses
  vmparam,
  vm_map,
  kern_authinfo,
- kern_thr;
+ kern_thr,
+ trap;
 
 //////////
 
@@ -173,7 +174,7 @@ function kern_mmap_dmem(map   :vm_map_t;
                         length:QWORD;
                         mtype :DWORD;
                         prot  :DWORD;
-                        align :DWORD;
+                        align :QWORD;
                         flags :DWORD):Integer;
 label
  _fixed;
@@ -187,6 +188,7 @@ var
  err:Integer;
 begin
  Result:=0;
+ addr^:=9;
 
  if (((phaddr shr 36) > 4) or ((max_valid - phaddr) < length)) then
  begin
@@ -226,7 +228,7 @@ begin
 
       if (err=0) then
       begin
-       //
+       addr^:=vaddr;
       end else
       begin
        vm_map_delete(map,vaddr,v_end);
@@ -294,7 +296,7 @@ function sys_mmap_dmem(vaddr :Pointer;
 var
  td:p_kthread;
  addr:vm_offset_t;
- align:Integer;
+ align:QWORD;
 begin
  td:=curkthread;
  if (td=nil) then Exit(Pointer(-1));
@@ -355,8 +357,9 @@ begin
    addr:=$ff0000000;
   end;
 
-  align:=flags and MAP_ALIGNMENT_SHIFT;
+  align:=(flags shr MAP_ALIGNMENT_SHIFT) and $1f;
   if (align<PAGE_SHIFT) then align:=1;
+  align:=1 shl align;
  end else
  begin
   //Address range must be all in user VM space.
@@ -433,7 +436,8 @@ procedure dmem_vmo_get_type(map:vm_map_t;
                             sdk_version_big_4ffffff:Boolean);
 var
  obj:vm_map_object;
- start,relofs:QWORD;
+ start:QWORD;
+ relofs:Int64;
 
  d_start,d_start2:QWORD;
  d_end,d_end2:QWORD;
@@ -471,6 +475,7 @@ begin
   begin
    start :=entry^.start;
    relofs:=entry^.offset - start;
+
    if (addr < start) then
    begin
     addr:=start;
@@ -556,7 +561,8 @@ var
  td:p_kthread;
  map:vm_map_t;
  entry,next:vm_map_entry_t;
- rbp,rip:PPointer;
+ rbp:PPointer;
+ rip:Pointer;
  sdk_version_big_4ffffff:Boolean;
  is_libsys_call:Boolean;
  qinfo:SceKernelVirtualQueryInfo;
@@ -565,6 +571,8 @@ var
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
+
+ Writeln('sys_virtual_query:',HexStr(addr),' ',flags);
 
  QWORD(addr):=QWORD(addr) and $ffffffffffffc000;
 
@@ -599,7 +607,7 @@ begin
   if (p_proc.libkernel_start_addr >  rip) or
      (p_proc.libkernel___end_addr <= rip) then
   begin
-   if (QWORD(rip) - QWORD($7f0000000) < QWORD($800000000)) then
+   if ((Int64(rip) - Int64($7f0000000)) < Int64($800000000)) then //ET_DYN_LOAD_ADDR_SYS
    begin
      sdk_version_big_4ffffff:=true;
      is_libsys_call         :=true;
@@ -724,6 +732,7 @@ begin
 
  end;
 
+ Writeln(Sizeof(qinfo));
 
  Result:=copyout(@qinfo,info,size);
 end;

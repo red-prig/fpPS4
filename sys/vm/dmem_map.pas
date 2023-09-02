@@ -1156,10 +1156,10 @@ begin
 
  dmem_map_lock(map);
 
- if (dmem_map_lookup_entry(map, offset, @entry)) then
+ if (dmem_map_lookup_entry(map, OFF_TO_IDX(offset), @entry)) then
  begin
-  pstart^:=entry^.start;
-  p__end^:=entry^.__end;
+  pstart^:=IDX_TO_OFF(entry^.start);
+  p__end^:=IDX_TO_OFF(entry^.__end);
   pmtype^:=entry^.m_type;
 
   Result:=0;
@@ -1169,8 +1169,6 @@ begin
  end;
 
  dmem_map_unlock(map);
-
- Result:=0;
 end;
 
 

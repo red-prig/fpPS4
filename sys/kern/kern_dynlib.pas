@@ -125,6 +125,8 @@ begin
  Result:=copyinstr(symbol,@fsym,sizeof(fsym),nil);
  if (Result<>0) then Exit;
 
+ Writeln('sys_dynlib_dlsym:',fsym);
+
  dynlibs_lock;
 
  obj:=find_obj_by_handle(handle);
