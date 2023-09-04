@@ -26,7 +26,8 @@ uses
  vm_pager,
  kern_event,
  kern_mtx,
- md_time;
+ md_time,
+ md_proc;
 
 type
  p_flip_control_args=^t_flip_control_args;
@@ -101,6 +102,138 @@ type
 var
  flipArg:QWORD=0;
 
+type
+ p_cursor_enable=^t_cursor_enable;
+ t_cursor_enable=packed record
+  rtype  :DWORD; //0
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //3 = enable; 1 = disable
+  enable :DWORD; //1 = enable; 0 = disable
+  addr_hi:DWORD;
+  addr_lo:DWORD;
+  padding:array[0..13] of DWORD;
+ end;
+
+ p_cursor_img_addr=^t_cursor_img_addr;
+ t_cursor_img_addr=packed record
+  rtype  :DWORD; //1
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //2
+  addr_hi:DWORD;
+  addr_lo:DWORD;
+  padding:array[0..14] of DWORD;
+ end;
+
+ p_cursor_pos=^t_cursor_pos;
+ t_cursor_pos=packed record
+  rtype  :DWORD; //2
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //2
+  posX   :DWORD;
+  posY   :DWORD;
+  padding:array[0..14] of DWORD;
+ end;
+
+ p_cursor_pos_stereo=^t_cursor_pos_stereo;
+ t_cursor_pos_stereo=packed record
+  rtype  :DWORD; //3
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //3
+  posX   :DWORD;
+  posY   :DWORD;
+  offset :DWORD;
+  padding:array[0..13] of DWORD;
+ end;
+
+ p_cursor_hot_spot=^t_cursor_hot_spot;
+ t_cursor_hot_spot=packed record
+  rtype  :DWORD; //4
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //2
+  hotX   :DWORD;
+  hotY   :DWORD;
+  padding:array[0..14] of DWORD;
+ end;
+
+ p_cursor_magnify=^t_cursor_magnify;
+ t_cursor_magnify=packed record
+  rtype  :DWORD; //5
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //1
+  enable :DWORD;
+  padding:array[0..15] of DWORD;
+ end;
+
+ p_cursor_update_pending=^t_cursor_update_pending;
+ t_cursor_update_pending=packed record
+  rtype  :DWORD; //6
+  index  :DWORD; //Cursor index (0-1)
+  args   :DWORD; //1
+  ptype  :DWORD;
+  padding:array[0..14] of DWORD;
+  result :DWORD; //0,1
+ end;
+
+Function dce_set_cursor_info(dev:p_cdev;canary:QWORD;arg5:DWORD;data:Pointer):Integer;
+var
+ info:t_cursor_enable;
+ addr:qword;
+begin
+ info:=Default(t_cursor_enable);
+ Result:=copyin(data,@info,80);
+ if (Result<>0) then Exit;
+
+ case info.rtype of
+  0: //enable/disable
+    begin
+     case info.enable of
+      1:
+        begin
+         addr:=info.addr_lo or (QWORD(info.addr_hi) shl 32);
+
+         Writeln('dce_set_cursor_enable:',canary,' ',
+                                          info.index,' ',
+                                          HexStr(addr,16));
+        end;
+      0:
+        begin
+         Writeln('dce_set_cursor_disable:',canary,' ',
+                                           info.index);
+        end;
+     end;
+    end;
+
+  1:; //SetImageAddress
+
+  2: //SetPosition
+    begin
+     Writeln('dce_set_cursor_pos:',canary,' ',
+                                   p_cursor_pos(@info)^.index,' ',
+                                   p_cursor_pos(@info)^.posX,' ',
+                                   p_cursor_pos(@info)^.posY);
+    end;
+
+  3:; //SetPositionStereo
+  4:; //SetHotSpot
+  5:; //Set2xMagnify
+
+  6: //IsUpdatePending
+    begin
+     Writeln('dce_is_update_pending:',canary,' ',
+                                      p_cursor_update_pending(@info)^.index,' ',
+                                      p_cursor_update_pending(@info)^.ptype);
+
+     p_cursor_update_pending(@info)^.result:=0;
+
+     Result:=copyout(@p_cursor_update_pending(@info)^.result,@p_cursor_update_pending(data)^.result,8);
+    end;
+
+  else
+   Exit(EINVAL);
+ end;
+
+end;
+
 Function dce_flip_control(dev:p_cdev;data:p_flip_control_args):Integer;
 var
  ptr :Pointer;
@@ -120,9 +253,25 @@ begin
      if (data^.arg6=0) and (data^.arg2=0) then
      begin
 
+      Writeln('dce_video_open');
+
       ptr:=Pointer(data^.arg5);
       len:=111; //canary
       copyout(@len,ptr,SizeOf(QWORD));
+
+      Exit(0);
+     end;
+     Exit(EINVAL);
+    end;
+
+  1: //video close
+    begin
+     if (data^.arg3=0) and (data^.arg4=0) and
+        (data^.arg5=0) and (data^.arg6=0) then
+     begin
+      //arg2 -> canary
+
+      Writeln('dce_video_close:',data^.arg2);
 
       Exit(0);
      end;
@@ -257,6 +406,18 @@ begin
      Exit(EINVAL);
     end;
 
+  24: //sceVideoOutCursor*
+    begin
+     if (data^.arg6=0) and (data^.arg4=80) then
+     begin
+      //arg2 -> canary
+      //arg4 = 80;
+      Result:=dce_set_cursor_info(dev,data^.arg2,data^.arg5,Pointer(data^.arg3));
+      Exit;
+     end;
+     Exit(EINVAL);
+    end;
+
   31: //set vaddr
     begin
      //arg2 -> canary
@@ -357,14 +518,15 @@ var
 begin
  Result:=0;
 
- Writeln(sizeof(t_submit_flip));
-
  Writeln('submit_flip:',data^.bufferIndex,' ',
                         data^.flipMode,' ',
                         '0x',HexStr(data^.flipArg,16),' ',
                         data^.eop_val);
 
- knote(@g_video_out_event_flip, $0006 or (data^.flipArg shl 16), 0);
+ knote(@g_video_out_event_flip, $0006 or (data^.flipArg shl 16), 0);  //SCE_VIDEO_OUT_EVENT_FLIP
+
+ knote(@g_video_out_event_flip, $0007 or (data^.flipArg shl 16), 0); //SCE_VIDEO_OUT_EVENT_VBLANK
+
  flipArg:=data^.flipArg;
 
  if (data^.rout<>nil) then
@@ -373,6 +535,15 @@ begin
   copyout(@ures,data^.rout,SizeOf(QWORD));
  end;
 
+end;
+
+Function dce_deregister_ident(dev:p_cdev;data:PQWORD):Integer;
+begin
+ writeln('dce_deregister_ident:',HexStr(data^,16));
+
+ kqueue_deregister(EVFILT_DISPLAY,g_pid,data^);
+
+ Result:=0;
 end;
 
 Function dce_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
@@ -386,6 +557,7 @@ begin
   $C0308207:Result:=dce_register_buffer_attr(dev,data); //SCE_SYS_DCE_IOCTL_REGISTER_BUFFER_ATTRIBUTE
   $C0308206:Result:=dce_register_buffer_ptrs(dev,data);
   $C0488204:Result:=dce_submit_flip         (dev,data);
+  $80088209:Result:=dce_deregister_ident    (dev,data);
 
   else
    begin
@@ -493,7 +665,7 @@ begin
   //_display_attach(&kn->kn_kevent);
  end;
 
- //kn^.kn_hook = (long)p_pid;
+ kn^.kn_hook:=Pointer(g_pid);
 
  event_id:=kn^.kn_kevent.ident shr 48;
 

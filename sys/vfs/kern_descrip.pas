@@ -709,7 +709,9 @@ begin
   * Return EINVAL when the new descriptor is out of bounds.
   }
  if (old < 0) then
+ begin
   Exit(EBADF);
+ end;
 
  if (new < 0) then
  begin

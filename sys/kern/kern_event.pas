@@ -30,6 +30,7 @@ uses
 function  kevent_copyout   (arg:Pointer;kevp:p_kevent;count:Integer):Integer;
 function  kevent_copyin    (arg:Pointer;kevp:p_kevent;count:Integer):Integer;
 function  kqueue_register  (kq:p_kqueue;kev:p_kevent):Integer;
+procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint);
 function  kqueue_acquire   (fp:p_file;kqp:pp_kqueue):Integer;
 procedure kqueue_release   (kq:p_kqueue;locked:Integer);
 function  kqueue_expand    (kq:p_kqueue;fops:p_filterops;ident:ptruint):Integer;
@@ -1436,6 +1437,72 @@ done:
   kqueue_fo_release(filt);
  end;
  Exit(error);
+end;
+
+procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint);
+label
+ _lock,
+ _again;
+var
+ kq:p_kqueue;
+ kn:p_knote;
+ i:QWORD;
+begin
+ FILEDESC_XLOCK(@fd_table);
+
+ kq:=TAILQ_FIRST(@fd_table.fd_kqlist);
+ while (kq<>nil) do
+ begin
+  _lock:
+
+  KQ_LOCK(kq);
+
+  _again:
+  if (kq^.kq_knhashmask<>0) then
+  begin
+   For i:=0 to kq^.kq_knhashmask do
+   begin
+    kn:=kq^.kq_knhash[i].slh_first;
+
+    while (kn<>nil) do
+    begin
+     if (kn^.kn_kevent.filter=filter) and
+        ((pid=0) or (PtrUint(kn^.kn_hook)=pid)) and
+        ((ident=0) or (kn^.kn_kevent.ident=ident)) then
+     begin
+      if ((kn^.kn_status and KN_INFLUX)<>0) then
+      begin
+       kq^.kq_state:=kq^.kq_state or KQ_FLUXWAIT;
+       msleep(kq,@kq^.kq_lock,PSOCK,'kqflxwt2',0);
+       goto _again;
+      end;
+
+      kn^.kn_status:=kn^.kn_status or KN_INFLUX;
+
+      KQ_UNLOCK(kq);
+
+      if ((kn^.kn_status and KN_DETACHED)=0) then
+      begin
+       kn^.kn_fop^.f_detach(kn);
+      end;
+
+      knote_drop(kn);
+      goto _lock;
+     end;
+
+     kn:=kn^.kn_link.sle_next;
+    end; //while (kn<>nil) do
+
+   end; //for
+
+  end; //if (kq^.kq_knhashmask<>0)
+
+  KQ_UNLOCK(kq);
+  //
+  kq:=TAILQ_NEXT(kq,@kq^.kq_list);
+ end; //while (kq<>nil) do
+
+ FILEDESC_XUNLOCK(@fd_table);
 end;
 
 function kqueue_acquire(fp:p_file;kqp:pp_kqueue):Integer;
