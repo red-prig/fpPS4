@@ -12,7 +12,6 @@ function sys_socketclose(fd:Integer):Integer;
 implementation
 
 uses
- errno,
  kern_thr,
  kern_descrip,
  kern_conf,

@@ -7,6 +7,7 @@ interface
 
 uses
  kern_thr,
+ kern_proc,
  kern_id,
  sys_event,
  vfile,

@@ -16,6 +16,7 @@ uses
  kern_sysctl,
  kern_thr,
  kern_thread,
+ kern_proc,
  kern_sig,
  kern_timeout,
  kern_synch,

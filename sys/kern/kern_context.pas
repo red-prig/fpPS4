@@ -23,6 +23,7 @@ uses
  systm,
  kern_thr,
  kern_thread,
+ kern_proc,
  signal,
  kern_sig,
  kern_synch,

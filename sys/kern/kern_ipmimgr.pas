@@ -13,7 +13,6 @@ uses
  errno,
  systm,
  trap,
- kern_thr,
  kern_named_id;
 
 type

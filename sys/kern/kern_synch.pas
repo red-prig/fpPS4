@@ -39,7 +39,7 @@ function  msleep(ident   :Pointer;
 function  tsleep(ident   :Pointer;
                  priority:Integer;
                  wmesg   :PChar;
-                 timo    :Int64):Integer; inline;
+                 timo    :Int64):Integer;
 
 function  pause(wmesg:PChar;timo:Int64):Integer;
 
@@ -56,6 +56,7 @@ function  sys_cpumode_yield():Integer;
 implementation
 
 uses
+ kern_proc,
  kern_thread,
  sched_ule,
  md_sleep,
@@ -145,7 +146,7 @@ end;
 function tsleep(ident   :Pointer;
                 priority:Integer;
                 wmesg   :PChar;
-                timo    :Int64):Integer; inline;
+                timo    :Int64):Integer;
 begin
  Result:=msleep(ident,nil,priority,wmesg,timo);
 end;

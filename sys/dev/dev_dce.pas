@@ -19,7 +19,6 @@ implementation
 uses
  errno,
  systm,
- kern_thr,
  trap,
  vm,
  vm_object,
@@ -203,7 +202,14 @@ begin
      end;
     end;
 
-  1:; //SetImageAddress
+  1: //SetImageAddress
+    begin
+     addr:=p_cursor_img_addr(@info)^.addr_lo or (QWORD(p_cursor_img_addr(@info)^.addr_hi) shl 32);
+
+     Writeln('dce_set_image_addr:',canary,' ',
+                                   p_cursor_img_addr(@info)^.index,' ',
+                                   HexStr(addr,16));
+    end;
 
   2: //SetPosition
     begin
@@ -223,9 +229,9 @@ begin
                                       p_cursor_update_pending(@info)^.index,' ',
                                       p_cursor_update_pending(@info)^.ptype);
 
-     p_cursor_update_pending(@info)^.result:=0;
+     addr:=1;
 
-     Result:=copyout(@p_cursor_update_pending(@info)^.result,@p_cursor_update_pending(data)^.result,8);
+     Result:=copyout(@addr,@p_cursor_update_pending(data)^.result,8);
     end;
 
   else
@@ -678,8 +684,8 @@ begin
      begin
       knlist_add(@g_video_out_event_flip,kn,0)
      end;
-   //$0051:Result:=8;
-   //$0058:Result:=12;
+   // $0051:Result:=8;
+   // $0058:Result:=12;
   else
    begin
     Writeln(stderr,'filt_display_attach:',event_id);

@@ -9,7 +9,8 @@ uses
  Windows,
  ntapi,
  ucontext,
- kern_thr;
+ kern_thr,
+ kern_proc;
 
 const
  XSTATE_LEGACY_FLOATING_POINT=0;

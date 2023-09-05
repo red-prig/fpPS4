@@ -33,6 +33,7 @@ implementation
 uses
  systm,
  errno,
+ kern_proc,
  kern_mtx,
  vm,
  vmparam,

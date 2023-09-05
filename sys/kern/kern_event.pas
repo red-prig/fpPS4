@@ -119,6 +119,7 @@ uses
  vfs_subr,
  subr_hash,
  vsys_generic,
+ kern_proc,
  kern_callout,
  kern_timeout;
 

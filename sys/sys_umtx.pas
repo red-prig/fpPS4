@@ -26,8 +26,7 @@ uses
  errno,
  syscalls,
  kern_umtx,
- trap,
- thr_error;
+ trap;
 
 procedure umtx_init(var umtx:umtx); inline;
 begin

@@ -9,7 +9,8 @@ uses
  signal,
  signalvar,
  ucontext,
- kern_thr;
+ kern_thr,
+ kern_proc;
 
 const
  _ucodesel=(8 shl 3) or 3;
@@ -148,7 +149,6 @@ begin
   else
     With td^.td_frame do
     begin
-     Writeln(stderr,'syscall error:',error);
      tf_rax:=error;
      tf_rflags:=tf_rflags or PSL_C;
     end;

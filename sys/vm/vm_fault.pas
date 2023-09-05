@@ -218,13 +218,14 @@ begin
  //Did the exception happen inside a patch? just going out
  if vm_check_patch_entry(map,rip_addr,@entry) then
  begin
+  Writeln('exception_inside_patch');
   Exit(0);
  end;
 
  obj:=entry^.vm_obj;
  Assert(obj<>nil,'vm_try_jit_patch (obj=nil)');
 
- Writeln('mmaped addr 0x',HexStr(mem_addr,16),' to 0x',HexStr(uplift(Pointer(mem_addr))));
+ Writeln('mmaped addr 0x',HexStr(mem_addr,16),' to 0x',HexStr(uplift(Pointer(mem_addr))),' on rip:0x',HexStr(rip_addr,16));
 
  ctx:=Default(t_jit_context);
  ctx.Code:=c_data16;
@@ -250,6 +251,8 @@ begin
   begin
    //delete patch
 
+   Writeln('Delete overlap patch at:0x',HexStr(info.vaddr));
+
    tmp_jit:=@info.stub^.body;
 
    patch_original(map,entry,QWORD(info.vaddr),tmp_jit^.o_len,@tmp_jit^.o_data);
@@ -268,7 +271,6 @@ begin
   1..2:
     begin
      //Not possible
-     chunk_prolog:=nil;
     end;
   3:
     begin
@@ -300,7 +302,10 @@ begin
      chunk_prolog:=p_alloc(Pointer(rip_addr_jmp),SizeOf(t_jit_prolog));
     end;
   else
+   begin
+    Writeln('vm_try_jit_patch (',vsize,')');
     Assert(false,'vm_try_jit_patch (vsize)');
+   end;
  end;
 
  ctx.rip_addr:=rip_addr;
@@ -309,6 +314,7 @@ begin
  if (chunk_prolog=nil) then
  begin
   //Prologue not created?
+  ctx.jit_code^.prolog:=nil;
  end else
  begin
   jit_prolog:=@chunk_prolog^.body;
@@ -321,10 +327,18 @@ begin
 
   if (vsize<5) then
   begin
-   Assert(is_mask_valid(Pointer(rip_addr_jmp),jit_prolog,mask),'vm_try_jit_patch (is_mask_valid)');
+   if not is_mask_valid(Pointer(rip_addr_jmp),jit_prolog,mask) then
+   begin
+    Writeln('is_mask_valid:',HexStr(mask,8));
+    Assert(false,'vm_try_jit_patch (is_mask_valid)');
+   end;
   end else
   begin
-   Assert(is_near_valid(Pointer(rip_addr_jmp),jit_prolog),'vm_try_jit_patch (is_near_valid)');
+   if not is_near_valid(Pointer(rip_addr_jmp),jit_prolog) then
+   begin
+    Writeln('is_near_valid:');
+    Assert(false,'vm_try_jit_patch (is_near_valid)');
+   end;
   end;
 
   patch_original(map,entry,rip_addr,vsize,Integer(delta));

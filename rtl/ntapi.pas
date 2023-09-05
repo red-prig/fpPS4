@@ -487,12 +487,19 @@ function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
 function NtCreateThread(
           hThread           :PHandle;
           DesiredAccess     :ACCESS_MASK;
-          ObjectAttributes  :Pointer;
+          ObjectAttributes  :POBJECT_ATTRIBUTES;
           ProcessHandle     :THandle;
           ClientId          :PCLIENT_ID;
           ThreadContext     :PCONTEXT;
           InitialTeb        :PINITIAL_TEB;
           CreateSuspended   :Boolean
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtOpenThread(
+          ThreadHandle    :PHandle;
+          DesiredAccess   :ACCESS_MASK;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
+          ClientId        :PCLIENT_ID
          ):DWORD; stdcall; external 'ntdll';
 
 function NtTerminateThread(
@@ -618,7 +625,7 @@ function NtQueryPerformanceCounter(
 function NtCreateTimer(
           TimerHandle     :PHandle;
           DesiredAccess   :ACCESS_MASK;
-          ObjectAttributes:Pointer;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
           TimerType       :DWORD
          ):DWORD; stdcall; external 'ntdll';
 
@@ -815,7 +822,7 @@ function NtQueryVolumeInformationFile(
 function NtCreateEvent(
           EventHandle     :PHandle;
           DesiredAccess   :ACCESS_MASK;
-          ObjectAttributes:Pointer;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
           EventType       :DWORD;
           InitialState    :Boolean
          ):DWORD; stdcall; external 'ntdll';
@@ -835,7 +842,7 @@ function NtClearEvent(EventHandle:THandle):DWORD; stdcall; external 'ntdll';
 function NtCreateMutant(
           MutantHandle    :PHandle;
           DesiredAccess   :ACCESS_MASK;
-          ObjectAttributes:Pointer;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
           InitialOwner    :Boolean
          ):DWORD; stdcall; external 'ntdll';
 
@@ -856,7 +863,7 @@ function NtQueryMutant(
 function NtCreateSection(
           SectionHandle        :PHandle;
           DesiredAccess        :ACCESS_MASK;
-          ObjectAttributes     :Pointer;
+          ObjectAttributes     :POBJECT_ATTRIBUTES;
           MaximumSize          :PLARGE_INTEGER;
           SectionPageProtection:ULONG;
           AllocationAttributes :ULONG;

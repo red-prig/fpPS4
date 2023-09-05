@@ -95,7 +95,7 @@ uses
  vm_map,
  kern_authinfo,
  kern_thr,
- trap;
+ kern_proc;
 
 //////////
 

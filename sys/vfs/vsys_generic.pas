@@ -113,6 +113,7 @@ uses
  subr_uio,
  kern_sig,
  kern_thread,
+ kern_proc,
  md_time,
  sys_capability;
 

@@ -20,6 +20,7 @@ implementation
 uses
  systm,
  errno,
+ kern_proc,
  kern_thread,
  sched_ule,
  md_proc;

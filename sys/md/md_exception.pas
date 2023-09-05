@@ -90,6 +90,7 @@ end;
 
 const
  FPC_EXCEPTION_CODE=$E0465043;
+ FPC_SET_EH_HANDLER=$E0465044;
 
 function translate_pageflt_err(v:QWORD):QWORD; inline;
 begin
@@ -106,14 +107,15 @@ var
  ExceptionCode:DWORD;
  td:p_kthread;
  tf_addr:QWORD;
- backup:trapframe;
+ //backup:trapframe;
  rv:Integer;
 begin
  Result:=1;
  td:=curkthread;
 
  //Context backup to return correctly
- backup:=td^.td_frame;
+ //backup:=td^.td_frame;
+
  td^.td_frame.tf_trapno:=0;
 
  ExceptionCode:=p^.ExceptionRecord^.ExceptionCode;
@@ -128,7 +130,7 @@ begin
      //Writeln(HexStr(p^.ContextRecord^.Rip,16));
      //Writeln(HexStr(Get_pc_addr));
 
-     _get_frame(p^.ContextRecord,@td^.td_frame,@td^.td_fpstate);
+     _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
 
      td^.td_frame.tf_trapno:=T_PAGEFLT;
      td^.td_frame.tf_err   :=translate_pageflt_err(p^.ExceptionRecord^.ExceptionInformation[0]);
@@ -142,50 +144,99 @@ begin
 
  if (rv=0) then
  begin
-  _set_frame(p^.ContextRecord,@td^.td_frame,@td^.td_fpstate);
+  _set_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
   Result:=0;
  end;
 
  //simple ret
- td^.pcb_flags:=td^.pcb_flags and (not PCB_FULL_IRET);
+ //td^.pcb_flags:=td^.pcb_flags and (not PCB_FULL_IRET);
 
- td^.td_frame:=backup;
+ //td^.td_frame:=backup;
 end;
 
-function ProcessException2(p:PExceptionPointers):longint; assembler; nostackframe; SysV_ABI_CDecl;
+{
+//rdi,rsi
+function ProcessException2(p:PExceptionPointers;rsp:Pointer):longint; assembler; nostackframe; SysV_ABI_CDecl;
 asm
  //prolog (debugger)
- pushq %rbp
- movq  %rsp,%rbp
+ //pushq %rbp
+ //movq  %rsp,%rbp
 
- movq ProcessException3,%rax
- call fast_syscall
+ xchg  %rsi,%rsp
+ andq  $-32,%rsp //align stack
+
+ pushq %rsi
+ pushq %rbp
+
+ call  ProcessException3
+
+ popq  %rbp
+ popq  %rsp
+
+ //movq ProcessException3,%rax
+ ///call fast_syscall
 
  //epilog (debugger)
- popq  %rbp
+ //popq  %rbp
 end;
+}
 
 type
  TExceptObjProc=function(code: Longint; const rec: TExceptionRecord): Pointer; { Exception }
  TExceptClsProc=function(code: Longint): Pointer; { ExceptClass }
 
+function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
+begin
+ Result:=(rsp<=QWORD(td^.td_kstack.stack)) and (rsp>(QWORD(td^.td_kstack.sttop)));
+end;
+
 function ProcessException(p:PExceptionPointers):longint; stdcall;
+var
+ td:p_kthread;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
 
- //Writeln('rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
- //Writeln('rsp:0x',HexStr(get_frame));
+ //Writeln('  p_ctx:0x',HexStr(p));
+ //Writeln('rsp_ctx:0x',HexStr(p^.ContextRecord^.Rsp,16));
+ //Writeln('rsp_frm:0x',HexStr(get_frame));
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
+  FPC_SET_EH_HANDLER      :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT    :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
 
- if (curkthread=nil) then Exit;
+ //readln;
 
- //It looks like there is a small stack inside the exception, so you need to switch the context
- Result:=ProcessException2(p);
+ td:=curkthread;
+
+ if (td=nil) then Exit;
+
+ {
+ if (td^.td_teb^.jit_rsp<>nil) then //debugger switch
+ begin
+  Writeln('td_kstack:0x',HexStr(td^.td_kstack.stack));
+  Writeln('jit_rsp:0x',HexStr(td^.td_teb^.jit_rsp));
+  p^.ContextRecord^.Rsp:=qword(td^.td_teb^.jit_rsp);
+  td^.td_teb^.jit_rsp:=nil;
+ end;
+ }
+
+ Result:=ProcessException3(p);
+
+ {
+ if IS_SYSTEM_STACK(curkthread,p^.ContextRecord^.Rsp) then
+ begin
+  Writeln(IS_SYSTEM_STACK(curkthread,p^.ContextRecord^.Rsp),' ',IS_SYSTEM_STACK(curkthread,qword(get_frame)));
+  //
+  Exit;
+ end else
+ begin
+  //It looks like there is a small stack inside the exception, so you need to switch the context
+  Result:=ProcessException2(p,curkthread^.td_kstack.stack);
+ end;
+ }
 
  if (Result=0) then
  begin
@@ -207,6 +258,7 @@ begin
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
+  FPC_SET_EH_HANDLER      :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT    :Exit;
   EXCEPTION_SET_THREADNAME:Exit;
  end;
@@ -229,6 +281,9 @@ begin
   ExObj:=Exception(TExceptObjProc(ExceptObjProc)(abs(code),rec^));
  end;
 
+ if curkthread<>nil then
+  Writeln('curkthread^.td_name:',curkthread^.td_name);
+
  if (ExObj=nil) then
  begin
   Writeln(stderr,'Runtime error ',code,' at $',hexstr(rec^.ExceptionAddress));
@@ -244,6 +299,17 @@ begin
 
  ErrorCode:=word(code);
  md_halt(code);
+end;
+
+procedure ExceptionDispatcher(p:PExceptionPointers); stdcall;
+begin
+ if (ProcessException(p)=EXCEPTION_CONTINUE_EXECUTION) then
+ begin
+  NtContinue(p^.ContextRecord,False);
+ end else
+ begin
+  UnhandledException(p);
+ end;
 end;
 
 Procedure _Assert(Const Msg,FName:Shortstring;LineNo:Longint;ErrorAddr:Pointer);
@@ -265,12 +331,27 @@ var
  UEHandler:Pointer=nil;
  V2Handler:Pointer=nil;
 
+type
+ PEH_HANDLER_INFO=^EH_HANDLER_INFO;
+ EH_HANDLER_INFO=record
+  ptr:Pointer;
+ end;
+
+procedure RaiseException(dwExceptionCode:DWORD;
+                         dwExceptionFlags:DWORD;
+                         nNumberOfArguments:DWORD;
+                         lpArguments:Pointer); external 'kernel32';
+
 procedure InstallExceptionHandler;
+var
+ eh:EH_HANDLER_INFO;
 begin
  AssertErrorProc:=@_Assert;
  UEHandler:=SetUnhandledExceptionFilter(@UnhandledException);
  VEHandler:=AddVectoredExceptionHandler(1,@ProcessException);
  V2Handler:=AddVectoredExceptionHandler(0,@UnhandledException);
+ eh.ptr:=@ExceptionDispatcher;
+ RaiseException(FPC_SET_EH_HANDLER,0,2,@eh);
 end;
 
 procedure UninstallExceptionHandler;

@@ -153,7 +153,7 @@ procedure switch_to_jit(frame:p_jit_frame);
 function  IS_TRAP_FUNC(rip:qword):Boolean;
 
 function  trap(frame:p_trapframe):Integer;
-function  trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
+function  trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 
 implementation
 
@@ -577,6 +577,7 @@ var
  scall:tsyscall;
  error:Integer;
  i,count:Integer;
+ is_guest:Boolean;
 begin
  //Call directly to the address or make an ID table?
 
@@ -587,6 +588,7 @@ begin
 
  error:=0;
  scall:=nil;
+ is_guest:=False;
 
  if (td_frame^.tf_rax<=High(sysent_table)) then
  begin
@@ -638,6 +640,7 @@ begin
   if (td_frame^.tf_rax<=High(sysent_table)) then
   if is_guest_addr(td_frame^.tf_rip) then
   begin
+   is_guest:=True;
    Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
 
    //count:=sysent_table[td_frame^.tf_rax].sy_narg;
@@ -663,6 +666,17 @@ begin
  if ((td^.td_pflags and TDP_NERRNO)=0) then
  begin
   td^.td_errno:=error;
+ end;
+
+ if is_guest then
+ Case error of
+  0:;
+  ERESTART:;
+  EJUSTRETURN:; //nothing
+  else
+    begin
+     Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name,' error:',error);
+    end;
  end;
 
  cpu_set_syscall_retval(td,error);
@@ -865,10 +879,40 @@ procedure jit_frame_call(frame:p_jit_frame);
 begin
  cpu_init_jit(curkthread);
 
+ if QWORD(frame^.reta)-QWORD(frame^.addr)=3 then
+ begin
+  Writeln('tf_rcx>:',HexStr(curkthread^.td_frame.tf_rcx,16));
+ end;
+
  t_proc(frame^.call)();
+
+ if QWORD(frame^.reta)-QWORD(frame^.addr)=3 then
+ begin
+  Writeln('tf_rcx<:',HexStr(curkthread^.td_frame.tf_rcx,16));
+ end;
 
  cpu_fini_jit(curkthread);
 end;
+
+{
+//rdi
+procedure jit_frame_call(frame:p_jit_frame); assembler;
+var
+ rdi:QWORD;
+asm
+ movqq %rdi,rdi
+
+ movqq %gs:teb.thread,%rdi
+ call cpu_init_jit
+
+ movqq rdi,%rdi
+ movqq t_jit_frame.call(%rdi),%rax
+ callq %rax
+
+ movqq %gs:teb.thread,%rdi
+ call cpu_fini_jit
+end;
+}
 
 //input:
 // 1: %gs:teb.jit_rsp (original %rsp)
@@ -876,10 +920,8 @@ end;
 procedure jit_call; assembler; nostackframe;
 label
  _after_call,
- _doreti,
  _fail,
- _ast,
- _doreti_exit;
+ _ast;
 asm
  //%rsp must be saved in %gs:teb.jit_rsp upon enter (Implicit lock interrupt)
 
@@ -948,10 +990,6 @@ asm
 
  movqq %gs:teb.thread,%rcx //curkthread
 
- //Requested full context restore
- testl PCB_FULL_IRET,kthread.pcb_flags(%rcx)
- jnz _doreti
-
  testl TDF_AST,kthread.td_flags(%rcx)
  jne _ast
 
@@ -988,11 +1026,11 @@ asm
  //fail (curkthread=nil)
  _fail:
 
+ sahf  //restore flags from AH
+
  movqq %gs:teb.jitcall       ,%rax //get struct
  movqq t_jit_frame.reta(%rax),%rax //get ret addr
  movqq %rax,%gs:teb.jitcall        //save ret
-
- sahf  //restore flags from AH
 
  movqq %gs:teb.jit_rax,%rax //restore %rax
  xchgq %gs:teb.jit_rsp,%rsp //restore %rsp (and also set teb.jit_rsp=0)
@@ -1005,22 +1043,6 @@ asm
 
   call ast
   jmp _after_call
-
- //doreti
- _doreti:
-
-  //%rcx=curkthread
-  testl TDF_AST,kthread.td_flags(%rcx)
-  je _doreti_exit
-
-  call ast
-  jmp _doreti
-
- _doreti_exit:
-
-  //Restore full.
-  call  ipi_sigreturn
-  hlt
 end;
 
 function IS_TRAP_FUNC(rip:qword):Boolean;
@@ -1031,13 +1053,13 @@ begin
          ) or
          (
           (rip>=QWORD(@jit_call)) and
-          (rip<=(QWORD(@jit_call)+$23C)) //jit_call func size
+          (rip<=(QWORD(@jit_call)+$219)) //jit_call func size
          );
 end;
 
-function IS_USERMODE(td:p_kthread;frame:p_trapframe):Integer; inline;
+function IS_USERMODE(td:p_kthread;frame:p_trapframe):Boolean; inline;
 begin
- Result:=ord((frame^.tf_rsp>QWORD(td^.td_kstack.stack)) or (frame^.tf_rsp<=(QWORD(td^.td_kstack.sttop))));
+ Result:=(frame^.tf_rsp>QWORD(td^.td_kstack.stack)) or (frame^.tf_rsp<=(QWORD(td^.td_kstack.sttop)));
 end;
 
 function trap(frame:p_trapframe):Integer;
@@ -1060,6 +1082,7 @@ end;
 
 procedure trap_fatal(frame:p_trapframe;eva:vm_offset_t);
 var
+ td:p_kthread;
  trapno:Integer;
  msg,msg2:pchar;
 begin
@@ -1070,15 +1093,29 @@ begin
  else
   msg:='UNKNOWN';
 
- if Boolean(IS_USERMODE(curkthread,frame)) then
+ if IS_USERMODE(curkthread,frame) then
   msg2:='user'
  else
   msg2:='kernel';
 
  Writeln(StdErr,'Fatal trap ',trapno,': ',msg,' while in ',msg2,' mode');
+
+ Writeln(StdErr,'fault virtual address = 0x',HexStr(eva,16));
+ Writeln(StdErr,'instruction pointer   = 0x',HexStr(frame^.tf_rip,16));
+ Writeln(StdErr,'stack pointer         = 0x',HexStr(frame^.tf_rsp,16));
+ Writeln(StdErr,'frame pointer         = 0x',HexStr(frame^.tf_rbp,16));
+
+ td:=curkthread;
+ if (td<>nil) then
+ begin
+ Writeln(StdErr,'td_ustack.stack       = 0x',HexStr(td^.td_ustack.stack));
+ Writeln(StdErr,'td_ustack.sttop       = 0x',HexStr(td^.td_ustack.sttop));
+ Writeln(StdErr,'td_kstack.stack       = 0x',HexStr(td^.td_kstack.stack));
+ Writeln(StdErr,'td_kstack.sttop       = 0x',HexStr(td^.td_kstack.sttop));
+ end;
 end;
 
-function trap_pfault(frame:p_trapframe;usermode:Integer):Integer;
+function trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 var
  td:p_kthread;
  eva:vm_offset_t;
@@ -1092,6 +1129,7 @@ begin
 
  if ((td^.td_pflags and TDP_NOFAULTING)<>0) then
  begin
+  Writeln('TDP_NOFAULTING:',curkthread^.td_name);
   Exit(SIGSEGV);
  end;
 
@@ -1114,13 +1152,15 @@ begin
 
  end else
  begin
+  Writeln('not is_guest_addr:0x',HexStr(eva,16),':',curkthread^.td_name);
   Result:=SIGSEGV;
  end;
 
- //if (usermode=0) then
+ if (not usermode) then
  begin
   if (td^.pcb_onfault<>nil) then
   begin
+   Writeln('pcb_onfault<:',HexStr(td^.pcb_onfault),':',curkthread^.td_name);
    frame^.tf_rip:=QWORD(td^.pcb_onfault);
    Exit(0);
   end else

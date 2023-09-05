@@ -207,6 +207,7 @@ uses
  devfs_devs,
  devfs_rule,
  devfs_vfsops,
+ kern_proc,
  kern_descrip,
  kern_mtxpool,
  subr_uio;

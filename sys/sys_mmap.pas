@@ -83,7 +83,7 @@ implementation
 
 uses
  syscalls,
- errno;
+ thr_error;
 
 //sce
 

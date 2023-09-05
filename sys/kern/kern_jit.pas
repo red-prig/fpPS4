@@ -50,6 +50,7 @@ type
 
 function  GetFrameOffsetInt(RegValue:TRegValue):Integer;
 procedure print_disassemble(addr:Pointer;vsize:Integer);
+procedure print_frame(td:p_kthread);
 function  classif_memop(var din:TInstruction):t_memop_type;
 function  get_lea_id(memop:t_memop_type):Byte;
 function  get_reg_id(memop:t_memop_type):Byte;
@@ -191,11 +192,32 @@ begin
  proc.Free;
 end;
 
+procedure print_frame(td:p_kthread);
+begin
+ Writeln('tf_adr:',HexStr(td^.td_frame.tf_addr,16));
+ Writeln('tf_rip:',HexStr(td^.td_frame.tf_rip,16));
+ Writeln('tf_rax:',HexStr(td^.td_frame.tf_rax,16));
+ Writeln('tf_rcx:',HexStr(td^.td_frame.tf_rcx,16));
+ Writeln('tf_rdx:',HexStr(td^.td_frame.tf_rdx,16));
+ Writeln('tf_rbx:',HexStr(td^.td_frame.tf_rbx,16));
+ Writeln('tf_rsp:',HexStr(td^.td_frame.tf_rsp,16));
+ Writeln('tf_rbp:',HexStr(td^.td_frame.tf_rbp,16));
+ Writeln('tf_rsi:',HexStr(td^.td_frame.tf_rsi,16));
+ Writeln('tf_rdi:',HexStr(td^.td_frame.tf_rdi,16));
+ Writeln('tf_r8 :',HexStr(td^.td_frame.tf_r8 ,16));
+ Writeln('tf_r9 :',HexStr(td^.td_frame.tf_r9 ,16));
+ Writeln('tf_r10:',HexStr(td^.td_frame.tf_r10,16));
+ Writeln('tf_r11:',HexStr(td^.td_frame.tf_r11,16));
+ Writeln('tf_r12:',HexStr(td^.td_frame.tf_r12,16));
+ Writeln('tf_r13:',HexStr(td^.td_frame.tf_r13,16));
+ Writeln('tf_r14:',HexStr(td^.td_frame.tf_r14,16));
+ Writeln('tf_r15:',HexStr(td^.td_frame.tf_r15,16));
+end;
+
 procedure test_jit;
 begin
  writeln('test_jit');
 end;
-
 
 //rdi,rsi,edx
 procedure copyout_mov(vaddr:Pointer;cb:tcopy_cb;size:Integer);
@@ -306,7 +328,21 @@ begin
 
   if (RegValue[0].AScale>1) then
   begin
-   leaq(adr,[adr*RegValue[0].AScale])
+   ofs:=0;
+   if GetTargetOfs(ctx,id,ofs) then
+   begin
+    leaq(adr,[adr*RegValue[0].AScale+ofs]);
+   end else
+   begin
+    leaq(adr,[adr*RegValue[0].AScale]);
+   end;
+  end else
+  begin
+   ofs:=0;
+   if GetTargetOfs(ctx,id,ofs) then
+   begin
+    leaq(adr,[adr+ofs]);
+   end;
   end;
 
   if (RegValue[1].AType<>regNone) then
@@ -316,16 +352,9 @@ begin
 
    addq(adr,[tdr+i]);
   end;
+
  end;
 
- ofs:=0;
- if GetTargetOfs(ctx,id,ofs) then
- begin
-  with ctx.builder do
-  begin
-   leaq(adr,[adr+ofs]);
-  end;
- end;
 end;
 
 //
@@ -403,17 +432,8 @@ begin
      begin
       //imm const
 
-      if (copy_size>reg_size) or (imm=0) then
-      begin
-       xorq(rsi,rsi);
-      end;
+      movi(mem.ARegValue[0].ASize,[rdi],imm);
 
-      if (imm<>0) then
-      begin
-       movi(reg,imm);
-      end;
-
-      movq([rdi],mem); //TODO movi([rdi],imm);
      end else
      begin
       movq(rcx,[GS+Integer(teb_thread)]);

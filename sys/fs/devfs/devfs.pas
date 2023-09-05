@@ -235,7 +235,6 @@ procedure devfs_mtx_init;
 implementation
 
 uses
- devfs_devs,
  devfs_vnops;
 
 {

@@ -71,6 +71,7 @@ implementation
 uses
  errno,
  signalvar,
+ kern_proc,
  kern_thread,
  kern_sig,
  sched_ule,

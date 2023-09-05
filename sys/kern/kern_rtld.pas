@@ -214,6 +214,7 @@ uses
  vm_map,
  vm_mmap,
  vm_pmap,
+ kern_proc,
  kern_patcher;
 
 function maxInt64(a,b:Int64):Int64; inline;

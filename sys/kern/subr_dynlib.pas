@@ -367,6 +367,7 @@ uses
  vfs_lookup,
  vfs_subr,
  vnode_if,
+ kern_proc,
  kern_reloc,
  kern_namedobj,
  elf_nid_utils;

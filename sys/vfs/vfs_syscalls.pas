@@ -6,6 +6,7 @@ unit vfs_syscalls;
 interface
 
 uses
+ kern_proc,
  time,
  vmount,
  vuio,
@@ -453,7 +454,7 @@ begin
    end;
    if {(priv_check(td, PRIV_VFS_GENERATION))} True then
    begin
-    Move(sp^, sb, sizeof(sb));
+    sb:=sp^;
     sb.f_fsid.val[0]:=0;
     sb.f_fsid.val[1]:=0;
     //prison_enforce_statfs(td^.td_ucred, mp, @sb);
@@ -461,7 +462,7 @@ begin
    end;
    if (bufseg=UIO_SYSSPACE) then
    begin
-    Move(sp^, sfsp^, sizeof(sb));
+    sfsp^:=sp^;
    end else
    begin
     error:=copyout(sp, sfsp, sizeof(sb));
@@ -1675,7 +1676,7 @@ begin
      vattr.va_size:=size;
 
     if (noneg<>0) and
-       ((vattr.va_size > High(Int64)) or
+       ((vattr.va_size < 0) or
         ((offset > 0) and (vattr.va_size > High(Int64) - offset))) then
     begin
      error:=EOVERFLOW;

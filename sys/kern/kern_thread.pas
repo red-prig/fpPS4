@@ -74,6 +74,7 @@ uses
  kern_umtx,
  kern_sig,
  kern_synch,
+ kern_proc,
  sched_ule,
  subr_sleepqueue;
 
@@ -333,6 +334,19 @@ begin
  ipi_sigreturn; //switch
 end;
 
+procedure main_wrapper; assembler; nostackframe;
+asm
+ subq   $40, %rsp
+.seh_stackalloc 40
+.seh_endprologue
+ jmpq   %gs:teb.jitcall
+
+ nop
+ addq   $40, %rsp
+.seh_handler __FPC_default_handler,@except,@unwind
+end;
+
+
 function create_thread(td        :p_kthread; //calling thread
                        ctx       :p_mcontext_t;
                        start_func:Pointer;
@@ -469,6 +483,11 @@ begin
   // Setup user TLS address and TLS pointer register.
   cpu_set_user_tls(newtd,tls_base);
  end;
+
+ //seh wrapper
+ newtd^.td_teb^.jitcall:=Pointer(newtd^.td_frame.tf_rip);
+ newtd^.td_frame.tf_rip:=QWORD(@main_wrapper);
+ //seh wrapper
 
  if (td<>nil) then
  begin

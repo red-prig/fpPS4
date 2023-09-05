@@ -11,7 +11,8 @@ uses
  time,
  signal,
  signalvar,
- kern_thr;
+ kern_thr,
+ kern_proc;
 
 const
  SA_KILL    =$01; // terminates process by default

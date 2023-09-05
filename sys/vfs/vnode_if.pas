@@ -950,7 +950,6 @@ const
 implementation
 
 uses
- errno,
  vfs_subr;
 
 function get_vp_cb(vp:p_vnode;offset:Pointer):Pointer; inline;

@@ -98,6 +98,7 @@ uses
  sysutils,
  errno,
  kern_thr,
+ kern_proc,
  vfs_subr,
  subr_uio;
 
@@ -549,14 +550,19 @@ begin
  de:=vp^.v_data;
 
  error:=vaccess(vp^.v_type, de^.ufs_mode, de^.ufs_uid, de^.ufs_gid, ap^.a_accmode, nil);
+
  if (error=0) then
+ begin
   Exit(0);
+ end;
 
  if (error<>EACCES) then
   Exit(error);
 
  if ((p_proc.p_flag and P_CONTROLT)=0) then
+ begin
   Exit(error);
+ end;
 
  Exit(error);
 end;

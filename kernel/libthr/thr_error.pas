@@ -13,11 +13,55 @@ uses
 var
  g_errno:Integer=0;
 
+function px2sce(e:Integer):Integer;
+function sce2px(e:Integer):Integer;
+
+function _get_errno:Integer;
+function _set_errno(r:Integer):Integer;
+function _set_sce_errno(r:Integer):Integer;
+
 procedure hmqw8GlN_tI(base:Pointer;size:QWORD); //hmqw8GlN+tI
 function  __error:PInteger;
 procedure cerror;
 
 implementation
+
+function px2sce(e:Integer):Integer;
+begin
+ if (e=0) then
+  Result:=0
+ else
+  Result:=e-$7ffe0000;
+end;
+
+function sce2px(e:Integer):Integer;
+begin
+ if (e=0) then
+  Result:=0
+ else
+  Result:=e+$7ffe0000;
+end;
+
+function _get_errno:Integer;
+begin
+ Result:=__error^;
+end;
+
+function _set_errno(r:Integer):Integer;
+begin
+ Result:=0;
+ __error^:=r;
+ if (r<>0) then
+ begin
+  Result:=-1;
+ end;
+end;
+
+function _set_sce_errno(r:Integer):Integer;
+begin
+ __error^:=sce2px(r);
+ Result:=r;
+end;
 
 var
  g_exclude_stack_base:Pointer=nil;

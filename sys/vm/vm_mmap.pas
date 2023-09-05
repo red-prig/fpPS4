@@ -52,6 +52,7 @@ uses
  systm,
  errno,
  kern_thr,
+ kern_proc,
  vmparam,
  _resource,
  kern_resource,

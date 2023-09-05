@@ -59,7 +59,7 @@ const
 
 
 //CTL_KERN identifiers
- KERN_PROC      =14;
+ KERN_PROC_     =14;
  KERN_USRSTACK  =33;
  KERN_ARND      =37;
  KERN_SDKVERSION=38; //SDK version
@@ -163,6 +163,7 @@ uses
  time,
  kern_authinfo,
  md_arc4random,
+ kern_proc,
  md_proc;
 
 var
@@ -449,7 +450,7 @@ begin
   'kern.proc.ptc':
     begin
      oid[0]:=CTL_KERN;
-     oid[1]:=KERN_PROC;
+     oid[1]:=KERN_PROC_;
      oid[2]:=KERN_PROC_PTC;
      len^  :=3;
     end;
@@ -574,7 +575,7 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  KERN_PROC      :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
+  KERN_PROC_     :Result:=sysctl_kern_proc(name+1,namelen-1,noid,req);
 
   KERN_USRSTACK  :Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
   KERN_ARND      :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);

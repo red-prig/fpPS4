@@ -22,8 +22,7 @@ uses
  subr_uio,
  vpoll,
  vm,
- sys_event,
- kern_event;
+ sys_event;
 
 var
  dev_console:p_cdev;

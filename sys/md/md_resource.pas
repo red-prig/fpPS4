@@ -19,6 +19,7 @@ uses
  md_proc,
  md_time,
  kern_thr,
+ kern_proc,
  vmparam,
  vm_map;
 

@@ -222,6 +222,7 @@ type
   procedure _push   (op:Byte;reg:t_jit_reg);
   procedure _pushi  (size:TOperandSize;imm:Integer);
   procedure movq    (reg0:t_jit_reg ;reg1:t_jit_reg);
+  procedure movi    (size:TOperandSize;mem:t_jit_regs;imm:Int64);
   procedure movi    (reg:t_jit_reg  ;imm:Int64);
   procedure movq    (reg:t_jit_reg  ;mem:t_jit_regs);
   procedure movq    (mem:t_jit_regs ;reg:t_jit_reg);
@@ -832,7 +833,6 @@ type
   procedure build(Index:Byte;mreg:t_jit_reg);
   procedure build(reg,mreg:t_jit_reg);
   procedure emit(var ji:t_jit_instruction);
-  procedure emit8(var ji:t_jit_instruction);
  end;
 
 procedure t_modrm_info.build(Index:Byte;mreg:t_jit_reg);
@@ -1024,18 +1024,6 @@ begin
     end;
   else;
  end;
-end;
-
-procedure t_modrm_info.emit8(var ji:t_jit_instruction);
-begin
- ji.EmitModRM(ModRM.Mode,ModRM.Index,ModRM.RM);
-
- if (ModRM.RM=4) then
- begin
-  ji.EmitSIB(SIB.Scale,SIB.Index,SIB.Base);
- end;
-
- ji.EmitByte(AOffset); //1
 end;
 
 procedure t_jit_builder._mov(op,op8:Byte;reg:t_jit_reg;mem:t_jit_regs);
@@ -1339,6 +1327,14 @@ begin
 
  modrm_info.emit(ji);
 
+ case Size of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt64(imm);
+  else;
+ end;
+
  _add(ji);
 end;
 
@@ -1465,7 +1461,9 @@ begin
 
  ji.EmitByte(op);
 
- modrm_info.emit8(ji);
+ modrm_info.emit(ji);
+
+ ji.EmitByte(imm); //1
 
  _add(ji);
 end;
@@ -1620,6 +1618,11 @@ begin
  _mov($89,$88,reg0,reg1);
 end;
 
+procedure t_jit_builder.movi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+begin
+ _movi($C7,$C6,0,size,mem,imm);
+end;
+
 procedure t_jit_builder.movi(reg:t_jit_reg;imm:Int64);
 var
  rexF,rexB,rexW:Boolean;
@@ -1689,7 +1692,7 @@ begin
    os8:ji.EmitByte (imm);
   os16:ji.EmitWord (imm);
   os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt64(imm);
+  os64:ji.EmitInt32(imm);
   else;
  end;
 

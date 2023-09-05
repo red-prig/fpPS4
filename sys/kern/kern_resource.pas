@@ -28,6 +28,7 @@ uses
  errno,
  systm,
  kern_thr,
+ kern_proc,
  md_proc,
  md_resource;
 

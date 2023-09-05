@@ -258,6 +258,9 @@ procedure vminit; //SYSINIT
 
 implementation
 
+uses
+ kern_proc;
+
 var
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
