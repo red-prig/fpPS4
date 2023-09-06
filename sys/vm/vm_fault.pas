@@ -168,9 +168,59 @@ begin
  patch_original(map,entry,vaddr,vsize,@trampoline);
 end;
 
+function vm_try_next(ptr:Pointer;var ctx:t_jit_context):Boolean;
+var
+ dis:TX86Disassembler;
+ din:TInstruction;
+ ofs:Int64;
+begin
+ Result:=False;
+
+ dis.Disassemble(dm64,ptr,din);
+
+ ptr:=ptr-dis.CodeIdx;
+ print_disassemble(ptr,dis.CodeIdx);
+
+ case din.OpCode.Opcode of
+  OPjmp:
+    begin
+     if (din.OpCode.Suffix<>OPSnone) or
+        (din.Operand[1].Size<>os32) or
+        (ofMemory in din.Operand[1].Flags) then
+     begin
+      Writeln('Unhandled jit:',
+              din.OpCode.Opcode,' ',
+              din.OpCode.Suffix,' ',
+              din.Operand[1].Size,' ',
+              din.Operand[2].Size);
+      Assert(false);
+     end;
+
+     ofs:=0;
+     if not GetTargetOfs(din,ptr,1,ofs) then
+     begin
+      Assert(false);
+     end;
+
+     ctx.rip_reta:=ctx.rip_addr+
+                   ctx.vsize+
+                   dis.CodeIdx+
+                   Integer(ofs);
+
+     ctx.vsize:=ctx.vsize+dis.CodeIdx;
+
+     Result:=True;
+    end;
+  else;
+ end;
+
+end;
+
 function vm_try_jit_patch(map:vm_map_t;
                           mem_addr:vm_offset_t;
                           rip_addr:vm_offset_t):Integer;
+label
+ _repeat;
 var
  err:Integer;
  vsize:Integer;
@@ -229,14 +279,16 @@ begin
 
  ctx:=Default(t_jit_context);
  ctx.Code:=c_data16;
+ ctx.rip_addr:=rip_addr;
 
  err:=copyin_nofault(Pointer(rip_addr),@ctx.Code,SizeOf(ctx.Code));
  if (err<>0) then Exit(KERN_PROTECTION_FAILURE);
 
  ptr:=@ctx.Code;
  ctx.dis.Disassemble(dm64,ptr,ctx.din);
+ ctx.vsize:=ctx.dis.CodeIdx;
 
- vsize:=ctx.dis.CodeIdx;
+ vsize:=ctx.vsize;
 
  print_disassemble(@ctx.Code,vsize);
 
@@ -267,10 +319,17 @@ begin
 
  chunk_prolog:=nil;
 
+ _repeat:
+
  case vsize of
   1..2:
     begin
      //Not possible
+     if vm_try_next(ptr,ctx) then
+     begin
+      vsize:=ctx.vsize;
+      goto _repeat;
+     end;
     end;
   3:
     begin
@@ -308,7 +367,6 @@ begin
    end;
  end;
 
- ctx.rip_addr:=rip_addr;
  chunk_jit:=generate_jit(ctx);
 
  if (chunk_prolog=nil) then

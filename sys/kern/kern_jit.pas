@@ -37,8 +37,10 @@ type
 
  t_jit_context=record
   rip_addr:QWORD;
+  rip_reta:QWORD;
 
   Code:t_data16;
+  vsize:Integer;
 
   dis:TX86Disassembler;
   din:TInstruction;
@@ -54,6 +56,8 @@ procedure print_frame(td:p_kthread);
 function  classif_memop(var din:TInstruction):t_memop_type;
 function  get_lea_id(memop:t_memop_type):Byte;
 function  get_reg_id(memop:t_memop_type):Byte;
+
+function  GetTargetOfs(var din:TInstruction;Code:PByte;id:Byte;var ofs:Int64):Boolean;
 function  GetTargetOfs(var ctx:t_jit_context;id:Byte;var ofs:Int64):Boolean;
 
 function  generate_jit(var ctx:t_jit_context):p_stub_chunk;
@@ -282,20 +286,25 @@ begin
  end;
 end;
 
-function GetTargetOfs(var ctx:t_jit_context;id:Byte;var ofs:Int64):Boolean;
+function GetTargetOfs(var din:TInstruction;Code:PByte;id:Byte;var ofs:Int64):Boolean;
 var
  i:Integer;
 begin
  Result:=True;
- i:=ctx.din.Operand[id].CodeIndex;
- case ctx.din.Operand[id].ByteCount of
-   1: ofs:=PShortint(@ctx.Code[i])^;
-   2: ofs:=PSmallint(@ctx.Code[i])^;
-   4: ofs:=PInteger (@ctx.Code[i])^;
-   8: ofs:=PInt64   (@ctx.Code[i])^;
+ i:=din.Operand[id].CodeIndex;
+ case din.Operand[id].ByteCount of
+   1: ofs:=PShortint(@Code[i])^;
+   2: ofs:=PSmallint(@Code[i])^;
+   4: ofs:=PInteger (@Code[i])^;
+   8: ofs:=PInt64   (@Code[i])^;
    else
       Result:=False;
  end;
+end;
+
+function GetTargetOfs(var ctx:t_jit_context;id:Byte;var ofs:Int64):Boolean;
+begin
+ Result:=GetTargetOfs(ctx.din,@ctx.Code,id,ofs);
 end;
 
 procedure build_lea(var ctx:t_jit_context;id:Byte);
@@ -940,12 +949,19 @@ begin
 
  ctx.jit_code^.frame.call:=@ctx.jit_code^.code;
  ctx.jit_code^.frame.addr:=Pointer(ctx.rip_addr);
- ctx.jit_code^.frame.reta:=Pointer(ctx.rip_addr+ctx.dis.CodeIdx);
 
- ctx.jit_code^.o_len :=ctx.dis.CodeIdx;
+ if (ctx.rip_reta<>0) then
+ begin
+  ctx.jit_code^.frame.reta:=Pointer(ctx.rip_reta);
+ end else
+ begin
+  ctx.jit_code^.frame.reta:=Pointer(ctx.rip_addr+ctx.vsize);
+ end;
+
+ ctx.jit_code^.o_len :=ctx.vsize;
  ctx.jit_code^.o_data:=c_data16;
 
- Move(ctx.Code,ctx.jit_code^.o_data,ctx.dis.CodeIdx);
+ Move(ctx.Code,ctx.jit_code^.o_data,ctx.vsize);
 
  ctx.builder.SaveTo(@ctx.jit_code^.code,jit_size);
 

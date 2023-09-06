@@ -1,5 +1,6 @@
 
 uses
+ hamt,
  Windows,
  ntapi,
  kern_thr;
@@ -143,109 +144,141 @@ begin
  Result:=(rsp<=QWORD(kstack.stack)) and (rsp>QWORD(kstack.sttop));
 end;
 
-procedure ProcessAV(p:PEXCEPTION_DEBUG_INFO);
+type
+ p_debug_thread=^t_debug_thread;
+ t_debug_thread=packed record
+  ProcessId:DWORD;
+  ThreadId :DWORD;
+  hThread  :THandle;
+  u_teb    :p_teb;
+  u_td     :p_kthread;
+  kstack   :t_td_stack;
+ end;
+
 var
+ debug_threads:TSTUB_HAMT32;
+
+function load_debug_thread(dwProcessId,dwThreadId:DWORD):p_debug_thread;
+var
+ data:PPointer;
+ thread:p_debug_thread;
+
  hThread:THandle;
  u_teb:p_teb;
- k_teb:teb;
  u_td:p_kthread;
- _Context:array[0..SizeOf(TCONTEXT)+15] of Byte;
- Context :PCONTEXT;
-
- k_exp:TExceptionPointers;
- u_exp:PExceptionPointers;
-
  kstack:t_td_stack;
+begin
+ Result:=nil;
+ data:=HAMT_search32(@debug_threads,dwThreadId);
+
+ if (data<>nil) then Exit(data^);
+
+ hThread:=NtQueryThread(dwProcessId,dwThreadId);
+ if (hThread=0) then Exit;
+
+ u_teb:=NtQueryTeb(hThread);
+ if (u_teb=nil) then
+ begin
+  NtClose(hThread);
+  Exit;
+ end;
+
+ u_td:=nil;
+ md_copyin(@u_teb^.thread,@u_td,SizeOf(Pointer),nil);
+
+ kstack:=Default(t_td_stack);
+ md_copyin(@u_td^.td_kstack,@kstack,SizeOf(t_td_stack),nil);
+
+ thread:=AllocMem(SizeOf(t_debug_thread));
+
+ thread^.ProcessId:=dwProcessId;
+ thread^.ThreadId :=dwThreadId;
+ thread^.hThread  :=hThread;
+ thread^.u_teb    :=u_teb;
+ thread^.u_td     :=u_td;
+ thread^.kstack   :=kstack;
+
+ HAMT_insert32(@debug_threads,dwThreadId,thread);
+
+ Exit(thread);
+end;
+
+type
+ PDispatchContext=^TDispatchContext;
+ TDispatchContext=packed record
+  ExceptionContext :TCONTEXT;
+  ExceptionRecord  :EXCEPTION_RECORD;
+  ExceptionPointers:TExceptionPointers;
+ end;
+
+procedure ProcessAV(p:PEXCEPTION_DEBUG_INFO);
+var
+ thread:p_debug_thread;
+
+ _Context:array[0..SizeOf(TDispatchContext)+15] of Byte;
+ Context :PDispatchContext;
+
+ u_ctx:PDispatchContext;
+ u_exp:PExceptionPointers;
 
  rsp:QWORD;
 
  err:DWORD;
 begin
- //dwContinueStatus:=DBG_EXCEPTION_NOT_HANDLED;
+ thread:=load_debug_thread(devent.dwProcessId,devent.dwThreadId);
+ if (thread=nil) then Exit;
 
- hThread:=NtQueryThread(devent.dwProcessId,devent.dwThreadId);
+ if (thread^.u_td=nil) then Exit;
 
- u_teb:=NtQueryTeb(hThread);
+ Context:=Align(@_Context,16);
 
- u_td:=nil;
+ Context^:=Default(TDispatchContext);
+ Context^.ExceptionContext.ContextFlags:=CONTEXT_ALL;
 
- if (u_teb<>nil) then
+ err:=NtGetContextThread(thread^.hThread,@Context^.ExceptionContext);
+ //Writeln('NtGetContextThread:',HexStr(err,16));
+
+ //Writeln('td_kstack.stack:',HexStr(kstack.stack));
+ //Writeln('td_kstack.sttop:',HexStr(kstack.sttop));
+
+ rsp:=Context^.ExceptionContext.Rsp;
+ //Writeln('Rsp:',HexStr(rsp,16));
+
+ if IS_SYSTEM_STACK(thread^.kstack,rsp) then
  begin
-  k_teb:=Default(teb);
-  md_copyin(u_teb,@k_teb,SizeOf(teb),nil);
-  u_td:=k_teb.thread;
+  rsp:=rsp-128;
+ end else
+ begin
+  rsp:=QWORD(thread^.kstack.stack);
  end;
 
- if (u_td<>nil) then
- begin
-  Context:=Align(@_Context,16);
+ rsp:=rsp-SizeOf(TDispatchContext);
+ rsp:=rsp and QWORD(-32); //avx/context align
 
-  Context^:=Default(TCONTEXT);
-  Context^.ContextFlags:=CONTEXT_ALL;
+ u_ctx:=Pointer(rsp);
+ u_exp:=@u_ctx^.ExceptionPointers;
 
-  err:=NtGetContextThread(hThread,Context);
-  //Writeln('NtGetContextThread:',HexStr(err,16));
+ //stack frame
+ rsp:=rsp-SizeOf(QWORD);
 
-  kstack:=Default(t_td_stack);
-  err:=md_copyin(@u_td^.td_kstack,@kstack,SizeOf(t_td_stack),nil);
-  //Writeln('md_copyin:',err);
+ Context^.ExceptionRecord:=p^.ExceptionRecord;
 
-  //Writeln('td_kstack.stack:',HexStr(kstack.stack));
-  //Writeln('td_kstack.sttop:',HexStr(kstack.sttop));
+ Context^.ExceptionPointers.ExceptionRecord:=@u_ctx^.ExceptionRecord;
+ Context^.ExceptionPointers.ContextRecord  :=@u_ctx^.ExceptionContext;
 
-  rsp:=Context^.Rsp;
-  //Writeln('Rsp:',HexStr(rsp,16));
+ err:=md_copyout(Context,u_ctx,SizeOf(TDispatchContext),nil);
+ //Writeln('md_copyout:',err);
 
-  if IS_SYSTEM_STACK(kstack,rsp) then
-  begin
-   rsp:=rsp-128;
-  end else
-  begin
-   rsp:=QWORD(kstack.stack);
-  end;
+ //Writeln('start rsp:',HexStr(rsp,16));
 
-  rsp:=rsp-SizeOf(EXCEPTION_RECORD);
-  k_exp.ExceptionRecord:=Pointer(rsp);
+ Context^.ExceptionContext.Rsp:=rsp;
+ Context^.ExceptionContext.Rbp:=rsp;
 
-  rsp:=rsp-SizeOf(TCONTEXT);
-  rsp:=rsp and QWORD(-16); //context align
+ Context^.ExceptionContext.Rcx:=QWORD(u_exp);
+ Context^.ExceptionContext.Rip:=QWORD(EhHandler);
 
-  k_exp.ContextRecord:=Pointer(rsp);
-
-  rsp:=rsp-SizeOf(EXCEPTION_POINTERS);
-
-  u_exp:=Pointer(rsp);
-
-  rsp:=rsp-SizeOf(QWORD);
-  rsp:=rsp and QWORD(-32); //avx align
-  rsp:=rsp-SizeOf(QWORD);
-
-  err:=md_copyout(@k_exp,u_exp,SizeOf(EXCEPTION_POINTERS),nil); //pointers
-  //Writeln('md_copyout:',err);
-
-  err:=md_copyout(Context,k_exp.ContextRecord,SizeOf(TCONTEXT),nil); //context
-  //Writeln('md_copyout:',err);
-
-  err:=md_copyout(@p^.ExceptionRecord,k_exp.ExceptionRecord,SizeOf(EXCEPTION_RECORD),nil); //record
-  //Writeln('md_copyout:',err);
-
-  //Writeln('start rsp:',HexStr(rsp,16));
-
-  Context^.Rsp:=rsp;
-  Context^.Rbp:=rsp;
-
-  Context^.Rcx:=QWORD(u_exp);
-  Context^.Rip:=QWORD(EhHandler);
-
-  err:=NtSetContextThread(hThread,Context);
-  //Writeln('NtSetContextThread:',err);
-
- end;
-
- if (hThread<>0) then
- begin
-  NtClose(hThread);
- end;
+ err:=NtSetContextThread(thread^.hThread,@Context^.ExceptionContext);
+ //Writeln('NtSetContextThread:',err);
 
 end;
 

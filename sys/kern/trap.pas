@@ -875,6 +875,7 @@ end;
 type
  t_proc=Procedure();
 
+ {
 procedure jit_frame_call(frame:p_jit_frame);
 begin
  cpu_init_jit(curkthread);
@@ -893,8 +894,8 @@ begin
 
  cpu_fini_jit(curkthread);
 end;
+}
 
-{
 //rdi
 procedure jit_frame_call(frame:p_jit_frame); assembler;
 var
@@ -912,7 +913,6 @@ asm
  movqq %gs:teb.thread,%rdi
  call cpu_fini_jit
 end;
-}
 
 //input:
 // 1: %gs:teb.jit_rsp (original %rsp)
