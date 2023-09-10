@@ -59,7 +59,8 @@ uses
  machdep,
  kern_dlsym,
  kern_authinfo,
- vfs_syscalls;
+ vfs_syscalls,
+ kern_jit2;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -244,7 +245,7 @@ begin
   }
  map:=@vmspace^.vm_map;
 
- sv_minuser:=VM_MINUSER_ADDRESS;
+ sv_minuser:=pmap_mem[0].start;
  sv_maxuser:=VM_MAXUSER_ADDRESS;
 
  if (vm_map_min(map)=sv_minuser) and
@@ -998,6 +999,12 @@ begin
   p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
   p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
  end;
+
+ kern_jit2.add_entry_point(dynlibs_info.libkernel^.entry_addr);
+ kern_jit2.add_entry_point(dynlibs_info.libkernel^.init_proc_addr);
+ kern_jit2.add_entry_point(dynlibs_info.libkernel^.fini_proc_addr);
+
+ kern_jit2.pick();
 
  _dyn_not_exist:
 

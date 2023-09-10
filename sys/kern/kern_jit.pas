@@ -629,7 +629,7 @@ begin
 
        movi(edx,copy_size);
 
-       call(@copyout_mov); //rdi,rsi,edx
+       call(@copyin_mov); //rdi,rsi,edx
 
        reta;
 

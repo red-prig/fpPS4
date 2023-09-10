@@ -589,6 +589,9 @@ type
     function GetCanReverseDisassemble: boolean;
     function ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal): Boolean; inline;
   public
+    Disassembler: TX86Disassembler;
+    Instr: TInstruction;
+
     constructor Create(AProcess: TDbgProcess);
 
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: RawByteString; out ACode: RawByteString; out AnInfo: TDbgInstInfo);
@@ -5061,8 +5064,6 @@ const
   OSTEXT: array[TOperandSize] of RawByteString = ('os8', 'os16', 'os32', 'os64', 'os48', 'os80', 'os128');
 {$endif}
 var
-  Disassembler: TX86Disassembler;
-  Instr: TInstruction;
   S, Soper: RawByteString;
   n, i: Integer;
   TargetAddrOffs: Int64;
