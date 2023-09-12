@@ -926,6 +926,55 @@ begin
  end;
 end;
 
+procedure pick_obj(obj:p_lib_info);
+var
+ Lib_Entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ symp:p_elf64_sym;
+ addr:Pointer;
+ ST_TYPE:Integer;
+begin
+
+ kern_jit2.add_entry_point(obj^.entry_addr);
+ kern_jit2.add_entry_point(obj^.init_proc_addr);
+ kern_jit2.add_entry_point(obj^.fini_proc_addr);
+
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (Lib_Entry^.import=0) then //export
+  begin
+   h_entry:=TAILQ_FIRST(@Lib_Entry^.syms);
+   while (h_entry<>nil) do
+   begin
+
+    symp:=@h_entry^.sym;
+
+    ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+    Case ST_TYPE of
+     STT_NOTYPE,
+     STT_FUN,
+     STT_SCE:
+        if (symp^.st_value<>0) and
+           (symp^.st_shndx<>SHN_UNDEF) and
+           (symp^.st_value<obj^.text_size) then
+        begin
+         addr:=obj^.relocbase + symp^.st_value;
+
+         kern_jit2.add_entry_point(addr);
+        end;
+     else;
+    end; //case
+
+    h_entry:=TAILQ_NEXT(h_entry,@h_entry^.link)
+   end;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+end;
+
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
 label
  _dyn_not_exist;
@@ -1000,9 +1049,7 @@ begin
   p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
  end;
 
- kern_jit2.add_entry_point(dynlibs_info.libkernel^.entry_addr);
- kern_jit2.add_entry_point(dynlibs_info.libkernel^.init_proc_addr);
- kern_jit2.add_entry_point(dynlibs_info.libkernel^.fini_proc_addr);
+ pick_obj(dynlibs_info.libkernel);
 
  kern_jit2.pick();
 
