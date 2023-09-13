@@ -18,6 +18,12 @@ type
   AOffset  :Int64;
  end;
 
+ t_op_type=packed record
+  op,op8:Word;
+  index:Byte;
+  opt:Set of (not_prefix,not_impl);
+ end;
+
  TOperandSizeSet =Set of TOperandSize;
  TRegisterTypeSet=Set of TRegisterType;
 
@@ -73,134 +79,134 @@ type
 
  t_jit_builder=object
   Const
-   ah  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:0),(AType:regNone)));
-   ch  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:1),(AType:regNone)));
-   dh  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:2),(AType:regNone)));
-   bh  :t_jit_reg=(ARegValue:((AType:regGeneralH;ASize:os8;AIndex:3),(AType:regNone)));
+   FS  :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:4);
+   GS  :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:5);
 
-   al  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 0),(AType:regNone)));
-   cl  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 1),(AType:regNone)));
-   dl  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 2),(AType:regNone)));
-   bl  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 3),(AType:regNone)));
-   spl :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 4),(AType:regNone)));
-   bpl :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 5),(AType:regNone)));
-   sil :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 6),(AType:regNone)));
-   dil :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 7),(AType:regNone)));
-   r8b :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 8),(AType:regNone)));
-   r9b :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex: 9),(AType:regNone)));
-   r10b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:10),(AType:regNone)));
-   r11b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:11),(AType:regNone)));
-   r12b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:12),(AType:regNone)));
-   r13b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:13),(AType:regNone)));
-   r14b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:14),(AType:regNone)));
-   r15b:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os8;AIndex:15),(AType:regNone)));
+   ah  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:0);
+   ch  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:1);
+   dh  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:2);
+   bh  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:3);
 
-   ax  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 0),(AType:regNone)));
-   cx  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 1),(AType:regNone)));
-   dx  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 2),(AType:regNone)));
-   bx  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 3),(AType:regNone)));
-   sp  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 4),(AType:regNone)));
-   bp  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 5),(AType:regNone)));
-   si  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 6),(AType:regNone)));
-   di  :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 7),(AType:regNone)));
-   r8w :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 8),(AType:regNone)));
-   r9w :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex: 9),(AType:regNone)));
-   r10w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:10),(AType:regNone)));
-   r11w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:11),(AType:regNone)));
-   r12w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:12),(AType:regNone)));
-   r13w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:13),(AType:regNone)));
-   r14w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:14),(AType:regNone)));
-   r15w:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os16;AIndex:15),(AType:regNone)));
+   al  :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 0);
+   cl  :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 1);
+   dl  :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 2);
+   bl  :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 3);
+   spl :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 4);
+   bpl :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 5);
+   sil :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 6);
+   dil :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 7);
+   r8b :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 8);
+   r9b :TRegValue=(AType:regGeneral;ASize:os8;AIndex: 9);
+   r10b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:10);
+   r11b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:11);
+   r12b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:12);
+   r13b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:13);
+   r14b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:14);
+   r15b:TRegValue=(AType:regGeneral;ASize:os8;AIndex:15);
 
-   eax :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 0),(AType:regNone)));
-   ecx :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 1),(AType:regNone)));
-   edx :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 2),(AType:regNone)));
-   ebx :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 3),(AType:regNone)));
-   esp :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 4),(AType:regNone)));
-   ebp :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 5),(AType:regNone)));
-   esi :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 6),(AType:regNone)));
-   edi :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 7),(AType:regNone)));
-   r8d :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 8),(AType:regNone)));
-   r9d :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex: 9),(AType:regNone)));
-   r10d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:10),(AType:regNone)));
-   r11d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:11),(AType:regNone)));
-   r12d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:12),(AType:regNone)));
-   r13d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:13),(AType:regNone)));
-   r14d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:14),(AType:regNone)));
-   r15d:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os32;AIndex:15),(AType:regNone)));
+   ax  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 0);
+   cx  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 1);
+   dx  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 2);
+   bx  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 3);
+   sp  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 4);
+   bp  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 5);
+   si  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 6);
+   di  :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 7);
+   r8w :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 8);
+   r9w :TRegValue=(AType:regGeneral;ASize:os16;AIndex: 9);
+   r10w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:10);
+   r11w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:11);
+   r12w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:12);
+   r13w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:13);
+   r14w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:14);
+   r15w:TRegValue=(AType:regGeneral;ASize:os16;AIndex:15);
 
-   rax:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 0),(AType:regNone)));
-   rcx:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 1),(AType:regNone)));
-   rdx:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 2),(AType:regNone)));
-   rbx:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 3),(AType:regNone)));
-   rsp:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 4),(AType:regNone)));
-   rbp:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 5),(AType:regNone)));
-   rsi:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 6),(AType:regNone)));
-   rdi:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 7),(AType:regNone)));
-   r8 :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 8),(AType:regNone)));
-   r9 :t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex: 9),(AType:regNone)));
-   r10:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:10),(AType:regNone)));
-   r11:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:11),(AType:regNone)));
-   r12:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:12),(AType:regNone)));
-   r13:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:13),(AType:regNone)));
-   r14:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:14),(AType:regNone)));
-   r15:t_jit_reg=(ARegValue:((AType:regGeneral;ASize:os64;AIndex:15),(AType:regNone)));
+   eax :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 0);
+   ecx :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 1);
+   edx :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 2);
+   ebx :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 3);
+   esp :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 4);
+   ebp :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 5);
+   esi :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 6);
+   edi :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 7);
+   r8d :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 8);
+   r9d :TRegValue=(AType:regGeneral;ASize:os32;AIndex: 9);
+   r10d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:10);
+   r11d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:11);
+   r12d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:12);
+   r13d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:13);
+   r14d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:14);
+   r15d:TRegValue=(AType:regGeneral;ASize:os32;AIndex:15);
 
-   rip:t_jit_reg=(ARegValue:((AType:regRip;ASize:os64),(AType:regNone)));
+   rax:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 0);
+   rcx:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 1);
+   rdx:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 2);
+   rbx:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 3);
+   rsp:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 4);
+   rbp:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 5);
+   rsi:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 6);
+   rdi:TRegValue=(AType:regGeneral;ASize:os64;AIndex: 7);
+   r8 :TRegValue=(AType:regGeneral;ASize:os64;AIndex: 8);
+   r9 :TRegValue=(AType:regGeneral;ASize:os64;AIndex: 9);
+   r10:TRegValue=(AType:regGeneral;ASize:os64;AIndex:10);
+   r11:TRegValue=(AType:regGeneral;ASize:os64;AIndex:11);
+   r12:TRegValue=(AType:regGeneral;ASize:os64;AIndex:12);
+   r13:TRegValue=(AType:regGeneral;ASize:os64;AIndex:13);
+   r14:TRegValue=(AType:regGeneral;ASize:os64;AIndex:14);
+   r15:TRegValue=(AType:regGeneral;ASize:os64;AIndex:15);
 
-   FS :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:4);
-   GS :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:5);
+   rip:TRegValue=(AType:regRip;ASize:os64);
 
-   mm0 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  0),(AType:regNone)));
-   mm1 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  1),(AType:regNone)));
-   mm2 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  2),(AType:regNone)));
-   mm3 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  3),(AType:regNone)));
-   mm4 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  4),(AType:regNone)));
-   mm5 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  5),(AType:regNone)));
-   mm6 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  6),(AType:regNone)));
-   mm7 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  7),(AType:regNone)));
-   mm8 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  8),(AType:regNone)));
-   mm9 :t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex:  9),(AType:regNone)));
-   mm10:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 10),(AType:regNone)));
-   mm11:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 11),(AType:regNone)));
-   mm12:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 12),(AType:regNone)));
-   mm13:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 13),(AType:regNone)));
-   mm14:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 14),(AType:regNone)));
-   mm15:t_jit_reg=(ARegValue:((AType:regMm;ASize:os64;AIndex: 15),(AType:regNone)));
+   mm0 :TRegValue=(AType:regMm;ASize:os64;AIndex:  0);
+   mm1 :TRegValue=(AType:regMm;ASize:os64;AIndex:  1);
+   mm2 :TRegValue=(AType:regMm;ASize:os64;AIndex:  2);
+   mm3 :TRegValue=(AType:regMm;ASize:os64;AIndex:  3);
+   mm4 :TRegValue=(AType:regMm;ASize:os64;AIndex:  4);
+   mm5 :TRegValue=(AType:regMm;ASize:os64;AIndex:  5);
+   mm6 :TRegValue=(AType:regMm;ASize:os64;AIndex:  6);
+   mm7 :TRegValue=(AType:regMm;ASize:os64;AIndex:  7);
+   mm8 :TRegValue=(AType:regMm;ASize:os64;AIndex:  8);
+   mm9 :TRegValue=(AType:regMm;ASize:os64;AIndex:  9);
+   mm10:TRegValue=(AType:regMm;ASize:os64;AIndex: 10);
+   mm11:TRegValue=(AType:regMm;ASize:os64;AIndex: 11);
+   mm12:TRegValue=(AType:regMm;ASize:os64;AIndex: 12);
+   mm13:TRegValue=(AType:regMm;ASize:os64;AIndex: 13);
+   mm14:TRegValue=(AType:regMm;ASize:os64;AIndex: 14);
+   mm15:TRegValue=(AType:regMm;ASize:os64;AIndex: 15);
 
-   xmm0 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  0),(AType:regNone)));
-   xmm1 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  1),(AType:regNone)));
-   xmm2 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  2),(AType:regNone)));
-   xmm3 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  3),(AType:regNone)));
-   xmm4 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  4),(AType:regNone)));
-   xmm5 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  5),(AType:regNone)));
-   xmm6 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  6),(AType:regNone)));
-   xmm7 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  7),(AType:regNone)));
-   xmm8 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  8),(AType:regNone)));
-   xmm9 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex:  9),(AType:regNone)));
-   xmm10:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 10),(AType:regNone)));
-   xmm11:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 11),(AType:regNone)));
-   xmm12:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 12),(AType:regNone)));
-   xmm13:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 13),(AType:regNone)));
-   xmm14:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 14),(AType:regNone)));
-   xmm15:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os128;AIndex: 15),(AType:regNone)));
+   xmm0 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  0);
+   xmm1 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  1);
+   xmm2 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  2);
+   xmm3 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  3);
+   xmm4 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  4);
+   xmm5 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  5);
+   xmm6 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  6);
+   xmm7 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  7);
+   xmm8 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  8);
+   xmm9 :TRegValue=(AType:regXmm;ASize:os128;AIndex:  9);
+   xmm10:TRegValue=(AType:regXmm;ASize:os128;AIndex: 10);
+   xmm11:TRegValue=(AType:regXmm;ASize:os128;AIndex: 11);
+   xmm12:TRegValue=(AType:regXmm;ASize:os128;AIndex: 12);
+   xmm13:TRegValue=(AType:regXmm;ASize:os128;AIndex: 13);
+   xmm14:TRegValue=(AType:regXmm;ASize:os128;AIndex: 14);
+   xmm15:TRegValue=(AType:regXmm;ASize:os128;AIndex: 15);
 
-   ymm0 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  0),(AType:regNone)));
-   ymm1 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  1),(AType:regNone)));
-   ymm2 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  2),(AType:regNone)));
-   ymm3 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  3),(AType:regNone)));
-   ymm4 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  4),(AType:regNone)));
-   ymm5 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  5),(AType:regNone)));
-   ymm6 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  6),(AType:regNone)));
-   ymm7 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  7),(AType:regNone)));
-   ymm8 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  8),(AType:regNone)));
-   ymm9 :t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex:  9),(AType:regNone)));
-   ymm10:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 10),(AType:regNone)));
-   ymm11:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 11),(AType:regNone)));
-   ymm12:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 12),(AType:regNone)));
-   ymm13:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 13),(AType:regNone)));
-   ymm14:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 14),(AType:regNone)));
-   ymm15:t_jit_reg=(ARegValue:((AType:regXmm;ASize:os256;AIndex: 15),(AType:regNone)));
+   ymm0 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  0);
+   ymm1 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  1);
+   ymm2 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  2);
+   ymm3 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  3);
+   ymm4 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  4);
+   ymm5 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  5);
+   ymm6 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  6);
+   ymm7 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  7);
+   ymm8 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  8);
+   ymm9 :TRegValue=(AType:regXmm;ASize:os256;AIndex:  9);
+   ymm10:TRegValue=(AType:regXmm;ASize:os256;AIndex: 10);
+   ymm11:TRegValue=(AType:regXmm;ASize:os256;AIndex: 11);
+   ymm12:TRegValue=(AType:regXmm;ASize:os256;AIndex: 12);
+   ymm13:TRegValue=(AType:regXmm;ASize:os256;AIndex: 13);
+   ymm14:TRegValue=(AType:regXmm;ASize:os256;AIndex: 14);
+   ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
    AInstructions:t_jit_instructions;
    AInstructionSize:Integer;
@@ -231,17 +237,18 @@ type
   Procedure LinkData;
   Function  SaveTo(ptr:PByte;size:Integer):Integer;
   //
-  procedure _mov    (op,op8:Byte;reg:t_jit_reg;mem:t_jit_regs);
-  procedure _mov    (op,op8:Byte;reg0:t_jit_reg;reg1:t_jit_reg;size:TOperandSize=os0);
-  procedure _mov    (op,op8,index:Byte;reg:t_jit_reg);
-  procedure _mov    (op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs);
-  procedure _movi   (op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
-  procedure _movi   (op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Int64);
-  procedure _movi8  (op,index:Byte;reg:t_jit_reg;imm:Byte);
-  procedure _movi8  (op,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Byte);
-  procedure _movz   (op:Byte;reg:t_jit_reg;mem:t_jit_regs);
-  procedure _movzm  (op,index:Byte;size:TOperandSize;mem:t_jit_regs);
-  procedure _movz   (op:Byte;reg0:t_jit_reg;reg1:t_jit_reg);
+  procedure _RM     (const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs);
+  procedure _RMI    (const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs;imm:Int64);
+  procedure _RMI8   (const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs;imm:Byte);
+  procedure _RR     (const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;size:TOperandSize=os0);
+  procedure _RRI    (const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;imm:Int64;size:TOperandSize=os0);
+  procedure _RRI8   (const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;imm:Byte;size:TOperandSize=os0);
+  procedure _R      (const desc:t_op_type;reg:t_jit_reg);
+  procedure _M      (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
+  procedure _RI     (const desc:t_op_type;reg:t_jit_reg;imm:Int64);
+  procedure _MI     (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+  procedure _RI8    (const desc:t_op_type;reg:t_jit_reg;imm:Byte);
+  procedure _MI8    (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Byte);
   procedure cmov    (op:TOpCodeSuffix;reg:t_jit_reg;mem:t_jit_regs);
   procedure cmov    (op:TOpCodeSuffix;reg0:t_jit_reg;reg1:t_jit_reg);
   procedure _push   (op,index:Byte;size:TOperandSize;mem:t_jit_regs);
@@ -285,7 +292,6 @@ type
   procedure pop     (reg:t_jit_reg);
   procedure pushfq;
   procedure popfq;
-  procedure _pmov   (Op0,Op1:Byte;reg:t_jit_reg;mem:t_jit_regs);
   procedure _vmov   (Op0,Op1:Byte;reg:t_jit_reg;mem:t_jit_regs);
   procedure vmovdqu (reg:t_jit_reg ;mem:t_jit_regs);
   procedure vmovdqu (mem:t_jit_regs;reg:t_jit_reg);
@@ -299,10 +305,14 @@ type
   procedure lahf;
  end;
 
-operator + (A,B:t_jit_reg):t_jit_reg;
-operator + (A:t_jit_reg;B:Integer):t_jit_reg;
-operator + (A:t_jit_reg;B:Int64):t_jit_reg;
-operator * (A:t_jit_reg;B:Integer):t_jit_reg;
+operator :=(const A:TRegValue):t_jit_reg;
+operator + (const A,B:t_jit_reg):t_jit_reg;
+operator + (const A:t_jit_reg;const B:TRegValue):t_jit_reg;
+operator + (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator - (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator + (const A:t_jit_reg;B:Int64):t_jit_reg;
+operator - (const A:t_jit_reg;B:Int64):t_jit_reg;
+operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):Byte;
@@ -422,7 +432,13 @@ begin
  Result:=is_valid_scale(reg.ARegValue[0]) and (reg.ARegValue[1].AScale<=1)
 end;
 
-operator + (A,B:t_jit_reg):t_jit_reg;
+operator := (const A:TRegValue):t_jit_reg;
+begin
+ Result:=Default(t_jit_reg);
+ Result.ARegValue[0]:=A;
+end;
+
+operator + (const A,B:t_jit_reg):t_jit_reg;
 begin
  Assert(is_not_reg(A) or is_one_reg(A));
  Assert(is_not_reg(B) or is_one_reg(B));
@@ -459,21 +475,58 @@ begin
  Result.AOffset:=Result.AOffset+B.AOffset;
 end;
 
-operator + (A:t_jit_reg;B:Integer):t_jit_reg;
+operator + (const A:t_jit_reg;const B:TRegValue):t_jit_reg;
+begin
+ Assert(is_not_reg(A) or is_one_reg(A));
+
+ Result:=A;
+
+ if is_one_reg(Result) then
+ begin
+  if (A.ARegValue[0].AScale>1) then
+  begin
+   Result.ARegValue[0]:=A.ARegValue[0];
+   Result.ARegValue[1]:=B;
+  end else
+  begin
+   Result.ARegValue[1]:=A.ARegValue[0];
+   Result.ARegValue[0]:=B;
+  end;
+ end else
+ begin
+  Result.ARegValue[0]:=B;
+ end;
+end;
+
+operator + (const A:t_jit_reg;B:Integer):t_jit_reg;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator + (A:t_jit_reg;B:Int64):t_jit_reg;
+operator - (const A:t_jit_reg;B:Integer):t_jit_reg;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset-B;
+end;
+
+operator + (const A:t_jit_reg;B:Int64):t_jit_reg;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator * (A:t_jit_reg;B:Integer):t_jit_reg;
+operator - (const A:t_jit_reg;B:Int64):t_jit_reg;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset-B;
+end;
+
+operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
 begin
  Assert(is_one_reg(A));
 
@@ -929,7 +982,7 @@ end;
 
 type
  t_modrm_info=object
-  RH,rexF:Boolean;
+  Mem,RH,rexF:Boolean;
 
   rexB,rexX,rexR:Boolean;
 
@@ -943,18 +996,20 @@ type
 
   AOffset:Int64;
 
-  procedure build_im(Index:Byte;mreg:t_jit_reg);
-  procedure build_rm(reg,mreg:t_jit_reg);
-  procedure build_rr(reg0,reg1:t_jit_reg);
-  procedure build_ir(Index:Byte;reg:t_jit_reg);
+  procedure build_im(Index:Byte;const mreg:t_jit_reg);
+  procedure build_rm(const reg:TRegValue;const mreg:t_jit_reg);
+  procedure build_rr(const reg0,reg1:TRegValue);
+  procedure build_ir(Index:Byte;const reg:TRegValue);
   procedure emit_rex(var ji:t_jit_instruction;rexW:Boolean);
   procedure emit_mrm(var ji:t_jit_instruction);
  end;
 
-procedure t_modrm_info.build_im(Index:Byte;mreg:t_jit_reg);
+procedure t_modrm_info.build_im(Index:Byte;const mreg:t_jit_reg);
 var
  ubase:Boolean;
 begin
+ Mem:=True;
+
  ModRM.Index:=Index;
 
  if not is_valid_reg_type(mreg.ARegValue[0]) then
@@ -1086,22 +1141,24 @@ begin
  AOffset:=mreg.AOffset;
 end;
 
-function get_force_rex(const reg:t_jit_reg):Boolean; inline;
+function get_force_rex(const reg:TRegValue):Boolean; inline;
 begin
  Result:=False;
- if (reg.ARegValue[0].AType=regGeneral) then
- if (reg.ARegValue[0].ASize=os8) then
-  case reg.ARegValue[0].AIndex of
+ if (reg.AType=regGeneral) then
+ if (reg.ASize=os8) then
+  case reg.AIndex of
    4..7:Result:=True;
    else;
   end;
 end;
 
-procedure t_modrm_info.build_rm(reg,mreg:t_jit_reg);
+procedure t_modrm_info.build_rm(const reg:TRegValue;const mreg:t_jit_reg);
 begin
- ModRM.Index:=reg.ARegValue[0].AIndex;
+ Mem:=True;
 
- if (reg.ARegValue[0].AType=regGeneralH) then
+ ModRM.Index:=reg.AIndex;
+
+ if (reg.AType=regGeneralH) then
  begin
   RH:=True;
   Inc(ModRM.Index,4);
@@ -1117,11 +1174,11 @@ begin
  build_im(ModRM.Index,mreg);
 end;
 
-procedure t_modrm_info.build_rr(reg0,reg1:t_jit_reg);
+procedure t_modrm_info.build_rr(const reg0,reg1:TRegValue);
 begin
- ModRM.Index:=reg1.ARegValue[0].AIndex;
+ ModRM.Index:=reg1.AIndex;
 
- if (reg1.ARegValue[0].AType=regGeneralH) then
+ if (reg1.AType=regGeneralH) then
  begin
   RH:=True;
   Inc(ModRM.Index,4);
@@ -1134,9 +1191,9 @@ begin
 
  rexF:=get_force_rex(reg1);
 
- ModRM.RM:=reg0.ARegValue[0].AIndex;
+ ModRM.RM:=reg0.AIndex;
 
- if (reg0.ARegValue[0].AType=regGeneralH) then
+ if (reg0.AType=regGeneralH) then
  begin
   if rexF or rexR then
   begin
@@ -1158,11 +1215,11 @@ begin
  ModRM.Mode:=3;
 end;
 
-procedure t_modrm_info.build_ir(Index:Byte;reg:t_jit_reg);
+procedure t_modrm_info.build_ir(Index:Byte;const reg:TRegValue);
 begin
  ModRM.Index:=Index;
 
- ModRM.RM:=reg.ARegValue[0].AIndex;
+ ModRM.RM:=reg.AIndex;
  if (ModRM.RM>=8) then
  begin
   rexB:=true;
@@ -1186,39 +1243,44 @@ procedure t_modrm_info.emit_mrm(var ji:t_jit_instruction);
 begin
  ji.EmitModRM(ModRM.Mode,ModRM.Index,ModRM.RM);
 
- if (ModRM.RM=4) then
+ if Mem then
  begin
-  ji.EmitSIB(SIB.Scale,SIB.Index,SIB.Base);
+  if (ModRM.RM=4) then
+  begin
+   ji.EmitSIB(SIB.Scale,SIB.Index,SIB.Base);
+  end;
+
+  case ModRM.Mode of
+   0:
+   begin
+    case ModRM.RM of
+     4:if (SIB.Base=5) then
+       begin
+        ji.ALink.ADataOffset:=ji.ASize;
+        ji.EmitInt32(AOffset); //4
+       end;
+     5:begin
+        ji.ALink.ADataOffset:=ji.ASize;
+        ji.EmitInt32(AOffset); //4
+       end;
+    end;
+   end;
+   1:ji.EmitByte(AOffset); //1
+   2:begin
+      ji.ALink.ADataOffset:=ji.ASize;
+      ji.EmitInt32(AOffset); //4
+     end;
+   else;
+  end;
  end;
 
- case ModRM.Mode of
-  0:
-  begin
-   case ModRM.RM of
-    4:if (SIB.Base=5) then
-      begin
-       ji.ALink.ADataOffset:=ji.ASize;
-       ji.EmitInt32(AOffset); //4
-      end;
-    5:begin
-       ji.ALink.ADataOffset:=ji.ASize;
-       ji.EmitInt32(AOffset); //4
-      end;
-   end;
-  end;
-  1:ji.EmitByte(AOffset); //1
-  2:begin
-     ji.ALink.ADataOffset:=ji.ASize;
-     ji.EmitInt32(AOffset); //4
-    end;
-  else;
- end;
 end;
 
-procedure t_jit_builder._mov(op,op8:Byte;reg:t_jit_reg;mem:t_jit_regs);
+procedure t_jit_builder._RM(const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs);
 var
  mreg:t_jit_reg;
 
+ op:Word;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1226,8 +1288,9 @@ var
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(is_one_reg(reg));
- Assert(is_reg_size(reg,[os8,os16,os32,os64]));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
 
  Assert(is_reg_type(reg,[regGeneral,regGeneralH]));
 
@@ -1244,12 +1307,15 @@ begin
  rexW:=False;
  Prefix:=0;
 
+ op:=desc.op;
  case reg.ARegValue[0].ASize of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
-  os16:
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -1263,13 +1329,13 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_rm(reg,mreg);
+ modrm_info.build_rm(reg.ARegValue[0],mreg);
 
  ji.EmitSelector(mreg.ASegment);
 
  if (Prefix<>0) then
  begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
  if (mreg.ARegValue[0].ASize=os32) then
@@ -1279,28 +1345,221 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
  _add(ji);
 end;
 
-procedure t_jit_builder._mov(op,op8:Byte;reg0:t_jit_reg;reg1:t_jit_reg;size:TOperandSize=os0);
+procedure t_jit_builder._RMI(const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs;imm:Int64);
 var
+ mreg:t_jit_reg;
+
+ op:Word;
  rexW:Boolean;
+ Prefix:Byte;
 
  modrm_info:t_modrm_info;
 
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_one_reg(reg));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH]));
+
+ Assert(reg.ARegValue[0].AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case reg.ARegValue[0].ASize of
+   os8:
+       begin
+        op:=desc.op8;
+       end;
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg.ARegValue[0],mreg);
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_rex(ji,rexW);
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
+
+ modrm_info.emit_mrm(ji);
+
+ case reg.ARegValue[0].ASize of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._RMI8(const desc:t_op_type;reg:t_jit_reg;mem:t_jit_regs;imm:Byte);
+var
+ mreg:t_jit_reg;
+
+ op:Word;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_one_reg(reg));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH]));
+
+ Assert(reg.ARegValue[0].AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case reg.ARegValue[0].ASize of
+   os8:
+       begin
+        op:=desc.op8;
+       end;
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg.ARegValue[0],mreg);
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_rex(ji,rexW);
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._RR(const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;size:TOperandSize=os0);
+var
+ modrm_info:t_modrm_info;
+
+ op:Word;
+ rexW:Boolean;
  Prefix:Byte;
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(is_one_reg(reg0));
  Assert(is_one_reg(reg1));
 
- Assert(is_reg_size(reg0,[os8,os16,os32,os64]));
- Assert(is_reg_size(reg1,[os8,os16,os32,os64]));
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
 
  Assert(is_reg_type(reg0,[regGeneral,regGeneralH]));
  Assert(is_reg_type(reg1,[regGeneral,regGeneralH]));
@@ -1319,12 +1578,15 @@ begin
  rexW:=false;
  Prefix:=0;
 
+ op:=desc.op;
  case size of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
-  os16:
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -1338,16 +1600,26 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_rr(reg0,reg1);
+ modrm_info.build_rr(reg0.ARegValue[0],reg1.ARegValue[0]);
 
  if (Prefix<>0) then
  begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1356,19 +1628,194 @@ end;
 
 ////
 
-procedure t_jit_builder._mov(op,op8,index:Byte;reg:t_jit_reg);
+procedure t_jit_builder._RRI(const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;imm:Int64;size:TOperandSize=os0);
 var
- rexW:Boolean;
-
  modrm_info:t_modrm_info;
 
+ op:Word;
+ rexW:Boolean;
  Prefix:Byte;
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_one_reg(reg0));
+ Assert(is_one_reg(reg1));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH]));
+
+ Assert(reg0.ARegValue[0].AScale<=1);
+ Assert(reg1.ARegValue[0].AScale<=1);
+
+ if (size=os0) then
+ begin
+  Assert(reg0.ARegValue[0].ASize=reg1.ARegValue[0].ASize);
+  size:=reg0.ARegValue[0].ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case size of
+   os8:
+       begin
+        op:=desc.op8;
+       end;
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg0.ARegValue[0],reg1.ARegValue[0]);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_rex(ji,rexW);
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
+
+ modrm_info.emit_mrm(ji);
+
+ case size of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._RRI8(const desc:t_op_type;reg0:t_jit_reg;reg1:t_jit_reg;imm:Byte;size:TOperandSize=os0);
+var
+ modrm_info:t_modrm_info;
+
+ op:Word;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_one_reg(reg0));
+ Assert(is_one_reg(reg1));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH]));
+
+ Assert(reg0.ARegValue[0].AScale<=1);
+ Assert(reg1.ARegValue[0].AScale<=1);
+
+ if (size=os0) then
+ begin
+  Assert(reg0.ARegValue[0].ASize=reg1.ARegValue[0].ASize);
+  size:=reg0.ARegValue[0].ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case size of
+   os8:
+       begin
+        op:=desc.op8;
+       end;
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg0.ARegValue[0],reg1.ARegValue[0]);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_rex(ji,rexW);
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte (imm);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._R(const desc:t_op_type;reg:t_jit_reg);
+var
+ modrm_info:t_modrm_info;
+
+ op:Word;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
  Assert(is_one_reg(reg));
 
- Assert(is_reg_size(reg,[os8,os16,os32,os64]));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
 
  Assert(is_reg_type(reg,[regGeneral,regGeneralH]));
 
@@ -1379,12 +1826,15 @@ begin
  rexW:=false;
  Prefix:=0;
 
+ op:=desc.op;
  case reg.ARegValue[0].ASize of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
-  os16:
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -1398,16 +1848,26 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_ir(Index,reg);
+ modrm_info.build_ir(desc.index,reg.ARegValue[0]);
 
  if (Prefix<>0) then
  begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1416,10 +1876,11 @@ end;
 
 ////
 
-procedure t_jit_builder._mov(op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs);
+procedure t_jit_builder._M(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
 var
  mreg:t_jit_reg;
 
+ op:Word;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1427,9 +1888,11 @@ var
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
+
  mreg:=Sums(mem);
 
- Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_size(mreg,[os0,os32,os64,os128]));
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
  Assert(is_valid_scale(mreg));
 
@@ -1438,12 +1901,15 @@ begin
  rexW:=False;
  Prefix:=0;
 
+ op:=desc.op;
  case size of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
-  os16:
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -1457,13 +1923,13 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_im(Index,mreg);
+ modrm_info.build_im(desc.index,mreg);
 
  ji.EmitSelector(mreg.ASegment);
 
  if (Prefix<>0) then
  begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
  if (mreg.ARegValue[0].ASize=os32) then
@@ -1473,7 +1939,17 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1482,16 +1958,17 @@ end;
 
 ////
 
-procedure t_jit_builder._movi(op,op8,index:Byte;reg:t_jit_reg;imm:Int64);
+procedure t_jit_builder._RI(const desc:t_op_type;reg:t_jit_reg;imm:Int64);
 var
- rexW:Boolean;
-
- Prefix:Byte;
-
  modrm_info:t_modrm_info;
+
+ op:Word;
+ rexW:Boolean;
+ Prefix:Byte;
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(is_one_reg(reg));
  Assert(is_reg_size(reg,[os8,os16,os32,os64]));
 
@@ -1505,12 +1982,13 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_ir(Index,reg);
+ modrm_info.build_ir(desc.index,reg.ARegValue[0]);
 
+ op:=desc.op;
  case reg.ARegValue[0].ASize of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
   os16:
        begin
@@ -1531,7 +2009,17 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1546,10 +2034,11 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._movi(op,op8,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+procedure t_jit_builder._MI(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Int64);
 var
  mreg:t_jit_reg;
 
+ op:Word;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1557,6 +2046,7 @@ var
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(size in [os8,os16,os32,os64]);
 
  mreg:=Sums(mem);
@@ -1570,10 +2060,11 @@ begin
  rexW:=False;
  Prefix:=0;
 
+ op:=desc.op;
  case size of
    os8:
        begin
-        op:=op8;
+        op:=desc.op8;
        end;
   os16:
        begin
@@ -1589,7 +2080,7 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_im(Index,mreg);
+ modrm_info.build_im(desc.index,mreg);
 
  ji.EmitSelector(mreg.ASegment);
 
@@ -1605,7 +2096,17 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1620,16 +2121,17 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._movi8(op,index:Byte;reg:t_jit_reg;imm:Byte);
+procedure t_jit_builder._RI8(const desc:t_op_type;reg:t_jit_reg;imm:Byte);
 var
+ op:Word;
  rexW:Boolean;
-
  Prefix:Byte;
 
  modrm_info:t_modrm_info;
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(is_one_reg(reg));
  Assert(is_reg_size(reg,[os16,os32,os64]));
 
@@ -1644,8 +2146,9 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_ir(Index,reg);
+ modrm_info.build_ir(desc.index,reg.ARegValue[0]);
 
+ op:=desc.op;
  case reg.ARegValue[0].ASize of
   os16:
        begin
@@ -1666,7 +2169,17 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
@@ -1675,10 +2188,11 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._movi8(op,index:Byte;size:TOperandSize;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder._MI8(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Byte);
 var
  mreg:t_jit_reg;
 
+ op:Word;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1686,6 +2200,7 @@ var
 
  ji:t_jit_instruction;
 begin
+ Assert(not (not_impl in desc.opt));
  Assert(size in [os16,os32,os64]);
 
  mreg:=Sums(mem);
@@ -1699,6 +2214,7 @@ begin
  rexW:=False;
  Prefix:=0;
 
+ op:=desc.op;
  case size of
   os16:
        begin
@@ -1714,7 +2230,7 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_im(Index,mreg);
+ modrm_info.build_im(desc.index,mreg);
 
  ji.EmitSelector(mreg.ASegment);
 
@@ -1730,206 +2246,21 @@ begin
 
  modrm_info.emit_rex(ji,rexW);
 
- ji.EmitByte(op);
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end
+  else
+   begin
+    ji.EmitByte(Hi(op));
+    ji.EmitByte(Lo(op));
+   end;
+ end;
 
  modrm_info.emit_mrm(ji);
 
  ji.EmitByte(imm); //1
-
- _add(ji);
-end;
-
-///
-
-procedure t_jit_builder._movz(op:Byte;reg:t_jit_reg;mem:t_jit_regs);
-var
- mreg:t_jit_reg;
-
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(is_one_reg(reg));
- Assert(is_reg_size(reg,[os16,os32,os64]));
-
- Assert(is_reg_type(reg,[regGeneral]));
-
- Assert(reg.ARegValue[0].AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- case reg.ARegValue[0].ASize of
-  os16:
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_rex(ji,rexW);
-
- ji.EmitByte($0F);
-
- ji.EmitByte(op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-procedure t_jit_builder._movzm(op,index:Byte;size:TOperandSize;mem:t_jit_regs);
-var
- mreg:t_jit_reg;
-
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- case size of
-  os16:
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(Index,mreg);
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_rex(ji,rexW);
-
- ji.EmitByte($0F);
-
- ji.EmitByte(op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-procedure t_jit_builder._movz(op:Byte;reg0:t_jit_reg;reg1:t_jit_reg);
-var
- rexW:Boolean;
-
- modrm_info:t_modrm_info;
-
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(is_one_reg(reg0));
- Assert(is_one_reg(reg1));
-
- Assert(is_reg_size(reg0,[os16,os32,os64]));
- Assert(is_reg_size(reg1,[os16,os32,os64]));
-
- Assert(is_reg_type(reg0,[regGeneral]));
- Assert(is_reg_type(reg1,[regGeneral]));
-
- Assert(reg0.ARegValue[0].AScale<=1);
- Assert(reg1.ARegValue[0].AScale<=1);
-
- //Assert(reg0.ARegValue[0].ASize=reg1.ARegValue[0].ASize);
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- case reg0.ARegValue[0].ASize of
-  os16:
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg1,reg0);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- modrm_info.emit_rex(ji,rexW);
-
- ji.EmitByte($0F);
-
- ji.EmitByte(op);
-
- modrm_info.emit_mrm(ji);
 
  _add(ji);
 end;
@@ -1943,6 +2274,8 @@ const
  );
 
 procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg:t_jit_reg;mem:t_jit_regs);
+var
+ desc:t_op_type;
 begin
  case op of
   OPSc_o..OPSc_nle:;
@@ -1950,10 +2283,16 @@ begin
    Assert(false);
  end;
 
- _movz(CMOV_32[op],reg,mem);
+ desc:=Default(t_op_type);
+ desc.op:=$0F00 or CMOV_32[op];
+ desc.op8:=desc.op;
+
+ _RM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg0:t_jit_reg;reg1:t_jit_reg);
+var
+ desc:t_op_type;
 begin
  case op of
   OPSc_o..OPSc_nle:;
@@ -1961,7 +2300,11 @@ begin
    Assert(false);
  end;
 
- _movz(CMOV_32[op],reg0,reg1);
+ desc:=Default(t_op_type);
+ desc.op:=$0F00 or CMOV_32[op];
+ desc.op8:=desc.op;
+
+ _RR(desc,reg1,reg0);
 end;
 
 ////
@@ -2107,18 +2450,24 @@ end;
 //
 
 procedure t_jit_builder.movq(reg0:t_jit_reg;reg1:t_jit_reg);
+const
+ desc:t_op_type=(op:$89;op8:$88;index:0);
 begin
- _mov($89,$88,reg0,reg1);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.movi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+const
+ desc:t_op_type=(op:$C7;op8:$C6;index:0);
 begin
- _movi($C7,$C6,0,size,mem,imm);
+ _MI(desc,size,mem,imm);
 end;
 
 procedure t_jit_builder.movi(reg:t_jit_reg;imm:Int64);
+const
+ desc:t_op_type=(op:$C7;op8:$C6;index:0);
 begin
- _movi($C7,$C6,0,reg,imm);
+ _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.movi64(reg:t_jit_reg;imm:Int64);
@@ -2150,7 +2499,7 @@ begin
   Dec(Index,8);
  end;
 
- rexF:=get_force_rex(reg);
+ rexF:=get_force_rex(reg.ARegValue[0]);
 
  case reg.ARegValue[0].ASize of
    os8:
@@ -2198,130 +2547,176 @@ begin
 end;
 
 procedure t_jit_builder.movq(reg:t_jit_reg;mem:t_jit_regs);
+const
+ desc:t_op_type=(op:$8B;op8:$8A;index:0);
 begin
- _mov($8B,$8A,reg,mem); //MOV r64, r/m64
+ _RM(desc,reg,mem); //MOV r64, r/m64
 end;
 
 procedure t_jit_builder.movq(mem:t_jit_regs;reg:t_jit_reg);
+const
+ desc:t_op_type=(op:$89;op8:$88;index:0);
 begin
- _mov($89,$88,reg,mem); //MOV r/m64, r64
+ _RM(desc,reg,mem); //MOV r/m64, r64
 end;
 
 //
 
 procedure t_jit_builder.leaq(reg:t_jit_reg;mem:t_jit_regs);
+const
+ desc:t_op_type=(op:$8D;op8:$8D;index:0);
 begin
  Assert(is_reg_size(reg,[os16,os32,os64]));
 
- _mov($8D,$8D,reg,mem); //LEA r64,m
+ _RM(desc,reg,mem); //LEA r64,m
 end;
 
 //
 
 procedure t_jit_builder.addq(mem:t_jit_regs;reg:t_jit_reg);
+const
+ desc:t_op_type=(op:$01;op8:$00;index:0);
 begin
- _mov($01,$00,reg,mem); //ADD r/m64, r64
+ _RM(desc,reg,mem); //ADD r/m64, r64
 end;
 
 procedure t_jit_builder.addq(reg:t_jit_reg;mem:t_jit_regs);
+const
+ desc:t_op_type=(op:$03;op8:$02;index:0);
 begin
- _mov($03,$02,reg,mem); //ADD r64, r/m64
+ _RM(desc,reg,mem); //ADD r64, r/m64
 end;
 
 procedure t_jit_builder.addq(reg0:t_jit_reg;reg1:t_jit_reg);
+const
+ desc:t_op_type=(op:$01;op8:$00;index:0);
 begin
- _mov($01,$00,reg0,reg1);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.addi(reg:t_jit_reg;imm:Int64);
+const
+ desc:t_op_type=(op:$81;op8:$80;index:0);
 begin
- _movi($81,$80,0,reg,imm);
+ _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.addi8(reg:t_jit_reg;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:0);
 begin
- _movi8($83,0,reg,imm);
+ _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.addi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:0);
 begin
- _movi8($83,0,size,mem,imm);
+ _MI8(desc,size,mem,imm);
 end;
 
 //
 
 procedure t_jit_builder.subq(mem:t_jit_regs;reg:t_jit_reg);
+const
+ desc:t_op_type=(op:$29;op8:$28;index:0);
 begin
- _mov($29,$28,reg,mem); //SUB r/m64, r64
+ _RM(desc,reg,mem); //SUB r/m64, r64
 end;
 
 procedure t_jit_builder.subq(reg:t_jit_reg;mem:t_jit_regs);
+const
+ desc:t_op_type=(op:$2B;op8:$2A;index:0);
 begin
- _mov($2B,$2A,reg,mem); //SUB r64, r/m64
+ _RM(desc,reg,mem); //SUB r64, r/m64
 end;
 
 procedure t_jit_builder.subq(reg0:t_jit_reg;reg1:t_jit_reg);
+const
+ desc:t_op_type=(op:$29;op8:$28;index:0);
 begin
- _mov($29,$28,reg0,reg1);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.subi(reg:t_jit_reg;imm:Int64);
+const
+ desc:t_op_type=(op:$81;op8:$80;index:5);
 begin
- _movi($81,$80,5,reg,imm);
+ _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.subi8(reg:t_jit_reg;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:5);
 begin
- _movi8($83,5,reg,imm);
+ _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.subi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:5);
 begin
- _movi8($83,5,size,mem,imm);
+ _MI8(desc,size,mem,imm);
 end;
 
 ///
 
 procedure t_jit_builder.xorq(reg0:t_jit_reg;reg1:t_jit_reg);
+const
+ desc:t_op_type=(op:$31;op8:$30;index:0);
 begin
- _mov($31,$30,reg0,reg1);
+ _RR(desc,reg0,reg1);
 end;
 
 ///
 
 procedure t_jit_builder.cmpq(mem:t_jit_regs;reg:t_jit_reg);
+const
+ desc:t_op_type=(op:$39;op8:$38;index:0);
 begin
- _mov($39,$38,reg,mem);
+ _RM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.cmpq(reg:t_jit_reg;mem:t_jit_regs);
+const
+ desc:t_op_type=(op:$3B;op8:$3A;index:0);
 begin
- _mov($3B,$3A,reg,mem);
+ _RM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.cmpq(reg0:t_jit_reg;reg1:t_jit_reg);
+const
+ desc:t_op_type=(op:$39;op8:$38;index:0);
 begin
- _mov($39,$38,reg0,reg1);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.cmpi(reg:t_jit_reg;imm:Int64);
+const
+ desc:t_op_type=(op:$81;op8:$80;index:7);
 begin
- _movi($81,$80,7,reg,imm);
+ _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.cmpi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+const
+ desc:t_op_type=(op:$81;op8:$80;index:7);
 begin
- _movi($81,$80,7,size,mem,imm);
+ _MI(desc,size,mem,imm);
 end;
 
 procedure t_jit_builder.cmpi8(reg:t_jit_reg;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:7);
 begin
- _movi8($83,7,reg,imm);
+ _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.cmpi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+const
+ desc:t_op_type=(op:$83;op8:$83;index:7);
 begin
- _movi8($83,7,size,mem,imm);
+ _MI8(desc,size,mem,imm);
 end;
 
 
@@ -2394,55 +2789,6 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._pmov(Op0,Op1:Byte;reg:t_jit_reg;mem:t_jit_regs);
-var
- mreg:t_jit_reg;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(is_one_reg(reg));
- Assert(is_reg_size(reg,[os64,os128]));
-
- Assert(is_reg_type(reg,[regMm,regXmm]));
-
- Assert(reg.ARegValue[0].AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- if (reg.ARegValue[0].ASize=os128) then
- begin
-  ji.EmitByte($66); //xmm prefix
- end;
-
- modrm_info.emit_rex(ji,False);
-
- ji.EmitByte(Op0);
- ji.EmitByte(Op1);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
 procedure t_jit_builder._vmov(Op0,Op1:Byte;reg:t_jit_reg;mem:t_jit_regs);
 var
  mreg:t_jit_reg;
@@ -2478,7 +2824,7 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_rm(reg,mreg);
+ modrm_info.build_rm(reg.ARegValue[0],mreg);
 
  ji.EmitSelector(mreg.ASegment);
 
