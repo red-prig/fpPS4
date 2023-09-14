@@ -310,14 +310,14 @@ end;
 procedure build_lea(var ctx:t_jit_context;id:Byte);
 var
  RegValue:TRegValues;
- adr,tdr:t_jit_reg;
+ adr,tdr:TRegValue;
  i:Integer;
  ofs:Int64;
 begin
  RegValue:=ctx.din.Operand[id].RegValue;
 
  adr:=t_jit_builder.rdi;
- adr.ARegValue[0].ASize:=RegValue[0].ASize;
+ adr.ASize:=RegValue[0].ASize;
 
  tdr:=t_jit_builder.rcx;
 
@@ -368,7 +368,7 @@ end;
 
 //
 
-procedure get_size_info(Size:TOperandSize;var byte_size:Integer;var reg:t_jit_reg);
+procedure get_size_info(Size:TOperandSize;var byte_size:Integer;var reg:TRegValue);
 begin
  case Size of
    os8:
@@ -404,7 +404,7 @@ var
  i,copy_size,reg_size:Integer;
  imm:Int64;
  link:t_jit_i_link;
- mem,reg:t_jit_reg;
+ mem,reg:TRegValue;
 begin
 
  get_size_info(ctx.din.Operand[get_lea_id(memop)].Size,copy_size,mem);
@@ -441,7 +441,7 @@ begin
      begin
       //imm const
 
-      movi(mem.ARegValue[0].ASize,[rdi],imm);
+      movi(mem.ASize,[rdi],imm);
 
      end else
      begin
@@ -540,7 +540,7 @@ var
  i,copy_size,reg_size:Integer;
  imm:Int64;
  link:t_jit_i_link;
- mem,reg:t_jit_reg;
+ mem,reg:TRegValue;
 begin
 
  get_size_info(ctx.din.Operand[get_lea_id(memop)].Size,copy_size,mem);
@@ -585,10 +585,10 @@ begin
        build_load_flags(ctx);
        if (reg_size=1) and (copy_size<>1) then
        begin
-        cmpi8(mem.ARegValue[0].ASize,[rdi],imm);
+        cmpi8(mem.ASize,[rdi],imm);
        end else
        begin
-        cmpi(mem.ARegValue[0].ASize,[rdi],imm);
+        cmpi(mem.ASize,[rdi],imm);
        end;
        build_save_flags(ctx);
 
@@ -670,7 +670,7 @@ end;
 procedure build_vmovdqu(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
 var
  link:t_jit_i_link;
- dst:t_jit_reg;
+ dst:TRegValue;
 begin
  case memop of
   moCopyout:
@@ -696,8 +696,7 @@ begin
 
      link._label:=_label;
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovdqu([rdi],dst);
 
@@ -727,8 +726,7 @@ begin
 
      link._label:=_label;
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovdqu(dst,[rdi]);
 
@@ -741,7 +739,7 @@ end;
 procedure build_vmovups(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
 var
  link:t_jit_i_link;
- dst:t_jit_reg;
+ dst:TRegValue;
 begin
  case memop of
   moCopyout:
@@ -767,8 +765,7 @@ begin
 
      link._label:=_label;
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovups([rdi],dst);
 
@@ -798,8 +795,7 @@ begin
 
      link._label:=_label;
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovups(dst,[rdi]);
 
@@ -811,7 +807,7 @@ end;
 
 procedure build_vmovdqa(var ctx:t_jit_context;id:Byte;memop:t_memop_type);
 var
- dst:t_jit_reg;
+ dst:TRegValue;
 begin
  case memop of
   moCopyout:
@@ -822,8 +818,7 @@ begin
 
      call(@uplift); //input:rdi output:rax
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovdqa([rax],dst);
 
@@ -838,8 +833,7 @@ begin
 
      call(@uplift); //input:rdi output:rax
 
-     dst:=Default(t_jit_reg);
-     dst.ARegValue:=ctx.din.Operand[id].RegValue;
+     dst:=ctx.din.Operand[id].RegValue[0];
 
      vmovdqa(dst,[rax]);
 
