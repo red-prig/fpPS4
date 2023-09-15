@@ -20,7 +20,7 @@ type
  end;
 
  t_op_type=packed object
-  op,op8:Word;
+  op:DWORD;
   index:Byte;
   opt:Set of (not_prefix,not_impl);
  end;
@@ -242,10 +242,11 @@ type
   procedure _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
   procedure _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Int64);
   procedure _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Byte);
-  procedure _RR     (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize=os0);
+  procedure _RR     (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize);
   procedure _RRI    (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
   procedure _RRI8   (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
   procedure _R      (const desc:t_op_type;reg:TRegValue);
+  procedure _O      (const desc:t_op_type;reg:TRegValue);
   procedure _M      (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
   procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
   procedure _MI     (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Int64);
@@ -294,7 +295,7 @@ type
   procedure pop     (reg:TRegValue);
   procedure pushfq;
   procedure popfq;
-  procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
+  procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
   procedure _RVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
   procedure _MVI8   (const desc:t_op_type;mem:t_jit_regs;reg:TRegValue;imm8:Byte);
@@ -320,8 +321,8 @@ operator - (const A:t_jit_reg;B:Int64):t_jit_reg;
 operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
 
 function classif_offset_32(AOffset:Integer):Byte;
-function classif_offset_64(AOffset:Int64):Byte;
-function classif_offset_se64(AOffset:Int64):Byte;
+function classif_offset_64(AOffset:Int64):TOperandSize;
+function classif_offset_se64(AOffset:Int64):TOperandSize;
 
 implementation
 
@@ -367,25 +368,25 @@ begin
  end;
 end;
 
-function classif_offset_64(AOffset:Int64):Byte;
+function classif_offset_64(AOffset:Int64):TOperandSize;
 begin
  case AOffset of
-                                  0:Result:=0;
-  -128       ..  -1,  1..127       :Result:=1;
-  -2147483648..-129,128..2147483647:Result:=2;
+                                  0:Result:=os0;
+  -128       ..  -1,  1..127       :Result:=os8;
+  -2147483648..-129,128..2147483647:Result:=os32;
   else
-                                    Result:=3;
+                                    Result:=os64;
  end;
 end;
 
-function classif_offset_se64(AOffset:Int64):Byte;
+function classif_offset_se64(AOffset:Int64):TOperandSize;
 begin
  case AOffset of
-                0:Result:=0;
-           1..127:Result:=1;
-  128..2147483647:Result:=2;
+                0:Result:=os0;
+           1..127:Result:=os8;
+  128..2147483647:Result:=os32;
   else
-                  Result:=3;
+                  Result:=os64;
  end;
 end;
 
@@ -394,7 +395,7 @@ begin
  Result:=classif_offset_32(reg.AOffset);
 end;
 
-function classif_offset_64(reg:t_jit_reg):Byte; inline;
+function classif_offset_64(reg:t_jit_reg):TOperandSize; inline;
 begin
  Result:=classif_offset_64(reg.AOffset);
 end;
@@ -675,7 +676,7 @@ var
  b:Byte;
 begin
  b:=SimdOpcode and 3;
- if (not rexW) then b:=b or $80;
+ if rexW then b:=b or $80;
  b:=b or (((VectorIndex xor $F) and $F) shl 3);
  b:=b or ((VectorLength and 1) shl 2);
  EmitByte(b);
@@ -1287,7 +1288,7 @@ procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1315,7 +1316,7 @@ begin
  case reg.ASize of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1358,11 +1359,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1375,7 +1382,7 @@ procedure t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;i
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1403,7 +1410,7 @@ begin
  case reg.ASize of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1446,11 +1453,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1471,7 +1484,7 @@ procedure t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1499,7 +1512,7 @@ begin
  case reg.ASize of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1542,11 +1555,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1557,11 +1576,11 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._RR(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize=os0);
+procedure t_jit_builder._RR(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize);
 var
  modrm_info:t_modrm_info;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1593,7 +1612,7 @@ begin
  case size of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1624,11 +1643,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1643,7 +1668,7 @@ procedure t_jit_builder._RRI(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;
 var
  modrm_info:t_modrm_info;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1675,7 +1700,7 @@ begin
  case size of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1706,11 +1731,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1731,7 +1762,7 @@ procedure t_jit_builder._RRI8(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue
 var
  modrm_info:t_modrm_info;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1763,7 +1794,7 @@ begin
  case size of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1794,11 +1825,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1813,7 +1850,7 @@ procedure t_jit_builder._R(const desc:t_op_type;reg:TRegValue);
 var
  modrm_info:t_modrm_info;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1833,7 +1870,7 @@ begin
  case reg.ASize of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1864,15 +1901,99 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
  modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
+///
+
+procedure t_jit_builder._O(const desc:t_op_type;reg:TRegValue);
+var
+ op:DWORD;
+ rexW,rexB:Boolean;
+ Index:Byte;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ rexB:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case reg.ASize of
+  os16,
+  os128:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ Index:=reg.AIndex;
+ if (Index>=8) then
+ begin
+  rexB:=true;
+  Dec(Index,8);
+ end;
+
+ op:=op+Index;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if rexB or rexW then
+ begin
+  ji.EmitREX(rexB,False,False,rexW);
+ end;
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+  else
+   begin
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+ end;
 
  _add(ji);
 end;
@@ -1883,7 +2004,7 @@ procedure t_jit_builder._M(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1908,7 +2029,7 @@ begin
  case size of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16,
   os128:
@@ -1951,11 +2072,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -1970,7 +2097,7 @@ procedure t_jit_builder._RI(const desc:t_op_type;reg:TRegValue;imm:Int64);
 var
  modrm_info:t_modrm_info;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -1993,7 +2120,7 @@ begin
  case reg.ASize of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16:
        begin
@@ -2018,11 +2145,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -2043,7 +2176,7 @@ procedure t_jit_builder._MI(const desc:t_op_type;size:TOperandSize;mem:t_jit_reg
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -2069,7 +2202,7 @@ begin
  case size of
    os8:
        begin
-        op:=desc.op8;
+        Dec(op);
        end;
   os16:
        begin
@@ -2110,11 +2243,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -2133,7 +2272,7 @@ end;
 
 procedure t_jit_builder._RI8(const desc:t_op_type;reg:TRegValue;imm:Byte);
 var
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -2180,11 +2319,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -2199,7 +2344,7 @@ procedure t_jit_builder._MI8(const desc:t_op_type;size:TOperandSize;mem:t_jit_re
 var
  mreg:t_jit_reg;
 
- op:Word;
+ op:DWORD;
  rexW:Boolean;
  Prefix:Byte;
 
@@ -2262,11 +2407,17 @@ begin
   $00..$FF:
    begin
     ji.EmitByte(Byte(op));
-   end
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
   else
    begin
-    ji.EmitByte(Hi(op));
-    ji.EmitByte(Lo(op));
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
    end;
  end;
 
@@ -2297,7 +2448,6 @@ begin
 
  desc:=Default(t_op_type);
  desc.op:=$0F00 or CMOV_8[op];
- desc.op8:=desc.op;
 
  _RM(desc,reg,mem);
 end;
@@ -2314,9 +2464,8 @@ begin
 
  desc:=Default(t_op_type);
  desc.op:=$0F00 or CMOV_8[op];
- desc.op8:=desc.op;
 
- _RR(desc,reg1,reg0);
+ _RR(desc,reg1,reg0,os0);
 end;
 
 ////
@@ -2464,21 +2613,21 @@ end;
 
 procedure t_jit_builder.movq(reg0:TRegValue;reg1:TRegValue);
 const
- desc:t_op_type=(op:$89;op8:$88;index:0);
+ desc:t_op_type=(op:$89;index:0);
 begin
- _RR(desc,reg0,reg1);
+ _RR(desc,reg0,reg1,os0);
 end;
 
 procedure t_jit_builder.movi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
 const
- desc:t_op_type=(op:$C7;op8:$C6;index:0);
+ desc:t_op_type=(op:$C7;index:0);
 begin
  _MI(desc,size,mem,imm);
 end;
 
 procedure t_jit_builder.movi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$C7;op8:$C6;index:0);
+ desc:t_op_type=(op:$C7;index:0);
 begin
  _RI(desc,reg,imm);
 end;
@@ -2558,14 +2707,14 @@ end;
 
 procedure t_jit_builder.movq(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$8B;op8:$8A;index:0);
+ desc:t_op_type=(op:$8B;index:0);
 begin
  _RM(desc,reg,mem); //MOV r64, r/m64
 end;
 
 procedure t_jit_builder.movq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$89;op8:$88;index:0);
+ desc:t_op_type=(op:$89;index:0);
 begin
  _RM(desc,reg,mem); //MOV r/m64, r64
 end;
@@ -2574,7 +2723,7 @@ end;
 
 procedure t_jit_builder.leaq(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$8D;op8:$8D;index:0);
+ desc:t_op_type=(op:$8D;index:0);
 begin
  Assert(is_reg_size(reg,[os16,os32,os64]));
 
@@ -2585,42 +2734,42 @@ end;
 
 procedure t_jit_builder.addq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$01;op8:$00;index:0);
+ desc:t_op_type=(op:$01;index:0);
 begin
  _RM(desc,reg,mem); //ADD r/m64, r64
 end;
 
 procedure t_jit_builder.addq(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$03;op8:$02;index:0);
+ desc:t_op_type=(op:$03;index:0);
 begin
  _RM(desc,reg,mem); //ADD r64, r/m64
 end;
 
 procedure t_jit_builder.addq(reg0:TRegValue;reg1:TRegValue);
 const
- desc:t_op_type=(op:$01;op8:$00;index:0);
+ desc:t_op_type=(op:$01;index:0);
 begin
- _RR(desc,reg0,reg1);
+ _RR(desc,reg0,reg1,os0);
 end;
 
 procedure t_jit_builder.addi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$81;op8:$80;index:0);
+ desc:t_op_type=(op:$81;index:0);
 begin
  _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.addi8(reg:TRegValue;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:0);
+ desc:t_op_type=(op:$83;index:0);
 begin
  _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.addi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:0);
+ desc:t_op_type=(op:$83;index:0);
 begin
  _MI8(desc,size,mem,imm);
 end;
@@ -2629,42 +2778,42 @@ end;
 
 procedure t_jit_builder.subq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$29;op8:$28;index:0);
+ desc:t_op_type=(op:$29;index:0);
 begin
  _RM(desc,reg,mem); //SUB r/m64, r64
 end;
 
 procedure t_jit_builder.subq(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$2B;op8:$2A;index:0);
+ desc:t_op_type=(op:$2B;index:0);
 begin
  _RM(desc,reg,mem); //SUB r64, r/m64
 end;
 
 procedure t_jit_builder.subq(reg0:TRegValue;reg1:TRegValue);
 const
- desc:t_op_type=(op:$29;op8:$28;index:0);
+ desc:t_op_type=(op:$29;index:0);
 begin
- _RR(desc,reg0,reg1);
+ _RR(desc,reg0,reg1,os0);
 end;
 
 procedure t_jit_builder.subi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$81;op8:$80;index:5);
+ desc:t_op_type=(op:$81;index:5);
 begin
  _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.subi8(reg:TRegValue;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:5);
+ desc:t_op_type=(op:$83;index:5);
 begin
  _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.subi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:5);
+ desc:t_op_type=(op:$83;index:5);
 begin
  _MI8(desc,size,mem,imm);
 end;
@@ -2673,58 +2822,58 @@ end;
 
 procedure t_jit_builder.xorq(reg0:TRegValue;reg1:TRegValue);
 const
- desc:t_op_type=(op:$31;op8:$30;index:0);
+ desc:t_op_type=(op:$31;index:0);
 begin
- _RR(desc,reg0,reg1);
+ _RR(desc,reg0,reg1,os0);
 end;
 
 ///
 
 procedure t_jit_builder.cmpq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$39;op8:$38;index:0);
+ desc:t_op_type=(op:$39;index:0);
 begin
  _RM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.cmpq(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$3B;op8:$3A;index:0);
+ desc:t_op_type=(op:$3B;index:0);
 begin
  _RM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.cmpq(reg0:TRegValue;reg1:TRegValue);
 const
- desc:t_op_type=(op:$39;op8:$38;index:0);
+ desc:t_op_type=(op:$39;index:0);
 begin
- _RR(desc,reg0,reg1);
+ _RR(desc,reg0,reg1,os0);
 end;
 
 procedure t_jit_builder.cmpi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$81;op8:$80;index:7);
+ desc:t_op_type=(op:$810;index:7);
 begin
  _RI(desc,reg,imm);
 end;
 
 procedure t_jit_builder.cmpi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
 const
- desc:t_op_type=(op:$81;op8:$80;index:7);
+ desc:t_op_type=(op:$81;index:7);
 begin
  _MI(desc,size,mem,imm);
 end;
 
 procedure t_jit_builder.cmpi8(reg:TRegValue;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:7);
+ desc:t_op_type=(op:$83;index:7);
 begin
  _RI8(desc,reg,imm);
 end;
 
 procedure t_jit_builder.cmpi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
 const
- desc:t_op_type=(op:$83;op8:$83;index:7);
+ desc:t_op_type=(op:$83;index:7);
 begin
  _MI8(desc,size,mem,imm);
 end;
@@ -2799,13 +2948,14 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
 var
  mreg:t_jit_reg;
 
  modrm_info:t_modrm_info;
 
  Vex:record
+  rexW:Boolean;
   Length:Byte;
  end;
 
@@ -2813,8 +2963,8 @@ var
 begin
  Assert(not (not_impl in desc.opt));
 
- Assert(is_reg_size(reg,[os128,os256]));
- Assert(is_reg_type(reg,[regXmm]));
+ Assert(is_reg_size(reg,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg,[regGeneral,regXmm]));
  Assert(reg.AScale<=1);
 
  mreg:=Sums(mem);
@@ -2829,6 +2979,12 @@ begin
   os128:Vex.Length:=0;
   os256:Vex.Length:=1;
   else;
+ end;
+
+ Vex.rexW:=False;
+ if (size=os64) then
+ begin
+  Vex.rexW:=True;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -2847,12 +3003,12 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- if modrm_info.rexB or modrm_info.rexX then
+ if Vex.rexW or modrm_info.rexB or modrm_info.rexX then
  begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,1);
-  ji.EmitWvvv(False,0,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
  end else
  begin
   ji.EmitByte($C5); //VEX2
@@ -2947,6 +3103,7 @@ var
  modrm_info:t_modrm_info;
 
  Vex:record
+  rexW:Boolean;
   Length:Byte;
  end;
 
@@ -2970,6 +3127,12 @@ begin
   else;
  end;
 
+ Vex.rexW:=False;
+ if (reg0.ASize=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
  modrm_info:=Default(t_modrm_info);
 
  modrm_info.build_rr(reg0,reg1);
@@ -2977,7 +3140,7 @@ begin
  ji.EmitByte($C4); //VEX3
 
  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,3);
- ji.EmitWvvv(False,0,Vex.Length,desc.index);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
 
  ji.EmitByte(desc.op);
 
@@ -3052,51 +3215,51 @@ end;
 
 procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$6F;op8:$6F;index:2);
+ desc:t_op_type=(op:$6F;index:2);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqu(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;op8:$7F;index:2);
+ desc:t_op_type=(op:$7F;index:2);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$6F;op8:$6F;index:1);
+ desc:t_op_type=(op:$6F;index:1);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqa(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;op8:$7F;index:1);
+ desc:t_op_type=(op:$7F;index:1);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovntdq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$E7;op8:$E7;index:1);
+ desc:t_op_type=(op:$E7;index:1);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$10;op8:$10;index:0);
+ desc:t_op_type=(op:$10;index:0);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovups(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$11;op8:$11;index:0);
+ desc:t_op_type=(op:$11;index:0);
 begin
- _VM(desc,reg,mem);
+ _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqa(reg0:TRegValue;reg1:TRegValue);
