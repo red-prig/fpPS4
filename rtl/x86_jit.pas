@@ -22,7 +22,8 @@ type
  t_op_type=packed object
   op:DWORD;
   index:Byte;
-  opt:Set of (not_prefix,not_impl);
+  mm:Byte;
+  opt:Set of (not_impl,not_prefix,not_vex_len);
  end;
 
  TOperandSizeSet =Set of TOperandSize;
@@ -296,7 +297,10 @@ type
   procedure pushfq;
   procedure popfq;
   procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
+  procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
+  procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
   procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
+  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue);
   procedure _RVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
   procedure _MVI8   (const desc:t_op_type;mem:t_jit_regs;reg:TRegValue;imm8:Byte);
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_regs);
@@ -2962,6 +2966,7 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=1);
 
  Assert(is_reg_size(reg,[os32,os64,os128,os256]));
  Assert(is_reg_type(reg,[regGeneral,regXmm]));
@@ -2975,6 +2980,9 @@ begin
 
  ji:=default_jit_instruction;
 
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
  case reg.ASize of
   os128:Vex.Length:=0;
   os256:Vex.Length:=1;
@@ -3003,7 +3011,9 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- if Vex.rexW or modrm_info.rexB or modrm_info.rexX then
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX then
  begin
   ji.EmitByte($C4); //VEX3
 
@@ -3023,13 +3033,14 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
 var
  mreg:t_jit_reg;
 
  modrm_info:t_modrm_info;
 
  Vex:record
+  rexW:Boolean;
   Index :Byte;
   Length:Byte;
  end;
@@ -3037,13 +3048,141 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=2);
+ Assert(desc.op=$F3);
 
- Assert(is_reg_size(reg0,[os128,os256]));
- Assert(is_reg_type(reg0,[regXmm]));
+ Assert(is_reg_size(reg,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg,[regGeneral,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
+ case reg.ASize of
+  os128:Vex.Length:=0;
+  os256:Vex.Length:=1;
+  else;
+ end;
+
+ Vex.rexW:=False;
+ if (size=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
+ Vex.Index:=reg.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
+ ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW:Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=2);
+ Assert(desc.op=$F3);
+
+ Assert(is_reg_size(reg0,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
  Assert(reg0.AScale<=1);
 
- Assert(is_reg_size(reg1,[os128,os256]));
- Assert(is_reg_type(reg1,[regXmm]));
+ Assert(is_reg_size(reg1,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=0;
+
+ Vex.rexW:=False;
+ if (size=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
+ Vex.Index:=reg0.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_ir(desc.index,reg1);
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
+ ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
+var
+ mreg:t_jit_reg;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW:Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
  Assert(reg1.AScale<=1);
 
  mreg:=Sums(mem);
@@ -3054,6 +3193,9 @@ begin
 
  ji:=default_jit_instruction;
 
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
  case reg0.ASize of
   os128:Vex.Length:=0;
   os256:Vex.Length:=1;
@@ -3061,6 +3203,12 @@ begin
  end;
 
  Vex.Index:=reg1.AIndex;
+
+ Vex.rexW:=False;
+ if (reg0.ASize=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
 
  modrm_info:=Default(t_modrm_info);
 
@@ -3078,12 +3226,88 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- if modrm_info.rexB or modrm_info.rexX then
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
  begin
   ji.EmitByte($C4); //VEX3
 
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,1);
-  ji.EmitWvvv(False,Vex.Index,Vex.Length,desc.index);
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.index);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
+procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue);
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW:Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ Assert(is_reg_size(reg2,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg2,[regGeneral,regXmm]));
+ Assert(reg2.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
+ case reg0.ASize of
+  os128:Vex.Length:=0;
+  os256:Vex.Length:=1;
+  else;
+ end;
+
+ Vex.Index:=reg1.AIndex;
+
+ Vex.rexW:=False;
+ if (reg0.ASize=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg2,reg0);
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
  end else
  begin
   ji.EmitByte($C5); //VEX2
@@ -3110,6 +3334,7 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=3);
 
  Assert(is_reg_size(reg0,[os8,os16,os32,os64]));
  Assert(is_reg_type(reg0,[regGeneral]));
@@ -3121,6 +3346,9 @@ begin
 
  ji:=default_jit_instruction;
 
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
  case reg1.ASize of
   os128:Vex.Length:=0;
   os256:Vex.Length:=1;
@@ -3177,6 +3405,9 @@ begin
 
  ji:=default_jit_instruction;
 
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
  case reg.ASize of
   os128:Vex.Length:=0;
   os256:Vex.Length:=1;
