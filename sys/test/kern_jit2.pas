@@ -23,6 +23,9 @@ procedure pick();
 
 implementation
 
+uses
+ machdep;
+
 type
  p_jit_frame=^jit_frame;
  jit_frame=packed record
@@ -130,6 +133,7 @@ begin
     end;
   else;
  end;
+
 end;
 
 function is_preserved(const r:TRegValues):Boolean; inline;
@@ -139,7 +143,8 @@ end;
 
 function is_preserved(const r:TOperand):Boolean; inline;
 begin
- Result:=is_preserved(r.RegValue);
+ Result:=is_preserved(r.RegValue) and
+         (not (ofMemory in r.Flags));
 end;
 
 function is_preserved(const r:TInstruction):Boolean;
@@ -182,9 +187,16 @@ begin
  end;
 end;
 
+function is_segment(const r:TOperand):Boolean; inline;
+begin
+ Result:=(r.RegValue[0].AType=regSegment) and
+         (not (ofMemory in r.Flags));
+end;
+
 type
  p_jit_context2=^t_jit_context2;
  t_jit_context2=record
+  Code    :Pointer;
   ptr_curr:Pointer;
   ptr_next:Pointer;
 
@@ -198,7 +210,7 @@ type
  t_jit_cb=procedure(var ctx:t_jit_context2);
 
 var
- jit_cbs:array[TOpCode,TOpCodeSuffix] of t_jit_cb;
+ jit_cbs:array[TOpcodePrefix,TOpCode,TOpCodeSuffix] of t_jit_cb;
 
 procedure add_orig(var ctx:t_jit_context2);
 var
@@ -206,7 +218,7 @@ var
 begin
  ji:=default_jit_instruction;
 
- Move(ctx.ptr_curr^,ji.AData,ctx.dis.CodeIdx);
+ Move(ctx.code^,ji.AData,ctx.dis.CodeIdx);
 
  ji.ASize:=ctx.dis.CodeIdx;
 
@@ -311,7 +323,7 @@ begin
   if is_rip(RegValue[0]) then
   begin
    ofs:=0;
-   GetTargetOfs(ctx.din,ctx.ptr_curr,id,ofs);
+   GetTargetOfs(ctx.din,ctx.code,id,ofs);
    ofs:=Int64(ctx.ptr_next)+ofs;
 
    if (classif_offset_se64(ofs)=os64) then
@@ -327,7 +339,7 @@ begin
    AScale:=RegValue[0].AScale;
 
    ofs:=0;
-   GetTargetOfs(ctx.din,ctx.ptr_curr,id,ofs);
+   GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
    if is_preserved(RegValue[0]) then
    begin
@@ -361,7 +373,7 @@ begin
   end else
   begin
    ofs:=0;
-   GetTargetOfs(ctx.din,ctx.ptr_curr,id,ofs);
+   GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
    new1:=new_reg(RegValue[0]);
 
@@ -590,7 +602,7 @@ type
   reg_mem:t_op_type; //reg_reg
   reg_imm:t_op_type; //mem_imm
   reg_im8:t_op_type; //mem_im8
-  hint:Set of (his_mov,his_xor,his_cmp,his_align);
+  hint:Set of (his_mov,his_xor,his_cmp,his_xchg,his_align);
  end;
 
  t_op_shift=packed record
@@ -605,6 +617,7 @@ label
  _exit;
 asm
  pushfq
+ push %r14
  //
  //low addr (r14)
  mov %rax,%r14
@@ -623,6 +636,7 @@ asm
  or  %r14,%rax
  _exit:
  //
+ pop %r14
  popfq
 end;
 
@@ -670,8 +684,7 @@ end;
 //in:rax(addr),r14b:(size)
 procedure copyout_mov; assembler;
 label
- _simple,
- _exit;
+ _simple;
 var
  data:array[0..31] of Byte;
 asm
@@ -679,6 +692,8 @@ asm
  //
  call page_test
  je _simple
+
+  popfq //restore flags before call
 
   push %rdi
   push %rsi
@@ -693,15 +708,20 @@ asm
 
   mov  data,%rax
 
-  mov  8(%rbp),%rdi //ret addr
-  add  $2,%rdi      //jmp near
+  mov  8(%rbp) ,%rdi //ret addr
+  lea (,%rdi,2),%rdi //jmp near
+
   call %rdi         //reg->data
 
   pop     %rsi      //vaddr
   mov     data,%rdi //data
   movzbq %r14b,%rdx //size
 
+  pushfq
+
   call copyout
+
+  popfq
 
   pop  %r11
   pop  %r10
@@ -712,18 +732,18 @@ asm
   pop  %rsi
   pop  %rdi
 
-  jmp _exit
+  ret
  _simple:
 
   call uplift_jit
 
-  mov  8(%rbp),%r14 //ret addr
-  add  $2,%r14      //jmp near
+  mov  8(%rbp) ,%r14 //ret addr
+  lea (,%r14,2),%r14 //jmp near
+
+  popfq //restore flags before call
+
   call %r14         //reg->data
 
- _exit:
- //
- popfq
 end;
 
 //in:rax(addr),r14b:(size) out:rax
@@ -785,7 +805,7 @@ end;
 const
  OPERAND_BYTES:array[TOperandSize] of Word=(0,1,2,4,8,6,10,16,32,64,512);
 
-procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type);
+procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;used_rax:Boolean);
 var
  i:Integer;
  memop:t_memop_type1;
@@ -802,6 +822,21 @@ var
   end;
  end;
 
+ procedure mem_in;
+ begin
+  with ctx.builder do
+  begin
+   //input:rax
+
+   i:=GetFrameOffset(rax);
+   movq(rax,[r_thrd+i]);
+
+   _M(desc,mem_size,[flags(ctx)+r_tmp1]);
+
+   movq([r_thrd+i],rax);
+  end;
+ end;
+
 begin
  memop:=classif_memop1(ctx.din);
 
@@ -809,29 +844,57 @@ begin
   case memop of
    mo_mem:
     begin
-     build_lea(ctx,1,r_tmp0);
-     mem_size:=ctx.din.Operand[1].Size;
 
-     if (mem_size=os8) then
+     if used_rax then
      begin
-      call(@uplift_jit); //in/out:rax
+      //RAX:=RAX X [mem]
+      build_lea(ctx,1,r_tmp0);
+      mem_size:=ctx.din.Operand[1].Size;
 
-      mem_out;
+      if (mem_size=os8) then
+      begin
+       call(@uplift_jit); //in/out:rax uses:r14
+
+       mem_in;
+      end else
+      begin
+       //mem_size
+       movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+
+       call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+
+       mem_in;
+      end;
+
      end else
      begin
-      //mem_size
-      movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+      //[mem]:=DATA
+      build_lea(ctx,1,r_tmp0);
+      mem_size:=ctx.din.Operand[1].Size;
 
-      call(@copyout_mov); //in:rax(addr),r14:(size)
+      if (mem_size=os8) then
+      begin
 
-      link_next:=jmp8(0);
+       call(@uplift_jit); //in/out:rax uses:r14
 
-      mem_out;
+       mem_out;
+      end else
+      begin
+       //mem_size
+       movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-      reta;
+       call(@copyout_mov); //in:rax(addr),r14:(size)
 
-      link_next._label:=_label;
+       link_next:=jmp8(0);
+
+       mem_out;
+
+       reta;
+
+       link_next._label:=_label;
+      end;
      end;
+
     end;
 
    mo_ctx:
@@ -881,7 +944,7 @@ var
        //input:rax
 
        imm:=0;
-       GetTargetOfs(ctx.din,ctx.ptr_curr,2,imm);
+       GetTargetOfs(ctx.din,ctx.code,2,imm);
 
        imm_size:=ctx.din.Operand[2].Size;
 
@@ -908,6 +971,12 @@ var
        movq(new1,[r_thrd+i]);
 
        _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp0]);
+
+       if (his_xchg in desc.hint) then
+       begin
+        movq([r_thrd+i],new1);
+       end;
+
       end;
     else;
    end;
@@ -924,7 +993,7 @@ var
        new1:=new_reg(ctx.din.Operand[1]);
 
        imm:=0;
-       if GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm) then
+       if GetTargetOfs(ctx.din,ctx.code,3,imm) then
        begin
         imm_size:=ctx.din.Operand[3].Size;
         mem_size:=ctx.din.Operand[1].Size;
@@ -959,7 +1028,7 @@ var
        end;
 
        imm:=0;
-       if GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm) then
+       if GetTargetOfs(ctx.din,ctx.code,3,imm) then
        begin
         imm_size:=ctx.din.Operand[3].Size;
         mem_size:=ctx.din.Operand[1].Size;
@@ -1014,7 +1083,7 @@ begin
      begin
       if (mem_size=os8) then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1039,7 +1108,7 @@ begin
      begin
       if (mem_size=os8) then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -1058,7 +1127,7 @@ begin
       new1:=new_reg(ctx.din.Operand[2]);
 
       imm:=0;
-      if GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm) then
+      if GetTargetOfs(ctx.din,ctx.code,3,imm) then
       begin
        new2:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
@@ -1120,7 +1189,7 @@ begin
       i:=GetFrameOffset(ctx.din.Operand[2]);
 
       imm:=0;
-      if GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm) then
+      if GetTargetOfs(ctx.din,ctx.code,3,imm) then
       begin
        imm_size:=ctx.din.Operand[3].Size;
        mem_size:=ctx.din.Operand[1].Size;
@@ -1160,7 +1229,7 @@ begin
      begin
 
       imm:=0;
-      if GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm) then
+      if GetTargetOfs(ctx.din,ctx.code,3,imm) then
       begin
        imm_size:=ctx.din.Operand[3].Size;
        mem_size:=ctx.din.Operand[1].Size;
@@ -1246,7 +1315,7 @@ begin
       i:=GetFrameOffset(ctx.din.Operand[1]);
 
       imm:=0;
-      if not GetTargetOfs(ctx.din,ctx.ptr_curr,2,imm) then
+      if not GetTargetOfs(ctx.din,ctx.code,2,imm) then
       begin
        Assert(false);
       end;
@@ -1307,7 +1376,7 @@ var
        //input:rax
 
        imm:=0;
-       if not GetTargetOfs(ctx.din,ctx.ptr_curr,2,imm) then
+       if not GetTargetOfs(ctx.din,ctx.code,2,imm) then
        begin
         Assert(false);
        end;
@@ -1359,7 +1428,7 @@ begin
      begin
       if (mem_size=os8) then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1385,7 +1454,7 @@ begin
       i:=GetFrameOffset(ctx.din.Operand[1]);
 
       imm:=0;
-      if not GetTargetOfs(ctx.din,ctx.ptr_curr,2,imm) then
+      if not GetTargetOfs(ctx.din,ctx.code,2,imm) then
       begin
        Assert(false);
       end;
@@ -1484,7 +1553,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1508,7 +1577,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -1552,6 +1621,8 @@ var
  mem_size:TOperandSize;
  link_next:t_jit_i_link;
 
+ imm:Int64;
+
  new1,new2:TRegValue;
 
  procedure mem_out;
@@ -1563,7 +1634,15 @@ var
    new1:=new_reg(ctx.din.Operand[2]);
    new2:=new_reg(ctx.din.Operand[3]);
 
-   _VVM(desc,new2,new1,[flags(ctx)+r_tmp0]); //[mem],arg2,arg3 -> arg3,arg2,[mem]
+   imm:=0;
+   if GetTargetOfs(ctx.din,ctx.code,4,imm) then
+   begin
+    _VVMI8(desc,new2,new1,[flags(ctx)+r_tmp0],imm);
+   end else
+   begin
+    _VVM(desc,new2,new1,[flags(ctx)+r_tmp0]); //[mem],arg2,arg3 -> arg3,arg2,[mem]
+   end;
+
   end;
  end;
 
@@ -1576,7 +1655,15 @@ var
    new1:=new_reg(ctx.din.Operand[1]);
    new2:=new_reg(ctx.din.Operand[2]);
 
-   _VVM(desc,new1,new2,[flags(ctx)+r_tmp0]);
+   imm:=0;
+   if GetTargetOfs(ctx.din,ctx.code,4,imm) then
+   begin
+    _VVMI8(desc,new1,new2,[flags(ctx)+r_tmp0],imm);
+   end else
+   begin
+    _VVM(desc,new1,new2,[flags(ctx)+r_tmp0]);
+   end;
+
   end;
  end;
 
@@ -1593,7 +1680,7 @@ begin
 
    if false then
    begin
-    call(@uplift_jit); //in/out:rax
+    call(@uplift_jit); //in/out:rax uses:r14
 
     mem_in;
    end else
@@ -1621,7 +1708,7 @@ begin
 
    if false then
    begin
-    call(@uplift_jit); //in/out:rax
+    call(@uplift_jit); //in/out:rax uses:r14
 
     mem_out;
    end else
@@ -1668,7 +1755,7 @@ var
    new2:=new_reg(ctx.din.Operand[2]);
 
    imm:=0;
-   GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm);
+   GetTargetOfs(ctx.din,ctx.code,3,imm);
 
    _MVI8(desc,[flags(ctx)+r_tmp0],new2,imm);
   end;
@@ -1686,7 +1773,7 @@ begin
 
      if (mem_size=os8) then
      begin
-      call(@uplift_jit); //in/out:rax
+      call(@uplift_jit); //in/out:rax uses:r14
 
       mem_out;
      end else
@@ -1714,13 +1801,13 @@ begin
      new2:=new_reg(ctx.din.Operand[2]);
 
      imm:=0;
-     GetTargetOfs(ctx.din,ctx.ptr_curr,3,imm);
+     GetTargetOfs(ctx.din,ctx.code,3,imm);
 
      if (mem_size=os32) then
      begin
       new1:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
-      _RVI8(desc,new1,new2,imm);
+      _VVI8(desc,new1,new2,imm);
 
       movq([r_thrd+i],new1);
      end else
@@ -1915,12 +2002,40 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   case ctx.din.OperCnt of
-   1:op_emit1(ctx,imul_desc1); //R
+   1:op_emit1(ctx,imul_desc1,True); //R
    2:op_emit2(ctx,imul_desc2); //RM
    3:op_emit2(ctx,imul_desc2); //RMI
    else
     Assert(false);
   end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ mul_desc:t_op_type=(op:$F7;index:4);
+
+procedure op_mul(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit1(ctx,mul_desc,True); //R
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ div_desc:t_op_type=(op:$F7;index:6);
+
+procedure op_div(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit1(ctx,div_desc,True); //R
  end else
  begin
   add_orig(ctx);
@@ -1948,6 +2063,26 @@ begin
 end;
 
 const
+ xchg_desc:t_op_desc=(
+  mem_reg:(op:$87;index:0);
+  reg_mem:(op:$87;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_xchg];
+ );
+
+procedure op_xchg(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,xchg_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  mov_desc:t_op_desc=(
   mem_reg:(op:$89;index:0);
   reg_mem:(op:$8B;index:0);
@@ -1956,8 +2091,68 @@ const
   hint:[his_mov];
  );
 
-procedure op_mov(var ctx:t_jit_context2);
+function get_segment_value(const Operand:TOperand):Byte;
+const
+ REG_ES = 0;
+ REG_CS = 1;
+ REG_SS = 2;
+ REG_DS = 3;
+ REG_FS = 4;
+ REG_GS = 5;
 begin
+ case Operand.RegValue[0].AIndex of
+  REG_ES:Result:=_udatasel;
+  REG_CS:Result:=_ucodesel;
+  REG_SS:Result:=_udatasel;
+  REG_DS:Result:=_udatasel;
+  REG_FS:Result:=_ufssel;
+  REG_GS:Result:=_ugssel;
+  else
+         Result:=0;
+ end;
+end;
+
+procedure op_mov(var ctx:t_jit_context2);
+var
+ data:array[0..15] of Byte;
+ Code:Pointer;
+ Operand:TOperand;
+ i:Byte;
+begin
+ if is_segment(ctx.din.Operand[1]) then
+ begin
+  Exit; //skip segment change
+ end;
+
+ if is_segment(ctx.din.Operand[2]) then
+ begin
+  if is_preserved(ctx.din) or is_memory(ctx.din) then
+  begin
+   i:=ctx.dis.CodeIdx;
+   Move(ctx.Code^,data,i);
+
+   data[i]:=get_segment_value(ctx.din.Operand[2]);
+
+   Code:=ctx.Code;
+   Operand:=ctx.din.Operand[2];
+
+   ctx.din.Operand[2].RegValue:=Default(TRegValues);
+   ctx.din.Operand[2].Size:=os8;
+   ctx.din.Operand[2].ByteCount:=i;
+
+   op_emit2(ctx,mov_desc);
+
+   ctx.din.Operand[2]:=Operand;
+   ctx.Code:=Code;
+  end else
+  begin
+   //reg_imm
+   ctx.builder.movi(new_reg(ctx.din.Operand[1]),get_segment_value(ctx.din.Operand[2]));
+  end;
+
+  Exit;
+ end;
+
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2(ctx,mov_desc);
@@ -2139,7 +2334,7 @@ const
   reg_mem:(op:$6F;index:2;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_align];
+  hint:[his_mov];
  );
 
 procedure op_vmovdqu(var ctx:t_jit_context2);
@@ -2147,6 +2342,26 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx2(ctx,vmovdqu_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vmovdqa_desc:t_op_desc=(
+  mem_reg:(op:$7F;index:1;mm:1);
+  reg_mem:(op:$6F;index:1;mm:1);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_align];
+ );
+
+procedure op_vmovdqa(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vmovdqa_desc);
  end else
  begin
   add_orig(ctx);
@@ -2167,6 +2382,26 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit_avx2(ctx,vmovq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vptest_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$17;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov];
+ );
+
+procedure op_vptest(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vptest_desc);
  end else
  begin
   add_orig(ctx);
@@ -2231,7 +2466,7 @@ begin
      begin
       if false then
       begin
-       call(@uplift_jit); //in/out:rax
+       call(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -2434,7 +2669,7 @@ begin
   leaq(stack,[stack-8]);
   movq([r_thrd+i],stack);
 
-  call(@uplift_jit); //in/out:rax
+  call(@uplift_jit); //in/out:rax uses:r14
 
   imm:=Int64(ctx.ptr_next);
 
@@ -2468,7 +2703,7 @@ begin
   i:=GetFrameOffset(rsp);
   movq(stack1,[r_thrd+i]);
 
-  call(@uplift_jit); //in/out:rax
+  call(@uplift_jit); //in/out:rax uses:r14
 
   movq(stack2,stack1);
 
@@ -2508,7 +2743,7 @@ begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
   ofs:=0;
-  if not GetTargetOfs(ctx.din,ctx.ptr_curr,1,ofs) then
+  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
   begin
    Assert(false);
   end;
@@ -2593,7 +2828,7 @@ begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
   ofs:=0;
-  if not GetTargetOfs(ctx.din,ctx.ptr_curr,1,ofs) then
+  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
   begin
    Assert(false);
   end;
@@ -2649,7 +2884,7 @@ var
  i:Integer;
 begin
  ofs:=0;
- if not GetTargetOfs(ctx.din,ctx.ptr_curr,1,ofs) then
+ if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
  begin
   Assert(false);
  end;
@@ -2683,7 +2918,7 @@ begin
   desc:=Default(t_op_type);
   desc.op:=$0F00 or SETcc_8[ctx.din.OpCode.Suffix];
   //
-  op_emit1(ctx,desc);
+  op_emit1(ctx,desc,False);
  end else
  begin
   add_orig(ctx);
@@ -2832,7 +3067,7 @@ procedure op_inc(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,inc_desc);
+  op_emit1(ctx,inc_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -2848,7 +3083,7 @@ procedure op_dec(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,dec_desc);
+  op_emit1(ctx,dec_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -2864,7 +3099,7 @@ procedure op_neg(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,neg_desc);
+  op_emit1(ctx,neg_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -2880,7 +3115,7 @@ procedure op_not(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,not_desc);
+  op_emit1(ctx,not_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -2953,7 +3188,7 @@ begin
   begin
    build_lea(ctx,1,r_tmp0);
 
-   call(@uplift_jit); //in/out:rax
+   call(@uplift_jit); //in/out:rax uses:r14
 
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
@@ -2975,60 +3210,87 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   movq([r_thrd+i],stack);
 
-  call(@uplift_jit); //in/out:rax
+  call(@uplift_jit); //in/out:rax uses:r14
 
   movq([stack],new);
-
  end;
 end;
+
+procedure op_pushfq(var ctx:t_jit_context2);
+var
+ i:Integer;
+ mem_size:TOperandSize;
+ stack,new:TRegValue;
+begin
+ with ctx.builder do
+ begin
+  stack:=r_tmp0;
+
+  new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+
+  mem_size:=ctx.din.Operand[1].Size;
+
+  pushfq(mem_size);
+  pop(new);
+
+  i:=GetFrameOffset(rsp);
+  movq(stack,[r_thrd+i]);
+  leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
+  movq([r_thrd+i],stack);
+
+  call(@uplift_jit); //in/out:rax uses:r14
+
+  movq([stack],new);
+ end;
+end;
+
 
 procedure op_pop(var ctx:t_jit_context2);
 var
  i:Integer;
- new,stack1,stack2:TRegValue;
+ new,stack:TRegValue;
 begin
  with ctx.builder do
+ begin
+  stack:=r_tmp0;
+
+  i:=GetFrameOffset(rsp);
+  movq(stack,[r_thrd+i]);
+
+  call(@uplift_jit); //in/out:rax uses:r14
+
   if is_memory(ctx.din) then
   begin
-   Assert(false);
+   new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+
+   movq(new,[stack]);
+
+   build_lea(ctx,1,r_tmp0);
+
+   call(@uplift_jit); //in/out:rax uses:r14
+
+   movq([r_tmp0],new);
+  end else
+  if is_preserved(ctx.din) then
+  begin
+   new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+
+   movq(new,[stack]);
+
+   i:=GetFrameOffset(ctx.din.Operand[1]);
+   movq([r_thrd+i],new);
   end else
   begin
-   stack1:=r_tmp0;
-   stack2:=r_tmp1;
+   new:=new_reg(ctx.din.Operand[1]);
 
-   i:=GetFrameOffset(rsp);
-   movq(stack1,[r_thrd+i]);
-
-   if is_preserved(ctx.din) then
-   begin
-    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
-
-    call(@uplift_jit); //in/out:rax
-
-    movq(new,[stack1]);
-
-    i:=GetFrameOffset(ctx.din.Operand[1]);
-    movq([r_thrd+i],new);
-
-    i:=GetFrameOffset(rsp);
-    movq(stack1,[r_thrd+i]);
-    leaq(stack1,[stack1+OPERAND_BYTES[new.ASize]]);
-    movq([r_thrd+i],stack2);
-   end else
-   begin
-    new:=new_reg(ctx.din.Operand[1]);
-
-    movq(stack2,stack1);
-
-    call(@uplift_jit); //in/out:rax
-
-    movq(new,[stack1]);
-
-    leaq(stack2,[stack2+OPERAND_BYTES[new.ASize]]);
-    movq([r_thrd+i],stack2);
-   end;
-
+   movq(new,[stack]);
   end;
+
+  i:=GetFrameOffset(rsp);
+  movq(stack,[r_thrd+i]);
+  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
+  movq([r_thrd+i],stack);
+ end;
 end;
 
 procedure op_cdqe(var ctx:t_jit_context2);
@@ -3053,7 +3315,7 @@ var
 begin
  i:=ctx.din.Operand[1].ByteCount;
  Assert(i=1);
- id:=PByte(ctx.ptr_curr)[i];
+ id:=PByte(ctx.code)[i];
 
  case id of
   $44: //system error?
@@ -3196,6 +3458,70 @@ begin
 end;
 
 const
+ vpunpcklqdq_desc:t_op_type=(
+  op:$6C;index:1;mm:1;
+ );
+
+procedure op_vpunpcklqdq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpcklqdq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vcmpps_desc:t_op_type=(
+  op:$C2;index:0;mm:1;
+ );
+
+procedure op_vcmpps(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vcmpps_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vcmppd_desc:t_op_type=(
+  op:$C2;index:1;mm:1;
+ );
+
+procedure op_vcmppd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vcmppd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpshufd_desc:t_op_type=(
+  op:$70;index:1;mm:1;
+ );
+
+procedure op_vpshufd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpshufd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  vpminud_desc:t_op_type=(
   op:$3B;index:1;mm:2;
  );
@@ -3228,7 +3554,39 @@ begin
  end;
 end;
 
-procedure op_emit_bmi3(var ctx:t_jit_context2;const desc:t_op_type);
+const
+ vpxor_desc:t_op_type=(
+  op:$EF;index:1;mm:1;
+ );
+
+procedure op_vpxor(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpxor_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpor_desc:t_op_type=(
+  op:$EB;index:1;mm:1;
+ );
+
+procedure op_vpor(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpor_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_emit_bmi_rmr(var ctx:t_jit_context2;const desc:t_op_type);
 var
  i:Integer;
  mem_size:TOperandSize;
@@ -3264,7 +3622,7 @@ begin
    new2:=new_reg_size(r_tmp0,ctx.din.Operand[2]);
    //
    i:=GetFrameOffset(ctx.din.Operand[2]);
-   movq(fix_size(new2),[r_thrd+i]);
+   movq(new2,[r_thrd+i]);
   end else
   begin
    new2:=new_reg(ctx.din.Operand[2]);
@@ -3275,7 +3633,7 @@ begin
    new3:=new_reg_size(r_tmp1,ctx.din.Operand[3]);
    //
    i:=GetFrameOffset(ctx.din.Operand[3]);
-   movq(fix_size(new3),[r_thrd+i]);
+   movq(new3,[r_thrd+i]);
   end else
   begin
    new3:=new_reg(ctx.din.Operand[3]);
@@ -3292,24 +3650,100 @@ begin
  end;
 end;
 
+//
+
+procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
+var
+ i:Integer;
+ mem_size:TOperandSize;
+
+ new1,new2,new3:TRegValue;
+begin
+ with ctx.builder do
+ begin
+
+  if is_preserved(ctx.din.Operand[1]) then
+  begin
+   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+  end else
+  begin
+   new1:=new_reg(ctx.din.Operand[1]);
+  end;
+
+  if is_preserved(ctx.din.Operand[2]) then
+  begin
+   new2:=new_reg_size(r_tmp0,ctx.din.Operand[2]);
+   //
+   i:=GetFrameOffset(ctx.din.Operand[2]);
+   movq(new2,[r_thrd+i]);
+  end else
+  begin
+   new2:=new_reg(ctx.din.Operand[2]);
+  end;
+
+  if is_memory(ctx.din.Operand[2]) then
+  begin
+   new3:=new_reg_size(r_tmp1,ctx.din.Operand[3]);
+
+   mem_size:=ctx.din.Operand[3].Size;
+
+   //mem_size
+   movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+
+   call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+
+   movq(new3,[r_tmp0]);
+  end else
+  if is_preserved(ctx.din.Operand[3]) then
+  begin
+   new3:=new_reg_size(r_tmp1,ctx.din.Operand[3]);
+   //
+   i:=GetFrameOffset(ctx.din.Operand[3]);
+   movq(new3,[r_thrd+i]);
+  end else
+  begin
+   new3:=new_reg(ctx.din.Operand[3]);
+  end;
+
+  _VVV(desc,new1,new2,new3); //1 2 3
+
+  if is_preserved(ctx.din.Operand[1]) then
+  begin
+   i:=GetFrameOffset(ctx.din.Operand[1]);
+   movq([r_thrd+i],fix_size(new1));
+  end;
+
+ end;
+end;
+
+//
+
 const
  bextr_desc:t_op_type=(
   op:$F7;index:0;mm:2;
  );
 
-//VEX.LZ.0F38.W1 F7 /r BEXTR r64a, r/m64, r64b
-
 procedure op_bextr(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  //with ctx.builder do
-  // _VVM(bextr_desc,rax,rbx,[r15]);
-  //
-  //with ctx.builder do
-  // _VVV(bextr_desc,rax,rbx,r15);
+  op_emit_bmi_rmr(ctx,bextr_desc); //r64a, r/m64, r64b
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
 
-  op_emit_bmi3(ctx,bextr_desc);
+const
+ andn_desc:t_op_type=(
+  op:$F2;index:0;mm:2;
+ );
+
+procedure op_andn(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_bmi_rrm(ctx,andn_desc); //r64a, r64b, r/m64
  end else
  begin
   add_orig(ctx);
@@ -3359,7 +3793,7 @@ procedure op_fnstcw(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fnstcw_desc);
+  op_emit1(ctx,fnstcw_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -3375,7 +3809,23 @@ procedure op_fldcw(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fldcw_desc);
+  op_emit1(ctx,fldcw_desc,False);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ fxsave_desc:t_op_type=(
+  op:$0FAE;index:0;opt:[not_prefix];
+ );
+
+procedure op_fxsave(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit1(ctx,fxsave_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -3391,7 +3841,7 @@ procedure op_fxrstor(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fxrstor_desc);
+  op_emit1(ctx,fxrstor_desc,False);
  end else
  begin
   add_orig(ctx);
@@ -3424,148 +3874,172 @@ begin
  Writeln(SizeOf(TOpCode),' ',Succ(Ord(High(TOpCode))));
  Writeln(SizeOf(TOpCodeSuffix),' ',Succ(Ord(High(TOpCodeSuffix))));
 
- jit_cbs[OPxor ,OPSnone]:=@op_xor;
- jit_cbs[OPor  ,OPSnone]:=@op_or;
- jit_cbs[OPand ,OPSnone]:=@op_and;
- jit_cbs[OPsub ,OPSnone]:=@op_sub;
- jit_cbs[OPsbb ,OPSnone]:=@op_sbb;
- jit_cbs[OPadd ,OPSnone]:=@op_add;
- jit_cbs[OPadc ,OPSnone]:=@op_adc;
+ jit_cbs[OPPnone,OPxor ,OPSnone]:=@op_xor;
+ jit_cbs[OPPnone,OPor  ,OPSnone]:=@op_or;
+ jit_cbs[OPPnone,OPand ,OPSnone]:=@op_and;
+ jit_cbs[OPPnone,OPsub ,OPSnone]:=@op_sub;
+ jit_cbs[OPPnone,OPsbb ,OPSnone]:=@op_sbb;
+ jit_cbs[OPPnone,OPadd ,OPSnone]:=@op_add;
+ jit_cbs[OPPnone,OPadc ,OPSnone]:=@op_adc;
 
- jit_cbs[OPimul,OPSnone]:=@op_imul;
+ jit_cbs[OPPnone,OPimul,OPSnone]:=@op_imul;
+ jit_cbs[OPPnone,OPmul ,OPSnone]:=@op_mul;
+ jit_cbs[OPPnone,OPdiv ,OPSnone]:=@op_div;
 
- jit_cbs[OPbt  ,OPSnone]:=@op_bt;
+ jit_cbs[OPPnone,OPbt  ,OPSnone]:=@op_bt;
 
- jit_cbs[OPmov ,OPSnone]:=@op_mov;
+ jit_cbs[OPPnone,OPxchg,OPSnone]:=@op_xchg;
 
- jit_cbs[OPmovu,OPSx_ps ]:=@op_vmovups;
- jit_cbs[OPmova,OPSx_ps ]:=@op_vmovaps;
- jit_cbs[OPmov ,OPSx_dqu]:=@op_vmovdqu;
+ jit_cbs[OPPnone,OPmov ,OPSnone]:=@op_mov;
 
- jit_cbs[OPmov ,OPSx_d  ]:=@op_vmovq;
- jit_cbs[OPmov ,OPSx_q  ]:=@op_vmovq;
+ jit_cbs[OPPv,OPmovu,OPSx_ps ]:=@op_vmovups;
+ jit_cbs[OPPv,OPmova,OPSx_ps ]:=@op_vmovaps;
+ jit_cbs[OPPv,OPmov ,OPSx_dqu]:=@op_vmovdqu;
+ jit_cbs[OPPv,OPmov ,OPSx_dqa]:=@op_vmovdqa;
 
- jit_cbs[OPblsr,OPSnone ]:=@op_blsr;
+ jit_cbs[OPPv,OPmov ,OPSx_d  ]:=@op_vmovq;
+ jit_cbs[OPPv,OPmov ,OPSx_q  ]:=@op_vmovq;
 
- jit_cbs[OPcmov__,OPSc_o  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_no ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_b  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_nb ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_z  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_nz ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_be ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_nbe]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_s  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_ns ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_p  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_np ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_l  ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_nl ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_le ]:=@op_cmov;
- jit_cbs[OPcmov__,OPSc_nle]:=@op_cmov;
+ jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
 
- jit_cbs[OPmovzx,OPSnone]:=@op_movzx;
- jit_cbs[OPmovsx,OPSnone]:=@op_movsx;
- jit_cbs[OPmovsx,OPSx_d ]:=@op_movsxd;
- jit_cbs[OPmov  ,OPSc_be]:=@op_movbe;
+ jit_cbs[OPPnone,OPblsr,OPSnone ]:=@op_blsr;
 
- jit_cbs[OPcall,OPSnone]:=@op_call;
- jit_cbs[OPjmp ,OPSnone]:=@op_jmp;
- jit_cbs[OPret ,OPSnone]:=@op_ret;
+ jit_cbs[OPPnone,OPcmov__,OPSc_o  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_no ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_b  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_nb ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_z  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_nz ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_be ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_nbe]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_s  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_ns ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_p  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_np ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_l  ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_nl ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_le ]:=@op_cmov;
+ jit_cbs[OPPnone,OPcmov__,OPSc_nle]:=@op_cmov;
 
- jit_cbs[OPtest,OPSnone]:=@op_test;
- jit_cbs[OPcmp ,OPSnone]:=@op_cmp;
+ jit_cbs[OPPnone,OPmovzx,OPSnone]:=@op_movzx;
+ jit_cbs[OPPnone,OPmovsx,OPSnone]:=@op_movsx;
+ jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
+ jit_cbs[OPPnone,OPmov  ,OPSc_be]:=@op_movbe;
 
- jit_cbs[OPcmpxchg,OPSnone]:=@op_cmpxchg;
+ jit_cbs[OPPnone,OPcall,OPSnone]:=@op_call;
+ jit_cbs[OPPnone,OPjmp ,OPSnone]:=@op_jmp;
+ jit_cbs[OPPnone,OPret ,OPSnone]:=@op_ret;
 
- jit_cbs[OPshl ,OPSnone]:=@op_shl;
- jit_cbs[OPshr ,OPSnone]:=@op_shr;
- jit_cbs[OPsar ,OPSnone]:=@op_sar;
- jit_cbs[OProl ,OPSnone]:=@op_rol;
+ jit_cbs[OPPnone,OPtest,OPSnone]:=@op_test;
+ jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
 
- jit_cbs[OPset__,OPSc_o  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_no ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_b  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_nb ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_z  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_nz ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_be ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_nbe]:=@op_setcc;
- jit_cbs[OPset__,OPSc_s  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_ns ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_p  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_np ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_l  ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_nl ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_le ]:=@op_setcc;
- jit_cbs[OPset__,OPSc_nle]:=@op_setcc;
+ jit_cbs[OPPnone,OPcmpxchg,OPSnone]:=@op_cmpxchg;
 
- jit_cbs[OPj__,OPSc_o  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_no ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_b  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_nb ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_z  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_nz ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_be ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_nbe]:=@op_jcc;
- jit_cbs[OPj__,OPSc_s  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_ns ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_p  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_np ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_l  ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_nl ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_le ]:=@op_jcc;
- jit_cbs[OPj__,OPSc_nle]:=@op_jcc;
+ jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shl;
+ jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
+ jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_sar;
+ jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
 
- jit_cbs[OPpush,OPSnone]:=@op_push;
- jit_cbs[OPpop ,OPSnone]:=@op_pop;
+ jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_b  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_nb ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_z  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_nz ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_be ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_nbe]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_s  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_ns ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_p  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_np ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_l  ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_setcc;
 
- jit_cbs[OPpxor,OPSnone]:=@op_pxor;
+ jit_cbs[OPPnone,OPj__,OPSc_o  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_no ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_b  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_nb ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_z  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_nz ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_be ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_nbe]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_s  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_ns ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_p  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_np ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_l  ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_nl ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_le ]:=@op_jcc;
+ jit_cbs[OPPnone,OPj__,OPSc_nle]:=@op_jcc;
 
- jit_cbs[OPemms,OPSnone]:=@add_orig;
- jit_cbs[OPvzeroall,OPSnone]:=@add_orig;
- jit_cbs[OPfninit,OPSnone]:=@add_orig;
- jit_cbs[OPrdtsc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPpush,OPSnone]:=@op_push;
+ jit_cbs[OPPnone,OPpop ,OPSnone]:=@op_pop;
 
- jit_cbs[OPxor   ,OPSx_ps]:=@op_vxorps;
- jit_cbs[OPpcmpeq,OPSx_d ]:=@op_vpcmpeqd;
- jit_cbs[OPpsub  ,OPSx_q ]:=@op_vpsubq;
- jit_cbs[OPpadd  ,OPSx_d ]:=@op_vpaddd;
- jit_cbs[OPpadd  ,OPSx_q ]:=@op_vpaddq;
- jit_cbs[OPpminu ,OPSx_d ]:=@op_vpminud;
- jit_cbs[OPmaskmov,OPSx_ps]:=@op_vmaskmovps;
+ jit_cbs[OPPnone,OPpxor,OPSnone]:=@op_pxor;
 
- jit_cbs[OPbextr,OPSnone]:=@op_bextr;
+ jit_cbs[OPPnone,OPemms,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPvzeroall,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfninit,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPrdtsc ,OPSnone]:=@add_orig;
 
- jit_cbs[OPpextr ,OPSx_q ]:=@op_vpextrq;
- jit_cbs[OPinsert,OPSx_f128]:=@op_vinsertf128;
+ jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushfq;
+ jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushfq;
+ //
+ //jit_cbs[OPpopf  ,OPSnone]:=@;
+ //jit_cbs[OPpopf  ,OPSx_q ]:=@;
 
- jit_cbs[OPcbw ,OPSnone]:=@op_cdqe;
- jit_cbs[OPcwde,OPSnone]:=@op_cdqe;
- jit_cbs[OPcdqe,OPSnone]:=@op_cdqe;
+ jit_cbs[OPPv,OPxor   ,OPSx_ps]:=@op_vxorps;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_d ]:=@op_vpcmpeqd;
+ jit_cbs[OPPv,OPpsub  ,OPSx_q ]:=@op_vpsubq;
+ jit_cbs[OPPv,OPpadd  ,OPSx_d ]:=@op_vpaddd;
+ jit_cbs[OPPv,OPpadd  ,OPSx_q ]:=@op_vpaddq;
+ jit_cbs[OPPv,OPpunpcklqdq,OPSnone]:=@op_vpunpcklqdq;
 
- jit_cbs[OPlea,OPSnone]:=@op_lea;
- jit_cbs[OPint,OPSnone]:=@op_int;
- jit_cbs[OPud2,OPSnone]:=@op_ud2;
+ jit_cbs[OPPv,OPcmp   ,OPSx_ps]:=@op_vcmpps;
+ jit_cbs[OPPv,OPcmp   ,OPSx_pd]:=@op_vcmppd;
 
- jit_cbs[OPiret,OPSnone]:=@op_iretq;
- jit_cbs[OPiret,OPSx_d ]:=@op_iretq;
- jit_cbs[OPiret,OPSx_q ]:=@op_iretq;
+ jit_cbs[OPPv,OPpshuf ,OPSx_d ]:=@op_vpshufd;
 
- jit_cbs[OPcpuid,OPSnone]:=@op_cpuid;
+ jit_cbs[OPPv,OPpminu  ,OPSx_d ]:=@op_vpminud;
+ jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_vmaskmovps;
+ jit_cbs[OPPv,OPpxor   ,OPSnone]:=@op_vpxor;
+ jit_cbs[OPPv,OPpor    ,OPSnone]:=@op_vpor;
 
- jit_cbs[OPnop,OPSnone]:=@op_nop;
+ jit_cbs[OPPnone,OPbextr,OPSnone]:=@op_bextr;
+ jit_cbs[OPPnone,OPandn ,OPSnone]:=@op_andn;
 
- jit_cbs[OPinc,OPSnone]:=@op_inc;
- jit_cbs[OPdec,OPSnone]:=@op_dec;
- jit_cbs[OPneg,OPSnone]:=@op_neg;
- jit_cbs[OPnot,OPSnone]:=@op_not;
- jit_cbs[OPbswap,OPSnone]:=@op_bswap;
+ jit_cbs[OPPv,OPpextr ,OPSx_q ]:=@op_vpextrq;
+ jit_cbs[OPPv,OPinsert,OPSx_f128]:=@op_vinsertf128;
 
- jit_cbs[OPfnstcw,OPSnone]:=@op_fnstcw;
- jit_cbs[OPfldcw ,OPSnone]:=@op_fldcw;
+ jit_cbs[OPPnone,OPcbw ,OPSnone]:=@op_cdqe;
+ jit_cbs[OPPnone,OPcwde,OPSnone]:=@op_cdqe;
+ jit_cbs[OPPnone,OPcdqe,OPSnone]:=@op_cdqe;
 
- jit_cbs[OPfxrstor,OPSnone]:=@op_fxrstor;
+ jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
+ jit_cbs[OPPnone,OPint,OPSnone]:=@op_int;
+ jit_cbs[OPPnone,OPud2,OPSnone]:=@op_ud2;
+
+ jit_cbs[OPPnone,OPiret,OPSnone]:=@op_iretq;
+ jit_cbs[OPPnone,OPiret,OPSx_d ]:=@op_iretq;
+ jit_cbs[OPPnone,OPiret,OPSx_q ]:=@op_iretq;
+
+ jit_cbs[OPPnone,OPcpuid,OPSnone]:=@op_cpuid;
+
+ jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
+
+ jit_cbs[OPPnone,OPinc,OPSnone]:=@op_inc;
+ jit_cbs[OPPnone,OPdec,OPSnone]:=@op_dec;
+ jit_cbs[OPPnone,OPneg,OPSnone]:=@op_neg;
+ jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
+ jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
+
+ jit_cbs[OPPnone,OPfnstcw,OPSnone]:=@op_fnstcw;
+ jit_cbs[OPPnone,OPfldcw ,OPSnone]:=@op_fldcw;
+
+ jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_fxsave;
+ jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_fxrstor;
 
  proc:=TDbgProcess.Create(dm64);
  adec:=TX86AsmDecoder.Create(proc);
@@ -3582,14 +4056,17 @@ begin
   ctx.ptr_next:=ptr;
   ctx.ptr_curr:=ptr-adec.Disassembler.CodeIdx;
 
+  ctx.code:=ctx.ptr_curr;
+
   ctx.dis:=adec.Disassembler;
   ctx.din:=adec.Instr;
 
-  cb:=jit_cbs[adec.Instr.OpCode.Opcode,adec.Instr.OpCode.Suffix];
+  cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
 
   if (cb=nil) then
   begin
    Writeln('Unhandled jit:',
+           ctx.din.OpCode.Prefix,' ',
            ctx.din.OpCode.Opcode,' ',
            ctx.din.OpCode.Suffix,' ',
            ctx.din.Operand[1].Size,' ',
