@@ -313,13 +313,31 @@ begin
 
  adr:=new_reg_size(reg,RegValue);
 
+ if (adr.ASize=os0) then
+ begin
+  adr.ASize:=os64;
+ end;
+
  with ctx.builder do
  begin
-  if (RegValue[0].ASize<>os64) then
+  if (adr.ASize<>os64) then
   begin
    xorq(reg,reg);
   end;
 
+  if (RegValue[0].AType=regNone) then //absolute offset
+  begin
+   ofs:=0;
+   GetTargetOfs(ctx.din,ctx.code,id,ofs);
+
+   if (classif_offset_se64(ofs)=os64) then
+   begin
+    movi64(adr,ofs);
+   end else
+   begin
+    movi(adr,ofs);
+   end;
+  end else
   if is_rip(RegValue[0]) then
   begin
    ofs:=0;
@@ -597,12 +615,20 @@ begin
 end;
 
 type
+ t_op_hint=Set of (his_mov,
+                   his_xor,
+                   his_cmp,
+                   his_xchg,
+                   his_rax,
+                   his_rw,
+                   his_align);
+
  t_op_desc=packed record
   mem_reg:t_op_type; //reg_reg
   reg_mem:t_op_type; //reg_reg
   reg_imm:t_op_type; //mem_imm
   reg_im8:t_op_type; //mem_im8
-  hint:Set of (his_mov,his_xor,his_cmp,his_xchg,his_align);
+  hint:t_op_hint;
  end;
 
  t_op_shift=packed record
@@ -805,7 +831,7 @@ end;
 const
  OPERAND_BYTES:array[TOperandSize] of Word=(0,1,2,4,8,6,10,16,32,64,512);
 
-procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;used_rax:Boolean);
+procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 var
  i:Integer;
  memop:t_memop_type1;
@@ -845,13 +871,14 @@ begin
    mo_mem:
     begin
 
-     if used_rax then
+     if (his_rax in hint) then
      begin
       //RAX:=RAX X [mem]
       build_lea(ctx,1,r_tmp0);
       mem_size:=ctx.din.Operand[1].Size;
 
-      if (mem_size=os8) then
+      if (mem_size=os8) or
+         (his_rw in hint) then
       begin
        call(@uplift_jit); //in/out:rax uses:r14
 
@@ -872,7 +899,8 @@ begin
       build_lea(ctx,1,r_tmp0);
       mem_size:=ctx.din.Operand[1].Size;
 
-      if (mem_size=os8) then
+      if (mem_size=os8) or
+         (his_rw in hint) then
       begin
 
        call(@uplift_jit); //in/out:rax uses:r14
@@ -937,7 +965,24 @@ var
        //input:rax
 
        new1:=new_reg(ctx.din.Operand[2]);
-       _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp0]);
+
+       if (his_rax in desc.hint) then
+       begin
+        new2:=new_reg_size(rax,ctx.din.Operand[2]);
+
+        movq(r_tmp1,r_tmp0);
+
+        i:=GetFrameOffset(rax);
+        movq(fix_size(new2),[r_thrd+i]);
+
+        _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp1]);
+
+        movq([r_thrd+i],fix_size(new2));
+       end else
+       begin
+        _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp0]);
+       end;
+
       end;
     mo_mem_imm:
       begin
@@ -965,16 +1010,38 @@ var
       begin
        //input:rax
 
-       new1:=new_reg_size(r_tmp1,ctx.din.Operand[2]);
-
-       i:=GetFrameOffset(ctx.din.Operand[2]);
-       movq(new1,[r_thrd+i]);
-
-       _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp0]);
-
-       if (his_xchg in desc.hint) then
+       if (his_rax in desc.hint) then
        begin
-        movq([r_thrd+i],new1);
+        new1:=new_reg_size(r_tmp1,ctx.din.Operand[2]);
+
+        i:=GetFrameOffset(ctx.din.Operand[2]);
+        movq(new1,[r_thrd+i]);
+
+        push(r15);
+
+        i:=GetFrameOffset(rax);
+        movq(r15,[r_thrd+i]);
+
+        xchgq(r15,rax);
+
+        _RM(desc.mem_reg,new1,[flags(ctx)+r15]);
+
+        pop(r15);
+
+        movq([r_thrd+i],rax);
+       end else
+       begin
+        new1:=new_reg_size(r_tmp1,ctx.din.Operand[2]);
+
+        i:=GetFrameOffset(ctx.din.Operand[2]);
+        movq(new1,[r_thrd+i]);
+
+        _RM(desc.mem_reg,new1,[flags(ctx)+r_tmp0]);
+
+        if (his_xchg in desc.hint) then
+        begin
+         movq([r_thrd+i],new1);
+        end;
        end;
 
       end;
@@ -1050,6 +1117,7 @@ var
 
        if not (his_cmp in desc.hint) then
        begin
+        i:=GetFrameOffset(ctx.din.Operand[1]);
         movq([r_thrd+i],fix_size(new1));
        end;
 
@@ -1081,7 +1149,8 @@ begin
    mo_mem_imm,
    mo_mem_ctx:
      begin
-      if (mem_size=os8) then
+      if (mem_size=os8) or
+         (his_rw in desc.hint) then
       begin
        call(@uplift_jit); //in/out:rax uses:r14
 
@@ -1106,7 +1175,8 @@ begin
    mo_reg_mem,
    mo_ctx_mem:
      begin
-      if (mem_size=os8) then
+      if (mem_size=os8) or
+         (his_rw in desc.hint) then
       begin
        call(@uplift_jit); //in/out:rax uses:r14
 
@@ -1175,6 +1245,19 @@ begin
         movq([r_thrd+i],fix_size(new2));
        end;
 
+      end else
+      if (his_rax in desc.hint) then
+      begin
+       new2:=new_reg_size(rax,ctx.din.Operand[1]);
+
+       i:=GetFrameOffset(rax);
+       movq(fix_size(new2),[r_thrd+i]);
+
+       i:=GetFrameOffset(ctx.din.Operand[1]);
+       _RM(desc.mem_reg,new1,[r_thrd+i]);
+
+       i:=GetFrameOffset(rax);
+       movq([r_thrd+i],fix_size(new2));
       end else
       begin
        i:=GetFrameOffset(ctx.din.Operand[1]);
@@ -2002,7 +2085,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   case ctx.din.OperCnt of
-   1:op_emit1(ctx,imul_desc1,True); //R
+   1:op_emit1(ctx,imul_desc1,[his_rax]); //R
    2:op_emit2(ctx,imul_desc2); //RM
    3:op_emit2(ctx,imul_desc2); //RMI
    else
@@ -2021,7 +2104,7 @@ procedure op_mul(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,mul_desc,True); //R
+  op_emit1(ctx,mul_desc,[his_rax]); //R
  end else
  begin
   add_orig(ctx);
@@ -2035,7 +2118,7 @@ procedure op_div(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,div_desc,True); //R
+  op_emit1(ctx,div_desc,[his_rax]); //R
  end else
  begin
   add_orig(ctx);
@@ -2918,7 +3001,7 @@ begin
   desc:=Default(t_op_type);
   desc.op:=$0F00 or SETcc_8[ctx.din.OpCode.Suffix];
   //
-  op_emit1(ctx,desc,False);
+  op_emit1(ctx,desc,[]);
  end else
  begin
   add_orig(ctx);
@@ -2972,7 +3055,7 @@ const
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[];
+  hint:[his_xchg,his_rax,his_rw];
  );
 
 procedure op_cmpxchg(var ctx:t_jit_context2);
@@ -2980,6 +3063,26 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2(ctx,cmpxchg_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ xadd_desc:t_op_desc=(
+  mem_reg:(op:$0FC1;index:0);
+  reg_mem:(opt:[not_impl]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_xadd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,xadd_desc);
  end else
  begin
   add_orig(ctx);
@@ -3067,7 +3170,7 @@ procedure op_inc(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,inc_desc,False);
+  op_emit1(ctx,inc_desc,[his_rw]);
  end else
  begin
   add_orig(ctx);
@@ -3083,7 +3186,7 @@ procedure op_dec(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,dec_desc,False);
+  op_emit1(ctx,dec_desc,[his_rw]);
  end else
  begin
   add_orig(ctx);
@@ -3099,7 +3202,7 @@ procedure op_neg(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,neg_desc,False);
+  op_emit1(ctx,neg_desc,[his_rw]);
  end else
  begin
   add_orig(ctx);
@@ -3115,7 +3218,7 @@ procedure op_not(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,not_desc,False);
+  op_emit1(ctx,not_desc,[his_rw]);
  end else
  begin
   add_orig(ctx);
@@ -3306,6 +3409,11 @@ begin
 
   movq([r_thrd+i],r_tmp0);
  end;
+end;
+
+procedure op_syscall(var ctx:t_jit_context2);
+begin
+ ctx.builder.call(nil); //TODO syscall dispatcher
 end;
 
 procedure op_int(var ctx:t_jit_context2);
@@ -3793,7 +3901,7 @@ procedure op_fnstcw(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fnstcw_desc,False);
+  op_emit1(ctx,fnstcw_desc,[]);
  end else
  begin
   add_orig(ctx);
@@ -3809,7 +3917,7 @@ procedure op_fldcw(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fldcw_desc,False);
+  op_emit1(ctx,fldcw_desc,[]);
  end else
  begin
   add_orig(ctx);
@@ -3825,7 +3933,7 @@ procedure op_fxsave(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fxsave_desc,False);
+  op_emit1(ctx,fxsave_desc,[]);
  end else
  begin
   add_orig(ctx);
@@ -3841,7 +3949,7 @@ procedure op_fxrstor(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit1(ctx,fxrstor_desc,False);
+  op_emit1(ctx,fxrstor_desc,[]);
  end else
  begin
   add_orig(ctx);
@@ -3934,6 +4042,7 @@ begin
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
 
  jit_cbs[OPPnone,OPcmpxchg,OPSnone]:=@op_cmpxchg;
+ jit_cbs[OPPnone,OPxadd   ,OPSnone]:=@op_xadd;
 
  jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shl;
  jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
@@ -3983,6 +4092,7 @@ begin
  jit_cbs[OPPnone,OPvzeroall,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfninit,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPrdtsc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPpause ,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushfq;
  jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushfq;
@@ -4018,8 +4128,10 @@ begin
  jit_cbs[OPPnone,OPcdqe,OPSnone]:=@op_cdqe;
 
  jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
- jit_cbs[OPPnone,OPint,OPSnone]:=@op_int;
- jit_cbs[OPPnone,OPud2,OPSnone]:=@op_ud2;
+
+ jit_cbs[OPPnone,OPsyscall,OPSnone]:=@op_syscall;
+ jit_cbs[OPPnone,OPint    ,OPSnone]:=@op_int;
+ jit_cbs[OPPnone,OPud2    ,OPSnone]:=@op_ud2;
 
  jit_cbs[OPPnone,OPiret,OPSnone]:=@op_iretq;
  jit_cbs[OPPnone,OPiret,OPSx_d ]:=@op_iretq;
@@ -4093,12 +4205,12 @@ begin
    Writeln('recompiled----------------------':32,' ','');
   end;
 
-  if (len1<>len2) then
+  //if (len1<>len2) then
   begin
    add_jit_label(@labels,ctx.ptr_curr,len1);
   end;
 
-  if (len1<>len2) then
+  //if (len1<>len2) then
   begin
    i:=find_jit_label(@labels,ptr);
 

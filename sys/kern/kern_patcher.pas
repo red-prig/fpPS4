@@ -516,6 +516,8 @@ var
 begin
  Assert(_obj<>nil,'patcher_process_section');
 
+ Exit;
+
  fs_count:=0;
  gs_count:=0;
  sv_count:=0;
