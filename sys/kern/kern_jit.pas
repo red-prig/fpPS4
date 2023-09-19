@@ -7,6 +7,7 @@ unit kern_jit;
 interface
 
 uses
+ mqueue,
  kern_thr,
  vm_pmap,
  systm,
@@ -420,20 +421,20 @@ begin
 
      if (copy_size=1) then
      begin
-      call(@uplift); //input:rdi output:rax=rdi
+      call_far(@uplift); //input:rdi output:rax=rdi
      end else
      begin
-      link:=leaj(rsi,[rip+$FFFF],-1);
+      link:=leaj(rsi,[rip+$FFFF],nil);
 
       movi(edx,copy_size);
 
-      call(@copyout_mov); //rdi,rsi,edx
+      call_far(@copyout_mov); //rdi,rsi,edx
 
       reta;
 
       //input:rdi
 
-      link._label:=_label;
+      link._label:=get_next_label;
      end;
 
      imm:=0;
@@ -471,20 +472,20 @@ begin
 
      if (copy_size=1) then
      begin
-      call(@uplift); //input:rdi output:rax=rdi
+      call_far(@uplift); //input:rdi output:rax=rdi
      end else
      begin
-      link:=movj(rsi,[rip+$FFFF],-1);
+      link:=movj(rsi,[rip+$FFFF],nil);
 
       movi(edx,copy_size);
 
-      call(@copyin_mov); //rdi,rsi,edx
+      call_far(@copyin_mov); //rdi,rsi,edx
 
       reta;
 
       //input:rdi
 
-      link._label:=_label;
+      link._label:=get_next_label;
      end;
 
      movq(rcx,[GS+Integer(teb_thread)]);
@@ -559,20 +560,20 @@ begin
 
       if (copy_size=1) then
       begin
-       call(@uplift); //input:rdi output:rax=rdi
+       call_far(@uplift); //input:rdi output:rax=rdi
       end else
       begin
-       link:=leaj(rsi,[rip+$FFFF],-1);
+       link:=leaj(rsi,[rip+$FFFF],nil);
 
        movi(edx,copy_size);
 
-       call(@copyout_mov); //rdi,rsi,edx
+       call_far(@copyout_mov); //rdi,rsi,edx
 
        reta;
 
        //input:rdi
 
-       link._label:=_label;
+       link._label:=get_next_label;
       end;
 
       movq(rcx,[GS+Integer(teb_thread)]);
@@ -622,20 +623,20 @@ begin
 
       if (copy_size=1) then
       begin
-       call(@uplift); //input:rdi output:rax=rdi
+       call_far(@uplift); //input:rdi output:rax=rdi
       end else
       begin
-       link:=leaj(rsi,[rip+$FFFF],-1);
+       link:=leaj(rsi,[rip+$FFFF],nil);
 
        movi(edx,copy_size);
 
-       call(@copyin_mov); //rdi,rsi,edx
+       call_far(@copyin_mov); //rdi,rsi,edx
 
        reta;
 
        //input:rdi
 
-       link._label:=_label;
+       link._label:=get_next_label;
       end;
 
       movq(rcx,[GS+Integer(teb_thread)]);
@@ -679,7 +680,7 @@ begin
     begin
      //input:rdi
 
-     link:=leaj(rsi,[rip+$FFFF],-1);
+     link:=leaj(rsi,[rip+$FFFF],nil);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -688,13 +689,13 @@ begin
        Assert(false);
      end;
 
-     call(@copyout_mov); //rdi,rsi,edx
+     call_far(@copyout_mov); //rdi,rsi,edx
 
      reta;
 
      //input:rdi
 
-     link._label:=_label;
+     link._label:=get_next_label;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -709,7 +710,7 @@ begin
     begin
      //input:rdi
 
-     link:=movj(rsi,[rip+$FFFF],-1);
+     link:=movj(rsi,[rip+$FFFF],nil);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -718,13 +719,13 @@ begin
        Assert(false);
      end;
 
-     call(@copyin_mov); //rdi,rsi,edx
+     call_far(@copyin_mov); //rdi,rsi,edx
 
      reta;
 
      //input:rdi
 
-     link._label:=_label;
+     link._label:=get_next_label;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -748,7 +749,7 @@ begin
     begin
      //input:rdi
 
-     link:=leaj(rsi,[rip+$FFFF],-1);
+     link:=leaj(rsi,[rip+$FFFF],nil);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -757,13 +758,13 @@ begin
        Assert(false);
      end;
 
-     call(@copyout_mov); //rdi,rsi,edx
+     call_far(@copyout_mov); //rdi,rsi,edx
 
      reta;
 
      //input:rdi
 
-     link._label:=_label;
+     link._label:=get_next_label;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -778,7 +779,7 @@ begin
     begin
      //input:rdi
 
-     link:=movj(rsi,[rip+$FFFF],-1);
+     link:=movj(rsi,[rip+$FFFF],nil);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -787,13 +788,13 @@ begin
        Assert(false);
      end;
 
-     call(@copyin_mov); //rdi,rsi,edx
+     call_far(@copyin_mov); //rdi,rsi,edx
 
      reta;
 
      //input:rdi
 
-     link._label:=_label;
+     link._label:=get_next_label;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -816,7 +817,7 @@ begin
     begin
      //input:rdi
 
-     call(@uplift); //input:rdi output:rax
+     call_far(@uplift); //input:rdi output:rax
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -831,7 +832,7 @@ begin
     begin
      //input:rdi
 
-     call(@uplift); //input:rdi output:rax
+     call_far(@uplift); //input:rdi output:rax
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -849,6 +850,8 @@ label
 var
  memop:t_memop_type;
  jit_size,size,i:Integer;
+
+ node_data:p_jit_data;
 begin
 
  //ctx.builder.call(@test_jit); //test
@@ -962,19 +965,28 @@ begin
  Writeln('--------------------------------':32,' ','print patch');
  print_disassemble(@ctx.jit_code^.code,ctx.builder.GetInstructionsSize);
 
- if (Length(ctx.builder.AData))<>0 then
+ if (ctx.builder.ADataCount<>0) then
  begin
   Writeln('--------------------------------':32,' ','print data');
-  For i:=0 to High(ctx.builder.AData) do
+  //
+  node_data:=TAILQ_FIRST(@ctx.builder.ADataList);
+
+  i:=0;
+  while (node_data<>nil) do
   begin
-   Writeln('[0x'+HexStr(ctx.builder.AData[i])+']':32,' data:',i);
+   Writeln('[0x'+HexStr(node_data^.pData)+']':32,' data:',i);
+   Inc(i);
+   //
+   node_data:=TAILQ_NEXT(node_data,@node_data^.link);
   end;
+  //
   Writeln('--------------------------------':32,' ','print data');
  end;
 
  Writeln;
 
  ///
+ ctx.builder.Free;
 end;
 
 

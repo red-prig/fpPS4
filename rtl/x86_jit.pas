@@ -9,9 +9,25 @@ unit x86_jit;
 interface
 
 uses
+ mqueue,
  x86_fpdbgdisas;
 
 type
+ generic TNodeSplay<PNode,TNode>=object
+  var
+   pRoot:PNode;
+  function  _Splay(node:PNode):Integer;
+  function  Min:PNode;
+  function  Max:PNode;
+  function  Next(node:PNode):PNode;
+  function  Prev(node:PNode):PNode;
+  function  Find(node:PNode):PNode;
+  function  Find_be(node:PNode):PNode;
+  function  Find_le(node:PNode):PNode;
+  procedure Insert(node:PNode);
+  procedure Delete(node:PNode);
+ end;
+
  t_jit_reg=packed object
   ARegValue:TRegValues;
   AOffset  :Int64;
@@ -33,14 +49,17 @@ type
 
  t_jit_link_type=(lnkNone,lnkData,lnkLabel);
 
+ p_jit_instruction=^t_jit_instruction;
  t_jit_instruction=object
+  link :TAILQ_ENTRY;
   AData:array[0..15] of Byte;
   ASize:Byte;
   AInstructionOffset:Integer;
   ALink:record
-   AType:t_jit_link_type;
+   ADataType  :t_jit_link_type;
+   ADataSize  :Byte;
    ADataOffset:Byte;
-   ALinkId:Integer;
+   ALink      :Pointer;
   end;
   procedure EmitByte(b:byte); inline;
   procedure EmitWord(w:Word); inline;
@@ -58,25 +77,31 @@ type
 const
  default_jit_instruction:t_jit_instruction=(
   AData:($90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90);
-  ASize:0;
-  AInstructionOffset:0;
-  ALink:(AType:lnkNone;ADataOffset:0;ALinkId:-1);
  );
 
 type
- t_jit_instructions=array of t_jit_instruction;
- t_jit_data        =array of Pointer;
+ p_jit_data=^t_jit_data;
+ t_jit_data=object
+  link  :TAILQ_ENTRY;
+  pLeft :p_jit_data;
+  pRight:p_jit_data;
+  pData :Pointer;
+  pId   :Integer;
+  function c(n1,n2:p_jit_data):Integer; static;
+ end;
+
+ t_jit_data_set=specialize TNodeSplay<p_jit_data,t_jit_data>;
 
  p_jit_builder=^t_jit_builder;
 
  t_jit_i_link=object
   private
-   builder:p_jit_builder;
-   inst_id:Integer;
-   procedure set_label(id:Integer);
-   function  get_label():Integer;
+   ALink:p_jit_instruction;
+   procedure set_label(link:p_jit_instruction);
+   function  get_label():p_jit_instruction;
   public
-   property  _label:Integer read get_label write set_label;
+   function  is_valid:Boolean;
+   property  _label:p_jit_instruction read get_label write set_label;
  end;
 
  t_jit_builder=object
@@ -211,25 +236,37 @@ type
    ymm14:TRegValue=(AType:regXmm;ASize:os256;AIndex: 14);
    ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
-   AInstructions:t_jit_instructions;
+   AInstructions:TAILQ_HEAD;
+   ADataSet     :t_jit_data_set;
+   ADataList    :TAILQ_HEAD;
    AInstructionSize:Integer;
-   AData:t_jit_data;
+   ADataCount      :Integer;
+
+   Allocator:record
+    pHead:SLIST_HEAD;
+    curr_apos:ptruint; //alloc pos in current node
+    curr_size:ptruint; //useable size of current node
+    used_size:ptruint; //full usable size
+    full_size:ptruint; //full alloc size
+   end;
   //
+  Function  Alloc(Size:ptruint):Pointer;
+  Procedure Free;
   procedure _add(const ji:t_jit_instruction);
-  Function  _add_data(P:Pointer):Integer;
-  Function  _get_data_offset(ALinkId,AInstructionEnd:Integer):Integer;
-  Function  _get_label_offset(ALinkId,AInstructionEnd:Integer):Integer;
-  Function  _label:Integer;
+  Function  get_next_label:p_jit_instruction;
+  Function  get_curr_label:p_jit_instruction;
+  Function  _add_data(P:Pointer):p_jit_data;
+  Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
   //
-  Procedure call(P:Pointer);
-  Procedure jmp (P:Pointer);
+  Procedure call_far(P:Pointer);
+  Procedure jmp_far (P:Pointer);
   //
-  function  call(_label_id:Integer):t_jit_i_link;
-  function  jmp (_label_id:Integer):t_jit_i_link;
-  function  jmp8(_label_id:Integer):t_jit_i_link;
-  function  jcc (op:TOpCodeSuffix;_label_id:Integer):t_jit_i_link;
-  function  movj(reg:TRegValue;mem:t_jit_regs;_label_id:Integer):t_jit_i_link;
-  function  leaj(reg:TRegValue;mem:t_jit_regs;_label_id:Integer):t_jit_i_link;
+  function  call(_label_id:p_jit_instruction):t_jit_i_link;
+  function  jmp (_label_id:p_jit_instruction):t_jit_i_link;
+  function  jmp8(_label_id:p_jit_instruction):t_jit_i_link;
+  function  jcc (op:TOpCodeSuffix;_label_id:p_jit_instruction):t_jit_i_link;
+  function  movj(reg:TRegValue;mem:t_jit_regs;_label_id:p_jit_instruction):t_jit_i_link;
+  function  leaj(reg:TRegValue;mem:t_jit_regs;_label_id:p_jit_instruction):t_jit_i_link;
   //
   Procedure reta;
   //
@@ -332,6 +369,206 @@ function classif_offset_64(AOffset:Int64):TOperandSize;
 function classif_offset_se64(AOffset:Int64):TOperandSize;
 
 implementation
+
+function TNodeSplay._Splay(node:PNode):Integer;
+var
+ aux:TNode;
+ t,l,r,y:PNode;
+begin
+ t:=pRoot;
+ l:=@aux;
+ r:=@aux;
+ aux.pLeft:=nil;
+ aux.pRight:=nil;
+ while (true) do
+ begin
+  Result:=TNode.c(t,node);
+  if (Result=0) then Break;
+  if (Result>0) then
+  begin
+   if (t^.pLeft=nil) then break;
+   if (TNode.c(node,t^.pLeft)<0) then
+   begin
+    y:=t^.pLeft;                           // rotate pRight
+    t^.pLeft:=y^.pRight;
+    y^.pRight:=t;
+    t:=y;
+    if (t^.pLeft=nil) then break;
+   end;
+   r^.pLeft:=t;                            // link pRight
+   r:=t;
+   t:=t^.pLeft;
+  end else
+  begin
+   if (t^.pRight=nil) then break;
+   if (TNode.c(node,t^.pRight)>0) then
+   begin
+    y:=t^.pRight;                          // rotate pLeft
+    t^.pRight:=y^.pLeft;
+    y^.pLeft:=t;
+    t:=y;
+    if (t^.pRight=nil) then break;
+   end;
+   l^.pRight:=t;                           // link pLeft
+   l:=t;
+   t:=t^.pRight;
+  end;
+ end;
+ l^.pRight:=t^.pLeft; // assemble
+ r^.pLeft :=t^.pRight;
+ t^.pLeft :=aux.pRight;
+ t^.pRight:=aux.pLeft;
+ pRoot:=t;
+end;
+
+function TNodeSplay.Min:PNode;
+var
+ node:PNode;
+begin
+ Result:=nil;
+ node:=pRoot;
+ While (node<>nil) do
+ begin
+  Result:=node;
+  node:=node^.pLeft;
+ end;
+end;
+
+function TNodeSplay.Max:PNode;
+var
+ node:PNode;
+begin
+ Result:=nil;
+ node:=pRoot;
+ While (node<>nil) do
+ begin
+  Result:=node;
+  node:=node^.pRight;
+ end;
+end;
+
+function TNodeSplay.Next(node:PNode):PNode;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ _Splay(node);
+ node:=node^.pRight;
+ While (node<>nil) do
+ begin
+  Result:=node;
+  node:=node^.pLeft;
+ end;
+end;
+
+function TNodeSplay.Prev(node:PNode):PNode;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ _Splay(node);
+ node:=node^.pLeft;
+ While (node<>nil) do
+ begin
+  Result:=node;
+  node:=node^.pRight;
+ end;
+end;
+
+function TNodeSplay.Find(node:PNode):PNode;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ if (_Splay(node)=0) then Result:=pRoot;
+end;
+
+function TNodeSplay.Find_be(node:PNode):PNode;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ if (_Splay(node)<0) then
+ begin
+  Result:=Next(pRoot);
+ end else
+ begin
+  Result:=pRoot;
+ end;
+end;
+
+function TNodeSplay.Find_le(node:PNode):PNode;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ if (_Splay(node)>0) then
+ begin
+  Result:=Prev(pRoot);
+ end else
+ begin
+  Result:=pRoot;
+ end;
+end;
+
+procedure TNodeSplay.Insert(node:PNode);
+var
+ c:Integer;
+begin
+ if (node=nil) then Exit;
+ if (pRoot=nil) then
+ begin
+  pRoot:=node;
+ end else
+ begin
+  c:=TNode.c(pRoot,node);
+  if (c<>0) then
+  begin
+   if (c<0) then
+   begin
+    node^.pRight:=pRoot^.pRight;
+    node^.pLeft :=pRoot;
+    pRoot^.pRight:=nil;
+   end else
+   begin
+    node^.pLeft :=pRoot^.pLeft;
+    node^.pRight:=pRoot;
+    pRoot^.pLeft:=nil;
+   end;
+   pRoot:=node;
+  end;
+ end;
+end;
+
+procedure TNodeSplay.Delete(node:PNode);
+var
+ pLeft :PNode;
+ pRight:PNode;
+ pMax  :PNode;
+begin
+ if (pRoot=nil) or (node=nil) then Exit;
+ if (_Splay(node)<>0) then Exit;
+
+ pLeft :=pRoot^.pLeft;
+ pRight:=pRoot^.pRight;
+
+ if (pLeft<>nil) then
+ begin
+  pMax:=pLeft;
+  while (pMax^.pRight<>nil) do
+  begin
+   pMax:=pMax^.pRight;
+  end;
+
+  pRoot:=pLeft;
+  _Splay(pMax);
+
+  pRoot^.pRight:=pRight;
+ end else
+ begin
+  pRoot:=pRight;
+ end;
+end;
+
+function t_jit_data.c(n1,n2:p_jit_data):Integer;
+begin
+ Result:=Integer(n1^.pData>n2^.pData)-Integer(n1^.pData<n2^.pData);
+end;
 
 function is_valid_reg_type(reg:TRegValue):Boolean; inline;
 begin
@@ -579,14 +816,27 @@ end;
 
 ////
 
-procedure t_jit_i_link.set_label(id:Integer);
+Procedure LinkLabel(node:p_jit_instruction); forward;
+
+procedure t_jit_i_link.set_label(link:p_jit_instruction);
 begin
- builder^.AInstructions[inst_id].ALink.ALinkId:=id;
+ if (ALink=nil) then Exit;
+ if (ALink^.ALink.ADataType<>lnkLabel) then Exit;
+ ALink^.ALink.ALink:=link;
+ LinkLabel(ALink);
 end;
 
-function t_jit_i_link.get_label():Integer;
+function t_jit_i_link.get_label():p_jit_instruction;
 begin
- Result:=builder^.AInstructions[inst_id].ALink.ALinkId;
+ Result:=nil;
+ if (ALink=nil) then Exit;
+ if (ALink^.ALink.ADataType<>lnkLabel) then Exit;
+ Result:=ALink^.ALink.ALink;
+end;
+
+function t_jit_i_link.is_valid:Boolean;
+begin
+ Result:=(ALink<>nil);
 end;
 
 ////
@@ -691,54 +941,210 @@ end;
 
 //
 
+type
+ PAllocNode=^TAllocNode;
+ TAllocNode=packed record
+  link:PAllocNode;
+  data:record end;
+ end;
+
+Function t_jit_builder.Alloc(Size:ptruint):Pointer;
+const
+ asize=(1*1024*1024)-SizeOf(ptruint)*3;
+var
+ mem_size:ptruint;
+ node:PAllocNode;
+
+ function _alloc:Pointer;
+ begin
+  if (Size>asize-SizeOf(Pointer)) then
+  begin
+   Result:=AllocMem(Size+SizeOf(Pointer));
+  end else
+  begin
+   Result:=AllocMem(asize);
+  end;
+ end;
+
+begin
+ if (Allocator.pHead.slh_first=nil) or (Size>Allocator.curr_size) then
+ begin
+  node:=_alloc;
+  SLIST_INSERT_HEAD(@Allocator.pHead,node,@node^.link);
+
+  //Push_head(_alloc);
+  mem_size:=MemSize(node);
+  Allocator.curr_apos:=0;
+  Allocator.curr_size:=mem_size-SizeOf(Pointer);
+  Inc(Allocator.full_size,mem_size);
+ end;
+
+ node:=SLIST_FIRST(@Allocator.pHead);
+
+ Result:=@PByte(@node^.data)[Allocator.curr_apos];
+
+ Inc(Allocator.used_size,Size);
+ Size:=Align(Size,SizeOf(ptruint));
+ Inc(Allocator.curr_apos,Size);
+ Dec(Allocator.curr_size,Size);
+end;
+
+Procedure t_jit_builder.Free;
+var
+ node:PAllocNode;
+begin
+ //node:=Pop_head;
+ node:=Allocator.pHead.slh_first;
+ if (node<>nil) then
+ begin
+  Allocator.pHead.slh_first:=node^.link;
+ end;
+ While (node<>nil) do
+ begin
+  FreeMem(node);
+  //node:=Pop_head;
+  node:=Allocator.pHead.slh_first;
+  if (node<>nil) then
+  begin
+   Allocator.pHead.slh_first:=node^.link;
+  end;
+ end;
+ Self:=Default(t_jit_builder);
+end;
+
+//
+
 procedure t_jit_builder._add(const ji:t_jit_instruction);
 var
- i:Integer;
+ node:p_jit_instruction;
+ link:TAILQ_ENTRY;
 begin
- i:=Length(AInstructions);
- SetLength(AInstructions,i+1);
- AInstructions[i]:=ji;
+ if (AInstructions.tqh_first=nil) and
+    (AInstructions.tqh_last=nil) then
+ begin
+  TAILQ_INIT(@AInstructions);
+ end;
 
- AInstructions[i].AInstructionOffset:=AInstructionSize;
+ {
+ node:=TAILQ_LAST(@AInstructions);
+
+ if (node<>nil) then
+ begin
+  if (node^.ASize=0) then
+  begin
+   link:=node^.link;
+   node^:=ji;
+   node^.link:=link;
+   //
+   node^.AInstructionOffset:=AInstructionSize;
+   //
+   Inc(AInstructionSize,ji.ASize);
+   //
+   Exit;
+  end;
+ end;
+ }
+
+ node:=Alloc(SizeOf(t_jit_instruction));
+ node^:=ji;
+ //
+ node^.AInstructionOffset:=AInstructionSize;
+ //
+ TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
+ //
  Inc(AInstructionSize,ji.ASize);
 end;
 
-Function t_jit_builder._add_data(P:Pointer):Integer;
-begin
- Result:=Length(AData);
- SetLength(AData,Result+1);
- AData[Result]:=P;
-end;
-
-Function t_jit_builder._get_data_offset(ALinkId,AInstructionEnd:Integer):Integer;
-begin
- Assert(ALinkId<Length(AData));
- Result:=(AInstructionSize-AInstructionEnd)+(ALinkId*SizeOf(Pointer));
-end;
-
-Function t_jit_builder._get_label_offset(ALinkId,AInstructionEnd:Integer):Integer;
+Function t_jit_builder.get_next_label:p_jit_instruction;
 var
- i:Integer;
+ node:p_jit_instruction;
 begin
- Assert(ALinkId<=Length(AInstructions));
-
- if (ALinkId>=Length(AInstructions)) then
+ if (AInstructions.tqh_first=nil) and
+    (AInstructions.tqh_last=nil) then
  begin
-  i:=AInstructionSize;
- end else
- begin
-  i:=AInstructions[ALinkId].AInstructionOffset;
+  TAILQ_INIT(@AInstructions);
  end;
-
- Result:=(i-AInstructionEnd);
+ //
+ node:=TAILQ_LAST(@AInstructions);
+ if (node<>nil) then
+ begin
+  if (node^.ASize=0) then
+  begin
+   Exit(node);
+  end;
+ end;
+ //
+ node:=Alloc(SizeOf(t_jit_instruction));
+ //
+ node^.AInstructionOffset:=AInstructionSize;
+ //
+ TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
+ //
+ Result:=node;
 end;
 
-Function t_jit_builder._label:Integer;
+Function t_jit_builder.get_curr_label:p_jit_instruction;
 begin
- Result:=Length(AInstructions);
+ if (AInstructions.tqh_first=nil) and
+    (AInstructions.tqh_last=nil) then
+ begin
+  TAILQ_INIT(@AInstructions);
+ end;
+ //
+ Result:=TAILQ_LAST(@AInstructions);
+ //
+ {
+ if (Result<>nil) then
+ begin
+  if (Result^.ASize=0) then
+  begin
+   Result:=TAILQ_PREV(Result,@Result^.link);
+  end;
+ end;
+ }
 end;
 
-Procedure t_jit_builder.call(P:Pointer);
+Function t_jit_builder._add_data(P:Pointer):p_jit_data;
+var
+ node:t_jit_data;
+begin
+ Result:=nil;
+ node:=Default(t_jit_data);
+ node.pData:=p;
+ Result:=ADataSet.Find(@node);
+ if (Result=nil) then
+ begin
+  Result:=Alloc(SizeOf(t_jit_data));
+  Result^.pData:=P;
+  Result^.pId:=ADataCount;
+  //
+  ADataSet.Insert(Result);
+  //
+  if (ADataList.tqh_first=nil) and
+     (ADataList.tqh_last=nil) then
+  begin
+   TAILQ_INIT(@ADataList);
+  end;
+  //
+  TAILQ_INSERT_TAIL(@ADataList,Result,@Result^.link);
+  //
+  Inc(ADataCount);
+ end;
+end;
+
+Function t_jit_builder._get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
+begin
+ Assert(ALink<>nil);
+ Result:=(AInstructionSize-AInstructionEnd)+(ALink^.pId*SizeOf(Pointer));
+end;
+
+Function _get_label_offset(ALink:p_jit_instruction;AInstructionEnd:Integer):Integer;
+begin
+ Assert(ALink<>nil);
+ Result:=(ALink^.AInstructionOffset-AInstructionEnd);
+end;
+
+Procedure t_jit_builder.call_far(P:Pointer);
 var
  ji:t_jit_instruction;
 begin
@@ -747,16 +1153,17 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($15);
 
- ji.ALink.AType:=lnkData;
+ ji.ALink.ADataType  :=lnkData;
+ ji.ALink.ADataSize  :=4;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_add_data(P);
+ ji.ALink.ALink      :=_add_data(P);
 
  ji.EmitInt32(0);
 
  _add(ji);
 end;
 
-Procedure t_jit_builder.jmp(P:Pointer);
+Procedure t_jit_builder.jmp_far(P:Pointer);
 var
  ji:t_jit_instruction;
 begin
@@ -765,16 +1172,17 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($25);
 
- ji.ALink.AType:=lnkData;
+ ji.ALink.ADataType  :=lnkData;
+ ji.ALink.ADataSize  :=4;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_add_data(P);
+ ji.ALink.ALink      :=_add_data(P);
 
  ji.EmitInt32(0);
 
  _add(ji);
 end;
 
-function t_jit_builder.call(_label_id:Integer):t_jit_i_link;
+function t_jit_builder.call(_label_id:p_jit_instruction):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -782,19 +1190,20 @@ begin
 
  ji.EmitByte($E8);
 
- ji.ALink.AType:=lnkLabel;
+ ji.ALink.ADataType  :=lnkLabel;
+ ji.ALink.ADataSize  :=4;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_label_id;
+ ji.ALink.ALink      :=_label_id;
 
  ji.EmitInt32(0);
 
  _add(ji);
 
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
+ LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jmp(_label_id:Integer):t_jit_i_link;
+function t_jit_builder.jmp(_label_id:p_jit_instruction):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -802,19 +1211,20 @@ begin
 
  ji.EmitByte($E9);
 
- ji.ALink.AType:=lnkLabel;
+ ji.ALink.ADataType  :=lnkLabel;
+ ji.ALink.ADataSize  :=4;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_label_id;
+ ji.ALink.ALink      :=_label_id;
 
  ji.EmitInt32(0);
 
  _add(ji);
 
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
+ LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jmp8(_label_id:Integer):t_jit_i_link;
+function t_jit_builder.jmp8(_label_id:p_jit_instruction):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -822,16 +1232,17 @@ begin
 
  ji.EmitByte($EB);
 
- ji.ALink.AType:=lnkLabel;
+ ji.ALink.ADataType  :=lnkLabel;
+ ji.ALink.ADataSize  :=1;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_label_id;
+ ji.ALink.ALink      :=_label_id;
 
  ji.EmitByte(0);
 
  _add(ji);
 
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
+ LinkLabel(Result.ALink);
 end;
 
 const
@@ -840,7 +1251,7 @@ const
   $88,$89,$8A,$8B,$8C,$8D,$8E,$8F
  );
 
-function t_jit_builder.jcc(op:TOpCodeSuffix;_label_id:Integer):t_jit_i_link;
+function t_jit_builder.jcc(op:TOpCodeSuffix;_label_id:p_jit_instruction):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -856,46 +1267,39 @@ begin
 
  ji.EmitByte(COND_32[op]);
 
- ji.ALink.AType:=lnkLabel;
+ ji.ALink.ADataType  :=lnkLabel;
+ ji.ALink.ADataSize  :=4;
  ji.ALink.ADataOffset:=ji.ASize;
- ji.ALink.ALinkId:=_label_id;
+ ji.ALink.ALink      :=_label_id;
 
  ji.EmitInt32(0);
 
  _add(ji);
 
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
+ LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.movj(reg:TRegValue;mem:t_jit_regs;_label_id:Integer):t_jit_i_link;
-var
- i:Integer;
+function t_jit_builder.movj(reg:TRegValue;mem:t_jit_regs;_label_id:p_jit_instruction):t_jit_i_link;
 begin
  movq(reg,mem);
 
- i:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
 
- AInstructions[i].ALink.AType:=lnkLabel;
- AInstructions[i].ALink.ALinkId:=_label_id;
-
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink^.ALink.ADataType:=lnkLabel;
+ Result.ALink^.ALink.ALink    :=_label_id;
+ LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_regs;_label_id:Integer):t_jit_i_link;
-var
- i:Integer;
+function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_regs;_label_id:p_jit_instruction):t_jit_i_link;
 begin
  leaq(reg,mem);
 
- i:=High(AInstructions);
+ Result.ALink:=TAILQ_LAST(@AInstructions);
 
- AInstructions[i].ALink.AType:=lnkLabel;
- AInstructions[i].ALink.ALinkId:=_label_id;
-
- Result.builder:=@self;
- Result.inst_id:=High(AInstructions);
+ Result.ALink^.ALink.ADataType:=lnkLabel;
+ Result.ALink^.ALink.ALink    :=_label_id;
+ LinkLabel(Result.ALink);
 end;
 
 Procedure t_jit_builder.reta;
@@ -916,83 +1320,122 @@ end;
 
 Function t_jit_builder.GetDataSize:Integer;
 begin
- Result:=Length(AData)*SizeOf(QWORD);
+ Result:=ADataCount*SizeOf(Pointer);
 end;
 
 Function t_jit_builder.GetMemSize:Integer;
 begin
- Result:=AInstructionSize+Length(AData)*SizeOf(QWORD);
+ Result:=AInstructionSize+GetDataSize;
 end;
 
 Procedure t_jit_builder.RebuldInstructionOffset;
 var
- i:Integer;
+ node:p_jit_instruction;
 begin
  AInstructionSize:=0;
- if (Length(AInstructions)<>0) then
- For i:=0 to High(AInstructions) do
+
+ node:=TAILQ_FIRST(@AInstructions);
+
+ while (node<>nil) do
  begin
-  AInstructions[i].AInstructionOffset:=AInstructionSize;
-  Inc(AInstructionSize,AInstructions[i].ASize);
+  node^.AInstructionOffset:=AInstructionSize;
+  Inc(AInstructionSize,node^.ASize);
+  //
+  node:=TAILQ_NEXT(node,@node^.link);
+ end;
+end;
+
+Procedure LinkLabel(node:p_jit_instruction);
+var
+ d:Integer;
+begin
+ if (node=nil) then Exit;
+ if (node^.ALink.ADataType<>lnkLabel) then Exit;
+ if (node^.ALink.ALink=nil) then Exit;
+ With node^ do
+ begin
+  d:=_get_label_offset(ALink.ALink,AInstructionOffset+ASize);
+  Move(d,node^.AData[ALink.ADataOffset],ASize);
  end;
 end;
 
 Procedure t_jit_builder.LinkData;
 var
- i,d:Integer;
-begin
- if (Length(AInstructions)<>0) then
- For i:=0 to High(AInstructions) do
+ node:p_jit_instruction;
+ d:Integer;
+
+ procedure _set_data(d:Integer); inline;
  begin
-  With AInstructions[i] do
-   case ALink.AType of
+  With node^ do
+   Move(d,node^.AData[ALink.ADataOffset],ASize);
+ end;
+
+begin
+ node:=TAILQ_FIRST(@AInstructions);
+
+ while (node<>nil) do
+ begin
+  With node^ do
+   case ALink.ADataType of
     lnkData:
       begin
-       d:=_get_data_offset(ALink.ALinkId,AInstructionOffset+ASize);
-       PInteger(@AData[ALink.ADataOffset])^:=d;
+       d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
+       _set_data(d);
       end;
     lnkLabel:
       begin
-       d:=_get_label_offset(ALink.ALinkId,AInstructionOffset+ASize);
-       PInteger(@AData[ALink.ADataOffset])^:=d;
+       d:=_get_label_offset(ALink.ALink,AInstructionOffset+ASize);
+       _set_data(d);
       end;
     else;
    end;
+  //
+  node:=TAILQ_NEXT(node,@node^.link);
  end;
 end;
 
 Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
 var
- i,s:Integer;
+ node_code:p_jit_instruction;
+ node_data:p_jit_data;
+ s:Integer;
 begin
  LinkData;
 
  Result:=0;
- if (Length(AInstructions)<>0) then
- For i:=0 to High(AInstructions) do
+
+ node_code:=TAILQ_FIRST(@AInstructions);
+
+ while (node_code<>nil) do
  begin
-  s:=AInstructions[i].ASize;
+  s:=node_code^.ASize;
   if ((Result+s)>size) then
   begin
    Exit;
   end;
-  Move(AInstructions[i].AData,ptr^,s);
+  Move(node_code^.AData,ptr^,s);
   Inc(Result,s);
   Inc(ptr   ,s);
+  //
+  node_code:=TAILQ_NEXT(node_code,@node_code^.link);
  end;
 
- if (Length(AData)<>0) then
- For i:=0 to High(AData) do
+ node_data:=TAILQ_FIRST(@ADataList);
+
+ while (node_data<>nil) do
  begin
-  s:=SizeOf(QWORD);
+  s:=SizeOf(Pointer);
   if ((Result+s)>size) then
   begin
    Exit;
   end;
-  Move(AData[i],ptr^,s);
+  Move(node_data^.pData,ptr^,s);
   Inc(Result,s);
   Inc(ptr   ,s);
+  //
+  node_data:=TAILQ_NEXT(node_data,@node_data^.link);
  end;
+
 end;
 
 type
@@ -1271,17 +1714,24 @@ begin
     case ModRM.RM of
      4:if (SIB.Base=5) then
        begin
+        ji.ALink.ADataSize:=4;
         ji.ALink.ADataOffset:=ji.ASize;
         ji.EmitInt32(AOffset); //4
        end;
      5:begin
+        ji.ALink.ADataSize:=4;
         ji.ALink.ADataOffset:=ji.ASize;
         ji.EmitInt32(AOffset); //4
        end;
     end;
    end;
-   1:ji.EmitByte(AOffset); //1
+   1:begin
+      ji.ALink.ADataSize:=1;
+      ji.ALink.ADataOffset:=ji.ASize;
+      ji.EmitByte(AOffset); //1
+     end;
    2:begin
+      ji.ALink.ADataSize:=4;
       ji.ALink.ADataOffset:=ji.ASize;
       ji.EmitInt32(AOffset); //4
      end;
@@ -3632,49 +4082,49 @@ end;
 
 procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$6F;index:2);
+ desc:t_op_type=(op:$6F;index:2;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqu(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;index:2);
+ desc:t_op_type=(op:$7F;index:2;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$6F;index:1);
+ desc:t_op_type=(op:$6F;index:1;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovdqa(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;index:1);
+ desc:t_op_type=(op:$7F;index:1;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovntdq(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$E7;index:1);
+ desc:t_op_type=(op:$E7;index:1;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_regs);
 const
- desc:t_op_type=(op:$10;index:0);
+ desc:t_op_type=(op:$10;index:0;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;
 
 procedure t_jit_builder.vmovups(mem:t_jit_regs;reg:TRegValue);
 const
- desc:t_op_type=(op:$11;index:0);
+ desc:t_op_type=(op:$11;index:0;mm:1);
 begin
  _VM(desc,reg,mem,os0);
 end;

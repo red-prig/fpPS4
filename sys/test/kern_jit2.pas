@@ -880,7 +880,7 @@ begin
       if (mem_size=os8) or
          (his_rw in hint) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -888,7 +888,7 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+       call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
        mem_in;
       end;
@@ -903,7 +903,7 @@ begin
          (his_rw in hint) then
       begin
 
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -911,15 +911,15 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyout_mov); //in:rax(addr),r14:(size)
+       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(0);
+       link_next:=jmp8(nil);
 
        mem_out;
 
        reta;
 
-       link_next._label:=_label;
+       link_next._label:=get_next_label;
       end;
      end;
 
@@ -1152,7 +1152,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1160,15 +1160,15 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyout_mov); //in:rax(addr),r14:(size)
+       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(0);
+       link_next:=jmp8(nil);
 
        mem_out;
 
        reta;
 
-       link_next._label:=_label;
+       link_next._label:=get_next_label;
       end;
      end;
 
@@ -1178,7 +1178,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -1186,7 +1186,7 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+       call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
        mem_in;
       end;
@@ -1511,7 +1511,7 @@ begin
      begin
       if (mem_size=os8) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1519,15 +1519,15 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyout_mov); //in:rax(addr),r14:(size)
+       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(0);
+       link_next:=jmp8(nil);
 
        mem_out;
 
        reta;
 
-       link_next._label:=_label;
+       link_next._label:=get_next_label;
       end;
      end;
 
@@ -1636,7 +1636,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_out;
       end else
@@ -1644,15 +1644,15 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyout_mov); //in:rax(addr),r14:(size)
+       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(0);
+       link_next:=jmp8(nil);
 
        mem_out;
 
        reta;
 
-       link_next._label:=_label;
+       link_next._label:=get_next_label;
       end;
      end;
 
@@ -1660,7 +1660,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -1668,7 +1668,7 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+       call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
        mem_in;
       end;
@@ -1763,7 +1763,7 @@ begin
 
    if false then
    begin
-    call(@uplift_jit); //in/out:rax uses:r14
+    call_far(@uplift_jit); //in/out:rax uses:r14
 
     mem_in;
    end else
@@ -1771,7 +1771,7 @@ begin
     //mem_size
     movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-    call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+    call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
     mem_in;
    end;
@@ -1791,7 +1791,7 @@ begin
 
    if false then
    begin
-    call(@uplift_jit); //in/out:rax uses:r14
+    call_far(@uplift_jit); //in/out:rax uses:r14
 
     mem_out;
    end else
@@ -1799,15 +1799,15 @@ begin
     //mem_size
     movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-    call(@copyout_mov); //in:rax(addr),r14:(size)
+    call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-    link_next:=jmp8(0);
+    link_next:=jmp8(nil);
 
     mem_out;
 
     reta;
 
-    link_next._label:=_label;
+    link_next._label:=get_next_label;
    end;
 
   end;
@@ -1856,7 +1856,7 @@ begin
 
      if (mem_size=os8) then
      begin
-      call(@uplift_jit); //in/out:rax uses:r14
+      call_far(@uplift_jit); //in/out:rax uses:r14
 
       mem_out;
      end else
@@ -1864,15 +1864,15 @@ begin
       //mem_size
       movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-      call(@copyout_mov); //in:rax(addr),r14:(size)
+      call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-      link_next:=jmp8(0);
+      link_next:=jmp8(nil);
 
       mem_out;
 
       reta;
 
-      link_next._label:=_label;
+      link_next._label:=get_next_label;
      end;
     end;
 
@@ -2549,7 +2549,7 @@ begin
      begin
       if false then
       begin
-       call(@uplift_jit); //in/out:rax uses:r14
+       call_far(@uplift_jit); //in/out:rax uses:r14
 
        mem_in;
       end else
@@ -2557,7 +2557,7 @@ begin
        //mem_size
        movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-       call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+       call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
        mem_in;
       end;
@@ -2635,7 +2635,7 @@ type
  t_jit_label=record
   link:TAILQ_ENTRY;
   src:Pointer;
-  id:Integer;
+  label_id:p_jit_instruction;
  end;
 
  p_jit_entry_point=^t_jit_entry_point;
@@ -2649,28 +2649,28 @@ var
  labels:TAILQ_HEAD=(tqh_first:nil;tqh_last:@labels.tqh_first);
  lfrwrd:TAILQ_HEAD=(tqh_first:nil;tqh_last:@lfrwrd.tqh_first);
 
-procedure add_jit_label(head:P_TAILQ_HEAD;src:Pointer;id:Integer);
+procedure add_jit_label(head:P_TAILQ_HEAD;src:Pointer;label_id:p_jit_instruction);
 var
  entry:p_jit_label;
 begin
  entry:=AllocMem(Sizeof(t_jit_label));
  entry^.src:=src;
- entry^.id:=id;
+ entry^.label_id:=label_id;
  TAILQ_INSERT_TAIL(head,entry,@entry^.link);
 end;
 
-function find_jit_label(head:P_TAILQ_HEAD;src:Pointer):Integer;
+function find_jit_label(head:P_TAILQ_HEAD;src:Pointer):p_jit_instruction;
 var
  entry:p_jit_label;
 begin
- Result:=-1;
+ Result:=nil;
 
  entry:=TAILQ_FIRST(head);
  while (entry<>nil) do
  begin
   if (entry^.src=src) then
   begin
-   Exit(entry^.id);
+   Exit(entry^.label_id);
   end;
 
   entry:=TAILQ_NEXT(entry,@entry^.link);
@@ -2729,7 +2729,7 @@ end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call(nil); //input:rax TODO jmp dispatcher
+ ctx.builder.call_far(nil); //input:rax TODO jmp dispatcher
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2;used_r_tmp0:Boolean);
@@ -2752,7 +2752,7 @@ begin
   leaq(stack,[stack-8]);
   movq([r_thrd+i],stack);
 
-  call(@uplift_jit); //in/out:rax uses:r14
+  call_far(@uplift_jit); //in/out:rax uses:r14
 
   imm:=Int64(ctx.ptr_next);
 
@@ -2786,7 +2786,7 @@ begin
   i:=GetFrameOffset(rsp);
   movq(stack1,[r_thrd+i]);
 
-  call(@uplift_jit); //in/out:rax uses:r14
+  call_far(@uplift_jit); //in/out:rax uses:r14
 
   movq(stack2,stack1);
 
@@ -2822,6 +2822,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
+ label_id:p_jit_instruction;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -2833,18 +2834,18 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  i:=find_jit_label(@labels,dst);
+  label_id:=find_jit_label(@labels,dst);
 
-  if (i<>-1) then
+  if (label_id<>nil) then
   begin
    op_push_rip(ctx,false);
    //
-   ctx.builder.jmp(i);
+   ctx.builder.jmp(label_id);
   end else
   begin
    op_push_rip(ctx,false);
    //
-   id:=ctx.builder.jmp(-1);
+   id:=ctx.builder.jmp(nil);
    add_entry_point(@lfrwrd,id,dst);
   end;
  end else
@@ -2907,6 +2908,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
+ label_id:p_jit_instruction;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -2918,14 +2920,14 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  i:=find_jit_label(@labels,dst);
+  label_id:=find_jit_label(@labels,dst);
 
-  if (i<>-1) then
+  if (label_id<>nil) then
   begin
-   ctx.builder.jmp(i);
+   ctx.builder.jmp(label_id);
   end else
   begin
-   id:=ctx.builder.jmp(-1);
+   id:=ctx.builder.jmp(nil);
    add_entry_point(@lfrwrd,id,dst);
   end;
 
@@ -2964,7 +2966,7 @@ var
  id:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
- i:Integer;
+ label_id:p_jit_instruction;
 begin
  ofs:=0;
  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
@@ -2974,14 +2976,14 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- i:=find_jit_label(@labels,dst);
+ label_id:=find_jit_label(@labels,dst);
 
- if (i<>-1) then
+ if (label_id<>nil) then
  begin
-  ctx.builder.jcc(ctx.din.OpCode.Suffix,i);
+  ctx.builder.jcc(ctx.din.OpCode.Suffix,label_id);
  end else
  begin
-  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,-1);
+  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil);
   add_entry_point(@lfrwrd,id,dst);
  end;
 end;
@@ -3291,7 +3293,7 @@ begin
   begin
    build_lea(ctx,1,r_tmp0);
 
-   call(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:rax uses:r14
 
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
@@ -3313,7 +3315,7 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   movq([r_thrd+i],stack);
 
-  call(@uplift_jit); //in/out:rax uses:r14
+  call_far(@uplift_jit); //in/out:rax uses:r14
 
   movq([stack],new);
  end;
@@ -3341,7 +3343,7 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   movq([r_thrd+i],stack);
 
-  call(@uplift_jit); //in/out:rax uses:r14
+  call_far(@uplift_jit); //in/out:rax uses:r14
 
   movq([stack],new);
  end;
@@ -3360,7 +3362,7 @@ begin
   i:=GetFrameOffset(rsp);
   movq(stack,[r_thrd+i]);
 
-  call(@uplift_jit); //in/out:rax uses:r14
+  call_far(@uplift_jit); //in/out:rax uses:r14
 
   if is_memory(ctx.din) then
   begin
@@ -3370,7 +3372,7 @@ begin
 
    build_lea(ctx,1,r_tmp0);
 
-   call(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:rax uses:r14
 
    movq([r_tmp0],new);
   end else
@@ -3413,7 +3415,7 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
- ctx.builder.call(nil); //TODO syscall dispatcher
+ ctx.builder.call_far(nil); //TODO syscall dispatcher
 end;
 
 procedure op_int(var ctx:t_jit_context2);
@@ -3429,7 +3431,7 @@ begin
   $44: //system error?
    begin
     //
-    ctx.builder.call(nil); //TODO error dispatcher
+    ctx.builder.call_far(nil); //TODO error dispatcher
     ctx.ptr_next:=nil; //trim
    end;
   else
@@ -3442,20 +3444,20 @@ end;
 procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
- ctx.builder.call(nil); //TODO exit dispatcher
+ ctx.builder.call_far(nil); //TODO exit dispatcher
  ctx.ptr_next:=nil; //trim
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
- ctx.builder.call(nil); //TODO exit dispatcher
+ ctx.builder.call_far(nil); //TODO exit dispatcher
  ctx.ptr_next:=nil; //trim
 end;
 
 procedure op_cpuid(var ctx:t_jit_context2);
 begin
- ctx.builder.call(nil); //TODO CPUID
+ ctx.builder.call_far(nil); //TODO CPUID
 end;
 
 procedure op_nop(var ctx:t_jit_context2);
@@ -3721,7 +3723,7 @@ begin
    //mem_size
    movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-   call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+   call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
    movq(new2,[r_tmp0]);
   end else
@@ -3798,7 +3800,7 @@ begin
    //mem_size
    movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
 
-   call(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+   call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
 
    movq(new3,[r_tmp0]);
   end else
@@ -3959,7 +3961,7 @@ end;
 procedure pick();
 var
  addr:Pointer;
- id:t_jit_i_link;
+ entry_point:t_jit_i_link;
 
  proc:TDbgProcess;
  adec:TX86AsmDecoder;
@@ -3968,10 +3970,17 @@ var
  ctx:t_jit_context2;
  cb:t_jit_cb;
 
- len1,len2,i:Integer;
+ {len1,len2,}i:Integer;
+
+ node,node_curr,node_code1,node_code2:p_jit_instruction;
 begin
 
- if not fetch_entry_point(@lfrwrd,id,addr) then
+ ctx:=Default(t_jit_context2);
+
+ entry_point:=Default(t_jit_i_link);
+ addr:=nil;
+
+ if not fetch_entry_point(@lfrwrd,entry_point,addr) then
  begin
   Assert(false);
  end;
@@ -4186,54 +4195,61 @@ begin
    Assert(false);
   end;
 
-  len1:=Length(ctx.builder.AInstructions);
+  node_curr:=ctx.builder.get_curr_label;
+  if (node_curr=nil) then node_curr:=ctx.builder.get_next_label;
+  node_code1:=node_curr;
 
   cb(ctx);
 
-  len2:=Length(ctx.builder.AInstructions);
+  node_code2:=ctx.builder.get_curr_label;
 
-  if (len1<>len2) then
+  //if (node_code1<>node_code2) then
   begin
-   Writeln('recompiled----------------------':32,' ','');
-   For i:=len1 to len2-1 do
-   begin
-
-    print_disassemble(@ctx.builder.AInstructions[i].AData,
-                       ctx.builder.AInstructions[i].ASize);
-
-   end;
-   Writeln('recompiled----------------------':32,' ','');
+   add_jit_label(@labels,ctx.ptr_curr,node_curr);
   end;
 
   //if (len1<>len2) then
   begin
-   add_jit_label(@labels,ctx.ptr_curr,len1);
-  end;
+   node:=find_jit_label(@labels,ptr);
 
-  //if (len1<>len2) then
-  begin
-   i:=find_jit_label(@labels,ptr);
-
-   if (i<>-1) then
+   if (node<>nil) then
    begin
-    ctx.builder.jmp(i);
+    ctx.builder.jmp(node);
     ctx.ptr_next:=nil;
     Writeln('jmp next:0x',HexStr(ptr));
    end;
 
   end;
 
+  if (node_code1<>node_code2) and
+     (node_code1<>nil) then
+  begin
+   node:=TAILQ_NEXT(node_code1,@node_code1^.link);
+
+   Writeln('recompiled----------------------':32,' ','');
+   while (node<>nil) do
+   begin
+
+    print_disassemble(@node^.AData,
+                       node^.ASize);
+
+
+    node:=TAILQ_NEXT(node,@node^.link);
+   end;
+   Writeln('recompiled----------------------':32,' ','');
+  end;
+
   if (ctx.ptr_next=nil) then
   begin
    repeat
 
-    if not fetch_entry_point(@lfrwrd,id,addr) then
+    if not fetch_entry_point(@lfrwrd,entry_point,addr) then
     begin
      Assert(false);
     end;
 
-    i:=find_jit_label(@labels,addr);
-    if (i=-1) then
+    node:=find_jit_label(@labels,addr);
+    if (node=nil) then
     begin
      Writeln('not found:0x',HexStr(addr));
      writeln;
@@ -4245,7 +4261,6 @@ begin
    ptr:=addr;
   end;
 
-  //ptr:=ctx.ptr_next; //jmp switch
  end;
 
  adec.Free;

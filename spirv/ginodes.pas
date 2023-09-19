@@ -42,7 +42,7 @@ type
   function  Find(node:PNode):PNode;
   function  Find_be(node:PNode):PNode;
   function  Find_le(node:PNode):PNode;
-  procedure Insert(new:PNode);
+  procedure Insert(node:PNode);
  end;
 
 function ComparePChar(buf1,buf2:PChar):Integer;
@@ -186,32 +186,62 @@ begin
  end;
 end;
 
-procedure TNodeFetch.Insert(new:PNode);
+procedure TNodeFetch.Insert(node:PNode);
 var
  c:Integer;
 begin
- if (new=nil) then Exit;
+ if (node=nil) then Exit;
  if (pRoot=nil) then
  begin
-  pRoot:=new;
+  pRoot:=node;
  end else
  begin
-  c:=TNode.c(pRoot,new);
+  c:=TNode.c(pRoot,node);
   if (c<>0) then
   begin
    if (c<0) then
    begin
-    new^.pRight:=pRoot^.pRight;
-    new^.pLeft :=pRoot;
+    node^.pRight:=pRoot^.pRight;
+    node^.pLeft :=pRoot;
     pRoot^.pRight:=nil;
    end else
    begin
-    new^.pLeft :=pRoot^.pLeft;
-    new^.pRight:=pRoot;
+    node^.pLeft :=pRoot^.pLeft;
+    node^.pRight:=pRoot;
     pRoot^.pLeft:=nil;
    end;
-   pRoot:=new;
+   pRoot:=node;
   end;
+ end;
+end;
+
+procedure TNodeFetch.Delete(node:PNode);
+var
+ pLeft :PNode;
+ pRight:PNode;
+ pMax  :PNode;
+begin
+ if (pRoot=nil) or (node=nil) then Exit;
+ if (_Splay(node)<>0) then Exit;
+
+ pLeft :=pRoot^.pLeft;
+ pRight:=pRoot^.pRight;
+
+ if (pLeft<>nil) then
+ begin
+  pMax:=pLeft;
+  while (pMax^.pRight<>nil) do
+  begin
+   pMax:=pMax^.pRight;
+  end;
+
+  pRoot:=pLeft;
+  _Splay(pMax);
+
+  pRoot^.pRight:=pRight;
+ end else
+ begin
+  pRoot:=pRight;
  end;
 end;
 
