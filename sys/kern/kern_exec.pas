@@ -1051,7 +1051,7 @@ begin
 
  pick_obj(dynlibs_info.libkernel);
 
- kern_jit2.pick();
+ kern_jit2.pick(dynlibs_info.libkernel^.fini_proc_addr);
 
  _dyn_not_exist:
 

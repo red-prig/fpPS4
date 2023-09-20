@@ -424,7 +424,7 @@ begin
       call_far(@uplift); //input:rdi output:rax=rdi
      end else
      begin
-      link:=leaj(rsi,[rip+$FFFF],nil);
+      link:=leaj(rsi,[rip+$FFFF],nil_link);
 
       movi(edx,copy_size);
 
@@ -475,7 +475,7 @@ begin
       call_far(@uplift); //input:rdi output:rax=rdi
      end else
      begin
-      link:=movj(rsi,[rip+$FFFF],nil);
+      link:=movj(rsi,[rip+$FFFF],nil_link);
 
       movi(edx,copy_size);
 
@@ -563,7 +563,7 @@ begin
        call_far(@uplift); //input:rdi output:rax=rdi
       end else
       begin
-       link:=leaj(rsi,[rip+$FFFF],nil);
+       link:=leaj(rsi,[rip+$FFFF],nil_link);
 
        movi(edx,copy_size);
 
@@ -626,7 +626,7 @@ begin
        call_far(@uplift); //input:rdi output:rax=rdi
       end else
       begin
-       link:=leaj(rsi,[rip+$FFFF],nil);
+       link:=leaj(rsi,[rip+$FFFF],nil_link);
 
        movi(edx,copy_size);
 
@@ -680,7 +680,7 @@ begin
     begin
      //input:rdi
 
-     link:=leaj(rsi,[rip+$FFFF],nil);
+     link:=leaj(rsi,[rip+$FFFF],nil_link);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -710,7 +710,7 @@ begin
     begin
      //input:rdi
 
-     link:=movj(rsi,[rip+$FFFF],nil);
+     link:=movj(rsi,[rip+$FFFF],nil_link);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -749,7 +749,7 @@ begin
     begin
      //input:rdi
 
-     link:=leaj(rsi,[rip+$FFFF],nil);
+     link:=leaj(rsi,[rip+$FFFF],nil_link);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);
@@ -779,7 +779,7 @@ begin
     begin
      //input:rdi
 
-     link:=movj(rsi,[rip+$FFFF],nil);
+     link:=movj(rsi,[rip+$FFFF],nil_link);
 
      case ctx.din.Operand[id].RegValue[0].ASize of
       os128:movi(edx,16);

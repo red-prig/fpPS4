@@ -19,7 +19,7 @@ uses
 
 procedure add_entry_point(dst:Pointer);
 
-procedure pick();
+procedure pick(fini:Pointer);
 
 implementation
 
@@ -196,6 +196,8 @@ end;
 type
  p_jit_context2=^t_jit_context2;
  t_jit_context2=record
+  max:QWORD;
+
   Code    :Pointer;
   ptr_curr:Pointer;
   ptr_next:Pointer;
@@ -301,6 +303,16 @@ begin
  Result:=flags(ctx.din);
 end;
 
+procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64);
+begin
+ if (ctx.max<>0) and
+    (ofs<=ctx.max) then
+ if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+ begin
+  add_entry_point(Pointer(ofs));
+ end;
+end;
+
 procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue);
 var
  RegValue:TRegValues;
@@ -343,6 +355,8 @@ begin
    ofs:=0;
    GetTargetOfs(ctx.din,ctx.code,id,ofs);
    ofs:=Int64(ctx.ptr_next)+ofs;
+
+   add_rip_entry(ctx,ofs);
 
    if (classif_offset_se64(ofs)=os64) then
    begin
@@ -913,7 +927,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil);
+       link_next:=jmp8(nil_link);
 
        mem_out;
 
@@ -1162,7 +1176,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil);
+       link_next:=jmp8(nil_link);
 
        mem_out;
 
@@ -1521,7 +1535,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil);
+       link_next:=jmp8(nil_link);
 
        mem_out;
 
@@ -1646,7 +1660,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil);
+       link_next:=jmp8(nil_link);
 
        mem_out;
 
@@ -1801,7 +1815,7 @@ begin
 
     call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-    link_next:=jmp8(nil);
+    link_next:=jmp8(nil_link);
 
     mem_out;
 
@@ -1866,7 +1880,7 @@ begin
 
       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-      link_next:=jmp8(nil);
+      link_next:=jmp8(nil_link);
 
       mem_out;
 
@@ -2144,6 +2158,27 @@ begin
   add_orig(ctx);
  end;
 end;
+
+const
+ bts_desc:t_op_desc=(
+  mem_reg:(op:$0FAB;index:0);
+  reg_mem:(opt:[not_impl]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(op:$0FBA;index:5);
+  hint:[];
+ );
+
+procedure op_bts(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,bts_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 
 const
  xchg_desc:t_op_desc=(
@@ -2635,7 +2670,7 @@ type
  t_jit_label=record
   link:TAILQ_ENTRY;
   src:Pointer;
-  label_id:p_jit_instruction;
+  label_id:t_jit_i_link;
  end;
 
  p_jit_entry_point=^t_jit_entry_point;
@@ -2649,7 +2684,7 @@ var
  labels:TAILQ_HEAD=(tqh_first:nil;tqh_last:@labels.tqh_first);
  lfrwrd:TAILQ_HEAD=(tqh_first:nil;tqh_last:@lfrwrd.tqh_first);
 
-procedure add_jit_label(head:P_TAILQ_HEAD;src:Pointer;label_id:p_jit_instruction);
+procedure add_jit_label(head:P_TAILQ_HEAD;src:Pointer;label_id:t_jit_i_link);
 var
  entry:p_jit_label;
 begin
@@ -2659,11 +2694,11 @@ begin
  TAILQ_INSERT_TAIL(head,entry,@entry^.link);
 end;
 
-function find_jit_label(head:P_TAILQ_HEAD;src:Pointer):p_jit_instruction;
+function find_jit_label(head:P_TAILQ_HEAD;src:Pointer):t_jit_i_link;
 var
  entry:p_jit_label;
 begin
- Result:=nil;
+ Result:=nil_link;
 
  entry:=TAILQ_FIRST(head);
  while (entry<>nil) do
@@ -2822,7 +2857,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
- label_id:p_jit_instruction;
+ label_id:t_jit_i_link;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -2836,7 +2871,7 @@ begin
 
   label_id:=find_jit_label(@labels,dst);
 
-  if (label_id<>nil) then
+  if (label_id<>nil_link) then
   begin
    op_push_rip(ctx,false);
    //
@@ -2845,7 +2880,7 @@ begin
   begin
    op_push_rip(ctx,false);
    //
-   id:=ctx.builder.jmp(nil);
+   id:=ctx.builder.jmp(nil_link);
    add_entry_point(@lfrwrd,id,dst);
   end;
  end else
@@ -2908,7 +2943,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
- label_id:p_jit_instruction;
+ label_id:t_jit_i_link;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -2922,12 +2957,12 @@ begin
 
   label_id:=find_jit_label(@labels,dst);
 
-  if (label_id<>nil) then
+  if (label_id<>nil_link) then
   begin
    ctx.builder.jmp(label_id);
   end else
   begin
-   id:=ctx.builder.jmp(nil);
+   id:=ctx.builder.jmp(nil_link);
    add_entry_point(@lfrwrd,id,dst);
   end;
 
@@ -2966,7 +3001,7 @@ var
  id:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
- label_id:p_jit_instruction;
+ label_id:t_jit_i_link;
 begin
  ofs:=0;
  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
@@ -2978,12 +3013,12 @@ begin
 
  label_id:=find_jit_label(@labels,dst);
 
- if (label_id<>nil) then
+ if (label_id<>nil_link) then
  begin
   ctx.builder.jcc(ctx.din.OpCode.Suffix,label_id);
  end else
  begin
-  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil);
+  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
   add_entry_point(@lfrwrd,id,dst);
  end;
 end;
@@ -3958,7 +3993,28 @@ begin
  end;
 end;
 
-procedure pick();
+function is_invalid(const r:TOperand):Boolean; inline;
+begin
+ Result:=(r.RegValue[0].AType=regInvalid) or
+         (r.RegValue[1].AType=regInvalid);
+end;
+
+function is_invalid(const r:TInstruction):Boolean;
+var
+ i:Integer;
+begin
+ Result:=False;
+ if (r.OperCnt<>0) then
+ For i:=1 to r.OperCnt do
+ begin
+  Result:=is_invalid(r.Operand[i]);
+  if Result then Exit;
+ end;
+end;
+
+procedure pick(fini:Pointer);
+label
+ _next;
 var
  addr:Pointer;
  entry_point:t_jit_i_link;
@@ -3970,12 +4026,12 @@ var
  ctx:t_jit_context2;
  cb:t_jit_cb;
 
- {len1,len2,}i:Integer;
-
- node,node_curr,node_code1,node_code2:p_jit_instruction;
+ node_new,node_curr:t_jit_i_link;
+ node,node_code1,node_code2:p_jit_instruction;
 begin
 
  ctx:=Default(t_jit_context2);
+ ctx.max:=QWORD(fini); //maximal entry point?
 
  entry_point:=Default(t_jit_i_link);
  addr:=nil;
@@ -3987,9 +4043,6 @@ begin
 
  ptr:=addr;
  fin:=Pointer(Int64(-1));
-
- Writeln(SizeOf(TOpCode),' ',Succ(Ord(High(TOpCode))));
- Writeln(SizeOf(TOpCodeSuffix),' ',Succ(Ord(High(TOpCodeSuffix))));
 
  jit_cbs[OPPnone,OPxor ,OPSnone]:=@op_xor;
  jit_cbs[OPPnone,OPor  ,OPSnone]:=@op_or;
@@ -4004,6 +4057,7 @@ begin
  jit_cbs[OPPnone,OPdiv ,OPSnone]:=@op_div;
 
  jit_cbs[OPPnone,OPbt  ,OPSnone]:=@op_bt;
+ jit_cbs[OPPnone,OPbts ,OPSnone]:=@op_bts;
 
  jit_cbs[OPPnone,OPxchg,OPSnone]:=@op_xchg;
 
@@ -4168,14 +4222,38 @@ begin
  while (ptr<fin) do
  begin
 
+  if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
+  begin
+   writeln('not excec:0x',HexStr(ptr));
+   goto _next;
+  end;
+
+  ctx.ptr_curr:=ptr;
+
   adec.Disassemble(ptr,ACodeBytes,ACode);
+
+  case adec.Instr.OpCode.Opcode of
+   OPX_Invalid..OPX_GroupP:
+    begin
+     //invalid
+     writeln('invalid:0x',HexStr(ctx.ptr_curr));
+     goto _next;
+    end;
+   else;
+  end;
+
+  if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
+     is_invalid(adec.Instr) then
+  begin
+   writeln('invalid:0x',HexStr(ctx.ptr_curr));
+   goto _next;
+  end;
 
   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
   Writeln(ACodeBytes:32,' ',ACode);
   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
 
   ctx.ptr_next:=ptr;
-  ctx.ptr_curr:=ptr-adec.Disassembler.CodeIdx;
 
   ctx.code:=ctx.ptr_curr;
 
@@ -4196,12 +4274,11 @@ begin
   end;
 
   node_curr:=ctx.builder.get_curr_label;
-  if (node_curr=nil) then node_curr:=ctx.builder.get_next_label;
-  node_code1:=node_curr;
+  node_code1:=node_curr._node;
 
   cb(ctx);
 
-  node_code2:=ctx.builder.get_curr_label;
+  node_code2:=ctx.builder.get_curr_label._node;
 
   //if (node_code1<>node_code2) then
   begin
@@ -4210,11 +4287,11 @@ begin
 
   //if (len1<>len2) then
   begin
-   node:=find_jit_label(@labels,ptr);
+   node_new:=find_jit_label(@labels,ptr);
 
-   if (node<>nil) then
+   if (node_new<>nil_link) then
    begin
-    ctx.builder.jmp(node);
+    ctx.builder.jmp(node_new);
     ctx.ptr_next:=nil;
     Writeln('jmp next:0x',HexStr(ptr));
    end;
@@ -4241,6 +4318,7 @@ begin
 
   if (ctx.ptr_next=nil) then
   begin
+   _next:
    repeat
 
     if not fetch_entry_point(@lfrwrd,entry_point,addr) then
@@ -4248,8 +4326,8 @@ begin
      Assert(false);
     end;
 
-    node:=find_jit_label(@labels,addr);
-    if (node=nil) then
+    node_new:=find_jit_label(@labels,addr);
+    if (node_new=nil_link) then
     begin
      Writeln('not found:0x',HexStr(addr));
      writeln;

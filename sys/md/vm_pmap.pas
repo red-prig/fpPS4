@@ -524,7 +524,7 @@ var
  size:QWORD;
  r,old:Integer;
 begin
- Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(new_prot,2),':',HexStr(old_prot,2));
+ Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':new:',HexStr(new_prot,2),':old:',HexStr(old_prot,2));
 
  base_new:=Pointer(trunc_page(start));
  base_old:=base_new;
@@ -576,6 +576,8 @@ begin
   Writeln('failed NtProtectVirtualMemory:',HexStr(r,8));
   Assert(false,'pmap_protect');
  end;
+
+ pmap_mark(start,__end,QWORD(base_new),(new_prot and VM_RWX) shl PAGE_PROT_SHIFT);
 end;
 
 procedure pmap_madv_free(pmap :pmap_t;
