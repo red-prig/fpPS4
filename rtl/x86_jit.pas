@@ -10,24 +10,10 @@ interface
 
 uses
  mqueue,
+ g_node_splay,
  x86_fpdbgdisas;
 
 type
- generic TNodeSplay<PNode,TNode>=object
-  var
-   pRoot:PNode;
-  function  _Splay(node:PNode):Integer;
-  function  Min:PNode;
-  function  Max:PNode;
-  function  Next(node:PNode):PNode;
-  function  Prev(node:PNode):PNode;
-  function  Find(node:PNode):PNode;
-  function  Find_be(node:PNode):PNode;
-  function  Find_le(node:PNode):PNode;
-  procedure Insert(node:PNode);
-  procedure Delete(node:PNode);
- end;
-
  t_jit_reg=packed object
   ARegValue:TRegValues;
   AOffset  :Int64;
@@ -90,7 +76,7 @@ type
   function c(n1,n2:p_jit_data):Integer; static;
  end;
 
- t_jit_data_set=specialize TNodeSplay<p_jit_data,t_jit_data>;
+ t_jit_data_set=specialize TNodeSplay<t_jit_data>;
 
  t_jit_i_link=object
   private
@@ -100,6 +86,10 @@ type
    function  get_label():t_jit_i_link;
   public
    function  is_valid:Boolean;
+   function  before:t_jit_i_link;
+   function  after :t_jit_i_link;
+   function  prev(_before:boolean):t_jit_i_link;
+   function  next(_before:boolean):t_jit_i_link;
    property  _node:p_jit_instruction read ALink;
    property  _label:t_jit_i_link read get_label write set_label;
  end;
@@ -260,7 +250,6 @@ type
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
   procedure _add(const ji:t_jit_instruction);
-  Function  get_next_label:t_jit_i_link;
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
@@ -376,201 +365,6 @@ function classif_offset_64(AOffset:Int64):TOperandSize;
 function classif_offset_se64(AOffset:Int64):TOperandSize;
 
 implementation
-
-function TNodeSplay._Splay(node:PNode):Integer;
-var
- aux:TNode;
- t,l,r,y:PNode;
-begin
- t:=pRoot;
- l:=@aux;
- r:=@aux;
- aux.pLeft:=nil;
- aux.pRight:=nil;
- while (true) do
- begin
-  Result:=TNode.c(t,node);
-  if (Result=0) then Break;
-  if (Result>0) then
-  begin
-   if (t^.pLeft=nil) then break;
-   if (TNode.c(node,t^.pLeft)<0) then
-   begin
-    y:=t^.pLeft;                           // rotate pRight
-    t^.pLeft:=y^.pRight;
-    y^.pRight:=t;
-    t:=y;
-    if (t^.pLeft=nil) then break;
-   end;
-   r^.pLeft:=t;                            // link pRight
-   r:=t;
-   t:=t^.pLeft;
-  end else
-  begin
-   if (t^.pRight=nil) then break;
-   if (TNode.c(node,t^.pRight)>0) then
-   begin
-    y:=t^.pRight;                          // rotate pLeft
-    t^.pRight:=y^.pLeft;
-    y^.pLeft:=t;
-    t:=y;
-    if (t^.pRight=nil) then break;
-   end;
-   l^.pRight:=t;                           // link pLeft
-   l:=t;
-   t:=t^.pRight;
-  end;
- end;
- l^.pRight:=t^.pLeft; // assemble
- r^.pLeft :=t^.pRight;
- t^.pLeft :=aux.pRight;
- t^.pRight:=aux.pLeft;
- pRoot:=t;
-end;
-
-function TNodeSplay.Min:PNode;
-var
- node:PNode;
-begin
- Result:=nil;
- node:=pRoot;
- While (node<>nil) do
- begin
-  Result:=node;
-  node:=node^.pLeft;
- end;
-end;
-
-function TNodeSplay.Max:PNode;
-var
- node:PNode;
-begin
- Result:=nil;
- node:=pRoot;
- While (node<>nil) do
- begin
-  Result:=node;
-  node:=node^.pRight;
- end;
-end;
-
-function TNodeSplay.Next(node:PNode):PNode;
-begin
- Result:=nil;
- if (pRoot=nil) or (node=nil) then Exit;
- _Splay(node);
- node:=node^.pRight;
- While (node<>nil) do
- begin
-  Result:=node;
-  node:=node^.pLeft;
- end;
-end;
-
-function TNodeSplay.Prev(node:PNode):PNode;
-begin
- Result:=nil;
- if (pRoot=nil) or (node=nil) then Exit;
- _Splay(node);
- node:=node^.pLeft;
- While (node<>nil) do
- begin
-  Result:=node;
-  node:=node^.pRight;
- end;
-end;
-
-function TNodeSplay.Find(node:PNode):PNode;
-begin
- Result:=nil;
- if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)=0) then Result:=pRoot;
-end;
-
-function TNodeSplay.Find_be(node:PNode):PNode;
-begin
- Result:=nil;
- if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)<0) then
- begin
-  Result:=Next(pRoot);
- end else
- begin
-  Result:=pRoot;
- end;
-end;
-
-function TNodeSplay.Find_le(node:PNode):PNode;
-begin
- Result:=nil;
- if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)>0) then
- begin
-  Result:=Prev(pRoot);
- end else
- begin
-  Result:=pRoot;
- end;
-end;
-
-procedure TNodeSplay.Insert(node:PNode);
-var
- c:Integer;
-begin
- if (node=nil) then Exit;
- if (pRoot=nil) then
- begin
-  pRoot:=node;
- end else
- begin
-  c:=TNode.c(pRoot,node);
-  if (c<>0) then
-  begin
-   if (c<0) then
-   begin
-    node^.pRight:=pRoot^.pRight;
-    node^.pLeft :=pRoot;
-    pRoot^.pRight:=nil;
-   end else
-   begin
-    node^.pLeft :=pRoot^.pLeft;
-    node^.pRight:=pRoot;
-    pRoot^.pLeft:=nil;
-   end;
-   pRoot:=node;
-  end;
- end;
-end;
-
-procedure TNodeSplay.Delete(node:PNode);
-var
- pLeft :PNode;
- pRight:PNode;
- pMax  :PNode;
-begin
- if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)<>0) then Exit;
-
- pLeft :=pRoot^.pLeft;
- pRight:=pRoot^.pRight;
-
- if (pLeft<>nil) then
- begin
-  pMax:=pLeft;
-  while (pMax^.pRight<>nil) do
-  begin
-   pMax:=pMax^.pRight;
-  end;
-
-  pRoot:=pLeft;
-  _Splay(pMax);
-
-  pRoot^.pRight:=pRight;
- end else
- begin
-  pRoot:=pRight;
- end;
-end;
 
 function t_jit_data.c(n1,n2:p_jit_data):Integer;
 begin
@@ -846,6 +640,72 @@ begin
  Result:=(ALink<>nil);
 end;
 
+function t_jit_i_link.before:t_jit_i_link;
+begin
+ Result:=Self;
+ case AType of
+  lnkLabelBefore,
+  lnkLabelAfter:
+   begin
+    Result.AType:=lnkLabelBefore;
+   end;
+ end;
+end;
+
+function t_jit_i_link.after:t_jit_i_link;
+begin
+ Result:=Self;
+ case AType of
+  lnkLabelBefore,
+  lnkLabelAfter:
+   begin
+    Result.AType:=lnkLabelAfter;
+   end;
+ end;
+end;
+
+function t_jit_i_link.prev(_before:boolean):t_jit_i_link;
+begin
+ Result:=nil_link;
+ case AType of
+  lnkData:
+   begin
+    Result.AType:=lnkData;
+    Result.ALink:=TAILQ_PREV(ALink,@ALink^.link);
+   end;
+  lnkLabelBefore,
+  lnkLabelAfter:
+   begin
+    if _before then
+     Result.AType:=lnkLabelBefore
+    else
+     Result.AType:=lnkLabelAfter;
+    Result.ALink:=TAILQ_PREV(ALink,@ALink^.link);
+   end;
+ end;
+end;
+
+function t_jit_i_link.next(_before:boolean):t_jit_i_link;
+begin
+ Result:=nil_link;
+ case AType of
+  lnkData:
+   begin
+    Result.AType:=lnkData;
+    Result.ALink:=TAILQ_NEXT(ALink,@ALink^.link);
+   end;
+  lnkLabelBefore,
+  lnkLabelAfter:
+   begin
+    if _before then
+     Result.AType:=lnkLabelBefore
+    else
+     Result.AType:=lnkLabelAfter;
+    Result.ALink:=TAILQ_NEXT(ALink,@ALink^.link);
+   end;
+ end;
+end;
+
 operator = (A,B:t_jit_i_link):Boolean;
 begin
  Result:=(A.ALink=B.ALink) and (A.AType=B.AType);
@@ -1042,35 +902,6 @@ begin
  Inc(AInstructionSize,ji.ASize);
 end;
 
-Function t_jit_builder.get_next_label:t_jit_i_link;
-var
- node:p_jit_instruction;
-begin
- if (AInstructions.tqh_first=nil) and
-    (AInstructions.tqh_last=nil) then
- begin
-  TAILQ_INIT(@AInstructions);
- end;
- node:=TAILQ_LAST(@AInstructions);
- if (node=nil) then
- begin
-  node:=Alloc(SizeOf(t_jit_instruction));
-  node^.AInstructionOffset:=AInstructionSize;
-  TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
-  Result.AType:=lnkLabelBefore;
-  Result.ALink:=node;
- end else
- if (node^.ASize=0) then
- begin
-  Result.AType:=lnkLabelBefore;
-  Result.ALink:=node;
- end else
- begin
-  Result.AType:=lnkLabelAfter;
-  Result.ALink:=node;
- end;
-end;
-
 Function t_jit_builder.get_curr_label:t_jit_i_link;
 var
  node:p_jit_instruction;
@@ -1086,13 +917,9 @@ begin
   node:=Alloc(SizeOf(t_jit_instruction));
   node^.AInstructionOffset:=AInstructionSize;
   TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
-  Result.AType:=lnkLabelBefore;
-  Result.ALink:=node;
- end else
- begin
-  Result.AType:=lnkLabelBefore;
-  Result.ALink:=node;
  end;
+ Result.AType:=lnkLabelBefore;
+ Result.ALink:=node;
 end;
 
 Function t_jit_builder._add_data(P:Pointer):p_jit_data;

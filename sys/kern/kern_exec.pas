@@ -60,7 +60,8 @@ uses
  kern_dlsym,
  kern_authinfo,
  vfs_syscalls,
- kern_jit2;
+ kern_jit2,
+ kern_jit2_ctx;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -928,6 +929,8 @@ end;
 
 procedure pick_obj(obj:p_lib_info);
 var
+ ctx:t_jit_context2;
+
  Lib_Entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
  symp:p_elf64_sym;
@@ -935,9 +938,11 @@ var
  ST_TYPE:Integer;
 begin
 
- kern_jit2.add_entry_point(obj^.entry_addr);
- kern_jit2.add_entry_point(obj^.init_proc_addr);
- kern_jit2.add_entry_point(obj^.fini_proc_addr);
+ ctx:=Default(t_jit_context2);
+
+ ctx.add_forward_point(obj^.entry_addr);
+ ctx.add_forward_point(obj^.init_proc_addr);
+ ctx.add_forward_point(obj^.fini_proc_addr);
 
  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
  while (lib_entry<>nil) do
@@ -962,7 +967,7 @@ begin
         begin
          addr:=obj^.relocbase + symp^.st_value;
 
-         kern_jit2.add_entry_point(addr);
+         ctx.add_forward_point(addr);
         end;
      else;
     end; //case
@@ -973,6 +978,7 @@ begin
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
 
+ kern_jit2.pick(ctx);
 end;
 
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
@@ -1050,8 +1056,6 @@ begin
  end;
 
  pick_obj(dynlibs_info.libkernel);
-
- kern_jit2.pick(dynlibs_info.libkernel^.fini_proc_addr);
 
  _dyn_not_exist:
 

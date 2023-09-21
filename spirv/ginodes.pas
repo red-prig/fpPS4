@@ -40,9 +40,12 @@ type
   function  Next(node:PNode):PNode;
   function  Prev(node:PNode):PNode;
   function  Find(node:PNode):PNode;
+  function  Find_b(node:PNode):PNode;
   function  Find_be(node:PNode):PNode;
+  function  Find_l(node:PNode):PNode;
   function  Find_le(node:PNode):PNode;
-  procedure Insert(node:PNode);
+  function  Insert(node:PNode):Boolean;
+  function  Delete(node:PNode):Boolean;
  end;
 
 function ComparePChar(buf1,buf2:PChar):Integer;
@@ -51,54 +54,93 @@ function ComparePtruint(buf1,buf2:PPtruint;count:PtrUint):Integer;
 implementation
 
 function TNodeFetch._Splay(node:PNode):Integer;
+label
+ _left,
+ _right;
 var
- aux:TNode;
- t,l,r,y:PNode;
+ llist,rlist:PNode;
+ ltree,rtree:PNode;
+ y          :PNode;
 begin
- t:=pRoot;
- l:=@aux;
- r:=@aux;
- aux.pLeft:=nil;
- aux.pRight:=nil;
- while (true) do
- begin
-  Result:=TNode.c(t,node);
-  if (Result=0) then Break;
+ if (pRoot=nil) then Exit(0);
+
+ llist:=nil;
+ rlist:=nil;
+ repeat
+  Result:=TNode.c(node,pRoot);
+
+  if (Result<0) then
+  begin
+   y:=pRoot^.pLeft;
+   if (y=nil) then break;
+   if (y^.pLeft=nil) then
+   begin
+    _left:
+    pRoot^.pLeft:=rlist;
+    rlist:=pRoot;
+    pRoot:=y;
+   end else
+   if (TNode.c(node,y)<0) then
+   begin
+    pRoot^.pLeft:=y^.pRight;
+    y^.pRight:=pRoot;
+    pRoot:=y^.pLeft;
+    y^.pLeft:=rlist;
+    rlist:=y;
+   end else
+   begin
+    goto _left;
+   end;
+  end else
   if (Result>0) then
   begin
-   if (t^.pLeft=nil) then break;
-   if (TNode.c(node,t^.pLeft)<0) then
+   y:=pRoot^.pRight;
+   if (y=nil) then break;
+   if (y^.pRight=nil) then
    begin
-    y:=t^.pLeft;                           // rotate pRight
-    t^.pLeft:=y^.pRight;
-    y^.pRight:=t;
-    t:=y;
-    if (t^.pLeft=nil) then break;
+    _right:
+    pRoot^.pRight:=llist;
+    llist:=pRoot;
+    pRoot:=y;
+   end else
+   if (TNode.c(node,y)>0) then
+   begin
+    pRoot^.pRight:=y^.pLeft;
+    y^.pLeft:=pRoot;
+    pRoot:=y^.pRight;
+    y^.pRight:=llist;
+    llist:=y;
+   end else
+   begin
+    goto _right;
    end;
-   r^.pLeft:=t;                            // link pRight
-   r:=t;
-   t:=t^.pLeft;
   end else
   begin
-   if (t^.pRight=nil) then break;
-   if (TNode.c(node,t^.pRight)>0) then
-   begin
-    y:=t^.pRight;                          // rotate pLeft
-    t^.pRight:=y^.pLeft;
-    y^.pLeft:=t;
-    t:=y;
-    if (t^.pRight=nil) then break;
-   end;
-   l^.pRight:=t;                           // link pLeft
-   l:=t;
-   t:=t^.pRight;
+   Break;
   end;
+ until false;
+
+ ltree:=pRoot^.pLeft;
+ while (llist<>nil) do
+ begin
+  y:=llist^.pRight;
+  llist^.pRight:=ltree;
+  ltree:=llist;
+  llist:=y;
  end;
- l^.pRight:=t^.pLeft; // assemble
- r^.pLeft :=t^.pRight;
- t^.pLeft :=aux.pRight;
- t^.pRight:=aux.pLeft;
- pRoot:=t;
+
+ rtree:=pRoot^.pRight;
+ while (rlist<>nil) do
+ begin
+  y:=rlist^.pLeft;
+  rlist^.pLeft:=rtree;
+  rtree:=rlist;
+  rlist:=y;
+ end;
+
+ pRoot^.pLeft :=ltree;
+ pRoot^.pRight:=rtree;
+ Result:=TNode.c(node,pRoot);
 end;
 
 function TNodeFetch.Min:PNode;
@@ -128,29 +170,79 @@ begin
 end;
 
 function TNodeFetch.Next(node:PNode):PNode;
+var
+ y,r:PNode;
+ c:Integer;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- _Splay(node);
- node:=node^.pRight;
- While (node<>nil) do
+
+ r:=pRoot;
+ y:=nil;
+
+ if (node^.pRight<>nil) then
  begin
-  Result:=node;
-  node:=node^.pLeft;
+  y:=node^.pRight;
+  while (y^.pLeft<>nil) do y:=y^.pLeft;
+  Exit(y);
  end;
+
+ while (r<>nil) do
+ begin
+  c:=TNode.c(node,r);
+  if (c=0) then
+  begin
+   Break;
+  end else
+  if (c<0) then
+  begin
+   y:=r;
+   r:=r^.pLeft;
+  end else
+  begin
+   r:=r^.pRight;
+  end;
+ end;
+
+ Exit(y);
 end;
 
 function TNodeFetch.Prev(node:PNode):PNode;
+var
+ y,r:PNode;
+ c:Integer;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- _Splay(node);
- node:=node^.pLeft;
- While (node<>nil) do
+
+ r:=pRoot;
+ y:=nil;
+
+ if (node^.pLeft<>nil) then
  begin
-  Result:=node;
-  node:=node^.pRight;
+  y:=node^.pLeft;
+  while (y^.pRight<>nil) do y:=y^.pRight;
+  Exit(y);
  end;
+
+ while (r<>nil) do
+ begin
+  c:=TNode.c(node,r);
+  if (c=0) then
+  begin
+   break;
+  end else
+  if (c>0) then
+  begin
+   y:=r;
+   r:=r^.pRight;
+  end else
+  begin
+   r:=r^.pLeft;
+  end;
+ end;
+
+ Exit(y);
 end;
 
 function TNodeFetch.Find(node:PNode):PNode;
@@ -160,67 +252,103 @@ begin
  if (_Splay(node)=0) then Result:=pRoot;
 end;
 
-function TNodeFetch.Find_be(node:PNode):PNode;
+function TNodeFetch.Find_b(node:PNode):PNode;
+var
+ c:Integer;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)<0) then
+ c:=_Splay(node);
+ if (c=0) then
  begin
   Result:=Next(pRoot);
  end else
+ if (c<0) then
+ begin
+  Result:=pRoot;
+ end;
+end;
+
+function TNodeFetch.Find_be(node:PNode):PNode;
+var
+ c:Integer;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ c:=_Splay(node);
+ if (c<=0) then
+ begin
+  Result:=pRoot;
+ end;
+end;
+
+function TNodeFetch.Find_l(node:PNode):PNode;
+var
+ c:Integer;
+begin
+ Result:=nil;
+ if (pRoot=nil) or (node=nil) then Exit;
+ c:=_Splay(node);
+ if (c=0) then
+ begin
+  Result:=Prev(pRoot);
+ end else
+ if (c>0) then
  begin
   Result:=pRoot;
  end;
 end;
 
 function TNodeFetch.Find_le(node:PNode):PNode;
+var
+ c:Integer;
 begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
- if (_Splay(node)>0) then
- begin
-  Result:=Prev(pRoot);
- end else
+ c:=_Splay(node);
+ if (c>=0) then
  begin
   Result:=pRoot;
  end;
 end;
 
-procedure TNodeFetch.Insert(node:PNode);
+function TNodeFetch.Insert(node:PNode):Boolean;
 var
  c:Integer;
 begin
+ Result:=False;
  if (node=nil) then Exit;
  if (pRoot=nil) then
  begin
   pRoot:=node;
  end else
  begin
-  c:=TNode.c(pRoot,node);
-  if (c<>0) then
+  c:=_Splay(node);
+  if (c=0) then Exit;
+  if (c>0) then
   begin
-   if (c<0) then
-   begin
-    node^.pRight:=pRoot^.pRight;
-    node^.pLeft :=pRoot;
-    pRoot^.pRight:=nil;
-   end else
-   begin
-    node^.pLeft :=pRoot^.pLeft;
-    node^.pRight:=pRoot;
-    pRoot^.pLeft:=nil;
-   end;
-   pRoot:=node;
+   node^.pRight:=pRoot^.pRight;
+   node^.pLeft :=pRoot;
+   pRoot^.pRight:=nil;
+  end else
+  begin
+   node^.pLeft :=pRoot^.pLeft;
+   node^.pRight:=pRoot;
+   pRoot^.pLeft:=nil;
   end;
+  pRoot:=node;
  end;
+ Result:=True;
 end;
 
-procedure TNodeFetch.Delete(node:PNode);
+function TNodeFetch.Delete(node:PNode):Boolean;
 var
  pLeft :PNode;
  pRight:PNode;
  pMax  :PNode;
 begin
+ Result:=False;
+
  if (pRoot=nil) or (node=nil) then Exit;
  if (_Splay(node)<>0) then Exit;
 
@@ -243,6 +371,8 @@ begin
  begin
   pRoot:=pRight;
  end;
+
+ Result:=True;
 end;
 
 //--

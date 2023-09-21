@@ -434,7 +434,7 @@ begin
 
       //input:rdi
 
-      link._label:=get_next_label;
+      link._label:=get_curr_label.after;
      end;
 
      imm:=0;
@@ -485,7 +485,7 @@ begin
 
       //input:rdi
 
-      link._label:=get_next_label;
+      link._label:=get_curr_label.after;
      end;
 
      movq(rcx,[GS+Integer(teb_thread)]);
@@ -573,7 +573,7 @@ begin
 
        //input:rdi
 
-       link._label:=get_next_label;
+       link._label:=get_curr_label.after;
       end;
 
       movq(rcx,[GS+Integer(teb_thread)]);
@@ -636,7 +636,7 @@ begin
 
        //input:rdi
 
-       link._label:=get_next_label;
+       link._label:=get_curr_label.after;
       end;
 
       movq(rcx,[GS+Integer(teb_thread)]);
@@ -695,7 +695,7 @@ begin
 
      //input:rdi
 
-     link._label:=get_next_label;
+     link._label:=get_curr_label.after;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -725,7 +725,7 @@ begin
 
      //input:rdi
 
-     link._label:=get_next_label;
+     link._label:=get_curr_label.after;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -764,7 +764,7 @@ begin
 
      //input:rdi
 
-     link._label:=get_next_label;
+     link._label:=get_curr_label.after;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
@@ -794,7 +794,7 @@ begin
 
      //input:rdi
 
-     link._label:=get_next_label;
+     link._label:=get_curr_label.after;
 
      dst:=ctx.din.Operand[id].RegValue[0];
 
