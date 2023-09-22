@@ -349,6 +349,7 @@ type
     CodeIdx: Byte;
     OperIdx: Integer;
     ModRMIdx: Byte;
+    mm: Byte;
     Flags: TFlags;
     SimdOpcode: TSimdOpcode;
     ModRM: record
@@ -3538,13 +3539,16 @@ begin
     //---
     $C0: begin
       DecodeSIMD([soNone]);
-      if SimdOpcode = soNone
-      then begin SetOpcode(OPxadd); AddEb; AddGb; CheckLock; end;
+      case SimdOpcode of
+        soNone: begin SetOpcode(OPxadd); AddEb; AddGb; CheckLock; end;
+      end;
     end;
     $C1: begin
       DecodeSIMD([soNone]);
-      if SimdOpcode = soNone
-      then begin SetOpcode(OPxadd); AddEv; AddGv; CheckLock; end;
+      case SimdOpcode of
+        soNone: begin SetOpcode(OPxadd); AddEv; AddGv; CheckLock; end;
+        so66:   begin SetOpcode(OPxadd); AddEw; AddGw; CheckLock; end;
+      end;
     end;
     $C2: begin
       DecodeSIMD;
@@ -3929,7 +3933,7 @@ const
   SIMDMAP: array[0..3] of TSimdOpcode = (soNone, so66, soF3, soF2);
   LENMAP: array[0..3] of TOperandSize = (os128, os256, os512, os0);
 var
-  idx, mm: Byte;
+  idx: Byte;
 begin
   Assert(ASize in [2..4], Format('Invalid VEX size: %u', [ASize]));
 
@@ -4695,6 +4699,7 @@ begin
   OperIdx := 0;
   SimdOpcode := soInvalid;
   Vex.MaskIndex := 0;
+  mm:=0;
 
   Sib.Scale:=0;
   Sib.Index:=0;

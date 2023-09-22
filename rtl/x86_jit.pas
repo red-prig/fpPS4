@@ -88,8 +88,8 @@ type
    function  is_valid:Boolean;
    function  before:t_jit_i_link;
    function  after :t_jit_i_link;
-   function  prev(_before:boolean):t_jit_i_link;
-   function  next(_before:boolean):t_jit_i_link;
+   function  prev:t_jit_i_link;
+   function  next:t_jit_i_link;
    property  _node:p_jit_instruction read ALink;
    property  _label:t_jit_i_link read get_label write set_label;
  end;
@@ -98,6 +98,9 @@ const
  nil_link:t_jit_i_link=(AType:lnkNone;ALink:nil);
 
 operator = (A,B:t_jit_i_link):Boolean;
+
+//SimdOpcode (soNone=0, so66=1, soF3=2, soF2=3);
+//mm         (0F=1, 0F38=2, 0F3A=3)
 
 type
  p_jit_builder=^t_jit_builder;
@@ -265,6 +268,7 @@ type
   function  leaj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
   //
   Procedure reta;
+  Procedure ud2;
   //
   Function  GetInstructionsSize:Integer;
   Function  GetDataSize:Integer;
@@ -333,8 +337,8 @@ type
   procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
-  procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
-  procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;imm8:Byte);
+  procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
+  procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
   procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue);
   procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte);
   procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
@@ -649,6 +653,7 @@ begin
    begin
     Result.AType:=lnkLabelBefore;
    end;
+  else;
  end;
 end;
 
@@ -661,48 +666,53 @@ begin
    begin
     Result.AType:=lnkLabelAfter;
    end;
+  else;
  end;
 end;
 
-function t_jit_i_link.prev(_before:boolean):t_jit_i_link;
+function t_jit_i_link.prev:t_jit_i_link;
 begin
  Result:=nil_link;
  case AType of
   lnkData:
    begin
     Result.AType:=lnkData;
-    Result.ALink:=TAILQ_PREV(ALink,@ALink^.link);
+    Result.ALink:=TAILQ_PREV(ALink,@p_jit_data(ALink)^.link);
    end;
   lnkLabelBefore,
   lnkLabelAfter:
    begin
-    if _before then
-     Result.AType:=lnkLabelBefore
-    else
-     Result.AType:=lnkLabelAfter;
+    Result.AType:=lnkLabelBefore;
     Result.ALink:=TAILQ_PREV(ALink,@ALink^.link);
    end;
+  else;
+ end;
+ if (Result.ALink=nil) then
+ begin
+  Result:=nil_link;
  end;
 end;
 
-function t_jit_i_link.next(_before:boolean):t_jit_i_link;
+function t_jit_i_link.next:t_jit_i_link;
 begin
  Result:=nil_link;
  case AType of
   lnkData:
    begin
     Result.AType:=lnkData;
-    Result.ALink:=TAILQ_NEXT(ALink,@ALink^.link);
+    Result.ALink:=TAILQ_NEXT(ALink,@p_jit_data(ALink)^.link);
    end;
   lnkLabelBefore,
   lnkLabelAfter:
    begin
-    if _before then
-     Result.AType:=lnkLabelBefore
-    else
-     Result.AType:=lnkLabelAfter;
+    Result.AType:=lnkLabelBefore;
     Result.ALink:=TAILQ_NEXT(ALink,@ALink^.link);
    end;
+  else;
+ end;
+ if (Result.ALink=nil) then
+ begin
+  Result:=nil_link;
  end;
 end;
 
@@ -1135,6 +1145,19 @@ begin
  ji:=default_jit_instruction;
 
  ji.EmitByte($C3);
+
+ _add(ji);
+end;
+
+
+Procedure t_jit_builder.ud2;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($0F);
+ ji.EmitByte($0B);
 
  _add(ji);
 end;
@@ -3474,7 +3497,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
 var
  mreg:t_jit_reg;
 
@@ -3518,10 +3541,17 @@ begin
 
  Vex.Index:=reg1.AIndex;
 
- Vex.rexW:=False;
- if (reg0.ASize=os64) then
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ if (size=os64) then
  begin
   Vex.rexW:=True;
+ end else
+ begin
+  Vex.rexW:=False;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -3563,7 +3593,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;imm8:Byte);
+procedure t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
 var
  mreg:t_jit_reg;
 
@@ -3607,10 +3637,17 @@ begin
 
  Vex.Index:=reg1.AIndex;
 
- Vex.rexW:=False;
- if (reg0.ASize=os64) then
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ if (size=os64) then
  begin
   Vex.rexW:=True;
+ end else
+ begin
+  Vex.rexW:=False;
  end;
 
  modrm_info:=Default(t_modrm_info);

@@ -420,6 +420,12 @@ begin
  id:=PByte(ctx.code)[i];
 
  case id of
+  $41: //assert?
+   begin
+    //
+    ctx.builder.call_far(nil); //TODO error dispatcher
+   end;
+
   $44: //system error?
    begin
     //
@@ -450,6 +456,12 @@ end;
 procedure op_cpuid(var ctx:t_jit_context2);
 begin
  ctx.builder.call_far(nil); //TODO CPUID
+end;
+
+procedure op_rdtsc(var ctx:t_jit_context2);
+begin
+ add_orig(ctx);
+ op_save_rax(ctx,ctx.builder.rax);
 end;
 
 procedure op_nop(var ctx:t_jit_context2);
@@ -503,6 +515,7 @@ begin
  jit_cbs[OPPnone,OPiret,OPSx_q ]:=@op_iretq;
 
  jit_cbs[OPPnone,OPcpuid,OPSnone]:=@op_cpuid;
+ jit_cbs[OPPnone,OPrdtsc ,OPSnone]:=@op_rdtsc;
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
@@ -510,6 +523,9 @@ begin
 end;
 
 procedure pick(var ctx:t_jit_context2);
+const
+ SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
+ MCODES:array[0..3] of RawByteString=('','0F','0F38','0F3A');
 label
  _next;
 var
@@ -534,6 +550,9 @@ begin
  kern_jit2_ops.init_cbs;
 
  ctx.max:=QWORD(ctx.max_forward_point);
+ Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
+ Writeln(' ctx.max       :0x',HexStr(ctx.max,16));
+ Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
 
  links:=Default(t_jit_context2.t_forward_links);
  addr:=nil;
@@ -567,6 +586,11 @@ begin
     begin
      //invalid
      writeln('invalid:0x',HexStr(ctx.ptr_curr));
+
+     ptr:=ctx.ptr_curr;
+     adec.Disassemble(ptr,ACodeBytes,ACode);
+
+
      goto _next;
     end;
    else;
@@ -600,6 +624,9 @@ begin
            ctx.din.OpCode.Suffix,' ',
            ctx.din.Operand[1].Size,' ',
            ctx.din.Operand[2].Size);
+   Writeln('MIndex=',ctx.dis.ModRM.Index,' ',
+           'SOpcode=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
+           'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);
    Assert(false);
   end;
 
@@ -659,6 +686,8 @@ begin
 
     if not ctx.fetch_forward_point(links,addr) then
     begin
+     ctx.builder.ud2;
+
      data:=AllocMem(ctx.builder.GetMemSize);
      ctx.builder.SaveTo(data,ctx.builder.GetMemSize);
 

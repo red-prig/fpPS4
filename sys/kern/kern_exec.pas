@@ -937,12 +937,20 @@ var
  addr:Pointer;
  ST_TYPE:Integer;
 begin
+ if (obj=nil) then Exit;
 
  ctx:=Default(t_jit_context2);
 
+ ctx.text_start:=QWORD(obj^.map_base);
+ ctx.text___end:=ctx.text_start+obj^.text_size;
+
  ctx.add_forward_point(obj^.entry_addr);
- ctx.add_forward_point(obj^.init_proc_addr);
- ctx.add_forward_point(obj^.fini_proc_addr);
+
+ if (obj^.mainprog=0) then
+ begin
+  ctx.add_forward_point(obj^.init_proc_addr);
+  ctx.add_forward_point(obj^.fini_proc_addr);
+ end;
 
  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
  while (lib_entry<>nil) do
@@ -1020,6 +1028,8 @@ begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
+ pick_obj(obj);
+
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) do
  begin
@@ -1054,6 +1064,8 @@ begin
   p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
   p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
  end;
+
+ //pick_obj(dynlibs_info.libprogram);
 
  pick_obj(dynlibs_info.libkernel);
 
