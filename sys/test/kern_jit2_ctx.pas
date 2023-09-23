@@ -203,6 +203,7 @@ procedure op_emit_avx2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_avx3(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx_F3(var ctx:t_jit_context2;const desc:t_op_type);
+procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rmr(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 
@@ -2279,7 +2280,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   _MVI8(desc,[flags(ctx)+r_tmp0],new2,imm);
+   _VMI8(desc,new2,[flags(ctx)+r_tmp0],imm);
   end;
  end;
 
@@ -2297,7 +2298,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   _MVI8(desc,[flags(ctx)+r_tmp0],new2,imm);
+   _VMI8(desc,new1,[flags(ctx)+r_tmp0],imm);
   end;
  end;
 
@@ -2374,7 +2375,7 @@ begin
       movq([r_thrd+i],new1);
      end else
      begin
-      _MVI8(desc,[r_thrd+i],new2,imm);
+      _VMI8(desc,new2,[r_thrd+i],imm);
      end;
     end;
 
@@ -2505,6 +2506,56 @@ begin
     Assert(false);
   end;
 
+end;
+
+//rrrr,rrmr
+procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
+var
+ memop:t_memop_type2;
+ mem_size:TOperandSize;
+ link_next:t_jit_i_link;
+
+ new1,new2,new3:TRegValue;
+
+ procedure mem_in;
+ begin
+  with ctx.builder do
+  begin
+   //input:rax
+
+   new1:=new_reg(ctx.din.Operand[1]);
+   new2:=new_reg(ctx.din.Operand[2]);
+   new3:=new_reg(ctx.din.Operand[4]);
+
+   _VVMV(desc,new1,new2,[flags(ctx)+r_tmp0],mem_size,new3);
+  end;
+ end;
+
+begin
+ with ctx.builder do
+  if is_memory(ctx.din.Operand[3]) then
+  begin
+   build_lea(ctx,3,r_tmp0);
+   mem_size:=ctx.din.Operand[3].Size;
+
+   if false then
+   begin
+    call_far(@uplift_jit); //in/out:rax uses:r14
+
+    mem_in;
+   end else
+   begin
+    //mem_size
+    movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+
+    call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+
+    mem_in;
+   end;
+  end else
+  begin
+   Assert(false);
+  end;
 end;
 
 procedure op_emit_bmi_rmr(var ctx:t_jit_context2;const desc:t_op_type);

@@ -453,6 +453,12 @@ begin
  ctx.ptr_next:=nil; //trim
 end;
 
+procedure op_hlt(var ctx:t_jit_context2);
+begin
+ //stop thread?
+ ctx.builder.call_far(nil); //TODO exit dispatcher
+end;
+
 procedure op_cpuid(var ctx:t_jit_context2);
 begin
  ctx.builder.call_far(nil); //TODO CPUID
@@ -513,6 +519,8 @@ begin
  jit_cbs[OPPnone,OPiret,OPSnone]:=@op_iretq;
  jit_cbs[OPPnone,OPiret,OPSx_d ]:=@op_iretq;
  jit_cbs[OPPnone,OPiret,OPSx_q ]:=@op_iretq;
+
+ jit_cbs[OPPnone,OPhlt ,OPSnone]:=@op_hlt;
 
  jit_cbs[OPPnone,OPcpuid,OPSnone]:=@op_cpuid;
  jit_cbs[OPPnone,OPrdtsc ,OPSnone]:=@op_rdtsc;

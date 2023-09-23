@@ -339,10 +339,11 @@ type
   procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
   procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
+  procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
   procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue);
   procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte);
   procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
-  procedure _MVI8   (const desc:t_op_type;mem:t_jit_regs;reg:TRegValue;imm8:Byte);
+  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm8:Byte);
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_regs);
   procedure vmovdqu (mem:t_jit_regs;reg:TRegValue);
   procedure vmovdqa (reg:TRegValue ;mem:t_jit_regs);
@@ -1639,6 +1640,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -1733,6 +1735,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -1835,6 +1838,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -1935,6 +1939,7 @@ begin
  op:=desc.op;
  case size of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2023,6 +2028,7 @@ begin
  op:=desc.op;
  case size of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2117,6 +2123,7 @@ begin
  op:=desc.op;
  case size of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2193,6 +2200,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2352,6 +2360,7 @@ begin
  op:=desc.op;
  case size of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2443,10 +2452,12 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
   os16:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -2525,10 +2536,12 @@ begin
  op:=desc.op;
  case size of
    os8:
+       if (not (not_prefix in desc.opt)) then
        begin
         Dec(op);
        end;
   os16:
+       if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
        end;
@@ -3691,6 +3704,11 @@ begin
  _add(ji);
 end;
 
+procedure t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
+begin
+ _VVMI8(desc,reg0,reg1,mem,size,reg2.AIndex shl 4);
+end;
+
 procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue);
 var
  modrm_info:t_modrm_info;
@@ -3896,7 +3914,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._MVI8(const desc:t_op_type;mem:t_jit_regs;reg:TRegValue;imm8:Byte);
+procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm8:Byte);
 var
  mreg:t_jit_reg;
 
