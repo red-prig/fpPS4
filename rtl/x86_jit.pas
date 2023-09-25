@@ -335,6 +335,7 @@ type
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
   procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
+  procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
   procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
   procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
@@ -1327,6 +1328,7 @@ type
   procedure build_rr(const reg0,reg1:TRegValue);
   procedure build_ir(Index:Byte;const reg:TRegValue);
   procedure emit_rex(var ji:t_jit_instruction;rexW:Boolean);
+  procedure emit_gop(var ji:t_jit_instruction;rexW:Boolean;op:DWORD);
   procedure emit_mrm(var ji:t_jit_instruction);
  end;
 
@@ -1565,6 +1567,39 @@ begin
  end;
 end;
 
+procedure t_modrm_info.emit_gop(var ji:t_jit_instruction;rexW:Boolean;op:DWORD);
+begin
+ case op of
+  $00..$FF:
+   begin
+    emit_rex(ji,rexW);
+    ji.EmitByte(Byte(op));
+   end;
+  $100..$FFFF:
+   begin
+    emit_rex(ji,rexW);
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+  else
+   begin
+    if (Lo(Hi(op))=$F3) then
+    begin
+     ji.EmitByte(Lo(Hi(op)));
+     emit_rex(ji,rexW);
+     ji.EmitByte(Hi(Lo(op)));
+     ji.EmitByte(Lo(Lo(op)));
+    end else
+    begin
+     emit_rex(ji,rexW);
+     ji.EmitByte(Lo(Hi(op)));
+     ji.EmitByte(Hi(Lo(op)));
+     ji.EmitByte(Lo(Lo(op)));
+    end;
+   end;
+ end;
+end;
+
 procedure t_modrm_info.emit_mrm(var ji:t_jit_instruction);
 begin
  ji.EmitModRM(ModRM.Mode,ModRM.Index,ModRM.RM);
@@ -1679,25 +1714,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -1774,25 +1791,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -1877,25 +1876,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -1966,25 +1947,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2055,25 +2018,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2150,25 +2095,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2227,25 +2154,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2399,25 +2308,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2474,25 +2365,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2574,25 +2447,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2650,25 +2505,7 @@ begin
   ji.EmitByte(Prefix); //Operand-size override prefix (16)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -2738,25 +2575,7 @@ begin
   ji.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_rex(ji,rexW);
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
+ modrm_info.emit_gop(ji,rexW,op);
 
  modrm_info.emit_mrm(ji);
 
@@ -3383,6 +3202,72 @@ begin
  _add(ji);
 end;
 
+procedure t_jit_builder._VV(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
+ case reg0.ASize of
+  os128:Vex.Length:=0;
+  os256:Vex.Length:=1;
+  else;
+ end;
+
+ Vex.rexW:=False;
+ if (size=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg1,reg0);
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.index);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
 procedure t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
 var
  mreg:t_jit_reg;
@@ -3871,11 +3756,11 @@ begin
  Assert(not (not_impl in desc.opt));
  Assert(desc.mm=3);
 
- Assert(is_reg_size(reg0,[os8,os16,os32,os64]));
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
  Assert(is_reg_type(reg0,[regGeneral,regXmm]));
  Assert(reg0.AScale<=1);
 
- Assert(is_reg_size(reg1,[os8,os16,os32,os64]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
  Assert(is_reg_type(reg1,[regGeneral,regXmm]));
  Assert(reg1.AScale<=1);
 
@@ -3898,7 +3783,7 @@ begin
 
  modrm_info:=Default(t_modrm_info);
 
- modrm_info.build_rr(reg0,reg1);
+ modrm_info.build_rr(reg1,reg0);
 
  ji.EmitByte($C4); //VEX3
 
@@ -3927,8 +3812,9 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=3);
 
- Assert(is_reg_size(reg,[os128,os256]));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
  Assert(is_reg_type(reg,[regXmm]));
  Assert(reg.AScale<=1);
 

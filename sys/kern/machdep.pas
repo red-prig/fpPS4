@@ -13,10 +13,15 @@ uses
  kern_proc;
 
 const
- _ucodesel=(8 shl 3) or 3;
- _udatasel=(7 shl 3) or 3;
- _ufssel  =(2 shl 3) or 3;
- _ugssel  =(3 shl 3) or 3;
+ GUFS32_SEL = 2; // User 32 bit %fs Descriptor
+ GUGS32_SEL = 3; // User 32 bit %gs Descriptor
+ GUDATA_SEL = 7; // User 32/64 bit Data Descriptor
+ GUCODE_SEL = 8; // User 64 bit Code Descriptor
+
+ _ucodesel=(GUCODE_SEL shl 3) or 3;
+ _udatasel=(GUDATA_SEL shl 3) or 3;
+ _ufssel  =(GUFS32_SEL shl 3) or 3;
+ _ugssel  =(GUGS32_SEL shl 3) or 3;
 
 procedure bzero(ptr:Pointer;size:ptrint);
 Procedure bmove(src,dst:Pointer;size:ptrint);
