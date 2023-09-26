@@ -16,7 +16,8 @@ uses
  x86_fpdbgdisas,
  x86_jit,
  kern_stub,
- kern_jit2_ctx;
+ kern_jit2_ctx,
+ kern_jit2_ops_avx;
 
 procedure pick(var ctx:t_jit_context2);
 
@@ -556,6 +557,9 @@ begin
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
+ kern_jit2_ops.init_cbs;
+ init_cbs_avx;
+
  inited:=1;
 end;
 
@@ -584,7 +588,6 @@ var
 begin
 
  init_cbs;
- kern_jit2_ops.init_cbs;
 
  ctx.max:=QWORD(ctx.max_forward_point);
  Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));

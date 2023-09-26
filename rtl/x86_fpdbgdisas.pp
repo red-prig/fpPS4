@@ -1794,12 +1794,12 @@ end;
 
 procedure TX86Disassembler.AddUpd;
 begin
-  AddModRM([modReg], os128, regXmm);
+  AddModRM([modReg], VectorSize, regXmm);
 end;
 
 procedure TX86Disassembler.AddUps;
 begin
-  AddModRM([modReg], os128, regXmm);
+  AddModRM([modReg], VectorSize, regXmm);
 end;
 
 procedure TX86Disassembler.AddUq;

@@ -205,6 +205,7 @@ procedure op_save_rax(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 procedure op_emit2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_shift(var ctx:t_jit_context2;const desc:t_op_shift);
+procedure op_emit_avx2_rr(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_avx3(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_avx3_imm);
@@ -1996,6 +1997,31 @@ end;
 
 //
 
+procedure op_emit_avx2_rr(var ctx:t_jit_context2;const desc:t_op_type);
+var
+ i:Integer;
+ new1,new2:TRegValue;
+begin
+ if is_preserved(ctx.din.Operand[1]) then
+ begin
+  with ctx.builder do
+  begin
+   new1:=r_tmp0;
+   new2:=new_reg(ctx.din.Operand[2]);
+
+   _VV(desc,new1,new2,new2.ASize);
+
+   i:=GetFrameOffset(ctx.din.Operand[1]);
+   movq([r_thrd+i],new1);
+  end;
+ end else
+ begin
+  Assert(False);
+ end;
+end;
+
+//
+
 procedure op_emit_avx2(var ctx:t_jit_context2;const desc:t_op_desc);
 var
  i:Integer;
@@ -2639,7 +2665,7 @@ begin
    new3:=new_reg(ctx.din.Operand[3]);
   end;
 
-  _VVV(desc,new1,new3,new2); //1 3 2
+  _VVV(desc,new1,new3,new2,new3.ASize); //1 3 2
 
   if is_preserved(ctx.din.Operand[1]) then
   begin
@@ -2705,7 +2731,7 @@ begin
    new3:=new_reg(ctx.din.Operand[3]);
   end;
 
-  _VVV(desc,new1,new2,new3); //1 2 3
+  _VVV(desc,new1,new2,new3,new3.ASize); //1 2 3
 
   if is_preserved(ctx.din.Operand[1]) then
   begin

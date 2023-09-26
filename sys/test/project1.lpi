@@ -754,6 +754,10 @@
         <Filename Value="..\..\rtl\g_node_splay.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="kern_jit2_ops_avx.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

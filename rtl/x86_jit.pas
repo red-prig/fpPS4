@@ -341,8 +341,8 @@ type
   procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
   procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
   procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
-  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue);
-  procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte);
+  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
+  procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize;imm8:Byte);
   procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize;imm8:Byte);
   procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_regs);
@@ -3240,15 +3240,20 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
+ Vex.rexW:=False;
 
- if not (not_vex_len in desc.opt) then
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
  end;
 
- Vex.rexW:=False;
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
@@ -3312,15 +3317,20 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
+ Vex.rexW:=False;
 
- if not (not_vex_len in desc.opt) then
- case reg.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
+ if (size=os0) then
+ begin
+  size:=reg.ASize;
  end;
 
- Vex.rexW:=False;
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
@@ -3383,8 +3393,20 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
-
  Vex.rexW:=False;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
@@ -3442,28 +3464,26 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
-
- if not (not_vex_len in desc.opt) then
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
- end;
-
- Vex.Index:=reg1.AIndex;
+ Vex.rexW:=False;
 
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
- end else
- begin
-  Vex.rexW:=False;
  end;
+
+ Vex.Index:=reg1.AIndex;
 
  modrm_info:=Default(t_modrm_info);
 
@@ -3538,28 +3558,26 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
-
- if not (not_vex_len in desc.opt) then
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
- end;
-
- Vex.Index:=reg1.AIndex;
+ Vex.rexW:=False;
 
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
- end else
- begin
-  Vex.rexW:=False;
  end;
+
+ Vex.Index:=reg1.AIndex;
 
  modrm_info:=Default(t_modrm_info);
 
@@ -3607,7 +3625,7 @@ begin
  _VVMI8(desc,reg0,reg1,mem,size,reg2.AIndex shl 4);
 end;
 
-procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue);
+procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
 var
  modrm_info:t_modrm_info;
 
@@ -3637,21 +3655,26 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
+ Vex.rexW:=False;
 
- if not (not_vex_len in desc.opt) then
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
  end;
 
- Vex.Index:=reg1.AIndex;
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
 
- Vex.rexW:=False;
- if (reg0.ASize=os64) then
+ if not (not_prefix in desc.opt) then
+ if (size=os64) then
  begin
   Vex.rexW:=True;
  end;
+
+ Vex.Index:=reg1.AIndex;
 
  modrm_info:=Default(t_modrm_info);
 
@@ -3680,7 +3703,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte);
+procedure t_jit_builder._VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize;imm8:Byte);
 var
  modrm_info:t_modrm_info;
 
@@ -3710,21 +3733,26 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
+ Vex.rexW:=False;
 
- if not (not_vex_len in desc.opt) then
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
  end;
 
- Vex.Index:=reg1.AIndex;
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
 
- Vex.rexW:=False;
- if (reg0.ASize=os64) then
+ if not (not_prefix in desc.opt) then
+ if (size=os64) then
  begin
   Vex.rexW:=True;
  end;
+
+ Vex.Index:=reg1.AIndex;
 
  modrm_info:=Default(t_modrm_info);
 
@@ -3780,25 +3808,23 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
-
- if not (not_vex_len in desc.opt) then
- case reg1.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
- end;
+ Vex.rexW:=False;
 
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
- end else
- begin
-  Vex.rexW:=False;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -3848,25 +3874,23 @@ begin
  ji:=default_jit_instruction;
 
  Vex.Length:=0;
-
- if not (not_vex_len in desc.opt) then
- case reg.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
- end;
+ Vex.rexW:=False;
 
  if (size=os0) then
  begin
   size:=reg.ASize;
  end;
 
+ if not (not_vex_len in desc.opt) then
+ if (size=os256) then
+ begin
+  Vex.Length:=1;
+ end;
+
+ if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
   Vex.rexW:=True;
- end else
- begin
-  Vex.rexW:=False;
  end;
 
  modrm_info:=Default(t_modrm_info);
