@@ -2180,6 +2180,54 @@ begin
 end;
 
 const
+ vminss_desc:t_op_type=(
+  op:$5D;index:2;mm:1
+ );
+
+procedure op_vminss(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vminss_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vminsd_desc:t_op_type=(
+  op:$5D;index:3;mm:1
+ );
+
+procedure op_vminsd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vminsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vmaxss_desc:t_op_type=(
+  op:$5F;index:2;mm:1
+ );
+
+procedure op_vmaxss(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vmaxss_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  vmaxsd_desc:t_op_type=(
   op:$5F;index:3;mm:1
  );
@@ -2405,6 +2453,10 @@ begin
  jit_cbs[OPPv,OPpsll,OPSx_d]:=@op_vpslld;
  jit_cbs[OPPv,OPpsll,OPSx_q]:=@op_vpsllq;
 
+ jit_cbs[OPPv,OPmin,OPSx_ss]:=@op_vminss;
+ jit_cbs[OPPv,OPmin,OPSx_sd]:=@op_vminsd;
+
+ jit_cbs[OPPv,OPmax,OPSx_ss]:=@op_vmaxss;
  jit_cbs[OPPv,OPmax,OPSx_sd]:=@op_vmaxsd;
 
  jit_cbs[OPPv,OPhadd,OPSx_pd]:=@op_vhaddpd;

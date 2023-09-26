@@ -105,8 +105,8 @@ type
     pre66,   // $66:  	Operand-size override prefix  (32 and 64 bit) or SIMD prefix
     preAdr,  // $67:    Address-size override prefix
     preLock,
-    preF2,   // $F2: Repeat RawByteString/input/output or SIMD prefix
-    preF3,   // $F3: Repeat RawByteString/input/output or SIMD prefix
+    preF2,   // $F2: Repeat String/input/output or SIMD prefix
+    preF3,   // $F3: Repeat String/input/output or SIMD prefix
     oprDefault64,  // In 64bit mode set default operand size to 64 (d64 note in Table A-x)
     oprForce64,    // In 64bit mode set operand size to 64 (f64 note in Table A-x)
     flagVex,
@@ -4604,7 +4604,7 @@ begin
       end;
       $EC: begin
         SetOpcode(OPin);
-        AddReg(regGeneral, os8, REG_A);
+        AddReg(regGeneral,  os8, REG_A);
         AddReg(regGeneral, os16, REG_D);
       end;
       $ED: begin
@@ -4615,7 +4615,7 @@ begin
       $EE: begin
         SetOpcode(OPout);
         AddReg(regGeneral, os16, REG_D);
-        AddReg(regGeneral, os8, REG_A);
+        AddReg(regGeneral,  os8, REG_A);
       end;
       $EF: begin
         SetOpcode(OPout);

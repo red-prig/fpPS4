@@ -489,19 +489,39 @@ begin
 end;
 
 const
- movsxd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$63;index:0);
+ movsd_desc:t_op_desc=(
+  mem_reg:(op:$F20F11;opt:[not_prefix]);
+  reg_mem:(op:$F20F10;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
-procedure op_movsxd(var ctx:t_jit_context2);
+procedure op_movsd(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit2(ctx,movsxd_desc);
+  op_emit2(ctx,movsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ movss_desc:t_op_desc=(
+  mem_reg:(op:$F30F11;opt:[not_prefix]);
+  reg_mem:(op:$F30F10;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movss(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,movss_desc);
  end else
  begin
   add_orig(ctx);
@@ -522,6 +542,26 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2(ctx,movbe_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ movsxd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$63;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movsxd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,movsxd_desc);
  end else
  begin
   add_orig(ctx);
@@ -897,26 +937,6 @@ begin
  end;
 end;
 
-const
- pxor_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$0FEF;index:0);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_xor,his_rw];
- );
-
-procedure op_pxor(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,pxor_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
 //
 
 const
@@ -958,7 +978,7 @@ const
 
 procedure op_fnstsw(var ctx:t_jit_context2);
 begin
- if is_memory(ctx.din) then
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit1(ctx,fnstsw_desc,[]);
  end else
@@ -974,7 +994,7 @@ const
 
 procedure op_fnstcw(var ctx:t_jit_context2);
 begin
- if is_memory(ctx.din) then
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit1(ctx,fnstcw_desc,[]);
  end else
@@ -1336,6 +1356,32 @@ begin
  end;
 end;
 
+
+const
+ fisub_16_desc:t_op_type=(
+  op:$DE;index:4;opt:[not_prefix];
+ );
+
+ fisub_32_desc:t_op_type=(
+  op:$DA;index:4;opt:[not_prefix];
+ );
+
+procedure op_fisub(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  case ctx.din.Operand[1].Size of
+   os32:op_emit1(ctx,fisub_16_desc,[his_ro]);
+   os64:op_emit1(ctx,fisub_32_desc,[his_ro]);
+   else
+    Assert(false);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 const
  fdiv_32_desc:t_op_type=(
   op:$D8;index:6;opt:[not_prefix];
@@ -1448,6 +1494,49 @@ begin
  op_emit1(ctx,prefetch2_desc,[his_rw]);
 end;
 
+//
+
+const
+ pxor_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$0FEF;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_xor,his_rw];
+ );
+
+procedure op_pxor(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,pxor_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ cvtsd2si_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F2D;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_cvtsd2si(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,cvtsd2si_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 procedure init_cbs;
 begin
@@ -1490,8 +1579,10 @@ begin
 
  jit_cbs[OPPnone,OPmovzx,OPSnone]:=@op_movzx;
  jit_cbs[OPPnone,OPmovsx,OPSnone]:=@op_movsx;
- jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
+ jit_cbs[OPPnone,OPmov  ,OPSx_sd]:=@op_movsd;
+ jit_cbs[OPPnone,OPmov  ,OPSx_ss]:=@op_movss;
  jit_cbs[OPPnone,OPmov  ,OPSc_be]:=@op_movbe;
+ jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
 
  jit_cbs[OPPnone,OPtest,OPSnone]:=@op_test;
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
@@ -1524,8 +1615,6 @@ begin
  jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_setcc;
  jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_setcc;
  jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_setcc;
-
- jit_cbs[OPPnone,OPpxor,OPSnone]:=@op_pxor;
 
  jit_cbs[OPPnone,OPemms    ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPvzeroall,OPSnone]:=@add_orig;
@@ -1567,6 +1656,9 @@ begin
  jit_cbs[OPPnone,OPfdivr,OPSx_p ]:=@add_orig;
  jit_cbs[OPPnone,OPfsqrt,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfabs ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPfprem ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfprem1,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPfwait ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfnclex,OPSnone]:=@add_orig;
@@ -1616,6 +1708,7 @@ begin
  jit_cbs[OPPnone,OPfmul   ,OPSnone]:=@op_fmul;
  jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_fsub;
  jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_fsubr;
+ jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_fisub;
  jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_fdiv;
  jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_fdivr;
 
@@ -1625,6 +1718,10 @@ begin
  jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_prefetch0;
  jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_prefetch1;
  jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_prefetch2;
+
+ jit_cbs[OPPnone,OPpxor,OPSnone]:=@op_pxor;
+
+ jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_cvtsd2si;
 
 end;
 
