@@ -287,9 +287,14 @@ begin
  end;
 end;
 
+const
+ movsx8_desc:t_op_type=(op:$0FBE);
+ movsxd_desc:t_op_type=(op:$63);
+
 procedure op_push(var ctx:t_jit_context2);
 var
  i:Integer;
+ imm:Int64;
  stack,new:TRegValue;
 begin
  with ctx.builder do
@@ -306,6 +311,15 @@ begin
 
    movq(new,[r_tmp0]);
   end else
+  if (ctx.din.Operand[1].ByteCount<>0) then
+  begin
+   imm:=0;
+   GetTargetOfs(ctx.din,ctx.code,1,imm);
+
+   new:=new_reg_size(r_tmp1,ctx.din.Operand[1].Size);
+
+   movi(new,imm);
+  end else
   if is_preserved(ctx.din) then
   begin
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
@@ -315,6 +329,21 @@ begin
   end else
   begin
    new:=new_reg(ctx.din.Operand[1]);
+  end;
+
+  //sign extend
+  case new.ASize of
+    os8:
+     begin
+      ctx.builder._RR(movsx8_desc,new,new,os64);
+      new:=new_reg_size(new,os64);
+     end;
+   os32:
+     begin
+      ctx.builder._RR(movsxd_desc,new,new,os64);
+      new:=new_reg_size(new,os64);
+     end
+   else;
   end;
 
   i:=GetFrameOffset(rsp);
@@ -523,7 +552,7 @@ begin
  jit_cbs[OPPnone,OPhlt ,OPSnone]:=@op_hlt;
 
  jit_cbs[OPPnone,OPcpuid,OPSnone]:=@op_cpuid;
- jit_cbs[OPPnone,OPrdtsc ,OPSnone]:=@op_rdtsc;
+ jit_cbs[OPPnone,OPrdtsc,OPSnone]:=@op_rdtsc;
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
@@ -654,8 +683,7 @@ begin
    while (node<>nil) do
    begin
 
-    print_disassemble(@node^.AData,
-                       node^.ASize);
+    print_disassemble(@node^.AData,node^.ASize);
 
 
     node:=TAILQ_NEXT(node,@node^.link);

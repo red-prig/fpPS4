@@ -343,8 +343,8 @@ type
   procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
   procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue);
   procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte);
-  procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
-  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm8:Byte);
+  procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize;imm8:Byte);
+  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_regs);
   procedure vmovdqu (mem:t_jit_regs;reg:TRegValue);
   procedure vmovdqa (reg:TRegValue ;mem:t_jit_regs);
@@ -368,6 +368,7 @@ operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):TOperandSize;
+function classif_offset_u64(AOffset:QWORD):TOperandSize;
 function classif_offset_se64(AOffset:Int64):TOperandSize;
 
 implementation
@@ -427,6 +428,17 @@ begin
   -2147483648..-129,128..2147483647:Result:=os32;
   else
                                     Result:=os64;
+ end;
+end;
+
+function classif_offset_u64(AOffset:QWORD):TOperandSize;
+begin
+ case AOffset of
+                0:Result:=os0;
+           1..$FF:Result:=os8;
+  $100..$FFFFFFFF:Result:=os32;
+  else
+                  Result:=os64;
  end;
 end;
 
@@ -2334,6 +2346,7 @@ begin
 
  ji:=default_jit_instruction;
 
+ rexW:=False;
  Prefix:=0;
 
  modrm_info:=Default(t_modrm_info);
@@ -3742,7 +3755,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVI8(const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte);
+procedure t_jit_builder._VVI8(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize;imm8:Byte);
 var
  modrm_info:t_modrm_info;
 
@@ -3775,10 +3788,17 @@ begin
   else;
  end;
 
- Vex.rexW:=False;
- if (reg0.ASize=os64) then
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ if (size=os64) then
  begin
   Vex.rexW:=True;
+ end else
+ begin
+  Vex.rexW:=False;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -3799,13 +3819,14 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm8:Byte);
+procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
 var
  mreg:t_jit_reg;
 
  modrm_info:t_modrm_info;
 
  Vex:record
+  rexW  :Boolean;
   Length:Byte;
  end;
 
@@ -3835,6 +3856,19 @@ begin
   else;
  end;
 
+ if (size=os0) then
+ begin
+  size:=reg.ASize;
+ end;
+
+ if (size=os64) then
+ begin
+  Vex.rexW:=True;
+ end else
+ begin
+  Vex.rexW:=False;
+ end;
+
  modrm_info:=Default(t_modrm_info);
 
  modrm_info.build_rm(reg,mreg);
@@ -3854,7 +3888,7 @@ begin
  ji.EmitByte($C4); //VEX3
 
  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,3);
- ji.EmitWvvv(False,0,Vex.Length,desc.index);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
 
  ji.EmitByte(desc.op);
 

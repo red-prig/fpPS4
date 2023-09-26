@@ -3887,8 +3887,8 @@ begin
         $06: begin SetOpcode(OPvperm2,      OPSx_f128     ); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $08: begin SetOpcode(OPround,       OPSx_ps,  True); AddVx;    AddWx;  AddIb;                      end;
         $09: begin SetOpcode(OPround,       OPSx_pd,  True); AddVx;    AddWx;  AddIb;                      end;
-        $0A: begin SetOpcode(OPround,       OPSx_ss,  True); AddVss;   AddWss; AddIb;                      end;
-        $0B: begin SetOpcode(OPround,       OPSx_sd,  True); AddVsd;   AddWsd; AddIb;                      end;
+        $0A: begin SetOpcode(OPround,       OPSx_ss,  True); AddVss;   AddHx;  AddWss;    AddIb;           end;
+        $0B: begin SetOpcode(OPround,       OPSx_sd,  True); AddVsd;   AddHx;  AddWsd;    AddIb;           end;
         $0C: begin SetOpcode(OPblend,       OPSx_ps,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
         $0D: begin SetOpcode(OPblend,       OPSx_pd,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
         $0E: begin SetOpcode(OPpblend,      OPSx_w,   True); AddVx;    AddHx;  AddWx;     AddIb;           end;

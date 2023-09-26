@@ -183,6 +183,11 @@ type
   mem_one:t_op_type; //reg_one
  end;
 
+ t_op_avx3_imm=packed record
+  rmi:t_op_type;
+  mri:t_op_type;
+ end;
+
 procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;use_r_tmp1:Boolean=True);
 
 function  cmp_reg(const r1,r2:TRegValue):Boolean;
@@ -202,7 +207,7 @@ procedure op_emit2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_shift(var ctx:t_jit_context2;const desc:t_op_shift);
 procedure op_emit_avx2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_avx3(var ctx:t_jit_context2;const desc:t_op_type);
-procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_type);
+procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_avx3_imm);
 procedure op_emit_avx_F3(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rmr(var ctx:t_jit_context2;const desc:t_op_type);
@@ -823,22 +828,18 @@ begin
 
  with ctx.builder do
  begin
-  if (adr.ASize<>os64) then
-  begin
-   xorq(reg,reg);
-  end;
-
   if (RegValue[0].AType=regNone) then //absolute offset
   begin
    ofs:=0;
    GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
-   if (classif_offset_se64(ofs)=os64) then
+   if (classif_offset_u64(ofs)=os64) then
    begin
     movi64(adr,ofs);
    end else
    begin
-    movi(adr,ofs);
+    //mov eax,imm32   this is zero extend to 64bit
+    movi(new_reg_size(adr,os32),ofs);
    end;
   end else
   if is_rip(RegValue[0]) then
@@ -849,12 +850,13 @@ begin
 
    add_rip_entry(ctx,ofs);
 
-   if (classif_offset_se64(ofs)=os64) then
+   if (classif_offset_u64(ofs)=os64) then
    begin
     movi64(adr,ofs);
    end else
    begin
-    movi(adr,ofs);
+    //mov eax,imm32   this is zero extend to 64bit
+    movi(new_reg_size(adr,os32),ofs);
    end;
   end else
   if is_preserved(RegValue) then
@@ -2091,7 +2093,7 @@ begin
 
       if (not_impl in desc.mem_reg.opt) then
       begin
-       new2:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+       new2:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
        _VV(desc.reg_mem,new2,new1,mem_size);
 
@@ -2269,7 +2271,7 @@ begin
 end;
 
 //rri,mri
-procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_type);
+procedure op_emit_avx3_imm8(var ctx:t_jit_context2;const desc:t_op_avx3_imm);
 var
  i:Integer;
  memop:t_memop_type2;
@@ -2293,7 +2295,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   _VMI8(desc,new2,[flags(ctx)+r_tmp0],imm);
+   _VMI8(desc.mri,new2,[flags(ctx)+r_tmp0],mem_size,imm);
   end;
  end;
 
@@ -2311,7 +2313,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   _VMI8(desc,new1,[flags(ctx)+r_tmp0],imm);
+   _VMI8(desc.rmi,new1,[flags(ctx)+r_tmp0],mem_size,imm);
   end;
  end;
 
@@ -2379,18 +2381,31 @@ begin
      imm:=0;
      GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-     if (mem_size=os32) then
-     begin
-      new1:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+     new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
-      _VVI8(desc,new1,new2,imm);
+     //mri
 
-      movq([r_thrd+i],new1);
-     end else
-     begin
-      _VMI8(desc,new2,[r_thrd+i],imm);
-     end;
+     _VVI8(desc.mri,new2,new1,mem_size,imm);
+
+     movq([r_thrd+i],fix_size(new1));
     end;
+
+   mo_reg_ctx:
+    begin
+     mem_size:=ctx.din.Operand[2].Size;
+     i:=GetFrameOffset(ctx.din.Operand[2]);
+
+     new1:=new_reg(ctx.din.Operand[1]);
+
+     new2:=new_reg_size(r_tmp0,ctx.din.Operand[2]);
+
+     //rmi
+
+     movq(fix_size(new2),[r_thrd+i]);
+
+     _VVI8(desc.rmi,new1,new2,mem_size,imm);
+    end
+
 
    else
     Assert(false);
