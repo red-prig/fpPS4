@@ -549,6 +549,41 @@ begin
 end;
 
 const
+ movd_desc:t_op_desc=( //movq
+  mem_reg:(op:$0F7E;index:0);
+  reg_mem:(op:$0F6E;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+const
+ movd_xmm_desc:t_op_desc=( //movq_xmm
+  mem_reg:(op:$660F7E;index:0);
+  reg_mem:(op:$660F6E;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  if is_xmm(ctx.din) then
+  begin
+   op_emit2(ctx,movd_xmm_desc);
+  end else
+  begin
+   op_emit2(ctx,movd_desc);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  movsxd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
   reg_mem:(op:$63;index:0);
@@ -593,9 +628,9 @@ end;
 const
  test_desc:t_op_desc=(
   mem_reg:(op:$85;index:0);
-  reg_mem:(op:$00;index:0);
+  reg_mem:(opt:[not_impl]);
   reg_imm:(op:$F7;index:0);
-  reg_im8:(op:$00;index:0);
+  reg_im8:(opt:[not_impl]);
   hint:[his_ro];
  );
 
@@ -630,7 +665,6 @@ begin
  end;
 end;
 
-
 const
  cmpxchg_desc:t_op_desc=(
   mem_reg:(op:$0FB1;index:0);
@@ -651,6 +685,14 @@ begin
   add_orig(ctx);
   op_save_rax(ctx,ctx.builder.rax);
  end;
+end;
+
+const
+ cmpxchg16b_desc:t_op_type=(op:$0FC7;index:1);
+
+procedure op_cmpxchg16b(var ctx:t_jit_context2);
+begin
+ op_emit1(ctx,cmpxchg16b_desc,[his_xchg,his_rax,his_rw]);
 end;
 
 const
@@ -799,6 +841,24 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit_shift(ctx,rol_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ ror_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:1);
+  mem__cl:(op:$D3;index:1);
+  mem_one:(op:$D1;index:1);
+ );
+
+procedure op_ror(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift(ctx,ror_desc);
  end else
  begin
   add_orig(ctx);
@@ -1201,6 +1261,61 @@ begin
 end;
 
 const
+ fist_16_desc:t_op_type=(
+  op:$DF;index:2;opt:[not_prefix];
+ );
+
+ fist_32_desc:t_op_type=(
+  op:$DB;index:2;opt:[not_prefix];
+ );
+
+procedure op_fist(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  case ctx.din.Operand[1].Size of
+   os16:op_emit1(ctx,fist_16_desc,[]);
+   os32:op_emit1(ctx,fist_32_desc,[]);
+   else
+    Assert(false);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ fistp_16_desc:t_op_type=(
+  op:$DF;index:3;opt:[not_prefix];
+ );
+
+ fistp_32_desc:t_op_type=(
+  op:$DB;index:3;opt:[not_prefix];
+ );
+
+ fistp_64_desc:t_op_type=(
+  op:$DF;index:7;opt:[not_prefix];
+ );
+
+procedure op_fistp(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  case ctx.din.Operand[1].Size of
+   os16:op_emit1(ctx,fistp_16_desc,[]);
+   os32:op_emit1(ctx,fistp_32_desc,[]);
+   os64:op_emit1(ctx,fistp_64_desc,[]);
+   else
+    Assert(false);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  fisttp_16_desc:t_op_type=(
   op:$DF;index:1;opt:[not_prefix];
  );
@@ -1497,9 +1612,58 @@ end;
 //
 
 const
+ orps_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$0F56;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_orps(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,orps_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ orpd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$660F56;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_orpd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,orpd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  pxor_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$0FEF;index:0);
+  reg_mem:(op:$0FEF;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_xor,his_rw];
+ );
+
+const
+ pxor_xmm_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$660FEF;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_xor,his_rw];
@@ -1509,7 +1673,157 @@ procedure op_pxor(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit2(ctx,pxor_desc);
+  if is_xmm(ctx.din) then
+  begin
+   op_emit2(ctx,pxor_xmm_desc);
+  end else
+  begin
+   op_emit2(ctx,pxor_desc);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ addsd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F58;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_addsd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,addsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ addss_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F58;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_addss(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,addss_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ subsd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F5C;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_subsd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,subsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ subss_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F5C;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_subss(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,subss_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ mulsd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F59;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_mulsd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,mulsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ mulss_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F59;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_rw];
+ );
+
+procedure op_mulss(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,mulss_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ cvtsi2ss_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F2A);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_cvtsi2ss(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,cvtsi2ss_desc);
  end else
  begin
   add_orig(ctx);
@@ -1519,7 +1833,7 @@ end;
 const
  cvtsd2si_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F2D;index:0);
+  reg_mem:(op:$F20F2D);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -1530,6 +1844,68 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2(ctx,cvtsd2si_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ cvtss2si_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F2D);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_cvtss2s(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,cvtss2si_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ sqrtsd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F51;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_sqrtsd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,sqrtsd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ sqrtss_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F51;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_sqrtss(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,sqrtss_desc);
  end else
  begin
   add_orig(ctx);
@@ -1579,15 +1955,22 @@ begin
 
  jit_cbs[OPPnone,OPmovzx,OPSnone]:=@op_movzx;
  jit_cbs[OPPnone,OPmovsx,OPSnone]:=@op_movsx;
+
  jit_cbs[OPPnone,OPmov  ,OPSx_sd]:=@op_movsd;
  jit_cbs[OPPnone,OPmov  ,OPSx_ss]:=@op_movss;
  jit_cbs[OPPnone,OPmov  ,OPSc_be]:=@op_movbe;
+
+ jit_cbs[OPPnone,OPmov  ,OPSx_d ]:=@op_movd;
+ jit_cbs[OPPnone,OPmov  ,OPSx_q ]:=@op_movd;
+
  jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
 
  jit_cbs[OPPnone,OPtest,OPSnone]:=@op_test;
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
 
- jit_cbs[OPPnone,OPcmpxchg,OPSnone]:=@op_cmpxchg;
+ jit_cbs[OPPnone,OPcmpxchg,OPSnone ]:=@op_cmpxchg;
+ jit_cbs[OPPnone,OPcmpxchg,OPSx_16b]:=@op_cmpxchg16b;
+
  jit_cbs[OPPnone,OPxadd   ,OPSnone]:=@op_xadd;
 
  jit_cbs[OPPnone,OPlzcnt  ,OPSnone]:=@op_lzcnt;
@@ -1598,6 +1981,7 @@ begin
  jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
  jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_sar;
  jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
+ jit_cbs[OPPnone,OPror ,OPSnone]:=@op_ror;
 
  jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_setcc;
  jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_setcc;
@@ -1620,6 +2004,7 @@ begin
  jit_cbs[OPPnone,OPvzeroall,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPfninit  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfrndint ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfchs    ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfxch    ,OPSnone]:=@add_orig;
 
@@ -1648,20 +2033,20 @@ begin
  jit_cbs[OPPnone,OPfcom,OPSx_ip]:=@add_orig;
  jit_cbs[OPPnone,OPfcom,OPSx_p ]:=@add_orig;
 
- jit_cbs[OPPnone,OPfadd ,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfsub ,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfsubr,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfmul ,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfdiv ,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfdivr,OPSx_p ]:=@add_orig;
- jit_cbs[OPPnone,OPfsqrt,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPfabs ,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPfprem ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPfprem1,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPfwait ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPfnclex,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfadd   ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfsub   ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfsubr  ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfmul   ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfdiv   ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfdivr  ,OPSx_p ]:=@add_orig;
+ jit_cbs[OPPnone,OPfsqrt  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfabs   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfscale ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfprem  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfprem1 ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfxtract,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfwait  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfnclex ,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPpause,OPSnone]:=@add_orig;
 
@@ -1670,6 +2055,10 @@ begin
  jit_cbs[OPPnone,OPsfence,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPcmc,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPclac,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPclc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcld ,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPcwd ,OPSnone]:=@op_cdq;
  jit_cbs[OPPnone,OPcdq ,OPSnone]:=@op_cdq;
@@ -1702,6 +2091,8 @@ begin
  jit_cbs[OPPnone,OPstmxcsr,OPSnone]:=@op_stmxcsr;
  jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_fst;
  jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_fstp;
+ jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_fist;
+ jit_cbs[OPPnone,OPfist   ,OPSx_p ]:=@op_fistp;
  jit_cbs[OPPnone,OPfisttp ,OPSnone]:=@op_fisttp;
  jit_cbs[OPPnone,OPfadd   ,OPSnone]:=@op_fadd;
  jit_cbs[OPPnone,OPfiadd  ,OPSnone]:=@op_fiadd;
@@ -1719,9 +2110,24 @@ begin
  jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_prefetch1;
  jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_prefetch2;
 
+ jit_cbs[OPPnone,OPor,OPSx_ps]:=@op_orps;
+ jit_cbs[OPPnone,OPor,OPSx_pd]:=@op_orpd;
+
  jit_cbs[OPPnone,OPpxor,OPSnone]:=@op_pxor;
 
+ jit_cbs[OPPnone,OPadd ,OPSx_sd]:=@op_addsd;
+ jit_cbs[OPPnone,OPadd ,OPSx_ss]:=@op_addss;
+ jit_cbs[OPPnone,OPsub ,OPSx_sd]:=@op_subsd;
+ jit_cbs[OPPnone,OPsub ,OPSx_ss]:=@op_subss;
+ jit_cbs[OPPnone,OPmul ,OPSx_sd]:=@op_mulsd;
+ jit_cbs[OPPnone,OPmul ,OPSx_ss]:=@op_mulss;
+
+ jit_cbs[OPPnone,OPcvtsi2,OPSx_ss]:=@op_cvtsi2ss;
  jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_cvtsd2si;
+ jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_cvtss2s;
+
+ jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_sqrtsd;
+ jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_sqrtss;
 
 end;
 

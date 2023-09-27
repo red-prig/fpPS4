@@ -265,6 +265,37 @@ begin
  end;
 end;
 
+//
+
+const
+ vmovlps_desc2:t_op_desc=(
+  mem_reg:(op:$13;index:0;mm:1);
+  reg_mem:(opt:[not_impl]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+ vmovlps_rrm_desc:t_op_type=(op:$12;index:0;mm:1);
+
+procedure op_vmovlps(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  case ctx.din.OperCnt of
+   2:op_emit_avx2(ctx,vmovlps_desc2);
+   3:op_emit_avx3(ctx,vmovlps_rrm_desc);
+   else
+    Assert(False);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
 const
  vmovlpd_desc2:t_op_desc=(
   mem_reg:(op:$13;index:1;mm:1);
@@ -318,6 +349,8 @@ begin
   add_orig(ctx);
  end;
 end;
+
+//
 
 const
  vmovsldup_desc:t_op_desc=(
@@ -926,7 +959,6 @@ begin
  end;
 end;
 
-
 const
  vphaddd_desc:t_op_type=(
   op:$02;index:1;mm:2;
@@ -937,6 +969,38 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vphaddd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vaddsubpd_desc:t_op_type=(
+  op:$D0;index:1;mm:1;
+ );
+
+procedure op_vaddsubpd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vaddsubpd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vaddsubps_desc:t_op_type=(
+  op:$D0;index:3;mm:1;
+ );
+
+procedure op_vaddsubps(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vaddsubps_desc);
  end else
  begin
   add_orig(ctx);
@@ -1161,6 +1225,22 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vunpcklpd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vunpckhpd_desc:t_op_type=(
+  op:$15;index:1;mm:1;
+ );
+
+procedure op_vunpckhpd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vunpckhpd_desc);
  end else
  begin
   add_orig(ctx);
@@ -2297,6 +2377,8 @@ begin
  jit_cbs[OPPv,OPmov ,OPSx_ss ]:=@op_vmovss;
  jit_cbs[OPPv,OPmov ,OPSx_sd ]:=@op_vmovsd;
 
+ jit_cbs[OPPv,OPmovl,OPSx_ps]:=@op_vmovlps;
+
  jit_cbs[OPPv,OPmovl,OPSx_pd]:=@op_vmovlpd;
  jit_cbs[OPPv,OPmovh,OPSx_pd]:=@op_vmovhpd;
 
@@ -2352,6 +2434,9 @@ begin
  jit_cbs[OPPv,OPphadd ,OPSx_w]:=@op_vphaddw;
  jit_cbs[OPPv,OPphadd ,OPSx_d]:=@op_vphaddd;
 
+ jit_cbs[OPPv,OPaddsub,OPSx_pd]:=@op_vaddsubpd;
+ jit_cbs[OPPv,OPaddsub,OPSx_ps]:=@op_vaddsubps;
+
  jit_cbs[OPPv,OPdiv   ,OPSx_ps]:=@op_vdivps;
  jit_cbs[OPPv,OPdiv   ,OPSx_pd]:=@op_vdivpd;
  jit_cbs[OPPv,OPdiv   ,OPSx_ss]:=@op_vdivss;
@@ -2371,6 +2456,7 @@ begin
  jit_cbs[OPPv,OPpunpckldq ,OPSnone]:=@op_vpunpckldq;
 
  jit_cbs[OPPv,OPunpckl    ,OPSx_pd]:=@op_vunpcklpd;
+ jit_cbs[OPPv,OPunpckh    ,OPSx_pd]:=@op_vunpckhpd;
 
  jit_cbs[OPPv,OPcmp   ,OPSx_ps]:=@op_vcmpps;
  jit_cbs[OPPv,OPcmp   ,OPSx_pd]:=@op_vcmppd;

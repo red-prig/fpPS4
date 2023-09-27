@@ -261,9 +261,8 @@ type
   Procedure jmp_far (P:Pointer);
   //
   function  call(_label_id:t_jit_i_link):t_jit_i_link;
-  function  jmp (_label_id:t_jit_i_link):t_jit_i_link;
-  function  jmp8(_label_id:t_jit_i_link):t_jit_i_link;
-  function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link):t_jit_i_link;
+  function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+  function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
   function  movj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
   function  leaj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
   //
@@ -284,6 +283,7 @@ type
   procedure _RRI    (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
   procedure _RRI8   (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
   procedure _R      (const desc:t_op_type;reg:TRegValue);
+  procedure _O      (op:DWORD;Size:TOperandSize=os0;not_prefix:Boolean=false);
   procedure _O      (const desc:t_op_type;reg:TRegValue);
   procedure _M      (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
   procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
@@ -1048,42 +1048,33 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jmp(_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.jmp(_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
  ji:=default_jit_instruction;
 
- ji.EmitByte($E9);
+ if (size=os8) then
+ begin
+  ji.EmitByte($EB);
 
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=4;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
+  ji.ALink.AType  :=_label_id.AType;
+  ji.ALink.ASize  :=1;
+  ji.ALink.AOffset:=ji.ASize;
+  ji.ALink.ALink  :=_label_id.ALink;
 
- ji.EmitInt32(0);
+  ji.EmitByte(0);
+ end else
+ begin
+  ji.EmitByte($E9);
 
- _add(ji);
+  ji.ALink.AType  :=_label_id.AType;
+  ji.ALink.ASize  :=4;
+  ji.ALink.AOffset:=ji.ASize;
+  ji.ALink.ALink  :=_label_id.ALink;
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
- Result.AType:=lnkLabelBefore;
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.jmp8(_label_id:t_jit_i_link):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($EB);
-
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=1;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
-
- ji.EmitByte(0);
+  ji.EmitInt32(0);
+ end;
 
  _add(ji);
 
@@ -1093,12 +1084,17 @@ begin
 end;
 
 const
+ COND_8:array[OPSc_o..OPSc_nle] of Byte=(
+  $70,$71,$72,$73,$74,$75,$76,$77,
+  $78,$79,$7A,$7B,$7C,$7D,$7E,$7F
+ );
+
  COND_32:array[OPSc_o..OPSc_nle] of Byte=(
   $80,$81,$82,$83,$84,$85,$86,$87,
   $88,$89,$8A,$8B,$8C,$8D,$8E,$8F
  );
 
-function t_jit_builder.jcc(op:TOpCodeSuffix;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.jcc(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1110,16 +1106,28 @@ begin
    Assert(false);
  end;
 
- ji.EmitByte($0F);
+ if (size=os8) then
+ begin
+  ji.EmitByte(COND_8[op]);
 
- ji.EmitByte(COND_32[op]);
+  ji.ALink.AType  :=_label_id.AType;
+  ji.ALink.ASize  :=1;
+  ji.ALink.AOffset:=ji.ASize;
+  ji.ALink.ALink  :=_label_id.ALink;
 
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=4;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
+  ji.EmitByte(0);
+ end else
+ begin
+  ji.EmitByte($0F);
+  ji.EmitByte(COND_32[op]);
 
- ji.EmitInt32(0);
+  ji.ALink.AType  :=_label_id.AType;
+  ji.ALink.ASize  :=4;
+  ji.ALink.AOffset:=ji.ASize;
+  ji.ALink.ALink  :=_label_id.ALink;
+
+  ji.EmitInt32(0);
+ end;
 
  _add(ji);
 
@@ -1153,27 +1161,14 @@ begin
 end;
 
 Procedure t_jit_builder.reta;
-var
- ji:t_jit_instruction;
 begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($C3);
-
- _add(ji);
+ _O($C3);
 end;
 
 
 Procedure t_jit_builder.ud2;
-var
- ji:t_jit_instruction;
 begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($0F);
- ji.EmitByte($0B);
-
- _add(ji);
+ _O($0F0B);
 end;
 
 Function t_jit_builder.GetInstructionsSize:Integer;
@@ -1596,6 +1591,7 @@ begin
   else
    begin
     case Lo(Hi(op)) of
+     $66,
      $F2,
      $F3:
       begin
@@ -2179,6 +2175,64 @@ end;
 
 ///
 
+procedure t_jit_builder._O(op:DWORD;Size:TOperandSize=os0;not_prefix:Boolean=false);
+var
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ case Size of
+  os16,
+  os128:
+       if (not not_prefix) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if rexW then
+ begin
+  ji.EmitREX(False,False,False,rexW);
+ end;
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+  else
+   begin
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+ end;
+
+ _add(ji);
+end;
+
 procedure t_jit_builder._O(const desc:t_op_type;reg:TRegValue);
 var
  op:DWORD;
@@ -2283,24 +2337,38 @@ begin
  Prefix:=0;
 
  op:=desc.op;
- case size of
-   os8:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16,
-  os128:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
+
+ if (op=$0FC7) and
+    (desc.index=1) then //cmpxchg8b/cmpxchg16b
+ begin
+  case size of
+   os128:
+        begin
+         rexW:=True;
+        end;
+   else;
+  end;
+ end else
+ begin
+  case size of
+    os8:
+        if (not (not_prefix in desc.opt)) then
+        begin
+         Dec(op);
+        end;
+   os16,
+   os128:
+        if (not (not_prefix in desc.opt)) then
+        begin
+         Prefix:=$66;
+        end;
+   os32:;
+   os64:
+        begin
+         rexW:=True;
+        end;
+   else;
+  end;
  end;
 
  modrm_info:=Default(t_modrm_info);
@@ -4048,25 +4116,13 @@ begin
 end;
 
 procedure t_jit_builder.sahf;
-var
- ji:t_jit_instruction;
 begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($9E);
-
- _add(ji);
+ _O($9E);
 end;
 
 procedure t_jit_builder.lahf;
-var
- ji:t_jit_instruction;
 begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($9F);
-
- _add(ji);
+ _O($9F);
 end;
 
 end.

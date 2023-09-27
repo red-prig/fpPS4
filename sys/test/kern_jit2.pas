@@ -505,6 +505,117 @@ begin
  //align?
 end;
 
+procedure op_rep_cmps(var ctx:t_jit_context2);
+const
+ test_desc:t_op_type=(op:$85;index:0);
+var
+ op:DWORD;
+ size:TOperandSize;
+
+ link_start:t_jit_i_link;
+ link___end:t_jit_i_link;
+
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+ link_jmp2:t_jit_i_link;
+begin
+ //rdi,rsi
+ //prefix $67 TODO
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:
+   begin
+    size:=os8;
+    op:=$A6;
+   end;
+  OPSx_w:
+   begin
+    size:=os16;
+    op:=$A7;
+   end;
+  OPSx_d:
+   begin
+    size:=os32;
+    op:=$A7;
+   end;
+  OPSx_q:
+   begin
+    size:=os64;
+    op:=$A7;
+   end;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rsi
+ with ctx.builder do
+ begin
+
+  link_jmp0:=nil_link;
+  link_jmp1:=nil_link;
+  link_jmp2:=nil_link;
+
+  link_start:=ctx.builder.get_curr_label.after;
+
+  //repeat
+   lahf;
+    _RR(test_desc,rcx,rcx,os0);
+    link_jmp0:=jcc(OPSc_z,nil_link,os8);
+   sahf;
+
+   movq(r_tmp0,rsi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+   movq(r_tmp1,r_tmp0);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+
+   _O(op,Size);
+
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+
+   leaq(rcx,[rcx-1]);
+   leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+   leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+
+   if (ifPrefixRepE in ctx.din.Flags) then
+   begin
+    //if a[i]<>b[i] then exit
+    link_jmp1:=jcc(OPSc_nz,nil_link,os8);
+   end else
+   if (ifPrefixRepNe in ctx.din.Flags) then
+   begin
+    //if a[i]=b[i] then exit
+    link_jmp1:=jcc(OPSc_z,nil_link,os8);
+   end;
+
+  //until
+  jmp(link_start,os8);
+
+  link_jmp2:=jmp(nil_link,os8);
+
+  //exit1
+  sahf;
+
+  //exit2
+
+  link___end:=ctx.builder.get_curr_label.before;
+
+  link_jmp0._label:=link___end;
+
+  link___end:=link___end.after;
+
+  link_jmp1._label:=link___end;
+  link_jmp2._label:=link___end;
+ end;
+
+end;
+
 var
  inited:Integer=0;
 
@@ -654,7 +765,20 @@ begin
   ctx.dis:=adec.Disassembler;
   ctx.din:=adec.Instr;
 
-  cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
+  if is_rep_prefix(ctx.din) then
+  begin
+   cb:=nil;
+   if (ctx.din.OpCode.Prefix=OPPnone) then
+   begin
+    case ctx.din.OpCode.Opcode of
+     OPcmps:cb:=@op_rep_cmps;
+     else;
+    end;
+   end;
+  end else
+  begin
+   cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
+  end;
 
   if (cb=nil) then
   begin

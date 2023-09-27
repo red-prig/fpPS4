@@ -110,6 +110,8 @@ function is_preserved(const r:TOperand):Boolean;
 function is_preserved(const r:TInstruction):Boolean;
 function is_memory(const r:TOperand):Boolean;
 function is_memory(const r:TInstruction):Boolean;
+function is_xmm(const r:TOperand):Boolean;
+function is_xmm(const r:TInstruction):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
 
 //in/out:rax uses:r14
@@ -196,6 +198,7 @@ function  new_reg_size(const r:TRegValue;ASize:TOperandSize):TRegValue;
 function  new_reg_size(const r:TRegValue;const RegValue:TRegValues):TRegValue;
 function  new_reg_size(const r:TRegValue;const Operand:TOperand):TRegValue;
 function  fix_size(const r:TRegValue):TRegValue;
+function  is_rep_prefix(const i:TInstruction):Boolean;
 function  flags(const i:TInstruction):t_jit_reg;
 function  flags(const ctx:t_jit_context2):t_jit_reg;
 
@@ -488,6 +491,24 @@ begin
  end;
 end;
 
+function is_xmm(const r:TOperand):Boolean; inline;
+begin
+ Result:=r.RegValue[0].AType=regXmm;
+end;
+
+function is_xmm(const r:TInstruction):Boolean;
+var
+ i:Integer;
+begin
+ Result:=False;
+ if (r.OperCnt<>0) then
+ For i:=1 to r.OperCnt do
+ begin
+  Result:=is_xmm(r.Operand[i]);
+  if Result then Exit;
+ end;
+end;
+
 function is_cl(const r:TRegValue):Boolean; inline;
 begin
  Result:=False;
@@ -546,6 +567,11 @@ begin
  begin
   Result.ASize:=os64;
  end;
+end;
+
+function is_rep_prefix(const i:TInstruction):Boolean;
+begin
+ Result:=[ifPrefixRep,ifPrefixRepE,ifPrefixRepNe]*i.Flags<>[];
 end;
 
 function flags(const i:TInstruction):t_jit_reg;
@@ -1232,7 +1258,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil_link);
+       link_next:=jmp(nil_link,os8);
 
        mem_out;
 
@@ -1574,7 +1600,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil_link);
+       link_next:=jmp(nil_link,os8);
 
        mem_out;
 
@@ -1933,7 +1959,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil_link);
+       link_next:=jmp(nil_link,os8);
 
        mem_out;
 
@@ -2083,7 +2109,7 @@ begin
 
        call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-       link_next:=jmp8(nil_link);
+       link_next:=jmp(nil_link,os8);
 
        mem_out;
 
@@ -2279,7 +2305,7 @@ begin
 
     call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-    link_next:=jmp8(nil_link);
+    link_next:=jmp(nil_link,os8);
 
     mem_out;
 
@@ -2366,7 +2392,7 @@ begin
 
       call_far(@copyout_mov); //in:rax(addr),r14:(size)
 
-      link_next:=jmp8(nil_link);
+      link_next:=jmp(nil_link,os8);
 
       mem_out;
 
