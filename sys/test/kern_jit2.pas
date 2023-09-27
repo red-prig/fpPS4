@@ -517,32 +517,20 @@ var
 
  link_jmp0:t_jit_i_link;
  link_jmp1:t_jit_i_link;
- link_jmp2:t_jit_i_link;
 begin
  //rdi,rsi
  //prefix $67 TODO
 
+ op:=$A7;
  case ctx.din.OpCode.Suffix of
   OPSx_b:
    begin
     size:=os8;
     op:=$A6;
    end;
-  OPSx_w:
-   begin
-    size:=os16;
-    op:=$A7;
-   end;
-  OPSx_d:
-   begin
-    size:=os32;
-    op:=$A7;
-   end;
-  OPSx_q:
-   begin
-    size:=os64;
-    op:=$A7;
-   end;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
   else;
    Assert(False);
  end;
@@ -554,7 +542,6 @@ begin
 
   link_jmp0:=nil_link;
   link_jmp1:=nil_link;
-  link_jmp2:=nil_link;
 
   link_start:=ctx.builder.get_curr_label.after;
 
@@ -597,24 +584,110 @@ begin
   //until
   jmp(link_start,os8);
 
-  link_jmp2:=jmp(nil_link,os8);
+  //exit1
+  sahf;
+
+  //exit2
+
+  link___end:=ctx.builder.get_curr_label.before; //exit1
+
+  link_jmp0._label:=link___end;
+
+  link___end:=link___end.after; //exit2
+
+  link_jmp1._label:=link___end;
+ end;
+
+end;
+
+///
+
+procedure op_rep_stos(var ctx:t_jit_context2);
+const
+ test_desc:t_op_type=(op:$85;index:0);
+var
+ i:Integer;
+ size:TOperandSize;
+
+ new:TRegValue;
+
+ link_start:t_jit_i_link;
+ link___end:t_jit_i_link;
+
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ //rdi,rsi
+ //prefix $67 TODO
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rax
+ with ctx.builder do
+ begin
+
+  link_jmp0:=nil_link;
+  link_jmp1:=nil_link;
+
+  new:=new_reg_size(r_tmp1,size);
+
+  i:=GetFrameOffset(rax);
+  movq(new,[r_thrd+i]);
+
+  link_start:=ctx.builder.get_curr_label.after;
+
+  //repeat
+   lahf;
+    _RR(test_desc,rcx,rcx,os0);
+    link_jmp0:=jcc(OPSc_z,nil_link,os8);
+   sahf;
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   movq([r_tmp0],new);
+
+   leaq(rcx,[rcx-1]);
+   leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+
+   if (ifPrefixRepE in ctx.din.Flags) then
+   begin
+    //if a[i]<>b[i] then exit
+    link_jmp1:=jcc(OPSc_nz,nil_link,os8);
+   end else
+   if (ifPrefixRepNe in ctx.din.Flags) then
+   begin
+    //if a[i]=b[i] then exit
+    link_jmp1:=jcc(OPSc_z,nil_link,os8);
+   end;
+
+  //until
+  jmp(link_start,os8);
 
   //exit1
   sahf;
 
   //exit2
 
-  link___end:=ctx.builder.get_curr_label.before;
+  link___end:=ctx.builder.get_curr_label.before; //exit1
 
   link_jmp0._label:=link___end;
 
-  link___end:=link___end.after;
+  link___end:=link___end.after; //exit2
 
   link_jmp1._label:=link___end;
-  link_jmp2._label:=link___end;
  end;
 
 end;
+
 
 var
  inited:Integer=0;
@@ -772,6 +845,7 @@ begin
    begin
     case ctx.din.OpCode.Opcode of
      OPcmps:cb:=@op_rep_cmps;
+     OPstos:cb:=@op_rep_stos;
      else;
     end;
    end;
