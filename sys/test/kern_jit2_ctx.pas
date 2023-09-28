@@ -33,6 +33,7 @@ type
   tf_rbp:QWORD;
   tf_r14:QWORD;
   tf_r15:QWORD;
+  tf_rip:QWORD;
  end;
 
  p_jit_context2=^t_jit_context2;
@@ -201,7 +202,8 @@ type
   mri:t_op_type;
  end;
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;use_r_tmp1:Boolean=True);
+procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;
+                    use_segment:Boolean=True;use_r_tmp1:Boolean=True);
 
 function  cmp_reg(const r1,r2:TRegValue):Boolean;
 function  new_reg(const Operand:TOperand):TRegValue;
@@ -231,6 +233,9 @@ procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 procedure print_disassemble(addr:Pointer;vsize:Integer);
 
 implementation
+
+uses
+ kern_thr;
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
 var
@@ -611,27 +616,6 @@ begin
  begin
   Result:=Result+t_jit_builder.LOCK;
  end;
-
- if (ifPrefixRep in i.Flags) then
- begin
-  Assert(false);
- end;
-
- if (ifPrefixRepE in i.Flags) then
- begin
-  Assert(false);
- end;
-
- if (ifPrefixRepNe in i.Flags) then
- begin
-  Assert(false);
- end;
-
- case i.SegmentReg of
-  4:Result:=Result+t_jit_builder.FS;
-  5:Result:=Result+t_jit_builder.GS;
-  else;
- end;
 end;
 
 function flags(const ctx:t_jit_context2):t_jit_reg; inline;
@@ -866,7 +850,30 @@ begin
  end;
 end;
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;use_r_tmp1:Boolean=True);
+function is_segment(const i:TInstruction):Boolean;
+begin
+ Result:=False;
+
+ case i.SegmentReg of
+  4:Result:=True;
+  5:Result:=True;
+  else;
+ end;
+end;
+
+function get_segment(const i:TInstruction):Integer;
+begin
+ Result:=0;
+
+ case i.SegmentReg of
+  4:Result:=teb_tcb;
+  5:Result:=teb_gsbase;
+  else;
+ end;
+end;
+
+procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;
+                    use_segment:Boolean=True;use_r_tmp1:Boolean=True);
 var
  RegValue:TRegValues;
  adr,new1,new2:TRegValue;
@@ -885,19 +892,29 @@ begin
 
  with ctx.builder do
  begin
+  if use_segment and is_segment(ctx.din) then
+  begin
+
+   if (RegValue[0].AType=regNone) then //absolute offset
+   begin
+    ofs:=0;
+    GetTargetOfs(ctx.din,ctx.code,id,ofs);
+
+    movq(adr,[GS+get_segment(ctx.din)]);
+    leaq(adr,[adr+ofs]);
+   end else
+   begin
+    Assert(false,'TODO');
+   end;
+
+  end else
   if (RegValue[0].AType=regNone) then //absolute offset
   begin
    ofs:=0;
    GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
-   if (classif_offset_u64(ofs)=os64) then
-   begin
-    movi64(adr,ofs);
-   end else
-   begin
-    //mov eax,imm32   this is zero extend to 64bit
-    movi(new_reg_size(adr,os32),ofs);
-   end;
+   //sign extend
+   movi(adr,ofs);
   end else
   if is_rip(RegValue[0]) then
   begin
@@ -2621,9 +2638,7 @@ end;
 //rrrr,rrmr
 procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
 var
- memop:t_memop_type2;
  mem_size:TOperandSize;
- link_next:t_jit_i_link;
 
  new1,new2,new3:TRegValue;
 

@@ -127,10 +127,13 @@ begin
  td^.td_retval[0]:=0;
  td^.td_retval[1]:=td^.td_frame.tf_rdx;
 
- //teb stack
- td^.td_teb^.sttop:=td^.td_kstack.sttop;
- td^.td_teb^.stack:=td^.td_kstack.stack;
- //teb stack
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  //teb stack
+  td^.td_teb^.sttop:=td^.td_kstack.sttop;
+  td^.td_teb^.stack:=td^.td_kstack.stack;
+  //teb stack
+ end;
 end;
 
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
@@ -159,17 +162,20 @@ begin
     end;
  end;
 
- //teb stack
- if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
-  td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
-  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
- end else
- begin
-  td^.td_teb^.stack:=td^.td_ustack.stack;
-  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  //teb stack
+  if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+  begin
+   td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
+   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
+  end else
+  begin
+   td^.td_teb^.stack:=td^.td_ustack.stack;
+   td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  end;
+  //teb stack
  end;
- //teb stack
 end;
 
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);

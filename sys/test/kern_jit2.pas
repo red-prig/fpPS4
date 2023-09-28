@@ -7,12 +7,6 @@ interface
 
 uses
  mqueue,
- kern_thr,
- ucontext,
- vmparam,
- vm_pmap,
- systm,
- trap,
  x86_fpdbgdisas,
  x86_jit,
  kern_stub,
@@ -25,8 +19,155 @@ implementation
 
 uses
  sysutils,
+ kern_thr,
+ ucontext,
+ vmparam,
+ vm_pmap,
+ systm,
+ trap,
+ md_context,
+ kern_sig,
  kern_jit2_ops,
  kern_jit_dynamic;
+
+procedure jit_syscall; assembler; nostackframe;
+label
+ _after_call,
+ _doreti,
+ _fail,
+ _ast,
+ _doreti_exit;
+asm
+ //prolog (debugger)
+ pushq %rbp
+ movqq %rsp,%rbp
+
+ movqq %rax,jit_frame.tf_rip(%r15) //save %rax to tf_rip
+
+ lahf //load to AH
+
+ movqq %gs:teb.thread,%r14 //curkthread
+ test  %r14,%r14
+ jz    _fail
+
+ andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%r14) //clear PCB_FULL_IRET
+
+ shr    $8,%ax
+ movzbq %al,%rax
+ movb  %rax,kthread.td_frame.tf_rflags(%r14) //save flags
+
+ movqq %rdi,kthread.td_frame.tf_rdi(%r14)
+ movqq %rsi,kthread.td_frame.tf_rsi(%r14)
+ movqq %rdx,kthread.td_frame.tf_rdx(%r14)
+ movqq   $0,kthread.td_frame.tf_rcx(%r14)
+ movqq %r8 ,kthread.td_frame.tf_r8 (%r14)
+ movqq %r9 ,kthread.td_frame.tf_r9 (%r14)
+ movqq %rbx,kthread.td_frame.tf_rbx(%r14)
+ movqq %r10,kthread.td_frame.tf_r10(%r14)
+ movqq   $0,kthread.td_frame.tf_r11(%r14)
+ movqq %r12,kthread.td_frame.tf_r12(%r14)
+ movqq %r13,kthread.td_frame.tf_r13(%r14)
+
+ movqq   $1,kthread.td_frame.tf_trapno(%r14)
+ movqq   $0,kthread.td_frame.tf_addr  (%r14)
+ movqq   $0,kthread.td_frame.tf_flags (%r14)
+ movqq   $2,kthread.td_frame.tf_err   (%r14) //sizeof(syscall)
+
+ movqq jit_frame.tf_rax(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_rax(%r14)
+
+ movqq jit_frame.tf_rsp(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_rsp(%r14)
+
+ movqq jit_frame.tf_rbp(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_rbp(%r14)
+
+ movqq jit_frame.tf_r14(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_r14(%r14)
+
+ movqq jit_frame.tf_r15(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_r15(%r14)
+
+ movqq jit_frame.tf_rip(%r15),%rax
+ movqq %rax,kthread.td_frame.tf_rip(%r14)
+
+ call amd64_syscall
+
+ _after_call:
+
+ movqq %gs:teb.thread          ,%r14 //curkthread
+ movqq kthread.td_jit_ctx(%r14),%r15 //jit_frame
+
+ //Requested full context restore
+ testl PCB_FULL_IRET,kthread.pcb_flags(%r14)
+ jnz _doreti
+
+ testl TDF_AST,kthread.td_flags(%r14)
+ jne _ast
+
+ //Restore preserved registers.
+
+ //get flags
+ movqq kthread.td_frame.tf_rflags(%r14),%ax
+ shl   $8,%ax
+ sahf  //restore flags
+
+ movqq kthread.td_frame.tf_rdi(%r14),%rdi
+ movqq kthread.td_frame.tf_rsi(%r14),%rsi
+ movqq kthread.td_frame.tf_rdx(%r14),%rdx
+
+ movqq kthread.td_frame.tf_rax(%r14),%rax
+ movqq %rax,jit_frame.tf_rax(%r15)
+
+ movqq kthread.td_frame.tf_rsp(%r14),%rax
+ movqq %rax,jit_frame.tf_rsp(%r15)
+
+ movqq kthread.td_frame.tf_rbp(%r14),%rax
+ movqq %rax,jit_frame.tf_rbp(%r15)
+
+ movqq $0,%rcx
+ movqq $0,%r11
+
+ //epilog (debugger)
+ popq  %rbp
+ ret
+
+ //fail (curkthread=nil)
+ _fail:
+
+ or    $1,%ah  //set CF
+ sahf          //restore flags
+
+ movqq $14,jit_frame.tf_rax(%r15) //EFAULT
+ movqq  $0,%rdx
+ movqq  $0,%rcx
+ movqq  $0,%r11
+
+ popq  %rbp
+ ret
+
+ //ast
+ _ast:
+
+  call ast
+  jmp _after_call
+
+ //doreti
+ _doreti:
+
+  //%r14=curkthread
+  testl TDF_AST,kthread.td_flags(%r14)
+  je _doreti_exit
+
+  call ast
+  jmp _doreti
+
+ _doreti_exit:
+
+  //Restore full.
+  call  ipi_sigreturn
+  hlt
+end;
 
 procedure jit_before_start; assembler; nostackframe;
 asm
@@ -36,12 +177,6 @@ end;
 procedure jit_jmp_dispatch;
 begin
  Writeln('TODO:jit_jmp_dispatch');
- Assert(False);
-end;
-
-procedure jit_syscall;
-begin
- Writeln('TODO:jit_syscall');
  Assert(False);
 end;
 
@@ -538,7 +673,12 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_syscall); //TODO syscall dispatcher
+ ctx.add_forward_point(nil_link,ctx.ptr_curr);
+ ctx.add_forward_point(nil_link,ctx.ptr_next);
+ //
+ op_set_rax_imm(ctx,Int64(ctx.ptr_next));
+ //
+ ctx.builder.call_far(@jit_syscall); //syscall dispatcher
 end;
 
 procedure op_int(var ctx:t_jit_context2);

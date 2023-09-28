@@ -74,7 +74,8 @@ implementation
 
 uses
  vmparam,
- vm_pmap;
+ vm_pmap,
+ trap;
 
 procedure switch_to_jit();
 var
@@ -123,6 +124,8 @@ begin
 
  td^.td_frame.tf_rip:=QWORD(node^.dst);
  td^.td_frame.tf_r15:=QWORD(jctx);
+
+ set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 end;
 
 function fetch_entry(src:Pointer):t_jit_dynamic.p_entry_point;

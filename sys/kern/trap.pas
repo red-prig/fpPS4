@@ -91,6 +91,7 @@ const
 
 const
  PCB_FULL_IRET=1;
+ PCB_IS_JIT   =2;
 
  SIG_ALTERABLE=$80000000;
  SIG_STI_LOCK =$40000000;
@@ -113,6 +114,8 @@ procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
 
 procedure fast_syscall;
+procedure amd64_syscall;
+
 procedure sigcode;
 procedure sigipi;
 
@@ -155,6 +158,12 @@ function  IS_TRAP_FUNC(rip:qword):Boolean;
 function  trap(frame:p_trapframe):Integer;
 function  trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 
+const
+ NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+ NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
+ NOT_SIG_STI_LOCK =not SIG_STI_LOCK;
+ TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
+
 implementation
 
 uses
@@ -172,13 +181,8 @@ uses
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
- ps4libdoc;
-
-const
- NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
- NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
- NOT_SIG_STI_LOCK =not SIG_STI_LOCK;
- TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
+ ps4libdoc,
+ kern_jit_dynamic;
 
 procedure _sig_lock; assembler; nostackframe;
 asm
@@ -575,6 +579,7 @@ var
  td:p_kthread;
  td_frame:p_trapframe;
  scall:tsyscall;
+ rip:QWORD;
  error:Integer;
  i,count:Integer;
  is_guest:Boolean;
@@ -586,6 +591,7 @@ begin
 
  cpu_fetch_syscall_args(td);
 
+ rip:=td_frame^.tf_rip;
  error:=0;
  scall:=nil;
  is_guest:=False;
@@ -680,6 +686,12 @@ begin
  end;
 
  cpu_set_syscall_retval(td,error);
+
+ if (rip<>td_frame^.tf_rip) then
+ begin
+  kern_jit_dynamic.switch_to_jit();
+ end;
+
 end;
 
 procedure fast_syscall; assembler; nostackframe;

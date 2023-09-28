@@ -59,8 +59,7 @@ uses
  machdep,
  kern_dlsym,
  kern_authinfo,
- vfs_syscalls,
- kern_jit_dynamic;
+ vfs_syscalls;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -1532,11 +1531,6 @@ done2:
 
  VFS_UNLOCK_GIANT(vfslocked);
  exec_free_args(args);
-
- if (error=0) then
- begin
-  kern_jit_dynamic.switch_to_jit();
- end;
 
  Exit(error);
 end;
