@@ -60,8 +60,7 @@ uses
  kern_dlsym,
  kern_authinfo,
  vfs_syscalls,
- kern_jit2,
- kern_jit2_ctx;
+ kern_jit_dynamic;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -777,10 +776,9 @@ begin
  dynlibs_info.tls_static_space:=0;
  dynlibs_info.tls_count       :=1;
  dynlibs_info.tls_max         :=1;
- //dynlibs_info.bits          :=0;
 
  obj:=obj_new();
- obj^.mainprog:=1;
+ obj^.rtld_flags.mainprog:=1;
  obj^.relocbase:=imgp^.reloc_base;
 
  text_addr:=g_vmspace.vm_taddr;
@@ -845,6 +843,7 @@ begin
   if (Result<>0) then
   begin
    obj_free(dynlibs_info.libprogram);
+   dynlibs_info.libprogram:=nil;
   end;
  end;
 end;
@@ -927,68 +926,6 @@ begin
  end;
 end;
 
-procedure pick_obj(obj:p_lib_info);
-var
- ctx:t_jit_context2;
-
- Lib_Entry:p_Lib_Entry;
- h_entry:p_sym_hash_entry;
- symp:p_elf64_sym;
- addr:Pointer;
- ST_TYPE:Integer;
-begin
- if (obj=nil) then Exit;
-
- ctx:=Default(t_jit_context2);
-
- ctx.text_start:=QWORD(obj^.map_base);
- ctx.text___end:=ctx.text_start+obj^.text_size;
-
- ctx.add_forward_point(obj^.entry_addr);
-
- if (obj^.mainprog=0) then
- begin
-  ctx.add_forward_point(obj^.init_proc_addr);
-  ctx.add_forward_point(obj^.fini_proc_addr);
- end;
-
- lib_entry:=TAILQ_FIRST(@obj^.lib_table);
- while (lib_entry<>nil) do
- begin
-  if (Lib_Entry^.import=0) then //export
-  begin
-   h_entry:=TAILQ_FIRST(@Lib_Entry^.syms);
-   while (h_entry<>nil) do
-   begin
-
-    symp:=@h_entry^.sym;
-
-    ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
-
-    Case ST_TYPE of
-     STT_NOTYPE,
-     STT_FUN,
-     STT_SCE:
-        if (symp^.st_value<>0) and
-           (symp^.st_shndx<>SHN_UNDEF) and
-           (symp^.st_value<obj^.text_size) then
-        begin
-         addr:=obj^.relocbase + symp^.st_value;
-
-         ctx.add_forward_point(addr);
-        end;
-     else;
-    end; //case
-
-    h_entry:=TAILQ_NEXT(h_entry,@h_entry^.link)
-   end;
-  end;
-  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
- end;
-
- kern_jit2.pick(ctx);
-end;
-
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
 label
  _dyn_not_exist;
@@ -1011,6 +948,8 @@ begin
  flags:=$40; //priv libs?
  if (budget_ptype_caller=0) then flags:=flags or $20; //vm_map_wire
 
+ pick_obj(dynlibs_info.libprogram);
+
  str:='libkernel.sprx';
  obj:=preload_prx_modules(pchar(str),flags,err);
  dynlibs_info.libkernel:=obj;
@@ -1027,8 +966,6 @@ begin
  begin
   Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
-
- pick_obj(obj);
 
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) do
@@ -1064,10 +1001,6 @@ begin
   p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
   p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
  end;
-
- //pick_obj(dynlibs_info.libprogram);
-
- pick_obj(dynlibs_info.libkernel);
 
  _dyn_not_exist:
 
@@ -1599,6 +1532,11 @@ done2:
 
  VFS_UNLOCK_GIANT(vfslocked);
  exec_free_args(args);
+
+ if (error=0) then
+ begin
+  kern_jit_dynamic.switch_to_jit();
+ end;
 
  Exit(error);
 end;

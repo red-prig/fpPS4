@@ -86,10 +86,11 @@ type
    function  get_label():t_jit_i_link;
   public
    function  is_valid:Boolean;
+   function  offset:Integer;
    function  before:t_jit_i_link;
    function  after :t_jit_i_link;
-   function  prev:t_jit_i_link;
-   function  next:t_jit_i_link;
+   function  prev  :t_jit_i_link;
+   function  next  :t_jit_i_link;
    property  _node:p_jit_instruction read ALink;
    property  _label:t_jit_i_link read get_label write set_label;
  end;
@@ -103,6 +104,23 @@ operator = (A,B:t_jit_i_link):Boolean;
 //mm         (0F=1, 0F38=2, 0F3A=3)
 
 type
+ t_jit_builder_allocator=object
+  type
+   PAllocNode=^TAllocNode;
+   TAllocNode=packed record
+    link:PAllocNode;
+    data:record end;
+   end;
+  var
+   pHead:SLIST_HEAD;
+   curr_apos:ptruint; //alloc pos in current node
+   curr_size:ptruint; //useable size of current node
+   used_size:ptruint; //full usable size
+   full_size:ptruint; //full alloc size
+  Function  Alloc(Size:ptruint):Pointer;
+  Procedure Free;
+ end;
+
  p_jit_builder=^t_jit_builder;
  t_jit_builder=object
   Const
@@ -236,19 +254,13 @@ type
    ymm14:TRegValue=(AType:regXmm;ASize:os256;AIndex: 14);
    ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
-   AInstructions:TAILQ_HEAD;
-   ADataSet     :t_jit_data_set;
-   ADataList    :TAILQ_HEAD;
+   AInstructions   :TAILQ_HEAD;
+   ADataSet        :t_jit_data_set;
+   ADataList       :TAILQ_HEAD;
    AInstructionSize:Integer;
    ADataCount      :Integer;
 
-   Allocator:record
-    pHead:SLIST_HEAD;
-    curr_apos:ptruint; //alloc pos in current node
-    curr_size:ptruint; //useable size of current node
-    used_size:ptruint; //full usable size
-    full_size:ptruint; //full alloc size
-   end;
+   Allocator:t_jit_builder_allocator;
   //
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
@@ -658,6 +670,26 @@ begin
  Result:=(ALink<>nil);
 end;
 
+function t_jit_i_link.offset:Integer;
+begin
+ Result:=0;
+ if (ALink<>nil) then
+ begin
+  case AType of
+   lnkData:
+    begin
+     Result:=p_jit_data(ALink)^.pId*SizeOf(Pointer);
+    end;
+   lnkLabelBefore,
+   lnkLabelAfter:
+    begin
+     Result:=ALink^.AInstructionOffset;
+    end;
+   else;
+  end;
+ end;
+end;
+
 function t_jit_i_link.before:t_jit_i_link;
 begin
  Result:=Self;
@@ -837,14 +869,7 @@ end;
 
 //
 
-type
- PAllocNode=^TAllocNode;
- TAllocNode=packed record
-  link:PAllocNode;
-  data:record end;
- end;
-
-Function t_jit_builder.Alloc(Size:ptruint):Pointer;
+Function t_jit_builder_allocator.Alloc(Size:ptruint):Pointer;
 const
  asize=(1*1024*1024)-SizeOf(ptruint)*3;
 var
@@ -863,49 +888,59 @@ var
  end;
 
 begin
- if (Allocator.pHead.slh_first=nil) or (Size>Allocator.curr_size) then
+ if (pHead.slh_first=nil) or (Size>curr_size) then
  begin
   node:=_alloc;
-  SLIST_INSERT_HEAD(@Allocator.pHead,node,@node^.link);
+  SLIST_INSERT_HEAD(@pHead,node,@node^.link);
 
   //Push_head(_alloc);
   mem_size:=MemSize(node);
-  Allocator.curr_apos:=0;
-  Allocator.curr_size:=mem_size-SizeOf(Pointer);
-  Inc(Allocator.full_size,mem_size);
+  curr_apos:=0;
+  curr_size:=mem_size-SizeOf(Pointer);
+  Inc(full_size,mem_size);
  end;
 
- node:=SLIST_FIRST(@Allocator.pHead);
+ node:=SLIST_FIRST(@pHead);
 
- Result:=@PByte(@node^.data)[Allocator.curr_apos];
+ Result:=@PByte(@node^.data)[curr_apos];
 
- Inc(Allocator.used_size,Size);
+ Inc(used_size,Size);
  Size:=Align(Size,SizeOf(ptruint));
- Inc(Allocator.curr_apos,Size);
- Dec(Allocator.curr_size,Size);
+ Inc(curr_apos,Size);
+ Dec(curr_size,Size);
 end;
 
-Procedure t_jit_builder.Free;
+Procedure t_jit_builder_allocator.Free;
 var
  node:PAllocNode;
 begin
  //node:=Pop_head;
- node:=Allocator.pHead.slh_first;
+ node:=pHead.slh_first;
  if (node<>nil) then
  begin
-  Allocator.pHead.slh_first:=node^.link;
+  pHead.slh_first:=node^.link;
  end;
  While (node<>nil) do
  begin
   FreeMem(node);
   //node:=Pop_head;
-  node:=Allocator.pHead.slh_first;
+  node:=pHead.slh_first;
   if (node<>nil) then
   begin
-   Allocator.pHead.slh_first:=node^.link;
+   pHead.slh_first:=node^.link;
   end;
  end;
- Self:=Default(t_jit_builder);
+ Self:=Default(t_jit_builder_allocator);
+end;
+
+Function t_jit_builder.Alloc(Size:ptruint):Pointer;
+begin
+ Result:=Allocator.Alloc(Size);
+end;
+
+Procedure t_jit_builder.Free;
+begin
+ Allocator.Free;
 end;
 
 //
@@ -1165,7 +1200,6 @@ begin
  _O($C3);
 end;
 
-
 Procedure t_jit_builder.ud2;
 begin
  _O($0F0B);
@@ -1233,12 +1267,44 @@ begin
  end;
 end;
 
+function is_8bit_offset(d:Integer):Boolean; inline;
+begin
+ case d of
+  -128..127:Result:=True;
+  else
+              Result:=False;
+ end;
+end;
+
+function classif_instr(node:p_jit_instruction):Byte; inline;
+begin
+ Result:=0;
+ case node^.AData[0] of
+       $EB:Result:=1; //jmp8
+       $E9:Result:=2; //jmp32
+  $70..$7F:Result:=3; //jcc8
+       $0F:
+           case node^.AData[1] of
+            $80..$8F:Result:=4; //jcc32
+            else;
+           end;
+  else;
+ end;
+end;
+
 Procedure t_jit_builder.LinkData;
+label
+ _start;
 var
  node:p_jit_instruction;
- d:Integer;
+ d,t:Integer;
 
+ is_change:Boolean;
 begin
+
+ _start:
+ is_change:=False;
+
  d:=0;
  node:=TAILQ_FIRST(@AInstructions);
 
@@ -1247,27 +1313,81 @@ begin
   With node^ do
    case ALink.AType of
     lnkData:
+      if not is_change then
       begin
        d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
        _set_data(node,d);
       end;
-    lnkLabelBefore:
-     With node^ do
-     begin
-      d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
-      _set_data(node,d);
-     end;
+    lnkLabelBefore,
     lnkLabelAfter:
-     With node^ do
      begin
-      d:=_get_label_after_offset(ALink.ALink,AInstructionOffset+ASize);
-      _set_data(node,d);
+
+      case ALink.AType of
+       lnkLabelBefore:d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
+       lnkLabelAfter :d:=_get_label_after_offset (ALink.ALink,AInstructionOffset+ASize);
+      end;
+
+      t:=classif_instr(node);
+
+      if (t<>0) then
+      begin
+       if (d=0) then
+       begin
+        //clear instr
+
+        ALink.AType:=lnkNone;
+        ASize:=0;
+
+        is_change:=True;
+       end;
+      end;
+
+      if (ASize<>0) then
+      case t of
+       2:if is_8bit_offset(d) then //jmp32
+         begin
+          //set to jmp8
+
+          AData[0]:=$EB;
+          ASize:=2;
+
+          ALink.ASize:=1;
+
+          is_change:=True;
+         end;
+       4:if is_8bit_offset(d) then //jcc32
+         begin
+          t:=node^.AData[1] and $F;
+
+          AData[0]:=$70 or t;
+          ASize:=2;
+
+          ALink.ASize:=1;
+          ALink.AOffset:=1;
+
+          is_change:=True;
+         end;
+       else;
+      end;
+
+      if not is_change then
+      begin
+       _set_data(node,d);
+      end;
+
      end;
     else;
    end;
   //
   node:=TAILQ_NEXT(node,@node^.link);
  end;
+
+ if is_change then
+ begin
+  RebuldInstructionOffset;
+  goto _start;
+ end;
+
 end;
 
 Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;

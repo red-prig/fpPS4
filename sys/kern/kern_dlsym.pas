@@ -328,7 +328,7 @@ begin
  donelist_init(donelist);
 
  err:=0;
- if (obj^.mainprog=0) then
+ if (obj^.rtld_flags.mainprog=0) then
  begin
   err:=symlook_list(@req,obj^.dagmembers,donelist);
  end else

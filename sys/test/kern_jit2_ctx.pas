@@ -68,9 +68,18 @@ type
     function c(n1,n2:p_label):Integer; static;
    end;
    t_label_set=specialize TNodeSplay<t_label>;
+
+   p_entry_point=^t_entry_point;
+   t_entry_point=object
+    next    :p_entry_point;
+    src     :Pointer;
+    label_id:t_jit_i_link;
+   end;
+
   var
    forward_set:t_forward_set;
    label_set  :t_label_set;
+   entry_list :p_entry_point;
 
    text_start:QWORD;
    text___end:QWORD;
@@ -86,6 +95,7 @@ type
 
    builder:t_jit_builder;
 
+  function  is_curr_addr(addr:QWORD):Boolean;
   procedure add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
   function  add_forward_point(label_id:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(dst:Pointer):p_forward_point;
@@ -93,6 +103,7 @@ type
   function  fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
   function  add_label(src:Pointer;label_id:t_jit_i_link):p_label;
   function  find_label(src:Pointer):t_jit_i_link;
+  procedure add_entry_point(src:Pointer;label_id:t_jit_i_link);
  end;
 
 const
@@ -255,6 +266,11 @@ begin
  Result:=Integer(n1^.src>n2^.src)-Integer(n1^.src<n2^.src);
 end;
 
+function t_jit_context2.is_curr_addr(addr:QWORD):Boolean;
+begin
+ Result:=(addr>=text_start) and (addr<text___end);
+end;
+
 procedure t_jit_context2.add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
 var
  link:p_forward_link;
@@ -349,6 +365,19 @@ begin
  entry:=label_set.Find(@node);
  if (entry=nil) then Exit;
  Result:=entry^.label_id;
+end;
+
+procedure t_jit_context2.add_entry_point(src:Pointer;label_id:t_jit_i_link);
+var
+ node:p_entry_point;
+begin
+ if (src=nil) then Exit;
+ node:=builder.Alloc(Sizeof(t_entry_point));
+ node^.next    :=entry_list;
+ node^.src     :=src;
+ node^.label_id:=label_id;
+ //
+ entry_list:=node;
 end;
 
 //
@@ -657,8 +686,9 @@ asm
  shr PAGE_SHIFT   ,%rax
  and PAGE_MAP_MASK,%rax
  //uplift (rax)
- mov PAGE_MAP,%rax
- mov (%rax,%rax,4),%edi
+ lea (,%rax,4),%rax
+ add PAGE_MAP(%rip),%rax
+ mov (%rax),%eax
  //filter (rax)
  and PAGE_OFS_MASK,%rax
  jz _exit
@@ -696,8 +726,8 @@ asm
  lea (,%rdi,4),%rdi
  lea (,%rsi,4),%rsi
  //
- add PAGE_MAP,%rdi
- add PAGE_MAP,%rsi
+ add PAGE_MAP(%rip),%rdi
+ add PAGE_MAP(%rip),%rsi
  //
  mov (%rdi),%edi
  mov (%rsi),%esi

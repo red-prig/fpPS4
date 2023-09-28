@@ -97,7 +97,7 @@ begin
     R_X86_64_NONE:; //ignore
 
     R_X86_64_COPY:
-      if (obj^.mainprog=0) then
+      if (obj^.rtld_flags.mainprog=0) then
       begin
        Writeln(StdErr,'reloc_non_plt:','Unexpected R_X86_64_COPY relocation in shared library ',dynlib_basename(obj^.lib_path));
        Exit(ENOEXEC);
@@ -394,8 +394,8 @@ begin
  end;
 
  if (flags=1) and
-    (obj^.jmpslots_done=0) and
-    (defobj^.jmpslots_done=0) then
+    (obj^.rtld_flags.jmpslots_done=0) and
+    (defobj^.rtld_flags.jmpslots_done=0) then
  begin
   Exit(5);
  end;
@@ -528,7 +528,7 @@ begin
     R_X86_64_NONE:; //ignore
 
     R_X86_64_COPY:
-      if (obj^.mainprog=0) then
+      if (obj^.rtld_flags.mainprog=0) then
       begin
        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unexpected R_X86_64_COPY relocation in dynamic library ',dynlib_basename(obj^.lib_path));
        Exit(-1);

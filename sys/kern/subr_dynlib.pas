@@ -116,20 +116,20 @@ type
 
   loaded:Integer;
 
-  //t_rtld_bits rtld_flags;
-
-  mainprog     :Byte;
-  tls_done     :Byte;
-  init_scanned :Byte;
-  init_done    :Byte;
-  on_fini_list :Byte;
-  not_get_proc :Byte;
-  textrel      :Byte;
-  init_plt     :Byte;
-  is_system    :Byte;
-  dag_inited   :Byte;
-  jmpslots_done:Byte;
-  internal     :Byte;
+  rtld_flags:bitpacked record
+   mainprog     :0..1;
+   tls_done     :0..1;
+   init_scanned :0..1;
+   init_done    :0..1;
+   on_fini_list :0..1;
+   not_get_proc :0..1;
+   textrel      :0..1;
+   init_plt     :0..1;
+   is_system    :0..1;
+   dag_inited   :0..1;
+   jmpslots_done:0..1;
+   internal     :0..1;
+  end;
 
   dldags    :TAILQ_HEAD; //Objlist_Entry
   dagmembers:TAILQ_HEAD; //Objlist_Entry
@@ -327,6 +327,8 @@ procedure unload_object(root:p_lib_info);
 function  relocate_object(root:p_lib_info):Integer;
 function  dynlib_load_relocate():Integer;
 
+procedure pick_obj(obj:p_lib_info);
+
 function  preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 function  load_prx(path:pchar;flags:DWORD;var pobj:p_lib_info):Integer;
 function  unload_prx(obj:p_lib_info):Integer;
@@ -370,7 +372,9 @@ uses
  kern_proc,
  kern_reloc,
  kern_namedobj,
- elf_nid_utils;
+ elf_nid_utils,
+ kern_jit2,
+ kern_jit2_ctx;
 
 procedure dynlibs_lock;
 begin
@@ -567,7 +571,7 @@ end;
 function obj_new_int(mod_name:pchar):p_lib_info;
 begin
  Result:=obj_new();
- Result^.internal:=1;
+ Result^.rtld_flags.internal:=1;
  Result^.add_mod(mod_name);
 end;
 
@@ -948,7 +952,7 @@ function allocate_tls_offset(obj:p_lib_info):Boolean;
 var
  off:Int64;
 begin
- if (obj^.tls_done<>0) then
+ if (obj^.rtld_flags.tls_done<>0) then
  begin
   Exit(True);
  end;
@@ -956,7 +960,7 @@ begin
  off:=obj^.tls_size;
  if (off=0) then
  begin
-  obj^.tls_done:=1;
+  obj^.rtld_flags.tls_done:=1;
   Exit(True);
  end;
 
@@ -985,7 +989,7 @@ end;
 
 procedure free_tls_offset(obj:p_lib_info);
 begin
- if (obj^.tls_done<>0) and (obj^.tls_offset=dynlibs_info.tls_last_offset) then
+ if (obj^.rtld_flags.tls_done<>0) and (obj^.tls_offset=dynlibs_info.tls_last_offset) then
  begin
   dynlibs_info.tls_last_offset:=obj^.tls_offset - obj^.tls_size;
   dynlibs_info.tls_last_size  :=0;
@@ -1269,8 +1273,9 @@ procedure initlist_add_objects(var fini_proc_list:TAILQ_HEAD;
                                tail:p_lib_info;
                                var init_proc_list:TAILQ_HEAD);
 begin
- if (obj^.init_scanned<>0) or (obj^.init_done<>0) then Exit;
- obj^.init_scanned:=1;
+ if (obj^.rtld_flags.init_scanned<>0) or
+    (obj^.rtld_flags.init_done<>0) then Exit;
+ obj^.rtld_flags.init_scanned:=1;
 
  if (obj<>tail) then
  begin
@@ -1287,11 +1292,12 @@ begin
   objlist_push_tail(init_proc_list,obj);
  end;
 
- if (obj^.fini_proc_addr<>nil) and (obj^.on_fini_list=0) then
+ if (obj^.fini_proc_addr<>nil) and
+    (obj^.rtld_flags.on_fini_list=0) then
  begin
   objlist_push_tail(fini_proc_list,obj);
 
-  obj^.on_fini_list:=1;
+  obj^.rtld_flags.on_fini_list:=1;
  end;
 end;
 
@@ -1435,7 +1441,7 @@ begin
 
     DT_TEXTREL:
       begin
-       obj^.textrel:=1;
+       obj^.rtld_flags.textrel:=1;
       end;
 
     DT_FLAGS:
@@ -1456,7 +1462,7 @@ begin
 
        if ((dval and DF_TEXTREL)<>0) then
        begin
-        obj^.textrel:=1;
+        obj^.rtld_flags.textrel:=1;
        end;
       end;
 
@@ -2061,7 +2067,7 @@ begin
 
  if (budget=2) then
  begin
-  new^.is_system:=1;
+  new^.rtld_flags.is_system:=1;
  end;
 
  error:=acquire_per_file_info_obj(imgp,new);
@@ -2122,7 +2128,7 @@ function relocate_text_or_data_segment(obj:p_lib_info;src,dst:Pointer;size:QWORD
 var
  map:vm_map_t;
 begin
- if (obj^.textrel=0) or
+ if (obj^.rtld_flags.textrel=0) or
     (obj^.map_base > dst) or
     ((obj^.map_base + obj^.text_size) < (dst + size)) then
  begin
@@ -2182,7 +2188,7 @@ var
  elm:p_Objlist_Entry;
  donelist:t_DoneList;
 begin
- if (root^.dag_inited<>0) then Exit;
+ if (root^.rtld_flags.dag_inited<>0) then Exit;
 
  donelist:=Default(t_DoneList);
  donelist_init(donelist);
@@ -2224,14 +2230,14 @@ begin
   elm:=TAILQ_NEXT(elm,@elm^.link);
  end;
 
- root^.dag_inited:=1;
+ root^.rtld_flags.dag_inited:=1;
 end;
 
 procedure ref_dag(root:p_lib_info);
 var
  elm:p_Objlist_Entry;
 begin
- Assert(root^.dag_inited<>0,'DAG is not initialized');
+ Assert(root^.rtld_flags.dag_inited<>0,'DAG is not initialized');
 
  elm:=TAILQ_FIRST(@root^.dagmembers);
  while (elm<>nil) do
@@ -2246,7 +2252,7 @@ procedure unref_dag(root:p_lib_info);
 var
  elm:p_Objlist_Entry;
 begin
- Assert(root^.dag_inited<>0,'DAG is not initialized');
+ Assert(root^.rtld_flags.dag_inited<>0,'DAG is not initialized');
 
  elm:=TAILQ_FIRST(@root^.dagmembers);
  while (elm<>nil) do
@@ -2268,7 +2274,7 @@ var
 begin
  Result:=0;
 
- if (obj^.init_plt<>0) then Exit;
+ if (obj^.rtld_flags.init_plt<>0) then Exit;
 
  Result:=change_relro_protection(obj,VM_PROT_RW);
  if (Result<>0) then Exit;
@@ -2311,7 +2317,7 @@ begin
 
  err:=change_relro_protection(obj,VM_PROT_READ);
 
- obj^.init_plt:=1;
+ obj^.rtld_flags.init_plt:=1;
 end;
 
 function DecodeSym(obj:p_lib_info;
@@ -2547,7 +2553,7 @@ begin
   goto _error;
  end;
 
- if (new^.textrel<>0) then
+ if (new^.rtld_flags.textrel<>0) then
  begin
   Writeln(StdErr,'do_load_object:',new^.lib_path,' has impure text');
   err:=EINVAL;
@@ -2678,7 +2684,7 @@ begin
     //reg lib
     dynlibs_add_obj(Result);
     //
-    Result^.internal:=1;
+    Result^.rtld_flags.internal:=1;
     Result^.loaded:=1;
 
     Writeln(' preload_prx_internal:',path);
@@ -2690,6 +2696,75 @@ begin
   entry:=SLIST_NEXT(entry,@entry^.link);
  end;
 
+end;
+
+procedure pick_obj(obj:p_lib_info);
+var
+ ctx:t_jit_context2;
+
+ Lib_Entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ symp:p_elf64_sym;
+ addr:Pointer;
+ ST_TYPE:Integer;
+begin
+ if (obj=nil) then Exit;
+
+ if (obj^.rtld_flags.internal=1) then
+ begin
+  Exit;
+ end;
+
+ Writeln('pick_obj:',obj^.lib_path);
+
+ ctx:=Default(t_jit_context2);
+
+ ctx.text_start:=QWORD(obj^.map_base);
+ ctx.text___end:=ctx.text_start+obj^.text_size;
+
+ ctx.add_forward_point(obj^.entry_addr);
+
+ if (obj^.rtld_flags.mainprog=0) then
+ begin
+  ctx.add_forward_point(obj^.init_proc_addr);
+  ctx.add_forward_point(obj^.fini_proc_addr);
+ end;
+
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (Lib_Entry^.import=0) then //export
+  begin
+   h_entry:=TAILQ_FIRST(@Lib_Entry^.syms);
+   while (h_entry<>nil) do
+   begin
+
+    symp:=@h_entry^.sym;
+
+    ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+    Case ST_TYPE of
+     STT_NOTYPE,
+     STT_FUN,
+     STT_SCE:
+        if (symp^.st_value<>0) and
+           (symp^.st_shndx<>SHN_UNDEF) and
+           (symp^.st_value<obj^.text_size) then
+        begin
+         addr:=obj^.relocbase + symp^.st_value;
+
+         ctx.add_forward_point(addr);
+        end;
+     else;
+    end; //case
+
+    h_entry:=TAILQ_NEXT(h_entry,@h_entry^.link)
+   end;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+ kern_jit2.pick(ctx);
 end;
 
 function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
@@ -2766,6 +2841,8 @@ begin
  _do_load:
 
  Result:=do_load_object(pchar(fname),flags,err);
+
+ pick_obj(Result);
 end;
 
 function relocate_object(root:p_lib_info):Integer;
@@ -2775,7 +2852,7 @@ begin
  Result:=change_relro_protection_all(VM_PROT_RW);
  if (Result<>0) then Exit;
 
- Result:=relocate_one_object(root,ord(root^.jmpslots_done=0));
+ Result:=relocate_one_object(root,ord(root^.rtld_flags.jmpslots_done=0));
 
  if (Result=0) then
  begin
@@ -2785,7 +2862,7 @@ begin
   begin
    if (obj<>root) then
    begin
-    Result:=relocate_one_object(obj,ord(root^.jmpslots_done=0));
+    Result:=relocate_one_object(obj,ord(root^.rtld_flags.jmpslots_done=0));
    end;
    obj:=TAILQ_NEXT(obj,@obj^.link);
   end;
@@ -2844,12 +2921,12 @@ begin
  begin
   if ((flags and $20000)<>0) then //set jmpslots_done?
   begin
-   obj^.jmpslots_done:=1;
+   obj^.rtld_flags.jmpslots_done:=1;
   end;
 
   if ((flags and $40000)<>0) then //set not_get_proc?
   begin
-   obj^.not_get_proc:=1;
+   obj^.rtld_flags.not_get_proc:=1;
   end;
 
   init_dag(obj);

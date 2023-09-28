@@ -299,7 +299,7 @@ begin
   begin
    dst^:=Default(SceKernelModuleInfo);
 
-   if ((flags and 1)=0) and (obj^.is_system<>0) then
+   if ((flags and 1)=0) and (obj^.rtld_flags.is_system<>0) then
    begin
     Result:=EPERM;
     Break;
@@ -434,13 +434,13 @@ begin
 
    if ((flags and 1)<>0) then
    begin
-    tls_index:=((ord(obj^.is_system<>0) + ord(obj^.mainprog<>0)*2) * $10000) or tls_index;
+    tls_index:=((ord(obj^.rtld_flags.is_system<>0) + ord(obj^.rtld_flags.mainprog<>0)*2) * $10000) or tls_index;
     dst^.tls_index:=tls_index;
    end;
 
    if ((flags and 2)<>0) then
    begin
-    if (obj^.is_system<>0) {or (is_webkit)} then
+    if (obj^.rtld_flags.is_system<>0) {or (is_webkit)} then
     begin
      FillChar(dst^.name,SCE_DBG_MAX_NAME_LENGTH,0);
     end;
@@ -461,7 +461,7 @@ begin
 
    //if not webkit then
    begin
-    if (obj^.not_get_proc=0) then
+    if (obj^.rtld_flags.not_get_proc=0) then
     begin
      dst^.init_proc_addr:=obj^.init_proc_addr;
      dst^.fini_proc_addr:=obj^.fini_proc_addr;
@@ -551,7 +551,7 @@ begin
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) and (i<count) do
  begin
-  if ((flags and 1)<>0) or (obj^.is_system=0) then
+  if ((flags and 1)<>0) or (obj^.rtld_flags.is_system=0) then
   begin
    if (numArray<=i) then
    begin
@@ -621,11 +621,11 @@ begin
    dst:=nil;
 
    case num of
-    1:if (obj^.not_get_proc=0) then
+    1:if (obj^.rtld_flags.not_get_proc=0) then
       begin
        dst:=obj^.init_proc_addr;
       end;
-    2:if (obj^.not_get_proc=0) then
+    2:if (obj^.rtld_flags.not_get_proc=0) then
       begin
        dst:=obj^.fini_proc_addr;
       end;

@@ -25,11 +25,53 @@ implementation
 
 uses
  sysutils,
- kern_jit2_ops;
+ kern_jit2_ops,
+ kern_jit_dynamic;
+
+procedure jit_before_start; assembler; nostackframe;
+asm
+ nop
+end;
+
+procedure jit_jmp_dispatch;
+begin
+ Writeln('TODO:jit_jmp_dispatch');
+ Assert(False);
+end;
+
+procedure jit_syscall;
+begin
+ Writeln('TODO:jit_syscall');
+ Assert(False);
+end;
+
+procedure jit_assert;
+begin
+ Writeln('TODO:jit_assert');
+ Assert(False);
+end;
+
+procedure jit_system_error;
+begin
+ Writeln('TODO:jit_system_error');
+ Assert(False);
+end;
+
+procedure jit_exit_proc;
+begin
+ Writeln('TODO:jit_exit_proc');
+ //Assert(False);
+end;
+
+procedure jit_cpuid;
+begin
+ Writeln('TODO:jit_cpuid');
+ Assert(False);
+end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(nil); //input:rax TODO jmp dispatcher
+ ctx.builder.call_far(@jit_jmp_dispatch); //input:rax TODO jmp dispatcher
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2;used_r_tmp0:Boolean);
@@ -58,10 +100,20 @@ begin
 
   if (classif_offset_se64(imm)=os64) then
   begin
-   movi64(r_tmp1,imm);
-   movq([stack],r_tmp1);
+   if (classif_offset_u64(imm)=os64) then
+   begin
+    //64bit imm
+    movi64(r_tmp1,imm);
+    movq([stack],r_tmp1);
+   end else
+   begin
+    //32bit zero extend
+    movi(new_reg_size(r_tmp1,os32),imm);
+    movq([stack],r_tmp1);
+   end;
   end else
   begin
+   //32bit sign extend
    movi(os64,[stack],imm);
   end;
 
@@ -115,6 +167,20 @@ begin
  Result:=is_rsp(r[0]) or is_rsp(r[1]);
 end;
 
+procedure op_set_rax_imm(var ctx:t_jit_context2;imm:Int64);
+begin
+ with ctx.builder do
+  if (classif_offset_u64(imm)=os64) then
+  begin
+   //64bit imm
+   movi64(r_tmp0,imm);
+  end else
+  begin
+   //32bit zero extend
+   movi(new_reg_size(r_tmp0,os32),imm);
+  end;
+end;
+
 procedure op_call(var ctx:t_jit_context2);
 var
  id:t_jit_i_link;
@@ -134,20 +200,31 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  label_id:=ctx.find_label(dst);
-
-  if (label_id<>nil_link) then
+  if ctx.is_curr_addr(QWORD(dst)) then
   begin
-   op_push_rip(ctx,false);
-   //
-   ctx.builder.jmp(label_id);
+   label_id:=ctx.find_label(dst);
+
+   if (label_id<>nil_link) then
+   begin
+    op_push_rip(ctx,false);
+    //
+    ctx.builder.jmp(label_id);
+   end else
+   begin
+    op_push_rip(ctx,false);
+    //
+    id:=ctx.builder.jmp(nil_link);
+    ctx.add_forward_point(id,dst);
+   end;
   end else
   begin
    op_push_rip(ctx,false);
    //
-   id:=ctx.builder.jmp(nil_link);
-   ctx.add_forward_point(id,dst);
+   op_set_rax_imm(ctx,Int64(dst));
+   //
+   op_jmp_dispatcher(ctx);
   end;
+
  end else
  if is_memory(ctx.din) then
  begin
@@ -220,15 +297,23 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  label_id:=ctx.find_label(dst);
-
-  if (label_id<>nil_link) then
+  if ctx.is_curr_addr(QWORD(dst)) then
   begin
-   ctx.builder.jmp(label_id);
+   label_id:=ctx.find_label(dst);
+
+   if (label_id<>nil_link) then
+   begin
+    ctx.builder.jmp(label_id);
+   end else
+   begin
+    id:=ctx.builder.jmp(nil_link);
+    ctx.add_forward_point(id,dst);
+   end;
   end else
   begin
-   id:=ctx.builder.jmp(nil_link);
-   ctx.add_forward_point(id,dst);
+   op_set_rax_imm(ctx,Int64(dst));
+   //
+   op_jmp_dispatcher(ctx);
   end;
 
  end else
@@ -263,7 +348,7 @@ end;
 
 procedure op_jcc(var ctx:t_jit_context2);
 var
- id:t_jit_i_link;
+ id,id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
  label_id:t_jit_i_link;
@@ -276,15 +361,31 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- label_id:=ctx.find_label(dst);
-
- if (label_id<>nil_link) then
+ if ctx.is_curr_addr(QWORD(dst)) then
  begin
-  ctx.builder.jcc(ctx.din.OpCode.Suffix,label_id);
+  label_id:=ctx.find_label(dst);
+
+  if (label_id<>nil_link) then
+  begin
+   ctx.builder.jcc(ctx.din.OpCode.Suffix,label_id);
+  end else
+  begin
+   id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
+   ctx.add_forward_point(id,dst);
+  end;
  end else
  begin
-  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
-  ctx.add_forward_point(id,dst);
+  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link,os8);
+
+  id2:=ctx.builder.jmp(nil_link,os8);
+
+   id._label:=ctx.builder.get_curr_label.after;
+   //
+   op_set_rax_imm(ctx,Int64(dst));
+   //
+   op_jmp_dispatcher(ctx);
+
+  id2._label:=ctx.builder.get_curr_label.after;
  end;
 end;
 
@@ -437,7 +538,7 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(nil); //TODO syscall dispatcher
+ ctx.builder.call_far(@jit_syscall); //TODO syscall dispatcher
 end;
 
 procedure op_int(var ctx:t_jit_context2);
@@ -453,13 +554,13 @@ begin
   $41: //assert?
    begin
     //
-    ctx.builder.call_far(nil); //TODO error dispatcher
+    ctx.builder.call_far(@jit_assert); //TODO error dispatcher
    end;
 
   $44: //system error?
    begin
     //
-    ctx.builder.call_far(nil); //TODO error dispatcher
+    ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
     ctx.ptr_next:=nil; //trim
    end;
   else
@@ -472,26 +573,26 @@ end;
 procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
- ctx.builder.call_far(nil); //TODO exit dispatcher
+ ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
  ctx.ptr_next:=nil; //trim
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
- ctx.builder.call_far(nil); //TODO exit dispatcher
+ ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
  ctx.ptr_next:=nil; //trim
 end;
 
 procedure op_hlt(var ctx:t_jit_context2);
 begin
  //stop thread?
- ctx.builder.call_far(nil); //TODO exit dispatcher
+ ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
 end;
 
 procedure op_cpuid(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(nil); //TODO CPUID
+ ctx.builder.call_far(@jit_cpuid); //TODO CPUID
 end;
 
 procedure op_rdtsc(var ctx:t_jit_context2);
@@ -505,9 +606,10 @@ begin
  //align?
 end;
 
-procedure op_rep_cmps(var ctx:t_jit_context2);
 const
  test_desc:t_op_type=(op:$85;index:0);
+
+procedure op_rep_cmps(var ctx:t_jit_context2);
 var
  op:DWORD;
  size:TOperandSize;
@@ -603,8 +705,6 @@ end;
 ///
 
 procedure op_rep_stos(var ctx:t_jit_context2);
-const
- test_desc:t_op_type=(op:$85;index:0);
 var
  i:Integer;
  size:TOperandSize;
@@ -615,7 +715,6 @@ var
  link___end:t_jit_i_link;
 
  link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
 begin
  //rdi,rsi
  //prefix $67 TODO
@@ -635,7 +734,6 @@ begin
  begin
 
   link_jmp0:=nil_link;
-  link_jmp1:=nil_link;
 
   new:=new_reg_size(r_tmp1,size);
 
@@ -658,17 +756,6 @@ begin
    leaq(rcx,[rcx-1]);
    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
 
-   if (ifPrefixRepE in ctx.din.Flags) then
-   begin
-    //if a[i]<>b[i] then exit
-    link_jmp1:=jcc(OPSc_nz,nil_link,os8);
-   end else
-   if (ifPrefixRepNe in ctx.din.Flags) then
-   begin
-    //if a[i]=b[i] then exit
-    link_jmp1:=jcc(OPSc_z,nil_link,os8);
-   end;
-
   //until
   jmp(link_start,os8);
 
@@ -680,10 +767,6 @@ begin
   link___end:=ctx.builder.get_curr_label.before; //exit1
 
   link_jmp0._label:=link___end;
-
-  link___end:=link___end.after; //exit2
-
-  link_jmp1._label:=link___end;
  end;
 
 end;
@@ -752,14 +835,17 @@ const
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
  MCODES:array[0..3] of RawByteString=('','0F','0F38','0F3A');
 label
- _next;
+ _next,
+ _build;
 var
  addr:Pointer;
+ ptr:Pointer;
+
  links:t_jit_context2.t_forward_links;
+ entry_link:Pointer;
 
  proc:TDbgProcess;
  adec:TX86AsmDecoder;
- ptr,fin:Pointer;
  ACodeBytes,ACode:RawByteString;
 
  cb:t_jit_cb;
@@ -767,8 +853,10 @@ var
  node_new,node_curr:t_jit_i_link;
  node,node_code1,node_code2:p_jit_instruction;
 
- data:Pointer;
- F:THandle;
+ blob:p_jit_dynamic;
+ entry_point:t_jit_context2.p_entry_point;
+
+ //F:THandle;
 begin
 
  init_cbs;
@@ -783,21 +871,27 @@ begin
 
  if not ctx.fetch_forward_point(links,addr) then
  begin
-  Assert(false);
+  Exit;
  end;
 
+ entry_link:=addr;
+
+ Writeln('0x',HexStr(entry_link));
+
+   ctx.builder.call_far(@jit_before_start);
+
  ptr:=addr;
- fin:=Pointer(Int64(-1));
 
  proc:=TDbgProcess.Create(dm64);
  adec:=TX86AsmDecoder.Create(proc);
 
- while (ptr<fin) do
+ while True do
  begin
 
   if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
-   writeln('not excec:0x',HexStr(ptr));
+   //writeln('not excec:0x',HexStr(ptr));
+   ctx.builder.ud2;
    goto _next;
   end;
 
@@ -809,12 +903,8 @@ begin
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     writeln('invalid:0x',HexStr(ctx.ptr_curr));
-
-     ptr:=ctx.ptr_curr;
-     adec.Disassemble(ptr,ACodeBytes,ACode);
-
-
+     //writeln('invalid:0x',HexStr(ctx.ptr_curr));
+     ctx.builder.ud2;
      goto _next;
     end;
    else;
@@ -823,13 +913,16 @@ begin
   if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
      is_invalid(adec.Instr) then
   begin
-   writeln('invalid:0x',HexStr(ctx.ptr_curr));
+   //writeln('invalid:0x',HexStr(ctx.ptr_curr));
+   ctx.builder.ud2;
    goto _next;
   end;
 
+  {
   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
   Writeln(ACodeBytes:32,' ',ACode);
   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+  }
 
   ctx.ptr_next:=ptr;
 
@@ -856,6 +949,10 @@ begin
 
   if (cb=nil) then
   begin
+   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
+   Writeln(ACodeBytes:32,' ',ACode);
+   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+
    Writeln('Unhandled jit:',
            ctx.din.OpCode.Prefix,' ',
            ctx.din.OpCode.Opcode,' ',
@@ -875,6 +972,7 @@ begin
 
   node_code2:=ctx.builder.get_curr_label._node;
 
+  {
   if (node_code1<>node_code2) and
      (node_code1<>nil) then
   begin
@@ -891,8 +989,8 @@ begin
    end;
    Writeln('recompiled----------------------':32,' ','');
   end;
+  }
 
-  //if (node_code1<>node_code2) then
   begin
    ctx.add_label(ctx.ptr_curr,node_curr);
   end;
@@ -903,7 +1001,12 @@ begin
    links.root:=nil;
   end;
 
-  //if (len1<>len2) then
+  if (entry_link<>nil) then
+  begin
+   ctx.add_entry_point(entry_link,node_curr);
+   entry_link:=nil;
+  end;
+
   begin
    node_new:=ctx.find_label(ptr);
 
@@ -911,7 +1014,7 @@ begin
    begin
     ctx.builder.jmp(node_new);
     ctx.ptr_next:=nil;
-    Writeln('jmp next:0x',HexStr(ptr));
+    //Writeln('jmp next:0x',HexStr(ptr));
    end;
 
   end;
@@ -923,39 +1026,63 @@ begin
 
     if not ctx.fetch_forward_point(links,addr) then
     begin
-     ctx.builder.ud2;
-
-     data:=AllocMem(ctx.builder.GetMemSize);
-     ctx.builder.SaveTo(data,ctx.builder.GetMemSize);
-
-     F:=FileCreate('recompile.bin');
-     FileWrite(F,data^,ctx.builder.GetMemSize);
-     FileClose(F);
-
-     Assert(false);
+     goto _build;
     end;
 
     node_new:=ctx.find_label(addr);
     if (node_new=nil_link) then
     begin
-     Writeln('not found:0x',HexStr(addr));
-     writeln;
+     //Writeln('not found:0x',HexStr(addr));
      Break;
     end else
     begin
      links.Resolve(node_new);
      links.root:=nil;
+     //
+     ctx.add_entry_point(addr,node_new);
     end;
 
    until false;
+
+       ctx.builder.call_far(@jit_before_start);
+
+   entry_link:=addr;
 
    ptr:=addr;
   end;
 
  end;
 
+ _build:
+ //build blob
+
+ ctx.builder.ud2;
+
+ blob:=new_blob(ctx.builder.GetMemSize);
+
+ ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
+
+ //F:=FileCreate('recompile.bin');
+ //FileWrite(F,data^,ctx.builder.GetMemSize);
+ //FileClose(F);
+
+  //copy entrys
+ entry_point:=ctx.entry_list;
+ while (entry_point<>nil) do
+ begin
+  addr:=blob^.base+entry_point^.label_id.offset;
+  //
+  blob^.add_entry_point(entry_point^.src,addr);
+  //
+  entry_point:=entry_point^.next;
+ end;
+
+ blob^.attach;
+
  adec.Free;
  proc.Free;
+
+ ctx.builder.Free;
 end;
 
 
