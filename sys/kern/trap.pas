@@ -649,14 +649,14 @@ begin
    is_guest:=True;
    Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
 
-   //count:=sysent_table[td_frame^.tf_rax].sy_narg;
-   //Assert(count<=6);
-   //
-   //if (count<>0) then
-   //For i:=0 to count-1 do
-   //begin
-   // Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
-   //end;
+   count:=sysent_table[td_frame^.tf_rax].sy_narg;
+   Assert(count<=6);
+
+   if (count<>0) then
+   For i:=0 to count-1 do
+   begin
+    Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+   end;
 
   end;
 
@@ -709,8 +709,8 @@ asm
  movqq %rax,%r11 //save rax
  movqq %rcx,%r10 //save rcx
 
- lahf           //load to AH
- movb  %ah,%ch  //save flags to CH
+ pushf
+ pop %rcx //save flags to rcx
 
  movqq %gs:teb.thread,%rax //curkthread
  test  %rax,%rax
@@ -769,8 +769,9 @@ asm
  //Restore preserved registers.
 
  //get flags
- movb  kthread.td_frame.tf_rflags(%rcx),%ah
- sahf  //restore flags
+ movqq kthread.td_frame.tf_rflags(%rcx),%rax
+ push %rax
+ popf
 
  movqq kthread.td_frame.tf_rdi(%rcx),%rdi
  movqq kthread.td_frame.tf_rsi(%rcx),%rsi
@@ -792,9 +793,9 @@ asm
  //fail (curkthread=nil)
  _fail:
 
- movb  %ch,%ah //get flags
- or    $1,%ah  //set CF
- sahf          //restore flags
+ or $1,%rcx //set CF
+ push %rcx
+ popf
 
  movqq $14,%rax //EFAULT
  movqq  $0,%rdx

@@ -616,6 +616,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   desc:=Default(t_op_type);
+  desc.opt:=[not_prefix];
   desc.op:=$0F00 or SETcc_8[ctx.din.OpCode.Suffix];
   //
   op_emit1(ctx,desc,[]);
@@ -955,7 +956,6 @@ begin
   add_orig(ctx);
  end;
 end;
-
 
 procedure op_lea(var ctx:t_jit_context2);
 var
@@ -2059,6 +2059,9 @@ begin
  jit_cbs[OPPnone,OPclac,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPclc ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPcld ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPstc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPstd ,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPcwd ,OPSnone]:=@op_cdq;
  jit_cbs[OPPnone,OPcdq ,OPSnone]:=@op_cdq;

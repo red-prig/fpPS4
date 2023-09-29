@@ -367,6 +367,7 @@ type
   procedure vmovdqa (reg0:TRegValue;reg1:TRegValue);
   procedure sahf;
   procedure lahf;
+  procedure seto(reg:TRegValue);
  end;
 
 operator :=(const A:TRegValue):t_jit_reg;
@@ -680,10 +681,13 @@ begin
     begin
      Result:=p_jit_data(ALink)^.pId*SizeOf(Pointer);
     end;
-   lnkLabelBefore,
-   lnkLabelAfter:
+   lnkLabelBefore:
     begin
      Result:=ALink^.AInstructionOffset;
+    end;
+   lnkLabelAfter:
+    begin
+     Result:=ALink^.AInstructionOffset+ALink^.ASize;
     end;
    else;
   end;
@@ -1968,11 +1972,11 @@ begin
 
  op:=desc.op;
  case reg.ASize of
-   os8:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Dec(op);
-       end;
+  os8:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Dec(op);
+      end;
   os16,
   os128:
        if (not (not_prefix in desc.opt)) then
@@ -2199,11 +2203,11 @@ begin
 
  op:=desc.op;
  case size of
-   os8:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Dec(op);
-       end;
+  os8:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Dec(op);
+      end;
   os16,
   os128:
        if (not (not_prefix in desc.opt)) then
@@ -2552,7 +2556,8 @@ begin
        begin
         Dec(op);
        end;
-  os16:
+  os16,
+  os128:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2618,7 +2623,8 @@ begin
        begin
         Dec(op);
        end;
-  os16:
+  os16,
+  os128:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2693,10 +2699,12 @@ begin
 
  op:=desc.op;
  case reg.ASize of
-  os16:
-       begin
-        Prefix:=$66;
-       end;
+  os16,
+  os128:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Prefix:=$66;
+      end;
   os32:;
   os64:
        begin
@@ -2747,10 +2755,12 @@ begin
 
  op:=desc.op;
  case size of
-  os16:
-       begin
-        Prefix:=$66;
-       end;
+  os16,
+  os128:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Prefix:=$66;
+      end;
   os32:;
   os64:
        begin
@@ -4244,6 +4254,14 @@ procedure t_jit_builder.lahf;
 begin
  _O($9F);
 end;
+
+procedure t_jit_builder.seto(reg:TRegValue);
+const
+ desc:t_op_type=(op:$0F90;opt:[not_prefix]);
+begin
+ _R(desc,reg);
+end;
+
 
 end.
 

@@ -4,6 +4,9 @@ unit kern_psl;
 
 interface
 
+//80 40   10   04   01
+//SF:ZF:0:AF:0:PF:1:CF
+
 const
  PSL_C   =$00000001; // carry bit
  PSL_PF  =$00000004; // parity bit

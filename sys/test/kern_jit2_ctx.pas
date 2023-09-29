@@ -753,8 +753,8 @@ asm
 
   mov  data,%rax
 
-  mov  8(%rbp) ,%rdi //ret addr
-  lea (,%rdi,2),%rdi //jmp near
+  mov  8(%rbp),%rdi //ret addr
+  lea  2(%rdi),%rdi //jmp near
 
   call %rdi         //reg->data
 
@@ -782,8 +782,8 @@ asm
 
   call uplift_jit
 
-  mov  8(%rbp) ,%r14 //ret addr
-  lea (,%r14,2),%r14 //jmp near
+  mov  8(%rbp),%r14 //ret addr
+  lea  2(%r14),%r14 //jmp near
 
   popfq //restore flags before call
 
@@ -1446,7 +1446,8 @@ var
        end;
 
       end;
-    else;
+    else
+     Assert(False);
    end;
  end;
 
@@ -1587,7 +1588,31 @@ var
 
      end;
 
-    else;
+    mo_mem_imm:
+     begin
+      //input:rax
+
+      imm:=0;
+      GetTargetOfs(ctx.din,ctx.code,2,imm);
+
+      imm_size:=ctx.din.Operand[2].Size;
+
+      Assert(imm_size<>os64);
+
+      if (imm_size=os8) and
+         (mem_size<>os8) and
+         (not (not_impl in desc.reg_im8.opt)) then
+      begin
+       _MI8(desc.reg_im8,mem_size,[flags(ctx)+r_tmp0],imm);
+      end else
+      begin
+       _MI(desc.reg_imm,mem_size,[flags(ctx)+r_tmp0],imm);
+      end;
+
+     end
+
+    else
+     Assert(False);
    end;
  end;
 
@@ -1969,7 +1994,8 @@ var
       _M(desc.mem_one,mem_size,[flags(ctx)+r_tmp0]);
      end
 
-    else;
+    else
+     Assert(False);
    end;
  end;
 
@@ -2544,7 +2570,8 @@ var
       i:=GetFrameOffset(ctx.din.Operand[1]);
       movq([r_thrd+i],fix_size(new1));
      end;
-    else;
+    else
+     Assert(False);
    end;
   end;
  end;

@@ -69,6 +69,7 @@ var
 function  fetch_entry(src:Pointer):t_jit_dynamic.p_entry_point;
 
 procedure switch_to_jit();
+function  jmp_dispatcher(addr:Pointer):Pointer;
 
 implementation
 
@@ -88,7 +89,7 @@ begin
 
  if not is_guest_addr(td^.td_frame.tf_rip) then
  begin
-  Assert(False);
+  Assert(False,'TODO');
  end;
 
  node:=fetch_entry(Pointer(td^.td_frame.tf_rip));
@@ -126,6 +127,41 @@ begin
  td^.td_frame.tf_r15:=QWORD(jctx);
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
+end;
+
+function jmp_dispatcher(addr:Pointer):Pointer;
+var
+ td:p_kthread;
+ node:t_jit_dynamic.p_entry_point;
+ jctx:p_jit_thr_ctx;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(nil);
+
+ if not is_guest_addr(QWORD(addr)) then
+ begin
+  Assert(False,'TODO');
+ end;
+
+ node:=fetch_entry(addr);
+
+ if (node=nil) then
+ begin
+  Writeln('addr:0x',HexStr(addr));
+  Assert(False);
+ end;
+
+ jctx:=td^.td_jit_ctx;
+
+ if (jctx^.cblob<>nil) then
+ begin
+  jctx^.cblob^.dec_ref;
+  jctx^.cblob:=nil;
+ end;
+
+ jctx^.cblob:=node^.blob;
+
+ Result:=node^.dst;
 end;
 
 function fetch_entry(src:Pointer):t_jit_dynamic.p_entry_point;

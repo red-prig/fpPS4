@@ -13,6 +13,9 @@ uses
  kern_jit2_ctx,
  kern_jit2_ops_avx;
 
+const
+ print_asm=false;
+
 procedure pick(var ctx:t_jit_context2);
 
 implementation
@@ -44,7 +47,8 @@ asm
 
  movqq %rax,jit_frame.tf_rip(%r15) //save %rax to tf_rip
 
- lahf //load to AH
+ pushf
+ pop %rax
 
  movqq %gs:teb.thread,%r14 //curkthread
  test  %r14,%r14
@@ -52,9 +56,7 @@ asm
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%r14) //clear PCB_FULL_IRET
 
- shr    $8,%ax
- movzbq %al,%rax
- movb  %rax,kthread.td_frame.tf_rflags(%r14) //save flags
+ movqq %rax,kthread.td_frame.tf_rflags(%r14) //save flags
 
  movqq %rdi,kthread.td_frame.tf_rdi(%r14)
  movqq %rsi,kthread.td_frame.tf_rsi(%r14)
@@ -108,9 +110,9 @@ asm
  //Restore preserved registers.
 
  //get flags
- movqq kthread.td_frame.tf_rflags(%r14),%ax
- shl   $8,%ax
- sahf  //restore flags
+ movqq kthread.td_frame.tf_rflags(%r14),%rax
+ push %rax
+ popf
 
  movqq kthread.td_frame.tf_rdi(%r14),%rdi
  movqq kthread.td_frame.tf_rsi(%r14),%rsi
@@ -135,8 +137,9 @@ asm
  //fail (curkthread=nil)
  _fail:
 
- or    $1,%ah  //set CF
- sahf          //restore flags
+ or $1,%rax //set CF
+ push %rax
+ popf
 
  movqq $14,jit_frame.tf_rax(%r15) //EFAULT
  movqq  $0,%rdx
@@ -174,10 +177,39 @@ asm
  nop
 end;
 
-procedure jit_jmp_dispatch;
-begin
- Writeln('TODO:jit_jmp_dispatch');
- Assert(False);
+procedure jit_jmp_dispatch; assembler; nostackframe;
+asm
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ push %rdi
+ push %rsi
+ push %rdx
+ push %rcx
+ push %r8
+ push %r9
+ push %r10
+ push %r11
+
+ mov  %rax,%rdi
+
+ call jmp_dispatcher
+
+ pop  %r11
+ pop  %r10
+ pop  %r9
+ pop  %r8
+ pop  %rcx
+ pop  %rdx
+ pop  %rsi
+ pop  %rdi
+
+ //epilog
+ pop  %rbp
+
+ lea  8(%rsp),%rsp
+ jmp  %rax
 end;
 
 procedure jit_assert;
@@ -206,7 +238,7 @@ end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_jmp_dispatch); //input:rax TODO jmp dispatcher
+ ctx.builder.call_far(@jit_jmp_dispatch); //input:rax
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2;used_r_tmp0:Boolean);
@@ -215,6 +247,9 @@ var
  stack:TRegValue;
  imm:Int64;
 begin
+ //lea rsp,[rsp-8]
+ //mov [rsp],rax
+
  with ctx.builder do
  begin
   if used_r_tmp0 then
@@ -259,28 +294,32 @@ begin
  end;
 end;
 
-procedure op_pop_rip(var ctx:t_jit_context2);
+procedure op_pop_rip(var ctx:t_jit_context2); //out:rax
 var
  i:Integer;
- new,stack1,stack2:TRegValue;
+ stack:TRegValue;
 begin
+ //mov rax,[rsp]
+ //lea rsp,[rsp+8]
+
  with ctx.builder do
  begin
-  new   :=r_tmp0;
-  stack1:=r_tmp0;
-  stack2:=r_tmp1;
+  stack:=r_tmp0;
 
   i:=GetFrameOffset(rsp);
-  movq(stack1,[r_thrd+i]);
+  movq(stack,[r_thrd+i]);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
-  movq(stack2,stack1);
+  movq(r_tmp1,[stack]);
 
-  movq(new,[stack1]);
+  seto(al);
+  lahf;
+   addi8(os64,[r_thrd+i],8);
+  addi(al,127);
+  sahf;
 
-  leaq(stack2,[stack2+8]);
-  movq([r_thrd+i],stack2);
+  movq(r_tmp0,r_tmp1);
  end;
 end;
 
@@ -400,6 +439,9 @@ begin
   //
   op_jmp_dispatcher(ctx);
  end;
+
+ //
+ ctx.add_forward_point(nil_link,ctx.ptr_next);
 end;
 
 procedure op_ret(var ctx:t_jit_context2);
@@ -534,6 +576,9 @@ var
  imm:Int64;
  stack,new:TRegValue;
 begin
+ //lea rsp,[rsp-len]
+ //mov [rsp],reg
+
  with ctx.builder do
  begin
   stack:=r_tmp0;
@@ -600,6 +645,9 @@ var
  mem_size:TOperandSize;
  stack,new:TRegValue;
 begin
+ //lea rsp,[rsp-len]
+ //mov [rsp],rflags
+
  with ctx.builder do
  begin
   stack:=r_tmp0;
@@ -622,12 +670,14 @@ begin
  end;
 end;
 
-
 procedure op_pop(var ctx:t_jit_context2);
 var
  i:Integer;
  new,stack:TRegValue;
 begin
+ //mov reg,[rsp]
+ //lea rsp,[rsp+len]
+
  with ctx.builder do
  begin
   stack:=r_tmp0;
@@ -665,9 +715,12 @@ begin
   end;
 
   i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
-  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
-  movq([r_thrd+i],stack);
+
+  seto(al);
+  lahf;
+   addi8(os64,[r_thrd+i],OPERAND_BYTES[new.ASize]);
+  addi(al,127);
+  sahf;
  end;
 end;
 
@@ -788,9 +841,11 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
+   seto(al);
    lahf;
     _RR(test_desc,rcx,rcx,os0);
     link_jmp0:=jcc(OPSc_z,nil_link,os8);
+   addi(al,127);
    sahf;
 
    movq(r_tmp0,rsi);
@@ -809,6 +864,9 @@ begin
    xchgq(rsi,r_tmp1);
 
    leaq(rcx,[rcx-1]);
+
+
+
    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
 
@@ -827,6 +885,7 @@ begin
   jmp(link_start,os8);
 
   //exit1
+  addi(al,127);
   sahf;
 
   //exit2
@@ -883,9 +942,11 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
+   seto(al);
    lahf;
     _RR(test_desc,rcx,rcx,os0);
     link_jmp0:=jcc(OPSc_z,nil_link,os8);
+   addi(al,127);
    sahf;
 
    movq(r_tmp0,rdi);
@@ -1018,7 +1079,9 @@ begin
 
  Writeln('0x',HexStr(entry_link));
 
+ //debug
    ctx.builder.call_far(@jit_before_start);
+ //debug
 
  ptr:=addr;
 
@@ -1058,11 +1121,12 @@ begin
    goto _next;
   end;
 
-  {
-  Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
-  Writeln(ACodeBytes:32,' ',ACode);
-  Writeln('original------------------------':32,' ','0x',HexStr(ptr));
-  }
+  if print_asm then
+  begin
+   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
+   Writeln(ACodeBytes:32,' ',ACode);
+   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+  end;
 
   ctx.ptr_next:=ptr;
 
@@ -1112,7 +1176,7 @@ begin
 
   node_code2:=ctx.builder.get_curr_label._node;
 
-  {
+  if print_asm then
   if (node_code1<>node_code2) and
      (node_code1<>nil) then
   begin
@@ -1129,7 +1193,12 @@ begin
    end;
    Writeln('recompiled----------------------':32,' ','');
   end;
-  }
+
+  //debug
+   op_set_rax_imm(ctx,$FACEADD7);
+   op_set_rax_imm(ctx,Int64(ctx.ptr_next));
+   op_set_rax_imm(ctx,0);
+  //debug
 
   begin
    ctx.add_label(ctx.ptr_curr,node_curr);
@@ -1184,7 +1253,9 @@ begin
 
    until false;
 
-       ctx.builder.call_far(@jit_before_start);
+   //debug
+    ctx.builder.call_far(@jit_before_start);
+   //debug
 
    entry_link:=addr;
 
