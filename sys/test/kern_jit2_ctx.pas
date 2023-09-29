@@ -655,6 +655,12 @@ begin
  end;
 end;
 
+procedure sigsegv(addr:Pointer);
+begin
+ Writeln('sigsegv:0x',HexStr(addr));
+ Assert(False);
+end;
+
 //in/out:rax uses:r14
 procedure uplift_jit; assembler; nostackframe;
 label
@@ -662,6 +668,7 @@ label
 asm
  pushfq
  push %r14
+ push %rax
  //
  //low addr (r14)
  mov %rax,%r14
@@ -679,10 +686,20 @@ asm
  //combine (rax|r14)
  shl PAGE_SHIFT,%rax
  or  %r14,%rax
- _exit:
  //
  pop %r14
+ pop %r14
  popfq
+ ret
+
+ _exit:
+ pop %rdi
+
+ call sigsegv
+
+ pop %r14
+ popfq
+ ret
 end;
 
 //in:rax(addr),r14b:(mem_size) out:ZF
@@ -719,6 +736,7 @@ asm
  and PAGE_OFS_MASK,%rdi
  and PAGE_OFS_MASK,%rsi
  //
+ inc %rdi
  cmp %rdi,%rsi
  _exit:
  //
@@ -729,8 +747,10 @@ end;
 //in:rax(addr),r14b:(size)
 procedure copyout_mov; assembler;
 label
- _simple;
+ _simple,
+ _exit;
 var
+ addr:Pointer;
  data:array[0..31] of Byte;
 asm
  pushfq
@@ -749,17 +769,17 @@ asm
   push %r10
   push %r11
 
-  push %rax
+  movq %rax,addr
 
-  mov  data,%rax
+  lea  data,%rax    //vaddr:=data
 
   mov  8(%rbp),%rdi //ret addr
   lea  2(%rdi),%rdi //jmp near
 
   call %rdi         //reg->data
 
-  pop     %rsi      //vaddr
-  mov     data,%rdi //data
+  movq    addr,%rsi //vaddr
+  lea     data,%rdi //data
   movzbq %r14b,%rdx //size
 
   pushfq
@@ -777,7 +797,7 @@ asm
   pop  %rsi
   pop  %rdi
 
-  ret
+  jmp _exit
  _simple:
 
   call uplift_jit
@@ -789,6 +809,7 @@ asm
 
   call %r14         //reg->data
 
+ _exit:
 end;
 
 //in:rax(addr),r14b:(size) out:rax
@@ -814,7 +835,7 @@ asm
   push %r11
 
   mov     %rax,%rdi //vaddr
-  mov     data,%rsi //data
+  lea     data,%rsi //data
   movzbq %r14b,%rdx //size
 
   call copyin
@@ -828,7 +849,7 @@ asm
   pop  %rsi
   pop  %rdi
 
-  mov data,%rax //vaddr:=data
+  lea data,%rax //vaddr:=data
 
   jmp _exit
  _simple:

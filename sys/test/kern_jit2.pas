@@ -9,7 +9,6 @@ uses
  mqueue,
  x86_fpdbgdisas,
  x86_jit,
- kern_stub,
  kern_jit2_ctx,
  kern_jit2_ops_avx;
 
@@ -241,7 +240,7 @@ begin
  ctx.builder.call_far(@jit_jmp_dispatch); //input:rax
 end;
 
-procedure op_push_rip(var ctx:t_jit_context2;used_r_tmp0:Boolean);
+procedure op_push_rip(var ctx:t_jit_context2);
 var
  i:Integer;
  stack:TRegValue;
@@ -252,11 +251,6 @@ begin
 
  with ctx.builder do
  begin
-  if used_r_tmp0 then
-  begin
-   push(r_tmp0);
-  end;
-
   stack:=r_tmp0;
 
   i:=GetFrameOffset(rsp);
@@ -287,10 +281,6 @@ begin
    movi(os64,[stack],imm);
   end;
 
-  if used_r_tmp0 then
-  begin
-   pop(r_tmp0);
-  end;
  end;
 end;
 
@@ -323,24 +313,6 @@ begin
  end;
 end;
 
-function is_rsp(const r:TRegValue):Boolean; inline;
-begin
- Result:=False;
- case r.AType of
-  regGeneral:
-   case r.AIndex of
-     4:Result:=True;
-    else;
-   end;
-  else;
- end;
-end;
-
-function is_rsp(const r:TRegValues):Boolean; inline;
-begin
- Result:=is_rsp(r[0]) or is_rsp(r[1]);
-end;
-
 procedure op_set_rax_imm(var ctx:t_jit_context2;imm:Int64);
 begin
  with ctx.builder do
@@ -364,6 +336,8 @@ var
  i:Integer;
  label_id:t_jit_i_link;
 begin
+ op_push_rip(ctx);
+
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
   ofs:=0;
@@ -380,20 +354,14 @@ begin
 
    if (label_id<>nil_link) then
    begin
-    op_push_rip(ctx,false);
-    //
     ctx.builder.jmp(label_id);
    end else
    begin
-    op_push_rip(ctx,false);
-    //
     id:=ctx.builder.jmp(nil_link);
     ctx.add_forward_point(id,dst);
    end;
   end else
   begin
-   op_push_rip(ctx,false);
-   //
    op_set_rax_imm(ctx,Int64(dst));
    //
    op_jmp_dispatcher(ctx);
@@ -404,17 +372,11 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  if is_rsp(ctx.din.Operand[1].RegValue) then
-  begin
-   build_lea(ctx,1,new1);
-   //
-   op_push_rip(ctx,true);
-  end else
-  begin
-   op_push_rip(ctx,false);
-   //
-   build_lea(ctx,1,new1);
-  end;
+  build_lea(ctx,1,new1);
+  //
+  ctx.builder.call_far(@uplift_jit); //in/out:rax uses:r14
+  //
+  ctx.builder.movq(new1,[new1]);
   //
   op_jmp_dispatcher(ctx);
  end else
@@ -422,16 +384,12 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  op_push_rip(ctx,false);
-  //
   i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
   ctx.builder.movq(new1,[r_thrd+i]);
   //
   op_jmp_dispatcher(ctx);
  end else
  begin
-  op_push_rip(ctx,false);
-  //
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   new2:=new_reg(ctx.din.Operand[1]);
   //
@@ -499,6 +457,10 @@ begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
   build_lea(ctx,1,new1);
+  //
+  ctx.builder.call_far(@uplift_jit); //in/out:rax uses:r14
+  //
+  ctx.builder.movq(new1,[new1]);
   //
   op_jmp_dispatcher(ctx);
  end else

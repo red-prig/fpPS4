@@ -140,6 +140,7 @@ begin
 
  if not is_guest_addr(QWORD(addr)) then
  begin
+  Writeln('addr:0x',HexStr(addr));
   Assert(False,'TODO');
  end;
 
