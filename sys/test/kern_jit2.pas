@@ -12,8 +12,8 @@ uses
  kern_jit2_ctx,
  kern_jit2_ops_avx;
 
-const
- print_asm=false;
+var
+ print_asm:Boolean=False;
 
 procedure pick(var ctx:t_jit_context2);
 
@@ -334,7 +334,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
- label_id:t_jit_i_link;
+ link:t_jit_i_link;
 begin
  op_push_rip(ctx);
 
@@ -348,13 +348,13 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  if ctx.is_curr_addr(QWORD(dst)) then
+  if ctx.is_text_addr(QWORD(dst)) then
   begin
-   label_id:=ctx.find_label(dst);
+   link:=ctx.get_link(dst);
 
-   if (label_id<>nil_link) then
+   if (link<>nil_link) then
    begin
-    ctx.builder.jmp(label_id);
+    ctx.builder.jmp(link);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
@@ -372,7 +372,7 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  build_lea(ctx,1,new1);
+  build_lea(ctx,1,new1,[code_ref]);
   //
   ctx.builder.call_far(@uplift_jit); //in/out:rax uses:r14
   //
@@ -410,7 +410,7 @@ begin
  //
  op_jmp_dispatcher(ctx);
  //
- ctx.ptr_next:=nil; //trim
+ ctx.trim:=True;
 end;
 
 procedure op_jmp(var ctx:t_jit_context2);
@@ -420,7 +420,7 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  i:Integer;
- label_id:t_jit_i_link;
+ link:t_jit_i_link;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -432,13 +432,13 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  if ctx.is_curr_addr(QWORD(dst)) then
+  if ctx.is_text_addr(QWORD(dst)) then
   begin
-   label_id:=ctx.find_label(dst);
+   link:=ctx.get_link(dst);
 
-   if (label_id<>nil_link) then
+   if (link<>nil_link) then
    begin
-    ctx.builder.jmp(label_id);
+    ctx.builder.jmp(link);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
@@ -456,7 +456,7 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  build_lea(ctx,1,new1);
+  build_lea(ctx,1,new1,[code_ref]);
   //
   ctx.builder.call_far(@uplift_jit); //in/out:rax uses:r14
   //
@@ -482,7 +482,7 @@ begin
   op_jmp_dispatcher(ctx);
  end;
  //
- ctx.ptr_next:=nil; //trim
+ ctx.trim:=True;
 end;
 
 procedure op_jcc(var ctx:t_jit_context2);
@@ -490,7 +490,7 @@ var
  id,id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
- label_id:t_jit_i_link;
+ link:t_jit_i_link;
 begin
  ofs:=0;
  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
@@ -500,13 +500,13 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- if ctx.is_curr_addr(QWORD(dst)) then
+ if ctx.is_text_addr(QWORD(dst)) then
  begin
-  label_id:=ctx.find_label(dst);
+  link:=ctx.get_link(dst);
 
-  if (label_id<>nil_link) then
+  if (link<>nil_link) then
   begin
-   ctx.builder.jcc(ctx.din.OpCode.Suffix,label_id);
+   ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
   end else
   begin
    id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
@@ -716,7 +716,7 @@ begin
    begin
     //
     ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
-    ctx.ptr_next:=nil; //trim
+     ctx.trim:=True;
    end;
   else
    begin
@@ -729,14 +729,14 @@ procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
- ctx.ptr_next:=nil; //trim
+  ctx.trim:=True;
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
- ctx.ptr_next:=nil; //trim
+  ctx.trim:=True;
 end;
 
 procedure op_hlt(var ctx:t_jit_context2);
@@ -993,6 +993,47 @@ begin
  inited:=1;
 end;
 
+function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
+var
+ proc:TDbgProcess;
+ adec:TX86AsmDecoder;
+ ptr,fin:Pointer;
+ ACodeBytes,ACode:RawByteString;
+begin
+ Result:=True;
+
+ ptr:=addr;
+ fin:=addr+vsize;
+
+ proc:=TDbgProcess.Create(dm64);
+ adec:=TX86AsmDecoder.Create(proc);
+
+ while (ptr<fin) do
+ begin
+  adec.Disassemble(ptr,ACodeBytes,ACode);
+
+  case adec.Instr.OpCode.Opcode of
+   OPX_Invalid..OPX_GroupP:
+    begin
+     Result:=False;
+     Break;
+    end;
+   else;
+  end;
+
+  if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
+     is_invalid(adec.Instr) then
+  begin
+   Result:=False;
+   Break;
+  end;
+
+ end;
+
+ adec.Free;
+ proc.Free;
+end;
+
 procedure pick(var ctx:t_jit_context2);
 const
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
@@ -1013,13 +1054,11 @@ var
 
  cb:t_jit_cb;
 
- node_new,node_curr:t_jit_i_link;
- node,node_code1,node_code2:p_jit_instruction;
+ link_new :t_jit_i_link;
+ link_curr:t_jit_i_link;
+ link_next:t_jit_i_link;
 
- blob:p_jit_dynamic;
- entry_point:t_jit_context2.p_entry_point;
-
- //F:THandle;
+ node,node_curr,node_next:p_jit_instruction;
 begin
 
  init_cbs;
@@ -1034,10 +1073,15 @@ begin
 
  if not ctx.fetch_forward_point(links,addr) then
  begin
+  ctx.builder.Free;
   Exit;
  end;
 
+ ctx.trim:=False;
+
  entry_link:=addr;
+
+ ctx.builder._new_chunk(QWORD(entry_link));
 
  Writeln('0x',HexStr(entry_link));
 
@@ -1131,18 +1175,40 @@ begin
    Assert(false);
   end;
 
-  node_curr:=ctx.builder.get_curr_label.after;
-  node_code1:=node_curr._node;
+  link_curr:=ctx.builder.get_curr_label.after;
+  node_curr:=link_curr._node;
 
   cb(ctx);
 
-  node_code2:=ctx.builder.get_curr_label._node;
+  link_next:=ctx.builder.get_curr_label.after;
+  node_next:=link_next._node;
+
+  {
+  if (node_curr<>node_next) and
+     (node_curr<>nil) then
+  begin
+   node:=TAILQ_NEXT(node_curr,@node_curr^.link);
+
+   while (node<>nil) do
+   begin
+
+    if not test_disassemble(@node^.AData,node^.ASize) then
+    begin
+     print_asm:=True;
+     Break;
+    end;
+
+
+    node:=TAILQ_NEXT(node,@node^.link);
+   end;
+  end;
+  }
 
   if print_asm then
-  if (node_code1<>node_code2) and
-     (node_code1<>nil) then
+  if (node_curr<>node_next) and
+     (node_curr<>nil) then
   begin
-   node:=TAILQ_NEXT(node_code1,@node_code1^.link);
+   node:=TAILQ_NEXT(node_curr,@node_curr^.link);
 
    Writeln('recompiled----------------------':32,' ','');
    while (node<>nil) do
@@ -1159,40 +1225,51 @@ begin
   //debug
    op_set_rax_imm(ctx,$FACEADD7);
    op_set_rax_imm(ctx,Int64(ctx.ptr_next));
-   op_set_rax_imm(ctx,0);
+   op_set_rax_imm(ctx,$FACEADDE);
   //debug
 
   begin
-   ctx.add_label(ctx.ptr_curr,node_curr);
+   link_next:=ctx.builder.get_curr_label.after;
+
+   ctx.add_label(ctx.ptr_curr,
+                 ctx.ptr_next,
+                 link_curr,
+                 link_next);
   end;
 
   if (links.root<>nil) then
   begin
-   links.Resolve(node_curr);
+   links.Resolve(link_curr);
    links.root:=nil;
   end;
 
   if (entry_link<>nil) then
   begin
-   ctx.add_entry_point(entry_link,node_curr);
+   ctx.add_entry_point(entry_link,link_curr);
    entry_link:=nil;
   end;
 
   begin
-   node_new:=ctx.find_label(ptr);
+   link_new:=ctx.get_link(ptr);
 
-   if (node_new<>nil_link) then
+   if (link_new<>nil_link) then
    begin
-    ctx.builder.jmp(node_new);
-    ctx.ptr_next:=nil;
+    ctx.builder.jmp(link_new);
+    ctx.trim:=True;
     //Writeln('jmp next:0x',HexStr(ptr));
    end;
 
   end;
 
-  if (ctx.ptr_next=nil) then
+  if ctx.trim then
   begin
    _next:
+
+   ctx.trim:=False;
+
+   //close chunk
+   ctx.builder._end_chunk(QWORD(ctx.ptr_next));
+
    repeat
 
     if not ctx.fetch_forward_point(links,addr) then
@@ -1200,26 +1277,28 @@ begin
      goto _build;
     end;
 
-    node_new:=ctx.find_label(addr);
-    if (node_new=nil_link) then
+    link_new:=ctx.get_link(addr);
+    if (link_new=nil_link) then
     begin
      //Writeln('not found:0x',HexStr(addr));
      Break;
     end else
     begin
-     links.Resolve(node_new);
+     links.Resolve(link_new);
      links.root:=nil;
      //
-     ctx.add_entry_point(addr,node_new);
+     ctx.add_entry_point(addr,link_new);
     end;
 
    until false;
 
+   entry_link:=addr;
+
+   ctx.builder._new_chunk(QWORD(entry_link));
+
    //debug
     ctx.builder.call_far(@jit_before_start);
    //debug
-
-   entry_link:=addr;
 
    ptr:=addr;
   end;
@@ -1231,26 +1310,7 @@ begin
 
  ctx.builder.ud2;
 
- blob:=new_blob(ctx.builder.GetMemSize);
-
- ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
-
- //F:=FileCreate('recompile.bin');
- //FileWrite(F,data^,ctx.builder.GetMemSize);
- //FileClose(F);
-
-  //copy entrys
- entry_point:=ctx.entry_list;
- while (entry_point<>nil) do
- begin
-  addr:=blob^.base+entry_point^.label_id.offset;
-  //
-  blob^.add_entry_point(entry_point^.src,addr);
-  //
-  entry_point:=entry_point^.next;
- end;
-
- blob^.attach;
+ build(ctx);
 
  adec.Free;
  proc.Free;
@@ -1260,4 +1320,5 @@ end;
 
 
 end.
+
 

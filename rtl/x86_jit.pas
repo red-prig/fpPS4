@@ -78,6 +78,19 @@ type
 
  t_jit_data_set=specialize TNodeSplay<t_jit_data>;
 
+ p_jit_code_chunk=^t_jit_code_chunk;
+ t_jit_code_chunk=object
+  link  :TAILQ_ENTRY;
+  pLeft :p_jit_code_chunk;
+  pRight:p_jit_code_chunk;
+  start:QWORD;
+  __end:QWORD;
+  AInstructions:TAILQ_HEAD;
+  function c(n1,n2:p_jit_code_chunk):Integer; static;
+ end;
+
+ t_jit_code_chunk_set=specialize TNodeSplay<t_jit_code_chunk>;
+
  t_jit_i_link=object
   private
    AType:t_jit_link_type;
@@ -254,16 +267,23 @@ type
    ymm14:TRegValue=(AType:regXmm;ASize:os256;AIndex: 14);
    ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
-   AInstructions   :TAILQ_HEAD;
+   //AInstructions   :TAILQ_HEAD;
+   ACodeChunkSet   :t_jit_code_chunk_set;
+   ACodeChunkList  :TAILQ_HEAD;
+   ACodeChunkCurr  :p_jit_code_chunk;
+   //
    ADataSet        :t_jit_data_set;
    ADataList       :TAILQ_HEAD;
+   //
    AInstructionSize:Integer;
    ADataCount      :Integer;
-
+   //
    Allocator:t_jit_builder_allocator;
   //
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
+  Function  _new_chunk(start:QWORD):p_jit_code_chunk;
+  procedure _end_chunk(__end:QWORD);
   procedure _add(const ji:t_jit_instruction);
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
@@ -284,6 +304,7 @@ type
   Function  GetInstructionsSize:Integer;
   Function  GetDataSize:Integer;
   Function  GetMemSize:Integer;
+  Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
   Procedure LinkData;
   Function  SaveTo(ptr:PByte;size:Integer):Integer;
@@ -389,6 +410,11 @@ implementation
 function t_jit_data.c(n1,n2:p_jit_data):Integer;
 begin
  Result:=Integer(n1^.pData>n2^.pData)-Integer(n1^.pData<n2^.pData);
+end;
+
+function t_jit_code_chunk.c(n1,n2:p_jit_code_chunk):Integer;
+begin
+ Result:=Integer(n1^.start>n2^.start)-Integer(n1^.start<n2^.start);
 end;
 
 function is_valid_reg_type(reg:TRegValue):Boolean; inline;
@@ -949,19 +975,51 @@ end;
 
 //
 
+Function t_jit_builder._new_chunk(start:QWORD):p_jit_code_chunk;
+var
+ node:t_jit_code_chunk;
+begin
+ Result:=nil;
+ node:=Default(t_jit_code_chunk);
+ node.start:=start;
+ Result:=ACodeChunkSet.Find(@node);
+ if (Result=nil) then
+ begin
+  Result:=Alloc(SizeOf(t_jit_code_chunk));
+  Result^.start:=start;
+  TAILQ_INIT(@Result^.AInstructions);
+  ACodeChunkSet.Insert(Result);
+  ACodeChunkCurr:=Result;
+ end else
+ begin
+  Result:=nil;
+ end;
+end;
+
+procedure t_jit_builder._end_chunk(__end:QWORD);
+begin
+ if (ACodeChunkCurr<>nil) then
+ begin
+  ACodeChunkCurr^.__end:=__end;
+  ACodeChunkCurr:=nil;
+ end;
+end;
+
 procedure t_jit_builder._add(const ji:t_jit_instruction);
 var
  node:p_jit_instruction;
 begin
- if (AInstructions.tqh_first=nil) and
-    (AInstructions.tqh_last=nil) then
+ if (ACodeChunkCurr=nil) then
  begin
-  TAILQ_INIT(@AInstructions);
+  _new_chunk(0);
+  Assert(ACodeChunkCurr<>nil)
  end;
+
  node:=Alloc(SizeOf(t_jit_instruction));
  node^:=ji;
  node^.AInstructionOffset:=AInstructionSize;
- TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
+
+ TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.link);
  Inc(AInstructionSize,ji.ASize);
 end;
 
@@ -969,18 +1027,19 @@ Function t_jit_builder.get_curr_label:t_jit_i_link;
 var
  node:p_jit_instruction;
 begin
- if (AInstructions.tqh_first=nil) and
-    (AInstructions.tqh_last=nil) then
+ if (ACodeChunkCurr=nil) then
  begin
-  TAILQ_INIT(@AInstructions);
+  _add(Default(t_jit_instruction));
  end;
- node:=TAILQ_LAST(@AInstructions);
+
+ node:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+
  if (node=nil) then
  begin
-  node:=Alloc(SizeOf(t_jit_instruction));
-  node^.AInstructionOffset:=AInstructionSize;
-  TAILQ_INSERT_TAIL(@AInstructions,node,@node^.link);
+  _add(Default(t_jit_instruction));
+  node:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  end;
+
  Result.AType:=lnkLabelBefore;
  Result.ALink:=node;
 end;
@@ -1082,7 +1141,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1117,7 +1176,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1170,7 +1229,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1179,7 +1238,7 @@ function t_jit_builder.movj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link)
 begin
  movq(reg,mem);
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
 
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
@@ -1191,7 +1250,7 @@ function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link)
 begin
  leaq(reg,mem);
 
- Result.ALink:=TAILQ_LAST(@AInstructions);
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
 
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
@@ -1224,20 +1283,46 @@ begin
  Result:=AInstructionSize+GetDataSize;
 end;
 
+Procedure t_jit_builder.RebuldChunkList;
+var
+ chunk:p_jit_code_chunk;
+begin
+ ACodeChunkCurr:=nil;
+
+ TAILQ_INIT(@ACodeChunkList);
+
+ chunk:=ACodeChunkSet.Min;
+
+ while (chunk<>nil) do
+ begin
+  TAILQ_INSERT_TAIL(@ACodeChunkList,chunk,@chunk^.link);
+
+  chunk:=ACodeChunkSet.Next(chunk);
+ end;
+end;
+
 Procedure t_jit_builder.RebuldInstructionOffset;
 var
+ chunk:p_jit_code_chunk;
  node:p_jit_instruction;
 begin
  AInstructionSize:=0;
 
- node:=TAILQ_FIRST(@AInstructions);
+ chunk:=TAILQ_FIRST(@ACodeChunkList);
 
- while (node<>nil) do
+ while (chunk<>nil) do
  begin
-  node^.AInstructionOffset:=AInstructionSize;
-  Inc(AInstructionSize,node^.ASize);
+  node:=TAILQ_FIRST(@chunk^.AInstructions);
   //
-  node:=TAILQ_NEXT(node,@node^.link);
+  while (node<>nil) do
+  begin
+   node^.AInstructionOffset:=AInstructionSize;
+   Inc(AInstructionSize,node^.ASize);
+   //
+   node:=TAILQ_NEXT(node,@node^.link);
+  end;
+  //
+  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
  end;
 end;
 
@@ -1300,6 +1385,7 @@ Procedure t_jit_builder.LinkData;
 label
  _start;
 var
+ chunk:p_jit_code_chunk;
  node:p_jit_instruction;
  d,t:Integer;
 
@@ -1310,80 +1396,88 @@ begin
  is_change:=False;
 
  d:=0;
- node:=TAILQ_FIRST(@AInstructions);
 
- while (node<>nil) do
+ chunk:=TAILQ_FIRST(@ACodeChunkList);
+
+ while (chunk<>nil) do
  begin
-  With node^ do
-   case ALink.AType of
-    lnkData:
-      if not is_change then
-      begin
-       d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
-       _set_data(node,d);
-      end;
-    lnkLabelBefore,
-    lnkLabelAfter:
-     begin
-
-      case ALink.AType of
-       lnkLabelBefore:d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
-       lnkLabelAfter :d:=_get_label_after_offset (ALink.ALink,AInstructionOffset+ASize);
-      end;
-
-      t:=classif_instr(node);
-
-      if (t<>0) then
-      begin
-       if (d=0) then
-       begin
-        //clear instr
-
-        ALink.AType:=lnkNone;
-        ASize:=0;
-
-        is_change:=True;
-       end;
-      end;
-
-      if (ASize<>0) then
-      case t of
-       2:if is_8bit_offset(d) then //jmp32
-         begin
-          //set to jmp8
-
-          AData[0]:=$EB;
-          ASize:=2;
-
-          ALink.ASize:=1;
-
-          is_change:=True;
-         end;
-       4:if is_8bit_offset(d) then //jcc32
-         begin
-          t:=node^.AData[1] and $F;
-
-          AData[0]:=$70 or t;
-          ASize:=2;
-
-          ALink.ASize:=1;
-          ALink.AOffset:=1;
-
-          is_change:=True;
-         end;
-       else;
-      end;
-
-      if not is_change then
-      begin
-       _set_data(node,d);
-      end;
-
-     end;
-    else;
-   end;
+  node:=TAILQ_FIRST(@chunk^.AInstructions);
   //
-  node:=TAILQ_NEXT(node,@node^.link);
+  while (node<>nil) do
+  begin
+   With node^ do
+    case ALink.AType of
+     lnkData:
+       if not is_change then
+       begin
+        d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
+        _set_data(node,d);
+       end;
+     lnkLabelBefore,
+     lnkLabelAfter:
+      begin
+
+       case ALink.AType of
+        lnkLabelBefore:d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
+        lnkLabelAfter :d:=_get_label_after_offset (ALink.ALink,AInstructionOffset+ASize);
+       end;
+
+       t:=classif_instr(node);
+
+       if (t<>0) then
+       begin
+        if (d=0) then
+        begin
+         //clear instr
+
+         ALink.AType:=lnkNone;
+         ASize:=0;
+
+         is_change:=True;
+        end;
+       end;
+
+       if (ASize<>0) then
+       case t of
+        2:if is_8bit_offset(d) then //jmp32
+          begin
+           //set to jmp8
+
+           AData[0]:=$EB;
+           ASize:=2;
+
+           ALink.ASize:=1;
+
+           is_change:=True;
+          end;
+        4:if is_8bit_offset(d) then //jcc32
+          begin
+           t:=node^.AData[1] and $F;
+
+           AData[0]:=$70 or t;
+           ASize:=2;
+
+           ALink.ASize:=1;
+           ALink.AOffset:=1;
+
+           is_change:=True;
+          end;
+        else;
+       end;
+
+       if not is_change then
+       begin
+        _set_data(node,d);
+       end;
+
+      end;
+     else;
+    end;
+   //
+   node:=TAILQ_NEXT(node,@node^.link);
+  end;
+  //
+  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
  end;
 
  if is_change then
@@ -1396,29 +1490,40 @@ end;
 
 Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
 var
+ chunk:p_jit_code_chunk;
  node_code:p_jit_instruction;
  node_data:p_jit_data;
  s:Integer;
 begin
+ RebuldChunkList;
+ RebuldInstructionOffset;
  LinkData;
 
  Result:=0;
 
- node_code:=TAILQ_FIRST(@AInstructions);
+ chunk:=TAILQ_FIRST(@ACodeChunkList);
 
- while (node_code<>nil) do
+ while (chunk<>nil) do
  begin
-  s:=node_code^.ASize;
-  if ((Result+s)>size) then
-  begin
-   Exit;
-  end;
-  Move(node_code^.AData,ptr^,s);
-  Inc(Result,s);
-  Inc(ptr   ,s);
+  node_code:=TAILQ_FIRST(@chunk^.AInstructions);
   //
-  node_code:=TAILQ_NEXT(node_code,@node_code^.link);
+  while (node_code<>nil) do
+  begin
+   s:=node_code^.ASize;
+   if ((Result+s)>size) then
+   begin
+    Exit;
+   end;
+   Move(node_code^.AData,ptr^,s);
+   Inc(Result,s);
+   Inc(ptr   ,s);
+   //
+   node_code:=TAILQ_NEXT(node_code,@node_code^.link);
+  end;
+  //
+  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
  end;
+
 
  node_data:=TAILQ_FIRST(@ADataList);
 

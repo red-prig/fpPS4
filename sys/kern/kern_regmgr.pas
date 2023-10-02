@@ -121,12 +121,17 @@ begin
 
   else
       begin
+       if (op=$27) or (op>=$40) then
+       begin
+        kret:=$800d0219;
+        goto _err;
+       end;
+
        Writeln('Unhandled regmgr op:0x',HexStr(op,4));
        print_backtrace_td(stderr);
        Assert(False);
       end;
  end;
-
 
 _err:
  Result:=copyout(@kret,presult,SizeOf(DWORD));

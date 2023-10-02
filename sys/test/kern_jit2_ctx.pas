@@ -62,10 +62,12 @@ type
 
    p_label=^t_label;
    t_label=object
-    pLeft   :p_label;
-    pRight  :p_label;
-    src     :Pointer;
-    label_id:t_jit_i_link;
+    pLeft     :p_label;
+    pRight    :p_label;
+    curr      :Pointer;
+    next      :Pointer;
+    link_curr:t_jit_i_link;
+    link_next:t_jit_i_link;
     function c(n1,n2:p_label):Integer; static;
    end;
    t_label_set=specialize TNodeSplay<t_label>;
@@ -84,6 +86,7 @@ type
 
    text_start:QWORD;
    text___end:QWORD;
+   map____end:QWORD;
 
    max:QWORD;
 
@@ -91,19 +94,23 @@ type
    ptr_curr:Pointer;
    ptr_next:Pointer;
 
+   trim:Boolean;
+
    dis:TX86Disassembler;
    din:TInstruction;
 
    builder:t_jit_builder;
 
-  function  is_curr_addr(addr:QWORD):Boolean;
+  function  is_text_addr(addr:QWORD):Boolean;
+  function  is_map_addr(addr:QWORD):Boolean;
   procedure add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
   function  add_forward_point(label_id:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(dst:Pointer):p_forward_point;
   function  max_forward_point():Pointer;
   function  fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
-  function  add_label(src:Pointer;label_id:t_jit_i_link):p_label;
-  function  find_label(src:Pointer):t_jit_i_link;
+  function  add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link):p_label;
+  function  get_label(src:Pointer):p_label;
+  function  get_link(src:Pointer):t_jit_i_link;
   procedure add_entry_point(src:Pointer;label_id:t_jit_i_link);
  end;
 
@@ -202,8 +209,9 @@ type
   mri:t_op_type;
  end;
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;
-                    use_segment:Boolean=True;use_r_tmp1:Boolean=True);
+ t_lea_hint=Set Of (not_use_segment,not_use_r_tmp1,code_ref);
+
+procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;hint:t_lea_hint=[]);
 
 function  cmp_reg(const r1,r2:TRegValue):Boolean;
 function  new_reg(const Operand:TOperand):TRegValue;
@@ -268,12 +276,17 @@ end;
 
 function t_jit_context2.t_label.c(n1,n2:p_label):Integer;
 begin
- Result:=Integer(n1^.src>n2^.src)-Integer(n1^.src<n2^.src);
+ Result:=Integer(n1^.curr>n2^.curr)-Integer(n1^.curr<n2^.curr);
 end;
 
-function t_jit_context2.is_curr_addr(addr:QWORD):Boolean;
+function t_jit_context2.is_text_addr(addr:QWORD):Boolean;
 begin
  Result:=(addr>=text_start) and (addr<text___end);
+end;
+
+function t_jit_context2.is_map_addr(addr:QWORD):Boolean;
+begin
+ Result:=(addr>=text_start) and (addr<map____end);
 end;
 
 procedure t_jit_context2.add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
@@ -346,30 +359,41 @@ begin
  end;
 end;
 
-function t_jit_context2.add_label(src:Pointer;label_id:t_jit_i_link):p_label;
+function t_jit_context2.add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link):p_label;
 var
  node:t_label;
 begin
- if (src=nil) then Exit;
- node.src:=src;
+ if (curr=nil) then Exit;
+ node.curr:=curr;
  Result:=label_set.Find(@node);
  if (Result<>nil) then Exit;
  Result:=builder.Alloc(Sizeof(t_label));
- Result^.label_id:=label_id;
- Result^.src     :=src;
+ //
+ Result^.curr     :=curr;
+ Result^.next     :=next;
+ Result^.link_curr:=link_curr;
+ Result^.link_next:=link_next;
+ //
  label_set.Insert(Result);
 end;
 
-function t_jit_context2.find_label(src:Pointer):t_jit_i_link;
+function t_jit_context2.get_label(src:Pointer):p_label;
 var
  node:t_label;
- entry:p_label;
+begin
+ Result:=nil;
+ node.curr:=src;
+ Result:=label_set.Find(@node);
+end;
+
+function t_jit_context2.get_link(src:Pointer):t_jit_i_link;
+var
+ node:p_label;
 begin
  Result:=nil_link;
- node.src:=src;
- entry:=label_set.Find(@node);
- if (entry=nil) then Exit;
- Result:=entry^.label_id;
+ node:=get_label(src);
+ if (node=nil) then Exit;
+ Result:=node^.link_curr;
 end;
 
 procedure t_jit_context2.add_entry_point(src:Pointer;label_id:t_jit_i_link);
@@ -695,10 +719,11 @@ asm
  _exit:
  pop %rdi
 
- call sigsegv
-
  pop %r14
  popfq
+
+ call sigsegv
+
  ret
 end;
 
@@ -861,14 +886,33 @@ asm
  popfq
 end;
 
-procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64);
+procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 begin
- if (ctx.max<>0) and
-    (ofs<=ctx.max) then
- if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+ if ctx.is_text_addr(ofs) then
  begin
-  ctx.add_forward_point(Pointer(ofs));
+  if (ctx.max<>0) and
+     (ofs<=ctx.max) then
+  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+  begin
+   ctx.add_forward_point(Pointer(ofs));
+  end;
  end;
+
+ if (code_ref in hint) then
+ if ctx.is_map_addr(ofs) then
+ if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
+ begin
+  ofs:=PInt64(ofs)^;
+
+  if ctx.is_text_addr(ofs) then
+  if (ctx.max<>0) and
+     (ofs<=ctx.max) then
+  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+  begin
+   ctx.add_forward_point(Pointer(ofs));
+  end;
+ end;
+
 end;
 
 function is_segment(const i:TInstruction):Boolean;
@@ -893,8 +937,7 @@ begin
  end;
 end;
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;
-                    use_segment:Boolean=True;use_r_tmp1:Boolean=True);
+procedure build_lea(var ctx:t_jit_context2;id:Byte;reg:TRegValue;hint:t_lea_hint=[]);
 var
  RegValue:TRegValues;
  adr,new1,new2:TRegValue;
@@ -913,7 +956,8 @@ begin
 
  with ctx.builder do
  begin
-  if use_segment and is_segment(ctx.din) then
+  if (not (not_use_segment in hint)) and
+     is_segment(ctx.din) then
   begin
 
    if (RegValue[0].AType=regNone) then //absolute offset
@@ -943,7 +987,7 @@ begin
    GetTargetOfs(ctx.din,ctx.code,id,ofs);
    ofs:=Int64(ctx.ptr_next)+ofs;
 
-   add_rip_entry(ctx,ofs);
+   add_rip_entry(ctx,ofs,hint);
 
    if (classif_offset_u64(ofs)=os64) then
    begin
@@ -998,7 +1042,7 @@ begin
     begin
      i:=GetFrameOffset(RegValue[1]);
 
-     if use_r_tmp1 then
+     if not (not_use_r_tmp1 in hint) then
      begin
       new2:=new_reg_size(r_tmp1,adr.ASize);
 
@@ -2744,6 +2788,7 @@ begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
    new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+   //not need load result
   end else
   begin
    new1:=new_reg(ctx.din.Operand[1]);
@@ -2753,6 +2798,7 @@ begin
   begin
    new2:=new_reg_size(r_tmp0,ctx.din.Operand[2]);
 
+   build_lea(ctx,2,r_tmp0);
    mem_size:=ctx.din.Operand[2].Size;
 
    //mem_size
@@ -2810,6 +2856,7 @@ begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
    new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+   //not need load result
   end else
   begin
    new1:=new_reg(ctx.din.Operand[1]);
@@ -2826,10 +2873,11 @@ begin
    new2:=new_reg(ctx.din.Operand[2]);
   end;
 
-  if is_memory(ctx.din.Operand[2]) then
+  if is_memory(ctx.din.Operand[3]) then
   begin
    new3:=new_reg_size(r_tmp1,ctx.din.Operand[3]);
 
+   build_lea(ctx,3,r_tmp0);
    mem_size:=ctx.din.Operand[3].Size;
 
    //mem_size

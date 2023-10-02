@@ -481,6 +481,12 @@ begin
 
  ref:=refobj^.rel_data^.symtab_addr + symnum;
 
+ if (ref^.st_shndx=SHN_UNDEF) then //is import
+ if ((flags and $200)<>0) then     //is export only
+ begin
+  Exit(nil);
+ end;
+
  str:=obj_get_str(refobj,ref^.st_name);
 
  ST_BIND:=ELF64_ST_BIND(ref^.st_info);
@@ -521,6 +527,11 @@ begin
    def   :=req.sym_out;
    defobj:=req.defobj_out;
   end;
+ end;
+
+ if (def=nil) and ((flags and $200)<>0) then //is export only
+ begin
+  Exit(nil);
  end;
 
  if (def=nil) then

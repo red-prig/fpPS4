@@ -325,6 +325,7 @@ function  do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 procedure unload_object(root:p_lib_info);
 
 function  relocate_object(root:p_lib_info):Integer;
+function  relocate_object_export_only(obj:p_lib_info):Integer;
 function  dynlib_load_relocate():Integer;
 
 procedure pick_obj(obj:p_lib_info);
@@ -1665,24 +1666,36 @@ begin
 end;
 
 function check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
+var
+ p:PByte;
 begin
  if (obj^.relo_bits=nil) then Exit(False);
 
- Result:=((obj^.relo_bits[i shr 3] shr (i and 7)) and 1)<>0;
+ p:=@obj^.relo_bits[i shr 3];
+
+ Result:=((p^ shr (i and 7)) and 1)<>0;
 end;
 
 procedure set_relo_bits(obj:p_lib_info;i:Integer);
+var
+ p:PByte;
 begin
  if (obj^.relo_bits=nil) then Exit;
 
- obj^.relo_bits[i shr 3]:=obj^.relo_bits[i shr 3] or (1 shl (i and 7))
+ p:=@obj^.relo_bits[i shr 3];
+
+ p^:=p^ or (1 shl (i and 7));
 end;
 
 procedure reset_relo_bits(obj:p_lib_info;i:Integer);
+var
+ p:PByte;
 begin
  if (obj^.relo_bits=nil) then Exit;
 
- obj^.relo_bits[i shr 3]:=obj^.relo_bits[i shr 3] and (not (1 shl (i and 7)))
+ p:=@obj^.relo_bits[i shr 3];
+
+ p^:=p^ and (not (1 shl (i and 7)));
 end;
 
 function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
@@ -2715,12 +2728,15 @@ begin
   Exit;
  end;
 
+ relocate_object_export_only(obj);
+
  Writeln('pick_obj:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
 
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
+ ctx.map____end:=ctx.text_start+obj^.map_size;
 
  ctx.add_forward_point(obj^.entry_addr);
 
@@ -2852,7 +2868,7 @@ begin
  Result:=change_relro_protection_all(VM_PROT_RW);
  if (Result<>0) then Exit;
 
- Result:=relocate_one_object(root,ord(root^.rtld_flags.jmpslots_done=0));
+ Result:=relocate_one_object(root,(root^.rtld_flags.jmpslots_done=0),false);
 
  if (Result=0) then
  begin
@@ -2862,13 +2878,23 @@ begin
   begin
    if (obj<>root) then
    begin
-    Result:=relocate_one_object(obj,ord(root^.rtld_flags.jmpslots_done=0));
+    Result:=relocate_one_object(obj,(root^.rtld_flags.jmpslots_done=0),false);
    end;
    obj:=TAILQ_NEXT(obj,@obj^.link);
   end;
  end;
 
  change_relro_protection_all(VM_PROT_READ);
+end;
+
+function relocate_object_export_only(obj:p_lib_info):Integer;
+begin
+ Result:=change_relro_protection(obj,VM_PROT_RW);
+ if (Result<>0) then Exit;
+
+ Result:=relocate_one_object(obj,(obj^.rtld_flags.jmpslots_done=0),true);
+
+ change_relro_protection(obj,VM_PROT_READ);
 end;
 
 function dynlib_load_relocate():Integer;

@@ -11,7 +11,9 @@ uses
  kern_rtld,
  subr_dynlib;
 
-function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
+function reloc_non_plt(obj:p_lib_info;flags:DWORD):Integer;
+function reloc_jmpslots(obj:p_lib_info;flags:DWORD):Integer;
+function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer;
 function check_copy_relocations(obj:p_lib_info):Integer;
 function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
 
@@ -51,7 +53,7 @@ begin
  Result:=0;
 end;
 
-function reloc_non_plt(obj:p_lib_info):Integer;
+function reloc_non_plt(obj:p_lib_info;flags:DWORD):Integer;
 label
  _next,
  _move64;
@@ -86,6 +88,7 @@ begin
 
  if (rela<>nil) and (count<>0) then
  For i:=0 to count-1 do
+ begin
   if not check_relo_bits(obj,i) then
   begin
    where:=Pointer(obj^.relocbase)+rela^.r_offset;
@@ -131,7 +134,7 @@ begin
         Exit;
        end;
 
-       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0],where);
+       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,flags,@cache[0],where);
 
        if (def<>nil) then
         case r_type of
@@ -174,7 +177,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_DTPMOD64
 
          R_X86_64_DTPOFF64:
@@ -196,7 +201,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_DTPOFF64
 
          R_X86_64_TPOFF64:
@@ -217,7 +224,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_TPOFF64
 
         else;
@@ -236,7 +245,7 @@ begin
         Exit;
        end;
 
-       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,0,@cache[0],where);
+       def:=find_symdef(ELF64_R_SYM(rela^.r_info),obj,defobj,flags,@cache[0],where);
 
        if (def<>nil) then
         case r_type of
@@ -265,7 +274,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_PC32
 
          R_X86_64_DTPOFF32:
@@ -287,7 +298,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_DTPOFF32
 
 
@@ -309,7 +322,9 @@ begin
             end;
 
             if (def<>@dynlibs_info.sym_nops) then
+            begin
              set_relo_bits(obj,i);
+            end;
            end; //R_X86_64_TPOFF32
 
          else;
@@ -324,10 +339,11 @@ begin
       end;
    end; //case
 
-   //
-   _next:
-   Inc(rela);
   end;
+  //
+  _next:
+  Inc(rela);
+ end;
 
  Exit(0);
  _move64:
@@ -347,12 +363,14 @@ begin
   end;
 
   if (def<>@dynlibs_info.sym_nops) then
+  begin
    set_relo_bits(obj,i);
+  end;
 
  goto _next;
 end;
 
-function reloc_jmpslot(obj:p_lib_info;i:Integer;cache:p_SymCache;flags:Integer):Integer;
+function reloc_jmpslot(obj:p_lib_info;i:Integer;cache:p_SymCache;flags:DWORD):Integer;
 var
  idofs:Integer;
  entry:p_elf64_rela;
@@ -371,9 +389,8 @@ begin
  end;
 
  idofs:=obj^.rel_data^.rela_size div SizeOf(elf64_rela);
- idofs:=idofs+i;
 
- if check_relo_bits(obj,idofs) then Exit;
+ if check_relo_bits(obj,idofs+i) then Exit;
 
  entry:=obj^.rel_data^.pltrela_addr+i;
 
@@ -386,14 +403,14 @@ begin
  where:=(obj^.relocbase + entry^.r_offset);
 
  defobj:=nil;
- def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,cache,where);
+ def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,(flags and $200) or SYMLOOK_BASE64,cache,where);
 
  if (def=nil) then
  begin
   Exit(1);
  end;
 
- if (flags=1) and
+ if ((flags and $200)=1) and
     (obj^.rtld_flags.jmpslots_done=0) and
     (defobj^.rtld_flags.jmpslots_done=0) then
  begin
@@ -416,14 +433,16 @@ begin
  end;
 
  if (def<>@dynlibs_info.sym_nops) then
-  set_relo_bits(obj,idofs);
+ begin
+  set_relo_bits(obj,idofs+i);
+ end;
 
- if (flags=0) then Exit;
+ if ((flags and $200)=0) then Exit;
 
  //dl_debug_flags
 end;
 
-function reloc_jmpslots(obj:p_lib_info):Integer;
+function reloc_jmpslots(obj:p_lib_info;flags:DWORD):Integer;
 var
  cache:array of t_SymCache;
 
@@ -439,7 +458,7 @@ begin
  if (obj^.rel_data^.pltrela_addr<>nil) and (count<>0) then
  For i:=0 to count-1 do
   begin
-   Result:=reloc_jmpslot(obj,i,@cache[0],0);
+   Result:=reloc_jmpslot(obj,i,@cache[0],flags);
    case Result of
     3:Exit(EINVAL);
     4:Exit(ENOEXEC);
@@ -451,20 +470,20 @@ begin
  Result:=0;
 end;
 
-function relocate_one_object(obj:p_lib_info;jmpslots:Integer):Integer;
+function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer;
 begin
  Writeln(' relocate:',dynlib_basename(obj^.lib_path));
 
- Result:=reloc_non_plt(obj);
+ Result:=reloc_non_plt(obj,ord(export_only)*$200);
  if (Result<>0) then
  begin
   Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
   Exit;
  end;
 
- if (jmpslots=1) then
+ if jmpslots then
  begin
-  Result:=reloc_jmpslots(obj);
+  Result:=reloc_jmpslots(obj,ord(export_only)*$200);
   if (Result<>0) then
   begin
    Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
@@ -517,6 +536,7 @@ begin
 
  if (rela<>nil) and (count<>0) then
  For i:=0 to count-1 do
+ begin
   if check_relo_bits(obj,i) then
   begin
    where:=Pointer(obj^.relocbase)+rela^.r_offset;
@@ -603,6 +623,7 @@ begin
 
    end;
   end; //case
+ end;
 
 end;
 
@@ -627,6 +648,7 @@ begin
 
  if (obj^.rel_data^.pltrela_addr<>nil) and (count<>0) then
  For i:=0 to count-1 do
+ begin
   if check_relo_bits(obj,idofs+i) then
   begin
    entry:=obj^.rel_data^.pltrela_addr+i;
@@ -638,7 +660,7 @@ begin
    end;
 
    defobj:=nil;
-   def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,1,nil,nil);
+   def:=find_symdef(ELF64_R_SYM(entry^.r_info),obj,defobj,SYMLOOK_BASE64,nil,nil);
 
    if (def=nil) then
    begin
@@ -672,6 +694,7 @@ begin
    end;
 
   end;
+ end;
 
 end;
 

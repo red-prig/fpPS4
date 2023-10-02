@@ -3303,6 +3303,7 @@ begin
  if (td=nil) then Exit(-1);
 
  td^.td_retval[0]:=1; //only in sandbox
+ Result:=0;
 end;
 
 function sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
@@ -3311,6 +3312,7 @@ var
  dst_len:QWORD;
  data:array[0..255] of AnsiChar;
 begin
+ Result:=0;
  FillChar(data,SizeOf(data),0);
  dst_len:=0;
 

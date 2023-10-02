@@ -967,7 +967,7 @@ begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
    new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
-   build_lea(ctx,2,new,False);
+   build_lea(ctx,2,new,[not_use_segment]);
    //
    i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
    ctx.builder.movq([r_thrd+i],new);

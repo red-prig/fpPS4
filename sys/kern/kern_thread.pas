@@ -336,13 +336,13 @@ end;
 
 procedure main_wrapper; assembler; nostackframe;
 asm
- subq   $40, %rsp
+ subq   $48, %rsp
 .seh_stackalloc 40
 .seh_endprologue
  jmpq   %gs:teb.jitcall
 
  nop
- addq   $40, %rsp
+ addq   $48, %rsp
 .seh_handler __FPC_default_handler,@except,@unwind
 end;
 
