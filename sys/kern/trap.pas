@@ -276,7 +276,7 @@ end;
 
 procedure set_pcb_flags(td:p_kthread;f:Integer);
 begin
- td^.pcb_flags:=f;
+ td^.pcb_flags:=f or (td^.pcb_flags and PCB_IS_JIT);
 end;
 
 function fuptr(var base:Pointer):Pointer;
@@ -687,7 +687,8 @@ begin
 
  cpu_set_syscall_retval(td,error);
 
- if (rip<>td_frame^.tf_rip) then
+ if (rip<>td_frame^.tf_rip) or
+    ((td^.pcb_flags and (PCB_FULL_IRET or PCB_IS_JIT))=(PCB_FULL_IRET or PCB_IS_JIT)) then
  begin
   kern_jit_dynamic.switch_to_jit();
  end;
@@ -717,7 +718,7 @@ asm
  jz    _fail
 
  movqq kthread.td_kstack.stack(%rax),%rsp //td_kstack (Implicit lock interrupt)
- andq  $-32,%rsp //align stack
+ andq  $-16,%rsp //align stack
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 

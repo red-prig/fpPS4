@@ -8,6 +8,7 @@
         <MainUnitHasCreateFormStatements Value="False"/>
         <MainUnitHasTitleStatement Value="False"/>
         <MainUnitHasScaledStatement Value="False"/>
+        <AlwaysBuild Value="True"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
       <Title Value="project1"/>

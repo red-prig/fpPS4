@@ -261,11 +261,17 @@ begin
  c:=_Splay(node);
  if (c=0) then
  begin
+  //=
   Result:=Next(pRoot);
  end else
  if (c<0) then
  begin
+  //<
   Result:=pRoot;
+ end else
+ begin
+  //>
+  Result:=Next(pRoot);
  end;
 end;
 
@@ -276,9 +282,19 @@ begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
  c:=_Splay(node);
- if (c<=0) then
+ if (c=0) then
  begin
+  //=
   Result:=pRoot;
+ end else
+ if (c<0) then
+ begin
+  //<
+  Result:=pRoot;
+ end else
+ begin
+  //>
+  Result:=Next(pRoot);
  end;
 end;
 
@@ -291,10 +307,16 @@ begin
  c:=_Splay(node);
  if (c=0) then
  begin
+  //=
   Result:=Prev(pRoot);
  end else
- if (c>0) then
+ if (c<0) then
  begin
+  //<
+  Result:=Prev(pRoot);
+ end else
+ begin
+  //>
   Result:=pRoot;
  end;
 end;
@@ -306,8 +328,18 @@ begin
  Result:=nil;
  if (pRoot=nil) or (node=nil) then Exit;
  c:=_Splay(node);
- if (c>=0) then
+ if (c=0) then
  begin
+  //=
+  Result:=pRoot;
+ end else
+ if (c<0) then
+ begin
+  //<
+  Result:=Prev(pRoot);
+ end else
+ begin
+  //>
   Result:=pRoot;
  end;
 end;

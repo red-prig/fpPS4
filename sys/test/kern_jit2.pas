@@ -16,6 +16,7 @@ var
  print_asm:Boolean=False;
 
 procedure pick(var ctx:t_jit_context2);
+procedure pick_locked(var ctx:t_jit_context2);
 
 implementation
 
@@ -25,6 +26,7 @@ uses
  ucontext,
  vmparam,
  vm_pmap,
+ vm_map,
  systm,
  trap,
  md_context,
@@ -91,6 +93,8 @@ asm
 
  movqq jit_frame.tf_rip(%r15),%rax
  movqq %rax,kthread.td_frame.tf_rip(%r14)
+
+ andq  $-16,%rsp //align stack
 
  call amd64_syscall
 
@@ -182,29 +186,90 @@ asm
  push %rbp
  movq %rsp,%rbp
 
- push %rdi
- push %rsi
- push %rdx
- push %rcx
- push %r8
- push %r9
- push %r10
- push %r11
+ andq  $-16,%rsp //align stack
+
+ pushf     //0
+ push %rdi //1
+ push %rsi //2
+ push %rdx //3
+ push %rcx //4
+ push %r8  //5
+ push %r9  //6
+ push %r10 //7
+ push %r11 //8
+
+ lea  -8(%rsp),%rsp //align
+
+ lea  -16(%rsp),%rsp
+ movdqa %xmm0,(%rsp)
 
  mov  %rax,%rdi
+ mov    $0,%rsi
 
  call jmp_dispatcher
 
- pop  %r11
- pop  %r10
- pop  %r9
- pop  %r8
- pop  %rcx
- pop  %rdx
- pop  %rsi
- pop  %rdi
+ movdqa (%rsp),%xmm0
+ lea  16(%rsp),%rsp
+
+ lea  8(%rsp),%rsp //align
+
+ pop  %r11 //0
+ pop  %r10 //1
+ pop  %r9  //2
+ pop  %r8  //3
+ pop  %rcx //4
+ pop  %rdx //5
+ pop  %rsi //6
+ pop  %rdi //7
+ popf      //8
 
  //epilog
+ movq %rbp,%rsp
+ pop  %rbp
+
+ lea  8(%rsp),%rsp
+ jmp  %rax
+end;
+
+procedure jit_call_dispatch; assembler; nostackframe;
+asm
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ andq  $-16,%rsp //align stack
+
+ push %rdi //0
+ push %rsi //1
+ push %rdx //2
+ push %rcx //3
+ push %r8  //4
+ push %r9  //5
+ push %r10 //6
+ push %r11 //7
+
+ mov  %rax,%rdi
+ mov    $1,%rsi
+
+ lea  -16(%rsp),%rsp
+ movdqa %xmm0,(%rsp)
+
+ call jmp_dispatcher
+
+ movdqa (%rsp),%xmm0
+ lea  16(%rsp),%rsp
+
+ pop  %r11 //0
+ pop  %r10 //1
+ pop  %r9  //2
+ pop  %r8  //3
+ pop  %rcx //4
+ pop  %rdx //5
+ pop  %rsi //6
+ pop  %rdi //7
+
+ //epilog
+ movq %rbp,%rsp
  pop  %rbp
 
  lea  8(%rsp),%rsp
@@ -238,6 +303,11 @@ end;
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
  ctx.builder.call_far(@jit_jmp_dispatch); //input:rax
+end;
+
+procedure op_call_dispatcher(var ctx:t_jit_context2);
+begin
+ ctx.builder.call_far(@jit_call_dispatch); //input:rax
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2);
@@ -340,6 +410,8 @@ begin
 
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
+  //imm offset
+
   ofs:=0;
   if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
   begin
@@ -348,7 +420,8 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  if ctx.is_text_addr(QWORD(dst)) then
+  if ctx.is_text_addr(QWORD(dst)) and
+     (not exist_entry(dst)) then
   begin
    link:=ctx.get_link(dst);
 
@@ -364,7 +437,7 @@ begin
   begin
    op_set_rax_imm(ctx,Int64(dst));
    //
-   op_jmp_dispatcher(ctx);
+   op_call_dispatcher(ctx);
   end;
 
  end else
@@ -372,13 +445,13 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  build_lea(ctx,1,new1,[code_ref]);
+  build_lea(ctx,1,new1,[inc8_rsp,code_ref]);
   //
   ctx.builder.call_far(@uplift_jit); //in/out:rax uses:r14
   //
   ctx.builder.movq(new1,[new1]);
   //
-  op_jmp_dispatcher(ctx);
+  op_call_dispatcher(ctx);
  end else
  if is_preserved(ctx.din) then
  begin
@@ -387,7 +460,12 @@ begin
   i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
   ctx.builder.movq(new1,[r_thrd+i]);
   //
-  op_jmp_dispatcher(ctx);
+  if is_rsp(ctx.din.Operand[1].RegValue[0]) then
+  begin
+   ctx.builder.leaq(new1,[new1+8]);
+  end;
+  //
+  op_call_dispatcher(ctx);
  end else
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
@@ -395,7 +473,7 @@ begin
   //
   ctx.builder.movq(new1,new2);
   //
-  op_jmp_dispatcher(ctx);
+  op_call_dispatcher(ctx);
  end;
 
  //
@@ -432,7 +510,8 @@ begin
 
   dst:=ctx.ptr_next+ofs;
 
-  if ctx.is_text_addr(QWORD(dst)) then
+  if ctx.is_text_addr(QWORD(dst)) and
+     (not exist_entry(dst)) then
   begin
    link:=ctx.get_link(dst);
 
@@ -500,7 +579,8 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- if ctx.is_text_addr(QWORD(dst)) then
+ if ctx.is_text_addr(QWORD(dst)) and
+    (not exist_entry(dst)) then
  begin
   link:=ctx.get_link(dst);
 
@@ -934,14 +1014,8 @@ begin
 
 end;
 
-
-var
- inited:Integer=0;
-
 procedure init_cbs;
 begin
- if (inited<>0) then Exit;
-
  jit_cbs[OPPnone,OPcall,OPSnone]:=@op_call;
  jit_cbs[OPPnone,OPjmp ,OPSnone]:=@op_jmp;
  jit_cbs[OPPnone,OPret ,OPSnone]:=@op_ret;
@@ -987,10 +1061,6 @@ begin
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
- kern_jit2_ops.init_cbs;
- init_cbs_avx;
-
- inited:=1;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
@@ -1035,6 +1105,15 @@ begin
 end;
 
 procedure pick(var ctx:t_jit_context2);
+begin
+ vm_map_lock  (@g_vmspace.vm_map);
+
+ pick_locked(ctx);
+
+ vm_map_unlock(@g_vmspace.vm_map);
+end;
+
+procedure pick_locked(var ctx:t_jit_context2);
 const
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
  MCODES:array[0..3] of RawByteString=('','0F','0F38','0F3A');
@@ -1060,20 +1139,26 @@ var
 
  node,node_curr,node_next:p_jit_instruction;
 begin
+ if (ctx.max=QWORD(-1)) then
+ begin
+  //dont scan rip relative
+  ctx.max:=0;
+ end else
+ begin
+  ctx.max:=QWORD(ctx.max_forward_point);
+ end;
 
- init_cbs;
-
- ctx.max:=QWORD(ctx.max_forward_point);
  Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
  Writeln(' ctx.max       :0x',HexStr(ctx.max,16));
  Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
+ Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
 
  links:=Default(t_jit_context2.t_forward_links);
  addr:=nil;
 
  if not ctx.fetch_forward_point(links,addr) then
  begin
-  ctx.builder.Free;
+  ctx.Free;
   Exit;
  end;
 
@@ -1082,8 +1167,6 @@ begin
  entry_link:=addr;
 
  ctx.builder._new_chunk(QWORD(entry_link));
-
- Writeln('0x',HexStr(entry_link));
 
  //debug
    ctx.builder.call_far(@jit_before_start);
@@ -1101,7 +1184,7 @@ begin
   begin
    //writeln('not excec:0x',HexStr(ptr));
    ctx.builder.ud2;
-   goto _next;
+   goto _next; //trim
   end;
 
   ctx.ptr_curr:=ptr;
@@ -1114,7 +1197,7 @@ begin
      //invalid
      //writeln('invalid:0x',HexStr(ctx.ptr_curr));
      ctx.builder.ud2;
-     goto _next;
+     goto _next; //trim
     end;
    else;
   end;
@@ -1124,7 +1207,7 @@ begin
   begin
    //writeln('invalid:0x',HexStr(ctx.ptr_curr));
    ctx.builder.ud2;
-   goto _next;
+   goto _next; //trim
   end;
 
   if print_asm then
@@ -1255,10 +1338,18 @@ begin
    if (link_new<>nil_link) then
    begin
     ctx.builder.jmp(link_new);
-    ctx.trim:=True;
     //Writeln('jmp next:0x',HexStr(ptr));
+    goto _next; //trim
    end;
+  end;
 
+  if exist_entry(ptr) then
+  begin
+   op_set_rax_imm(ctx,Int64(ptr));
+   //
+   op_jmp_dispatcher(ctx);
+   //
+   goto _next; //trim
   end;
 
   if ctx.trim then
@@ -1311,12 +1402,14 @@ begin
  ctx.builder.ud2;
 
  build(ctx);
+ ctx.Free;
 
  adec.Free;
  proc.Free;
-
- ctx.builder.Free;
 end;
+
+initialization
+ init_cbs;
 
 
 end.

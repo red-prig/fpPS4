@@ -16,8 +16,6 @@ type
 var
  jit_cbs:array[TOpcodePrefix,TOpCode,TOpCodeSuffix] of t_jit_cb;
 
-procedure init_cbs;
-
 implementation
 
 uses
@@ -776,59 +774,7 @@ begin
  end;
 end;
 
-const
- shl_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:4);
-  mem__cl:(op:$D3;index:4);
-  mem_one:(op:$D1;index:4);
- );
-
-procedure op_shl(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift(ctx,shl_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- shr_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:5);
-  mem__cl:(op:$D3;index:5);
-  mem_one:(op:$D1;index:5);
- );
-
-procedure op_shr(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift(ctx,shr_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- sar_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:7);
-  mem__cl:(op:$D3;index:7);
-  mem_one:(op:$D1;index:7);
- );
-
-procedure op_sar(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift(ctx,sar_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
+//
 
 const
  rol_desc:t_op_shift=(
@@ -841,7 +787,7 @@ procedure op_rol(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit_shift(ctx,rol_desc);
+  op_emit_shift2(ctx,rol_desc);
  end else
  begin
   add_orig(ctx);
@@ -859,12 +805,106 @@ procedure op_ror(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit_shift(ctx,ror_desc);
+  op_emit_shift2(ctx,ror_desc);
  end else
  begin
   add_orig(ctx);
  end;
 end;
+
+const
+ shl_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:4);
+  mem__cl:(op:$D3;index:4);
+  mem_one:(op:$D1;index:4);
+ );
+
+procedure op_shl(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift2(ctx,shl_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ shr_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:5);
+  mem__cl:(op:$D3;index:5);
+  mem_one:(op:$D1;index:5);
+ );
+
+procedure op_shr(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift2(ctx,shr_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ sar_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:7);
+  mem__cl:(op:$D3;index:7);
+  mem_one:(op:$D1;index:7);
+ );
+
+procedure op_sar(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift2(ctx,sar_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ shld_desc:t_op_shift=(
+  reg_im8:(op:$0FA4);
+  mem__cl:(op:$0FA5);
+  mem_one:(opt:[not_impl]);
+ );
+
+procedure op_shld(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift3(ctx,shld_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ shrd_desc:t_op_shift=(
+  reg_im8:(op:$0FAC);
+  mem__cl:(op:$0FAD);
+  mem_one:(opt:[not_impl]);
+ );
+
+procedure op_shrd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift3(ctx,shrd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  inc_desc:t_op_type=(
@@ -959,22 +999,22 @@ end;
 
 procedure op_lea(var ctx:t_jit_context2);
 var
- new:TRegValue;
+ new1,new2:TRegValue;
  i:Integer;
 begin
  if is_preserved(ctx.din) then
  begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
-   new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
-   build_lea(ctx,2,new,[not_use_segment]);
+   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+   build_lea(ctx,2,new1,[not_use_segment]);
    //
    i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
-   ctx.builder.movq([r_thrd+i],new);
+   ctx.builder.movq([r_thrd+i],new1);
   end else
   begin
-   new:=new_reg(ctx.din.Operand[1]);
-   build_lea(ctx,2,new);
+   new1:=new_reg(ctx.din.Operand[1]);
+   build_lea(ctx,2,new1);
   end;
  end else
  begin
@@ -1977,11 +2017,14 @@ begin
  jit_cbs[OPPnone,OPtzcnt  ,OPSnone]:=@op_tzcnt;
  jit_cbs[OPPnone,OPpopcnt ,OPSnone]:=@op_popcnt;
 
+ jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
+ jit_cbs[OPPnone,OPror ,OPSnone]:=@op_ror;
  jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shl;
  jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
  jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_sar;
- jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
- jit_cbs[OPPnone,OPror ,OPSnone]:=@op_ror;
+
+ jit_cbs[OPPnone,OPshl ,OPSx_d ]:=@op_shld;
+ jit_cbs[OPPnone,OPshr ,OPSx_d ]:=@op_shrd;
 
  jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_setcc;
  jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_setcc;
@@ -2079,6 +2122,8 @@ begin
  jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
  jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
 
+ //fpu
+
  jit_cbs[OPPnone,OPfldcw ,OPSnone]:=@op_fldcw;
  jit_cbs[OPPnone,OPfld   ,OPSnone]:=@op_fld;
  jit_cbs[OPPnone,OPfild  ,OPSnone]:=@op_fild;
@@ -2106,12 +2151,16 @@ begin
  jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_fdiv;
  jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_fdivr;
 
+ //fpu
+
  jit_cbs[OPPnone,OPprefetch,OPSnone ]:=@op_prefetch;
  jit_cbs[OPPnone,OPprefetch,OPSp_w  ]:=@op_prefetchw;
  jit_cbs[OPPnone,OPprefetch,OPSp_nta]:=@op_prefetchnta;
  jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_prefetch0;
  jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_prefetch1;
  jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_prefetch2;
+
+ //sse
 
  jit_cbs[OPPnone,OPor,OPSx_ps]:=@op_orps;
  jit_cbs[OPPnone,OPor,OPSx_pd]:=@op_orpd;
@@ -2132,8 +2181,11 @@ begin
  jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_sqrtsd;
  jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_sqrtss;
 
+ //sse
 end;
 
+initialization
+ init_cbs;
 
 end.
 

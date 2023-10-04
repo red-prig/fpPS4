@@ -11,8 +11,6 @@ uses
  kern_jit2_ops,
  kern_jit2_ctx;
 
-procedure init_cbs_avx;
-
 implementation
 
 const
@@ -392,6 +390,8 @@ begin
  end;
 end;
 
+//
+
 const
  vpmovsxbw_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
@@ -406,6 +406,86 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx2(ctx,vpmovsxbw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovsxbd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$21;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovsxbd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovsxbd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovsxbq_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$22;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovsxbq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovsxbq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovsxwd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$23;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovsxwd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovsxwd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovsxwq_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$24;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovsxwq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovsxwq_desc);
  end else
  begin
   add_orig(ctx);
@@ -431,6 +511,130 @@ begin
   add_orig(ctx);
  end;
 end;
+
+//
+
+const
+ vpmovzxbw_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$30;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxbw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxbw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovzxbd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$31;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxbd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxbd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovzxbq_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$32;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxbq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxbq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovzxwd_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$33;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxwd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxwd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovzxwq_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$34;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxwq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxwq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmovzxdq_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$35;index:1;mm:2);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vpmovzxdq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx2(ctx,vpmovzxdq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  vmovmskps_desc:t_op_type=(op:$50;index:0;mm:1);
@@ -637,6 +841,56 @@ begin
 end;
 
 const
+ vpcmpeqq_desc:t_op_type=(
+  op:$29;index:1;mm:2;
+ );
+
+procedure op_vpcmpeqq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpcmpeqq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ vpcmpgtb_desc:t_op_type=(
+  op:$64;index:1;mm:1;
+ );
+
+procedure op_vpcmpgtb(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpcmpgtb_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpcmpgtw_desc:t_op_type=(
+  op:$65;index:1;mm:1;
+ );
+
+procedure op_vpcmpgtw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpcmpgtw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  vpcmpgtd_desc:t_op_type=(
   op:$66;index:1;mm:1;
  );
@@ -646,6 +900,41 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vpcmpgtd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpcmpgtq_desc:t_op_type=(
+  op:$37;index:1;mm:2;
+ );
+
+procedure op_vpcmpgtq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpcmpgtq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+///
+
+const
+ vpcmpestrm_desc:t_op_avx3_imm=(
+  rmi:(op:$60;index:1;mm:3);
+  mri:(opt:[not_impl]);
+ );
+
+procedure op_vpcmpestrm(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3_imm8(ctx,vpcmpestrm_desc);
  end else
  begin
   add_orig(ctx);
@@ -1136,6 +1425,22 @@ begin
 end;
 
 const
+ vpmulld_desc:t_op_type=(
+  op:$40;index:1;mm:2;
+ );
+
+procedure op_vpmulld(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpmulld_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  vpmullw_desc:t_op_type=(
   op:$D5;index:1;mm:1;
  );
@@ -1145,6 +1450,22 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vpmullw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpmuludq_desc:t_op_type=(
+  op:$F4;index:1;mm:1;
+ );
+
+procedure op_vpmuludq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpmuludq_desc);
  end else
  begin
   add_orig(ctx);
@@ -1167,16 +1488,18 @@ begin
  end;
 end;
 
+//
+
 const
- vpunpcklqdq_desc:t_op_type=(
-  op:$6C;index:1;mm:1;
+ vpunpcklbw_desc:t_op_type=(
+  op:$60;index:1;mm:1;
  );
 
-procedure op_vpunpcklqdq(var ctx:t_jit_context2);
+procedure op_vpunpcklbw(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit_avx3(ctx,vpunpcklqdq_desc);
+  op_emit_avx3(ctx,vpunpcklbw_desc);
  end else
  begin
   add_orig(ctx);
@@ -1214,6 +1537,90 @@ begin
   add_orig(ctx);
  end;
 end;
+
+const
+ vpunpcklqdq_desc:t_op_type=(
+  op:$6C;index:1;mm:1;
+ );
+
+procedure op_vpunpcklqdq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpcklqdq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ vpunpckhbw_desc:t_op_type=(
+  op:$68;index:1;mm:1;
+ );
+
+procedure op_vpunpckhbw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpckhbw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpunpckhwd_desc:t_op_type=(
+  op:$69;index:1;mm:1;
+ );
+
+procedure op_vpunpckhwd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpckhwd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpunpckhdq_desc:t_op_type=(
+  op:$6A;index:1;mm:1;
+ );
+
+procedure op_vpunpckhdq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpckhdq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpunpckhqdq_desc:t_op_type=(
+  op:$6D;index:1;mm:1;
+ );
+
+procedure op_vpunpckhqdq(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpunpckhqdq_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  vunpcklpd_desc:t_op_type=(
@@ -1431,6 +1838,22 @@ begin
  if is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vpsrlw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpsrld_desc:t_op_type=(
+  op:$D2;index:1;mm:1;
+ );
+
+procedure op_vpsrld(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpsrld_desc);
  end else
  begin
   add_orig(ctx);
@@ -2386,7 +2809,18 @@ begin
  jit_cbs[OPPv,OPmovshdup,OPSnone]:=@op_vmovshdup;
 
  jit_cbs[OPPv,OPpmovsx,OPSv_bw]:=@op_vpmovsxbw;
+ jit_cbs[OPPv,OPpmovsx,OPSv_bd]:=@op_vpmovsxbd;
+ jit_cbs[OPPv,OPpmovsx,OPSv_bq]:=@op_vpmovsxbq;
+ jit_cbs[OPPv,OPpmovsx,OPSv_wd]:=@op_vpmovsxwd;
+ jit_cbs[OPPv,OPpmovsx,OPSv_wq]:=@op_vpmovsxwq;
  jit_cbs[OPPv,OPpmovsx,OPSv_dq]:=@op_vpmovsxdq;
+
+ jit_cbs[OPPv,OPpmovzx,OPSv_bw]:=@op_vpmovzxbw;
+ jit_cbs[OPPv,OPpmovzx,OPSv_bd]:=@op_vpmovzxbd;
+ jit_cbs[OPPv,OPpmovzx,OPSv_bq]:=@op_vpmovzxbq;
+ jit_cbs[OPPv,OPpmovzx,OPSv_wd]:=@op_vpmovzxwd;
+ jit_cbs[OPPv,OPpmovzx,OPSv_wq]:=@op_vpmovzxwq;
+ jit_cbs[OPPv,OPpmovzx,OPSv_dq]:=@op_vpmovzxdq;
 
  jit_cbs[OPPv,OPmovmsk,OPSx_ps]:=@op_vmovmskps;
  jit_cbs[OPPv,OPmovmsk,OPSx_pd]:=@op_vmovmskpd;
@@ -2405,9 +2839,14 @@ begin
  jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_vpcmpeqb;
  jit_cbs[OPPv,OPpcmpeq,OPSx_w ]:=@op_vpcmpeqw;
  jit_cbs[OPPv,OPpcmpeq,OPSx_d ]:=@op_vpcmpeqd;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_q ]:=@op_vpcmpeqq;
 
+ jit_cbs[OPPv,OPpcmpgt,OPSx_b ]:=@op_vpcmpgtb;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_w ]:=@op_vpcmpgtw;
  jit_cbs[OPPv,OPpcmpgt,OPSx_d ]:=@op_vpcmpgtd;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_q ]:=@op_vpcmpgtq;
 
+ jit_cbs[OPPv,OPpcmpestrm,OPSnone]:=@op_vpcmpestrm;
  jit_cbs[OPPv,OPpcmpestri,OPSnone]:=@op_vpcmpestri;
  jit_cbs[OPPv,OPpcmpistrm,OPSnone]:=@op_vpcmpistrm;
  jit_cbs[OPPv,OPpcmpistri,OPSnone]:=@op_vpcmpistri;
@@ -2447,13 +2886,21 @@ begin
  jit_cbs[OPPv,OPmul   ,OPSx_ss]:=@op_vmulss;
  jit_cbs[OPPv,OPmul   ,OPSx_sd]:=@op_vmulsd;
 
+ jit_cbs[OPPv,OPpmull ,OPSx_d]:=@op_vpmulld;
  jit_cbs[OPPv,OPpmull ,OPSx_w]:=@op_vpmullw;
 
+ jit_cbs[OPPv,OPpmuludq,OPSnone]:=@op_vpmuludq;
  jit_cbs[OPPv,OPpmulhuw,OPSnone]:=@op_vpmulhuw;
 
- jit_cbs[OPPv,OPpunpcklqdq,OPSnone]:=@op_vpunpcklqdq;
+ jit_cbs[OPPv,OPpunpcklbw ,OPSnone]:=@op_vpunpcklbw;
  jit_cbs[OPPv,OPpunpcklwd ,OPSnone]:=@op_vpunpcklwd;
  jit_cbs[OPPv,OPpunpckldq ,OPSnone]:=@op_vpunpckldq;
+ jit_cbs[OPPv,OPpunpcklqdq,OPSnone]:=@op_vpunpcklqdq;
+
+ jit_cbs[OPPv,OPpunpckhbw ,OPSnone]:=@op_vpunpckhbw;
+ jit_cbs[OPPv,OPpunpckhwd ,OPSnone]:=@op_vpunpckhwd;
+ jit_cbs[OPPv,OPpunpckhdq ,OPSnone]:=@op_vpunpckhdq;
+ jit_cbs[OPPv,OPpunpckhqdq,OPSnone]:=@op_vpunpckhqdq;
 
  jit_cbs[OPPv,OPunpckl    ,OPSx_pd]:=@op_vunpcklpd;
  jit_cbs[OPPv,OPunpckh    ,OPSx_pd]:=@op_vunpckhpd;
@@ -2472,7 +2919,9 @@ begin
  jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_vperm2f128;
 
  jit_cbs[OPPv,OPpsrl,OPSx_w]:=@op_vpsrlw;
+ jit_cbs[OPPv,OPpsrl,OPSx_d]:=@op_vpsrld;
  jit_cbs[OPPv,OPpsrl,OPSx_q]:=@op_vpsrlq;
+ jit_cbs[OPPv,OPpsrl,OPSx_dq]:=@add_orig;
 
  jit_cbs[OPPv,OPpminu  ,OPSx_d ]:=@op_vpminud;
  jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_vmaskmovps;
@@ -2549,8 +2998,10 @@ begin
  jit_cbs[OPPv,OPhadd,OPSx_ps]:=@op_vhaddps;
 
 
-
 end;
+
+initialization
+ init_cbs_avx;
 
 end.
 
