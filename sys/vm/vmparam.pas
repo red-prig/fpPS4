@@ -52,7 +52,7 @@ const
 
  SCE_KERNEL_GNMDRIVER =QWORD($00FE0000000);
 
- VM_MINUSER_ADDRESS   =QWORD($00200000000); //(original:$000000000000)
+ VM_MINUSER_ADDRESS   =QWORD($00010000000); //(original:$000000000000)
  VM_MAXUSER_ADDRESS   =QWORD($10000000000); //(original:$800000000000)
 
  VM_MIN_GPU_ADDRESS   =QWORD($10000000000);
@@ -63,13 +63,13 @@ const
  pmap_mem:array[0..3] of t_addr_range=(
   (start:PROC_IMAGE_AREA_START;__end:PROC_IMAGE_AREA___END),
   (start:DL_AREA_START        ;__end:DL_AREA___END        ),
-  (start:VM_MINUSER_ADDRESS   ;__end:VM_MAXUSER_ADDRESS   ),
+  (start:SCE_USR_HEAP_START   ;__end:VM_MAXUSER_ADDRESS   ),
   (start:VM_MIN_GPU_ADDRESS   ;__end:VM_MAX_GPU_ADDRESS   )
  );
 
  exclude_mem:array[0..1] of t_addr_range=(
   (start:PROC_IMAGE_AREA___END;__end:DL_AREA_START     ),
-  (start:DL_AREA___END        ;__end:VM_MINUSER_ADDRESS)
+  (start:DL_AREA___END        ;__end:SCE_USR_HEAP_START)
  );
 
  //t_addr_range

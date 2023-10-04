@@ -720,12 +720,19 @@ end;
 
 //in/out:rax uses:r14
 procedure uplift_jit; assembler; nostackframe;
+const
+ VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
 label
- _exit;
+ _sigsegv;
 asm
  pushfq
  push %r14
  push %rax
+ //
+ mov VM_MAX_D,%r14
+ shl $32,%r14
+ cmp %r14,%rax
+ ja _sigsegv
  //
  //low addr (r14)
  mov %rax,%r14
@@ -739,7 +746,7 @@ asm
  mov (%rax),%eax
  //filter (rax)
  and PAGE_OFS_MASK,%rax
- jz _exit
+ jz _sigsegv
  //combine (rax|r14)
  shl PAGE_SHIFT,%rax
  or  %r14,%rax
@@ -749,7 +756,7 @@ asm
  popfq
  ret
 
- _exit:
+ _sigsegv:
  pop %rdi
 
  pop %r14

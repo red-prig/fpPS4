@@ -8,7 +8,7 @@ interface
 uses
  mqueue,
  hamt,
- g_node_splay,
+ g23tree,
  murmurhash,
  x86_jit,
  kern_jit2_ctx,
@@ -64,7 +64,7 @@ type
     function  find_addr(addr:QWORD):QWORD;
    end;
 
-   t_jcode_chunk_set=specialize TNodeSplay<t_jcode_chunk>;
+   t_jcode_chunk_set=specialize T23treeSet<p_jcode_chunk,t_jcode_chunk>;
 
   var
    entry_list:p_entry_point;
@@ -251,6 +251,7 @@ end;
 
 function fetch_chunk(src:Pointer):t_jit_dynamic.p_jcode_chunk;
 var
+ i:t_jit_dynamic.t_jcode_chunk_set.Iterator;
  node:t_jit_dynamic.t_jcode_chunk;
 begin
  Result:=nil;
@@ -259,7 +260,12 @@ begin
  //
  rw_rlock(entry_chunk_lock);
 
- Result:=entry_chunk.Find_le(@node);
+ i:=entry_chunk.Find_le(@node);
+
+ if (i.Item<>nil) then
+ begin
+  Result:=i.Item^;
+ end;
 
  if (Result<>nil) then
  begin
@@ -270,12 +276,24 @@ begin
 end;
 
 function next_chunk(node:t_jit_dynamic.p_jcode_chunk):t_jit_dynamic.p_jcode_chunk;
+var
+ i:t_jit_dynamic.t_jcode_chunk_set.Iterator;
 begin
  Result:=nil;
  //
  rw_rlock(entry_chunk_lock);
 
- Result:=entry_chunk.Next(node);
+ i:=entry_chunk.find_be(node);
+
+ if (i.Item<>nil) then
+ begin
+  i.Next;
+ end;
+
+ if (i.Item<>nil) then
+ begin
+  Result:=i.Item^;
+ end;
 
  if (Result<>nil) then
  begin

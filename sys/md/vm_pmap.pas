@@ -34,6 +34,8 @@ const
 var
  PAGE_MAP:PDWORD=nil;
 
+procedure pmap_mark(start,__end,__off:vm_offset_t;flags:DWORD);
+procedure pmap_unmark(start,__end:vm_offset_t);
 procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
 function  pmap_get_raw   (addr:vm_offset_t):DWORD;
 function  pmap_get_page  (addr:vm_offset_t):DWORD;
@@ -219,6 +221,16 @@ begin
  PAGE_MAP:=md_mmap(nil,PAGE_MAP_COUNT*SizeOf(DWORD),MD_PROT_RW);
 
  Assert(PAGE_MAP<>nil,'pmap_init');
+
+ //Mapping to internal memory, isolate TODO
+ if Length(exclude_mem)<>0 then
+ begin
+  For i:=0 to High(exclude_mem) do
+  begin
+   pmap_mark(exclude_mem[i].start,exclude_mem[i].__end,exclude_mem[i].start,0);
+  end;
+ end;
+
 end;
 
 {
