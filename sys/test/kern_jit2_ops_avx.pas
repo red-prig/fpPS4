@@ -2678,6 +2678,38 @@ end;
 //
 
 const
+ vpacksswb_desc:t_op_type=(
+  op:$63;index:1;mm:1
+ );
+
+procedure op_vpacksswb(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpacksswb_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpackssdw_desc:t_op_type=(
+  op:$6B;index:1;mm:1
+ );
+
+procedure op_vpackssdw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpackssdw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  vpackusdw_desc:t_op_type=(
   op:$2B;index:1;mm:2
  );
@@ -3060,6 +3092,8 @@ begin
  jit_cbs[OPPv,OPpinsr,OPSx_q]:=@op_vpinsrd;
  jit_cbs[OPPv,OPpinsr,OPSx_w]:=@op_vpinsrw;
 
+ jit_cbs[OPPv,OPpacksswb,OPSnone]:=@op_vpacksswb;
+ jit_cbs[OPPv,OPpackssdw,OPSnone]:=@op_vpackssdw;
  jit_cbs[OPPv,OPpackusdw,OPSnone]:=@op_vpackusdw;
  jit_cbs[OPPv,OPpackuswb,OPSnone]:=@op_vpackuswb;
 

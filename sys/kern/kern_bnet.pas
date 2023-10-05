@@ -25,6 +25,8 @@ var
  _kbuf:array[0..159] of Byte;
  kaddr:Pointer;
 begin
+ Result:=0;
+
  if (buf=nil) then
  begin
   kaddr:=nil;
