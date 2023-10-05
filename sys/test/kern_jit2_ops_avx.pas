@@ -1718,21 +1718,7 @@ begin
  end;
 end;
 
-const
- vpshufd_desc:t_op_type=(
-  op:$70;index:1;mm:1;
- );
-
-procedure op_vpshufd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit_avx3(ctx,vpshufd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
+//
 
 const
  vpshufb_desc:t_op_type=(
@@ -1749,6 +1735,59 @@ begin
   add_orig(ctx);
  end;
 end;
+
+const
+ vpshufd_desc:t_op_avx3_imm=(
+  rmi:(op:$70;index:1;mm:1);
+  mri:(opt:[not_impl]);
+ );
+
+procedure op_vpshufd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3_imm8(ctx,vpshufd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpshufhw_desc:t_op_avx3_imm=(
+  rmi:(op:$70;index:2;mm:1);
+  mri:(opt:[not_impl]);
+ );
+
+procedure op_vpshufhw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3_imm8(ctx,vpshufhw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ vpshuflw_desc:t_op_avx3_imm=(
+  rmi:(op:$70;index:3;mm:1);
+  mri:(opt:[not_impl]);
+ );
+
+procedure op_vpshuflw(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit_avx3_imm8(ctx,vpshuflw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  vpermilps_rrm_desc:t_op_type=(
@@ -2586,6 +2625,24 @@ begin
  end;
 end;
 
+//
+
+const
+ vpinsrb_desc:t_op_type=(
+  op:$20;index:1;mm:3
+ );
+
+procedure op_vpinsrb(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpinsrb_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 const
  vpinsrd_desc:t_op_type=(
   op:$22;index:1;mm:3
@@ -2593,7 +2650,7 @@ const
 
 procedure op_vpinsrd(var ctx:t_jit_context2); //vpinsrq
 begin
- if is_memory(ctx.din) then
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit_avx3(ctx,vpinsrd_desc);
  end else
@@ -2601,6 +2658,24 @@ begin
   add_orig(ctx);
  end;
 end;
+
+const
+ vpinsrw_desc:t_op_type=(
+  op:$C4;index:1;mm:1
+ );
+
+procedure op_vpinsrw(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_avx3(ctx,vpinsrw_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  vpackusdw_desc:t_op_type=(
@@ -2910,8 +2985,10 @@ begin
  jit_cbs[OPPv,OPcmp   ,OPSx_sd]:=@op_vcmpsd;
  jit_cbs[OPPv,OPcmp   ,OPSx_ss]:=@op_vcmpss;
 
- jit_cbs[OPPv,OPpshuf ,OPSx_d ]:=@op_vpshufd;
  jit_cbs[OPPv,OPpshuf ,OPSx_b ]:=@op_vpshufb;
+ jit_cbs[OPPv,OPpshuf ,OPSx_d ]:=@op_vpshufd;
+ jit_cbs[OPPv,OPpshuf ,OPSx_hw]:=@op_vpshufhw;
+ jit_cbs[OPPv,OPpshuf ,OPSx_lw]:=@op_vpshuflw;
 
  jit_cbs[OPPnone,OPvpermil,OPSx_ps]:=@op_vpermilps;
  jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_vpermilpd;
@@ -2978,8 +3055,10 @@ begin
  jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_vbroadcastsd;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_f128]:=@op_vbroadcastf128;
 
+ jit_cbs[OPPv,OPpinsr,OPSx_b]:=@op_vpinsrb;
  jit_cbs[OPPv,OPpinsr,OPSx_d]:=@op_vpinsrd;
  jit_cbs[OPPv,OPpinsr,OPSx_q]:=@op_vpinsrd;
+ jit_cbs[OPPv,OPpinsr,OPSx_w]:=@op_vpinsrw;
 
  jit_cbs[OPPv,OPpackusdw,OPSnone]:=@op_vpackusdw;
  jit_cbs[OPPv,OPpackuswb,OPSnone]:=@op_vpackuswb;

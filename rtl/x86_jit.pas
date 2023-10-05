@@ -289,8 +289,8 @@ type
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
   //
-  Procedure call_far(P:Pointer);
-  Procedure jmp_far (P:Pointer);
+  function  call_far(P:Pointer):t_jit_i_link;
+  function  jmp_far (P:Pointer):t_jit_i_link;
   //
   function  call(_label_id:t_jit_i_link):t_jit_i_link;
   function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
@@ -1086,7 +1086,7 @@ begin
  Result:=((ALink^.AInstructionOffset+ALink^.ASize)-AInstructionEnd);
 end;
 
-Procedure t_jit_builder.call_far(P:Pointer);
+Function t_jit_builder.call_far(P:Pointer):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1103,9 +1103,13 @@ begin
  ji.EmitInt32(0);
 
  _add(ji);
+
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
 end;
 
-Procedure t_jit_builder.jmp_far(P:Pointer);
+Function t_jit_builder.jmp_far(P:Pointer):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1122,6 +1126,10 @@ begin
  ji.EmitInt32(0);
 
  _add(ji);
+
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
 end;
 
 function t_jit_builder.call(_label_id:t_jit_i_link):t_jit_i_link;
@@ -1336,10 +1344,17 @@ Procedure LinkLabel(node:p_jit_instruction);
 var
  d:Integer;
 begin
+ //Pre-linking, for debugging only
  d:=0;
  if (node=nil) then Exit;
  if (node^.ALink.ALink=nil) then Exit;
  case node^.ALink.AType of
+  lnkData:
+   With node^ do
+   begin
+    d:=(p_jit_data(ALink.ALink)^.pId*SizeOf(Pointer));
+    _set_data(node,d);
+   end;
   lnkLabelBefore:
    With node^ do
    begin
@@ -4102,7 +4117,6 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
- Assert(desc.mm=3);
 
  Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
  Assert(is_reg_type(reg0,[regGeneral,regXmm]));
@@ -4140,7 +4154,7 @@ begin
 
  ji.EmitByte($C4); //VEX3
 
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,3);
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
 
  ji.EmitByte(desc.op);
@@ -4166,7 +4180,6 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
- Assert(desc.mm=3);
 
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
  Assert(is_reg_type(reg,[regXmm]));
@@ -4218,7 +4231,7 @@ begin
 
  ji.EmitByte($C4); //VEX3
 
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,3);
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
 
  ji.EmitByte(desc.op);

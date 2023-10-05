@@ -294,10 +294,82 @@ begin
  //Assert(False);
 end;
 
-procedure jit_cpuid;
-begin
- Writeln('TODO:jit_cpuid');
- Assert(False);
+//0x0
+//0x1
+//0x4
+//0x6
+//0xb
+
+//0x40000000
+//0x40000010
+
+//0x80000001
+//0x80000002
+//0x80000004
+//0x80000005
+//0x80000006
+//0x80000008
+
+//0xc0000000
+//0xc0000001
+procedure jit_cpuid; assembler; nostackframe;
+label
+ _cpuid_0,
+ _cpuid_1;
+asm
+ pushf
+
+ mov jit_frame.tf_rax(%r15),%rax
+
+ cmp $0,%eax
+ je _cpuid_0
+
+ cmp $1,%eax
+ je _cpuid_1
+
+ ud2
+
+ _cpuid_0:
+
+ //cpu_high TODO check
+ mov $0xF,%eax
+
+ //cpu_vendor
+ mov $0x68747541,%ebx
+ mov $0x69746E65,%edx
+ mov $0x444D4163,%ecx
+
+ mov %rax,jit_frame.tf_rax(%r15)
+ popf
+ ret
+
+ _cpuid_1:
+
+ //get host
+ cpuid
+
+ //if ((cpu_id & 0xffffff80) == 0x740f00) then
+ //if "machdep.bootparams.base_ps4_mode" then sceKernelHasNeoMode
+
+ //if ((cpu_id & 0xffffff80) == 0x740f00) then sceKernelIsAuthenticNeo
+
+ mov $0x00710f13,%eax //cpu_id
+ mov $0x178bfbff,%edx //cpu_feature
+ mov $0x36d8220b,%ecx //cpu_feature2
+
+//CPUID_BRAND_INDEX   0x000000ff
+//CPUID_CLFUSH_SIZE   0x0000ff00
+//CPUID_HTT_CORES     0x00ff0000  //sceKernelGetCurrentCpu 0..7
+//CPUID_LOCAL_APIC_ID 0xff000000
+
+ and $0xFF070000,%ebx //filter CPUID_LOCAL_APIC_ID|CPUID_HTT_CORES
+
+ or $0x00000800,%ebx //cpu_procinfo
+
+ mov %rax,jit_frame.tf_rax(%r15)
+ popf
+ ret
+
 end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
@@ -413,10 +485,7 @@ begin
   //imm offset
 
   ofs:=0;
-  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
-  begin
-   Assert(false);
-  end;
+  GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
   dst:=ctx.ptr_next+ofs;
 
@@ -428,6 +497,7 @@ begin
    if (link<>nil_link) then
    begin
     ctx.builder.jmp(link);
+    ctx.add_forward_point(nil_link,dst);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
@@ -503,10 +573,7 @@ begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
   ofs:=0;
-  if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
-  begin
-   Assert(false);
-  end;
+  GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
   dst:=ctx.ptr_next+ofs;
 
@@ -518,6 +585,7 @@ begin
    if (link<>nil_link) then
    begin
     ctx.builder.jmp(link);
+    ctx.add_forward_point(nil_link,dst);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
@@ -572,10 +640,7 @@ var
  link:t_jit_i_link;
 begin
  ofs:=0;
- if not GetTargetOfs(ctx.din,ctx.code,1,ofs) then
- begin
-  Assert(false);
- end;
+ GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
  dst:=ctx.ptr_next+ofs;
 
@@ -587,6 +652,7 @@ begin
   if (link<>nil_link) then
   begin
    ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
+   ctx.add_forward_point(nil_link,dst);
   end else
   begin
    id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
@@ -843,8 +909,9 @@ end;
 
 const
  test_desc:t_op_type=(op:$85;index:0);
+ bt_desc_imm:t_op_type=(op:$0FBA;index:4);
 
-procedure op_rep_cmps(var ctx:t_jit_context2);
+procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
 var
  op:DWORD;
  size:TOperandSize;
@@ -907,10 +974,15 @@ begin
 
    leaq(rcx,[rcx-1]);
 
-
-
-   leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-   leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
+   end;
 
    if (ifPrefixRepE in ctx.din.Flags) then
    begin
@@ -943,9 +1015,38 @@ begin
 
 end;
 
+procedure op_rep_cmps(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  _MI8(bt_desc_imm,os64,[rsp],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  popfq(os64);
+  _op_rep_cmps(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+  _op_rep_cmps(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+ end;
+end;
+
 ///
 
-procedure op_rep_stos(var ctx:t_jit_context2);
+procedure _op_rep_stos(var ctx:t_jit_context2;dflag:Integer);
 var
  i:Integer;
  size:TOperandSize;
@@ -997,7 +1098,14 @@ begin
    movq([r_tmp0],new);
 
    leaq(rcx,[rcx-1]);
-   leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+   end;
 
   //until
   jmp(link_start,os8);
@@ -1012,6 +1120,35 @@ begin
   link_jmp0._label:=link___end;
  end;
 
+end;
+
+procedure op_rep_stos(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  _MI8(bt_desc_imm,os64,[rsp],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  popfq(os64);
+  _op_rep_stos(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+  _op_rep_stos(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+ end;
 end;
 
 procedure init_cbs;

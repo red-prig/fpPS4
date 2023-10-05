@@ -274,12 +274,32 @@ begin
 end;
 
 const
+ btc_desc:t_op_desc=(
+  mem_reg:(op:$0FBB;index:0);
+  reg_mem:(opt:[not_impl]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(op:$0FBA;index:7);
+  hint:[his_rw];
+ );
+
+procedure op_btc(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,btc_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  bts_desc:t_op_desc=(
   mem_reg:(op:$0FAB;index:0);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(op:$0FBA;index:5);
-  hint:[his_ro];
+  hint:[his_rw];
  );
 
 procedure op_bts(var ctx:t_jit_context2);
@@ -293,6 +313,25 @@ begin
  end;
 end;
 
+const
+ btr_desc:t_op_desc=(
+  mem_reg:(op:$0FB3;index:0);
+  reg_mem:(opt:[not_impl]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(op:$0FBA;index:6);
+  hint:[his_rw];
+ );
+
+procedure op_btr(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,btr_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
 
 const
  xchg_desc:t_op_desc=(
@@ -1970,7 +2009,9 @@ begin
  jit_cbs[OPPnone,OPdiv ,OPSnone]:=@op_div;
 
  jit_cbs[OPPnone,OPbt  ,OPSnone]:=@op_bt;
+ jit_cbs[OPPnone,OPbtc ,OPSnone]:=@op_btc;
  jit_cbs[OPPnone,OPbts ,OPSnone]:=@op_bts;
+ jit_cbs[OPPnone,OPbtr ,OPSnone]:=@op_btr;
 
  jit_cbs[OPPnone,OPxchg,OPSnone]:=@op_xchg;
 
