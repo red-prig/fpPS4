@@ -489,7 +489,7 @@ end;
 const
  movx_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$00;index:0);
+  reg_mem:(op:$00;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -583,8 +583,8 @@ end;
 
 const
  movbe_desc:t_op_desc=(
-  mem_reg:(op:$0F38F1;index:0);
-  reg_mem:(op:$0F38F0;index:0);
+  mem_reg:(op:$0F38F1;opt:[not_prefix]);
+  reg_mem:(op:$0F38F0;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -602,18 +602,25 @@ begin
 end;
 
 const
- movd_desc:t_op_desc=( //movq
-  mem_reg:(op:$0F7E;index:0);
-  reg_mem:(op:$0F6E;index:0);
+ mov_dq_xr_desc:t_op_desc=(
+  mem_reg:(op:$660F7E;opt:[not_prefix]);
+  reg_mem:(op:$660F6E;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
-const
- movd_xmm_desc:t_op_desc=( //movq_xmm
-  mem_reg:(op:$660F7E;index:0);
-  reg_mem:(op:$660F6E;index:0);
+ mov_dq_mm_desc:t_op_desc=(
+  mem_reg:(op:$0F7E;opt:[not_prefix]);
+  reg_mem:(op:$0F6E;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+ movq_xx_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F30F7E;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -623,12 +630,33 @@ procedure op_movd(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  if is_xmm(ctx.din) then
+  if (ctx.dis.SimdOpcode=so66) then
   begin
-   op_emit2(ctx,movd_xmm_desc);
+   op_emit2(ctx,mov_dq_xr_desc);
   end else
   begin
-   op_emit2(ctx,movd_desc);
+   op_emit2(ctx,mov_dq_mm_desc);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_movq(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  if (ctx.dis.SimdOpcode=soF3) then
+  begin
+   op_emit2(ctx,movq_xx_desc);
+  end else
+  if (ctx.dis.SimdOpcode=so66) then
+  begin
+   op_emit2(ctx,mov_dq_xr_desc);
+  end else
+  begin
+   op_emit2(ctx,mov_dq_mm_desc);
   end;
  end else
  begin
@@ -639,7 +667,7 @@ end;
 const
  movsxd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$63;index:0);
+  reg_mem:(op:$63;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -655,6 +683,50 @@ begin
   add_orig(ctx);
  end;
 end;
+
+//
+
+const
+ movdqa_desc:t_op_desc=(
+  mem_reg:(op:$660F7F;opt:[not_prefix]);
+  reg_mem:(op:$660F6F;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo,his_align];
+ );
+
+procedure op_movdqa(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,movdqa_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ movdqu_desc:t_op_desc=(
+  mem_reg:(op:$F30F7F;opt:[not_prefix]);
+  reg_mem:(op:$F30F6F;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movdqu(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,movdqu_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
 
 const
  SETcc_8:array[OPSc_o..OPSc_nle] of Byte=(
@@ -1033,20 +1105,18 @@ const
 procedure op_bswap(var ctx:t_jit_context2);
 var
  new:TRegValue;
- i:Integer;
 begin
  if is_preserved(ctx.din) then
  begin
   with ctx.builder do
   begin
-   i:=GetFrameOffset(ctx.din.Operand[1]);
    new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
-   movq(new,[r_thrd+i]);
+   op_load(ctx,new,1);
 
    _O(bswap_desc,new);
 
-   movq([r_thrd+i],fix_size(new));
+   op_save(ctx,1,fix_size(new));
   end;
  end else
  begin
@@ -1056,31 +1126,29 @@ end;
 
 procedure op_lea(var ctx:t_jit_context2);
 var
- new1:TRegValue;
- i:Integer;
+ new:TRegValue;
 begin
  if is_preserved(ctx.din) then
  begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
-   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
-   build_lea(ctx,2,new1,[not_use_segment]);
+   new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+   build_lea(ctx,2,new,[not_use_segment]);
    //
-   i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
-   ctx.builder.movq([r_thrd+i],fix_size(new1));
+   op_save(ctx,1,fix_size(new));
   end else
   begin
-   new1:=new_reg(ctx.din.Operand[1]);
+   new:=new_reg(ctx.din.Operand[1]);
    //
-   if (new1.ASize=os16) then
+   if (new.ASize=os16) then
    begin
     //low part
     build_lea(ctx,2,r_tmp0);
     //
-    ctx.builder.movq(new1,r_tmp0);
+    ctx.builder.movq(new,r_tmp0);
    end else
    begin
-    build_lea(ctx,2,new1);
+    build_lea(ctx,2,new);
    end;
   end;
  end else
@@ -1775,7 +1843,7 @@ procedure op_pxor(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  if is_xmm(ctx.din) then
+  if (ctx.dis.SimdOpcode=so66) then
   begin
    op_emit2(ctx,pxor_xmm_desc);
   end else
@@ -1915,7 +1983,7 @@ end;
 const
  cvtsi2ss_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F2A);
+  reg_mem:(op:$F30F2A;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -1935,7 +2003,7 @@ end;
 const
  cvtsd2si_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F2D);
+  reg_mem:(op:$F20F2D;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -1955,13 +2023,13 @@ end;
 const
  cvtss2si_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F2D);
+  reg_mem:(op:$F30F2D;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
  );
 
-procedure op_cvtss2s(var ctx:t_jit_context2);
+procedure op_cvtss2si(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
@@ -2065,9 +2133,15 @@ begin
  jit_cbs[OPPnone,OPmov  ,OPSc_be]:=@op_movbe;
 
  jit_cbs[OPPnone,OPmov  ,OPSx_d ]:=@op_movd;
- jit_cbs[OPPnone,OPmov  ,OPSx_q ]:=@op_movd;
+ jit_cbs[OPPnone,OPmov  ,OPSx_q ]:=@op_movq;
 
  jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
+
+ jit_cbs[OPPnone,OPmovdq2q,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPmovq2dq,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPmov,OPSx_dqa]:=@op_movdqa;
+ jit_cbs[OPPnone,OPmov,OPSx_dqu]:=@op_movdqu;
 
  jit_cbs[OPPnone,OPtest,OPSnone]:=@op_test;
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
@@ -2240,7 +2314,7 @@ begin
 
  jit_cbs[OPPnone,OPcvtsi2,OPSx_ss]:=@op_cvtsi2ss;
  jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_cvtsd2si;
- jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_cvtss2s;
+ jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_cvtss2si;
 
  jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_sqrtsd;
  jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_sqrtss;

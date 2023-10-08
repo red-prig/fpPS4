@@ -389,6 +389,8 @@ type
   procedure lahf;
   procedure seto(reg:TRegValue);
   procedure int3;
+  procedure testq(reg0:TRegValue;reg1:TRegValue);
+  procedure bti8 (mem:t_jit_leas;imm:Byte);
  end;
 
 operator :=(const A:TRegValue):t_jit_lea;
@@ -1978,8 +1980,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2060,8 +2061,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2150,8 +2150,7 @@ begin
       begin
        Dec(op);
       end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2233,8 +2232,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2304,8 +2302,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2381,8 +2378,7 @@ begin
       begin
        Dec(op);
       end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2440,8 +2436,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2485,8 +2480,7 @@ begin
  Prefix:=0;
 
  case Size of
-  os16,
-  os128:
+  os16:
        if (not not_prefix) then
        begin
         Prefix:=$66;
@@ -2552,8 +2546,7 @@ begin
 
  op:=desc.op;
  case reg.ASize of
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2653,8 +2646,7 @@ begin
         begin
          Dec(op);
         end;
-   os16,
-   os128:
+   os16:
         if (not (not_prefix in desc.opt)) then
         begin
          Prefix:=$66;
@@ -2729,8 +2721,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2797,8 +2788,7 @@ begin
        begin
         Dec(op);
        end;
-  os16,
-  os128:
+  os16:
        if (not (not_prefix in desc.opt)) then
        begin
         Prefix:=$66;
@@ -2873,8 +2863,7 @@ begin
 
  op:=desc.op;
  case reg.ASize of
-  os16,
-  os128:
+  os16:
       if (not (not_prefix in desc.opt)) then
       begin
        Prefix:=$66;
@@ -2930,8 +2919,7 @@ begin
 
  op:=desc.op;
  case mreg.AMemSize of
-  os16,
-  os128:
+  os16:
       if (not (not_prefix in desc.opt)) then
       begin
        Prefix:=$66;
@@ -4429,6 +4417,21 @@ procedure t_jit_builder.int3;
 begin
  _O($CC);
 end;
+
+procedure t_jit_builder.testq(reg0:TRegValue;reg1:TRegValue);
+const
+ desc:t_op_type=(op:$85;index:0);
+begin
+ _RR(desc,reg0,reg1,os0);
+end;
+
+procedure t_jit_builder.bti8(mem:t_jit_leas;imm:Byte);
+const
+ desc:t_op_type=(op:$0FBA;index:4);
+begin
+ _MI8(desc,mem,imm);
+end;
+
 
 end.
 

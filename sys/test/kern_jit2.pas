@@ -427,7 +427,6 @@ end;
 
 procedure op_push_rip(var ctx:t_jit_context2);
 var
- i:Integer;
  stack:TRegValue;
  imm:Int64;
 begin
@@ -438,10 +437,9 @@ begin
  begin
   stack:=r_tmp0;
 
-  i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
+  op_load_rsp(ctx,stack);
   leaq(stack,[stack-8]);
-  movq([r_thrd+i],stack);
+  op_save_rsp(ctx,stack);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
@@ -471,7 +469,6 @@ end;
 
 procedure op_pop_rip(var ctx:t_jit_context2); //out:rax
 var
- i:Integer;
  stack:TRegValue;
 begin
  //mov rax,[rsp]
@@ -481,18 +478,15 @@ begin
  begin
   stack:=r_tmp0;
 
-  i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
+  op_load_rsp(ctx,stack);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
   movq(r_tmp1,[stack]);
 
-  seto(al);
-  lahf;
-   addi8([r_thrd+i,os64],8);
-  addi(al,127);
-  sahf;
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack+8]);
+  op_save_rsp(ctx,stack);
 
   movq(r_tmp0,r_tmp1);
  end;
@@ -518,7 +512,6 @@ var
  ofs:Int64;
  dst:Pointer;
  new1,new2:TRegValue;
- i:Integer;
  link:t_jit_i_link;
 begin
  op_push_rip(ctx);
@@ -570,8 +563,7 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
-  ctx.builder.movq(new1,[r_thrd+i]);
+  op_load(ctx,new1,1);
   //
   if is_rsp(ctx.din.Operand[1].RegValue[0]) then
   begin
@@ -610,7 +602,6 @@ var
  ofs:Int64;
  dst:Pointer;
  new1,new2:TRegValue;
- i:Integer;
  link:t_jit_i_link;
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
@@ -658,8 +649,7 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
-  ctx.builder.movq(new1,[r_thrd+i]);
+  op_load(ctx,new1,1);
   //
   op_jmp_dispatcher(ctx);
  end else
@@ -723,7 +713,6 @@ const
 
 procedure op_push(var ctx:t_jit_context2);
 var
- i:Integer;
  imm:Int64;
  stack,new:TRegValue;
 begin
@@ -757,8 +746,7 @@ begin
   begin
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
-   i:=GetFrameOffset(ctx.din.Operand[1]);
-   movq(new,[r_thrd+i]);
+   op_load(ctx,new,1);
   end else
   begin
    new:=new_reg(ctx.din.Operand[1]);
@@ -779,10 +767,9 @@ begin
    else;
   end;
 
-  i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
+  op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
-  movq([r_thrd+i],stack);
+  op_save_rsp(ctx,stack);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
@@ -792,7 +779,6 @@ end;
 
 procedure op_pushfq(var ctx:t_jit_context2);
 var
- i:Integer;
  mem_size:TOperandSize;
  stack,new:TRegValue;
 begin
@@ -810,10 +796,9 @@ begin
   pushfq(mem_size);
   pop(new);
 
-  i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
+  op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
-  movq([r_thrd+i],stack);
+  op_save_rsp(ctx,stack);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
@@ -823,7 +808,6 @@ end;
 
 procedure op_pop(var ctx:t_jit_context2);
 var
- i:Integer;
  new,stack:TRegValue;
 begin
  //mov reg,[rsp]
@@ -833,8 +817,7 @@ begin
  begin
   stack:=r_tmp0;
 
-  i:=GetFrameOffset(rsp);
-  movq(stack,[r_thrd+i]);
+  op_load_rsp(ctx,stack);
 
   call_far(@uplift_jit); //in/out:rax uses:r14
 
@@ -856,8 +839,7 @@ begin
 
    movq(new,[stack]);
 
-   i:=GetFrameOffset(ctx.din.Operand[1]);
-   movq([r_thrd+i],new);
+   op_save(ctx,1,fix_size(new));
   end else
   begin
    new:=new_reg(ctx.din.Operand[1]);
@@ -865,13 +847,9 @@ begin
    movq(new,[stack]);
   end;
 
-  i:=GetFrameOffset(rsp);
-
-  seto(al);
-  lahf;
-   addi8([r_thrd+i,os64],OPERAND_BYTES[new.ASize]);
-  addi(al,127);
-  sahf;
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
+  op_save_rsp(ctx,stack);
  end;
 end;
 
@@ -918,14 +896,14 @@ procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
-  ctx.trim:=True;
+ ctx.trim:=True;
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
-  ctx.trim:=True;
+ ctx.trim:=True;
 end;
 
 procedure op_hlt(var ctx:t_jit_context2);
@@ -949,10 +927,6 @@ procedure op_nop(var ctx:t_jit_context2);
 begin
  //align?
 end;
-
-const
- test_desc:t_op_type=(op:$85;index:0);
- bt_desc_imm:t_op_type=(op:$0FBA;index:4);
 
 procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
 var
@@ -995,7 +969,7 @@ begin
   //repeat
    seto(al);
    lahf;
-    _RR(test_desc,rcx,rcx,os0);
+    testq(rcx,rcx);
     link_jmp0:=jcc(OPSc_z,nil_link,os8);
    addi(al,127);
    sahf;
@@ -1068,7 +1042,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  _MI8(bt_desc_imm,[rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt rax, 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -1091,7 +1065,6 @@ end;
 
 procedure _op_rep_stos(var ctx:t_jit_context2;dflag:Integer);
 var
- i:Integer;
  size:TOperandSize;
 
  new:TRegValue;
@@ -1122,15 +1095,14 @@ begin
 
   new:=new_reg_size(r_tmp1,size);
 
-  i:=GetFrameOffset(rax);
-  movq(new,[r_thrd+i]);
+  op_load_rax(ctx,new);
 
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
    seto(al);
    lahf;
-    _RR(test_desc,rcx,rcx,os0);
+    testq(rcx,rcx);
     link_jmp0:=jcc(OPSc_z,nil_link,os8);
    addi(al,127);
    sahf;
@@ -1175,7 +1147,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  _MI8(bt_desc_imm,[rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt rax, 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
