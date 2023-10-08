@@ -9,6 +9,12 @@ uses
  signal;
 
 type
+ t_fpstate=packed record
+  XMM_SAVE_AREA:array[0..63] of QWORD;
+  XSTATE       :array[0..39] of QWORD;
+ end;
+ {$IF sizeof(t_fpstate)<>832}{$STOP sizeof(t_fpstate)<>832}{$ENDIF}
+
  sigcontext=packed record //0x4C0(1216)
   sc_mask:sigset_t; //signal mask to restore =1 if (SS_ONSTACK)
   _align1:array[0..5] of QWORD; //6(qword) 12(int)
@@ -59,7 +65,7 @@ type
   sc_aux1    :QWORD;
   sc_aux2    :QWORD;
 
-  sc_fpstate:array[0..103] of QWORD; //__aligned(16); =XMM_SAVE_AREA32+XSTATE
+  sc_fpstate:t_fpstate; //__aligned(16); =XMM_SAVE_AREA32+XSTATE
 
   sc_fsbase:QWORD;
   sc_gsbase:QWORD;
@@ -153,7 +159,7 @@ type
   mc_aux1    :QWORD;
   mc_aux2    :QWORD;
 
-  mc_fpstate:array[0..103] of QWORD; //__aligned(16); =XMM_SAVE_AREA32+XSTATE
+  mc_fpstate:t_fpstate; //__aligned(16); =XMM_SAVE_AREA32+XSTATE
 
   mc_fsbase:QWORD;
   mc_gsbase:QWORD;

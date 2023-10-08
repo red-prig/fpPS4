@@ -123,6 +123,7 @@ procedure preload(addr:Pointer);
 implementation
 
 uses
+ sysutils,
  vmparam,
  vm_pmap,
  trap,
@@ -486,13 +487,15 @@ var
 
  clabel:t_jit_context2.p_label;
 
+ link_prev:t_jit_i_link;
  link_curr:t_jit_i_link;
  link_next:t_jit_i_link;
 
+ prev:Pointer;
  curr:Pointer;
  next:Pointer;
 
- //F:THandle;
+ F:THandle;
 begin
  if (ctx.builder.GetMemSize=0) then Exit;
 
@@ -503,7 +506,7 @@ begin
  Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base));
 
  //F:=FileCreate('recompile.bin');
- //FileWrite(F,data^,ctx.builder.GetMemSize);
+ //FileWrite(F,blob^.base^,ctx.builder.GetMemSize);
  //FileClose(F);
 
  //copy entrys
@@ -573,6 +576,9 @@ begin
     count:=0;
     curr:=Pointer(start);
 
+    prev:=nil;
+    link_prev:=nil_link;
+
     //get table
     while (QWORD(curr)<__end) do
     begin
@@ -582,6 +588,19 @@ begin
 
      link_curr:=clabel^.link_curr;
      link_next:=clabel^.link_next;
+
+     if (link_prev<>nil_link) then
+     begin
+      if (link_prev.offset<>link_curr.offset) then
+      begin
+       Writeln(':',HexStr(curr),'..',HexStr(next),' prev:',HexStr(prev));
+       Writeln('table:',HexStr(link_prev.offset,8),'<>',HexStr(link_next.offset,8));
+
+       print_disassemble(blob^.base+link_prev.offset,link_next.offset-link_prev.offset);
+
+       Assert(False);
+      end;
+     end;
 
      original:=QWORD(next)-QWORD(curr);
      recompil:=link_next.offset-link_curr.offset;
@@ -597,6 +616,9 @@ begin
              ':0x',HexStr(link_curr.offset,8),'..',HexStr(link_next.offset,8),
              ':',count);
      }
+
+     prev:=curr;
+     link_prev:=link_next;
 
      Inc(count);
      curr:=next;

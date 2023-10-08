@@ -9,8 +9,7 @@ uses
  mqueue,
  x86_fpdbgdisas,
  x86_jit,
- kern_jit2_ctx,
- kern_jit2_ops_avx;
+ kern_jit2_ctx;
 
 var
  print_asm:Boolean=False;
@@ -32,7 +31,9 @@ uses
  md_context,
  kern_sig,
  kern_jit2_ops,
+ kern_jit2_ops_avx,
  kern_jit_dynamic;
+
 
 procedure jit_syscall; assembler; nostackframe;
 label
@@ -45,6 +46,8 @@ asm
  //prolog (debugger)
  pushq %rbp
  movqq %rsp,%rbp
+
+ andq  $-16,%rsp //align stack
 
  movqq %rax,jit_frame.tf_rip(%r15) //save %rax to tf_rip
 
@@ -94,8 +97,6 @@ asm
  movqq jit_frame.tf_rip(%r15),%rax
  movqq %rax,kthread.td_frame.tf_rip(%r14)
 
- andq  $-16,%rsp //align stack
-
  call amd64_syscall
 
  _after_call:
@@ -134,6 +135,7 @@ asm
  movqq $0,%r11
 
  //epilog (debugger)
+ movq  %rbp,%rsp
  popq  %rbp
  ret
 
@@ -149,6 +151,8 @@ asm
  movqq  $0,%rcx
  movqq  $0,%r11
 
+ //epilog (debugger)
+ movq  %rbp,%rsp
  popq  %rbp
  ret
 
@@ -175,9 +179,94 @@ asm
   hlt
 end;
 
-procedure jit_before_start; assembler; nostackframe;
+procedure jit_save_ctx; assembler; nostackframe;
 asm
- nop
+ push %rax
+
+ movqq %gs:teb.thread,%rax //curkthread
+
+ movqq %rdi,kthread.td_frame.tf_rdi(%rax)
+ movqq %rsi,kthread.td_frame.tf_rsi(%rax)
+ movqq %rdx,kthread.td_frame.tf_rdx(%rax)
+ movqq %rcx,kthread.td_frame.tf_rcx(%rax)
+ movqq %r8 ,kthread.td_frame.tf_r8 (%rax)
+ movqq %r9 ,kthread.td_frame.tf_r9 (%rax)
+ movqq %rbx,kthread.td_frame.tf_rbx(%rax)
+ movqq %r10,kthread.td_frame.tf_r10(%rax)
+ movqq %r11,kthread.td_frame.tf_r11(%rax)
+ movqq %r12,kthread.td_frame.tf_r12(%rax)
+ movqq %r13,kthread.td_frame.tf_r13(%rax)
+
+ pushf
+ pop %rdi
+ movqq %rdi,kthread.td_frame.tf_rflags(%rax);
+
+ lea kthread.td_fpstate(%rax),%rdi
+ and $-32,%rdi
+
+ vmovdqa %ymm0 ,0x000(%rdi)
+ vmovdqa %ymm1 ,0x020(%rdi)
+ vmovdqa %ymm2 ,0x040(%rdi)
+ vmovdqa %ymm3 ,0x060(%rdi)
+ vmovdqa %ymm4 ,0x080(%rdi)
+ vmovdqa %ymm5 ,0x0A0(%rdi)
+ vmovdqa %ymm6 ,0x0C0(%rdi)
+ vmovdqa %ymm7 ,0x0E0(%rdi)
+ vmovdqa %ymm8 ,0x100(%rdi)
+ vmovdqa %ymm9 ,0x120(%rdi)
+ vmovdqa %ymm10,0x140(%rdi)
+ vmovdqa %ymm11,0x160(%rdi)
+ vmovdqa %ymm12,0x180(%rdi)
+ vmovdqa %ymm13,0x1A0(%rdi)
+ vmovdqa %ymm14,0x1C0(%rdi)
+ vmovdqa %ymm15,0x1E0(%rdi)
+
+ pop %rax
+end;
+
+procedure jit_load_ctx; assembler; nostackframe;
+asm
+ push %rax
+
+ movqq %gs:teb.thread,%rax //curkthread
+
+ lea kthread.td_fpstate(%rax),%rdi
+ and $-32,%rdi
+
+ vmovdqa 0x000(%rdi),%ymm0
+ vmovdqa 0x020(%rdi),%ymm1
+ vmovdqa 0x040(%rdi),%ymm2
+ vmovdqa 0x060(%rdi),%ymm3
+ vmovdqa 0x080(%rdi),%ymm4
+ vmovdqa 0x0A0(%rdi),%ymm5
+ vmovdqa 0x0C0(%rdi),%ymm6
+ vmovdqa 0x0E0(%rdi),%ymm7
+ vmovdqa 0x100(%rdi),%ymm8
+ vmovdqa 0x120(%rdi),%ymm9
+ vmovdqa 0x140(%rdi),%ymm10
+ vmovdqa 0x160(%rdi),%ymm11
+ vmovdqa 0x180(%rdi),%ymm12
+ vmovdqa 0x1A0(%rdi),%ymm13
+ vmovdqa 0x1C0(%rdi),%ymm14
+ vmovdqa 0x1E0(%rdi),%ymm15
+
+ movqq kthread.td_frame.tf_rflags(%rax),%rdi
+ push %rdi
+ popf
+
+ movqq kthread.td_frame.tf_rdi(%rax),%rdi
+ movqq kthread.td_frame.tf_rsi(%rax),%rsi
+ movqq kthread.td_frame.tf_rdx(%rax),%rdx
+ movqq kthread.td_frame.tf_rcx(%rax),%rcx
+ movqq kthread.td_frame.tf_r8 (%rax),%r8
+ movqq kthread.td_frame.tf_r9 (%rax),%r9
+ movqq kthread.td_frame.tf_rbx(%rax),%rbx
+ movqq kthread.td_frame.tf_r10(%rax),%r10
+ movqq kthread.td_frame.tf_r11(%rax),%r11
+ movqq kthread.td_frame.tf_r12(%rax),%r12
+ movqq kthread.td_frame.tf_r13(%rax),%r13
+
+ pop %rax
 end;
 
 procedure jit_jmp_dispatch; assembler; nostackframe;
@@ -188,40 +277,14 @@ asm
 
  andq  $-16,%rsp //align stack
 
- pushf     //0
- push %rdi //1
- push %rsi //2
- push %rdx //3
- push %rcx //4
- push %r8  //5
- push %r9  //6
- push %r10 //7
- push %r11 //8
-
- lea  -8(%rsp),%rsp //align
-
- lea  -16(%rsp),%rsp
- movdqa %xmm0,(%rsp)
+ call jit_save_ctx
 
  mov  %rax,%rdi
  mov    $0,%rsi
 
  call jmp_dispatcher
 
- movdqa (%rsp),%xmm0
- lea  16(%rsp),%rsp
-
- lea  8(%rsp),%rsp //align
-
- pop  %r11 //0
- pop  %r10 //1
- pop  %r9  //2
- pop  %r8  //3
- pop  %rcx //4
- pop  %rdx //5
- pop  %rsi //6
- pop  %rdi //7
- popf      //8
+ call jit_load_ctx
 
  //epilog
  movq %rbp,%rsp
@@ -239,34 +302,14 @@ asm
 
  andq  $-16,%rsp //align stack
 
- push %rdi //0
- push %rsi //1
- push %rdx //2
- push %rcx //3
- push %r8  //4
- push %r9  //5
- push %r10 //6
- push %r11 //7
+ call jit_save_ctx
 
  mov  %rax,%rdi
  mov    $1,%rsi
 
- lea  -16(%rsp),%rsp
- movdqa %xmm0,(%rsp)
-
  call jmp_dispatcher
 
- movdqa (%rsp),%xmm0
- lea  16(%rsp),%rsp
-
- pop  %r11 //0
- pop  %r10 //1
- pop  %r9  //2
- pop  %r8  //3
- pop  %rcx //4
- pop  %rdx //5
- pop  %rsi //6
- pop  %rdi //7
+ call jit_load_ctx
 
  //epilog
  movq %rbp,%rsp
@@ -420,7 +463,7 @@ begin
   end else
   begin
    //32bit sign extend
-   movi(os64,[stack],imm);
+   movi([stack,os64],imm);
   end;
 
  end;
@@ -447,7 +490,7 @@ begin
 
   seto(al);
   lahf;
-   addi8(os64,[r_thrd+i],8);
+   addi8([r_thrd+i,os64],8);
   addi(al,127);
   sahf;
 
@@ -826,7 +869,7 @@ begin
 
   seto(al);
   lahf;
-   addi8(os64,[r_thrd+i],OPERAND_BYTES[new.ASize]);
+   addi8([r_thrd+i,os64],OPERAND_BYTES[new.ASize]);
   addi(al,127);
   sahf;
  end;
@@ -1025,7 +1068,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  _MI8(bt_desc_imm,os64,[rsp],10); //bt rax, 10
+  _MI8(bt_desc_imm,[rsp,os64],10); //bt rax, 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -1132,7 +1175,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  _MI8(bt_desc_imm,os64,[rsp],10); //bt rax, 10
+  _MI8(bt_desc_imm,[rsp,os64],10); //bt rax, 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -1149,6 +1192,23 @@ begin
   link_jmp1._label:=ctx.builder.get_curr_label.after;
 
  end;
+end;
+
+procedure op_debug_info(var ctx:t_jit_context2);
+var
+ link_jmp:t_jit_i_link;
+begin
+ //debug
+  link_jmp:=ctx.builder.jmp(nil_link,os8);
+  //
+  op_set_rax_imm(ctx,$FACEADD7);
+  op_set_rax_imm(ctx,Int64(ctx.ptr_curr));
+  add_orig(ctx);
+  op_set_rax_imm(ctx,Int64(ctx.ptr_next));
+  op_set_rax_imm(ctx,$FACEADDE);
+  //
+  link_jmp._label:=ctx.builder.get_curr_label.after;
+ //debug
 end;
 
 procedure init_cbs;
@@ -1305,10 +1365,6 @@ begin
 
  ctx.builder._new_chunk(QWORD(entry_link));
 
- //debug
-   ctx.builder.call_far(@jit_before_start);
- //debug
-
  ptr:=addr;
 
  proc:=TDbgProcess.Create(dm64);
@@ -1321,6 +1377,16 @@ begin
   begin
    //writeln('not excec:0x',HexStr(ptr));
    ctx.builder.ud2;
+
+   //Add a link for the sequence
+   link_curr:=ctx.builder.get_curr_label.before;
+   link_next:=link_curr.after;
+
+   ctx.add_label(ptr,
+                 ptr,
+                 link_curr,
+                 link_next);
+
    goto _next; //trim
   end;
 
@@ -1334,6 +1400,16 @@ begin
      //invalid
      //writeln('invalid:0x',HexStr(ctx.ptr_curr));
      ctx.builder.ud2;
+
+     //Add a link for the sequence
+     link_curr:=ctx.builder.get_curr_label.before;
+     link_next:=link_curr.after;
+
+     ctx.add_label(ptr,
+                   ptr,
+                   link_curr,
+                   link_next);
+
      goto _next; //trim
     end;
    else;
@@ -1344,6 +1420,16 @@ begin
   begin
    //writeln('invalid:0x',HexStr(ctx.ptr_curr));
    ctx.builder.ud2;
+
+   //Add a link for the sequence
+   link_curr:=ctx.builder.get_curr_label.before;
+   link_next:=link_curr.after;
+
+   ctx.add_label(ptr,
+                 ptr,
+                 link_curr,
+                 link_next);
+
    goto _next; //trim
   end;
 
@@ -1424,6 +1510,7 @@ begin
   end;
   }
 
+  //debug print
   if print_asm then
   if (node_curr<>node_next) and
      (node_curr<>nil) then
@@ -1442,33 +1529,66 @@ begin
    Writeln('recompiled----------------------':32,' ','');
   end;
 
-  //debug
-   op_set_rax_imm(ctx,$FACEADD7);
-   op_set_rax_imm(ctx,Int64(ctx.ptr_next));
-   op_set_rax_imm(ctx,$FACEADDE);
-  //debug
-
+  {
+  if (qword(ptr) and $FFFFF) = $03340 then
   begin
-   link_next:=ctx.builder.get_curr_label.after;
-
-   ctx.add_label(ctx.ptr_curr,
-                 ctx.ptr_next,
-                 link_curr,
-                 link_next);
+   //print_asm:=true;
+   ctx.builder.int3;
   end;
 
+  if (qword(ptr)) = $80A2B8e9 then
+  begin
+   print_asm:=true;
+   ctx.builder.int3;
+  end;
+  }
+
+  {
+  if (qword(ptr) and $FFFFF) = $29e53 then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+
+  if (qword(ptr) and $FFFFF) = $29e42 then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+
+  if (qword(ptr) and $FFFFF) = $29e45 then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+
+  if (qword(ptr) and $FFFFF) = $2b8a0 then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+  }
+
+
+  //debug
+   op_debug_info(ctx);
+  //debug
+
+  //resolve forward links
   if (links.root<>nil) then
   begin
    links.Resolve(link_curr);
    links.root:=nil;
   end;
 
+  //add new entry point
   if (entry_link<>nil) then
   begin
    ctx.add_entry_point(entry_link,link_curr);
    entry_link:=nil;
   end;
 
+  //label exist in current blob
   begin
    link_new:=ctx.get_link(ptr);
 
@@ -1476,17 +1596,30 @@ begin
    begin
     ctx.builder.jmp(link_new);
     //Writeln('jmp next:0x',HexStr(ptr));
-    goto _next; //trim
+    ctx.trim:=True;
    end;
   end;
 
+  //entry exist in another blob
+  if not ctx.trim then
   if exist_entry(ptr) then
   begin
    op_set_rax_imm(ctx,Int64(ptr));
    //
    op_jmp_dispatcher(ctx);
    //
-   goto _next; //trim
+   ctx.trim:=True;
+  end;
+
+  //add new label [link_curr..link_next]
+  begin
+   //update link_next
+   link_next:=ctx.builder.get_curr_label.after;
+
+   ctx.add_label(ctx.ptr_curr,
+                 ctx.ptr_next,
+                 link_curr,
+                 link_next);
   end;
 
   if ctx.trim then
@@ -1523,10 +1656,6 @@ begin
    entry_link:=addr;
 
    ctx.builder._new_chunk(QWORD(entry_link));
-
-   //debug
-    ctx.builder.call_far(@jit_before_start);
-   //debug
 
    ptr:=addr;
   end;

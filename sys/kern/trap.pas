@@ -405,9 +405,16 @@ var
  obj:p_lib_info;
  r:TLQRec;
  adr:QWORD;
+ lock:Boolean;
 begin
  Result:=False;
- dynlibs_lock;
+
+ lock:=False;
+ if not dynlibs_locked then
+ begin
+  dynlibs_lock;
+  lock:=True;
+ end;
 
  obj:=fuptr(dynlibs_info.obj_list.tqh_first);
  while (obj<>nil) do
@@ -466,14 +473,16 @@ begin
 
    end;
 
-   dynlibs_unlock;
-   Exit;
+   Break;
   end;
   //
   obj:=fuptr(obj^.link.tqe_next);
  end;
 
- dynlibs_unlock;
+ if lock then
+ begin
+  dynlibs_unlock;
+ end;
 end;
 
 function find_obj_by_handle(id:Integer):p_lib_info;

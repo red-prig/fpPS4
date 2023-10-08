@@ -442,7 +442,7 @@ begin
      begin
       //imm const
 
-      movi(mem.ASize,[rdi],imm);
+      movi([rdi,mem.ASize],imm);
 
      end else
      begin
@@ -586,10 +586,10 @@ begin
        build_load_flags(ctx);
        if (reg_size=1) and (copy_size<>1) then
        begin
-        cmpi8(mem.ASize,[rdi],imm);
+        cmpi8([rdi,mem.ASize],imm);
        end else
        begin
-        cmpi(mem.ASize,[rdi],imm);
+        cmpi([rdi,mem.ASize],imm);
        end;
        build_save_flags(ctx);
 

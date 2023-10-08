@@ -14,9 +14,10 @@ uses
  x86_fpdbgdisas;
 
 type
- t_jit_reg=packed object
+ t_jit_lea=packed object
   ARegValue:TRegValues;
   AOffset  :Int64;
+  AMemSize :TOperandSize;
   ASegment :Byte;
   ALock    :Boolean;
  end;
@@ -31,7 +32,7 @@ type
  TOperandSizeSet =Set of TOperandSize;
  TRegisterTypeSet=Set of TRegisterType;
 
- t_jit_regs =array of t_jit_reg;
+ t_jit_leas =array of t_jit_lea;
 
  t_jit_link_type=(lnkNone,lnkData,lnkLabelBefore,lnkLabelAfter);
 
@@ -137,9 +138,9 @@ type
  p_jit_builder=^t_jit_builder;
  t_jit_builder=object
   Const
-   LOCK:t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ALock:True);
-   FS  :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:4);
-   GS  :t_jit_reg=(ARegValue:((AType:regNone),(AType:regNone));ASegment:5);
+   LOCK:t_jit_lea=(ARegValue:((AType:regNone),(AType:regNone));ALock:True);
+   FS  :t_jit_lea=(ARegValue:((AType:regNone),(AType:regNone));ASegment:4);
+   GS  :t_jit_lea=(ARegValue:((AType:regNone),(AType:regNone));ASegment:5);
 
    ah  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:0);
    ch  :TRegValue=(AType:regGeneralH;ASize:os8;AIndex:1);
@@ -295,8 +296,8 @@ type
   function  call(_label_id:t_jit_i_link):t_jit_i_link;
   function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
   function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
-  function  movj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
-  function  leaj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
+  function  movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+  function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   //
   Procedure reta;
   Procedure ud2;
@@ -309,96 +310,100 @@ type
   Procedure LinkData;
   Function  SaveTo(ptr:PByte;size:Integer):Integer;
   //
-  procedure _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
-  procedure _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Int64);
-  procedure _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Byte);
-  procedure _RR     (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize);
-  procedure _RRI    (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
-  procedure _RRI8   (const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
+  procedure _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+  procedure _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64);
+  procedure _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte);
+  procedure _RR     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
+  procedure _RRI    (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
+  procedure _RRI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
   procedure _R      (const desc:t_op_type;reg:TRegValue);
   procedure _O      (op:DWORD;Size:TOperandSize=os0;not_prefix:Boolean=false);
   procedure _O      (const desc:t_op_type;reg:TRegValue);
-  procedure _M      (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
+  procedure _M      (const desc:t_op_type;mem:t_jit_leas);
   procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
-  procedure _MI     (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+  procedure _MI     (const desc:t_op_type;mem:t_jit_leas;imm:Int64);
   procedure _RI8    (const desc:t_op_type;reg:TRegValue;imm:Byte);
-  procedure _MI8    (const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Byte);
-  procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_regs);
+  procedure _MI8    (const desc:t_op_type;mem:t_jit_leas;imm:Byte);
+  procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
   procedure cmov    (op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
-  procedure _push   (op,index:Byte;size:TOperandSize;mem:t_jit_regs);
+  procedure _push   (op,index:Byte;mem:t_jit_leas);
   procedure _push   (op:Byte;reg:TRegValue);
   procedure _pushi  (size:TOperandSize;imm:Integer);
   procedure movq    (reg0:TRegValue ;reg1:TRegValue);
-  procedure movi    (size:TOperandSize;mem:t_jit_regs;imm:Int64);
+  procedure movi    (mem:t_jit_leas ;imm:Int64);
   procedure movi    (reg:TRegValue  ;imm:Int64);
   procedure movi64  (reg:TRegValue  ;imm:Int64);
-  procedure movq    (reg:TRegValue  ;mem:t_jit_regs);
-  procedure movq    (mem:t_jit_regs ;reg:TRegValue);
-  procedure leaq    (reg:TRegValue  ;mem:t_jit_regs);
-  procedure addq    (mem:t_jit_regs ;reg:TRegValue);
-  procedure addq    (reg:TRegValue  ;mem:t_jit_regs);
+  procedure movq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure movq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure leaq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure addq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure addq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure addq    (reg0:TRegValue ;reg1:TRegValue);
   procedure addi    (reg:TRegValue  ;imm:Int64);
   procedure addi8   (reg:TRegValue  ;imm:Byte);
-  procedure addi8   (size:TOperandSize;mem:t_jit_regs;imm:Byte);
-  procedure subq    (mem:t_jit_regs ;reg:TRegValue);
-  procedure subq    (reg:TRegValue  ;mem:t_jit_regs);
+  procedure addi8   (mem:t_jit_leas ;imm:Byte);
+  procedure subq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure subq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure subq    (reg0:TRegValue ;reg1:TRegValue);
   procedure subi    (reg:TRegValue  ;imm:Int64);
   procedure subi8   (reg:TRegValue  ;imm:Byte);
-  procedure subi8   (size:TOperandSize;mem:t_jit_regs;imm:Byte);
+  procedure subi8   (mem:t_jit_leas ;imm:Byte);
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
-  procedure cmpq    (mem:t_jit_regs ;reg:TRegValue);
-  procedure cmpq    (reg:TRegValue  ;mem:t_jit_regs);
+  procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
   procedure cmpi    (reg:TRegValue  ;imm:Int64);
-  procedure cmpi    (size:TOperandSize;mem:t_jit_regs;imm:Int64);
-  procedure cmpi8   (reg:TRegValue;imm:Byte);
-  procedure cmpi8   (size:TOperandSize;mem:t_jit_regs;imm:Byte);
-  procedure xchgq   (reg0:TRegValue;reg1:TRegValue);
-  procedure push16  (mem:t_jit_regs);
-  procedure push64  (mem:t_jit_regs);
+  procedure cmpi    (mem:t_jit_leas ;imm:Int64);
+  procedure cmpi8   (reg:TRegValue  ;imm:Byte);
+  procedure cmpi8   (mem:t_jit_leas ;imm:Byte);
+  procedure xchgq   (reg0:TRegValue ;reg1:TRegValue);
+  procedure push    (mem:t_jit_leas);
   procedure push    (reg:TRegValue);
   procedure push8   (imm:Integer);
   procedure push16  (imm:Integer);
   procedure push32  (imm:Integer);
-  procedure pop16   (mem:t_jit_regs);
-  procedure pop64   (mem:t_jit_regs);
+  procedure pop     (mem:t_jit_leas);
   procedure pop     (reg:TRegValue);
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
-  procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
-  procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
-  procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
-  procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
-  procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
-  procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
-  procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
-  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
-  procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize;imm8:Byte);
-  procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize;imm8:Byte);
-  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
-  procedure vmovdqu (reg:TRegValue ;mem:t_jit_regs);
-  procedure vmovdqu (mem:t_jit_regs;reg:TRegValue);
-  procedure vmovdqa (reg:TRegValue ;mem:t_jit_regs);
-  procedure vmovdqa (mem:t_jit_regs;reg:TRegValue);
-  procedure vmovntdq(mem:t_jit_regs;reg:TRegValue);
-  procedure vmovups (reg:TRegValue ;mem:t_jit_regs);
-  procedure vmovups (mem:t_jit_regs;reg:TRegValue);
+  procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+  procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
+  procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+  procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
+  procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas);
+  procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte);
+  procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue);
+  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize=os0);
+  procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize=os0);
+  procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize=os0);
+  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte);
+  procedure vmovdqu (reg:TRegValue ;mem:t_jit_leas);
+  procedure vmovdqu (mem:t_jit_leas;reg:TRegValue);
+  procedure vmovdqa (reg:TRegValue ;mem:t_jit_leas);
+  procedure vmovdqa (mem:t_jit_leas;reg:TRegValue);
+  procedure vmovntdq(mem:t_jit_leas;reg:TRegValue);
+  procedure vmovups (reg:TRegValue ;mem:t_jit_leas);
+  procedure vmovups (mem:t_jit_leas;reg:TRegValue);
   procedure vmovdqa (reg0:TRegValue;reg1:TRegValue);
   procedure sahf;
   procedure lahf;
   procedure seto(reg:TRegValue);
+  procedure int3;
  end;
 
-operator :=(const A:TRegValue):t_jit_reg;
-operator + (const A,B:t_jit_reg):t_jit_reg;
-operator + (const A:t_jit_reg;const B:TRegValue):t_jit_reg;
-operator + (const A:t_jit_reg;B:Integer):t_jit_reg;
-operator - (const A:t_jit_reg;B:Integer):t_jit_reg;
-operator + (const A:t_jit_reg;B:Int64):t_jit_reg;
-operator - (const A:t_jit_reg;B:Int64):t_jit_reg;
-operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator :=(const A:TRegValue):t_jit_lea;
+operator + (const A,B:t_jit_lea):t_jit_lea;
+operator + (const A:t_jit_lea;const B:TRegValue):t_jit_lea;
+operator + (const A:t_jit_lea;B:Integer):t_jit_lea;
+operator - (const A:t_jit_lea;B:Integer):t_jit_lea;
+operator + (const A:t_jit_lea;B:Int64):t_jit_lea;
+operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
+operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea;
+operator :=(const A:TOperandSize):t_jit_lea;
+operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
+
+function Sums(mem:t_jit_leas):t_jit_lea;
+function mem_size(mem:t_jit_leas):TOperandSize;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):TOperandSize;
@@ -492,41 +497,41 @@ begin
  end;
 end;
 
-function classif_offset_32(reg:t_jit_reg):Byte; inline;
+function classif_offset_32(reg:t_jit_lea):Byte; inline;
 begin
  Result:=classif_offset_32(reg.AOffset);
 end;
 
-function classif_offset_64(reg:t_jit_reg):TOperandSize; inline;
+function classif_offset_64(reg:t_jit_lea):TOperandSize; inline;
 begin
  Result:=classif_offset_64(reg.AOffset);
 end;
 
-function is_not_reg(reg:t_jit_reg):Boolean; inline;
+function is_not_reg(reg:t_jit_lea):Boolean; inline;
 begin
  Result:=(not is_valid_reg_type(reg.ARegValue[0])) and
          (not is_valid_reg_type(reg.ARegValue[1]));
 end;
 
-function is_one_reg(reg:t_jit_reg):Boolean; inline;
+function is_one_reg(reg:t_jit_lea):Boolean; inline;
 begin
  Result:=(    is_valid_reg_type(reg.ARegValue[0])) and
          (not is_valid_reg_type(reg.ARegValue[1]));
 end;
 
-function is_reg_size(reg:t_jit_reg;Size:TOperandSizeSet):Boolean; inline;
+function is_reg_size(reg:t_jit_lea;Size:TOperandSizeSet):Boolean; inline;
 begin
  Result:=(reg.ARegValue[0].ASize in Size) and
          ((reg.ARegValue[1].ASize in Size) or (reg.ARegValue[1].ASize=os0));
 end;
 
-function is_reg_type(reg:t_jit_reg;AType:TRegisterTypeSet):Boolean; inline;
+function is_reg_type(reg:t_jit_lea;AType:TRegisterTypeSet):Boolean; inline;
 begin
  Result:=(reg.ARegValue[0].AType in AType) and
          ((reg.ARegValue[1].AType in AType) or (reg.ARegValue[1].AType=regNone));
 end;
 
-function is_valid_seg(reg:t_jit_reg):Boolean; inline;
+function is_valid_seg(reg:t_jit_lea):Boolean; inline;
 begin
  case reg.ASegment of
   0..5:Result:=True
@@ -535,25 +540,26 @@ begin
  end;
 end;
 
-function is_valid_scale(reg:t_jit_reg):Boolean; inline;
+function is_valid_scale(reg:t_jit_lea):Boolean; inline;
 begin
  Result:=is_valid_scale(reg.ARegValue[0]) and (reg.ARegValue[1].AScale<=1)
 end;
 
-operator := (const A:TRegValue):t_jit_reg;
+operator := (const A:TRegValue):t_jit_lea;
 begin
- Result:=Default(t_jit_reg);
+ Result:=Default(t_jit_lea);
  Result.ARegValue[0]:=A;
 end;
 
-operator + (const A,B:t_jit_reg):t_jit_reg;
+operator + (const A,B:t_jit_lea):t_jit_lea;
 begin
  Assert(is_not_reg(A) or is_one_reg(A));
  Assert(is_not_reg(B) or is_one_reg(B));
 
  Result:=A;
 
- if is_one_reg(Result) then
+ if is_one_reg(Result) and
+    is_one_reg(B) then
  begin
   if (A.ARegValue[0].AScale>1) then
   begin
@@ -565,6 +571,7 @@ begin
    Result.ARegValue[0]:=B.ARegValue[0];
   end;
  end else
+ if is_one_reg(B) then
  begin
   Result.ARegValue[0]:=B.ARegValue[0];
  end;
@@ -576,8 +583,21 @@ begin
    Result.ASegment:=B.ASegment;
   end;
  end else
+ if is_valid_seg(B) then
  begin
   Result.ASegment:=B.ASegment;
+ end;
+
+ if (Result.AMemSize<>os0) then
+ begin
+  if (B.AMemSize<>os0) then
+  begin
+   Result.AMemSize:=B.AMemSize;
+  end;
+ end else
+ if (B.AMemSize<>os0) then
+ begin
+  Result.AMemSize:=B.AMemSize;
  end;
 
  Result.ALock:=Result.ALock or B.ALock;
@@ -585,7 +605,7 @@ begin
  Result.AOffset:=Result.AOffset+B.AOffset;
 end;
 
-operator + (const A:t_jit_reg;const B:TRegValue):t_jit_reg;
+operator + (const A:t_jit_lea;const B:TRegValue):t_jit_lea;
 begin
  Assert(is_not_reg(A) or is_one_reg(A));
 
@@ -608,35 +628,48 @@ begin
  end;
 end;
 
-operator + (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator + (const A:t_jit_lea;B:Integer):t_jit_lea;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator - (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator - (const A:t_jit_lea;B:Integer):t_jit_lea;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset-B;
 end;
 
-operator + (const A:t_jit_reg;B:Int64):t_jit_reg;
+operator + (const A:t_jit_lea;B:Int64):t_jit_lea;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator - (const A:t_jit_reg;B:Int64):t_jit_reg;
+operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset-B;
 end;
 
-operator * (const A:t_jit_reg;B:Integer):t_jit_reg;
+operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea;
+begin
+ Result:=A;
+
+ Result.AMemSize:=B;
+end;
+
+operator :=(const A:TOperandSize):t_jit_lea;
+begin
+ Result:=Default(t_jit_lea);
+ Result.AMemSize:=A;
+end;
+
+operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
 begin
  Assert(is_one_reg(A));
 
@@ -651,13 +684,13 @@ begin
  end;
 end;
 
-function Sums(mem:t_jit_regs):t_jit_reg;
+function Sums(mem:t_jit_leas):t_jit_lea;
 var
  i:Integer;
 begin
  if (Length(mem)=0) then
  begin
-  Result:=Default(t_jit_reg);
+  Result:=Default(t_jit_lea);
  end else
  if (Length(mem)=1) then
  begin
@@ -670,6 +703,11 @@ begin
    Result:=Result+mem[i];
   end;
  end;
+end;
+
+function mem_size(mem:t_jit_leas):TOperandSize;
+begin
+ Result:=Sums(mem).AMemSize;
 end;
 
 ////
@@ -1242,7 +1280,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.movj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
 begin
  movq(reg,mem);
 
@@ -1254,7 +1292,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_regs;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
 begin
  leaq(reg,mem);
 
@@ -1574,8 +1612,8 @@ type
 
   AOffset:Int64;
 
-  procedure build_im(Index:Byte;const mreg:t_jit_reg);
-  procedure build_rm(const reg:TRegValue;const mreg:t_jit_reg);
+  procedure build_im(Index:Byte;const mreg:t_jit_lea);
+  procedure build_rm(const reg:TRegValue;const mreg:t_jit_lea);
   procedure build_rr(const reg0,reg1:TRegValue);
   procedure build_ir(Index:Byte;const reg:TRegValue);
   procedure emit_rex(var ji:t_jit_instruction;rexW:Boolean);
@@ -1583,7 +1621,7 @@ type
   procedure emit_mrm(var ji:t_jit_instruction);
  end;
 
-procedure t_modrm_info.build_im(Index:Byte;const mreg:t_jit_reg);
+procedure t_modrm_info.build_im(Index:Byte;const mreg:t_jit_lea);
 var
  ubase:Boolean;
 begin
@@ -1731,7 +1769,7 @@ begin
   end;
 end;
 
-procedure t_modrm_info.build_rm(const reg:TRegValue;const mreg:t_jit_reg);
+procedure t_modrm_info.build_rm(const reg:TRegValue;const mreg:t_jit_lea);
 begin
  Mem:=True;
 
@@ -1900,9 +1938,9 @@ begin
 
 end;
 
-procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -1923,13 +1961,18 @@ begin
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
  Assert(is_valid_scale(mreg));
 
+ if (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
  ji:=default_jit_instruction;
 
  rexW:=False;
  Prefix:=0;
 
  op:=desc.op;
- case reg.ASize of
+ case mreg.AMemSize of
    os8:
        if (not (not_prefix in desc.opt)) then
        begin
@@ -1977,9 +2020,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Int64);
+procedure t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -2000,13 +2043,18 @@ begin
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
  Assert(is_valid_scale(mreg));
 
+ if (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
  ji:=default_jit_instruction;
 
  rexW:=False;
  Prefix:=0;
 
  op:=desc.op;
- case reg.ASize of
+ case mreg.AMemSize of
    os8:
        if (not (not_prefix in desc.opt)) then
        begin
@@ -2062,9 +2110,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -2085,13 +2133,18 @@ begin
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
  Assert(is_valid_scale(mreg));
 
+ if (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
  ji:=default_jit_instruction;
 
  rexW:=False;
  Prefix:=0;
 
  op:=desc.op;
- case reg.ASize of
+ case mreg.AMemSize of
   os8:
       if (not (not_prefix in desc.opt)) then
       begin
@@ -2141,7 +2194,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._RR(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;size:TOperandSize);
+procedure t_jit_builder._RR(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
 var
  modrm_info:t_modrm_info;
 
@@ -2212,7 +2265,7 @@ end;
 
 ////
 
-procedure t_jit_builder._RRI(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
+procedure t_jit_builder._RRI(const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
 var
  modrm_info:t_modrm_info;
 
@@ -2289,7 +2342,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._RRI8(const desc:t_op_type;reg0:TRegValue;reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
+procedure t_jit_builder._RRI8(const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
 var
  modrm_info:t_modrm_info;
 
@@ -2555,9 +2608,9 @@ end;
 
 ////
 
-procedure t_jit_builder._M(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs);
+procedure t_jit_builder._M(const desc:t_op_type;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -2585,7 +2638,7 @@ begin
  if (op=$0FC7) and
     (desc.index=1) then //cmpxchg8b/cmpxchg16b
  begin
-  case size of
+  case mreg.AMemSize of
    os128:
         begin
          rexW:=True;
@@ -2594,7 +2647,7 @@ begin
   end;
  end else
  begin
-  case size of
+  case mreg.AMemSize of
     os8:
         if (not (not_prefix in desc.opt)) then
         begin
@@ -2710,9 +2763,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._MI(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Int64);
+procedure t_jit_builder._MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -2723,9 +2776,10 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
- Assert(size in [os8,os16,os32,os64]);
 
  mreg:=Sums(mem);
+
+ Assert(mreg.AMemSize in [os8,os16,os32,os64]);
 
  Assert(is_reg_size(mreg,[os0,os32,os64]));
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
@@ -2737,7 +2791,7 @@ begin
  Prefix:=0;
 
  op:=desc.op;
- case size of
+ case mreg.AMemSize of
    os8:
        if (not (not_prefix in desc.opt)) then
        begin
@@ -2782,7 +2836,7 @@ begin
 
  modrm_info.emit_mrm(ji);
 
- case Size of
+ case mreg.AMemSize of
    os8:ji.EmitByte (imm);
   os16:ji.EmitWord (imm);
   os32:ji.EmitInt32(imm);
@@ -2847,9 +2901,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._MI8(const desc:t_op_type;size:TOperandSize;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder._MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  op:DWORD;
  rexW:Boolean;
@@ -2860,9 +2914,10 @@ var
  ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
- Assert(size in [os8,os16,os32,os64]);
 
  mreg:=Sums(mem);
+
+ Assert(mreg.AMemSize in [os8,os16,os32,os64]);
 
  Assert(is_reg_size(mreg,[os0,os32,os64]));
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
@@ -2874,7 +2929,7 @@ begin
  Prefix:=0;
 
  op:=desc.op;
- case size of
+ case mreg.AMemSize of
   os16,
   os128:
       if (not (not_prefix in desc.opt)) then
@@ -2927,7 +2982,7 @@ const
   $48,$49,$4A,$4B,$4C,$4D,$4E,$4F
  );
 
-procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
 var
  desc:t_op_type;
 begin
@@ -2961,9 +3016,9 @@ end;
 
 ////
 
-procedure t_jit_builder._push(op,index:Byte;size:TOperandSize;mem:t_jit_regs);
+procedure t_jit_builder._push(op,index:Byte;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -2971,7 +3026,7 @@ var
 begin
  mreg:=Sums(mem);
 
- Assert(size in [os16,os64]);
+ Assert(mreg.AMemSize in [os16,os64]);
 
  Assert(is_reg_size(mreg,[os0,os32,os64]));
  Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
@@ -2990,7 +3045,7 @@ begin
 
  ji.EmitSelector(mreg.ASegment);
 
- if (size=os16) then
+ if (mreg.AMemSize=os16) then
  begin
   ji.EmitByte($66); //Operand-size override prefix (16)
  end;
@@ -3109,11 +3164,11 @@ begin
  _RR(desc,reg0,reg1,os0);
 end;
 
-procedure t_jit_builder.movi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+procedure t_jit_builder.movi(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$C7;index:0);
 begin
- _MI(desc,size,mem,imm);
+ _MI(desc,mem,imm);
 end;
 
 procedure t_jit_builder.movi(reg:TRegValue;imm:Int64);
@@ -3196,14 +3251,14 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder.movq(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.movq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$8B;index:0);
 begin
  _RM(desc,reg,mem); //MOV r64, r/m64
 end;
 
-procedure t_jit_builder.movq(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.movq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$89;index:0);
 begin
@@ -3212,7 +3267,7 @@ end;
 
 //
 
-procedure t_jit_builder.leaq(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.leaq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$8D;index:0);
 begin
@@ -3223,14 +3278,14 @@ end;
 
 //
 
-procedure t_jit_builder.addq(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.addq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$01;index:0);
 begin
  _RM(desc,reg,mem); //ADD r/m64, r64
 end;
 
-procedure t_jit_builder.addq(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.addq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$03;index:0);
 begin
@@ -3241,7 +3296,7 @@ procedure t_jit_builder.addq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$01;index:0);
 begin
- _RR(desc,reg0,reg1,os0);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.addi(reg:TRegValue;imm:Int64);
@@ -3258,23 +3313,23 @@ begin
  _RI8(desc,reg,imm);
 end;
 
-procedure t_jit_builder.addi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder.addi8(mem:t_jit_leas;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:0);
 begin
- _MI8(desc,size,mem,imm);
+ _MI8(desc,mem,imm);
 end;
 
 //
 
-procedure t_jit_builder.subq(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.subq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$29;index:0);
 begin
  _RM(desc,reg,mem); //SUB r/m64, r64
 end;
 
-procedure t_jit_builder.subq(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.subq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$2B;index:0);
 begin
@@ -3285,7 +3340,7 @@ procedure t_jit_builder.subq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$29;index:0);
 begin
- _RR(desc,reg0,reg1,os0);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.subi(reg:TRegValue;imm:Int64);
@@ -3302,11 +3357,11 @@ begin
  _RI8(desc,reg,imm);
 end;
 
-procedure t_jit_builder.subi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder.subi8(mem:t_jit_leas;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:5);
 begin
- _MI8(desc,size,mem,imm);
+ _MI8(desc,mem,imm);
 end;
 
 ///
@@ -3315,19 +3370,19 @@ procedure t_jit_builder.xorq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$31;index:0);
 begin
- _RR(desc,reg0,reg1,os0);
+ _RR(desc,reg0,reg1);
 end;
 
 ///
 
-procedure t_jit_builder.cmpq(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.cmpq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$39;index:0);
 begin
  _RM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.cmpq(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.cmpq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$3B;index:0);
 begin
@@ -3338,7 +3393,7 @@ procedure t_jit_builder.cmpq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$39;index:0);
 begin
- _RR(desc,reg0,reg1,os0);
+ _RR(desc,reg0,reg1);
 end;
 
 procedure t_jit_builder.cmpi(reg:TRegValue;imm:Int64);
@@ -3348,11 +3403,11 @@ begin
  _RI(desc,reg,imm);
 end;
 
-procedure t_jit_builder.cmpi(size:TOperandSize;mem:t_jit_regs;imm:Int64);
+procedure t_jit_builder.cmpi(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:7);
 begin
- _MI(desc,size,mem,imm);
+ _MI(desc,mem,imm);
 end;
 
 procedure t_jit_builder.cmpi8(reg:TRegValue;imm:Byte);
@@ -3362,30 +3417,25 @@ begin
  _RI8(desc,reg,imm);
 end;
 
-procedure t_jit_builder.cmpi8(size:TOperandSize;mem:t_jit_regs;imm:Byte);
+procedure t_jit_builder.cmpi8(mem:t_jit_leas;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:7);
 begin
- _MI8(desc,size,mem,imm);
+ _MI8(desc,mem,imm);
 end;
 
 procedure t_jit_builder.xchgq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$87;index:0);
 begin
- _RR(desc,reg0,reg1,os0);
+ _RR(desc,reg0,reg1);
 end;
 
 ///
 
-procedure t_jit_builder.push16(mem:t_jit_regs);
+procedure t_jit_builder.push(mem:t_jit_leas);
 begin
- _push($FF,6,os16,mem);
-end;
-
-procedure t_jit_builder.push64(mem:t_jit_regs);
-begin
- _push($FF,6,os64,mem);
+ _push($FF,6,mem);
 end;
 
 procedure t_jit_builder.push(reg:TRegValue);
@@ -3408,14 +3458,9 @@ begin
  _pushi(os32,imm);
 end;
 
-procedure t_jit_builder.pop16(mem:t_jit_regs);
+procedure t_jit_builder.pop(mem:t_jit_leas);
 begin
- _push($8F,0,os16,mem);
-end;
-
-procedure t_jit_builder.pop64(mem:t_jit_regs);
-begin
- _push($8F,0,os64,mem);
+ _push($8F,0,mem);
 end;
 
 procedure t_jit_builder.pop(reg:TRegValue);
@@ -3455,9 +3500,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
+procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -3493,7 +3538,7 @@ begin
  end;
 
  Vex.rexW:=False;
- if (size=os64) then
+ if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
  end;
@@ -3608,9 +3653,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize);
+procedure t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -3641,19 +3686,19 @@ begin
  Vex.Length:=0;
  Vex.rexW:=False;
 
- if (size=os0) then
+ if (mreg.AMemSize=os0) then
  begin
-  size:=reg.ASize;
+  mreg.AMemSize:=reg.ASize;
  end;
 
  if not (not_vex_len in desc.opt) then
- if (size=os256) then
+ if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
  if not (not_prefix in desc.opt) then
- if (size=os64) then
+ if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
  end;
@@ -3752,9 +3797,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize);
+procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -3788,19 +3833,19 @@ begin
  Vex.Length:=0;
  Vex.rexW:=False;
 
- if (size=os0) then
+ if (mreg.AMemSize=os0) then
  begin
-  size:=reg0.ASize;
+  mreg.AMemSize:=reg0.ASize;
  end;
 
  if not (not_vex_len in desc.opt) then
- if (size=os256) then
+ if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
  if not (not_prefix in desc.opt) then
- if (size=os64) then
+ if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
  end;
@@ -3846,9 +3891,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
+procedure t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -3882,19 +3927,19 @@ begin
  Vex.Length:=0;
  Vex.rexW:=False;
 
- if (size=os0) then
+ if (mreg.AMemSize=os0) then
  begin
-  size:=reg0.ASize;
+  mreg.AMemSize:=reg0.ASize;
  end;
 
  if not (not_vex_len in desc.opt) then
- if (size=os256) then
+ if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
  if not (not_prefix in desc.opt) then
- if (size=os64) then
+ if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
  end;
@@ -3942,9 +3987,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_regs;size:TOperandSize;reg2:TRegValue);
+procedure t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue);
 begin
- _VVMI8(desc,reg0,reg1,mem,size,reg2.AIndex shl 4);
+ _VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
 end;
 
 procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
@@ -4025,7 +4070,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize;imm8:Byte);
+procedure t_jit_builder._VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize);
 var
  modrm_info:t_modrm_info;
 
@@ -4105,7 +4150,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVI8(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize;imm8:Byte);
+procedure t_jit_builder._VVI8(const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize);
 var
  modrm_info:t_modrm_info;
 
@@ -4166,9 +4211,9 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_regs;size:TOperandSize;imm8:Byte);
+procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte);
 var
- mreg:t_jit_reg;
+ mreg:t_jit_lea;
 
  modrm_info:t_modrm_info;
 
@@ -4196,19 +4241,19 @@ begin
  Vex.Length:=0;
  Vex.rexW:=False;
 
- if (size=os0) then
+ if (mreg.AMemSize=os0) then
  begin
-  size:=reg.ASize;
+  mreg.AMemSize:=reg.ASize;
  end;
 
  if not (not_vex_len in desc.opt) then
- if (size=os256) then
+ if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
  if not (not_prefix in desc.opt) then
- if (size=os64) then
+ if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
  end;
@@ -4243,53 +4288,53 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$6F;index:2;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovdqu(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.vmovdqu(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;index:2;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$6F;index:1;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovdqa(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.vmovdqa(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;index:1;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovntdq(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.vmovntdq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$E7;index:1;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_regs);
+procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$10;index:0;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
-procedure t_jit_builder.vmovups(mem:t_jit_regs;reg:TRegValue);
+procedure t_jit_builder.vmovups(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$11;index:0;mm:1);
 begin
- _VM(desc,reg,mem,os0);
+ _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovdqa(reg0:TRegValue;reg1:TRegValue);
@@ -4380,6 +4425,10 @@ begin
  _R(desc,reg);
 end;
 
+procedure t_jit_builder.int3;
+begin
+ _O($CC);
+end;
 
 end.
 

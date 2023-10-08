@@ -195,7 +195,7 @@ type
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
   td_frame        :trapframe;
-  td_fpstate      :array[0..103] of QWORD;
+  td_fpstate      :t_fpstate;
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   td_retval       :array[0..1] of QWORD;

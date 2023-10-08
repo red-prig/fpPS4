@@ -250,6 +250,7 @@ type
   flag:ptruint;
  end;
 
+function  dynlibs_locked:Boolean;
 procedure dynlibs_lock;
 procedure dynlibs_unlock;
 
@@ -355,6 +356,7 @@ implementation
 uses
  errno,
  systm,
+ trap,
  vm,
  vmparam,
  vm_map,
@@ -376,6 +378,11 @@ uses
  elf_nid_utils,
  kern_jit2,
  kern_jit2_ctx;
+
+function dynlibs_locked:Boolean;
+begin
+ Result:=sx_xlocked(@dynlibs_info.lock);
+end;
 
 procedure dynlibs_lock;
 begin
@@ -2850,6 +2857,7 @@ begin
  if (Result<>nil) then Exit;
 
  Writeln(StdErr,' prx_module_not_found:',dynlib_basename(path));
+ print_backtrace_td(stderr);
 
  err:=ENOENT;
  Exit(nil);

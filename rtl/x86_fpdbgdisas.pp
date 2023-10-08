@@ -346,6 +346,7 @@ type
   public
     ProcessMode: TFPDMode;
     Code: PByte;
+    opcode: Byte;
     CodeIdx: Byte;
     OperIdx: Integer;
     ModRMIdx: Byte;
@@ -916,6 +917,8 @@ end;
 
 procedure TX86Disassembler.SetOpcode(AOpcode: TOpcode; ASuffix: TOpCodeSuffix; APrefixV: Boolean);
 begin
+  opcode:=Code[CodeIdx];
+
   if (flagVex in Flags) and APrefixV
   then Instruction^.OpCode.Prefix := OPPv
   else Instruction^.OpCode.Prefix := OPPnone;
@@ -3376,9 +3379,9 @@ begin
     $7E: begin
       DecodeSIMD([soNone, so66, soF3]);
       case SimdOpcode of
-        soNone: begin SetOpcode(OPmov, OPSx_d      ); AddEy; AddPy; end;
-        so66:   begin SetOpcode(OPmov, OPSx_d, True); AddEy; AddVy; end;
-        soF3:   begin SetOpcode(OPmov, OPSx_q, True); AddVq; AddWq; end;
+        soNone: begin SetOpcode(OPmov, OPS_d_q      ); AddEy; AddPy; end;
+        so66:   begin SetOpcode(OPmov, OPS_d_q, True); AddEy; AddVy; end;
+        soF3:   begin SetOpcode(OPmov, OPSx_q , True); AddVq; AddWq; end;
       end;
     end;
     $7F: begin
@@ -4694,6 +4697,7 @@ begin
 
   SetOpcode(OPX_Invalid);
 
+  opcode := 0;
   Flags := [];
   CodeIdx := 0;
   OperIdx := 0;

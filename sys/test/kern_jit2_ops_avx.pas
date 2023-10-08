@@ -204,6 +204,8 @@ const
 
 procedure op_vmovq(var ctx:t_jit_context2); //op_vmovd
 begin
+ //TODO fix this
+
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit_avx2(ctx,vmovq_desc);

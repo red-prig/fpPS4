@@ -185,7 +185,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   case ctx.din.OperCnt of
-   1:op_emit1(ctx,imul_desc1,[his_rax]); //R
+   1:op_emit1(ctx,imul_desc1,[his_rax,his_ro]); //R
    2:op_emit2(ctx,imul_desc2); //RM
    3:op_emit2(ctx,imul_desc3); //RMI
    else
@@ -212,7 +212,7 @@ procedure op_mul(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,mul_desc,[his_rax]); //R
+  op_emit1(ctx,mul_desc,[his_rax,his_ro]); //R
  end else
  begin
   op_load_rax(ctx,ctx.builder.rax);
@@ -228,7 +228,7 @@ procedure op_idiv(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,idiv_desc1,[his_rax]); //R
+  op_emit1(ctx,idiv_desc1,[his_rax,his_ro]); //R
  end else
  begin
   op_load_rax(ctx,ctx.builder.rax);
@@ -244,7 +244,7 @@ procedure op_div(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,div_desc,[his_rax]); //R
+  op_emit1(ctx,div_desc,[his_rax,his_ro]); //R
  end else
  begin
   op_load_rax(ctx,ctx.builder.rax);
@@ -401,6 +401,14 @@ begin
   Exit; //skip segment change
  end;
 
+ //mov eax,eax
+ if (not is_memory(ctx.din.Operand[1])) and
+    (not is_memory(ctx.din.Operand[2])) then
+ if cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]) then
+ begin
+  Exit;
+ end;
+
  if is_segment(ctx.din.Operand[2]) then
  begin
   if is_preserved(ctx.din) or is_memory(ctx.din) then
@@ -458,6 +466,14 @@ procedure op_cmov(var ctx:t_jit_context2);
 var
  desc:t_op_desc;
 begin
+ //mov eax,eax
+ if (not is_memory(ctx.din.Operand[1])) and
+    (not is_memory(ctx.din.Operand[2])) then
+ if cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]) then
+ begin
+  Exit;
+ end;
+
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   desc:=cmov_desc;
@@ -1016,6 +1032,7 @@ const
 
 procedure op_bswap(var ctx:t_jit_context2);
 var
+ new:TRegValue;
  i:Integer;
 begin
  if is_preserved(ctx.din) then
@@ -1023,12 +1040,13 @@ begin
   with ctx.builder do
   begin
    i:=GetFrameOffset(ctx.din.Operand[1]);
+   new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
-   movq(r_tmp0,[r_thrd+i]);
+   movq(new,[r_thrd+i]);
 
-   _O(bswap_desc,r_tmp0);
+   _O(bswap_desc,new);
 
-   movq([r_thrd+i],r_tmp0);
+   movq([r_thrd+i],fix_size(new));
   end;
  end else
  begin
@@ -1038,7 +1056,7 @@ end;
 
 procedure op_lea(var ctx:t_jit_context2);
 var
- new1,new2:TRegValue;
+ new1:TRegValue;
  i:Integer;
 begin
  if is_preserved(ctx.din) then
@@ -1049,11 +1067,21 @@ begin
    build_lea(ctx,2,new1,[not_use_segment]);
    //
    i:=GetFrameOffset(ctx.din.Operand[1].RegValue[0]);
-   ctx.builder.movq([r_thrd+i],new1);
+   ctx.builder.movq([r_thrd+i],fix_size(new1));
   end else
   begin
    new1:=new_reg(ctx.din.Operand[1]);
-   build_lea(ctx,2,new1);
+   //
+   if (new1.ASize=os16) then
+   begin
+    //low part
+    build_lea(ctx,2,r_tmp0);
+    //
+    ctx.builder.movq(new1,r_tmp0);
+   end else
+   begin
+    build_lea(ctx,2,new1);
+   end;
   end;
  end else
  begin
@@ -1062,17 +1090,12 @@ begin
 end;
 
 procedure op_cdq(var ctx:t_jit_context2);
-var
- i:Integer;
 begin
  with ctx.builder do
  begin
-  i:=GetFrameOffset(rax);
-  movq(rax,[r_thrd+i]);
-
+  op_load_rax(ctx,ctx.builder.rax);
   add_orig(ctx);
-
-  movq([r_thrd+i],rax);
+  op_save_rax(ctx,ctx.builder.rax);
  end;
 end;
 
