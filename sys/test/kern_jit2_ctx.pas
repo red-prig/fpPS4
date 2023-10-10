@@ -227,6 +227,8 @@ function  new_reg_size(const r:TRegValue;const RegValue:TRegValues):TRegValue;
 function  new_reg_size(const r:TRegValue;const Operand:TOperand):TRegValue;
 function  fix_size(const r:TRegValue):TRegValue;
 function  is_rep_prefix(const i:TInstruction):Boolean;
+function  is_segment(const r:TOperand):Boolean; inline;
+function  get_segment_value(const Operand:TOperand):Byte;
 function  flags(const i:TInstruction):t_jit_lea;
 function  flags(const ctx:t_jit_context2):t_jit_lea;
 
@@ -261,6 +263,7 @@ uses
  vmparam,
  vm_pmap,
  systm,
+ machdep,
  kern_thr;
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
@@ -682,6 +685,33 @@ end;
 function is_rep_prefix(const i:TInstruction):Boolean;
 begin
  Result:=[ifPrefixRep,ifPrefixRepE,ifPrefixRepNe]*i.Flags<>[];
+end;
+
+function is_segment(const r:TOperand):Boolean; inline;
+begin
+ Result:=(r.RegValue[0].AType=regSegment) and
+         (not (ofMemory in r.Flags));
+end;
+
+function get_segment_value(const Operand:TOperand):Byte;
+const
+ REG_ES = 0;
+ REG_CS = 1;
+ REG_SS = 2;
+ REG_DS = 3;
+ REG_FS = 4;
+ REG_GS = 5;
+begin
+ case Operand.RegValue[0].AIndex of
+  REG_ES:Result:=_udatasel;
+  REG_CS:Result:=_ucodesel;
+  REG_SS:Result:=_udatasel;
+  REG_DS:Result:=_udatasel;
+  REG_FS:Result:=_ufssel;
+  REG_GS:Result:=_ugssel;
+  else
+         Result:=0;
+ end;
 end;
 
 function flags(const i:TInstruction):t_jit_lea;

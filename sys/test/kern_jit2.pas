@@ -31,6 +31,7 @@ uses
  md_context,
  kern_sig,
  kern_jit2_ops,
+ kern_jit2_ops_sse,
  kern_jit2_ops_avx,
  kern_jit_dynamic;
 
@@ -1447,7 +1448,8 @@ begin
            ctx.din.OpCode.Suffix,' ',
            ctx.din.Operand[1].Size,' ',
            ctx.din.Operand[2].Size);
-   Writeln('MIndex=',ctx.dis.ModRM.Index,' ',
+   Writeln('opcode=$',HexStr(ctx.dis.opcode,2),' ',
+           'MIndex=',ctx.dis.ModRM.Index,' ',
            'SOpcode=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
            'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);
    Assert(false);

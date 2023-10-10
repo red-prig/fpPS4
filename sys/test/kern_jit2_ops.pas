@@ -18,9 +18,6 @@ var
 
 implementation
 
-uses
- machdep;
-
 const
  xor_desc:t_op_desc=(
   mem_reg:(op:$31;index:0);
@@ -362,33 +359,6 @@ const
   hint:[his_mov,his_wo];
  );
 
-function is_segment(const r:TOperand):Boolean; inline;
-begin
- Result:=(r.RegValue[0].AType=regSegment) and
-         (not (ofMemory in r.Flags));
-end;
-
-function get_segment_value(const Operand:TOperand):Byte;
-const
- REG_ES = 0;
- REG_CS = 1;
- REG_SS = 2;
- REG_DS = 3;
- REG_FS = 4;
- REG_GS = 5;
-begin
- case Operand.RegValue[0].AIndex of
-  REG_ES:Result:=_udatasel;
-  REG_CS:Result:=_ucodesel;
-  REG_SS:Result:=_udatasel;
-  REG_DS:Result:=_udatasel;
-  REG_FS:Result:=_ufssel;
-  REG_GS:Result:=_ugssel;
-  else
-         Result:=0;
- end;
-end;
-
 procedure op_mov(var ctx:t_jit_context2);
 var
  data:array[0..15] of Byte;
@@ -542,46 +512,6 @@ begin
 end;
 
 const
- movsd_desc:t_op_desc=(
-  mem_reg:(op:$F20F11;opt:[not_prefix]);
-  reg_mem:(op:$F20F10;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movsd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- movss_desc:t_op_desc=(
-  mem_reg:(op:$F30F11;opt:[not_prefix]);
-  reg_mem:(op:$F30F10;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movss(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
  movbe_desc:t_op_desc=(
   mem_reg:(op:$0F38F1;opt:[not_prefix]);
   reg_mem:(op:$0F38F0;opt:[not_prefix]);
@@ -602,69 +532,6 @@ begin
 end;
 
 const
- mov_dq_xr_desc:t_op_desc=(
-  mem_reg:(op:$660F7E;opt:[not_prefix]);
-  reg_mem:(op:$660F6E;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
- mov_dq_mm_desc:t_op_desc=(
-  mem_reg:(op:$0F7E;opt:[not_prefix]);
-  reg_mem:(op:$0F6E;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
- movq_xx_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F7E;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  if (ctx.dis.SimdOpcode=so66) then
-  begin
-   op_emit2(ctx,mov_dq_xr_desc);
-  end else
-  begin
-   op_emit2(ctx,mov_dq_mm_desc);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-procedure op_movq(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  if (ctx.dis.SimdOpcode=soF3) then
-  begin
-   op_emit2(ctx,movq_xx_desc);
-  end else
-  if (ctx.dis.SimdOpcode=so66) then
-  begin
-   op_emit2(ctx,mov_dq_xr_desc);
-  end else
-  begin
-   op_emit2(ctx,mov_dq_mm_desc);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
  movsxd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
   reg_mem:(op:$63;opt:[not_prefix]);
@@ -678,48 +545,6 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2(ctx,movsxd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- movdqa_desc:t_op_desc=(
-  mem_reg:(op:$660F7F;opt:[not_prefix]);
-  reg_mem:(op:$660F6F;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo,his_align];
- );
-
-procedure op_movdqa(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movdqa_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- movdqu_desc:t_op_desc=(
-  mem_reg:(op:$F30F7F;opt:[not_prefix]);
-  reg_mem:(op:$F30F6F;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movdqu(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movdqu_desc);
  end else
  begin
   add_orig(ctx);
@@ -1781,309 +1606,6 @@ end;
 
 //
 
-const
- orps_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$0F56;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_orps(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,orps_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- orpd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$660F56;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_orpd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,orpd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- pxor_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$0FEF;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_xor,his_rw];
- );
-
-const
- pxor_xmm_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$660FEF;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_xor,his_rw];
- );
-
-procedure op_pxor(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  if (ctx.dis.SimdOpcode=so66) then
-  begin
-   op_emit2(ctx,pxor_xmm_desc);
-  end else
-  begin
-   op_emit2(ctx,pxor_desc);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- addsd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F58;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_addsd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,addsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- addss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F58;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_addss(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,addss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- subsd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F5C;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_subsd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,subsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- subss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F5C;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_subss(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,subss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- mulsd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F59;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_mulsd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,mulsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- mulss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F59;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_rw];
- );
-
-procedure op_mulss(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,mulss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- cvtsi2ss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F2A;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_cvtsi2ss(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,cvtsi2ss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- cvtsd2si_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F2D;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_cvtsd2si(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,cvtsd2si_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- cvtss2si_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F2D;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_cvtss2si(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit2(ctx,cvtss2si_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- sqrtsd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F20F51;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_sqrtsd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,sqrtsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- sqrtss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30F51;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_sqrtss(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,sqrtss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
 procedure init_cbs;
 begin
  jit_cbs[OPPnone,OPxor ,OPSnone]:=@op_xor;
@@ -2127,21 +1649,8 @@ begin
 
  jit_cbs[OPPnone,OPmovzx,OPSnone]:=@op_movzx;
  jit_cbs[OPPnone,OPmovsx,OPSnone]:=@op_movsx;
-
- jit_cbs[OPPnone,OPmov  ,OPSx_sd]:=@op_movsd;
- jit_cbs[OPPnone,OPmov  ,OPSx_ss]:=@op_movss;
  jit_cbs[OPPnone,OPmov  ,OPSc_be]:=@op_movbe;
-
- jit_cbs[OPPnone,OPmov  ,OPSx_d ]:=@op_movd;
- jit_cbs[OPPnone,OPmov  ,OPSx_q ]:=@op_movq;
-
  jit_cbs[OPPnone,OPmovsx,OPSx_d ]:=@op_movsxd;
-
- jit_cbs[OPPnone,OPmovdq2q,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPmovq2dq,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPmov,OPSx_dqa]:=@op_movdqa;
- jit_cbs[OPPnone,OPmov,OPSx_dqu]:=@op_movdqu;
 
  jit_cbs[OPPnone,OPtest,OPSnone]:=@op_test;
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
@@ -2298,28 +1807,6 @@ begin
  jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_prefetch1;
  jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_prefetch2;
 
- //sse
-
- jit_cbs[OPPnone,OPor,OPSx_ps]:=@op_orps;
- jit_cbs[OPPnone,OPor,OPSx_pd]:=@op_orpd;
-
- jit_cbs[OPPnone,OPpxor,OPSnone]:=@op_pxor;
-
- jit_cbs[OPPnone,OPadd ,OPSx_sd]:=@op_addsd;
- jit_cbs[OPPnone,OPadd ,OPSx_ss]:=@op_addss;
- jit_cbs[OPPnone,OPsub ,OPSx_sd]:=@op_subsd;
- jit_cbs[OPPnone,OPsub ,OPSx_ss]:=@op_subss;
- jit_cbs[OPPnone,OPmul ,OPSx_sd]:=@op_mulsd;
- jit_cbs[OPPnone,OPmul ,OPSx_ss]:=@op_mulss;
-
- jit_cbs[OPPnone,OPcvtsi2,OPSx_ss]:=@op_cvtsi2ss;
- jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_cvtsd2si;
- jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_cvtss2si;
-
- jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_sqrtsd;
- jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_sqrtss;
-
- //sse
 end;
 
 initialization
