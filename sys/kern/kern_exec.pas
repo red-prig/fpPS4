@@ -1212,7 +1212,7 @@ begin
  Exit(0);
 end;
 
-procedure init_tty;
+procedure init_tty; //TODO before execve
 begin
  kern_openat(STDIN_FILENO ,'/dev/deci_stdin' ,UIO_SYSSPACE,O_RDWR,0);
  kern_openat(STDOUT_FILENO,'/dev/deci_stdout',UIO_SYSSPACE,O_RDWR,0);
@@ -1444,16 +1444,17 @@ begin
  //copy authinfo
  g_authinfo:=imgp^.authinfo;
 
- //copy appinfo
+ //copy appinfo (TODO before execve)
  g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 1; //is_big_app ???
  if (p_proc.p_sce_replay_exec<>0) then
  begin
   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 2; //is_system ???
  end;
+ g_appinfo.AppType:=SCE_LNC_APP_TYPE_BIG_APP;
 
  //TODO load CUSANAME
 
- //init std tty
+ //init std tty (TODO before execve)
  init_tty;
 
  {
