@@ -347,6 +347,7 @@ end;
 //0x40000000
 //0x40000010
 
+//0x80000000
 //0x80000001
 //0x80000002
 //0x80000004
@@ -359,7 +360,10 @@ end;
 procedure jit_cpuid; assembler; nostackframe;
 label
  _cpuid_0,
- _cpuid_1;
+ _cpuid_1,
+ _cpuid_80000000,
+ _cpuid_80000001,
+ _cpuid_80000008;
 asm
  pushf
 
@@ -371,7 +375,22 @@ asm
  cmp $1,%eax
  je _cpuid_1
 
+ cmp $0x80000000,%eax
+ je _cpuid_80000000
+
+ cmp $0x80000001,%eax
+ je _cpuid_80000001
+
+
+ cmp $0x80000008,%eax
+ je _cpuid_80000008
+
  ud2
+
+
+
+
+
 
  _cpuid_0:
 
@@ -409,6 +428,39 @@ asm
  and $0xFF070000,%ebx //filter CPUID_LOCAL_APIC_ID|CPUID_HTT_CORES
 
  or $0x00000800,%ebx //cpu_procinfo
+
+ mov %rax,jit_frame.tf_rax(%r15)
+ popf
+ ret
+
+ _cpuid_80000000:
+
+ //cpu_exthigh TODO check
+ mov $0xC0000001,%eax
+
+ //cpu_vendor
+ mov $0x68747541,%ebx
+ mov $0x69746E65,%edx
+ mov $0x444D4163,%ecx
+
+ mov %rax,jit_frame.tf_rax(%r15)
+ popf
+ ret
+
+ _cpuid_80000001:
+
+ mov $0x2e500800,%edx //amd_feature
+ mov $0x154837fb,%ecx //amd_feature2
+
+ popf
+ ret
+
+ _cpuid_80000008:
+
+ mov $0x00003030,%eax //TODO check
+ mov $0x00001007,%ebx //TODO check
+ mov $0x00000000,%edx //TODO check
+ mov $0x00004007,%ecx //cpu_procinfo2 TODO check
 
  mov %rax,jit_frame.tf_rax(%r15)
  popf
@@ -468,12 +520,12 @@ begin
  end;
 end;
 
-procedure op_pop_rip(var ctx:t_jit_context2); //out:rax
+procedure op_pop_rip(var ctx:t_jit_context2;imm:Word); //out:rax
 var
  stack:TRegValue;
 begin
  //mov rax,[rsp]
- //lea rsp,[rsp+8]
+ //lea rsp,[rsp+8+imm]
 
  with ctx.builder do
  begin
@@ -486,7 +538,7 @@ begin
   movq(r_tmp1,[stack]);
 
   op_load_rsp(ctx,stack);
-  leaq(stack,[stack+8]);
+  leaq(stack,[stack+8+imm]);
   op_save_rsp(ctx,stack);
 
   movq(r_tmp0,r_tmp1);
@@ -587,10 +639,13 @@ begin
 end;
 
 procedure op_ret(var ctx:t_jit_context2);
+var
+ imm:Int64;
 begin
- Assert(ctx.din.Operand[1].ByteCount=0);
-
- op_pop_rip(ctx); //out:rax
+ imm:=0;
+ GetTargetOfs(ctx.din,ctx.code,1,imm);
+ //
+ op_pop_rip(ctx,imm); //out:rax
  //
  op_jmp_dispatcher(ctx);
  //
@@ -1189,6 +1244,7 @@ begin
  jit_cbs[OPPnone,OPcall,OPSnone]:=@op_call;
  jit_cbs[OPPnone,OPjmp ,OPSnone]:=@op_jmp;
  jit_cbs[OPPnone,OPret ,OPSnone]:=@op_ret;
+ jit_cbs[OPPnone,OPretf,OPSnone]:=@op_ret;
 
  jit_cbs[OPPnone,OPj__,OPSc_o  ]:=@op_jcc;
  jit_cbs[OPPnone,OPj__,OPSc_no ]:=@op_jcc;
@@ -1348,18 +1404,13 @@ begin
 
   if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
-   //writeln('not excec:0x',HexStr(ptr));
+   writeln('not excec:0x',HexStr(ptr));
+
+   link_curr:=ctx.builder.get_curr_label.after;
    ctx.builder.ud2;
+   link_next:=ctx.builder.get_curr_label.after;
 
-   //Add a link for the sequence
-   link_curr:=ctx.builder.get_curr_label.before;
-   link_next:=link_curr.after;
-
-   ctx.add_label(ptr,
-                 ptr,
-                 link_curr,
-                 link_next);
-
+   ctx.trim:=True;
    goto _next; //trim
   end;
 
@@ -1367,22 +1418,19 @@ begin
 
   adec.Disassemble(ptr,ACodeBytes,ACode);
 
+  ctx.ptr_next:=ptr;
+
   case adec.Instr.OpCode.Opcode of
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     //writeln('invalid:0x',HexStr(ctx.ptr_curr));
+     writeln('invalid:0x',HexStr(ctx.ptr_curr));
+
+     link_curr:=ctx.builder.get_curr_label.after;
      ctx.builder.ud2;
+     link_next:=ctx.builder.get_curr_label.after;
 
-     //Add a link for the sequence
-     link_curr:=ctx.builder.get_curr_label.before;
-     link_next:=link_curr.after;
-
-     ctx.add_label(ptr,
-                   ptr,
-                   link_curr,
-                   link_next);
-
+     ctx.trim:=True;
      goto _next; //trim
     end;
    else;
@@ -1391,18 +1439,13 @@ begin
   if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
      is_invalid(adec.Instr) then
   begin
-   //writeln('invalid:0x',HexStr(ctx.ptr_curr));
+   writeln('invalid:0x',HexStr(ctx.ptr_curr));
+
+   link_curr:=ctx.builder.get_curr_label.after;
    ctx.builder.ud2;
+   link_next:=ctx.builder.get_curr_label.after;
 
-   //Add a link for the sequence
-   link_curr:=ctx.builder.get_curr_label.before;
-   link_next:=link_curr.after;
-
-   ctx.add_label(ptr,
-                 ptr,
-                 link_curr,
-                 link_next);
-
+   ctx.trim:=True;
    goto _next; //trim
   end;
 
@@ -1412,8 +1455,6 @@ begin
    Writeln(ACodeBytes:32,' ',ACode);
    Writeln('original------------------------':32,' ','0x',HexStr(ptr));
   end;
-
-  ctx.ptr_next:=ptr;
 
   ctx.code:=ctx.ptr_curr;
 
@@ -1543,6 +1584,7 @@ begin
   end;
   }
 
+  _next:
 
   //debug
    op_debug_info(ctx);
@@ -1563,6 +1605,7 @@ begin
   end;
 
   //label exist in current blob
+  if not ctx.trim then
   begin
    link_new:=ctx.get_link(ptr);
 
@@ -1598,8 +1641,6 @@ begin
 
   if ctx.trim then
   begin
-   _next:
-
    ctx.trim:=False;
 
    //close chunk

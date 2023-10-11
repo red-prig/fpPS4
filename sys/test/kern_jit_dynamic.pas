@@ -554,7 +554,7 @@ begin
 
      if (clabel=nil) then
      begin
-      Writeln('0x',HexStr(curr));
+      Writeln('(clabel=nil) 0x',HexStr(curr));
       Assert(false);
      end;
 
@@ -605,8 +605,12 @@ begin
      original:=QWORD(next)-QWORD(curr);
      recompil:=link_next.offset-link_curr.offset;
 
-     Assert(original<=255);
-     Assert(recompil<=255);
+     if (original>255) or (recompil>255) then
+     begin
+      Writeln('0x',HexStr(curr));
+      Writeln(original,':',recompil);
+      Assert(False);
+     end;
 
      table[count].original:=Byte(original);
      table[count].recompil:=Byte(recompil);

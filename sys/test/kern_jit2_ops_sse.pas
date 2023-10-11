@@ -300,7 +300,12 @@ begin
  jit_cbs[OPPnone,OPpsrl,OPSx_w ]:=@op_reg_mem_0F_rw;
  jit_cbs[OPPnone,OPpsrl,OPSx_d ]:=@op_reg_mem_0F_rw;
  jit_cbs[OPPnone,OPpsrl,OPSx_q ]:=@op_reg_mem_0F_rw;
- jit_cbs[OPPnone,OPpsrl,OPSx_dq]:=@op_reg_mem_0F_rw;
+ jit_cbs[OPPnone,OPpsrl,OPSx_dq]:=@add_orig;
+
+ jit_cbs[OPPnone,OPpsll,OPSx_w ]:=@op_reg_mem_0F_rw;
+ jit_cbs[OPPnone,OPpsll,OPSx_d ]:=@op_reg_mem_0F_rw;
+ jit_cbs[OPPnone,OPpsll,OPSx_q ]:=@op_reg_mem_0F_rw;
+ jit_cbs[OPPnone,OPpsll,OPSx_dq]:=@add_orig;
 
  jit_cbs[OPPnone,OPpalignr,OPSnone]:=@op_palignr;
 

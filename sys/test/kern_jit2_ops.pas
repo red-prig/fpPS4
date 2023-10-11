@@ -992,6 +992,15 @@ begin
  end;
 end;
 
+procedure op_xgetbv(var ctx:t_jit_context2);
+begin
+ with ctx.builder do
+ begin
+  add_orig(ctx);
+  op_save_rax(ctx,ctx.builder.rax);
+ end;
+end;
+
 //
 
 const
@@ -1760,6 +1769,8 @@ begin
  jit_cbs[OPPnone,OPcbw ,OPSnone]:=@op_cdq;
  jit_cbs[OPPnone,OPcwde,OPSnone]:=@op_cdq;
  jit_cbs[OPPnone,OPcdqe,OPSnone]:=@op_cdq;
+
+ jit_cbs[OPPnone,OPgetbv,OPSnone]:=@op_xgetbv;
 
  jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
 

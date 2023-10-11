@@ -977,30 +977,39 @@ end;
 
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 begin
- if (ctx.max<>0) then
- if ctx.is_text_addr(ofs) then
- begin
-  if (ofs<=ctx.max) then
-  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
-  begin
-   ctx.add_forward_point(Pointer(ofs));
-  end;
- end;
-
  if (code_ref in hint) then
- if ctx.is_map_addr(ofs) then
- if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
  begin
-  ofs:=PInt64(ofs)^;
+  //call [addr]
+  //jmp  [addr]
 
-  if ctx.is_text_addr(ofs) then
-  if (ctx.max=0) or (ofs<=ctx.max) then
-  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+  if ctx.is_map_addr(ofs) then
+  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
-   ctx.add_forward_point(Pointer(ofs));
-  end;
- end;
+   ofs:=PInt64(ofs)^;
 
+   if ctx.is_text_addr(ofs) then
+   if (ctx.max=0) or (ofs<=ctx.max) then
+   if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   begin
+    ctx.add_forward_point(Pointer(ofs));
+   end;
+  end;
+
+ end else
+ begin
+  //lea
+
+  if (ctx.max<>0) then
+  if ctx.is_text_addr(ofs) then
+  begin
+   if (ofs<=ctx.max) then
+   if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   begin
+    ctx.add_forward_point(Pointer(ofs));
+   end;
+  end;
+
+ end;
 end;
 
 function is_segment(const i:TInstruction):Boolean;
