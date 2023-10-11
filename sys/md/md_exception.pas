@@ -23,10 +23,11 @@ uses
 type
  LPTOP_LEVEL_EXCEPTION_FILTER=function(excep:PEXCEPTION_POINTERS):longint; stdcall;
 
-function SetUnhandledExceptionFilter(lpTopLevelExceptionFilter:Pointer):Pointer;          stdcall; external 'kernel32' name 'SetUnhandledExceptionFilter';
-function AddVectoredExceptionHandler(FirstHandler:DWORD;VectoredHandler:Pointer):Pointer; stdcall; external 'kernel32' name 'AddVectoredExceptionHandler';
-function RemoveVectoredExceptionHandler(VectoredHandlerHandle:Pointer): ULONG;            stdcall; external 'kernel32' name 'RemoveVectoredExceptionHandler';
-function GetModuleHandleEx(dwFlags:DWORD;lpModuleName:Pointer;var hModule:THandle):BOOL;  stdcall; external 'kernel32' name 'GetModuleHandleExA';
+function SetUnhandledExceptionFilter(lpTopLevelExceptionFilter:Pointer):Pointer;          stdcall; external kernel32 name 'SetUnhandledExceptionFilter';
+function AddVectoredExceptionHandler(FirstHandler:DWORD;VectoredHandler:Pointer):Pointer; stdcall; external kernel32 name 'AddVectoredExceptionHandler';
+function RemoveVectoredExceptionHandler(VectoredHandlerHandle:Pointer): ULONG;            stdcall; external kernel32 name 'RemoveVectoredExceptionHandler';
+function GetModuleHandleEx(dwFlags:DWORD;lpModuleName:Pointer;var hModule:THandle):BOOL;  stdcall; external kernel32 name 'GetModuleHandleExA';
+function IsDebuggerPresent: BOOL; stdcall; external kernel32;
 
 function RunErrorCode(const rec: TExceptionRecord): longint;
 begin
@@ -312,17 +313,31 @@ begin
  end;
 end;
 
+function _get_msg(Const Msg:Shortstring):Shortstring; inline;
+begin
+ Result:=Msg;
+ if (Result='') then
+ begin
+  Result:='Assertion failed';
+ end;
+end;
+
 Procedure _Assert(Const Msg,FName:Shortstring;LineNo:Longint;ErrorAddr:Pointer);
 begin
- If Length(msg)=0 then
-   write(stderr,'Assertion failed')
- else
-   write(stderr,msg);
- Writeln(stderr,' (',FName,', line ',LineNo,').');
- print_backtrace(stderr,Get_pc_addr,get_frame,0);
- asm
-  int3
- end;
+ Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
+ print_backtrace(stderr,Get_pc_addr,get_frame,2);
+
+ if IsDebuggerPresent then
+  Raise EAssertionFailed.
+         Createfmt('%s (%s, line %d).',
+         [_get_msg(Msg),FName,LineNo])
+         at get_caller_addr (ErrorAddr),
+            get_caller_frame(ErrorAddr);
+
+ //asm
+ // int3
+ //end;
+
  md_halt(217);
 end;
 

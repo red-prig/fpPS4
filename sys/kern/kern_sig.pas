@@ -1756,11 +1756,14 @@ begin
  if (td=nil) then Exit;
 
  //teb stack
- sttop:=td^.td_teb^.sttop;
- stack:=td^.td_teb^.stack;
- //
- td^.td_teb^.sttop:=td^.td_kstack.sttop;
- td^.td_teb^.stack:=td^.td_kstack.stack;
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  sttop:=td^.td_teb^.sttop;
+  stack:=td^.td_teb^.stack;
+  //
+  td^.td_teb^.sttop:=td^.td_kstack.sttop;
+  td^.td_teb^.stack:=td^.td_kstack.stack;
+ end;
  //teb stack
 
  thread_lock(td);
@@ -1862,8 +1865,11 @@ begin
  end;
 
  //teb stack
- td^.td_teb^.sttop:=sttop;
- td^.td_teb^.stack:=stack;
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  td^.td_teb^.sttop:=sttop;
+  td^.td_teb^.stack:=stack;
+ end;
  //teb stack
 end;
 

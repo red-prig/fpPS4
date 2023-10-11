@@ -113,7 +113,7 @@ function  fetch_chunk(src:Pointer):t_jit_dynamic.p_jcode_chunk;
 function  next_chunk(node:t_jit_dynamic.p_jcode_chunk):t_jit_dynamic.p_jcode_chunk;
 function  preload_entry(addr:Pointer):t_jit_dynamic.p_entry_point;
 
-procedure switch_to_jit();
+procedure switch_to_jit(td:p_kthread);
 function  jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer;
 
 procedure build(var ctx:t_jit_context2);
@@ -183,7 +183,7 @@ begin
   ctx.map____end:=ctx.text___end;
   ctx.max       :=QWORD(-1); //dont scan rip relative
 
-  ctx.add_forward_point(addr);
+  ctx.add_forward_point(fpCall,addr);
 
   pick(ctx);
  end else
@@ -192,23 +192,23 @@ begin
  end;
 end;
 
-procedure switch_to_jit();
+procedure switch_to_jit(td:p_kthread);
 label
  _start;
 var
- td:p_kthread;
  node:t_jit_dynamic.p_entry_point;
  jctx:p_jctx;
  jit_state:Boolean;
 begin
- td:=curkthread;
  if (td=nil) then Exit;
 
  jit_state:=((td^.pcb_flags and PCB_IS_JIT)<>0);
 
  if not is_guest_addr(td^.td_frame.tf_rip) then
  begin
-  Assert(False,'TODO');
+  //clear jit flag
+  td^.pcb_flags:=td^.pcb_flags and (not PCB_IS_JIT);
+  Exit; //internal?
  end;
 
  _start:
@@ -248,6 +248,11 @@ begin
  td^.td_frame.tf_r15:=QWORD(jctx);
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
+
+ //teb stack
+ td^.td_teb^.sttop:=td^.td_kstack.sttop;
+ td^.td_teb^.stack:=td^.td_kstack.stack;
+ //teb stack
 end;
 
 function fetch_chunk(src:Pointer):t_jit_dynamic.p_jcode_chunk;
@@ -533,6 +538,10 @@ begin
 
  while (chunk<>nil) do
  begin
+  if (t_point_type(chunk^.data)=fpInvalid) then
+  begin
+   //skip
+  end else
   if (__end=chunk^.start) then
   begin
    //expand

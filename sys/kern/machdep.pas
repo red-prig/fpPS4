@@ -102,22 +102,28 @@ end;
 procedure cpu_init_jit(td:p_kthread);
 begin
  //teb stack
- td^.td_teb^.sttop:=td^.td_kstack.sttop;
- td^.td_teb^.stack:=td^.td_kstack.stack;
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  td^.td_teb^.sttop:=td^.td_kstack.sttop;
+  td^.td_teb^.stack:=td^.td_kstack.stack;
+ end;
  //teb stack
 end;
 
 procedure cpu_fini_jit(td:p_kthread);
 begin
  //teb stack
- if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
-  td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
-  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
- end else
- begin
-  td^.td_teb^.stack:=td^.td_ustack.stack;
-  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  if (sigonstack(td^.td_frame.tf_rsp)<>0) then
+  begin
+   td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
+   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
+  end else
+  begin
+   td^.td_teb^.stack:=td^.td_ustack.stack;
+   td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  end;
  end;
  //teb stack
 end;
@@ -162,9 +168,9 @@ begin
     end;
  end;
 
+ //teb stack
  if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
-  //teb stack
   if (sigonstack(td^.td_frame.tf_rsp)<>0) then
   begin
    td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
@@ -174,8 +180,8 @@ begin
    td^.td_teb^.stack:=td^.td_ustack.stack;
    td^.td_teb^.sttop:=td^.td_ustack.sttop;
   end;
-  //teb stack
  end;
+ //teb stack
 end;
 
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);

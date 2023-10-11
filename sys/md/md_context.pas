@@ -524,8 +524,11 @@ begin
  if (td=nil) then Exit;
 
  //teb stack
- td^.td_teb^.sttop:=td^.td_kstack.sttop;
- td^.td_teb^.stack:=td^.td_kstack.stack;
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  td^.td_teb^.sttop:=td^.td_kstack.sttop;
+  td^.td_teb^.stack:=td^.td_kstack.stack;
+ end;
  //teb stack
 
  regs:=@td^.td_frame;
@@ -581,15 +584,22 @@ begin
  end;
  //xmm,ymm
 
+
  //teb stack
- if (sigonstack(regs^.tf_rsp)<>0) then
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
-  td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
-  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
- end else
- begin
-  td^.td_teb^.stack:=td^.td_ustack.stack;
-  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+  begin
+   if (sigonstack(regs^.tf_rsp)<>0) then
+   begin
+    td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
+    td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
+   end else
+   begin
+    td^.td_teb^.stack:=td^.td_ustack.stack;
+    td^.td_teb^.sttop:=td^.td_ustack.sttop;
+   end;
+  end;
  end;
  //teb stack
 
@@ -771,14 +781,17 @@ begin
  end;
 
  //teb stack
- if (sigonstack(regs^.tf_rsp)<>0) then
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
-  td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
-  td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
- end else
- begin
-  td^.td_teb^.stack:=td^.td_ustack.stack;
-  td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  if (sigonstack(regs^.tf_rsp)<>0) then
+  begin
+   td^.td_teb^.stack:=td^.td_sigstk.ss_sp+td^.td_sigstk.ss_size;
+   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp;
+  end else
+  begin
+   td^.td_teb^.stack:=td^.td_ustack.stack;
+   td^.td_teb^.sttop:=td^.td_ustack.sttop;
+  end;
  end;
  //teb stack
 

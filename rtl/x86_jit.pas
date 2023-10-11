@@ -88,6 +88,7 @@ type
   pRight:p_jit_code_chunk;
   start:QWORD;
   __end:QWORD;
+  data :QWORD;
   AInstructions:TAILQ_HEAD;
   function c(n1,n2:p_jit_code_chunk):Integer; static;
  end;

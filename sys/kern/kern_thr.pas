@@ -127,6 +127,9 @@ const
  SW_INVOL  =$0200; // Involuntary switch.
  SW_PREEMPT=$0400; // The invol switch is a preemption
 
+ PCB_FULL_IRET=1;
+ PCB_IS_JIT   =2;
+
 type
  p_teb=^teb;
  teb=packed record

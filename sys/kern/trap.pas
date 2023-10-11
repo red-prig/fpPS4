@@ -89,10 +89,6 @@ const
   'DTrace pid return trap'         // 32 T_DTRACE_RET
  );
 
-const
- PCB_FULL_IRET=1;
- PCB_IS_JIT   =2;
-
  SIG_ALTERABLE=$80000000;
  SIG_STI_LOCK =$40000000;
 
@@ -175,6 +171,7 @@ uses
  vm_fault,
  machdep,
  md_context,
+ md_thread,
  signal,
  kern_sig,
  sysent,
@@ -549,7 +546,13 @@ begin
  count:=max_frame_dump;
  count:=30;
 
- print_frame(f,rip);
+ if (skipframes>0) then
+ begin
+  Dec(skipframes);
+ end else
+ begin
+  print_frame(f,rip);
+ end;
 
  count:=CaptureBacktrace(curkthread,rbp,skipframes,count,@frames[0]);
 
@@ -699,7 +702,18 @@ begin
  if (rip<>td_frame^.tf_rip) or
     ((td^.pcb_flags and (PCB_FULL_IRET or PCB_IS_JIT))=(PCB_FULL_IRET or PCB_IS_JIT)) then
  begin
-  kern_jit_dynamic.switch_to_jit();
+  kern_jit_dynamic.switch_to_jit(curkthread);
+
+  //if internal
+  if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+  begin
+   //seh wrapper
+   seh_wrapper(td);
+   //seh wrapper
+
+   //teb stack ???
+  end;
+
  end;
 
 end;

@@ -76,7 +76,8 @@ uses
  kern_synch,
  kern_proc,
  sched_ule,
- subr_sleepqueue;
+ subr_sleepqueue,
+ kern_jit_dynamic;
 
 var
  tidhashtbl:TSTUB_HAMT32;
@@ -334,19 +335,6 @@ begin
  ipi_sigreturn; //switch
 end;
 
-procedure main_wrapper; assembler; nostackframe;
-asm
- subq   $48, %rsp
-.seh_stackalloc 40
-.seh_endprologue
- jmpq   %gs:teb.jitcall
-
- nop
- addq   $48, %rsp
-.seh_handler __FPC_default_handler,@except,@unwind
-end;
-
-
 function create_thread(td        :p_kthread; //calling thread
                        ctx       :p_mcontext_t;
                        start_func:Pointer;
@@ -484,9 +472,12 @@ begin
   cpu_set_user_tls(newtd,tls_base);
  end;
 
+ //jit wrapper
+ kern_jit_dynamic.switch_to_jit(newtd);
+ //jit wrapper
+
  //seh wrapper
- newtd^.td_teb^.jitcall:=Pointer(newtd^.td_frame.tf_rip);
- newtd^.td_frame.tf_rip:=QWORD(@main_wrapper);
+ seh_wrapper(newtd);
  //seh wrapper
 
  if (td<>nil) then
@@ -573,6 +564,14 @@ begin
  end;
 
  cpu_set_upcall_kse(newtd,func,arg,@stack);
+
+ //jit wrapper
+ kern_jit_dynamic.switch_to_jit(newtd);
+ //jit wrapper
+
+ //seh wrapper
+ seh_wrapper(newtd);
+ //seh wrapper
 
  if (td<>nil) then
  begin
@@ -695,6 +694,9 @@ begin
  thread_unlink(td);
 
  umtx_thread_exit(td);
+
+ FreeMem(td^.td_jit_ctx);
+ td^.td_jit_ctx:=nil;
 
  //free
  thread_dec_ref(td);

@@ -33,6 +33,8 @@ type
   tf_rip:QWORD; //28
  end;
 
+ t_point_type=(fpCall,fpData,fpInvalid);
+
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object
   type
@@ -44,6 +46,7 @@ type
 
    t_forward_links=object
     root:p_forward_link;
+    ptype:t_point_type;
     procedure Resolve(_label:t_jit_i_link);
    end;
 
@@ -99,15 +102,19 @@ type
    builder:t_jit_builder;
 
   function  is_text_addr(addr:QWORD):Boolean;
-  function  is_map_addr(addr:QWORD):Boolean;
-  procedure add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
-  function  add_forward_point(label_id:t_jit_i_link;dst:Pointer):p_forward_point;
-  function  add_forward_point(dst:Pointer):p_forward_point;
+  function  is_map_addr (addr:QWORD):Boolean;
+  procedure add_forward_link (node:p_forward_point;label_id:t_jit_i_link);
+  function  add_forward_point(ptype:t_point_type;label_id:t_jit_i_link;dst:Pointer):p_forward_point;
+  function  add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
+  Function  new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
+  procedure mark_chunk(ptype:t_point_type);
+  function  get_chunk_ptype():t_point_type;
+  procedure end_chunk(__end:Pointer);
   function  max_forward_point():Pointer;
   function  fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
   function  add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link):p_label;
   function  get_label(src:Pointer):p_label;
-  function  get_link(src:Pointer):t_jit_i_link;
+  function  get_link (src:Pointer):t_jit_i_link;
   procedure add_entry_point(src:Pointer;label_id:t_jit_i_link);
   procedure Free;
  end;
@@ -321,11 +328,17 @@ begin
  node^.links.root:=link;
 end;
 
-function t_jit_context2.add_forward_point(label_id:t_jit_i_link;dst:Pointer):p_forward_point;
+function t_jit_context2.add_forward_point(ptype:t_point_type;label_id:t_jit_i_link;dst:Pointer):p_forward_point;
 var
  node:t_forward_point;
 begin
  if (dst=nil) then Exit;
+
+ if (ptype=fpCall) then
+ if (get_chunk_ptype=fpData) then
+ begin
+  ptype:=fpData;
+ end;
 
  node.dst:=dst;
  Result:=forward_set.Find(@node);
@@ -333,14 +346,53 @@ begin
  begin
   Result:=builder.Alloc(Sizeof(t_forward_point));
   Result^.dst:=dst;
+  Result^.links.ptype:=ptype;
   forward_set.Insert(Result);
  end;
  add_forward_link(Result,label_id);
 end;
 
-function t_jit_context2.add_forward_point(dst:Pointer):p_forward_point;
+function t_jit_context2.add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
 begin
- Result:=add_forward_point(nil_link,dst);
+ Result:=add_forward_point(ptype,nil_link,dst);
+end;
+
+Function t_jit_context2.new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
+begin
+ Result:=builder._new_chunk(QWORD(start));
+ if (Result<>nil) then
+ begin
+  Result^.data:=QWORD(ptype);
+ end;
+end;
+
+procedure t_jit_context2.mark_chunk(ptype:t_point_type);
+var
+ node:p_jit_code_chunk;
+begin
+ node:=builder.ACodeChunkCurr;
+ if (node<>nil) then
+ if (t_point_type(node^.data)=fpData) then
+ begin
+  node^.data:=QWORD(ptype);
+ end;
+end;
+
+function t_jit_context2.get_chunk_ptype():t_point_type;
+var
+ node:p_jit_code_chunk;
+begin
+ Result:=fpCall;
+ node:=builder.ACodeChunkCurr;
+ if (node<>nil) then
+ begin
+  Result:=t_point_type(node^.data);
+ end;
+end;
+
+procedure t_jit_context2.end_chunk(__end:Pointer);
+begin
+ builder._end_chunk(QWORD(__end));
 end;
 
 function t_jit_context2.max_forward_point():Pointer;
@@ -991,7 +1043,7 @@ begin
    if (ctx.max=0) or (ofs<=ctx.max) then
    if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
-    ctx.add_forward_point(Pointer(ofs));
+    ctx.add_forward_point(fpCall,Pointer(ofs));
    end;
   end;
 
@@ -1005,7 +1057,7 @@ begin
    if (ofs<=ctx.max) then
    if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
-    ctx.add_forward_point(Pointer(ofs));
+    ctx.add_forward_point(fpData,Pointer(ofs));
    end;
   end;
 

@@ -586,11 +586,11 @@ begin
    if (link<>nil_link) then
    begin
     ctx.builder.jmp(link);
-    ctx.add_forward_point(nil_link,dst);
+    ctx.add_forward_point(fpCall,dst);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
-    ctx.add_forward_point(id,dst);
+    ctx.add_forward_point(fpCall,id,dst);
    end;
   end else
   begin
@@ -635,7 +635,7 @@ begin
  end;
 
  //
- ctx.add_forward_point(nil_link,ctx.ptr_next);
+ ctx.add_forward_point(fpCall,ctx.ptr_next);
 end;
 
 procedure op_ret(var ctx:t_jit_context2);
@@ -675,11 +675,11 @@ begin
    if (link<>nil_link) then
    begin
     ctx.builder.jmp(link);
-    ctx.add_forward_point(nil_link,dst);
+    ctx.add_forward_point(fpCall,dst);
    end else
    begin
     id:=ctx.builder.jmp(nil_link);
-    ctx.add_forward_point(id,dst);
+    ctx.add_forward_point(fpCall,id,dst);
    end;
   end else
   begin
@@ -741,11 +741,11 @@ begin
   if (link<>nil_link) then
   begin
    ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
-   ctx.add_forward_point(nil_link,dst);
+   ctx.add_forward_point(fpCall,dst);
   end else
   begin
    id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
-   ctx.add_forward_point(id,dst);
+   ctx.add_forward_point(fpCall,id,dst);
   end;
  end else
  begin
@@ -911,8 +911,8 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
- ctx.add_forward_point(nil_link,ctx.ptr_curr);
- ctx.add_forward_point(nil_link,ctx.ptr_next);
+ ctx.add_forward_point(fpCall,ctx.ptr_curr);
+ ctx.add_forward_point(fpCall,ctx.ptr_next);
  //
  op_set_rax_imm(ctx,Int64(ctx.ptr_next));
  //
@@ -1500,7 +1500,7 @@ begin
 
  entry_link:=addr;
 
- ctx.builder._new_chunk(QWORD(entry_link));
+ ctx.new_chunk(links.ptype,entry_link);
 
  ptr:=addr;
 
@@ -1513,6 +1513,8 @@ begin
   if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    writeln('not excec:0x',HexStr(ptr));
+
+   ctx.mark_chunk(fpInvalid);
 
    link_curr:=ctx.builder.get_curr_label.after;
    ctx.builder.ud2;
@@ -1534,6 +1536,8 @@ begin
      //invalid
      writeln('invalid:0x',HexStr(ctx.ptr_curr));
 
+     ctx.mark_chunk(fpInvalid);
+
      link_curr:=ctx.builder.get_curr_label.after;
      ctx.builder.ud2;
      link_next:=ctx.builder.get_curr_label.after;
@@ -1548,6 +1552,8 @@ begin
      is_invalid(adec.Instr) then
   begin
    writeln('invalid:0x',HexStr(ctx.ptr_curr));
+
+   ctx.mark_chunk(fpInvalid);
 
    link_curr:=ctx.builder.get_curr_label.after;
    ctx.builder.ud2;
@@ -1767,7 +1773,7 @@ begin
    ctx.trim:=False;
 
    //close chunk
-   ctx.builder._end_chunk(QWORD(ctx.ptr_next));
+   ctx.end_chunk(ctx.ptr_next);
 
    repeat
 
@@ -1793,7 +1799,7 @@ begin
 
    entry_link:=addr;
 
-   ctx.builder._new_chunk(QWORD(entry_link));
+   ctx.new_chunk(links.ptype,entry_link);
 
    ptr:=addr;
   end;

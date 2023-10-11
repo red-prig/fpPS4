@@ -32,6 +32,8 @@ function  cpu_thread_finished(td:p_kthread):Boolean;
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 
+procedure seh_wrapper(td:p_kthread);
+
 implementation
 
 uses
@@ -313,6 +315,24 @@ begin
  Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
 end;
 
+procedure main_wrapper; assembler; nostackframe;
+asm
+ subq   $40, %rsp
+.seh_stackalloc 40
+.seh_endprologue
+
+ call %gs:teb.jitcall
+
+ nop
+ addq   $40, %rsp
+.seh_handler __FPC_default_handler,@except,@unwind
+end;
+
+procedure seh_wrapper(td:p_kthread);
+begin
+ td^.td_teb^.jitcall:=Pointer(td^.td_frame.tf_rip);
+ td^.td_frame.tf_rip:=QWORD(@main_wrapper);
+end;
 
 
 end.

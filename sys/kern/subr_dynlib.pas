@@ -2745,12 +2745,12 @@ begin
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
 
- ctx.add_forward_point(obj^.entry_addr);
+ ctx.add_forward_point(fpCall,obj^.entry_addr);
 
  if (obj^.rtld_flags.mainprog=0) then
  begin
-  ctx.add_forward_point(obj^.init_proc_addr);
-  ctx.add_forward_point(obj^.fini_proc_addr);
+  ctx.add_forward_point(fpCall,obj^.init_proc_addr);
+  ctx.add_forward_point(fpCall,obj^.fini_proc_addr);
  end;
 
  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
@@ -2776,7 +2776,7 @@ begin
         begin
          addr:=obj^.relocbase + symp^.st_value;
 
-         ctx.add_forward_point(addr);
+         ctx.add_forward_point(fpCall,addr);
         end;
      else;
     end; //case
