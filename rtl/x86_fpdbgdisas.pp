@@ -3344,6 +3344,7 @@ begin
       then begin
         if flagVex in Flags
         then begin
+          Exclude(Flags,flagModRM);
           if Vex.VectorLength = os128
           then SetOpcode(OPvzeroupper)
           else SetOpcode(OPvzeroall);

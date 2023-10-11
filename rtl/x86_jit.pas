@@ -22,11 +22,13 @@ type
   ALock    :Boolean;
  end;
 
+ t_op_opt=Set of (not_impl,not_prefix,not_vex_len);
+
  t_op_type=packed object
   op:DWORD;
   index:Byte;
   mm:Byte;
-  opt:Set of (not_impl,not_prefix,not_vex_len);
+  opt:t_op_opt;
  end;
 
  TOperandSizeSet =Set of TOperandSize;
@@ -317,7 +319,7 @@ type
   procedure _RRI    (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
   procedure _RRI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
   procedure _R      (const desc:t_op_type;reg:TRegValue);
-  procedure _O      (op:DWORD;Size:TOperandSize=os0;not_prefix:Boolean=false);
+  procedure _O      (op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]);
   procedure _O      (const desc:t_op_type;reg:TRegValue);
   procedure _M      (const desc:t_op_type;mem:t_jit_leas);
   procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
@@ -2467,7 +2469,7 @@ end;
 
 ///
 
-procedure t_jit_builder._O(op:DWORD;Size:TOperandSize=os0;not_prefix:Boolean=false);
+procedure t_jit_builder._O(op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]);
 var
  rexW:Boolean;
  Prefix:Byte;
@@ -2480,8 +2482,13 @@ begin
  Prefix:=0;
 
  case Size of
+   os8:
+       if (not (not_prefix in opt)) then
+       begin
+        Dec(op);
+       end;
   os16:
-       if (not not_prefix) then
+       if (not (not_prefix in opt)) then
        begin
         Prefix:=$66;
        end;
@@ -2546,6 +2553,11 @@ begin
 
  op:=desc.op;
  case reg.ASize of
+   os8:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Dec(op);
+       end;
   os16:
        if (not (not_prefix in desc.opt)) then
        begin

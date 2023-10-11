@@ -2968,8 +2968,8 @@ var
   begin
    //input:rax
 
-   new1:=new_reg(ctx.din.Operand[2]);
-   _VM(desc.mem_reg,new1,[flags(ctx)+r_tmp0,mem_size]);
+   new2:=new_reg(ctx.din.Operand[2]);
+   _VM(desc.mem_reg,new2,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -2977,10 +2977,40 @@ var
  begin
   with ctx.builder do
   begin
-   //input:rax
+   case memop of
+    mo_reg_mem:
+      begin
+       //input:rax
 
-   new1:=new_reg(ctx.din.Operand[1]);
-   _VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]);
+       new1:=new_reg(ctx.din.Operand[1]);
+       _VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]);
+      end;
+
+    mo_ctx_mem:
+      begin
+       //input:rax
+
+       Assert(not (his_rax in desc.hint));
+
+       new1:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+
+       if (not (his_wo in desc.hint)) or
+          (his_ro in desc.hint) then
+       begin
+        op_load(ctx,new1,1);
+       end;
+
+       _VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]);
+
+       if not (his_ro in desc.hint) then
+       begin
+        op_save(ctx,1,fix_size(new1));
+       end;
+
+      end;
+    else
+     Assert(false);
+    end;
   end;
  end;
 
@@ -3025,7 +3055,8 @@ begin
       end;
      end;
 
-   mo_reg_mem:
+   mo_reg_mem,
+   mo_ctx_mem:
      begin
       if (his_align in desc.hint) then
       begin

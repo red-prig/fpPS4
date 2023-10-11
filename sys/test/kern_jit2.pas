@@ -984,9 +984,18 @@ begin
  //align?
 end;
 
+{
+ //load flags to al,ah
+ seto(al);
+ lahf;
+
+ //store flags from al,ah
+ addi(al,127);
+ sahf;
+}
+
 procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
 var
- op:DWORD;
  size:TOperandSize;
 
  link_start:t_jit_i_link;
@@ -998,13 +1007,8 @@ begin
  //rdi,rsi
  //prefix $67 TODO
 
- op:=$A7;
  case ctx.din.OpCode.Suffix of
-  OPSx_b:
-   begin
-    size:=os8;
-    op:=$A6;
-   end;
+  OPSx_b:size:=os8;
   OPSx_w:size:=os16;
   OPSx_d:size:=os32;
   OPSx_q:size:=os64;
@@ -1040,7 +1044,7 @@ begin
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
-   _O(op,Size);
+   _O($A7,Size);
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -1156,12 +1160,11 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
-   seto(al);
-   lahf;
+
+   //flags saved in up proc
     testq(rcx,rcx);
     link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   addi(al,127);
-   sahf;
+   //flags saved in up proc
 
    movq(r_tmp0,rdi);
    call_far(@uplift_jit); //in/out:rax uses:r14
@@ -1181,12 +1184,9 @@ begin
   //until
   jmp(link_start,os8);
 
-  //exit1
-  sahf;
+  //exit
 
-  //exit2
-
-  link___end:=ctx.builder.get_curr_label.before; //exit1
+  link___end:=ctx.builder.get_curr_label.after; //exit
 
   link_jmp0._label:=link___end;
  end;
@@ -1207,17 +1207,125 @@ begin
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
-  popfq(os64);
   _op_rep_stos(ctx,0);
 
   link_jmp1:=jmp(nil_link,os8);
 
   link_jmp0._label:=ctx.builder.get_curr_label.after;
 
-  popfq(os64);
   _op_rep_stos(ctx,1);
 
   link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+
+ end;
+end;
+
+//
+
+procedure _op_rep_movs(var ctx:t_jit_context2;dflag:Integer);
+var
+ size:TOperandSize;
+
+ link_start:t_jit_i_link;
+ link___end:t_jit_i_link;
+
+ link_jmp0:t_jit_i_link;
+begin
+ //rdi,rsi
+ //prefix $67 TODO
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rsi
+ with ctx.builder do
+ begin
+
+  link_jmp0:=nil_link;
+
+  link_start:=ctx.builder.get_curr_label.after;
+
+  //repeat
+   //flags saved in up proc
+    testq(rcx,rcx);
+    link_jmp0:=jcc(OPSc_z,nil_link,os8);
+   //flags saved in up proc
+
+   movq(r_tmp0,rsi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+   movq(r_tmp1,r_tmp0);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   //[RSI] -> [RDI].
+
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+   //
+   _O($A5,Size);
+   //
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+
+   leaq(rcx,[rcx-1]);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
+   end;
+
+  //until
+  jmp(link_start,os8);
+
+  //exit
+
+  link___end:=ctx.builder.get_curr_label.after; //exit
+
+  link_jmp0._label:=link___end;
+ end;
+
+end;
+
+procedure op_rep_movs(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  _op_rep_movs(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  _op_rep_movs(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
 
  end;
 end;
@@ -1469,6 +1577,7 @@ begin
     case ctx.din.OpCode.Opcode of
      OPcmps:cb:=@op_rep_cmps;
      OPstos:cb:=@op_rep_stos;
+     OPmovs:cb:=@op_rep_movs;
      else;
     end;
    end;
@@ -1578,6 +1687,20 @@ begin
   end;
 
   if (qword(ptr) and $FFFFF) = $2b8a0 then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+  }
+
+  {
+  if (qword(ctx.ptr_curr) and $FFFFF) = $2849d then
+  begin
+   //print_asm:=true;
+   ctx.builder.int3;
+  end;
+
+  if (qword(ctx.ptr_curr) and $FFFFF) = $2849a then
   begin
    //print_asm:=true;
    ctx.builder.int3;
