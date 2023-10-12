@@ -765,6 +765,42 @@ begin
 end;
 
 const
+ rcl_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:2);
+  mem__cl:(op:$D3;index:2);
+  mem_one:(op:$D1;index:2);
+ );
+
+procedure op_rcl(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift2(ctx,rcl_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ rcr_desc:t_op_shift=(
+  reg_im8:(op:$C1;index:3);
+  mem__cl:(op:$D3;index:3);
+  mem_one:(op:$D1;index:3);
+ );
+
+procedure op_rcr(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_shift2(ctx,rcr_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
  shl_desc:t_op_shift=(
   reg_im8:(op:$C1;index:4);
   mem__cl:(op:$D3;index:4);
@@ -1684,6 +1720,8 @@ begin
 
  jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
  jit_cbs[OPPnone,OPror ,OPSnone]:=@op_ror;
+ jit_cbs[OPPnone,OPrcl ,OPSnone]:=@op_rcl;
+ jit_cbs[OPPnone,OPrcr ,OPSnone]:=@op_rcr;
  jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shl;
  jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
  jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_sar;
@@ -1708,8 +1746,9 @@ begin
  jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_setcc;
  jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_setcc;
 
- jit_cbs[OPPnone,OPemms    ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPvzeroall,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPemms      ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPvzeroall  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPvzeroupper,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPfninit  ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfrndint ,OPSnone]:=@add_orig;

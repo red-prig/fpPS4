@@ -4395,7 +4395,7 @@ begin
       $A9: begin
         SetOpcode(OPtest);
         AddReg(regGeneral, OperandSize, REG_A);
-        AddIv;
+        AddIz;
       end;
       $AA: begin
         SetOpcode(OPstos, OPSx_b); CheckRepeat;
