@@ -1606,7 +1606,7 @@ begin
            ctx.din.Operand[2].Size);
    Writeln('opcode=$',HexStr(ctx.dis.opcode,2),' ',
            'MIndex=',ctx.dis.ModRM.Index,' ',
-           'SOpcode=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
+           'SimdOp=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
            'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);
    Assert(false);
   end;

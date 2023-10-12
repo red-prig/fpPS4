@@ -19,7 +19,7 @@ const
 procedure op_emit_avx2_mem_reg(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
-  mem_reg:(op:0;index:0;mm:0);
+  mem_reg:(op:0;index:0;simdop:0;mm:0);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
@@ -29,9 +29,9 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.mem_reg.op   :=ctx.dis.opcode;
- tmp.mem_reg.index:=SCODES[ctx.dis.SimdOpcode];
- tmp.mem_reg.mm   :=ctx.dis.mm;
+ tmp.mem_reg.op    :=ctx.dis.opcode;
+ tmp.mem_reg.simdop:=SCODES[ctx.dis.SimdOpcode];
+ tmp.mem_reg.mm    :=ctx.dis.mm;
  tmp.hint:=hint;
 
  op_emit_avx2(ctx,tmp);
@@ -41,7 +41,7 @@ procedure op_emit_avx2_reg_mem(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:0;index:0;mm:0);
+  reg_mem:(op:0;index:0;simdop:0;mm:0);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -50,9 +50,9 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.reg_mem.op   :=ctx.dis.opcode;
- tmp.reg_mem.index:=SCODES[ctx.dis.SimdOpcode];
- tmp.reg_mem.mm   :=ctx.dis.mm;
+ tmp.reg_mem.op    :=ctx.dis.opcode;
+ tmp.reg_mem.simdop:=SCODES[ctx.dis.SimdOpcode];
+ tmp.reg_mem.mm    :=ctx.dis.mm;
  tmp.hint:=hint;
 
  op_emit_avx2(ctx,tmp);
@@ -94,7 +94,7 @@ end;
 procedure op_emit_avx3_gen(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
-  op:0;index:0;mm:0;opt:[]
+  op:0;index:0;simdop:0;mm:0;opt:[]
  );
 var
  tmp:t_op_type;
@@ -102,9 +102,9 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.op   :=ctx.dis.opcode;
-  tmp.index:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm   :=ctx.dis.mm;
+  tmp.op    :=ctx.dis.opcode;
+  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm    :=ctx.dis.mm;
 
   op_emit_avx3(ctx,tmp);
  end else
@@ -116,7 +116,7 @@ end;
 procedure op_emit_avx3_not_vex_len(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
-  op:0;index:0;mm:0;opt:[not_vex_len];
+  op:0;index:0;simdop:0;mm:0;opt:[not_vex_len];
  );
 var
  tmp:t_op_type;
@@ -124,9 +124,9 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.op   :=ctx.dis.opcode;
-  tmp.index:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm   :=ctx.dis.mm;
+  tmp.op    :=ctx.dis.opcode;
+  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm    :=ctx.dis.mm;
 
   op_emit_avx3(ctx,tmp);
  end else
@@ -140,7 +140,7 @@ end;
 procedure op_emit_avx3_rmi(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
-  rmi:(op:0;index:0;mm:0);
+  rmi:(op:0;index:0;simdop:0;mm:0);
   mri:(opt:[not_impl]);
  );
 var
@@ -149,9 +149,9 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.rmi.op   :=ctx.dis.opcode;
-  tmp.rmi.index:=SCODES[ctx.dis.SimdOpcode];
-  tmp.rmi.mm   :=ctx.dis.mm;
+  tmp.rmi.op    :=ctx.dis.opcode;
+  tmp.rmi.simdop:=SCODES[ctx.dis.SimdOpcode];
+  tmp.rmi.mm    :=ctx.dis.mm;
 
   op_emit_avx3_imm8(ctx,tmp);
  end else
@@ -164,7 +164,7 @@ procedure op_emit_avx3_mri(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
   rmi:(opt:[not_impl]);
-  mri:(op:0;index:0;mm:0);
+  mri:(op:0;index:0;simdop:0;mm:0);
  );
 var
  tmp:t_op_avx3_imm;
@@ -172,9 +172,9 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.mri.op   :=ctx.dis.opcode;
-  tmp.mri.index:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mri.mm   :=ctx.dis.mm;
+  tmp.mri.op    :=ctx.dis.opcode;
+  tmp.mri.simdop:=SCODES[ctx.dis.SimdOpcode];
+  tmp.mri.mm    :=ctx.dis.mm;
 
   op_emit_avx3_imm8(ctx,tmp);
  end else
@@ -187,8 +187,8 @@ end;
 
 const
  vmovups_desc:t_op_desc=(
-  mem_reg:(op:$11;index:0;mm:1);
-  reg_mem:(op:$10;index:0;mm:1);
+  mem_reg:(op:$11;simdop:0;mm:1);
+  reg_mem:(op:$10;simdop:0;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -207,8 +207,8 @@ end;
 
 const
  vmovupd_desc:t_op_desc=(
-  mem_reg:(op:$11;index:1;mm:1);
-  reg_mem:(op:$10;index:1;mm:1);
+  mem_reg:(op:$11;simdop:1;mm:1);
+  reg_mem:(op:$10;simdop:1;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -227,8 +227,8 @@ end;
 
 const
  vmovaps_desc:t_op_desc=(
-  mem_reg:(op:$29;index:0;mm:1);
-  reg_mem:(op:$28;index:0;mm:1);
+  mem_reg:(op:$29;simdop:0;mm:1);
+  reg_mem:(op:$28;simdop:0;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -247,8 +247,8 @@ end;
 
 const
  vmovapd_desc:t_op_desc=(
-  mem_reg:(op:$29;index:1;mm:1);
-  reg_mem:(op:$28;index:1;mm:1);
+  mem_reg:(op:$29;simdop:1;mm:1);
+  reg_mem:(op:$28;simdop:1;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -267,8 +267,8 @@ end;
 
 const
  vmovdqu_desc:t_op_desc=(
-  mem_reg:(op:$7F;index:2;mm:1);
-  reg_mem:(op:$6F;index:2;mm:1);
+  mem_reg:(op:$7F;simdop:2;mm:1);
+  reg_mem:(op:$6F;simdop:2;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -287,8 +287,8 @@ end;
 
 const
  vmovdqa_desc:t_op_desc=(
-  mem_reg:(op:$7F;index:1;mm:1);
-  reg_mem:(op:$6F;index:1;mm:1);
+  mem_reg:(op:$7F;simdop:1;mm:1);
+  reg_mem:(op:$6F;simdop:1;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -318,8 +318,8 @@ end;
 
 const
  vmov_dq_desc:t_op_desc=(
-  mem_reg:(op:$7E;index:1;mm:1);
-  reg_mem:(op:$6E;index:1;mm:1);
+  mem_reg:(op:$7E;simdop:1;mm:1);
+  reg_mem:(op:$6E;simdop:1;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -338,8 +338,8 @@ end;
 
 const
  vmovq_desc:t_op_desc=(
-  mem_reg:(op:$D6;index:1;mm:1);
-  reg_mem:(op:$7E;index:2;mm:1);
+  mem_reg:(op:$D6;simdop:1;mm:1);
+  reg_mem:(op:$7E;simdop:2;mm:1);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -367,14 +367,14 @@ end;
 
 const
  vmovlps_desc2:t_op_desc=(
-  mem_reg:(op:$13;index:0;mm:1);
+  mem_reg:(op:$13;simdop:0;mm:1);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovlps_rrm_desc:t_op_type=(op:$12;index:0;mm:1);
+ vmovlps_rrm_desc:t_op_type=(op:$12;simdop:0;mm:1);
 
 procedure op_vmovlps(var ctx:t_jit_context2);
 begin
@@ -396,14 +396,14 @@ end;
 
 const
  vmovlpd_desc2:t_op_desc=(
-  mem_reg:(op:$13;index:1;mm:1);
+  mem_reg:(op:$13;simdop:1;mm:1);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovlpd_rrm_desc:t_op_type=(op:$12;index:1;mm:1);
+ vmovlpd_rrm_desc:t_op_type=(op:$12;simdop:1;mm:1);
 
 procedure op_vmovlpd(var ctx:t_jit_context2);
 begin
@@ -425,14 +425,14 @@ end;
 
 const
  vmovhps_desc2:t_op_desc=(
-  mem_reg:(op:$17;index:0;mm:1);
+  mem_reg:(op:$17;simdop:0;mm:1);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovhps_rrm_desc:t_op_type=(op:$16;index:0;mm:1);
+ vmovhps_rrm_desc:t_op_type=(op:$16;simdop:0;mm:1);
 
 procedure op_vmovhps(var ctx:t_jit_context2);
 begin
@@ -454,14 +454,14 @@ end;
 
 const
  vmovhpd_desc2:t_op_desc=(
-  mem_reg:(op:$17;index:1;mm:1);
+  mem_reg:(op:$17;simdop:1;mm:1);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovhpd_rrm_desc:t_op_type=(op:$16;index:1;mm:1);
+ vmovhpd_rrm_desc:t_op_type=(op:$16;simdop:1;mm:1);
 
 procedure op_vmovhpd(var ctx:t_jit_context2);
 begin
@@ -482,7 +482,7 @@ end;
 //
 
 const
- vmovmskps_desc:t_op_type=(op:$50;index:0;mm:1);
+ vmovmskps_desc:t_op_type=(op:$50;simdop:0;mm:1);
 
 procedure op_vmovmskps(var ctx:t_jit_context2);
 begin
@@ -496,7 +496,7 @@ begin
 end;
 
 const
- vmovmskpd_desc:t_op_type=(op:$50;index:1;mm:1);
+ vmovmskpd_desc:t_op_type=(op:$50;simdop:1;mm:1);
 
 procedure op_vmovmskpd(var ctx:t_jit_context2);
 begin
@@ -510,7 +510,7 @@ begin
 end;
 
 const
- vpmovmskb_desc:t_op_type=(op:$D7;index:1;mm:1);
+ vpmovmskb_desc:t_op_type=(op:$D7;simdop:1;mm:1);
 
 procedure op_vpmovmskb(var ctx:t_jit_context2);
 begin
@@ -528,7 +528,7 @@ end;
 const
  vptest_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$17;index:1;mm:2);
+  reg_mem:(op:$17;simdop:1;mm:2);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_ro];
@@ -545,32 +545,21 @@ begin
  end;
 end;
 
+procedure op_bmi_gen(var ctx:t_jit_context2);
 const
- blsr_desc:t_op_type=(
-  op:$F3;index:1;mm:2
+ desc:t_op_type=(
+  op:$F3;index:0;mm:0
  );
-
-procedure op_blsr(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit_avx_F3(ctx,blsr_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- blsi_desc:t_op_type=(
-  op:$F3;index:3;mm:2
- );
-
-procedure op_blsi(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_avx_F3(ctx,blsi_desc);
+  tmp:=desc;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.mm   :=ctx.dis.mm;
+  //
+  op_emit_avx_F3(ctx,tmp);
  end else
  begin
   add_orig(ctx);
@@ -581,11 +570,11 @@ end;
 
 const
  vpermilps_rrm_desc:t_op_type=(
-  op:$0C;index:1;mm:2;
+  op:$0C;simdop:1;mm:2;
  );
 
  vpermilps_rmi_desc:t_op_avx3_imm=(
-  rmi:(op:$04;index:1;mm:3);
+  rmi:(op:$04;simdop:1;mm:3);
   mri:(opt:[not_impl]);
  );
 
@@ -612,11 +601,11 @@ end;
 
 const
  vpermilpd_rrm_desc:t_op_type=(
-  op:$0D;index:1;mm:2;
+  op:$0D;simdop:1;mm:2;
  );
 
  vpermilpd_rmi_desc:t_op_avx3_imm=(
-  rmi:(op:$05;index:1;mm:3);
+  rmi:(op:$05;simdop:1;mm:3);
   mri:(opt:[not_impl]);
  );
 
@@ -643,7 +632,7 @@ end;
 
 const
  vpblendvb_desc:t_op_type=(
-  op:$4C;index:1;mm:3
+  op:$4C;simdop:1;mm:3
  );
 
 procedure op_vpblendvb(var ctx:t_jit_context2);
@@ -659,7 +648,7 @@ end;
 
 const
  vblendvps_desc:t_op_type=(
-  op:$4A;index:1;mm:3
+  op:$4A;simdop:1;mm:3
  );
 
 procedure op_vblendvps(var ctx:t_jit_context2);
@@ -675,7 +664,7 @@ end;
 
 const
  vblendvpd_desc:t_op_type=(
-  op:$4B;index:1;mm:3
+  op:$4B;simdop:1;mm:3
  );
 
 procedure op_vblendvpd(var ctx:t_jit_context2);
@@ -693,7 +682,7 @@ end;
 
 const
  bextr_desc:t_op_type=(
-  op:$F7;index:0;mm:2;
+  op:$F7;simdop:0;mm:2;
  );
 
 procedure op_bextr(var ctx:t_jit_context2);
@@ -709,7 +698,7 @@ end;
 
 const
  andn_desc:t_op_type=(
-  op:$F2;index:0;mm:2;
+  op:$F2;simdop:0;mm:2;
  );
 
 procedure op_andn(var ctx:t_jit_context2);
@@ -728,7 +717,7 @@ end;
 const
  vbroadcastss_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$18;index:1;mm:2;opt:[not_vex_len]);
+  reg_mem:(op:$18;simdop:1;mm:2;opt:[not_vex_len]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -748,7 +737,7 @@ end;
 const
  vbroadcastsd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$19;index:1;mm:2;opt:[not_vex_len]);
+  reg_mem:(op:$19;simdop:1;mm:2;opt:[not_vex_len]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -768,7 +757,7 @@ end;
 const
  vbroadcastf128_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$1A;index:1;mm:2;opt:[not_vex_len]);
+  reg_mem:(op:$1A;simdop:1;mm:2;opt:[not_vex_len]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -847,8 +836,9 @@ begin
 
  jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
 
- jit_cbs[OPPnone,OPblsr,OPSnone ]:=@op_blsr;
- jit_cbs[OPPnone,OPblsi,OPSnone ]:=@op_blsi;
+ jit_cbs[OPPnone,OPblsr  ,OPSnone]:=@op_bmi_gen;
+ jit_cbs[OPPnone,OPblsmsk,OPSnone]:=@op_bmi_gen;
+ jit_cbs[OPPnone,OPblsi  ,OPSnone]:=@op_bmi_gen;
 
  jit_cbs[OPPv,OPxor   ,OPSx_ps]:=@op_emit_avx3_gen;
  jit_cbs[OPPv,OPxor   ,OPSx_pd]:=@op_emit_avx3_gen;

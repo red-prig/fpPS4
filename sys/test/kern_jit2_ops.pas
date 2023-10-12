@@ -728,126 +728,24 @@ end;
 
 //
 
+procedure op_shift2_gen(var ctx:t_jit_context2);
 const
- rol_desc:t_op_shift=(
+ desc:t_op_shift=(
   reg_im8:(op:$C1;index:0);
   mem__cl:(op:$D3;index:0);
   mem_one:(op:$D1;index:0);
  );
-
-procedure op_rol(var ctx:t_jit_context2);
+var
+ tmp:t_op_shift;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit_shift2(ctx,rol_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- ror_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:1);
-  mem__cl:(op:$D3;index:1);
-  mem_one:(op:$D1;index:1);
- );
-
-procedure op_ror(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,ror_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- rcl_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:2);
-  mem__cl:(op:$D3;index:2);
-  mem_one:(op:$D1;index:2);
- );
-
-procedure op_rcl(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,rcl_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- rcr_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:3);
-  mem__cl:(op:$D3;index:3);
-  mem_one:(op:$D1;index:3);
- );
-
-procedure op_rcr(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,rcr_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- shl_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:4);
-  mem__cl:(op:$D3;index:4);
-  mem_one:(op:$D1;index:4);
- );
-
-procedure op_shl(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,shl_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- shr_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:5);
-  mem__cl:(op:$D3;index:5);
-  mem_one:(op:$D1;index:5);
- );
-
-procedure op_shr(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,shr_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- sar_desc:t_op_shift=(
-  reg_im8:(op:$C1;index:7);
-  mem__cl:(op:$D3;index:7);
-  mem_one:(op:$D1;index:7);
- );
-
-procedure op_sar(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_shift2(ctx,sar_desc);
+  tmp:=desc;
+  tmp.reg_im8.index:=ctx.dis.ModRM.Index;
+  tmp.mem__cl.index:=ctx.dis.ModRM.Index;
+  tmp.mem_one.index:=ctx.dis.ModRM.Index;
+  //
+  op_emit_shift2(ctx,tmp);
  end else
  begin
   add_orig(ctx);
@@ -1718,13 +1616,13 @@ begin
  jit_cbs[OPPnone,OPtzcnt  ,OPSnone]:=@op_tzcnt;
  jit_cbs[OPPnone,OPpopcnt ,OPSnone]:=@op_popcnt;
 
- jit_cbs[OPPnone,OProl ,OPSnone]:=@op_rol;
- jit_cbs[OPPnone,OPror ,OPSnone]:=@op_ror;
- jit_cbs[OPPnone,OPrcl ,OPSnone]:=@op_rcl;
- jit_cbs[OPPnone,OPrcr ,OPSnone]:=@op_rcr;
- jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shl;
- jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shr;
- jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_sar;
+ jit_cbs[OPPnone,OProl ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPror ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPrcl ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPrcr ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_shift2_gen;
 
  jit_cbs[OPPnone,OPshl ,OPSx_d ]:=@op_shld;
  jit_cbs[OPPnone,OPshr ,OPSx_d ]:=@op_shrd;

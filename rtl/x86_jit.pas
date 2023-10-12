@@ -25,10 +25,11 @@ type
  t_op_opt=Set of (not_impl,not_prefix,not_vex_len);
 
  t_op_type=packed object
-  op:DWORD;
-  index:Byte;
-  mm:Byte;
-  opt:t_op_opt;
+  op    :DWORD;
+  index :Byte;
+  simdop:Byte;
+  mm    :Byte;
+  opt   :t_op_opt;
  end;
 
  TOperandSizeSet =Set of TOperandSize;
@@ -369,6 +370,7 @@ type
   procedure pop     (reg:TRegValue);
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
+  procedure _VM     (const desc:t_op_type;mem:t_jit_leas);
   procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
   procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
   procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
@@ -3501,6 +3503,84 @@ begin
  _add(ji);
 end;
 
+procedure t_jit_builder._VM(const desc:t_op_type;mem:t_jit_leas);
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=0;
+
+ if not (not_vex_len in desc.opt) then
+ case mreg.AMemSize of
+  os128:Vex.Length:=0;
+  os256:Vex.Length:=1;
+  else;
+ end;
+
+ Vex.rexW:=False;
+ if (mreg.AMemSize=os64) then
+ begin
+  Vex.rexW:=True;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ _add(ji);
+end;
+
 procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
 var
  mreg:t_jit_lea;
@@ -3568,12 +3648,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -3639,12 +3719,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -3877,12 +3957,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -3971,12 +4051,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -4056,12 +4136,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -4134,12 +4214,12 @@ begin
   ji.EmitByte($C4); //VEX3
 
   ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.index);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
  end else
  begin
   ji.EmitByte($C5); //VEX2
 
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.index);
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
  end;
 
  ji.EmitByte(desc.op);
@@ -4201,7 +4281,7 @@ begin
  ji.EmitByte($C4); //VEX3
 
  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
- ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
 
  ji.EmitByte(desc.op);
 
@@ -4278,7 +4358,7 @@ begin
  ji.EmitByte($C4); //VEX3
 
  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
- ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.index);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
 
  ji.EmitByte(desc.op);
 
@@ -4291,49 +4371,49 @@ end;
 
 procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_leas);
 const
- desc:t_op_type=(op:$6F;index:2;mm:1);
+ desc:t_op_type=(op:$6F;simdop:2;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovdqu(mem:t_jit_leas;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;index:2;mm:1);
+ desc:t_op_type=(op:$7F;simdop:2;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_leas);
 const
- desc:t_op_type=(op:$6F;index:1;mm:1);
+ desc:t_op_type=(op:$6F;simdop:1;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovdqa(mem:t_jit_leas;reg:TRegValue);
 const
- desc:t_op_type=(op:$7F;index:1;mm:1);
+ desc:t_op_type=(op:$7F;simdop:1;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovntdq(mem:t_jit_leas;reg:TRegValue);
 const
- desc:t_op_type=(op:$E7;index:1;mm:1);
+ desc:t_op_type=(op:$E7;simdop:1;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_leas);
 const
- desc:t_op_type=(op:$10;index:0;mm:1);
+ desc:t_op_type=(op:$10;simdop:0;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
 
 procedure t_jit_builder.vmovups(mem:t_jit_leas;reg:TRegValue);
 const
- desc:t_op_type=(op:$11;index:0;mm:1);
+ desc:t_op_type=(op:$11;simdop:0;mm:1);
 begin
  _VM(desc,reg,mem);
 end;
