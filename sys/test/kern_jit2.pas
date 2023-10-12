@@ -1382,6 +1382,8 @@ begin
 
  jit_cbs[OPPnone,OPsyscall,OPSnone]:=@op_syscall;
  jit_cbs[OPPnone,OPint    ,OPSnone]:=@op_int;
+ jit_cbs[OPPnone,OPint1   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPint3   ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPud2    ,OPSnone]:=@op_ud2;
 
  jit_cbs[OPPnone,OPiret,OPSnone]:=@op_iretq;

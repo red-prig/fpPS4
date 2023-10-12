@@ -253,6 +253,7 @@ procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 procedure op_emit2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_shift2(var ctx:t_jit_context2;const desc:t_op_shift);
 procedure op_emit_shift3(var ctx:t_jit_context2;const desc:t_op_shift);
+procedure op_emit_avx1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 procedure op_emit_avx2_rr(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx2(var ctx:t_jit_context2;const desc:t_op_desc);
 procedure op_emit_avx3(var ctx:t_jit_context2;const desc:t_op_type);
@@ -2973,6 +2974,146 @@ begin
 
       _RR(desc.mem__cl,new1,new2,mem_size);
      end
+
+   else
+    Assert(false);
+  end;
+
+end;
+
+//
+
+procedure op_emit_avx1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
+var
+ i:Integer;
+ memop:t_memop_type1;
+ mem_size:TOperandSize;
+ link_next:t_jit_i_link;
+
+ new:TRegValue;
+
+ procedure mem_out;
+ begin
+  with ctx.builder do
+  begin
+   //input:rax
+
+   _VM(desc,[flags(ctx)+r_tmp0,mem_size]);
+  end;
+ end;
+
+ procedure mem_in;
+ begin
+  with ctx.builder do
+  begin
+   //input:rax
+
+   _VM(desc,[flags(ctx)+r_tmp0,mem_size]);
+  end;
+ end;
+
+begin
+ memop:=classif_memop1(ctx.din);
+
+ with ctx.builder do
+  case memop of
+   mo_mem:
+    begin
+
+     Assert(not (his_rax in hint));
+
+     if (his_ro in hint) then
+     begin
+      //DATA:=[mem]
+
+      build_lea(ctx,1,r_tmp0);
+      mem_size:=ctx.din.Operand[1].Size;
+      Assert(mem_size<>os0);
+
+      if (mem_size=os8) or
+         (his_rw in hint) then
+      begin
+       call_far(@uplift_jit); //in/out:rax uses:r14
+
+       mem_in;
+      end else
+      begin
+       //mem_size
+       movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+
+       call_far(@copyin_mov); //in:rax(addr),r14:(size) out:rax
+
+       mem_in;
+      end;
+
+     end else
+     begin
+      //[mem]:=DATA
+
+      build_lea(ctx,1,r_tmp0);
+      mem_size:=ctx.din.Operand[1].Size;
+      Assert(mem_size<>os0);
+
+      if (mem_size=os8) or
+         (his_rw in hint) then
+      begin
+
+       call_far(@uplift_jit); //in/out:rax uses:r14
+
+       mem_out;
+      end else
+      begin
+       //mem_size
+       movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
+
+       call_far(@copyout_mov); //in:rax(addr),r14:(size)
+
+       link_next:=jmp(nil_link,os8);
+
+       mem_out;
+
+       reta;
+
+       link_next._label:=get_curr_label.after;
+      end;
+
+     end;
+
+    end;
+
+   mo_ctx:
+    begin
+     mem_size:=ctx.din.Operand[1].Size;
+     Assert(mem_size<>os0);
+
+     Assert(not (his_rax in hint));
+
+     if (his_ro in hint) or
+        (mem_size<>os32) then
+     begin
+      i:=GetFrameOffset(ctx.din.Operand[1]);
+      _VM(desc,[r_thrd+i,mem_size]);
+     end else
+     begin
+
+      new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+
+      if (not (his_wo in hint)) or
+         (his_ro in hint) then
+      begin
+       op_load(ctx,new,1);
+      end;
+
+      Assert(false,'_V(desc,new);');
+
+      if not (his_ro in hint) then
+      begin
+       op_save(ctx,1,fix_size(new));
+      end;
+
+     end;
+
+    end;
 
    else
     Assert(false);

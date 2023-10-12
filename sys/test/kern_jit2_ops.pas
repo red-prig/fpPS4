@@ -191,10 +191,11 @@ begin
  end else
  begin
   case ctx.din.OperCnt of
-   1:begin
-      op_load_rax(ctx,ctx.builder.rax);
+   1:with ctx.builder do
+     begin
+      op_load_rax(ctx,rax);
       add_orig(ctx);
-      op_save_rax(ctx,ctx.builder.rax);
+      op_save_rax(ctx,rax);
      end;
    else
      add_orig(ctx);
@@ -211,10 +212,11 @@ begin
  begin
   op_emit1(ctx,mul_desc,[his_rax,his_ro]); //R
  end else
+ with ctx.builder do
  begin
-  op_load_rax(ctx,ctx.builder.rax);
+  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -227,10 +229,11 @@ begin
  begin
   op_emit1(ctx,idiv_desc1,[his_rax,his_ro]); //R
  end else
+ with ctx.builder do
  begin
-  op_load_rax(ctx,ctx.builder.rax);
+  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -243,10 +246,11 @@ begin
  begin
   op_emit1(ctx,div_desc,[his_rax,his_ro]); //R
  end else
+ with ctx.builder do
  begin
-  op_load_rax(ctx,ctx.builder.rax);
+  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -631,10 +635,11 @@ begin
  begin
   op_emit2(ctx,cmpxchg_desc);
  end else
+ with ctx.builder do
  begin
-  op_load_rax(ctx,ctx.builder.rax);
+  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -920,9 +925,9 @@ procedure op_cdq(var ctx:t_jit_context2);
 begin
  with ctx.builder do
  begin
-  op_load_rax(ctx,ctx.builder.rax);
+  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -931,7 +936,7 @@ begin
  with ctx.builder do
  begin
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -940,7 +945,35 @@ begin
  with ctx.builder do
  begin
   add_orig(ctx);
-  op_save_rax(ctx,ctx.builder.rax);
+  op_save_rax(ctx,rax);
+ end;
+end;
+
+//
+
+procedure op_sahf(var ctx:t_jit_context2);
+var
+ i:Integer;
+begin
+ with ctx.builder do
+ begin
+  i:=GetFrameOffset(ah);
+  movq(al,[r_thrd+i]);
+  movq(ah,al);
+  sahf;
+ end;
+end;
+
+procedure op_lahf(var ctx:t_jit_context2);
+var
+ i:Integer;
+begin
+ with ctx.builder do
+ begin
+  lahf;
+  i:=GetFrameOffset(ah);
+  movq(al,ah);
+  movq([r_thrd+i],al);
  end;
 end;
 
@@ -1042,37 +1075,7 @@ begin
  end;
 end;
 
-const
- ldmxcsr_desc:t_op_type=(
-  op:$0FAE;index:2;opt:[not_prefix];
- );
-
-procedure op_ldmxcsr(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,ldmxcsr_desc,[his_ro]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- stmxcsr_desc:t_op_type=(
-  op:$0FAE;index:3;opt:[not_prefix];
- );
-
-procedure op_stmxcsr(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,stmxcsr_desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
+//
 
 const
  fldcw_desc:t_op_type=(
@@ -1727,6 +1730,9 @@ begin
  jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
  jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
 
+ jit_cbs[OPPnone,OPsahf,OPSnone]:=@op_sahf;
+ jit_cbs[OPPnone,OPlahf,OPSnone]:=@op_lahf;
+
  //fpu
 
  jit_cbs[OPPnone,OPfldcw ,OPSnone]:=@op_fldcw;
@@ -1740,8 +1746,6 @@ begin
 
  jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_fxsave;
  jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_fxrstor;
- jit_cbs[OPPnone,OPldmxcsr,OPSnone]:=@op_ldmxcsr;
- jit_cbs[OPPnone,OPstmxcsr,OPSnone]:=@op_stmxcsr;
  jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_fst;
  jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_fstp;
  jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_fist;

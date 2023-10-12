@@ -58,7 +58,7 @@ begin
  op_emit_avx2(ctx,tmp);
 end;
 
-procedure op_emit_avx2_mem_reg_mov_wo(var ctx:t_jit_context2);
+procedure op_avx2_mem_reg_mov_wo(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
@@ -69,7 +69,7 @@ begin
  end;
 end;
 
-procedure op_emit_avx2_reg_mem_mov_wo(var ctx:t_jit_context2);
+procedure op_avx2_reg_mem_mov_wo(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
@@ -80,7 +80,7 @@ begin
  end;
 end;
 
-procedure op_emit_avx2_reg_mem_wo(var ctx:t_jit_context2);
+procedure op_avx2_reg_mem_wo(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
@@ -91,7 +91,7 @@ begin
  end;
 end;
 
-procedure op_emit_avx3_gen(var ctx:t_jit_context2);
+procedure op_avx3_gen(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
   op:0;index:0;simdop:0;mm:0;opt:[]
@@ -113,7 +113,7 @@ begin
  end;
 end;
 
-procedure op_emit_avx3_not_vex_len(var ctx:t_jit_context2);
+procedure op_avx3_not_vex_len(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
   op:0;index:0;simdop:0;mm:0;opt:[not_vex_len];
@@ -137,7 +137,7 @@ end;
 
 //
 
-procedure op_emit_avx3_rmi(var ctx:t_jit_context2);
+procedure op_avx3_rmi(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
   rmi:(op:0;index:0;simdop:0;mm:0);
@@ -160,7 +160,7 @@ begin
  end;
 end;
 
-procedure op_emit_avx3_mri(var ctx:t_jit_context2);
+procedure op_avx3_mri(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
   rmi:(opt:[not_impl]);
@@ -774,6 +774,28 @@ begin
  end;
 end;
 
+//
+
+const
+ vldmxcsr_desc:t_op_type=(
+  op:$AE;index:2;simdop:0;mm:1;
+ );
+
+procedure op_vldmxcsr(var ctx:t_jit_context2);
+begin
+ op_emit_avx1(ctx,vldmxcsr_desc,[his_ro]);
+end;
+
+const
+ vstmxcsr_desc:t_op_type=(
+  op:$AE;index:3;simdop:0;mm:1;
+ );
+
+procedure op_vstmxcsr(var ctx:t_jit_context2);
+begin
+ op_emit_avx1(ctx,vstmxcsr_desc,[his_wo]);
+end;
+
 ///
 
 procedure init_cbs_avx;
@@ -786,18 +808,18 @@ begin
  jit_cbs[OPPv,OPmov ,OPSx_dqa]:=@op_vmovdqa;
 
  jit_cbs[OPPv,OPmovnt,OPSx_dqa]:=@op_vmovntdqa;
- jit_cbs[OPPv,OPmovnt,OPSx_dq ]:=@op_emit_avx2_mem_reg_mov_wo;
+ jit_cbs[OPPv,OPmovnt,OPSx_dq ]:=@op_avx2_mem_reg_mov_wo;
 
- jit_cbs[OPPv,OPmovnt,OPSx_ps ]:=@op_emit_avx2_mem_reg_mov_wo;
- jit_cbs[OPPv,OPmovnt,OPSx_pd ]:=@op_emit_avx2_mem_reg_mov_wo;
+ jit_cbs[OPPv,OPmovnt,OPSx_ps ]:=@op_avx2_mem_reg_mov_wo;
+ jit_cbs[OPPv,OPmovnt,OPSx_pd ]:=@op_avx2_mem_reg_mov_wo;
 
- jit_cbs[OPPv,OPmovddup,OPSnone]:=@op_emit_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPmovddup,OPSnone]:=@op_avx2_reg_mem_mov_wo;
 
  jit_cbs[OPPv,OPmov ,OPSx_d  ]:=@op_vmovd;
  jit_cbs[OPPv,OPmov ,OPSx_q  ]:=@op_vmovq;
 
- jit_cbs[OPPv,OPmov ,OPSx_ss ]:=@op_emit_avx3_not_vex_len;
- jit_cbs[OPPv,OPmov ,OPSx_sd ]:=@op_emit_avx3_not_vex_len;
+ jit_cbs[OPPv,OPmov ,OPSx_ss ]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPv,OPmov ,OPSx_sd ]:=@op_avx3_not_vex_len;
 
  jit_cbs[OPPv,OPmovl,OPSx_ps]:=@op_vmovlps;
  jit_cbs[OPPv,OPmovl,OPSx_pd]:=@op_vmovlpd;
@@ -807,32 +829,32 @@ begin
 
  jit_cbs[OPPv,OPmovlh,OPSx_ps]:=@add_orig;
 
- jit_cbs[OPPv,OPmovsldup,OPSnone]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPmovshdup,OPSnone]:=@op_emit_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPmovsldup,OPSnone]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPmovshdup,OPSnone]:=@op_avx2_reg_mem_mov_wo;
 
- jit_cbs[OPPv,OPpmovsx,OPSv_bw]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovsx,OPSv_bd]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovsx,OPSv_bq]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovsx,OPSv_wd]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovsx,OPSv_wq]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovsx,OPSv_dq]:=@op_emit_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_bw]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_bd]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_bq]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_wd]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_wq]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovsx,OPSv_dq]:=@op_avx2_reg_mem_mov_wo;
 
- jit_cbs[OPPv,OPpmovzx,OPSv_bw]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovzx,OPSv_bd]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovzx,OPSv_bq]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovzx,OPSv_wd]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovzx,OPSv_wq]:=@op_emit_avx2_reg_mem_mov_wo;
- jit_cbs[OPPv,OPpmovzx,OPSv_dq]:=@op_emit_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_bw]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_bd]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_bq]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_wd]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_wq]:=@op_avx2_reg_mem_mov_wo;
+ jit_cbs[OPPv,OPpmovzx,OPSv_dq]:=@op_avx2_reg_mem_mov_wo;
 
  jit_cbs[OPPv,OPmovmsk,OPSx_ps]:=@op_vmovmskps;
  jit_cbs[OPPv,OPmovmsk,OPSx_pd]:=@op_vmovmskpd;
 
  jit_cbs[OPPv,OPpmovmskb,OPSnone]:=@op_vpmovmskb;
 
- jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_avx2_reg_mem_wo;
 
  jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
 
@@ -840,226 +862,243 @@ begin
  jit_cbs[OPPnone,OPblsmsk,OPSnone]:=@op_bmi_gen;
  jit_cbs[OPPnone,OPblsi  ,OPSnone]:=@op_bmi_gen;
 
- jit_cbs[OPPv,OPxor   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPxor   ,OPSx_pd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPxor   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPxor   ,OPSx_pd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpeq,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpeq,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpeq,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpeq,OPSx_q ]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpcmpgt,OPSx_b ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpgt,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpgt,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpcmpgt,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpcmpgt,OPSx_q ]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpcmpestrm,OPSnone]:=@op_emit_avx3_rmi;
- jit_cbs[OPPv,OPpcmpestri,OPSnone]:=@op_emit_avx3_rmi;
- jit_cbs[OPPv,OPpcmpistrm,OPSnone]:=@op_emit_avx3_rmi;
- jit_cbs[OPPv,OPpcmpistri,OPSnone]:=@op_emit_avx3_rmi;
+ jit_cbs[OPPv,OPpcmpestrm,OPSnone]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPpcmpestri,OPSnone]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPpcmpistrm,OPSnone]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPpcmpistri,OPSnone]:=@op_avx3_rmi;
 
- jit_cbs[OPPv,OPsub   ,OPSx_sd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPsub   ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPsub   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPsub   ,OPSx_pd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPsub   ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPsub   ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPsub   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPsub   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsub  ,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsub  ,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsub  ,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsub  ,OPSx_q ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsubs ,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsubs ,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsubus,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsubus,OPSx_w ]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpsub  ,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsub  ,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsub  ,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPadd   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPadd   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPadd   ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPadd   ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadd  ,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadd  ,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadd  ,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadd  ,OPSx_q ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadds ,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpadds ,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpaddus,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpaddus,OPSx_w ]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpadd  ,OPSx_b ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpadd  ,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpadd  ,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpadd  ,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPphadd ,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPphadd ,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPadd   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPadd   ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPadd   ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPadd   ,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPaddsub,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPaddsub,OPSx_ps]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPphadd ,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPphadd ,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPdiv   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPdiv   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPdiv   ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPdiv   ,OPSx_sd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPaddsub,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPaddsub,OPSx_ps]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPmul   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmul   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmul   ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmul   ,OPSx_sd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPdiv   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPdiv   ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPdiv   ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPdiv   ,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmull ,OPSx_d]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmull ,OPSx_w]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPmul   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmul   ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmul   ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmul   ,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmuludq ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmulhuw ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmulhrsw,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmulhw  ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmuldq  ,OPSnone]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmull ,OPSx_d]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmull ,OPSx_w]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpunpcklbw ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpcklwd ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpckldq ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpcklqdq,OPSnone]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmuludq ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmulhuw ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmulhrsw,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmulhw  ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmuldq  ,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpunpckhbw ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpckhwd ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpckhdq ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpunpckhqdq,OPSnone]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpunpcklbw ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpcklwd ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpckldq ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpcklqdq,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPunpckl    ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPunpckl    ,OPSx_ps]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpunpckhbw ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpckhwd ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpckhdq ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpunpckhqdq,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPunpckh    ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPunpckh    ,OPSx_ps]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPunpckl    ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPunpckl    ,OPSx_ps]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPcmp   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcmp   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcmp   ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcmp   ,OPSx_ss]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPunpckh    ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPunpckh    ,OPSx_ps]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpshuf ,OPSx_b ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpshuf ,OPSx_d ]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPpshuf ,OPSx_hw]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPpshuf ,OPSx_lw]:=@op_avx3_rmi;
 
- jit_cbs[OPPv,OPcmp   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcmp   ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcmp   ,OPSx_sd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcmp   ,OPSx_ss]:=@op_emit_avx3_gen;
-
- jit_cbs[OPPv,OPpshuf ,OPSx_b ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpshuf ,OPSx_d ]:=@op_emit_avx3_rmi;
- jit_cbs[OPPv,OPpshuf ,OPSx_hw]:=@op_emit_avx3_rmi;
- jit_cbs[OPPv,OPpshuf ,OPSx_lw]:=@op_emit_avx3_rmi;
-
- jit_cbs[OPPv,OPshuf  ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPshuf  ,OPSx_pd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPshuf  ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPshuf  ,OPSx_pd]:=@op_avx3_gen;
 
  jit_cbs[OPPnone,OPvpermil,OPSx_ps]:=@op_vpermilps;
  jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_vpermilpd;
 
- jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_emit_avx3_not_vex_len;
+ jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_avx3_not_vex_len;
 
- jit_cbs[OPPv,OPpxor   ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPor     ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPor     ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpor    ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPand    ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPand    ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPandn   ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPandn   ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpand   ,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpandn  ,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpxor   ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPor     ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPor     ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpor    ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPand    ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPand    ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPandn   ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPandn   ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpand   ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpandn  ,OPSnone]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPblend  ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPblend  ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpblend ,OPSx_w ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPblend  ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPblend  ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpblend ,OPSx_w ]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPpblendvb,OPSnone]:=@op_vpblendvb;
 
  jit_cbs[OPPv,OPblendv ,OPSx_ps]:=@op_vblendvps;
  jit_cbs[OPPv,OPblendv ,OPSx_pd]:=@op_vblendvpd;
 
- jit_cbs[OPPv,OPcvtsi2 ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcvtsi2 ,OPSx_sd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcvtss2 ,OPSx_sd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcvtsd2 ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPcvttps2,OPSx_dq]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvttpd2,OPSx_dq]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvtdq2 ,OPSx_ps]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvtdq2 ,OPSx_pd]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtsi2 ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvtsi2 ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvtss2 ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvtsd2 ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvttps2,OPSx_dq]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvttpd2,OPSx_dq]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtdq2 ,OPSx_ps]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtdq2 ,OPSx_pd]:=@op_avx2_reg_mem_wo;
 
- jit_cbs[OPPv,OPcvttss2,OPSx_si]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvttsd2,OPSx_si]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvttss2,OPSx_si]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvttsd2,OPSx_si]:=@op_avx2_reg_mem_wo;
 
- jit_cbs[OPPv,OPcvtpd2 ,OPSx_ps]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvtpd2 ,OPSx_dq]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtpd2 ,OPSx_ps]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtpd2 ,OPSx_dq]:=@op_avx2_reg_mem_wo;
 
- jit_cbs[OPPv,OPcvtps2,OPSx_pd]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvtps2,OPSx_dq]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtps2,OPSx_pd]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtps2,OPSx_dq]:=@op_avx2_reg_mem_wo;
 
  jit_cbs[OPPnone,OPbextr,OPSnone]:=@op_bextr;
  jit_cbs[OPPnone,OPandn ,OPSnone]:=@op_andn;
 
- jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_emit_avx3_mri;
- jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_emit_avx3_mri;
- jit_cbs[OPPv,OPpextr,OPSx_q]:=@op_emit_avx3_mri;
- jit_cbs[OPPv,OPpextr,OPSx_w]:=@op_emit_avx3_mri;
+ jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
+ jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_avx3_mri;
+ jit_cbs[OPPv,OPpextr,OPSx_q]:=@op_avx3_mri;
+ jit_cbs[OPPv,OPpextr,OPSx_w]:=@op_avx3_mri;
 
- jit_cbs[OPPv,OPextract,OPSx_ps]:=@op_emit_avx3_mri;
+ jit_cbs[OPPv,OPextract,OPSx_ps]:=@op_avx3_mri;
 
- jit_cbs[OPPv,OPinsert ,OPSx_f128]:=@op_emit_avx3_not_vex_len;
- jit_cbs[OPPv,OPinsert ,OPSx_ps  ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPinsert ,OPSx_f128]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPv,OPinsert ,OPSx_ps  ]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPextract,OPSx_f128]:=@op_emit_avx3_not_vex_len;
+ jit_cbs[OPPv,OPextract,OPSx_f128]:=@op_avx3_not_vex_len;
 
- jit_cbs[OPPv,OPround,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPround,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPround,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPround,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPround,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPround,OPSx_sd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPsqrt ,OPSx_sd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPsqrt ,OPSx_ss]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPsqrt ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPsqrt ,OPSx_ss]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPrsqrt,OPSx_ps]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPrsqrt,OPSx_ss]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPrsqrt,OPSx_ps]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPrsqrt,OPSx_ss]:=@op_avx3_gen;
+
+ jit_cbs[OPPv,OPrcp  ,OPSx_ps]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPrcp  ,OPSx_ss]:=@op_avx3_gen;
 
  jit_cbs[OPPnone,OPvbroadcast,OPSx_ss  ]:=@op_vbroadcastss;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_vbroadcastsd;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_f128]:=@op_vbroadcastf128;
 
- jit_cbs[OPPv,OPpinsr,OPSx_b]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpinsr,OPSx_d]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpinsr,OPSx_q]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpinsr,OPSx_w]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpinsr,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpinsr,OPSx_d]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpinsr,OPSx_q]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpinsr,OPSx_w]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpacksswb,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpackssdw,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpackusdw,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpackuswb,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpacksswb,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpackssdw,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpackusdw,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpackuswb,OPSnone]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpabs,OPSx_b]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPpabs,OPSx_w]:=@op_emit_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPpabs,OPSx_d]:=@op_emit_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPpabs,OPSx_b]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPpabs,OPSx_w]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPpabs,OPSx_d]:=@op_avx2_reg_mem_wo;
 
- jit_cbs[OPPv,OPpsra,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsra,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpsra,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsra,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpsrl,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsrl,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsrl,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpsrl,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsrl,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsrl,OPSx_q ]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpsrl,OPSx_dq]:=@add_orig;
 
- jit_cbs[OPPv,OPpsll,OPSx_w ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsll,OPSx_d ]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpsll,OPSx_q ]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpsll,OPSx_w ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsll,OPSx_d ]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsll,OPSx_q ]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpsll,OPSx_dq]:=@add_orig;
 
- jit_cbs[OPPv,OPpminu,OPSx_b]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpminu,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpminu,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpminu,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpminu,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpminu,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmins,OPSx_b]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmins,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmins,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmins,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmins,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmins,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPmin ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmin ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmin ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmin ,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPmin ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmin ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmin ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmin ,OPSx_sd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmaxu,OPSx_b]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmaxu,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmaxu,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmaxu,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmaxu,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmaxu,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmaxs,OPSx_b]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmaxs,OPSx_w]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmaxs,OPSx_d]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmaxs,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmaxs,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmaxs,OPSx_d]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPmax ,OPSx_ps]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmax ,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmax ,OPSx_ss]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPmax ,OPSx_sd]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPmax ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmax ,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmax ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPmax ,OPSx_sd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPhadd,OPSx_pd]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPhadd,OPSx_ps]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPhadd,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPhadd,OPSx_ps]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPpmaddubsw,OPSnone]:=@op_emit_avx3_gen;
- jit_cbs[OPPv,OPpmaddwd  ,OPSnone]:=@op_emit_avx3_gen;
+ jit_cbs[OPPv,OPpmaddubsw,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpmaddwd  ,OPSnone]:=@op_avx3_gen;
+
+ jit_cbs[OPPv,OPpalignr,OPSnone]:=@op_avx3_gen;
+
+ jit_cbs[OPPv,OPldmxcsr,OPSnone]:=@op_vldmxcsr;
+ jit_cbs[OPPv,OPstmxcsr,OPSnone]:=@op_vstmxcsr;
 
 end;
 
