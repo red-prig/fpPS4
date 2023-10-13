@@ -1660,6 +1660,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=1);
  memop:=classif_memop1(ctx.din);
 
  with ctx.builder do
@@ -2182,6 +2183,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt in [2,3]);
  memop:=classif_memop2(ctx.din);
 
  with ctx.builder do
@@ -2634,6 +2636,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=2);
  memop:=classif_shift2(ctx.din);
 
  with ctx.builder do
@@ -2819,6 +2822,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=3);
  memop:=classif_shift3(ctx.din);
 
  with ctx.builder do
@@ -3013,6 +3017,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=1);
  memop:=classif_memop1(ctx.din);
 
  with ctx.builder do
@@ -3127,6 +3132,7 @@ procedure op_emit_avx2_rr(var ctx:t_jit_context2;const desc:t_op_type);
 var
  new1,new2:TRegValue;
 begin
+ Assert(ctx.din.OperCnt=2);
  if is_preserved(ctx.din.Operand[1]) then
  begin
   with ctx.builder do
@@ -3208,6 +3214,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=2);
  memop:=classif_memop2(ctx.din);
 
  with ctx.builder do
@@ -3361,6 +3368,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt in [3,4]);
  if (ofMemory in ctx.din.Operand[3].Flags) then
  begin
   //mo_reg_reg_mem
@@ -3505,6 +3513,7 @@ var
 
 
 begin
+ Assert(ctx.din.OperCnt=3);
  memop:=classif_memop2(ctx.din);
 
  with ctx.builder do
@@ -3638,6 +3647,7 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=2);
  memop:=classif_memop2(ctx.din);
 
  with ctx.builder do
@@ -3745,6 +3755,8 @@ var
  end;
 
 begin
+ Assert(ctx.din.OperCnt=4);
+
  with ctx.builder do
   if is_memory(ctx.din.Operand[3]) then
   begin
@@ -3778,6 +3790,8 @@ var
 
  new1,new2,new3:TRegValue;
 begin
+ Assert(ctx.din.OperCnt=3);
+
  with ctx.builder do
  begin
 
@@ -3843,6 +3857,8 @@ var
 
  new1,new2,new3:TRegValue;
 begin
+ Assert(ctx.din.OperCnt=3);
+
  with ctx.builder do
  begin
 

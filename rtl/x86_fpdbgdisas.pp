@@ -2971,19 +2971,19 @@ begin
     $10: begin
       DecodeSIMD;
       case SimdOpcode of
-        soNone: begin SetOpcode(OPmovu, OPSx_ps, True); AddVps; AddWps;         end;
-        so66:   begin SetOpcode(OPmovu, OPSx_pd, True); AddVpd; AddWpd;         end;
-        soF2:   begin SetOpcode(OPmov,  OPSx_sd, True); AddVx;  AddHx;  AddWsd; end;
-        soF3:   begin SetOpcode(OPmov,  OPSx_ss, True); AddVx;  AddHx;  AddWss; end;
+        soNone: begin SetOpcode(OPmovu, OPSx_ps, True); AddVps; AddWps; end;
+        so66:   begin SetOpcode(OPmovu, OPSx_pd, True); AddVpd; AddWpd; end;
+        soF2:   begin SetOpcode(OPmov,  OPSx_sd, True); AddVx;  AddWsd; end;
+        soF3:   begin SetOpcode(OPmov,  OPSx_ss, True); AddVx;  AddWss; end;
       end;
     end;
     $11: begin
       DecodeSIMD;
       case SimdOpcode of
-        soNone: begin SetOpcode(OPmovu, OPSx_ps, True); AddWps; AddVps;         end;
-        so66:   begin SetOpcode(OPmovu, OPSx_pd, True); AddWpd; AddVpd;         end;
-        soF2:   begin SetOpcode(OPmov,  OPSx_sd, True); AddWsd; AddHx;  AddVsd; end;
-        soF3:   begin SetOpcode(OPmov,  OPSx_ss, True); AddWss; AddHx;  AddVss; end;
+        soNone: begin SetOpcode(OPmovu, OPSx_ps, True); AddWps; AddVps; end;
+        so66:   begin SetOpcode(OPmovu, OPSx_pd, True); AddWpd; AddVpd; end;
+        soF2:   begin SetOpcode(OPmov,  OPSx_sd, True); AddWsd; AddVsd; end;
+        soF3:   begin SetOpcode(OPmov,  OPSx_ss, True); AddWss; AddVss; end;
       end;
     end;
     $12: begin

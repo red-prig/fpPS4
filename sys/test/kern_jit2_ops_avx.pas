@@ -91,6 +91,30 @@ begin
  end;
 end;
 
+//
+
+procedure op_avx2_rr(var ctx:t_jit_context2);
+const
+ desc:t_op_type=(op:0;simdop:0;mm:0);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  tmp:=desc;
+  tmp.op    :=ctx.dis.opcode;
+  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm    :=ctx.dis.mm;
+  //
+  op_emit_avx2_rr(ctx,tmp);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
 procedure op_avx3_gen(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
@@ -363,6 +387,31 @@ begin
  end;
 end;
 
+const
+ vmov_ss_sd_desc:t_op_desc=(
+  mem_reg:(op:$11;simdop:2;mm:1);
+  reg_mem:(op:$10;simdop:2;mm:1);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_vmov_ss_sd(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  case ctx.din.OperCnt of
+   2:op_emit_avx2(ctx,vmov_ss_sd_desc);
+   3:op_avx3_not_vex_len(ctx);
+   else
+    Assert(False);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 //
 
 const
@@ -473,50 +522,6 @@ begin
    else
     Assert(False);
   end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- vmovmskps_desc:t_op_type=(op:$50;simdop:0;mm:1);
-
-procedure op_vmovmskps(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) then
- begin
-  op_emit_avx2_rr(ctx,vmovmskps_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- vmovmskpd_desc:t_op_type=(op:$50;simdop:1;mm:1);
-
-procedure op_vmovmskpd(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) then
- begin
-  op_emit_avx2_rr(ctx,vmovmskpd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- vpmovmskb_desc:t_op_type=(op:$D7;simdop:1;mm:1);
-
-procedure op_vpmovmskb(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) then
- begin
-  op_emit_avx2_rr(ctx,vpmovmskb_desc);
  end else
  begin
   add_orig(ctx);
@@ -818,8 +823,8 @@ begin
  jit_cbs[OPPv,OPmov ,OPSx_d  ]:=@op_vmovd;
  jit_cbs[OPPv,OPmov ,OPSx_q  ]:=@op_vmovq;
 
- jit_cbs[OPPv,OPmov ,OPSx_ss ]:=@op_avx3_not_vex_len;
- jit_cbs[OPPv,OPmov ,OPSx_sd ]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPv,OPmov ,OPSx_ss ]:=@op_vmov_ss_sd;
+ jit_cbs[OPPv,OPmov ,OPSx_sd ]:=@op_vmov_ss_sd;
 
  jit_cbs[OPPv,OPmovl,OPSx_ps]:=@op_vmovlps;
  jit_cbs[OPPv,OPmovl,OPSx_pd]:=@op_vmovlpd;
@@ -846,10 +851,9 @@ begin
  jit_cbs[OPPv,OPpmovzx,OPSv_wq]:=@op_avx2_reg_mem_mov_wo;
  jit_cbs[OPPv,OPpmovzx,OPSv_dq]:=@op_avx2_reg_mem_mov_wo;
 
- jit_cbs[OPPv,OPmovmsk,OPSx_ps]:=@op_vmovmskps;
- jit_cbs[OPPv,OPmovmsk,OPSx_pd]:=@op_vmovmskpd;
-
- jit_cbs[OPPv,OPpmovmskb,OPSnone]:=@op_vpmovmskb;
+ jit_cbs[OPPv,OPmovmsk  ,OPSx_ps]:=@op_avx2_rr;
+ jit_cbs[OPPv,OPmovmsk  ,OPSx_pd]:=@op_avx2_rr;
+ jit_cbs[OPPv,OPpmovmskb,OPSnone]:=@op_avx2_rr;
 
  jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_avx3_gen;
 

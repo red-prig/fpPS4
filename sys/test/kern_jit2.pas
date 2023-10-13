@@ -1463,9 +1463,12 @@ var
  links:t_jit_context2.t_forward_links;
  entry_link:Pointer;
 
- proc:TDbgProcess;
- adec:TX86AsmDecoder;
- ACodeBytes,ACode:RawByteString;
+ dis:TX86Disassembler;
+ din:TInstruction;
+
+ //proc:TDbgProcess;
+ //adec:TX86AsmDecoder;
+ //ACodeBytes,ACode:RawByteString;
 
  cb:t_jit_cb;
 
@@ -1506,8 +1509,11 @@ begin
 
  ptr:=addr;
 
- proc:=TDbgProcess.Create(dm64);
- adec:=TX86AsmDecoder.Create(proc);
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ //proc:=TDbgProcess.Create(dm64);
+ //adec:=TX86AsmDecoder.Create(proc);
 
  while True do
  begin
@@ -1528,11 +1534,12 @@ begin
 
   ctx.ptr_curr:=ptr;
 
-  adec.Disassemble(ptr,ACodeBytes,ACode);
+  //adec.Disassemble(ptr,ACodeBytes,ACode);
+  dis.Disassemble(dm64,ptr,din);
 
   ctx.ptr_next:=ptr;
 
-  case adec.Instr.OpCode.Opcode of
+  case din.OpCode.Opcode of
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
@@ -1550,8 +1557,8 @@ begin
    else;
   end;
 
-  if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     is_invalid(adec.Instr) then
+  if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
+     is_invalid(din) then
   begin
    writeln('invalid:0x',HexStr(ctx.ptr_curr));
 
@@ -1567,15 +1574,16 @@ begin
 
   if print_asm then
   begin
-   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
-   Writeln(ACodeBytes:32,' ',ACode);
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+   print_disassemble(ctx.ptr_curr,dis.CodeIdx);
+   //Writeln(ACodeBytes:32,' ',ACode);
    Writeln('original------------------------':32,' ','0x',HexStr(ptr));
   end;
 
   ctx.code:=ctx.ptr_curr;
 
-  ctx.dis:=adec.Disassembler;
-  ctx.din:=adec.Instr;
+  ctx.dis:=dis;
+  ctx.din:=din;
 
   if is_rep_prefix(ctx.din) then
   begin
@@ -1596,8 +1604,8 @@ begin
 
   if (cb=nil) then
   begin
-   Writeln('original------------------------':32,' ','0x',HexStr(ptr-adec.Disassembler.CodeIdx));
-   Writeln(ACodeBytes:32,' ',ACode);
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+   print_disassemble(ctx.ptr_curr,dis.CodeIdx);
    Writeln('original------------------------':32,' ','0x',HexStr(ptr));
 
    Writeln('Unhandled jit:',
@@ -1816,8 +1824,8 @@ begin
  build(ctx);
  ctx.Free;
 
- adec.Free;
- proc.Free;
+ //adec.Free;
+ //proc.Free;
 end;
 
 initialization
