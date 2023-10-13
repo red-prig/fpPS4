@@ -33,8 +33,8 @@ uses
  kern_jit2_ops,
  kern_jit2_ops_sse,
  kern_jit2_ops_avx,
- kern_jit_dynamic;
-
+ kern_jit_dynamic,
+ kern_jit2_test;
 
 procedure jit_syscall; assembler; nostackframe;
 label
@@ -1492,6 +1492,8 @@ begin
  Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
  Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
 
+ print_test_jit_cbs(False,True);
+
  links:=Default(t_jit_context2.t_forward_links);
  addr:=nil;
 
@@ -1609,8 +1611,8 @@ begin
    Writeln('original------------------------':32,' ','0x',HexStr(ptr));
 
    Writeln('Unhandled jit:',
-           ctx.din.OpCode.Prefix,' ',
-           ctx.din.OpCode.Opcode,' ',
+           ctx.din.OpCode.Prefix,',',
+           ctx.din.OpCode.Opcode,',',
            ctx.din.OpCode.Suffix,' ',
            ctx.din.Operand[1].Size,' ',
            ctx.din.Operand[2].Size);

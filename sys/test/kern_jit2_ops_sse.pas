@@ -5,13 +5,13 @@ unit kern_jit2_ops_sse;
 
 interface
 
+implementation
+
 uses
  x86_fpdbgdisas,
  x86_jit,
  kern_jit2_ops,
  kern_jit2_ctx;
-
-implementation
 
 procedure _ins_op(var op:DWORD;i:Byte); inline;
 begin
