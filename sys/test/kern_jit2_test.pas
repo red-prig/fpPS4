@@ -23,11 +23,27 @@ begin
  used_op[OPPnone,OPadc,OPSnone]:=True;
  used_op[OPPnone,OPadcx,OPSnone]:=True;
  used_op[OPPnone,OPadd,OPSnone]:=True;
+ used_op[OPPnone,OPadd,OPSx_pd]:=True;
+ used_op[OPPnone,OPadd,OPSx_ps]:=True;
+ used_op[OPPnone,OPadd,OPSx_sd]:=True;
+ used_op[OPPnone,OPadd,OPSx_ss]:=True;
+ used_op[OPPnone,OPaddsub,OPSx_pd]:=True;
+ used_op[OPPnone,OPaddsub,OPSx_ps]:=True;
  used_op[OPPnone,OPadox,OPSnone]:=True;
  used_op[OPPnone,OPand,OPSnone]:=True;
+ used_op[OPPnone,OPand,OPSx_pd]:=True;
+ used_op[OPPnone,OPand,OPSx_ps]:=True;
+ used_op[OPPnone,OPand,OPSx_sd]:=True;
+ used_op[OPPnone,OPand,OPSx_ss]:=True;
  used_op[OPPnone,OPandn,OPSnone]:=True;
+ used_op[OPPnone,OPandn,OPSx_pd]:=True;
+ used_op[OPPnone,OPandn,OPSx_ps]:=True;
+ used_op[OPPnone,OPandn,OPSx_sd]:=True;
+ used_op[OPPnone,OPandn,OPSx_ss]:=True;
  used_op[OPPnone,OParpl,OPSnone]:=True;
  used_op[OPPnone,OPbextr,OPSnone]:=True;
+ used_op[OPPnone,OPblend,OPSx_pd]:=True;
+ used_op[OPPnone,OPblend,OPSx_ps]:=True;
  used_op[OPPnone,OPblendv,OPSx_pd]:=True;
  used_op[OPPnone,OPblendv,OPSx_ps]:=True;
  used_op[OPPnone,OPblsi,OPSnone]:=True;
@@ -71,6 +87,10 @@ begin
  used_op[OPPnone,OPcmov__,OPSc_le]:=True;
  used_op[OPPnone,OPcmov__,OPSc_nle]:=True;
  used_op[OPPnone,OPcmp,OPSnone]:=True;
+ used_op[OPPnone,OPcmp,OPSx_pd]:=True;
+ used_op[OPPnone,OPcmp,OPSx_ps]:=True;
+ used_op[OPPnone,OPcmp,OPSx_sd]:=True;
+ used_op[OPPnone,OPcmp,OPSx_ss]:=True;
  used_op[OPPnone,OPcmps,OPSx_b]:=True;
  used_op[OPPnone,OPcmps,OPSx_d]:=True;
  used_op[OPPnone,OPcmps,OPSx_q]:=True;
@@ -78,25 +98,53 @@ begin
  used_op[OPPnone,OPcmpxchg,OPSnone]:=True;
  used_op[OPPnone,OPcmpxchg,OPSx_8b]:=True;
  used_op[OPPnone,OPcmpxchg,OPSx_16b]:=True;
+ used_op[OPPnone,OPcomi,OPSx_sd]:=True;
+ used_op[OPPnone,OPcomi,OPSx_ss]:=True;
  used_op[OPPnone,OPcpuid,OPSnone]:=True;
  used_op[OPPnone,OPcqo,OPSnone]:=True;
  used_op[OPPnone,OPcrc32,OPSnone]:=True;
+ used_op[OPPnone,OPcvtdq2,OPSx_pd]:=True;
+ used_op[OPPnone,OPcvtdq2,OPSx_ps]:=True;
+ used_op[OPPnone,OPcvtpd2,OPSx_dq]:=True;
  used_op[OPPnone,OPcvtpd2,OPSx_pi]:=True;
+ used_op[OPPnone,OPcvtpd2,OPSx_ps]:=True;
  used_op[OPPnone,OPcvtpi2,OPSx_pd]:=True;
  used_op[OPPnone,OPcvtpi2,OPSx_ps]:=True;
+ used_op[OPPnone,OPcvtps2,OPSx_dq]:=True;
+ used_op[OPPnone,OPcvtps2,OPSx_pd]:=True;
+ used_op[OPPnone,OPcvtps2,OPSx_ph]:=True;
  used_op[OPPnone,OPcvtps2,OPSx_pi]:=True;
+ used_op[OPPnone,OPcvtsd2,OPSx_si]:=True;
+ used_op[OPPnone,OPcvtsd2,OPSx_ss]:=True;
+ used_op[OPPnone,OPcvtsi2,OPSx_sd]:=True;
+ used_op[OPPnone,OPcvtsi2,OPSx_ss]:=True;
+ used_op[OPPnone,OPcvtss2,OPSx_sd]:=True;
+ used_op[OPPnone,OPcvtss2,OPSx_si]:=True;
+ used_op[OPPnone,OPcvttpd2,OPSx_dq]:=True;
  used_op[OPPnone,OPcvttpd2,OPSx_pi]:=True;
+ used_op[OPPnone,OPcvttps2,OPSx_dq]:=True;
  used_op[OPPnone,OPcvttps2,OPSx_pi]:=True;
+ used_op[OPPnone,OPcvttsd2,OPSx_si]:=True;
+ used_op[OPPnone,OPcvttss2,OPSx_si]:=True;
  used_op[OPPnone,OPcwd,OPSnone]:=True;
  used_op[OPPnone,OPcwde,OPSnone]:=True;
  used_op[OPPnone,OPdaa,OPSnone]:=True;
  used_op[OPPnone,OPdas,OPSnone]:=True;
  used_op[OPPnone,OPdec,OPSnone]:=True;
  used_op[OPPnone,OPdiv,OPSnone]:=True;
+ used_op[OPPnone,OPdiv,OPSx_pd]:=True;
+ used_op[OPPnone,OPdiv,OPSx_ps]:=True;
+ used_op[OPPnone,OPdiv,OPSx_sd]:=True;
+ used_op[OPPnone,OPdiv,OPSx_ss]:=True;
+ used_op[OPPnone,OPdp,OPSx_pd]:=True;
+ used_op[OPPnone,OPdp,OPSx_ps]:=True;
  used_op[OPPnone,OPemms,OPSnone]:=True;
  used_op[OPPnone,OPencls,OPSnone]:=True;
  used_op[OPPnone,OPenclu,OPSnone]:=True;
  used_op[OPPnone,OPenter,OPSnone]:=True;
+ used_op[OPPnone,OPextract,OPSx_f128]:=True;
+ used_op[OPPnone,OPextract,OPSx_i128]:=True;
+ used_op[OPPnone,OPextract,OPSx_ps]:=True;
  used_op[OPPnone,OPf2xm1,OPSnone]:=True;
  used_op[OPPnone,OPfabs,OPSnone]:=True;
  used_op[OPPnone,OPfadd,OPSnone]:=True;
@@ -186,6 +234,8 @@ begin
  used_op[OPPnone,OPfyl2xp1,OPSnone]:=True;
  used_op[OPPnone,OPgetbv,OPSnone]:=True;
  used_op[OPPnone,OPgetsec,OPSnone]:=True;
+ used_op[OPPnone,OPhadd,OPSx_pd]:=True;
+ used_op[OPPnone,OPhadd,OPSx_ps]:=True;
  used_op[OPPnone,OPhlt,OPSnone]:=True;
  used_op[OPPnone,OPidiv,OPSnone]:=True;
  used_op[OPPnone,OPimul,OPSnone]:=True;
@@ -194,6 +244,9 @@ begin
  used_op[OPPnone,OPins,OPSx_b]:=True;
  used_op[OPPnone,OPins,OPSx_d]:=True;
  used_op[OPPnone,OPins,OPSx_w]:=True;
+ used_op[OPPnone,OPinsert,OPSx_f128]:=True;
+ used_op[OPPnone,OPinsert,OPSx_i128]:=True;
+ used_op[OPPnone,OPinsert,OPSx_ps]:=True;
  used_op[OPPnone,OPint,OPSnone]:=True;
  used_op[OPPnone,OPint1,OPSnone]:=True;
  used_op[OPPnone,OPint3,OPSnone]:=True;
@@ -230,6 +283,8 @@ begin
  used_op[OPPnone,OPjrcxz,OPSnone]:=True;
  used_op[OPPnone,OPlahf,OPSnone]:=True;
  used_op[OPPnone,OPlar,OPSnone]:=True;
+ used_op[OPPnone,OPlddqu,OPSnone]:=True;
+ used_op[OPPnone,OPldmxcsr,OPSnone]:=True;
  used_op[OPPnone,OPlds,OPSnone]:=True;
  used_op[OPPnone,OPlea,OPSnone]:=True;
  used_op[OPPnone,OPleave,OPSnone]:=True;
@@ -252,27 +307,72 @@ begin
  used_op[OPPnone,OPlss,OPSnone]:=True;
  used_op[OPPnone,OPltr,OPSnone]:=True;
  used_op[OPPnone,OPlzcnt,OPSnone]:=True;
+ used_op[OPPnone,OPmaskmov,OPSx_dqu]:=True;
+ used_op[OPPnone,OPmaskmov,OPSx_pd]:=True;
+ used_op[OPPnone,OPmaskmov,OPSx_ps]:=True;
  used_op[OPPnone,OPmaskmov,OPSx_q]:=True;
+ used_op[OPPnone,OPmax,OPSx_pd]:=True;
+ used_op[OPPnone,OPmax,OPSx_ps]:=True;
+ used_op[OPPnone,OPmax,OPSx_sd]:=True;
+ used_op[OPPnone,OPmax,OPSx_ss]:=True;
  used_op[OPPnone,OPmcommit,OPSnone]:=True;
  used_op[OPPnone,OPmfence,OPSnone]:=True;
+ used_op[OPPnone,OPmin,OPSx_pd]:=True;
+ used_op[OPPnone,OPmin,OPSx_ps]:=True;
+ used_op[OPPnone,OPmin,OPSx_sd]:=True;
+ used_op[OPPnone,OPmin,OPSx_ss]:=True;
  used_op[OPPnone,OPmonitor,OPSnone]:=True;
  used_op[OPPnone,OPmonitor,OPSx_x]:=True;
  used_op[OPPnone,OPmov,OPSnone]:=True;
  used_op[OPPnone,OPmov,OPSc_be]:=True;
  used_op[OPPnone,OPmov,OPSx_d]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqa]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqa32]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqa64]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqu]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqu8]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqu16]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqu32]:=True;
+ used_op[OPPnone,OPmov,OPSx_dqu64]:=True;
  used_op[OPPnone,OPmov,OPSx_q]:=True;
+ used_op[OPPnone,OPmov,OPSx_sd]:=True;
+ used_op[OPPnone,OPmov,OPSx_ss]:=True;
+ used_op[OPPnone,OPmova,OPSx_pd]:=True;
+ used_op[OPPnone,OPmova,OPSx_ps]:=True;
+ used_op[OPPnone,OPmovddup,OPSnone]:=True;
  used_op[OPPnone,OPmovdq2q,OPSnone]:=True;
+ used_op[OPPnone,OPmovh,OPSx_pd]:=True;
+ used_op[OPPnone,OPmovh,OPSx_ps]:=True;
+ used_op[OPPnone,OPmovhlps,OPSnone]:=True;
+ used_op[OPPnone,OPmovl,OPSx_pd]:=True;
+ used_op[OPPnone,OPmovl,OPSx_ps]:=True;
+ used_op[OPPnone,OPmovlh,OPSx_ps]:=True;
+ used_op[OPPnone,OPmovmsk,OPSx_pd]:=True;
+ used_op[OPPnone,OPmovmsk,OPSx_ps]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_dq]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_dqa]:=True;
  used_op[OPPnone,OPmovnt,OPSx_i]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_pd]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_ps]:=True;
  used_op[OPPnone,OPmovnt,OPSx_q]:=True;
  used_op[OPPnone,OPmovq2dq,OPSnone]:=True;
  used_op[OPPnone,OPmovs,OPSx_b]:=True;
  used_op[OPPnone,OPmovs,OPSx_d]:=True;
  used_op[OPPnone,OPmovs,OPSx_q]:=True;
  used_op[OPPnone,OPmovs,OPSx_w]:=True;
+ used_op[OPPnone,OPmovshdup,OPSnone]:=True;
+ used_op[OPPnone,OPmovsldup,OPSnone]:=True;
  used_op[OPPnone,OPmovsx,OPSnone]:=True;
  used_op[OPPnone,OPmovsx,OPSx_d]:=True;
+ used_op[OPPnone,OPmovu,OPSx_pd]:=True;
+ used_op[OPPnone,OPmovu,OPSx_ps]:=True;
  used_op[OPPnone,OPmovzx,OPSnone]:=True;
+ used_op[OPPnone,OPmpsadbw,OPSnone]:=True;
  used_op[OPPnone,OPmul,OPSnone]:=True;
+ used_op[OPPnone,OPmul,OPSx_pd]:=True;
+ used_op[OPPnone,OPmul,OPSx_ps]:=True;
+ used_op[OPPnone,OPmul,OPSx_sd]:=True;
+ used_op[OPPnone,OPmul,OPSx_ss]:=True;
  used_op[OPPnone,OPmul,OPSx_x]:=True;
  used_op[OPPnone,OPmwait,OPSnone]:=True;
  used_op[OPPnone,OPmwait,OPSx_x]:=True;
@@ -280,6 +380,10 @@ begin
  used_op[OPPnone,OPnop,OPSnone]:=True;
  used_op[OPPnone,OPnot,OPSnone]:=True;
  used_op[OPPnone,OPor,OPSnone]:=True;
+ used_op[OPPnone,OPor,OPSx_pd]:=True;
+ used_op[OPPnone,OPor,OPSx_ps]:=True;
+ used_op[OPPnone,OPor,OPSx_sd]:=True;
+ used_op[OPPnone,OPor,OPSx_ss]:=True;
  used_op[OPPnone,OPout,OPSnone]:=True;
  used_op[OPPnone,OPouts,OPSx_b]:=True;
  used_op[OPPnone,OPouts,OPSx_d]:=True;
@@ -289,6 +393,7 @@ begin
  used_op[OPPnone,OPpabs,OPSx_w]:=True;
  used_op[OPPnone,OPpackssdw,OPSnone]:=True;
  used_op[OPPnone,OPpacksswb,OPSnone]:=True;
+ used_op[OPPnone,OPpackusdw,OPSnone]:=True;
  used_op[OPPnone,OPpackuswb,OPSnone]:=True;
  used_op[OPPnone,OPpadd,OPSx_b]:=True;
  used_op[OPPnone,OPpadd,OPSx_d]:=True;
@@ -301,18 +406,31 @@ begin
  used_op[OPPnone,OPpalignr,OPSnone]:=True;
  used_op[OPPnone,OPpand,OPSnone]:=True;
  used_op[OPPnone,OPpandn,OPSnone]:=True;
+ used_op[OPPnone,OPpause,OPSnone]:=True;
  used_op[OPPnone,OPpavg,OPSx_b]:=True;
  used_op[OPPnone,OPpavg,OPSx_w]:=True;
  used_op[OPPnone,OPpavgusb,OPSnone]:=True;
  used_op[OPPnone,OPpblendvb,OPSnone]:=True;
+ used_op[OPPnone,OPpblend,OPSx_d]:=True;
+ used_op[OPPnone,OPpblend,OPSx_w]:=True;
+ used_op[OPPnone,OPpclmulqdq,OPSnone]:=True;
  used_op[OPPnone,OPpcmpeq,OPSx_b]:=True;
  used_op[OPPnone,OPpcmpeq,OPSx_d]:=True;
+ used_op[OPPnone,OPpcmpeq,OPSx_q]:=True;
  used_op[OPPnone,OPpcmpeq,OPSx_w]:=True;
+ used_op[OPPnone,OPpcmpestri,OPSnone]:=True;
+ used_op[OPPnone,OPpcmpestrm,OPSnone]:=True;
  used_op[OPPnone,OPpcmpgt,OPSx_b]:=True;
  used_op[OPPnone,OPpcmpgt,OPSx_d]:=True;
+ used_op[OPPnone,OPpcmpgt,OPSx_q]:=True;
  used_op[OPPnone,OPpcmpgt,OPSx_w]:=True;
+ used_op[OPPnone,OPpcmpistri,OPSnone]:=True;
+ used_op[OPPnone,OPpcmpistrm,OPSnone]:=True;
  used_op[OPPnone,OPpdep,OPSnone]:=True;
  used_op[OPPnone,OPpext,OPSnone]:=True;
+ used_op[OPPnone,OPpextr,OPSx_b]:=True;
+ used_op[OPPnone,OPpextr,OPSx_d]:=True;
+ used_op[OPPnone,OPpextr,OPSx_q]:=True;
  used_op[OPPnone,OPpextr,OPSx_w]:=True;
  used_op[OPPnone,OPpf2id,OPSnone]:=True;
  used_op[OPPnone,OPpf2iw,OPSnone]:=True;
@@ -336,23 +454,49 @@ begin
  used_op[OPPnone,OPphadd,OPSx_d]:=True;
  used_op[OPPnone,OPphadd,OPSx_w]:=True;
  used_op[OPPnone,OPphaddsw,OPSnone]:=True;
+ used_op[OPPnone,OPphminposuw,OPSnone]:=True;
  used_op[OPPnone,OPphsub,OPSx_d]:=True;
  used_op[OPPnone,OPphsub,OPSx_w]:=True;
  used_op[OPPnone,OPphsubsw,OPSnone]:=True;
  used_op[OPPnone,OPpi2fd,OPSnone]:=True;
  used_op[OPPnone,OPpi2fw,OPSnone]:=True;
+ used_op[OPPnone,OPpinsr,OPSx_b]:=True;
+ used_op[OPPnone,OPpinsr,OPSx_d]:=True;
+ used_op[OPPnone,OPpinsr,OPSx_q]:=True;
  used_op[OPPnone,OPpinsr,OPSx_w]:=True;
  used_op[OPPnone,OPpmaddubsw,OPSnone]:=True;
  used_op[OPPnone,OPpmaddwd,OPSnone]:=True;
+ used_op[OPPnone,OPpmaxs,OPSx_b]:=True;
+ used_op[OPPnone,OPpmaxs,OPSx_d]:=True;
  used_op[OPPnone,OPpmaxs,OPSx_w]:=True;
  used_op[OPPnone,OPpmaxu,OPSx_b]:=True;
+ used_op[OPPnone,OPpmaxu,OPSx_d]:=True;
+ used_op[OPPnone,OPpmaxu,OPSx_w]:=True;
+ used_op[OPPnone,OPpmins,OPSx_b]:=True;
+ used_op[OPPnone,OPpmins,OPSx_d]:=True;
  used_op[OPPnone,OPpmins,OPSx_w]:=True;
  used_op[OPPnone,OPpminu,OPSx_b]:=True;
+ used_op[OPPnone,OPpminu,OPSx_d]:=True;
+ used_op[OPPnone,OPpminu,OPSx_w]:=True;
  used_op[OPPnone,OPpmovmskb,OPSnone]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_bw]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_bd]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_bq]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_wd]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_wq]:=True;
+ used_op[OPPnone,OPpmovsx,OPSv_dq]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_bw]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_bd]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_bq]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_wd]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_wq]:=True;
+ used_op[OPPnone,OPpmovzx,OPSv_dq]:=True;
+ used_op[OPPnone,OPpmuldq,OPSnone]:=True;
  used_op[OPPnone,OPpmulhrsw,OPSnone]:=True;
  used_op[OPPnone,OPpmulhrw,OPSnone]:=True;
  used_op[OPPnone,OPpmulhuw,OPSnone]:=True;
  used_op[OPPnone,OPpmulhw,OPSnone]:=True;
+ used_op[OPPnone,OPpmull,OPSx_d]:=True;
  used_op[OPPnone,OPpmull,OPSx_w]:=True;
  used_op[OPPnone,OPpmuludq,OPSnone]:=True;
  used_op[OPPnone,OPpop,OPSnone]:=True;
@@ -370,11 +514,15 @@ begin
  used_op[OPPnone,OPprefetch,OPSp_w]:=True;
  used_op[OPPnone,OPpsadbw,OPSnone]:=True;
  used_op[OPPnone,OPpshuf,OPSx_b]:=True;
+ used_op[OPPnone,OPpshuf,OPSx_d]:=True;
+ used_op[OPPnone,OPpshuf,OPSx_hw]:=True;
+ used_op[OPPnone,OPpshuf,OPSx_lw]:=True;
  used_op[OPPnone,OPpshuf,OPSx_w]:=True;
  used_op[OPPnone,OPpsign,OPSx_b]:=True;
  used_op[OPPnone,OPpsign,OPSx_d]:=True;
  used_op[OPPnone,OPpsign,OPSx_w]:=True;
  used_op[OPPnone,OPpsll,OPSx_d]:=True;
+ used_op[OPPnone,OPpsll,OPSx_dq]:=True;
  used_op[OPPnone,OPpsll,OPSx_q]:=True;
  used_op[OPPnone,OPpsll,OPSx_w]:=True;
  used_op[OPPnone,OPpsmash,OPSnone]:=True;
@@ -393,6 +541,7 @@ begin
  used_op[OPPnone,OPpsubus,OPSx_b]:=True;
  used_op[OPPnone,OPpsubus,OPSx_w]:=True;
  used_op[OPPnone,OPpswapd,OPSnone]:=True;
+ used_op[OPPnone,OPptest,OPSnone]:=True;
  used_op[OPPnone,OPpunpckhbw,OPSnone]:=True;
  used_op[OPPnone,OPpunpckhdq,OPSnone]:=True;
  used_op[OPPnone,OPpunpckhqdq,OPSnone]:=True;
@@ -410,6 +559,10 @@ begin
  used_op[OPPnone,OPpvalidate,OPSnone]:=True;
  used_op[OPPnone,OPpxor,OPSnone]:=True;
  used_op[OPPnone,OPrcl,OPSnone]:=True;
+ used_op[OPPnone,OPrcp,OPSx_pd]:=True;
+ used_op[OPPnone,OPrcp,OPSx_ps]:=True;
+ used_op[OPPnone,OPrcp,OPSx_sd]:=True;
+ used_op[OPPnone,OPrcp,OPSx_ss]:=True;
  used_op[OPPnone,OPrcr,OPSnone]:=True;
  used_op[OPPnone,OPrdfsbase,OPSnone]:=True;
  used_op[OPPnone,OPrdgsbase,OPSnone]:=True;
@@ -430,7 +583,15 @@ begin
  used_op[OPPnone,OProl,OPSnone]:=True;
  used_op[OPPnone,OPror,OPSnone]:=True;
  used_op[OPPnone,OProrx,OPSnone]:=True;
+ used_op[OPPnone,OPround,OPSx_pd]:=True;
+ used_op[OPPnone,OPround,OPSx_ps]:=True;
+ used_op[OPPnone,OPround,OPSx_sd]:=True;
+ used_op[OPPnone,OPround,OPSx_ss]:=True;
  used_op[OPPnone,OPrsm,OPSnone]:=True;
+ used_op[OPPnone,OPrsqrt,OPSx_pd]:=True;
+ used_op[OPPnone,OPrsqrt,OPSx_ps]:=True;
+ used_op[OPPnone,OPrsqrt,OPSx_sd]:=True;
+ used_op[OPPnone,OPrsqrt,OPSx_ss]:=True;
  used_op[OPPnone,OPsahf,OPSnone]:=True;
  used_op[OPPnone,OPsal,OPSnone]:=True;
  used_op[OPPnone,OPsalc,OPSnone]:=True;
@@ -462,34 +623,39 @@ begin
  used_op[OPPnone,OPsetssbsy,OPSnone]:=True;
  used_op[OPPnone,OPsfence,OPSnone]:=True;
  used_op[OPPnone,OPsgdt,OPSnone]:=True;
- used_op[OPPnone,OPsha1msg1,OPSnone]:=True;
- used_op[OPPnone,OPsha1msg2,OPSnone]:=True;
- used_op[OPPnone,OPsha1nexte,OPSnone]:=True;
  used_op[OPPnone,OPsha1rnds4,OPSnone]:=True;
- used_op[OPPnone,OPsha256msg1,OPSnone]:=True;
- used_op[OPPnone,OPsha256msg2,OPSnone]:=True;
- used_op[OPPnone,OPsha256rnds2,OPSnone]:=True;
  used_op[OPPnone,OPshl,OPSnone]:=True;
  used_op[OPPnone,OPshl,OPSx_d]:=True;
  used_op[OPPnone,OPshl,OPSx_x]:=True;
  used_op[OPPnone,OPshr,OPSnone]:=True;
  used_op[OPPnone,OPshr,OPSx_d]:=True;
  used_op[OPPnone,OPshr,OPSx_x]:=True;
+ used_op[OPPnone,OPshuf,OPSx_pd]:=True;
+ used_op[OPPnone,OPshuf,OPSx_ps]:=True;
  used_op[OPPnone,OPsidt,OPSnone]:=True;
  used_op[OPPnone,OPskinit,OPSnone]:=True;
  used_op[OPPnone,OPsldt,OPSnone]:=True;
  used_op[OPPnone,OPsmsw,OPSnone]:=True;
+ used_op[OPPnone,OPsqrt,OPSx_pd]:=True;
+ used_op[OPPnone,OPsqrt,OPSx_ps]:=True;
+ used_op[OPPnone,OPsqrt,OPSx_sd]:=True;
+ used_op[OPPnone,OPsqrt,OPSx_ss]:=True;
  used_op[OPPnone,OPstac,OPSnone]:=True;
  used_op[OPPnone,OPstc,OPSnone]:=True;
  used_op[OPPnone,OPstd,OPSnone]:=True;
  used_op[OPPnone,OPstgi,OPSnone]:=True;
  used_op[OPPnone,OPsti,OPSnone]:=True;
+ used_op[OPPnone,OPstmxcsr,OPSnone]:=True;
  used_op[OPPnone,OPstos,OPSx_b]:=True;
  used_op[OPPnone,OPstos,OPSx_d]:=True;
  used_op[OPPnone,OPstos,OPSx_q]:=True;
  used_op[OPPnone,OPstos,OPSx_w]:=True;
  used_op[OPPnone,OPstr,OPSnone]:=True;
  used_op[OPPnone,OPsub,OPSnone]:=True;
+ used_op[OPPnone,OPsub,OPSx_pd]:=True;
+ used_op[OPPnone,OPsub,OPSx_ps]:=True;
+ used_op[OPPnone,OPsub,OPSx_sd]:=True;
+ used_op[OPPnone,OPsub,OPSx_ss]:=True;
  used_op[OPPnone,OPswapgs,OPSnone]:=True;
  used_op[OPPnone,OPsyscall,OPSnone]:=True;
  used_op[OPPnone,OPsysenter,OPSnone]:=True;
@@ -497,8 +663,14 @@ begin
  used_op[OPPnone,OPsysret,OPSnone]:=True;
  used_op[OPPnone,OPtest,OPSnone]:=True;
  used_op[OPPnone,OPtzcnt,OPSnone]:=True;
+ used_op[OPPnone,OPucomi,OPSx_sd]:=True;
+ used_op[OPPnone,OPucomi,OPSx_ss]:=True;
  used_op[OPPnone,OPud1,OPSnone]:=True;
  used_op[OPPnone,OPud2,OPSnone]:=True;
+ used_op[OPPnone,OPunpckh,OPSx_pd]:=True;
+ used_op[OPPnone,OPunpckh,OPSx_ps]:=True;
+ used_op[OPPnone,OPunpckl,OPSx_pd]:=True;
+ used_op[OPPnone,OPunpckl,OPSx_ps]:=True;
  used_op[OPPnone,OPvalign,OPSx_d]:=True;
  used_op[OPPnone,OPvalign,OPSx_q]:=True;
  used_op[OPPnone,OPvbroadcast,OPSx_f128]:=True;
@@ -561,21 +733,6 @@ begin
  used_op[OPPnone,OPvgatherq,OPSx_d]:=True;
  used_op[OPPnone,OPvgatherq,OPSx_ps]:=True;
  used_op[OPPnone,OPvgatherq,OPSx_q]:=True;
- used_op[OPPnone,OPvmcall,OPSnone]:=True;
- used_op[OPPnone,OPvmclear,OPSnone]:=True;
- used_op[OPPnone,OPvmfunc,OPSnone]:=True;
- used_op[OPPnone,OPvmlaunch,OPSnone]:=True;
- used_op[OPPnone,OPvmload,OPSnone]:=True;
- used_op[OPPnone,OPvmmcall,OPSnone]:=True;
- used_op[OPPnone,OPvmptrld,OPSnone]:=True;
- used_op[OPPnone,OPvmptrst,OPSnone]:=True;
- used_op[OPPnone,OPvmread,OPSnone]:=True;
- used_op[OPPnone,OPvmresume,OPSnone]:=True;
- used_op[OPPnone,OPvmrun,OPSnone]:=True;
- used_op[OPPnone,OPvmsave,OPSnone]:=True;
- used_op[OPPnone,OPvmwrite,OPSnone]:=True;
- used_op[OPPnone,OPvmxoff,OPSnone]:=True;
- used_op[OPPnone,OPvmxon,OPSnone]:=True;
  used_op[OPPnone,OPvpbroadcast,OPSx_b]:=True;
  used_op[OPPnone,OPvpbroadcast,OPSx_d]:=True;
  used_op[OPPnone,OPvpbroadcast,OPSx_i128]:=True;
@@ -612,6 +769,10 @@ begin
  used_op[OPPnone,OPxend,OPSnone]:=True;
  used_op[OPPnone,OPxlat,OPSnone]:=True;
  used_op[OPPnone,OPxor,OPSnone]:=True;
+ used_op[OPPnone,OPxor,OPSx_pd]:=True;
+ used_op[OPPnone,OPxor,OPSx_ps]:=True;
+ used_op[OPPnone,OPxor,OPSx_sd]:=True;
+ used_op[OPPnone,OPxor,OPSx_ss]:=True;
  used_op[OPPnone,OPxrstor,OPSnone]:=True;
  used_op[OPPnone,OPxsave,OPSnone]:=True;
  used_op[OPPnone,OPxsaveopt,OPSnone]:=True;
@@ -819,6 +980,7 @@ begin
  used_op[OPPv,OPpsign,OPSx_d]:=True;
  used_op[OPPv,OPpsign,OPSx_w]:=True;
  used_op[OPPv,OPpsll,OPSx_d]:=True;
+ used_op[OPPv,OPpsll,OPSx_dq]:=True;
  used_op[OPPv,OPpsll,OPSx_q]:=True;
  used_op[OPPv,OPpsll,OPSx_w]:=True;
  used_op[OPPv,OPpsra,OPSx_d]:=True;
@@ -880,9 +1042,31 @@ begin
  used_op[OPPv,OPxor,OPSx_ss]:=True;
 end;
 
+function is_sse(x:TOpcodePrefix;y:TOpCode;z:TOpCodeSuffix):Boolean;
+begin
+ Result:=False;
+ if (x=OPPnone) then
+ begin
+  case y of
+   OPcvtdq2..OPcvttss2,
+   opDP     ,
+   opBLEND  ,
+   opBLENDV ,
+   opROUND  ,
+   opINSERT ,
+   opEXTRACT,
+   opMPSADBW,
+   opMOVNT  ,
+   opLDDQU  ,
+   OPpabs..OPpxor,
+   OPxabort..OPxtest:Result:=True;
+  end;
+ end;
+end;
+
 type
  t_status=record
-  g,f,v:DWORD;
+  g,s,f,v:DWORD;
  end;
 
 function percent(a,b:DWORD):Single; inline;
@@ -911,11 +1095,22 @@ var
   begin
    Inc(status.f);
   end else
-  begin
-   case x of
-    OPPnone:Inc(status.g);
-    OPPv   :Inc(status.v);
-   end;
+  case y of
+   OPvalign..OPvzeroupper:Inc(status.v);
+   else
+     case x of
+      OPPnone:
+        begin
+         if is_sse(x,y,z) then
+         begin
+          Inc(status.s)
+         end else
+         begin
+          Inc(status.g)
+         end;
+        end;
+      OPPv   :Inc(status.v);
+     end;
   end;
  end;
 
@@ -935,30 +1130,38 @@ begin
  For x:=low(x) to high(x) do
  For y:=low(y) to high(y) do
  For z:=low(z) to high(z) do
- if used_op[x,y,z] then
  begin
-  if (jit_cbs[x,y,z]=nil) then
+  if used_op[x,y,z] then
   begin
-   if print_ops then
+   if (jit_cbs[x,y,z]=nil) then
    begin
-    Writeln('Unhandled jit:',x,',',y,',',z);
+    if print_ops then
+    begin
+     Writeln('Unhandled jit:',x,',',y,',',z);
+    end;
+   end else
+   if print_status then
+   begin
+    inc_status(cbs_status);
    end;
   end else
-  if print_status then
+  if print_ops then
+  if (jit_cbs[x,y,z]<>nil) then
   begin
-   inc_status(cbs_status);
+   Writeln('  handled jit:',x,',',y,',',z);
   end;
  end;
 
  if print_status then
  begin
   Writeln('[jit status]');
-  Writeln('  general and sse:',percent(cbs_status.g,use_status.g):0:2,'%');
-  Writeln('        x87 float:',percent(cbs_status.f,use_status.f):0:2,'%');
-  Writeln('     vex encoding:',percent(cbs_status.v,use_status.v):0:2,'%');
-  Writeln('            total:',percent(cbs_status.g+cbs_status.f+cbs_status.v,
-                                       use_status.g+use_status.f+use_status.v
-                                      ):0:2,'%');
+  Writeln('       general:',percent(cbs_status.g,use_status.g):0:2,'%');
+  Writeln('           sse:',percent(cbs_status.g,use_status.g):0:2,'%');
+  Writeln('     x87 float:',percent(cbs_status.f,use_status.f):0:2,'%');
+  Writeln('  vex encoding:',percent(cbs_status.v,use_status.v):0:2,'%');
+  Writeln('         total:',percent(cbs_status.g+use_status.s+cbs_status.f+cbs_status.v,
+                                    use_status.g+use_status.s+use_status.f+use_status.v
+                                   ):0:2,'%');
  end;
 
 end;

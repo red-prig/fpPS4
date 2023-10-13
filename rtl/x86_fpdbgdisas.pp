@@ -2739,7 +2739,7 @@ end;
 
 procedure TX86Disassembler.DoGroup14;
 const
-  OPC: array[0..7] of TOpCode       = (OPX_Invalid, OPX_Invalid, OPpsrl, OPpsrl,  OPX_Invalid, OPX_Invalid, OPpsll, OPpsrl);
+  OPC: array[0..7] of TOpCode       = (OPX_Invalid, OPX_Invalid, OPpsrl, OPpsll,  OPX_Invalid, OPX_Invalid, OPpsll, OPpsrl);
   OPS: array[0..7] of TOpCodeSuffix = (OPSnone,     OPSnone,     OPSx_q, OPSx_dq, OPSnone,     OPSnone,     OPSx_q, OPSx_dq);
 begin
   Assert(Code[CodeIdx] = $73, 'Not group 14');
