@@ -209,6 +209,8 @@ type
 
     OPor, OPout, OPouts,
 
+    OPextrq,
+
     OPpabs, OPpackssdw, OPpacksswb, OPpackusdw, OPpackuswb, OPpadd, OPpadds,
     OPpaddus, OPpalignr, OPpand, OPpandn, OPpause, OPpavg, OPpavgusb, OPpblendvb,
     OPpblend, OPpclmulqdq, OPpcmpeq, OPpcmpestri, OPpcmpestrm, OPpcmpgt, OPpcmpistri,
@@ -708,6 +710,8 @@ const
       'neg', 'nop', 'not',
 
       'or', 'out', 'outs',
+
+      'extrq',
 
       'pabs', 'packssdw', 'packsswb', 'packusdw', 'packuswb', 'padd', 'padds',
       'paddus', 'palignr', 'pand', 'pandn', 'pause', 'pavg', 'pavgusb', 'pblendvb',
@@ -3146,10 +3150,12 @@ begin
       end;
     end;
     $2B: begin
-      DecodeSIMD([soNone, so66]);
+      DecodeSIMD([soNone, so66, soF2, soF3]);
       case SimdOpcode of
         soNone: begin SetOpcode(OPmovnt, OPSx_ps, True); AddMps; AddVps; end;
         so66:   begin SetOpcode(OPmovnt, OPSx_pd, True); AddMpd; AddVpd; end;
+        soF2:   begin SetOpcode(OPmovnt, OPSx_sd, True); AddMpd; AddVpd; end;
+        soF3:   begin SetOpcode(OPmovnt, OPSx_ss, True); AddMpd; AddVpd; end;
       end;
     end;
     $2C: begin
@@ -3376,14 +3382,23 @@ begin
       end;
     end;
     $78: begin
-      DecodeSIMD([soNone]);
-      if SimdOpcode = soNone
-      then begin SetOpcode(OPvmread); AddEy; AddGy; end;
+      DecodeSIMD([soNone, so66, soF2]);
+      case SimdOpcode of
+        soNone: begin SetOpcode(OPvmread); AddEy; AddGy; end;
+        so66:   begin
+                 DecodeModRM;
+                 if ModRM.Index = 0
+                 then begin SetOpcode(OPextrq); AddVq; AddIb; AddIb; end;
+                end;
+        soF2:   begin SetOpcode(OPinsert, OPSx_q); AddVq; AddUdq; AddIb; AddIb; end;
+      end;
     end;
     $79: begin
-      DecodeSIMD([soNone]);
-      if SimdOpcode = soNone
-      then begin SetOpcode(OPvmwrite); AddGy; AddEy; end;
+      DecodeSIMD([soNone, so66]);
+      case SimdOpcode of
+        soNone: begin SetOpcode(OPvmwrite); AddGy; AddEy;  end;
+        so66:   begin SetOpcode(OPextrq);   AddVq; AddUdq; end;
+      end;
     end;
     // $7A..$7B: OPX_Invalid
     $7C: begin
