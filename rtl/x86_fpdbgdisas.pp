@@ -3394,10 +3394,11 @@ begin
       end;
     end;
     $79: begin
-      DecodeSIMD([soNone, so66]);
+      DecodeSIMD([soNone, so66, soF2]);
       case SimdOpcode of
-        soNone: begin SetOpcode(OPvmwrite); AddGy; AddEy;  end;
-        so66:   begin SetOpcode(OPextrq);   AddVq; AddUdq; end;
+        soNone: begin SetOpcode(OPvmwrite);        AddGy; AddEy;  end;
+        so66:   begin SetOpcode(OPextrq);          AddVq; AddUdq; end;
+        soF2:   begin SetOpcode(OPinsert, OPSx_q); AddVq; AddUdq; end;
       end;
     end;
     // $7A..$7B: OPX_Invalid
