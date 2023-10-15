@@ -607,6 +607,39 @@ end;
 //
 
 const
+ vpermilpd_rrm_desc:t_op_type=(
+  op:$0D;simdop:1;mm:2;
+ );
+
+ vpermilpd_rmi_desc:t_op_avx3_imm=(
+  rmi:(op:$05;simdop:1;mm:3);
+  mri:(opt:[not_impl]);
+ );
+
+procedure op_vpermilpd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  if is_memory(ctx.din.Operand[3]) then
+  begin
+   op_emit_avx3(ctx,vpermilpd_rrm_desc);
+  end else
+  if (ctx.din.Operand[3].ByteCount<>0) then
+  begin
+   op_emit_avx3_imm8(ctx,vpermilpd_rmi_desc);
+  end else
+  begin
+   Assert(False);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
  vpblendvb_desc:t_op_type=(
   op:$4C;simdop:1;mm:3
  );
@@ -936,7 +969,7 @@ begin
  jit_cbs[OPPv,OPshuf  ,OPSx_pd]:=@op_avx3_gen;
 
  jit_cbs[OPPnone,OPvpermil,OPSx_ps]:=@op_vpermilps;
- jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_avx3_gen;
+ jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_vpermilpd;
 
  jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_avx3_not_vex_len;
  jit_cbs[OPPnone,OPvperm2,OPSx_i128]:=@op_avx3_not_vex_len;

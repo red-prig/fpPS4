@@ -1669,7 +1669,8 @@ const
 label
  _next,
  _build,
- _invalid;
+ _invalid,
+ _table;
 var
  addr:Pointer;
  ptr:Pointer;
@@ -1679,10 +1680,6 @@ var
 
  dis:TX86Disassembler;
  din:TInstruction;
-
- //proc:TDbgProcess;
- //adec:TX86AsmDecoder;
- //ACodeBytes,ACode:RawByteString;
 
  cb:t_jit_cb;
 
@@ -1728,9 +1725,6 @@ begin
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
- //proc:=TDbgProcess.Create(dm64);
- //adec:=TX86AsmDecoder.Create(proc);
-
  while True do
  begin
 
@@ -1754,6 +1748,13 @@ begin
      writeln('invalid:0x',HexStr(ctx.ptr_curr));
 
      _invalid:
+
+     begin
+      Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+      print_disassemble(ctx.ptr_curr,dis.CodeIdx);
+      Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+     end;
+
      ctx.mark_chunk(fpInvalid);
 
      link_curr:=ctx.builder.get_curr_label.after;
@@ -1778,7 +1779,6 @@ begin
   begin
    Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
    print_disassemble(ctx.ptr_curr,dis.CodeIdx);
-   //Writeln(ACodeBytes:32,' ',ACode);
    Writeln('original------------------------':32,' ','0x',HexStr(ptr));
   end;
 
@@ -1800,12 +1800,14 @@ begin
      OPstos:cb:=@op_rep_stos;
      OPcmps:cb:=@op_rep_cmps;
      OPscas:cb:=nil;
+     OPret :goto _table;
      else
             cb:=@op_invalid;
     end;
    end;
   end else
   begin
+   _table:
    cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
   end;
 
@@ -2044,8 +2046,6 @@ begin
  build(ctx);
  ctx.Free;
 
- //adec.Free;
- //proc.Free;
 end;
 
 initialization
