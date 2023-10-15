@@ -1156,8 +1156,8 @@ begin
  begin
   Writeln('[jit status]');
   Writeln('       general:',percent(cbs_status.g,use_status.g):0:2,'%');
-  Writeln('           sse:',percent(cbs_status.g,use_status.g):0:2,'%');
   Writeln('     x87 float:',percent(cbs_status.f,use_status.f):0:2,'%');
+  Writeln('           sse:',percent(cbs_status.s,use_status.s):0:2,'%');
   Writeln('  vex encoding:',percent(cbs_status.v,use_status.v):0:2,'%');
   Writeln('         total:',percent(cbs_status.g+use_status.s+cbs_status.f+cbs_status.v,
                                     use_status.g+use_status.s+use_status.f+use_status.v

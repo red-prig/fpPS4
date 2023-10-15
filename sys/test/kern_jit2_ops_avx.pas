@@ -604,36 +604,7 @@ begin
  end;
 end;
 
-const
- vpermilpd_rrm_desc:t_op_type=(
-  op:$0D;simdop:1;mm:2;
- );
-
- vpermilpd_rmi_desc:t_op_avx3_imm=(
-  rmi:(op:$05;simdop:1;mm:3);
-  mri:(opt:[not_impl]);
- );
-
-procedure op_vpermilpd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  if is_memory(ctx.din.Operand[3]) then
-  begin
-   op_emit_avx3(ctx,vpermilpd_rrm_desc);
-  end else
-  if (ctx.din.Operand[3].ByteCount<>0) then
-  begin
-   op_emit_avx3_imm8(ctx,vpermilpd_rmi_desc);
-  end else
-  begin
-   Assert(False);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
+//
 
 const
  vpblendvb_desc:t_op_type=(
@@ -965,9 +936,16 @@ begin
  jit_cbs[OPPv,OPshuf  ,OPSx_pd]:=@op_avx3_gen;
 
  jit_cbs[OPPnone,OPvpermil,OPSx_ps]:=@op_vpermilps;
- jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_vpermilpd;
+ jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_avx3_gen;
 
  jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPnone,OPvperm2,OPSx_i128]:=@op_avx3_not_vex_len;
+
+ jit_cbs[OPPnone,OPvperm,OPSx_d]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPnone,OPvperm,OPSx_q]:=@op_avx3_rmi;
+
+ jit_cbs[OPPnone,OPvperm,OPSx_ps]:=@op_avx3_not_vex_len;
+ jit_cbs[OPPnone,OPvperm,OPSx_pd]:=@op_avx3_rmi;
 
  jit_cbs[OPPv,OPpxor   ,OPSnone]:=@op_avx3_gen;
  jit_cbs[OPPv,OPor     ,OPSx_ps]:=@op_avx3_gen;
@@ -991,10 +969,16 @@ begin
 
  jit_cbs[OPPv,OPcvtsi2 ,OPSx_ss]:=@op_avx3_gen;
  jit_cbs[OPPv,OPcvtsi2 ,OPSx_sd]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPcvtss2 ,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvtss2 ,OPSx_si]:=@op_avx2_reg_mem_wo;
+
  jit_cbs[OPPv,OPcvtsd2 ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPcvtsd2 ,OPSx_si]:=@op_avx2_reg_mem_wo;
+
  jit_cbs[OPPv,OPcvttps2,OPSx_dq]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPcvttpd2,OPSx_dq]:=@op_avx2_reg_mem_wo;
+
  jit_cbs[OPPv,OPcvtdq2 ,OPSx_ps]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPcvtdq2 ,OPSx_pd]:=@op_avx2_reg_mem_wo;
 
@@ -1027,6 +1011,8 @@ begin
  jit_cbs[OPPv,OPround,OPSx_ss]:=@op_avx3_gen;
  jit_cbs[OPPv,OPround,OPSx_sd]:=@op_avx3_gen;
 
+ jit_cbs[OPPv,OPsqrt ,OPSx_ps]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPsqrt ,OPSx_ss]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPsqrt ,OPSx_sd]:=@op_avx3_gen;
  jit_cbs[OPPv,OPsqrt ,OPSx_ss]:=@op_avx3_gen;
 
@@ -1039,6 +1025,8 @@ begin
  jit_cbs[OPPnone,OPvbroadcast,OPSx_ss  ]:=@op_vbroadcastss;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_vbroadcastsd;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_f128]:=@op_vbroadcastf128;
+
+ jit_cbs[OPPv,OPpclmulqdq,OPSnone]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPpinsr,OPSx_b]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpinsr,OPSx_d]:=@op_avx3_gen;
@@ -1099,10 +1087,15 @@ begin
  jit_cbs[OPPv,OPpmaddubsw,OPSnone]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpmaddwd  ,OPSnone]:=@op_avx3_gen;
 
+ jit_cbs[OPPv,OPpsadbw,OPSnone]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPpalignr,OPSnone]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPldmxcsr,OPSnone]:=@op_vldmxcsr;
  jit_cbs[OPPv,OPstmxcsr,OPSnone]:=@op_vstmxcsr;
+
+ jit_cbs[OPPv,OPpavg,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpavg,OPSx_w]:=@op_avx3_gen;
 
 end;
 

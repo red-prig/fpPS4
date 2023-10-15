@@ -980,6 +980,18 @@ end;
 //
 
 const
+ clflush_desc:t_op_type=(
+  op:$0FAE;index:7;opt:[not_prefix];
+ );
+
+procedure op_clflush(var ctx:t_jit_context2);
+begin
+ op_emit1(ctx,clflush_desc,[his_rw]);
+end;
+
+//
+
+const
  fldenv_desc:t_op_type=(
   op:$D9;index:4;opt:[not_prefix];
  );
@@ -1732,6 +1744,8 @@ begin
 
  jit_cbs[OPPnone,OPsahf,OPSnone]:=@op_sahf;
  jit_cbs[OPPnone,OPlahf,OPSnone]:=@op_lahf;
+
+ jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_clflush;
 
  //fpu
 

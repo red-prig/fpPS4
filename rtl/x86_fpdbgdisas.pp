@@ -3388,7 +3388,7 @@ begin
         so66:   begin
                  DecodeModRM;
                  if ModRM.Index = 0
-                 then begin SetOpcode(OPextrq); AddVq; AddIb; AddIb; end;
+                 then begin SetOpcode(OPextrq); AddUdq; AddIb; AddIb; end;
                 end;
         soF2:   begin SetOpcode(OPinsert, OPSx_q); AddVq; AddUdq; AddIb; AddIb; end;
       end;
@@ -4318,7 +4318,11 @@ begin
       //---
       $90: begin
         if preF3 in Flags
-        then SetOpcode(OPpause)
+        then
+        begin
+         SetOpcode(OPpause);
+         Exclude(Flags, preF3);
+        end
         else if rexB in Flags
         then begin
           SetOpcode(OPxchg);

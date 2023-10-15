@@ -833,7 +833,7 @@ begin
  end;
 end;
 
-procedure op_pushfq(var ctx:t_jit_context2);
+procedure op_pushf(var ctx:t_jit_context2);
 var
  mem_size:TOperandSize;
  stack,new:TRegValue;
@@ -859,6 +859,36 @@ begin
   call_far(@uplift_jit); //in/out:rax uses:r14
 
   movq([stack],new);
+ end;
+end;
+
+procedure op_popf(var ctx:t_jit_context2);
+var
+ mem_size:TOperandSize;
+ new,stack:TRegValue;
+begin
+ //mov rflags,[rsp]
+ //lea rsp,[rsp+len]
+
+ with ctx.builder do
+ begin
+  stack:=r_tmp0;
+
+  new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+
+  mem_size:=ctx.din.Operand[1].Size;
+
+  op_load_rsp(ctx,stack);
+
+  call_far(@uplift_jit); //in/out:rax uses:r14
+
+  movq(new,[stack]);
+  push(new);
+  popfq(mem_size);
+
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
+  op_save_rsp(ctx,stack);
  end;
 end;
 
@@ -891,7 +921,7 @@ begin
   end else
   if is_preserved(ctx.din) then
   begin
-   new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
+   new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
 
    movq(new,[stack]);
 
@@ -984,6 +1014,11 @@ begin
  //align?
 end;
 
+procedure op_invalid(var ctx:t_jit_context2);
+begin
+ ctx.builder.ud2;
+end;
+
 {
  //load flags to al,ah
  seto(al);
@@ -994,7 +1029,7 @@ end;
  sahf;
 }
 
-procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
+procedure op_rep_cmps(var ctx:t_jit_context2);
 var
  size:TOperandSize;
 
@@ -1046,20 +1081,12 @@ begin
 
    _O($A7,Size);
 
+   //The command implicitly changes rdi,rsi
+
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
    leaq(rcx,[rcx-1]);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
-   end;
 
    if (ifPrefixRepE in ctx.din.Flags) then
    begin
@@ -1090,35 +1117,6 @@ begin
   link_jmp1._label:=link___end;
  end;
 
-end;
-
-procedure op_rep_cmps(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  popfq(os64);
-  _op_rep_cmps(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-  _op_rep_cmps(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
- end;
 end;
 
 ///
@@ -1224,7 +1222,7 @@ end;
 
 //
 
-procedure _op_rep_movs(var ctx:t_jit_context2;dflag:Integer);
+procedure op_rep_movs(var ctx:t_jit_context2);
 var
  size:TOperandSize;
 
@@ -1271,23 +1269,15 @@ begin
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
-   //
+
    _O($A5,Size);
-   //
+
+   //The command implicitly changes rdi,rsi
+
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
    leaq(rcx,[rcx-1]);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
-   end;
 
   //until
   jmp(link_start,os8);
@@ -1301,7 +1291,99 @@ begin
 
 end;
 
-procedure op_rep_movs(var ctx:t_jit_context2);
+//
+
+procedure op_movs(var ctx:t_jit_context2);
+var
+ size:TOperandSize;
+begin
+ //rdi,rsi
+ //prefix $67 TODO
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rsi
+ with ctx.builder do
+ begin
+
+   movq(r_tmp0,rsi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+   movq(r_tmp1,r_tmp0);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   //[RSI] -> [RDI].
+
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+
+   _O($A5,Size);
+
+   //The command implicitly changes rdi,rsi
+
+   xchgq(rdi,r_tmp0);
+   xchgq(rsi,r_tmp1);
+
+ end;
+
+end;
+
+//
+
+procedure _op_stos(var ctx:t_jit_context2;dflag:Integer);
+var
+ size:TOperandSize;
+
+ new:TRegValue;
+begin
+ //rdi,rsi
+ //prefix $67 TODO
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rax
+ with ctx.builder do
+ begin
+
+  new:=new_reg_size(r_tmp1,size);
+
+  op_load_rax(ctx,new);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   movq([r_tmp0],new);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+   end;
+
+ end;
+
+end;
+
+procedure op_stos(var ctx:t_jit_context2);
 var
  link_jmp0:t_jit_i_link;
  link_jmp1:t_jit_i_link;
@@ -1315,13 +1397,13 @@ begin
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
-  _op_rep_movs(ctx,0);
+  _op_stos(ctx,0);
 
   link_jmp1:=jmp(nil_link,os8);
 
   link_jmp0._label:=ctx.builder.get_curr_label.after;
 
-  _op_rep_movs(ctx,1);
+  _op_stos(ctx,1);
 
   link_jmp1._label:=ctx.builder.get_curr_label.after;
 
@@ -1330,6 +1412,7 @@ begin
  end;
 end;
 
+//
 procedure op_debug_info(var ctx:t_jit_context2);
 var
  link_jmp:t_jit_i_link;
@@ -1374,11 +1457,21 @@ begin
  jit_cbs[OPPnone,OPpush,OPSnone]:=@op_push;
  jit_cbs[OPPnone,OPpop ,OPSnone]:=@op_pop;
 
- jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushfq;
- jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushfq;
- //
- //jit_cbs[OPpopf  ,OPSnone]:=@;
- //jit_cbs[OPpopf  ,OPSx_q ]:=@;
+ jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushf;
+ jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushf;
+
+ jit_cbs[OPPnone,OPpopf  ,OPSnone]:=@op_popf;
+ jit_cbs[OPPnone,OPpopf  ,OPSx_q ]:=@op_popf;
+
+ jit_cbs[OPPnone,OPmovs,OPSx_b]:=@op_movs;
+ jit_cbs[OPPnone,OPmovs,OPSx_w]:=@op_movs;
+ jit_cbs[OPPnone,OPmovs,OPSx_d]:=@op_movs;
+ jit_cbs[OPPnone,OPmovs,OPSx_q]:=@op_movs;
+
+ jit_cbs[OPPnone,OPstos,OPSx_b]:=@op_stos;
+ jit_cbs[OPPnone,OPstos,OPSx_w]:=@op_stos;
+ jit_cbs[OPPnone,OPstos,OPSx_d]:=@op_stos;
+ jit_cbs[OPPnone,OPstos,OPSx_q]:=@op_stos;
 
  jit_cbs[OPPnone,OPsyscall,OPSnone]:=@op_syscall;
  jit_cbs[OPPnone,OPint    ,OPSnone]:=@op_int;
@@ -1397,6 +1490,15 @@ begin
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
+ jit_cbs[OPPnone,OPin  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPins ,OPSx_b ]:=@op_invalid;
+ jit_cbs[OPPnone,OPins ,OPSx_w ]:=@op_invalid;
+ jit_cbs[OPPnone,OPins ,OPSx_d ]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPout ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts,OPSx_b ]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts,OPSx_w ]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts,OPSx_d ]:=@op_invalid;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
@@ -1455,7 +1557,8 @@ const
  MCODES:array[0..3] of RawByteString=('','0F','0F38','0F3A');
 label
  _next,
- _build;
+ _build,
+ _invalid;
 var
  addr:Pointer;
  ptr:Pointer;
@@ -1523,15 +1626,7 @@ begin
   if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    writeln('not excec:0x',HexStr(ptr));
-
-   ctx.mark_chunk(fpInvalid);
-
-   link_curr:=ctx.builder.get_curr_label.after;
-   ctx.builder.ud2;
-   link_next:=ctx.builder.get_curr_label.after;
-
-   ctx.trim:=True;
-   goto _next; //trim
+   goto _invalid;
   end;
 
   ctx.ptr_curr:=ptr;
@@ -1547,6 +1642,7 @@ begin
      //invalid
      writeln('invalid:0x',HexStr(ctx.ptr_curr));
 
+     _invalid:
      ctx.mark_chunk(fpInvalid);
 
      link_curr:=ctx.builder.get_curr_label.after;
@@ -1560,18 +1656,11 @@ begin
   end;
 
   if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
+     (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
   begin
    writeln('invalid:0x',HexStr(ctx.ptr_curr));
-
-   ctx.mark_chunk(fpInvalid);
-
-   link_curr:=ctx.builder.get_curr_label.after;
-   ctx.builder.ud2;
-   link_next:=ctx.builder.get_curr_label.after;
-
-   ctx.trim:=True;
-   goto _next; //trim
+   goto _invalid;
   end;
 
   if print_asm then
@@ -1593,15 +1682,33 @@ begin
    if (ctx.din.OpCode.Prefix=OPPnone) then
    begin
     case ctx.din.OpCode.Opcode of
-     OPcmps:cb:=@op_rep_cmps;
-     OPstos:cb:=@op_rep_stos;
+     OPins :cb:=@op_invalid;
+     OPouts:cb:=@op_invalid;
      OPmovs:cb:=@op_rep_movs;
-     else;
+     OPlods:cb:=nil;
+     OPstos:cb:=@op_rep_stos;
+     OPcmps:cb:=@op_rep_cmps;
+     OPscas:cb:=nil;
+     else
+            cb:=@op_invalid;
     end;
    end;
   end else
   begin
    cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
+  end;
+
+  if (cb=@op_invalid) then
+  begin
+   case ctx.get_chunk_ptype of
+    fpData,
+    fpInvalid:
+     begin
+      writeln('skip:0x',HexStr(ctx.ptr_curr));
+      goto _invalid;
+     end
+    else;
+   end;
   end;
 
   if (cb=nil) then
