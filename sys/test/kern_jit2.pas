@@ -1029,7 +1029,7 @@ end;
  sahf;
 }
 
-procedure op_rep_cmps(var ctx:t_jit_context2);
+procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
 var
  size:TOperandSize;
 
@@ -1081,12 +1081,20 @@ begin
 
    _O($A7,Size);
 
-   //The command implicitly changes rdi,rsi
-
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
    leaq(rcx,[rcx-1]);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
+   end;
 
    if (ifPrefixRepE in ctx.din.Flags) then
    begin
@@ -1117,6 +1125,35 @@ begin
   link_jmp1._label:=link___end;
  end;
 
+end;
+
+procedure op_rep_cmps(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  popfq(os64);
+  _op_rep_cmps(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+  _op_rep_cmps(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+ end;
 end;
 
 ///
@@ -1222,7 +1259,7 @@ end;
 
 //
 
-procedure op_rep_movs(var ctx:t_jit_context2);
+procedure _op_rep_movs(var ctx:t_jit_context2;dflag:Integer);
 var
  size:TOperandSize;
 
@@ -1272,12 +1309,20 @@ begin
 
    _O($A5,Size);
 
-   //The command implicitly changes rdi,rsi
-
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
    leaq(rcx,[rcx-1]);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
+   end;
 
   //until
   jmp(link_start,os8);
@@ -1291,9 +1336,38 @@ begin
 
 end;
 
+procedure op_rep_movs(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  _op_rep_movs(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  _op_rep_movs(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+
+ end;
+end;
+
 //
 
-procedure op_movs(var ctx:t_jit_context2);
+procedure _op_movs(var ctx:t_jit_context2;dflag:Integer);
 var
  size:TOperandSize;
 begin
@@ -1328,13 +1402,50 @@ begin
 
    _O($A5,Size);
 
-   //The command implicitly changes rdi,rsi
-
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
 
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
+   end;
+
  end;
 
+end;
+
+procedure op_movs(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  _op_movs(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  _op_movs(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+
+ end;
 end;
 
 //
