@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  kern_mtx,
  kern_mtxpool,
  kern_condvar,

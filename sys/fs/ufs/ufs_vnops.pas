@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  time,
  vfile,
  vmount,

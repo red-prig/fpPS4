@@ -6,6 +6,7 @@ unit kern_proc;
 interface
 
 uses
+ kern_param,
  kern_mtx,
  sys_event;
 
@@ -19,9 +20,6 @@ type
   ar_length:Integer;  // Length.
   ar_args  :AnsiChar; // Arguments.
  end;
-
-const
- MAXCOMLEN=19;
 
 var
  p_proc:record

@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ kern_param,
  vnode,
  vnode_if,
  vdirent,

@@ -6,6 +6,7 @@ unit kern_descrip;
 interface
 
 uses
+ kern_param,
  kern_thr,
  kern_proc,
  kern_id,

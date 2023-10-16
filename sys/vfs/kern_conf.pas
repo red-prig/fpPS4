@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  sys_event,
  vmount,
  vfile,
@@ -35,8 +36,6 @@ const
  SI_CANDELETE =$0100; { can do BIO_DELETE }
  SI_CLONELIST =$0200; { on a clone list }
  SI_UNMAPPED  =$0400; { can handle unmapped I/O }
-
- SPECNAMELEN  =63;    { max length of devicename }
 
 type
  pp_cdev=^p_cdev;

@@ -58,7 +58,7 @@ begin
  obj^.otype:=OBJT_DEAD;
 end;
 
-procedure vm_pager_deallocate(obj:vm_object_t);
+procedure vm_pager_deallocate(obj:vm_object_t); public;
 begin
  if (obj=nil) then Exit;
 

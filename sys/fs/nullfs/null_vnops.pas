@@ -30,7 +30,7 @@ function null_vptofh(ap:p_vop_vptofh_args):Integer;
 function null_vptocnp(ap:p_vop_vptocnp_args):Integer;
 function null_link(ap:p_vop_link_args):Integer;
 
-const
+var
  null_vnodeops:vop_vector=(
   vop_default       :nil;
   vop_bypass        :@null_bypass;
@@ -83,7 +83,7 @@ const
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
- );
+ ); public;
 
 implementation
 
@@ -241,7 +241,9 @@ begin
   vppp:=VOPARG_OFFSETTO(descp^.vdesc_vpp_offset,ap);
 
   if (vppp^<>nil) then
+  begin
    error:=null_nodeget(old_vps[0]^.v_mount,vppp^^,vppp^);
+  end;
  end;
 
 _out:
@@ -268,7 +270,9 @@ begin
  if ((flags and ISLASTCN)<>0) and
     ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
     ((cnp^.cn_nameiop=DELETE) or (cnp^.cn_nameiop=RENAME)) then
+ begin
   Exit(EROFS);
+ end;
  {
   * Although it is possible to call null_bypass(), we'll do
   * a direct call to reduce overhead
@@ -302,7 +306,9 @@ begin
   begin
    error:=null_nodeget(dvp^.v_mount, lvp, @vp);
    if (error=0) then
+   begin
     ap^.a_vpp^:=vp;
+   end;
   end;
  end;
  Exit(error);
@@ -347,7 +353,9 @@ begin
      (vap^.va_mode        <>VNOVAL)
     ) and
     ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+ begin
   Exit(EROFS);
+ end;
 
  if (vap^.va_size<>VNOVAL) then
  begin
@@ -394,7 +402,9 @@ begin
  error:=null_bypass(Pointer(ap));
 
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  ap^.a_vap^.va_fsid:=p_mount(ap^.a_vp^.v_mount)^.mnt_stat.f_fsid.val[0];
  Exit(0);
@@ -456,7 +466,9 @@ begin
    VREG:
     begin
      if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     begin
       Exit(EROFS);
+     end;
     end;
    else;
   end;
@@ -486,7 +498,9 @@ begin
  begin
   lvp:=NULLVPTOLOWERVP(vp);
   if (lvp<>nil) then
+  begin
    VREF(lvp);
+  end;
   vreleit:=1;
  end else
   vreleit:=0;
@@ -499,7 +513,9 @@ begin
   retval:=null_bypass(Pointer(ap));
 
   if (vreleit<>0) then
+  begin
    vrele(lvp);
+  end;
  end else
  begin
   retval:=0;
@@ -540,7 +556,9 @@ begin
    vput(tdvp);
 
   if (tvp<>nil) then
+  begin
    vput(tvp);
+  end;
   vrele(fdvp);
   vrele(fvp);
   Exit(EXDEV);
@@ -693,12 +711,16 @@ begin
   error:=VOP_UNLOCK(lvp, flags);
   vdrop(lvp);
   if (mtxlkflag=0) then
+  begin
    VI_LOCK(vp);
+  end;
  end else
  begin
   _else:
   if (mtxlkflag=2) then
+  begin
    VI_UNLOCK(vp);
+  end;
   error:=vop_stdunlock(ap);
  end;
 

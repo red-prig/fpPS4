@@ -6,6 +6,7 @@ unit devfs_vfsops;
 interface
 
 uses
+ kern_param,
  vnode,
  vmount,
  devfs,
@@ -64,10 +65,15 @@ uses
  kern_sx,
  devfs_devs,
  devfs_rule,
- devfs_vnops,
  vfs_mount,
  vfs_subr,
  vnode_if;
+
+//
+
+function devfs_allocv(de:p_devfs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer; external;
+
+//
 
 var
  unr_desc:t_id_desc=(free:nil;refs:0);
@@ -272,7 +278,9 @@ begin
  sx_xlock(@dmp^.dm_lock);
  error:=devfs_allocv(dmp^.dm_rootdir, mp, LK_EXCLUSIVE, @vp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  vp^.v_vflag:=vp^.v_vflag or VV_ROOT;
  vpp^:=vp;

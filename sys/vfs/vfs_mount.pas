@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ kern_param,
  vmount,
  vuio,
  vnamei,

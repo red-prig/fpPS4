@@ -17,8 +17,7 @@ uses
   trap,
   signal,
   ucontext,
-  vm,
-  vmparam;
+  vm;
 
 type
  LPTOP_LEVEL_EXCEPTION_FILTER=function(excep:PEXCEPTION_POINTERS):longint; stdcall;

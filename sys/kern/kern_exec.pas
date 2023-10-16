@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ kern_param,
  kern_thr,
  vnode,
  vuio,

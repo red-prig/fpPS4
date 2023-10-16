@@ -6,6 +6,7 @@ unit kern_time;
 interface
 
 uses
+ kern_param,
  time;
 
 Procedure timeinit; //SYSINIT

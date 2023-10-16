@@ -155,7 +155,6 @@ implementation
 uses
  errno,
  systm,
- vfile,
  vmparam,
  vm_map,
  kern_thr,
@@ -496,8 +495,10 @@ begin
 end;
 
 function sysctl_sysctl_name2oid(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+type
+ t_path=array[0..MAXPATHLEN] of AnsiChar;
 var
- new:array[0..MAXPATHLEN] of AnsiChar;
+ new:t_path;
  oid:array[0..CTL_MAXNAME-1] of Integer;
  len:Integer;
 begin
@@ -505,7 +506,7 @@ begin
 
  if (req^.newlen >= MAXPATHLEN) then Exit(ENAMETOOLONG);
 
- FillChar(new,SizeOf(new),0);
+ new:=Default(t_path);
 
  Result:=SYSCTL_IN(req, @new, req^.newlen);
  if (Result<>0) then Exit;

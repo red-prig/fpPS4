@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  sys_event,
  time,
  signal,
@@ -125,12 +126,17 @@ uses
  kern_exit,
  kern_prot,
  kern_synch,
- kern_event,
  md_context,
  md_proc,
  machdep,
  sched_ule,
  subr_sleepqueue;
+
+//
+
+{$I kern_event.inc}
+
+//
 
 const
  max_pending_per_proc=128;
@@ -464,7 +470,7 @@ end;
 
 Function issignal(td:p_kthread;stop_allowed:Integer):Integer; forward;
 
-Function cursig(td:p_kthread;stop_allowed:Integer):Integer;
+Function cursig(td:p_kthread;stop_allowed:Integer):Integer; public;
 begin
  Assert((stop_allowed=SIG_STOP_ALLOWED) or (stop_allowed=SIG_STOP_NOT_ALLOWED),'cursig: stop_allowed');
 
@@ -511,12 +517,12 @@ begin
  end;
 end;
 
-procedure ps_mtx_lock;
+procedure ps_mtx_lock; public;
 begin
  mtx_lock(p_sigacts.ps_mtx);
 end;
 
-procedure ps_mtx_unlock;
+procedure ps_mtx_unlock; public;
 begin
  mtx_unlock(p_sigacts.ps_mtx);
 end;
@@ -1410,7 +1416,7 @@ var
 begin
  Result:=0;
 
- KNOTE_LOCKED(@g_p_klist, NOTE_SIGNAL or sig);
+ KNOTE_LOCKED(@p_proc.p_klist, NOTE_SIGNAL or sig);
  prop:=sigprop(sig);
 
  if (td=nil) then
@@ -1880,14 +1886,14 @@ begin
  kn^.kn_ptr.p_proc:=nil;
  kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  // automatically set
 
- knlist_add(@g_p_klist, kn, 0);
+ knlist_add(@p_proc.p_klist, kn, 0);
 
  Exit(0);
 end;
 
 procedure filt_sigdetach(kn:p_knote);
 begin
- knlist_remove(@g_p_klist, kn, 0);
+ knlist_remove(@p_proc.p_klist, kn, 0);
 end;
 
 function filt_signal(kn:p_knote;hint:QWORD):Integer;
@@ -1897,7 +1903,9 @@ begin
   hint:=hint and (not NOTE_SIGNAL);
 
   if (kn^.kn_id=hint) then
+  begin
    Inc(kn^.kn_kevent.data);
+  end;
  end;
 
  Exit(ord(kn^.kn_data<>0));

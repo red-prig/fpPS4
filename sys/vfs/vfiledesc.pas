@@ -6,6 +6,7 @@ unit vfiledesc;
 interface
 
 uses
+ kern_param,
  mqueue,
  sys_event,
  vfile,

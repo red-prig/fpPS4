@@ -37,8 +37,14 @@ uses
  vfs_vnops,
  dead_vnops,
  vnode_if,
- null_vnops,
  kern_mtx;
+
+//
+
+var
+ null_vnodeops:vop_vector; external;
+
+//
 
 var
  null_node_hashtbl:TSTUB_HAMT32;

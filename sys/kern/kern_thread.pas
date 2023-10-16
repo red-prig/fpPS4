@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ kern_param,
  kern_thr,
  ucontext,
  signal,
@@ -203,12 +204,12 @@ begin
  end;
 end;
 
-procedure thread_lock(td:p_kthread);
+procedure thread_lock(td:p_kthread); public;
 begin
  rw_wlock(td^.td_lock);
 end;
 
-procedure thread_unlock(td:p_kthread);
+procedure thread_unlock(td:p_kthread); public;
 begin
  rw_wunlock(td^.td_lock);
 end;
@@ -864,9 +865,6 @@ begin
 
  if (Result=0) and ((td^.td_flags and TDF_THRWAKEUP)=0) then
  begin
-  //PROC_UNLOCK; //
-  //Result:=msleep_td(tv);
-  //PROC_LOCK;   //
   Result:=msleep(td,@p_proc.p_mtx,PCATCH,'lthr',tv);
  end;
 

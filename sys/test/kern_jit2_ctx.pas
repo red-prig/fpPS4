@@ -10,29 +10,7 @@ uses
  x86_fpdbgdisas,
  x86_jit;
 
-{
-change: rsp,rbp,rip
-rax?
-
-eflahs? temp change?
-
-change: push/pop
-
-thread: r15
-
-}
-
 type
- p_jit_frame=^jit_frame;
- jit_frame=packed record
-  tf_rax:QWORD; //00
-  tf_rsp:QWORD; //08
-  tf_rbp:QWORD; //10
-  tf_r14:QWORD; //18
-  tf_r15:QWORD; //20
-  tf_rip:QWORD; //28
- end;
-
  t_point_type=(fpCall,fpData,fpInvalid);
 
  p_jit_context2=^t_jit_context2;
@@ -139,18 +117,6 @@ function is_xmm(const r:TInstruction):Boolean;
 function is_rsp(const r:TRegValue):Boolean;
 function is_rsp(const r:TRegValues):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
-
-//in/out:rax uses:r14
-procedure uplift_jit; assembler;
-
-//in:rax(addr),r14b:(mem_size) out:ZF
-procedure page_test; assembler;
-
-//in:rax(addr),r14b:(size)
-procedure copyout_mov; assembler;
-
-//in:rax(addr),r14b:(size) out:rax
-procedure copyin_mov; assembler;
 
 type
  t_memop_type1=(mo_reg,
@@ -268,11 +234,10 @@ procedure print_disassemble(addr:Pointer;vsize:Integer);
 implementation
 
 uses
- vmparam,
  vm_pmap,
- systm,
  machdep,
- kern_thr;
+ kern_thr,
+ kern_jit_asm;
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
 var
@@ -812,220 +777,6 @@ begin
   Result:=is_invalid(r.Operand[i]);
   if Result then Exit;
  end;
-end;
-
-procedure sigsegv(addr:Pointer);
-begin
- Writeln('sigsegv:0x',HexStr(addr));
- Assert(False);
-end;
-
-//in/out:rax uses:r14
-procedure uplift_jit; assembler; nostackframe;
-const
- VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
-label
- _sigsegv;
-asm
- pushfq
- push %r14
- push %rax
- //
- mov VM_MAX_D,%r14
- shl $32,%r14
- cmp %r14,%rax
- ja _sigsegv
- //
- //low addr (r14)
- mov %rax,%r14
- and PAGE_MASK,%r14
- //high addr (rax)
- shr PAGE_SHIFT   ,%rax
- and PAGE_MAP_MASK,%rax
- //uplift (rax)
- lea (,%rax,4),%rax
- add PAGE_MAP(%rip),%rax
- mov (%rax),%eax
- //filter (rax)
- and PAGE_OFS_MASK,%rax
- jz _sigsegv
- //combine (rax|r14)
- shl PAGE_SHIFT,%rax
- or  %r14,%rax
- //
- pop %r14
- pop %r14
- popfq
- ret
-
- _sigsegv:
- pop %rdi
-
- pop %r14
- popfq
-
- call sigsegv
-
- ret
-end;
-
-//in:rax(addr),r14b:(mem_size) out:ZF
-procedure page_test; assembler; nostackframe;
-label
- _exit;
-asm
- push %rdi
- push %rsi
- //
- mov %rax,%rdi
- movzbq %r14b,%rsi
- sub $1,%rsi
- //addr2:=addr+mem_high (rsi)
- add %rdi,%rsi
- //high addr (rdi,rsi)
- shr PAGE_SHIFT   ,%rdi
- shr PAGE_SHIFT   ,%rsi
- and PAGE_MAP_MASK,%rdi
- and PAGE_MAP_MASK,%rsi
- //
- cmp %rdi,%rsi
- je _exit
- //uplift (rdi,rsi)
- lea (,%rdi,4),%rdi
- lea (,%rsi,4),%rsi
- //
- add PAGE_MAP(%rip),%rdi
- add PAGE_MAP(%rip),%rsi
- //
- mov (%rdi),%edi
- mov (%rsi),%esi
- //filter (rdi,rsi)
- and PAGE_OFS_MASK,%rdi
- and PAGE_OFS_MASK,%rsi
- //
- inc %rdi
- cmp %rdi,%rsi
- _exit:
- //
- pop %rsi
- pop %rdi
-end;
-
-//in:rax(addr),r14b:(size)
-procedure copyout_mov; assembler;
-label
- _simple,
- _exit;
-var
- addr:Pointer;
- data:array[0..31] of Byte;
-asm
- pushfq
- //
- call page_test
- je _simple
-
-  popfq //restore flags before call
-
-  push %rdi
-  push %rsi
-  push %rdx
-  push %rcx
-  push %r8
-  push %r9
-  push %r10
-  push %r11
-
-  movq %rax,addr
-
-  lea  data,%rax    //vaddr:=data
-
-  mov  8(%rbp),%rdi //ret addr
-  lea  2(%rdi),%rdi //jmp near
-
-  call %rdi         //reg->data
-
-  movq    addr,%rsi //vaddr
-  lea     data,%rdi //data
-  movzbq %r14b,%rdx //size
-
-  pushfq
-
-  call copyout
-
-  popfq
-
-  pop  %r11
-  pop  %r10
-  pop  %r9
-  pop  %r8
-  pop  %rcx
-  pop  %rdx
-  pop  %rsi
-  pop  %rdi
-
-  jmp _exit
- _simple:
-
-  call uplift_jit
-
-  mov  8(%rbp),%r14 //ret addr
-  lea  2(%r14),%r14 //jmp near
-
-  popfq //restore flags before call
-
-  call %r14         //reg->data
-
- _exit:
-end;
-
-//in:rax(addr),r14b:(size) out:rax
-procedure copyin_mov; assembler;
-label
- _simple,
- _exit;
-var
- data:array[0..31] of Byte;
-asm
- pushfq
- //
- call page_test
- je _simple
-
-  push %rdi
-  push %rsi
-  push %rdx
-  push %rcx
-  push %r8
-  push %r9
-  push %r10
-  push %r11
-
-  mov     %rax,%rdi //vaddr
-  lea     data,%rsi //data
-  movzbq %r14b,%rdx //size
-
-  call copyin
-
-  pop  %r11
-  pop  %r10
-  pop  %r9
-  pop  %r8
-  pop  %rcx
-  pop  %rdx
-  pop  %rsi
-  pop  %rdi
-
-  lea data,%rax //vaddr:=data
-
-  jmp _exit
- _simple:
-
-  call uplift_jit
-
- _exit:
- //
- popfq
 end;
 
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);

@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ kern_param,
  systm,
  vcapability,
  vuio,
@@ -74,7 +75,7 @@ end;
 
 function zalloc_namei:Pointer; inline;
 begin
- Result:=AllocMem(vfile.MAXPATHLEN);
+ Result:=AllocMem(kern_param.MAXPATHLEN);
 end;
 
 function nd_namei(ndp:p_nameidata):Integer;

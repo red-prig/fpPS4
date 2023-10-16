@@ -72,10 +72,20 @@ uses
  errno,
  signalvar,
  kern_proc,
- kern_thread,
- kern_sig,
- sched_ule,
- kern_synch;
+ sched_ule;
+
+//
+
+procedure ps_mtx_lock;   external;
+procedure ps_mtx_unlock; external;
+Function  cursig(td:p_kthread;stop_allowed:Integer):Integer; external;
+
+function  mi_switch(flags:Integer):Integer; external;
+
+procedure thread_lock(td:p_kthread);   external;
+procedure thread_unlock(td:p_kthread); external;
+
+//
 
 var
  sleepq_chains:array[0..SC_MASK] of sleepqueue_chain;

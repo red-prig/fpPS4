@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  vmount,
+ kern_param,
  sys_event,
  vfile,
  vstat,
@@ -191,10 +192,17 @@ uses
  subr_uio,
  vm_object,
  vsys_generic,
- dead_vnops,
  rtprio,
- kern_conf,
- kern_event;
+ kern_conf;
+
+//
+
+{$I kern_event.inc}
+
+var
+ dead_vnodeops:vop_vector; external;
+
+//
 
 {
  * Macros to control when a vnode is freed and recycled.  All require
@@ -3573,7 +3581,9 @@ var
  error:Integer;
 begin
  if (dp^.d_reclen > ap^.a_uio^.uio_resid) then
+ begin
   Exit(ENAMETOOLONG);
+ end;
 
  error:=uiomove(dp, dp^.d_reclen, ap^.a_uio);
  if (error<>0) then

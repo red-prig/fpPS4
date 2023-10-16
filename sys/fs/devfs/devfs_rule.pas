@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  kern_conf,
  devfs,
  kern_sx;
@@ -74,8 +75,11 @@ implementation
 uses
  errno,
  vdirent,
- sys_fnmatch,
- devfs_vnops;
+ sys_fnmatch;
+
+//
+
+function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:Pointer):PChar; external;
 
 //
 
@@ -91,7 +95,9 @@ begin
  sx_assert(@dm^.dm_lock);
 
  if (dm^.dm_ruleset=0) then
+ begin
   Exit;
+ end;
  sx_slock(@sx_rules);
  ds:=devfs_ruleset_bynum(dm^.dm_ruleset);
  Assert(ds<>nil, ('mount-point has nil ruleset'));
@@ -125,7 +131,9 @@ begin
  error:=EPERM;
  //error:=priv_check(td, PRIV_DEVFS_RULE);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  sx_xlock(@sx_rules);
 
@@ -135,7 +143,9 @@ begin
     dr:=p_devfs_rule(data);
     error:=devfs_rule_input(dr, dm);
     if (error<>0) then
+    begin
      goto _break;
+    end;
     dk:=devfs_rule_byid(dr^.dr_id);
     if (dk<>nil) then
     begin
@@ -154,7 +164,9 @@ begin
     dr:=p_devfs_rule(data);
     error:=devfs_rule_input(dr, dm);
     if (error<>0) then
+    begin
      goto _break;
+    end;
 
     {
      * This is one of many possible hackish
@@ -211,7 +223,9 @@ begin
     dr:=p_devfs_rule(data);
     error:=devfs_rule_input(dr, dm);
     if (error<>0) then
+    begin
      goto _break;
+    end;
     {
      * We can't use devfs_rule_byid() here since that
      * requires the rule specified to exist, but we want
@@ -265,7 +279,9 @@ begin
     while (ds<>nil) do
     begin
      if (ds^.ds_number > rsnum) then
+     begin
       break;
+     end;
      ds:=TAILQ_NEXT(ds,@ds^.ds_list);
     end;
     if (ds=nil) then
@@ -346,7 +362,9 @@ begin
   rnump^:=rid2rn(dk^.dk_rule.dr_id) + 100;
   { Detect overflow. }
   if (rnump^ < rid2rn(dk^.dk_rule.dr_id)) then
+  begin
    Exit(ERANGE);
+  end;
  end;
  Assert(devfs_rule_byid(mkrid(ds^.ds_number, rnump^))=nil,'autonumbering resulted in an already existing rule');
  Exit(0);
@@ -364,15 +382,20 @@ begin
  rn:=rid2rn(rid);
  ds:=devfs_ruleset_bynum(rid2rsn(rid));
  if (ds=nil) then
+ begin
   Exit(nil);
+ end;
  dk:=TAILQ_FIRST(@ds^.ds_rules);
  while (dk<>nil) do
  begin
   if (rid2rn(dk^.dk_rule.dr_id)=rn) then
+  begin
    Exit(dk)
-  else
-  if (rid2rn(dk^.dk_rule.dr_id) > rn) then
+  end else
+  if (rid2rn(dk^.dk_rule.dr_id)>rn) then
+  begin
    break;
+  end;
   dk:=TAILQ_NEXT(dk,@dk^.dk_list);
  end;
  Exit(nil);
@@ -410,7 +433,10 @@ end;
 function devfs_rule_getdev(de:p_devfs_dirent):p_cdev;
 begin
  if (de^.de_cdp=nil) then
+ begin
   Exit(nil);
+ end;
+
  if ((de^.de_cdp^.cdp_flags and CDP_ACTIVE)<>0) then
   Exit(@de^.de_cdp^.cdp_c)
  else
@@ -425,7 +451,10 @@ end;
 function devfs_rule_input(dr:p_devfs_rule;dm:p_devfs_mount):Integer;
 begin
  if (dr^.dr_magic<>DEVFS_MAGIC) then
+ begin
   Exit(ERPCMISMATCH);
+ end;
+
  dr^.dr_id:=devfs_rid_input(dr^.dr_id, dm);
  Exit(0);
 end;
@@ -453,16 +482,22 @@ begin
  begin
   dsi:=devfs_ruleset_bynum(dr^.dr_incset);
   if (dsi=nil) then
+  begin
    Exit(ESRCH);
+  end;
  end else
+ begin
   dsi:=nil;
+ end;
 
  rsnum:=rid2rsn(dr^.dr_id);
  Assert(rsnum<>0, ('Inserting into ruleset zero'));
 
  ds:=devfs_ruleset_bynum(rsnum);
  if (ds=nil) then
+ begin
   ds:=devfs_ruleset_create(rsnum);
+ end;
  dkrn:=rid2rn(dr^.dr_id);
  if (dkrn=0) then
  begin
@@ -477,7 +512,9 @@ begin
  dk:=AllocMem(sizeof(t_devfs_krule));
  dk^.dk_ruleset:=ds;
  if (dsi<>nil) then
+ begin
   Inc(dsi^.ds_refcount);
+ end;
  { XXX: Inspect dr? }
  Move(dr^,dk^.dk_rule,sizeof(t_devfs_rule));
  dk^.dk_rule.dr_id:=mkrid(rid2rsn(dk^.dk_rule.dr_id), dkrn);
@@ -525,10 +562,14 @@ begin
  if ((dr^.dr_icond and DRC_DSWFLAGS)<>0) then
  begin
   if (dev=nil) then
+  begin
    Exit(0);
+  end;
   dsw:=dev_refthread(dev, @ref);
   if (dsw=nil) then
+  begin
    Exit(0);
+  end;
   if ((dsw^.d_flags and dr^.dr_dswflags)=0) then
   begin
    dev_relthread(dev, ref);
@@ -536,9 +577,12 @@ begin
   end;
   dev_relthread(dev, ref);
  end;
+
  if ((dr^.dr_icond and DRC_PATHPTRN)<>0) then
   if (devfs_rule_matchpath(dk, dm, de)=0) then
+  begin
    Exit(0);
+  end;
 
  Exit(1);
 end;
@@ -586,7 +630,10 @@ begin
  dr:=@dk^.dk_rule;
 
  if (devfs_rule_match(dk, dm, de)=0) then
+ begin
   Exit;
+ end;
+
  if ((dr^.dr_iacts and DRA_BACTS)<>0) then
  begin
   if ((dr^.dr_bacts and DRB_HIDE)<>0) then
@@ -710,7 +757,9 @@ begin
   s1:=TAILQ_NEXT(s1,@s1^.ds_list);
  end;
  if (s1=nil) then
+ begin
   TAILQ_INSERT_TAIL(@devfs_rulesets,ds,@ds^.ds_list);
+ end;
  Exit(ds);
 end;
 
@@ -724,7 +773,9 @@ begin
  Assert(ds^.ds_number<>0,'reaping ruleset zero');
 
  if (not TAILQ_EMPTY(@ds^.ds_rules)) or (ds^.ds_refcount<>0) then
+ begin
   Exit;
+ end;
 
  TAILQ_REMOVE(@devfs_rulesets,ds,@ds^.ds_list);
  FreeMem(ds);

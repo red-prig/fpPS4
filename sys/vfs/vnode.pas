@@ -9,8 +9,7 @@ uses
  mqueue,
  kern_mtx,
  vselinfo,
- time,
- vmparam;
+ time;
 
 const
  VI_MOUNT      =$0020; // Mount in progress
@@ -107,13 +106,6 @@ const
  VR_NO_SUSPCLR =$0002; // vfs_write_resume: do not clear suspension
 
  VNOVAL=-1;
-
- DEV_BSHIFT=9;
- DEV_BSIZE =(1 shl DEV_BSHIFT);
-
- BLKDEV_IOSIZE=PAGE_SIZE;
- DFLTPHYS     =(64 * 1024);
- MAXPHYS      =(128 * 1024);
 
  //Flags for vdesc_flags:
  VDESC_MAX_VPS=16;
@@ -325,9 +317,16 @@ var
 implementation
 
 uses
- vmount,
- sys_event,
- kern_event;
+ sys_event;
+
+//
+
+{$I kern_event.inc}
+
+function  VFS_PROLOGUE(mp:Pointer):Boolean; external;
+procedure VFS_EPILOGUE(_enable_stops:Boolean); external;
+
+//
 
 function VOPARG_OFFSETTO(s_offset:Integer;struct_p:Pointer):Pointer;
 begin

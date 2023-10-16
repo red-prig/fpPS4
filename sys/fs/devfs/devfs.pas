@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ kern_param,
  vfile,
  vdirent,
  vnode,
@@ -221,6 +222,10 @@ var
  devfs_dirlist:LIST_HEAD=(lh_first:nil); //dirlistent
  dirlist_mtx  :mtx; //MTX_SYSINIT(dirlist_mtx, &dirlist_mtx, "devfs dirlist lock", MTX_DEF);
 
+ devfs_de_interlock:mtx; //MTX_SYSINIT(devfs_de_interlock, @devfs_de_interlock, 'devfs interlock', MTX_DEF);
+ cdevpriv_mtx      :mtx; //MTX_SYSINIT(cdevpriv_mtx, @cdevpriv_mtx, 'cdevpriv lock', MTX_DEF);
+ clone_drain_lock  :t_sx=(n:'clone events drain lock';c:nil;m:0);
+
  devfs_generation:DWORD=0;
 
 function  devfs_dir_find(path:PChar):Integer;
@@ -234,8 +239,11 @@ procedure devfs_mtx_init;
 
 implementation
 
-uses
- devfs_vnops;
+//
+
+function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:Pointer):PChar; external;
+
+//
 
 {
  * Identifier manipulators.

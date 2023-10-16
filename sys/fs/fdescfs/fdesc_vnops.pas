@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  vmount,
  vnode,
  vfs_default,
@@ -101,7 +102,6 @@ uses
  vfs_subr,
  vfs_syscalls,
  kern_mtx,
- kern_synch,
  kern_descrip,
  kern_thr;
 

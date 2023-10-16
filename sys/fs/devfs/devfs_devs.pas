@@ -187,10 +187,14 @@ end;
 function devfs_parent_dirent(de:p_devfs_dirent):p_devfs_dirent;
 begin
  if (de^.de_dirent^.d_type<>DT_DIR) then
+ begin
   Exit(de^.de_dir);
+ end;
 
  if ((de^.de_flags and (DE_DOT or DE_DOTDOT))<>0) then
+ begin
   Exit(nil);
+ end;
 
  de:=TAILQ_FIRST(@de^.de_dlist); { '.' }
  if (de=nil) then Exit(nil);
@@ -352,7 +356,9 @@ begin
   vgone(vp);
 
   if ((flags and DEVFS_DEL_VNLOCKED)=0) then
+  begin
    VOP_UNLOCK(vp, 0);
+  end;
 
   vdrop(vp);
   sx_xlock(@dm^.dm_lock);
@@ -374,8 +380,11 @@ begin
   devfs_free_cdp_inode(de^.de_inode);
   de^.de_inode:=0;
  end;
+
  if DEVFS_DE_DROP(de) then
+ begin
   devfs_dirent_free(de);
+ end;
 
  if (dd<>nil) then
  begin
@@ -452,8 +461,12 @@ begin
   Exit;
  end;
  Move(cdp^.cdp_dirents^,dep^,(cdp^.cdp_maxdirent + 1)*SizeOf(Pointer));
+
  if (cdp^.cdp_maxdirent > 0) then
+ begin
   FreeMem(cdp^.cdp_dirents);
+ end;
+
  cdp^.cdp_dirents:=dep;
  {
   * XXX: if malloc told us how much we actually got this could
@@ -546,7 +559,9 @@ begin
   dev_unlock();
 
   if (dm^.dm_idx > cdp^.cdp_maxdirent) then
+  begin
    devfs_metoo(cdp, dm);
+  end;
 
   dd:=dm^.dm_rootdir;
   s:=cdp^.cdp_c.si_name;
@@ -564,7 +579,9 @@ begin
    begin
     de:=devfs_find(dd, s, q - s, DT_DIR);
     if (de=nil) then
+    begin
      de:=devfs_vmkdir(dm, s, q - s, dd, 0);
+    end;
     de^.de_flags:=de^.de_flags or DE_COVERED;
    end;
    s:=q + 1;
@@ -626,7 +643,9 @@ begin
  sx_assert(@dm^.dm_lock);
  gen:=devfs_generation;
  if (dm^.dm_generation=gen) then
+ begin
   Exit;
+ end;
  while (devfs_populate_loop(dm, 0)<>0) do;
  dm^.dm_generation:=gen;
 end;

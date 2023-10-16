@@ -7,28 +7,9 @@ interface
 
 uses
  subr_sleepqueue,
+ kern_param,
  kern_mtx,
  kern_thr;
-
-const
- PUSER=700;
- PRI_MIN_KERN=64;
-
- PSWP  =(PRI_MIN_KERN+ 0);
- PVM   =(PRI_MIN_KERN+ 4);
- PINOD =(PRI_MIN_KERN+ 8);
- PRIBIO=(PRI_MIN_KERN+12);
- PVFS  =(PRI_MIN_KERN+16);
- PZERO =(PRI_MIN_KERN+20);
- PSOCK =(PRI_MIN_KERN+24);
- PWAIT =(PRI_MIN_KERN+28);
- PLOCK =(PRI_MIN_KERN+32);
- PPAUSE=(PRI_MIN_KERN+36);
-
- PRIMASK=$0fff;
- PCATCH =$1000; //OR'd with pri for tsleep to check signals
- PDROP  =$2000; //OR'd with pri to stop re-entry of interlock mutex
- PBDRY  =$4000; //for PCATCH stop is done on the user boundary
 
 function  msleep(ident   :Pointer;
                  lock    :p_mtx;
@@ -69,7 +50,7 @@ function msleep(ident   :Pointer;
                 lock    :p_mtx;
                 priority:Integer;
                 wmesg   :PChar;
-                timo    :Int64):Integer;
+                timo    :Int64):Integer; public;
 var
  td:p_kthread;
  catch,flags,pri:Integer;
@@ -173,7 +154,7 @@ begin
  sleepq_release(ident);
 end;
 
-function mi_switch(flags:Integer):Integer;
+function mi_switch(flags:Integer):Integer; public;
 var
  td:p_kthread;
 begin

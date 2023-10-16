@@ -147,8 +147,6 @@ const
   jitcall:@jit_call;
  );
 
-procedure switch_to_jit(frame:p_jit_frame);
-
 function  IS_TRAP_FUNC(rip:qword):Boolean;
 
 function  trap(frame:p_trapframe):Integer;
@@ -178,8 +176,13 @@ uses
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
- ps4libdoc,
- kern_jit_dynamic;
+ ps4libdoc;
+
+//
+
+procedure switch_to_jit(td:p_kthread); external;
+
+//
 
 procedure _sig_lock; assembler; nostackframe;
 asm
@@ -702,7 +705,7 @@ begin
  if (rip<>td_frame^.tf_rip) or
     ((td^.pcb_flags and (PCB_FULL_IRET or PCB_IS_JIT))=(PCB_FULL_IRET or PCB_IS_JIT)) then
  begin
-  kern_jit_dynamic.switch_to_jit(curkthread);
+  switch_to_jit(curkthread);
 
   //if internal
   if ((td^.pcb_flags and PCB_IS_JIT)=0) then
@@ -897,6 +900,7 @@ end;
  end;
 }
 
+{
 procedure switch_to_jit(frame:p_jit_frame);
 var
  td:p_kthread;
@@ -908,6 +912,7 @@ begin
  td^.td_frame.tf_rsp:=QWORD(frame);
  td^.td_frame.tf_rip:=QWORD(@jit_call);
 end;
+}
 
 type
  t_proc=Procedure();

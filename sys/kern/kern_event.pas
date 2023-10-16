@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
+ kern_param,
  systm,
  time,
  sys_event,
@@ -104,9 +105,6 @@ function  sys_kevent(fd:Integer;
                      eventlist:Pointer;
                      nevents:Integer;
                      timeout:Pointer):Integer;
-
-var
- g_p_klist:t_knlist; //Knotes attached to this proc
 
 implementation
 
@@ -453,7 +451,7 @@ begin
 
  if (immediate=0) then
  begin
-  knlist_add(@g_p_klist, kn, 1);
+  knlist_add(@p_proc.p_klist, kn, 1);
  end;
 
  {
@@ -482,7 +480,7 @@ end;
 { XXX - move to kern_proc.c?  }
 procedure filt_procdetach (kn:p_knote);
 begin
- knlist_remove(@g_p_klist, kn, 0);
+ knlist_remove(@p_proc.p_klist, kn, 0);
 end;
 
 procedure knlist_remove_inevent(knl:p_knlist;kn:p_knote); forward;
@@ -513,7 +511,7 @@ begin
  begin
   if ((kn^.kn_status and KN_DETACHED)=0) then
   begin
-   knlist_remove_inevent(@g_p_klist, kn);
+   knlist_remove_inevent(@p_proc.p_klist, kn);
   end;
   kn^.kn_flags:=kn^.kn_flags or (EV_EOF or EV_ONESHOT);
   kn^.kn_ptr.p_proc:=nil;
@@ -2176,7 +2174,7 @@ end;
  * down the chain to make up the parent kqueue.  Make this code functional
  * first.
  }
-procedure knote(list:p_knlist;hint:QWORD;lockflags:Integer);
+procedure knote(list:p_knlist;hint:QWORD;lockflags:Integer); public;
 var
  kq:p_kqueue;
  kn:p_knote;
@@ -2250,7 +2248,7 @@ end;
 {
  * add a knote to a knlist
  }
-procedure knlist_add(knl:p_knlist;kn:p_knote;islocked:Integer);
+procedure knlist_add(knl:p_knlist;kn:p_knote;islocked:Integer); public;
 begin
  KNL_ASSERT_LOCK(knl, islocked);
  KQ_NOTOWNED(kn^.kn_kq);
@@ -2314,7 +2312,7 @@ end;
 {
  * remove all knotes from a specified klist
  }
-procedure knlist_remove(knl:p_knlist;kn:p_knote;islocked:Integer);
+procedure knlist_remove(knl:p_knlist;kn:p_knote;islocked:Integer); public;
 begin
  knlist_remove_kq(knl, kn, islocked, 0);
 end;
@@ -2353,7 +2351,7 @@ begin
  //
 end;
 
-procedure knlist_init(knl:p_knlist;lock,kl_lock,kl_unlock,kl_assert_locked,kl_assert_unlocked:Pointer);
+procedure knlist_init(knl:p_knlist;lock,kl_lock,kl_unlock,kl_assert_locked,kl_assert_unlocked:Pointer); public;
 begin
  if (lock=nil) then
   knl^.kl_lockarg:=@knlist_lock
@@ -2388,7 +2386,7 @@ begin
  knlist_init(knl, lock, nil, nil, nil, nil);
 end;
 
-procedure knlist_destroy(knl:p_knlist);
+procedure knlist_destroy(knl:p_knlist); public;
 begin
  {
   * if we run across this error, we need to find the offending
@@ -2409,7 +2407,7 @@ end;
  * Even if we are locked, we may need to drop the lock to allow any influx
  * knotes time to 'settle'.
  }
-procedure knlist_cleardel(knl:p_knlist;islocked,killkn:Integer);
+procedure knlist_cleardel(knl:p_knlist;islocked,killkn:Integer); public;
 label
  again;
 var
@@ -2481,12 +2479,12 @@ begin
  end;
 end;
 
-procedure knlist_clear(knl:p_knlist;islocked:Integer);
+procedure knlist_clear(knl:p_knlist;islocked:Integer); inline;
 begin
  knlist_cleardel(knl, islocked, 0)
 end;
 
-procedure knlist_delete(knl:p_knlist;islocked:Integer);
+procedure knlist_delete(knl:p_knlist;islocked:Integer); inline;
 begin
  knlist_cleardel(knl, islocked, 1)
 end;
@@ -2656,7 +2654,7 @@ begin
  mtx_init(filterops_lock,'protect sysfilt_ops');
  mtx_init(knlist_lock   ,'knlist lock for lockless objects');
  //
- knlist_init_mtx(@g_p_klist,@p_proc.p_mtx);
+ knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
 end;
 
 function knote_alloc():p_knote;

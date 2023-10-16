@@ -7,6 +7,7 @@ interface
 
 uses
  vmount,
+ kern_param,
  vfs_mount,
  vnode,
  fdescfs;

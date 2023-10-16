@@ -13,22 +13,6 @@ uses
  kern_id;
 
 const
- NAME_MAX  =255;  // max bytes in a file name
- PATH_MAX  =1024; // max bytes in pathname
- PIPE_BUF  =512;  // max bytes for atomic pipe writes
- IOV_MAX   =1024; // max elements in i/o vector
- MAXNAMLEN =255;
-
- LINK_MAX   =32767; // max file link count
- MAX_CANON  =255;   // max bytes in term canon input line
- MAX_INPUT  =255;   // max bytes in terminal inpu
- NGROUPS_MAX=1023;  // max supplemental group id's
-
- MAXPATHLEN =PATH_MAX;
- MAXSYMLINKS=32;
-
- maxfilesperproc = 44236;
-
  // configurable pathname variables
  _PC_LINK_MAX        =1;
  _PC_MAX_CANON       =2;

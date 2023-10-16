@@ -7,7 +7,7 @@ interface
 
 uses
  vmparam,
- vfile,
+ kern_param,
  _resource;
 
 function  lim_max(which:Integer):QWORD;

@@ -7,6 +7,7 @@ interface
 
 uses
  sys_event,
+ kern_param,
  vmount,
  vnamei,
  vfile,
@@ -60,7 +61,7 @@ const
   fo_flags   :DFLAG_PASSABLE or DFLAG_SEEKABLE
  );
 
-function  foffset_get(fp:p_file):Int64; inline;
+function  foffset_get(fp:p_file):Int64;
 function  foffset_lock(fp:p_file;flags:Integer):Int64;
 procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
 procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);

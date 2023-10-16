@@ -102,8 +102,26 @@ uses
  systm,
  trap,
  kern_psl,
- signal,
- kern_sig;
+ signal;
+
+//
+
+Function sigonstack(sp:size_t):Integer;
+var
+ td:p_kthread;
+begin
+ Result:=0;
+
+ td:=curkthread;
+ if (td=nil) then Exit;
+
+ if ((td^.td_pflags and TDP_ALTSTACK)<>0) then
+ begin
+  Result:=ord((sp-size_t(td^.td_sigstk.ss_sp))<td^.td_sigstk.ss_size);
+ end;
+end;
+
+//
 
 const
  _ucodesel=(8 shl 3) or 3;

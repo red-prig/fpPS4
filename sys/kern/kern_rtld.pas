@@ -7,8 +7,8 @@ interface
 
 uses
  sysutils,
+ kern_param,
  kern_thr,
- vfile,
  vnode,
  vm_object,
  vuio,

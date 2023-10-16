@@ -13,7 +13,8 @@ uses
  x86_jit,
  kern_jit2_ctx,
  kern_rwlock,
- kern_thr;
+ kern_thr,
+ kern_jit_asm;
 
 {
   entry_point -> +----------+    +---------+
@@ -410,7 +411,7 @@ asm
  jmp %gs:teb.jitcall
 end;
 
-function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer;
+function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; public;
 label
  _start;
 var

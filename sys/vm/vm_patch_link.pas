@@ -261,7 +261,7 @@ begin
  FreeMem(node);
 end;
 
-procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD);
+procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); public;
 var
  obj:vm_object_t;
  entry,next:p_patch_node;

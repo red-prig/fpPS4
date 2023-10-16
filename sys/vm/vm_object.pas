@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  vm,
+ kern_param,
  kern_mtx,
  kern_synch;
 
@@ -118,9 +119,15 @@ implementation
 uses
  vmparam,
  vnode,
- vfs_subr,
- vm_pager,
- vm_patch_link;
+ vfs_subr;
+
+//
+
+procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); external;
+
+procedure vm_pager_deallocate(obj:vm_object_t); external;
+
+//
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin

@@ -6,6 +6,7 @@ unit vfs_syscalls;
 interface
 
 uses
+ kern_param,
  kern_proc,
  time,
  vmount,
@@ -3307,13 +3308,15 @@ begin
 end;
 
 function sys_randomized_path(src,dst:pchar;plen:PQWORD):Integer;
+type
+ t_data=array[0..255] of AnsiChar;
 var
  ran_len:Integer;
  dst_len:QWORD;
- data:array[0..255] of AnsiChar;
+ data:t_data;
 begin
  Result:=0;
- FillChar(data,SizeOf(data),0);
+ data:=Default(t_data);
  dst_len:=0;
 
  if (src=nil) then

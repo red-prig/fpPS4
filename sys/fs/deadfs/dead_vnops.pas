@@ -21,7 +21,7 @@ function dead_write(ap:p_vop_write_args):Integer;
 function dead_getwritemount(ap:p_vop_getwritemount_args):Integer;
 function dead_rename(ap:p_vop_rename_args):Integer;
 
-const
+var
  dead_vnodeops:vop_vector=(
   vop_default       :@default_vnodeops;
   vop_bypass        :nil;
@@ -73,7 +73,7 @@ const
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
- );
+ );  public;
 
 implementation
 

@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  time,
  sys_event,
  vfile,
@@ -26,11 +27,6 @@ uses
  kern_mtx,
  kern_sx,
  kern_conf;
-
-var
- devfs_de_interlock:mtx; //MTX_SYSINIT(devfs_de_interlock, @devfs_de_interlock, 'devfs interlock', MTX_DEF);
- cdevpriv_mtx      :mtx; //MTX_SYSINIT(cdevpriv_mtx, @cdevpriv_mtx, 'cdevpriv lock', MTX_DEF);
- clone_drain_lock  :t_sx=(n:'clone events drain lock';c:nil;m:0);
 
 function  devfs_fp_check(fp:p_file;devp:pp_cdev;dswp:pp_cdevsw;ref:PInteger):Integer;
 function  devfs_get_cdevpriv(datap:PPointer):Integer;
@@ -465,7 +461,7 @@ end;
  * Construct the fully qualified path name relative to the mountpoint.
  * If a nil cnp is provided, no '/' is appended to the resulting path.
  }
-function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:p_componentname):PChar;
+function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:p_componentname):PChar; public;
 var
  i:Integer;
  de:p_devfs_dirent;
@@ -544,7 +540,7 @@ end;
  * devfs_allocv shall be entered with dmp^.dm_lock held, and it drops
  * it on Exit.
  }
-function devfs_allocv(de:p_devfs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer;
+function devfs_allocv(de:p_devfs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer; public;
 label
  loop;
 var

@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ kern_param,
  time,
  sys_event,
  kern_mtx,
@@ -15,13 +16,6 @@ uses
  vnode;
 
 const
- DFLTPHYS=(64*1024);
-
- MAXFIDSZ=16;
-
- MFSNAMELEN=16; // length of type name including null
- MNAMELEN  =88; // size of on/from name bufs
-
  STATFS_VERSION=$20030518; // current version number
 
  //User specifiable flags, stored in mnt_flag.
@@ -501,7 +495,7 @@ begin
   mtx_assert(VFS_Giant);
 end;
 
-function VFS_PROLOGUE(mp:p_mount):Boolean;
+function VFS_PROLOGUE(mp:p_mount):Boolean; public;
 begin
  if (mp<>nil) then
  begin
@@ -512,7 +506,7 @@ begin
  end;
 end;
 
-procedure VFS_EPILOGUE(_enable_stops:Boolean); inline;
+procedure VFS_EPILOGUE(_enable_stops:Boolean); public;
 begin
  if _enable_stops then sigallowstop;
 end;

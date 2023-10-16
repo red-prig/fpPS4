@@ -258,7 +258,7 @@ begin
   if (tmp_jit^.prolog=nil) then
   begin
    //Prologue not created? Switch code on exit
-   switch_to_jit(@tmp_jit^.frame);
+   //switch_to_jit(@tmp_jit^.frame);
   end;
 
   p_dec_ref(info.stub); //release (vm_get_patch_link)
@@ -407,7 +407,7 @@ begin
  vm_add_patch_link(obj,Pointer(rip_addr),vsize,pt_jit_frame,chunk_jit);
 
  //Switch code on exit
- switch_to_jit(@ctx.jit_code^.frame);
+ //switch_to_jit(@ctx.jit_code^.frame);
 end;
 
 function vm_fault(map        :vm_map_t;

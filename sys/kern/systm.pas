@@ -5,9 +5,8 @@ unit systm;
 
 interface
 
-const
- IOSIZE_MAX      =High(Integer);
- DEVFS_IOSIZE_MAX=High(Integer);
+uses
+ kern_param;
 
 function copystr(from,_to:pchar;maxlen:ptruint;lencopied:pptruint):Integer;
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
