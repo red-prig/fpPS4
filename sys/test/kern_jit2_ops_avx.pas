@@ -29,7 +29,7 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.mem_reg.op    :=ctx.dis.opcode;
+ tmp.mem_reg.op    :=ctx.dis.opcode and $FF;
  tmp.mem_reg.simdop:=SCODES[ctx.dis.SimdOpcode];
  tmp.mem_reg.mm    :=ctx.dis.mm;
  tmp.hint:=hint;
@@ -50,7 +50,7 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.reg_mem.op    :=ctx.dis.opcode;
+ tmp.reg_mem.op    :=ctx.dis.opcode and $FF;
  tmp.reg_mem.simdop:=SCODES[ctx.dis.SimdOpcode];
  tmp.reg_mem.mm    :=ctx.dis.mm;
  tmp.hint:=hint;
@@ -102,7 +102,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.op    :=ctx.dis.opcode;
+  tmp.op    :=ctx.dis.opcode and $FF;
   tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
   tmp.mm    :=ctx.dis.mm;
   //
@@ -126,7 +126,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.op    :=ctx.dis.opcode;
+  tmp.op    :=ctx.dis.opcode and $FF;
   tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
   tmp.mm    :=ctx.dis.mm;
 
@@ -148,7 +148,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.op    :=ctx.dis.opcode;
+  tmp.op    :=ctx.dis.opcode and $FF;
   tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
   tmp.mm    :=ctx.dis.mm;
 
@@ -173,7 +173,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.rmi.op    :=ctx.dis.opcode;
+  tmp.rmi.op    :=ctx.dis.opcode and $FF;
   tmp.rmi.simdop:=SCODES[ctx.dis.SimdOpcode];
   tmp.rmi.mm    :=ctx.dis.mm;
 
@@ -196,7 +196,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.mri.op    :=ctx.dis.opcode;
+  tmp.mri.op    :=ctx.dis.opcode and $FF;
   tmp.mri.simdop:=SCODES[ctx.dis.SimdOpcode];
   tmp.mri.mm    :=ctx.dis.mm;
 
@@ -374,7 +374,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   if (ctx.dis.SimdOpcode=so66) and
-     (ctx.dis.opcode in [$6E,$7E]) then
+     ((ctx.dis.opcode and $FF) in [$6E,$7E]) then
   begin
    op_emit_avx2(ctx,vmov_dq_desc);
   end else

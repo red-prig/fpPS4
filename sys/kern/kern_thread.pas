@@ -14,7 +14,6 @@ uses
  signalvar,
  time,
  rtprio,
- kern_rtprio,
  hamt;
 
 type
@@ -71,13 +70,27 @@ uses
  md_proc,
  md_thread,
  kern_rwlock,
- kern_umtx,
  kern_sig,
  kern_synch,
  kern_proc,
- sched_ule,
- subr_sleepqueue,
- kern_jit_dynamic;
+ sched_ule;
+
+//
+
+procedure umtx_thread_init(td:p_kthread); external;
+procedure umtx_thread_exit(td:p_kthread); external;
+procedure umtx_thread_fini(td:p_kthread); external;
+function  kern_umtx_wake(td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Integer; external;
+function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
+
+function  sleepq_alloc:Pointer; external;
+procedure sleepq_free(sq:Pointer); external;
+
+function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; external;
+
+procedure switch_to_jit(td:p_kthread); external;
+
+//
 
 var
  tidhashtbl:TSTUB_HAMT32;
@@ -473,7 +486,7 @@ begin
  end;
 
  //jit wrapper
- kern_jit_dynamic.switch_to_jit(newtd);
+ switch_to_jit(newtd);
  //jit wrapper
 
  //seh wrapper
@@ -566,7 +579,7 @@ begin
  cpu_set_upcall_kse(newtd,func,arg,@stack);
 
  //jit wrapper
- kern_jit_dynamic.switch_to_jit(newtd);
+ switch_to_jit(newtd);
  //jit wrapper
 
  //seh wrapper

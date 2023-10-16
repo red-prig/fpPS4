@@ -312,19 +312,19 @@ begin
  uq^.uq_thread:=nil;
 end;
 
-procedure umtx_thread_init(td:p_kthread);
+procedure umtx_thread_init(td:p_kthread); public;
 begin
  umtxq_init(td^.td_umtxq,td);
 end;
 
-procedure umtx_thread_exit(td:p_kthread);
+procedure umtx_thread_exit(td:p_kthread); public;
 begin
  thread_lock(td);
  sched_lend_user_prio(td,PRI_MAX);
  thread_unlock(td);
 end;
 
-procedure umtx_thread_fini(td:p_kthread);
+procedure umtx_thread_fini(td:p_kthread); public;
 begin
  umtxq_free(td^.td_umtxq);
 end;
@@ -703,7 +703,7 @@ begin
  end;
 end;
 
-function kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer;
+function kern_umtx_wake(td:p_kthread;umtx:p_umtx;n_wake,priv:Integer):Integer; public;
 var
  key:umtx_key;
 begin
@@ -2368,7 +2368,7 @@ end;
 
 ////
 
-function umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer;
+function umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; public;
 begin
  Result:=copyin(addr,tsp,SizeOf(timespec));
  if (Result=0) then

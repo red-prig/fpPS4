@@ -348,11 +348,11 @@ type
   public
     ProcessMode: TFPDMode;
     Code: PByte;
-    opcode: Byte;
-    CodeIdx: Byte;
     OperIdx: Integer;
+    CodeIdx: Byte;
     ModRMIdx: Byte;
     mm: Byte;
+    opcode: DWORD;
     Flags: TFlags;
     SimdOpcode: TSimdOpcode;
     ModRM: record
@@ -526,6 +526,7 @@ type
 
     function AddressSize: TAddressSize;
     function HasOpcode: Boolean;
+    procedure AddOpPrefix;
     procedure SetOpcode(AOpcode: TOpcode; ASuffix: TOpCodeSuffix = OPSnone; APrefixV: Boolean = False);
     procedure Default64;
     procedure Force64;
@@ -919,9 +920,14 @@ begin
   Flags := Flags - [pre66, preF2, preF3];
 end;
 
+procedure TX86Disassembler.AddOpPrefix;
+begin
+ opcode:=((opcode and (not $FF)) shl 8) or (DWORD(Code[CodeIdx]) shl 8) or (opcode and $FF);
+end;
+
 procedure TX86Disassembler.SetOpcode(AOpcode: TOpcode; ASuffix: TOpCodeSuffix; APrefixV: Boolean);
 begin
-  opcode:=Code[CodeIdx];
+  opcode:=(opcode and (not $FF)) or Code[CodeIdx];
 
   if (flagVex in Flags) and APrefixV
   then Instruction^.OpCode.Prefix := OPPv
@@ -2282,7 +2288,7 @@ begin
   AddPq;
   AddQq;
   // to adjust the instruction length, add an empty AnInstruction.operand for the Instruction^.Opcode
-  AddOperand({'',} RegValue(regNone), 1);
+  AddOperand(RegValue(regNone), 1);
   // calc index of imm_opcode
   idx := 0;
   if flagModRM in Flags then Inc(idx);
@@ -2971,6 +2977,7 @@ begin
       SetOpcode(OPfemms);
     end;
     $0F: begin
+      AddOpPrefix;
       // AMD
       Do3DNow;
     end;
@@ -3214,12 +3221,14 @@ begin
       SetOpcode(OPgetsec);
     end;
     $38: begin
+      AddOpPrefix;
       Inc(CodeIdx);
       Inc(ModRMIdx);
       Do3ByteOpcode38;
     end;
     // $39: OPX_Invalid
     $3A: begin
+      AddOpPrefix;
       Inc(CodeIdx);
       Inc(ModRMIdx);
       Do3ByteOpcode3A;
@@ -4081,6 +4090,7 @@ begin
         AddReg(regSegment, MODE_SIZE[ProcessMode], REG_CS);
       end;
       $0F: begin
+        AddOpPrefix;
         Inc(CodeIdx);
         Inc(ModRMIdx);
         Do2ByteOpcode;

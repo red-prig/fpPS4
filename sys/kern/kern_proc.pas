@@ -66,8 +66,11 @@ procedure PROC_INIT; //SYSINIT
 implementation
 
 uses
- kern_event,
  md_time;
+
+//
+
+procedure knlist_init_mtx(knl:p_knlist;lock:p_mtx); external;
 
 //
 

@@ -2383,7 +2383,7 @@ begin
  SLIST_INIT(@knl^.kl_list);
 end;
 
-procedure knlist_init_mtx(knl:p_knlist;lock:p_mtx);
+procedure knlist_init_mtx(knl:p_knlist;lock:p_mtx); public;
 begin
  knlist_init(knl, lock, nil, nil, nil, nil);
 end;

@@ -126,8 +126,13 @@ uses
  sysutils,
  vmparam,
  vm_pmap,
- trap,
- kern_jit2;
+ trap;
+
+//
+
+procedure pick(var ctx:t_jit_context2); external name 'kern_jit_pick';
+
+//
 
 function scan_up_exc(addr:QWORD):QWORD;
 begin
@@ -192,7 +197,7 @@ begin
  end;
 end;
 
-procedure switch_to_jit(td:p_kthread);
+procedure switch_to_jit(td:p_kthread); public;
 label
  _start;
 var

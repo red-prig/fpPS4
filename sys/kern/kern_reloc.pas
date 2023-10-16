@@ -470,7 +470,7 @@ begin
  Result:=0;
 end;
 
-function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer;
+function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer; public;
 begin
  Writeln(' relocate:',dynlib_basename(obj^.lib_path));
 
@@ -698,7 +698,7 @@ begin
 
 end;
 
-function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer;
+function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer; public;
 begin
  Result:=dynlib_unlink_non_plt_reloc_each(root,obj);
  if (Result<>0) then

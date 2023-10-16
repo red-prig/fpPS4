@@ -25,7 +25,7 @@ uses
  sched_ule,
  md_proc;
 
-function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer;
+function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; public;
 var
  newpri:Integer;
 begin

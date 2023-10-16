@@ -373,11 +373,17 @@ uses
  vfs_subr,
  vnode_if,
  kern_proc,
- kern_reloc,
  kern_namedobj,
  elf_nid_utils,
  kern_jit2,
  kern_jit2_ctx;
+
+//
+
+function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer; external;
+function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer; external;
+
+//
 
 function dynlibs_locked:Boolean;
 begin

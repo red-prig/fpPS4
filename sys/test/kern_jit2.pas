@@ -1653,7 +1653,7 @@ begin
  proc.Free;
 end;
 
-procedure pick(var ctx:t_jit_context2);
+procedure pick(var ctx:t_jit_context2); [public, alias:'kern_jit_pick'];
 begin
  vm_map_lock  (@g_vmspace.vm_map);
 
@@ -1836,7 +1836,7 @@ begin
            ctx.din.OpCode.Suffix,' ',
            ctx.din.Operand[1].Size,' ',
            ctx.din.Operand[2].Size);
-   Writeln('opcode=$',HexStr(ctx.dis.opcode,2),' ',
+   Writeln('opcode=$',HexStr(ctx.dis.opcode,8),' ',
            'MIndex=',ctx.dis.ModRM.Index,' ',
            'SimdOp=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
            'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);

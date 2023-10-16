@@ -47,7 +47,7 @@ type
  end;
 
 function  sleepq_alloc:p_sleepqueue;
-procedure sleepq_free(sq:p_sleepqueue); inline;
+procedure sleepq_free(sq:p_sleepqueue);
 procedure sleepq_lock(wchan:Pointer);
 procedure sleepq_release(wchan:Pointer);
 procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);
@@ -94,7 +94,7 @@ procedure sleepq_switch(wchan:Pointer;pri:Integer); forward;
 function  sleepq_resume_thread(sq:p_sleepqueue;td:p_kthread;pri:Integer):Integer; forward;
 procedure sleepq_timeout(arg:Pointer); forward;
 
-function sleepq_alloc:p_sleepqueue;
+function sleepq_alloc:p_sleepqueue; public;
 var
  i:Integer;
 begin
@@ -106,7 +106,7 @@ begin
  LIST_INIT(@Result^.sq_free);
 end;
 
-procedure sleepq_free(sq:p_sleepqueue); inline;
+procedure sleepq_free(sq:p_sleepqueue); public;
 begin
  FreeMem(sq);
 end;

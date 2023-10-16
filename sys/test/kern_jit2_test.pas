@@ -247,6 +247,7 @@ begin
  used_op[OPPnone,OPinsert,OPSx_f128]:=True;
  used_op[OPPnone,OPinsert,OPSx_i128]:=True;
  used_op[OPPnone,OPinsert,OPSx_ps]:=True;
+ used_op[OPPnone,OPinsert,OPSx_q]:=True;
  used_op[OPPnone,OPint,OPSnone]:=True;
  used_op[OPPnone,OPint1,OPSnone]:=True;
  used_op[OPPnone,OPint3,OPSnone]:=True;
@@ -355,6 +356,8 @@ begin
  used_op[OPPnone,OPmovnt,OPSx_pd]:=True;
  used_op[OPPnone,OPmovnt,OPSx_ps]:=True;
  used_op[OPPnone,OPmovnt,OPSx_q]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_sd]:=True;
+ used_op[OPPnone,OPmovnt,OPSx_ss]:=True;
  used_op[OPPnone,OPmovq2dq,OPSnone]:=True;
  used_op[OPPnone,OPmovs,OPSx_b]:=True;
  used_op[OPPnone,OPmovs,OPSx_d]:=True;
@@ -388,6 +391,7 @@ begin
  used_op[OPPnone,OPouts,OPSx_b]:=True;
  used_op[OPPnone,OPouts,OPSx_d]:=True;
  used_op[OPPnone,OPouts,OPSx_w]:=True;
+ used_op[OPPnone,OPextrq,OPSnone]:=True;
  used_op[OPPnone,OPpabs,OPSx_b]:=True;
  used_op[OPPnone,OPpabs,OPSx_d]:=True;
  used_op[OPPnone,OPpabs,OPSx_w]:=True;
@@ -1048,7 +1052,15 @@ begin
  if (x=OPPnone) then
  begin
   case y of
+   OPaddsub,
+   OPcomi,
+   OPmaskmov, OPmova,
+   OPmovddup..OPmovsldup,
+   OPmovu,
    OPcvtdq2..OPcvttss2,
+   OPextrq,
+   OPpabs..OPpmuludq,
+   OPpor..OPpxor,
    opDP     ,
    opBLEND  ,
    opBLENDV ,
@@ -1056,9 +1068,8 @@ begin
    opINSERT ,
    opEXTRACT,
    opMPSADBW,
-   opMOVNT  ,
    opLDDQU  ,
-   OPpabs..OPpxor,
+
    OPxabort..OPxtest:Result:=True;
   end;
  end;
