@@ -65,6 +65,7 @@ implementation
 uses
  errno,
  systm,
+ kern_mtx,
  md_sleep,
  md_context,
  machdep,
@@ -72,7 +73,6 @@ uses
  md_thread,
  kern_rwlock,
  kern_sig,
- kern_synch,
  kern_proc,
  sched_ule;
 
@@ -90,6 +90,12 @@ procedure sleepq_free(sq:Pointer); external;
 function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; external;
 
 procedure switch_to_jit(td:p_kthread); external;
+
+function  msleep(ident   :Pointer;
+                 lock    :p_mtx;
+                 priority:Integer;
+                 wmesg   :PChar;
+                 timo    :Int64):Integer; external;
 
 //
 

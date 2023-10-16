@@ -144,9 +144,6 @@ const
  kern_forcesigexit=1;
 
 var
- g_p_sigqueue     :sigqueue_t; //Sigs not delivered to a td.
- g_p_pendingcnt   :Integer=0;  //how many signals are pending
-
  signal_overflow  :Integer=0;
  signal_alloc_fail:Integer=0;
 
@@ -208,7 +205,7 @@ begin
     ksiginfo_copy(ksi,si);
     if ksiginfo_tryfree(ksi) then
     begin
-     Dec(g_p_pendingcnt);
+     Dec(p_proc.p_pendingcnt);
     end;
    end;
    if (count>1) then
@@ -245,7 +242,7 @@ begin
  ksi^.ksi_sigq:=nil;
  if ((ksi^.ksi_flags and KSI_EXT)=0)then
  begin
-  Dec(g_p_pendingcnt);
+  Dec(p_proc.p_pendingcnt);
  end;
 
  kp:=TAILQ_FIRST(@sq^.sq_list);
@@ -287,7 +284,7 @@ begin
   goto out_set_bit;
  end;
 
- if (g_p_pendingcnt>=max_pending_per_proc) then
+ if (p_proc.p_pendingcnt>=max_pending_per_proc) then
  begin
   Inc(signal_overflow);
   Result:=EAGAIN;
@@ -300,7 +297,7 @@ begin
    Result:=EAGAIN;
   end else
   begin
-   Inc(g_p_pendingcnt);
+   Inc(p_proc.p_pendingcnt);
    ksiginfo_copy(si,ksi);
    ksi^.ksi_info.si_signo:=signo;
    if ((si^.ksi_flags and KSI_HEAD)<>0) then
@@ -342,7 +339,7 @@ begin
   ksi^.ksi_sigq:=nil;
   if ksiginfo_tryfree(ksi) then
   begin
-   Dec(g_p_pendingcnt);
+   Dec(p_proc.p_pendingcnt);
   end;
   ksi:=next;
  end;
@@ -402,7 +399,7 @@ begin
    ksi^.ksi_sigq:=nil;
    if ksiginfo_tryfree(ksi) then
    begin
-    Dec(g_p_pendingcnt)
+    Dec(p_proc.p_pendingcnt)
    end;
   end;
 
@@ -429,7 +426,7 @@ var
  i:kthread_iterator;
 begin
  sigqueue_init(@worklist);
- sigqueue_move_set(@g_p_sigqueue,@worklist,_set);
+ sigqueue_move_set(@p_proc.p_sigqueue,@worklist,_set);
 
  if FOREACH_THREAD_START(@i) then
  begin
@@ -678,7 +675,7 @@ begin
   end;
  end;
 
- sigqueue_init(@g_p_sigqueue);
+ sigqueue_init(@p_proc.p_sigqueue);
 end;
 
 procedure reschedule_signals(block:sigset_t;flags:Integer); forward;
@@ -793,7 +790,7 @@ begin
  if (td=nil) then Exit(-1);
 
  PROC_LOCK;
- pending:=g_p_sigqueue.sq_signals;
+ pending:=p_proc.p_sigqueue.sq_signals;
  SIGSETOR(@pending,@td^.td_sigqueue.sq_signals);
  PROC_UNLOCK;
 
@@ -842,7 +839,7 @@ begin
   if (sig<>0) and SIGISMEMBER(@waitset,sig) then
   begin
    if (sigqueue_get(@td^.td_sigqueue,sig,ksi)<>0) or
-      (sigqueue_get(@g_p_sigqueue,sig,ksi)<>0) then
+      (sigqueue_get(@p_proc.p_sigqueue,sig,ksi)<>0) then
    begin
     Result:=0;
     break;
@@ -1422,7 +1419,7 @@ begin
  if (td=nil) then
  begin
   td:=sigtd(sig,prop);
-  sigqueue:=@g_p_sigqueue;
+  sigqueue:=@p_proc.p_sigqueue;
  end else
  begin
   sigqueue:=@td^.td_sigqueue;
@@ -1525,7 +1522,7 @@ begin
   begin
    thread_unlock(td);
    PROC_UNLOCK;
-   sigqueue_delete(@g_p_sigqueue,sig);
+   sigqueue_delete(@p_proc.p_sigqueue,sig);
    sigqueue_delete(@td^.td_sigqueue,sig);
    Exit;
   end;
@@ -1559,9 +1556,9 @@ var
  td:p_kthread;
  sig:Integer;
 begin
- if (SIGISEMPTY(@g_p_sigqueue.sq_signals)) then Exit;
+ if (SIGISEMPTY(@p_proc.p_sigqueue.sq_signals)) then Exit;
 
- SIGSETAND(@block,@g_p_sigqueue.sq_signals);
+ SIGSETAND(@block,@p_proc.p_sigqueue.sq_signals);
 
  repeat
   sig:=sig_ffs(@block);
@@ -1636,7 +1633,7 @@ begin
  repeat
 
   sigpending:=td^.td_sigqueue.sq_signals;
-  SIGSETOR(@sigpending,@g_p_sigqueue.sq_signals);
+  SIGSETOR(@sigpending,@p_proc.p_sigqueue.sq_signals);
   SIGSETNAND(@sigpending,@td^.td_sigmask);
 
   if (td^.td_flags and TDF_SBDRY)<>0 then
@@ -1652,7 +1649,7 @@ begin
   if SIGISMEMBER(@p_sigacts.ps_sigignore,sig) then
   begin
    sigqueue_delete(@td^.td_sigqueue,sig);
-   sigqueue_delete(@g_p_sigqueue,sig);
+   sigqueue_delete(@p_proc.p_sigqueue,sig);
    continue;
   end;
 
@@ -1688,7 +1685,7 @@ begin
   end;
 
   sigqueue_delete(@td^.td_sigqueue,sig);
-  sigqueue_delete(@g_p_sigqueue,sig);
+  sigqueue_delete(@p_proc.p_sigqueue,sig);
  until false;
 end;
 
@@ -1706,7 +1703,7 @@ begin
  ksiginfo_init(@ksi);
 
  if (sigqueue_get(@td^.td_sigqueue,sig,@ksi)=0) and
-    (sigqueue_get(@g_p_sigqueue,sig,@ksi)=0) then
+    (sigqueue_get(@p_proc.p_sigqueue,sig,@ksi)=0) then
  begin
   Exit(0);
  end;
@@ -1814,8 +1811,8 @@ begin
  end;
 
  if ((flags and TDF_NEEDSIGCHK)<>0) or
-    (g_p_pendingcnt>0) or
-    (not SIGISEMPTY(@g_p_sigqueue.sq_list)) then
+    (p_proc.p_pendingcnt>0) or
+    (not SIGISEMPTY(@p_proc.p_sigqueue.sq_list)) then
  begin
   PROC_LOCK;
   ps_mtx_lock;

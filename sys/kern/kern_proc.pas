@@ -8,7 +8,8 @@ interface
 uses
  kern_param,
  kern_mtx,
- sys_event;
+ sys_event,
+ signalvar;
 
 type
  {
@@ -43,6 +44,9 @@ var
   p_comm           :array[0..MAXCOMLEN] of AnsiChar;
   prog_name        :array[0..1023] of AnsiChar;
   p_randomized_path:array[0..7] of AnsiChar;
+
+  p_sigqueue       :sigqueue_t; //Sigs not delivered to a td.
+  p_pendingcnt     :Integer;    //how many signals are pending
 
   p_klist:t_knlist;
 
