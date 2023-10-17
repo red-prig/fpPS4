@@ -1189,6 +1189,7 @@ begin
  fp:=AllocMem(SizeOf(t_file));
  if (fp=nil) then Exit(ENOMEM);
 
+ fp^.desc.refs:=1;
  fp^.desc.free:=@_fdrop;
  fp^.f_ops    :=@badfileops;
  fp^.f_data   :=nil;

@@ -24,7 +24,8 @@ uses
  vcapability,
  vselinfo,
  vpoll,
- vstat;
+ vstat,
+ trap;
 
 //TASKQUEUE_DEFINE_THREAD(kqueue);
 
@@ -119,7 +120,9 @@ uses
  vsys_generic,
  kern_proc,
  kern_callout,
- kern_timeout;
+ kern_timeout,
+ kern_named_id,
+ kern_namedobj;
 
 //static MALLOC_DEFINE(M_KQUEUE, 'kqueue', 'memory for kqueue system');
 
@@ -974,9 +977,11 @@ function kern_kevent(fd:Integer;
 label
  done_norel,
  done;
+type
+ t_keva=array[0..KQ_NEVENTS-1] of t_kevent;
 var
  td:p_kthread;
- keva:array[0..KQ_NEVENTS-1] of t_kevent;
+ keva:t_keva;
  kevp,changes:p_kevent;
  kq:p_kqueue;
  fp:p_file;
@@ -991,7 +996,20 @@ begin
  error:=kqueue_acquire(fp, @kq);
  if (error<>0) then goto done_norel;
 
+ //cache
+ if (kq^.kq_name[0]=#0) and (kq^.kq_name[1]<>#1) then
+ begin
+  get_obj_name(Pointer(fd),$107,@kq^.kq_name);
+  if (kq^.kq_name[0]=#0) then
+  begin
+   kq^.kq_name[1]:=#1;
+  end;
+ end;
+
+ Writeln('kern_kevent:',kq^.kq_name);
+
  nerrors:=0;
+ keva:=Default(t_keva);
 
  while (nchanges > 0) do
  begin
@@ -1026,6 +1044,7 @@ begin
   end;
   Dec(nchanges,n);
  end;
+
  if (nerrors<>0) then
  begin
   td^.td_retval[0]:=nerrors;
@@ -1147,9 +1166,13 @@ begin
 
  if (sysfilt_ops[not filt].fop=nil) then
  begin
-  Writeln(stderr,'kqueue_fo_find:',filt);
+  Writeln(stderr,'kqueue filterops not found:',EVFILT_NAME(filt));
   sysfilt_ops[not filt].fop:=@null_filtops;
+ end else
+ begin
+  Writeln('kqueue_fo_find:',EVFILT_NAME(filt));
  end;
+
  mtx_unlock(filterops_lock);
 
  Exit(sysfilt_ops[not filt].fop);
@@ -1270,7 +1293,9 @@ findkn:
    begin
     if (kev^.ident=kn^.kn_id) and
        (kev^.filter=kn^.kn_filter) then
+    begin
      break;
+    end;
     kn:=SLIST_NEXT(kn,@kn^.kn_link);
    end;
   end;
@@ -1296,7 +1321,7 @@ findkn:
  end;
 
  {
-  * kn now contains the matching knote, or nil if no match
+  * kn now contains the matching knote, or null if no match
   }
  if (kn=nil) then
  begin

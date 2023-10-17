@@ -55,6 +55,7 @@ end;
 Procedure id_release(d:p_id_desc);
 begin
  if (d=nil) then Exit;
+ Assert(d^.refs>0);
  if (System.InterlockedDecrement(d^.refs)=0) then
  if (d^.free<>nil) then
  begin

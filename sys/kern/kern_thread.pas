@@ -355,6 +355,16 @@ begin
  ipi_sigreturn; //switch
 end;
 
+procedure thread0_param(td:p_kthread);
+begin
+ td^.td_base_user_pri:=700;
+ td^.td_lend_user_pri:=1023;
+ td^.td_base_pri     :=68;
+ td^.td_priority     :=68;
+ td^.td_pri_class    :=10;
+ td^.td_user_pri     :=700;
+end;
+
 function create_thread(td        :p_kthread; //calling thread
                        ctx       :p_mcontext_t;
                        start_func:Pointer;
@@ -431,6 +441,8 @@ begin
 
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
+
+ thread0_param(newtd);
 
  //user stack
  newtd^.td_ustack.stack:=stack_base+stack_size;
@@ -562,6 +574,8 @@ begin
 
  newtd:=thread_alloc;
  if (newtd=nil) then Exit(ENOMEM);
+
+ thread0_param(newtd);
 
  stack.ss_sp  :=newtd^.td_kstack.sttop;
  stack.ss_size:=(ptruint(newtd^.td_kstack.stack)-ptruint(newtd^.td_kstack.sttop));

@@ -87,7 +87,6 @@ function  fdesc_allocvp(ftype:fdntype;fd_fd,ix:Integer;mp:p_mount;vpp:pp_vnode):
 implementation
 
 uses
- sysutils,
  errno,
  time,
  vfile,
@@ -192,7 +191,9 @@ loop:
    VI_LOCK(vp);
    mtx_unlock(fdesc_hashmtx);
    if (vget(vp, LK_EXCLUSIVE or LK_INTERLOCK)<>0) then
+   begin
     goto loop;
+   end;
    vpp^:=vp;
    Exit(0);
   end;
@@ -259,7 +260,9 @@ loop:
    vput(vp);
    { If we didn't get it, return no vnode. }
    if (error<>0) then
+   begin
     vp2:=nil;
+   end;
    vpp^:=vp2;
    Exit(error);
   end;
@@ -348,7 +351,9 @@ begin
   }
  error:=fget(fd, 0, @fp);
  if (error<>0) then
+ begin
   goto bad;
+ end;
 
  { Check if we're looking up ourselves. }
  if (VTOFDESC(dvp)^.fd_ix=FD_DESC + fd) then
@@ -387,7 +392,9 @@ begin
  end;
 
  if (error<>0) then
+ begin
   goto bad;
+ end;
  vpp^:=fvp;
  Exit(0);
 
@@ -483,7 +490,9 @@ begin
   * Can't mess with the root vnode
   }
  if (VTOFDESC(ap^.a_vp)^.fd_type=_Froot) then
+ begin
   Exit(EACCES);
+ end;
 
  fd:=VTOFDESC(ap^.a_vp)^.fd_fd;
 
@@ -539,7 +548,9 @@ begin
  dp:=@d;
 
  if (VTOFDESC(ap^.a_vp)^.fd_type<>_Froot) then
+ begin
   Assert(False,'fdesc_readdir: not dir');
+ end;
 
  if (ap^.a_ncookies<>nil) then
   ap^.a_ncookies^:=0;
@@ -550,7 +561,10 @@ begin
     (off < 0) or
     ((off mod UIO_MX)<>0) or
     (uio^.uio_resid < UIO_MX) then
+ begin
   Exit(EINVAL);
+ end;
+
  i:=off div UIO_MX;
 
  error:=0;
@@ -577,10 +591,12 @@ begin
     begin
      tmp:=fget_unlocked(fcnt); //check exists
      if (tmp=nil) then
+     begin
       goto _break;
+     end;
      fdrop(tmp);
 
-     dp^.d_name  :=IntToStr(fcnt);
+     Str(fcnt,dp^.d_name);
      dp^.d_namlen:=strlen(dp^.d_name);
      dp^.d_reclen:=UIO_MX;
      dp^.d_type  :=DT_CHR;
@@ -597,7 +613,9 @@ begin
    FILEDESC_SUNLOCK(@fd_table);
    error:=uiomove(dp, UIO_MX, uio);
    if (error<>0) then
+   begin
     goto done;
+   end;
    FILEDESC_SLOCK(@fd_table);
   end;
   Inc(i);

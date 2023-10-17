@@ -228,6 +228,7 @@ type
  {$IF sizeof(t_kevent_copyops)<>24}{$STOP sizeof(t_kevent_copyops)<>24}{$ENDIF}
 
 procedure EV_SET(kevp:p_kevent;a:PtrUint;b:SmallInt;c:Word;d:DWORD;e:Ptrint;f:Pointer);
+function  EVFILT_NAME(i:Integer):RawByteString;
 
 implementation
 
@@ -241,6 +242,36 @@ begin
  (kevp)^.udata :=(f);
 end;
 
+function EVFILT_NAME(i:Integer):RawByteString;
+begin
+ Result:='';
+ case i of
+  EVFILT_READ                :Result:='EVFILT_READ';
+  EVFILT_WRITE               :Result:='EVFILT_WRITE';
+  EVFILT_AIO                 :Result:='EVFILT_AIO';
+  EVFILT_VNODE               :Result:='EVFILT_VNODE';
+  EVFILT_PROC                :Result:='EVFILT_PROC';
+  EVFILT_SIGNAL              :Result:='EVFILT_SIGNAL';
+  EVFILT_TIMER               :Result:='EVFILT_TIMER';
+  EVFILT_FS                  :Result:='EVFILT_FS';
+  EVFILT_LIO                 :Result:='EVFILT_LIO';
+  EVFILT_USER                :Result:='EVFILT_USER';
+  EVFILT_POLLING             :Result:='EVFILT_POLLING';
+  EVFILT_DISPLAY             :Result:='EVFILT_DISPLAY';
+  EVFILT_GRAPHICS_CORE       :Result:='EVFILT_GRAPHICS_CORE';
+  EVFILT_HRTIMER             :Result:='EVFILT_HRTIMER';
+  EVFILT_UVD_TRAP            :Result:='EVFILT_UVD_TRAP';
+  EVFILT_VCE_TRAP            :Result:='EVFILT_VCE_TRAP';
+  EVFILT_SDMA_TRAP           :Result:='EVFILT_SDMA_TRAP';
+  EVFILT_REG_EV              :Result:='EVFILT_REG_EV';
+  EVFILT_GPU_EXCEPTION       :Result:='EVFILT_GPU_EXCEPTION';
+  EVFILT_GPU_SYSTEM_EXCEPTION:Result:='EVFILT_GPU_SYSTEM_EXCEPTION';
+  EVFILT_GPU_DBGGC_EV        :Result:='EVFILT_GPU_DBGGC_EV';
+  EVFILT_CPUMODE             :Result:='EVFILT_CPUMODE';
+  else
+    Str(i,Result);
+ end;
+end;
 
 end.
 

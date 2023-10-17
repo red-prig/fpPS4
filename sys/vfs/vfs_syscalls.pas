@@ -913,6 +913,7 @@ begin
 
   Exit(error);
  end;
+
  td^.td_dupfd:=0;
  vfslocked:=NDHASGIANT(@nd);
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -1006,8 +1007,10 @@ success:
  fdrop(fp);
  td^.td_retval[0]:=indx;
  Exit(0);
+
 bad:
  VFS_UNLOCK_GIANT(vfslocked);
+
 bad_unlocked:
  if (indx<>-1) then
  begin
