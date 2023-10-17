@@ -112,7 +112,6 @@ uses
  errno,
  kern_descrip,
  subr_uio,
- kern_sig,
  kern_thread,
  kern_proc,
  md_time,

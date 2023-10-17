@@ -190,14 +190,12 @@ uses
  errno,
  vfs_vnops,
  subr_uio,
- vm_object,
+ sys_vm_object,
  vsys_generic,
  rtprio,
  kern_conf;
 
 //
-
-{$I kern_event.inc}
 
 var
  dead_vnodeops:vop_vector; external;
@@ -348,7 +346,7 @@ begin
  Exit(nil);
 end;
 
-function makedev(x,y:Integer):Integer;
+function makedev(x,y:Integer):Integer; inline;
 begin
  Result:=(x shl 8) or y;
 end;
@@ -710,7 +708,9 @@ begin
   Inc(td^.td_vp_reserv,count);
   Exit;
  end else
+ begin
   System.InterlockedExchangeAdd64(numvnodes, -count);
+ end;
 
  mtx_lock(vnode_free_list_mtx);
  while (count > 0) do
@@ -822,7 +822,9 @@ begin
  begin
   //bo^.bo_bsize:=mp^.mnt_stat.f_iosize;
   if ((mp^.mnt_kern_flag and MNTK_NOKNOTE)<>0) then
+  begin
    vp^.v_vflag:=vp^.v_vflag or VV_NOKNOTE;
+  end;
  end;
  //rangelock_init(@vp^.v_rl);
 
@@ -1969,7 +1971,9 @@ begin
  end;
 
  if ((vp^.v_iflag and VI_DOOMED)<>0) and ((flags and LK_RETRY)=0) then
+ begin
   Assert(false,'vget: vn_lock failed to Exit ENOENT');
+ end;
 
  VI_LOCK(vp);
  { Upgrade our holdcnt to a usecount. }
@@ -1997,7 +2001,7 @@ end;
 {
  * Increase the reference count of a vnode.
  }
-procedure vref(vp:p_vnode);
+procedure vref(vp:p_vnode); public;
 begin
  VI_LOCK(vp);
  v_incr_usecount(vp);
@@ -2720,7 +2724,9 @@ var
  vi:p_vpollinfo;
 begin
  if (vp^.v_pollinfo<>nil) then
+ begin
   Exit;
+ end;
  vi:=AllocMem(SizeOf(vpollinfo));
  mtx_init(vi^.vpi_lock,'vnode pollinfo');
  knlist_init(@vi^.vpi_selinfo.si_note, vp, @vfs_knllock, @vfs_knlunlock, @vfs_knl_assert_locked, @vfs_knl_assert_unlocked);
@@ -2961,14 +2967,17 @@ begin
   error:=ENXIO
  else
  if (p_cdev(vp^.v_rdev)^.si_devsw=nil) then
+ begin
   error:=ENXIO
- else{
+ end{ else
  if ((p_cdev(vp^.v_rdev)^.si_devsw^.d_flags and D_DISK)=0) then
   error:=ENOTBLK};
  dev_unlock();
  error:=ENOTBLK;
  if (errp<>nil) then
+ begin
   errp^:=error;
+ end;
  Exit(error=0);
 end;
 
@@ -3172,7 +3181,7 @@ begin
   vfs_badlock('is not exclusive locked but should be', str, vp);
 end;
 
-function VOP_WRITE_PRE(ap:p_vop_write_args;var osize,ooffset:Int64):Integer;
+function VOP_WRITE_PRE(ap:p_vop_write_args;var osize,ooffset:Int64):Integer; public;
 var
  va:t_vattr;
  error:Integer;
@@ -3189,7 +3198,7 @@ begin
  end;
 end;
 
-procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64);
+procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64); public;
 var
  noffset:Int64;
 begin
@@ -3220,7 +3229,7 @@ begin
  vrele(ap^.a_fvp);
 end;
 
-procedure vop_rename_pre(ap:p_vop_rename_args);
+procedure vop_rename_pre(ap:p_vop_rename_args); public;
 begin
  if (ap^.a_tdvp<>ap^.a_fdvp) then
   vhold(ap^.a_fdvp);
@@ -3234,7 +3243,7 @@ begin
   vhold(ap^.a_tvp);
 end;
 
-procedure vop_create_post(ap:p_vop_create_args;rc:Integer);
+procedure vop_create_post(ap:p_vop_create_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
@@ -3242,16 +3251,16 @@ begin
  end;
 end;
 
-procedure vop_link_post(ap:p_vop_link_args;rc:Integer);
+procedure vop_link_post(ap:p_vop_link_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
-  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_LINK);
+  VFS_KNOTE_LOCKED(ap^.a_vp  , NOTE_LINK);
   VFS_KNOTE_LOCKED(ap^.a_tdvp, NOTE_WRITE);
  end;
 end;
 
-procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer);
+procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
@@ -3259,7 +3268,7 @@ begin
  end;
 end;
 
-procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer);
+procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
@@ -3267,22 +3276,22 @@ begin
  end;
 end;
 
-procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer);
+procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
   VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE);
-  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_DELETE);
+  VFS_KNOTE_LOCKED(ap^.a_vp , NOTE_DELETE);
  end;
 end;
 
-procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer);
+procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
   VFS_KNOTE_UNLOCKED(ap^.a_fdvp, NOTE_WRITE);
   VFS_KNOTE_UNLOCKED(ap^.a_tdvp, NOTE_WRITE);
-  VFS_KNOTE_UNLOCKED(ap^.a_fvp, NOTE_RENAME);
+  VFS_KNOTE_UNLOCKED(ap^.a_fvp , NOTE_RENAME);
   if (ap^.a_tvp<>nil) then
   begin
    VFS_KNOTE_UNLOCKED(ap^.a_tvp, NOTE_DELETE);
@@ -3303,16 +3312,16 @@ begin
  end;
 end;
 
-procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer);
+procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
   VFS_KNOTE_LOCKED(ap^.a_dvp, NOTE_WRITE or NOTE_LINK);
-  VFS_KNOTE_LOCKED(ap^.a_vp, NOTE_DELETE);
+  VFS_KNOTE_LOCKED(ap^.a_vp , NOTE_DELETE);
  end;
 end;
 
-procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer);
+procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
@@ -3320,7 +3329,7 @@ begin
  end;
 end;
 
-procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer);
+procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer); public;
 begin
  if (rc=0) then
  begin
@@ -3460,12 +3469,9 @@ begin
  kn:=ap^.a_kn;
 
  case (kn^.kn_filter) of
-  EVFILT_READ:
-   kn^.kn_fop:=@vfsread_filtops;
-  EVFILT_WRITE:
-   kn^.kn_fop:=@vfswrite_filtops;
-  EVFILT_VNODE:
-   kn^.kn_fop:=@vfsvnode_filtops;
+  EVFILT_READ :kn^.kn_fop:=@vfsread_filtops;
+  EVFILT_WRITE:kn^.kn_fop:=@vfswrite_filtops;
+  EVFILT_VNODE:kn^.kn_fop:=@vfsvnode_filtops;
   else
    Exit(EINVAL);
  end;
@@ -3473,8 +3479,11 @@ begin
  kn^.kn_hook:=vp;
 
  v_addpollinfo(vp);
+
  if (vp^.v_pollinfo=nil) then
+ begin
   Exit(ENOMEM);
+ end;
 
  knl:=@vp^.v_pollinfo^.vpi_selinfo.si_note;
  vhold(vp);
@@ -3663,7 +3672,9 @@ begin
   * on the containing directory instead.
   }
  if ((accmode^ and (VDELETE_CHILD or VDELETE))<>0) then
+ begin
   Exit(EPERM);
+ end;
 
  if ((accmode^ and VADMIN_PERMS)<>0) then
  begin
@@ -3862,8 +3873,7 @@ end;
 
 procedure __mnt_vnode_markerfree_active(mvp:pp_vnode;mp:p_mount);
 begin
- if (mvp^=nil) then
-  Exit;
+ if (mvp^=nil) then Exit;
 
  mtx_lock(vnode_free_list_mtx);
  TAILQ_REMOVE(@mp^.mnt_activevnodelist,mvp^,@mvp^^.v_actfreelist);

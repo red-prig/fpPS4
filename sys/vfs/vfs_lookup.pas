@@ -11,7 +11,6 @@ uses
  systm,
  vcapability,
  vuio,
- vfile,
  vfiledesc,
  vfcntl,
  vnode,
@@ -33,8 +32,14 @@ implementation
 uses
  errno,
  vfs_subr,
- vfs_vnops,
- dead_vnops;
+ vfs_vnops;
+
+//
+
+var
+ dead_vnodeops:vop_vector; external;
+
+//
 
 var
  vp_crossmp:p_vnode;

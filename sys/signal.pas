@@ -232,6 +232,26 @@ function _SIG_VALID_32(sig:Integer):Boolean; inline;
 function _SIG_WORD(sig:Integer):DWORD; inline;
 function _SIG_BIT(sig:Integer):DWORD; inline;
 
+procedure ps_mtx_lock;   external;
+procedure ps_mtx_unlock; external;
+
+function  sigdeferstop:Integer; external;
+procedure sigallowstop; external;
+
+Function  sigonstack(sp:size_t):Integer; external;
+Function  cursig(td:Pointer;stop_allowed:Integer):Integer; external;
+procedure tdsignal(td:Pointer;sig:Integer); external;
+procedure sigexit(td:Pointer;sig:Integer); external;
+
+procedure ast; external;
+
+Function  kern_sigprocmask(td:Pointer;
+                           how:Integer;
+                           _set:p_sigset_t;
+                           oset:p_sigset_t;
+                           flags:Integer
+                          ):Integer; external;
+
 function _get_sig_str(signum:Integer):RawByteString;
 
 implementation

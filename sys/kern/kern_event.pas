@@ -24,8 +24,7 @@ uses
  vcapability,
  vselinfo,
  vpoll,
- vstat,
- trap;
+ vstat;
 
 //TASKQUEUE_DEFINE_THREAD(kqueue);
 
@@ -121,7 +120,6 @@ uses
  kern_proc,
  kern_callout,
  kern_timeout,
- kern_named_id,
  kern_namedobj;
 
 //static MALLOC_DEFINE(M_KQUEUE, 'kqueue', 'memory for kqueue system');
@@ -2519,7 +2517,7 @@ end;
  * lock.  This prevents a race where a new fd comes along and occupies the
  * entry and we attach a knote to the fd.
  }
-procedure knote_fdclose(fd:Integer);
+procedure knote_fdclose(fd:Integer); public;
 label
  again;
 var

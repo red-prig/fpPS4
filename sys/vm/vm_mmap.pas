@@ -8,7 +8,7 @@ interface
 uses
  vm,
  vm_map,
- vm_object;
+ sys_vm_object;
 
 type
  p_query_memory_prot=^t_query_memory_prot;
@@ -54,7 +54,7 @@ uses
  kern_thr,
  kern_proc,
  vmparam,
- _resource,
+ sys_resource,
  kern_resource,
  kern_mtx,
  kern_descrip,

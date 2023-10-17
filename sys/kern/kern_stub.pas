@@ -49,7 +49,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- vm_object;
+ sys_vm_object;
 
 var
  {$IFDEF chunk_alloc}

@@ -94,6 +94,9 @@ uses
  kern_thread,
  sched_ule;
 
+var
+ size_of_umtx_q:Integer=SizeOf(umtx_q); public;
+
 type
  p_umtxq_hamt=^umtxq_hamt;
  umtxq_hamt=packed record

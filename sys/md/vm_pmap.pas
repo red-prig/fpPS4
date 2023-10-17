@@ -10,7 +10,7 @@ uses
  windows,
  vm,
  vmparam,
- vm_object;
+ sys_vm_object;
 
 {$DEFINE GPU_REMAP}
 

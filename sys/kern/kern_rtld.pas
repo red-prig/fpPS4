@@ -10,7 +10,7 @@ uses
  kern_param,
  kern_thr,
  vnode,
- vm_object,
+ sys_vm_object,
  vuio,
  elf64,
  kern_authinfo;

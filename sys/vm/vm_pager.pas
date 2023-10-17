@@ -7,7 +7,7 @@ interface
 
 uses
  vm,
- vm_object;
+ sys_vm_object;
 
 function  vm_pager_allocate(otype:objtype_t;
                            handle:Pointer;
@@ -75,7 +75,6 @@ begin
   OBJT_TRCMEM   :;
   OBJT_PHYSHM   :;
   OBJT_BLOCKPOOL:;
-  else;
  end;
 end;
 

@@ -227,10 +227,54 @@ type
  end;
  {$IF sizeof(t_kevent_copyops)<>24}{$STOP sizeof(t_kevent_copyops)<>24}{$ENDIF}
 
+procedure knote(list:p_knlist;hint:QWORD;lockflags:Integer); external;
+
+procedure knlist_add   (knl:p_knlist;kn:p_knote;islocked:Integer); external;
+procedure knlist_remove(knl:p_knlist;kn:p_knote;islocked:Integer); external;
+
+procedure knote_fdclose(fd:Integer); external;
+
+procedure knlist_init(knl:p_knlist;lock,kl_lock,kl_unlock,kl_assert_locked,kl_assert_unlocked:Pointer); external;
+procedure knlist_init_mtx(knl:p_knlist;lock:Pointer); external;
+
+procedure knlist_destroy (knl:p_knlist); external;
+procedure knlist_cleardel(knl:p_knlist;islocked,killkn:Integer); external;
+
+//
+
+procedure KNOTE_LOCKED  (list:p_knlist;hint:QWORD);
+procedure KNOTE_UNLOCKED(list:p_knlist;hint:QWORD);
+
+procedure knlist_clear(knl:p_knlist;islocked:Integer);
+
+function  M_KNLIST_EMPTY(list:p_knlist):Boolean;
+
+//
+
 procedure EV_SET(kevp:p_kevent;a:PtrUint;b:SmallInt;c:Word;d:DWORD;e:Ptrint;f:Pointer);
 function  EVFILT_NAME(i:Integer):RawByteString;
 
 implementation
+
+procedure KNOTE_LOCKED(list:p_knlist;hint:QWORD);
+begin
+ knote(list, hint, KNF_LISTLOCKED);
+end;
+
+procedure KNOTE_UNLOCKED(list:p_knlist;hint:QWORD);
+begin
+ knote(list, hint, 0);
+end;
+
+procedure knlist_clear(knl:p_knlist;islocked:Integer);
+begin
+ knlist_cleardel(knl, islocked, 0)
+end;
+
+function M_KNLIST_EMPTY(list:p_knlist):Boolean;
+begin
+ Result:=SLIST_EMPTY(@list^.kl_list);
+end;
 
 procedure EV_SET(kevp:p_kevent;a:PtrUint;b:SmallInt;c:Word;d:DWORD;e:Ptrint;f:Pointer);
 begin

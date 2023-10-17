@@ -5,10 +5,6 @@ unit vselect;
 
 interface
 
-uses
- signal,
- time;
-
 type
  pp_fd_mask=^p_fd_mask;
  p_fd_mask=^fd_mask;

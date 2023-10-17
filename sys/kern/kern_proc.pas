@@ -80,10 +80,6 @@ uses
 
 //
 
-procedure knlist_init_mtx(knl:p_knlist;lock:p_mtx); external;
-
-//
-
 function pargs_alloc(len:Integer):p_pargs;
 begin
  Result:=AllocMem(sizeof(t_pargs) + len);

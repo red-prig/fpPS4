@@ -40,7 +40,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- vm_object,
+ sys_vm_object,
  vm_pager,
  vnamei,
  vfs_lookup,
@@ -53,7 +53,7 @@ uses
  kern_descrip,
  vfs_cache,
  vnode_if,
- _resource,
+ sys_resource,
  kern_resource,
  sys_event,
  kern_event,
@@ -856,9 +856,6 @@ end;
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
  obj,tail:p_lib_info;
-
- init_proc_addr:Pointer;
- fini_proc_addr:Pointer;
 begin
  Result:=0;
 
@@ -886,9 +883,6 @@ begin
  dynlibs_info.sym_zero.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
  dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
-
- init_proc_addr:=obj^.init_proc_addr;
- fini_proc_addr:=obj^.fini_proc_addr;
 
  obj^.fini_proc_addr:=nil;
  obj^.init_proc_addr:=nil;

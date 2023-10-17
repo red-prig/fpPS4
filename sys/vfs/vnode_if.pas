@@ -949,9 +949,6 @@ const
 
 implementation
 
-uses
- vfs_subr;
-
 function get_vp_cb(vp:p_vnode;offset:Pointer):Pointer; inline;
 var
  v:p_vop_vector;
@@ -1008,6 +1005,8 @@ begin
  VFS_EPILOGUE(s);
 end;
 
+procedure vop_create_post(ap:p_vop_create_args;rc:Integer); external;
+
 function VOP_CREATE(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
 var
  c:Pointer;
@@ -1043,6 +1042,8 @@ begin
  Result:=vop_whiteout_t(c)(@a);
  VFS_EPILOGUE(s);
 end;
+
+procedure vop_mknod_post(ap:p_vop_mknod_args;rc:Integer); external;
 
 function VOP_MKNOD(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
 var
@@ -1144,6 +1145,8 @@ begin
  VFS_EPILOGUE(s);
 end;
 
+procedure vop_setattr_post(ap:p_vop_setattr_args;rc:Integer); external;
+
 function VOP_SETATTR(vp:p_vnode;vap:p_vattr):Integer;
 var
  c:Pointer;
@@ -1192,6 +1195,9 @@ begin
  Result:=vop_read_t(c)(@a);
  VFS_EPILOGUE(s);
 end;
+
+function  VOP_WRITE_PRE(ap:p_vop_write_args;var osize,ooffset:Int64):Integer; external;
+procedure VOP_WRITE_POST(ap:p_vop_write_args;ret:Integer;var osize,ooffset:Int64); external;
 
 function VOP_WRITE(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
 var
@@ -1297,6 +1303,8 @@ begin
  VFS_EPILOGUE(s);
 end;
 
+procedure vop_remove_post(ap:p_vop_remove_args;rc:Integer); external;
+
 function VOP_REMOVE(dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
 var
  c:Pointer;
@@ -1315,6 +1323,8 @@ begin
  vop_remove_post(@a,Result);
 end;
 
+procedure vop_link_post(ap:p_vop_link_args;rc:Integer); external;
+
 function VOP_LINK(tdvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
 var
  c:Pointer;
@@ -1332,6 +1342,9 @@ begin
  VFS_EPILOGUE(s);
  vop_link_post(@a,Result);
 end;
+
+procedure vop_rename_pre (ap:p_vop_rename_args); external;
+procedure vop_rename_post(ap:p_vop_rename_args;rc:Integer); external;
 
 function VOP_RENAME(fdvp:p_vnode;fvp:p_vnode;fcnp:p_componentname;tdvp:p_vnode;tvp:p_vnode;tcnp:p_componentname):Integer;
 var
@@ -1355,6 +1368,8 @@ begin
  vop_rename_post(@a,Result);
 end;
 
+procedure vop_mkdir_post(ap:p_vop_mkdir_args;rc:Integer); external;
+
 function VOP_MKDIR(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
 var
  c:Pointer;
@@ -1374,6 +1389,8 @@ begin
  vop_mkdir_post(@a,Result);
 end;
 
+procedure vop_rmdir_post(ap:p_vop_rmdir_args;rc:Integer); external;
+
 function VOP_RMDIR(dvp:p_vnode;vp:p_vnode;cnp:p_componentname):Integer;
 var
  c:Pointer;
@@ -1391,6 +1408,8 @@ begin
  VFS_EPILOGUE(s);
  vop_rmdir_post(@a,Result);
 end;
+
+procedure vop_symlink_post(ap:p_vop_symlink_args;rc:Integer); external;
 
 function VOP_SYMLINK(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;target:PChar):Integer;
 var

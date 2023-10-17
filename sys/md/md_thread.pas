@@ -36,8 +36,12 @@ procedure seh_wrapper(td:p_kthread);
 
 implementation
 
-uses
- kern_umtx;
+//
+
+var
+ size_of_umtx_q:Integer; external;
+
+//
 
 function cpu_thread_alloc():p_kthread;
 var
@@ -62,7 +66,7 @@ begin
  if (R<>0) then Exit;
 
  //header
- size:=SizeOf(kthread)+SizeOf(umtx_q);
+ size:=SizeOf(kthread)+size_of_umtx_q;
  size:=System.Align(size,4*1024);
 
  R:=NtAllocateVirtualMemory(

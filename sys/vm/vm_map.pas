@@ -9,10 +9,11 @@ uses
  vm,
  vmparam,
  vm_pmap,
+ sys_vm_object,
  vm_object,
  kern_mtx,
  kern_thr,
- _resource,
+ sys_resource,
  kern_resource;
 
 type
@@ -918,7 +919,9 @@ begin
   inheritance:=VM_INHERIT_DEFAULT;
 
  if ((cow and (MAP_ACC_NO_CHARGE or MAP_NOFAULT))<>0) then
+ begin
   goto charged;
+ end;
 
  if ((cow and MAP_ACC_CHARGED)<>0) or (((prot and VM_PROT_WRITE)<>0) and
      (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (vm_obj=nil))) then
@@ -926,7 +929,9 @@ begin
   Assert((vm_obj=nil) or
          ((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0),'OVERCOMMIT: vm_map_insert o %p", object');
   if (vm_obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
+  begin
    charge_prev_obj:=TRUE;
+  end;
  end;
 
 charged:

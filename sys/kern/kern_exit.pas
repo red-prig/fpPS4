@@ -6,7 +6,7 @@ unit kern_exit;
 interface
 
 uses
- _resource;
+ sys_resource;
 
 const
  WCOREFLAG=&0200;

@@ -40,7 +40,6 @@ uses
  errno,
  systm,
  kern_thr,
- kern_rtprio,
  kern_proc,
  md_proc;
 

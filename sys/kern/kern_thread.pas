@@ -84,10 +84,8 @@ procedure umtx_thread_fini(td:p_kthread); external;
 function  kern_umtx_wake(td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Integer; external;
 function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
 
-function  sleepq_alloc:Pointer; external;
+function  sleepq_alloc:Pointer;    external;
 procedure sleepq_free(sq:Pointer); external;
-
-function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; external;
 
 procedure switch_to_jit(td:p_kthread); external;
 

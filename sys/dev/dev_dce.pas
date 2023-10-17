@@ -21,7 +21,7 @@ uses
  systm,
  trap,
  vm,
- vm_object,
+ sys_vm_object,
  vm_pager,
  kern_event,
  kern_mtx,
@@ -712,8 +712,8 @@ begin
      begin
       knlist_remove(@g_video_out_event_flip,kn,0)
      end;
-   //$0051:Result:=8;
-   //$0058:Result:=12;
+   // $0051:Result:=8;
+   // $0058:Result:=12;
   else;
  end;
 

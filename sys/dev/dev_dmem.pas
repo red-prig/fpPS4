@@ -19,7 +19,7 @@ uses
  vm,
  dmem_map,
  kern_dmem,
- vm_object,
+ sys_vm_object,
  trap;
 
 type

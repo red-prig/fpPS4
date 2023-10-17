@@ -467,8 +467,6 @@ begin
     vap^.va_size :=0;
     vap^.va_rdev :=makedev(0, vap^.va_fileid);
    end;
-  else
-   Assert(False,'fdesc_getattr');
  end;
 
  vp^.v_type:=vap^.va_type;

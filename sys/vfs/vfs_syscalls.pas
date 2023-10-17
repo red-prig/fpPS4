@@ -143,11 +143,11 @@ uses
  errno,
  kern_mtx,
  kern_thr,
- kern_synch,
  kern_descrip,
  vnode_if,
  sys_capability,
  vmparam,
+ sys_vm_object,
  vm_object;
 
 {

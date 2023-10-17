@@ -74,7 +74,7 @@ uses
  ufs,
  vmount,
  kern_prot,
- _resource,
+ sys_resource,
  kern_resource,
  md_proc,
  kern_ksched,

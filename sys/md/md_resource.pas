@@ -6,7 +6,7 @@ unit md_resource;
 interface
 
 uses
- _resource;
+ sys_resource;
 
 function kern_getrusage(who:Integer;rup:p_rusage):Integer;
 

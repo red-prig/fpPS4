@@ -112,7 +112,9 @@ end;
 function cap_check(c:p_capability;rights:cap_rights_t):Integer;
 begin
  if ((c^.cap_rights or rights)<>c^.cap_rights) then
+ begin
   Exit(ENOTCAPABLE);
+ end;
  Exit(0);
 end;
 
@@ -121,7 +123,7 @@ end;
  * any other way, as we want to keep all capability permission evaluation in
  * this one file.
  }
-function cap_rights(fp_cap:p_file):cap_rights_t;
+function cap_rights(fp_cap:p_file):cap_rights_t; public;
 var
  c:p_capability;
 begin
@@ -131,7 +133,7 @@ begin
  Exit(c^.cap_rights);
 end;
 
-function cap_funwrap(fp_cap:p_file;rights:cap_rights_t;fpp:pp_file):Integer;
+function cap_funwrap(fp_cap:p_file;rights:cap_rights_t;fpp:pp_file):Integer; public;
 var
  c:p_capability;
  error:Integer;
@@ -145,7 +147,9 @@ begin
  c:=fp_cap^.f_data;
  error:=cap_check(c, rights);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  fpp^:=c^.cap_object;
  Exit(0);
 end;
@@ -155,7 +159,7 @@ end;
  * capability and check CAP_MMAP, but also Exita bitmask representing the
  * maximum mapping rights the capability allows on the object.
  }
-function cap_funwrap_mmap(fp_cap:p_file;rights:cap_rights_t;maxprotp:PByte;fpp:pp_file):Integer;
+function cap_funwrap_mmap(fp_cap:p_file;rights:cap_rights_t;maxprotp:PByte;fpp:pp_file):Integer; public;
 var
  c:p_capability;
  maxprot:Byte;
@@ -174,11 +178,17 @@ begin
  fpp^:=c^.cap_object;
  maxprot:=0;
  if (c^.cap_rights and CAP_READ)<>0 then
+ begin
   maxprot:=maxprot or VM_PROT_READ;
+ end;
  if (c^.cap_rights and CAP_WRITE)<>0 then
+ begin
   maxprot:=maxprot or VM_PROT_WRITE;
+ end;
  if (c^.cap_rights and CAP_MAPEXEC)<>0 then
+ begin
   maxprot:=maxprot or VM_PROT_EXECUTE;
+ end;
  maxprotp^:=maxprot;
  Exit(0);
 end;
@@ -193,7 +203,9 @@ var
  error:Integer;
 begin
  if ((rights or CAP_MASK_VALID)<>CAP_MASK_VALID) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * If a new capability is being derived from an existing capability,
@@ -204,7 +216,9 @@ begin
  begin
   cp_old:=fp^.f_data;
   if ((cp_old^.cap_rights or rights)<>cp_old^.cap_rights) then
+  begin
    Exit(ENOTCAPABLE);
+  end;
  end;
 
  {
@@ -212,7 +226,9 @@ begin
   }
  error:=falloc(@fcapp, capfdp, fp^.f_flag);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  {
   * Rather than nesting capabilities, directly reference the object an
@@ -225,6 +241,7 @@ begin
   fp_object:=p_capability(fp^.f_data)^.cap_object
  else
   fp_object:=fp;
+
  fhold(fp_object);
  cp:=AllocMem(SizeOf(t_capability));
  cp^.cap_rights:=rights;

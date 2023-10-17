@@ -7,7 +7,7 @@ interface
 
 uses
  vmparam,
- vm_object,
+ sys_vm_object,
  kern_mtx;
 
 Const

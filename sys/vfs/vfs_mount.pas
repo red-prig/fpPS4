@@ -13,7 +13,6 @@ uses
  vuio,
  vnamei,
  kern_mtx,
- kern_synch,
  kern_thr,
  vnode,
  vfs_init,
@@ -117,6 +116,18 @@ uses
  vfs_vnops,
  vfs_subr,
  vfs_cache;
+
+//
+
+function  msleep(ident   :Pointer;
+                 lock    :Pointer;
+                 priority:Integer;
+                 wmesg   :PChar;
+                 timo    :Int64):Integer; external;
+
+procedure wakeup(ident:Pointer); external;
+
+//
 
 {
  * ---------------------------------------------------------------------

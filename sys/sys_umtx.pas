@@ -25,7 +25,6 @@ implementation
 uses
  errno,
  syscalls,
- kern_umtx,
  trap;
 
 procedure umtx_init(var umtx:umtx); inline;
@@ -86,7 +85,7 @@ end;
 
 function _umtx_op_err(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; assembler; nostackframe;
 asm
- movq  sys__umtx_op,%rax
+ movq  $454,%rax
  call  fast_syscall
 end;
 

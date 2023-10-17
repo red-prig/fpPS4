@@ -2255,18 +2255,16 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
+ ioin:=nil;
  case uio^.uio_rw of
   UIO_READ :ioin:=@td^.td_ru.ru_inblock;
   UIO_WRITE:ioin:=@td^.td_ru.ru_oublock;
-  else
-            Exit(EINVAL);
  end;
 
+ iocb:=nil;
  case uio^.uio_rw of
   UIO_READ :iocb:=@NtReadFile;
   UIO_WRITE:iocb:=@NtWriteFile;
-  else
-            Exit(EINVAL);
  end;
 
  append:=(uio^.uio_rw=UIO_WRITE) and ((ioflag and IO_APPEND)<>0);

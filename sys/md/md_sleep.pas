@@ -22,8 +22,7 @@ procedure md_yield;
 implementation
 
 uses
- errno,
- trap;
+ errno;
 
 function ntw2px(n:Integer):Integer; inline;
 begin

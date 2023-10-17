@@ -42,7 +42,7 @@ uses
  hamt,
  kern_rwlock,
  vmparam,
- vm_object;
+ sys_vm_object;
 
 type
  p_patch_page=^t_patch_page;

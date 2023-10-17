@@ -126,8 +126,7 @@ implementation
 uses
  sysutils,
  vmparam,
- vm_pmap,
- trap;
+ vm_pmap;
 
 //
 
@@ -204,11 +203,11 @@ label
 var
  node:t_jit_dynamic.p_entry_point;
  jctx:p_jctx;
- jit_state:Boolean;
+ //jit_state:Boolean;
 begin
  if (td=nil) then Exit;
 
- jit_state:=((td^.pcb_flags and PCB_IS_JIT)<>0);
+ //jit_state:=((td^.pcb_flags and PCB_IS_JIT)<>0);
 
  if not is_guest_addr(td^.td_frame.tf_rip) then
  begin
@@ -506,7 +505,7 @@ var
  curr:Pointer;
  next:Pointer;
 
- F:THandle;
+ //F:THandle;
 begin
  if (ctx.builder.GetMemSize=0) then Exit;
 

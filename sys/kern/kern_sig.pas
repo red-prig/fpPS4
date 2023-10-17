@@ -132,12 +132,6 @@ uses
  sched_ule,
  subr_sleepqueue;
 
-//
-
-{$I kern_event.inc}
-
-//
-
 const
  max_pending_per_proc=128;
 
@@ -490,7 +484,7 @@ begin
  end;
 end;
 
-Function sigonstack(sp:size_t):Integer;
+Function sigonstack(sp:size_t):Integer; public;
 var
  td:p_kthread;
 begin
@@ -685,7 +679,7 @@ Function kern_sigprocmask(td:p_kthread;
                           _set:p_sigset_t;
                           oset:p_sigset_t;
                           flags:Integer
-                         ):Integer;
+                         ):Integer; public;
 label
  _out;
 var
@@ -867,10 +861,7 @@ begin
    tv:=0;
   end;
 
-  //PROC_UNLOCK; //
   Result:=msleep(@p_sigacts,@p_proc.p_mtx,PPAUSE or PCATCH,'sigwait',tvtohz(tv));
-  //Result:=msleep_td(tvtohz(tv));
-  //PROC_LOCK;  //
 
   if (timeout<>nil) then
   begin
@@ -1472,7 +1463,7 @@ begin
  tdsigwakeup(td,sig,action,intrval);
 end;
 
-procedure tdsignal(td:p_kthread;sig:Integer);
+procedure tdsignal(td:p_kthread;sig:Integer); public;
 var
  ksi:ksiginfo_t;
 begin
@@ -1603,7 +1594,7 @@ begin
  reschedule_signals(unblocked,0);
 end;
 
-function sigdeferstop:Integer;
+function sigdeferstop:Integer; public;
 var
  td:p_kthread;
 begin
@@ -1615,7 +1606,7 @@ begin
  Result:=1;
 end;
 
-procedure sigallowstop;
+procedure sigallowstop; public;
 var
  td:p_kthread;
 begin
@@ -1739,7 +1730,7 @@ begin
  Result:=1;
 end;
 
-procedure sigexit(td:p_kthread;sig:Integer);
+procedure sigexit(td:p_kthread;sig:Integer); public;
 begin
  exit1(W_EXITCODE(0,sig));
  // NOTREACHED
@@ -1747,7 +1738,7 @@ end;
 
 //
 
-procedure ast;
+procedure ast; public;
 var
  td:p_kthread;
  flags,sig:Integer;

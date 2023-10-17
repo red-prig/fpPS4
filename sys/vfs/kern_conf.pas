@@ -15,7 +15,7 @@ uses
  vnode,
  time,
  vm,
- vm_object,
+ sys_vm_object,
  kern_mtx;
 
 const
@@ -344,7 +344,9 @@ begin
  end;
  dev_unlock();
  if (flag<>0) then
+ begin
   devfs_free(dev);
+ end;
 end;
 
 function dev_refthread(dev:p_cdev;ref:PInteger):p_cdevsw;

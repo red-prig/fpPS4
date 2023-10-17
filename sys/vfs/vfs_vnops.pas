@@ -67,6 +67,12 @@ procedure foffset_unlock(fp:p_file;val:Int64;flags:Integer);
 procedure foffset_lock_uio(fp:p_file;uio:p_uio;flags:Integer);
 procedure foffset_unlock_uio(fp:p_file;uio:p_uio;flags:Integer);
 
+//
+
+procedure vref(vp:p_vnode); external;
+
+//
+
 implementation
 
 uses

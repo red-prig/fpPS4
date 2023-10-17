@@ -252,6 +252,23 @@ type
 function  curkthread:p_kthread;
 procedure set_curkthread(td:p_kthread);
 
+const
+ SIG_ALTERABLE=$80000000;
+ SIG_STI_LOCK =$40000000;
+
+ NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
+ NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
+ NOT_SIG_STI_LOCK =not SIG_STI_LOCK;
+
+ TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
+
+procedure sig_sta; assembler;
+procedure sig_cla; assembler;
+procedure sig_sti; assembler;
+procedure sig_cli; assembler;
+
+procedure set_pcb_flags(td:p_kthread;f:Integer);
+
 function  TD_IS_SLEEPING(td:p_kthread):Boolean;
 function  TD_ON_SLEEPQ(td:p_kthread):Boolean;
 function  TD_IS_SUSPENDED(td:p_kthread):Boolean;
@@ -288,6 +305,9 @@ function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
 
+procedure thread_lock(td:p_kthread);   external;
+procedure thread_unlock(td:p_kthread); external;
+
 implementation
 
 function curkthread:p_kthread; assembler; nostackframe;
@@ -298,6 +318,31 @@ end;
 procedure set_curkthread(td:p_kthread); assembler; nostackframe;
 asm
  movqq td,%gs:teb.thread
+end;
+
+procedure sig_sta; assembler; nostackframe;
+asm
+ lock orl SIG_ALTERABLE,%gs:teb.iflag
+end;
+
+procedure sig_cla; assembler; nostackframe;
+asm
+ lock andl NOT_SIG_ALTERABLE,%gs:teb.iflag
+end;
+
+procedure sig_sti; assembler; nostackframe;
+asm
+ lock orl SIG_STI_LOCK,%gs:teb.iflag
+end;
+
+procedure sig_cli; assembler; nostackframe;
+asm
+ lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag
+end;
+
+procedure set_pcb_flags(td:p_kthread;f:Integer);
+begin
+ td^.pcb_flags:=f or (td^.pcb_flags and PCB_IS_JIT);
 end;
 
 function TD_IS_SLEEPING(td:p_kthread):Boolean;

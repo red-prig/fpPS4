@@ -6,7 +6,7 @@ unit kern_dmem;
 interface
 
 uses
- vm_object,
+ sys_vm_object,
  dmem_map,
  rmem_map;
 

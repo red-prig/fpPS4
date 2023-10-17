@@ -8,8 +8,6 @@ interface
 uses
  mqueue,
  vfile,
- vselinfo,
- vsocket,
  vsockstate,
  vsockbuf,
  kern_mtx;

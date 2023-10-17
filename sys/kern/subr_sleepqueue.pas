@@ -70,20 +70,14 @@ implementation
 
 uses
  errno,
+ signal,
  signalvar,
  kern_proc,
  sched_ule;
 
 //
 
-procedure ps_mtx_lock;   external;
-procedure ps_mtx_unlock; external;
-Function  cursig(td:p_kthread;stop_allowed:Integer):Integer; external;
-
 function  mi_switch(flags:Integer):Integer; external;
-
-procedure thread_lock(td:p_kthread);   external;
-procedure thread_unlock(td:p_kthread); external;
 
 //
 

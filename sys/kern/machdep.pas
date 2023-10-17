@@ -53,7 +53,6 @@ uses
  errno,
  systm,
  kern_psl,
- kern_sig,
  trap,
  md_context;
 

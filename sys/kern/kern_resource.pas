@@ -8,7 +8,7 @@ interface
 uses
  vmparam,
  kern_param,
- _resource;
+ sys_resource;
 
 function  lim_max(which:Integer):QWORD;
 function  lim_cur(which:Integer):QWORD;

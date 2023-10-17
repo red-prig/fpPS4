@@ -140,7 +140,7 @@ begin
  Result:=(tsleep(@pause_wchan, 0, wmesg, timo));
 end;
 
-procedure wakeup(ident:Pointer);
+procedure wakeup(ident:Pointer); public;
 begin
  sleepq_lock(ident);
  sleepq_broadcast(ident,SLEEPQ_SLEEP,0,0);

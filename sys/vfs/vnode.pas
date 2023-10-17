@@ -321,8 +321,6 @@ uses
 
 //
 
-{$I kern_event.inc}
-
 function  VFS_PROLOGUE(mp:Pointer):Boolean; external;
 procedure VFS_EPILOGUE(_enable_stops:Boolean); external;
 

@@ -11,8 +11,8 @@ uses
  time,
  sys_event,
  kern_mtx,
- kern_synch,
- kern_sig,
+ //kern_synch,
+ signal,
  vnode;
 
 const
@@ -418,6 +418,12 @@ procedure vmountinit; //SYSINIT
 
 implementation
 
+//
+
+procedure wakeup(ident:Pointer); external;
+
+//
+
 function MNT_SHARED_WRITES(mp:p_mount):Boolean; inline;
 begin
  if (mp<>nil) then
@@ -473,7 +479,7 @@ begin
  end;
 end;
 
-function VFS_LOCK_GIANT(mp:p_mount):Integer;
+function VFS_LOCK_GIANT(mp:p_mount):Integer; public;
 begin
  if VFS_NEEDSGIANT(mp) then
  begin

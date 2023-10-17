@@ -89,22 +89,11 @@ const
   'DTrace pid return trap'         // 32 T_DTRACE_RET
  );
 
- SIG_ALTERABLE=$80000000;
- SIG_STI_LOCK =$40000000;
-
-procedure set_pcb_flags(td:p_kthread;f:Integer);
-
 procedure _sig_lock;
 procedure _sig_unlock;
 
 procedure sig_lock;
 procedure sig_unlock;
-
-procedure sig_sta;
-procedure sig_cla;
-
-procedure sig_sti;
-procedure sig_cli;
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
@@ -120,12 +109,6 @@ function  IS_TRAP_FUNC(rip:qword):Boolean;
 function  trap(frame:p_trapframe):Integer;
 function  trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 
-const
- NOT_PCB_FULL_IRET=not PCB_FULL_IRET;
- NOT_SIG_ALTERABLE=not SIG_ALTERABLE;
- NOT_SIG_STI_LOCK =not SIG_STI_LOCK;
- TDF_AST=TDF_ASTPENDING or TDF_NEEDRESCHED;
-
 implementation
 
 uses
@@ -139,7 +122,6 @@ uses
  md_context,
  md_thread,
  signal,
- kern_sig,
  kern_proc,
  kern_named_id,
  subr_dynlib,
@@ -220,31 +202,6 @@ asm
  popf
  popq  %rax
  popq  %rbp
-end;
-
-procedure sig_sta; assembler; nostackframe;
-asm
- lock orl SIG_ALTERABLE,%gs:teb.iflag
-end;
-
-procedure sig_cla; assembler; nostackframe;
-asm
- lock andl NOT_SIG_ALTERABLE,%gs:teb.iflag
-end;
-
-procedure sig_sti; assembler; nostackframe;
-asm
- lock orl SIG_STI_LOCK,%gs:teb.iflag
-end;
-
-procedure sig_cli; assembler; nostackframe;
-asm
- lock andl NOT_SIG_STI_LOCK,%gs:teb.iflag
-end;
-
-procedure set_pcb_flags(td:p_kthread;f:Integer);
-begin
- td^.pcb_flags:=f or (td^.pcb_flags and PCB_IS_JIT);
 end;
 
 function fuptr(var base:Pointer):Pointer;

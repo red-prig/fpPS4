@@ -132,15 +132,20 @@ uses
  errno,
  systm,
  vfiledesc,
- sys_capability,
- vfs_subr,
  vfs_vnops,
  vnode_if,
- _resource,
+ sys_resource,
  kern_resource,
  kern_mtx,
- kern_conf,
- kern_event;
+ kern_conf;
+
+//
+
+function  cap_funwrap(fp_cap:p_file;rights:cap_rights_t;fpp:pp_file):Integer; external;
+function  cap_rights(fp_cap:p_file):cap_rights_t; external;
+function  cap_funwrap_mmap(fp_cap:p_file;rights:cap_rights_t;maxprotp:PByte;fpp:pp_file):Integer; external;
+
+//
 
 function badfo_readwrite(fp:p_file;uio:p_uio;flags:Integer):Integer;
 begin

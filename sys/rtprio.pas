@@ -5,6 +5,9 @@ unit rtprio;
 
 interface
 
+uses
+ kern_thr;
+
 const
  PRI_ITHD     =1; // Interrupt thread.
  PRI_REALTIME =2; // Real time process.
@@ -45,6 +48,9 @@ type
 
 function  PRI_BASE(P:Word):Word;
 function  RTP_PRIO_BASE(P:Word):Word;
+
+function  rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; external;
+procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio); external;
 
 implementation
 

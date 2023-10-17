@@ -479,10 +479,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\_resource.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\kern\kern_uuid.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -764,10 +760,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\kern\kern_event.inc"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\kern\kern_param.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -783,6 +775,18 @@
         <Filename Value="elf_machdep.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\init_sysent.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\sys_resource.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\vm\sys_vm_object.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -792,7 +796,7 @@
       <Filename Value="project1"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir);..;..\kern"/>
+      <IncludeFiles Value="$(ProjOutDir);.."/>
       <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev;..\.."/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>

@@ -63,7 +63,7 @@ begin
  thread_unlock(td);
 end;
 
-procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio);
+procedure pri_to_rtp(td:p_kthread;rtp:p_rtprio); public;
 begin
  thread_lock(td);
 

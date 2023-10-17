@@ -11,7 +11,7 @@ uses
  vmparam,
  vm_map,
  vm_pmap,
- vm_object;
+ sys_vm_object;
 
 function vm_fault(map        :vm_map_t;
                   mem_addr   :vm_offset_t;
@@ -42,16 +42,6 @@ begin
   Result:=True;
  end;
 end;
-
-type
- p_jmp32_trampoline=^t_jmp32_trampoline;
- t_jmp32_trampoline=packed record
-  inst:Byte;    //E9
-  addr:Integer;
- end;
-
-const
- c_jmpl32_trampoline:t_jmp32_trampoline=(inst:$E9;addr:0);
 
 function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 var
