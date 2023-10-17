@@ -513,7 +513,7 @@ begin
 
  ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
 
- Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base));
+ Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
 
  //F:=FileCreate('recompile.bin');
  //FileWrite(F,blob^.base^,ctx.builder.GetMemSize);

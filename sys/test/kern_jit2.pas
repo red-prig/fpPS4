@@ -433,7 +433,7 @@ end;
 
 procedure op_jcc(var ctx:t_jit_context2);
 var
- id,id2:t_jit_i_link;
+ id1,id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
  link:t_jit_i_link;
@@ -448,28 +448,67 @@ begin
  begin
   link:=ctx.get_link(dst);
 
+  id1:=ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
+
   if (link<>nil_link) then
   begin
-   ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
    ctx.add_forward_point(fpCall,dst);
   end else
   begin
-   id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link);
-   ctx.add_forward_point(fpCall,id,dst);
+   ctx.add_forward_point(fpCall,id1,dst);
   end;
  end else
  begin
-  id:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link,os8);
+  id1:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link,os8);
 
   id2:=ctx.builder.jmp(nil_link,os8);
-
-   id._label:=ctx.builder.get_curr_label.after;
-   //
+   id1._label:=ctx.builder.get_curr_label.after;
    op_set_rax_imm(ctx,Int64(dst));
-   //
    op_jmp_dispatcher(ctx);
-
   id2._label:=ctx.builder.get_curr_label.after;
+ end;
+end;
+
+procedure op_loop(var ctx:t_jit_context2);
+var
+ id1,id2,id3:t_jit_i_link;
+ ofs:Int64;
+ dst:Pointer;
+ link:t_jit_i_link;
+begin
+ ofs:=0;
+ GetTargetOfs(ctx.din,ctx.code,1,ofs);
+
+ dst:=ctx.ptr_next+ofs;
+
+ id1:=ctx.builder.loop(ctx.din.OpCode.Suffix,nil_link,ctx.dis.AddressSize);
+
+ if ctx.is_text_addr(QWORD(dst)) and
+    (not exist_entry(dst)) then
+ begin
+  link:=ctx.get_link(dst);
+
+  id2:=ctx.builder.jmp(nil_link,os8);
+   id1._label:=ctx.builder.get_curr_label.after;
+   id3:=ctx.builder.jmp(nil_link);
+  id2._label:=ctx.builder.get_curr_label.after;
+
+  if (link<>nil_link) then
+  begin
+   ctx.add_forward_point(fpCall,dst);
+  end else
+  begin
+   ctx.add_forward_point(fpCall,id3,dst);
+  end;
+ end else
+ begin
+
+  id2:=ctx.builder.jmp(nil_link,os8);
+   id1._label:=ctx.builder.get_curr_label.after;
+   op_set_rax_imm(ctx,Int64(dst));
+   op_jmp_dispatcher(ctx);
+  id2._label:=ctx.builder.get_curr_label.after;
+
  end;
 end;
 
@@ -739,500 +778,6 @@ end;
  sahf;
 }
 
-procedure _op_rep_cmps(var ctx:t_jit_context2;dflag:Integer);
-var
- size:TOperandSize;
-
- link_start:t_jit_i_link;
- link___end:t_jit_i_link;
-
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- //rdi,rsi
- //prefix $67 TODO
-
- case ctx.din.OpCode.Suffix of
-  OPSx_b:size:=os8;
-  OPSx_w:size:=os16;
-  OPSx_d:size:=os32;
-  OPSx_q:size:=os64;
-  else;
-   Assert(False);
- end;
-
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rsi
- with ctx.builder do
- begin
-
-  link_jmp0:=nil_link;
-  link_jmp1:=nil_link;
-
-  link_start:=ctx.builder.get_curr_label.after;
-
-  //repeat
-   seto(al);
-   lahf;
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   addi(al,127);
-   sahf;
-
-   movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-   movq(r_tmp1,r_tmp0);
-
-   movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   _O($A7,Size);
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   leaq(rcx,[rcx-1]);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
-   end;
-
-   if (ifPrefixRepE in ctx.din.Flags) then
-   begin
-    //if a[i]<>b[i] then exit
-    link_jmp1:=jcc(OPSc_nz,nil_link,os8);
-   end else
-   if (ifPrefixRepNe in ctx.din.Flags) then
-   begin
-    //if a[i]=b[i] then exit
-    link_jmp1:=jcc(OPSc_z,nil_link,os8);
-   end;
-
-  //until
-  jmp(link_start,os8);
-
-  //exit1
-  addi(al,127);
-  sahf;
-
-  //exit2
-
-  link___end:=ctx.builder.get_curr_label.before; //exit1
-
-  link_jmp0._label:=link___end;
-
-  link___end:=link___end.after; //exit2
-
-  link_jmp1._label:=link___end;
- end;
-
-end;
-
-procedure op_rep_cmps(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  popfq(os64);
-  _op_rep_cmps(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-  _op_rep_cmps(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
- end;
-end;
-
-///
-
-procedure _op_rep_stos(var ctx:t_jit_context2;dflag:Integer);
-var
- size:TOperandSize;
-
- new:TRegValue;
-
- link_start:t_jit_i_link;
- link___end:t_jit_i_link;
-
- link_jmp0:t_jit_i_link;
-begin
- //rdi,rsi
- //prefix $67 TODO
-
- case ctx.din.OpCode.Suffix of
-  OPSx_b:size:=os8;
-  OPSx_w:size:=os16;
-  OPSx_d:size:=os32;
-  OPSx_q:size:=os64;
-  else;
-   Assert(False);
- end;
-
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rax
- with ctx.builder do
- begin
-
-  link_jmp0:=nil_link;
-
-  new:=new_reg_size(r_tmp1,size);
-
-  op_load_rax(ctx,new);
-
-  link_start:=ctx.builder.get_curr_label.after;
-
-  //repeat
-
-   //flags saved in up proc
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   //flags saved in up proc
-
-   movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-
-   movq([r_tmp0],new);
-
-   leaq(rcx,[rcx-1]);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-   end;
-
-  //until
-  jmp(link_start,os8);
-
-  //exit
-
-  link___end:=ctx.builder.get_curr_label.after; //exit
-
-  link_jmp0._label:=link___end;
- end;
-
-end;
-
-procedure op_rep_stos(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  _op_rep_stos(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  _op_rep_stos(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-
- end;
-end;
-
-//
-
-procedure _op_rep_movs(var ctx:t_jit_context2;dflag:Integer);
-var
- size:TOperandSize;
-
- link_start:t_jit_i_link;
- link___end:t_jit_i_link;
-
- link_jmp0:t_jit_i_link;
-begin
- //rdi,rsi
- //prefix $67 TODO
-
- case ctx.din.OpCode.Suffix of
-  OPSx_b:size:=os8;
-  OPSx_w:size:=os16;
-  OPSx_d:size:=os32;
-  OPSx_q:size:=os64;
-  else;
-   Assert(False);
- end;
-
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rsi
- with ctx.builder do
- begin
-
-  link_jmp0:=nil_link;
-
-  link_start:=ctx.builder.get_curr_label.after;
-
-  //repeat
-   //flags saved in up proc
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   //flags saved in up proc
-
-   movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-   movq(r_tmp1,r_tmp0);
-
-   movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-
-   //[RSI] -> [RDI].
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   _O($A5,Size);
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   leaq(rcx,[rcx-1]);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
-   end;
-
-  //until
-  jmp(link_start,os8);
-
-  //exit
-
-  link___end:=ctx.builder.get_curr_label.after; //exit
-
-  link_jmp0._label:=link___end;
- end;
-
-end;
-
-procedure op_rep_movs(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  _op_rep_movs(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  _op_rep_movs(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-
- end;
-end;
-
-//
-
-procedure _op_movs(var ctx:t_jit_context2;dflag:Integer);
-var
- size:TOperandSize;
-begin
- //rdi,rsi
- //prefix $67 TODO
-
- case ctx.din.OpCode.Suffix of
-  OPSx_b:size:=os8;
-  OPSx_w:size:=os16;
-  OPSx_d:size:=os32;
-  OPSx_q:size:=os64;
-  else;
-   Assert(False);
- end;
-
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rsi
- with ctx.builder do
- begin
-
-   movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-   movq(r_tmp1,r_tmp0);
-
-   movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-
-   //[RSI] -> [RDI].
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   _O($A5,Size);
-
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
-   end;
-
- end;
-
-end;
-
-procedure op_movs(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  _op_movs(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  _op_movs(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-
- end;
-end;
-
-//
-
-procedure _op_stos(var ctx:t_jit_context2;dflag:Integer);
-var
- size:TOperandSize;
-
- new:TRegValue;
-begin
- //rdi,rsi
- //prefix $67 TODO
-
- case ctx.din.OpCode.Suffix of
-  OPSx_b:size:=os8;
-  OPSx_w:size:=os16;
-  OPSx_d:size:=os32;
-  OPSx_q:size:=os64;
-  else;
-   Assert(False);
- end;
-
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rax
- with ctx.builder do
- begin
-
-  new:=new_reg_size(r_tmp1,size);
-
-  op_load_rax(ctx,new);
-
-   movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
-
-   movq([r_tmp0],new);
-
-   if (dflag=0) then
-   begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
-   end else
-   begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
-   end;
-
- end;
-
-end;
-
-procedure op_stos(var ctx:t_jit_context2);
-var
- link_jmp0:t_jit_i_link;
- link_jmp1:t_jit_i_link;
-begin
- with ctx.builder do
- begin
-
-  //get d flag
-  pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
-
-  link_jmp0:=jcc(OPSc_b,nil_link,os8);
-
-  _op_stos(ctx,0);
-
-  link_jmp1:=jmp(nil_link,os8);
-
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
-
-  _op_stos(ctx,1);
-
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
-
-  popfq(os64);
-
- end;
-end;
-
 //
 procedure op_debug_info(var ctx:t_jit_context2);
 var
@@ -1253,6 +798,15 @@ end;
 
 procedure init_cbs;
 begin
+
+ //
+
+ jit_rep_cbs[repOPins ]:=@op_invalid;
+ jit_rep_cbs[repOPouts]:=@op_invalid;
+ jit_rep_cbs[repOPret ]:=@op_ret;
+
+ //
+
  jit_cbs[OPPnone,OPcall,OPSnone]:=@op_call;
  jit_cbs[OPPnone,OPjmp ,OPSnone]:=@op_jmp;
  jit_cbs[OPPnone,OPret ,OPSnone]:=@op_ret;
@@ -1275,6 +829,10 @@ begin
  jit_cbs[OPPnone,OPj__,OPSc_le ]:=@op_jcc;
  jit_cbs[OPPnone,OPj__,OPSc_nle]:=@op_jcc;
 
+ jit_cbs[OPPnone,OPloop,OPSnone]:=@op_loop;
+ jit_cbs[OPPnone,OPloop,OPSc_ne]:=@op_loop;
+ jit_cbs[OPPnone,OPloop,OPSc_e ]:=@op_loop;
+
  jit_cbs[OPPnone,OPpush,OPSnone]:=@op_push;
  jit_cbs[OPPnone,OPpop ,OPSnone]:=@op_pop;
 
@@ -1284,20 +842,11 @@ begin
  jit_cbs[OPPnone,OPpopf  ,OPSnone]:=@op_popf;
  jit_cbs[OPPnone,OPpopf  ,OPSx_q ]:=@op_popf;
 
- jit_cbs[OPPnone,OPmovs,OPSx_b]:=@op_movs;
- jit_cbs[OPPnone,OPmovs,OPSx_w]:=@op_movs;
- jit_cbs[OPPnone,OPmovs,OPSx_d]:=@op_movs;
- jit_cbs[OPPnone,OPmovs,OPSx_q]:=@op_movs;
-
- jit_cbs[OPPnone,OPstos,OPSx_b]:=@op_stos;
- jit_cbs[OPPnone,OPstos,OPSx_w]:=@op_stos;
- jit_cbs[OPPnone,OPstos,OPSx_d]:=@op_stos;
- jit_cbs[OPPnone,OPstos,OPSx_q]:=@op_stos;
-
  jit_cbs[OPPnone,OPsyscall,OPSnone]:=@op_syscall;
  jit_cbs[OPPnone,OPint    ,OPSnone]:=@op_int;
  jit_cbs[OPPnone,OPint1   ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPint3   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPud1    ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPud2    ,OPSnone]:=@op_ud2;
 
  jit_cbs[OPPnone,OPiret,OPSnone]:=@op_iretq;
@@ -1379,8 +928,7 @@ const
 label
  _next,
  _build,
- _invalid,
- _table;
+ _invalid;
 var
  addr:Pointer;
  ptr:Pointer;
@@ -1503,21 +1051,20 @@ begin
    if (ctx.din.OpCode.Prefix=OPPnone) then
    begin
     case ctx.din.OpCode.Opcode of
-     OPins :cb:=@op_invalid;
-     OPouts:cb:=@op_invalid;
-     OPmovs:cb:=@op_rep_movs;
-     OPlods:cb:=nil;
-     OPstos:cb:=@op_rep_stos;
-     OPcmps:cb:=@op_rep_cmps;
-     OPscas:cb:=nil;
-     OPret :goto _table;
+     OPins :cb:=jit_rep_cbs[repOPins ];
+     OPouts:cb:=jit_rep_cbs[repOPouts];
+     OPmovs:cb:=jit_rep_cbs[repOPmovs];
+     OPlods:cb:=jit_rep_cbs[repOPlods];
+     OPstos:cb:=jit_rep_cbs[repOPstos];
+     OPcmps:cb:=jit_rep_cbs[repOPcmps];
+     OPscas:cb:=jit_rep_cbs[repOPscas];
+     OPret :cb:=jit_rep_cbs[repOPret ];
      else
             cb:=@op_invalid;
     end;
    end;
   end else
   begin
-   _table:
    cb:=jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix];
   end;
 

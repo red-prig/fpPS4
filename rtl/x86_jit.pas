@@ -300,6 +300,7 @@ type
   function  call(_label_id:t_jit_i_link):t_jit_i_link;
   function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
   function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+  function  loop(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
   function  movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   //
@@ -946,7 +947,7 @@ end;
 
 Function t_jit_builder_allocator.Alloc(Size:ptruint):Pointer;
 const
- asize=(1*1024*1024)-SizeOf(ptruint)*3;
+ asize=(2*1024*1024)-SizeOf(ptruint)*3;
 var
  mem_size:ptruint;
  node:PAllocNode;
@@ -1279,6 +1280,39 @@ begin
 
   ji.EmitInt32(0);
  end;
+
+ _add(ji);
+
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.loop(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ if (size=as32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ case op of
+  OPSnone:ji.EmitByte($E2);
+  OPSc_ne:ji.EmitByte($E0);
+  OPSc_e :ji.EmitByte($E1);
+  else
+   Assert(false);
+ end;
+
+ ji.ALink.AType  :=_label_id.AType;
+ ji.ALink.ASize  :=1;
+ ji.ALink.AOffset:=ji.ASize;
+ ji.ALink.ALink  :=_label_id.ALink;
+
+ ji.EmitByte(0);
 
  _add(ji);
 

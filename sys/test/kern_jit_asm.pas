@@ -52,7 +52,7 @@ uses
  vm_pmap,
  trap,
  md_context,
- kern_sig,
+ signal,
  kern_thr;
 
 //
