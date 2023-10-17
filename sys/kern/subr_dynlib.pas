@@ -1750,9 +1750,9 @@ begin
  text_addr :=0;
  text_size :=0;
 
- if (budget_ptype_caller=0) then
+ if (p_proc.p_budget_ptype=0) then
  begin
-  _2mb_mode:=((g_mode_2mb or 1)=3);
+  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3);
  end else
  begin
   _2mb_mode:=False;
@@ -1788,7 +1788,7 @@ begin
      used_mode_2m:=false;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,1,budget_ptype_caller);
+     used_mode_2m:=is_used_mode_2mb(phdr,1,p_proc.p_budget_ptype);
     end;
 
     Result:=self_load_section(imgp,
@@ -1810,7 +1810,7 @@ begin
      used_mode_2m:=false;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,1,budget_ptype_caller);
+     used_mode_2m:=is_used_mode_2mb(phdr,1,p_proc.p_budget_ptype);
     end;
 
     Result:=self_load_section(imgp,
@@ -2014,7 +2014,7 @@ begin
    end;
  end;
 
- budget:=budget_ptype_caller;
+ budget:=p_proc.p_budget_ptype;
 
  if is_system_path(path) then
  begin

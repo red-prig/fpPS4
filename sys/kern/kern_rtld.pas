@@ -154,10 +154,6 @@ const
  M2MB_READONLY    =2; //Text_rodata=65536 (ATTRIBUTE2:0x10000)
  M2MB_ENABLE      =3; //All_section=98304 (ATTRIBUTE2:0x18000)
 
- g_self_fixed:Integer=0;
- g_mode_2mb  :Integer=M2MB_NOTDYN_FIXED;
- budget_ptype_caller:Integer=0;
-
 function  maxInt64(a,b:Int64):Int64; inline;
 function  minInt64(a,b:Int64):Int64; inline;
 
@@ -167,7 +163,7 @@ procedure rtld_free_self(imgp:p_image_params);
 function  rtld_load_self(imgp:p_image_params):Integer;
 procedure rtld_load_auth(imgp:p_image_params);
 
-function  is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype_caller:Integer):Boolean;
+function  is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype:Integer):Boolean;
 
 function  rtld_dirname(path,bname:pchar):Integer;
 function  rtld_file_exists(path:pchar):Boolean;
@@ -493,13 +489,13 @@ begin
  imgp^.authinfo.app_type:=authinfo^.AuthorityID;
 end;
 
-function is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype_caller:Integer):Boolean;
+function is_used_mode_2mb(phdr:p_elf64_phdr;is_dynlib,budget_ptype:Integer):Boolean;
 var
  flag_write:Integer;
 begin
  Result:=False;
 
- if (budget_ptype_caller=0) then
+ if (budget_ptype=0) then
  begin
   flag_write:=2;
   if (phdr^.p_type<>PT_SCE_RELRO) then
@@ -507,8 +503,8 @@ begin
    flag_write:=phdr^.p_flags and 2;
   end;
 
-  case g_mode_2mb of
-   M2MB_NOTDYN_FIXED:Result:=(is_dynlib=0) and (g_self_fixed<>0);
+  case p_proc.p_mode_2mb of
+   M2MB_NOTDYN_FIXED:Result:=(is_dynlib=0) and (p_proc.p_self_fixed<>0);
    M2MB_READONLY    :Result:=(flag_write=0);
    M2MB_ENABLE      :Result:=True;
    else;

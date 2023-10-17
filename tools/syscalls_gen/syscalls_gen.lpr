@@ -608,6 +608,7 @@ begin
  S:=S+'interface'#13#10;
  S:=S+#13#10;
  S:=S+'uses'#13#10;
+ S:=S+' sysent,'#13#10;
 
  FileWrite(F,Pchar(S)^,Length(S));
 
@@ -638,15 +639,10 @@ begin
  S:=S+'function nosup:Integer;'#13#10;
  S:=S+'function nzero:Integer;'#13#10;
  S:=S+#13#10;
- S:=S+'type'#13#10;
- S:=S+' t_sysent=packed record'#13#10;
- S:=S+'  sy_narg:ptruint;'#13#10;
- S:=S+'  sy_call:Pointer;'#13#10;
- S:=S+'  sy_name:PChar;'#13#10;
- S:=S+' end;'#13#10;
+ S:=S+'var'#13#10;
+ S:=S+' sv_size:Integer='+IntToStr(Length(sysent_table))+'; public;'#13#10;
  S:=S+#13#10;
- S:=S+'const'#13#10;
- S:=S+' sysent_table:array[0..'+IntToStr(high(sysent_table))+'] of t_sysent=('#13#10;
+ S:=S+' sv_table:array[0..'+IntToStr(high(sysent_table))+'] of t_sysent=('#13#10;
 
  FileWrite(F,Pchar(S)^,Length(S));
 
@@ -697,7 +693,7 @@ begin
 
  end;
 
- S:=  ' );'#13#10;
+ S:=  ' ); public;'#13#10;
  S:=S+#13#10;
  S:=S+'implementation'#13#10;
  S:=S+#13#10;
@@ -827,7 +823,7 @@ begin
 
  LoadStats;
 
- Save_sysent('sysent.pas');
+ Save_sysent('init_sysent.pas');
  Save_syscalls('syscalls.pas');
 
  readln;

@@ -142,8 +142,8 @@ implementation
 uses
  errno,
  systm,
- md_proc,
- kern_rtld;
+ kern_proc,
+ md_proc;
 
 function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
 var
@@ -195,7 +195,7 @@ begin
 
  if (info.size<>SizeOf(t_proc_type_info)) then Exit(EINVAL);
 
- info.bptype:=budget_ptype_caller;
+ info.bptype:=p_proc.p_budget_ptype;
 
  if sceSblACMgrIsVideoplayerProcess(@g_authinfo) then
  begin

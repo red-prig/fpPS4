@@ -44,7 +44,7 @@ uses
  vfs_subr,
  vfs_mount,
  vfs_default,
- sysent,
+ init_sysent,
  vfs_syscalls,
  vsys_generic,
  vsocket,

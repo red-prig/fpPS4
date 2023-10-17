@@ -140,7 +140,7 @@ uses
  md_thread,
  signal,
  kern_sig,
- sysent,
+ kern_proc,
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
@@ -579,14 +579,14 @@ begin
  scall:=nil;
  is_guest:=False;
 
- if (td_frame^.tf_rax<=High(sysent_table)) then
+ if (td_frame^.tf_rax<p_proc.p_sysent^.sv_size) then
  begin
-  scall:=tsyscall(sysent_table[td_frame^.tf_rax].sy_call);
+  scall:=tsyscall(p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_call);
   if (scall=nil) then
   begin
-   Writeln('Unhandled syscall:',td_frame^.tf_rax,':',sysent_table[td_frame^.tf_rax].sy_name);
+   Writeln('Unhandled syscall:',td_frame^.tf_rax,':',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
 
-   count:=sysent_table[td_frame^.tf_rax].sy_narg;
+   count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
    Assert(count<=6);
 
    if (count<>0) then
@@ -597,14 +597,14 @@ begin
 
    print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
 
-   Assert(false,sysent_table[td_frame^.tf_rax].sy_name);
+   Assert(false,p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
   end;
  end else
  if (td_frame^.tf_rax<=$1000) then
  begin
   Writeln('Unhandled syscall:',td_frame^.tf_rax);
 
-  count:=sysent_table[td_frame^.tf_rax].sy_narg;
+  count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
   Assert(count<=6);
 
   if (count<>0) then
@@ -626,13 +626,13 @@ begin
   error:=ENOSYS;
  end else
  begin
-  if (td_frame^.tf_rax<=High(sysent_table)) then
+  if (td_frame^.tf_rax<p_proc.p_sysent^.sv_size) then
   if is_guest_addr(td_frame^.tf_rip) then
   begin
    is_guest:=True;
-   Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name);
+   Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
 
-   count:=sysent_table[td_frame^.tf_rax].sy_narg;
+   count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
    Assert(count<=6);
 
    if (count<>0) then
@@ -664,7 +664,7 @@ begin
   EJUSTRETURN:; //nothing
   else
     begin
-     Writeln('Guest syscall:',sysent_table[td_frame^.tf_rax].sy_name,' error:',error);
+     Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name,' error:',error);
     end;
  end;
 

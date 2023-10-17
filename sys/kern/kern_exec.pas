@@ -592,9 +592,9 @@ begin
 
  hdr:=imgp^.image_header;
 
- if (budget_ptype_caller=0) then
+ if (p_proc.p_budget_ptype=0) then
  begin
-  _2mb_mode:=((g_mode_2mb or 1)=3) or ((g_self_fixed<>0) and (g_mode_2mb=M2MB_NOTDYN_FIXED));
+  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3) or ((p_proc.p_self_fixed<>0) and (p_proc.p_mode_2mb=M2MB_NOTDYN_FIXED));
  end else
  begin
   _2mb_mode:=False;
@@ -627,7 +627,7 @@ begin
    p_filesz:=phdr^.p_filesz;
    p_offset:=phdr^.p_offset;
 
-   if (p_type=PT_SCE_RELRO) and (budget_ptype_caller=0) then
+   if (p_type=PT_SCE_RELRO) and (p_proc.p_budget_ptype=0) then
    begin
 
     if (_2mb_mode=false) then
@@ -657,7 +657,7 @@ begin
      used_mode_2m:=false;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,0,budget_ptype_caller);
+     used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
     end;
 
     Result:=self_load_section(imgp,
@@ -940,13 +940,13 @@ begin
  obj:=nil;
 
  //if (td_proc->sdk_version < 0x5000000) {
- //  *(byte *)&dynlibs_info->bits = *(byte *)&dynlibs_info->bits | 0x20;
+ //  *(byte *)&dynlibs_info->bits = *(byte *)&dynlibs_info->bits | 0x20;  (find_symdef mode)
  //}
 
  if (imgp^.dyn_exist=0) then goto _dyn_not_exist;
 
  flags:=$40; //priv libs?
- if (budget_ptype_caller=0) then flags:=flags or $20; //vm_map_wire
+ if (p_proc.p_budget_ptype=0) then flags:=flags or $20; //vm_map_wire
 
  pick_obj(dynlibs_info.libprogram);
 

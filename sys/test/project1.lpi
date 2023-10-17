@@ -299,10 +299,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\sysent.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\vfs\vfs_syscalls.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -728,10 +724,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="..\kern\kern_jit.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\dev\dev_dce.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -781,6 +773,14 @@
       </Unit>
       <Unit>
         <Filename Value="kern_jit_asm.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="sysent.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="elf_machdep.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

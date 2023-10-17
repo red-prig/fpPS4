@@ -96,7 +96,8 @@ implementation
 uses
  errno,
  systm,
- vm;
+ vm,
+ kern_proc;
 
 function not_dynamic:Boolean; inline;
 begin
@@ -214,7 +215,7 @@ begin
  dynlibs_lock;
 
  obj:=nil;
- Result:=load_prx(@fname,flags or ord(budget_ptype_caller=0),obj);
+ Result:=load_prx(@fname,flags or ord(p_proc.p_budget_ptype=0),obj);
  if (Result=0) then
  begin
   allocs:=(obj^.id<=0);

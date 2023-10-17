@@ -8,6 +8,7 @@ interface
 uses
  kern_param,
  kern_mtx,
+ sysent,
  sys_event,
  signalvar;
 
@@ -32,6 +33,8 @@ var
   p_sdk_version:Integer;
   p_sce_replay_exec:Integer;
 
+  p_sysent:p_sysentvec;
+
   libkernel_start_addr:Pointer;
   libkernel___end_addr:Pointer;
 
@@ -52,6 +55,10 @@ var
 
   p_args:p_pargs;
 
+  p_self_fixed  :Integer;
+  p_mode_2mb    :Integer;
+  p_budget_ptype:Integer;
+
   p_dmem_aliasing:Integer;
  end;
 
@@ -68,6 +75,7 @@ procedure PROC_INIT; //SYSINIT
 implementation
 
 uses
+ elf_machdep,
  md_time;
 
 //
@@ -124,6 +132,9 @@ begin
 
  knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
 
+ init_sysvec;
+ p_proc.p_sysent:=@self_orbis_sysvec;
+
  p_proc.p_osrel:=osreldate;
 
  p_proc.p_randomized_path:='system';
@@ -131,5 +142,8 @@ begin
  p_proc.p_ptc:=rdtsc;
 end;
 
+
 end.
+
+
 
