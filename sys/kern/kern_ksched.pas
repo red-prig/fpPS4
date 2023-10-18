@@ -159,7 +159,7 @@ begin
  e:=copyin(param, @sched_param, sizeof(sched_param));
  if (e<>0) then Exit(e);
 
- if (pid=0) or (pid=g_pid) then
+ if (pid=0) or (pid=p_proc.p_pid) then
  begin
   //
  end else
@@ -183,7 +183,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- if (pid=0) or (pid=g_pid) then
+ if (pid=0) or (pid=p_proc.p_pid) then
  begin
   //
  end else
@@ -217,7 +217,7 @@ begin
  e:=copyin(param, @sched_param, sizeof(sched_param));
  if (e<>0) then Exit(e);
 
- if (pid=0) or (pid=g_pid) then
+ if (pid=0) or (pid=p_proc.p_pid) then
  begin
   //
  end else
@@ -240,7 +240,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- if (pid=0) or (pid=g_pid) then
+ if (pid=0) or (pid=p_proc.p_pid) then
  begin
   //
  end else
@@ -289,7 +289,7 @@ var
  e:Integer;
 begin
 
- if (pid=0) or (pid=g_pid) then
+ if (pid=0) or (pid=p_proc.p_pid) then
  begin
   //
  end else

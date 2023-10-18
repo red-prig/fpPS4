@@ -232,7 +232,7 @@ begin
  Result:=0;
 
  if (pid<>0) and
-    (pid<>g_pid) then
+    (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;

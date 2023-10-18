@@ -44,7 +44,7 @@ uses
  systm,
  signal,
  kern_thr,
- md_proc;
+ kern_proc;
 
 {
  * System calls related to processes and protection
@@ -56,7 +56,7 @@ var
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
- td^.td_retval[0]:=g_pid;
+ td^.td_retval[0]:=p_proc.p_pid;
  Exit(0);
 end;
 
@@ -91,7 +91,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- if (pid<>0) and (pid<>g_pid) then
+ if (pid<>0) and (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;
@@ -110,7 +110,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- if (pid<>0) and (pid<>g_pid) then
+ if (pid<>0) and (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;
@@ -213,7 +213,7 @@ end;
  }
 function sys_setpgid(pid,pgid:Integer):Integer;
 begin
- if (pid<>0) and (pid<>g_pid) then
+ if (pid<>0) and (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;

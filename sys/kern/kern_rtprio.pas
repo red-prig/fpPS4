@@ -135,7 +135,7 @@ var
  rtp1,rtp2:t_rtprio;
  i:kthread_iterator;
 begin
- if (pid<>0) and (pid<>g_pid) then Exit(ESRCH);
+ if (pid<>0) and (pid<>p_proc.p_pid) then Exit(ESRCH);
 
  td:=curkthread;
 

@@ -430,7 +430,7 @@ var
 begin
  immediate:=0;
 
- if (Integer(kn^.kn_id)<>g_pid) then Exit(ESRCH);
+ if (Integer(kn^.kn_id)<>p_proc.p_pid) then Exit(ESRCH);
 
  if ((p_proc.p_flag and P_WEXIT)<>0) then
  begin

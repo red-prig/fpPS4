@@ -1182,7 +1182,9 @@ var
  error:Integer;
 begin
  if (signum > _SIG_MAXSIG) then
+ begin
   Exit(EINVAL);
+ end;
 
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=signum;
@@ -1192,14 +1194,16 @@ begin
  if (pid > 0) then
  begin
   { kill single process }
-  if (pid<>g_pid) then Exit(ESRCH);
+  if (pid<>p_proc.p_pid) then Exit(ESRCH);
 
   PROC_LOCK;
 
   error:=p_cansignal(signum);
 
   if (error=0) and (signum<>0) then
+  begin
    pksignal(signum, @ksi);
+  end;
 
   PROC_UNLOCK;
 
@@ -1223,7 +1227,9 @@ var
  error:Integer;
 begin
  if (signum > _SIG_MAXSIG) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * Specification says sigqueue can only send signal to
@@ -1234,7 +1240,7 @@ begin
   Exit(EINVAL);
  end;
 
- if (pid<>0) and (pid<>g_pid) then
+ if (pid<>0) and (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;
@@ -1247,7 +1253,7 @@ begin
   ksi.ksi_flags:=KSI_SIGQ;
   ksi.ksi_info.si_signo:=signum;
   ksi.ksi_info.si_code :=SI_QUEUE;
-  ksi.ksi_info.si_pid  :=g_pid;
+  ksi.ksi_info.si_pid  :=p_proc.p_pid;
   ksi.ksi_info.si_value.sival_ptr:=value;
 
   PROC_LOCK();
@@ -1384,7 +1390,7 @@ begin
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
  ksi.ksi_info.si_code :=SI_KERNEL;
- ksi.ksi_info.si_pid  :=g_pid;
+ ksi.ksi_info.si_pid  :=p_proc.p_pid;
  tdsendsignal(nil,sig,@ksi);
 end;
 
@@ -1470,7 +1476,7 @@ begin
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
  ksi.ksi_info.si_code :=SI_KERNEL;
- ksi.ksi_info.si_pid  :=g_pid;
+ ksi.ksi_info.si_pid  :=p_proc.p_pid;
  tdsendsignal(td,sig,@ksi);
 end;
 

@@ -9,9 +9,6 @@ uses
  ntapi,
  windows;
 
-var
- g_pid:DWORD=0;
-
 function  cpuset_setproc(new:Ptruint):Integer;
 function  cpuset_getproc(var old:Ptruint):Integer;
 
@@ -21,6 +18,9 @@ function  set_proc_prio(n:Integer):Integer;
 Procedure md_halt(errnum:TExitCode); noreturn;
 
 implementation
+
+uses
+ kern_proc;
 
 function cpuset_setproc(new:Ptruint):Integer;
 begin
@@ -101,7 +101,7 @@ begin
 end;
 
 initialization
- g_pid:=GetCurrentProcessId;
+ p_proc.p_pid:=GetCurrentProcessId;
 
 end.
 

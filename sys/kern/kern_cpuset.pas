@@ -34,6 +34,7 @@ uses
  systm,
  kern_thr,
  kern_thread,
+ kern_proc,
  md_thread,
  md_proc;
 
@@ -72,7 +73,7 @@ begin
     end;
   CPU_WHICH_PID:
     begin
-     if (id=-1) or (id=g_pid) then
+     if (id=-1) or (id=p_proc.p_pid) then
      begin
       Result:=cpuset_getproc(old);
       if (Result<>0) then Exit(ESRCH);
@@ -147,7 +148,7 @@ begin
   CPU_WHICH_PID:
     begin
      begin
-      if (id=-1) or (id=g_pid) then
+      if (id=-1) or (id=p_proc.p_pid) then
       begin
        Result:=cpuset_setproc(new);
        if (Result<>0) then Result:=ESRCH;
@@ -227,7 +228,7 @@ begin
     end;
   CPU_WHICH_PID:
     begin
-     if (id=-1) or (id=g_pid) then
+     if (id=-1) or (id=p_proc.p_pid) then
      begin
       //
      end else

@@ -27,6 +27,8 @@ var
  p_proc:record
   p_mtx:mtx;
 
+  p_pid:Integer;
+
   p_flag :Integer;
   p_osrel:Integer;
 

@@ -360,7 +360,7 @@ begin
 
  pid:=PInteger(arg1)^;
 
- if (pid<>g_pid) then Exit(EINVAL);
+ if (pid<>p_proc.p_pid) then Exit(EINVAL);
 
  //sceSblACMgrIsSystemUcred()!=0 -> any proc
  //sceSblACMgrIsSystemUcred()==0 -> cur proc

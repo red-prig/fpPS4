@@ -18,7 +18,7 @@ implementation
 uses
  errno,
  kern_thr,
- md_proc;
+ kern_proc;
 
 function sys_budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer;
 begin
@@ -53,7 +53,7 @@ begin
  if (td=nil) then Exit(-1);
 
  if (pid<>-1) and
-    (pid<>g_pid) then
+    (pid<>p_proc.p_pid) then
  begin
   Exit(ENOSYS);
  end;

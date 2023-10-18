@@ -790,7 +790,7 @@ begin
  ksiginfo_init(@ksi);
  ksi.ksi_info.si_signo:=sig;
  ksi.ksi_info.si_code :=SI_LWP;
- ksi.ksi_info.si_pid  :=g_pid;
+ ksi.ksi_info.si_pid  :=p_proc.p_pid;
 
  if (id=-1) then //all
  begin
@@ -844,7 +844,7 @@ end;
 
 function sys_thr_kill2(pid,id,sig:Integer):Integer;
 begin
- if (pid<>0) and (pid<>g_pid) then
+ if (pid<>0) and (pid<>p_proc.p_pid) then
  begin
   Exit(ESRCH);
  end;

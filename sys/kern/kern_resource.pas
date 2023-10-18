@@ -124,7 +124,7 @@ begin
 
   PRIO_PROCESS:
    begin
-    if (who=0) or (who=g_pid)  then
+    if (who=0) or (who=p_proc.p_pid)  then
     begin
      low:=cur_proc_get_nice;
     end;
@@ -140,7 +140,7 @@ begin
 
   PRIO_USER:
    begin
-    if (who=0) or (who=g_pid)  then
+    if (who=0) or (who=p_proc.p_pid)  then
     begin
      low:=cur_proc_get_nice;
     end;
@@ -168,7 +168,7 @@ begin
 
   PRIO_PROCESS:
    begin
-    if (who=0) or (who=g_pid)  then
+    if (who=0) or (who=p_proc.p_pid)  then
     begin
      PROC_LOCK();
      error:=cur_proc_donice(prio);
@@ -190,7 +190,7 @@ begin
 
   PRIO_USER:
    begin
-    if (who=0) or (who=g_pid)  then
+    if (who=0) or (who=p_proc.p_pid)  then
     begin
      PROC_LOCK();
      error:=cur_proc_donice(prio);
