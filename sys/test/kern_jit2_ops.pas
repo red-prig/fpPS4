@@ -58,12 +58,7 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
-   seto(al);
-   lahf;
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   addi(al,127);
-   sahf;
+   link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
    call_far(@uplift_jit); //in/out:rax uses:r14
@@ -106,18 +101,11 @@ begin
   //until
   jmp(link_start,os8);
 
-  //exit1
-  addi(al,127);
-  sahf;
+  //exit
 
-  //exit2
-
-  link___end:=ctx.builder.get_curr_label.before; //exit1
+  link___end:=ctx.builder.get_curr_label.after; //exit
 
   link_jmp0._label:=link___end;
-
-  link___end:=link___end.after; //exit2
-
   link_jmp1._label:=link___end;
  end;
 
@@ -192,11 +180,7 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
-
-   //flags saved in up proc
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   //flags saved in up proc
+   link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rdi);
    call_far(@uplift_jit); //in/out:rax uses:r14
@@ -288,10 +272,7 @@ begin
   link_start:=ctx.builder.get_curr_label.after;
 
   //repeat
-   //flags saved in up proc
-    testq(rcx,rcx);
-    link_jmp0:=jcc(OPSc_z,nil_link,os8);
-   //flags saved in up proc
+   link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
    call_far(@uplift_jit); //in/out:rax uses:r14
@@ -598,6 +579,82 @@ begin
   link_jmp0._label:=ctx.builder.get_curr_label.after;
 
   _op_stos(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+
+ end;
+end;
+
+//
+
+procedure _op_lods(var ctx:t_jit_context2;dflag:Integer);
+var
+ size:TOperandSize;
+
+ new:TRegValue;
+begin
+ //rdi,rsi
+
+ Assert(ctx.dis.AddressSize=as64,'prefix $67 TODO');
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ //(r_tmp1)r14 <-> rax
+ with ctx.builder do
+ begin
+
+  new:=new_reg_size(r_tmp1,size);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   movq(new,[r_tmp0]);
+
+  op_save_rax(ctx,fix_size(new));
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+   end;
+
+ end;
+
+end;
+
+procedure op_lods(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  _op_lods(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  _op_lods(ctx,1);
 
   link_jmp1._label:=ctx.builder.get_curr_label.after;
 
@@ -924,6 +981,51 @@ begin
  end;
 end;
 
+//
+
+const
+ bsf_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$0FBC;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_bsf(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,bsf_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+const
+ bsr_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$0FBD;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_wo];
+ );
+
+procedure op_bsr(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,bsr_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+
+//
+
 const
  xchg_desc:t_op_desc=(
   mem_reg:(op:$87;index:0);
@@ -963,14 +1065,6 @@ begin
  if is_segment(ctx.din.Operand[1]) then
  begin
   Exit; //skip segment change
- end;
-
- //mov eax,eax
- if (not is_memory(ctx.din.Operand[1])) and
-    (not is_memory(ctx.din.Operand[2])) then
- if cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]) then
- begin
-  Exit;
  end;
 
  if is_segment(ctx.din.Operand[2]) then
@@ -1030,14 +1124,6 @@ procedure op_cmov(var ctx:t_jit_context2);
 var
  desc:t_op_desc;
 begin
- //mov eax,eax
- if (not is_memory(ctx.din.Operand[1])) and
-    (not is_memory(ctx.din.Operand[2])) then
- if cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]) then
- begin
-  Exit;
- end;
-
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   desc:=cmov_desc;
@@ -2189,6 +2275,11 @@ begin
  jit_cbs[OPPnone,OPstos,OPSx_d]:=@op_stos;
  jit_cbs[OPPnone,OPstos,OPSx_q]:=@op_stos;
 
+ jit_cbs[OPPnone,OPlods,OPSx_b]:=@op_lods;
+ jit_cbs[OPPnone,OPlods,OPSx_w]:=@op_lods;
+ jit_cbs[OPPnone,OPlods,OPSx_d]:=@op_lods;
+ jit_cbs[OPPnone,OPlods,OPSx_q]:=@op_lods;
+
  //
 
  jit_cbs[OPPnone,OPxor ,OPSnone]:=@op_xor;
@@ -2208,6 +2299,9 @@ begin
  jit_cbs[OPPnone,OPbtc ,OPSnone]:=@op_btc;
  jit_cbs[OPPnone,OPbts ,OPSnone]:=@op_bts;
  jit_cbs[OPPnone,OPbtr ,OPSnone]:=@op_btr;
+
+ jit_cbs[OPPnone,OPbsf,OPSnone]:=@op_bsf;
+ jit_cbs[OPPnone,OPbsr,OPSnone]:=@op_bsr;
 
  jit_cbs[OPPnone,OPxchg,OPSnone]:=@op_xchg;
 

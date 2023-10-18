@@ -301,6 +301,7 @@ type
   function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
   function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
   function  loop(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+  function  jcxz(_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
   function  movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   //
@@ -1306,6 +1307,33 @@ begin
   else
    Assert(false);
  end;
+
+ ji.ALink.AType  :=_label_id.AType;
+ ji.ALink.ASize  :=1;
+ ji.ALink.AOffset:=ji.ASize;
+ ji.ALink.ALink  :=_label_id.ALink;
+
+ ji.EmitByte(0);
+
+ _add(ji);
+
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.jcxz(_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ if (size=as32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ ji.EmitByte($E3);
 
  ji.ALink.AType  :=_label_id.AType;
  ji.ALink.ASize  :=1;

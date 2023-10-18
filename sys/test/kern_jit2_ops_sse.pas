@@ -133,6 +133,17 @@ begin
  end;
 end;
 
+procedure op_reg_mem_mov_wo(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2_simd_reg_mem(ctx,[his_mov,his_wo]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 //
 
 const
@@ -389,6 +400,19 @@ begin
  jit_cbs[OPPnone,OPmova,OPSx_ps]:=@op_movaps;
  jit_cbs[OPPnone,OPmova,OPSx_pd]:=@op_movapd;
 
+ jit_cbs[OPPnone,OPmovl,OPSx_ps]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPmovl,OPSx_pd]:=@op_reg_mem_mov_wo;
+
+ jit_cbs[OPPnone,OPmovh,OPSx_ps]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPmovh,OPSx_pd]:=@op_reg_mem_mov_wo;
+
+ jit_cbs[OPPnone,OPmovhlps,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPmovlh,OPSx_ps]:=@add_orig;
+
+ jit_cbs[OPPnone,OPmovsldup,OPSnone]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPmovshdup,OPSnone]:=@op_reg_mem_mov_wo;
+
  jit_cbs[OPPnone,OPmovnt,OPSx_dqa]:=@op_movntdqa;
  jit_cbs[OPPnone,OPmovnt,OPSx_dq ]:=@op_mem_reg_mov_wo;
  jit_cbs[OPPnone,OPmovnt,OPSx_i  ]:=@op_mem_reg_mov_wo;
@@ -456,8 +480,13 @@ begin
  jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_reg_mem_wo;
 
+ jit_cbs[OPPnone,OPsqrt,OPSx_ps]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPsqrt,OPSx_pd]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPrsqrt,OPSx_ps]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPrsqrt,OPSx_ss]:=@op_reg_mem_wo;
 
  jit_cbs[OPPnone,OPrcp ,OPSx_ps]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPrcp ,OPSx_ss]:=@op_reg_mem_wo;

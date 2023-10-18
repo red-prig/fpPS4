@@ -211,6 +211,9 @@ procedure op_save_rax(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_load_rsp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_save_rsp(var ctx:t_jit_context2;reg:TRegValue);
 
+procedure op_load_rbp(var ctx:t_jit_context2;reg:TRegValue);
+procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
+
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
 
@@ -1341,6 +1344,30 @@ end;
 
 //
 
+procedure op_load_rbp(var ctx:t_jit_context2;reg:TRegValue);
+var
+ i:Integer;
+begin
+ with ctx.builder do
+ begin
+  i:=GetFrameOffset(rbp);
+  movq(reg,[r_thrd+i]);
+ end;
+end;
+
+procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
+var
+ i:Integer;
+begin
+ with ctx.builder do
+ begin
+  i:=GetFrameOffset(rbp);
+  movq([r_thrd+i],reg);
+ end;
+end;
+
+//
+
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 var
  i:Integer;
@@ -2183,7 +2210,8 @@ begin
        end;
 
        if ((his_ro in desc.hint) or (mem_size<>os32)) and
-          (not (not_impl in desc.mem_reg.opt)) then
+          (not (not_impl in desc.mem_reg.opt)) and
+          (not cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2])) then
        begin
         if tmp2_used2 then
         begin

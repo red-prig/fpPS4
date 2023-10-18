@@ -512,6 +512,49 @@ begin
  end;
 end;
 
+procedure op_jcxz(var ctx:t_jit_context2);
+var
+ id1,id2,id3:t_jit_i_link;
+ ofs:Int64;
+ dst:Pointer;
+ link:t_jit_i_link;
+begin
+ ofs:=0;
+ GetTargetOfs(ctx.din,ctx.code,1,ofs);
+
+ dst:=ctx.ptr_next+ofs;
+
+ id1:=ctx.builder.jcxz(nil_link,ctx.dis.AddressSize);
+
+ if ctx.is_text_addr(QWORD(dst)) and
+    (not exist_entry(dst)) then
+ begin
+  link:=ctx.get_link(dst);
+
+  id2:=ctx.builder.jmp(nil_link,os8);
+   id1._label:=ctx.builder.get_curr_label.after;
+   id3:=ctx.builder.jmp(nil_link);
+  id2._label:=ctx.builder.get_curr_label.after;
+
+  if (link<>nil_link) then
+  begin
+   ctx.add_forward_point(fpCall,dst);
+  end else
+  begin
+   ctx.add_forward_point(fpCall,id3,dst);
+  end;
+ end else
+ begin
+
+  id2:=ctx.builder.jmp(nil_link,os8);
+   id1._label:=ctx.builder.get_curr_label.after;
+   op_set_rax_imm(ctx,Int64(dst));
+   op_jmp_dispatcher(ctx);
+  id2._label:=ctx.builder.get_curr_label.after;
+
+ end;
+end;
+
 const
  movsx8_desc:t_op_type=(op:$0FBE);
  movsxd_desc:t_op_type=(op:$63);
@@ -609,6 +652,36 @@ begin
 
   movq([stack],new);
  end;
+end;
+
+procedure op_leave(var ctx:t_jit_context2);
+var
+ new,stack:TRegValue;
+begin
+ //mov rsp,rbp
+ //mov rbp,[rsp]
+ //lea rsp,[rsp+len]
+
+ Assert(ctx.dis.AddressSize=as64,'prefix $67 TODO');
+
+ with ctx.builder do
+ begin
+  stack:=r_tmp0;
+  new  :=r_tmp0;
+
+  op_load_rbp(ctx,stack);
+  op_save_rsp(ctx,stack);
+
+  call_far(@uplift_jit); //in/out:rax uses:r14
+
+  movq(new,[stack]);
+  op_save_rbp(ctx,new);
+
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack+OPERAND_BYTES[os64]]);
+  op_save_rsp(ctx,stack);
+ end;
+
 end;
 
 procedure op_popf(var ctx:t_jit_context2);
@@ -833,11 +906,17 @@ begin
  jit_cbs[OPPnone,OPloop,OPSc_ne]:=@op_loop;
  jit_cbs[OPPnone,OPloop,OPSc_e ]:=@op_loop;
 
+ jit_cbs[OPPnone,OPjcxz ,OPSnone]:=@op_jcxz;
+ jit_cbs[OPPnone,OPjecxz,OPSnone]:=@op_jcxz;
+ jit_cbs[OPPnone,OPjrcxz,OPSnone]:=@op_jcxz;
+
  jit_cbs[OPPnone,OPpush,OPSnone]:=@op_push;
  jit_cbs[OPPnone,OPpop ,OPSnone]:=@op_pop;
 
  jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushf;
  jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushf;
+
+ jit_cbs[OPPnone,OPleave ,OPSnone]:=@op_leave;
 
  jit_cbs[OPPnone,OPpopf  ,OPSnone]:=@op_popf;
  jit_cbs[OPPnone,OPpopf  ,OPSx_q ]:=@op_popf;
