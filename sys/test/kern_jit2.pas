@@ -42,6 +42,12 @@ begin
  Assert(False);
 end;
 
+procedure jit_unknow_int;
+begin
+ Writeln('TODO:jit_unknow_int');
+ Assert(False);
+end;
+
 procedure jit_exit_proc;
 begin
  Writeln('TODO:jit_exit_proc');
@@ -662,8 +668,6 @@ begin
  //mov rbp,[rsp]
  //lea rsp,[rsp+len]
 
- Assert(ctx.dis.AddressSize=as64,'prefix $67 TODO');
-
  with ctx.builder do
  begin
   stack:=r_tmp0;
@@ -678,7 +682,7 @@ begin
   op_save_rbp(ctx,new);
 
   op_load_rsp(ctx,stack);
-  leaq(stack,[stack+OPERAND_BYTES[os64]]);
+  leaq(stack,[stack+OPERAND_BYTES[ctx.dis.OperandSize]]);
   op_save_rsp(ctx,stack);
  end;
 
@@ -781,6 +785,11 @@ begin
  id:=PByte(ctx.code)[i];
 
  case id of
+  1,3:
+   begin
+    add_orig(ctx);
+   end;
+
   $41: //assert?
    begin
     //
@@ -791,11 +800,13 @@ begin
    begin
     //
     ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
-     ctx.trim:=True;
+    ctx.trim:=True;
    end;
+
   else
    begin
-    Assert(False);
+    ctx.builder.call_far(@jit_unknow_int);
+    ctx.trim:=True;
    end;
  end;
 end;
@@ -916,6 +927,7 @@ begin
  jit_cbs[OPPnone,OPpushf ,OPSnone]:=@op_pushf;
  jit_cbs[OPPnone,OPpushf ,OPSx_q ]:=@op_pushf;
 
+ jit_cbs[OPPnone,OPenter ,OPSnone]:=@op_invalid; //TODO
  jit_cbs[OPPnone,OPleave ,OPSnone]:=@op_leave;
 
  jit_cbs[OPPnone,OPpopf  ,OPSnone]:=@op_popf;

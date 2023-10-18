@@ -665,6 +665,85 @@ end;
 
 //
 
+procedure _op_scas(var ctx:t_jit_context2;dflag:Integer);
+var
+ size:TOperandSize;
+
+ new:TRegValue;
+begin
+ //rdi,rsi
+
+ Assert(ctx.dis.AddressSize=as64,'prefix $67 TODO');
+
+ case ctx.din.OpCode.Suffix of
+  OPSx_b:size:=os8;
+  OPSx_w:size:=os16;
+  OPSx_d:size:=os32;
+  OPSx_q:size:=os64;
+  else;
+   Assert(False);
+ end;
+
+ //(r_tmp0)rax <-> rdi
+ with ctx.builder do
+ begin
+
+  new:=new_reg_size(r_tmp0,size);
+
+   movq(r_tmp0,rdi);
+   call_far(@uplift_jit); //in/out:rax uses:r14
+
+   xchgq(rdi,r_tmp0);
+
+   op_load_rax(ctx,new);
+
+   _O($AF,Size);
+
+   xchgq(rdi,r_tmp0);
+
+   if (dflag=0) then
+   begin
+    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+   end else
+   begin
+    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+   end;
+
+ end;
+
+end;
+
+procedure op_scas(var ctx:t_jit_context2);
+var
+ link_jmp0:t_jit_i_link;
+ link_jmp1:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+
+  //get d flag
+  pushfq(os64);
+  bti8([rsp,os64],10); //bt rax, 10
+
+  link_jmp0:=jcc(OPSc_b,nil_link,os8);
+
+  popfq(os64);
+  _op_scas(ctx,0);
+
+  link_jmp1:=jmp(nil_link,os8);
+
+  link_jmp0._label:=ctx.builder.get_curr_label.after;
+
+  popfq(os64);
+  _op_scas(ctx,1);
+
+  link_jmp1._label:=ctx.builder.get_curr_label.after;
+
+ end;
+end;
+
+//
+
 const
  xor_desc:t_op_desc=(
   mem_reg:(op:$31;index:0);
@@ -2279,6 +2358,11 @@ begin
  jit_cbs[OPPnone,OPlods,OPSx_w]:=@op_lods;
  jit_cbs[OPPnone,OPlods,OPSx_d]:=@op_lods;
  jit_cbs[OPPnone,OPlods,OPSx_q]:=@op_lods;
+
+ jit_cbs[OPPnone,OPscas,OPSx_b]:=@op_scas;
+ jit_cbs[OPPnone,OPscas,OPSx_w]:=@op_scas;
+ jit_cbs[OPPnone,OPscas,OPSx_d]:=@op_scas;
+ jit_cbs[OPPnone,OPscas,OPSx_q]:=@op_scas;
 
  //
 
