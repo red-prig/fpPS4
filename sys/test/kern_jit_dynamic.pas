@@ -382,59 +382,6 @@ begin
  end;
 end;
 
-procedure jit_call_internal; assembler; nostackframe;
-asm
- //pop host call
- mov jit_frame.tf_rsp(%r15),%r13
- lea 8(%r13),%r13
- mov %r13,jit_frame.tf_rsp(%r15)
-
- //push internal call
- lea  -8(%rsp),%rsp
-
- //prolog (debugger)
- push %rbp
- movq %rsp,%rbp
-
- //set
- //%r13 ABI preserve the registers
- //%r14 ABI preserve the registers
- //%r15 ABI preserve the registers
-
- //%rsp???
- //%rbp???
-
- call %gs:teb.jitcall
-
- //restore guard
- movq %gs:teb.thread               ,%r15 //curkthread
- leaq kthread.td_frame.tf_r13(%r15),%r15 //jit_frame
-
- //%r13 ABI preserve the registers
- //%r14 ABI preserve the registers
- //%r15 ABI preserve the registers
-
- //%rsp???
- //%rbp???
-
- //epilog
- pop  %rbp
-end;
-
-procedure jit_jmp_internal; assembler; nostackframe;
-asm
- //set
-
- //%rsp???
- //%rbp???
-
- movqq jit_frame.tf_r13(%r15),%r13
- movqq jit_frame.tf_r14(%r15),%r14
- //movqq jit_frame.tf_r15(%r15),%r15
-
- jmp %gs:teb.jitcall
-end;
-
 function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; public;
 label
  _start;
