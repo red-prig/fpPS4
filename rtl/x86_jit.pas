@@ -1866,6 +1866,10 @@ begin
 
  if (reg1.AType=regGeneralH) then
  begin
+  if (reg0.AType=regGeneral) then
+  begin
+   Assert(reg0.AIndex<=4,'imposible');
+  end;
   RH:=True;
   Inc(ModRM.Index,4);
  end else
@@ -1881,6 +1885,10 @@ begin
 
  if (reg0.AType=regGeneralH) then
  begin
+  if (reg1.AType=regGeneral) then
+  begin
+   Assert(reg1.AIndex<=4,'imposible');
+  end;
   if rexF or rexR then
   begin
    Assert(false,'imposible');

@@ -95,7 +95,7 @@ type
 
  p_jctx=^t_jctx;
  t_jctx=object
-  frame:jit_frame;
+  frame:p_jit_frame;
   cblob:p_jit_dynamic;
  end;
 
@@ -114,6 +114,7 @@ function  fetch_chunk(src:Pointer):t_jit_dynamic.p_jcode_chunk;
 function  next_chunk(node:t_jit_dynamic.p_jcode_chunk):t_jit_dynamic.p_jcode_chunk;
 function  preload_entry(addr:Pointer):t_jit_dynamic.p_entry_point;
 
+procedure jit_ctx_free(td:p_kthread);
 procedure switch_to_jit(td:p_kthread);
 function  jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer;
 
@@ -197,6 +198,20 @@ begin
  end;
 end;
 
+procedure jit_ctx_free(td:p_kthread); public;
+var
+ jctx:p_jctx;
+begin
+ jctx:=td^.td_jit_ctx;
+ td^.td_jit_ctx:=nil;
+ if (jctx<>nil) then
+ begin
+  jctx^.cblob^.dec_ref;
+  jctx^.cblob:=nil;
+  FreeMem(jctx);
+ end;
+end;
+
 procedure switch_to_jit(td:p_kthread); public;
 label
  _start;
@@ -228,8 +243,15 @@ begin
 
  if (td^.td_jit_ctx=nil) then
  begin
-  td^.td_jit_ctx:=AllocMem(SizeOf(t_jctx));
+  jctx:=AllocMem(SizeOf(t_jctx));
+  jctx^.frame:=@td^.td_frame.tf_r13;
+
+  td^.td_jit_ctx:=jctx;
+ end else
+ begin
+  jctx:=td^.td_jit_ctx;
  end;
+
  jctx:=td^.td_jit_ctx;
 
  if (jctx^.cblob<>nil) then
@@ -240,17 +262,18 @@ begin
 
  jctx^.cblob:=node^.blob;
 
- jctx^.frame.tf_rax:=td^.td_frame.tf_rax;
- jctx^.frame.tf_rsp:=td^.td_frame.tf_rsp;
- jctx^.frame.tf_rbp:=td^.td_frame.tf_rbp;
- jctx^.frame.tf_r14:=td^.td_frame.tf_r14;
- jctx^.frame.tf_r15:=td^.td_frame.tf_r15;
+ //tf_r13 not need to move
+ //tf_r14 not need to move
+
+ jctx^.frame^.tf_rsp:=td^.td_frame.tf_rsp;
+ jctx^.frame^.tf_rbp:=td^.td_frame.tf_rbp;
+ jctx^.frame^.tf_r15:=td^.td_frame.tf_r15;
 
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
  td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
 
  td^.td_frame.tf_rip:=QWORD(node^.dst);
- td^.td_frame.tf_r15:=QWORD(jctx);
+ td^.td_frame.tf_r15:=QWORD(jctx^.frame);
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 
@@ -362,9 +385,9 @@ end;
 procedure jit_call_internal; assembler; nostackframe;
 asm
  //pop host call
- mov jit_frame.tf_rsp(%r15),%rax
- lea 8(%rax),%rax
- mov %rax,jit_frame.tf_rsp(%r15)
+ mov jit_frame.tf_rsp(%r15),%r13
+ lea 8(%r13),%r13
+ mov %r13,jit_frame.tf_rsp(%r15)
 
  //push internal call
  lea  -8(%rsp),%rsp
@@ -374,7 +397,7 @@ asm
  movq %rsp,%rbp
 
  //set
- movqq jit_frame.tf_rax(%r15),%rax
+ //%r13 ABI preserve the registers
  //%r14 ABI preserve the registers
  //%r15 ABI preserve the registers
 
@@ -384,10 +407,10 @@ asm
  call %gs:teb.jitcall
 
  //restore guard
- movqq %gs:teb.thread          ,%r15 //curkthread
- movqq kthread.td_jit_ctx(%r15),%r15 //jit_frame
+ movq %gs:teb.thread               ,%r15 //curkthread
+ leaq kthread.td_frame.tf_r13(%r15),%r15 //jit_frame
 
- movqq %rax,jit_frame.tf_rax(%r15)
+ //%r13 ABI preserve the registers
  //%r14 ABI preserve the registers
  //%r15 ABI preserve the registers
 
@@ -401,11 +424,13 @@ end;
 procedure jit_jmp_internal; assembler; nostackframe;
 asm
  //set
- movqq jit_frame.tf_rax(%r15),%rax
+
  //%rsp???
  //%rbp???
- movqq jit_frame.tf_rax(%r14),%r14
- movqq jit_frame.tf_rax(%r15),%r15
+
+ movqq jit_frame.tf_r13(%r15),%r13
+ movqq jit_frame.tf_r14(%r15),%r14
+ //movqq jit_frame.tf_r15(%r15),%r15
 
  jmp %gs:teb.jitcall
 end;

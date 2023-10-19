@@ -5,43 +5,43 @@ unit kern_jit_asm;
 
 interface
 
+uses
+ kern_thr;
+
 {
 change: rsp,rbp,rip
-rax?
 
-eflahs? temp change?
+eflahs: temp change
 
 change: push/pop
 
-thread: r15
+temp:   r13,r14
 
+frame:  r15
 }
 
 type
+ //kthread.td_frame.tf_r13
+
  p_jit_frame=^jit_frame;
  jit_frame=packed record
-  tf_rax:QWORD; //00
-  tf_rsp:QWORD; //08
-  tf_rbp:QWORD; //10
-  tf_r14:QWORD; //18
-  tf_r15:QWORD; //20
-  tf_rip:QWORD; //28
+  tf_r13:QWORD;      //00
+  tf_r14:QWORD;      //08
+  tf__10:QWORD;      //10 (tf_r15)
+  tf_r15:QWORD;      //18 (tf_trapno)
+  tf_rbp:QWORD;      //20 (tf_addr)
+  tf__28:QWORD;      //28 (tf_flags)
+  tf_rsp:QWORD;      //30 (tf_err)
  end;
 
-//in/out:rax uses:r14
-procedure uplift_jit; assembler;
 
-//in:rax(addr),r14b:(mem_size) out:ZF
-procedure page_test; assembler;
-
-//in:rax(addr),r14b:(size)
+procedure uplift_jit;  assembler;
+procedure page_test;   assembler;
 procedure copyout_mov; assembler;
+procedure copyin_mov;  assembler;
 
-//in:rax(addr),r14b:(size) out:rax
-procedure copyin_mov; assembler;
-
-procedure jit_syscall; assembler;
-procedure jit_jmp_dispatch; assembler;
+procedure jit_syscall;       assembler;
+procedure jit_jmp_dispatch;  assembler;
 procedure jit_call_dispatch; assembler;
 
 implementation
@@ -52,8 +52,7 @@ uses
  vm_pmap,
  trap,
  md_context,
- signal,
- kern_thr;
+ signal;
 
 //
 
@@ -61,13 +60,13 @@ function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; external;
 
 //
 
-procedure sigsegv(addr:Pointer);
+procedure jit_sigsegv(addr:Pointer);
 begin
- Writeln('sigsegv:0x',HexStr(addr));
+ Writeln('jit_sigsegv:0x',HexStr(addr));
  Assert(False);
 end;
 
-//in/out:rax uses:r14
+//in/out:r13
 procedure uplift_jit; assembler; nostackframe;
 const
  VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
@@ -76,47 +75,47 @@ label
 asm
  pushfq
  push %r14
- push %rax
+ push %r13
  //
  mov VM_MAX_D,%r14
- shl $32,%r14
- cmp %r14,%rax
+ shl  $32,%r14
+ cmp %r14,%r13
  ja _sigsegv
  //
  //low addr (r14)
- mov %rax,%r14
+ mov %r13,%r14
  and PAGE_MASK,%r14
- //high addr (rax)
- shr PAGE_SHIFT   ,%rax
- and PAGE_MAP_MASK,%rax
- //uplift (rax)
- lea (,%rax,4),%rax
- add PAGE_MAP(%rip),%rax
- mov (%rax),%eax
- //filter (rax)
- and PAGE_OFS_MASK,%rax
+ //high addr (r13)
+ shr PAGE_SHIFT   ,%r13
+ and PAGE_MAP_MASK,%r13
+ //uplift (r13)
+ lea (,%r13,4),%r13
+ add PAGE_MAP(%rip),%r13
+ mov (%r13),%r13d
+ //filter (r13)
+ and PAGE_OFS_MASK,%r13
  jz _sigsegv
- //combine (rax|r14)
- shl PAGE_SHIFT,%rax
- or  %r14,%rax
+ //combine (r13|r14)
+ shl PAGE_SHIFT,%r13
+ or  %r14,%r13
  //
- pop %r14
+ pop %r14 //origin
  pop %r14
  popfq
  ret
 
  _sigsegv:
- pop %rdi
+ pop %rdi //origin
 
  pop %r14
  popfq
 
- call sigsegv
+ call jit_sigsegv
 
  ret
 end;
 
-//in:rax(addr),r14b:(mem_size) out:ZF
+//in:r13(addr),r14b:(mem_size) out:ZF
 procedure page_test; assembler; nostackframe;
 label
  _exit;
@@ -124,9 +123,9 @@ asm
  push %rdi
  push %rsi
  //
- mov %rax,%rdi
+ mov    %r13 ,%rdi
  movzbq %r14b,%rsi
- sub $1,%rsi
+ lea -1(%rsi),%rsi //-1
  //addr2:=addr+mem_high (rsi)
  add %rdi,%rsi
  //high addr (rdi,rsi)
@@ -158,13 +157,27 @@ asm
  pop %rdi
 end;
 
-//in:rax(addr),r14b:(size)
+procedure jit_simple_save_ctx; assembler; nostackframe;
+asm
+ movqq %rdi, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r15)
+ movqq %rsi, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r15)
+ movqq %rdx, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdx(%r15)
+ movqq %rcx, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_rcx(%r15)
+ movqq %r8 , -kthread.td_frame.tf_r13 + kthread.td_frame.tf_r8 (%r15)
+ movqq %r9 , -kthread.td_frame.tf_r13 + kthread.td_frame.tf_r9 (%r15)
+ movqq %rax, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r15)
+ movqq %r10, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_r10(%r15)
+ movqq %r11, -kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r15)
+end;
+
+//in:r13(addr),r14b:(size)
 procedure copyout_mov; assembler;
 label
  _simple,
  _exit;
 var
  addr:Pointer;
+ size:QWORD;
  data:array[0..31] of Byte;
 asm
  pushfq
@@ -172,7 +185,21 @@ asm
  call page_test
  je _simple
 
-  popfq //restore flags before call
+  //cross page
+
+  movq %r13,addr    //save orig addr
+  movq %r14,size    //save orig size
+
+  lea  data,%r13    //vaddr:=data
+
+  mov  8(%rbp),%r14 //get ret addr
+  lea  2(%rdi),%r14 //add jmp near
+
+  popfq  //restore flags before call
+
+  call %r14         //reg->data
+
+  pushfq //save again
 
   push %rdi
   push %rsi
@@ -180,36 +207,28 @@ asm
   push %rcx
   push %r8
   push %r9
+  push %rax
   push %r10
   push %r11
 
-  movq %rax,addr
-
-  lea  data,%rax    //vaddr:=data
-
-  mov  8(%rbp),%rdi //ret addr
-  lea  2(%rdi),%rdi //jmp near
-
-  call %rdi         //reg->data
-
   movq    addr,%rsi //vaddr
   lea     data,%rdi //data
+  movq    size,%r14
   movzbq %r14b,%rdx //size
-
-  pushfq
 
   call copyout
 
-  popfq
-
   pop  %r11
   pop  %r10
+  pop  %rax
   pop  %r9
   pop  %r8
   pop  %rcx
   pop  %rdx
   pop  %rsi
   pop  %rdi
+
+  popfq
 
   jmp _exit
  _simple:
@@ -226,7 +245,7 @@ asm
  _exit:
 end;
 
-//in:rax(addr),r14b:(size) out:rax
+//in:r13(addr),r14b:(size) out:r13
 procedure copyin_mov; assembler;
 label
  _simple,
@@ -239,16 +258,20 @@ asm
  call page_test
  je _simple
 
+  //cross page
+
   push %rdi
   push %rsi
   push %rdx
   push %rcx
   push %r8
   push %r9
+  push %rax
+  push %rdx
   push %r10
   push %r11
 
-  mov     %rax,%rdi //vaddr
+  mov     %r13,%rdi //vaddr
   lea     data,%rsi //data
   movzbq %r14b,%rdx //size
 
@@ -256,6 +279,7 @@ asm
 
   pop  %r11
   pop  %r10
+  pop  %rax
   pop  %r9
   pop  %r8
   pop  %rcx
@@ -263,7 +287,7 @@ asm
   pop  %rsi
   pop  %rdi
 
-  lea data,%rax //vaddr:=data
+  lea data,%r13 //vaddr:=data
 
   jmp _exit
  _simple:
@@ -277,6 +301,7 @@ end;
 
 //
 
+//in:r13(addr)
 procedure jit_syscall; assembler; nostackframe;
 label
  _after_call,
@@ -291,10 +316,10 @@ asm
 
  andq  $-16,%rsp //align stack
 
- movqq %rax,jit_frame.tf_rip(%r15) //save %rax to tf_rip
+ movqq %r13, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip (%r15) //save %r13 to tf_rip
 
  pushf
- pop %rax
+ pop %r13
 
  movqq %gs:teb.thread,%r14 //curkthread
  test  %r14,%r14
@@ -302,7 +327,7 @@ asm
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%r14) //clear PCB_FULL_IRET
 
- movqq %rax,kthread.td_frame.tf_rflags(%r14) //save flags
+ movqq %r13,kthread.td_frame.tf_rflags(%r14) //save flags
 
  movqq %rdi,kthread.td_frame.tf_rdi(%r14)
  movqq %rsi,kthread.td_frame.tf_rsi(%r14)
@@ -310,41 +335,35 @@ asm
  movqq   $0,kthread.td_frame.tf_rcx(%r14)
  movqq %r8 ,kthread.td_frame.tf_r8 (%r14)
  movqq %r9 ,kthread.td_frame.tf_r9 (%r14)
+ movqq %rax,kthread.td_frame.tf_rax(%r14)
  movqq %rbx,kthread.td_frame.tf_rbx(%r14)
  movqq %r10,kthread.td_frame.tf_r10(%r14)
  movqq   $0,kthread.td_frame.tf_r11(%r14)
  movqq %r12,kthread.td_frame.tf_r12(%r14)
- movqq %r13,kthread.td_frame.tf_r13(%r14)
+
+ //tf_r13=tf_r13
+ //tf_r14=tf_r14
+
+ movqq             jit_frame.tf_r15(%r15),%r13
+ movqq %r13,kthread.td_frame.tf_r15(%r14)
+
+ movqq             jit_frame.tf_rsp(%r15),%r13
+ movqq %r13,kthread.td_frame.tf_rsp(%r14)
+
+ movqq             jit_frame.tf_rbp(%r15),%r13
+ movqq %r13,kthread.td_frame.tf_rbp(%r14)
 
  movqq   $1,kthread.td_frame.tf_trapno(%r14)
  movqq   $0,kthread.td_frame.tf_addr  (%r14)
  movqq   $0,kthread.td_frame.tf_flags (%r14)
  movqq   $2,kthread.td_frame.tf_err   (%r14) //sizeof(syscall)
 
- movqq jit_frame.tf_rax(%r15),%rax
- movqq %rax,kthread.td_frame.tf_rax(%r14)
-
- movqq jit_frame.tf_rsp(%r15),%rax
- movqq %rax,kthread.td_frame.tf_rsp(%r14)
-
- movqq jit_frame.tf_rbp(%r15),%rax
- movqq %rax,kthread.td_frame.tf_rbp(%r14)
-
- movqq jit_frame.tf_r14(%r15),%rax
- movqq %rax,kthread.td_frame.tf_r14(%r14)
-
- movqq jit_frame.tf_r15(%r15),%rax
- movqq %rax,kthread.td_frame.tf_r15(%r14)
-
- movqq jit_frame.tf_rip(%r15),%rax
- movqq %rax,kthread.td_frame.tf_rip(%r14)
-
  call amd64_syscall
 
  _after_call:
 
- movqq %gs:teb.thread          ,%r14 //curkthread
- movqq kthread.td_jit_ctx(%r14),%r15 //jit_frame
+ movq %gs:teb.thread               ,%r14 //curkthread
+ leaq kthread.td_frame.tf_r13(%r14),%r15 //jit_frame
 
  //Requested full context restore
  testl PCB_FULL_IRET,kthread.pcb_flags(%r14)
@@ -356,22 +375,26 @@ asm
  //Restore preserved registers.
 
  //get flags
- movqq kthread.td_frame.tf_rflags(%r14),%rax
- push %rax
+ movqq kthread.td_frame.tf_rflags(%r14),%r13
+ push %r13
  popf
 
  movqq kthread.td_frame.tf_rdi(%r14),%rdi
  movqq kthread.td_frame.tf_rsi(%r14),%rsi
  movqq kthread.td_frame.tf_rdx(%r14),%rdx
-
  movqq kthread.td_frame.tf_rax(%r14),%rax
- movqq %rax,jit_frame.tf_rax(%r15)
 
- movqq kthread.td_frame.tf_rsp(%r14),%rax
- movqq %rax,jit_frame.tf_rsp(%r15)
+ //tf_r13=tf_r13
+ //tf_r14=tf_r14
 
- movqq kthread.td_frame.tf_rbp(%r14),%rax
- movqq %rax,jit_frame.tf_rbp(%r15)
+ movqq kthread.td_frame.tf_r15(%r14),%r13
+ movqq   %r13,jit_frame.tf_r15(%r15)
+
+ movqq kthread.td_frame.tf_rsp(%r14),%r13
+ movqq   %r13,jit_frame.tf_rsp(%r15)
+
+ movqq kthread.td_frame.tf_rbp(%r14),%r13
+ movqq   %r13,jit_frame.tf_rbp(%r15)
 
  movqq $0,%rcx
  movqq $0,%r11
@@ -384,11 +407,11 @@ asm
  //fail (curkthread=nil)
  _fail:
 
- or $1,%rax //set CF
- push %rax
+ or $1,%r13 //set CF
+ push  %r13
  popf
 
- movqq $14,jit_frame.tf_rax(%r15) //EFAULT
+ movqq $14,%rax //EFAULT
  movqq  $0,%rdx
  movqq  $0,%rcx
  movqq  $0,%r11
@@ -423,27 +446,27 @@ end;
 
 procedure jit_save_ctx; assembler; nostackframe;
 asm
- push %rax
+ push %r13
 
- movqq %gs:teb.thread,%rax //curkthread
+ movqq %gs:teb.thread,%r13 //curkthread
 
- movqq %rdi,kthread.td_frame.tf_rdi(%rax)
- movqq %rsi,kthread.td_frame.tf_rsi(%rax)
- movqq %rdx,kthread.td_frame.tf_rdx(%rax)
- movqq %rcx,kthread.td_frame.tf_rcx(%rax)
- movqq %r8 ,kthread.td_frame.tf_r8 (%rax)
- movqq %r9 ,kthread.td_frame.tf_r9 (%rax)
- movqq %rbx,kthread.td_frame.tf_rbx(%rax)
- movqq %r10,kthread.td_frame.tf_r10(%rax)
- movqq %r11,kthread.td_frame.tf_r11(%rax)
- movqq %r12,kthread.td_frame.tf_r12(%rax)
- movqq %r13,kthread.td_frame.tf_r13(%rax)
+ movqq %rdi,kthread.td_frame.tf_rdi(%r13)
+ movqq %rsi,kthread.td_frame.tf_rsi(%r13)
+ movqq %rdx,kthread.td_frame.tf_rdx(%r13)
+ movqq %rcx,kthread.td_frame.tf_rcx(%r13)
+ movqq %r8 ,kthread.td_frame.tf_r8 (%r13)
+ movqq %r9 ,kthread.td_frame.tf_r9 (%r13)
+ movqq %rbx,kthread.td_frame.tf_rbx(%r13)
+ movqq %rax,kthread.td_frame.tf_rax(%r13)
+ movqq %r10,kthread.td_frame.tf_r10(%r13)
+ movqq %r11,kthread.td_frame.tf_r11(%r13)
+ movqq %r12,kthread.td_frame.tf_r12(%r13)
 
  pushf
  pop %rdi
- movqq %rdi,kthread.td_frame.tf_rflags(%rax);
+ movqq %rdi,kthread.td_frame.tf_rflags(%r13);
 
- lea kthread.td_fpstate(%rax),%rdi
+ lea kthread.td_fpstate(%r13),%rdi
  and $-32,%rdi
 
  vmovdqa %ymm0 ,0x000(%rdi)
@@ -463,16 +486,16 @@ asm
  vmovdqa %ymm14,0x1C0(%rdi)
  vmovdqa %ymm15,0x1E0(%rdi)
 
- pop %rax
+ pop %r13
 end;
 
 procedure jit_load_ctx; assembler; nostackframe;
 asm
- push %rax
+ push %r13
 
- movqq %gs:teb.thread,%rax //curkthread
+ movqq %gs:teb.thread,%r13 //curkthread
 
- lea kthread.td_fpstate(%rax),%rdi
+ lea kthread.td_fpstate(%r13),%rdi
  and $-32,%rdi
 
  vmovdqa 0x000(%rdi),%ymm0
@@ -492,23 +515,23 @@ asm
  vmovdqa 0x1C0(%rdi),%ymm14
  vmovdqa 0x1E0(%rdi),%ymm15
 
- movqq kthread.td_frame.tf_rflags(%rax),%rdi
+ movqq kthread.td_frame.tf_rflags(%r13),%rdi
  push %rdi
  popf
 
- movqq kthread.td_frame.tf_rdi(%rax),%rdi
- movqq kthread.td_frame.tf_rsi(%rax),%rsi
- movqq kthread.td_frame.tf_rdx(%rax),%rdx
- movqq kthread.td_frame.tf_rcx(%rax),%rcx
- movqq kthread.td_frame.tf_r8 (%rax),%r8
- movqq kthread.td_frame.tf_r9 (%rax),%r9
- movqq kthread.td_frame.tf_rbx(%rax),%rbx
- movqq kthread.td_frame.tf_r10(%rax),%r10
- movqq kthread.td_frame.tf_r11(%rax),%r11
- movqq kthread.td_frame.tf_r12(%rax),%r12
- movqq kthread.td_frame.tf_r13(%rax),%r13
+ movqq kthread.td_frame.tf_rdi(%r13),%rdi
+ movqq kthread.td_frame.tf_rsi(%r13),%rsi
+ movqq kthread.td_frame.tf_rdx(%r13),%rdx
+ movqq kthread.td_frame.tf_rcx(%r13),%rcx
+ movqq kthread.td_frame.tf_r8 (%r13),%r8
+ movqq kthread.td_frame.tf_r9 (%r13),%r9
+ movqq kthread.td_frame.tf_rbx(%r13),%rbx
+ movqq kthread.td_frame.tf_rax(%r13),%rax
+ movqq kthread.td_frame.tf_r10(%r13),%r10
+ movqq kthread.td_frame.tf_r11(%r13),%r11
+ movqq kthread.td_frame.tf_r12(%r13),%r12
 
- pop %rax
+ pop %r13
 end;
 
 procedure jit_jmp_dispatch; assembler; nostackframe;
@@ -521,10 +544,12 @@ asm
 
  call jit_save_ctx
 
- mov  %rax,%rdi
+ mov  %r13,%rdi
  mov    $0,%rsi
 
  call jmp_dispatcher
+
+ mov  %rax,%r13
 
  call jit_load_ctx
 
@@ -533,7 +558,7 @@ asm
  pop  %rbp
 
  lea  8(%rsp),%rsp
- jmp  %rax
+ jmp  %r13
 end;
 
 procedure jit_call_dispatch; assembler; nostackframe;
@@ -546,10 +571,12 @@ asm
 
  call jit_save_ctx
 
- mov  %rax,%rdi
+ mov  %r13,%rdi
  mov    $1,%rsi
 
  call jmp_dispatcher
+
+ mov  %rax,%r13
 
  call jit_load_ctx
 
@@ -558,7 +585,7 @@ asm
  pop  %rbp
 
  lea  8(%rsp),%rsp
- jmp  %rax
+ jmp  %r13
 end;
 
 end.

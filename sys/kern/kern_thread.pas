@@ -87,6 +87,7 @@ function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
 function  sleepq_alloc:Pointer;    external;
 procedure sleepq_free(sq:Pointer); external;
 
+procedure jit_ctx_free(td:p_kthread);  external;
 procedure switch_to_jit(td:p_kthread); external;
 
 function  msleep(ident   :Pointer;
@@ -727,8 +728,7 @@ begin
 
  umtx_thread_exit(td);
 
- FreeMem(td^.td_jit_ctx);
- td^.td_jit_ctx:=nil;
+ jit_ctx_free(td);
 
  //free
  thread_dec_ref(td);

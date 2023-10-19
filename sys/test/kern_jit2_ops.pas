@@ -47,7 +47,7 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
+ //(r_tmp0)r13 <-> rdi
  //(r_tmp1)r14 <-> rsi
  with ctx.builder do
  begin
@@ -61,11 +61,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -121,7 +121,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -166,16 +166,13 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rax
+ //(r_tmp0)r13 <-> rdi
  with ctx.builder do
  begin
 
   link_jmp0:=nil_link;
 
-  new:=new_reg_size(r_tmp1,size);
-
-  op_load_rax(ctx,new);
+  new:=new_reg_size(rax,size);
 
   link_start:=ctx.builder.get_curr_label.after;
 
@@ -183,9 +180,9 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
-   movq([r_tmp0],new);
+   movq([r_tmp0],new); // mov [r13],rax
 
    leaq(rcx,[rcx-1]);
 
@@ -219,7 +216,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -262,7 +259,7 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
+ //(r_tmp0)r13 <-> rdi
  //(r_tmp1)r14 <-> rsi
  with ctx.builder do
  begin
@@ -275,11 +272,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    //[RSI] -> [RDI].
 
@@ -325,7 +322,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -364,17 +361,17 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
+ //(r_tmp0)r13 <-> rdi
  //(r_tmp1)r14 <-> rsi
  with ctx.builder do
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -408,7 +405,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -446,17 +443,17 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
+ //(r_tmp0)r13 <-> rdi
  //(r_tmp1)r14 <-> rsi
  with ctx.builder do
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    //[RSI] -> [RDI].
 
@@ -492,7 +489,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -532,17 +529,14 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rax
+ //(r_tmp0)r13 <-> rdi
  with ctx.builder do
  begin
 
-  new:=new_reg_size(r_tmp1,size);
-
-  op_load_rax(ctx,new);
+  new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    movq([r_tmp0],new);
 
@@ -568,7 +562,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -608,19 +602,16 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
- //(r_tmp1)r14 <-> rax
+ //(r_tmp0)r13 <-> rdi
  with ctx.builder do
  begin
 
-  new:=new_reg_size(r_tmp1,size);
+  new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    movq(new,[r_tmp0]);
-
-  op_save_rax(ctx,fix_size(new));
 
    if (dflag=0) then
    begin
@@ -644,7 +635,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -668,8 +659,6 @@ end;
 procedure _op_scas(var ctx:t_jit_context2;dflag:Integer);
 var
  size:TOperandSize;
-
- new:TRegValue;
 begin
  //rdi,rsi
 
@@ -684,18 +673,14 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)rax <-> rdi
+ //(r_tmp0)r13 <-> rdi
  with ctx.builder do
  begin
 
-  new:=new_reg_size(r_tmp0,size);
-
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:rax uses:r14
+   call_far(@uplift_jit); //in/out:r13
 
    xchgq(rdi,r_tmp0);
-
-   op_load_rax(ctx,new);
 
    _O($AF,Size);
 
@@ -723,7 +708,7 @@ begin
 
   //get d flag
   pushfq(os64);
-  bti8([rsp,os64],10); //bt rax, 10
+  bti8([rsp,os64],10); //bt [rsp], 10
 
   link_jmp0:=jcc(OPSc_b,nil_link,os8);
 
@@ -908,7 +893,7 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   case ctx.din.OperCnt of
-   1:op_emit1(ctx,imul_desc1,[his_rax,his_ro]); //R
+   1:op_emit1(ctx,imul_desc1,[his_ro]); //R
    2:op_emit2(ctx,imul_desc2); //RM
    3:op_emit2(ctx,imul_desc3); //RMI
    else
@@ -916,16 +901,7 @@ begin
   end;
  end else
  begin
-  case ctx.din.OperCnt of
-   1:with ctx.builder do
-     begin
-      op_load_rax(ctx,rax);
-      add_orig(ctx);
-      op_save_rax(ctx,rax);
-     end;
-   else
-     add_orig(ctx);
-  end;
+  add_orig(ctx);
  end;
 end;
 
@@ -936,13 +912,11 @@ procedure op_mul(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,mul_desc,[his_rax,his_ro]); //R
+  op_emit1(ctx,mul_desc,[his_ro]); //R
  end else
  with ctx.builder do
  begin
-  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -953,13 +927,11 @@ procedure op_idiv(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,idiv_desc1,[his_rax,his_ro]); //R
+  op_emit1(ctx,idiv_desc1,[his_ro]); //R
  end else
  with ctx.builder do
  begin
-  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -970,13 +942,11 @@ procedure op_div(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,div_desc,[his_rax,his_ro]); //R
+  op_emit1(ctx,div_desc,[his_ro]); //R
  end else
  with ctx.builder do
  begin
-  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -1111,7 +1081,7 @@ const
   reg_mem:(op:$87;index:0);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_xchg];
+  hint:[his_xchg,his_rw];
  );
 
 procedure op_xchg(var ctx:t_jit_context2);
@@ -1381,7 +1351,7 @@ const
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_xchg,his_rax,his_rw];
+  hint:[his_xchg,his_rw];
  );
 
 procedure op_cmpxchg(var ctx:t_jit_context2);
@@ -1392,9 +1362,7 @@ begin
  end else
  with ctx.builder do
  begin
-  op_load_rax(ctx,rax);
   add_orig(ctx);
-  op_save_rax(ctx,rax);
  end;
 end;
 
@@ -1403,7 +1371,7 @@ const
 
 procedure op_cmpxchg16b(var ctx:t_jit_context2);
 begin
- op_emit1(ctx,cmpxchg16b_desc,[his_xchg,his_rax,his_rw]);
+ op_emit1(ctx,cmpxchg16b_desc,[his_xchg,his_rw]);
 end;
 
 const
@@ -1678,58 +1646,29 @@ end;
 
 procedure op_cdq(var ctx:t_jit_context2);
 begin
- with ctx.builder do
- begin
-  op_load_rax(ctx,rax);
-  add_orig(ctx);
-  op_save_rax(ctx,rax);
- end;
+ add_orig(ctx);
 end;
 
 procedure op_xgetbv(var ctx:t_jit_context2);
 begin
- with ctx.builder do
- begin
-  add_orig(ctx);
-  op_save_rax(ctx,rax);
- end;
+ add_orig(ctx);
 end;
 
 procedure op_rdpmc(var ctx:t_jit_context2);
 begin
- with ctx.builder do
- begin
-  add_orig(ctx);
-  op_save_rax(ctx,rax);
- end;
+ add_orig(ctx);
 end;
 
 //
 
 procedure op_sahf(var ctx:t_jit_context2);
-var
- i:Integer;
 begin
- with ctx.builder do
- begin
-  i:=GetFrameOffset(ah);
-  movq(al,[r_thrd+i]);
-  movq(ah,al);
-  sahf;
- end;
+ add_orig(ctx);
 end;
 
 procedure op_lahf(var ctx:t_jit_context2);
-var
- i:Integer;
 begin
- with ctx.builder do
- begin
-  lahf;
-  i:=GetFrameOffset(ah);
-  movq(al,ah);
-  movq([r_thrd+i],al);
- end;
+ add_orig(ctx);
 end;
 
 //
