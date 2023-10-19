@@ -3958,7 +3958,7 @@ begin
         $38: begin SetOpcode(OPinsert,      OPSx_i128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $39: begin SetOpcode(OPextract,     OPSx_i128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
         $40: begin SetOpcode(OPdp,          OPSx_ps,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
-        $41: begin SetOpcode(OPdp,          OPSx_pd,  True); AddVdq;   AddHdq; AddWdq;    AddIb;           end;
+        $41: begin SetOpcode(OPdp,          OPSx_pd,  True); AddVdq;   AddHx;  AddWdq;    AddIb;           end;
         $42: begin SetOpcode(OPmpsadbw,     OPSnone,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
         $44: begin SetOpcode(OPpclmulqdq,   OPSnone,  True); AddVdq;   AddHdq; AddWdq;    AddIb;           end;
         $46: begin SetOpcode(OPvperm2,      OPSx_i128     ); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;

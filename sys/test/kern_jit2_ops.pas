@@ -1456,6 +1456,28 @@ end;
 
 //
 
+const
+ crc32_desc:t_op_desc=(
+  mem_reg:(opt:[not_impl]);
+  reg_mem:(op:$F20F38F1;index:0);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[];
+ );
+
+procedure op_crc32(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2(ctx,crc32_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
 procedure op_shift2_gen(var ctx:t_jit_context2);
 const
  desc:t_op_shift=(
@@ -1642,33 +1664,6 @@ begin
  begin
   add_orig(ctx);
  end;
-end;
-
-procedure op_cdq(var ctx:t_jit_context2);
-begin
- add_orig(ctx);
-end;
-
-procedure op_xgetbv(var ctx:t_jit_context2);
-begin
- add_orig(ctx);
-end;
-
-procedure op_rdpmc(var ctx:t_jit_context2);
-begin
- add_orig(ctx);
-end;
-
-//
-
-procedure op_sahf(var ctx:t_jit_context2);
-begin
- add_orig(ctx);
-end;
-
-procedure op_lahf(var ctx:t_jit_context2);
-begin
- add_orig(ctx);
 end;
 
 //
@@ -2363,6 +2358,7 @@ begin
  jit_cbs[OPPnone,OPlzcnt  ,OPSnone]:=@op_lzcnt;
  jit_cbs[OPPnone,OPtzcnt  ,OPSnone]:=@op_tzcnt;
  jit_cbs[OPPnone,OPpopcnt ,OPSnone]:=@op_popcnt;
+ jit_cbs[OPPnone,OPcrc32  ,OPSnone]:=@op_crc32;
 
  jit_cbs[OPPnone,OProl ,OPSnone]:=@op_shift2_gen;
  jit_cbs[OPPnone,OPror ,OPSnone]:=@op_shift2_gen;
@@ -2371,6 +2367,7 @@ begin
  jit_cbs[OPPnone,OPshl ,OPSnone]:=@op_shift2_gen;
  jit_cbs[OPPnone,OPshr ,OPSnone]:=@op_shift2_gen;
  jit_cbs[OPPnone,OPsar ,OPSnone]:=@op_shift2_gen;
+ jit_cbs[OPPnone,OPsal ,OPSnone]:=@op_shift2_gen;
 
  jit_cbs[OPPnone,OPshl ,OPSx_d ]:=@op_shld;
  jit_cbs[OPPnone,OPshr ,OPSx_d ]:=@op_shrd;
@@ -2393,8 +2390,55 @@ begin
  jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_setcc;
 
  jit_cbs[OPPnone,OPemms      ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfemms     ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPvzeroall  ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPvzeroupper,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPpause,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPlfence,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPmfence,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPsfence,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPcmc,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPcli ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPsti ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPclac,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPclc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcld ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPstc ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPstd ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPcwd ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcdq ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcqo ,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPcbw ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcwde,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPcdqe,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPgetbv,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPrdpmc,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
+
+ jit_cbs[OPPnone,OPinc,OPSnone]:=@op_inc;
+ jit_cbs[OPPnone,OPdec,OPSnone]:=@op_dec;
+ jit_cbs[OPPnone,OPneg,OPSnone]:=@op_neg;
+ jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
+ jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
+
+ jit_cbs[OPPnone,OPsahf,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPlahf,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPxlat,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_clflush;
+
+ //fpu
 
  jit_cbs[OPPnone,OPfninit  ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfrndint ,OPSnone]:=@add_orig;
@@ -2441,49 +2485,22 @@ begin
  jit_cbs[OPPnone,OPfwait  ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfnclex ,OPSnone]:=@add_orig;
 
- jit_cbs[OPPnone,OPpause,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfsin   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfcos   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfsincos,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfpatan ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfptan  ,OPSnone]:=@add_orig;
 
- jit_cbs[OPPnone,OPlfence,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPmfence,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPsfence,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfyl2x  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfyl2xp1,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPf2xm1  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfdecstp,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPffree  ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfincstp,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPftst   ,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPfxam   ,OPSnone]:=@add_orig;
 
- jit_cbs[OPPnone,OPcmc,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPcli ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPsti ,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPclac,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPclc ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPcld ,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPstc ,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPstd ,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPcwd ,OPSnone]:=@op_cdq;
- jit_cbs[OPPnone,OPcdq ,OPSnone]:=@op_cdq;
- jit_cbs[OPPnone,OPcqo ,OPSnone]:=@op_cdq;
-
- jit_cbs[OPPnone,OPcbw ,OPSnone]:=@op_cdq;
- jit_cbs[OPPnone,OPcwde,OPSnone]:=@op_cdq;
- jit_cbs[OPPnone,OPcdqe,OPSnone]:=@op_cdq;
-
- jit_cbs[OPPnone,OPgetbv,OPSnone]:=@op_xgetbv;
- jit_cbs[OPPnone,OPrdpmc,OPSnone]:=@op_rdpmc;
-
- jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
-
- jit_cbs[OPPnone,OPinc,OPSnone]:=@op_inc;
- jit_cbs[OPPnone,OPdec,OPSnone]:=@op_dec;
- jit_cbs[OPPnone,OPneg,OPSnone]:=@op_neg;
- jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
- jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
-
- jit_cbs[OPPnone,OPsahf,OPSnone]:=@op_sahf;
- jit_cbs[OPPnone,OPlahf,OPSnone]:=@op_lahf;
-
- jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_clflush;
-
- //fpu
+ //
 
  jit_cbs[OPPnone,OPfldcw ,OPSnone]:=@op_fldcw;
  jit_cbs[OPPnone,OPfld   ,OPSnone]:=@op_fld;

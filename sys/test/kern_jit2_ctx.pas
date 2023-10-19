@@ -117,6 +117,7 @@ function is_xmm(const r:TInstruction):Boolean;
 function is_high(const r:TOperand):Boolean;
 function is_rsp(const r:TRegValue):Boolean;
 function is_rsp(const r:TRegValues):Boolean;
+function is_invalid(const r:TRegValue):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
 
 type
@@ -766,10 +767,61 @@ begin
  ctx.builder._add(ji);
 end;
 
+function is_invalid(const r:TRegValue):Boolean;
+begin
+ Result:=False;
+ case r.AType of
+  regInvalid:Result:=True;
+
+  regGeneral:
+    case r.ASize of
+       os8,
+      os16,
+      os32,
+      os64: Result:=(r.AIndex>=16);
+    else
+            Result:=True;
+    end;
+
+  regGeneralH:
+    case r.ASize of
+       os8: Result:=(r.AIndex>=4);
+    else
+            Result:=True;
+    end;
+
+  regMm,
+  regX87: Result:=(r.AIndex>=8);
+
+  regXmm:
+    case r.ASize of
+      os32,
+      os64,
+      os128,
+      os256: Result:=(r.AIndex>=16);
+    else
+             Result:=True;
+    end;
+
+  regSegment: Result:=(r.AIndex>=6);
+
+  regFlags:
+   case r.ASize of
+     os16,
+     os32,
+     os64:;
+   else
+     Result:=True;
+   end;
+
+  else;
+ end;
+end;
+
 function is_invalid(const r:TOperand):Boolean; inline;
 begin
- Result:=(r.RegValue[0].AType=regInvalid) or
-         (r.RegValue[1].AType=regInvalid);
+ Result:=is_invalid(r.RegValue[0]) or
+         is_invalid(r.RegValue[1]);
 end;
 
 function is_invalid(const r:TInstruction):Boolean;

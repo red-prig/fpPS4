@@ -1155,8 +1155,17 @@ begin
  jit_cbs[OPPv,OPpavg,OPSx_b]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpavg,OPSx_w]:=@op_avx3_gen;
 
+ jit_cbs[OPPv,OPdp,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPdp,OPSx_pd]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPaeskeygenassist,OPSnone]:=@op_avx3_rmi;
  jit_cbs[OPPv,OPaesimc         ,OPSnone]:=@op_avx2_reg_mem_wo;
+
+ jit_cbs[OPPv,OPaesenc    ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPaesenclast,OPSnone]:=@op_avx3_gen;
+
+ jit_cbs[OPPv,OPaesdec    ,OPSnone]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPaesdeclast,OPSnone]:=@op_avx3_gen;
 
 end;
 
