@@ -228,7 +228,7 @@ type
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
   pcb_onfault     :Pointer;
-  td_jit_ctx      :Pointer;
+  td_jctx         :Pointer;
  end;
 
  p_thr_param=^thr_param;

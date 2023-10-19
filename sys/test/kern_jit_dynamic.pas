@@ -135,6 +135,11 @@ procedure pick(var ctx:t_jit_context2); external name 'kern_jit_pick';
 
 //
 
+var
+ size_of_jctx:Integer=SizeOf(t_jctx); public;
+
+//
+
 function scan_up_exc(addr:QWORD):QWORD;
 begin
  addr:=(addr+PAGE_MASK) and (not PAGE_MASK);
@@ -202,14 +207,9 @@ procedure jit_ctx_free(td:p_kthread); public;
 var
  jctx:p_jctx;
 begin
- jctx:=td^.td_jit_ctx;
- td^.td_jit_ctx:=nil;
- if (jctx<>nil) then
- begin
-  jctx^.cblob^.dec_ref;
-  jctx^.cblob:=nil;
-  FreeMem(jctx);
- end;
+ jctx:=td^.td_jctx;
+ jctx^.cblob^.dec_ref;
+ jctx^.cblob:=nil;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -241,18 +241,12 @@ begin
   goto _start;
  end;
 
- if (td^.td_jit_ctx=nil) then
+ jctx:=td^.td_jctx;
+
+ if (jctx^.frame=nil) then
  begin
-  jctx:=AllocMem(SizeOf(t_jctx));
   jctx^.frame:=@td^.td_frame.tf_r13;
-
-  td^.td_jit_ctx:=jctx;
- end else
- begin
-  jctx:=td^.td_jit_ctx;
  end;
-
- jctx:=td^.td_jit_ctx;
 
  if (jctx^.cblob<>nil) then
  begin
@@ -427,7 +421,7 @@ begin
   goto _start;
  end;
 
- jctx:=td^.td_jit_ctx;
+ jctx:=td^.td_jctx;
 
  if (jctx^.cblob<>nil) then
  begin
