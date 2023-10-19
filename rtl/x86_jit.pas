@@ -1711,13 +1711,13 @@ begin
  begin
   if is_valid_reg_type(mreg.ARegValue[1]) then
   begin
-   Assert(false,'imposible');
+   Assert(false,'Impossible');
    Exit;
   end;
 
   if (mreg.ARegValue[0].AScale>1) then
   begin
-   Assert(false,'imposible');
+   Assert(false,'Impossible');
    Exit;
   end;
 
@@ -1741,7 +1741,7 @@ begin
    begin
     if RH then
     begin
-     Assert(false,'imposible');
+     Assert(false,'Impossible');
     end;
     rexX:=true;
     Dec(SIB.Index,8);
@@ -1754,7 +1754,7 @@ begin
     begin
      if RH then
      begin
-      Assert(false,'imposible');
+      Assert(false,'Impossible');
      end;
      rexB:=true;
      Dec(SIB.Base,8);
@@ -1770,13 +1770,13 @@ begin
     //swap
     if (not rexB) and (SIB.Base=4) then
     begin
-     Assert(false,'imposible');
+     Assert(false,'Impossible');
      Exit;
     end;
 
     if not ubase then
     begin
-     Assert(false,'imposible');
+     Assert(false,'Impossible');
      Exit;
     end;
 
@@ -1803,7 +1803,7 @@ begin
    begin
     if RH then
     begin
-     Assert(false,'imposible');
+     Assert(false,'Impossible');
     end;
     rexB:=true;
     Dec(ModRM.RM,8);
@@ -1868,7 +1868,7 @@ begin
  begin
   if (reg0.AType=regGeneral) then
   begin
-   Assert(reg0.AIndex<=4,'imposible');
+   Assert(reg0.AIndex<=4,'Impossible');
   end;
   RH:=True;
   Inc(ModRM.Index,4);
@@ -1887,11 +1887,11 @@ begin
  begin
   if (reg1.AType=regGeneral) then
   begin
-   Assert(reg1.AIndex<=4,'imposible');
+   Assert(reg1.AIndex<=4,'Impossible');
   end;
   if rexF or rexR then
   begin
-   Assert(false,'imposible');
+   Assert(false,'Impossible');
   end;
   RH:=True;
   Inc(ModRM.RM,4)
@@ -1900,7 +1900,7 @@ begin
  begin
   if RH then
   begin
-   Assert(false,'imposible');
+   Assert(false,'Impossible');
   end;
   rexB:=true;
   Dec(ModRM.RM,8);
