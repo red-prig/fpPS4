@@ -47,8 +47,8 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
- //(r_tmp1)r14 <-> rsi
+ //(r_tmp0)r14 <-> rdi
+ //(r_tmp1)r15 <-> rsi
  with ctx.builder do
  begin
 
@@ -61,11 +61,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -166,7 +166,7 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
+ //(r_tmp0)r14 <-> rdi
  with ctx.builder do
  begin
 
@@ -180,9 +180,9 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
-   movq([r_tmp0],new); // mov [r13],rax
+   movq([r_tmp0],new); // mov [r14],rax
 
    leaq(rcx,[rcx-1]);
 
@@ -259,8 +259,8 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
- //(r_tmp1)r14 <-> rsi
+ //(r_tmp0)r14 <-> rdi
+ //(r_tmp1)r15 <-> rsi
  with ctx.builder do
  begin
 
@@ -272,11 +272,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    //[RSI] -> [RDI].
 
@@ -361,17 +361,17 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
- //(r_tmp1)r14 <-> rsi
+ //(r_tmp0)r14 <-> rdi
+ //(r_tmp1)r15 <-> rsi
  with ctx.builder do
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -443,17 +443,17 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
- //(r_tmp1)r14 <-> rsi
+ //(r_tmp0)r14 <-> rdi
+ //(r_tmp1)r15 <-> rsi
  with ctx.builder do
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    //[RSI] -> [RDI].
 
@@ -529,14 +529,14 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
+ //(r_tmp0)r14 <-> rdi
  with ctx.builder do
  begin
 
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    movq([r_tmp0],new);
 
@@ -602,14 +602,14 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
+ //(r_tmp0)r14 <-> rdi
  with ctx.builder do
  begin
 
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    movq(new,[r_tmp0]);
 
@@ -673,12 +673,12 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r13 <-> rdi
+ //(r_tmp0)r14 <-> rdi
  with ctx.builder do
  begin
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    xchgq(rdi,r_tmp0);
 

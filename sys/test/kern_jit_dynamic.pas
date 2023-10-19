@@ -256,18 +256,18 @@ begin
 
  jctx^.cblob:=node^.blob;
 
- //tf_r13 not need to move
  //tf_r14 not need to move
+ //tf_r15 not need to move
 
+ jctx^.frame^.tf_r13:=td^.td_frame.tf_r13;
  jctx^.frame^.tf_rsp:=td^.td_frame.tf_rsp;
  jctx^.frame^.tf_rbp:=td^.td_frame.tf_rbp;
- jctx^.frame^.tf_r15:=td^.td_frame.tf_r15;
 
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
  td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
 
  td^.td_frame.tf_rip:=QWORD(node^.dst);
- td^.td_frame.tf_r15:=QWORD(jctx^.frame);
+ td^.td_frame.tf_r13:=QWORD(jctx^.frame);
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 

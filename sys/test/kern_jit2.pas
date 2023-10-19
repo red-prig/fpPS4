@@ -180,12 +180,12 @@ end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_jmp_dispatch); //input:r13
+ ctx.builder.call_far(@jit_jmp_dispatch); //input:r14
 end;
 
 procedure op_call_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_call_dispatch); //input:r13
+ ctx.builder.call_far(@jit_call_dispatch); //input:r14
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2);
@@ -194,7 +194,7 @@ var
  imm:Int64;
 begin
  //lea rsp,[rsp-8]
- //mov [rsp],r13
+ //mov [rsp],r14
 
  with ctx.builder do
  begin
@@ -204,7 +204,7 @@ begin
   leaq(stack,[stack-8]);
   op_save_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   imm:=Int64(ctx.ptr_next);
 
@@ -230,11 +230,11 @@ begin
  end;
 end;
 
-procedure op_pop_rip(var ctx:t_jit_context2;imm:Word); //out:r13
+procedure op_pop_rip(var ctx:t_jit_context2;imm:Word); //out:r14
 var
  stack:TRegValue;
 begin
- //mov r13,[rsp]
+ //mov r14,[rsp]
  //lea rsp,[rsp+8+imm]
 
  with ctx.builder do
@@ -243,7 +243,7 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   movq(r_tmp1,[stack]);
 
@@ -255,7 +255,7 @@ begin
  end;
 end;
 
-procedure op_set_r13_imm(var ctx:t_jit_context2;imm:Int64);
+procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 begin
  with ctx.builder do
   if (classif_offset_u64(imm)=os64) then
@@ -304,7 +304,7 @@ begin
    end;
   end else
   begin
-   op_set_r13_imm(ctx,Int64(dst));
+   op_set_r14_imm(ctx,Int64(dst));
    //
    op_call_dispatcher(ctx);
   end;
@@ -316,7 +316,7 @@ begin
   //
   build_lea(ctx,1,new1,[inc8_rsp,code_ref]);
   //
-  ctx.builder.call_far(@uplift_jit); //in/out:r13
+  ctx.builder.call_far(@uplift_jit); //in/out:r14
   //
   ctx.builder.movq(new1,[new1]);
   //
@@ -355,7 +355,7 @@ begin
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
- op_pop_rip(ctx,imm); //out:r13
+ op_pop_rip(ctx,imm); //out:r14
  //
  op_jmp_dispatcher(ctx);
  //
@@ -393,7 +393,7 @@ begin
    end;
   end else
   begin
-   op_set_r13_imm(ctx,Int64(dst));
+   op_set_r14_imm(ctx,Int64(dst));
    //
    op_jmp_dispatcher(ctx);
   end;
@@ -405,7 +405,7 @@ begin
   //
   build_lea(ctx,1,new1,[code_ref]);
   //
-  ctx.builder.call_far(@uplift_jit); //in/out:r13
+  ctx.builder.call_far(@uplift_jit); //in/out:r14
   //
   ctx.builder.movq(new1,[new1]);
   //
@@ -463,7 +463,7 @@ begin
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
-   op_set_r13_imm(ctx,Int64(dst));
+   op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx);
   id2._label:=ctx.builder.get_curr_label.after;
  end;
@@ -505,7 +505,7 @@ begin
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
-   op_set_r13_imm(ctx,Int64(dst));
+   op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx);
   id2._label:=ctx.builder.get_curr_label.after;
 
@@ -548,7 +548,7 @@ begin
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
-   op_set_r13_imm(ctx,Int64(dst));
+   op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx);
   id2._label:=ctx.builder.get_curr_label.after;
 
@@ -575,7 +575,7 @@ begin
   begin
    build_lea(ctx,1,r_tmp0);
 
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
@@ -619,7 +619,7 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   movq([stack],new);
  end;
@@ -648,7 +648,7 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   movq([stack],new);
  end;
@@ -670,7 +670,7 @@ begin
   op_load_rbp(ctx,stack);
   op_save_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   movq(new,[stack]);
   op_save_rbp(ctx,new);
@@ -700,7 +700,7 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   movq(new,[stack]);
   push(new);
@@ -725,7 +725,7 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  call_far(@uplift_jit); //in/out:r13
+  call_far(@uplift_jit); //in/out:r14
 
   if is_memory(ctx.din) then
   begin
@@ -735,7 +735,7 @@ begin
 
    build_lea(ctx,1,r_tmp0);
 
-   call_far(@uplift_jit); //in/out:r13
+   call_far(@uplift_jit); //in/out:r14
 
    movq([r_tmp0],new);
   end else
@@ -764,7 +764,7 @@ begin
  ctx.add_forward_point(fpCall,ctx.ptr_curr);
  ctx.add_forward_point(fpCall,ctx.ptr_next);
  //
- op_set_r13_imm(ctx,Int64(ctx.ptr_next));
+ op_set_r14_imm(ctx,Int64(ctx.ptr_next));
  //
  ctx.builder.call_far(@jit_syscall); //syscall dispatcher
 end;
@@ -863,11 +863,13 @@ begin
  //debug
   link_jmp:=ctx.builder.jmp(nil_link,os8);
   //
-  op_set_r13_imm(ctx,$FACEADD7);
-  op_set_r13_imm(ctx,Int64(ctx.ptr_curr));
+  ctx.builder._O($FA); //cli
+  //op_set_r14_imm(ctx,$FACEADD7);
+  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
   add_orig(ctx);
-  op_set_r13_imm(ctx,Int64(ctx.ptr_next));
-  op_set_r13_imm(ctx,$FACEADDE);
+  op_set_r14_imm(ctx,Int64(ctx.ptr_next));
+  //op_set_r14_imm(ctx,$FACEADDE);
+  ctx.builder._O($FB); //sti
   //
   link_jmp._label:=ctx.builder.get_curr_label.after;
  //debug
@@ -1333,7 +1335,7 @@ begin
   if not ctx.trim then
   if exist_entry(ptr) then
   begin
-   op_set_r13_imm(ctx,Int64(ptr));
+   op_set_r14_imm(ctx,Int64(ptr));
    //
    op_jmp_dispatcher(ctx);
    //
