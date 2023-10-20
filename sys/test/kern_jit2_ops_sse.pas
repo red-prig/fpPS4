@@ -120,6 +120,17 @@ begin
  end;
 end;
 
+procedure op_reg_mem_ro(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2_simd_reg_mem(ctx,[his_ro]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 //
 
 procedure op_mem_reg_mov_wo(var ctx:t_jit_context2);
@@ -423,6 +434,9 @@ begin
  jit_cbs[OPPnone,OPmovdq2q,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPmovq2dq,OPSnone]:=@add_orig;
 
+ jit_cbs[OPPnone,OPucomi,OPSx_ss]:=@op_reg_mem_ro;
+ jit_cbs[OPPnone,OPucomi,OPSx_sd]:=@op_reg_mem_ro;
+
  jit_cbs[OPPnone,OPor ,OPSx_ps]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPor ,OPSx_pd]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpor,OPSnone]:=@op_reg_mem_rw;
@@ -445,6 +459,11 @@ begin
  jit_cbs[OPPnone,OPpcmpestri,OPSnone]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpcmpistrm,OPSnone]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpcmpistri,OPSnone]:=@op_reg_mem_rw;
+
+ jit_cbs[OPPnone,OPdiv ,OPSx_ps]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPdiv ,OPSx_pd]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPdiv ,OPSx_ss]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPdiv ,OPSx_sd]:=@op_reg_mem_rw;
 
  jit_cbs[OPPnone,OPmul ,OPSx_ps]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPmul ,OPSx_pd]:=@op_reg_mem_rw;
@@ -476,9 +495,34 @@ begin
  jit_cbs[OPPnone,OPpmaddubsw,OPSnone]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpmaddwd  ,OPSnone]:=@op_reg_mem_rw;
 
- jit_cbs[OPPnone,OPcvtsi2,OPSx_ss]:=@op_reg_mem_wo;
- jit_cbs[OPPnone,OPcvtsd2,OPSx_si]:=@op_reg_mem_wo;
- jit_cbs[OPPnone,OPcvtss2,OPSx_si]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtsi2 ,OPSx_ss]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtsi2 ,OPSx_sd]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvtss2 ,OPSx_sd]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtss2 ,OPSx_si]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvtsi2 ,OPSx_ss]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtsd2 ,OPSx_si]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvttps2,OPSx_dq]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvttps2,OPSx_pi]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvttpd2,OPSx_dq]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvttpd2,OPSx_pi]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvtdq2 ,OPSx_ps]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtdq2 ,OPSx_pd]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvttss2,OPSx_si]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvttsd2,OPSx_si]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvtpd2 ,OPSx_ps]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtpd2 ,OPSx_dq]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtpd2 ,OPSx_pi]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPcvtps2 ,OPSx_pd]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtps2 ,OPSx_dq]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPcvtps2 ,OPSx_pi]:=@op_reg_mem_wo;
 
  jit_cbs[OPPnone,OPsqrt,OPSx_ps]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPsqrt,OPSx_pd]:=@op_reg_mem_wo;

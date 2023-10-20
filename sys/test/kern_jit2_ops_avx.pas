@@ -91,6 +91,17 @@ begin
  end;
 end;
 
+procedure op_avx2_reg_mem_ro(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit_avx2_reg_mem(ctx,[his_ro]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 //
 
 procedure op_avx2_rr(var ctx:t_jit_context2);
@@ -887,8 +898,8 @@ begin
  jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPmaskmov,OPSx_pd]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_avx2_reg_mem_ro;
+ jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_avx2_reg_mem_ro;
 
  jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
 
@@ -1047,8 +1058,8 @@ begin
  jit_cbs[OPPv,OPcvtpd2 ,OPSx_ps]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPcvtpd2 ,OPSx_dq]:=@op_avx2_reg_mem_wo;
 
- jit_cbs[OPPv,OPcvtps2,OPSx_pd]:=@op_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPcvtps2,OPSx_dq]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtps2,OPSx_pd ]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPv,OPcvtps2,OPSx_dq ]:=@op_avx2_reg_mem_wo;
 
  jit_cbs[OPPnone,OPbextr,OPSnone]:=@op_bextr;
  jit_cbs[OPPnone,OPandn ,OPSnone]:=@op_andn;
