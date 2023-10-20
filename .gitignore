@@ -10,7 +10,9 @@
 *.tga
 *.bat
 *.prx
+*.srx
 *.sprx
+*.sdll
 *.bin
 *.elf
 *.self
