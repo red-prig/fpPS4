@@ -344,6 +344,9 @@ function  find_obj_by_name  (name:pchar):p_lib_info;
 
 function  dynlib_load_needed_shared_objects():Integer;
 
+function  copy_proc_param(pout:pSceProcParam):Integer;
+function  copy_libc_param(pout:pSceLibcParam):Integer;
+
 var
  dynlibs_info:t_dynlibs_info;
 
@@ -3181,6 +3184,62 @@ begin
 
  Result:=0;
 end;
+
+//
+
+function copy_proc_param(pout:pSceProcParam):Integer;
+var
+ proc_param_addr:pSceProcParam;
+ proc_param_size:QWORD;
+begin
+ proc_param_addr:=dynlibs_info.proc_param_addr;
+ proc_param_size:=dynlibs_info.proc_param_size;
+
+ if (proc_param_addr=nil) then Exit(ENOENT);
+
+ pout^:=Default(TSceProcParam);
+
+ if (proc_param_size>SizeOf(TSceProcParam)) then
+ begin
+  proc_param_size:=SizeOf(TSceProcParam);
+ end;
+
+ Result:=copyin(proc_param_addr,pout,proc_param_size);
+
+ if (Result=0) then
+ begin
+  if (pout^.Magic<>$4942524f) then Result:=ENOEXEC;
+ end;
+end;
+
+function copy_libc_param(pout:pSceLibcParam):Integer;
+var
+ proc_param:TSceProcParam;
+ libc_param_addr:pSceLibcParam;
+ libc_param_size:QWORD;
+begin
+ Result:=copy_proc_param(@proc_param);
+ if (Result<>0) then Exit;
+
+ if (proc_param.Entry_count=0) or
+    (proc_param.Size <= 63) or
+    (proc_param._sceLibcParam=nil) then
+ begin
+  Exit(ENOEXEC);
+ end;
+
+ libc_param_addr:=proc_param._sceLibcParam;
+
+ Result:=copyin(libc_param_addr,@libc_param_size,8);
+ if (Result<>0) then Exit;
+
+ if (libc_param_size >= 169) then Exit(EINVAL);
+
+ pout^:=Default(TSceLibcParam);
+
+ Result:=copyin(proc_param._sceLibcParam,pout,libc_param_size);
+end;
+
 
 
 end.
