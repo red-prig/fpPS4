@@ -441,6 +441,102 @@ begin
  Result:=Integer(n1^.hash>n2^.hash)-Integer(n1^.hash<n2^.hash);
 end;
 
+procedure build_chunk(var ctx:t_jit_context2;blob:p_jit_dynamic;start,__end,count:QWORD);
+var
+ hash :QWORD;
+
+ original:QWORD;
+ recompil:QWORD;
+
+ jcode:t_jit_dynamic.p_jcode_chunk;
+ table:t_jit_dynamic.p_instr_len;
+
+ clabel:t_jit_context2.p_label;
+
+ link_prev:t_jit_i_link;
+ link_curr:t_jit_i_link;
+ link_next:t_jit_i_link;
+
+ prev:Pointer;
+ curr:Pointer;
+ next:Pointer;
+begin
+ jcode:=nil;
+ table:=nil;
+
+ if (count=0) then Exit;
+
+ hash:=MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
+
+ clabel:=ctx.get_label(Pointer(start));
+
+ jcode:=blob^.new_chunk(count);
+
+ jcode^.start:=start;
+ jcode^.__end:=__end;
+ jcode^.dest :=QWORD(blob^.base)+clabel^.link_curr.offset;
+ jcode^.hash :=hash ;
+
+ table:=@jcode^.table;
+
+ count:=0;
+ curr:=Pointer(start);
+
+ prev:=nil;
+ link_prev:=nil_link;
+
+ //get table
+ while (QWORD(curr)<__end) do
+ begin
+  clabel:=ctx.get_label(curr);
+
+  next:=clabel^.next;
+
+  link_curr:=clabel^.link_curr;
+  link_next:=clabel^.link_next;
+
+  if (link_prev<>nil_link) then
+  begin
+   if (link_prev.offset<>link_curr.offset) then
+   begin
+    Writeln('oaddr:',HexStr(curr),'..',HexStr(next),' prev:',HexStr(prev));
+    Writeln('table:',HexStr(blob^.base+link_prev.offset),'<>',HexStr(blob^.base+link_curr.offset));
+
+    print_disassemble(blob^.base+link_prev.offset,link_next.offset-link_prev.offset);
+
+    Assert(False);
+   end;
+  end;
+
+  original:=QWORD(next)-QWORD(curr);
+  recompil:=link_next.offset-link_curr.offset;
+
+  if (original>255) or (recompil>255) then
+  begin
+   Writeln('0x',HexStr(curr));
+   Writeln(original,':',recompil);
+   Assert(False);
+  end;
+
+  table[count].original:=Byte(original);
+  table[count].recompil:=Byte(recompil);
+
+  {
+  writeln('|0x',HexStr(curr),'..',HexStr(next),
+          ':0x',HexStr(link_curr.offset,8),'..',HexStr(link_next.offset,8),
+          ':',count);
+  }
+
+  prev:=curr;
+  link_prev:=link_next;
+
+  Inc(count);
+  curr:=next;
+ end;
+
+ //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
+end;
+
 procedure build(var ctx:t_jit_context2);
 var
  addr:Pointer;
@@ -452,14 +548,7 @@ var
 
  start:QWORD;
  __end:QWORD;
- hash :QWORD;
  count:QWORD;
-
- original:QWORD;
- recompil:QWORD;
-
- jcode:t_jit_dynamic.p_jcode_chunk;
- table:t_jit_dynamic.p_instr_len;
 
  clabel:t_jit_context2.p_label;
 
@@ -498,11 +587,7 @@ begin
 
  start:=0;
  __end:=0;
- hash :=0;
  count:=0;
-
- jcode:=nil;
- table:=nil;
 
  //copy chunks
  chunk:=TAILQ_FIRST(@ctx.builder.ACodeChunkList);
@@ -522,10 +607,12 @@ begin
    //save
    if (start<>0) then
    begin
-    hash:=MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
 
     count:=0;
     curr:=Pointer(start);
+
+    prev:=nil;
+    link_prev:=nil_link;
 
     //get count
     while (QWORD(curr)<__end) do
@@ -538,32 +625,6 @@ begin
       Assert(false);
      end;
 
-     Inc(count);
-     curr:=clabel^.next;
-    end;
-
-    clabel:=ctx.get_label(Pointer(start));
-
-    jcode:=blob^.new_chunk(count);
-
-    jcode^.start:=start;
-    jcode^.__end:=__end;
-    jcode^.dest :=QWORD(blob^.base)+clabel^.link_curr.offset;
-    jcode^.hash :=hash ;
-
-    table:=@jcode^.table;
-
-    count:=0;
-    curr:=Pointer(start);
-
-    prev:=nil;
-    link_prev:=nil_link;
-
-    //get table
-    while (QWORD(curr)<__end) do
-    begin
-     clabel:=ctx.get_label(curr);
-
      next:=clabel^.next;
 
      link_curr:=clabel^.link_curr;
@@ -573,33 +634,14 @@ begin
      begin
       if (link_prev.offset<>link_curr.offset) then
       begin
-       Writeln(':',HexStr(curr),'..',HexStr(next),' prev:',HexStr(prev));
-       Writeln('table:',HexStr(link_prev.offset,8),'<>',HexStr(link_next.offset,8));
+       //devide chunk
 
-       print_disassemble(blob^.base+link_prev.offset,link_next.offset-link_prev.offset);
+       build_chunk(ctx,blob,start,QWORD(curr),count);
 
-       Assert(False);
+       start:=QWORD(curr);
+       count:=0;
       end;
      end;
-
-     original:=QWORD(next)-QWORD(curr);
-     recompil:=link_next.offset-link_curr.offset;
-
-     if (original>255) or (recompil>255) then
-     begin
-      Writeln('0x',HexStr(curr));
-      Writeln(original,':',recompil);
-      Assert(False);
-     end;
-
-     table[count].original:=Byte(original);
-     table[count].recompil:=Byte(recompil);
-
-     {
-     writeln('|0x',HexStr(curr),'..',HexStr(next),
-             ':0x',HexStr(link_curr.offset,8),'..',HexStr(link_next.offset,8),
-             ':',count);
-     }
 
      prev:=curr;
      link_prev:=link_next;
@@ -608,10 +650,8 @@ begin
      curr:=next;
     end;
 
-    //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
+    build_chunk(ctx,blob,start,__end,count);
 
-    jcode:=nil;
-    table:=nil;
    end;
    //new
    start:=chunk^.start;

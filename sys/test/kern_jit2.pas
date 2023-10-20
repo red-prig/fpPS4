@@ -1080,7 +1080,6 @@ begin
 
   ctx.ptr_curr:=ptr;
 
-  //adec.Disassemble(ptr,ACodeBytes,ACode);
   dis.Disassemble(dm64,ptr,din);
 
   ctx.ptr_next:=ptr;
@@ -1089,7 +1088,7 @@ begin
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     writeln('invalid:0x',HexStr(ctx.ptr_curr));
+     writeln('invalid1:0x',HexStr(ctx.ptr_curr));
 
      _invalid:
 
@@ -1101,10 +1100,12 @@ begin
 
      ctx.mark_chunk(fpInvalid);
 
-     link_curr:=ctx.builder.get_curr_label.after;
      ctx.builder.ud2;
+
+     link_curr:=ctx.builder.get_curr_label.before;
      link_next:=ctx.builder.get_curr_label.after;
 
+     cb:=@op_invalid;
      ctx.trim:=True;
      goto _next; //trim
     end;
@@ -1115,7 +1116,7 @@ begin
      (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
   begin
-   writeln('invalid:0x',HexStr(ctx.ptr_curr));
+   writeln('invalid2:0x',HexStr(ctx.ptr_curr));
    goto _invalid;
   end;
 
@@ -1301,7 +1302,10 @@ begin
   _next:
 
   //debug
+  if (cb<>@op_invalid) then
+  begin
    op_debug_info(ctx);
+  end;
   //debug
 
   //resolve forward links
@@ -1321,7 +1325,7 @@ begin
   //label exist in current blob
   if not ctx.trim then
   begin
-   link_new:=ctx.get_link(ptr);
+   link_new:=ctx.get_link(ctx.ptr_next);
 
    if (link_new<>nil_link) then
    begin
@@ -1333,9 +1337,9 @@ begin
 
   //entry exist in another blob
   if not ctx.trim then
-  if exist_entry(ptr) then
+  if exist_entry(ctx.ptr_next) then
   begin
-   op_set_r14_imm(ctx,Int64(ptr));
+   op_set_r14_imm(ctx,Int64(ctx.ptr_next));
    //
    op_jmp_dispatcher(ctx);
    //

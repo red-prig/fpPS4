@@ -304,10 +304,10 @@ var
 begin
  if (dst=nil) then Exit;
 
- if (ptype=fpCall) then
- if (get_chunk_ptype=fpData) then
- begin
-  ptype:=fpData;
+ case get_chunk_ptype of
+  fpData   :if (ptype=fpCall) then ptype:=fpData;
+  fpInvalid:ptype:=fpInvalid;
+  else;
  end;
 
  node.dst:=dst;
