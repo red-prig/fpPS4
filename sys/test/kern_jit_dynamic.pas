@@ -208,8 +208,11 @@ var
  jctx:p_jctx;
 begin
  jctx:=td^.td_jctx;
- jctx^.cblob^.dec_ref;
- jctx^.cblob:=nil;
+ if (jctx^.cblob<>nil) then
+ begin
+  jctx^.cblob^.dec_ref;
+  jctx^.cblob:=nil;
+ end;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;

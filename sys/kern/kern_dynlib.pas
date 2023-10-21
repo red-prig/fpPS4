@@ -212,6 +212,8 @@ begin
  Result:=copyinstr(moduleFileName,@fname,sizeof(fname),@len);
  if (Result<>0) then Exit;
 
+ Writeln('sys_dynlib_load_prx:',fname);
+
  dynlibs_lock;
 
  obj:=nil;

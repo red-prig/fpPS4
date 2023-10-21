@@ -203,6 +203,7 @@ begin
   STATUS_OBJECT_NAME_NOT_FOUND :Result:=ENOENT;
   STATUS_OBJECT_NAME_COLLISION :Result:=EEXIST;
   STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
+  STATUS_OBJECT_PATH_SYNTAX_BAD:Result:=ENOTDIR;
   STATUS_SHARING_VIOLATION     :Result:=EACCES;
   STATUS_FILE_LOCK_CONFLICT    :Result:=EWOULDBLOCK;
   STATUS_LOCK_NOT_GRANTED      :Result:=EWOULDBLOCK;
@@ -419,8 +420,15 @@ end;
 
 function md_free_dirent(de:p_ufs_dirent):Integer;
 var
+ s:Pointer;
  fd:THandle;
 begin
+ s:=System.InterlockedExchange(de^.ufs_symlink,nil);
+ if (s<>nil) then
+ begin
+  FreeMem(s);
+ end;
+
  if ((de^.ufs_flags and UFS_DROOT)=0) then //if not root dir
  begin
   fd:=THandle(System.InterlockedExchange(de^.ufs_md_fp,nil));
@@ -441,6 +449,8 @@ var
  R:DWORD;
 begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+
+ Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
@@ -472,6 +482,8 @@ var
  R:DWORD;
 begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+
+ Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
@@ -509,18 +521,14 @@ begin
  fdr^:=F;
 end;
 
-function md_find_rel_mount_path(var src:PWideChar;var len:SizeInt):Integer;
+function md_find_rel_mount_path(first:p_mount;var src:PWideChar;var len:SizeInt):Integer;
 var
  mp:p_mount;
  W:WideString;
-begin
- Result:=ERESTART;
- mtx_lock(mountlist_mtx);
 
- mp:=TAILQ_FIRST(@mountlist);
- while (mp<>nil) do
+ function compare(mp:p_mount):Boolean;
  begin
-
+  Result:=False;
   if (mp^.mnt_vfc=@ufs_vfsconf) then //current fstype
   if ((mp^.mnt_flag and MNT_ROOTFS)=0) then //host mount
   begin
@@ -542,10 +550,32 @@ begin
      Inc(src,Length(W));
      Dec(len,Length(W));
 
-     Result:=0;
-     Break;
+     Result:=True;
     end; //cmp
    end; //len
+  end;
+ end;
+
+begin
+ Result:=ERESTART;
+ mtx_lock(mountlist_mtx);
+
+ if (first<>nil) then
+ if compare(first) then
+ begin
+  mtx_unlock(mountlist_mtx);
+  Exit(0);
+ end;
+
+ mp:=TAILQ_FIRST(@mountlist);
+ while (mp<>nil) do
+ begin
+
+  if (first<>mp) then
+  if compare(mp) then
+  begin
+   Result:=0;
+   Break;
   end;
 
   mp:=TAILQ_NEXT(mp,@mp^.mnt_list);
@@ -566,6 +596,8 @@ var
  nt_abs:Boolean;
 
  R:DWORD;
+
+ mp:p_mount;
 begin
  if (de^.ufs_dirent^.d_type<>DT_LNK) then Exit(EINVAL);
 
@@ -628,8 +660,15 @@ begin
 
  if nt_abs then
  begin
+  mp:=nil;
+
+  if (de^.ufs_vnode<>nil) then
+  begin
+   mp:=de^.ufs_vnode^.v_mount;
+  end;
+
   //find by mount points
-  Result:=md_find_rel_mount_path(P,len);
+  Result:=md_find_rel_mount_path(mp,P,len);
   if (Result<>0) then Exit;
  end;
 
@@ -961,14 +1000,16 @@ begin
 end;
 
 procedure md_unlink_cache(de:p_ufs_dirent);
+label
+ _start;
 var
  dd:p_ufs_dirent;
  notlocked:Boolean;
+ fparent:Boolean;
 begin
  if (de=nil) then Exit;
 
- //clear fd
- md_free_dirent(de);
+ _start:
 
  dd:=System.InterlockedExchange(de^.ufs_dir,nil); //parent
 
@@ -989,18 +1030,22 @@ begin
    sx_xlock(@dd^.ufs_md_lock);
   end;
   TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
+  fparent:=TAILQ_EMPTY(@dd^.ufs_dlist) and (dd^.ufs_dir<>nil);
   if notlocked then
   begin
    sx_unlock(@dd^.ufs_md_lock);
   end;
   ufs_de_drop(dd); //prev hold
   ufs_de_drop(dd); //list hold
+  if fparent then
+  begin
+   de:=dd;
+   goto _start;
+  end;
  end;
 end;
 
 procedure md_delete_cache(de:p_ufs_dirent);
-var
- s:Pointer;
 begin
  if (de=nil) then Exit;
 
@@ -1010,12 +1055,6 @@ begin
  de^.ufs_flags:=de^.ufs_flags or UFS_DOOMED;
 
  md_unlink_cache(de);
-
- s:=System.InterlockedExchange(de^.ufs_symlink,nil);
- if (s<>nil) then
- begin
-  FreeMem(s);
- end;
 
  ufs_de_drop(de);
 end;
@@ -1036,6 +1075,7 @@ begin
   begin
    md_delete_cache(de);
   end;
+  vrecycle(vp);
  end;
 
  Exit(0);
@@ -1079,19 +1119,27 @@ begin
  vpp^:=nil;
 
  if (dvp^.v_type<>VDIR) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  if (((flags and ISDOTDOT)<>0) and ((dvp^.v_vflag and VV_ROOT)<>0)) then
+ begin
   Exit(EIO);
+ end;
 
  error:=VOP_ACCESS(dvp, VEXEC);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (cnp^.cn_namelen=1) and (pname^='.') then
  begin
   if ((flags and ISLASTCN) and nameiop<>LOOKUP) then
+  begin
    Exit(EINVAL);
+  end;
 
   vpp^:=dvp;
   VREF(dvp);
@@ -1130,7 +1178,9 @@ begin
  begin
   error:=VOP_ACCESS(dvp, VWRITE);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   if (vpp^=dvp) then
   begin
@@ -1173,11 +1223,15 @@ var
  restart:Boolean;
 begin
  if (ap^.a_vp^.v_type<>VDIR) then
+ begin
   Exit(ENOTDIR);
+ end;
 
  uio:=ap^.a_uio;
  if (uio^.uio_offset < 0) then
+ begin
   Exit(EINVAL);
+ end;
 
  dd:=ap^.a_vp^.v_data;
  off:=0;
