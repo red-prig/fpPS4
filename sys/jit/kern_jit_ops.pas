@@ -1367,11 +1367,11 @@ begin
 end;
 
 const
- cmpxchg16b_desc:t_op_type=(op:$0FC7;index:1);
+ cmpxchg_8b_16b_desc:t_op_type=(op:$0FC7;index:1);
 
-procedure op_cmpxchg16b(var ctx:t_jit_context2);
+procedure op_cmpxchg_8b_16b(var ctx:t_jit_context2);
 begin
- op_emit1(ctx,cmpxchg16b_desc,[his_xchg,his_rw]);
+ op_emit1(ctx,cmpxchg_8b_16b_desc,[his_xchg,his_rw]);
 end;
 
 const
@@ -2351,7 +2351,8 @@ begin
  jit_cbs[OPPnone,OPcmp ,OPSnone]:=@op_cmp;
 
  jit_cbs[OPPnone,OPcmpxchg,OPSnone ]:=@op_cmpxchg;
- jit_cbs[OPPnone,OPcmpxchg,OPSx_16b]:=@op_cmpxchg16b;
+ jit_cbs[OPPnone,OPcmpxchg,OPSx_8b ]:=@op_cmpxchg_8b_16b;
+ jit_cbs[OPPnone,OPcmpxchg,OPSx_16b]:=@op_cmpxchg_8b_16b;
 
  jit_cbs[OPPnone,OPxadd   ,OPSnone]:=@op_xadd;
 

@@ -260,7 +260,7 @@ end;
 //
 
 const
- movups_desc:t_op_desc=(
+ movu_ps_pd_desc:t_op_desc=(
   mem_reg:(op:$0F11;opt:[not_prefix]);
   reg_mem:(op:$0F10;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
@@ -268,31 +268,11 @@ const
   hint:[his_mov,his_wo];
  );
 
-procedure op_movups(var ctx:t_jit_context2);
+procedure op_movu_ps_pd(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit2(ctx,movups_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- movupd_desc:t_op_desc=(
-  mem_reg:(op:$660F11;opt:[not_prefix]);
-  reg_mem:(op:$660F10;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movupd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movupd_desc);
+  op_emit2_simd(ctx,movu_ps_pd_desc);
  end else
  begin
   add_orig(ctx);
@@ -302,39 +282,19 @@ end;
 //
 
 const
- movaps_desc:t_op_desc=(
+ mova_ps_pd_desc:t_op_desc=(
   mem_reg:(op:$0F29;opt:[not_prefix]);
   reg_mem:(op:$0F28;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
+  hint:[his_mov,his_wo,his_align];
  );
 
-procedure op_movaps(var ctx:t_jit_context2);
+procedure op_mova_ps_pd(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
-  op_emit2(ctx,movaps_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- movapd_desc:t_op_desc=(
-  mem_reg:(op:$660F29;opt:[not_prefix]);
-  reg_mem:(op:$660F28;opt:[not_prefix]);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
- );
-
-procedure op_movapd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit2(ctx,movapd_desc);
+  op_emit2_simd(ctx,mova_ps_pd_desc);
  end else
  begin
   add_orig(ctx);
@@ -373,6 +333,51 @@ end;
 //
 
 const
+ movl_ps_pd_desc:t_op_desc=(
+  mem_reg:(op:$0F13;opt:[not_prefix]);
+  reg_mem:(op:$0F12;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movl_ps_pd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2_simd(ctx,movl_ps_pd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
+const
+ movh_ps_pd_desc:t_op_desc=(
+  mem_reg:(op:$0F17;opt:[not_prefix]);
+  reg_mem:(op:$0F16;opt:[not_prefix]);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
+procedure op_movh_ps_pd(var ctx:t_jit_context2);
+begin
+ if is_memory(ctx.din) then
+ begin
+  op_emit2_simd(ctx,movh_ps_pd_desc);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+
+//
+
+const
  ldmxcsr_desc:t_op_type=(
   op:$0FAE;index:2;opt:[not_prefix];
  );
@@ -405,11 +410,11 @@ begin
  jit_cbs[OPPnone,OPmov,OPSx_dqa]:=@op_movdqa;
  jit_cbs[OPPnone,OPmov,OPSx_dqu]:=@op_movdqu;
 
- jit_cbs[OPPnone,OPmovu,OPSx_ps]:=@op_movups;
- jit_cbs[OPPnone,OPmovu,OPSx_pd]:=@op_movupd;
+ jit_cbs[OPPnone,OPmovu,OPSx_ps]:=@op_movu_ps_pd;
+ jit_cbs[OPPnone,OPmovu,OPSx_pd]:=@op_movu_ps_pd;
 
- jit_cbs[OPPnone,OPmova,OPSx_ps]:=@op_movaps;
- jit_cbs[OPPnone,OPmova,OPSx_pd]:=@op_movapd;
+ jit_cbs[OPPnone,OPmova,OPSx_ps]:=@op_mova_ps_pd;
+ jit_cbs[OPPnone,OPmova,OPSx_pd]:=@op_mova_ps_pd;
 
  jit_cbs[OPPnone,OPmovl,OPSx_ps]:=@op_reg_mem_mov_wo;
  jit_cbs[OPPnone,OPmovl,OPSx_pd]:=@op_reg_mem_mov_wo;
@@ -433,6 +438,32 @@ begin
 
  jit_cbs[OPPnone,OPmovdq2q,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPmovq2dq,OPSnone]:=@add_orig;
+
+ jit_cbs[OPPnone,OPmovddup,OPSnone]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPmovl,OPSx_ps]:=@op_movl_ps_pd;
+ jit_cbs[OPPnone,OPmovl,OPSx_pd]:=@op_movl_ps_pd;
+
+ jit_cbs[OPPnone,OPmovh,OPSx_ps]:=@op_movh_ps_pd;
+ jit_cbs[OPPnone,OPmovh,OPSx_pd]:=@op_movh_ps_pd;
+
+ jit_cbs[OPPnone,OPpmovsx,OPSv_bw]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovsx,OPSv_bd]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovsx,OPSv_bq]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovsx,OPSv_wd]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovsx,OPSv_wq]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovsx,OPSv_dq]:=@op_reg_mem_mov_wo;
+
+ jit_cbs[OPPnone,OPpmovzx,OPSv_bw]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovzx,OPSv_bd]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovzx,OPSv_bq]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovzx,OPSv_wd]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovzx,OPSv_wq]:=@op_reg_mem_mov_wo;
+ jit_cbs[OPPnone,OPpmovzx,OPSv_dq]:=@op_reg_mem_mov_wo;
+
+ //jit_cbs[OPPnone,OPmovmsk  ,OPSx_ps]:=@op_rr;
+ //jit_cbs[OPPnone,OPmovmsk  ,OPSx_pd]:=@op_rr;
+ //jit_cbs[OPPnone,OPpmovmskb,OPSnone]:=@op_rr;
 
  jit_cbs[OPPnone,OPucomi,OPSx_ss]:=@op_reg_mem_ro;
  jit_cbs[OPPnone,OPucomi,OPSx_sd]:=@op_reg_mem_ro;
@@ -589,6 +620,15 @@ begin
   jit_cbs[OPPnone,OPmovnt,OPSx_sd]:=@op_movsd;
   jit_cbs[OPPnone,OPmovnt,OPSx_ss]:=@op_movss;
  end;
+
+ jit_cbs[OPPnone,OPaeskeygenassist,OPSnone]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPaesimc         ,OPSnone]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPaesenc    ,OPSnone]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPaesenclast,OPSnone]:=@op_reg_mem_rw;
+
+ jit_cbs[OPPnone,OPaesdec    ,OPSnone]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPaesdeclast,OPSnone]:=@op_reg_mem_rw;
 
 end;
 

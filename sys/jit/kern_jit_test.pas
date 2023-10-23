@@ -31,6 +31,12 @@ begin
  used_op[OPPnone,OPaddsub,OPSx_pd]:=True;
  used_op[OPPnone,OPaddsub,OPSx_ps]:=True;
  used_op[OPPnone,OPadox,OPSnone]:=True;
+ used_op[OPPnone,OPaesdec,OPSnone]:=True;
+ used_op[OPPnone,OPaesdeclast,OPSnone]:=True;
+ used_op[OPPnone,OPaesenc,OPSnone]:=True;
+ used_op[OPPnone,OPaesenclast,OPSnone]:=True;
+ used_op[OPPnone,OPaesimc,OPSnone]:=True;
+ used_op[OPPnone,OPaeskeygenassist,OPSnone]:=True;
  used_op[OPPnone,OPand,OPSnone]:=True;
  used_op[OPPnone,OPand,OPSx_pd]:=True;
  used_op[OPPnone,OPand,OPSx_ps]:=True;
@@ -50,7 +56,6 @@ begin
  used_op[OPPnone,OPblsi,OPSnone]:=True;
  used_op[OPPnone,OPblsmsk,OPSnone]:=True;
  used_op[OPPnone,OPblsr,OPSnone]:=True;
- used_op[OPPnone,OPbound,OPSnone]:=True;
  used_op[OPPnone,OPbsf,OPSnone]:=True;
  used_op[OPPnone,OPbsr,OPSnone]:=True;
  used_op[OPPnone,OPbswap,OPSnone]:=True;
@@ -140,8 +145,6 @@ begin
  used_op[OPPnone,OPdp,OPSx_pd]:=True;
  used_op[OPPnone,OPdp,OPSx_ps]:=True;
  used_op[OPPnone,OPemms,OPSnone]:=True;
- used_op[OPPnone,OPencls,OPSnone]:=True;
- used_op[OPPnone,OPenclu,OPSnone]:=True;
  used_op[OPPnone,OPenter,OPSnone]:=True;
  used_op[OPPnone,OPextract,OPSx_f128]:=True;
  used_op[OPPnone,OPextract,OPSx_i128]:=True;
@@ -234,7 +237,6 @@ begin
  used_op[OPPnone,OPfyl2x,OPSnone]:=True;
  used_op[OPPnone,OPfyl2xp1,OPSnone]:=True;
  used_op[OPPnone,OPgetbv,OPSnone]:=True;
- used_op[OPPnone,OPgetsec,OPSnone]:=True;
  used_op[OPPnone,OPhadd,OPSx_pd]:=True;
  used_op[OPPnone,OPhadd,OPSx_ps]:=True;
  used_op[OPPnone,OPhlt,OPSnone]:=True;
@@ -281,7 +283,6 @@ begin
  used_op[OPPnone,OPjcxz,OPSnone]:=True;
  used_op[OPPnone,OPjecxz,OPSnone]:=True;
  used_op[OPPnone,OPjmp,OPSnone]:=True;
- used_op[OPPnone,OPjmpe,OPSnone]:=True;
  used_op[OPPnone,OPjrcxz,OPSnone]:=True;
  used_op[OPPnone,OPlahf,OPSnone]:=True;
  used_op[OPPnone,OPlar,OPSnone]:=True;
@@ -505,10 +506,8 @@ begin
  used_op[OPPnone,OPpmull,OPSx_w]:=True;
  used_op[OPPnone,OPpmuludq,OPSnone]:=True;
  used_op[OPPnone,OPpop,OPSnone]:=True;
- used_op[OPPnone,OPpopa,OPSnone]:=True;
- used_op[OPPnone,OPpopa,OPSx_d]:=True;
  used_op[OPPnone,OPpopcnt,OPSnone]:=True;
- used_op[OPPnone,OPpopf,OPSx_d]:=True;
+ used_op[OPPnone,OPpopf,OPSnone]:=True;
  used_op[OPPnone,OPpopf,OPSx_q]:=True;
  used_op[OPPnone,OPpor,OPSnone]:=True;
  used_op[OPPnone,OPprefetch,OPSnone]:=True;
@@ -556,10 +555,7 @@ begin
  used_op[OPPnone,OPpunpcklqdq,OPSnone]:=True;
  used_op[OPPnone,OPpunpcklwd,OPSnone]:=True;
  used_op[OPPnone,OPpush,OPSnone]:=True;
- used_op[OPPnone,OPpusha,OPSnone]:=True;
- used_op[OPPnone,OPpusha,OPSx_d]:=True;
  used_op[OPPnone,OPpushf,OPSnone]:=True;
- used_op[OPPnone,OPpushf,OPSx_d]:=True;
  used_op[OPPnone,OPpushf,OPSx_q]:=True;
  used_op[OPPnone,OPpvalidate,OPSnone]:=True;
  used_op[OPPnone,OPpxor,OPSnone]:=True;
@@ -788,6 +784,12 @@ begin
  used_op[OPPv,OPadd,OPSx_ss]:=True;
  used_op[OPPv,OPaddsub,OPSx_pd]:=True;
  used_op[OPPv,OPaddsub,OPSx_ps]:=True;
+ used_op[OPPv,OPaesdec,OPSnone]:=True;
+ used_op[OPPv,OPaesdeclast,OPSnone]:=True;
+ used_op[OPPv,OPaesenc,OPSnone]:=True;
+ used_op[OPPv,OPaesenclast,OPSnone]:=True;
+ used_op[OPPv,OPaesimc,OPSnone]:=True;
+ used_op[OPPv,OPaeskeygenassist,OPSnone]:=True;
  used_op[OPPv,OPand,OPSx_pd]:=True;
  used_op[OPPv,OPand,OPSx_ps]:=True;
  used_op[OPPv,OPand,OPSx_sd]:=True;
@@ -1071,14 +1073,54 @@ begin
    opMPSADBW,
    opLDDQU  ,
 
+   OPaesimc,
+   OPaesenc,
+   OPaesenclast,
+   OPaesdec,
+   OPaesdeclast,
+   OPaeskeygenassist,
+
    OPxabort..OPxtest:Result:=True;
+  end;
+ end;
+end;
+
+function is_3dnow(x:TOpcodePrefix;y:TOpCode;z:TOpCodeSuffix):Boolean;
+begin
+ Result:=False;
+ if (x=OPPnone) then
+ begin
+  case y of
+   OPpi2fw,
+   OPpi2fd,
+   OPpf2iw,
+   OPpf2id,
+   OPpfnacc,
+   OPpfpnacc,
+   OPpfcmpge,
+   OPpfmin,
+   OPpfrcp,
+   OPpfrsqrt,
+   OPpfsub,
+   OPpfadd,
+   OPpfcmpgt,
+   OPpfmax,
+   OPpfrcpit1,
+   OPpfrsqit1,
+   OPpfsubr,
+   OPpfacc,
+   OPpfcmpeq,
+   OPpfmul,
+   OPpfrcpit2,
+   OPpmulhrw,
+   OPpswapd:Result:=True;
   end;
  end;
 end;
 
 type
  t_status=record
-  g,s,f,v:DWORD;
+  g,s,d,f,v:DWORD;
  end;
 
 function percent(a,b:DWORD):Single; inline;
@@ -1113,6 +1155,10 @@ var
      case x of
       OPPnone:
         begin
+         if is_3dnow(x,y,z) then
+         begin
+          Inc(status.d)
+         end else
          if is_sse(x,y,z) then
          begin
           Inc(status.s)
@@ -1167,12 +1213,13 @@ begin
  if print_status then
  begin
   Writeln('[jit status]');
-  Writeln('       general:',percent(cbs_status.g,use_status.g):0:2,'%');
-  Writeln('     x87 float:',percent(cbs_status.f,use_status.f):0:2,'%');
-  Writeln('           sse:',percent(cbs_status.s,use_status.s):0:2,'%');
-  Writeln('  vex encoding:',percent(cbs_status.v,use_status.v):0:2,'%');
-  Writeln('         total:',percent(cbs_status.g+use_status.s+cbs_status.f+cbs_status.v,
-                                    use_status.g+use_status.s+use_status.f+use_status.v
+  Writeln('       general:',percent(cbs_status.g,use_status.g):5:2,'%');
+  Writeln('     x87 float:',percent(cbs_status.f,use_status.f):5:2,'%');
+  Writeln('         3DNow:',percent(cbs_status.d,use_status.d):5:2,'%');
+  Writeln('           sse:',percent(cbs_status.s,use_status.s):5:2,'%');
+  Writeln('  vex encoding:',percent(cbs_status.v,use_status.v):5:2,'%');
+  Writeln('         total:',percent(cbs_status.g+cbs_status.s+use_status.d+cbs_status.f+cbs_status.v,
+                                    use_status.g+use_status.s+use_status.d+use_status.f+use_status.v
                                    ):0:2,'%');
  end;
 
