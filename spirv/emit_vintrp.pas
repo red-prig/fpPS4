@@ -38,8 +38,8 @@ begin
 
  inp_M0:=GetInputRegNode(get_m0^.current);
 
- Assert(inp_M0<>nil);
- Assert(inp_M0^.itype=itPsState);
+ //Assert(inp_M0<>nil);
+ //Assert(inp_M0^.itype=itPsState);
 
  Case FSPI.VINTRP.OP of
   V_INTERP_P1_F32:

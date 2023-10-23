@@ -1,7 +1,15 @@
 
 # fpPS4 [![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions) [<img src="https://img.shields.io/discord/1047920770225012769?color=5865F2&label=fpPS4&logo=discord&logoColor=white"/>](https://discord.gg/up9qatpX7M)
 
-# Donate: [<img src="https://static.boosty.to/assets/images/logo.Ffjjd.svg"/>](https://boosty.to/fpps4)
+This emulator is still in the early stages of development and big games like the tripple A game still don't work, see the compatibility list for more details: https://github.com/red-prig/fpps4-game-compatibility/issues
+
+If your game doesn't work don't create a new issue, check the compatibility list first.
+
+If you want to know the details or just chat, welcome to the discord: https://discord.gg/up9qatpX7M
+
+I am currently rewriting the emulator core in the [kern](https://github.com/red-prig/fpPS4/tree/kern) branch and until the work is completed, there will be no support for specific games.
+
+# Donate: [<img src="icons/boosty.svg"/>](https://boosty.to/fpps4)
 
 ![Book logo](/icons/logo.png) 
 
