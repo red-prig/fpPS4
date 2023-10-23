@@ -154,7 +154,6 @@ uses
  errno,
  vfs_subr,
  vfs_vnops,
- vfs_lookup,
  vsys_generic;
 
 {

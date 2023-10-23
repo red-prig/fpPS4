@@ -237,13 +237,32 @@ procedure devfs_dir_unref_de(dm:p_devfs_mount;de:p_devfs_dirent);
 function  devfs_pathpath(p1,p2:PChar):Integer;
 procedure devfs_mtx_init;
 
+var
+ cdevp_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@cdevp_list.tqh_first);
+
+function  devfs_alloc(flags:Integer):p_cdev;                                                                           external;
+function  devfs_dev_exists(name:PChar):Integer;                                                                        external;
+procedure devfs_free(cdev:p_cdev);                                                                                     external;
+function  devfs_find(dd:p_devfs_dirent;name:PChar;namelen:Integer;_type:Integer):p_devfs_dirent;                       external;
+function  devfs_newdirent(name:PChar;namelen:Integer):p_devfs_dirent;                                                  external;
+function  devfs_parent_dirent(de:p_devfs_dirent):p_devfs_dirent;                                                       external;
+function  devfs_vmkdir(dmp:p_devfs_mount;name:PChar;namelen:Integer;dotdot:p_devfs_dirent;inode:DWORD):p_devfs_dirent; external;
+procedure devfs_dirent_free(de:p_devfs_dirent);                                                                        external;
+procedure devfs_rmdir_empty(dm:p_devfs_mount;de:p_devfs_dirent);                                                       external;
+procedure devfs_delete(dm:p_devfs_mount;de:p_devfs_dirent;flags:Integer);                                              external;
+procedure devfs_purge(dm:p_devfs_mount;dd:p_devfs_dirent);                                                             external;
+procedure devfs_metoo(cdp:p_cdev_priv;dm:p_devfs_mount);                                                               external;
+function  devfs_populate_loop(dm:p_devfs_mount;cleanup:Integer):Integer;                                               external;
+procedure devfs_populate(dm:p_devfs_mount);                                                                            external;
+procedure devfs_cleanup(dm:p_devfs_mount);                                                                             external;
+procedure devfs_create(dev:p_cdev);                                                                                    external;
+procedure devfs_destroy(dev:p_cdev);                                                                                   external;
+function  devfs_alloc_cdp_inode():ino_t;                                                                               external;
+procedure devfs_free_cdp_inode(ino:ino_t);                                                                             external;
+
+function  devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:Pointer):PChar; external;
+
 implementation
-
-//
-
-function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:Pointer):PChar; external;
-
-//
 
 {
  * Identifier manipulators.
@@ -341,8 +360,7 @@ procedure devfs_dir_ref(dir:PChar);
 var
  dle,dle_new:p_dirlistent;
 begin
- if (dir^=#0) then
-  Exit;
+ if (dir^=#0) then Exit;
 
  dle_new:=AllocMem(sizeof(t_dirlistent));
  dle_new^.dir:=strdup(dir);
@@ -377,8 +395,7 @@ procedure devfs_dir_unref(dir:PChar);
 var
  dle:p_dirlistent;
 begin
- if (dir^=#0) then
-  Exit;
+ if (dir^=#0) then Exit;
 
  mtx_lock(dirlist_mtx);
  dle:=devfs_dir_findent_locked(dir);
@@ -392,7 +409,9 @@ begin
   FreeMem(dle^.dir);
   FreeMem(dle);
  end else
+ begin
   mtx_unlock(dirlist_mtx);
+ end;
 end;
 
 procedure devfs_dir_unref_de(dm:p_devfs_mount;de:p_devfs_dirent);

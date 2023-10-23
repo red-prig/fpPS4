@@ -9,11 +9,7 @@ uses
  mqueue,
  kern_id,
  kern_conf,
- devfs,
- devfs_rule;
-
-var
- cdevp_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@cdevp_list.tqh_first);
+ devfs;
 
 function  devfs_alloc(flags:Integer):p_cdev;
 function  devfs_dev_exists(name:PChar):Integer;
@@ -46,7 +42,8 @@ uses
  kern_sx,
  vfs_vnops,
  vfs_subr,
- vnode_if;
+ vnode_if,
+ devfs_rule;
 
 var
  devfs_desc:t_id_desc=(free:nil;refs:0);
@@ -59,7 +56,7 @@ begin
  Result:=c-ptruint(@p_cdev_priv(nil)^.cdp_c);
 end;
 
-function devfs_alloc(flags:Integer):p_cdev;
+function devfs_alloc(flags:Integer):p_cdev; public;
 var
  cdp:p_cdev_priv;
  cdev:p_cdev;
@@ -87,7 +84,7 @@ begin
  Exit(cdev);
 end;
 
-function devfs_dev_exists(name:PChar):Integer;
+function devfs_dev_exists(name:PChar):Integer; public;
 var
  cdp:p_cdev_priv;
 begin
@@ -114,7 +111,7 @@ begin
  Exit(0);
 end;
 
-procedure devfs_free(cdev:p_cdev);
+procedure devfs_free(cdev:p_cdev); public;
 var
  cdp:p_cdev_priv;
 begin
@@ -125,7 +122,7 @@ begin
  FreeMem(cdp);
 end;
 
-function devfs_find(dd:p_devfs_dirent;name:PChar;namelen:Integer;_type:Integer):p_devfs_dirent;
+function devfs_find(dd:p_devfs_dirent;name:PChar;namelen:Integer;_type:Integer):p_devfs_dirent; public;
 var
  de:p_devfs_dirent;
 begin
@@ -158,7 +155,7 @@ begin
  Exit(de);
 end;
 
-function devfs_newdirent(name:PChar;namelen:Integer):p_devfs_dirent;
+function devfs_newdirent(name:PChar;namelen:Integer):p_devfs_dirent; public;
 var
  i:Integer;
  de:p_devfs_dirent;
@@ -183,7 +180,7 @@ begin
  Exit(de);
 end;
 
-function devfs_parent_dirent(de:p_devfs_dirent):p_devfs_dirent;
+function devfs_parent_dirent(de:p_devfs_dirent):p_devfs_dirent; public;
 begin
  if (de^.de_dirent^.d_type<>DT_DIR) then
  begin
@@ -204,7 +201,7 @@ begin
  Exit(de^.de_dir);
 end;
 
-function devfs_vmkdir(dmp:p_devfs_mount;name:PChar;namelen:Integer;dotdot:p_devfs_dirent;inode:DWORD):p_devfs_dirent;
+function devfs_vmkdir(dmp:p_devfs_mount;name:PChar;namelen:Integer;dotdot:p_devfs_dirent;inode:DWORD):p_devfs_dirent; public;
 var
  dd,de:p_devfs_dirent;
 begin
@@ -255,7 +252,7 @@ begin
  Exit(dd);
 end;
 
-procedure devfs_dirent_free(de:p_devfs_dirent);
+procedure devfs_dirent_free(de:p_devfs_dirent); public;
 begin
  FreeMem(de);
 end;
@@ -264,7 +261,7 @@ end;
  * Removes a directory if it is empty. Also empty parent directories are
  * removed recursively.
  }
-procedure devfs_rmdir_empty(dm:p_devfs_mount;de:p_devfs_dirent);
+procedure devfs_rmdir_empty(dm:p_devfs_mount;de:p_devfs_dirent); public;
 var
  dd,de_dot,de_dotdot:p_devfs_dirent;
 begin
@@ -315,7 +312,7 @@ end;
  * The caller needs to hold the dm for the duration of the call since
  * dm^.dm_lock may be temporary dropped.
  }
-procedure devfs_delete(dm:p_devfs_mount;de:p_devfs_dirent;flags:Integer);
+procedure devfs_delete(dm:p_devfs_mount;de:p_devfs_dirent;flags:Integer); public;
 var
  dd:p_devfs_dirent;
  vp:p_vnode;
@@ -399,7 +396,7 @@ end;
  * Recursively removes the entire tree.
  * The caller needs to hold the dm for the duration of the call.
  }
-procedure devfs_purge(dm:p_devfs_mount;dd:p_devfs_dirent);
+procedure devfs_purge(dm:p_devfs_mount;dd:p_devfs_dirent); public;
 var
  de:p_devfs_dirent;
 begin
@@ -444,7 +441,7 @@ end;
  * This function extends the array when necessary, taking into account that
  * the default array is 1 element and not malloc'ed.
  }
-procedure devfs_metoo(cdp:p_cdev_priv;dm:p_devfs_mount);
+procedure devfs_metoo(cdp:p_cdev_priv;dm:p_devfs_mount); public;
 var
  dep:pp_devfs_dirent;
  siz:Integer;
@@ -478,7 +475,7 @@ end;
 {
  * The caller needs to hold the dm for the duration of the call.
  }
-function devfs_populate_loop(dm:p_devfs_mount;cleanup:Integer):Integer;
+function devfs_populate_loop(dm:p_devfs_mount;cleanup:Integer):Integer; public;
 var
  cdp:p_cdev_priv;
  de:p_devfs_dirent;
@@ -635,7 +632,7 @@ end;
 {
  * The caller needs to hold the dm for the duration of the call.
  }
-procedure devfs_populate(dm:p_devfs_mount);
+procedure devfs_populate(dm:p_devfs_mount); public;
 var
  gen:DWORD;
 begin
@@ -652,7 +649,7 @@ end;
 {
  * The caller needs to hold the dm for the duration of the call.
  }
-procedure devfs_cleanup(dm:p_devfs_mount);
+procedure devfs_cleanup(dm:p_devfs_mount); public;
 begin
  sx_assert(@dm^.dm_lock);
  while (devfs_populate_loop(dm, 1)<>0) do;
@@ -664,7 +661,7 @@ end;
  * in both cases the devlock() mutex is held, so no further locking
  * is necesary and no sleeping allowed.
  }
-procedure devfs_create(dev:p_cdev);
+procedure devfs_create(dev:p_cdev); public;
 var
  cdp:p_cdev_priv;
 begin
@@ -677,7 +674,7 @@ begin
  Inc(devfs_generation);
 end;
 
-procedure devfs_destroy(dev:p_cdev);
+procedure devfs_destroy(dev:p_cdev); public;
 var
  cdp:p_cdev_priv;
 begin
@@ -687,7 +684,7 @@ begin
  Inc(devfs_generation);
 end;
 
-function devfs_alloc_cdp_inode():ino_t;
+function devfs_alloc_cdp_inode():ino_t; public;
 begin
  if id_new(@devfs_inos,@devfs_desc,@Result) then
  begin
@@ -698,7 +695,7 @@ begin
  end;
 end;
 
-procedure devfs_free_cdp_inode(ino:ino_t);
+procedure devfs_free_cdp_inode(ino:ino_t); public;
 begin
  if (ino>0) then
  begin

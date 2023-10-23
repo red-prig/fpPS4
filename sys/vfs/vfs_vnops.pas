@@ -79,7 +79,6 @@ uses
  errno,
  vnode_if,
  vfcntl,
- vfs_lookup,
  vfs_subr,
  vfs_syscalls,
  kern_thr,

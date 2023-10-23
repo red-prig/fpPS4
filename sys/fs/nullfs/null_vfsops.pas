@@ -61,7 +61,6 @@ uses
  vuio,
  vnamei,
  vfs_mount,
- vfs_lookup,
  vfs_vnops,
  vfs_subr,
  vnode_if,

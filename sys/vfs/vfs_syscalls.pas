@@ -22,8 +22,7 @@ uses
  vfs_mount,
  vnode,
  vfs_vnops,
- vfs_subr,
- vfs_lookup;
+ vfs_subr;
 
 function chroot_refuse_vdir_fds():Integer;
 function getutimes(usrtvp:p_timeval;tvpseg:uio_seg;tsp:p_timespec):Integer;

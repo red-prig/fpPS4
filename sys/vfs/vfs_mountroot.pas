@@ -26,7 +26,6 @@ uses
  vfs_init,
  vfs_mount,
  vfs_syscalls,
- vfs_lookup,
  kern_thr,
  kern_mtx;
 

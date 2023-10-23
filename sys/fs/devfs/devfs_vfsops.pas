@@ -63,11 +63,10 @@ uses
  errno,
  kern_mtx,
  kern_sx,
- devfs_devs,
- devfs_rule,
  vfs_mount,
  vfs_subr,
- vnode_if;
+ vnode_if,
+ devfs_rule;
 
 //
 

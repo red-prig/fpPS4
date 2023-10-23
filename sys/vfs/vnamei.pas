@@ -188,6 +188,10 @@ procedure NDINIT_ATVP(
  vp:p_vnode;
  td:p_kthread); inline;
 
+function  nd_namei(ndp:p_nameidata):Integer;     external;
+function  nd_lookup(ndp:p_nameidata):Integer;    external;
+procedure NDFREE(ndp:p_nameidata;flags:Integer); external;
+
 implementation
 
 function NDHASGIANT(ndp:p_nameidata):Integer; inline;

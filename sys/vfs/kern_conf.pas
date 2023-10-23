@@ -283,7 +283,6 @@ uses
  sysutils,
  errno,
  devfs,
- devfs_devs,
  devfs_vnops,
  vsys_generic,
  kern_synch;

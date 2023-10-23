@@ -37,7 +37,7 @@ type
   ds_refcount:Integer;
  end;
 
-function devfs_rid_input(rid:devfs_rid;dm:p_devfs_mount):devfs_rid;
+function  devfs_rid_input(rid:devfs_rid;dm:p_devfs_mount):devfs_rid;
 //
 procedure devfs_rule_applyde_recursive(dk:p_devfs_krule;dm:p_devfs_mount;de:p_devfs_dirent);
 procedure devfs_rule_applydm(dk:p_devfs_krule;dm:p_devfs_mount);
@@ -76,10 +76,6 @@ uses
  errno,
  vdirent,
  sys_fnmatch;
-
-//
-
-function devfs_fqpn(buf:PChar;dmp:p_devfs_mount;dd:p_devfs_dirent;cnp:Pointer):PChar; external;
 
 //
 

@@ -200,7 +200,6 @@ uses
  kern_thr,
  vfs_subr,
  vsys_generic,
- devfs_devs,
  devfs_rule,
  devfs_vfsops,
  kern_proc,

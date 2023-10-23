@@ -16,7 +16,6 @@ uses
  kern_thr,
  vnode,
  vfs_init,
- vfs_lookup,
  vnode_if;
 
 const

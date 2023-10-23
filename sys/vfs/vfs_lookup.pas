@@ -83,7 +83,7 @@ begin
  Result:=AllocMem(kern_param.MAXPATHLEN);
 end;
 
-function nd_namei(ndp:p_nameidata):Integer;
+function nd_namei(ndp:p_nameidata):Integer; public;
 var
  cp:PChar;  { pointer into pathname argument }
  dp:p_vnode; { the directory we are searching }
@@ -447,7 +447,7 @@ end;
  *     if WANTPARENT set, Exitunlocked parent in ni_dvp
  }
 
-function nd_lookup(ndp:p_nameidata):Integer;
+function nd_lookup(ndp:p_nameidata):Integer; public;
 var
  cp             :PChar  ;  { pointer into pathname argument }
  dp             :p_vnode;  { the directory we are searching }
@@ -1146,7 +1146,7 @@ end;
 {
  * Free data allocated by namei(); see namei(9) for details.
  }
-procedure NDFREE(ndp:p_nameidata;flags:Integer);
+procedure NDFREE(ndp:p_nameidata;flags:Integer); public;
 var
  unlock_dvp:Integer;
  unlock_vp :Integer;
