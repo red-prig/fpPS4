@@ -378,8 +378,8 @@ uses
  kern_proc,
  kern_namedobj,
  elf_nid_utils,
- kern_jit2,
- kern_jit2_ctx;
+ kern_jit,
+ kern_jit_ctx;
 
 //
 
@@ -2796,7 +2796,7 @@ begin
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
 
- kern_jit2.pick(ctx);
+ kern_jit.pick(ctx);
 end;
 
 function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;

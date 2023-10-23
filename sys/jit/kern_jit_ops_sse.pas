@@ -1,4 +1,4 @@
-unit kern_jit2_ops_sse;
+unit kern_jit_ops_sse;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -10,8 +10,8 @@ implementation
 uses
  x86_fpdbgdisas,
  x86_jit,
- kern_jit2_ops,
- kern_jit2_ctx;
+ kern_jit_ops,
+ kern_jit_ctx;
 
 var
  _SSE4aSupport:Boolean=False;

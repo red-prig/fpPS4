@@ -130,7 +130,7 @@ uses
  md_proc,
  machdep,
  sched_ule,
- subr_sleepqueue;
+ sys_sleepqueue;
 
 const
  max_pending_per_proc=128;

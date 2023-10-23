@@ -74,7 +74,8 @@ uses
  kern_rwlock,
  kern_sig,
  kern_proc,
- sched_ule;
+ sched_ule,
+ sys_sleepqueue;
 
 //
 
@@ -83,9 +84,6 @@ procedure umtx_thread_exit(td:p_kthread); external;
 procedure umtx_thread_fini(td:p_kthread); external;
 function  kern_umtx_wake(td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Integer; external;
 function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
-
-function  sleepq_alloc:Pointer;    external;
-procedure sleepq_free(sq:Pointer); external;
 
 procedure jit_ctx_free(td:p_kthread);  external;
 procedure switch_to_jit(td:p_kthread); external;

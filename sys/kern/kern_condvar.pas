@@ -8,7 +8,7 @@ interface
 uses
  time,
  kern_thr,
- subr_sleepqueue;
+ sys_sleepqueue;
 
 type
  p_cv=^t_cv;

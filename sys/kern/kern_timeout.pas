@@ -8,7 +8,7 @@ interface
 uses
  mqueue,
  kern_synch,
- subr_sleepqueue,
+ sys_sleepqueue,
  kern_thr,
  kern_mtx,
  kern_rwlock,

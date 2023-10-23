@@ -1,4 +1,4 @@
-unit kern_jit2;
+unit kern_jit;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -9,7 +9,7 @@ uses
  mqueue,
  x86_fpdbgdisas,
  x86_jit,
- kern_jit2_ctx;
+ kern_jit_ctx;
 
 var
  print_asm:Boolean=False;
@@ -23,11 +23,11 @@ uses
  sysutils,
  vm_pmap,
  vm_map,
- kern_jit2_ops,
- kern_jit2_ops_sse,
- kern_jit2_ops_avx,
+ kern_jit_ops,
+ kern_jit_ops_sse,
+ kern_jit_ops_avx,
  kern_jit_dynamic,
- kern_jit2_test,
+ kern_jit_test,
  kern_jit_asm;
 
 procedure jit_assert;

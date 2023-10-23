@@ -712,51 +712,11 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="kern_jit2.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit2_ops.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit2_ctx.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\..\rtl\g_node_splay.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="kern_jit2_ops_avx.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit_dynamic.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit2_ops_sse.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit2_test.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="..\kern\kern_param.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="kern_jit_asm.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="sysent.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="elf_machdep.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -775,6 +735,50 @@
         <Filename Value="..\elf64.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\sys_sleepqueue.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\sysent.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_asm.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_dynamic.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\elf_machdep.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_ctx.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_ops.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_ops_avx.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_ops_sse.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\jit\kern_jit_test.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -785,7 +789,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);.."/>
-      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev;..\.."/>
+      <OtherUnitFiles Value="..;..\..\rtl;..\..\kernel\libthr;..\kern;..\vm;..\vfs;..\fs\deadfs;..\fs\devfs;..\fs\fdescfs;..\fs\nullfs;..\fs\ufs;..\md;..\dev;..\..;..\jit"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

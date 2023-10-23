@@ -7,22 +7,13 @@ interface
 
 uses
  mqueue,
+ sys_sleepqueue,
  hamt,
  kern_mtx,
  kern_thr,
  rtprio;
 
 const
- SLEEPQ_TYPE         =$ff;  // Mask of sleep queue types.
- SLEEPQ_SLEEP        =$00;  // Used by sleep/wakeup.
- SLEEPQ_CONDVAR      =$01;  // Used for a cv.
- SLEEPQ_PAUSE        =$02;  // Used by pause.
- SLEEPQ_SX           =$03;  // Used by an sx lock.
- SLEEPQ_LK           =$04;  // Used by a lockmgr.
- SLEEPQ_INTERRUPTIBLE=$100; // Sleep is interruptible.
- SLEEPQ_STOP_ON_BDRY =$200; // Stop sleeping thread
- SLEEPQ_HAMT         =$400;
-
  SC_TABLESIZE=128;
  SC_MASK     =(SC_TABLESIZE-1);
  SC_SHIFT    =8;
@@ -128,7 +119,7 @@ end;
 {
  * Lock the sleep queue chain associated with the specified wait channel.
 }
-procedure sleepq_lock(wchan:Pointer);
+procedure sleepq_lock(wchan:Pointer); public;
 var
  sc:p_sleepqueue_chain;
 begin
@@ -139,7 +130,7 @@ end;
 {
  * Unlock the sleep queue chain associated with a given wait channel.
 }
-procedure sleepq_release(wchan:Pointer);
+procedure sleepq_release(wchan:Pointer); public;
 var
  sc:p_sleepqueue_chain;
 begin
@@ -185,7 +176,7 @@ end;
  * lock with the sleepq to make sure it is held when that sleep queue is
  * woken up.
 }
-procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);
+procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer); public;
 var
  td:p_kthread;
  sq:p_sleepqueue;
@@ -234,7 +225,7 @@ end;
  * Sets a timeout that will remove the current thread from the specified
  * sleep queue after timo ticks if the thread has not already been awakened.
 }
-procedure sleepq_set_timeout(wchan:Pointer;time:Int64);
+procedure sleepq_set_timeout(wchan:Pointer;time:Int64); public;
 var
  td:p_kthread;
 begin
@@ -250,7 +241,7 @@ end;
 {
  * Return the number of actual sleepers for the specified queue.
 }
-function sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD;
+function sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD; public;
 var
  sq:p_sleepqueue;
 begin
@@ -268,7 +259,7 @@ end;
  * to sleep. Enters and exits with the thread lock held.  Thread lock
  * may have transitioned from the sleepq lock to a run lock.
 }
-function sleepq_catch_signals(wchan:Pointer;pri:Integer):Integer;
+function sleepq_catch_signals(wchan:Pointer;pri:Integer):Integer; public;
 label
  _out;
 var
@@ -363,7 +354,7 @@ end;
  * Switches to another thread if we are still asleep on a sleep queue.
  * Returns with thread lock.
 }
-procedure sleepq_switch(wchan:Pointer;pri:Integer);
+procedure sleepq_switch(wchan:Pointer;pri:Integer); public;
 var
  td:p_kthread;
  sc:p_sleepqueue_chain;
@@ -462,7 +453,7 @@ end;
 {
  * Block the current thread until it is awakened from its sleep queue.
 }
-procedure sleepq_wait(wchan:Pointer;pri:Integer);
+procedure sleepq_wait(wchan:Pointer;pri:Integer); public;
 var
  td:p_kthread;
 begin
@@ -478,7 +469,7 @@ end;
  * Block the current thread until it is awakened from its sleep queue
  * or it is interrupted by a signal.
 }
-function sleepq_wait_sig(wchan:Pointer;pri:Integer):Integer;
+function sleepq_wait_sig(wchan:Pointer;pri:Integer):Integer; public;
 var
  rcatch:Integer;
 begin
@@ -495,7 +486,7 @@ end;
  * Block the current thread until it is awakened from its sleep queue
  * or it times out while waiting.
 }
-function sleepq_timedwait(wchan:Pointer;pri:Integer):Integer;
+function sleepq_timedwait(wchan:Pointer;pri:Integer):Integer; public;
 var
  td:p_kthread;
 begin
@@ -512,7 +503,7 @@ end;
  * Block the current thread until it is awakened from its sleep queue,
  * it is interrupted by a signal, or it times out waiting to be awakened.
 }
-function sleepq_timedwait_sig(wchan:Pointer;pri:Integer):Integer;
+function sleepq_timedwait_sig(wchan:Pointer;pri:Integer):Integer; public;
 var
  rcatch,rvalt,rvals:Integer;
 begin
@@ -534,7 +525,7 @@ end;
 {
  * Returns the type of sleepqueue given a waitchannel.
 }
-function sleepq_get_type(wchan:Pointer;pri:Integer):Integer;
+function sleepq_get_type(wchan:Pointer;pri:Integer):Integer; public;
 var
  sq:p_sleepqueue;
 begin
@@ -555,7 +546,7 @@ end;
  * Removes a thread from a sleep queue and makes it
  * runnable.
 }
-function sleepq_resume_thread(sq:p_sleepqueue;td:p_kthread;pri:Integer):Integer;
+function sleepq_resume_thread(sq:p_sleepqueue;td:p_kthread;pri:Integer):Integer; public;
 begin
  Result:=0;
 
@@ -606,7 +597,7 @@ end;
 {
  * Find the highest priority thread sleeping on a wait channel and resume it.
 }
-function sleepq_signal(wchan:Pointer;flags,pri,queue:Integer):Integer;
+function sleepq_signal(wchan:Pointer;flags,pri,queue:Integer):Integer; public;
 var
  td,besttd:p_kthread;
  sq:p_sleepqueue;
@@ -640,7 +631,7 @@ end;
 {
  * Find the highest priority thread sleeping on a wait channel and resume it.
 }
-function sleepq_signalto(wchan:Pointer;flags,pri,queue:Integer;std:p_kthread):Integer;
+function sleepq_signalto(wchan:Pointer;flags,pri,queue:Integer;std:p_kthread):Integer; public;
 var
  td:p_kthread;
  sq:p_sleepqueue;
@@ -672,7 +663,7 @@ end;
 {
  * Resume all threads sleeping on a specified wait channel.
 }
-function sleepq_broadcast(wchan:Pointer;flags,pri,queue:Integer):Integer;
+function sleepq_broadcast(wchan:Pointer;flags,pri,queue:Integer):Integer; public;
 var
  td:p_kthread;
  sq:p_sleepqueue;
@@ -704,7 +695,7 @@ end;
  * Time sleeping threads out.  When the timeout expires, the thread is
  * removed from the sleep queue and made runnable if it is still asleep.
 }
-procedure sleepq_timeout(arg:Pointer);
+procedure sleepq_timeout(arg:Pointer); public;
 var
  td:p_kthread;
  sq:p_sleepqueue;
@@ -749,7 +740,7 @@ end;
  * Resumes a specific thread from the sleep queue associated with a specific
  * wait channel if it is on that queue.
 }
-procedure sleepq_remove(td:p_kthread;wchan:Pointer);
+procedure sleepq_remove(td:p_kthread;wchan:Pointer); public;
 var
  sq:p_sleepqueue;
 begin
@@ -776,7 +767,7 @@ end;
  * Abort a thread as if an interrupt had occurred.  Only abort
  * interruptible waits (unfortunately it isn't safe to abort others).
 }
-function sleepq_abort(td:p_kthread;intrval:Integer):Integer;
+function sleepq_abort(td:p_kthread;intrval:Integer):Integer; public;
 var
  sq:p_sleepqueue;
  wchan:Pointer;

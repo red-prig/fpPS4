@@ -1,4 +1,4 @@
-unit kern_jit2_ctx;
+unit kern_jit_ctx;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}

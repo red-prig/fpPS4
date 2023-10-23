@@ -1,4 +1,4 @@
-unit kern_jit2_ops_avx;
+unit kern_jit_ops_avx;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -10,8 +10,8 @@ implementation
 uses
  x86_fpdbgdisas,
  x86_jit,
- kern_jit2_ops,
- kern_jit2_ctx;
+ kern_jit_ops,
+ kern_jit_ctx;
 
 const
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);

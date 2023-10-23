@@ -1,4 +1,4 @@
-unit kern_jit2_ops;
+unit kern_jit_ops;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -8,7 +8,7 @@ interface
 uses
  x86_fpdbgdisas,
  x86_jit,
- kern_jit2_ctx,
+ kern_jit_ctx,
  kern_jit_asm;
 
 type

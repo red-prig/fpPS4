@@ -11,7 +11,7 @@ uses
  g23tree,
  murmurhash,
  x86_jit,
- kern_jit2_ctx,
+ kern_jit_ctx,
  kern_rwlock,
  kern_thr,
  kern_jit_asm;

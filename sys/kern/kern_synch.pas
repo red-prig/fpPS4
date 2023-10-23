@@ -6,7 +6,7 @@ unit kern_synch;
 interface
 
 uses
- subr_sleepqueue,
+ sys_sleepqueue,
  kern_param,
  kern_mtx,
  kern_thr;

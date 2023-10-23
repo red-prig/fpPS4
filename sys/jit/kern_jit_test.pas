@@ -1,6 +1,7 @@
-unit kern_jit2_test;
+unit kern_jit_test;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
@@ -10,7 +11,7 @@ implementation
 
 uses
  x86_fpdbgdisas,
- kern_jit2_ops;
+ kern_jit_ops;
 
 type
  t_used_op=array[TOpcodePrefix,TOpCode,TOpCodeSuffix] of Boolean;
