@@ -49,7 +49,7 @@ uses
  elf_nid_utils,
  kern_stub,
  vm_patch_link,
- trap,
+ subr_backtrace,
  ps4libdoc;
 
 function symlook_obj(req:p_SymLook;obj:p_lib_info):Integer;
@@ -397,7 +397,9 @@ type
  t_jmpq64_trampoline=packed record
   lea:array[0..6] of Byte;
   //
-  inst   :Word;  //FF 25
+  and_rsp:DWORD; //48 83 E4 F0
+  //
+  inst   :Word;  //FF 15
   offset :DWORD; //00
   addr   :QWORD;
   nid    :QWORD;
@@ -405,7 +407,7 @@ type
  end;
 
 const
- c_jmpq64_trampoline:t_jmpq64_trampoline=(lea:($48,$8D,$3D,$F9,$FF,$FF,$FF);inst:$25FF;offset:0;addr:0);
+ c_jmpq64_trampoline:t_jmpq64_trampoline=(lea:($48,$8D,$3D,$F9,$FF,$FF,$FF);and_rsp:($F0E48348);inst:$15FF;offset:0;addr:0);
 
 procedure _unresolve_symbol(data:p_jmpq64_trampoline);
 var
@@ -418,7 +420,7 @@ begin
  end;
 
  Writeln(StdErr,'_unresolve_symbol:0x',HexStr(data^.nid,16),':',str,':',data^.libname);
- print_backtrace(StdErr,Get_pc_addr,get_frame,0);
+ print_backtrace_td(StdErr);
  readln;
 end;
 

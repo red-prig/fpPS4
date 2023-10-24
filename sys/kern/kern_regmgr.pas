@@ -29,7 +29,7 @@ uses
  errno,
  systm,
  kern_thr,
- trap;
+ subr_backtrace;
 
 const
  s_ScrambNSsdk:array[0..15] of Byte=(

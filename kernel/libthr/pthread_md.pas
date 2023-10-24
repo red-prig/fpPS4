@@ -40,7 +40,7 @@ end;
 
 function TCB_GET64:p_tcb; assembler; nostackframe;
 asm
- movqq %gs:teb.tcb,Result
+ movqq %gs:teb.fsbase,Result
 end;
 
 procedure _tcb_set(tcb:p_tcb); inline;

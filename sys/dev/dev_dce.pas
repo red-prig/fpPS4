@@ -19,7 +19,7 @@ implementation
 uses
  errno,
  systm,
- trap,
+ subr_backtrace,
  vm,
  sys_vm_object,
  vm_pager,

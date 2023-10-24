@@ -14,6 +14,7 @@ uses
   md_context,
   md_proc,
   kern_thr,
+  subr_backtrace,
   trap,
   signal,
   ucontext,

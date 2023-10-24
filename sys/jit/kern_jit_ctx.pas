@@ -890,7 +890,7 @@ begin
  Result:=0;
 
  case i.SegmentReg of
-  4:Result:=teb_tcb;
+  4:Result:=teb_fsbase;
   5:Result:=teb_gsbase;
   else
     Assert(False);

@@ -905,46 +905,58 @@ begin
  end;
 end;
 
-const
- mul_desc:t_op_type=(op:$F7;index:4);
-
-procedure op_mul(var ctx:t_jit_context2);
+procedure op_emit1_gn(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,mul_desc,[his_ro]); //R
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_prefix];
+
+  op_emit1(ctx,tmp,[]);
  end else
- with ctx.builder do
  begin
   add_orig(ctx);
  end;
 end;
 
-const
- idiv_desc1:t_op_type=(op:$F7;index:7);
-
-procedure op_idiv(var ctx:t_jit_context2);
+procedure op_emit1_ro(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,idiv_desc1,[his_ro]); //R
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_prefix];
+
+  op_emit1(ctx,tmp,[his_ro]);
  end else
- with ctx.builder do
  begin
   add_orig(ctx);
  end;
 end;
 
-const
- div_desc:t_op_type=(op:$F7;index:6);
-
-procedure op_div(var ctx:t_jit_context2);
+procedure op_emit1_rw(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit1(ctx,div_desc,[his_ro]); //R
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_prefix];
+
+  op_emit1(ctx,tmp,[his_rw]);
  end else
- with ctx.builder do
  begin
   add_orig(ctx);
  end;
@@ -1283,29 +1295,6 @@ end;
 //
 
 const
- SETcc_8:array[OPSc_o..OPSc_nle] of Byte=(
-  $90,$91,$92,$93,$94,$95,$96,$97,
-  $98,$99,$9A,$9B,$9C,$9D,$9E,$9F
- );
-
-procedure op_setcc(var ctx:t_jit_context2);
-var
- desc:t_op_type;
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  desc:=Default(t_op_type);
-  desc.opt:=[not_prefix];
-  desc.op:=$0F00 or SETcc_8[ctx.din.OpCode.Suffix];
-  //
-  op_emit1(ctx,desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
  test_desc:t_op_desc=(
   mem_reg:(op:$85;index:0);
   reg_mem:(opt:[not_impl]);
@@ -1543,70 +1532,6 @@ end;
 //
 
 const
- inc_desc:t_op_type=(
-  op:$FF;index:0
- );
-
-procedure op_inc(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,inc_desc,[his_rw]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- dec_desc:t_op_type=(
-  op:$FF;index:1
- );
-
-procedure op_dec(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,dec_desc,[his_rw]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- neg_desc:t_op_type=(
-  op:$F7;index:3
- );
-
-procedure op_neg(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,neg_desc,[his_rw]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- not_desc:t_op_type=(
-  op:$F7;index:2
- );
-
-procedure op_not(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,not_desc,[his_rw]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
  bswap_desc:t_op_type=(
   op:$0FC8;index:0
  );
@@ -1668,600 +1593,6 @@ end;
 
 //
 
-const
- clflush_desc:t_op_type=(
-  op:$0FAE;index:7;opt:[not_prefix];
- );
-
-procedure op_clflush(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,clflush_desc,[his_rw]);
-end;
-
-//
-
-const
- fldenv_desc:t_op_type=(
-  op:$D9;index:4;opt:[not_prefix];
- );
-
-procedure op_fldenv(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fldenv_desc,[his_ro]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fnstenv_desc:t_op_type=(
-  op:$D9;index:6;opt:[not_prefix];
- );
-
-procedure op_fnstenv(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fnstenv_desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fnstsw_desc:t_op_type=(
-  op:$DD;index:7;opt:[not_prefix];
- );
-
-procedure op_fnstsw(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fnstsw_desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fnstcw_desc:t_op_type=(
-  op:$D9;index:7;opt:[not_prefix];
- );
-
-procedure op_fnstcw(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fnstcw_desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fxsave_desc:t_op_type=(
-  op:$0FAE;index:0;opt:[not_prefix];
- );
-
-procedure op_fxsave(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fxsave_desc,[]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fxrstor_desc:t_op_type=(
-  op:$0FAE;index:1;opt:[not_prefix];
- );
-
-procedure op_fxrstor(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fxrstor_desc,[his_ro]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- fldcw_desc:t_op_type=(
-  op:$D9;index:5;opt:[not_prefix];
- );
-
-procedure op_fldcw(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit1(ctx,fldcw_desc,[his_ro]);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fld_32_desc:t_op_type=(
-  op:$D9;index:0;opt:[not_prefix];
- );
-
- fld_64_desc:t_op_type=(
-  op:$DD;index:0;opt:[not_prefix];
- );
-
- fld_80_desc:t_op_type=(
-  op:$DB;index:5;opt:[not_prefix];
- );
-
-procedure op_fld(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fld_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fld_64_desc,[his_ro]);
-   os80:op_emit1(ctx,fld_80_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fild_16_desc:t_op_type=(
-  op:$DF;index:0;opt:[not_prefix];
- );
-
- fild_32_desc:t_op_type=(
-  op:$DB;index:0;opt:[not_prefix];
- );
-
- fild_64_desc:t_op_type=(
-  op:$DF;index:5;opt:[not_prefix];
- );
-
-procedure op_fild(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os16:op_emit1(ctx,fild_16_desc,[his_ro]);
-   os32:op_emit1(ctx,fild_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fild_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- fst_32_desc:t_op_type=(
-  op:$D9;index:2;opt:[not_prefix];
- );
-
- fst_64_desc:t_op_type=(
-  op:$DD;index:2;opt:[not_prefix];
- );
-
-procedure op_fst(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fst_32_desc,[]);
-   os64:op_emit1(ctx,fst_64_desc,[]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fstp_32_desc:t_op_type=(
-  op:$D9;index:3;opt:[not_prefix];
- );
-
- fstp_64_desc:t_op_type=(
-  op:$DD;index:3;opt:[not_prefix];
- );
-
- fstp_80_desc:t_op_type=(
-  op:$DB;index:7;opt:[not_prefix];
- );
-
-procedure op_fstp(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fstp_32_desc,[]);
-   os64:op_emit1(ctx,fstp_64_desc,[]);
-   os80:op_emit1(ctx,fstp_80_desc,[]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fist_16_desc:t_op_type=(
-  op:$DF;index:2;opt:[not_prefix];
- );
-
- fist_32_desc:t_op_type=(
-  op:$DB;index:2;opt:[not_prefix];
- );
-
-procedure op_fist(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os16:op_emit1(ctx,fist_16_desc,[]);
-   os32:op_emit1(ctx,fist_32_desc,[]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fistp_16_desc:t_op_type=(
-  op:$DF;index:3;opt:[not_prefix];
- );
-
- fistp_32_desc:t_op_type=(
-  op:$DB;index:3;opt:[not_prefix];
- );
-
- fistp_64_desc:t_op_type=(
-  op:$DF;index:7;opt:[not_prefix];
- );
-
-procedure op_fistp(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os16:op_emit1(ctx,fistp_16_desc,[]);
-   os32:op_emit1(ctx,fistp_32_desc,[]);
-   os64:op_emit1(ctx,fistp_64_desc,[]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fisttp_16_desc:t_op_type=(
-  op:$DF;index:1;opt:[not_prefix];
- );
-
- fisttp_32_desc:t_op_type=(
-  op:$DB;index:1;opt:[not_prefix];
- );
-
- fisttp_64_desc:t_op_type=(
-  op:$DD;index:1;opt:[not_prefix];
- );
-
-procedure op_fisttp(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os16:op_emit1(ctx,fisttp_16_desc,[]);
-   os32:op_emit1(ctx,fisttp_32_desc,[]);
-   os64:op_emit1(ctx,fisttp_64_desc,[]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fadd_32_desc:t_op_type=(
-  op:$D8;index:0;opt:[not_prefix];
- );
-
- fadd_64_desc:t_op_type=(
-  op:$DC;index:0;opt:[not_prefix];
- );
-
-procedure op_fadd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fadd_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fadd_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-
-const
- fiadd_16_desc:t_op_type=(
-  op:$DE;index:0;opt:[not_prefix];
- );
-
- fiadd_32_desc:t_op_type=(
-  op:$DA;index:0;opt:[not_prefix];
- );
-
-procedure op_fiadd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os16:op_emit1(ctx,fiadd_16_desc,[his_ro]);
-   os32:op_emit1(ctx,fiadd_32_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fmul_32_desc:t_op_type=(
-  op:$D8;index:1;opt:[not_prefix];
- );
-
- fmul_64_desc:t_op_type=(
-  op:$DC;index:1;opt:[not_prefix];
- );
-
-procedure op_fmul(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fmul_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fmul_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fsub_32_desc:t_op_type=(
-  op:$D8;index:4;opt:[not_prefix];
- );
-
- fsub_64_desc:t_op_type=(
-  op:$DC;index:4;opt:[not_prefix];
- );
-
-procedure op_fsub(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fsub_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fsub_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fsubr_32_desc:t_op_type=(
-  op:$D8;index:5;opt:[not_prefix];
- );
-
- fsubr_64_desc:t_op_type=(
-  op:$DC;index:5;opt:[not_prefix];
- );
-
-procedure op_fsubr(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fsubr_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fsubr_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-
-const
- fisub_16_desc:t_op_type=(
-  op:$DE;index:4;opt:[not_prefix];
- );
-
- fisub_32_desc:t_op_type=(
-  op:$DA;index:4;opt:[not_prefix];
- );
-
-procedure op_fisub(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fisub_16_desc,[his_ro]);
-   os64:op_emit1(ctx,fisub_32_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fdiv_32_desc:t_op_type=(
-  op:$D8;index:6;opt:[not_prefix];
- );
-
- fdiv_64_desc:t_op_type=(
-  op:$DC;index:6;opt:[not_prefix];
- );
-
-procedure op_fdiv(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fdiv_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fdiv_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- fdivr_32_desc:t_op_type=(
-  op:$D8;index:7;opt:[not_prefix];
- );
-
- fdivr_64_desc:t_op_type=(
-  op:$DC;index:7;opt:[not_prefix];
- );
-
-procedure op_fdivr(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  case ctx.din.Operand[1].Size of
-   os32:op_emit1(ctx,fdivr_32_desc,[his_ro]);
-   os64:op_emit1(ctx,fdivr_64_desc,[his_ro]);
-   else
-    Assert(false);
-  end;
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
- prefetchnta_desc:t_op_type=(
-  op:$0F18;index:0;opt:[not_prefix];
- );
-
-procedure op_prefetchnta(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetchnta_desc,[his_rw]);
-end;
-
-const
- prefetch_desc:t_op_type=(
-  op:$0F0D;index:0;opt:[not_prefix];
- );
-
-procedure op_prefetch(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetch_desc,[his_rw]);
-end;
-
-const
- prefetchw_desc:t_op_type=(
-  op:$0F0D;index:1;opt:[not_prefix];
- );
-
-procedure op_prefetchw(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetchw_desc,[his_rw]);
-end;
-
-const
- prefetch0_desc:t_op_type=(
-  op:$0F18;index:1;opt:[not_prefix];
- );
-
-procedure op_prefetch0(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetch0_desc,[his_rw]);
-end;
-
-const
- prefetch1_desc:t_op_type=(
-  op:$0F18;index:2;opt:[not_prefix];
- );
-
-procedure op_prefetch1(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetch1_desc,[his_rw]);
-end;
-
-const
- prefetch2_desc:t_op_type=(
-  op:$0F18;index:3;opt:[not_prefix];
- );
-
-procedure op_prefetch2(var ctx:t_jit_context2);
-begin
- op_emit1(ctx,prefetch2_desc,[his_rw]);
-end;
-
-//
-
 procedure init_cbs;
 begin
  //
@@ -2309,9 +1640,9 @@ begin
  jit_cbs[OPPnone,OPadc ,OPSnone]:=@op_adc;
 
  jit_cbs[OPPnone,OPimul,OPSnone]:=@op_imul;
- jit_cbs[OPPnone,OPmul ,OPSnone]:=@op_mul;
- jit_cbs[OPPnone,OPidiv,OPSnone]:=@op_idiv;
- jit_cbs[OPPnone,OPdiv ,OPSnone]:=@op_div;
+ jit_cbs[OPPnone,OPmul ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPidiv,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPdiv ,OPSnone]:=@op_emit1_ro;
 
  jit_cbs[OPPnone,OPbt  ,OPSnone]:=@op_bt;
  jit_cbs[OPPnone,OPbtc ,OPSnone]:=@op_btc;
@@ -2373,22 +1704,22 @@ begin
  jit_cbs[OPPnone,OPshl ,OPSx_d ]:=@op_shld;
  jit_cbs[OPPnone,OPshr ,OPSx_d ]:=@op_shrd;
 
- jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_b  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_nb ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_z  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_nz ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_be ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_nbe]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_s  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_ns ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_p  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_np ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_l  ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_setcc;
- jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_setcc;
+ jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_b  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_nb ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_z  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_nz ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_be ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_nbe]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_s  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_ns ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_p  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_np ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_l  ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_emit1_gn;
 
  jit_cbs[OPPnone,OPemms      ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfemms     ,OPSnone]:=@add_orig;
@@ -2426,18 +1757,17 @@ begin
 
  jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
 
- jit_cbs[OPPnone,OPinc,OPSnone]:=@op_inc;
- jit_cbs[OPPnone,OPdec,OPSnone]:=@op_dec;
- jit_cbs[OPPnone,OPneg,OPSnone]:=@op_neg;
- jit_cbs[OPPnone,OPnot,OPSnone]:=@op_not;
+ jit_cbs[OPPnone,OPinc,OPSnone]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPdec,OPSnone]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPneg,OPSnone]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPnot,OPSnone]:=@op_emit1_rw;
+
  jit_cbs[OPPnone,OPbswap,OPSnone]:=@op_bswap;
 
  jit_cbs[OPPnone,OPsahf,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPlahf,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPxlat,OPSnone]:=@add_orig;
-
- jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_clflush;
 
  //fpu
 
@@ -2503,39 +1833,42 @@ begin
 
  //
 
- jit_cbs[OPPnone,OPfldcw ,OPSnone]:=@op_fldcw;
- jit_cbs[OPPnone,OPfld   ,OPSnone]:=@op_fld;
- jit_cbs[OPPnone,OPfild  ,OPSnone]:=@op_fild;
+ jit_cbs[OPPnone,OPfldcw  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfld    ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfild   ,OPSnone]:=@op_emit1_ro;
 
- jit_cbs[OPPnone,OPfldenv ,OPSnone]:=@op_fldenv;
- jit_cbs[OPPnone,OPfnstenv,OPSnone]:=@op_fnstenv;
- jit_cbs[OPPnone,OPfnstcw ,OPSnone]:=@op_fnstcw;
- jit_cbs[OPPnone,OPfnstsw ,OPSnone]:=@op_fnstsw;
+ jit_cbs[OPPnone,OPfldenv ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfnstenv,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfnstcw ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfnstsw ,OPSnone]:=@op_emit1_gn;
 
- jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_fxsave;
- jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_fxrstor;
- jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_fst;
- jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_fstp;
- jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_fist;
- jit_cbs[OPPnone,OPfist   ,OPSx_p ]:=@op_fistp;
- jit_cbs[OPPnone,OPfisttp ,OPSnone]:=@op_fisttp;
- jit_cbs[OPPnone,OPfadd   ,OPSnone]:=@op_fadd;
- jit_cbs[OPPnone,OPfiadd  ,OPSnone]:=@op_fiadd;
- jit_cbs[OPPnone,OPfmul   ,OPSnone]:=@op_fmul;
- jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_fsub;
- jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_fsubr;
- jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_fisub;
- jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_fdiv;
- jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_fdivr;
+ jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfist   ,OPSx_p ]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfisttp ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfadd   ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfiadd  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfmul   ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfimul  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_emit1_ro;
+
+ jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_emit1_rw;
 
  //fpu
 
- jit_cbs[OPPnone,OPprefetch,OPSnone ]:=@op_prefetch;
- jit_cbs[OPPnone,OPprefetch,OPSp_w  ]:=@op_prefetchw;
- jit_cbs[OPPnone,OPprefetch,OPSp_nta]:=@op_prefetchnta;
- jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_prefetch0;
- jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_prefetch1;
- jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_prefetch2;
+ jit_cbs[OPPnone,OPprefetch,OPSnone ]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSp_w  ]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSp_nta]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_emit1_rw;
 
 end;
 

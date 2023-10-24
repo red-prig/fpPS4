@@ -20,7 +20,7 @@ uses
  dmem_map,
  kern_dmem,
  sys_vm_object,
- trap;
+ subr_backtrace;
 
 type
  PAvailableDirectMemorySize=^TAvailableDirectMemorySize;

@@ -320,22 +320,22 @@ const
  }
 
  patch_fs_table:array[0..15] of t_mov_rel_base32=(
-  (inst:($65,$48,$8B,$04,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$0C,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$14,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$1C,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$24,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$2C,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$34,$25);addr:teb_tcb),
-  (inst:($65,$48,$8B,$3C,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$04,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$0C,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$14,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$1C,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$24,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$2C,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$34,$25);addr:teb_tcb),
-  (inst:($65,$4C,$8B,$3C,$25);addr:teb_tcb)
+  (inst:($65,$48,$8B,$04,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$0C,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$14,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$1C,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$24,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$2C,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$34,$25);addr:teb_fsbase),
+  (inst:($65,$48,$8B,$3C,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$04,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$0C,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$14,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$1C,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$24,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$2C,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$34,$25);addr:teb_fsbase),
+  (inst:($65,$4C,$8B,$3C,$25);addr:teb_fsbase)
  );
 
  patch_gs_table:array[0..15] of t_mov_rel_base32=(

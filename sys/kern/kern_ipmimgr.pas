@@ -12,7 +12,7 @@ implementation
 uses
  errno,
  systm,
- trap,
+ subr_backtrace,
  kern_named_id;
 
 type

@@ -468,6 +468,9 @@ begin
  jit_cbs[OPPnone,OPucomi,OPSx_ss]:=@op_reg_mem_ro;
  jit_cbs[OPPnone,OPucomi,OPSx_sd]:=@op_reg_mem_ro;
 
+ jit_cbs[OPPnone,OPxor,OPSx_ps]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPxor,OPSx_pd]:=@op_reg_mem_rw;
+
  jit_cbs[OPPnone,OPor ,OPSx_ps]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPor ,OPSx_pd]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpor,OPSnone]:=@op_reg_mem_rw;

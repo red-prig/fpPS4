@@ -166,7 +166,7 @@ uses
  md_arc4random,
  kern_proc,
  md_proc,
- trap;
+ subr_backtrace;
 
 var
  sysctllock   :t_sx;

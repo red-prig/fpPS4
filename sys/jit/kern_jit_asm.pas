@@ -47,6 +47,8 @@ procedure jit_call_dispatch; assembler;
 procedure jit_call_internal; assembler;
 procedure jit_jmp_internal;  assembler;
 
+function  IS_JIT_FUNC(rip:qword):Boolean;
+
 implementation
 
 uses
@@ -566,8 +568,44 @@ asm
  movq %rbp,%rsp
  pop  %rbp
 
+ //pop internal
  lea  8(%rsp),%rsp
  jmp  %r14
+end;
+
+procedure stack_set_user; assembler; nostackframe;
+asm
+ //switch stack
+ movq %rsp,%gs:teb.jit_rsp
+ movq %rbp,%gs:teb.jit_rbp
+
+ movq jit_frame.tf_rsp(%r13),%rsp
+ movq jit_frame.tf_rbp(%r13),%rbp
+
+ //teb
+ movq - kthread.td_frame.tf_r13 + kthread.td_kstack.sttop(%r13) ,%r14
+ movq - kthread.td_frame.tf_r13 + kthread.td_kstack.stack(%r13) ,%r15
+
+ movq %r14,%gs:teb.sttop
+ movq %r15,%gs:teb.stack
+ //teb
+end;
+
+procedure stack_set_jit; assembler; nostackframe;
+asm
+ //switch stack
+ movq %gs:teb.jit_rsp,%rsp
+ movq %gs:teb.jit_rbp,%rbp
+
+ //teb
+ movq - kthread.td_frame.tf_r13 + kthread.td_ustack.sttop(%r13) ,%r14
+ movq - kthread.td_frame.tf_r13 + kthread.td_ustack.stack(%r13) ,%r15
+
+ movq %r14,%gs:teb.sttop
+ movq %r15,%gs:teb.stack
+ //teb
+
+ //uplift %rsp/%rbp ???
 end;
 
 procedure jit_call_internal; assembler; nostackframe;
@@ -589,21 +627,20 @@ asm
  //%r14 ABI preserve the registers
  //%r15 ABI preserve the registers
 
- //%rsp???
- //%rbp???
+ //call stack_set_user
 
+ //call
  call %gs:teb.jitcall
 
  //restore guard
  movq %gs:teb.thread               ,%r13 //curkthread
  leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
 
+ //call stack_set_jit
+
  //%r13 ABI preserve the registers
  //%r14 ABI preserve the registers
  //%r15 ABI preserve the registers
-
- //%rsp???
- //%rbp???
 
  //epilog
  pop  %rbp
@@ -611,18 +648,54 @@ end;
 
 procedure jit_jmp_internal; assembler; nostackframe;
 asm
- //set
+ //push internal call
+ lea  -8(%rsp),%rsp
 
- //%rsp???
- //%rbp???
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
 
- movqq jit_frame.tf_r14(%r13),%r14
- movqq jit_frame.tf_r15(%r13),%r15
- movqq jit_frame.tf_r13(%r13),%r13
+ //call stack_set_user
 
- jmp %gs:teb.jitcall
+ //movqq jit_frame.tf_r14(%r13),%r14
+ //movqq jit_frame.tf_r15(%r13),%r15
+ //movqq jit_frame.tf_r13(%r13),%r13
+
+ call %gs:teb.jitcall
+
+ //restore guard
+ movq %gs:teb.thread               ,%r13 //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ //call stack_set_jit
+
+ //epilog
+ pop  %rbp
+
+ //pop host call
+ mov jit_frame.tf_rsp(%r13),%r15
+ mov  (%r15),%r14
+ lea 8(%r15),%r15
+ mov %r15,jit_frame.tf_rsp(%r13)
+
+ jmp  jit_call_dispatch
 end;
 
+function IS_JIT_FUNC(rip:qword):Boolean; public;
+begin
+ Result:=(
+          (rip>=QWORD(@jit_syscall)) and
+          (rip<=(QWORD(@jit_syscall)+$1A5)) //jit_syscall func size
+         ) or
+         (
+          (rip>=QWORD(@jit_jmp_dispatch)) and
+          (rip<=(QWORD(@jit_jmp_dispatch)+$30)) //jit_jmp_dispatch func size
+         ) or
+         (
+          (rip>=QWORD(@jit_call_dispatch)) and
+          (rip<=(QWORD(@jit_call_dispatch)+$30)) //jit_call_dispatch func size
+         );
+end;
 
 end.
 

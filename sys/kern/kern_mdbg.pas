@@ -12,7 +12,7 @@ implementation
 uses
  errno,
  systm,
- trap;
+ subr_backtrace;
 
 type
  t_SetProcessProperty=packed record //0x48

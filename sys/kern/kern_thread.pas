@@ -498,7 +498,7 @@ begin
   // Set upcall address to user thread entry function.
   cpu_set_upcall_kse(newtd,start_func,arg,@stack);
   // Setup user TLS address and TLS pointer register.
-  cpu_set_user_tls(newtd,tls_base);
+  cpu_set_fsbase(newtd,tls_base);
  end;
 
  //jit wrapper
@@ -974,7 +974,7 @@ begin
 
  if (Integer(id)=-1) then
  begin
-  //TODO SetProcName
+  kern_proc.p_proc.p_comm:=name;
   Exit;
  end;
 
@@ -1035,7 +1035,7 @@ begin
  Result:=0;
  td:=curkthread;
  if (td=nil) then Exit(-1);
- cpu_set_user_tls(td,base);
+ cpu_set_fsbase(td,base);
 end;
 
 function sys_amd64_get_fsbase(base:PPointer):Integer;

@@ -23,14 +23,14 @@ const
  MAXPATHLEN =PATH_MAX;
  MAXSYMLINKS=32;
 
- MAXCOMLEN=19;
+ MAXCOMLEN  =31;
 
- SPECNAMELEN  =63;    { max length of devicename }
+ SPECNAMELEN=63;    { max length of devicename }
 
- MAXFIDSZ=16;
+ MAXFIDSZ   =16;
 
- MFSNAMELEN=16; // length of type name including null
- MNAMELEN  =88; // size of on/from name bufs
+ MFSNAMELEN =16; // length of type name including null
+ MNAMELEN   =88; // size of on/from name bufs
 
  DEV_BSHIFT=9;
  DEV_BSIZE =(1 shl DEV_BSHIFT);

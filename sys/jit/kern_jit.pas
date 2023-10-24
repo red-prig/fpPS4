@@ -32,20 +32,17 @@ uses
 
 procedure jit_assert;
 begin
- Writeln('TODO:jit_assert');
- Assert(False);
+ Assert(False,'jit_assert');
 end;
 
 procedure jit_system_error;
 begin
- Writeln('TODO:jit_system_error');
- Assert(False);
+ Assert(False,'jit_system_error');
 end;
 
 procedure jit_unknow_int;
 begin
- Writeln('TODO:jit_unknow_int');
- Assert(False);
+ Assert(False,'jit_unknow_int');
 end;
 
 procedure jit_exit_proc;
@@ -1122,6 +1119,14 @@ begin
    writeln('invalid2:0x',HexStr(ctx.ptr_curr));
    goto _invalid;
   end;
+
+  {
+  if (qword(ctx.ptr_curr) and $FFFFF) = $427F5 then
+  begin
+   print_asm:=true;
+   ctx.builder.int3;
+  end;
+  }
 
   if print_asm then
   begin

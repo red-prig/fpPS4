@@ -18,7 +18,7 @@ uses
  vsocket,
  vfile,
  vfcntl,
- trap;
+ subr_backtrace;
 
 function soo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 begin

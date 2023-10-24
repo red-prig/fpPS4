@@ -359,7 +359,7 @@ implementation
 uses
  errno,
  systm,
- trap,
+ subr_backtrace,
  vm,
  vmparam,
  vm_map,

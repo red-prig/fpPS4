@@ -27,7 +27,7 @@ procedure bzero(ptr:Pointer;size:ptrint);
 Procedure bmove(src,dst:Pointer;size:ptrint);
 
 function  cpu_getstack(td:p_kthread):QWORD;
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+procedure cpu_set_fsbase(td:p_kthread;base:Pointer);
 procedure cpu_set_gsbase(td:p_kthread;base:Pointer);
 procedure cpu_init_jit(td:p_kthread);
 procedure cpu_fini_jit(td:p_kthread);
@@ -84,10 +84,10 @@ begin
  Result:=td^.td_frame.tf_rsp;
 end;
 
-procedure cpu_set_user_tls(td:p_kthread;base:Pointer);
+procedure cpu_set_fsbase(td:p_kthread;base:Pointer);
 begin
  td^.pcb_fsbase:=base;
- td^.td_teb^.tcb:=base;
+ td^.td_teb^.fsbase:=base;
  set_pcb_flags(td,PCB_FULL_IRET);
 end;
 
@@ -101,29 +101,14 @@ end;
 procedure cpu_init_jit(td:p_kthread);
 begin
  //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  td^.td_teb^.sttop:=td^.td_kstack.sttop;
-  td^.td_teb^.stack:=td^.td_kstack.stack;
- end;
+ teb_set_kernel(td);
  //teb stack
 end;
 
 procedure cpu_fini_jit(td:p_kthread);
 begin
  //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  if (sigonstack(td^.td_frame.tf_rsp)<>0) then
-  begin
-   td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
-   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
-  end else
-  begin
-   td^.td_teb^.stack:=td^.td_ustack.stack;
-   td^.td_teb^.sttop:=td^.td_ustack.sttop;
-  end;
- end;
+ teb_set_user(td);
  //teb stack
 end;
 
@@ -132,13 +117,9 @@ begin
  td^.td_retval[0]:=0;
  td^.td_retval[1]:=td^.td_frame.tf_rdx;
 
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  //teb stack
-  td^.td_teb^.sttop:=td^.td_kstack.sttop;
-  td^.td_teb^.stack:=td^.td_kstack.stack;
-  //teb stack
- end;
+ //teb stack
+ teb_set_kernel(td);
+ //teb stack
 end;
 
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
@@ -168,18 +149,7 @@ begin
  end;
 
  //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  if (sigonstack(td^.td_frame.tf_rsp)<>0) then
-  begin
-   td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
-   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
-  end else
-  begin
-   td^.td_teb^.stack:=td^.td_ustack.stack;
-   td^.td_teb^.sttop:=td^.td_ustack.sttop;
-  end;
- end;
+ teb_set_user(td);
  //teb stack
 end;
 
@@ -410,8 +380,8 @@ begin
 
  if ((mcp^.mc_flags and _MC_HASBASES)<>0) then
  begin
-  cpu_set_user_tls(td,Pointer(mcp^.mc_fsbase));
-  cpu_set_gsbase  (td,Pointer(mcp^.mc_gsbase));
+  cpu_set_fsbase(td,Pointer(mcp^.mc_fsbase));
+  cpu_set_gsbase(td,Pointer(mcp^.mc_gsbase));
  end;
 
  set_pcb_flags(td,PCB_FULL_IRET);
@@ -567,8 +537,8 @@ begin
 
  if ((ucp^.uc_mcontext.mc_flags and _MC_HASBASES)<>0) then
  begin
-  cpu_set_user_tls(td,Pointer(ucp^.uc_mcontext.mc_fsbase));
-  cpu_set_gsbase  (td,Pointer(ucp^.uc_mcontext.mc_gsbase));
+  cpu_set_fsbase(td,Pointer(ucp^.uc_mcontext.mc_fsbase));
+  cpu_set_gsbase(td,Pointer(ucp^.uc_mcontext.mc_gsbase));
  end;
 
  kern_sigprocmask(td,SIG_SETMASK,@ucp^.uc_sigmask,nil,0);
@@ -583,8 +553,8 @@ var
 begin
  regs:=@td^.td_frame;
 
- cpu_set_user_tls(td,nil);
- cpu_set_gsbase  (td,nil);
+ cpu_set_fsbase(td,nil);
+ cpu_set_gsbase(td,nil);
 
  set_pcb_flags(td,PCB_FULL_IRET);
 
