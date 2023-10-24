@@ -2238,10 +2238,15 @@ begin
 
  growsize:=sgrowsiz;
 
+ {
  if (max_ssize<growsize) then
   init_ssize:=max_ssize
  else
   init_ssize:=growsize;
+ }
+
+ //No need to trim the stack
+ init_ssize:=max_ssize;
 
  vmemlim:=lim_cur(RLIMIT_VMEM);
 
@@ -2279,7 +2284,7 @@ begin
 
  {
   * We initially map a stack of only init_ssize.  We will grow as
-  * needed later.  Dep__ending on the orientation of the stack (i.e.
+  * needed later.  Depending on the orientation of the stack (i.e.
   * the grow direction) we either map at the top of the range, the
   * bottom of the range or in the middle.
   *

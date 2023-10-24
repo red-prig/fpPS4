@@ -168,7 +168,9 @@ begin
   if (Pointer(addr)>=obj^.map_base) and
      (Pointer(addr)<(obj^.map_base+obj^.map_size)) then
   begin
-   r:=Default(TLQRec);
+   r.LastAdr:=nil;
+   r.LastNid:=0;
+
    r.Addr:=Pointer(addr);
    r.Base:=fuptr(obj^.map_base);
 

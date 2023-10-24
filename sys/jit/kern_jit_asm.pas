@@ -57,7 +57,8 @@ uses
  vm_pmap,
  trap,
  md_context,
- signal;
+ signal,
+ subr_backtrace;
 
 //
 
@@ -67,6 +68,7 @@ function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; external;
 
 procedure jit_sigsegv(addr:Pointer);
 begin
+ print_backtrace_td(stderr);
  Writeln('jit_sigsegv:0x',HexStr(addr));
  Assert(False);
 end;
