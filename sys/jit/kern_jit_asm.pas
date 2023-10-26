@@ -6,7 +6,8 @@ unit kern_jit_asm;
 interface
 
 uses
- kern_thr;
+ kern_thr,
+ x86_fpdbgdisas;
 
 {
 change: rsp,rbp,rip
@@ -36,9 +37,28 @@ type
 
 
 procedure uplift_jit;  assembler;
-procedure page_test;   assembler;
-procedure copyout_mov; assembler;
-procedure copyin_mov;  assembler;
+
+procedure copyout_mov_1;   assembler;
+procedure copyout_mov_2;   assembler;
+procedure copyout_mov_4;   assembler;
+procedure copyout_mov_8;   assembler;
+procedure copyout_mov_6;   assembler;
+procedure copyout_mov_10;  assembler;
+procedure copyout_mov_16;  assembler;
+procedure copyout_mov_32;  assembler;
+procedure copyout_mov_64;  assembler;
+procedure copyout_mov_512; assembler;
+
+procedure copyin_mov_1;   assembler;
+procedure copyin_mov_2;   assembler;
+procedure copyin_mov_4;   assembler;
+procedure copyin_mov_8;   assembler;
+procedure copyin_mov_6;   assembler;
+procedure copyin_mov_10;  assembler;
+procedure copyin_mov_16;  assembler;
+procedure copyin_mov_32;  assembler;
+procedure copyin_mov_64;  assembler;
+procedure copyin_mov_512; assembler;
 
 procedure jit_syscall;       assembler;
 procedure jit_jmp_dispatch;  assembler;
@@ -48,6 +68,35 @@ procedure jit_call_internal; assembler;
 procedure jit_jmp_internal;  assembler;
 
 function  IS_JIT_FUNC(rip:qword):Boolean;
+
+const
+ copyout_mov_size:array[TOperandSize] of Pointer=(
+  @copyout_mov_1 ,
+  @copyout_mov_1 ,
+  @copyout_mov_2 ,
+  @copyout_mov_4 ,
+  @copyout_mov_8 ,
+  @copyout_mov_6 ,
+  @copyout_mov_10,
+  @copyout_mov_16,
+  @copyout_mov_32,
+  @copyout_mov_64,
+  @copyout_mov_512
+ );
+
+ copyin_mov_size:array[TOperandSize] of Pointer=(
+  @copyin_mov_1 ,
+  @copyin_mov_1 ,
+  @copyin_mov_2 ,
+  @copyin_mov_4 ,
+  @copyin_mov_8 ,
+  @copyin_mov_6 ,
+  @copyin_mov_10,
+  @copyin_mov_16,
+  @copyin_mov_32,
+  @copyin_mov_64,
+  @copyin_mov_512
+ );
 
 implementation
 
@@ -74,7 +123,7 @@ begin
 end;
 
 //in/out:r14
-procedure uplift_jit; assembler;
+procedure uplift_jit_notsafe; assembler;
 const
  VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
 label
@@ -84,8 +133,6 @@ var
  addr:QWORD;
  tmp2:QWORD;
 asm
- pushfq //
-
  mov %r15,tmp2
  mov %r14,addr //origin
  //
@@ -112,24 +159,29 @@ asm
  or  %r15,%r14
  //
 
- mov tmp2,%r15
- popfq //
+ mov tmp2,%r15 //restore
 
  jmp _ret
 
  _sigsegv:
 
  mov addr,%rdi //origin
-
- mov tmp2,%r15
- popfq //
+ mov tmp2,%r15 //restore
 
  call jit_sigsegv
 
  _ret:
 end;
 
-//in:r14(addr),r15b:(mem_size) out:ZF
+//in/out:r14
+procedure uplift_jit; assembler; nostackframe;
+asm
+ pushfq //
+ call uplift_jit_notsafe
+ popfq  //
+end;
+
+//in:r14(addr),r15:(mem_size) out:ZF
 procedure page_test; assembler;
 label
  _exit;
@@ -140,8 +192,8 @@ asm
  mov %rdi,rdi
  mov %rsi,rsi
  //
- mov    %r14 ,%rdi
- movzbq %r15b,%rsi
+ mov %r14,%rdi
+ mov %r15,%rsi
  //addr2:=addr+mem_size-1 (rsi)
  lea -1(%rsi,%rdi),%rsi
  //high addr (rdi,rsi)
@@ -199,7 +251,7 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13), %r11
 end;
 
-//in:r14(addr),r15b:(size)
+//in:r14(addr),r15:(size)
 procedure copyout_mov; assembler;
 label
  _simple,
@@ -235,7 +287,7 @@ asm
   movq    addr,%rsi //vaddr
   lea     data,%rdi //data
   movq    size,%r15
-  movzbq %r15b,%rdx //size
+  movq    %r15,%rdx //size
 
   call copyout
 
@@ -246,7 +298,7 @@ asm
   jmp _exit
  _simple:
 
-  call uplift_jit
+  call uplift_jit_notsafe
 
   mov  8(%rbp),%r15 //ret addr
   lea  2(%r15),%r15 //jmp near
@@ -258,7 +310,67 @@ asm
  _exit:
 end;
 
-//in:r14(addr),r15b:(size) out:r14
+procedure copyout_mov_1; assembler; nostackframe;
+asm
+ movq $1,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_2; assembler; nostackframe;
+asm
+ movq $2,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_4; assembler; nostackframe;
+asm
+ movq $4,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_8; assembler; nostackframe;
+asm
+ movq $8,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_6; assembler; nostackframe;
+asm
+ movq $6,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_10; assembler; nostackframe;
+asm
+ movq $10,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_16; assembler; nostackframe;
+asm
+ movq $16,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_32; assembler; nostackframe;
+asm
+ movq $32,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_64; assembler; nostackframe;
+asm
+ movq $64,%r15
+ jmp copyout_mov
+end;
+
+procedure copyout_mov_512; assembler; nostackframe;
+asm
+ movq $512,%r15
+ jmp copyout_mov
+end;
+
+//in:r14(addr),r15:(size) out:r14
 procedure copyin_mov; assembler;
 label
  _simple,
@@ -277,7 +389,7 @@ asm
 
   mov     %r14,%rdi //vaddr
   lea     data,%rsi //data
-  movzbq %r15b,%rdx //size
+  mov     %r15,%rdx //size
 
   call copyin
 
@@ -288,11 +400,71 @@ asm
   jmp _exit
  _simple:
 
-  call uplift_jit
+  call uplift_jit_notsafe
 
  _exit:
  //
  popfq
+end;
+
+procedure copyin_mov_1; assembler; nostackframe;
+asm
+ movq $1,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_2; assembler; nostackframe;
+asm
+ movq $2,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_4; assembler; nostackframe;
+asm
+ movq $4,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_8; assembler; nostackframe;
+asm
+ movq $8,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_6; assembler; nostackframe;
+asm
+ movq $6,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_10; assembler; nostackframe;
+asm
+ movq $10,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_16; assembler; nostackframe;
+asm
+ movq $16,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_32; assembler; nostackframe;
+asm
+ movq $32,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_64; assembler; nostackframe;
+asm
+ movq $64,%r15
+ jmp copyin_mov
+end;
+
+procedure copyin_mov_512; assembler; nostackframe;
+asm
+ movq $512,%r15
+ jmp copyin_mov
 end;
 
 //

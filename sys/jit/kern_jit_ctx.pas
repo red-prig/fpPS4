@@ -1456,8 +1456,7 @@ procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
 begin
  with ctx.builder do
  begin
-  movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
-  call_far(@copyin_mov); //in:r14(addr),r15b:(size) out:r14
+  call_far(copyin_mov_size[mem_size]); //in:r14(addr), out:r14
  end;
 end;
 
@@ -1465,8 +1464,7 @@ procedure op_copyout(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
 begin
  with ctx.builder do
  begin
-  movi(new_reg_size(r_tmp1,os8),OPERAND_BYTES[mem_size]);
-  call_far(@copyout_mov); //in:r14(addr),r15b:(size)
+  call_far(copyout_mov_size[mem_size]); //in:r14(addr)
  end;
 end;
 
