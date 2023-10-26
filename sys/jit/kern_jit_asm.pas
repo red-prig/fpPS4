@@ -115,6 +115,9 @@ function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; external;
 
 //
 
+procedure jit_save_ctx; forward;
+procedure jit_load_ctx; forward;
+
 procedure jit_sigsegv(addr:Pointer);
 begin
  print_backtrace_td(stderr);
@@ -165,10 +168,15 @@ asm
 
  _sigsegv:
 
- mov addr,%rdi //origin
  mov tmp2,%r15 //restore
 
+ call jit_save_ctx
+
+ mov  addr,%rdi //origin
+
  call jit_sigsegv
+
+ call jit_load_ctx
 
  _ret:
 end;

@@ -127,7 +127,8 @@ implementation
 uses
  sysutils,
  vmparam,
- vm_pmap;
+ vm_pmap,
+ md_map;
 
 //
 
@@ -794,8 +795,9 @@ end;
 
 procedure t_jit_dynamic.alloc_base(_size:ptruint);
 begin
- base:=md_mmap(nil,_size,MD_PROT_RWX);
+ base:=nil;
  size:=_size;
+ md_mmap(base,size,MD_PROT_RWX);
 end;
 
 procedure t_jit_dynamic.free_base;

@@ -14,7 +14,7 @@ implementation
 
 uses
  kern_thr,
- vm_pmap,
+ md_map,
  vm_patch_link,
  trap,
  x86_index_instr;

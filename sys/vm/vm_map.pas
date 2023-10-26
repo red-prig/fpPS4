@@ -162,14 +162,14 @@ function  vm_map_lookup_entry(
             entry      :p_vm_map_entry_t):Boolean;
 
 function  vm_map_insert(
-           map        :vm_map_t;
-           vm_obj     :vm_object_t;
-           offset     :vm_ooffset_t;
-           start      :vm_offset_t;
-           __end      :vm_offset_t;
-           prot       :vm_prot_t;
-           max        :vm_prot_t;
-           cow        :Integer):Integer;
+           map   :vm_map_t;
+           obj   :vm_object_t;
+           offset:vm_ooffset_t;
+           start :vm_offset_t;
+           __end :vm_offset_t;
+           prot  :vm_prot_t;
+           max   :vm_prot_t;
+           cow   :Integer):Integer;
 
 function  vm_map_findspace(map   :vm_map_t;
                            start :vm_offset_t;
@@ -843,14 +843,14 @@ end;
  * prior to making call to account for the new entry.
  }
 function vm_map_insert(
-           map        :vm_map_t;
-           vm_obj     :vm_object_t;
-           offset     :vm_ooffset_t;
-           start      :vm_offset_t;
-           __end      :vm_offset_t;
-           prot       :vm_prot_t;
-           max        :vm_prot_t;
-           cow        :Integer):Integer;
+           map   :vm_map_t;
+           obj   :vm_object_t;
+           offset:vm_ooffset_t;
+           start :vm_offset_t;
+           __end :vm_offset_t;
+           prot  :vm_prot_t;
+           max   :vm_prot_t;
+           cow   :Integer):Integer;
 label
  charged;
 var
@@ -901,7 +901,7 @@ begin
  begin
   protoeflags:=protoeflags or MAP_ENTRY_NOFAULT;
 
-  Assert(vm_obj=nil,'vm_map_insert: paradoxical MAP_NOFAULT request');
+  Assert(obj=nil,'vm_map_insert: paradoxical MAP_NOFAULT request');
  end;
 
  if ((cow and MAP_DISABLE_SYNCER)<>0) then
@@ -924,11 +924,11 @@ begin
  end;
 
  if ((cow and MAP_ACC_CHARGED)<>0) or (((prot and VM_PROT_WRITE)<>0) and
-     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (vm_obj=nil))) then
+     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (obj=nil))) then
  begin
-  Assert((vm_obj=nil) or
+  Assert((obj=nil) or
          ((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0),'OVERCOMMIT: vm_map_insert o %p", object');
-  if (vm_obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
+  if (obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
   begin
    charge_prev_obj:=TRUE;
   end;
@@ -936,7 +936,7 @@ begin
 
 charged:
 
- if (vm_obj<>nil) then
+ if (obj<>nil) then
  begin
   {
    * OBJ_ONEMAPPING must be cleared unless this mapping
@@ -945,12 +945,12 @@ charged:
    * reference counting is insufficient to recognize
    * aliases with precision.)
    }
-  VM_OBJECT_LOCK(vm_obj);
-  if (vm_obj^.ref_count>1) then
+  VM_OBJECT_LOCK(obj);
+  if (obj^.ref_count>1) then
   begin
-   vm_object_clear_flag(vm_obj, OBJ_ONEMAPPING);
+   vm_object_clear_flag(obj, OBJ_ONEMAPPING);
   end;
-  VM_OBJECT_UNLOCK(vm_obj);
+  VM_OBJECT_UNLOCK(obj);
  end else
  if ((prev_entry<>@map^.header) and
    (prev_entry^.eflags=protoeflags) and
@@ -977,6 +977,8 @@ charged:
    if (cow<>-1) then
    begin
     pmap_enter_object(map^.pmap,
+                      obj,
+                      offset,
                       start,
                       __end,
                       prot);
@@ -988,15 +990,15 @@ charged:
   end;
 
   {
-   * If we can extend the object but cannot ext__end the
+   * If we can extend the object but cannot extend the
    * map entry, we have to create a new map entry.  We
-   * must bump the ref count on the ext__ended object to
+   * must bump the ref count on the extended object to
    * account for it.  object may be nil.
    }
-  vm_obj:=prev_entry^.vm_obj;
+  obj:=prev_entry^.vm_obj;
   offset:=prev_entry^.offset + (prev_entry^.__end - prev_entry^.start);
-  vm_object_reference(vm_obj);
-  if (vm_obj<>nil) and
+  vm_object_reference(obj);
+  if (obj<>nil) and
      ((prev_entry^.eflags and MAP_ENTRY_NEEDS_COPY)=0) then
   begin
    { Object already accounts for this uid. }
@@ -1017,7 +1019,7 @@ charged:
  new_entry^.__end:=__end;
 
  new_entry^.eflags:=protoeflags;
- new_entry^.vm_obj:=vm_obj;
+ new_entry^.vm_obj:=obj;
  new_entry^.offset:=offset;
  new_entry^.avail_ssize:=0;
 
@@ -1025,7 +1027,7 @@ charged:
  new_entry^.protection:=prot;
  new_entry^.max_protection:=max;
 
- vm_object_reference(vm_obj);
+ vm_object_reference(obj);
 
  Assert(not ENTRY_CHARGED(new_entry),'OVERCOMMIT: vm_map_insert leaks vm_map %p", new_entry');
 
@@ -1048,6 +1050,8 @@ charged:
  if (cow<>-1) then
  begin
   pmap_enter_object(map^.pmap,
+                    obj,
+                    offset,
                     start,
                     __end,
                     prot);
@@ -1798,6 +1802,8 @@ begin
      MADV_WILLNEED:
       begin
        pmap_enter_object(map^.pmap,
+                         current^.vm_obj,
+                         ptoa(pstart),
                          useStart,
                          useStart+ptoa(pend-pstart),
                          current^.protection);

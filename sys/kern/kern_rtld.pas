@@ -209,7 +209,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- vm_pmap,
+ md_map,
  kern_proc,
  kern_patcher;
 
