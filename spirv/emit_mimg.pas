@@ -42,7 +42,8 @@ type
   procedure emit_image_sample_gather(Tgrp:PsrNode;info:PsrImageInfo);
   procedure emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
   procedure emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
+  procedure emit_image_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
+  procedure emit_image_get_lod(Tgrp:PsrNode;info:PsrImageInfo);
  end;
 
 implementation
@@ -1006,7 +1007,7 @@ begin
 
 end;
 
-procedure TEmit_MIMG.emit_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
 var
  offset:DWORD;
  dst,lod:PsrRegNode;
@@ -1033,6 +1034,51 @@ begin
  _Op2(line,Op.OpImageQuerySizeLod,dst,PsrRegNode(Tgrp),lod);
 
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
+
+ AddCapability(Capability.ImageQuery);
+end;
+
+procedure TEmit_MIMG.emit_image_get_lod(Tgrp:PsrNode;info:PsrImageInfo);
+var
+ src:array[0..3] of PsrRegSlot;
+
+ pLayout:PsrDataLayout;
+ Sgrp:PsrNode;
+
+ dst,cmb:PsrRegNode;
+
+ param:TImgSampleParam;
+
+ mask:Byte;
+begin
+ if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
+
+ pLayout:=GroupingSharp(src,rtSSharp4);
+ Sgrp:=FetchSampler(pLayout);
+
+ cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
+
+ Assert(FSPI.MIMG.DMASK=1,'FSPI.MIMG.DMASK<>1');
+
+ //gather
+ param:=Default(TImgSampleParam);
+ param.coord:=GatherCoord_f(param.roffset,info);
+ //gather
+
+ dst:=NewReg(param.coord^.dtype);
+
+ _Op2(line,Op.OpImageQueryLod,dst,PsrRegNode(cmb),param.coord);
+
+ case param.coord^.dtype.Count of
+  1:mask:=1;
+  2:mask:=3;
+  3:mask:=7;
+  4:mask:=15;
+  else
+    mask:=0;
+ end;
+
+ DistribDmask(mask,dst,info);
 
  AddCapability(Capability.ImageQuery);
 end;
@@ -1111,7 +1157,15 @@ begin
      info.tinfo.Sampled:=1;
      Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
 
-     emit_GET_RESINFO(Tgrp,@info);
+     emit_image_get_resinfo(Tgrp,@info);
+    end;
+
+  IMAGE_GET_LOD:
+    begin
+     info.tinfo.Sampled:=1;
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+
+     emit_image_get_lod(Tgrp,@info);
     end;
 
   else
