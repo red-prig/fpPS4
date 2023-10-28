@@ -601,7 +601,6 @@ const
  fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
 var
  fvolume:array[0..7] of Single;
- fL,fR:Single;
 begin
  fvolume[_FL]:=(volume[_FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
  fvolume[_FR]:=(volume[_FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
@@ -611,6 +610,51 @@ begin
  fvolume[_BL]:=(volume[_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
  fvolume[_BR]:=(volume[_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
  __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
+end;
+
+procedure __VecMulS16CH8ToS(Src,Dst:Pointer;count:Integer;fvolume:PSingle);
+var
+ fL,fR:Single;
+begin
+ While (count>0) do
+ begin
+
+  fL:=(PSmallInt(Src)[_FL]*fvolume[_FL])+
+      (PSmallInt(Src)[_FC]*fvolume[_FC])+
+      (PSmallInt(Src)[_SL]*fvolume[_SL])+
+      (PSmallInt(Src)[_BL]*fvolume[_BL]);
+
+  fR:=(PSmallInt(Src)[_FR]*fvolume[_FR])+
+      (PSmallInt(Src)[_FC]*fvolume[_FC])+
+      (PSmallInt(Src)[_SR]*fvolume[_SR])+
+      (PSmallInt(Src)[_BR]*fvolume[_BR]);
+
+  PSmallInt(Dst)^:=Trunc(fL);
+  Inc(Dst,2);
+  PSmallInt(Dst)^:=Trunc(fR);
+  Inc(Dst,2);
+
+  Inc(Src,2*8);
+
+  Dec(count);
+ end;
+end;
+
+procedure _VecMulS32CH8ToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
+const
+ fdiv1:Single=1+(3/Sqrt(2));
+ fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
+var
+ fvolume:array[0..7] of Single;
+begin
+ fvolume[_FL]:=(volume[_FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
+ fvolume[_FR]:=(volume[_FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
+ fvolume[_FC]:=(volume[_FC]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_SL]:=(volume[_SL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_SR]:=(volume[_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_BL]:=(volume[_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ fvolume[_BR]:=(volume[_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
+ __VecMulS16CH8ToS(Src,Dst,count,@fvolume);
 end;
 
 procedure _VecMulF32CH8STDToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
@@ -668,7 +712,18 @@ begin
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
    begin
-    Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH');
+
+    if (H.pnumOutputChannels=2) then
+    begin
+     _VecMulS32CH8ToS(ptr,H.buf,count,@H.volume);
+     _sig_lock;
+     err:=Pa_WriteStream(H.pstream,H.buf,count);
+     _sig_unlock;
+    end else
+    begin
+     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH');
+    end;
+
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
    begin
