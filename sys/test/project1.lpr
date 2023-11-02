@@ -370,10 +370,25 @@ begin
 
  //readln;
 
+
+                      //fs  guest     host
+ err:=vfs_mount_mkdir('ufs','/app0'  ,'/'      ,nil,0);
+ err:=vfs_mount_mkdir('ufs','/system','/system',nil,0);
+
+ err:=vfs_unmount_rmdir('/app0'  ,0);
+ err:=vfs_unmount_rmdir('/system',0);
+
+ err:=vfs_mount_mkdir('ufs','/app0'  ,'/'      ,nil,0);
+ err:=vfs_mount_mkdir('ufs','/system','/system',nil,0);
+
  //argv0:='/app0/basic-sample_debug.elf';
  //argv0:='/app0/simple.elf';
- argv0:='/app0/videoout_basic.elf';
+ //argv0:='/app0/videoout_basic.elf';
  argv0:='/app0/videoout_cursor.elf';
+
+ //argv0:='/app0/scene2.bin';
+ //argv0:='/app0/basic_quad_debug.elf';
+
 
  err:=_execve(argv0,@argv0,nil);
 end;
