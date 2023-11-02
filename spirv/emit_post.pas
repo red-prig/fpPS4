@@ -63,6 +63,7 @@ type
  end;
 
 function  EnumLineRegs(cb:TRegsCb;pLine:PSpirvOp):Integer;
+function  EnumFirstReg(cb:TRegsCb;pLine:PSpirvOp):Integer;
 function  EnumBlockOpForward(cb:TPostCb;pBlock:PsrOpBlock):Integer;
 function  EnumBlockOpBackward(cb:TPostCb;pBlock:PsrOpBlock):Integer;
 
@@ -98,6 +99,25 @@ begin
    node^.Value:=pReg;
   end;
   node:=node^.Next;
+ end;
+end;
+
+function EnumFirstReg(cb:TRegsCb;pLine:PSpirvOp):Integer;
+var
+ node:POpParamNode;
+ pReg:PsrRegNode;
+begin
+ Result:=0;
+ if (cb=nil) or (pLine=nil) then Exit;
+ node:=pLine^.ParamFirst;
+ if (node<>nil) then
+ begin
+  if node^.Value^.IsType(ntReg) then
+  begin
+   pReg:=node^.AsReg;
+   Result:=Result+cb(pLine,pReg);
+   node^.Value:=pReg;
+  end;
  end;
 end;
 
@@ -429,7 +449,8 @@ begin
  if not node^.pDst^.IsType(ntReg) then Exit; //is reg
 
  Case node^.OpId of
-  Op.OpBitFieldUExtract  ,
+  Op.OpBitFieldSExtract  ,
+  Op.OpBitFieldUExtract  :Result:=EnumFirstReg(@RegSTStrict,node);
   Op.OpSelect            :Result:=EnumLineRegs(@RegSTStrict,node);
   Op.OpIAddCarry         ,
   Op.OpISubBorrow        ,

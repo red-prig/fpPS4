@@ -24,6 +24,9 @@ type
   procedure emit_V_CVT_FLR_I32_F32;
   procedure emit_V_CVT_RPI_I32_F32;
   procedure emit_V_CVT_F32_UBYTE0;
+  procedure emit_V_CVT_F32_UBYTE1;
+  procedure emit_V_CVT_F32_UBYTE2;
+  procedure emit_V_CVT_F32_UBYTE3;
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_RSQ_CLAMP_F32;
   procedure emit_V_SIN_COS(OpId:DWORD);
@@ -152,6 +155,51 @@ begin
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE1;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ src:=OpShrTo(src,8);
+ src:=OpAndTo(src,$FF);
+ src^.PrepType(ord(dtUInt32));
+
+ Op1(Op.OpConvertUToF,dtFloat32,dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE2;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ src:=OpShrTo(src,16);
+ src:=OpAndTo(src,$FF);
+ src^.PrepType(ord(dtUInt32));
+
+ Op1(Op.OpConvertUToF,dtFloat32,dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE3;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
+
+ src:=OpShrTo(src,24);
+ src:=OpAndTo(src,$FF);
+ src^.PrepType(ord(dtUInt32));
+
+ Op1(Op.OpConvertUToF,dtFloat32,dst,src);
+end;
+
 procedure TEmit_VOP1.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
@@ -254,7 +302,9 @@ begin
   V_CVT_RPI_I32_F32: emit_V_CVT_RPI_I32_F32;
 
   V_CVT_F32_UBYTE0: emit_V_CVT_F32_UBYTE0;
-
+  V_CVT_F32_UBYTE1: emit_V_CVT_F32_UBYTE1;
+  V_CVT_F32_UBYTE2: emit_V_CVT_F32_UBYTE2;
+  V_CVT_F32_UBYTE3: emit_V_CVT_F32_UBYTE3;
 
   V_FRACT_F32: emit_V_EXT_F32(GlslOp.Fract);
   V_TRUNC_F32: emit_V_EXT_F32(GlslOp.Trunc);

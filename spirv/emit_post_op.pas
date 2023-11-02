@@ -38,7 +38,7 @@ type
   function  OnWQM32__1(node:PSpirvOp):Integer;
   function  OnPackOfs1(node:PSpirvOp):Integer;
   function  _Fetch_PackAnc(node:PsrRegNode;index,count:Byte):PsrRegNode;
-  function  OnBFEU32_1(node:PSpirvOp):Integer;
+  function  OnBFE_32_1(node:PSpirvOp):Integer;
   function  OnBFIB32_1(node:PSpirvOp):Integer;
   function  OnMakeCub1(node:PSpirvOp):Integer;
   //
@@ -92,7 +92,7 @@ begin
   srOpUtils.OpAbsDiff   :Result:=OnAbsDiff1(node);
   srOpUtils.OpWQM32     :Result:=OnWQM32__1(node);
   srOpUtils.OpPackOfs   :Result:=OnPackOfs1(node);
-  srOpUtils.OpBFEU32    :Result:=OnBFEU32_1(node);
+  srOpUtils.OpBFE_32    :Result:=OnBFE_32_1(node);
   srOpUtils.OpBFIB32    :Result:=OnBFIB32_1(node);
   srOpUtils.OpMakeCub   :Result:=OnMakeCub1(node);
 
@@ -1889,7 +1889,7 @@ begin
 
 end;
 
-function TEmitPostOp.OnBFEU32_1(node:PSpirvOp):Integer;
+function TEmitPostOp.OnBFE_32_1(node:PSpirvOp):Integer;
 var
  dst:PsrRegNode;
  rBase,rIndex,rCount:PsrRegNode;
@@ -1897,6 +1897,7 @@ var
  num_31:PsrRegNode;
  data:array[0..1] of QWORD;
  index,count:Byte;
+ dtype:TsrDataType;
 begin
  Result:=0;
  dst:=node^.pDst^.AsType(ntReg);
@@ -1907,6 +1908,8 @@ begin
  rCount:=RegDown(node^.ParamNode(2)^.AsReg);
 
  if (rBase=nil) or (rIndex=nil) or (rCount=nil) then Exit;
+
+ dtype:=rBase^.dtype;
 
  //else
  node^.mark_not_used;
@@ -1942,7 +1945,7 @@ begin
     num_31:=NewReg_q(dtUInt32,data[1],@Node);
     //
     rsl:=OpAndTo(rsl,num_31,@node);
-    rsl^.PrepType(ord(dtUInt32));
+    rsl^.PrepType(ord(dtype));
    end;
 
    dst^.pWriter:=rsl;
@@ -2002,7 +2005,13 @@ begin
   rCount^.PrepType(ord(dtUInt32));
  end;
 
- _Op3(node,Op.OpBitFieldUExtract,dst,rBase,rIndex,rCount);
+ case dtype of
+  dtUint32:_Op3(node,Op.OpBitFieldUExtract,dst,rBase,rIndex,rCount);
+  dtInt32 :_Op3(node,Op.OpBitFieldSExtract,dst,rBase,rIndex,rCount);
+  else
+   Assert(False);
+ end;
+
 end;
 
 function TEmitPostOp.OnBFIB32_1(node:PSpirvOp):Integer;

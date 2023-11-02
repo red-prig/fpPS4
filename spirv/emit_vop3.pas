@@ -47,6 +47,7 @@ type
   procedure emit_V_MBCNT_HI_U32_B32;
 
   procedure emit_V_BFE_U32;
+  procedure emit_V_BFE_I32;
   procedure emit_V_BFI_B32;
   procedure emit_V_MAD_F32;
   procedure emit_V_MAD_LEGACY_F32;
@@ -555,7 +556,26 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
 
- OpBFEU32(dst,src[0],src[1],src[2]);
+ OpBFE_32(dst,src[0],src[1],src[2]);
+end;
+
+procedure TEmit_VOP3.emit_V_BFE_I32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ OpBFE_32(dst,src[0],src[1],src[2]);
 end;
 
 procedure TEmit_VOP3.emit_V_BFI_B32;
@@ -1235,7 +1255,9 @@ begin
   V_MUL_HI_I32: emit_V_MUL_HI(dtInt32);
 
   V_BFE_U32: emit_V_BFE_U32;
+  V_BFE_I32: emit_V_BFE_I32;
   V_BFI_B32: emit_V_BFI_B32;
+
   V_MAD_F32: emit_V_MAD_F32;
   V_MAD_LEGACY_F32: emit_V_MAD_LEGACY_F32;
 

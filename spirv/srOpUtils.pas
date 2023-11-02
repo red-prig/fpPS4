@@ -19,7 +19,7 @@ const
  OpAbsDiff=DWORD(-3);
  OpWQM32  =DWORD(-4);
 
- OpBFEU32 =DWORD(-5);
+ OpBFE_32 =DWORD(-5);
  OpBFIB32 =DWORD(-6);
 
  OpPackAnc=DWORD(-7);

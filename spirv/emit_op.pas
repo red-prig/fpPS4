@@ -74,7 +74,7 @@ type
   function  OpAbsDiff(pLine:PspirvOp;dst,src0,src1:PsrRegNode):PSpirvOp;
   procedure OpWQM32(dst:PsrRegSlot;src:PsrRegNode);
   //
-  procedure OpBFEU32(dst:PsrRegSlot;base,src0,src1:PsrRegNode);
+  procedure OpBFE_32(dst:PsrRegSlot;base,src0,src1:PsrRegNode);
   procedure OpBFIB32(dst:PsrRegSlot;bitmsk,src0,src1:PsrRegNode);
   //
   function  OpBFITo(src0,src1,src2,src3:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
@@ -638,9 +638,9 @@ begin
  Op1(srOpUtils.OpWQM32,dtUnknow,dst,src);
 end;
 
-procedure TEmitOp.OpBFEU32(dst:PsrRegSlot;base,src0,src1:PsrRegNode);
+procedure TEmitOp.OpBFE_32(dst:PsrRegSlot;base,src0,src1:PsrRegNode);
 begin
- Op3(srOpUtils.OpBFEU32,dtUint32,dst,base,src0,src1);
+ Op3(srOpUtils.OpBFE_32,base^.dtype,dst,base,src0,src1);
 end;
 
 procedure TEmitOp.OpBFIB32(dst:PsrRegSlot;bitmsk,src0,src1:PsrRegNode);
