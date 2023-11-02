@@ -10,7 +10,9 @@ uses
  vmount;
 
 procedure vfs_mountroot();
-function  vfs_mountroot_simple(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function  vfs_mount_path   (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function  vfs_mount_mkdir  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function  vfs_unmount_rmdir(path:PChar;flags:Integer):Integer;
 
 implementation
 
@@ -319,7 +321,7 @@ begin
  Exit(0);
 end;
 
-function vfs_mountroot_simple(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function vfs_mount_path(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 const
  ERRMSGL=255;
 var
@@ -343,7 +345,25 @@ begin
  ma:=mount_arg(ma, 'errmsg', PChar(errmsg), ERRMSGL);
 
  ma:=parse_mountroot_options(ma, opts);
- Result:=kernel_mount(ma,flags);
+ Result:=kernel_nmount(ma,flags);
+end;
+
+function vfs_mount_mkdir(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+begin
+ Result:=kern_mkdir(fspath,UIO_SYSSPACE,&777);
+ if (Result=0) then
+ begin
+  Result:=vfs_mount_path(fstype,fspath,from,opts,flags);
+ end;
+end;
+
+function vfs_unmount_rmdir(path:PChar;flags:Integer):Integer;
+begin
+ Result:=kern_unmount(path,flags);
+ if (Result=0) then
+ begin
+  Result:=kern_rmdir(path,UIO_SYSSPACE);
+ end;
 end;
 
 procedure vfs_mountroot();
@@ -360,39 +380,24 @@ begin
 
  mount_print;
 
- error:=vfs_mountroot_simple('ufs','/','/',nil,MNT_ROOTFS);
+ error:=vfs_mount_path('ufs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
-
- //error:=vfs_mountroot_simple('devfs','/dev','/dev',nil,MNT_ROOTFS);
- //if (error<>0) then goto _end;
 
  mount_print;
 
  error:=vfs_mountroot_shuffle(mp);
 
- //error:=vfs_mountroot_simple('ufs','/app0/test','/app0/test',nil,0);
- //if (error<>0) then goto _end;
-
+ {
  error:=kern_mkdir('null',UIO_SYSSPACE,&777);
  if (error=0) then
  begin
   error:=vfs_mountroot_simple('nullfs','/null','/dev',nil,0);
  end;
+ }
 
- error:=kern_mkdir('app0',UIO_SYSSPACE,&777);
- if (error=0) then
- begin
-  error:=vfs_mountroot_simple('ufs','/app0','/',nil,0);
- end;
-
- error:=kern_mkdir('system',UIO_SYSSPACE,&777);
- if (error=0) then
- begin
-  error:=vfs_mountroot_simple('ufs','/system','/system',nil,0);
- end;
-
- //error:=kern_unmount('/app0',0);
-
+ //error:=vfs_mount_mkdir('ufs','/app0','/',nil,0);
+ //error:=vfs_mount_mkdir('ufs','/system','/system',nil,0);
+ //
  mount_print;
 
 _end:

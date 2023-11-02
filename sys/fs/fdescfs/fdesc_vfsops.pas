@@ -78,7 +78,7 @@ end;
  }
 function fdesc_cmount(ma,data:Pointer;flags:QWORD):Integer;
 begin
- Exit(kernel_mount(ma, flags));
+ Exit(kernel_nmount(ma, flags));
 end;
 
 {

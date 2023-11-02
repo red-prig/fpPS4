@@ -98,7 +98,7 @@ function  mount_argsu(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 function  mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 procedure free_mntarg(ma:p_mntarg);
 
-function  kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
+function  kernel_nmount(ma:p_mntarg;flags:QWORD):Integer;
 function  kern_unmount(path:PChar;flags:Integer):Integer;
 
 function  sys_nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer;
@@ -1566,10 +1566,14 @@ begin
  // vfs_setpublicfs(nil, nil, nil);
 
  vfs_msync(mp, MNT_WAIT);
+
  MNT_ILOCK(mp);
+
  async_flag:=mp^.mnt_flag and MNT_ASYNC;
- mp^.mnt_flag:=mp^.mnt_flag and (not MNT_ASYNC);
+
+ mp^.mnt_flag     :=mp^.mnt_flag      and (not MNT_ASYNC);
  mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
+
  MNT_IUNLOCK(mp);
  //cache_purgevfs(mp); { remove cache entries for this file sys }
  //vfs_deallocate_syncvnode(mp);
@@ -1796,13 +1800,13 @@ end;
 {
  * Mount a filesystem
  }
-function kernel_mount(ma:p_mntarg;flags:QWORD):Integer;
+function kernel_nmount(ma:p_mntarg;flags:QWORD):Integer;
 var
  auio:t_uio;
  error:Integer;
 begin
- Assert(ma<>nil, 'kernel_mount nil ma');
- Assert(ma^.v<>nil, 'kernel_mount nil ma^.v');
+ Assert(ma<>nil,           'kernel_mount nil ma');
+ Assert(ma^.v<>nil,        'kernel_mount nil ma^.v');
  Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (%d)');
 
  auio.uio_iov:=ma^.v;

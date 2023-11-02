@@ -457,11 +457,13 @@ end;
 
 procedure MNT_REF(mp:p_mount); inline;
 begin
+ Assert(mp^.mnt_ref>=0);
  System.InterlockedIncrement(mp^.mnt_ref);
 end;
 
 procedure MNT_REL(mp:p_mount); inline;
 begin
+ Assert(mp^.mnt_ref>0);
  if (System.InterlockedDecrement(mp^.mnt_ref)=0) then
  begin
   wakeup(mp)

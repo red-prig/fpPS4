@@ -336,7 +336,7 @@ begin
   if (mp^.mnt_stat.f_fsid.val[0]=fsid^.val[0]) and
      (mp^.mnt_stat.f_fsid.val[1]=fsid^.val[1]) then
   begin
-   MNT_REL(mp);
+   MNT_REF(mp);
    mtx_unlock(mountlist_mtx);
    Exit(mp);
   end;
@@ -849,8 +849,7 @@ var
  active:Integer;
 begin
  mp:=vp^.v_mount;
- if (mp=nil) then
-  Exit;
+ if (mp=nil) then Exit;
  MNT_ILOCK(mp);
  VI_LOCK(vp);
  Assert(mp^.mnt_activevnodelistsize <= mp^.mnt_nvnodelistsize,
