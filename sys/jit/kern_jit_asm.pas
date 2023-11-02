@@ -639,7 +639,7 @@ asm
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rflags(%r13);
 
  lea - kthread.td_frame.tf_r13 + kthread.td_fpstate(%r13), %rdi
- and $-32,%rdi
+ //and $-32,%rdi
 
  vmovdqa %ymm0 ,0x000(%rdi)
  vmovdqa %ymm1 ,0x020(%rdi)
@@ -662,7 +662,7 @@ end;
 procedure jit_load_ctx; assembler; nostackframe;
 asm
  lea - kthread.td_frame.tf_r13 + kthread.td_fpstate(%r13), %rdi
- and $-32,%rdi
+ //and $-32,%rdi
 
  vmovdqa 0x000(%rdi),%ymm0
  vmovdqa 0x020(%rdi),%ymm1

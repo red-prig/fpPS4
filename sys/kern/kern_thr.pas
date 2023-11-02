@@ -197,11 +197,10 @@ type
   td_sigmask      :sigset_t;
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
+  td_retval       :array[0..1] of QWORD;
+  td_jctx         :Pointer;
   td_frame        :trapframe;
   td_fpstate      :t_fpstate;
-  pcb_fsbase      :Pointer;
-  pcb_gsbase      :Pointer;
-  td_retval       :array[0..1] of QWORD;
   td_ustack       :t_td_stack;
   td_kstack       :t_td_stack;
   //
@@ -227,10 +226,19 @@ type
   td_rmap_def_user:Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
+  pcb_fsbase      :Pointer;
+  pcb_gsbase      :Pointer;
   pcb_onfault     :Pointer;
-  td_jctx         :Pointer;
  end;
 
+const
+ kthread_fpstate=ptruint(@kthread(nil^).td_fpstate);
+
+ {$IF (kthread_fpstate mod 64)<>0}
+  {$STOP kthread.td_fpstate must be 64 aligned}
+ {$ENDIF}
+
+type
  p_thr_param=^thr_param;
  thr_param=packed record
   start_func:Pointer;
