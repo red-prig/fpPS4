@@ -9,6 +9,8 @@ uses
  kern_thr,
  x86_fpdbgdisas;
 
+{$DEFINE USE_XSAVE}
+
 {
 change: rsp,rbp,rip
 
@@ -105,6 +107,7 @@ uses
  systm,
  vm_pmap,
  trap,
+ ucontext,
  md_context,
  signal,
  subr_backtrace;
@@ -641,22 +644,31 @@ asm
  lea - kthread.td_frame.tf_r13 + kthread.td_fpstate(%r13), %rdi
  //and $-32,%rdi
 
- vmovdqa %ymm0 ,0x000(%rdi)
- vmovdqa %ymm1 ,0x020(%rdi)
- vmovdqa %ymm2 ,0x040(%rdi)
- vmovdqa %ymm3 ,0x060(%rdi)
- vmovdqa %ymm4 ,0x080(%rdi)
- vmovdqa %ymm5 ,0x0A0(%rdi)
- vmovdqa %ymm6 ,0x0C0(%rdi)
- vmovdqa %ymm7 ,0x0E0(%rdi)
- vmovdqa %ymm8 ,0x100(%rdi)
- vmovdqa %ymm9 ,0x120(%rdi)
- vmovdqa %ymm10,0x140(%rdi)
- vmovdqa %ymm11,0x160(%rdi)
- vmovdqa %ymm12,0x180(%rdi)
- vmovdqa %ymm13,0x1A0(%rdi)
- vmovdqa %ymm14,0x1C0(%rdi)
- vmovdqa %ymm15,0x1E0(%rdi)
+ {$IFDEF USE_XSAVE}
+  movqq $0,t_fpstate.XSTATE_BV(%rdi)
+  movqq $0,t_fpstate.XCOMP_BV (%rdi)
+
+  mov   $7,%eax
+  xor %edx,%edx
+  xsave64 (%rdi)
+ {$ELSE}
+  vmovdqa %ymm0 ,0x000(%rdi)
+  vmovdqa %ymm1 ,0x020(%rdi)
+  vmovdqa %ymm2 ,0x040(%rdi)
+  vmovdqa %ymm3 ,0x060(%rdi)
+  vmovdqa %ymm4 ,0x080(%rdi)
+  vmovdqa %ymm5 ,0x0A0(%rdi)
+  vmovdqa %ymm6 ,0x0C0(%rdi)
+  vmovdqa %ymm7 ,0x0E0(%rdi)
+  vmovdqa %ymm8 ,0x100(%rdi)
+  vmovdqa %ymm9 ,0x120(%rdi)
+  vmovdqa %ymm10,0x140(%rdi)
+  vmovdqa %ymm11,0x160(%rdi)
+  vmovdqa %ymm12,0x180(%rdi)
+  vmovdqa %ymm13,0x1A0(%rdi)
+  vmovdqa %ymm14,0x1C0(%rdi)
+  vmovdqa %ymm15,0x1E0(%rdi)
+ {$ENDIF}
 end;
 
 procedure jit_load_ctx; assembler; nostackframe;
@@ -664,22 +676,28 @@ asm
  lea - kthread.td_frame.tf_r13 + kthread.td_fpstate(%r13), %rdi
  //and $-32,%rdi
 
- vmovdqa 0x000(%rdi),%ymm0
- vmovdqa 0x020(%rdi),%ymm1
- vmovdqa 0x040(%rdi),%ymm2
- vmovdqa 0x060(%rdi),%ymm3
- vmovdqa 0x080(%rdi),%ymm4
- vmovdqa 0x0A0(%rdi),%ymm5
- vmovdqa 0x0C0(%rdi),%ymm6
- vmovdqa 0x0E0(%rdi),%ymm7
- vmovdqa 0x100(%rdi),%ymm8
- vmovdqa 0x120(%rdi),%ymm9
- vmovdqa 0x140(%rdi),%ymm10
- vmovdqa 0x160(%rdi),%ymm11
- vmovdqa 0x180(%rdi),%ymm12
- vmovdqa 0x1A0(%rdi),%ymm13
- vmovdqa 0x1C0(%rdi),%ymm14
- vmovdqa 0x1E0(%rdi),%ymm15
+ {$IFDEF USE_XSAVE}
+  mov   $7,%eax
+  xor %edx,%edx
+  xrstor (%rdi)
+ {$ELSE}
+  vmovdqa 0x000(%rdi),%ymm0
+  vmovdqa 0x020(%rdi),%ymm1
+  vmovdqa 0x040(%rdi),%ymm2
+  vmovdqa 0x060(%rdi),%ymm3
+  vmovdqa 0x080(%rdi),%ymm4
+  vmovdqa 0x0A0(%rdi),%ymm5
+  vmovdqa 0x0C0(%rdi),%ymm6
+  vmovdqa 0x0E0(%rdi),%ymm7
+  vmovdqa 0x100(%rdi),%ymm8
+  vmovdqa 0x120(%rdi),%ymm9
+  vmovdqa 0x140(%rdi),%ymm10
+  vmovdqa 0x160(%rdi),%ymm11
+  vmovdqa 0x180(%rdi),%ymm12
+  vmovdqa 0x1A0(%rdi),%ymm13
+  vmovdqa 0x1C0(%rdi),%ymm14
+  vmovdqa 0x1E0(%rdi),%ymm15
+ {$ENDIF}
 
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rflags(%r13), %rdi
  push %rdi

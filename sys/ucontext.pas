@@ -11,7 +11,9 @@ uses
 type
  t_fpstate=packed record
   XMM_SAVE_AREA:array[0..63] of QWORD;
-  XSTATE       :array[0..39] of QWORD;
+  XSTATE_BV    :QWORD;
+  XCOMP_BV     :QWORD;
+  XSTATE       :array[0..37] of QWORD;
  end;
  {$IF sizeof(t_fpstate)<>832}{$STOP sizeof(t_fpstate)<>832}{$ENDIF}
 
