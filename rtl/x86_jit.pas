@@ -37,7 +37,7 @@ type
 
  t_jit_leas =array of t_jit_lea;
 
- t_jit_link_type=(lnkNone,lnkData,lnkLabelBefore,lnkLabelAfter);
+ t_jit_link_type=(lnkNone,lnkData,lnkPlt,lnkLabelBefore,lnkLabelAfter);
 
  p_jit_instruction=^t_jit_instruction;
  t_jit_instruction=object
@@ -81,6 +81,11 @@ type
  end;
 
  t_jit_data_set=specialize TNodeSplay<t_jit_data>;
+
+ p_jit_plt=^t_jit_plt;
+ t_jit_plt=packed record
+  cache:Pointer;
+ end;
 
  p_jit_code_chunk=^t_jit_code_chunk;
  t_jit_code_chunk=object
@@ -282,6 +287,7 @@ type
    //
    AInstructionSize:Integer;
    ADataCount      :Integer;
+   APltCount       :Integer;
    //
    Allocator:t_jit_builder_allocator;
   //
@@ -292,7 +298,9 @@ type
   procedure _add(const ji:t_jit_instruction);
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
+  Function  _add_plt:Integer;
   Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
+  Function  _get_plt_offset (ALink:Pointer;AInstructionEnd:Integer):Integer;
   //
   function  call_far(P:Pointer):t_jit_i_link;
   function  jmp_far (P:Pointer):t_jit_i_link;
@@ -304,12 +312,14 @@ type
   function  jcxz(_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
   function  movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+  function  leap(reg:TRegValue):t_jit_i_link;
   //
   Procedure reta;
   Procedure ud2;
   //
   Function  GetInstructionsSize:Integer;
   Function  GetDataSize:Integer;
+  Function  GetPltSize:Integer;
   Function  GetMemSize:Integer;
   Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
@@ -754,6 +764,10 @@ begin
     begin
      Result:=p_jit_data(ALink)^.pId*SizeOf(Pointer);
     end;
+   lnkPlt:
+    begin
+     Result:=QWORD(ALink)*SizeOf(t_jit_plt);
+    end;
    lnkLabelBefore:
     begin
      Result:=ALink^.AInstructionOffset;
@@ -802,6 +816,13 @@ begin
     Result.AType:=lnkData;
     Result.ALink:=TAILQ_PREV(ALink,@p_jit_data(ALink)^.link);
    end;
+  lnkPlt:
+   begin
+    if (ALink<>nil) then
+    begin
+     Dec(QWORD(ALink));
+    end;
+   end;
   lnkLabelBefore,
   lnkLabelAfter:
    begin
@@ -810,7 +831,7 @@ begin
    end;
   else;
  end;
- if (Result.ALink=nil) then
+ if (Result.ALink=nil) and (AType<>lnkPlt) then
  begin
   Result:=nil_link;
  end;
@@ -825,6 +846,13 @@ begin
     Result.AType:=lnkData;
     Result.ALink:=TAILQ_NEXT(ALink,@p_jit_data(ALink)^.link);
    end;
+  lnkPlt:
+   begin
+    if (ALink<>nil) then
+    begin
+     Dec(QWORD(ALink));
+    end;
+   end;
   lnkLabelBefore,
   lnkLabelAfter:
    begin
@@ -833,7 +861,7 @@ begin
    end;
   else;
  end;
- if (Result.ALink=nil) then
+ if (Result.ALink=nil) and (AType<>lnkPlt) then
  begin
   Result:=nil_link;
  end;
@@ -1115,10 +1143,21 @@ begin
  end;
 end;
 
+Function t_jit_builder._add_plt:Integer;
+begin
+ Result:=APltCount;
+ Inc(APltCount);
+end;
+
 Function t_jit_builder._get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
 begin
  Assert(ALink<>nil);
  Result:=(AInstructionSize-AInstructionEnd)+(ALink^.pId*SizeOf(Pointer));
+end;
+
+Function t_jit_builder._get_plt_offset(ALink:Pointer;AInstructionEnd:Integer):Integer;
+begin
+ Result:=(AInstructionSize-AInstructionEnd)+GetDataSize+(QWORD(ALink)*SizeOf(t_jit_plt));
 end;
 
 Function _get_label_before_offset(ALink:p_jit_instruction;AInstructionEnd:Integer):Integer;
@@ -1286,6 +1325,7 @@ begin
 
  Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
+
  LinkLabel(Result.ALink);
 end;
 
@@ -1319,6 +1359,7 @@ begin
 
  Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
+
  LinkLabel(Result.ALink);
 end;
 
@@ -1346,6 +1387,7 @@ begin
 
  Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
  Result.AType:=lnkLabelBefore;
+
  LinkLabel(Result.ALink);
 end;
 
@@ -1358,6 +1400,7 @@ begin
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
  Result.AType:=lnkLabelBefore;
+
  LinkLabel(Result.ALink);
 end;
 
@@ -1370,6 +1413,20 @@ begin
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
  Result.AType:=lnkLabelBefore;
+
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.leap(reg:TRegValue):t_jit_i_link;
+begin
+ leaq(reg,[rip+$7FFFFFFF]);
+
+ Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+
+ Result.ALink^.ALink.AType:=lnkPlt;
+ Result.ALink^.ALink.ALink:=Pointer(_add_plt);
+ Result.AType:=lnkLabelBefore;
+
  LinkLabel(Result.ALink);
 end;
 
@@ -1393,9 +1450,14 @@ begin
  Result:=ADataCount*SizeOf(Pointer);
 end;
 
+Function t_jit_builder.GetPltSize:Integer;
+begin
+ Result:=APltCount*SizeOf(t_jit_plt);
+end;
+
 Function t_jit_builder.GetMemSize:Integer;
 begin
- Result:=AInstructionSize+GetDataSize;
+ Result:=AInstructionSize+GetDataSize+GetPltSize;
 end;
 
 Procedure t_jit_builder.RebuldChunkList;
@@ -1454,12 +1516,19 @@ begin
  //Pre-linking, for debugging only
  d:=0;
  if (node=nil) then Exit;
- if (node^.ALink.ALink=nil) then Exit;
+ if (node^.ALink.ALink=nil) and
+    (node^.ALink.AType<>lnkPlt) then Exit;
  case node^.ALink.AType of
   lnkData:
    With node^ do
    begin
     d:=(p_jit_data(ALink.ALink)^.pId*SizeOf(Pointer));
+    _set_data(node,d);
+   end;
+  lnkPlt:
+   With node^ do
+   begin
+    d:=QWORD(ALink.ALink);
     _set_data(node,d);
    end;
   lnkLabelBefore:
@@ -1533,6 +1602,11 @@ begin
        if not is_change then
        begin
         d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
+        _set_data(node,d);
+       end;
+     lnkPlt:
+       begin
+        d:=_get_plt_offset(ALink.ALink,AInstructionOffset+ASize);
         _set_data(node,d);
        end;
      lnkLabelBefore,
@@ -1646,6 +1720,7 @@ begin
   chunk:=TAILQ_NEXT(chunk,@chunk^.link);
  end;
 
+ //data
 
  node_data:=TAILQ_FIRST(@ADataList);
 
@@ -1663,6 +1738,18 @@ begin
   node_data:=TAILQ_NEXT(node_data,@node_data^.link);
  end;
 
+ //plt
+
+ s:=GetPltSize;
+ if (s<>0) then
+ begin
+  if (s>size) then s:=size;
+
+  FillChar(ptr^,s,0);
+
+  Inc(Result,s);
+  Inc(ptr   ,s);
+ end;
 end;
 
 type

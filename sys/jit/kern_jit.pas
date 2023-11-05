@@ -177,12 +177,20 @@ end;
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_jmp_dispatch); //input:r14
+ with ctx.builder do
+ begin
+  leap(r15);
+  call_far(@jit_jmp_dispatch); //input:r14
+ end;
 end;
 
 procedure op_call_dispatcher(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_call_dispatch); //input:r14
+ with ctx.builder do
+ begin
+  leap(r15);
+  call_far(@jit_call_dispatch); //input:r14
+ end;
 end;
 
 procedure op_push_rip(var ctx:t_jit_context2);

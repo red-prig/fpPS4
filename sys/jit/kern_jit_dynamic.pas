@@ -9,6 +9,7 @@ uses
  mqueue,
  hamt,
  g23tree,
+ g_node_splay,
  murmurhash,
  x86_jit,
  kern_jit_ctx,
@@ -59,7 +60,7 @@ type
     hash  :QWORD; //MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
     count :QWORD;
     table :record end; //p_instr_len[]
-    function c(n1,n2:p_jcode_chunk):Integer; static;
+    function  c(n1,n2:p_jcode_chunk):Integer; static;
     procedure inc_ref;
     procedure dec_ref;
     function  find_addr(addr:QWORD):QWORD;
@@ -67,9 +68,19 @@ type
 
    t_jcode_chunk_set=specialize T23treeSet<p_jcode_chunk,t_jcode_chunk>;
 
+   p_jplt_cache=^t_jplt_cache;
+   t_jplt_cache=object(t_jplt_cache_asm)
+    pLeft :p_jplt_cache;
+    pRight:p_jplt_cache;
+    function c(n1,n2:p_jplt_cache):Integer; static;
+   end;
+
+   t_jplt_cache_set=specialize TNodeSplay<t_jplt_cache>;
+
   var
    entry_list:p_entry_point;
    chunk_list:p_jcode_chunk;
+   jpltc_list:t_jplt_cache_set;
 
    base:Pointer;
    size:ptruint;
@@ -81,6 +92,7 @@ type
   procedure dec_ref;
   procedure Free;
   function  add_entry_point(src,dst:Pointer):p_entry_point;
+  function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic):p_jplt_cache;
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
   procedure free_base;
@@ -94,9 +106,10 @@ type
  end;
 
  p_jctx=^t_jctx;
- t_jctx=object
-  frame:p_jit_frame;
-  cblob:p_jit_dynamic;
+ t_jctx=object(t_jctx_asm)
+  pstub:t_jit_dynamic.t_jplt_cache;
+  procedure free_stub;
+  procedure make_stub(src,dst:Pointer;blk:p_jit_dynamic);
  end;
 
 function new_blob(_size:ptruint):p_jit_dynamic;
@@ -116,7 +129,7 @@ function  preload_entry(addr:Pointer):t_jit_dynamic.p_entry_point;
 
 procedure jit_ctx_free(td:p_kthread);
 procedure switch_to_jit(td:p_kthread);
-function  jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer;
+function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt;is_call:Boolean):Pointer;
 
 procedure build(var ctx:t_jit_context2);
 
@@ -204,16 +217,36 @@ begin
  end;
 end;
 
+procedure t_jctx.free_stub;
+begin
+ cache:=nil;
+ if (pstub.blk<>nil) then
+ begin
+  p_jit_dynamic(pstub.blk)^.dec_ref;
+  pstub.blk:=nil;
+ end;
+end;
+
+procedure t_jctx.make_stub(src,dst:Pointer;blk:p_jit_dynamic);
+begin
+ free_stub;
+ //
+ pstub.src:=src;
+ pstub.dst:=dst;
+ pstub.blk:=blk;
+ //
+ blk^.inc_ref;
+ //
+ cache:=@pstub;
+end;
+
 procedure jit_ctx_free(td:p_kthread); public;
 var
  jctx:p_jctx;
 begin
  jctx:=td^.td_jctx;
- if (jctx^.cblob<>nil) then
- begin
-  jctx^.cblob^.dec_ref;
-  jctx^.cblob:=nil;
- end;
+
+ jctx^.free_stub;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -252,13 +285,7 @@ begin
   jctx^.frame:=@td^.td_frame.tf_r13;
  end;
 
- if (jctx^.cblob<>nil) then
- begin
-  jctx^.cblob^.dec_ref;
-  jctx^.cblob:=nil;
- end;
-
- jctx^.cblob:=node^.blob;
+ jctx^.make_stub(node^.src,node^.dst,node^.blob);
 
  //tf_r14 not need to move
  //tf_r15 not need to move
@@ -380,13 +407,14 @@ begin
  end;
 end;
 
-function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; public;
+function jmp_dispatcher(addr:Pointer;plt:p_jit_plt;is_call:Boolean):Pointer; public;
 label
  _start;
 var
  td:p_kthread;
  node:t_jit_dynamic.p_entry_point;
  jctx:p_jctx;
+ curr:p_jit_dynamic;
 begin
  td:=curkthread;
  if (td=nil) then Exit(nil);
@@ -427,13 +455,22 @@ begin
 
  jctx:=td^.td_jctx;
 
- if (jctx^.cblob<>nil) then
+ curr:=nil;
+ if (jctx^.cache<>nil) then
  begin
-  jctx^.cblob^.dec_ref;
-  jctx^.cblob:=nil;
+  curr:=jctx^.cache^.blk;
  end;
 
- jctx^.cblob:=node^.blob;
+ if (curr=nil) then
+ begin
+  jctx^.make_stub(node^.src,node^.dst,node^.blob);
+ end else
+ begin
+  jctx^.cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
+
+  //one element plt cache
+  System.InterlockedExchange(plt^.cache,jctx^.cache);
+ end;
 
  Result:=node^.dst;
 end;
@@ -443,6 +480,13 @@ begin
  Result:=Integer(n1^.start>n2^.start)-Integer(n1^.start<n2^.start);
  if (Result<>0) then Exit;
  Result:=Integer(n1^.hash>n2^.hash)-Integer(n1^.hash<n2^.hash);
+end;
+
+function t_jit_dynamic.t_jplt_cache.c(n1,n2:p_jplt_cache):Integer;
+begin
+ Result:=Integer(n1^.plt>n2^.plt)-Integer(n1^.plt<n2^.plt);
+ if (Result<>0) then Exit;
+ Result:=Integer(n1^.src>n2^.src)-Integer(n1^.src<n2^.src);
 end;
 
 procedure build_chunk(var ctx:t_jit_context2;blob:p_jit_dynamic;start,__end,count:QWORD);
@@ -781,6 +825,36 @@ begin
  Result^.dst :=dst;
  //
  entry_list:=Result;
+end;
+
+function t_jit_dynamic.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic):p_jplt_cache;
+var
+ node:t_jplt_cache;
+begin
+ Assert(plt<>nil);
+ Assert(blk<>nil);
+
+ node.plt:=plt;
+ node.src:=src;
+
+ rw_wlock(lock);
+
+ Result:=jpltc_list.Find(@node);
+
+ if (Result=nil) then
+ begin
+  Result:=AllocMem(Sizeof(t_jplt_cache));
+  Result^.plt:=plt;
+  Result^.src:=src;
+  Result^.dst:=dst;
+  Result^.blk:=blk;
+  //
+  blk^.inc_ref;
+  //
+  jpltc_list.Insert(Result);
+ end;
+
+ rw_wunlock(lock);
 end;
 
 function t_jit_dynamic.new_chunk(count:QWORD):p_jcode_chunk;

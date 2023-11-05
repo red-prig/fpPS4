@@ -1517,6 +1517,7 @@ begin
       Assert(mem_size<>os0);
 
       if (mem_size=os8) or
+         (mem_size=os4096) or
          (his_rw in hint) then
       begin
        op_uplift(ctx); //in/out:r14
@@ -1538,6 +1539,7 @@ begin
       Assert(mem_size<>os0);
 
       if (mem_size=os8) or
+         (mem_size=os4096) or
          (his_rw in hint) then
       begin
 

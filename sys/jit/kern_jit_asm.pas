@@ -37,6 +37,18 @@ type
   tf_r13:QWORD;      //30 (tf_err)
  end;
 
+ p_jplt_cache_asm=^t_jplt_cache_asm;
+ t_jplt_cache_asm=object
+  plt:Pointer;
+  src:Pointer;
+  dst:Pointer;
+  blk:Pointer;
+ end;
+
+ t_jctx_asm=object
+  frame:p_jit_frame;
+  cache:p_jplt_cache_asm;
+ end;
 
 procedure uplift_jit;  assembler;
 
@@ -114,7 +126,7 @@ uses
 
 //
 
-function jmp_dispatcher(addr:Pointer;is_call:Boolean):Pointer; external;
+function jmp_dispatcher(addr,plt:Pointer;is_call:Boolean):Pointer; external;
 
 //
 
@@ -716,9 +728,48 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13), %r12
 end;
 
-//in:r14(addr)
+procedure jit_plt_cache; assembler; nostackframe;
+label
+ _exit;
+asm
+ //load cache
+ pushf
+ push  %r15
+ movq  (%r15),%r15 //plt^
+
+ test  %r15,%r15
+ jz    _exit
+
+ cmpq  t_jplt_cache_asm.src(%r15),%r14
+
+ jne  _exit
+
+ //get jctx
+ movqq - kthread.td_frame.tf_r13 + kthread.td_jctx(%r13), %r14
+
+ //set cache
+ movqq %r15,t_jctx_asm.cache(%r14)
+
+ //get dst
+ movq t_jplt_cache_asm.dst(%r15),%r14
+
+ lea  8(%rsp),%rsp
+ popf
+
+ //pop internal
+ lea  16(%rsp),%rsp
+ jmp  %r14
+
+ _exit:
+ pop  %r15
+ popf
+end;
+
+//in:r14(addr) r15(plt)
 procedure jit_jmp_dispatch; assembler; nostackframe;
 asm
+ call jit_plt_cache
+
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
@@ -727,8 +778,10 @@ asm
 
  call jit_save_ctx
 
+ //rdi, rsi, rdx
  mov  %r14,%rdi
- mov    $0,%rsi
+ mov  %r15,%rsi
+ mov    $0,%rdx
 
  call jmp_dispatcher
 
@@ -740,13 +793,16 @@ asm
  movq %rbp,%rsp
  pop  %rbp
 
+ //pop internal
  lea  8(%rsp),%rsp
  jmp  %r14
 end;
 
-//in:r14(addr)
+//in:r14(addr) r15(plt)
 procedure jit_call_dispatch; assembler; nostackframe;
 asm
+ call jit_plt_cache
+
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
@@ -755,8 +811,10 @@ asm
 
  call jit_save_ctx
 
+ //rdi, rsi, rdx
  mov  %r14,%rdi
- mov    $1,%rsi
+ mov  %r15,%rsi
+ mov    $1,%rdx
 
  call jmp_dispatcher
 
