@@ -138,6 +138,8 @@ end;
 procedure uplift_jit_notsafe; assembler;
 const
  VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
+ PAGE_SHIFT_2   =PAGE_SHIFT-2;
+ PAGE_MAP_MASK_2=PAGE_MAP_MASK shl 2;
 label
  _ret,
  _sigsegv;
@@ -157,10 +159,9 @@ asm
  mov %r14,%r15
  and PAGE_MASK,%r15
  //high addr (r14)
- shr PAGE_SHIFT   ,%r14
- and PAGE_MAP_MASK,%r14
+ shr PAGE_SHIFT_2   ,%r14
+ and PAGE_MAP_MASK_2,%r14
  //uplift (r14)
- lea (,%r14,4),%r14
  add PAGE_MAP(%rip),%r14
  mov (%r14),%r14d
  //filter (r14)
