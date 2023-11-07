@@ -137,7 +137,6 @@ end;
 //in/out:r14
 procedure uplift_jit_notsafe; assembler;
 const
- VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
  PAGE_SHIFT_2   =PAGE_SHIFT-2;
  PAGE_MAP_MASK_2=PAGE_MAP_MASK shl 2;
 label
@@ -147,17 +146,16 @@ var
  addr:QWORD;
  tmp2:QWORD;
 asm
- mov %r15,tmp2
+ mov %rax,tmp2
  mov %r14,addr //origin
  //
- mov VM_MAX_D,%r15
- shl  $32,%r15
- cmp %r15,%r14
+ mov VM_MAXUSER_ADDRESS,%rax
+ cmp %rax,%r14
  ja _sigsegv
  //
- //low addr (r15)
- mov %r14,%r15
- and PAGE_MASK,%r15
+ //low addr (rax)
+ mov %r14,%rax
+ and PAGE_MASK,%rax
  //high addr (r14)
  shr PAGE_SHIFT_2   ,%r14
  and PAGE_MAP_MASK_2,%r14
@@ -167,18 +165,18 @@ asm
  //filter (r14)
  and PAGE_OFS_MASK,%r14
  jz _sigsegv
- //combine (r14|r15)
+ //combine (r14|rax)
  shl PAGE_SHIFT,%r14
- or  %r15,%r14
+ or  %rax,%r14
  //
 
- mov tmp2,%r15 //restore
+ mov tmp2,%rax //restore
 
  jmp _ret
 
  _sigsegv:
 
- mov tmp2,%r15 //restore
+ mov tmp2,%rax //restore
 
  call jit_save_ctx
 
