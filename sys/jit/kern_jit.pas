@@ -180,7 +180,7 @@ begin
  with ctx.builder do
  begin
   leap(r15);
-  call_far(@jit_jmp_dispatch); //input:r14
+  call_far(@jit_plt_cache); //input:r14,r15
  end;
 end;
 
@@ -189,7 +189,7 @@ begin
  with ctx.builder do
  begin
   leap(r15);
-  call_far(@jit_call_dispatch); //input:r14
+  call_far(@jit_plt_cache); //input:r14,r15
  end;
 end;
 

@@ -40,7 +40,6 @@ implementation
 
 var
  size_of_umtx_q:Integer; external;
- size_of_jctx  :Integer; external;
 
 //
 
@@ -67,7 +66,7 @@ begin
  if (R<>0) then Exit;
 
  //header
- size:=SizeOf(kthread)+size_of_umtx_q+size_of_jctx;
+ size:=SizeOf(kthread)+size_of_umtx_q;
  size:=System.Align(size,4*1024);
 
  R:=NtAllocateVirtualMemory(
@@ -82,7 +81,6 @@ begin
 
  td:=data;
  td^.td_umtxq:=Pointer(td+1);
- td^.td_jctx :=Pointer(td^.td_umtxq)+size_of_umtx_q;
 
  //footer
  data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;

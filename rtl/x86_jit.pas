@@ -320,6 +320,7 @@ type
   Function  GetInstructionsSize:Integer;
   Function  GetDataSize:Integer;
   Function  GetPltSize:Integer;
+  Function  GetPltStart:Integer;
   Function  GetMemSize:Integer;
   Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
@@ -1453,6 +1454,11 @@ end;
 Function t_jit_builder.GetPltSize:Integer;
 begin
  Result:=APltCount*SizeOf(t_jit_plt);
+end;
+
+Function t_jit_builder.GetPltStart:Integer;
+begin
+ Result:=AInstructionSize+GetDataSize;
 end;
 
 Function t_jit_builder.GetMemSize:Integer;

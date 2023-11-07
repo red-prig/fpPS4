@@ -45,11 +45,6 @@ type
   blk:Pointer;
  end;
 
- t_jctx_asm=object
-  frame:p_jit_frame;
-  cache:p_jplt_cache_asm;
- end;
-
 procedure uplift_jit;  assembler;
 
 procedure copyout_mov_1;   assembler;
@@ -75,10 +70,9 @@ procedure copyin_mov_64;  assembler;
 procedure copyin_mov_512; assembler;
 
 procedure jit_syscall;       assembler;
+procedure jit_plt_cache;     assembler;
 procedure jit_jmp_dispatch;  assembler;
-procedure jit_call_dispatch; assembler;
 
-procedure jit_call_internal; assembler;
 procedure jit_jmp_internal;  assembler;
 
 function  IS_JIT_FUNC(rip:qword):Boolean;
@@ -126,7 +120,7 @@ uses
 
 //
 
-function jmp_dispatcher(addr,plt:Pointer;is_call:Boolean):Pointer; external;
+function jmp_dispatcher(addr,plt:Pointer):Pointer; external;
 
 //
 
@@ -737,18 +731,15 @@ asm
  push  %r15
  movq  (%r15),%r15 //plt^
 
- test  %r15,%r15
- jz    _exit
-
  cmpq  t_jplt_cache_asm.src(%r15),%r14
 
  jne  _exit
 
- //get jctx
- movqq - kthread.td_frame.tf_r13 + kthread.td_jctx(%r13), %r14
+ //get blk
+ movq t_jplt_cache_asm.blk(%r15),%r14
 
- //set cache
- movqq %r15,t_jctx_asm.cache(%r14)
+ //save current block
+ movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.block(%r13)
 
  //get dst
  movq t_jplt_cache_asm.dst(%r15),%r14
@@ -757,19 +748,19 @@ asm
  popf
 
  //pop internal
- lea  16(%rsp),%rsp
+ lea  8(%rsp),%rsp
  jmp  %r14
 
  _exit:
  pop  %r15
  popf
+
+ jmp jit_jmp_dispatch
 end;
 
 //in:r14(addr) r15(plt)
 procedure jit_jmp_dispatch; assembler; nostackframe;
 asm
- call jit_plt_cache
-
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
@@ -778,43 +769,9 @@ asm
 
  call jit_save_ctx
 
- //rdi, rsi, rdx
+ //rdi, rsi
  mov  %r14,%rdi
  mov  %r15,%rsi
- mov    $0,%rdx
-
- call jmp_dispatcher
-
- mov  %rax,%r14
-
- call jit_load_ctx
-
- //epilog
- movq %rbp,%rsp
- pop  %rbp
-
- //pop internal
- lea  8(%rsp),%rsp
- jmp  %r14
-end;
-
-//in:r14(addr) r15(plt)
-procedure jit_call_dispatch; assembler; nostackframe;
-asm
- call jit_plt_cache
-
- //prolog (debugger)
- push %rbp
- movq %rsp,%rbp
-
- andq  $-16,%rsp //align stack
-
- call jit_save_ctx
-
- //rdi, rsi, rdx
- mov  %r14,%rdi
- mov  %r15,%rsi
- mov    $1,%rdx
 
  call jmp_dispatcher
 
@@ -866,44 +823,6 @@ asm
  //uplift %rsp/%rbp ???
 end;
 
-procedure jit_call_internal; assembler; nostackframe;
-asm
- //pop host call
- mov jit_frame.tf_rsp(%r13),%r14
- lea 8(%r14),%r14
- mov %r14,jit_frame.tf_rsp(%r13)
-
- //push internal call
- lea  -8(%rsp),%rsp
-
- //prolog (debugger)
- push %rbp
- movq %rsp,%rbp
-
- //set
- //%r13 ABI preserve the registers
- //%r14 ABI preserve the registers
- //%r15 ABI preserve the registers
-
- //call stack_set_user
-
- //call
- call %gs:teb.jitcall
-
- //restore guard
- movq %gs:teb.thread               ,%r13 //curkthread
- leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
-
- //call stack_set_jit
-
- //%r13 ABI preserve the registers
- //%r14 ABI preserve the registers
- //%r15 ABI preserve the registers
-
- //epilog
- pop  %rbp
-end;
-
 procedure jit_jmp_internal; assembler; nostackframe;
 asm
  //push internal call
@@ -931,12 +850,24 @@ asm
  pop  %rbp
 
  //pop host call
+ mov jit_frame.tf_rsp(%r13),%r14
+
+ pushfq //
+ call uplift_jit_notsafe
+ popfq  //
+
+ //get addr
+ mov  (%r14),%r14
+
+ //lea rsp,[rsp+8]
  mov jit_frame.tf_rsp(%r13),%r15
- mov  (%r15),%r14
  lea 8(%r15),%r15
  mov %r15,jit_frame.tf_rsp(%r13)
 
- jmp  jit_call_dispatch
+ //set zero plt
+ mov $0, %r15
+
+ jmp  jit_jmp_dispatch
 end;
 
 function IS_JIT_FUNC(rip:qword):Boolean; public;
@@ -947,11 +878,11 @@ begin
          ) or
          (
           (rip>=QWORD(@jit_jmp_dispatch)) and
-          (rip<=(QWORD(@jit_jmp_dispatch)+$30)) //jit_jmp_dispatch func size
+          (rip<=(QWORD(@jit_jmp_dispatch)+$2C)) //jit_jmp_dispatch func size
          ) or
          (
-          (rip>=QWORD(@jit_call_dispatch)) and
-          (rip<=(QWORD(@jit_call_dispatch)+$30)) //jit_call_dispatch func size
+          (rip>=QWORD(@jit_plt_cache)) and
+          (rip<=(QWORD(@jit_plt_cache)+$33)) //jit_plt_cache func size
          );
 end;
 

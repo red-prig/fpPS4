@@ -85,6 +85,11 @@ type
    base:Pointer;
    size:ptruint;
 
+   plta:p_jit_plt;
+   pltc:ptruint;
+
+   plt_stub:t_jplt_cache_asm;
+
    lock:Pointer;
    refs:Integer;
 
@@ -92,6 +97,7 @@ type
   procedure dec_ref;
   procedure Free;
   function  add_entry_point(src,dst:Pointer):p_entry_point;
+  procedure init_plt;
   function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic):p_jplt_cache;
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
@@ -103,13 +109,6 @@ type
   procedure detach_entry;
   procedure detach_chunk;
   procedure detach;
- end;
-
- p_jctx=^t_jctx;
- t_jctx=object(t_jctx_asm)
-  pstub:t_jit_dynamic.t_jplt_cache;
-  procedure free_stub;
-  procedure make_stub(src,dst:Pointer;blk:p_jit_dynamic);
  end;
 
 function new_blob(_size:ptruint):p_jit_dynamic;
@@ -129,7 +128,7 @@ function  preload_entry(addr:Pointer):t_jit_dynamic.p_entry_point;
 
 procedure jit_ctx_free(td:p_kthread);
 procedure switch_to_jit(td:p_kthread);
-function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt;is_call:Boolean):Pointer;
+function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt):Pointer;
 
 procedure build(var ctx:t_jit_context2);
 
@@ -146,11 +145,6 @@ uses
 //
 
 procedure pick(var ctx:t_jit_context2); external name 'kern_jit_pick';
-
-//
-
-var
- size_of_jctx:Integer=SizeOf(t_jctx); public;
 
 //
 
@@ -217,36 +211,9 @@ begin
  end;
 end;
 
-procedure t_jctx.free_stub;
-begin
- cache:=nil;
- if (pstub.blk<>nil) then
- begin
-  p_jit_dynamic(pstub.blk)^.dec_ref;
-  pstub.blk:=nil;
- end;
-end;
-
-procedure t_jctx.make_stub(src,dst:Pointer;blk:p_jit_dynamic);
-begin
- free_stub;
- //
- pstub.src:=src;
- pstub.dst:=dst;
- pstub.blk:=blk;
- //
- blk^.inc_ref;
- //
- cache:=@pstub;
-end;
-
 procedure jit_ctx_free(td:p_kthread); public;
-var
- jctx:p_jctx;
 begin
- jctx:=td^.td_jctx;
-
- jctx^.free_stub;
+ td^.td_jctx.block:=nil;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -254,7 +221,8 @@ label
  _start;
 var
  node:t_jit_dynamic.p_entry_point;
- jctx:p_jctx;
+ jctx:p_td_jctx;
+ frame:p_jit_frame;
  //jit_state:Boolean;
 begin
  if (td=nil) then Exit;
@@ -278,27 +246,24 @@ begin
   goto _start;
  end;
 
- jctx:=td^.td_jctx;
+ jctx:=@td^.td_jctx;
 
- if (jctx^.frame=nil) then
- begin
-  jctx^.frame:=@td^.td_frame.tf_r13;
- end;
+ frame:=@td^.td_frame.tf_r13;
 
- jctx^.make_stub(node^.src,node^.dst,node^.blob);
+ jctx^.block:=node^.blob;
 
  //tf_r14 not need to move
  //tf_r15 not need to move
 
- jctx^.frame^.tf_r13:=td^.td_frame.tf_r13;
- jctx^.frame^.tf_rsp:=td^.td_frame.tf_rsp;
- jctx^.frame^.tf_rbp:=td^.td_frame.tf_rbp;
+ frame^.tf_r13:=td^.td_frame.tf_r13;
+ frame^.tf_rsp:=td^.td_frame.tf_rsp;
+ frame^.tf_rbp:=td^.td_frame.tf_rbp;
 
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
  td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
 
  td^.td_frame.tf_rip:=QWORD(node^.dst);
- td^.td_frame.tf_r13:=QWORD(jctx^.frame);
+ td^.td_frame.tf_r13:=QWORD(frame);
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 
@@ -407,14 +372,15 @@ begin
  end;
 end;
 
-function jmp_dispatcher(addr:Pointer;plt:p_jit_plt;is_call:Boolean):Pointer; public;
+function jmp_dispatcher(addr:Pointer;plt:p_jit_plt):Pointer; public;
 label
  _start;
 var
  td:p_kthread;
  node:t_jit_dynamic.p_entry_point;
- jctx:p_jctx;
+ jctx:p_td_jctx;
  curr:p_jit_dynamic;
+ cache:t_jit_dynamic.p_jplt_cache;
 begin
  td:=curkthread;
  if (td=nil) then Exit(nil);
@@ -425,16 +391,8 @@ begin
  begin
   //switch to internal
 
-  if is_call then
-  begin
-   td^.td_teb^.jitcall:=addr;
-   Exit(@jit_call_internal);
-  end else
-  begin
-   td^.td_teb^.jitcall:=addr;
-   Exit(@jit_jmp_internal);
-  end;
-
+  td^.td_teb^.jitcall:=addr;
+  Exit(@jit_jmp_internal);
  end;
 
  _start:
@@ -453,23 +411,21 @@ begin
   goto _start;
  end;
 
- jctx:=td^.td_jctx;
+ jctx:=@td^.td_jctx;
 
- curr:=nil;
- if (jctx^.cache<>nil) then
- begin
-  curr:=jctx^.cache^.blk;
- end;
+ curr:=jctx^.block;
 
- if (curr=nil) then
+ if (curr=nil) or (plt=nil) then
  begin
-  jctx^.make_stub(node^.src,node^.dst,node^.blob);
+  jctx^.block:=node^.blob;
  end else
  begin
-  jctx^.cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
+  cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
+
+  jctx^.block:=node^.blob;
 
   //one element plt cache
-  System.InterlockedExchange(plt^.cache,jctx^.cache);
+  System.InterlockedExchange(plt^.cache,cache);
  end;
 
  Result:=node^.dst;
@@ -615,6 +571,11 @@ begin
  blob:=new_blob(ctx.builder.GetMemSize);
 
  ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
+
+ blob^.plta:=blob^.base+ctx.builder.GetPltStart;
+ blob^.pltc:=ctx.builder.APltCount;
+
+ blob^.init_plt;
 
  Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
 
@@ -827,34 +788,82 @@ begin
  entry_list:=Result;
 end;
 
+procedure t_jit_dynamic.init_plt;
+var
+ i:Integer;
+begin
+ if (pltc<>0) then
+ For i:=0 to pltc-1 do
+ begin
+  plta[i].cache:=@plt_stub;
+ end;
+end;
+
 function t_jit_dynamic.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic):p_jplt_cache;
 var
  node:t_jplt_cache;
+ dec_blk:p_jit_dynamic;
+ _insert:Boolean;
 begin
  Assert(plt<>nil);
  Assert(blk<>nil);
 
+ dec_blk:=nil;
+
  node.plt:=plt;
  node.src:=src;
 
- rw_wlock(lock);
+ repeat
 
- Result:=jpltc_list.Find(@node);
+  rw_wlock(lock);
+   Result:=jpltc_list.Find(@node);
+   if (Result<>nil) then
+   begin
+    //update
+    Result^.dst:=dst;
+    if (Result^.blk<>blk) then
+    begin
+     dec_blk:=Result^.blk;
+     Result^.blk:=blk;
+     //
+     blk^.inc_ref;
+    end;
+   end;
+  rw_wunlock(lock);
 
- if (Result=nil) then
- begin
-  Result:=AllocMem(Sizeof(t_jplt_cache));
-  Result^.plt:=plt;
-  Result^.src:=src;
-  Result^.dst:=dst;
-  Result^.blk:=blk;
-  //
-  blk^.inc_ref;
-  //
-  jpltc_list.Insert(Result);
- end;
+  if (dec_blk<>nil) then
+  begin
+   dec_blk^.dec_ref;
+   dec_blk:=nil;
+  end;
 
- rw_wunlock(lock);
+  if (Result<>nil) then
+  begin
+   Break;
+  end else
+  begin
+   Result:=AllocMem(Sizeof(t_jplt_cache));
+   Result^.plt:=plt;
+   Result^.src:=src;
+   Result^.dst:=dst;
+   Result^.blk:=blk;
+   //
+   rw_wlock(lock);
+    _insert:=jpltc_list.Insert(Result);
+    if _insert then
+    begin
+     blk^.inc_ref;
+    end;
+   rw_wunlock(lock);
+   //
+   if _insert then
+   begin
+    Break;
+   end;
+  end;
+
+ until false;
+
 end;
 
 function t_jit_dynamic.new_chunk(count:QWORD):p_jcode_chunk;

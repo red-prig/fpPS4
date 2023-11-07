@@ -169,6 +169,11 @@ type
   sttop:Pointer;
  end;
 
+ p_td_jctx=^t_td_jctx;
+ t_td_jctx=packed record
+  block:Pointer;
+ end;
+
  pp_kthread=^p_kthread;
  p_kthread=^kthread;
  kthread=record
@@ -198,9 +203,10 @@ type
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
   td_retval       :array[0..1] of QWORD;
-  td_jctx         :Pointer;
+  td_align        :Pointer;
   td_frame        :trapframe;
   td_fpstate      :t_fpstate;
+  td_jctx         :t_td_jctx;
   td_ustack       :t_td_stack;
   td_kstack       :t_td_stack;
   //
