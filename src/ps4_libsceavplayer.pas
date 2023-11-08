@@ -377,7 +377,7 @@ var
  data:TAvPlayerInfo;
 begin
  spin_lock(hamt_lock);
-  data:=TAvPlayerInfo(HAMT_delete64(@AvHandleHamt,handle));
+  HAMT_delete64(@AvHandleHamt,handle,@data);
  spin_unlock(hamt_lock);
 
  if (data<>nil) then

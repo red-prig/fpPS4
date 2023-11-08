@@ -559,7 +559,7 @@ begin
  begin
   Result:=0;
   node:=P^;
-  HAMT_delete32(@eq^.FUserEvents.hamt,id);
+  HAMT_delete32(@eq^.FUserEvents.hamt,id,nil);
   _free_kevent_node(node);
  end else
  begin
