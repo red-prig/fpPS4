@@ -347,14 +347,17 @@ begin
  Result:=0;
 end;
 
-//function ps4_sceNetGetsockopt(s:Integer; level:Integer; optname:Integer; optval:Pointer; optlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
-//begin
-// Result:=0;
-//end;
+function ps4_sceNetGetsockopt(s:Integer; level:Integer; optname:Integer; optval:Pointer; optlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
 
 function ps4_sceNetResolverStartAton(rid:Integer; const addr:pSceNetInAddr; hostname:PChar; hostname_len:Integer; timeout:Integer; retry:Integer; flags:Integer):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceNetResolveStartAton:',hostname,':',flags);
+ if (hostname<>nil) then
+ begin
+  FillChar(hostname^,hostname_len,0);
+ end;
  Result:=0;
 end;
 
@@ -655,7 +658,7 @@ begin
  lib^.set_proc($A501A91D8A290086,@ps4_sceNetNtohl);
  lib^.set_proc($45BBEDFB9636884C,@ps4_sceNetNtohs);
  lib^.set_proc($655C38E9BB1AB009,@ps4_sceNetEpollControl);
- //lib^.set_proc($C6986B66EB25EFC1,@ps4_sceNetGetsockopt);
+ lib^.set_proc($C6986B66EB25EFC1,@ps4_sceNetGetsockopt);
  lib^.set_proc($0296F8603C4AB112,@ps4_sceNetResolverStartAton);
  lib^.set_proc($9099581F9B8C0162,@ps4_sceNetResolverDestroy);
  lib^.set_proc($3975D7E26524DEE9,@ps4_sceNetConnect);
