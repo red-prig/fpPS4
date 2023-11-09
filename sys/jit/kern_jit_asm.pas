@@ -134,20 +134,20 @@ begin
  Assert(False);
 end;
 
-//in/out:r14
-procedure uplift_jit_notsafe; assembler;
 const
  PAGE_SHIFT_2   =PAGE_SHIFT-2;
  PAGE_MAP_MASK_2=PAGE_MAP_MASK shl 2;
+
+//in/out:r14
+procedure uplift_jit_notsafe; assembler; nostackframe;
 label
  _ret,
  _sigsegv;
-var
- addr:QWORD;
- tmp2:QWORD;
 asm
- mov %rax,tmp2
- mov %r14,addr //origin
+ //save
+ mov %rax, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13)
+ //origin
+ mov %r14, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13)
  //
  mov VM_MAXUSER_ADDRESS,%rax
  cmp %rax,%r14
@@ -170,17 +170,20 @@ asm
  or  %rax,%r14
  //
 
- mov tmp2,%rax //restore
+ //restore
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
 
  jmp _ret
 
  _sigsegv:
 
- mov tmp2,%rax //restore
+ //restore
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
 
  call jit_save_ctx
 
- mov  addr,%rdi //origin
+  //origin
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13), %rdi
 
  call jit_sigsegv
 
@@ -198,47 +201,44 @@ asm
 end;
 
 //in:r14(addr),r15:(mem_size) out:ZF
-procedure page_test; assembler;
+procedure page_test; assembler; nostackframe;
 label
  _exit;
-var
- rdi:QWORD;
- rsi:QWORD;
 asm
- mov %rdi,rdi
- mov %rsi,rsi
+ //save
+ mov %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13)
+ mov %rsi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r13)
  //
  mov %r14,%rdi
- mov %r15,%rsi
  //addr2:=addr+mem_size-1 (rsi)
- lea -1(%rsi,%rdi),%rsi
+ lea -1(%r15,%r14),%rsi
  //high addr (rdi,rsi)
- shr PAGE_SHIFT   ,%rdi
- shr PAGE_SHIFT   ,%rsi
- and PAGE_MAP_MASK,%rdi
- and PAGE_MAP_MASK,%rsi
+ shr PAGE_SHIFT_2   ,%rdi
+ shr PAGE_SHIFT_2   ,%rsi
+ and PAGE_MAP_MASK_2,%rdi
+ and PAGE_MAP_MASK_2,%rsi
  //
  cmp %rdi,%rsi
  je _exit
+ //save
+ mov %rax,- kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13)
  //uplift (rdi,rsi)
- lea (,%rdi,4),%rdi
- lea (,%rsi,4),%rsi
- //
- add PAGE_MAP(%rip),%rdi
- add PAGE_MAP(%rip),%rsi
- //
- mov (%rdi),%edi
- mov (%rsi),%esi
+ mov PAGE_MAP(%rip),%rax
+ mov (%rax,%rdi),%edi
+ mov (%rax,%rsi),%esi
+ //restore
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
  //filter (rdi,rsi)
  and PAGE_OFS_MASK,%rdi
  and PAGE_OFS_MASK,%rsi
  //
  inc %rdi
  cmp %rdi,%rsi
+
  _exit:
- //
- mov rdi,%rdi
- mov rsi,%rsi
+ //restore
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13) ,%rdi
+ mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r13) ,%rsi
 end;
 
 procedure jit_simple_save_ctx; assembler; nostackframe;
