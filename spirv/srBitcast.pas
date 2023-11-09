@@ -101,6 +101,8 @@ begin
  if (src=nil) then Exit;
  if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
+ Assert(TryBitcastType(src^.dtype,dtype));
+
  if src^.is_const then
  begin
   //only from consts, first
@@ -134,6 +136,8 @@ begin
  if (src=nil) then Exit;
  if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
+ Assert(TryBitcastType(src^.dtype,dtype));
+
  dst:=rSlot.New(src^.pLine,dtype);
  dst^.pWriter:=src^.pWriter;
 
@@ -154,6 +158,8 @@ begin
  if (dtype=dtUnknow) or (dtype=src^.dtype) then Exit;
 
  dst:=nil;
+
+ Assert(TryBitcastType(src^.dtype,dtype));
 
  //
  dst:=Find(dtype,src);
@@ -177,6 +183,7 @@ begin
    rSlot.Emit.OpCast(src^.pLine,dst,src)
   end else
   begin
+   Writeln('bitcast:',src^.dtype,'<>',dtype);
    Assert(false,'bitcast');
   end;
  end;
