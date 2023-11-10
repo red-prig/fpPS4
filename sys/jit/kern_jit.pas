@@ -193,6 +193,11 @@ begin
  end;
 end;
 
+procedure trim_flow(var ctx:t_jit_context2);
+begin
+ ctx.trim:=True;
+end;
+
 procedure op_push_rip(var ctx:t_jit_context2);
 var
  stack:TRegValue;
@@ -364,7 +369,7 @@ begin
  //
  op_jmp_dispatcher(ctx);
  //
- ctx.trim:=True;
+ trim_flow(ctx);
 end;
 
 procedure op_jmp(var ctx:t_jit_context2);
@@ -433,7 +438,7 @@ begin
   op_jmp_dispatcher(ctx);
  end;
  //
- ctx.trim:=True;
+ trim_flow(ctx);
 end;
 
 procedure op_jcc(var ctx:t_jit_context2);
@@ -799,13 +804,13 @@ begin
    begin
     //
     ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
-    ctx.trim:=True;
+    trim_flow(ctx);
    end;
 
   else
    begin
     ctx.builder.call_far(@jit_unknow_int);
-    ctx.trim:=True;
+    trim_flow(ctx);
    end;
  end;
 end;
@@ -814,14 +819,14 @@ procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
- ctx.trim:=True;
+ trim_flow(ctx);
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
- ctx.trim:=True;
+ trim_flow(ctx);
 end;
 
 procedure op_hlt(var ctx:t_jit_context2);
@@ -1079,6 +1084,12 @@ begin
 
  while True do
  begin
+
+  if not ctx.is_text_addr(QWORD(ptr)) then
+  begin
+   writeln('not excec:0x',HexStr(ptr));
+   goto _invalid;
+  end;
 
   if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin

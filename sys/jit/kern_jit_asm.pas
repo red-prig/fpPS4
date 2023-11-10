@@ -79,31 +79,31 @@ function  IS_JIT_FUNC(rip:qword):Boolean;
 
 const
  copyout_mov_size:array[TOperandSize] of Pointer=(
-  @copyout_mov_1 ,
-  @copyout_mov_1 ,
-  @copyout_mov_2 ,
-  @copyout_mov_4 ,
-  @copyout_mov_8 ,
-  @copyout_mov_6 ,
-  @copyout_mov_10,
-  @copyout_mov_16,
-  @copyout_mov_32,
-  @copyout_mov_64,
-  @copyout_mov_512
+  @copyout_mov_1 , //os0
+  @copyout_mov_1 , //os8
+  @copyout_mov_2 , //os16
+  @copyout_mov_4 , //os32
+  @copyout_mov_8 , //os64
+  @copyout_mov_6 , //os48
+  @copyout_mov_10, //os80
+  @copyout_mov_16, //os128
+  @copyout_mov_32, //os256
+  @copyout_mov_64, //os512
+  @copyout_mov_512 //os4096
  );
 
  copyin_mov_size:array[TOperandSize] of Pointer=(
-  @copyin_mov_1 ,
-  @copyin_mov_1 ,
-  @copyin_mov_2 ,
-  @copyin_mov_4 ,
-  @copyin_mov_8 ,
-  @copyin_mov_6 ,
-  @copyin_mov_10,
-  @copyin_mov_16,
-  @copyin_mov_32,
-  @copyin_mov_64,
-  @copyin_mov_512
+  @copyin_mov_1 , //os0
+  @copyin_mov_1 , //os8
+  @copyin_mov_2 , //os16
+  @copyin_mov_4 , //os32
+  @copyin_mov_8 , //os64
+  @copyin_mov_6 , //os48
+  @copyin_mov_10, //os80
+  @copyin_mov_16, //os128
+  @copyin_mov_32, //os256
+  @copyin_mov_64, //os512
+  @copyin_mov_512 //os4096
  );
 
 implementation
@@ -275,7 +275,7 @@ label
 var
  addr:Pointer;
  size:QWORD;
- data:array[0..31] of Byte;
+ data:array[0..511] of Byte;
 asm
  pushfq
  //
@@ -392,7 +392,7 @@ label
  _simple,
  _exit;
 var
- data:array[0..31] of Byte;
+ data:array[0..511] of Byte;
 asm
  pushfq
  //
