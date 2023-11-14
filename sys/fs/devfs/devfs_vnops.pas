@@ -1378,13 +1378,17 @@ begin
   fp^.f_data:=dev;
   fp^.f_vnode:=vp;
  end;
+
  if (dsw^.d_fdopen<>nil) then
   error:=dsw^.d_fdopen(dev, ap^.a_mode, fp)
  else
   error:=dsw^.d_open(dev, ap^.a_mode, S_IFCHR);
+
  { cleanup any cdevpriv upon error }
  if (error<>0) then
+ begin
   devfs_clear_cdevpriv();
+ end;
 
  td^.td_fpop:=fpop;
 
@@ -1487,7 +1491,9 @@ begin
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT);
 
  if ((ioflag and O_DIRECT)<>0) then
+ begin
   ioflag:=ioflag or IO_DIRECT;
+ end;
 
  foffset_lock_uio(fp, uio, flags or FOF_NOLOCK);
  error:=dsw^.d_read(dev, uio, ioflag);
@@ -1546,7 +1552,9 @@ begin
  if (devfs_populate_vp(ap^.a_vp)<>0) then
  begin
   if (tmp_ncookies<>nil) then
+  begin
    ap^.a_ncookies:=tmp_ncookies;
+  end;
   Exit(EIO);
  end;
  error:=0;
@@ -1562,24 +1570,32 @@ begin
    dd:=TAILQ_NEXT(dd,@dd^.de_list);
    continue;
   end;
+
   if (devfs_prison_check(dd)<>0) then
   begin
    dd:=TAILQ_NEXT(dd,@dd^.de_list);
    continue;
   end;
+
   if (dd^.de_dirent^.d_type=DT_DIR) then
    de:=dd^.de_dir
   else
    de:=dd;
+
   dp:=dd^.de_dirent;
   if (dp^.d_reclen > uio^.uio_resid) then
+  begin
    break;
+  end;
+
   dp^.d_fileno:=de^.de_inode;
   if (off >= uio^.uio_offset) then
   begin
    error:=vfs_read_dirent(ap, dp, off);
    if (error<>0) then
+   begin
     break;
+   end;
   end;
   Inc(off,dp^.d_reclen);
   dd:=TAILQ_NEXT(dd,@dd^.de_list);
@@ -1592,7 +1608,9 @@ begin
   * place.
   }
  if (tmp_ncookies<>nil) then
+ begin
   ap^.a_ncookies:=tmp_ncookies;
+ end;
 
  Exit(error);
 end;
@@ -1739,7 +1757,9 @@ begin
   begin
    de:=cdp^.cdp_dirents[i];
    if (de=nil) then
+   begin
     continue;
+   end;
 
    vp2:=de^.de_vnode;
    if (vp2<>nil) then
@@ -1748,7 +1768,9 @@ begin
     VI_LOCK(vp2);
     mtx_unlock(devfs_de_interlock);
     if (vget(vp2, LK_EXCLUSIVE or LK_INTERLOCK)<>0) then
+    begin
      goto loop;
+    end;
     vhold(vp2);
     vgone(vp2);
     vdrop(vp2);

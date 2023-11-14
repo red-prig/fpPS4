@@ -17,7 +17,7 @@ const
 
  LINK_MAX   =32767; // max file link count
  MAX_CANON  =255;   // max bytes in term canon input line
- MAX_INPUT  =255;   // max bytes in terminal inpu
+ MAX_INPUT  =255;   // max bytes in terminal input
  NGROUPS_MAX=1023;  // max supplemental group id's
 
  MAXPATHLEN =PATH_MAX;

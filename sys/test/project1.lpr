@@ -104,6 +104,7 @@ uses
  kern_mdbg,
  md_exception,
  systm,
+ dev_tty,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs,
@@ -310,7 +311,7 @@ var
  td:p_kthread;
  fs:t_statfs;
  fd_1,fd_2:Integer;
- err:Integer;
+ i,err:Integer;
 
  buf:PChar;
 
@@ -370,6 +371,11 @@ begin
 
  //readln;
 
+ For i:=0 to High(deci_tty) do
+ begin
+  deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+ end;
 
                       //fs  guest     host
  err:=vfs_mount_mkdir('ufs','/app0'  ,'/'      ,nil,0);
