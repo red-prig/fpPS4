@@ -127,6 +127,7 @@ type
   function  OpFMulToS(src0:PsrRegNode;src1:Single;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   function  OpUToF(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpFToU(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpSToF(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpUToU(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpSToS(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
@@ -1208,6 +1209,14 @@ begin
 
  Result:=NewReg(rtype);
  _Op1(_get_line(ppLine),Op.OpConvertUToF,Result,src);
+end;
+
+function TEmitOp.OpFToU(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ if (src=nil) then Exit(src);
+
+ Result:=NewReg(rtype);
+ _Op1(_get_line(ppLine),Op.OpConvertFToU,Result,src);
 end;
 
 function TEmitOp.OpSToF(src:PsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):PsrRegNode;

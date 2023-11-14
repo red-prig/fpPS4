@@ -701,6 +701,8 @@ var
  node:PVNode;
  pLine:PspirvOp;
 begin
+ Assert(rtype.BitSize div 8=size);
+
  Fdtype:=rtype;
 
  pTypeList:=Emit.GetTypeList;

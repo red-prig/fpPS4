@@ -416,14 +416,19 @@ end;
 
 procedure TElf_node._set_lib(id:Word;lib:TLIBRARY);
 var
- i:SizeInt;
+ p,i:SizeInt;
  plib:PLIBRARY;
 begin
  i:=Length(aLibs);
  if (i<=id) then
  begin
   i:=id+1;
+  p:=Length(aLibs);
   SetLength(aLibs,i);
+  for p:=p to i-1 do
+  begin
+   aLibs[p]:=nil;
+  end;
  end;
  plib:=aLibs[id];
  if (plib=nil) then plib:=AllocMem(SizeOf(TLIBRARY));
@@ -434,14 +439,19 @@ end;
 
 procedure TElf_node._set_lib_attr(u:TLibraryValue);
 var
- i:SizeInt;
+ p,i:SizeInt;
  plib:PLIBRARY;
 begin
  i:=Length(aLibs);
  if (i<=u.id) then
  begin
   i:=u.id+1;
+  p:=Length(aLibs);
   SetLength(aLibs,i);
+  for p:=p to i-1 do
+  begin
+   aLibs[p]:=nil;
+  end;
  end;
  plib:=aLibs[u.id];
  if (plib=nil) then plib:=AllocMem(SizeOf(TLIBRARY));

@@ -22,6 +22,7 @@ const
  SCE_HTTP_ERROR_OUT_OF_MEMORY=$80431022;
  SCE_HTTP_ERROR_INVALID_VALUE=$804311fe;
  SCE_HTTP_ERROR_INVALID_URL  =$80433060;
+ SCE_HTTP_ERROR_NETWORK      =$80431063;
 
 type
  SceHttpUriElement=packed record
@@ -182,7 +183,7 @@ function ps4_sceHttpWaitRequest(eh:SceHttpEpollHandle;
                                 maxevents:Integer;
                                 timeout_us:Integer):Integer; SysV_ABI_CDecl;
 begin
- WriteLn(SysLogPrefix, 'sceHttpWaitRequest handle=', HexStr(eh),' event.id=', nbev^.id,' maxevents=',maxevents);
+ //WriteLn(SysLogPrefix, 'sceHttpWaitRequest handle=', HexStr(eh),' event.id=', nbev^.id,' maxevents=',maxevents);
 
  nbev^.events:=SCE_HTTP_NB_EVENT_SOCK_ERR;
  nbev^.id:=3;

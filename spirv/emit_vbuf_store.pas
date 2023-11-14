@@ -104,15 +104,46 @@ begin
    end;
   end;
 
+ if (lc.elem_resl<>lc.elem_orig) then
+ begin
+  case lc.elem_resl of
+   dtFloat32: //isScalar
+     begin
+
+      Case lc.info.NFMT of
+       BUF_NUM_FORMAT_UNORM:
+         begin
+          For i:=0 to lc.elem_count-1 do
+          begin
+           lc.elm[i]:=OpFMulToS(lc.elm[i],255);
+           lc.elm[i]:=OpFToU(lc.elm[i],lc.elem_orig);
+          end;
+         end;
+       else
+        Assert(false,'TODO CONVERT');
+      end;
+
+     end;
+   dtUint32,
+   dtInt32  : //isInt
+     begin
+      Assert(false,'TODO CONVERT');
+     end;
+   else
+    Assert(False);
+  end;
+ end;
+
  Case lc.elem_count of
   1:rsl:=lc.elm[0];
   else
    begin
-    rsl:=OpMakeVec(line,lc.elem_resl.AsVector(lc.elem_count),@lc.elm);
+    rsl:=OpMakeVec(line,lc.elem_orig.AsVector(lc.elem_count),@lc.elm);
+    //rsl:=OpMakeVec(line,lc.elem_resl.AsVector(lc.elem_count),@lc.elm);
    end;
  end;
 
- Assert(lc.elem_resl=lc.elem_orig,'TODO CONVERT');
+ //Assert(lc.elem_resl=lc.elem_orig,'TODO CONVERT');
 
  csize:=Min(lc.info.GetElemSize*lc.elem_count,lc.info.GetSizeFormat);
  orig:=lc.v.data[0];

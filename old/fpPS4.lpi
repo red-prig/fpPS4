@@ -615,6 +615,7 @@
       <Unit133>
         <Filename Value="src\audiodec\ps4_libsceaudiodec.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAudiodec"/>
       </Unit133>
       <Unit134>
         <Filename Value="src\audiodec\ps4_libsceaudiodeccpu.pas"/>

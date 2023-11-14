@@ -29,7 +29,7 @@ var
 
  inp_SRC:PsrInput;
 
- rsl:PsrRegNode;
+ rsl,elm:PsrRegNode;
 
 begin
  Assert(FExecutionModel=ExecutionModel.Fragment); //only pixel shader
@@ -65,8 +65,9 @@ begin
 
      rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
 
-     dst^.New(line,dtFloat32);
-     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+     elm:=dst^.New(line,dtFloat32);
+
+     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
     end;
 
   V_INTERP_P2_F32:
@@ -92,8 +93,9 @@ begin
 
      rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
 
-     dst^.New(line,dtFloat32);
-     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+     elm:=dst^.New(line,dtFloat32);
+
+     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
     end;
 
    V_INTERP_MOV_F32:
@@ -105,8 +107,9 @@ begin
 
      rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
 
-     dst^.New(line,dtFloat32);
-     OpExtract(line,dst^.current,rsl,FSPI.VINTRP.ATTRCHAN);
+     elm:=dst^.New(line,dtFloat32);
+
+     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
     end;
 
 

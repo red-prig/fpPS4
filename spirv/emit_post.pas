@@ -721,7 +721,14 @@ begin
     end;
     F:=F.pField^.FetchValue(_offset,pChain^.size,dtype);
 
-   until (F.fValue<>frNotFit);
+    case F.fValue of
+     frNotFit,
+     frIdent :Break;
+     else;
+    end;
+
+   until false;
+
    if (F.fValue<>frNotFit) then Break;
 
    buf:=BufferList.NextAlias(buf);
@@ -783,7 +790,14 @@ begin
        end;
     end;
 
-   until (F.fValue<>frNotFit);
+    case F.fValue of
+     frNotFit,
+     frIdent :Break;
+     else;
+    end;
+
+   until false;
+
    if (F.fValue<>frNotFit) then Break;
 
    buf:=BufferList.NextAlias(buf);

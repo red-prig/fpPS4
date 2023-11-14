@@ -1054,6 +1054,7 @@ begin
   DT_NEEDED:
    begin
     mu.value:=entry.d_un.d_val;
+    _md:=Default(TMODULE);
     _md.strName:=PChar(@pStrTable[mu.name_offset]);
     _add_need(_md.strName);
     Writeln('DT_NEEDED               :',_md.strName); //import filename
@@ -1061,6 +1062,7 @@ begin
   DT_SCE_MODULE_INFO:
    begin
     mu.value:=entry.d_un.d_val;
+    _md:=Default(TMODULE);
     _md.strName:=PChar(@pStrTable[mu.name_offset]);
     _md.Import:=False;
     Writeln('DT_SCE_MODULE_INFO:',_md.strName,':',HexStr(mu.id,4)); //current module name
@@ -1070,6 +1072,7 @@ begin
   DT_SCE_NEEDED_MODULE:
    begin
     mu.value:=entry.d_un.d_val;
+    _md:=Default(TMODULE);
     _md.strName:=PChar(@pStrTable[mu.name_offset]);
     _md.Import:=True;
     Writeln('DT_SCE_NEEDED_MODULE    :',HexStr(mu.id,4),':',_md.strName); //import module name
@@ -1078,6 +1081,7 @@ begin
   DT_SCE_IMPORT_LIB:
    begin
     lu.value:=entry.d_un.d_val;
+    lib:=Default(TLIBRARY);
     lib.strName:=PChar(@pStrTable[lu.name_offset]);
     lib.Import:=True;
     Writeln('DT_SCE_IMPORT_LIB       :',HexStr(lu.id,4),':',lib.strName); //import lib name
@@ -1086,6 +1090,7 @@ begin
   DT_SCE_EXPORT_LIB:
    begin
     lu.value:=entry.d_un.d_val;
+    lib:=Default(TLIBRARY);
     lib.strName:=PChar(@pStrTable[lu.name_offset]);
     lib.Import:=False;
     Writeln('DT_SCE_EXPORT_LIB       :',HexStr(lu.id,4),':',lib.strName); //export libname
