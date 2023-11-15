@@ -57,18 +57,21 @@ end;
 
 function ttydisc_read(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
 var
- len:QWORD;
- S:RawByteString;
+ LEN:QWORD;
+ BLK:IO_STATUS_BLOCK;
+ OFFSET:Int64;
+ BUF:array[0..1023] of AnsiChar;
 begin
- Readln(S);
-
- len:=Length(S);
- if (len > uio^.uio_resid) then
- begin
-  len:=uio^.uio_resid;
- end;
-
- Result:=uiomove(PChar(S), len, uio);
+ //init
+ BLK:=Default(IO_STATUS_BLOCK);
+ OFFSET:=0;
+ //
+ LEN:=uio^.uio_resid;
+ if (len>Length(BUF)) then len:=Length(BUF);
+ //
+ NtReadFile(tp^.t_rd_handle,0,nil,nil,@BLK,@BUF,LEN,@OFFSET,nil);
+ //
+ Result:=uiomove(@BUF, BLK.Information, uio);
 end;
 
 function ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
