@@ -64,7 +64,7 @@ var
 begin
  //init
  BLK:=Default(IO_STATUS_BLOCK);
- OFFSET:=0;
+ OFFSET:=Int64(FILE_USE_FILE_POINTER_POSITION_L);
  //
  LEN:=uio^.uio_resid;
  if (len>Length(BUF)) then len:=Length(BUF);
