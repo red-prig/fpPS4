@@ -12,11 +12,15 @@ uses
  subr_uio,
  sys_tty;
 
-function ttydisc_read_poll (tp:p_tty):QWORD;
-function ttydisc_write_poll(tp:p_tty):QWORD;
+function  ttydisc_read_poll (tp:p_tty):QWORD;
+function  ttydisc_write_poll(tp:p_tty):QWORD;
 
-function ttydisc_read (tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
-function ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
+function  ttydisc_read (tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
+function  ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
+
+function  ttycrt_write(tp:p_tty;iov_base:Pointer;iov_len:qword):Integer;
+
+procedure md_init_tty;
 
 implementation
 
@@ -76,7 +80,7 @@ end;
 
 function ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
 var
- LEN:QWORD;
+ MAX,LEN,OFS:QWORD;
  BLK:IO_STATUS_BLOCK;
  OFFSET:Int64;
  PTR:Pointer;
@@ -86,26 +90,81 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
  OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
  //tty name
- LEN:=tp^.t_nlen;
- Move(tp^.t_name^,BUF,LEN);
- PTR:=@BUF[LEN];
- LEN:=uio^.uio_resid+LEN;
+ OFS:=tp^.t_nlen;
+ Move(tp^.t_name^,BUF,OFS);
+ PTR:=@BUF[OFS];
+ MAX:=Length(BUF)-OFS;
+ LEN:=uio^.uio_resid+OFS;
  //text
  while (LEN<>0) do
  begin
-  if (len>Length(BUF)) then len:=Length(BUF);
+  if (LEN>MAX) then LEN:=MAX;
   //
-  Result:=uiomove(PTR, len, uio);
+  Result:=uiomove(PTR, LEN-OFS, uio);
   if (Result<>0) then Break;
   //
   NtWriteFile(tp^.t_wr_handle,0,nil,nil,@BLK,@BUF,LEN,@OFFSET,nil);
   //
   PTR:=@BUF[0];
+  MAX:=Length(BUF);
   LEN:=uio^.uio_resid;
+  OFS:=0;
  end;
 end;
 
+function ttycrt_write(tp:p_tty;iov_base:Pointer;iov_len:qword):Integer;
+var
+ MAX,LEN,OFS:QWORD;
+ BLK:IO_STATUS_BLOCK;
+ OFFSET:Int64;
+ PTR:Pointer;
+ BUF:array[0..1023] of AnsiChar;
+begin
+ Result:=0;
+ //init
+ BLK:=Default(IO_STATUS_BLOCK);
+ OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
+ //tty name
+ OFS:=tp^.t_nlen;
+ Move(tp^.t_name^,BUF,OFS);
+ PTR:=@BUF[OFS];
+ MAX:=Length(BUF)-OFS;
+ LEN:=iov_len+OFS;
+ //text
+ while (LEN<>0) do
+ begin
+  if (LEN>MAX) then LEN:=MAX;
+  //
+  MAX:=LEN-OFS;
+  Move(iov_base^,PTR^,MAX);
+  Inc(iov_base,MAX);
+  Dec(iov_len ,MAX);
+  //
+  NtWriteFile(tp^.t_wr_handle,0,nil,nil,@BLK,@BUF,LEN,@OFFSET,nil);
+  //
+  PTR:=@BUF[0];
+  MAX:=Length(BUF);
+  LEN:=iov_len;
+  OFS:=0;
+ end;
+end;
 
+procedure md_init_tty;
+var
+ i:Integer;
+begin
+ For i:=0 to High(std_tty) do
+ begin
+  std_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  std_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+ end;
+
+ For i:=0 to High(deci_tty) do
+ begin
+  deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+ end;
+end;
 
 end.
 

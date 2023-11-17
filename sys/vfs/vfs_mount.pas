@@ -1809,9 +1809,13 @@ begin
  Assert(ma^.v<>nil,        'kernel_mount nil ma^.v');
  Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (%d)');
 
- auio.uio_iov:=ma^.v;
+ auio.uio_iov   :=ma^.v;
  auio.uio_iovcnt:=ma^.len;
+ auio.uio_offset:=0;
+ auio.uio_resid :=0;
  auio.uio_segflg:=UIO_SYSSPACE;
+ auio.uio_rw    :=UIO_READ;
+ auio.uio_td    :=nil;
 
  error:=ma^.error;
  if (error=0) then

@@ -60,6 +60,9 @@ procedure threadinit; //SYSINIT
 function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
 procedure kthread_exit();
 
+var
+ init_tty_cb:Tprocedure;
+
 implementation
 
 uses
@@ -348,9 +351,34 @@ end;
 
 procedure before_start(td:p_kthread);
 begin
- //init this
- ipi_sigreturn; //switch
+ InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
+
+ if (init_tty_cb<>nil) then
+ begin
+  init_tty_cb();
+ end;
+
+  //switch
+ ipi_sigreturn;
 end;
+
+procedure before_start_kern(td:p_kthread);
+type
+ t_cb=procedure(arg:QWORD);
+begin
+ InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
+
+ if (init_tty_cb<>nil) then
+ begin
+  init_tty_cb();
+ end;
+
+ //call
+ t_cb(td^.td_frame.tf_rip)(td^.td_frame.tf_rdi);
+
+ kthread_exit();
+end;
+
 
 procedure thread0_param(td:p_kthread);
 begin
@@ -377,6 +405,8 @@ function create_thread(td        :p_kthread; //calling thread
 var
  newtd:p_kthread;
  stack:stack_t;
+
+ wrap:Pointer;
 
  n:Integer;
 begin
@@ -446,10 +476,16 @@ begin
  newtd^.td_ustack.sttop:=stack_base;
  //user stack
 
+
+ //seh wrapper
+ wrap:=@before_start;
+ seh_wrapper_before(newtd,wrap);
+ //seh wrapper
+
  n:=cpu_thread_create(newtd,
                       stack_base,
                       stack_size,
-                      @before_start,
+                      wrap,
                       Pointer(newtd));
 
  if (n<>0) then
@@ -506,7 +542,8 @@ begin
  //jit wrapper
 
  //seh wrapper
- seh_wrapper(newtd);
+ wrap:=@before_start;
+ seh_wrapper_after(newtd,wrap);
  //seh wrapper
 
  if (td<>nil) then
@@ -555,6 +592,8 @@ var
  newtd:p_kthread;
  stack:stack_t;
 
+ wrap:Pointer;
+
  n:Integer;
 begin
  Result:=0;
@@ -582,11 +621,16 @@ begin
  newtd^.td_ustack.sttop:=newtd^.td_kstack.sttop;
  //user stack
 
+ //seh wrapper
+ wrap:=@before_start_kern;
+ seh_wrapper_before(newtd,wrap);
+ //seh wrapper
+
  n:=cpu_thread_create(newtd,
                       stack.ss_sp,
                       stack.ss_size,
-                      func,
-                      arg);
+                      wrap,
+                      Pointer(newtd));
 
  if (n<>0) then
  begin
@@ -601,7 +645,8 @@ begin
  //jit wrapper
 
  //seh wrapper
- seh_wrapper(newtd);
+ wrap:=@before_start_kern;
+ seh_wrapper_after(newtd,wrap);
  //seh wrapper
 
  if (td<>nil) then
@@ -730,6 +775,8 @@ begin
 
  //free
  thread_dec_ref(td);
+
+ DoneThread;
 
  cpu_sched_throw;
 end;

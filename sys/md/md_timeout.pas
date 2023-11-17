@@ -125,7 +125,6 @@ begin
 
   msleep_td(0);
  until false;
- kthread_exit();
 end;
 
 procedure md_callout_reset(c:p_callout);

@@ -59,7 +59,6 @@ begin
   vnlru_proc;
   pause('sys_daemon',hz);
  until false;
- kthread_exit();
 end;
 
 procedure sys_daemon_init;

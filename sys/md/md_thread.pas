@@ -32,7 +32,8 @@ function  cpu_thread_finished(td:p_kthread):Boolean;
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 
-procedure seh_wrapper(td:p_kthread);
+procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
+procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 
 implementation
 
@@ -332,12 +333,15 @@ asm
 .seh_handler __FPC_default_handler,@except,@unwind
 end;
 
-procedure seh_wrapper(td:p_kthread);
+procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 begin
- td^.td_teb^.jitcall:=Pointer(td^.td_frame.tf_rip);
- td^.td_frame.tf_rip:=QWORD(@main_wrapper);
+ func:=@main_wrapper;
 end;
 
+procedure seh_wrapper_after(td:p_kthread;func:Pointer);
+begin
+ td^.td_teb^.jitcall:=func;
+end;
 
 end.
 

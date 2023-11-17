@@ -13,8 +13,6 @@ uses
  sys_tty;
 
 var
- deci_tty:array[0..11] of t_tty;
-
  dev_console:p_cdev;
 
 procedure ttyconsdev_init(); //SYSINIT(tty, SI_SUB_DRIVERS, SI_ORDER_FIRST, ttyconsdev_init, nil);
@@ -375,6 +373,10 @@ end;
 
 procedure ttyconsdev_init();
 begin
+ tty_init(@std_tty[ 0],'[Input]:' ,nil);
+ tty_init(@std_tty[ 1],'[Output]:',nil);
+ tty_init(@std_tty[ 2],'[Error]:' ,nil);
+ //
  tty_init(@deci_tty[ 0],'[stdin]:' ,nil);
  tty_init(@deci_tty[ 1],'[stdout]:',nil);
  tty_init(@deci_tty[ 2],'[stderr]:',nil);
@@ -402,6 +404,8 @@ begin
  tty_makedev(@deci_tty[ 9],'deci_ttya0' ,[]);
  tty_makedev(@deci_tty[10],'deci_ttyb0' ,[]);
  tty_makedev(@deci_tty[11],'deci_ttyc0' ,[]);
+ //
+ md_init_tty;
 end;
 
 

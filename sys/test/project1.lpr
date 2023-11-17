@@ -105,6 +105,7 @@ uses
  md_exception,
  systm,
  dev_tty,
+ sys_crt,
  ps4_libSceSystemService,
  ps4_libSceIpmi,
  ps4_libSceDialogs,
@@ -371,12 +372,6 @@ begin
 
  //readln;
 
- For i:=0 to High(deci_tty) do
- begin
-  deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
-  deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
- end;
-
                       //fs  guest     host
  err:=vfs_mount_mkdir('ufs','/app0'  ,'/'      ,nil,0);
  err:=vfs_mount_mkdir('ufs','/system','/system',nil,0);
@@ -537,7 +532,6 @@ var
 
  calloutp:p_callout;
 begin
-
  writeln('Get_SEH:0x',HexStr(Get_SEH));
 
  //writeln('copyin:',copyin(mem2+64*1024*4-(sizeof(ucontext_t) div 2),@uctx,sizeof(ucontext_t)));
