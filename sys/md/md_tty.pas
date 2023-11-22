@@ -90,11 +90,20 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
  OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
  //tty name
- OFS:=tp^.t_nlen;
- Move(tp^.t_name^,BUF,OFS);
- PTR:=@BUF[OFS];
- MAX:=Length(BUF)-OFS;
- LEN:=uio^.uio_resid+OFS;
+ if ((tp^.t_flags and TF_NOWRITEPREFIX)=0) then
+ begin
+  OFS:=tp^.t_nlen;
+  Move(tp^.t_name^,BUF,OFS);
+  PTR:=@BUF[OFS];
+  MAX:=Length(BUF)-OFS;
+  LEN:=uio^.uio_resid+OFS;
+ end else
+ begin
+  PTR:=@BUF[0];
+  MAX:=Length(BUF);
+  LEN:=uio^.uio_resid;
+  OFS:=0;
+ end;
  //text
  while (LEN<>0) do
  begin
@@ -125,11 +134,20 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
  OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
  //tty name
- OFS:=tp^.t_nlen;
- Move(tp^.t_name^,BUF,OFS);
- PTR:=@BUF[OFS];
- MAX:=Length(BUF)-OFS;
- LEN:=iov_len+OFS;
+ if ((tp^.t_flags and TF_NOWRITEPREFIX)=0) then
+ begin
+  OFS:=tp^.t_nlen;
+  Move(tp^.t_name^,BUF,OFS);
+  PTR:=@BUF[OFS];
+  MAX:=Length(BUF)-OFS;
+  LEN:=iov_len+OFS;
+ end else
+ begin
+  PTR:=@BUF[0];
+  MAX:=Length(BUF);
+  LEN:=iov_len;
+  OFS:=0;
+ end;
  //text
  while (LEN<>0) do
  begin

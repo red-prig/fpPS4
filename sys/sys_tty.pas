@@ -11,11 +11,16 @@ uses
  vselinfo,
  kern_mtx;
 
+const
+ TF_NOWRITEPREFIX=$00001;
+
 type
  p_tty=^t_tty;
  t_tty=record
   t_name   :PChar;
   t_nlen   :QWORD;
+
+  t_flags  :QWORD;
 
   t_mtx    :p_mtx;      // TTY lock.
   t_mtxobj :mtx;        // Per-TTY lock (when not borrowing).

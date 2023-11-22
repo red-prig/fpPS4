@@ -390,6 +390,7 @@ begin
  //argv0:='/app0/scene2.bin';
  //argv0:='/app0/basic_quad_debug.elf';
 
+ //argv0:='/app0/hello_world.bin';
 
  err:=_execve(argv0,@argv0,nil);
 end;

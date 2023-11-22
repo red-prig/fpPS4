@@ -21,6 +21,7 @@ uses
  systm,
  subr_backtrace,
  vm,
+ vmparam,
  sys_vm_object,
  vm_pager,
  kern_event,
@@ -46,7 +47,7 @@ type
   heigth          :DWORD;
   paneWidth       :DWORD;
   paneHeight      :DWORD;
-  refreshHz       :DWORD;
+  refreshHz       :DWORD; //Single
   screenSizeInInch:DWORD;
   padding:array[0..19] of Byte;
  end;
@@ -59,28 +60,28 @@ type
  //SCE_VIDEO_OUT_REFRESH_RATE_89_91HZ  = 35, 0x23
  //SCE_VIDEO_OUT_REFRESH_RATE_119_88HZ = 13, 0xD
 
- //refreshRate =    0                                SCE_VIDEO_OUT_REFRESH_RATE_UNKNOWN
- //refreshRate =    3; result.refreshHz = 0x426fc28f SCE_VIDEO_OUT_REFRESH_RATE_59_94HZ
- //refreshRate =    2, result.refreshHz = 0x42480000 SCE_VIDEO_OUT_REFRESH_RATE_50HZ
- //refreshRate =    1, result.refreshHz = 0x41bfd70a SCE_VIDEO_OUT_REFRESH_RATE_23_98HZ
- //refreshRate =    4, result.refreshHz = 0x41c00000
- //refreshRate =    5, result.refreshHz = 0x41f00000
- //refreshRate =    6, result.refreshHz = 0x41efc28f SCE_VIDEO_OUT_REFRESH_RATE_29_97HZ
- //refreshRate =    7, result.refreshHz = 0x41c80000
- //refreshRate =    9, result.refreshHz = 0x42700000
- //refreshRate =   10, result.refreshHz = 0x42400000
- //refreshRate =  0xb, result.refreshHz = 0x423fcccd
- //refreshRate =  0xc, result.refreshHz = 0x42c80000
- //refreshRate =  0xd, result.refreshHz = 0x42efc28f SCE_VIDEO_OUT_REFRESH_RATE_119_88HZ
- //refreshRate =  0xe, result.refreshHz = 0x42f00000
- //refreshRate =  0xf, result.refreshHz = 0x43480000
- //refreshRate = 0x10, result.refreshHz = 0x436fc28f
- //refreshRate = 0x11, result.refreshHz = 0x43700000
- //refreshRate = 0x14, result.refreshHz = 0x413fd70a
- //refreshRate = 0x15, result.refreshHz = 0x41400000
- //refreshRate = 0x16, result.refreshHz = 0x416fd70a
- //refreshRate = 0x17, result.refreshHz = 0x41700000
- //refreshRate = 0x23, result.refreshHz = 0x42b3d1ec SCE_VIDEO_OUT_REFRESH_RATE_89_91HZ
+ //refreshRate =    0                                        SCE_VIDEO_OUT_REFRESH_RATE_UNKNOWN
+ //refreshRate =    3; result.refreshHz = 0x426fc28f( 59.94) SCE_VIDEO_OUT_REFRESH_RATE_59_94HZ
+ //refreshRate =    2, result.refreshHz = 0x42480000( 50.00) SCE_VIDEO_OUT_REFRESH_RATE_50HZ
+ //refreshRate =    1, result.refreshHz = 0x41bfd70a( 23.98) SCE_VIDEO_OUT_REFRESH_RATE_23_98HZ
+ //refreshRate =    4, result.refreshHz = 0x41c00000( 24.00)
+ //refreshRate =    5, result.refreshHz = 0x41f00000( 30.00)
+ //refreshRate =    6, result.refreshHz = 0x41efc28f( 29.97) SCE_VIDEO_OUT_REFRESH_RATE_29_97HZ
+ //refreshRate =    7, result.refreshHz = 0x41c80000( 25.00)
+ //refreshRate =    9, result.refreshHz = 0x42700000( 60.00)
+ //refreshRate =   10, result.refreshHz = 0x42400000( 48.00)
+ //refreshRate =  0xb, result.refreshHz = 0x423fcccd( 47.95)
+ //refreshRate =  0xc, result.refreshHz = 0x42c80000(100.00)
+ //refreshRate =  0xd, result.refreshHz = 0x42efc28f(119.88) SCE_VIDEO_OUT_REFRESH_RATE_119_88HZ
+ //refreshRate =  0xe, result.refreshHz = 0x42f00000(120.00)
+ //refreshRate =  0xf, result.refreshHz = 0x43480000(200.00)
+ //refreshRate = 0x10, result.refreshHz = 0x436fc28f(239.76)
+ //refreshRate = 0x11, result.refreshHz = 0x43700000(240.00)
+ //refreshRate = 0x14, result.refreshHz = 0x413fd70a( 11.99)
+ //refreshRate = 0x15, result.refreshHz = 0x41400000( 12.00)
+ //refreshRate = 0x16, result.refreshHz = 0x416fd70a( 14.99)
+ //refreshRate = 0x17, result.refreshHz = 0x41700000( 15.00)
+ //refreshRate = 0x23, result.refreshHz = 0x42b3d1ec( 89.91) SCE_VIDEO_OUT_REFRESH_RATE_89_91HZ
 
 type
  p_flip_status=^t_flip_status;
@@ -335,7 +336,7 @@ begin
      Exit(EINVAL);
     end;
 
-  10:
+  10: //sceVideoOutGetFlipStatus
     begin
      if (data^.arg6=0) and (Integer(data^.arg4)>0) then
      begin
@@ -364,22 +365,24 @@ begin
      Exit(EINVAL);
     end;
 
-  12:
+  12: //scaler?
     begin
      if (data^.arg5=0) and (data^.arg6=0) then
      begin
       if (data^.arg4=$30) or (data^.arg4=$40) then
       begin
        //arg2 -> canary
+       //arg3 -> ptr
+       //arg4 -> 64
 
        ptr:=Pointer(data^.arg3);
 
        len:=0;
 
-       Writeln('dce_flip_control(',data^.id,'):wait?');
-       print_backtrace_td(stderr);
+       Writeln('dce_flip_control(',data^.id,'):get_data?');
+       //print_backtrace_td(stderr);
 
-       Result:=copyout(@len,ptr,data^.arg4);
+       Result:=copyout(@len,ptr,8);
 
        Exit;
       end;
@@ -593,7 +596,7 @@ begin
 
  foff:=offset; //?
 
- offset:=((DWORD(offset) mod $4000) + foff);
+ offset:=((DWORD(offset) mod PAGE_SIZE) + foff);
 
  offset:=(foff and $1fffff) { or (uVar1 and $fffffffe00000)};
 
@@ -607,7 +610,7 @@ var
 begin
  Result:=0;
 
- if (size<>$4000) then
+ if (size<>PAGE_SIZE) then
  begin
   Exit(EINVAL);
  end;
@@ -623,7 +626,7 @@ begin
   Exit(EACCES);
  end;
 
- obj:=vm_pager_allocate(OBJT_DEVICE,cdev,$4000,$33,off);
+ obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
 
  if (obj=nil) then
  begin
@@ -635,9 +638,11 @@ end;
 
 Function dce_kqfilter(dev:p_cdev;kn:p_knote):Integer;
 begin
- Result:=0;
-
- Assert(false);
+ if (kn^.kn_kevent.filter=EVFILT_DISPLAY) then
+ begin
+  knlist_add(@g_video_out_event_flip,kn,1);
+ end;
+ Result:=EINVAL;
 end;
 
 const

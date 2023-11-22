@@ -20,6 +20,8 @@ Procedure CrtOutWrite(var t:TextRec);
 var
  tp:p_tty;
 Begin
+ if (t.BufPos=0) then Exit;
+
  tp:=PPointer(@t.UserData)^;
  if (tp=nil) then Exit;
 
