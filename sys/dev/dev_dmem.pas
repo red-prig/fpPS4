@@ -40,6 +40,12 @@ type
   mtype:DWORD;
  end;
 
+ PReleaseDirectMemory=^TReleaseDirectMemory;
+ TReleaseDirectMemory=packed record
+  start:QWORD; //in
+  len  :QWORD; //in
+ end;
+
 Function dmem_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
@@ -66,7 +72,15 @@ begin
              begin
               Result:=dmem_map_alloc(@dmem,start,__end,len,align,mtype,start);
              end;
-            end
+            end;
+
+  $80108002: //sceKernelReleaseDirectMemory
+            begin
+             with PReleaseDirectMemory(data)^ do
+             begin
+              Result:=dmem_map_release(@dmem,start,len);
+             end;
+            end;
 
   else
    begin

@@ -5,7 +5,6 @@ unit sys_crt;
 interface
 
 uses
- vuio,
  sys_tty;
 
 Procedure sys_tty_init;

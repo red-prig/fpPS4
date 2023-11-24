@@ -82,6 +82,7 @@ function  dmem_map_insert(
 
 Function  dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var oaddr,osize:QWORD):Integer;
 Function  dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;
+Function  dmem_map_release(map:p_dmem_map;start,len:QWORD):Integer;
 
 function  dmem_map_findspace(map   :p_dmem_map;
                              start :DWORD;
@@ -768,6 +769,39 @@ begin
  begin
   oaddr:=start;
  end;
+end;
+
+Function dmem_map_release(map:p_dmem_map;start,len:QWORD):Integer;
+var
+ offset:QWORD;
+begin
+ if (((len or start) and QWORD($8000000000003fff))<>0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (Int64(start) > Int64($4fffffffff)) then
+ begin
+  Exit(0);
+ end;
+
+ offset:=$5000000000 - start;
+
+ if (Int64(len) < Int64(offset)) then
+ begin
+  offset:=len;
+ end;
+
+ if (offset=0) then
+ begin
+  Exit(0);
+ end;
+
+ dmem_map_lock(map);
+
+ Result:=dmem_map_delete(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
+
+ dmem_map_unlock(map);
 end;
 
 function dmem_map_findspace(map   :p_dmem_map;
