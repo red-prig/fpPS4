@@ -75,7 +75,7 @@ begin
   guest:=is_guest_addr(QWORD(udaddr));
   if guest then
   begin
-   if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
+   if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
    begin
     Result:=EFAULT;
     goto _exit;
@@ -97,7 +97,7 @@ begin
 
     if guest then
     begin
-     if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
+     if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
      begin
       goto _next;
      end else
@@ -152,7 +152,7 @@ begin
   guest:=is_guest_addr(QWORD(udaddr));
   if guest then
   begin
-   if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
+   if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
    begin
     Result:=EFAULT;
     goto _exit;
@@ -177,7 +177,7 @@ begin
   begin
    if guest then
    begin
-    if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
+    if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
     begin
      Result:=0;
     end else
@@ -227,7 +227,7 @@ begin
   guest:=is_guest_addr(QWORD(udaddr));
   if guest then
   begin
-   if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
+   if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
    begin
     Result:=EFAULT;
     goto _exit;
@@ -249,7 +249,7 @@ begin
 
     if guest then
     begin
-     if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
+     if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
      begin
       goto _next;
      end else
@@ -321,7 +321,7 @@ begin
   guest:=is_guest_addr(QWORD(udaddr));
   if guest then
   begin
-   if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
+   if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
    begin
     Result:=EFAULT;
     goto _exit;
@@ -343,7 +343,7 @@ begin
 
     if guest then
     begin
-     if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
+     if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
      begin
       goto _next;
      end else
@@ -398,7 +398,7 @@ begin
   guest:=is_guest_addr(QWORD(udaddr));
   if guest then
   begin
-   if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
+   if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
    begin
     Result:=EFAULT;
     goto _exit;
@@ -423,7 +423,7 @@ begin
   begin
    if guest then
    begin
-    if ((pmap_get_raw(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
+    if ((pmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
     begin
      Result:=0;
     end else
@@ -514,7 +514,7 @@ begin
   _fault:
    if guest then
    begin
-    if ((pmap_get_raw(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
+    if ((pmap_get_prot(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
     begin
      goto _begin;
     end else
@@ -571,7 +571,7 @@ begin
   _fault:
    if guest then
    begin
-    if ((pmap_get_raw(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
+    if ((pmap_get_prot(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
     begin
      goto _begin;
     end else

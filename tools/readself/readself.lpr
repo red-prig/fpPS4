@@ -2,7 +2,7 @@ program readself;
 
 uses
  sysutils,
- elf64,
+ elf64 in '..\..\sys\elf64.pas',
  elf_nid_utils,
  ps4libdoc;
 

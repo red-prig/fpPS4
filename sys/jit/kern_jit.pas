@@ -1020,6 +1020,9 @@ begin
  vm_map_unlock(@g_vmspace.vm_map);
 end;
 
+var
+ _print_stat:Integer=0;
+
 procedure pick_locked(var ctx:t_jit_context2);
 const
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
@@ -1060,7 +1063,10 @@ begin
  Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
  Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
 
- print_test_jit_cbs(False,True);
+ if System.InterlockedExchange(_print_stat,1)=0 then
+ begin
+  print_test_jit_cbs(False,True);
+ end;
 
  links:=Default(t_jit_context2.t_forward_links);
  addr:=nil;
@@ -1091,7 +1097,7 @@ begin
    goto _invalid;
   end;
 
-  if ((pmap_get_raw(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((pmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    writeln('not excec:0x',HexStr(ptr));
    goto _invalid;

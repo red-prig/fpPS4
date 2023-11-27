@@ -845,13 +845,13 @@ begin
   //jmp  [addr]
 
   if ctx.is_map_addr(ofs) then
-  if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
+  if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
    ofs:=PInt64(ofs)^;
 
    if ctx.is_text_addr(ofs) then
    if (ctx.max=0) or (ofs<=ctx.max) then
-   if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
     ctx.add_forward_point(fpCall,Pointer(ofs));
    end;
@@ -865,7 +865,7 @@ begin
   if ctx.is_text_addr(ofs) then
   begin
    if (ofs<=ctx.max) then
-   if ((pmap_get_raw(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
     ctx.add_forward_point(fpData,Pointer(ofs));
    end;

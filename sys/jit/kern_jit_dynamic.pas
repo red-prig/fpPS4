@@ -156,7 +156,7 @@ begin
  begin
   Result:=addr;
 
-  if ((pmap_get_raw(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    Break;
   end;
@@ -174,7 +174,7 @@ begin
  begin
   Result:=addr;
 
-  if ((pmap_get_raw(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    Break;
   end;
@@ -397,7 +397,7 @@ begin
 
  _start:
 
- if ((pmap_get_raw(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+ if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
  begin
   writeln('not excec:0x',HexStr(addr));
   Assert(False,'TODO');

@@ -16,26 +16,22 @@ const
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
  PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
 
- PAGE_PROT_EXECUTE=DWORD($80000000);
- PAGE_PROT_WRITE  =DWORD($40000000);
- PAGE_PROT_READ   =DWORD($20000000);
+ PAGE_PROT_EXECUTE=VM_PROT_EXECUTE;
+ PAGE_PROT_WRITE  =VM_PROT_WRITE;
+ PAGE_PROT_READ   =VM_PROT_READ;
 
  PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
-
- PAGE_PROT_SHIFT  =29;
-
- PAGE_OFS_MASK    =(1 shl PAGE_PROT_SHIFT)-1; //Possible addressing in 8TB
 
  //PAGE_BUSY_FLAG   =DWORD($10000000);
  //PAGE_PATCH_FLAG  =DWORD($08000000);
 
 var
- PAGE_MAP:PDWORD=nil;
+ PAGE_MAP   :PDWORD=nil;
+ PAGE_PROT  :PBYTE =nil;
 
-procedure pmap_mark      (start,__end,__off:vm_offset_t;flags:DWORD);
+procedure pmap_mark      (start,__end,__off:vm_offset_t;prots:Byte);
 procedure pmap_unmark    (start,__end:vm_offset_t);
-procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
-function  pmap_get_raw   (addr:vm_offset_t):DWORD;
+function  pmap_get_prot  (addr:vm_offset_t):Byte;
 function  pmap_get_page  (addr:vm_offset_t):DWORD;
 function  pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
 
@@ -114,6 +110,7 @@ procedure pmap_pinit(pmap:p_pmap);
 var
  base:Pointer;
  size:QWORD;
+ prot:QWORD;
  i,r:Integer;
 begin
 
@@ -139,6 +136,9 @@ begin
  PAGE_MAP:=nil;
  size:=PAGE_MAP_COUNT*SizeOf(DWORD);
 
+ prot:=size;
+ size:=size+PAGE_MAP_COUNT;
+
  r:=md_mmap(PAGE_MAP,size,MD_PROT_RW);
 
  if (r<>0) then
@@ -146,6 +146,8 @@ begin
   Writeln('failed md_mmap(',HexStr(PAGE_MAP),',',HexStr(PAGE_MAP+size),'):',HexStr(r,8));
   Assert(false,'pmap_init');
  end;
+
+ PAGE_PROT:=Pointer(PAGE_MAP)+prot;
 
  //Mapping to internal memory, isolate TODO
  if Length(exclude_mem)<>0 then
@@ -202,14 +204,15 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-procedure pmap_mark(start,__end,__off:vm_offset_t;flags:DWORD);
+procedure pmap_mark(start,__end,__off:vm_offset_t;prots:Byte);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  __off:=OFF_TO_IDX(__off);
  while (start<__end) do
  begin
-  PAGE_MAP[start and PAGE_MAP_MASK]:=(__off and PAGE_OFS_MASK) or flags;
+  PAGE_MAP [start and PAGE_MAP_MASK]:=__off;
+  PAGE_PROT[start and PAGE_MAP_MASK]:=prots;
   Inc(__off);
   Inc(start);
  end;
@@ -222,32 +225,18 @@ begin
  __end:=OFF_TO_IDX(__end);
  while (start<__end) do
  begin
-  PAGE_MAP[start and PAGE_MAP_MASK]:=0;
+  PAGE_MAP [start and PAGE_MAP_MASK]:=0;
+  PAGE_PROT[start and PAGE_MAP_MASK]:=0;
   Inc(start);
  end;
  WriteBarrier;
 end;
 
-procedure pmap_mark_flags(start,__end:vm_offset_t;flags:DWORD);
-var
- i:vm_offset_t;
-begin
- start:=OFF_TO_IDX(start);
- __end:=OFF_TO_IDX(__end);
- while (start<__end) do
- begin
-  i:=start and PAGE_MAP_MASK;
-  PAGE_MAP[i]:=PAGE_MAP[i] or flags;
-  Inc(start);
- end;
- WriteBarrier;
-end;
-
-function pmap_get_raw(addr:vm_offset_t):DWORD;
+function pmap_get_prot(addr:vm_offset_t):Byte;
 begin
  addr:=OFF_TO_IDX(addr);
  addr:=addr and PAGE_MAP_MASK;
- Result:=PAGE_MAP[addr];
+ Result:=PAGE_PROT[addr];
 end;
 
 function pmap_get_page(addr:vm_offset_t):DWORD;
@@ -255,7 +244,6 @@ begin
  addr:=OFF_TO_IDX(addr);
  addr:=addr and PAGE_MAP_MASK;
  Result:=PAGE_MAP[addr];
- Result:=Result and PAGE_OFS_MASK;
 end;
 
 function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
@@ -269,8 +257,6 @@ begin
   Result:=False;
  end else
  begin
-  page1:=PAGE_MAP[page1] and PAGE_OFS_MASK;
-  page2:=PAGE_MAP[page2] and PAGE_OFS_MASK;
   Result:=(page1<>page2);
  end;
 end;
@@ -297,7 +283,7 @@ asm
  mov PAGE_MAP(%rip),%rax
  mov (%rax,%rdi,4),%edi
  //filter (rdi)
- and PAGE_OFS_MASK,%rdi
+ test %rdi,%rdi
  jz _exit
  //combine (rdi|rsi)
  shl PAGE_SHIFT,%rdi
@@ -367,7 +353,7 @@ begin
   Assert(false,'pmap_enter_object');
  end;
 
- pmap_mark(start,__end,QWORD(base),(prot and VM_RWX) shl PAGE_PROT_SHIFT);
+ pmap_mark(start,__end,QWORD(base),(prot and VM_RWX));
 end;
 
 procedure pmap_move(pmap    :pmap_t;
@@ -414,7 +400,7 @@ begin
   end;
  end;
 
- pmap_mark(start,start+size,ofs_new,(new_prot and VM_RWX) shl PAGE_PROT_SHIFT);
+ pmap_mark(start,start+size,ofs_new,(new_prot and VM_RWX));
 
  //free old
  r:=md_remove(Pointer(ofs_old),size);
@@ -483,7 +469,7 @@ begin
   Assert(false,'pmap_protect');
  end;
 
- pmap_mark(start,__end,QWORD(base_new),(new_prot and VM_RWX) shl PAGE_PROT_SHIFT);
+ pmap_mark(start,__end,QWORD(base_new),(new_prot and VM_RWX));
 end;
 
 procedure pmap_madv_free(pmap :pmap_t;

@@ -10,7 +10,7 @@
         <MainUnitHasScaledStatement Value="False"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
-      <Title Value="readself"/>
+      <Title Value="oelf2fself"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
     </General>
@@ -26,15 +26,15 @@
     </RunParams>
     <Units>
       <Unit>
-        <Filename Value="readself.lpr"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="elf_nid_utils.pas"/>
+        <Filename Value="oelf2fself.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="..\..\sys\elf64.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="DCPsha256.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
@@ -43,7 +43,7 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="readself"/>
+      <Filename Value="oelf2fself"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>

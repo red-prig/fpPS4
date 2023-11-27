@@ -163,7 +163,7 @@ asm
  add PAGE_MAP(%rip),%r14
  mov (%r14),%r14d
  //filter (r14)
- and PAGE_OFS_MASK,%r14
+ test %r14,%r14
  jz _sigsegv
  //combine (r14|rax)
  shl PAGE_SHIFT,%r14
@@ -228,9 +228,6 @@ asm
  mov (%rax,%rsi),%esi
  //restore
  mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
- //filter (rdi,rsi)
- and PAGE_OFS_MASK,%rdi
- and PAGE_OFS_MASK,%rsi
  //
  inc %rdi
  cmp %rdi,%rsi

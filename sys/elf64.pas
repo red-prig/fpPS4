@@ -397,6 +397,8 @@ const
  SELF_PT_SECURE_MODULE=$E;
  SELF_PT_SECURE_KERNEL=$F;
 
+ SELF_CONTROL_BLOCK_TYPE_NPDRM = $3;
+
 type
  p_self_segment=^t_self_segment;
  t_self_segment=packed record
@@ -412,8 +414,15 @@ type
   Program_Type   :QWORD;
   Program_Version:QWORD;
   System_Version :QWORD;
-  //Content_ID    :array[0..31] of Byte; //Optional
   Digest_SHA_256 :array[0..31] of Byte;
+ end;
+
+ p_self_npdrm_control_block=^t_self_npdrm_control_block;
+ t_self_npdrm_control_block=packed record
+  pType    :Word;
+  Unknown  :array[0..13] of byte;
+  ContentID:array[0..18] of byte;
+  RandomPad:array[0..12] of byte;
  end;
 
  p_eh_frame_hdr=^eh_frame_hdr;
