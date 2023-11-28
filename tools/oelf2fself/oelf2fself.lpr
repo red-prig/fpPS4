@@ -509,7 +509,8 @@ begin
  Case hdr^.e_type of
   ET_SCE_EXEC       ,
   ET_SCE_REPLAY_EXEC,
-  ET_SCE_DYNEXEC    :
+  ET_SCE_DYNEXEC    ,
+  ET_SCE_DYNAMIC    :
   else
    begin
     Writeln(StdErr,'exec_oelf_imgact:',' unspported e_type:0x',HexStr(hdr^.e_type,4));
