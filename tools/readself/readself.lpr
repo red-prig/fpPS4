@@ -379,8 +379,8 @@ begin
 
   Writeln(' AuthorityID    :0x',HexStr(authinfo^.AuthorityID,16));
   Writeln(' Program_Type   :0x',HexStr(authinfo^.Program_Type,2),' ',get_program_type_str(authinfo^.Program_Type));
-  Writeln(' Program_Version:',get_sdk_version_str(authinfo^.Program_Version shr 16));
-  Writeln(' System_Version :',get_sdk_version_str(authinfo^.System_Version  shr 16));
+  Writeln(' Program_Version:0x',HexStr(authinfo^.Program_Version shr 16,8),'(',get_sdk_version_str(authinfo^.Program_Version shr 16),')');
+  Writeln(' System_Version :0x',HexStr(authinfo^.System_Version  shr 16,8),'(',get_sdk_version_str(authinfo^.System_Version  shr 16),')');
 
   Write  (' Digest_SHA_256 :');
   print_bytes(@authinfo^.Digest_SHA_256,32);
@@ -716,10 +716,11 @@ begin
 
   Writeln('Program Headers:0x',HexStr(s,8),'..0x',HexStr(e,8),':',(e-s));
 
-  Writeln(' Type             Flags Offset     VirtAddr   PhysAddr   FileSize   MemSize    Align');
+  Writeln(' Num  Type             Flags Offset     VirtAddr   PhysAddr   FileSize   MemSize    Align');
   if (count<>0) then
   For i:=0 to count-1 do
   begin
+   Write(' ',i:3,' ');
    Write(' ',get_pt_name(elf_phdr^.p_type),' ');
    Write(get_p_flags_str(elf_phdr^.p_flags),'   ');
 
@@ -1710,7 +1711,7 @@ begin
   if (Pointer(@pa^.Size                      )+SizeOf(pa^.Size                      )<=pe) then Writeln(' Size                               :0x',HexStr(pa^.Size              ,8));
   if (Pointer(@pa^.Magic                     )+SizeOf(pa^.Magic                     )<=pe) then Writeln(' Magic                              :0x',HexStr(pa^.Magic             ,8));
   if (Pointer(@pa^.Entry_count               )+SizeOf(pa^.Entry_count               )<=pe) then Writeln(' Entry_count                        :0x',HexStr(pa^.Entry_count       ,8));
-  if (Pointer(@pa^.SDK_version               )+SizeOf(pa^.SDK_version               )<=pe) then Writeln(' SDK_version                        :',get_sdk_version_str(pa^.SDK_version));
+  if (Pointer(@pa^.SDK_version               )+SizeOf(pa^.SDK_version               )<=pe) then Writeln(' SDK_version                        :0x',HexStr(pa^.SDK_version       ,8),'(',get_sdk_version_str(pa^.SDK_version),')');
   if (Pointer(@pa^.sceProcessName            )+SizeOf(pa^.sceProcessName            )<=pe) then WOfsstr(' sceProcessName                     :',@pa^.sceProcessName            ,obj);
   if (Pointer(@pa^.sceUserMainThreadName     )+SizeOf(pa^.sceUserMainThreadName     )<=pe) then WOfsstr(' sceUserMainThreadName              :',@pa^.sceUserMainThreadName     ,obj);
   if (Pointer(@pa^.sceUserMainThreadPriority )+SizeOf(pa^.sceUserMainThreadPriority )<=pe) then WOfsDwr(' sceUserMainThreadPriority          :',@pa^.sceUserMainThreadPriority ,obj);

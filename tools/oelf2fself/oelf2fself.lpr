@@ -43,7 +43,6 @@ type
 
  p_image_params=^t_image_params;
  t_image_params=packed record
-  image_self  :p_self_header;
   image_header:p_elf64_hdr;
   entry_addr  :Pointer;
   elf_size    :Integer;
@@ -189,7 +188,6 @@ begin
       end;
 
       imgp^.image_header:=elf_hdr;
-      imgp^.image_self  :=nil;
       imgp^.elf_size    :=obj_size;
     end;
   else
@@ -501,10 +499,10 @@ begin
 
  hdr:=imgp^.image_header;
 
- hdr^.e_shoff    :=0;
- hdr^.e_shentsize:=0;
- hdr^.e_shnum    :=0;
- hdr^.e_shstrndx :=0;
+ //hdr^.e_shoff    :=0;
+ //hdr^.e_shentsize:=0;
+ //hdr^.e_shnum    :=0;
+ //hdr^.e_shstrndx :=0;
 
  if (hdr=nil) then Exit(-1);
 
@@ -567,13 +565,14 @@ end;
 
 function ilog2(i:QWORD):QWORD; inline;
 begin
- Result:=BsfQWORD(i or 1);
+ Result:=BsrQWORD(i or 1);
 end;
 
 function make(size:sizeint):AByte; inline;
 begin
  Result:=nil;
  SetLength(Result,size);
+ FillChar(Result[0],size,0);
 end;
 
 function createSelfEntries(imgp:p_image_params;
@@ -590,12 +589,16 @@ begin
  for i:=0 to prog_size-1 do
  begin
 
-  if (prog^.p_type <> PT_LOAD) and
-     (prog^.p_type <> PT_SCE_RELRO) and
-     (prog^.p_type <> PT_SCE_DYNLIBDATA) then
-  begin
-   Inc(prog);
-   continue;
+  case prog^.p_type of
+   PT_LOAD:;
+   PT_SCE_RELRO:;
+   PT_SCE_DYNLIBDATA:;
+   PT_SCE_COMMENT:;
+   else
+    begin
+     Inc(prog);
+     continue;
+    end;
   end;
 
   metaEntryProperties:=0;
@@ -626,6 +629,26 @@ begin
  end;
 
  Result:=length(imgp^._selfEntries) * SELF_META_DATA_BLOCK_SIZE;
+end;
+
+function writeNullBytes(imgp:p_image_params;
+                        size:Integer):Integer;
+var
+ buf:Pointer;
+ w:sizeint;
+begin
+ if (size=0) then Exit(0);
+
+ buf:=AllocMem(size);
+
+ w:=FileWrite(imgp^.outputFself,buf^,size);
+ if (w<>size) then
+ begin
+  Writeln(StdErr,'writeNullBytes:',' FileWrite:',w);
+ end;
+
+ FreeMem(buf);
+ Result:=size;
 end;
 
 function writeNullPadding(imgp:p_image_params;
@@ -858,7 +881,9 @@ begin
  for i:=0 to high(imgp^._selfEntries) do
  begin
 
-  //Writeln(imgp^._selfEntries[i].info.offset,':',Length(imgp^._selfEntries[i].data));
+  //Writeln('offset:',imgp^._selfEntries[i].info.offset:6,
+  //        ' len:',Length(imgp^._selfEntries[i].data):6,
+  //        ' end:',imgp^._selfEntries[i].info.offset+Length(imgp^._selfEntries[i].data):6);
 
   s:=imgp^._selfEntries[i].info.offset;
   w:=FileSeek(imgp^.outputFself,s,fsFromBeginning);
@@ -938,18 +963,26 @@ begin
  headerSize += SELF_EXTENDED_HEADER_SIZE;
  headerSize += SELF_NPDRM_BLOCK_SIZE;
 
+ //Writeln('headerSize=',headerSize);
+
  entryIndex := 0;
  offset := headerSize + (length(imgp^._selfEntries)*SELF_ENTRY_SIZE)+SELF_META_FOOTER_SIZE+SELF_SIGNATURE_SIZE;
+
+ //Writeln('MetaSize=',offset);
 
  for i:=0 to prog_size-1 do
  begin
 
-  if (prog^.p_type <> PT_LOAD) and
-     (prog^.p_type <> PT_SCE_RELRO) and
-     (prog^.p_type <> PT_SCE_DYNLIBDATA) then
-  begin
-   Inc(prog);
-   continue;
+  case prog^.p_type of
+   PT_LOAD:;
+   PT_SCE_RELRO:;
+   PT_SCE_DYNLIBDATA:;
+   PT_SCE_COMMENT:;
+   else
+    begin
+     Inc(prog);
+     continue;
+    end;
   end;
 
   numBlocks := align(prog^.p_filesz, BLOCK_SIZE) div BLOCK_SIZE;
@@ -983,6 +1016,8 @@ begin
 
  fileSize := offset;
 
+ //Writeln('fileSize=',fileSize);
+
  signedBlockCount := $2;
  flags := $2 or ((signedBlockCount and $7) shl 4);
 
@@ -1004,10 +1039,25 @@ begin
  finalFileSize += writeNullPadding(imgp, finalFileSize, $10);
  finalFileSize += writeExtendedInfo(imgp, pType, paid, appVersion, fwVersion, sha256Digest);
  finalFileSize += writeNpdrmControlBlock(imgp);
+
+ //Writeln('headerSize2=',finalFileSize);
+
  finalFileSize += writeMetaBlocks(imgp);
  finalFileSize += writeMetaFooter(imgp, $10000);
  finalFileSize += writeSignature(imgp, signature);
+
+ //Writeln('MetaSize2=',finalFileSize);
+
  finalFileSize += writeSegments(imgp);
+
+ finalFileSize:=FileSeek(imgp^.outputFself,0,fsFromEnd);
+
+ if (finalFileSize<fileSize) then
+ begin
+  writeNullBytes(imgp,fileSize-finalFileSize);
+ end;
+
+ //Writeln('finalFileSize=',finalFileSize);
 
  FileClose(imgp^.outputFself);
 
@@ -1048,12 +1098,11 @@ end;
 var
  InputFileName :RawByteString='';                //input Orbis OELF filepath
  OutputFileName:RawByteString='';                //output Orbis FSELF filepath
- sdkver        :DWORD        =$1000051;          //SDK version integer
  ptype         :RawByteString='';                //program type
  authInfo      :RawByteString='';                //authentication info
  paid          :QWORD        =$3800000000000011; //program authentication ID
- appVer        :QWORD        =0;                 //application version
- fwVer         :QWORD        =0;                 //firmware version
+ appVer        :QWORD        =$10000510000;      //application version
+ fwVer         :QWORD        =$10000510000;      //firmware version
 
 procedure parse_param;
 var
@@ -1069,24 +1118,22 @@ begin
   case LowerCase(S) of
           '-i':n:=0;
           '-o':n:=1;
-     '-sdkver':n:=2;
-      '-ptype':n:=3;
-   '-authinfo':n:=4;
-       '-paid':n:=5;
-     '-appver':n:=6;
-      '-fwver':n:=7;
+      '-ptype':n:=2;
+   '-authinfo':n:=3;
+       '-paid':n:=4;
+     '-appver':n:=5;
+      '-fwver':n:=6;
    else
      if (n<>-1) then
      begin
       Case n of
        0:InputFileName :=S;
        1:OutputFileName:=S;
-       2:sdkver        :=HexToDword(S,sdkver);
-       3:ptype         :=LowerCase(S);
-       4:authInfo      :=S;
-       5:paid          :=HexToQword(S,paid);
-       6:appVer        :=HexToQword(S,appVer);
-       7:fwVer         :=HexToQword(S,fwVer);
+       2:ptype         :=LowerCase(S);
+       3:authInfo      :=S;
+       4:paid          :=HexToQword(S,paid);
+       5:appVer        :=HexToQword(S,appVer);
+       6:fwVer         :=HexToQword(S,fwVer);
       end;
       n:=-1;
      end else
@@ -1161,6 +1208,6 @@ begin
 
  free_imgp(@img);
 
- readln;
+ //readln;
 end.
 
