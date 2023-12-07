@@ -6,6 +6,7 @@ unit rmem_map;
 interface
 
 uses
+ vm,
  vmparam,
  kern_mtx;
 
@@ -481,7 +482,7 @@ begin
   }
  if (start<map^.min_offset) or (__end>map^.max_offset) or (start>=__end) then
  begin
-  Exit(EINVAL);
+  Exit(KERN_INVALID_ADDRESS);
  end;
 
  {
@@ -490,7 +491,7 @@ begin
   }
  if rmem_map_lookup_entry(map,start,@temp_entry) then
  begin
-  Exit(EAGAIN);
+  Exit(KERN_NO_SPACE);
  end;
 
  prev_entry:=temp_entry;
@@ -510,7 +511,7 @@ begin
 
    rmem_map_entry_resize_free(map, prev_entry);
    rmem_map_simplify_entry(map, prev_entry);
-   Exit(0);
+   Exit(KERN_SUCCESS);
   end;
 
   if (prev_entry=@map^.header) then Break;
@@ -538,7 +539,7 @@ begin
 
  //rmem_rmap_enter(map,start,__end);
 
- Result:=0;
+ Result:=KERN_SUCCESS;
 end;
 
 function rmem_map_fixed(map    :p_rmem_map;

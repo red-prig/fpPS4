@@ -302,6 +302,15 @@ begin
  Exit(error);
 end;
 
+function vm_mmap_dmem(handle      :Pointer;
+                      objsize     :vm_size_t;
+                      foff        :p_vm_ooffset_t;
+                      objp        :p_vm_object_t):Integer;
+begin
+ //todo
+ Exit(EOPNOTSUPP);
+end;
+
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
 begin
  Case rv of
@@ -332,14 +341,14 @@ function vm_mmap2(map        :vm_map_t;
                   handle     :Pointer;
                   foff       :vm_ooffset_t):Integer;
 var
- vm_obj:vm_object_t;
+ obj:vm_object_t;
  docow,error,findspace,rv:Integer;
  fitit:Boolean;
  writecounted:Boolean;
 begin
  if (size=0) then Exit(0);
 
- vm_obj:=nil;
+ obj:=nil;
 
  size:=round_page(size);
 
@@ -367,16 +376,27 @@ begin
  Case handle_type of
   OBJT_DEVICE:
    begin
-    error:=vm_mmap_cdev(size,prot,@maxprot,@flags,handle,@foff,@vm_obj);
+    error:=vm_mmap_cdev(size,prot,@maxprot,@flags,handle,@foff,@obj);
    end;
+  OBJT_SELF,  //same as file
   OBJT_VNODE:
    begin
-    error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@vm_obj,@writecounted);
+    error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@obj,@writecounted);
    end;
   OBJT_SWAP:
    begin
-    error:=vm_mmap_shm(size,prot,@maxprot,@flags,handle,@foff,@vm_obj);
+    error:=vm_mmap_shm(size,prot,@maxprot,@flags,handle,@foff,@obj);
    end;
+  OBJT_PHYSHM:
+   begin
+    error:=EACCES;
+    if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) or
+       ((maxprot and VM_PROT_WRITE)<>0) then
+    begin
+     error:=vm_mmap_dmem(handle,size,@foff,@obj);
+    end;
+   end;
+
   OBJT_DEFAULT:
    begin
     if (handle=nil) then
@@ -395,7 +415,7 @@ begin
 
  if ((flags and MAP_ANON)<>0) then
  begin
-  vm_obj:=nil;
+  obj:=nil;
   docow:=0;
   if (handle=nil) then foff:=0;
  end else
@@ -437,10 +457,10 @@ begin
   begin
    findspace:=VMFS_OPTIMAL_SPACE;
   end;
-  rv:=vm_map_find(map, vm_obj, foff, addr, size, findspace, prot, maxprot, docow);
+  rv:=vm_map_find(map, obj, foff, addr, size, findspace, prot, maxprot, docow);
  end else
  begin
-  rv:=vm_map_fixed(map, vm_obj, foff, addr^, size, prot, maxprot, docow,
+  rv:=vm_map_fixed(map, obj, foff, addr^, size, prot, maxprot, docow,
        ord((flags and MAP_NO_OVERWRITE)=0));
  end;
 
@@ -454,7 +474,7 @@ begin
    //vnode_pager_release_writecount(vm_obj, 0, size);
   end;
 
-  vm_object_deallocate(vm_obj);
+  vm_object_deallocate(obj);
  end;
  Exit(vm_mmap_to_errno(rv));
 end;
@@ -604,70 +624,104 @@ begin
    Result:=Pointer(fget_mmap(fd,rights,@cap_maxprot,@fp));
    if (Result<>nil) then goto _done;
 
-   if (fp^.f_type=DTYPE_SHM) then
-   begin
-    handle:=fp^.f_data;
-    handle_type:=OBJT_SWAP;
-    maxprot:=VM_PROT_NONE;
+   case fp^.f_type of
+    DTYPE_VNODE:
+      begin
+       vp:=fp^.f_vnode;
 
-    // FREAD should always be set.
-    if ((fp^.f_flag and FREAD)<>0) then
-    begin
-     maxprot:=maxprot or VM_PROT_EXECUTE or VM_PROT_READ;
-    end;
-    if ((fp^.f_flag and FWRITE)<>0) then
-    begin
-     maxprot:=maxprot or VM_PROT_WRITE;
-    end;
-    goto _map;
+       maxprot:=VM_PROT_EXECUTE;
+
+       if (vp^.v_mount<>nil) then
+       if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
+       begin
+        maxprot:=VM_PROT_NONE;
+       end;
+
+       if ((fp^.f_flag and FREAD)<>0) then
+       begin
+        maxprot:=maxprot or VM_PROT_READ;
+       end else
+       if ((prot and VM_PROT_READ)<>0) then
+       begin
+        Result:=Pointer(EACCES);
+        goto _done;
+       end;
+
+       if ((flags and MAP_SHARED)<>0) then
+       begin
+        if ((fp^.f_flag and FWRITE)<>0) then
+        begin
+         maxprot:=maxprot or VM_PROT_WRITE;
+        end else
+        if ((prot and VM_PROT_WRITE)<>0) then
+        begin
+         Result:=Pointer(EACCES);
+         goto _done;
+        end;
+       end else
+       if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
+       begin
+        maxprot:=maxprot or VM_PROT_WRITE;
+        cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
+       end;
+
+       handle:=vp;
+       handle_type:=OBJT_VNODE;
+      end;
+
+    DTYPE_SHM:
+      begin
+       handle:=fp^.f_data;
+       handle_type:=OBJT_SWAP;
+       maxprot:=VM_PROT_NONE;
+
+       // FREAD should always be set.
+       if ((fp^.f_flag and FREAD)<>0) then
+       begin
+        maxprot:=maxprot or (VM_PROT_EXECUTE or VM_PROT_READ);
+       end;
+       if ((fp^.f_flag and FWRITE)<>0) then
+       begin
+        maxprot:=maxprot or VM_PROT_WRITE;
+       end;
+       goto _map;
+      end;
+
+    DTYPE_PHYSHM:
+      begin
+       handle:=fp^.f_data;
+       handle_type:=OBJT_PHYSHM;
+
+       prot:=VM_PROT_READ or VM_PROT_GPU_READ;
+
+       if ((fp^.f_flag and FREAD)=0) then
+       begin
+        prot:=VM_PROT_NONE;
+       end;
+
+       maxprot:=prot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
+
+       if ((fp^.f_flag and FWRITE)=0) then
+       begin
+        maxprot:=prot;
+       end;
+      end;
+
+    DTYPE_BLOCKPOOL:
+      begin
+       handle:=fp^.f_data;
+       handle_type:=OBJT_BLOCKPOOL;
+       maxprot:=VM_PROT_ALL;
+      end;
+
+    else
+      begin
+       Writeln('DTYPE_',fp^.f_type,' TODO');
+       Result:=Pointer(ENODEV);
+       goto _done;
+      end;
    end;
 
-   if (fp^.f_type<>DTYPE_VNODE) then
-   begin
-    Result:=Pointer(ENODEV);
-    goto _done;
-   end;
-
-   vp:=fp^.f_vnode;
-
-   maxprot:=VM_PROT_EXECUTE;
-
-   if (vp^.v_mount<>nil) then
-   if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
-   begin
-    maxprot:=VM_PROT_NONE;
-   end;
-
-   if ((fp^.f_flag and FREAD)<>0) then
-   begin
-    maxprot:=maxprot or VM_PROT_READ;
-   end else
-   if ((prot and VM_PROT_READ)<>0) then
-   begin
-    Result:=Pointer(EACCES);
-    goto _done;
-   end;
-
-   if ((flags and MAP_SHARED)<>0) then
-   begin
-    if ((fp^.f_flag and FWRITE)<>0) then
-    begin
-     maxprot:=maxprot or VM_PROT_WRITE;
-    end else
-    if ((prot and VM_PROT_WRITE)<>0) then
-    begin
-     Result:=Pointer(EACCES);
-     goto _done;
-    end;
-   end else
-   if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
-   begin
-    maxprot:=maxprot or VM_PROT_WRITE;
-    cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
-   end;
-
-   handle:=vp;
-   handle_type:=OBJT_VNODE;
   end;
  end else
  begin

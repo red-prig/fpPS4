@@ -62,6 +62,7 @@ const
  OBJ_ONEMAPPING   =$2000; // One USE (a single, non-forked) mapping flag
  OBJ_DISCONNECTWNT=$4000; // disconnect from vnode wanted
  OBJ_DMEM_EXT     =$8000;
+ OBJ_DMEM_EXT2    =$0020;
 
  OBJPC_SYNC  =$1;  // sync I/O
  OBJPC_INVAL =$2;  // invalidate

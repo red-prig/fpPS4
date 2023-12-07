@@ -54,6 +54,7 @@ type
   flags:vm_flags_t;         // flags for this vm_map
   root:vm_map_entry_t;      // Root of a binary search tree
   pmap:pmap_t;              // (c) Physical map
+  rmap:Pointer;
   busy:Integer;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
@@ -260,7 +261,9 @@ procedure vminit; //SYSINIT
 implementation
 
 uses
- kern_proc;
+ kern_proc,
+ rmem_map,
+ kern_budget;
 
 var
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
@@ -830,6 +833,46 @@ begin
  Result:=(FALSE);
 end;
 
+function vm_object_rmap_insert(map   :vm_map_t;
+                               obj   :vm_object_t;
+                               start :vm_offset_t;
+                               __end :vm_offset_t;
+                               offset:vm_ooffset_t):Integer;
+var
+ rmap:p_rmem_map;
+ length:vm_offset_t;
+begin
+ rmap:=map^.rmap;
+ length:=__end-start;
+
+ rmem_map_lock(rmap);
+
+ Result:=rmem_map_insert(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+
+ rmem_map_unlock(rmap);
+end;
+
+function vm_object_rmap_release(map   :vm_map_t;
+                                obj   :vm_object_t;
+                                start :vm_offset_t;
+                                __end :vm_offset_t;
+                                offset:vm_ooffset_t):Integer;
+var
+ rmap:p_rmem_map;
+ length:vm_offset_t;
+begin
+ rmap:=map^.rmap;
+ length:=__end-start;
+
+ rmem_map_lock(rmap);
+
+ Result:=rmem_map_delete(rmap, OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+
+ rmem_map_unlock(rmap);
+end;
+
+procedure vm_map_delete_internal(map:vm_map_t;entry:vm_map_entry_t;__end:vm_offset_t); forward;
+
 {
  * vm_map_insert:
  *
@@ -860,6 +903,36 @@ var
  protoeflags:vm_eflags_t;
  inheritance:vm_inherit_t;
  charge_prev_obj:Boolean;
+
+ function _enter_object:Integer;
+ begin
+  Result:=KERN_SUCCESS;
+
+  if (cow<>-1) then
+  begin
+   budget_enter_object(obj,__end-start);
+
+   if (obj<>nil) then
+   begin
+    if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or (obj^.otype=OBJT_PHYSHM) then
+    begin
+     Result:=vm_object_rmap_insert(map,obj,start,__end,offset);
+    end;
+   end;
+
+   if (Result=KERN_SUCCESS) then
+   begin
+    pmap_enter_object(map^.pmap,
+                      obj,
+                      offset,
+                      start,
+                      __end,
+                      prot);
+   end;
+
+  end;
+ end;
+
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -974,19 +1047,15 @@ charged:
    prev_entry^.__end:=__end;
    //change size
 
-   if (cow<>-1) then
+   Result:=_enter_object;
+
+   if (Result=KERN_SUCCESS) then
    begin
-    pmap_enter_object(map^.pmap,
-                      obj,
-                      offset,
-                      start,
-                      __end,
-                      prot);
+    vm_map_entry_resize_free(map, prev_entry);
+    vm_map_simplify_entry(map, prev_entry);
    end;
 
-   vm_map_entry_resize_free(map, prev_entry);
-   vm_map_simplify_entry(map, prev_entry);
-   Exit(KERN_SUCCESS);
+   Exit;
   end;
 
   {
@@ -1047,18 +1116,12 @@ charged:
   vm_map_simplify_entry(map, new_entry);
  end;
 
- if (cow<>-1) then
+ Result:=_enter_object;
+
+ if (Result<>KERN_SUCCESS) then
  begin
-  pmap_enter_object(map^.pmap,
-                    obj,
-                    offset,
-                    start,
-                    __end,
-                    prot);
-
+  vm_map_delete_internal(map,new_entry,__end);
  end;
-
- Result:=KERN_SUCCESS;
 end;
 
 {
@@ -2030,7 +2093,7 @@ end;
  }
 procedure vm_map_entry_delete(map:vm_map_t;entry:vm_map_entry_t);
 var
- vm_obj:vm_object_t;
+ obj:vm_object_t;
  offidxstart,offidx_end,count:vm_pindex_t;
  size:vm_ooffset_t;
 begin
@@ -2040,21 +2103,22 @@ begin
  end;
 
  vm_map_entry_unlink(map, entry);
- vm_obj:=entry^.vm_obj;
+ obj:=entry^.vm_obj;
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
 
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
-    (vm_obj<>nil) then
+    (obj<>nil) then
+ if (obj^.otype<>OBJT_BLOCKPOOL) then
  begin
   count:=OFF_TO_IDX(size);
   offidxstart:=OFF_TO_IDX(entry^.offset);
   offidx_end:=offidxstart + count;
-  VM_OBJECT_LOCK(vm_obj);
-  if (vm_obj^.ref_count<>1) and
-      (((vm_obj^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
+  VM_OBJECT_LOCK(obj);
+  if (obj^.ref_count<>1) and
+      (((obj^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
   begin
-   vm_object_collapse(vm_obj);
+   vm_object_collapse(obj);
 
    {
     * The option OBJPR_NOTMAPPED can be passed here
@@ -2062,15 +2126,15 @@ begin
     * pmap_remove() on the only mapping to this range
     * of pages.
     }
-   vm_object_page_remove(vm_obj, offidxstart, offidx_end, OBJPR_NOTMAPPED);
+   vm_object_page_remove(obj, offidxstart, offidx_end, OBJPR_NOTMAPPED);
 
-   if (offidx_end>=vm_obj^.size) and
-      (offidxstart<vm_obj^.size) then
+   if (offidx_end>=obj^.size) and
+      (offidxstart<obj^.size) then
    begin
-    vm_obj^.size:=offidxstart;
+    obj^.size:=offidxstart;
    end;
   end;
-  VM_OBJECT_UNLOCK(vm_obj);
+  VM_OBJECT_UNLOCK(obj);
  end else
  begin
   entry^.vm_obj:=nil;
@@ -2079,6 +2143,28 @@ begin
  begin
   entry^.next:=curkthread^.td_map_def_user;
   curkthread^.td_map_def_user:=entry;
+ end;
+end;
+
+procedure vm_map_delete_internal(map:vm_map_t;entry:vm_map_entry_t;__end:vm_offset_t);
+var
+ next:vm_map_entry_t;
+begin
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  if (entry^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   entry:=entry^.next;
+   continue;
+  end;
+
+  vm_map_clip_end(map, entry, __end);
+
+  next:=entry^.next;
+
+  vm_map_entry_delete(map, entry);
+  entry:=next;
  end;
 end;
 
@@ -2093,6 +2179,7 @@ var
  entry      :vm_map_entry_t;
  first_entry:vm_map_entry_t;
  next       :vm_map_entry_t;
+ obj        :vm_object_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -2110,7 +2197,48 @@ begin
  end else
  begin
   entry:=first_entry;
+
+  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+  begin
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
+  obj:=entry^.vm_obj;
+
+  if (obj<>nil) then
+  if (obj^.otype=OBJT_BLOCKPOOL) then
+  begin
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
   vm_map_clip_start(map, entry, start);
+ end;
+
+ //check
+ next:=entry;
+ while (next<>@map^.header) and (next^.start<__end) do
+ begin
+
+  if ((next^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+  begin
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
+  obj:=next^.vm_obj;
+
+  if (obj<>nil) then
+  if (obj^.otype=OBJT_BLOCKPOOL) then
+  begin
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
+  if (next^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   next:=next^.next;
+   continue;
+  end;
+
+  next:=entry^.next;
  end;
 
  {
@@ -2129,7 +2257,18 @@ begin
 
   next:=entry^.next;
 
+  budget_remove(entry^.vm_obj,
+                entry^.__end-entry^.start);
+
   pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
+
+  if (obj<>nil) then
+  begin
+   if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or (obj^.otype=OBJT_PHYSHM) then
+   begin
+    Result:=vm_object_rmap_release(map,obj,entry^.start,entry^.__end,entry^.offset);
+   end;
+  end;
 
   {
    * Delete the entry only after removing all pmap

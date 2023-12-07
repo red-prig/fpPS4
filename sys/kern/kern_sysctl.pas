@@ -68,7 +68,9 @@ const
  KERN_SCHED   =$101; //(OID_AUTO) Scheduler
 
 //CTL_VM subtypes
- KERN_VM_PS4DEV=1;   //vm parameters for PS4 (DevKit only)
+ KERN_VM_PS4DEV=1;     //vm parameters for PS4 (DevKit only)
+
+ KERN_VM_BUDGETS=$100; //(OID_AUTO) VM budgets
 
 //KERN_PROC subtypes
  KERN_PROC_APPINFO     =35; //Application information
@@ -106,6 +108,10 @@ const
 //KERN_VM_PS4DEV subtypes
  KERN_VM_PS4DEV_TRCMEM_TOTAL=$100; //(OID_AUTO) trace memory total
  KERN_VM_PS4DEV_TRCMEM_AVAIL=$101; //(OID_AUTO) trace memory available
+
+//KERN_VM_BUDGETS
+ KERN_VM_BUDGETS_MLOCK_AVAIL=$100; //(OID_AUTO) Available MLOCK budget
+ KERN_VM_BUDGETS_MLOCK_TOTAL=$101; //(OID_AUTO) Total MLOCK budget
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
@@ -166,6 +172,7 @@ uses
  md_arc4random,
  kern_proc,
  md_proc,
+ kern_budget,
  subr_backtrace;
 
 var
@@ -338,9 +345,11 @@ begin
 end;
 
 function sysctl_kern_arandom(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+type
+ t_data_256=array[0..255] of Byte;
 var
  len:Integer;
- data:array[0..254] of Byte;
+ data:t_data_256;
 begin
  len:=256;
  if (req^.oldlen < 256)  then
@@ -348,7 +357,8 @@ begin
   len:=req^.oldlen;
  end;
 
- arc4rand(@data,len,0);
+ data:=Default(t_data_256);
+ //arc4rand(@data,len,0); ASLR?
 
  Result:=SYSCTL_OUT(req,@data,len);
 end;
@@ -507,6 +517,12 @@ begin
  Result:=0;
 
  case RawByteString(name) of
+  'kern.sdk_version':
+    begin
+     oid[0]:=CTL_KERN;
+     oid[1]:=KERN_SDKVERSION;
+     len^  :=2;
+    end;
   'kern.smp.cpus':
     begin
      oid[0]:=CTL_KERN;
@@ -548,12 +564,21 @@ begin
      oid[2]:=KERN_VM_PS4DEV_TRCMEM_AVAIL;
      len^  :=3;
     end;
-  'kern.sdk_version':
+  'vm.budgets.mlock_avail':
     begin
-     oid[0]:=CTL_KERN;
-     oid[1]:=KERN_SDKVERSION;
-     len^  :=2;
+     oid[0]:=CTL_VM;
+     oid[1]:=KERN_VM_BUDGETS;
+     oid[2]:=KERN_VM_BUDGETS_MLOCK_AVAIL;
+     len^  :=3;
     end;
+  'vm.budgets.mlock_total':
+    begin
+     oid[0]:=CTL_VM;
+     oid[1]:=KERN_VM_BUDGETS;
+     oid[2]:=KERN_VM_BUDGETS_MLOCK_TOTAL;
+     len^  :=3;
+    end;
+
 
   else
    print_backtrace_td(stderr);
@@ -666,6 +691,41 @@ begin
  end;
 end;
 
+function sysctl_mlock_avail(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ val:QWORD;
+begin
+ val:=get_mlock_avail;
+ Result:=SYSCTL_OUT(req,@val,SizeOf(QWORD));
+end;
+
+function sysctl_mlock_total(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ val:QWORD;
+begin
+ val:=get_mlock_total;
+ Result:=SYSCTL_OUT(req,@val,SizeOf(QWORD));
+end;
+
+function sysctl_vm(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+
+  KERN_VM_BUDGETS_MLOCK_AVAIL:Result:=SYSCTL_HANDLE(noid,name,$80000008,@sysctl_mlock_avail); //sceKernelAvailableFlexibleMemorySize
+  KERN_VM_BUDGETS_MLOCK_TOTAL:Result:=SYSCTL_HANDLE(noid,name,$80000008,@sysctl_mlock_total); //sceKernelConfiguredFlexibleMemorySize
+
+  else
+   begin
+    print_backtrace_td(stderr);
+    Writeln(StdErr,'Unhandled sysctl_vm:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
 function sysctl_sysctl(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
@@ -742,6 +802,7 @@ begin
  case name[0] of
   CTL_UNSPEC :Result:=sysctl_sysctl (name+1,namelen-1,noid,req);
   CTL_KERN   :Result:=sysctl_kern   (name+1,namelen-1,noid,req);
+  CTL_VM     :Result:=sysctl_vm     (name+1,namelen-1,noid,req);
   CTL_HW     :Result:=sysctl_hw     (name+1,namelen-1,noid,req);
   CTL_MACHDEP:Result:=sysctl_machdep(name+1,namelen-1,noid,req);
   else

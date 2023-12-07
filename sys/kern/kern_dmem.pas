@@ -125,11 +125,13 @@ end;
 
 procedure init_dmem_map;
 begin
- dobj:=vm_object_allocate(OBJT_PHYS,OFF_TO_IDX(SCE_KERNEL_MAIN_DMEM_SIZE));
+ dobj:=vm_object_allocate(OBJT_PHYSHM,OFF_TO_IDX(SCE_KERNEL_MAIN_DMEM_SIZE));
  dobj^.flags:=dobj^.flags or OBJ_DMEM_EXT;
 
  dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
  rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
+
+ g_vmspace.vm_map.rmap:=@rmap;
 end;
 
 const
@@ -165,6 +167,18 @@ end;
 function sdk_version_big_20():Boolean; inline;
 begin
  Result:=p_proc.p_sdk_version > $2ffffff;
+end;
+
+function vm_mmap_to_errno(rv:Integer):Integer; inline;
+begin
+ Case rv of
+  KERN_SUCCESS           :Result:=0;
+  KERN_INVALID_ADDRESS,
+  KERN_NO_SPACE          :Result:=ENOMEM;
+  KERN_PROTECTION_FAILURE:Result:=EACCES;
+  else
+   Result:=EINVAL;
+ end;
 end;
 
 function kern_mmap_dmem(map   :vm_map_t;
@@ -221,20 +235,13 @@ begin
     if (err=0) then
     begin
      err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, prot, 0);
+     err:=vm_mmap_to_errno(err);
 
      if (err=0) then
      begin
-      err:=rmem_map_insert(@rmap, OFF_TO_IDX(vaddr), OFF_TO_IDX(phaddr), OFF_TO_IDX(phaddr+length));
-
-      if (err=0) then
-      begin
-       addr^:=vaddr;
-      end else
-      begin
-       vm_map_delete(map,vaddr,v_end);
-      end;
-
+      addr^:=vaddr;
      end;
+
     end;
 
    end;
@@ -256,6 +263,7 @@ begin
   //find free space
 
   err:=vm_map_findspace(map,vaddr,length,@faddr);
+  err:=vm_mmap_to_errno(err);
 
   if (err=0) then
   begin
@@ -278,6 +286,7 @@ begin
     end;
 
     err:=vm_map_findspace(map,next^.__end,length,@faddr);
+    err:=vm_mmap_to_errno(err);
    until (err<>0);
   end;
 

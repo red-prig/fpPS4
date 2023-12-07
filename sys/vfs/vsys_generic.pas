@@ -115,6 +115,7 @@ uses
  kern_thread,
  kern_proc,
  md_time,
+ subr_backtrace,
  sys_capability;
 
 var
@@ -541,6 +542,7 @@ begin
     (((com and (IOC_IN or IOC_OUT))<>0) and (size=0)) or
     (((com and IOC_VOID)<>0) and (size > 0) and (size<>sizeof(Integer))) then
  begin
+  Writeln('com:0x',HexStr(com,16),':ENOTTY');
   Exit(ENOTTY);
  end;
 
