@@ -3413,7 +3413,7 @@ var
   ),
   (//[671]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_get_page_table_stats;
      sy_name:'sys_get_page_table_stats'
   ),
   (//[672]

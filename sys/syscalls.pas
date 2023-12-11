@@ -248,6 +248,7 @@ function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
 function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer;
+function  get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 function  __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  cpumode_yield():Integer;
 
@@ -1940,6 +1941,13 @@ end;
 function __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $660,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer; assembler; nostackframe;
+asm
+ movq  $671,%rax
  call  fast_syscall
  jmp   cerror
 end;

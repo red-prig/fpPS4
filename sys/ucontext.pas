@@ -104,6 +104,9 @@ type
   tf_es:Word;
   tf_ds:Word;
 
+  //BrF
+  //BrT
+
   tf_err   :QWORD; //errno
   tf_rip   :QWORD;
   tf_cs    :QWORD;
@@ -190,8 +193,9 @@ type
  {$IF sizeof(ucontext_t)<>1280}{$STOP sizeof(ucontext_t)<>1280}{$ENDIF}
 
  p_sigframe=^sigframe;
- sigframe=packed record
+ sigframe=packed record //0x590
   sf_ahu:Pointer;
+  _align:array[0..6] of Pointer;
   sf_uc :ucontext_t;
   sf_si :siginfo_t;
  end;

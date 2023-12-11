@@ -438,6 +438,9 @@ begin
 
  bmove(regs,@sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
 
+ sf.sf_uc.uc_mcontext.mc_lbrfrom:=QWORD(-1);
+ sf.sf_uc.uc_mcontext.mc_lbrto  :=QWORD(-1);
+
  sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
 
  //xmm,ymm

@@ -82,6 +82,10 @@ const
  MAP_PREFAULT_READ=$40000;   // prefault mapping for reading
  MAP_SELF         =$80000;   // map decryped SELF file
 
+                 //$200000
+ MAP_NO_COALESCE  =$400000;
+
+
  MAP_ALIGNMENT_BIT  =24;
  MAP_ALIGNMENT_SHIFT=24;
  MAP_ALIGNMENT_MASK =$ff shl MAP_ALIGNMENT_SHIFT;

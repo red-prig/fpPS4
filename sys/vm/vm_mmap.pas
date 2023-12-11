@@ -32,6 +32,7 @@ function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
+function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
 
@@ -509,6 +510,11 @@ begin
 
  fp:=nil;
 
+ if ((flags and $200000)<>0) {and (devkit_parameter(0)=0)} then
+ begin
+  Exit(Pointer(EINVAL));
+ end;
+
  if (size = 0) and
     {(sv_flags > -1) and}
     (p_proc.p_osrel > $c3567) then
@@ -591,139 +597,7 @@ begin
   end;
  end;
 
- if ((flags and MAP_VOID)=0) then
- begin
-  //not MAP_VOID
-  if ((flags and MAP_ANON)<>0) then
-  begin
-   //Mapping blank space is trivial.
-   handle:=nil;
-   handle_type:=OBJT_DEFAULT;
-   maxprot:=VM_PROT_ALL;
-   cap_maxprot:=VM_PROT_ALL;
-  end else
-  begin
-   //Mapping file
-   rights:=CAP_MMAP;
-   if ((prot and (VM_PROT_READ or VM_PROT_GPU_READ))<>0) then
-   begin
-    rights:=rights or CAP_READ;
-   end;
-   if ((flags and MAP_SHARED)<>0) then
-   begin
-    if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
-    begin
-     rights:=rights or CAP_WRITE;
-    end;
-   end;
-   if ((prot and VM_PROT_EXECUTE)<>0) then
-   begin
-    rights:=rights or CAP_MAPEXEC;
-   end;
-
-   Result:=Pointer(fget_mmap(fd,rights,@cap_maxprot,@fp));
-   if (Result<>nil) then goto _done;
-
-   case fp^.f_type of
-    DTYPE_VNODE:
-      begin
-       vp:=fp^.f_vnode;
-
-       maxprot:=VM_PROT_EXECUTE;
-
-       if (vp^.v_mount<>nil) then
-       if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
-       begin
-        maxprot:=VM_PROT_NONE;
-       end;
-
-       if ((fp^.f_flag and FREAD)<>0) then
-       begin
-        maxprot:=maxprot or VM_PROT_READ;
-       end else
-       if ((prot and VM_PROT_READ)<>0) then
-       begin
-        Result:=Pointer(EACCES);
-        goto _done;
-       end;
-
-       if ((flags and MAP_SHARED)<>0) then
-       begin
-        if ((fp^.f_flag and FWRITE)<>0) then
-        begin
-         maxprot:=maxprot or VM_PROT_WRITE;
-        end else
-        if ((prot and VM_PROT_WRITE)<>0) then
-        begin
-         Result:=Pointer(EACCES);
-         goto _done;
-        end;
-       end else
-       if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
-       begin
-        maxprot:=maxprot or VM_PROT_WRITE;
-        cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
-       end;
-
-       handle:=vp;
-       handle_type:=OBJT_VNODE;
-      end;
-
-    DTYPE_SHM:
-      begin
-       handle:=fp^.f_data;
-       handle_type:=OBJT_SWAP;
-       maxprot:=VM_PROT_NONE;
-
-       // FREAD should always be set.
-       if ((fp^.f_flag and FREAD)<>0) then
-       begin
-        maxprot:=maxprot or (VM_PROT_EXECUTE or VM_PROT_READ);
-       end;
-       if ((fp^.f_flag and FWRITE)<>0) then
-       begin
-        maxprot:=maxprot or VM_PROT_WRITE;
-       end;
-       goto _map;
-      end;
-
-    DTYPE_PHYSHM:
-      begin
-       handle:=fp^.f_data;
-       handle_type:=OBJT_PHYSHM;
-
-       prot:=VM_PROT_READ or VM_PROT_GPU_READ;
-
-       if ((fp^.f_flag and FREAD)=0) then
-       begin
-        prot:=VM_PROT_NONE;
-       end;
-
-       maxprot:=prot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
-
-       if ((fp^.f_flag and FWRITE)=0) then
-       begin
-        maxprot:=prot;
-       end;
-      end;
-
-    DTYPE_BLOCKPOOL:
-      begin
-       handle:=fp^.f_data;
-       handle_type:=OBJT_BLOCKPOOL;
-       maxprot:=VM_PROT_ALL;
-      end;
-
-    else
-      begin
-       Writeln('DTYPE_',fp^.f_type,' TODO');
-       Result:=Pointer(ENODEV);
-       goto _done;
-      end;
-   end;
-
-  end;
- end else
+ if ((flags and MAP_VOID)<>0) then
  begin
   //MAP_VOID
   handle:=nil;
@@ -733,6 +607,136 @@ begin
   flags:=flags or MAP_ANON;
   rights:=0;
   prot:=0;
+  goto _map;
+ end;
+
+ if ((flags and MAP_ANON)<>0) then
+ begin
+  //Mapping blank space is trivial.
+  handle:=nil;
+  handle_type:=OBJT_DEFAULT;
+  maxprot:=VM_PROT_ALL;
+  cap_maxprot:=VM_PROT_ALL;
+  goto _map;
+ end;
+
+ //Mapping file
+ rights:=CAP_MMAP;
+ if ((prot and (VM_PROT_READ or VM_PROT_GPU_READ))<>0) then
+ begin
+  rights:=rights or CAP_READ;
+ end;
+ if ((flags and MAP_SHARED)<>0) then
+ begin
+  if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
+  begin
+   rights:=rights or CAP_WRITE;
+  end;
+ end;
+ if ((prot and VM_PROT_EXECUTE)<>0) then
+ begin
+  rights:=rights or CAP_MAPEXEC;
+ end;
+
+ Result:=Pointer(fget_mmap(fd,rights,@cap_maxprot,@fp));
+ if (Result<>nil) then goto _done;
+
+ case fp^.f_type of
+  DTYPE_VNODE:
+    begin
+     vp:=fp^.f_vnode;
+
+     maxprot:=VM_PROT_EXECUTE;
+
+     if (vp^.v_mount<>nil) then
+     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
+     begin
+      maxprot:=VM_PROT_NONE;
+     end;
+
+     if ((fp^.f_flag and FREAD)<>0) then
+     begin
+      maxprot:=maxprot or VM_PROT_READ;
+     end else
+     if ((prot and VM_PROT_READ)<>0) then
+     begin
+      Result:=Pointer(EACCES);
+      goto _done;
+     end;
+
+     if ((flags and MAP_SHARED)<>0) then
+     begin
+      if ((fp^.f_flag and FWRITE)<>0) then
+      begin
+       maxprot:=maxprot or VM_PROT_WRITE;
+      end else
+      if ((prot and VM_PROT_WRITE)<>0) then
+      begin
+       Result:=Pointer(EACCES);
+       goto _done;
+      end;
+     end else
+     if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
+     begin
+      maxprot:=maxprot or VM_PROT_WRITE;
+      cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
+     end;
+
+     handle:=vp;
+     handle_type:=OBJT_VNODE;
+    end;
+
+  DTYPE_SHM:
+    begin
+     handle:=fp^.f_data;
+     handle_type:=OBJT_SWAP;
+     maxprot:=VM_PROT_NONE;
+
+     // FREAD should always be set.
+     if ((fp^.f_flag and FREAD)<>0) then
+     begin
+      maxprot:=maxprot or (VM_PROT_EXECUTE or VM_PROT_READ);
+     end;
+     if ((fp^.f_flag and FWRITE)<>0) then
+     begin
+      maxprot:=maxprot or VM_PROT_WRITE;
+     end;
+     goto _map;
+    end;
+
+  DTYPE_PHYSHM:
+    begin
+     handle:=fp^.f_data;
+     handle_type:=OBJT_PHYSHM;
+
+     prot:=VM_PROT_READ or VM_PROT_GPU_READ;
+
+     if ((fp^.f_flag and FREAD)=0) then
+     begin
+      prot:=VM_PROT_NONE;
+     end;
+
+     maxprot:=prot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
+
+     if ((fp^.f_flag and FWRITE)=0) then
+     begin
+      maxprot:=prot;
+     end;
+    end;
+
+  DTYPE_BLOCKPOOL:
+    begin
+     handle:=fp^.f_data;
+     handle_type:=OBJT_BLOCKPOOL;
+     maxprot:=VM_PROT_ALL;
+    end;
+
+  else
+    begin
+     Writeln('DTYPE_',fp^.f_type,' TODO');
+     Result:=Pointer(ENODEV);
+     goto _done;
+    end;
  end;
 
 _map:
@@ -920,6 +924,10 @@ begin
  end;
 end;
 
+function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
+begin
+ Exit(ENOENT); //devkit_parameter(0)=0
+end;
 
 end.
 

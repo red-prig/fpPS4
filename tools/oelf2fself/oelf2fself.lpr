@@ -1161,7 +1161,6 @@ begin
   Writeln(' Options are:');
   Writeln('  -i        input  Orbis OELF filepath');
   Writeln('  -o        output Orbis FSELF filepath');
-  Writeln('  -sdkver   SDK version integer');
   Writeln('  -ptype    program type');
   Writeln('  -authinfo authentication info');
   Writeln('  -paid     program authentication ID');
