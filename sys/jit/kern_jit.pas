@@ -1105,9 +1105,13 @@ begin
 
   ctx.ptr_curr:=ptr;
 
+  //guest->host ptr
+  ctx.code:=uplift(ptr);
+  ptr:=ctx.code;
+
   dis.Disassemble(dm64,ptr,din);
 
-  ctx.ptr_next:=ptr;
+  ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
 
   case din.OpCode.Opcode of
    OPX_Invalid..OPX_GroupP:
@@ -1119,8 +1123,8 @@ begin
 
      begin
       Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
-      print_disassemble(ctx.ptr_curr,dis.CodeIdx);
-      Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+      print_disassemble(ctx.code,dis.CodeIdx);
+      Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
      end;
 
      ctx.mark_chunk(fpInvalid);
@@ -1156,18 +1160,16 @@ begin
   if print_asm then
   begin
    Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
-   print_disassemble(ctx.ptr_curr,dis.CodeIdx);
-   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+   print_disassemble(ctx.code,dis.CodeIdx);
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
   end;
-
-  ctx.code:=ctx.ptr_curr;
 
   ctx.dis:=dis;
   ctx.din:=din;
 
   if is_rep_prefix(ctx.din) then
   begin
-   cb:=nil;
+   cb:=@op_invalid;
    if (ctx.din.OpCode.Prefix=OPPnone) then
    begin
     case ctx.din.OpCode.Opcode of
@@ -1179,8 +1181,7 @@ begin
      OPcmps:cb:=jit_rep_cbs[repOPcmps];
      OPscas:cb:=jit_rep_cbs[repOPscas];
      OPret :cb:=jit_rep_cbs[repOPret ];
-     else
-            cb:=@op_invalid;
+     else;
     end;
    end;
   end else
@@ -1204,8 +1205,8 @@ begin
   if (cb=nil) then
   begin
    Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
-   print_disassemble(ctx.ptr_curr,dis.CodeIdx);
-   Writeln('original------------------------':32,' ','0x',HexStr(ptr));
+   print_disassemble(ctx.code,dis.CodeIdx);
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
 
    Writeln('Unhandled jit:',
            ctx.din.OpCode.Prefix,',',

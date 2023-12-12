@@ -15,6 +15,7 @@
 *.sdll
 *.bin
 *.elf
+*.oelf
 *.self
 *.dump
 *.h

@@ -2168,6 +2168,12 @@ begin
  end;
 end;
 
+//
+
+procedure unmap_jit_cache(start,__end:QWORD); external name 'kern_unmap_jit_cache';
+
+//
+
 {
  * vm_map_delete: [ internal use only ]
  *
@@ -2261,6 +2267,8 @@ begin
                 entry^.__end-entry^.start);
 
   pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
+
+  unmap_jit_cache(entry^.start,entry^.__end);
 
   if (obj<>nil) then
   begin

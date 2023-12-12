@@ -85,11 +85,14 @@ begin
 end;
 
 function get_mlock_avail():QWORD;
+var
+ m:QWORD;
 begin
  Result:=0;
- if (budget_total>budget_malloc) then
+ m:=budget_malloc;
+ if (budget_total>m) then
  begin
-  Result:=budget_total-budget_malloc;
+  Result:=budget_total-m;
  end;
 end;
 
