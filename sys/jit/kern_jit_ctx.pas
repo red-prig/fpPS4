@@ -218,6 +218,8 @@ procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
 
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
+
 procedure add_orig(var ctx:t_jit_context2);
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 procedure op_emit2(var ctx:t_jit_context2;const desc:t_op_desc);
@@ -241,6 +243,7 @@ uses
  vm_pmap,
  machdep,
  kern_thr,
+ systm,
  kern_jit_asm;
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
@@ -847,14 +850,18 @@ begin
   if ctx.is_map_addr(ofs) then
   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
-   ofs:=PInt64(ofs)^;
+   ofs:=0;
 
-   if ctx.is_text_addr(ofs) then
-   if (ctx.max=0) or (ofs<=ctx.max) then
-   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   if (copyin(Pointer(ofs),@ofs,SizeOf(Pointer))=0) then
    begin
-    ctx.add_forward_point(fpCall,Pointer(ofs));
+    if ctx.is_text_addr(ofs) then
+    if (ctx.max=0) or (ofs<=ctx.max) then
+    if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+    begin
+     ctx.add_forward_point(fpCall,Pointer(ofs));
+    end;
    end;
+
   end;
 
  end else
@@ -1447,7 +1454,7 @@ end;
 
 //
 
-procedure op_uplift(var ctx:t_jit_context2); inline;
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
 begin
  ctx.builder.call_far(@uplift_jit); //in/out:r14
 end;
@@ -1520,7 +1527,7 @@ begin
          (mem_size=os4096) or
          (his_rw in hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -1543,7 +1550,7 @@ begin
          (his_rw in hint) then
       begin
 
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2075,7 +2082,7 @@ begin
        if (mem_size=os8) or
           (his_rw in desc.hint) then
        begin
-        op_uplift(ctx); //in/out:r14
+        op_uplift(ctx,mem_size); //in/out:r14
 
         mem_in;
        end else
@@ -2089,7 +2096,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2112,7 +2119,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -2421,7 +2428,7 @@ begin
      begin
       if true then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2671,7 +2678,7 @@ begin
      begin
       if true then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2876,7 +2883,7 @@ begin
       if (mem_size=os8) or
          (his_rw in hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -2898,7 +2905,7 @@ begin
          (his_rw in hint) then
       begin
 
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -3063,7 +3070,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -3085,7 +3092,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3204,7 +3211,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx); //in/out:r14
+    op_uplift(ctx,mem_size); //in/out:r14
 
     mem_in;
    end else
@@ -3257,7 +3264,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx); //in/out:r14
+    op_uplift(ctx,mem_size); //in/out:r14
 
     mem_out;
    end else
@@ -3342,7 +3349,7 @@ begin
 
      if (mem_size=os8) then
      begin
-      op_uplift(ctx); //in/out:r14
+      op_uplift(ctx,mem_size); //in/out:r14
 
       mem_out;
      end else
@@ -3367,7 +3374,7 @@ begin
 
       if (mem_size=os8) then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3479,7 +3486,7 @@ begin
      begin
       if false then
       begin
-       op_uplift(ctx); //in/out:r14
+       op_uplift(ctx,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3573,7 +3580,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx); //in/out:r14
+    op_uplift(ctx,mem_size); //in/out:r14
 
     mem_in;
    end else

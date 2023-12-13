@@ -22,6 +22,8 @@ const
 
  PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
 
+ PAGE_PROT_LIFT   =$40;
+
  //PAGE_BUSY_FLAG   =DWORD($10000000);
  //PAGE_PATCH_FLAG  =DWORD($08000000);
 
@@ -209,6 +211,7 @@ begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  __off:=OFF_TO_IDX(__off);
+ prots:=prots or (ord(start=__off)*PAGE_PROT_LIFT);
  while (start<__end) do
  begin
   PAGE_MAP [start and PAGE_MAP_MASK]:=__off;
@@ -263,30 +266,27 @@ end;
 
 //rax,rdi,rsi
 function uplift(addr:Pointer):Pointer; assembler; nostackframe;
-const
- VM_MAX_D=VM_MAXUSER_ADDRESS shr 32;
 label
  _exit;
 asm
- //
- mov VM_MAX_D,%rsi
- shl  $32,%rsi
- cmp %rsi,%rdi
- ja _exit
  //low addr (rsi)
  mov %rdi,%rsi
- and PAGE_MASK,%rsi
  //high addr (rdi)
- shr PAGE_SHIFT   ,%rdi
- and PAGE_MAP_MASK,%rdi
+ shr PAGE_SHIFT,%rdi
+ //test
+ cmp PAGE_MAP_COUNT,%rdi
+ ja _exit
  //uplift (rdi)
  mov PAGE_MAP(%rip),%rax
  mov (%rax,%rdi,4),%edi
  //filter (rdi)
  test %rdi,%rdi
  jz _exit
- //combine (rdi|rsi)
+ //high addr (rdi)
  shl PAGE_SHIFT,%rdi
+ //low addr (rsi)
+ and PAGE_MASK,%rsi
+ //combine (rdi|rsi)
  or  %rsi,%rdi
  //result
  _exit:
@@ -353,7 +353,7 @@ begin
   Assert(false,'pmap_enter_object');
  end;
 
- pmap_mark(start,__end,QWORD(base),(prot and VM_RWX));
+ pmap_mark(start,__end,QWORD(base),prot);
 end;
 
 procedure pmap_move(pmap    :pmap_t;
@@ -400,7 +400,7 @@ begin
   end;
  end;
 
- pmap_mark(start,start+size,ofs_new,(new_prot and VM_RWX));
+ pmap_mark(start,start+size,ofs_new,new_prot);
 
  //free old
  r:=md_remove(Pointer(ofs_old),size);
@@ -469,7 +469,7 @@ begin
   Assert(false,'pmap_protect');
  end;
 
- pmap_mark(start,__end,QWORD(base_new),(new_prot and VM_RWX));
+ pmap_mark(start,__end,QWORD(base_new),new_prot);
 end;
 
 procedure pmap_madv_free(pmap :pmap_t;

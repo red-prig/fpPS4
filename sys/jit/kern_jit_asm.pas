@@ -134,10 +134,6 @@ begin
  Assert(False);
 end;
 
-const
- PAGE_SHIFT_2   =PAGE_SHIFT-2;
- PAGE_MAP_MASK_2=PAGE_MAP_MASK shl 2;
-
 //in/out:r14
 procedure uplift_jit_notsafe; assembler; nostackframe;
 label
@@ -149,24 +145,24 @@ asm
  //origin
  mov %r14, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13)
  //
- mov VM_MAXUSER_ADDRESS,%rax
- cmp %rax,%r14
- ja _sigsegv
- //
  //low addr (rax)
  mov %r14,%rax
- and PAGE_MASK,%rax
  //high addr (r14)
- shr PAGE_SHIFT_2   ,%r14
- and PAGE_MAP_MASK_2,%r14
+ shr PAGE_SHIFT    ,%r14
+ cmp PAGE_MAP_COUNT,%r14
+ ja _sigsegv
  //uplift (r14)
+ shl $2,%r14
  add PAGE_MAP(%rip),%r14
  mov (%r14),%r14d
  //filter (r14)
  test %r14,%r14
  jz _sigsegv
- //combine (r14|rax)
+ //low addr (rax)
+ and PAGE_MASK,%rax
+ //high addr (r14)
  shl PAGE_SHIFT,%r14
+ //combine (r14|rax)
  or  %rax,%r14
  //
 
@@ -213,10 +209,10 @@ asm
  //addr2:=addr+mem_size-1 (rsi)
  lea -1(%r15,%r14),%rsi
  //high addr (rdi,rsi)
- shr PAGE_SHIFT_2   ,%rdi
- shr PAGE_SHIFT_2   ,%rsi
- and PAGE_MAP_MASK_2,%rdi
- and PAGE_MAP_MASK_2,%rsi
+ shr PAGE_SHIFT   ,%rdi
+ shr PAGE_SHIFT   ,%rsi
+ and PAGE_MAP_MASK,%rdi
+ and PAGE_MAP_MASK,%rsi
  //
  cmp %rdi,%rsi
  je _exit
@@ -224,8 +220,8 @@ asm
  mov %rax,- kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13)
  //uplift (rdi,rsi)
  mov PAGE_MAP(%rip),%rax
- mov (%rax,%rdi),%edi
- mov (%rax,%rsi),%esi
+ mov (%rax,%rdi,4),%edi
+ mov (%rax,%rsi,4),%esi
  //restore
  mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
  //

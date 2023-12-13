@@ -61,11 +61,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -180,7 +180,7 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    movq([r_tmp0],new); // mov [r14],rax
 
@@ -272,11 +272,11 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    //[RSI] -> [RDI].
 
@@ -367,11 +367,11 @@ begin
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -449,11 +449,11 @@ begin
  begin
 
    movq(r_tmp0,rsi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
    movq(r_tmp1,r_tmp0);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    //[RSI] -> [RDI].
 
@@ -536,7 +536,7 @@ begin
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    movq([r_tmp0],new);
 
@@ -609,7 +609,7 @@ begin
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    movq(new,[r_tmp0]);
 
@@ -678,7 +678,7 @@ begin
  begin
 
    movq(r_tmp0,rdi);
-   call_far(@uplift_jit); //in/out:r14
+   op_uplift(ctx,size); //in/out:r14
 
    xchgq(rdi,r_tmp0);
 
