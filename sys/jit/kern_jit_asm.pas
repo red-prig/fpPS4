@@ -31,10 +31,13 @@ type
   tf__00:QWORD;      //00 (tf_r13)
   tf_r14:QWORD;      //08
   tf_r15:QWORD;      //10
-  tf_rsp:QWORD;      //18 (tf_trapno)
-  tf_rbp:QWORD;      //20 (tf_addr)
+  tf_r13:QWORD;      //18 (tf_trapno)
+  tf_adr:QWORD;      //20 (tf_addr)
   tf__28:QWORD;      //28 (tf_flags)
-  tf_r13:QWORD;      //30 (tf_err)
+  tf_rsp:QWORD;      //30 (tf_BrF)
+  tf_rbp:QWORD;      //38 (tf_BrT)
+  tf_err:QWORD;      //40 (tf_err)
+  tf_rip:QWORD;      //48 (tf_rip)
  end;
 
  p_jplt_cache_asm=^t_jplt_cache_asm;
@@ -140,13 +143,9 @@ label
  _ret,
  _sigsegv;
 asm
- //save
- mov %rax, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13)
  //origin
- mov %r14, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13)
+ mov %r14, jit_frame.tf_adr(%r13)
  //
- //low addr (rax)
- mov %r14,%rax
  //high addr (r14)
  shr PAGE_SHIFT    ,%r14
  cmp PAGE_MAP_COUNT,%r14
@@ -155,37 +154,26 @@ asm
  shl $2,%r14
  add PAGE_MAP(%rip),%r14
  mov (%r14),%r14d
- //filter (r14)
- test %r14,%r14
- jz _sigsegv
- //low addr (rax)
- and PAGE_MASK,%rax
  //high addr (r14)
  shl PAGE_SHIFT,%r14
- //combine (r14|rax)
- or  %rax,%r14
- //
+ //combine (r14+origin)
+ add jit_frame.tf_adr(%r13),%r14
+ //test
+ cmp PAGE_SIZE,%r14
+ jna _sigsegv
 
- //restore
- mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
-
- jmp _ret
+ ret
 
  _sigsegv:
 
- //restore
- mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
-
  call jit_save_ctx
 
-  //origin
- mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13), %rdi
+ //origin
+ mov jit_frame.tf_adr(%r13), %rdi
 
  call jit_sigsegv
 
  call jit_load_ctx
-
- _ret:
 end;
 
 //in/out:r14
@@ -225,7 +213,6 @@ asm
  //restore
  mov - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13) ,%rax
  //
- inc %rdi
  cmp %rdi,%rsi
 
  _exit:

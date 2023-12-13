@@ -28,8 +28,8 @@ const
  //PAGE_PATCH_FLAG  =DWORD($08000000);
 
 var
- PAGE_MAP   :PDWORD=nil;
- PAGE_PROT  :PBYTE =nil;
+ PAGE_MAP   :PInteger=nil;
+ PAGE_PROT  :PBYTE   =nil;
 
 procedure pmap_mark      (start,__end,__off:vm_offset_t;prots:Byte);
 procedure pmap_unmark    (start,__end:vm_offset_t);
@@ -151,6 +151,9 @@ begin
 
  PAGE_PROT:=Pointer(PAGE_MAP)+prot;
 
+ //init zero
+ pmap_unmark(0,VM_MAXUSER_ADDRESS);
+
  //Mapping to internal memory, isolate TODO
  if Length(exclude_mem)<>0 then
  begin
@@ -206,17 +209,29 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
+function MAX_IDX(x:DWORD):DWORD; inline;
+begin
+ if (x>PAGE_MAP_MASK) then
+  Result:=PAGE_MAP_MASK
+ else
+  Result:=x;
+end;
+
 procedure pmap_mark(start,__end,__off:vm_offset_t;prots:Byte);
+var
+ d:Integer;
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  __off:=OFF_TO_IDX(__off);
- prots:=prots or (ord(start=__off)*PAGE_PROT_LIFT);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
+ d:=Integer(__off-start);
+ prots:=prots or (ord(d<>0)*PAGE_PROT_LIFT);
  while (start<__end) do
  begin
-  PAGE_MAP [start and PAGE_MAP_MASK]:=__off;
-  PAGE_PROT[start and PAGE_MAP_MASK]:=prots;
-  Inc(__off);
+  PAGE_MAP [start]:=d;
+  PAGE_PROT[start]:=prots;
   Inc(start);
  end;
  WriteBarrier;
@@ -226,10 +241,12 @@ procedure pmap_unmark(start,__end:vm_offset_t);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
  while (start<__end) do
  begin
-  PAGE_MAP [start and PAGE_MAP_MASK]:=0;
-  PAGE_PROT[start and PAGE_MAP_MASK]:=0;
+  PAGE_MAP [start]:=Integer(0-start);
+  PAGE_PROT[start]:=0;
   Inc(start);
  end;
  WriteBarrier;
@@ -246,7 +263,7 @@ function pmap_get_page(addr:vm_offset_t):DWORD;
 begin
  addr:=OFF_TO_IDX(addr);
  addr:=addr and PAGE_MAP_MASK;
- Result:=PAGE_MAP[addr];
+ Result:=addr+PAGE_MAP[addr];
 end;
 
 function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
@@ -269,7 +286,7 @@ function uplift(addr:Pointer):Pointer; assembler; nostackframe;
 label
  _exit;
 asm
- //low addr (rsi)
+ //orig addr (rsi)
  mov %rdi,%rsi
  //high addr (rdi)
  shr PAGE_SHIFT,%rdi
@@ -278,19 +295,19 @@ asm
  ja _exit
  //uplift (rdi)
  mov PAGE_MAP(%rip),%rax
- mov (%rax,%rdi,4),%edi
- //filter (rdi)
- test %rdi,%rdi
- jz _exit
+ mov (%rax,%rdi,4) ,%edi
  //high addr (rdi)
  shl PAGE_SHIFT,%rdi
- //low addr (rsi)
- and PAGE_MASK,%rsi
- //combine (rdi|rsi)
- or  %rsi,%rdi
+ //combine (rdi+rsi)
+ lea (%rsi,%rdi),%rdi
+ //test
+ cmp PAGE_SIZE,%rdi
+ jna _exit
  //result
- _exit:
  mov %rdi,%rax
+ ret
+ _exit:
+  xor %eax,%eax
 end;
 
 const

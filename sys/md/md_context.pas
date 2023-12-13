@@ -761,7 +761,8 @@ begin
 
  sf.sf_uc.uc_mcontext.mc_onstack:=oonstack;
 
- Move(regs^,sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
+ Move(regs^.tf_rdi,sf.sf_uc.uc_mcontext.mc_rdi,tf_copy_1);
+ Move(regs^.tf_err,sf.sf_uc.uc_mcontext.mc_err,tf_copy_2);
 
  sf.sf_uc.uc_mcontext.mc_len:=sizeof(mcontext_t);
 

@@ -436,7 +436,8 @@ begin
  regs^.tf_flags:=regs^.tf_flags or TF_HASSEGS;
  //set segs
 
- bmove(regs,@sf.sf_uc.uc_mcontext.mc_rdi,SizeOf(trapframe));
+ bmove(@regs^.tf_rdi,@sf.sf_uc.uc_mcontext.mc_rdi,tf_copy_1);
+ bmove(@regs^.tf_err,@sf.sf_uc.uc_mcontext.mc_err,tf_copy_2);
 
  sf.sf_uc.uc_mcontext.mc_lbrfrom:=QWORD(-1);
  sf.sf_uc.uc_mcontext.mc_lbrto  :=QWORD(-1);
@@ -536,7 +537,8 @@ begin
  end;
  //xmm,ymm
 
- bmove(@ucp^.uc_mcontext.mc_rdi,regs,sizeof(trapframe));
+ bmove(@ucp^.uc_mcontext.mc_rdi,@regs^.tf_rdi,tf_copy_1);
+ bmove(@ucp^.uc_mcontext.mc_err,@regs^.tf_err,tf_copy_2);
 
  if ((ucp^.uc_mcontext.mc_flags and _MC_HASBASES)<>0) then
  begin

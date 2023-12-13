@@ -629,7 +629,7 @@ begin
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
 
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,new.ASize); //in/out:r14
 
   movq([stack],new);
  end;
@@ -655,7 +655,7 @@ begin
   pop(new);
 
   op_load_rsp(ctx,stack);
-  leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
+  leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
   op_save_rsp(ctx,stack);
 
   op_uplift(ctx,mem_size); //in/out:r14

@@ -104,8 +104,8 @@ type
   tf_es:Word;
   tf_ds:Word;
 
-  //BrF
-  //BrT
+  tf_BrF:QWORD;
+  tf_BrT:QWORD;
 
   tf_err   :QWORD; //errno
   tf_rip   :QWORD;
@@ -115,6 +115,11 @@ type
   tf_ss    :QWORD;
  end;
 
+const
+ tf_copy_1:ptruint=ptruint(@p_trapframe(nil)^.tf_BrF);
+ tf_copy_2:ptruint=sizeof(trapframe)-ptruint(@p_trapframe(nil)^.tf_err);
+
+type
  p_mcontext_t=^mcontext_t;
  mcontext_t=packed record //0x480(1152)
   mc_onstack:QWORD; //sigstack state to restore  =1 if (SS_ONSTACK)

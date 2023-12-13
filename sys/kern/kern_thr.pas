@@ -202,10 +202,10 @@ type
   td_sigmask      :sigset_t;
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
-  td_retval       :array[0..1] of QWORD;
   td_align        :Pointer;
   td_frame        :trapframe;
   td_fpstate      :t_fpstate;
+  td_retval       :array[0..1] of QWORD;
   td_jctx         :t_td_jctx;
   td_ustack       :t_td_stack;
   td_kstack       :t_td_stack;
