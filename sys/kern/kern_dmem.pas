@@ -159,8 +159,8 @@ function sys_set_chicken_switches(flags:Integer):Integer;
 begin
  Writeln('[KERNEL] set_chicken_switches(',flags,')');
  p_proc.p_dmem_aliasing:=p_proc.p_dmem_aliasing or flags;
- //0x1 - kern_mmap_dmem ->
- //0x2 - kern_mmap_dmem ->
+ //0x1 - kern_mmap_dmem -> any alias
+ //0x2 - kern_mmap_dmem -> GPU -> CPU only
  Result:=0;
 end;
 
@@ -237,6 +237,7 @@ begin
 
    //
    if (not boolean(err)) or //not found
+      (is_sce_prog_attr_080000(@g_authinfo)) or
       ((p_proc.p_dmem_aliasing and 1)<>0) then //aliasing
    begin
     err:=dmem_map_set_mtype(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);

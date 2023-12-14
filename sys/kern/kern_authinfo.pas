@@ -16,12 +16,10 @@ type
 
  p_authinfo=^t_authinfo;
  t_authinfo=packed record
-  app_type   :QWORD;
-  app_flags  :QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
-  app_cap    :QWORD;
-  unknow1    :array[0..1] of QWORD;
-  sce_prg_atr:QWORD;
-  unknow2    :array[0..10] of QWORD;
+  app_type :QWORD;
+  app_caps :array[0..3] of QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
+  app_attrs:array[0..3] of QWORD;
+  unknow   :array[0..7] of QWORD;
  end;
  {$IF sizeof(t_authinfo)<>136}{$STOP sizeof(t_authinfo)<>136}{$ENDIF}
 
@@ -133,6 +131,7 @@ function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
 function sceSblACMgrIsVideoplayerProcess(info:p_authinfo):Boolean;
 function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
+function is_sce_prog_attr_080000(info:p_authinfo):Boolean;
 
 function sys_get_proc_type_info(dst:Pointer):Integer;
 function sys_get_authinfo(pid:Integer;info:Pointer):Integer;
@@ -164,14 +163,14 @@ end;
 
 function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
 begin
- Result:=((info^.app_cap shr $39) and 1)<>0;
+ Result:=((info^.app_caps[1] shr $39) and 1)<>0;
 end;
 
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
 var
  sce_prog_attr:QWORD;
 begin
- sce_prog_attr:=info^.sce_prg_atr;
+ sce_prog_attr:=info^.app_attrs[0];
  if ((sce_prog_attr and $1000000)=0) then
  begin
   if ((sce_prog_attr and $2000000)<>0) then
@@ -182,6 +181,16 @@ begin
  end;
  //sceSblRcMgrIsSoftwagnerQafForAcmgr
  Exit(false);
+end;
+
+function is_sce_prog_attr_080000(info:p_authinfo):Boolean;
+begin
+ Result:=True;
+ if ((info^.app_caps[1] and $2000000000000000)=0) or
+    ((info^.app_attrs[0] and $800000)=0) then
+ begin
+  Result:=False;
+ end;
 end;
 
 function sys_get_proc_type_info(dst:Pointer):Integer;
@@ -252,7 +261,7 @@ begin
    data.app_type:=x;
   end;
 
-  data.app_flags:=g_authinfo.app_flags and QWORD($7000000000000000);
+  data.app_caps[0]:=g_authinfo.app_caps[0] and QWORD($7000000000000000);
  end;
 
  if (info<>nil) then
