@@ -6,6 +6,7 @@ unit vm_map;
 interface
 
 uses
+ sysutils,
  vm,
  vmparam,
  vm_pmap,
@@ -25,22 +26,24 @@ type
  p_vm_map_entry_t=^vm_map_entry_t;
  vm_map_entry_t=^vm_map_entry;
  vm_map_entry=packed record
-  prev          :vm_map_entry_t; // previous entry
-  next          :vm_map_entry_t; // next entry
-  left          :vm_map_entry_t; // left child in binary search tree
-  right         :vm_map_entry_t; // right child in binary search tree
-  start         :vm_offset_t;    // start address
-  __end         :vm_offset_t;    // end address
-  avail_ssize   :vm_offset_t;    // amt can grow if this is a stack
-  adj_free      :vm_offset_t;    // amount of adjacent free space
-  max_free      :vm_offset_t;    // max free space in subtree
-  vm_obj        :vm_map_object;  // object I point to
-  offset        :vm_ooffset_t;   // offset into object
-  eflags        :vm_eflags_t;    // map entry flags
-  protection    :vm_prot_t;      // protection code
-  max_protection:vm_prot_t;      // maximum protection
-  inheritance   :vm_inherit_t;   // inheritance
-  name          :array[0..31] of Char;
+  prev          :vm_map_entry_t;       // previous entry
+  next          :vm_map_entry_t;       // next entry
+  left          :vm_map_entry_t;       // left child in binary search tree
+  right         :vm_map_entry_t;       // right child in binary search tree
+  start         :vm_offset_t;          // start address
+  __end         :vm_offset_t;          // end address
+  avail_ssize   :vm_offset_t;          // amt can grow if this is a stack
+  adj_free      :vm_offset_t;          // amount of adjacent free space
+  max_free      :vm_offset_t;          // max free space in subtree
+  vm_obj        :vm_map_object;        // object I point to
+  offset        :vm_ooffset_t;         // offset into object
+  eflags        :vm_eflags_t;          // map entry flags
+  protection    :vm_prot_t;            // protection code
+  max_protection:vm_prot_t;            // maximum protection
+  inheritance   :vm_inherit_t;         // inheritance
+  name          :array[0..31] of Char; // entry name
+  anon_addr     :Pointer;              // source code address
+  entry_id      :QWORD;                // order id
  end;
 
  p_vm_map_t=^vm_map_t;
@@ -56,6 +59,7 @@ type
   pmap:pmap_t;              // (c) Physical map
   rmap:Pointer;
   busy:Integer;
+  entry_id:QWORD;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -85,7 +89,7 @@ const
  MAP_ENTRY_COW       =$0004;
  MAP_ENTRY_NEEDS_COPY=$0008;
  MAP_ENTRY_NOFAULT   =$0010;
- //MAP_ENTRY_USER_WIRED=$0020;
+ MAP_ENTRY_USER_WIRED=$0020;
 
  MAP_ENTRY_BEHAV_NORMAL    =$0000; // default behavior
  MAP_ENTRY_BEHAV_SEQUENTIAL=$0040; // expect sequential access
@@ -94,15 +98,23 @@ const
 
  MAP_ENTRY_BEHAV_MASK=$00C0;
 
- //MAP_ENTRY_IN_TRANSITION=$0100; // entry being changed
- //MAP_ENTRY_NEEDS_WAKEUP =$0200; // waiters in transition
+ MAP_ENTRY_IN_TRANSITION=$0100; // entry being changed
+ MAP_ENTRY_NEEDS_WAKEUP =$0200; // waiters in transition
  MAP_ENTRY_NOCOREDUMP   =$0400; // don't include in a core
 
  MAP_ENTRY_GROWS_DOWN   =$1000; // Top-down stacks
  MAP_ENTRY_GROWS_UP     =$2000; // Bottom-up stacks
 
  MAP_ENTRY_WIRE_SKIPPED =$4000;
- MAP_ENTRY_VN_WRITECNT  =$8000; // writeable vnode mapping
+
+ MAP_ENTRY_VN_WRITECNT  =$10000; // writeable vnode mapping
+
+                      //0x20000
+                      //0x40000
+                      //0x80000
+                      //0x200000 budget?
+
+ MAP_ENTRY_NO_COALESCE  =$400000;
 
  //vm_flags_t values
  //MAP_WIREFUTURE =$01; // wire all future pages
@@ -122,6 +134,12 @@ const
  MAP_STACK_GROWS_UP  =$2000;
  MAP_ACC_CHARGED     =$4000;
  MAP_ACC_NO_CHARGE   =$8000;
+
+ MAP_COW_SYSTEM      =$10000;
+ MAP_COW_UNK         =$20000;
+ MAP_COW_KERNEL      =$40000;
+
+ MAP_COW_NO_COALESCE =$400000;
 
  //vm_fault option flags
  VM_FAULT_NORMAL       =0; // Nothing special
@@ -503,6 +521,8 @@ begin
  new_entry:=AllocMem(SizeOf(vm_map_entry));
  Assert((new_entry<>nil),'vm_map_entry_create: kernel resources exhausted');
  Result:=new_entry;
+ Result^.entry_id:=map^.entry_id;
+ Inc(map^.entry_id);
 end;
 
 {
@@ -967,8 +987,12 @@ begin
  protoeflags:=0;
  charge_prev_obj:=FALSE;
 
+ protoeflags:=protoeflags or (cow and (MAP_COW_NO_COALESCE or MAP_COW_UNK));
+
  if ((cow and MAP_COPY_ON_WRITE)<>0) then
+ begin
   protoeflags:=protoeflags or MAP_ENTRY_COW or MAP_ENTRY_NEEDS_COPY;
+ end;
 
  if ((cow and MAP_NOFAULT)<>0) then
  begin
@@ -978,13 +1002,19 @@ begin
  end;
 
  if ((cow and MAP_DISABLE_SYNCER)<>0) then
+ begin
   protoeflags:=protoeflags or MAP_ENTRY_NOSYNC;
+ end;
 
  if ((cow and MAP_DISABLE_COREDUMP)<>0) then
+ begin
   protoeflags:=protoeflags or MAP_ENTRY_NOCOREDUMP;
+ end;
 
  if ((cow and MAP_VN_WRITECOUNT)<>0) then
+ begin
   protoeflags:=protoeflags or MAP_ENTRY_VN_WRITECNT;
+ end;
 
  if ((cow and MAP_INHERIT_SHARE)<>0) then
   inheritance:=VM_INHERIT_SHARE
@@ -1111,7 +1141,7 @@ charged:
   * previous entries.  However, due to MAP_STACK_* being a hack, a
   * panic can result from merging such entries.
   }
- if ((cow and (MAP_STACK_GROWS_DOWN or MAP_STACK_GROWS_UP))=0) then
+ if ((cow and (MAP_STACK_GROWS_DOWN or MAP_STACK_GROWS_UP or MAP_COW_NO_COALESCE))=0) then
  begin
   vm_map_simplify_entry(map, new_entry);
  end;
@@ -1365,8 +1395,9 @@ var
  next,prev:vm_map_entry_t;
  prevsize,esize:vm_size_t;
  obj:vm_map_object;
+ sdk_5:Boolean;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) or //0x20000 MAP_ENTRY_IN_TRANSITION
+ if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or MAP_COW_UNK or MAP_ENTRY_IN_TRANSITION))<>0) or
     (entry^.inheritance=VM_INHERIT_HOLE) then
  begin
   Exit;
@@ -1387,6 +1418,8 @@ begin
   end;
  end;
 
+ sdk_5:=(p_proc.p_sdk_version>$54fffff);
+
  prev:=entry^.prev;
  if (prev<>@map^.header) then
  begin
@@ -1397,33 +1430,39 @@ begin
      (prev^.eflags=entry^.eflags) and
      (prev^.protection=entry^.protection) and
      (prev^.max_protection=entry^.max_protection) and
-     (prev^.inheritance=entry^.inheritance) then
+     (prev^.inheritance=entry^.inheritance) and
+     (sdk_5 or (prev^.anon_addr=entry^.anon_addr)) and
+     (((prev^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
+     then
   begin
-   vm_map_entry_unlink(map, prev);
-   entry^.start:=prev^.start;
-   entry^.offset:=prev^.offset;
-   //change
-   if (entry^.prev<>@map^.header) then
+   if (strlcomp(pchar(@prev^.name),pchar(@entry^.name),32)=0) then
    begin
-    vm_map_entry_resize_free(map, entry^.prev);
-   end;
+    vm_map_entry_unlink(map, prev);
+    entry^.start:=prev^.start;
+    entry^.offset:=prev^.offset;
+    //change
+    if (entry^.prev<>@map^.header) then
+    begin
+     vm_map_entry_resize_free(map, entry^.prev);
+    end;
 
-   {
-    * If the backing object is a vnode object,
-    * vm_object_deallocate() calls vrele().
-    * However, vrele() does not lock the vnode
-    * because the vnode has additional
-    * references.  Thus, the map lock can be kept
-    * without causing a lock-order reversal with
-    * the vnode lock.
-    *
-    * Since we count the number of virtual page
-    * mappings in object^.un_pager.vnp.writemappings,
-    * the writemappings value should not be adjusted
-    * when the entry is disposed of.
-    }
-   vm_object_deallocate(prev^.vm_obj);
-   vm_map_entry_dispose(map, prev);
+    {
+     * If the backing object is a vnode object,
+     * vm_object_deallocate() calls vrele().
+     * However, vrele() does not lock the vnode
+     * because the vnode has additional
+     * references.  Thus, the map lock can be kept
+     * without causing a lock-order reversal with
+     * the vnode lock.
+     *
+     * Since we count the number of virtual page
+     * mappings in object^.un_pager.vnp.writemappings,
+     * the writemappings value should not be adjusted
+     * when the entry is disposed of.
+     }
+    vm_object_deallocate(prev^.vm_obj);
+    vm_map_entry_dispose(map, prev);
+   end;
   end;
  end;
 
@@ -1437,15 +1476,21 @@ begin
      (next^.eflags=entry^.eflags) and
      (next^.protection=entry^.protection) and
      (next^.max_protection=entry^.max_protection) and
-     (next^.inheritance=entry^.inheritance) then
+     (next^.inheritance=entry^.inheritance) and
+     (sdk_5 or (next^.anon_addr=entry^.anon_addr)) and
+     (((entry^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
+     then
   begin
-   vm_map_entry_unlink(map, next);
-   entry^.__end:=next^.__end;
-   //change
-   vm_map_entry_resize_free(map, entry);
+   if (strlcomp(pchar(@next^.name),pchar(@entry^.name),32)=0) then
+   begin
+    vm_map_entry_unlink(map, next);
+    entry^.__end:=next^.__end;
+    //change
+    vm_map_entry_resize_free(map, entry);
 
-   vm_object_deallocate(next^.vm_obj);
-   vm_map_entry_dispose(map, next);
+    vm_object_deallocate(next^.vm_obj);
+    vm_map_entry_dispose(map, next);
+   end;
   end;
  end;
 end;
@@ -1491,7 +1536,14 @@ end;
  * it splits the entry into two.
  }
 procedure vm_map_clip_start(map:vm_map_t;entry:vm_map_entry_t;start:vm_offset_t);
+var
+ obj:vm_object_t;
 begin
+ obj:=entry^.vm_obj;
+
+ if (obj<>nil) then
+ if (obj^.otype=OBJT_BLOCKPOOL) then Exit;
+
  if (start>entry^.start) then
  begin
   _vm_map_clip_start(map,entry,start);
@@ -1571,6 +1623,7 @@ var
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
  old_prot:vm_prot_t;
+ ext_flags:Byte;
 begin
  if (start=__end) then
  begin
@@ -1595,20 +1648,49 @@ begin
  current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
+
   if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
      (current^.inheritance=VM_INHERIT_HOLE) then
   begin
    vm_map_unlock(map);
    Exit(KERN_INVALID_ARGUMENT);
   end;
-  if ((new_prot and current^.max_protection)<>new_prot) then
+
+  if set_max then
+  begin
+   obj:=current^.vm_obj;
+
+   if (obj<>nil) then
+   if (obj^.otype=OBJT_BLOCKPOOL) then
+   begin
+    vm_map_unlock(map);
+    Exit(KERN_INVALID_ARGUMENT);
+   end;
+  end;
+
+  ext_flags:=2; //current^.ext_flags
+
+  if ((ext_flags and 2)<>0) then
+  begin
+   old_prot:=current^.max_protection;
+  end else
+  begin
+   old_prot:=current^.max_protection and VM_PROT_GPU_ALL;
+  end;
+
+  if ((ext_flags and 1)<>0) then
+  begin
+   old_prot:=0;
+  end;
+
+  if ((new_prot and old_prot)<>new_prot) then
   begin
    vm_map_unlock(map);
    Exit(KERN_PROTECTION_FAILURE);
   end;
+
   current:=current^.next;
  end;
-
 
  {
   * Do an accounting pass for private read-only mappings that

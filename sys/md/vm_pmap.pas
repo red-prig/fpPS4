@@ -277,6 +277,8 @@ begin
   Result:=False;
  end else
  begin
+  page1:=PAGE_MAP[page1];
+  page2:=PAGE_MAP[page2];
   Result:=(page1<>page2);
  end;
 end;

@@ -191,7 +191,8 @@ function kern_mmap_dmem(map   :vm_map_t;
                         align :QWORD;
                         flags :DWORD):Integer;
 label
- _fixed;
+ _fixed,
+ _rmap_insert;
 var
  v_end:QWORD;
  faddr:QWORD;
@@ -199,6 +200,7 @@ var
 
  rentry:p_rmem_map_entry;
 
+ cow:Integer;
  err:Integer;
 begin
  Result:=0;
@@ -208,6 +210,9 @@ begin
  begin
   Exit(EACCES);
  end;
+
+ //eflags = flags & MAP_NO_COALESCE | 0x20000 | 0x80000
+ cow:=(flags and MAP_NO_COALESCE) or MAP_COW_UNK;
 
  vm_map_lock(map);
 
@@ -219,47 +224,66 @@ begin
   v_end:=vaddr+length;
 
   if (v_end <= map^.max_offset) and
-     ( ((flags and $200000)<>0) or
+     ( ((flags and MAP_SANITIZER)<>0) or
        ((vaddr shr 47) <> 0) or
        (v_end < $fc00000001) or
        (sdk_version_big_20()=false) ) then
   begin
+   _rmap_insert:
+
    rmem_map_lock(@rmap);
+    err:=Integer(rmem_map_lookup_entry(@rmap,OFF_TO_IDX(phaddr),@rentry));
+   rmem_map_unlock(@rmap);
 
    //
-   if (not rmem_map_lookup_entry(@rmap,OFF_TO_IDX(phaddr),@rentry)) or //not found
+   if (not boolean(err)) or //not found
       ((p_proc.p_dmem_aliasing and 1)<>0) then //aliasing
    begin
     err:=dmem_map_set_mtype(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);
 
     if (err=0) then
     begin
-     err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, prot, 0);
-     err:=vm_mmap_to_errno(err);
+     err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow);
 
      if (err=0) then
      begin
       addr^:=vaddr;
-     end;
+     end else
+     begin
+      err:=vm_mmap_to_errno(err);
 
+      dmem_map_lock  (@dmem);
+      dmem_map_delete(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length));
+      dmem_map_unlock(@dmem);
+     end;
     end;
 
+   end else
+   if ((p_proc.p_dmem_aliasing and 2)<>0) then //aliasing gpu???
+   begin
+    if ((prot and VM_PROT_GPU_ALL)<>0) then
+    begin
+     Assert(False,'TODO');
+    end;
+    goto _rmap_insert;
+   end else
+   begin
+    Writeln('[KERNEL] multiple VA mappings are detected. va:[0x',HexStr(vaddr,16),',0x',HexStr(v_end,16),')');
+    Result:=EINVAL;
    end;
 
-   rmem_map_unlock(@rmap);
-  end else
-  if ((p_proc.p_dmem_aliasing and 2)<>0) and //aliasing gpu???
-     ((prot and VM_PROT_GPU_ALL)<>0) then
-  begin
-   Assert(False,'TODO');
   end else
   begin
-   Writeln('[KERNEL] multiple VA mappings are detected. va:[0x',HexStr(vaddr,16),',0x',HexStr(v_end,16),')');
-   Result:=EINVAL;
+   Result:=ENOMEM;
+   if (align=0) then
+   begin
+    Result:=EINVAL;
+   end;
   end;
 
  end else
  begin
+  //(align<>0)
   //find free space
 
   err:=vm_map_findspace(map,vaddr,length,@faddr);
@@ -342,8 +366,9 @@ begin
   Exit(Pointer(EINVAL));
  end;
 
- if ((flags and $200000)<>0) then
+ if ((flags and MAP_SANITIZER)<>0) then
  begin
+  Exit(Pointer(EINVAL)); //is_sanitizer()=0
   //Sanitizer
  end;
 
@@ -457,7 +482,14 @@ var
 begin
  qinfo^:=Default(SceKernelVirtualQueryInfo);
 
- qinfo^.name:=entry^.name;
+ case entry^.inheritance of
+  VM_INHERIT_PATCH:;
+  VM_INHERIT_HOLE :;
+  else
+    begin
+     qinfo^.name:=entry^.name;
+    end;
+ end;
 
  obj:=entry^.vm_obj;
 

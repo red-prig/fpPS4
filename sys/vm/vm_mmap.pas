@@ -426,20 +426,38 @@ begin
   docow:=MAP_PREFAULT_PARTIAL;
 
  if ((flags and (MAP_ANON or MAP_SHARED))=0) then
+ begin
   docow:=docow or MAP_COPY_ON_WRITE;
+ end;
 
  if ((flags and MAP_NOSYNC)<>0) then
+ begin
   docow:=docow or MAP_DISABLE_SYNCER;
+ end;
 
  if ((flags and MAP_NOCORE)<>0) then
+ begin
   docow:=docow or MAP_DISABLE_COREDUMP;
+ end;
 
  // Shared memory is also shared with children.
  if ((flags and MAP_SHARED)<>0) then
+ begin
   docow:=docow or MAP_INHERIT_SHARE;
+ end;
 
  if (writecounted) then
+ begin
   docow:=docow or MAP_VN_WRITECOUNT;
+ end;
+
+ if (handle_type=OBJT_BLOCKPOOL) then
+ begin
+  docow:=docow or (MAP_COW_UNK or MAP_COW_NO_COALESCE);
+ end else
+ begin
+  docow:=docow or (flags and MAP_NO_COALESCE);
+ end;
 
  if ((flags and MAP_STACK)<>0) then
  begin
@@ -510,7 +528,7 @@ begin
 
  fp:=nil;
 
- if ((flags and $200000)<>0) {and (devkit_parameter(0)=0)} then
+ if ((flags and MAP_SANITIZER)<>0) {and (devkit_parameter(0)=0)} then
  begin
   Exit(Pointer(EINVAL));
  end;
