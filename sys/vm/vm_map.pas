@@ -521,8 +521,6 @@ begin
  new_entry:=AllocMem(SizeOf(vm_map_entry));
  Assert((new_entry<>nil),'vm_map_entry_create: kernel resources exhausted');
  Result:=new_entry;
- Result^.entry_id:=map^.entry_id;
- Inc(map^.entry_id);
 end;
 
 {
@@ -1057,7 +1055,7 @@ charged:
  end else
  if ((prev_entry<>@map^.header) and
    (prev_entry^.eflags=protoeflags) and
-   ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP))=0) and
+   ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP or MAP_COW_NO_COALESCE))=0) and
    (prev_entry^.__end=start) and
      vm_object_coalesce(prev_entry^.vm_obj,
          prev_entry^.offset,
@@ -1125,6 +1123,9 @@ charged:
  new_entry^.inheritance:=inheritance;
  new_entry^.protection:=prot;
  new_entry^.max_protection:=max;
+
+ new_entry^.entry_id:=map^.entry_id;
+ Inc(map^.entry_id);
 
  vm_object_reference(obj);
 

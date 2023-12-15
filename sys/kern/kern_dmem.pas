@@ -229,8 +229,6 @@ begin
        (v_end < $fc00000001) or
        (sdk_version_big_20()=false) ) then
   begin
-   _rmap_insert:
-
    rmem_map_lock(@rmap);
     err:=Integer(rmem_map_lookup_entry(@rmap,OFF_TO_IDX(phaddr),@rentry));
    rmem_map_unlock(@rmap);
@@ -240,6 +238,8 @@ begin
       (is_sce_prog_attr_080000(@g_authinfo)) or
       ((p_proc.p_dmem_aliasing and 1)<>0) then //aliasing
    begin
+    _rmap_insert:
+
     err:=dmem_map_set_mtype(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);
 
     if (err=0) then
@@ -252,10 +252,6 @@ begin
      end else
      begin
       err:=vm_mmap_to_errno(err);
-
-      dmem_map_lock  (@dmem);
-      dmem_map_delete(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length));
-      dmem_map_unlock(@dmem);
      end;
     end;
 
@@ -264,7 +260,7 @@ begin
    begin
     if ((prot and VM_PROT_GPU_ALL)<>0) then
     begin
-     Assert(False,'TODO');
+     Writeln('TODO check aliasing prot');
     end;
     goto _rmap_insert;
    end else
@@ -515,6 +511,8 @@ begin
 
   if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
   begin
+   qinfo^.protection:=qinfo^.protection and (VM_PROT_GPU_ALL or VM_PROT_RW);
+
    start :=entry^.start;
    relofs:=entry^.offset - start;
 
