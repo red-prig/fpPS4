@@ -867,17 +867,24 @@ function vm_object_rmap_release(map   :vm_map_t;
                                 obj   :vm_object_t;
                                 start :vm_offset_t;
                                 __end :vm_offset_t;
-                                offset:vm_ooffset_t):Integer;
+                                offset:vm_ooffset_t;
+                                p_rem :PBoolean):Integer;
 var
  rmap:p_rmem_map;
  length:vm_offset_t;
+ entry:p_rmem_map_entry;
 begin
  rmap:=map^.rmap;
  length:=__end-start;
 
  rmem_map_lock(rmap);
 
- Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+  Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+
+  if (Result=0) then
+  begin
+   p_rem^:=not rmem_map_lookup_entry_any(rmap,OFF_TO_IDX(offset),@entry)
+  end;
 
  rmem_map_unlock(rmap);
 end;
@@ -1755,10 +1762,12 @@ begin
    }
   if (old_prot<>current^.protection) then
   begin
-   pmap_protect(map^.pmap, current^.start,
-       current^.__end,
-       current^.protection and MASK(current),
-       old_prot);
+   pmap_protect(map^.pmap,
+                current^.vm_obj,
+                current^.offset,
+                current^.start,
+                current^.__end,
+                current^.protection and MASK(current));
   end;
   vm_map_simplify_entry(map, current);
   current:=current^.next;
@@ -1925,8 +1934,11 @@ begin
     pstart:=pstart+atop(start - current^.start);
     useStart:=start;
    end;
+
    if (current^.__end>__end) then
+   begin
     pend:=pend-atop(current^.__end - __end);
+   end;
 
    if (pstart>=pend) then
    begin
@@ -1951,6 +1963,8 @@ begin
      MADV_FREE:
       begin
        pmap_madv_free(map^.pmap,
+                      current^.vm_obj,
+                      ptoa(pstart),
                       useStart,
                       useStart+ptoa(pend-pstart),
                       current^.protection);
@@ -2263,6 +2277,7 @@ var
  first_entry:vm_map_entry_t;
  next       :vm_map_entry_t;
  obj        :vm_object_t;
+ p_rem      :Boolean;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -2343,17 +2358,32 @@ begin
   budget_remove(entry^.vm_obj,
                 entry^.__end-entry^.start);
 
-  pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
-
-  unmap_jit_cache(entry^.start,entry^.__end);
-
+  p_rem:=True;
   if (obj<>nil) then
   begin
    if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or (obj^.otype=OBJT_PHYSHM) then
    begin
-    Result:=vm_object_rmap_release(map,obj,entry^.start,entry^.__end,entry^.offset);
+    Result:=vm_object_rmap_release(map,
+                                   obj,
+                                   entry^.start,
+                                   entry^.__end,
+                                   entry^.offset,
+                                   @p_rem);
    end;
   end;
+
+  if p_rem then
+  begin
+   pmap_remove(map^.pmap,
+               entry^.vm_obj,
+               entry^.offset,
+               entry^.start,
+               entry^.__end,
+               entry^.protection);
+
+  end;
+
+  unmap_jit_cache(entry^.start,entry^.__end);
 
   {
    * Delete the entry only after removing all pmap

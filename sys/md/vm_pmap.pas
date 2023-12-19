@@ -10,8 +10,6 @@ uses
  vmparam,
  sys_vm_object;
 
-{$DEFINE GPU_REMAP}
-
 const
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
  PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
@@ -67,21 +65,26 @@ procedure pmap_enter_object(pmap   :pmap_t;
                             __end  :vm_offset_t;
                             prot   :vm_prot_t);
 
-procedure pmap_protect(pmap    :pmap_t;
-                       start   :vm_offset_t;
-                       __end   :vm_offset_t;
-                       new_prot:vm_prot_t;
-                       old_prot:vm_prot_t);
+procedure pmap_protect(pmap  :pmap_t;
+                       obj   :vm_object_t;
+                       offset:vm_ooffset_t;
+                       start :vm_offset_t;
+                       __end :vm_offset_t;
+                       prot  :vm_prot_t);
 
-procedure pmap_madv_free(pmap :pmap_t;
-                        start:vm_offset_t;
-                        __end:vm_offset_t;
-                        prot :vm_prot_t);
+procedure pmap_madv_free(pmap  :pmap_t;
+                         obj   :vm_object_t;
+                         offset:vm_ooffset_t;
+                         start :vm_offset_t;
+                         __end :vm_offset_t;
+                         prot  :vm_prot_t);
 
-procedure pmap_remove(pmap :pmap_t;
-                      start:vm_offset_t;
-                      __end:vm_offset_t;
-                      prot :vm_prot_t);
+procedure pmap_remove(pmap  :pmap_t;
+                      obj   :vm_object_t;
+                      offset:vm_ooffset_t;
+                      start :vm_offset_t;
+                      __end :vm_offset_t;
+                      prot  :vm_prot_t);
 
 implementation
 
@@ -351,20 +354,34 @@ var
 begin
  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
- base:=Pointer(trunc_page(start));
- size:=trunc_page(__end-start);
+ r:=0;
+ case vm_object_type(obj) of
+  OBJT_DEVICE, // same?
+  OBJT_SELF  , // same?
 
- {$IFDEF GPU_REMAP}
- if is_gpu(prot) then
- begin
-  //shift
-  base:=base+VM_MIN_GPU_ADDRESS;
-  prot:=prot or ((prot and VM_PROT_GPU_ALL) shr 4);
-  Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+(__end-start),11),':',HexStr(prot,2));
+  OBJT_DEFAULT:
+    begin
+     base:=Pointer(trunc_page(start));
+     size:=trunc_page(__end-start);
+
+     r:=md_enter(base,size,wprots[prot and VM_RWX]);
+    end;
+  OBJT_PHYSHM:
+    begin
+     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     size:=trunc_page(__end-start);
+
+     Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+
+     r:=md_enter(base,size,MD_PROT_RWX);
+    end;
+  else
+    begin
+     Writeln('TODO:',vm_object_type(obj));
+     Assert(False);
+     Exit;
+    end;
  end;
- {$ENDIF}
-
- r:=md_enter(base,size,wprots[prot and VM_RWX]);
 
  if (r<>0) then
  begin
@@ -431,56 +448,47 @@ begin
  end;
 end;
 
-procedure pmap_protect(pmap    :pmap_t;
-                       start   :vm_offset_t;
-                       __end   :vm_offset_t;
-                       new_prot:vm_prot_t;
-                       old_prot:vm_prot_t);
+procedure pmap_protect(pmap  :pmap_t;
+                       obj   :vm_object_t;
+                       offset:vm_ooffset_t;
+                       start :vm_offset_t;
+                       __end :vm_offset_t;
+                       prot  :vm_prot_t);
 var
- base_new:Pointer;
- base_old:Pointer;
+ base:Pointer;
  size:QWORD;
  r:Integer;
 begin
- Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':new:',HexStr(new_prot,2),':old:',HexStr(old_prot,2));
+ Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
 
- base_new:=Pointer(trunc_page(start));
- base_old:=base_new;
- size:=trunc_page(__end-start);
+ r:=0;
+ case vm_object_type(obj) of
+  OBJT_DEVICE, // same?
+  OBJT_SELF  , // same?
 
- {$IFDEF GPU_REMAP}
- if (is_gpu(new_prot)<>is_gpu(old_prot)) then
- begin
-  //realloc
+  OBJT_DEFAULT:
+    begin
+     base:=Pointer(trunc_page(start));
+     size:=trunc_page(__end-start);
 
-  if is_gpu(new_prot) then
-  begin
-   //shift
-   base_new:=base_new+VM_MIN_GPU_ADDRESS;
-   new_prot:=new_prot or ((new_prot and VM_PROT_GPU_ALL) shr 4);
-  end;
+     r:=md_protect(base,size,wprots[prot and VM_RWX]);
+    end;
+  OBJT_PHYSHM:
+    begin
+     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     size:=trunc_page(__end-start);
 
-  if is_gpu(old_prot) then
-  begin
-   //shift
-   base_old:=base_old+VM_MIN_GPU_ADDRESS;
-  end;
+     Writeln('pmap_protect_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
 
-  pmap_move(pmap,start,vm_offset_t(base_old),vm_offset_t(base_new),size,new_prot);
-
-  Exit;
+     r:=md_protect(base,size,MD_PROT_RWX);
+    end;
+  else
+    begin
+     Writeln('TODO:',vm_object_type(obj));
+     Assert(False);
+     Exit;
+    end;
  end;
- {$ENDIF}
-
- {$IFDEF GPU_REMAP}
- if is_gpu(new_prot) then
- begin
-  //shift
-  base_new:=base_new+VM_MIN_GPU_ADDRESS;
- end;
- {$ENDIF}
-
- r:=md_protect(base_new,size,wprots[new_prot and VM_RWX]);
 
  if (r<>0) then
  begin
@@ -488,13 +496,15 @@ begin
   Assert(false,'pmap_protect');
  end;
 
- pmap_mark(start,__end,QWORD(base_new),new_prot);
+ pmap_mark(start,__end,QWORD(base),prot);
 end;
 
-procedure pmap_madv_free(pmap :pmap_t;
-                        start:vm_offset_t;
-                        __end:vm_offset_t;
-                        prot :vm_prot_t);
+procedure pmap_madv_free(pmap  :pmap_t;
+                         obj   :vm_object_t;
+                         offset:vm_ooffset_t;
+                         start :vm_offset_t;
+                         __end :vm_offset_t;
+                         prot  :vm_prot_t);
 var
  base:Pointer;
  size:QWORD;
@@ -502,13 +512,29 @@ var
 begin
  Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
- //dont reset gpu mem
- if is_gpu(prot) then Exit;
+ r:=0;
+ case vm_object_type(obj) of
+  OBJT_DEVICE, // same?
+  OBJT_SELF  , // same?
 
- base:=Pointer(trunc_page(start));
- size:=trunc_page(__end-start);
+  OBJT_DEFAULT:
+    begin
+     base:=Pointer(trunc_page(start));
+     size:=trunc_page(__end-start);
 
- r:=md_reset(base,size,wprots[prot and VM_RWX]);
+     r:=md_reset(base,size,wprots[prot and VM_RWX]);
+    end;
+  OBJT_PHYSHM:
+    begin
+     //ignore
+    end;
+  else
+    begin
+     Writeln('TODO:',vm_object_type(obj));
+     Assert(False);
+     Exit;
+    end;
+ end;
 
  if (r<>0) then
  begin
@@ -517,10 +543,12 @@ begin
  end;
 end;
 
-procedure pmap_remove(pmap :pmap_t;
-                      start:vm_offset_t;
-                      __end:vm_offset_t;
-                      prot :vm_prot_t);
+procedure pmap_remove(pmap  :pmap_t;
+                      obj   :vm_object_t;
+                      offset:vm_ooffset_t;
+                      start :vm_offset_t;
+                      __end :vm_offset_t;
+                      prot  :vm_prot_t);
 var
  base:Pointer;
  size:QWORD;
@@ -528,20 +556,36 @@ var
 begin
  Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
- base:=Pointer(trunc_page(start));
- size:=trunc_page(__end-start);
-
  pmap_unmark(start,__end);
 
- {$IFDEF GPU_REMAP}
- if is_gpu(prot) then
- begin
-  //shift
-  base:=base+VM_MIN_GPU_ADDRESS;
- end;
- {$ENDIF}
+ r:=0;
+ case vm_object_type(obj) of
+  OBJT_DEVICE, // same?
+  OBJT_SELF  , // same?
 
- r:=md_remove(base,size);
+  OBJT_DEFAULT:
+    begin
+     base:=Pointer(trunc_page(start));
+     size:=trunc_page(__end-start);
+
+     r:=md_remove(base,size);
+    end;
+  OBJT_PHYSHM:
+    begin
+     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     size:=trunc_page(__end-start);
+
+     Writeln('pmap_remove_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+
+     r:=md_remove(base,size);
+    end;
+  else
+    begin
+     Writeln('TODO:',vm_object_type(obj));
+     Assert(False);
+     Exit;
+    end;
+ end;
 
  if (r<>0) then
  begin

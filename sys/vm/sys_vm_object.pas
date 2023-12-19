@@ -89,6 +89,7 @@ procedure vm_object_reference(obj:vm_object_t);
 
 procedure vm_object_pip_add(obj:vm_object_t;i:word);
 procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
+function  vm_object_type(obj:vm_object_t):obj_type;
 
 procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); external;
 
@@ -203,6 +204,14 @@ begin
  VM_OBJECT_LOCK_ASSERT(obj);
  obj^.paging_in_progress:=obj^.paging_in_progress-i;
 end;
+
+function vm_object_type(obj:vm_object_t):obj_type;
+begin
+ if (obj=nil) then Exit(OBJT_DEFAULT);
+
+ Result:=obj^.otype;
+end;
+
 
 end.
 

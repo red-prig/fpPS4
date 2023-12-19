@@ -667,8 +667,6 @@ begin
 
    next:=entry^.next;
 
-   //pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
-
    rmem_map_entry_delete(map, entry);
   end else
   begin
