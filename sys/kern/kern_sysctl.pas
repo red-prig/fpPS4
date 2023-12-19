@@ -340,8 +340,11 @@ begin
 end;
 
 function sysctl_kern_usrstack(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+var
+ vms:p_vmspace;
 begin
- Result:=SYSCTL_OUT(req,@g_vmspace.sv_usrstack,SizeOf(Pointer));
+ vms:=p_proc.p_vmspace;
+ Result:=SYSCTL_OUT(req,@vms^.sv_usrstack,SizeOf(Pointer));
 end;
 
 function sysctl_kern_arandom(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;

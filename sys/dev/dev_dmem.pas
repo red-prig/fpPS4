@@ -78,7 +78,7 @@ begin
             begin
              with PReleaseDirectMemory(data)^ do
              begin
-              Result:=dmem_map_release(@dmem,start,len);
+              Result:=dmem_map_release(@dmem,start,len,False);
              end;
             end;
 

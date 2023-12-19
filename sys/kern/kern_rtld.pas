@@ -615,7 +615,7 @@ function rtld_mmap(addr:PQWORD;size:QWORD):Integer;
 var
  map:vm_map_t;
 begin
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
  if (p_proc.p_sce_replay_exec<>0) then
  begin
@@ -631,11 +631,9 @@ var
 begin
  if (base<>nil) and (size<>0) then
  begin
-  map:=@g_vmspace.vm_map;
+  map:=p_proc.p_vmspace;
   //
-  vm_map_lock(map);
-  vm_map_delete(map,QWORD(base),QWORD(base) + size);
-  vm_map_unlock(map);
+  vm_map_remove(map,QWORD(base),QWORD(base) + size);
  end;
 end;
 
@@ -1078,14 +1076,14 @@ begin
 
  base:=Pointer(imgp^.image_header)+offset;
 
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
  vm_map_lock(map);
 
  //remove prev if exist
- vm_map_delete(map,vaddr_lo,vaddr_hi);
+ vm_map_delete(map,vaddr_lo,vaddr_hi,True);
 
- Result:=vm_map_insert(map,imgp^.obj,offset,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0);
+ Result:=vm_map_insert(map,imgp^.obj,offset,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0,false);
  if (Result<>0) then
  begin
   vm_map_unlock(map);

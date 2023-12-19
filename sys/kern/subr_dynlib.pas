@@ -1867,7 +1867,7 @@ begin
 
  if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
  begin
-  Result:=vm_map_protect(@g_vmspace.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.reloc_base)+imgp^.relro_size,VM_PROT_READ,False);
+  Result:=vm_map_protect(p_proc.p_vmspace,QWORD(imgp^.relro_addr),QWORD(imgp^.reloc_base)+imgp^.relro_size,VM_PROT_READ,False);
   Result:=vm_mmap_to_errno(Result);
   if (Result<>0) then Exit;
  end;
@@ -2123,7 +2123,7 @@ var
  addr:Pointer;
  size:QWORD;
 begin
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
  addr:=obj^.relro_addr;
  size:=obj^.relro_size;
@@ -2165,7 +2165,7 @@ begin
  end else
  if (p_proc.p_sdk_version < $1700000) then
  begin
-  map:=@g_vmspace.vm_map;
+  map:=p_proc.p_vmspace;
   //
   vm_map_lock(map);
   //

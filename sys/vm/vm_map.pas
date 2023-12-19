@@ -172,9 +172,6 @@ function  vm_map_min(map:vm_map_t):vm_offset_t;
 function  vm_map_pmap(map:vm_map_t):pmap_t;
 procedure vm_map_modflags(map:vm_map_t;_set,clear:vm_flags_t);
 
-var
- g_vmspace:vmspace;
-
 function  vm_map_lookup_entry(
             map        :vm_map_t;
             address    :vm_offset_t;
@@ -188,7 +185,8 @@ function  vm_map_insert(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer):Integer;
+           cow   :Integer;
+           alias :Boolean):Integer;
 
 function  vm_map_findspace(map   :vm_map_t;
                            start :vm_offset_t;
@@ -263,7 +261,7 @@ procedure vm_map_lock(map:vm_map_t);
 function  vm_map_trylock(map:vm_map_t):Boolean;
 procedure vm_map_unlock(map:vm_map_t);
 
-function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;rmap_free:Boolean):Integer;
 function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
@@ -349,32 +347,15 @@ begin
  Result:=False;//MAP_ENTRY_NEEDS_COPY
 end;
 
-{
- * vm_map_startup:
- *
- * Initialize the vm_map module.  Must be called before
- * any other vm_map routines.
- *
- * Map and entry structures are allocated from the general
- * purpose memory pool with some exceptions:
- *
- * - The kernel map and kmem submap are allocated statically.
- * - Kernel map entries are allocated out of a static pool.
- *
- * These restrictions are necessary since malloc() uses the
- * maps and requires map entries.
- }
-procedure vmspace_zinit;
-begin
- FillChar(g_vmspace,SizeOf(vmspace),0);
-end;
-
 function vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 begin
  Result:=@vm^.vm_pmap;
 end;
 
 procedure vm_map_init(map:vm_map_t;pmap:pmap_t;min,max:vm_offset_t); forward;
+
+var
+ g_vmspace:vmspace;
 
 {
  * Allocate a vmspace structure, including a vm_map and pmap,
@@ -855,7 +836,10 @@ function vm_object_rmap_insert(map   :vm_map_t;
                                obj   :vm_object_t;
                                start :vm_offset_t;
                                __end :vm_offset_t;
-                               offset:vm_ooffset_t):Integer;
+                               offset:vm_ooffset_t;
+                               alias :Boolean):Integer;
+var
+ tmp:p_rmem_map_entry;
 var
  rmap:p_rmem_map;
  length:vm_offset_t;
@@ -864,6 +848,15 @@ begin
  length:=__end-start;
 
  rmem_map_lock(rmap);
+
+ if not alias then
+ begin
+  if rmem_map_lookup_entry_any(rmap,OFF_TO_IDX(offset),@tmp) then
+  begin
+   rmem_map_unlock(rmap);
+   Exit(KERN_NO_SPACE);
+  end;
+ end;
 
  Result:=rmem_map_insert(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
 
@@ -884,7 +877,7 @@ begin
 
  rmem_map_lock(rmap);
 
- Result:=rmem_map_delete(rmap, OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+ Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
 
  rmem_map_unlock(rmap);
 end;
@@ -911,7 +904,8 @@ function vm_map_insert(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer):Integer;
+           cow   :Integer;
+           alias :Boolean):Integer;
 label
  charged;
 var
@@ -934,7 +928,7 @@ var
    begin
     if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or (obj^.otype=OBJT_PHYSHM) then
     begin
-     Result:=vm_object_rmap_insert(map,obj,start,__end,offset);
+     Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
     end;
    end;
 
@@ -1289,12 +1283,12 @@ var
 begin
  __end:=start + length;
  vm_map_lock(map);
- VM_MAP_RANGE_CHECK(map, start, __end);
- if (overwr<>0) then
- begin
-  vm_map_delete(map, start, __end);
- end;
- Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow);
+  VM_MAP_RANGE_CHECK(map, start, __end);
+  if (overwr<>0) then
+  begin
+   vm_map_delete(map, start, __end, True);
+  end;
+  Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow, false);
  vm_map_unlock(map);
 end;
 
@@ -1372,7 +1366,7 @@ again:
 
    start:=addr^;
   end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow);
+  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow, false);
  until not ((Result=KERN_NO_SPACE) and
             (find_space<>VMFS_NO_SPACE) and
             (find_space<>VMFS_ANY_SPACE));
@@ -2263,7 +2257,7 @@ procedure unmap_jit_cache(start,__end:QWORD); external name 'kern_unmap_jit_cach
  * Deallocates the given address range from the target
  * map.
  }
-function vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+function vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;rmap_free:Boolean):Integer;
 var
  entry      :vm_map_entry_t;
  first_entry:vm_map_entry_t;
@@ -2383,7 +2377,7 @@ function vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer
 begin
  vm_map_lock(map);
  VM_MAP_RANGE_CHECK(map, start, __end);
- Result:=vm_map_delete(map, start, __end);
+  Result:=vm_map_delete(map, start, __end, True);
  vm_map_unlock(map);
 end;
 
@@ -2541,7 +2535,7 @@ begin
  end;
 
  top:=bot + init_ssize;
- rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow);
+ rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow, false);
 
  { Now set the avail_ssize amount. }
  if (rv=KERN_SUCCESS) then
@@ -2766,7 +2760,7 @@ begin
   end;
 
   rv:=vm_map_insert(map, nil, 0, addr, stack_entry^.start,
-      next_entry^.protection, next_entry^.max_protection, 0);
+      next_entry^.protection, next_entry^.max_protection, 0, false);
 
   { Adjust the available stack space by the amount we grew. }
   if (rv=KERN_SUCCESS) then
@@ -3178,16 +3172,16 @@ var
  map:vm_map_t;
  i:Integer;
 begin
- vmspace_alloc(PROC_IMAGE_AREA_START,VM_MAXUSER_ADDRESS);
+ p_proc.p_vmspace:=vmspace_alloc(PROC_IMAGE_AREA_START,VM_MAXUSER_ADDRESS);
 
  //exclude addr
  if Length(exclude_mem)<>0 then
  begin
-  map:=@g_vmspace.vm_map;
+  map:=p_proc.p_vmspace;
   vm_map_lock(map);
   For i:=0 to High(exclude_mem) do
   begin
-   vm_map_insert         (map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1);
+   vm_map_insert         (map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1, false);
    vm_map_set_name_locked(map,         exclude_mem[i].start, exclude_mem[i].__end, '#hole', VM_INHERIT_HOLE);
   end;
   vm_map_unlock(map);

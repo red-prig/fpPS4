@@ -597,7 +597,7 @@ begin
 
  if is_guest_addr(eva) then
  begin
-  map:=@g_vmspace.vm_map;
+  map:=p_proc.p_vmspace;
 
   rv:=vm_fault.vm_fault(map,
                         frame^.tf_addr,

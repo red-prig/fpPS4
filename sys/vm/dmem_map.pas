@@ -52,6 +52,8 @@ type
   nentries:DWORD;            // Number of entries
   size    :DWORD;            // size
   root    :p_dmem_map_entry; // Root of a binary search tree
+  vmap    :Pointer;
+  rmap    :Pointer;
   property min_offset:DWORD read header.start write header.start;
   property max_offset:DWORD read header.__end write header.__end;
  end;
@@ -82,7 +84,7 @@ function  dmem_map_insert(
 
 Function  dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var oaddr,osize:QWORD):Integer;
 Function  dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;
-Function  dmem_map_release(map:p_dmem_map;start,len:QWORD):Integer;
+Function  dmem_map_release(map:p_dmem_map;start,len:QWORD;check:Boolean):Integer;
 
 function  dmem_map_findspace(map   :p_dmem_map;
                              start :DWORD;
@@ -117,7 +119,9 @@ implementation
 
 uses
  errno,
- kern_thr;
+ kern_thr,
+ vm_map,
+ rmem_map;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
@@ -155,10 +159,6 @@ end;
 
 procedure dmem_map_entry_deallocate(entry:p_dmem_map_entry);
 begin
- //if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
- //begin
- // vm_object_deallocate(entry^.vm_obj);
- //end;
  Freemem(entry);
 end;
 
@@ -592,8 +592,6 @@ begin
 
  dmem_map_simplify_entry(map, new_entry);
 
- //dmem_rmap_enter(map,start,__end);
-
  Result:=0;
 end;
 
@@ -771,9 +769,61 @@ begin
  end;
 end;
 
-Function dmem_map_release(map:p_dmem_map;start,len:QWORD):Integer;
+function _dmem_map_test(map  :p_dmem_map;
+                        start:DWORD;
+                        __end:DWORD):Boolean;
+var
+ curr,next,entry:p_dmem_map_entry;
+begin
+ Result:=True;
+
+ if dmem_map_lookup_entry(map,start,@entry) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ //EACCES/ENOENT
+ //one entry? multi entry?
+
+ if (entry^.start>start) then
+ begin
+  Exit(False);
+ end;
+
+ curr:=entry;
+ while (curr<>@map^.header) and (curr^.start<__end) do
+ begin
+  next:=curr^.next;
+
+  if (next<>@map^.header) then
+  if (curr^.__end<>next^.start) then
+  begin
+   Exit(False);
+  end;
+
+  curr:=next;
+ end;
+
+ if (curr^.__end<__end) then
+ begin
+  Exit(False);
+ end;
+
+end;
+
+procedure _unmap(entry:p_rmem_map_entry;data:Pointer);
+begin
+ vm_map_delete(data, IDX_TO_OFF(entry^.vaddr), IDX_TO_OFF(entry^.vaddr+(entry^.__end-entry^.start)), False);
+end;
+
+Function dmem_map_release(map:p_dmem_map;start,len:QWORD;check:Boolean):Integer;
 var
  offset:QWORD;
+ rmap:p_rmem_map;
+ vmap:vm_map_t;
 begin
  if (((len or start) and QWORD($8000000000003fff))<>0) then
  begin
@@ -799,9 +849,39 @@ begin
 
  dmem_map_lock(map);
 
+ if check then
+ begin
+  if not _dmem_map_test(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len)) then
+  begin
+   dmem_map_unlock(map);
+   Exit(ENOENT);
+  end;
+ end;
+
  Result:=dmem_map_delete(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
 
  dmem_map_unlock(map);
+
+ if (Result=0) then
+ begin
+  rmap:=map^.rmap;
+
+  rmem_map_process_deferred(nil,nil); //flush
+
+  rmem_map_lock(rmap);
+   Result:=rmem_map_delete_any(rmap,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
+  rmem_map_unlock(rmap);
+
+  if (Result=0) then
+  begin
+   vmap:=map^.vmap;
+
+   vm_map_lock(vmap);
+    rmem_map_process_deferred(@_unmap,vmap);
+   vm_map_unlock(vmap);
+  end;
+ end;
+
 end;
 
 function dmem_map_findspace(map   :p_dmem_map;
@@ -930,11 +1010,6 @@ procedure dmem_map_simplify_entry(map:p_dmem_map;entry:p_dmem_map_entry);
 var
  next,prev:p_dmem_map_entry;
 begin
- //if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP))<>0) then
- //begin
- // Exit;
- //end;
-
  prev:=entry^.prev;
  if (prev<>@map^.header) then
  begin
@@ -985,11 +1060,6 @@ begin
  entry^.start:=start;
 
  dmem_map_entry_link(map, entry^.prev, new_entry);
-
- //if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
- //begin
- // vm_object_reference(new_entry^.vm_obj);
- //end;
 end;
 
 procedure dmem_map_clip_start(map:p_dmem_map;entry:p_dmem_map_entry;start:DWORD);
@@ -1016,11 +1086,6 @@ begin
  entry^.__end:=__end;
 
  dmem_map_entry_link(map, entry, new_entry);
-
- //if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
- //begin
- // vm_object_reference(new_entry^.vm_obj);
- //end;
 end;
 
 procedure dmem_map_clip_end(map:p_dmem_map;entry:p_dmem_map_entry;__end:DWORD);
@@ -1098,7 +1163,7 @@ function dmem_map_set_mtype(map  :p_dmem_map;
                             new  :DWORD):Integer;
 
 var
- current,entry:p_dmem_map_entry;
+ current,next,entry:p_dmem_map_entry;
  old:DWORD;
 begin
  if (start=__end) then
@@ -1115,6 +1180,11 @@ begin
   //
  end else
  begin
+  entry:=entry^.next;
+ end;
+
+ if (entry^.start>start) then
+ begin
   dmem_map_unlock(map);
   Exit(EACCES);
  end;
@@ -1122,7 +1192,16 @@ begin
  current:=entry;
  while (current<>@map^.header) and (current^.start<__end) do
  begin
-  current:=current^.next;
+  next:=current^.next;
+
+  if (next<>@map^.header) then
+  if (current^.__end<>next^.start) then
+  begin
+   dmem_map_unlock(map);
+   Exit(EACCES);
+  end;
+
+  current:=next;
  end;
 
  if (current^.__end<__end) then

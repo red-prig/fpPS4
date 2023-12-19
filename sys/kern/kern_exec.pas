@@ -233,7 +233,7 @@ var
  stack_addr:QWORD;
  ssiz:QWORD;
 begin
- vmspace:=@g_vmspace;
+ vmspace:=p_proc.p_vmspace;
 
  { May be called with Giant held }
  //EVENTHANDLER_INVOKE(process_exec, p, imgp);
@@ -342,7 +342,7 @@ begin
  else
   execpath_len:=0;
 
- vms:=@g_vmspace;
+ vms:=p_proc.p_vmspace;
 
  vms^.ps_strings:=(vms^.sv_usrstack-SizeOf(t_ps_strings));
  arginfo:=vms^.ps_strings;
@@ -580,6 +580,8 @@ var
 
  auxargs:p_elf64_auxargs;
 
+ vms:p_vmspace;
+
  cache:Pointer;
 begin
  Result:=0;
@@ -716,10 +718,12 @@ begin
   Exit(ENOMEM);
  end;
 
- g_vmspace.vm_tsize:=text_size shr PAGE_SHIFT;
- g_vmspace.vm_taddr:=Pointer(text_addr);
- g_vmspace.vm_dsize:=data_size shr PAGE_SHIFT;
- g_vmspace.vm_daddr:=Pointer(data_addr);
+ vms:=p_proc.p_vmspace;
+
+ vms^.vm_tsize:=text_size shr PAGE_SHIFT;
+ vms^.vm_taddr:=Pointer(text_addr);
+ vms^.vm_dsize:=data_size shr PAGE_SHIFT;
+ vms^.vm_daddr:=Pointer(data_addr);
 
  addr:=0;
  if (hdr^.e_type=ET_SCE_DYNEXEC) then
@@ -737,7 +741,7 @@ begin
  auxargs^.phent :=hdr^.e_phentsize;
  auxargs^.phnum :=hdr^.e_phnum;
  auxargs^.pagesz:=PAGE_SIZE;
- auxargs^.base  :=(QWORD(g_vmspace.vm_daddr) + $3fff + lim_max(RLIMIT_DATA)) and QWORD($ffffffffffffc000);
+ auxargs^.base  :=(QWORD(vms^.vm_daddr) + $3fff + lim_max(RLIMIT_DATA)) and QWORD($ffffffffffffc000);
  auxargs^.flags :=0;
  auxargs^.entry :=QWORD(imgp^.entry_addr);
 
@@ -749,7 +753,7 @@ begin
 
  if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
  begin
-  Result:=vm_map_protect(@g_vmspace.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.relro_addr)+imgp^.relro_size,VM_PROT_READ,False);
+  Result:=vm_map_protect(@vms^.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.relro_addr)+imgp^.relro_size,VM_PROT_READ,False);
   Result:=vm_mmap_to_errno(Result);
  end;
 
@@ -757,6 +761,7 @@ end;
 
 function dynlib_proc_initialize_step1(imgp:p_image_params):Integer;
 var
+ vms:p_vmspace;
  obj:p_lib_info;
  text_addr:Pointer;
  eh_frame_addr:Pointer;
@@ -781,13 +786,15 @@ begin
  obj^.rtld_flags.mainprog:=1;
  obj^.relocbase:=imgp^.reloc_base;
 
- text_addr:=g_vmspace.vm_taddr;
+ vms:=p_proc.p_vmspace;
+
+ text_addr:=vms^.vm_taddr;
 
  obj^.map_base:=text_addr;
 
- obj^.text_size:=g_vmspace.vm_tsize * PAGE_SIZE;
- obj^.data_addr:=g_vmspace.vm_daddr;
- obj^.data_size:=g_vmspace.vm_dsize * PAGE_SIZE;
+ obj^.text_size:=vms^.vm_tsize * PAGE_SIZE;
+ obj^.data_addr:=vms^.vm_daddr;
+ obj^.data_size:=vms^.vm_dsize * PAGE_SIZE;
 
  obj^.map_size :=((QWORD(obj^.data_addr) + obj^.data_size + $3fff) and QWORD($ffffffffffffc000)) - QWORD(text_addr);
 
@@ -1237,6 +1244,8 @@ var
  tvfslocked:Integer;
 
  newargs,oldargs:p_pargs;
+
+ vms:p_vmspace;
 begin
 
  textvp:=nil;
@@ -1431,8 +1440,10 @@ begin
 
  dynlib_proc_initialize_step3(imgp);
 
+ vms:=p_proc.p_vmspace;
+
  { Set values passed into the program in registers. }
- exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base), QWORD(g_vmspace.sv_usrstack));
+ exec_setregs(td, QWORD(imgp^.entry_addr), QWORD(stack_base), QWORD(vms^.sv_usrstack));
 
  vfs_mark_atime(imgp^.vp);
 

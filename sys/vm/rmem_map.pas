@@ -20,8 +20,6 @@ type
   right         :p_rmem_map_entry; // right child in binary search tree
   start         :DWORD;            // start address
   __end         :DWORD;            // end address
-  adj_free      :DWORD;            // amount of adjacent free space
-  max_free      :DWORD;            // max free space in subtree
   vaddr         :DWORD;            // virtual addr mapping
  end;
 
@@ -30,11 +28,14 @@ type
   header  :t_rmem_map_entry; // List of entries
   lock    :mtx;              // Lock for map data
   nentries:DWORD;            // Number of entries
-  size    :DWORD;            // size
   root    :p_rmem_map_entry; // Root of a binary search tree
   property min_offset:DWORD read header.start write header.start;
   property max_offset:DWORD read header.__end write header.__end;
  end;
+
+ t_rmem_cb_deferred=procedure(entry:p_rmem_map_entry;data:Pointer);
+
+procedure rmem_map_process_deferred(cb:t_rmem_cb_deferred;data:Pointer);
 
 procedure rmem_map_entry_deallocate(entry:p_rmem_map_entry);
 
@@ -49,26 +50,37 @@ procedure rmem_map_entry_dispose(map:p_rmem_map;entry:p_rmem_map_entry); inline;
 function  rmem_map_entry_create(map:p_rmem_map):p_rmem_map_entry;
 
 function  rmem_map_lookup_entry(
-            map        :p_rmem_map;
-            address    :DWORD;
-            entry      :pp_rmem_map_entry):Boolean;
+            map  :p_rmem_map;
+            vaddr:DWORD;
+            start:DWORD;
+            entry:pp_rmem_map_entry):Boolean;
+
+function  rmem_map_lookup_entry_any(
+            map  :p_rmem_map;
+            start:DWORD;
+            entry:pp_rmem_map_entry):Boolean;
 
 function  rmem_map_insert(
-            map        :p_rmem_map;
-            vaddr      :DWORD;
-            start      :DWORD;
-            __end      :DWORD):Integer;
+            map  :p_rmem_map;
+            vaddr:DWORD;
+            start:DWORD;
+            __end:DWORD):Integer;
 
-function  rmem_map_fixed(map    :p_rmem_map;
-                         vaddr  :DWORD;
-                         start  :DWORD;
-                         length :DWORD):Integer;
-
-procedure rmem_map_simplify_entry(map:p_rmem_map;entry:p_rmem_map_entry);
+function  rmem_map_fixed(map   :p_rmem_map;
+                         vaddr :DWORD;
+                         start :DWORD;
+                         length:DWORD):Integer;
 
 procedure rmem_map_entry_delete(map:p_rmem_map;entry:p_rmem_map_entry);
 
-function  rmem_map_delete(map:p_rmem_map;start:DWORD;__end:DWORD):Integer;
+function  rmem_map_delete(map  :p_rmem_map;
+                          vaddr:DWORD;
+                          start:DWORD;
+                          __end:DWORD):Integer;
+
+function  rmem_map_delete_any(map  :p_rmem_map;
+                              start:DWORD;
+                              __end:DWORD):Integer;
 
 implementation
 
@@ -131,7 +143,7 @@ begin
  Result:=mtx_trylock(map^.lock);
 end;
 
-procedure rmem_map_process_deferred;
+procedure rmem_map_process_deferred(cb:t_rmem_cb_deferred;data:Pointer);
 var
  td:p_kthread;
  entry,next:p_rmem_map_entry;
@@ -143,6 +155,10 @@ begin
  while (entry<>nil) do
  begin
   next:=entry^.next;
+  if (cb<>nil) then
+  begin
+   cb(entry,data);
+  end;
   rmem_map_entry_deallocate(entry);
   entry:=next;
  end;
@@ -151,7 +167,7 @@ end;
 procedure rmem_map_unlock(map:p_rmem_map);
 begin
  mtx_unlock(map^.lock);
- rmem_map_process_deferred();
+ rmem_map_process_deferred(nil,nil);
 end;
 
 function rmem_map_locked(map:p_rmem_map):Boolean; inline;
@@ -170,10 +186,7 @@ begin
  map^.header.prev:=@map^.header;
  map^.min_offset :=min;
  map^.max_offset :=max;
- map^.header.adj_free:=(max-min);
- map^.header.max_free:=(max-min);
  map^.nentries:=0;
- map^.size    :=0;
  map^.root:=nil;
 end;
 
@@ -197,22 +210,31 @@ begin
  Result:=new_entry;
 end;
 
-procedure rmem_map_entry_set_max_free(entry:p_rmem_map_entry);
+//(start1<start2)
+function cmp_lt(start1,vaddr1,start2,vaddr2:DWORD):Boolean; inline;
 begin
- entry^.max_free:=entry^.adj_free;
- if (entry^.left<>nil) then
- if (entry^.left^.max_free>entry^.max_free) then
+ if (start1=start2) then
  begin
-  entry^.max_free:=entry^.left^.max_free;
- end;
- if (entry^.right<>nil) then
- if (entry^.right^.max_free>entry^.max_free) then
+  Result:=(vaddr1<vaddr2);
+ end else
  begin
-  entry^.max_free:=entry^.right^.max_free;
+  Result:=(start1<start2);
  end;
 end;
 
-function rmem_map_entry_splay(addr:DWORD;root:p_rmem_map_entry):p_rmem_map_entry;
+//(start1>=start2)
+function cmp_be(start1,vaddr1,start2,vaddr2:DWORD):Boolean; inline;
+begin
+ if (start1=start2) then
+ begin
+  Result:=(vaddr1>=vaddr2);
+ end else
+ begin
+  Result:=(start1>=start2);
+ end;
+end;
+
+function rmem_map_entry_splay(vaddr,start:DWORD;root:p_rmem_map_entry):p_rmem_map_entry;
 var
  llist,rlist:p_rmem_map_entry;
  ltree,rtree:p_rmem_map_entry;
@@ -225,16 +247,15 @@ begin
  rlist:=nil;
  repeat
   { root is never nil in here. }
-  if (addr<root^.start) then
+  if cmp_lt(start,vaddr,root^.start,root^.vaddr) then
   begin
    y:=root^.left;
    if (y=nil) then break;
-   if (addr<y^.start) and (y^.left<>nil) then
+   if cmp_lt(start,vaddr,y^.start,y^.vaddr) and (y^.left<>nil) then
    begin
     { Rotate right and put y on rlist. }
     root^.left:=y^.right;
     y^.right:=root;
-    rmem_map_entry_set_max_free(root);
     root:=y^.left;
     y^.left:=rlist;
     rlist:=y;
@@ -246,16 +267,15 @@ begin
     root:=y;
    end;
   end else
-  if (addr>=root^.__end) then
+  if (start>=root^.__end) then
   begin
    y:=root^.right;
    if (y=nil) then break;
-   if (addr>=y^.__end) and (y^.right<>nil) then
+   if (start>=y^.__end) and (y^.right<>nil) then
    begin
     { Rotate left and put y on llist. }
     root^.right:=y^.left;
     y^.left:=root;
-    rmem_map_entry_set_max_free(root);
     root:=y^.right;
     y^.right:=llist;
     llist:=y;
@@ -282,7 +302,6 @@ begin
  begin
   y:=llist^.right;
   llist^.right:=ltree;
-  rmem_map_entry_set_max_free(llist);
   ltree:=llist;
   llist:=y;
  end;
@@ -291,7 +310,6 @@ begin
  begin
   y:=rlist^.left;
   rlist^.left:=rtree;
-  rmem_map_entry_set_max_free(rlist);
   rtree:=rlist;
   rlist:=y;
  end;
@@ -299,9 +317,8 @@ begin
  {
   * Final assembly: add ltree and rtree as subtrees of root.
   }
- root^.left:=ltree;
+ root^.left :=ltree;
  root^.right:=rtree;
- rmem_map_entry_set_max_free(root);
 
  Result:=(root);
 end;
@@ -323,26 +340,16 @@ begin
  begin
   if (after_where<>map^.root) then
   begin
-   rmem_map_entry_splay(after_where^.start, map^.root);
+   rmem_map_entry_splay(after_where^.vaddr, after_where^.start, map^.root);
   end;
   entry^.right:=after_where^.right;
   entry^.left:=after_where;
   after_where^.right:=nil;
-  after_where^.adj_free:=entry^.start - after_where^.__end;
-  rmem_map_entry_set_max_free(after_where);
  end else
  begin
   entry^.right:=map^.root;
   entry^.left:=nil;
  end;
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
- rmem_map_entry_set_max_free(entry);
  map^.root:=entry;
 end;
 
@@ -356,23 +363,15 @@ begin
 
  if (entry<>map^.root) then
  begin
-  rmem_map_entry_splay(entry^.start, map^.root);
+  rmem_map_entry_splay(entry^.vaddr, entry^.start, map^.root);
  end;
  if (entry^.left=nil) then
  begin
   root:=entry^.right;
  end else
  begin
-  root:=rmem_map_entry_splay(entry^.start, entry^.left);
+  root:=rmem_map_entry_splay(entry^.vaddr, entry^.start, entry^.left);
   root^.right:=entry^.right;
-  if (root^.next=@map^.header) then
-  begin
-   root^.adj_free:=map^.max_offset-root^.__end;
-  end else
-  begin
-   root^.adj_free:=entry^.next^.start-root^.__end;
-  end;
-  rmem_map_entry_set_max_free(root);
  end;
  map^.root:=root;
 
@@ -383,27 +382,11 @@ begin
  Dec(map^.nentries);
 end;
 
-procedure rmem_map_entry_resize_free(map:p_rmem_map;entry:p_rmem_map_entry);
-begin
- if (entry<>map^.root) then
- begin
-  map^.root:=rmem_map_entry_splay(entry^.start, map^.root);
- end;
-
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
- rmem_map_entry_set_max_free(entry);
-end;
-
 function rmem_map_lookup_entry(
-           map    :p_rmem_map;
-           address:DWORD;
-           entry  :pp_rmem_map_entry):Boolean;
+           map  :p_rmem_map;
+           vaddr:DWORD;
+           start:DWORD;
+           entry:pp_rmem_map_entry):Boolean;
 var
  cur:p_rmem_map_entry;
 begin
@@ -411,17 +394,23 @@ begin
 
  {
   * If the map is empty, then the map entry immediately preceding
-  * "address" is the map's header.
+  * "start" is the map's header.
   }
  cur:=map^.root;
  if (cur=nil) then
  begin
   entry^:=@map^.header;
  end else
- if (address>=cur^.start) and (cur^.__end>address) then
+ //if (start>=cur^.start) and (cur^.__end>start) then
+ if cmp_be(start,vaddr,cur^.start,cur^.vaddr) and
+    (cur^.__end>start) then
  begin
   entry^:=cur;
-  Exit(TRUE);
+  if (vaddr>=cur^.vaddr) and
+     (vaddr<(cur^.vaddr+(cur^.__end-cur^.start))) then
+  begin
+   Exit(TRUE);
+  end;
  end else
  begin
   {
@@ -430,18 +419,20 @@ begin
    * change the map.  Thus, the map's timestamp need not change
    * on a temporary upgrade.
    }
-  cur:=rmem_map_entry_splay(address,cur);
+  cur:=rmem_map_entry_splay(vaddr,start,cur);
   map^.root:=cur;
 
   {
-   * If "address" is contained within a map entry, the new root
+   * If "start" is contained within a map entry, the new root
    * is that map entry.  Otherwise, the new root is a map entry
-   * immediately before or after "address".
+   * immediately before or after "start".
    }
-  if (address>=cur^.start) then
+  if (start>=cur^.start) then
   begin
    entry^:=cur;
-   if (cur^.__end>address) then
+   if (cur^.__end>start) and
+      (vaddr>=cur^.vaddr) and
+      (vaddr<(cur^.vaddr+(cur^.__end-cur^.start))) then
    begin
     Exit(TRUE);
    end;
@@ -454,22 +445,65 @@ begin
  Result:=(FALSE);
 end;
 
-function entry_cross(entry:p_rmem_map_entry;start,__end:DWORD):Boolean;
+function rmem_map_lookup_entry_any(
+           map  :p_rmem_map;
+           start:DWORD;
+           entry:pp_rmem_map_entry):Boolean;
+var
+ cur:p_rmem_map_entry;
 begin
- Result:=(__end>entry^.start) and (start<entry^.__end);
-end;
+ RMEM_MAP_ASSERT_LOCKED(map);
 
-function entry_vaddr(prev:p_rmem_map_entry;vaddr:DWORD):Boolean; inline;
-begin
- Result:=((prev^.vaddr=0) and (vaddr=0)) or
-         (prev^.vaddr+(prev^.__end-prev^.start)=vaddr);
+ {
+  * If the map is empty, then the map entry immediately preceding
+  * "start" is the map's header.
+  }
+ cur:=map^.root;
+ if (cur=nil) then
+ begin
+  entry^:=@map^.header;
+ end else
+ if (start>=cur^.start) and (cur^.__end>start) then
+ begin
+  entry^:=cur;
+  Exit(TRUE);
+ end else
+ begin
+  {
+   * Splay requires a write lock on the map.  However, it only
+   * restructures the binary search tree; it does not otherwise
+   * change the map.  Thus, the map's timestamp need not change
+   * on a temporary upgrade.
+   }
+  cur:=rmem_map_entry_splay(0,start,cur);
+  map^.root:=cur;
+
+  {
+   * If "start" is contained within a map entry, the new root
+   * is that map entry.  Otherwise, the new root is a map entry
+   * immediately before or after "start".
+   }
+  if (start>=cur^.start) then
+  begin
+   entry^:=cur;
+   if (cur^.__end>start) then
+   begin
+    Exit(TRUE);
+   end;
+  end else
+  begin
+   entry^:=cur^.prev;
+  end;
+ end;
+
+ Result:=(FALSE);
 end;
 
 function rmem_map_insert(
-           map        :p_rmem_map;
-           vaddr      :DWORD;
-           start      :DWORD;
-           __end      :DWORD):Integer;
+           map  :p_rmem_map;
+           vaddr:DWORD;
+           start:DWORD;
+           __end:DWORD):Integer;
 var
  new_entry :p_rmem_map_entry;
  prev_entry:p_rmem_map_entry;
@@ -489,33 +523,9 @@ begin
   * Find the entry prior to the proposed starting address; if it's part
   * of an existing entry, this range is bogus.
   }
- if rmem_map_lookup_entry(map,start,@temp_entry) then
+ if rmem_map_lookup_entry(map,vaddr,start,@temp_entry) then
  begin
   Exit(KERN_NO_SPACE);
- end;
-
- prev_entry:=temp_entry;
-
- while entry_cross(prev_entry,start,__end) do
- begin
-
-  if (prev_entry<>@map^.header) and
-     (prev_entry^.__end=start) and
-     entry_vaddr(prev_entry,vaddr) then
-  begin
-   map^.size:=map^.size+(__end - prev_entry^.__end);
-   prev_entry^.__end:=__end;
-   //change size
-
-   //rmem_rmap_enter(map,start,__end);
-
-   rmem_map_entry_resize_free(map, prev_entry);
-   rmem_map_simplify_entry(map, prev_entry);
-   Exit(KERN_SUCCESS);
-  end;
-
-  if (prev_entry=@map^.header) then Break;
-  prev_entry:=prev_entry^.prev;
  end;
 
  prev_entry:=temp_entry;
@@ -533,19 +543,14 @@ begin
   * Insert the new entry into the list
   }
  rmem_map_entry_link(map, prev_entry, new_entry);
- map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
-
- rmem_map_simplify_entry(map, new_entry);
-
- //rmem_rmap_enter(map,start,__end);
 
  Result:=KERN_SUCCESS;
 end;
 
-function rmem_map_fixed(map    :p_rmem_map;
-                        vaddr  :DWORD;
-                        start  :DWORD;
-                        length :DWORD):Integer;
+function rmem_map_fixed(map   :p_rmem_map;
+                        vaddr :DWORD;
+                        start :DWORD;
+                        length:DWORD):Integer;
 var
  __end:DWORD;
 begin
@@ -556,67 +561,11 @@ begin
  rmem_map_unlock(map);
 end;
 
-procedure rmem_map_simplify_entry(map:p_rmem_map;entry:p_rmem_map_entry);
-var
- next,prev:p_rmem_map_entry;
-begin
- prev:=entry^.prev;
-
- while entry_cross(prev,entry^.start,entry^.__end) do
- begin
-  if (prev<>@map^.header) then
-  begin
-   if (prev^.__end=entry^.start) and
-      entry_vaddr(prev,entry^.vaddr) then
-   begin
-    rmem_map_entry_unlink(map, prev);
-    entry^.start:=prev^.start;
-    entry^.vaddr:=prev^.vaddr;
-
-    //change
-    if (entry^.prev<>@map^.header) then
-    begin
-     rmem_map_entry_resize_free(map, entry^.prev);
-    end;
-
-    rmem_map_entry_dispose(map, prev);
-   end;
-  end;
-
-  if (prev=@map^.header) then Break;
-  prev:=prev^.prev;
- end;
-
- next:=entry^.next;
-
- while entry_cross(next,entry^.start,entry^.__end) do
- begin
-  if (next<>@map^.header) then
-  begin
-   if (entry^.__end=next^.start) and
-      entry_vaddr(entry,next^.vaddr) then
-   begin
-    rmem_map_entry_unlink(map, next);
-    entry^.__end:=next^.__end;
-    //change
-    rmem_map_entry_resize_free(map, entry);
-
-    rmem_map_entry_dispose(map, next);
-   end;
-  end;
-
-  if (next=@map^.header) then Break;
-  next:=next^.next;
- end;
-end;
-
 procedure _rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:DWORD);
 var
  new_entry:p_rmem_map_entry;
 begin
  RMEM_MAP_ASSERT_LOCKED(map);
-
- rmem_map_simplify_entry(map, entry);
 
  new_entry:=rmem_map_entry_create(map);
  new_entry^:=entry^;
@@ -664,18 +613,76 @@ begin
 end;
 
 procedure rmem_map_entry_delete(map:p_rmem_map;entry:p_rmem_map_entry);
-var
- size:DWORD;
 begin
  rmem_map_entry_unlink(map, entry);
- size:=entry^.__end - entry^.start;
- map^.size:=map^.size-size;
 
  entry^.next:=curkthread^.td_rmap_def_user;
  curkthread^.td_rmap_def_user:=entry;
 end;
 
-function rmem_map_delete(map:p_rmem_map;start:DWORD;__end:DWORD):Integer;
+function  rmem_map_delete(map  :p_rmem_map;
+                          vaddr:DWORD;
+                          start:DWORD;
+                          __end:DWORD):Integer;
+var
+ entry      :p_rmem_map_entry;
+ first_entry:p_rmem_map_entry;
+ next       :p_rmem_map_entry;
+ vaend      :DWORD;
+begin
+ RMEM_MAP_ASSERT_LOCKED(map);
+
+ if (start=__end) then
+ begin
+  Exit(0);
+ end;
+
+ vaend:=vaddr+(__end-start);
+
+ {
+  * Find the start of the region, and clip it
+  }
+ if (not rmem_map_lookup_entry(map,vaddr,start,@first_entry)) then
+ begin
+  entry:=first_entry^.next;
+ end else
+ begin
+  entry:=first_entry;
+
+  if (vaend>entry^.vaddr) and (vaddr<entry^.vaddr+(entry^.__end-entry^.start)) then
+  begin
+   rmem_map_clip_start(map, entry, start);
+  end;
+ end;
+
+ {
+  * Step through all entries in this region
+  }
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  if (vaend>entry^.vaddr) and (vaddr<entry^.vaddr+(entry^.__end-entry^.start)) then
+  begin
+   rmem_map_clip_end(map, entry, __end);
+
+   next:=entry^.next;
+
+   //pmap_remove(map^.pmap,entry^.start,entry^.__end,entry^.protection);
+
+   rmem_map_entry_delete(map, entry);
+  end else
+  begin
+   next:=entry^.next;
+  end;
+
+  entry:=next;
+ end;
+ Result:=(0);
+end;
+
+function  rmem_map_delete_any(map  :p_rmem_map;
+                              start:DWORD;
+                              __end:DWORD):Integer;
 var
  entry      :p_rmem_map_entry;
  first_entry:p_rmem_map_entry;
@@ -691,7 +698,7 @@ begin
  {
   * Find the start of the region, and clip it
   }
- if (not rmem_map_lookup_entry(map, start, @first_entry)) then
+ if (not rmem_map_lookup_entry(map,0,start,@first_entry)) then
  begin
   entry:=first_entry^.next;
  end else
@@ -710,21 +717,14 @@ begin
 
   next:=entry^.next;
 
-  //rmem_rmap_remove(map,entry^.start,entry^.__end);
+  //_remove(*,entry^.start,entry^.__end);
 
-  {
-   * Delete the entry only after removing all pmap
-   * entries pointing to its pages.  (Otherwise, its
-   * page frames may be reallocated, and any modify bits
-   * will be set in the wrong object!)
-   }
   rmem_map_entry_delete(map, entry);
+
   entry:=next;
  end;
  Result:=(0);
 end;
-
-
 
 
 end.

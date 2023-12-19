@@ -37,6 +37,8 @@ var
  IO:IO_COUNTERS;
  VM:VM_COUNTERS;
  R:DWORD;
+
+ vms:p_vmspace;
 begin
  Result:=0;
 
@@ -52,9 +54,11 @@ begin
      rup^.ru_nvcsw   :=p_proc.p_nvcsw;
      rup^.ru_nivcsw  :=p_proc.p_nivcsw;
 
-     rup^.ru_ixrss   :=pgtok(g_vmspace.vm_tsize);
-     rup^.ru_idrss   :=pgtok(g_vmspace.vm_dsize);
-     rup^.ru_isrss   :=pgtok(g_vmspace.vm_ssize);
+     vms:=p_proc.p_vmspace;
+
+     rup^.ru_ixrss   :=pgtok(vms^.vm_tsize);
+     rup^.ru_idrss   :=pgtok(vms^.vm_dsize);
+     rup^.ru_isrss   :=pgtok(vms^.vm_ssize);
 
      IO:=Default(IO_COUNTERS);
      R:=NtQueryInformationProcess(NtCurrentProcess,ProcessIoCounters,@IO,SizeOf(IO),nil);

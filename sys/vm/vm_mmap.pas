@@ -509,6 +509,7 @@ label
  _done;
 var
  td:p_kthread;
+ map:vm_map_t;
  fp:p_file;
  vp:p_vnode;
  addr:vm_offset_t;
@@ -522,6 +523,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(Pointer(-1));
 
+ map:=p_proc.p_vmspace;
  addr:=vm_offset_t(vaddr);
  size:=vlen;
  prot:=prot and VM_PROT_ALL;
@@ -590,8 +592,8 @@ begin
   end;
 
   //Address range must be all in user VM space.
-  if (addr < vm_map_min(@g_vmspace.vm_map)) or
-     (addr + size > vm_map_max(@g_vmspace.vm_map)) then
+  if (addr < vm_map_min(map)) or
+     (addr + size > vm_map_max(map)) then
   begin
    Exit(Pointer(EINVAL));
   end;
@@ -760,7 +762,7 @@ begin
 _map:
  td^.td_fpop:=fp;
  maxprot:=maxprot and cap_maxprot;
- Result:=Pointer(vm_mmap2(@g_vmspace.vm_map,@addr,size,prot,maxprot,flags,handle_type,handle,pos));
+ Result:=Pointer(vm_mmap2(map,@addr,size,prot,maxprot,flags,handle_type,handle,pos));
  td^.td_fpop:=nil;
 
  td^.td_retval[0]:=(addr+pageoff);
@@ -774,6 +776,7 @@ end;
 
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
 var
+ map:vm_map_t;
  size,pageoff:vm_size_t;
 begin
  size:=len;
@@ -792,19 +795,19 @@ begin
   Exit(EINVAL);
  end;
 
+ map:=p_proc.p_vmspace;
+
  {
   * Check for illegal addresses.  Watch out for address wrap...
   }
- if (qword(addr) < vm_map_min(@g_vmspace.vm_map)) or (qword(addr) + size > vm_map_max(@g_vmspace.vm_map)) then
+ if (qword(addr) < vm_map_min(map)) or (qword(addr) + size > vm_map_max(map)) then
  begin
   Exit(EINVAL);
  end;
 
- vm_map_lock  (@g_vmspace.vm_map);
- vm_map_delete(@g_vmspace.vm_map, qword(addr), qword(addr) + size);
- vm_map_unlock(@g_vmspace.vm_map);
+ vm_map_remove(map, qword(addr), qword(addr) + size);
 
- // vm_map_delete returns nothing but KERN_SUCCESS anyway
+ // vm_map_remove returns nothing but KERN_SUCCESS anyway
  Exit(0);
 end;
 
@@ -825,7 +828,7 @@ begin
   Exit(EINVAL);
  end;
 
- Result:=vm_map_protect(@g_vmspace.vm_map, QWORD(addr), QWORD(addr) + size, prot, FALSE);
+ Result:=vm_map_protect(p_proc.p_vmspace, QWORD(addr), QWORD(addr) + size, prot, FALSE);
 
  case Result of
   KERN_SUCCESS           :Exit(0);
@@ -838,6 +841,7 @@ end;
 
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 var
+ map:vm_map_t;
  start,__end:vm_offset_t;
 begin
  {
@@ -856,12 +860,15 @@ begin
  begin
   Exit(EINVAL);
  end;
+
+ map:=p_proc.p_vmspace;
+
  {
   * Check for illegal addresses.  Watch out for address wrap... Note
   * that VM_*_ADDRESS are not constants due to casts (argh).
   }
- if (vm_offset_t(addr) < vm_map_min(@g_vmspace.vm_map)) or
-    (vm_offset_t(addr) + len > vm_map_max(@g_vmspace.vm_map)) then
+ if (vm_offset_t(addr) < vm_map_min(map)) or
+    (vm_offset_t(addr) + len > vm_map_max(map)) then
  begin
   Exit(EINVAL);
  end;
@@ -878,7 +885,7 @@ begin
  start:=trunc_page(vm_offset_t(addr));
  __end:=round_page(vm_offset_t(addr) + len);
 
- if (vm_map_madvise(@g_vmspace.vm_map, start, __end, behav))<>0 then
+ if (vm_map_madvise(map, start, __end, behav))<>0 then
  begin
   Exit(EINVAL);
  end;
@@ -888,11 +895,14 @@ end;
 
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 var
+ map:vm_map_t;
  start,__end:vm_offset_t;
  _name:array[0..31] of Char;
 begin
- if (vm_offset_t(addr) < vm_map_min(@g_vmspace.vm_map)) or
-    (vm_offset_t(addr) + len > vm_map_max(@g_vmspace.vm_map)) then
+ map:=p_proc.p_vmspace;
+
+ if (vm_offset_t(addr) < vm_map_min(map)) or
+    (vm_offset_t(addr) + len > vm_map_max(map)) then
  begin
   Exit(EINVAL);
  end;
@@ -908,7 +918,7 @@ begin
  start:=trunc_page(vm_offset_t(addr));
  __end:=round_page(vm_offset_t(addr) + len);
 
- vm_map_set_name(@g_vmspace.vm_map,start,__end,@_name);
+ vm_map_set_name(map,start,__end,@_name);
 end;
 
 function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
@@ -921,7 +931,7 @@ var
 begin
  Result:=EINVAL;
  _addr:=trunc_page(vm_offset_t(addr));
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
  __end:=vm_map_max(map);
  if (_addr<__end) or (_addr=__end) then
  begin

@@ -23,6 +23,7 @@ uses
  sysutils,
  vm_pmap,
  vm_map,
+ kern_proc,
  kern_jit_ops,
  kern_jit_ops_sse,
  kern_jit_ops_avx,
@@ -1012,12 +1013,16 @@ begin
 end;
 
 procedure pick(var ctx:t_jit_context2); [public, alias:'kern_jit_pick'];
+var
+ map:vm_map_t;
 begin
- vm_map_lock  (@g_vmspace.vm_map);
+ map:=p_proc.p_vmspace;
+
+ vm_map_lock(map);
 
  pick_locked(ctx);
 
- vm_map_unlock(@g_vmspace.vm_map);
+ vm_map_unlock(map);
 end;
 
 var

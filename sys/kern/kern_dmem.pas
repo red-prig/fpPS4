@@ -124,6 +124,8 @@ begin
 end;
 
 procedure init_dmem_map;
+var
+ vmap:vm_map_t;
 begin
  dobj:=vm_object_allocate(OBJT_PHYSHM,OFF_TO_IDX(SCE_KERNEL_MAIN_DMEM_SIZE));
  dobj^.flags:=dobj^.flags or OBJ_DMEM_EXT;
@@ -131,7 +133,12 @@ begin
  dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
  rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
 
- g_vmspace.vm_map.rmap:=@rmap;
+ vmap:=p_proc.p_vmspace;
+
+ vmap^.rmap:=@rmap;
+
+ dmem.vmap:=@vmap;
+ dmem.rmap:=@rmap;
 end;
 
 const
@@ -230,7 +237,7 @@ begin
        (sdk_version_big_20()=false) ) then
   begin
    rmem_map_lock(@rmap);
-    err:=Integer(rmem_map_lookup_entry(@rmap,OFF_TO_IDX(phaddr),@rentry));
+    err:=Integer(rmem_map_lookup_entry_any(@rmap,OFF_TO_IDX(phaddr),@rentry));
    rmem_map_unlock(@rmap);
 
    //
@@ -244,14 +251,14 @@ begin
 
     if (err=0) then
     begin
-     err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow);
+     err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow, ((p_proc.p_dmem_aliasing and 3)<>0));
 
      if (err=0) then
      begin
       addr^:=vaddr;
      end else
      begin
-      err:=vm_mmap_to_errno(err);
+      Result:=vm_mmap_to_errno(err);
      end;
     end;
 
@@ -284,7 +291,6 @@ begin
   //find free space
 
   err:=vm_map_findspace(map,vaddr,length,@faddr);
-  err:=vm_mmap_to_errno(err);
 
   if (err=0) then
   begin
@@ -307,7 +313,6 @@ begin
     end;
 
     err:=vm_map_findspace(map,next^.__end,length,@faddr);
-    err:=vm_mmap_to_errno(err);
    until (err<>0);
   end;
 
@@ -325,6 +330,7 @@ function sys_mmap_dmem(vaddr :Pointer;
                        phaddr:QWORD):Pointer;
 var
  td:p_kthread;
+ map:vm_map_t;
  addr:vm_offset_t;
  align:QWORD;
 begin
@@ -369,6 +375,8 @@ begin
   //Sanitizer
  end;
 
+ map:=p_proc.p_vmspace;
+
  if ((flags and MAP_FIXED)=0) then
  begin
   if (addr=0) then
@@ -394,8 +402,8 @@ begin
  end else
  begin
   //Address range must be all in user VM space.
-  if (addr < vm_map_min(@g_vmspace.vm_map)) or
-     (addr + length > vm_map_max(@g_vmspace.vm_map)) then
+  if (addr < vm_map_min(map)) or
+     (addr + length > vm_map_max(map)) then
   begin
    Exit(Pointer(EINVAL));
   end;
@@ -408,7 +416,7 @@ begin
   align:=0;
  end;
 
- Result:=Pointer(kern_mmap_dmem(@g_vmspace.vm_map,
+ Result:=Pointer(kern_mmap_dmem(map,
                                 @addr,
                                 phaddr,
                                 addr,
@@ -616,7 +624,7 @@ begin
 
  QWORD(addr):=QWORD(addr) and $ffffffffffffc000;
 
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
  if (vm_map_max(map) < QWORD(addr)) then
  begin

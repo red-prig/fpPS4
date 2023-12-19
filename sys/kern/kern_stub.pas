@@ -49,7 +49,8 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- sys_vm_object;
+ sys_vm_object,
+ kern_proc;
 
 var
  {$IFDEF chunk_alloc}
@@ -103,7 +104,7 @@ begin
 
  size:=AlignUp(size+SizeOf(stub_chunk),PAGE_SIZE);
 
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
  if (start=0) then
  begin
@@ -141,11 +142,9 @@ procedure free_segment(chunk:p_stub_chunk);
 var
  map:vm_map_t;
 begin
- map:=@g_vmspace.vm_map;
+ map:=p_proc.p_vmspace;
 
- vm_map_lock  (map);
- vm_map_delete(map, qword(chunk), qword(chunk) + chunk^.curr_size);
- vm_map_unlock(map);
+ vm_map_remove(map, qword(chunk), qword(chunk) + chunk^.curr_size);
 end;
 
 procedure fix_next_size(chunk:p_stub_chunk);
