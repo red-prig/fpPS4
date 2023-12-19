@@ -83,6 +83,7 @@ const
  FC`0000`0000 System Reserved
  FF`FFFF`FFFF
 
+                               0x0 00400000  (win stack)
                                0x1 00000000  (win image)
                             0x7FF8 xxxxxxxx  (win  dll)
  -- System Managed

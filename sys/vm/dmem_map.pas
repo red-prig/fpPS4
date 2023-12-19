@@ -566,8 +566,6 @@ begin
    prev_entry^.__end:=__end;
    //change size
 
-   //dmem_rmap_enter(map,start,__end);
-
    dmem_map_entry_resize_free(map, prev_entry);
    dmem_map_simplify_entry(map, prev_entry);
    Exit(0);
@@ -1157,8 +1155,6 @@ begin
   dmem_map_clip_end(map, entry, __end);
 
   next:=entry^.next;
-
-  //dmem_rmap_remove(map,entry^.start,entry^.__end);
 
   {
    * Delete the entry only after removing all pmap

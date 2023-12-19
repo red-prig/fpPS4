@@ -43,6 +43,7 @@ begin
  if (counter<maxlen) then
  begin
   _to[counter]:=#0;
+  Inc(counter);
  end;
  if (lencopied<>nil) then
  begin

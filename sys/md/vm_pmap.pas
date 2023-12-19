@@ -323,10 +323,10 @@ const
   MD_PROT_R   ,//__R
   MD_PROT_W   ,//_W_
   MD_PROT_RW  ,//_WR
-  MD_PROT_X   ,//X__
-  MD_PROT_RX  ,//X_R
-  MD_PROT_WX  ,//XW_
-  MD_PROT_RWX  //XWR
+  MD_PROT_R   ,//X__
+  MD_PROT_R   ,//X_R
+  MD_PROT_RW  ,//XW_
+  MD_PROT_RW   //XWR
  );
 
 {
