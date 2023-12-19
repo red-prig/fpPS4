@@ -137,7 +137,7 @@ begin
 
  vmap^.rmap:=@rmap;
 
- dmem.vmap:=@vmap;
+ dmem.vmap:=vmap;
  dmem.rmap:=@rmap;
 end;
 

@@ -33,9 +33,7 @@ type
   property max_offset:DWORD read header.__end write header.__end;
  end;
 
- t_rmem_cb_deferred=procedure(entry:p_rmem_map_entry;data:Pointer);
-
-procedure rmem_map_process_deferred(cb:t_rmem_cb_deferred;data:Pointer);
+procedure rmem_map_process_deferred;
 
 procedure rmem_map_entry_deallocate(entry:p_rmem_map_entry);
 
@@ -143,7 +141,7 @@ begin
  Result:=mtx_trylock(map^.lock);
 end;
 
-procedure rmem_map_process_deferred(cb:t_rmem_cb_deferred;data:Pointer);
+procedure rmem_map_process_deferred;
 var
  td:p_kthread;
  entry,next:p_rmem_map_entry;
@@ -155,10 +153,6 @@ begin
  while (entry<>nil) do
  begin
   next:=entry^.next;
-  if (cb<>nil) then
-  begin
-   cb(entry,data);
-  end;
   rmem_map_entry_deallocate(entry);
   entry:=next;
  end;
@@ -167,7 +161,7 @@ end;
 procedure rmem_map_unlock(map:p_rmem_map);
 begin
  mtx_unlock(map^.lock);
- rmem_map_process_deferred(nil,nil);
+ rmem_map_process_deferred;
 end;
 
 function rmem_map_locked(map:p_rmem_map):Boolean; inline;

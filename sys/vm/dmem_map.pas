@@ -814,16 +814,13 @@ begin
 
 end;
 
-procedure _unmap(entry:p_rmem_map_entry;data:Pointer);
-begin
- vm_map_delete(data, IDX_TO_OFF(entry^.vaddr), IDX_TO_OFF(entry^.vaddr+(entry^.__end-entry^.start)), False);
-end;
-
 Function dmem_map_release(map:p_dmem_map;start,len:QWORD;check:Boolean):Integer;
 var
  offset:QWORD;
  rmap:p_rmem_map;
  vmap:vm_map_t;
+ td:p_kthread;
+ entry,next:p_rmem_map_entry;
 begin
  if (((len or start) and QWORD($8000000000003fff))<>0) then
  begin
@@ -866,19 +863,37 @@ begin
  begin
   rmap:=map^.rmap;
 
-  rmem_map_process_deferred(nil,nil); //flush
+  rmem_map_process_deferred; //flush
 
   rmem_map_lock(rmap);
    Result:=rmem_map_delete_any(rmap,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
-  rmem_map_unlock(rmap);
+  mtx_unlock(rmap^.lock);
 
   if (Result=0) then
   begin
-   vmap:=map^.vmap;
+   td:=curkthread;
+   if (td<>nil) then
+   if (td^.td_rmap_def_user<>nil) then
+   begin
+    vmap:=map^.vmap;
 
-   vm_map_lock(vmap);
-    rmem_map_process_deferred(@_unmap,vmap);
-   vm_map_unlock(vmap);
+    entry:=td^.td_rmap_def_user;
+    td^.td_rmap_def_user:=nil;
+
+    vm_map_lock(vmap);
+
+     while (entry<>nil) do
+     begin
+      next:=entry^.next;
+
+      vm_map_delete(vmap, IDX_TO_OFF(entry^.vaddr), IDX_TO_OFF(entry^.vaddr+(entry^.__end-entry^.start)), False);
+
+      rmem_map_entry_deallocate(entry);
+      entry:=next;
+     end;
+
+    vm_map_unlock(vmap);
+   end;
   end;
  end;
 

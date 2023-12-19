@@ -868,6 +868,7 @@ function vm_object_rmap_release(map   :vm_map_t;
                                 start :vm_offset_t;
                                 __end :vm_offset_t;
                                 offset:vm_ooffset_t;
+                                p_free:Boolean;
                                 p_rem :PBoolean):Integer;
 var
  rmap:p_rmem_map;
@@ -879,7 +880,13 @@ begin
 
  rmem_map_lock(rmap);
 
-  Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+  if p_free then
+  begin
+   Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+  end else
+  begin
+   Result:=0;
+  end;
 
   if (Result=0) then
   begin
@@ -2368,6 +2375,7 @@ begin
                                    entry^.start,
                                    entry^.__end,
                                    entry^.offset,
+                                   rmap_free,
                                    @p_rem);
    end;
   end;
