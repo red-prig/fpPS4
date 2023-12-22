@@ -303,13 +303,34 @@ begin
  Exit(error);
 end;
 
+function IDX_TO_OFF(x:DWORD):QWORD; inline;
+begin
+ Result:=QWORD(x) shl PAGE_SHIFT;
+end;
+
 function vm_mmap_dmem(handle      :Pointer;
                       objsize     :vm_size_t;
-                      foff        :p_vm_ooffset_t;
+                      foff        :vm_ooffset_t;
                       objp        :p_vm_object_t):Integer;
+var
+ obj:vm_object_t;
+ len:vm_size_t;
 begin
- //todo
- Exit(EOPNOTSUPP);
+ obj:=handle; //t_physhmfd *
+
+ len:=IDX_TO_OFF(obj^.size);
+
+ if (foff<0) or
+    (len<foff) or
+    ((len-foff)<objsize) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ vm_object_reference(obj);
+
+ objp^:=obj;
+ Result:=0;
 end;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
@@ -394,7 +415,7 @@ begin
     if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) or
        ((maxprot and VM_PROT_WRITE)<>0) then
     begin
-     error:=vm_mmap_dmem(handle,size,@foff,@obj);
+     error:=vm_mmap_dmem(handle,size,foff,@obj);
     end;
    end;
 

@@ -128,7 +128,7 @@ var
  vmap:vm_map_t;
 begin
  dobj:=vm_object_allocate(OBJT_PHYSHM,OFF_TO_IDX(SCE_KERNEL_MAIN_DMEM_SIZE));
- dobj^.flags:=dobj^.flags or OBJ_DMEM_EXT;
+ dobj^.flags:=dobj^.flags or OBJ_DMEM_EXT or OBJ_NOSPLIT;
 
  dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
  rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
@@ -242,7 +242,7 @@ begin
 
    //
    if (not boolean(err)) or //not found
-      (is_sce_prog_attr_080000(@g_authinfo)) or
+      (is_sce_prog_attr_20_800000(@g_authinfo)) or
       ((p_proc.p_dmem_aliasing and 1)<>0) then //aliasing
    begin
     _rmap_insert:
@@ -465,7 +465,7 @@ end;
 
 function get_obj_mtype(obj:vm_map_object):Byte;
 begin
- Result:=QWORD(obj^.handle);
+ Result:=QWORD(obj^.un_pager.vnp.vnp_size);
 end;
 
 procedure dmem_vmo_get_type(map:vm_map_t;

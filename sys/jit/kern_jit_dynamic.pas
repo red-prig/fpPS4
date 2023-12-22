@@ -154,7 +154,7 @@ uses
 
 //
 
-procedure pick(var ctx:t_jit_context2); external name 'kern_jit_pick';
+procedure pick(var ctx:t_jit_context2;preload:Pointer); external name 'kern_jit_pick';
 
 //
 
@@ -214,7 +214,7 @@ begin
 
   ctx.add_forward_point(fpCall,addr);
 
-  pick(ctx);
+  pick(ctx,addr);
  end else
  begin
   node^.dec_ref;

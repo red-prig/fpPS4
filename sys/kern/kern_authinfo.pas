@@ -17,7 +17,7 @@ type
  p_authinfo=^t_authinfo;
  t_authinfo=packed record
   app_type :QWORD;
-  app_caps :array[0..3] of QWORD; //62 bit IsSystemProcess;61 bit IsGameProcess1;60 bit IsGameProcess2;
+  app_caps :array[0..3] of QWORD; //62 bit IsSystem;61 bit IsGame;60 bit IsNongame;
   app_attrs:array[0..3] of QWORD;
   unknow   :array[0..7] of QWORD;
  end;
@@ -127,11 +127,17 @@ var
  g_authinfo:t_authinfo;
  g_appinfo :t_appinfo;
 
+function sceSblACMgrHasMmapSelfCapability(info:p_authinfo):Boolean;
 function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
 function sceSblACMgrIsVideoplayerProcess(info:p_authinfo):Boolean;
 function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
+function sceSblACMgrIsNongameUcred(info:p_authinfo):Boolean;
+function sceSblACMgrIsSystemUcred(info:p_authinfo):Boolean;
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
-function is_sce_prog_attr_080000(info:p_authinfo):Boolean;
+function sceSblACMgrIsAllowedToMmapSelf(icurr,ifile:p_authinfo):Boolean;
+function is_sce_prog_attr_20_800000(info:p_authinfo):Boolean;
+function is_sce_prog_attr_40_800000(info:p_authinfo):Boolean;
+function is_sce_prog_attr_40_400000(info:p_authinfo):Boolean;
 
 function sys_get_proc_type_info(dst:Pointer):Integer;
 function sys_get_authinfo(pid:Integer;info:Pointer):Integer;
@@ -143,6 +149,11 @@ uses
  systm,
  kern_proc,
  md_proc;
+
+function sceSblACMgrHasMmapSelfCapability(info:p_authinfo):Boolean;
+begin
+ Result:=(info^.app_caps[1] and $400000000000000)<>0;
+end;
 
 function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
 var
@@ -163,7 +174,17 @@ end;
 
 function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
 begin
- Result:=((info^.app_caps[1] shr $39) and 1)<>0;
+ Result:=(info^.app_caps[1] and $200000000000000)<>0;
+end;
+
+function sceSblACMgrIsNongameUcred(info:p_authinfo):Boolean;
+begin
+ Result:=(info^.app_caps[0] and $1000000000000000)<>0;
+end;
+
+function sceSblACMgrIsSystemUcred(info:p_authinfo):Boolean;
+begin
+ Result:=(info^.app_caps[0] and $4000000000000000)<>0;
 end;
 
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
@@ -183,11 +204,41 @@ begin
  Exit(false);
 end;
 
-function is_sce_prog_attr_080000(info:p_authinfo):Boolean;
+function sceSblACMgrIsAllowedToMmapSelf(icurr,ifile:p_authinfo):Boolean;
+begin
+ Result:=True;
+ if ((icurr^.app_caps[1] and $400000000000000)=0) or
+    ((ifile^.app_attrs[0] and $8000000)=0) then
+ begin
+  Result:=False;
+ end;
+end;
+
+function is_sce_prog_attr_20_800000(info:p_authinfo):Boolean;
 begin
  Result:=True;
  if ((info^.app_caps[1] and $2000000000000000)=0) or
     ((info^.app_attrs[0] and $800000)=0) then
+ begin
+  Result:=False;
+ end;
+end;
+
+function is_sce_prog_attr_40_800000(info:p_authinfo):Boolean;
+begin
+ Result:=True;
+ if ((info^.app_caps[1] and $4000000000000000)=0) or
+    ((info^.app_attrs[0] and $800000)=0) then
+ begin
+  Result:=False;
+ end;
+end;
+
+function is_sce_prog_attr_40_400000(info:p_authinfo):Boolean;
+begin
+ Result:=True;
+ if ((info^.app_caps[1] and $4000000000000000)=0) or
+    ((info^.app_attrs[0] and $400000)=0) then
  begin
   Result:=False;
  end;

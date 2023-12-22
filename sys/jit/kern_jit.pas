@@ -14,7 +14,7 @@ uses
 var
  print_asm:Boolean=False;
 
-procedure pick(var ctx:t_jit_context2);
+procedure pick(var ctx:t_jit_context2;preload:Pointer);
 procedure pick_locked(var ctx:t_jit_context2);
 
 implementation
@@ -1012,15 +1012,27 @@ begin
  proc.Free;
 end;
 
-procedure pick(var ctx:t_jit_context2); [public, alias:'kern_jit_pick'];
+procedure pick(var ctx:t_jit_context2;preload:Pointer); [public, alias:'kern_jit_pick'];
 var
  map:vm_map_t;
+ node:p_jit_entry_point;
 begin
  map:=p_proc.p_vmspace;
 
  vm_map_lock(map);
 
- pick_locked(ctx);
+  if (preload<>nil) then
+  begin
+   node:=preload_entry(preload);
+   if (node<>nil) then
+   begin
+    node^.dec_ref;
+    vm_map_unlock(map);
+    Exit;
+   end;
+  end;
+
+  pick_locked(ctx);
 
  vm_map_unlock(map);
 end;

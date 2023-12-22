@@ -2796,7 +2796,7 @@ begin
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
 
- kern_jit.pick(ctx);
+ kern_jit.pick(ctx,nil);
 end;
 
 function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;

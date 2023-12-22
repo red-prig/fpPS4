@@ -1400,8 +1400,7 @@ begin
   Exit(error);
  end;
 
- if (fp=nil) then
-  Exit(error);
+ if (fp=nil) then Exit(error);
 
  if (fp^.f_ops=@badfileops) then
  begin
