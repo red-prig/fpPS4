@@ -445,7 +445,6 @@ begin
   m_nExpCur:=m_nExpCur*2;
  end;
  time:=-m_nExpCur;
- time:=80;
  NtDelayExecution(True,@time);
 end;
 
@@ -459,8 +458,6 @@ Var
  time:Int64;
 begin
  time:=Int64(NT_INFINITE);
- time:=80;
- time:=-40;
  NtDelayExecution(True,@time);
 end;
 
