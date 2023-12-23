@@ -146,6 +146,14 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetAccountId(onlineId:pSceNpOnlineId;pAccountId:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (onlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ if (pAccountId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pAccountId^:=1111;
+ Result:=0;
+end;
+
 function ps4_sceNpGetAccountIdA(userId:Integer;pAccountId:PQWORD):Integer; SysV_ABI_CDecl;
 begin
  if (pAccountId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -489,6 +497,7 @@ begin
 
  lib:=Result._add_lib('libSceNpManager');
  lib^.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
+ lib^.set_proc($6BC47DFFBE6EE223,@ps4_sceNpGetAccountId);
  lib^.set_proc($ADB9276948E9A96A,@ps4_sceNpGetAccountIdA);
  lib^.set_proc($1A1CFD8960D4B42E,@ps4_sceNpGetAccountCountry);
  lib^.set_proc($253FADD346B74F10,@ps4_sceNpGetAccountCountryA);
