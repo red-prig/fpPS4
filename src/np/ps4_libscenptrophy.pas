@@ -148,6 +148,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpTrophyDestroyContext(context:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpTrophyDestroyContext');
+ Result:=0;
+end;
+
 function ps4_sceNpTrophyDestroyHandle(handle:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpTrophyDestroyHandle:',handle);
@@ -327,6 +333,7 @@ begin
  lib:=Result._add_lib('libSceNpTrophy');
  lib^.set_proc($5DB9236E86D99426,@ps4_sceNpTrophyCreateContext);
  lib^.set_proc($ABB53AB440107FB7,@ps4_sceNpTrophyCreateHandle);
+ lib^.set_proc($1355ABC1DD3B2EBF,@ps4_sceNpTrophyDestroyContext);
  lib^.set_proc($18D705E2889D6346,@ps4_sceNpTrophyDestroyHandle);
  lib^.set_proc($6939C7B3B5BFF549,@ps4_sceNpTrophyAbortHandle);
  lib^.set_proc($4C9080C6DA3D4845,@ps4_sceNpTrophyRegisterContext);
