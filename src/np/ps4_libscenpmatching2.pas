@@ -43,18 +43,6 @@ type
                                 errorCode:Integer;
                                 arg:Pointer); SysV_ABI_CDecl;
 
- type
- pSceNpMatching2TerminateParameter=^SceNpMatching2TerminateParameter;
- SceNpMatching2TerminateParameter=packed record
-  poolSize:QWORD;         // 0 = default
-  cpuAffinityMask:QWORD;  // 0 = default SceKernelCpumask
-  threadPriority:Integer; // 0 = default
-  padding:Integer;
-  threadStackSize:QWORD;  // 0 = default
-  size:QWORD;             // size of this structure
-  sslPoolSize:QWORD;      // 0 = default
- end;
-
 function ps4_sceNpMatching2Initialize(param:pSceNpMatching2InitializeParameter):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -72,7 +60,7 @@ begin
  Result:=SCE_NP_MATCHING2_ERROR_NOT_INITIALIZED;
 end;
 
-function ps4_sceNpMatching2Terminate(param:pSceNpMatching2TerminateParameter):Integer; SysV_ABI_CDecl;
+function ps4_sceNpMatching2Terminate():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;

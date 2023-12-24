@@ -148,14 +148,9 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpTrophyDestroyContext(context     :PInteger;
-                                      userId      :Integer;
-                                      serviceLabel:DWORD;
-                                      options     :QWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTrophyDestroyContext(context:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpTrophyDestroyContext');
- if (context=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
- context^:=1086;
  Result:=0;
 end;
 

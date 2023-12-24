@@ -122,7 +122,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceGameLiveStreamingSetMaxBitrate(isSetMaxBitrate:Boolean):Integer; SysV_ABI_CDecl;
+function ps4_sceGameLiveStreamingSetMaxBitrate(isSetMaxBitrate:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGameLiveStreamingSetMaxBitrate,isSetMaxBitrate=',isSetMaxBitrate);
  Result:=0;
