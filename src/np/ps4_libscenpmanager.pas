@@ -161,6 +161,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetAccountLanguageA(userId:Integer;pAccountLanguage:PQWORD):Integer; SysV_ABI_CDecl;
+begin
+ if (pAccountLanguage=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pAccountLanguage^:=Default(pAccountLanguage);
+ Result:=0;
+end;
+
 const
  GEOCLASS_NATION = 16;
 
@@ -533,6 +540,8 @@ begin
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
+ lib^.set_proc($4CF31B808C6FA20D,@ps4_sceNpGetAccountLanguageA);
+ 
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
