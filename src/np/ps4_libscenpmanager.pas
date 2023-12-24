@@ -161,12 +161,12 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGetAccountLanguageA(userId:Integer;pAccountLanguage:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceNpGetAccountLanguageA(reqId,userId:Integer;pLangCode:PQWord):Integer; SysV_ABI_CDecl;
 begin
- if (pAccountLanguage=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
- pAccountLanguage^:=Default(pAccountLanguage);
- Result:=0;
-end;
+  if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+  pLangCode^:=QWord(PAnsiChar('en'));
+  Result:=0;
+end;   
 
 const
  GEOCLASS_NATION = 16;
