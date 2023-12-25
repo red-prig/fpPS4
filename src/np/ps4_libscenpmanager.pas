@@ -8,11 +8,13 @@ uses
   windows,
   ps4_program,
   np_error,
+  ps4_libSceNpInGameMessage,
   ps4_libSceNpCommon;
+
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
- 
+
  SCE_NP_LANGUAGE_CODE_MAX_LEN=5;
 
  SCE_NP_TITLE_ID_LEN=12;
@@ -174,7 +176,12 @@ begin
  if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  pLangCode^.code:='en';
  Result:=0;
-end;   
+end;
+
+function ps4_SceNpInGameMessageInitialize(poolSize:QWORD;pOption:Pointer):Integer; SysV_ABI_CDecl;
+begin
+  Result:=0;
+end;
 
 const
  GEOCLASS_NATION = 16;
@@ -549,7 +556,7 @@ begin
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
  lib^.set_proc($4CF31B808C6FA20D,@ps4_sceNpGetAccountLanguageA);
- 
+ lib^.set_proc($1858555294666C71,@ps4_sceNpInGameMessageInitialize);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
