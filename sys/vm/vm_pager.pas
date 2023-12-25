@@ -10,10 +10,10 @@ uses
  sys_vm_object;
 
 function  vm_pager_allocate(otype:objtype_t;
-                           handle:Pointer;
-                           size:vm_ooffset_t;
-                           prot:vm_prot_t;
-                           off:vm_ooffset_t):vm_object_t;
+                            handle:Pointer;
+                            size:vm_ooffset_t;
+                            prot:vm_prot_t;
+                            off:vm_ooffset_t):vm_object_t;
 
 procedure vm_pager_deallocate(obj:vm_object_t);
 

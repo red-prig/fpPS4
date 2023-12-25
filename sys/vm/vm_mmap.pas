@@ -92,7 +92,7 @@ begin
  if ((dsw^.d_flags and D_MMAP_ANON)<>0) then
  begin
   dev_relthread(cdev, ref);
-  maxprotp^:=VM_PROT_ALL;
+  maxprotp^:=$33;
   flagsp^:=flagsp^ or MAP_ANON;
   Exit(0);
  end;
@@ -111,20 +111,21 @@ begin
   dev_relthread(cdev, ref);
   Exit(EINVAL);
  end;
+
  {
   * Force device mappings to be shared.
   }
  flags:=flags or MAP_SHARED;
 
- {
- * First, try d_mmap_single().  If that is not implemented
- * (returns ENODEV), fall back to using the device pager.
- * Note that d_mmap_single() must return a reference to the
- * object (it needs to bump the reference count of the object
- * it returns somehow).
-  *
-  * XXX assumes VM_PROT_*=PROT_*
-  }
+ error:=dsw^.d_mmap_single2(cdev, foff, objsize, objp, prot, maxprotp, @flags);
+
+ if (error<>ENODEV) then
+ begin
+  dev_relthread(cdev, ref);
+  flagsp^:=flags;
+  Exit(error);
+ end;
+
  error:=dsw^.d_mmap_single(cdev, foff, objsize, objp, prot);
 
  dev_relthread(cdev, ref);
@@ -400,7 +401,6 @@ begin
    begin
     error:=vm_mmap_cdev(size,prot,@maxprot,@flags,handle,@foff,@obj);
    end;
-  OBJT_SELF,  //same as file
   OBJT_VNODE:
    begin
     error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@obj,@writecounted);
@@ -419,6 +419,7 @@ begin
     end;
    end;
 
+  OBJT_SELF,  //same as default
   OBJT_DEFAULT:
    begin
     if (handle=nil) then

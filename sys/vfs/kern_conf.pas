@@ -70,19 +70,20 @@ type
   __si_namebuf  :array[0..SPECNAMELEN] of AnsiChar;
  end;
 
- d_open_t       =Function (dev:p_cdev;oflags,devtype:Integer):Integer;
- d_fdopen_t     =Function (dev:p_cdev;oflags:Integer;fp:p_file):Integer;
- d_close_t      =Function (dev:p_cdev;fflag,devtype:Integer):Integer;
- d_strategy_t   =Procedure(bp:Pointer);//bio
- d_ioctl_t      =Function (dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
+ d_open_t        =Function (dev:p_cdev;oflags,devtype:Integer):Integer;
+ d_fdopen_t      =Function (dev:p_cdev;oflags:Integer;fp:p_file):Integer;
+ d_close_t       =Function (dev:p_cdev;fflag,devtype:Integer):Integer;
+ d_strategy_t    =Procedure(bp:Pointer);//bio
+ d_ioctl_t       =Function (dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 
- d_read_t       =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
- d_write_t      =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
- d_poll_t       =Function (dev:p_cdev;events:Integer):Integer;
- d_kqfilter_t   =Function (dev:p_cdev;kn:p_knote):Integer;
- d_mmap_t       =Function (dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
- d_mmap_single_t=Function (cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer):Integer;
- d_purge_t      =Procedure(dev:p_cdev);
+ d_read_t        =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
+ d_write_t       =Function (dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
+ d_poll_t        =Function (dev:p_cdev;events:Integer):Integer;
+ d_kqfilter_t    =Function (dev:p_cdev;kn:p_knote):Integer;
+ d_mmap_t        =Function (dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
+ d_mmap_single_t =Function (dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer):Integer;
+ d_mmap_single2_t=Function (dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
+ d_purge_t       =Procedure(dev:p_cdev);
 
  dumper_t=Function(
   _priv:Pointer        ;  { Private to the driver. }
@@ -133,24 +134,25 @@ type
  pp_cdevsw=^p_cdevsw;
  p_cdevsw=^t_cdevsw;
  t_cdevsw=packed record
-  d_version    :Integer;
-  d_flags      :DWORD;
-  d_name       :PChar;
-  d_open       :d_open_t;
-  d_fdopen     :d_fdopen_t;
-  d_close      :d_close_t;
-  d_read       :d_read_t;
-  d_write      :d_write_t;
-  d_ioctl      :d_ioctl_t;
-  d_poll       :d_poll_t;
-  d_mmap       :d_mmap_t;
-  d_strategy   :d_strategy_t;
-  d_dump       :dumper_t;
-  d_kqfilter   :d_kqfilter_t;
-  d_purge      :d_purge_t;
-  d_mmap_single:d_mmap_single_t;
+  d_version     :Integer;
+  d_flags       :DWORD;
+  d_name        :PChar;
+  d_open        :d_open_t;
+  d_fdopen      :d_fdopen_t;
+  d_close       :d_close_t;
+  d_read        :d_read_t;
+  d_write       :d_write_t;
+  d_ioctl       :d_ioctl_t;
+  d_poll        :d_poll_t;
+  d_mmap        :d_mmap_t;
+  d_strategy    :d_strategy_t;
+  d_dump        :dumper_t;
+  d_kqfilter    :d_kqfilter_t;
+  d_purge       :d_purge_t;
+  d_mmap_single :d_mmap_single_t;
+  d_mmap_single2:d_mmap_single2_t;
 
-  d_spare0:array[0..3] of Integer;
+  d_spare0:array[0..1] of Integer;
   d_spare1:array[0..2] of Pointer;
 
   { These fields should not be messed with by drivers }
@@ -516,22 +518,23 @@ end;
 
 const
  dead_cdevsw:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :0;
-  d_name       :'dead';
-  d_open       :d_open_t(@_enxio);
-  d_fdopen     :nil;
-  d_close      :d_close_t(@_enxio);
-  d_read       :d_read_t(@_enxio);
-  d_write      :d_write_t(@_enxio);
-  d_ioctl      :d_ioctl_t(@_enxio);
-  d_poll       :d_poll_t(@_enodev);
-  d_mmap       :d_mmap_t(@_enodev);
-  d_strategy   :@dead_strategy;
-  d_dump       :dumper_t(@_enxio);
-  d_kqfilter   :d_kqfilter_t(@_enxio);
-  d_purge      :nil;
-  d_mmap_single:d_mmap_single_t(@_enodev);
+  d_version     :D_VERSION;
+  d_flags       :0;
+  d_name        :'dead';
+  d_open        :d_open_t(@_enxio);
+  d_fdopen      :nil;
+  d_close       :d_close_t(@_enxio);
+  d_read        :d_read_t(@_enxio);
+  d_write       :d_write_t(@_enxio);
+  d_ioctl       :d_ioctl_t(@_enxio);
+  d_poll        :d_poll_t(@_enodev);
+  d_mmap        :d_mmap_t(@_enodev);
+  d_strategy    :@dead_strategy;
+  d_dump        :dumper_t(@_enxio);
+  d_kqfilter    :d_kqfilter_t(@_enxio);
+  d_purge       :nil;
+  d_mmap_single :d_mmap_single_t(@_enodev);
+  d_mmap_single2:d_mmap_single2_t(@_enodev);
  );
 
 procedure no_strategy(bp:Pointer);
@@ -733,6 +736,23 @@ begin
  Exit(retval);
 end;
 
+Function giant_mmap_single2(dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
+var
+ dsw:p_cdevsw;
+ ref,retval:Integer;
+begin
+ dsw:=dev_refthread(dev, @ref);
+ if (dsw=nil) then
+ begin
+  Exit(ENXIO);
+ end;
+ mtx_lock(VFS_Giant);
+ retval:=dsw^.d_gianttrick^.d_mmap_single2(dev, offset, size, obj, nprot, maxprotp, flagsp);
+ mtx_unlock(VFS_Giant);
+ dev_relthread(dev, ref);
+ Exit(retval);
+end;
+
 procedure notify(dev:p_cdev;ev:PChar;flags:Integer);
 const
  prefix:PChar='cdev=';
@@ -844,17 +864,18 @@ begin
  if (devsw^.d_version<>D_VERSION_03) then
  begin
   Writeln('WARNING: Device driver has wrong version');
-  devsw^.d_open       :=d_open_t(@_enxio);
-  devsw^.d_close      :=d_close_t(@_enxio);
-  devsw^.d_read       :=d_read_t(@_enxio);
-  devsw^.d_write      :=d_write_t(@_enxio);
-  devsw^.d_ioctl      :=d_ioctl_t(@_enxio);
-  devsw^.d_poll       :=d_poll_t(@_enodev);
-  devsw^.d_mmap       :=d_mmap_t(@_enodev);
-  devsw^.d_mmap_single:=d_mmap_single_t(@_enodev);
-  devsw^.d_strategy   :=@dead_strategy;
-  devsw^.d_dump       :=dumper_t(@_enxio);
-  devsw^.d_kqfilter   :=d_kqfilter_t(@_enxio);
+  devsw^.d_open        :=d_open_t(@_enxio);
+  devsw^.d_close       :=d_close_t(@_enxio);
+  devsw^.d_read        :=d_read_t(@_enxio);
+  devsw^.d_write       :=d_write_t(@_enxio);
+  devsw^.d_ioctl       :=d_ioctl_t(@_enxio);
+  devsw^.d_poll        :=d_poll_t(@_enodev);
+  devsw^.d_mmap        :=d_mmap_t(@_enodev);
+  devsw^.d_mmap_single :=d_mmap_single_t(@_enodev);
+  devsw^.d_mmap_single2:=d_mmap_single2_t(@_enodev);
+  devsw^.d_strategy    :=@dead_strategy;
+  devsw^.d_dump        :=dumper_t(@_enxio);
+  devsw^.d_kqfilter    :=d_kqfilter_t(@_enxio);
  end;
 
  if ((devsw^.d_flags and D_NEEDGIANT)<>0) then
@@ -867,17 +888,18 @@ begin
   end;
  end;
 
- FIXUP(@devsw^.d_open,        @_nullop,      @giant_open);
- FIXUP(@devsw^.d_fdopen,      nil,           @giant_fdopen);
- FIXUP(@devsw^.d_close,       @_nullop,      @giant_close);
- FIXUP(@devsw^.d_read,        @_enodev,      @giant_read);
- FIXUP(@devsw^.d_write,       @_enodev,      @giant_write);
- FIXUP(@devsw^.d_ioctl,       @_enodev,      @giant_ioctl);
- FIXUP(@devsw^.d_poll,        @no_poll,      @giant_poll);
- FIXUP(@devsw^.d_mmap,        @_enodev,      @giant_mmap);
- FIXUP(@devsw^.d_strategy,    @no_strategy,  @giant_strategy);
- FIXUP(@devsw^.d_kqfilter,    @_enodev,      @giant_kqfilter);
- FIXUP(@devsw^.d_mmap_single, @_enodev,      @giant_mmap_single);
+ FIXUP(@devsw^.d_open,         @_nullop,      @giant_open);
+ FIXUP(@devsw^.d_fdopen,       nil,           @giant_fdopen);
+ FIXUP(@devsw^.d_close,        @_nullop,      @giant_close);
+ FIXUP(@devsw^.d_read,         @_enodev,      @giant_read);
+ FIXUP(@devsw^.d_write,        @_enodev,      @giant_write);
+ FIXUP(@devsw^.d_ioctl,        @_enodev,      @giant_ioctl);
+ FIXUP(@devsw^.d_poll,         @no_poll,      @giant_poll);
+ FIXUP(@devsw^.d_mmap,         @_enodev,      @giant_mmap);
+ FIXUP(@devsw^.d_strategy,     @no_strategy,  @giant_strategy);
+ FIXUP(@devsw^.d_kqfilter,     @_enodev,      @giant_kqfilter);
+ FIXUP(@devsw^.d_mmap_single,  @_enodev,      @giant_mmap_single);
+ FIXUP(@devsw^.d_mmap_single2, @_enodev,      @giant_mmap_single2);
 
  if (devsw^.d_dump=nil) then devsw^.d_dump:=dumper_t(@_enodev);
 
@@ -886,7 +908,10 @@ begin
  devsw^.d_flags:=devsw^.d_flags or D_INIT;
 
  if (dsw2<>nil) then
+ begin
   cdevsw_free_devlocked(dsw2);
+ end;
+
  Exit(0);
 end;
 

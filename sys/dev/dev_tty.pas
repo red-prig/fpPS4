@@ -293,22 +293,23 @@ end;
 
 const
  ttydev_cdevsw:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :D_TTY;
-  d_name       :'ttydev';
-  d_open       :@ttydev_open;
-  d_fdopen     :nil;
-  d_close      :@ttydev_close;
-  d_read       :@ttydev_read;
-  d_write      :@ttydev_write;
-  d_ioctl      :@ttydev_ioctl;
-  d_poll       :@ttydev_poll;
-  d_mmap       :@ttydev_mmap;
-  d_strategy   :nil;
-  d_dump       :nil;
-  d_kqfilter   :@ttydev_kqfilter;
-  d_purge      :nil;
-  d_mmap_single:nil;
+  d_version     :D_VERSION;
+  d_flags       :D_TTY;
+  d_name        :'ttydev';
+  d_open        :@ttydev_open;
+  d_fdopen      :nil;
+  d_close       :@ttydev_close;
+  d_read        :@ttydev_read;
+  d_write       :@ttydev_write;
+  d_ioctl       :@ttydev_ioctl;
+  d_poll        :@ttydev_poll;
+  d_mmap        :@ttydev_mmap;
+  d_strategy    :nil;
+  d_dump        :nil;
+  d_kqfilter    :@ttydev_kqfilter;
+  d_purge       :nil;
+  d_mmap_single :nil;
+  d_mmap_single2:nil;
  );
 
 {
@@ -328,22 +329,23 @@ end;
 
 const
  ttyconsdev_cdevsw:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :D_TTY;
-  d_name       :'ttyconsdev';
-  d_open       :@ttyconsdev_open;
-  d_fdopen     :nil;
-  d_close      :@ttydev_close;
-  d_read       :@ttydev_read;
-  d_write      :@ttyconsdev_write;
-  d_ioctl      :@ttydev_ioctl;
-  d_poll       :@ttydev_poll;
-  d_mmap       :@ttydev_mmap;
-  d_strategy   :nil;
-  d_dump       :nil;
-  d_kqfilter   :@ttydev_kqfilter;
-  d_purge      :nil;
-  d_mmap_single:nil;
+  d_version     :D_VERSION;
+  d_flags       :D_TTY;
+  d_name        :'ttyconsdev';
+  d_open        :@ttyconsdev_open;
+  d_fdopen      :nil;
+  d_close       :@ttydev_close;
+  d_read        :@ttydev_read;
+  d_write       :@ttyconsdev_write;
+  d_ioctl       :@ttydev_ioctl;
+  d_poll        :@ttydev_poll;
+  d_mmap        :@ttydev_mmap;
+  d_strategy    :nil;
+  d_dump        :nil;
+  d_kqfilter    :@ttydev_kqfilter;
+  d_purge       :nil;
+  d_mmap_single :nil;
+  d_mmap_single2:nil;
  );
 
 {

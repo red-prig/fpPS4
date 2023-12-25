@@ -39,22 +39,23 @@ end;
 
 const
  devw_rng:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :0;
-  d_name       :'rng';
-  d_open       :nil;
-  d_fdopen     :nil;
-  d_close      :nil;
-  d_read       :nil;
-  d_write      :nil;
-  d_ioctl      :@rng_ioctl;
-  d_poll       :nil;
-  d_mmap       :nil;
-  d_strategy   :nil;
-  d_dump       :nil;
-  d_kqfilter   :nil;
-  d_purge      :nil;
-  d_mmap_single:nil;
+  d_version     :D_VERSION;
+  d_flags       :0;
+  d_name        :'rng';
+  d_open        :nil;
+  d_fdopen      :nil;
+  d_close       :nil;
+  d_read        :nil;
+  d_write       :nil;
+  d_ioctl       :@rng_ioctl;
+  d_poll        :nil;
+  d_mmap        :nil;
+  d_strategy    :nil;
+  d_dump        :nil;
+  d_kqfilter    :nil;
+  d_purge       :nil;
+  d_mmap_single :nil;
+  d_mmap_single2:nil;
  );
 
 procedure rng_init();

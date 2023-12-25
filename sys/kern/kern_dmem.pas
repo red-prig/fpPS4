@@ -63,10 +63,18 @@ type
   operation:Integer;
  end;
 
+type
+ p_dmem_obj=^t_dmem_obj;
+ t_dmem_obj=record
+  dmem:p_dmem_map;
+  vobj:vm_object_t;
+ end;
+
 var
- dobj:vm_object_t;
  dmem:t_dmem_map;
  rmap:t_rmem_map;
+
+ dmem_maps:array[0..2] of t_dmem_obj;
 
 procedure init_dmem_map;
 
@@ -127,9 +135,6 @@ procedure init_dmem_map;
 var
  vmap:vm_map_t;
 begin
- dobj:=vm_object_allocate(OBJT_PHYSHM,OFF_TO_IDX(SCE_KERNEL_MAIN_DMEM_SIZE));
- dobj^.flags:=dobj^.flags or OBJ_DMEM_EXT or OBJ_NOSPLIT;
-
  dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
  rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
 
@@ -201,6 +206,8 @@ label
  _fixed,
  _rmap_insert;
 var
+ dmap:t_dmem_obj;
+
  v_end:QWORD;
  faddr:QWORD;
  entry,next:vm_map_entry_t;
@@ -217,6 +224,8 @@ begin
  begin
   Exit(EACCES);
  end;
+
+ dmap:=dmem_maps[default_pool_id];
 
  //eflags = flags & MAP_NO_COALESCE | 0x20000 | 0x80000
  cow:=(flags and MAP_NO_COALESCE) or MAP_COW_UNK;
@@ -247,11 +256,11 @@ begin
    begin
     _rmap_insert:
 
-    err:=dmem_map_set_mtype(@dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);
+    err:=dmem_map_set_mtype(dmap.dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);
 
     if (err=0) then
     begin
-     err:=vm_map_insert(map, dobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow, ((p_proc.p_dmem_aliasing and 3)<>0));
+     err:=vm_map_insert(map, dmap.vobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow, ((p_proc.p_dmem_aliasing and 3)<>0));
 
      if (err=0) then
      begin
@@ -336,6 +345,16 @@ var
 begin
  td:=curkthread;
  if (td=nil) then Exit(Pointer(-1));
+
+ if is_sce_prog_attr_40_800000(@g_authinfo) then
+ begin
+  Exit(Pointer(EPERM));
+ end;
+
+ if is_sce_prog_attr_40_400000(@g_authinfo) then
+ begin
+  Exit(Pointer(EPERM));
+ end;
 
  if (default_pool_id<>1) then
  begin
@@ -465,7 +484,7 @@ end;
 
 function get_obj_mtype(obj:vm_map_object):Byte;
 begin
- Result:=QWORD(obj^.un_pager.vnp.vnp_size);
+ Result:=obj^.un_pager.physhm.mtype;
 end;
 
 procedure dmem_vmo_get_type(map:vm_map_t;
@@ -529,7 +548,7 @@ begin
     addr:=start;
    end;
 
-   ret:=dmem_map_get_mtype(@dmem,obj,addr + relofs,@d_start2,@d_end2,@d_mtype);
+   ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,obj,addr + relofs,@d_start2,@d_end2,@d_mtype);
    if (ret<>0) then
    begin
     Assert(false,'dmem_vmo_get_type error %d');

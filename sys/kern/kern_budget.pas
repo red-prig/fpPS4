@@ -9,11 +9,11 @@ uses
  vm,
  sys_vm_object;
 
-procedure budget_enter_object(obj :vm_object_t;
-                              len :vm_ooffset_t);
+procedure budget_reserve(obj :vm_object_t;
+                         len :vm_ooffset_t);
 
-procedure budget_remove(obj :vm_object_t;
-                        len :vm_ooffset_t);
+procedure budget_release(obj :vm_object_t;
+                         len :vm_ooffset_t);
 
 function  get_mlock_avail():QWORD;
 function  get_mlock_total():QWORD;
@@ -36,10 +36,9 @@ uses
 var
  budget_total :QWORD=(448*1024*1024);
  budget_malloc:QWORD=0;
- budget_dmem  :QWORD=0;
 
-procedure budget_enter_object(obj :vm_object_t;
-                              len :vm_ooffset_t);
+procedure budget_reserve(obj :vm_object_t;
+                         len :vm_ooffset_t);
 label
  _inc_malloc;
 begin
@@ -53,16 +52,10 @@ begin
  begin
   goto _inc_malloc;
  end;
-
- if (obj<>nil) then
- if (obj^.otype=OBJT_PHYSHM) then
- begin
-  System.InterlockedExchangeAdd64(budget_dmem,len);
- end;
 end;
 
-procedure budget_remove(obj :vm_object_t;
-                        len :vm_ooffset_t);
+procedure budget_release(obj :vm_object_t;
+                         len :vm_ooffset_t);
 label
  _dec_malloc;
 begin
@@ -75,12 +68,6 @@ begin
     ((obj^.flags and OBJ_DMEM_EXT2)=0) then
  begin
   goto _dec_malloc;
- end;
-
- if (obj<>nil) then
- if (obj^.otype=OBJT_PHYSHM) then
- begin
-  System.InterlockedExchangeAdd64(budget_dmem,-len);
  end;
 end;
 

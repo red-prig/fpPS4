@@ -43,10 +43,14 @@ type
   flags             :Word;                    // see below
   handle            :Pointer;
   paging_in_progress:Integer;
+  map_base          :Pointer;
   un_pager:packed record
    vnp:packed record
     vnp_size:QWORD;
     writemappings:vm_ooffset_t;
+   end;
+   physhm:packed record
+    mtype:Byte;
    end;
   end;
  end;

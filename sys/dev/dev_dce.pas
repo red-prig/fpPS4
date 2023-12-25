@@ -6,12 +6,16 @@ unit dev_dce;
 interface
 
 uses
+ vm,
+ vmparam,
  kern_conf,
  sys_event;
 
 procedure dce_initialize();
 
 var
+ dce_page:array[0..PAGE_SIZE-1] of Byte;
+
  g_video_out_event_flip:t_knlist;
 
 implementation
@@ -20,8 +24,6 @@ uses
  errno,
  systm,
  subr_backtrace,
- vm,
- vmparam,
  sys_vm_object,
  vm_pager,
  kern_event,
@@ -584,7 +586,7 @@ var
 begin
  Result:=0;
 
- if ($3ffffff < offset) then
+ if (offset > $3ffffff) then
  begin
   Exit(EINVAL);
  end;
@@ -621,12 +623,18 @@ begin
   Exit(EINVAL);
  end;
 
+ if (off<>PAGE_SIZE) then
+ begin
+  Assert(false);
+ end;
+
  if (nprot<>$33) then
  begin
   Exit(EACCES);
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
+ obj^.map_base:=Pointer(@dce_page)-PAGE_SIZE;
 
  if (obj=nil) then
  begin
@@ -647,22 +655,23 @@ end;
 
 const
  dce_cdevsw:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :0;
-  d_name       :'dce';
-  d_open       :nil;
-  d_fdopen     :nil;
-  d_close      :nil;
-  d_read       :nil;
-  d_write      :nil;
-  d_ioctl      :@dce_ioctl;
-  d_poll       :nil;
-  d_mmap       :@dce_mmap;
-  d_strategy   :nil;
-  d_dump       :nil;
-  d_kqfilter   :@dce_kqfilter;
-  d_purge      :nil;
-  d_mmap_single:@dce_mmap_single;
+  d_version     :D_VERSION;
+  d_flags       :0;
+  d_name        :'dce';
+  d_open        :nil;
+  d_fdopen      :nil;
+  d_close       :nil;
+  d_read        :nil;
+  d_write       :nil;
+  d_ioctl       :@dce_ioctl;
+  d_poll        :nil;
+  d_mmap        :@dce_mmap;
+  d_strategy    :nil;
+  d_dump        :nil;
+  d_kqfilter    :@dce_kqfilter;
+  d_purge       :nil;
+  d_mmap_single :@dce_mmap_single;
+  d_mmap_single2:nil;
  );
 
 function filt_display_attach(kn:p_knote):Integer;

@@ -936,11 +936,12 @@ var
 
   if (cow<>-1) then
   begin
-   budget_enter_object(obj,__end-start);
+   budget_reserve(obj,__end-start);
 
    if (obj<>nil) then
    begin
-    if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or (obj^.otype=OBJT_PHYSHM) then
+    if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
+       (obj^.otype=OBJT_PHYSHM) then
     begin
      Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
     end;
@@ -2362,13 +2363,14 @@ begin
 
   next:=entry^.next;
 
-  budget_remove(entry^.vm_obj,
-                entry^.__end-entry^.start);
+  budget_release(entry^.vm_obj,
+                 entry^.__end-entry^.start);
 
   p_rem:=True;
   if (obj<>nil) then
   begin
-   if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or (obj^.otype=OBJT_PHYSHM) then
+   if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or
+      (obj^.otype=OBJT_PHYSHM) then
    begin
     Result:=vm_object_rmap_release(map,
                                    obj,

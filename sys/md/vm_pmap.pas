@@ -347,6 +347,8 @@ procedure pmap_enter_object(pmap   :pmap_t;
                             start  :vm_offset_t;
                             __end  :vm_offset_t;
                             prot   :vm_prot_t);
+label
+ _default;
 var
  base:Pointer;
  size:QWORD;
@@ -356,24 +358,33 @@ begin
 
  r:=0;
  case vm_object_type(obj) of
-  OBJT_DEVICE, // same?
   OBJT_SELF  , // same?
 
   OBJT_DEFAULT:
     begin
+     _default:
+
      base:=Pointer(trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_enter(base,size,wprots[prot and VM_RWX]);
     end;
-  OBJT_PHYSHM:
+  OBJT_DEVICE:
     begin
-     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     if (obj^.map_base=nil) then
+     begin
+      goto _default;
+     end;
+
+     base:=obj^.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
-     Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     begin
+      Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
 
-     r:=md_enter(base,size,MD_PROT_RWX);
+      r:=md_enter(base,size,MD_PROT_RWX);
+     end;
     end;
   else
     begin
@@ -454,6 +465,8 @@ procedure pmap_protect(pmap  :pmap_t;
                        start :vm_offset_t;
                        __end :vm_offset_t;
                        prot  :vm_prot_t);
+label
+ _default;
 var
  base:Pointer;
  size:QWORD;
@@ -463,24 +476,33 @@ begin
 
  r:=0;
  case vm_object_type(obj) of
-  OBJT_DEVICE, // same?
   OBJT_SELF  , // same?
 
   OBJT_DEFAULT:
     begin
+     _default:
+
      base:=Pointer(trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_protect(base,size,wprots[prot and VM_RWX]);
     end;
-  OBJT_PHYSHM:
+  OBJT_DEVICE:
     begin
-     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     if (obj^.map_base=nil) then
+     begin
+      goto _default;
+     end;
+
+     base:=obj^.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
-     Writeln('pmap_protect_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     begin
+      Writeln('pmap_protect_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
 
-     r:=md_protect(base,size,MD_PROT_RWX);
+      r:=md_protect(base,size,MD_PROT_RWX);
+     end;
     end;
   else
     begin
@@ -505,6 +527,8 @@ procedure pmap_madv_free(pmap  :pmap_t;
                          start :vm_offset_t;
                          __end :vm_offset_t;
                          prot  :vm_prot_t);
+label
+ _default;
 var
  base:Pointer;
  size:QWORD;
@@ -514,15 +538,24 @@ begin
 
  r:=0;
  case vm_object_type(obj) of
-  OBJT_DEVICE, // same?
   OBJT_SELF  , // same?
 
   OBJT_DEFAULT:
     begin
+     _default:
+
      base:=Pointer(trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_reset(base,size,wprots[prot and VM_RWX]);
+    end;
+  OBJT_DEVICE:
+    begin
+     if (obj^.map_base=nil) then
+     begin
+      goto _default;
+     end;
+     //ignore
     end;
   OBJT_PHYSHM:
     begin
@@ -549,6 +582,8 @@ procedure pmap_remove(pmap  :pmap_t;
                       start :vm_offset_t;
                       __end :vm_offset_t;
                       prot  :vm_prot_t);
+label
+ _default;
 var
  base:Pointer;
  size:QWORD;
@@ -560,24 +595,33 @@ begin
 
  r:=0;
  case vm_object_type(obj) of
-  OBJT_DEVICE, // same?
   OBJT_SELF  , // same?
 
   OBJT_DEFAULT:
     begin
+     _default:
+
      base:=Pointer(trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_remove(base,size);
     end;
-  OBJT_PHYSHM:
+  OBJT_DEVICE:
     begin
-     base:=Pointer(trunc_page(offset))+VM_MIN_GPU_ADDRESS;
+     if (obj^.map_base=nil) then
+     begin
+      goto _default;
+     end;
+
+     base:=obj^.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
-     Writeln('pmap_remove_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     begin
+      Writeln('pmap_remove_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
 
-     r:=md_remove(base,size);
+      r:=md_remove(base,size);
+     end;
     end;
   else
     begin

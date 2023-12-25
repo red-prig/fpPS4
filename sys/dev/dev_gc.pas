@@ -17,10 +17,13 @@ uses
  kern_authinfo,
  vm,
  vmparam,
+ sys_vm_object,
+ vm_pager,
  subr_backtrace;
 
 var
- gc_mmap_ptr:Pointer=nil;
+ gc_page:array[0..PAGE_SIZE-1] of Byte;
+
  gc_AreSubmitsAllowed:Integer=0; //0=true,1=false (0xfe0100000)
 
 type
@@ -107,6 +110,38 @@ begin
 
 end;
 
+Function gc_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer):Integer;
+var
+ obj:vm_object_t;
+begin
+ if sceSblACMgrHasUseHp3dPipeCapability(@g_authinfo) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (offset^>=PAGE_SIZE) then
+ begin
+  Exit(EPERM);
+ end;
+
+ if (size<>PAGE_SIZE) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,nprot,offset^);
+ obj^.map_base:=@gc_page;
+
+ if (obj=nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ objp^:=obj;
+
+ Result:=0;
+end;
+
 Function gc_mmap(dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
 begin
  if sceSblACMgrHasUseHp3dPipeCapability(@g_authinfo) then
@@ -119,7 +154,7 @@ begin
   Exit(EPERM);
  end;
 
- paddr^:=offset + QWORD(gc_mmap_ptr);
+ paddr^:=offset + QWORD(@gc_page);
  memattr^:=0;
 
  Result:=0;
@@ -127,28 +162,27 @@ end;
 
 const
  gc_cdevsw:t_cdevsw=(
-  d_version    :D_VERSION;
-  d_flags      :0;
-  d_name       :'gc';
-  d_open       :nil;
-  d_fdopen     :nil;
-  d_close      :nil;
-  d_read       :nil;
-  d_write      :nil;
-  d_ioctl      :@gc_ioctl;
-  d_poll       :nil;
-  d_mmap       :@gc_mmap;
-  d_strategy   :nil;
-  d_dump       :nil;
-  d_kqfilter   :nil;
-  d_purge      :nil;
-  d_mmap_single:nil;
+  d_version     :D_VERSION;
+  d_flags       :0;
+  d_name        :'gc';
+  d_open        :nil;
+  d_fdopen      :nil;
+  d_close       :nil;
+  d_read        :nil;
+  d_write       :nil;
+  d_ioctl       :@gc_ioctl;
+  d_poll        :nil;
+  d_mmap        :@gc_mmap;
+  d_strategy    :nil;
+  d_dump        :nil;
+  d_kqfilter    :nil;
+  d_purge       :nil;
+  d_mmap_single :@gc_mmap_single;
+  d_mmap_single2:nil;
  );
 
 procedure gc_initialize();
 begin
- gc_mmap_ptr:=Pointer($fe0200000);
-
  make_dev(@gc_cdevsw,0,0,0,&666,'gc',[]);
 end;
 
