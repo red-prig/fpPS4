@@ -12,6 +12,8 @@ uses
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
+ 
+ SCE_NP_LANGUAGE_CODE_MAX_LEN=5;
 
  SCE_NP_TITLE_ID_LEN=12;
 
@@ -38,6 +40,12 @@ type
   data:array[0..SCE_NP_COUNTRY_CODE_LENGTH-1] of AnsiChar;
   term:AnsiChar;
   padding:array[0..1] of AnsiChar;
+ end;
+
+ pSceNpLanguageCode=^SceNpLanguageCode;
+ SceNpLanguageCode=packed record
+  code:array[0..SCE_NP_LANGUAGE_CODE_MAX_LEN] of AnsiChar;
+  padding:array[0..9] of Byte;
  end;
 
  SceNpAgeRestriction=packed record
@@ -161,11 +169,11 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGetAccountLanguageA(reqId,userId:Integer;pLangCode:PQWord):Integer; SysV_ABI_CDecl;
+function ps4_sceNpGetAccountLanguageA(reqId,userId:Integer;pLangCode:pSceNpLanguageCode):Integer; SysV_ABI_CDecl;
 begin
-  if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
-  pLangCode^:=QWord(PAnsiChar('en'));
-  Result:=0;
+ if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pLangCode^.code:='en';
+ Result:=0;
 end;   
 
 const
