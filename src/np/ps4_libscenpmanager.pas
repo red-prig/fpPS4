@@ -12,6 +12,8 @@ uses
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
+ 
+ SCE_NP_LANGUAGE_CODE_MAX_LEN=5;
 
  SCE_NP_TITLE_ID_LEN=12;
 
@@ -38,6 +40,12 @@ type
   data:array[0..SCE_NP_COUNTRY_CODE_LENGTH-1] of AnsiChar;
   term:AnsiChar;
   padding:array[0..1] of AnsiChar;
+ end;
+
+ pSceNpLanguageCode=^SceNpLanguageCode;
+ SceNpLanguageCode=packed record
+  code:array[0..SCE_NP_LANGUAGE_CODE_MAX_LEN] of AnsiChar;
+  padding:array[0..9] of Byte;
  end;
 
  SceNpAgeRestriction=packed record
@@ -160,6 +168,13 @@ begin
  pAccountId^:=1111;
  Result:=0;
 end;
+
+function ps4_sceNpGetAccountLanguageA(reqId,userId:Integer;pLangCode:pSceNpLanguageCode):Integer; SysV_ABI_CDecl;
+begin
+ if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pLangCode^.code:='en';
+ Result:=0;
+end;   
 
 const
  GEOCLASS_NATION = 16;
@@ -533,6 +548,8 @@ begin
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
+ lib^.set_proc($4CF31B808C6FA20D,@ps4_sceNpGetAccountLanguageA);
+ 
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
