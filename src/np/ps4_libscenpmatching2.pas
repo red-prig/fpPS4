@@ -43,6 +43,12 @@ type
                                 errorCode:Integer;
                                 arg:Pointer); SysV_ABI_CDecl;
 
+ SceNpMatching2RoomEventCallback=procedure(
+                                ctxId,event:Word;
+                                eventCause:Byte;
+                                errorCode:Integer;
+                                arg:Pointer); SysV_ABI_CDecl;                                
+
  SceNpMatching2SignalingCallback=procedure(
                                 ctxId,event:Word;
                                 eventCause:Byte;
@@ -55,6 +61,12 @@ begin
 end;
 
 function ps4_sceNpMatching2RegisterContextCallback(cbFunc:SceNpMatching2ContextCallback;cbFuncArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpMatching2RegisterRoomEventCallback(ctxId:SceNpMatching2ContextId;
+                                                     cbFunc:SceNpMatching2RoomEventCallback;cbFuncArg:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -97,6 +109,7 @@ begin
  lib:=Result._add_lib('libSceNpMatching2');
  lib^.set_proc($D74B777B9F893E75,@ps4_sceNpMatching2Initialize);
  lib^.set_proc($7D041F3FCEC8EE1B,@ps4_sceNpMatching2RegisterContextCallback);
+ lib^.set_proc($A7ED849F199A00C3,@ps4_sceNpMatching2RegisterRoomEventCallback);
  lib^.set_proc($D1431E5911A764A0,@ps4_sceNpMatching2RegisterSignalingCallback);
  lib^.set_proc($EEF8CD43A675A29D,@ps4_sceNpMatching2ContextStart);
  lib^.set_proc($61F9A95BBD7DACCA,@ps4_sceNpMatching2CreateContext);
