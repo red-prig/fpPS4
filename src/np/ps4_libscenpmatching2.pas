@@ -37,6 +37,13 @@ type
   size        :size_t;
  end;
 
+ pSceNpMatching2CreateContextParamA=^SceNpMatching2CreateContextParamA;
+ SceNpMatching2CreateContextParamA=packed record
+  user        :Integer;
+  serviceLabel:SceNpServiceLabel;
+  size        :size_t;
+ end;
+
  SceNpMatching2ContextCallback=procedure(
                                 ctxId,event:Word;
                                 eventCause:Byte;
@@ -44,22 +51,26 @@ type
                                 arg:Pointer); SysV_ABI_CDecl;
 
  SceNpMatching2LobbyEventCallback=procedure(
-                                ctxId,event:Word;
-                                eventCause:Byte;
-                                errorCode:Integer;
-                                arg:Pointer); SysV_ABI_CDecl;                                
+                                   ctxId:Word;
+                                   lobbyId:QWORD;
+                                   event:Word;
+                                   data:Pointer;
+                                   arg:Pointer); SysV_ABI_CDecl;
 
  SceNpMatching2RoomEventCallback=procedure(
-                                ctxId,event:Word;
-                                eventCause:Byte;
-                                errorCode:Integer;
-                                arg:Pointer); SysV_ABI_CDecl;                                
+                                  ctxId:Word;
+                                  roomId:QWORD;
+                                  event:Word;
+                                  data:Pointer;
+                                  arg:Pointer); SysV_ABI_CDecl;
 
  SceNpMatching2SignalingCallback=procedure(
-                                ctxId,event:Word;
-                                eventCause:Byte;
-                                errorCode:Integer;
-                                arg:Pointer); SysV_ABI_CDecl;                                
+                                  ctxId:Word;
+                                  roomId:QWORD;
+                                  peerMemberId:Word;
+                                  event:Word;
+                                  errorCode:Integer;
+                                  arg:Pointer); SysV_ABI_CDecl;
 
 function ps4_sceNpMatching2Initialize(param:pSceNpMatching2InitializeParameter):Integer; SysV_ABI_CDecl;
 begin
@@ -89,7 +100,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpMatching2ContextStart(ctxId:SceNpMatching2ContextId):Integer; SysV_ABI_CDecl;
+function ps4_sceNpMatching2ContextStart(ctxId:SceNpMatching2ContextId;timeout:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -98,11 +109,13 @@ function ps4_sceNpMatching2CreateContext(param:pSceNpMatching2CreateContextParam
                                          ctxId:PWord):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpMatching2CreateContext,serviceLabel=',param^.serviceLabel,',size=',param^.size);
- Result:=SCE_NP_MATCHING2_ERROR_NOT_INITIALIZED;
+ Result:=0;
 end;
 
-function ps4_sceNpMatching2CreateContextA(ctxId:SceNpMatching2ContextId):Integer; SysV_ABI_CDecl;
+function ps4_sceNpMatching2CreateContextA(param:pSceNpMatching2CreateContextParamA;
+                                          ctxId:PWord):Integer; SysV_ABI_CDecl;
 begin
+ Writeln('sceNpMatching2CreateContextA,serviceLabel=',param^.serviceLabel,',size=',param^.size);
  Result:=0;
 end;
 
