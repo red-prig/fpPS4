@@ -53,6 +53,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpMatching2ContextStart(ctxId:SceNpMatching2ContextId):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpMatching2CreateContext(param:pSceNpMatching2CreateContextParam;
                                          ctxId:PWord):Integer; SysV_ABI_CDecl;
 begin
@@ -80,6 +85,7 @@ begin
  lib:=Result._add_lib('libSceNpMatching2');
  lib^.set_proc($D74B777B9F893E75,@ps4_sceNpMatching2Initialize);
  lib^.set_proc($7D041F3FCEC8EE1B,@ps4_sceNpMatching2RegisterContextCallback);
+ lib^.set_proc($EEF8CD43A675A29D,@ps4_sceNpMatching2ContextStart);
  lib^.set_proc($61F9A95BBD7DACCA,@ps4_sceNpMatching2CreateContext);
  lib^.set_proc($6A3BF373C7B6BA9A,@ps4_sceNpMatching2CreateContextA);
  lib^.set_proc($32AA77949FAC8F2E,@ps4_sceNpMatching2Terminate);
