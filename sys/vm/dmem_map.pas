@@ -1189,7 +1189,7 @@ begin
  if (mtype=SCE_KERNEL_WB_GARLIC) and
     ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
  begin
-  if ((flags and MAP_WRITABLE_WB_GARLIC)<>0) then
+  if ((flags and MAP_WRITABLE_WB_GARLIC)=0) then
   begin
    Exit(EACCES);
   end;
