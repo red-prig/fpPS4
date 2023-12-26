@@ -1234,7 +1234,11 @@ begin
   Exit(EACCES);
  end;
 
- if (mtype=-1) then Exit(0);
+ if (mtype=-1) then
+ begin
+  dmem_map_unlock(map);
+  Exit(0);
+ end;
 
  dmem_map_clip_start(map, entry, start);
 
