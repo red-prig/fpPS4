@@ -77,6 +77,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHmdReprojectionSetDisplayBuffers(videoOutHandle:Integer;index0:Integer;index1:Integer;option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHmdTerminate():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -102,6 +107,7 @@ begin
  lib^.set_proc($88634DA430E3730A,@ps4_sceHmdReprojectionUnsetDisplayBuffers);
  lib^.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
  lib^.set_proc($99DC856DA263EBA3,@ps4_sceHmdReprojectionClearUserEventStart);
+ lib^.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
  lib^.set_proc($CFF44C20BA8FEAD1,@ps4_sceHmdTerminate);
 end;
 
