@@ -82,6 +82,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHmdOpen(userId:Pointer;Integer:type;pParam:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHmdTerminate():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -108,6 +113,7 @@ begin
  lib^.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
  lib^.set_proc($99DC856DA263EBA3,@ps4_sceHmdReprojectionClearUserEventStart);
  lib^.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
+ lib^.set_proc($776839223EC4533A,@ps4_sceHmdOpen);
  lib^.set_proc($CFF44C20BA8FEAD1,@ps4_sceHmdTerminate);
 end;
 
