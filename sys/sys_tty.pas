@@ -40,8 +40,9 @@ procedure tty_init(tp:p_tty;name:PChar;mutex:p_mtx);
 procedure tty_fini(tp:p_tty);
 
 var
- std_tty :array[0..2 ] of t_tty;
- deci_tty:array[0..11] of t_tty;
+ std_tty  :array[0..2 ] of t_tty;
+ deci_tty :array[0..11] of t_tty;
+ debug_tty:t_tty;
 
 implementation
 

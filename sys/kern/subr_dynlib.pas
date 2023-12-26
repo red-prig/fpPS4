@@ -376,6 +376,7 @@ uses
  vfs_subr,
  vnode_if,
  kern_proc,
+ kern_budget,
  kern_namedobj,
  elf_nid_utils,
  kern_jit,
@@ -1753,7 +1754,7 @@ begin
  text_addr :=0;
  text_size :=0;
 
- if (p_proc.p_budget_ptype=0) then
+ if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  begin
   _2mb_mode:=((p_proc.p_mode_2mb or 1)=3);
  end else

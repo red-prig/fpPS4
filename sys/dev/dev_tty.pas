@@ -392,10 +392,13 @@ begin
  tty_init(@deci_tty[10],'[ttyb0 ]:',nil);
  tty_init(@deci_tty[11],'[ttyc0 ]:',nil);
  //
+ tty_init(@debug_tty   ,'[Debug ]:',nil);
+ //
  std_tty[0].t_flags:=TF_NOWRITEPREFIX;
  std_tty[1].t_flags:=TF_NOWRITEPREFIX;
  //
  dev_console:=make_dev_credf(MAKEDEV_ETERNAL, @ttyconsdev_cdevsw, 0, UID_ROOT, GID_WHEEL, &600, 'console',[]);
+ dev_console^.si_drv1:=@debug_tty;
  //
  tty_makedev(@deci_tty[ 0],'deci_stdin' ,[]);
  tty_makedev(@deci_tty[ 1],'deci_stdout',[]);
@@ -412,7 +415,6 @@ begin
  //
  md_init_tty;
 end;
-
 
 end.
 

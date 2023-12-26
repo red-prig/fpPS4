@@ -50,6 +50,7 @@ uses
  vfcntl,
  vfs_vnops,
  vfs_subr,
+ kern_budget,
  kern_descrip,
  vfs_cache,
  vnode_if,
@@ -594,7 +595,7 @@ begin
 
  hdr:=imgp^.image_header;
 
- if (p_proc.p_budget_ptype=0) then
+ if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  begin
   _2mb_mode:=((p_proc.p_mode_2mb or 1)=3) or ((p_proc.p_self_fixed<>0) and (p_proc.p_mode_2mb=M2MB_NOTDYN_FIXED));
  end else
@@ -629,7 +630,7 @@ begin
    p_filesz:=phdr^.p_filesz;
    p_offset:=phdr^.p_offset;
 
-   if (p_type=PT_SCE_RELRO) and (p_proc.p_budget_ptype=0) then
+   if (p_type=PT_SCE_RELRO) and (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
    begin
 
     if (_2mb_mode=false) then
@@ -947,7 +948,7 @@ begin
  if (imgp^.dyn_exist=0) then goto _dyn_not_exist;
 
  flags:=$40; //priv libs?
- if (p_proc.p_budget_ptype=0) then flags:=flags or $20; //vm_map_wire
+ if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then flags:=flags or $20; //vm_map_wire
 
  pick_obj(dynlibs_info.libprogram);
 

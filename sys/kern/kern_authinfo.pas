@@ -54,10 +54,10 @@ type
 const
  //SceLncAppType
  SCE_LNC_APP_TYPE_INVALID =-1;
- SCE_LNC_APP_TYPE_SHELL_UI= 1;
- SCE_LNC_APP_TYPE_DAEMON  = 2;
- SCE_LNC_APP_TYPE_CDLG    = 3;
- SCE_LNC_APP_TYPE_MINI_APP= 4;
+ SCE_LNC_APP_TYPE_SHELL_UI= 1; //isSystemApp
+ SCE_LNC_APP_TYPE_DAEMON  = 2; //isSystemApp
+ SCE_LNC_APP_TYPE_CDLG    = 3; //isSystemApp
+ SCE_LNC_APP_TYPE_MINI_APP= 4; //isSystemApp
  SCE_LNC_APP_TYPE_BIG_APP = 5;
 
  //[preloadPrxFlags] -> sceSysmodulePreloadModuleForLibkernel

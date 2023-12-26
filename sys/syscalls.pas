@@ -204,7 +204,7 @@ function  osem_post(key,signalCount:Integer):Integer;
 function  osem_cancel(key,setCount:Integer;pNumWait:PInteger):Integer;
 function  __sys_namedobj_create(name:PChar;objp:Pointer;objt:Integer):Integer;
 function  __sys_namedobj_delete(id,objt:Integer):Integer;
-function  budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer;
+function  budget_create(name:pchar;ptype:DWORD;new:Pointer;count:DWORD;prev:Pointer):Integer;
 function  budget_delete(key:Integer):Integer;
 function  budget_get(key:Integer;ptr:Pointer;psize:PInteger):Integer;
 function  budget_set(key:Integer):Integer;
@@ -1637,7 +1637,7 @@ asm
  jmp   cerror
 end;
 
-function budget_create(name:pchar;ptype:DWORD;unk_ptr1:Pointer;unk_count:DWORD;unk_ptr2:Pointer):Integer; assembler; nostackframe;
+function budget_create(name:pchar;ptype:DWORD;new:Pointer;count:DWORD;prev:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $568,%rax
  call  fast_syscall

@@ -211,6 +211,7 @@ uses
  vm_mmap,
  md_map,
  kern_proc,
+ kern_budget,
  kern_patcher;
 
 function maxInt64(a,b:Int64):Int64; inline;
@@ -495,7 +496,7 @@ var
 begin
  Result:=False;
 
- if (budget_ptype=0) then
+ if (budget_ptype=PTYPE_BIG_APP) then
  begin
   flag_write:=2;
   if (phdr^.p_type<>PT_SCE_RELRO) then
