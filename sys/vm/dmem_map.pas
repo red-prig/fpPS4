@@ -6,6 +6,7 @@ unit dmem_map;
 interface
 
 uses
+ vm,
  vmparam,
  sys_vm_object,
  kern_mtx;
@@ -106,7 +107,9 @@ function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD):Integer;
 function  dmem_map_set_mtype(map  :p_dmem_map;
                              start:DWORD;
                              __end:DWORD;
-                             new  :DWORD):Integer;
+                             mtype:Integer;
+                             prot :Integer;
+                             flags:Integer):Integer;
 
 function  dmem_map_get_mtype(map  :p_dmem_map;
                              obj   :vm_object_t;
@@ -1171,8 +1174,9 @@ end;
 function dmem_map_set_mtype(map  :p_dmem_map;
                             start:DWORD;
                             __end:DWORD;
-                            new  :DWORD):Integer;
-
+                            mtype:Integer;
+                            prot :Integer;
+                            flags:Integer):Integer;
 var
  current,next,entry:p_dmem_map_entry;
  old:DWORD;
@@ -1180,6 +1184,15 @@ begin
  if (start=__end) then
  begin
   Exit(0);
+ end;
+
+ if (mtype=SCE_KERNEL_WB_GARLIC) and
+    ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
+ begin
+  if ((flags and MAP_WRITABLE_WB_GARLIC)<>0) then
+  begin
+   Exit(EACCES);
+  end;
  end;
 
  dmem_map_lock(map);
@@ -1221,7 +1234,7 @@ begin
   Exit(EACCES);
  end;
 
- if (new=DWORD(-1)) then Exit(0);
+ if (mtype=-1) then Exit(0);
 
  dmem_map_clip_start(map, entry, start);
 
@@ -1241,7 +1254,7 @@ begin
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
   old:=current^.m_type;
-  current^.m_type:=new;
+  current^.m_type:=mtype;
 
   if (old<>current^.m_type) then
   begin

@@ -256,7 +256,12 @@ begin
    begin
     _rmap_insert:
 
-    err:=dmem_map_set_mtype(dmap.dmem,OFF_TO_IDX(phaddr),OFF_TO_IDX(phaddr+length),mtype);
+    err:=dmem_map_set_mtype(dmap.dmem,
+                            OFF_TO_IDX(phaddr),
+                            OFF_TO_IDX(phaddr+length),
+                            mtype,
+                            prot,
+                            flags);
 
     if (err=0) then
     begin

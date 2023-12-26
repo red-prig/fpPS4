@@ -146,6 +146,10 @@ begin
 end;
 
 Function dmem_mmap_single2(dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
+var
+ dmap:p_dmem_obj;
+ ofs:vm_ooffset_t;
+ flags:Integer;
 begin
  Result:=0;
 
@@ -161,8 +165,35 @@ begin
 
  Writeln('dmem_mmap_single2("',dev^.si_name,'",0x',HexStr(offset^,8),',0x',HexStr(size,8),',',nprot,')');
 
- print_backtrace_td(stderr);
- Assert(False);
+ ofs:=offset^;
+
+ if (ofs > -1) and (size <= $5000000000 - ofs) then
+ begin
+  //
+ end else
+ begin
+  Exit(EACCES);
+ end;
+
+ dmap:=dev^.si_drv1;
+
+ flags:=flagsp^;
+
+ Result:=dmem_map_set_mtype(dmap^.dmem,
+                            OFF_TO_IDX(ofs),
+                            OFF_TO_IDX(ofs+size),
+                            -1,
+                            nprot,
+                            flags);
+
+ if (Result<>0) then Exit;
+
+ if ((maxprotp^ and nprot)=nprot) then
+ begin
+  Exit(EACCES);
+ end;
+
+ obj^:=dmap^.vobj;
 end;
 
 Function dmem_open(dev:p_cdev;oflags,devtype:Integer):Integer;
