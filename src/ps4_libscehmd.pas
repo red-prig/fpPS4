@@ -9,6 +9,18 @@ uses
   ps4_program,
   Classes,
   SysUtils;
+  ps4_libSceUserService;
+  
+type
+pSceUserServiceUserId=^SceUserServiceUserId;
+  SceUserServiceUserId=packed record
+  SceUserServiceUserId:Integer;
+end;
+
+pSceHmdOpenParam=^SceHmdOpenParam;
+SceHmdOpenParam=packed record
+    reserve:array[0..7] of Byte;
+end;
 
 implementation
 
@@ -82,7 +94,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceHmdOpen(userId:Pointer;Integer:type;pParam:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceHmdOpen(userId:pSceUserServiceUserId;_type:Integer;index:Integer;pParam:pSceHmdOpenParam):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;

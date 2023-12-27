@@ -9,15 +9,17 @@ uses
   atomic,
   Classes,
   SysUtils;
+  ps4_libSceHmd;
 
 const
  SCE_USER_SERVICE_MAX_LOGIN_USERS=4;
  SCE_USER_SERVICE_USER_ID_INVALID=Integer($FFFFFFFF);
 
 type
+ pSceUserServiceUserId=^SceUserServiceUserid;
  PUserServiceInitializeParams=^TUserServiceInitializeParams;
  TUserServiceInitializeParams=packed record
-  priority:DWORD;
+  priority:DWORD;;
  end;
 
  PUserServiceLoginUserIdList=^TUserServiceLoginUserIdList;
