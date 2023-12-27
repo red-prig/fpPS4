@@ -19,7 +19,7 @@ type
  pSceUserServiceUserId=^SceUserServiceUserid;
  PUserServiceInitializeParams=^TUserServiceInitializeParams;
  TUserServiceInitializeParams=packed record
-  priority:DWORD;;
+  priority:DWORD;
  end;
 
  PUserServiceLoginUserIdList=^TUserServiceLoginUserIdList;
