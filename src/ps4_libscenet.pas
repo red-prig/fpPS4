@@ -434,7 +434,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNetHtonll(host64:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceNetHtonll(host64:QWORD):QWORD; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
