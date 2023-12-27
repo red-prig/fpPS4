@@ -10,6 +10,23 @@ uses
   Classes,
   SysUtils;
 
+const
+ SCE_HMD_ERROR_PARAMETER_NULL=Integer($81110008);
+
+type
+ pSceHmdOpenParam=^SceHmdOpenParam;
+ SceHmdOpenParam=packed record
+  reserve:array[0..7] of Byte;
+ end;
+
+ pSceHmdFieldOfView=^SceHmdFieldOfView;
+ SceHmdFieldOfView=packed record
+  tanOut   :Single;
+  tanIn    :Single;
+  tanTop   :Single;
+  tanBottom:Single;
+ end;
+
 implementation
 
 function ps4_sceHmdInitialize(param:Pointer):Integer; SysV_ABI_CDecl;
@@ -77,6 +94,28 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHmdReprojectionSetDisplayBuffers(videoOutHandle,index0,index1:Integer;option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdOpen(userId,_type,index:Integer;pParam:pSceHmdOpenParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdGetFieldOfView(handle:Integer;fieldOfView:pSceHmdFieldOfView):Integer; SysV_ABI_CDecl;
+begin
+ if (fieldOfView=nil) then Exit(SCE_HMD_ERROR_PARAMETER_NULL);
+
+ fieldOfView^.tanOut   :=1.20743;
+ fieldOfView^.tanIn    :=1.181346;
+ fieldOfView^.tanTop   :=1.262872;
+ fieldOfView^.tanBottom:=1.262872;
+
+ Result:=0;
+end;
+
 function ps4_sceHmdTerminate():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -102,6 +141,9 @@ begin
  lib^.set_proc($88634DA430E3730A,@ps4_sceHmdReprojectionUnsetDisplayBuffers);
  lib^.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
  lib^.set_proc($99DC856DA263EBA3,@ps4_sceHmdReprojectionClearUserEventStart);
+ lib^.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
+ lib^.set_proc($776839223EC4533A,@ps4_sceHmdOpen);
+ lib^.set_proc($34F430605AA2D1BB,@ps4_sceHmdGetFieldOfView);
  lib^.set_proc($CFF44C20BA8FEAD1,@ps4_sceHmdTerminate);
 end;
 
