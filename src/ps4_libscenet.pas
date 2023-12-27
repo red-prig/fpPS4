@@ -439,6 +439,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNetResolverStartNtoa(rid:Integer; const hostname:PChar; addr:pSceNetInAddr; timeout:Integer; retry:Integer; flags:Integer):Integer; SysV_ABI_CDecl;
+const
+ chost:PChar='123.site.com'#0;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNetCtlInit:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -723,6 +730,7 @@ begin
  lib^.set_proc($76B8C86C36C0ED44,@ps4_sceNetEpollWait);
  lib^.set_proc($227A7595F2FE25DC,@ps4_sceNetEpollDestroy);
  lib^.set_proc($DC21E2D4AD70B024,@ps4_sceNetHtonll);
+ lib^.set_proc($35DF7559A5A61B6C,@ps4_sceNetResolverStartNtoa);
 end;
 
 function Load_libSceNetCtl(Const name:RawByteString):TElf_node;
