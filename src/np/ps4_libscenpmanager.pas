@@ -8,6 +8,7 @@ uses
   windows,
   ps4_program,
   np_error,
+  ps4_libSceNpInGameMessage,
   ps4_libSceNpCommon;
 
 
@@ -41,13 +42,6 @@ type
   data:array[0..SCE_NP_COUNTRY_CODE_LENGTH-1] of AnsiChar;
   term:AnsiChar;
   padding:array[0..1] of AnsiChar;
- end;
-
- pSceNpPeerAddressA=^SceNpPeerAddressA;
- SceNpPeerAddressA=packed record
-  accountId:SceNpAccountId;
-  platform:SceNpPlatformType;
-  padding:array[0..3] of AnsiChar;
  end;
 
  pSceNpLanguageCode=^SceNpLanguageCode;

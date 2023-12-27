@@ -25,8 +25,6 @@ type
  pSceNpAccountId=^SceNpAccountId;
  SceNpAccountId=QWORD;
 
- SceNpPlatformType=Integer;
-
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
   data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
