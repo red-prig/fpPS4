@@ -9,18 +9,23 @@ uses
   ps4_program,
   Classes,
   SysUtils;
-  ps4_libSceUserService;
-  
-type
-pSceUserServiceUserId=^SceUserServiceUserId;
-  SceUserServiceUserId=packed record
-  SceUserServiceUserId:Integer;
-end;
 
-pSceHmdOpenParam=^SceHmdOpenParam;
-SceHmdOpenParam=packed record
-    reserve:array[0..7] of Byte;
-end;
+const
+ SCE_HMD_ERROR_PARAMETER_NULL=Integer($81110008);
+
+type
+ pSceHmdOpenParam=^SceHmdOpenParam;
+ SceHmdOpenParam=packed record
+  reserve:array[0..7] of Byte;
+ end;
+
+ pSceHmdFieldOfView=^SceHmdFieldOfView;
+ SceHmdFieldOfView=packed record
+  tanOut   :Single;
+  tanIn    :Single;
+  tanTop   :Single;
+  tanBottom:Single;
+ end;
 
 implementation
 
@@ -89,18 +94,25 @@ begin
  Result:=0;
 end;
 
-function ps4_sceHmdReprojectionSetDisplayBuffers(videoOutHandle:Integer;index0:Integer;index1:Integer;option:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceHmdReprojectionSetDisplayBuffers(videoOutHandle,index0,index1:Integer;option:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceHmdOpen(userId:pSceUserServiceUserId;_type:Integer;index:Integer;pParam:pSceHmdOpenParam):Integer; SysV_ABI_CDecl;
+function ps4_sceHmdOpen(userId,_type,index:Integer;pParam:pSceHmdOpenParam):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceHmdGetFieldOfView(handle:Integer;fieldOfView:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceHmdGetFieldOfView(handle:Integer;fieldOfView:pSceHmdFieldOfView):Integer; SysV_ABI_CDecl;
 begin
+ if (fieldOfView=nil) then Exit(SCE_HMD_ERROR_PARAMETER_NULL);
+
+ fieldOfView^.tanOut   :=1.20743;
+ fieldOfView^.tanIn    :=1.181346;
+ fieldOfView^.tanTop   :=1.262872;
+ fieldOfView^.tanBottom:=1.262872;
+
  Result:=0;
 end;
 
