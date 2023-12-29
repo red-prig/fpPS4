@@ -11,6 +11,10 @@ uses
   SysUtils;
 
 type
+  pSceVoiceInitParam=^SceVoiceInitParam;
+  SceVoiceInitParam=packed record
+end;
+  
   pSceVoiceStartParam=^SceVoiceStartParam;
   SceVoiceStartParam=packed record
 end;
@@ -21,18 +25,12 @@ end;
 
 implementation
 
-function ps4_sceVoiceInit(
-          pArg:Pointer;  //pSceVoiceInitParam
-          version:DWORD //SceVoiceVersion
-          ):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceInit(pArg:pSceVoiceInitParam):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceVoiceQoSInit(
-          pMemBlock:Pointer;
-          memSize:DWORD;
-          appType:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceQoSInit(pMemBlock:Pointer;memSize:DWORD;appType:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
