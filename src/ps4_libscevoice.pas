@@ -10,6 +10,11 @@ uses
   Classes,
   SysUtils;
 
+type
+  pSceVoiceStartParam=^SceVoiceStartParam;
+  SceVoiceStartParam=packed record
+end;
+
 implementation
 
 function ps4_sceVoiceInit(
@@ -28,6 +33,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceStart(pArg:pSceVoiceStartParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceVoice(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -36,6 +46,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceVoice');
  lib^.set_proc($F53AE1B86CDB7AB4,@ps4_sceVoiceInit);
+ lib^.set_proc($E78A613C7D8B665B,@ps4_sceVoiceStart);
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
