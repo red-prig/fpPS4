@@ -10,20 +10,58 @@ uses
   Classes,
   SysUtils;
 
+type
+ pSceVoiceInitParam=^SceVoiceInitParam;
+ SceVoiceInitParam=packed record
+  appType  :Integer;
+  _align   :Integer;
+  onEvent  :Pointer;
+  pUserData:Pointer;
+  reserved :array[0..11] of Byte;
+ end;
+
+ pSceVoiceStartParam=^SceVoiceStartParam;
+ SceVoiceStartParam=packed record
+  container:Pointer;
+  memSize  :DWORD;
+  reserved :array[0..19] of Byte;
+ end;
+
+ pSceVoicePortParam=^SceVoicePortParam;
+ SceVoicePortParam=packed record
+  //
+ end;
+
 implementation
 
-function ps4_sceVoiceInit(
-          pArg:Pointer;  //pSceVoiceInitParam
-          version:DWORD //SceVoiceVersion
-          ):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceInit(pArg:pSceVoiceInitParam;
+                          version:DWORD //SceVoiceVersion
+                          ):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceVoiceQoSInit(
-          pMemBlock:Pointer;
-          memSize:DWORD;
-          appType:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceQoSInit(pMemBlock:Pointer;memSize:DWORD;appType:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceStart(pArg:pSceVoiceStartParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceCreatePort(portId:DWORD; const pArg:pSceVoicePortParam):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceConnectIPortToOPort(ips,ops:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceDisconnectIPortFromOPort(ips,ops:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -36,6 +74,10 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceVoice');
  lib^.set_proc($F53AE1B86CDB7AB4,@ps4_sceVoiceInit);
+ lib^.set_proc($E78A613C7D8B665B,@ps4_sceVoiceStart);
+ lib^.set_proc($9D7A637B9C8DA5A1,@ps4_sceVoiceCreatePort);
+ lib^.set_proc($A15F4601D276DC6C,@ps4_sceVoiceConnectIPortToOPort);
+ lib^.set_proc($6A3563DD01B6BA6E,@ps4_sceVoiceDisconnectIPortFromOPort);
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
