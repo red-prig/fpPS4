@@ -12,7 +12,7 @@ uses
 
 Const
  SCE_NP_COUNTRY_CODE_LENGTH=2;
- 
+
  SCE_NP_LANGUAGE_CODE_MAX_LEN=5;
 
  SCE_NP_TITLE_ID_LEN=12;
@@ -146,6 +146,30 @@ type
                                           state:Integer; //SceNpReachabilityState
                                           userdata:Pointer); SysV_ABI_CDecl;
 
+//SceNpInGameMessage
+
+const
+ NP_IN_GAME_MESSAGE_POOL_SIZE=(16*1024);
+ SCE_NP_IN_GAME_MESSAGE_DATA_SIZE_MAX=512;
+
+type
+ pSceNpInGameMessageData=^SceNpInGameMessageData;
+ SceNpInGameMessageData=packed record
+  data:array[0..SCE_NP_IN_GAME_MESSAGE_DATA_SIZE_MAX-1] of AnsiChar;
+  dataSize:QWORD;
+ end;
+
+ pSceNpPeerAddressA=^SceNpPeerAddressA;
+ SceNpPeerAddressA=packed record
+  accountId:SceNpAccountId;
+  platform:SceNpPlatformType;
+  padding:array[0..3] of AnsiChar;
+ end;
+
+ SceNpInGameMessageEventCallbackA=procedure(libCtxId,pTo:Integer;pToOnlineId:pSceNpOnlineId;pFrom:Integer;pMessage:pSceNpInGameMessageData;pUserArg:Pointer) SysV_ABI_CDecl;
+
+ //SceNpInGameMessage
+
 implementation
 
 function ps4_sceNpSetContentRestriction(pRestriction:PSceNpContentRestriction):Integer; SysV_ABI_CDecl;
@@ -174,7 +198,37 @@ begin
  if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  pLangCode^.code:='en';
  Result:=0;
-end;   
+end;
+
+function ps4_sceNpInGameMessageInitialize(poolSize:size_t;pOption:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=6;
+end;
+
+function ps4_SceNpInGameMessageTerminate(libCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpInGameMessageCreateHandle(libCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=3;
+end;
+
+function ps4_sceNpInGameMessageDeleteHandle(libCtxId,handleId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpInGameMessagePrepareA(libCtxId,handleId:Integer;pReserved:Pointer;cbFunc:SceNpInGameMessageEventCallbackA;pUserArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpInGameMessageSendDataA(libCtxId:Integer;pTo:pSceNpPeerAddressA;pFrom:pSceNpPeerAddressA;pMessage:pSceNpInGameMessageData):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
 
 const
  GEOCLASS_NATION = 16;
@@ -549,7 +603,13 @@ begin
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
  lib^.set_proc($4CF31B808C6FA20D,@ps4_sceNpGetAccountLanguageA);
- 
+
+ lib^.set_proc($1858555294666C71,@ps4_sceNpInGameMessageInitialize);
+ lib^.set_proc($6CC1B77159949AE9,@ps4_SceNpInGameMessageTerminate);
+ lib^.set_proc($B385046B988125D7,@ps4_sceNpInGameMessageCreateHandle);
+ lib^.set_proc($F9A9EE4B1D9ABC74,@ps4_sceNpInGameMessageDeleteHandle);
+ lib^.set_proc($2242FAD85329229A,@ps4_sceNpInGameMessagePrepareA);
+ lib^.set_proc($3D00C5C5C9EAC6DC,@ps4_sceNpInGameMessageSendDataA);
 
  lib:=Result._add_lib('libSceNpManagerForToolkit');
  lib^.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
