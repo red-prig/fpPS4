@@ -10,6 +10,9 @@ uses
   Classes,
   SysUtils;
 
+const
+ SCE_VOICE_ERROR_ARGUMENT_INVALID=-2142369787;
+
 type
  pSceVoiceInitParam=^SceVoiceInitParam;
  SceVoiceInitParam=packed record
@@ -34,6 +37,13 @@ type
 
  pSceVoiceBasePortInfo=^SceVoiceBasePortInfo;
  SceVoiceBasePortInfo=packed record
+  portType :Integer; //SceVoicePortType
+  state    :Integer; //SceVoicePortState
+  pEdge    :PDWORD;
+  numByte  :DWORD;
+  frameSize:DWORD;
+  numEdge  :WORD;
+  reserved :WORD;
  end;
 
 implementation
@@ -77,6 +87,15 @@ end;
 
 function ps4_sceVoiceGetPortInfo(portId:DWORD;pInfo:pSceVoiceBasePortInfo):Integer; SysV_ABI_CDecl;
 begin
+ if (pInfo=nil) then Exit(SCE_VOICE_ERROR_ARGUMENT_INVALID);
+
+ pInfo^.portType :=0;
+ pInfo^.state    :=3
+ pInfo^.numByte  :=0;
+ pInfo^.frameSize:=1;
+ pInfo^.numEdge  :=0;
+ pInfo^.reserved :=0;
+
  Result:=0;
 end;
 

@@ -413,11 +413,15 @@ end;
 
 function ps4_sceSystemServiceReportAbnormalTermination(const info:pSceSystemServiceAbnormalTerminationInfo):Integer; SysV_ABI_CDecl;
 begin
+ Writeln(StdErr,'sceSystemServiceReportAbnormalTermination');
+ Assert(false);
  Result:=0;
 end;
 
 function ps4_sceSystemServiceLoadExec(const path:PChar;const argv:PChar):Integer; SysV_ABI_CDecl;
 begin
+ Writeln(StdErr,'TODO:sceSystemServiceLoadExec:',path);
+ Assert(false);
  Result:=0;
 end;
 
