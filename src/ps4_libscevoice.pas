@@ -32,6 +32,10 @@ type
   //
  end;
 
+ pSceVoiceBasePortInfo=^SceVoiceBasePortInfo;
+ SceVoiceBasePortInfo=packed record
+ end;
+
 implementation
 
 function ps4_sceVoiceInit(pArg:pSceVoiceInitParam;
@@ -71,6 +75,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceGetPortInfo(portId:DWORD;pInfo:pSceVoiceBasePortInfo):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceVoice(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -84,6 +93,7 @@ begin
  lib^.set_proc($6FB90923E9F1DA18,@ps4_sceVoiceDeletePort);
  lib^.set_proc($A15F4601D276DC6C,@ps4_sceVoiceConnectIPortToOPort);
  lib^.set_proc($6A3563DD01B6BA6E,@ps4_sceVoiceDisconnectIPortFromOPort);
+ lib^.set_proc($0AB2EA0F058BA173,@ps4_sceVoiceGetPortInfo);
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
