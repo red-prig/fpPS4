@@ -157,6 +157,10 @@ type
   minToneMapLuminance         :Single;
  end;
 
+ pSceSystemServiceAbnormalTerminationInfo=^SceSystemServiceAbnormalTerminationInfo;
+ SceSystemServiceAbnormalTerminationInfo=packed record
+ end;
+
  pSceSystemServiceEventType=^SceSystemServiceEventType;
  SceSystemServiceEventType=packed record
   eventType:Integer; //SceSystemServiceEventType
