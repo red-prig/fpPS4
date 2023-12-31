@@ -99,6 +99,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceReadFromOPort(ops:DWORD;data:pPointer;size:pDWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceVoice(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -113,6 +118,7 @@ begin
  lib^.set_proc($A15F4601D276DC6C,@ps4_sceVoiceConnectIPortToOPort);
  lib^.set_proc($6A3563DD01B6BA6E,@ps4_sceVoiceDisconnectIPortFromOPort);
  lib^.set_proc($0AB2EA0F058BA173,@ps4_sceVoiceGetPortInfo);
+ lib^.set_proc($710E831AC4048D5E,@ps4_sceVoiceReadFromOPort);
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
