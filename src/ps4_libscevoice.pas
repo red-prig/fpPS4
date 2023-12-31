@@ -99,7 +99,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVoiceReadFromOPort(ops:DWORD;data:pPointer;size:pDWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceReadFromOPort(ops:DWORD;data:Pointer;size:pDWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
