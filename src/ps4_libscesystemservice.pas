@@ -412,6 +412,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSystemServiceLoadExec(const path:PChar;const argv:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 //
 
 function ps4_sceSystemServiceEnableSuspendNotification:Integer; SysV_ABI_CDecl;
@@ -445,6 +450,7 @@ begin
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
  lib^.set_proc($EB9E8B3104AB83A5,@ps4_sceSystemServiceReceiveEvent);
  lib^.set_proc($DECF1C1E20812811,@ps4_sceSystemServiceReportAbnormalTermination);
+ lib^.set_proc($26806A490B75CB20,@ps4_sceSystemServiceLoadExec);
 
  lib:=Result._add_lib('libSceSystemServiceSuspend');
  lib^.set_proc($6B92A38EAE8781C5,@ps4_sceSystemServiceEnableSuspendNotification);
