@@ -10,6 +10,9 @@ uses
   Classes,
   SysUtils;
 
+const
+ SCE_VOICE_ERROR_ARGUMENT_INVALID=-2142369787;
+
 type
  pSceVoiceInitParam=^SceVoiceInitParam;
  SceVoiceInitParam=packed record
@@ -30,6 +33,17 @@ type
  pSceVoicePortParam=^SceVoicePortParam;
  SceVoicePortParam=packed record
   //
+ end;
+
+ pSceVoiceBasePortInfo=^SceVoiceBasePortInfo;
+ SceVoiceBasePortInfo=packed record
+  portType :Integer; //SceVoicePortType
+  state    :Integer; //SceVoicePortState
+  pEdge    :PDWORD;
+  numByte  :DWORD;
+  frameSize:DWORD;
+  numEdge  :WORD;
+  reserved :WORD;
  end;
 
 implementation
@@ -56,6 +70,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceDeletePort(portId:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceVoiceConnectIPortToOPort(ips,ops:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -63,6 +82,20 @@ end;
 
 function ps4_sceVoiceDisconnectIPortFromOPort(ips,ops:DWORD):Integer; SysV_ABI_CDecl;
 begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceGetPortInfo(portId:DWORD;pInfo:pSceVoiceBasePortInfo):Integer; SysV_ABI_CDecl;
+begin
+ if (pInfo=nil) then Exit(SCE_VOICE_ERROR_ARGUMENT_INVALID);
+
+ pInfo^.portType :=0;
+ pInfo^.state    :=3;
+ pInfo^.numByte  :=0;
+ pInfo^.frameSize:=1;
+ pInfo^.numEdge  :=0;
+ pInfo^.reserved :=0;
+
  Result:=0;
 end;
 
@@ -76,8 +109,10 @@ begin
  lib^.set_proc($F53AE1B86CDB7AB4,@ps4_sceVoiceInit);
  lib^.set_proc($E78A613C7D8B665B,@ps4_sceVoiceStart);
  lib^.set_proc($9D7A637B9C8DA5A1,@ps4_sceVoiceCreatePort);
+ lib^.set_proc($6FB90923E9F1DA18,@ps4_sceVoiceDeletePort);
  lib^.set_proc($A15F4601D276DC6C,@ps4_sceVoiceConnectIPortToOPort);
  lib^.set_proc($6A3563DD01B6BA6E,@ps4_sceVoiceDisconnectIPortFromOPort);
+ lib^.set_proc($0AB2EA0F058BA173,@ps4_sceVoiceGetPortInfo);
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
