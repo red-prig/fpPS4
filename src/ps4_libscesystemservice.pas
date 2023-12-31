@@ -407,6 +407,11 @@ begin
  Result:=SCE_SYSTEM_SERVICE_ERROR_NO_EVENT;
 end;
 
+function ps4_sceSystemServiceReportAbnormalTermination(const info:pSceSystemServiceAbnormalTerminationInfo):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 function ps4_sceSystemServiceEnableSuspendNotification:Integer; SysV_ABI_CDecl;
@@ -439,6 +444,7 @@ begin
  lib^.set_proc($98FA4FC6FE4266DE,@ps4_sceSystemServiceGetHdrToneMapLuminance);
  lib^.set_proc($ACFA3AB55F03F5B3,@ps4_sceSystemServiceGetStatus);
  lib^.set_proc($EB9E8B3104AB83A5,@ps4_sceSystemServiceReceiveEvent);
+ lib^.set_proc($DECF1C1E20812811,@ps4_sceSystemServiceReportAbnormalTermination);
 
  lib:=Result._add_lib('libSceSystemServiceSuspend');
  lib^.set_proc($6B92A38EAE8781C5,@ps4_sceSystemServiceEnableSuspendNotification);
