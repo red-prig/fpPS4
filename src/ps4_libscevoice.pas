@@ -90,7 +90,7 @@ begin
  if (pInfo=nil) then Exit(SCE_VOICE_ERROR_ARGUMENT_INVALID);
 
  pInfo^.portType :=0;
- pInfo^.state    :=3
+ pInfo^.state    :=3;
  pInfo^.numByte  :=0;
  pInfo^.frameSize:=1;
  pInfo^.numEdge  :=0;
