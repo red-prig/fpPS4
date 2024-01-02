@@ -101,7 +101,8 @@ uses
  kern_thr,
  kern_proc,
  vfs_subr,
- subr_uio;
+ subr_uio,
+ vnode_pager;
 
 const
  UFS_DEL_VNLOCKED =$01;
@@ -1026,7 +1027,7 @@ begin
 
  ufs_relv(vp);
 
- //vnode_destroy_vobject(vp);
+ vnode_destroy_vobject(vp);
 
  Exit(0);
 end;

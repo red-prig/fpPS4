@@ -311,6 +311,8 @@ procedure vn_rangelock_unlock_range(vp:p_vnode;cookie:Pointer;start,__end:Int64)
 function  vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
 function  vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
 
+function  vn_canvmio(vp:p_vnode):Boolean;
+
 var
  rootvnode:p_vnode=nil;
 
@@ -462,6 +464,23 @@ begin
  Result:=nil;
  //Result:=rangelock_wlock(@vp^.v_rl, start, __end, VI_MTX(vp))
 end;
+
+const
+ vmiodirenable=False;
+
+function vn_canvmio(vp:p_vnode):Boolean;
+begin
+ if (vp<>nil) then
+ begin
+  if (vp^.v_type=VREG) or
+     (vmiodirenable and (vp^.v_type=VDIR)) then
+  begin
+   Exit(True);
+  end;
+ end;
+ Result:=False;
+end;
+
 
 end.
 

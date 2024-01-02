@@ -123,7 +123,8 @@ uses
  vstat,
  vfs_subr,
  subr_uio,
- kern_thr;
+ kern_thr,
+ vnode_pager;
 
 const
  UFS_SET_READONLY=(not &0222);
@@ -1094,7 +1095,7 @@ begin
   md_delete_cache(de);
  end;
 
- //vnode_destroy_vobject(vp);
+ vnode_destroy_vobject(vp);
 
  Exit(0);
 end;
@@ -1944,7 +1945,7 @@ begin
   VLNK:Exit(0);
   VDIR:Exit(0);
   else
-   Exit(EPERM);
+   Exit(EOPNOTSUPP);
  end;
 
  de:=vp^.v_data;
@@ -1997,6 +1998,8 @@ begin
 
  vp^.v_un:=Pointer(FD);
 
+ vnode_create_vobject(vp, de^.ufs_size);
+
  if ((de^.ufs_flags and UFS_CREATE)<>0) then
  begin
   if ((flags and O_EXCL)<>0) then
@@ -2027,6 +2030,8 @@ begin
  begin
   NtClose(FD);
  end;
+
+ vnode_destroy_vobject(vp);
 
  Result:=0;
 end;
@@ -2259,6 +2264,8 @@ begin
    if (Result<>0) then goto _err;
 
    de^.ufs_size:=SIZE;
+
+   vnode_pager_setsize(vp, SIZE);
   end;
 
   _err:
@@ -2396,6 +2403,19 @@ begin
   Dec(uio^.uio_iovcnt);
  end;
 
+ if (Result=0) and (uio^.uio_rw=UIO_WRITE) then
+ begin
+  if not locked then
+  begin
+   sx_xlock(@de^.ufs_md_lock);
+  end;
+
+  md_update_dirent(F,de,nil);
+
+  vnode_pager_setsize(vp, de^.ufs_size);
+
+  sx_xunlock(@de^.ufs_md_lock);
+ end else
  if locked then
  begin
   sx_xunlock(@de^.ufs_md_lock);

@@ -463,7 +463,7 @@ begin
  if (imgp=nil) then Exit;
 
  imgp^.authinfo:=Default(t_authinfo);
- imgp^.authinfo.app_caps [0]:=QWORD($2000000000000000); //IsGameProcess1
+ imgp^.authinfo.app_caps [0]:=QWORD($2000000000000000); //IsGame
  imgp^.authinfo.app_attrs[0]:=$400000 or $800000; //allow dmem map
 
  if (imgp^.image_header=nil) or

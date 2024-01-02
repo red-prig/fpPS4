@@ -21,7 +21,8 @@ implementation
 
 uses
  vmparam,
- device_pager;
+ device_pager,
+ vnode_pager;
 
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
@@ -37,7 +38,7 @@ begin
  case otype of
   OBJT_DEFAULT  :Result:=vm_object_allocate(otype,OFF_TO_IDX(size));
   //OBJT_SWAP     :;
-  //OBJT_VNODE    :;
+  OBJT_VNODE    :Result:=vnode_pager_alloc(handle,size,prot,off);
   OBJT_DEVICE   :Result:=dev_pager_alloc(handle,size,prot,off);
   //OBJT_PHYS     :;
   //OBJT_DEAD     :;
@@ -65,7 +66,7 @@ begin
  case obj^.otype of
   OBJT_DEFAULT  :default_dealloc(obj);
   OBJT_SWAP     :;
-  OBJT_VNODE    :;
+  OBJT_VNODE    :vnode_pager_dealloc(obj);
   OBJT_DEVICE   :dev_pager_dealloc(obj);
   OBJT_PHYS     :;
   OBJT_DEAD     :;

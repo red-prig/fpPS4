@@ -205,7 +205,8 @@ uses
  kern_proc,
  kern_descrip,
  kern_mtxpool,
- subr_uio;
+ subr_uio,
+ vnode_pager;
 
 function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
 begin
@@ -1641,7 +1642,7 @@ begin
  end;
  mtx_unlock(devfs_de_interlock);
 
- //vnode_destroy_vobject(vp);
+ vnode_destroy_vobject(vp);
 
  VI_LOCK(vp);
  dev_lock();

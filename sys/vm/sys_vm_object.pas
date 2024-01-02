@@ -32,9 +32,7 @@ type
  vm_object_t=^t_vm_object;
  t_vm_object=packed record
   mtx               :mtx;
-  memq              :TAILQ_HEAD;              // list of resident pages
   patchq            :TAILQ_HEAD;              // list of patches
-  root              :Pointer;                 // root of the resident page splay tree
   size              :vm_pindex_t;             // Object size
   generation        :Integer;                 // generation ID
   ref_count         :Integer;                 // How many refs??
@@ -118,6 +116,15 @@ function  vm_object_page_clean(obj:vm_object_t;
 
 implementation
 
+uses
+ vnode;
+
+//
+
+procedure vref(vp:p_vnode); external;
+
+//
+
 function VM_OBJECT_MTX(obj:vm_object_t):p_mtx;
 begin
  Result:=@obj^.mtx;
@@ -166,7 +173,6 @@ begin
 
  mtx_init(Result^.mtx,'vm_object');
 
- TAILQ_INIT(@Result^.memq);
  TAILQ_INIT(@Result^.patchq);
 
  Result^.otype     :=t;
@@ -190,7 +196,19 @@ procedure vm_object_reference(obj:vm_object_t);
 begin
  if (obj=nil) then Exit;
 
- System.InterlockedIncrement(obj^.ref_count);
+ VM_OBJECT_LOCK(obj);
+
+  Inc(obj^.ref_count);
+
+  if (obj^.otype=OBJT_VNODE) then
+  begin
+   if (obj^.otype=OBJT_VNODE) then
+   begin
+    vref(obj^.handle);
+   end;
+  end;
+
+ VM_OBJECT_UNLOCK(obj);
 end;
 
 procedure vm_object_pip_add(obj:vm_object_t;i:word);

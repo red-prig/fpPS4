@@ -2164,8 +2164,8 @@ var
  mp:p_mount;
 begin
  Inc(vp^.v_holdcnt);
- if (not VSHOULDBUSY(vp)) then
-  Exit;
+ if (not VSHOULDBUSY(vp)) then Exit;
+
  ASSERT_VI_LOCKED(vp,'vholdl');
  Assert((vp^.v_iflag and VI_FREE)<>0,'vnode not free');
  Assert(vp^.v_op<>nil,'vholdl: vnode already reclaimed.');
@@ -2659,7 +2659,7 @@ begin
  begin
   obj:=vp^.v_object;
   if (obj<>nil) and
-     {((obj^.flags and OBJ_MIGHTBEDIRTY)<>0)} False and
+     ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) and
      ((flags=MNT_WAIT) or (VOP_ISLOCKED(vp)=0)) then
   begin
    if (vget(vp, LK_EXCLUSIVE or LK_RETRY or LK_INTERLOCK)=0) then
@@ -2960,17 +2960,21 @@ begin
  error:=0;
  dev_lock();
  if (vp^.v_type<>VCHR) then
+ begin
   error:=ENOTBLK
- else
+ end else
  if (vp^.v_rdev=nil) then
+ begin
   error:=ENXIO
- else
+ end else
  if (p_cdev(vp^.v_rdev)^.si_devsw=nil) then
  begin
   error:=ENXIO
- end{ else
- if ((p_cdev(vp^.v_rdev)^.si_devsw^.d_flags and D_DISK)=0) then
-  error:=ENOTBLK};
+ end else
+ if ((p_cdevsw(p_cdev(vp^.v_rdev)^.si_devsw)^.d_flags and D_DISK)=0) then
+ begin
+  error:=ENOTBLK;
+ end;
  dev_unlock();
  error:=ENOTBLK;
  if (errp<>nil) then

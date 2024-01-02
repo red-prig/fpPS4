@@ -181,7 +181,7 @@ begin
  end;
  foff:=foffp^;
  flags:=flagsp^;
- obj:=nil;
+
  obj:=vp^.v_object;
 
  case vp^.v_type of
@@ -258,12 +258,14 @@ begin
  begin
   flags:=flags or MAP_NOSYNC;
  end;
+
  obj:=vm_pager_allocate(OBJT_VNODE, vp, objsize, prot, foff);
  if (obj=nil) then
  begin
   error:=ENOMEM;
   goto done;
  end;
+
  objp^:=obj;
  flagsp^:=flags;
 
@@ -276,7 +278,9 @@ done:
   writecounted^:=FALSE;
   //vnode_pager_update_writecount(obj, objsize, 0);
  end;
+
  vput(vp);
+
  VFS_UNLOCK_GIANT(vfslocked);
  Result:=(error);
 end;

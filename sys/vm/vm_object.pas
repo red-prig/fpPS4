@@ -38,7 +38,11 @@ implementation
 uses
  vmparam,
  vnode,
- vfs_subr;
+ vnode_if,
+ vmount,
+ vfs_subr,
+ vfs_vnops,
+ kern_mtx;
 
 //
 
@@ -71,7 +75,7 @@ end;
  The object must be locked.
  This routine may block.
 }
-procedure vm_object_terminate(obj:vm_object_t);
+procedure vm_object_terminate(obj:vm_object_t); public;
 var
  vp:p_vnode;
 begin
@@ -118,26 +122,112 @@ begin
  vm_object_destroy(obj);
 end;
 
-procedure vm_object_deallocate(obj:vm_object_t); public;
+{
+ Handle deallocating an object of type OBJT_VNODE.
+}
+procedure vm_object_vndeallocate(obj:vm_object_t);
 var
- ref:Integer;
+ vp:p_vnode;
+begin
+ vp:=obj^.handle;
+
+ VFS_ASSERT_GIANT(vp^.v_mount);
+ VM_OBJECT_LOCK_ASSERT(obj);
+
+ Assert(obj^.otype=OBJT_VNODE,'vm_object_vndeallocate: not a vnode obj');
+ Assert(vp<>nil, 'vm_object_vndeallocate: missing vp');
+
+ if (obj^.ref_count > 1) then
+ begin
+  VM_OBJECT_UNLOCK(obj);
+  // vrele may need the vnode lock.
+  vrele(vp);
+ end else
+ begin
+  vhold(vp);
+  VM_OBJECT_UNLOCK(obj);
+
+  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+  vdrop(vp);
+
+  VM_OBJECT_LOCK(obj);
+
+  Dec(obj^.ref_count);
+
+  if (obj^.otype=OBJT_DEAD) then
+  begin
+   VM_OBJECT_UNLOCK(obj);
+   VOP_UNLOCK(vp, 0);
+  end else
+  begin
+   if (obj^.ref_count=0) then
+   begin
+    //VOP_UNSET_TEXT(vp);
+   end;
+   VM_OBJECT_UNLOCK(obj);
+   vput(vp);
+  end;
+ end;
+end;
+
+{
+ vm_object_deallocate:
+
+ Release a reference to the specified object,
+ gained either through a vm_object_allocate
+ or a vm_object_reference call.  When all references
+ are gone, storage associated with this object
+ may be relinquished.
+
+ No object may be locked.
+}
+procedure vm_object_deallocate(obj:vm_object_t); public;
+label
+ restart;
+var
+ vfslocked:Integer;
+ vp:p_vnode;
 begin
  if (obj=nil) then Exit;
 
- ref:=System.InterlockedDecrement(obj^.ref_count);
+ VM_OBJECT_LOCK(obj);
 
- if (ref=1) then
- begin
-  VM_OBJECT_LOCK(obj);
-  vm_object_set_flag(obj, OBJ_ONEMAPPING);
-  VM_OBJECT_UNLOCK(obj);
- end else
- if (ref=0) then
- if ((obj^.flags and OBJ_DEAD)=0) then
- begin
-  VM_OBJECT_LOCK(obj);
-  vm_object_terminate(obj);
- end;
+  if (obj^.otype=OBJT_VNODE) then
+  begin
+   restart:
+
+    vp:=obj^.handle;
+
+    vfslocked:=0;
+    if VFS_NEEDSGIANT(vp^.v_mount) then
+    begin
+     vfslocked:=1;
+     if not mtx_trylock(VFS_Giant) then
+     begin
+      VM_OBJECT_UNLOCK(obj);
+      mtx_lock(VFS_Giant);
+      goto restart;
+     end;
+    end;
+
+    vm_object_vndeallocate(obj);
+    VFS_UNLOCK_GIANT(vfslocked);
+    Exit;
+  end;
+
+  Dec(obj^.ref_count);
+
+  if (obj^.ref_count=1) then
+  begin
+   vm_object_set_flag(obj, OBJ_ONEMAPPING);
+  end else
+  if (obj^.ref_count=0) then
+  if ((obj^.flags and OBJ_DEAD)=0) then
+  begin
+   vm_object_terminate(obj);
+  end;
+
+ VM_OBJECT_UNLOCK(obj);
 end;
 
 procedure vm_object_pip_wakeup(obj:vm_object_t);
@@ -166,7 +256,7 @@ begin
  end;
 end;
 
-procedure vm_object_pip_wait(obj:vm_object_t;waitid:pchar);
+procedure vm_object_pip_wait(obj:vm_object_t;waitid:pchar); public;
 begin
  if (obj=nil) then Exit;
 
