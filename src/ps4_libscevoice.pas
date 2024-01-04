@@ -46,10 +46,6 @@ type
   reserved :WORD;
  end;
 
-pfloat=^float;
- float=packed record
- end;
-
 implementation
 
 function ps4_sceVoiceInit(pArg:pSceVoiceInitParam;
@@ -108,7 +104,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVoiceSetVolume(portId:DWORD;volume:float):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceSetVolume(portId:DWORD;volume:Single):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
