@@ -44,6 +44,23 @@ type
   size        :size_t;
  end;
 
+ SceNpMatching2RequestCallback=procedure(
+                                ctxId:Word;
+                                reqId:DWORD;
+                                event:Word;
+                                errorCode:Integer;
+                                const data:Pointer;
+                                arg:Pointer); SysV_ABI_CDecl;
+
+ pSceNpMatching2RequestOptParam=^SceNpMatching2RequestOptParam;
+ SceNpMatching2RequestOptParam=packed record
+  cbFunc:SceNpMatching2RequestCallback;
+  cbFuncArg:Pointer;
+  timeout:DWORD;
+  appReqId:Word;
+  padding:char; //unsigned
+ end;
+
  SceNpMatching2ContextCallback=procedure(
                                 ctxId,event:Word;
                                 eventCause:Byte;
@@ -71,6 +88,14 @@ type
                                   event:Word;
                                   errorCode:Integer;
                                   arg:Pointer); SysV_ABI_CDecl;
+
+  SceNpMatching2RoomMessageCallback=procedure(
+                                  ctxId:Word;
+                                  roomId:QWORD;
+                                  srcMemberId:Word;
+                                  event:Word;
+                                  const data:Pointer;
+                                  arg:Pointer); SysV_ABI_CDecl;                                  
 
 function ps4_sceNpMatching2Initialize(param:pSceNpMatching2InitializeParameter):Integer; SysV_ABI_CDecl;
 begin
@@ -100,6 +125,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpMatching2RegisterRoomMessageCallback(const ctxId:SceNpMatching2ContextId;
+                                                       cbFunc:SceNpMatching2RoomMessageCallback;cbFuncArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpMatching2ContextStart(ctxId:SceNpMatching2ContextId;timeout:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -116,6 +147,12 @@ function ps4_sceNpMatching2CreateContextA(param:pSceNpMatching2CreateContextPara
                                           ctxId:PWord):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpMatching2CreateContextA,serviceLabel=',param^.serviceLabel,',size=',param^.size);
+ Result:=0;
+end;
+
+function ps4_sceNpMatching2SetDefaultRequestOptParam(const ctxId:SceNpMatching2ContextId;
+                                                     const optParam:pSceNpMatching2RequestOptParam):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
@@ -136,10 +173,12 @@ begin
  lib^.set_proc($7D041F3FCEC8EE1B,@ps4_sceNpMatching2RegisterContextCallback);
  lib^.set_proc($E0D8FBBB9079C820,@ps4_sceNpMatching2RegisterLobbyEventCallback);
  lib^.set_proc($A7ED849F199A00C3,@ps4_sceNpMatching2RegisterRoomEventCallback);
+ lib^.set_proc($B81112CF3E02430B,@ps4_sceNpMatching2RegisterRoomMessageCallback);
  lib^.set_proc($D1431E5911A764A0,@ps4_sceNpMatching2RegisterSignalingCallback);
  lib^.set_proc($EEF8CD43A675A29D,@ps4_sceNpMatching2ContextStart);
  lib^.set_proc($61F9A95BBD7DACCA,@ps4_sceNpMatching2CreateContext);
  lib^.set_proc($6A3BF373C7B6BA9A,@ps4_sceNpMatching2CreateContextA);
+ lib^.set_proc($FBC7BBC172E68DDB,@ps4_sceNpMatching2SetDefaultRequestOptParam);
  lib^.set_proc($32AA77949FAC8F2E,@ps4_sceNpMatching2Terminate);
 end;
 
