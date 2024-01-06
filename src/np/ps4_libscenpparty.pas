@@ -5,88 +5,86 @@ unit ps4_libSceNpParty;
 interface
 
 uses
-  windows,
-  ps4_program,
-  np_error,
-  ps4_libSceNpCommon;
+ ps4_program,
+ ps4_libSceNpCommon;
+
+const
+ SCE_NP_PARTY_MEMBER_NUM_MAX=8;
 
 type
-  pSceNpPartyInitializeParam=^SceNpPartyInitializeParam;
-  SceNpPartyInitializeParam=packed record
+ pSceNpPartyInitializeParam=^SceNpPartyInitializeParam;
+ SceNpPartyInitializeParam=packed record
   sdkVersion:DWORD;
-end;
+ end;
 
-  pSceNpPartyState=^SceNpPartyState;
-  SceNpPartyState=packed record
-end;
+ pSceNpPartyState=^SceNpPartyState;
+ SceNpPartyState=Word;
 
-  pSceNpPartyRoomMemberId=^SceNpPartyRoomMemberId;
-  SceNpPartyRoomMemberId=packed record
-end;
+ pSceNpPartyRoomMemberId=^SceNpPartyRoomMemberId;
+ SceNpPartyRoomMemberId=Word;
 
-  pSceNpPartyMemberVoiceState=^SceNpPartyMemberVoiceState;
-  SceNpPartyMemberVoiceState=packed record
-end;
+ pSceNpPartyMemberVoiceState=^SceNpPartyMemberVoiceState;
+ SceNpPartyMemberVoiceState=Byte;
 
-  pSceNpPeerAddressA=^SceNpPeerAddressA;
-  SceNpPeerAddressA=packed record
+ pSceNpPeerAddressA=^SceNpPeerAddressA;
+ SceNpPeerAddressA=packed record
   accountId:SceNpAccountId;
-  platform:SceNpPlatformType;
-  padding:char;
-end;
+  platform :SceNpPlatformType;
+  padding  :Integer;
+ end;
 
-  pSceNpPartyMemberFlags=^SceNpPartyMemberFlags;
-  SceNpPartyMemberFlags=packed record
-end;
+ pSceNpPartyMemberFlags=^SceNpPartyMemberFlags;
+ SceNpPartyMemberFlags=Byte;
 
-  pSceNpPartyMemberInfo=^SceNpPartyMemberInfo;
-  SceNpPartyMemberInfo=packed record
+ pSceNpPartyMemberInfo=^SceNpPartyMemberInfo;
+ SceNpPartyMemberInfo=packed record
   peerAddress:SceNpPeerAddressA;
-  onlineId:   SceNpOnlineId;
-  memberId:   SceNpPartyRoomMemberId;
+  onlineId   :SceNpOnlineId;
+  memberId   :SceNpPartyRoomMemberId;
   memberFlags:SceNpPartyMemberFlags;
-  reserved:   WORD;
-end;
+  reserved   :Byte;
+ end;
 
-  pSceNpPartyMemberVoiceInfo=^SceNpPartyMemberVoiceInfo;
-  SceNpPartyMemberVoiceInfo=packed record
-  memberId:           SceNpPartyRoomMemberId;
-  memberVoiceState:   SceNpPartyMemberVoiceState;
-  reserved:           Word;
+ pSceNpPartyMemberVoiceInfo=^SceNpPartyMemberVoiceInfo;
+ SceNpPartyMemberVoiceInfo=packed record
+  memberId           :SceNpPartyRoomMemberId;
+  memberVoiceState   :SceNpPartyMemberVoiceState;
+  reserved           :Byte;
   destinationMemberId:SceNpPartyRoomMemberId;
-end;
+ end;
 
-  pSceNpPartyMemberList=^SceNpPartyMemberList;
-  SceNpPartyMemberList=packed record
-  members:SceNpPartyMemberInfo;
-  memberNum:Byte;
-  reserved2:bool;
-  reserved:array[0..5] of Byte;
-end;
+ pSceNpPartyMemberList=^SceNpPartyMemberList;
+ SceNpPartyMemberList=packed record
+  members     :array[0..SCE_NP_PARTY_MEMBER_NUM_MAX-1] of SceNpPartyMemberInfo;
+  memberIds   :array[0..SCE_NP_PARTY_MEMBER_NUM_MAX-1] of SceNpPartyRoomMemberId;
+  memberNum   :Byte;
+  privateParty:Boolean;
+  reserved    :Word;
+ end;
 
-  SceNpPartyBinaryMessageEventHandler=procedure(
-                                         event:Word;
-                                         const data:Pointer;
-                                         userdata:Pointer); SysV_ABI_CDecl;
+ SceNpPartyBinaryMessageEventHandler=procedure(
+                                        event:Word;
+                                        const data:Pointer;
+                                        userdata:Pointer); SysV_ABI_CDecl;
 
-  SceNpPartyRoomEventHandler=procedure(
-                                eventType:Word;
-                                const data:Pointer;
-                                userdata:Pointer); SysV_ABI_CDecl;
+ SceNpPartyRoomEventHandler=procedure(
+                               eventType:Word;
+                               const data:Pointer;
+                               userdata:Pointer); SysV_ABI_CDecl;
 
-  SceNpPartyVoiceEventHandler=procedure(
-                                const memberVoiceInfo:SceNpPartyMemberVoiceInfo;
-                                userdata:Pointer); SysV_ABI_CDecl;
+ SceNpPartyVoiceEventHandler=procedure(
+                               const memberVoiceInfo:SceNpPartyMemberVoiceInfo;
+                               userdata:Pointer); SysV_ABI_CDecl;
 
-  pSceNpPartyEventHandlers=^SceNpPartyEventHandlers;
-  SceNpPartyEventHandlers=packed record
-  sdkVersion:               DWORD;
-  reserved:                 DWORD;
-  roomEvenHandler:          SceNpPartyRoomEventHandler;
-  voiceEventHandler:        SceNpPartyVoiceEventHandler;
+ pSceNpPartyEventHandlers=^SceNpPartyEventHandlers;
+ SceNpPartyEventHandlers=packed record
+  sdkVersion               :DWORD;
+  reserved                 :DWORD;
+  roomEvenHandler          :SceNpPartyRoomEventHandler;
+  voiceEventHandler        :SceNpPartyVoiceEventHandler;
   binaryMessageEventHandler:SceNpPartyBinaryMessageEventHandler;
-  reserved2:                Pointer;
-end;
+  reserved2                :Pointer;
+ end;
 
 implementation
 
@@ -142,3 +140,4 @@ initialization
  ps4_app.RegistredPreLoad('libSceNpParty.prx',@Load_libSceNpParty);
 
 end.
+

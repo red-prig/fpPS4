@@ -58,7 +58,7 @@ type
   cbFuncArg:Pointer;
   timeout:DWORD;
   appReqId:Word;
-  padding:char; //unsigned
+  padding:Word;
  end;
 
  SceNpMatching2ContextCallback=procedure(
@@ -90,12 +90,12 @@ type
                                   arg:Pointer); SysV_ABI_CDecl;
 
   SceNpMatching2RoomMessageCallback=procedure(
-                                  ctxId:Word;
-                                  roomId:QWORD;
-                                  srcMemberId:Word;
-                                  event:Word;
-                                  const data:Pointer;
-                                  arg:Pointer); SysV_ABI_CDecl;                                  
+                                     ctxId:Word;
+                                     roomId:QWORD;
+                                     srcMemberId:Word;
+                                     event:Word;
+                                     const data:Pointer;
+                                     arg:Pointer); SysV_ABI_CDecl;
 
 function ps4_sceNpMatching2Initialize(param:pSceNpMatching2InitializeParameter):Integer; SysV_ABI_CDecl;
 begin
