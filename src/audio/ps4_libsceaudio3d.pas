@@ -23,8 +23,7 @@ const
 
 type
  pSceUserServiceUserId=^SceUserServiceUserId;
- SceUserServiceUserId=packed record
- end;
+ SceUserServiceUserId=DWORD;
 
  pSceAudio3dAttributeId=^SceAudio3dAttributeId;
  SceAudio3dAttributeId=packed record
@@ -127,6 +126,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudio3dAudioOutOpen(uiPortId:SceAudio3dPortId;
+                                    userId:SceUserServiceUserId;
+                                    _type,index:DWORD;len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceAudio3d(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -143,6 +149,7 @@ begin
  lib^.set_proc($970D2AADD4A366DF,@ps4_sceAudio3dPortAdvance);
  lib^.set_proc($54456167DA9DE196,@ps4_sceAudio3dPortPush);
  lib^.set_proc($226FA33A86B95802,@ps4_sceAudio3dGetDefaultOpenParameters);
+ lib^.set_proc($B9C12C8BADACA13A,@ps4_sceAudio3dAudioOutOpen);
 end;
 
 initialization
