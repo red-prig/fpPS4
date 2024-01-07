@@ -149,3 +149,4 @@ initialization
  ps4_app.RegistredPreLoad('libSceAudio3d.prx',@Load_libSceAudio3d);
 
 end.
+
