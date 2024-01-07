@@ -128,7 +128,7 @@ end;
 
 function ps4_sceAudio3dAudioOutOpen(uiPortId:SceAudio3dPortId;
                                     userId:SceUserServiceUserId;
-                                    _type,index:DWORD;len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
+                                    _type,index:Integer;len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
