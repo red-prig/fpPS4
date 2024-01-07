@@ -45,6 +45,7 @@ uses
  ps4_libSceDialogs,
  ps4_libSceUserService,
  ps4_libSceAudioOut,
+ ps4_libSceAudio3d,
  ps4_libSceVoice,
  ps4_libSceVideoOut,
  ps4_libSceAvPlayer,
