@@ -5,7 +5,6 @@ unit ps4_libSceAudio3d;
 interface
 
 uses
- libportaudio,
  ps4_program;
 
 const
@@ -22,61 +21,52 @@ const
  SCE_AUDIO3D_BLOCKING_SYNC =1;
 
 type
- pSceUserServiceUserId=^SceUserServiceUserId;
- SceUserServiceUserId=DWORD;
-
  pSceAudio3dAttributeId=^SceAudio3dAttributeId;
- SceAudio3dAttributeId=packed record
- end;
+ SceAudio3dAttributeId=DWORD;
 
  pSceAudio3dAttribute=^SceAudio3dAttribute;
  SceAudio3dAttribute=packed record
   uiAttributeId:SceAudio3dAttributeId;
-  Integer:single;
+  _align:Integer;
   pValue:Pointer;
   szValue:QWORD;
  end;
 
  pSceAudio3dBlocking=^SceAudio3dBlocking;
- SceAudio3dBlocking=packed record
- end;
+ SceAudio3dBlocking=Integer;
 
  pSceAudio3dBufferMode=^SceAudio3dBufferMode;
- SceAudio3dBufferMode=packed record
- end;
+ SceAudio3dBufferMode=Integer;
 
  pSceAudio3dObjectId=^SceAudio3dObjectId;
- SceAudio3dObjectId=packed record
- end;
+ SceAudio3dObjectId=DWORD;
 
  pSceAudio3dPortId=^SceAudio3dPortId;
- SceAudio3dPortId=packed record
- end;
+ SceAudio3dPortId=DWORD;
 
  pSceAudio3dRate=^SceAudio3dRate;
- SceAudio3dRate=packed record
- end;
+ SceAudio3dRate=Integer;
 
  pSceAudio3dOpenParameters=^SceAudio3dOpenParameters;
  SceAudio3dOpenParameters=packed record
   szSizeThis   :QWORD;
-  uiGranularity:Word;
+  uiGranularity:DWORD;
   eRate        :SceAudio3dRate;
-  uiMaxObjects :Word;
-  uiQueueDepth :Word;
+  uiMaxObjects :DWORD;
+  uiQueueDepth :DWORD;
   eBufferMode  :SceAudio3dBufferMode;
-  Integer      :single;
-  uiNumBeds    :Word;
+  _align       :Integer;
+  uiNumBeds    :DWORD;
  end;
 
 implementation
 
-function ps4_sceAudio3dInitialize(iReserved:QWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceAudio3dInitialize(iReserved:Int64):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceAudio3dPortOpen(iUserId:SceUserServiceUserId;
+function ps4_sceAudio3dPortOpen(iUserId:Integer;
                                 const pParameters:pSceAudio3dOpenParameters;
                                 pId:pSceAudio3dPortId):Integer; SysV_ABI_CDecl;
 begin
@@ -121,14 +111,9 @@ begin
  Result:=0;
 end;
 
-function ps4_sceAudio3dGetDefaultOpenParameters():Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
 function ps4_sceAudio3dAudioOutOpen(uiPortId:SceAudio3dPortId;
-                                    userId:SceUserServiceUserId;
-                                    _type,index:Integer;len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
+                                    userId,_type,index:Integer;
+                                    len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -154,7 +139,6 @@ begin
  lib^.set_proc($64E1ABC562E04331,@ps4_sceAudio3dPortFlush);
  lib^.set_proc($970D2AADD4A366DF,@ps4_sceAudio3dPortAdvance);
  lib^.set_proc($54456167DA9DE196,@ps4_sceAudio3dPortPush);
- lib^.set_proc($226FA33A86B95802,@ps4_sceAudio3dGetDefaultOpenParameters);
  lib^.set_proc($B9C12C8BADACA13A,@ps4_sceAudio3dAudioOutOpen);
  lib^.set_proc($61A6836C3C0AA453,@ps4_sceAudio3dPortGetQueueLevel);
 end;
