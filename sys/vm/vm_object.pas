@@ -91,7 +91,7 @@ begin
   }
  vm_object_pip_wait(obj, 'objtrm');
 
- Assert(obj^.paging_in_progress=0,'vm_object_terminate: pageout in progress');
+ Assert(obj^.pip=0,'vm_object_terminate: pageout in progress');
 
  vm_object_patch_remove(obj,0,0);
 
@@ -235,8 +235,8 @@ begin
  if (obj=nil) then Exit;
 
  VM_OBJECT_LOCK_ASSERT(obj);
- Dec(obj^.paging_in_progress);
- if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.paging_in_progress=0) then
+ Dec(obj^.pip);
+ if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.pip=0) then
  begin
   vm_object_clear_flag(obj, OBJ_PIPWNT);
   wakeup(obj);
@@ -248,8 +248,8 @@ begin
  if (obj=nil) then Exit;
 
  VM_OBJECT_LOCK_ASSERT(obj);
- Dec(obj^.paging_in_progress,i);
- if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.paging_in_progress=0) then
+ Dec(obj^.pip,i);
+ if ((obj^.flags and OBJ_PIPWNT)<>0) and (obj^.pip=0) then
  begin
   vm_object_clear_flag(obj, OBJ_PIPWNT);
   wakeup(obj);
@@ -261,7 +261,7 @@ begin
  if (obj=nil) then Exit;
 
  VM_OBJECT_LOCK_ASSERT(obj);
- while (obj^.paging_in_progress<>0) do
+ while (obj^.pip<>0) do
  begin
   obj^.flags:=obj^.flags or OBJ_PIPWNT;
   msleep(obj, VM_OBJECT_MTX(obj), PVM, waitid, 0);

@@ -1084,10 +1084,14 @@ begin
  //remove prev if exist
  vm_map_delete(map,vaddr_lo,vaddr_hi,True);
 
+ vm_object_reference(imgp^.obj);
+
  Result:=vm_map_insert(map,imgp^.obj,offset,vaddr_lo,vaddr_hi,VM_PROT_RW,prot or VM_PROT_RW,0,false);
  if (Result<>0) then
  begin
   vm_map_unlock(map);
+  //
+  vm_object_deallocate(imgp^.obj);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
   Exit(vm_mmap_to_errno(Result));

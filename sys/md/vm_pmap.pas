@@ -8,7 +8,9 @@ interface
 uses
  vm,
  vmparam,
- sys_vm_object;
+ sys_vm_object,
+ vm_file,
+ vnode;
 
 const
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
@@ -329,6 +331,40 @@ const
   MD_PROT_RW   //XWR
  );
 
+function get_vnode_handle(obj:vm_object_t):THandle;
+var
+ vp:p_vnode;
+begin
+ Result:=0;
+
+ vp:=obj^.handle;
+
+ if (vp<>nil) then
+ begin
+  VI_LOCK(vp);
+
+  Result:=THandle(vp^.v_un);
+
+  VI_UNLOCK(vp);
+ end;
+end;
+
+function vm_file_map_fixed(map   :p_vm_file_map;
+                           offset:vm_ooffset_t;
+                           start :vm_offset_t;
+                           __end :vm_offset_t;
+                           base  :Pointer;
+                           size  :QWORD):Integer;
+var
+ obj:p_vm_file_obj;
+begin
+ vm_file_map_delete(map,start,__end);
+
+ obj:=vm_file_obj_allocate(base,size,@md_file_unmap);
+
+ Result:=vm_file_map_insert(map,obj,offset,start,__end);
+end;
+
 {
  * Maps a sequence of resident pages belonging to the same object.
  * The sequence begins with the given page m_start.  This page is
@@ -350,8 +386,10 @@ procedure pmap_enter_object(pmap   :pmap_t;
 label
  _default;
 var
+ fd:THandle;
  base:Pointer;
  size:QWORD;
+ delta:QWORD;
  r:Integer;
 begin
  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
@@ -371,12 +409,12 @@ begin
     end;
   OBJT_DEVICE:
     begin
-     if (obj^.map_base=nil) then
+     if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
 
-     base:=obj^.map_base+trunc_page(offset);
+     base:=obj^.un_pager.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
@@ -385,6 +423,43 @@ begin
 
       r:=md_enter(base,size,MD_PROT_RWX);
      end;
+    end;
+   OBJT_VNODE:
+    begin
+     VM_OBJECT_LOCK(obj);
+
+       fd:=get_vnode_handle(obj);
+
+       if (fd<>0) then
+       begin
+
+        delta :=offset and (MD_ALLOC_GRANULARITY-1);
+        offset:=offset and (not (MD_ALLOC_GRANULARITY-1));
+
+        size:=delta+offset+(__end-start);
+
+        if (size>obj^.un_pager.vnp.vnp_size) then
+        begin
+         size:=obj^.un_pager.vnp.vnp_size;
+        end;
+        size:=size-offset;
+
+        base:=nil;
+        r:=md_file_mmap(fd,base,offset,size,wprots[prot and VM_RWX]);
+
+        if (r=0) then
+        begin
+         r:=vm_file_map_fixed(@obj^.un_pager.vnp.file_map,
+                              delta,
+                              start,
+                              __end,
+                              base,
+                              size);
+        end;
+
+       end;
+
+     VM_OBJECT_UNLOCK(obj);
     end;
   else
     begin
@@ -489,12 +564,12 @@ begin
     end;
   OBJT_DEVICE:
     begin
-     if (obj^.map_base=nil) then
+     if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
 
-     base:=obj^.map_base+trunc_page(offset);
+     base:=obj^.un_pager.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
@@ -551,7 +626,7 @@ begin
     end;
   OBJT_DEVICE:
     begin
-     if (obj^.map_base=nil) then
+     if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
@@ -608,12 +683,12 @@ begin
     end;
   OBJT_DEVICE:
     begin
-     if (obj^.map_base=nil) then
+     if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
 
-     base:=obj^.map_base+trunc_page(offset);
+     base:=obj^.un_pager.map_base+trunc_page(offset);
      size:=trunc_page(__end-start);
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then

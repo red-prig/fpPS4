@@ -1046,13 +1046,8 @@ begin
   Exit(0);
  end;
 
- if (vp^.v_object<>nil) then
- begin
-  vm_object_deallocate(vp^.v_object);
-  vp^.v_object:=nil;
- end;
-
  //Exit(bufobj_invalbuf(@vp^.v_bufobj, flags, slpflag, slptimeo));
+
  Result:=0;
 end;
 

@@ -53,12 +53,15 @@ type
 
 const
  //SceLncAppType
- SCE_LNC_APP_TYPE_INVALID =-1;
- SCE_LNC_APP_TYPE_SHELL_UI= 1; //isSystemApp
- SCE_LNC_APP_TYPE_DAEMON  = 2; //isSystemApp
- SCE_LNC_APP_TYPE_CDLG    = 3; //isSystemApp
- SCE_LNC_APP_TYPE_MINI_APP= 4; //isSystemApp
- SCE_LNC_APP_TYPE_BIG_APP = 5;
+ SCE_LNC_APP_TYPE_INVALID   =-1;
+ SCE_LNC_APP_TYPE_NULL      = 0;
+ SCE_LNC_APP_TYPE_SHELL_UI  = 1; //isSystemApp
+ SCE_LNC_APP_TYPE_DAEMON    = 2; //isSystemApp
+ SCE_LNC_APP_TYPE_CDLG      = 3; //isSystemApp
+ SCE_LNC_APP_TYPE_MINI_APP  = 4; //isSystemApp
+ SCE_LNC_APP_TYPE_BIG_APP   = 5;
+ SCE_LNC_APP_TYPE_SHELL_CORE= 6; //isSystemApp
+ SCE_LNC_APP_TYPE_SHELL_APP = 7; //isSystemApp
 
  //[preloadPrxFlags] -> sceSysmodulePreloadModuleForLibkernel
  //0x0000000004 libSceNet
@@ -108,7 +111,7 @@ type
   AppId           :Integer;       //4
   mmap_flags      :Integer;       //4
   attributeExe    :Integer;       //4
-  AppType         :Integer;       //4  SceLncAppType
+  attribute2      :Integer;       //4
   CUSANAME        :TCUSANAME;     //10 titleId
   debug_level     :Byte;          //1
   slv_flags       :Byte;          //1  eLoadOptions

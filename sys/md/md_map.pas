@@ -31,6 +31,9 @@ function md_reset  (base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_mmap   (var base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_unmap  (base:Pointer;size:QWORD):Integer;
 
+function md_file_mmap (handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
+function md_file_unmap(base:Pointer;size:QWORD):Integer;
+
 const
  ICACHE=1; //Flush the instruction cache.
  DCACHE=2; //Write back to memory and invalidate the affected valid cache lines.
@@ -144,6 +147,65 @@ begin
           @size,
           MEM_RELEASE
          );
+end;
+
+function md_file_mmap(handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
+var
+ hSection:THandle;
+ DesiredAccess:DWORD;
+ CommitSize:ULONG_PTR;
+ SectionOffset:ULONG_PTR;
+ ViewSize:ULONG_PTR;
+begin
+
+ case prot of
+  PAGE_READWRITE        :DesiredAccess:=SECTION_MAP_READ or SECTION_MAP_WRITE;
+  PAGE_EXECUTE          :DesiredAccess:=SECTION_MAP_EXECUTE;
+  PAGE_EXECUTE_READ     :DesiredAccess:=SECTION_MAP_EXECUTE or SECTION_MAP_READ;
+  PAGE_EXECUTE_READWRITE:DesiredAccess:=SECTION_MAP_EXECUTE or SECTION_MAP_READ or SECTION_MAP_WRITE;
+  else
+                         DesiredAccess:=SECTION_MAP_READ;
+ end;
+
+ hSection:=0;
+ Result:=NtCreateSection(
+           @hSection,
+           DesiredAccess,
+           nil,
+           @size,
+           prot,
+           SEC_COMMIT,
+           handle
+          );
+
+ if (Result<>0) then Exit;
+
+ base:=md_alloc_page(base);
+
+ CommitSize   :=md_up_page(size);
+ SectionOffset:=offset and (not (MD_ALLOC_GRANULARITY-1));
+ ViewSize     :=CommitSize;
+
+ Result:=NtMapViewOfSection(hSection,
+                            NtCurrentProcess,
+                            @base,
+                            0,
+                            CommitSize,
+                            @SectionOffset,
+                            @ViewSize,
+                            ViewUnmap,
+                            0 {MEM_COMMIT},
+                            prot
+                           );
+
+ NtClose(hSection);
+end;
+
+function md_file_unmap(base:Pointer;size:QWORD):Integer;
+begin
+ base:=md_alloc_page(base);
+
+ Result:=NtUnmapViewOfSection(NtCurrentProcess,@base);
 end;
 
 //

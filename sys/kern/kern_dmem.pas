@@ -265,6 +265,8 @@ begin
 
     if (err=0) then
     begin
+     vm_object_reference(dmap.vobj);
+
      err:=vm_map_insert(map, dmap.vobj, phaddr, vaddr, v_end, prot, VM_PROT_ALL, cow, ((p_proc.p_dmem_aliasing and 3)<>0));
 
      if (err=0) then
@@ -272,6 +274,8 @@ begin
       addr^:=vaddr;
      end else
      begin
+      vm_object_deallocate(dmap.vobj);
+      //
       Result:=vm_mmap_to_errno(err);
      end;
     end;

@@ -1313,6 +1313,8 @@ begin
 
  Result:=md_update_dirent(THandle(vp^.v_un),de,nil);
 
+ vnode_pager_setsize(vp, de^.ufs_size);
+
  sx_xunlock(@de^.ufs_md_lock);
 
  if (Result<>0) then Exit;
@@ -2403,19 +2405,6 @@ begin
   Dec(uio^.uio_iovcnt);
  end;
 
- if (Result=0) and (uio^.uio_rw=UIO_WRITE) then
- begin
-  if not locked then
-  begin
-   sx_xlock(@de^.ufs_md_lock);
-  end;
-
-  md_update_dirent(F,de,nil);
-
-  vnode_pager_setsize(vp, de^.ufs_size);
-
-  sx_xunlock(@de^.ufs_md_lock);
- end else
  if locked then
  begin
   sx_xunlock(@de^.ufs_md_lock);

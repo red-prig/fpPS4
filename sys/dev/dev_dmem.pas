@@ -141,7 +141,7 @@ begin
   Exit(-1);
  end;
 
- paddr^:=offset + QWORD(dmap^.vobj^.map_base);
+ paddr^:=offset + QWORD(dmap^.vobj^.un_pager.map_base);
  memattr^:=0;
 end;
 
@@ -246,7 +246,7 @@ begin
   obj:=vm_pager_allocate(OBJT_DEVICE,dev,0,0,0);
   obj^.size:=$1400000;
   obj^.flags:=obj^.flags or OBJ_DMEM_EXT;
-  obj^.map_base:=Pointer(VM_MIN_GPU_ADDRESS);
+  obj^.un_pager.map_base:=Pointer(VM_MIN_GPU_ADDRESS);
   vm_object_reference(obj);
   //
   dmem_maps[i].dmem:=@kern_dmem.dmem;

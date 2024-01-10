@@ -8,6 +8,8 @@ interface
 uses
  mqueue,
  vm,
+ vmparam,
+ vm_file,
  kern_mtx;
 
 type
@@ -30,25 +32,27 @@ type
 
  p_vm_object_t=^vm_object_t;
  vm_object_t=^t_vm_object;
- t_vm_object=packed record
-  mtx               :mtx;
-  patchq            :TAILQ_HEAD;              // list of patches
-  size              :vm_pindex_t;             // Object size
-  generation        :Integer;                 // generation ID
-  ref_count         :Integer;                 // How many refs??
-  otype             :objtype_t;               // type of pager
-  pg_color          :Word;
-  flags             :Word;                    // see below
-  handle            :Pointer;
-  paging_in_progress:Integer;
-  map_base          :Pointer;
-  un_pager:packed record
-   vnp:packed record
+ t_vm_object=record
+  mtx       :mtx;
+  patchq    :TAILQ_HEAD;              // list of patches
+  size      :vm_pindex_t;             // Object size
+  generation:Integer;                 // generation ID
+  ref_count :Integer;                 // How many refs??
+  otype     :objtype_t;               // type of pager
+  pg_color  :Word;
+  flags     :Word;                    // see below
+  pip       :Integer;
+  handle    :Pointer;
+  un_pager  :record
+   map_base:Pointer;
+   vnp:record
+    file_map:vm_file_map;
     vnp_size:QWORD;
     writemappings:vm_ooffset_t;
    end;
-   physhm:packed record
-    mtype:Byte;
+   physhm:record
+    map_base:Pointer;
+    mtype   :Byte;
    end;
   end;
  end;
@@ -180,15 +184,29 @@ begin
  Result^.generation:=1;
  Result^.ref_count :=1;
 
- if (t=OBJT_DEFAULT) then
- begin
-  Result^.flags:=OBJ_ONEMAPPING;
+ case t of
+  OBJT_DEFAULT:
+    begin
+     Result^.flags:=OBJ_ONEMAPPING;
+    end;
+  OBJT_VNODE:
+    begin
+     vm_file_map_init(@Result^.un_pager.vnp.file_map,0,VM_MAXUSER_ADDRESS);
+    end;
+  else;
  end;
+
 end;
 
 procedure vm_object_destroy(obj:vm_object_t);
 begin
  mtx_destroy(obj^.mtx);
+
+ if (obj^.otype=OBJT_VNODE) then
+ begin
+  vm_file_map_free(@obj^.un_pager.vnp.file_map);
+ end;
+
  FreeMem(obj);
 end;
 
@@ -216,7 +234,7 @@ begin
  if (obj=nil) then Exit;
 
  VM_OBJECT_LOCK_ASSERT(obj);
- obj^.paging_in_progress:=obj^.paging_in_progress+i;
+ obj^.pip:=obj^.pip+i;
 end;
 
 procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
@@ -224,7 +242,7 @@ begin
  if (obj=nil) then Exit;
 
  VM_OBJECT_LOCK_ASSERT(obj);
- obj^.paging_in_progress:=obj^.paging_in_progress-i;
+ obj^.pip:=obj^.pip-i;
 end;
 
 function vm_object_type(obj:vm_object_t):obj_type;

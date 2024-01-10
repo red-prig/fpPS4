@@ -1310,9 +1310,9 @@ begin
  if (error<>0) then goto exec_fail_dealloc;
 
  //imgp^.obj:=imgp^.vp^.v_object;
- //if (imgp^.object<>nil) then
+ //if (imgp^.obj<>nil) then
  //begin
- // vm_object_reference(imgp^.object);
+ // vm_object_reference(imgp^.obj);
  //end;
 
  error:=rtld_load_self(imgp);
@@ -1457,7 +1457,6 @@ begin
  begin
   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 2; //is_system ???
  end;
- g_appinfo.AppType:=SCE_LNC_APP_TYPE_BIG_APP;
 
  //TODO load CUSANAME
 

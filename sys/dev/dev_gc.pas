@@ -130,7 +130,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,nprot,offset^);
- obj^.map_base:=@gc_page;
+ obj^.un_pager.map_base:=@gc_page;
 
  if (obj=nil) then
  begin

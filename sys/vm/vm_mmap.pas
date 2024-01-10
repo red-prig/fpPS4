@@ -511,7 +511,7 @@ begin
 
  if (rv=KERN_SUCCESS) then
  begin
-  //
+  //vm_map_wire
  end else
  begin
   if (writecounted) then
@@ -521,6 +521,7 @@ begin
 
   vm_object_deallocate(obj);
  end;
+
  Exit(vm_mmap_to_errno(rv));
 end;
 

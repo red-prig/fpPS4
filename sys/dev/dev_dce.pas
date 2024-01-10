@@ -634,7 +634,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
- obj^.map_base:=Pointer(@dce_page)-PAGE_SIZE;
+ obj^.un_pager.map_base:=Pointer(@dce_page)-PAGE_SIZE;
 
  if (obj=nil) then
  begin

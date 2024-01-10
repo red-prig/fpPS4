@@ -187,11 +187,11 @@ begin
   * Dereference the reference we just created.  This assumes
   * that the obj is associated with the vp.
   }
- //VM_OBJECT_LOCK(obj);
- // Dec(obj^.ref_count);
- //VM_OBJECT_UNLOCK(obj);
+ VM_OBJECT_LOCK(obj);
+  Dec(obj^.ref_count);
+ VM_OBJECT_UNLOCK(obj);
 
- //vrele(vp);
+ vrele(vp);
 
  Assert(vp^.v_object<>nil, 'vnode_create_vobject: nil obj');
 

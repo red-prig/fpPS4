@@ -1136,8 +1136,6 @@ charged:
  new_entry^.entry_id:=map^.entry_id;
  Inc(map^.entry_id);
 
- vm_object_reference(obj);
-
  Assert(not ENTRY_CHARGED(new_entry),'OVERCOMMIT: vm_map_insert leaks vm_map %p", new_entry');
 
  {
@@ -2070,7 +2068,7 @@ var
  current:vm_map_entry_t;
  entry  :vm_map_entry_t;
  size   :vm_size_t;
- vm_obj :vm_object_t;
+ obj    :vm_object_t;
  offset :vm_ooffset_t;
  last_timestamp:DWORD;
  failed:Boolean;
@@ -2145,21 +2143,21 @@ begin
    begin
     size:=tsize;
    end;
-   vm_obj:=tentry^.vm_obj;
+   obj:=tentry^.vm_obj;
    offset:=tentry^.offset + (offset - tentry^.start);
    vm_map_unlock(smap);
   end else
   begin
-   vm_obj:=current^.vm_obj;
+   obj:=current^.vm_obj;
   end;
 
-  vm_object_reference(vm_obj);
+  vm_object_reference(obj);
   last_timestamp:=map^.timestamp;
   vm_map_unlock(map);
   //if (not vm_object_sync(_object, offset, size, syncio, invalidate)) then
   // failed:=TRUE;
   start:=start+size;
-  vm_object_deallocate(vm_obj);
+  vm_object_deallocate(obj);
   vm_map_lock(map);
   if (last_timestamp=map^.timestamp) or
      (not vm_map_lookup_entry(map, start, @current)) then
