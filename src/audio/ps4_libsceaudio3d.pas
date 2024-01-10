@@ -66,7 +66,7 @@ begin
  Result:=0;
 end;
 
-procedure ps4_sceAudio3dGetDefaultOpenParameters(const pParameters:pSceAudio3dOpenParameters);
+procedure ps4_sceAudio3dGetDefaultOpenParameters(const pParameters:pSceAudio3dOpenParameters); SysV_ABI_CDecl;
 begin
  if (pParameters<>nil) then
  begin
