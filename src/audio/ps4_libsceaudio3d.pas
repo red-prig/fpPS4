@@ -66,6 +66,19 @@ begin
  Result:=0;
 end;
 
+procedure ps4_sceAudio3dGetDefaultOpenParameters(const pParameters:pSceAudio3dOpenParameters);
+begin
+ if (pParameters<>nil) then
+ begin
+  pParameters^.szSizeThis   :=$20;
+  pParameters^.uiGranularity:=256;
+  pParameters^.eRate        :=SCE_AUDIO3D_RATE_48000;
+  pParameters^.uiMaxObjects :=512;
+  pParameters^.uiQueueDepth :=2;
+  pParameters^.eBufferMode  :=SCE_AUDIO3D_BUFFER_ADVANCE_AND_PUSH;
+ end;
+end;
+
 function ps4_sceAudio3dPortOpen(iUserId:Integer;
                                 const pParameters:pSceAudio3dOpenParameters;
                                 pId:pSceAudio3dPortId):Integer; SysV_ABI_CDecl;
@@ -132,6 +145,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceAudio3d');
  lib^.set_proc($5260AF8D29AE648C,@ps4_sceAudio3dInitialize);
+ lib^.set_proc($226FA33A86B95802,@ps4_sceAudio3dGetDefaultOpenParameters);
  lib^.set_proc($5DE0C32B4C495900,@ps4_sceAudio3dPortOpen);
  lib^.set_proc($8CEDAD79CE1D2763,@ps4_sceAudio3dObjectReserve);
  lib^.set_proc($E2EC8737DAB865E5,@ps4_sceAudio3dObjectSetAttributes);
