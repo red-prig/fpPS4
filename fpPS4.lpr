@@ -61,6 +61,7 @@ uses
  ps4_libSceUlt,
  ps4_libSceGameLiveStreaming,
  ps4_libSceSharePlay,
+ ps4_libSceSocialScreen,
  ps4_libSceVideoRecording,
  ps4_libSceContentExport,
  ps4_libSceUsbd,
