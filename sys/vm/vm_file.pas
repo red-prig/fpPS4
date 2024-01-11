@@ -10,14 +10,16 @@ uses
  vmparam;
 
 type
- t_uncb=function(base:Pointer;size:QWORD):Integer;
+ t_protect_cb=function(start,__end:QWORD;base:Pointer;size:QWORD;prot:Integer):Integer;
+ t_unmap_cb  =function(base:Pointer;size:QWORD):Integer;
 
  p_vm_file_obj=^vm_file_obj;
  vm_file_obj=packed record
-  base:Pointer;
-  size:QWORD;
-  refs:QWORD;
-  uncb:t_uncb;
+  base   :Pointer;
+  size   :QWORD;
+  refs   :QWORD;
+  protect:t_protect_cb;
+  unmap  :t_unmap_cb;
  end;
 
  pp_vm_file_entry=^p_vm_file_entry;
@@ -35,15 +37,11 @@ type
 
  p_vm_file_map=^vm_file_map;
  vm_file_map=packed object
-  header  :vm_file_entry;
-  root    :p_vm_file_entry;
-  nentries:DWORD;
-  pages   :DWORD;
-  property  min_offset:QWORD read header.start write header.start;
-  property  max_offset:QWORD read header.__end write header.__end;
+  header:vm_file_entry;
+  root  :p_vm_file_entry;
  end;
 
-function  vm_file_obj_allocate  (base:Pointer;size:QWORD;uncb:t_uncb):p_vm_file_obj;
+function  vm_file_obj_allocate  (base:Pointer;size:QWORD):p_vm_file_obj;
 procedure vm_file_obj_destroy   (obj:p_vm_file_obj);
 procedure vm_file_obj_reference (obj:p_vm_file_obj);
 procedure vm_file_obj_deallocate(obj:p_vm_file_obj);
@@ -63,7 +61,12 @@ function  vm_file_map_insert(
             start :QWORD;
             __end :QWORD):Integer;
 
-function  vm_file_map_delete(map:p_vm_file_map;
+function  vm_file_map_protect(map  :p_vm_file_map;
+                              start:QWORD;
+                              __end:QWORD;
+                              prot :Integer):Integer;
+
+function  vm_file_map_delete(map  :p_vm_file_map;
                              start:QWORD;
                              __end:QWORD):Integer;
 
@@ -74,21 +77,20 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-function vm_file_obj_allocate(base:Pointer;size:QWORD;uncb:t_uncb):p_vm_file_obj;
+function vm_file_obj_allocate(base:Pointer;size:QWORD):p_vm_file_obj;
 begin
  Result:=AllocMem(SizeOf(vm_file_obj));
 
  Result^.base:=base;
  Result^.size:=size;
  Result^.refs:=1;
- Result^.uncb:=uncb;
 end;
 
 procedure vm_file_obj_destroy(obj:p_vm_file_obj);
 begin
- if (obj^.uncb<>nil) then
+ if (obj^.unmap<>nil) then
  begin
-  obj^.uncb(obj^.base,obj^.size);
+  obj^.unmap(obj^.base,obj^.size);
  end;
 
  FreeMem(obj);
@@ -113,18 +115,16 @@ end;
 
 procedure vm_file_map_init(map:p_vm_file_map;min,max:QWORD);
 begin
- map^.header.next:=@map^.header;
- map^.header.prev:=@map^.header;
- map^.min_offset :=min;
- map^.max_offset :=max;
- map^.root       :=nil;
- map^.nentries   :=0;
- map^.pages      :=0;
+ map^.header.next :=@map^.header;
+ map^.header.prev :=@map^.header;
+ map^.header.start:=min;
+ map^.header.__end:=max;
+ map^.root        :=nil;
 end;
 
 procedure vm_file_map_free(map:p_vm_file_map);
 begin
- vm_file_map_delete(map,map^.min_offset,map^.max_offset);
+ vm_file_map_delete(map,map^.header.start,map^.header.__end);
 end;
 
 procedure vm_file_entry_dispose(map:p_vm_file_map;entry:p_vm_file_entry); inline;
@@ -223,8 +223,6 @@ procedure vm_file_map_entry_link(
            after_where:p_vm_file_entry;
            entry      :p_vm_file_entry);
 begin
- Inc(map^.nentries);
-
  entry^.prev:=after_where;
  entry^.next:=after_where^.next;
  entry^.next^.prev:=entry;
@@ -271,7 +269,6 @@ begin
  next:=entry^.next;
  next^.prev:=prev;
  prev^.next:=next;
- Dec(map^.nentries);
 end;
 
 function vm_file_map_lookup_entry(
@@ -347,19 +344,15 @@ begin
  new_entry^.obj   :=obj;
 
  vm_file_map_entry_link(map, prev_entry, new_entry);
- map^.pages:=map^.pages+OFF_TO_IDX(new_entry^.__end - new_entry^.start);
 end;
 
 procedure vm_file_map_entry_delete(map:p_vm_file_map;entry:p_vm_file_entry);
 begin
  vm_file_map_entry_unlink(map, entry);
-
- map^.pages:=map^.pages-OFF_TO_IDX(entry^.__end - entry^.start);
-
  vm_file_entry_dispose(map,entry);
 end;
 
-procedure _vm_map_clip_start(map:p_vm_file_map;entry:p_vm_file_entry;start:QWORD);
+procedure _vm_file_map_clip_start(map:p_vm_file_map;entry:p_vm_file_entry;start:QWORD);
 var
  new_entry:p_vm_file_entry;
 begin
@@ -375,15 +368,15 @@ begin
  vm_file_obj_reference(new_entry^.obj);
 end;
 
-procedure vm_map_clip_start(map:p_vm_file_map;entry:p_vm_file_entry;start:QWORD);
+procedure vm_file_map_clip_start(map:p_vm_file_map;entry:p_vm_file_entry;start:QWORD);
 begin
  if (start>entry^.start) then
  begin
-  _vm_map_clip_start(map,entry,start);
+  _vm_file_map_clip_start(map,entry,start);
  end;
 end;
 
-procedure _vm_map_clip_end(map:p_vm_file_map;entry:p_vm_file_entry;__end:QWORD);
+procedure _vm_file_map_clip_end(map:p_vm_file_map;entry:p_vm_file_entry;__end:QWORD);
 var
  new_entry:p_vm_file_entry;
 begin
@@ -399,15 +392,80 @@ begin
  vm_file_obj_reference(new_entry^.obj);
 end;
 
-procedure vm_map_clip_end(map:p_vm_file_map;entry:p_vm_file_entry;__end:QWORD);
+procedure vm_file_map_clip_end(map:p_vm_file_map;entry:p_vm_file_entry;__end:QWORD);
 begin
  if (__end<entry^.__end) then
  begin
-  _vm_map_clip_end(map,entry,__end);
+  _vm_file_map_clip_end(map,entry,__end);
  end;
 end;
 
-function vm_file_map_delete(map:p_vm_file_map;
+function vm_file_map_protect(map  :p_vm_file_map;
+                             start:QWORD;
+                             __end:QWORD;
+                             prot :Integer):Integer;
+var
+ current,entry:p_vm_file_entry;
+ obj:p_vm_file_obj;
+ m_start:QWORD;
+ m___end:QWORD;
+ offset :QWORD;
+ size   :QWORD;
+begin
+ if (start=__end) then
+ begin
+  Exit(KERN_SUCCESS);
+ end;
+
+ if (not vm_file_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end;
+
+ current:=entry;
+ while ((current<>@map^.header) and (current^.start<__end)) do
+ begin
+  obj:=current^.obj;
+
+  if (obj^.protect<>nil) then
+  begin
+
+   m_start:=current^.start;
+   m___end:=current^.__end;
+
+   if (start>m_start) then
+   begin
+    offset :=start-m_start;
+    m_start:=start;
+   end else
+   begin
+    offset:=0;
+   end;
+
+   if (m___end>__end) then
+   begin
+    m___end:=__end;
+   end;
+
+   offset:=offset+current^.offset;
+
+   size:=(m___end-m_start)+offset;
+   if (size>obj^.size) then
+   begin
+    size:=obj^.size;
+   end;
+   size:=size-offset;
+
+   obj^.protect(m_start,m___end,obj^.base+offset,size,prot);
+  end;
+
+  current:=current^.next;
+ end;
+
+ Result:=(KERN_SUCCESS);
+end;
+
+function vm_file_map_delete(map  :p_vm_file_map;
                             start:QWORD;
                             __end:QWORD):Integer;
 var
@@ -427,12 +485,12 @@ begin
  begin
   entry:=first_entry;
 
-  vm_map_clip_start(map, entry, start);
+  vm_file_map_clip_start(map, entry, start);
  end;
 
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
-  vm_map_clip_end(map, entry, __end);
+  vm_file_map_clip_end(map, entry, __end);
   next:=entry^.next;
   vm_file_map_entry_delete(map, entry);
   entry:=next;
@@ -441,4 +499,5 @@ begin
 end;
 
 end.
+
 

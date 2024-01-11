@@ -891,7 +891,7 @@ function NtMapViewOfSection(
 
 function NtUnmapViewOfSection(
           ProcessHandle        :THandle;
-          BaseAddress          :PPointer
+          BaseAddress          :Pointer
          ):DWORD; stdcall; external 'ntdll';
 
 function NtAllocateVirtualMemory(

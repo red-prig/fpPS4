@@ -9,6 +9,7 @@ uses
  windows,
  ntapi,
  mqueue,
+ vm_pmap,
  kern_param,
  time,
  vfile,
@@ -2292,6 +2293,13 @@ type
   Key          :PULONG
  ):DWORD; stdcall;
 
+ t_iov_cb=procedure(iov:p_iovec);
+
+procedure iov_null(iov:p_iovec); assembler; nostackframe;
+asm
+ //
+end;
+
 function md_io(vp:p_vnode;uio:p_uio;ioflag:Integer):Integer;
 var
  td:p_kthread;
@@ -2305,7 +2313,8 @@ var
  locked:Boolean;
 
  iov:p_iovec;
- cnt:Integer;
+ vec:iovec;
+ iol:t_iov_cb;
 
  OFFSET:Int64;
  BLK:IO_STATUS_BLOCK;
@@ -2330,6 +2339,12 @@ begin
   UIO_WRITE:iocb:=@NtWriteFile;
  end;
 
+ iol:=nil;
+ case uio^.uio_segflg of
+  UIO_USERSPACE:iol:=@iov_uplift;
+  UIO_SYSSPACE :iol:=@iov_null;
+ end;
+
  append:=(uio^.uio_rw=UIO_WRITE) and ((ioflag and IO_APPEND)<>0);
 
  locked:=((ioflag and IO_UNIT)<>0) and (not append);
@@ -2342,9 +2357,11 @@ begin
  while (uio^.uio_iovcnt<>0) or (uio^.uio_resid<>0) do
  begin
   iov:=uio^.uio_iov;
-  cnt:=iov^.iov_len;
 
-  if (cnt=0) then
+  vec:=iov^;
+  iol(@vec);
+
+  if (vec.iov_len=0) then
   begin
    Inc(uio^.uio_iov);
    Dec(uio^.uio_iovcnt);
@@ -2361,7 +2378,7 @@ begin
 
   BLK:=Default(IO_STATUS_BLOCK);
 
-  R:=iocb(F,0,nil,nil,@BLK,iov^.iov_base,cnt,@OFFSET,nil);
+  R:=iocb(F,0,nil,nil,@BLK,vec.iov_base,vec.iov_len,@OFFSET,nil);
 
   if (R=STATUS_PENDING) then
   begin
@@ -2372,19 +2389,19 @@ begin
 
   System.InterlockedIncrement64(ioin^);
 
-  if (Int64(BLK.Information)<cnt) then
+  if (Int64(BLK.Information)<vec.iov_len) then
   begin
    //partial
-   cnt:=BLK.Information;
-   if (cnt<>0) then
+   vec.iov_len:=BLK.Information;
+   if (vec.iov_len<>0) then
    begin
-    Inc(iov^.iov_base  ,cnt);
-    Dec(iov^.iov_len   ,cnt);
-    Dec(uio^.uio_resid ,cnt);
+    Inc(iov^.iov_base  ,vec.iov_len);
+    Dec(iov^.iov_len   ,vec.iov_len);
+    Dec(uio^.uio_resid ,vec.iov_len);
 
     if not append then
     begin
-     Inc(uio^.uio_offset,cnt);
+     Inc(uio^.uio_offset,vec.iov_len);
     end;
    end;
    Break;
@@ -2392,17 +2409,20 @@ begin
 
   if (Result<>0) then Break;
 
-  Inc(iov^.iov_base  ,cnt);
-  Dec(iov^.iov_len   ,cnt);
-  Dec(uio^.uio_resid ,cnt);
+  Inc(iov^.iov_base  ,vec.iov_len);
+  Dec(iov^.iov_len   ,vec.iov_len);
+  Dec(uio^.uio_resid ,vec.iov_len);
 
   if not append then
   begin
-   Inc(uio^.uio_offset,cnt);
+   Inc(uio^.uio_offset,vec.iov_len);
   end;
 
-  Inc(uio^.uio_iov);
-  Dec(uio^.uio_iovcnt);
+  if (iov^.iov_len=0) then
+  begin
+   Inc(uio^.uio_iov);
+   Dec(uio^.uio_iovcnt);
+  end;
  end;
 
  if locked then

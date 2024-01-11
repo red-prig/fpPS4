@@ -153,7 +153,7 @@ asm
  //uplift (r14)
  shl $2,%r14
  add PAGE_MAP(%rip),%r14
- mov (%r14),%r14d
+ movslq (%r14),%r14 //sign extend int32->int64
  //high addr (r14)
  shl PAGE_SHIFT,%r14
  //combine (r14+origin)

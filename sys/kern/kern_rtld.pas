@@ -209,6 +209,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
+ vm_pmap,
  md_map,
  kern_proc,
  kern_budget,
@@ -1140,7 +1141,7 @@ begin
 
  if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
-  md_cacheflush(Pointer(vaddr_lo),memsz,ICACHE);
+  md_cacheflush(uplift(Pointer(vaddr_lo)),memsz,ICACHE);
  end;
 
  vm_map_unlock(map);

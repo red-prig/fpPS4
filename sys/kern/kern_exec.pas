@@ -1452,6 +1452,8 @@ begin
  g_authinfo:=imgp^.authinfo;
 
  //copy appinfo (TODO before execve)
+ g_appinfo.AppId:=$60000100;
+
  g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 1; //is_big_app ???
  if (p_proc.p_sce_replay_exec<>0) then
  begin

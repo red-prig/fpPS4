@@ -10,7 +10,8 @@ uses
  vmparam,
  sys_vm_object,
  vm_file,
- vnode;
+ vnode,
+ vuio;
 
 const
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
@@ -38,6 +39,7 @@ function  pmap_get_page  (addr:vm_offset_t):DWORD;
 function  pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
 
 function  uplift(addr:Pointer):Pointer;
+procedure iov_uplift(iov:p_iovec);
 
 type
  p_pmap=^_pmap;
@@ -132,7 +134,7 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):',HexStr(r,8));
+    Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
     //STATUS_COMMITMENT_LIMIT = $C000012D
     Assert(false,'pmap_init');
    end;
@@ -150,7 +152,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_mmap(',HexStr(PAGE_MAP),',',HexStr(PAGE_MAP+size),'):',HexStr(r,8));
+  Writeln('failed md_mmap(',HexStr(PAGE_MAP),',',HexStr(PAGE_MAP+size),'):0x',HexStr(r,8));
   Assert(false,'pmap_init');
  end;
 
@@ -302,7 +304,7 @@ asm
  ja _exit
  //uplift (rdi)
  mov PAGE_MAP(%rip),%rax
- mov (%rax,%rdi,4) ,%edi
+ movslq (%rax,%rdi,4),%rdi //sign extend int32->int64
  //high addr (rdi)
  shl PAGE_SHIFT,%rdi
  //combine (rdi+rsi)
@@ -315,6 +317,48 @@ asm
  ret
  _exit:
   xor %eax,%eax
+end;
+
+procedure iov_uplift(iov:p_iovec);
+var
+ base:Ptruint;
+ len:Ptruint;
+ i,p:DWORD;
+ v:Integer;
+begin
+ base:=Ptruint(iov^.iov_base);
+ len:=iov^.iov_len;
+
+ p:=base shr PAGE_SHIFT;
+
+ if (p>=PAGE_MAP_COUNT) then
+ begin
+  //error
+  iov^.iov_base:=nil;
+  Exit;
+ end;
+
+ i:=base and PAGE_MASK;
+ i:=PAGE_SIZE-i;
+ if (i>len) then i:=len;
+ Dec(len,i);
+
+ v:=PAGE_MAP[p];
+
+ while (len<>0) and (p<PAGE_MAP_COUNT) do
+ begin
+  Inc(p);
+  if (v<>PAGE_MAP[p]) then Break;
+
+  i:=PAGE_SIZE;
+  if (i>len) then i:=len;
+  Dec(len,i);
+ end;
+
+ base:=base+(int64(v) shl PAGE_MASK);
+
+ iov^.iov_base:=Pointer(base);
+ Dec(iov^.iov_len,len);
 end;
 
 const
@@ -349,6 +393,30 @@ begin
  end;
 end;
 
+function vm_file_protect(start,__end:QWORD;base:Pointer;size:QWORD;prot:Integer):Integer;
+begin
+ Result:=md_protect(base,size,wprots[prot and VM_RWX]);
+
+ if (Result<>0) then
+ begin
+  Writeln('failed md_protect:0x',HexStr(Result,8));
+  Assert(false,'md_protect');
+ end;
+
+ pmap_mark(start,__end,QWORD(base),prot);
+end;
+
+function vm_file_unmap(base:Pointer;size:QWORD):Integer;
+begin
+ Result:=md_file_unmap(base,size);
+
+ if (Result<>0) then
+ begin
+  Writeln('failed md_file_unmap:0x',HexStr(Result,8));
+  Assert(false,'md_file_unmap');
+ end;
+end;
+
 function vm_file_map_fixed(map   :p_vm_file_map;
                            offset:vm_ooffset_t;
                            start :vm_offset_t;
@@ -360,7 +428,10 @@ var
 begin
  vm_file_map_delete(map,start,__end);
 
- obj:=vm_file_obj_allocate(base,size,@md_file_unmap);
+ obj:=vm_file_obj_allocate(base,size);
+
+ obj^.protect:=@vm_file_protect;
+ obj^.unmap  :=@vm_file_unmap;
 
  Result:=vm_file_map_insert(map,obj,offset,start,__end);
 end;
@@ -424,8 +495,11 @@ begin
       r:=md_enter(base,size,MD_PROT_RWX);
      end;
     end;
-   OBJT_VNODE:
+  OBJT_VNODE:
     begin
+     base:=nil;
+     delta:=0;
+
      VM_OBJECT_LOCK(obj);
 
        fd:=get_vnode_handle(obj);
@@ -447,8 +521,21 @@ begin
         base:=nil;
         r:=md_file_mmap(fd,base,offset,size,wprots[prot and VM_RWX]);
 
+        if (r<>0) then
+        begin
+         Writeln('failed md_file_mmap:0x',HexStr(r,8));
+         Assert(false,'md_file_mmap');
+        end;
+
+        if (r=0) and (delta<>0) then
+        begin
+         md_protect(base,delta,MD_PROT_NONE);
+        end;
+
         if (r=0) then
         begin
+         size:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+
          r:=vm_file_map_fixed(@obj^.un_pager.vnp.file_map,
                               delta,
                               start,
@@ -460,6 +547,18 @@ begin
        end;
 
      VM_OBJECT_UNLOCK(obj);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_file_map_fixed:0x',HexStr(r,8));
+      Assert(false,'vm_file_map_fixed');
+     end;
+
+     if (r=0) then
+     begin
+      base:=base+delta;
+     end;
+
     end;
   else
     begin
@@ -471,7 +570,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_enter:',HexStr(r,8));
+  Writeln('failed md_enter:0x',HexStr(r,8));
   Assert(false,'pmap_enter_object');
  end;
 
@@ -494,7 +593,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_protect:',HexStr(r,8));
+  Writeln('failed md_protect:0x',HexStr(r,8));
   Assert(false,'pmap_move');
  end;
 
@@ -503,7 +602,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_enter:',HexStr(r,8));
+  Writeln('failed md_enter:0x',HexStr(r,8));
   Assert(false,'pmap_move');
  end;
 
@@ -517,7 +616,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed md_protect:',HexStr(r,8));
+   Writeln('failed md_protect:0x',HexStr(r,8));
    Assert(false,'pmap_move');
   end;
  end;
@@ -529,7 +628,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_remove:',HexStr(r,8));
+  Writeln('failed md_remove:0x',HexStr(r,8));
   Assert(false,'pmap_move');
  end;
 end;
@@ -579,6 +678,25 @@ begin
       r:=md_protect(base,size,MD_PROT_RWX);
      end;
     end;
+  OBJT_VNODE:
+    begin
+     VM_OBJECT_LOCK(obj);
+
+      r:=vm_file_map_protect(@obj^.un_pager.vnp.file_map,
+                             start,
+                             __end,
+                             prot);
+
+     VM_OBJECT_UNLOCK(obj);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_file_map_protect:0x',HexStr(r,8));
+      Assert(false,'vm_file_map_protect');
+     end;
+
+     Exit;
+    end;
   else
     begin
      Writeln('TODO:',vm_object_type(obj));
@@ -589,7 +707,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_protect:',HexStr(r,8));
+  Writeln('failed md_protect:0x',HexStr(r,8));
   Assert(false,'pmap_protect');
  end;
 
@@ -636,6 +754,10 @@ begin
     begin
      //ignore
     end;
+  OBJT_VNODE:
+    begin
+     //ignore
+    end;
   else
     begin
      Writeln('TODO:',vm_object_type(obj));
@@ -646,7 +768,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_reset:',HexStr(r,8));
+  Writeln('failed md_reset:0x',HexStr(r,8));
   Assert(false,'pmap_madv_free');
  end;
 end;
@@ -698,6 +820,24 @@ begin
       r:=md_remove(base,size);
      end;
     end;
+  OBJT_VNODE:
+    begin
+     VM_OBJECT_LOCK(obj);
+
+      r:=vm_file_map_delete(@obj^.un_pager.vnp.file_map,
+                             start,
+                             __end);
+
+     VM_OBJECT_UNLOCK(obj);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_file_map_delete:0x',HexStr(r,8));
+      Assert(false,'vm_file_map_delete');
+     end;
+
+     Exit;
+    end;
   else
     begin
      Writeln('TODO:',vm_object_type(obj));
@@ -708,7 +848,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_remove:',HexStr(r,8));
+  Writeln('failed md_remove:0x',HexStr(r,8));
   Assert(false,'pmap_remove');
  end;
 end;

@@ -39,7 +39,7 @@ const
  //          _sceKernelMapDirectMemory
  //          sceKernelMapDirectMemory2
 
- //excp_flags
+ //attributeExe
  //bit 1 -> use in [libkernel_exception] ->
  //      -> sceKernelInstallExceptionHandler
  //      -> sceKernelRemoveExceptionHandler

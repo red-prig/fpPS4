@@ -152,27 +152,17 @@ end;
 function md_file_mmap(handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
 var
  hSection:THandle;
- DesiredAccess:DWORD;
  CommitSize:ULONG_PTR;
  SectionOffset:ULONG_PTR;
- ViewSize:ULONG_PTR;
 begin
-
- case prot of
-  PAGE_READWRITE        :DesiredAccess:=SECTION_MAP_READ or SECTION_MAP_WRITE;
-  PAGE_EXECUTE          :DesiredAccess:=SECTION_MAP_EXECUTE;
-  PAGE_EXECUTE_READ     :DesiredAccess:=SECTION_MAP_EXECUTE or SECTION_MAP_READ;
-  PAGE_EXECUTE_READWRITE:DesiredAccess:=SECTION_MAP_EXECUTE or SECTION_MAP_READ or SECTION_MAP_WRITE;
-  else
-                         DesiredAccess:=SECTION_MAP_READ;
- end;
+ CommitSize:=0; //full size
 
  hSection:=0;
  Result:=NtCreateSection(
            @hSection,
-           DesiredAccess,
+           SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
            nil,
-           @size,
+           @CommitSize,
            prot,
            SEC_COMMIT,
            handle
@@ -182,9 +172,8 @@ begin
 
  base:=md_alloc_page(base);
 
- CommitSize   :=md_up_page(size);
+ CommitSize:=size;
  SectionOffset:=offset and (not (MD_ALLOC_GRANULARITY-1));
- ViewSize     :=CommitSize;
 
  Result:=NtMapViewOfSection(hSection,
                             NtCurrentProcess,
@@ -192,9 +181,9 @@ begin
                             0,
                             CommitSize,
                             @SectionOffset,
-                            @ViewSize,
+                            @CommitSize,
                             ViewUnmap,
-                            0 {MEM_COMMIT},
+                            0,
                             prot
                            );
 
@@ -205,7 +194,7 @@ function md_file_unmap(base:Pointer;size:QWORD):Integer;
 begin
  base:=md_alloc_page(base);
 
- Result:=NtUnmapViewOfSection(NtCurrentProcess,@base);
+ Result:=NtUnmapViewOfSection(NtCurrentProcess,base);
 end;
 
 //
