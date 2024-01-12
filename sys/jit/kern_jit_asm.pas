@@ -147,7 +147,7 @@ asm
  mov %r14, jit_frame.tf_adr(%r13)
  //
  //high addr (r14)
- shr PAGE_SHIFT    ,%r14
+ shr PMAPP_SHIFT   ,%r14
  cmp PAGE_MAP_COUNT,%r14
  ja _sigsegv
  //uplift (r14)
@@ -155,11 +155,11 @@ asm
  add PAGE_MAP(%rip),%r14
  movslq (%r14),%r14 //sign extend int32->int64
  //high addr (r14)
- shl PAGE_SHIFT,%r14
+ shl PMAPP_SHIFT,%r14
  //combine (r14+origin)
  add jit_frame.tf_adr(%r13),%r14
  //test
- cmp PAGE_SIZE,%r14
+ cmp PMAPP_SIZE,%r14
  jna _sigsegv
 
  ret
@@ -197,8 +197,8 @@ asm
  //addr2:=addr+mem_size-1 (rsi)
  lea -1(%r15,%r14),%rsi
  //high addr (rdi,rsi)
- shr PAGE_SHIFT   ,%rdi
- shr PAGE_SHIFT   ,%rsi
+ shr PMAPP_SHIFT  ,%rdi
+ shr PMAPP_SHIFT  ,%rsi
  and PAGE_MAP_MASK,%rdi
  and PAGE_MAP_MASK,%rsi
  //

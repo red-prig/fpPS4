@@ -11,6 +11,7 @@ uses
 
 type
  t_protect_cb=function(start,__end:QWORD;base:Pointer;size:QWORD;prot:Integer):Integer;
+ t_remove_cb =function(start,__end:QWORD;base:Pointer;size:QWORD):Integer;
  t_unmap_cb  =function(base:Pointer;size:QWORD):Integer;
 
  p_vm_file_obj=^vm_file_obj;
@@ -19,6 +20,7 @@ type
   size   :QWORD;
   refs   :QWORD;
   protect:t_protect_cb;
+  remove :t_remove_cb;
   unmap  :t_unmap_cb;
  end;
 
@@ -472,6 +474,7 @@ var
  entry      :p_vm_file_entry;
  first_entry:p_vm_file_entry;
  next       :p_vm_file_entry;
+ obj:p_vm_file_obj;
 begin
  if (start=__end) then
  begin
@@ -492,6 +495,19 @@ begin
  begin
   vm_file_map_clip_end(map, entry, __end);
   next:=entry^.next;
+
+  obj:=entry^.obj;
+
+  if (obj^.remove<>nil) then
+  begin
+   obj^.remove(entry^.start,
+               entry^.__end,
+               obj^.base+entry^.offset,
+               obj^.size-entry^.offset
+               );
+
+  end;
+
   vm_file_map_entry_delete(map, entry);
   entry:=next;
  end;

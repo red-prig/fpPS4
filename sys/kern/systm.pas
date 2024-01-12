@@ -68,8 +68,8 @@ begin
 
  while (len<>0) do
  begin
-  i:=QWORD(udaddr) and PAGE_MASK;
-  i:=PAGE_SIZE-i;
+  i:=QWORD(udaddr) and PMAPP_MASK;
+  i:=PMAPP_SIZE-i;
   if (i>len) then i:=len;
   w:=i;
 
@@ -146,8 +146,8 @@ begin
 
  while (len<>0) do
  begin
-  i:=QWORD(udaddr) and PAGE_MASK;
-  i:=PAGE_SIZE-i;
+  i:=QWORD(udaddr) and PMAPP_MASK;
+  i:=PMAPP_SIZE-i;
   if (i>len) then i:=len;
 
   guest:=is_guest_addr(QWORD(udaddr));
@@ -220,8 +220,8 @@ begin
 
  while (len<>0) do
  begin
-  i:=QWORD(udaddr) and PAGE_MASK;
-  i:=PAGE_SIZE-i;
+  i:=QWORD(udaddr) and PMAPP_MASK;
+  i:=PMAPP_SIZE-i;
   if (i>len) then i:=len;
   w:=i;
 
@@ -314,8 +314,8 @@ begin
 
  while (len<>0) do
  begin
-  i:=QWORD(udaddr) and PAGE_MASK;
-  i:=PAGE_SIZE-i;
+  i:=QWORD(udaddr) and PMAPP_MASK;
+  i:=PMAPP_SIZE-i;
   if (i>len) then i:=len;
   w:=i;
 
@@ -392,8 +392,8 @@ begin
 
  while (len<>0) do
  begin
-  i:=QWORD(udaddr) and PAGE_MASK;
-  i:=PAGE_SIZE-i;
+  i:=QWORD(udaddr) and PMAPP_MASK;
+  i:=PMAPP_SIZE-i;
   if (i>len) then i:=len;
 
   guest:=is_guest_addr(QWORD(udaddr));

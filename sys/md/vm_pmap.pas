@@ -14,12 +14,16 @@ uses
  vuio;
 
 const
- PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PAGE_SHIFT);
- PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
+ PMAPP_SHIFT=12;
+ PMAPP_SIZE =1 shl PMAPP_SHIFT;
+ PMAPP_MASK =PMAPP_SIZE-1;
 
- PAGE_PROT_EXECUTE=VM_PROT_EXECUTE;
- PAGE_PROT_WRITE  =VM_PROT_WRITE;
+ PAGE_MAP_COUNT     =(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
+ PAGE_MAP_MASK      =PAGE_MAP_COUNT-1;
+
  PAGE_PROT_READ   =VM_PROT_READ;
+ PAGE_PROT_WRITE  =VM_PROT_WRITE;
+ PAGE_PROT_EXECUTE=VM_PROT_EXECUTE;
 
  PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
 
@@ -208,12 +212,12 @@ end;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
- Result:=QWORD(x) shl PAGE_SHIFT;
+ Result:=QWORD(x) shl PMAPP_SHIFT;
 end;
 
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
- Result:=QWORD(x) shr PAGE_SHIFT;
+ Result:=QWORD(x) shr PMAPP_SHIFT;
 end;
 
 function MAX_IDX(x:DWORD):DWORD; inline;
@@ -298,7 +302,7 @@ asm
  //orig addr (rsi)
  mov %rdi,%rsi
  //high addr (rdi)
- shr PAGE_SHIFT,%rdi
+ shr PMAPP_SHIFT,%rdi
  //test
  cmp PAGE_MAP_COUNT,%rdi
  ja _exit
@@ -306,11 +310,11 @@ asm
  mov PAGE_MAP(%rip),%rax
  movslq (%rax,%rdi,4),%rdi //sign extend int32->int64
  //high addr (rdi)
- shl PAGE_SHIFT,%rdi
+ shl PMAPP_SHIFT,%rdi
  //combine (rdi+rsi)
  lea (%rsi,%rdi),%rdi
  //test
- cmp PAGE_SIZE,%rdi
+ cmp PMAPP_SIZE,%rdi
  jna _exit
  //result
  mov %rdi,%rax
@@ -329,7 +333,7 @@ begin
  base:=Ptruint(iov^.iov_base);
  len:=iov^.iov_len;
 
- p:=base shr PAGE_SHIFT;
+ p:=base shr PMAPP_SHIFT;
 
  if (p>=PAGE_MAP_COUNT) then
  begin
@@ -338,8 +342,8 @@ begin
   Exit;
  end;
 
- i:=base and PAGE_MASK;
- i:=PAGE_SIZE-i;
+ i:=base and PMAPP_MASK;
+ i:=PMAPP_SIZE-i;
  if (i>len) then i:=len;
  Dec(len,i);
 
@@ -350,12 +354,12 @@ begin
   Inc(p);
   if (v<>PAGE_MAP[p]) then Break;
 
-  i:=PAGE_SIZE;
+  i:=PMAPP_SIZE;
   if (i>len) then i:=len;
   Dec(len,i);
  end;
 
- base:=base+(int64(v) shl PAGE_MASK);
+ base:=base+(int64(v) shl PMAPP_SHIFT);
 
  iov^.iov_base:=Pointer(base);
  Dec(iov^.iov_len,len);
@@ -394,6 +398,9 @@ begin
 end;
 
 function vm_file_protect(start,__end:QWORD;base:Pointer;size:QWORD;prot:Integer):Integer;
+var
+ paddi:QWORD;
+ delta:QWORD;
 begin
  Result:=md_protect(base,size,wprots[prot and VM_RWX]);
 
@@ -403,7 +410,57 @@ begin
   Assert(false,'md_protect');
  end;
 
- pmap_mark(start,__end,QWORD(base),prot);
+ //padding pages
+ paddi:=PAGE_SIZE-(size and PAGE_MASK);
+
+ if (paddi<>0) then
+ begin
+  delta:=__end-paddi;
+  //
+  //padding as private pages
+  Result:=md_protect(Pointer(VM_DEFAULT_MAP_BASE+delta),paddi,wprots[prot and VM_RWX]);
+
+  if (Result<>0) then
+  begin
+   Writeln('failed md_protect:0x',HexStr(Result,8));
+   Assert(false,'md_protect');
+  end;
+ end;
+
+ if (paddi<>0) then
+ begin
+  pmap_mark(start,delta,QWORD(base),prot and VM_RWX);
+  //
+  pmap_mark(delta,__end,VM_DEFAULT_MAP_BASE+delta,prot and VM_RWX);
+ end else
+ begin
+  pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
+ end;
+end;
+
+function vm_file_remove(start,__end:QWORD;base:Pointer;size:QWORD):Integer;
+var
+ paddi:QWORD;
+ delta:QWORD;
+begin
+ Result:=0;
+
+ //padding pages
+ paddi:=PAGE_SIZE-(size and PAGE_MASK);
+
+ if (paddi<>0) then
+ begin
+  delta:=__end-paddi;
+  //
+  //padding as private pages
+  Result:=md_remove(Pointer(VM_DEFAULT_MAP_BASE+delta),paddi);
+
+  if (Result<>0) then
+  begin
+   Writeln('failed md_remove:0x',HexStr(Result,8));
+   Assert(false,'md_remove');
+  end;
+ end;
 end;
 
 function vm_file_unmap(base:Pointer;size:QWORD):Integer;
@@ -431,6 +488,7 @@ begin
  obj:=vm_file_obj_allocate(base,size);
 
  obj^.protect:=@vm_file_protect;
+ obj^.remove :=@vm_file_remove;
  obj^.unmap  :=@vm_file_unmap;
 
  Result:=vm_file_map_insert(map,obj,offset,start,__end);
@@ -461,6 +519,7 @@ var
  base:Pointer;
  size:QWORD;
  delta:QWORD;
+ paddi:QWORD;
  r:Integer;
 begin
  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
@@ -473,7 +532,7 @@ begin
     begin
      _default:
 
-     base:=Pointer(trunc_page(start));
+     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_enter(base,size,wprots[prot and VM_RWX]);
@@ -499,6 +558,7 @@ begin
     begin
      base:=nil;
      delta:=0;
+     paddi:=0;
 
      VM_OBJECT_LOCK(obj);
 
@@ -529,13 +589,33 @@ begin
 
         if (r=0) and (delta<>0) then
         begin
+         //protect head
          md_protect(base,delta,MD_PROT_NONE);
         end;
 
         if (r=0) then
         begin
+         //align host page
          size:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
+         //padding pages
+         paddi:=PAGE_SIZE-((size-delta) and PAGE_MASK);
+
+         if (paddi<>0) then
+         begin
+          //padding as private pages
+          r:=md_enter(Pointer(__end-paddi),paddi,wprots[prot and VM_RWX]);
+
+          if (r<>0) then
+          begin
+           Writeln('failed md_enter:0x',HexStr(r,8));
+           Assert(false,'md_enter');
+          end;
+         end;
+        end;
+
+        if (r=0) then
+        begin
          r:=vm_file_map_fixed(@obj^.un_pager.vnp.file_map,
                               delta,
                               start,
@@ -557,8 +637,21 @@ begin
      if (r=0) then
      begin
       base:=base+delta;
+
+      if (paddi<>0) then
+      begin
+       delta:=__end-paddi;
+       //
+       pmap_mark(start,delta,QWORD(base),prot and VM_RWX);
+       //
+       pmap_mark(delta,__end,delta,prot and VM_RWX);
+      end else
+      begin
+       pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
+      end;
      end;
 
+     Exit;
     end;
   else
     begin
@@ -574,7 +667,7 @@ begin
   Assert(false,'pmap_enter_object');
  end;
 
- pmap_mark(start,__end,QWORD(base),prot);
+ pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
 end;
 
 procedure pmap_move(pmap    :pmap_t;
@@ -656,7 +749,7 @@ begin
     begin
      _default:
 
-     base:=Pointer(trunc_page(start));
+     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_protect(base,size,wprots[prot and VM_RWX]);
@@ -711,7 +804,7 @@ begin
   Assert(false,'pmap_protect');
  end;
 
- pmap_mark(start,__end,QWORD(base),prot);
+ pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
 end;
 
 procedure pmap_madv_free(pmap  :pmap_t;
@@ -737,7 +830,7 @@ begin
     begin
      _default:
 
-     base:=Pointer(trunc_page(start));
+     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_reset(base,size,wprots[prot and VM_RWX]);
@@ -798,7 +891,7 @@ begin
     begin
      _default:
 
-     base:=Pointer(trunc_page(start));
+     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_remove(base,size);
