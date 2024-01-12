@@ -368,10 +368,7 @@ begin
  end;
 
  Result:=kern_dynlib_get_info(handle,1,@dst);
- if (Result<>0) then
- begin
-  Exit(ESRCH);
- end;
+ if (Result<>0) then Exit;
 
  Result:=copyout(@dst,info,SizeOf(SceKernelModuleInfo));
 end;
@@ -400,10 +397,7 @@ begin
  end;
 
  Result:=kern_dynlib_get_info(handle,0,@dst);
- if (Result<>0) then
- begin
-  Exit(ESRCH);
- end;
+ if (Result<>0) then Exit;
 
  Result:=copyout(@dst,info,SizeOf(SceKernelModuleInfo));
 end;
@@ -514,10 +508,7 @@ begin
  end;
 
  Result:=kern_dynlib_get_info_ex(handle,flags,@dst);
- if (Result<>0) then
- begin
-  Exit(ESRCH);
- end;
+ if (Result<>0) then Exit;
 
  Result:=copyout(@dst,info,SizeOf(SceKernelModuleInfoEx));
 end;
@@ -529,7 +520,7 @@ end;
 
 function copyout_module_handle_list(pArray:PInteger;numArray:QWORD;flags:DWORD;pActualNum:PQWORD):Integer;
 var
- i,count:QWORD;
+ i,w,count:QWORD;
  src:PInteger;
  obj:p_lib_info;
 begin
@@ -542,6 +533,7 @@ begin
  dynlibs_lock;
 
  i:=0;
+ w:=0;
  count:=dynlibs_info.obj_count;
 
  if (((flags and 1)<>0) and (count > numArray)) then
@@ -557,13 +549,14 @@ begin
  begin
   if ((flags and 1)<>0) or (obj^.rtld_flags.is_system=0) then
   begin
-   if (numArray<=i) then
+   if (w>=numArray) then
    begin
     dynlibs_unlock;
     FreeMem(src);
     Exit(ENOMEM);
    end;
-   src[i]:=obj^.id;
+   src[w]:=obj^.id;
+   Inc(w);
   end;
   //
   Inc(i);
@@ -577,11 +570,11 @@ begin
   Writeln(StdErr,'copyout_module_handle_list:','WARNING: num<>dp^.obj_count');
  end;
 
- Result:=copyout(src,pArray,i*SizeOf(Integer));
+ Result:=copyout(src,pArray,w*SizeOf(Integer));
 
  if (Result=0) then
  begin
-  Result:=copyout(@i,pActualNum,8);
+  Result:=copyout(@w,pActualNum,8);
  end;
 
  FreeMem(src);

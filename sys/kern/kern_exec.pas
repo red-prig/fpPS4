@@ -784,7 +784,7 @@ begin
  dynlibs_info.tls_max         :=1;
 
  obj:=obj_new();
- obj^.rtld_flags.mainprog:=1;
+
  obj^.relocbase:=imgp^.reloc_base;
 
  vms:=p_proc.p_vmspace;
@@ -831,8 +831,7 @@ begin
 
  obj_set_lib_path(obj,imgp^.execpath);
 
- //*(byte *)&obj^.rtld_flags:=*(byte *)&obj^.rtld_flags | 1;
-
+ obj^.rtld_flags.mainprog:=1;
  obj^.loaded:=4;
 
  dynlibs_info.libprogram:=obj;
@@ -856,14 +855,11 @@ begin
  end;
 end;
 
-procedure null_init; assembler; nostackframe;
-asm
- //
-end;
-
 function dynlib_proc_initialize_step2(imgp:p_image_params):Integer;
 var
  obj,tail:p_lib_info;
+ init_proc_addr:Pointer;
+ fini_proc_addr:Pointer;
 begin
  Result:=0;
 
@@ -892,6 +888,9 @@ begin
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
  dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
 
+ init_proc_addr:=obj^.fini_proc_addr;
+ fini_proc_addr:=obj^.init_proc_addr;
+
  obj^.fini_proc_addr:=nil;
  obj^.init_proc_addr:=nil;
 
@@ -906,8 +905,8 @@ begin
                       tail,
                       dynlibs_info.init_proc_list);
 
- obj^.init_proc_addr:=@null_init;//init_proc_addr;
- obj^.fini_proc_addr:=@null_init;//fini_proc_addr;
+ obj^.init_proc_addr:=init_proc_addr;
+ obj^.fini_proc_addr:=fini_proc_addr;
 
  ///
 end;

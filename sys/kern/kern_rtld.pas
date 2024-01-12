@@ -1151,7 +1151,7 @@ function is_system_path(path:pchar):Boolean;
 begin
  if (path=nil)     then Exit(False);
  if (path[0]<>'/') then Exit(False);
- Result:=StrLComp(p_proc.p_randomized_path,@path[1],Length(p_proc.p_randomized_path))=0;
+ Result:=StrLComp(p_proc.p_randomized_path,@path[1],strlen(p_proc.p_randomized_path))=0;
 end;
 
 function dynlib_basename(path:pchar):pchar;

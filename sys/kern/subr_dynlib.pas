@@ -377,6 +377,7 @@ uses
  vnode_if,
  kern_proc,
  kern_budget,
+ kern_authinfo,
  kern_namedobj,
  elf_nid_utils,
  kern_jit,
@@ -2018,13 +2019,22 @@ begin
    end;
  end;
 
- budget:=p_proc.p_budget_ptype;
+ rtld_load_auth(imgp);
 
+ budget:=PTYPE_BIG_APP;
+
+ if ((PByte(@imgp^.authinfo.app_type)[7] and $f) - 4 < 4) then
+ begin
+  budget:=p_proc.p_budget_ptype;
+ end else
  if is_system_path(path) then
  begin
-  if not is_libc_or_fios(path) then
+  if is_libc_or_fios(path) then
   begin
-   budget:=2;
+   budget:=p_proc.p_budget_ptype;
+  end else
+  begin
+   budget:=PTYPE_SYSTEM;
   end;
  end;
 
@@ -2046,8 +2056,6 @@ begin
   goto _fail_dealloc;
  end;
 
- rtld_load_auth(imgp);
-
  new^.tls_size         :=imgp^.tls_size;
  new^.tls_align        :=imgp^.tls_align;
  new^.tls_init_size    :=imgp^.tls_init_size;
@@ -2062,7 +2070,7 @@ begin
  end;
 
  addr:=ET_DYN_LOAD_ADDR_USR;
- if (budget=2) then
+ if (budget=PTYPE_SYSTEM) then
  begin
   addr:=ET_DYN_LOAD_ADDR_SYS;
  end;
@@ -2095,7 +2103,7 @@ begin
   goto _fail_dealloc;
  end;
 
- if (budget=2) then
+ if (budget=PTYPE_SYSTEM) then
  begin
   new^.rtld_flags.is_system:=1;
  end;
@@ -2714,6 +2722,7 @@ begin
     //reg lib
     dynlibs_add_obj(Result);
     //
+    Result^.rtld_flags.is_system:=1;
     Result^.rtld_flags.internal:=1;
     Result^.loaded:=1;
 

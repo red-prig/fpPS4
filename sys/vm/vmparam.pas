@@ -58,6 +58,8 @@ const
  VM_MIN_GPU_ADDRESS   =QWORD($10000000000);
  VM_MAX_GPU_ADDRESS   =QWORD($10180000000); //6GB
 
+ VM_DEFAULT_MAP_BASE  =QWORD(0);
+
  pageablemem=VM_MAXUSER_ADDRESS-VM_MINUSER_ADDRESS;
 
  pmap_mem:array[0..3] of t_addr_range=(
