@@ -604,7 +604,7 @@ begin
          if (paddi<>0) then
          begin
           //padding as private pages
-          r:=md_enter(Pointer(__end-paddi),paddi,wprots[prot and VM_RWX]);
+          r:=md_enter(Pointer(VM_DEFAULT_MAP_BASE+__end-paddi),paddi,wprots[prot and VM_RWX]);
 
           if (r<>0) then
           begin
@@ -644,7 +644,7 @@ begin
        //
        pmap_mark(start,delta,QWORD(base),prot and VM_RWX);
        //
-       pmap_mark(delta,__end,delta,prot and VM_RWX);
+       pmap_mark(delta,__end,VM_DEFAULT_MAP_BASE+delta,prot and VM_RWX);
       end else
       begin
        pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
