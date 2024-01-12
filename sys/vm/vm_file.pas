@@ -458,7 +458,11 @@ begin
    end;
    size:=size-offset;
 
-   obj^.protect(m_start,m___end,obj^.base+offset,size,prot);
+   obj^.protect(m_start,
+                m___end,
+                obj^.base+offset,
+                size,
+                prot);
   end;
 
   current:=current^.next;
@@ -474,7 +478,9 @@ var
  entry      :p_vm_file_entry;
  first_entry:p_vm_file_entry;
  next       :p_vm_file_entry;
- obj:p_vm_file_obj;
+ obj        :p_vm_file_obj;
+ offset     :QWORD;
+ size       :QWORD;
 begin
  if (start=__end) then
  begin
@@ -500,10 +506,19 @@ begin
 
   if (obj^.remove<>nil) then
   begin
+   offset:=entry^.offset;
+
+   size:=(entry^.__end-entry^.start)+offset;
+   if (size>obj^.size) then
+   begin
+    size:=obj^.size;
+   end;
+   size:=size-offset;
+
    obj^.remove(entry^.start,
                entry^.__end,
-               obj^.base+entry^.offset,
-               obj^.size-entry^.offset
+               obj^.base+offset,
+               size
                );
 
   end;
