@@ -421,6 +421,23 @@ begin
  Result:=0;
 end;
 
+type
+ pSceAudioOutSystemState=^SceAudioOutSystemState;
+ SceAudioOutSystemState=packed record
+  loudness  :single;
+  reserved8 :array[0..3] of Byte;
+  reserved64:array[0..2] of QWORD;
+ end;
+
+function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer; SysV_ABI_CDecl;
+begin
+ if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+
+ state^.loudness:=1;
+ Result:=0;
+end;
+
 function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
 Var
  H:TAudioOutHandle;
@@ -848,6 +865,7 @@ begin
  lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
  lib^.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
+ lib^.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
 end;
 
 const
