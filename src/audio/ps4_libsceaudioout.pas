@@ -14,6 +14,10 @@ uses
   ps4_program,
   Classes,
   SysUtils;
+  ///ps4_event_flag,
+  ///ps4_mspace_internal,
+  ///ps4_mutex,          ///for ps4_sceAudioOutGetSystemState
+  ///ps4_map_mm;
 
 implementation
 
@@ -420,6 +424,32 @@ begin
  H.Release;
  Result:=0;
 end;
+
+type
+ pSceAudioOutSystemState=^SceAudioOutSystemState;
+ SceAudioOutSystemState=packed record
+   loudness:single;
+   reserved8:array[0..3] of Byte;
+   reserved64:array[0..2] of Byte;
+ end;
+
+function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer; SysV_ABI_CDecl;
+///var
+ ///AudioState:pSceAudioOutSystemState;
+ ///pMutex:p_pthread_mutex;
+begin
+    ///if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER) else
+    ///if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT) else
+
+    ///begin
+        ///ps4_scePthreadMutexLock(pMutex);
+        ///state^:=AudioState^;                 ///May work when AvPlayer fixed
+        ///ps4_scePthreadMutexUnlock(pMutex);
+    ///end;
+  ///Writeln('sceAudioOutGetSystemState: ', state);
+  Result:=0;
+end;
+
 
 function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
 Var
@@ -848,6 +878,7 @@ begin
  lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
  lib^.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
+ lib^.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
 end;
 
 const
