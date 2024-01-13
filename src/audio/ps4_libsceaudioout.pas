@@ -14,10 +14,6 @@ uses
   ps4_program,
   Classes,
   SysUtils;
-  ///ps4_event_flag,
-  ///ps4_mspace_internal,
-  ///ps4_mutex,          ///for ps4_sceAudioOutGetSystemState
-  ///ps4_map_mm;
 
 implementation
 
@@ -428,28 +424,19 @@ end;
 type
  pSceAudioOutSystemState=^SceAudioOutSystemState;
  SceAudioOutSystemState=packed record
-   loudness:single;
-   reserved8:array[0..3] of Byte;
-   reserved64:array[0..2] of Byte;
+  loudness  :single;
+  reserved8 :array[0..3] of Byte;
+  reserved64:array[0..2] of QWORD;
  end;
 
 function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer; SysV_ABI_CDecl;
-///var
- ///AudioState:pSceAudioOutSystemState;
- ///pMutex:p_pthread_mutex;
 begin
-    ///if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER) else
-    ///if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT) else
+ if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
-    ///begin
-        ///ps4_scePthreadMutexLock(pMutex);
-        ///state^:=AudioState^;                 ///May work when AvPlayer fixed
-        ///ps4_scePthreadMutexUnlock(pMutex);
-    ///end;
-  ///Writeln('sceAudioOutGetSystemState: ', state);
-  Result:=0;
+ state^.loudness:=1;
+ Result:=0;
 end;
-
 
 function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
 Var
