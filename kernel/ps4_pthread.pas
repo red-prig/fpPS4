@@ -35,6 +35,7 @@ function  ps4_scePthreadCancel(_pthread:pthread):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_setcancelstate(state:Integer;oldstate:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_pthread_setcanceltype (_type:Integer;oldtype:PInteger):Integer; SysV_ABI_CDecl;
 function  ps4_scePthreadSetcancelstate(state:Integer;oldState:PInteger):Integer; SysV_ABI_CDecl;
+function  ps4_scePthreadSetcanceltype(_type:Integer;oldType:PInteger):Integer; SysV_ABI_CDecl;
 
 function  ps4_pthread_self():pthread; SysV_ABI_CDecl;
 function  ps4_scePthreadSelf():pthread; SysV_ABI_CDecl;
@@ -519,6 +520,11 @@ end;
 function ps4_scePthreadSetcancelstate(state:Integer;oldState:PInteger):Integer; SysV_ABI_CDecl;
 begin
  Result:=px2sce(ps4_pthread_setcancelstate(state,oldState));
+end;
+
+function ps4_scePthreadSetcanceltype(_type:Integer;oldType:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=px2sce(ps4_pthread_setcanceltype(_type,oldType));
 end;
 
 function ps4_pthread_self():pthread; SysV_ABI_CDecl;
