@@ -21,22 +21,31 @@ type
 
  pSceMoveExtensionPortData=^SceMoveExtensionPortData;
  SceMoveExtensionPortData=packed record
+  status      :Word;
+  digital1    :Word;
+  digital2    :Word;
+  analogRightX:Word;
+  analogRightY:Word;
+  analogLeftX :Word;
+  analogLeftY :Word;
+  custom      :array[0..5] of Byte;
  end;
 
  pSceMoveData=^SceMoveData;
  SceMoveData=packed record
-  accelerometer:single;
-  gyro:single;
-  pad:SceMoveButtonData;
-  ext:SceMoveExtensionPortData;
-  timestamp:Integer;
-  counter:Integer;
-  temperature:single;
+  accelerometer:array[0..2] of single;
+  gyro         :array[0..2] of single;
+  pad          :SceMoveButtonData;
+  ext          :SceMoveExtensionPortData;
+  timestamp    :Int64;
+  counter      :Integer;
+  temperature  :single;
  end;
 
  pSceMoveTrackerControllerInput=^SceMoveTrackerControllerInput;
  SceMoveTrackerControllerInput=packed record
   handle:Integer;
+  _align:Integer;
   data:pSceMoveData;
   num:Integer;
  end;  
@@ -46,8 +55,8 @@ implementation
 function ps4_sceMoveTrackerGetWorkingMemorySize(onionSize,garlicSize:PInteger):Integer; SysV_ABI_CDecl;
 begin
  if (onionSize=nil) or (garlicSize=nil) then Exit(SCE_MOVE_TRACKER_ERROR_INVALID_ARG);
- onionSize^:=0;
- garlicSize^:=0;
+ onionSize^ :=$800000 + $200000;
+ garlicSize^:=$800000;
  Result:=0;
 end;
 
@@ -57,8 +66,9 @@ begin
  Result:=0;
 end;
 
-function ps4_sceMoveTrackerControllersUpdate(controllerInputs:SceMoveTrackerControllerInput):Integer; SysV_ABI_CDecl;
+function ps4_sceMoveTrackerControllersUpdate(controllerInputs:pSceMoveTrackerControllerInput):Integer; SysV_ABI_CDecl;
 begin
+ //controllerInputs[SCE_MOVE_MAX_CONTROLLERS]
  Result:=0;
 end;
 
