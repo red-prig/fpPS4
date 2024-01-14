@@ -27,6 +27,7 @@ uses
  ps4_libSceMouse,
  ps4_libSceIme,
  ps4_libSceMove,
+ ps4_libSceMoveTracker,
  ps4_libScePlayGo,
  ps4_libSceDiscMap,
  ps4_libSceAppContent,
