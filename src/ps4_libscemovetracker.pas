@@ -7,8 +7,6 @@ interface
 uses
   ps4_program;
 
-implementation
-
 const
  SCE_MOVE_TRACKER_ERROR_INVALID_ARG=-2131820541; //0x80EF0003
 
@@ -41,7 +39,9 @@ type
   handle:Integer;
   data:pSceMoveData;
   num:Integer;
- end;
+ end;  
+
+implementation
 
 function ps4_sceMoveTrackerGetWorkingMemorySize(onionSize,garlicSize:PInteger):Integer; SysV_ABI_CDecl;
 begin
