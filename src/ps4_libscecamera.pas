@@ -173,6 +173,14 @@ type
   pFramePointerListGarlic:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM] of Pointer;
  end;  
 
+ pSceCameraOpenParameter=^SceCameraOpenParameter;
+ SceCameraOpenParameter=packed record
+  sizeThis :DWORD;
+  reserved1:DWORD;
+  reserved2:DWORD;
+  reserved3:DWORD;
+ end;
+
 implementation
 
 function ps4_sceCameraIsAttached(index:Integer):Integer; SysV_ABI_CDecl;
@@ -200,6 +208,11 @@ begin
  Result:=0;
 end; 
 
+function ps4_sceCameraOpen(userId,_type,index:Integer;pParam:pSceCameraOpenParameter):Integer; SysV_ABI_CDecl;
+begin
+ Result:=333;
+end;
+
 function Load_libSceCamera(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -211,7 +224,8 @@ begin
  lib^.set_proc($550FB9900AAC1364,@ps4_sceCameraSetConfig);
  lib^.set_proc($C297B217027E5042,@ps4_sceCameraSetVideoSync);
  lib^.set_proc($F44A5160CCBBAC75,@ps4_sceCameraStart);
- lib^.set_proc($9B180C991FB52ABD,@ps4_sceCameraGetFrameData);  
+ lib^.set_proc($9B180C991FB52ABD,@ps4_sceCameraGetFrameData);
+ lib^.set_proc($0479FCDF1AC5F761,@ps4_sceCameraOpen);
 end;
 
 initialization
