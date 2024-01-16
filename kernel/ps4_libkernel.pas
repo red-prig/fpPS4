@@ -1092,6 +1092,163 @@ end;
 
 //
 
+const
+ AF_INET = 2;
+ AF_INET6=28;
+
+function inet_ntop4(src,dst:PChar;size:Integer):PChar; SysV_ABI_CDecl;
+var
+ S:RawByteString;
+begin
+ S:=Format('%u.%u.%u.%u',[src[0], src[1], src[2], src[3]]);
+
+ if (Length(S)<=0) or (Length(S)>=size) then
+ begin
+  Exit(nil);
+ end;
+
+ strlcopy(dst,PChar(S),Length(S));
+ Exit(dst);
+end;
+
+function inet_ntop6(src,dst:PChar;size:Integer):PChar; SysV_ABI_CDecl;
+const
+ NS_IN6ADDRSZ=16;
+ NS_INT16SZ  =2;
+type
+ t_cur=record
+  base,len:Integer;
+ end;
+var
+ tp:PChar;
+ tmp,s:RawByteString;
+ best,cur:t_cur;
+ words:array[0..(NS_IN6ADDRSZ div NS_INT16SZ)-1] of DWORD;
+ i:Integer;
+begin
+ FillChar(words,sizeof(words),0);
+
+ for i:=0 to NS_IN6ADDRSZ-1 do
+ begin
+  words[i div 2]:=words[i div 2] or (Byte(src[i]) shl ((1 - (i mod 2)) shl 3));
+ end;
+
+ best.base:=-1;
+ best.len :=0;
+ cur.base :=-1;
+ cur.len  :=0;
+
+ for i:=0 to (NS_IN6ADDRSZ div NS_INT16SZ)-1 do
+ begin
+  if (words[i]=0) then
+  begin
+   if (cur.base=-1) then
+   begin
+    cur.base:=i;
+    cur.len :=1;
+   end else
+   begin
+    Inc(cur.len);
+   end;
+  end else
+  begin
+   if (cur.base<>-1) then
+   begin
+    if (best.base=-1) or (cur.len > best.len) then
+    begin
+     best:=cur;
+    end;
+    cur.base:=-1;
+   end;
+  end;
+ end;
+
+ if (cur.base<>-1) then
+ begin
+  if (best.base=-1) or (cur.len > best.len) then
+  begin
+   best:=cur;
+  end;
+ end else
+ if (best.base<>-1) and (best.len < 2) then
+ begin
+  best.base:=-1;
+ end;
+
+ tmp:='ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255';
+ tp:=PChar(tmp);
+
+ for i:=0 to (NS_IN6ADDRSZ div NS_INT16SZ)-1 do
+ begin
+  if (best.base<>-1) and
+     (i >= best.base) and
+     (i < (best.base + best.len)) then
+  begin
+   if (i=best.base) then
+   begin
+    tp^:=':';
+    Inc(tp);
+   end;
+   continue;
+  end;
+
+  if (i<>0) then
+  begin
+   tp^:=':';
+   Inc(tp);
+  end;
+
+  if (i=6) and
+     (best.base=0) and
+     (
+      (best.len=6) or
+      ((best.len=7) and (words[7]<>$0001)) or
+      ((best.len=5) and (words[5]=$ffff))
+     ) then
+  begin
+   if (inet_ntop4(src+12, tp, Length(tmp) - (tp - PChar(tmp)) )=nil) then
+   begin
+    Exit(nil);
+   end;
+   tp:=tp+strlen(tp);
+   break;
+  end;
+  s:=Format('%x',[words[i]]);
+  Move(PChar(s)^,PChar(tp)^,Length(s));
+  tp:=tp+Length(s);
+ end;
+
+ if (best.base<>-1) and
+    ((best.base + best.len)=(NS_IN6ADDRSZ div NS_INT16SZ)) then
+ begin
+  tp^:=':';
+  Inc(tp);
+ end;
+
+ tp:=#0;
+ Inc(tp);
+
+ if ((tp - PChar(tmp)) > size) then
+ begin
+  Exit(nil);
+ end;
+
+ strcopy(dst, PChar(tmp));
+ Exit(dst);
+end;
+
+function ps4_inet_ntop(af:Integer;src,dst:PChar;size:Integer):PChar; SysV_ABI_CDecl;
+begin
+ case af of
+  AF_INET :Exit(inet_ntop4(src, dst, size));
+  AF_INET6:Exit(inet_ntop6(src, dst, size));
+  else
+           Exit(nil);
+ end;
+end;
+
+//
+
 {$I libsysmodule.inc}
 
 function ps4_sceSysmoduleLoadModule(id:DWord):Integer; SysV_ABI_CDecl;
@@ -1817,6 +1974,8 @@ begin
  //file
 
  lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
+
+ lib^.set_proc($E63442B366B1B6BE,@ps4_inet_ntop);
 
  //
 
