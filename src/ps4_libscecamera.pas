@@ -11,44 +11,52 @@ uses
   SysUtils;
 
 const
-  SCE_CAMERA_CONFIG_TYPE1 = $01;
-  SCE_CAMERA_CONFIG_TYPE2 = $02;
-  SCE_CAMERA_CONFIG_TYPE3 = $03;
-  SCE_CAMERA_CONFIG_TYPE4 = $04;
-  SCE_CAMERA_CONFIG_TYPE5 = $05;
-  SCE_CAMERA_CONFIG_EXTENTION = $10;
+ //SceCameraConfigType
+ SCE_CAMERA_CONFIG_TYPE1     = $01;
+ SCE_CAMERA_CONFIG_TYPE2     = $02;
+ SCE_CAMERA_CONFIG_TYPE3     = $03;
+ SCE_CAMERA_CONFIG_TYPE4     = $04;
+ SCE_CAMERA_CONFIG_TYPE5     = $05;
+ SCE_CAMERA_CONFIG_EXTENTION = $10;
 
-  SCE_CAMERA_FORMAT_YUV422 = $0;
-  SCE_CAMERA_FORMAT_NO_USE = $10;
-  SCE_CAMERA_FORMAT_UNKNOWN= $FF;
+ //SceCameraBaseFormat
+ SCE_CAMERA_FORMAT_YUV422 = $0;
+ SCE_CAMERA_FORMAT_NO_USE = $10;
+ SCE_CAMERA_FORMAT_UNKNOWN= $FF;
 
-  SCE_CAMERA_SCALE_FORMAT_YUV422 = $0;
-  SCE_CAMERA_SCALE_FORMAT_Y16    = $3;
-  SCE_CAMERA_SCALE_FORMAT_NO_USE = $10;
-  SCE_CAMERA_SCALE_FORMAT_UNKNOWN= $FF;
+ //SceCameraScaleFormat
+ SCE_CAMERA_SCALE_FORMAT_YUV422 = $0;
+ SCE_CAMERA_SCALE_FORMAT_Y16    = $3;
+ SCE_CAMERA_SCALE_FORMAT_NO_USE = $10;
+ SCE_CAMERA_SCALE_FORMAT_UNKNOWN= $FF;
 
-  SCE_CAMERA_MAX_DEVICE_NUM=2;
-  SCE_CAMERA_MAX_FORMAT_LEVEL_NUM=4;
+ SCE_CAMERA_MAX_DEVICE_NUM      =2;
+ SCE_CAMERA_MAX_FORMAT_LEVEL_NUM=4;
 
-  SCE_CAMERA_RESOLUTION_1280X800= $0;
-  SCE_CAMERA_RESOLUTION_UNKNOWN = $FF;
+ //SceCameraResolution
+ SCE_CAMERA_RESOLUTION_1280X800               = $0;
+ SCE_CAMERA_RESOLUTION_640X400                = $1;
+ SCE_CAMERA_RESOLUTION_320X200                = $2;
+ SCE_CAMERA_RESOLUTION_160X100                = $3;
+ SCE_CAMERA_RESOLUTION_320X192                = $4;
+ SCE_CAMERA_RESOLUTION_SPECIFIED_WIDTH_HEIGHT = $5;
+ SCE_CAMERA_RESOLUTION_UNKNOWN                = $FF;
 
-  SCE_CAMERA_FRAMERATE_UNKNOWN=0;
-  SCE_CAMERA_FRAMERATE_7_5    =7;
-  SCE_CAMERA_FRAMERATE_15     =15;
-  SCE_CAMERA_FRAMERATE_30     =30;
-  SCE_CAMERA_FRAMERATE_60     =60;
-  SCE_CAMERA_FRAMERATE_120    =120;
-  SCE_CAMERA_FRAMERATE_240    =240;
+ //SceCameraFramerate
+ SCE_CAMERA_FRAMERATE_UNKNOWN=0;
+ SCE_CAMERA_FRAMERATE_7_5    =7;
+ SCE_CAMERA_FRAMERATE_15     =15;
+ SCE_CAMERA_FRAMERATE_30     =30;
+ SCE_CAMERA_FRAMERATE_60     =60;
+ SCE_CAMERA_FRAMERATE_120    =120;
+ SCE_CAMERA_FRAMERATE_240    =240;
 
 type
  pSceCameraBaseFormat=^SceCameraBaseFormat;
- SceCameraBaseFormat=packed record
- end;
+ SceCameraBaseFormat=Integer;
 
  pSceCameraScaleFormat=^SceCameraScaleFormat;
- SceCameraScaleFormat=packed record
- end;
+ SceCameraScaleFormat=Integer;
 
  pSceCameraFormat=^SceCameraFormat;
  SceCameraFormat=packed record
@@ -59,53 +67,51 @@ type
  end;
 
  pSceCameraResolution=^SceCameraResolution;
- SceCameraResolution=packed record
- end;
+ SceCameraResolution=Integer;
 
  pSceCameraFramerate=^SceCameraFramerate;
- SceCameraFramerate=packed record
- end;
+ SceCameraFramerate=Integer;
 
  pSceCameraConfigType=^SceCameraConfigType;
- SceCameraConfigType=packed record
- end;
+ SceCameraConfigType=Integer;
 
  pSceCameraConfigExtention=^SceCameraConfigExtention;
  SceCameraConfigExtention=packed record
-  format:SceCameraFormat;
-  resolution:SceCameraResolution;
-  framerate:SceCameraFramerate;
-  width:DWORD;
-  height:DWORD;
-  reserved1:DWORD;
+  format     :SceCameraFormat;
+  resolution :SceCameraResolution;
+  framerate  :SceCameraFramerate;
+  width      :DWORD;
+  height     :DWORD;
+  reserved1  :DWORD;
   pBaseOption:Pointer;
  end;
 
  pSceCameraConfig=^SceCameraConfigType;
  SceCameraConfig=packed record
-  sizeThis:DWORD;
-  configType:SceCameraConfigType;
-  configExtention:SceCameraConfigExtention;
+  sizeThis       :DWORD;
+  configType     :SceCameraConfigType;
+  configExtention:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraConfigExtention;
  end;
 
  pSceCameraVideoSyncParameter=^SceCameraVideoSyncParameter;
  SceCameraVideoSyncParameter=packed record
-  sizeThis:DWORD;
+  sizeThis     :DWORD;
   videoSyncMode:DWORD;
-  pModeOption:Pointer;
+  pModeOption  :Pointer;
  end;
 
  pSceCameraStartParameter=^SceCameraStartParameter;
  SceCameraStartParameter=packed record
-  sizeThis:DWORD;
-  formatlevel:DWORD;
+  sizeThis    :DWORD;
+  formatlevel :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
+  _align      :DWORD;
   pStartOption:Pointer;
  end;
 
  pSceCameraFramePosition=^SceCameraFramePosition;
  SceCameraFramePosition=packed record
-  x:DWORD;
-  y:DWORD;
+  x    :DWORD;
+  y    :DWORD;
   xSize:DWORD;
   ySize:DWORD;
  end;
@@ -113,55 +119,58 @@ type
  pSceCameraExposureGain=^SceCameraExposureGain;
  SceCameraExposureGain=packed record
   exposureControl:DWORD;
-  exposure:DWORD;
-  gain:DWORD;
-  mode:DWORD;
+  exposure       :DWORD;
+  gain           :DWORD;
+  mode           :DWORD;
  end;
 
  pSceCameraWhiteBalance=^SceCameraWhiteBalance;
  SceCameraWhiteBalance=packed record
   whiteBalanceControl:DWORD;
-  gainRed:DWORD;
-  gainBlue:DWORD;
-  gainGreen:DWORD;
+  gainRed            :DWORD;
+  gainBlue           :DWORD;
+  gainGreen          :DWORD;
  end;
 
  pSceCameraGamma=^SceCameraGamma;
  SceCameraGamma=packed record
   gammaControl:DWORD;
-  value:DWORD;
-  reserved:array[0..16] of Word;
+  value       :DWORD;
+  reserved    :array[0..15] of Word;
  end;
 
  pSceFVector3=^SceFVector3;
  SceFVector3=packed record
+  x,y,z:Single;
  end;
 
  pSceCameraMeta=^SceCameraMeta;
  SceCameraMeta=packed record
-  metaMode:DWORD;
-  format:DWORD;
-  frame:QWORD;
-  timestamp:QWORD;
-  deviceTimestamp:DWORD;
-  exposureGain:SceCameraExposureGain;
-  whiteBalance:SceCameraWhiteBalance;
-  gamma:SceCameraGamma;
-  luminance:DWORD;
-  acceleration:SceFVector3;
-  vcounter:QWORD;
-  reserved:array[0..16] of DWORD;
+  metaMode       :DWORD;
+  format         :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of DWORD;
+  _align         :DWORD;
+  frame          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of QWORD;
+  timestamp      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of QWORD;
+  deviceTimestamp:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
+  exposureGain   :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraExposureGain;
+  whiteBalance   :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraWhiteBalance;
+  gamma          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraGamma;
+  luminance      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
+  acceleration   :SceFVector3;
+  vcounter       :QWORD;
+  reserved       :array[0..15] of DWORD;
  end;
 
  pSceCameraFrameData=^SceCameraFrameData;
  SceCameraFrameData=packed record
-  sizeThis:DWORD;
-  readMode:DWORD;
-  framePosition:SceCameraFramePosition;
-  pFramePointerList:Pointer;
-  frameSize:DWORD;
-  meta:SceCameraMeta;
-  pFramePointerListGarlic:Pointer;
+  sizeThis               :DWORD;
+  readMode               :DWORD;
+  framePosition          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM] of SceCameraFramePosition;
+  pFramePointerList      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM] of Pointer;
+  frameSize              :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM] of DWORD;
+  status                 :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
+  meta                   :SceCameraMeta;
+  pFramePointerListGarlic:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM] of Pointer;
  end;  
 
 implementation
@@ -186,7 +195,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceCameraGetFrameData(handle:Integer;pFrameData:SceCameraFrameData):Integer; SysV_ABI_CDecl;
+function ps4_sceCameraGetFrameData(handle:Integer;pFrameData:pSceCameraFrameData):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end; 
