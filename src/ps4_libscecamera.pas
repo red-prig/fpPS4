@@ -20,7 +20,7 @@ end;
 
 function ps4_sceCameraOpen(userId:Integer;_type,index:Integer;pParam:PInteger):Integer; SysV_ABI_CDecl;
 begin
- Result:=1;
+ Result:=0;
 end;
 
 function Load_libSceCamera(Const name:RawByteString):TElf_node;
