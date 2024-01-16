@@ -12,15 +12,23 @@ uses
 
 implementation
 
+type
+ pSceCameraOpenParameter=^SceCameraOpenParameter;
+ SceCameraOpenParameter=packed record
+  sizeThis :DWORD;
+  reserved1:DWORD;
+  reserved2:DWORD;
+  reserved3:DWORD;
+ end;
 
 function ps4_sceCameraIsAttached(index:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceCameraOpen(userId:Integer;_type,index:Integer;pParam:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceCameraOpen(userId,_type,index:Integer;pParam:pSceCameraOpenParameter):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=333;
 end;
 
 function Load_libSceCamera(Const name:RawByteString):TElf_node;
