@@ -53,6 +53,8 @@ procedure FOREACH_THREAD_FINISH();
 function  THREAD_NEXT(i:p_kthread_iterator):Boolean;
 function  THREAD_GET (i:p_kthread_iterator):p_kthread;
 
+procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
+
 function  SIGPENDING(td:p_kthread):Boolean;
 
 procedure threadinit; //SYSINIT

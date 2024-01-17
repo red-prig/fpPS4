@@ -314,6 +314,7 @@ procedure TD_SET_CAN_RUN(td:p_kthread);
 
 procedure THREAD_NO_SLEEPING();
 procedure THREAD_SLEEPING_OK();
+function  THREAD_IS_NOSLEEPING:Boolean;
 
 function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
@@ -520,6 +521,14 @@ begin
  td:=curkthread;
  Assert((td^.td_pflags and TDP_NOSLEEPING)<>0,'nested sleeping ok');
  td^.td_pflags:=td^.td_pflags and (not TDP_NOSLEEPING);
+end;
+
+function THREAD_IS_NOSLEEPING:Boolean;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ Result:=(td^.td_pflags and TDP_NOSLEEPING)<>0;
 end;
 
 //

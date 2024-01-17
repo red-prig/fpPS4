@@ -87,7 +87,6 @@ uses
  sys_event,
  sys_eventvar,
  kern_event,
- kern_callout,
  kern_timeout,
  kern_exec,
  kern_dynlib,
@@ -386,7 +385,7 @@ begin
  //argv0:='/app0/scene2.bin';
  //argv0:='/app0/basic_quad_debug.elf';
 
- argv0:='/app0/hello_world8.bin';
+ //argv0:='/app0/hello_world9.bin';
 
  err:=_execve(argv0,@argv0,nil);
 end;

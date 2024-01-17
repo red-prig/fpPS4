@@ -50,6 +50,7 @@ uses
  vfcntl,
  vfs_vnops,
  vfs_subr,
+ kern_thread,
  kern_budget,
  kern_descrip,
  vfs_cache,
@@ -1411,6 +1412,7 @@ begin
  end;
 
  Move(p_proc.p_comm, td^.td_name, sizeof(td^.td_name));
+ KernSetThreadDebugName(td,'ps4:');
 
  {
   * mark as execed, wakeup the process that vforked (if any) and tell

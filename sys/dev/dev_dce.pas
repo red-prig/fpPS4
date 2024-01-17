@@ -9,7 +9,8 @@ uses
  vm,
  vmparam,
  kern_conf,
- sys_event;
+ sys_event,
+ time;
 
 procedure dce_initialize();
 
@@ -29,7 +30,47 @@ uses
  kern_event,
  kern_mtx,
  md_time,
- kern_proc;
+ kern_proc,
+ kern_timeout;
+
+const
+ EVENTID_FLIP  =$0006;
+ EVENTID_VBLANK=$0007;
+
+procedure knote_eventid(event_id:WORD;flipArg:QWORD;lockflags:Integer);
+begin
+ knote(@g_video_out_event_flip, event_id or (flipArg shl 16), lockflags);
+end;
+
+var
+ callout_vblank:t_callout;
+ callout_refs  :Int64=0;
+
+procedure vblank_expire(arg:Pointer);
+begin
+ if (callout_refs<>0) then
+ begin
+  knote_eventid(EVENTID_VBLANK, 0, 1); //SCE_VIDEO_OUT_EVENT_VBLANK
+  //
+  callout_reset(@callout_vblank, callout_vblank.c_time, @vblank_expire, nil);
+ end;
+end;
+
+procedure open_vblank;
+var
+ time:Int64;
+begin
+ if (System.InterlockedIncrement64(callout_refs)=1) then
+ begin
+  time:=round(hz/59.94);
+  callout_reset(@callout_vblank, time, @vblank_expire, nil);
+ end;
+end;
+
+procedure close_vblank;
+begin
+ System.InterlockedDecrement64(callout_refs);
+end;
 
 type
  p_flip_control_args=^t_flip_control_args;
@@ -268,6 +309,8 @@ begin
       len:=111; //canary
       copyout(@len,ptr,SizeOf(QWORD));
 
+      open_vblank;
+
       Exit(0);
      end;
      Exit(EINVAL);
@@ -281,6 +324,8 @@ begin
       //arg2 -> canary
 
       Writeln('dce_video_close:',data^.arg2);
+
+      close_vblank;
 
       Exit(0);
      end;
@@ -367,7 +412,7 @@ begin
      Exit(EINVAL);
     end;
 
-  12: //scaler?
+  12: //sceVideoOutSysUpdateScalerParameters
     begin
      if (data^.arg5=0) and (data^.arg6=0) then
      begin
@@ -382,7 +427,7 @@ begin
        len:=0;
 
        Writeln('dce_flip_control(',data^.id,'):get_data?');
-       //print_backtrace_td(stderr);
+       print_backtrace_td(stderr);
 
        Result:=copyout(@len,ptr,8);
 
@@ -534,9 +579,7 @@ begin
                         '0x',HexStr(data^.flipArg,16),' ',
                         data^.eop_val);
 
- knote(@g_video_out_event_flip, $0006 or (data^.flipArg shl 16), 0);  //SCE_VIDEO_OUT_EVENT_FLIP
-
- knote(@g_video_out_event_flip, $0007 or (data^.flipArg shl 16), 0); //SCE_VIDEO_OUT_EVENT_VBLANK
+ knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
 
  flipArg:=data^.flipArg;
 
@@ -690,11 +733,11 @@ begin
  event_id:=kn^.kn_kevent.ident shr 48;
 
  case event_id of
-   $0006: //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_FLIP:   //SCE_VIDEO_OUT_EVENT_FLIP
      begin
       knlist_add(@g_video_out_event_flip,kn,0)
      end;
-   $0007: //SCE_VIDEO_OUT_EVENT_VBLANK
+   EVENTID_VBLANK: //SCE_VIDEO_OUT_EVENT_VBLANK
      begin
       knlist_add(@g_video_out_event_flip,kn,0)
      end;
@@ -718,11 +761,11 @@ begin
  event_id:=kn^.kn_kevent.ident shr 48;
 
  case event_id of
-   $0006: //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_FLIP:    //SCE_VIDEO_OUT_EVENT_FLIP
      begin
       knlist_remove(@g_video_out_event_flip,kn,0)
      end;
-   $0007: //SCE_VIDEO_OUT_EVENT_VBLANK
+   EVENTID_VBLANK: //SCE_VIDEO_OUT_EVENT_VBLANK
      begin
       knlist_remove(@g_video_out_event_flip,kn,0)
      end;
@@ -792,6 +835,8 @@ begin
  mtx_init(knlist_lock_flip,'knlist_lock_flip');
 
  knlist_init_mtx(@g_video_out_event_flip,@knlist_lock_flip);
+
+ callout_init_mtx(@callout_vblank,knlist_lock_flip,0);
 
  kqueue_add_filteropts(EVFILT_DISPLAY,@filterops_display);
 

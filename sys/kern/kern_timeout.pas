@@ -14,6 +14,21 @@ uses
  kern_rwlock,
  kern_callout;
 
+type
+ t_callout_func=kern_callout.t_callout_func;
+
+ p_callout=kern_callout.p_callout;
+ t_callout=kern_callout.t_callout;
+
+const
+ CALLOUT_LOCAL_ALLOC   =kern_callout.CALLOUT_LOCAL_ALLOC   ;
+ CALLOUT_ACTIVE        =kern_callout.CALLOUT_ACTIVE        ;
+ CALLOUT_PENDING       =kern_callout.CALLOUT_PENDING       ;
+ CALLOUT_MPSAFE        =kern_callout.CALLOUT_MPSAFE        ;
+ CALLOUT_RETURNUNLOCKED=kern_callout.CALLOUT_RETURNUNLOCKED;
+ CALLOUT_SHAREDLOCK    =kern_callout.CALLOUT_SHAREDLOCK    ;
+ CALLOUT_RWLOCK        =kern_callout.CALLOUT_RWLOCK        ;
+
 procedure kern_timeout_init();
 
 procedure CC_LOCK(cc:p_callout_cpu);
@@ -65,6 +80,7 @@ begin
  c^:=Default(t_callout);
  if (mpsafe<>0) then
  begin
+  c^.c_lock :=nil; //no locking
   c^.c_flags:=CALLOUT_RETURNUNLOCKED;
  end else
  begin
@@ -79,7 +95,7 @@ begin
  c^.c_lock:=lock;
  Assert((flags and (not (CALLOUT_RETURNUNLOCKED or CALLOUT_SHAREDLOCK)))=0,'callout_init_lock: bad flags');
  Assert((lock<>nil) or ((flags and CALLOUT_RETURNUNLOCKED)=0),'callout_init_lock: CALLOUT_RETURNUNLOCKED with no lock');
- Assert(lock=nil,'invalid lock');
+ Assert(lock<>nil,'invalid lock');
  c^.c_flags:=flags and (CALLOUT_RETURNUNLOCKED or CALLOUT_SHAREDLOCK);
 end;
 
@@ -350,7 +366,7 @@ begin
    Exit(0);
   end;
 
-  if (safe<>0) then
+  if (safe<>0) and (not THREAD_IS_NOSLEEPING) then
   begin
    while (cc^.cc_curr=c) do
    begin

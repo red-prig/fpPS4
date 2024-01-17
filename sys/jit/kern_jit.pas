@@ -12,7 +12,8 @@ uses
  kern_jit_ctx;
 
 var
- print_asm:Boolean=False;
+ print_asm :Boolean=False;
+ debug_info:Boolean=False;
 
 procedure pick(var ctx:t_jit_context2;preload:Pointer);
 procedure pick_locked(var ctx:t_jit_context2);
@@ -872,17 +873,20 @@ var
  link_jmp:t_jit_i_link;
 begin
  //debug
+ if debug_info then
+ begin
   link_jmp:=ctx.builder.jmp(nil_link,os8);
   //
-  ctx.builder._O($FA); //cli
+  ctx.builder.cli;
   //op_set_r14_imm(ctx,$FACEADD7);
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
   add_orig(ctx);
   op_set_r14_imm(ctx,Int64(ctx.ptr_next));
   //op_set_r14_imm(ctx,$FACEADDE);
-  ctx.builder._O($FB); //sti
+  ctx.builder.sti;
   //
   link_jmp._label:=ctx.builder.get_curr_label.after;
+ end;
  //debug
 end;
 

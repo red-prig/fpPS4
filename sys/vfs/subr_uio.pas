@@ -42,6 +42,8 @@ var
  cnt:QWORD;
  error, newflags, save:Integer;
 begin
+ if (n<=0) then Exit(0);
+
  td:=curkthread;
  error:=0;
 

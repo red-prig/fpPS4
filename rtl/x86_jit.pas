@@ -405,6 +405,8 @@ type
   procedure vmovdqa (reg0:TRegValue;reg1:TRegValue);
   procedure sahf;
   procedure lahf;
+  procedure cli;
+  procedure sti;
   procedure seto(reg:TRegValue);
   procedure int3;
   procedure testq(reg0:TRegValue;reg1:TRegValue);
@@ -4660,6 +4662,16 @@ end;
 procedure t_jit_builder.lahf;
 begin
  _O($9F);
+end;
+
+procedure t_jit_builder.cli;
+begin
+ _O($FA);
+end;
+
+procedure t_jit_builder.sti;
+begin
+ _O($FB);
 end;
 
 procedure t_jit_builder.seto(reg:TRegValue);
