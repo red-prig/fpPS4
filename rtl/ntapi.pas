@@ -149,6 +149,12 @@ const
 
  SECTION_MAP_EXECUTE=$8;
 
+ MEM_REPLACE_PLACEHOLDER=$04000;
+ MEM_RESERVE_PLACEHOLDER=$40000;
+
+ MEM_COALESCE_PLACEHOLDERS=$01;
+ MEM_PRESERVE_PLACEHOLDER =$02;
+
  OBJ_INHERIT         =$00000002;
  OBJ_PERMANENT       =$00000010;
  OBJ_EXCLUSIVE       =$00000020;
@@ -889,9 +895,27 @@ function NtMapViewOfSection(
           Protect              :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtMapViewOfSectionEx(
+          SectionHandle         :THandle;
+          ProcessHandle         :THandle;
+          BaseAddress           :PPointer;
+          SectionOffset         :PLARGE_INTEGER;
+          ViewSize              :PULONG_PTR;
+          AllocationType        :ULONG;
+          Protect               :ULONG;
+          ExtendedParameters    :Pointer;
+          ExtendedParameterCount:ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtUnmapViewOfSection(
-          ProcessHandle        :THandle;
-          BaseAddress          :Pointer
+          ProcessHandle:THandle;
+          BaseAddress  :Pointer
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtUnmapViewOfSectionEx(
+          ProcessHandle:THandle;
+          BaseAddress  :Pointer;
+          Flags        :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtAllocateVirtualMemory(
@@ -901,6 +925,16 @@ function NtAllocateVirtualMemory(
           RegionSize           :PULONG_PTR;
           AllocationType       :ULONG;
           Protect              :ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtAllocateVirtualMemoryEx(
+          ProcessHandle         :THandle;
+          BaseAddress           :PPointer;
+          RegionSize            :PULONG_PTR;
+          AllocationType        :ULONG;
+          Protect               :ULONG;
+          ExtendedParameters    :Pointer;
+          ExtendedParameterCount:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtFreeVirtualMemory(
