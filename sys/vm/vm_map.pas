@@ -48,18 +48,18 @@ type
 
  p_vm_map_t=^vm_map_t;
  vm_map_t=^_vm_map;
- _vm_map=packed object
-  header:vm_map_entry;      // List of entries
-  lock:mtx;                 // Lock for map data
-  nentries:Integer;         // Number of entries
-  size:vm_size_t;           // virtual size
+ _vm_map=object
+  header   :vm_map_entry;   // List of entries
+  lock     :mtx;            // Lock for map data
+  size     :vm_size_t;      // virtual size
+  nentries :Integer;        // Number of entries
   timestamp:DWORD;          // Version number
-  flags:vm_flags_t;         // flags for this vm_map
-  root:vm_map_entry_t;      // Root of a binary search tree
-  pmap:pmap_t;              // (c) Physical map
-  rmap:Pointer;
-  busy:Integer;
-  entry_id:QWORD;
+  flags    :vm_flags_t;     // flags for this vm_map
+  busy     :Integer;
+  root     :vm_map_entry_t; // Root of a binary search tree
+  pmap     :pmap_t;         // (c) Physical map
+  rmap     :Pointer;
+  entry_id :QWORD;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -367,9 +367,10 @@ var
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm));
+ pmap_pinit(vmspace_pmap(vm),@vm^.vm_map,min,max);
 
  vm_map_init(@vm^.vm_map,vmspace_pmap(vm),min,max);
+
  //vm^.vm_refcnt:=1;
  //vm^.vm_shm:=nil;
  vm^.vm_swrss:=0;
@@ -1433,7 +1434,7 @@ begin
  begin
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
-     (prev^.vm_obj=entry^.vm_obj) and
+     (prev^.vm_obj=obj) and
      ((prev^.vm_obj=nil) or (prev^.offset + prevsize=entry^.offset)) and
      (prev^.eflags=entry^.eflags) and
      (prev^.protection=entry^.protection) and
@@ -1479,8 +1480,8 @@ begin
  begin
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
-     (next^.vm_obj=entry^.vm_obj) and
-     ((entry^.vm_obj=nil) or (entry^.offset + esize=next^.offset)) and
+     (next^.vm_obj=obj) and
+     ((obj=nil) or (entry^.offset + esize=next^.offset)) and
      (next^.eflags=entry^.eflags) and
      (next^.protection=entry^.protection) and
      (next^.max_protection=entry^.max_protection) and

@@ -1,4 +1,8 @@
 
+{
+ {$MAXSTACKSIZE $7FBE0000}
+}
+
 uses
  windows,
  dateutils,
@@ -378,8 +382,8 @@ begin
 
  //argv0:='/app0/basic-sample_debug.elf';
  //argv0:='/app0/simple.elf';
- argv0:='/app0/videoout_basic.elf';
- //argv0:='/app0/videoout_basic.bin';
+ //argv0:='/app0/videoout_basic.elf';
+ argv0:='/app0/videoout_basic.bin';
  //argv0:='/app0/videoout_cursor.elf';
 
  //argv0:='/app0/scene2.bin';
@@ -868,8 +872,193 @@ begin
  Writeln('-----');
 end;
 
-const
- SECTION_MAP_EXECUTE=$8;
+procedure test_map2;
+var
+ hSection:THandle;
+ place_base:Pointer;
+ base:Pointer;
+ size:ULONG_PTR;
+ SectionOffset:ULONG_PTR;
+ R:DWORD;
+ old:Integer;
+begin
+ exit;
+
+ place_base:=nil;
+ size:=4*1024*1024;
+
+ R:=NtAllocateVirtualMemoryEx(
+     NtCurrentProcess,
+     @place_base,
+     @size,
+     MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
+     PAGE_NOACCESS,
+     nil,
+     0
+    );
+
+ Writeln('NtAllocateVirtualMemoryEx:',HexStr(R,8));
+
+ Writeln('place_base:',HexStr(place_base));
+
+ base:=place_base;
+ size:=4*1024;
+
+ //split region
+ R:=NtFreeVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
+    );
+
+ Writeln('NtFreeVirtualMemory:',HexStr(R,8));
+
+ size:=1*1024*1024*1024; //create page file
+
+ hSection:=0;
+ R:=NtCreateSection(
+     @hSection,
+     SECTION_MAP_WRITE or SECTION_MAP_READ{ or SECTION_MAP_EXECUTE},
+     nil,
+     @size,
+     PAGE_READWRITE,
+     SEC_COMMIT,
+     THandle(0)
+    );
+
+ Writeln('NtCreateSection:',HexStr(R,8));
+
+ {
+ HANDLE CreateFileMappingA(
+   [in]           HANDLE                hFile,
+   [in, optional] LPSECURITY_ATTRIBUTES lpFileMappingAttributes,
+   [in]           DWORD                 flProtect,
+   [in]           DWORD                 dwMaximumSizeHigh,
+   [in]           DWORD                 dwMaximumSizeLow,
+   [in, optional] LPCSTR                lpName
+ );
+ }
+
+ base:=place_base;
+ SectionOffset:=4*1024;
+ size:=4*1024;
+
+ R:=NtMapViewOfSectionEx(
+           hSection,
+           NtCurrentProcess,
+           @base,
+           @SectionOffset,
+           @size,
+           MEM_REPLACE_PLACEHOLDER,
+           PAGE_READWRITE,
+           nil,
+           0
+          );
+
+ Writeln('NtMapViewOfSectionEx:',HexStr(R,8));
+
+ old:=0;
+ R:=NtProtectVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     PAGE_READONLY,
+     @old
+    );
+
+ Writeln('NtProtectVirtualMemory:',HexStr(R,8));
+
+ old:=0;
+ R:=NtProtectVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     PAGE_READWRITE,
+     @old
+    );
+
+ Writeln('NtProtectVirtualMemory:',HexStr(R,8));
+
+ //private
+
+ base:=place_base+4*1024;
+ size:=4*1024;
+
+ //split region
+ R:=NtFreeVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
+    );
+
+ Writeln('NtFreeVirtualMemory:',HexStr(R,8));
+
+ base:=place_base+4*1024;
+ SectionOffset:=4*1024;
+ size:=4*1024;
+
+ R:=NtMapViewOfSectionEx(
+           hSection,
+           NtCurrentProcess,
+           @base,
+           @SectionOffset,
+           @size,
+           MEM_REPLACE_PLACEHOLDER,
+           PAGE_READWRITE,
+           nil,
+           0
+          );
+
+ Writeln('NtMapViewOfSectionEx:',HexStr(R,8));
+
+ {
+ base:=place_base+4*1024;
+ size:=4*1024;
+
+ R:=NtAllocateVirtualMemoryEx(
+     NtCurrentProcess,
+     @base,
+     @size,
+     MEM_RESERVE or MEM_COMMIT,
+     PAGE_READWRITE,
+     nil,
+     0
+    );
+
+ Writeln('NtAllocateVirtualMemoryEx:',HexStr(R,8));
+ }
+
+ PByte(place_base)^:=$FF;
+
+ Writeln(PByte(base)^);
+
+ base:=place_base+4*1024;
+
+ R:=NtUnmapViewOfSectionEx(
+     NtCurrentProcess,
+     base,
+     MEM_PRESERVE_PLACEHOLDER
+    );
+
+ Writeln('NtUnmapViewOfSectionEx:',HexStr(R,8));
+
+ base:=place_base+4*1024;
+ size:=4*1024*1024-4*1024;
+
+ //union region
+ R:=NtFreeVirtualMemory(
+     NtCurrentProcess,
+     @base,
+     @size,
+     MEM_RELEASE or MEM_COALESCE_PLACEHOLDERS
+    );
+
+ Writeln('NtFreeVirtualMemory:',HexStr(R,8));
+
+ readln;
+end;
 
 procedure test_map;
 var
@@ -1326,6 +1515,7 @@ begin
  id_test;
 
  //test_map;
+ test_map2;
  sys_init;
 
  //Writeln(get_proc_prio());

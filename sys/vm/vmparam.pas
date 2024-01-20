@@ -86,8 +86,9 @@ const
  FF`FFFF`FFFF
 
                                0x0 00400000  (win stack)
+                               0x0 7FFE0000  (win kernel data)
                                0x1 00000000  (win image)
-                            0x7FF8 xxxxxxxx  (win  dll)
+                            0x7FF8 xxxxxxxx  (win dll)
  -- System Managed
  SCE_KERNEL_PROC_IMAGE_AREA  = 0x0`00400000 - 0x0`80000000  (ET_SCE_DYNEXEC)
  SCE_KERNEL_DL_AREA          = 0x0`80000000 - 0x2`00000000

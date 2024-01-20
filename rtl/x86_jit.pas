@@ -102,7 +102,7 @@ type
  t_jit_code_chunk_set=specialize TNodeSplay<t_jit_code_chunk>;
 
  t_jit_i_link=object
-  private
+  //private
    AType:t_jit_link_type;
    ALink:p_jit_instruction;
    procedure set_label(link:t_jit_i_link);
@@ -301,6 +301,8 @@ type
   Function  _add_plt:Integer;
   Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
   Function  _get_plt_offset (ALink:Pointer;AInstructionEnd:Integer):Integer;
+  //
+  Function  last_instruction:p_jit_instruction;
   //
   function  call_far(P:Pointer):t_jit_i_link;
   function  jmp_far (P:Pointer):t_jit_i_link;
@@ -1175,6 +1177,11 @@ begin
  Result:=((ALink^.AInstructionOffset+ALink^.ASize)-AInstructionEnd);
 end;
 
+Function t_jit_builder.last_instruction:p_jit_instruction;
+begin
+ Result:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+end;
+
 Function t_jit_builder.call_far(P:Pointer):t_jit_i_link;
 var
  ji:t_jit_instruction;
@@ -1193,7 +1200,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1216,7 +1223,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1238,7 +1245,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1273,7 +1280,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
  LinkLabel(Result.ALink);
 end;
@@ -1326,7 +1333,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1360,7 +1367,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1388,7 +1395,7 @@ begin
 
  _add(ji);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1398,7 +1405,7 @@ function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link)
 begin
  movq(reg,mem);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
 
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
@@ -1411,7 +1418,7 @@ function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link)
 begin
  leaq(reg,mem);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
 
  Result.ALink^.ALink.AType:=_label_id.AType;
  Result.ALink^.ALink.ALink:=_label_id.ALink;
@@ -1424,7 +1431,7 @@ function t_jit_builder.leap(reg:TRegValue):t_jit_i_link;
 begin
  leaq(reg,[rip+$7FFFFFFF]);
 
- Result.ALink:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+ Result.ALink:=last_instruction;
 
  Result.ALink^.ALink.AType:=lnkPlt;
  Result.ALink^.ALink.ALink:=Pointer(_add_plt);

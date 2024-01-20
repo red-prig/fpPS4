@@ -47,7 +47,7 @@ type
  end;
 
  p_dmem_map=^t_dmem_map;
- t_dmem_map=packed object
+ t_dmem_map=object
   header  :t_dmem_map_entry; // List of entries
   lock    :mtx;              // Lock for map data
   nentries:DWORD;            // Number of entries

@@ -584,6 +584,14 @@ function NtSuspendThread(
           SuspendCount:PULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtSuspendProcess(
+          ProcessHandle:THandle
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtResumeProcess(
+          ProcessHandle:THandle
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtQueryInformationThread(
           ThreadHandle           :THandle;
           ThreadInformationClass :DWORD;
@@ -954,7 +962,7 @@ function NtProtectVirtualMemory(
 
 function NtQueryVirtualMemory(
           ProcessHandle         :THandle;
-          BaseAddress           :PPointer;
+          BaseAddress           :Pointer;
           MemoryInformationClass:DWORD;
           Buffer                :Pointer;
           Length                :ULONG_PTR;

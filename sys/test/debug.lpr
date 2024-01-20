@@ -3,7 +3,8 @@ uses
  hamt,
  Windows,
  ntapi,
- kern_thr;
+ kern_thr,
+ vmparam;
 
 const
  ProcessName='project1.exe';
@@ -314,13 +315,209 @@ begin
  end;
 end;
 
+//function VirtualQueryEx(hProcess: THandle; lpAddress: Pointer; var lpBuffer: TMemoryBasicInformation; dwLength: PTRUINT): PTRUINT; external 'kernel32' name 'VirtualQueryEx';
+
+function _get_prot_str(p:DWORD):RawByteString;
+begin
+ case (p and 127) of
+  0,
+  PAGE_NOACCESS         :Result:='___';
+  PAGE_READONLY         :Result:='R__';
+  PAGE_READWRITE        :Result:='RW_';
+  PAGE_WRITECOPY        :Result:='CW_';
+  PAGE_EXECUTE          :Result:='__E';
+  PAGE_EXECUTE_READ     :Result:='R_E';
+  PAGE_EXECUTE_READWRITE:Result:='RWE';
+  PAGE_EXECUTE_WRITECOPY:Result:='CWE';
+  else
+   begin
+    Result:='x'+HexStr(p,2);
+   end;
+ end;
+
+ if ((p and PAGE_GUARD)<>0) then
+ begin
+  Result:=Result+'G';
+ end else
+ begin
+  Result:=Result+'_';
+ end;
+end;
+
+function _get_state_str(s:DWORD):RawByteString;
+begin
+ case s of
+  MEM_COMMIT :Result:='COMMIT ';
+  MEM_FREE   :Result:='FREE   ';
+  MEM_RESERVE:Result:='RESERVE';
+  else
+   Result:='0x'+HexStr(s,5);
+ end;
+end;
+
+function _get_type_str(t:DWORD):RawByteString;
+begin
+ case t of
+  0          :Result:='FREE   ';
+  MEM_IMAGE  :Result:='IMAGE  ';
+  MEM_MAPPED :Result:='MAPPED ';
+  MEM_PRIVATE:Result:='PRIVATE';
+  else
+   Result:='0x'+HexStr(t,5);
+ end;
+end;
+
+function get_virtual_size(hProcess:THandle;addr:Pointer):ptruint;
+var
+ base:Pointer;
+ prev:Pointer;
+ info:TMemoryBasicInformation;
+ size:ptruint;
+ i:integer;
+begin
+ Result:=0;
+
+ i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
+ if (i=0) then Exit;
+
+ //allocated?
+ if (info.State=MEM_FREE) then Exit;
+
+ //first section?
+ if (info.BaseAddress<>addr) then Exit;
+ if (info.BaseAddress<>info.AllocationBase) then Exit;
+
+ base:=addr;
+ addr:=addr+Info.RegionSize;
+ size:=Info.RegionSize;
+
+ repeat
+  i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
+  if (i=0) then Break;
+
+  if (base<>info.AllocationBase) then Break;
+
+  size:=size+Info.RegionSize;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+ until (prev>=addr);
+
+ Result:=size;
+end;
+
+function md_reserve(hProcess:THandle;base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtAllocateVirtualMemory(
+          hProcess,
+          @base,
+          0,
+          @size,
+          MEM_RESERVE,
+          PAGE_NOACCESS
+         );
+end;
+
+procedure pmap_pinit(hProcess:THandle);
+var
+ base:Pointer;
+ size:QWORD;
+ prot:QWORD;
+ i,r:Integer;
+begin
+
+ if Length(pmap_mem)<>0 then
+ begin
+  For i:=0 to High(pmap_mem) do
+  begin
+   base:=Pointer(pmap_mem[i].start);
+   size:=pmap_mem[i].__end-pmap_mem[i].start;
+
+   r:=md_reserve(hProcess,base,size);
+
+   if (r<>0) then
+   begin
+    Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+    //STATUS_COMMITMENT_LIMIT = $C000012D
+    //Assert(false,'pmap_init');
+   end;
+
+  end;
+ end;
+
+end;
+
+procedure print_virtual_proc(hProcess:THandle);
+var
+ addr,prev:Pointer;
+ info:TMemoryBasicInformation;
+ size:ptruint;
+ i:integer;
+begin
+ addr:=Pointer($400000);
+
+ size:=get_virtual_size(hProcess,addr);
+ Writeln('0x',HexStr(addr),'..','0x',HexStr(addr+size),':','0x',HexStr(size,16));
+
+ addr:=nil;
+
+ repeat
+
+  i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
+
+  if (i=0) then
+  begin
+   Break;
+  end;
+
+  Writeln('0x',HexStr(info.BaseAddress)   ,'..',
+          '0x',HexStr(info.BaseAddress+info.RegionSize),':',
+          '0x',HexStr(info.RegionSize,16) ,' ',
+          _get_prot_str(info.Protect),' ',
+          _get_state_str(info.State),' ',
+          _get_type_str(info._Type),' '
+          );
+
+  //BaseAddress : PVOID;
+  //AllocationBase : PVOID;
+  //AllocationProtect : DWORD;
+  //RegionSize : PTRUINT; // MvdV: size_t in win SDK 6.0.
+  //State : DWORD;
+  //Protect : DWORD;
+  //_Type : DWORD;
+
+  //Case Info.State of
+  // MEM_FREE :paddr^:=Info.BaseAddress;
+  // else      paddr^:=Info.AllocationBase;
+  //end;
+
+  //Case Info.State of
+  // MEM_FREE :psize^:=Info.RegionSize;
+  // else      psize^:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
+  //end;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+  //if (addr>=Pointer($7FFE0000)) then Break;
+
+ until (prev>=addr);
+end;
+
 begin
  si:=Default(TSTARTUPINFO);
  pi:=Default(PROCESS_INFORMATION);
 
  si.cb:=SizeOf(si);
 
- b:=CreateProcessW(ProcessName,nil,nil,nil,False,DEBUG_ONLY_THIS_PROCESS,nil,nil,@si,@pi);
+ b:=CreateProcessW(ProcessName,nil,nil,nil,False,DEBUG_ONLY_THIS_PROCESS or CREATE_SUSPENDED,nil,nil,@si,@pi);
+
+ print_virtual_proc(pi.hProcess);
+
+ pmap_pinit(pi.hProcess);
+
+ NtResumeProcess(pi.hProcess);
 
  devent:=Default(Windows.DEBUG_EVENT);
 

@@ -7,6 +7,7 @@ interface
 
 uses
  ntapi,
+ vm,
  windows;
 
 const
@@ -22,7 +23,28 @@ const
  MD_PROT_WX  =PAGE_EXECUTE_READWRITE;
  MD_PROT_RWX =PAGE_EXECUTE_READWRITE;
 
+const
+ VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
+
+ wprots:array[0..7] of Byte=(
+  MD_PROT_NONE,//___
+  MD_PROT_R   ,//__R
+  MD_PROT_W   ,//_W_
+  MD_PROT_RW  ,//_WR
+  MD_PROT_R   ,//X__
+  MD_PROT_R   ,//X_R
+  MD_PROT_RW  ,//XW_
+  MD_PROT_RW   //XWR
+ );
+
 function md_reserve(var base:Pointer;size:QWORD):Integer;
+
+function md_split  (base:Pointer;size:QWORD):Integer;
+function md_union  (base:Pointer;size:QWORD):Integer;
+
+function md_memfd_create(var hFile:THandle;size:QWORD):Integer;
+function md_memfd_close (hFile:THandle):Integer;
+
 function md_enter  (base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_remove (base:Pointer;size:QWORD):Integer;
@@ -33,6 +55,9 @@ function md_unmap  (base:Pointer;size:QWORD):Integer;
 
 function md_file_mmap (handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
 function md_file_unmap(base:Pointer;size:QWORD):Integer;
+
+function md_file_mmap_ex (handle:THandle;base:Pointer;offset,size:QWORD;prot:Integer):Integer;
+function md_file_unmap_ex(base:Pointer):Integer;
 
 const
  ICACHE=1; //Flush the instruction cache.
@@ -59,10 +84,41 @@ begin
 end;
 
 function md_reserve(var base:Pointer;size:QWORD):Integer;
+var
+ info:TMemoryBasicInformation;
+ len:ULONG_PTR;
 begin
  base:=md_alloc_page(base);
  size:=md_up_page(size);
 
+ len:=0;
+ Result:=NtQueryVirtualMemory(
+          NtCurrentProcess,
+          base,
+          0,
+          @info,
+          sizeof(info),
+          @len);
+
+ if (Result=0) then
+ begin
+  if (info.State=MEM_RESERVE) then
+  begin
+   if (base>=info.BaseAddress) and
+      ((base+size)<=(info.BaseAddress+info.RegionSize)) then
+   begin
+    Exit(0);
+   end;
+  end;
+  {
+  Writeln('Query:','0x',HexStr(info.BaseAddress),'..',
+                   '0x',HexStr(info.BaseAddress+info.RegionSize),':',
+                   '0x',HexStr(info.RegionSize,16),' ',
+                   info.State);
+  }
+ end;
+
+ {
  Result:=NtAllocateVirtualMemory(
           NtCurrentProcess,
           @base,
@@ -71,6 +127,58 @@ begin
           MEM_RESERVE,
           PAGE_NOACCESS
          );
+ }
+
+ Result:=NtAllocateVirtualMemoryEx(
+          NtCurrentProcess,
+          @base,
+          @size,
+          MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
+          PAGE_NOACCESS,
+          nil,
+          0
+         );
+
+end;
+
+function md_split(base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtFreeVirtualMemory(
+          NtCurrentProcess,
+          @base,
+          @size,
+          MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
+         );
+end;
+
+function md_union(base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtFreeVirtualMemory(
+          NtCurrentProcess,
+          @base,
+          @size,
+          MEM_RELEASE or MEM_COALESCE_PLACEHOLDERS
+         );
+end;
+
+function md_memfd_create(var hFile:THandle;size:QWORD):Integer;
+begin
+ hFile:=0;
+ Result:=NtCreateSection(
+          @hFile,
+          SECTION_ALL_ACCESS,
+          //SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
+          nil,
+          @size,
+          PAGE_READWRITE,
+          SEC_COMMIT,
+          THandle(0)
+         );
+end;
+
+function md_memfd_close(hFile:THandle):Integer;
+begin
+ Result:=NtClose(hFile);
 end;
 
 function md_enter(base:Pointer;size:QWORD;prot:Integer):Integer;
@@ -195,6 +303,28 @@ begin
  base:=md_alloc_page(base);
 
  Result:=NtUnmapViewOfSection(NtCurrentProcess,base);
+end;
+
+//
+
+function md_file_mmap_ex(handle:THandle;base:Pointer;offset,size:QWORD;prot:Integer):Integer;
+begin
+ Result:=NtMapViewOfSectionEx(
+          handle,
+          NtCurrentProcess,
+          @base,
+          @offset,
+          @size,
+          MEM_REPLACE_PLACEHOLDER,
+          prot,
+          nil,
+          0
+         );
+end;
+
+function md_file_unmap_ex(base:Pointer):Integer;
+begin
+ Result:=NtUnmapViewOfSectionEx(NtCurrentProcess,base,MEM_PRESERVE_PLACEHOLDER);
 end;
 
 //

@@ -1,0 +1,1091 @@
+unit vm_nt_map;
+
+{$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
+
+interface
+
+uses
+ sysutils,
+ vm;
+
+const
+ NT_FILE_FREE=1;
+ NT_MOBJ_FREE=2;
+ NT_UNION_OBJ=4;
+
+ MAX_UNION_SIZE=256*1024*1024;
+
+type
+ pp_vm_nt_file_obj=^p_vm_nt_file_obj;
+ p_vm_nt_file_obj=^vm_nt_file_obj;
+ vm_nt_file_obj=packed record
+  hfile:THandle;
+  refs :QWORD;
+  flags:QWORD;
+ end;
+
+ pp_vm_nt_entry=^p_vm_nt_entry;
+ p_vm_nt_entry=^vm_nt_entry;
+ vm_nt_entry=packed record
+  prev       :p_vm_nt_entry;     // previous entry
+  next       :p_vm_nt_entry;     // next entry
+  left       :p_vm_nt_entry;     // left child in binary search tree
+  right      :p_vm_nt_entry;     // right child in binary search tree
+  start      :vm_offset_t;       // start address
+  __end      :vm_offset_t;       // end address
+  avail_ssize:vm_offset_t;       // amt can grow if this is a stack
+  adj_free   :vm_offset_t;       // amount of adjacent free space
+  max_free   :vm_offset_t;       // max free space in subtree
+  obj        :p_vm_nt_file_obj;  // object I point to
+  offset     :vm_ooffset_t;      // offset into object
+ end;
+
+ p_vm_nt_map=^_vm_nt_map;
+ _vm_nt_map=object
+  header   :vm_nt_entry;   // List of entries
+  size     :vm_size_t;     // virtual size
+  nentries :Integer;       // Number of entries
+  root     :p_vm_nt_entry; // Root of a binary search tree
+  vmap     :Pointer;
+  property  min_offset:vm_offset_t read header.start write header.start;
+  property  max_offset:vm_offset_t read header.__end write header.__end;
+ end;
+
+function  vm_nt_file_obj_allocate  (hfile:THandle):p_vm_nt_file_obj;
+procedure vm_nt_file_obj_destroy   (obj:p_vm_nt_file_obj);
+procedure vm_nt_file_obj_reference (obj:p_vm_nt_file_obj);
+procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
+
+function  vm_nt_map_max(map:p_vm_nt_map):vm_offset_t;
+function  vm_nt_map_min(map:p_vm_nt_map):vm_offset_t;
+
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;vmap:Pointer);
+
+function  vm_nt_map_lookup_entry(
+            map    :p_vm_nt_map;
+            address:vm_offset_t;
+            entry  :pp_vm_nt_entry):Boolean;
+
+function vm_nt_map_insert(
+            map   :p_vm_nt_map;
+            obj   :p_vm_nt_file_obj;
+            offset:vm_ooffset_t;
+            start :vm_offset_t;
+            __end :vm_offset_t;
+            prot  :Integer):Integer;
+
+function  vm_nt_map_fixed(map   :p_vm_nt_map;
+                          obj   :p_vm_nt_file_obj;
+                          offset:vm_ooffset_t;
+                          start :vm_offset_t;
+                          __end :vm_offset_t;
+                          prot  :Integer):Integer;
+
+function  vm_nt_map_delete(map:p_vm_nt_map;start:vm_offset_t;__end:vm_offset_t):Integer;
+
+procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
+
+implementation
+
+uses
+ vm_map,
+ md_map;
+
+type
+ p_range=^t_range;
+ t_range=record
+  start:vm_offset_t;
+  __end:vm_offset_t;
+ end;
+
+ t_range_stat=record
+  obj:p_vm_nt_file_obj;
+  //
+  case Byte of
+   0:(
+      rprev:t_range;
+      rcurr:t_range;
+      rnext:t_range;
+     );
+   1:(
+      range:array[0..2] of t_range;
+     );
+ end;
+
+function vm_nt_file_obj_allocate(hfile:THandle):p_vm_nt_file_obj;
+begin
+ Result:=AllocMem(SizeOf(vm_nt_file_obj));
+
+ Result^.hfile:=hfile;
+ Result^.refs :=1;
+ Result^.flags:=NT_FILE_FREE or NT_MOBJ_FREE or NT_UNION_OBJ;
+end;
+
+procedure vm_nt_file_obj_destroy(obj:p_vm_nt_file_obj);
+var
+ r:Integer;
+begin
+ if ((obj^.flags and NT_FILE_FREE)<>0) then
+ begin
+  r:=md_memfd_close(obj^.hfile);
+  if (r<>0) then
+  begin
+   Writeln('failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
+   Assert(false,'vm_nt_file_obj_destroy');
+  end;
+ end;
+
+ if ((obj^.flags and NT_MOBJ_FREE)<>0) then
+ begin
+  FreeMem(obj);
+ end;
+end;
+
+procedure vm_nt_file_obj_reference(obj:p_vm_nt_file_obj);
+begin
+ if (obj=nil) then Exit;
+
+ System.InterlockedIncrement64(obj^.refs);
+end;
+
+procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
+begin
+ if (obj=nil) then Exit;
+
+ if (System.InterlockedDecrement64(obj^.refs)=0) then
+ begin
+  vm_nt_file_obj_destroy(obj);
+ end;
+end;
+
+//
+
+procedure vm_prot_fixup(map:p_vm_nt_map;start,__end:vm_offset_t);
+var
+ vmap:vm_map_t;
+ entry:vm_map_entry_t;
+ base,size:vm_size_t;
+ prot:Integer;
+ r:Integer;
+begin
+ vmap:=map^.vmap;
+
+ if (vmap=nil) then Exit;
+ if (start=__end) then Exit;
+
+ if (not vm_map_lookup_entry(vmap, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end else
+ begin
+  entry:=entry;
+ end;
+
+ while (entry<>@vmap^.header) and (entry^.start<__end) do
+ begin
+
+  if (entry^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   entry:=entry^.next;
+   continue;
+  end;
+
+  base:=entry^.start;
+  size:=entry^.__end;
+
+  if (base<start) then
+  begin
+   base:=start;
+  end;
+
+  if (size>__end) then
+  begin
+   size:=__end;
+  end;
+
+  size:=size-base;
+
+  prot:=wprots[entry^.protection and VM_RWX];
+
+  if (prot<>MD_PROT_RW) then
+  begin
+   r:=md_protect(Pointer(base),size,prot);
+   if (r<>0) then
+   begin
+    Writeln('failed md_protect(',HexStr(base,16),',',HexStr(base+size,16),'):0x',HexStr(r,8));
+    Assert(false,'vm_prot_fixup');
+   end;
+  end;
+
+  entry:=entry^.next;
+ end;
+end;
+
+//
+
+procedure vm_init_stat(var stat:t_range_stat;entry:p_vm_nt_entry); inline;
+begin
+ stat:=Default(t_range_stat);
+ stat.obj        :=entry^.obj;
+ stat.rcurr.start:=entry^.start;
+ stat.rcurr.__end:=entry^.__end;
+end;
+
+procedure vm_get_space(map:p_vm_nt_map;entry:p_vm_nt_entry;var start,__end:vm_offset_t);
+var
+ prev:p_vm_nt_entry;
+ next:p_vm_nt_entry;
+begin
+ prev:=entry^.prev;
+ next:=entry^.next;
+
+ if (prev=@map^.header) then
+ begin
+  start:=map^.min_offset;
+ end else
+ begin
+  start:=prev^.__end;
+ end;
+
+ if (next=@map^.header) then
+ begin
+  __end:=map^.max_offset;
+ end else
+ begin
+  __end:=next^.start;
+ end;
+end;
+
+procedure vm_map(map:p_vm_nt_map;
+                 entry:p_vm_nt_entry;
+                 prot:Integer);
+var
+ start:vm_offset_t;
+ __end:vm_offset_t;
+ size:vm_size_t;
+ r:Integer;
+begin
+ if (entry^.obj<>nil) then
+ begin
+  size:=entry^.__end-entry^.start;
+
+  vm_get_space(map,entry,start,__end);
+
+  if (start<>__end) then
+  if (entry^.start<>start) or
+     (entry^.__end<>__end) then
+  begin
+   r:=md_split(Pointer(entry^.start),size);
+   if (r<>0) then
+   begin
+    Writeln('failed md_split(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+    Assert(false,'vm_map');
+   end;
+  end;
+
+  r:=md_file_mmap_ex(entry^.obj^.hfile,Pointer(entry^.start),entry^.offset,size,MD_PROT_RW);
+  if (r<>0) then
+  begin
+   Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+   Assert(false,'vm_map');
+  end;
+
+  if (prot<>MD_PROT_RW) then
+  begin
+   r:=md_protect(Pointer(entry^.start),size,prot);
+   if (r<>0) then
+   begin
+    Writeln('failed md_protect(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+    Assert(false,'vm_prot_fixup');
+   end;
+  end;
+
+  //Writeln('md_file_mmap(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+ end;
+end;
+
+function vm_remap(map:p_vm_nt_map;
+                  entry1:p_vm_nt_entry;
+                  entry2:p_vm_nt_entry;
+                  entry3:p_vm_nt_entry;
+                  var stat:t_range_stat):Boolean;
+var
+ ets:array[0..2] of p_vm_nt_entry;
+ first:p_vm_nt_entry;
+
+ e_count:Integer;
+ r_count:Integer;
+
+ start:vm_offset_t;
+ __end:vm_offset_t;
+ size:vm_size_t;
+
+ p:p_range;
+ i,r:Integer;
+begin
+ Result:=False;
+
+ if (stat.obj=nil) then Exit(False);
+
+ ets[0]:=entry1;
+ ets[1]:=entry2;
+ ets[2]:=entry3;
+
+ first:=nil;
+ For i:=Low(ets) to High(ets) do
+ begin
+  if (ets[i]<>nil) then
+  begin
+   first:=ets[i];
+   Break;
+  end;
+ end;
+
+ if (first=nil) then Exit(False);
+
+ if (stat.rcurr.start=first^.start) and
+    (stat.rcurr.__end=first^.__end) then Exit(False);
+
+ start:=0;
+ __end:=0;
+ e_count:=0;
+ r_count:=0;
+
+ For i:=Low(ets) to High(ets) do
+ begin
+  if (ets[i]<>nil) then
+  begin
+   if (start=0) or (start>ets[i]^.start) then
+   begin
+    start:=ets[i]^.start;
+   end;
+
+   if (__end=0) or (__end<ets[i]^.__end) then
+   begin
+    __end:=ets[i]^.__end;
+   end;
+
+   Inc(e_count);
+  end;
+ end;
+
+ //union size
+ size:=__end-start;
+
+ //danger zone
+
+ //unmap all
+ For i:=Low(stat.range) to High(stat.range) do
+ begin
+  p:=@stat.range[i];
+  //
+  if (p^.start<>0) and
+     (p^.start<>p^.__end) then
+  begin
+   r:=md_file_unmap_ex(Pointer(p^.start));
+   if (r<>0) then
+   begin
+    Writeln('failed md_file_unmap_ex(',HexStr(p^.start,16),',',HexStr(p^.__end,16),'):0x',HexStr(r,8));
+    Assert(false,'vm_remap');
+   end;
+   //
+   //Writeln('md_file_unmap_ex(',HexStr(p^.start,16),',',HexStr(p^.__end,16),'):0x',HexStr(r,8));
+   //
+   Inc(r_count);
+  end;
+ end;
+
+ //union parts
+ if (r_count>1) then
+ begin
+  r:=md_union(Pointer(start),size);
+  if (r<>0) then
+  begin
+   Writeln('failed md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+   Assert(false,'vm_remap');
+  end;
+  //Writeln('md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+ end;
+
+ //split to parts
+ if (e_count>1) then
+ For i:=Low(ets) to High(ets) do
+ begin
+  if (ets[i]<>nil) and (ets[i]<>first) then
+  begin
+   size:=ets[i]^.__end-ets[i]^.start;
+
+   r:=md_split(Pointer(ets[i]^.start),size);
+   if (r<>0) then
+   begin
+    Writeln('failed md_split(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+
+    Writeln('(',HexStr(start,16),',',HexStr(__end,16),')');
+
+    Assert(false,'vm_remap');
+   end;
+
+   //Writeln('md_split(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+
+   Break; //middle or last splt
+  end;
+ end;
+
+ //map new parts
+ For i:=Low(ets) to High(ets) do
+ begin
+  if (ets[i]<>nil) then
+  begin
+   //map new
+   if (ets[i]^.obj<>nil) then
+   begin
+    size:=ets[i]^.__end-ets[i]^.start;
+
+    r:=md_file_mmap_ex(stat.obj^.hfile,Pointer(ets[i]^.start),ets[i]^.offset,size,MD_PROT_RW);
+    if (r<>0) then
+    begin
+     Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+     Assert(false,'vm_remap');
+    end;
+
+    //Writeln('md_file_mmap_ex(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+   end;
+  end;
+ end;
+
+ //fix prot
+
+ For i:=Low(ets) to High(ets) do
+ begin
+  if (ets[i]<>nil) then
+  begin
+   if (ets[i]^.obj<>nil) then
+   begin
+    vm_prot_fixup(map,ets[i]^.start,ets[i]^.__end);
+   end;
+  end;
+ end;
+
+ //danger zone
+
+ Result:=True;
+end;
+
+procedure vm_unmap(map:p_vm_nt_map;entry:p_vm_nt_entry);
+var
+ start:vm_offset_t;
+ __end:vm_offset_t;
+ r:Integer;
+begin
+ if (entry^.obj<>nil) then
+ begin
+  r:=md_file_unmap_ex(Pointer(entry^.start));
+  if (r<>0) then
+  begin
+   Writeln('failed md_file_unmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+   Assert(false,'vm_unmap');
+  end;
+  //Writeln('md_file_unmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+ end;
+
+ vm_get_space(map,entry,start,__end);
+
+ if (start<>__end) then
+ if (entry^.start<>start) or
+    (entry^.__end<>__end) then
+ begin
+  r:=md_union(Pointer(start),__end-start);
+  if (r<>0) then
+  begin
+   Writeln('failed md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+
+   Writeln('(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+
+   Assert(false,'vm_unmap');
+  end;
+ end;
+end;
+
+//
+
+function vm_nt_map_max(map:p_vm_nt_map):vm_offset_t; inline;
+begin
+ Result:=map^.max_offset;
+end;
+
+function vm_nt_map_min(map:p_vm_nt_map):vm_offset_t; inline;
+begin
+ Result:=map^.min_offset;
+end;
+
+procedure VM_NT_MAP_RANGE_CHECK(map:p_vm_nt_map;var start,__end:vm_offset_t);
+begin
+ if (start<vm_nt_map_min(map)) then
+ begin
+  start:=vm_nt_map_min(map);
+ end;
+ if (__end>vm_nt_map_max(map)) then
+ begin
+  __end:=vm_nt_map_max(map);
+ end;
+ if (start>__end) then
+ begin
+  start:=__end;
+ end;
+end;
+
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;vmap:Pointer);
+begin
+ map^.header.next:=@map^.header;
+ map^.header.prev:=@map^.header;
+ map^.min_offset:=min;
+ map^.max_offset:=max;
+ map^.header.adj_free:=(max-min);
+ map^.header.max_free:=(max-min);
+ map^.root:=nil;
+ map^.vmap:=vmap;
+end;
+
+procedure vm_nt_entry_dispose(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
+begin
+ FreeMem(entry);
+end;
+
+function vm_nt_entry_create(map:p_vm_nt_map):p_vm_nt_entry;
+var
+ new_entry:p_vm_nt_entry;
+begin
+ new_entry:=AllocMem(SizeOf(vm_nt_entry));
+ Assert((new_entry<>nil),'vm_nt_entry_create: kernel resources exhausted');
+ Result:=new_entry;
+end;
+
+procedure vm_nt_entry_set_max_free(entry:p_vm_nt_entry);
+begin
+ entry^.max_free:=entry^.adj_free;
+ if (entry^.left<>nil) then
+ if (entry^.left^.max_free>entry^.max_free) then
+ begin
+  entry^.max_free:=entry^.left^.max_free;
+ end;
+ if (entry^.right<>nil) then
+ if (entry^.right^.max_free>entry^.max_free) then
+ begin
+  entry^.max_free:=entry^.right^.max_free;
+ end;
+end;
+
+function vm_nt_entry_splay(addr:vm_offset_t;root:p_vm_nt_entry):p_vm_nt_entry;
+var
+ llist,rlist:p_vm_nt_entry;
+ ltree,rtree:p_vm_nt_entry;
+ y          :p_vm_nt_entry;
+begin
+ if (root=nil) then Exit(root);
+
+ llist:=nil;
+ rlist:=nil;
+ repeat
+  if (addr<root^.start) then
+  begin
+   y:=root^.left;
+   if (y=nil) then break;
+   if (addr<y^.start) and (y^.left<>nil) then
+   begin
+    root^.left:=y^.right;
+    y^.right:=root;
+    vm_nt_entry_set_max_free(root);
+    root:=y^.left;
+    y^.left:=rlist;
+    rlist:=y;
+   end else
+   begin
+    root^.left:=rlist;
+    rlist:=root;
+    root:=y;
+   end;
+  end else
+  if (addr>=root^.__end) then
+  begin
+   y:=root^.right;
+   if (y=nil) then break;
+   if (addr>=y^.__end) and (y^.right<>nil) then
+   begin
+    root^.right:=y^.left;
+    y^.left:=root;
+    vm_nt_entry_set_max_free(root);
+    root:=y^.right;
+    y^.right:=llist;
+    llist:=y;
+   end else
+   begin
+    root^.right:=llist;
+    llist:=root;
+    root:=y;
+   end;
+  end else
+  begin
+   break;
+  end;
+ until false;
+
+ ltree:=root^.left;
+ while (llist<>nil) do
+ begin
+  y:=llist^.right;
+  llist^.right:=ltree;
+  vm_nt_entry_set_max_free(llist);
+  ltree:=llist;
+  llist:=y;
+ end;
+ rtree:=root^.right;
+ while (rlist<>nil) do
+ begin
+  y:=rlist^.left;
+  rlist^.left:=rtree;
+  vm_nt_entry_set_max_free(rlist);
+  rtree:=rlist;
+  rlist:=y;
+ end;
+
+ root^.left:=ltree;
+ root^.right:=rtree;
+ vm_nt_entry_set_max_free(root);
+
+ Result:=(root);
+end;
+
+procedure vm_nt_entry_link(
+           map        :p_vm_nt_map;
+           after_where:p_vm_nt_entry;
+           entry      :p_vm_nt_entry);
+begin
+ Inc(map^.nentries);
+ entry^.prev:=after_where;
+ entry^.next:=after_where^.next;
+ entry^.next^.prev:=entry;
+ after_where^.next:=entry;
+
+ if (after_where<>@map^.header) then
+ begin
+  if (after_where<>map^.root) then
+  begin
+   vm_nt_entry_splay(after_where^.start, map^.root);
+  end;
+  entry^.right:=after_where^.right;
+  entry^.left:=after_where;
+  after_where^.right:=nil;
+  after_where^.adj_free:=entry^.start - after_where^.__end;
+  vm_nt_entry_set_max_free(after_where);
+ end else
+ begin
+  entry^.right:=map^.root;
+  entry^.left:=nil;
+ end;
+ if (entry^.next=@map^.header) then
+ begin
+  entry^.adj_free:=map^.max_offset-entry^.__end;
+ end else
+ begin
+  entry^.adj_free:=entry^.next^.start-entry^.__end;
+ end;
+ vm_nt_entry_set_max_free(entry);
+ map^.root:=entry;
+end;
+
+procedure vm_nt_entry_unlink(
+           map        :p_vm_nt_map;
+           entry      :p_vm_nt_entry);
+var
+ next,prev,root:p_vm_nt_entry;
+begin
+ if (entry<>map^.root) then
+ begin
+  vm_nt_entry_splay(entry^.start, map^.root);
+ end;
+ if (entry^.left=nil) then
+ begin
+  root:=entry^.right;
+ end else
+ begin
+  root:=vm_nt_entry_splay(entry^.start, entry^.left);
+  root^.right:=entry^.right;
+  if (root^.next=@map^.header) then
+  begin
+   root^.adj_free:=map^.max_offset-root^.__end;
+  end else
+  begin
+   root^.adj_free:=entry^.next^.start-root^.__end;
+  end;
+  vm_nt_entry_set_max_free(root);
+ end;
+ map^.root:=root;
+
+ prev:=entry^.prev;
+ next:=entry^.next;
+ next^.prev:=prev;
+ prev^.next:=next;
+ Dec(map^.nentries);
+end;
+
+procedure vm_nt_entry_resize_free(map:p_vm_nt_map;entry:p_vm_nt_entry);
+begin
+ if (entry<>map^.root) then
+ begin
+  map^.root:=vm_nt_entry_splay(entry^.start, map^.root);
+ end;
+
+ if (entry^.next=@map^.header) then
+ begin
+  entry^.adj_free:=map^.max_offset-entry^.__end;
+ end else
+ begin
+  entry^.adj_free:=entry^.next^.start-entry^.__end;
+ end;
+ vm_nt_entry_set_max_free(entry);
+end;
+
+function vm_nt_map_lookup_entry(
+           map        :p_vm_nt_map;
+           address    :vm_offset_t;
+           entry      :pp_vm_nt_entry):Boolean;
+var
+ cur:p_vm_nt_entry;
+begin
+ cur:=map^.root;
+ if (cur=nil) then
+ begin
+  entry^:=@map^.header;
+ end else
+ if (address>=cur^.start) and (cur^.__end>address) then
+ begin
+  entry^:=cur;
+  Exit(TRUE);
+ end else
+ begin
+
+  cur:=vm_nt_entry_splay(address,cur);
+  map^.root:=cur;
+
+  if (address>=cur^.start) then
+  begin
+   entry^:=cur;
+   if (cur^.__end>address) then
+   begin
+    Exit(TRUE);
+   end;
+  end else
+  begin
+   entry^:=cur^.prev;
+  end;
+ end;
+ Result:=(FALSE);
+end;
+
+function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_range_stat):Boolean; forward;
+
+function vm_nt_map_insert(
+           map   :p_vm_nt_map;
+           obj   :p_vm_nt_file_obj;
+           offset:vm_ooffset_t;
+           start :vm_offset_t;
+           __end :vm_offset_t;
+           prot  :Integer):Integer;
+var
+ new_entry :p_vm_nt_entry;
+ prev_entry:p_vm_nt_entry;
+ temp_entry:p_vm_nt_entry;
+ stat      :t_range_stat;
+begin
+ if (start<map^.min_offset) or (__end>map^.max_offset) or (start>=__end) then
+ begin
+  Exit(KERN_INVALID_ADDRESS);
+ end;
+
+ if vm_nt_map_lookup_entry(map,start,@temp_entry) then
+ begin
+  Exit(KERN_NO_SPACE);
+ end;
+
+ prev_entry:=temp_entry;
+
+ if (prev_entry^.next<>@map^.header) and
+    (prev_entry^.next^.start<__end) then
+ begin
+  Exit(KERN_NO_SPACE);
+ end;
+
+ new_entry:=vm_nt_entry_create(map);
+ new_entry^.start:=start;
+ new_entry^.__end:=__end;
+
+ new_entry^.obj        :=obj;
+ new_entry^.offset     :=offset;
+ new_entry^.avail_ssize:=0;
+
+ vm_nt_entry_link(map, prev_entry, new_entry);
+ map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
+
+ vm_map(map,new_entry,prot);
+
+ vm_nt_map_simplify_entry(map,new_entry,stat);
+
+ vm_remap(map,new_entry,nil,nil,stat);
+
+ Result:=KERN_SUCCESS;
+end;
+
+function vm_nt_map_fixed(map   :p_vm_nt_map;
+                         obj   :p_vm_nt_file_obj;
+                         offset:vm_ooffset_t;
+                         start :vm_offset_t;
+                         __end :vm_offset_t;
+                         prot  :Integer):Integer;
+begin
+ VM_NT_MAP_RANGE_CHECK(map, start, __end);
+ vm_nt_map_delete(map, start, __end);
+ Result:=vm_nt_map_insert(map, obj, offset, start, __end, prot);
+end;
+
+function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_range_stat):Boolean;
+var
+ next,prev:p_vm_nt_entry;
+ prevsize,esize:vm_size_t;
+ stat:t_range_stat;
+begin
+ vm_init_stat(stat,entry);
+
+ if (stat.obj<>nil) then
+ if ((stat.obj^.flags and NT_UNION_OBJ)=0) then
+ begin
+  sb:=stat;
+  Exit(False);
+ end;
+
+ if ((stat.rcurr.__end-stat.rcurr.start)>MAX_UNION_SIZE) then
+ begin
+  sb:=stat;
+  Exit(False);
+ end;
+
+ prev:=entry^.prev;
+ if (prev<>@map^.header) then
+ begin
+  prevsize:=prev^.__end - prev^.start;
+  if (prev^.__end=stat.rcurr.start) and
+     (prevsize<=MAX_UNION_SIZE) and
+     (prev^.obj=stat.obj) and
+     ((prev^.obj=nil) or (prev^.offset + prevsize=entry^.offset))
+     then
+  begin
+   vm_nt_entry_unlink(map, prev);
+
+   stat.rprev.start:=prev^.start;
+   stat.rprev.__end:=prev^.__end;
+
+   entry^.start :=prev^.start;
+   entry^.offset:=prev^.offset;
+
+   //change
+   if (entry^.prev<>@map^.header) then
+   begin
+    vm_nt_entry_resize_free(map, entry^.prev);
+   end;
+
+   vm_nt_file_obj_deallocate(prev^.obj);
+   vm_nt_entry_dispose(map, prev);
+  end;
+ end;
+
+ next:=entry^.next;
+ if (next<>@map^.header) then
+ begin
+  esize:=stat.rcurr.__end - entry^.start;
+  if (stat.rcurr.__end=next^.start) and
+     (esize<=MAX_UNION_SIZE) and
+     (next^.obj=stat.obj) and
+     ((stat.obj=nil) or (entry^.offset + esize=next^.offset))
+     then
+  begin
+   begin
+    vm_nt_entry_unlink(map, next);
+
+    stat.rnext.start:=next^.start;
+    stat.rnext.__end:=next^.__end;
+
+    entry^.__end:=next^.__end;
+
+    //change
+    vm_nt_entry_resize_free(map, entry);
+
+    vm_nt_file_obj_deallocate(next^.obj);
+    vm_nt_entry_dispose(map, next);
+   end;
+  end;
+ end;
+
+ sb:=stat;
+ Result:=True;
+end;
+
+procedure vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry);
+var
+ stat:t_range_stat;
+begin
+ vm_nt_map_simplify_entry(map,entry,stat);
+
+ vm_remap(map,entry,nil,nil,stat);
+end;
+
+procedure vm_nt_map_clip_start_end(map:p_vm_nt_map;entry:p_vm_nt_entry;start,__end:vm_offset_t);
+var
+ prev:p_vm_nt_entry;
+ next:p_vm_nt_entry;
+ stat:t_range_stat;
+begin
+ prev:=nil;
+ next:=nil;
+
+ vm_nt_map_simplify_entry(map,entry,stat);
+
+ if (start>entry^.start) then
+ begin
+  prev:=vm_nt_entry_create(map);
+  prev^:=entry^;
+
+  prev^.__end:=start;
+
+  entry^.offset:=entry^.offset + (start - entry^.start);
+  entry^.start :=start;
+
+  vm_nt_entry_link(map, entry^.prev, prev);
+
+  vm_nt_file_obj_reference(prev^.obj);
+ end;
+
+ if (__end<entry^.__end) then
+ begin
+  next:=vm_nt_entry_create(map);
+  next^:=entry^;
+
+  next^.start :=__end;
+  entry^.__end:=__end;
+
+  next^.offset:=next^.offset + (__end - entry^.start);
+
+  vm_nt_entry_link(map, entry, next);
+
+  vm_nt_file_obj_reference(next^.obj);
+ end;
+
+ //
+
+ if (prev<>nil) or (next<>nil) then
+ begin
+  //exclude entry
+  vm_nt_file_obj_deallocate(entry^.obj);
+  entry^.obj:=nil;
+ end;
+
+ vm_remap(map,prev,entry,next,stat);
+
+end;
+
+procedure vm_nt_map_clip_end(map:p_vm_nt_map;entry:p_vm_nt_entry;__end:vm_offset_t);
+var
+ next:p_vm_nt_entry;
+ stat:t_range_stat;
+begin
+ next:=nil;
+
+ vm_init_stat(stat,entry);
+
+ //
+
+ if (__end<entry^.__end) then
+ begin
+  next:=vm_nt_entry_create(map);
+  next^:=entry^;
+
+  next^.start:=__end;
+  entry^.__end:=__end;
+
+  next^.offset:=next^.offset + (__end - entry^.start);
+
+  vm_nt_entry_link(map, entry, next);
+
+  vm_nt_file_obj_reference(next^.obj);
+ end;
+
+ //
+
+ if (next<>nil) then
+ begin
+  //exclude entry
+  vm_nt_file_obj_deallocate(entry^.obj);
+  entry^.obj:=nil;
+ end;
+
+ vm_remap(map,nil,entry,next,stat);
+
+end;
+
+procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
+begin
+ vm_nt_file_obj_deallocate(entry^.obj);
+ Freemem(entry);
+end;
+
+procedure vm_nt_entry_delete(map:p_vm_nt_map;entry:p_vm_nt_entry);
+var
+ size:vm_ooffset_t;
+begin
+ vm_nt_entry_unlink(map, entry);
+
+ size:=entry^.__end - entry^.start;
+ map^.size:=map^.size-size;
+
+ vm_nt_entry_deallocate(entry);
+end;
+
+function vm_nt_map_delete(map:p_vm_nt_map;start:vm_offset_t;__end:vm_offset_t):Integer;
+var
+ entry      :p_vm_nt_entry;
+ first_entry:p_vm_nt_entry;
+ next       :p_vm_nt_entry;
+begin
+ if (start=__end) then
+ begin
+  Exit(KERN_SUCCESS);
+ end;
+
+ if (not vm_nt_map_lookup_entry(map, start, @first_entry)) then
+ begin
+  entry:=first_entry^.next;
+
+ end else
+ begin
+  entry:=first_entry;
+
+  vm_nt_map_clip_start_end(map, entry, start, __end);
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  vm_nt_map_clip_end(map, entry, __end);
+
+  next:=entry^.next;
+
+  vm_unmap(map,entry);
+
+  vm_nt_entry_delete(map, entry);
+
+  entry:=next;
+ end;
+ Result:=(KERN_SUCCESS);
+end;
+
+end.
+

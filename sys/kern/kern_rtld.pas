@@ -1126,7 +1126,7 @@ begin
   //
   Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
     id,', ',HexStr(base),'->',HexStr(vaddr_lo,8),':',HexStr(memsz,8));
-  readln;
+  Assert(false,'self_load_section');
   Exit;
  end;
 

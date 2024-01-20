@@ -24,7 +24,7 @@ type
  end;
 
  p_rmem_map=^t_rmem_map;
- t_rmem_map=packed object
+ t_rmem_map=object
   header  :t_rmem_map_entry; // List of entries
   lock    :mtx;              // Lock for map data
   nentries:DWORD;            // Number of entries

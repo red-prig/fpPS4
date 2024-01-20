@@ -11,15 +11,17 @@ uses
  sys_vm_object,
  vm_file,
  vnode,
- vuio;
+ vuio,
+ md_map,
+ vm_nt_map;
 
 const
  PMAPP_SHIFT=12;
  PMAPP_SIZE =1 shl PMAPP_SHIFT;
  PMAPP_MASK =PMAPP_SIZE-1;
 
- PAGE_MAP_COUNT     =(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
- PAGE_MAP_MASK      =PAGE_MAP_COUNT-1;
+ PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
+ PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
 
  PAGE_PROT_READ   =VM_PROT_READ;
  PAGE_PROT_WRITE  =VM_PROT_WRITE;
@@ -32,9 +34,16 @@ const
  //PAGE_BUSY_FLAG   =DWORD($10000000);
  //PAGE_PATCH_FLAG  =DWORD($08000000);
 
+ PMAPP_1GB_SHIFT =30;
+ PMAPP_1GB_SIZE  =QWORD(QWORD(1) shl PMAPP_1GB_SHIFT);
+ PMAPP_1GB_MASK  =PMAPP_1GB_SIZE-1;
+ PMAPP_1GB_BLOCKS=QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_1GB_SHIFT;
+
 var
  PAGE_MAP   :PInteger=nil;
  PAGE_PROT  :PBYTE   =nil;
+
+ PRIVATE_FD :array[0..PMAPP_1GB_BLOCKS-1] of vm_nt_file_obj;
 
 procedure pmap_mark      (start,__end,__off:vm_offset_t;prots:Byte);
 procedure pmap_unmark    (start,__end:vm_offset_t);
@@ -48,7 +57,7 @@ procedure iov_uplift(iov:p_iovec);
 type
  p_pmap=^_pmap;
  _pmap=packed object
-  //
+  nt_map:_vm_nt_map;
  end;
 
  pmap_t=p_pmap;
@@ -59,7 +68,7 @@ function  ptoa(x:DWORD):QWORD; inline;
 function  ctob(x:QWORD):QWORD; inline;
 function  btoc(x:QWORD):QWORD; inline;
 
-procedure pmap_pinit(pmap:p_pmap);
+procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -96,9 +105,6 @@ procedure pmap_remove(pmap  :pmap_t;
 
 implementation
 
-uses
- md_map;
-
 function atop(x:QWORD):DWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
@@ -119,7 +125,7 @@ begin
  Result:=((x+PAGE_MASK) shr PAGE_SHIFT);
 end;
 
-procedure pmap_pinit(pmap:p_pmap);
+procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
 var
  base:Pointer;
  size:QWORD;
@@ -174,6 +180,61 @@ begin
   end;
  end;
 
+ vm_nt_map_init(@pmap^.nt_map,min,max,vmap);
+
+ if Length(exclude_mem)<>0 then
+ begin
+  For i:=0 to High(exclude_mem) do
+  begin
+   vm_nt_map_insert(@pmap^.nt_map,nil,0,exclude_mem[i].start,exclude_mem[i].__end,MD_PROT_NONE);
+  end;
+ end;
+
+end;
+
+type
+ t_private_fd_info=record
+  start :QWORD;
+  __end :QWORD;
+  obj   :p_vm_nt_file_obj;
+  offset:QWORD;
+ end;
+
+procedure get_private_fd(var info:t_private_fd_info);
+var
+ i:DWORD;
+ r:DWORD;
+ s:QWORD;
+ e:QWORD;
+begin
+ s:=info.start;
+
+ i:=s shr PMAPP_1GB_SHIFT;
+
+ if (PRIVATE_FD[i].hfile=0) then
+ begin
+  R:=md_memfd_create(PRIVATE_FD[i].hfile,PMAPP_1GB_SIZE);
+
+  if (r<>0) then
+  begin
+   Writeln('failed md_memfd_create(',HexStr(PMAPP_1GB_SIZE,16),'):0x',HexStr(r,8));
+   Assert(false,'get_private_fd');
+  end;
+ end;
+
+ info.obj   :=@PRIVATE_FD[i];
+ info.offset:=s and PMAPP_1GB_MASK;
+
+ e:=info.offset+(info.__end-s);
+
+ if (e>PMAPP_1GB_SIZE) then
+ begin
+  e:=PMAPP_1GB_SIZE;
+ end;
+
+ e:=(e-info.offset)+info.start;
+
+ info.__end:=e;
 end;
 
 {
@@ -365,20 +426,6 @@ begin
  Dec(iov^.iov_len,len);
 end;
 
-const
- VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
-
- wprots:array[0..7] of Byte=(
-  MD_PROT_NONE,//___
-  MD_PROT_R   ,//__R
-  MD_PROT_W   ,//_W_
-  MD_PROT_RW  ,//_WR
-  MD_PROT_R   ,//X__
-  MD_PROT_R   ,//X_R
-  MD_PROT_RW  ,//XW_
-  MD_PROT_RW   //XWR
- );
-
 function get_vnode_handle(obj:vm_object_t):THandle;
 var
  vp:p_vnode;
@@ -520,6 +567,9 @@ var
  size:QWORD;
  delta:QWORD;
  paddi:QWORD;
+
+ info:t_private_fd_info;
+
  r:Integer;
 begin
  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
@@ -532,13 +582,38 @@ begin
     begin
      _default:
 
-     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
-     size:=trunc_page(__end-start);
+      size:=__end-start;
 
-     r:=md_enter(base,size,wprots[prot and VM_RWX]);
+      info.start:=start;
+      info.__end:=__end;
+
+      while (size<>0) do
+      begin
+       get_private_fd(info);
+
+       r:=vm_nt_map_insert(@pmap^.nt_map,
+                           info.obj,
+                           info.offset,
+                           info.start,
+                           info.__end,
+                           wprots[prot and VM_RWX]);
+       Assert(r=0);
+
+
+       size:=size-(info.__end-info.start);
+      end;
+
+      base:=Pointer(start);
+
+     //base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
+     //size:=trunc_page(__end-start);
+     //
+     //r:=md_enter(base,size,wprots[prot and VM_RWX]);
     end;
   OBJT_DEVICE:
     begin
+     goto _default;
+
      if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
@@ -756,6 +831,8 @@ begin
     end;
   OBJT_DEVICE:
     begin
+     goto _default;
+
      if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
@@ -891,10 +968,17 @@ begin
     begin
      _default:
 
+     r:=vm_nt_map_delete(@pmap^.nt_map,
+                         start,
+                         __end);
+     Assert(r=0);
+
+     {
      base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
      size:=trunc_page(__end-start);
 
      r:=md_remove(base,size);
+     }
     end;
   OBJT_DEVICE:
     begin
