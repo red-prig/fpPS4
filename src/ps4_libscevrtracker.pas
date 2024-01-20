@@ -111,24 +111,19 @@ type
   end;
 
   pSceVrTrackerDeviceType=^SceVrTrackerDeviceType;
-  SceVrTrackerDeviceType=packed record
-  end;
+  SceVrTrackerDeviceType=Integer;
 
   pSceVrTrackerPreferenceType=^SceVrTrackerPreferenceType;
-  SceVrTrackerPreferenceType=packed record
-  end;
+  SceVrTrackerPreferenceType=Integer;
 
   pSceVrTrackerCameraMetaCheckMode=^SceVrTrackerCameraMetaCheckMode;
-  SceVrTrackerCameraMetaCheckMode=packed record
-  end;
+  SceVrTrackerCameraMetaCheckMode=Integer;
 
   pSceVrTrackerDevicePermitType=^SceVrTrackerDevicePermitType;
-  SceVrTrackerDevicePermitType=packed record
-  end;
+  SceVrTrackerDevicePermitType=Integer;
 
   pSceVrTrackerRobustnessLevel=^SceVrTrackerRobustnessLevel;
-  SceVrTrackerRobustnessLevel=packed record
-  end;
+  SceVrTrackerRobustnessLevel=Integer;
 
   pSceCameraFramePosition=^SceCameraFramePosition;
   SceCameraFramePosition=packed record
@@ -194,20 +189,16 @@ type
   end;
 
   pSceVrTrackerResultType=^SceVrTrackerResultType;
-  SceVrTrackerResultType=packed record
-  end;
+  SceVrTrackerResultType=Integer;
 
   pSceVrTrackerOrientationType=^SceVrTrackerOrientationType;
-  SceVrTrackerOrientationType=packed record
-  end;
+  SceVrTrackerOrientationType=Integer;
 
   pSceVrTrackerUsageType=^SceVrTrackerUsageType;
-  SceVrTrackerUsageType=packed record
-  end;
+  SceVrTrackerUsageType=Integer;
 
   pSceVrTrackerDebugMarkerType=^SceVrTrackerDebugMarkerType;
-  SceVrTrackerDebugMarkerType=packed record
-  end;
+  SceVrTrackerDebugMarkerType=Integer;
 
   pSceVrTrackerGetResultParam=^SceVrTrackerGetResultParam;
   SceVrTrackerGetResultParam=packed record
@@ -225,24 +216,19 @@ type
   end;
 
   pSceVrTrackerRecalibrateNecessityType=^SceVrTrackerRecalibrateNecessityType;
-  SceVrTrackerRecalibrateNecessityType=packed record
-  end;
+  SceVrTrackerRecalibrateNecessityType=Integer;
 
   pSceVrTrackerPlayareaBrightnessRiskType=^SceVrTrackerPlayareaBrightnessRiskType;
-  SceVrTrackerPlayareaBrightnessRiskType=packed record
-  end;
+  SceVrTrackerPlayareaBrightnessRiskType=Integer;
 
   pSceVrTrackerLedColor=^SceVrTrackerLedColor;
-  SceVrTrackerLedColor=packed record
-  end;
+  SceVrTrackerLedColor=Integer;
 
   pSceVrTrackerStatus=^SceVrTrackerStatus;
-  SceVrTrackerStatus=packed record
-  end;
+  SceVrTrackerStatus=Integer;
 
   pSceVrTrackerQuality=^SceVrTrackerQuality;
-  SceVrTrackerQuality=packed record
-  end;
+  SceVrTrackerQuality=Integer;
 
   pSceVrTrackerHmdRearTrackingStatus=^SceVrTrackerHmdRearTrackingStatus;
   SceVrTrackerHmdRearTrackingStatus=packed record
@@ -281,8 +267,7 @@ type
   end;
 
   pSceVrTrackerLedAdjustmentStatus=^SceVrTrackerLedAdjustmentStatus;
-  SceVrTrackerLedAdjustmentStatus=packed record
-  end;
+  SceVrTrackerLedAdjustmentStatus=Integer;
 
   pSceVrTrackerLedResult=^SceVrTrackerLedResult;
   SceVrTrackerLedResult=packed record
@@ -322,8 +307,7 @@ type
   end;
 
   pSceVrTrackerUpdateMotionSensorDataOperationMode=^SceVrTrackerUpdateMotionSensorDataOperationMode;
-  SceVrTrackerUpdateMotionSensorDataOperationMode=packed record
-  end;
+  SceVrTrackerUpdateMotionSensorDataOperationMode=Integer;
 
   pSceVrTrackerUpdateMotionSensorDataParam=^SceVrTrackerUpdateMotionSensorDataParam;
   SceVrTrackerUpdateMotionSensorDataParam=packed record
@@ -372,7 +356,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerGetResult(const param:pSceVrTrackerGetResultParam;Integer:pSceVrTrackerResultData):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerGetResult(const param:pSceVrTrackerGetResultParam;_result:pSceVrTrackerResultData):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
