@@ -8,6 +8,7 @@ interface
 uses
   ps4_program,
   ps4_libSceCamera,
+  ps4_time,
   Classes,
   SysUtils;
 
@@ -95,6 +96,8 @@ const
   SCE_VR_TRACKER_ROBUSTNESS_LEVEL_LOW   =3;
   SCE_VR_TRACKER_ROBUSTNESS_LEVEL_MEDIUM=6;
   SCE_VR_TRACKER_ROBUSTNESS_LEVEL_LEGACY=99;
+
+  SCE_VR_TRACKER_ERROR_ARGUMENT_INVALID=-2128214010; //0x81260806;
 
 type
   pSceFQuaternion=^SceFQuaternion;
@@ -292,6 +295,9 @@ end;
 
 function ps4_sceVrTrackerGetTime(time:pQWORD):Integer; SysV_ABI_CDecl;
 begin
+ if (time=nil) then Exit(SCE_VR_TRACKER_ERROR_ARGUMENT_INVALID);
+ time^:=ps4_sceKernelGetProcessTime;
+
  Result:=0;
 end;
 
