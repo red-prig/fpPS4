@@ -12,9 +12,6 @@ uses
   SysUtils;
 
 const
-  SCE_CAMERA_MAX_DEVICE_NUM      =2;
-  SCE_CAMERA_MAX_FORMAT_LEVEL_NUM=4;
-
   SCE_VR_TRACKER_MAX_LED_NUM=2;
 
   //SceVrTrackerDeviceType
@@ -100,11 +97,6 @@ const
   SCE_VR_TRACKER_ROBUSTNESS_LEVEL_LEGACY=99;
 
 type
-  pSceFVector3=^SceFVector3;
-  SceFVector3=packed record
-   x,y,z:Single;
-  end;
-
   pSceFQuaternion=^SceFQuaternion;
   SceFQuaternion=packed record
    x,y,z,w:Single;
@@ -124,57 +116,6 @@ type
 
   pSceVrTrackerRobustnessLevel=^SceVrTrackerRobustnessLevel;
   SceVrTrackerRobustnessLevel=Integer;
-
-  pSceCameraFramePosition=^SceCameraFramePosition;
-  SceCameraFramePosition=packed record
-   x,y,xSize,ySize:DWORD;
-  end;
-
-  pSceCameraExposureGain=^SceCameraExposureGain;
-  SceCameraExposureGain=packed record
-   exposureControl,exposure,gain,mode:DWORD;
-  end;
-
-  pSceCameraWhiteBalance=^SceCameraWhiteBalance;
-  SceCameraWhiteBalance=packed record
-   whiteBalanceControl,gainRed,gainBlue,gainGreen:DWORD;
-  end;
-
-  pSceCameraGamma=^SceCameraGamma;
-  SceCameraGamma=packed record
-   gammaControl:DWORD;
-   value:DWORD;
-   reserved:array[0..15] of Byte;
-  end;
-
-  pSceCameraMeta=^SceCameraMeta;
-  SceCameraMeta=packed record
-   metaMode       :DWORD;
-   format         :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of DWORD;
-   _align         :DWORD;
-   frame          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of QWORD;
-   timestamp      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of QWORD;
-   deviceTimestamp:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
-   exposureGain   :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraExposureGain;
-   whiteBalance   :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraWhiteBalance;
-   gamma          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of SceCameraGamma;
-   luminance      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1] of DWORD;
-   acceleration   :SceFVector3;
-   vcounter       :QWORD;
-   reserved       :array[0..15] of DWORD;
-  end;
-
-  pSceCameraFrameData=^SceCameraFrameData;
-  SceCameraFrameData=packed record
-   sizeThis               :DWORD;
-   readMode               :DWORD;
-   framePosition          :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of SceCameraFramePosition;
-   pFramePointerList      :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of Pointer;
-   frameSize              :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of DWORD;
-   status                 :array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of DWORD;
-   meta                   :SceCameraMeta;
-   pFramePointerListGarlic:array[0..SCE_CAMERA_MAX_DEVICE_NUM-1,0..SCE_CAMERA_MAX_FORMAT_LEVEL_NUM-1] of Pointer;
-  end;
 
   pSceVrTrackerGpuSubmitParam=^SceVrTrackerGpuSubmitParam;
   SceVrTrackerGpuSubmitParam=packed record
@@ -231,8 +172,7 @@ type
   SceVrTrackerQuality=Integer;
 
   pSceVrTrackerHmdRearTrackingStatus=^SceVrTrackerHmdRearTrackingStatus;
-  SceVrTrackerHmdRearTrackingStatus=packed record
-  end;
+  SceVrTrackerHmdRearTrackingStatus=Integer;
 
   pSceVrTrackerPoseData=^SceVrTrackerPoseData;
   SceVrTrackerPoseData=packed record
@@ -287,16 +227,20 @@ type
    reserved01                        :array[0..1] of QWORD;
    ledColor                          :SceVrTrackerLedColor;
    status                            :SceVrTrackerStatus;
-   positionQuality,orientationQuality:SceVrTrackerQuality;
+   positionQuality                   :SceVrTrackerQuality;
+   orientationQuality                :SceVrTrackerQuality;
    velocity                          :SceFVector3;
    acceleration                      :SceFVector3;
    angularVelocity                   :SceFVector3;
    angularAcceleration               :SceFVector3;
    cameraOrientation                 :SceFQuaternion;
-   hmdInfo                           :SceVrTrackerHmdInfo;
-   padInfo                           :SceVrTrackerPadInfo;
-   moveInfo                          :SceVrTrackerMoveInfo;
-   gunInfo                           :SceVrTrackerMoveInfo;
+   union                             :packed record
+    Case Byte of
+     0:(hmdInfo                      :SceVrTrackerHmdInfo);
+     1:(padInfo                      :SceVrTrackerPadInfo);
+     2:(moveInfo                     :SceVrTrackerMoveInfo);
+     3:(gunInfo                      :SceVrTrackerMoveInfo);
+   end;
    userFrameNumber                   :DWORD;
    ledAdjustmentStatus               :SceVrTrackerLedAdjustmentStatus;
    timestampOfLedResult              :QWORD;
