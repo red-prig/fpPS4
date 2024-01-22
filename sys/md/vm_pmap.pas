@@ -9,7 +9,6 @@ uses
  vm,
  vmparam,
  sys_vm_object,
- vm_file,
  vnode,
  vuio,
  md_map,
@@ -37,19 +36,24 @@ const
  PMAPP_1GB_SHIFT =30;
  PMAPP_1GB_SIZE  =QWORD(QWORD(1) shl PMAPP_1GB_SHIFT);
  PMAPP_1GB_MASK  =PMAPP_1GB_SIZE-1;
- PMAPP_1GB_BLOCKS=QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_1GB_SHIFT;
+
+ PMAPP_1GB_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_1GB_SHIFT;
 
 var
- PAGE_MAP   :PInteger=nil;
- PAGE_PROT  :PBYTE   =nil;
+ PAGE_PROT:PBYTE=nil;
 
- PRIVATE_FD :array[0..PMAPP_1GB_BLOCKS-1] of vm_nt_file_obj;
+ DMEM_FD:array[0..PMAPP_1GB_DMEM_BLOCKS-1] of vm_nt_file_obj;
 
-procedure pmap_mark      (start,__end,__off:vm_offset_t;prots:Byte);
+ DEV_INFO:record
+  DEV_FD  :vm_nt_file_obj;
+  DEV_SIZE:QWORD;
+  DEV_POS :QWORD;
+  DEV_PTR :Pointer;
+ end;
+
+procedure pmap_mark      (start,__end:vm_offset_t;prots:Byte);
 procedure pmap_unmark    (start,__end:vm_offset_t);
 function  pmap_get_prot  (addr:vm_offset_t):Byte;
-function  pmap_get_page  (addr:vm_offset_t):DWORD;
-function  pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
 
 function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
@@ -67,6 +71,8 @@ function  ptoa(x:DWORD):QWORD; inline;
 
 function  ctob(x:QWORD):QWORD; inline;
 function  btoc(x:QWORD):QWORD; inline;
+
+function  dev_mem_alloc(pages:Integer):Pointer;
 
 procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
 
@@ -125,6 +131,51 @@ begin
  Result:=((x+PAGE_MASK) shr PAGE_SHIFT);
 end;
 
+procedure dev_mem_init(pages:Integer);
+var
+ r:Integer;
+begin
+ DEV_INFO.DEV_SIZE:=pages*PAGE_SIZE;
+
+ R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE);
+ if (r<>0) then
+ begin
+  Writeln('failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert(false,'dev_mem_init');
+ end;
+
+ r:=md_reserve(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
+ if (r<>0) then
+ begin
+  Writeln('failed md_reserve(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert(false,'dev_mem_init');
+ end;
+
+ r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,MD_PROT_RW);
+ if (r<>0) then
+ begin
+  Writeln('failed md_file_mmap_ex(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert(false,'dev_mem_init');
+ end;
+end;
+
+function dev_mem_alloc(pages:Integer):Pointer;
+var
+ size:QWORD;
+begin
+ size:=pages*PAGE_SIZE;
+
+ if (size>(DEV_INFO.DEV_SIZE-DEV_INFO.DEV_POS)) then
+ begin
+  Assert(false,'dev_mem_alloc limit');
+  Exit(nil);
+ end;
+
+ Result:=DEV_INFO.DEV_PTR+DEV_INFO.DEV_POS;
+
+ DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
+end;
+
 procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
 var
  base:Pointer;
@@ -152,32 +203,16 @@ begin
   end;
  end;
 
- PAGE_MAP:=nil;
- size:=PAGE_MAP_COUNT*SizeOf(DWORD);
+ dev_mem_init(4);
 
- prot:=size;
- size:=size+PAGE_MAP_COUNT;
+ PAGE_PROT:=nil;
 
- r:=md_mmap(PAGE_MAP,size,MD_PROT_RW);
+ r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,MD_PROT_RW);
 
  if (r<>0) then
  begin
-  Writeln('failed md_mmap(',HexStr(PAGE_MAP),',',HexStr(PAGE_MAP+size),'):0x',HexStr(r,8));
+  Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT,11),'):0x',HexStr(r,8));
   Assert(false,'pmap_init');
- end;
-
- PAGE_PROT:=Pointer(PAGE_MAP)+prot;
-
- //init zero
- pmap_unmark(0,VM_MAXUSER_ADDRESS);
-
- //Mapping to internal memory, isolate TODO
- if Length(exclude_mem)<>0 then
- begin
-  For i:=0 to High(exclude_mem) do
-  begin
-   pmap_mark(exclude_mem[i].start,exclude_mem[i].__end,exclude_mem[i].start,0);
-  end;
  end;
 
  vm_nt_map_init(@pmap^.nt_map,min,max,vmap);
@@ -186,55 +221,113 @@ begin
  begin
   For i:=0 to High(exclude_mem) do
   begin
-   vm_nt_map_insert(@pmap^.nt_map,nil,0,exclude_mem[i].start,exclude_mem[i].__end,MD_PROT_NONE);
+   vm_nt_map_insert(@pmap^.nt_map,
+                    nil,0,
+                    exclude_mem[i].start,
+                    exclude_mem[i].__end,
+                    exclude_mem[i].__end-exclude_mem[i].start,
+                    MD_PROT_NONE);
   end;
  end;
 
 end;
 
 type
- t_private_fd_info=record
+ t_fd_info=record
   start :QWORD;
   __end :QWORD;
   obj   :p_vm_nt_file_obj;
   offset:QWORD;
  end;
 
-procedure get_private_fd(var info:t_private_fd_info);
+procedure get_private_fd(var info:t_fd_info);
 var
- i:DWORD;
- r:DWORD;
+ hfile:THandle;
+ i:QWORD;
  s:QWORD;
  e:QWORD;
+ r:DWORD;
 begin
  s:=info.start;
+ e:=info.__end;
 
- i:=s shr PMAPP_1GB_SHIFT;
+ i:=(e-s);
 
- if (PRIVATE_FD[i].hfile=0) then
+ if (i>PMAPP_1GB_SIZE) then
  begin
-  R:=md_memfd_create(PRIVATE_FD[i].hfile,PMAPP_1GB_SIZE);
+  i:=PMAPP_1GB_SIZE;
+  info.__end:=(s+i);
+ end;
+
+ hfile:=0;
+ r:=md_memfd_create(hfile,i);
+
+ if (r<>0) then
+ begin
+  Writeln('failed md_memfd_create(',HexStr(i,11),'):0x',HexStr(r,8));
+  Assert(false,'get_private_fd');
+ end;
+
+ info.obj:=vm_nt_file_obj_allocate(hfile);
+
+ with info.obj^ do
+ begin
+  flags:=flags and (not NT_UNION_OBJ);
+ end;
+end;
+
+procedure get_dmem_fd(var info:t_fd_info);
+var
+ o:QWORD;
+ e:QWORD;
+ i:DWORD;
+ r:DWORD;
+begin
+ o:=info.offset;
+
+ i:=o shr PMAPP_1GB_SHIFT;
+
+ if (DMEM_FD[i].hfile=0) then
+ begin
+  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_1GB_SIZE);
 
   if (r<>0) then
   begin
-   Writeln('failed md_memfd_create(',HexStr(PMAPP_1GB_SIZE,16),'):0x',HexStr(r,8));
-   Assert(false,'get_private_fd');
+   Writeln('failed md_memfd_create(',HexStr(PMAPP_1GB_SIZE,11),'):0x',HexStr(r,8));
+   Assert(false,'get_dmem_fd');
   end;
  end;
 
- info.obj   :=@PRIVATE_FD[i];
- info.offset:=s and PMAPP_1GB_MASK;
+ info.obj:=@DMEM_FD[i];
 
- e:=info.offset+(info.__end-s);
+ vm_nt_file_obj_reference(info.obj);
+
+ e:=o+(info.__end-info.start);
 
  if (e>PMAPP_1GB_SIZE) then
  begin
   e:=PMAPP_1GB_SIZE;
+  e:=(e-o)+info.start;
+  info.__end:=e;
+ end;
+end;
+
+procedure get_dev_fd(ptr:Pointer;var info:t_fd_info);
+var
+ o:QWORD;
+begin
+ o:=QWORD(ptr)-QWORD(DEV_INFO.DEV_PTR);
+
+ if (o>DEV_INFO.DEV_SIZE) then
+ begin
+  Assert(false,'get_dev_fd wrong');
+  Exit();
  end;
 
- e:=(e-info.offset)+info.start;
+ info.offset:=info.offset+o;
+ info.obj:=@DEV_INFO.DEV_FD;
 
- info.__end:=e;
+ vm_nt_file_obj_reference(info.obj);
 end;
 
 {
@@ -289,20 +382,14 @@ begin
   Result:=x;
 end;
 
-procedure pmap_mark(start,__end,__off:vm_offset_t;prots:Byte);
-var
- d:Integer;
+procedure pmap_mark(start,__end:vm_offset_t;prots:Byte);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
- __off:=OFF_TO_IDX(__off);
  start:=MAX_IDX(start);
  __end:=MAX_IDX(__end);
- d:=Integer(__off-start);
- prots:=prots or (ord(d<>0)*PAGE_PROT_LIFT);
  while (start<__end) do
  begin
-  PAGE_MAP [start]:=d;
   PAGE_PROT[start]:=prots;
   Inc(start);
  end;
@@ -317,7 +404,6 @@ begin
  __end:=MAX_IDX(__end);
  while (start<__end) do
  begin
-  PAGE_MAP [start]:=Integer(0-start);
   PAGE_PROT[start]:=0;
   Inc(start);
  end;
@@ -331,99 +417,16 @@ begin
  Result:=PAGE_PROT[addr];
 end;
 
-function pmap_get_page(addr:vm_offset_t):DWORD;
-begin
- addr:=OFF_TO_IDX(addr);
- addr:=addr and PAGE_MAP_MASK;
- Result:=addr+PAGE_MAP[addr];
-end;
-
-function pmap_test_cross(addr:vm_offset_t;h:Integer):Boolean;
-var
- page1,page2:DWORD;
-begin
- page1:=OFF_TO_IDX(addr  ) and PAGE_MAP_MASK;
- page2:=OFF_TO_IDX(addr+h) and PAGE_MAP_MASK;
- if (page1=page2) then
- begin
-  Result:=False;
- end else
- begin
-  page1:=PAGE_MAP[page1];
-  page2:=PAGE_MAP[page2];
-  Result:=(page1<>page2);
- end;
-end;
-
 //rax,rdi,rsi
 function uplift(addr:Pointer):Pointer; assembler; nostackframe;
-label
- _exit;
 asm
- //orig addr (rsi)
- mov %rdi,%rsi
- //high addr (rdi)
- shr PMAPP_SHIFT,%rdi
- //test
- cmp PAGE_MAP_COUNT,%rdi
- ja _exit
- //uplift (rdi)
- mov PAGE_MAP(%rip),%rax
- movslq (%rax,%rdi,4),%rdi //sign extend int32->int64
- //high addr (rdi)
- shl PMAPP_SHIFT,%rdi
- //combine (rdi+rsi)
- lea (%rsi,%rdi),%rdi
- //test
- cmp PMAPP_SIZE,%rdi
- jna _exit
- //result
  mov %rdi,%rax
  ret
- _exit:
-  xor %eax,%eax
 end;
 
 procedure iov_uplift(iov:p_iovec);
-var
- base:Ptruint;
- len:Ptruint;
- i,p:DWORD;
- v:Integer;
 begin
- base:=Ptruint(iov^.iov_base);
- len:=iov^.iov_len;
-
- p:=base shr PMAPP_SHIFT;
-
- if (p>=PAGE_MAP_COUNT) then
- begin
-  //error
-  iov^.iov_base:=nil;
-  Exit;
- end;
-
- i:=base and PMAPP_MASK;
- i:=PMAPP_SIZE-i;
- if (i>len) then i:=len;
- Dec(len,i);
-
- v:=PAGE_MAP[p];
-
- while (len<>0) and (p<PAGE_MAP_COUNT) do
- begin
-  Inc(p);
-  if (v<>PAGE_MAP[p]) then Break;
-
-  i:=PMAPP_SIZE;
-  if (i>len) then i:=len;
-  Dec(len,i);
- end;
-
- base:=base+(int64(v) shl PMAPP_SHIFT);
-
- iov^.iov_base:=Pointer(base);
- Dec(iov^.iov_len,len);
+ //
 end;
 
 function get_vnode_handle(obj:vm_object_t):THandle;
@@ -442,103 +445,6 @@ begin
 
   VI_UNLOCK(vp);
  end;
-end;
-
-function vm_file_protect(start,__end:QWORD;base:Pointer;size:QWORD;prot:Integer):Integer;
-var
- paddi:QWORD;
- delta:QWORD;
-begin
- Result:=md_protect(base,size,wprots[prot and VM_RWX]);
-
- if (Result<>0) then
- begin
-  Writeln('failed md_protect:0x',HexStr(Result,8));
-  Assert(false,'md_protect');
- end;
-
- //padding pages
- paddi:=PAGE_SIZE-(size and PAGE_MASK);
-
- if (paddi<>0) then
- begin
-  delta:=__end-paddi;
-  //
-  //padding as private pages
-  Result:=md_protect(Pointer(VM_DEFAULT_MAP_BASE+delta),paddi,wprots[prot and VM_RWX]);
-
-  if (Result<>0) then
-  begin
-   Writeln('failed md_protect:0x',HexStr(Result,8));
-   Assert(false,'md_protect');
-  end;
- end;
-
- if (paddi<>0) then
- begin
-  pmap_mark(start,delta,QWORD(base),prot and VM_RWX);
-  //
-  pmap_mark(delta,__end,VM_DEFAULT_MAP_BASE+delta,prot and VM_RWX);
- end else
- begin
-  pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
- end;
-end;
-
-function vm_file_remove(start,__end:QWORD;base:Pointer;size:QWORD):Integer;
-var
- paddi:QWORD;
- delta:QWORD;
-begin
- Result:=0;
-
- //padding pages
- paddi:=PAGE_SIZE-(size and PAGE_MASK);
-
- if (paddi<>0) then
- begin
-  delta:=__end-paddi;
-  //
-  //padding as private pages
-  Result:=md_remove(Pointer(VM_DEFAULT_MAP_BASE+delta),paddi);
-
-  if (Result<>0) then
-  begin
-   Writeln('failed md_remove:0x',HexStr(Result,8));
-   Assert(false,'md_remove');
-  end;
- end;
-end;
-
-function vm_file_unmap(base:Pointer;size:QWORD):Integer;
-begin
- Result:=md_file_unmap(base,size);
-
- if (Result<>0) then
- begin
-  Writeln('failed md_file_unmap:0x',HexStr(Result,8));
-  Assert(false,'md_file_unmap');
- end;
-end;
-
-function vm_file_map_fixed(map   :p_vm_file_map;
-                           offset:vm_ooffset_t;
-                           start :vm_offset_t;
-                           __end :vm_offset_t;
-                           base  :Pointer;
-                           size  :QWORD):Integer;
-var
- obj:p_vm_file_obj;
-begin
- vm_file_map_delete(map,start,__end);
-
- obj:=vm_file_obj_allocate(base,size);
-
- obj^.protect:=@vm_file_protect;
- obj^.remove :=@vm_file_remove;
- obj^.unmap  :=@vm_file_unmap;
-
- Result:=vm_file_map_insert(map,obj,offset,start,__end);
 end;
 
 {
@@ -563,12 +469,13 @@ label
  _default;
 var
  fd:THandle;
- base:Pointer;
+ md:THandle;
+
  size:QWORD;
  delta:QWORD;
  paddi:QWORD;
 
- info:t_private_fd_info;
+ info:t_fd_info;
 
  r:Integer;
 begin
@@ -586,54 +493,111 @@ begin
 
       info.start:=start;
       info.__end:=__end;
+      info.offset:=0;
 
       while (size<>0) do
       begin
        get_private_fd(info);
+
+       delta:=(info.__end-info.start);
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.offset,
                            info.start,
                            info.__end,
+                           delta,
                            wprots[prot and VM_RWX]);
-       Assert(r=0);
 
+       if (r<>0) then
+       begin
+        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert(false,'pmap_enter_object');
+       end;
 
-       size:=size-(info.__end-info.start);
+       info.start :=info.start+delta;
+       info.offset:=0;
+
+       size:=size-delta;
       end;
 
-      base:=Pointer(start);
-
-     //base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
-     //size:=trunc_page(__end-start);
-     //
-     //r:=md_enter(base,size,wprots[prot and VM_RWX]);
     end;
   OBJT_DEVICE:
     begin
-     goto _default;
-
      if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
 
-     base:=obj^.un_pager.map_base+trunc_page(offset);
-     size:=trunc_page(__end-start);
-
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      Writeln('pmap_enter_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
+      Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
-      r:=md_enter(base,size,MD_PROT_RWX);
+      size:=__end-start;
+
+      info.start:=start;
+      info.__end:=__end;
+      info.offset:=offset;
+
+      while (size<>0) do
+      begin
+       get_dmem_fd(info);
+
+       delta:=(info.__end-info.start);
+
+       r:=vm_nt_map_insert(@pmap^.nt_map,
+                           info.obj,
+                           info.offset,
+                           info.start,
+                           info.__end,
+                           delta,
+                           wprots[prot and VM_RWX]);
+
+       if (r<>0) then
+       begin
+        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert(false,'pmap_enter_object');
+       end;
+
+       info.start :=info.start +delta;
+       info.offset:=info.offset+delta;
+
+       size:=size-delta;
+      end;
+
+     end else
+     begin
+      Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+
+      info.start:=start;
+      info.__end:=__end;
+      info.offset:=offset;
+
+      get_dev_fd(obj^.un_pager.map_base,info);
+
+      delta:=(info.__end-info.start);
+
+      r:=vm_nt_map_insert(@pmap^.nt_map,
+                          info.obj,
+                          info.offset,
+                          info.start,
+                          info.__end,
+                          delta,
+                          wprots[prot and VM_RWX]);
+
+      if (r<>0) then
+      begin
+       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+       Assert(false,'pmap_enter_object');
+      end;
      end;
+
     end;
   OBJT_VNODE:
     begin
-     base:=nil;
      delta:=0;
      paddi:=0;
+     md:=0;
 
      VM_OBJECT_LOCK(obj);
 
@@ -641,89 +605,68 @@ begin
 
        if (fd<>0) then
        begin
+        delta:=(__end-start);
 
-        delta :=offset and (MD_ALLOC_GRANULARITY-1);
-        offset:=offset and (not (MD_ALLOC_GRANULARITY-1));
-
-        size:=delta+offset+(__end-start);
-
+        //max unaligned size
+        size:=offset+delta;
         if (size>obj^.un_pager.vnp.vnp_size) then
         begin
          size:=obj^.un_pager.vnp.vnp_size;
         end;
         size:=size-offset;
 
-        base:=nil;
-        r:=md_file_mmap(fd,base,offset,size,wprots[prot and VM_RWX]);
-
-        if (r<>0) then
-        begin
-         Writeln('failed md_file_mmap:0x',HexStr(r,8));
-         Assert(false,'md_file_mmap');
-        end;
-
-        if (r=0) and (delta<>0) then
-        begin
-         //protect head
-         md_protect(base,delta,MD_PROT_NONE);
-        end;
-
-        if (r=0) then
-        begin
-         //align host page
-         size:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
-
-         //padding pages
-         paddi:=PAGE_SIZE-((size-delta) and PAGE_MASK);
-
-         if (paddi<>0) then
-         begin
-          //padding as private pages
-          r:=md_enter(Pointer(VM_DEFAULT_MAP_BASE+__end-paddi),paddi,wprots[prot and VM_RWX]);
-
-          if (r<>0) then
-          begin
-           Writeln('failed md_enter:0x',HexStr(r,8));
-           Assert(false,'md_enter');
-          end;
-         end;
-        end;
-
-        if (r=0) then
-        begin
-         r:=vm_file_map_fixed(@obj^.un_pager.vnp.file_map,
-                              delta,
-                              start,
-                              __end,
-                              base,
-                              size);
-        end;
-
+        r:=md_memfd_open(md,fd);
        end;
 
      VM_OBJECT_UNLOCK(obj);
 
      if (r<>0) then
      begin
-      Writeln('failed vm_file_map_fixed:0x',HexStr(r,8));
-      Assert(false,'vm_file_map_fixed');
+      Writeln('failed md_memfd_open:0x',HexStr(r,8));
+      Assert(false,'pmap_enter_object');
      end;
 
-     if (r=0) then
+     if (md=0) then
      begin
-      base:=base+delta;
+      Writeln('zero file fd');
+      Assert(false,'pmap_enter_object');
+     end;
 
-      if (paddi<>0) then
-      begin
-       delta:=__end-paddi;
-       //
-       pmap_mark(start,delta,QWORD(base),prot and VM_RWX);
-       //
-       pmap_mark(delta,__end,VM_DEFAULT_MAP_BASE+delta,prot and VM_RWX);
-      end else
-      begin
-       pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
-      end;
+     //align host page
+     paddi:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+
+     info.obj   :=vm_nt_file_obj_allocate(md);
+     info.offset:=offset;
+     info.start :=start;
+     info.__end :=start+paddi;
+
+     r:=vm_nt_map_insert(@pmap^.nt_map,
+                         info.obj,
+                         info.offset,
+                         info.start,
+                         info.__end,
+                         size,
+                         wprots[prot and VM_RWX]);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+      Assert(false,'pmap_enter_object');
+     end;
+
+     pmap_mark(info.start,info.__end,prot and VM_RWX);
+
+     //aligned size
+     size:=paddi;
+
+     //padding pages
+     paddi:=PAGE_SIZE-((delta-size) and PAGE_MASK);
+
+     if (paddi<>0) then
+     begin
+      offset:=0;
+      start:=start+size;
+      goto _default;
      end;
 
      Exit;
@@ -736,15 +679,10 @@ begin
     end;
  end;
 
- if (r<>0) then
- begin
-  Writeln('failed md_enter:0x',HexStr(r,8));
-  Assert(false,'pmap_enter_object');
- end;
-
- pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
+ pmap_mark(start,__end,prot and VM_RWX);
 end;
 
+{
 procedure pmap_move(pmap    :pmap_t;
                     start   :vm_offset_t;
                     ofs_old :vm_offset_t;
@@ -800,6 +738,7 @@ begin
   Assert(false,'pmap_move');
  end;
 end;
+}
 
 procedure pmap_protect(pmap  :pmap_t;
                        obj   :vm_object_t;
@@ -810,13 +749,10 @@ procedure pmap_protect(pmap  :pmap_t;
 label
  _default;
 var
- base:Pointer;
  size:QWORD;
- r:Integer;
 begin
  Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
 
- r:=0;
  case vm_object_type(obj) of
   OBJT_SELF  , // same?
 
@@ -824,48 +760,32 @@ begin
     begin
      _default:
 
-     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
-     size:=trunc_page(__end-start);
+     vm_nt_map_protect(@pmap^.nt_map,
+                       start,
+                       __end,
+                       wprots[prot and VM_RWX]);
 
-     r:=md_protect(base,size,wprots[prot and VM_RWX]);
     end;
   OBJT_DEVICE:
     begin
-     goto _default;
-
      if (obj^.un_pager.map_base=nil) then
      begin
       goto _default;
      end;
 
-     base:=obj^.un_pager.map_base+trunc_page(offset);
-     size:=trunc_page(__end-start);
-
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      Writeln('pmap_protect_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
-
-      r:=md_protect(base,size,MD_PROT_RWX);
+      Writeln('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+     end else
+     begin
+      Writeln('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
      end;
+
+     goto _default;
     end;
   OBJT_VNODE:
     begin
-     VM_OBJECT_LOCK(obj);
-
-      r:=vm_file_map_protect(@obj^.un_pager.vnp.file_map,
-                             start,
-                             __end,
-                             prot);
-
-     VM_OBJECT_UNLOCK(obj);
-
-     if (r<>0) then
-     begin
-      Writeln('failed vm_file_map_protect:0x',HexStr(r,8));
-      Assert(false,'vm_file_map_protect');
-     end;
-
-     Exit;
+     goto _default;
     end;
   else
     begin
@@ -875,13 +795,7 @@ begin
     end;
  end;
 
- if (r<>0) then
- begin
-  Writeln('failed md_protect:0x',HexStr(r,8));
-  Assert(false,'pmap_protect');
- end;
-
- pmap_mark(start,__end,QWORD(base),prot and VM_RWX);
+ pmap_mark(start,__end,prot and VM_RWX);
 end;
 
 procedure pmap_madv_free(pmap  :pmap_t;
@@ -893,7 +807,6 @@ procedure pmap_madv_free(pmap  :pmap_t;
 label
  _default;
 var
- base:Pointer;
  size:QWORD;
  r:Integer;
 begin
@@ -907,10 +820,9 @@ begin
     begin
      _default:
 
-     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
-     size:=trunc_page(__end-start);
+     size:=(__end-start);
 
-     r:=md_reset(base,size,wprots[prot and VM_RWX]);
+     r:=md_reset(Pointer(start),size,wprots[prot and VM_RWX]);
     end;
   OBJT_DEVICE:
     begin
@@ -952,8 +864,6 @@ procedure pmap_remove(pmap  :pmap_t;
 label
  _default;
 var
- base:Pointer;
- size:QWORD;
  r:Integer;
 begin
  Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
@@ -971,14 +881,7 @@ begin
      r:=vm_nt_map_delete(@pmap^.nt_map,
                          start,
                          __end);
-     Assert(r=0);
 
-     {
-     base:=Pointer(VM_DEFAULT_MAP_BASE+trunc_page(start));
-     size:=trunc_page(__end-start);
-
-     r:=md_remove(base,size);
-     }
     end;
   OBJT_DEVICE:
     begin
@@ -987,33 +890,19 @@ begin
       goto _default;
      end;
 
-     base:=obj^.un_pager.map_base+trunc_page(offset);
-     size:=trunc_page(__end-start);
-
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      Writeln('pmap_remove_gpuobj:',HexStr(QWORD(base),11),':',HexStr(QWORD(base)+size,11),':',HexStr(prot,2));
-
-      r:=md_remove(base,size);
+      Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+     end else
+     begin
+      Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
      end;
+
+     goto _default;
     end;
   OBJT_VNODE:
     begin
-     VM_OBJECT_LOCK(obj);
-
-      r:=vm_file_map_delete(@obj^.un_pager.vnp.file_map,
-                             start,
-                             __end);
-
-     VM_OBJECT_UNLOCK(obj);
-
-     if (r<>0) then
-     begin
-      Writeln('failed vm_file_map_delete:0x',HexStr(r,8));
-      Assert(false,'vm_file_map_delete');
-     end;
-
-     Exit;
+     goto _default;
     end;
   else
     begin
@@ -1025,7 +914,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed md_remove:0x',HexStr(r,8));
+  Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
   Assert(false,'pmap_remove');
  end;
 end;

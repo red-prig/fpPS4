@@ -34,8 +34,14 @@ const
  MAXSSIZ =(2    *1024*1024); // max stack size
  SGROWSIZ=        (16*1024); // amount to grow stack
 
- PROC_IMAGE_AREA_START=QWORD($00010000000); //(original:0x400000-0x80000000)
- PROC_IMAGE_AREA___END=QWORD($00070000000);
+ //0x0 7FFE0000
+
+ _PROC_AREA_START_0   =QWORD($00000400000);
+ _PROC_AREA_START_1   =QWORD($00010000000); //(original:0x400000-0x80000000)
+ _PROC_AREA___END     =QWORD($00070000000);
+
+ WIN_MIN_MOVED_STACK  =QWORD($00070000000);
+ WIN_MAX_MOVED_STACK  =QWORD($0007FFE0000); //255MB
 
  SCE_REPLAY_EXEC_START=QWORD($00fc0000000);
 
@@ -52,27 +58,13 @@ const
 
  SCE_KERNEL_GNMDRIVER =QWORD($00FE0000000);
 
- VM_MINUSER_ADDRESS   =QWORD($00010000000); //(original:$000000000000)
+ _VM_MINUSER_ADDRESS  =QWORD($00010000000); //(original:$000000000000)
  VM_MAXUSER_ADDRESS   =QWORD($10000000000); //(original:$800000000000) MAP_AREA_END=0xfc00000000
 
  VM_MIN_GPU_ADDRESS   =QWORD($10000000000);
  VM_MAX_GPU_ADDRESS   =QWORD($10180000000); //6GB
 
  VM_DEFAULT_MAP_BASE  =QWORD(0);
-
- pageablemem=VM_MAXUSER_ADDRESS-VM_MINUSER_ADDRESS;
-
- pmap_mem:array[0..3] of t_addr_range=(
-  (start:PROC_IMAGE_AREA_START;__end:PROC_IMAGE_AREA___END),
-  (start:DL_AREA_START        ;__end:DL_AREA___END        ),
-  (start:SCE_USR_HEAP_START   ;__end:VM_MAXUSER_ADDRESS   ),
-  (start:VM_MIN_GPU_ADDRESS   ;__end:VM_MAX_GPU_ADDRESS   )
- );
-
- exclude_mem:array[0..1] of t_addr_range=(
-  (start:PROC_IMAGE_AREA___END;__end:DL_AREA_START     ),
-  (start:DL_AREA___END        ;__end:SCE_USR_HEAP_START)
- );
 
  //t_addr_range
 
@@ -104,16 +96,47 @@ const
  SCE_KERNEl_GNM_TESS_AREA    = 0xF`F0000000 - 0xF`F0040000
 }
 
+var
+ pmap_mem:array[0..2] of t_addr_range=(
+  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ),
+  (start:DL_AREA_START     ;__end:DL_AREA___END     ),
+  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS)
+ );
+
+ exclude_mem:array[0..1] of t_addr_range=(
+  (start:_PROC_AREA___END;__end:DL_AREA_START     ),
+  (start:DL_AREA___END   ;__end:SCE_USR_HEAP_START)
+ );
+
+function pageablemem:QWORD;
+function VM_MINUSER_ADDRESS:QWORD;
+function PROC_IMAGE_AREA_START:QWORD;
+
 function is_guest_addr(addr:QWORD):Boolean;
 
 implementation
+
+function pageablemem:QWORD;
+begin
+ Result:=VM_MAXUSER_ADDRESS-pmap_mem[0].start;
+end;
+
+function VM_MINUSER_ADDRESS:QWORD;
+begin
+ Result:=pmap_mem[0].start;
+end;
+
+function PROC_IMAGE_AREA_START:QWORD;
+begin
+ Result:=pmap_mem[0].start;
+end;
 
 function is_guest_addr(addr:QWORD):Boolean;
 var
  i:Integer;
 begin
  Result:=False;
- For i:=0 to High(pmap_mem)-1 do //exclude ext GPU_ADDRESS
+ For i:=0 to High(pmap_mem) do
  begin
   if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
   begin

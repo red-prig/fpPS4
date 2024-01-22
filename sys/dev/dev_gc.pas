@@ -17,12 +17,13 @@ uses
  kern_authinfo,
  vm,
  vmparam,
+ vm_pmap,
  sys_vm_object,
  vm_pager,
  subr_backtrace;
 
 var
- gc_page:array[0..PAGE_SIZE-1] of Byte;
+ gc_page:Pointer;
 
  gc_AreSubmitsAllowed:Integer=0; //0=true,1=false (0xfe0100000)
 
@@ -130,7 +131,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,nprot,offset^);
- obj^.un_pager.map_base:=@gc_page;
+ obj^.un_pager.map_base:=gc_page;
 
  if (obj=nil) then
  begin
@@ -154,7 +155,7 @@ begin
   Exit(EPERM);
  end;
 
- paddr^:=offset + QWORD(@gc_page);
+ paddr^:=offset {+ };
  memattr^:=0;
 
  Result:=0;
@@ -183,6 +184,8 @@ const
 
 procedure gc_initialize();
 begin
+ gc_page:=dev_mem_alloc(1);
+
  make_dev(@gc_cdevsw,0,0,0,&666,'gc',[]);
 end;
 

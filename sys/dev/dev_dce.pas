@@ -10,12 +10,15 @@ uses
  vmparam,
  kern_conf,
  sys_event,
- time;
+ time,
+
+ sysutils,
+ windows;
 
 procedure dce_initialize();
 
 var
- dce_page:array[0..PAGE_SIZE-1] of Byte;
+ dce_page:Pointer;
 
  g_video_out_event_flip:t_knlist;
 
@@ -24,6 +27,7 @@ implementation
 uses
  errno,
  systm,
+ vm_pmap,
  subr_backtrace,
  sys_vm_object,
  vm_pager,
@@ -568,9 +572,20 @@ type
   rout       :PQWORD; //extraout of result
  end;
 
+var
+ prev:int64=0;
+
+procedure SetConsoleTitle(i:int64);
+var
+ S:RawByteString;
+begin
+ S:=IntToStr(i);
+ Windows.SetConsoleTitle(pchar(S));
+end;
+
 Function dce_submit_flip(dev:p_cdev;data:p_submit_flip):Integer;
 var
- ures:QWORD;
+ ures,i:QWORD;
 begin
  Result:=0;
 
@@ -578,6 +593,16 @@ begin
                         data^.flipMode,' ',
                         '0x',HexStr(data^.flipArg,16),' ',
                         data^.eop_val);
+
+ if (prev=0) then
+ begin
+  prev:=get_unit_uptime;
+ end else
+ begin
+  i:=get_unit_uptime-prev;
+  prev:=get_unit_uptime;
+  SetConsoleTitle(UNIT_PER_SEC div i);
+ end;
 
  knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
 
@@ -645,7 +670,7 @@ begin
 
  offset:=(foff and $1fffff) { or (uVar1 and $fffffffe00000)};
 
- paddr^:=DWORD(offset);
+ paddr^:=DWORD(offset) {+ };
 end;
 
 Function dce_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;pobj:p_vm_object_t;nprot:Integer):Integer;
@@ -677,7 +702,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
- obj^.un_pager.map_base:=Pointer(@dce_page)-PAGE_SIZE;
+ obj^.un_pager.map_base:=dce_page;
 
  if (obj=nil) then
  begin
@@ -839,6 +864,8 @@ begin
  callout_init_mtx(@callout_vblank,knlist_lock_flip,0);
 
  kqueue_add_filteropts(EVFILT_DISPLAY,@filterops_display);
+
+ dce_page:=dev_mem_alloc(2);
 
  make_dev(@dce_cdevsw,0,0,0,0666,'dce',[]);
 end;

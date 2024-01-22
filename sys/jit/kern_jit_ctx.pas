@@ -1454,118 +1454,15 @@ end;
 
 //
 
-const
- _shr_64_imm8:t_op_type=(op:$C1;index:5);
- _shl_64_imm8:t_op_type=(op:$C1;index:4);
- _movsxd_64  :t_op_type=(op:$63;index:0);
-
- //add PAGE_MAP(%rip),%r14
-procedure add_r14_p(var ctx:t_jit_context2);
-var
- PAGE_MAP_JIT:p_jit_data;
- ALink:p_jit_instruction;
-begin
- with ctx.builder do
- begin
-  PAGE_MAP_JIT:=_add_data(PAGE_MAP);
-
-  addq(r14,[rip+$7FFFFFFF]);
-
-  ALink:=last_instruction;
-
-  ALink^.ALink.AType:=lnkData;
-  ALink^.ALink.ALink:=PAGE_MAP_JIT;
-
-  //LinkLabel(Result.ALink);
- end;
-end;
-
 procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize); //inline;
 begin
  //ctx.builder.call_far(@uplift_jit); //in/out:r14
-
- with ctx.builder do
- begin
-
-  leaq(r14,[r14+$7FFFFFFF]);
-  leaq(r14,[r14-$7FFFFFFF]);
-
-  //pushfq(os64);
-
-  //origin
-  //movq([r13+Integer(@jit_frame(nil^).tf_adr)],r14);
-
-  {
-  //high addr (r14)
-  //shr PMAPP_SHIFT   ,%r14
-  _RI8(_shr_64_imm8,r14,PMAPP_SHIFT);
-
-  //shl $2,%r14
-  _RI8(_shl_64_imm8,r14,2);
-
-  //add PAGE_MAP(%rip),%r14
-  add_r14_p(ctx);
-
-  //movslq (%r14),%r14 //sign extend int32->int64
-  _RM(_movsxd_64,r14,[r14]);
-
-  //shl PMAPP_SHIFT,%r14
-  _RI8(_shl_64_imm8,r14,PMAPP_SHIFT);
-
-  //add jit_frame.tf_adr(%r13),%r14
-  addq(r14,[r13+Integer(@jit_frame(nil^).tf_adr)]);
-  }
-
-  //popfq(os64);
- end;
-
- {
- pushfq //
-
- //origin
- mov %r14, jit_frame.tf_adr(%r13)
- //
- //high addr (r14)
- shr PMAPP_SHIFT   ,%r14
- cmp PAGE_MAP_COUNT,%r14
- ja _sigsegv
- //uplift (r14)
- shl $2,%r14
- add PAGE_MAP(%rip),%r14
- movslq (%r14),%r14 //sign extend int32->int64
- //high addr (r14)
- shl PMAPP_SHIFT,%r14
- //combine (r14+origin)
- add jit_frame.tf_adr(%r13),%r14
- //test
- cmp PMAPP_SIZE,%r14
- jna _sigsegv
-
- ret
-
- _sigsegv:
-
- call jit_save_ctx
-
- //origin
- mov jit_frame.tf_adr(%r13), %rdi
-
- call jit_sigsegv
-
- call jit_load_ctx
-
- popfq  //
- }
-
-
 end;
 
 procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
 begin
  with ctx.builder do
  begin
-  op_uplift(ctx,mem_size);
-
   //call_far(copyin_mov_size[mem_size]); //in:r14(addr), out:r14
  end;
 end;
@@ -1574,8 +1471,6 @@ procedure op_copyout_before(var ctx:t_jit_context2;var link_next:t_jit_i_link;me
 begin
  with ctx.builder do
  begin
-  op_uplift(ctx,mem_size);
-
   ////call_far(copyout_mov_size[mem_size]); //in:r14(addr)
   //
   ////link_next:=jmp(nil_link,os8);

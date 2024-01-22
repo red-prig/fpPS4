@@ -9,7 +9,6 @@ uses
  mqueue,
  vm,
  vmparam,
- vm_file,
  kern_mtx;
 
 type
@@ -46,12 +45,10 @@ type
   un_pager  :record
    map_base:Pointer;
    vnp:record
-    file_map:vm_file_map;
     vnp_size:QWORD;
     writemappings:vm_ooffset_t;
    end;
    physhm:record
-    map_base:Pointer;
     mtype   :Byte;
    end;
   end;
@@ -189,10 +186,6 @@ begin
     begin
      Result^.flags:=OBJ_ONEMAPPING;
     end;
-  OBJT_VNODE:
-    begin
-     vm_file_map_init(@Result^.un_pager.vnp.file_map,0,VM_MAXUSER_ADDRESS);
-    end;
   else;
  end;
 
@@ -201,11 +194,6 @@ end;
 procedure vm_object_destroy(obj:vm_object_t);
 begin
  mtx_destroy(obj^.mtx);
-
- if (obj^.otype=OBJT_VNODE) then
- begin
-  vm_file_map_free(@obj^.un_pager.vnp.file_map);
- end;
 
  FreeMem(obj);
 end;

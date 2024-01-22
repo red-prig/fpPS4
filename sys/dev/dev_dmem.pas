@@ -141,7 +141,7 @@ begin
   Exit(-1);
  end;
 
- paddr^:=offset + QWORD(dmap^.vobj^.un_pager.map_base);
+ paddr^:=offset {+ };
  memattr^:=0;
 end;
 

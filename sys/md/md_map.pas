@@ -42,8 +42,9 @@ function md_reserve(var base:Pointer;size:QWORD):Integer;
 function md_split  (base:Pointer;size:QWORD):Integer;
 function md_union  (base:Pointer;size:QWORD):Integer;
 
-function md_memfd_create(var hFile:THandle;size:QWORD):Integer;
-function md_memfd_close (hFile:THandle):Integer;
+function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
+function md_memfd_open  (var hMem:THandle;hFile:THandle):Integer;
+function md_memfd_close (hMem:THandle):Integer;
 
 function md_enter  (base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
@@ -91,31 +92,34 @@ begin
  base:=md_alloc_page(base);
  size:=md_up_page(size);
 
- len:=0;
- Result:=NtQueryVirtualMemory(
-          NtCurrentProcess,
-          base,
-          0,
-          @info,
-          sizeof(info),
-          @len);
-
- if (Result=0) then
+ if (base<>nil) then
  begin
-  if (info.State=MEM_RESERVE) then
+  len:=0;
+  Result:=NtQueryVirtualMemory(
+           NtCurrentProcess,
+           base,
+           0,
+           @info,
+           sizeof(info),
+           @len);
+
+  if (Result=0) then
   begin
-   if (base>=info.BaseAddress) and
-      ((base+size)<=(info.BaseAddress+info.RegionSize)) then
+   if (info.State=MEM_RESERVE) then
    begin
-    Exit(0);
+    if (base>=info.BaseAddress) and
+       ((base+size)<=(info.BaseAddress+info.RegionSize)) then
+    begin
+     Exit(0);
+    end;
    end;
+   {
+   Writeln('Query:','0x',HexStr(info.BaseAddress),'..',
+                    '0x',HexStr(info.BaseAddress+info.RegionSize),':',
+                    '0x',HexStr(info.RegionSize,16),' ',
+                    info.State);
+   }
   end;
-  {
-  Writeln('Query:','0x',HexStr(info.BaseAddress),'..',
-                   '0x',HexStr(info.BaseAddress+info.RegionSize),':',
-                   '0x',HexStr(info.RegionSize,16),' ',
-                   info.State);
-  }
  end;
 
  {
@@ -161,11 +165,11 @@ begin
          );
 end;
 
-function md_memfd_create(var hFile:THandle;size:QWORD):Integer;
+function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
 begin
- hFile:=0;
+ hMem:=0;
  Result:=NtCreateSection(
-          @hFile,
+          @hMem,
           SECTION_ALL_ACCESS,
           //SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
           nil,
@@ -176,9 +180,27 @@ begin
          );
 end;
 
-function md_memfd_close(hFile:THandle):Integer;
+function md_memfd_open(var hMem:THandle;hFile:THandle):Integer;
+var
+ size:QWORD;
 begin
- Result:=NtClose(hFile);
+ size:=0;
+ hMem:=0;
+ Result:=NtCreateSection(
+          @hMem,
+          SECTION_ALL_ACCESS,
+          //SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
+          nil,
+          @size,
+          PAGE_READWRITE,
+          SEC_COMMIT,
+          hFile
+         );
+end;
+
+function md_memfd_close(hMem:THandle):Integer;
+begin
+ Result:=NtClose(hMem);
 end;
 
 function md_enter(base:Pointer;size:QWORD;prot:Integer):Integer;

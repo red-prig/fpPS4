@@ -3211,7 +3211,7 @@ var
  map:vm_map_t;
  i:Integer;
 begin
- p_proc.p_vmspace:=vmspace_alloc(PROC_IMAGE_AREA_START,VM_MAXUSER_ADDRESS);
+ p_proc.p_vmspace:=vmspace_alloc(VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
  //exclude addr
  if Length(exclude_mem)<>0 then

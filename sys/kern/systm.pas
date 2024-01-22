@@ -496,11 +496,6 @@ begin
 
  if guest then
  begin
-  if pmap_test_cross(QWORD(@base),3) then
-  begin
-   Assert(false,'casuword32');
-  end;
-
   src:=uplift(@base);
  end else
  begin
@@ -553,11 +548,6 @@ begin
 
  if guest then
  begin
-  if pmap_test_cross(QWORD(@base),7) then
-  begin
-   Assert(false,'casuword64');
-  end;
-
   src:=uplift(@base);
  end else
  begin

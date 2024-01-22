@@ -247,7 +247,7 @@ begin
   }
  map:=@vmspace^.vm_map;
 
- sv_minuser:=pmap_mem[0].start;
+ sv_minuser:=VM_MINUSER_ADDRESS;
  sv_maxuser:=VM_MAXUSER_ADDRESS;
 
  if (vm_map_min(map)=sv_minuser) and

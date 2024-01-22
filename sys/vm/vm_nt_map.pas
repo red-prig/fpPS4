@@ -34,9 +34,7 @@ type
   right      :p_vm_nt_entry;     // right child in binary search tree
   start      :vm_offset_t;       // start address
   __end      :vm_offset_t;       // end address
-  avail_ssize:vm_offset_t;       // amt can grow if this is a stack
-  adj_free   :vm_offset_t;       // amount of adjacent free space
-  max_free   :vm_offset_t;       // max free space in subtree
+  size       :vm_offset_t;       // unaligned size
   obj        :p_vm_nt_file_obj;  // object I point to
   offset     :vm_ooffset_t;      // offset into object
  end;
@@ -67,22 +65,21 @@ function  vm_nt_map_lookup_entry(
             address:vm_offset_t;
             entry  :pp_vm_nt_entry):Boolean;
 
-function vm_nt_map_insert(
-            map   :p_vm_nt_map;
-            obj   :p_vm_nt_file_obj;
-            offset:vm_ooffset_t;
-            start :vm_offset_t;
-            __end :vm_offset_t;
-            prot  :Integer):Integer;
-
-function  vm_nt_map_fixed(map   :p_vm_nt_map;
-                          obj   :p_vm_nt_file_obj;
-                          offset:vm_ooffset_t;
-                          start :vm_offset_t;
-                          __end :vm_offset_t;
-                          prot  :Integer):Integer;
+function  vm_nt_map_insert(
+             map   :p_vm_nt_map;
+             obj   :p_vm_nt_file_obj;
+             offset:vm_ooffset_t;
+             start :vm_offset_t;
+             __end :vm_offset_t;
+             size  :vm_offset_t;
+             prot  :Integer):Integer;
 
 function  vm_nt_map_delete(map:p_vm_nt_map;start:vm_offset_t;__end:vm_offset_t):Integer;
+
+procedure vm_nt_map_protect(map:p_vm_nt_map;
+                            start:vm_offset_t;
+                            __end:vm_offset_t;
+                            prot  :Integer);
 
 procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 
@@ -213,7 +210,7 @@ begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
    begin
-    Writeln('failed md_protect(',HexStr(base,16),',',HexStr(base+size,16),'):0x',HexStr(r,8));
+    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_prot_fixup');
    end;
   end;
@@ -279,15 +276,19 @@ begin
    r:=md_split(Pointer(entry^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_split(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+    Writeln('failed md_split(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
 
-  r:=md_file_mmap_ex(entry^.obj^.hfile,Pointer(entry^.start),entry^.offset,size,MD_PROT_RW);
+  r:=md_file_mmap_ex(entry^.obj^.hfile,
+                     Pointer(entry^.start),
+                     entry^.offset,
+                     entry^.size, //unaligned size
+                     MD_PROT_RW);
   if (r<>0) then
   begin
-   Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+   Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
    Assert(false,'vm_map');
   end;
 
@@ -296,12 +297,12 @@ begin
    r:=md_protect(Pointer(entry^.start),size,prot);
    if (r<>0) then
    begin
-    Writeln('failed md_protect(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+    Writeln('failed md_protect(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_prot_fixup');
    end;
   end;
 
-  //Writeln('md_file_mmap(',HexStr(entry^.start,16),',',HexStr(entry^.start+size,16),'):0x',HexStr(r,8));
+  //Writeln('md_file_mmap(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
  end;
 end;
 
@@ -386,11 +387,11 @@ begin
    r:=md_file_unmap_ex(Pointer(p^.start));
    if (r<>0) then
    begin
-    Writeln('failed md_file_unmap_ex(',HexStr(p^.start,16),',',HexStr(p^.__end,16),'):0x',HexStr(r,8));
+    Writeln('failed md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
     Assert(false,'vm_remap');
    end;
    //
-   //Writeln('md_file_unmap_ex(',HexStr(p^.start,16),',',HexStr(p^.__end,16),'):0x',HexStr(r,8));
+   //Writeln('md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
    //
    Inc(r_count);
   end;
@@ -402,10 +403,10 @@ begin
   r:=md_union(Pointer(start),size);
   if (r<>0) then
   begin
-   Writeln('failed md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+   Writeln('failed md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
    Assert(false,'vm_remap');
   end;
-  //Writeln('md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+  //Writeln('md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
  end;
 
  //split to parts
@@ -419,14 +420,14 @@ begin
    r:=md_split(Pointer(ets[i]^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_split(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+    Writeln('failed md_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
 
-    Writeln('(',HexStr(start,16),',',HexStr(__end,16),')');
+    Writeln('(',HexStr(start,11),',',HexStr(__end,11),')');
 
     Assert(false,'vm_remap');
    end;
 
-   //Writeln('md_split(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+   //Writeln('md_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
 
    Break; //middle or last splt
   end;
@@ -440,16 +441,18 @@ begin
    //map new
    if (ets[i]^.obj<>nil) then
    begin
-    size:=ets[i]^.__end-ets[i]^.start;
-
-    r:=md_file_mmap_ex(stat.obj^.hfile,Pointer(ets[i]^.start),ets[i]^.offset,size,MD_PROT_RW);
+    r:=md_file_mmap_ex(stat.obj^.hfile,
+                       Pointer(ets[i]^.start),
+                       ets[i]^.offset,
+                       ets[i]^.size, //unaligned size
+                       MD_PROT_RW);
     if (r<>0) then
     begin
-     Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+     Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
 
-    //Writeln('md_file_mmap_ex(',HexStr(ets[i]^.start,16),',',HexStr(ets[i]^.__end,16),'):0x',HexStr(r,8));
+    //Writeln('md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
    end;
   end;
  end;
@@ -483,10 +486,10 @@ begin
   r:=md_file_unmap_ex(Pointer(entry^.start));
   if (r<>0) then
   begin
-   Writeln('failed md_file_unmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+   Writeln('failed md_file_unmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
    Assert(false,'vm_unmap');
   end;
-  //Writeln('md_file_unmap_ex(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+  //Writeln('md_file_unmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
  end;
 
  vm_get_space(map,entry,start,__end);
@@ -498,9 +501,9 @@ begin
   r:=md_union(Pointer(start),__end-start);
   if (r<>0) then
   begin
-   Writeln('failed md_union(',HexStr(start,16),',',HexStr(__end,16),'):0x',HexStr(r,8));
+   Writeln('failed md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
 
-   Writeln('(',HexStr(entry^.start,16),',',HexStr(entry^.__end,16),'):0x',HexStr(r,8));
+   Writeln('(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
 
    Assert(false,'vm_unmap');
   end;
@@ -541,8 +544,6 @@ begin
  map^.header.prev:=@map^.header;
  map^.min_offset:=min;
  map^.max_offset:=max;
- map^.header.adj_free:=(max-min);
- map^.header.max_free:=(max-min);
  map^.root:=nil;
  map^.vmap:=vmap;
 end;
@@ -559,21 +560,6 @@ begin
  new_entry:=AllocMem(SizeOf(vm_nt_entry));
  Assert((new_entry<>nil),'vm_nt_entry_create: kernel resources exhausted');
  Result:=new_entry;
-end;
-
-procedure vm_nt_entry_set_max_free(entry:p_vm_nt_entry);
-begin
- entry^.max_free:=entry^.adj_free;
- if (entry^.left<>nil) then
- if (entry^.left^.max_free>entry^.max_free) then
- begin
-  entry^.max_free:=entry^.left^.max_free;
- end;
- if (entry^.right<>nil) then
- if (entry^.right^.max_free>entry^.max_free) then
- begin
-  entry^.max_free:=entry^.right^.max_free;
- end;
 end;
 
 function vm_nt_entry_splay(addr:vm_offset_t;root:p_vm_nt_entry):p_vm_nt_entry;
@@ -595,7 +581,6 @@ begin
    begin
     root^.left:=y^.right;
     y^.right:=root;
-    vm_nt_entry_set_max_free(root);
     root:=y^.left;
     y^.left:=rlist;
     rlist:=y;
@@ -614,7 +599,6 @@ begin
    begin
     root^.right:=y^.left;
     y^.left:=root;
-    vm_nt_entry_set_max_free(root);
     root:=y^.right;
     y^.right:=llist;
     llist:=y;
@@ -635,7 +619,6 @@ begin
  begin
   y:=llist^.right;
   llist^.right:=ltree;
-  vm_nt_entry_set_max_free(llist);
   ltree:=llist;
   llist:=y;
  end;
@@ -644,14 +627,12 @@ begin
  begin
   y:=rlist^.left;
   rlist^.left:=rtree;
-  vm_nt_entry_set_max_free(rlist);
   rtree:=rlist;
   rlist:=y;
  end;
 
  root^.left:=ltree;
  root^.right:=rtree;
- vm_nt_entry_set_max_free(root);
 
  Result:=(root);
 end;
@@ -676,21 +657,11 @@ begin
   entry^.right:=after_where^.right;
   entry^.left:=after_where;
   after_where^.right:=nil;
-  after_where^.adj_free:=entry^.start - after_where^.__end;
-  vm_nt_entry_set_max_free(after_where);
  end else
  begin
   entry^.right:=map^.root;
   entry^.left:=nil;
  end;
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
- vm_nt_entry_set_max_free(entry);
  map^.root:=entry;
 end;
 
@@ -711,14 +682,6 @@ begin
  begin
   root:=vm_nt_entry_splay(entry^.start, entry^.left);
   root^.right:=entry^.right;
-  if (root^.next=@map^.header) then
-  begin
-   root^.adj_free:=map^.max_offset-root^.__end;
-  end else
-  begin
-   root^.adj_free:=entry^.next^.start-root^.__end;
-  end;
-  vm_nt_entry_set_max_free(root);
  end;
  map^.root:=root;
 
@@ -727,23 +690,6 @@ begin
  next^.prev:=prev;
  prev^.next:=next;
  Dec(map^.nentries);
-end;
-
-procedure vm_nt_entry_resize_free(map:p_vm_nt_map;entry:p_vm_nt_entry);
-begin
- if (entry<>map^.root) then
- begin
-  map^.root:=vm_nt_entry_splay(entry^.start, map^.root);
- end;
-
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
- vm_nt_entry_set_max_free(entry);
 end;
 
 function vm_nt_map_lookup_entry(
@@ -791,6 +737,7 @@ function vm_nt_map_insert(
            offset:vm_ooffset_t;
            start :vm_offset_t;
            __end :vm_offset_t;
+           size  :vm_offset_t; //unaligned size
            prot  :Integer):Integer;
 var
  new_entry :p_vm_nt_entry;
@@ -817,12 +764,11 @@ begin
  end;
 
  new_entry:=vm_nt_entry_create(map);
- new_entry^.start:=start;
- new_entry^.__end:=__end;
-
- new_entry^.obj        :=obj;
- new_entry^.offset     :=offset;
- new_entry^.avail_ssize:=0;
+ new_entry^.start :=start;
+ new_entry^.__end :=__end;
+ new_entry^.size  :=size; //unaligned size
+ new_entry^.obj   :=obj;
+ new_entry^.offset:=offset;
 
  vm_nt_entry_link(map, prev_entry, new_entry);
  map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
@@ -834,18 +780,6 @@ begin
  vm_remap(map,new_entry,nil,nil,stat);
 
  Result:=KERN_SUCCESS;
-end;
-
-function vm_nt_map_fixed(map   :p_vm_nt_map;
-                         obj   :p_vm_nt_file_obj;
-                         offset:vm_ooffset_t;
-                         start :vm_offset_t;
-                         __end :vm_offset_t;
-                         prot  :Integer):Integer;
-begin
- VM_NT_MAP_RANGE_CHECK(map, start, __end);
- vm_nt_map_delete(map, start, __end);
- Result:=vm_nt_map_insert(map, obj, offset, start, __end, prot);
 end;
 
 function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_range_stat):Boolean;
@@ -886,12 +820,7 @@ begin
 
    entry^.start :=prev^.start;
    entry^.offset:=prev^.offset;
-
-   //change
-   if (entry^.prev<>@map^.header) then
-   begin
-    vm_nt_entry_resize_free(map, entry^.prev);
-   end;
+   entry^.size  :=entry^.size+prev^.size; //unaligned size
 
    vm_nt_file_obj_deallocate(prev^.obj);
    vm_nt_entry_dispose(map, prev);
@@ -915,9 +844,7 @@ begin
     stat.rnext.__end:=next^.__end;
 
     entry^.__end:=next^.__end;
-
-    //change
-    vm_nt_entry_resize_free(map, entry);
+    entry^.size :=entry^.size+next^.size; //unaligned size
 
     vm_nt_file_obj_deallocate(next^.obj);
     vm_nt_entry_dispose(map, next);
@@ -955,12 +882,13 @@ begin
   prev^:=entry^;
 
   prev^.__end:=start;
+  prev^.size :=(prev^.__end-prev^.start); //unaligned size
 
   entry^.offset:=entry^.offset + (start - entry^.start);
   entry^.start :=start;
+  entry^.size  :=entry^.size-prev^.size; //unaligned size
 
   vm_nt_entry_link(map, entry^.prev, prev);
-
   vm_nt_file_obj_reference(prev^.obj);
  end;
 
@@ -970,12 +898,14 @@ begin
   next^:=entry^;
 
   next^.start :=__end;
+
   entry^.__end:=__end;
+  entry^.size :=(entry^.__end-entry^.start); //unaligned size
 
   next^.offset:=next^.offset + (__end - entry^.start);
+  next^.size  :=next^.size-entry^.size; //unaligned size
 
   vm_nt_entry_link(map, entry, next);
-
   vm_nt_file_obj_reference(next^.obj);
  end;
 
@@ -1008,13 +938,15 @@ begin
   next:=vm_nt_entry_create(map);
   next^:=entry^;
 
-  next^.start:=__end;
+  next^.start :=__end;
+
   entry^.__end:=__end;
+  entry^.size :=(entry^.__end-entry^.size); //unaligned size
 
   next^.offset:=next^.offset + (__end - entry^.start);
+  next^.size  :=next^.size-entry^.size; //unaligned size
 
   vm_nt_entry_link(map, entry, next);
-
   vm_nt_file_obj_reference(next^.obj);
  end;
 
@@ -1086,6 +1018,54 @@ begin
  end;
  Result:=(KERN_SUCCESS);
 end;
+
+procedure vm_nt_map_protect(map:p_vm_nt_map;
+                            start:vm_offset_t;
+                            __end:vm_offset_t;
+                            prot  :Integer);
+var
+ entry:p_vm_nt_entry;
+ base,size:vm_size_t;
+ r:Integer;
+begin
+ if (start=__end) then Exit;
+
+ if (not vm_nt_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end else
+ begin
+  entry:=entry;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+  base:=entry^.start;
+  size:=entry^.__end;
+
+  if (base<start) then
+  begin
+   base:=start;
+  end;
+
+  if (size>__end) then
+  begin
+   size:=__end;
+  end;
+
+  size:=size-base;
+
+  r:=md_protect(Pointer(base),size,prot);
+  if (r<>0) then
+  begin
+   Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
+   Assert(false,'vm_nt_map_protect');
+  end;
+
+  entry:=entry^.next;
+ end;
+end;
+
 
 end.
 
