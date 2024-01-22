@@ -74,7 +74,7 @@ function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
 
-procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
+procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -176,11 +176,10 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-procedure pmap_pinit(pmap:p_pmap;vmap:Pointer;min,max:vm_offset_t);
+procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
 var
  base:Pointer;
  size:QWORD;
- prot:QWORD;
  i,r:Integer;
 begin
 
@@ -200,6 +199,9 @@ begin
     Assert(false,'pmap_init');
    end;
 
+   pmap_mem[i].start:=QWORD(base);
+
+   Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
   end;
  end;
 
@@ -215,17 +217,17 @@ begin
   Assert(false,'pmap_init');
  end;
 
- vm_nt_map_init(@pmap^.nt_map,min,max,vmap);
+ vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,vmap);
 
- if Length(exclude_mem)<>0 then
+ if Length(pmap_mem)>1 then
  begin
-  For i:=0 to High(exclude_mem) do
+  For i:=0 to High(pmap_mem)-1 do
   begin
    vm_nt_map_insert(@pmap^.nt_map,
                     nil,0,
-                    exclude_mem[i].start,
-                    exclude_mem[i].__end,
-                    exclude_mem[i].__end-exclude_mem[i].start,
+                    pmap_mem[  i].__end,
+                    pmap_mem[i+1].start,
+                    pmap_mem[i+1].start-pmap_mem[i].__end,
                     MD_PROT_NONE);
   end;
  end;

@@ -46,9 +46,7 @@ function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
 function md_memfd_open  (var hMem:THandle;hFile:THandle):Integer;
 function md_memfd_close (hMem:THandle):Integer;
 
-function md_enter  (base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
-function md_remove (base:Pointer;size:QWORD):Integer;
 function md_reset  (base:Pointer;size:QWORD;prot:Integer):Integer;
 
 function md_mmap   (var base:Pointer;size:QWORD;prot:Integer):Integer;
@@ -103,35 +101,32 @@ begin
            sizeof(info),
            @len);
 
+  //Writeln('NtQueryVirtualMemory:','0x',HexStr(Result,8));
+
   if (Result=0) then
   begin
+   {
+   Writeln('Query:','0x',HexStr(info.AllocationBase),'..',
+                    '0x',HexStr(info.BaseAddress),'..',
+                    '0x',HexStr(info.BaseAddress+info.RegionSize),':',
+                    '0x',HexStr(info.RegionSize,11),' ',
+                    info.State,' ',
+                    info.Protect,' ',
+                    info._Type
+                    );
+   }
    if (info.State=MEM_RESERVE) then
    begin
     if (base>=info.BaseAddress) and
        ((base+size)<=(info.BaseAddress+info.RegionSize)) then
     begin
+     base:=info.AllocationBase;
      Exit(0);
     end;
    end;
-   {
-   Writeln('Query:','0x',HexStr(info.BaseAddress),'..',
-                    '0x',HexStr(info.BaseAddress+info.RegionSize),':',
-                    '0x',HexStr(info.RegionSize,16),' ',
-                    info.State);
-   }
+
   end;
  end;
-
- {
- Result:=NtAllocateVirtualMemory(
-          NtCurrentProcess,
-          @base,
-          0,
-          @size,
-          MEM_RESERVE,
-          PAGE_NOACCESS
-         );
- }
 
  Result:=NtAllocateVirtualMemoryEx(
           NtCurrentProcess,
@@ -203,18 +198,6 @@ begin
  Result:=NtClose(hMem);
 end;
 
-function md_enter(base:Pointer;size:QWORD;prot:Integer):Integer;
-begin
- Result:=NtAllocateVirtualMemory(
-          NtCurrentProcess,
-          @base,
-          0,
-          @size,
-          MEM_COMMIT,
-          prot
-         );
-end;
-
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
 var
  old:Integer;
@@ -226,16 +209,6 @@ begin
           @size,
           prot,
           @old
-         );
-end;
-
-function md_remove(base:Pointer;size:QWORD):Integer;
-begin
- Result:=NtFreeVirtualMemory(
-          NtCurrentProcess,
-          @base,
-          @size,
-          MEM_DECOMMIT
          );
 end;
 

@@ -103,11 +103,6 @@ var
   (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS)
  );
 
- exclude_mem:array[0..1] of t_addr_range=(
-  (start:_PROC_AREA___END;__end:DL_AREA_START     ),
-  (start:DL_AREA___END   ;__end:SCE_USR_HEAP_START)
- );
-
 function pageablemem:QWORD;
 function VM_MINUSER_ADDRESS:QWORD;
 function PROC_IMAGE_AREA_START:QWORD;

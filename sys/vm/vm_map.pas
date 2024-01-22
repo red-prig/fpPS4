@@ -361,15 +361,17 @@ var
  * Allocate a vmspace structure, including a vm_map and pmap,
  * and initialize those structures.  The refcnt is set to 1.
  }
-function vmspace_alloc(min,max:vm_offset_t):p_vmspace;
+function vmspace_alloc():p_vmspace;
 var
  vm:p_vmspace;
+ map:vm_map_t;
+ i:Integer;
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm),@vm^.vm_map,min,max);
+ pmap_pinit(vmspace_pmap(vm),@vm^.vm_map);
 
- vm_map_init(@vm^.vm_map,vmspace_pmap(vm),min,max);
+ vm_map_init(@vm^.vm_map,vmspace_pmap(vm),VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
  //vm^.vm_refcnt:=1;
  //vm^.vm_shm:=nil;
@@ -380,6 +382,18 @@ begin
  vm^.vm_taddr:=nil;
  vm^.vm_daddr:=nil;
  vm^.vm_maxsaddr:=nil;
+
+ if Length(pmap_mem)>1 then
+ begin
+  map:=@vm^.vm_map;
+  vm_map_lock(map);
+   For i:=0 to High(pmap_mem)-1 do
+   begin
+    vm_map_insert         (map, nil, 0, pmap_mem[i].__end, pmap_mem[i+1].start, 0, 0, -1, false);
+    vm_map_set_name_locked(map,         pmap_mem[i].__end, pmap_mem[i+1].start, '#hole', VM_INHERIT_HOLE);
+   end;
+  vm_map_unlock(map);
+ end;
 
  Result:=vm;
 end;
@@ -3207,24 +3221,8 @@ begin
 end;
 
 procedure vminit;
-var
- map:vm_map_t;
- i:Integer;
 begin
- p_proc.p_vmspace:=vmspace_alloc(VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
-
- //exclude addr
- if Length(exclude_mem)<>0 then
- begin
-  map:=p_proc.p_vmspace;
-  vm_map_lock(map);
-  For i:=0 to High(exclude_mem) do
-  begin
-   vm_map_insert         (map, nil, 0, exclude_mem[i].start, exclude_mem[i].__end, 0, 0, -1, false);
-   vm_map_set_name_locked(map,         exclude_mem[i].start, exclude_mem[i].__end, '#hole', VM_INHERIT_HOLE);
-  end;
-  vm_map_unlock(map);
- end;
+ p_proc.p_vmspace:=vmspace_alloc();
 end;
 
 end.

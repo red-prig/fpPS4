@@ -367,29 +367,24 @@ begin
  end;
 end;
 
-function get_virtual_size(hProcess:THandle;addr:Pointer):ptruint;
+procedure get_virtual_info(hProcess:THandle;var base:Pointer;var size:QWORD);
 var
- base:Pointer;
+ addr:Pointer;
  prev:Pointer;
  info:TMemoryBasicInformation;
- size:ptruint;
  i:integer;
 begin
- Result:=0;
+ size:=0;
 
- i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
+ i:=VirtualQueryEx(hProcess,base,@info,SizeOf(info));
  if (i=0) then Exit;
 
  //allocated?
  if (info.State=MEM_FREE) then Exit;
 
- //first section?
- if (info.BaseAddress<>addr) then Exit;
- if (info.BaseAddress<>info.AllocationBase) then Exit;
+ addr:=info.AllocationBase;
 
  base:=addr;
- addr:=addr+Info.RegionSize;
- size:=Info.RegionSize;
 
  repeat
   i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
@@ -403,19 +398,41 @@ begin
   addr:=addr+Info.RegionSize;
 
  until (prev>=addr);
-
- Result:=size;
 end;
 
 function md_reserve(hProcess:THandle;base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtAllocateVirtualMemoryEx(
+          hProcess,
+          @base,
+          @size,
+          MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
+          PAGE_NOACCESS,
+          nil,
+          0
+         );
+end;
+
+function md_mmap(hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Integer;
 begin
  Result:=NtAllocateVirtualMemory(
           hProcess,
           @base,
           0,
           @size,
-          MEM_RESERVE,
-          PAGE_NOACCESS
+          MEM_COMMIT or MEM_RESERVE,
+          prot
+         );
+end;
+
+function md_unmap(hProcess:THandle;base:Pointer;size:QWORD):Integer;
+begin
+ size:=0;
+ Result:=NtFreeVirtualMemory(
+          hProcess,
+          @base,
+          @size,
+          MEM_RELEASE
          );
 end;
 
@@ -426,6 +443,8 @@ var
  prot:QWORD;
  i,r:Integer;
 begin
+ //fixup
+ pmap_mem[0].start:=_PROC_AREA_START_0;
 
  if Length(pmap_mem)<>0 then
  begin
@@ -443,6 +462,7 @@ begin
     //Assert(false,'pmap_init');
    end;
 
+   Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),')');
   end;
  end;
 
@@ -457,7 +477,7 @@ var
 begin
  addr:=Pointer($400000);
 
- size:=get_virtual_size(hProcess,addr);
+ get_virtual_info(hProcess,addr,size);
  Writeln('0x',HexStr(addr),'..','0x',HexStr(addr+size),':','0x',HexStr(size,16));
 
  addr:=nil;
@@ -479,28 +499,121 @@ begin
           _get_type_str(info._Type),' '
           );
 
-  //BaseAddress : PVOID;
-  //AllocationBase : PVOID;
-  //AllocationProtect : DWORD;
-  //RegionSize : PTRUINT; // MvdV: size_t in win SDK 6.0.
-  //State : DWORD;
-  //Protect : DWORD;
-  //_Type : DWORD;
-
-  //Case Info.State of
-  // MEM_FREE :paddr^:=Info.BaseAddress;
-  // else      paddr^:=Info.AllocationBase;
-  //end;
-
-  //Case Info.State of
-  // MEM_FREE :psize^:=Info.RegionSize;
-  // else      psize^:=Info.RegionSize+(ptruint(Info.BaseAddress)-ptruint(Info.AllocationBase));
-  //end;
-
   prev:=addr;
   addr:=addr+Info.RegionSize;
 
   //if (addr>=Pointer($7FFE0000)) then Break;
+
+ until (prev>=addr);
+end;
+
+procedure move_stack(hProcess,hThread:THandle);
+var
+ _Context:array[0..SizeOf(TCONTEXT)+15] of Byte;
+ Context :PCONTEXT;
+ teb   :p_teb;
+ kstack:t_td_stack;
+ addr  :Pointer;
+ delta :QWORD;
+ size  :QWORD;
+ err   :DWORD;
+begin
+ Context:=Align(@_Context,16);
+
+ Context^:=Default(TCONTEXT);
+ Context^.ContextFlags:=CONTEXT_ALL;
+
+ err:=NtGetContextThread(hThread,Context);
+ Writeln('NtGetContextThread:',HexStr(err,16));
+
+ teb:=NtQueryTeb(hThread);
+
+ kstack:=Default(t_td_stack);
+ md_copyin(@teb^.stack,@kstack,SizeOf(t_td_stack),nil);
+
+ Writeln('kstack.stack:',HexStr(kstack.stack));
+ Writeln('kstack.sttop:',HexStr(kstack.sttop));
+
+ Writeln('Rsp         :',HexStr(Context^.Rsp,16));
+ Writeln('Rip         :',HexStr(Context^.Rip,16));
+
+ delta:=QWORD(kstack.stack)-Context^.Rsp;
+
+ addr:=kstack.sttop;
+ get_virtual_info(hProcess,addr,size);
+
+ Writeln('addr        :',HexStr(addr));
+ Writeln('size        :',HexStr(size,16));
+
+ err:=md_unmap(hProcess,addr,size);
+ Writeln('md_unmap    :',HexStr(err,16));
+
+ addr:=Pointer(WIN_MIN_MOVED_STACK);
+
+ if (size>(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK)) then
+ begin
+  size:=(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK);
+ end;
+
+ Writeln('addr        :',HexStr(addr));
+ Writeln('size        :',HexStr(size,16));
+
+ err:=md_mmap(hProcess,addr,size,PAGE_READWRITE);
+ Writeln('md_mmap     :',HexStr(err,16));
+
+ kstack.sttop:=addr;
+ kstack.stack:=addr+size;
+
+ Writeln('kstack.stack:',HexStr(kstack.stack));
+ Writeln('kstack.sttop:',HexStr(kstack.sttop));
+
+ md_copyout(@kstack,@teb^.stack,SizeOf(t_td_stack),nil);
+
+ Context^.Rsp:=QWORD(kstack.stack)-delta;
+
+ Writeln('Rsp         :',HexStr(Context^.Rsp,16));
+ Writeln('Rip         :',HexStr(Context^.Rip,16));
+
+ err:=NtSetContextThread(hThread,Context);
+ Writeln('NtSetContextThread:',err);
+end;
+
+procedure reserve_holes(hProcess:THandle);
+var
+ addr,prev:Pointer;
+ info:TMemoryBasicInformation;
+ i,r:integer;
+begin
+ Writeln('[reserve_holes]');
+
+ addr:=Pointer(pmap_mem[0].start);
+
+ repeat
+
+  i:=VirtualQueryEx(hProcess,addr,@info,SizeOf(info));
+
+  if (i=0) then
+  begin
+   Break;
+  end;
+
+  if (info.State=MEM_FREE) then
+  begin
+   r:=md_reserve(hProcess,info.BaseAddress,info.RegionSize);
+
+   if (r<>0) then
+   begin
+    Writeln('failed md_reserve(',HexStr(info.BaseAddress),',',HexStr(info.BaseAddress+info.RegionSize),'):0x',HexStr(r,8));
+    //Assert(false,'pmap_init');
+   end;
+
+   Writeln('md_reserve(',HexStr(info.BaseAddress),',',HexStr(info.BaseAddress+info.RegionSize),')');
+  end;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+  if (addr>=Pointer(VM_MAXUSER_ADDRESS)) then Break;
 
  until (prev>=addr);
 end;
@@ -515,7 +628,13 @@ begin
 
  print_virtual_proc(pi.hProcess);
 
+ move_stack(pi.hProcess,pi.hThread);
+
  pmap_pinit(pi.hProcess);
+
+ reserve_holes(pi.hProcess);
+
+ readln;
 
  NtResumeProcess(pi.hProcess);
 
