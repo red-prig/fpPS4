@@ -1,0 +1,132 @@
+object frmGameEditor: TfrmGameEditor
+  Left = 411
+  Height = 319
+  Top = 206
+  Width = 397
+  Caption = 'Game editor'
+  ClientHeight = 319
+  ClientWidth = 397
+  Position = poMainFormCenter
+  LCLVersion = '3.99.0.0'
+  OnClose = FormClose
+  object EditPages: TPageControl
+    AnchorSideBottom.Control = BtnOk
+    Left = 0
+    Height = 274
+    Top = 0
+    Width = 397
+    ActivePage = TabMounts
+    Align = alCustom
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    BorderSpacing.Bottom = 10
+    TabIndex = 1
+    TabOrder = 0
+    object TabMain: TTabSheet
+      Caption = 'Main'
+      ClientHeight = 246
+      ClientWidth = 389
+      object GridMain: TStringGrid
+        Left = 0
+        Height = 246
+        Top = 0
+        Width = 389
+        Align = alClient
+        AutoFillColumns = True
+        ColCount = 2
+        FixedRows = 0
+        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
+        RowCount = 1
+        TabOrder = 0
+        TitleStyle = tsNative
+        OnEditingDone = GridEditingDone
+        OnSelectEditor = GridSelectEditor
+        ColWidths = (
+          64
+          321
+        )
+      end
+    end
+    object TabMounts: TTabSheet
+      Caption = 'Mounts'
+      ClientHeight = 246
+      ClientWidth = 389
+      object GridMounts: TStringGrid
+        Left = 0
+        Height = 246
+        Top = 0
+        Width = 389
+        Align = alClient
+        AutoFillColumns = True
+        ColCount = 2
+        FixedRows = 0
+        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
+        RowCount = 1
+        TabOrder = 0
+        TitleStyle = tsNative
+        OnEditingDone = GridEditingDone
+        OnSelectEditor = GridSelectEditor
+        ColWidths = (
+          64
+          321
+        )
+      end
+    end
+    object TabParamSfo: TTabSheet
+      Caption = 'param.sfo'
+      ClientHeight = 246
+      ClientWidth = 389
+      object GridParamSfo: TStringGrid
+        Left = 0
+        Height = 246
+        Top = 0
+        Width = 389
+        Align = alClient
+        AutoFillColumns = True
+        ColCount = 2
+        FixedRows = 0
+        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goThumbTracking, goSmoothScroll]
+        RowCount = 1
+        TabOrder = 0
+        TitleStyle = tsNative
+        OnEditingDone = GridEditingDone
+        OnSelectEditor = GridSelectEditor
+        ColWidths = (
+          64
+          321
+        )
+      end
+    end
+  end
+  object BtnOk: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 10
+    Height = 25
+    Top = 284
+    Width = 75
+    Anchors = [akLeft, akBottom]
+    BorderSpacing.Left = 10
+    BorderSpacing.Bottom = 10
+    Caption = 'ok'
+    TabOrder = 1
+    OnClick = BtnOkClick
+  end
+  object BtnCancel: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 312
+    Height = 25
+    Top = 284
+    Width = 75
+    Anchors = [akRight, akBottom]
+    BorderSpacing.Right = 10
+    BorderSpacing.Bottom = 10
+    Caption = 'cancel'
+    TabOrder = 2
+    OnClick = BtnCancelClick
+  end
+end

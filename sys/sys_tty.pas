@@ -31,6 +31,7 @@ type
 
   t_rd_handle :THandle;
   t_wr_handle :THandle;
+  t_update    :TProcedure;
  end;
 
 procedure tty_lock  (tp:p_tty);

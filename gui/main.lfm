@@ -1,0 +1,98 @@
+object frmMain: TfrmMain
+  Left = 527
+  Height = 343
+  Top = 146
+  Width = 623
+  Caption = 'fpPS4'
+  ClientHeight = 343
+  ClientWidth = 623
+  Position = poScreenCenter
+  LCLVersion = '3.99.0.0'
+  OnCreate = FormCreate
+  object Pages: TPageControl
+    Left = 0
+    Height = 343
+    Top = 0
+    Width = 623
+    ActivePage = TabList
+    Align = alClient
+    TabIndex = 0
+    TabOrder = 0
+    object TabList: TTabSheet
+      Caption = 'Games'
+      ClientHeight = 315
+      ClientWidth = 615
+      PopupMenu = MenuList
+      object ListGrid: TStringGrid
+        Left = 0
+        Height = 315
+        Top = 0
+        Width = 615
+        Align = alClient
+        AutoEdit = False
+        AutoFillColumns = True
+        BorderStyle = bsNone
+        ColCount = 3
+        Columns = <        
+          item
+            Title.Caption = 'Name'
+            Width = 205
+          end        
+          item
+            Title.Caption = 'Title id'
+            Width = 205
+          end        
+          item
+            Title.Caption = 'Version'
+            Width = 205
+          end>
+        FixedCols = 0
+        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goRowSelect, goThumbTracking, goSmoothScroll]
+        RowCount = 1
+        TabOrder = 0
+        TitleStyle = tsNative
+        ColWidths = (
+          205
+          205
+          205
+        )
+      end
+    end
+    object TabLog: TTabSheet
+      Caption = 'Log'
+    end
+  end
+  object MenuList: TPopupMenu
+    Left = 171
+    Top = 142
+    object MIRun: TMenuItem
+      Caption = 'Run'
+      OnClick = MIRunClick
+    end
+    object MIDevide3: TMenuItem
+      Caption = '-'
+    end
+    object MIAdd: TMenuItem
+      Caption = 'Add'
+      OnClick = MIAddClick
+    end
+    object MIAddFolder: TMenuItem
+      Caption = 'Add Folder'
+      OnClick = MIAddFolderClick
+    end
+    object MIDevide1: TMenuItem
+      Caption = '-'
+    end
+    object MIEdit: TMenuItem
+      Caption = 'Edit'
+      OnClick = MIEditClick
+    end
+    object MIDevide2: TMenuItem
+      Caption = '-'
+    end
+    object MIDel: TMenuItem
+      Caption = 'Delete'
+      OnClick = MIDelClick
+    end
+  end
+end

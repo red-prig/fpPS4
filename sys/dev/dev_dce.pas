@@ -10,10 +10,7 @@ uses
  vmparam,
  kern_conf,
  sys_event,
- time,
-
- sysutils,
- windows;
+ time;
 
 procedure dce_initialize();
 
@@ -572,20 +569,9 @@ type
   rout       :PQWORD; //extraout of result
  end;
 
-var
- prev:int64=0;
-
-procedure SetConsoleTitle(i:int64);
-var
- S:RawByteString;
-begin
- S:=IntToStr(i);
- Windows.SetConsoleTitle(pchar(S));
-end;
-
 Function dce_submit_flip(dev:p_cdev;data:p_submit_flip):Integer;
 var
- ures,i:QWORD;
+ ures:QWORD;
 begin
  Result:=0;
 
@@ -593,16 +579,6 @@ begin
                         data^.flipMode,' ',
                         '0x',HexStr(data^.flipArg,16),' ',
                         data^.eop_val);
-
- if (prev=0) then
- begin
-  prev:=get_unit_uptime;
- end else
- begin
-  i:=get_unit_uptime-prev;
-  prev:=get_unit_uptime;
-  SetConsoleTitle(UNIT_PER_SEC div i);
- end;
 
  knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
 

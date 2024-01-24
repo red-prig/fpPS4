@@ -97,6 +97,8 @@ procedure sig_unlock;
 procedure fast_syscall;
 procedure amd64_syscall;
 
+procedure jit_prepare(rip:QWORD);
+
 procedure sigcode;
 procedure sigipi;
 
@@ -322,16 +324,27 @@ begin
 
  cpu_set_syscall_retval(td,error);
 
- is_guest:=((td^.pcb_flags and PCB_IS_JIT)<>0);
+ jit_prepare(rip);
+end;
 
- if (rip<>td_frame^.tf_rip) or
+procedure jit_prepare(rip:QWORD);
+var
+ td:p_kthread;
+ is_jit:Boolean;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit;
+
+ is_jit:=((td^.pcb_flags and PCB_IS_JIT)<>0);
+
+ if (rip<>td^.td_frame.tf_rip) or
     ((td^.pcb_flags and (PCB_FULL_IRET or PCB_IS_JIT))=(PCB_FULL_IRET or PCB_IS_JIT)) then
  begin
   switch_to_jit(curkthread);
 
   //if internal
   if ((td^.pcb_flags and PCB_IS_JIT)=0) then
-  if is_guest then //prev is jit
+  if is_jit then //prev is jit
   begin
    //teb stack
    teb_set_user(td);
@@ -339,7 +352,6 @@ begin
   end;
 
  end;
-
 end;
 
 procedure fast_syscall; assembler; nostackframe;

@@ -20,6 +20,7 @@
 *.dump
 *.h
 link.res
+log.txt
 lib/
 backup/
 shader_dump/*

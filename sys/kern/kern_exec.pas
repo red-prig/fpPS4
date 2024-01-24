@@ -27,6 +27,7 @@ function  exec_copyin_args(args:p_image_args;
                            envv:ppchar):Integer;
 
 function  kern_execve(td:p_kthread;args:p_image_args):Integer;
+function  main_execve(fname:pchar;argv,envv:ppchar):Integer;
 function  sys_execve(fname:pchar;argv,envv:ppchar):Integer;
 
 implementation
@@ -62,7 +63,9 @@ uses
  machdep,
  kern_dlsym,
  kern_authinfo,
- vfs_syscalls;
+ vfs_syscalls,
+ trap,
+ md_context;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -996,13 +999,16 @@ begin
   obj:=TAILQ_NEXT(obj,@obj^.link);
  end;
 
- if (dynlibs_info.libkernel<>nil) then
+ if (dynlibs_info.libkernel=nil) then
  begin
-  imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
-
-  p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
-  p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
+  //error
+  Exit;
  end;
+
+ imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
+
+ p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
+ p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
 
  _dyn_not_exist:
 
@@ -1442,6 +1448,12 @@ begin
 
  dynlib_proc_initialize_step3(imgp);
 
+ if (dynlibs_info.libkernel=nil) then
+ begin
+  error:=ENOENT;
+  goto exec_fail_dealloc;
+ end;
+
  vms:=p_proc.p_vmspace;
 
  { Set values passed into the program in registers. }
@@ -1561,6 +1573,27 @@ begin
  end;
 
  Exit(error);
+end;
+
+function main_execve(fname:pchar;argv,envv:ppchar):Integer;
+var
+ error:Integer;
+ args:t_image_args;
+begin
+ error:=exec_copyin_args(@args, fname, UIO_SYSSPACE, argv, envv);
+
+ if (error=0) then
+ begin
+  error:=kern_execve(curkthread, @args);
+ end;
+
+ Result:=(error);
+
+ if (Result=0) then
+ begin
+  jit_prepare(0);
+  ipi_sigreturn;
+ end;
 end;
 
 function sys_execve(fname:pchar;argv,envv:ppchar):Integer;

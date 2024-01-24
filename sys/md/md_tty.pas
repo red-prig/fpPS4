@@ -156,6 +156,11 @@ begin
   //
   BUF.INIT();
  end;
+ //
+ if (tp^.t_update<>nil) then
+ begin
+  tp^.t_update();
+ end;
 end;
 
 function ttycrt_write(tp:p_tty;iov_base:Pointer;iov_len:qword):Integer;
@@ -181,10 +186,6 @@ begin
  td:=curkthread;
  if (td<>nil) then
  begin
-  if (td^.td_name='SceVideoOutServiceThread') then
-  begin
-   Exit(0);
-  end;
   BUF.WRITE(pchar('('),1);
   BUF.WRITE(@td^.td_name,strlen(@td^.td_name));
   BUF.WRITE(pchar('):'),2);
@@ -199,6 +200,11 @@ begin
   NtWriteFile(tp^.t_wr_handle,0,nil,nil,@BLK,@BUF.BUF,BUF.LEN,@OFFSET,nil);
   //
   BUF.INIT();
+ end;
+ //
+ if (tp^.t_update<>nil) then
+ begin
+  tp^.t_update();
  end;
 end;
 
@@ -217,6 +223,9 @@ begin
   deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
   deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
  end;
+
+ debug_tty.t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+ debug_tty.t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
 end;
 
 end.

@@ -10,6 +10,8 @@ procedure sys_init;
 implementation
 
 uses
+ init_sysent, //compile spec
+ kern_rtprio, //compile spec
  time,
  kern_time,
  subr_sleepqueue,

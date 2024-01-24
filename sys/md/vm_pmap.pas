@@ -74,6 +74,8 @@ function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
 
+procedure pmap_reserve(wr:Boolean);
+
 procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
@@ -176,13 +178,12 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
+procedure pmap_reserve(wr:Boolean);
 var
  base:Pointer;
  size:QWORD;
  i,r:Integer;
 begin
-
  if Length(pmap_mem)<>0 then
  begin
   For i:=0 to High(pmap_mem) do
@@ -194,16 +195,30 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+    if wr then
+    begin
+     Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+    end;
     //STATUS_COMMITMENT_LIMIT = $C000012D
     Assert(false,'pmap_init');
    end;
 
    pmap_mem[i].start:=QWORD(base);
 
-   Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+   if wr then
+   begin
+    Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+   end;
   end;
  end;
+end;
+
+procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
+var
+ i,r:Integer;
+begin
+
+ pmap_reserve(True);
 
  dev_mem_init(4);
 
@@ -219,6 +234,7 @@ begin
 
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,vmap);
 
+ //exclude
  if Length(pmap_mem)>1 then
  begin
   For i:=0 to High(pmap_mem)-1 do
