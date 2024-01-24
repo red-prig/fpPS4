@@ -14,6 +14,24 @@ const
  SCE_HMD_ERROR_PARAMETER_NULL=Integer($81110008);
 
 type
+ pSceHmdDeviceInformation=^SceHmdDeviceInformation;
+ SceHmdDeviceInformation=packed record
+  status:DWORD;
+  userId,reserve0:array[0..3] of Byte;
+   PanelResolution:packed record
+    Case Byte of
+     0:(width:DWORD);
+     1:(height:DWORD);
+    end;
+   FlipToDisplayLatency:packed record
+    Case Byte of
+     0:(refreshRate90Hz:Word);
+     1:(refreshRate120Hz:Word);
+    end;
+  hmuMount:Byte;
+  reserve1:array[0..6] of Byte;
+ end;
+
  pSceHmdOpenParam=^SceHmdOpenParam;
  SceHmdOpenParam=packed record
   reserve:array[0..7] of Byte;
@@ -70,6 +88,11 @@ begin
 end;
 
 function ps4_sceHmdGetDeviceInformation(info:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdGetDeviceInformationByHandle(handle:Integer;info:pSceHmdDeviceInformation):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -137,6 +160,7 @@ begin
  lib^.set_proc($EDAB340A35D6D41F,@ps4_sceHmdReprojectionSetUserEventStart);
  lib^.set_proc($927C888659292E01,@ps4_sceHmdReprojectionSetUserEventEnd);
  lib^.set_proc($B610EDF6EA59969F,@ps4_sceHmdGetDeviceInformation);
+ lib^.set_proc($D69C507E27F5AE41,@ps4_sceHmdGetDeviceInformationByHandle);
  lib^.set_proc($BF33049300507223,@ps4_sceHmdReprojectionStop);
  lib^.set_proc($88634DA430E3730A,@ps4_sceHmdReprojectionUnsetDisplayBuffers);
  lib^.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
