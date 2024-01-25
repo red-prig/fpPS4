@@ -270,7 +270,7 @@ begin
  set_rootvnode();
  //cache_purgevfs(rootvnode^.v_mount);
 
- mount_print;
+ //mount_print;
 
  { Remount devfs under /dev }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, '/dev', curkthread);
@@ -378,12 +378,12 @@ begin
  error:=vfs_mountroot_devfs(@mp);
  if (error<>0) then goto _end;
 
- mount_print;
+ //mount_print;
 
  error:=vfs_mount_path('ufs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
 
- mount_print;
+ //mount_print;
 
  error:=vfs_mountroot_shuffle(mp);
 
@@ -398,7 +398,7 @@ begin
  //error:=vfs_mount_mkdir('ufs','/app0','/',nil,0);
  //error:=vfs_mount_mkdir('ufs','/system','/system',nil,0);
  //
- mount_print;
+ //mount_print;
 
 _end:
  mtx_unlock(VFS_Giant);

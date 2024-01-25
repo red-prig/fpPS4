@@ -20,8 +20,6 @@ function  ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
 
 function  ttycrt_write(tp:p_tty;iov_base:Pointer;iov_len:qword):Integer;
 
-procedure md_init_tty;
-
 implementation
 
 uses
@@ -208,7 +206,7 @@ begin
  end;
 end;
 
-procedure md_init_tty;
+procedure md_init_tty; register;
 var
  i:Integer;
 begin
@@ -227,6 +225,9 @@ begin
  debug_tty.t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
  debug_tty.t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
 end;
+
+initialization
+ init_tty:=@md_init_tty;
 
 end.
 

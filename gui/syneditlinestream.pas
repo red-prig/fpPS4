@@ -48,6 +48,7 @@ type
    procedure EditUndo(Item: TSynEditUndoItem);                                 override;
    procedure EditRedo(Item: TSynEditUndoItem);                                 override;
    procedure Update;
+   procedure Reset;
  end;
 
 implementation
@@ -230,6 +231,44 @@ begin
  IncreaseTextChangeStamp;
  //
  SendNotification(senrLineChange, self, ffcnt-1, 1);
+ SendNotification(senrLineCount , self, ffcnt-1, delta);
+ //
+ EndUpdate;
+end;
+
+procedure TSynEditLineStream.Reset;
+var
+ i,c,ffcnt,delta:Integer;
+ tend:Boolean;
+begin
+ BeginUpdate;
+ //
+ i:=FSynLog.TopLine+FSynLog.LinesInWindow+3;
+ //
+ FStream.Reset;
+ ffcnt:=FStream.GetCount;
+ delta:=FStream.Update;
+ //
+ tend:=(i>=ffcnt);
+ //
+ if tend then
+ begin
+  i:=FSynLog.LinesInWindow;
+  c:=FStream.GetCount;
+  //
+  if (c>i) then
+  begin
+   i:=c-i+1;
+  end else
+  begin
+   i:=1;
+  end;
+  //
+  FSynLog.TopLine:=i;
+ end;
+ //
+ IncreaseTextChangeStamp;
+ //
  SendNotification(senrLineCount , self, ffcnt-1, delta);
  //
  EndUpdate;

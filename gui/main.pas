@@ -329,7 +329,7 @@ begin
                          GENERIC_READ or GENERIC_WRITE,
                          FILE_SHARE_READ,
                          nil,
-                         CREATE_ALWAYS, //OPEN_ALWAYS,
+                         OPEN_ALWAYS,
                          0,
                          0);
 
@@ -358,15 +358,25 @@ begin
  Application.AddOnIdleHandler(@OnIdleUpdate,False);
 end;
 
+Var
+ FLogUpdateTime:QWORD=0;
+
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
 begin
  Done:=True;
 
- if (System.InterlockedExchange(FLogUpdate,0)<>0) then
- if (FList<>nil) then
+ if (GetTickCount64-FLogUpdateTime)>700 then
  begin
-  FList.Update;
+
+  if (System.InterlockedExchange(FLogUpdate,0)<>0) then
+  if (FList<>nil) then
+  begin
+   FList.Update;
+  end;
+
+  FLogUpdateTime:=GetTickCount64;
  end;
+
 end;
 
 procedure TfrmMain.MIAddClick(Sender: TObject);
@@ -448,6 +458,15 @@ begin
  Item:=GetItemRow(aRow);
 
  t_wr_handle:=FAddHandle;
+
+ FList.FSynLog.TopLine:=FList.FSynLog.Lines.Count;
+
+ //reset file
+ FileTruncate(FAddHandle,0);
+ FList.Reset;
+ //
+
+ Pages.ActivePage:=TabLog;
 
  run_item(Item);
 end;

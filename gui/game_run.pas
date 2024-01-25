@@ -51,7 +51,7 @@ begin
  end;
 end;
 
-procedure re_init_tty;
+procedure re_init_tty; register;
 var
  i:Integer;
 begin
@@ -81,10 +81,11 @@ var
  exec:array[0..PATH_MAX] of Char;
  argv:array[0..1] of PChar;
 begin
+ re_init_tty;
+ init_tty:=@re_init_tty;
+
  //init all
  sys_init;
-
- re_init_tty;
                        //fs  guest     host
  err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,0);
  Assert(err=0);
@@ -125,8 +126,6 @@ begin
  if Item.FLock then Exit;
 
  if runing then Exit;
-
- re_init_tty;
 
  r:=kthread_add(@prepare,Item,@td,'[main]');
  Assert(r=0);

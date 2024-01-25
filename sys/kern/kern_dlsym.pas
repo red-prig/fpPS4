@@ -421,7 +421,7 @@ begin
 
  Writeln(StdErr,'_unresolve_symbol:0x',HexStr(data^.nid,16),':',str,':',data^.libname);
  print_backtrace_td(StdErr);
- readln;
+ Assert(false);
 end;
 
 function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;nid:QWORD;libname:PChar):Pointer;

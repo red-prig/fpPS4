@@ -59,9 +59,10 @@ var
 
   p_vmspace:Pointer;
 
-  p_self_fixed  :Integer;
-  p_mode_2mb    :Integer;
-  p_budget_ptype:Integer;
+  p_self_fixed   :Integer;
+  p_mode_2mb     :Integer;
+  p_mode_2mb_size:Integer;
+  p_budget_ptype :Integer;
 
   p_dmem_aliasing:Integer;
  end;

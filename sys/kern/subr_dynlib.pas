@@ -2132,6 +2132,7 @@ var
  addr:Pointer;
  size:QWORD;
 begin
+ Result:=0;
  map:=p_proc.p_vmspace;
 
  addr:=obj^.relro_addr;

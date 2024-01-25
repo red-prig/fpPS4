@@ -45,6 +45,8 @@ var
  deci_tty :array[0..11] of t_tty;
  debug_tty:t_tty;
 
+ init_tty:TProcedure;
+
 implementation
 
 uses

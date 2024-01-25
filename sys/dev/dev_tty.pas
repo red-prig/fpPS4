@@ -413,7 +413,11 @@ begin
  tty_makedev(@deci_tty[10],'deci_ttyb0' ,[]);
  tty_makedev(@deci_tty[11],'deci_ttyc0' ,[]);
  //
- md_init_tty;
+
+ if (init_tty<>nil) then
+ begin
+  init_tty();
+ end;
 end;
 
 end.

@@ -601,12 +601,12 @@ type
  PSceKernelMemParam=^TSceKernelMemParam;
  TSceKernelMemParam=packed record
   Size:QWORD;
-  sceKernelExtendedPageTable   :PQWORD;
-  sceKernelFlexibleMemorySize  :PQWORD;
-  sceKernelExtendedMemory1     :PByte;
-  sceKernelExtendedGpuPageTable:PQWORD;
-  sceKernelExtendedMemory2     :PByte;
-  sceKernelExtendedCpuPageTable:PQWORD;
+  sceKernelExtendedPageTable   :PQWORD; //in bytes (virtual), MAX 64GB
+  sceKernelFlexibleMemorySize  :PQWORD; //in bytes, MAX 448MB
+  sceKernelExtendedMemory1     :PByte ; //bool
+  sceKernelExtendedGpuPageTable:PQWORD; //in bytes (virtual), MAX 64GB
+  sceKernelExtendedMemory2     :PByte ; //bool
+  sceKernelExtendedCpuPageTable:PQWORD; //in bytes (virtual), MAX 64GB
  end;
 
  PSceKernelFsParam=^TSceKernelFsParam;

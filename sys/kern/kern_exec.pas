@@ -601,7 +601,9 @@ begin
 
  if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  begin
-  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3) or ((p_proc.p_self_fixed<>0) and (p_proc.p_mode_2mb=M2MB_NOTDYN_FIXED));
+             //M2MB_READONLY,M2MB_ENABLE
+  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3) or
+             ((p_proc.p_self_fixed<>0) and (p_proc.p_mode_2mb=M2MB_NOTDYN_FIXED));
  end else
  begin
   _2mb_mode:=False;
