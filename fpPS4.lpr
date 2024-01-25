@@ -37,6 +37,7 @@ uses
  ps4_libSceNpScore,
  ps4_libSceNpTrophy,
  ps4_libSceSystemService,
+ ps4_libSceSystemGesture,
  ps4_libSceNpUtility,
  ps4_libSceNpCommon,
  ps4_libSceNpManager,
