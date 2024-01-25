@@ -17,17 +17,18 @@ type
  pSceHmdDeviceInformation=^SceHmdDeviceInformation;
  SceHmdDeviceInformation=packed record
   status:DWORD;
-  userId,reserve0:array[0..3] of Byte;
-   PanelResolution:packed record
-    Case Byte of
-     0:(width:DWORD);
-     1:(height:DWORD);
-    end;
-   FlipToDisplayLatency:packed record
-    Case Byte of
-     0:(refreshRate90Hz:Word);
-     1:(refreshRate120Hz:Word);
-    end;
+  userId:DWORD;
+  reserve0:array[0..3] of Byte;
+  deviceInfo:packed record
+   panelResolution:packed record
+    width :DWORD;
+    height:DWORD;
+   end;
+   flipToDisplayLatency:packed record
+    refreshRate90Hz :Word;
+    refreshRate120Hz:Word;
+   end;
+  end;
   hmuMount:Byte;
   reserve1:array[0..6] of Byte;
  end;

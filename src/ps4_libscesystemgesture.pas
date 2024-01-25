@@ -6,7 +6,7 @@ interface
 
 uses
   ps4_program,
-  ps4_libScePad,
+  sce_pad_types,
   Classes,
   SysUtils;
 
@@ -31,59 +31,6 @@ type
   pSceFVector3=^SceFVector3;
   SceFVector3=packed record
    x,y,z:single;
-  end;
-
-  pScePadAnalogStick=^ScePadAnalogStick;
-  ScePadAnalogStick=packed record
-   x,y:Byte;
-  end;
-
-  pScePadAnalogButtons=^ScePadAnalogButtons;
-  ScePadAnalogButtons=packed record
-   l2,r2:Byte;
-   padding:array[0..1] of Byte;
-  end;
-
-  pScePadTouch=^ScePadTouch;
-  ScePadTouch=packed record
-   x,y    :Word;
-   id     :Byte;
-   reserve:array[0..2] of Byte;
-  end;
-
-  pScePadTouchData=^ScePadTouchData;
-  ScePadTouchData=packed record
-   touchNum:Byte;
-   reserve :array[0..2] of Byte;
-   reserve1:QWORD;
-   touch   :array[0..SCE_PAD_MAX_TOUCH_NUM-1] of ScePadTouch;
-  end;
-
-  pScePadExtensionUnitData=^ScePadExtensionUnitData;
-  ScePadExtensionUnitData=packed record
-   extensionUnitId:DWORD;
-   reserve        :array[0..0] of Byte;
-   dataLength     :Byte;
-   data           :array[0..9] of Byte;
-  end;
-
-  pScePadData=^ScePadData;
-  ScePadData=packed record
-   buttons            :DWORD;
-   leftStick          :ScePadAnalogStick;
-   rightStick         :ScePadAnalogStick;
-   analogButtons      :ScePadAnalogButtons;
-   orientation        :SceFQuaternion;
-   acceleration       :SceFVector3;
-   angularVelocity    :SceFVector3;
-   touchData          :ScePadTouchData;
-   connected          :single;
-   timestamp          :QWORD;
-   extensionUnitData  :ScePadExtensionUnitData;
-   connectedCount     :Byte;
-   reserve            :array[0..1] of Byte;
-   deviceUniqueDataLen:Byte;
-   deviceUniqueData   :array[0..SCE_PAD_MAX_DEVICE_UNIQUE_DATA_SIZE-1] of Byte;
   end;
 
   pSceSystemGesturePrimitiveTouchRecognizerParameter=^SceSystemGesturePrimitiveTouchRecognizerParameter;
