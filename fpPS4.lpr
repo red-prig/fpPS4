@@ -76,6 +76,7 @@ uses
  ps4_libSceLoginService,
  ps4_libSceHmd,
  ps4_libSceVrTracker,
+ ps4_libSceZlib,
  ps4_libSceCamera,
  ps4_elf,
  ps4_pthread,
