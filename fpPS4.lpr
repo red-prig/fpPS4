@@ -54,6 +54,7 @@ uses
  ps4_libSceAvPlayer,
  ps4_libSceAudiodec,
  ps4_libScePad,
+ ps4_libSceJson2,
  ps4_libSceNpWebApi,
  ps4_libSceRudp,
  ps4_libSceRandom,
