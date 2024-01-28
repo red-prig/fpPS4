@@ -1785,7 +1785,6 @@ begin
   begin
    pmap_protect(map^.pmap,
                 current^.vm_obj,
-                current^.offset,
                 current^.start,
                 current^.__end,
                 current^.protection and MASK(current));
@@ -1921,6 +1920,7 @@ begin
      end;
     else;
    end;
+
    vm_map_simplify_entry(map, current);
 
    current:=current^.next;
@@ -1967,30 +1967,15 @@ begin
     continue;
    end;
 
-   //vm_object_madvise(current^.vm_obj, pstart, p__end, behav);
+   vm_object_madvise(map^.pmap,
+                     current^.vm_obj,
+                     useStart,
+                     useStart+ptoa(pend-pstart),
+                     behav);
 
-   if (current^.vm_obj=nil) then
+   if (behav=MADV_WILLNEED) then
    begin
-    Case behav of
-     MADV_WILLNEED:
-      begin
-       pmap_enter_object(map^.pmap,
-                         current^.vm_obj,
-                         ptoa(pstart),
-                         useStart,
-                         useStart+ptoa(pend-pstart),
-                         current^.protection);
-      end;
-     MADV_FREE:
-      begin
-       pmap_madv_free(map^.pmap,
-                      current^.vm_obj,
-                      ptoa(pstart),
-                      useStart,
-                      useStart+ptoa(pend-pstart),
-                      current^.protection);
-      end;
-    end;
+    //re enter?
    end;
 
    current:=current^.next;
@@ -2399,10 +2384,8 @@ begin
   begin
    pmap_remove(map^.pmap,
                entry^.vm_obj,
-               entry^.offset,
                entry^.start,
-               entry^.__end,
-               entry^.protection);
+               entry^.__end);
 
   end;
 

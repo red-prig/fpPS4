@@ -33,10 +33,17 @@ function  vm_object_coalesce(prev_object:vm_object_t;
                              next_size  :vm_ooffset_t;
                              reserved   :Boolean):Boolean;
 
+procedure vm_object_madvise(pmap  :Pointer;
+                            obj   :vm_object_t;
+                            start :vm_offset_t;
+                            __end :vm_offset_t;
+                            advise:Integer);
+
 implementation
 
 uses
  vmparam,
+ vm_pmap,
  vnode,
  vnode_if,
  vmount,
@@ -408,6 +415,97 @@ begin
  VM_OBJECT_UNLOCK(prev_object);
  Result:=(TRUE);
 end;
+
+{
+ vm_object_madvise:
+
+ Implements the madvise function at the object/page level.
+
+ MADV_WILLNEED (any object)
+
+     Activate the specified pages if they are resident.
+
+ MADV_DONTNEED (any object)
+
+     Deactivate the specified pages if they are resident.
+
+ MADV_FREE (OBJT_DEFAULT/OBJT_SWAP objects,
+    OBJ_ONEMAPPING only)
+
+     Deactivate and clean the specified pages if they are
+     resident.  This permits the process to reuse the pages
+     without faulting or the kernel to reclaim the pages
+     without I/O.
+}
+procedure vm_object_madvise(pmap  :Pointer;
+                            obj   :vm_object_t;
+                            start :vm_offset_t;
+                            __end :vm_offset_t;
+                            advise:Integer);
+label
+ unlock_tobject;
+begin
+ if (obj=nil) then
+ begin
+
+  case advise of
+   MADV_WILLNEED,
+   MADV_DONTNEED,
+   MADV_FREE    :
+    begin
+     pmap_madvise(pmap,
+                  obj,
+                  start,
+                  __end,
+                  advise);
+    end
+   else;
+  end;
+
+  Exit;
+ end;
+
+ VM_OBJECT_LOCK(obj);
+
+  {
+   * MADV_FREE only operates on OBJT_DEFAULT or OBJT_SWAP pages
+   * and those pages must be OBJ_ONEMAPPING.
+   }
+  if (advise=MADV_FREE) then
+  begin
+   if  ((obj^.otype<>OBJT_DEFAULT) and
+        (obj^.otype<>OBJT_SELF) and //
+        (obj^.otype<>OBJT_SWAP)) or
+       ((obj^.flags and OBJ_ONEMAPPING)=0) then
+   begin
+    goto unlock_tobject;
+   end;
+  end else
+  if (obj^.otype=OBJT_PHYS) then
+  begin
+   goto unlock_tobject;
+  end;
+
+  case advise of
+   MADV_WILLNEED,
+   MADV_DONTNEED,
+   MADV_FREE    :
+    begin
+     pmap_madvise(pmap,
+                  obj,
+                  start,
+                  __end,
+                  advise);
+    end
+   else;
+  end;
+
+ unlock_tobject:
+  VM_OBJECT_UNLOCK(obj);
+end;
+
+
+
 
 end.
 

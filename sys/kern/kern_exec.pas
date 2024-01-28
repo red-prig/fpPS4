@@ -1422,21 +1422,7 @@ begin
  Move(p_proc.p_comm, td^.td_name, sizeof(td^.td_name));
  KernSetThreadDebugName(td,'ps4:');
 
- {
-  * mark as execed, wakeup the process that vforked (if any) and tell
-  * it that it now has its own resources back
-  }
- p_proc.p_flag:=p_proc.p_flag or P_EXEC;
-
- {
-  * Notify others that we exec'd, and clear the P_INEXEC flag
-  * as we're now a bona fide freshly-execed process.
-  }
- KNOTE_LOCKED(@p_proc.p_klist, NOTE_EXEC);
- p_proc.p_flag:=p_proc.p_flag and (not P_INEXEC);
-
- { clear 'fork but no exec' flag, as we _are_ execing }
- //p^.p_acflag:= and ~AFORK;
+ PROC_UNLOCK();
 
  {
   * Free any previous argument cache and replace it with
@@ -1446,8 +1432,6 @@ begin
  p_proc.p_args:=newargs;
  newargs:=nil;
 
- PROC_UNLOCK();
-
  dynlib_proc_initialize_step3(imgp);
 
  if (dynlibs_info.libkernel=nil) then
@@ -1455,6 +1439,26 @@ begin
   error:=ENOENT;
   goto exec_fail_dealloc;
  end;
+
+ PROC_LOCK();
+
+  {
+   * mark as execed, wakeup the process that vforked (if any) and tell
+   * it that it now has its own resources back
+   }
+  p_proc.p_flag:=p_proc.p_flag or P_EXEC;
+
+  {
+   * Notify others that we exec'd, and clear the P_INEXEC flag
+   * as we're now a bona fide freshly-execed process.
+   }
+  KNOTE_LOCKED(@p_proc.p_klist, NOTE_EXEC);
+  p_proc.p_flag:=p_proc.p_flag and (not P_INEXEC);
+
+  { clear 'fork but no exec' flag, as we _are_ execing }
+  //p^.p_acflag:= and ~AFORK;
+
+ PROC_UNLOCK();
 
  vms:=p_proc.p_vmspace;
 
@@ -1555,6 +1559,13 @@ done2:
 
  VFS_UNLOCK_GIANT(vfslocked);
  exec_free_args(args);
+
+ if (error<>0) then
+ begin
+  // sorry, no more process anymore. exit gracefully
+  //exit1(td, W_EXITCODE(0, SIGABRT));
+  // NOT REACHED
+ end;
 
  Exit(error);
 end;

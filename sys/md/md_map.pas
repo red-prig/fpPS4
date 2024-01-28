@@ -47,7 +47,9 @@ function md_memfd_open  (var hMem:THandle;hFile:THandle):Integer;
 function md_memfd_close (hMem:THandle):Integer;
 
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
-function md_reset  (base:Pointer;size:QWORD;prot:Integer):Integer;
+
+function md_dontneed(base:Pointer;size:QWORD):Integer;
+function md_activate(base:Pointer;size:QWORD):Integer;
 
 function md_mmap   (var base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_unmap  (base:Pointer;size:QWORD):Integer;
@@ -212,7 +214,7 @@ begin
          );
 end;
 
-function md_reset(base:Pointer;size:QWORD;prot:Integer):Integer;
+function md_dontneed(base:Pointer;size:QWORD):Integer;
 begin
  Result:=NtAllocateVirtualMemory(
           NtCurrentProcess,
@@ -220,7 +222,19 @@ begin
           0,
           @size,
           MEM_RESET,
-          prot
+          PAGE_NOACCESS
+         );
+end;
+
+function md_activate(base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtAllocateVirtualMemory(
+          NtCurrentProcess,
+          @base,
+          0,
+          @size,
+          MEM_RESET_UNDO,
+          PAGE_NOACCESS
          );
 end;
 

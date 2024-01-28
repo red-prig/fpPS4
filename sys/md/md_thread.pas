@@ -8,7 +8,8 @@ interface
 uses
  ntapi,
  windows,
- kern_thr;
+ kern_thr,
+ sysutils;
 
 Const
  SYS_STACK_RSRV=64*1024;
@@ -31,6 +32,8 @@ function  cpu_thread_finished(td:p_kthread):Boolean;
 
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
+
+function  cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
 
 procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 procedure seh_wrapper_after (td:p_kthread;func:Pointer);
@@ -318,6 +321,27 @@ begin
  end;
 
  Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
+end;
+
+function cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
+var
+ W:array[0..255] of WideChar;
+ UNAME:UNICODE_STRING;
+ L:DWORD;
+begin
+ Result:=0;
+ if (td=nil) then Exit;
+ if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit;
+
+ L:=Utf8ToUnicode(@W,length(W),@name[1],length(name));
+
+ W:=UTF8Decode(name);
+
+ UNAME.Length       :=L*SizeOf(WideChar);
+ UNAME.MaximumLength:=UNAME.Length;
+ UNAME.Buffer       :=@W;
+
+ Result:=NtSetInformationThread(td^.td_handle,ThreadNameInformation,@UNAME,SizeOf(UNAME));
 end;
 
 procedure main_wrapper; assembler; nostackframe;

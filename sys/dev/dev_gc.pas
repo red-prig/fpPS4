@@ -20,7 +20,8 @@ uses
  vm_pmap,
  sys_vm_object,
  vm_pager,
- subr_backtrace;
+ subr_backtrace,
+ bittype;
 
 var
  gc_page:Pointer;
@@ -41,6 +42,49 @@ type
   param1:DWORD;
   param2:DWORD;
   param3:DWORD;
+ end;
+
+ p_Submit=^t_Submit;
+ t_Submit=packed record
+  arg0 :DWORD;
+  count:DWORD;
+  cmds :PQWORD;
+ end;
+
+function PM4_TYPE(token:DWORD):Byte; inline;
+begin
+ Result:=(token shr 30) and 3;
+end;
+
+function PM4_LENGTH_DW(token:DWORD):WORD; inline;
+begin
+ Result:=((token shr 16) and $3FFF) + 2;
+end;
+
+type
+ PPM4_TYPE_3_HEADER=^PM4_TYPE_3_HEADER;
+ PM4_TYPE_3_HEADER=bitpacked record
+  predicate:bit1;  //1
+  shaderType:bit1; //1
+  reserved:bit6;   //6
+  opcode:Byte;     //8
+  count:bit14;     //14
+  _type:bit2;      //2
+ end;
+
+ PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
+ PM4CMDINDIRECTBUFFER=bitpacked record
+  ibBaseLo      :DWORD; ///< Indirect buffer base address, must be 4 byte aligned
+  ibBaseHi32    :DWORD; ///< Indirect buffer base address
+  //
+  ibSize        :bit20; ///< Indirect buffer size
+  chain         :bit1;  ///< set to chain to IB allocations
+  offLoadPolling:bit1;
+  volatile__CI  :bit1;
+  valid         :bit1;
+  vmid          :bit4;  ///< Virtual memory domain ID for command buffer
+  cachePolicy   :bit2;
+  reserved1     :bit2;
  end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
@@ -79,6 +123,7 @@ begin
             end;
   $C008811B: //sceGnmAreSubmitsAllowed
             begin
+             //ret1 = mmap_addr(0xfe0100000,0x4000,1,(ulong *)&paddr,&local_50);
              PPointer(data)^:=@gc_AreSubmitsAllowed;
             end;
 
@@ -98,7 +143,32 @@ begin
   $C0048114: //sceGnmFlushGarlic
             begin
              Writeln('sceGnmFlushGarlic');
-            end
+            end;
+
+  $C0108102: //submit
+            begin
+             Writeln(p_Submit(data)^.arg0);
+             Writeln(p_Submit(data)^.count);
+             Writeln(HexStr(p_Submit(data)^.cmds));
+
+             //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb
+             //IT_COND_INDIRECT_BUFFER = $0000003f;  dcb
+
+             //opcode           0x33                     0x3F
+             //if ((op != L'\xc0023300') && (op != L'\xc0023f00')) {
+             //  printf("## %s: invalid opcode = 0x%08x\n","gc_insert_indirect_buffer");
+             //  ret1 = 0x804c0010;
+             //  goto LAB_ffffffff826bd78b;
+             //}
+             //if ((_buffer[1] & 0xfffff00000000) == 0) {
+             //  printf("## %s: invalid ib_size = 0x%05x\n","gc_insert_indirect_buffer",0);
+             //  ret1 = 0x804c0011;
+             //  goto LAB_ffffffff826bd78b;
+             //}
+
+
+             Assert(False);
+            end;
 
 
   else

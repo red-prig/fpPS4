@@ -327,7 +327,7 @@ begin
  Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
  print_backtrace(stderr,Get_pc_addr,get_frame,2);
 
- sleep(-1);
+ //sleep(-1);
 
  if IsDebuggerPresent then
   Raise EAssertionFailed.
@@ -339,6 +339,8 @@ begin
  //asm
  // int3
  //end;
+
+ sleep(-1);
 
  md_halt(217);
 end;

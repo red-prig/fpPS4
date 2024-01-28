@@ -81,6 +81,11 @@ procedure vm_nt_map_protect(map:p_vm_nt_map;
                             __end:vm_offset_t;
                             prot  :Integer);
 
+procedure vm_nt_map_madvise(map:p_vm_nt_map;
+                            start:vm_offset_t;
+                            __end:vm_offset_t;
+                            advise:Integer);
+
 procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 
 implementation
@@ -124,6 +129,7 @@ var
  r:Integer;
 begin
  if ((obj^.flags and NT_FILE_FREE)<>0) then
+ if (obj^.hfile<>0) then
  begin
   r:=md_memfd_close(obj^.hfile);
   if (r<>0) then
@@ -281,15 +287,18 @@ begin
    end;
   end;
 
-  r:=md_file_mmap_ex(entry^.obj^.hfile,
-                     Pointer(entry^.start),
-                     entry^.offset,
-                     entry^.size, //unaligned size
-                     MD_PROT_RW);
-  if (r<>0) then
+  if (entry^.obj^.hfile<>0) then
   begin
-   Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
-   Assert(false,'vm_map');
+   r:=md_file_mmap_ex(entry^.obj^.hfile,
+                      Pointer(entry^.start),
+                      entry^.offset,
+                      entry^.size, //unaligned size
+                      MD_PROT_RW);
+   if (r<>0) then
+   begin
+    Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    Assert(false,'vm_map');
+   end;
   end;
 
   if (prot<>MD_PROT_RW) then
@@ -384,11 +393,15 @@ begin
   if (p^.start<>0) and
      (p^.start<>p^.__end) then
   begin
-   r:=md_file_unmap_ex(Pointer(p^.start));
-   if (r<>0) then
+   //
+   if (stat.obj^.hfile<>0) then
    begin
-    Writeln('failed md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
-    Assert(false,'vm_remap');
+    r:=md_file_unmap_ex(Pointer(p^.start));
+    if (r<>0) then
+    begin
+     Writeln('failed md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
+     Assert(false,'vm_remap');
+    end;
    end;
    //
    //Writeln('md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
@@ -440,6 +453,7 @@ begin
   begin
    //map new
    if (ets[i]^.obj<>nil) then
+   if (stat.obj^.hfile<>0) then
    begin
     r:=md_file_mmap_ex(stat.obj^.hfile,
                        Pointer(ets[i]^.start),
@@ -482,6 +496,7 @@ var
  r:Integer;
 begin
  if (entry^.obj<>nil) then
+ if (entry^.obj^.hfile<>0) then
  begin
   r:=md_file_unmap_ex(Pointer(entry^.start));
   if (r<>0) then
@@ -1061,6 +1076,55 @@ begin
    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
    Assert(false,'vm_nt_map_protect');
   end;
+
+  entry:=entry^.next;
+ end;
+end;
+
+procedure vm_nt_map_madvise(map:p_vm_nt_map;
+                            start:vm_offset_t;
+                            __end:vm_offset_t;
+                            advise:Integer);
+var
+ entry:p_vm_nt_entry;
+ base,size:vm_size_t;
+ r:Integer;
+begin
+ if (start=__end) then Exit;
+
+ if (not vm_nt_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end else
+ begin
+  entry:=entry;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+  base:=entry^.start;
+  size:=entry^.__end;
+
+  if (base<start) then
+  begin
+   base:=start;
+  end;
+
+  if (size>__end) then
+  begin
+   size:=__end;
+  end;
+
+  size:=size-base;
+
+  case advise of
+   MADV_WILLNEED:r:=md_dontneed(Pointer(base),size);
+   MADV_DONTNEED,
+   MADV_FREE    :r:=md_activate(Pointer(base),size);
+   else;
+  end;
+
+  //ignore errors
 
   entry:=entry^.next;
  end;

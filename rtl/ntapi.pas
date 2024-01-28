@@ -73,6 +73,8 @@ const
  ThreadSetTlsArrayAddress        = 15;
  ThreadIsIoPending               = 16;
  ThreadHideFromDebugger          = 17;
+ ThreadNameInformation           = 38;
+ ThreadSystemThreadInformation   = 40;
 
  //ProcessInformationClass
  ProcessBasicInformation=0;
@@ -154,6 +156,8 @@ const
 
  MEM_COALESCE_PLACEHOLDERS=$01;
  MEM_PRESERVE_PLACEHOLDER =$02;
+
+ MEM_RESET_UNDO=$1000000;
 
  OBJ_INHERIT         =$00000002;
  OBJ_PERMANENT       =$00000010;

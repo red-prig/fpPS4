@@ -92,24 +92,20 @@ procedure pmap_enter_object(pmap   :pmap_t;
 
 procedure pmap_protect(pmap  :pmap_t;
                        obj   :vm_object_t;
-                       offset:vm_ooffset_t;
                        start :vm_offset_t;
                        __end :vm_offset_t;
                        prot  :vm_prot_t);
 
-procedure pmap_madv_free(pmap  :pmap_t;
-                         obj   :vm_object_t;
-                         offset:vm_ooffset_t;
-                         start :vm_offset_t;
-                         __end :vm_offset_t;
-                         prot  :vm_prot_t);
+procedure pmap_madvise(pmap  :pmap_t;
+                       obj   :vm_object_t;
+                       start :vm_offset_t;
+                       __end :vm_offset_t;
+                       advise:Integer);
 
 procedure pmap_remove(pmap  :pmap_t;
                       obj   :vm_object_t;
-                      offset:vm_ooffset_t;
                       start :vm_offset_t;
-                      __end :vm_offset_t;
-                      prot  :vm_prot_t);
+                      __end :vm_offset_t);
 
 implementation
 
@@ -760,14 +756,11 @@ end;
 
 procedure pmap_protect(pmap  :pmap_t;
                        obj   :vm_object_t;
-                       offset:vm_ooffset_t;
                        start :vm_offset_t;
                        __end :vm_offset_t;
                        prot  :vm_prot_t);
 label
  _default;
-var
- size:QWORD;
 begin
  Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
 
@@ -816,19 +809,18 @@ begin
  pmap_mark(start,__end,prot and VM_RWX);
 end;
 
-procedure pmap_madv_free(pmap  :pmap_t;
-                         obj   :vm_object_t;
-                         offset:vm_ooffset_t;
-                         start :vm_offset_t;
-                         __end :vm_offset_t;
-                         prot  :vm_prot_t);
+procedure pmap_madvise(pmap  :pmap_t;
+                       obj   :vm_object_t;
+                       start :vm_offset_t;
+                       __end :vm_offset_t;
+                       advise:Integer);
 label
  _default;
 var
  size:QWORD;
  r:Integer;
 begin
- Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+ Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
 
  r:=0;
  case vm_object_type(obj) of
@@ -840,7 +832,7 @@ begin
 
      size:=(__end-start);
 
-     r:=md_reset(Pointer(start),size,wprots[prot and VM_RWX]);
+     r:=md_dontneed(Pointer(start),size);
     end;
   OBJT_DEVICE:
     begin
@@ -875,16 +867,14 @@ end;
 
 procedure pmap_remove(pmap  :pmap_t;
                       obj   :vm_object_t;
-                      offset:vm_ooffset_t;
                       start :vm_offset_t;
-                      __end :vm_offset_t;
-                      prot  :vm_prot_t);
+                      __end :vm_offset_t);
 label
  _default;
 var
  r:Integer;
 begin
- Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+ Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
 
  pmap_unmark(start,__end);
 
@@ -910,10 +900,10 @@ begin
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
      end else
      begin
-      Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
      end;
 
      goto _default;

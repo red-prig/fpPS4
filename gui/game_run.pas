@@ -31,6 +31,7 @@ uses
 
  //internal libs
  ps4_libSceSystemService,
+ ps4_libSceUserService,
  ps4_libSceIpmi,
  ps4_libSceDialogs,
  ps4_libSceAvSetting

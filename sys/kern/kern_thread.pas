@@ -325,13 +325,17 @@ end;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 var
- td:p_kthread;
- backup:array[0..1] of QWORD;
+ //td:p_kthread;
+ //backup:array[0..1] of QWORD;
  name:shortstring;
 begin
  name:=shortstring(prefix)+shortstring(newtd^.td_name);
 
+ cpu_thread_set_name(newtd,name);
+
+ {
  td:=curkthread;
+
  if (td<>nil) then
  begin
   //prevent bullshit in ntdll:__chkstk
@@ -349,6 +353,7 @@ begin
   PQWORD(td^.td_kstack.stack)[-1]:=backup[0];
   PQWORD(td^.td_kstack.stack)[-2]:=backup[1];
  end;
+ }
 end;
 
 procedure before_start(td:p_kthread);
