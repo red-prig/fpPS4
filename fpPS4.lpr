@@ -67,6 +67,7 @@ uses
  ps4_libSceShareUtility,
  ps4_libSceSocialScreen,
  ps4_libSceVideoRecording,
+ ps4_libSceWebBrowserDialog,
  ps4_libSceContentExport,
  ps4_libSceUsbd,
  ps4_libSceAudiodecCpu,
