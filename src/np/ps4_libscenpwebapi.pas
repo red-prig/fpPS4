@@ -94,7 +94,7 @@ begin
  Result:=5;
 end;
 
-function ps4_sceNpWebApi2PushEventDeletePushContext():Integer; SysV_ABI_CDecl;
+function ps4_sceNpWebApi2PushEventDeletePushContext(param_1:Integer;param_2:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -232,9 +232,9 @@ begin
  Result:=3;
 end;
 
-function ps4_sceNpWebApiCheckTimeout():Integer; SysV_ABI_CDecl;
+procedure ps4_sceNpWebApiCheckTimeout(); SysV_ABI_CDecl;
 begin
- Result:=0;
+ //
 end;
 
 function ps4_sceNpWebApiDeleteContext(userCtxId:Integer):Integer; SysV_ABI_CDecl;
