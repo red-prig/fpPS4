@@ -94,6 +94,11 @@ begin
  Result:=5;
 end;
 
+function ps4_sceNpWebApi2PushEventDeletePushContext(param_1:Integer;param_2:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpWebApiSendRequest(requestId:Int64;
                                     pData:Pointer;
                                     dataSize:size_t):Integer; SysV_ABI_CDecl;
@@ -227,6 +232,15 @@ begin
  Result:=3;
 end;
 
+procedure ps4_sceNpWebApiCheckTimeout(); SysV_ABI_CDecl;
+begin
+ //
+end;
+
+function ps4_sceNpWebApiDeleteContext(userCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
 
 function Load_libSceNpWebApi(Const name:RawByteString):TElf_node;
 var
@@ -256,6 +270,8 @@ begin
  lib^.set_proc($909409134B8A9B9C,@ps4_sceNpWebApiRegisterServicePushEventCallback);
  lib^.set_proc($33605407E0CD1061,@ps4_sceNpWebApiCreateExtdPushEventFilter);
  lib^.set_proc($BEB334D80E46CB53,@ps4_sceNpWebApiRegisterExtdPushEventCallback);
+ lib^.set_proc($81534DCB17FFD528,@ps4_sceNpWebApiCheckTimeout);
+ lib^.set_proc($5D48DDB124D36775,@ps4_sceNpWebApiDeleteContext);
 end;
 
 function Load_libSceNpWebApi2(Const name:RawByteString):TElf_node;
@@ -269,6 +285,7 @@ begin
 
  lib^.set_proc($FA8F7CD7A61086A4,@ps4_sceNpWebApi2Initialize );
  lib^.set_proc($B24E786E2E85B583,@ps4_sceNpWebApi2CreateUserContext);
+ lib^.set_proc($41A7F179933758AE,@ps4_sceNpWebApi2PushEventDeletePushContext);
 end;
 
 initialization
