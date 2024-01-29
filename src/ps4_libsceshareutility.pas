@@ -30,6 +30,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceShareUtilityAdvanceSetUploadContentData(const contentData:PChar;
+                                                        contentDataLength:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceShareUtility(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -39,6 +45,7 @@ begin
  lib:=Result._add_lib('libSceShareUtility');
  lib^.set_proc($8FB0E56A50731E1F,@ps4_sceShareUtilityInitializeEx2);
  lib^.set_proc($BB86C21A4AA1381E,@ps4_sceShareUtilityAdvanceInitialize);
+ lib^.set_proc($91AAE72616A474A8,@ps4_sceShareUtilityAdvanceSetUploadContentData);
 end;
 
 initialization
