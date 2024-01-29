@@ -147,6 +147,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSystemGestureUpdateTouchRecognizer(gestureHandle:Integer;
+                                                   touchRecognizer:pSceSystemGestureTouchRecognizer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceSystemGestureGetTouchEventsCount(gestureHandle:Integer;
                                                  const touchRecognizer:pSceSystemGestureTouchRecognizer):Integer; SysV_ABI_CDecl;
 begin
@@ -167,6 +173,7 @@ begin
  lib^.set_proc($D4C30AD16FE43200,@ps4_sceSystemGestureAppendTouchRecognizer);
  lib^.set_proc($1A014C6F6DAC6DB2,@ps4_sceSystemGestureUpdatePrimitiveTouchRecognizer);
  lib^.set_proc($C0F246C08D913362,@ps4_sceSystemGestureUpdateAllTouchRecognizer);
+ lib^.set_proc($8F887CD8241610DA,@ps4_sceSystemGestureUpdateTouchRecognizer);
  lib^.set_proc($87CBA89E0701355B,@ps4_sceSystemGestureGetTouchEventsCount);
 end;
 
