@@ -69,6 +69,7 @@ uses
  ps4_libSceVideoRecording,
  ps4_libSceWebBrowserDialog,
  ps4_libSceContentExport,
+ ps4_libSceConvertKeycode,
  ps4_libSceUsbd,
  ps4_libSceAudiodecCpu,
  ps4_libSceDepth,
