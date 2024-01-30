@@ -5,10 +5,19 @@ unit game_info;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes,
+  SysUtils,
+  IniFiles;
 
 type
- TMainInfo=class
+ TAbstractInfo=class
+  Procedure Serialize  (Stream:TStream); virtual;
+  Procedure Deserialize(Stream:TStream); virtual;
+  procedure ReadIni    (INI:TIniFile;const Section:RawByteString);
+  procedure WriteIni   (INI:TIniFile;const Section:RawByteString);
+ end;
+
+ TMainInfo=class(TAbstractInfo)
  private
   FLogFile:RawByteString;
  published
@@ -17,8 +26,7 @@ type
   Constructor Create;
  end;
 
-type
- TGameInfo=class
+ TGameInfo=class(TAbstractInfo)
  private
   FName   :RawByteString;
   FTitleId:RawByteString;
@@ -35,7 +43,7 @@ type
   Constructor Create;
  end;
 
- TMountList=class
+ TMountList=class(TAbstractInfo)
   private
    Fapp0  :RawByteString;
    Fsystem:RawByteString;
@@ -48,7 +56,7 @@ type
    Constructor Create;
  end;
 
- TGameItem=class
+ TGameItem=class(TAbstractInfo)
   public
    FSecton   :RawByteString;
    FGameInfo :TGameInfo ;
@@ -57,9 +65,139 @@ type
   public
    Constructor Create;
    Destructor  Destroy; override;
+   Procedure   Serialize  (Stream:TStream); override;
+   Procedure   Deserialize(Stream:TStream); override;
  end;
 
 implementation
+
+uses
+ TypInfo,Rtti;
+
+Procedure TAbstractInfo.Serialize(Stream:TStream);
+var
+ i,c:Integer;
+ //
+ Ctx:TRTTIContext;
+ RT :TRTTIType;
+ A  :specialize TArray<TRttiProperty>;
+begin
+ Ctx:=TRTTIContext.Create;
+ try
+  ///
+  RT:=Ctx.GetType(Self.ClassInfo);
+  A:=rt.GetProperties;
+  c:=Length(A);
+  if (c<>0) then
+  begin
+   For i:=0 to c-1 do
+   begin
+    case A[i].PropertyType.TypeKind of
+     tkSString,
+     tkLString,
+     tkAString:Stream.WriteAnsiString(A[i].GetValue(Self).AsString);
+     else
+      Assert(false);
+    end;
+   end;
+  end;
+  ///
+ finally
+  Ctx.free;
+ end;
+end;
+
+Procedure TAbstractInfo.Deserialize(Stream:TStream);
+var
+ i,c:Integer;
+ //
+ Ctx:TRTTIContext;
+ RT :TRTTIType;
+ A  :specialize TArray<TRttiProperty>;
+begin
+ Ctx:=TRTTIContext.Create;
+ try
+  ///
+  RT:=Ctx.GetType(Self.ClassInfo);
+  A:=rt.GetProperties;
+  c:=Length(A);
+  if (c<>0) then
+  begin
+   For i:=0 to c-1 do
+   begin
+    case A[i].PropertyType.TypeKind of
+     tkSString,
+     tkLString,
+     tkAString:A[i].SetValue(Self,Stream.ReadAnsiString);
+     else
+      Assert(false);
+    end;
+   end;
+  end;
+  ///
+ finally
+  Ctx.free;
+ end;
+end;
+
+procedure TAbstractInfo.ReadIni(INI:TIniFile;const Section:RawByteString);
+var
+ i,c:Integer;
+ //
+ Ctx:TRTTIContext;
+ RT :TRTTIType;
+ A  :specialize TArray<TRttiProperty>;
+ V  :RawByteString;
+begin
+ Ctx:=TRTTIContext.Create;
+ try
+  ///
+  RT:=Ctx.GetType(Self.ClassInfo);
+  A:=rt.GetProperties;
+  c:=Length(A);
+  if (c<>0) then
+  begin
+   For i:=0 to c-1 do
+   begin
+    V:=Trim(A[i].GetValue(Self).AsString);
+    V:=Trim(INI.ReadString(Section,A[i].Name,V));
+    A[i].SetValue(Self,V);
+   end;
+  end;
+  ///
+ finally
+  Ctx.free;
+ end;
+end;
+
+procedure TAbstractInfo.WriteIni(INI:TIniFile;const Section:RawByteString);
+var
+ i,c:Integer;
+ //
+ Ctx:TRTTIContext;
+ RT :TRTTIType;
+ A  :specialize TArray<TRttiProperty>;
+ V  :RawByteString;
+begin
+ Ctx:=TRTTIContext.Create;
+ try
+  ///
+  RT:=Ctx.GetType(Self.ClassInfo);
+  A:=rt.GetProperties;
+  c:=Length(A);
+  if (c<>0) then
+  begin
+   For i:=0 to c-1 do
+   begin
+    V:=Trim(A[i].GetValue(Self).AsString);
+    INI.WriteString(Section,A[i].Name,V);
+   end;
+  end;
+  ///
+ finally
+  Ctx.free;
+ end;
+end;
 
 Constructor TMainInfo.Create;
 begin
@@ -75,9 +213,9 @@ end;
 
 Constructor TMountList.Create;
 begin
- Fapp0  :='/';
- Fsystem:='/system';
- Fdata  :='/data';
+ Fapp0  :=DirectorySeparator;
+ Fsystem:=DirectorySeparator+'system';
+ Fdata  :=DirectorySeparator+'data';
 end;
 
 Constructor TGameItem.Create;
@@ -92,6 +230,18 @@ begin
  FreeAndNil(FGameInfo );
  FreeAndNil(FMountList);
  inherited;
+end;
+
+Procedure TGameItem.Serialize(Stream:TStream);
+begin
+ FGameInfo .Serialize(Stream);
+ FMountList.Serialize(Stream);
+end;
+
+Procedure TGameItem.Deserialize(Stream:TStream);
+begin
+ FGameInfo .Deserialize(Stream);
+ FMountList.Deserialize(Stream);
 end;
 
 end.

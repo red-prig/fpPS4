@@ -77,13 +77,15 @@ const
  ThreadSystemThreadInformation   = 40;
 
  //ProcessInformationClass
- ProcessBasicInformation=0;
- ProcessQuotaLimits     =1;
- ProcessIoCounters      =2;
- ProcessVmCounters      =3;
- ProcessTimes           =4;
- ProcessPriorityClass   =18;
- ProcessAffinityMask    =21;
+ ProcessBasicInformation  =0;
+ ProcessQuotaLimits       =1;
+ ProcessIoCounters        =2;
+ ProcessVmCounters        =3;
+ ProcessTimes             =4;
+ ProcessPriorityClass     =18;
+ ProcessAffinityMask      =21;
+ ProcessImageFileName     =27;
+ ProcessImageFileNameWin32=43;
 
  //SystemInformationClass
  SystemTimeAdjustmentInformation=28;
@@ -494,6 +496,16 @@ type
  end;
 
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
+
+function NtDuplicateObject(
+          SourceProcessHandle:THandle;
+          SourceHandle       :THandle;
+          TargetProcessHandle:THandle;
+          TargetHandle       :PHandle;
+          DesiredAccess      :DWORD;
+          HandleAttributes   :ULONG;
+          Options            :ULONG
+         ):DWORD; stdcall; external 'ntdll';
 
 function NtCreateThread(
           hThread           :PHandle;

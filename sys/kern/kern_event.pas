@@ -166,7 +166,8 @@ end;
 
 procedure KQ_LOCK(kq:p_kqueue); inline;
 begin
- mtx_lock(kq^.kq_lock);
+ if (kq<>nil) then
+  mtx_lock(kq^.kq_lock);
 end;
 
 procedure KQ_FLUX_WAKEUP(kq:p_kqueue); inline;
@@ -186,7 +187,8 @@ end;
 
 procedure KQ_UNLOCK(kq:p_kqueue); inline;
 begin
- mtx_unlock(kq^.kq_lock);
+ if (kq<>nil) then
+  mtx_unlock(kq^.kq_lock);
 end;
 
 procedure KQ_OWNED(kq:p_kqueue); inline;
@@ -2679,12 +2681,12 @@ begin
  knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
 end;
 
-function knote_alloc():p_knote;
+function knote_alloc():p_knote; public;
 begin
  Result:=AllocMem(SizeOf(t_knote));
 end;
 
-procedure knote_free(kn:p_knote);
+procedure knote_free(kn:p_knote);  public;
 begin
  if (kn<>nil) then
  begin

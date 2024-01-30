@@ -222,6 +222,9 @@ begin
   deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
  end;
 
+ std_tty [2].t_wr_handle:=GetStdHandle(STD_ERROR_HANDLE);
+ deci_tty[2].t_wr_handle:=GetStdHandle(STD_ERROR_HANDLE);
+
  debug_tty.t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
  debug_tty.t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
 end;

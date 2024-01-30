@@ -344,7 +344,7 @@ end;
 
 function ENTRY_CHARGED(e:vm_map_entry_t):Boolean; inline;
 begin
- Result:=False;//MAP_ENTRY_NEEDS_COPY
+ Result:=(e^.vm_obj<>nil) and ((e^.eflags and MAP_ENTRY_NEEDS_COPY)=0);
 end;
 
 function vmspace_pmap(vm:p_vmspace):pmap_t; inline;
@@ -913,6 +913,51 @@ end;
 
 procedure vm_map_delete_internal(map:vm_map_t;entry:vm_map_entry_t;__end:vm_offset_t); forward;
 
+function vm_map_insert_internal(
+           map   :vm_map_t;
+           obj   :vm_object_t;
+           offset:vm_ooffset_t;
+           start :vm_offset_t;
+           __end :vm_offset_t;
+           prot  :vm_prot_t;
+           cow   :Integer;
+           alias :Boolean):Integer;
+begin
+ Result:=KERN_SUCCESS;
+
+ if (cow<>-1) then
+ begin
+  budget_reserve(obj,__end-start);
+
+  if (obj<>nil) then
+  begin
+   if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
+      (obj^.otype=OBJT_PHYSHM) then
+   begin
+    Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
+   end;
+  end;
+
+  if (Result=KERN_SUCCESS) then
+  begin
+
+   //force copy
+   if ((cow and MAP_COPY_ON_WRITE)<>0) then
+   begin
+    prot:=prot or VM_PROT_COPY;
+   end;
+
+   pmap_enter_object(map^.pmap,
+                     obj,
+                     offset,
+                     start,
+                     __end,
+                     prot);
+  end;
+
+ end;
+end;
+
 {
  * vm_map_insert:
  *
@@ -944,36 +989,6 @@ var
  protoeflags:vm_eflags_t;
  inheritance:vm_inherit_t;
  charge_prev_obj:Boolean;
-
- function _enter_object:Integer;
- begin
-  Result:=KERN_SUCCESS;
-
-  if (cow<>-1) then
-  begin
-   budget_reserve(obj,__end-start);
-
-   if (obj<>nil) then
-   begin
-    if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
-       (obj^.otype=OBJT_PHYSHM) then
-    begin
-     Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
-    end;
-   end;
-
-   if (Result=KERN_SUCCESS) then
-   begin
-    pmap_enter_object(map^.pmap,
-                      obj,
-                      offset,
-                      start,
-                      __end,
-                      prot);
-   end;
-
-  end;
- end;
 
 begin
  VM_MAP_ASSERT_LOCKED(map);
@@ -1051,8 +1066,6 @@ begin
  if ((cow and MAP_ACC_CHARGED)<>0) or (((prot and VM_PROT_WRITE)<>0) and
      (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (obj=nil))) then
  begin
-  Assert((obj=nil) or
-         ((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0),'OVERCOMMIT: vm_map_insert o %p", object');
   if (obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
   begin
    charge_prev_obj:=TRUE;
@@ -1099,7 +1112,15 @@ charged:
    prev_entry^.__end:=__end;
    //change size
 
-   Result:=_enter_object;
+   Result:=vm_map_insert_internal(
+              map   ,
+              obj   ,
+              offset,
+              start ,
+              __end ,
+              prot  ,
+              cow   ,
+              alias);
 
    if (Result=KERN_SUCCESS) then
    begin
@@ -1151,8 +1172,6 @@ charged:
  new_entry^.entry_id:=map^.entry_id;
  Inc(map^.entry_id);
 
- Assert(not ENTRY_CHARGED(new_entry),'OVERCOMMIT: vm_map_insert leaks vm_map %p", new_entry');
-
  {
   * Insert the new entry into the list
   }
@@ -1169,7 +1188,15 @@ charged:
   vm_map_simplify_entry(map, new_entry);
  end;
 
- Result:=_enter_object;
+ Result:=vm_map_insert_internal(
+            map   ,
+            obj   ,
+            offset,
+            start ,
+            __end ,
+            prot  ,
+            cow   ,
+            alias);
 
  if (Result<>KERN_SUCCESS) then
  begin
@@ -1737,6 +1764,7 @@ begin
 
   if (obj=nil) or ((current^.eflags and MAP_ENTRY_NEEDS_COPY)<>0) then
   begin
+   //swap_reserve
    goto _continue;
   end;
 
@@ -1771,7 +1799,8 @@ begin
    current^.protection:=new_prot;
   end;
 
-  if ((current^.protection and VM_PROT_WRITE)<>0) and
+  if ((current^.eflags and (MAP_ENTRY_COW or MAP_ENTRY_USER_WIRED))=(MAP_ENTRY_COW or MAP_ENTRY_USER_WIRED)) and
+     ((current^.protection and VM_PROT_WRITE)<>0) and
      ((old_prot and VM_PROT_WRITE)=0) then
   begin
    //vm_fault_copy_entry(map, map, current, current, nil);

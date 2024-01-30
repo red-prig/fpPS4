@@ -60,11 +60,17 @@ procedure exit1(rv:Integer);
 procedure sys_sys_exit(rval:Integer);
 function  sys_wait4(pid:Integer;status:PInteger;options:Integer;rusage:Pointer):Integer;
 
+var
+ halt_on_exit:Boolean=False;
+
 implementation
 
 uses
  errno,
  systm,
+ kern_proc,
+ sys_event,
+ kern_event,
  md_proc;
 
 function _WSTATUS(x:Integer):Integer; inline;
@@ -124,7 +130,13 @@ end;
 
 procedure exit1(rv:Integer);
 begin
- md_halt(rv);
+ //Notify interested parties of our demise.
+ KNOTE_UNLOCKED(@p_proc.p_klist, NOTE_EXIT);
+ //
+ if halt_on_exit then
+ begin
+  md_halt(rv);
+ end;
 end;
 
 procedure sys_sys_exit(rval:Integer);

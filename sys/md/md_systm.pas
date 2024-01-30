@@ -6,22 +6,38 @@ unit md_systm;
 interface
 
 uses
+ sysutils,
+ windows,
  ntapi;
 
-function md_copyin (udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+type
+ t_fork_cb=procedure(data:Pointer;size:QWORD); SysV_ABI_CDecl;
+
+function  md_copyin (hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function  md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+
+function  md_copyin (udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+
+procedure md_run_forked;
+procedure md_fork_unshare;
+function  md_fork_process(proc:Pointer;data:Pointer;size:QWORD):THandle;
 
 implementation
 
 uses
- errno;
+ vmparam,
+ kern_thr,
+ sys_crt,
+ errno,
+ md_map;
 
-function md_copyin(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function md_copyin(hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 var
  num:DWORD;
 begin
  num:=0;
- if (NtReadVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,@num)=0) then
+ if (NtReadVirtualMemory(hProcess,udaddr,kaddr,len,@num)=0) then
  begin
   Result:=0;
  end else
@@ -34,12 +50,12 @@ begin
  end;
 end;
 
-function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 var
  num:DWORD;
 begin
  num:=0;
- if (NtWriteVirtualMemory(NtCurrentProcess,udaddr,kaddr,len,@num)=0) then
+ if (NtWriteVirtualMemory(hProcess,udaddr,kaddr,len,@num)=0) then
  begin
   Result:=0;
  end else
@@ -50,6 +66,454 @@ begin
  begin
   lencopied^:=num;
  end;
+end;
+
+function md_copyin(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+begin
+ Result:=md_copyin(NtCurrentProcess,udaddr,kaddr,len,lencopied);
+end;
+
+function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+begin
+ Result:=md_copyout(NtCurrentProcess,kaddr,udaddr,len,lencopied);
+end;
+
+const
+ JobObjectExtendedLimitInformation=9;
+ JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=$00002000;
+
+type
+ JOBOBJECT_BASIC_LIMIT_INFORMATION = record
+  PerProcessUserTimeLimit: LARGE_INTEGER;
+  PerJobUserTimeLimit: LARGE_INTEGER;
+  LimitFlags: DWORD;
+  MinimumWorkingSetSize: SIZE_T;
+  MaximumWorkingSetSize: SIZE_T;
+  ActiveProcessLimit: DWORD;
+  Affinity: ULONG_PTR;
+  PriorityClass: DWORD;
+  SchedulingClass: DWORD;
+ end;
+
+ PJOBOBJECT_EXTENDED_LIMIT_INFORMATION = ^JOBOBJECT_EXTENDED_LIMIT_INFORMATION;
+ JOBOBJECT_EXTENDED_LIMIT_INFORMATION = record
+  BasicLimitInformation: JOBOBJECT_BASIC_LIMIT_INFORMATION;
+  IoInfo: IO_COUNTERS;
+  ProcessMemoryLimit: SIZE_T;
+  JobMemoryLimit: SIZE_T;
+  PeakProcessMemoryUsed: SIZE_T;
+  PeakJobMemoryUsed: SIZE_T;
+ end;
+
+function CreateJobObjectA(lpJobAttributes:LPSECURITY_ATTRIBUTES;
+                          lpName:LPCTSTR):THandle; stdcall; external kernel32;
+
+function SetInformationJobObject(hJob:HANDLE;
+                                 JobObjectInformationClass:DWORD;
+                                 lpJobObjectInformation:LPVOID;
+                                 cbJobObjectInformationLength:DWORD):BOOL; stdcall; external kernel32;
+
+function AssignProcessToJobObject(hJob,hProcess:THandle):BOOL; stdcall; external kernel32;
+
+function NtQueryTeb(td_handle:THandle):p_teb;
+var
+ TBI:THREAD_BASIC_INFORMATION;
+ err:Integer;
+begin
+ Result:=nil;
+ TBI:=Default(THREAD_BASIC_INFORMATION);
+
+ err:=NtQueryInformationThread(
+       td_handle,
+       ThreadBasicInformation,
+       @TBI,
+       SizeOf(THREAD_BASIC_INFORMATION),
+       nil);
+ if (err<>0) then Exit;
+
+ Result:=TBI.TebBaseAddress;
+end;
+
+procedure NtGetVirtualInfo(hProcess:THandle;var base:Pointer;var size:QWORD);
+var
+ addr:Pointer;
+ prev:Pointer;
+ info:TMemoryBasicInformation;
+ len:ULONG_PTR;
+begin
+ size:=0;
+
+ len:=0;
+ NtQueryVirtualMemory(
+  hProcess,
+  base,
+  0,
+  @info,
+  sizeof(info),
+  @len);
+ if (len=0) then Exit;
+
+ //allocated?
+ if (info.State=MEM_FREE) then Exit;
+
+ addr:=info.AllocationBase;
+
+ base:=addr;
+
+ repeat
+  len:=0;
+  NtQueryVirtualMemory(
+   hProcess,
+   addr,
+   0,
+   @info,
+   sizeof(info),
+   @len);
+  if (len=0) then Exit;
+
+  if (base<>info.AllocationBase) then Break;
+
+  size:=size+Info.RegionSize;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+ until (prev>=addr);
+end;
+
+function NtMoveStack(hProcess,hThread:THandle):Integer;
+var
+ _Context:array[0..SizeOf(TCONTEXT)+15] of Byte;
+ Context :PCONTEXT;
+ teb   :p_teb;
+ kstack:t_td_stack;
+ addr  :Pointer;
+ delta :QWORD;
+ size  :QWORD;
+ err   :DWORD;
+begin
+ Result:=0;
+
+ Context:=Align(@_Context,16);
+
+ Context^:=Default(TCONTEXT);
+ Context^.ContextFlags:=CONTEXT_ALL;
+
+ err:=NtGetContextThread(hThread,Context);
+ if (err<>0) then Exit(err);
+
+ teb:=NtQueryTeb(hThread);
+ if (teb=nil) then Exit(-1);
+
+ kstack:=Default(t_td_stack);
+ err:=md_copyin(hProcess,@teb^.stack,@kstack,SizeOf(t_td_stack),nil);
+ if (err<>0) then Exit(err);
+
+ delta:=QWORD(kstack.stack)-Context^.Rsp;
+
+ addr:=kstack.sttop;
+ size:=0;
+ NtGetVirtualInfo(hProcess,addr,size);
+
+ err:=md_unmap(hProcess,addr,size);
+ if (err<>0) then Exit(err);
+
+ addr:=Pointer(WIN_MIN_MOVED_STACK);
+
+ if (size>(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK)) then
+ begin
+  size:=(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK);
+ end;
+
+ err:=md_mmap(hProcess,addr,size,PAGE_READWRITE);
+ if (err<>0) then Exit(err);
+
+ kstack.sttop:=addr;
+ kstack.stack:=addr+size;
+
+ err:=md_copyout(hProcess,@kstack,@teb^.stack,SizeOf(t_td_stack),nil);
+ if (err<>0) then Exit(err);
+
+ Context^.Rsp:=QWORD(kstack.stack)-delta;
+
+ err:=NtSetContextThread(hThread,Context);
+
+ Exit(err);
+end;
+
+function NtReserve(hProcess:THandle):Integer;
+var
+ base:Pointer;
+ size:QWORD;
+ i,r:Integer;
+
+ addr,prev:Pointer;
+ info:TMemoryBasicInformation;
+ len:ULONG_PTR;
+begin
+ if Length(pmap_mem)<>0 then
+ begin
+  //fixup
+  pmap_mem[0].start:=_PROC_AREA_START_0;
+  //
+  For i:=0 to High(pmap_mem) do
+  begin
+   base:=Pointer(pmap_mem[i].start);
+   size:=pmap_mem[i].__end-pmap_mem[i].start;
+
+   r:=md_reserve(hProcess,base,size);
+   if (r<>0) then Exit(r);
+  end;
+ end;
+
+ addr:=Pointer(pmap_mem[0].start);
+
+ repeat
+
+  len:=0;
+  NtQueryVirtualMemory(
+   hProcess,
+   addr,
+   0,
+   @info,
+   sizeof(info),
+   @len);
+  if (len=0) then Break;
+
+  if (info.State=MEM_FREE) then
+  begin
+   r:=md_reserve(hProcess,info.BaseAddress,info.RegionSize);
+  end;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+  if (addr>=Pointer(VM_MAXUSER_ADDRESS)) then Break;
+
+ until (prev>=addr);
+end;
+
+function md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
+begin
+ Result:=0;
+ NtDuplicateObject(
+  pidfd,
+  targetfd,
+  NtCurrentProcess,
+  @Result,
+  0,
+  0,
+  DUPLICATE_SAME_ACCESS
+ );
+end;
+
+function md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
+begin
+ Result:=0;
+ NtDuplicateObject(
+  NtCurrentProcess,
+  targetfd,
+  pidfd,
+  @Result,
+  0,
+  0,
+  DUPLICATE_SAME_ACCESS
+ );
+end;
+
+type
+ p_shared_info=^t_shared_info;
+ t_shared_info=record
+  hParent   :THandle;
+  hStdInput :THandle;
+  hStdOutput:THandle;
+  hStdError :THandle;
+  proc      :Pointer;
+  size      :QWORD;
+  data      :record end;
+ end;
+
+procedure md_run_forked;
+var
+ base:p_shared_info;
+ info:TMemoryBasicInformation;
+ len:ULONG_PTR;
+
+ proc:Pointer;
+
+ {
+ F:THandle;
+ F2:THandle;
+ S:RAwByteString;
+ BLK:IO_STATUS_BLOCK;
+ OFFSET:Int64;
+ R:DWORD;
+ }
+begin
+ base:=Pointer(WIN_SHARED_ADDR);
+
+ len:=0;
+ NtQueryVirtualMemory(
+  NtCurrentProcess,
+  base,
+  0,
+  @info,
+  sizeof(info),
+  @len);
+ if (len=0) then Exit;
+
+ if (info.State=MEM_FREE) then Exit;
+
+ //sleep(-1);
+
+ SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
+ SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
+ SetStdHandle(STD_OUTPUT_HANDLE,base^.hStdError );
+
+ proc:=base^.proc;
+
+ if (proc=nil) then Exit;
+
+ {
+ F:=FileCreate('log2.txt');
+
+ S:='0x'+HexStr(Pointer(proc))+#13#10;
+ FileWrite(F,PChar(S)^,Length(S));
+
+ S:='hParent:'+IntToStr(base^.hParent)+':'+#13#10;
+ FileWrite(F,PChar(S)^,Length(S));
+
+ F2:=GetStdHandle(STD_OUTPUT_HANDLE);
+ //F2:=md_pidfd_getfd(base^.hParent,F2);
+
+ S:='[NtWriteFile] hParent:'+IntToStr(base^.hParent)+'-'+#13#10;
+ //FileWrite(F2,PChar(S)^,Length(S));
+
+ BLK:=Default(IO_STATUS_BLOCK);
+ OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
+ R:=NtWriteFile(F2,0,nil,nil,@BLK,PChar(S),Length(S),@OFFSET,nil);
+
+ S:='F2:'+IntToStr(F2)+':'+#13#10;
+ FileWrite(F,PChar(S)^,Length(S));
+
+ S:='R:0x'+HexStr(R,8)+#13#10;
+ FileWrite(F,PChar(S)^,Length(S));
+ }
+
+ //writeln('test!');
+
+ //sleep(-1);
+
+ t_fork_cb(proc)(@base^.data,base^.size);
+
+ NtTerminateProcess(NtCurrentProcess, 0);
+end;
+
+procedure md_fork_unshare;
+var
+ base:Pointer;
+begin
+ base:=Pointer(WIN_SHARED_ADDR);
+ md_unmap(base,0);
+end;
+
+var
+ hProcJob:Thandle=0;
+
+function NtFetchJob:THandle;
+var
+ info:JOBOBJECT_EXTENDED_LIMIT_INFORMATION;
+begin
+ if (hProcJob<>0) then Exit(hProcJob);
+
+ hProcJob:=CreateJobObjectA(nil,nil);
+
+ info:=Default(JOBOBJECT_EXTENDED_LIMIT_INFORMATION);
+ info.BasicLimitInformation.LimitFlags:=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+ SetInformationJobObject(hProcJob,
+                         JobObjectExtendedLimitInformation,
+                         @info,
+                         SizeOf(info));
+
+ Exit(hProcJob);
+end;
+
+function NtCreateShared(hProcess:THandle;proc:Pointer;data:Pointer;size:QWORD):Integer;
+var
+ base:p_shared_info;
+ shared_info:t_shared_info;
+begin
+ base:=Pointer(WIN_SHARED_ADDR);
+ size:=SizeOf(Pointer)+size;
+ size:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+
+ Result:=md_mmap(hProcess,base,size,MD_PROT_RW);
+ if (Result<>0) then Exit;
+
+ shared_info:=Default(t_shared_info);
+
+ shared_info.hParent   :=md_dup_to_pidfd(hProcess,NtCurrentProcess);
+
+ shared_info.hStdInput :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_INPUT_HANDLE));
+ shared_info.hStdOutput:=md_dup_to_pidfd(hProcess,GetStdHandle(STD_OUTPUT_HANDLE));
+ shared_info.hStdError :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_ERROR_HANDLE));
+
+ shared_info.proc:=proc;
+
+ shared_info.size:=size;
+
+ Result:=md_copyout(hProcess,@shared_info,base,SizeOf(shared_info),nil);
+ if (Result<>0) then Exit;
+
+ if (data<>nil) and (size<>0) then
+ begin
+  Result:=md_copyout(hProcess,data,@base^.data,size,nil);
+ end;
+end;
+
+function md_fork_process(proc:Pointer;data:Pointer;size:QWORD):THandle;
+var
+ si:TSTARTUPINFO;
+ pi:PROCESS_INFORMATION;
+ BUF:packed record
+  UNAME:UNICODE_STRING;
+  DATA :array[0..MAX_PATH*2] of WideChar;
+ end;
+ LEN:ULONG;
+ R:DWORD;
+ b:BOOL;
+begin
+ Result:=0;
+
+ FillChar(BUF,SizeOf(BUF),0);
+ LEN:=SizeOf(BUF);
+
+ R:=NtQueryInformationProcess(NtCurrentProcess,
+                              ProcessImageFileNameWin32,
+                              @BUF,
+                              LEN,
+                              @LEN);
+ if (R<>0) then Exit;
+
+ si:=Default(TSTARTUPINFO);
+ pi:=Default(PROCESS_INFORMATION);
+
+ si.cb:=SizeOf(si);
+
+ b:=CreateProcessW(PWideChar(@BUF.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
+ if not b then Exit;
+
+ b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
+
+ NtMoveStack(pi.hProcess,pi.hThread);
+ NtReserve(pi.hProcess);
+ NtCreateShared(pi.hProcess,proc,data,size);
+
+ NtResumeProcess(pi.hProcess);
+ NtClose(pi.hThread);
+
+ Result:=pi.hProcess;
 end;
 
 end.

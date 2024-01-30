@@ -339,7 +339,7 @@ begin
 
  UNAME.Length       :=L*SizeOf(WideChar);
  UNAME.MaximumLength:=UNAME.Length;
- UNAME.Buffer       :=@W;
+ UNAME.Buffer       :=PWideChar(W);
 
  Result:=NtSetInformationThread(td^.td_handle,ThreadNameInformation,@UNAME,SizeOf(UNAME));
 end;

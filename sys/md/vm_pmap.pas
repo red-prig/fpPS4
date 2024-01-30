@@ -142,6 +142,7 @@ begin
   Assert(false,'dev_mem_init');
  end;
 
+ DEV_INFO.DEV_PTR:=nil;
  r:=md_reserve(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
  if (r<>0) then
  begin
@@ -461,6 +462,60 @@ begin
  end;
 end;
 
+procedure pmap_copy(pmap   :pmap_t;
+                    src_obj:p_vm_nt_file_obj;
+                    src_ofs:vm_ooffset_t;
+                    dst_obj:p_vm_nt_file_obj;
+                    delta  :vm_ooffset_t;
+                    size   :vm_ooffset_t);
+var
+ src,dst:Pointer;
+ r:Integer;
+begin
+ if (size>delta) then
+ begin
+  size:=delta;
+ end;
+
+ src:=nil;
+ r:=md_file_mmap(src_obj^.hfile,src,src_ofs,size,MD_PROT_R);
+
+ if (r<>0) then
+ begin
+  Writeln('failed md_file_mmap:0x',HexStr(r,8));
+  Assert(false,'pmap_copy');
+ end;
+
+ dst:=nil;
+ r:=md_file_mmap(dst_obj^.hfile,dst,0,delta,MD_PROT_RW);
+
+ if (r<>0) then
+ begin
+  Writeln('failed md_file_mmap:0x',HexStr(r,8));
+  Assert(false,'pmap_copy');
+ end;
+
+ Move(src^,dst^,size);
+
+ md_cacheflush(dst,size,DCACHE);
+
+ r:=md_file_unmap(dst,delta);
+
+ if (r<>0) then
+ begin
+  Writeln('failed md_file_unmap:0x',HexStr(r,8));
+  Assert(false,'pmap_copy');
+ end;
+
+ r:=md_file_unmap(src,size);
+
+ if (r<>0) then
+ begin
+  Writeln('failed md_file_unmap:0x',HexStr(r,8));
+  Assert(false,'pmap_copy');
+ end;
+end;
+
 {
  * Maps a sequence of resident pages belonging to the same object.
  * The sequence begins with the given page m_start.  This page is
@@ -490,6 +545,7 @@ var
  paddi:QWORD;
 
  info:t_fd_info;
+ cow :p_vm_nt_file_obj;
 
  r:Integer;
 begin
@@ -503,13 +559,13 @@ begin
     begin
      _default:
 
-      size:=__end-start;
+      Assert((prot and VM_PROT_COPY)=0);
 
       info.start:=start;
       info.__end:=__end;
       info.offset:=0;
 
-      while (size<>0) do
+      while (info.start<>info.__end) do
       begin
        get_private_fd(info);
 
@@ -530,9 +586,8 @@ begin
        end;
 
        info.start :=info.start+delta;
+       info.__end :=__end;
        info.offset:=0;
-
-       size:=size-delta;
       end;
 
     end;
@@ -543,17 +598,17 @@ begin
       goto _default;
      end;
 
+     Assert((prot and VM_PROT_COPY)=0);
+
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
       Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
-
-      size:=__end-start;
 
       info.start:=start;
       info.__end:=__end;
       info.offset:=offset;
 
-      while (size<>0) do
+      while (info.start<>info.__end) do
       begin
        get_dmem_fd(info);
 
@@ -574,9 +629,8 @@ begin
        end;
 
        info.start :=info.start +delta;
+       info.__end :=__end;
        info.offset:=info.offset+delta;
-
-       size:=size-delta;
       end;
 
      end else
@@ -649,23 +703,74 @@ begin
      //align host page
      paddi:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
-     info.obj   :=vm_nt_file_obj_allocate(md);
-     info.offset:=offset;
-     info.start :=start;
-     info.__end :=start+paddi;
-
-     r:=vm_nt_map_insert(@pmap^.nt_map,
-                         info.obj,
-                         info.offset,
-                         info.start,
-                         info.__end,
-                         size,
-                         wprots[prot and VM_RWX]);
-
-     if (r<>0) then
+     if ((prot and VM_PROT_COPY)<>0) then
      begin
-      Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-      Assert(false,'pmap_enter_object');
+      Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+
+      Assert(false,'TODO COW');
+
+      cow:=vm_nt_file_obj_allocate(md);
+
+      info.offset:=offset;
+      info.start :=start;
+      info.__end :=start+paddi;
+
+      while (info.start<>info.__end) do
+      begin
+       get_private_fd(info);
+
+       delta:=(info.__end-info.start);
+
+       pmap_copy(pmap,
+                 cow,
+                 info.offset,
+                 info.obj,
+                 delta,
+                 size);
+
+       r:=vm_nt_map_insert(@pmap^.nt_map,
+                           info.obj,
+                           0,
+                           info.start,
+                           info.__end,
+                           delta,
+                           wprots[prot and VM_RWX]);
+
+       if (r<>0) then
+       begin
+        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert(false,'pmap_enter_object');
+       end;
+
+       info.start :=info.start +delta;
+       info.__end :=start+paddi;
+       info.offset:=info.offset+delta;
+
+       size:=size-delta; //unaligned size
+      end;
+
+      vm_nt_file_obj_destroy(cow);
+
+     end else
+     begin
+      info.obj   :=vm_nt_file_obj_allocate(md);
+      info.offset:=offset;
+      info.start :=start;
+      info.__end :=start+paddi;
+
+      r:=vm_nt_map_insert(@pmap^.nt_map,
+                          info.obj,
+                          info.offset,
+                          info.start,
+                          info.__end,
+                          size,
+                          wprots[prot and VM_RWX]);
+
+      if (r<>0) then
+      begin
+       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+       Assert(false,'pmap_enter_object');
+      end;
      end;
 
      pmap_mark(info.start,info.__end,prot and VM_RWX);

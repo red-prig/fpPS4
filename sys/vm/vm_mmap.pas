@@ -106,7 +106,7 @@ begin
   Exit(EACCES);
  end;
 
- if ((flags and (MAP_PRIVATE{ or MAP_COPY}))<>0) then
+ if ((flags and MAP_PRIVATE)<>0) then
  begin
   dev_relthread(cdev, ref);
   Exit(EINVAL);

@@ -10,11 +10,13 @@ uses
   Forms,
   main,
   game_edit,
+  md_systm,
   vm_pmap;
 
 {$R *.res}
 
 begin
+  md_systm.md_run_forked;
   vm_pmap.pmap_reserve(False);
   //
   RequireDerivedFormResource:=True;

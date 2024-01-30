@@ -736,11 +736,11 @@ begin
  case event_id of
    EVENTID_FLIP:   //SCE_VIDEO_OUT_EVENT_FLIP
      begin
-      knlist_add(@g_video_out_event_flip,kn,0)
+      knlist_add(@g_video_out_event_flip,kn,0);
      end;
    EVENTID_VBLANK: //SCE_VIDEO_OUT_EVENT_VBLANK
      begin
-      knlist_add(@g_video_out_event_flip,kn,0)
+      knlist_add(@g_video_out_event_flip,kn,0);
      end;
    // $0051:Result:=8;
    // $0058:Result:=12;

@@ -37,6 +37,7 @@ const
   MD_PROT_RW   //XWR
  );
 
+function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 function md_reserve(var base:Pointer;size:QWORD):Integer;
 
 function md_split  (base:Pointer;size:QWORD):Integer;
@@ -46,10 +47,14 @@ function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
 function md_memfd_open  (var hMem:THandle;hFile:THandle):Integer;
 function md_memfd_close (hMem:THandle):Integer;
 
+function md_protect(hProcess:THandle;base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
 
 function md_dontneed(base:Pointer;size:QWORD):Integer;
 function md_activate(base:Pointer;size:QWORD):Integer;
+
+function md_mmap   (hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Integer;
+function md_unmap  (hProcess:THandle;base:Pointer;size:QWORD):Integer;
 
 function md_mmap   (var base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_unmap  (base:Pointer;size:QWORD):Integer;
@@ -76,7 +81,7 @@ end;
 
 function md_dw_page(x:QWORD):QWORD; inline;
 begin
- Result:=x and (not MD_PAGE_SIZE);
+ Result:=x and (not (MD_PAGE_SIZE-1));
 end;
 
 function md_up_page(x:QWORD):QWORD; inline;
@@ -84,7 +89,7 @@ begin
  Result:=(x+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 end;
 
-function md_reserve(var base:Pointer;size:QWORD):Integer;
+function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 var
  info:TMemoryBasicInformation;
  len:ULONG_PTR;
@@ -96,7 +101,7 @@ begin
  begin
   len:=0;
   Result:=NtQueryVirtualMemory(
-           NtCurrentProcess,
+           hProcess,
            base,
            0,
            @info,
@@ -131,7 +136,7 @@ begin
  end;
 
  Result:=NtAllocateVirtualMemoryEx(
-          NtCurrentProcess,
+          hProcess,
           @base,
           @size,
           MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
@@ -140,6 +145,11 @@ begin
           0
          );
 
+end;
+
+function md_reserve(var base:Pointer;size:QWORD):Integer;
+begin
+ Result:=md_reserve(NtCurrentProcess,base,size);
 end;
 
 function md_split(base:Pointer;size:QWORD):Integer;
@@ -200,18 +210,23 @@ begin
  Result:=NtClose(hMem);
 end;
 
-function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
+function md_protect(hProcess:THandle;base:Pointer;size:QWORD;prot:Integer):Integer;
 var
  old:Integer;
 begin
  old:=0;
  Result:=NtProtectVirtualMemory(
-          NtCurrentProcess,
+          hProcess,
           @base,
           @size,
           prot,
           @old
          );
+end;
+
+function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
+begin
+ Result:=md_protect(NtCurrentProcess,base,size,prot);
 end;
 
 function md_dontneed(base:Pointer;size:QWORD):Integer;
@@ -238,13 +253,13 @@ begin
          );
 end;
 
-function md_mmap(var base:Pointer;size:QWORD;prot:Integer):Integer;
+function md_mmap(hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Integer;
 begin
  base:=md_alloc_page(base);
  size:=md_up_page(size);
 
  Result:=NtAllocateVirtualMemory(
-          NtCurrentProcess,
+          hProcess,
           @base,
           0,
           @size,
@@ -253,17 +268,27 @@ begin
          );
 end;
 
-function md_unmap(base:Pointer;size:QWORD):Integer;
+function md_unmap(hProcess:THandle;base:Pointer;size:QWORD):Integer;
 begin
  base:=md_alloc_page(base);
  size:=0;
 
  Result:=NtFreeVirtualMemory(
-          NtCurrentProcess,
+          hProcess,
           @base,
           @size,
           MEM_RELEASE
          );
+end;
+
+function md_mmap(var base:Pointer;size:QWORD;prot:Integer):Integer;
+begin
+ Result:=md_mmap(NtCurrentProcess,base,size,prot);
+end;
+
+function md_unmap(base:Pointer;size:QWORD):Integer;
+begin
+ Result:=md_unmap(NtCurrentProcess,base,size);
 end;
 
 function md_file_mmap(handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;

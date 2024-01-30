@@ -1877,7 +1877,7 @@ end;
 
 function filt_sigattach(kn:p_knote):Integer;
 begin
- kn^.kn_ptr.p_proc:=nil;
+ kn^.kn_ptr.p_proc:=@p_proc;
  kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  // automatically set
 
  knlist_add(@p_proc.p_klist, kn, 0);

@@ -227,6 +227,9 @@ type
  end;
  {$IF sizeof(t_kevent_copyops)<>24}{$STOP sizeof(t_kevent_copyops)<>24}{$ENDIF}
 
+function  knote_alloc():p_knote;  external;
+procedure knote_free(kn:p_knote); external;
+
 procedure knote(list:p_knlist;hint:QWORD;lockflags:Integer); external;
 
 procedure knlist_add   (knl:p_knlist;kn:p_knote;islocked:Integer); external;

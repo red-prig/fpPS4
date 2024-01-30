@@ -116,39 +116,16 @@ const
 procedure TfrmMain.ReadIniFile;
 var
  i,c:Integer;
- //
- Ctx:TRTTIContext;
- RT :TRTTIType;
- A  :specialize TArray<TRttiProperty>;
- V  :RawByteString;
+ V:RawByteString;
  //
  List:TStringList;
  Item:TGameItem;
 begin
  //main
- Ctx:=TRTTIContext.Create;
- try
-  ///
-  RT:=Ctx.GetType(FMainInfo.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    V:=Trim(A[i].GetValue(FMainInfo).AsString);
-    V:=Trim(FIniFile.ReadString('main',A[i].Name,V));
-    A[i].SetValue(FMainInfo,V);
-   end;
-  end;
-  ///
- finally
-  Ctx.free;
- end;
+ FMainInfo.ReadIni(FIniFile,'main');
  //main
 
  //games
-
  List:=TStringList.Create;
  FIniFile.ReadSections(List);
 
@@ -177,100 +154,20 @@ begin
 end;
 
 procedure TfrmMain.LoadItemIni(Item:TGameItem);
-var
- i,c:Integer;
- //
- Ctx:TRTTIContext;
- RT :TRTTIType;
- A  :specialize TArray<TRttiProperty>;
- V  :RawByteString;
 begin
-
- Ctx:=TRTTIContext.Create;
- try
-  ///
-  RT:=Ctx.GetType(Item.FGameInfo.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    V:=Trim(A[i].GetValue(Item.FGameInfo).AsString);
-    V:=Trim(FIniFile.ReadString(Item.FSecton,A[i].Name,V));
-    A[i].SetValue(Item.FGameInfo,V);
-   end;
-  end;
-  ///
-  RT:=Ctx.GetType(Item.FMountList.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    V:=Trim(A[i].GetValue(Item.FMountList).AsString);
-    V:=Trim(FIniFile.ReadString(Item.FSecton,A[i].Name,V));
-    A[i].SetValue(Item.FMountList,V);
-   end;
-  end;
-  ///
- finally
-  Ctx.free;
- end;
-
+ Item.FGameInfo .ReadIni(FIniFile,Item.FSecton);
+ Item.FMountList.ReadIni(FIniFile,Item.FSecton);
 end;
 
 procedure TfrmMain.SaveItemIni(Item:TGameItem);
-var
- i,c:Integer;
- //
- Ctx:TRTTIContext;
- RT :TRTTIType;
- A  :specialize TArray<TRttiProperty>;
- V  :RawByteString;
 begin
-
  if (Item.FSecton='') then
  begin
   Item.FSecton:=gen_section;
  end;
 
- //
-
- Ctx:=TRTTIContext.Create;
- try
-  ///
-  RT:=Ctx.GetType(Item.FGameInfo.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    V:=Trim(A[i].GetValue(Item.FGameInfo).AsString);
-
-    FIniFile.WriteString(Item.FSecton,A[i].Name,V);
-   end;
-  end;
-  ///
-  RT:=Ctx.GetType(Item.FMountList.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    V:=Trim(A[i].GetValue(Item.FMountList).AsString);
-
-    FIniFile.WriteString(Item.FSecton,A[i].Name,V);
-   end;
-  end;
-  ///
- finally
-  Ctx.free;
- end;
-
+ Item.FGameInfo .WriteIni(FIniFile,Item.FSecton);
+ Item.FMountList.WriteIni(FIniFile,Item.FSecton);
 end;
 
 function EncodeValue32(nVal:DWORD):RawByteString;
@@ -365,10 +262,10 @@ procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
 begin
  Done:=True;
 
- if (GetTickCount64-FLogUpdateTime)>700 then
+ if (GetTickCount64-FLogUpdateTime)>500 then
  begin
 
-  if (System.InterlockedExchange(FLogUpdate,0)<>0) then
+  //if (System.InterlockedExchange(FLogUpdate,0)<>0) then
   if (FList<>nil) then
   begin
    FList.Update;
