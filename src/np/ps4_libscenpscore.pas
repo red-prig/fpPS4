@@ -94,6 +94,24 @@ type
   hits:PInteger;
  end;
 
+ pSceNpScoreBoardId=^SceNpScoreBoardId;
+ SceNpScoreBoardId=DWORD;
+
+ pSceNpScorePlayerRankDataA=^SceNpScorePlayerRankDataA;
+ SceNpScorePlayerRankDataA=packed record
+  hasData:Integer;
+  pad0:array[0..3] of Byte;
+  rankData:SceNpScoreRankDataA;
+ end;
+
+ pSceRtcTick=^SceRtcTick;
+ SceRtcTick=packed record
+  tick:QWORD;
+ end;
+
+ pSceNpScoreRankNumber=^SceNpScoreRankNumber;
+ SceNpScoreRankNumber=DWORD;
+
 function ps4_sceNpScoreGetFriendsRanking(
              reqId:Integer;
              boardId:DWORD;
@@ -252,6 +270,34 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpScoreGetRankingByNpIdAsync():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpScoreGetRankingByAccountId(reqId:Integer;
+                                             boardId:SceNpScoreBoardId;
+                                             const accountIdArray:SceNpAccountId;
+                                             accountIdArraySize:QWORD;
+                                             rankArray:pSceNpScorePlayerRankDataA;
+                                             rankArraySize:QWORD;
+                                             commentArray:pSceNpScoreComment;
+                                             commentArraySize:QWORD;
+                                             infoArray:pSceNpScoreGameInfo;
+                                             infoArraySize:QWORD;
+                                             arrayNum:QWORD;
+                                             lastSortDate:pSceRtcTick;
+                                             totalRecord:pSceNpScoreRankNumber;
+                                             option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpScoreDeleteNpTitleCtx(titleCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceNpScoreRanking(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -270,6 +316,9 @@ begin
  lib^.set_proc($CD3D1706D82D3922,@ps4_sceNpScoreRecordScore);
  lib^.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
  lib^.set_proc($9B50DF351B2D9124,@ps4_sceNpScorePollAsync);
+ lib^.set_proc($45DDBB76A505655F,@ps4_sceNpScoreGetRankingByNpIdAsync);
+ lib^.set_proc($2BDB653834D0C777,@ps4_sceNpScoreGetRankingByAccountId);
+ lib^.set_proc($1B4A44F91342C1F9,@ps4_sceNpScoreDeleteNpTitleCtx);
 end;
 
 initialization
