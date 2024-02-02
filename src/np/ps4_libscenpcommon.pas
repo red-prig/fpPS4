@@ -29,15 +29,15 @@ type
 
  pSceNpOnlineId=^SceNpOnlineId;
  SceNpOnlineId=packed record
-  data:array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
-  term:AnsiChar;
+  data :array[0..SCE_NP_ONLINEID_MAX_LENGTH-1] of AnsiChar;
+  term :AnsiChar;
   dummy:array[0..2] of AnsiChar;
  end;
 
  PSceNpId=^SceNpId;
  SceNpId=packed record
-  handle:SceNpOnlineId;
-  opt:array[0..7] of Byte;
+  handle  :SceNpOnlineId;
+  opt     :array[0..7] of Byte;
   reserved:array[0..7] of Byte;
  end;
 
