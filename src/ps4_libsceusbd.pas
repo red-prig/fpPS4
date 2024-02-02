@@ -18,6 +18,10 @@ type
  SceUsbdDevice=Pointer;
  PSceUsbdDevice=^SceUsbdDevice;
 
+ pSceUsbdDeviceHandle=^SceUsbdDeviceHandle;
+ SceUsbdDeviceHandle=packed record
+ end;
+
 function ps4_sceUsbdInit:Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceUsbdInit');
