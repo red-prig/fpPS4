@@ -361,6 +361,19 @@ begin
  Result:=0;
 end;
 
+function ps4_scePadOpenExt(userID,_type,index:Integer;param:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+ Result:=0;
+end;
+
+function ps4_scePadGetExtControllerInformation(handle:Integer;
+                                               pInfo:pScePadControllerInformation):Integer; SysV_ABI_CDecl;
+begin
+ if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
+ Result:=0;
+end;
+
 function Load_libScePad(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -386,6 +399,8 @@ begin
  lib^.set_proc($AC866747A792A6F9,@ps4_scePadResetOrientation);
  lib^.set_proc($BC32CCA092DD7BC2,@ps4_scePadSetTiltCorrectionState);
  lib^.set_proc($AF8E260317521BE5,@ps4_scePadSetAngularVelocityDeadbandState);
+ lib^.set_proc($58522249F5C652AF,@ps4_scePadOpenExt);
+ lib^.set_proc($8466DFD904C19AA7,@ps4_scePadGetExtControllerInformation);
 end;
 
 initialization
