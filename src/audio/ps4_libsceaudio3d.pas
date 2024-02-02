@@ -158,7 +158,8 @@ begin
 end;
 
 initialization
- ps4_app.RegistredPreLoad('libSceAudio3d.prx',@Load_libSceAudio3d);
+ //low priority
+ ps4_app.RegistredFinLoad('libSceAudio3d.prx',@Load_libSceAudio3d);
 
 end.
 
