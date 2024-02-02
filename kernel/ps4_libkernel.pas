@@ -23,7 +23,7 @@ uses
   ps4_kernel_file,
   ps4_queue,
   ps4_event_flag,
-  ps4_libScePosix,
+  ps4_scesocket,
   ps4_elf,
   ps4_program,
 
@@ -1974,20 +1974,27 @@ begin
 
  //file
 
- lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
+ //socket
 
- lib^.set_proc($E63442B366B1B6BE,@ps4_inet_ntop);
-
- //
-
- px:=Result._add_lib('libScePosix');
- px^.MapSymbol:=lib^.MapSymbol;
  lib^.set_proc($4D4FDDF4F7C81CF3,@ps4_socket);
  lib^.set_proc($2AE3A680AA2A09D6,@ps4_bind);
  lib^.set_proc($7C5C469311766D5A,@ps4_setsockopt);
  lib^.set_proc($4FC7C447EB481A09,@ps4_select);
  lib^.set_proc($95493AC2B197C8CC,@ps4_recvfrom);
 
+ //socket
+
+ lib^.set_proc($BA5E7B86F9BA9817,@ps4_sceKernelGetOpenPsIdForSystem);
+
+ lib^.set_proc($E63442B366B1B6BE,@ps4_inet_ntop);
+
+ //
+
+ //mirror of libkernel
+ px:=Result._add_lib('libScePosix');
+ px^.MapSymbol:=lib^.MapSymbol;
+
+ //mirror of libkernel
  px:=Result._add_lib('libkernel_cpumode_platform');
  px^.MapSymbol:=lib^.MapSymbol;
 
@@ -1999,6 +2006,7 @@ begin
  lib^.set_proc($421BF90110283847,@ps4_sceKernelRemoveExceptionHandler);
  lib^.set_proc($8A5D379E5B8A7CC9,@ps4_sceKernelRaiseException);
 
+ //mirror of libkernel
  px:=Result._add_lib('libkernel_exception');
  px^.MapSymbol:=lib^.MapSymbol;
 

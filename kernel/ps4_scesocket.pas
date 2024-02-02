@@ -1,4 +1,4 @@
-unit ps4_libScePosix;
+unit ps4_scesocket;
 
 {$mode ObjFPC}{$H+}
 
