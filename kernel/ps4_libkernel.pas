@@ -1981,6 +1981,11 @@ begin
 
  px:=Result._add_lib('libScePosix');
  px^.MapSymbol:=lib^.MapSymbol;
+ lib^.set_proc($4D4FDDF4F7C81CF3,@ps4_socket);
+ lib^.set_proc($2AE3A680AA2A09D6,@ps4_bind);
+ lib^.set_proc($7C5C469311766D5A,@ps4_setsockopt);
+ lib^.set_proc($4FC7C447EB481A09,@ps4_select);
+ lib^.set_proc($95493AC2B197C8CC,@ps4_recvfrom);
 
  px:=Result._add_lib('libkernel_cpumode_platform');
  px^.MapSymbol:=lib^.MapSymbol;
