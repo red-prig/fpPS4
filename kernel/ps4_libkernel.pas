@@ -23,6 +23,7 @@ uses
   ps4_kernel_file,
   ps4_queue,
   ps4_event_flag,
+  ps4_libScePosix,
   ps4_elf,
   ps4_program,
 
