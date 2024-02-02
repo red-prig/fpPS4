@@ -14,19 +14,6 @@ type
  pSceNetId=^SceNetId;
  SceNetId=Integer;
 
- pSceNetSaFamily=^SceNetSaFamily;
- SceNetSaFamily=Integer;
-
- pSceNetSockaddr=^SceNetSockaddr;
- SceNetSockaddr=packed record
-  sa_len:Byte;
-  sa_family:SceNetSaFamily;
-  sa_data:array[0..13] of char;
- end;
-
- pSceNetSocklen_t=^SceNetSocklen_t;
- SceNetSocklen_t=DWORD;
-
 function ps4_socket(const name:PChar;
                     family,_type,protocol:Integer):Integer; SysV_ABI_CDecl;
 

@@ -361,17 +361,28 @@ begin
  Result:=0;
 end;
 
-function ps4_scePadOpenExt(userID,_type,index:Integer;param:Pointer):Integer; SysV_ABI_CDecl;
+type
+ p_pad_ext_param=^t_pad_ext_param;
+ t_pad_ext_param=packed record
+  param_0:Word;
+  param_1:Word;
+  param_2:Word;
+  param_3:Byte;
+ end;
+
+function ps4_scePadOpenExt(userID,_type,index:Integer;param:p_pad_ext_param):Integer; SysV_ABI_CDecl;
 begin
- if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- Result:=0;
+ Result:=ps4_scePadOpen(userID,_type,index,param);
 end;
 
 function ps4_scePadGetExtControllerInformation(handle:Integer;
-                                               pInfo:pScePadControllerInformation):Integer; SysV_ABI_CDecl;
+                                               pInfo:pScePadExtControllerInformation):Integer; SysV_ABI_CDecl;
 begin
  if (ScePadInterface=nil) then Exit(SCE_PAD_ERROR_NOT_INITIALIZED);
- Result:=0;
+
+ pInfo^:=Default(ScePadExtControllerInformation);
+
+ Result:=ps4_scePadGetControllerInformation(handle,@pInfo^.base);
 end;
 
 function Load_libScePad(Const name:RawByteString):TElf_node;

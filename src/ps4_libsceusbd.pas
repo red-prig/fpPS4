@@ -42,9 +42,9 @@ begin
  Result:=0;
 end;
 
-function ps4_sceUsbdOpenDeviceWithVidPid(vendorId:Word;productId:Word):Integer; SysV_ABI_CDecl;
+function ps4_sceUsbdOpenDeviceWithVidPid(vendorId:Word;productId:Word):pSceUsbdDeviceHandle; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=nil;
 end;
 
 function Load_libSceUsbd(Const name:RawByteString):TElf_node;
