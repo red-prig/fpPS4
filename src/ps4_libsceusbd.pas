@@ -26,22 +26,20 @@ end;
 
 function ps4_sceUsbdGetDeviceList(list:PSceUsbdDevice):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceUsbdGetDeviceList');
  Result:=0;
 end;
 
 procedure ps4_sceUsbdFreeDeviceList(list:PSceUsbdDevice;unrefDevices:Integer); SysV_ABI_CDecl;
 begin
- Writeln('sceUsbdFreeDeviceList');
 end;
 
 function ps4_sceUsbdHandleEventsTimeout(tv:Ptimeval):Integer; SysV_ABI_CDecl;
 begin
- Writeln('sceUsbdHandleEventsTimeout');
- if tv<>nil then
- begin
-  Writeln('sec=',tv^.tv_sec,',usec=',tv^.tv_usec);
- end;
+ Result:=0;
+end;
+
+function ps4_sceUsbdOpenDeviceWithVidPid(vendorId:Word;productId:Word):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
@@ -58,6 +56,7 @@ begin
  lib^.set_proc($F2A07D02BE0FE677,@ps4_sceUsbdGetDeviceList);
  lib^.set_proc($110E9208B32ACE43,@ps4_sceUsbdFreeDeviceList);
  lib^.set_proc($FB053A086B997169,@ps4_sceUsbdHandleEventsTimeout);
+ lib^.set_proc($BEB417611A351B09,@ps4_sceUsbdOpenDeviceWithVidPid);
 end;
 
 initialization
