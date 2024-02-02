@@ -189,8 +189,7 @@ type
   dataLen    :QWORD;
  end;
 
- pSceNpWebApiExtdPushEventCallbackA=^SceNpWebApiExtdPushEventCallbackA;
- SceNpWebApiExtdPushEventCallbackA=packed record
+ SceNpWebApiExtdPushEventCallbackA=procedure(
   userCtxId     :Integer;
   callbackId    :Integer;
   pNpServiceName:PChar;
@@ -204,8 +203,8 @@ type
   dataLen       :QWORD;
   pExtdData     :pSceNpWebApiExtdPushEventExtdData;
   extdDataNum   :QWORD;
-  pUserArg      :Pointer;
- end;
+  pUserArg      :Pointer
+ ); SysV_ABI_CDecl;
 
 function ps4_sceNpWebApiCreatePushEventFilter(libCtxId:Integer;
                                               pDataType:pSceNpWebApiPushEventDataType;

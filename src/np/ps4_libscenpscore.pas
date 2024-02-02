@@ -36,35 +36,35 @@ end;
 type
  pSceNpScoreRankData=^SceNpScoreRankData;
  SceNpScoreRankData=packed record
-  npId:SceNpId;
-  reserved:array[0..48] of Byte;
-  pad0:array[0..2] of Byte;
-  pcId:Integer;
-  serialRank:DWORD;
-  rank:DWORD;
+  npId       :SceNpId;
+  reserved   :array[0..48] of Byte;
+  pad0       :array[0..2] of Byte;
+  pcId       :Integer;
+  serialRank :DWORD;
+  rank       :DWORD;
   highestRank:DWORD;
-  scoreValue:Int64;
+  scoreValue :Int64;
   hasGameData:Integer;
-  pad1:array[0..3] of Byte;
-  recordDate:QWORD;
+  pad1       :array[0..3] of Byte;
+  recordDate :QWORD;
  end;
 
  PSceNpScoreRankDataA=^SceNpScoreRankDataA;
  SceNpScoreRankDataA=packed record
-  onlineId:SceNpOnlineId;
-  reserved0:array[0..15] of Byte;
-  reserved:array[0..48] of Byte;
-  pad0:array[0..2] of Byte;
-  pcId:Integer;
-  serialRank:DWORD;
-  rank:DWORD;
+  onlineId   :SceNpOnlineId;
+  reserved0  :array[0..15] of Byte;
+  reserved   :array[0..48] of Byte;
+  pad0       :array[0..2] of Byte;
+  pcId       :Integer;
+  serialRank :DWORD;
+  rank       :DWORD;
   highestRank:DWORD;
   hasGameData:Integer;
-  pad1:array[0..3] of Byte;
-  scoreValue:Int64;
-  recordDate:QWORD;
-  accountId:QWORD;
-  pad2:array[0..7] of Byte;
+  pad1       :array[0..3] of Byte;
+  scoreValue :Int64;
+  recordDate :QWORD;
+  accountId  :QWORD;
+  pad2       :array[0..7] of Byte;
  end;
 
 const
@@ -89,9 +89,9 @@ type
 
  PSceNpScoreGetFriendRankingOptParam=^SceNpScoreGetFriendRankingOptParam;
  SceNpScoreGetFriendRankingOptParam=packed record
-  size:size_t;
+  size           :size_t;
   startSerialRank:PInteger;
-  hits:PInteger;
+  hits           :PInteger;
  end;
 
  pSceNpScoreBoardId=^SceNpScoreBoardId;
@@ -99,14 +99,9 @@ type
 
  pSceNpScorePlayerRankDataA=^SceNpScorePlayerRankDataA;
  SceNpScorePlayerRankDataA=packed record
-  hasData:Integer;
-  pad0:array[0..3] of Byte;
+  hasData :Integer;
+  pad0    :array[0..3] of Byte;
   rankData:SceNpScoreRankDataA;
- end;
-
- pSceRtcTick=^SceRtcTick;
- SceRtcTick=packed record
-  tick:QWORD;
  end;
 
  pSceNpScoreRankNumber=^SceNpScoreRankNumber;
@@ -231,7 +226,7 @@ function ps4_sceNpScoreRecordScore(
              score:Int64;        //SceNpScoreValue
              scoreComment:pSceNpScoreComment;
              gameInfo:pSceNpScoreGameInfo;
-             tmpRank:PDWORD;     //SceNpScoreRankNumber
+             tmpRank:pSceNpScoreRankNumber;
              compareDate:PQWORD; //SceRtcTick
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
@@ -248,7 +243,7 @@ function ps4_sceNpScoreRecordScoreAsync(
              score:Int64;        //SceNpScoreValue
              scoreComment:pSceNpScoreComment;
              gameInfo:pSceNpScoreGameInfo;
-             tmpRank:PDWORD;     //SceNpScoreRankNumber
+             tmpRank:pSceNpScoreRankNumber;
              compareDate:PQWORD; //SceRtcTick
              option:Pointer):Integer; SysV_ABI_CDecl;
 begin
@@ -286,7 +281,7 @@ function ps4_sceNpScoreGetRankingByAccountId(reqId:Integer;
                                              infoArray:pSceNpScoreGameInfo;
                                              infoArraySize:QWORD;
                                              arrayNum:QWORD;
-                                             lastSortDate:pSceRtcTick;
+                                             lastSortDate:PQWORD; //SceRtcTick
                                              totalRecord:pSceNpScoreRankNumber;
                                              option:Pointer):Integer; SysV_ABI_CDecl;
 begin

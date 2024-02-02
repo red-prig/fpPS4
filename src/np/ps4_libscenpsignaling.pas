@@ -5,20 +5,20 @@ unit ps4_libSceNpSignaling;
 interface
 
 uses
-  ps4_program;
+  ps4_program,
+  ps4_libSceNpCommon;
 
 const
  SCE_NP_SIGNALING_CONTEXT_MAX=8;
 
 type
- pSceNpSignalingHandler=^SceNpSignalingHandler;
- SceNpSignalingHandler=packed record
+ SceNpSignalingHandler=procedure(
   ctxId    :DWORD;
   subjectId:DWORD;
   event    :Integer;
   errorCode:Integer;
-  arg      :Pointer;
- end;
+  arg      :Pointer
+ ); SysV_ABI_CDecl;
 
 implementation
 
@@ -30,9 +30,10 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpSignalingCreateContext(userId,handler:SceNpSignalingHandler;
+function ps4_sceNpSignalingCreateContext(npId:pSceNpId;
+                                         handler:SceNpSignalingHandler;
                                          arg:Pointer;
-                                         ctxId:PQWORD):Integer; SysV_ABI_CDecl;
+                                         ctxId:PDWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
