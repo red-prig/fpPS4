@@ -10,11 +10,6 @@ uses
   Classes,
   SysUtils;
 
-implementation
-
-uses
- ps4_time;
-
 const
  SCE_NET_EINVAL      =22;
  SCE_NET_ENOSPC      =28;
@@ -22,9 +17,12 @@ const
 
  SCE_NET_EHOSTUNREACH=65;
 
+ //
 
-threadvar
- sce_net_errno:Integer;
+ SCE_NET_INET_ADDRSTRLEN=16;
+
+ SCE_NET_ETHER_ADDR_LEN  =6;
+ SCE_NET_ETHER_ADDRSTRLEN=18;
 
 type
  SceNetInAddr_t=DWORD;
@@ -34,35 +32,24 @@ type
   s_addr:SceNetInAddr_t;
  end;
 
-const
- SCE_NET_INET_ADDRSTRLEN=16;
-
- SCE_NET_ETHER_ADDR_LEN  =6;
- SCE_NET_ETHER_ADDRSTRLEN=18;
-
-type
  pSceNetEtherAddr=^SceNetEtherAddr;
  SceNetEtherAddr=packed record
   data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
  end;
 
-type
  pSceNetSocklen_t=^SceNetSocklen_t;
  SceNetSocklen_t=DWORD;
 
-type
  SceNetSaFamily=Byte;
 
-type
- SceNetEpollData= packed record
+ SceNetEpollData=packed record
   Case Byte of //union
   0:(ptr:Pointer);
   1:(u32:DWORD);
   2:(fd:Integer);
   3:(u64:QWORD);
-end;
+ end;
 
-type
  pSceNetSockaddr=^SceNetSockaddr;
  SceNetSockaddr = packed record
   sa_len:Byte;
@@ -70,7 +57,6 @@ type
   sa_data:array[0..13] of Byte;
  end;
 
-type
  pSceNetEpollEvent=^SceNetEpollEvent;
  SceNetEpollEvent = packed record
   events:DWORD;
@@ -78,6 +64,14 @@ type
   ident:QWORD;
   data:SceNetEpollData;
  end;
+
+implementation
+
+uses
+ ps4_time;
+
+threadvar
+ sce_net_errno:Integer;
 
 function libnet_tls_get_errno():PInteger;
 begin
