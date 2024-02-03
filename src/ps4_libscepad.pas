@@ -385,6 +385,11 @@ begin
  Result:=ps4_scePadGetControllerInformation(handle,@pInfo^.base);
 end;
 
+function ps4_scePadOutputReport(param_1:Integer;param_2:Byte;param_3:Pointer;param_4:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libScePad(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -412,6 +417,7 @@ begin
  lib^.set_proc($AF8E260317521BE5,@ps4_scePadSetAngularVelocityDeadbandState);
  lib^.set_proc($58522249F5C652AF,@ps4_scePadOpenExt);
  lib^.set_proc($8466DFD904C19AA7,@ps4_scePadGetExtControllerInformation);
+ lib^.set_proc($0EB52EF1C3EB8DEF,@ps4_scePadOutputReport);
 end;
 
 initialization
