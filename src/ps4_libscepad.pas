@@ -385,7 +385,7 @@ begin
  Result:=ps4_scePadGetControllerInformation(handle,@pInfo^.base);
 end;
 
-function ps4_scePadOutputReport():Integer; SysV_ABI_CDecl;
+function ps4_scePadOutputReport(param_1:Integer;param_2:Byte;param_3:Pointer;param_4:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
