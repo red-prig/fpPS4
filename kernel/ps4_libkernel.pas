@@ -1824,7 +1824,6 @@ begin
  lib^.set_proc($8E91639A0002E401,@ps4_sceKernelDeleteEqueue);
  lib^.set_proc($7F3C8C2ACF648A6D,@ps4_sceKernelWaitEqueue);
 
- lib^.set_proc($E7B64AF8E0C45D66,@ps4_sceKernelAddTimerEvent);
  lib^.set_proc($6164055325C855D5,@ps4_sceKernelDeleteTimerEvent);
 
  lib^.set_proc($E11EBF3AF2367040,@ps4_sceKernelAddUserEvent);
