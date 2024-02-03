@@ -128,6 +128,19 @@ type
   ev:SceKernelEvent;
  end;
 
+ PKTimerNode=^TKTimerNode;
+ TKTimerNode=object
+  refs:DWORD;
+  lock:DWORD;
+  wait:DWORD;
+  eq:SceKernelEqueue;
+  ev:SceKernelEvent;
+ end;
+
+ pSceKernelUseconds=^SceKernelUseconds;
+ SceKernelUseconds=packed record
+ end;
+
 function ps4_sceKernelCreateEqueue(outEq:PSceKernelEqueue;name:PChar):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelDeleteEqueue(eq:PSceKernelEqueue):Integer; SysV_ABI_CDecl;
 
@@ -137,6 +150,11 @@ function ps4_sceKernelWaitEqueue(
           num:Integer;
           out_num:PInteger;
           timo:PDWORD):Integer; SysV_ABI_CDecl;
+
+function ps4_sceKernelAddTimerEvent(eq:SceKernelEqueue;id:Integer;
+                                    usec:SceKernelUseconds;
+                                    udata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceKernelDeleteTimerEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_sceKernelAddUserEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelAddUserEventEdge(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
@@ -164,6 +182,7 @@ procedure _release_equeue(eq:SceKernelEqueue);
 function  _post_event(eq:SceKernelEqueue;node:PKEventNode;cb:TKFetchEvent):Boolean;
 
 function  _alloc_kevent_node(eq:SceKernelEqueue;size:qword):Pointer;
+procedure _free_kevent_node(node:PKTimerNode);
 procedure _free_kevent_node(node:PKEventNode);
 function  _get_kevent_node(node:PKEventNode;ev:PSceKernelEvent):Boolean;
 function  _trigger_kevent_node(node:PKEventNode;after:TKAfterEvent;data:Pointer):Boolean;
@@ -214,6 +233,16 @@ begin
  end;
  PKEventNode(Result)^.eq  :=eq;
  PKEventNode(Result)^.refs:=1;
+end;
+
+procedure _free_kevent_node(node:PKTimerNode);
+begin
+ if (node=nil) then Exit;
+ _release_equeue(XCHG(node^.eq,nil));
+ if System.InterlockedDecrement(node^.refs)=0 then
+ begin
+  SwFreeMem(node);
+ end;
 end;
 
 procedure _free_kevent_node(node:PKEventNode);
@@ -505,6 +534,85 @@ function ps4_sceKernelWaitEqueue(
 begin
  _sig_lock;
  Result:=_set_sce_errno(_sceKernelWaitEqueue(eq,ev,num,out_num,timo));
+ _sig_unlock;
+end;
+
+function _sceKernelAddTimerEvent(eq:SceKernelEqueue;id:Integer;
+                                    usec:SceKernelUseconds;
+                                    udata:Pointer):Integer;
+var
+ P:PPointer;
+ node:PKTimerNode;
+begin
+ if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (eq^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ eq^.FUserEvents.LockWr;
+
+ P:=HAMT_search32(@eq^.FUserEvents.hamt,id);
+ if (P<>nil) then
+ begin
+  node:=P^;
+ end else
+ begin
+  node:=_alloc_kevent_node(eq,SizeOf(TKEventNode));
+  if (node=nil) or (node=Pointer(1)) then
+  begin
+   eq^.FUserEvents.Unlock;
+   Exit(SCE_KERNEL_ERROR_ENOMEM);
+  end;
+
+  node^.ev.ident :=id;
+  node^.ev.filter:=SCE_KERNEL_EVFILT_USER;
+
+  HAMT_insert32(@eq^.FUserEvents.hamt,id,node);
+ end;
+
+ eq^.FUserEvents.Unlock;
+
+ Result:=0;
+end;
+
+function _sceKernelDeleteTimerEvent(eq:SceKernelEqueue;id:Integer):Integer;
+var
+ P:PPointer;
+ node:PKTimerNode;
+begin
+ if (eq=nil) then Exit(SCE_KERNEL_ERROR_EBADF);
+ if (eq^.valid<>LIFE_EQ) then Exit(SCE_KERNEL_ERROR_EBADF);
+
+ eq^.FUserEvents.LockWr;
+
+ P:=HAMT_search32(@eq^.FUserEvents.hamt,id);
+ if (P<>nil) then
+ begin
+  Result:=0;
+  node:=P^;
+  HAMT_delete32(@eq^.FUserEvents.hamt,id,nil);
+  _free_kevent_node(node);
+ end else
+ begin
+  Result:=SCE_KERNEL_ERROR_ENOENT;
+ end;
+
+ eq^.FUserEvents.Unlock;
+end;
+
+function ps4_sceKernelAddTimerEvent(eq:SceKernelEqueue;id:Integer;
+                                    usec:SceKernelUseconds;
+                                    udata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ //Writeln('sceKernelAddTimerEvent:',id);
+ Result:=_set_sce_errno(_sceKernelAddTimerEvent(eq,id,usec,udata));
+ _sig_unlock;
+end;
+
+function ps4_sceKernelDeleteTimerEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ //Writeln('sceKernelDeleteUserEvent:',id);
+ Result:=_set_sce_errno(_sceKernelDeleteTimerEvent(eq,id));
  _sig_unlock;
 end;
 
