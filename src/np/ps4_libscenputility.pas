@@ -8,15 +8,17 @@ uses
   ps4_program,
   ps4_libSceNpCommon;
 
+const
+ SCE_NP_LOOKUP_MAX_CTX_NUM=32;
 
 implementation
 
-const
-
-  SCE_NP_LOOKUP_MAX_CTX_NUM=32;
-
-
 function ps4_sceNpLookupCreateTitleCtx(selfNpId:PSceNpId):Integer; SysV_ABI_CDecl;
+begin
+ Result:=1;
+end;
+
+function ps4_sceNpLookupCreateTitleCtxA(selfNpId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=1;
 end;
@@ -30,6 +32,7 @@ begin
 
  lib:=Result._add_lib('libSceNpUtility');
  lib^.set_proc($F39DF743E2D4EC44,@ps4_sceNpLookupCreateTitleCtx);
+ lib^.set_proc($BD3F7186A3CEEBED,@ps4_sceNpLookupCreateTitleCtxA);
  ///lib^.set_proc($E7262311D778B7C6,@ps4_sceNpSignalingCreateContext);
 end;
 
