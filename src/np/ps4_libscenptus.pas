@@ -10,12 +10,12 @@ uses
 
 implementation
 
-function ps4_sceNpTssCreateNpTitleCtx(serviceLabel:DWord;id:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTssCreateNpTitleCtx(serviceLabel:DWord;npId:PSceNpId):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
 end;
 
-function ps4_sceNpTssCreateNpTitleCtxA(serviceLabel:DWord;id:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTssCreateNpTitleCtxA(serviceLabel:DWord;selfId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
 end;
@@ -25,7 +25,7 @@ begin
  Result:=-1;
 end;
 
-function ps4_sceNpTusCreateNpTitleCtxA(serviceLabel:DWord;npId:PSceNpId):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTusCreateNpTitleCtxA(serviceLabel:DWord;selfId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=-1;
 end;
