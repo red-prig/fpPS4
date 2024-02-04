@@ -43,6 +43,13 @@ function ps4_accept(s:SceNetId;
                     addr:pSceNetSockaddr;
                     paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 
+function ps4_sendto(s:SceNetId;
+                    const buf:Pointer;
+                    len:QWORD;
+                    flags:Integer;
+                    const addr:pSceNetSockaddr;
+                    paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;                    
+
 implementation
 
 function ps4_socket(const name:PChar;
@@ -93,6 +100,16 @@ end;
 
 function ps4_accept(s:SceNetId;
                     addr:pSceNetSockaddr;
+                    paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sendto(s:SceNetId;
+                    const buf:Pointer;
+                    len:QWORD;
+                    flags:Integer;
+                    const addr:pSceNetSockaddr;
                     paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
