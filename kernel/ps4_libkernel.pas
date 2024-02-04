@@ -1983,6 +1983,7 @@ begin
  lib^.set_proc($95493AC2B197C8CC,@ps4_recvfrom);
  lib^.set_proc($A719C299A82BB5AA,@ps4_listen);
  lib^.set_proc($4D4BA2612DA413CB,@ps4_shutdown);
+ lib^.set_proc($DDEFB822FEC827C5,@ps4_accept);
 
  //socket
 
