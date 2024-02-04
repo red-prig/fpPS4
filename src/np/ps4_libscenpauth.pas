@@ -16,7 +16,7 @@ const
 type
  pSceNpClientId=^SceNpClientId;
  SceNpClientId=packed record
-  id:array[0..SCE_NP_CLIENT_ID_MAX_LEN+1] of char;
+  id:array[0..SCE_NP_CLIENT_ID_MAX_LEN] of char;
   padding:array[0..6] of Byte;
  end;
 
@@ -31,14 +31,14 @@ type
  pSceNpAuthGetAuthorizationCodeParameter=^SceNpAuthGetAuthorizationCodeParameter;
  SceNpAuthGetAuthorizationCodeParameter=packed record
   size:QWORD;
-  userId,padding:array[0..3] of Byte;
-  clientId:pSceNpClientId;
+  pOnlineId:pSceNpOnlineId;
+  pClientId:pSceNpClientId;
   scope:PChar;
  end;
 
  pSceNpAuthorizationCode=^SceNpAuthorizationCode;
  SceNpAuthorizationCode=packed record
-  code:array[0..SCE_NP_AUTHORIZATION_CODE_MAX_LEN+1] of char;
+  code:array[0..SCE_NP_AUTHORIZATION_CODE_MAX_LEN] of char;
   padding:array[0..6] of Byte;
  end;
 

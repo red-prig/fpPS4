@@ -18,7 +18,7 @@ begin
  Result:=1;
 end;
 
-function ps4_sceNpLookupCreateTitleCtxA(selfNpId:PSceNpId):Integer; SysV_ABI_CDecl;
+function ps4_sceNpLookupCreateTitleCtxA(selfNpId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=1;
 end;
