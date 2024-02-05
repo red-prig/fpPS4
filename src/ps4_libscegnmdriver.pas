@@ -1979,10 +1979,12 @@ const
  SCE_GNM_ERROR_FAILURE=-1897004801; // $8eee00ff;
 
 type
- FoundResourceCallback=procedure(
-                        resourceHandle:DWORD;
-                        ownerHandle:DWORD;
-                        callbackData:QWORD); SysV_ABI_CDecl; 
+ pFoundResourceCallback=^FoundResourceCallback;
+ FoundResourceCallback=packed record
+  resourceHandle:DWORD;
+  ownerHandle:DWORD;
+  callbackData:QWORD;
+ end;
 
 function ps4_sceGnmGetResourceRegistrationBuffers({params?}):Int64; SysV_ABI_CDecl;
 begin
