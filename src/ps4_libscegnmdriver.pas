@@ -1978,14 +1978,41 @@ end;
 const
  SCE_GNM_ERROR_FAILURE=-1897004801; // $8eee00ff;
 
+type
+ pResourceHandle=^ResourceHandle;
+ ResourceHandle=DWORD;
+
+ pOwnerHandle=^OwnerHandle;
+ OwnerHandle=DWORD;
+
+ FoundResourceCallback=procedure(
+                        resourceHandle:ResourceHandle;
+                        ownerHandle:OwnerHandle;
+                        callbackData:QWORD); SysV_ABI_CDecl; 
+
 function ps4_sceGnmGetResourceRegistrationBuffers({params?}):Int64; SysV_ABI_CDecl;
 begin
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmFindResourcesPublic(const pTestArea:Pointer;
+                                       testSizeInBytes:QWORD;
+                                       foundResourceCallback:FoundResourceCallback;
+                                       callbackData:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmFindResourcesPublic:',callbackData);
  Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
 function ps4_sceGnmRegisterOwner(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGnmRegisterOwner:',ownerName);
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmRegisterOwnerForSystem(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmRegisterOwnerForSystem:',ownerName);
  Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
@@ -2243,7 +2270,9 @@ begin
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 
  lib^.set_proc($78B41B36C29E4E45,@ps4_sceGnmGetResourceRegistrationBuffers);
+ lib^.set_proc($E0CBFD397CA9046F,@ps4_sceGnmFindResourcesPublic);
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
+ lib^.set_proc($8FA99242CDD481A6,@ps4_sceGnmRegisterOwnerForSystem);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
  lib^.set_proc($93C11792120FFA53,@ps4_sceGnmUnregisterResource);
  lib^.set_proc($7E12B0095563F679,@ps4_sceGnmUnregisterOwnerAndResources);
