@@ -1979,12 +1979,6 @@ const
  SCE_GNM_ERROR_FAILURE=-1897004801; // $8eee00ff;
 
 type
- pResourceHandle=^ResourceHandle;
- ResourceHandle=DWORD;
-
- pOwnerHandle=^OwnerHandle;
- OwnerHandle=DWORD;
-
  FoundResourceCallback=procedure(
                         resourceHandle:DWORD;
                         ownerHandle:DWORD;
