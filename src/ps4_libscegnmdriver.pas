@@ -1986,8 +1986,8 @@ type
  OwnerHandle=DWORD;
 
  FoundResourceCallback=procedure(
-                        resourceHandle:ResourceHandle;
-                        ownerHandle:OwnerHandle;
+                        resourceHandle:DWORD;
+                        ownerHandle:DWORD;
                         callbackData:QWORD); SysV_ABI_CDecl; 
 
 function ps4_sceGnmGetResourceRegistrationBuffers({params?}):Int64; SysV_ABI_CDecl;
