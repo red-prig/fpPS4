@@ -80,7 +80,7 @@ begin
 end;
 
 function ps4_sceNpTusSetDataA(reqId:Integer;
-                              targetAccountId:QWORD;
+                              targetAccountId:SceNpAccountId;
                               slotId:DWORD;
                               totalSize:QWORD;
                               sendSize:QWORD;
