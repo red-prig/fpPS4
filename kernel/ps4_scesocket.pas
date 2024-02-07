@@ -48,7 +48,11 @@ function ps4_sendto(s:SceNetId;
                     len:QWORD;
                     flags:Integer;
                     const addr:pSceNetSockaddr;
-                    paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;                    
+                    paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+
+function ps4_getsockname(s:SceNetId;
+                         addr:pSceNetSockaddr;
+                         paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;                                       
 
 implementation
 
@@ -111,6 +115,13 @@ function ps4_sendto(s:SceNetId;
                     flags:Integer;
                     const addr:pSceNetSockaddr;
                     paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_getsockname(s:SceNetId;
+                         addr:pSceNetSockaddr;
+                         paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
