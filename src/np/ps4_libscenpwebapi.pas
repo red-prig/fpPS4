@@ -88,6 +88,23 @@ begin
  Result:=4;
 end;
 
+function ps4_sceNpWebApi2CreateRequest(titleUserCtxId:Integer;
+	                               pApiGroup:Pchar;
+	                               pPath:Pchar;
+	                               method:Integer; //SceNpWebApiHttpMethod
+	                               pContentParameter:pSceNpWebApiContentParameter;
+	                               pRequestId:pInt64):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpWebApi2SendRequest(requestId:Int64;
+                                     pData:Pointer;
+                                     dataSize:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
@@ -95,6 +112,13 @@ begin
 end;
 
 function ps4_sceNpWebApi2PushEventDeletePushContext(param_1:Integer;param_2:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpWebApi2AddHttpRequestHeader(requestId:Integer;
+                                              const pFieldName:PChar;
+                                              const pValue:PChar):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -315,9 +339,12 @@ begin
 
  lib:=Result._add_lib('libSceNpWebApi2');
 
- lib^.set_proc($FA8F7CD7A61086A4,@ps4_sceNpWebApi2Initialize );
+ lib^.set_proc($FA8F7CD7A61086A4,@ps4_sceNpWebApi2Initialize);
+  lib^.set_proc($DC423F39227AE577,@ps4_sceNpWebApi2CreateRequest);
+ lib^.set_proc($95038217CE25BF3C,@ps4_sceNpWebApi2SendRequest); 
  lib^.set_proc($B24E786E2E85B583,@ps4_sceNpWebApi2CreateUserContext);
  lib^.set_proc($41A7F179933758AE,@ps4_sceNpWebApi2PushEventDeletePushContext);
+ lib^.set_proc($7A038EBEB9C5EA62,@ps4_sceNpWebApi2AddHttpRequestHeader); 
 end;
 
 initialization
