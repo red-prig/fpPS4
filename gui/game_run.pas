@@ -8,12 +8,16 @@ uses
  windows,
  Classes,
  SysUtils,
+ md_pipe,
+ host_ipc,
+ md_host_ipc,
  game_info;
 
 var
- //FLogUpdate:Integer=0;
-
  t_wr_handle:THandle;
+
+ mgui_ipc:THostIpcConnect=nil;
+ kern_ipc:THostIpcConnect=nil;
 
 procedure run_item(Item:TGameItem);
 
@@ -31,7 +35,6 @@ uses
  md_exception, //<- install custom
 
  kern_proc,
- host_ipc,
  md_systm,
 
  //internal libs
@@ -47,16 +50,6 @@ uses
 var
  runing:Boolean=False;
 
-procedure WakeMainThread;
-begin
- //System.InterlockedIncrement(FLogUpdate);
-
- if Assigned(Classes.WakeMainThread) then
- begin
-  Classes.WakeMainThread(nil);
- end;
-end;
-
 procedure re_init_tty; register;
 var
  i:Integer;
@@ -65,18 +58,18 @@ begin
  begin
   //std_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
   //std_tty[i].t_wr_handle:=t_wr_handle;
-  std_tty[i].t_update   :=@WakeMainThread;
+  //std_tty[i].t_update   :=@WakeMainThread;
  end;
 
  For i:=0 to High(deci_tty) do
  begin
   //deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
   //deci_tty[i].t_wr_handle:=t_wr_handle;
-  deci_tty[i].t_update   :=@WakeMainThread;
+  //deci_tty[i].t_update   :=@WakeMainThread;
  end;
 
  //debug_tty.t_wr_handle:=t_wr_handle;
- debug_tty.t_update   :=@WakeMainThread;
+ //debug_tty.t_update   :=@WakeMainThread;
 end;
 
 procedure prepare(Item:TGameItem); SysV_ABI_CDecl;
@@ -86,8 +79,6 @@ var
  len:Integer;
  exec:array[0..PATH_MAX] of Char;
  argv:array[0..1] of PChar;
-
- host_ipc:THostIpcConnect;
 begin
  //re_init_tty;
  //init_tty:=@re_init_tty;
@@ -95,16 +86,14 @@ begin
  //init all
  sys_init;
 
- Writeln('Hollo World!');
+ PROC_INIT_HOST_IPC(kern_ipc);
 
  Writeln(Item.FGameInfo.Exec);
-
- //host_ipc:=THostIpcConnect(THostIpcSimpleKERN.Create);
- //PROC_INIT_HOST_IPC(host_ipc);
-
  Writeln(Item.FMountList.app0);
  Writeln(Item.FMountList.system);
  Writeln(Item.FMountList.data);
+
+
 
                        //fs  guest     host
  err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,0);
@@ -162,10 +151,15 @@ var
  td:p_kthread;
  r:Integer;
 
+ pipefd:THandle;
+ parent:THandle;
+
  mem:TPCharStream;
  Item:TGameItem;
 begin
  mem:=TPCharStream.Create(data,size);
+
+ mem.Read(pipefd,SizeOf(THandle));
 
  Item:=TGameItem.Create;
  Item.Deserialize(mem);
@@ -175,9 +169,12 @@ begin
  //free shared
  md_fork_unshare;
 
- //sys_init;
+ parent:=md_pidfd_open(md_getppid);
 
- //sleep(-1);
+ pipefd:=md_pidfd_getfd(parent,pipefd);
+
+ kern_ipc:=THostIpcConnect(THostIpcPipeKERN.Create);
+ THostIpcPipeKERN(kern_ipc).set_pipe(pipefd);
 
  td:=nil;
  r:=kthread_add(@prepare,Item,@td,'[main]');
@@ -186,10 +183,15 @@ begin
  sleep(-1);
 end;
 
+const
+ fork_proc:Boolean=True;
+
 procedure run_item(Item:TGameItem);
 var
  td:p_kthread;
  r:Integer;
+
+ kern2mgui:array[0..1] of THandle;
 
  mem:TMemoryStream;
 begin
@@ -200,21 +202,36 @@ begin
  SetStdHandle(STD_ERROR_HANDLE ,t_wr_handle);
  SetStdHandle(STD_OUTPUT_HANDLE,t_wr_handle);
 
- mem:=TMemoryStream.Create;
+ if fork_proc then
+ begin
+  md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
 
- Item.Serialize(mem);
+  mgui_ipc:=THostIpcConnect(THostIpcPipeMGUI.Create);
+  THostIpcPipeMGUI(mgui_ipc).set_pipe(kern2mgui[0]);
 
- //mem.Position:=0;
+  //
 
- md_fork_process(@fork_process,mem.Memory,mem.Size);
+  mem:=TMemoryStream.Create;
 
- mem.Free;
+  mem.Write(kern2mgui[1],SizeOf(THandle));
 
- {
- td:=nil;
- r:=kthread_add(@prepare,Item,@td,'[main]');
- Assert(r=0);
- }
+  Item.Serialize(mem);
+
+  md_fork_process(@fork_process,mem.Memory,mem.Size);
+
+  mem.Free;
+ end else
+ begin
+  kern_ipc:=THostIpcConnect(THostIpcSimpleKERN.Create);
+  mgui_ipc:=THostIpcConnect(THostIpcSimpleMGUI.Create);
+
+  THostIpcSimpleKERN(kern_ipc).FDest:=THostIpcSimpleMGUI(mgui_ipc);
+  THostIpcSimpleMGUI(mgui_ipc).FDest:=THostIpcSimpleKERN(kern_ipc);
+
+  td:=nil;
+  r:=kthread_add(@prepare,Item,@td,'[main]');
+  Assert(r=0);
+ end;
 
  runing:=True;
 end;

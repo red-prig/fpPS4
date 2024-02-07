@@ -8,7 +8,9 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
   game_info,
-  game_edit;
+  game_edit,
+
+  host_ipc;
 
 type
 
@@ -73,6 +75,9 @@ uses
  TypInfo,
  Rtti,
 
+ evbuffer,
+ evpoll,
+
  game_run;
 
 //
@@ -113,6 +118,20 @@ var
 const
  section_prefix='game-';
 
+type
+ TGuiIpcHandler=class(THostIpcHandler)
+  Form:TfrmMain;
+  Procedure OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer); override;
+ end;
+
+Procedure TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+begin
+ ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
+end;
+
+var
+ IpcHandler:TGuiIpcHandler;
+
 procedure TfrmMain.ReadIniFile;
 var
  i,c:Integer;
@@ -121,6 +140,9 @@ var
  List:TStringList;
  Item:TGameItem;
 begin
+ IpcHandler:=TGuiIpcHandler.Create;
+ IpcHandler.Form:=Self;
+
  //main
  FMainInfo.ReadIni(FIniFile,'main');
  //main
@@ -262,16 +284,18 @@ procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
 begin
  Done:=True;
 
- if (GetTickCount64-FLogUpdateTime)>500 then
+ if (GetTickCount64-FLogUpdateTime)>100 then
  begin
-
-  //if (System.InterlockedExchange(FLogUpdate,0)<>0) then
   if (FList<>nil) then
   begin
    FList.Update;
   end;
-
   FLogUpdateTime:=GetTickCount64;
+ end;
+
+ if (mgui_ipc<>nil) then
+ begin
+  mgui_ipc.Update(IpcHandler);
  end;
 
 end;

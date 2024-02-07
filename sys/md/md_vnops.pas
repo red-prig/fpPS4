@@ -2383,6 +2383,10 @@ begin
   if (R=STATUS_PENDING) then
   begin
    R:=NtWaitForSingleObject(F,False,nil);
+   if (R=0) then
+   begin
+    R:=BLK.Status;
+   end;
   end;
 
   Result:=ntf2px(R);

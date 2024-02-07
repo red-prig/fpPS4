@@ -45,9 +45,15 @@ const
  STATUS_FILE_CORRUPT_ERROR     =$C0000102; //EIO
  STATUS_NOT_A_DIRECTORY        =$C0000103; //ENOTDIR
  STATUS_NAME_TOO_LONG          =$C0000106; //ENAMETOOLONG
+ STATUS_CANCELLED              =$C0000120;
  STATUS_PAGEFILE_QUOTA_EXCEEDED=$C000012C; //ENOMEM
  STATUS_COMMITMENT_LIMIT       =$C000012D; //ENOMEM
+ STATUS_LOCAL_DISCONNECT       =$C000013B;
  STATUS_IO_DEVICE_ERROR        =$C0000185; //EIO
+ STATUS_CONNECTION_RESET       =$C000020D;
+ STATUS_CONNECTION_REFUSED     =$C0000236;
+ STATUS_GRACEFUL_DISCONNECT    =$C0000237;
+ STATUS_CONNECTION_ABORTED     =$C0000241;
  STATUS_TOO_MANY_LINKS         =$C0000265; //EMLINK
  STATUS_COMMITMENT_MINIMUM     =$C00002C8; //ENOMEM
  STATUS_CANT_CROSS_RM_BOUNDARY =$C0190038; //EXDEV
@@ -100,22 +106,25 @@ const
  PROCESS_PRIORITY_CLASS_ABOVE_NORMAL=6;
 
  //FileInformationClass
- FileBasicInformation          = 4;
- FileStandardInformation       = 5;
- FileInternalInformation       = 6;
- FileEaInformation             = 7;
- FileAccessInformation         = 8;
- FileRenameInformation         =10;
- FileLinkInformation           =11;
- FileNamesInformation          =12;
- FileDispositionInformation    =13;
- FilePositionInformation       =14;
- FileModeInformation           =16;
- FileAlignmentInformation      =17;
- FileAllInformation            =18;
- FileAllocationInformation     =19;
- FileEndOfFileInformation      =20;
- FileIdFullDirectoryInformation=38;
+ FileBasicInformation            = 4;
+ FileStandardInformation         = 5;
+ FileInternalInformation         = 6;
+ FileEaInformation               = 7;
+ FileAccessInformation           = 8;
+ FileRenameInformation           =10;
+ FileLinkInformation             =11;
+ FileNamesInformation            =12;
+ FileDispositionInformation      =13;
+ FilePositionInformation         =14;
+ FileModeInformation             =16;
+ FileAlignmentInformation        =17;
+ FileAllInformation              =18;
+ FileAllocationInformation       =19;
+ FileEndOfFileInformation        =20;
+ FilePipeInformation             =23;
+ FileCompletionInformation       =30;
+ FileIdFullDirectoryInformation  =38;
+ FileReplaceCompletionInformation=61;
 
  FileFsFullSizeInformation=7;
 
@@ -227,6 +236,8 @@ const
  FSCTL_SET_REPARSE_POINT=$000900A4;
  FSCTL_GET_REPARSE_POINT=$000900A8;
 
+ FSCTL_PIPE_PEEK=$11400c;
+
  // ReparseTag
  IO_REPARSE_TAG_SYMLINK =$A000000C;
 
@@ -235,6 +246,18 @@ const
 
  // Privileges
  SE_CREATE_SYMBOLIC_LINK_PRIVILEGE=35;
+
+ //NamedPipeType
+ FILE_PIPE_BYTE_STREAM_TYPE=$00000000;
+ FILE_PIPE_MESSAGE_TYPE    =$00000001;
+
+ //ReadMode
+ FILE_PIPE_BYTE_STREAM_MODE=$00000000;
+ FILE_PIPE_MESSAGE_MODE    =$00000001;
+
+ //CompletionMode
+ FILE_PIPE_QUEUE_OPERATION   =$00000000;
+ FILE_PIPE_COMPLETE_OPERATION=$00000001;
 
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
@@ -317,6 +340,19 @@ type
  FILE_NAME_INFORMATION=packed record
   FileNameLength:ULONG;      //size in byte
   FileName      :record end; //WCHAR
+ end;
+
+ PFILE_COMPLETION_INFORMATION=^FILE_COMPLETION_INFORMATION;
+ FILE_COMPLETION_INFORMATION=packed record
+  Port:THandle;
+  Key :Pointer;
+ end;
+
+ PFILE_IO_COMPLETION_INFORMATION=^FILE_IO_COMPLETION_INFORMATION;
+ FILE_IO_COMPLETION_INFORMATION=packed record
+  KeyContext   :Pointer;
+  ApcContext   :Pointer;
+  IoStatusBlock:IO_STATUS_BLOCK;
  end;
 
  PFILE_ALL_INFORMATION=^FILE_ALL_INFORMATION;
@@ -495,6 +531,14 @@ type
   Enable        :ULONG;
  end;
 
+ T_PIPE_PEEK=packed record
+  NamedPipeState   :DWORD;
+  ReadDataAvailable:DWORD;
+  NumberOfMessages :DWORD;
+  MessageLength    :DWORD;
+  data             :record end;
+ end;
+
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
 
 function NtDuplicateObject(
@@ -600,6 +644,13 @@ function NtSuspendThread(
           SuspendCount:PULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtOpenProcess(
+          ProcessHandle   :PHandle;
+          DesiredAccess   :DWORD;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
+          ClientId        :PCLIENT_ID
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtSuspendProcess(
           ProcessHandle:THandle
          ):DWORD; stdcall; external 'ntdll';
@@ -692,6 +743,23 @@ function NtQuerySystemInformation(
           SystemInformation      :Pointer;
           SystemInformationLength:ULONG;
           ReturnLength           :PULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtCreateNamedPipeFile(
+          FileHandle       :PHandle;
+          DesiredAccess    :ACCESS_MASK;
+          ObjectAttributes :POBJECT_ATTRIBUTES;
+          IoStatusBlock    :PIO_STATUS_BLOCK;
+          ShareAccess      :ULONG;
+          CreateDisposition:ULONG;
+          CreateOptions    :ULONG;
+          NamedPipeType    :ULONG;
+          ReadMode         :ULONG;
+          CompletionMode   :ULONG;
+          MaximumInstances :ULONG;
+          InboundQuota     :ULONG;
+          OutboundQuota    :ULONG;
+          DefaultTimeout   :PLARGE_INTEGER
          ):DWORD; stdcall; external 'ntdll';
 
 function NtCreateFile(
@@ -849,6 +917,21 @@ function NtQueryVolumeInformationFile(
          ):DWORD; stdcall; external 'ntdll';
 
 
+function NtCreateIoCompletion(
+          IoCompletionHandle:PHandle;
+          DesiredAccess     :ACCESS_MASK;
+          ObjectAttributes  :POBJECT_ATTRIBUTES;
+          Count             :ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtRemoveIoCompletionEx(
+          IoCompletionHandle     :THandle;
+          IoCompletionInformation:PFILE_IO_COMPLETION_INFORMATION;
+          Count                  :ULONG;
+          NumEntriesRemoved      :PULONG;
+          Timeout                :PLARGE_INTEGER;
+          Alertable              :Boolean
+         ):DWORD; stdcall; external 'ntdll';
 
 function NtCreateEvent(
           EventHandle     :PHandle;

@@ -19,6 +19,10 @@ function  md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied
 function  md_copyin (udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 
+function  md_getppid:DWORD;
+function  md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
+function  md_pidfd_open (pid:DWORD):THandle;
+
 procedure md_run_forked;
 procedure md_fork_unshare;
 function  md_fork_process(proc:Pointer;data:Pointer;size:QWORD):THandle;
@@ -31,6 +35,9 @@ uses
  sys_crt,
  errno,
  md_map;
+
+var
+ ppid:DWORD=0;
 
 function md_copyin(hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 var
@@ -76,6 +83,56 @@ end;
 function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 begin
  Result:=md_copyout(NtCurrentProcess,kaddr,udaddr,len,lencopied);
+end;
+
+function md_getppid:DWORD;
+begin
+ Result:=ppid;
+end;
+
+function md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
+begin
+ Result:=0;
+ NtDuplicateObject(
+  pidfd,
+  targetfd,
+  NtCurrentProcess,
+  @Result,
+  0,
+  0,
+  DUPLICATE_SAME_ACCESS
+ );
+end;
+
+function md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
+begin
+ Result:=0;
+ NtDuplicateObject(
+  NtCurrentProcess,
+  targetfd,
+  pidfd,
+  @Result,
+  0,
+  0,
+  DUPLICATE_SAME_ACCESS
+ );
+end;
+
+function md_pidfd_open(pid:DWORD):THandle;
+var
+ ClientId:TCLIENT_ID;
+ OATTR:OBJECT_ATTRIBUTES;
+ R:DWORD;
+begin
+ Result:=0;
+
+ ClientId.UniqueProcess:=pid;
+ ClientId.UniqueThread :=0;
+
+ OATTR:=Default(OBJECT_ATTRIBUTES);
+ OATTR.Length:=SizeOf(OBJECT_ATTRIBUTES);
+
+ R:=NtOpenProcess(@Result,PROCESS_DUP_HANDLE,@OATTR,@ClientId);
 end;
 
 const
@@ -293,38 +350,10 @@ begin
  until (prev>=addr);
 end;
 
-function md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
-begin
- Result:=0;
- NtDuplicateObject(
-  pidfd,
-  targetfd,
-  NtCurrentProcess,
-  @Result,
-  0,
-  0,
-  DUPLICATE_SAME_ACCESS
- );
-end;
-
-function md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
-begin
- Result:=0;
- NtDuplicateObject(
-  NtCurrentProcess,
-  targetfd,
-  pidfd,
-  @Result,
-  0,
-  0,
-  DUPLICATE_SAME_ACCESS
- );
-end;
-
 type
  p_shared_info=^t_shared_info;
  t_shared_info=record
-  hParent   :THandle;
+  ppid      :QWORD;
   hStdInput :THandle;
   hStdOutput:THandle;
   hStdError :THandle;
@@ -340,15 +369,6 @@ var
  len:ULONG_PTR;
 
  proc:Pointer;
-
- {
- F:THandle;
- F2:THandle;
- S:RAwByteString;
- BLK:IO_STATUS_BLOCK;
- OFFSET:Int64;
- R:DWORD;
- }
 begin
  base:=Pointer(WIN_SHARED_ADDR);
 
@@ -364,7 +384,7 @@ begin
 
  if (info.State=MEM_FREE) then Exit;
 
- //sleep(-1);
+ ppid:=base^.ppid;
 
  SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
  SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
@@ -373,36 +393,6 @@ begin
  proc:=base^.proc;
 
  if (proc=nil) then Exit;
-
- {
- F:=FileCreate('log2.txt');
-
- S:='0x'+HexStr(Pointer(proc))+#13#10;
- FileWrite(F,PChar(S)^,Length(S));
-
- S:='hParent:'+IntToStr(base^.hParent)+':'+#13#10;
- FileWrite(F,PChar(S)^,Length(S));
-
- F2:=GetStdHandle(STD_OUTPUT_HANDLE);
- //F2:=md_pidfd_getfd(base^.hParent,F2);
-
- S:='[NtWriteFile] hParent:'+IntToStr(base^.hParent)+'-'+#13#10;
- //FileWrite(F2,PChar(S)^,Length(S));
-
- BLK:=Default(IO_STATUS_BLOCK);
- OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
- R:=NtWriteFile(F2,0,nil,nil,@BLK,PChar(S),Length(S),@OFFSET,nil);
-
- S:='F2:'+IntToStr(F2)+':'+#13#10;
- FileWrite(F,PChar(S)^,Length(S));
-
- S:='R:0x'+HexStr(R,8)+#13#10;
- FileWrite(F,PChar(S)^,Length(S));
- }
-
- //writeln('test!');
-
- //sleep(-1);
 
  t_fork_cb(proc)(@base^.data,base^.size);
 
@@ -453,7 +443,7 @@ begin
 
  shared_info:=Default(t_shared_info);
 
- shared_info.hParent   :=md_dup_to_pidfd(hProcess,NtCurrentProcess);
+ shared_info.ppid      :=GetCurrentProcessId;
 
  shared_info.hStdInput :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_INPUT_HANDLE));
  shared_info.hStdOutput:=md_dup_to_pidfd(hProcess,GetStdHandle(STD_OUTPUT_HANDLE));

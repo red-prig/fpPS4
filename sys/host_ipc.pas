@@ -15,6 +15,20 @@ type
   iKNOTE
  );
 
+ PNodeHeader=^TNodeHeader;
+ TNodeHeader=packed record
+  mtype:DWORD;
+  mlen :DWORD;
+  buf  :record end;
+ end;
+
+ PQNode=^TQNode;
+ TQNode=packed record
+  next_ :PQNode;
+  header:TNodeHeader;
+  buf   :record end;
+ end;
+
  PHostIpcKnote=^THostIpcKnote;
  THostIpcKnote=packed record
   pid   :Integer;
@@ -22,52 +36,45 @@ type
   hint  :QWORD
  end;
 
- PQNode=^TQNode;
- TQNode=packed record
-  next_:PQNode;
-  mtype:DWORD;
-  mlen :DWORD;
-  buf  :record end;
- end;
-
- THostIpcCb=procedure(node,data:Pointer); register;
-
- THostIpcCbRec=record
-  cbs :THostIpcCb;
-  data:Pointer;
+ THostIpcHandler=class
+  Procedure OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer); virtual;
  end;
 
  THostIpcConnect=class
   FQueue:TIntrusiveMPSCQueue;
-  FCbReg:array[t_mtype] of THostIpcCbRec;
   //
   procedure   knote(pid,filter:Integer;hint:QWORD);
   //
   procedure   Send(mtype:t_mtype;mlen:DWORD;buf:Pointer); virtual;
   procedure   Pack(mtype:t_mtype;mlen:DWORD;buf:Pointer);
   function    Recv:PQNode;
-  procedure   Update; virtual;
+  procedure   Update(Handler:THostIpcHandler); virtual;
   //
   Constructor Create;
  end;
 
  THostIpcSimpleKERN=class;
 
- THostIpcSimpleGUI=class(THostIpcConnect)
+ THostIpcSimpleMGUI=class(THostIpcConnect)
   FDest:THostIpcSimpleKERN;
   procedure Send(mtype:t_mtype;mlen:DWORD;buf:Pointer); override;
  end;
 
  THostIpcSimpleKERN=class(THostIpcConnect)
-  FDest:THostIpcSimpleGUI;
+  FDest:THostIpcSimpleMGUI;
   FEvent:PRTLEvent;
   Constructor Create;
   Destructor  Destroy; override;
   procedure   Send(mtype:t_mtype;mlen:DWORD;buf:Pointer); override;
-  procedure   Update; override;
+  procedure   Update(Handler:THostIpcHandler); override;
  end;
 
 implementation
+
+Procedure THostIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+begin
+ //
+end;
 
 Constructor THostIpcConnect.Create;
 begin
@@ -79,9 +86,11 @@ var
  node:PQNode;
 begin
  node:=AllocMem(SizeOf(TQNode)+mlen);
- node^.mtype:=DWORD(mtype);
- node^.mlen :=mlen;
+ node^.header.mtype:=DWORD(mtype);
+ node^.header.mlen :=mlen;
  Move(buf^,node^.buf,mlen);
+ //
+ FQueue.Push(node);
 end;
 
 function THostIpcConnect.Recv:PQNode;
@@ -90,18 +99,17 @@ begin
  FQueue.Pop(Result);
 end;
 
-procedure THostIpcConnect.Update;
+procedure THostIpcConnect.Update(Handler:THostIpcHandler);
 var
  node:PQNode;
- rec:THostIpcCbRec;
 begin
  node:=Recv;
  while (node<>nil) do
  begin
-  rec:=FCbReg[t_mtype(node^.mtype)];
-  if (rec.cbs<>nil) then
+  //
+  if (Handler<>nil) then
   begin
-   rec.cbs(@node^.buf,rec.data);
+   Handler.OnMessage(t_mtype(node^.header.mtype),node^.header.mlen,@node^.buf);
   end;
   //
   FreeMem(node);
@@ -130,7 +138,7 @@ begin
  //
 end;
 
-procedure THostIpcSimpleGUI.Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+procedure THostIpcSimpleMGUI.Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);
 begin
  if (FDest<>nil) then
  begin
@@ -153,10 +161,13 @@ begin
  inherited;
 end;
 
-procedure THostIpcSimpleKERN.Update;
+procedure THostIpcSimpleKERN.Update(Handler:THostIpcHandler);
 begin
- RTLEventWaitFor(FEvent);
- inherited;
+ if FQueue.IsEmpty then
+ begin
+  RTLEventWaitFor(FEvent);
+ end;
+ inherited Update(Handler);
 end;
 
 procedure THostIpcSimpleKERN.Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);

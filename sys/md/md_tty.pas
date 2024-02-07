@@ -168,6 +168,7 @@ var
  BUF:TWRITE_BUF;
  i:QWORD;
  td:p_kthread;
+ R:DWORD;
 begin
  Result:=0;
  //init
@@ -195,7 +196,16 @@ begin
   Inc(iov_base,i);
   Dec(iov_len ,i);
   //
-  NtWriteFile(tp^.t_wr_handle,0,nil,nil,@BLK,@BUF.BUF,BUF.LEN,@OFFSET,nil);
+  R:=NtWriteFile(tp^.t_wr_handle,0,nil,nil,@BLK,@BUF.BUF,BUF.LEN,@OFFSET,nil);
+  //
+  if (R=STATUS_PENDING) then
+  begin
+   R:=NtWaitForSingleObject(tp^.t_wr_handle,False,nil);
+   if (R=0) then
+   begin
+    R:=BLK.Status;
+   end;
+  end;
   //
   BUF.INIT();
  end;

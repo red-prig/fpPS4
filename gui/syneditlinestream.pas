@@ -238,34 +238,13 @@ end;
 
 procedure TSynEditLineStream.Reset;
 var
- i,c,ffcnt,delta:Integer;
- tend:Boolean;
+ ffcnt,delta:Integer;
 begin
  BeginUpdate;
  //
- i:=FSynLog.TopLine+FSynLog.LinesInWindow+3;
- //
- FStream.Reset;
  ffcnt:=FStream.GetCount;
- delta:=FStream.Update;
- //
- tend:=(i>=ffcnt);
- //
- if tend then
- begin
-  i:=FSynLog.LinesInWindow;
-  c:=FStream.GetCount;
-  //
-  if (c>i) then
-  begin
-   i:=c-i+1;
-  end else
-  begin
-   i:=1;
-  end;
-  //
-  FSynLog.TopLine:=i;
- end;
+ FStream.Reset;
+ delta:=-ffcnt;
  //
  IncreaseTextChangeStamp;
  //
