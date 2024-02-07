@@ -876,6 +876,11 @@ begin
  Result:=Integer(SCE_AUDIO_IN_ERROR_NOT_OPENED);
 end;
 
+function ps4_sceAudioInGetSilentState(handle:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceAudioIn(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -884,6 +889,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceAudioIn');
  lib^.set_proc($E4D13C4A373B542F,@ps4_sceAudioInOpen);
+ lib^.set_proc($068844010EC39541,@ps4_sceAudioInGetSilentState);
 end;
 
 initialization
