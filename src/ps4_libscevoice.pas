@@ -109,7 +109,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVoiceSetMuteFlag(portId:DWORD;bMuted:Single):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceSetMuteFlag(portId:DWORD;bMuted:Boolean):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;

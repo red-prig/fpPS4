@@ -11,6 +11,9 @@ uses
   SysUtils;
 
 const
+ AF_INET = 2;
+ AF_INET6=28;
+
  SCE_NET_EINVAL      =22;
  SCE_NET_ENOSPC      =28;
  SCE_NET_EAFNOSUPPORT=47;
@@ -64,6 +67,13 @@ type
   ident:QWORD;
   data:SceNetEpollData;
  end;
+
+const
+ default_addr:SceNetSockaddr=(
+  sa_len   :SizeOf(SceNetSockaddr);
+  sa_family:AF_INET;
+  sa_data  :(80,0,1,1,1,1,0,0,0,0,0,0,0,0);
+ );
 
 implementation
 
@@ -129,10 +139,6 @@ begin
 //Writeln('sceNetEpollCreate:',name,':',flags);
  Result:=3;
 end;
-
-const
- AF_INET = 2;
- AF_INET6=28;
 
 function ps4_sceNetInetPton(af:Integer;
                             src:Pchar;
@@ -280,13 +286,6 @@ function ps4_sceNetListen(s:Integer;backlog:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
-
-const
- default_addr:SceNetSockaddr=(
-  sa_len   :SizeOf(SceNetSockaddr);
-  sa_family:AF_INET;
-  sa_data  :(80,0,1,1,1,1,0,0,0,0,0,0,0,0);
- );
 
 function ps4_sceNetAccept(s:Integer;
                           addr:pSceNetSockaddr;
