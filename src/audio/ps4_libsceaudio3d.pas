@@ -8,6 +8,10 @@ uses
  ps4_program;
 
 const
+ //SceAudio3dFormat
+ SCE_AUDIO3D_FORMAT_S16  =0;
+ SCE_AUDIO3D_FORMAT_FLOAT=1;
+
  //SceAudio3dRate
  SCE_AUDIO3D_RATE_48000=0;
 
@@ -21,6 +25,9 @@ const
  SCE_AUDIO3D_BLOCKING_SYNC =1;
 
 type
+ pSceAudio3dFormat=^SceAudio3dFormat;
+ SceAudio3dFormat=Integer;
+
  pSceAudio3dAttributeId=^SceAudio3dAttributeId;
  SceAudio3dAttributeId=DWORD;
 
@@ -137,6 +144,15 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudio3dBedWrite(uiPortId:SceAudio3dPortId;
+                                uiNumChannels:Integer;
+                                eFormat:SceAudio3dFormat;
+                                const pBuffer:Pointer;
+                                _uiNumChannels:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceAudio3d(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -155,6 +171,7 @@ begin
  lib^.set_proc($54456167DA9DE196,@ps4_sceAudio3dPortPush);
  lib^.set_proc($B9C12C8BADACA13A,@ps4_sceAudio3dAudioOutOpen);
  lib^.set_proc($61A6836C3C0AA453,@ps4_sceAudio3dPortGetQueueLevel);
+ lib^.set_proc($F6D130134195D2AA,@ps4_sceAudio3dBedWrite);
 end;
 
 initialization
