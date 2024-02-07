@@ -337,6 +337,7 @@
       <Unit73>
         <Filename Value="src\ps4_libsceremoteplay.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceRemoteplay"/>
       </Unit73>
       <Unit74>
         <Filename Value="src\ps4_libscertc.pas"/>

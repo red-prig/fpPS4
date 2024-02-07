@@ -23,7 +23,7 @@ type
   ownerId                   :SceNpOnlineId;
   reserved1                 :array[0..15] of Byte;
   hasData                   :Integer;
-  lastChangedDate           :PQWORD; //SceRtcTick
+  lastChangedDate           :QWORD; //SceRtcTick
   lastChangedAuthorId       :SceNpOnlineId;
   reserved2                 :array[0..15] of Byte;
   pad                       :array[0..3] of Byte;
@@ -39,7 +39,7 @@ implementation
 
 function ps4_sceNpTusCreateRequest(titleCtxId:Integer):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=1;
 end;
 
 function ps4_sceNpTusDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
@@ -70,7 +70,7 @@ end;
 function ps4_sceNpTusGetDataA(reqId:Integer;
                               targetAccountId:SceNpAccountId;
                               slotId:DWORD;
-                              dataStatus:SceNpTusDataStatusA;
+                              dataStatus:pSceNpTusDataStatusA;
                               dataStatusSize:QWORD;
                               data:Pointer;
                               recvSize:QWORD;
