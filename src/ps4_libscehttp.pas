@@ -25,6 +25,11 @@ const
  SCE_HTTP_ERROR_NETWORK      =$80431063;
 
 type
+ pSceHttpsCaList=^SceHttpsCaList;
+ SceHttpsCaList=packed record
+  //
+ end;
+
  SceHttpUriElement=packed record
   opaque  :LongBool;
   _align  :DWord;
@@ -297,6 +302,15 @@ end;
 function ps4_sceHttpReadData(reqId:Integer;
                              data:Pointer;
                              size:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHttpUriBuild(_out:PChar;
+                             require:QWORD;
+                             prepare:QWORD;
+                             const srcElement:pSceHttpUriElement;
+                             option:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -644,6 +658,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHttpsGetCaList(libhttpCtxId:Integer;
+                               caList:pSceHttpsCaList):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceHttp(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -686,6 +706,7 @@ begin
  lib^.set_proc($68260F31250868FF,@ps4_sceHttpGetAllResponseHeaders);
  lib^.set_proc($CAE3B61F652F9E8B,@ps4_sceHttpGetResponseContentLength);
  lib^.set_proc($3F9A5DA3290F6139,@ps4_sceHttpReadData);
+ lib^.set_proc($E4B640F8A3C84950,@ps4_sceHttpUriBuild);
  lib^.set_proc($2166A5027FE0B85B,@ps4_sceHttpUriParse);
  lib^.set_proc($2A2C2FF6BE086427,@ps4_sceHttpCreateConnection);
  lib^.set_proc($B6C195AEEDE109EF,@ps4_sceHttpCreateRequest);
@@ -694,6 +715,7 @@ begin
  lib^.set_proc($C5E8057D9281565C,@ps4_sceHttpSetSendTimeOut);
  lib^.set_proc($3C3C52E3CC4640BB,@ps4_sceHttpSetChunkedTransferEnabled);
  lib^.set_proc($86F1BA19F04C5E0F,@ps4_sceHttpAbortRequest);
+ lib^.set_proc($81C523C14DDF6B43,@ps4_sceHttpsGetCaList);
 end;
 
 function ps4_sceHttp2Init(libnetMemId,libsslCtxId:Integer;

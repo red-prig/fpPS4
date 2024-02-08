@@ -14,6 +14,21 @@ const
  SCE_HMD_ERROR_PARAMETER_NULL=Integer($81110008);
 
 type
+ pSceHmdReprojectionResourceInfo=^SceHmdReprojectionResourceInfo;
+ SceHmdReprojectionResourceInfo=packed record
+  pOnionBuff     :Pointer;
+  pGarlicBuff    :Pointer;
+  threadPriority :Integer;
+  _align         :Integer;
+  cpuAffinityMask:QWORD;
+  pipeId         :DWORD;
+  queueId        :DWORD;
+  reserved       :array[0..2] of DWORD;
+ end;
+
+ pSceHmdReprojectionReprojectionType=^SceHmdReprojectionReprojectionType;
+ SceHmdReprojectionReprojectionType=Integer;
+
  pSceHmdDeviceInformation=^SceHmdDeviceInformation;
  SceHmdDeviceInformation=packed record
   status:DWORD;
@@ -54,6 +69,13 @@ begin
 end;
 
 function ps4_sceHmdInitialize315(param:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceHmdReprojectionInitialize(resource:pSceHmdReprojectionResourceInfo;
+                                          _type:SceHmdReprojectionReprojectionType;
+                                          option:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -154,6 +176,7 @@ begin
  lib:=Result._add_lib('libSceHmd');
  lib^.set_proc($2B82A71F44244F67,@ps4_sceHmdInitialize);
  lib^.set_proc($B3F27AE9AAFD839D,@ps4_sceHmdInitialize315);
+ lib^.set_proc($3AECA01845A48A7B,@ps4_sceHmdReprojectionInitialize);
  lib^.set_proc($90B50090DE9AD5EF,@ps4_sceHmdReprojectionQueryOnionBuffSize);
  lib^.set_proc($216C9B59B47FC6F0,@ps4_sceHmdReprojectionQueryOnionBuffAlign);
  lib^.set_proc($CF42AD375BEA1761,@ps4_sceHmdReprojectionQueryGarlicBuffSize);
