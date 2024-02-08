@@ -19,6 +19,7 @@ type
   pOnionBuff     :Pointer;
   pGarlicBuff    :Pointer;
   threadPriority :Integer;
+  _align         :Integer;
   cpuAffinityMask:QWORD;
   pipeId         :DWORD;
   queueId        :DWORD;

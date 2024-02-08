@@ -26,7 +26,9 @@ const
 
 type
  pSceHttpsCaList=^SceHttpsCaList;
- SceHttpsCaList=Integer;
+ SceHttpsCaList=packed record
+  //
+ end;
 
  SceHttpUriElement=packed record
   opaque  :LongBool;
