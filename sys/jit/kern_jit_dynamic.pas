@@ -149,6 +149,7 @@ implementation
 uses
  sysutils,
  vmparam,
+ vm_pmap_prot,
  vm_pmap,
  md_map;
 

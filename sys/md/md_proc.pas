@@ -100,8 +100,6 @@ begin
  NtTerminateProcess(NtCurrentProcess, errnum);
 end;
 
-initialization
- p_proc.p_pid:=GetCurrentProcessId;
 
 end.
 

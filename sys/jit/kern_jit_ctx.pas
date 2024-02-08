@@ -240,7 +240,7 @@ procedure print_disassemble(addr:Pointer;vsize:Integer);
 implementation
 
 uses
- vm_pmap,
+ vm_pmap_prot,
  machdep,
  kern_thr,
  systm,

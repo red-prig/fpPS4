@@ -25,7 +25,7 @@ type
 
   FPush  :t_push_cb;
 
-  procedure Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+  procedure Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
   procedure Recv;
  end;
 
@@ -37,7 +37,7 @@ type
   Function    Push(Node:Pointer):Boolean; virtual;
   procedure   thread_new;  virtual;
   procedure   thread_free; virtual;
-  procedure   Send(mtype:t_mtype;mlen:DWORD;buf:Pointer); override;
+  procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
   Constructor Create;
   Destructor  Destroy; override;
  end;
@@ -51,7 +51,7 @@ type
 
  THostIpcPipeKERN=class(THostIpcPipe)
   Ftd:p_kthread;
-  Handler:THostIpcHandler;
+  FHandler:THostIpcHandler;
   procedure   Recv;        override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
@@ -59,13 +59,14 @@ type
 
 implementation
 
-procedure t_ipc_proto.Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+procedure t_ipc_proto.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
 var
  node:PNodeHeader;
 begin
  node:=AllocMem(SizeOf(TNodeHeader)+mlen);
  node^.mtype:=DWORD(mtype);
  node^.mlen :=mlen;
+ node^.mtid :=mtid;
  Move(buf^,node^.buf,mlen);
 
  evbuffer_add_ref(Foutput,node,0,SizeOf(TNodeHeader)+mlen,Freemem_ptr);
@@ -177,9 +178,9 @@ begin
  //
 end;
 
-procedure THostIpcPipe.Send(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+procedure THostIpcPipe.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
 begin
- proto.Send(mtype,mlen,buf);
+ proto.Send(mtype,mlen,mtid,buf);
 end;
 
 Constructor THostIpcPipe.Create;
@@ -227,7 +228,7 @@ procedure THostIpcPipeKERN.Recv;
 begin
  inherited;
 
- Update(Handler);
+ Update(FHandler);
 end;
 
 procedure THostIpcPipeKERN.thread_new;

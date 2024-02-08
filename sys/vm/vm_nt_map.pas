@@ -7,7 +7,8 @@ interface
 
 uses
  sysutils,
- vm;
+ vm,
+ vm_pmap_prot;
 
 const
  NT_FILE_FREE=1;
@@ -45,7 +46,6 @@ type
   size     :vm_size_t;     // virtual size
   nentries :Integer;       // Number of entries
   root     :p_vm_nt_entry; // Root of a binary search tree
-  vmap     :Pointer;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -58,7 +58,7 @@ procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
 function  vm_nt_map_max(map:p_vm_nt_map):vm_offset_t;
 function  vm_nt_map_min(map:p_vm_nt_map):vm_offset_t;
 
-procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;vmap:Pointer);
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
 
 function  vm_nt_map_lookup_entry(
             map    :p_vm_nt_map;
@@ -91,7 +91,6 @@ procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 implementation
 
 uses
- vm_map,
  md_map;
 
 type
@@ -166,50 +165,24 @@ end;
 
 procedure vm_prot_fixup(map:p_vm_nt_map;start,__end:vm_offset_t);
 var
- vmap:vm_map_t;
- entry:vm_map_entry_t;
+ next:vm_offset_t;
  base,size:vm_size_t;
  prot:Integer;
  r:Integer;
 begin
- vmap:=map^.vmap;
-
- if (vmap=nil) then Exit;
+ if (PAGE_PROT=nil) then Exit;
  if (start=__end) then Exit;
 
- if (not vm_map_lookup_entry(vmap, start, @entry)) then
+ while (start<__end) do
  begin
-  entry:=entry^.next;
- end else
- begin
-  entry:=entry;
- end;
+  next:=pmap_scan_rwx(start,__end);
 
- while (entry<>@vmap^.header) and (entry^.start<__end) do
- begin
+  base:=start;
+  size:=next-start;
 
-  if (entry^.inheritance=VM_INHERIT_HOLE) then
-  begin
-   entry:=entry^.next;
-   continue;
-  end;
+  prot:=pmap_get_prot(start);
 
-  base:=entry^.start;
-  size:=entry^.__end;
-
-  if (base<start) then
-  begin
-   base:=start;
-  end;
-
-  if (size>__end) then
-  begin
-   size:=__end;
-  end;
-
-  size:=size-base;
-
-  prot:=wprots[entry^.protection and VM_RWX];
+  prot:=wprots[prot and VM_RWX];
 
   if (prot<>MD_PROT_RW) then
   begin
@@ -221,7 +194,7 @@ begin
    end;
   end;
 
-  entry:=entry^.next;
+  start:=next;
  end;
 end;
 
@@ -553,14 +526,13 @@ begin
  end;
 end;
 
-procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;vmap:Pointer);
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
 begin
  map^.header.next:=@map^.header;
  map^.header.prev:=@map^.header;
  map^.min_offset:=min;
  map^.max_offset:=max;
  map^.root:=nil;
- map^.vmap:=vmap;
 end;
 
 procedure vm_nt_entry_dispose(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;

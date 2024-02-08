@@ -22,6 +22,7 @@ implementation
 
 uses
  sysutils,
+ vm_pmap_prot,
  vm_pmap,
  vm_map,
  kern_proc,

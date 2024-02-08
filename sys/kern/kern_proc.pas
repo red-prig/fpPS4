@@ -177,7 +177,8 @@ procedure PROC_INIT;
 const
  osreldate=$000DBBA0;
 begin
- FillChar(p_proc,SizeOf(p_proc),0);
+ p_proc.p_pid:=GetProcessID;
+
  mtx_init(p_proc.p_mtx,'process lock');
 
  knlist_init_mtx(@p_proc.p_klist,@p_proc.p_mtx);
@@ -191,7 +192,6 @@ begin
 
  p_proc.p_ptc:=rdtsc;
 end;
-
 
 end.
 

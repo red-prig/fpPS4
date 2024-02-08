@@ -154,6 +154,8 @@ var
  pipefd:THandle;
  parent:THandle;
 
+ kipc:THostIpcPipeKERN;
+
  mem:TPCharStream;
  Item:TGameItem;
 begin
@@ -173,8 +175,10 @@ begin
 
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
- kern_ipc:=THostIpcConnect(THostIpcPipeKERN.Create);
- THostIpcPipeKERN(kern_ipc).set_pipe(pipefd);
+ kipc:=THostIpcPipeKERN.Create;
+ kipc.set_pipe(pipefd);
+
+ kern_ipc:=THostIpcConnect(kipc);
 
  td:=nil;
  r:=kthread_add(@prepare,Item,@td,'[main]');
@@ -193,6 +197,11 @@ var
 
  kern2mgui:array[0..1] of THandle;
 
+ p_mgui_ipc:THostIpcPipeMGUI;
+
+ s_kern_ipc:THostIpcSimpleKERN;
+ s_mgui_ipc:THostIpcSimpleMGUI;
+
  mem:TMemoryStream;
 begin
  if Item.FLock then Exit;
@@ -206,8 +215,10 @@ begin
  begin
   md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
 
-  mgui_ipc:=THostIpcConnect(THostIpcPipeMGUI.Create);
-  THostIpcPipeMGUI(mgui_ipc).set_pipe(kern2mgui[0]);
+  p_mgui_ipc:=THostIpcPipeMGUI.Create;
+  p_mgui_ipc.set_pipe(kern2mgui[0]);
+
+  mgui_ipc:=p_mgui_ipc;
 
   //
 
@@ -222,11 +233,14 @@ begin
   mem.Free;
  end else
  begin
-  kern_ipc:=THostIpcConnect(THostIpcSimpleKERN.Create);
-  mgui_ipc:=THostIpcConnect(THostIpcSimpleMGUI.Create);
+  s_kern_ipc:=THostIpcSimpleKERN.Create;
+  s_mgui_ipc:=THostIpcSimpleMGUI.Create;
 
-  THostIpcSimpleKERN(kern_ipc).FDest:=THostIpcSimpleMGUI(mgui_ipc);
-  THostIpcSimpleMGUI(mgui_ipc).FDest:=THostIpcSimpleKERN(kern_ipc);
+  s_kern_ipc.FDest:=s_mgui_ipc;
+  s_mgui_ipc.FDest:=s_kern_ipc;
+
+  kern_ipc:=s_kern_ipc;
+  mgui_ipc:=s_mgui_ipc;
 
   td:=nil;
   r:=kthread_add(@prepare,Item,@td,'[main]');

@@ -121,13 +121,29 @@ const
 type
  TGuiIpcHandler=class(THostIpcHandler)
   Form:TfrmMain;
-  Procedure OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer); override;
+  function OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; override;
  end;
 
-Procedure TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer);
+function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
 begin
- ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
+ Result:=0;
+ case mtype of
+  iKNOTE:
+    with PHostIpcKnote(buf)^ do
+    begin
+     ShowMessage('iKNOTE pid:'+IntToStr(pid)+
+                 ' filter:'+IntToStr(filter)+
+                 ' hint:'+HexStr(hint,16)
+                );
+    end;
+
+
+  else;
+   ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
+ end;
 end;
+
+//PHostIpcKnote
 
 var
  IpcHandler:TGuiIpcHandler;

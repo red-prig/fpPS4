@@ -12,27 +12,10 @@ uses
  vnode,
  vuio,
  md_map,
+ vm_pmap_prot,
  vm_nt_map;
 
 const
- PMAPP_SHIFT=12;
- PMAPP_SIZE =1 shl PMAPP_SHIFT;
- PMAPP_MASK =PMAPP_SIZE-1;
-
- PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
- PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
-
- PAGE_PROT_READ   =VM_PROT_READ;
- PAGE_PROT_WRITE  =VM_PROT_WRITE;
- PAGE_PROT_EXECUTE=VM_PROT_EXECUTE;
-
- PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
-
- PAGE_PROT_LIFT   =$40;
-
- //PAGE_BUSY_FLAG   =DWORD($10000000);
- //PAGE_PATCH_FLAG  =DWORD($08000000);
-
  PMAPP_1GB_SHIFT =30;
  PMAPP_1GB_SIZE  =QWORD(QWORD(1) shl PMAPP_1GB_SHIFT);
  PMAPP_1GB_MASK  =PMAPP_1GB_SIZE-1;
@@ -40,8 +23,6 @@ const
  PMAPP_1GB_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_1GB_SHIFT;
 
 var
- PAGE_PROT:PBYTE=nil;
-
  DMEM_FD:array[0..PMAPP_1GB_DMEM_BLOCKS-1] of vm_nt_file_obj;
 
  DEV_INFO:record
@@ -50,10 +31,6 @@ var
   DEV_POS :QWORD;
   DEV_PTR :Pointer;
  end;
-
-procedure pmap_mark      (start,__end:vm_offset_t;prots:Byte);
-procedure pmap_unmark    (start,__end:vm_offset_t);
-function  pmap_get_prot  (addr:vm_offset_t):Byte;
 
 function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
@@ -76,7 +53,7 @@ function  dev_mem_alloc(pages:Integer):Pointer;
 
 procedure pmap_reserve(wr:Boolean);
 
-procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -210,7 +187,7 @@ begin
  end;
 end;
 
-procedure pmap_pinit(pmap:p_pmap;vmap:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 var
  i,r:Integer;
 begin
@@ -229,7 +206,7 @@ begin
   Assert(false,'pmap_init');
  end;
 
- vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,vmap);
+ vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
  //exclude
  if Length(pmap_mem)>1 then
@@ -375,61 +352,6 @@ begin
  begin
   addr^:=((addr^ + PDRMASK) and (not PDRMASK)) + superpage_offset;
  end;
-end;
-
-//PAGE_MAP
-
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
-begin
- Result:=QWORD(x) shl PMAPP_SHIFT;
-end;
-
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
-begin
- Result:=QWORD(x) shr PMAPP_SHIFT;
-end;
-
-function MAX_IDX(x:DWORD):DWORD; inline;
-begin
- if (x>PAGE_MAP_MASK) then
-  Result:=PAGE_MAP_MASK
- else
-  Result:=x;
-end;
-
-procedure pmap_mark(start,__end:vm_offset_t;prots:Byte);
-begin
- start:=OFF_TO_IDX(start);
- __end:=OFF_TO_IDX(__end);
- start:=MAX_IDX(start);
- __end:=MAX_IDX(__end);
- while (start<__end) do
- begin
-  PAGE_PROT[start]:=prots;
-  Inc(start);
- end;
- WriteBarrier;
-end;
-
-procedure pmap_unmark(start,__end:vm_offset_t);
-begin
- start:=OFF_TO_IDX(start);
- __end:=OFF_TO_IDX(__end);
- start:=MAX_IDX(start);
- __end:=MAX_IDX(__end);
- while (start<__end) do
- begin
-  PAGE_PROT[start]:=0;
-  Inc(start);
- end;
- WriteBarrier;
-end;
-
-function pmap_get_prot(addr:vm_offset_t):Byte;
-begin
- addr:=OFF_TO_IDX(addr);
- addr:=addr and PAGE_MAP_MASK;
- Result:=PAGE_PROT[addr];
 end;
 
 //rax,rdi,rsi

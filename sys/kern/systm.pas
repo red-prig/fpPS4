@@ -27,6 +27,7 @@ uses
  errno,
  md_systm,
  vmparam,
+ vm_pmap_prot,
  vm_pmap,
  kern_thr;
 

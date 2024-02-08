@@ -369,7 +369,7 @@ var
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm),@vm^.vm_map);
+ pmap_pinit(vmspace_pmap(vm));
 
  vm_map_init(@vm^.vm_map,vmspace_pmap(vm),VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
