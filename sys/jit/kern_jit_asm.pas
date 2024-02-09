@@ -279,7 +279,9 @@ asm
 
   mov   $7,%eax
   xor %edx,%edx
-  xsave64 (%rdi)
+  //xsave64 (%rdi) //480FAE27
+  .byte 0x48, 0x0F, 0xAE, 0x27
+  //
  {$ELSE}
   vmovdqa %ymm0 ,0x000(%rdi)
   vmovdqa %ymm1 ,0x020(%rdi)
@@ -308,7 +310,9 @@ asm
  {$IFDEF USE_XSAVE}
   mov   $7,%eax
   xor %edx,%edx
-  xrstor (%rdi)
+  //xrstor (%rdi) //0FAE2F
+  .byte 0x0F, 0xAE, 0x2F
+  //
  {$ELSE}
   vmovdqa 0x000(%rdi),%ymm0
   vmovdqa 0x020(%rdi),%ymm1

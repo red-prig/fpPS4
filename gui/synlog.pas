@@ -321,7 +321,7 @@ type
     FPendingFoldState: String;
 
     procedure DoTopViewChanged(Sender: TObject);
-    procedure SetTabViewClass(AValue: TSynEditStringTabExpanderClass);
+    //procedure SetTabViewClass(AValue: TSynEditStringTabExpanderClass);
     procedure UpdateScreenCaret;
     procedure AquirePrimarySelection;
     function GetChangeStamp: int64;
@@ -871,7 +871,7 @@ type
       read GetBracketHighlightStyle write SetBracketHighlightStyle;
     property TabWidth: integer read fTabWidth write SetTabWidth default 8;
     property WantTabs: boolean read fWantTabs write SetWantTabs default True;
-    property TabViewClass: TSynEditStringTabExpanderClass write SetTabViewClass;
+    //property TabViewClass: TSynEditStringTabExpanderClass write SetTabViewClass;
 
     // Events
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
@@ -1417,6 +1417,7 @@ begin
   FTextArea.TheLinesView := FTheLinesView;
 end;
 
+{
 procedure TCustomSynLog.SetTabViewClass(AValue: TSynEditStringTabExpanderClass
   );
 var
@@ -1429,6 +1430,7 @@ begin
   //FTextViewsManager.AddTextView(FTabbedLinesView, i);
   //FTabbedLinesView.TabWidth := fTabWidth;
 end;
+}
 
 function TCustomSynLog.LinesCreate:TSynEditStringListBase;
 begin

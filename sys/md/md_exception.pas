@@ -20,6 +20,9 @@ uses
   ucontext,
   vm;
 
+const
+ EXCEPTION_SET_THREADNAME = $406D1388;
+
 type
  LPTOP_LEVEL_EXCEPTION_FILTER=function(excep:PEXCEPTION_POINTERS):longint; stdcall;
 

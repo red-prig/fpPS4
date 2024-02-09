@@ -15,7 +15,7 @@ function  cpuset_getproc(var old:Ptruint):Integer;
 function  get_proc_prio():Integer;
 function  set_proc_prio(n:Integer):Integer;
 
-Procedure md_halt(errnum:TExitCode); noreturn;
+Procedure md_halt(errnum:DWORD); noreturn;
 
 implementation
 
@@ -95,7 +95,7 @@ begin
                                  SizeOf(info));
 end;
 
-Procedure md_halt(errnum:TExitCode); noreturn;
+Procedure md_halt(errnum:DWORD); noreturn;
 begin
  NtTerminateProcess(NtCurrentProcess, errnum);
 end;

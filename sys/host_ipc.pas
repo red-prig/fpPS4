@@ -42,12 +42,6 @@ type
   tid   :DWORD;
  end;
 
- PHostIpcResult=^THostIpcResult;
- THostIpcResult=packed record
-  value:Ptruint;
-  tid  :DWORD;
- end;
-
  PHostIpcKnote=^THostIpcKnote;
  THostIpcKnote=packed record
   pid   :Integer;
@@ -143,20 +137,20 @@ end;
 
 procedure THostIpcConnect.RecvSync(node:PQNode);
 var
- res:THostIpcResult;
+ value:Ptruint;
  mlen:DWORD;
 begin
- res:=Default(THostIpcResult);
+ value:=0;
 
  mlen:=node^.header.mlen;
- if (mlen>SizeOf(THostIpcResult)) then
+ if (mlen>SizeOf(Ptruint)) then
  begin
-  mlen:=SizeOf(THostIpcResult);
+  mlen:=SizeOf(Ptruint);
  end;
 
- Move(node^.buf,res,mlen);
+ Move(node^.buf,value,mlen);
 
- TriggerNodeSync(res.tid,res.value);
+ TriggerNodeSync(node^.header.mtid,value);
 end;
 
 procedure THostIpcConnect.Update(Handler:THostIpcHandler);
@@ -193,13 +187,8 @@ end;
 //
 
 procedure THostIpcConnect.SyncResult(tid:DWORD;value:Ptruint);
-var
- note:THostIpcResult;
 begin
- note.value:=value;
- note.tid  :=tid;
- //
- Send(iRESULT,SizeOf(note),0,@note);
+ Send(iRESULT,SizeOf(Ptruint),tid,@value);
 end;
 
 procedure THostIpcConnect.knote(pid,filter:Integer;hint:QWORD);
