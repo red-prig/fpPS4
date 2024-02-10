@@ -430,6 +430,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSystemServicePowerTick():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 function ps4_sceSystemServiceEnableSuspendNotification:Integer; SysV_ABI_CDecl;
@@ -465,6 +470,7 @@ begin
  lib^.set_proc($DECF1C1E20812811,@ps4_sceSystemServiceReportAbnormalTermination);
  lib^.set_proc($26806A490B75CB20,@ps4_sceSystemServiceLoadExec);
  lib^.set_proc($8C0EB6F4F70C08A5,@ps4_sceSystemServiceGetRenderingMode);
+ lib^.set_proc($5DB6C90B713E2F93,@ps4_sceSystemServicePowerTick);
 
  lib:=Result._add_lib('libSceSystemServiceSuspend');
  lib^.set_proc($6B92A38EAE8781C5,@ps4_sceSystemServiceEnableSuspendNotification);
