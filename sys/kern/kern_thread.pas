@@ -17,10 +17,6 @@ uses
  rtprio,
  hamt;
 
-type
- p_kthread_iterator=^kthread_iterator;
- kthread_iterator=THAMT_Iterator32;
-
 procedure thread_reap();
 
 function  thread_alloc:p_kthread;
@@ -48,10 +44,8 @@ procedure thread_lock   (td:p_kthread);
 procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 
-function  FOREACH_THREAD_START (i:p_kthread_iterator):Boolean;
-procedure FOREACH_THREAD_FINISH();
-function  THREAD_NEXT(i:p_kthread_iterator):Boolean;
-function  THREAD_GET (i:p_kthread_iterator):p_kthread;
+procedure threads_lock;
+procedure threads_unlock;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 
@@ -65,6 +59,9 @@ procedure kthread_exit();
 var
  init_tty_cb:Tprocedure;
 
+ p_threads:TAILQ_HEAD=(tqh_first:nil;tqh_last:@p_threads.tqh_first);
+ p_numthreads:Integer=0;
+
 implementation
 
 uses
@@ -74,7 +71,6 @@ uses
  md_sleep,
  md_context,
  machdep,
- md_proc,
  md_thread,
  kern_rwlock,
  kern_sig,
@@ -108,8 +104,6 @@ var
  zombie_threads:TAILQ_HEAD=(tqh_first:nil;tqh_last:@zombie_threads.tqh_first);
  zombie_lock:Pointer=nil;
 
- p_numthreads:Integer=0;
-
 const
  max_threads_per_proc=1500;
 
@@ -126,9 +120,12 @@ begin
  Result:=0;
 end;
 
+var
+ _t_init:Integer=0;
+
 procedure threadinit;
 begin
- FillChar(tidhashtbl,SizeOf(tidhashtbl),0);
+ if (System.InterlockedExchange(_t_init,1)<>0) then Exit;
  //init internals
  BeginThread(@_thread_null);
 end;
@@ -265,6 +262,8 @@ var
 begin
  rw_wlock(tidhash_lock);
 
+ TAILQ_INSERT_HEAD(@p_threads, td, @td^.td_plist);
+
  data:=HAMT_insert32(@tidhashtbl,td^.td_tid,td);
 
  if (data<>nil) then
@@ -285,6 +284,8 @@ begin
  data:=nil;
  rw_wlock(tidhash_lock);
 
+ TAILQ_REMOVE(@p_threads, td, @td^.td_plist);
+
  HAMT_delete32(@tidhashtbl,td^.td_tid,@data);
 
  rw_wunlock(tidhash_lock);
@@ -295,33 +296,16 @@ begin
  end;
 end;
 
-function FOREACH_THREAD_START(i:p_kthread_iterator):Boolean;
+procedure threads_lock;
 begin
- rw_rlock(tidhash_lock);
-
- Result:=HAMT_first32(@tidhashtbl,i);
-
- if not Result then //space
- begin
-  rw_runlock(tidhash_lock);
- end;
+ rw_wlock(tidhash_lock);
 end;
 
-procedure FOREACH_THREAD_FINISH();
+procedure threads_unlock;
 begin
- rw_runlock(tidhash_lock);
+ rw_wunlock(tidhash_lock);
 end;
 
-function THREAD_NEXT(i:p_kthread_iterator):Boolean;
-begin
- Result:=HAMT_next32(i);
-end;
-
-function THREAD_GET(i:p_kthread_iterator):p_kthread;
-begin
- Result:=nil;
- HAMT_get_value32(i,@Result);
-end;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 var
@@ -605,6 +589,8 @@ var
 begin
  Result:=0;
 
+ threadinit;
+
  if (func=nil) or
     (newtdp=nil) then
  begin
@@ -833,7 +819,6 @@ function sys_thr_kill(id,sig:Integer):Integer;
 var
  td,ttd:p_kthread;
  ksi:ksiginfo_t;
- i:kthread_iterator;
 begin
  td:=curkthread;
 
@@ -854,19 +839,24 @@ begin
    Result:=ESRCH;
    PROC_LOCK;
 
-   if FOREACH_THREAD_START(@i) then
-   begin
-    repeat
-     ttd:=THREAD_GET(@i);
-     if (ttd<>td) then
+   threads_lock;
+
+     ttd:=TAILQ_FIRST(@p_threads);
+     while (ttd<>nil) do
      begin
-      Result:=0;
-      if (sig=0) then Break;
-      tdksignal(ttd,sig,@ksi);
+
+      if (ttd<>td) then
+      begin
+       Result:=0;
+       if (sig=0) then Break;
+       tdksignal(ttd,sig,@ksi);
+      end;
+
+
+      ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
      end;
-    until not THREAD_NEXT(@i);
-    FOREACH_THREAD_FINISH();
-   end;
+
+    threads_unlock;
 
    PROC_UNLOCK;
   end;

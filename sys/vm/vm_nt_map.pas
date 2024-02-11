@@ -24,6 +24,7 @@ type
   hfile:THandle;
   refs :QWORD;
   flags:QWORD;
+  maxp :Byte;
  end;
 
  pp_vm_nt_entry=^p_vm_nt_entry;
@@ -50,7 +51,7 @@ type
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
 
-function  vm_nt_file_obj_allocate  (hfile:THandle):p_vm_nt_file_obj;
+function  vm_nt_file_obj_allocate  (hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
 procedure vm_nt_file_obj_destroy   (obj:p_vm_nt_file_obj);
 procedure vm_nt_file_obj_reference (obj:p_vm_nt_file_obj);
 procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
@@ -114,13 +115,16 @@ type
      );
  end;
 
-function vm_nt_file_obj_allocate(hfile:THandle):p_vm_nt_file_obj;
+function vm_nt_file_obj_allocate(hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
 begin
+ Assert(maxp<>0);
+
  Result:=AllocMem(SizeOf(vm_nt_file_obj));
 
  Result^.hfile:=hfile;
  Result^.refs :=1;
  Result^.flags:=NT_FILE_FREE or NT_MOBJ_FREE or NT_UNION_OBJ;
+ Result^.maxp :=maxp;
 end;
 
 procedure vm_nt_file_obj_destroy(obj:p_vm_nt_file_obj);
@@ -163,7 +167,10 @@ end;
 
 //
 
-procedure vm_prot_fixup(map:p_vm_nt_map;start,__end:vm_offset_t);
+procedure vm_prot_fixup(map:p_vm_nt_map;
+                        start:vm_offset_t;
+                        __end:vm_offset_t;
+                        max  :Integer);
 var
  next:vm_offset_t;
  base,size:vm_size_t;
@@ -184,7 +191,7 @@ begin
 
   prot:=wprots[prot and VM_RWX];
 
-  if (prot<>MD_PROT_RW) then
+  if (prot<>max) then
   begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
@@ -240,6 +247,7 @@ var
  start:vm_offset_t;
  __end:vm_offset_t;
  size:vm_size_t;
+ max:Integer;
  r:Integer;
 begin
  if (entry^.obj<>nil) then
@@ -260,13 +268,15 @@ begin
    end;
   end;
 
+  max:=wprots[entry^.obj^.maxp and VM_RWX];
+
   if (entry^.obj^.hfile<>0) then
   begin
    r:=md_file_mmap_ex(entry^.obj^.hfile,
                       Pointer(entry^.start),
                       entry^.offset,
                       entry^.size, //unaligned size
-                      MD_PROT_RW);
+                      max);
    if (r<>0) then
    begin
     Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
@@ -274,7 +284,7 @@ begin
    end;
   end;
 
-  if (prot<>MD_PROT_RW) then
+  if (prot<>max) then
   begin
    r:=md_protect(Pointer(entry^.start),size,prot);
    if (r<>0) then
@@ -303,6 +313,8 @@ var
  start:vm_offset_t;
  __end:vm_offset_t;
  size:vm_size_t;
+
+ max:Integer;
 
  p:p_range;
  i,r:Integer;
@@ -419,6 +431,8 @@ begin
   end;
  end;
 
+ max:=wprots[stat.obj^.maxp and VM_RWX];
+
  //map new parts
  For i:=Low(ets) to High(ets) do
  begin
@@ -432,7 +446,7 @@ begin
                        Pointer(ets[i]^.start),
                        ets[i]^.offset,
                        ets[i]^.size, //unaligned size
-                       MD_PROT_RW);
+                       max);
     if (r<>0) then
     begin
      Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
@@ -451,8 +465,13 @@ begin
   if (ets[i]<>nil) then
   begin
    if (ets[i]^.obj<>nil) then
+   if (stat.obj^.hfile<>0) then
    begin
-    vm_prot_fixup(map,ets[i]^.start,ets[i]^.__end);
+    vm_prot_fixup(map,
+                  ets[i]^.start,
+                  ets[i]^.__end,
+                  max
+                 );
    end;
   end;
  end;

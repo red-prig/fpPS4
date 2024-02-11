@@ -177,6 +177,7 @@ type
  pp_kthread=^p_kthread;
  p_kthread=^kthread;
  kthread=record
+  td_plist        :TAILQ_ENTRY;
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
   td_teb          :p_teb;
@@ -198,11 +199,9 @@ type
   td_user_pri     :Word;
   td_name         :t_td_name;
   //
-  td_cpuset       :Ptruint;
   td_sigmask      :sigset_t;
   td_oldsigmask   :sigset_t;
   td_sigqueue     :sigqueue_t;
-  td_align        :Pointer;
   td_frame        :trapframe;
   td_fpstate      :t_fpstate;
   td_retval       :array[0..1] of QWORD;
@@ -210,6 +209,7 @@ type
   td_ustack       :t_td_stack;
   td_kstack       :t_td_stack;
   //
+  td_cpuset       :Ptruint;
   td_sleepqueue   :Pointer;
   td_slpq         :TAILQ_ENTRY;
   td_wchan        :Pointer;

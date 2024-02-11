@@ -8,25 +8,45 @@ uses
  windows,
  Classes,
  SysUtils,
+ kern_thr,
  md_pipe,
  host_ipc,
  md_host_ipc,
  game_info;
 
-var
- t_wr_handle:THandle;
+type
+ TGameRunConfig=record
+  hOutput:THandle;
+  hError :THandle;
 
- mgui_ipc:THostIpcConnect=nil;
+  fork_proc:Boolean;
+ end;
+
+ TGameProcess=class
+  g_ipc :THostIpcConnect;
+  g_fork:Boolean;
+ end;
+
+ TGameProcessSimple=class(TGameProcess)
+  Ftd:p_kthread;
+ end;
+
+ TGameProcessPipe=class(TGameProcess)
+  FProcess:THandle;
+  FChild:THandle;
+ end;
+
+var
+
  kern_ipc:THostIpcConnect=nil;
 
-procedure run_item(Item:TGameItem);
+function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
 
 implementation
 
 uses
  sys_sysinit,
  kern_param,
- kern_thr,
  kern_thread,
  kern_exec,
  vfs_mountroot,
@@ -187,12 +207,8 @@ begin
  sleep(-1);
 end;
 
-const
- fork_proc:Boolean=True;
-
-procedure run_item(Item:TGameItem);
+function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
 var
- td:p_kthread;
  r:Integer;
 
  kern2mgui:array[0..1] of THandle;
@@ -204,21 +220,29 @@ var
 
  mem:TMemoryStream;
 begin
+ Result:=nil;
  if Item.FLock then Exit;
 
  if runing then Exit;
 
- SetStdHandle(STD_ERROR_HANDLE ,t_wr_handle);
- SetStdHandle(STD_OUTPUT_HANDLE,t_wr_handle);
+ SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
+ SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
 
- if fork_proc then
+ if cfg.fork_proc then
  begin
-  md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
+  Result:=TGameProcessPipe.Create;
+  Result.g_fork:=cfg.fork_proc;
 
-  p_mgui_ipc:=THostIpcPipeMGUI.Create;
-  p_mgui_ipc.set_pipe(kern2mgui[0]);
+  with TGameProcessPipe(Result) do
+  begin
+   md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
 
-  mgui_ipc:=p_mgui_ipc;
+   p_mgui_ipc:=THostIpcPipeMGUI.Create;
+   p_mgui_ipc.set_pipe(kern2mgui[0]);
+
+   g_ipc:=p_mgui_ipc;
+   FChild:=kern2mgui[1];
+  end;
 
   //
 
@@ -228,23 +252,34 @@ begin
 
   Item.Serialize(mem);
 
-  md_fork_process(@fork_process,mem.Memory,mem.Size);
+  with TGameProcessPipe(Result) do
+  begin
+   FProcess:=md_fork_process(@fork_process,mem.Memory,mem.Size);
+  end;
 
   mem.Free;
  end else
  begin
-  s_kern_ipc:=THostIpcSimpleKERN.Create;
-  s_mgui_ipc:=THostIpcSimpleMGUI.Create;
+  Result:=TGameProcessSimple.Create;
+  Result.g_fork:=cfg.fork_proc;
 
-  s_kern_ipc.FDest:=s_mgui_ipc;
-  s_mgui_ipc.FDest:=s_kern_ipc;
+  with TGameProcessSimple(Result) do
+  begin
 
-  kern_ipc:=s_kern_ipc;
-  mgui_ipc:=s_mgui_ipc;
+   s_kern_ipc:=THostIpcSimpleKERN.Create;
+   s_mgui_ipc:=THostIpcSimpleMGUI.Create;
 
-  td:=nil;
-  r:=kthread_add(@prepare,Item,@td,'[main]');
-  Assert(r=0);
+   s_kern_ipc.FDest:=s_mgui_ipc;
+   s_mgui_ipc.FDest:=s_kern_ipc;
+
+   g_ipc:=s_mgui_ipc;
+
+   kern_ipc:=s_kern_ipc;
+
+   Ftd:=nil;
+   r:=kthread_add(@prepare,Item,@Ftd,'[main]');
+  end;
+
  end;
 
  runing:=True;

@@ -9,6 +9,7 @@ uses
 
   game_info,
   game_edit,
+  game_run,
 
   host_ipc;
 
@@ -41,6 +42,8 @@ type
   private
 
   public
+    GameProcess:TGameProcess;
+
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
     procedure SaveItemIni(Item:TGameItem);
@@ -76,9 +79,7 @@ uses
  Rtti,
 
  evbuffer,
- evpoll,
-
- game_run;
+ evpoll;
 
 //
 
@@ -309,9 +310,10 @@ begin
   FLogUpdateTime:=GetTickCount64;
  end;
 
- if (mgui_ipc<>nil) then
+ if (GameProcess<>nil) then
+ if (GameProcess.g_ipc<>nil) then
  begin
-  mgui_ipc.Update(IpcHandler);
+  GameProcess.g_ipc.Update(IpcHandler);
  end;
 
 end;
@@ -386,6 +388,7 @@ procedure TfrmMain.MIRunClick(Sender: TObject);
 var
  Item:TGameItem;
  aRow:Integer;
+ cfg:TGameRunConfig;
 begin
  aRow:=ListGrid.Row;
 
@@ -393,8 +396,6 @@ begin
  if (aRow>ListGrid.RowCount) then Exit;
 
  Item:=GetItemRow(aRow);
-
- t_wr_handle:=FAddHandle;
 
  FList.FSynLog.TopLine:=FList.FSynLog.Lines.Count;
 
@@ -405,7 +406,12 @@ begin
 
  Pages.ActivePage:=TabLog;
 
- run_item(Item);
+ cfg.hOutput:=FAddHandle;
+ cfg.hError :=FAddHandle;
+
+ cfg.fork_proc:=False;
+
+ GameProcess:=run_item(cfg,Item);
 end;
 
 procedure TfrmMain.MIDelClick(Sender: TObject);

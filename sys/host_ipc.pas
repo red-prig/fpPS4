@@ -64,6 +64,7 @@ type
    procedure   TriggerNodeSync(tid:DWORD;value:Ptruint);
    procedure   Pack(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
    function    Recv:PQNode;
+   procedure   Flush;
    procedure   RecvSync(node:PQNode);
   public
    //
@@ -112,6 +113,7 @@ end;
 
 Destructor THostIpcConnect.Destroy;
 begin
+ Flush;
  mtx_destroy(FWLock);
  inherited;
 end;
@@ -133,6 +135,17 @@ function THostIpcConnect.Recv:PQNode;
 begin
  Result:=nil;
  FQueue.Pop(Result);
+end;
+
+procedure THostIpcConnect.Flush;
+var
+ node:PQNode;
+begin
+ node:=nil;
+ while FQueue.Pop(node) do
+ begin
+  FreeMem(node);
+ end;
 end;
 
 procedure THostIpcConnect.RecvSync(node:PQNode);

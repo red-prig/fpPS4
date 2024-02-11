@@ -417,21 +417,22 @@ procedure sigqueue_delete_set_proc(_set:p_sigset_t);
 var
  td0:p_kthread;
  worklist:sigqueue_t;
- i:kthread_iterator;
 begin
  sigqueue_init(@worklist);
  sigqueue_move_set(@p_proc.p_sigqueue,@worklist,_set);
 
- if FOREACH_THREAD_START(@i) then
- begin
-  repeat
-   td0:=THREAD_GET(@i);
+ threads_lock;
+
+  td0:=TAILQ_FIRST(@p_threads);
+  while (td0<>nil) do
+  begin
 
    sigqueue_move_set(@td0^.td_sigqueue,@worklist,_set);
 
-  until not THREAD_NEXT(@i);
-  FOREACH_THREAD_FINISH();
- end;
+   td0:=TAILQ_NEXT(td0,@td0^.td_plist)
+  end;
+
+ threads_unlock;
 
  sigqueue_flush(@worklist);
 end;
@@ -1341,7 +1342,6 @@ var
  td:p_kthread;
  first_td :p_kthread;
  signal_td:p_kthread;
- i:kthread_iterator;
 begin
  td:=curkthread;
 
@@ -1354,25 +1354,27 @@ begin
  first_td :=nil;
  signal_td:=nil;
 
- if FOREACH_THREAD_START(@i) then
- begin
-  repeat
-   td:=THREAD_GET(@i);
+ threads_lock;
 
-   if (first_td=nil) then
+   td:=TAILQ_FIRST(@p_threads);
+   while (td<>nil) do
    begin
-    first_td:=td;
+
+    if (first_td=nil) then
+    begin
+     first_td:=td;
+    end;
+
+    if (not SIGISMEMBER(@td^.td_sigmask,sig)) then
+    begin
+     signal_td:=td;
+     Break;
+    end;
+
+    td:=TAILQ_NEXT(td,@td^.td_plist)
    end;
 
-   if (not SIGISMEMBER(@td^.td_sigmask,sig)) then
-   begin
-    signal_td:=td;
-    Break;
-   end;
-
-  until not THREAD_NEXT(@i);
-  FOREACH_THREAD_FINISH();
- end;
+ threads_unlock;
 
  if (signal_td=nil) then
  begin

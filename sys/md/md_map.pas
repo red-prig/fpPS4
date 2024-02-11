@@ -37,6 +37,17 @@ const
   MD_PROT_RW   //XWR
  );
 
+ wprots_e:array[0..7] of Byte=(
+  MD_PROT_NONE,//___
+  MD_PROT_R   ,//__R
+  MD_PROT_W   ,//_W_
+  MD_PROT_RW  ,//_WR
+  MD_PROT_X   ,//X__
+  MD_PROT_RX  ,//X_R
+  MD_PROT_WX  ,//XW_
+  MD_PROT_RWX  //XWR
+ );
+
 function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 function md_reserve(var base:Pointer;size:QWORD):Integer;
 
@@ -44,7 +55,7 @@ function md_split  (base:Pointer;size:QWORD):Integer;
 function md_union  (base:Pointer;size:QWORD):Integer;
 
 function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
-function md_memfd_open  (var hMem:THandle;hFile:THandle):Integer;
+function md_memfd_open  (var hMem:THandle;hFile:THandle;maxprot:Byte):Integer;
 function md_memfd_close (hMem:THandle):Integer;
 
 function md_protect(hProcess:THandle;base:Pointer;size:QWORD;prot:Integer):Integer;
@@ -187,19 +198,39 @@ begin
          );
 end;
 
-function md_memfd_open(var hMem:THandle;hFile:THandle):Integer;
+function md_memfd_open(var hMem:THandle;hFile:THandle;maxprot:Byte):Integer;
 var
+ Access:DWORD;
+ prot:DWORD;
  size:QWORD;
 begin
+ Access:=SECTION_QUERY;
+
+ if ((maxprot and VM_PROT_READ)<>0) then
+ begin
+  Access:=Access or SECTION_MAP_READ;
+ end;
+
+ if ((maxprot and VM_PROT_WRITE)<>0) then
+ begin
+  Access:=Access or SECTION_MAP_WRITE;
+ end;
+
+ if ((maxprot and VM_PROT_EXECUTE)<>0) then
+ begin
+  Access:=Access or SECTION_MAP_EXECUTE;
+ end;
+
+ prot:=wprots_e[maxprot and VM_RWX];
+
  size:=0;
  hMem:=0;
  Result:=NtCreateSection(
           @hMem,
-          SECTION_ALL_ACCESS,
-          //SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
+          Access,
           nil,
           @size,
-          PAGE_READWRITE,
+          prot,
           SEC_COMMIT,
           hFile
          );
@@ -293,31 +324,15 @@ end;
 
 function md_file_mmap(handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
 var
- hSection:THandle;
  CommitSize:ULONG_PTR;
  SectionOffset:ULONG_PTR;
 begin
- CommitSize:=0; //full size
-
- hSection:=0;
- Result:=NtCreateSection(
-           @hSection,
-           SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
-           nil,
-           @CommitSize,
-           prot,
-           SEC_COMMIT,
-           handle
-          );
-
- if (Result<>0) then Exit;
-
  base:=md_alloc_page(base);
 
  CommitSize:=size;
  SectionOffset:=offset and (not (MD_ALLOC_GRANULARITY-1));
 
- Result:=NtMapViewOfSection(hSection,
+ Result:=NtMapViewOfSection(handle,
                             NtCurrentProcess,
                             @base,
                             0,
@@ -328,8 +343,6 @@ begin
                             0,
                             prot
                            );
-
- NtClose(hSection);
 end;
 
 function md_file_unmap(base:Pointer;size:QWORD):Integer;

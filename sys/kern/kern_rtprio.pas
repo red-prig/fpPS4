@@ -6,6 +6,7 @@ unit kern_rtprio;
 interface
 
 uses
+ mqueue,
  rtprio,
  kern_thr;
 
@@ -133,7 +134,6 @@ function sys_rtprio(func,pid:Integer;rtp:Pointer):Integer;
 var
  td,tdp:p_kthread;
  rtp1,rtp2:t_rtprio;
- i:kthread_iterator;
 begin
  if (pid<>0) and (pid<>p_proc.p_pid) then Exit(ESRCH);
 
@@ -162,24 +162,25 @@ begin
      rtp1._type:=RTP_PRIO_IDLE;
      rtp1._prio:=RTP_PRIO_MAX;
 
-     if FOREACH_THREAD_START(@i) then
-     begin
-      repeat
-       tdp:=THREAD_GET(@i);
+     threads_lock;
 
-       pri_to_rtp(tdp,@rtp2);
-
-       if (rtp2._type<rtp1._type) or
-          ((rtp2._type=rtp1._type) and
-           (rtp2._prio<rtp1._prio)) then
+       tdp:=TAILQ_FIRST(@p_threads);
+       while (tdp<>nil) do
        begin
-        rtp1:=rtp2;
+
+        pri_to_rtp(tdp,@rtp2);
+
+        if (rtp2._type<rtp1._type) or
+           ((rtp2._type=rtp1._type) and
+            (rtp2._prio<rtp1._prio)) then
+        begin
+         rtp1:=rtp2;
+        end;
+
+        tdp:=TAILQ_NEXT(tdp,@tdp^.td_plist)
        end;
 
-      until not THREAD_NEXT(@i);
-      FOREACH_THREAD_FINISH();
-     end;
-
+     threads_unlock;
     end;
 
     PROC_UNLOCK;
@@ -197,19 +198,19 @@ begin
      Result:=rtp_to_pri(@rtp1,td);
     end else
     begin
+     threads_lock;
 
-     if FOREACH_THREAD_START(@i) then
-     begin
-      repeat
-       tdp:=THREAD_GET(@i);
+       tdp:=TAILQ_FIRST(@p_threads);
+       while (tdp<>nil) do
+       begin
 
-       Result:=rtp_to_pri(@rtp1,tdp);
-       if (Result<>0) then Break;
+        Result:=rtp_to_pri(@rtp1,tdp);
+        if (Result<>0) then Break;
 
-      until not THREAD_NEXT(@i);
-      FOREACH_THREAD_FINISH();
-     end;
+        tdp:=TAILQ_NEXT(tdp,@tdp^.td_plist)
+       end;
 
+     threads_unlock;
     end;
 
     PROC_UNLOCK;

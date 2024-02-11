@@ -86,6 +86,9 @@ procedure pmap_remove(pmap  :pmap_t;
 
 implementation
 
+uses
+ ntapi;
+
 function atop(x:QWORD):DWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
@@ -118,6 +121,8 @@ begin
   Writeln('failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert(false,'dev_mem_init');
  end;
+
+ DEV_INFO.DEV_FD.maxp:=VM_PROT_READ or VM_PROT_WRITE;
 
  DEV_INFO.DEV_PTR:=nil;
  r:=md_reserve(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
@@ -260,7 +265,7 @@ begin
   Assert(false,'get_private_fd');
  end;
 
- info.obj:=vm_nt_file_obj_allocate(hfile);
+ info.obj:=vm_nt_file_obj_allocate(hfile,VM_PROT_READ or VM_PROT_WRITE);
 
  with info.obj^ do
  begin
@@ -282,6 +287,8 @@ begin
  if (DMEM_FD[i].hfile=0) then
  begin
   R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_1GB_SIZE);
+
+  DMEM_FD[i].maxp:=VM_PROT_READ or VM_PROT_WRITE;
 
   if (r<>0) then
   begin
@@ -391,6 +398,9 @@ procedure pmap_copy(pmap   :pmap_t;
                     delta  :vm_ooffset_t;
                     size   :vm_ooffset_t);
 var
+ start :vm_ooffset_t;
+ __end :vm_ooffset_t;
+ offset:vm_ooffset_t;
  src,dst:Pointer;
  r:Integer;
 begin
@@ -399,8 +409,12 @@ begin
   size:=delta;
  end;
 
+ start :=src_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
+ __end :=src_ofs+size; //up
+ offset:=src_ofs and (MD_ALLOC_GRANULARITY-1);
+
  src:=nil;
- r:=md_file_mmap(src_obj^.hfile,src,src_ofs,size,MD_PROT_R);
+ r:=md_file_mmap(src_obj^.hfile,src,start,__end-start,MD_PROT_R);
 
  if (r<>0) then
  begin
@@ -417,7 +431,7 @@ begin
   Assert(false,'pmap_copy');
  end;
 
- Move(src^,dst^,size);
+ Move((src+offset)^,dst^,size);
 
  md_cacheflush(dst,size,DCACHE);
 
@@ -468,6 +482,8 @@ var
 
  info:t_fd_info;
  cow :p_vm_nt_file_obj;
+
+ max:Integer;
 
  r:Integer;
 begin
@@ -605,7 +621,14 @@ begin
         end;
         size:=size-offset;
 
-        r:=md_memfd_open(md,fd);
+        max:=VM_PROT_READ or VM_PROT_WRITE;
+        r:=md_memfd_open(md,fd,max);
+
+        if (DWORD(r)=STATUS_ACCESS_DENIED) then
+        begin
+         max:=VM_PROT_READ;
+         r:=md_memfd_open(md,fd,max);
+        end;
        end;
 
      VM_OBJECT_UNLOCK(obj);
@@ -629,9 +652,7 @@ begin
      begin
       Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
-      Assert(false,'TODO COW');
-
-      cow:=vm_nt_file_obj_allocate(md);
+      cow:=vm_nt_file_obj_allocate(md,VM_PROT_READ);
 
       info.offset:=offset;
       info.start :=start;
@@ -675,7 +696,7 @@ begin
 
      end else
      begin
-      info.obj   :=vm_nt_file_obj_allocate(md);
+      info.obj   :=vm_nt_file_obj_allocate(md,max);
       info.offset:=offset;
       info.start :=start;
       info.__end :=start+paddi;
@@ -697,16 +718,14 @@ begin
 
      pmap_mark(info.start,info.__end,prot and VM_RWX);
 
-     //aligned size
-     size:=paddi;
+     //upper pages
+     delta:=(paddi and PAGE_MASK);
 
-     //padding pages
-     paddi:=PAGE_SIZE-((delta-size) and PAGE_MASK);
-
-     if (paddi<>0) then
+     if (delta<>0) then
      begin
       offset:=0;
-      start:=start+size;
+      start:=start+paddi;
+      prot:=prot and (not VM_PROT_COPY);
       goto _default;
      end;
 
