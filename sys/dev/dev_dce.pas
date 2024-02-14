@@ -6,15 +6,24 @@ unit dev_dce;
 interface
 
 uses
+ sysutils,
  vm,
  vmparam,
  kern_conf,
  sys_event,
- time;
+ time,
+ kern_mtx,
+ display_interface;
 
 procedure dce_initialize();
 
 var
+ dce_interface:TAbstractDisplay=TDisplayInterface;
+
+ dce_handle:TDisplayHandle;
+
+ dce_mtx:mtx;
+
  dce_page:Pointer;
 
  g_video_out_event_flip:t_knlist;
@@ -29,14 +38,19 @@ uses
  sys_vm_object,
  vm_pager,
  kern_event,
- kern_mtx,
  md_time,
  kern_proc,
  kern_timeout;
 
 const
- EVENTID_FLIP  =$0006;
- EVENTID_VBLANK=$0007;
+ EVENTID_FLIP     =$0006;
+ EVENTID_VBLANK   =$0007;
+ EVENTID_SETMODE  =$0051;
+ EVENTID_POSITION =$0058;
+ EVENTID_PREVBLANK=$0059;
+
+ //$0062 wZI4fmUJMlw / vXMpe7Murfc
+ //$0063 sys_vblank
 
 procedure knote_eventid(event_id:WORD;flipArg:QWORD;lockflags:Integer);
 begin
@@ -139,7 +153,7 @@ type
   flipPendingNum0:DWORD;
   gcQueueNum     :DWORD;
   flipPendingNum1:DWORD;
-  submitTsc      :DWORD;
+  submitTsc      :QWORD;
   f_0x40         :QWORD;
  end;
 
@@ -291,8 +305,11 @@ var
  poff:PQWORD;
  plen:PQWORD;
  len:QWORD;
- resl_status:t_resolution_status;
- flip_status:t_flip_status;
+ u:record
+  case byte of
+   0:(r_status:t_resolution_status);
+   1:(f_status:t_flip_status);
+ end;
 begin
  Result:=0;
 
@@ -304,10 +321,37 @@ begin
      if (data^.arg6=0) and (data^.arg2=0) then
      begin
 
+      //arg3 [0..1]
+      case Integer(data^.arg3) of
+       0:;
+       1:begin
+          //sceSblACMgrIsSystemUcred
+          Exit(EPERM);
+         end;
+       else
+         begin
+          Exit(EINVAL);
+         end;
+      end;
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        dce_handle:=dce_interface.Open;
+       end else
+       begin
+        Result:=EBUSY;
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
       Writeln('dce_video_open');
 
       ptr:=Pointer(data^.arg5);
-      len:=111; //canary
+      len:=$a5a5; //canary
       copyout(@len,ptr,SizeOf(QWORD));
 
       open_vblank;
@@ -323,6 +367,22 @@ begin
         (data^.arg5=0) and (data^.arg6=0) then
      begin
       //arg2 -> canary
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        FreeAndNil(dce_handle);
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
 
       Writeln('dce_video_close:',data^.arg2);
 
@@ -340,6 +400,24 @@ begin
       //arg2 -> canary
       //arg3 -> fid
 
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      if (Integer(data^.arg3)>15) then Exit(EINVAL);
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        Result:=dce_handle.UnregisterBuffer(Integer(data^.arg3));
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
       Writeln('UnregisterBufferAttribute:',data^.arg2,' ',data^.arg3);
 
       Exit(0);
@@ -354,6 +432,22 @@ begin
       //arg2 -> canary
       //arg3 -> rate
 
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        Result:=dce_handle.SetFlipRate(Integer(data^.arg3));
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
       Writeln('SetFlipRate:',data^.arg2,' ',data^.arg3);
 
       Exit(0);
@@ -366,6 +460,8 @@ begin
      if (data^.arg5=0) and (data^.arg6=0) then
      begin
       //arg2 -> canary
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
       poff:=Pointer(data^.arg3); //output offset  //4000..3FFC000
       plen:=Pointer(data^.arg4); //output len     //4000
@@ -392,20 +488,42 @@ begin
       //arg3 = &result;
       //arg4 = 72
 
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
       ptr:=Pointer(data^.arg3);
 
-      flip_status:=Default(t_flip_status);
-      flip_status.flipArg        :=flipArg;
-      flip_status.count          :=0;
-      flip_status.processTime    :=0;
-      flip_status.tsc            :=0;
-      flip_status.currentBuffer  :=0;
-      flip_status.flipPendingNum0:=0;
-      flip_status.gcQueueNum     :=0;
-      flip_status.flipPendingNum1:=0;
-      flip_status.submitTsc      :=0;
+      len:=Integer(data^.arg4);
+      if (len>SizeOf(t_flip_status)) then
+      begin
+       len:=SizeOf(t_flip_status);
+      end;
 
-      Result:=copyout(@flip_status,ptr,data^.arg4);
+      u.f_status:=Default(t_flip_status);
+      u.f_status.flipArg        :=flipArg;
+      u.f_status.count          :=0;
+      u.f_status.processTime    :=0;
+      u.f_status.tsc            :=0;
+      u.f_status.currentBuffer  :=0;
+      u.f_status.flipPendingNum0:=0;
+      u.f_status.gcQueueNum     :=0;
+      u.f_status.flipPendingNum1:=0;
+      u.f_status.submitTsc      :=0;
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        Result:=dce_handle.GetFlipStatus(@u.f_status);
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
+      Result:=copyout(@u.f_status,ptr,len);
 
       Exit;
      end;
@@ -422,6 +540,8 @@ begin
        //arg2 -> canary
        //arg3 -> ptr
        //arg4 -> 64
+
+       if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
        ptr:=Pointer(data^.arg3);
 
@@ -446,17 +566,39 @@ begin
       //arg3 = &result;
       //arg4 = 44;
 
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
       ptr:=Pointer(data^.arg3);
 
-      resl_status:=Default(t_resolution_status);
-      resl_status.width           :=1920;
-      resl_status.heigth          :=1080;
-      resl_status.paneWidth       :=1920;
-      resl_status.paneHeight      :=1080;
-      resl_status.refreshHz       :=$426fc28f;
-      resl_status.screenSizeInInch:=32;
+      len:=Integer(data^.arg4);
+      if (len>SizeOf(t_resolution_status)) then
+      begin
+       len:=SizeOf(t_resolution_status);
+      end;
 
-      Result:=copyout(@resl_status,ptr,data^.arg4);
+      u.r_status:=Default(t_resolution_status);
+      u.r_status.width           :=1920;
+      u.r_status.heigth          :=1080;
+      u.r_status.paneWidth       :=1920;
+      u.r_status.paneHeight      :=1080;
+      u.r_status.refreshHz       :=$426fc28f;
+      u.r_status.screenSizeInInch:=32;
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        Result:=dce_handle.GetResolutionStatus(@u.r_status);
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
+      Result:=copyout(@u.r_status,ptr,len);
 
       Exit;
      end;
@@ -469,16 +611,21 @@ begin
      begin
       //arg2 -> canary
       //arg4 = 80;
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
       Result:=dce_set_cursor_info(dev,data^.arg2,data^.arg5,Pointer(data^.arg3));
       Exit;
      end;
      Exit(EINVAL);
     end;
 
-  31: //set vaddr
+  31: //sys
     begin
      //arg2 -> canary
      //arg3 <- subtype 0..13
+
+     if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
      if (data^.arg3>13) then Exit(EINVAL);
 
@@ -500,7 +647,7 @@ type
  p_register_buffer_attr_args=^t_register_buffer_attr_args;
  t_register_buffer_attr_args=packed record
   canary     :QWORD; //arg5 data in dce_flip_control:0:pointer(arg5)^
-  vid        :Byte;  //video output port id ?
+  attrid     :Byte;  //attribute id [0..3]
   submit     :Byte;  //0 = RegisterBuffers ; 1 = SubmitChangeBufferAttribute
   f_0xa      :WORD;
   pixelFormat:DWORD;
@@ -519,7 +666,28 @@ Function dce_register_buffer_attr(dev:p_cdev;data:p_register_buffer_attr_args):I
 begin
  Result:=0;
 
- Writeln('register_buffer_attr:',data^.vid,' ',
+ if (data^.canary<>$a5a5) then Exit(EINVAL);
+
+ if (data^.attrid>3) then Exit(EINVAL);
+ if (data^.submit>1) then Exit(EINVAL);
+
+ mtx_lock(dce_mtx);
+
+  if (dce_handle=nil) then
+  begin
+   Result:=EINVAL;
+  end else
+  begin
+   case data^.submit of
+     0:Result:=dce_handle.RegisterBufferAttribute(data^.attrid,@data^.pixelFormat);
+     1:Result:=dce_handle.SubmitBufferAttribute  (data^.attrid,@data^.pixelFormat);
+    else;
+   end;
+  end;
+
+ mtx_unlock(dce_mtx);
+
+ Writeln('register_buffer_attr:',data^.attrid,' ',
                                  data^.submit,' ',
                                  '0x',HexStr(data^.pixelFormat,8),' ',
                                  data^.tilingMode,' ',
@@ -534,17 +702,35 @@ type
  p_register_buffer_ptrs=^t_register_buffer_ptrs;
  t_register_buffer_ptrs=packed record
   canary:QWORD;   //arg5 data in dce_flip_control:0:pointer(arg5)^
-  index :DWORD;   //buffer index
-  vid   :DWORD;   //video output port id ?
+  index :DWORD;   //buffer index [0..15]
+  attrid:DWORD;   //attribute id [0..3]
   left  :Pointer; //buffer ptr
   right :Pointer; //Stereo ptr
+  unk   :Integer;
  end;
 
 Function dce_register_buffer_ptrs(dev:p_cdev;data:p_register_buffer_ptrs):Integer;
 begin
  Result:=0;
 
- Writeln('register_buffer_ptrs:',data^.vid,' ',
+ if (data^.canary<>$a5a5) then Exit(EINVAL);
+
+ if (data^.index>15) then Exit(EINVAL);
+ if (data^.attrid>3) then Exit(EINVAL);
+
+ mtx_lock(dce_mtx);
+
+  if (dce_handle=nil) then
+  begin
+   Result:=EINVAL;
+  end else
+  begin
+   Result:=dce_handle.RegisterBuffer(@data^.index);
+  end;
+
+ mtx_unlock(dce_mtx);
+
+ Writeln('register_buffer_ptrs:',data^.attrid,' ',
                                  data^.index,' ',
                                  '0x',HexStr(data^.left),' ',
                                  '0x',HexStr(data^.right));
@@ -553,8 +739,8 @@ end;
 
 
 type
- p_submit_flip=^t_submit_flip;
- t_submit_flip=packed record
+ p_submit_flip_args=^t_submit_flip_args;
+ t_submit_flip_args=packed record
   canary     :QWORD; //arg5 data in dce_flip_control:0:pointer(arg5)^
   bufferIndex:QWORD;
   flipMode   :DWORD;
@@ -563,22 +749,53 @@ type
   flipArg2   :QWORD;
   eop_nz     :DWORD;
   f_0x2c     :DWORD;
-  eop_val    :DWORD;
-  f_0x34     :DWORD;
+  eop_val    :PQWORD;
   f_0x38     :QWORD;
   rout       :PQWORD; //extraout of result
  end;
 
-Function dce_submit_flip(dev:p_cdev;data:p_submit_flip):Integer;
+Function dce_submit_flip(dev:p_cdev;data:p_submit_flip_args):Integer;
 var
+ submit:t_submit_flip;
+ eop_val:PQWORD;
  ures:QWORD;
 begin
  Result:=0;
 
+ if (data^.canary<>$a5a5) then Exit(EINVAL);
+
+ if (data^.bufferIndex>15) then Exit(EINVAL);
+ if (data^.eop_nz>1) then Exit(EINVAL);
+
+ submit.bufferIndex:=data^.bufferIndex;
+ submit.flipMode   :=data^.flipMode;
+ submit.flipArg    :=data^.flipArg;
+ submit.flipArg2   :=data^.flipArg2;
+
+ if (data^.eop_nz=1) then
+ begin
+  eop_val:=data^.eop_val;
+ end else
+ begin
+  eop_val:=nil;
+ end;
+
+ mtx_lock(dce_mtx);
+
+  if (dce_handle=nil) then
+  begin
+   Result:=EINVAL;
+  end else
+  begin
+   Result:=dce_handle.SubmitFlip(@submit,eop_val);
+  end;
+
+ mtx_unlock(dce_mtx);
+
  Writeln('submit_flip:',data^.bufferIndex,' ',
                         data^.flipMode,' ',
                         '0x',HexStr(data^.flipArg,16),' ',
-                        data^.eop_val);
+                        '0x',HexStr(data^.eop_val));
 
  knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
 
@@ -734,20 +951,22 @@ begin
  event_id:=kn^.kn_kevent.ident shr 48;
 
  case event_id of
-   EVENTID_FLIP:   //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_FLIP,      //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_VBLANK,    //SCE_VIDEO_OUT_EVENT_VBLANK
+   EVENTID_SETMODE,   //8
+   EVENTID_POSITION,  //12
+   EVENTID_PREVBLANK, //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
+   $0060,
+   $0061,
+   $0062,
+   $0063:
      begin
       knlist_add(@g_video_out_event_flip,kn,0);
      end;
-   EVENTID_VBLANK: //SCE_VIDEO_OUT_EVENT_VBLANK
-     begin
-      knlist_add(@g_video_out_event_flip,kn,0);
-     end;
-   // $0051:Result:=8;
-   // $0058:Result:=12;
   else
    begin
-    Writeln(stderr,'filt_display_attach:',event_id);
-    Assert(false,'filt_display_attach');
+    //Writeln(stderr,'filt_display_attach:',event_id);
+    //Assert(false,'filt_display_attach');
     Result:=EINVAL;
    end;
  end;
@@ -762,16 +981,18 @@ begin
  event_id:=kn^.kn_kevent.ident shr 48;
 
  case event_id of
-   EVENTID_FLIP:    //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_FLIP,      //SCE_VIDEO_OUT_EVENT_FLIP
+   EVENTID_VBLANK,    //SCE_VIDEO_OUT_EVENT_VBLANK
+   EVENTID_SETMODE,   //8
+   EVENTID_POSITION,  //12
+   EVENTID_PREVBLANK, //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
+   $0060,
+   $0061,
+   $0062,
+   $0063:
      begin
       knlist_remove(@g_video_out_event_flip,kn,0)
      end;
-   EVENTID_VBLANK: //SCE_VIDEO_OUT_EVENT_VBLANK
-     begin
-      knlist_remove(@g_video_out_event_flip,kn,0)
-     end;
-   // $0051:Result:=8;
-   // $0058:Result:=12;
   else;
  end;
 
@@ -834,6 +1055,7 @@ var
 procedure dce_initialize();
 begin
  mtx_init(knlist_lock_flip,'knlist_lock_flip');
+ mtx_init(dce_mtx,'dce');
 
  knlist_init_mtx(@g_video_out_event_flip,@knlist_lock_flip);
 

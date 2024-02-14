@@ -395,19 +395,30 @@ end;
 type
  p_jmpq64_trampoline=^t_jmpq64_trampoline;
  t_jmpq64_trampoline=packed record
-  lea:array[0..6] of Byte;
+  lea    :array[0..6] of Byte; //48 8D 3D F9 FF FF FF
+  nop1   :Byte;  //90
   //
   and_rsp:DWORD; //48 83 E4 F0
   //
   inst   :Word;  //FF 15
-  offset :DWORD; //00
+  offset :DWORD; //02
+  ret    :Byte;  //C3
+  nop2   :Byte;  //90
   addr   :QWORD;
   nid    :QWORD;
   libname:PChar;
  end;
 
 const
- c_jmpq64_trampoline:t_jmpq64_trampoline=(lea:($48,$8D,$3D,$F9,$FF,$FF,$FF);and_rsp:($F0E48348);inst:$15FF;offset:0;addr:0);
+ c_jmpq64_trampoline:t_jmpq64_trampoline=(lea    :($48,$8D,$3D,$F9,$FF,$FF,$FF);
+                                          nop1   :$90;
+                                          and_rsp:($F0E48348);
+                                          inst   :$15FF;offset:$02;
+                                          ret    :$C3;
+                                          nop2   :$90;
+                                          addr   :0;
+                                          nid    :0;
+                                          libname:nil);
 
 procedure _unresolve_symbol(data:p_jmpq64_trampoline);
 var

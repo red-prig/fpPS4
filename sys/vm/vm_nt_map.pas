@@ -23,7 +23,7 @@ type
  vm_nt_file_obj=packed record
   hfile:THandle;
   refs :QWORD;
-  flags:QWORD;
+  flags:Byte;
   maxp :Byte;
  end;
 
