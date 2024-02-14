@@ -12,10 +12,11 @@ uses
 
 const
  SCE_COMPANION_HTTPD_ERROR_NOT_INITIALIZED=-2132541434; //0x80E40006
+ SCE_COMPANION_HTTPD_ERROR_INVALID_PARAM  =-2132541436; //0x80E40004
 
 type
  pSceNetInPort_t=^SceNetInPort_t;
- SceNetInPort_t=Integer;
+ SceNetInPort_t=word;
 
  pSceCompanionHttpdOptParam2=^SceCompanionHttpdOptParam2;
  SceCompanionHttpdOptParam2=packed record
@@ -23,20 +24,20 @@ type
   workMemory                  :Pointer;
   workMemorySize              :QWORD;
   workThreadPriority          :Integer;
-  align                       :Integer;
+  _align1                     :Integer;
   workThreadAffinity          :QWORD;
   workThreadStackSize         :QWORD;
   transceiverThreadPriority   :Integer;
-  _align                      :Integer;
-  _transceiverThreadPriority  :QWORD;
+  _align2                     :Integer;
+  transceiverThreadAffinity   :QWORD;
   transceiverStackSize        :QWORD;
   transceiverThreadCount      :QWORD;
   port                        :SceNetInPort_t;
-  __align                     :single;
+  _align3                     :word;
   screenOrientation           :Integer;
   workDirectory               :PChar;
   enableWebSocketProxy        :Boolean;
-  ___align                    :char;
+  _align4                     :Byte;
   webSocketServerPort         :SceNetInPort_t;
   webSocketProxySessionTimeout:DWORD;
  end;
@@ -51,6 +52,7 @@ type
  pSceCompanionHttpdRequest=^SceCompanionHttpdRequest;
  SceCompanionHttpdRequest=packed record
   method  :Integer;
+  _align  :Integer;
   url     :PChar;
   header  :pSceCompanionHttpdHeader;
   body    :PChar;
@@ -60,24 +62,25 @@ type
  pSceCompanionHttpdResponse=^SceCompanionHttpdResponse;
  SceCompanionHttpdResponse=packed record
   status  :Integer;
+  _align  :Integer;
   header  :pSceCompanionHttpdHeader;
   body    :PChar;
   bodySize:QWORD;
  end;
 
- pSceCompanionHttpdRequestCallback=^SceCompanionHttpdRequestCallback;
- SceCompanionHttpdRequestCallback=packed record
-  userId,httpRequest:SceCompanionHttpdRequest;
-  httpResponse      :pSceCompanionHttpdResponse;
-  param             :Pointer;
- end;
+ SceCompanionHttpdRequestCallback=function(
+  userId      :Integer;
+  httpRequest :pSceCompanionHttpdRequest;
+  httpResponse:pSceCompanionHttpdResponse;
+  param       :Pointer
+ ):Integer;
 
- pSceCompanionHttpdRequestBodyReceptionCallback=^SceCompanionHttpdRequestBodyReceptionCallback;
- SceCompanionHttpdRequestBodyReceptionCallback=packed record
-  event             :Integer;
-  userId,httpRequest:SceCompanionHttpdRequest;
-  param             :Pointer;
- end;
+ SceCompanionHttpdRequestBodyReceptionCallback=function(
+  event      :Integer;
+  userId     :Integer;
+  httpRequest:pSceCompanionHttpdRequest;
+  param      :Pointer
+ ):Integer;
 
 implementation
 
@@ -88,20 +91,20 @@ end;
 
 function ps4_sceCompanionHttpdStart():Integer; SysV_ABI_CDecl;
 begin
- Result:=SCE_COMPANION_HTTPD_ERROR_NOT_INITIALIZED;
+ Result:=0;
 end;
 
 function ps4_sceCompanionHttpdRegisterRequestCallback(_function:SceCompanionHttpdRequestCallback;
                                                       param:Pointer):Integer; SysV_ABI_CDecl;
 begin
- if (param=nil) then Exit(SCE_COMPANION_HTTPD_ERROR_NOT_INITIALIZED);
+ if (param=nil) then Exit(SCE_COMPANION_HTTPD_ERROR_INVALID_PARAM);
  Result:=0;
 end;
 
 function ps4_sceCompanionHttpdRegisterRequestBodyReceptionCallback(_function:SceCompanionHttpdRequestBodyReceptionCallback;
                                                                    param:Pointer):Integer; SysV_ABI_CDecl;
 begin
- if (param=nil) then Exit(SCE_COMPANION_HTTPD_ERROR_NOT_INITIALIZED);
+ if (param=nil) then Exit(SCE_COMPANION_HTTPD_ERROR_INVALID_PARAM);
  Result:=0;
 end;
 
