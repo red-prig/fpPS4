@@ -14,6 +14,9 @@ implementation
 
 uses
  errno,
+ kern_mtx,
+ sys_event,
+ kern_event,
  kern_authinfo,
  vm,
  vmparam,
@@ -27,6 +30,9 @@ var
  gc_page:Pointer;
 
  gc_AreSubmitsAllowed:Integer=0; //0=true,1=false (0xfe0100000)
+
+ gc_knl_lock:mtx;
+ gc_knlist:t_knlist;
 
 type
  p_SetGsRingSizes=^t_SetGsRingSizes;
@@ -252,11 +258,120 @@ const
   d_mmap_single2:nil;
  );
 
+function filterops_graphics_core_attach(kn:p_knote):Integer;
+var
+ kn_sdata:QWORD;
+ event_id:Byte;
+ cap:Boolean;
+ unk:Integer;
+begin
+ event_id:=Byte(kn^.kn_data);
+
+ cap:=sceSblACMgrHasUseHp3dPipeCapability(@g_authinfo);
+
+ unk:=0;
+
+ case event_id of
+  $00..$41,
+  $80..$86:
+   begin
+
+    if (not cap) then
+    begin
+     if (event_id=$84) or (event_id=$41) then Exit(EPERM);
+    end else
+    begin
+     if (event_id=$40) then Exit(EPERM);
+    end;
+
+    kn_sdata:=kn^.kn_sdata;
+
+    kn^.kn_sdata:=(kn_sdata and QWORD($ffffffffffffff00)) or QWORD(event_id);
+
+    case event_id of
+     $82..$86:kn_sdata:=(kn_sdata and QWORD($ffffffffffff0000)) or
+                        QWORD(event_id);
+      else
+              kn_sdata:=(kn_sdata and QWORD($ffffffffffff0000)) or
+                        QWORD(event_id) or
+                        QWORD((unk and $ff) shl 8);
+    end;
+
+    kn^.kn_sdata:=kn_sdata;
+
+    kn^.kn_flags:=kn^.kn_flags or EV_CLEAR; { automatically set }
+
+    knlist_add(@gc_knlist,kn,0);
+   end;
+  else
+   Result:=EINVAL;
+ end;
+
+end;
+
+procedure filterops_graphics_core_detach(kn:p_knote);
+begin
+ knlist_remove(@gc_knlist,kn,0);
+end;
+
+function filterops_graphics_core_event(kn:p_knote;hint:QWORD):Integer;
+var
+ event_id:Byte;
+begin
+ if (hint=0) then
+ begin
+  Result:=ord(kn^.kn_kevent.data<>0);
+ end else
+ begin
+  Result:=0;
+  if (Byte(kn^.kn_sdata)=Byte(hint)) then
+  begin
+   event_id:=(hint shr 8);
+
+   if (event_id=$80) or
+      (Byte(kn^.kn_sdata shr 8)=event_id) then
+   begin
+    Result:=1;
+
+    event_id:=PByte(@kn^.kn_kevent.data)[1];
+
+    kn^.kn_kevent.data:=(hint and QWORD($ffffffffffff00ff)) or
+                        (QWORD(event_id) shl 8);
+
+   end;
+  end;
+ end;
+end;
+
+procedure filterops_graphics_core_touch(kn:p_knote;kev:p_kevent;_type:QWORD);
+begin
+ if (_type=EVENT_PROCESS) then
+ begin
+  kev^:=kn^.kn_kevent;
+ end;
+end;
+
+const
+ filterops_graphics_core:t_filterops=(
+  f_isfd  :0;
+  _align  :0;
+  f_attach:@filterops_graphics_core_attach;
+  f_detach:@filterops_graphics_core_detach;
+  f_event :@filterops_graphics_core_event;
+  f_touch :@filterops_graphics_core_touch
+ );
+
 procedure gc_initialize();
 begin
  gc_page:=dev_mem_alloc(1);
 
  make_dev(@gc_cdevsw,0,0,0,&666,'gc',[]);
+
+ mtx_init(gc_knl_lock,'gc knl lock');
+ knlist_init_mtx(@gc_knlist,@gc_knl_lock);
+
+ kqueue_add_filteropts(EVFILT_GRAPHICS_CORE,@filterops_graphics_core);
+
 end;
 
 

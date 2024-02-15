@@ -1934,6 +1934,7 @@ begin
   FreeAndNil(FBlockSelection);
   FreeAndNil(FStrings);
   FreeAndNil(FTextViewsManager);
+  FFoldedLinesView := nil; // destroyed by FTextViewsManager
   FreeAndNil(fLines);
   FreeAndNil(fCaret);
   FreeAndNil(fInternalCaret);
@@ -3338,7 +3339,7 @@ begin
     if vf <> 0 then
       TopView := TopView + vf div 32;
 
-    FCaret.ViewedLineCharPos := PixelsToRowColumn(CurMousePos);
+    FCaret.LineCharPos:=PixelsToRowColumn(CurMousePos);
 
   finally
     if sfEnsureCursorPos in fStateFlags then
@@ -7306,6 +7307,8 @@ begin
   FreeAndNil(BufferBitmap);
   {$ENDIF}
   SurrenderPrimarySelection;
+  if FFoldedLinesView <> nil then
+    FFoldedLinesView.LinesInWindow := -1; // Mark as "not HandleAllocated"
   inherited DestroyWnd;
 end;
 

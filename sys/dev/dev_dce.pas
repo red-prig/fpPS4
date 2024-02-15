@@ -26,6 +26,7 @@ var
 
  dce_page:Pointer;
 
+ knlist_lock_flip:mtx;
  g_video_out_event_flip:t_knlist;
 
 implementation
@@ -772,6 +773,9 @@ begin
  submit.flipArg    :=data^.flipArg;
  submit.flipArg2   :=data^.flipArg2;
 
+ //       count               canary
+ //eop=0x[00000001] [ff] [00] [a5a5]
+
  if (data^.eop_nz=1) then
  begin
   eop_val:=data^.eop_val;
@@ -939,7 +943,7 @@ function filt_display_attach(kn:p_knote):Integer;
 var
  event_id:WORD;
 begin
- kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;             { automatically set }
+ kn^.kn_flags:=kn^.kn_flags or EV_CLEAR; { automatically set }
 
  if ((kn^.kn_kevent.ident and $f00000000000)=0) then
  begin
@@ -1048,9 +1052,6 @@ const
   f_detach:@filt_display_detach;
   f_event :@filt_display_event;
  );
-
-var
- knlist_lock_flip:mtx;
 
 procedure dce_initialize();
 begin
