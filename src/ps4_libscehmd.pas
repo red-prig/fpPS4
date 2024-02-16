@@ -61,6 +61,17 @@ type
   tanBottom:Single;
  end;
 
+ pSceFVector3=^SceFVector3;
+ SceFVector3=packed record
+  x,y,z:Single;
+ end;
+
+ pSceHmdEyeOffset=^SceHmdEyeOffset;
+ SceHmdEyeOffset=packed record
+  offset :SceFVector3;
+  reserve:array[0..19] of Byte;
+ end;
+
 implementation
 
 function ps4_sceHmdInitialize(param:Pointer):Integer; SysV_ABI_CDecl;
@@ -145,6 +156,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHmdReprojectionSetOutputMinColor(r,g,b:Single):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHmdOpen(userId,_type,index:Integer;pParam:pSceHmdOpenParam):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -161,6 +177,13 @@ begin
 
  Result:=0;
 end;
+
+function ps4_sceHmdGet2DEyeOffset(handle:Integer;
+                                  leftEyeOffset:pSceHmdEyeOffset;
+                                  rightEyeOffset:pSceHmdEyeOffset):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceHmdTerminate():Integer; SysV_ABI_CDecl;
 begin
@@ -190,8 +213,10 @@ begin
  lib^.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
  lib^.set_proc($99DC856DA263EBA3,@ps4_sceHmdReprojectionClearUserEventStart);
  lib^.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
+ lib^.set_proc($2E374B472B0753A6,@ps4_sceHmdReprojectionSetOutputMinColor);
  lib^.set_proc($776839223EC4533A,@ps4_sceHmdOpen);
  lib^.set_proc($34F430605AA2D1BB,@ps4_sceHmdGetFieldOfView);
+ lib^.set_proc($05663FA8A3398711,@ps4_sceHmdGet2DEyeOffset); 
  lib^.set_proc($CFF44C20BA8FEAD1,@ps4_sceHmdTerminate);
 end;
 
