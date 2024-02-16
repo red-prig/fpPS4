@@ -153,6 +153,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudio3dTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceAudio3d(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -172,6 +177,7 @@ begin
  lib^.set_proc($B9C12C8BADACA13A,@ps4_sceAudio3dAudioOutOpen);
  lib^.set_proc($61A6836C3C0AA453,@ps4_sceAudio3dPortGetQueueLevel);
  lib^.set_proc($F6D130134195D2AA,@ps4_sceAudio3dBedWrite);
+ lib^.set_proc($596D534B68B3E727,@ps4_sceAudio3dTerminate);
 end;
 
 initialization
