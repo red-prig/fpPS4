@@ -6,7 +6,7 @@ unit dev_rng;
 interface
 
 uses
- kern_conf;
+ sys_conf;
 
 procedure rng_init();
 

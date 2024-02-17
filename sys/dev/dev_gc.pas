@@ -6,7 +6,7 @@ unit dev_gc;
 interface
 
 uses
- kern_conf;
+ sys_conf;
 
 procedure gc_initialize();
 
@@ -16,7 +16,6 @@ uses
  errno,
  kern_mtx,
  sys_event,
- kern_event,
  kern_authinfo,
  vm,
  vmparam,
@@ -265,6 +264,8 @@ var
  cap:Boolean;
  unk:Integer;
 begin
+ Result:=0;
+
  event_id:=Byte(kn^.kn_data);
 
  cap:=sceSblACMgrHasUseHp3dPipeCapability(@g_authinfo);
@@ -333,7 +334,7 @@ begin
    begin
     Result:=1;
 
-    event_id:=PByte(@kn^.kn_kevent.data)[1];
+    event_id:=Byte(kn^.kn_kevent.data shr 8);
 
     kn^.kn_kevent.data:=(hint and QWORD($ffffffffffff00ff)) or
                         (QWORD(event_id) shl 8);

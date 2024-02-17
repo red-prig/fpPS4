@@ -44,6 +44,8 @@ type
   kq_knhashmask:QWORD;       // size of knhash
   kq_knhash    :p_klist;     // hash table for knotes
   //kq_task:task;
+  kq_wakeup    :t_kqueue_wakeup_cb;
+  kq_data      :Pointer;
   kq_name      :t_kq_name;
  end;
 

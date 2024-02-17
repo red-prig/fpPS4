@@ -6,6 +6,7 @@ unit sys_event;
 interface
 
 uses
+ time,
  mqueue;
 
 const
@@ -39,6 +40,7 @@ const
  EV_DELETE  =$0002;  // delete event from kq
  EV_ENABLE  =$0004;  // enable event
  EV_DISABLE =$0008;  // disable event (not reported)
+ EV_ACTION  =EV_ADD or EV_DELETE or EV_ENABLE or EV_DISABLE;
 
 // flags
  EV_ONESHOT  =$0010;  // only report one occurrence
@@ -227,6 +229,8 @@ type
  end;
  {$IF sizeof(t_kevent_copyops)<>24}{$STOP sizeof(t_kevent_copyops)<>24}{$ENDIF}
 
+ t_kqueue_wakeup_cb=procedure(data:Pointer);
+
 function  knote_alloc():p_knote;  external;
 procedure knote_free(kn:p_knote); external;
 
@@ -242,6 +246,25 @@ procedure knlist_init_mtx(knl:p_knlist;lock:Pointer); external;
 
 procedure knlist_destroy (knl:p_knlist); external;
 procedure knlist_cleardel(knl:p_knlist;islocked,killkn:Integer); external;
+
+function  kern_kqueue2(name:PAnsiChar;
+                       w_cb:t_kqueue_wakeup_cb;
+                       data:Pointer):Pointer; external;
+
+procedure kqueue_close2(kq:Pointer); external;
+
+function  kern_kevent2(kq        :Pointer;
+                       changelist:p_kevent;
+                       nchanges  :Integer;
+                       eventlist :p_kevent;
+                       nevents   :Integer;
+                       timeout   :p_timespec;
+                       p_ncount  :PInteger):Integer; external;
+
+function  kqueue_add_filteropts(filt:Integer;filtops:p_filterops):Integer; external;
+function  kqueue_del_filteropts(filt:Integer):Integer; external;
+function  kqfd_register(fd:Integer;kev:p_kevent):Integer; external;
+procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint); external;
 
 //
 

@@ -6,7 +6,7 @@ unit dev_null;
 interface
 
 uses
- kern_conf;
+ sys_conf;
 
 const
  ZERO_REGION_SIZE=(2 * 1024 * 1024); // 2MB

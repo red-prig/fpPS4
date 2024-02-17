@@ -23,7 +23,7 @@ uses
  errno,
  vmparam,
  vm_pmap,
- kern_conf;
+ sys_conf;
 
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin

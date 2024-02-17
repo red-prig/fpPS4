@@ -6,7 +6,7 @@ unit dev_dipsw;
 interface
 
 uses
- kern_conf;
+ sys_conf;
 
 procedure dipsw_init();
 

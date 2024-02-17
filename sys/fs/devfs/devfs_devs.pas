@@ -8,7 +8,8 @@ interface
 uses
  mqueue,
  kern_id,
- kern_conf,
+ sys_conf,
+ devfs_int,
  devfs;
 
 function  devfs_alloc(flags:Integer):p_cdev;
@@ -42,8 +43,7 @@ uses
  kern_sx,
  vfs_vnops,
  vfs_subr,
- vnode_if,
- devfs_rule;
+ vnode_if;
 
 var
  devfs_desc:t_id_desc=(free:nil;refs:0);

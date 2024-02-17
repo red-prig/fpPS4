@@ -9,7 +9,7 @@ uses
  sysutils,
  vm,
  vmparam,
- kern_conf,
+ sys_conf,
  sys_event,
  time,
  kern_mtx,
@@ -38,7 +38,6 @@ uses
  subr_backtrace,
  sys_vm_object,
  vm_pager,
- kern_event,
  md_time,
  kern_proc,
  kern_timeout;
@@ -755,10 +754,13 @@ type
   rout       :PQWORD; //extraout of result
  end;
 
+var
+ f_eop_count:Integer=0;
+
 Function dce_submit_flip(dev:p_cdev;data:p_submit_flip_args):Integer;
 var
  submit:t_submit_flip;
- eop_val:PQWORD;
+ submit_eop:QWORD;
  ures:QWORD;
 begin
  Result:=0;
@@ -766,23 +768,11 @@ begin
  if (data^.canary<>$a5a5) then Exit(EINVAL);
 
  if (data^.bufferIndex>15) then Exit(EINVAL);
- if (data^.eop_nz>1) then Exit(EINVAL);
 
  submit.bufferIndex:=data^.bufferIndex;
  submit.flipMode   :=data^.flipMode;
  submit.flipArg    :=data^.flipArg;
  submit.flipArg2   :=data^.flipArg2;
-
- //       count               canary
- //eop=0x[00000001] [ff] [00] [a5a5]
-
- if (data^.eop_nz=1) then
- begin
-  eop_val:=data^.eop_val;
- end else
- begin
-  eop_val:=nil;
- end;
 
  mtx_lock(dce_mtx);
 
@@ -791,7 +781,22 @@ begin
    Result:=EINVAL;
   end else
   begin
-   Result:=dce_handle.SubmitFlip(@submit,eop_val);
+
+   if (data^.eop_nz=1) then
+   begin
+    //       count               canary
+    //eop=0x[00000001] [ff] [00] [a5a5]
+
+    f_eop_count:=f_eop_count+1;
+
+    submit_eop:=(QWORD(f_eop_count) shl 32) or QWORD($ff00a5a5);
+
+    Result:=dce_handle.SubmitFlipEop(@submit,submit_eop);
+   end else
+   begin
+    Result:=dce_handle.SubmitFlip(@submit);
+   end;
+
   end;
 
  mtx_unlock(dce_mtx);
@@ -804,6 +809,11 @@ begin
  knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
 
  flipArg:=data^.flipArg;
+
+ if (data^.eop_nz=1) then
+ begin
+  Result:=copyout(@submit_eop,data^.eop_val,SizeOf(QWORD));
+ end;
 
  if (data^.rout<>nil) then
  begin

@@ -193,7 +193,7 @@ uses
  sys_vm_object,
  vsys_generic,
  rtprio,
- kern_conf;
+ sys_conf;
 
 //
 

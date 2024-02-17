@@ -15,7 +15,7 @@ uses
  kern_descrip,
  vfile,
  vfcntl,
- kern_conf,
+ sys_conf,
  vstat;
 
 function blockpool_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;

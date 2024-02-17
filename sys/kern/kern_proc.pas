@@ -129,48 +129,9 @@ begin
  mtx_unlock(p_proc.p_mtx);
 end;
 
-function  filt_host_ipc_attach(kn:p_knote):Integer;
-begin
- Result:=0;
-end;
-
-procedure filt_host_ipc_detach(kn:p_knote);
-begin
- //
-end;
-
-function  filt_host_ipc_event(kn:p_knote;hint:QWORD):Integer;
-begin
- p_proc.p_host_ipc.knote(p_proc.p_pid,EVFILT_PROC,hint);
- Result:=0;
-end;
-
-const
- filterops_host_ipc:t_filterops=(
-  f_isfd  :0;
-  _align  :0;
-  f_attach:@filt_host_ipc_attach;
-  f_detach:@filt_host_ipc_detach;
-  f_event :@filt_host_ipc_event;
- );
-
 procedure PROC_INIT_HOST_IPC(host_ipc:THostIpcConnect);
-var
- kn:p_knote;
 begin
- if (host_ipc=nil) then Exit;
-
  p_proc.p_host_ipc:=host_ipc;
-
- kn:=knote_alloc();
-
- kn^.kn_fop:=@filterops_host_ipc;
-
- kn^.kn_status:=KN_INFLUX or KN_DETACHED or KN_SCAN;
- kn^.kn_ptr.p_proc:=@p_proc;
- kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;
-
- knlist_add(@p_proc.p_klist, kn, 0);
 end;
 
 procedure PROC_INIT;

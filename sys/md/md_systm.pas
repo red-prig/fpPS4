@@ -13,6 +13,12 @@ uses
 type
  t_fork_cb=procedure(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 
+ p_fork_proc=^t_fork_proc;
+ t_fork_proc=record
+  hProcess:THandle;
+  fork_pid:Integer;
+ end;
+
 function  md_copyin (hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function  md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 
@@ -25,7 +31,7 @@ function  md_pidfd_open (pid:DWORD):THandle;
 
 procedure md_run_forked;
 procedure md_fork_unshare;
-function  md_fork_process(proc:Pointer;data:Pointer;size:QWORD):THandle;
+function  md_fork_process(proc:Pointer;data:Pointer;size:QWORD;var info:t_fork_proc):Integer;
 
 implementation
 
@@ -172,23 +178,23 @@ function SetInformationJobObject(hJob:HANDLE;
 
 function AssignProcessToJobObject(hJob,hProcess:THandle):BOOL; stdcall; external kernel32;
 
-function NtQueryTeb(td_handle:THandle):p_teb;
+function NtQueryTeb(td_handle:THandle;var teb:p_teb):Integer;
 var
  TBI:THREAD_BASIC_INFORMATION;
- err:Integer;
 begin
- Result:=nil;
+ Result:=0;
+ teb:=nil;
  TBI:=Default(THREAD_BASIC_INFORMATION);
 
- err:=NtQueryInformationThread(
-       td_handle,
-       ThreadBasicInformation,
-       @TBI,
-       SizeOf(THREAD_BASIC_INFORMATION),
-       nil);
- if (err<>0) then Exit;
+ Result:=NtQueryInformationThread(
+          td_handle,
+          ThreadBasicInformation,
+          @TBI,
+          SizeOf(THREAD_BASIC_INFORMATION),
+          nil);
+ if (Result<>0) then Exit;
 
- Result:=TBI.TebBaseAddress;
+ teb:=TBI.TebBaseAddress;
 end;
 
 procedure NtGetVirtualInfo(hProcess:THandle;var base:Pointer;var size:QWORD);
@@ -259,8 +265,8 @@ begin
  err:=NtGetContextThread(hThread,Context);
  if (err<>0) then Exit(err);
 
- teb:=NtQueryTeb(hThread);
- if (teb=nil) then Exit(-1);
+ err:=NtQueryTeb(hThread,teb);
+ if (err<>0) then Exit(err);
 
  kstack:=Default(t_td_stack);
  err:=md_copyin(hProcess,@teb^.stack,@kstack,SizeOf(t_td_stack),nil);
@@ -432,13 +438,15 @@ end;
 function NtCreateShared(hProcess:THandle;proc:Pointer;data:Pointer;size:QWORD):Integer;
 var
  base:p_shared_info;
+ full:QWORD;
  shared_info:t_shared_info;
 begin
  base:=Pointer(WIN_SHARED_ADDR);
- size:=SizeOf(Pointer)+size;
- size:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
- Result:=md_mmap(hProcess,base,size,MD_PROT_RW);
+ full:=SizeOf(shared_info)+size;
+ full:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+
+ Result:=md_mmap(hProcess,base,full,MD_PROT_RW);
  if (Result<>0) then Exit;
 
  shared_info:=Default(t_shared_info);
@@ -450,7 +458,6 @@ begin
  shared_info.hStdError :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_ERROR_HANDLE));
 
  shared_info.proc:=proc;
-
  shared_info.size:=size;
 
  Result:=md_copyout(hProcess,@shared_info,base,SizeOf(shared_info),nil);
@@ -462,7 +469,7 @@ begin
  end;
 end;
 
-function md_fork_process(proc:Pointer;data:Pointer;size:QWORD):THandle;
+function md_fork_process(proc:Pointer;data:Pointer;size:QWORD;var info:t_fork_proc):Integer;
 var
  si:TSTARTUPINFO;
  pi:PROCESS_INFORMATION;
@@ -471,7 +478,6 @@ var
   DATA :array[0..MAX_PATH*2] of WideChar;
  end;
  LEN:ULONG;
- R:DWORD;
  b:BOOL;
 begin
  Result:=0;
@@ -479,12 +485,12 @@ begin
  FillChar(BUF,SizeOf(BUF),0);
  LEN:=SizeOf(BUF);
 
- R:=NtQueryInformationProcess(NtCurrentProcess,
-                              ProcessImageFileNameWin32,
-                              @BUF,
-                              LEN,
-                              @LEN);
- if (R<>0) then Exit;
+ Result:=NtQueryInformationProcess(NtCurrentProcess,
+                                   ProcessImageFileNameWin32,
+                                   @BUF,
+                                   LEN,
+                                   @LEN);
+ if (Result<>0) then Exit;
 
  si:=Default(TSTARTUPINFO);
  pi:=Default(PROCESS_INFORMATION);
@@ -492,18 +498,27 @@ begin
  si.cb:=SizeOf(si);
 
  b:=CreateProcessW(PWideChar(@BUF.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
- if not b then Exit;
+ if not b then Exit(-1);
 
  b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
+ if not b then Exit(-1);
 
- NtMoveStack(pi.hProcess,pi.hThread);
- NtReserve(pi.hProcess);
- NtCreateShared(pi.hProcess,proc,data,size);
+ Result:=NtMoveStack(pi.hProcess,pi.hThread);
+ if (Result<>0) then Exit;
 
- NtResumeProcess(pi.hProcess);
+ Result:=NtReserve(pi.hProcess);
+ if (Result<>0) then Exit;
+
+ Result:=NtCreateShared(pi.hProcess,proc,data,size);
+ if (Result<>0) then Exit;
+
+ Result:=NtResumeProcess(pi.hProcess);
+ if (Result<>0) then Exit;
+
  NtClose(pi.hThread);
 
- Result:=pi.hProcess;
+ info.hProcess:=pi.hProcess;
+ info.fork_pid:=pi.dwProcessId;
 end;
 
 end.

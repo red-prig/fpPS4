@@ -70,7 +70,7 @@ uses
  systm,
  kern_proc,
  sys_event,
- kern_event,
+ md_sleep,
  md_proc;
 
 function _WSTATUS(x:Integer):Integer; inline;
@@ -136,6 +136,9 @@ begin
  if halt_on_exit then
  begin
   md_halt(rv);
+ end else
+ begin
+  msleep_td(0);
  end;
 end;
 

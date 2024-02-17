@@ -99,18 +99,18 @@ function  kqfd_register(fd:Integer;kev:p_kevent):Integer;
 
 function  sys_kqueue():Integer;
 function  sys_kqueueex(name:PChar):Integer;
-function  sys_kevent(fd:Integer;
+
+function  sys_kevent(fd        :Integer;
                      changelist:Pointer;
-                     nchanges:Integer;
-                     eventlist:Pointer;
-                     nevents:Integer;
-                     timeout:Pointer):Integer;
+                     nchanges  :Integer;
+                     eventlist :Pointer;
+                     nevents   :Integer;
+                     timeout   :Pointer):Integer;
 
 implementation
 
 uses
  errno,
- md_proc,
  md_time,
  kern_sig,
  kern_sx,
@@ -438,7 +438,7 @@ begin
   immediate:=1;
  end;
 
- kn^.kn_ptr.p_proc:=nil;
+ kn^.kn_ptr.p_proc:=@p_proc;
  kn^.kn_flags:=kn^.kn_flags or EV_CLEAR;  { automatically set }
 
  {
@@ -453,7 +453,7 @@ begin
 
  if (immediate=0) then
  begin
-  knlist_add(@p_proc.p_klist, kn, 1);
+  knlist_add(@p_proc.p_klist, kn, 0);
  end;
 
  {
@@ -843,7 +843,34 @@ end;
 
 //
 
-function kern_kqueue(pfd:PInteger;name:PAnsiChar):Integer;
+function kern_kqueue2(name:PAnsiChar;
+                      w_cb:t_kqueue_wakeup_cb;
+                      data:Pointer):p_kqueue; public;
+var
+ kq:p_kqueue;
+begin
+ kq:=AllocMem(SizeOf(t_kqueue));
+ if (kq=nil) then Exit;
+
+ mtx_init(kq^.kq_lock, 'kqueue');
+ TAILQ_INIT(@kq^.kq_head);
+ //kq^.kq_fdp:=fdp;
+ knlist_init_mtx(@kq^.kq_sel.si_note, @kq^.kq_lock);
+ //TASK_INIT(@kq^.kq_task, 0, kqueue_task, kq);
+
+ if (name<>nil) then
+ begin
+  kq^.kq_name:=name;
+ end;
+
+ kq^.kq_wakeup:=w_cb;
+ kq^.kq_data  :=data;
+
+ Result:=kq;
+end;
+
+function kern_kqueue(pfd :PInteger;
+                     name:PAnsiChar):Integer;
 var
  kq:p_kqueue;
  fp:p_file;
@@ -856,18 +883,9 @@ begin
  if (error<>0) then Exit(error);
 
  { An extra reference on `nfp' has been held for us by falloc(). }
- kq:=AllocMem(SizeOf(t_kqueue));
 
- mtx_init(kq^.kq_lock, 'kqueue');
- TAILQ_INIT(@kq^.kq_head);
- //kq^.kq_fdp:=fdp;
- knlist_init_mtx(@kq^.kq_sel.si_note, @kq^.kq_lock);
- //TASK_INIT(@kq^.kq_task, 0, kqueue_task, kq);
-
- if (name<>nil) then
- begin
-  kq^.kq_name:=name;
- end;
+ kq:=kern_kqueue2(name,nil,nil);
+ if (kq=nil) then Exit(ENOMEM);
 
  FILEDESC_XLOCK(@fd_table);
  TAILQ_INSERT_HEAD(@fd_table.fd_kqlist, kq, @kq^.kq_list);
@@ -922,12 +940,10 @@ end;
 type
  p_kevent_args=^t_kevent_args;
  t_kevent_args=record
-  fd        :Integer;
   changelist:p_kevent;
   nchanges  :Integer;
   eventlist :p_kevent;
   nevents   :Integer;
-  timeout   :p_timespec;
  end;
 
 {
@@ -949,6 +965,19 @@ begin
  Exit(error);
 end;
 
+function kevent_copyout2(arg:Pointer;kevp:p_kevent;count:Integer):Integer;
+var
+ uap:p_kevent_args;
+begin
+ Assert(count <= KQ_NEVENTS, Format('count (%d) > KQ_NEVENTS', [count]));
+ uap:=arg;
+
+ Move(kevp^,uap^.eventlist^,count*sizeof(t_kevent));
+
+ Inc(uap^.eventlist,count);
+ Result:=0;
+end;
+
 {
  * Copy 'count' items from the list pointed to by uap^.changelist.
  }
@@ -968,23 +997,97 @@ begin
  Exit(error);
 end;
 
+function kevent_copyin2(arg:Pointer;kevp:p_kevent;count:Integer):Integer;
+var
+ uap:p_kevent_args;
+begin
+ Assert(count <= KQ_NEVENTS, Format('count (%d) > KQ_NEVENTS', [count]));
+ uap:=arg;
+
+ Move(uap^.changelist^,kevp^,count*sizeof(t_kevent));
+
+ Inc(uap^.changelist,count);
+ Result:=0;
+end;
+
+function _kern_kevent(td:p_kthread;
+                      kq:p_kqueue;
+                      nchanges:Integer;
+                      nevents:Integer;
+                      k_ops:p_kevent_copyops;
+                      timeout:p_timespec):Integer;
+type
+ t_keva=array[0..KQ_NEVENTS-1] of t_kevent;
+var
+ keva:t_keva;
+ kevp,changes:p_kevent;
+ i,n,nerrors:Integer;
+begin
+ Result:=0;
+
+ nerrors:=0;
+ keva:=Default(t_keva);
+
+ while (nchanges > 0) do
+ begin
+  if (nchanges > KQ_NEVENTS) then
+   n:=KQ_NEVENTS
+  else
+   n:=nchanges;
+
+  Result:=k_ops^.k_copyin(k_ops^.arg, keva, n);
+  if (Result<>0) then Exit; //goto done;
+
+  changes:=keva;
+
+  For i:=0 to n-1 do
+  begin
+   kevp:=@changes[i];
+   if (kevp^.filter=0) then continue;
+   kevp^.flags:=kevp^.flags and (not EV_SYSFLAGS);
+   Result:=kqueue_register(kq, kevp);
+   if (Result<>0) or ((kevp^.flags and EV_RECEIPT)<>0) then
+   begin
+    if (nevents<>0) then
+    begin
+     kevp^.flags:=EV_ERROR;
+     kevp^.data :=Result;
+     k_ops^.k_copyout(k_ops^.arg, kevp, 1);
+     Dec(nevents);
+     Inc(nerrors);
+    end else
+    begin
+     Exit(0); //goto done;
+    end;
+   end;
+  end;
+
+  Dec(nchanges,n);
+ end;
+
+ if (nerrors<>0) then
+ begin
+  td^.td_retval[0]:=nerrors;
+  Exit(0); //goto done;
+ end;
+
+ Result:=kqueue_scan(kq, nevents, k_ops, timeout, keva);
+end;
+
 function kern_kevent(fd:Integer;
                      nchanges:Integer;
                      nevents:Integer;
                      k_ops:p_kevent_copyops;
                      timeout:p_timespec):Integer;
 label
- done_norel,
- done;
+ done_norel;
 type
  t_keva=array[0..KQ_NEVENTS-1] of t_kevent;
 var
  td:p_kthread;
- keva:t_keva;
- kevp,changes:p_kevent;
  kq:p_kqueue;
  fp:p_file;
- i,n,nerrors,error:Integer;
+ error:Integer;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
@@ -1007,64 +1110,27 @@ begin
 
  Writeln('kern_kevent:',kq^.kq_name);
 
- nerrors:=0;
- keva:=Default(t_keva);
+ error:=_kern_kevent(td,
+                     kq,
+                     nchanges,
+                     nevents,
+                     k_ops,
+                     timeout);
 
- while (nchanges > 0) do
- begin
-  if (nchanges > KQ_NEVENTS) then
-   n:=KQ_NEVENTS
-  else
-   n:=nchanges;
-
-  error:=k_ops^.k_copyin(k_ops^.arg, keva, n);
-  if (error<>0) then goto done;
-  changes:=keva;
-  For i:=0 to n-1 do
-  begin
-   kevp:=@changes[i];
-   if (kevp^.filter=0) then continue;
-   kevp^.flags:=kevp^.flags and (not EV_SYSFLAGS);
-   error:=kqueue_register(kq, kevp);
-   if (error<>0) or ((kevp^.flags and EV_RECEIPT)<>0) then
-   begin
-    if (nevents<>0) then
-    begin
-     kevp^.flags:=EV_ERROR;
-     kevp^.data :=error;
-     k_ops^.k_copyout(k_ops^.arg, kevp, 1);
-     Dec(nevents);
-     Inc(nerrors);
-    end else
-    begin
-     goto done;
-    end;
-   end;
-  end;
-  Dec(nchanges,n);
- end;
-
- if (nerrors<>0) then
- begin
-  td^.td_retval[0]:=nerrors;
-  error:=0;
-  goto done;
- end;
-
- error:=kqueue_scan(kq, nevents, k_ops, timeout, keva);
-done:
+//done:
  kqueue_release(kq, 0);
+
 done_norel:
  fdrop(fp);
  Exit(error);
 end;
 
-function sys_kevent(fd:Integer;
+function sys_kevent(fd        :Integer;
                     changelist:Pointer;
-                    nchanges:Integer;
-                    eventlist:Pointer;
-                    nevents:Integer;
-                    timeout:Pointer):Integer;
+                    nchanges  :Integer;
+                    eventlist :Pointer;
+                    nevents   :Integer;
+                    timeout   :Pointer):Integer;
 var
  ts:timespec;
  tsp:p_timespec;
@@ -1082,12 +1148,10 @@ begin
   tsp:=nil;
  end;
 
- uap.fd        :=fd        ;
  uap.changelist:=changelist;
  uap.nchanges  :=nchanges  ;
  uap.eventlist :=eventlist ;
  uap.nevents   :=nevents   ;
- uap.timeout   :=timeout   ;
 
  k_ops.arg      :=@uap;
  k_ops.k_copyout:=@kevent_copyout;
@@ -1098,7 +1162,44 @@ begin
  Exit(error);
 end;
 
-function kqueue_add_filteropts(filt:Integer;filtops:p_filterops):Integer;
+function kern_kevent2(kq        :p_kqueue;
+                      changelist:p_kevent;
+                      nchanges  :Integer;
+                      eventlist :p_kevent;
+                      nevents   :Integer;
+                      timeout   :p_timespec;
+                      p_ncount  :PInteger):Integer; public;
+var
+ td:p_kthread;
+ error:Integer;
+ uap:t_kevent_args;
+ k_ops:t_kevent_copyops;
+begin
+ td:=curkthread;
+ if (td=nil) then Exit(-1);
+
+ uap.changelist:=changelist;
+ uap.nchanges  :=nchanges  ;
+ uap.eventlist :=eventlist ;
+ uap.nevents   :=nevents   ;
+
+ k_ops.arg      :=@uap;
+ k_ops.k_copyout:=@kevent_copyout2;
+ k_ops.k_copyin :=@kevent_copyin2;
+
+ error:=_kern_kevent(td,
+                     kq,
+                     nchanges,
+                     nevents,
+                     @k_ops,
+                     timeout);
+
+ p_ncount^:=td^.td_retval[0];
+
+ Exit(error);
+end;
+
+function kqueue_add_filteropts(filt:Integer;filtops:p_filterops):Integer; public;
 var
  error:Integer;
 begin
@@ -1123,7 +1224,7 @@ begin
  Exit(error);
 end;
 
-function kqueue_del_filteropts(filt:Integer):Integer;
+function kqueue_del_filteropts(filt:Integer):Integer; public;
 var
  error:Integer;
 begin
@@ -1349,7 +1450,7 @@ findkn:
    kev^.fflags:=0;
    kev^.data:=0;
    kn^.kn_kevent:=kev^;
-   kn^.kn_kevent.flags:=kn^.kn_kevent.flags and (not (EV_ADD or EV_DELETE or EV_ENABLE or EV_DISABLE));
+   kn^.kn_kevent.flags:=kn^.kn_kevent.flags and (not EV_ACTION);
    kn^.kn_status:=KN_INFLUX or KN_DETACHED;
 
    error:=knote_attach(kn, kq);
@@ -1462,7 +1563,7 @@ done:
  Exit(error);
 end;
 
-procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint);
+procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint); public;
 label
  _lock,
  _again;
@@ -2018,21 +2119,13 @@ begin
  Exit(0);
 end;
 
-{ARGSUSED}
-function kqueue_close(fp:p_file):Integer;
+procedure kqueue_close2(kq:p_kqueue); public;
 var
- kq:p_kqueue;
  kn:p_knote;
  i:Integer;
- error:Integer;
- filedesc_unlock:Integer;
 begin
- kq:=fp^.f_data;
+ if (kq=nil) then Exit;
 
- error:=kqueue_acquire(fp, @kq);
- if (error<>0) then Exit(error);
-
- filedesc_unlock:=0;
  KQ_LOCK(kq);
 
  Assert((kq^.kq_state and KQ_CLOSING)<>KQ_CLOSING,'kqueue already closing');
@@ -2120,6 +2213,39 @@ begin
 
  KQ_UNLOCK(kq);
 
+ seldrain(@kq^.kq_sel);
+ knlist_destroy(@kq^.kq_sel.si_note);
+ mtx_destroy(kq^.kq_lock);
+ //kq^.kq_fdp:=nil;
+
+ if (kq^.kq_knhash<>nil) then
+ begin
+  FreeMem(kq^.kq_knhash);
+ end;
+ if (kq^.kq_knlist<>nil) then
+ begin
+  FreeMem(kq^.kq_knlist);
+ end;
+
+ //funsetown(@kq^.kq_sigio);
+
+ FreeMem(kq);
+end;
+
+{ARGSUSED}
+function kqueue_close(fp:p_file):Integer;
+var
+ kq:p_kqueue;
+ error:Integer;
+ filedesc_unlock:Integer;
+begin
+ kq:=fp^.f_data;
+
+ error:=kqueue_acquire(fp, @kq);
+ if (error<>0) then Exit(error);
+
+ filedesc_unlock:=0;
+
  {
   * We could be called due to the knote_drop() doing fdrop(),
   * called from kqueue_register().  In this case the global
@@ -2142,22 +2268,8 @@ begin
   FILEDESC_XUNLOCK(@fd_table);
  end;
 
- seldrain(@kq^.kq_sel);
- knlist_destroy(@kq^.kq_sel.si_note);
- mtx_destroy(kq^.kq_lock);
- //kq^.kq_fdp:=nil;
+ kqueue_close2(kq);
 
- if (kq^.kq_knhash<>nil) then
- begin
-  FreeMem(kq^.kq_knhash);
- end;
- if (kq^.kq_knlist<>nil) then
- begin
-  FreeMem(kq^.kq_knlist);
- end;
-
- //funsetown(@kq^.kq_sigio);
- FreeMem(kq);
  fp^.f_data:=nil;
 
  Exit(0);
@@ -2188,6 +2300,12 @@ begin
  begin
   //pgsigio(@kq^.kq_sigio, SIGIO, 0);
  end;
+
+ if (kq^.kq_wakeup<>nil) then
+ begin
+  kq^.kq_wakeup(kq^.kq_data);
+ end;
+
 end;
 
 {
@@ -2655,6 +2773,7 @@ begin
  TAILQ_INSERT_TAIL(@kq^.kq_head,kn,@kn^.kn_tqe);
  kn^.kn_status:=kn^.kn_status or KN_QUEUED;
  Inc(kq^.kq_count);
+
  kqueue_wakeup(kq);
 end;
 
@@ -2697,7 +2816,7 @@ end;
 {
  * Register the kev w/ the kq specified by fd.
  }
-function kqfd_register(fd:Integer;kev:p_kevent):Integer;
+function kqfd_register(fd:Integer;kev:p_kevent):Integer; public;
 label
  noacquire;
 var

@@ -6,17 +6,20 @@ interface
 
 uses
  Classes,
+ time,
  mqueue,
  LFQueue,
  kern_thr,
  kern_thread,
+ sys_event,
  kern_mtx;
 
 type
  t_mtype=(
   iRESULT,
-  iMOUNT,
-  iKNOTE
+  iKEV_CHANGE,
+  iKEV_EVENT,
+  iMOUNT
  );
 
  PNodeHeader=^TNodeHeader;
@@ -42,13 +45,6 @@ type
   tid   :DWORD;
  end;
 
- PHostIpcKnote=^THostIpcKnote;
- THostIpcKnote=packed record
-  pid   :Integer;
-  filter:Integer;
-  hint  :QWORD
- end;
-
  THostIpcHandler=class
   function OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; virtual;
  end;
@@ -58,6 +54,7 @@ type
    FQueue:TIntrusiveMPSCQueue;
    FWaits:LIST_HEAD;
    FWLock:mtx;
+   Fkq:Pointer;
    procedure   SyncResult(tid:DWORD;value:Ptruint);
    function    NewNodeSync:PNodeIpcSync;
    procedure   FreeNodeSync(node:PNodeIpcSync);
@@ -66,9 +63,12 @@ type
    function    Recv:PQNode;
    procedure   Flush;
    procedure   RecvSync(node:PQNode);
+   procedure   RecvKevent(node:PQNode);
+   procedure   UpdateKevent();
+   procedure   WakeupKevent(); virtual;
   public
    //
-   procedure   knote(pid,filter:Integer;hint:QWORD);
+   procedure   kevent(kev:p_kevent;count:Integer);
    //
    function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
    procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);
@@ -77,6 +77,8 @@ type
    //
    Constructor Create;
    Destructor  Destroy; override;
+   procedure   thread_new;  virtual;
+   procedure   thread_free; virtual;
  end;
 
  THostIpcSimpleKERN=class;
@@ -93,15 +95,17 @@ type
   FHandler:THostIpcHandler;
   Constructor Create;
   Destructor  Destroy; override;
+  procedure   thread_new; override;
+  procedure   thread_free; override;
   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
-  procedure   Update(Handler:THostIpcHandler); override;
+  procedure   WakeupKevent(); override;
  end;
 
 implementation
 
 function THostIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
 begin
- //
+ Result:=0;
 end;
 
 Constructor THostIpcConnect.Create;
@@ -115,7 +119,21 @@ Destructor THostIpcConnect.Destroy;
 begin
  Flush;
  mtx_destroy(FWLock);
+ if (Fkq<>nil) then
+ begin
+  kqueue_close2(Fkq);
+ end;
  inherited;
+end;
+
+procedure THostIpcConnect.thread_new;
+begin
+ //
+end;
+
+procedure THostIpcConnect.thread_free;
+begin
+ //
 end;
 
 procedure THostIpcConnect.Pack(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
@@ -166,6 +184,64 @@ begin
  TriggerNodeSync(node^.header.mtid,value);
 end;
 
+procedure kq_wakeup(data:Pointer); SysV_ABI_CDecl;
+begin
+ THostIpcConnect(data).WakeupKevent();
+end;
+
+procedure THostIpcConnect.RecvKevent(node:PQNode);
+var
+ kev:p_kevent;
+ value:Ptruint;
+ count:Integer;
+begin
+ kev  :=@node^.buf;
+ count:=node^.header.mlen div SizeOf(t_kevent);
+
+ Writeln('RecvKevent ',kev^.ident,' ',count);
+
+ if (Fkq=nil) then
+ begin
+  Fkq:=kern_kqueue2('[ipc]',@kq_wakeup,Pointer(Self));
+ end;
+
+ //changelist
+ value:=kern_kevent2(Fkq,kev,count,nil,0,nil,@count);
+
+ //is sync
+ if (node^.header.mtid<>0) then
+ begin
+  SyncResult(node^.header.mtid,value);
+ end;
+end;
+
+procedure THostIpcConnect.UpdateKevent();
+var
+ kev:array[0..7] of t_kevent;
+ t:timespec;
+ r:Integer;
+begin
+ if (Fkq=nil) then Exit;
+ t:=Default(timespec);
+
+ repeat
+
+  r:=0;
+  kern_kevent2(Fkq,nil,0,@kev,8,@t,@r);
+
+  if (r>0) then
+  begin
+   SendAsyn(iKEV_EVENT,r*SizeOf(t_kevent),@kev);
+  end;
+
+ until (r<>8);
+end;
+
+procedure THostIpcConnect.WakeupKevent();
+begin
+ //
+end;
+
 procedure THostIpcConnect.Update(Handler:THostIpcHandler);
 var
  node:PQNode;
@@ -175,21 +251,25 @@ begin
  while (node<>nil) do
  begin
   //
-  if (node^.header.mtype=DWORD(iRESULT)) then
-  begin
-   RecvSync(node);
-  end else
-  if (Handler<>nil) then
-  begin
-   value:=Handler.OnMessage(t_mtype(node^.header.mtype),node^.header.mlen,@node^.buf);
 
-   //is sync
-   if (node^.header.mtid<>0) then
-   begin
-    SyncResult(node^.header.mtid,value);
-   end;
+  case t_mtype(node^.header.mtype) of
+   iRESULT    :RecvSync(node);
+   iKEV_CHANGE:RecvKevent(node);
 
+   else
+     if (Handler<>nil) then
+     begin
+      value:=Handler.OnMessage(t_mtype(node^.header.mtype),node^.header.mlen,@node^.buf);
+
+      //is sync
+      if (node^.header.mtid<>0) then
+      begin
+       SyncResult(node^.header.mtid,value);
+      end;
+
+     end;
   end;
+
   //
   FreeMem(node);
   //
@@ -204,15 +284,9 @@ begin
  Send(iRESULT,SizeOf(Ptruint),tid,@value);
 end;
 
-procedure THostIpcConnect.knote(pid,filter:Integer;hint:QWORD);
-var
- note:THostIpcKnote;
+procedure THostIpcConnect.kevent(kev:p_kevent;count:Integer);
 begin
- note.pid   :=pid;
- note.filter:=filter;
- note.hint  :=hint;
- //
- SendAsyn(iKNOTE,SizeOf(note),@note);
+ SendAsyn(iKEV_CHANGE,count*SizeOf(t_kevent),kev);
 end;
 
 //
@@ -312,6 +386,10 @@ begin
  ipc:=THostIpcSimpleKERN(parameter);
 
  repeat
+  if ipc.FQueue.IsEmpty then
+  begin
+   RTLEventWaitFor(ipc.FEvent);
+  end;
   ipc.Update(ipc.FHandler);
  until false;
 
@@ -321,24 +399,30 @@ Constructor THostIpcSimpleKERN.Create;
 begin
  inherited;
  FEvent:=RTLEventCreate;
- Ftd:=nil;
- kthread_add(@simple_kern_thread,Self,@Ftd,'[ipc_pipe]');
 end;
 
 Destructor THostIpcSimpleKERN.Destroy;
 begin
- thread_dec_ref(Ftd);
+ thread_free;
  RTLEventDestroy(FEvent);
  inherited;
 end;
 
-procedure THostIpcSimpleKERN.Update(Handler:THostIpcHandler);
+procedure THostIpcSimpleKERN.thread_new;
 begin
- if FQueue.IsEmpty then
+ if (Ftd=nil) then
  begin
-  RTLEventWaitFor(FEvent);
+  kthread_add(@simple_kern_thread,Self,@Ftd,'[ipc_pipe]');
  end;
- inherited Update(Handler);
+end;
+
+procedure THostIpcSimpleKERN.thread_free;
+begin
+ if (Ftd<>nil) then
+ begin
+  thread_dec_ref(Ftd);
+  Ftd:=nil;
+ end;
 end;
 
 procedure THostIpcSimpleKERN.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
@@ -353,6 +437,11 @@ begin
   end;
   //
  end;
+end;
+
+procedure THostIpcSimpleKERN.WakeupKevent();
+begin
+ UpdateKevent();
 end;
 
 end.

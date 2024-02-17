@@ -23,10 +23,11 @@ uses
  vnode_if,
  vfs_default,
  vfs_vnops,
+ devfs_int,
  devfs,
  kern_mtx,
  kern_sx,
- kern_conf;
+ sys_conf;
 
 function  devfs_fp_check(fp:p_file;devp:pp_cdev;dswp:pp_cdevsw;ref:PInteger):Integer;
 function  devfs_get_cdevpriv(datap:PPointer):Integer;
@@ -200,8 +201,7 @@ uses
  kern_thr,
  vfs_subr,
  vsys_generic,
- devfs_rule,
- devfs_vfsops,
+ //devfs_vfsops,
  kern_proc,
  kern_descrip,
  kern_mtxpool,
@@ -236,7 +236,7 @@ begin
  Exit(0);
 end;
 
-function devfs_get_cdevpriv(datap:PPointer):Integer;
+function devfs_get_cdevpriv(datap:PPointer):Integer; public;
 var
  fp:p_file;
  p:p_cdev_privdata;
@@ -258,7 +258,7 @@ begin
  Exit(error);
 end;
 
-function devfs_set_cdevpriv(priv:Pointer;priv_dtr:cdevpriv_dtr_t):Integer;
+function devfs_set_cdevpriv(priv:Pointer;priv_dtr:cdevpriv_dtr_t):Integer; public;
 var
  fp:p_file;
  cdp:p_cdev_priv;
@@ -289,7 +289,7 @@ begin
  Exit(error);
 end;
 
-procedure devfs_destroy_cdevpriv(p:p_cdev_privdata);
+procedure devfs_destroy_cdevpriv(p:p_cdev_privdata); public;
 begin
  mtx_assert(cdevpriv_mtx);
  p^.cdpd_fp^.f_cdevpriv:=nil;
@@ -299,7 +299,7 @@ begin
  FreeMem(p);
 end;
 
-procedure devfs_fpdrop(fp:p_file);
+procedure devfs_fpdrop(fp:p_file); public;
 var
  p:p_cdev_privdata;
 begin
@@ -313,7 +313,7 @@ begin
  devfs_destroy_cdevpriv(p);
 end;
 
-procedure devfs_clear_cdevpriv();
+procedure devfs_clear_cdevpriv(); public;
 var
  fp:p_file;
 begin

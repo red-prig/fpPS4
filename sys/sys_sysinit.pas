@@ -12,6 +12,9 @@ implementation
 uses
  init_sysent, //compile spec
  kern_rtprio, //compile spec
+ kern_conf,   //compile spec
+ devfs_vnops, //compile spec
+ devfs_rule,  //compile spec
  time,
  kern_time,
  subr_sleepqueue,
@@ -42,7 +45,7 @@ uses
  ufs,
  kern_descrip,
  vfs_mountroot,
- kern_conf,
+ sys_conf,
  dev_null,
  dev_tty,
  dev_dmem,

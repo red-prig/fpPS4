@@ -14,7 +14,7 @@ implementation
 uses
  kern_thr,
  kern_descrip,
- kern_conf,
+ sys_conf,
  vsocket,
  vfile,
  vfcntl,

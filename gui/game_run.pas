@@ -9,6 +9,7 @@ uses
  Classes,
  SysUtils,
  kern_thr,
+ md_sleep,
  md_pipe,
  host_ipc,
  md_host_ipc,
@@ -53,6 +54,8 @@ uses
  sys_crt, //<- init writeln redirect
  sys_tty,
  md_exception, //<- install custom
+
+ sys_event,
 
  kern_proc,
  md_systm,
@@ -105,6 +108,8 @@ begin
 
  //init all
  sys_init;
+
+ kern_ipc.thread_new;
 
  PROC_INIT_HOST_IPC(kern_ipc);
 
@@ -204,7 +209,7 @@ begin
  r:=kthread_add(@prepare,Item,@td,'[main]');
  Assert(r=0);
 
- sleep(-1);
+ msleep_td(0);
 end;
 
 function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
@@ -212,6 +217,10 @@ var
  r:Integer;
 
  kern2mgui:array[0..1] of THandle;
+
+ fork_info:t_fork_proc;
+
+ kev:t_kevent;
 
  p_mgui_ipc:THostIpcPipeMGUI;
 
@@ -227,6 +236,8 @@ begin
 
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
+
+ fork_info:=Default(t_fork_proc);
 
  if cfg.fork_proc then
  begin
@@ -252,9 +263,11 @@ begin
 
   Item.Serialize(mem);
 
+  r:=md_fork_process(@fork_process,mem.Memory,mem.Size,fork_info);
+
   with TGameProcessPipe(Result) do
   begin
-   FProcess:=md_fork_process(@fork_process,mem.Memory,mem.Size);
+   FProcess:=fork_info.hProcess;
   end;
 
   mem.Free;
@@ -278,9 +291,22 @@ begin
 
    Ftd:=nil;
    r:=kthread_add(@prepare,Item,@Ftd,'[main]');
+
+   fork_info.fork_pid:=GetProcessID;
   end;
 
  end;
+
+ Result.g_ipc.thread_new;
+
+ kev.ident :=fork_info.fork_pid;
+ kev.filter:=EVFILT_PROC;
+ kev.flags :=EV_ADD;
+ kev.fflags:=NOTE_EXIT or NOTE_EXEC;
+ kev.data  :=0;
+ kev.udata :=nil;
+
+ Result.g_ipc.kevent(@kev,1);
 
  runing:=True;
 end;

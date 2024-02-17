@@ -59,7 +59,6 @@ uses
  sys_resource,
  kern_resource,
  sys_event,
- kern_event,
  machdep,
  kern_dlsym,
  kern_authinfo,

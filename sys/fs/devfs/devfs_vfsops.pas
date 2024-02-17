@@ -9,6 +9,7 @@ uses
  kern_param,
  vnode,
  vmount,
+ devfs_int,
  devfs,
  kern_id;
 
@@ -66,13 +67,7 @@ uses
  vfs_mount,
  vfs_subr,
  vnode_if,
- devfs_rule;
-
-//
-
-function devfs_allocv(de:p_devfs_dirent;mp:p_mount;lockmode:Integer;vpp:pp_vnode):Integer; external;
-
-//
+ devfs_devs;
 
 var
  unr_desc:t_id_desc=(free:nil;refs:0);
@@ -217,7 +212,7 @@ begin
  Exit(0);
 end;
 
-procedure devfs_unmount_final(fmp:p_devfs_mount);
+procedure devfs_unmount_final(fmp:p_devfs_mount); public;
 begin
  sx_destroy(@fmp^.dm_lock);
  FreeMem(fmp);

@@ -65,7 +65,8 @@ type
   function SubmitBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
   function RegisterBuffer         (buf:p_register_buffer):Integer; virtual;
   function UnregisterBuffer       (index:Integer):Integer; virtual;
-  function SubmitFlip             (submit:p_submit_flip;eop_val:PQWORD):Integer; virtual;
+  function SubmitFlip             (submit:p_submit_flip):Integer; virtual;
+  function SubmitFlipEop          (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
  end;
 
  TDisplayInterface=class
@@ -118,11 +119,15 @@ begin
  Result:=0;
 end;
 
-function TDisplayHandle.SubmitFlip(submit:p_submit_flip;eop_val:PQWORD):Integer;
+function TDisplayHandle.SubmitFlip(submit:p_submit_flip):Integer;
 begin
  Result:=0;
 end;
 
+function TDisplayHandle.SubmitFlipEop(submit:p_submit_flip;submit_id:QWORD):Integer;
+begin
+ Result:=0;
+end;
 
 end.
 

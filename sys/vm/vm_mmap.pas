@@ -66,7 +66,7 @@ uses
  vnode,
  vfs_subr,
  vnode_if,
- kern_conf,
+ sys_conf,
  vm_pager;
 
 function vm_mmap_cdev(objsize     :vm_size_t;

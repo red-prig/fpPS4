@@ -13,6 +13,7 @@ uses
   machdep,
   md_context,
   md_proc,
+  kern_exit,
   kern_thr,
   subr_backtrace,
   trap,
@@ -330,8 +331,6 @@ begin
  Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
  print_backtrace(stderr,Get_pc_addr,get_frame,2);
 
- //sleep(-1);
-
  if IsDebuggerPresent then
   Raise EAssertionFailed.
          Createfmt('%s (%s, line %d).',
@@ -343,9 +342,7 @@ begin
  // int3
  //end;
 
- sleep(-1);
-
- md_halt(217);
+ kern_exit.exit1(217);
 end;
 
 var

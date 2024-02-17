@@ -6,7 +6,7 @@ unit dev_dmem;
 interface
 
 uses
- kern_conf;
+ sys_conf;
 
 procedure dmemdev_init();
 

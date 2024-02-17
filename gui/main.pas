@@ -78,8 +78,7 @@ uses
  TypInfo,
  Rtti,
 
- evbuffer,
- evpoll;
+ sys_event;
 
 //
 
@@ -123,28 +122,49 @@ type
  TGuiIpcHandler=class(THostIpcHandler)
   Form:TfrmMain;
   function OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; override;
+  function OnKevent(kev:p_kevent;count:Integer):Ptruint;
  end;
 
 function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
 begin
  Result:=0;
  case mtype of
-  iKNOTE:
-    with PHostIpcKnote(buf)^ do
-    begin
-     ShowMessage('iKNOTE pid:'+IntToStr(pid)+
-                 ' filter:'+IntToStr(filter)+
-                 ' hint:'+HexStr(hint,16)
-                );
-    end;
-
-
+  iKEV_EVENT:Result:=OnKevent(buf,mlen div sizeof(t_kevent));
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;
 end;
 
-//PHostIpcKnote
+function TGuiIpcHandler.OnKevent(kev:p_kevent;count:Integer):Ptruint;
+var
+ i:Integer;
+begin
+ Result:=0;
+
+ i:=0;
+ while (i<>count) do
+ begin
+  case kev[i].filter of
+   EVFILT_PROC:
+     begin
+      if ((kev[i].fflags and NOTE_EXIT)<>0) then
+      begin
+       ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
+      end;
+      if ((kev[i].fflags and NOTE_EXEC)<>0) then
+      begin
+       ShowMessage('NOTE_EXEC pid:'+IntToStr(kev[i].ident));
+      end;
+     end;
+
+   else;
+  end;
+
+  Inc(i);
+ end;
+
+end;
+
 
 var
  IpcHandler:TGuiIpcHandler;
@@ -409,7 +429,7 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=False;
+ cfg.fork_proc:=True;
 
  GameProcess:=run_item(cfg,Item);
 end;

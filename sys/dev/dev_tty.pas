@@ -9,7 +9,7 @@ uses
  sysutils,
  vselinfo,
  kern_thr,
- kern_conf,
+ sys_conf,
  sys_tty;
 
 var

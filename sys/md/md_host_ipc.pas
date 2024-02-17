@@ -35,9 +35,8 @@ type
   procedure   set_pipe(fd:THandle);
   procedure   Recv; virtual;
   Function    Push(Node:Pointer):Boolean; virtual;
-  procedure   thread_new;  virtual;
-  procedure   thread_free; virtual;
   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
+  procedure   WakeupKevent(); override;
   Constructor Create;
   Destructor  Destroy; override;
  end;
@@ -168,26 +167,26 @@ begin
  Result:=FQueue.Push(node);
 end;
 
-procedure THostIpcPipe.thread_new;
-begin
- //
-end;
-
-procedure THostIpcPipe.thread_free;
-begin
- //
-end;
-
 procedure THostIpcPipe.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
 begin
  proto.Send(mtype,mlen,mtid,buf);
+end;
+
+Procedure ev_wakeup(param1:SizeUInt;param2:Pointer); register;
+begin
+ THostIpcPipe(param2).UpdateKevent();
+end;
+
+procedure THostIpcPipe.WakeupKevent();
+begin
+ evpoll_post(@evpoll,@ev_wakeup,0,Pointer(Self));
 end;
 
 Constructor THostIpcPipe.Create;
 begin
  inherited;
  evpoll_init(@evpoll,nil);
- thread_new;
+ //thread_new;
 end;
 
 Destructor THostIpcPipe.Destroy;
@@ -213,13 +212,20 @@ end;
 
 procedure THostIpcPipeMGUI.thread_new;
 begin
- Ftd:=BeginThread(@pipe_gui_thread,@evpoll);
+ if (Ftd=0) then
+ begin
+  Ftd:=BeginThread(@pipe_gui_thread,@evpoll);
+ end;
 end;
 
 procedure THostIpcPipeMGUI.thread_free;
 begin
- WaitForThreadTerminate(Ftd,0);
- CloseThread(Ftd);
+ if (Ftd<>0) then
+ begin
+  WaitForThreadTerminate(Ftd,0);
+  CloseThread(Ftd);
+  Ftd:=0;
+ end;
 end;
 
 //
@@ -233,13 +239,19 @@ end;
 
 procedure THostIpcPipeKERN.thread_new;
 begin
- Ftd:=nil;
- kthread_add(@pipe_kern_thread,@evpoll,@Ftd,'[ipc_pipe]');
+ if (Ftd=nil) then
+ begin
+  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,'[ipc_pipe]');
+ end;
 end;
 
 procedure THostIpcPipeKERN.thread_free;
 begin
- thread_dec_ref(Ftd);
+ if (Ftd<>nil) then
+ begin
+  thread_dec_ref(Ftd);
+  Ftd:=nil;
+ end;
 end;
 
 

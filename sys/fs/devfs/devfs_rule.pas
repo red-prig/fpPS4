@@ -8,7 +8,8 @@ interface
 uses
  mqueue,
  kern_param,
- kern_conf,
+ sys_conf,
+ devfs_int,
  devfs,
  kern_sx;
 
@@ -84,7 +85,7 @@ uses
  * exposed to the userland.  This should be called with an exclusive
  * lock on dm in case we need to run anything.
  }
-procedure devfs_rules_apply(dm:p_devfs_mount;de:p_devfs_dirent);
+procedure devfs_rules_apply(dm:p_devfs_mount;de:p_devfs_dirent); public;
 var
  ds:p_devfs_ruleset;
 begin
@@ -104,7 +105,7 @@ end;
 {
  * Rule subsystem ioctl hook.
  }
-function devfs_rules_ioctl(dm:p_devfs_mount;cmd:QWORD;data:Pointer):Integer;
+function devfs_rules_ioctl(dm:p_devfs_mount;cmd:QWORD;data:Pointer):Integer; public;
 label
  _break;
 var
@@ -807,7 +808,7 @@ begin
  Exit(0);
 end;
 
-procedure devfs_rules_cleanup(dm:p_devfs_mount);
+procedure devfs_rules_cleanup(dm:p_devfs_mount); public;
 var
  ds:p_devfs_ruleset;
 begin
@@ -823,7 +824,7 @@ end;
 {
  * Make rsnum the active ruleset for dm (locked)
  }
-procedure devfs_ruleset_set(rsnum:devfs_rsnum;dm:p_devfs_mount);
+procedure devfs_ruleset_set(rsnum:devfs_rsnum;dm:p_devfs_mount); public;
 begin
  sx_assert(@dm^.dm_lock);
  sx_xlock(@sx_rules);
@@ -834,7 +835,7 @@ end;
 {
  * Apply the current active ruleset on a mount
  }
-procedure devfs_ruleset_apply(dm:p_devfs_mount);
+procedure devfs_ruleset_apply(dm:p_devfs_mount); public;
 var
  ds:p_devfs_ruleset;
 begin

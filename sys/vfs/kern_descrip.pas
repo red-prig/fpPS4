@@ -137,7 +137,7 @@ uses
  sys_resource,
  kern_resource,
  kern_mtx,
- kern_conf;
+ sys_conf;
 
 //
 
@@ -809,7 +809,7 @@ begin
  Exit(0);
 end;
 
-function kern_close(fd:Integer):Integer;
+function kern_close(fd:Integer):Integer; public;
 var
  fp,fp_object:p_file;
 begin
