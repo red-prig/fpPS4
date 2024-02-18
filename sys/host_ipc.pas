@@ -213,6 +213,8 @@ begin
  begin
   SyncResult(node^.header.mtid,value);
  end;
+
+ UpdateKevent();
 end;
 
 procedure THostIpcConnect.UpdateKevent();

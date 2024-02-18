@@ -772,6 +772,7 @@ end;
 Function sock_recv(bev:Pbufferevent;ctrl_data:Pointer):Boolean;
 Var
  len:SizeUInt;
+ msg:SizeUInt;
  FLAGR,NOBTR,R:DWORD;
  iovec:WSABUF;
 begin
@@ -779,18 +780,29 @@ begin
  if Assigned(ctrl_data) then
  with PBufferevent_sio(bev)^ do
  begin
-  len:=PSizeUInt(ctrl_data)^;
+  len:=PSizeUInt(ctrl_data)[0];
+  msg:=PSizeUInt(ctrl_data)[1];
+
   FLAGR:=0;
   NOBTR:=0;
+
   iovec.len:=len;
   iovec.buf:=FRD_WSA.Buf;
-  R:=WSARecv(bev^.FHandle,@iovec,1,NOBTR,FLAGR,@FRD_WSA,nil);
+
+  if (msg<>0) then
+  begin
+   R:=WSARecv(bev^.FHandle,@iovec,1,NOBTR,FLAGR,@FRD_WSA,nil);
+  end else
+  begin
+   R:=WSARecv(bev^.FHandle,@iovec,1,NOBTR,FLAGR,nil,nil);
+  end;
+
   if (R<>0) then
   begin
    R:=WSAGetLastError();
    if (R=WSA_IO_PENDING) then R:=0;
   end;
-  PSizeUInt(ctrl_data)^:=NOBTR;
+  PSizeUInt(ctrl_data)[0]:=NOBTR;
   Result:=(R=0);
  end;
 end;
@@ -896,6 +908,7 @@ end;
 Function pipe_recv(bev:Pbufferevent;ctrl_data:Pointer):Boolean;
 Var
  len:SizeUInt;
+ msg:SizeUInt;
  OFFSET:Int64;
  R:DWORD;
 begin
@@ -903,10 +916,22 @@ begin
  if Assigned(ctrl_data) then
  with PBufferevent_sio(bev)^ do
  begin
-  len:=PSizeUInt(ctrl_data)^;
+  len:=PSizeUInt(ctrl_data)[0];
+  msg:=PSizeUInt(ctrl_data)[1];
+
   OFFSET:=0;
-  PIO_STATUS_BLOCK(@FRD_WSA)^.Status:=STATUS_PENDING;
-  R:=NtReadFile(bev^.FHandle,0,nil,@FRD_WSA,@FRD_WSA,FRD_WSA.Buf,len,@OFFSET,nil);
+
+  PIO_STATUS_BLOCK(@FRD_WSA)^.Status     :=STATUS_PENDING;
+  PIO_STATUS_BLOCK(@FRD_WSA)^.Information:=0;
+
+  if (msg<>0) then
+  begin
+   R:=NtReadFile(bev^.FHandle,0,nil,@FRD_WSA,@FRD_WSA,FRD_WSA.Buf,len,@OFFSET,nil);
+  end else
+  begin
+   R:=NtReadFile(bev^.FHandle,0,nil,nil,@FRD_WSA,FRD_WSA.Buf,len,@OFFSET,nil);
+  end;
+
   PSizeUInt(ctrl_data)^:=PIO_STATUS_BLOCK(@FRD_WSA)^.Information;
   Result:=(R=0) or (R=STATUS_PENDING);
  end;
@@ -920,7 +945,8 @@ begin
  with PBufferevent_sio(bev)^ do
  begin
   OFFSET:=0;
-  PIO_STATUS_BLOCK(@FRD_WSA)^.Status:=STATUS_PENDING;
+  PIO_STATUS_BLOCK(@FRD_WSA)^.Status     :=STATUS_PENDING;
+  PIO_STATUS_BLOCK(@FRD_WSA)^.Information:=0;
   R:=NtReadFile(bev^.FHandle,0,nil,@FRD_WSA,@FRD_WSA,nil,0,@OFFSET,nil);
   Result:=(R=0) or (R=STATUS_PENDING);
  end;
@@ -943,8 +969,12 @@ begin
   P:=FWR_WSA.Buf;
 
   OFFSET:=0;
-  PIO_STATUS_BLOCK(@FWR_WSA)^.Status:=STATUS_PENDING;
+
+  PIO_STATUS_BLOCK(@FWR_WSA)^.Status     :=STATUS_PENDING;
+  PIO_STATUS_BLOCK(@FWR_WSA)^.Information:=0;
+
   R:=NtWriteFile(bev^.FHandle,0,nil,@FWR_WSA,@FWR_WSA,P^.buf,P^.len,@OFFSET,nil);
+
   PSizeUInt(ctrl_data)^:=PIO_STATUS_BLOCK(@FWR_WSA)^.Information;
   Result:=(R=0) or (R=STATUS_PENDING);
  end;
@@ -963,7 +993,6 @@ Function pipe_nobtr(bev:Pbufferevent;ctrl_data:Pointer):Boolean;
 var
  BLK:IO_STATUS_BLOCK;
  BUF:T_PIPE_PEEK;
- R:DWORD;
 begin
  Result:=false;
  if Assigned(ctrl_data) then
@@ -971,16 +1000,16 @@ begin
   BLK:=Default(IO_STATUS_BLOCK);
   BUF:=Default(T_PIPE_PEEK);
 
-  R:=NtFsControlFile(bev^.FHandle,
-                     0,
-                     nil,
-                     nil,
-                     @BLK,
-                     FSCTL_PIPE_PEEK,
-                     nil,
-                     0,
-                     @BUF,
-                     SizeOf(T_PIPE_PEEK));
+  NtFsControlFile(bev^.FHandle,
+                  0,
+                  nil,
+                  nil,
+                  @BLK,
+                  FSCTL_PIPE_PEEK,
+                  nil,
+                  0,
+                  @BUF,
+                  SizeOf(T_PIPE_PEEK));
 
   PSizeUInt(ctrl_data)^:=BUF.ReadDataAvailable;
   Result:=True;
@@ -1374,9 +1403,16 @@ begin
  bev^.he_ops^.H_NOBTR(bev,@Result);
 end;
 
-Function ev_recv0(bev:Pbufferevent;var len:SizeUInt):Boolean;
+Function ev_recv0(bev:Pbufferevent;var len:SizeUInt;msg:Boolean):Boolean;
+var
+ a:array[0..1] of SizeUInt;
 begin
- Result:=bev^.he_ops^.H_RECV(bev,@len);
+ a[0]:=len;
+ a[1]:=ord(msg);
+
+ Result:=bev^.he_ops^.H_RECV(bev,@a);
+
+ len:=a[0];
 end;
 
 function ev_peek0(bev:Pbufferevent):Boolean;
@@ -1399,7 +1435,7 @@ begin
 
  fetch_add(bev^.FRefCount,1);
 
- Result:=ev_recv0(bev,len);
+ Result:=ev_recv0(bev,len,false);
 
  if (not Result) then
  begin
@@ -1427,7 +1463,7 @@ begin
    len:=NOBTR;
   end;
 
-  Result:=ev_recv0(bev,len);
+  Result:=ev_recv0(bev,len,false);
 
   if (not Result) then
   begin
@@ -1441,7 +1477,7 @@ begin
  end else
  begin
 
-  Result:=ev_recv0(bev,len);
+  Result:=ev_recv0(bev,len,true);
 
   if (not Result) then
   begin
@@ -1487,7 +1523,7 @@ begin
    {$ENDIF}
    begin
     _InitBuf(FRD_WSA.Buf,Result);
-    if (not ev_recv0(bev,Result)) then Result:=0;
+    if (not ev_recv0(bev,Result,false)) then Result:=0;
    end;
   end;
 
@@ -1984,7 +2020,7 @@ begin
     begin
     {$ENDIF}
      _InitBuf(bev^.FRD_WSA.Buf,NOBT);
-     ev_recv0(bev,NOBT);
+     ev_recv0(bev,NOBT,false);
      err:=NtGetOverlappedError(@bev^.FRD_WSA.O);
     {$IFNDEF NO_RATELIMIT}
     end else

@@ -33,7 +33,7 @@ type
   evpoll:Tevpoll;
   proto:t_ipc_proto;
   procedure   set_pipe(fd:THandle);
-  procedure   Recv; virtual;
+  procedure   Recv_pipe; virtual;
   Function    Push(Node:Pointer):Boolean; virtual;
   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
   procedure   WakeupKevent(); override;
@@ -43,7 +43,7 @@ type
 
  THostIpcPipeMGUI=class(THostIpcPipe)
   Ftd:TThreadID;
-  procedure   Recv;        override;
+  procedure   Recv_pipe;   override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
  end;
@@ -51,7 +51,7 @@ type
  THostIpcPipeKERN=class(THostIpcPipe)
   Ftd:p_kthread;
   FHandler:THostIpcHandler;
-  procedure   Recv;        override;
+  procedure   Recv_pipe;   override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
  end;
@@ -77,7 +77,6 @@ procedure t_ipc_proto.Recv;
 var
  node:PQNode;
 begin
-
  repeat
 
   case FState of
@@ -134,7 +133,7 @@ begin
 
  if (events and BEV_EVENT_READING)<>0 then
  begin
-  THostIpcPipe(ctx).Recv;
+  THostIpcPipe(ctx).Recv_pipe;
   bufferevent_read(bev);
  end;
 
@@ -157,7 +156,7 @@ begin
  bufferevent_enable(proto.Fbev);
 end;
 
-procedure THostIpcPipe.Recv;
+procedure THostIpcPipe.Recv_pipe;
 begin
  proto.Recv;
 end;
@@ -200,7 +199,7 @@ end;
 
 //
 
-procedure THostIpcPipeMGUI.Recv;
+procedure THostIpcPipeMGUI.Recv_pipe;
 begin
  inherited;
  //
@@ -230,7 +229,7 @@ end;
 
 //
 
-procedure THostIpcPipeKERN.Recv;
+procedure THostIpcPipeKERN.Recv_pipe;
 begin
  inherited;
 
