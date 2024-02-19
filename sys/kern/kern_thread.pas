@@ -56,6 +56,9 @@ procedure threadinit; //SYSINIT
 function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
 procedure kthread_exit();
 
+procedure thread_suspend_all(exclude:p_kthread);
+procedure thread_resume_all (exclude:p_kthread);
+
 var
  init_tty_cb:Tprocedure;
 
@@ -813,6 +816,52 @@ begin
  thread_reap();
  thread_exit();
  // NOTREACHED
+end;
+
+procedure thread_suspend_all(exclude:p_kthread); public;
+var
+ td,ttd:p_kthread;
+begin
+ td:=curkthread;
+
+ threads_lock;
+
+   ttd:=TAILQ_FIRST(@p_threads);
+   while (ttd<>nil) do
+   begin
+
+    if (ttd<>td) and (ttd<>exclude) then
+    begin
+     md_suspend(ttd);
+    end;
+
+    ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
+   end;
+
+ threads_unlock;
+end;
+
+procedure thread_resume_all(exclude:p_kthread); public;
+var
+ td,ttd:p_kthread;
+begin
+ td:=curkthread;
+
+ threads_lock;
+
+   ttd:=TAILQ_FIRST(@p_threads);
+   while (ttd<>nil) do
+   begin
+
+    if (ttd<>td) and (ttd<>exclude) then
+    begin
+     md_resume(ttd);
+    end;
+
+    ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
+   end;
+
+ threads_unlock;
 end;
 
 function sys_thr_kill(id,sig:Integer):Integer;

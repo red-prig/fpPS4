@@ -23,22 +23,14 @@ type
   fork_proc:Boolean;
  end;
 
- TGameProcess=class
-  g_ipc :THostIpcConnect;
-  g_fork:Boolean;
- end;
-
  TGameProcessSimple=class(TGameProcess)
   Ftd:p_kthread;
- end;
-
- TGameProcessPipe=class(TGameProcess)
-  FProcess:THandle;
-  FChild:THandle;
+  procedure  suspend; override;
+  procedure  resume;  override;
+  Destructor Destroy; override;
  end;
 
 var
-
  kern_ipc:THostIpcConnect=nil;
 
 function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
@@ -60,6 +52,8 @@ uses
  kern_proc,
  md_systm,
 
+ md_game_process,
+
  //internal libs
  ps4_libSceSystemService,
  ps4_libSceUserService,
@@ -69,6 +63,24 @@ uses
  //internal libs
 
  ;
+
+//
+
+procedure  TGameProcessSimple.suspend;
+begin
+ thread_suspend_all(Ftd);
+end;
+
+procedure  TGameProcessSimple.resume;
+begin
+ thread_resume_all(Ftd);
+end;
+
+Destructor TGameProcessSimple.Destroy;
+begin
+ thread_dec_ref(Ftd);
+ inherited;
+end;
 
 var
  runing:Boolean=False;
@@ -252,7 +264,7 @@ begin
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
-   FChild:=kern2mgui[1];
+   FChildpip:=kern2mgui[1];
   end;
 
   //
@@ -263,12 +275,15 @@ begin
 
   Item.Serialize(mem);
 
-  r:=md_fork_process(@fork_process,mem.Memory,mem.Size,fork_info);
+  fork_info.hInput :=GetStdHandle(STD_INPUT_HANDLE);
+  fork_info.hOutput:=cfg.hOutput;
+  fork_info.hError :=cfg.hError;
 
-  with TGameProcessPipe(Result) do
-  begin
-   FProcess:=fork_info.hProcess;
-  end;
+  fork_info.proc:=@fork_process;
+  fork_info.data:=mem.Memory;
+  fork_info.size:=mem.Size;
+
+  r:=md_fork_process(fork_info);
 
   mem.Free;
  end else
@@ -296,6 +311,9 @@ begin
   end;
 
  end;
+
+ Result.g_proc :=fork_info.hProcess;
+ Result.g_p_pid:=fork_info.fork_pid;
 
  Result.g_ipc.thread_new;
 

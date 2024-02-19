@@ -7,6 +7,15 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
+  g_bufstream,
+  LineStream,
+  synlog,
+  SynEditLineStream,
+  LazSynEditText,
+  SynEditMarkupBracket,
+
+  IniFiles,
+
   game_info,
   game_edit,
   game_run,
@@ -42,7 +51,21 @@ type
   private
 
   public
-    GameProcess:TGameProcess;
+    FGameProcess:TGameProcess;
+
+    FIniFile:TIniFile;
+
+    FMainInfo:TMainInfo;
+
+    FAddHandle:THandle;
+    FGetHandle:THandle;
+
+    FFile:TStream;
+    FList:TSynEditLineStream;
+
+    Fmlog:TCustomSynLog;
+
+    FLogUpdateTime:QWORD;
 
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
@@ -54,6 +77,8 @@ type
     procedure DelItemRow(Item:TGameItem);
     procedure DoAdd(Sender: TObject);
     procedure DoEdit(Sender: TObject);
+    procedure LogEnd;
+    procedure ClearLog;
   end;
 
 var
@@ -66,15 +91,6 @@ uses
 
  md_arc4random,
 
- g_bufstream,
- LineStream,
- synlog,
- SynEditLineStream,
- LazSynEditText,
- SynEditMarkupBracket,
-
- IniFiles,
-
  TypInfo,
  Rtti,
 
@@ -82,38 +98,32 @@ uses
 
 //
 
-var
- FIniFile:TIniFile;
-
- FMainInfo:TMainInfo;
-
- FAddHandle:THandle;
- FGetHandle:THandle;
-
- FFile:TStream;
- FList:TSynEditLineStream;
-
 {$R *.lfm}
 
 { TfrmMain }
 
 type
  TMySynLog=class(TCustomSynLog)
-  function LinesCreate:TSynEditStringListBase; override;
+  Form:TfrmMain;
+  constructor Create(AOwner: TComponent; AForm:TfrmMain);
+  function    LinesCreate:TSynEditStringListBase; override;
  end;
+
+constructor TMySynLog.Create(AOwner: TComponent; AForm:TfrmMain);
+begin
+ Form:=AForm;
+ inherited Create(AOwner);
+end;
 
 function TMySynLog.LinesCreate:TSynEditStringListBase;
 begin
- FList:=TSynEditLineStream.Create;
+ Form.FList:=TSynEditLineStream.Create;
 
- FList.FSynLog:=Self;
- FList.FStream:=TLineStream.Create(FFile);
+ Form.FList.FSynLog:=Self;
+ Form.FList.FStream:=TLineStream.Create(Form.FFile);
 
- Result:=FList;
+ Result:=Form.FList;
 end;
-
-var
- mlog:TMySynLog;
 
 const
  section_prefix='game-';
@@ -301,21 +311,18 @@ begin
 
  FFile:=TBufferedFileStream.Create(FGetHandle);
 
- mlog:=TMySynLog.Create(TabLog);
- mlog.Parent:=TabLog;
+ Fmlog:=TMySynLog.Create(TabLog,Self);
+ Fmlog.Parent:=TabLog;
 
- mlog.Align:=alClient;
+ Fmlog.Align:=alClient;
 
- mlog.BracketHighlightStyle:=sbhsBoth;
- mlog.Font.Style:=[];
+ Fmlog.BracketHighlightStyle:=sbhsBoth;
+ Fmlog.Font.Style:=[];
 
  Pages.ActivePageIndex:=0;
 
  Application.AddOnIdleHandler(@OnIdleUpdate,False);
 end;
-
-Var
- FLogUpdateTime:QWORD=0;
 
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
 begin
@@ -330,10 +337,10 @@ begin
   FLogUpdateTime:=GetTickCount64;
  end;
 
- if (GameProcess<>nil) then
- if (GameProcess.g_ipc<>nil) then
+ if (FGameProcess<>nil) then
+ if (FGameProcess.g_ipc<>nil) then
  begin
-  GameProcess.g_ipc.Update(IpcHandler);
+  FGameProcess.g_ipc.Update(IpcHandler);
  end;
 
 end;
@@ -404,6 +411,19 @@ begin
  form.FormInit(False);
 end;
 
+procedure TfrmMain.LogEnd;
+begin
+ Fmlog.TopLine:=Fmlog.Lines.Count;
+end;
+
+procedure TfrmMain.ClearLog;
+begin
+ //reset file
+ FileTruncate(FAddHandle,0);
+ FList.Reset;
+ //
+end;
+
 procedure TfrmMain.MIRunClick(Sender: TObject);
 var
  Item:TGameItem;
@@ -417,12 +437,8 @@ begin
 
  Item:=GetItemRow(aRow);
 
- FList.FSynLog.TopLine:=FList.FSynLog.Lines.Count;
-
- //reset file
- FileTruncate(FAddHandle,0);
- FList.Reset;
- //
+ LogEnd;
+ ClearLog;
 
  Pages.ActivePage:=TabLog;
 
@@ -431,7 +447,7 @@ begin
 
  cfg.fork_proc:=True;
 
- GameProcess:=run_item(cfg,Item);
+ FGameProcess:=run_item(cfg,Item);
 end;
 
 procedure TfrmMain.MIDelClick(Sender: TObject);

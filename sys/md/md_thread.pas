@@ -35,6 +35,9 @@ function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
 
 function  cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
 
+function  md_suspend(td:p_kthread):Integer;
+function  md_resume (td:p_kthread):Integer;
+
 procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 
@@ -342,6 +345,34 @@ begin
  UNAME.Buffer       :=PWideChar(W);
 
  Result:=NtSetInformationThread(td^.td_handle,ThreadNameInformation,@UNAME,SizeOf(UNAME));
+end;
+
+function md_suspend(td:p_kthread):Integer;
+var
+ count:ULONG;
+begin
+ Result:=0;
+ if (td=nil) then Exit;
+ if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit;
+
+ count:=0;
+ NtSuspendThread(td^.td_handle,@count);
+
+ Result:=count;
+end;
+
+function md_resume(td:p_kthread):Integer;
+var
+ count:ULONG;
+begin
+ Result:=0;
+ if (td=nil) then Exit;
+ if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit;
+
+ count:=0;
+ NtResumeThread(td^.td_handle,@count);
+
+ Result:=count;
 end;
 
 procedure main_wrapper; assembler; nostackframe;

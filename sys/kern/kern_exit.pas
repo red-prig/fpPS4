@@ -128,6 +128,8 @@ begin
  Result:=(ret shl 8) or sig;
 end;
 
+procedure thread_suspend_all(exclude:Pointer); external;
+
 procedure exit1(rv:Integer);
 begin
  //Notify interested parties of our demise.
@@ -138,6 +140,7 @@ begin
   md_halt(rv);
  end else
  begin
+  thread_suspend_all(nil);
   msleep_td(0);
  end;
 end;

@@ -34,6 +34,11 @@ type
     procedure GridSelectEditor(Sender:TObject;aCol,aRow:Integer;var Editor:TWinControl);
     procedure GridEditingDone(Sender: TObject);
   private
+    Fapp0_row   :Integer;
+    FName_row   :Integer;
+    FTitleId_row:Integer;
+    FVersion_row:Integer;
+
     Fapp0p:RawByteString;
   public
     OnSave  :TNotifyEvent;
@@ -227,6 +232,13 @@ begin
   begin
    For i:=0 to c-1 do
    begin
+    case A[i].Name of
+     'Name'   :FName_row   :=GridMain.RowCount;
+     'TitleId':FTitleId_row:=GridMain.RowCount;
+     'Version':FVersion_row:=GridMain.RowCount;
+     else;
+    end;
+
     AddRow(GridMain,A[i].Name+':',A[i].GetValue(Item.FGameInfo).AsString,nil);
    end;
   end;
@@ -238,6 +250,11 @@ begin
   begin
    For i:=0 to c-1 do
    begin
+    case A[i].Name of
+     'app0':Fapp0_row:=GridMounts.RowCount;
+     else;
+    end;
+
     AddRow(GridMounts,'/'+A[i].Name,A[i].GetValue(Item.FMountList).AsString,fip);
    end;
   end;
@@ -245,10 +262,6 @@ begin
  finally
   Ctx.free;
  end;
-
- //AddRow(GridMounts,'/app0'  ,ip);
- //AddRow(GridMounts,'/system',ip);
- //AddRow(GridMounts,'/data'  ,ip);
 
  LoadParamSfo(UpdateTitle);
 
@@ -294,25 +307,19 @@ begin
  end;
 end;
 
-function GetGridVal(Grid:TStringGrid;const name:RawByteString):RawByteString;
-var
- i:Integer;
+function GetGridVal(Grid:TStringGrid;ARow:Integer):RawByteString;
 begin
  Result:='';
- i:=Grid.Cols[0].IndexOf(name);
- if (i=-1) then Exit;
+ if (ARow<0) and (ARow>=Grid.RowCount) then Exit;
  //
- Result:=Grid.Cells[1,i];
+ Result:=Grid.Cells[1,ARow];
 end;
 
-procedure SetGridVal(Grid:TStringGrid;const name,value:RawByteString);
-var
- i:Integer;
+procedure SetGridVal(Grid:TStringGrid;ARow:Integer;const value:RawByteString);
 begin
- i:=Grid.Cols[0].IndexOf(name);
- if (i=-1) then Exit;
+ if (ARow<0) and (ARow>=Grid.RowCount) then Exit;
  //
- Grid.Cells[1,i]:=value;
+ Grid.Cells[1,ARow]:=value;
 end;
 
 procedure TfrmGameEditor.LoadParamSfo(UpdateTitle:Boolean);
@@ -320,7 +327,7 @@ var
  i:Integer;
  V:RawByteString;
 begin
- V:=GetGridVal(GridMounts,'/app0');
+ V:=GetGridVal(GridMounts,Fapp0_row);
 
  if (Fapp0p=V) then Exit;
 
@@ -357,13 +364,13 @@ begin
  if not UpdateTitle then Exit;
 
  V:=ParamSfo.GetString('TITLE');
- SetGridVal(GridMain,'Name:',V);
+ SetGridVal(GridMain,FName_row,V);
 
  V:=ParamSfo.GetString('TITLE_ID');
- SetGridVal(GridMain,'TitleId:',V);
+ SetGridVal(GridMain,FTitleId_row,V);
 
  V:=ParamSfo.GetString('VERSION');
- SetGridVal(GridMain,'Version:',V);
+ SetGridVal(GridMain,FVersion_row,V);
 end;
 
 procedure TfrmGameEditor.GridSelectEditor(Sender:TObject;aCol,aRow:Integer;var Editor:TWinControl);

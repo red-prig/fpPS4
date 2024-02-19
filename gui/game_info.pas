@@ -7,7 +7,8 @@ interface
 uses
   Classes,
   SysUtils,
-  IniFiles;
+  IniFiles,
+  host_ipc;
 
 type
  TAbstractInfo=class
@@ -69,10 +70,48 @@ type
    Procedure   Deserialize(Stream:TStream); override;
  end;
 
+ TGameProcess=class
+  g_ipc  :THostIpcConnect;
+  g_proc :THandle;
+  g_p_pid:Integer;
+  g_fork :Boolean;
+  function   is_terminated:Boolean; virtual;
+  procedure  suspend; virtual;
+  procedure  resume;  virtual;
+  procedure  stop;    virtual;
+  Destructor Destroy; override;
+ end;
+
 implementation
 
 uses
  TypInfo,Rtti;
+
+function TGameProcess.is_terminated:Boolean;
+begin
+ Result:=False;
+end;
+
+procedure TGameProcess.suspend;
+begin
+ //
+end;
+
+procedure TGameProcess.resume;
+begin
+ //
+end;
+
+procedure TGameProcess.stop;
+begin
+ //
+end;
+
+Destructor TGameProcess.Destroy;
+begin
+ FreeAndNil(g_ipc);
+ inherited;
+end;
 
 Procedure TAbstractInfo.Serialize(Stream:TStream);
 var

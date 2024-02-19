@@ -127,7 +127,6 @@ uses
  kern_prot,
  kern_synch,
  md_context,
- md_proc,
  machdep,
  sched_ule,
  sys_sleepqueue;

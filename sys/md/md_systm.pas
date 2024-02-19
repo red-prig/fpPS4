@@ -15,8 +15,16 @@ type
 
  p_fork_proc=^t_fork_proc;
  t_fork_proc=record
-  hProcess:THandle;
-  fork_pid:Integer;
+  hInput :THandle;  //in
+  hOutput:THandle;  //in
+  hError :THandle;  //in
+
+  proc:Pointer;     //in
+  data:Pointer;     //in
+  size:QWORD;       //in
+
+  hProcess:THandle; //out
+  fork_pid:Integer; //out
  end;
 
 function  md_copyin (hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
@@ -31,7 +39,7 @@ function  md_pidfd_open (pid:DWORD):THandle;
 
 procedure md_run_forked;
 procedure md_fork_unshare;
-function  md_fork_process(proc:Pointer;data:Pointer;size:QWORD;var info:t_fork_proc):Integer;
+function  md_fork_process(var info:t_fork_proc):Integer;
 
 implementation
 
@@ -435,7 +443,7 @@ begin
  Exit(hProcJob);
 end;
 
-function NtCreateShared(hProcess:THandle;proc:Pointer;data:Pointer;size:QWORD):Integer;
+function NtCreateShared(hProcess:THandle;var info:t_fork_proc):Integer;
 var
  base:p_shared_info;
  full:QWORD;
@@ -443,8 +451,8 @@ var
 begin
  base:=Pointer(WIN_SHARED_ADDR);
 
- full:=SizeOf(shared_info)+size;
- full:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+ full:=SizeOf(shared_info)+info.size;
+ full:=(info.size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
  Result:=md_mmap(hProcess,base,full,MD_PROT_RW);
  if (Result<>0) then Exit;
@@ -453,36 +461,38 @@ begin
 
  shared_info.ppid      :=GetCurrentProcessId;
 
- shared_info.hStdInput :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_INPUT_HANDLE));
- shared_info.hStdOutput:=md_dup_to_pidfd(hProcess,GetStdHandle(STD_OUTPUT_HANDLE));
- shared_info.hStdError :=md_dup_to_pidfd(hProcess,GetStdHandle(STD_ERROR_HANDLE));
+ shared_info.hStdInput :=md_dup_to_pidfd(hProcess,info.hInput );
+ shared_info.hStdOutput:=md_dup_to_pidfd(hProcess,info.hOutput);
+ shared_info.hStdError :=md_dup_to_pidfd(hProcess,info.hError );
 
- shared_info.proc:=proc;
- shared_info.size:=size;
+ shared_info.proc:=info.proc;
+ shared_info.size:=info.size;
 
  Result:=md_copyout(hProcess,@shared_info,base,SizeOf(shared_info),nil);
  if (Result<>0) then Exit;
 
- if (data<>nil) and (size<>0) then
+ if (info.data<>nil) and (info.size<>0) then
  begin
-  Result:=md_copyout(hProcess,data,@base^.data,size,nil);
+  Result:=md_copyout(hProcess,info.data,@base^.data,info.size,nil);
  end;
 end;
 
-function md_fork_process(proc:Pointer;data:Pointer;size:QWORD;var info:t_fork_proc):Integer;
-var
- si:TSTARTUPINFO;
- pi:PROCESS_INFORMATION;
- BUF:packed record
+function md_fork_process(var info:t_fork_proc):Integer;
+type
+ TBUF_PROC_INFO=packed record
   UNAME:UNICODE_STRING;
   DATA :array[0..MAX_PATH*2] of WideChar;
  end;
+var
+ si:TSTARTUPINFO;
+ pi:PROCESS_INFORMATION;
+ BUF:TBUF_PROC_INFO;
  LEN:ULONG;
  b:BOOL;
 begin
  Result:=0;
 
- FillChar(BUF,SizeOf(BUF),0);
+ BUF:=Default(TBUF_PROC_INFO);
  LEN:=SizeOf(BUF);
 
  Result:=NtQueryInformationProcess(NtCurrentProcess,
@@ -509,7 +519,7 @@ begin
  Result:=NtReserve(pi.hProcess);
  if (Result<>0) then Exit;
 
- Result:=NtCreateShared(pi.hProcess,proc,data,size);
+ Result:=NtCreateShared(pi.hProcess,info);
  if (Result<>0) then Exit;
 
  Result:=NtResumeProcess(pi.hProcess);
