@@ -95,8 +95,8 @@ begin
 end;
 
 function ps4_sceVoiceQoSCreateLocalEndpoint(pLocalId   :pSceVoiceQoSLocalId;
-                                            userId     :Integer
-                                            deviceInId :Integer
+                                            userId     :Integer;
+                                            deviceInId :Integer;
                                             deviceOutId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
