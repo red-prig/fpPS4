@@ -13,6 +13,17 @@ uses
 const
  SCE_VOICE_ERROR_ARGUMENT_INVALID=-2142369787;
 
+ //SceVoiceQoSAttributeId
+ SCE_VOICE_QOS_ATTR_MIC_VOLUME          =0;
+ SCE_VOICE_QOS_ATTR_MIC_MUTE            =true;
+ SCE_VOICE_QOS_ATTR_SPEAKER_VOLUME      =0;
+ SCE_VOICE_QOS_ATTR_SPEAKER_MUTE        =true;
+ SCE_VOICE_QOS_ATTR_DESIRED_OUT_BIT_RATE=3851;
+ SCE_VOICE_QOS_ATTR_MIC_USABLE          =false;
+ SCE_VOICE_QOS_ATTR_SILENT_STATE        =6;
+ SCE_VOICE_QOS_ATTR_REMOTE_MUTE         =true;
+ SCE_VOICE_QOS_ATTR_SPEAKER_DESTINATION =0;
+
  //SceVoicePortType
  SCE_VOICE_PORTTYPE_NULL        =-1;
  SCE_VOICE_PORTTYPE_IN_DEVICE   =0;
@@ -23,6 +34,12 @@ const
  SCE_VOICE_PORTTYPE_OUT_DEVICE  =5;
 
 type
+ pSceVoiceQoSLocalId=^SceVoiceQoSLocalId;
+ SceVoiceQoSLocalId=Integer;
+
+ pSceVoiceQoSAttributeId=^SceVoiceQoSAttributeId;
+ SceVoiceQoSAttributeId=Integer;
+
  pSceVoiceInitParam=^SceVoiceInitParam;
  SceVoiceInitParam=packed record
   appType  :Integer;
@@ -76,6 +93,22 @@ function ps4_sceVoiceQoSInit(pMemBlock:Pointer;memSize:DWORD;appType:Integer):In
 begin
  Result:=0;
 end;
+
+function ps4_sceVoiceQoSCreateLocalEndpoint(pLocalId   :pSceVoiceQoSLocalId;
+                                            userId     :Integer;
+                                            deviceInId :Integer;
+                                            deviceOutId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceVoiceQoSGetLocalEndpointAttribute(LocalId        :SceVoiceQoSLocalId;
+                                                  attributeId    :SceVoiceQoSAttributeId;
+                                                  pAttributeValue:Pointer;
+                                                  attributeSize  :Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceVoiceStart(pArg:pSceVoiceStartParam):Integer; SysV_ABI_CDecl;
 begin
@@ -171,6 +204,8 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceVoiceQoS');
  lib^.set_proc($53C21F365EBF0ACB,@ps4_sceVoiceQoSInit);
+ lib^.set_proc($96F342961347CF12,@ps4_sceVoiceQoSCreateLocalEndpoint);
+ lib^.set_proc($799BB644FD0C6B7C,@ps4_sceVoiceQoSGetLocalEndpointAttribute);
 end;
 
 initialization
