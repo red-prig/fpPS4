@@ -10,38 +10,21 @@ uses
  Classes,
  SysUtils;
 
+const
+ SCE_COMPANION_UTIL_ERROR_NO_EVENT=-2136145912; //0x80AD0008
+
 type
  pSceCompanionUtilOptParam=^SceCompanionUtilOptParam;
  SceCompanionUtilOptParam=packed record
-  thisSize:QWORD;
-  workMemory:Pointer;
+  thisSize      :QWORD;
+  workMemory    :Pointer;
   workMemorySize:QWORD;
- end;
-
- pSceNetInAddr=^SceNetInAddr;
- SceNetInAddr=packed record
-  s_addr:SceNetInAddr_t;
- end;
-
- pSceNetSaFamily_t=^SceNetSaFamily_t;
- SceNetSaFamily_t=Byte;
-
- pSceNetInPort_t=^SceNetInPort_t;
- SceNetInPort_t=Word;
-
- pSceNetSockaddrIn=^SceNetSockaddrIn;
- SceNetSockaddrIn=packed record
-  sin_len:Byte;
-  sin_family:SceNetSaFamily_t;
-  sin_port:SceNetInPort_t;
-  sin_addr:SceNetInAddr;
-  sin_vport:SceNetInPort_t;
-  sin_zero:array[0..5] of char;
  end;
 
  pSceCompanionUtilDeviceInfo=^SceCompanionUtilDeviceInfo;
  SceCompanionUtilDeviceInfo=packed record
-  userId,addr:SceNetSockaddrIn;
+  userId  :Integer;
+  addr    :SceNetSockaddrIn;
   reserved:array[0..235] of char;
  end;
 
@@ -49,10 +32,11 @@ type
  SceCompanionUtilEvent=packed record
   event:Integer;
   union:packed record
-  Case Byte of
-   0:(deviceInfo:SceCompanionUtilDeviceInfo);
-   1:(userId,reserved:array[0..255] of char);
-   end;
+   case Byte of
+    0:(deviceInfo:SceCompanionUtilDeviceInfo);
+    1:(userId    :Integer);
+    2:(reserved  :array[0..255] of char);
+  end;
  end;
 
 implementation
@@ -69,7 +53,7 @@ end;
 
 function ps4_sceCompanionUtilGetEvent(pEvent:pSceCompanionUtilEvent):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ Result:=SCE_COMPANION_UTIL_ERROR_NO_EVENT;
 end;
 
 function Load_libSceCompanionUtil(Const name:RawByteString):TElf_node;

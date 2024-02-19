@@ -94,16 +94,18 @@ begin
  Result:=0;
 end;
 
-function ps4_sceVoiceQoSCreateLocalEndpoint(pLocalId:SceVoiceQoSLocalId;
-                                            userId,deviceInId,deviceOutId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceQoSCreateLocalEndpoint(pLocalId   :pSceVoiceQoSLocalId;
+                                            userId     :Integer
+                                            deviceInId :Integer
+                                            deviceOutId:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
 
-function ps4_sceVoiceQoSGetLocalEndpointAttribute(pLocalId:SceVoiceQoSLocalId;
-                                                  attributeId:SceVoiceQoSAttributeId;
-                                                  const pAttributeValue:Pointer;
-                                                  attributeSize:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceVoiceQoSGetLocalEndpointAttribute(LocalId        :SceVoiceQoSLocalId;
+                                                  attributeId    :SceVoiceQoSAttributeId;
+                                                  pAttributeValue:Pointer;
+                                                  attributeSize  :Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end; 

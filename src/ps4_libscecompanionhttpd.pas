@@ -15,9 +15,6 @@ const
  SCE_COMPANION_HTTPD_ERROR_INVALID_PARAM  =-2132541436; //0x80E40004
 
 type
- pSceNetInPort_t=^SceNetInPort_t;
- SceNetInPort_t=word;
-
  pSceCompanionHttpdOptParam2=^SceCompanionHttpdOptParam2;
  SceCompanionHttpdOptParam2=packed record
   thisSize                    :QWORD;
