@@ -23,10 +23,15 @@ uses
   host_ipc;
 
 type
+  TMainButtonsState=(mbsStopped,
+                     mdsStarted,
+                     mdsRunned,
+                     mdsSuspended);
 
   { TfrmMain }
 
   TfrmMain = class(TForm)
+    MainImageList: TImageList;
     MIDevide3: TMenuItem;
     MIRun: TMenuItem;
     MIEdit: TMenuItem;
@@ -40,6 +45,11 @@ type
     ListGrid: TStringGrid;
     TabList: TTabSheet;
     TabLog: TTabSheet;
+    MainToolBar: TToolBar;
+    TBPlay: TToolButton;
+    TBPause: TToolButton;
+    TBStop: TToolButton;
+    TBConfig: TToolButton;
 
     procedure FormCreate(Sender: TObject);
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
@@ -48,6 +58,9 @@ type
     procedure MIDelClick(Sender: TObject);
     procedure MIEditClick(Sender: TObject);
     procedure MIRunClick(Sender: TObject);
+    procedure TBPauseClick(Sender: TObject);
+    procedure TBPlayClick(Sender: TObject);
+    procedure TBStopClick(Sender: TObject);
   private
 
   public
@@ -67,6 +80,8 @@ type
 
     FLogUpdateTime:QWORD;
 
+    FMainButtonsState:TMainButtonsState;
+
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
     procedure SaveItemIni(Item:TGameItem);
@@ -79,6 +94,7 @@ type
     procedure DoEdit(Sender: TObject);
     procedure LogEnd;
     procedure ClearLog;
+    procedure SetButtonsState(s:TMainButtonsState);
   end;
 
 var
@@ -163,7 +179,8 @@ begin
       end;
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin
-       ShowMessage('NOTE_EXEC pid:'+IntToStr(kev[i].ident));
+       //ShowMessage('NOTE_EXEC pid:'+IntToStr(kev[i].ident));
+       Form.SetButtonsState(mdsRunned);
       end;
      end;
 
@@ -322,6 +339,8 @@ begin
  Pages.ActivePageIndex:=0;
 
  Application.AddOnIdleHandler(@OnIdleUpdate,False);
+
+ SetButtonsState(mbsStopped);
 end;
 
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
@@ -338,9 +357,18 @@ begin
  end;
 
  if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
  begin
-  FGameProcess.g_ipc.Update(IpcHandler);
+
+  if (FGameProcess.g_ipc<>nil) then
+  begin
+   FGameProcess.g_ipc.Update(IpcHandler);
+  end;
+
+  if FGameProcess.is_terminated then
+  begin
+   TBStopClick(Sender);
+  end;
+
  end;
 
 end;
@@ -430,6 +458,8 @@ var
  aRow:Integer;
  cfg:TGameRunConfig;
 begin
+ if (FGameProcess<>nil) then Exit;
+
  aRow:=ListGrid.Row;
 
  if (aRow=0) then Exit;
@@ -448,6 +478,46 @@ begin
  cfg.fork_proc:=True;
 
  FGameProcess:=run_item(cfg,Item);
+
+ SetButtonsState(mdsStarted);
+end;
+
+procedure TfrmMain.TBPlayClick(Sender: TObject);
+begin
+ if (FGameProcess<>nil) then
+ begin
+  //resume
+  FGameProcess.resume;
+  SetButtonsState(mdsRunned);
+ end else
+ begin
+  //run
+  MIRunClick(Sender);
+ end;
+end;
+
+procedure TfrmMain.TBPauseClick(Sender: TObject);
+begin
+ if (FGameProcess<>nil) then
+ begin
+  //suspend
+  FGameProcess.suspend;
+  SetButtonsState(mdsSuspended);
+ end;
+end;
+
+procedure TfrmMain.TBStopClick(Sender: TObject);
+begin
+ if (FGameProcess<>nil) then
+ if (FGameProcess.g_fork) then //only forked
+ begin
+  //terminate
+  FGameProcess.stop;
+  SetButtonsState(mbsStopped);
+  FreeAndNil(FGameProcess);
+  //
+  Pages.ActivePage:=TabList;
+ end;
 end;
 
 procedure TfrmMain.MIDelClick(Sender: TObject);
@@ -555,6 +625,54 @@ begin
  SaveItemIni(Item);
 end;
 
+procedure TfrmMain.SetButtonsState(s:TMainButtonsState);
+begin
+ FMainButtonsState:=s;
+
+ case s of
+  mbsStopped:
+    begin
+     TBPlay .Enabled:=True;
+     TBPause.Enabled:=False;
+     TBStop .Enabled:=False;
+     //
+     TBPlay .ImageIndex:=0;
+     TBPause.ImageIndex:=1+3;
+     TBStop .ImageIndex:=2+3;
+    end;
+  mdsStarted:
+    begin
+     TBPlay .Enabled:=False;
+     TBPause.Enabled:=False;
+     TBStop .Enabled:=False;
+     //
+     TBPlay .ImageIndex:=0+3;
+     TBPause.ImageIndex:=1+3;
+     TBStop .ImageIndex:=2+3;
+    end;
+  mdsRunned:
+    begin
+     TBPlay .Enabled:=False;
+     TBPause.Enabled:=True;
+     TBStop .Enabled:=True;
+     //
+     TBPlay .ImageIndex:=0+3;
+     TBPause.ImageIndex:=1;
+     TBStop .ImageIndex:=2;
+    end;
+  mdsSuspended:
+    begin
+     TBPlay .Enabled:=True;
+     TBPause.Enabled:=False;
+     TBStop .Enabled:=True;
+     //
+     TBPlay .ImageIndex:=0;
+     TBPause.ImageIndex:=1+3;
+     TBStop .ImageIndex:=2;
+    end;
+ end;
+
+end;
 
 end.
 

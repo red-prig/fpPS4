@@ -82,9 +82,6 @@ begin
  inherited;
 end;
 
-var
- runing:Boolean=False;
-
 procedure re_init_tty; register;
 var
  i:Integer;
@@ -244,8 +241,6 @@ begin
  Result:=nil;
  if Item.FLock then Exit;
 
- if runing then Exit;
-
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
 
@@ -326,7 +321,6 @@ begin
 
  Result.g_ipc.kevent(@kev,1);
 
- runing:=True;
 end;
 
 
