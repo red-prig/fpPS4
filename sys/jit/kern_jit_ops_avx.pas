@@ -898,6 +898,9 @@ begin
  jit_cbs[OPPv,OPmaskmov,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPmaskmov,OPSx_pd]:=@op_avx3_gen;
 
+ jit_cbs[OPPv,OPcomi ,OPSx_ss]:=@op_avx2_reg_mem_ro;
+ jit_cbs[OPPv,OPcomi ,OPSx_sd]:=@op_avx2_reg_mem_ro;
+
  jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_avx2_reg_mem_ro;
  jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_avx2_reg_mem_ro;
 
@@ -906,9 +909,6 @@ begin
  jit_cbs[OPPnone,OPblsr  ,OPSnone]:=@op_bmi_gen;
  jit_cbs[OPPnone,OPblsmsk,OPSnone]:=@op_bmi_gen;
  jit_cbs[OPPnone,OPblsi  ,OPSnone]:=@op_bmi_gen;
-
- jit_cbs[OPPv,OPxor   ,OPSx_ps]:=@op_avx3_gen;
- jit_cbs[OPPv,OPxor   ,OPSx_pd]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpcmpeq,OPSx_w ]:=@op_avx3_gen;
@@ -1017,19 +1017,26 @@ begin
  jit_cbs[OPPnone,OPvperm,OPSx_ps]:=@op_avx3_not_vex_len;
  jit_cbs[OPPnone,OPvperm,OPSx_pd]:=@op_avx3_rmi;
 
+ jit_cbs[OPPv,OPxor    ,OPSx_ps]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPxor    ,OPSx_pd]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpxor   ,OPSnone]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPor     ,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPor     ,OPSx_pd]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpor    ,OPSnone]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPand    ,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPand    ,OPSx_pd]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPandn   ,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPandn   ,OPSx_pd]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPpand   ,OPSnone]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpandn  ,OPSnone]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPblend  ,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPv,OPblend  ,OPSx_pd]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPpblend ,OPSx_w ]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPpblendvb,OPSnone]:=@op_vpblendvb;
