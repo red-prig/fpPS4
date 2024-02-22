@@ -7,6 +7,10 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
+  LMessages,
+  LCLType,
+  LCLIntf,
+
   g_bufstream,
   LineStream,
   synlog,
@@ -28,7 +32,12 @@ type
                      mdsRunned,
                      mdsSuspended);
 
-  { TfrmMain }
+  TGameMainForm=class(TForm)
+   public
+    caption_format:RawByteString;
+    procedure SetCaptionFPS(Ffps:QWORD);
+    procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
+  end;
 
   TfrmMain = class(TForm)
     MainImageList: TImageList;
@@ -82,6 +91,11 @@ type
 
     FMainButtonsState:TMainButtonsState;
 
+    FGameMainForm:TGameMainForm;
+
+    function  OpenMainWindows():THandle;
+    Procedure CloseMainWindows();
+
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
     procedure SaveItemIni(Item:TGameItem);
@@ -116,7 +130,15 @@ uses
 
 {$R *.lfm}
 
-{ TfrmMain }
+procedure TGameMainForm.SetCaptionFPS(Ffps:QWORD);
+begin
+ Caption:=Format(caption_format,[Ffps]);
+end;
+
+procedure TGameMainForm.WMEraseBkgnd(var Message:TLMEraseBkgnd);
+begin
+ Message.Result:=1;
+end;
 
 type
  TMySynLog=class(TCustomSynLog)
@@ -155,7 +177,8 @@ function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
 begin
  Result:=0;
  case mtype of
-  iKEV_EVENT:Result:=OnKevent(buf,mlen div sizeof(t_kevent));
+  iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
+  iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;
@@ -373,6 +396,38 @@ begin
 
 end;
 
+function TfrmMain.OpenMainWindows():THandle;
+const
+ pd_Width=1280;
+ pd_Height=720;
+begin
+ if (FGameMainForm<>nil) then Exit(FGameMainForm.Handle);
+
+ FGameMainForm:=TGameMainForm.CreateNew(Self);
+ FGameMainForm.ShowInTaskBar:=stAlways;
+ FGameMainForm.DoubleBuffered:=False;
+ FGameMainForm.ParentDoubleBuffered:=False;
+ FGameMainForm.FormStyle:=fsNormal;
+ FGameMainForm.SetBounds(100, 100, pd_Width, pd_Height);
+ //FGameMainForm.caption_format:=get_caption_format;
+ FGameMainForm.SetCaptionFPS(0);
+ //FGameMainForm.OnClose:=@FGameMainForm.CloseEvent;
+ //FGameMainForm.OnKeyDown:=@FGameMainForm.KeyEvent;
+ FGameMainForm.Position:=poScreenCenter;
+
+ ///
+ ///
+
+ FGameMainForm.Show;
+
+ Exit(FGameMainForm.Handle);
+end;
+
+Procedure TfrmMain.CloseMainWindows();
+begin
+ FreeAndNil(FGameMainForm);
+end;
+
 procedure TfrmMain.MIAddClick(Sender: TObject);
 var
  form:TfrmGameEditor;
@@ -475,7 +530,7 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=True;
+ cfg.fork_proc:=False;
 
  FGameProcess:=run_item(cfg,Item);
 
@@ -515,6 +570,8 @@ begin
   FGameProcess.stop;
   SetButtonsState(mbsStopped);
   FreeAndNil(FGameProcess);
+  //
+  CloseMainWindows;
   //
   Pages.ActivePage:=TabList;
  end;

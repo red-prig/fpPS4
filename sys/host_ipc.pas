@@ -19,7 +19,8 @@ type
   iRESULT,
   iKEV_CHANGE,
   iKEV_EVENT,
-  iMOUNT
+  iMOUNT,
+  iMAIN_WINDOWS
  );
 
  PNodeHeader=^TNodeHeader;
@@ -69,6 +70,7 @@ type
   public
    //
    procedure   kevent(kev:p_kevent;count:Integer);
+   function    OpenMainWindows():THandle;
    //
    function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
    procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);
@@ -198,8 +200,6 @@ begin
  kev  :=@node^.buf;
  count:=node^.header.mlen div SizeOf(t_kevent);
 
- Writeln('RecvKevent ',kev^.ident,' ',count);
-
  if (Fkq=nil) then
  begin
   Fkq:=kern_kqueue2('[ipc]',@kq_wakeup,Pointer(Self));
@@ -289,6 +289,11 @@ end;
 procedure THostIpcConnect.kevent(kev:p_kevent;count:Integer);
 begin
  SendAsyn(iKEV_CHANGE,count*SizeOf(t_kevent),kev);
+end;
+
+function THostIpcConnect.OpenMainWindows():THandle;
+begin
+ Result:=THandle(SendSync(iMAIN_WINDOWS,0,nil));
 end;
 
 //

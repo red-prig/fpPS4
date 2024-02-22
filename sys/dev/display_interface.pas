@@ -4,6 +4,17 @@ unit display_interface;
 
 interface
 
+uses
+ sys_event,
+ md_time;
+
+const
+ EVENTID_FLIP     =$0006;
+ EVENTID_VBLANK   =$0007;
+ EVENTID_SETMODE  =$0051;
+ EVENTID_POSITION =$0058;
+ EVENTID_PREVBLANK=$0059;
+
 type
  p_flip_status=^t_flip_status;
  t_flip_status=packed record
@@ -26,7 +37,7 @@ type
   paneWidth       :DWORD;
   paneHeight      :DWORD;
   refreshHz       :DWORD; //Single
-  screenSizeInInch:DWORD;
+  screenSizeInInch:DWORD; //Single
  end;
 
  p_register_buffer_attr=^t_register_buffer_attr;
@@ -58,39 +69,56 @@ type
  end;
 
  TDisplayHandle=class
-  function GetFlipStatus          (status:p_flip_status):Integer; virtual;
-  function GetResolutionStatus    (status:p_resolution_status):Integer; virtual;
-  function SetFlipRate            (rate:Integer):Integer; virtual;
-  function RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
-  function SubmitBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
-  function RegisterBuffer         (buf:p_register_buffer):Integer; virtual;
-  function UnregisterBuffer       (index:Integer):Integer; virtual;
-  function SubmitFlip             (submit:p_submit_flip):Integer; virtual;
-  function SubmitFlipEop          (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
+  event_flip:p_knlist;
+  last_status:t_flip_status;
+  procedure knote_eventid          (event_id:WORD;flipArg:QWORD);
+  function  Open                   ():Integer; virtual;
+  function  GetFlipStatus          (status:p_flip_status):Integer; virtual;
+  function  GetResolutionStatus    (status:p_resolution_status):Integer; virtual;
+  function  SetFlipRate            (rate:Integer):Integer; virtual;
+  function  RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
+  function  SubmitBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
+  function  RegisterBuffer         (buf:p_register_buffer):Integer; virtual;
+  function  UnregisterBuffer       (index:Integer):Integer; virtual;
+  function  SubmitFlip             (submit:p_submit_flip):Integer; virtual;
+  function  SubmitFlipEop          (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
  end;
 
- TDisplayInterface=class
-  class Function Open:TDisplayHandle; virtual;
- end;
-
- TAbstractDisplay=class of TDisplayInterface;
+ TAbstractDisplay=class of TDisplayHandle;
 
 implementation
 
-class Function TDisplayInterface.Open:TDisplayHandle;
+//
+
+procedure TDisplayHandle.knote_eventid(event_id:WORD;flipArg:QWORD);
 begin
- Result:=TDisplayHandle.Create;
+ knote(event_flip, event_id or (flipArg shl 16), 0);
 end;
 
-//
+function TDisplayHandle.Open():Integer;
+begin
+ last_status.currentBuffer:=DWORD(-1);
+ last_status.flipArg      :=QWORD(-1);
+
+ Result:=0;
+end;
 
 function TDisplayHandle.GetFlipStatus(status:p_flip_status):Integer;
 begin
+ status^:=last_status;
+
  Result:=0;
 end;
 
 function TDisplayHandle.GetResolutionStatus(status:p_resolution_status):Integer;
 begin
+ status^.width           :=1920;
+ status^.heigth          :=1080;
+ status^.paneWidth       :=1920;
+ status^.paneHeight      :=1080;
+ status^.refreshHz       :=$426fc28f; //( 59.94)
+ status^.screenSizeInInch:=$42500000; //( 52.00)
+ //
  Result:=0;
 end;
 
@@ -121,11 +149,34 @@ end;
 
 function TDisplayHandle.SubmitFlip(submit:p_submit_flip):Integer;
 begin
+ last_status.flipArg      :=submit^.flipArg;
+ last_status.flipArg2     :=submit^.flipArg2;
+ last_status.count        :=last_status.count+1;
+ last_status.submitTsc    :=rdtsc;
+ last_status.currentBuffer:=submit^.bufferIndex;
+
+ knote_eventid(EVENTID_FLIP, submit^.flipArg);
+
+ last_status.tsc        :=rdtsc;
+ last_status.processTime:=last_status.tsc;
+
  Result:=0;
 end;
 
+
 function TDisplayHandle.SubmitFlipEop(submit:p_submit_flip;submit_id:QWORD):Integer;
 begin
+ last_status.flipArg      :=submit^.flipArg;
+ last_status.flipArg2     :=submit^.flipArg2;
+ last_status.count        :=last_status.count+1;
+ last_status.submitTsc    :=rdtsc;
+ last_status.currentBuffer:=submit^.bufferIndex;
+
+ knote_eventid(EVENTID_FLIP, submit^.flipArg);
+
+ last_status.tsc        :=rdtsc;
+ last_status.processTime:=last_status.tsc;
+
  Result:=0;
 end;
 

@@ -54,6 +54,9 @@ uses
 
  md_game_process,
 
+ dev_dce,
+ display_soft,
+
  //internal libs
  ps4_libSceSystemService,
  ps4_libSceUserService,
@@ -66,14 +69,14 @@ uses
 
 //
 
-procedure  TGameProcessSimple.suspend;
+procedure TGameProcessSimple.suspend;
 begin
- thread_suspend_all(Ftd);
+ thread_suspend_all(nil);
 end;
 
-procedure  TGameProcessSimple.resume;
+procedure TGameProcessSimple.resume;
 begin
- thread_resume_all(Ftd);
+ thread_resume_all(nil);
 end;
 
 Destructor TGameProcessSimple.Destroy;
@@ -121,6 +124,8 @@ begin
  kern_ipc.thread_new;
 
  PROC_INIT_HOST_IPC(kern_ipc);
+
+ dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
 
  Writeln(Item.FGameInfo.Exec);
  Writeln(Item.FMountList.app0);

@@ -18,7 +18,7 @@ uses
 procedure dce_initialize();
 
 var
- dce_interface:TAbstractDisplay=TDisplayInterface;
+ dce_interface:TAbstractDisplay=TDisplayHandle;
 
  dce_handle:TDisplayHandle;
 
@@ -27,6 +27,7 @@ var
  dce_page:Pointer;
 
  knlist_lock_flip:mtx;
+
  g_video_out_event_flip:t_knlist;
 
 implementation
@@ -58,6 +59,7 @@ begin
 end;
 
 var
+ callout_lock  :mtx;
  callout_vblank:t_callout;
  callout_refs  :Int64=0;
 
@@ -65,9 +67,11 @@ procedure vblank_expire(arg:Pointer);
 begin
  if (callout_refs<>0) then
  begin
-  knote_eventid(EVENTID_VBLANK, 0, 1); //SCE_VIDEO_OUT_EVENT_VBLANK
+  knote_eventid(EVENTID_PREVBLANK, 0, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
   //
   callout_reset(@callout_vblank, callout_vblank.c_time, @vblank_expire, nil);
+  //
+  knote_eventid(EVENTID_VBLANK, 0, 0);    //SCE_VIDEO_OUT_EVENT_VBLANK
  end;
 end;
 
@@ -106,9 +110,11 @@ type
   paneWidth       :DWORD;
   paneHeight      :DWORD;
   refreshHz       :DWORD; //Single
-  screenSizeInInch:DWORD;
+  screenSizeInInch:DWORD; //Single
   padding:array[0..19] of Byte;
  end;
+
+ t_scaler_info=array[0..63] of Byte;
 
  //SCE_VIDEO_OUT_REFRESH_RATE_UNKNOWN  = 0,
  //SCE_VIDEO_OUT_REFRESH_RATE_23_98HZ  = 1,
@@ -156,9 +162,6 @@ type
   submitTsc      :QWORD;
   f_0x40         :QWORD;
  end;
-
-var
- flipArg:QWORD=0;
 
 type
  p_cursor_enable=^t_cursor_enable;
@@ -309,6 +312,7 @@ var
   case byte of
    0:(r_status:t_resolution_status);
    1:(f_status:t_flip_status);
+   2:(i_scaler:t_scaler_info);
  end;
 begin
  Result:=0;
@@ -338,7 +342,17 @@ begin
 
        if (dce_handle=nil) then
        begin
-        dce_handle:=dce_interface.Open;
+        dce_handle:=dce_interface.Create;
+
+        if (dce_handle=nil) then
+        begin
+         Result:=EBUSY;
+        end else
+        begin
+         dce_handle.event_flip:=@g_video_out_event_flip;
+         Result:=dce_handle.Open();
+        end;
+
        end else
        begin
         Result:=EBUSY;
@@ -499,15 +513,6 @@ begin
       end;
 
       u.f_status:=Default(t_flip_status);
-      u.f_status.flipArg        :=flipArg;
-      u.f_status.count          :=0;
-      u.f_status.processTime    :=0;
-      u.f_status.tsc            :=0;
-      u.f_status.currentBuffer  :=0;
-      u.f_status.flipPendingNum0:=0;
-      u.f_status.gcQueueNum     :=0;
-      u.f_status.flipPendingNum1:=0;
-      u.f_status.submitTsc      :=0;
 
       mtx_lock(dce_mtx);
 
@@ -544,13 +549,14 @@ begin
        if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
        ptr:=Pointer(data^.arg3);
+       len:=QWORD  (data^.arg4);
 
-       len:=0;
+       u.i_scaler:=Default(t_scaler_info);
 
-       Writeln('dce_flip_control(',data^.id,'):get_data?');
-       print_backtrace_td(stderr);
+       //Writeln('dce_flip_control(',data^.id,'):get_data?');
+       //print_backtrace_td(stderr);
 
-       Result:=copyout(@len,ptr,8);
+       Result:=copyout(@u.i_scaler,ptr,len);
 
        Exit;
       end;
@@ -569,20 +575,9 @@ begin
       if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
       ptr:=Pointer(data^.arg3);
-
-      len:=Integer(data^.arg4);
-      if (len>SizeOf(t_resolution_status)) then
-      begin
-       len:=SizeOf(t_resolution_status);
-      end;
+      len:=QWORD  (data^.arg4);
 
       u.r_status:=Default(t_resolution_status);
-      u.r_status.width           :=1920;
-      u.r_status.heigth          :=1080;
-      u.r_status.paneWidth       :=1920;
-      u.r_status.paneHeight      :=1080;
-      u.r_status.refreshHz       :=$426fc28f;
-      u.r_status.screenSizeInInch:=32;
 
       mtx_lock(dce_mtx);
 
@@ -805,10 +800,6 @@ begin
                         data^.flipMode,' ',
                         '0x',HexStr(data^.flipArg,16),' ',
                         '0x',HexStr(data^.eop_val));
-
- knote_eventid(EVENTID_FLIP, data^.flipArg, 0); //SCE_VIDEO_OUT_EVENT_FLIP
-
- flipArg:=data^.flipArg;
 
  if (data^.eop_nz=1) then
  begin
@@ -1070,7 +1061,8 @@ begin
 
  knlist_init_mtx(@g_video_out_event_flip,@knlist_lock_flip);
 
- callout_init_mtx(@callout_vblank,knlist_lock_flip,0);
+ mtx_init(callout_lock,'vblank_lock');
+ callout_init_mtx(@callout_vblank,callout_lock,0);
 
  kqueue_add_filteropts(EVFILT_DISPLAY,@filterops_display);
 

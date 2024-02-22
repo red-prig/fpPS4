@@ -74,6 +74,8 @@ begin
 end;
 
 procedure t_ipc_proto.Recv;
+label
+ _next;
 var
  node:PQNode;
 begin
@@ -87,10 +89,14 @@ begin
       evbuffer_remove(Finput,@FHeader,SizeOf(TNodeHeader));
 
       FState:=1;
+
+      if (FHeader.mlen=0) then goto _next;
      end;
    1:
      begin
       if (evbuffer_get_length(Finput)<FHeader.mlen) then Exit;
+
+      _next:
 
       node:=AllocMem(SizeOf(TQNode)+FHeader.mlen);
 
