@@ -74,6 +74,7 @@ type
 
   public
     FGameProcess:TGameProcess;
+    FGameItem   :TGameItem;
 
     FIniFile:TIniFile;
 
@@ -93,8 +94,10 @@ type
 
     FGameMainForm:TGameMainForm;
 
+    function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
     Procedure CloseMainWindows();
+    procedure SetCaptionFPS(Ffps:QWORD);
 
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
@@ -179,6 +182,7 @@ begin
  case mtype of
   iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
   iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
+  iCAPTION_FPS :Form.SetCaptionFPS(PQWORD(buf)^);
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;
@@ -396,6 +400,29 @@ begin
 
 end;
 
+function TfrmMain.get_caption_format:RawByteString;
+var
+ TITLE,TITLE_ID,APP_VER:RawByteString;
+begin
+ Result:='';
+
+ if (FGameItem=nil) then Exit;
+
+ TITLE   :=FGameItem.FGameInfo.Name;
+ TITLE_ID:=FGameItem.FGameInfo.TitleId;
+ APP_VER :=FGameItem.FGameInfo.Version;
+
+ if (TITLE='') then
+ begin
+  TITLE:=ExtractFileName(FGameItem.FGameInfo.Exec);
+ end;
+
+ if (TITLE_ID<>'') then TITLE_ID:='-' +TITLE_ID;
+ if (APP_VER <>'') then APP_VER :=':v'+APP_VER;
+
+ Result:=Format('fpPS4 (%s) [%s%s%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
+end;
+
 function TfrmMain.OpenMainWindows():THandle;
 const
  pd_Width=1280;
@@ -409,7 +436,7 @@ begin
  FGameMainForm.ParentDoubleBuffered:=False;
  FGameMainForm.FormStyle:=fsNormal;
  FGameMainForm.SetBounds(100, 100, pd_Width, pd_Height);
- //FGameMainForm.caption_format:=get_caption_format;
+ FGameMainForm.caption_format:=get_caption_format;
  FGameMainForm.SetCaptionFPS(0);
  //FGameMainForm.OnClose:=@FGameMainForm.CloseEvent;
  //FGameMainForm.OnKeyDown:=@FGameMainForm.KeyEvent;
@@ -426,6 +453,13 @@ end;
 Procedure TfrmMain.CloseMainWindows();
 begin
  FreeAndNil(FGameMainForm);
+end;
+
+procedure TfrmMain.SetCaptionFPS(Ffps:QWORD);
+begin
+ if (FGameMainForm=nil) then Exit;
+
+ FGameMainForm.SetCaptionFPS(Ffps);
 end;
 
 procedure TfrmMain.MIAddClick(Sender: TObject);
@@ -530,11 +564,19 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=False;
+ cfg.fork_proc:=True;
+
+ if Item.FLock then Exit;
 
  FGameProcess:=run_item(cfg,Item);
 
- SetButtonsState(mdsStarted);
+ if (FGameProcess<>nil) then
+ begin
+  Item.FLock:=True;
+  FGameItem:=Item;
+
+  SetButtonsState(mdsStarted);
+ end;
 end;
 
 procedure TfrmMain.TBPlayClick(Sender: TObject);
@@ -570,6 +612,12 @@ begin
   FGameProcess.stop;
   SetButtonsState(mbsStopped);
   FreeAndNil(FGameProcess);
+  //
+  if (FGameItem<>nil) then
+  begin
+   FGameItem.FLock:=False;
+   FGameItem:=nil;
+  end;
   //
   CloseMainWindows;
   //

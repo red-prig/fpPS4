@@ -6,6 +6,7 @@ interface
 
 uses
  display_interface,
+ time,
  md_time;
 
 type
@@ -51,8 +52,6 @@ begin
  hWindow:=p_proc.p_host_ipc.OpenMainWindows();
 
  Writeln('OpenMainWindows:',hWindow);
-
- SetWindowTextA(hWindow,'OpenMainWindows');
 end;
 
 function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
@@ -102,6 +101,10 @@ begin
  ReleaseDC(hWindow, hdc);
 end;
 
+var
+ Ffps     :QWORD=0;
+ Ftsc_prev:QWORD=0;
+
 function TDisplayHandleSoft.SubmitFlip(submit:p_submit_flip):Integer;
 var
  buf:p_buffer;
@@ -120,6 +123,21 @@ begin
 
  last_status.tsc        :=rdtsc;
  last_status.processTime:=last_status.tsc;
+
+ if (Ftsc_prev=0) then
+ begin
+  Ftsc_prev:=last_status.tsc;
+  Ffps:=1;
+ end else
+ begin
+  Inc(Ffps);
+  if ((last_status.tsc-Ftsc_prev) div tsc_freq)>=1 then
+  begin
+   p_proc.p_host_ipc.SetCaptionFPS(Ffps);
+   Ffps:=0;
+   Ftsc_prev:=last_status.tsc;
+  end;
+ end;
 
  Result:=0;
 end;

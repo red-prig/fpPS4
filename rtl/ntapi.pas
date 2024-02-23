@@ -94,7 +94,8 @@ const
  ProcessImageFileNameWin32=43;
 
  //SystemInformationClass
- SystemTimeAdjustmentInformation=28;
+ SystemTimeAdjustmentInformation      =28;
+ SystemHypervisorSharedPageInformation=197;
 
  //ntapi PriorityClass
  PROCESS_PRIORITY_CLASS_UNKNOWN     =0;

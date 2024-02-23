@@ -244,7 +244,6 @@ var
  mem:TMemoryStream;
 begin
  Result:=nil;
- if Item.FLock then Exit;
 
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );

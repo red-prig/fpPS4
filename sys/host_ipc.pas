@@ -20,7 +20,8 @@ type
   iKEV_CHANGE,
   iKEV_EVENT,
   iMOUNT,
-  iMAIN_WINDOWS
+  iMAIN_WINDOWS,
+  iCAPTION_FPS
  );
 
  PNodeHeader=^TNodeHeader;
@@ -71,6 +72,7 @@ type
    //
    procedure   kevent(kev:p_kevent;count:Integer);
    function    OpenMainWindows():THandle;
+   procedure   SetCaptionFps(Ffps:QWORD);
    //
    function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
    procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);
@@ -294,6 +296,11 @@ end;
 function THostIpcConnect.OpenMainWindows():THandle;
 begin
  Result:=THandle(SendSync(iMAIN_WINDOWS,0,nil));
+end;
+
+procedure THostIpcConnect.SetCaptionFps(Ffps:QWORD);
+begin
+ SendAsyn(iCAPTION_FPS,SizeOf(Ffps),@Ffps);
 end;
 
 //

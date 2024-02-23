@@ -13,7 +13,7 @@ uses
 Procedure md_timeinit;
 
 function  rdtsc:QWORD; assembler;
-function  tsc_calibrate:QWORD;
+function  get_rdtsc_freq:QWORD;
 
 function  get_proc_time:Int64;
 function  get_proc_time_freq:Int64;
@@ -46,15 +46,34 @@ end;
 
 function rdtsc:QWORD; assembler; nostackframe;
 asm
+ lfence
  rdtsc
- shl $0x20,%rdx
+ lfence
+ shl  $32,%rdx
  or  %rdx,%rax
 end;
 
+function _get_rdtsc_freq:QWORD;
+var
+ shared_page:PQWORD;
+ size:DWORD;
+ R:DWORD;
+begin
+ Result:=0;
+ shared_page:=nil;
+ size:=0;
+
+ R:=NtQuerySystemInformation(SystemHypervisorSharedPageInformation,
+                             @shared_page,SizeOf(Pointer),@size);
+ if (R<>0) then Exit;
+ if (size<>SizeOf(Pointer)) then Exit;
+
+ Result:=(UNIT_PER_SEC shl 32) div (shared_page[1] shr 32);
+end;
 
 function tsc_calibrate:QWORD;
 const
- samples=40;
+ samples=80;
 var
  i:Integer;
 
@@ -84,6 +103,16 @@ begin
  tsc_freq:=tsc_freq div samples;
 
  Result:=tsc_freq;
+end;
+
+function get_rdtsc_freq:QWORD;
+begin
+ Result:=_get_rdtsc_freq;
+
+ if (Result=0) then
+ begin
+  Result:=tsc_calibrate;
+ end;
 end;
 
 function get_proc_time:Int64;

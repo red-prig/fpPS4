@@ -39,7 +39,7 @@ Procedure timeinit;
 begin
  md_timeinit;
  getmicrouptime(@boottime);
- tsc_freq:=tsc_calibrate;
+ tsc_freq:=get_rdtsc_freq;
 end;
 
 procedure getmicrouptime(tvp:p_timeval);
