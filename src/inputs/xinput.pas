@@ -220,7 +220,9 @@ function XInput_Init:Integer; stdcall;
 var
  i:Integer;
 begin
- if (lib_handle<>NilHandle) then Exit(0);
+ Result:=0;
+
+ if (lib_handle<>NilHandle) then Exit;
 
  For i:=0 to High(XINPUT_DLL) do
  begin
