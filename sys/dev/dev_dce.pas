@@ -91,6 +91,16 @@ var
 begin
  if (callout_refs<>0) then
  begin
+
+  mtx_lock(dce_mtx);
+
+   if (dce_handle<>nil) then
+   begin
+    dce_handle.Vblank();
+   end;
+
+  mtx_unlock(dce_mtx);
+
   vblank_tsc:=rdtsc;
 
   i:=vblank_count;
@@ -394,6 +404,7 @@ begin
         end else
         begin
          dce_handle.event_flip:=@g_video_out_event_flip;
+         dce_handle.mtx       :=@dce_mtx;
          Result:=dce_handle.Open();
         end;
 
@@ -547,9 +558,11 @@ begin
      if (data^.arg4=0) and (data^.arg5=0) and (data^.arg6=0) then
      begin
       //arg2 -> canary
-      //arg3 -> rate
+      //arg3 -> rate [0..7]
 
       if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      if (DWORD(data^.arg3)>7) then Exit(EINVAL);
 
       mtx_lock(dce_mtx);
 

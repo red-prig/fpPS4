@@ -6,6 +6,7 @@ interface
 
 uses
  sys_event,
+ kern_mtx,
  md_time;
 
 const
@@ -62,7 +63,7 @@ type
 
  p_submit_flip=^t_submit_flip;
  t_submit_flip=packed record
-  bufferIndex:DWORD;
+  bufferIndex:Integer;
   flipMode   :DWORD;
   flipArg    :QWORD;
   flipArg2   :QWORD;
@@ -70,6 +71,7 @@ type
 
  TDisplayHandle=class
   event_flip:p_knlist;
+  mtx:p_mtx;
   last_status:t_flip_status;
   procedure knote_eventid            (event_id:WORD;flipArg:QWORD);
   function  Open                     ():Integer; virtual;
@@ -83,6 +85,7 @@ type
   function  UnregisterBuffer         (index:Integer):Integer; virtual;
   function  SubmitFlip               (submit:p_submit_flip):Integer; virtual;
   function  SubmitFlipEop            (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
+  function  Vblank                   ():Integer; virtual;
  end;
 
  TAbstractDisplay=class of TDisplayHandle;
@@ -169,7 +172,6 @@ begin
  Result:=0;
 end;
 
-
 function TDisplayHandle.SubmitFlipEop(submit:p_submit_flip;submit_id:QWORD):Integer;
 begin
  last_status.flipArg      :=submit^.flipArg;
@@ -183,6 +185,11 @@ begin
  last_status.tsc        :=rdtsc;
  last_status.processTime:=last_status.tsc;
 
+ Result:=0;
+end;
+
+function TDisplayHandle.Vblank():Integer;
+begin
  Result:=0;
 end;
 

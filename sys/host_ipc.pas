@@ -97,6 +97,7 @@ type
   FEvent:PRTLEvent;
   Ftd:p_kthread;
   FHandler:THostIpcHandler;
+  FTerminate:Boolean;
   Constructor Create;
   Destructor  Destroy; override;
   procedure   thread_new; override;
@@ -405,7 +406,7 @@ begin
    RTLEventWaitFor(ipc.FEvent);
   end;
   ipc.Update(ipc.FHandler);
- until false;
+ until ipc.FTerminate;
 
 end;
 
@@ -434,6 +435,9 @@ procedure THostIpcSimpleKERN.thread_free;
 begin
  if (Ftd<>nil) then
  begin
+  FTerminate:=True;
+  RTLEventSetEvent(FEvent);
+  WaitForThreadTerminate(Ftd^.td_handle,0);
   thread_dec_ref(Ftd);
   Ftd:=nil;
  end;
