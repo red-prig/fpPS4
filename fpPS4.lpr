@@ -17,7 +17,7 @@ uses
 
 begin
   md_systm.md_run_forked;
-  vm_pmap.pmap_reserve(False);
+  Application.Tag:=vm_pmap.pmap_reserve(False);
   //
   RequireDerivedFormResource:=True;
   Application.Scaled:=True;

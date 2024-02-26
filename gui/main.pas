@@ -99,6 +99,7 @@ type
     Procedure CloseMainWindows();
     procedure SetCaptionFPS(Ffps:QWORD);
 
+    procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadIniFile;
     procedure LoadItemIni(Item:TGameItem);
     procedure SaveItemIni(Item:TGameItem);
@@ -323,17 +324,11 @@ begin
  Result:=sVal;
 end;
 
-procedure TfrmMain.FormCreate(Sender: TObject);
+procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
 var
  FLogFileW:WideString;
 begin
- FMainInfo:=TMainInfo.Create;
-
- FIniFile:=TIniFile.Create('fpps4.ini');
-
- ReadIniFile;
-
- FLogFileW:=UTF8Decode(FMainInfo.LogFile);
+ FLogFileW:=UTF8Decode(LogFile);
 
  FAddHandle:=CreateFileW(PWideChar(FLogFileW),
                          GENERIC_READ or GENERIC_WRITE,
@@ -352,6 +347,27 @@ begin
                          0);
 
  FileSeek(FAddHandle,0,fsFromEnd);
+end;
+
+procedure TfrmMain.FormCreate(Sender: TObject);
+var
+ r:RawByteString;
+begin
+ FMainInfo:=TMainInfo.Create;
+
+ FIniFile:=TIniFile.Create('fpps4.ini');
+
+ ReadIniFile;
+
+ OpenLog(FMainInfo.LogFile);
+
+ if (Application.Tag<>0) then
+ begin
+  r:='Critical error, memory could not be reserved! code=0x'+HexStr(Application.Tag,8)+#13#10;
+  FileWrite(FAddHandle,PChar(r)^,Length(r));
+  ShowMessage(r);
+  Halt;
+ end;
 
  FFile:=TBufferedFileStream.Create(FGetHandle);
 

@@ -51,7 +51,7 @@ function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
 
-procedure pmap_reserve(wr:Boolean);
+function  pmap_reserve(wr:Boolean):DWORD;
 
 procedure pmap_pinit(pmap:p_pmap);
 
@@ -157,11 +157,11 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-procedure pmap_reserve(wr:Boolean);
+function pmap_reserve(wr:Boolean):DWORD;
 var
  base:Pointer;
  size:QWORD;
- i,r:Integer;
+ i:Integer;
 begin
  if Length(pmap_mem)<>0 then
  begin
@@ -170,23 +170,23 @@ begin
    base:=Pointer(pmap_mem[i].start);
    size:=pmap_mem[i].__end-pmap_mem[i].start;
 
-   r:=md_reserve(base,size);
+   Result:=md_reserve(base,size);
 
-   if (r<>0) then
+   if (Result<>0) then
    begin
     if wr then
     begin
-     Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+     Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
     end;
     //STATUS_COMMITMENT_LIMIT = $C000012D
-    Assert(false,'pmap_init');
+    Exit;
    end;
 
    pmap_mem[i].start:=QWORD(base);
 
    if wr then
    begin
-    Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
+    Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
    end;
   end;
  end;
@@ -197,7 +197,8 @@ var
  i,r:Integer;
 begin
 
- pmap_reserve(True);
+ r:=pmap_reserve(True);
+ Assert(r=0,'pmap_pinit');
 
  dev_mem_init(4);
 
@@ -208,7 +209,7 @@ begin
  if (r<>0) then
  begin
   Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT,11),'):0x',HexStr(r,8));
-  Assert(false,'pmap_init');
+  Assert(false,'pmap_pinit');
  end;
 
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);

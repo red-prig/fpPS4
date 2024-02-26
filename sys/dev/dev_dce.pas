@@ -17,6 +17,25 @@ uses
 
 procedure dce_initialize();
 
+type
+ p_dce_page=^t_dce_page;
+ t_dce_page=packed record //0x170
+  zero         :QWORD;
+  unk1         :array[0..151] of Byte;
+  labels       :array[0.. 15] of QWORD; //sceVideoOutGetBufferLabelAddress
+  label_       :QWORD;
+  unk2         :QWORD;
+  ident_flip   :QWORD;
+  ident_vblank :QWORD;
+  filter_id    :Integer;
+  _align       :Integer;
+  vopen_counter:QWORD;
+  ident_setmode:QWORD;
+  unk3         :array[0..23] of Byte;
+ end;
+
+ {$IF sizeof(t_dce_page)<>$170}{$STOP sizeof(t_dce_page)<>$170}{$ENDIF}
+
 var
  dce_interface:TAbstractDisplay=TDisplayHandle;
 
@@ -24,7 +43,7 @@ var
 
  dce_mtx:mtx;
 
- dce_page:Pointer;
+ dce_page:p_dce_page;
 
  knlist_lock_flip:mtx;
 
@@ -63,15 +82,25 @@ var
  callout_vblank:t_callout;
  callout_refs  :Int64=0;
 
+ vblank_count:QWORD=0;
+ vblank_tsc  :QWORD=0;
+
 procedure vblank_expire(arg:Pointer);
+var
+ i:QWORD;
 begin
  if (callout_refs<>0) then
  begin
-  knote_eventid(EVENTID_PREVBLANK, 0, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
+  vblank_tsc:=rdtsc;
+
+  i:=vblank_count;
+  vblank_count:=vblank_count+1;
+
+  knote_eventid(EVENTID_PREVBLANK, i, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
   //
   callout_reset(@callout_vblank, callout_vblank.c_time, @vblank_expire, nil);
   //
-  knote_eventid(EVENTID_VBLANK, 0, 0);    //SCE_VIDEO_OUT_EVENT_VBLANK
+  knote_eventid(EVENTID_VBLANK   , i, 0); //SCE_VIDEO_OUT_EVENT_VBLANK
  end;
 end;
 
@@ -161,6 +190,16 @@ type
   flipPendingNum1:DWORD;
   submitTsc      :QWORD;
   f_0x40         :QWORD;
+ end;
+
+ p_vblank_args=^t_vblank_args;
+ t_vblank_args=packed record
+  count      :QWORD;
+  processTime:QWORD;
+  tsc        :QWORD;
+  flags      :Byte;
+  _align     :array[0..7] of Byte;
+  reserved   :QWORD;
  end;
 
 type
@@ -302,6 +341,10 @@ begin
 
 end;
 
+var
+ f_vopen_counter:QWORD=0;
+ f_eop_count:Integer=1;
+
 Function dce_flip_control(dev:p_cdev;data:p_flip_control_args):Integer;
 var
  ptr :Pointer;
@@ -313,6 +356,7 @@ var
    0:(r_status:t_resolution_status);
    1:(f_status:t_flip_status);
    2:(i_scaler:t_scaler_info);
+   3:(v_vblank:t_vblank_args);
  end;
 begin
  Result:=0;
@@ -358,6 +402,22 @@ begin
         Result:=EBUSY;
        end;
 
+       if (Result=0) then
+       begin
+        f_vopen_counter:=f_vopen_counter+1;
+
+        FillChar(dce_page^,SizeOf(t_dce_page),0);
+
+        dce_page^.filter_id:=-13;
+
+        dce_page^.ident_flip   :=$06000000000000;
+        dce_page^.ident_vblank :=$07000000000000;
+        dce_page^.ident_setmode:=$51000000000000;
+        dce_page^.vopen_counter:=f_vopen_counter;
+
+        f_eop_count:=1;
+       end;
+
       mtx_unlock(dce_mtx);
 
       if (Result<>0) then Exit;
@@ -394,6 +454,11 @@ begin
         FreeAndNil(dce_handle);
        end;
 
+       if (Result=0) then
+       begin
+        FillChar(dce_page^,SizeOf(t_dce_page),0);
+       end;
+
       mtx_unlock(dce_mtx);
 
       if (Result<>0) then Exit;
@@ -401,6 +466,44 @@ begin
       Writeln('dce_video_close:',data^.arg2);
 
       close_vblank;
+
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$06000000000000);
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$07000000000000);
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$51000000000000);
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$58000000000000);
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$59000000000000);
+
+      Exit(0);
+     end;
+     Exit(EINVAL);
+    end;
+
+  4: //UnregisterBuffer
+    begin
+     if (data^.arg4=0) and (data^.arg5=0) and (data^.arg6=0) then
+     begin
+      //arg2 -> canary
+      //arg3 -> buffer id
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      if (DWORD(data^.arg3)>15) then Exit(EINVAL);
+
+      mtx_lock(dce_mtx);
+
+       if (dce_handle=nil) then
+       begin
+        Result:=EINVAL;
+       end else
+       begin
+        Result:=dce_handle.UnregisterBuffer(Integer(data^.arg3));
+       end;
+
+      mtx_unlock(dce_mtx);
+
+      if (Result<>0) then Exit;
+
+      Writeln('UnregisterBuffer:',data^.arg2,' ',data^.arg3);
 
       Exit(0);
      end;
@@ -412,11 +515,11 @@ begin
      if (data^.arg4=0) and (data^.arg5=0) and (data^.arg6=0) then
      begin
       //arg2 -> canary
-      //arg3 -> fid
+      //arg3 -> attr id
 
       if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
-      if (Integer(data^.arg3)>15) then Exit(EINVAL);
+      if (DWORD(data^.arg3)>3) then Exit(EINVAL);
 
       mtx_lock(dce_mtx);
 
@@ -425,7 +528,7 @@ begin
         Result:=EINVAL;
        end else
        begin
-        Result:=dce_handle.UnregisterBuffer(Integer(data^.arg3));
+        Result:=dce_handle.UnregisterBufferAttribute(Integer(data^.arg3));
        end;
 
       mtx_unlock(dce_mtx);
@@ -477,15 +580,15 @@ begin
 
       if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
-      poff:=Pointer(data^.arg3); //output offset  //4000..3FFC000
+      poff:=Pointer(data^.arg3); //output offset  //0..3FFC000
       plen:=Pointer(data^.arg4); //output len     //4000
 
       len:=$4000;
-
       Result:=copyout(@len,plen,SizeOf(QWORD));
 
       if (Result=0) then
       begin
+       len:=0;
        Result:=copyout(@len,poff,SizeOf(QWORD));
       end;
 
@@ -506,7 +609,7 @@ begin
 
       ptr:=Pointer(data^.arg3);
 
-      len:=Integer(data^.arg4);
+      len:=DWORD(data^.arg4);
       if (len>SizeOf(t_flip_status)) then
       begin
        len:=SizeOf(t_flip_status);
@@ -529,6 +632,38 @@ begin
       if (Result<>0) then Exit;
 
       Result:=copyout(@u.f_status,ptr,len);
+
+      Exit;
+     end;
+
+     Exit(EINVAL);
+    end;
+
+  11: //sceVideoOutGetVblankStatus
+    begin
+     if (data^.arg5=0) and (data^.arg6=0) and (Integer(data^.arg4)>0) then
+     begin
+      //arg2 -> canary
+      //arg3 = &result;
+      //arg4 = 40
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      ptr:=Pointer(data^.arg3);
+
+      len:=DWORD(data^.arg4);
+      if (len>SizeOf(t_vblank_args)) then
+      begin
+       len:=SizeOf(t_vblank_args);
+      end;
+
+      u.v_vblank:=Default(t_vblank_args);
+
+      u.v_vblank.count      :=vblank_count;
+      u.v_vblank.processTime:=vblank_tsc;
+      u.v_vblank.tsc        :=vblank_tsc;
+
+      Result:=copyout(@u.v_vblank,ptr,len);
 
       Exit;
      end;
@@ -664,7 +799,46 @@ begin
  if (data^.canary<>$a5a5) then Exit(EINVAL);
 
  if (data^.attrid>3) then Exit(EINVAL);
- if (data^.submit>1) then Exit(EINVAL);
+
+ if (data^.reserved2<>0) or
+    (data^.f_0x21<>0) or
+    (data^.pitchPixel<data^.width) or
+    (data^.f_0x20>1) then Exit(EINVAL);
+
+ if (data^.pitchPixel>$2000) or
+    (data^.width>$2000) or
+    (data^.height>$2000) then Exit(EINVAL);
+
+ case data^.pixelFormat of
+  $80000000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB
+  $80002200:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB
+  $80060000:;
+  $80062200:;
+  $80220000:;
+  $80320000:;
+  $80420000:;
+  $80520000:;
+  $88000000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB
+  $88060000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10
+  $88720000:;
+  $88740000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ
+  $88750000:;
+  $88820000:;
+  $88840000:;
+  $88850000:;
+  $b0000000:;
+  $b0060000:;
+  $b0720000:;
+  $b0740000:;
+  $b0750000:;
+  $b0820000:;
+  $b0840000:;
+  $b0850000:;
+  $c1060000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A16R16G16B16_FLOAT
+  $c1760000:;
+  else
+   Exit(EINVAL);
+ end;
 
  mtx_lock(dce_mtx);
 
@@ -673,10 +847,12 @@ begin
    Result:=EINVAL;
   end else
   begin
-   case data^.submit of
-     0:Result:=dce_handle.RegisterBufferAttribute(data^.attrid,@data^.pixelFormat);
-     1:Result:=dce_handle.SubmitBufferAttribute  (data^.attrid,@data^.pixelFormat);
-    else;
+   if (data^.submit=0) then
+   begin
+    Result:=dce_handle.RegisterBufferAttribute(data^.attrid,@data^.pixelFormat);
+   end else
+   begin
+    Result:=dce_handle.SubmitBufferAttribute  (data^.attrid,@data^.pixelFormat);
    end;
   end;
 
@@ -749,9 +925,6 @@ type
   rout       :PQWORD; //extraout of result
  end;
 
-var
- f_eop_count:Integer=0;
-
 Function dce_submit_flip(dev:p_cdev;data:p_submit_flip_args):Integer;
 var
  submit:t_submit_flip;
@@ -762,7 +935,10 @@ begin
 
  if (data^.canary<>$a5a5) then Exit(EINVAL);
 
- if (data^.bufferIndex>15) then Exit(EINVAL);
+ if (Integer(data^.bufferIndex)>15) or
+    (Integer(data^.bufferIndex)<-1) then Exit(EINVAL);
+
+ if (data^.flipMode>6) then Exit(EINVAL);
 
  submit.bufferIndex:=data^.bufferIndex;
  submit.flipMode   :=data^.flipMode;
@@ -782,9 +958,9 @@ begin
     //       count               canary
     //eop=0x[00000001] [ff] [00] [a5a5]
 
-    f_eop_count:=f_eop_count+1;
-
     submit_eop:=(QWORD(f_eop_count) shl 32) or QWORD($ff00a5a5);
+
+    f_eop_count:=f_eop_count+1;
 
     Result:=dce_handle.SubmitFlipEop(@submit,submit_eop);
    end else
@@ -884,12 +1060,12 @@ begin
  end;
 
  off:=offset^;
- if ((off and $fffffffffc003fff)<>0) then //4000..3FFC000
+ if ((off and $fffffffffc003fff)<>0) then //0..3FFC000
  begin
   Exit(EINVAL);
  end;
 
- if (off<>PAGE_SIZE) then
+ if (off<>0) then
  begin
   Assert(false);
  end;
@@ -1066,7 +1242,7 @@ begin
 
  kqueue_add_filteropts(EVFILT_DISPLAY,@filterops_display);
 
- dce_page:=dev_mem_alloc(2);
+ dce_page:=dev_mem_alloc(1);
 
  make_dev(@dce_cdevsw,0,0,0,0666,'dce',[]);
 end;

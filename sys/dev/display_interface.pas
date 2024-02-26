@@ -71,17 +71,18 @@ type
  TDisplayHandle=class
   event_flip:p_knlist;
   last_status:t_flip_status;
-  procedure knote_eventid          (event_id:WORD;flipArg:QWORD);
-  function  Open                   ():Integer; virtual;
-  function  GetFlipStatus          (status:p_flip_status):Integer; virtual;
-  function  GetResolutionStatus    (status:p_resolution_status):Integer; virtual;
-  function  SetFlipRate            (rate:Integer):Integer; virtual;
-  function  RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
-  function  SubmitBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
-  function  RegisterBuffer         (buf:p_register_buffer):Integer; virtual;
-  function  UnregisterBuffer       (index:Integer):Integer; virtual;
-  function  SubmitFlip             (submit:p_submit_flip):Integer; virtual;
-  function  SubmitFlipEop          (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
+  procedure knote_eventid            (event_id:WORD;flipArg:QWORD);
+  function  Open                     ():Integer; virtual;
+  function  GetFlipStatus            (status:p_flip_status):Integer; virtual;
+  function  GetResolutionStatus      (status:p_resolution_status):Integer; virtual;
+  function  SetFlipRate              (rate:Integer):Integer; virtual;
+  function  RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
+  function  SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
+  function  UnregisterBufferAttribute(attrid:Byte):Integer; virtual;
+  function  RegisterBuffer           (buf:p_register_buffer):Integer; virtual;
+  function  UnregisterBuffer         (index:Integer):Integer; virtual;
+  function  SubmitFlip               (submit:p_submit_flip):Integer; virtual;
+  function  SubmitFlipEop            (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
  end;
 
  TAbstractDisplay=class of TDisplayHandle;
@@ -133,6 +134,11 @@ begin
 end;
 
 function TDisplayHandle.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
+begin
+ Result:=0;
+end;
+
+function TDisplayHandle.UnregisterBufferAttribute(attrid:Byte):Integer;
 begin
  Result:=0;
 end;
