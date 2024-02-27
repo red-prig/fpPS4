@@ -66,16 +66,16 @@ type
    end;
    TNodeList=specialize TNodeList<PVNode>;
    TVoltList=specialize TNodeList<PsrVolatile>;
-  private
+  public
    pLeft,pRight:PsrPrivate;
-   //----
+   function  c(n1,n2:PsrPrivate):Integer; static;
+  private
    fwrite_count:DWORD;
    //
    FSource:PsrRegSlot;
    //
    FLineList:TNodeList;
    FVoltList:TVoltList;
-   function  c(n1,n2:PsrPrivate):Integer; static;
    Procedure SetRegType(rtype:TsrDataType);
    function  GetRegType:TsrDataType;
   public

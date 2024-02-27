@@ -46,9 +46,9 @@ type
  TRegDNodeList=specialize TNodeStack<PRegDNode>;
 
  TsrRegNode=packed object(TsrNode)
-  private
+  public
    pPrev,pNext:PsrRegNode;
-   //
+  private
    ID:TsrRefId;            //post id
    F:bitpacked record
     dtype:TsrDataType;

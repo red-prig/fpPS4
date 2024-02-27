@@ -253,6 +253,15 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudiodecTermLibrary(uiCodecType:DWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceAudiodecTermLibrary,uiCodecType=',uiCodecType);
+ if not (uiCodecType in [SCE_AUDIODEC_TYPE_AT9..SCE_AUDIODEC_TYPE_M4AAC]) then
+  Result:=SCE_AUDIODEC_ERROR_INVALID_TYPE
+ else
+  Result:=0;
+end;
+
 function Load_libSceAudiodec(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -261,12 +270,12 @@ begin
  Result.pFileName:=name;
 
  lib:=Result._add_lib('libSceAudiodec');
-
  lib^.set_proc($56386C9B1A5C7B32,@ps4_sceAudiodecInitLibrary);
  lib^.set_proc($3B77F5B0B31646FB,@ps4_sceAudiodecCreateDecoder);
  lib^.set_proc($2875C73032E420BC,@ps4_sceAudiodecDecode);
  lib^.set_proc($4E9F99132EBD98B9,@ps4_sceAudiodecDeleteDecoder);
  lib^.set_proc($E957FD5932C3A2CB,@ps4_sceAudiodecClearContext);
+ lib^.set_proc($8798D20764080D5D,@ps4_sceAudiodecTermLibrary);
 end;
 
 initialization

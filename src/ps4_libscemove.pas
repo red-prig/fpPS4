@@ -79,6 +79,13 @@ begin
  Result:=SCE_MOVE_RETURN_CODE_NO_CONTROLLER_CONNECTED;
 end;
 
+function ps4_sceMoveReadStateLatest(handle:Integer;pData:pSceMoveData):Integer; SysV_ABI_CDecl;
+begin
+ if (pData=nil) then Exit(SCE_MOVE_ERROR_INVALID_ARG);
+ pData^:=Default(SceMoveData);
+ Result:=SCE_MOVE_RETURN_CODE_NO_CONTROLLER_CONNECTED;
+end;
+
 function ps4_sceMoveReadStateRecent(handle:Integer;
                                     timestamp:QWORD;
                                     pData:pSceMoveData;
@@ -87,6 +94,11 @@ begin
  if (pData=nil) or (num=nil) then Exit(SCE_MOVE_ERROR_INVALID_ARG);
  pData^:=Default(SceMoveData);
  num^:=0;
+ Result:=SCE_MOVE_RETURN_CODE_NO_CONTROLLER_CONNECTED;
+end;
+
+function ps4_sceMoveSetVibration(handle:Integer;motor:Byte):Integer; SysV_ABI_CDecl;
+begin
  Result:=SCE_MOVE_RETURN_CODE_NO_CONTROLLER_CONNECTED;
 end;
 
@@ -102,7 +114,9 @@ begin
  lib^.set_proc($1F30BAD0C7E32715,@ps4_sceMoveOpen);
  lib^.set_proc($5D7EB0971A47C9EA,@ps4_sceMoveClose);
  lib^.set_proc($1965D3CB1B3841B1,@ps4_sceMoveGetDeviceInfo);
+ lib^.set_proc($B6D53E24E852865E,@ps4_sceMoveReadStateLatest);
  lib^.set_proc($7F66DCA4AEA425F8,@ps4_sceMoveReadStateRecent);
+ lib^.set_proc($205430B53D82798D,@ps4_sceMoveSetVibration);
 end;
 
 initialization

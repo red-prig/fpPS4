@@ -29,7 +29,7 @@ type
 
  PsrLiteral=^TsrLiteral;
  TsrLiteral=object(TsrNode)
-  private
+  public
    pLeft,pRight:PsrLiteral;
   public
    dtype:TsrDataType;

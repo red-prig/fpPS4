@@ -69,14 +69,14 @@ type
  PsrInput=^TsrInput;
 
  TsrInput=object(TsrDescriptor)
-  private
+  public
    pLeft,pRight:PsrInput;
-   //----
+   function  c(n1,n2:PsrInput):Integer; static;
+  private
    key:packed record
     itype:TpsslInputType;
     typeid:Byte;
    end;
-   function  c(n1,n2:PsrInput):Integer; static;
   public
    pReg:PsrRegNode;
    property  itype:TpsslInputType read key.itype;

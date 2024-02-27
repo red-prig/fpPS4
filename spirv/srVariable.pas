@@ -30,9 +30,9 @@ type
 
  PsrVariable=^TsrVariable;
  TsrVariable=packed object(TsrNode)
-  private
+  public
    pPrev,pNext:PsrVariable;
-   //
+  private
    fwrite_count:DWORD;
    ID:TsrRefId;      //post id
    FType:PsrType;

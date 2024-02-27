@@ -10,21 +10,22 @@ uses
   Classes,
   SysUtils;
 
-implementation
-
-uses
- ps4_time;
-
 const
+ AF_INET = 2;
+ AF_INET6=28;
+
  SCE_NET_EINVAL      =22;
  SCE_NET_ENOSPC      =28;
  SCE_NET_EAFNOSUPPORT=47;
 
  SCE_NET_EHOSTUNREACH=65;
 
+ //
 
-threadvar
- sce_net_errno:Integer;
+ SCE_NET_INET_ADDRSTRLEN=16;
+
+ SCE_NET_ETHER_ADDR_LEN  =6;
+ SCE_NET_ETHER_ADDRSTRLEN=18;
 
 type
  SceNetInAddr_t=DWORD;
@@ -34,50 +35,67 @@ type
   s_addr:SceNetInAddr_t;
  end;
 
-const
- SCE_NET_INET_ADDRSTRLEN=16;
-
- SCE_NET_ETHER_ADDR_LEN  =6;
- SCE_NET_ETHER_ADDRSTRLEN=18;
-
-type
  pSceNetEtherAddr=^SceNetEtherAddr;
  SceNetEtherAddr=packed record
   data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
  end;
 
-type
  pSceNetSocklen_t=^SceNetSocklen_t;
  SceNetSocklen_t=DWORD;
 
-type
- SceNetSaFamily=Byte;
+ pSceNetSaFamily_t=^SceNetSaFamily_t;
+ SceNetSaFamily_t=Byte;
 
-type
- SceNetEpollData= packed record
+ pSceNetInPort_t=^SceNetInPort_t;
+ SceNetInPort_t=word;
+
+ pSceNetSockaddrIn=^SceNetSockaddrIn;
+ SceNetSockaddrIn=packed record
+  sin_len   :Byte;
+  sin_family:SceNetSaFamily_t;
+  sin_port  :SceNetInPort_t;
+  sin_addr  :SceNetInAddr;
+  sin_vport :SceNetInPort_t;
+  sin_zero  :array[0..5] of char;
+ end;
+
+ SceNetEpollData=packed record
   Case Byte of //union
   0:(ptr:Pointer);
   1:(u32:DWORD);
-  2:(fd:Integer);
+  2:(fd :Integer);
   3:(u64:QWORD);
-end;
+ end;
 
-type
  pSceNetSockaddr=^SceNetSockaddr;
  SceNetSockaddr = packed record
-  sa_len:Byte;
-  sa_family:SceNetSaFamily;
-  sa_data:array[0..13] of Byte;
+  sa_len   :Byte;
+  sa_family:SceNetSaFamily_t;
+  sa_data  :array[0..13] of Byte;
  end;
 
-type
  pSceNetEpollEvent=^SceNetEpollEvent;
  SceNetEpollEvent = packed record
-  events:DWORD;
+  events  :DWORD;
   reserved:DWORD;
-  ident:QWORD;
-  data:SceNetEpollData;
+  ident   :QWORD;
+  data    :SceNetEpollData;
  end;
+
+const
+ default_addr:SceNetSockaddr=(
+  sa_len   :SizeOf(SceNetSockaddr);
+  sa_family:AF_INET;
+  sa_data  :(80,0,1,1,1,1,0,0,0,0,0,0,0,0);
+ );
+
+implementation
+
+uses
+ ps4_time;
+
+threadvar
+ sce_net_errno:Integer;
 
 function libnet_tls_get_errno():PInteger;
 begin
@@ -135,10 +153,6 @@ begin
 //Writeln('sceNetEpollCreate:',name,':',flags);
  Result:=3;
 end;
-
-const
- AF_INET = 2;
- AF_INET6=28;
 
 function ps4_sceNetInetPton(af:Integer;
                             src:Pchar;
@@ -287,13 +301,6 @@ begin
  Result:=0;
 end;
 
-const
- default_addr:SceNetSockaddr=(
-  sa_len   :SizeOf(SceNetSockaddr);
-  sa_family:AF_INET;
-  sa_data  :(80,0,1,1,1,1,0,0,0,0,0,0,0,0);
- );
-
 function ps4_sceNetAccept(s:Integer;
                           addr:pSceNetSockaddr;
                           paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
@@ -380,6 +387,16 @@ begin
  Result:=NToHs(net16);
 end;
 
+function htonll(Value:QWORD):QWORD; inline;
+begin
+ Result:=htonl(Value shr 32) or (htonl(Value) shl 32)
+end;
+
+function ps4_sceNetHtonll(host64:QWORD):QWORD; SysV_ABI_CDecl;
+begin
+ Result:=htonl(host64);
+end;
+
 function ps4_sceNetEpollControl(eid:Integer; op:Integer; id:Integer; event:pSceNetEpollEvent):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -411,6 +428,18 @@ begin
 
  FillChar(hostname^,hostname_len,0);
  Move(chost^,hostname^,Length(chost));
+end;
+
+function ps4_sceNetResolverStartNtoa(rid:Integer; const hostname:PChar; addr:pSceNetInAddr; timeout:Integer; retry:Integer; flags:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+
+ ps4_usleep(100);
+
+ if (addr<>nil) then
+ begin
+  addr^.s_addr:=SceNetInAddr_t(Pointer(@default_addr.sa_data)^);
+ end;
 end;
 
 function ps4_sceNetResolverDestroy(rid:Integer):Integer; SysV_ABI_CDecl;
@@ -710,9 +739,11 @@ begin
  lib^.set_proc($868380A1F86146F1,@ps4_sceNetGetsockname);
  lib^.set_proc($A501A91D8A290086,@ps4_sceNetNtohl);
  lib^.set_proc($45BBEDFB9636884C,@ps4_sceNetNtohs);
+ lib^.set_proc($DC21E2D4AD70B024,@ps4_sceNetHtonll);
  lib^.set_proc($655C38E9BB1AB009,@ps4_sceNetEpollControl);
  lib^.set_proc($C6986B66EB25EFC1,@ps4_sceNetGetsockopt);
  lib^.set_proc($0296F8603C4AB112,@ps4_sceNetResolverStartAton);
+ lib^.set_proc($35DF7559A5A61B6C,@ps4_sceNetResolverStartNtoa);
  lib^.set_proc($9099581F9B8C0162,@ps4_sceNetResolverDestroy);
  lib^.set_proc($3975D7E26524DEE9,@ps4_sceNetConnect);
  lib^.set_proc($76B8C86C36C0ED44,@ps4_sceNetEpollWait);

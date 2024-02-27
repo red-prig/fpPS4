@@ -1617,7 +1617,7 @@ const
    VK_IMAGE_USAGE_DEFAULT or
    ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
-function VK_IMAGE_USAGE_DEFAULT_COLOR(cformat:TVkFormat):TVkFlags;
+function VK_IMAGE_USAGE_DEFAULT_COLOR(cformat:TVkFormat;rt:Boolean):TVkFlags;
 begin
  Case cformat of
   VK_FORMAT_R4G4_UNORM_PACK8..
@@ -1636,6 +1636,13 @@ begin
    Result:=VK_IMAGE_USAGE_DEFAULT or
            ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
  end;
+
+ if rt then
+ begin
+  Result:=VK_IMAGE_USAGE_DEFAULT or
+          ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+ end;
+
 end;
 
 procedure ClearRenderTarget;
@@ -1653,7 +1660,7 @@ begin
 
  ri:=FetchImage(GFXRing.CmdBuffer,
                 RT_INFO.FImageInfo,
-                VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO.FImageInfo.cformat),
+                VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO.FImageInfo.cformat,true),
                 TM_CLEAR
                 );
 
@@ -1689,13 +1696,13 @@ begin
 
  ri_src:=FetchImage(GFXRing.CmdBuffer,
                     RT_INFO_SRC.FImageInfo,
-                    VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO_SRC.FImageInfo.cformat),
+                    VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO_SRC.FImageInfo.cformat,true),
                     {TM_READ}0
                     );
 
  ri_dst:=FetchImage(GFXRing.CmdBuffer,
                     RT_INFO_DST.FImageInfo,
-                    VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO_DST.FImageInfo.cformat),
+                    VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO_DST.FImageInfo.cformat,true),
                     TM_WRITE
                     );
 
@@ -1969,7 +1976,7 @@ begin
 
     ri:=FetchImage(GFXRing.CmdBuffer,
                    RT_INFO.FImageInfo,
-                   VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO.FImageInfo.cformat),
+                   VK_IMAGE_USAGE_DEFAULT_COLOR(RT_INFO.FImageInfo.cformat,true),
                    RT_INFO.IMAGE_USAGE
                    );
 
@@ -2179,7 +2186,7 @@ begin
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
-                  VK_IMAGE_USAGE_DEFAULT_COLOR(FImage.cformat),
+                  VK_IMAGE_USAGE_DEFAULT_COLOR(FImage.cformat,false),
                   TM_READ
                   );
 
@@ -2283,7 +2290,7 @@ begin
 
    ri:=FetchImage(GFXRing.CmdBuffer,
                   FImage,
-                  VK_IMAGE_USAGE_DEFAULT_COLOR(FImage.cformat),
+                  VK_IMAGE_USAGE_DEFAULT_COLOR(FImage.cformat,false),
                   TM_READ
                   );
 

@@ -175,6 +175,18 @@ type
   reserve:array[0..7] of Byte;
  end;
 
+ pScePadExtControllerInformation=^ScePadExtControllerInformation;
+ ScePadExtControllerInformation=packed record
+  base:ScePadControllerInformation;
+  pad_type1:Word;
+  pad_type2:Word;
+  capability:Byte;
+  case byte of
+   0:(quantityOfSelectorSwitch:Byte);
+   1:(maxPhysicalWheelAngle:Integer);
+   2:(data:array[0..7] of Byte);
+ end;
+
  pScePadDeviceClassExtendedInformation=^ScePadDeviceClassExtendedInformation;
  ScePadDeviceClassExtendedInformation=packed record
   deviceClass:DWORD; //ScePadDeviceClass

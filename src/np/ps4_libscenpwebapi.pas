@@ -79,21 +79,6 @@ begin
  Result:=0;
 end;
 
-//
-
-function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
-                                    poolSize:size_t):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
- Result:=4;
-end;
-
-function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
-begin
- Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
- Result:=5;
-end;
-
 function ps4_sceNpWebApiSendRequest(requestId:Int64;
                                     pData:Pointer;
                                     dataSize:size_t):Integer; SysV_ABI_CDecl;
@@ -157,6 +142,7 @@ end;
 
 const
  SCE_NP_WEBAPI_PUSH_EVENT_DATA_TYPE_LEN_MAX=64;
+ SCE_NP_WEBAPI_EXTD_PUSH_EVENT_EXTD_DATA_KEY_LEN_MAX=32;
 
 type
  pSceNpWebApiPushEventDataType=^SceNpWebApiPushEventDataType;
@@ -164,13 +150,48 @@ type
   val:array[0..SCE_NP_WEBAPI_PUSH_EVENT_DATA_TYPE_LEN_MAX] of AnsiChar;
  end;
 
+ pSceNpWebApiExtdPushEventExtdDataKey=^SceNpWebApiExtdPushEventExtdDataKey;
+ SceNpWebApiExtdPushEventExtdDataKey=packed record
+  val:array[0..SCE_NP_WEBAPI_EXTD_PUSH_EVENT_EXTD_DATA_KEY_LEN_MAX] of AnsiChar;
+ end;
+
+ pSceNpWebApiExtdPushEventFilterParameter=^SceNpWebApiExtdPushEventFilterParameter;
+ SceNpWebApiExtdPushEventFilterParameter=packed record
+  dataType:pSceNpWebApiExtdPushEventExtdDataKey;
+  pExtdDataKey:Pointer;
+  extdDataKeyNum:size_t;
+ end;
+
+ pSceNpWebApiExtdPushEventExtdData=^SceNpWebApiExtdPushEventExtdData;
+ SceNpWebApiExtdPushEventExtdData=packed record
+  extdDataKey:SceNpWebApiExtdPushEventExtdDataKey;
+  pData      :PChar;
+  dataLen    :QWORD;
+ end;
+
+ SceNpWebApiExtdPushEventCallbackA=procedure(
+  userCtxId     :Integer;
+  callbackId    :Integer;
+  pNpServiceName:PChar;
+  npServiceLabel:SceNpServiceLabel;
+  pTo           :pSceNpPeerAddressA;
+  pToOnlineId   :pSceNpOnlineId;
+  pFrom         :pSceNpPeerAddressA;
+  pFromOnlineId :SceNpOnlineId;
+  pDataType     :pSceNpWebApiPushEventDataType;
+  pData         :PChar;
+  dataLen       :QWORD;
+  pExtdData     :pSceNpWebApiExtdPushEventExtdData;
+  extdDataNum   :QWORD;
+  pUserArg      :Pointer
+ ); SysV_ABI_CDecl;
+
 function ps4_sceNpWebApiCreatePushEventFilter(libCtxId:Integer;
                                               pDataType:pSceNpWebApiPushEventDataType;
                                               dataTypeNum:size_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=7;
 end;
-
 
 function ps4_sceNpWebApiCreateServicePushEventFilter(libCtxId:Integer;
                                                      handleId:Integer;
@@ -180,6 +201,15 @@ function ps4_sceNpWebApiCreateServicePushEventFilter(libCtxId:Integer;
                                                      dataTypeNum:size_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=8;
+end;
+
+function ps4_sceNpWebApiCreateExtdPushEventFilter(libCtxId,handleId:Integer;
+                                                  pNpServiceName:PChar;
+                                                  npServiceLabel:DWORD;
+                                                  pFilterParam:pSceNpWebApiExtdPushEventFilterParameter;
+                                                  filterParamNum:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Result:=9;
 end;
 
 
@@ -199,6 +229,103 @@ begin
  Result:=2;
 end;
 
+function ps4_sceNpWebApiRegisterExtdPushEventCallback(userCtxId,filterId:Integer;
+                                                         cbFunc:Pointer; //SceNpWebApiServicePushEventCallback
+                                                         pUserArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=3;
+end;
+
+function ps4_sceNpWebApiRegisterExtdPushEventCallbackA(userCtxId,filterId:Integer;
+                                                       cbFunc:SceNpWebApiExtdPushEventCallbackA;
+                                                       pUserArg:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=3;
+end;
+
+procedure ps4_sceNpWebApiCheckTimeout(); SysV_ABI_CDecl;
+begin
+ //
+end;
+
+function ps4_sceNpWebApiDeleteContext(userCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//NpWebApi2
+
+type
+ pSceNpWebApi2ContentParameter=^SceNpWebApi2ContentParameter;
+ SceNpWebApi2ContentParameter=packed record
+  contentLength:QWORD;
+  pContentType :Pchar;
+  reserved     :array[0..15] of Byte;
+ end;
+
+ pSceNpWebApi2ResponseInformationOption=^SceNpWebApi2ResponseInformationOption;
+ SceNpWebApi2ResponseInformationOption=packed record
+  httpStatus      :Integer;
+  _align          :Integer;
+  pErrorObject    :Pchar;
+  errorObjectSize :QWORD;
+  responseDataSize:QWORD;
+ end;
+
+const
+ SCE_NP_WEBAPI2_PUSH_EVENT_UUID_LENGTH=36;
+
+type
+ pSceNpWebApi2PushEventPushContextId=^SceNpWebApi2PushEventPushContextId;
+ SceNpWebApi2PushEventPushContextId=packed record
+  uuid:array[0..SCE_NP_WEBAPI2_PUSH_EVENT_UUID_LENGTH] of Char;
+ end;
+
+function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
+                                    poolSize:size_t):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
+ Result:=4;
+end;
+
+function ps4_sceNpWebApi2CreateRequest(titleUserCtxId:Integer;
+	                               pApiGroup:Pchar;
+	                               pPath:Pchar;
+	                               method:PChar; //SceNpWebApi2HttpMethod
+	                               pContentParameter:pSceNpWebApi2ContentParameter;
+	                               pRequestId:pInt64):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpWebApi2SendRequest(requestId:Int64;
+                                     pData:Pointer;
+                                     dataSize:QWORD;
+                                     pRespInfoOption:pSceNpWebApi2ResponseInformationOption):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
+ Result:=5;
+end;
+
+function ps4_sceNpWebApi2PushEventDeletePushContext(userCtxId:Integer;
+                                                    pPushCtxId:pSceNpWebApi2PushEventPushContextId):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpWebApi2AddHttpRequestHeader(requestId:Integer;
+                                              const pFieldName:PChar;
+                                              const pValue:PChar):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//NpWebApi2
 
 function Load_libSceNpWebApi(Const name:RawByteString):TElf_node;
 var
@@ -226,6 +353,11 @@ begin
  lib^.set_proc($B08171EF7E3EC72B,@ps4_sceNpWebApiCreateServicePushEventFilter);
  lib^.set_proc($3DF4930C280D3207,@ps4_sceNpWebApiRegisterPushEventCallback);
  lib^.set_proc($909409134B8A9B9C,@ps4_sceNpWebApiRegisterServicePushEventCallback);
+ lib^.set_proc($33605407E0CD1061,@ps4_sceNpWebApiCreateExtdPushEventFilter);
+ lib^.set_proc($BEB334D80E46CB53,@ps4_sceNpWebApiRegisterExtdPushEventCallback);
+ lib^.set_proc($8E15CA1902787A02,@ps4_sceNpWebApiRegisterExtdPushEventCallbackA);
+ lib^.set_proc($81534DCB17FFD528,@ps4_sceNpWebApiCheckTimeout);
+ lib^.set_proc($5D48DDB124D36775,@ps4_sceNpWebApiDeleteContext);
 end;
 
 function Load_libSceNpWebApi2(Const name:RawByteString):TElf_node;
@@ -237,8 +369,12 @@ begin
 
  lib:=Result._add_lib('libSceNpWebApi2');
 
- lib^.set_proc($FA8F7CD7A61086A4,@ps4_sceNpWebApi2Initialize );
+ lib^.set_proc($FA8F7CD7A61086A4,@ps4_sceNpWebApi2Initialize);
+ lib^.set_proc($DC423F39227AE577,@ps4_sceNpWebApi2CreateRequest);
+ lib^.set_proc($95038217CE25BF3C,@ps4_sceNpWebApi2SendRequest); 
  lib^.set_proc($B24E786E2E85B583,@ps4_sceNpWebApi2CreateUserContext);
+ lib^.set_proc($41A7F179933758AE,@ps4_sceNpWebApi2PushEventDeletePushContext);
+ lib^.set_proc($7A038EBEB9C5EA62,@ps4_sceNpWebApi2AddHttpRequestHeader); 
 end;
 
 initialization

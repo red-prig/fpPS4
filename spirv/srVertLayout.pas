@@ -23,11 +23,11 @@ type
 
  PsrVertLayout=^TsrVertLayout;
  TsrVertLayout=object(TsrDescriptor)
-  private
+  public
    pLeft,pRight:PsrVertLayout;
-   //----
-   pLayout:PsrDataLayout;
    function  c(n1,n2:PsrVertLayout):Integer; static;
+  private
+   pLayout:PsrDataLayout;
   public
    pReg:PsrRegNode;
    procedure Init(p:PsrDataLayout); inline;

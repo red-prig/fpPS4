@@ -15,9 +15,10 @@ uses
 type
  PsrCacheOp=^TsrCacheOp;
  TsrCacheOp=object
-  private
+  public
    pLeft,pRight:PsrCacheOp;
-   //----
+   function  c(n1,n2:PsrCacheOp):Integer; static;
+  private
    key:packed record
     place:PsrOpBlock;
     OpId:DWORD;
@@ -25,7 +26,6 @@ type
     count:DWORD;
    end;
    pData:PPsrRegNode;
-   function  c(n1,n2:PsrCacheOp):Integer; static;
   public
    pDst:PsrNode;
  end;

@@ -1978,14 +1978,45 @@ end;
 const
  SCE_GNM_ERROR_FAILURE=-1897004801; // $8eee00ff;
 
+type
+ FoundResourceCallback=function(
+  resourceHandle:DWORD;
+  ownerHandle:DWORD;
+  callbackData:QWORD
+ ):Integer; SysV_ABI_CDecl;
+
 function ps4_sceGnmGetResourceRegistrationBuffers({params?}):Int64; SysV_ABI_CDecl;
 begin
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmFindResourcesPublic(const pTestArea:Pointer;
+                                       testSizeInBytes:QWORD;
+                                       foundResourceCallback:FoundResourceCallback;
+                                       callbackData:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmFindResourcesPublic:',callbackData);
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmFindResources(const pTestArea:Pointer;
+                                 testSizeInBytes:QWORD;
+                                 foundResourceCallback:FoundResourceCallback;
+                                 callbackData:QWORD):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmFindResources:',callbackData);
  Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
 function ps4_sceGnmRegisterOwner(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceGnmRegisterOwner:',ownerName);
+ Result:=SCE_GNM_ERROR_FAILURE;
+end;
+
+function ps4_sceGnmRegisterOwnerForSystem(pOwnerHandle:PInteger;ownerName:Pchar):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceGnmRegisterOwnerForSystem:',ownerName);
  Result:=SCE_GNM_ERROR_FAILURE;
 end;
 
@@ -2243,7 +2274,9 @@ begin
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 
  lib^.set_proc($78B41B36C29E4E45,@ps4_sceGnmGetResourceRegistrationBuffers);
+ lib^.set_proc($E0CBFD397CA9046F,@ps4_sceGnmFindResourcesPublic);
  lib^.set_proc($645A8A165DB768C7,@ps4_sceGnmRegisterOwner);
+ lib^.set_proc($8FA99242CDD481A6,@ps4_sceGnmRegisterOwnerForSystem);
  lib^.set_proc($9EF1307D8008993B,@ps4_sceGnmRegisterResource);
  lib^.set_proc($93C11792120FFA53,@ps4_sceGnmUnregisterResource);
  lib^.set_proc($7E12B0095563F679,@ps4_sceGnmUnregisterOwnerAndResources);
@@ -2255,6 +2288,12 @@ begin
  lib^.set_proc($170BE1FBE9BD2102,@ps4_sceGnmGetGpuCoreClockFrequency);
 
   //nop nid:libSceGnmDriver:DBDA0ABCA5F3119A:sceGnmMapComputeQueue
+
+ lib:=Result._add_lib('libSceGnmDriverResourceRegistration');
+
+ lib^.set_proc($BDB711E0A7A7E800,@ps4_sceGnmFindResources);
+ lib^.set_proc($78B41B36C29E4E45,@ps4_sceGnmGetResourceRegistrationBuffers);
+ lib^.set_proc($8FA99242CDD481A6,@ps4_sceGnmRegisterOwnerForSystem);
 
  libGnm_init:=2; //end load
 end;

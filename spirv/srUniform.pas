@@ -52,15 +52,15 @@ type
 
  PsrUniform=^TsrUniform;
  TsrUniform=object(TsrDescriptor)
-  private
+  public
    pLeft,pRight:PsrUniform;
-   //----
+   function  c(n1,n2:PsrUniform):Integer; static;
+  private
    pLayout:PsrDataLayout;
    //
    fwrite_count:DWORD;
    //
    FReg:TsrRegUniform;
-   function  c(n1,n2:PsrUniform):Integer; static;
   public
    Procedure Init; inline;
    function  pReg:PsrRegUniform; inline;

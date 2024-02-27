@@ -32,15 +32,15 @@ type
  PPsrConst=^PsrConst;
  PsrConst=^TsrConst;
  TsrConst=packed object(TsrNode)
-  private
+  public
    pPrev,pNext,pLeft,pRight:PsrConst;
-   //--
+   function  c(n1,n2:PsrConst):Integer; static;
+  private
    ID:TsrRefId; //post id
    fOpId:WORD;
    fCount:WORD;
    FType:PsrType;
    pData:PPsrNode;
-   function  c(n1,n2:PsrConst):Integer; static;
   public
    property  pType:PsrType     read FType;
    property  OpId:WORD         read fOpId;

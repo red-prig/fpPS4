@@ -43,6 +43,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceRemoteplayProhibit:Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceRemoteplay(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -55,6 +60,7 @@ begin
  lib^.set_proc($C50788AF24D7EDD6,@ps4_sceRemoteplayApprove);
  lib^.set_proc($8373CD8D8296AA74,@ps4_sceRemoteplayGetConnectionStatus);
  lib^.set_proc($45FD1731547BC4FC,@ps4_sceRemoteplaySetProhibition);
+ lib^.set_proc($9AB361EFCB41A668,@ps4_sceRemoteplayProhibit);
 end;
 
 initialization
