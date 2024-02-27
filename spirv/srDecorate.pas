@@ -19,14 +19,14 @@ type
 
  PsrDecorate=^TsrDecorate;
  TsrDecorate=object
-  private
+  public
    pLeft,pRight:PsrDecorate;
-   //----
+   function  c(n1,n2:PsrDecorate):Integer; static;
+  private
    key:packed record
     data:PsrNode;
     param:array[0..2] of DWORD;
    end;
-   function  c(n1,n2:PsrDecorate):Integer; static;
   public
    node:PSpirvOp;
  end;

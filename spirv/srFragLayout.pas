@@ -33,11 +33,11 @@ type
 
  PsrFragLayout=^TsrFragLayout;
  TsrFragLayout=object(TsrDescriptor)
-  private
+  public
    pLeft,pRight:PsrFragLayout;
-   //----
-   itype:TpsslInputType;
    function  c(n1,n2:PsrFragLayout):Integer; static;
+  private
+   itype:TpsslInputType;
   public
    pReg:PsrRegNode;
    Procedure Init; inline;

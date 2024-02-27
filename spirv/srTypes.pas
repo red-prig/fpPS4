@@ -26,16 +26,16 @@ type
  PPsrType=^PsrType;
  PsrType=^TsrType;
  TsrType=packed object(TsrNode)
-  private
+  public
    pPrev,pNext,pLeft,pRight:PsrType;
-   //
+   function  c(n1,n2:PsrType):Integer; static;
+  private
    ID:TsrRefId; //post id
    fdtype:TsrDataType;
    fsize:DWORD;
    fOpId:WORD;
    fcount:WORD;
    pData:PPsrNode;
-   function  c(n1,n2:PsrType):Integer; static;
   public
    property  size:DWORD        read fsize;
    property  OpId:WORD         read fOpId;

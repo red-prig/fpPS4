@@ -73,9 +73,10 @@ type
     pLine:PspirvOp;
    end;
    TNodeList=specialize TNodeList<PVNode>;
-  private
+  public
    pLeft,pRight:PsrChain;
-   //--
+   function  c(n1,n2:PsrChain):Integer; static;
+  private
    fwrite_count:DWORD;
    //--
    ID:TsrRefId; //post id
@@ -88,7 +89,6 @@ type
    FWriter:PsrNode;
    Fdtype:TsrDataType;
    FList:TNodeList;
-   function  c(n1,n2:PsrChain):Integer; static;
    Procedure SetWriter(t:PsrNode);
    Function  GetWriter:PsrNode;
    Procedure SetBuffer(t:PsrNode);

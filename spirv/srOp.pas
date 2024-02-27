@@ -50,8 +50,9 @@ type
 
  POpParamNode=^TOpParamNode;
  TOpParamNode=packed object
-  private
+  public
    pNext:POpParamNode;
+  private
    pParent:PspirvOp;
    pValue:PsrNode;
    procedure SetValue(v:PsrNode);
@@ -69,8 +70,9 @@ type
 
  PsrOpCustom=^TsrOpCustom;
  TsrOpCustom=object(TsrNode)
-  private
+  public
    pPrev,pNext:PsrOpCustom;
+  private
    pParent:PsrOpBlock;
  end;
 
@@ -181,14 +183,14 @@ type
 
  PSpirvFunc=^TSpirvFunc;
  TSpirvFunc=object(TsrNode)
-  private
+  public
    pPrev,pNext,pLeft,pRight:PSpirvFunc;
-   //----
+   function  c(n1,n2:PSpirvFunc):Integer; static;
+  private
    FName:RawByteString;
    FTop:TsrOpBlock;
    FBlock:PsrOpBlock;
    ID:TsrRefId; //post id
-   function  c(n1,n2:PSpirvFunc):Integer; static;
   public
    property  Name:RawByteString read FName;
    property  pBlock:PsrOpBlock  read FBlock;
