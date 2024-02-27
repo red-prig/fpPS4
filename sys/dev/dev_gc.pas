@@ -99,6 +99,11 @@ begin
  Writeln('gc_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
+  $C0108120: //call in neo mode (Tca)
+            begin
+             Exit(19);
+            end;
+
   $C004811F: //sceGnmGetNumTcaUnits
             begin
              Exit(19);

@@ -129,7 +129,8 @@ asm
 
  //if ((cpu_id & 0xffffff80) == 0x740f00) then sceKernelIsAuthenticNeo
 
- mov $0x00710f13,%eax //cpu_id
+ mov p_proc.p_cpuid,%eax //cpu_id
+
  mov $0x178bfbff,%edx //cpu_feature
  mov $0x36d8220b,%ecx //cpu_feature2
 

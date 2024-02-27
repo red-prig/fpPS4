@@ -10,6 +10,37 @@ uses
  md_time;
 
 const
+ //SceVideoOutPixelFormat
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB = $80000000; // MSB first. Blue is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_B8_G8_R8_A8_SRGB = SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB;  // alias name in a gnm-friendly order (LSB first)
+
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A16R16G16B16_FLOAT = $C1060000; // MSB first. Blue is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_B16_G16_R16_A16_FLOAT = SCE_VIDEO_OUT_PIXEL_FORMAT_A16R16G16B16_FLOAT;  // alias name in a gnm-friendly order (LSB first)
+
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB = $80002200; // MSB first. Red is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_R8_G8_B8_A8_SRGB = SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB;  // alias name in a gnm-friendly order (LSB first)
+
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10 = $88060000; // MSB first. Blue is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_B10_G10_R10_A2 = SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10;  // alias name in a gnm-friendly order (LSB first)
+
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB = $88000000; // MSB first. Blue is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_B10_G10_R10_A2_SRGB = SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB;  // alias name in a gnm-friendly order (LSB first)
+
+ SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ = $88740000; // MSB first. Blue is at LSB
+ SCE_VIDEO_OUT_PIXEL_FORMAT_B10_G10_R10_A2_BT2020_PQ = SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ;  // alias name in a gnm-friendly order (LSB first)
+
+ //SceVideoOutFlipMode
+ SCE_VIDEO_OUT_FLIP_MODE_VSYNC         = 1; // on real video out vsync
+ SCE_VIDEO_OUT_FLIP_MODE_HSYNC         = 2; // ASAP (but not immediate)
+ SCE_VIDEO_OUT_FLIP_MODE_WINDOW        = 3; // similar to vsync but may flip on some windows at the top and the bottom of the display. N/A on Neo mode
+ SCE_VIDEO_OUT_FLIP_MODE_VSYNC_MULTI   = 4; // vsync mode but allows multiple flips per vsync. flipRate is not valid. N/A on Neo mode
+ SCE_VIDEO_OUT_FLIP_MODE_VSYNC_MULTI_2 = 5; // vsync mode but allows multiple flips per vsync. flipRate is valid
+ SCE_VIDEO_OUT_FLIP_MODE_WINDOW_2      = 6; // Window mode but the top margin is less accurate than _MODE_WINDOW. The bottom margin must be 0.
+
+ //SceVideoOutTilingMode
+ SCE_VIDEO_OUT_TILING_MODE_TILE   = 0; // 32bpp pixel format only if on Neo mode
+ SCE_VIDEO_OUT_TILING_MODE_LINEAR = 1; // 32bpp pixel format only
+
  EVENTID_FLIP     =$0006;
  EVENTID_VBLANK   =$0007;
  EVENTID_SETMODE  =$0051;

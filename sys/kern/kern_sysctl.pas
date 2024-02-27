@@ -66,6 +66,7 @@ const
 
  KERN_SMP     =$100; //(OID_AUTO) Kernel SMP
  KERN_SCHED   =$101; //(OID_AUTO) Scheduler
+ KERN_NEOMODE =$102; //(OID_AUTO) Neo mode
 
 //CTL_VM subtypes
  KERN_VM_PS4DEV=1;     //vm parameters for PS4 (DevKit only)
@@ -103,7 +104,12 @@ const
  HW_MAXID       =13; // number of valid hw ids
 
 //MACHDEP subtypes
- MACHDEP_TSC_FREQ=$100; //(OID_AUTO) Time Stamp Counter frequency
+ MACHDEP_TSC_FREQ  =$100; //(OID_AUTO) Time Stamp Counter frequency
+ MACHDEP_BOOTPARAMS=$101; //(OID_AUTO) orbis bootparams
+
+//BOOTPARAMS subtypes
+ BOOTPARAMS_IS_MAIN_ON_STANDBY=$100; //(OID_AUTO) Is main on standby mode
+ BOOTPARAMS_BASE_PS4_MODE     =$101; //(OID_AUTO) base ps4 mode
 
 //KERN_VM_PS4DEV subtypes
  KERN_VM_PS4DEV_TRCMEM_TOTAL=$100; //(OID_AUTO) trace memory total
@@ -547,11 +553,24 @@ begin
      oid[2]:=KERN_SCHED_CPUSETSIZE;
      len^  :=3;
     end;
+  'kern.neomode':
+    begin
+     oid[0]:=CTL_KERN;
+     oid[1]:=KERN_NEOMODE;
+     len^  :=2;
+    end;
   'machdep.tsc_freq':
     begin
      oid[0]:=CTL_MACHDEP;
      oid[1]:=MACHDEP_TSC_FREQ;
      len^  :=2;
+    end;
+  'machdep.bootparams.base_ps4_mode':
+    begin
+     oid[0]:=CTL_MACHDEP;
+     oid[1]:=MACHDEP_BOOTPARAMS;
+     oid[2]:=BOOTPARAMS_BASE_PS4_MODE;
+     len^  :=3;
     end;
   'vm.ps4dev.trcmem_total':
     begin
@@ -670,8 +689,6 @@ begin
 end;
 
 function sysctl_kern(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
-const
- system_sdk_version=$10010001;
 begin
  if (namelen=0) then Exit(ENOTDIR);
  Result:=ENOENT;
@@ -681,10 +698,11 @@ begin
 
   KERN_USRSTACK  :Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
   KERN_ARND      :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);
-  KERN_SDKVERSION:Result:=SYSCTL_HANDLE(noid,name,$80048006,system_sdk_version,@sysctl_handle_int);
+  KERN_SDKVERSION:Result:=SYSCTL_HANDLE(noid,name,$80048006,p_proc.p_system_sdk_version,@sysctl_handle_int);
 
   KERN_SMP       :Result:=sysctl_kern_smp  (name+1,namelen-1,noid,req);
   KERN_SCHED     :Result:=sysctl_kern_sched(name+1,namelen-1,noid,req);
+  KERN_NEOMODE   :Result:=SYSCTL_HANDLE(noid,name,$80040002,p_proc.p_neomode,@sysctl_handle_int);
   else
    begin
     print_backtrace_td(stderr);
@@ -777,13 +795,30 @@ begin
  end;
 end;
 
+function sysctl_bootparams(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+  BOOTPARAMS_BASE_PS4_MODE:Result:=SYSCTL_HANDLE(noid,name,$80040002,ord(p_proc.p_cpuid<>CPUID_NEO_MODE),@sysctl_handle_int);
+  else
+   begin
+    print_backtrace_td(stderr);
+    Writeln(StdErr,'Unhandled sysctl_bootparams:',name[0]);
+    Assert(False);
+   end;
+ end;
+end;
+
 function sysctl_machdep(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
  Result:=ENOENT;
 
  case name[0] of
-  MACHDEP_TSC_FREQ:Result:=SYSCTL_HANDLE(noid,name,$C0000009,@sysctl_machdep_tsc_freq);
+  MACHDEP_TSC_FREQ  :Result:=SYSCTL_HANDLE(noid,name,$C0000009,@sysctl_machdep_tsc_freq);
+  MACHDEP_BOOTPARAMS:Result:=sysctl_bootparams(name+1,namelen-1,noid,req);
 
   else
    begin

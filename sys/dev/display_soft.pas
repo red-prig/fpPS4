@@ -31,13 +31,8 @@ type
  TOnParent=Procedure(node:PQNode) of object;
  TQNode=object
   next_ :PQNode;
-  Parent:TOnParent;
-  u:record
-   Case Byte of
-    0:(submit:t_submit_flip;
-       tsc   :QWORD);
-    1:(attr  :t_register_buffer_attr;);
-  end;
+  submit:t_submit_flip;
+  tsc   :QWORD;
  end;
 
  TSubmitQueue=object
@@ -58,8 +53,17 @@ type
   FQueue:TSubmitQueue;
   FTerminate:Boolean;
 
+  flip_rate:Integer;
+  vblank_count:Integer;
+
+  flipPendingNum:Integer;
+
   m_attr:array[0.. 3] of t_attr;
   m_bufs:array[0..15] of t_buffer;
+
+  m_sbat:array[0.. 3] of t_attr;
+
+  dst_cache:Pointer;
 
   Ffps     :QWORD;
   Ftsc_prev:QWORD;
@@ -68,7 +72,7 @@ type
   Destructor Destroy; override;
   //function  GetFlipStatus          (status:p_flip_status):Integer; virtual;
   //function  GetResolutionStatus    (status:p_resolution_status):Integer; virtual;
-  //function  SetFlipRate            (rate:Integer):Integer; virtual;
+  function   SetFlipRate              (rate:Integer):Integer; override;
   function   RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; override;
   function   SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr):Integer; override;
   function   UnregisterBufferAttribute(attrid:Byte):Integer; override;
@@ -92,7 +96,8 @@ uses
  LCLIntf,
  }
  kern_proc,
- kern_thread;
+ kern_thread,
+ dev_dce;
 
 Procedure TSubmitQueue.Init;
 var
@@ -151,7 +156,15 @@ begin
   Ftd:=nil;
  end;
  RTLEventDestroy(FEvent);
+ FreeMem(dst_cache);
  inherited;
+end;
+
+function TDisplayHandleSoft.SetFlipRate(rate:Integer):Integer;
+begin
+ flip_rate:=rate;
+
+ Result:=0;
 end;
 
 function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
@@ -166,8 +179,10 @@ end;
 
 function TDisplayHandleSoft.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
 begin
- m_attr[attrid].init:=1;
- m_attr[attrid].attr:=attr^;
+ if (m_sbat[attrid].init<>0) then Exit(EBUSY);
+
+ m_sbat[attrid].attr:=attr^;
+ m_sbat[attrid].init:=1;
 
  Result:=0;
 end;
@@ -208,11 +223,123 @@ begin
  Result:=0;
 end;
 
-procedure SoftFlip(hWindow:THandle;buf:p_buffer;attr:p_attr);
+function getTiledElementByteOffset_32(PITCH,x,y:DWORD):QWORD;
+var
+ element_index:DWORD;
+ pipe,bank:QWORD;
+ total_offset:QWORD;
+begin
+ //getElementIndex [0..5]
+ element_index:=                 ( (x      ) and 1) shl 2;
+ element_index:=element_index or ( (x shr 1) and 1) shl 3;
+ element_index:=element_index or ( (y      ) and 1) shl 4;
+ element_index:=element_index or ( (x shr 2) and 1) shl 5;
+ element_index:=element_index or ( (y shr 1) and 1) shl 6;
+ element_index:=element_index or ( (y shr 2) and 1) shl 7;
+
+ //getPipeIndex [6..8]
+ pipe:=        ( ((x shr 3) xor (y shr 3) xor (x shr 4)) and 1) shl 8;
+ pipe:=pipe or ( ((x shr 4) xor (y shr 4))               and 1) shl 9;
+ pipe:=pipe or ( ((x shr 5) xor (y shr 5))               and 1) shl 10;
+
+ //getBankIndex [9..12]
+ bank:=        ( ((x shr 6) xor (y shr 6))                and 1) shl 11;
+ bank:=bank or ( ((x shr 7) xor (y shr 5)  xor (y shr 6)) and 1) shl 12;
+ bank:=bank or ( ((x shr 8) xor (y shr 4))                and 1) shl 13;
+ bank:=bank or ( ((x shr 9) xor (y shr 3))                and 1) shl 14;
+
+ total_offset:=((y shr 6)*PITCH + (x shr 7));
+
+ Result := element_index or pipe or bank or (total_offset shl 15)
+end;
+
+
+function getTiledElementByteOffset_32_NEO(PITCH,x,y:DWORD):QWORD;
+var
+ element_index:DWORD;
+ pipe,bank:QWORD;
+ total_offset:QWORD;
+begin
+ //getElementIndex [0..5]
+ element_index:=                 ( (x shr 0) and 1) shl 2;
+ element_index:=element_index or ( (x shr 1) and 1) shl 3;
+ element_index:=element_index or ( (y shr 0) and 1) shl 4;
+ element_index:=element_index or ( (x shr 2) and 1) shl 5;
+ element_index:=element_index or ( (y shr 1) and 1) shl 6;
+ element_index:=element_index or ( (y shr 2) and 1) shl 7;
+
+ //getPipeIndex  [6..9]
+ pipe:=        ( ((x shr 3) xor (y shr 3) xor (x shr 4)) and 1) shl 8;
+ pipe:=pipe or ( ((x shr 4) xor (y shr 4))               and 1) shl 9;
+ pipe:=pipe or ( ((x shr 5) xor (y shr 5))               and 1) shl 10;
+ pipe:=pipe or ( ((x shr 6) xor (y shr 5))               and 1) shl 11;
+
+ //getBankIndex [10..12]
+ bank:=        ( ((x shr 7) xor (y shr 6))                and 1) shl 12;
+ bank:=bank or ( ((x shr 8) xor (y shr 5)  xor (y shr 6)) and 1) shl 13;
+ bank:=bank or ( ((x shr 9) xor (y shr 4))                and 1) shl 14;
+
+ total_offset:=
+  ( (x shr 7)        shl 1)+
+  (((y shr 7)*PITCH) shl 1)+
+  ( (y shr 3)        and 1);
+
+ Result := element_index or pipe or bank or (total_offset shl 15);
+end;
+
+
+procedure detile32bppBuf_slow(attr:p_attr;src,dst:Pointer);
+var
+ x,y:Ptrint;
+ tiled_offset,linear_offset:Ptrint;
+
+ linear_pitch:Ptrint;
+
+ FNeoMode:Boolean;
+
+ PITCH:Ptrint;
+begin
+ linear_offset:=0;
+
+ FNeoMode:=p_proc.p_neomode<>0;
+
+ PITCH:=(attr^.attr.pitchPixel+127) div 128;
+
+ y:=0;
+ While (y<attr^.attr.height) do
+ begin
+  linear_pitch:=y*attr^.attr.width;
+
+  x:=0;
+  While (x<attr^.attr.width) do
+  begin
+   if FNeoMode then
+   begin
+    tiled_offset:=getTiledElementByteOffset_32_NEO(PITCH,x,y);
+   end else
+   begin
+    tiled_offset:=getTiledElementByteOffset_32(PITCH,x,y);
+   end;
+
+   linear_offset:=(x+linear_pitch)*4;
+   PDWORD(dst + linear_offset)^:=PDWORD(src+tiled_offset)^;
+
+   x:=x+1;
+  end;
+
+  y:=y+1;
+ end;
+
+end;
+
+procedure SoftFlip(hWindow:THandle;buf:p_buffer;attr:p_attr;p_dst:PPointer);
 var
  hdc:THandle;
  bi:BITMAPINFO;
  rect:TRect;
+
+ len:Ptrint;
+ dst:Pointer;
 begin
  hdc:=GetDC(hWindow);
 
@@ -228,6 +355,27 @@ begin
  bi.bmiHeader.biBitCount   :=32;
  bi.bmiHeader.biCompression:=BI_RGB;
 
+ if (attr^.attr.tilingMode<>0) then
+ begin
+  len:=attr^.attr.width*attr^.attr.height*4;
+
+  if (p_dst^=nil) then
+  begin
+   p_dst^:=AllocMem(len);
+  end else
+  if (MemSize(p_dst^)<len) then
+  begin
+   p_dst^:=ReAllocMem(p_dst^,len);
+  end;
+
+  dst:=p_dst^;
+
+  detile32bppBuf_slow(attr,buf^.left,dst);
+ end else
+ begin
+  dst:=buf^.left;
+ end;
+
  //SetStretchBltMode(hdc, HALFTONE);
 
  StretchDIBits(hdc,
@@ -236,7 +384,7 @@ begin
                0,0,
                attr^.attr.width,
                attr^.attr.height,
-               buf^.left,
+               dst,
                bi,
                DIB_RGB_COLORS,
                SRCCOPY
@@ -271,48 +419,85 @@ begin
  Node:=FQueue.Alloc;
  if (Node=nil) then Exit(EBUSY);
 
- Node^.Parent  :=@OnSubmit;
- Node^.u.submit:=submit^;
- Node^.u.tsc   :=rdtsc;
+ Node^.submit:=submit^;
+ Node^.tsc   :=rdtsc;
 
  FQueue.FQueue.Push(Node);
- //RTLEventSetEvent(FEvent);
+
+ if (submit^.bufferIndex<>-1) then
+ begin
+  dce_page^.labels[submit^.bufferIndex]:=1;
+ end;
 
  last_status.flipPendingNum0:=last_status.flipPendingNum0+1;
+
+ if (submit^.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+ begin
+  RTLEventSetEvent(FEvent);
+ end;
 
  Result:=0;
 end;
 
 function TDisplayHandleSoft.Vblank():Integer;
 begin
- RTLEventSetEvent(FEvent);
+ vblank_count:=vblank_count+1;
+
+ if (vblank_count>flip_rate) then
+ begin
+  vblank_count:=0;
+  RTLEventSetEvent(FEvent);
+ end;
+
  Result:=0;
 end;
 
 procedure TDisplayHandleSoft.OnSubmit(Node:PQNode);
 var
+ i:Integer;
  submit:p_submit_flip;
  buf :p_buffer;
  attr:p_attr;
 begin
- submit:=@Node^.u.submit;
+ //submit attr
+ For i:=0 to High(m_sbat) do
+ if (m_sbat[i].init<>0) then
+ begin
+  mtx_lock(mtx^);
 
- if (submit^.bufferIndex=-1) then Exit;
+   m_attr[i].init:=1;
+   m_attr[i].attr:=m_sbat[i].attr;
 
- buf:=@m_bufs[submit^.bufferIndex];
- if (buf^.init=0) then Exit;
- attr:=@m_attr[buf^.attr];
- if (attr^.init=0) then Exit;
+   m_sbat[i].init:=0;
 
- SoftFlip(hWindow,buf,attr);
+  mtx_unlock(mtx^);
+ end;
+
+ submit:=@Node^.submit;
+
+ if (submit^.bufferIndex<>-1) then
+ begin
+  buf:=@m_bufs[submit^.bufferIndex];
+  if (buf^.init=0) then Exit;
+  attr:=@m_attr[buf^.attr];
+  if (attr^.init=0) then Exit;
+
+  SoftFlip(hWindow,buf,attr,@dst_cache);
+ end;
 
  mtx_lock(mtx^);
+
+  if (submit^.bufferIndex<>-1) then
+  begin
+   dce_page^.labels[submit^.bufferIndex]:=0;
+  end;
+  dce_page^.label_:=0;
 
   last_status.flipPendingNum0:=last_status.flipPendingNum0-1;
   last_status.flipArg        :=submit^.flipArg;
   last_status.flipArg2       :=submit^.flipArg2;
   last_status.count          :=last_status.count+1;
-  last_status.submitTsc      :=Node^.u.tsc;
+  last_status.submitTsc      :=Node^.tsc;
   last_status.currentBuffer  :=submit^.bufferIndex;
   last_status.tsc            :=rdtsc;
   last_status.processTime    :=last_status.tsc;
@@ -351,10 +536,7 @@ begin
   Node:=nil;
   if dce.FQueue.FQueue.Pop(Node) then
   begin
-   if (Node^.Parent<>nil) then
-   begin
-    Node^.Parent(Node);
-   end;
+   dce.OnSubmit(Node);
    dce.FQueue.Free(Node);
   end;
 

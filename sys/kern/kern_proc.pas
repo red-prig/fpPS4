@@ -24,6 +24,10 @@ type
   ar_args  :AnsiChar; // Arguments.
  end;
 
+const
+ CPUID_BASE_MODE=$710f13;
+ CPUID_NEO_MODE =$740f00;
+
 var
  p_proc:record
   p_mtx:mtx;
@@ -66,6 +70,10 @@ var
   p_budget_ptype :Integer;
 
   p_dmem_aliasing:Integer;
+
+  p_system_sdk_version:Integer; //$10010001;
+  p_cpuid             :Integer; //base mode = 0x710f13 / neo mode = 0x740f00
+  p_neomode           :Integer; //[0..1]
 
   p_host_ipc:THostIpcConnect;
  end;
@@ -152,6 +160,10 @@ begin
  p_proc.p_randomized_path:='system';
 
  p_proc.p_ptc:=rdtsc;
+
+ p_proc.p_system_sdk_version:=$10010001;
+ p_proc.p_cpuid             :=CPUID_BASE_MODE;
+ p_proc.p_neomode           :=0;
 end;
 
 end.

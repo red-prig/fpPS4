@@ -125,6 +125,9 @@ begin
 
  PROC_INIT_HOST_IPC(kern_ipc);
 
+ //p_proc.p_cpuid  :=CPUID_NEO_MODE;
+ //p_proc.p_neomode:=1;
+
  dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
 
  Writeln(Item.FGameInfo.Exec);
