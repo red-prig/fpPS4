@@ -638,6 +638,9 @@ begin
   CloseMainWindows;
   //
   Pages.ActivePage:=TabList;
+ end else
+ begin
+  TBPauseClick(Sender);
  end;
 end;
 
