@@ -390,35 +390,34 @@ begin
   dynlibs_unlock;
 end;
 
-//48 8D 3D 00 00 00 00 lea rdi,[rip+$00000000]   lea (%rip),%rdi
-
 type
  p_jmpq64_trampoline=^t_jmpq64_trampoline;
  t_jmpq64_trampoline=packed record
-  lea    :array[0..6] of Byte; //48 8D 3D F9 FF FF FF
-  nop1   :Byte;  //90
+  lea     :array[0..2] of Byte; //48 8D 3D  lea -7(%rip),%rdi
+  offset1 :DWORD; //F9 FF FF FF
   //
-  and_rsp:DWORD; //48 83 E4 F0
+  push_rbp:Byte;  //55
+  and_rsp :DWORD; //48 83 E4 F0
   //
-  inst   :Word;  //FF 15
-  offset :DWORD; //02
-  ret    :Byte;  //C3
-  nop2   :Byte;  //90
-  addr   :QWORD;
-  nid    :QWORD;
-  libname:PChar;
+  inst    :Word;  //FF 15  call 2(%rip)
+  offset2 :DWORD; //02
+  ret     :Byte;  //C3
+  nop2    :Byte;  //90
+  addr    :QWORD;
+  nid     :QWORD;
+  libname :PChar;
  end;
 
 const
- c_jmpq64_trampoline:t_jmpq64_trampoline=(lea    :($48,$8D,$3D,$F9,$FF,$FF,$FF);
-                                          nop1   :$90;
-                                          and_rsp:($F0E48348);
-                                          inst   :$15FF;offset:$02;
-                                          ret    :$C3;
-                                          nop2   :$90;
-                                          addr   :0;
-                                          nid    :0;
-                                          libname:nil);
+ c_jmpq64_trampoline:t_jmpq64_trampoline=(lea     :($48,$8D,$3D);offset1:$FFFFFFF9;
+                                          push_rbp:$55;
+                                          and_rsp :($F0E48348);
+                                          inst    :$15FF;offset2:$02;
+                                          ret     :$C3;
+                                          nop2    :$90;
+                                          addr    :0;
+                                          nid     :0;
+                                          libname :nil);
 
 procedure _unresolve_symbol(data:p_jmpq64_trampoline);
 var
@@ -430,8 +429,7 @@ begin
   str:=EncodeValue64(data^.nid);
  end;
 
- Writeln(StdErr,'_unresolve_symbol:0x',HexStr(data^.nid,16),':',str,':',data^.libname);
- print_backtrace_td(StdErr);
+ print_error_td('_unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname);
  Assert(false);
 end;
 

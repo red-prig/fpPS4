@@ -777,8 +777,7 @@ begin
 
   else
    begin
-    Writeln('dce_flip_control(',data^.id,')');
-    print_backtrace_td(stderr);
+    print_error_td('dce_flip_control('+IntToStr(data^.id)+')');
     Assert(False);
     Result:=EINVAL;
    end;
@@ -1027,7 +1026,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
+    print_error_td('dce_ioctl(0x'+HexStr(cmd,8)+')');
     Assert(False);
     Result:=EINVAL;
    end;

@@ -91,7 +91,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
+    print_error_td('dmem_ioctl(0x'+HexStr(cmd,8)+')');
     Assert(False);
     Result:=EINVAL;
    end;

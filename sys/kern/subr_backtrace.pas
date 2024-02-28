@@ -11,12 +11,14 @@ uses
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
+procedure print_error_td(const str:shortstring);
 
 implementation
 
 uses
  vmparam,
  md_systm,
+ kern_proc,
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
@@ -322,6 +324,18 @@ begin
  if (td=nil) then Exit;
  //
  print_backtrace(stderr,Pointer(td^.td_frame.tf_rip),Pointer(td^.td_frame.tf_rbp),0);
+end;
+
+procedure thread_suspend_all(exclude:Pointer); external;
+
+procedure print_error_td(const str:shortstring);
+begin
+ thread_suspend_all(p_proc.p_host_ipc.Ftd);
+
+ Writeln(StdErr,str);
+ p_proc.p_host_ipc.error(str);
+
+ print_backtrace_td(StdErr);
 end;
 
 end.

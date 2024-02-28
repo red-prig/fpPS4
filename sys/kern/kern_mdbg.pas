@@ -10,6 +10,7 @@ function sys_mdbg_service(op:Integer;arg1,arg2:Pointer):Integer;
 implementation
 
 uses
+ sysutils,
  errno,
  systm,
  subr_backtrace;
@@ -60,21 +61,20 @@ begin
 
   3: //sceKernelDebugRaiseException
     begin
-     Writeln('sceKernelDebugRaiseException:',HexStr(DWORD(arg1),8));
-     print_backtrace_td(stderr);
+     print_error_td('sceKernelDebugRaiseException:0x'+HexStr(DWORD(arg1),8));
      Assert(False);
      Result:=EINVAL;
     end;
 
   4: //sceKernelDebugRaiseExceptionOnReleaseMode
     begin
-     Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:',HexStr(DWORD(arg1),8));
+     Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
      Result:=0;
     end;
 
   else
     begin
-     print_backtrace_td(stderr);
+     print_error_td('sys_mdbg_service('+IntToStr(op)+')');
      Assert(False);
      Result:=EINVAL;
     end;

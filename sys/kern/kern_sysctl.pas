@@ -165,6 +165,7 @@ procedure sysctl_register_all(); //SYSINIT(sysctl, SI_SUB_KMEM, SI_ORDER_ANY, sy
 implementation
 
 uses
+ sysutils,
  errno,
  systm,
  vmparam,
@@ -603,8 +604,7 @@ begin
 
 
   else
-   print_backtrace_td(stderr);
-   Writeln(StdErr,'Unhandled name2oid:',name);
+   print_error_td('Unhandled name2oid:'+name);
    Assert(False);
    Result:=ENOENT;
  end;
@@ -645,8 +645,7 @@ begin
   KERN_PROC_TEXT_SEGMENT:Result:=SYSCTL_HANDLE(noid,name,$80040001,@sysctl_kern_text_segment);
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_kern_proc:',name[0]);
+    print_error_td('Unhandled sysctl_kern_proc:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -664,8 +663,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_kern_smp:',name[0]);
+    print_error_td('Unhandled sysctl_kern_smp:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -681,8 +679,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_kern_sched:',name[0]);
+    print_error_td('Unhandled sysctl_kern_sched:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -705,8 +702,7 @@ begin
   KERN_NEOMODE   :Result:=SYSCTL_HANDLE(noid,name,$80040002,p_proc.p_neomode,@sysctl_handle_int);
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_kern:',name[0]);
+    print_error_td('Unhandled sysctl_kern:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -740,8 +736,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_vm:',name[0]);
+    print_error_td('Unhandled sysctl_vm:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -757,8 +752,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_sysctl:',name[0]);
+    print_error_td('Unhandled sysctl_sysctl:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -774,8 +768,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_hw:',name[0]);
+    print_error_td('Unhandled sysctl_hw:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -804,8 +797,7 @@ begin
   BOOTPARAMS_BASE_PS4_MODE:Result:=SYSCTL_HANDLE(noid,name,$80040002,ord(p_proc.p_cpuid<>CPUID_NEO_MODE),@sysctl_handle_int);
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_bootparams:',name[0]);
+    print_error_td('Unhandled sysctl_bootparams:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -822,8 +814,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_machdep:',name[0]);
+    print_error_td('Unhandled sysctl_machdep:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;
@@ -845,8 +836,7 @@ begin
   CTL_MACHDEP:Result:=sysctl_machdep(name+1,namelen-1,noid,req);
   else
    begin
-    print_backtrace_td(stderr);
-    Writeln(StdErr,'Unhandled sysctl_root:',name[0]);
+    print_error_td('Unhandled sysctl_root:'+IntToStr(name[0]));
     Assert(False);
    end;
  end;

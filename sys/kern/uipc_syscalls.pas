@@ -33,7 +33,7 @@ begin
             end;
   else
    begin
-    print_backtrace_td(stderr);
+    print_error_td('soo_ioctl(0x'+HexStr(com,8)+')');
     Assert(False);
    end;
  end;

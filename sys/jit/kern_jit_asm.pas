@@ -76,8 +76,7 @@ procedure jit_load_ctx; forward;
 
 procedure jit_sigsegv(addr:Pointer);
 begin
- print_backtrace_td(stderr);
- Writeln('jit_sigsegv:0x',HexStr(addr));
+ print_error_td('jit_sigsegv:0x'+HexStr(addr));
  Assert(False);
 end;
 
@@ -152,12 +151,15 @@ asm
  //tf_r14=tf_r14
  //tf_r15=tf_r15
 
+ //tf_r13
  movqq             jit_frame.tf_r13(%r13),%r14
  movqq %r14,kthread.td_frame.tf_r13(%r15)
 
+ //tf_rsp
  movqq             jit_frame.tf_rsp(%r13),%r14
  movqq %r14,kthread.td_frame.tf_rsp(%r15)
 
+ //tf_rbp
  movqq             jit_frame.tf_rbp(%r13),%r14
  movqq %r14,kthread.td_frame.tf_rbp(%r15)
 
@@ -195,12 +197,15 @@ asm
  //tf_r14=tf_r14
  //tf_r15=tf_r15
 
+ //tf_r13
  movqq kthread.td_frame.tf_r13(%r15),%r14
  movqq   %r14,jit_frame.tf_r13(%r13)
 
+ //tf_rsp
  movqq kthread.td_frame.tf_rsp(%r15),%r14
  movqq   %r14,jit_frame.tf_rsp(%r13)
 
+ //tf_rbp
  movqq kthread.td_frame.tf_rbp(%r15),%r14
  movqq   %r14,jit_frame.tf_rbp(%r13)
 
@@ -266,6 +271,22 @@ asm
  movqq %r11, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13)
  movqq %r12, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13)
 
+ //tf_r14=tf_r14
+ //tf_r15=tf_r15
+
+ //tf_r13
+ movqq jit_frame.tf_r13(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13)
+
+ //tf_rsp
+ movqq jit_frame.tf_rsp(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13)
+
+ //tf_rbp
+ movqq jit_frame.tf_rbp(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
+
+ //tf_rflags
  pushf
  pop   %rdi
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rflags(%r13);
@@ -332,6 +353,19 @@ asm
   vmovdqa 0x1E0(%rdi),%ymm15
  {$ENDIF}
 
+ //tf_r13
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13),%rdi
+ movqq  %rdi,jit_frame.tf_r13(%r13)
+
+ //tf_rsp
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13),%rdi
+ movqq %rdi,jit_frame.tf_rsp(%r13)
+
+ //tf_rbp
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13),%rdi
+ movqq %rdi,jit_frame.tf_rbp(%r13)
+
+ //tf_rflags
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rflags(%r13), %rdi
  push %rdi
  popf
@@ -347,6 +381,10 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r10(%r13), %r10
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13), %r11
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13), %r12
+ //tf_r14=tf_r14
+ //tf_r15=tf_r15
+
+ //tf_r13,tf_rsp,tf_rbp -> not moved
 end;
 
 procedure jit_plt_cache; assembler; nostackframe;

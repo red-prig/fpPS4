@@ -183,7 +183,7 @@ begin
 
   else
    begin
-    print_backtrace_td(stderr);
+    print_error_td('gc_ioctl(0x'+HexStr(cmd,8)+')');
     Assert(False);
     Result:=EINVAL;
    end;

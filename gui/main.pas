@@ -184,6 +184,7 @@ begin
   iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
   iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
   iCAPTION_FPS :Form.SetCaptionFPS(PQWORD(buf)^);
+  iERROR       :ShowMessage(PChar(buf));
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;

@@ -42,14 +42,13 @@ type
  end;
 
  THostIpcPipeMGUI=class(THostIpcPipe)
-  Ftd:TThreadID;
+  Ftd_handle:TThreadID;
   procedure   Recv_pipe;   override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
  end;
 
  THostIpcPipeKERN=class(THostIpcPipe)
-  Ftd:p_kthread;
   FHandler:THostIpcHandler;
   procedure   Recv_pipe;   override;
   procedure   thread_new;  override;
@@ -217,19 +216,19 @@ end;
 
 procedure THostIpcPipeMGUI.thread_new;
 begin
- if (Ftd=0) then
+ if (Ftd_handle=0) then
  begin
-  Ftd:=BeginThread(@pipe_gui_thread,@evpoll);
+  Ftd_handle:=BeginThread(@pipe_gui_thread,@evpoll);
  end;
 end;
 
 procedure THostIpcPipeMGUI.thread_free;
 begin
- if (Ftd<>0) then
+ if (Ftd_handle<>0) then
  begin
-  WaitForThreadTerminate(Ftd,0);
-  CloseThread(Ftd);
-  Ftd:=0;
+  WaitForThreadTerminate(Ftd_handle,0);
+  CloseThread(Ftd_handle);
+  Ftd_handle:=0;
  end;
 end;
 

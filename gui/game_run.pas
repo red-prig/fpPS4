@@ -61,11 +61,12 @@ uses
  ps4_libSceSystemService,
  ps4_libSceUserService,
  ps4_libSceIpmi,
+ ps4_libSceMbus,
  ps4_libSceDialogs,
- ps4_libSceAvSetting
+ ps4_libSceAvSetting,
  //internal libs
 
- ;
+ subr_backtrace;
 
 //
 
@@ -139,13 +140,22 @@ begin
 
                        //fs  guest     host
  err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,0);
- Assert(err=0);
+ if (err<>0) then
+ begin
+  print_error_td('error mount "'+Item.FMountList.app0+'" to "/app0" error='+IntToStr(err));
+ end;
 
  err:=vfs_mount_mkdir('ufs','/system',pchar(Item.FMountList.system),nil,0);
- Assert(err=0);
+ if (err<>0) then
+ begin
+  print_error_td('error mount "'+Item.FMountList.system+'" to "/system" error='+IntToStr(err));
+ end;
 
  err:=vfs_mount_mkdir('ufs','/data'  ,pchar(Item.FMountList.data  ),nil,0);
- Assert(err=0);
+ if (err<>0) then
+ begin
+  print_error_td('error mount "'+Item.FMountList.data+'" to "/data" error='+IntToStr(err));
+ end;
 
  ///argv
  FillChar(exec,SizeOf(exec),0);

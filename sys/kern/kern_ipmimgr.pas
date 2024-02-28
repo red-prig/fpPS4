@@ -10,6 +10,7 @@ function sys_ipmimgr_call(op,kid:Integer;res:PInteger;params:Pointer;paramsSize:
 implementation
 
 uses
+ sysutils,
  errno,
  systm,
  subr_backtrace,
@@ -255,7 +256,7 @@ begin
     begin
      Result:=0;
      dst:=-1;
-     print_backtrace_td(stderr);
+     print_error_td('sys_ipmimgr_call('+IntToStr(op)+')');
      Assert(False);
     end;
  end;

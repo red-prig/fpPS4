@@ -17,6 +17,7 @@ uses
 type
  t_mtype=(
   iRESULT,
+  iERROR,
   iKEV_CHANGE,
   iKEV_EVENT,
   iMOUNT,
@@ -69,7 +70,9 @@ type
    procedure   UpdateKevent();
    procedure   WakeupKevent(); virtual;
   public
+   Ftd:p_kthread;
    //
+   procedure   error(const s:RawByteString);
    procedure   kevent(kev:p_kevent;count:Integer);
    function    OpenMainWindows():THandle;
    procedure   SetCaptionFps(Ffps:QWORD);
@@ -95,7 +98,6 @@ type
  THostIpcSimpleKERN=class(THostIpcConnect)
   FDest:THostIpcSimpleMGUI;
   FEvent:PRTLEvent;
-  Ftd:p_kthread;
   FHandler:THostIpcHandler;
   FTerminate:Boolean;
   Constructor Create;
@@ -287,6 +289,11 @@ end;
 procedure THostIpcConnect.SyncResult(tid:DWORD;value:Ptruint);
 begin
  Send(iRESULT,SizeOf(Ptruint),tid,@value);
+end;
+
+procedure THostIpcConnect.error(const s:RawByteString);
+begin
+ SendAsyn(iERROR,Length(s)+1,pchar(s));
 end;
 
 procedure THostIpcConnect.kevent(kev:p_kevent;count:Integer);

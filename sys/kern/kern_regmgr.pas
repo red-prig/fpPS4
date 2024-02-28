@@ -160,8 +160,7 @@ begin
 
         else
          begin
-          Writeln(' enc:0x',HexStr(data.enc,16),'->key:0x',HexStr(skey,8));
-          print_backtrace_td(stderr);
+          print_error_td(' enc:0x'+HexStr(data.enc,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
@@ -199,8 +198,7 @@ begin
           end;
         else
          begin
-          Writeln(' enc:0x',HexStr(data.enc,16),'->key:0x',HexStr(skey,8));
-          print_backtrace_td(stderr);
+          print_error_td(' enc:0x'+HexStr(data.enc,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
@@ -218,8 +216,7 @@ begin
         goto _err;
        end;
 
-       Writeln('Unhandled regmgr op:0x',HexStr(op,4));
-       print_backtrace_td(stderr);
+       print_error_td('Unhandled regmgr op:0x'+HexStr(op,4));
        Assert(False);
       end;
  end;

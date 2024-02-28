@@ -140,7 +140,7 @@ begin
   md_halt(rv);
  end else
  begin
-  thread_suspend_all(nil);
+  thread_suspend_all(p_proc.p_host_ipc.Ftd);
   msleep_td(0);
  end;
 end;
