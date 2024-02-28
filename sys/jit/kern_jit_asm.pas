@@ -383,8 +383,6 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13), %r12
  //tf_r14=tf_r14
  //tf_r15=tf_r15
-
- //tf_r13,tf_rsp,tf_rbp -> not moved
 end;
 
 procedure jit_plt_cache; assembler; nostackframe;

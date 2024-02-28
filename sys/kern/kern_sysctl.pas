@@ -177,6 +177,7 @@ uses
  subr_dynlib,
  kern_authinfo,
  md_arc4random,
+ sys_bootparam,
  kern_proc,
  md_proc,
  kern_budget,
@@ -368,7 +369,7 @@ begin
  end;
 
  data:=Default(t_data_256);
- //arc4rand(@data,len,0); ASLR?
+ arc4rand(@data,len,0); //ASLR?
 
  Result:=SYSCTL_OUT(req,@data,len);
 end;
@@ -420,8 +421,8 @@ function _copy_libkernel_addr(req:p_sysctl_req):Integer;
 var
  addr_out:array[0..1] of Pointer;
 begin
- addr_out[0]:=p_proc.libkernel_start_addr;
- addr_out[1]:=p_proc.libkernel___end_addr;
+ addr_out[0]:=p_proc.p_libkernel_start_addr;
+ addr_out[1]:=p_proc.p_libkernel___end_addr;
 
  Result:=SYSCTL_OUT(req,@addr_out,SizeOf(addr_out));
 end;
@@ -695,11 +696,11 @@ begin
 
   KERN_USRSTACK  :Result:=SYSCTL_HANDLE(noid,name,$80008008,@sysctl_kern_usrstack);
   KERN_ARND      :Result:=SYSCTL_HANDLE(noid,name,$80048005,@sysctl_kern_arandom);
-  KERN_SDKVERSION:Result:=SYSCTL_HANDLE(noid,name,$80048006,p_proc.p_system_sdk_version,@sysctl_handle_int);
+  KERN_SDKVERSION:Result:=SYSCTL_HANDLE(noid,name,$80048006,p_system_sdk_version,@sysctl_handle_int);
 
   KERN_SMP       :Result:=sysctl_kern_smp  (name+1,namelen-1,noid,req);
   KERN_SCHED     :Result:=sysctl_kern_sched(name+1,namelen-1,noid,req);
-  KERN_NEOMODE   :Result:=SYSCTL_HANDLE(noid,name,$80040002,p_proc.p_neomode,@sysctl_handle_int);
+  KERN_NEOMODE   :Result:=SYSCTL_HANDLE(noid,name,$80040002,p_neomode,@sysctl_handle_int);
   else
    begin
     print_error_td('Unhandled sysctl_kern:'+IntToStr(name[0]));
@@ -794,7 +795,7 @@ begin
  Result:=ENOENT;
 
  case name[0] of
-  BOOTPARAMS_BASE_PS4_MODE:Result:=SYSCTL_HANDLE(noid,name,$80040002,ord(p_proc.p_cpuid<>CPUID_NEO_MODE),@sysctl_handle_int);
+  BOOTPARAMS_BASE_PS4_MODE:Result:=SYSCTL_HANDLE(noid,name,$80040002,p_base_ps4_mode,@sysctl_handle_int);
   else
    begin
     print_error_td('Unhandled sysctl_bootparams:'+IntToStr(name[0]));

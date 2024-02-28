@@ -95,7 +95,7 @@ uses
  LCLType,
  LCLIntf,
  }
- kern_proc,
+ sys_bootparam,
  kern_thread,
  dev_dce;
 
@@ -131,7 +131,7 @@ begin
 
  Writeln('OpenMainWindows->');
 
- hWindow:=p_proc.p_host_ipc.OpenMainWindows();
+ hWindow:=p_host_ipc.OpenMainWindows();
 
  Writeln('OpenMainWindows:',hWindow);
 
@@ -301,7 +301,7 @@ var
 
  PITCH:Ptrint;
 begin
- if (p_proc.p_neomode<>0) then
+ if (p_neomode<>0) then
  begin
   get_tile_offset:=@getTiledElementByteOffset_32_NEO;
  end else
@@ -377,7 +377,7 @@ var
 
  ptr:Pointer;
 begin
- if (p_proc.p_neomode<>0) then
+ if (p_neomode<>0) then
  begin
   get_tile_offset:=@getTiledElementByteOffset_32_NEO;
  end else
@@ -635,7 +635,7 @@ begin
   Inc(Ffps);
   if ((last_status.tsc-Ftsc_prev) div tsc_freq)>=1 then
   begin
-   p_proc.p_host_ipc.SetCaptionFPS(Ffps);
+   p_host_ipc.SetCaptionFPS(Ffps);
    Ffps:=0;
    Ftsc_prev:=last_status.tsc;
   end;

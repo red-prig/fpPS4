@@ -34,7 +34,7 @@ begin
   Result:=sys_thr_new(param,param_size);
  end else
  asm
-  movq  sys_thr_new,%rax
+  movq  $455,%rax
   call  fast_syscall
   jmp   cerror
  end;
@@ -47,7 +47,7 @@ begin
   Result:=sys_thr_create(ctx,id,flags);
  end else
  asm
-  movq  sys_thr_new,%rax
+  movq  $455,%rax
   call  fast_syscall
   jmp   cerror
  end;

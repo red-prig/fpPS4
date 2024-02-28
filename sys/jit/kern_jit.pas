@@ -25,6 +25,7 @@ uses
  vm_pmap_prot,
  vm_pmap,
  vm_map,
+ sys_bootparam,
  kern_proc,
  kern_jit_ops,
  kern_jit_ops_sse,
@@ -129,7 +130,7 @@ asm
 
  //if ((cpu_id & 0xffffff80) == 0x740f00) then sceKernelIsAuthenticNeo
 
- mov p_proc.p_cpuid,%eax //cpu_id
+ mov p_cpuid    ,%eax //cpu_id
 
  mov $0x178bfbff,%edx //cpu_feature
  mov $0x36d8220b,%ecx //cpu_feature2
@@ -1081,10 +1082,13 @@ begin
   ctx.max:=QWORD(ctx.max_forward_point);
  end;
 
- Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
- Writeln(' ctx.max       :0x',HexStr(ctx.max,16));
- Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
- Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
+ if (p_print_jit_preload<>0) then
+ begin
+  Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
+  Writeln(' ctx.max       :0x',HexStr(ctx.max,16));
+  Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
+  Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
+ end;
 
  if System.InterlockedExchange(_print_stat,1)=0 then
  begin

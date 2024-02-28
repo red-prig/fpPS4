@@ -24,7 +24,7 @@ uses
   game_edit,
   game_run,
 
-  host_ipc;
+  host_ipc_interface;
 
 type
   TMainButtonsState=(mbsStopped,
@@ -177,6 +177,25 @@ type
   function OnKevent(kev:p_kevent;count:Integer):Ptruint;
  end;
 
+function MessageDlgEx(const AMsg:RawByteString;
+                      ADlgType:TMsgDlgType;
+                      AButtons:TMsgDlgButtons;
+                      AParent:TForm):TModalResult;
+var
+ MsgFrm:TForm;
+begin
+ MsgFrm:=CreateMessageDialog(AMsg, ADlgType, AButtons);
+ try
+  MsgFrm.Position :=poDefaultSizeOnly;
+  MsgFrm.FormStyle:=fsSystemStayOnTop;
+  MsgFrm.Left:= AParent.Left + (AParent.Width  - MsgFrm.Width ) div 2;
+  MsgFrm.Top := AParent.Top  + (AParent.Height - MsgFrm.Height) div 2;
+  Result:=MsgFrm.ShowModal;
+ finally
+  MsgFrm.Free
+ end;
+end;
+
 function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
 begin
  Result:=0;
@@ -184,7 +203,7 @@ begin
   iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
   iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
   iCAPTION_FPS :Form.SetCaptionFPS(PQWORD(buf)^);
-  iERROR       :ShowMessage(PChar(buf));
+  iERROR       :MessageDlgEx(PChar(buf),mtError,[mbOK],Form);
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;
@@ -204,7 +223,8 @@ begin
      begin
       if ((kev[i].fflags and NOTE_EXIT)<>0) then
       begin
-       ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
+       //ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
+       ShowMessage('The process reported exit!');
       end;
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin

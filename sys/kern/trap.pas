@@ -120,6 +120,7 @@ uses
  md_thread,
  signal,
  kern_proc,
+ sys_bootparam,
  subr_backtrace;
 
 //
@@ -211,6 +212,47 @@ var
   Byte(ptruint(@p_trapframe(nil)^.tf_r9 ) div SizeOf(QWORD))
  );
 
+procedure thread_suspend_all(exclude:Pointer); external;
+
+procedure print_syscall_args(td_frame:p_trapframe);
+var
+ i,count:Integer;
+begin
+ count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
+ if (count<>0) then
+ begin
+  For i:=0 to count-1 do
+  begin
+   Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+  end;
+ end;
+end;
+
+procedure print_error_syscall(td_frame:p_trapframe);
+var
+ count:integer;
+ str:shortstring;
+begin
+ thread_suspend_all(p_host_ipc.Ftd);
+
+ count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
+ Assert(count<=6);
+
+ str:='Unhandled syscall:0x'+
+       IntToSTr(td_frame^.tf_rax)+':'+
+       p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name;
+
+ Writeln(StdErr,str);
+
+ print_syscall_args(td_frame);
+
+ print_backtrace_td(StdErr);
+
+ p_host_ipc.error(str);
+
+ Assert(false,p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name)
+end;
+
 procedure amd64_syscall;
 var
  td:p_kthread;
@@ -218,10 +260,9 @@ var
  scall:tsyscall;
  rip:QWORD;
  error:Integer;
- i,count:Integer;
  is_guest:Boolean;
 begin
- //Call directly to the address or make an ID table?
+ //Call by ID table
 
  td:=curkthread;
  td_frame:=@td^.td_frame;
@@ -238,41 +279,8 @@ begin
   scall:=tsyscall(p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_call);
   if (scall=nil) then
   begin
-   Writeln('Unhandled syscall:',td_frame^.tf_rax,':',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
-
-   count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
-   Assert(count<=6);
-
-   if (count<>0) then
-   For i:=0 to count-1 do
-   begin
-    Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
-   end;
-
-   print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
-
-   Assert(false,p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
+   print_error_syscall(td_frame);
   end;
- end else
- if (td_frame^.tf_rax<=$1000) then
- begin
-  Writeln('Unhandled syscall:',td_frame^.tf_rax);
-
-  count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
-  Assert(count<=6);
-
-  if (count<>0) then
-  For i:=0 to count-1 do
-  begin
-   Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
-  end;
-
-  print_backtrace(StdErr,Pointer(td_frame^.tf_rip),Pointer(td_frame^.tf_rbp),0);
-
-  Assert(false,IntToStr(td_frame^.tf_rax));
- end else
- begin
-  scall:=tsyscall(td_frame^.tf_rax);
  end;
 
  if (scall=nil) then
@@ -280,22 +288,15 @@ begin
   error:=ENOSYS;
  end else
  begin
-  if (td_frame^.tf_rax<p_proc.p_sysent^.sv_size) then
-  if is_guest_addr(td_frame^.tf_rip) then
-  begin
-   is_guest:=True;
-   Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
+  if (p_print_guest_syscall<>0) then
+   if (td_frame^.tf_rax<p_proc.p_sysent^.sv_size) then
+    if is_guest_addr(td_frame^.tf_rip) then
+    begin
+     is_guest:=True;
+     Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
 
-   count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
-   Assert(count<=6);
-
-   if (count<>0) then
-   For i:=0 to count-1 do
-   begin
-    Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
-   end;
-
-  end;
+     print_syscall_args(td_frame);
+    end;
 
   error:=scall(td_frame^.tf_rdi,
                td_frame^.tf_rsi,

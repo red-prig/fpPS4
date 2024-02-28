@@ -9,22 +9,13 @@ uses
  time,
  mqueue,
  LFQueue,
+ host_ipc_interface,
  kern_thr,
  kern_thread,
  sys_event,
  kern_mtx;
 
 type
- t_mtype=(
-  iRESULT,
-  iERROR,
-  iKEV_CHANGE,
-  iKEV_EVENT,
-  iMOUNT,
-  iMAIN_WINDOWS,
-  iCAPTION_FPS
- );
-
  PNodeHeader=^TNodeHeader;
  TNodeHeader=packed record
   mtype:DWORD;
@@ -48,11 +39,10 @@ type
   tid   :DWORD;
  end;
 
- THostIpcHandler=class
-  function OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; virtual;
- end;
+ t_mtype        =host_ipc_interface.t_mtype;
+ THostIpcHandler=host_ipc_interface.THostIpcHandler;
 
- THostIpcConnect=class
+ THostIpcConnect=class(THostIpcInterface)
   protected
    FQueue:TIntrusiveMPSCQueue;
    FWaits:LIST_HEAD;
@@ -70,20 +60,14 @@ type
    procedure   UpdateKevent();
    procedure   WakeupKevent(); virtual;
   public
-   Ftd:p_kthread;
    //
-   procedure   error(const s:RawByteString);
-   procedure   kevent(kev:p_kevent;count:Integer);
-   function    OpenMainWindows():THandle;
-   procedure   SetCaptionFps(Ffps:QWORD);
-   //
-   function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
-   procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);
-   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); virtual;
-   procedure   Update(Handler:THostIpcHandler); virtual;
+   function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; override;
+   procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);         override;
+   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);        virtual;
+   procedure   Update  (Handler:THostIpcHandler);                      override;
    //
    Constructor Create;
-   Destructor  Destroy; override;
+   Destructor  Destroy;     override;
    procedure   thread_new;  virtual;
    procedure   thread_free; virtual;
  end;
@@ -109,11 +93,6 @@ type
  end;
 
 implementation
-
-function THostIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
-begin
- Result:=0;
-end;
 
 Constructor THostIpcConnect.Create;
 begin
@@ -291,26 +270,6 @@ begin
  Send(iRESULT,SizeOf(Ptruint),tid,@value);
 end;
 
-procedure THostIpcConnect.error(const s:RawByteString);
-begin
- SendAsyn(iERROR,Length(s)+1,pchar(s));
-end;
-
-procedure THostIpcConnect.kevent(kev:p_kevent;count:Integer);
-begin
- SendAsyn(iKEV_CHANGE,count*SizeOf(t_kevent),kev);
-end;
-
-function THostIpcConnect.OpenMainWindows():THandle;
-begin
- Result:=THandle(SendSync(iMAIN_WINDOWS,0,nil));
-end;
-
-procedure THostIpcConnect.SetCaptionFps(Ffps:QWORD);
-begin
- SendAsyn(iCAPTION_FPS,SizeOf(Ffps),@Ffps);
-end;
-
 //
 
 function THostIpcConnect.NewNodeSync:PNodeIpcSync;
@@ -444,7 +403,7 @@ begin
  begin
   FTerminate:=True;
   RTLEventSetEvent(FEvent);
-  WaitForThreadTerminate(Ftd^.td_handle,0);
+  WaitForThreadTerminate(p_kthread(Ftd)^.td_handle,0);
   thread_dec_ref(Ftd);
   Ftd:=nil;
  end;

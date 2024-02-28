@@ -10,8 +10,7 @@ uses
  kern_mtx,
  sysent,
  sys_event,
- signalvar,
- host_ipc;
+ signalvar;
 
 type
  {
@@ -23,10 +22,6 @@ type
   ar_length:Integer;  // Length.
   ar_args  :AnsiChar; // Arguments.
  end;
-
-const
- CPUID_BASE_MODE=$710f13;
- CPUID_NEO_MODE =$740f00;
 
 var
  p_proc:record
@@ -42,8 +37,8 @@ var
 
   p_sysent:p_sysentvec;
 
-  libkernel_start_addr:Pointer;
-  libkernel___end_addr:Pointer;
+  p_libkernel_start_addr:Pointer;
+  p_libkernel___end_addr:Pointer;
 
   p_ptc:Int64;
 
@@ -52,7 +47,7 @@ var
   p_nivcsw  :Int64;
 
   p_comm           :array[0..MAXCOMLEN] of AnsiChar;
-  prog_name        :array[0..1023] of AnsiChar;
+  p_prog_name      :array[0..1023] of AnsiChar;
   p_randomized_path:array[0..7] of AnsiChar;
 
   p_sigqueue       :sigqueue_t; //Sigs not delivered to a td.
@@ -70,12 +65,6 @@ var
   p_budget_ptype :Integer;
 
   p_dmem_aliasing:Integer;
-
-  p_system_sdk_version:Integer; //$10010001;
-  p_cpuid             :Integer; //base mode = 0x710f13 / neo mode = 0x740f00
-  p_neomode           :Integer; //[0..1]
-
-  p_host_ipc:THostIpcConnect;
  end;
 
 function  pargs_alloc(len:Integer):p_pargs;
@@ -85,8 +74,6 @@ procedure pargs_drop(pa:p_pargs);
 
 procedure PROC_LOCK;
 procedure PROC_UNLOCK;
-
-procedure PROC_INIT_HOST_IPC(host_ipc:THostIpcConnect);
 
 procedure PROC_INIT; //SYSINIT
 
@@ -137,11 +124,6 @@ begin
  mtx_unlock(p_proc.p_mtx);
 end;
 
-procedure PROC_INIT_HOST_IPC(host_ipc:THostIpcConnect);
-begin
- p_proc.p_host_ipc:=host_ipc;
-end;
-
 procedure PROC_INIT;
 const
  osreldate=$000DBBA0;
@@ -160,10 +142,6 @@ begin
  p_proc.p_randomized_path:='system';
 
  p_proc.p_ptc:=rdtsc;
-
- p_proc.p_system_sdk_version:=$10010001;
- p_proc.p_cpuid             :=CPUID_BASE_MODE;
- p_proc.p_neomode           :=0;
 end;
 
 end.

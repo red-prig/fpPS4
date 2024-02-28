@@ -18,7 +18,7 @@ implementation
 uses
  vmparam,
  md_systm,
- kern_proc,
+ sys_bootparam,
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
@@ -330,10 +330,10 @@ procedure thread_suspend_all(exclude:Pointer); external;
 
 procedure print_error_td(const str:shortstring);
 begin
- thread_suspend_all(p_proc.p_host_ipc.Ftd);
+ thread_suspend_all(p_host_ipc.Ftd);
 
  Writeln(StdErr,str);
- p_proc.p_host_ipc.error(str);
+ p_host_ipc.error(str);
 
  print_backtrace_td(StdErr);
 end;

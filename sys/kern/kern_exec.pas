@@ -755,7 +755,7 @@ begin
 
  imgp^.auxargs:=auxargs;
 
- MoveChar0(imgp^.execpath^,p_proc.prog_name,1024);
+ MoveChar0(imgp^.execpath^,p_proc.p_prog_name,1024);
 
  if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
  begin
@@ -1008,8 +1008,8 @@ begin
 
  imgp^.entry_addr:=dynlibs_info.libkernel^.entry_addr;
 
- p_proc.libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
- p_proc.libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
+ p_proc.p_libkernel_start_addr:=dynlibs_info.libkernel^.map_base;
+ p_proc.p_libkernel___end_addr:=dynlibs_info.libkernel^.map_base + dynlibs_info.libkernel^.text_size;
 
  _dyn_not_exist:
 

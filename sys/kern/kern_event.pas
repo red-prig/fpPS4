@@ -1108,7 +1108,7 @@ begin
   end;
  end;
 
- Writeln('kern_kevent:',kq^.kq_name);
+ //Writeln('kern_kevent:',kq^.kq_name);
 
  error:=_kern_kevent(td,
                      kq,

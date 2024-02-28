@@ -13,7 +13,7 @@ uses
   machdep,
   md_context,
   md_proc,
-  kern_proc,
+  sys_bootparam,
   kern_exit,
   kern_thr,
   subr_backtrace,
@@ -330,7 +330,7 @@ end;
 Procedure _Assert(Const Msg,FName:Shortstring;LineNo:Longint;ErrorAddr:Pointer);
 begin
  Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
- p_proc.p_host_ipc.error(_get_msg(Msg)+' ('+FName+', line '+IntToStr(LineNo)+').');
+ p_host_ipc.error(_get_msg(Msg)+' ('+FName+', line '+IntToStr(LineNo)+').');
 
  print_backtrace(stderr,Get_pc_addr,get_frame,2);
 

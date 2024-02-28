@@ -87,7 +87,8 @@ procedure pmap_remove(pmap  :pmap_t;
 implementation
 
 uses
- ntapi;
+ ntapi,
+ sys_bootparam;
 
 function atop(x:QWORD):DWORD; inline;
 begin
@@ -488,7 +489,10 @@ var
 
  r:Integer;
 begin
- Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+ if (p_print_pmap<>0) then
+ begin
+  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+ end;
 
  r:=0;
  case vm_object_type(obj) of
@@ -541,7 +545,10 @@ begin
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      if (p_print_pmap<>0) then
+      begin
+       Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      end;
 
       info.start:=start;
       info.__end:=__end;
@@ -574,7 +581,10 @@ begin
 
      end else
      begin
-      Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      if (p_print_pmap<>0) then
+      begin
+       Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      end;
 
       info.start:=start;
       info.__end:=__end;
@@ -651,7 +661,10 @@ begin
 
      if ((prot and VM_PROT_COPY)<>0) then
      begin
-      Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      if (p_print_pmap<>0) then
+      begin
+       Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      end;
 
       cow:=vm_nt_file_obj_allocate(md,VM_PROT_READ);
 
@@ -743,64 +756,6 @@ begin
  pmap_mark(start,__end,prot and VM_RWX);
 end;
 
-{
-procedure pmap_move(pmap    :pmap_t;
-                    start   :vm_offset_t;
-                    ofs_old :vm_offset_t;
-                    ofs_new :vm_offset_t;
-                    size    :vm_offset_t;
-                    new_prot:vm_prot_t);
-var
- r:Integer;
-begin
- //pmap_mark_flags(start,start+size,PAGE_BUSY_FLAG);
-
- //set old to readonly
- r:=md_protect(Pointer(ofs_old),size,MD_PROT_R);
-
- if (r<>0) then
- begin
-  Writeln('failed md_protect:0x',HexStr(r,8));
-  Assert(false,'pmap_move');
- end;
-
- //alloc new
- r:=md_enter(Pointer(ofs_new),size,MD_PROT_RW);
-
- if (r<>0) then
- begin
-  Writeln('failed md_enter:0x',HexStr(r,8));
-  Assert(false,'pmap_move');
- end;
-
- //move data
- Move(Pointer(ofs_old)^,Pointer(ofs_new)^,size);
-
- //prot new
- if (MD_PROT_RW<>wprots[new_prot and VM_RWX]) then
- begin
-  r:=md_protect(Pointer(ofs_new),size,wprots[new_prot and VM_RWX]);
-
-  if (r<>0) then
-  begin
-   Writeln('failed md_protect:0x',HexStr(r,8));
-   Assert(false,'pmap_move');
-  end;
- end;
-
- pmap_mark(start,start+size,ofs_new,new_prot);
-
- //free old
- r:=md_remove(Pointer(ofs_old),size);
-
- if (r<>0) then
- begin
-  Writeln('failed md_remove:0x',HexStr(r,8));
-  Assert(false,'pmap_move');
- end;
-end;
-}
-
 procedure pmap_protect(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -809,7 +764,10 @@ procedure pmap_protect(pmap  :pmap_t;
 label
  _default;
 begin
- Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
+ if (p_print_pmap<>0) then
+ begin
+  Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
+ end;
 
  case vm_object_type(obj) of
   OBJT_SELF  , // same?
@@ -831,12 +789,15 @@ begin
       goto _default;
      end;
 
-     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     if (p_print_pmap<>0) then
      begin
-      Writeln('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
-     end else
-     begin
-      Writeln('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+      begin
+       Writeln('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      end else
+      begin
+       Writeln('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+      end;
      end;
 
      goto _default;
@@ -867,7 +828,10 @@ var
  size:QWORD;
  r:Integer;
 begin
- Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
+ if (p_print_pmap<>0) then
+ begin
+  Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
+ end;
 
  r:=0;
  case vm_object_type(obj) of
@@ -921,7 +885,10 @@ label
 var
  r:Integer;
 begin
- Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
+ if (p_print_pmap<>0) then
+ begin
+  Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
+ end;
 
  pmap_unmark(start,__end);
 
@@ -945,12 +912,15 @@ begin
       goto _default;
      end;
 
-     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     if (p_print_pmap<>0) then
      begin
-      Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
-     end else
-     begin
-      Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
+      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+      begin
+       Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
+      end else
+      begin
+       Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
+      end;
      end;
 
      goto _default;

@@ -253,7 +253,7 @@ procedure THostIpcPipeKERN.thread_free;
 begin
  if (Ftd<>nil) then
  begin
-  WaitForThreadTerminate(Ftd^.td_handle,0);
+  WaitForThreadTerminate(p_kthread(Ftd)^.td_handle,0);
   thread_dec_ref(Ftd);
   Ftd:=nil;
  end;

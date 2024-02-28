@@ -429,7 +429,7 @@ begin
   str:=EncodeValue64(data^.nid);
  end;
 
- print_error_td('_unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname);
+ print_error_td('unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname);
  Assert(false);
 end;
 

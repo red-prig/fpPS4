@@ -149,6 +149,7 @@ implementation
 uses
  sysutils,
  vmparam,
+ sys_bootparam,
  vm_pmap_prot,
  vm_pmap,
  md_map;
@@ -200,7 +201,10 @@ var
  node:p_jit_entry_point;
  ctx:t_jit_context2;
 begin
- Writeln('unk addr:0x',HexStr(addr));
+ if (p_print_jit_preload<>0) then
+ begin
+  Writeln('unk addr:0x',HexStr(addr));
+ end;
 
  node:=preload_entry(addr);
 
@@ -621,7 +625,10 @@ begin
 
  blob^.init_plt;
 
- Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
+ if (p_print_jit_preload<>0) then
+ begin
+  Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
+ end;
 
  //F:=FileCreate('recompile.bin');
  //FileWrite(F,blob^.base^,ctx.builder.GetMemSize);

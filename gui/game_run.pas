@@ -8,6 +8,7 @@ uses
  windows,
  Classes,
  SysUtils,
+ Dialogs,
  kern_thr,
  md_sleep,
  md_pipe,
@@ -29,9 +30,6 @@ type
   procedure  resume;  override;
   Destructor Destroy; override;
  end;
-
-var
- kern_ipc:THostIpcConnect=nil;
 
 function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
 
@@ -66,6 +64,8 @@ uses
  ps4_libSceAvSetting,
  //internal libs
 
+ kern_authinfo,
+ sys_bootparam,
  subr_backtrace;
 
 //
@@ -122,14 +122,19 @@ begin
  //init all
  sys_init;
 
- kern_ipc.thread_new;
+ if (p_host_ipc<>nil) then
+ begin
+  THostIpcConnect(p_host_ipc).thread_new;
+ end;
 
- PROC_INIT_HOST_IPC(kern_ipc);
-
- //p_proc.p_cpuid  :=CPUID_NEO_MODE;
- //p_proc.p_neomode:=1;
+ //p_cpuid        :=CPUID_NEO_MODE;
+ //p_base_ps4_mode:=0;
+ //p_neomode      :=1;
 
  dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
+
+ g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
+ //g_appinfo.debug_level:=1;
 
  Writeln(Item.FGameInfo.Exec);
  Writeln(Item.FMountList.app0);
@@ -142,19 +147,19 @@ begin
  err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,0);
  if (err<>0) then
  begin
-  print_error_td('error mount "'+Item.FMountList.app0+'" to "/app0" error='+IntToStr(err));
+  print_error_td('error mount "'+Item.FMountList.app0+'" to "/app0" code='+IntToStr(err));
  end;
 
  err:=vfs_mount_mkdir('ufs','/system',pchar(Item.FMountList.system),nil,0);
  if (err<>0) then
  begin
-  print_error_td('error mount "'+Item.FMountList.system+'" to "/system" error='+IntToStr(err));
+  print_error_td('error mount "'+Item.FMountList.system+'" to "/system" code='+IntToStr(err));
  end;
 
  err:=vfs_mount_mkdir('ufs','/data'  ,pchar(Item.FMountList.data  ),nil,0);
  if (err<>0) then
  begin
-  print_error_td('error mount "'+Item.FMountList.data+'" to "/data" error='+IntToStr(err));
+  print_error_td('error mount "'+Item.FMountList.data+'" to "/data" code='+IntToStr(err));
  end;
 
  ///argv
@@ -174,7 +179,10 @@ begin
  td^.td_pflags:=td^.td_pflags and (not TDP_KTHREAD);
 
  err:=main_execve(argv[0],@argv[0],nil);
- Assert(err=0);
+ if (err<>0) then
+ begin
+  print_error_td('error execve "'+Item.FGameInfo.Exec+'" code='+IntToStr(err));
+ end;
  //
 
 end;
@@ -230,7 +238,7 @@ begin
  kipc:=THostIpcPipeKERN.Create;
  kipc.set_pipe(pipefd);
 
- kern_ipc:=THostIpcConnect(kipc);
+ p_host_ipc:=kipc;
 
  td:=nil;
  r:=kthread_add(@prepare,Item,@td,'[main]');
@@ -314,7 +322,7 @@ begin
 
    g_ipc:=s_mgui_ipc;
 
-   kern_ipc:=s_kern_ipc;
+   p_host_ipc:=s_kern_ipc;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,Item,@Ftd,'[main]');
@@ -322,6 +330,13 @@ begin
    fork_info.fork_pid:=GetProcessID;
   end;
 
+ end;
+
+ if (r<>0) then
+ begin
+  ShowMessage('error run process code='+IntToStr(r));
+  FreeAndNil(Result);
+  Exit;
  end;
 
  Result.g_proc :=fork_info.hProcess;
