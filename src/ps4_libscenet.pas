@@ -16,6 +16,7 @@ const
 
  SCE_NET_EINVAL      =22;
  SCE_NET_ENOSPC      =28;
+ SCE_NET_EWOULDBLOCK =35;
  SCE_NET_EAFNOSUPPORT=47;
 
  SCE_NET_EHOSTUNREACH=65;
@@ -305,6 +306,7 @@ function ps4_sceNetAccept(s:Integer;
                           addr:pSceNetSockaddr;
                           paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
+ sleep(200);
  Result:=0;
  if (addr<>nil) then
  begin
@@ -314,6 +316,7 @@ begin
  begin
   paddrlen^:=SizeOf(SceNetSockaddr);
  end;
+ Result:=_set_net_errno(SCE_NET_EWOULDBLOCK)
 end;
 
 function ps4_sceNetRecv(s:Integer;

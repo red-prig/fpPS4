@@ -5,10 +5,11 @@ unit ps4_scesocket;
 interface
 
 uses
-  ps4_libSceNet,
-  ps4_program,
-  Classes,
-  SysUtils;
+ sys_kernel,
+ ps4_libSceNet,
+ ps4_program,
+ Classes,
+ SysUtils;
 
 type
  pSceNetId=^SceNetId;
@@ -114,7 +115,17 @@ function ps4_accept(s:SceNetId;
                     addr:pSceNetSockaddr;
                     paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
+ sleep(200);
  Result:=0;
+ if (addr<>nil) then
+ begin
+  addr^:=default_addr;
+ end;
+ if (paddrlen<>nil) then
+ begin
+  paddrlen^:=SizeOf(SceNetSockaddr);
+ end;
+ Result:=_set_errno(EAGAIN);
 end;
 
 function ps4_sendto(s:SceNetId;
