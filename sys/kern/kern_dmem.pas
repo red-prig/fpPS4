@@ -680,8 +680,8 @@ begin
    Break;
   end;
 
-  if (p_proc.libkernel_start_addr >  rip) or
-     (p_proc.libkernel___end_addr <= rip) then
+  if (p_proc.p_libkernel_start_addr >  rip) or
+     (p_proc.p_libkernel___end_addr <= rip) then
   begin
    if ((Int64(rip) - Int64($7f0000000)) < Int64($800000000)) then //ET_DYN_LOAD_ADDR_SYS
    begin
