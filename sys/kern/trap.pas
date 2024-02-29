@@ -99,8 +99,8 @@ procedure amd64_syscall;
 
 procedure jit_prepare(rip:QWORD);
 
-procedure sigcode;
-procedure sigipi;
+procedure host_sigcode;
+procedure host_sigipi;
 
 function  IS_TRAP_FUNC(rip:qword):Boolean;
 
@@ -117,7 +117,6 @@ uses
  vm_fault,
  machdep,
  md_context,
- md_thread,
  signal,
  kern_proc,
  sys_bootparam,
@@ -489,17 +488,29 @@ asm
   hlt
 end;
 
-procedure sigcode; assembler; nostackframe;
+procedure host_sigcode; assembler; nostackframe; public;
 asm
  call  sigframe.sf_ahu(%rsp)
  lea   sigframe.sf_uc (%rsp),%rdi
  pushq $0
- movqq sys_sigreturn,%rax
+ movqq $417,%rax    //sys_sigreturn
  call  fast_syscall
  hlt
 end;
 
-procedure sigipi; assembler; nostackframe; public;
+var
+ guest_sigcode:array[0..21] of Byte=(
+  $ff,$14,$24,                 //CALL    qword ptr [RSP]
+  $48,$8d,$7c,$24,$40,         //LEA     RDI,[RSP + 0x40]
+  $6a,$00,                     //PUSH    0x0
+  $48,$c7,$c0,$a1,$01,$00,$00, //MOV     RAX,417
+  $0f,$05,                     //SYSCALL
+  $f4,                         //HLT
+  $eb,$fd                      //JMP     -3
+ ); public;
+ guest_szsigcode:Integer=Length(guest_sigcode); public;
+
+procedure host_sigipi; assembler; nostackframe; public;
 label
  _ast,
  _ast_exit;

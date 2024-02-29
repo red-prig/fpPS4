@@ -53,7 +53,7 @@ uses
  errno,
  systm,
  kern_psl,
- trap,
+ vm_map,
  md_context;
 
 //clearing memory without AVX optimizations
@@ -388,6 +388,8 @@ begin
  Result:=0;
 end;
 
+procedure host_sigcode; external;
+
 procedure sendsig(catcher:sig_t;ksi:p_ksiginfo;mask:p_sigset_t);
 var
  td:p_kthread;
@@ -501,7 +503,15 @@ begin
  end;
 
  regs^.tf_rsp:=QWORD(sfp);
- regs^.tf_rip:=QWORD(@sigcode);
+
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
+ begin
+  regs^.tf_rip:=QWORD(@host_sigcode);
+ end else
+ begin
+  regs^.tf_rip:=QWORD(p_vmspace(p_proc.p_vmspace)^.sv_usrstack);
+ end;
+
  regs^.tf_rflags:=regs^.tf_rflags and (not (PSL_T or PSL_D));
 
  set_pcb_flags(td,PCB_FULL_IRET);

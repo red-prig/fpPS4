@@ -622,7 +622,7 @@ begin
  NtContinue(Context,False);
 end;
 
-procedure sigipi; external;
+procedure host_sigipi; external;
 
 function ipi_send_cpu(td:p_kthread):Integer;
 label
@@ -791,7 +791,7 @@ begin
  end;
 
  Context^.Rsp:=QWORD(sfp);
- Context^.Rip:=QWORD(@sigipi);
+ Context^.Rip:=QWORD(@host_sigipi);
  Context^.EFlags:=Context^.EFlags and (not (PSL_T or PSL_D));
 
  set_pcb_flags(td,PCB_FULL_IRET);

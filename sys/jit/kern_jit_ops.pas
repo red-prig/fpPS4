@@ -8,8 +8,7 @@ interface
 uses
  x86_fpdbgdisas,
  x86_jit,
- kern_jit_ctx,
- kern_jit_asm;
+ kern_jit_ctx;
 
 type
  t_jit_cb=procedure(var ctx:t_jit_context2);

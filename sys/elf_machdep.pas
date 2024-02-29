@@ -40,11 +40,15 @@ var
  sv_size :Integer; external;
  sv_table:array[0..0] of t_sysent; external;
 
+ guest_sigcode  :array[0..0] of Byte; external;
+ guest_szsigcode:Integer; external;
 
 procedure init_sysvec;
 begin
- self_orbis_sysvec.sv_size :=sv_size;
- self_orbis_sysvec.sv_table:=@sv_table;
+ self_orbis_sysvec.sv_size     :=sv_size;
+ self_orbis_sysvec.sv_table    :=@sv_table;
+ self_orbis_sysvec.sv_sigcode  :=@guest_sigcode;
+ self_orbis_sysvec.sv_szsigcode:=@guest_szsigcode;
 end;
 
 

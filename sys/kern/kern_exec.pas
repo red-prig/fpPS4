@@ -54,6 +54,7 @@ uses
  kern_thread,
  kern_budget,
  kern_descrip,
+ kern_exit,
  vfs_cache,
  vnode_if,
  sys_resource,
@@ -63,6 +64,7 @@ uses
  kern_dlsym,
  kern_authinfo,
  vfs_syscalls,
+ signal,
  trap,
  md_context;
 
@@ -271,7 +273,7 @@ begin
 
  //mapping shared page (sv_usrstack_len=0x4000)
  error:=vm_map_fixed(map,nil,0,
-         QWORD(vmspace^.sv_usrstack), PAGE_SIZE,
+         QWORD(vmspace^.sv_usrstack), p_proc.p_sysent^.sv_shared_page_len,
          VM_PROT_RW,
          VM_PROT_ALL,
          MAP_INHERIT_SHARE or MAP_ACC_NO_CHARGE,
@@ -280,6 +282,13 @@ begin
  if (error<>0) then
  begin
   Exit(error);
+ end;
+
+ //copy sigcode
+ if (p_proc.p_sysent^.sv_sigcode<>nil) and
+    (p_proc.p_sysent^.sv_szsigcode<>nil) then
+ begin
+  copyout(p_proc.p_sysent^.sv_sigcode,vmspace^.sv_usrstack,p_proc.p_sysent^.sv_szsigcode^);
  end;
 
  {
@@ -1562,7 +1571,7 @@ done2:
  if (error<>0) then
  begin
   // sorry, no more process anymore. exit gracefully
-  //exit1(td, W_EXITCODE(0, SIGABRT));
+  exit1(W_EXITCODE(0, SIGABRT));
   // NOT REACHED
  end;
 

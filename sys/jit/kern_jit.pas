@@ -217,7 +217,6 @@ begin
 
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-8]);
-  op_save_rsp(ctx,stack);
 
   op_uplift(ctx,os64); //in/out:r14
 
@@ -242,6 +241,13 @@ begin
    movi([stack,os64],imm);
   end;
 
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rsp(ctx,stack);
+  //[op_uplift] leaq(stack,[stack-8]);
+  op_save_rsp(ctx,stack);
+
  end;
 end;
 
@@ -260,28 +266,19 @@ begin
 
   op_uplift(ctx,os64); //in/out:r14
 
+  //load to tmp
   movq(r_tmp1,[stack]);
 
-  op_load_rsp(ctx,stack);
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rsp(ctx,stack);
   leaq(stack,[stack+8+imm]);
   op_save_rsp(ctx,stack);
 
+  //out:r14
   movq(r_tmp0,r_tmp1);
  end;
-end;
-
-procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
-begin
- with ctx.builder do
-  if (classif_offset_u64(imm)=os64) then
-  begin
-   //64bit imm
-   movi64(r_tmp0,imm);
-  end else
-  begin
-   //32bit zero extend
-   movi(new_reg_size(r_tmp0,os32),imm);
-  end;
 end;
 
 procedure op_call(var ctx:t_jit_context2);
@@ -306,6 +303,8 @@ begin
   if ctx.is_text_addr(QWORD(dst)) and
      (not exist_entry(dst)) then
   begin
+   //near
+
    link:=ctx.get_link(dst);
 
    if (link<>nil_link) then
@@ -387,6 +386,8 @@ var
 begin
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
+  //imm offset
+
   ofs:=0;
   GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
@@ -395,6 +396,8 @@ begin
   if ctx.is_text_addr(QWORD(dst)) and
      (not exist_entry(dst)) then
   begin
+   //near
+
    link:=ctx.get_link(dst);
 
    if (link<>nil_link) then
@@ -461,6 +464,8 @@ begin
  if ctx.is_text_addr(QWORD(dst)) and
     (not exist_entry(dst)) then
  begin
+  //near
+
   link:=ctx.get_link(dst);
 
   id1:=ctx.builder.jcc(ctx.din.OpCode.Suffix,link);
@@ -501,6 +506,8 @@ begin
  if ctx.is_text_addr(QWORD(dst)) and
     (not exist_entry(dst)) then
  begin
+  //near
+
   link:=ctx.get_link(dst);
 
   id2:=ctx.builder.jmp(nil_link,os8);
@@ -517,7 +524,6 @@ begin
   end;
  end else
  begin
-
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
@@ -632,11 +638,18 @@ begin
 
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
-  op_save_rsp(ctx,stack);
 
   op_uplift(ctx,new.ASize); //in/out:r14
 
   movq([stack],new);
+
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rsp(ctx,stack);
+  //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
+  op_save_rsp(ctx,stack);
+
  end;
 end;
 
@@ -661,11 +674,18 @@ begin
 
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
-  op_save_rsp(ctx,stack);
 
   op_uplift(ctx,mem_size); //in/out:r14
 
   movq([stack],new);
+
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rsp(ctx,stack);
+  //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
+  op_save_rsp(ctx,stack);
+
  end;
 end;
 
@@ -683,14 +703,19 @@ begin
   new  :=r_tmp0;
 
   op_load_rbp(ctx,stack);
-  op_save_rsp(ctx,stack);
 
   op_uplift(ctx,os64); //in/out:r14
 
   movq(new,[stack]);
+
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rbp(ctx,stack);
+  //[op_uplift] op_save_rsp(ctx,stack);
   op_save_rbp(ctx,new);
 
-  op_load_rsp(ctx,stack);
+  //[op_uplift] op_load_rsp(ctx,stack);
   leaq(stack,[stack+OPERAND_BYTES[ctx.dis.OperandSize]]);
   op_save_rsp(ctx,stack);
  end;
@@ -721,7 +746,10 @@ begin
   push(new);
   popfq(mem_size);
 
-  op_load_rsp(ctx,stack);
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  //[op_uplift] op_load_rsp(ctx,stack);
   leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
  end;
@@ -768,6 +796,9 @@ begin
    movq(new,[stack]);
   end;
 
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
   op_load_rsp(ctx,stack);
   leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
@@ -779,7 +810,7 @@ begin
  ctx.add_forward_point(fpCall,ctx.ptr_curr);
  ctx.add_forward_point(fpCall,ctx.ptr_next);
  //
- op_set_r14_imm(ctx,Int64(ctx.ptr_next));
+ op_set_rip_imm(ctx,Int64(ctx.ptr_next));
  //
  ctx.builder.call_far(@jit_syscall); //syscall dispatcher
 end;
@@ -1120,13 +1151,19 @@ begin
 
   if not ctx.is_text_addr(QWORD(ptr)) then
   begin
-   writeln('not excec:0x',HexStr(ptr));
+   if (p_print_jit_preload<>0) then
+   begin
+    writeln('not excec:0x',HexStr(ptr));
+   end;
    goto _invalid;
   end;
 
   if ((pmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
-   writeln('not excec:0x',HexStr(ptr));
+   if (p_print_jit_preload<>0) then
+   begin
+    writeln('not excec:0x',HexStr(ptr));
+   end;
    goto _invalid;
   end;
 
@@ -1144,10 +1181,14 @@ begin
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     writeln('invalid1:0x',HexStr(ctx.ptr_curr));
+     if (p_print_jit_preload<>0) then
+     begin
+      writeln('invalid1:0x',HexStr(ctx.ptr_curr));
+     end;
 
      _invalid:
 
+     if (p_print_jit_preload<>0) then
      begin
       Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
       print_disassemble(ctx.code,dis.CodeIdx);
@@ -1172,7 +1213,10 @@ begin
      (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
   begin
-   writeln('invalid2:0x',HexStr(ctx.ptr_curr));
+   if (p_print_jit_preload<>0) then
+   begin
+    writeln('invalid2:0x',HexStr(ctx.ptr_curr));
+   end;
    goto _invalid;
   end;
 

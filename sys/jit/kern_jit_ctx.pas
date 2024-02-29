@@ -206,6 +206,9 @@ function  get_segment_value(const Operand:TOperand):Byte;
 function  flags(const i:TInstruction):t_jit_lea;
 function  flags(const ctx:t_jit_context2):t_jit_lea;
 
+procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
+procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
+
 procedure op_load_r14(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_save_r14(var ctx:t_jit_context2;reg:TRegValue);
 
@@ -1357,6 +1360,33 @@ begin
 end;
 
 //
+
+procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
+begin
+ with ctx.builder do
+  if (classif_offset_u64(imm)=os64) then
+  begin
+   //64bit imm
+   movi64(r_tmp0,imm);
+  end else
+  begin
+   //32bit zero extend
+   movi(new_reg_size(r_tmp0,os32),imm);
+  end;
+end;
+
+procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
+var
+ i:Integer;
+begin
+ op_set_r14_imm(ctx,imm);
+ //
+ with ctx.builder do
+ begin
+  i:=Integer(@p_jit_frame(nil)^.tf_rip);
+  movq([r_thrd+i],r_tmp0);
+ end;
+end;
 
 procedure op_load_r14(var ctx:t_jit_context2;reg:TRegValue);
 var

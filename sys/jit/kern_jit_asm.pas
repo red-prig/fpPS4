@@ -108,7 +108,7 @@ end;
 
 //
 
-//in:r14(addr)
+//in:tf_rip
 procedure jit_syscall; assembler; nostackframe;
 label
  _after_call,
@@ -122,8 +122,6 @@ asm
  movqq %rsp,%rbp
 
  andq  $-16,%rsp //align stack
-
- movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rip(%r13) //save %r14 to tf_rip
 
  pushf
  pop %r14
@@ -257,6 +255,34 @@ asm
   hlt
 end;
 
+procedure jit_save_to_sys_save(td:p_kthread);
+var
+ frame:p_jit_frame;
+begin
+ frame:=@td^.td_frame.tf_r13;
+
+ //tf_rip ?????
+
+ td^.td_frame.tf_r13:=frame^.tf_r13;
+ td^.td_frame.tf_rsp:=frame^.tf_rsp;
+ td^.td_frame.tf_rbp:=frame^.tf_rbp;
+
+ td^.td_frame.tf_trapno:=0;
+ td^.td_frame.tf_BrF   :=0;
+ td^.td_frame.tf_BrT   :=0;
+end;
+
+procedure sys_save_to_jit_save(td:p_kthread);
+var
+ frame:p_jit_frame;
+begin
+ frame:=@td^.td_frame.tf_r13;
+
+ frame^.tf_r13:=td^.td_frame.tf_r13;
+ frame^.tf_rsp:=td^.td_frame.tf_rsp;
+ frame^.tf_rbp:=td^.td_frame.tf_rbp;
+end;
+
 procedure jit_save_ctx; assembler; nostackframe;
 asm
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13)
@@ -274,6 +300,7 @@ asm
  //tf_r14=tf_r14
  //tf_r15=tf_r15
 
+ {
  //tf_r13
  movqq jit_frame.tf_r13(%r13),%rdi
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13)
@@ -285,6 +312,7 @@ asm
  //tf_rbp
  movqq jit_frame.tf_rbp(%r13),%rdi
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
+ }
 
  //tf_rflags
  pushf
@@ -353,6 +381,7 @@ asm
   vmovdqa 0x1E0(%rdi),%ymm15
  {$ENDIF}
 
+ {
  //tf_r13
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13),%rdi
  movqq  %rdi,jit_frame.tf_r13(%r13)
@@ -364,6 +393,7 @@ asm
  //tf_rbp
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13),%rdi
  movqq %rdi,jit_frame.tf_rbp(%r13)
+ }
 
  //tf_rflags
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rflags(%r13), %rdi
@@ -385,6 +415,7 @@ asm
  //tf_r15=tf_r15
 end;
 
+//in:r14(addr) r15(plt)
 procedure jit_plt_cache; assembler; nostackframe;
 label
  _exit;
