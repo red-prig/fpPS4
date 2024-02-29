@@ -64,14 +64,14 @@ const
  KERN_ARND      =37;
  KERN_SDKVERSION=38; //SDK version
 
- KERN_SMP     =$100; //(OID_AUTO) Kernel SMP
- KERN_SCHED   =$101; //(OID_AUTO) Scheduler
- KERN_NEOMODE =$102; //(OID_AUTO) Neo mode
+ KERN_SMP     =$485; //(OID_AUTO) Kernel SMP
+ KERN_SCHED   =$2A0; //(OID_AUTO) Scheduler
+ KERN_NEOMODE =$50F; //(OID_AUTO) Neo mode
 
 //CTL_VM subtypes
  KERN_VM_PS4DEV=1;     //vm parameters for PS4 (DevKit only)
 
- KERN_VM_BUDGETS=$100; //(OID_AUTO) VM budgets
+ KERN_VM_BUDGETS=$139; //(OID_AUTO) VM budgets
 
 //KERN_PROC subtypes
  KERN_PROC_APPINFO     =35; //Application information
@@ -83,10 +83,10 @@ const
  KERN_PROC_TEXT_SEGMENT=44; //kern_dynlib_get_libkernel_text_segment
 
 //KERN_SMP subtypes
- KERN_CPUS=$100; //(OID_AUTO) Number of CPUs online
+ KERN_CPUS=$48A; //(OID_AUTO) Number of CPUs online
 
 //KERN_SCHED subtypes
- KERN_SCHED_CPUSETSIZE=$100; //(OID_AUTO) sizeof(cpuset_t)
+ KERN_SCHED_CPUSETSIZE=$4E4; //(OID_AUTO) sizeof(cpuset_t)
 
 //CTL_HW identifiers
  HW_MACHINE     = 1; // string: machine class
@@ -104,20 +104,20 @@ const
  HW_MAXID       =13; // number of valid hw ids
 
 //MACHDEP subtypes
- MACHDEP_TSC_FREQ  =$100; //(OID_AUTO) Time Stamp Counter frequency
- MACHDEP_BOOTPARAMS=$101; //(OID_AUTO) orbis bootparams
+ MACHDEP_TSC_FREQ  =$1EC; //(OID_AUTO) Time Stamp Counter frequency
+ MACHDEP_BOOTPARAMS=$14D; //(OID_AUTO) orbis bootparams
 
 //BOOTPARAMS subtypes
  BOOTPARAMS_IS_MAIN_ON_STANDBY=$100; //(OID_AUTO) Is main on standby mode
- BOOTPARAMS_BASE_PS4_MODE     =$101; //(OID_AUTO) base ps4 mode
+ BOOTPARAMS_BASE_PS4_MODE     =$151; //(OID_AUTO) base ps4 mode
 
 //KERN_VM_PS4DEV subtypes
- KERN_VM_PS4DEV_TRCMEM_TOTAL=$100; //(OID_AUTO) trace memory total
- KERN_VM_PS4DEV_TRCMEM_AVAIL=$101; //(OID_AUTO) trace memory available
+ KERN_VM_PS4DEV_TRCMEM_TOTAL=$23B; //(OID_AUTO) trace memory total
+ KERN_VM_PS4DEV_TRCMEM_AVAIL=$23C; //(OID_AUTO) trace memory available
 
 //KERN_VM_BUDGETS
- KERN_VM_BUDGETS_MLOCK_AVAIL=$100; //(OID_AUTO) Available MLOCK budget
- KERN_VM_BUDGETS_MLOCK_TOTAL=$101; //(OID_AUTO) Total MLOCK budget
+ KERN_VM_BUDGETS_MLOCK_AVAIL=$13A; //(OID_AUTO) Available MLOCK budget
+ KERN_VM_BUDGETS_MLOCK_TOTAL=$13B; //(OID_AUTO) Total MLOCK budget
 
 //SYSCTL_HANDLER_ARGS oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req
 
