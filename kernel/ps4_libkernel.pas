@@ -1986,6 +1986,7 @@ begin
  lib^.set_proc($DDEFB822FEC827C5,@ps4_accept);
  lib^.set_proc($A01AF7D773E9A4D1,@ps4_sendto);
  lib^.set_proc($45E9C8D652F55859,@ps4_getsockname);
+ lib^.set_proc($5D52FC4A8DD02549,@ps4_connect);
 
  //socket
 
