@@ -543,6 +543,14 @@ begin
  Result:=0; // TODO: Not used by current implementation of this lib.
 end;
 
+function ps4_sceUltWaitingQueueResourcePoolDestroy(pool:PSceUltWaitingQueueResourcePool):QWord; SysV_ABI_CDecl;
+begin
+ if (pool=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolDestroy');
+ Result:=0; // TODO: Not used by current implementation of this lib.
+end;
+
 //
 
 function ps4_sceUltQueueDataResourcePoolGetWorkAreaSize(numData:DWord;dataSize:QWord;numQueueObjects:DWord):Integer; SysV_ABI_CDecl;
@@ -663,6 +671,14 @@ begin
  Result:=0;
 end;
 
+function ps4_sceUltMutexDestroy(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
+begin
+ if (mutex=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ //Writeln(SysLogPrefix,'sceUltMutexDestroy,mutex=',mutex^.name);
+ Result:=0;
+end;
+
 //
 
 function ps4_sceUltSemaphoreCreate(semaphore   :PSceUltSemaphore;
@@ -753,6 +769,7 @@ begin
 
  lib^.set_proc($588595D5077B3C55,@ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize);
  lib^.set_proc($6221EE8CE1BDBD76,@ps4_sceUltWaitingQueueResourcePoolCreate);
+ lib^.set_proc($A2BE79E35EF07039,@ps4_sceUltWaitingQueueResourcePoolDestroy);
 
  lib^.set_proc($7AF8FD60F912F2CE,@ps4_sceUltQueueDataResourcePoolGetWorkAreaSize);
  lib^.set_proc($4C51E6EBF37ABE4B,@ps4_sceUltQueueDataResourcePoolCreate);
@@ -765,6 +782,7 @@ begin
  lib^.set_proc($F21106911D697EBF,@ps4_sceUltMutexLock);
  lib^.set_proc($8745DE6CA88C06D9,@ps4_sceUltMutexUnlock);
  lib^.set_proc($D7EF2DF5A1CB8B3F,@ps4_sceUltMutexOptParamInitialize);
+ lib^.set_proc($8D6F879DA7DE4B76,@ps4_sceUltMutexDestroy);
 
  lib^.set_proc($8794252188FE468F,@ps4_sceUltSemaphoreCreate);
  lib^.set_proc($1C0D4B75B8B794F6,@ps4_sceUltSemaphoreTryAcquire);
