@@ -98,6 +98,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpPartyRegisterHandlerA(const handlers:pSceNpPartyEventHandlers;userdata:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpPartyGetState(const state:pSceNpPartyState):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -129,6 +134,7 @@ begin
  lib:=Result._add_lib('libSceNpParty');
  lib^.set_proc($9616024D098191DB,@ps4_sceNpPartyInitialize);
  lib^.set_proc($900F3C81BBFBD5AA,@ps4_sceNpPartyRegisterHandler);
+ lib^.set_proc($FAFE1F5473301567,@ps4_sceNpPartyRegisterHandlerA);
  lib^.set_proc($684CCA749CC04D9D,@ps4_sceNpPartyGetState);
  lib^.set_proc($4F650E29FD3464DD,@ps4_sceNpPartyGetMembers);
  lib^.set_proc($1753FEFF0A71428C,@ps4_sceNpPartyGetMemberInfo);

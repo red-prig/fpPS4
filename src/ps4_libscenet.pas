@@ -18,7 +18,7 @@ const
  SCE_NET_ENOSPC      =28;
  SCE_NET_EWOULDBLOCK =35;
  SCE_NET_EAFNOSUPPORT=47;
-
+ SCE_NET_ECONNREFUSED=61;
  SCE_NET_EHOSTUNREACH=65;
 
  //
@@ -452,7 +452,8 @@ end;
 
 function ps4_sceNetConnect(s:Integer; const addr:pSceNetSockaddr; addrlen:SceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ sleep(200);
+ Result:=_set_net_errno(SCE_NET_ECONNREFUSED);
 end;
 
 function ps4_sceNetEpollWait(s:Integer; events:pSceNetEpollEvent; maxevents:Integer; timeout:Integer):Integer; SysV_ABI_CDecl;

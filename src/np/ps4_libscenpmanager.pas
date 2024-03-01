@@ -546,8 +546,19 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGetAccountDateOfBirth(userId:SceUserServiceUserId;
+function ps4_sceNpGetAccountDateOfBirth(pOnlineId:pSceNpOnlineId;
                                         pDateOfBirth:PSceNpDate):Integer; SysV_ABI_CDecl;
+begin
+ if pDateOfBirth=nil then
+  Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+ pDateOfBirth^.year :=1990;
+ pDateOfBirth^.month:=1;
+ pDateOfBirth^.day  :=1;
+ Result:=0;
+end;
+
+function ps4_sceNpGetAccountDateOfBirthA(userId:SceUserServiceUserId;
+                                         pDateOfBirth:PSceNpDate):Integer; SysV_ABI_CDecl;
 begin
  if pDateOfBirth=nil then
   Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
@@ -602,6 +613,7 @@ begin
  lib^.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
  lib^.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib^.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
+ lib^.set_proc($AB733B5F304A0B7B,@ps4_sceNpGetAccountDateOfBirthA);
  lib^.set_proc($4CF31B808C6FA20D,@ps4_sceNpGetAccountLanguageA);
 
  lib^.set_proc($1858555294666C71,@ps4_sceNpInGameMessageInitialize);
