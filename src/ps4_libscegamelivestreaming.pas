@@ -74,7 +74,10 @@ type
  pSceGameLiveStreamingPresetSocialFeedback=^SceGameLiveStreamingPresetSocialFeedback;
  SceGameLiveStreamingPresetSocialFeedback=packed record
   commandId  :DWORD;
-  commandText:array[0..SCE_GAME_LIVE_STREAMING_MAX_SOCIAL_FEEDBACK_PRESET_TEXT_LENGTH,0..MB_LEN_MAX-1] of char;
+  commandText:array[0..
+                    (SCE_GAME_LIVE_STREAMING_MAX_SOCIAL_FEEDBACK_PRESET_TEXT_LENGTH*
+                     MB_LEN_MAX+1)
+                   -1] of char;
   reserved   :array[0..30] of Byte;
  end;
 

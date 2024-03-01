@@ -20,19 +20,14 @@ type
 
  pSceNpTusDataStatus=^SceNpTusDataStatus;
  SceNpTusDataStatus=packed record
-  ownerId                   :SceNpOnlineId;
-  reserved1                 :array[0..15] of Byte;
-  hasData                   :Integer;
-  lastChangedDate           :QWORD; //SceRtcTick
-  lastChangedAuthorId       :SceNpOnlineId;
-  reserved2                 :array[0..15] of Byte;
-  pad                       :array[0..3] of Byte;
-  data                      :Pointer;
-  dataSize                  :QWORD;
-  info                      :SceNpTusDataInfo;
-  ownerAccountId            :SceNpAccountId;
-  lastChangedAuthorAccountId:SceNpAccountId;
-  reserved                  :array[0..15] of Byte;
+  ownerId            :SceNpId;
+  hasData            :Integer;
+  lastChangedDate    :QWORD; //SceRtcTick
+  lastChangedAuthorId:SceNpId;
+  pad                :array[0..3] of Byte;
+  data               :Pointer;
+  dataSize           :QWORD;
+  info               :SceNpTusDataInfo;
  end;
 
  pSceNpTusDataStatusA=^SceNpTusDataStatusA;
@@ -85,13 +80,13 @@ begin
 end;
 
 function ps4_sceNpTusGetData(reqId:Integer;
-                              targetAccountId:SceNpAccountId;
-                              slotId:DWORD;
-                              dataStatus:pSceNpTusDataStatus;
-                              dataStatusSize:QWORD;
-                              data:Pointer;
-                              recvSize:QWORD;
-                              option:Pointer):Integer; SysV_ABI_CDecl;
+                             targetNpId:pSceNpId;
+                             slotId:DWORD;
+                             dataStatus:pSceNpTusDataStatus;
+                             dataStatusSize:QWORD;
+                             data:Pointer;
+                             recvSize:QWORD;
+                             option:Pointer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end; 

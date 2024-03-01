@@ -161,7 +161,8 @@ function ps4_connect(s:SceNetId;
                      const addr:pSceNetSockaddr;
                      addrlen:SceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ sleep(200);
+ Result:=_set_errno(ECONNREFUSED);
 end;
 
 end.

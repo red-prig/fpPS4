@@ -546,7 +546,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGetAccountDateOfBirth(userId:SceUserServiceUserId;
+function ps4_sceNpGetAccountDateOfBirth(pOnlineId:pSceNpOnlineId;
                                         pDateOfBirth:PSceNpDate):Integer; SysV_ABI_CDecl;
 begin
  if pDateOfBirth=nil then

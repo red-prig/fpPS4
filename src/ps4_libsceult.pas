@@ -23,15 +23,16 @@ uses
 {$I sce_errno.inc}
 
 const
- SCE_ULT_ERROR_NULL          =$80810001;
- SCE_ULT_ERROR_ALIGNMENT     =$80810002;
- SCE_ULT_ERROR_RANGE         =$80810003;
- SCE_ULT_ERROR_INVALID       =$80810004;
- SCE_ULT_ERROR_PERMISSION    =$80810005;
- SCE_ULT_ERROR_STATE         =$80810006;
- SCE_ULT_ERROR_BUSY          =$80810007;
- SCE_ULT_ERROR_AGAIN         =$80810008;
- SCE_ULT_ERROR_NOT_INITIALIZE=$8081000A;
+ SCE_ULT_ERROR_NULL          =Integer($80810001);
+ SCE_ULT_ERROR_ALIGNMENT     =Integer($80810002);
+ SCE_ULT_ERROR_RANGE         =Integer($80810003);
+ SCE_ULT_ERROR_INVALID       =Integer($80810004);
+ SCE_ULT_ERROR_PERMISSION    =Integer($80810005);
+ SCE_ULT_ERROR_STATE         =Integer($80810006);
+ SCE_ULT_ERROR_BUSY          =Integer($80810007);
+ SCE_ULT_ERROR_AGAIN         =Integer($80810008);
+ SCE_ULT_ERROR_NOT_INITIALIZE=Integer($8081000A);
+
  SCE_ULT_MAX_NAME_LENGTH     =31;
 
  ULT_STATE_INIT        =0;
@@ -548,7 +549,7 @@ begin
  if (pool=nil) then
   Exit(SCE_ULT_ERROR_NULL);
  Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolDestroy');
- Result:=0; // TODO: Not used by current implementation of this lib.
+ Result:=0; // TODO: There is no actual destructor
 end;
 
 //
@@ -675,6 +676,8 @@ function ps4_sceUltMutexDestroy(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
 begin
  if (mutex=nil) then
   Exit(SCE_ULT_ERROR_NULL);
+ ps4_pthread_mutex_destroy(mutex^.handle);
+ mutex^.handle:=nil;
  //Writeln(SysLogPrefix,'sceUltMutexDestroy,mutex=',mutex^.name);
  Result:=0;
 end;
