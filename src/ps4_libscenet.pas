@@ -316,7 +316,7 @@ begin
  begin
   paddrlen^:=SizeOf(SceNetSockaddr);
  end;
- Result:=0;
+ Result:=_set_net_errno(SCE_NET_EWOULDBLOCK)
 end;
 
 function ps4_sceNetRecv(s:Integer;
