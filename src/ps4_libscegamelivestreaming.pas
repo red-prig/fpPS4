@@ -178,7 +178,7 @@ begin
 end;
 
 function ps4_sceGameLiveStreamingSetSpoilerTag(const spoilerTagCounts:QWORD;
-                                               const spoilerTag:SceGameLiveStreamingSpoilerTag):Integer; SysV_ABI_CDecl;
+                                               const spoilerTag:pSceGameLiveStreamingSpoilerTag):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
