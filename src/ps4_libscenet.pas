@@ -306,7 +306,7 @@ function ps4_sceNetAccept(s:Integer;
                           addr:pSceNetSockaddr;
                           paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
- sleep(200);
+ sleep(-1);
  Result:=0;
  if (addr<>nil) then
  begin
