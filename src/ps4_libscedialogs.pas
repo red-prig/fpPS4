@@ -133,6 +133,11 @@ begin
  Result:=status_profile_dialog;
 end;
 
+function ps4_sceNpProfileDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 var
@@ -586,6 +591,7 @@ begin
  lib:=Result._add_lib('libSceNpProfileDialog');
  lib^.set_proc($2E0F8D084EA94F04,@ps4_sceNpProfileDialogInitialize);
  lib^.set_proc($85A55913D1602AA1,@ps4_sceNpProfileDialogUpdateStatus);
+ lib^.set_proc($D12A7DBC9701D7FC,@ps4_sceNpProfileDialogTerminate);
 end;
 
 //
