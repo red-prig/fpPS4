@@ -251,6 +251,8 @@ begin
 end;
 
 function TLineStream.Get(Index: integer): RawByteString;
+label
+ _next;
 begin
  Result:='';
 
@@ -263,6 +265,12 @@ begin
 
  if (FLineIndex>Index) then
  begin
+  if (Index<=(FLineIndex div 2)) then
+  begin
+   reset;
+   goto _next;
+  end;
+
   while PrevLine do
   begin
    if (FLineIndex=Index) then
@@ -272,6 +280,7 @@ begin
   end;
  end else
  begin
+  _next:
   while NextLine do
   begin
    if (FLineIndex=Index) then

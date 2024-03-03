@@ -84,6 +84,7 @@ function  dmem_map_insert(
             m_type:DWORD):Integer;
 
 Function  dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var oaddr,osize:QWORD):Integer;
+Function  dmem_map_query(map:p_dmem_map;offset:QWORD;flags,id:Integer;info:Pointer;size:QWORD):Integer;
 Function  dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;
 Function  dmem_map_release(map:p_dmem_map;start,len:QWORD;check:Boolean):Integer;
 
@@ -123,6 +124,7 @@ implementation
 uses
  errno,
  kern_thr,
+ systm,
  vm_map,
  rmem_map;
 
@@ -645,7 +647,7 @@ begin
   map^.root:=dmem_map_entry_splay(OFF_TO_IDX(start), map^.root);
   entry:=map^.root;
 
-  while (entry<>nil) do
+  while (entry<>nil) and (entry<>@map^.header) do
   begin
    if (entry^.adj_free<>0) then
    begin
@@ -673,6 +675,84 @@ begin
 
  oaddr:=r_addr;
  osize:=r_size;
+end;
+
+type
+ pSceKernelDirectMemoryQueryInfo=^SceKernelDirectMemoryQueryInfo;
+ SceKernelDirectMemoryQueryInfo=packed record
+  start:QWORD;
+  __end:QWORD;
+  mtype:Integer;
+  align:Integer;
+ end;
+
+Function dmem_map_query(map:p_dmem_map;offset:QWORD;flags,id:Integer;info:Pointer;size:QWORD):Integer;
+var
+ data:SceKernelDirectMemoryQueryInfo;
+ entry:p_dmem_map_entry;
+begin
+ Result:=0;
+
+ if (flags>1) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ Assert(id=0,'dmem_map_query (id<>0)');
+
+ data:=Default(SceKernelDirectMemoryQueryInfo);
+
+ Result:=EACCES;
+
+ dmem_map_lock(map);
+
+ if (map^.root<>nil) then
+ begin
+
+  map^.root:=dmem_map_entry_splay(OFF_TO_IDX(offset), map^.root);
+  entry:=map^.root;
+
+  if ((flags and 1)=0) then
+  begin
+   if (entry<>nil) then
+   if (entry^.start<=offset) and
+      (entry^.__end>offset) then
+   begin
+    Result:=0;
+   end;
+  end else
+  begin
+   while (entry<>nil) and (entry<>@map^.header) do
+   begin
+    if (entry^.m_type<>DWORD(-1)) and
+       (entry^.__end>offset) then
+    begin
+     Result:=0;
+     Break;
+    end;
+    entry:=entry^.next;
+   end;
+  end;
+
+  if (Result=0) then
+  begin
+   data.start:=entry^.start;
+   data.__end:=entry^.__end;
+   data.mtype:=entry^.m_type;
+  end;
+
+ end;
+
+ dmem_map_unlock(map);
+
+ if (Result<>0) then Exit;
+
+ if (size>sizeof(SceKernelDirectMemoryQueryInfo)) then
+ begin
+  size:=sizeof(SceKernelDirectMemoryQueryInfo);
+ end;
+
+ Result:=copyout(@data,info,size);
 end;
 
 Function dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:DWORD;var oaddr:QWORD):Integer;

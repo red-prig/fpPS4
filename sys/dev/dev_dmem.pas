@@ -49,6 +49,17 @@ type
   len  :QWORD; //in
  end;
 
+ PDirectMemoryQuery=^TDirectMemoryQuery;
+ TDirectMemoryQuery=packed record
+  d_pool_id:Integer;
+  flags    :Integer;
+  id       :Integer;
+  _align   :Integer;
+  offset   :QWORD;
+  info     :Pointer;
+  size     :QWORD;
+ end;
+
 Function dmem_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  dmap:p_dmem_obj;
@@ -86,6 +97,26 @@ begin
              with PReleaseDirectMemory(data)^ do
              begin
               Result:=dmem_map_release(dmap^.dmem,start,len,False);
+             end;
+            end;
+
+  $80288012: //sceKernelDirectMemoryQuery
+            begin
+             with PDirectMemoryQuery(data)^ do
+             begin
+
+              if (d_pool_id>2) then
+              begin
+               Exit(EINVAL);
+              end;
+
+              if (d_pool_id<>1) then
+              begin
+               //sceSblACMgrIsSystemUcred
+               Exit(EPERM);
+              end;
+
+              Result:=dmem_map_query(dmap^.dmem,offset,flags,id,info,size);
              end;
             end;
 
