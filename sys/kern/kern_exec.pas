@@ -234,6 +234,8 @@ var
  vmspace:p_vmspace;
  map:vm_map_t;
  //obj:vm_object_t;
+ shared_page_base:Pointer;
+ shared_page_len :QWORD;
  sv_minuser:QWORD;
  sv_maxuser:QWORD;
  stack_addr:QWORD;
@@ -271,9 +273,12 @@ begin
 
  { Map a shared page }
 
+ shared_page_base:=vmspace^.sv_usrstack;
+ shared_page_len :=p_proc.p_sysent^.sv_shared_page_len;
+
  //mapping shared page (sv_usrstack_len=0x4000)
  error:=vm_map_fixed(map,nil,0,
-         QWORD(vmspace^.sv_usrstack), p_proc.p_sysent^.sv_shared_page_len,
+         QWORD(shared_page_base), shared_page_len,
          VM_PROT_RW,
          VM_PROT_ALL,
          MAP_INHERIT_SHARE or MAP_ACC_NO_CHARGE,
@@ -285,11 +290,18 @@ begin
  end;
 
  //copy sigcode
- if (p_proc.p_sysent^.sv_sigcode<>nil) and
-    (p_proc.p_sysent^.sv_szsigcode<>nil) then
- begin
-  copyout(p_proc.p_sysent^.sv_sigcode,vmspace^.sv_usrstack,p_proc.p_sysent^.sv_szsigcode^);
- end;
+ with p_proc.p_sysent^ do
+  if (sv_sigcode<>nil) and
+     (sv_szsigcode<>nil) then
+  begin
+   copyout(sv_sigcode,shared_page_base,sv_szsigcode^);
+  end;
+
+ vm_map_protect(map,
+                QWORD(shared_page_base),
+                QWORD(shared_page_base)+shared_page_len,
+                VM_PROT_READ or VM_PROT_EXECUTE,
+                True);
 
  {
  obj:=sv^.sv_shared_page_obj;

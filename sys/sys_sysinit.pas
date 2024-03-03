@@ -52,7 +52,8 @@ uses
  dev_dipsw,
  dev_rng,
  dev_gc,
- dev_dce;
+ dev_dce,
+ dev_hid;
 
 var
  daemon_thr:p_kthread;
@@ -90,6 +91,7 @@ begin
  rng_init();
  gc_initialize();
  dce_initialize();
+ hid_init();
 end;
 
 //Manual order of lazy initialization

@@ -16,6 +16,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceMbusAddHandleByUserId(unk1  :Integer;
+                                      handle:Integer;
+                                      userId:Integer;
+                                      _type :Integer;
+                                      index :Integer;
+                                      unk2  :qword):Integer;
+begin
+ Result:=0;
+end;
+
 function Load_libSceMbus(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -25,6 +35,7 @@ begin
  lib:=Result^.add_lib('libSceMbus');
 
  lib.set_proc($C113D7306B643AAD,@ps4_sceMbusInit);
+ lib.set_proc($0B00D5B063BA5374,@ps4_sceMbusAddHandleByUserId);
 end;
 
 var
