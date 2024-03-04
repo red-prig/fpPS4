@@ -75,12 +75,12 @@ type
  t_pad_device_info=packed record //0x40
   conn_type  :Byte;
   pad1       :array[0..2] of Byte;
-  connected  :Integer;
+  device_id  :Integer;
   unknow1    :QWORD;
-  pad_type1  :Word;
-  pad_type2  :Word;
+  hid_vid    :Word;
+  hid_did    :Word;
   unknow2    :array[0..11] of Byte;
-  pad_type   :Byte;
+  dualshock_i:Byte;
   pad2       :array[0..2] of Byte;
   capability1:Integer;
   dev_classid:Byte;
@@ -96,8 +96,8 @@ type
 
  p_pad_dev_info_args=^t_pad_dev_info_args;
  t_pad_dev_info_args=packed record
-  handle   :Integer;
-  _align1  :Integer;
+  device_id:Integer;
+  unknow   :Integer;
   info     :p_pad_device_info; //0x40
  end;
 
@@ -149,7 +149,7 @@ type
   state    :p_pad_state; //num*0xA8
   num      :Integer;
   unk1     :Integer;
-  connected:PInteger;
+  device_id:PInteger;
   s_version:PInteger;
   read_type:Integer;
   unk3     :Integer;
@@ -204,6 +204,8 @@ begin
 
       //handle
       td^.td_retval[0]:=generateHandle(port_type,0,0);
+
+      Writeln('handle=0x',HexStr(td^.td_retval[0],8));
      end;
     end;
 
@@ -211,12 +213,26 @@ begin
     begin
      with p_pad_dev_info_args(data)^ do
      begin
+
+     subr_backtrace.print_backtrace_td(stderr);
+
+      Writeln('device_id=0x',HexStr(device_id,8));
+      Assert(unknow=8,'unknow<>8');
+
       FillChar(_data,64,0);
 
       p_pad_device_info(@_data)^.conn_type  :=0;
-      p_pad_device_info(@_data)^.connected  :=1;
-      p_pad_device_info(@_data)^.pad_type   :=0;
+      p_pad_device_info(@_data)^.device_id  :=$60300;
+      p_pad_device_info(@_data)^.hid_vid    :=$54c; //Vendor ID = 054C
+      p_pad_device_info(@_data)^.hid_did    :=$5c4; //Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
+      p_pad_device_info(@_data)^.dualshock_i:=4;
+      p_pad_device_info(@_data)^.capability1:=$37;
       p_pad_device_info(@_data)^.dev_classid:=0;
+      p_pad_device_info(@_data)^.touchpad.pixelDensity:=$1186; // (4.486)
+      p_pad_device_info(@_data)^.touchpad.x:=$780; //1920
+      p_pad_device_info(@_data)^.touchpad.y:=$3ae; //942
+      p_pad_device_info(@_data)^.stick_info.deadZoneLeft :=$d;
+      p_pad_device_info(@_data)^.stick_info.deadZoneRight:=$d;
 
       Result:=copyout(@_data,info,64);
      end;
@@ -226,6 +242,8 @@ begin
     begin
      with p_read_state_args(data)^ do
      begin
+
+      Writeln('handle=0x',HexStr(handle,8));
 
       FillChar(_data,168,0);
 
@@ -260,10 +278,10 @@ begin
 
       copyout(@_data,state,168);
 
-      val:=1;
-      copyout(@val,connected,4);
+      val:=$60300;
+      copyout(@val,device_id,4);
 
-      val:=0;
+      val:=1;
       copyout(@val,s_version,4);
 
       //num * 0xa8

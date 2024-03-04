@@ -69,7 +69,7 @@ var
 begin
  Result:=-1;
  if (List=nil) then Exit;
- List^.userId[0]:=1;
+ List^.userId[0]:=$167a1a93;
  For i:=1 to SCE_USER_SERVICE_MAX_LOGIN_USERS-1 do
   List^.userId[i]:=SCE_USER_SERVICE_USER_ID_INVALID;
  Result:=0;
@@ -78,7 +78,7 @@ end;
 function ps4_sceUserServiceGetInitialUser(pUserId:PInteger):Integer;
 begin
  if (pUserId=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
- pUserId^:=1;
+ pUserId^:=$167a1a93;
  Result:=0;
 end;
 
@@ -113,7 +113,7 @@ begin
 
   event^:=Default(SceUserServiceEvent);
   event^.eventType:=SCE_USER_SERVICE_EVENT_TYPE_LOGIN;
-  event^.userId   :=1;
+  event^.userId   :=$167a1a93;
 
   Result:=0;
  end;
