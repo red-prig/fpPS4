@@ -60,28 +60,37 @@ type
 
  t_touch_pad_info=packed record
   pixelDensity:DWORD;
-  x           :word;
-  y           :word;
+  x           :Word;
+  y           :Word;
+ end;
+
+ t_pad_ext_info=packed record
+  case byte of
+   0:(quantityOfSelectorSwitch:Byte);
+   1:(maxPhysicalWheelAngle:Integer);
+   2:(data:array[0..7] of Byte);
  end;
 
  p_pad_device_info=^t_pad_device_info;
- t_pad_device_info=packed record
-  conn_type :Byte;
-  pad1      :array[0..2] of Byte;
-  connected :Integer;
-  unknow1   :QWORD;
-  unknow2   :word;
-  unknow3   :word;
-  unknow4   :array[0..11] of Byte;
-  pad_type  :Byte;
-  pad2      :array[0..2] of Byte;
-  capability:Integer;
-  dev_class :Byte;
-  pad3      :array[0..2] of Byte;
-  unknow5   :QWORD;
-  touchpad  :t_touch_pad_info;
-  stick_info:t_pad_stick_info;
-  unknow6   :word;
+ t_pad_device_info=packed record //0x40
+  conn_type  :Byte;
+  pad1       :array[0..2] of Byte;
+  connected  :Integer;
+  unknow1    :QWORD;
+  pad_type1  :Word;
+  pad_type2  :Word;
+  unknow2    :array[0..11] of Byte;
+  pad_type   :Byte;
+  pad2       :array[0..2] of Byte;
+  capability1:Integer;
+  dev_classid:Byte;
+  unknow3    :Byte;
+  capability2:Byte;
+  unknow4    :Byte;
+  ext_data   :t_pad_ext_info;
+  touchpad   :t_touch_pad_info;
+  stick_info :t_pad_stick_info;
+  unknow5    :Word;
  end;
  {$IF sizeof(t_pad_device_info)<>64}{$STOP sizeof(t_pad_device_info)<>64}{$ENDIF}
 
@@ -204,10 +213,10 @@ begin
      begin
       FillChar(_data,64,0);
 
-      p_pad_device_info(@_data)^.conn_type:=0;
-      p_pad_device_info(@_data)^.connected:=1;
-      p_pad_device_info(@_data)^.pad_type :=0;
-      p_pad_device_info(@_data)^.dev_class:=0;
+      p_pad_device_info(@_data)^.conn_type  :=0;
+      p_pad_device_info(@_data)^.connected  :=1;
+      p_pad_device_info(@_data)^.pad_type   :=0;
+      p_pad_device_info(@_data)^.dev_classid:=0;
 
       Result:=copyout(@_data,info,64);
      end;

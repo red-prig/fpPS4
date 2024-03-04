@@ -97,6 +97,8 @@ type
     function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
     Procedure CloseMainWindows();
+    Procedure ShowMainWindows();
+    Procedure HideMainWindows();
     procedure SetCaptionFPS(Ffps:QWORD);
 
     procedure OpenLog(Const LogFile:RawByteString);
@@ -112,6 +114,7 @@ type
     procedure DoEdit(Sender: TObject);
     procedure LogEnd;
     procedure ClearLog;
+    function  GameProcessForked:Boolean;
     procedure SetButtonsState(s:TMainButtonsState);
   end;
 
@@ -465,7 +468,11 @@ const
  pd_Width=1280;
  pd_Height=720;
 begin
- if (FGameMainForm<>nil) then Exit(FGameMainForm.Handle);
+ if (FGameMainForm<>nil) then
+ begin
+  FGameMainForm.Show;
+  Exit(FGameMainForm.Handle);
+ end;
 
  FGameMainForm:=TGameMainForm.CreateNew(Self);
  FGameMainForm.ShowInTaskBar:=stAlways;
@@ -490,6 +497,22 @@ end;
 Procedure TfrmMain.CloseMainWindows();
 begin
  FreeAndNil(FGameMainForm);
+end;
+
+Procedure TfrmMain.ShowMainWindows();
+begin
+ if (FGameMainForm<>nil) then
+ begin
+  FGameMainForm.Show;
+ end;
+end;
+
+Procedure TfrmMain.HideMainWindows();
+begin
+ if (FGameMainForm<>nil) then
+ begin
+  FGameMainForm.Hide;
+ end;
 end;
 
 procedure TfrmMain.SetCaptionFPS(Ffps:QWORD);
@@ -621,6 +644,7 @@ begin
  if (FGameProcess<>nil) then
  begin
   //resume
+  ShowMainWindows();
   FGameProcess.resume;
   SetButtonsState(mdsRunned);
  end else
@@ -640,10 +664,18 @@ begin
  end;
 end;
 
+function TfrmMain.GameProcessForked:Boolean;
+begin
+ Result:=False;
+ if (FGameProcess<>nil) then
+ begin
+  Result:=FGameProcess.g_fork;
+ end;
+end;
+
 procedure TfrmMain.TBStopClick(Sender: TObject);
 begin
- if (FGameProcess<>nil) then
- if (FGameProcess.g_fork) then //only forked
+ if GameProcessForked then //only forked
  begin
   //terminate
   FGameProcess.stop;
@@ -799,21 +831,35 @@ begin
     begin
      TBPlay .Enabled:=False;
      TBPause.Enabled:=True;
-     TBStop .Enabled:=True;
+     TBStop .Enabled:=False;
      //
      TBPlay .ImageIndex:=0+3;
      TBPause.ImageIndex:=1;
-     TBStop .ImageIndex:=2;
+     TBStop .ImageIndex:=2+3;
+
+     if GameProcessForked then //only forked
+     begin
+      TBStop .Enabled:=True;
+
+      TBStop .ImageIndex:=2;
+     end;
     end;
   mdsSuspended:
     begin
      TBPlay .Enabled:=True;
      TBPause.Enabled:=False;
-     TBStop .Enabled:=True;
+     TBStop .Enabled:=False;
      //
      TBPlay .ImageIndex:=0;
      TBPause.ImageIndex:=1+3;
-     TBStop .ImageIndex:=2;
+     TBStop .ImageIndex:=2+3;
+
+     if GameProcessForked then //only forked
+     begin
+      TBStop .Enabled:=True;
+
+      TBStop .ImageIndex:=2;
+     end;
     end;
  end;
 
