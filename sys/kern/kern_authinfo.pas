@@ -137,6 +137,7 @@ function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
 function sceSblACMgrIsNongameUcred(info:p_authinfo):Boolean;
 function sceSblACMgrIsSystemUcred(info:p_authinfo):Boolean;
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
+function sceSblACMgrIsDebuggableProcess(info:p_authinfo):Boolean;
 function sceSblACMgrIsAllowedToMmapSelf(icurr,ifile:p_authinfo):Boolean;
 function is_sce_prog_attr_20_800000(info:p_authinfo):Boolean;
 function is_sce_prog_attr_40_800000(info:p_authinfo):Boolean;
@@ -150,8 +151,7 @@ implementation
 uses
  errno,
  systm,
- kern_proc,
- md_proc;
+ kern_proc;
 
 function sceSblACMgrHasMmapSelfCapability(info:p_authinfo):Boolean;
 begin
@@ -191,13 +191,18 @@ begin
 end;
 
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
-var
- sce_prog_attr:QWORD;
 begin
- sce_prog_attr:=info^.app_attrs[0];
- if ((sce_prog_attr and $1000000)=0) then
+ Result:=(info^.app_attrs[0] and $80000000)<>0;
+end;
+
+function sceSblACMgrIsDebuggableProcess(info:p_authinfo):Boolean;
+var
+ attr:QWORD;
+begin
+ attr:=info^.app_attrs[0];
+ if ((attr and $1000000)=0) then
  begin
-  if ((sce_prog_attr and $2000000)<>0) then
+  if ((attr and $2000000)<>0) then
   begin
    Exit(true);
   end;
@@ -272,6 +277,11 @@ begin
 
  if sceSblACMgrHasSceProgramAttribute(@g_authinfo) then
  begin
+  info.pflags:=info.pflags or $40;
+ end;
+
+ if sceSblACMgrIsDebuggableProcess(@g_authinfo) then
+ begin
   info.pflags:=info.pflags or $80;
  end;
 
@@ -281,8 +291,8 @@ begin
  //sceSblACMgrIsDiskplayeruiProcess()        -> | 0x08
  //sceSblACMgrHasUseVideoServiceCapability() -> | 0x10
  //sceSblACMgrIsWebcoreProcess()             -> | 0x20
- //is_libkernel_sys()                        -> | 0x40
- //sceSblACMgrHasSceProgramAttribute()       -> | 0x80
+ //sceSblACMgrHasSceProgramAttribute()       -> | 0x40
+ //sceSblACMgrIsDebuggableProcess()          -> | 0x80
 
  Result:=copyout(@info,dst,SizeOf(t_proc_type_info));
 end;

@@ -465,7 +465,13 @@ begin
 
  imgp^.authinfo:=Default(t_authinfo);
  imgp^.authinfo.app_caps [0]:=QWORD($2000000000000000); //IsGame
- imgp^.authinfo.app_attrs[0]:=$400000 or $800000; //allow dmem map
+ imgp^.authinfo.app_attrs[0]:=$400000 or $800000;       //allow dmem map
+
+ if (imgp^.proc_param_addr<>nil) then
+ begin
+  //SceProgramAttribute
+  imgp^.authinfo.app_attrs[0]:=imgp^.authinfo.app_attrs[0] or $80000000;
+ end;
 
  if (imgp^.image_header=nil) or
     (imgp^.image_self  =nil) then
