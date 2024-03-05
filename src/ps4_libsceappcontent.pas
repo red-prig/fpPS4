@@ -177,6 +177,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+ Result:=UnMountTmpPath(PChar(mountPoint));
+ _sig_unlock;
+end;
+
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -197,6 +204,7 @@ begin
  lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
  lib^.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
+ lib^.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
 end;
 
 
