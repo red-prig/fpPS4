@@ -20,6 +20,7 @@ uses
  ps4_libSceLibcInternal,
  ps4_libSceScreenShot,
  ps4_libSceRtc,
+ ps4_libSceNpSessionSignaling,
  ps4_libSceNpSignaling,
  ps4_libSceNpMatching2,
  ps4_libSceRemoteplay,
