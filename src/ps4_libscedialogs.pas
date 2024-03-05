@@ -553,6 +553,13 @@ end;
 
 //
 
+function ps4_sceNpFriendListDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -701,6 +708,16 @@ begin
  lib^.set_proc($51DEE3DFE4432018,@ps4_sceHmdSetupDialogUpdateStatus);
  lib^.set_proc($EA55511CC5792D8D,@ps4_sceHmdSetupDialogGetResult);
  lib^.set_proc($FB3E0E26616B7997,@ps4_sceHmdSetupDialogTerminate);
+end;
+
+function Load_libSceNpFriendListDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceNpFriendListDialog');
+ lib^.set_proc($7EBC33DDECAE03AC,@ps4_sceNpFriendListDialogUpdateStatus);
 end;
 
 initialization
