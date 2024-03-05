@@ -751,6 +751,15 @@ begin
  RTLEventSetEvent(semaphore^.wakeUpEvent);
 end;
 
+function ps4_sceUltSemaphoreDestroy(semaphore:PSceUltSemaphore):Integer; SysV_ABI_CDecl;
+begin
+ if (semaphore=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ //Writeln(SysLogPrefix,'sceUltSemaphoreDestroy,name=',semaphore^.name,');
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreDestroy currently not working with ulthreads');
+ Result:=0;
+end;
+
 //
 
 function Load_libSceUlt(Const name:RawByteString):TElf_node;
@@ -791,6 +800,7 @@ begin
  lib^.set_proc($1C0D4B75B8B794F6,@ps4_sceUltSemaphoreTryAcquire);
  lib^.set_proc($4001F5A1F23DEEF5,@ps4_sceUltSemaphoreAcquire);
  lib^.set_proc($95BB64E57D6679CC,@ps4_sceUltSemaphoreRelease);
+ lib^.set_proc($8B35F27A1A68646A,@ps4_sceUltSemaphoreDestroy);
 end;
 
 initialization
