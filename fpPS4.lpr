@@ -69,7 +69,6 @@ uses
  ps4_libSceSocialScreen,
  ps4_libSceVideoRecording,
  ps4_libSceWebBrowserDialog,
- ps4_libSceInvitationDialog,
  ps4_libSceCompanionHttpd,
  ps4_libSceCompanionUtil,
  ps4_libSceContentExport,
