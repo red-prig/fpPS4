@@ -52,6 +52,13 @@ type
   port_index :Integer;
  end;
 
+ p_pad_state_args=^t_pad_state_args;
+ t_pad_state_args=packed record
+  id    :Integer; // handle/device_id
+  unknow:Integer;
+  state :Pointer;
+ end;
+
 
  t_pad_stick_info=packed record
   deadZoneLeft :Byte;
@@ -93,15 +100,6 @@ type
   unknow5    :Word;
  end;
  {$IF sizeof(t_pad_device_info)<>64}{$STOP sizeof(t_pad_device_info)<>64}{$ENDIF}
-
- p_pad_dev_info_args=^t_pad_dev_info_args;
- t_pad_dev_info_args=packed record
-  device_id:Integer;
-  unknow   :Integer;
-  info     :p_pad_device_info; //0x40
- end;
-
-
 
  t_analog_stick=packed record
   x,y:Byte;
@@ -175,11 +173,37 @@ const
  SCE_PAD_BUTTON_TOUCH_PAD   = $00100000;
  SCE_PAD_BUTTON_INTERCEPTED = $80000000;
 
+type
+ p_motion_calib_state=^t_motion_calib_state;
+ t_motion_calib_state=packed record
+  field_0x0 :Word;
+  field_0x2 :Integer;
+  field_0x6 :Word;
+  field_0x8 :Integer;
+  field_0xc :Word;
+  field_0xe :Integer;
+  field_0x12:Word;
+  field_0x14:Word;
+  field_0x16:Integer;
+  field_0x1a:Word;
+  field_0x1c:Integer;
+  field_0x20:Word;
+  field_0x22:Word;
+  field_0x24:Word;
+  field_0x26:Word;
+  field_0x28:Word;
+ end;
+
 Function hidIoctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  td:p_kthread;
  val:Integer;
- _data:array[0..167] of Byte;
+ u:packed record
+  case byte of
+   0:(pad_device_info:t_pad_device_info);
+   1:(pad_state:t_pad_state);
+   2:(motion_calib_state:t_motion_calib_state);
+ end;
 begin
  Result:=0;
 
@@ -211,30 +235,38 @@ begin
 
   $80104801: //sceHidGetDeviceInfoForUser
     begin
-     with p_pad_dev_info_args(data)^ do
+     with p_pad_state_args(data)^ do
      begin
+      Writeln('device_id=0x',HexStr(id,8));
 
-     subr_backtrace.print_backtrace_td(stderr);
+      u.pad_device_info:=Default(t_pad_device_info);
 
-      Writeln('device_id=0x',HexStr(device_id,8));
-      Assert(unknow=8,'unknow<>8');
+      u.pad_device_info.conn_type  :=0;
+      u.pad_device_info.device_id  :=$60300;
+      u.pad_device_info.hid_vid    :=$54c; //Vendor ID = 054C
+      u.pad_device_info.hid_did    :=$5c4; //Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
+      u.pad_device_info.dualshock_i:=4;
+      u.pad_device_info.capability1:=$37;
+      u.pad_device_info.dev_classid:=0;
+      u.pad_device_info.touchpad.pixelDensity:=$1186; // (4.486)
+      u.pad_device_info.touchpad.x:=$780; //1920
+      u.pad_device_info.touchpad.y:=$3ae; //942
+      u.pad_device_info.stick_info.deadZoneLeft :=$d;
+      u.pad_device_info.stick_info.deadZoneRight:=$d;
 
-      FillChar(_data,64,0);
+      Result:=copyout(@u.pad_device_info,state,sizeof(t_pad_device_info));
+     end;
+    end;
 
-      p_pad_device_info(@_data)^.conn_type  :=0;
-      p_pad_device_info(@_data)^.device_id  :=$60300;
-      p_pad_device_info(@_data)^.hid_vid    :=$54c; //Vendor ID = 054C
-      p_pad_device_info(@_data)^.hid_did    :=$5c4; //Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
-      p_pad_device_info(@_data)^.dualshock_i:=4;
-      p_pad_device_info(@_data)^.capability1:=$37;
-      p_pad_device_info(@_data)^.dev_classid:=0;
-      p_pad_device_info(@_data)^.touchpad.pixelDensity:=$1186; // (4.486)
-      p_pad_device_info(@_data)^.touchpad.x:=$780; //1920
-      p_pad_device_info(@_data)^.touchpad.y:=$3ae; //942
-      p_pad_device_info(@_data)^.stick_info.deadZoneLeft :=$d;
-      p_pad_device_info(@_data)^.stick_info.deadZoneRight:=$d;
+  $80104823: //sceHidControllerMotionCalibReadForUser
+    begin
+     with p_pad_state_args(data)^ do
+     begin
+      Writeln('device_id=0x',HexStr(id,8));
 
-      Result:=copyout(@_data,info,64);
+      u.motion_calib_state:=Default(t_motion_calib_state);
+
+      Result:=copyout(@u.motion_calib_state,state,sizeof(t_motion_calib_state));
      end;
     end;
 
@@ -245,38 +277,38 @@ begin
 
       Writeln('handle=0x',HexStr(handle,8));
 
-      FillChar(_data,168,0);
+      u.pad_state:=Default(t_pad_state);
 
-      p_pad_state(@_data)^.timestamp:=$101010;
-      p_pad_state(@_data)^.buttons:=SCE_PAD_BUTTON_UP or SCE_PAD_BUTTON_LEFT;
+      u.pad_state.timestamp:=$101010;
+      u.pad_state.buttons:=SCE_PAD_BUTTON_UP or SCE_PAD_BUTTON_LEFT;
 
-      p_pad_state(@_data)^.leftStick.x:=1;
-      p_pad_state(@_data)^.leftStick.y:=2;
+      u.pad_state.leftStick.x:=1;
+      u.pad_state.leftStick.y:=2;
 
-      p_pad_state(@_data)^.rightStick.x:=3;
-      p_pad_state(@_data)^.rightStick.y:=4;
+      u.pad_state.rightStick.x:=3;
+      u.pad_state.rightStick.y:=4;
 
-      p_pad_state(@_data)^.analogButtons.l2:=5;
-      p_pad_state(@_data)^.analogButtons.r2:=6;
-
-      p_pad_state(@_data)^.touch_gcount:=1;
-      p_pad_state(@_data)^.touch_groups[0].touchNum:=2;
+      u.pad_state.analogButtons.l2:=5;
+      u.pad_state.analogButtons.r2:=6;
 
 
-      p_pad_state(@_data)^.touch_groups[0].touch[0].id:=1;
-      p_pad_state(@_data)^.touch_groups[0].touch[0].x :=2;
-      p_pad_state(@_data)^.touch_groups[0].touch[0].y :=3;
+      u.pad_state.touch_gcount:=1;
+      u.pad_state.touch_groups[0].touchNum:=2;
 
-      p_pad_state(@_data)^.touch_groups[0].touch[1].id:=4;
-      p_pad_state(@_data)^.touch_groups[0].touch[1].x :=5;
-      p_pad_state(@_data)^.touch_groups[0].touch[1].y :=6;
+      u.pad_state.touch_groups[0].touch[0].id:=1;
+      u.pad_state.touch_groups[0].touch[0].x :=2;
+      u.pad_state.touch_groups[0].touch[0].y :=3;
+
+      u.pad_state.touch_groups[0].touch[1].id:=4;
+      u.pad_state.touch_groups[0].touch[1].x :=5;
+      u.pad_state.touch_groups[0].touch[1].y :=6;
 
 
-      p_pad_state(@_data)^.unique_len :=7;
-      p_pad_state(@_data)^.unique_data[6]:=7;
+      u.pad_state.unique_len :=7;
+      u.pad_state.unique_data[6]:=7;
 
 
-      copyout(@_data,state,168);
+      Result:=copyout(@u.pad_state,state,sizeof(t_pad_state));
 
       val:=$60300;
       copyout(@val,device_id,4);

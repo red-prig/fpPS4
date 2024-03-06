@@ -343,7 +343,12 @@ begin
 
  GridParamSfo.Clear;
 
- if (ParamSfo=nil) then Exit;
+ if (ParamSfo=nil) then
+ begin
+  SetGridVal(GridMain,FTitleId_row,'???');
+  SetGridVal(GridMain,FVersion_row,'???');
+  Exit;
+ end;
 
  if (Length(ParamSfo.params)=0) then Exit;
  For i:=0 to High(ParamSfo.params) do
