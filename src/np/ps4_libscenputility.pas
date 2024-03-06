@@ -16,7 +16,7 @@ type
  SceNpBandwidthTestInitParam=packed record
   size           :QWORD;
   threadPriority :Integer;
-  padding        :array[0..3] of char;
+  padding        :Integer;
   cpuAffinityMask:QWORD;
   reserved       :array[0..7] of DWORD;
  end;

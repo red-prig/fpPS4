@@ -179,9 +179,7 @@ end;
 
 function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
 begin
- _sig_lock;
- Result:=UnMountTmpPath(PChar(mountPoint));
- _sig_unlock;
+ Result:=0;
 end;
 
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;

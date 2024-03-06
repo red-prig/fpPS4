@@ -757,6 +757,8 @@ begin
   Exit(SCE_ULT_ERROR_NULL);
  //Writeln(SysLogPrefix,'sceUltSemaphoreDestroy,name=',semaphore^.name,');
  assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreDestroy currently not working with ulthreads');
+ ps4_sceKernelDeleteSema(@semaphore^.handle);
+ semaphore^.handle:=nil;
  Result:=0;
 end;
 
