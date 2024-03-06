@@ -80,24 +80,26 @@ type
 
  p_pad_device_info=^t_pad_device_info;
  t_pad_device_info=packed record //0x40
-  conn_type  :Byte;
-  pad1       :array[0..2] of Byte;
-  device_id  :Integer;
-  unknow1    :QWORD;
-  hid_vid    :Word;
-  hid_did    :Word;
-  unknow2    :array[0..11] of Byte;
-  dualshock_i:Byte;
-  pad2       :array[0..2] of Byte;
-  capability1:Integer;
-  dev_classid:Byte;
-  unknow3    :Byte;
-  capability2:Byte;
-  unknow4    :Byte;
-  ext_data   :t_pad_ext_info;
-  touchpad   :t_touch_pad_info;
-  stick_info :t_pad_stick_info;
-  unknow5    :Word;
+  connect_type  :Byte;
+  pad1          :array[0..2] of Byte;
+  device_id     :Integer;
+  bluetooth_addr:QWORD;
+  hid_vid       :Word;
+  hid_did       :Word;
+  f_0x14        :QWORD;
+  f_0x1c        :Word;
+  f_0x1e        :Word;
+  dualshock_id  :Byte;
+  pad2          :array[0..2] of Byte;
+  capability1   :Integer;
+  dev_class_id  :Byte;
+  motion_scale  :Byte;
+  capability2   :Byte;
+  unknow4       :Byte;
+  ext_data      :t_pad_ext_info;
+  touchpad      :t_touch_pad_info;
+  stick_info    :t_pad_stick_info;
+  unknow5       :Word;
  end;
  {$IF sizeof(t_pad_device_info)<>64}{$STOP sizeof(t_pad_device_info)<>64}{$ENDIF}
 
@@ -176,12 +178,12 @@ const
 type
  p_motion_calib_state=^t_motion_calib_state;
  t_motion_calib_state=packed record
-  field_0x0 :Word;
-  field_0x2 :Integer;
-  field_0x6 :Word;
-  field_0x8 :Integer;
-  field_0xc :Word;
-  field_0xe :Integer;
+  field_0x00:Word;
+  field_0x02:Integer;
+  field_0x06:Word;
+  field_0x08:Integer;
+  field_0x0c:Word;
+  field_0x0e:Integer;
   field_0x12:Word;
   field_0x14:Word;
   field_0x16:Integer;
@@ -241,16 +243,18 @@ begin
 
       u.pad_device_info:=Default(t_pad_device_info);
 
-      u.pad_device_info.conn_type  :=0;
-      u.pad_device_info.device_id  :=$60300;
-      u.pad_device_info.hid_vid    :=$54c; //Vendor ID = 054C
-      u.pad_device_info.hid_did    :=$5c4; //Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
-      u.pad_device_info.dualshock_i:=4;
-      u.pad_device_info.capability1:=$37;
-      u.pad_device_info.dev_classid:=0;
-      u.pad_device_info.touchpad.pixelDensity:=$1186; // (4.486)
-      u.pad_device_info.touchpad.x:=$780; //1920
-      u.pad_device_info.touchpad.y:=$3ae; //942
+      u.pad_device_info.connect_type            :=0;
+      u.pad_device_info.device_id               :=$60300;
+      u.pad_device_info.hid_vid                 :=$54c;  // Vendor ID = 054C
+      u.pad_device_info.hid_did                 :=$5c4;  // Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
+      u.pad_device_info.f_0x1c                  :=$2;
+      u.pad_device_info.f_0x1e                  :=$b;
+      u.pad_device_info.dualshock_id            :=4;
+      u.pad_device_info.capability1             :=$37;
+      u.pad_device_info.dev_class_id            :=0;
+      u.pad_device_info.touchpad.pixelDensity   :=$1186; // (4.486)
+      u.pad_device_info.touchpad.x              :=$780;  // 1920
+      u.pad_device_info.touchpad.y              :=$3ae;  // 942
       u.pad_device_info.stick_info.deadZoneLeft :=$d;
       u.pad_device_info.stick_info.deadZoneRight:=$d;
 
@@ -317,8 +321,6 @@ begin
       copyout(@val,s_version,4);
 
       //num * 0xa8
-
-      writeln;
 
       //num
       td^.td_retval[0]:=1;
