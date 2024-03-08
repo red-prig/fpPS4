@@ -198,15 +198,6 @@ type
   end;
  end;
 
-//
-
-function ps4_sceLncUtilInitialize():Integer; SysV_ABI_CDecl;
-begin
- Result:=0;
-end;
-
-// 
-
 function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer; SysV_ABI_CDecl;
 var
  info:DWORD;
@@ -455,18 +446,6 @@ function ps4_sceSystemServiceDisableSuspendNotification:Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
-
-//
-
-function Load_libSceLncUtil(Const name:RawByteString):TElf_node;
-var
- lib:PLIBRARY;
-begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
- lib:=Result._add_lib('libSceLncUtil');
- lib^.set_proc($7FF43C35DDF71417,@ps4_sceLncUtilInitialize);
-end; 
 
 //
 
