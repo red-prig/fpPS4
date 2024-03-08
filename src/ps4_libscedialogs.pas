@@ -398,6 +398,11 @@ begin
  Result:=status_commerce_dialog;
 end;
 
+function ps4_sceNpCommerceDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=status_commerce_dialog;
+end;
+
 type
  pSceNpCommerceDialogResult=^SceNpCommerceDialogResult;
  SceNpCommerceDialogResult=packed record
@@ -654,6 +659,7 @@ begin
  lib^.set_proc($D1A4766969906A5E,@ps4_sceNpCommerceDialogInitialize);
  lib^.set_proc($0DF4820D10371236,@ps4_sceNpCommerceDialogOpen);
  lib^.set_proc($2D1E5CC0530C0951,@ps4_sceNpCommerceDialogUpdateStatus);
+ lib^.set_proc($0826C2FA5AAABC5D,@ps4_sceNpCommerceDialogGetStatus);
  lib^.set_proc($AF8D9B59C41BB596,@ps4_sceNpCommerceDialogGetResult);
  lib^.set_proc($9BF23DD806F9D16F,@ps4_sceNpCommerceDialogTerminate);
  lib^.set_proc($0C79B0B1AE92F137,@ps4_sceNpCommerceShowPsStoreIcon);
