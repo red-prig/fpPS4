@@ -850,6 +850,8 @@ begin
  jit_cbs[OPPv,OPmov ,OPSx_dqu]:=@op_vmovdqu;
  jit_cbs[OPPv,OPmov ,OPSx_dqa]:=@op_vmovdqa;
 
+ jit_cbs[OPPv,OPlddqu,OPSnone]:=@op_avx2_reg_mem_wo;
+
  jit_cbs[OPPv,OPmovnt,OPSx_dqa]:=@op_vmovntdqa;
  jit_cbs[OPPv,OPmovnt,OPSx_dq ]:=@op_avx2_mem_reg_mov_wo;
 
@@ -1067,6 +1069,8 @@ begin
 
  jit_cbs[OPPv,OPcvtps2,OPSx_pd ]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPcvtps2,OPSx_dq ]:=@op_avx2_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPvcvtph2ps,OPSnone]:=@op_avx2_reg_mem_wo;
 
  jit_cbs[OPPnone,OPbextr,OPSnone]:=@op_bextr;
  jit_cbs[OPPnone,OPandn ,OPSnone]:=@op_andn;

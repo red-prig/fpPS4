@@ -401,7 +401,10 @@ begin
  Fmlog.Align:=alClient;
 
  Fmlog.BracketHighlightStyle:=sbhsBoth;
+
  Fmlog.Font.Style:=[];
+ Fmlog.Font.Name:='Consolas';
+ Fmlog.Font.Size:=11;
 
  Pages.ActivePageIndex:=0;
 

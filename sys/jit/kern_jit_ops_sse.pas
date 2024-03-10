@@ -410,6 +410,8 @@ begin
  jit_cbs[OPPnone,OPmov,OPSx_dqa]:=@op_movdqa;
  jit_cbs[OPPnone,OPmov,OPSx_dqu]:=@op_movdqu;
 
+ jit_cbs[OPPnone,OPlddqu,OPSnone]:=@op_reg_mem_wo;
+
  jit_cbs[OPPnone,OPmovu,OPSx_ps]:=@op_movu_ps_pd;
  jit_cbs[OPPnone,OPmovu,OPSx_pd]:=@op_movu_ps_pd;
 

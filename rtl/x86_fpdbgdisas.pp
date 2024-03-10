@@ -3791,7 +3791,7 @@ begin
         $0E: begin SetOpcode(OPvtest,       OPSx_ps       ); AddVx;          AddWx;  CheckVex; end;
         $0F: begin SetOpcode(OPvtest,       OPSx_pd       ); AddVx;          AddWx;  CheckVex; end;
         $10: begin SetOpcode(OPpblendvb                   ); AddVdq; AddWdq;                   end;
-        $13: begin SetOpcode(OPvcvtph2ps                  ); AddVx;  AddWx;  AddIb;  CheckVex; end;
+        $13: begin SetOpcode(OPvcvtph2ps                  ); AddVx;  AddWx;          CheckVex; end;
         $14: begin SetOpcode(OPblendv,      OPSx_ps       ); AddVdq; AddWdq; AddReg(regXmm, os128, 0); end;
         $15: begin SetOpcode(OPblendv,      OPSx_pd       ); AddVdq; AddWdq; AddReg(regXmm, os128, 0); end;
         $16: begin SetOpcode(OPvperm,       OPSx_ps       ); AddVqq; AddHqq; AddWqq; CheckVex; end;
