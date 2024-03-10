@@ -12,12 +12,20 @@ uses
 
 const
  SCE_NP_CLIENT_ID_MAX_LEN=128;
+ SCE_NP_CLIENT_SECRET_MAX_LEN=256;
  SCE_NP_AUTHORIZATION_CODE_MAX_LEN=128;
+ SCE_NP_ID_TOKEN_MAX_LEN=4096;
 
 type
  pSceNpClientId=^SceNpClientId;
  SceNpClientId=packed record
   id:array[0..SCE_NP_CLIENT_ID_MAX_LEN] of char;
+  padding:array[0..6] of Byte;
+ end;
+
+ pSceNpClientSecret=^SceNpClientSecret;
+ SceNpClientSecret=packed record
+  secret:array[0..SCE_NP_CLIENT_SECRET_MAX_LEN] of char;
   padding:array[0..6] of Byte;
  end;
 
@@ -40,6 +48,22 @@ type
  pSceNpAuthorizationCode=^SceNpAuthorizationCode;
  SceNpAuthorizationCode=packed record
   code:array[0..SCE_NP_AUTHORIZATION_CODE_MAX_LEN] of char;
+  padding:array[0..6] of Byte;
+ end;
+
+ pSceNpAuthGetIdTokenParameterA=^SceNpAuthGetIdTokenParameterA;
+ SceNpAuthGetIdTokenParameterA=packed record
+  size:QWORD;
+  userId:Integer;
+  padding:array[0..3] of Byte;
+  clientId:pSceNpClientId;
+  clientSecret:pSceNpClientSecret;
+  scope:PChar;
+ end;
+
+ pSceNpIdToken=^SceNpIdToken;
+ SceNpIdToken=packed record
+  token:array[0..SCE_NP_ID_TOKEN_MAX_LEN] of char;
   padding:array[0..6] of Byte;
  end;
 
@@ -74,6 +98,15 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpAuthGetIdTokenA(reqId:Integer;
+                                  const param:pSceNpAuthGetIdTokenParameterA;
+                                  idToken:pSceNpIdToken):Integer; SysV_ABI_CDecl;
+begin
+ Writeln(SysLogPrefix,'sceNpAuthGetIdTokenA');
+ FillChar(idToken^, SizeOf(SceNpIdToken), 0);
+ Result:=0;
+end;
+
 function Load_libSceNpAuth(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -87,6 +120,7 @@ begin
  lib^.set_proc($2B11A43AB4094EA6,@ps4_sceNpAuthGetAuthorizationCode);
  lib^.set_proc($8234B27F34AC0DC1,@ps4_sceNpAuthPollAsync);
  lib^.set_proc($1FCC06F4193F9CF7,@ps4_sceNpAuthDeleteRequest);
+ lib^.set_proc($0A871B1D520A3C4F,@ps4_sceNpAuthGetIdTokenA);
 end;
 
 initialization
