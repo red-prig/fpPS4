@@ -222,6 +222,29 @@ begin
  end;
 end;
 
+function ps4__sceNpHeapMalloc(heap:pSceNpHeap;size:size_t):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=nil;
+ if (heap^.mspace<>nil) then
+ begin
+  Result:=ps4_sceLibcMspaceMalloc(heap^.mspace,size);
+ end;
+end;
+
+function ps4_sceNpHeapGetStat():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+procedure ps4_sceNpHeapDestroy(heap:pSceNpHeap); SysV_ABI_CDecl;
+begin
+ if (heap^.mspace<>nil) then
+ begin
+  ps4_sceLibcMspaceDestroy(heap^.mspace);
+  heap^.mspace:=nil;
+ end;
+end;
+
 function ps4_sceNpCreateEventFlag(ef:pSceKernelEventFlag;
                                   pName:PChar;
                                   attr:DWORD;
@@ -271,6 +294,9 @@ begin
  lib^.set_proc($E33C5EBE082D62B4,@ps4_sceNpMutexDestroy); // sceNpLwMutexDestroy
  //
  lib^.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
+ lib^.set_proc($9305B9A9D75FF8BA,@ps4__sceNpHeapMalloc);
+ lib^.set_proc($DA3747A0FA52F96D,@ps4_sceNpHeapGetStat);
+ lib^.set_proc($C15767EFC1CA737D,@ps4_sceNpHeapDestroy);
  lib^.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
  lib^.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
 end;
