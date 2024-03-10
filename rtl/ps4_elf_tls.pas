@@ -21,9 +21,10 @@ type
   seg_adr:Pointer;
   dtv:Pdtv;
   _dtv:Tdtv;
+  base:Pointer;
  end;
 
-function  _init_tls_tcb(Size,is_static,gen:QWORD):Ptls_tcb;
+function  _init_tls_tcb(Size,_align,is_static,gen:QWORD):Ptls_tcb;
 function  _get_tls_tcb(gen:QWORD):Ptls_tcb;
 procedure _free_tls_tcb_all;
 
@@ -32,21 +33,29 @@ implementation
 threadvar
  tls_local:THAMT;
 
-function _init_tls_tcb(Size,is_static,gen:QWORD):Ptls_tcb;
+function _init_tls_tcb(Size,_align,is_static,gen:QWORD):Ptls_tcb;
 var
  full_size:QWORD;
  base:Pointer;
- tcb:Ptls_tcb;
- PP:PPointer;
+ dtv :Pointer;
+ tcb :Ptls_tcb;
+ PP  :PPointer;
 begin
- full_size:=Size+SizeOf(Ttls_tcb);
+ if (_align=0) then _align:=1;
+
+ full_size:=Size+(_align-1)+SizeOf(Ttls_tcb);
  base:=AllocMem(full_size);
- tcb:=Pointer(base+Size);
+ dtv :=Align(base,_align);
+
+ tcb:=Pointer(dtv+Size);
+ tcb^.base:=base;
+
  tcb^.seg_adr:=tcb;
  tcb^.dtv:=@tcb^._dtv;
- tcb^._dtv.value:=base;
+ tcb^._dtv.value:=dtv;
  tcb^._dtv.is_static:=is_static;
  tcb^._dtv.gen:=gen;
+
  if (tls_local=nil) then tls_local:=HAMT_create64;
  PP:=HAMT_insert64(tls_local,gen,tcb);
  Assert(PP<>nil);
@@ -70,7 +79,7 @@ Var
 begin
  tcb:=data;
  if (tcb=nil) then Exit;
- base:=tcb^._dtv.value;
+ base:=tcb^.base;
  FreeMem(base);
 end;
 
