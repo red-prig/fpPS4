@@ -79,6 +79,13 @@ type
   entry:Pointer; // 24
  end;
 
+ pSceNpHeapStat=^SceNpHeapStat;
+ SceNpHeapStat=packed record
+  maxSystemSize   :QWORD;
+  maxInuseSize    :QWORD;
+  currentInuseSize:QWORD;
+ end;
+
 implementation
 
 uses
@@ -231,9 +238,22 @@ begin
  end;
 end;
 
-function ps4_sceNpHeapGetStat():Integer; SysV_ABI_CDecl;
+function ps4_sceNpHeapGetStat(heap:pSceNpHeap;stat:pSceNpHeapStat):Integer; SysV_ABI_CDecl;
+var
+ data:SceLibcMallocManagedSize;
 begin
- Result:=0;
+ data:=Default(SceLibcMallocManagedSize);
+ data.size   :=40;
+ data.version:=1;
+
+ Result:=ps4_sceLibcMspaceMallocStats(heap^.mspace,@data);
+
+ if (Result=0) then
+ begin
+  stat^.maxSystemSize   :=data.maxSystemSize;
+  stat^.maxInuseSize    :=data.maxInuseSize;
+  stat^.currentInuseSize:=data.currentInuseSize;
+ end;
 end;
 
 procedure ps4_sceNpHeapDestroy(heap:pSceNpHeap); SysV_ABI_CDecl;
