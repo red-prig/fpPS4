@@ -196,6 +196,26 @@ type
   field_0x28:Word;
  end;
 
+procedure fill_device_info(var device_info:t_pad_device_info);
+begin
+ device_info:=Default(t_pad_device_info);
+
+ device_info.connect_type            :=0;
+ device_info.device_id               :=$60300;
+ device_info.hid_vid                 :=$54c;  // Vendor ID = 054C
+ device_info.hid_did                 :=$5c4;  // Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
+ device_info.f_0x1c                  :=$2;
+ device_info.f_0x1e                  :=$b;
+ device_info.dualshock_id            :=4;
+ device_info.capability1             :=$37;
+ device_info.dev_class_id            :=0;
+ device_info.touchpad.pixelDensity   :=$1186; // (4.486)
+ device_info.touchpad.x              :=$780;  // 1920
+ device_info.touchpad.y              :=$3ae;  // 942
+ device_info.stick_info.deadZoneLeft :=$d;
+ device_info.stick_info.deadZoneRight:=$d;
+end;
+
 Function hidIoctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  td:p_kthread;
@@ -241,22 +261,19 @@ begin
      begin
       Writeln('device_id=0x',HexStr(id,8));
 
-      u.pad_device_info:=Default(t_pad_device_info);
+      fill_device_info(u.pad_device_info);
 
-      u.pad_device_info.connect_type            :=0;
-      u.pad_device_info.device_id               :=$60300;
-      u.pad_device_info.hid_vid                 :=$54c;  // Vendor ID = 054C
-      u.pad_device_info.hid_did                 :=$5c4;  // Device ID = 05C4 (DualShock 4 [CUH-ZCT1x])
-      u.pad_device_info.f_0x1c                  :=$2;
-      u.pad_device_info.f_0x1e                  :=$b;
-      u.pad_device_info.dualshock_id            :=4;
-      u.pad_device_info.capability1             :=$37;
-      u.pad_device_info.dev_class_id            :=0;
-      u.pad_device_info.touchpad.pixelDensity   :=$1186; // (4.486)
-      u.pad_device_info.touchpad.x              :=$780;  // 1920
-      u.pad_device_info.touchpad.y              :=$3ae;  // 942
-      u.pad_device_info.stick_info.deadZoneLeft :=$d;
-      u.pad_device_info.stick_info.deadZoneRight:=$d;
+      Result:=copyout(@u.pad_device_info,state,sizeof(t_pad_device_info));
+     end;
+    end;
+
+  $8010480E: //sceHidGetDeviceInfoByHandleForUser
+    begin
+     with p_pad_state_args(data)^ do
+     begin
+      Writeln('handle=0x',HexStr(id,8));
+
+      fill_device_info(u.pad_device_info);
 
       Result:=copyout(@u.pad_device_info,state,sizeof(t_pad_device_info));
      end;
