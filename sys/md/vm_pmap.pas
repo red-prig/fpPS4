@@ -279,11 +279,13 @@ procedure get_dmem_fd(var info:t_fd_info);
 var
  o:QWORD;
  e:QWORD;
+ d:QWORD;
  i:DWORD;
  r:DWORD;
 begin
  o:=info.offset;
 
+ //current block id
  i:=o shr PMAPP_1GB_SHIFT;
 
  if (DMEM_FD[i].hfile=0) then
@@ -303,12 +305,21 @@ begin
 
  vm_nt_file_obj_reference(info.obj);
 
- e:=o+(info.__end-info.start);
+ //current block offset
+ o:=o and PMAPP_1GB_MASK;
 
+ //mem size
+ d:=info.__end-info.start;
+
+ //max offset
+ e:=o+d;
+
+ // |start         end|
+ // |offset  |max
  if (e>PMAPP_1GB_SIZE) then
  begin
-  e:=PMAPP_1GB_SIZE;
-  e:=(e-o)+info.start;
+  e:=PMAPP_1GB_SIZE-o;
+  e:=e+info.start;
   info.__end:=e;
  end;
 end;
@@ -506,17 +517,17 @@ begin
 
       info.start:=start;
       info.__end:=__end;
-      info.offset:=0;
 
       while (info.start<>info.__end) do
       begin
        get_private_fd(info);
 
        delta:=(info.__end-info.start);
+       if (delta=0) then Break;
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           info.offset,
+                           0, //private always from the start
                            info.start,
                            info.__end,
                            delta,
@@ -530,7 +541,6 @@ begin
 
        info.start :=info.start+delta;
        info.__end :=__end;
-       info.offset:=0;
       end;
 
     end;
@@ -547,7 +557,7 @@ begin
      begin
       if (p_print_pmap<>0) then
       begin
-       Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+       Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
       end;
 
       info.start:=start;
@@ -559,10 +569,16 @@ begin
        get_dmem_fd(info);
 
        delta:=(info.__end-info.start);
+       if (delta=0) then Break;
+
+       if (p_print_pmap<>0) then
+       begin
+        Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+       end;
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           info.offset,
+                           info.offset and PMAPP_1GB_MASK, //block local offset
                            info.start,
                            info.__end,
                            delta,
@@ -596,7 +612,7 @@ begin
 
       r:=vm_nt_map_insert(@pmap^.nt_map,
                           info.obj,
-                          info.offset,
+                          info.offset, //one block for all dev
                           info.start,
                           info.__end,
                           delta,
@@ -677,6 +693,7 @@ begin
        get_private_fd(info);
 
        delta:=(info.__end-info.start);
+       if (delta=0) then Break;
 
        pmap_copy(pmap,
                  cow,
@@ -687,7 +704,7 @@ begin
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           0,
+                           0, //private always from the start
                            info.start,
                            info.__end,
                            delta,
@@ -717,7 +734,7 @@ begin
 
       r:=vm_nt_map_insert(@pmap^.nt_map,
                           info.obj,
-                          info.offset,
+                          info.offset, //offset in file
                           info.start,
                           info.__end,
                           size,

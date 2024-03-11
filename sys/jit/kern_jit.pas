@@ -32,11 +32,21 @@ uses
  kern_jit_ops_avx,
  kern_jit_dynamic,
  kern_jit_test,
- kern_jit_asm;
+ kern_jit_asm,
+ kern_thr,
+ subr_backtrace;
 
-procedure jit_assert;
+procedure _jit_assert;
 begin
- Assert(False,'jit_assert');
+ jit_save_to_sys_save(curkthread);
+ print_error_td('Assert in guest code!');
+ Assert(false);
+end;
+
+procedure jit_assert; assembler; nostackframe;
+asm
+ call jit_save_ctx
+ jmp  _jit_assert
 end;
 
 procedure jit_system_error;

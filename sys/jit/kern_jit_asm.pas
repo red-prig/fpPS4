@@ -56,6 +56,12 @@ procedure jit_jmp_internal;  assembler;
 
 function  IS_JIT_FUNC(rip:qword):Boolean;
 
+procedure jit_save_ctx;
+procedure jit_load_ctx;
+
+procedure jit_save_to_sys_save(td:p_kthread);
+procedure sys_save_to_jit_save(td:p_kthread);
+
 implementation
 
 uses
@@ -70,9 +76,6 @@ uses
 function jmp_dispatcher(addr,plt:Pointer):Pointer; external;
 
 //
-
-procedure jit_save_ctx; forward;
-procedure jit_load_ctx; forward;
 
 procedure jit_sigsegv(addr:Pointer);
 begin

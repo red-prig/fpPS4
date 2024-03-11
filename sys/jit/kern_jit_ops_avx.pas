@@ -422,7 +422,7 @@ begin
 end;
 
 const
- vmov_ss_sd_desc:t_op_desc=(
+ vmov_ss_desc:t_op_desc=(
   mem_reg:(op:$11;simdop:2;mm:1);
   reg_mem:(op:$10;simdop:2;mm:1);
   reg_imm:(opt:[not_impl]);
@@ -431,11 +431,18 @@ const
  );
 
 procedure op_vmov_ss_sd(var ctx:t_jit_context2);
+var
+ desc:t_op_desc;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   case ctx.din.OperCnt of
-   2:op_emit_avx2(ctx,vmov_ss_sd_desc);
+   2:begin
+      desc:=vmov_ss_desc;
+      desc.mem_reg.simdop:=SCODES[ctx.dis.SimdOpcode];
+      desc.reg_mem.simdop:=SCODES[ctx.dis.SimdOpcode];
+      op_emit_avx2(ctx,desc);
+     end;
    3:op_avx3_not_vex_len(ctx);
    else
     Assert(False);
