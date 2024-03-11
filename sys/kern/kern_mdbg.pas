@@ -69,6 +69,7 @@ begin
   4: //sceKernelDebugRaiseExceptionOnReleaseMode
     begin
      Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
+     print_backtrace_td(stderr);
      Result:=0;
     end;
 

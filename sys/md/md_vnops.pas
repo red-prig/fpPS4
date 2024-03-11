@@ -19,6 +19,7 @@ uses
  vnode,
  vnamei,
  vnode_if,
+ vfilio,
  vfs_default,
  ufs,
  ufs_vnops,
@@ -54,6 +55,8 @@ function md_close(ap:p_vop_close_args):Integer;
 function md_fsync(ap:p_vop_fsync_args):Integer;
 function md_setattr(ap:p_vop_setattr_args):Integer;
 
+function md_ioctl(ap:p_vop_ioctl_args):Integer;
+
 function md_read(ap:p_vop_read_args):Integer;
 function md_write(ap:p_vop_write_args):Integer;
 
@@ -79,7 +82,7 @@ const
   vop_markatime     :nil;
   vop_read          :@md_read;
   vop_write         :@md_write;
-  vop_ioctl         :nil;
+  vop_ioctl         :@md_ioctl;
   vop_poll          :nil;
   vop_kqfilter      :nil;
   vop_revoke        :nil;
@@ -2276,6 +2279,17 @@ begin
   begin
    NtClose(RL);
   end;
+ end;
+
+end;
+
+function md_ioctl(ap:p_vop_ioctl_args):Integer;
+begin
+ Result:=EOPNOTSUPP;
+
+ case ap^.a_command of
+  FIOSEEKDATA:Result:=0;
+  else;
  end;
 
 end;

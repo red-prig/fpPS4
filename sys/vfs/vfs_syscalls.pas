@@ -1644,10 +1644,12 @@ begin
   fdrop(fp);
   Exit(ESPIPE);
  end;
+
  vp:=fp^.f_vnode;
  foffset:=foffset_lock(fp, 0);
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
  noneg:=ord(vp^.v_type<>VCHR);
+
  case whence of
   L_INCR:
    begin
@@ -1666,7 +1668,9 @@ begin
     error:=VOP_GETATTR(vp, @vattr);
     VOP_UNLOCK(vp, 0);
     if (error<>0) then
+    begin
      goto _break;
+    end;
 
     {
      * If the file references a disk device, then fetch
@@ -1676,7 +1680,9 @@ begin
     if (vattr.va_size=0) and
        (vp^.v_type=VCHR) and
        (fo_ioctl(fp, DIOCGMEDIASIZE, @size)=0) then
+    begin
      vattr.va_size:=size;
+    end;
 
     if (noneg<>0) and
        ((vattr.va_size < 0) or
@@ -1697,9 +1703,15 @@ begin
  end;
  _break:
  if (error=0) and (noneg<>0) and (offset < 0) then
+ begin
   error:=EINVAL;
+ end;
+
  if (error<>0) then
+ begin
   goto drop;
+ end;
+
  VFS_KNOTE_UNLOCKED(vp, 0);
  td^.td_retval[0]:=offset;
 

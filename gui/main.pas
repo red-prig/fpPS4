@@ -434,6 +434,7 @@ begin
    FGameProcess.g_ipc.Update(IpcHandler);
   end;
 
+  if (FGameProcess.g_ipc<>nil) then //recheck, must be free in Update()
   if FGameProcess.is_terminated then
   begin
    TBStopClick(Sender);
