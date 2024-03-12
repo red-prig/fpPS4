@@ -46,6 +46,7 @@ uses
  hamt,
  errno,
  systm,
+ kern_rtld,
  elf_nid_utils,
  kern_stub,
  vm_patch_link,
@@ -409,6 +410,7 @@ type
   addr    :QWORD;
   nid     :QWORD;
   libname :PChar;
+  libfrom :PChar;
  end;
 
 const
@@ -434,7 +436,7 @@ begin
   str:=EncodeValue64(data^.nid);
  end;
 
- print_error_td('unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname);
+ print_error_td('unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname+' from '+data^.libfrom);
  Assert(false);
 end;
 
@@ -448,6 +450,7 @@ begin
  p_jmpq64_trampoline(@stub^.body)^.addr:=QWORD(@_unresolve_symbol);
  p_jmpq64_trampoline(@stub^.body)^.nid:=nid;
  p_jmpq64_trampoline(@stub^.body)^.libname:=libname;
+ p_jmpq64_trampoline(@stub^.body)^.libfrom:=dynlib_basename(refobj^.lib_path);
 
  Result:=@stub^.body;
 

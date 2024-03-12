@@ -2851,6 +2851,7 @@ begin
  fname:=ChangeFileExt(fname,'.prx');
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 
+ ///
 
  //try /system/*
  fname:=pbase;
@@ -2860,6 +2861,25 @@ begin
   fname:='/'+fname;
  end;
  fname:='/'+p_proc.p_randomized_path+fname;
+
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ fname:=ChangeFileExt(fname,'.sprx');
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ fname:=ChangeFileExt(fname,'.prx');
+ if rtld_file_exists(pchar(fname)) then goto _do_load;
+
+ //
+
+ //try /system/common/lib/*
+ fname:=pbase;
+
+ if (fname[1]<>'/') then
+ begin
+  fname:='/'+fname;
+ end;
+ fname:='/'+p_proc.p_randomized_path+'/common/lib'+fname;
 
  if rtld_file_exists(pchar(fname)) then goto _do_load;
 

@@ -59,10 +59,17 @@ begin
  Assert(False,'jit_unknow_int');
 end;
 
-procedure jit_exit_proc;
+procedure _jit_exit_proc;
 begin
- Writeln('TODO:jit_exit_proc');
- //Assert(False);
+ jit_save_to_sys_save(curkthread);
+ print_error_td('TODO:jit_exit_proc');
+ Assert(False);
+end;
+
+procedure jit_exit_proc; assembler; nostackframe;
+asm
+ call jit_save_ctx
+ jmp  _jit_exit_proc
 end;
 
 //0x0
@@ -864,6 +871,7 @@ end;
 procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
+ ctx.builder.int3;
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
  trim_flow(ctx);
 end;
@@ -871,6 +879,7 @@ end;
 procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
+ ctx.builder.int3;
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
  trim_flow(ctx);
 end;
@@ -878,6 +887,7 @@ end;
 procedure op_hlt(var ctx:t_jit_context2);
 begin
  //stop thread?
+ ctx.builder.int3;
  ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
 end;
 
@@ -1201,6 +1211,7 @@ begin
 
      if (p_print_jit_preload<>0) then
      begin
+      print_frame(stdout,ctx.ptr_curr);
       Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
       print_disassemble(ctx.code,dis.CodeIdx);
       Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
@@ -1288,6 +1299,8 @@ begin
 
   if (cb=nil) then
   begin
+   print_error_td('Unhandled jit opcode!');
+
    Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
    print_disassemble(ctx.code,dis.CodeIdx);
    Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
@@ -1302,6 +1315,7 @@ begin
            'MIndex=',ctx.dis.ModRM.Index,' ',
            'SimdOp=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
            'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);
+
    Assert(false);
   end;
 

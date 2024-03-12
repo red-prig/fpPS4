@@ -9,6 +9,8 @@ uses
  mqueue,
  kern_thr;
 
+procedure print_frame(var f:text;frame:Pointer);
+
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
 procedure print_error_td(const str:shortstring);
@@ -180,6 +182,11 @@ begin
 
    info.source:=Default(t_id_name);
    md_copyin(@obj^.name,@info.source,SizeOf(t_id_name),nil);
+
+   if (info.source='') then
+   begin
+    md_copyin(obj^.lib_path,@info.source,SizeOf(t_id_name),nil);
+   end;
 
    if (find_proc_obj(obj,r)<>0) then
    begin
