@@ -1849,14 +1849,25 @@ begin
   if ModRM.Mode = 3 // reg
   then begin
     case Vex.VectorLength of
-      os512: Size := os128;
-      os256: Size := os64;
+      os512: Size := os256;
     else
-      Size := os32;
+      Size := os128;
     end;
+
     AddModRM([modReg], Size, regXmm);
   end
-  else AddModRM([modMem], os32, regNone);
+  else
+  begin
+   case Vex.VectorLength of
+     os128: Size := os32;
+     os256: Size := os64;
+     os512: Size := os128;
+   else
+     Size := os32;
+   end;
+
+   AddModRM([modMem], Size, regNone);
+  end;
 end;
 
 procedure TX86Disassembler.AddUx_Mq;
@@ -1867,13 +1878,24 @@ begin
   then begin
     case Vex.VectorLength of
       os512: Size := os256;
+    else
+      Size := os128;
+    end;
+
+    AddModRM([modReg], Size, regXmm);
+  end
+  else
+  begin
+    case Vex.VectorLength of
+      os128: Size := os64;
       os256: Size := os128;
+      os512: Size := os256;
     else
       Size := os64;
     end;
-    AddModRM([modReg], Size, regXmm);
-  end
-  else AddModRM([modMem], os64, regNone);
+
+    AddModRM([modMem], Size, regNone);
+  end;
 end;
 
 procedure TX86Disassembler.AddUx_Mw;
@@ -1883,14 +1905,25 @@ begin
   if ModRM.Mode = 3 // reg
   then begin
     case Vex.VectorLength of
-      os512: Size := os64;
+      os512: Size := os256;
+    else
+      Size := os128;
+    end;
+
+    AddModRM([modReg], Size, regXmm);
+  end
+  else
+  begin
+    case Vex.VectorLength of
+      os128: Size := os16;
       os256: Size := os32;
+      os512: Size := os64;
     else
       Size := os16;
     end;
-    AddModRM([modReg], Size, regXmm);
-  end
-  else AddModRM([modMem], os16, regNone);
+
+    AddModRM([modMem], Size, regNone);
+  end;
 end;
 
 procedure TX86Disassembler.AddVdq;
