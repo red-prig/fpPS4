@@ -258,7 +258,7 @@ asm
   hlt
 end;
 
-procedure jit_save_to_sys_save(td:p_kthread);
+procedure jit_save_to_sys_save(td:p_kthread); public;
 var
  frame:p_jit_frame;
 begin

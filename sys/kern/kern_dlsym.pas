@@ -49,6 +49,7 @@ uses
  elf_nid_utils,
  kern_stub,
  vm_patch_link,
+ kern_thr,
  subr_backtrace,
  ps4libdoc;
 
@@ -390,6 +391,8 @@ begin
   dynlibs_unlock;
 end;
 
+procedure jit_save_to_sys_save(td:p_kthread); external;
+
 type
  p_jmpq64_trampoline=^t_jmpq64_trampoline;
  t_jmpq64_trampoline=packed record
@@ -423,6 +426,8 @@ procedure _unresolve_symbol(data:p_jmpq64_trampoline);
 var
  str:shortstring;
 begin
+ jit_save_to_sys_save(curkthread);
+
  str:=ps4libdoc.GetFunctName(data^.nid);
  if (str='Unknow') then
  begin

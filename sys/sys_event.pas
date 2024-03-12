@@ -22,8 +22,8 @@ const
  EVFILT_LIO                 =(-10);  // attached to lio requests
  EVFILT_USER                =(-11);  // User events
  EVFILT_POLLING             =(-12);
- EVFILT_DISPLAY             =(-13);
- EVFILT_GRAPHICS_CORE       =(-14);
+ EVFILT_DISPLAY             =(-13);  // dev/dce
+ EVFILT_GRAPHICS_CORE       =(-14);  // dev/gc
  EVFILT_HRTIMER             =(-15);  // High resolution timers
  EVFILT_UVD_TRAP            =(-16);
  EVFILT_VCE_TRAP            =(-17);

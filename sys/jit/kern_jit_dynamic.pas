@@ -395,8 +395,10 @@ begin
 
   if (dest<>0) then
   begin
-   Writeln('cache:',HexStr(addr),'->',HexStr(dest,16));
-   //writeln;
+   if (p_print_jit_preload<>0) then
+   begin
+    Writeln('cache:',HexStr(addr),'->',HexStr(dest,16));
+   end;
 
    blob:=curr^.blob;
 

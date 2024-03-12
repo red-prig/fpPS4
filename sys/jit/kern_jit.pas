@@ -898,6 +898,7 @@ end;
 
 procedure op_invalid(var ctx:t_jit_context2);
 begin
+ ctx.builder.int3;
  ctx.builder.ud2;
 end;
 
@@ -1207,6 +1208,8 @@ begin
 
      ctx.mark_chunk(fpInvalid);
 
+     ctx.builder.int3;
+     ctx.builder.int3;
      ctx.builder.ud2;
 
      link_curr:=ctx.builder.get_curr_label.before;
@@ -1513,6 +1516,9 @@ begin
  _build:
  //build blob
 
+ ctx.builder.int3;
+ ctx.builder.int3;
+ ctx.builder.int3;
  ctx.builder.ud2;
 
  build(ctx);

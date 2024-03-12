@@ -8,16 +8,20 @@ interface
 function sys_socket(domain,stype,protocol:Integer):Integer;
 function sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer;
 function sys_socketclose(fd:Integer):Integer;
+function sys_connect(fd:Integer;name:Pointer;namelen:Integer):Integer;
 
 implementation
 
 uses
+ errno,
+ systm,
  kern_thr,
  kern_descrip,
  sys_conf,
  vsocket,
  vfile,
  vfcntl,
+ vcapability,
  subr_backtrace;
 
 function soo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
@@ -120,7 +124,96 @@ begin
  Result:=kern_close(fd);
 end;
 
+{
+ Convert a user file descriptor to a kernel file entry and check that, if
+ it is a capability, the right rights are present. A reference on the file
+ entry is held upon returning.
+}
+function getsock_cap(fd    :Integer;
+                     rights:cap_rights_t;
+                     fpp   :pp_file;
+                     fflagp:PDWORD):Integer;
+var
+ fp:p_file;
+begin
+ fp:=fget_unlocked(fd);
 
+ if (fp=nil) then
+ begin
+  Exit(EBADF);
+ end;
+
+ if (fp^.f_type<>DTYPE_SOCKET) and
+    (fp^.f_type<>DTYPE_IPCSOCKET) then
+ begin
+  fdrop(fp);
+  Exit(ENOTSOCK);
+ end;
+
+ if (fflagp<>nil) then
+ begin
+  fflagp^:=fp^.f_flag;
+ end;
+
+ fpp^:=fp;
+ Exit(0);
+end;
+
+function getsockaddr(namp:pp_sockaddr;uaddr:Pointer;len:size_t):Integer;
+var
+ sa:p_sockaddr;
+begin
+ sa:=nil;
+
+ if (len>SOCK_MAXADDRLEN) then
+ begin
+  Exit(ENAMETOOLONG);
+ end;
+
+ if (len<size_t(@p_sockaddr(nil)^.sa_data[0])) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ sa:=AllocMem(len);
+
+ Result:=copyin(uaddr, sa, len);
+
+ if (Result<>0) then
+ begin
+  FreeMem(sa);
+ end else
+ begin
+  sa^.sa_len:=len;
+  namp^:=sa;
+ end;
+end;
+
+function kern_connect(fd:Integer;sa:p_sockaddr):Integer;
+var
+ fp:p_file;
+begin
+ fp:=nil;
+ Result:=getsock_cap(fd, CAP_CONNECT, @fp, nil);
+ if (Result<>0) then Exit;
+
+ Result:=ECONNREFUSED;
+
+ fdrop(fp);
+end;
+
+function sys_connect(fd:Integer;name:Pointer;namelen:Integer):Integer;
+var
+ sa:p_sockaddr;
+begin
+ sa:=nil;
+ Result:=getsockaddr(@sa, name, namelen);
+ if (Result<>0) then Exit;
+
+ Result:=kern_connect(fd, sa);
+
+ FreeMem(sa);
+end;
 
 end.
 

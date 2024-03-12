@@ -548,7 +548,7 @@ var
   ),
   (//[98]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_connect;
      sy_name:'sys_connect'
   ),
   (//[99]

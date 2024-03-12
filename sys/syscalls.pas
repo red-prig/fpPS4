@@ -59,6 +59,7 @@ function  select(nd:Integer;uin,uou,uex,utv:Pointer):Integer;
 function  fsync(fd:Integer):Integer;
 function  setpriority(which,who,prio:Integer):Integer;
 function  socket(domain,stype,protocol:Integer):Integer;
+function  _connect(fd:Integer;name:Pointer;namelen:Integer):Integer;
 function  __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
 function  getpriority(which,who:Integer):Integer;
 function  __sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer;
@@ -618,6 +619,13 @@ end;
 function socket(domain,stype,protocol:Integer):Integer; assembler; nostackframe;
 asm
  movq  $97,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function _connect(fd:Integer;name:Pointer;namelen:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $98,%rax
  call  fast_syscall
  jmp   cerror
 end;

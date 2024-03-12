@@ -110,6 +110,7 @@ type
  * Structure used by kernel to store most
  * addresses.
  }
+ pp_sockaddr=^p_sockaddr;
  p_sockaddr=^t_sockaddr;
  t_sockaddr=packed record
   sa_len   :Byte;                 { total length }
