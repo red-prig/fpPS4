@@ -2680,7 +2680,7 @@ const
  internal_module_param:TsceModuleParam=(
   Size       :SizeOf(TsceModuleParam);
   Magic      :$23C13F4BF;
-  SDK_version:$010010001;
+  SDK_version:$000000001;///$010010001;
  );
 
 function preload_prx_internal(name:pchar;flag:ptruint):p_lib_info;

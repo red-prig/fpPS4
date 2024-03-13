@@ -72,10 +72,18 @@ asm
  jmp  _jit_exit_proc
 end;
 
+procedure _jit_cpuid(rax:qword);
+begin
+ jit_save_to_sys_save(curkthread);
+ print_error_td('TODO:jit_cpuid:0x'+HexStr(rax,16));
+ Assert(False);
+end;
+
 //0x0
 //0x1
 //0x4
 //0x6
+//0x7
 //0xb
 
 //0x40000000
@@ -117,10 +125,12 @@ asm
  cmp $0x80000008,%eax
  je _cpuid_80000008
 
- ud2
-
-
-
+ //unknow id
+ popf
+ mov  %rax,%r14
+ call jit_save_ctx
+ mov  %r14,%rdi
+ jmp  _jit_cpuid
 
 
 

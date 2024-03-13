@@ -13,6 +13,7 @@ uses
  sysutils,
  errno,
  systm,
+ md_sleep,
  subr_backtrace;
 
 type
@@ -70,6 +71,39 @@ begin
     begin
      Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
      print_backtrace_td(stderr);
+     Result:=0;
+    end;
+
+  8:
+    begin
+     //init_mdbg_pevt(proc);
+     //td->td_dbgflags = td->td_dbgflags | 0x100;
+
+     //signal thread start and wait
+     msleep_td(0);
+    end;
+
+  10: //sceCoredumpAttach*
+    begin
+     //(td->td_dbgflags | 0x100)=0 && not sceSblACMgrIsSystemUcred
+     Result:=EPERM;
+    end;
+
+  11:
+    begin
+     //init_mdbg_pevt
+     Result:=0;
+    end;
+
+  12:
+    begin
+     //wait thread start
+     Result:=0;
+    end;
+
+  20:
+    begin
+     //td->td_dbgflags = td->td_dbgflags | 0x800;
      Result:=0;
     end;
 
