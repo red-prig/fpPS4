@@ -549,7 +549,7 @@ var
 function ps4_sceNetCtlRegisterCallback(func:SceNetCtlCallback;arg:Pointer;cid:PInteger):Integer; SysV_ABI_CDecl;
 begin
  NetCtlCb.func:=func;
- NetCtlCb.arg:=arg;
+ NetCtlCb.arg :=arg;
  if (cid<>nil) then cid^:=0;
  Result:=0;
 end;
@@ -586,7 +586,8 @@ type
 
  pSceNetCtlIfStat=^SceNetCtlIfStat;
  SceNetCtlIfStat=packed record
-  device:DWORD;
+  device :DWORD; //SCE_NET_CTL_DEVICE
+  _align :DWORD;
   txBytes:QWORD;
   rxBytes:QWORD;
   reserved:array[0..7] of DWORD;
@@ -621,8 +622,7 @@ function ps4_sceNetCtlGetIfStat(ifStat:pSceNetCtlIfStat):Integer; SysV_ABI_CDecl
 begin
  if (ifStat=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
 
- ifStat^.txBytes:=SCE_NET_CTL_DEVICE_WIRED;
- ifStat^.rxBytes:=SCE_NET_CTL_DEVICE_WIRELESS;
+ ifStat^:=Default(SceNetCtlIfStat);
 
  Result:=0;
 end;
