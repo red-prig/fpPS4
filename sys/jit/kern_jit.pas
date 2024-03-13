@@ -79,23 +79,23 @@ begin
  Assert(False);
 end;
 
-//0x0
-//0x1
+//cpuid(0x0)       :eax=0xd        ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
+//cpuid(0x1)       :eax=0x710f31   ebx=0x7080800  ecx=0x3ed8220b edx=0x178bfbff
 //0x4
 //0x6
-//0x7
+//cpuid(0x7)       :eax=0x0        ebx=0x0        ecx=0x0        edx=0x0
 //0xb
 
 //0x40000000
 //0x40000010
 
-//0x80000000
-//0x80000001
+//cpuid(0x80000000):eax=0x8000001e ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
+//cpuid(0x80000001):eax=0x710f31   ebx=0x0        ecx=0x154837ff edx=0x2fd3fbff
 //0x80000002
 //0x80000004
 //0x80000005
 //0x80000006
-//0x80000008
+//cpuid(0x80000008):eax=0x3028     ebx=0x0        ecx=0x3007     edx=0x0
 
 //0xc0000000
 //0xc0000001
@@ -103,6 +103,7 @@ procedure jit_cpuid; assembler; nostackframe;
 label
  _cpuid_0,
  _cpuid_1,
+ _cpuid_7,
  _cpuid_80000000,
  _cpuid_80000001,
  _cpuid_80000008;
@@ -115,12 +116,14 @@ asm
  cmp $1,%eax
  je _cpuid_1
 
+ cmp $7,%eax
+ je _cpuid_7
+
  cmp $0x80000000,%eax
  je _cpuid_80000000
 
  cmp $0x80000001,%eax
  je _cpuid_80000001
-
 
  cmp $0x80000008,%eax
  je _cpuid_80000008
@@ -136,8 +139,8 @@ asm
 
  _cpuid_0:
 
- //cpu_high TODO check
- mov $0xF,%eax
+ //cpu_high
+ mov $0xD,%eax
 
  //cpu_vendor
  mov $0x68747541,%ebx
@@ -160,47 +163,60 @@ asm
  mov p_cpuid    ,%eax //cpu_id
 
  mov $0x178bfbff,%edx //cpu_feature
- mov $0x36d8220b,%ecx //cpu_feature2
+ mov $0x3ed8220b,%ecx //cpu_feature2
 
+//                    0x07080800
 //CPUID_BRAND_INDEX   0x000000ff
 //CPUID_CLFUSH_SIZE   0x0000ff00
 //CPUID_HTT_CORES     0x00ff0000  //sceKernelGetCurrentCpu 0..7
 //CPUID_LOCAL_APIC_ID 0xff000000
 
- and $0xFF070000,%ebx //filter CPUID_LOCAL_APIC_ID|CPUID_HTT_CORES
+ and $0xFF000000,%ebx //filter CPUID_LOCAL_APIC_ID
 
- or $0x00000800,%ebx //cpu_procinfo
+ or  $0x00080800,%ebx //cpu_procinfo
+
+ popf
+ ret
+
+ _cpuid_7:
+
+ mov $0x0,%eax
+ mov $0x0,%ebx
+ mov $0x0,%edx
+ mov $0x0,%ecx
 
  popf
  ret
 
  _cpuid_80000000:
 
- //cpu_exthigh TODO check
- mov $0xC0000001,%eax
+ //cpu_exthigh
+ mov $0x8000001E,%eax
 
  //cpu_vendor
  mov $0x68747541,%ebx
- mov $0x69746E65,%edx
- mov $0x444D4163,%ecx
+ mov $0x69746e65,%edx
+ mov $0x444d4163,%ecx
 
  popf
  ret
 
  _cpuid_80000001:
 
- mov $0x2e500800,%edx //amd_feature
- mov $0x154837fb,%ecx //amd_feature2
+ mov $0x00710f31,%eax
+ mov $0x00000000,%ebx
+ mov $0x2fd3fbff,%edx //amd_feature
+ mov $0x154837ff,%ecx //amd_feature2
 
  popf
  ret
 
  _cpuid_80000008:
 
- mov $0x00003030,%eax //TODO check
- mov $0x00001007,%ebx //TODO check
- mov $0x00000000,%edx //TODO check
- mov $0x00004007,%ecx //cpu_procinfo2 TODO check
+ mov $0x00003028,%eax
+ mov $0x00000000,%ebx
+ mov $0x00000000,%edx
+ mov $0x00003007,%ecx //cpu_procinfo2
 
  popf
  ret
