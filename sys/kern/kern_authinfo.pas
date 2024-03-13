@@ -106,6 +106,61 @@ type
   ids    :array[0..1] of QWORD;
  end;
 
+//workaround ids bits number
+const
+ NUM_WORKAROUND_ID                                        =$00;
+ BUG107292_EXTRA_USB_AUDIO_DEVICE                         =$01;
+ BUG119504_SUSPEND_BLACK_LIST                             =$02;
+ BUG113237_LIVE_DETAIL_BLACK_LIST                         =$03;
+ BUG117780_GPU_DOUBLE_PRECISION                           =$04;
+ BUG134640_FFXIV_MOVIE_CRASH                              =$05;
+ BUG140207_FAKE_BG_EXECUTION                              =$06;
+ BUG140207_DELAY_SUSPEND                                  =$07;
+ BUG141751_FORCE_VIDEO_RECORDING_COMPATIBLE               =$08;
+ BUG141953_FORCE_CONTENT_SEARCH_COMPATIBLE                =$09;
+ BUG135666_FORCED_BASE_MODE                               =$0A;
+ BUG142996_NEW_QUICK_MENU_BLACK_LIST                      =$0B;
+ BUG146562_PRODUCT_DETAIL_BLACK_LIST                      =$0C;
+ BUG141677_DISABLE_SERVICE_ENTITLEMENT_UPDATE_EVENT       =$0D;
+ BUG158272_EXTERNAL_HDD_BLACK_LIST                        =$0E;
+ BUG159526_INVALIDATE_ENTITLEMENT_IN_APPLICATION_DB       =$0F;
+ BUG163566_BOOST_MODE_BLACK_LIST                          =$10;
+ BUG171584_EXTERNAL_HDD_ACCESS_LATENCY                    =$11;
+ BUG183465_SPECIAL_ISSUE                                  =$12;
+ BUG183542_NEO_VDDNB_VID_3STEP                            =$13;
+ BUG183542_NEO_VDDNB_VID_4STEP                            =$14;
+ BUG183542_NEO_VDDNB_VID_5STEP                            =$15;
+ BUG184831_NEO_VDDNB_VID_STEP_UP_ALL_TITLE                =$16;
+ BUG180029_SAVE_DATA_MEMORY_TIMEOUT_10SEC                 =$17;
+ BUG180341_WEBAPI_NOT_COPY_ERROR_JSON                     =$18;
+ BUG180847_USE_RECRYPT_BLOCKS                             =$19;
+ BUG182301_NP_MANAGER_KEEP_COMPATIBLE                     =$1A;
+ BUG182170_OSK                                            =$1B;
+ BUG188290_NEO_SCLK_DOWN_LEVEL1                           =$1C;
+ BUG188290_NEO_SCLK_DOWN_LEVEL2                           =$1D;
+ BUG188290_NEO_SCLK_DOWN_LEVEL3                           =$1E;
+ BUG187987_NTS_CONNECTHASHTABLE                           =$1F;
+ BUG190872_HIDE_4K                                        =$20;
+ BUG191849_HDCP_CHECK_APP_ONLY                            =$21;
+ BUG193000_USE_OLD_WEB_BROWSER_ENGINE                     =$22;
+ BUG186690_IME_DISABLE_REMOTE_PLAY                        =$23;
+ BUG196278_IME_DISABLE_REMOTE_PLAY_WITH_DISABLE_CONTROLLER=$24;
+ BUG196285_IME_PACKED_UPDATE_TEXT                         =$25;
+ BUG186690_IME_REMOTE_PLAY_FINISHED_BY_PRESS_ENTER        =$26;
+ BUG196699_SYSMODULE_SWITCH_LIBSSL                        =$27;
+ BUG192912_PLAYGO_FULL_MULTISTREAM                        =$28;
+ BUG201910_DINO_FRONTIER_DLSYM                            =$29;
+ BUG202240_HIKARU_UTADA_SCHED                             =$2A;
+ BUG198989_ANTHEM_KERNEL_PANIC                            =$2B;
+ BUG202952_SSL_CHECK_RECV_PENDING_ALWAYS_TRUE             =$2C;
+ BUG203700_PARTY_ROLLBACK                                 =$2D;
+ CAMELOT3106_USE_OLD_STYLE_USER_AGENT                     =$2E;
+ BUG209289_SESSION_SIGNALING_TERMINATE_ON_LEFT            =$2F;
+ BUG198642_LB_SYNC_RESET_TO_FIX_CURSOR_8000               =$30;
+ BUG198642_LB_SYNC_RESET_NOT_TO_FIX_CURSOR                =$31;
+ BUG210925_ENABLE_TLS_BUG_FIX                             =$32;
+
+type
  p_appinfo=^t_appinfo;
  t_appinfo=packed record
   AppId           :Integer;       //4
