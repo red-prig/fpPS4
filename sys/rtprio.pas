@@ -24,6 +24,9 @@ const
 
  PUSER=700;
 
+ PRI_MIN_REALTIME=48;
+ PRI_MAX_REALTIME=767;
+
  PRI_USER     =-2; // Change to current user priority.
  PRI_UNCHANGED=-1; // Do not change priority.
 

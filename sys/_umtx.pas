@@ -120,13 +120,50 @@ const
  TYPE_RWLOCK       =7;
  TYPE_FUTEX        =8;
 
-function URWLOCK_READER_COUNT(c:DWORD):DWORD; inline;
+type
+ // Key to represent a unique userland synchronous object
+ p_umtx_key=^umtx_key;
+ umtx_key=record
+  hash  :Integer;
+  _type :Integer;
+  shared:Integer;
+  info  :record
+   case byte of
+    0:(shared:record
+        vm_obj:Pointer; //vm_object
+        offset:QWORD;
+       end);
+    1:(private:record
+        vs    :Pointer; //vmspace
+        addr  :QWORD;
+       end);
+    2:(both:record
+        a     :Pointer;
+        b     :QWORD;
+       end);
+  end;
+ end;
+
+const
+ THREAD_SHARE =0;
+ PROCESS_SHARE=1;
+ AUTO_SHARE   =2;
+
+function umtx_key_match(k1,k2:p_umtx_key):Integer;
+function URWLOCK_READER_COUNT(c:DWORD):DWORD;
 
 implementation
 
-function URWLOCK_READER_COUNT(c:DWORD):DWORD; inline;
+function URWLOCK_READER_COUNT(c:DWORD):DWORD;
 begin
  Result:=(c and URWLOCK_MAX_READERS);
+end;
+
+function umtx_key_match(k1,k2:p_umtx_key):Integer;
+begin
+ Result:=ord((k1^._type      =k2^._type) and
+             (k1^.info.both.a=k2^.info.both.a) and
+             (k1^.info.both.b=k2^.info.both.b));
 end;
 
 end.

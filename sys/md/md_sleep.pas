@@ -10,11 +10,6 @@ uses
  windows,
  kern_thr;
 
-function  _umtxq_alloc:THandle;
-procedure _umtxq_free(h:THandle);
-function  msleep_umtxq(h:THandle;timo:Int64):Integer;
-function  wakeup_umtxq(h:THandle):Integer; inline;
-
 function  msleep_td(timo:Int64):Integer;
 function  wakeup_td(td:p_kthread):Integer;
 procedure md_yield;
@@ -49,39 +44,6 @@ begin
   else
                           Result:=EINVAL;
  end;
-end;
-
-function _umtxq_alloc:THandle;
-var
- n:Integer;
-begin
- Result:=0;
- n:=NtCreateEvent(@Result,EVENT_ALL_ACCESS,nil,SynchronizationEvent,False);
- Assert(n=0);
-end;
-
-procedure _umtxq_free(h:THandle);
-begin
- NtClose(h);
-end;
-
-function msleep_umtxq(h:THandle;timo:Int64):Integer;
-begin
- if (timo=0) then
- begin
-  timo:=NT_INFINITE;
- end else
- begin
-  timo:=-timo;
- end;
- sig_sta;
- Result:=ntw2px(NtWaitForSingleObject(h,True,@timo));
- sig_cla;
-end;
-
-function wakeup_umtxq(h:THandle):Integer; inline;
-begin
- Result:=ntw2px(NtSetEvent(h,nil));
 end;
 
 function msleep_td(timo:Int64):Integer;
