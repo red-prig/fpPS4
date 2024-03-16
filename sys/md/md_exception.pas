@@ -20,7 +20,8 @@ uses
   trap,
   signal,
   ucontext,
-  vm;
+  vm,
+  kern_jit_dynamic;
 
 const
  EXCEPTION_SET_THREADNAME = $406D1388;
@@ -108,19 +109,35 @@ begin
  end;
 end;
 
-function ProcessException3(p:PExceptionPointers):longint; SysV_ABI_CDecl;
+procedure jit_save_to_sys_save(td:p_kthread); external;
+procedure sys_save_to_jit_save(td:p_kthread); external;
+
+function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
  ExceptionCode:DWORD;
- td:p_kthread;
  tf_addr:QWORD;
- //backup:trapframe;
  rv:Integer;
+ is_jit:Boolean;
 begin
  Result:=1;
- td:=curkthread;
+ if (td=nil) then Exit;
 
- //Context backup to return correctly
- //backup:=td^.td_frame;
+ thread_suspend_all(td);
+
+ tf_addr:=0;
+ is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@tf_addr);
+
+ Writeln('tf_rip:0x',HexStr(tf_addr,16));
+
+ _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil,is_jit);
+
+ if (is_jit) then
+ begin
+  jit_save_to_sys_save(td);
+  td^.td_frame.tf_rip:=tf_addr;
+ end;
+
+ print_backtrace_td(stderr);
 
  td^.td_frame.tf_trapno:=0;
 
@@ -133,59 +150,41 @@ begin
     begin
      tf_addr:=p^.ExceptionRecord^.ExceptionInformation[1];
 
+     Writeln('tf_addr:0x',HexStr(tf_addr,16));
+
      //Writeln(HexStr(p^.ContextRecord^.Rip,16));
      //Writeln(HexStr(Get_pc_addr));
 
-     _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
+     //_get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
 
      td^.td_frame.tf_trapno:=T_PAGEFLT;
      td^.td_frame.tf_err   :=translate_pageflt_err(p^.ExceptionRecord^.ExceptionInformation[0]);
      td^.td_frame.tf_addr  :=tf_addr;
 
-     rv:=trap.trap(@td^.td_frame);
+     rv:=trap.trap(@td^.td_frame,is_jit);
     end;
 
   else;
  end;
 
+ if (is_jit) then
+ begin
+  sys_save_to_jit_save(td);
+ end;
+
  if (rv=0) then
  begin
-  _set_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
+  //_set_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
   Result:=0;
  end;
+
+ thread_resume_all(td);
 
  //simple ret
  //td^.pcb_flags:=td^.pcb_flags and (not PCB_FULL_IRET);
 
  //td^.td_frame:=backup;
 end;
-
-{
-//rdi,rsi
-function ProcessException2(p:PExceptionPointers;rsp:Pointer):longint; assembler; nostackframe; SysV_ABI_CDecl;
-asm
- //prolog (debugger)
- //pushq %rbp
- //movq  %rsp,%rbp
-
- xchg  %rsi,%rsp
- andq  $-32,%rsp //align stack
-
- pushq %rsi
- pushq %rbp
-
- call  ProcessException3
-
- popq  %rbp
- popq  %rsp
-
- //movq ProcessException3,%rax
- ///call fast_syscall
-
- //epilog (debugger)
- //popq  %rbp
-end;
-}
 
 type
  TExceptObjProc=function(code: Longint; const rec: TExceptionRecord): Pointer; { Exception }
@@ -197,14 +196,8 @@ begin
 end;
 
 function ProcessException(p:PExceptionPointers):longint; stdcall;
-var
- td:p_kthread;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
-
- //Writeln('  p_ctx:0x',HexStr(p));
- //Writeln('rsp_ctx:0x',HexStr(p^.ContextRecord^.Rsp,16));
- //Writeln('rsp_frm:0x',HexStr(get_frame));
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE      :Exit;
@@ -213,36 +206,7 @@ begin
   EXCEPTION_SET_THREADNAME:Exit;
  end;
 
- //readln;
-
- td:=curkthread;
-
- if (td=nil) then Exit;
-
- {
- if (td^.td_teb^.jit_rsp<>nil) then //debugger switch
- begin
-  Writeln('td_kstack:0x',HexStr(td^.td_kstack.stack));
-  Writeln('jit_rsp:0x',HexStr(td^.td_teb^.jit_rsp));
-  p^.ContextRecord^.Rsp:=qword(td^.td_teb^.jit_rsp);
-  td^.td_teb^.jit_rsp:=nil;
- end;
- }
-
- Result:=ProcessException3(p);
-
- {
- if IS_SYSTEM_STACK(curkthread,p^.ContextRecord^.Rsp) then
- begin
-  Writeln(IS_SYSTEM_STACK(curkthread,p^.ContextRecord^.Rsp),' ',IS_SYSTEM_STACK(curkthread,qword(get_frame)));
-  //
-  Exit;
- end else
- begin
-  //It looks like there is a small stack inside the exception, so you need to switch the context
-  Result:=ProcessException2(p,curkthread^.td_kstack.stack);
- end;
- }
+ Result:=ProcessException3(curkthread,p);
 
  if (Result=0) then
  begin

@@ -85,8 +85,8 @@ function  _get_ctx_flags(src:p_ucontext_t):DWORD;
 procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
 procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
 
-procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
-procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
+procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
+procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
 
 procedure _get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
 procedure _set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
@@ -271,7 +271,7 @@ begin
           xs^:=uc_xstate^;
 end;
 
-procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
+procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
 var
  flags:DWORD;
 begin
@@ -292,16 +292,22 @@ begin
   dst^.tf_r10:=src^.R10;
   dst^.tf_r11:=src^.R11;
   dst^.tf_r12:=src^.R12;
-  dst^.tf_r13:=src^.R13;
-  dst^.tf_r14:=src^.R14;
-  dst^.tf_r15:=src^.R15;
-  dst^.tf_rbp:=src^.Rbp;
+  if not is_jit then
+  begin
+   dst^.tf_r13:=src^.R13;
+   dst^.tf_r14:=src^.R14;
+   dst^.tf_r15:=src^.R15;
+   dst^.tf_rbp:=src^.Rbp;
+  end;
  end;
 
  if ((flags and CONTEXT_CONTROL)<>0) then
  begin
-  dst^.tf_rsp   :=src^.Rsp;
-  dst^.tf_rip   :=src^.Rip;
+  if not is_jit then
+  begin
+   dst^.tf_rsp   :=src^.Rsp;
+   dst^.tf_rip   :=src^.Rip;
+  end;
   dst^.tf_rflags:=src^.EFlags;
  end;
 
@@ -313,7 +319,7 @@ begin
  end;
 end;
 
-procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
+procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
 var
  flags:DWORD;
 begin
@@ -336,17 +342,23 @@ begin
   dst^.R9 :=src^.tf_r9;
   dst^.R10:=src^.tf_r10;
   dst^.R11:=src^.tf_r11;
-  dst^.R12:=src^.tf_r12;
-  dst^.R13:=src^.tf_r13;
-  dst^.R14:=src^.tf_r14;
-  dst^.R15:=src^.tf_r15;
-  dst^.Rbp:=src^.tf_rbp;
+  if not is_jit then
+  begin
+   dst^.R12:=src^.tf_r12;
+   dst^.R13:=src^.tf_r13;
+   dst^.R14:=src^.tf_r14;
+   dst^.R15:=src^.tf_r15;
+   dst^.Rbp:=src^.tf_rbp;
+  end;
  end;
 
  if ((flags and CONTEXT_CONTROL)<>0) then
  begin
-  dst^.Rsp   :=src^.tf_rsp;
-  dst^.Rip   :=src^.tf_rip;
+  if not is_jit then
+  begin
+   dst^.Rsp   :=src^.tf_rsp;
+   dst^.Rip   :=src^.tf_rip;
+  end;
   dst^.EFlags:=src^.tf_rflags;
  end;
 

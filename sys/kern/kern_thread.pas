@@ -409,6 +409,14 @@ begin
   Exit(EPROCLIM);
  end;
 
+ writeln('create_thread[',name,']'#13#10,
+         ' start_func:0x',HexStr(start_func),#13#10,
+         ' arg       :0x',HexStr(arg),#13#10,
+         ' stack_base:0x',HexStr(stack_base),#13#10,
+         ' stack_size:0x',HexStr(stack_size,16),#13#10,
+         ' tls_base  :0x',HexStr(tls_base)
+        );
+
  thread_reap();
 
  if (rtp<>nil) then

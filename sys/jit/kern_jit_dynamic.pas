@@ -56,14 +56,17 @@ type
   start :QWORD; //<-guest
   __end :QWORD; //<-guest
   dest  :QWORD; //<-host
+  d_end :QWORD; //<-host
   hash  :QWORD; //MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
   count :QWORD;
   table :record end; //p_jinstr_len[]
   function  c(n1,n2:p_jcode_chunk):Integer; static;
   procedure inc_ref;
   procedure dec_ref;
-  function  find_addr(addr:QWORD):QWORD;
-  function  cross(c_start,c___end:QWORD):Boolean;
+  function  find_host_by_guest(addr:QWORD):QWORD;
+  function  find_guest_by_host(addr:QWORD):QWORD;
+  function  cross_guest(c_start,c___end:QWORD):Boolean;
+  function  cross_host (c_start,c___end:QWORD):Boolean;
  end;
 
  t_jcode_chunk_set=specialize T23treeSet<p_jcode_chunk,t_jcode_chunk>;
@@ -100,6 +103,8 @@ type
   procedure dec_ref;
   procedure inc_attach_count;
   function  dec_attach_count:Boolean;
+  function  find_guest_by_host(addr:QWORD):QWORD;
+  function  cross_host(c_start,c___end:QWORD):Boolean;
   procedure Free;
   function  add_entry_point(src,dst:Pointer):p_jit_entry_point;
   procedure free_entry_point(node:p_jit_entry_point);
@@ -131,7 +136,11 @@ var
 
 function  fetch_entry(src:Pointer):p_jit_entry_point;
 function  exist_entry(src:Pointer):Boolean;
-function  fetch_chunk(src:Pointer):p_jcode_chunk;
+
+function  fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
+function  fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
+function  exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean;
+
 function  next_chunk(node:p_jcode_chunk):p_jcode_chunk;
 procedure unmap_jit_cache(start,__end:QWORD);
 function  preload_entry(addr:Pointer):p_jit_entry_point;
@@ -288,7 +297,7 @@ begin
  //teb stack
 end;
 
-function fetch_chunk(src:Pointer):p_jcode_chunk;
+function fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
 var
  i:t_jcode_chunk_set.Iterator;
  node:t_jcode_chunk;
@@ -312,6 +321,67 @@ begin
  end;
 
  rw_runlock(entry_chunk_lock);
+end;
+
+function fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
+var
+ i:t_jcode_chunk_set.Iterator;
+ node:p_jcode_chunk;
+ prev:p_jit_dynamic_blob;
+ blob:p_jit_dynamic_blob;
+begin
+ Result:=nil;
+
+ prev:=nil;
+
+ //
+ rw_rlock(entry_chunk_lock);
+
+ i:=entry_chunk.cbegin;
+
+ while (i.Item<>nil) do
+ begin
+
+  node:=i.Item^;
+  if (node<>nil) then
+  begin
+   blob:=node^.blob;
+   if (blob<>nil) and (blob<>prev) then
+   begin
+    if blob^.cross_host(QWORD(src),QWORD(src)+1) then
+    begin
+     blob^.inc_ref;
+     Exit(blob);
+    end;
+    prev:=blob;
+   end;
+  end;
+
+  i.Next;
+ end;
+
+ rw_runlock(entry_chunk_lock);
+end;
+
+function exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean;
+var
+ blob:p_jit_dynamic_blob;
+begin
+ blob:=fetch_blob_by_host(src);
+ if (blob<>nil) then
+ begin
+  if (tf_tip<>nil) then
+  begin
+   rw_rlock(blob^.lock);
+   tf_tip^:=blob^.find_guest_by_host(QWORD(src));
+   rw_runlock(blob^.lock);
+  end;
+  blob^.dec_ref;
+  Result:=True;
+ end else
+ begin
+  Result:=False;
+ end;
 end;
 
 function next_chunk(node:p_jcode_chunk):p_jcode_chunk;
@@ -347,13 +417,13 @@ var
  curr,next:p_jcode_chunk;
  blob:p_jit_dynamic_blob;
 begin
- curr:=fetch_chunk(Pointer(start));
+ curr:=fetch_chunk_by_guest(Pointer(start));
  while (curr<>nil) do
  begin
 
   if (curr^.start>=__end) then Break;
 
-  if curr^.cross(start,__end) then
+  if curr^.cross_guest(start,__end) then
   begin
    blob:=curr^.blob;
    rw_wlock(blob^.lock);
@@ -383,7 +453,7 @@ var
 begin
  Result:=nil;
 
- curr:=fetch_chunk(addr);
+ curr:=fetch_chunk_by_guest(addr);
  while (curr<>nil) do
  begin
 
@@ -391,7 +461,7 @@ begin
 
   if (QWORD(addr)<curr^.start) then Break;
 
-  dest:=curr^.find_addr(QWORD(addr));
+  dest:=curr^.find_host_by_guest(QWORD(addr));
 
   if (dest<>0) then
   begin
@@ -499,6 +569,7 @@ procedure build_chunk(var ctx:t_jit_context2;blob:p_jit_dynamic_blob;start,__end
 var
  hash :QWORD;
 
+ i       :QWORD;
  original:QWORD;
  recompil:QWORD;
 
@@ -533,7 +604,7 @@ begin
 
  table:=@jcode^.table;
 
- count:=0;
+ i:=0;
  curr:=Pointer(start);
 
  prev:=nil;
@@ -572,14 +643,92 @@ begin
    Assert(False);
   end;
 
-  table[count].original:=Byte(original);
-  table[count].recompil:=Byte(recompil);
+  table[i].original:=Byte(original);
+  table[i].recompil:=Byte(recompil);
 
   {
   writeln('|0x',HexStr(curr),'..',HexStr(next),
           ':0x',HexStr(link_curr.offset,8),'..',HexStr(link_next.offset,8),
-          ':',count);
+          ':',i);
   }
+
+  prev:=curr;
+  link_prev:=link_next;
+
+  Inc(i);
+  curr:=next;
+ end;
+
+ //get last addr
+ //jcode^.d_end:=QWORD(blob^.base)+clabel^.link_curr.offset;
+
+ recompil:=0;
+ for i:=0 to count-1 do
+ begin
+  recompil:=recompil+table[i].recompil;
+ end;
+ jcode^.d_end:=QWORD(jcode^.dest)+recompil;
+
+ if (p_print_jit_preload<>0) then
+ begin
+  Writeln('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',i,':',count);
+ end;
+
+ //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
+end;
+
+procedure _build(var ctx:t_jit_context2;
+                 blob:p_jit_dynamic_blob;
+                 start,__end:QWORD);
+var
+ count:QWORD;
+
+ clabel:t_jit_context2.p_label;
+
+ link_prev:t_jit_i_link;
+ link_curr:t_jit_i_link;
+ link_next:t_jit_i_link;
+
+ prev:QWORD;
+ curr:QWORD;
+ next:QWORD;
+begin
+ count:=0;
+ curr:=start;
+
+ prev:=0;
+ link_prev:=nil_link;
+
+ //get count
+ while (QWORD(curr)<__end) do
+ begin
+  clabel:=ctx.get_label(Pointer(curr));
+
+  if (clabel=nil) then
+  begin
+   Writeln('(clabel=nil) 0x',HexStr(curr,16));
+   Assert(false);
+  end;
+
+  //Writeln('clabel:0x',HexStr(QWORD(blob^.base)+clabel^.link_curr.offset,16));
+
+  next:=QWORD(clabel^.next);
+
+  link_curr:=clabel^.link_curr;
+  link_next:=clabel^.link_next;
+
+  if (link_prev<>nil_link) then
+  begin
+   if (link_prev.offset<>link_curr.offset) then
+   begin
+    //devide chunk
+
+    build_chunk(ctx,blob,start,curr,count);
+
+    start:=curr;
+    count:=0;
+   end;
+  end;
 
   prev:=curr;
   link_prev:=link_next;
@@ -588,7 +737,7 @@ begin
   curr:=next;
  end;
 
- //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
+ build_chunk(ctx,blob,start,__end,count);
 end;
 
 procedure build(var ctx:t_jit_context2);
@@ -602,19 +751,9 @@ var
 
  start:QWORD;
  __end:QWORD;
- count:QWORD;
-
- clabel:t_jit_context2.p_label;
-
- link_prev:t_jit_i_link;
- link_curr:t_jit_i_link;
- link_next:t_jit_i_link;
-
- prev:Pointer;
- curr:Pointer;
- next:Pointer;
 
  //F:THandle;
+
 begin
  if (ctx.builder.GetMemSize=0) then Exit;
 
@@ -649,79 +788,47 @@ begin
 
  start:=0;
  __end:=0;
- count:=0;
 
  //copy chunks
  chunk:=TAILQ_FIRST(@ctx.builder.ACodeChunkList);
 
  while (chunk<>nil) do
  begin
-  if (t_point_type(chunk^.data)=fpInvalid) then
+  if (chunk^.start=chunk^.__end) then
   begin
-   //skip
-  end else
-  if (__end=chunk^.start) then
-  begin
-   //expand
-   __end:=chunk^.__end;
+   //no instr
   end else
   begin
-   //save
-   if (start<>0) then
+   //
+   {if (t_point_type(chunk^.data)=fpInvalid) then
    begin
-
-    count:=0;
-    curr:=Pointer(start);
-
-    prev:=nil;
-    link_prev:=nil_link;
-
-    //get count
-    while (QWORD(curr)<__end) do
+    //skip
+   end else }
+   if (__end=chunk^.start) then
+   begin
+    //expand
+    __end:=chunk^.__end;
+   end else
+   begin
+    //save
+    if (start<>0) then
     begin
-     clabel:=ctx.get_label(curr);
-
-     if (clabel=nil) then
-     begin
-      Writeln('(clabel=nil) 0x',HexStr(curr));
-      Assert(false);
-     end;
-
-     next:=clabel^.next;
-
-     link_curr:=clabel^.link_curr;
-     link_next:=clabel^.link_next;
-
-     if (link_prev<>nil_link) then
-     begin
-      if (link_prev.offset<>link_curr.offset) then
-      begin
-       //devide chunk
-
-       build_chunk(ctx,blob,start,QWORD(curr),count);
-
-       start:=QWORD(curr);
-       count:=0;
-      end;
-     end;
-
-     prev:=curr;
-     link_prev:=link_next;
-
-     Inc(count);
-     curr:=next;
+     //build prev saved
+     _build(ctx,blob,start,__end);
     end;
-
-    build_chunk(ctx,blob,start,__end,count);
-
+    //new
+    start:=chunk^.start;
+    __end:=chunk^.__end;
    end;
-   //new
-   start:=chunk^.start;
-   __end:=chunk^.__end;
   end;
-
   //
   chunk:=TAILQ_NEXT(chunk,@chunk^.link);
+ end;
+
+ if (start<>0) then
+ begin
+  //build prev saved
+  _build(ctx,blob,start,__end);
  end;
 
  blob^.attach;
@@ -819,6 +926,28 @@ end;
 function t_jit_dynamic_blob.dec_attach_count:Boolean;
 begin
  Result:=(System.InterlockedDecrement(attach_count)=0);
+end;
+
+function t_jit_dynamic_blob.find_guest_by_host(addr:QWORD):QWORD;
+var
+ node:p_jcode_chunk;
+begin
+ Writeln('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
+
+ Result:=0;
+ node:=chunk_list;
+ while (node<>nil) do
+ begin
+  Result:=node^.find_guest_by_host(addr);
+  if (Result<>0) then Exit;
+
+  node:=node^.next;
+ end;
+end;
+
+function t_jit_dynamic_blob.cross_host(c_start,c___end:QWORD):Boolean;
+begin
+ Result:=(c___end>QWORD(base)) and (c_start<(QWORD(base)+size));
 end;
 
 //
@@ -961,7 +1090,7 @@ end;
 
 //
 
-function t_jcode_chunk.find_addr(addr:QWORD):QWORD;
+function t_jcode_chunk.find_host_by_guest(addr:QWORD):QWORD;
 var
  i,src,dst:QWORD;
  _table:p_jinstr_len;
@@ -991,9 +1120,45 @@ begin
  end;
 end;
 
-function t_jcode_chunk.cross(c_start,c___end:QWORD):Boolean;
+function t_jcode_chunk.find_guest_by_host(addr:QWORD):QWORD;
+var
+ i,src,dst:QWORD;
+ _table:p_jinstr_len;
+begin
+ Result:=0;
+ Writeln('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
+ if (addr>=dest) and (addr<=d_end) then
+ if (count<>0) then
+ begin
+  src:=start;
+  dst:=dest;
+  _table:=@table;
+  For i:=0 to count-1 do
+  begin
+
+   if (addr>=dst) then
+   begin
+    Result:=src;
+   end else
+   if (dst>addr) then
+   begin
+    Exit;
+   end;
+
+   src:=src+_table[i].original;
+   dst:=dst+_table[i].recompil;
+  end;
+ end;
+end;
+
+function t_jcode_chunk.cross_guest(c_start,c___end:QWORD):Boolean;
 begin
  Result:=(c___end>start) and (c_start<__end);
+end;
+
+function t_jcode_chunk.cross_host(c_start,c___end:QWORD):Boolean;
+begin
+ Result:=(c___end>dest) and (c_start<d_end);
 end;
 
 //

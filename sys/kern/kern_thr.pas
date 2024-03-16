@@ -323,6 +323,9 @@ procedure curthread_set_pcb_onfault(v:Pointer);
 procedure thread_lock(td:p_kthread);   external;
 procedure thread_unlock(td:p_kthread); external;
 
+procedure thread_suspend_all(exclude:p_kthread); external;
+procedure thread_resume_all (exclude:p_kthread); external;
+
 implementation
 
 function curkthread:p_kthread; assembler; nostackframe;

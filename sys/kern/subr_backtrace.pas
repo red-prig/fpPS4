@@ -333,8 +333,6 @@ begin
  print_backtrace(stderr,Pointer(td^.td_frame.tf_rip),Pointer(td^.td_frame.tf_rbp),0);
 end;
 
-procedure thread_suspend_all(exclude:Pointer); external;
-
 procedure print_error_td(const str:shortstring);
 begin
  thread_suspend_all(p_host_ipc.Ftd);

@@ -275,7 +275,7 @@ begin
  td^.td_frame.tf_BrT   :=0;
 end;
 
-procedure sys_save_to_jit_save(td:p_kthread);
+procedure sys_save_to_jit_save(td:p_kthread); public;
 var
  frame:p_jit_frame;
 begin

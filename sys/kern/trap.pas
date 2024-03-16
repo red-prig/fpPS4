@@ -104,7 +104,7 @@ procedure host_sigipi;
 
 function  IS_TRAP_FUNC(rip:qword):Boolean;
 
-function  trap(frame:p_trapframe):Integer;
+function  trap(frame:p_trapframe;usermode:Boolean):Integer;
 function  trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 
 implementation
@@ -210,8 +210,6 @@ var
   Byte(ptruint(@p_trapframe(nil)^.tf_r8 ) div SizeOf(QWORD)),
   Byte(ptruint(@p_trapframe(nil)^.tf_r9 ) div SizeOf(QWORD))
  );
-
-procedure thread_suspend_all(exclude:Pointer); external;
 
 procedure print_syscall_args(td_frame:p_trapframe);
 var
@@ -319,6 +317,8 @@ begin
   else
     begin
      Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name,' error:',error);
+
+     print_backtrace_td(StdErr);
     end;
  end;
 
@@ -543,19 +543,21 @@ begin
          );
 end;
 
+{
 function IS_USERMODE(td:p_kthread;frame:p_trapframe):Boolean; inline;
 begin
  Result:=(frame^.tf_rsp>QWORD(td^.td_kstack.stack)) or (frame^.tf_rsp<=(QWORD(td^.td_kstack.sttop)));
 end;
+}
 
-function trap(frame:p_trapframe):Integer;
+function trap(frame:p_trapframe;usermode:Boolean):Integer;
 begin
  Result:=0;
 
  case frame^.tf_trapno of
   T_PAGEFLT:
     begin
-     Result:=trap_pfault(frame,IS_USERMODE(curkthread,frame));
+     Result:=trap_pfault(frame,usermode);
 
      //print_backtrace_td(stderr);
      //writeln;
@@ -566,7 +568,7 @@ begin
 
 end;
 
-procedure trap_fatal(frame:p_trapframe;eva:vm_offset_t);
+procedure trap_fatal(frame:p_trapframe;eva:vm_offset_t;usermode:Boolean);
 var
  td:p_kthread;
  trapno:Integer;
@@ -579,7 +581,7 @@ begin
  else
   msg:='UNKNOWN';
 
- if IS_USERMODE(curkthread,frame) then
+ if usermode then
   msg2:='user'
  else
   msg2:='kernel';
@@ -594,10 +596,10 @@ begin
  td:=curkthread;
  if (td<>nil) then
  begin
- Writeln(StdErr,'td_ustack.stack       = 0x',HexStr(td^.td_ustack.stack));
- Writeln(StdErr,'td_ustack.sttop       = 0x',HexStr(td^.td_ustack.sttop));
- Writeln(StdErr,'td_kstack.stack       = 0x',HexStr(td^.td_kstack.stack));
- Writeln(StdErr,'td_kstack.sttop       = 0x',HexStr(td^.td_kstack.sttop));
+  Writeln(StdErr,'td_ustack.stack       = 0x',HexStr(td^.td_ustack.stack));
+  Writeln(StdErr,'td_ustack.sttop       = 0x',HexStr(td^.td_ustack.sttop));
+  Writeln(StdErr,'td_kstack.stack       = 0x',HexStr(td^.td_kstack.stack));
+  Writeln(StdErr,'td_kstack.sttop       = 0x',HexStr(td^.td_kstack.sttop));
  end;
 end;
 
@@ -651,7 +653,7 @@ begin
    Exit(0);
   end else
   begin
-   trap_fatal(frame, eva);
+   trap_fatal(frame, eva, usermode);
    Exit(-1);
   end;
  end;
