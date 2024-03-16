@@ -477,6 +477,7 @@ type
     procedure AddWsd;
     procedure AddWss;
     procedure AddWx;
+    procedure AddWx_Mq;
     //---
 
     procedure AddReg(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte);
@@ -2022,6 +2023,12 @@ end;
 procedure TX86Disassembler.AddWx;
 begin
   AddModRM([modReg, modMem], VectorSize, regXmm);
+end;
+
+procedure TX86Disassembler.AddWx_Mq;
+begin
+  DecodeModRM;
+  AddUx_Mq;
 end;
 
 procedure TX86Disassembler.AddStdOperands(AIndex: Byte);
@@ -3838,7 +3845,7 @@ begin
         $0E: begin SetOpcode(OPvtest,       OPSx_ps       ); AddVx;          AddWx;  CheckVex; end;
         $0F: begin SetOpcode(OPvtest,       OPSx_pd       ); AddVx;          AddWx;  CheckVex; end;
         $10: begin SetOpcode(OPpblendvb                   ); AddVdq; AddWdq;                   end;
-        $13: begin SetOpcode(OPvcvtph2ps                  ); AddVx;  AddWx;          CheckVex; end;
+        $13: begin SetOpcode(OPvcvtph2ps                  ); AddVx;  AddUx_Mq;       CheckVex; end;
         $14: begin SetOpcode(OPblendv,      OPSx_ps       ); AddVdq; AddWdq; AddReg(regXmm, os128, 0); end;
         $15: begin SetOpcode(OPblendv,      OPSx_pd       ); AddVdq; AddWdq; AddReg(regXmm, os128, 0); end;
         $16: begin SetOpcode(OPvperm,       OPSx_ps       ); AddVqq; AddHqq; AddWqq; CheckVex; end;
@@ -3998,7 +4005,7 @@ begin
         $17: begin SetOpcode(OPextract,     OPSx_ps,  True); AddEd;    AddVdq; AddIb;                      end;
         $18: begin SetOpcode(OPinsert,      OPSx_f128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $19: begin SetOpcode(OPextract,     OPSx_f128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
-        $1D: begin SetOpcode(OPcvtps2,      OPSx_ph,  True); AddWx;    AddVx;  AddIb;            CheckVex; end;
+        $1D: begin SetOpcode(OPcvtps2,      OPSx_ph,  True); AddWx_Mq; AddVx;  AddIb;            CheckVex; end;
         $20: begin SetOpcode(OPpinsr,       OPSx_b,   True); AddVdq;   AddHdq; AddRy_Mb;  AddIb;           end;
         $21: begin SetOpcode(OPinsert,      OPSx_ps,  True); AddVdq;   AddHdq; AddUdq_Md; AddIb;           end;
         $22: begin SetOpcode(OPpinsr,       OPS_d_q,  True); AddVdq;   AddHdq; AddEy;     AddIb;           end;

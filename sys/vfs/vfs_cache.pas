@@ -84,7 +84,9 @@ begin
  //if (disablefullpath) then Exit(ENODEV);
 
  if (vn=nil) then
+ begin
   Exit(EINVAL);
+ end;
 
  buf:=AllocMem(MAXPATHLEN);
 
@@ -233,7 +235,9 @@ begin
  begin
   error:=vn_vptocnp(@vp, buf, @buflen);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
 
   if (buflen=0) then
   begin
@@ -276,7 +280,9 @@ begin
   end;
   error:=vn_vptocnp(@vp, buf, @buflen);
   if (error<>0) then
+  begin
    break;
+  end;
 
   if (buflen=0) then
   begin
@@ -291,7 +297,9 @@ begin
   slash_prefixed:=1;
  end;
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  if (slash_prefixed=0) then
  begin
@@ -324,7 +332,9 @@ begin
  if (buflen < 2) then Exit(EINVAL);
 
  if (buflen > MAXPATHLEN) then
+ begin
   buflen:=MAXPATHLEN;
+ end;
 
  tmpbuf:=AllocMem(buflen);
 

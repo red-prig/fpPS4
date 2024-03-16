@@ -134,6 +134,7 @@ begin
  dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
 
  g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
+ //g_appinfo.hasParamSfo
  //g_appinfo.debug_level:=1;
 
  Writeln(Item.FGameInfo.Exec);

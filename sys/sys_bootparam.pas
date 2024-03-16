@@ -8,7 +8,7 @@ uses
  host_ipc_interface;
 
 const
- CPUID_BASE_MODE=$710f13;
+ CPUID_BASE_MODE=$710f13; //$710f31
  CPUID_NEO_MODE =$740f00;
 
 var

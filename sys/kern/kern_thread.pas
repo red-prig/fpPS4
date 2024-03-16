@@ -192,7 +192,6 @@ begin
 end;
 
 procedure thread_free(td:p_kthread);
-
 begin
  sleepq_free(td^.td_sleepqueue);
  umtx_thread_fini(td);
