@@ -22,7 +22,7 @@ type
   ALock    :Boolean;
  end;
 
- t_op_opt=Set of (not_impl,not_prefix,not_vex_len);
+ t_op_opt=Set of (not_impl,not_os8,not_prefix,not_vex_len);
 
  t_op_type=packed object
   op    :DWORD;
@@ -2153,7 +2153,7 @@ begin
  op:=desc.op;
  case mreg.AMemSize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2234,7 +2234,7 @@ begin
  op:=desc.op;
  case mreg.AMemSize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2323,7 +2323,7 @@ begin
  op:=desc.op;
  case mreg.AMemSize of
   os8:
-      if (not (not_prefix in desc.opt)) then
+      if (not (not_os8 in desc.opt)) then
       begin
        Dec(op);
       end;
@@ -2405,7 +2405,7 @@ begin
  op:=desc.op;
  case size of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2475,7 +2475,7 @@ begin
  op:=desc.op;
  case size of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2551,7 +2551,7 @@ begin
  op:=desc.op;
  case size of
   os8:
-      if (not (not_prefix in desc.opt)) then
+      if (not (not_os8 in desc.opt)) then
       begin
        Dec(op);
       end;
@@ -2609,7 +2609,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2658,7 +2658,7 @@ begin
 
  case Size of
    os8:
-       if (not (not_prefix in opt)) then
+       if (not (not_os8 in opt)) then
        begin
         Dec(op);
        end;
@@ -2729,7 +2729,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2829,7 +2829,7 @@ begin
  begin
   case mreg.AMemSize of
     os8:
-        if (not (not_prefix in desc.opt)) then
+        if (not (not_os8 in desc.opt)) then
         begin
          Dec(op);
         end;
@@ -2904,7 +2904,7 @@ begin
  op:=desc.op;
  case reg.ASize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;
@@ -2971,7 +2971,7 @@ begin
  op:=desc.op;
  case mreg.AMemSize of
    os8:
-       if (not (not_prefix in desc.opt)) then
+       if (not (not_os8 in desc.opt)) then
        begin
         Dec(op);
        end;

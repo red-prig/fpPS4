@@ -61,7 +61,7 @@ end;
 procedure op_emit2_simd_mem_reg(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
-  mem_reg:(op:0;opt:[not_prefix]);
+  mem_reg:(op:0;opt:[not_os8,not_prefix]);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
@@ -81,7 +81,7 @@ procedure op_emit2_simd_reg_mem(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:0;opt:[not_prefix]);
+  reg_mem:(op:0;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -159,8 +159,8 @@ end;
 
 const
  movsd_desc:t_op_desc=(
-  mem_reg:(op:$F20F11;opt:[not_prefix]);
-  reg_mem:(op:$F20F10;opt:[not_prefix]);
+  mem_reg:(op:$F20F11;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$F20F10;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -179,8 +179,8 @@ end;
 
 const
  movss_desc:t_op_desc=(
-  mem_reg:(op:$F30F11;opt:[not_prefix]);
-  reg_mem:(op:$F30F10;opt:[not_prefix]);
+  mem_reg:(op:$F30F11;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$F30F10;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -199,8 +199,8 @@ end;
 
 const
  mov_dq_desc:t_op_desc=(
-  mem_reg:(op:$0F7E;opt:[not_prefix]);
-  reg_mem:(op:$0F6E;opt:[not_prefix]);
+  mem_reg:(op:$0F7E;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F6E;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -219,8 +219,8 @@ end;
 
 const
  movdqa_desc:t_op_desc=(
-  mem_reg:(op:$660F7F;opt:[not_prefix]);
-  reg_mem:(op:$660F6F;opt:[not_prefix]);
+  mem_reg:(op:$660F7F;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$660F6F;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -239,8 +239,8 @@ end;
 
 const
  movdqu_desc:t_op_desc=(
-  mem_reg:(op:$F30F7F;opt:[not_prefix]);
-  reg_mem:(op:$F30F6F;opt:[not_prefix]);
+  mem_reg:(op:$F30F7F;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$F30F6F;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -261,8 +261,8 @@ end;
 
 const
  movu_ps_pd_desc:t_op_desc=(
-  mem_reg:(op:$0F11;opt:[not_prefix]);
-  reg_mem:(op:$0F10;opt:[not_prefix]);
+  mem_reg:(op:$0F11;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F10;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -283,8 +283,8 @@ end;
 
 const
  mova_ps_pd_desc:t_op_desc=(
-  mem_reg:(op:$0F29;opt:[not_prefix]);
-  reg_mem:(op:$0F28;opt:[not_prefix]);
+  mem_reg:(op:$0F29;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F28;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -306,7 +306,7 @@ end;
 const
  movntdqa_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$660F382A;opt:[not_prefix]);
+  reg_mem:(op:$660F382A;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo,his_align];
@@ -334,8 +334,8 @@ end;
 
 const
  movl_ps_pd_desc:t_op_desc=(
-  mem_reg:(op:$0F13;opt:[not_prefix]);
-  reg_mem:(op:$0F12;opt:[not_prefix]);
+  mem_reg:(op:$0F13;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F12;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -356,8 +356,8 @@ end;
 
 const
  movh_ps_pd_desc:t_op_desc=(
-  mem_reg:(op:$0F17;opt:[not_prefix]);
-  reg_mem:(op:$0F16;opt:[not_prefix]);
+  mem_reg:(op:$0F17;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F16;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -379,7 +379,7 @@ end;
 
 const
  ldmxcsr_desc:t_op_type=(
-  op:$0FAE;index:2;opt:[not_prefix];
+  op:$0FAE;index:2;opt:[not_os8,not_prefix];
  );
 
 procedure op_ldmxcsr(var ctx:t_jit_context2);
@@ -389,7 +389,7 @@ end;
 
 const
  stmxcsr_desc:t_op_type=(
-  op:$0FAE;index:3;opt:[not_prefix];
+  op:$0FAE;index:3;opt:[not_os8,not_prefix];
  );
 
 procedure op_stmxcsr(var ctx:t_jit_context2);

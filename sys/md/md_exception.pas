@@ -137,6 +137,9 @@ begin
   td^.td_frame.tf_rip:=tf_addr;
  end;
 
+ Writeln('tf_tsp:0x',HexStr(td^.td_frame.tf_rsp,16));
+ Writeln('tf_tbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+
  print_backtrace_td(stderr);
 
  td^.td_frame.tf_trapno:=0;

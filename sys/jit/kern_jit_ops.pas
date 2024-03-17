@@ -914,7 +914,26 @@ begin
 
   tmp.op   :=ctx.dis.opcode;
   tmp.index:=ctx.dis.ModRM.Index;
-  tmp.opt  :=[not_prefix];
+  tmp.opt  :=[not_os8];
+
+  op_emit1(ctx,tmp,[]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_emit1_gn_np(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_os8,not_prefix];
 
   op_emit1(ctx,tmp,[]);
  end else
@@ -933,7 +952,26 @@ begin
 
   tmp.op   :=ctx.dis.opcode;
   tmp.index:=ctx.dis.ModRM.Index;
-  tmp.opt  :=[not_prefix];
+  tmp.opt  :=[not_os8];
+
+  op_emit1(ctx,tmp,[his_ro]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_emit1_ro_np(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_os8,not_prefix];
 
   op_emit1(ctx,tmp,[his_ro]);
  end else
@@ -952,7 +990,26 @@ begin
 
   tmp.op   :=ctx.dis.opcode;
   tmp.index:=ctx.dis.ModRM.Index;
-  tmp.opt  :=[not_prefix];
+  tmp.opt  :=[not_os8];
+
+  op_emit1(ctx,tmp,[his_rw]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_emit1_rw_np(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_os8,not_prefix];
 
   op_emit1(ctx,tmp,[his_rw]);
  end else
@@ -1199,7 +1256,7 @@ end;
 const
  movx_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$00;opt:[not_prefix]);
+  reg_mem:(op:$00;opt:[not_os8]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -1253,8 +1310,8 @@ end;
 
 const
  movbe_desc:t_op_desc=(
-  mem_reg:(op:$0F38F1;opt:[not_prefix]);
-  reg_mem:(op:$0F38F0;opt:[not_prefix]);
+  mem_reg:(op:$0F38F1;opt:[not_os8]);
+  reg_mem:(op:$0F38F0;opt:[not_os8]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -1274,7 +1331,7 @@ end;
 const
  movsxd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$63;opt:[not_prefix]);
+  reg_mem:(op:$63;opt:[not_os8]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -1703,22 +1760,22 @@ begin
  jit_cbs[OPPnone,OPshl ,OPSx_d ]:=@op_shld;
  jit_cbs[OPPnone,OPshr ,OPSx_d ]:=@op_shrd;
 
- jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_b  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_nb ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_z  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_nz ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_be ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_nbe]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_s  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_ns ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_p  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_np ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_l  ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPset__,OPSc_o  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_no ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_b  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_nb ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_z  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_nz ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_be ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_nbe]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_s  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_ns ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_p  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_np ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_l  ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_emit1_gn_np;
 
  jit_cbs[OPPnone,OPemms      ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfemms     ,OPSnone]:=@add_orig;
@@ -1832,42 +1889,42 @@ begin
 
  //
 
- jit_cbs[OPPnone,OPfldcw  ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfld    ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfild   ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfldcw  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfld    ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfild   ,OPSnone]:=@op_emit1_ro_np;
 
- jit_cbs[OPPnone,OPfldenv ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfnstenv,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfnstcw ,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfnstsw ,OPSnone]:=@op_emit1_gn;
+ jit_cbs[OPPnone,OPfldenv ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfnstenv,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfnstcw ,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfnstsw ,OPSnone]:=@op_emit1_gn_np;
 
- jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfist   ,OPSx_p ]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfisttp ,OPSnone]:=@op_emit1_gn;
- jit_cbs[OPPnone,OPfadd   ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfiadd  ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfmul   ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfimul  ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_emit1_ro;
- jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_emit1_ro;
+ jit_cbs[OPPnone,OPfxsave ,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfxrstor,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfst    ,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfst    ,OPSx_p ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfist   ,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfist   ,OPSx_p ]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfisttp ,OPSnone]:=@op_emit1_gn_np;
+ jit_cbs[OPPnone,OPfadd   ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfiadd  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfmul   ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfimul  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_emit1_ro_np;
 
- jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_emit1_rw_np;
 
  //fpu
 
- jit_cbs[OPPnone,OPprefetch,OPSnone ]:=@op_emit1_rw;
- jit_cbs[OPPnone,OPprefetch,OPSp_w  ]:=@op_emit1_rw;
- jit_cbs[OPPnone,OPprefetch,OPSp_nta]:=@op_emit1_rw;
- jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_emit1_rw;
- jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_emit1_rw;
- jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_emit1_rw;
+ jit_cbs[OPPnone,OPprefetch,OPSnone ]:=@op_emit1_rw_np;
+ jit_cbs[OPPnone,OPprefetch,OPSp_w  ]:=@op_emit1_rw_np;
+ jit_cbs[OPPnone,OPprefetch,OPSp_nta]:=@op_emit1_rw_np;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_emit1_rw_np;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_emit1_rw_np;
+ jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_emit1_rw_np;
 
 end;
 

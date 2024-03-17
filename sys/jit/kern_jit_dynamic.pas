@@ -671,7 +671,7 @@ begin
 
  if (p_print_jit_preload<>0) then
  begin
-  Writeln('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',i,':',count);
+  Writeln('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
  end;
 
  //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
