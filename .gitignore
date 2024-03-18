@@ -19,6 +19,13 @@
 *.self
 *.dump
 *.h
+*.sfo
+*.ttf
+*.otf
+*.rco
+*.bsf
+*.aac
+*.nv12
 link.res
 log.txt
 lib/

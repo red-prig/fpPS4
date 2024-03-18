@@ -400,13 +400,11 @@ type
   lea     :array[0..2] of Byte; //48 8D 3D  lea -7(%rip),%rdi
   offset1 :DWORD; //F9 FF FF FF
   //
-  push_rbp:Byte;  //55
-  and_rsp :DWORD; //48 83 E4 F0
-  //
-  inst    :Word;  //FF 15  call 2(%rip)
-  offset2 :DWORD; //02
+  inst    :Word;  //FF 25  jmp 4(%rip)
+  offset2 :DWORD; //04
   ret     :Byte;  //C3
-  nop2    :Byte;  //90
+  nop1    :Byte;  //90
+  nop2    :Word;  //9090
   addr    :QWORD;
   nid     :QWORD;
   libname :PChar;
@@ -415,20 +413,24 @@ type
 
 const
  c_jmpq64_trampoline:t_jmpq64_trampoline=(lea     :($48,$8D,$3D);offset1:$FFFFFFF9;
-                                          push_rbp:$55;
-                                          and_rsp :($F0E48348);
-                                          inst    :$15FF;offset2:$02;
+                                          inst    :$25FF;offset2:$04;
                                           ret     :$C3;
-                                          nop2    :$90;
+                                          nop1    :$90;
+                                          nop2    :$9090;
                                           addr    :0;
                                           nid     :0;
-                                          libname :nil);
+                                          libname :nil;
+                                          libfrom :nil);
 
-procedure _unresolve_symbol(data:p_jmpq64_trampoline);
+procedure unresolve_symbol(data:p_jmpq64_trampoline);
 var
+ td:p_kthread;
  str:shortstring;
 begin
- jit_save_to_sys_save(curkthread);
+ td:=curkthread;
+ jit_save_to_sys_save(td);
+
+ td^.td_frame.tf_rip:=PQWORD(td^.td_frame.tf_rsp)^;
 
  str:=ps4libdoc.GetFunctName(data^.nid);
  if (str='Unknow') then
@@ -438,6 +440,16 @@ begin
 
  print_error_td('unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname+' from '+data^.libfrom);
  Assert(false);
+end;
+
+procedure _unresolve_symbol; assembler; nostackframe;
+asm
+ push %rbp
+ movq %rsp,%rbp
+
+ andq  $-16,%rsp //align stack
+
+ call unresolve_symbol
 end;
 
 function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;nid:QWORD;libname:PChar):Pointer;

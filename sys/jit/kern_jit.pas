@@ -36,17 +36,22 @@ uses
  kern_thr,
  subr_backtrace;
 
-procedure _jit_assert;
+procedure jit_assert(tf_rip:QWORD);
+var
+ td:p_kthread;
 begin
- jit_save_to_sys_save(curkthread);
+ td:=curkthread;
+ jit_save_to_sys_save(td);
+ td^.td_frame.tf_rip:=tf_rip;
  print_error_td('Assert in guest code!');
  Assert(false);
 end;
 
-procedure jit_assert; assembler; nostackframe;
+procedure _jit_assert; assembler; nostackframe;
 asm
  call jit_save_ctx
- jmp  _jit_assert
+ mov  %r14,%rdi
+ jmp  jit_assert
 end;
 
 procedure jit_system_error;
@@ -59,22 +64,31 @@ begin
  Assert(False,'jit_unknow_int');
 end;
 
-procedure _jit_exit_proc;
+procedure jit_exit_proc(tf_rip:QWORD);
+var
+ td:p_kthread;
 begin
- jit_save_to_sys_save(curkthread);
+ td:=curkthread;
+ jit_save_to_sys_save(td);
+ td^.td_frame.tf_rip:=tf_rip;
  print_error_td('TODO:jit_exit_proc');
  Assert(False);
 end;
 
-procedure jit_exit_proc; assembler; nostackframe;
+procedure _jit_exit_proc; assembler; nostackframe;
 asm
  call jit_save_ctx
- jmp  _jit_exit_proc
+ mov  %r14,%rdi
+ jmp  jit_exit_proc
 end;
 
-procedure _jit_cpuid(rax:qword);
+procedure _jit_cpuid(tf_rip,rax:qword);
+var
+ td:p_kthread;
 begin
- jit_save_to_sys_save(curkthread);
+ td:=curkthread;
+ jit_save_to_sys_save(td);
+ td^.td_frame.tf_rip:=tf_rip;
  print_error_td('TODO:jit_cpuid:0x'+HexStr(rax,16));
  Assert(False);
 end;
@@ -130,9 +144,10 @@ asm
 
  //unknow id
  popf
- mov  %rax,%r14
+ mov  %rax,%r15
  call jit_save_ctx
  mov  %r14,%rdi
+ mov  %r15,%rsi
  jmp  _jit_cpuid
 
 
@@ -876,12 +891,14 @@ begin
   $41: //assert?
    begin
     //
-    ctx.builder.call_far(@jit_assert); //TODO error dispatcher
+    op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+    ctx.builder.call_far(@_jit_assert); //TODO error dispatcher
    end;
 
   $44: //system error?
    begin
     //
+    op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
     ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
     trim_flow(ctx);
    end;
@@ -898,7 +915,8 @@ procedure op_ud2(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.int3;
- ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
+ op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+ ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
  trim_flow(ctx);
 end;
 
@@ -906,7 +924,8 @@ procedure op_iretq(var ctx:t_jit_context2);
 begin
  //exit proc?
  ctx.builder.int3;
- ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
+ op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+ ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
  trim_flow(ctx);
 end;
 
@@ -914,12 +933,14 @@ procedure op_hlt(var ctx:t_jit_context2);
 begin
  //stop thread?
  ctx.builder.int3;
- ctx.builder.call_far(@jit_exit_proc); //TODO exit dispatcher
+ op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+ ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
 end;
 
 procedure op_cpuid(var ctx:t_jit_context2);
 begin
- ctx.builder.call_far(@jit_cpuid); //TODO CPUID
+ op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+ ctx.builder.call_far(@jit_cpuid);
 end;
 
 procedure op_rdtsc(var ctx:t_jit_context2);

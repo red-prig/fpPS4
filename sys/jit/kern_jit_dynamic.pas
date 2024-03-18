@@ -363,7 +363,7 @@ begin
  rw_runlock(entry_chunk_lock);
 end;
 
-function exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean;
+function exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean; public;
 var
  blob:p_jit_dynamic_blob;
 begin
