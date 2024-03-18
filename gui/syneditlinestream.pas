@@ -48,7 +48,7 @@ type
    procedure EditUndo(Item: TSynEditUndoItem);                                 override;
    procedure EditRedo(Item: TSynEditUndoItem);                                 override;
    procedure Update;
-   procedure Reset;
+   procedure Reset(full:Boolean);
  end;
 
 implementation
@@ -236,14 +236,14 @@ begin
  EndUpdate;
 end;
 
-procedure TSynEditLineStream.Reset;
+procedure TSynEditLineStream.Reset(full:Boolean);
 var
  ffcnt,delta:Integer;
 begin
  BeginUpdate;
  //
  ffcnt:=FStream.GetCount;
- FStream.Reset;
+ FStream.Reset(full);
  delta:=-ffcnt;
  //
  IncreaseTextChangeStamp;

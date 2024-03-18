@@ -5,17 +5,32 @@ unit LineStream;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes,
+  SysUtils,
+  g_node_splay;
 
 type
+ PLineNode=^TLineNode;
+ TLineNode=object
+  pLeft :PLineNode;
+  pRight:PLineNode;
+  FIndex:Integer;
+  FData :record end;
+  function c(n1,n2:PLineNode):Integer; static;
+ end;
+
+ TLineCache=specialize TNodeSplay<TLineNode>;
+
  TLineStream = Class
   FStream   :TStream;
+  FLineCache:TLineCache;
   FLineStart:Int64;
   FLine__End:Int64;
   FLineIndex:Integer;
   FLineCount:Integer;
   Constructor Create(Stream:TStream);
-  procedure   Reset;
+  Destructor  Destroy; override;
+  procedure   Reset(full:Boolean);
   function    Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
   Function    ReadForward (var ABuffer; ACount : LongInt) : Integer;
   Function    ReadBackward(var ABuffer; ACount : LongInt) : Integer;
@@ -23,24 +38,43 @@ type
   Function    NextLine:Boolean;
   Function    PrevLine:Boolean;
   function    GetCount: integer;
+  function    GetCache(Index: integer;var R:RawByteString): Boolean;
+  procedure   AddCache(Index: integer;const R:RawByteString);
+  procedure   ClearCache;
   function    Get(Index: integer): RawByteString;
   function    Update:Integer;
  end;
 
 implementation
 
+function TLineNode.c(n1,n2:PLineNode):Integer;
+begin
+ Result:=Integer(n1^.FIndex>n2^.FIndex)-Integer(n1^.FIndex<n2^.FIndex);
+end;
+
 Constructor TLineStream.Create(Stream:TStream);
 begin
  FStream:=Stream;
- Reset;
+ Reset(False);
 end;
 
-procedure TLineStream.Reset;
+Destructor TLineStream.Destroy;
+begin
+ ClearCache;
+ inherited;
+end;
+
+procedure TLineStream.Reset(full:Boolean);
 begin
  Seek(0,soBeginning);
  FLineStart:=-1;
  FLine__End:=0;
  FLineIndex:=-1;
+ if full then
+ begin
+  FLineCount:=0;
+  ClearCache;
+ end;
 end;
 
 function TLineStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
@@ -125,8 +159,6 @@ begin
   Exit(False);
  end;
 
- f:=FLineStart;
-
  //read prev
  if (FLineIndex>=0) then
  begin
@@ -139,6 +171,8 @@ begin
  begin
   FLineStart:=FStream.Position;
  end;
+
+ f:=FLineStart;
 
  repeat
   i:=ReadForward(ch,1);
@@ -203,7 +237,7 @@ begin
 
   if (i<=0) then
   begin
-   Reset;
+   Reset(False);
    Exit(False);
   end;
 
@@ -250,6 +284,56 @@ begin
  Result:=FLineCount;
 end;
 
+function TLineStream.GetCache(Index: integer;var R:RawByteString): Boolean;
+var
+ _node:TLineNode;
+ node :PLineNode;
+begin
+ Result:=False;
+
+ _node:=Default(TLineNode);
+ _node.FIndex:=Index;
+
+ node:=FLineCache.Find(@_node);
+
+ if (node=nil) then Exit();
+
+ R:=PChar(@node^.FData);
+
+ Result:=True;
+end;
+
+procedure TLineStream.AddCache(Index: integer;const R:RawByteString);
+var
+ node:PLineNode;
+begin
+ if (Index>=FLineCount) then Exit;
+
+ node:=AllocMem(sizeof(TLineNode)+Length(R)+1);
+
+ node^.FIndex:=Index;
+
+ Move(PChar(R)^,PChar(@node^.FData)^,Length(R)+1);
+
+ FLineCache.Insert(node);
+end;
+
+procedure TLineStream.ClearCache;
+var
+ node:PLineNode;
+begin
+ node:=FLineCache.Min;
+
+ while (node<>nil) do
+ begin
+  FLineCache.Delete(node);
+
+  FreeMem(node);
+
+  node:=FLineCache.Min;
+ end;
+end;
+
 function TLineStream.Get(Index: integer): RawByteString;
 label
  _next;
@@ -258,16 +342,20 @@ begin
 
  if (Index<0) then Exit;
 
+ if GetCache(Index,Result) then Exit;
+
  if (FLineIndex=Index) then
  begin
-  Exit(GetLine);
+  Result:=GetLine;
+  AddCache(Index,Result);
+  Exit;
  end;
 
  if (FLineIndex>Index) then
  begin
   if (Index<=(FLineIndex div 2)) then
   begin
-   reset;
+   Reset(False);
    goto _next;
   end;
 
@@ -275,7 +363,9 @@ begin
   begin
    if (FLineIndex=Index) then
    begin
-    Exit(GetLine);
+    Result:=GetLine;
+    AddCache(Index,Result);
+    Exit;
    end;
   end;
  end else
@@ -285,7 +375,9 @@ begin
   begin
    if (FLineIndex=Index) then
    begin
-    Exit(GetLine);
+    Result:=GetLine;
+    AddCache(Index,Result);
+    Exit;
    end;
   end;
  end;

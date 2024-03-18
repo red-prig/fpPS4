@@ -601,7 +601,7 @@ procedure TfrmMain.ClearLog;
 begin
  //reset file
  FileTruncate(FAddHandle,0);
- FList.Reset;
+ FList.Reset(True);
  //
 end;
 
