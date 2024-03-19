@@ -20,8 +20,8 @@ type
   procedure emit_V_AND_B32;
   procedure emit_V_OR_B32;
   procedure emit_V_XOR_B32;
-  procedure emit_V_SHNRM(OpId:DWORD;rtype:TsrDataType);
-  procedure emit_V_SHREV(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_ADD_I32;
   procedure emit_V_SUB_I32;
   procedure emit_V_SUBREV_I32;
@@ -119,7 +119,7 @@ begin
  OpBitwiseXor(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_SHNRM(OpId:DWORD;rtype:TsrDataType);
+procedure TEmit_VOP2.emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -135,7 +135,7 @@ begin
  Op2(OpId,src[0]^.dtype,dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_SHREV(OpId:DWORD;rtype:TsrDataType);
+procedure TEmit_VOP2.emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -510,12 +510,12 @@ begin
   V_OR_B32     : emit_V_OR_B32;
   V_XOR_B32    : emit_V_XOR_B32;
 
-  V_LSHL_B32   : emit_V_SHNRM(Op.OpShiftLeftLogical    ,dtUint32);
-  V_LSHLREV_B32: emit_V_SHREV(Op.OpShiftLeftLogical    ,dtUint32);
-  V_LSHR_B32   : emit_V_SHNRM(Op.OpShiftRightLogical   ,dtUint32);
-  V_LSHRREV_B32: emit_V_SHREV(Op.OpShiftRightLogical   ,dtUint32);
-  V_ASHR_I32   : emit_V_SHNRM(Op.OpShiftRightArithmetic,dtInt32);
-  V_ASHRREV_I32: emit_V_SHREV(Op.OpShiftRightArithmetic,dtInt32);
+  V_LSHL_B32   : emit_V_SH_NRM(Op.OpShiftLeftLogical    ,dtUint32);
+  V_LSHLREV_B32: emit_V_SH_REV(Op.OpShiftLeftLogical    ,dtUint32);
+  V_LSHR_B32   : emit_V_SH_NRM(Op.OpShiftRightLogical   ,dtUint32);
+  V_LSHRREV_B32: emit_V_SH_REV(Op.OpShiftRightLogical   ,dtUint32);
+  V_ASHR_I32   : emit_V_SH_NRM(Op.OpShiftRightArithmetic,dtInt32);
+  V_ASHRREV_I32: emit_V_SH_REV(Op.OpShiftRightArithmetic,dtInt32);
 
   V_ADD_I32    : emit_V_ADD_I32;
   V_SUB_I32    : emit_V_SUB_I32;

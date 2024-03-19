@@ -193,6 +193,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceCameraGetConfig(handle:Integer;pConfig:pSceCameraConfig):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function ps4_sceCameraSetVideoSync(handle:Integer;pVideoSync:SceCameraVideoSyncParameter):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
@@ -222,6 +227,7 @@ begin
  lib:=Result._add_lib('libSceCamera');
  lib^.set_proc($A7A9F73698B7618E,@ps4_sceCameraIsAttached);
  lib^.set_proc($550FB9900AAC1364,@ps4_sceCameraSetConfig);
+ lib^.set_proc($65AAA6184B58B8BD,@ps4_sceCameraGetConfig);
  lib^.set_proc($C297B217027E5042,@ps4_sceCameraSetVideoSync);
  lib^.set_proc($F44A5160CCBBAC75,@ps4_sceCameraStart);
  lib^.set_proc($9B180C991FB52ABD,@ps4_sceCameraGetFrameData);

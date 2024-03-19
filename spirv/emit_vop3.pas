@@ -34,9 +34,11 @@ type
   procedure emit_V_CNDMASK_B32;
   procedure emit_V_MUL_LEGACY_F32;
   procedure emit_V2_F32(OpId:DWORD);
-  procedure emit_V_SUBREV_F32;
+  procedure emit_V2_REV_F32(OpId:DWORD);
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_MMX_F32(OpId:DWORD);
+  procedure emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_MUL_LO(rtype:TsrDataType);
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
@@ -283,7 +285,7 @@ begin
  emit_dst_clamp_f(dst);
 end;
 
-procedure TEmit_VOP3.emit_V_SUBREV_F32;
+procedure TEmit_VOP3.emit_V2_REV_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of PsrRegNode;
@@ -296,7 +298,7 @@ begin
  emit_src_abs_bit(@src,2);
  emit_src_neg_bit(@src,2);
 
- Op2(Op.OpFSub,dtFloat32,dst,src[1],src[0]);
+ Op2(OpId,dtFloat32,dst,src[1],src[0]);
 
  emit_dst_omod_f(dst);
  emit_dst_clamp_f(dst);
@@ -338,6 +340,48 @@ begin
 
  emit_dst_omod_f(dst);
  emit_dst_clamp_f(dst);
+end;
+
+procedure TEmit_VOP3.emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+
+ src[1]:=OpAndTo(src[1],31);
+ src[1]^.PrepType(ord(dtUInt32));
+
+ Op2(OpId,src[0]^.dtype,dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP3.emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
+
+ src[0]:=OpAndTo(src[0],31);
+ src[0]^.PrepType(ord(dtUInt32));
+
+ Op2(OpId,src[1]^.dtype,dst,src[1],src[0]);
 end;
 
 procedure TEmit_VOP3.emit_V_MUL_LO(rtype:TsrDataType);
@@ -1220,9 +1264,16 @@ begin
 
   256+V_CNDMASK_B32: emit_V_CNDMASK_B32;
 
-  256+V_ADD_F32: emit_V2_F32(Op.OpFAdd);
-  256+V_SUB_F32: emit_V2_F32(Op.OpFSub);
-  256+V_SUBREV_F32: emit_V_SUBREV_F32;
+  256+V_ADD_F32    : emit_V2_F32(Op.OpFAdd);
+  256+V_SUB_F32    : emit_V2_F32(Op.OpFSub);
+  256+V_SUBREV_F32 : emit_V2_REV_F32(Op.OpFSub);
+
+  256+V_LSHL_B32   : emit_V_SH_NRM(Op.OpShiftLeftLogical    ,dtUint32);
+  256+V_LSHLREV_B32: emit_V_SH_REV(Op.OpShiftLeftLogical    ,dtUint32);
+  256+V_LSHR_B32   : emit_V_SH_NRM(Op.OpShiftRightLogical   ,dtUint32);
+  256+V_LSHRREV_B32: emit_V_SH_REV(Op.OpShiftRightLogical   ,dtUint32);
+  256+V_ASHR_I32   : emit_V_SH_NRM(Op.OpShiftRightArithmetic,dtInt32);
+  256+V_ASHRREV_I32: emit_V_SH_REV(Op.OpShiftRightArithmetic,dtInt32);
 
   256+V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
 

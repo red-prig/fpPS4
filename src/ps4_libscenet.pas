@@ -16,8 +16,9 @@ const
 
  SCE_NET_EINVAL      =22;
  SCE_NET_ENOSPC      =28;
+ SCE_NET_EWOULDBLOCK =35;
  SCE_NET_EAFNOSUPPORT=47;
-
+ SCE_NET_ECONNREFUSED=61;
  SCE_NET_EHOSTUNREACH=65;
 
  //
@@ -305,6 +306,7 @@ function ps4_sceNetAccept(s:Integer;
                           addr:pSceNetSockaddr;
                           paddrlen:pSceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
+ sleep(-1);
  Result:=0;
  if (addr<>nil) then
  begin
@@ -314,6 +316,7 @@ begin
  begin
   paddrlen^:=SizeOf(SceNetSockaddr);
  end;
+ Result:=_set_net_errno(SCE_NET_EWOULDBLOCK)
 end;
 
 function ps4_sceNetRecv(s:Integer;
@@ -449,7 +452,8 @@ end;
 
 function ps4_sceNetConnect(s:Integer; const addr:pSceNetSockaddr; addrlen:SceNetSocklen_t):Integer; SysV_ABI_CDecl;
 begin
- Result:=0;
+ sleep(200);
+ Result:=_set_net_errno(SCE_NET_ECONNREFUSED);
 end;
 
 function ps4_sceNetEpollWait(s:Integer; events:pSceNetEpollEvent; maxevents:Integer; timeout:Integer):Integer; SysV_ABI_CDecl;
@@ -545,8 +549,13 @@ var
 function ps4_sceNetCtlRegisterCallback(func:SceNetCtlCallback;arg:Pointer;cid:PInteger):Integer; SysV_ABI_CDecl;
 begin
  NetCtlCb.func:=func;
- NetCtlCb.arg:=arg;
+ NetCtlCb.arg :=arg;
  if (cid<>nil) then cid^:=0;
+ Result:=0;
+end;
+
+function ps4_sceNetCtlUnregisterCallback(cid:Integer):Integer; SysV_ABI_CDecl;
+begin
  Result:=0;
 end;
 
@@ -575,7 +584,17 @@ type
   mappedAddr:SceNetInAddr;
  end;
 
+ pSceNetCtlIfStat=^SceNetCtlIfStat;
+ SceNetCtlIfStat=packed record
+  device :DWORD; //SCE_NET_CTL_DEVICE
+  _align :DWORD;
+  txBytes:QWORD;
+  rxBytes:QWORD;
+  reserved:array[0..7] of DWORD;
+ end;
+
 const
+ //SceNetCtlGetNatInfo
  SCE_NET_CTL_NATINFO_STUN_UNCHECKED=0;
  SCE_NET_CTL_NATINFO_STUN_FAILED   =1;
  SCE_NET_CTL_NATINFO_STUN_OK       =2;
@@ -584,6 +603,9 @@ const
  SCE_NET_CTL_NATINFO_NAT_TYPE_2    =2;
  SCE_NET_CTL_NATINFO_NAT_TYPE_3    =3;
 
+ //SceNetCtlGetIfStat
+ SCE_NET_CTL_DEVICE_WIRED          =0;
+ SCE_NET_CTL_DEVICE_WIRELESS       =1; 
 
 function ps4_sceNetCtlGetNatInfo(natInfo:pSceNetCtlNatInfo):Integer; SysV_ABI_CDecl;
 begin
@@ -592,6 +614,15 @@ begin
 
  natInfo^.stunStatus:=SCE_NET_CTL_NATINFO_STUN_FAILED;
  natInfo^.natType:=SCE_NET_CTL_NATINFO_NAT_TYPE_1;
+
+ Result:=0;
+end;
+
+function ps4_sceNetCtlGetIfStat(ifStat:pSceNetCtlIfStat):Integer; SysV_ABI_CDecl;
+begin
+ if (ifStat=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
+
+ ifStat^:=Default(SceNetCtlIfStat);
 
  Result:=0;
 end;
@@ -761,10 +792,12 @@ begin
  lib^.set_proc($678C3008588110B4,@ps4_sceNetCtlTerm);
  lib^.set_proc($B813E5AF495BBA22,@ps4_sceNetCtlGetState);
  lib^.set_proc($509F99ED0FB8724D,@ps4_sceNetCtlRegisterCallback);
+ lib^.set_proc($46A9B63A764C0B3D,@ps4_sceNetCtlUnregisterCallback);
  lib^.set_proc($890C378903E1BD44,@ps4_sceNetCtlCheckCallback);
  lib^.set_proc($D1C06076E3D147E3,@ps4_sceNetCtlGetResult);
  lib^.set_proc($24EE32B93B8CA0A2,@ps4_sceNetCtlGetNatInfo);
  lib^.set_proc($A1BBB17538B0905F,@ps4_sceNetCtlGetInfo);
+ lib^.set_proc($B5EB8AE109C94C68,@ps4_sceNetCtlGetIfStat);
 
  lib:=Result._add_lib('libSceNetCtlForNpToolkit');
 

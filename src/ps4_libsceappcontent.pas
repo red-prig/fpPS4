@@ -91,7 +91,6 @@ function ps4_sceAppContentAppParamGetInt(paramId:DWORD;value:PInteger):Integer; 
 begin
  Result:=0;
  if (value=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
- Writeln('sceAppContentAppParamGetInt:',paramId);
  Case SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG of
   SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            :value^:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
   SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_1');
@@ -178,6 +177,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceAppContent(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -198,6 +202,7 @@ begin
  lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
  lib^.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
+ lib^.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
 end;
 
 

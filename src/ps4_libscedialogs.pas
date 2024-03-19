@@ -133,6 +133,11 @@ begin
  Result:=status_profile_dialog;
 end;
 
+function ps4_sceNpProfileDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 var
@@ -393,6 +398,11 @@ begin
  Result:=status_commerce_dialog;
 end;
 
+function ps4_sceNpCommerceDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=status_commerce_dialog;
+end;
+
 type
  pSceNpCommerceDialogResult=^SceNpCommerceDialogResult;
  SceNpCommerceDialogResult=packed record
@@ -548,6 +558,20 @@ end;
 
 //
 
+function ps4_sceNpFriendListDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
+function ps4_sceInvitationDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+//
+
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -586,6 +610,7 @@ begin
  lib:=Result._add_lib('libSceNpProfileDialog');
  lib^.set_proc($2E0F8D084EA94F04,@ps4_sceNpProfileDialogInitialize);
  lib^.set_proc($85A55913D1602AA1,@ps4_sceNpProfileDialogUpdateStatus);
+ lib^.set_proc($D12A7DBC9701D7FC,@ps4_sceNpProfileDialogTerminate);
 end;
 
 //
@@ -634,6 +659,7 @@ begin
  lib^.set_proc($D1A4766969906A5E,@ps4_sceNpCommerceDialogInitialize);
  lib^.set_proc($0DF4820D10371236,@ps4_sceNpCommerceDialogOpen);
  lib^.set_proc($2D1E5CC0530C0951,@ps4_sceNpCommerceDialogUpdateStatus);
+ lib^.set_proc($0826C2FA5AAABC5D,@ps4_sceNpCommerceDialogGetStatus);
  lib^.set_proc($AF8D9B59C41BB596,@ps4_sceNpCommerceDialogGetResult);
  lib^.set_proc($9BF23DD806F9D16F,@ps4_sceNpCommerceDialogTerminate);
  lib^.set_proc($0C79B0B1AE92F137,@ps4_sceNpCommerceShowPsStoreIcon);
@@ -697,6 +723,27 @@ begin
  lib^.set_proc($FB3E0E26616B7997,@ps4_sceHmdSetupDialogTerminate);
 end;
 
+function Load_libSceNpFriendListDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+ lib:=Result._add_lib('libSceNpFriendListDialog');
+ lib^.set_proc($7EBC33DDECAE03AC,@ps4_sceNpFriendListDialogUpdateStatus);
+end;
+
+function Load_libSceInvitationDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+
+ lib:=Result._add_lib('libSceInvitationDialog');
+ lib^.set_proc($F7E83D88EABEEE48,@ps4_sceInvitationDialogUpdateStatus);
+end;
+
 initialization
  ps4_app.RegistredPreLoad('libSceCommonDialog.prx'          ,@Load_libSceCommonDialog);
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx'           ,@Load_libSceErrorDialog);
@@ -709,6 +756,8 @@ initialization
  ps4_app.RegistredPreLoad('libSceImeDialog.prx'             ,@Load_libSceImeDialog);
  ps4_app.RegistredPreLoad('libSceLoginDialog.prx'           ,@Load_libSceLoginDialog);
  ps4_app.RegistredPreLoad('libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog);
+ ps4_app.RegistredPreLoad('libSceNpFriendListDialog.prx'    ,@Load_libSceNpFriendListDialog); 
+ ps4_app.RegistredPreLoad('libSceInvitationDialog.prx'      ,@Load_libSceInvitationDialog); 
 
 end.
 

@@ -8,6 +8,10 @@ uses
  ps4_program;
 
 const
+ SCE_GAME_LIVE_STREAMING_MAX_SOCIAL_FEEDBACK_PRESET_TEXT_LENGTH=32;
+ SCE_GAME_LIVE_STREAMING_MAX_SPOILER_TAG_LENGTH=32;
+ MB_LEN_MAX=2;
+
  SCE_GAME_LIVE_STREAMING_ERROR_UNKNOWN                   =-2136997887; //0x80A00001
  SCE_GAME_LIVE_STREAMING_ERROR_INVALID_PARAM             =-2136997886; //0x80A00002
  SCE_GAME_LIVE_STREAMING_ERROR_INVALID_STATUS            =-2136997885; //0x80A00003
@@ -32,6 +36,11 @@ const
  SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_TOP_RIGHT   =$02;
  SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_BOTTOM_LEFT =$03;
  SCE_GAME_LIVE_STREAMING_CAMERA_FRAME_POSITION_BOTTOM_RIGHT=$04;
+
+ //SceGameLiveStreamingSocialFeedbackMessageType
+ SCE_GAME_LIVE_STREAMING_SOCIAL_FEEDBACK_MESSAGE_TYPE_MESSAGE=$01;
+ SCE_GAME_LIVE_STREAMING_SOCIAL_FEEDBACK_MESSAGE_TYPE_COMMAND=$02;
+ SCE_GAME_LIVE_STREAMING_SOCIAL_FEEDBACK_MESSAGE_TYPE_TEXT   =$03;
 
 type
  pSceGameLiveStreamingStatus=^SceGameLiveStreamingStatus;
@@ -62,6 +71,28 @@ type
   isDisableCamera:Boolean;
   reserved:array[0..30] of Byte;
  end;
+
+ pSceGameLiveStreamingPresetSocialFeedback=^SceGameLiveStreamingPresetSocialFeedback;
+ SceGameLiveStreamingPresetSocialFeedback=packed record
+  commandId  :DWORD;
+  commandText:array[0..
+                    (SCE_GAME_LIVE_STREAMING_MAX_SOCIAL_FEEDBACK_PRESET_TEXT_LENGTH*
+                     MB_LEN_MAX+1)
+                   -1] of char;
+  reserved   :array[0..30] of Byte;
+ end;
+
+ pSceGameLiveStreamingSocialFeedbackMessageType=^SceGameLiveStreamingSocialFeedbackMessageType;
+ SceGameLiveStreamingSocialFeedbackMessageType=Integer;
+
+ pSceGameLiveStreamingSpoilerTag=^SceGameLiveStreamingSpoilerTag;
+ SceGameLiveStreamingSpoilerTag=packed record
+  tagText :array[0..
+                (SCE_GAME_LIVE_STREAMING_MAX_SPOILER_TAG_LENGTH*
+                 MB_LEN_MAX+1)
+               -1] of char;
+  reserved:array[0..30] of Byte;
+ end; 
 
 implementation
 
@@ -134,6 +165,24 @@ begin
  Result:=0;
 end;
 
+function ps4_sceGameLiveStreamingSetPresetSocialFeedbackCommands(const presetCounts:QWORD;
+                                                                 preset:pSceGameLiveStreamingPresetSocialFeedback):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceGameLiveStreamingGetSocialFeedbackMessagesCount(const _type:SceGameLiveStreamingSocialFeedbackMessageType;
+                                                                count:PInteger):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceGameLiveStreamingSetSpoilerTag(const spoilerTagCounts:QWORD;
+                                               const spoilerTag:pSceGameLiveStreamingSpoilerTag):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceGameLiveStreaming(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -153,6 +202,9 @@ begin
  lib^.set_proc($DCF4A2C00CC52121,@ps4_sceGameLiveStreamingSetCameraFrameSetting);
  lib^.set_proc($ABF931B9A17B5115,@ps4_sceGameLiveStreamingSetMaxBitrate);
  lib^.set_proc($30BBD823CE85140A,@ps4_sceGameLiveStreamingSetStandbyScreenResource);
+ lib^.set_proc($C9CA1D88FD88D31A,@ps4_sceGameLiveStreamingSetPresetSocialFeedbackCommands);
+ lib^.set_proc($C9E40A8C71138B8D,@ps4_sceGameLiveStreamingGetSocialFeedbackMessagesCount);
+ lib^.set_proc($66E5FECF3CF60E40,@ps4_sceGameLiveStreamingSetSpoilerTag);
 end;
 
 initialization

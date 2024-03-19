@@ -2650,7 +2650,7 @@ Var
  adr:Pointer;
 begin
  tcb_size:=pTls.full_size;
- tcb:=_init_tls_tcb(tcb_size,is_static,Handle);
+ tcb:=_init_tls_tcb(tcb_size,pTls.align,is_static,Handle);
  base:=tcb^._dtv.value;
  Assert(IsAlign(base,pTls.align));
  if (pTls.tmpl_size<>0) then

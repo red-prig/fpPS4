@@ -6,6 +6,7 @@ interface
 
 uses
   ps4_program,
+  ps4_libSceNet,
   ps4_libSceNpCommon;
 
 const
@@ -19,6 +20,14 @@ type
   errorCode:Integer;
   arg      :Pointer
  ); SysV_ABI_CDecl;
+
+ pSceNpSignalingNetInfo=^SceNpSignalingNetInfo;
+ SceNpSignalingNetInfo=packed record
+  size       :QWORD;
+  local_addr :SceNetInAddr;
+  mapped_addr:SceNetInAddr;
+  nat_status :Integer;
+ end;
 
 implementation
 
@@ -46,6 +55,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpSignalingGetLocalNetInfo(ctxId:DWORD;
+                                           info:pSceNpSignalingNetInfo):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 function Load_libSceNpSignaling(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -57,6 +72,7 @@ begin
  lib^.set_proc($DCA3AE0B84666595,@ps4_sceNpSignalingInitialize);
  lib^.set_proc($E7262311D778B7C6,@ps4_sceNpSignalingCreateContext);
  lib^.set_proc($7432CD15D63C770B,@ps4_sceNpSignalingCreateContextA);
+ lib^.set_proc($53C01032538505CF,@ps4_sceNpSignalingGetLocalNetInfo);
 end;
 
 initialization

@@ -23,15 +23,16 @@ uses
 {$I sce_errno.inc}
 
 const
- SCE_ULT_ERROR_NULL          =$80810001;
- SCE_ULT_ERROR_ALIGNMENT     =$80810002;
- SCE_ULT_ERROR_RANGE         =$80810003;
- SCE_ULT_ERROR_INVALID       =$80810004;
- SCE_ULT_ERROR_PERMISSION    =$80810005;
- SCE_ULT_ERROR_STATE         =$80810006;
- SCE_ULT_ERROR_BUSY          =$80810007;
- SCE_ULT_ERROR_AGAIN         =$80810008;
- SCE_ULT_ERROR_NOT_INITIALIZE=$8081000A;
+ SCE_ULT_ERROR_NULL          =Integer($80810001);
+ SCE_ULT_ERROR_ALIGNMENT     =Integer($80810002);
+ SCE_ULT_ERROR_RANGE         =Integer($80810003);
+ SCE_ULT_ERROR_INVALID       =Integer($80810004);
+ SCE_ULT_ERROR_PERMISSION    =Integer($80810005);
+ SCE_ULT_ERROR_STATE         =Integer($80810006);
+ SCE_ULT_ERROR_BUSY          =Integer($80810007);
+ SCE_ULT_ERROR_AGAIN         =Integer($80810008);
+ SCE_ULT_ERROR_NOT_INITIALIZE=Integer($8081000A);
+
  SCE_ULT_MAX_NAME_LENGTH     =31;
 
  ULT_STATE_INIT        =0;
@@ -543,6 +544,14 @@ begin
  Result:=0; // TODO: Not used by current implementation of this lib.
 end;
 
+function ps4_sceUltWaitingQueueResourcePoolDestroy(pool:PSceUltWaitingQueueResourcePool):QWord; SysV_ABI_CDecl;
+begin
+ if (pool=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ Writeln(SysLogPrefix,'sceUltWaitingQueueResourcePoolDestroy');
+ Result:=0; // TODO: There is no actual destructor
+end;
+
 //
 
 function ps4_sceUltQueueDataResourcePoolGetWorkAreaSize(numData:DWord;dataSize:QWord;numQueueObjects:DWord):Integer; SysV_ABI_CDecl;
@@ -663,6 +672,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceUltMutexDestroy(mutex:PSceUltMutex):Integer; SysV_ABI_CDecl;
+begin
+ if (mutex=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ ps4_pthread_mutex_destroy(mutex^.handle);
+ mutex^.handle:=nil;
+ //Writeln(SysLogPrefix,'sceUltMutexDestroy,mutex=',mutex^.name);
+ Result:=0;
+end;
+
 //
 
 function ps4_sceUltSemaphoreCreate(semaphore   :PSceUltSemaphore;
@@ -732,6 +751,17 @@ begin
  RTLEventSetEvent(semaphore^.wakeUpEvent);
 end;
 
+function ps4_sceUltSemaphoreDestroy(semaphore:PSceUltSemaphore):Integer; SysV_ABI_CDecl;
+begin
+ if (semaphore=nil) then
+  Exit(SCE_ULT_ERROR_NULL);
+ //Writeln(SysLogPrefix,'sceUltSemaphoreDestroy,name=',semaphore^.name,');
+ assert(_currentUlThread=nil,'TODO: ps4_sceUltSemaphoreDestroy currently not working with ulthreads');
+ ps4_sceKernelDeleteSema(@semaphore^.handle);
+ semaphore^.handle:=nil;
+ Result:=0;
+end;
+
 //
 
 function Load_libSceUlt(Const name:RawByteString):TElf_node;
@@ -753,6 +783,7 @@ begin
 
  lib^.set_proc($588595D5077B3C55,@ps4_sceUltWaitingQueueResourcePoolGetWorkAreaSize);
  lib^.set_proc($6221EE8CE1BDBD76,@ps4_sceUltWaitingQueueResourcePoolCreate);
+ lib^.set_proc($A2BE79E35EF07039,@ps4_sceUltWaitingQueueResourcePoolDestroy);
 
  lib^.set_proc($7AF8FD60F912F2CE,@ps4_sceUltQueueDataResourcePoolGetWorkAreaSize);
  lib^.set_proc($4C51E6EBF37ABE4B,@ps4_sceUltQueueDataResourcePoolCreate);
@@ -765,11 +796,13 @@ begin
  lib^.set_proc($F21106911D697EBF,@ps4_sceUltMutexLock);
  lib^.set_proc($8745DE6CA88C06D9,@ps4_sceUltMutexUnlock);
  lib^.set_proc($D7EF2DF5A1CB8B3F,@ps4_sceUltMutexOptParamInitialize);
+ lib^.set_proc($8D6F879DA7DE4B76,@ps4_sceUltMutexDestroy);
 
  lib^.set_proc($8794252188FE468F,@ps4_sceUltSemaphoreCreate);
  lib^.set_proc($1C0D4B75B8B794F6,@ps4_sceUltSemaphoreTryAcquire);
  lib^.set_proc($4001F5A1F23DEEF5,@ps4_sceUltSemaphoreAcquire);
  lib^.set_proc($95BB64E57D6679CC,@ps4_sceUltSemaphoreRelease);
+ lib^.set_proc($8B35F27A1A68646A,@ps4_sceUltSemaphoreDestroy);
 end;
 
 initialization

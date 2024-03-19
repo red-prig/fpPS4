@@ -18,6 +18,18 @@ type
   data    :array[0..SCE_NP_TUS_DATA_INFO_MAX_SIZE-1] of Byte;
  end;
 
+ pSceNpTusDataStatus=^SceNpTusDataStatus;
+ SceNpTusDataStatus=packed record
+  ownerId            :SceNpId;
+  hasData            :Integer;
+  lastChangedDate    :QWORD; //SceRtcTick
+  lastChangedAuthorId:SceNpId;
+  pad                :array[0..3] of Byte;
+  data               :Pointer;
+  dataSize           :QWORD;
+  info               :SceNpTusDataInfo;
+ end;
+
  pSceNpTusDataStatusA=^SceNpTusDataStatusA;
  SceNpTusDataStatusA=packed record
   ownerId                   :SceNpOnlineId;
@@ -67,6 +79,18 @@ begin
  Result:=-1;
 end;
 
+function ps4_sceNpTusGetData(reqId:Integer;
+                             targetNpId:pSceNpId;
+                             slotId:DWORD;
+                             dataStatus:pSceNpTusDataStatus;
+                             dataStatusSize:QWORD;
+                             data:Pointer;
+                             recvSize:QWORD;
+                             option:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 function ps4_sceNpTusGetDataA(reqId:Integer;
                               targetAccountId:SceNpAccountId;
                               slotId:DWORD;
@@ -108,6 +132,7 @@ begin
  lib^.set_proc($941B6B93EEE5935E,@ps4_sceNpTssCreateNpTitleCtxA);
  lib^.set_proc($04890C9947CD2963,@ps4_sceNpTusCreateNpTitleCtx);
  lib^.set_proc($D67FDD1AE9018276,@ps4_sceNpTusCreateNpTitleCtxA);
+ lib^.set_proc($5CECECCCEE0E3565,@ps4_sceNpTusGetData);
  lib^.set_proc($C96107505918D6A2,@ps4_sceNpTusGetDataA);
  lib^.set_proc($573C4DDED3A8BA3F,@ps4_sceNpTusSetDataA);
 end;
