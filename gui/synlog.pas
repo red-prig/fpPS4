@@ -8005,41 +8005,48 @@ end;
 procedure TCustomSynLog.CaretAtIdentOrString(XY: TPoint; out AtIdent, NearString: Boolean);
 // This is optimized to check if cursor is on identifier or string.
 var
-  PosX, PosY: integer;
+  PosX, PosY, Start: integer;
   Line, Token: string;
-  Start: Integer;
   Attri, PrevAttri: TSynHighlighterAttributes;
 begin
   PosY := XY.Y -1;
   PrevAttri := nil;
   AtIdent := False;
   NearString := False;
+  //DebugLn('TCustomSynEdit.CaretAtIdentOrString: Enter');
   if Assigned(Highlighter) and (PosY >= 0) and (PosY < FTheLinesView.Count) then
   begin
     Line := FTheLinesView[PosY];
     fHighlighter.CurrentLines := FTheLinesView;
     Highlighter.StartAtLineIndex(PosY);
     PosX := XY.X;
-    if (PosX > 0) and (PosX <= Length(Line)) then
+    //DebugLn([' CaretAtIdentOrString: Line="',Line,'", PosX=',PosX,', PosY=', PosY]);
+    if (PosX > 0) and (PosX <= Length(Line)+1) then
     begin
       while not Highlighter.GetEol do
       begin
         Start := Highlighter.GetTokenPos + 1;
         Token := Highlighter.GetToken;
-        //TokenType := Highlighter.GetTokenKind;
         Attri := Highlighter.GetTokenAttribute;
-        if (PosX = Start) then
+        //DebugLn(['  CaretAtIdentOrString: Start=', Start, ', Token=', Token]);
+        if PosX = Start then
         begin
           AtIdent := (Attri = Highlighter.IdentifierAttribute)
                   or (PrevAttri = Highlighter.IdentifierAttribute);
           NearString := (Attri = Highlighter.StringAttribute)
                  or (PrevAttri = Highlighter.StringAttribute); // If cursor is on end-quote.
+          //DebugLn(['   CaretAtIdentOrString: Success 1! Attri=', Attri,
+          //         ', AtIdent=', AtIdent, ', NearString=', NearString]);
           exit;
         end;
-        if (PosX >= Start) and (PosX < Start + Length(Token)) then
-        begin
+        if (PosX >= Start) and (PosX <= Start + Length(Token))
+        and ( (Attri = Highlighter.IdentifierAttribute)
+           or (Attri = Highlighter.StringAttribute) )
+        then begin
           AtIdent := Attri = Highlighter.IdentifierAttribute;
-          NearString := (Attri = Highlighter.StringAttribute);
+          NearString := Attri = Highlighter.StringAttribute;
+          //DebugLn(['   CaretAtIdentOrString: Success 2! Attri=', Attri,
+          //         ', AtIdent=', AtIdent, ', NearString=', NearString]);
           exit;
         end;
         PrevAttri := Attri;

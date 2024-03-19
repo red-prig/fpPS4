@@ -40,6 +40,7 @@ type
   function    GetCount: integer;
   function    GetCache(Index: integer;var R:RawByteString): Boolean;
   procedure   AddCache(Index: integer;const R:RawByteString);
+  procedure   DelCache(Index: integer);
   procedure   ClearCache;
   function    Get(Index: integer): RawByteString;
   function    Update:Integer;
@@ -167,19 +168,19 @@ begin
   if (i<=0) then Exit(False);
  end;
 
+ f:=FLineStart;
+
  if (FLineIndex<0) or (fv=#13) or (fv=#10) then
  begin
   FLineStart:=FStream.Position;
  end;
-
- f:=FLineStart;
 
  repeat
   i:=ReadForward(ch,1);
 
   if (i<=0) then
   begin
-   if (FLineStart=f) then Exit(False);
+   if (f=-1) or (FLineStart=f) then Exit(False);
 
    Break;
   end;
@@ -290,6 +291,7 @@ var
  node :PLineNode;
 begin
  Result:=False;
+ if (Index<0) then Exit;
 
  _node:=Default(TLineNode);
  _node.FIndex:=Index;
@@ -316,6 +318,25 @@ begin
  Move(PChar(R)^,PChar(@node^.FData)^,Length(R)+1);
 
  FLineCache.Insert(node);
+end;
+
+procedure TLineStream.DelCache(Index: integer);
+var
+ _node:TLineNode;
+ node :PLineNode;
+begin
+ if (Index<0) then Exit;
+
+ _node:=Default(TLineNode);
+ _node.FIndex:=Index;
+
+ node:=FLineCache.Find(@_node);
+
+ if (node=nil) then Exit();
+
+ FLineCache.Delete(node);
+
+ FreeMem(node);
 end;
 
 procedure TLineStream.ClearCache;
@@ -385,11 +406,19 @@ begin
 end;
 
 function TLineStream.Update:Integer;
+var
+ i:Integer;
+ e:Int64;
 begin
- Result:=GetCount;
+ e:=FLine__End;
+ i:=GetCount;
  FLineCount:=0;
  PrevLine;
- Result:=GetCount-Result;
+ Result:=GetCount-i;
+ if (e<>FLine__End) then
+ begin
+  DelCache(i-1);
+ end;
 end;
 
 end.

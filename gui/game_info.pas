@@ -7,6 +7,8 @@ interface
 uses
   Classes,
   SysUtils,
+  TypInfo,
+  Rtti,
   IniFiles,
   host_ipc;
 
@@ -83,9 +85,6 @@ type
  end;
 
 implementation
-
-uses
- TypInfo,Rtti;
 
 function TGameProcess.is_terminated:Boolean;
 begin
