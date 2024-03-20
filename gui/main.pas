@@ -131,6 +131,8 @@ uses
  TypInfo,
  Rtti,
 
+ vDevice,
+
  sys_event;
 
 //
@@ -370,6 +372,9 @@ begin
                          0,
                          0);
 
+ SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
+ SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
+
  FileSeek(FAddHandle,0,fsFromEnd);
 end;
 
@@ -411,6 +416,8 @@ begin
  Application.AddOnIdleHandler(@OnIdleUpdate,False);
 
  SetButtonsState(mbsStopped);
+
+ //InitVulkan;
 end;
 
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
@@ -628,7 +635,7 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=True;
+ cfg.fork_proc:=False;
 
  if Item.FLock then Exit;
 

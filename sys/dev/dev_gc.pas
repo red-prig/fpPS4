@@ -22,16 +22,54 @@ uses
  vm_pmap,
  sys_vm_object,
  vm_pager,
+ vm_map,
+ vm_mmap,
+ kern_proc,
  subr_backtrace,
  bittype;
 
 var
  gc_page:Pointer;
 
- gc_AreSubmitsAllowed:Integer=0; //0=true,1=false (0xfe0100000)
+ gc_submits_allowed_vaddr:PInteger=nil; //0=true,1=false (0xfe0100000)
+ gc_submits_allowed_vmirr:PInteger=nil;
 
  gc_knl_lock:mtx;
  gc_knlist:t_knlist;
+
+function mmap_addr(paddr,psize:QWORD;
+                   prot:Integer;
+                   pout_addr:PQWORD):Integer;
+var
+ map:vm_map_t;
+begin
+ if ((psize and $3fff)=0) and ((prot and $33)=prot) then
+ begin
+  map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+
+  if (paddr=0) and ((g_appinfo.mmap_flags and 2)<>0) then
+  begin
+   paddr:=$fc0000000;
+  end;
+
+  Result:=vm_mmap2(map,
+                   @paddr,psize,
+                   prot,prot,
+                   MAP_ANON or MAP_SYSTEM or MAP_SHARED,OBJT_DEFAULT,
+                   nil,0);
+
+  if (Result=0) then
+  begin
+   vm_map_set_name(map,paddr,paddr+psize,'SceAppCommArea');
+
+   pout_addr^:=paddr;
+  end;
+
+ end else
+ begin
+  Result:=EINVAL;
+ end;
+end;
 
 type
  p_SetGsRingSizes=^t_SetGsRingSizes;
@@ -93,6 +131,8 @@ type
  end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
+var
+ vaddr:QWORD;
 begin
  Result:=0;
 
@@ -133,8 +173,24 @@ begin
             end;
   $C008811B: //sceGnmAreSubmitsAllowed
             begin
-             //ret1 = mmap_addr(0xfe0100000,0x4000,1,(ulong *)&paddr,&local_50);
-             PPointer(data)^:=@gc_AreSubmitsAllowed;
+             if (gc_submits_allowed_vaddr=nil) then
+             begin
+              vaddr:=0;
+              Result:=mmap_addr($fe0100000,$4000,1,@vaddr);
+
+              if (Result<>0) then
+              begin
+               Result:=ENOMEM;
+               Exit;
+              end;
+
+              gc_submits_allowed_vaddr:=Pointer(vaddr);
+              gc_submits_allowed_vmirr:=mmap_mirror(vaddr,$4000);
+             end;
+
+             PPointer(data)^:=gc_submits_allowed_vaddr;
+
+             gc_submits_allowed_vmirr^:=0; //init
             end;
 
   $C010810B: //get cu mask

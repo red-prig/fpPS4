@@ -84,6 +84,14 @@ procedure pmap_remove(pmap  :pmap_t;
                       start :vm_offset_t;
                       __end :vm_offset_t);
 
+function  pmap_mirror_map(pmap :pmap_t;
+                          start:vm_offset_t;
+                          __end:vm_offset_t):Pointer;
+
+procedure pmap_mirror_unmap(pmap:pmap_t;
+                            base:Pointer;
+                            size:QWORD);
+
 implementation
 
 uses
@@ -961,6 +969,30 @@ begin
  end;
 end;
 
+function pmap_mirror_map(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t):Pointer;
+begin
+ Result:=vm_nt_map_mirror(@pmap^.nt_map,
+                          start,
+                          __end);
+end;
+
+procedure pmap_mirror_unmap(pmap:pmap_t;
+                            base:Pointer;
+                            size:QWORD);
+var
+ r:Integer;
+begin
+ r:=md_unmap_ex(base,size);
+ if (r<>0) then
+ begin
+  Writeln('failed md_unmap_ex:0x',HexStr(r,8));
+  Assert(false,'pmap_mirror_unmap');
+ end;
+end;
+
 
 end.
+
 

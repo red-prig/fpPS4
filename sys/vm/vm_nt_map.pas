@@ -87,6 +87,10 @@ procedure vm_nt_map_madvise(map:p_vm_nt_map;
                             __end:vm_offset_t;
                             advise:Integer);
 
+function  vm_nt_map_mirror(map:p_vm_nt_map;
+                           start:vm_offset_t;
+                           __end:vm_offset_t):Pointer;
+
 procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 
 implementation
@@ -1079,7 +1083,6 @@ procedure vm_nt_map_madvise(map:p_vm_nt_map;
 var
  entry:p_vm_nt_entry;
  base,size:vm_size_t;
- r:Integer;
 begin
  if (start=__end) then Exit;
 
@@ -1109,9 +1112,9 @@ begin
   size:=size-base;
 
   case advise of
-   MADV_WILLNEED:r:=md_dontneed(Pointer(base),size);
+   MADV_WILLNEED:md_dontneed(Pointer(base),size);
    MADV_DONTNEED,
-   MADV_FREE    :r:=md_activate(Pointer(base),size);
+   MADV_FREE    :md_activate(Pointer(base),size);
    else;
   end;
 
@@ -1120,6 +1123,100 @@ begin
   entry:=entry^.next;
  end;
 end;
+
+
+function vm_nt_map_mirror(map:p_vm_nt_map;
+                          start:vm_offset_t;
+                          __end:vm_offset_t):Pointer;
+var
+ entry:p_vm_nt_entry;
+ base,b_end,size,prev:vm_size_t;
+ offset:vm_ooffset_t;
+ curr:Pointer;
+ obj:p_vm_nt_file_obj;
+ max:Integer;
+ r:Integer;
+begin
+ Result:=nil;
+ if (start=__end) then Exit;
+
+ r:=md_reserve(Result,__end-start);
+ if (r<>0) then
+ begin
+  Writeln('failed md_reserve(',HexStr(__end-start,11),'):0x',HexStr(r,8));
+  Assert(false,'vm_map');
+  Exit;
+ end;
+
+ if (not vm_nt_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end else
+ begin
+  entry:=entry;
+ end;
+
+ prev:=0;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+  obj:=entry^.obj;
+
+  if (obj<>nil) then
+  if (obj^.hfile<>0) then
+  begin
+   base  :=entry^.start;
+   b_end :=entry^.__end;
+   offset:=entry^.offset;
+
+   if (base<start) then
+   begin
+    base:=start;
+    offset:=offset+(start-base);
+   end;
+
+   if (b_end>__end) then
+   begin
+    b_end:=__end;
+   end;
+
+   size:=b_end-base;
+
+   //addr in mirror
+   curr:=Result+(base-start);
+
+   if ((base<>start) and (base<>prev)) or
+      (b_end<>__end) then
+   begin
+    r:=md_split(curr,size);
+    if (r<>0) then
+    begin
+     Writeln('failed md_split(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+     Assert(false,'vm_map');
+    end;
+   end;
+
+   prev:=b_end;
+
+   max:=wprots[obj^.maxp and VM_RWX];
+
+   r:=md_file_mmap_ex(obj^.hfile,
+                      curr,
+                      offset,
+                      size,
+                      max);
+   if (r<>0) then
+   begin
+    Writeln('failed md_file_mmap_ex(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+    Assert(false,'vm_map');
+   end;
+
+  end;
+
+  entry:=entry^.next;
+ end;
+end;
+
 
 
 end.

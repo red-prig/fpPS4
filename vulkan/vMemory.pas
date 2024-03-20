@@ -5,6 +5,7 @@ unit vMemory;
 interface
 
 uses
+ sysutils,
  g23tree,
  Vulkan,
  vDevice;
@@ -64,6 +65,7 @@ type
 
   function    SparceSupportHost:Boolean;
   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
+  procedure   PrintMemoryHeaps;
   procedure   PrintMemoryType(typeFilter:TVkUInt32);
 
   Function    _AllcDevBlock(Size:TVkDeviceSize;mtindex:Byte;Var R:Word):Boolean;
@@ -88,7 +90,7 @@ function vkAllocHostPointer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt3
 function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
-Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
+//Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
 
 function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
@@ -99,8 +101,7 @@ var
 implementation
 
 uses
- spinlock,
- ps4_map_mm;
+ kern_rwlock;
 
 //free:  [FmType]|[FSize]|[FBlockId]
 function TFreeCompare.c(const a,b:TDevNode):Integer;
@@ -214,6 +215,8 @@ begin
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);
 
+ PrintMemoryHeaps;
+
  FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
                               ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) or
@@ -261,6 +264,56 @@ begin
   begin
    Exit(i);
   end;
+ end;
+end;
+
+procedure TvMemManager.PrintMemoryHeaps;
+var
+ i:TVkUInt32;
+
+ function get_flags_str(flags:TVkUInt32):RawByteString; inline;
+ begin
+  Result:='';
+  if (flags and ord(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT))<>0 then
+  begin
+   Result:='DEVICE_LOCAL';
+  end else
+  begin
+   Result:='HOST_LOCAL';
+  end;
+  if (flags and ord(VK_MEMORY_HEAP_MULTI_INSTANCE_BIT))<>0 then
+  begin
+   if (Result<>'') then Result:=Result+',';
+   Result:=Result+'MULTI_INSTANCE';
+  end;
+  if (flags and ord(VK_MEMORY_HEAP_RESERVED_2_BIT_KHR))<>0 then
+  begin
+   if (Result<>'') then Result:=Result+',';
+   Result:=Result+'RESERVED_2';
+  end;
+ end;
+
+ function get_types_str(heapIndex:TVkUInt32):RawByteString; inline;
+ var
+  i:TVkUInt32;
+ begin
+  Result:='';
+  For i:=0 to FProperties.memoryTypeCount-1 do
+  if (FProperties.memoryTypes[i].heapIndex=heapIndex) then
+  begin
+   if (Result<>'') then Result:=Result+',';
+   Result:=Result+IntToStr(i);
+  end;
+ end;
+
+begin
+ For i:=0 to FProperties.memoryHeapCount-1 do
+ begin
+  Writeln('[Heap]:',i);
+  Writeln(' size =0x',HexStr(FProperties.memoryHeaps[i].size,16));
+  Writeln(' flags=',get_flags_str(FProperties.memoryHeaps[i].flags));
+  Writeln(' types=',get_types_str(i));
+
  end;
 end;
 
@@ -489,7 +542,7 @@ begin
  key:=Default(TDevNode);
  Size:=System.Align(Size,8);
  if (Align>GRANULAR_DEV_BLOCK_SIZE) then Align:=GRANULAR_DEV_BLOCK_SIZE;
- spin_lock(lock);
+ rw_wlock(lock);
  if _FetchFree_a(Size,Align,mtindex,key) then
  begin
   Offset:=System.Align(key.FOffset,Align);
@@ -538,7 +591,7 @@ begin
    FAllcSet.Insert(key);
   end;
  end;
- spin_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 Function TvMemManager.Free(P:TvPointer):Boolean;
@@ -547,7 +600,7 @@ var
 begin
  if (P.FHandle=VK_NULL_HANDLE) then Exit;
  key:=Default(TDevNode);
- spin_lock(lock);
+ rw_wlock(lock);
  if _FindDevBlock(P.FHandle,key.FBlockId) then
  if _FetchAllc(P.FOffset,key.FBlockId,key) then
  begin
@@ -583,7 +636,7 @@ begin
   end;
   Result:=True;
  end;
- spin_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
@@ -670,6 +723,7 @@ begin
  end;
 end;
 
+{
 function OnGpuMemAlloc(addr:Pointer;len:size_t):TVkDeviceMemory;
 begin
  InitVulkan;
@@ -713,6 +767,7 @@ end;
 initialization
  GpuMemCb.Alloc:=TGpuMemAlloc(@OnGpuMemAlloc);
  GpuMemCb.Free :=TGpuMemFree (@OnGpuMemFree);
+}
 
 end.
 

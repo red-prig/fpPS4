@@ -51,6 +51,8 @@ const
 function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 function md_reserve(var base:Pointer;size:QWORD):Integer;
 
+function md_unmap_ex(base:Pointer;size:QWORD):Integer;
+
 function md_split  (base:Pointer;size:QWORD):Integer;
 function md_union  (base:Pointer;size:QWORD):Integer;
 
@@ -161,6 +163,62 @@ end;
 function md_reserve(var base:Pointer;size:QWORD):Integer;
 begin
  Result:=md_reserve(NtCurrentProcess,base,size);
+end;
+
+function md_unmap_ex(base:Pointer;size:QWORD):Integer;
+var
+ pend:Pointer;
+
+ addr,prev:Pointer;
+ info:TMemoryBasicInformation;
+ len:ULONG_PTR;
+begin
+ pend:=base+size;
+ addr:=base;
+
+ repeat
+
+  len:=0;
+  NtQueryVirtualMemory(
+   NtCurrentProcess,
+   addr,
+   0,
+   @info,
+   sizeof(info),
+   @len);
+  if (len=0) then Break;
+
+  if (info.State<>MEM_FREE) then
+  begin
+   //unmap
+   Result:=NtUnmapViewOfSectionEx(NtCurrentProcess,addr,MEM_PRESERVE_PLACEHOLDER);
+   if (Result<>0) then Exit;
+  end;
+
+  prev:=addr;
+  addr:=addr+Info.RegionSize;
+
+  if (addr>=pend) then Break;
+
+ until (prev>=addr);
+
+ //union
+ Result:=NtFreeVirtualMemory(
+          NtCurrentProcess,
+          @base,
+          @size,
+          MEM_RELEASE or MEM_COALESCE_PLACEHOLDERS
+         );
+ //ignore errors
+
+ //free
+ size:=0;
+ Result:=NtFreeVirtualMemory(
+          NtCurrentProcess,
+          @base,
+          @size,
+          MEM_RELEASE
+         );
 end;
 
 function md_split(base:Pointer;size:QWORD):Integer;

@@ -10,6 +10,7 @@ uses
   Forms,
   main,
   game_edit,
+  sys_crt_gui,
   md_systm,
   vm_pmap;
 

@@ -398,7 +398,7 @@ begin
   begin
    flags:=g_appinfo.mmap_flags;
    g_appinfo:=appinfo;
-   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or (flags and 2)
+   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or (flags and 2);
   end;
  end;
 

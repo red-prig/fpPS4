@@ -46,6 +46,9 @@ function vm_mmap2(map        :vm_map_t;
                   handle     :Pointer;
                   foff       :vm_ooffset_t):Integer;
 
+function  mmap_mirror (paddr,psize:QWORD):Pointer;
+procedure unmap_mirror(base:Pointer;size:QWORD);
+
 implementation
 
 uses
@@ -55,6 +58,7 @@ uses
  kern_thr,
  kern_proc,
  vmparam,
+ vm_pmap,
  sys_resource,
  kern_resource,
  kern_mtx,
@@ -982,6 +986,24 @@ end;
 function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 begin
  Exit(ENOENT); //devkit_parameter(0)=0
+end;
+
+function mmap_mirror(paddr,psize:QWORD):Pointer;
+var
+ map:vm_map_t;
+begin
+ map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+
+ Result:=pmap_mirror_map(map^.pmap,paddr,paddr+psize);
+end;
+
+procedure unmap_mirror(base:Pointer;size:QWORD);
+var
+ map:vm_map_t;
+begin
+ map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+
+ pmap_mirror_unmap(map^.pmap,base,size);
 end;
 
 end.
