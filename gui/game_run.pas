@@ -242,7 +242,7 @@ begin
  p_host_ipc:=kipc;
 
  td:=nil;
- r:=kthread_add(@prepare,Item,@td,'[main]');
+ r:=kthread_add(@prepare,Item,@td,0,'[main]');
  Assert(r=0);
 
  msleep_td(0);
@@ -326,7 +326,7 @@ begin
    p_host_ipc:=s_kern_ipc;
 
    Ftd:=nil;
-   r:=kthread_add(@prepare,Item,@Ftd,'[main]');
+   r:=kthread_add(@prepare,Item,@Ftd,0,'[main]');
 
    fork_info.fork_pid:=GetProcessID;
   end;

@@ -425,32 +425,38 @@ label
 asm
  //load cache
  pushf
- push  %r15
- movq  (%r15),%r15 //plt^
+ movq  (%r15),%rbp //plt^
 
- cmpq  t_jplt_cache_asm.src(%r15),%r14
+ cmpq  t_jplt_cache_asm.src(%rbp),%r14
 
  jne  _exit
 
  //get blk
- movq t_jplt_cache_asm.blk(%r15),%r14
+ movq t_jplt_cache_asm.blk(%rbp),%r14
 
  //save current block
  movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.block(%r13)
 
  //get dst
- movq t_jplt_cache_asm.dst(%r15),%r14
+ movq t_jplt_cache_asm.dst(%rbp),%r14
 
- lea  8(%rsp),%rsp
  popf
 
  //pop internal
  lea  8(%rsp),%rsp
+
+ //restore rbp
+ movq %rsp,%rbp
+
  jmp  %r14
 
  _exit:
- pop  %r15
+
  popf
+
+ //restore rbp
+ movq %rsp,%rbp
+ leaq 8(%rbp),%rbp
 
  jmp jit_jmp_dispatch
 end;

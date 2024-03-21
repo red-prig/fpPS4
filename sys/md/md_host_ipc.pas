@@ -245,7 +245,7 @@ procedure THostIpcPipeKERN.thread_new;
 begin
  if (Ftd=nil) then
  begin
-  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,'[ipc_pipe]');
+  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,0,'[ipc_pipe]');
  end;
 end;
 

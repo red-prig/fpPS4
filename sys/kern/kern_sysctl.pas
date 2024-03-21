@@ -725,7 +725,7 @@ begin
  Result:=SYSCTL_OUT(req,@val,SizeOf(QWORD));
 end;
 
-function sysctl_vm(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+function sysctl_vm_budgets(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
  Result:=ENOENT;
@@ -734,6 +734,23 @@ begin
 
   KERN_VM_BUDGETS_MLOCK_AVAIL:Result:=SYSCTL_HANDLE(noid,name,$80000008,@sysctl_mlock_avail); //sceKernelAvailableFlexibleMemorySize
   KERN_VM_BUDGETS_MLOCK_TOTAL:Result:=SYSCTL_HANDLE(noid,name,$80000008,@sysctl_mlock_total); //sceKernelConfiguredFlexibleMemorySize
+
+  else
+   begin
+    print_error_td('Unhandled sysctl_vm_budgets:'+IntToStr(name[0]));
+    Assert(False);
+   end;
+ end;
+end;
+
+function sysctl_vm(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
+begin
+ if (namelen=0) then Exit(ENOTDIR);
+ Result:=ENOENT;
+
+ case name[0] of
+
+  KERN_VM_BUDGETS:Result:=sysctl_vm_budgets(name+1,namelen-1,noid,req);
 
   else
    begin

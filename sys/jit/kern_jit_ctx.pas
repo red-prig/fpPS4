@@ -221,7 +221,7 @@ procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
 
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize);
 
 procedure add_orig(var ctx:t_jit_context2);
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
@@ -239,6 +239,9 @@ procedure op_emit_bmi_rmr(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
+
+var
+ jit_memory_guard:Boolean=False;
 
 implementation
 
@@ -845,6 +848,8 @@ end;
 
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 begin
+ //exit;
+
  if (code_ref in hint) then
  begin
   //call [addr]
@@ -940,9 +945,9 @@ var
  i:Integer;
  AScale:Byte;
  save_r_tmp0:Boolean;
- reg1_used:Boolean;
- scale_ofs:Boolean;
- fix_rsp:Boolean;
+ reg1_used  :Boolean;
+ scale_ofs  :Boolean;
+ fix_rsp    :Boolean;
 begin
  RegValue:=ctx.din.Operand[id].RegValue;
 
@@ -1017,7 +1022,8 @@ begin
 
    if save_r_tmp0 then
    begin
-    push(r_tmp0);
+    //use rbp
+    adr:=new_reg_size(rbp,adr.ASize);
    end;
 
    AScale:=RegValue[0].AScale;
@@ -1107,12 +1113,19 @@ begin
     begin
      i:=GetFrameOffset(RegValue[1]);
 
+     new2:=new_reg_size(r_tmp1,adr.ASize);
+
      if (not_use_r_tmp1 in hint) then
      begin
-      push(r_tmp1);
+      if save_r_tmp0 then
+      begin
+       push(r_tmp1);
+      end else
+      begin
+       //use rbp
+       new2:=new_reg_size(rbp,adr.ASize);
+      end;
      end;
-
-     new2:=new_reg_size(r_tmp1,adr.ASize);
 
      movq(new2,[r_thrd+i]);
 
@@ -1127,7 +1140,14 @@ begin
 
      if (not_use_r_tmp1 in hint) then
      begin
-      pop(r_tmp1);
+      if save_r_tmp0 then
+      begin
+       pop(r_tmp1);
+      end else
+      begin
+       //restore rbp
+       movq(rbp,rsp);
+      end;
      end;
 
     end else
@@ -1141,7 +1161,8 @@ begin
 
    if save_r_tmp0 then
    begin
-    pop(r_tmp0);
+    //restore rbp
+    movq(rbp,rsp);
    end;
 
    //is_preserved
@@ -1482,11 +1503,29 @@ begin
  end;
 end;
 
-//
+// $10000000000 = 1 shl 40
+// 64-40 = 24
 
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize); //inline;
+procedure uplift_jit; assembler; nostackframe;
+asm
+ //zero bits
+ movq $24,%rbp
+
+ //clear hi
+ shlx %rbp,%r14,%r14
+ shrx %rbp,%r14,%r14
+
+ //restore rbp
+ movq %rsp,%rbp
+ leaq 8(%rbp),%rbp
+end;
+
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize);
 begin
- //ctx.builder.call_far(@uplift_jit); //in/out:r14
+ if jit_memory_guard then
+ begin
+  ctx.builder.call_far(@uplift_jit); //in/out:r14
+ end;
 end;
 
 procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
@@ -1734,10 +1773,10 @@ begin
 end;
 
 const
- ax=0;
- cx=1;
- dx=2;
- bx=3;
+ ax_id=0;
+ cx_id=1;
+ dx_id=2;
+ bx_id=3;
 
 type
  t_lo_regi=0..3;
@@ -1750,23 +1789,23 @@ begin
  case ctx.din.OpCode.Opcode of
   OPcmpxchg:
     case ctx.din.OpCode.Suffix of
-     OPSnone: Result:=[ax];
+     OPSnone: Result:=[ax_id];
      else
-              Result:=[ax,dx];
+              Result:=[ax_id,dx_id];
     end;
 
-  OPimul:     Result:=[ax,dx];
+  OPimul:     Result:=[ax_id,dx_id];
 
-  OPpcmpestri:Result:=[cx];
-  OPpcmpistri:Result:=[cx];
+  OPpcmpestri:Result:=[cx_id];
+  OPpcmpistri:Result:=[cx_id];
 
-  OProl:      Result:=[cx];
-  OPror:      Result:=[cx];
-  OPrcl:      Result:=[cx];
-  OPrcr:      Result:=[cx];
-  OPshl:      Result:=[cx];
-  OPshr:      Result:=[cx];
-  OPsar:      Result:=[cx];
+  OProl:      Result:=[cx_id];
+  OPror:      Result:=[cx_id];
+  OPrcl:      Result:=[cx_id];
+  OPrcr:      Result:=[cx_id];
+  OPshl:      Result:=[cx_id];
+  OPshr:      Result:=[cx_id];
+  OPsar:      Result:=[cx_id];
 
   else;
  end;
@@ -1784,10 +1823,9 @@ begin
 
  excl:=get_implicit_regs(ctx);
 
- Result.AIndex:=0;
+ Result.AIndex:=bx_id;
 
- while (Result.AIndex<=3) do
- begin
+ repeat
 
   if (Result.AIndex in excl) then
   begin
@@ -1802,13 +1840,14 @@ begin
    if (ctx.din.Operand[i].RegValue[w].AType in [regGeneral, regGeneralH]) then
    if (ctx.din.Operand[i].RegValue[w].AIndex=Result.AIndex) then
    begin
-    Inc(Result.AIndex);
+    if (Result.AIndex=0) then Break;
+    Dec(Result.AIndex);
     Continue;
    end;
   end;
 
   Exit;
- end;
+ until false;
 
  Assert(False);
 end;
@@ -1834,6 +1873,8 @@ var
 
  new1_load:Boolean;
 
+ rbp_hack:Boolean;
+
  procedure override_beg1;
  begin
   with ctx.builder do
@@ -1843,9 +1884,17 @@ var
    if is_high(ctx.din.Operand[1]) then
    begin
     tmp1:=new1;
+
     new1:=alloc_tmp_lo(ctx,1);
 
-    push(fix_size8(new1));
+    if (new1.AIndex=bx_id) then
+    begin
+     rbp_hack:=True;
+    end else
+    begin
+     rbp_hack:=False;
+     push(fix_size8(new1));
+    end;
 
     if (not (his_wo in desc.hint)) or
        (his_ro in desc.hint) then
@@ -1867,7 +1916,15 @@ var
      movq(tmp1,new1);
     end;
 
-    pop(fix_size8(new1));
+    if rbp_hack then
+    begin
+     //restore rbp
+     movq(rbp,rsp);
+    end else
+    begin
+     pop(fix_size8(new1));
+    end;
+
    end;
   end;
  end;
@@ -1883,7 +1940,15 @@ var
     tmp2:=new2;
     new2:=alloc_tmp_lo(ctx,2);
 
-    push(fix_size8(new2));
+    if (new2.AIndex=bx_id) then
+    begin
+     rbp_hack:=True;
+    end else
+    begin
+     rbp_hack:=False;
+     push(fix_size8(new2));
+    end;
+
     movq(new2,tmp2);
    end;
   end;
@@ -1900,7 +1965,15 @@ var
      movq(tmp2,new2);
     end;
 
-    pop(fix_size8(new2));
+    if rbp_hack then
+    begin
+     //restore rbp
+     movq(rbp,rsp);
+    end else
+    begin
+     pop(fix_size8(new2));
+    end;
+
    end;
   end;
  end;
@@ -2564,6 +2637,8 @@ var
 
  tmp1,tmp2:TRegValue;
 
+ rbp_hack:Boolean;
+
  procedure override_beg1;
  begin
   with ctx.builder do
@@ -2575,7 +2650,15 @@ var
     tmp1:=new1;
     new1:=alloc_tmp_lo(ctx,1);
 
-    push(fix_size8(new1));
+    if (new1.AIndex=bx_id) then
+    begin
+     rbp_hack:=True;
+    end else
+    begin
+     rbp_hack:=False;
+     push(fix_size8(new1));
+    end;
+
     movq(new1,tmp1);
    end;
   end;
@@ -2589,7 +2672,15 @@ var
    begin
     movq(tmp1,new1);
 
-    pop(fix_size8(new1));
+    if rbp_hack then
+    begin
+     //restore rbp
+     movq(rbp,rsp);
+    end else
+    begin
+     pop(fix_size8(new1));
+    end;
+
    end;
   end;
  end;
@@ -2605,7 +2696,15 @@ var
     tmp2:=new2;
     new2:=alloc_tmp_lo(ctx,2);
 
-    push(fix_size8(new2));
+    if (new2.AIndex=bx_id) then
+    begin
+     rbp_hack:=True;
+    end else
+    begin
+     rbp_hack:=False;
+     push(fix_size8(new2));
+    end;
+
     movq(new2,tmp2);
    end;
   end;
@@ -2618,7 +2717,16 @@ var
    if (tmp2.AType<>regNone) then
    begin
     movq(tmp2,new2);
-    pop(fix_size8(new2));
+
+    if rbp_hack then
+    begin
+     //restore rbp
+     movq(rbp,rsp);
+    end else
+    begin
+     pop(fix_size8(new2));
+    end;
+
    end;
   end;
  end;

@@ -19,7 +19,7 @@ uses
 
 procedure thread_reap();
 
-function  thread_alloc:p_kthread;
+function  thread_alloc(pages:Word):p_kthread;
 procedure thread_free(td:p_kthread);
 
 function  sys_thr_new     (_param:Pointer;_size:Integer):Integer;
@@ -53,7 +53,7 @@ function  SIGPENDING(td:p_kthread):Boolean;
 
 procedure threadinit; //SYSINIT
 
-function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
+function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer;
 procedure kthread_exit();
 
 procedure thread_suspend_all(exclude:p_kthread);
@@ -178,11 +178,11 @@ begin
  end;
 end;
 
-function thread_alloc:p_kthread;
+function thread_alloc(pages:Word):p_kthread;
 begin
  thread_reap();
 
- Result:=cpu_thread_alloc();
+ Result:=cpu_thread_alloc(pages);
 
  Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
@@ -467,7 +467,7 @@ begin
   end;
  end;
 
- newtd:=thread_alloc;
+ newtd:=thread_alloc(0);
  if (newtd=nil) then Exit(ENOMEM);
 
  thread0_param(newtd);
@@ -587,7 +587,7 @@ begin
  end;
 end;
 
-function kthread_add(func,arg:Pointer;newtdp:pp_kthread;name:PChar):Integer;
+function kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer;
 var
  td:p_kthread;
  newtd:p_kthread;
@@ -611,7 +611,7 @@ begin
 
  td:=curkthread;
 
- newtd:=thread_alloc;
+ newtd:=thread_alloc(pages);
  if (newtd=nil) then Exit(ENOMEM);
 
  thread0_param(newtd);

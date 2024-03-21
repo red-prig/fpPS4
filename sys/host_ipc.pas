@@ -393,7 +393,7 @@ procedure THostIpcSimpleKERN.thread_new;
 begin
  if (Ftd=nil) then
  begin
-  kthread_add(@simple_kern_thread,Self,@Ftd,'[ipc_pipe]');
+  kthread_add(@simple_kern_thread,Self,@Ftd,0,'[ipc_pipe]');
  end;
 end;
 

@@ -71,7 +71,7 @@ procedure sys_daemon_init;
 var
  n:Integer;
 begin
- n:=kthread_add(@sys_daemon,nil,@daemon_thr,'sys_daemon');
+ n:=kthread_add(@sys_daemon,nil,@daemon_thr,0,'sys_daemon');
  Assert(n=0,'sys_daemon');
 end;
 

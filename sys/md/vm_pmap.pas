@@ -199,6 +199,21 @@ begin
    end;
   end;
  end;
+
+ //dmem mirror
+ base:=Pointer(VM_MIN_GPU_ADDRESS);
+ size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
+
+ Result:=md_reserve(base,size);
+
+ if (Result<>0) then
+ begin
+  if wr then
+  begin
+   Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
+  end;
+  Exit;
+ end;
 end;
 
 procedure pmap_pinit(pmap:p_pmap);

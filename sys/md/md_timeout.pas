@@ -38,7 +38,7 @@ var
 begin
  timeout_new.Create;
 
- r:=kthread_add(@softclock,nil,@timeout_thr,'softclock');
+ r:=kthread_add(@softclock,nil,@timeout_thr,0,'softclock');
  Assert(r=0,'softclock');
 end;
 

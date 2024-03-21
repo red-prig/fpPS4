@@ -14,8 +14,9 @@ uses
 Const
  SYS_STACK_RSRV=64*1024;
  SYS_STACK_SIZE=16*1024;
+ SYS_GUARD_SIZE= 4*1024;
 
-function  cpu_thread_alloc():p_kthread;
+function  cpu_thread_alloc(pages:Word):p_kthread;
 function  cpu_thread_free(td:p_kthread):Integer;
 
 function  BaseQueryInfo(td:p_kthread):Integer;
@@ -43,6 +44,9 @@ procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 
 implementation
 
+uses
+ vmparam;
+
 //
 
 var
@@ -50,18 +54,32 @@ var
 
 //
 
-function cpu_thread_alloc():p_kthread;
+function cpu_thread_alloc(pages:Word):p_kthread;
 var
  td:p_kthread;
+ stack_size:ULONG_PTR;
+ headr_size:ULONG_PTR;
  data:Pointer;
  size:ULONG_PTR;
  R:DWORD;
 begin
  Result:=nil;
 
- data:=nil;
- size:=SYS_STACK_RSRV;
+ stack_size:=ULONG_PTR(pages)*PAGE_SIZE;
+ if (stack_size<SYS_STACK_SIZE) then
+ begin
+  stack_size:=SYS_STACK_SIZE;
+ end;
 
+ headr_size:=SizeOf(kthread)+size_of_umtx_q;
+ headr_size:=System.Align(headr_size,4*1024);
+
+ size:=headr_size+SYS_GUARD_SIZE+stack_size;
+ size:=System.Align(size,64*1024);
+
+ data:=nil;
+
+ //reserve
  R:=NtAllocateVirtualMemory(
      NtCurrentProcess,
      @data,
@@ -73,14 +91,11 @@ begin
  if (R<>0) then Exit;
 
  //header
- size:=SizeOf(kthread)+size_of_umtx_q;
- size:=System.Align(size,4*1024);
-
  R:=NtAllocateVirtualMemory(
      NtCurrentProcess,
      @data,
      0,
-     @size,
+     @headr_size,
      MEM_COMMIT,
      PAGE_READWRITE
     );
@@ -90,23 +105,21 @@ begin
  td^.td_umtxq:=Pointer(td+1);
 
  //footer
- data:=data+SYS_STACK_RSRV-SYS_STACK_SIZE;
- size:=SYS_STACK_SIZE;
+ data:=data+size-stack_size;
 
+ //kernel stack
  R:=NtAllocateVirtualMemory(
      NtCurrentProcess,
      @data,
      0,
-     @size,
+     @stack_size,
      MEM_COMMIT,
      PAGE_READWRITE
     );
  if (R<>0) then Exit;
 
  td^.td_kstack.sttop:=data;
-
- data:=data+SYS_STACK_SIZE;
- td^.td_kstack.stack:=data;
+ td^.td_kstack.stack:=data+stack_size;
 
  Result:=td;
 end;

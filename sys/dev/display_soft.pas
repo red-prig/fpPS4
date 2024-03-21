@@ -141,7 +141,7 @@ begin
 
  if (Ftd=nil) then
  begin
-  kthread_add(@dce_thread,Self,@Ftd,'[dce_soft]');
+  kthread_add(@dce_thread,Self,@Ftd,0,'[dce_soft]');
  end;
 end;
 

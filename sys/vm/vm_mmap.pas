@@ -46,8 +46,8 @@ function vm_mmap2(map        :vm_map_t;
                   handle     :Pointer;
                   foff       :vm_ooffset_t):Integer;
 
-function  mmap_mirror (paddr,psize:QWORD):Pointer;
-procedure unmap_mirror(base:Pointer;size:QWORD);
+function  mirror_map  (paddr,psize:QWORD):Pointer;
+procedure mirror_unmap(base:Pointer;size:QWORD);
 
 implementation
 
@@ -988,7 +988,7 @@ begin
  Exit(ENOENT); //devkit_parameter(0)=0
 end;
 
-function mmap_mirror(paddr,psize:QWORD):Pointer;
+function mirror_map(paddr,psize:QWORD):Pointer;
 var
  map:vm_map_t;
 begin
@@ -997,7 +997,7 @@ begin
  Result:=pmap_mirror_map(map^.pmap,paddr,paddr+psize);
 end;
 
-procedure unmap_mirror(base:Pointer;size:QWORD);
+procedure mirror_unmap(base:Pointer;size:QWORD);
 var
  map:vm_map_t;
 begin

@@ -185,7 +185,7 @@ begin
               end;
 
               gc_submits_allowed_vaddr:=Pointer(vaddr);
-              gc_submits_allowed_vmirr:=mmap_mirror(vaddr,$4000);
+              gc_submits_allowed_vmirr:=mirror_map(vaddr,$4000);
              end;
 
              PPointer(data)^:=gc_submits_allowed_vaddr;

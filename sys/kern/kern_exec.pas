@@ -326,6 +326,8 @@ begin
 
  stack_addr:=QWORD(vmspace^.sv_usrstack) - ssiz;
 
+ Writeln('vm_map_stack:0x',HexStr(stack_addr,11),'..0x',HexStr(stack_addr+ssiz,11));
+
  error:=vm_map_stack(map,stack_addr,ssiz,VM_PROT_RW,VM_PROT_ALL,MAP_STACK_GROWS_DOWN);
 
  if (error<>0) then
@@ -979,6 +981,7 @@ begin
 
  str:='libkernel.sprx';
  obj:=preload_prx_modules(pchar(str),flags,err);
+
  dynlibs_info.libkernel:=obj;
 
  if (obj=nil) then

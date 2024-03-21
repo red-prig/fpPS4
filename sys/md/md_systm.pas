@@ -337,6 +337,13 @@ begin
   end;
  end;
 
+ //dmem mirror
+ base:=Pointer(VM_MIN_GPU_ADDRESS);
+ size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
+
+ r:=md_reserve(hProcess,base,size);
+ if (r<>0) then Exit(r);
+
  addr:=Pointer(pmap_mem[0].start);
 
  repeat
