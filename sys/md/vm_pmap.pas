@@ -118,6 +118,23 @@ begin
  Result:=((x+PAGE_MASK) shr PAGE_SHIFT);
 end;
 
+procedure dmem_init;
+var
+ base:Pointer;
+ i,r:Integer;
+begin
+ for i:=0 to PMAPP_1GB_DMEM_BLOCKS-2 do
+ begin
+  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_1GB_SIZE);
+  r:=md_split(base,PMAPP_1GB_SIZE);
+  if (r<>0) then
+  begin
+   Writeln('failed md_split(',HexStr(base),',',HexStr(base+PMAPP_1GB_SIZE),'):0x',HexStr(r,8));
+   Assert(false,'dmem_init');
+  end;
+ end;
+end;
+
 procedure dev_mem_init(pages:Integer);
 var
  r:Integer;
@@ -224,6 +241,7 @@ begin
  r:=pmap_reserve(True);
  Assert(r=0,'pmap_pinit');
 
+ dmem_init;
  dev_mem_init(4);
 
  PAGE_PROT:=nil;
@@ -300,6 +318,7 @@ end;
 
 procedure get_dmem_fd(var info:t_fd_info);
 var
+ base:Pointer;
  o:QWORD;
  e:QWORD;
  d:QWORD;
@@ -320,6 +339,15 @@ begin
   if (r<>0) then
   begin
    Writeln('failed md_memfd_create(',HexStr(PMAPP_1GB_SIZE,11),'):0x',HexStr(r,8));
+   Assert(false,'get_dmem_fd');
+  end;
+
+  //dmem mirror
+  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_1GB_SIZE);
+  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_1GB_SIZE,MD_PROT_RW);
+  if (r<>0) then
+  begin
+   Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+PMAPP_1GB_SIZE),'):0x',HexStr(r,8));
    Assert(false,'get_dmem_fd');
   end;
  end;
@@ -397,16 +425,24 @@ begin
  end;
 end;
 
-//rax,rdi,rsi
-function uplift(addr:Pointer):Pointer; assembler; nostackframe;
-asm
- mov %rdi,%rax
- ret
+function uplift(addr:Pointer):Pointer;
+begin
+ Result:=Pointer(QWORD(addr) and (VM_MAXUSER_ADDRESS-1));
 end;
 
 procedure iov_uplift(iov:p_iovec);
 begin
- //
+ if (QWORD(iov^.iov_base)>=VM_MAXUSER_ADDRESS) then
+ begin
+  iov^:=Default(iovec);
+  Exit;
+ end;
+
+ if ((QWORD(iov^.iov_base)+iov^.iov_len)>VM_MAXUSER_ADDRESS) then
+ begin
+  iov^.iov_len:=VM_MAXUSER_ADDRESS-QWORD(iov^.iov_base);
+  Exit;
+ end;
 end;
 
 function get_vnode_handle(obj:vm_object_t):THandle;
