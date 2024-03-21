@@ -151,7 +151,7 @@ begin
  DEV_INFO.DEV_FD.maxp:=VM_PROT_READ or VM_PROT_WRITE;
 
  DEV_INFO.DEV_PTR:=nil;
- r:=md_reserve(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
+ r:=md_reserve_ex(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
  if (r<>0) then
  begin
   Writeln('failed md_reserve(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
@@ -196,13 +196,13 @@ begin
    base:=Pointer(pmap_mem[i].start);
    size:=pmap_mem[i].__end-pmap_mem[i].start;
 
-   Result:=md_reserve(base,size);
+   Result:=md_reserve_ex(base,size);
 
    if (Result<>0) then
    begin
     if wr then
     begin
-     Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
+     Writeln('failed md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
     end;
     //STATUS_COMMITMENT_LIMIT = $C000012D
     Exit;
@@ -212,7 +212,7 @@ begin
 
    if wr then
    begin
-    Writeln('md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
+    Writeln('md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
    end;
   end;
  end;
@@ -221,13 +221,13 @@ begin
  base:=Pointer(VM_MIN_GPU_ADDRESS);
  size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
 
- Result:=md_reserve(base,size);
+ Result:=md_reserve_ex(base,size);
 
  if (Result<>0) then
  begin
   if wr then
   begin
-   Writeln('failed md_reserve(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
+   Writeln('failed md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
   end;
   Exit;
  end;

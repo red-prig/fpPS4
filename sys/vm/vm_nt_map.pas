@@ -1140,10 +1140,10 @@ begin
  Result:=nil;
  if (start=__end) then Exit;
 
- r:=md_reserve(Result,__end-start);
+ r:=md_reserve_ex(Result,__end-start);
  if (r<>0) then
  begin
-  Writeln('failed md_reserve(',HexStr(__end-start,11),'):0x',HexStr(r,8));
+  Writeln('failed md_reserve_ex(',HexStr(__end-start,11),'):0x',HexStr(r,8));
   Assert(false,'vm_map');
   Exit;
  end;

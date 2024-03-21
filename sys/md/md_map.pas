@@ -48,8 +48,8 @@ const
   MD_PROT_RWX  //XWR
  );
 
-function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
-function md_reserve(var base:Pointer;size:QWORD):Integer;
+function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
+function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
 
 function md_unmap_ex(base:Pointer;size:QWORD):Integer;
 
@@ -102,7 +102,7 @@ begin
  Result:=(x+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 end;
 
-function md_reserve(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
+function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 var
  info:TMemoryBasicInformation;
  len:ULONG_PTR;
@@ -160,9 +160,9 @@ begin
 
 end;
 
-function md_reserve(var base:Pointer;size:QWORD):Integer;
+function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
 begin
- Result:=md_reserve(NtCurrentProcess,base,size);
+ Result:=md_reserve_ex(NtCurrentProcess,base,size);
 end;
 
 function md_unmap_ex(base:Pointer;size:QWORD):Integer;

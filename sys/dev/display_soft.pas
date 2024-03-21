@@ -232,8 +232,8 @@ begin
 
  m_bufs[i].init :=1;
  m_bufs[i].attr :=a;
- m_bufs[i].left :=buf^.left;
- m_bufs[i].right:=buf^.right;
+ m_bufs[i].left :=left;
+ m_bufs[i].right:=right;
 
  Result:=0;
 end;

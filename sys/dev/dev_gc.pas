@@ -87,52 +87,51 @@ type
   param3:DWORD;
  end;
 
- p_Submit=^t_Submit;
- t_Submit=packed record
-  arg0 :DWORD;
+ p_submit_args=^t_submit_args;
+ t_submit_args=packed record
+  pid  :DWORD;
   count:DWORD;
   cmds :PQWORD;
+  eop_v:QWORD;
+  wait :Integer;
  end;
 
-function PM4_TYPE(token:DWORD):Byte; inline;
-begin
- Result:=(token shr 30) and 3;
-end;
-
-function PM4_LENGTH_DW(token:DWORD):WORD; inline;
-begin
- Result:=((token shr 16) and $3FFF) + 2;
-end;
-
-type
- PPM4_TYPE_3_HEADER=^PM4_TYPE_3_HEADER;
- PM4_TYPE_3_HEADER=bitpacked record
-  predicate:bit1;  //1
-  shaderType:bit1; //1
-  reserved:bit6;   //6
-  opcode:Byte;     //8
-  count:bit14;     //14
-  _type:bit2;      //2
- end;
+ //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb  0xc0023300
+ //IT_COND_INDIRECT_BUFFER = $0000003f;  dcb  0xc0023f00
 
  PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
  PM4CMDINDIRECTBUFFER=bitpacked record
-  ibBaseLo      :DWORD; ///< Indirect buffer base address, must be 4 byte aligned
-  ibBaseHi32    :DWORD; ///< Indirect buffer base address
+  header   :DWORD; // PM4_TYPE_3_HEADER
+  ibBase   :QWORD; // Indirect buffer base address, must be 4 byte aligned
   //
-  ibSize        :bit20; ///< Indirect buffer size
-  chain         :bit1;  ///< set to chain to IB allocations
-  offLoadPolling:bit1;
-  volatile__CI  :bit1;
-  valid         :bit1;
-  vmid          :bit4;  ///< Virtual memory domain ID for command buffer
-  cachePolicy   :bit2;
-  reserved1     :bit2;
+  ibSize   :bit20; // Indirect buffer size
+  reserved0:bit4;
+  vmid     :bit4;  // Virtual memory domain ID for command buffer
+  reserved1:bit4;
  end;
+
+const
+ GC_RING_SIZE =$80000;
+ GC_RING_COUNT=GC_RING_SIZE div 16;
+
+function gc_submit_internal(ring:Pointer;count:DWORD;cmds:Pointer):Integer;
+var
+ size_dw:QWORD;
+begin
+ if (count=0) then Exit(0);
+
+ if (count >= $1000) then Exit(-2142502897);
+
+ size_dw:=(count*4) and $3ffffffc;
+
+
+end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  vaddr:QWORD;
+ buf:PPM4CMDINDIRECTBUFFER;
+ i:Integer;
 begin
  Result:=0;
 
@@ -213,9 +212,18 @@ begin
 
   $C0108102: //submit
             begin
-             Writeln(p_Submit(data)^.arg0);
-             Writeln(p_Submit(data)^.count);
-             Writeln(HexStr(p_Submit(data)^.cmds));
+             Writeln(p_submit_args(data)^.count);
+             Writeln(HexStr(p_submit_args(data)^.cmds));
+
+             buf:=Pointer(p_submit_args(data)^.cmds);
+
+             for i:=0 to p_submit_args(data)^.count-1 do
+             begin
+              Writeln('opcode =0x',HexStr(buf[i].header,8));
+              Writeln('ib_base=0x',HexStr(buf[i].ibBase,16));
+              Writeln('ib_size=0x',HexStr(buf[i].ibSize,3));
+             end;
+
 
              //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb
              //IT_COND_INDIRECT_BUFFER = $0000003f;  dcb

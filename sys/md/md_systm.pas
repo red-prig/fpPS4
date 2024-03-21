@@ -332,7 +332,7 @@ begin
    base:=Pointer(pmap_mem[i].start);
    size:=pmap_mem[i].__end-pmap_mem[i].start;
 
-   r:=md_reserve(hProcess,base,size);
+   r:=md_reserve_ex(hProcess,base,size);
    if (r<>0) then Exit(r);
   end;
  end;
@@ -341,7 +341,7 @@ begin
  base:=Pointer(VM_MIN_GPU_ADDRESS);
  size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
 
- r:=md_reserve(hProcess,base,size);
+ r:=md_reserve_ex(hProcess,base,size);
  if (r<>0) then Exit(r);
 
  addr:=Pointer(pmap_mem[0].start);
@@ -360,7 +360,7 @@ begin
 
   if (info.State=MEM_FREE) then
   begin
-   r:=md_reserve(hProcess,info.BaseAddress,info.RegionSize);
+   r:=md_reserve_ex(hProcess,info.BaseAddress,info.RegionSize);
   end;
 
   prev:=addr;
