@@ -96,6 +96,7 @@ uses
  LCLIntf,
  }
  sys_bootparam,
+ vm_mmap,
  kern_thread,
  dev_dce;
 
@@ -199,12 +200,35 @@ end;
 function TDisplayHandleSoft.RegisterBuffer(buf:p_register_buffer):Integer;
 var
  i,a:Integer;
+
+ left :Pointer;
+ right:Pointer;
 begin
  i:=buf^.index;
  a:=buf^.attrid;
 
  if (m_bufs[i].init<>0) then Exit(EINVAL);
  if (m_attr[a].init=0 ) then Exit(EINVAL);
+
+ left :=buf^.left;
+ right:=buf^.right;
+
+ if (left=nil) then Exit(EINVAL);
+
+ //TODO: check size!
+ if not get_dmem_ptr(left,@left,nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (right<>nil) then
+ begin
+  //TODO: check size!
+  if not get_dmem_ptr(right,@right,nil) then
+  begin
+   Exit(EINVAL);
+  end;
+ end;
 
  m_bufs[i].init :=1;
  m_bufs[i].attr :=a;

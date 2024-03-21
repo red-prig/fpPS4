@@ -49,6 +49,9 @@ function vm_mmap2(map        :vm_map_t;
 function  mirror_map  (paddr,psize:QWORD):Pointer;
 procedure mirror_unmap(base:Pointer;size:QWORD);
 
+function  get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
+function  get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
+
 implementation
 
 uses
@@ -992,7 +995,7 @@ function mirror_map(paddr,psize:QWORD):Pointer;
 var
  map:vm_map_t;
 begin
- map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+ map:=p_proc.p_vmspace;
 
  Result:=pmap_mirror_map(map^.pmap,paddr,paddr+psize);
 end;
@@ -1001,9 +1004,64 @@ procedure mirror_unmap(base:Pointer;size:QWORD);
 var
  map:vm_map_t;
 begin
- map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+ map:=p_proc.p_vmspace;
 
  pmap_mirror_unmap(map^.pmap,base,size);
+end;
+
+function get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
+var
+ map:vm_map_t;
+ entry:vm_map_entry_t;
+ obj:vm_object_t;
+ diff:QWORD;
+begin
+ Result:=False;
+ map:=p_proc.p_vmspace;
+
+ vm_map_lock(map);
+
+ if vm_map_lookup_entry(map,addr,@entry) then
+ begin
+  obj:=entry^.vm_obj;
+
+  if (obj<>nil) then
+  begin
+   Result:=(obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0;
+  end;
+
+  if Result then
+  begin
+   diff:=addr-entry^.start;
+
+   if (p_offset<>nil) then
+   begin
+    p_offset^:=entry^.offset+diff;
+   end;
+
+   if (p_size<>nil) then
+   begin
+    p_size^:=(entry^.__end-entry^.start)-diff;
+   end;
+  end;
+ end;
+
+ vm_map_unlock(map);
+end;
+
+function get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
+var
+ offset:QWORD;
+begin
+ offset:=0;
+
+ Result:=get_dmem_offset(QWORD(addr),@offset,p_size);
+
+ if Result then
+ if (p_ptr<>nil) then
+ begin
+  p_ptr^:=Pointer(VM_MIN_GPU_ADDRESS+offset);
+ end;
 end;
 
 end.
