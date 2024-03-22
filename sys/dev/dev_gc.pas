@@ -24,7 +24,13 @@ uses
  vm_pager,
  vm_map,
  vm_mmap,
+ md_map,
+ systm,
+ kern_rwlock,
  kern_proc,
+ kern_thr,
+ kern_thread,
+ md_sleep,
  subr_backtrace,
  bittype;
 
@@ -110,19 +116,259 @@ type
   reserved1:bit4;
  end;
 
+ PPM4CMDSWITCHBUFFER=^PM4CMDSWITCHBUFFER;
+ PM4CMDSWITCHBUFFER=bitpacked record
+  header:DWORD;
+  data  :DWORD;
+ end;
+
 const
  GC_RING_SIZE =$80000;
- GC_RING_COUNT=GC_RING_SIZE div 16;
 
-function gc_submit_internal(ring:Pointer;count:DWORD;cmds:Pointer):Integer;
+type
+ p_pm4_ring=^t_pm4_ring;
+ t_pm4_ring=packed record
+  buff:Pointer;
+  size:DWORD;
+  rptr:DWORD;
+  wptr:DWORD;
+  aptr:DWORD;
+ end;
+
+function gc_ring_create(ring:p_pm4_ring;size:ptruint):Integer;
 var
- size_dw:QWORD;
+ hMem:THandle;
 begin
- if (count=0) then Exit(0);
+ Result:=0;
+ if (ring=nil) then Exit(-1);
 
- if (count >= $1000) then Exit(-2142502897);
+ size:=1 shl BsfQWORD(size);
+ if (size<64*1024) then size:=64*1024;
 
- size_dw:=(count*4) and $3ffffffc;
+ ring^.buff:=nil;
+ ring^.size:=size;
+ ring^.rptr:=0;
+ ring^.wptr:=0;
+ ring^.aptr:=0;
+
+ Result:=md_reserve_ex(ring^.buff,size+64*1024);
+ if (Result<>0) then Exit;
+
+ Result:=md_split(ring^.buff,size);
+ if (Result<>0) then Exit;
+
+ hMem:=0;
+ Result:=md_memfd_create(hMem,size);
+ if (Result<>0) then Exit;
+
+ Result:=md_file_mmap_ex(hMem,ring^.buff,0,size,MD_PROT_RW);
+ if (Result<>0) then
+ begin
+  md_memfd_close(hMem);
+  Exit;
+ end;
+
+ Result:=md_file_mmap_ex(hMem,ring^.buff+size,size,64*1024,MD_PROT_RW);
+
+ md_memfd_close(hMem);
+end;
+
+function gc_ring_free(ring:p_pm4_ring):Integer;
+begin
+ Result:=0;
+ if (ring=nil) then Exit;
+ if (ring^.buff=nil) then Exit;
+ if (ring^.size=0) then Exit;
+
+ Result:=md_unmap_ex(ring^.buff,ring^.size+64*1024);
+end;
+
+//need lock
+function gc_ring_pm4_alloc(ring:p_pm4_ring;size:DWORD;buff:PPointer):Boolean;
+var
+ next:DWORD;
+begin
+ Result:=False;
+ if (size>ring^.size) then Exit;
+
+ next:=ring^.aptr+size;
+
+ if (next>=ring^.size) then
+ begin
+  next:=next and (ring^.size-1);
+  if (next>ring^.rptr) then Exit;
+ end;
+
+ buff^:=ring^.buff+ring^.aptr;
+ ring^.aptr:=next;
+ Result:=True;
+end;
+
+procedure gc_ring_pm4_submit(ring:p_pm4_ring);
+begin
+ System.InterlockedExchange(ring^.wptr,ring^.aptr);
+end;
+
+procedure gc_ring_pm4_release(ring:p_pm4_ring);
+begin
+ ring^.aptr:=ring^.wptr;
+end;
+
+//single consumer
+function gc_ring_pm4_peek(ring:p_pm4_ring;size:PDWORD;buff:PPointer):Boolean;
+var
+ rptr:DWORD;
+ wptr:DWORD;
+ s   :DWORD;
+begin
+ Result:=False;
+
+ rptr:=ring^.rptr;
+ wptr:=ring^.wptr;
+
+ if (rptr>wptr) then
+ begin
+  s:=(ring^.size-rptr)+wptr;
+ end else
+ begin
+  s:=wptr-rptr;
+ end;
+
+ if (s<>0) then
+ begin
+  size^:=s;
+  buff^:=ring^.buff+rptr;
+  Result:=True;
+ end;
+end;
+
+//single consumer
+function gc_ring_pm4_drain(ring:p_pm4_ring;size:DWORD):Boolean;
+var
+ rptr:DWORD;
+ wptr:DWORD;
+ s   :DWORD;
+begin
+ Result:=False;
+
+ rptr:=ring^.rptr;
+ wptr:=ring^.wptr;
+
+ if (rptr>wptr) then
+ begin
+  s:=(ring^.size-rptr)+wptr;
+ end else
+ begin
+  s:=wptr-rptr;
+ end;
+
+ if (size>s) then Exit;
+
+ rptr:=rptr+size;
+ rptr:=rptr and (ring^.size-1);
+
+ System.InterlockedExchange(ring^.rptr,rptr);
+
+ Result:=True;
+end;
+
+function gc_submit_internal(ring:p_pm4_ring;count:DWORD;cmds:Pointer):Integer;
+var
+ size:QWORD;
+ buf:PPM4CMDINDIRECTBUFFER;
+ op:DWORD;
+begin
+ Result:=0;
+ if (count=0) then Exit;
+
+ if (count>=$1000) then Exit(-2142502897);
+
+ size:=(count*16);
+
+ buf:=nil;
+ if not gc_ring_pm4_alloc(ring,size,@buf) then
+ begin
+  Writeln(stderr,'### gc_submit_common : Cannot allocate a space in ring buffer.');
+  Exit(16);
+ end;
+
+ Result:=copyin(cmds,buf,size);
+
+ if (Result<>0) then
+ begin
+  gc_ring_pm4_release(ring);
+  Exit(-2142502898);
+ end;
+
+ while (count<>0) do
+ begin
+  op:=buf^.header;
+
+  if ((op<>$c0023300) and (op<>$c0023f00)) then
+  begin
+   Writeln(stderr,'## gc_insert_indirect_buffer: invalid opcode = 0x',HexStr(op,8));
+   gc_ring_pm4_release(ring);
+   Exit(-2142502896);
+  end;
+
+  if (buf^.ibSize=0) then
+  begin
+   Writeln(stderr,'## gc_insert_indirect_buffer: invalid ib_size = 0x',HexStr(buf^.ibSize,5));
+   gc_ring_pm4_release(ring);
+   Exit(-2142502895);
+  end;
+
+  Inc(buf);
+  Dec(count);
+ end;
+
+ gc_ring_pm4_submit(ring);
+end;
+
+function gc_switch_buffer_internal(ring:p_pm4_ring):Integer;
+var
+ buf:PPM4CMDSWITCHBUFFER;
+begin
+ Result:=0;
+
+ buf:=nil;
+ if not gc_ring_pm4_alloc(ring,sizeof(PM4CMDSWITCHBUFFER),@buf) then
+ begin
+  Writeln(stderr,'### gc_switch_buffer_internal : Cannot allocate a space in ring buffer.');
+  Exit(16);
+ end;
+
+ //IT_SWITCH_BUFFER = $0000008b;
+
+ buf^.header:=$c0008b00;
+ buf^.data  :=0;
+
+ gc_ring_pm4_submit(ring);
+end;
+
+var
+ ring_gfx:t_pm4_ring;
+ ring_gfx_lock:Pointer=nil;
+
+ parse_gfx_td:p_kthread;
+
+procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
+var
+ buff:Pointer;
+ size:DWORD;
+begin
+
+ repeat
+
+  if gc_ring_pm4_peek(@ring_gfx,@size,@buff) then
+  begin
+   Writeln('packet:0x',HexStr(buff),':',size);
+
+   gc_ring_pm4_drain(@ring_gfx,size);
+  end;
+
+  msleep_td(100);
+ until false;
 
 
 end;
@@ -130,8 +376,6 @@ end;
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  vaddr:QWORD;
- buf:PPM4CMDINDIRECTBUFFER;
- i:Integer;
 begin
  Result:=0;
 
@@ -212,36 +456,22 @@ begin
 
   $C0108102: //submit
             begin
-             Writeln(p_submit_args(data)^.count);
-             Writeln(HexStr(p_submit_args(data)^.cmds));
+             rw_wlock(ring_gfx_lock);
 
-             buf:=Pointer(p_submit_args(data)^.cmds);
+             Result:=gc_submit_internal(@ring_gfx,
+                                        p_submit_args(data)^.count,
+                                        p_submit_args(data)^.cmds);
 
-             for i:=0 to p_submit_args(data)^.count-1 do
-             begin
-              Writeln('opcode =0x',HexStr(buf[i].header,8));
-              Writeln('ib_base=0x',HexStr(buf[i].ibBase,16));
-              Writeln('ib_size=0x',HexStr(buf[i].ibSize,3));
-             end;
+             rw_wunlock(ring_gfx_lock);
+            end;
 
+  $C0088101: //switch_buffer
+            begin
+             rw_wlock(ring_gfx_lock);
 
-             //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb
-             //IT_COND_INDIRECT_BUFFER = $0000003f;  dcb
+             Result:=gc_switch_buffer_internal(@ring_gfx);
 
-             //opcode           0x33                     0x3F
-             //if ((op != L'\xc0023300') && (op != L'\xc0023f00')) {
-             //  printf("## %s: invalid opcode = 0x%08x\n","gc_insert_indirect_buffer");
-             //  ret1 = 0x804c0010;
-             //  goto LAB_ffffffff826bd78b;
-             //}
-             //if ((_buffer[1] & 0xfffff00000000) == 0) {
-             //  printf("## %s: invalid ib_size = 0x%05x\n","gc_insert_indirect_buffer",0);
-             //  ret1 = 0x804c0011;
-             //  goto LAB_ffffffff826bd78b;
-             //}
-
-
-             Assert(False);
+             rw_wunlock(ring_gfx_lock);
             end;
 
 
@@ -442,6 +672,8 @@ begin
 
  kqueue_add_filteropts(EVFILT_GRAPHICS_CORE,@filterops_graphics_core);
 
+ gc_ring_create(@ring_gfx,GC_RING_SIZE);
+ kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,0,'[GFX]');
 end;
 
 
