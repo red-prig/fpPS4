@@ -8,6 +8,43 @@ uses
  bittype;
 
 type
+ TWD_QOS=bitpacked record
+  DRAW_STALL:bit1;
+  RESERVED0 :bit31;
+ end;
+
+ TCP_STAT=bitpacked record
+  RESERVED0            :bit9;
+  ROQ_RING_BUSY        :bit1;
+  ROQ_INDIRECT1_BUSY   :bit1;
+  ROQ_INDIRECT2_BUSY   :bit1;
+  ROQ_STATE_BUSY       :bit1;
+  DC_BUSY              :bit1;
+  ATCL2IU_BUSY         :bit1;
+  PFP_BUSY             :bit1;
+  MEQ_BUSY             :bit1;
+  ME_BUSY              :bit1;
+  QUERY_BUSY           :bit1;
+  SEMAPHORE_BUSY       :bit1;
+  INTERRUPT_BUSY       :bit1;
+  SURFACE_SYNC_BUSY    :bit1;
+  DMA_BUSY             :bit1;
+  RCIU_BUSY            :bit1;
+  SCRATCH_RAM_BUSY     :bit1;
+  CPC_CPG_BUSY         :bit1;
+  CE_BUSY              :bit1;
+  TCIU_BUSY            :bit1;
+  ROQ_CE_RING_BUSY     :bit1;
+  ROQ_CE_INDIRECT1_BUSY:bit1;
+  ROQ_CE_INDIRECT2_BUSY:bit1;
+  CP_BUSY              :bit1;
+ end;
+
+ TCP_VMID=bitpacked record
+  VMID     :bit4;
+  RESERVED0:bit28;
+ end;
+
  TDB_EQAA=bitpacked record
   MAX_ANCHOR_SAMPLES            :bit3;
   RESERVED0                     :bit1;
@@ -27,6 +64,56 @@ type
   OVERRASTERIZATION_AMOUNT      :bit3;
   ENABLE_POSTZ_OVERRASTERIZATION:bit1;
   RESERVED5                     :bit4;
+ end;
+
+ TTA_CNTL=bitpacked record
+  FX_XNACK_CREDIT:bit7;
+  RESERVED0      :bit2;
+  SQ_XNACK_CREDIT:bit4;
+  TC_DATA_CREDIT :bit3;
+  ALIGNER_CREDIT :bit5;
+  RESERVED1      :bit1;
+  TD_FIFO_CREDIT :bit10;
+ end;
+
+ TTD_CNTL=bitpacked record
+  SYNC_PHASE_SH             :bit2;
+  RESERVED0                 :bit2;
+  SYNC_PHASE_VC_SMX         :bit2;
+  RESERVED1                 :bit2;
+  PAD_STALL_EN              :bit1;
+  EXTEND_LDS_STALL          :bit2;
+  LDS_STALL_PHASE_ADJUST    :bit2;
+  RESERVED2                 :bit2;
+  PRECISION_COMPATIBILITY   :bit1;
+  GATHER4_FLOAT_MODE        :bit1;
+  RESERVED3                 :bit1;
+  LD_FLOAT_MODE             :bit1;
+  GATHER4_DX9_MODE          :bit1;
+  DISABLE_POWER_THROTTLE    :bit1;
+  ENABLE_ROUND_TO_ZERO      :bit1;
+  DISABLE_D16_PACKING       :bit1;
+  DISABLE_2BIT_SIGNED_FORMAT:bit1;
+  RESERVED4                 :bit8;
+ end;
+
+ TCP_DEBUG=bitpacked record
+  RESERVED0 :bit6;
+  RESERVED1 :bit1;
+  RESERVED2 :bit8;
+  RESERVED3 :bit1;
+  RESERVED4 :bit3;
+  RESERVED5 :bit2;
+  RESERVED6 :bit1;
+  RESERVED7 :bit1;
+  RESERVED8 :bit1;
+  RESERVED9 :bit1;
+  RESERVED10:bit1;
+  RESERVED11:bit1;
+  RESERVED12:bit2;
+  RESERVED13:bit1;
+  RESERVED14:bit1;
+  RESERVED15:bit1;
  end;
 
  TDB_DEBUG=bitpacked record
@@ -54,6 +141,45 @@ type
   FORCE_MISS_IF_NOT_INFLIGHT           :bit1;
   DISABLE_DEPTH_SURFACE_SYNC           :bit1;
   DISABLE_HTILE_SURFACE_SYNC           :bit1;
+ end;
+
+ TTCA_CTRL=bitpacked record
+  HOLE_TIMEOUT:bit4;
+  RESERVED0   :bit28;
+ end;
+
+ TTCC_CTRL=bitpacked record
+  CACHE_SIZE                :bit2;
+  RATE                      :bit2;
+  WRITEBACK_MARGIN          :bit4;
+  METADATA_LATENCY_FIFO_SIZE:bit4;
+  SRC_FIFO_SIZE             :bit4;
+  LATENCY_FIFO_SIZE         :bit4;
+  WB_OR_INV_ALL_VMIDS       :bit1;
+  RESERVED0                 :bit3;
+  MDC_SIZE                  :bit2;
+  MDC_SECTOR_SIZE           :bit2;
+  MDC_SIDEBAND_FIFO_SIZE    :bit4;
+ end;
+
+ TTCP_CNTL=bitpacked record
+  FORCE_HIT             :bit1;
+  FORCE_MISS            :bit1;
+  L1_SIZE               :bit2;
+  FLAT_BUF_HASH_ENABLE  :bit1;
+  FLAT_BUF_CACHE_SWIZZLE:bit1;
+  RESERVED0             :bit9;
+  FORCE_EOW_TOTAL_CNT   :bit6;
+  RESERVED1             :bit1;
+  FORCE_EOW_TAGRAM_CNT  :bit6;
+  DISABLE_Z_MAP         :bit1;
+  INV_ALL_VMIDS         :bit1;
+  RESERVED2             :bit2;
+ end;
+
+ TCP_PIPEID=bitpacked record
+  PIPE_ID  :bit2;
+  RESERVED0:bit30;
  end;
 
  TDB_DEBUG2=bitpacked record
@@ -139,15 +265,59 @@ type
   ZRANGE_PRECISION       :bit1;
  end;
 
- TGB_GPU_ID=bitpacked record
-  GPU_ID   :bit4;
-  RESERVED0:bit28;
- end;
-
  TGRBM_CNTL=bitpacked record
   READ_TIMEOUT     :bit8;
   RESERVED0        :bit23;
   REPORT_LAST_RDERR:bit1;
+ end;
+
+ TTA_STATUS=bitpacked record
+  RESERVED0      :bit12;
+  FG_PFIFO_EMPTYB:bit1;
+  FG_LFIFO_EMPTYB:bit1;
+  FG_SFIFO_EMPTYB:bit1;
+  RESERVED1      :bit1;
+  FL_PFIFO_EMPTYB:bit1;
+  FL_LFIFO_EMPTYB:bit1;
+  FL_SFIFO_EMPTYB:bit1;
+  RESERVED2      :bit1;
+  FA_PFIFO_EMPTYB:bit1;
+  FA_LFIFO_EMPTYB:bit1;
+  FA_SFIFO_EMPTYB:bit1;
+  RESERVED3      :bit1;
+  IN_BUSY        :bit1;
+  FG_BUSY        :bit1;
+  LA_BUSY        :bit1;
+  FL_BUSY        :bit1;
+  TA_BUSY        :bit1;
+  FA_BUSY        :bit1;
+  AL_BUSY        :bit1;
+  BUSY           :bit1;
+ end;
+
+ TTCP_CNTL2=bitpacked record
+  LS_DISABLE_CLOCKS:bit8;
+  RESERVED0        :bit24;
+ end;
+
+ TTD_STATUS=bitpacked record
+  RESERVED0:bit31;
+  BUSY     :bit1;
+ end;
+
+ TCP_DFY_CMD=bitpacked record
+  OFFSET   :bit9;
+  RESERVED0:bit7;
+  SIZE     :bit16;
+ end;
+
+ TGDS_CONFIG=bitpacked record
+  RESERVED0        :bit1;
+  SH0_GPR_PHASE_SEL:bit2;
+  SH1_GPR_PHASE_SEL:bit2;
+  SH2_GPR_PHASE_SEL:bit2;
+  SH3_GPR_PHASE_SEL:bit2;
+  RESERVED1        :bit23;
  end;
 
  TGRBM_DEBUG=bitpacked record
@@ -166,16 +336,286 @@ type
 
  TIA_ENHANCE=bit32;
 
- TGB_EDC_MODE=bitpacked record
-  RESERVED0       :bit16;
-  FORCE_SEC_ON_DED:bit1;
-  RESERVED1       :bit3;
-  DED_MODE        :bit2;
-  RESERVED2       :bit7;
-  PROP_FED        :bit1;
-  RESERVED3       :bit1;
-  BYPASS          :bit1;
+ TSX_DEBUG_1=bitpacked record
+  SX_DB_QUAD_CREDIT              :bit7;
+  RESERVED0                      :bit1;
+  DISABLE_BLEND_OPT_DONT_RD_DST  :bit1;
+  DISABLE_BLEND_OPT_BYPASS       :bit1;
+  DISABLE_BLEND_OPT_DISCARD_PIXEL:bit1;
+  DISABLE_QUAD_PAIR_OPT          :bit1;
+  DISABLE_PIX_EN_ZERO_OPT        :bit1;
+  DEBUG_DATA                     :bit19;
  end;
+
+ TTA_SCRATCH=bit32;
+
+ TTCP_CREDIT=bitpacked record
+  LFIFO_CREDIT   :bit10;
+  RESERVED0      :bit6;
+  REQ_FIFO_CREDIT:bit7;
+  RESERVED1      :bit6;
+  TD_CREDIT      :bit3;
+ end;
+
+ TTCP_STATUS=bitpacked record
+  TCP_BUSY    :bit1;
+  INPUT_BUSY  :bit1;
+  ADRS_BUSY   :bit1;
+  TAGRAMS_BUSY:bit1;
+  CNTRL_BUSY  :bit1;
+  LFIFO_BUSY  :bit1;
+  READ_BUSY   :bit1;
+  FORMAT_BUSY :bit1;
+  RESERVED0   :bit24;
+ end;
+
+ TTD_SCRATCH=bit32;
+
+ TWD_ENHANCE=bit32;
+
+ TCP_CMD_DATA=bit32;
+
+ TCP_CSF_CNTL=bitpacked record
+  FETCH_BUFFER_DEPTH:bit4;
+  RESERVED0         :bit28;
+ end;
+
+ TCP_CSF_STAT=bitpacked record
+  BUFFER_SLOTS_ALLOCATED:bit4;
+  RESERVED0             :bit4;
+  BUFFER_REQUEST_COUNT  :bit9;
+  RESERVED1             :bit15;
+ end;
+
+ TCP_DFY_CNTL=bitpacked record
+  POLICY    :bit1;
+  RESERVED0 :bit1;
+  MTYPE     :bit2;
+  RESERVED1 :bit23;
+  RESERVED2 :bit1;
+  LFSR_RESET:bit1;
+  MODE      :bit2;
+  ENABLE    :bit1;
+ end;
+
+ TCP_DFY_STAT=bitpacked record
+  BURST_COUNT :bit16;
+  TAGS_PENDING:bit9;
+  RESERVED0   :bit6;
+  BUSY        :bit1;
+ end;
+
+ TCP_DMA_CNTL=bitpacked record
+  RESERVED0     :bit4;
+  MIN_AVAILSZ   :bit2;
+  RESERVED1     :bit10;
+  BUFFER_DEPTH  :bit4;
+  RESERVED2     :bit8;
+  PIO_FIFO_EMPTY:bit1;
+  PIO_FIFO_FULL :bit1;
+  PIO_COUNT     :bit2;
+ end;
+
+ TCP_HQD_VMID=bitpacked record
+  VMID     :bit4;
+  RESERVED0:bit4;
+  IB_VMID  :bit4;
+  RESERVED1:bit4;
+  VQID     :bit10;
+  RESERVED2:bit6;
+ end;
+
+ TCP_INT_CNTL=bitpacked record
+  RESERVED0                    :bit11;
+  CP_VM_DOORBELL_WR_INT_ENABLE :bit1;
+  RESERVED1                    :bit2;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  RESERVED2                    :bit2;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  CMP_BUSY_INT_ENABLE          :bit1;
+  CNTX_BUSY_INT_ENABLE         :bit1;
+  CNTX_EMPTY_INT_ENABLE        :bit1;
+  GFX_IDLE_INT_ENABLE          :bit1;
+  PRIV_INSTR_INT_ENABLE        :bit1;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_MEC_CNTL=bitpacked record
+  RESERVED0            :bit4;
+  MEC_INVALIDATE_ICACHE:bit1;
+  RESERVED1            :bit11;
+  MEC_ME1_PIPE0_RESET  :bit1;
+  MEC_ME1_PIPE1_RESET  :bit1;
+  MEC_ME1_PIPE2_RESET  :bit1;
+  MEC_ME1_PIPE3_RESET  :bit1;
+  MEC_ME2_PIPE0_RESET  :bit1;
+  MEC_ME2_PIPE1_RESET  :bit1;
+  RESERVED2            :bit6;
+  MEC_ME2_HALT         :bit1;
+  MEC_ME2_STEP         :bit1;
+  MEC_ME1_HALT         :bit1;
+  MEC_ME1_STEP         :bit1;
+ end;
+
+ TCP_MEQ_STAT=bitpacked record
+  MEQ_RPTR :bit10;
+  RESERVED0:bit6;
+  MEQ_WPTR :bit10;
+  RESERVED1:bit6;
+ end;
+
+ TCP_PWR_CNTL=bitpacked record
+  GFX_CLK_HALT_ME0_PIPE0:bit1;
+  GFX_CLK_HALT_ME0_PIPE1:bit1;
+  RESERVED0             :bit6;
+  CMP_CLK_HALT_ME1_PIPE0:bit1;
+  CMP_CLK_HALT_ME1_PIPE1:bit1;
+  CMP_CLK_HALT_ME1_PIPE2:bit1;
+  CMP_CLK_HALT_ME1_PIPE3:bit1;
+  RESERVED1             :bit4;
+  CMP_CLK_HALT_ME2_PIPE0:bit1;
+  CMP_CLK_HALT_ME2_PIPE1:bit1;
+  CMP_CLK_HALT_ME2_PIPE2:bit1;
+  CMP_CLK_HALT_ME2_PIPE3:bit1;
+  RESERVED2             :bit12;
+ end;
+
+ TCP_RB0_BASE=bit32;
+
+ TCP_RB0_CNTL=bitpacked record
+  RB_BUFSZ      :bit6;
+  RESERVED0     :bit2;
+  RB_BLKSZ      :bit6;
+  RESERVED1     :bit1;
+  MTYPE         :bit2;
+  BUF_SWAP      :bit2;
+  RESERVED2     :bit1;
+  MIN_AVAILSZ   :bit2;
+  MIN_IB_AVAILSZ:bit2;
+  CACHE_POLICY  :bit1;
+  RESERVED3     :bit2;
+  RB_NO_UPDATE  :bit1;
+  RESERVED4     :bit3;
+  RB_RPTR_WR_ENA:bit1;
+ end;
+
+ TCP_RB0_RPTR=bitpacked record
+  RB_RPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_RB0_WPTR=bitpacked record
+  RB_WPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_RB1_BASE=bit32;
+
+ TCP_RB1_CNTL=bitpacked record
+  RB_BUFSZ      :bit6;
+  RESERVED0     :bit2;
+  RB_BLKSZ      :bit6;
+  RESERVED1     :bit1;
+  MTYPE         :bit2;
+  RESERVED2     :bit3;
+  MIN_AVAILSZ   :bit2;
+  MIN_IB_AVAILSZ:bit2;
+  CACHE_POLICY  :bit1;
+  RESERVED3     :bit2;
+  RB_NO_UPDATE  :bit1;
+  RESERVED4     :bit3;
+  RB_RPTR_WR_ENA:bit1;
+ end;
+
+ TCP_RB1_RPTR=bitpacked record
+  RB_RPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_RB1_WPTR=bitpacked record
+  RB_WPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_RB2_BASE=bit32;
+
+ TCP_RB2_CNTL=bitpacked record
+  RB_BUFSZ      :bit6;
+  RESERVED0     :bit2;
+  RB_BLKSZ      :bit6;
+  RESERVED1     :bit1;
+  MTYPE         :bit2;
+  RESERVED2     :bit3;
+  MIN_AVAILSZ   :bit2;
+  MIN_IB_AVAILSZ:bit2;
+  CACHE_POLICY  :bit1;
+  RESERVED3     :bit2;
+  RB_NO_UPDATE  :bit1;
+  RESERVED4     :bit3;
+  RB_RPTR_WR_ENA:bit1;
+ end;
+
+ TCP_RB2_RPTR=bitpacked record
+  RB_RPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_RB2_WPTR=bitpacked record
+  RB_WPTR  :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_STQ_STAT=bitpacked record
+  STQ_RPTR :bit10;
+  RESERVED0:bit6;
+  RESERVED1:bit10;
+  RESERVED2:bit6;
+ end;
+
+ TCP_ST_BUFSZ=bitpacked record
+  ST_BUFSZ :bit20;
+  RESERVED0:bit12;
+ end;
+
+ TGDS_ATOM_OP=bitpacked record
+  OP    :bit8;
+  UNUSED:bit24;
+ end;
+
+ TGDS_EDC_CNT=bitpacked record
+  DED      :bit8;
+  SED      :bit8;
+  SEC      :bit8;
+  RESERVED0:bit8;
+ end;
+
+ TGDS_ENHANCE=bitpacked record
+  MISC          :bit16;
+  AUTO_INC_INDEX:bit1;
+  CGPG_RESTORE  :bit1;
+  RESERVED0     :bit14;
+ end;
+
+ TGDS_OA_CNTL=bitpacked record
+  INDEX    :bit4;
+  RESERVED0:bit28;
+ end;
+
+ TGDS_RD_ADDR=bit32;
+
+ TGDS_RD_DATA=bit32;
+
+ TGDS_WR_ADDR=bit32;
+
+ TGDS_WR_DATA=bit32;
 
  TGRBM_STATUS=bitpacked record
   ME0PIPE0_CMDFIFO_AVAIL:bit4;
@@ -213,6 +653,39 @@ type
   RESERVED0:bit24;
  end;
 
+ TTA_CNTL_AUX=bitpacked record
+  SCOAL_DSWIZZLE_N  :bit1;
+  RESERVED          :bit3;
+  D16_PACK_DISABLE  :bit1;
+  RESERVED0         :bit11;
+  ANISO_WEIGHT_MODE :bit1;
+  ANISO_RATIO_LUT   :bit1;
+  ANISO_TAP         :bit1;
+  ANISO_MIP_ADJ_MODE:bit1;
+  RESERVED1         :bit12;
+ end;
+
+ TTCC_EDC_CNT=bitpacked record
+  SEC_COUNT:bit8;
+  RESERVED0:bit8;
+  DED_COUNT:bit8;
+  RESERVED1:bit8;
+ end;
+
+ TTCP_EDC_CNT=bitpacked record
+  SEC_COUNT      :bit8;
+  LFIFO_SED_COUNT:bit8;
+  DED_COUNT      :bit8;
+  UNUSED         :bit8;
+ end;
+
+ TTD_DSM_CNTL=bitpacked record
+  FORCE_SEDB_0     :bit1;
+  FORCE_SEDB_1     :bit1;
+  EN_SINGLE_WR_SEDB:bit1;
+  RESERVED0        :bit29;
+ end;
+
  TVGT_ENHANCE=bit32;
 
  TVGT_GS_MODE=bitpacked record
@@ -241,15 +714,187 @@ type
   RESERVED0:bit28;
  end;
 
- TDBG_OUT_CNTL=bitpacked record
-  DBG_OUT_PIN_EN   :bit1;
-  RESERVED0        :bit3;
-  DBG_OUT_PIN_SEL  :bit1;
-  RESERVED1        :bit3;
-  DBG_OUT_12BIT_SEL:bit2;
-  RESERVED2        :bit2;
-  DBG_OUT_TEST_DATA:bit12;
-  RESERVED3        :bit8;
+ TCPC_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_BUSY_STAT=bitpacked record
+  REG_BUS_FIFO_BUSY     :bit1;
+  RESERVED0             :bit1;
+  RESERVED1             :bit1;
+  RESERVED2             :bit1;
+  RESERVED3             :bit1;
+  RESERVED4             :bit1;
+  COHER_CNT_NEQ_ZERO    :bit1;
+  PFP_PARSING_PACKETS   :bit1;
+  ME_PARSING_PACKETS    :bit1;
+  RCIU_PFP_BUSY         :bit1;
+  RCIU_ME_BUSY          :bit1;
+  RESERVED5             :bit1;
+  SEM_CMDFIFO_NOT_EMPTY :bit1;
+  SEM_FAILED_AND_HOLDING:bit1;
+  SEM_POLLING_FOR_PASS  :bit1;
+  GFX_CONTEXT_BUSY      :bit1;
+  RESERVED6             :bit1;
+  ME_PARSER_BUSY        :bit1;
+  EOP_DONE_BUSY         :bit1;
+  STRM_OUT_BUSY         :bit1;
+  PIPE_STATS_BUSY       :bit1;
+  RCIU_CE_BUSY          :bit1;
+  CE_PARSING_PACKETS    :bit1;
+  RESERVED7             :bit9;
+ end;
+
+ TCP_CMD_INDEX=bitpacked record
+  CMD_INDEX    :bit11;
+  RESERVED0    :bit1;
+  CMD_ME_SEL   :bit2;
+  RESERVED1    :bit2;
+  CMD_QUEUE_SEL:bit3;
+  RESERVED2    :bit13;
+ end;
+
+ TCP_CNTX_STAT=bitpacked record
+  ACTIVE_HP3D_CONTEXTS:bit8;
+  CURRENT_HP3D_CONTEXT:bit3;
+  RESERVED0           :bit9;
+  ACTIVE_GFX_CONTEXTS :bit8;
+  CURRENT_GFX_CONTEXT :bit3;
+  RESERVED1           :bit1;
+ end;
+
+ TCP_DEVICE_ID=bitpacked record
+  DEVICE_ID:bit8;
+  RESERVED0:bit24;
+ end;
+
+ TCP_HQD_ERROR=bitpacked record
+  EDC_ERROR_ID:bit4;
+  SUA_ERROR   :bit1;
+  RESERVED0   :bit27;
+ end;
+
+ TCP_IB1_BUFSZ=bitpacked record
+  IB1_BUFSZ:bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_IB2_BUFSZ=bitpacked record
+  IB2_BUFSZ:bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_MEQ_AVAIL=bitpacked record
+  MEQ_CNT  :bit10;
+  RESERVED0:bit22;
+ end;
+
+ TCP_PQ_STATUS=bitpacked record
+  DOORBELL_UPDATED:bit1;
+  DOORBELL_ENABLE :bit1;
+  RESERVED0       :bit30;
+ end;
+
+ TCP_ROQ_AVAIL=bitpacked record
+  ROQ_CNT_RING:bit11;
+  RESERVED0   :bit5;
+  ROQ_CNT_IB1 :bit11;
+  RESERVED1   :bit5;
+ end;
+
+ TCP_STQ_AVAIL=bitpacked record
+  STQ_CNT  :bit9;
+  RESERVED0:bit23;
+ end;
+
+ TGDS_ATOM_DST=bit32;
+
+ TGDS_DSM_CNTL=bitpacked record
+  SEL_DSM_GDS_IRRITATOR_DATA_A_0:bit1;
+  SEL_DSM_GDS_IRRITATOR_DATA_A_1:bit1;
+  GDS_ENABLE_SINGLE_WRITE_A     :bit1;
+  SEL_DSM_GDS_IRRITATOR_DATA_B_0:bit1;
+  SEL_DSM_GDS_IRRITATOR_DATA_B_1:bit1;
+  GDS_ENABLE_SINGLE_WRITE_B     :bit1;
+  UNUSED                        :bit26;
+ end;
+
+ TGDS_ENHANCE2=bitpacked record
+  MISC     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_RESET=bitpacked record
+  RESET    :bit1;
+  RESERVED0:bit7;
+  PIPE_ID  :bit8;
+  RESERVED1:bit16;
+ end;
+
+ TGDS_OA_VMID0=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID1=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID2=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID3=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID4=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID5=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID6=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID7=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID8=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID9=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
  end;
 
  TGRBM_NOWHERE=bit32;
@@ -295,6 +940,48 @@ type
  TSPI_GFX_CNTL=bitpacked record
   RESET_COUNTS:bit1;
   RESERVED0   :bit31;
+ end;
+
+ TTA_CGTT_CTRL=bitpacked record
+  ON_DELAY      :bit4;
+  OFF_HYSTERESIS:bit8;
+  RESERVED0     :bit12;
+  SOFT_OVERRIDE7:bit1;
+  SOFT_OVERRIDE6:bit1;
+  SOFT_OVERRIDE5:bit1;
+  SOFT_OVERRIDE4:bit1;
+  SOFT_OVERRIDE3:bit1;
+  SOFT_OVERRIDE2:bit1;
+  SOFT_OVERRIDE1:bit1;
+  SOFT_OVERRIDE0:bit1;
+ end;
+
+ TTCC_DSM_CNTL=bitpacked record
+  CACHE_RAM_IRRITATOR_DATA_SEL    :bit2;
+  CACHE_RAM_IRRITATOR_SINGLE_WRITE:bit1;
+  RESERVED0                       :bit29;
+ end;
+
+ TTCP_DSM_CNTL=bitpacked record
+  CACHE_RAM_IRRITATOR_DATA_SEL    :bit2;
+  CACHE_RAM_IRRITATOR_SINGLE_WRITE:bit1;
+  LFIFO_RAM_IRRITATOR_DATA_SEL    :bit2;
+  LFIFO_RAM_IRRITATOR_SINGLE_WRITE:bit1;
+  RESERVED0                       :bit26;
+ end;
+
+ TTD_CGTT_CTRL=bitpacked record
+  ON_DELAY      :bit4;
+  OFF_HYSTERESIS:bit8;
+  RESERVED0     :bit12;
+  SOFT_OVERRIDE7:bit1;
+  SOFT_OVERRIDE6:bit1;
+  SOFT_OVERRIDE5:bit1;
+  SOFT_OVERRIDE4:bit1;
+  SOFT_OVERRIDE3:bit1;
+  SOFT_OVERRIDE2:bit1;
+  SOFT_OVERRIDE1:bit1;
+  SOFT_OVERRIDE0:bit1;
  end;
 
  TVGT_DMA_BASE=bit32;
@@ -364,6 +1051,198 @@ type
 
  TCOMPUTE_DIM_Z=bit32;
 
+ TCP_CEQ1_AVAIL=bitpacked record
+  CEQ_CNT_RING:bit11;
+  RESERVED0   :bit5;
+  CEQ_CNT_IB1 :bit11;
+  RESERVED1   :bit5;
+ end;
+
+ TCP_CEQ2_AVAIL=bitpacked record
+  CEQ_CNT_IB2:bit11;
+  RESERVED0  :bit21;
+ end;
+
+ TCP_CE_COUNTER=bit32;
+
+ TCP_COHER_BASE=bit32;
+
+ TCP_COHER_CNTL=bitpacked record
+  DEST_BASE_0_ENA         :bit1;
+  DEST_BASE_1_ENA         :bit1;
+  TC_SD_ACTION_ENA        :bit1;
+  TC_NC_ACTION_ENA        :bit1;
+  RESERVED0               :bit2;
+  CB0_DEST_BASE_ENA       :bit1;
+  CB1_DEST_BASE_ENA       :bit1;
+  CB2_DEST_BASE_ENA       :bit1;
+  CB3_DEST_BASE_ENA       :bit1;
+  CB4_DEST_BASE_ENA       :bit1;
+  CB5_DEST_BASE_ENA       :bit1;
+  CB6_DEST_BASE_ENA       :bit1;
+  CB7_DEST_BASE_ENA       :bit1;
+  DB_DEST_BASE_ENA        :bit1;
+  TCL1_VOL_ACTION_ENA     :bit1;
+  TC_VOL_ACTION_ENA__CI   :bit1;
+  RESERVED1               :bit1;
+  TC_WB_ACTION_ENA        :bit1;
+  DEST_BASE_2_ENA         :bit1;
+  RESERVED2               :bit1;
+  DEST_BASE_3_ENA         :bit1;
+  TCL1_ACTION_ENA         :bit1;
+  TC_ACTION_ENA           :bit1;
+  RESERVED3               :bit1;
+  CB_ACTION_ENA           :bit1;
+  DB_ACTION_ENA           :bit1;
+  SH_KCACHE_ACTION_ENA    :bit1;
+  SH_KCACHE_VOL_ACTION_ENA:bit1;
+  SH_ICACHE_ACTION_ENA    :bit1;
+  SH_KCACHE_WB_ACTION_ENA :bit1;
+  SH_SD_ACTION_ENA        :bit1;
+ end;
+
+ TCP_COHER_SIZE=bit32;
+
+ TCP_CONFIG__SI=bitpacked record
+  RESERVED0   :bit8;
+  CP_RDREQ_URG:bit4;
+  RESERVED1   :bit4;
+  CP_REQ_TRAN :bit1;
+  RESERVED2   :bit15;
+ end;
+
+ TCP_CPC_STATUS=bitpacked record
+  MEC1_BUSY             :bit1;
+  MEC2_BUSY             :bit1;
+  DC0_BUSY              :bit1;
+  DC1_BUSY              :bit1;
+  RCIU1_BUSY            :bit1;
+  RCIU2_BUSY            :bit1;
+  ROQ1_BUSY             :bit1;
+  ROQ2_BUSY             :bit1;
+  MIU_RDREQ_BUSY__SI__CI:bit1;
+  MIU_WRREQ_BUSY__SI__CI:bit1;
+  TCIU_BUSY             :bit1;
+  SCRATCH_RAM_BUSY      :bit1;
+  QU_BUSY               :bit1;
+  ATCL2IU_BUSY          :bit1;
+  RESERVED0             :bit15;
+  CPG_CPC_BUSY          :bit1;
+  CPF_CPC_BUSY          :bit1;
+  CPC_BUSY              :bit1;
+ end;
+
+ TCP_CPF_STATUS=bitpacked record
+  POST_WPTR_GFX_BUSY    :bit1;
+  CSF_BUSY              :bit1;
+  MIU_RDREQ_BUSY__SI__CI:bit1;
+  MIU_WRREQ_BUSY__SI__CI:bit1;
+  ROQ_ALIGN_BUSY        :bit1;
+  ROQ_RING_BUSY         :bit1;
+  ROQ_INDIRECT1_BUSY    :bit1;
+  ROQ_INDIRECT2_BUSY    :bit1;
+  ROQ_STATE_BUSY        :bit1;
+  ROQ_CE_RING_BUSY      :bit1;
+  ROQ_CE_INDIRECT1_BUSY :bit1;
+  ROQ_CE_INDIRECT2_BUSY :bit1;
+  SEMAPHORE_BUSY        :bit1;
+  INTERRUPT_BUSY        :bit1;
+  TCIU_BUSY             :bit1;
+  HQD_BUSY              :bit1;
+  PRT_BUSY              :bit1;
+  ATCL2IU_BUSY          :bit1;
+  RESERVED0             :bit8;
+  CPF_GFX_BUSY          :bit1;
+  CPF_CMP_BUSY          :bit1;
+  GRBM_CPF_STAT_BUSY    :bit2;
+  CPC_CPF_BUSY          :bit1;
+  CPF_BUSY              :bit1;
+ end;
+
+ TCP_DFY_DATA_0=bit32;
+
+ TCP_DFY_DATA_1=bit32;
+
+ TCP_DFY_DATA_2=bit32;
+
+ TCP_DFY_DATA_3=bit32;
+
+ TCP_DFY_DATA_4=bit32;
+
+ TCP_DFY_DATA_5=bit32;
+
+ TCP_DFY_DATA_6=bit32;
+
+ TCP_DFY_DATA_7=bit32;
+
+ TCP_DFY_DATA_8=bit32;
+
+ TCP_DFY_DATA_9=bit32;
+
+ TCP_HQD_ACTIVE=bitpacked record
+  ACTIVE   :bit1;
+  BUSY_GATE:bit1;
+  RESERVED0:bit30;
+ end;
+
+ TCP_IB1_OFFSET=bitpacked record
+  IB1_OFFSET:bit20;
+  RESERVED0 :bit12;
+ end;
+
+ TCP_IB2_OFFSET=bitpacked record
+  IB2_OFFSET:bit20;
+  RESERVED0 :bit12;
+ end;
+
+ TCP_INDEX_TYPE=bitpacked record
+  INDEX_TYPE:bit2;
+  RESERVED0 :bit30;
+ end;
+
+ TCP_INT_STATUS=bitpacked record
+  RESERVED0                  :bit11;
+  CP_VM_DOORBELL_WR_INT_STAT :bit1;
+  RESERVED1                  :bit2;
+  CP_ECC_ERROR_INT_STAT      :bit1;
+  RESERVED2                  :bit2;
+  WRM_POLL_TIMEOUT_INT_STAT  :bit1;
+  CMP_BUSY_INT_STAT          :bit1;
+  CNTX_BUSY_INT_STAT         :bit1;
+  CNTX_EMPTY_INT_STAT        :bit1;
+  GFX_IDLE_INT_STAT          :bit1;
+  PRIV_INSTR_INT_STAT        :bit1;
+  PRIV_REG_INT_STAT          :bit1;
+  OPCODE_ERROR_INT_STAT      :bit1;
+  RESERVED3                  :bit1;
+  TIME_STAMP_INT_STAT        :bit1;
+  RESERVED_BIT_ERROR_INT_STAT:bit1;
+  RESERVED4                  :bit1;
+  GENERIC2_INT_STAT          :bit1;
+  GENERIC1_INT_STAT          :bit1;
+  GENERIC0_INT_STAT          :bit1;
+ end;
+
+ TCP_ROQ2_AVAIL=bitpacked record
+  ROQ_CNT_IB2:bit11;
+  RESERVED0  :bit21;
+ end;
+
+ TCP_ST_BASE_HI=bitpacked record
+  ST_BASE_HI:bit16;
+  RESERVED0 :bit16;
+ end;
+
+ TCP_ST_BASE_LO=bitpacked record
+  RESERVED0 :bit2;
+  ST_BASE_LO:bit30;
+ end;
+
+ TCP_VMID_RESET=bitpacked record
+  RESET_REQUEST:bit16;
+  RESET_STATUS :bit16;
+ end;
+
  TDB_DEPTH_INFO=bitpacked record
   ADDR5_SWIZZLE_MASK:bit4;
   ARRAY_MODE        :bit4;
@@ -403,144 +1282,130 @@ type
   AUTO_FLUSH_QUAD      :bit1;
  end;
 
- TGB_TILE_MODE0=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_ATOM_BASE=bitpacked record
+  BASE  :bit16;
+  UNUSED:bit16;
  end;
 
- TGB_TILE_MODE1=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_ATOM_CNTL=bitpacked record
+  AINC     :bit6;
+  RESERVED0:bit2;
+  DMODE    :bit2;
+  RESERVED1:bit22;
  end;
 
- TGB_TILE_MODE2=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_ATOM_SIZE=bitpacked record
+  SIZE  :bit16;
+  UNUSED:bit16;
  end;
 
- TGB_TILE_MODE3=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_ATOM_SRC0=bit32;
+
+ TGDS_ATOM_SRC1=bit32;
+
+ TGDS_GWS_VMID0=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE4=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID1=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE5=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID2=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE6=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID3=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE7=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID4=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE8=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID5=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE9=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID6=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
+ end;
+
+ TGDS_GWS_VMID7=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
+ end;
+
+ TGDS_GWS_VMID8=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
+ end;
+
+ TGDS_GWS_VMID9=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
+ end;
+
+ TGDS_OA_INCDEC=bitpacked record
+  VALUE :bit31;
+  INCDEC:bit1;
+ end;
+
+ TGDS_OA_VMID10=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID11=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID12=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID13=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID14=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_OA_VMID15=bitpacked record
+  MASK     :bit16;
+  RESERVED0:bit16;
  end;
 
  TGRBM_CAM_DATA=bitpacked record
@@ -909,6 +1774,45 @@ type
   ECO_SPARE0                                           :bit1;
  end;
 
+ TSX_DEBUG_BUSY=bitpacked record
+  POS_FREE_OR_VALIDS:bit1;
+  POS_REQUESTER_BUSY:bit1;
+  PA_SX_BUSY        :bit1;
+  POS_SCBD_BUSY     :bit1;
+  POS_BANK3VAL3_BUSY:bit1;
+  POS_BANK3VAL2_BUSY:bit1;
+  POS_BANK3VAL1_BUSY:bit1;
+  POS_BANK3VAL0_BUSY:bit1;
+  POS_BANK2VAL3_BUSY:bit1;
+  POS_BANK2VAL2_BUSY:bit1;
+  POS_BANK2VAL1_BUSY:bit1;
+  POS_BANK2VAL0_BUSY:bit1;
+  POS_BANK1VAL3_BUSY:bit1;
+  POS_BANK1VAL2_BUSY:bit1;
+  POS_BANK1VAL1_BUSY:bit1;
+  POS_BANK1VAL0_BUSY:bit1;
+  POS_BANK0VAL3_BUSY:bit1;
+  POS_BANK0VAL2_BUSY:bit1;
+  POS_BANK0VAL1_BUSY:bit1;
+  POS_BANK0VAL0_BUSY:bit1;
+  POS_INMUX_VALID   :bit1;
+  WRCTRL1_VALIDQ3   :bit1;
+  WRCTRL1_VALIDQ2   :bit1;
+  WRCTRL1_VALIDQ1   :bit1;
+  WRCTRL0_VALIDQ3   :bit1;
+  WRCTRL0_VALIDQ2   :bit1;
+  WRCTRL0_VALIDQ1   :bit1;
+  PCCMD_VALID       :bit1;
+  VDATA1_VALID      :bit1;
+  VDATA0_VALID      :bit1;
+  CMD_BUSYORVAL     :bit1;
+  ADDR_BUSYORVAL    :bit1;
+ end;
+
+ TTA_DEBUG_DATA=bit32;
+
+ TTD_DEBUG_DATA=bit32;
+
  TVGT_ES_PER_GS=bitpacked record
   ES_PER_GS:bit11;
   RESERVED0:bit21;
@@ -927,6 +1831,272 @@ type
  TVGT_REUSE_OFF=bitpacked record
   REUSE_OFF:bit1;
   RESERVED0:bit31;
+ end;
+
+ TWD_DEBUG_CNTL=bitpacked record
+  WD_DEBUG_INDX     :bit6;
+  WD_DEBUG_SEL_BUS_B:bit1;
+  RESERVED0         :bit25;
+ end;
+
+ TWD_DEBUG_DATA=bit32;
+
+ TWD_DEBUG_REG0=bitpacked record
+  wd_busy_extended      :bit1;
+  wd_nodma_busy_extended:bit1;
+  wd_busy               :bit1;
+  wd_nodma_busy         :bit1;
+  rbiu_busy             :bit1;
+  spl_dma_busy          :bit1;
+  spl_di_busy           :bit1;
+  vgt0_active_q         :bit1;
+  vgt1_active_q         :bit1;
+  spl_dma_p1_busy       :bit1;
+  rbiu_dr_p1_fifo_busy  :bit1;
+  rbiu_di_p1_fifo_busy  :bit1;
+  SPARE2                :bit1;
+  rbiu_dr_fifo_busy     :bit1;
+  rbiu_spl_dr_valid     :bit1;
+  spl_rbiu_dr_read      :bit1;
+  SPARE3                :bit1;
+  rbiu_di_fifo_busy     :bit1;
+  rbiu_spl_di_valid     :bit1;
+  spl_rbiu_di_read      :bit1;
+  se0_synced_q          :bit1;
+  se1_synced_q          :bit1;
+  se2_synced_q          :bit1;
+  se3_synced_q          :bit1;
+  reg_clk_busy          :bit1;
+  input_clk_busy        :bit1;
+  core_clk_busy         :bit1;
+  vgt2_active_q         :bit1;
+  sclk_reg_vld          :bit1;
+  sclk_input_vld        :bit1;
+  sclk_core_vld         :bit1;
+  vgt3_active_q         :bit1;
+ end;
+
+ TWD_DEBUG_REG1=bitpacked record
+  grbm_fifo_empty        :bit1;
+  grbm_fifo_full         :bit1;
+  grbm_fifo_we           :bit1;
+  grbm_fifo_re           :bit1;
+  draw_initiator_valid_q :bit1;
+  event_initiator_valid_q:bit1;
+  event_addr_valid_q     :bit1;
+  dma_request_valid_q    :bit1;
+  SPARE0                 :bit1;
+  min_indx_valid_q       :bit1;
+  max_indx_valid_q       :bit1;
+  indx_offset_valid_q    :bit1;
+  grbm_fifo_rdata_reg_id :bit5;
+  grbm_fifo_rdata_state  :bit3;
+  free_cnt_q             :bit6;
+  rbiu_di_fifo_we        :bit1;
+  rbiu_dr_fifo_we        :bit1;
+  rbiu_di_fifo_empty     :bit1;
+  rbiu_di_fifo_full      :bit1;
+  rbiu_dr_fifo_empty     :bit1;
+  rbiu_dr_fifo_full      :bit1;
+ end;
+
+ TWD_DEBUG_REG2=bitpacked record
+  p1_grbm_fifo_empty        :bit1;
+  p1_grbm_fifo_full         :bit1;
+  p1_grbm_fifo_we           :bit1;
+  p1_grbm_fifo_re           :bit1;
+  p1_draw_initiator_valid_q :bit1;
+  p1_event_initiator_valid_q:bit1;
+  p1_event_addr_valid_q     :bit1;
+  p1_dma_request_valid_q    :bit1;
+  SPARE0                    :bit1;
+  p1_min_indx_valid_q       :bit1;
+  p1_max_indx_valid_q       :bit1;
+  p1_indx_offset_valid_q    :bit1;
+  p1_grbm_fifo_rdata_reg_id :bit5;
+  p1_grbm_fifo_rdata_state  :bit3;
+  p1_free_cnt_q             :bit6;
+  p1_rbiu_di_fifo_we        :bit1;
+  p1_rbiu_dr_fifo_we        :bit1;
+  p1_rbiu_di_fifo_empty     :bit1;
+  p1_rbiu_di_fifo_full      :bit1;
+  p1_rbiu_dr_fifo_empty     :bit1;
+  p1_rbiu_dr_fifo_full      :bit1;
+ end;
+
+ TWD_DEBUG_REG3=bitpacked record
+  rbiu_spl_dr_valid        :bit1;
+  SPARE0                   :bit1;
+  pipe0_dr                 :bit1;
+  pipe0_rtr                :bit1;
+  pipe1_dr                 :bit1;
+  pipe1_rtr                :bit1;
+  wd_subdma_fifo_empty     :bit1;
+  wd_subdma_fifo_full      :bit1;
+  dma_buf_type_p0_q        :bit2;
+  dma_zero_indices_p0_q    :bit1;
+  dma_req_path_p3_q        :bit1;
+  dma_not_eop_p1_q         :bit1;
+  out_of_range_p4          :bit1;
+  last_sub_dma_p3_q        :bit1;
+  last_rdreq_of_sub_dma_p4 :bit1;
+  WD_IA_dma_send_d         :bit1;
+  WD_IA_dma_rtr            :bit1;
+  WD_IA1_dma_send_d        :bit1;
+  WD_IA1_dma_rtr           :bit1;
+  last_inst_of_dma_p2      :bit1;
+  last_sd_of_inst_p2       :bit1;
+  last_sd_of_dma_p2        :bit1;
+  SPARE1                   :bit1;
+  WD_IA_dma_busy           :bit1;
+  WD_IA1_dma_busy          :bit1;
+  send_to_ia1_p3_q         :bit1;
+  dma_wd_switch_on_eop_p3_q:bit1;
+  pipe3_dr                 :bit1;
+  pipe3_rtr                :bit1;
+  wd_dma2draw_fifo_empty   :bit1;
+  wd_dma2draw_fifo_full    :bit1;
+ end;
+
+ TWD_DEBUG_REG4=bitpacked record
+  rbiu_spl_di_valid       :bit1;
+  spl_rbiu_di_read        :bit1;
+  rbiu_spl_p1_di_valid    :bit1;
+  spl_rbiu_p1_di_read     :bit1;
+  pipe0_dr                :bit1;
+  pipe0_rtr               :bit1;
+  pipe1_dr                :bit1;
+  pipe1_rtr               :bit1;
+  pipe2_dr                :bit1;
+  pipe2_rtr               :bit1;
+  pipe3_ld                :bit1;
+  pipe3_rtr               :bit1;
+  WD_IA_draw_send_d       :bit1;
+  WD_IA_draw_rtr          :bit1;
+  di_type_p0              :bit2;
+  di_state_sel_p1_q       :bit3;
+  di_wd_switch_on_eop_p1_q:bit1;
+  rbiu_spl_pipe0_lockout  :bit1;
+  last_inst_of_di_p2      :bit1;
+  last_sd_of_inst_p2      :bit1;
+  last_sd_of_di_p2        :bit1;
+  not_eop_wait_p1_q       :bit1;
+  not_eop_wait_q          :bit1;
+  ext_event_wait_p1_q     :bit1;
+  ext_event_wait_q        :bit1;
+  WD_IA1_draw_send_d      :bit1;
+  WD_IA1_draw_rtr         :bit1;
+  send_to_ia1_q           :bit1;
+  dual_ia_mode            :bit1;
+ end;
+
+ TWD_DEBUG_REG5=bitpacked record
+  p1_rbiu_spl_dr_valid        :bit1;
+  SPARE0                      :bit1;
+  p1_pipe0_dr                 :bit1;
+  p1_pipe0_rtr                :bit1;
+  p1_pipe1_dr                 :bit1;
+  p1_pipe1_rtr                :bit1;
+  p1_wd_subdma_fifo_empty     :bit1;
+  p1_wd_subdma_fifo_full      :bit1;
+  p1_dma_buf_type_p0_q        :bit2;
+  p1_dma_zero_indices_p0_q    :bit1;
+  p1_dma_req_path_p3_q        :bit1;
+  p1_dma_not_eop_p1_q         :bit1;
+  p1_out_of_range_p4          :bit1;
+  p1_last_sub_dma_p3_q        :bit1;
+  p1_last_rdreq_of_sub_dma_p4 :bit1;
+  p1_WD_IA_dma_send_d         :bit1;
+  p1_WD_IA_dma_rtr            :bit1;
+  p1_WD_IA1_dma_send_d        :bit1;
+  p1_WD_IA1_dma_rtr           :bit1;
+  p1_last_inst_of_dma_p2      :bit1;
+  p1_last_sd_of_inst_p2       :bit1;
+  p1_last_sd_of_dma_p2        :bit1;
+  SPARE1                      :bit1;
+  p1_WD_IA_dma_busy           :bit1;
+  p1_WD_IA1_dma_busy          :bit1;
+  p1_send_to_ia1_p3_q         :bit1;
+  p1_dma_wd_switch_on_eop_p3_q:bit1;
+  p1_pipe3_dr                 :bit1;
+  p1_pipe3_rtr                :bit1;
+  p1_wd_dma2draw_fifo_empty   :bit1;
+  p1_wd_dma2draw_fifo_full    :bit1;
+ end;
+
+ TWD_DEBUG_REG6=bit32;
+
+ TWD_DEBUG_REG7=bitpacked record
+  SE0VGT_WD_thdgrp_send_in   :bit1;
+  wd_arb_se0_input_fifo_re   :bit1;
+  wd_arb_se0_input_fifo_empty:bit1;
+  wd_arb_se0_input_fifo_full :bit1;
+  SE1VGT_WD_thdgrp_send_in   :bit1;
+  wd_arb_se1_input_fifo_re   :bit1;
+  wd_arb_se1_input_fifo_empty:bit1;
+  wd_arb_se1_input_fifo_full :bit1;
+  SPARE1                     :bit4;
+  SPARE2                     :bit4;
+  te11_arb_state_q           :bit3;
+  SPARE5                     :bit1;
+  se0_thdgrp_is_event        :bit1;
+  se0_thdgrp_eop             :bit1;
+  se1_thdgrp_is_event        :bit1;
+  se1_thdgrp_eop             :bit1;
+  SPARE6                     :bit4;
+  tfreq_arb_tgroup_rtr       :bit1;
+  arb_tfreq_tgroup_rts       :bit1;
+  arb_tfreq_tgroup_event     :bit1;
+  te11_arb_busy              :bit1;
+ end;
+
+ TWD_DEBUG_REG8=bitpacked record
+  pipe0_dr               :bit1;
+  pipe1_dr               :bit1;
+  pipe0_rtr              :bit1;
+  pipe1_rtr              :bit1;
+  tfreq_tg_fifo_empty    :bit1;
+  tfreq_tg_fifo_full     :bit1;
+  tf_data_fifo_busy_q    :bit1;
+  tf_data_fifo_rtr_q     :bit1;
+  tf_skid_fifo_empty     :bit1;
+  tf_skid_fifo_full      :bit1;
+  wd_tc_rdreq_rtr_q      :bit1;
+  last_req_of_tg_p2      :bit1;
+  se0spi_wd_hs_done_cnt_q:bit6;
+  event_flag_p1_q        :bit1;
+  null_flag_p1_q         :bit1;
+  tf_data_fifo_cnt_q     :bit7;
+  second_tf_ret_data_q   :bit1;
+  first_req_of_tg_p1_q   :bit1;
+  WD_TC_rdreq_send_out   :bit1;
+  WD_TC_rdnfo_stall_out  :bit1;
+  TC_WD_rdret_valid_in   :bit1;
+ end;
+
+ TWD_DEBUG_REG9=bitpacked record
+  pipe0_dr                :bit1;
+  pipec_tf_dr             :bit1;
+  pipe2_dr                :bit1;
+  event_or_null_flags_p0_q:bit1;
+  pipe0_rtr               :bit1;
+  pipe1_rtr               :bit1;
+  pipec_tf_rtr            :bit1;
+  pipe2_rtr               :bit1;
+  ttp_patch_fifo_full     :bit1;
+  ttp_patch_fifo_empty    :bit1;
+  ttp_tf_fifo_empty       :bit1;
+  SPARE0                  :bit5;
+  tf_fetch_state_q        :bit3;
+  last_patch_of_tg        :bit1;
+  tf_pointer_p0_q         :bit4;
+  dynamic_hs_p0_q         :bit1;
+  first_fetch_of_tg_p0_q  :bit1;
+  mem_is_even             :bit1;
+  SPARE1                  :bit1;
+  SPARE2                  :bit2;
+  pipe4_dr                :bit1;
+  pipe4_rtr               :bit1;
  end;
 
  TCB_BLEND_ALPHA=bit32;
@@ -1288,6 +2458,171 @@ type
 
  TCOMPUTE_TMA_LO=bit32;
 
+ TCPC_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_APPEND_DATA=bit32;
+
+ TCP_CE_DE_COUNT=bit32;
+
+ TCP_DE_CE_COUNT=bit32;
+
+ TCP_DE_DE_COUNT=bit32;
+
+ TCP_DFY_ADDR_HI=bit32;
+
+ TCP_DFY_ADDR_LO=bitpacked record
+  RESERVED0:bit5;
+  ADDR_LO  :bit27;
+ end;
+
+ TCP_DFY_DATA_10=bit32;
+
+ TCP_DFY_DATA_11=bit32;
+
+ TCP_DFY_DATA_12=bit32;
+
+ TCP_DFY_DATA_13=bit32;
+
+ TCP_DFY_DATA_14=bit32;
+
+ TCP_DFY_DATA_15=bit32;
+
+ TCP_DRAW_OBJECT=bit32;
+
+ TCP_ENDIAN_SWAP=bitpacked record
+  ENDIAN_SWAP:bit2;
+  RESERVED0  :bit30;
+ end;
+
+ TCP_HPD_STATUS0=bitpacked record
+  QUEUE_STATE    :bit5;
+  MAPPED_QUEUE   :bit3;
+  QUEUE_AVAILABLE:bit8;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_HQD_IB_RPTR=bitpacked record
+  CONSUMED_OFFSET:bit20;
+  RESERVED0      :bit12;
+ end;
+
+ TCP_HQD_IQ_RPTR=bitpacked record
+  OFFSET   :bit6;
+  RESERVED0:bit26;
+ end;
+
+ TCP_HQD_OFFLOAD=bitpacked record
+  DMA_OFFLOAD   :bit1;
+  DMA_OFFLOAD_EN:bit1;
+  RESERVED0     :bit2;
+  EOP_OFFLOAD   :bit1;
+  EOP_OFFLOAD_EN:bit1;
+  RESERVED1     :bit26;
+ end;
+
+ TCP_HQD_PQ_BASE=bit32;
+
+ TCP_HQD_PQ_RPTR=bit32;
+
+ TCP_HQD_PQ_WPTR=bit32;
+
+ TCP_HQD_QUANTUM=bitpacked record
+  QUANTUM_EN      :bit1;
+  RESERVED0       :bit3;
+  QUANTUM_SCALE   :bit1;
+  RESERVED1       :bit3;
+  QUANTUM_DURATION:bit6;
+  RESERVED2       :bit17;
+  QUANTUM_ACTIVE  :bit1;
+ end;
+
+ TCP_IB1_BASE_HI=bitpacked record
+  IB1_BASE_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_IB1_BASE_LO=bitpacked record
+  RESERVED0  :bit2;
+  IB1_BASE_LO:bit30;
+ end;
+
+ TCP_IB2_BASE_HI=bitpacked record
+  IB2_BASE_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_IB2_BASE_LO=bitpacked record
+  RESERVED0  :bit2;
+  IB2_BASE_LO:bit30;
+ end;
+
+ TCP_MAX_CONTEXT=bitpacked record
+  MAX_CONTEXT:bit3;
+  RESERVED0  :bit29;
+ end;
+
+ TCP_MQD_CONTROL=bitpacked record
+  VMID             :bit4;
+  RESERVED0        :bit4;
+  RESERVED1        :bit1;
+  RESERVED2        :bit3;
+  PROCESSING_MQD   :bit1;
+  PROCESSING_MQD_EN:bit1;
+  RESERVED3        :bit9;
+  MQD_ATC          :bit1;
+  CACHE_POLICY     :bit1;
+  RESERVED4        :bit2;
+  MTYPE            :bit2;
+  RESERVED5        :bit3;
+ end;
+
+ TCP_RB0_BASE_HI=bitpacked record
+  RB_BASE_HI:bit8;
+  RESERVED0 :bit24;
+ end;
+
+ TCP_RB1_BASE_HI=bitpacked record
+  RB_BASE_HI:bit8;
+  RESERVED0 :bit24;
+ end;
+
+ TCP_ROQ_RB_STAT=bitpacked record
+  ROQ_RPTR_PRIMARY:bit10;
+  RESERVED0       :bit6;
+  ROQ_WPTR_PRIMARY:bit10;
+  RESERVED1       :bit6;
+ end;
+
+ TCP_STQ_WR_STAT=bitpacked record
+  STQ_WPTR :bit10;
+  RESERVED0:bit22;
+ end;
+
+ TCP_VIRT_STATUS=bit32;
+
+ TCP_VMID_STATUS=bitpacked record
+  PREEMPT_DE_STATUS:bit16;
+  PREEMPT_CE_STATUS:bit16;
+ end;
+
  TDB_DEPTH_CLEAR=bit32;
 
  TDB_DEPTH_SLICE=bitpacked record
@@ -1313,334 +2648,339 @@ type
 
  TDB_Z_READ_BASE=bit32;
 
- TGB_ADDR_CONFIG=bitpacked record
-  NUM_PIPES              :bit3;
-  RESERVED0              :bit1;
-  PIPE_INTERLEAVE_SIZE   :bit3;
-  RESERVED1              :bit1;
-  BANK_INTERLEAVE_SIZE   :bit3;
-  RESERVED2              :bit1;
-  NUM_SHADER_ENGINES     :bit2;
-  RESERVED3              :bit2;
-  SHADER_ENGINE_TILE_SIZE:bit3;
-  RESERVED4              :bit1;
-  NUM_GPUS               :bit3;
-  RESERVED5              :bit1;
-  MULTI_GPU_TILE_SIZE    :bit2;
-  RESERVED6              :bit2;
-  ROW_SIZE               :bit2;
-  NUM_LOWER_PIPES        :bit1;
-  RESERVED7              :bit1;
+ TGDS_ATOM_READ0=bit32;
+
+ TGDS_ATOM_READ1=bit32;
+
+ TGDS_DEBUG_CNTL=bitpacked record
+  GDS_DEBUG_INDX:bit5;
+  UNUSED        :bit27;
  end;
 
- TGB_BACKEND_MAP=bit32;
+ TGDS_DEBUG_DATA=bit32;
 
- TGB_TILE_MODE10=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG0=bitpacked record
+  spare1               :bit6;
+  write_buff_valid     :bit1;
+  wr_pixel_nxt_ptr     :bit5;
+  last_pixel_ptr       :bit1;
+  cstate               :bit4;
+  buff_write           :bit1;
+  flush_request        :bit1;
+  wr_buffer_wr_complete:bit1;
+  wbuf_fifo_empty      :bit1;
+  wbuf_fifo_full       :bit1;
+  spare                :bit10;
  end;
 
- TGB_TILE_MODE11=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG1=bitpacked record
+  tag_hit        :bit1;
+  tag_miss       :bit1;
+  pixel_addr     :bit15;
+  pixel_vld      :bit1;
+  data_ready     :bit1;
+  awaiting_data  :bit1;
+  addr_fifo_full :bit1;
+  addr_fifo_empty:bit1;
+  buffer_loaded  :bit1;
+  buffer_invalid :bit1;
+  spare          :bit8;
  end;
 
- TGB_TILE_MODE12=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG2=bitpacked record
+  ds_full        :bit1;
+  ds_credit_avail:bit1;
+  ord_idx_free   :bit1;
+  cmd_write      :bit1;
+  app_sel        :bit4;
+  req            :bit15;
+  spare          :bit9;
  end;
 
- TGB_TILE_MODE13=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG3=bitpacked record
+  pipe_num_busy :bit11;
+  pipe0_busy_num:bit4;
+  spare         :bit17;
  end;
 
- TGB_TILE_MODE14=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG4=bitpacked record
+  gws_busy           :bit1;
+  gws_req            :bit1;
+  gws_out_stall      :bit1;
+  cur_reso           :bit6;
+  cur_reso_head_valid:bit1;
+  cur_reso_head_dirty:bit1;
+  cur_reso_head_flag :bit1;
+  cur_reso_fed       :bit1;
+  cur_reso_barrier   :bit1;
+  cur_reso_flag      :bit1;
+  cur_reso_cnt_gt0   :bit1;
+  credit_cnt_gt0     :bit1;
+  cmd_write          :bit1;
+  grbm_gws_reso_wr   :bit1;
+  grbm_gws_reso_rd   :bit1;
+  ram_read_busy      :bit1;
+  gws_bulkfree       :bit1;
+  ram_gws_re         :bit1;
+  ram_gws_we         :bit1;
+  spare              :bit8;
  end;
 
- TGB_TILE_MODE15=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG5=bitpacked record
+  write_dis         :bit1;
+  dec_error         :bit1;
+  alloc_opco_error  :bit1;
+  dealloc_opco_error:bit1;
+  wrap_opco_error   :bit1;
+  spare             :bit3;
+  error_ds_address  :bit14;
+  spare1            :bit10;
  end;
 
- TGB_TILE_MODE16=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_DEBUG_REG6=bitpacked record
+  oa_busy         :bit1;
+  counters_enabled:bit4;
+  counters_busy   :bit16;
+  spare           :bit11;
  end;
 
- TGB_TILE_MODE17=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_EDC_OA_DED=bitpacked record
+  ME0_GFXHP3D_PIX_DED:bit1;
+  ME0_GFXHP3D_VTX_DED:bit1;
+  ME0_CS_DED         :bit1;
+  UNUSED0            :bit1;
+  ME1_PIPE0_DED      :bit1;
+  ME1_PIPE1_DED      :bit1;
+  ME1_PIPE2_DED      :bit1;
+  ME1_PIPE3_DED      :bit1;
+  ME2_PIPE0_DED      :bit1;
+  ME2_PIPE1_DED      :bit1;
+  ME2_PIPE2_DED      :bit1;
+  ME2_PIPE3_DED      :bit1;
+  UNUSED1            :bit20;
  end;
 
- TGB_TILE_MODE18=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_RESET0=bitpacked record
+  RESOURCE0_RESET :bit1;
+  RESOURCE1_RESET :bit1;
+  RESOURCE2_RESET :bit1;
+  RESOURCE3_RESET :bit1;
+  RESOURCE4_RESET :bit1;
+  RESOURCE5_RESET :bit1;
+  RESOURCE6_RESET :bit1;
+  RESOURCE7_RESET :bit1;
+  RESOURCE8_RESET :bit1;
+  RESOURCE9_RESET :bit1;
+  RESOURCE10_RESET:bit1;
+  RESOURCE11_RESET:bit1;
+  RESOURCE12_RESET:bit1;
+  RESOURCE13_RESET:bit1;
+  RESOURCE14_RESET:bit1;
+  RESOURCE15_RESET:bit1;
+  RESOURCE16_RESET:bit1;
+  RESOURCE17_RESET:bit1;
+  RESOURCE18_RESET:bit1;
+  RESOURCE19_RESET:bit1;
+  RESOURCE20_RESET:bit1;
+  RESOURCE21_RESET:bit1;
+  RESOURCE22_RESET:bit1;
+  RESOURCE23_RESET:bit1;
+  RESOURCE24_RESET:bit1;
+  RESOURCE25_RESET:bit1;
+  RESOURCE26_RESET:bit1;
+  RESOURCE27_RESET:bit1;
+  RESOURCE28_RESET:bit1;
+  RESOURCE29_RESET:bit1;
+  RESOURCE30_RESET:bit1;
+  RESOURCE31_RESET:bit1;
  end;
 
- TGB_TILE_MODE19=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_RESET1=bitpacked record
+  RESOURCE32_RESET:bit1;
+  RESOURCE33_RESET:bit1;
+  RESOURCE34_RESET:bit1;
+  RESOURCE35_RESET:bit1;
+  RESOURCE36_RESET:bit1;
+  RESOURCE37_RESET:bit1;
+  RESOURCE38_RESET:bit1;
+  RESOURCE39_RESET:bit1;
+  RESOURCE40_RESET:bit1;
+  RESOURCE41_RESET:bit1;
+  RESOURCE42_RESET:bit1;
+  RESOURCE43_RESET:bit1;
+  RESOURCE44_RESET:bit1;
+  RESOURCE45_RESET:bit1;
+  RESOURCE46_RESET:bit1;
+  RESOURCE47_RESET:bit1;
+  RESOURCE48_RESET:bit1;
+  RESOURCE49_RESET:bit1;
+  RESOURCE50_RESET:bit1;
+  RESOURCE51_RESET:bit1;
+  RESOURCE52_RESET:bit1;
+  RESOURCE53_RESET:bit1;
+  RESOURCE54_RESET:bit1;
+  RESOURCE55_RESET:bit1;
+  RESOURCE56_RESET:bit1;
+  RESOURCE57_RESET:bit1;
+  RESOURCE58_RESET:bit1;
+  RESOURCE59_RESET:bit1;
+  RESOURCE60_RESET:bit1;
+  RESOURCE61_RESET:bit1;
+  RESOURCE62_RESET:bit1;
+  RESOURCE63_RESET:bit1;
  end;
 
- TGB_TILE_MODE20=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID10=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE21=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID11=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE22=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID12=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE23=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID13=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE24=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID14=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE25=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_GWS_VMID15=bitpacked record
+  BASE     :bit6;
+  RESERVED0:bit10;
+  SIZE     :bit7;
+  RESERVED1:bit9;
  end;
 
- TGB_TILE_MODE26=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_OA_ADDRESS=bitpacked record
+  DS_ADDRESS  :bit16;
+  CRAWLER     :bit4;
+  CRAWLER_TYPE:bit2;
+  UNUSED      :bit8;
+  NO_ALLOC    :bit1;
+  ENABLE      :bit1;
  end;
 
- TGB_TILE_MODE27=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_OA_COUNTER=bit32;
+
+ TGDS_VMID0_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
  end;
 
- TGB_TILE_MODE28=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_VMID0_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
  end;
 
- TGB_TILE_MODE29=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_VMID1_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
  end;
 
- TGB_TILE_MODE30=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_VMID1_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
  end;
 
- TGB_TILE_MODE31=bitpacked record
-  MICRO_TILE_MODE    :bit2;
-  ARRAY_MODE         :bit4;
-  PIPE_CONFIG        :bit5;
-  TILE_SPLIT         :bit3;
-  BANK_WIDTH         :bit2;
-  BANK_HEIGHT        :bit2;
-  MACRO_TILE_ASPECT  :bit2;
-  NUM_BANKS          :bit2;
-  MICRO_TILE_MODE_NEW:bit3;
-  SAMPLE_SPLIT       :bit2;
-  RESERVED0          :bit5;
+ TGDS_VMID2_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID2_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID3_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID3_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID4_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID4_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID5_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID5_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID6_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID6_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID7_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID7_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID8_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID8_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID9_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID9_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
  end;
 
  TGRBM_CAM_INDEX=bitpacked record
@@ -1782,6 +3122,27 @@ type
  TSPI_LB_CU_MASK=bitpacked record
   CU_MASK  :bit16;
   RESERVED0:bit16;
+ end;
+
+ TTA_DEBUG_INDEX=bitpacked record
+  INDEX    :bit5;
+  RESERVED0:bit27;
+ end;
+
+ TTCC_REDUNDANCY=bitpacked record
+  MC_SEL0  :bit1;
+  MC_SEL1  :bit1;
+  RESERVED0:bit30;
+ end;
+
+ TTCP_INVALIDATE=bitpacked record
+  START    :bit1;
+  RESERVED0:bit31;
+ end;
+
+ TTD_DEBUG_INDEX=bitpacked record
+  INDEX    :bit5;
+  RESERVED0:bit27;
  end;
 
  TVGT_DEBUG_CNTL=bitpacked record
@@ -2020,6 +3381,42 @@ type
  TVGT_VTX_CNT_EN=bitpacked record
   VTX_CNT_EN:bit1;
   RESERVED0 :bit31;
+ end;
+
+ TWD_CNTL_STATUS=bitpacked record
+  WD_BUSY        :bit1;
+  WD_SPL_DMA_BUSY:bit1;
+  WD_SPL_DI_BUSY :bit1;
+  WD_ADC_BUSY    :bit1;
+  RESERVED0      :bit28;
+ end;
+
+ TWD_DEBUG_REG10=bitpacked record
+  ttp_pd_patch_rts          :bit1;
+  ttp_pd_is_event           :bit1;
+  ttp_pd_eopg               :bit1;
+  ttp_pd_eop                :bit1;
+  pipe0_dr                  :bit1;
+  pipe1_dr                  :bit1;
+  pipe0_rtr                 :bit1;
+  pipe1_rtr                 :bit1;
+  donut_en_p1_q             :bit1;
+  donut_se_switch_p2        :bit1;
+  patch_se_switch_p2        :bit1;
+  last_donut_switch_p2      :bit1;
+  last_donut_of_patch_p2    :bit1;
+  is_event_p1_q             :bit1;
+  eopg_p1_q                 :bit1;
+  eop_p1_q                  :bit1;
+  patch_accum_q             :bit8;
+  wd_te11_out_se0_fifo_full :bit1;
+  wd_te11_out_se0_fifo_empty:bit1;
+  wd_te11_out_se1_fifo_full :bit1;
+  wd_te11_out_se1_fifo_empty:bit1;
+  wd_te11_out_se2_fifo_full :bit1;
+  wd_te11_out_se2_fifo_empty:bit1;
+  wd_te11_out_se3_fifo_full :bit1;
+  wd_te11_out_se3_fifo_empty:bit1;
  end;
 
  TCB_COLOR0_CMASK=bit32;
@@ -2352,6 +3749,136 @@ type
 
  TCOMPUTE_START_Z=bit32;
 
+ TCPC_INT_CNTX_ID=bitpacked record
+  CNTX_ID  :bit28;
+  QUEUE_ID :bit3;
+  RESERVED0:bit1;
+ end;
+
+ TCP_CE_IB1_BUFSZ=bitpacked record
+  IB1_BUFSZ:bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_CE_IB2_BUFSZ=bitpacked record
+  IB2_BUFSZ:bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_CE_RB_OFFSET=bitpacked record
+  RB_OFFSET:bit20;
+  RESERVED0:bit12;
+ end;
+
+ TCP_COHER_STATUS=bitpacked record
+  MATCHING_GFX_CNTX:bit8;
+  RESERVED0        :bit16;
+  MEID             :bit2;
+  RESERVED1        :bit4;
+  PHASE1_STATUS    :bit1;
+  STATUS           :bit1;
+ end;
+
+ TCP_CONTEXT_CNTL=bitpacked record
+  ME0PIPE0_MAX_WD_CNTX  :bit3;
+  RESERVED0             :bit1;
+  ME0PIPE0_MAX_PIPE_CNTX:bit3;
+  RESERVED1             :bit9;
+  ME0PIPE1_MAX_WD_CNTX  :bit3;
+  RESERVED2             :bit1;
+  ME0PIPE1_MAX_PIPE_CNTX:bit3;
+  RESERVED3             :bit9;
+ end;
+
+ TCP_HQD_EOP_RPTR=bitpacked record
+  RPTR             :bit13;
+  RESERVED0        :bit17;
+  RPTR_EQ_CSMD_WPTR:bit1;
+  INIT_FETCHER     :bit1;
+ end;
+
+ TCP_HQD_EOP_WPTR=bitpacked record
+  WPTR     :bit13;
+  RESERVED0:bit3;
+  EOP_AVAIL:bit13;
+  RESERVED1:bit3;
+ end;
+
+ TCP_HQD_IQ_TIMER=bitpacked record
+  WAIT_TIME       :bit8;
+  RETRY_TYPE      :bit3;
+  IMMEDIATE_EXPIRE:bit1;
+  INTERRUPT_TYPE  :bit2;
+  CLOCK_COUNT     :bit2;
+  INTERRUPT_SIZE  :bit6;
+  QUANTUM_TIMER   :bit1;
+  IQ_ATC          :bit1;
+  CACHE_POLICY    :bit1;
+  RESERVED0       :bit2;
+  MTYPE           :bit2;
+  PROCESS_IQ_EN   :bit1;
+  PROCESSING_IQ   :bit1;
+  ACTIVE          :bit1;
+ end;
+
+ TCP_HQD_MSG_TYPE=bitpacked record
+  ACTION    :bit3;
+  RESERVED0 :bit1;
+  SAVE_STATE:bit3;
+  RESERVED1 :bit25;
+ end;
+
+ TCP_HQD_SEMA_CMD=bitpacked record
+  RETRY    :bit1;
+  RESULT   :bit2;
+  RESERVED0:bit29;
+ end;
+
+ TCP_MEM_SLP_CNTL=bitpacked record
+  CP_MEM_LS_EN          :bit1;
+  CP_MEM_DS_EN          :bit1;
+  RESERVED              :bit5;
+  CP_LS_DS_BUSY_OVERRIDE:bit1;
+  CP_MEM_LS_ON_DELAY    :bit8;
+  CP_MEM_LS_OFF_DELAY   :bit8;
+  RESERVED1             :bit8;
+ end;
+
+ TCP_PERFMON_CNTL=bitpacked record
+  PERFMON_STATE        :bit4;
+  SPM_PERFMON_STATE    :bit4;
+  PERFMON_ENABLE_MODE  :bit2;
+  PERFMON_SAMPLE_ENABLE:bit1;
+  RESERVED0            :bit21;
+ end;
+
+ TCP_ROQ_IB1_STAT=bitpacked record
+  ROQ_RPTR_INDIRECT1:bit10;
+  RESERVED0         :bit6;
+  ROQ_WPTR_INDIRECT1:bit10;
+  RESERVED1         :bit6;
+ end;
+
+ TCP_ROQ_IB2_STAT=bitpacked record
+  ROQ_RPTR_INDIRECT2:bit10;
+  RESERVED0         :bit6;
+  ROQ_WPTR_INDIRECT2:bit10;
+  RESERVED1         :bit6;
+ end;
+
+ TCP_SCRATCH_DATA=bit32;
+
+ TCP_STRMOUT_CNTL=bitpacked record
+  OFFSET_UPDATE_DONE:bit1;
+  RESERVED0         :bit31;
+ end;
+
+ TCP_VMID_PREEMPT=bitpacked record
+  PREEMPT_REQUEST:bit16;
+  VIRT_COMMAND   :bit4;
+  RESERVED0      :bit12;
+ end;
+
  TDB_CREDIT_LIMIT=bitpacked record
   DB_SC_TILE_CREDITS :bit5;
   DB_SC_QUAD_CREDITS :bit5;
@@ -2413,6 +3940,89 @@ type
  end;
 
  TDB_Z_WRITE_BASE=bit32;
+
+ TGDS_ATOM_SRC0_U=bit32;
+
+ TGDS_ATOM_SRC1_U=bit32;
+
+ TGDS_CNTL_STATUS=bitpacked record
+  GDS_BUSY        :bit1;
+  GRBM_WBUF_BUSY  :bit1;
+  ORD_APP_BUSY    :bit1;
+  DS_BANK_CONFLICT:bit1;
+  DS_ADDR_CONFLICT:bit1;
+  DS_WR_CLAMP     :bit1;
+  DS_RD_CLAMP     :bit1;
+  GRBM_RBUF_BUSY  :bit1;
+  DS_BUSY         :bit1;
+  GWS_BUSY        :bit1;
+  ORD_FIFO_BUSY   :bit1;
+  CREDIT_BUSY0    :bit1;
+  CREDIT_BUSY1    :bit1;
+  CREDIT_BUSY2    :bit1;
+  CREDIT_BUSY3    :bit1;
+  RESERVED0       :bit17;
+ end;
+
+ TGDS_VMID10_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID10_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID11_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID11_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID12_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID12_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID13_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID13_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID14_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID14_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
+
+ TGDS_VMID15_BASE=bitpacked record
+  BASE     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TGDS_VMID15_SIZE=bitpacked record
+  SIZE     :bit17;
+  RESERVED0:bit15;
+ end;
 
  TGRBM_DEBUG_CNTL=bitpacked record
   GRBM_DEBUG_INDEX:bit6;
@@ -2641,6 +4251,162 @@ type
   SGPR_START_PHASE:bit2;
   WAVE_START_PHASE:bit2;
   RESERVED0       :bit26;
+ end;
+
+ TSX_DEBUG_BUSY_2=bitpacked record
+  COL_SCBD_BUSY            :bit1;
+  COL_REQ3_FREECNT_NE0     :bit1;
+  COL_REQ3_IDLE            :bit1;
+  COL_REQ3_BUSY            :bit1;
+  COL_REQ2_FREECNT_NE0     :bit1;
+  COL_REQ2_IDLE            :bit1;
+  COL_REQ2_BUSY            :bit1;
+  COL_REQ1_FREECNT_NE0     :bit1;
+  COL_REQ1_IDLE            :bit1;
+  COL_REQ1_BUSY            :bit1;
+  COL_REQ0_FREECNT_NE0     :bit1;
+  COL_REQ0_IDLE            :bit1;
+  COL_REQ0_BUSY            :bit1;
+  COL_DBIF3_SENDFREE_BUSY  :bit1;
+  COL_DBIF3_FIFO_BUSY      :bit1;
+  COL_DBIF3_READ_VALID     :bit1;
+  COL_DBIF2_SENDFREE_BUSY  :bit1;
+  COL_DBIF2_FIFO_BUSY      :bit1;
+  COL_DBIF2_READ_VALID     :bit1;
+  COL_DBIF1_SENDFREE_BUSY  :bit1;
+  COL_DBIF1_FIFO_BUSY      :bit1;
+  COL_DBIF1_READ_VALID     :bit1;
+  COL_DBIF0_SENDFREE_BUSY  :bit1;
+  COL_DBIF0_FIFO_BUSY      :bit1;
+  COL_DBIF0_READ_VALID     :bit1;
+  COL_BUFF3_BANK3_VAL3_BUSY:bit1;
+  COL_BUFF3_BANK3_VAL2_BUSY:bit1;
+  COL_BUFF3_BANK3_VAL1_BUSY:bit1;
+  COL_BUFF3_BANK3_VAL0_BUSY:bit1;
+  COL_BUFF3_BANK2_VAL3_BUSY:bit1;
+  COL_BUFF3_BANK2_VAL2_BUSY:bit1;
+  COL_BUFF3_BANK2_VAL1_BUSY:bit1;
+ end;
+
+ TSX_DEBUG_BUSY_3=bitpacked record
+  COL_BUFF3_BANK2_VAL0_BUSY:bit1;
+  COL_BUFF3_BANK1_VAL3_BUSY:bit1;
+  COL_BUFF3_BANK1_VAL2_BUSY:bit1;
+  COL_BUFF3_BANK1_VAL1_BUSY:bit1;
+  COL_BUFF3_BANK1_VAL0_BUSY:bit1;
+  COL_BUFF3_BANK0_VAL3_BUSY:bit1;
+  COL_BUFF3_BANK0_VAL2_BUSY:bit1;
+  COL_BUFF3_BANK0_VAL1_BUSY:bit1;
+  COL_BUFF3_BANK0_VAL0_BUSY:bit1;
+  COL_BUFF2_BANK3_VAL3_BUSY:bit1;
+  COL_BUFF2_BANK3_VAL2_BUSY:bit1;
+  COL_BUFF2_BANK3_VAL1_BUSY:bit1;
+  COL_BUFF2_BANK3_VAL0_BUSY:bit1;
+  COL_BUFF2_BANK2_VAL3_BUSY:bit1;
+  COL_BUFF2_BANK2_VAL2_BUSY:bit1;
+  COL_BUFF2_BANK2_VAL1_BUSY:bit1;
+  COL_BUFF2_BANK2_VAL0_BUSY:bit1;
+  COL_BUFF2_BANK1_VAL3_BUSY:bit1;
+  COL_BUFF2_BANK1_VAL2_BUSY:bit1;
+  COL_BUFF2_BANK1_VAL1_BUSY:bit1;
+  COL_BUFF2_BANK1_VAL0_BUSY:bit1;
+  COL_BUFF2_BANK0_VAL3_BUSY:bit1;
+  COL_BUFF2_BANK0_VAL2_BUSY:bit1;
+  COL_BUFF2_BANK0_VAL1_BUSY:bit1;
+  COL_BUFF2_BANK0_VAL0_BUSY:bit1;
+  COL_BUFF1_BANK3_VAL3_BUSY:bit1;
+  COL_BUFF1_BANK3_VAL2_BUSY:bit1;
+  COL_BUFF1_BANK3_VAL1_BUSY:bit1;
+  COL_BUFF1_BANK3_VAL0_BUSY:bit1;
+  COL_BUFF1_BANK2_VAL3_BUSY:bit1;
+  COL_BUFF1_BANK2_VAL2_BUSY:bit1;
+  COL_BUFF1_BANK2_VAL1_BUSY:bit1;
+ end;
+
+ TSX_DEBUG_BUSY_4=bitpacked record
+  COL_BUFF1_BANK2_VAL0_BUSY:bit1;
+  COL_BUFF1_BANK1_VAL3_BUSY:bit1;
+  COL_BUFF1_BANK1_VAL2_BUSY:bit1;
+  COL_BUFF1_BANK1_VAL1_BUSY:bit1;
+  COL_BUFF1_BANK1_VAL0_BUSY:bit1;
+  COL_BUFF1_BANK0_VAL3_BUSY:bit1;
+  COL_BUFF1_BANK0_VAL2_BUSY:bit1;
+  COL_BUFF1_BANK0_VAL1_BUSY:bit1;
+  COL_BUFF1_BANK0_VAL0_BUSY:bit1;
+  COL_BUFF0_BANK3_VAL3_BUSY:bit1;
+  COL_BUFF0_BANK3_VAL2_BUSY:bit1;
+  COL_BUFF0_BANK3_VAL1_BUSY:bit1;
+  COL_BUFF0_BANK3_VAL0_BUSY:bit1;
+  COL_BUFF0_BANK2_VAL3_BUSY:bit1;
+  COL_BUFF0_BANK2_VAL2_BUSY:bit1;
+  COL_BUFF0_BANK2_VAL1_BUSY:bit1;
+  COL_BUFF0_BANK2_VAL0_BUSY:bit1;
+  COL_BUFF0_BANK1_VAL3_BUSY:bit1;
+  COL_BUFF0_BANK1_VAL2_BUSY:bit1;
+  COL_BUFF0_BANK1_VAL1_BUSY:bit1;
+  COL_BUFF0_BANK1_VAL0_BUSY:bit1;
+  COL_BUFF0_BANK0_VAL3_BUSY:bit1;
+  COL_BUFF0_BANK0_VAL2_BUSY:bit1;
+  COL_BUFF0_BANK0_VAL1_BUSY:bit1;
+  COL_BUFF0_BANK0_VAL0_BUSY:bit1;
+  RESERVED                 :bit7;
+ end;
+
+ TTA_BC_BASE_ADDR=bit32;
+
+ TTCC_EXE_DISABLE=bitpacked record
+  RESERVED0  :bit1;
+  EXE_DISABLE:bit1;
+  RESERVED1  :bit30;
+ end;
+
+ TTCP_ADDR_CONFIG=bitpacked record
+  NUM_TCC_BANKS :bit4;
+  NUM_BANKS     :bit2;
+  COLHI_WIDTH   :bit3;
+  RB_SPLIT_COLHI:bit1;
+  RESERVED0     :bit22;
+ end;
+
+ TTCP_GATCL1_CNTL=bitpacked record
+  RESERVED0             :bit25;
+  INVALIDATE_ALL_VMID   :bit1;
+  FORCE_MISS            :bit1;
+  FORCE_IN_ORDER        :bit1;
+  REDUCE_FIFO_DEPTH_BY_2:bit2;
+  REDUCE_CACHE_SIZE_BY_2:bit2;
+ end;
+
+ TTCP_WATCH0_CNTL=bitpacked record
+  MASK :bit24;
+  VMID :bit4;
+  ATC  :bit1;
+  MODE :bit2;
+  VALID:bit1;
+ end;
+
+ TTCP_WATCH1_CNTL=bitpacked record
+  MASK :bit24;
+  VMID :bit4;
+  ATC  :bit1;
+  MODE :bit2;
+  VALID:bit1;
+ end;
+
+ TTCP_WATCH2_CNTL=bitpacked record
+  MASK :bit24;
+  VMID :bit4;
+  ATC  :bit1;
+  MODE :bit2;
+  VALID:bit1;
+ end;
+
+ TTCP_WATCH3_CNTL=bitpacked record
+  MASK :bit24;
+  VMID :bit4;
+  ATC  :bit1;
+  MODE :bit2;
+  VALID:bit1;
  end;
 
  TVGT_CNTL_STATUS=bitpacked record
@@ -3338,6 +5104,252 @@ type
   IS_STATE:bit1;
  end;
 
+ TCP_CE_IB1_OFFSET=bitpacked record
+  IB1_OFFSET:bit20;
+  RESERVED0 :bit12;
+ end;
+
+ TCP_CE_IB2_OFFSET=bitpacked record
+  IB2_OFFSET:bit20;
+  RESERVED0 :bit12;
+ end;
+
+ TCP_CE_INIT_BUFSZ=bitpacked record
+  INIT_BUFSZ:bit12;
+  RESERVED0 :bit20;
+ end;
+
+ TCP_CE_UCODE_ADDR=bitpacked record
+  UCODE_ADDR:bit12;
+  RESERVED0 :bit20;
+ end;
+
+ TCP_CE_UCODE_DATA=bit32;
+
+ TCP_COHER_BASE_HI=bitpacked record
+  COHER_BASE_HI_256B:bit8;
+  RESERVED0         :bit24;
+ end;
+
+ TCP_COHER_SIZE_HI=bitpacked record
+  COHER_SIZE_HI_256B:bit8;
+  RESERVED0         :bit24;
+ end;
+
+ TCP_CPC_BUSY_STAT=bitpacked record
+  MEC1_LOAD_BUSY         :bit1;
+  MEC1_SEMAPOHRE_BUSY    :bit1;
+  MEC1_MUTEX_BUSY        :bit1;
+  MEC1_MESSAGE_BUSY      :bit1;
+  MEC1_EOP_QUEUE_BUSY    :bit1;
+  MEC1_IQ_QUEUE_BUSY     :bit1;
+  MEC1_IB_QUEUE_BUSY     :bit1;
+  MEC1_TC_BUSY           :bit1;
+  MEC1_DMA_BUSY          :bit1;
+  MEC1_PARTIAL_FLUSH_BUSY:bit1;
+  MEC1_PIPE0_BUSY        :bit1;
+  MEC1_PIPE1_BUSY        :bit1;
+  MEC1_PIPE2_BUSY        :bit1;
+  MEC1_PIPE3_BUSY        :bit1;
+  RESERVED0              :bit2;
+  MEC2_LOAD_BUSY         :bit1;
+  MEC2_SEMAPOHRE_BUSY    :bit1;
+  MEC2_MUTEX_BUSY        :bit1;
+  MEC2_MESSAGE_BUSY      :bit1;
+  MEC2_EOP_QUEUE_BUSY    :bit1;
+  MEC2_IQ_QUEUE_BUSY     :bit1;
+  MEC2_IB_QUEUE_BUSY     :bit1;
+  MEC2_TC_BUSY           :bit1;
+  MEC2_DMA_BUSY          :bit1;
+  MEC2_PARTIAL_FLUSH_BUSY:bit1;
+  MEC2_PIPE0_BUSY        :bit1;
+  MEC2_PIPE1_BUSY        :bit1;
+  MEC2_PIPE2_BUSY        :bit1;
+  MEC2_PIPE3_BUSY        :bit1;
+  RESERVED1              :bit2;
+ end;
+
+ TCP_CPF_BUSY_STAT=bitpacked record
+  REG_BUS_FIFO_BUSY        :bit1;
+  CSF_RING_BUSY            :bit1;
+  CSF_INDIRECT1_BUSY       :bit1;
+  CSF_INDIRECT2_BUSY       :bit1;
+  CSF_STATE_BUSY           :bit1;
+  CSF_CE_INDR1_BUSY        :bit1;
+  CSF_CE_INDR2_BUSY        :bit1;
+  CSF_ARBITER_BUSY         :bit1;
+  CSF_INPUT_BUSY           :bit1;
+  OUTSTANDING_READ_TAGS    :bit1;
+  RESERVED0                :bit1;
+  HPD_PROCESSING_EOP_BUSY  :bit1;
+  HQD_DISPATCH_BUSY        :bit1;
+  HQD_IQ_TIMER_BUSY        :bit1;
+  HQD_DMA_OFFLOAD_BUSY     :bit1;
+  HQD_WAIT_SEMAPHORE_BUSY  :bit1;
+  HQD_SIGNAL_SEMAPHORE_BUSY:bit1;
+  HQD_MESSAGE_BUSY         :bit1;
+  HQD_PQ_FETCHER_BUSY      :bit1;
+  HQD_IB_FETCHER_BUSY      :bit1;
+  HQD_IQ_FETCHER_BUSY      :bit1;
+  HQD_EOP_FETCHER_BUSY     :bit1;
+  HQD_CONSUMED_RPTR_BUSY   :bit1;
+  HQD_FETCHER_ARB_BUSY     :bit1;
+  HQD_ROQ_ALIGN_BUSY       :bit1;
+  HQD_ROQ_EOP_BUSY         :bit1;
+  HQD_ROQ_IQ_BUSY          :bit1;
+  HQD_ROQ_PQ_BUSY          :bit1;
+  HQD_ROQ_IB_BUSY          :bit1;
+  HQD_WPTR_POLL_BUSY       :bit1;
+  HQD_PQ_BUSY              :bit1;
+  HQD_IB_BUSY              :bit1;
+ end;
+
+ TCP_DMA_READ_TAGS=bitpacked record
+  DMA_READ_TAG      :bit26;
+  RESERVED0         :bit2;
+  DMA_READ_TAG_VALID:bit1;
+  RESERVED1         :bit3;
+ end;
+
+ TCP_GDS_BKUP_ADDR=bit32;
+
+ TCP_HQD_EOP_DONES=bit32;
+
+ TCP_IQ_WAIT_TIME1=bitpacked record
+  IB_OFFLOAD    :bit8;
+  ATOMIC_OFFLOAD:bit8;
+  WRM_OFFLOAD   :bit8;
+  GWS           :bit8;
+ end;
+
+ TCP_IQ_WAIT_TIME2=bitpacked record
+  QUE_SLEEP:bit8;
+  SCH_WAVE :bit8;
+  SEM_REARM:bit8;
+  DEQ_RETRY:bit8;
+ end;
+
+ TCP_MQD_BASE_ADDR=bitpacked record
+  RESERVED0:bit2;
+  BASE_ADDR:bit30;
+ end;
+
+ TCP_RB0_RPTR_ADDR=bitpacked record
+  RB_RPTR_SWAP:bit2;
+  RB_RPTR_ADDR:bit30;
+ end;
+
+ TCP_RB1_RPTR_ADDR=bitpacked record
+  RB_RPTR_SWAP:bit2;
+  RB_RPTR_ADDR:bit30;
+ end;
+
+ TCP_RB2_RPTR_ADDR=bitpacked record
+  RB_RPTR_SWAP:bit2;
+  RB_RPTR_ADDR:bit30;
+ end;
+
+ TCP_SAMPLE_STATUS=bitpacked record
+  Z_PASS_ACITVE       :bit1;
+  STREAMOUT_ACTIVE    :bit1;
+  PIPELINE_ACTIVE     :bit1;
+  STIPPLE_ACTIVE      :bit1;
+  VGT_BUFFERS_ACTIVE  :bit1;
+  SCREEN_EXT_ACTIVE   :bit1;
+  DRAW_INDIRECT_ACTIVE:bit1;
+  DISP_INDIRECT_ACTIVE:bit1;
+  RESERVED0           :bit24;
+ end;
+
+ TCP_SCRATCH_INDEX=bitpacked record
+  SCRATCH_INDEX:bit8;
+  RESERVED0    :bit24;
+ end;
+
+ TCP_STALLED_STAT1=bitpacked record
+  RBIU_TO_DMA_NOT_RDY_TO_RCV   :bit1;
+  RESERVED0                    :bit1;
+  RBIU_TO_SEM_NOT_RDY_TO_RCV   :bit1;
+  RESERVED1                    :bit1;
+  RBIU_TO_MEMWR_NOT_RDY_TO_RCV :bit1;
+  RESERVED2                    :bit5;
+  ME_HAS_ACTIVE_CE_BUFFER_FLAG :bit1;
+  ME_HAS_ACTIVE_DE_BUFFER_FLAG :bit1;
+  ME_STALLED_ON_TC_WR_CONFIRM  :bit1;
+  ME_STALLED_ON_ATOMIC_RTN_DATA:bit1;
+  ME_WAITING_ON_TC_READ_DATA   :bit1;
+  ME_WAITING_ON_REG_READ_DATA  :bit1;
+  RESERVED3                    :bit7;
+  RCIU_WAITING_ON_GDS_FREE     :bit1;
+  RCIU_WAITING_ON_GRBM_FREE    :bit1;
+  RCIU_WAITING_ON_VGT_FREE     :bit1;
+  RCIU_STALLED_ON_ME_READ      :bit1;
+  RCIU_STALLED_ON_DMA_READ     :bit1;
+  RCIU_STALLED_ON_APPEND_READ  :bit1;
+  RCIU_HALTED_BY_REG_VIOLATION :bit1;
+  RESERVED4                    :bit2;
+ end;
+
+ TCP_STALLED_STAT2=bitpacked record
+  PFP_TO_CSF_NOT_RDY_TO_RCV      :bit1;
+  PFP_TO_MEQ_NOT_RDY_TO_RCV      :bit1;
+  PFP_TO_RCIU_NOT_RDY_TO_RCV     :bit1;
+  RESERVED0                      :bit1;
+  PFP_TO_VGT_WRITES_PENDING      :bit1;
+  PFP_RCIU_READ_PENDING          :bit1;
+  PFP_MIU_READ_PENDING           :bit1;
+  PFP_TO_MIU_WRITE_NOT_RDY_TO_RCV:bit1;
+  PFP_WAITING_ON_BUFFER_DATA     :bit1;
+  ME_WAIT_ON_CE_COUNTER          :bit1;
+  ME_WAIT_ON_AVAIL_BUFFER        :bit1;
+  GFX_CNTX_NOT_AVAIL_TO_ME       :bit1;
+  ME_RCIU_NOT_RDY_TO_RCV         :bit1;
+  ME_TO_CONST_NOT_RDY_TO_RCV     :bit1;
+  ME_WAITING_DATA_FROM_PFP       :bit1;
+  ME_WAITING_ON_PARTIAL_FLUSH    :bit1;
+  MEQ_TO_ME_NOT_RDY_TO_RCV       :bit1;
+  STQ_TO_ME_NOT_RDY_TO_RCV       :bit1;
+  ME_WAITING_DATA_FROM_STQ       :bit1;
+  PFP_STALLED_ON_TC_WR_CONFIRM   :bit1;
+  PFP_STALLED_ON_ATOMIC_RTN_DATA :bit1;
+  EOPD_FIFO_NEEDS_SC_EOP_DONE    :bit1;
+  EOPD_FIFO_NEEDS_WR_CONFIRM     :bit1;
+  STRMO_WR_OF_PRIM_DATA_PENDING  :bit1;
+  PIPE_STATS_WR_DATA_PENDING     :bit1;
+  APPEND_RDY_WAIT_ON_CS_DONE     :bit1;
+  APPEND_RDY_WAIT_ON_PS_DONE     :bit1;
+  APPEND_WAIT_ON_WR_CONFIRM      :bit1;
+  APPEND_ACTIVE_PARTITION        :bit1;
+  APPEND_WAITING_TO_SEND_MEMWRITE:bit1;
+  SURF_SYNC_NEEDS_IDLE_CNTXS     :bit1;
+  SURF_SYNC_NEEDS_ALL_CLEAN      :bit1;
+ end;
+
+ TCP_STALLED_STAT3=bitpacked record
+  CE_TO_CSF_NOT_RDY_TO_RCV                :bit1;
+  CE_TO_RAM_INIT_FETCHER_NOT_RDY_TO_RCV   :bit1;
+  CE_WAITING_ON_DATA_FROM_RAM_INIT_FETCHER:bit1;
+  CE_TO_RAM_INIT_NOT_RDY                  :bit1;
+  CE_TO_RAM_DUMP_NOT_RDY                  :bit1;
+  CE_TO_RAM_WRITE_NOT_RDY                 :bit1;
+  CE_TO_INC_FIFO_NOT_RDY_TO_RCV           :bit1;
+  CE_TO_WR_FIFO_NOT_RDY_TO_RCV            :bit1;
+  CE_TO_MIU_WRITE_NOT_RDY_TO_RCV__SI__CI  :bit1;
+  RESERVED0                               :bit1;
+  CE_WAITING_ON_BUFFER_DATA               :bit1;
+  CE_WAITING_ON_CE_BUFFER_FLAG            :bit1;
+  CE_WAITING_ON_DE_COUNTER                :bit1;
+  CE_WAITING_ON_DE_COUNTER_UNDERFLOW      :bit1;
+  TCIU_WAITING_ON_FREE                    :bit1;
+  TCIU_WAITING_ON_TAGS                    :bit1;
+  CE_STALLED_ON_TC_WR_CONFIRM             :bit1;
+  CE_STALLED_ON_ATOMIC_RTN_DATA           :bit1;
+  ATCL2IU_WAITING_ON_FREE                 :bit1;
+  ATCL2IU_WAITING_ON_TAGS                 :bit1;
+  ATCL1_WAITING_ON_TRANS                  :bit1;
+  RESERVED1                               :bit11;
+ end;
+
  TDB_ALPHA_TO_MASK=bitpacked record
   ALPHA_TO_MASK_ENABLE :bit1;
   RESERVED0            :bit7;
@@ -3395,6 +5407,41 @@ type
   RESERVED0:bit24;
  end;
 
+ TGDS_ATOM_OFFSET0=bitpacked record
+  OFFSET0:bit8;
+  UNUSED :bit24;
+ end;
+
+ TGDS_ATOM_OFFSET1=bitpacked record
+  OFFSET1:bit8;
+  UNUSED :bit24;
+ end;
+
+ TGDS_ATOM_READ0_U=bit32;
+
+ TGDS_ATOM_READ1_U=bit32;
+
+ TGDS_EDC_GRBM_CNT=bitpacked record
+  DED      :bit8;
+  RESERVED0:bit8;
+  SEC      :bit8;
+  RESERVED1:bit8;
+ end;
+
+ TGDS_GWS_RESOURCE=bitpacked record
+  FLAG       :bit1;
+  COUNTER    :bit12;
+  _TYPE      :bit1;
+  DED        :bit1;
+  RELEASE_ALL:bit1;
+  HEAD_QUEUE :bit12;
+  HEAD_VALID :bit1;
+  HEAD_FLAG  :bit1;
+  UNUSED1    :bit2;
+ end;
+
+ TGDS_OA_RING_SIZE=bit32;
+
  TGRBM_READ_ERROR2=bitpacked record
   RESERVED0                 :bit17;
   READ_REQUESTER_SRBM       :bit1;
@@ -3429,14 +5476,6 @@ type
   WRITE_MEID          :bit2;
   RESERVED2           :bit7;
   WRITE_ERROR         :bit1;
- end;
-
- TPAGE_MIRROR_CNTL=bitpacked record
-  PAGE_MIRROR_BASE_ADDR :bit24;
-  PAGE_MIRROR_INVALIDATE:bit1;
-  PAGE_MIRROR_ENABLE    :bit1;
-  PAGE_MIRROR_USAGE     :bit2;
-  RESERVED0             :bit4;
  end;
 
  TPA_CL_POINT_SIZE=bit32;
@@ -3544,6 +5583,8 @@ type
   WAVESIZE :bit13;
   RESERVED0:bit7;
  end;
+
+ TTA_RESERVED_010C=bit32;
 
  TVGT_DMA_MAX_SIZE=bit32;
 
@@ -3716,6 +5757,295 @@ type
 
  TCOMPUTE_RESTART_Z=bit32;
 
+ TCP_APPEND_ADDR_HI=bitpacked record
+  MEM_ADDR_HI :bit16;
+  CS_PS_SEL   :bit1;
+  RESERVED0   :bit8;
+  CACHE_POLICY:bit1;
+  RESERVED1   :bit1;
+  MTYPE       :bit2;
+  COMMAND     :bit3;
+ end;
+
+ TCP_APPEND_ADDR_LO=bitpacked record
+  RESERVED0  :bit2;
+  MEM_ADDR_LO:bit30;
+ end;
+
+ TCP_CE_HEADER_DUMP=bit32;
+
+ TCP_CE_IB1_BASE_HI=bitpacked record
+  IB1_BASE_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_CE_IB1_BASE_LO=bitpacked record
+  RESERVED0  :bit2;
+  IB1_BASE_LO:bit30;
+ end;
+
+ TCP_CE_IB2_BASE_HI=bitpacked record
+  IB2_BASE_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_CE_IB2_BASE_LO=bitpacked record
+  RESERVED0  :bit2;
+  IB2_BASE_LO:bit30;
+ end;
+
+ TCP_CE_ROQ_RB_STAT=bitpacked record
+  CEQ_RPTR_PRIMARY:bit10;
+  RESERVED0       :bit6;
+  CEQ_WPTR_PRIMARY:bit10;
+  RESERVED1       :bit6;
+ end;
+
+ TCP_CPC_IC_BASE_HI=bitpacked record
+  IC_BASE_HI:bit16;
+  RESERVED0 :bit16;
+ end;
+
+ TCP_CPC_IC_BASE_LO=bitpacked record
+  RESERVED0 :bit12;
+  IC_BASE_LO:bit20;
+ end;
+
+ TCP_CPC_IC_OP_CNTL=bitpacked record
+  INVALIDATE_CACHE:bit1;
+  RESERVED0       :bit3;
+  PRIME_ICACHE    :bit1;
+  ICACHE_PRIMED   :bit1;
+  RESERVED1       :bit26;
+ end;
+
+ TCP_DMA_ME_COMMAND=bitpacked record
+  BYTE_COUNT:bit21;
+  DIS_WC    :bit1;
+  SRC_SWAP  :bit2;
+  DST_SWAP  :bit2;
+  SAS       :bit1;
+  DAS       :bit1;
+  SAIC      :bit1;
+  DAIC      :bit1;
+  RAW_WAIT  :bit1;
+  RESERVED0 :bit1;
+ end;
+
+ TCP_DMA_ME_CONTROL=bitpacked record
+  RESERVED0       :bit10;
+  SRC_MTYPE       :bit2;
+  SRC_ATC         :bit1;
+  SRC_CACHE_POLICY:bit1;
+  RESERVED1       :bit6;
+  DST_SELECT      :bit2;
+  DST_MTYPE       :bit2;
+  DST_ATC         :bit1;
+  DST_CACHE_POLICY:bit1;
+  RESERVED2       :bit3;
+  SRC_SELECT      :bit2;
+  RESERVED3       :bit1;
+ end;
+
+ TCP_DRAW_WINDOW_HI=bit32;
+
+ TCP_DRAW_WINDOW_LO=bitpacked record
+  MIN:bit16;
+  MAX:bit16;
+ end;
+
+ TCP_HQD_EOP_EVENTS=bitpacked record
+  EVENT_COUNT          :bit12;
+  RESERVED0            :bit4;
+  CS_PARTIAL_FLUSH_PEND:bit1;
+  RESERVED1            :bit15;
+ end;
+
+ TCP_HQD_HQ_STATUS0=bitpacked record
+  DEQUEUE_STATUS   :bit2;
+  DEQUEUE_RETRY_CNT:bit2;
+  RSV_6_4          :bit3;
+  SCRATCH_RAM_INIT :bit1;
+  TCL2_DIRTY       :bit1;
+  PG_ACTIVATED     :bit1;
+  RSVR_31_10       :bit22;
+ end;
+
+ TCP_HQD_HQ_STATUS1=bit32;
+
+ TCP_HQD_IB_CONTROL=bitpacked record
+  IB_SIZE          :bit20;
+  MIN_IB_AVAIL_SIZE:bit2;
+  RESERVED0        :bit1;
+  IB_ATC           :bit1;
+  IB_CACHE_POLICY  :bit1;
+  RESERVED1        :bit2;
+  MTYPE            :bit2;
+  RESERVED2        :bit1;
+  RESERVED3        :bit1;
+  PROCESSING_IB    :bit1;
+ end;
+
+ TCP_HQD_PQ_BASE_HI=bitpacked record
+  ADDR_HI  :bit8;
+  RESERVED0:bit24;
+ end;
+
+ TCP_HQD_PQ_CONTROL=bitpacked record
+  QUEUE_SIZE     :bit6;
+  RESERVED0      :bit2;
+  RPTR_BLOCK_SIZE:bit6;
+  RESERVED1      :bit1;
+  MTYPE          :bit2;
+  ENDIAN_SWAP    :bit2;
+  RESERVED2      :bit1;
+  MIN_AVAIL_SIZE :bit2;
+  RESERVED3      :bit1;
+  PQ_ATC         :bit1;
+  CACHE_POLICY   :bit1;
+  SLOT_BASED_WPTR:bit2;
+  NO_UPDATE_RPTR :bit1;
+  UNORD_DISPATCH :bit1;
+  ROQ_PQ_IB_FLIP :bit1;
+  PRIV_STATE     :bit1;
+  KMD_QUEUE      :bit1;
+ end;
+
+ TCP_INT_CNTL_RING0=bitpacked record
+  RESERVED0                    :bit11;
+  CP_VM_DOORBELL_WR_INT_ENABLE :bit1;
+  RESERVED1                    :bit2;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  RESERVED2                    :bit2;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  CMP_BUSY_INT_ENABLE          :bit1;
+  CNTX_BUSY_INT_ENABLE         :bit1;
+  CNTX_EMPTY_INT_ENABLE        :bit1;
+  GFX_IDLE_INT_ENABLE          :bit1;
+  PRIV_INSTR_INT_ENABLE        :bit1;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_INT_CNTL_RING1=bitpacked record
+  RESERVED0                    :bit11;
+  CP_VM_DOORBELL_WR_INT_ENABLE :bit1;
+  RESERVED1                    :bit2;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  RESERVED2                    :bit2;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  CMP_BUSY_INT_ENABLE          :bit1;
+  CNTX_BUSY_INT_ENABLE         :bit1;
+  CNTX_EMPTY_INT_ENABLE        :bit1;
+  GFX_IDLE_INT_ENABLE          :bit1;
+  PRIV_INSTR_INT_ENABLE        :bit1;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_INT_CNTL_RING2=bitpacked record
+  RESERVED0                    :bit11;
+  CP_VM_DOORBELL_WR_INT_ENABLE :bit1;
+  RESERVED1                    :bit2;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  RESERVED2                    :bit2;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  CMP_BUSY_INT_ENABLE          :bit1;
+  CNTX_BUSY_INT_ENABLE         :bit1;
+  CNTX_EMPTY_INT_ENABLE        :bit1;
+  GFX_IDLE_INT_ENABLE          :bit1;
+  PRIV_INSTR_INT_ENABLE        :bit1;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_INT_STAT_DEBUG=bitpacked record
+  RESERVED0                      :bit11;
+  CP_VM_DOORBELL_WR_INT_ASSERTED :bit1;
+  RESERVED1                      :bit2;
+  CP_ECC_ERROR_INT_ASSERTED      :bit1;
+  RESERVED2                      :bit2;
+  WRM_POLL_TIMEOUT_INT_ASSERTED  :bit1;
+  CMP_BUSY_INT_ASSERTED          :bit1;
+  CNTX_BUSY_INT_ASSERTED         :bit1;
+  CNTX_EMPTY_INT_ASSERTED        :bit1;
+  GFX_IDLE_INT_ASSERTED          :bit1;
+  PRIV_INSTR_INT_ASSERTED        :bit1;
+  PRIV_REG_INT_ASSERTED          :bit1;
+  OPCODE_ERROR_INT_ASSERTED      :bit1;
+  RESERVED3                      :bit1;
+  TIME_STAMP_INT_ASSERTED        :bit1;
+  RESERVED_BIT_ERROR_INT_ASSERTED:bit1;
+  RESERVED4                      :bit1;
+  GENERIC2_INT_ASSERTED          :bit1;
+  GENERIC1_INT_ASSERTED          :bit1;
+  GENERIC0_INT_ASSERTED          :bit1;
+ end;
+
+ TCP_ME0_PIPE0_VMID=bitpacked record
+  VMID     :bit4;
+  RESERVED0:bit28;
+ end;
+
+ TCP_ME0_PIPE1_VMID=bitpacked record
+  VMID     :bit4;
+  RESERVED0:bit28;
+ end;
+
+ TCP_MEQ_THRESHOLDS=bitpacked record
+  MEQ1_START:bit8;
+  MEQ2_START:bit8;
+  RESERVED0 :bit16;
+ end;
+
+ TCP_PFP_IB_CONTROL=bitpacked record
+  IB_EN    :bit8;
+  RESERVED0:bit24;
+ end;
+
+ TCP_PFP_UCODE_ADDR=bitpacked record
+  UCODE_ADDR:bit13;
+  RESERVED0 :bit19;
+ end;
+
+ TCP_PFP_UCODE_DATA=bit32;
+
+ TCP_ROQ_THRESHOLDS=bitpacked record
+  IB1_START:bit8;
+  IB2_START:bit8;
+  RESERVED0:bit16;
+ end;
+
+ TCP_SEM_WAIT_TIMER=bit32;
+
+ TCP_STQ_THRESHOLDS=bitpacked record
+  STQ0_START:bit8;
+  STQ1_START:bit8;
+  STQ2_START:bit8;
+  RESERVED0 :bit8;
+ end;
+
  TDB_RENDER_CONTROL=bitpacked record
   DEPTH_CLEAR_ENABLE      :bit1;
   STENCIL_CLEAR_ENABLE    :bit1;
@@ -3759,6 +6089,75 @@ type
   COUNT_HI :bit31;
   RESERVED0:bit1;
  end;
+
+ TGDS_ATOM_COMPLETE=bitpacked record
+  COMPLETE:bit1;
+  UNUSED  :bit31;
+ end;
+
+ TGDS_CS_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_CS_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_CS_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_CS_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_OA_RESET_MASK=bitpacked record
+  ME0_GFXHP3D_PIX_RESET:bit1;
+  ME0_GFXHP3D_VTX_RESET:bit1;
+  ME0_CS_RESET         :bit1;
+  RESERVED0            :bit1;
+  ME1_PIPE0_RESET      :bit1;
+  ME1_PIPE1_RESET      :bit1;
+  ME1_PIPE2_RESET      :bit1;
+  ME1_PIPE3_RESET      :bit1;
+  ME2_PIPE0_RESET      :bit1;
+  ME2_PIPE1_RESET      :bit1;
+  ME2_PIPE2_RESET      :bit1;
+  ME2_PIPE3_RESET      :bit1;
+  RESERVED1            :bit20;
+ end;
+
+ TGDS_RD_BURST_ADDR=bit32;
+
+ TGDS_RD_BURST_DATA=bit32;
+
+ TGDS_VS_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_VS_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_VS_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_VS_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_WR_BURST_ADDR=bit32;
+
+ TGDS_WR_BURST_DATA=bit32;
 
  TGRBM_HYP_CAM_DATA=bitpacked record
   CAM_ADDR     :bit16;
@@ -3955,6 +6354,326 @@ type
   RESERVED3      :bit19;
  end;
 
+ TSQ_BUF_RSRC_WORD0=bit32;
+
+ TSQ_BUF_RSRC_WORD1=bitpacked record
+  BASE_ADDRESS_HI:bit16;
+  STRIDE         :bit14;
+  CACHE_SWIZZLE  :bit1;
+  SWIZZLE_ENABLE :bit1;
+ end;
+
+ TSQ_BUF_RSRC_WORD2=bit32;
+
+ TSQ_BUF_RSRC_WORD3=bitpacked record
+  DST_SEL_X     :bit3;
+  DST_SEL_Y     :bit3;
+  DST_SEL_Z     :bit3;
+  DST_SEL_W     :bit3;
+  NUM_FORMAT    :bit3;
+  DATA_FORMAT   :bit4;
+  ELEMENT_SIZE  :bit2;
+  INDEX_STRIDE  :bit2;
+  ADD_TID_ENABLE:bit1;
+  ATC           :bit1;
+  HASH_ENABLE   :bit1;
+  HEAP          :bit1;
+  MTYPE         :bit3;
+  _TYPE         :bit2;
+ end;
+
+ TSQ_IMG_RSRC_WORD0=bit32;
+
+ TSQ_IMG_RSRC_WORD1=bitpacked record
+  BASE_ADDRESS_HI:bit8;
+  MIN_LOD        :bit12;
+  DATA_FORMAT    :bit6;
+  NUM_FORMAT     :bit4;
+  MTYPE          :bit2;
+ end;
+
+ TSQ_IMG_RSRC_WORD2=bitpacked record
+  WIDTH     :bit14;
+  HEIGHT    :bit14;
+  PERF_MOD  :bit3;
+  INTERLACED:bit1;
+ end;
+
+ TSQ_IMG_RSRC_WORD3=bitpacked record
+  DST_SEL_X   :bit3;
+  DST_SEL_Y   :bit3;
+  DST_SEL_Z   :bit3;
+  DST_SEL_W   :bit3;
+  BASE_LEVEL  :bit4;
+  LAST_LEVEL  :bit4;
+  TILING_INDEX:bit5;
+  POW2_PAD    :bit1;
+  MTYPE       :bit1;
+  ATC         :bit1;
+  _TYPE       :bit4;
+ end;
+
+ TSQ_IMG_RSRC_WORD4=bitpacked record
+  DEPTH    :bit13;
+  PITCH    :bit14;
+  RESERVED0:bit5;
+ end;
+
+ TSQ_IMG_RSRC_WORD5=bitpacked record
+  BASE_ARRAY:bit13;
+  LAST_ARRAY:bit13;
+  RESERVED0 :bit6;
+ end;
+
+ TSQ_IMG_RSRC_WORD6=bitpacked record
+  MIN_LOD_WARN   :bit12;
+  COUNTER_BANK_ID:bit8;
+  LOD_HDW_CNT_EN :bit1;
+  COMPRESSION_EN :bit1;
+  ALPHA_IS_ON_MSB:bit1;
+  COLOR_TRANSFORM:bit1;
+  LOST_ALPHA_BITS:bit4;
+  LOST_COLOR_BITS:bit4;
+ end;
+
+ TSQ_IMG_RSRC_WORD7=bit32;
+
+ TSQ_IMG_SAMP_WORD0=bitpacked record
+  CLAMP_X           :bit3;
+  CLAMP_Y           :bit3;
+  CLAMP_Z           :bit3;
+  MAX_ANISO_RATIO   :bit3;
+  DEPTH_COMPARE_FUNC:bit3;
+  FORCE_UNNORMALIZED:bit1;
+  ANISO_THRESHOLD   :bit3;
+  MC_COORD_TRUNC    :bit1;
+  FORCE_DEGAMMA     :bit1;
+  ANISO_BIAS        :bit6;
+  TRUNC_COORD       :bit1;
+  DISABLE_CUBE_WRAP :bit1;
+  FILTER_MODE       :bit2;
+  COMPAT_MODE       :bit1;
+ end;
+
+ TSQ_IMG_SAMP_WORD1=bitpacked record
+  MIN_LOD :bit12;
+  MAX_LOD :bit12;
+  PERF_MIP:bit4;
+  PERF_Z  :bit4;
+ end;
+
+ TSQ_IMG_SAMP_WORD2=bitpacked record
+  LOD_BIAS          :bit14;
+  LOD_BIAS_SEC      :bit6;
+  XY_MAG_FILTER     :bit2;
+  XY_MIN_FILTER     :bit2;
+  Z_FILTER          :bit2;
+  MIP_FILTER        :bit2;
+  MIP_POINT_PRECLAMP:bit1;
+  DISABLE_LSB_CEIL  :bit1;
+  FILTER_PREC_FIX   :bit1;
+  ANISO_OVERRIDE    :bit1;
+ end;
+
+ TSQ_IMG_SAMP_WORD3=bitpacked record
+  BORDER_COLOR_PTR :bit12;
+  RESERVED0        :bit18;
+  BORDER_COLOR_TYPE:bit2;
+ end;
+
+ TSX_MRT0_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT1_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT2_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT3_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT4_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT5_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT6_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_MRT7_BLEND_OPT=bitpacked record
+  COLOR_SRC_OPT :bit3;
+  RESERVED0     :bit1;
+  COLOR_DST_OPT :bit3;
+  RESERVED1     :bit1;
+  COLOR_COMB_FCN:bit3;
+  RESERVED2     :bit5;
+  ALPHA_SRC_OPT :bit3;
+  RESERVED3     :bit1;
+  ALPHA_DST_OPT :bit3;
+  RESERVED4     :bit1;
+  ALPHA_COMB_FCN:bit3;
+  RESERVED5     :bit5;
+ end;
+
+ TSX_PS_DOWNCONVERT=bitpacked record
+  MRT0:bit4;
+  MRT1:bit4;
+  MRT2:bit4;
+  MRT3:bit4;
+  MRT4:bit4;
+  MRT5:bit4;
+  MRT6:bit4;
+  MRT7:bit4;
+ end;
+
+ TTCP_CHAN_STEER_HI=bitpacked record
+  CHAN8:bit4;
+  CHAN9:bit4;
+  CHANA:bit4;
+  CHANB:bit4;
+  CHANC:bit4;
+  CHAND:bit4;
+  CHANE:bit4;
+  CHANF:bit4;
+ end;
+
+ TTCP_CHAN_STEER_LO=bitpacked record
+  CHAN0:bit4;
+  CHAN1:bit4;
+  CHAN2:bit4;
+  CHAN3:bit4;
+  CHAN4:bit4;
+  CHAN5:bit4;
+  CHAN6:bit4;
+  CHAN7:bit4;
+ end;
+
+ TTCP_WATCH0_ADDR_H=bitpacked record
+  ADDR     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TTCP_WATCH0_ADDR_L=bitpacked record
+  RESERVED0:bit6;
+  ADDR     :bit26;
+ end;
+
+ TTCP_WATCH1_ADDR_H=bitpacked record
+  ADDR     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TTCP_WATCH1_ADDR_L=bitpacked record
+  RESERVED0:bit6;
+  ADDR     :bit26;
+ end;
+
+ TTCP_WATCH2_ADDR_H=bitpacked record
+  ADDR     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TTCP_WATCH2_ADDR_L=bitpacked record
+  RESERVED0:bit6;
+  ADDR     :bit26;
+ end;
+
+ TTCP_WATCH3_ADDR_H=bitpacked record
+  ADDR     :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TTCP_WATCH3_ADDR_L=bitpacked record
+  RESERVED0:bit6;
+  ADDR     :bit26;
+ end;
+
  TVGT_NUM_INSTANCES=bit32;
 
  TVGT_STRMOUT_DELAY=bitpacked record
@@ -3997,6 +6716,158 @@ type
  TCB_PERFCOUNTER3_HI=bit32;
 
  TCB_PERFCOUNTER3_LO=bit32;
+
+ TCP_ATOMIC_PREOP_HI=bit32;
+
+ TCP_ATOMIC_PREOP_LO=bit32;
+
+ TCP_CE_INIT_BASE_HI=bitpacked record
+  INIT_BASE_HI:bit16;
+  RESERVED0   :bit16;
+ end;
+
+ TCP_CE_INIT_BASE_LO=bitpacked record
+  RESERVED0   :bit5;
+  INIT_BASE_LO:bit27;
+ end;
+
+ TCP_CE_ROQ_IB1_STAT=bitpacked record
+  CEQ_RPTR_INDIRECT1:bit10;
+  RESERVED0         :bit6;
+  CEQ_WPTR_INDIRECT1:bit10;
+  RESERVED1         :bit6;
+ end;
+
+ TCP_CE_ROQ_IB2_STAT=bitpacked record
+  CEQ_RPTR_INDIRECT2:bit10;
+  RESERVED0         :bit6;
+  CEQ_WPTR_INDIRECT2:bit10;
+  RESERVED1         :bit6;
+ end;
+
+ TCP_DMA_ME_DST_ADDR=bit32;
+
+ TCP_DMA_ME_SRC_ADDR=bit32;
+
+ TCP_DMA_PFP_COMMAND=bitpacked record
+  BYTE_COUNT:bit21;
+  DIS_WC    :bit1;
+  SRC_SWAP  :bit2;
+  DST_SWAP  :bit2;
+  SAS       :bit1;
+  DAS       :bit1;
+  SAIC      :bit1;
+  DAIC      :bit1;
+  RAW_WAIT  :bit1;
+  RESERVED0 :bit1;
+ end;
+
+ TCP_DMA_PFP_CONTROL=bitpacked record
+  RESERVED0       :bit10;
+  SRC_MTYPE       :bit2;
+  SRC_ATC         :bit1;
+  SRC_CACHE_POLICY:bit1;
+  RESERVED1       :bit6;
+  DST_SELECT      :bit2;
+  DST_MTYPE       :bit2;
+  DST_ATC         :bit1;
+  DST_CACHE_POLICY:bit1;
+  RESERVED2       :bit3;
+  SRC_SELECT      :bit2;
+  RESERVED3       :bit1;
+ end;
+
+ TCP_DMA_PIO_COMMAND=bitpacked record
+  RESERVED0:bit21;
+  RESERVED1:bit1;
+  RESERVED2:bit2;
+  RESERVED3:bit2;
+  RESERVED4:bit1;
+  RESERVED5:bit1;
+  RESERVED6:bit1;
+  RESERVED7:bit1;
+  RESERVED8:bit1;
+  RESERVED9:bit1;
+ end;
+
+ TCP_GRBM_FREE_COUNT=bitpacked record
+  FREE_COUNT    :bit6;
+  RESERVED0     :bit2;
+  FREE_COUNT_GDS:bit6;
+  RESERVED1     :bit2;
+  FREE_COUNT_PFP:bit6;
+  RESERVED2     :bit10;
+ end;
+
+ TCP_HPD_ROQ_OFFSETS=bitpacked record
+  IQ_OFFSET:bit3;
+  RESERVED0:bit5;
+  PQ_OFFSET:bit6;
+  RESERVED1:bit2;
+  IB_OFFSET:bit6;
+  RESERVED2:bit10;
+ end;
+
+ TCP_HQD_DMA_OFFLOAD=bitpacked record
+  DMA_OFFLOAD:bit1;
+  RESERVED0  :bit31;
+ end;
+
+ TCP_HQD_EOP_CONTROL=bitpacked record
+  EOP_SIZE        :bit6;
+  RESERVED0       :bit2;
+  PROCESSING_EOP  :bit1;
+  RESERVED1       :bit3;
+  PROCESS_EOP_EN  :bit1;
+  PROCESSING_EOPIB:bit1;
+  PROCESS_EOPIB_EN:bit1;
+  MTYPE           :bit2;
+  RESERVED2       :bit6;
+  EOP_ATC         :bit1;
+  CACHE_POLICY    :bit1;
+  RESERVED3       :bit4;
+  SIG_SEM_RESULT  :bit2;
+  PEND_SIG_SEM    :bit1;
+ end;
+
+ TCP_HQD_HQ_CONTROL0=bit32;
+
+ TCP_HQD_HQ_CONTROL1=bit32;
+
+ TCP_INDEX_BASE_ADDR=bit32;
+
+ TCP_PFP_HEADER_DUMP=bit32;
+
+ TCP_ROQ1_THRESHOLDS=bitpacked record
+  RB1_START   :bit8;
+  RB2_START   :bit8;
+  R0_IB1_START:bit8;
+  R1_IB1_START:bit8;
+ end;
+
+ TCP_ROQ2_THRESHOLDS=bitpacked record
+  R2_IB1_START:bit8;
+  R0_IB2_START:bit8;
+  R1_IB2_START:bit8;
+  R2_IB2_START:bit8;
+ end;
+
+ TCP_SIG_SEM_ADDR_HI=bitpacked record
+  SEM_ADDR_HI    :bit16;
+  SEM_USE_MAILBOX:bit1;
+  RESERVED0      :bit3;
+  SEM_SIGNAL_TYPE:bit1;
+  RESERVED1      :bit3;
+  SEM_CLIENT_CODE:bit2;
+  RESERVED2      :bit3;
+  SEM_SELECT     :bit3;
+ end;
+
+ TCP_SIG_SEM_ADDR_LO=bitpacked record
+  SEM_ADDR_SWAP:bit2;
+  RESERVED0    :bit1;
+  SEM_ADDR_LO  :bit29;
+ end;
 
  TDB_CGTT_CLK_CTRL_0=bitpacked record
   ON_DELAY      :bit4;
@@ -4097,85 +6968,169 @@ type
 
  TDB_ZPASS_COUNT_LOW=bit32;
 
- TGB_MACROTILE_MODE0=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS0_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE1=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS0_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE2=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS0_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE3=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS0_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE4=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS1_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE5=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS1_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE6=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS1_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE7=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS1_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE8=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS2_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
 
- TGB_MACROTILE_MODE9=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_PS2_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
  end;
+
+ TGDS_PS2_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS2_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS3_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS3_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS3_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS3_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS4_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS4_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS4_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS4_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS5_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS5_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS5_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS5_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS6_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS6_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS6_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS6_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS7_CTXSW_CNT0=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS7_CTXSW_CNT1=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS7_CTXSW_CNT2=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_PS7_CTXSW_CNT3=bitpacked record
+  UPDN:bit16;
+  PTR :bit16;
+ end;
+
+ TGDS_RD_BURST_COUNT=bit32;
+
+ TGDS_WRITE_COMPLETE=bit32;
 
  TGRBM_HYP_CAM_INDEX=bitpacked record
   CAM_INDEX:bit3;
@@ -4318,6 +7273,113 @@ type
   RESERVED0  :bit20;
  end;
 
+ TSQ_PERFCOUNTER0_HI=bit32;
+
+ TSQ_PERFCOUNTER0_LO=bit32;
+
+ TSQ_PERFCOUNTER1_HI=bit32;
+
+ TSQ_PERFCOUNTER1_LO=bit32;
+
+ TSQ_PERFCOUNTER2_HI=bit32;
+
+ TSQ_PERFCOUNTER2_LO=bit32;
+
+ TSQ_PERFCOUNTER3_HI=bit32;
+
+ TSQ_PERFCOUNTER3_LO=bit32;
+
+ TSQ_PERFCOUNTER4_HI=bit32;
+
+ TSQ_PERFCOUNTER4_LO=bit32;
+
+ TSQ_PERFCOUNTER5_HI=bit32;
+
+ TSQ_PERFCOUNTER5_LO=bit32;
+
+ TSQ_PERFCOUNTER6_HI=bit32;
+
+ TSQ_PERFCOUNTER6_LO=bit32;
+
+ TSQ_PERFCOUNTER7_HI=bit32;
+
+ TSQ_PERFCOUNTER7_LO=bit32;
+
+ TSQ_PERFCOUNTER8_HI=bit32;
+
+ TSQ_PERFCOUNTER8_LO=bit32;
+
+ TSQ_PERFCOUNTER9_HI=bit32;
+
+ TSQ_PERFCOUNTER9_LO=bit32;
+
+ TSX_PERFCOUNTER0_HI=bit32;
+
+ TSX_PERFCOUNTER0_LO=bit32;
+
+ TSX_PERFCOUNTER1_HI=bit32;
+
+ TSX_PERFCOUNTER1_LO=bit32;
+
+ TSX_PERFCOUNTER2_HI=bit32;
+
+ TSX_PERFCOUNTER2_LO=bit32;
+
+ TSX_PERFCOUNTER3_HI=bit32;
+
+ TSX_PERFCOUNTER3_LO=bit32;
+
+ TTA_BC_BASE_ADDR_HI=bitpacked record
+  ADDRESS  :bit8;
+  RESERVED0:bit24;
+ end;
+
+ TTA_CS_BC_BASE_ADDR=bit32;
+
+ TTA_PERFCOUNTER0_HI=bit32;
+
+ TTA_PERFCOUNTER0_LO=bit32;
+
+ TTA_PERFCOUNTER1_HI=bit32;
+
+ TTA_PERFCOUNTER1_LO=bit32;
+
+ TTCA_CGTT_SCLK_CTRL=bitpacked record
+  ON_DELAY      :bit4;
+  OFF_HYSTERESIS:bit8;
+  RESERVED0     :bit12;
+  SOFT_OVERRIDE7:bit1;
+  SOFT_OVERRIDE6:bit1;
+  SOFT_OVERRIDE5:bit1;
+  SOFT_OVERRIDE4:bit1;
+  SOFT_OVERRIDE3:bit1;
+  SOFT_OVERRIDE2:bit1;
+  SOFT_OVERRIDE1:bit1;
+  SOFT_OVERRIDE0:bit1;
+ end;
+
+ TTCC_CGTT_SCLK_CTRL=bitpacked record
+  ON_DELAY      :bit4;
+  OFF_HYSTERESIS:bit8;
+  RESERVED0     :bit12;
+  SOFT_OVERRIDE7:bit1;
+  SOFT_OVERRIDE6:bit1;
+  SOFT_OVERRIDE5:bit1;
+  SOFT_OVERRIDE4:bit1;
+  SOFT_OVERRIDE3:bit1;
+  SOFT_OVERRIDE2:bit1;
+  SOFT_OVERRIDE1:bit1;
+  SOFT_OVERRIDE0:bit1;
+ end;
+
+ TTD_PERFCOUNTER0_HI=bit32;
+
+ TTD_PERFCOUNTER0_LO=bit32;
+
+ TTD_PERFCOUNTER1_HI=bit32;
+
+ TTD_PERFCOUNTER1_LO=bit32;
+
  TVGT_DMA_INDEX_TYPE=bitpacked record
   INDEX_TYPE  :bit2;
   SWAP_MODE   :bit2;
@@ -4379,6 +7441,22 @@ type
   RESERVED0  :bit20;
  end;
 
+ TWD_PERFCOUNTER0_HI=bit32;
+
+ TWD_PERFCOUNTER0_LO=bit32;
+
+ TWD_PERFCOUNTER1_HI=bit32;
+
+ TWD_PERFCOUNTER1_LO=bit32;
+
+ TWD_PERFCOUNTER2_HI=bit32;
+
+ TWD_PERFCOUNTER2_LO=bit32;
+
+ TWD_PERFCOUNTER3_HI=bit32;
+
+ TWD_PERFCOUNTER3_LO=bit32;
+
  TCOMPUTE_DISPATCH_ID=bit32;
 
  TCOMPUTE_USER_DATA_0=bit32;
@@ -4400,6 +7478,257 @@ type
  TCOMPUTE_USER_DATA_8=bit32;
 
  TCOMPUTE_USER_DATA_9=bit32;
+
+ TCPC_PERFCOUNTER0_HI=bit32;
+
+ TCPC_PERFCOUNTER0_LO=bit32;
+
+ TCPC_PERFCOUNTER1_HI=bit32;
+
+ TCPC_PERFCOUNTER1_LO=bit32;
+
+ TCPF_PERFCOUNTER0_HI=bit32;
+
+ TCPF_PERFCOUNTER0_LO=bit32;
+
+ TCPF_PERFCOUNTER1_HI=bit32;
+
+ TCPF_PERFCOUNTER1_LO=bit32;
+
+ TCPG_PERFCOUNTER0_HI=bit32;
+
+ TCPG_PERFCOUNTER0_LO=bit32;
+
+ TCPG_PERFCOUNTER1_HI=bit32;
+
+ TCPG_PERFCOUNTER1_LO=bit32;
+
+ TCP_CE_COMPARE_COUNT=bit32;
+
+ TCP_CPC_IC_BASE_CNTL=bitpacked record
+  VMID        :bit4;
+  RESERVED0   :bit19;
+  ATC         :bit1;
+  CACHE_POLICY:bit1;
+  RESERVED1   :bit2;
+  MTYPE       :bit2;
+  RESERVED2   :bit3;
+ end;
+
+ TCP_CPC_SCRATCH_DATA=bit32;
+
+ TCP_DMA_PFP_DST_ADDR=bit32;
+
+ TCP_DMA_PFP_SRC_ADDR=bit32;
+
+ TCP_DRAW_WINDOW_CNTL=bitpacked record
+  DISABLE_DRAW_WINDOW_LO_MAX:bit1;
+  DISABLE_DRAW_WINDOW_LO_MIN:bit1;
+  DISABLE_DRAW_WINDOW_HI    :bit1;
+  RESERVED0                 :bit5;
+  MODE                      :bit1;
+  RESERVED1                 :bit23;
+ end;
+
+ TCP_EOP_DONE_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_EOP_DONE_ADDR_LO=bitpacked record
+  ADDR_SWAP__SI__CI:bit2;
+  ADDR_LO          :bit30;
+ end;
+
+ TCP_EOP_DONE_CNTX_ID=bitpacked record
+  CNTX_ID  :bit28;
+  RESERVED0:bit4;
+ end;
+
+ TCP_EOP_DONE_DATA_HI=bit32;
+
+ TCP_EOP_DONE_DATA_LO=bit32;
+
+ TCP_GDS_BKUP_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_HQD_EOP_WPTR_MEM=bitpacked record
+  WPTR     :bit13;
+  RESERVED0:bit19;
+ end;
+
+ TCP_HQD_IB_BASE_ADDR=bitpacked record
+  RESERVED0   :bit2;
+  IB_BASE_ADDR:bit30;
+ end;
+
+ TCP_IB1_PREAMBLE_END=bitpacked record
+  IB1_PREAMBLE_END:bit20;
+  RESERVED0       :bit12;
+ end;
+
+ TCP_IB2_PREAMBLE_END=bitpacked record
+  IB2_PREAMBLE_END:bit20;
+  RESERVED0       :bit12;
+ end;
+
+ TCP_INT_STATUS_RING0=bitpacked record
+  RESERVED0                  :bit11;
+  CP_VM_DOORBELL_WR_INT_STAT :bit1;
+  RESERVED1                  :bit2;
+  CP_ECC_ERROR_INT_STAT      :bit1;
+  RESERVED2                  :bit2;
+  WRM_POLL_TIMEOUT_INT_STAT  :bit1;
+  CMP_BUSY_INT_STAT          :bit1;
+  GCNTX_BUSY_INT_STAT        :bit1;
+  CNTX_EMPTY_INT_STAT        :bit1;
+  GFX_IDLE_INT_STAT          :bit1;
+  PRIV_INSTR_INT_STAT        :bit1;
+  PRIV_REG_INT_STAT          :bit1;
+  OPCODE_ERROR_INT_STAT      :bit1;
+  RESERVED3                  :bit1;
+  TIME_STAMP_INT_STAT        :bit1;
+  RESERVED_BIT_ERROR_INT_STAT:bit1;
+  RESERVED4                  :bit1;
+  GENERIC2_INT_STAT          :bit1;
+  GENERIC1_INT_STAT          :bit1;
+  GENERIC0_INT_STAT          :bit1;
+ end;
+
+ TCP_INT_STATUS_RING1=bitpacked record
+  RESERVED0                  :bit11;
+  CP_VM_DOORBELL_WR_INT_STAT :bit1;
+  RESERVED1                  :bit2;
+  CP_ECC_ERROR_INT_STAT      :bit1;
+  RESERVED2                  :bit2;
+  WRM_POLL_TIMEOUT_INT_STAT  :bit1;
+  CMP_BUSY_INT_STAT          :bit1;
+  CNTX_BUSY_INT_STAT         :bit1;
+  CNTX_EMPTY_INT_STAT        :bit1;
+  GFX_IDLE_INT_STAT          :bit1;
+  PRIV_INSTR_INT_STAT        :bit1;
+  PRIV_REG_INT_STAT          :bit1;
+  OPCODE_ERROR_INT_STAT      :bit1;
+  RESERVED3                  :bit1;
+  TIME_STAMP_INT_STAT        :bit1;
+  RESERVED_BIT_ERROR_INT_STAT:bit1;
+  RESERVED4                  :bit1;
+  GENERIC2_INT_STAT          :bit1;
+  GENERIC1_INT_STAT          :bit1;
+  GENERIC0_INT_STAT          :bit1;
+ end;
+
+ TCP_INT_STATUS_RING2=bitpacked record
+  RESERVED0                  :bit11;
+  CP_VM_DOORBELL_WR_INT_STAT :bit1;
+  RESERVED1                  :bit2;
+  CP_ECC_ERROR_INT_STAT      :bit1;
+  RESERVED2                  :bit2;
+  WRM_POLL_TIMEOUT_INT_STAT  :bit1;
+  CMP_BUSY_INT_STAT          :bit1;
+  CNTX_BUSY_INT_STAT         :bit1;
+  CNTX_EMPTY_INT_STAT        :bit1;
+  GFX_IDLE_INT_STAT          :bit1;
+  PRIV_INSTR_INT_STAT        :bit1;
+  PRIV_REG_INT_STAT          :bit1;
+  OPCODE_ERROR_INT_STAT      :bit1;
+  RESERVED3                  :bit1;
+  TIME_STAMP_INT_STAT        :bit1;
+  RESERVED_BIT_ERROR_INT_STAT:bit1;
+  RESERVED4                  :bit1;
+  GENERIC2_INT_STAT          :bit1;
+  GENERIC1_INT_STAT          :bit1;
+  GENERIC0_INT_STAT          :bit1;
+ end;
+
+ TCP_MEC1_F32_INT_DIS=bitpacked record
+  EDC_ROQ_FED_INT     :bit1;
+  PRIV_REG_INT        :bit1;
+  RESERVED_BIT_ERR_INT:bit1;
+  EDC_TC_FED_INT      :bit1;
+  EDC_GDS_FED_INT     :bit1;
+  EDC_SCRATCH_FED_INT :bit1;
+  WAVE_RESTORE_INT    :bit1;
+  SUA_VIOLATION_INT   :bit1;
+  EDC_DMA_FED_INT     :bit1;
+  IQ_TIMER_INT        :bit1;
+  RESERVED0           :bit22;
+ end;
+
+ TCP_MEC2_F32_INT_DIS=bitpacked record
+  EDC_ROQ_FED_INT     :bit1;
+  PRIV_REG_INT        :bit1;
+  RESERVED_BIT_ERR_INT:bit1;
+  EDC_TC_FED_INT      :bit1;
+  EDC_GDS_FED_INT     :bit1;
+  EDC_SCRATCH_FED_INT :bit1;
+  WAVE_RESTORE_INT    :bit1;
+  SUA_VIOLATION_INT   :bit1;
+  EDC_DMA_FED_INT     :bit1;
+  IQ_TIMER_INT        :bit1;
+  RESERVED0           :bit22;
+ end;
+
+ TCP_MQD_BASE_ADDR_HI=bitpacked record
+  BASE_ADDR_HI:bit16;
+  RESERVED0   :bit16;
+ end;
+
+ TCP_PFP_LOAD_CONTROL=bitpacked record
+  CONFIG_REG_EN:bit1;
+  CNTX_REG_EN  :bit1;
+  RESERVED0    :bit14;
+  SH_GFX_REG_EN:bit1;
+  RESERVED1    :bit7;
+  SH_CS_REG_EN :bit1;
+  RESERVED2    :bit7;
+ end;
+
+ TCP_PRED_NOT_VISIBLE=bitpacked record
+  NOT_VISIBLE:bit1;
+  RESERVED0  :bit31;
+ end;
+
+ TCP_QUEUE_THRESHOLDS=bitpacked record
+  ROQ_IB1_START:bit6;
+  RESERVED0    :bit2;
+  ROQ_IB2_START:bit6;
+  RESERVED1    :bit18;
+ end;
+
+ TCP_RB0_RPTR_ADDR_HI=bitpacked record
+  RB_RPTR_ADDR_HI:bit16;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_RB1_RPTR_ADDR_HI=bitpacked record
+  RB_RPTR_ADDR_HI:bit16;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_RB2_RPTR_ADDR_HI=bitpacked record
+  RB_RPTR_ADDR_HI:bit16;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_WAIT_SEM_ADDR_HI=bitpacked record
+  SEM_ADDR_HI    :bit16;
+  SEM_USE_MAILBOX:bit1;
+  RESERVED0      :bit3;
+  SEM_SIGNAL_TYPE:bit1;
+  RESERVED1      :bit3;
+  SEM_CLIENT_CODE:bit2;
+  RESERVED2      :bit3;
+  SEM_SELECT     :bit3;
+ end;
+
+ TCP_WAIT_SEM_ADDR_LO=bitpacked record
+  SEM_ADDR_SWAP:bit2;
+  RESERVED0    :bit1;
+  SEM_ADDR_LO  :bit29;
+ end;
 
  TDB_DEPTH_BOUNDS_MAX=bit32;
 
@@ -4424,53 +7753,35 @@ type
   RESERVED0                          :bit8;
  end;
 
- TGB_MACROTILE_MODE10=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_CS_CTXSW_STATUS=bitpacked record
+  R     :bit1;
+  W     :bit1;
+  UNUSED:bit30;
  end;
 
- TGB_MACROTILE_MODE11=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
+ TGDS_OA_CGPG_RESTORE=bitpacked record
+  VMID   :bit8;
+  MEID   :bit4;
+  PIPEID :bit4;
+  QUEUEID:bit4;
+  UNUSED :bit12;
  end;
 
- TGB_MACROTILE_MODE12=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
- end;
+ TGDS_PERFCOUNTER0_HI=bit32;
 
- TGB_MACROTILE_MODE13=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
- end;
+ TGDS_PERFCOUNTER0_LO=bit32;
 
- TGB_MACROTILE_MODE14=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
- end;
+ TGDS_PERFCOUNTER1_HI=bit32;
 
- TGB_MACROTILE_MODE15=bitpacked record
-  BANK_WIDTH       :bit2;
-  BANK_HEIGHT      :bit2;
-  MACRO_TILE_ASPECT:bit2;
-  NUM_BANKS        :bit2;
-  RESERVED0        :bit24;
- end;
+ TGDS_PERFCOUNTER1_LO=bit32;
+
+ TGDS_PERFCOUNTER2_HI=bit32;
+
+ TGDS_PERFCOUNTER2_LO=bit32;
+
+ TGDS_PERFCOUNTER3_HI=bit32;
+
+ TGDS_PERFCOUNTER3_LO=bit32;
 
  TGRBM_DEBUG_SNAPSHOT=bitpacked record
   CPF_RDY             :bit1;
@@ -4844,6 +8155,104 @@ type
   RESERVED0      :bit28;
  end;
 
+ TSQ_PERFCOUNTER10_HI=bit32;
+
+ TSQ_PERFCOUNTER10_LO=bit32;
+
+ TSQ_PERFCOUNTER11_HI=bit32;
+
+ TSQ_PERFCOUNTER11_LO=bit32;
+
+ TSQ_PERFCOUNTER12_HI=bit32;
+
+ TSQ_PERFCOUNTER12_LO=bit32;
+
+ TSQ_PERFCOUNTER13_HI=bit32;
+
+ TSQ_PERFCOUNTER13_LO=bit32;
+
+ TSQ_PERFCOUNTER14_HI=bit32;
+
+ TSQ_PERFCOUNTER14_LO=bit32;
+
+ TSQ_PERFCOUNTER15_HI=bit32;
+
+ TSQ_PERFCOUNTER15_LO=bit32;
+
+ TSQ_PERFCOUNTER_CTRL=bitpacked record
+  PS_EN        :bit1;
+  VS_EN        :bit1;
+  GS_EN        :bit1;
+  ES_EN        :bit1;
+  HS_EN        :bit1;
+  LS_EN        :bit1;
+  CS_EN        :bit1;
+  RESERVED0    :bit1;
+  CNTR_RATE    :bit5;
+  DISABLE_FLUSH:bit1;
+  RESERVED1    :bit18;
+ end;
+
+ TSQ_PERFCOUNTER_MASK=bitpacked record
+  SH0_MASK:bit16;
+  SH1_MASK:bit16;
+ end;
+
+ TTCA_PERFCOUNTER0_HI=bit32;
+
+ TTCA_PERFCOUNTER0_LO=bit32;
+
+ TTCA_PERFCOUNTER1_HI=bit32;
+
+ TTCA_PERFCOUNTER1_LO=bit32;
+
+ TTCA_PERFCOUNTER2_HI=bit32;
+
+ TTCA_PERFCOUNTER2_LO=bit32;
+
+ TTCA_PERFCOUNTER3_HI=bit32;
+
+ TTCA_PERFCOUNTER3_LO=bit32;
+
+ TTCC_PERFCOUNTER0_HI=bit32;
+
+ TTCC_PERFCOUNTER0_LO=bit32;
+
+ TTCC_PERFCOUNTER1_HI=bit32;
+
+ TTCC_PERFCOUNTER1_LO=bit32;
+
+ TTCC_PERFCOUNTER2_HI=bit32;
+
+ TTCC_PERFCOUNTER2_LO=bit32;
+
+ TTCC_PERFCOUNTER3_HI=bit32;
+
+ TTCC_PERFCOUNTER3_LO=bit32;
+
+ TTCP_GATCL1_DSM_CNTL=bitpacked record
+  SEL_DSM_TCP_GATCL1_IRRITATOR_DATA_A0:bit1;
+  SEL_DSM_TCP_GATCL1_IRRITATOR_DATA_A1:bit1;
+  TCP_GATCL1_ENABLE_SINGLE_WRITE_A    :bit1;
+  RESERVED0                           :bit29;
+ end;
+
+ TTCP_PERFCOUNTER0_HI=bit32;
+
+ TTCP_PERFCOUNTER0_LO=bit32;
+
+ TTCP_PERFCOUNTER1_HI=bit32;
+
+ TTCP_PERFCOUNTER1_LO=bit32;
+
+ TTCP_PERFCOUNTER2_HI=bit32;
+
+ TTCP_PERFCOUNTER2_LO=bit32;
+
+ TTCP_PERFCOUNTER3_HI=bit32;
+
+ TTCP_PERFCOUNTER3_LO=bit32;
+
  TVGT_EVENT_INITIATOR=bitpacked record
   EVENT_TYPE    :bit6;
   RESERVED0     :bit12;
@@ -4939,6 +8348,108 @@ type
 
  TCOMPUTE_USER_DATA_15=bit32;
 
+ TCP_COHER_START_DELAY=bitpacked record
+  START_DELAY_COUNT:bit6;
+  RESERVED0        :bit26;
+ end;
+
+ TCP_CPC_SCRATCH_INDEX=bitpacked record
+  SCRATCH_INDEX:bit9;
+  RESERVED0    :bit23;
+ end;
+
+ TCP_CPC_STALLED_STAT1=bitpacked record
+  MIU_RDREQ_FREE_STALL__SI__CI  :bit1;
+  MIU_WRREQ_FREE_STALL__SI__CI  :bit1;
+  RESERVED0                     :bit1;
+  RCIU_TX_FREE_STALL            :bit1;
+  RCIU_PRIV_VIOLATION           :bit1;
+  RESERVED1                     :bit1;
+  TCIU_TX_FREE_STALL            :bit1;
+  RESERVED2                     :bit1;
+  MEC1_DECODING_PACKET          :bit1;
+  MEC1_WAIT_ON_RCIU             :bit1;
+  MEC1_WAIT_ON_RCIU_READ        :bit1;
+  MEC1_WAIT_ON_MC_READ__SI__CI  :bit1;
+  MEC1_WAIT_ON_MC_WR_ACK__SI__CI:bit1;
+  MEC1_WAIT_ON_ROQ_DATA         :bit1;
+  RESERVED3                     :bit2;
+  MEC2_DECODING_PACKET          :bit1;
+  MEC2_WAIT_ON_RCIU             :bit1;
+  MEC2_WAIT_ON_RCIU_READ        :bit1;
+  MEC2_WAIT_ON_MC_READ__SI__CI  :bit1;
+  MEC2_WAIT_ON_MC_WR_ACK__SI__CI:bit1;
+  MEC2_WAIT_ON_ROQ_DATA         :bit1;
+  ATCL2IU_WAITING_ON_FREE       :bit1;
+  ATCL2IU_WAITING_ON_TAGS       :bit1;
+  ATCL1_WAITING_ON_TRANS        :bit1;
+  RESERVED4                     :bit7;
+ end;
+
+ TCP_CPF_STALLED_STAT1=bitpacked record
+  RING_FETCHING_DATA               :bit1;
+  INDR1_FETCHING_DATA              :bit1;
+  INDR2_FETCHING_DATA              :bit1;
+  STATE_FETCHING_DATA              :bit1;
+  MIU_WAITING_ON_RDREQ_FREE__SI__CI:bit1;
+  TCIU_WAITING_ON_FREE             :bit1;
+  TCIU_WAITING_ON_TAGS             :bit1;
+  ATCL2IU_WAITING_ON_FREE          :bit1;
+  ATCL2IU_WAITING_ON_TAGS          :bit1;
+  ATCL1_WAITING_ON_TRANS           :bit1;
+  RESERVED0                        :bit22;
+ end;
+
+ TCP_EOP_LAST_FENCE_HI=bit32;
+
+ TCP_EOP_LAST_FENCE_LO=bit32;
+
+ TCP_HQD_CTX_SAVE_SIZE=bitpacked record
+  RESERVED0:bit12;
+  SIZE     :bit13;
+  RESERVED1:bit7;
+ end;
+
+ TCP_HQD_EOP_BASE_ADDR=bit32;
+
+ TCP_HQD_HQ_SCHEDULER0=bit32;
+
+ TCP_HQD_HQ_SCHEDULER1=bit32;
+
+ TCP_HQD_PIPE_PRIORITY=bitpacked record
+  PIPE_PRIORITY:bit2;
+  RESERVED0    :bit30;
+ end;
+
+ TCP_MEQ_STQ_THRESHOLD=bitpacked record
+  STQ_START:bit8;
+  RESERVED0:bit24;
+ end;
+
+ TCP_PA_CPRIM_COUNT_HI=bit32;
+
+ TCP_PA_CPRIM_COUNT_LO=bit32;
+
+ TCP_PERFMON_CNTX_CNTL=bitpacked record
+  RESERVED0     :bit31;
+  PERFMON_ENABLE:bit1;
+ end;
+
+ TCP_PFP_F32_INTERRUPT=bitpacked record
+  RESERVED0   :bit1;
+  PRIV_REG_INT:bit1;
+  RESERVED1   :bit1;
+  RESERVED2   :bit1;
+  RESERVED3   :bit28;
+ end;
+
+ TCP_PQ_WPTR_POLL_CNTL=bitpacked record
+  PERIOD     :bit8;
+  RESERVED0  :bit22;
+  POLL_ACTIVE:bit1;
+  EN         :bit1;
+ end;
+
  TDB_STENCILREFMASK_BF=bitpacked record
   STENCILTESTVAL_BF  :bit8;
   STENCILMASK_BF     :bit8;
@@ -4947,6 +8458,28 @@ type
  end;
 
  TDB_STENCIL_READ_BASE=bit32;
+
+ TGDS_GFX_CTXSW_STATUS=bitpacked record
+  R     :bit1;
+  W     :bit1;
+  UNUSED:bit30;
+ end;
+
+ TGDS_GWS_RESOURCE_CNT=bitpacked record
+  RESOURCE_CNT:bit16;
+  RESERVED0   :bit16;
+ end;
+
+ TGDS_PROTECTION_FAULT=bitpacked record
+  WRITE_DIS     :bit1;
+  FAULT_DETECTED:bit1;
+  GRBM          :bit1;
+  SH_ID         :bit3;
+  CU_ID         :bit4;
+  SIMD_ID       :bit2;
+  WAVE_ID       :bit4;
+  ADDRESS       :bit16;
+ end;
 
  TGRBM_PERFCOUNTER0_HI=bit32;
 
@@ -5577,6 +9110,99 @@ type
   RESERVED0    :bit27;
  end;
 
+ TSQ_PERFCOUNTER_CTRL2=bitpacked record
+  FORCE_EN :bit1;
+  RESERVED0:bit31;
+ end;
+
+ TSQ_THREAD_TRACE_BASE=bit32;
+
+ TSQ_THREAD_TRACE_CNTR=bit32;
+
+ TSQ_THREAD_TRACE_CTRL=bitpacked record
+  RESERVED0   :bit31;
+  RESET_BUFFER:bit1;
+ end;
+
+ TSQ_THREAD_TRACE_MASK=bitpacked record
+  CU_SEL      :bit5;
+  SH_SEL      :bit1;
+  RESERVED0   :bit1;
+  REG_STALL_EN:bit1;
+  SIMD_EN     :bit4;
+  VM_ID_MASK  :bit2;
+  SPI_STALL_EN:bit1;
+  SQ_STALL_EN :bit1;
+  RANDOM_SEED :bit16;
+ end;
+
+ TSQ_THREAD_TRACE_MODE=bitpacked record
+  MASK_PS     :bit3;
+  MASK_VS     :bit3;
+  MASK_GS     :bit3;
+  MASK_ES     :bit3;
+  MASK_HS     :bit3;
+  MASK_LS     :bit3;
+  MASK_CS     :bit3;
+  MODE        :bit2;
+  CAPTURE_MODE:bit2;
+  AUTOFLUSH_EN:bit1;
+  PRIV        :bit1;
+  ISSUE_MASK  :bit2;
+  TEST_MODE   :bit1;
+  INTERRUPT_EN:bit1;
+  WRAP        :bit1;
+ end;
+
+ TSQ_THREAD_TRACE_SIZE=bitpacked record
+  SIZE     :bit22;
+  RESERVED0:bit10;
+ end;
+
+ TSQ_THREAD_TRACE_WPTR=bitpacked record
+  WPTR       :bit30;
+  READ_OFFSET:bit2;
+ end;
+
+ TSX_BLEND_OPT_CONTROL=bitpacked record
+  MRT0_COLOR_OPT_DISABLE:bit1;
+  MRT0_ALPHA_OPT_DISABLE:bit1;
+  RESERVED0             :bit2;
+  MRT1_COLOR_OPT_DISABLE:bit1;
+  MRT1_ALPHA_OPT_DISABLE:bit1;
+  RESERVED1             :bit2;
+  MRT2_COLOR_OPT_DISABLE:bit1;
+  MRT2_ALPHA_OPT_DISABLE:bit1;
+  RESERVED2             :bit2;
+  MRT3_COLOR_OPT_DISABLE:bit1;
+  MRT3_ALPHA_OPT_DISABLE:bit1;
+  RESERVED3             :bit2;
+  MRT4_COLOR_OPT_DISABLE:bit1;
+  MRT4_ALPHA_OPT_DISABLE:bit1;
+  RESERVED4             :bit2;
+  MRT5_COLOR_OPT_DISABLE:bit1;
+  MRT5_ALPHA_OPT_DISABLE:bit1;
+  RESERVED5             :bit2;
+  MRT6_COLOR_OPT_DISABLE:bit1;
+  MRT6_ALPHA_OPT_DISABLE:bit1;
+  RESERVED6             :bit2;
+  MRT7_COLOR_OPT_DISABLE:bit1;
+  MRT7_ALPHA_OPT_DISABLE:bit1;
+  RESERVED7             :bit1;
+  PIXEN_ZERO_OPT_DISABLE:bit1;
+ end;
+
+ TSX_BLEND_OPT_EPSILON=bitpacked record
+  MRT0_EPSILON:bit4;
+  MRT1_EPSILON:bit4;
+  MRT2_EPSILON:bit4;
+  MRT3_EPSILON:bit4;
+  MRT4_EPSILON:bit4;
+  MRT5_EPSILON:bit4;
+  MRT6_EPSILON:bit4;
+  MRT7_EPSILON:bit4;
+ end;
+
  TVGT_DMA_LS_HS_CONFIG=bitpacked record
   RESERVED0      :bit8;
   HS_NUM_INPUT_CP:bit6;
@@ -5874,7 +9500,402 @@ type
   RESERVED1   :bit15;
  end;
 
+ TCP_CPC_MGCG_SYNC_CNTL=bitpacked record
+  COOLDOWN_PERIOD:bit8;
+  WARMUP_PERIOD  :bit8;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_DISPATCH_INDR_ADDR=bit32;
+
+ TCP_DMA_ME_DST_ADDR_HI=bitpacked record
+  DST_ADDR_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_DMA_ME_SRC_ADDR_HI=bitpacked record
+  SRC_ADDR_HI:bit16;
+  RESERVED0  :bit4;
+  RESERVED1  :bit2;
+  RESERVED2  :bit7;
+  RESERVED3  :bit2;
+  RESERVED4  :bit1;
+ end;
+
+ TCP_EOP_DONE_DATA_CNTL=bitpacked record
+  CNTX_ID  :bit16;
+  DST_SEL  :bit2;
+  RESERVED0:bit6;
+  INT_SEL  :bit3;
+  RESERVED1:bit2;
+  DATA_SEL :bit3;
+ end;
+
+ TCP_HQD_QUEUE_PRIORITY=bitpacked record
+  PRIORITY_LEVEL:bit4;
+  RESERVED0     :bit28;
+ end;
+
+ TCP_IB1_PREAMBLE_BEGIN=bitpacked record
+  IB1_PREAMBLE_BEGIN:bit20;
+  RESERVED0         :bit12;
+ end;
+
+ TCP_IB2_PREAMBLE_BEGIN=bitpacked record
+  IB2_PREAMBLE_BEGIN:bit20;
+  RESERVED0         :bit12;
+ end;
+
+ TCP_INDEX_BASE_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_ME0_PIPE0_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME0_PIPE1_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME0_PIPE2_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME1_INT_STAT_DEBUG=bitpacked record
+  RESERVED0                      :bit12;
+  CMP_QUERY_STATUS_INT_ASSERTED  :bit1;
+  DEQUEUE_REQUEST_INT_ASSERTED   :bit1;
+  CP_ECC_ERROR_INT_ASSERTED      :bit1;
+  SUA_VIOLATION_INT_STATUS       :bit1;
+  RESERVED1                      :bit1;
+  WRM_POLL_TIMEOUT_INT_ASSERTED  :bit1;
+  RESERVED2                      :bit5;
+  PRIV_REG_INT_ASSERTED          :bit1;
+  OPCODE_ERROR_INT_ASSERTED      :bit1;
+  RESERVED3                      :bit1;
+  TIME_STAMP_INT_ASSERTED        :bit1;
+  RESERVED_BIT_ERROR_INT_ASSERTED:bit1;
+  RESERVED4                      :bit1;
+  GENERIC2_INT_ASSERTED          :bit1;
+  GENERIC1_INT_ASSERTED          :bit1;
+  GENERIC0_INT_ASSERTED          :bit1;
+ end;
+
+ TCP_ME1_PIPE0_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME1_PIPE0_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME1_PIPE1_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME1_PIPE1_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME1_PIPE2_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME1_PIPE2_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME1_PIPE3_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME1_PIPE3_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME2_INT_STAT_DEBUG=bitpacked record
+  RESERVED0                      :bit12;
+  CMP_QUERY_STATUS_INT_ASSERTED  :bit1;
+  DEQUEUE_REQUEST_INT_ASSERTED   :bit1;
+  CP_ECC_ERROR_INT_ASSERTED      :bit1;
+  SUA_VIOLATION_INT_STATUS       :bit1;
+  RESERVED1                      :bit1;
+  WRM_POLL_TIMEOUT_INT_ASSERTED  :bit1;
+  RESERVED2                      :bit5;
+  PRIV_REG_INT_ASSERTED          :bit1;
+  OPCODE_ERROR_INT_ASSERTED      :bit1;
+  RESERVED3                      :bit1;
+  TIME_STAMP_INT_ASSERTED        :bit1;
+  RESERVED_BIT_ERROR_INT_ASSERTED:bit1;
+  RESERVED4                      :bit1;
+  GENERIC2_INT_ASSERTED          :bit1;
+  GENERIC1_INT_ASSERTED          :bit1;
+  GENERIC0_INT_ASSERTED          :bit1;
+ end;
+
+ TCP_ME2_PIPE0_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME2_PIPE0_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME2_PIPE1_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME2_PIPE1_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME2_PIPE2_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME2_PIPE2_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_ME2_PIPE3_INT_CNTL=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_ENABLE  :bit1;
+  DEQUEUE_REQUEST_INT_ENABLE   :bit1;
+  CP_ECC_ERROR_INT_ENABLE      :bit1;
+  SUA_VIOLATION_INT_ENABLE     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_ENABLE  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_ENABLE          :bit1;
+  OPCODE_ERROR_INT_ENABLE      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_ENABLE        :bit1;
+  RESERVED_BIT_ERROR_INT_ENABLE:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_ENABLE          :bit1;
+  GENERIC1_INT_ENABLE          :bit1;
+  GENERIC0_INT_ENABLE          :bit1;
+ end;
+
+ TCP_ME2_PIPE3_PRIORITY=bitpacked record
+  PRIORITY :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_MEC1_F32_INTERRUPT=bitpacked record
+  RESERVED0   :bit1;
+  PRIV_REG_INT:bit1;
+  RESERVED1   :bit1;
+  RESERVED2   :bit1;
+  RESERVED3   :bit1;
+  RESERVED4   :bit1;
+  RESERVED5   :bit1;
+  RESERVED6   :bit1;
+  RESERVED7   :bit1;
+  RESERVED8   :bit1;
+  RESERVED9   :bit22;
+ end;
+
+ TCP_MEC2_F32_INTERRUPT=bitpacked record
+  RESERVED0   :bit1;
+  PRIV_REG_INT:bit1;
+  RESERVED1   :bit1;
+  RESERVED2   :bit1;
+  RESERVED3   :bit1;
+  RESERVED4   :bit1;
+  RESERVED5   :bit1;
+  RESERVED6   :bit1;
+  RESERVED7   :bit1;
+  RESERVED8   :bit1;
+  RESERVED9   :bit22;
+ end;
+
+ TCP_MEC_ME1_UCODE_ADDR=bitpacked record
+  UCODE_ADDR:bit17;
+  RESERVED0 :bit15;
+ end;
+
+ TCP_MEC_ME1_UCODE_DATA=bit32;
+
+ TCP_MEC_ME2_UCODE_ADDR=bitpacked record
+  UCODE_ADDR:bit17;
+  RESERVED0 :bit15;
+ end;
+
+ TCP_MEC_ME2_UCODE_DATA=bit32;
+
+ TCP_PA_CINVOC_COUNT_HI=bit32;
+
+ TCP_PA_CINVOC_COUNT_LO=bit32;
+
+ TCP_PIPE_STATS_ADDR_HI=bitpacked record
+  PIPE_STATS_ADDR_HI:bit16;
+  RESERVED0         :bit16;
+ end;
+
+ TCP_PIPE_STATS_ADDR_LO=bitpacked record
+  PIPE_STATS_ADDR_SWAP__SI__CI:bit2;
+  PIPE_STATS_ADDR_LO          :bit30;
+ end;
+
+ TCP_PIPE_STATS_CONTROL=bitpacked record
+  RESERVED0    :bit25;
+  CACHE_CONTROL:bit1;
+  RESERVED1    :bit1;
+  MTYPE        :bit2;
+  RESERVED2    :bit3;
+ end;
+
+ TCP_PQ_WPTR_POLL_CNTL1=bit32;
+
+ TCP_STREAM_OUT_ADDR_HI=bitpacked record
+  STREAM_OUT_ADDR_HI:bit16;
+  RESERVED0         :bit16;
+ end;
+
+ TCP_STREAM_OUT_ADDR_LO=bitpacked record
+  STREAM_OUT_ADDR_SWAP__SI__CI:bit2;
+  STREAM_OUT_ADDR_LO          :bit30;
+ end;
+
+ TCP_STREAM_OUT_CONTROL=bitpacked record
+  RESERVED0    :bit25;
+  CACHE_CONTROL:bit1;
+  RESERVED1    :bit1;
+  MTYPE        :bit2;
+  RESERVED2    :bit3;
+ end;
+
  TDB_STENCIL_WRITE_BASE=bit32;
+
+ TGDS_GWS_RESOURCE_CNTL=bitpacked record
+  INDEX :bit6;
+  UNUSED:bit26;
+ end;
 
  TGRBM_WAIT_IDLE_CLOCKS=bitpacked record
   WAIT_IDLE_CLOCKS:bit8;
@@ -6067,6 +10088,17 @@ type
   OVERRIDE_EN:bit1;
  end;
 
+ TSQ_THREAD_TRACE_BASE2=bitpacked record
+  ADDR_HI  :bit4;
+  ATC      :bit1;
+  RESERVED0:bit27;
+ end;
+
+ TTA_CS_BC_BASE_ADDR_HI=bitpacked record
+  ADDRESS  :bit8;
+  RESERVED0:bit24;
+ end;
+
  TVGT_DMA_NUM_INSTANCES=bit32;
 
  TVGT_EVENT_ADDRESS_REG=bitpacked record
@@ -6136,6 +10168,136 @@ type
 
  TCOMPUTE_THREADGROUP_ID=bit32;
 
+ TCP_CE_PRGRM_CNTR_START=bitpacked record
+  IP_START :bit11;
+  RESERVED0:bit21;
+ end;
+
+ TCP_CPC_GRBM_FREE_COUNT=bitpacked record
+  FREE_COUNT:bit6;
+  RESERVED0 :bit26;
+ end;
+
+ TCP_CPC_HALT_HYST_COUNT=bitpacked record
+  COUNT    :bit4;
+  RESERVED0:bit28;
+ end;
+
+ TCP_DE_LAST_INVAL_COUNT=bit32;
+
+ TCP_DMA_PFP_DST_ADDR_HI=bitpacked record
+  DST_ADDR_HI:bit16;
+  RESERVED0  :bit16;
+ end;
+
+ TCP_DMA_PFP_SRC_ADDR_HI=bitpacked record
+  SRC_ADDR_HI:bit16;
+  RESERVED0  :bit4;
+  RESERVED1  :bit2;
+  RESERVED2  :bit7;
+  RESERVED3  :bit2;
+  RESERVED4  :bit1;
+ end;
+
+ TCP_DRAW_INDX_INDR_ADDR=bit32;
+
+ TCP_DRAW_OBJECT_COUNTER=bitpacked record
+  COUNT    :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_DRAW_WINDOW_MASK_HI=bit32;
+
+ TCP_ECC_FIRSTOCCURRENCE=bitpacked record
+  INTERFACE:bit2;
+  RESERVED0:bit2;
+  CLIENT   :bit4;
+  ME       :bit2;
+  PIPE     :bit2;
+  QUEUE    :bit3;
+  RESERVED1:bit1;
+  VMID     :bit4;
+  RESERVED2:bit12;
+ end;
+
+ TCP_EOP_DONE_EVENT_CNTL=bitpacked record
+  WBINV_TC_OP     :bit7;
+  RESERVED0       :bit5;
+  WBINV_ACTION_ENA:bit6;
+  RESERVED1       :bit7;
+  CACHE_CONTROL   :bit1;
+  RESERVED2       :bit1;
+  MTYPE           :bit2;
+  RESERVED3       :bit3;
+ end;
+
+ TCP_HQD_CNTL_STACK_SIZE=bitpacked record
+  RESERVED0:bit12;
+  SIZE     :bit3;
+  RESERVED1:bit17;
+ end;
+
+ TCP_HQD_DEQUEUE_REQUEST=bitpacked record
+  DEQUEUE_REQ   :bit3;
+  RESERVED0     :bit1;
+  IQ_REQ_PEND   :bit1;
+  RESERVED1     :bit3;
+  DEQUEUE_INT   :bit1;
+  IQ_REQ_PEND_EN:bit1;
+  DEQUEUE_REQ_EN:bit1;
+  RESERVED2     :bit21;
+ end;
+
+ TCP_HQD_IB_BASE_ADDR_HI=bitpacked record
+  IB_BASE_ADDR_HI:bit16;
+  RESERVED0      :bit16;
+ end;
+
+ TCP_HQD_WG_STATE_OFFSET=bitpacked record
+  RESERVED0:bit2;
+  OFFSET   :bit23;
+  RESERVED1:bit7;
+ end;
+
+ TCP_MEC_ME1_HEADER_DUMP=bit32;
+
+ TCP_MEC_ME2_HEADER_DUMP=bit32;
+
+ TCP_PFP_ATOMIC_PREOP_HI=bit32;
+
+ TCP_PFP_ATOMIC_PREOP_LO=bit32;
+
+ TCP_PRT_LOD_STATS_CNTL0=bit32;
+
+ TCP_PRT_LOD_STATS_CNTL1=bit32;
+
+ TCP_PRT_LOD_STATS_CNTL2=bitpacked record
+  BASE_HI               :bit2;
+  INTERVAL              :bit8;
+  RESET_CNT             :bit8;
+  RESET_FORCE           :bit1;
+  REPORT_AND_RESET      :bit1;
+  MC_ENDIAN_SWAP__SI__CI:bit2;
+  RESERVED0             :bit1;
+  MC_VMID               :bit4;
+  RESERVED1             :bit1;
+  CACHE_POLICY          :bit1;
+  RESERVED2             :bit1;
+  MTYPE                 :bit2;
+ end;
+
+ TCP_VGT_GSPRIM_COUNT_HI=bit32;
+
+ TCP_VGT_GSPRIM_COUNT_LO=bit32;
+
+ TCP_VGT_IAPRIM_COUNT_HI=bit32;
+
+ TCP_VGT_IAPRIM_COUNT_LO=bit32;
+
+ TCP_VGT_IAVERT_COUNT_HI=bit32;
+
+ TCP_VGT_IAVERT_COUNT_LO=bit32;
+
  TDB_OCCLUSION_COUNT0_HI=bitpacked record
   COUNT_HI :bit31;
   RESERVED0:bit1;
@@ -6186,6 +10348,13 @@ type
   CNTR_MODE :bit4;
   PERF_MODE1:bit4;
   PERF_MODE :bit4;
+ end;
+
+ TGDS_GWS_RESOURCE_RESET=bitpacked record
+  RESET      :bit1;
+  RESERVED0  :bit7;
+  RESOURCE_ID:bit8;
+  RESERVED1  :bit16;
  end;
 
  TIA_PERFCOUNTER0_SELECT=bitpacked record
@@ -6273,6 +10442,189 @@ type
   YMAX_BOTTOM_EXCLUSION   :bit1;
  end;
 
+ TSQ_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER2_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER3_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER4_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER5_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER6_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER7_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER8_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER9_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_THREAD_TRACE_STATUS=bitpacked record
+  FINISH_PENDING:bit10;
+  RESERVED0     :bit6;
+  FINISH_DONE   :bit10;
+  RESERVED1     :bit3;
+  NEW_BUF       :bit1;
+  BUSY          :bit1;
+  FULL          :bit1;
+ end;
+
+ TSX_PERFCOUNTER0_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TSX_PERFCOUNTER1_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TSX_PERFCOUNTER2_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TSX_PERFCOUNTER3_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TTA_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL  :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL1 :bit8;
+  RESERVED1 :bit2;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTA_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL  :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL1 :bit8;
+  RESERVED1 :bit2;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCP_ATC_EDC_GATCL1_CNT=bitpacked record
+  DATA_SEC :bit8;
+  RESERVED0:bit24;
+ end;
+
+ TTD_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL  :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL1 :bit8;
+  RESERVED1 :bit2;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTD_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL  :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL1 :bit8;
+  RESERVED1 :bit2;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
  TVGT_CACHE_INVALIDATION=bitpacked record
   CACHE_INVALIDATION  :bit2;
   RESERVED0           :bit2;
@@ -6349,6 +10701,30 @@ type
   RESERVED0 :bit22;
  end;
 
+ TWD_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL :bit8;
+  RESERVED0:bit20;
+  PERF_MODE:bit4;
+ end;
+
+ TWD_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL :bit8;
+  RESERVED0:bit20;
+  PERF_MODE:bit4;
+ end;
+
+ TWD_PERFCOUNTER2_SELECT=bitpacked record
+  PERF_SEL :bit8;
+  RESERVED0:bit20;
+  PERF_MODE:bit4;
+ end;
+
+ TWD_PERFCOUNTER3_SELECT=bitpacked record
+  PERF_SEL :bit8;
+  RESERVED0:bit20;
+  PERF_MODE:bit4;
+ end;
+
  TCB_PERFCOUNTER0_SELECT1=bitpacked record
   PERF_SEL2 :bit9;
   RESERVED0 :bit1;
@@ -6368,6 +10744,291 @@ type
   CU_GROUP_COUNT :bit3;
   RESERVED1      :bit5;
  end;
+
+ TCPC_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit4;
+  PERF_SEL1:bit6;
+  RESERVED1:bit4;
+  CNTR_MODE:bit4;
+  RESERVED2:bit8;
+ end;
+
+ TCPC_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit26;
+ end;
+
+ TCPF_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit4;
+  PERF_SEL1:bit6;
+  RESERVED1:bit4;
+  CNTR_MODE:bit4;
+  RESERVED2:bit8;
+ end;
+
+ TCPF_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit26;
+ end;
+
+ TCPG_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit4;
+  PERF_SEL1:bit6;
+  RESERVED1:bit4;
+  CNTR_MODE:bit4;
+  RESERVED2:bit8;
+ end;
+
+ TCPG_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL :bit6;
+  RESERVED0:bit26;
+ end;
+
+ TCP_APPEND_LAST_CS_FENCE=bit32;
+
+ TCP_APPEND_LAST_PS_FENCE=bit32;
+
+ TCP_CE_COMPLETION_STATUS=bitpacked record
+  STATUS   :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TCP_GDS_ATOMIC0_PREOP_HI=bit32;
+
+ TCP_GDS_ATOMIC0_PREOP_LO=bit32;
+
+ TCP_GDS_ATOMIC1_PREOP_HI=bit32;
+
+ TCP_GDS_ATOMIC1_PREOP_LO=bit32;
+
+ TCP_HQD_ATOMIC0_PREOP_HI=bit32;
+
+ TCP_HQD_ATOMIC0_PREOP_LO=bit32;
+
+ TCP_HQD_ATOMIC1_PREOP_HI=bit32;
+
+ TCP_HQD_ATOMIC1_PREOP_LO=bit32;
+
+ TCP_HQD_CTX_SAVE_CONTROL=bitpacked record
+  ATC      :bit1;
+  MTYPE    :bit2;
+  POLICY   :bit1;
+  RESERVED0:bit28;
+ end;
+
+ TCP_HQD_EOP_BASE_ADDR_HI=bitpacked record
+  BASE_ADDR_HI:bit8;
+  RESERVED0   :bit24;
+ end;
+
+ TCP_HQD_PERSISTENT_STATE=bitpacked record
+  PRELOAD_REQ   :bit1;
+  RESERVED0     :bit7;
+  PRELOAD_SIZE  :bit10;
+  RESERVED1     :bit10;
+  RESTORE_ACTIVE:bit1;
+  RELAUNCH_WAVES:bit1;
+  QSWITCH_MODE  :bit1;
+  DISP_ACTIVE   :bit1;
+ end;
+
+ TCP_ME1_PIPE0_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME1_PIPE1_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME1_PIPE2_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME1_PIPE3_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME2_PIPE0_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME2_PIPE1_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME2_PIPE2_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_ME2_PIPE3_INT_STATUS=bitpacked record
+  RESERVED0                    :bit12;
+  CMP_QUERY_STATUS_INT_STATUS  :bit1;
+  DEQUEUE_REQUEST_INT_STATUS   :bit1;
+  CP_ECC_ERROR_INT_STATUS      :bit1;
+  SUA_VIOLATION_INT_STATUS     :bit1;
+  RESERVED1                    :bit1;
+  WRM_POLL_TIMEOUT_INT_STATUS  :bit1;
+  RESERVED2                    :bit5;
+  PRIV_REG_INT_STATUS          :bit1;
+  OPCODE_ERROR_INT_STATUS      :bit1;
+  RESERVED3                    :bit1;
+  TIME_STAMP_INT_STATUS        :bit1;
+  RESERVED_BIT_ERROR_INT_STATUS:bit1;
+  RESERVED4                    :bit1;
+  GENERIC2_INT_STATUS          :bit1;
+  GENERIC1_INT_STATUS          :bit1;
+  GENERIC0_INT_STATUS          :bit1;
+ end;
+
+ TCP_PFP_PRGRM_CNTR_START=bitpacked record
+  IP_START :bit12;
+  RESERVED0:bit20;
+ end;
+
+ TCP_SC_PSINVOC_COUNT0_HI=bit32;
+
+ TCP_SC_PSINVOC_COUNT0_LO=bit32;
+
+ TCP_SC_PSINVOC_COUNT1_HI=bit32;
+
+ TCP_SC_PSINVOC_COUNT1_LO=bit32;
+
+ TCP_VGT_CSINVOC_COUNT_HI=bit32;
+
+ TCP_VGT_CSINVOC_COUNT_LO=bit32;
+
+ TCP_VGT_DSINVOC_COUNT_HI=bit32;
+
+ TCP_VGT_DSINVOC_COUNT_LO=bit32;
+
+ TCP_VGT_GSINVOC_COUNT_HI=bit32;
+
+ TCP_VGT_GSINVOC_COUNT_LO=bit32;
+
+ TCP_VGT_HSINVOC_COUNT_HI=bit32;
+
+ TCP_VGT_HSINVOC_COUNT_LO=bit32;
+
+ TCP_VGT_VSINVOC_COUNT_HI=bit32;
+
+ TCP_VGT_VSINVOC_COUNT_LO=bit32;
+
+ TCP_WAIT_REG_MEM_TIMEOUT=bit32;
 
  TDB_OCCLUSION_COUNT0_LOW=bit32;
 
@@ -6391,6 +11052,51 @@ type
   RESERVED0 :bit4;
   PERF_MODE3:bit4;
   PERF_MODE2:bit4;
+ end;
+
+ TGDS_COMPUTE_MAX_WAVE_ID=bitpacked record
+  MAX_WAVE_ID:bit12;
+  RESERVED0  :bit20;
+ end;
+
+ TGDS_PERFCOUNTER0_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TGDS_PERFCOUNTER1_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TGDS_PERFCOUNTER2_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TGDS_PERFCOUNTER3_SELECT=bitpacked record
+  PERFCOUNTER_SELECT :bit10;
+  PERFCOUNTER_SELECT1:bit10;
+  CNTR_MODE          :bit4;
+  RESERVED0          :bit8;
+ end;
+
+ TGDS_VM_PROTECTION_FAULT=bitpacked record
+  WRITE_DIS     :bit1;
+  FAULT_DETECTED:bit1;
+  GWS           :bit1;
+  OA            :bit1;
+  GRBM          :bit1;
+  RESERVED0     :bit3;
+  VMID          :bit4;
+  RESERVED1     :bit4;
+  ADDRESS       :bit16;
  end;
 
  TGRBM_SE0_PERFCOUNTER_HI=bit32;
@@ -6781,6 +11487,197 @@ type
   EN_WARN:bit1;
  end;
 
+ TSQ_PERFCOUNTER10_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER11_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER12_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER13_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER14_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_PERFCOUNTER15_SELECT=bitpacked record
+  PERF_SEL       :bit9;
+  RESERVED0      :bit3;
+  SQC_BANK_MASK  :bit4;
+  SQC_CLIENT_MASK:bit4;
+  SPM_MODE       :bit4;
+  SIMD_MASK      :bit4;
+  PERF_MODE      :bit4;
+ end;
+
+ TSQ_THREAD_TRACE_HIWATER=bitpacked record
+  HIWATER  :bit3;
+  RESERVED0:bit29;
+ end;
+
+ TSX_PERFCOUNTER0_SELECT1=bitpacked record
+  PERFCOUNTER_SELECT2:bit10;
+  PERFCOUNTER_SELECT3:bit10;
+  RESERVED0          :bit12;
+ end;
+
+ TSX_PERFCOUNTER1_SELECT1=bitpacked record
+  PERFCOUNTER_SELECT2:bit10;
+  PERFCOUNTER_SELECT3:bit10;
+  RESERVED0          :bit12;
+ end;
+
+ TTA_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2 :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL3 :bit8;
+  RESERVED1 :bit6;
+  PERF_MODE3:bit4;
+  PERF_MODE2:bit4;
+ end;
+
+ TTCA_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCA_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCA_PERFCOUNTER2_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTCA_PERFCOUNTER3_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTCC_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCC_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCC_PERFCOUNTER2_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTCC_PERFCOUNTER3_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTCP_PERFCOUNTER0_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCP_PERFCOUNTER1_SELECT=bitpacked record
+  PERF_SEL  :bit10;
+  PERF_SEL1 :bit10;
+  CNTR_MODE :bit4;
+  PERF_MODE1:bit4;
+  PERF_MODE :bit4;
+ end;
+
+ TTCP_PERFCOUNTER2_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTCP_PERFCOUNTER3_SELECT=bitpacked record
+  PERF_SEL :bit10;
+  RESERVED0:bit10;
+  CNTR_MODE:bit4;
+  RESERVED1:bit4;
+  PERF_MODE:bit4;
+ end;
+
+ TTD_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2 :bit8;
+  RESERVED0 :bit2;
+  PERF_SEL3 :bit8;
+  RESERVED1 :bit6;
+  PERF_MODE3:bit4;
+  PERF_MODE2:bit4;
+ end;
+
  TVGT_DISPATCH_DRAW_INDEX=bit32;
 
  TVGT_DMA_DATA_FIFO_DEPTH=bitpacked record
@@ -6820,6 +11717,71 @@ type
  TCOMPUTE_PERFCOUNT_ENABLE=bitpacked record
   PERFCOUNT_ENABLE:bit1;
   RESERVED0       :bit31;
+ end;
+
+ TCPC_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2:bit6;
+  RESERVED0:bit4;
+  PERF_SEL3:bit6;
+  RESERVED1:bit16;
+ end;
+
+ TCPF_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2:bit6;
+  RESERVED0:bit4;
+  PERF_SEL3:bit6;
+  RESERVED1:bit16;
+ end;
+
+ TCPG_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2:bit6;
+  RESERVED0:bit4;
+  PERF_SEL3:bit6;
+  RESERVED1:bit16;
+ end;
+
+ TCP_CE_INTR_ROUTINE_START=bitpacked record
+  IR_START :bit11;
+  RESERVED0:bit21;
+ end;
+
+ TCP_CE_METADATA_BASE_ADDR=bit32;
+
+ TCP_DISPATCH_INDR_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_HQD_CNTL_STACK_OFFSET=bitpacked record
+  RESERVED0:bit2;
+  OFFSET   :bit13;
+  RESERVED1:bit17;
+ end;
+
+ TCP_HQD_PQ_WPTR_POLL_ADDR=bitpacked record
+  RESERVED0:bit2;
+  WPTR_ADDR:bit30;
+ end;
+
+ TCP_MEC1_PRGRM_CNTR_START=bitpacked record
+  IP_START :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_MEC2_PRGRM_CNTR_START=bitpacked record
+  IP_START :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_PFP_COMPLETION_STATUS=bitpacked record
+  STATUS   :bit2;
+  RESERVED0:bit30;
+ end;
+
+ TGDS_PERFCOUNTER0_SELECT1=bitpacked record
+  PERFCOUNTER_SELECT2:bit10;
+  PERFCOUNTER_SELECT3:bit10;
+  RESERVED0          :bit12;
  end;
 
  TGRBM_PERFCOUNTER0_SELECT=bitpacked record
@@ -7185,6 +12147,54 @@ type
   INT_SENT:bit1;
  end;
 
+ TTCA_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE2:bit4;
+  PERF_MODE3:bit4;
+ end;
+
+ TTCA_PERFCOUNTER1_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE2:bit4;
+  PERF_MODE3:bit4;
+ end;
+
+ TTCC_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE2:bit4;
+  PERF_MODE3:bit4;
+ end;
+
+ TTCC_PERFCOUNTER1_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE2:bit4;
+  PERF_MODE3:bit4;
+ end;
+
+ TTCP_PERFCOUNTER0_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE3:bit4;
+  PERF_MODE2:bit4;
+ end;
+
+ TTCP_PERFCOUNTER1_SELECT1=bitpacked record
+  PERF_SEL2 :bit10;
+  PERF_SEL3 :bit10;
+  RESERVED0 :bit4;
+  PERF_MODE3:bit4;
+  PERF_MODE2:bit4;
+ end;
+
  TVGT_DRAW_INIT_FIFO_DEPTH=bitpacked record
   DRAW_INIT_FIFO_DEPTH:bit6;
   RESERVED0           :bit26;
@@ -7229,6 +12239,49 @@ type
   STRIDE   :bit10;
   RESERVED0:bit22;
  end;
+
+ TCP_DRAW_INDX_INDR_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_HQD_GDS_RESOURCE_STATE=bitpacked record
+  OA_REQUIRED:bit1;
+  OA_ACQUIRED:bit1;
+  RESERVED0  :bit2;
+  GWS_SIZE   :bit6;
+  RESERVED1  :bit2;
+  GWS_PNTR   :bit6;
+  RESERVED2  :bit14;
+ end;
+
+ TCP_ME0_PIPE_PRIORITY_CNTS=bitpacked record
+  PRIORITY1_CNT :bit8;
+  PRIORITY2A_CNT:bit8;
+  PRIORITY2B_CNT:bit8;
+  PRIORITY3_CNT :bit8;
+ end;
+
+ TCP_ME1_PIPE_PRIORITY_CNTS=bitpacked record
+  PRIORITY1_CNT :bit8;
+  PRIORITY2A_CNT:bit8;
+  PRIORITY2B_CNT:bit8;
+  PRIORITY3_CNT :bit8;
+ end;
+
+ TCP_ME2_PIPE_PRIORITY_CNTS=bitpacked record
+  PRIORITY1_CNT :bit8;
+  PRIORITY2A_CNT:bit8;
+  PRIORITY2B_CNT:bit8;
+  PRIORITY3_CNT :bit8;
+ end;
+
+ TCP_PFP_INTR_ROUTINE_START=bitpacked record
+  IR_START :bit12;
+  RESERVED0:bit20;
+ end;
+
+ TCP_PFP_METADATA_BASE_ADDR=bit32;
 
  TPA_SC_CENTROID_PRIORITY_0=bitpacked record
   DISTANCE_0:bit4;
@@ -7725,6 +12778,22 @@ type
   INT_SENT:bit1;
  end;
 
+ TSQ_THREAD_TRACE_PERF_MASK=bitpacked record
+  SH0_MASK:bit16;
+  SH1_MASK:bit16;
+ end;
+
+ TTCP_BUFFER_ADDR_HASH_CNTL=bitpacked record
+  CHANNEL_BITS     :bit3;
+  RESERVED0        :bit5;
+  BANK_BITS        :bit3;
+  RESERVED1        :bit5;
+  CHANNEL_XOR_COUNT:bit3;
+  RESERVED2        :bit5;
+  BANK_XOR_COUNT   :bit3;
+  RESERVED3        :bit5;
+ end;
+
  TVGT_GROUP_VECT_0_FMT_CNTL=bitpacked record
   X_CONV  :bit4;
   X_OFFSET:bit4;
@@ -7785,10 +12854,31 @@ type
   RESERVED1            :bit17;
  end;
 
- TDBG_SMB_BYPASS_SRBM_ACCESS=bitpacked record
-  DBG_SMB_BYPASS_SRBM_EN:bit1;
-  RESERVED0             :bit4;
-  RESERVED1             :bit27;
+ TCP_HQD_PQ_DOORBELL_CONTROL=bitpacked record
+  DOORBELL_MODE      :bit1;
+  DOORBELL_BIF_DROP  :bit1;
+  DOORBELL_OFFSET    :bit21;
+  DOORBELL_CARRY_BITS:bit3;
+  RESERVED0          :bit2;
+  DOORBELL_SOURCE    :bit1;
+  DOORBELL_SCHD_HIT  :bit1;
+  DOORBELL_EN        :bit1;
+  DOORBELL_HIT       :bit1;
+ end;
+
+ TCP_HQD_PQ_RPTR_REPORT_ADDR=bitpacked record
+  RESERVED0       :bit2;
+  RPTR_REPORT_ADDR:bit30;
+ end;
+
+ TCP_MEC1_INTR_ROUTINE_START=bitpacked record
+  IR_START :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_MEC2_INTR_ROUTINE_START=bitpacked record
+  IR_START :bit16;
+  RESERVED0:bit16;
  end;
 
  TDB_SRESULTS_COMPARE_STATE0=bitpacked record
@@ -8049,6 +13139,21 @@ type
   POSITION_BUFFER_SIZE:bit16;
  end;
 
+ TSQ_THREAD_TRACE_TOKEN_MASK=bitpacked record
+  TOKEN_MASK       :bit16;
+  REG_MASK         :bit8;
+  REG_DROP_ON_STALL:bit1;
+  RESERVED0        :bit7;
+ end;
+
+ TSQ_THREAD_TRACE_USERDATA_0=bit32;
+
+ TSQ_THREAD_TRACE_USERDATA_1=bit32;
+
+ TSQ_THREAD_TRACE_USERDATA_2=bit32;
+
+ TSQ_THREAD_TRACE_USERDATA_3=bit32;
+
  TVGT_MULTI_PRIM_IB_RESET_EN=bitpacked record
   RESET_EN :bit1;
   RESERVED0:bit31;
@@ -8063,6 +13168,36 @@ type
   THREAD_TRACE_ENABLE:bit1;
   RESERVED0          :bit31;
  end;
+
+ TCP_CE_METADATA_BASE_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_HQD_PQ_WPTR_POLL_ADDR_HI=bitpacked record
+  WPTR_ADDR_HI:bit16;
+  RESERVED0   :bit16;
+ end;
+
+ TCP_MEC_DOORBELL_RANGE_LOWER=bitpacked record
+  RESERVED0           :bit2;
+  DOORBELL_RANGE_LOWER:bit21;
+  RESERVED1           :bit9;
+ end;
+
+ TCP_MEC_DOORBELL_RANGE_UPPER=bitpacked record
+  RESERVED0           :bit2;
+  DOORBELL_RANGE_UPPER:bit21;
+  RESERVED1           :bit9;
+ end;
+
+ TCP_PFP_GDS_ATOMIC0_PREOP_HI=bit32;
+
+ TCP_PFP_GDS_ATOMIC0_PREOP_LO=bit32;
+
+ TCP_PFP_GDS_ATOMIC1_PREOP_HI=bit32;
+
+ TCP_PFP_GDS_ATOMIC1_PREOP_LO=bit32;
 
  TGRBM_SE0_PERFCOUNTER_SELECT=bitpacked record
   PERF_SEL                  :bit6;
@@ -8147,6 +13282,8 @@ type
   RESERVED0                  :bit30;
  end;
 
+ TSQ_THREAD_TRACE_TOKEN_MASK2=bit32;
+
  TVGT_STRMOUT_BUFFER_OFFSET_0=bit32;
 
  TVGT_STRMOUT_BUFFER_OFFSET_1=bit32;
@@ -8171,6 +13308,43 @@ type
   ATC      :bit1;
   MTYPE    :bit2;
   RESERVED0:bit29;
+ end;
+
+ TCP_ECC_FIRSTOCCURRENCE_RING0=bit32;
+
+ TCP_ECC_FIRSTOCCURRENCE_RING1=bit32;
+
+ TCP_ECC_FIRSTOCCURRENCE_RING2=bit32;
+
+ TCP_HQD_CTX_SAVE_BASE_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
+ end;
+
+ TCP_HQD_CTX_SAVE_BASE_ADDR_LO=bitpacked record
+  RESERVED0:bit12;
+  ADDR     :bit20;
+ end;
+
+ TCP_NUM_PRIM_NEEDED_COUNT0_HI=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT0_LO=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT1_HI=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT1_LO=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT2_HI=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT2_LO=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT3_HI=bit32;
+
+ TCP_NUM_PRIM_NEEDED_COUNT3_LO=bit32;
+
+ TCP_PFP_METADATA_BASE_ADDR_HI=bitpacked record
+  ADDR_HI  :bit16;
+  RESERVED0:bit16;
  end;
 
  TPA_SC_HP3D_TRAP_SCREEN_COUNT=bitpacked record
@@ -8284,6 +13458,27 @@ type
  end;
 
  TVGT_MULTI_PRIM_IB_RESET_INDX=bit32;
+
+ TCP_HQD_PQ_RPTR_REPORT_ADDR_HI=bitpacked record
+  RPTR_REPORT_ADDR_HI:bit16;
+  RESERVED0          :bit16;
+ end;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT0_HI=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT0_LO=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT1_HI=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT1_LO=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT2_HI=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT2_LO=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT3_HI=bit32;
+
+ TCP_NUM_PRIM_WRITTEN_COUNT3_LO=bit32;
 
  TPA_SC_P3D_TRAP_SCREEN_HV_LOCK=bitpacked record
   DISABLE_NON_PRIV_WRITES:bit1;
