@@ -10209,15 +10209,15 @@ type
  TCP_DRAW_WINDOW_MASK_HI=bit32;
 
  TCP_ECC_FIRSTOCCURRENCE=bitpacked record
-  INTERFACE:bit2;
-  RESERVED0:bit2;
-  CLIENT   :bit4;
-  ME       :bit2;
-  PIPE     :bit2;
-  QUEUE    :bit3;
-  RESERVED1:bit1;
-  VMID     :bit4;
-  RESERVED2:bit12;
+  _INTERFACE:bit2;
+  RESERVED0 :bit2;
+  CLIENT    :bit4;
+  ME        :bit2;
+  PIPE      :bit2;
+  QUEUE     :bit3;
+  RESERVED1 :bit1;
+  VMID      :bit4;
+  RESERVED2 :bit12;
  end;
 
  TCP_EOP_DONE_EVENT_CNTL=bitpacked record

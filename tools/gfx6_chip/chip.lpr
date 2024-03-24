@@ -553,6 +553,7 @@ begin
       CutEnd(Name,'__VI');
       CutEnd(Name,'__SI');
       Case name of
+       'INTERFACE',
        'OVERRIDE',
        'TYPE':name:='_'+name;
       end;

@@ -30,6 +30,7 @@ uses
  kern_thread,
  md_sleep,
  pm4_ring,
+ pm4defs,
  subr_backtrace;
 
 var
@@ -111,6 +112,103 @@ begin
  Result:=((token shr 14) and $FFFC) + 8;
 end;
 
+procedure parse_gfx_buffer(buf:PPM4CMDINDIRECTBUFFER);
+var
+ addr:Pointer;
+ size:QWORD;
+
+ i,token,len:DWORD;
+begin
+ case buf^.header of
+  $c0023300:Writeln('INDIRECT_BUFFER_CNST');
+  $c0023f00:Writeln('COND_INDIRECT_BUFFER');
+  else;
+ end;
+
+ i:=buf^.ibSize*sizeof(DWORD);
+
+ addr:=nil;
+ size:=0;
+ if get_dmem_ptr(Pointer(buf^.ibBase),@addr,@size) then
+ begin
+  if (i>size) then
+  begin
+   Assert(false,'addr:0x'+HexStr(buf^.ibBase+size,16)+' not in dmem!');
+  end;
+
+  Writeln(' addr:0x'+HexStr(buf^.ibBase,16)+' '+HexStr(i,16));
+ end else
+ begin
+  Assert(false,'addr:0x'+HexStr(buf^.ibBase,16)+' not in dmem!');
+ end;
+
+ while (i<>0) do
+ begin
+  token:=PDWORD(addr)^;
+  len:=PM4_LENGTH(token);
+  if (len>i) then Exit;
+
+  case PM4_TYPE(token) of
+   0:begin //PM4_TYPE_0
+      Writeln('PM4_TYPE_0');
+      //onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
+     end;
+   2:begin //PM4_TYPE_2
+      Writeln('PM4_TYPE_2');
+      //onPm42(PM4_TYPE_2_HEADER(token));
+
+      //no body
+      len:=sizeof(DWORD);
+     end;
+   3:begin //PM4_TYPE_3
+      case PM4_TYPE_3_HEADER(token).opcode of
+       IT_NOP                :Writeln('IT_NOP                ');
+       IT_EVENT_WRITE_EOP    :Writeln('IT_EVENT_WRITE_EOP    ');
+       IT_EVENT_WRITE_EOS    :Writeln('IT_EVENT_WRITE_EOS    ');
+       IT_DMA_DATA           :Writeln('IT_DMA_DATA           ');
+       IT_ACQUIRE_MEM        :Writeln('IT_ACQUIRE_MEM        ');
+       IT_CONTEXT_CONTROL    :Writeln('IT_CONTEXT_CONTROL    ');
+       IT_CLEAR_STATE        :Writeln('IT_CLEAR_STATE        ');
+       IT_SET_CONTEXT_REG    :Writeln('IT_SET_CONTEXT_REG    ');
+       IT_SET_SH_REG         :Writeln('IT_SET_SH_REG         ');
+       IT_SET_UCONFIG_REG    :Writeln('IT_SET_UCONFIG_REG    ');
+       IT_SET_CONFIG_REG     :Writeln('IT_SET_CONFIG_REG     ');
+       IT_INDEX_BUFFER_SIZE  :Writeln('IT_INDEX_BUFFER_SIZE  ');
+       IT_INDEX_TYPE         :Writeln('IT_INDEX_TYPE         ');
+       IT_DRAW_INDEX_2       :Writeln('IT_DRAW_INDEX_2       ');
+       IT_DRAW_INDEX_AUTO    :Writeln('IT_DRAW_INDEX_AUTO    ');
+       IT_INDEX_BASE         :Writeln('IT_INDEX_BASE         ');
+       IT_DRAW_INDEX_OFFSET_2:Writeln('IT_DRAW_INDEX_OFFSET_2');
+       IT_DISPATCH_DIRECT    :Writeln('IT_DISPATCH_DIRECT    ');
+       IT_NUM_INSTANCES      :Writeln('IT_NUM_INSTANCES      ');
+       IT_WAIT_REG_MEM       :Writeln('IT_WAIT_REG_MEM       ');
+       IT_WRITE_DATA         :Writeln('IT_WRITE_DATA         ');
+       IT_EVENT_WRITE        :Writeln('IT_EVENT_WRITE        ');
+       IT_PFP_SYNC_ME        :Writeln('IT_PFP_SYNC_ME        ');
+
+       IT_SET_BASE           :Writeln('IT_SET_BASE           ');
+       IT_DRAW_PREAMBLE      :Writeln('IT_DRAW_PREAMBLE      ');
+       IT_SET_PREDICATION    :Writeln('IT_SET_PREDICATION    ');
+
+       IT_LOAD_CONST_RAM     :Writeln('IT_LOAD_CONST_RAM     ');
+
+       else
+                              Writeln('PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+      end;
+     end;
+   else
+    begin
+     Writeln('PM4_TYPE_',PM4_TYPE(token));
+     Assert(False);
+    end;
+  end;
+
+  Inc(addr,len);
+  Dec(i,len);
+ end;
+
+end;
+
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
  buff:Pointer;
@@ -131,8 +229,8 @@ begin
     if (len>i) then Exit;
 
     case op of
-     $c0023300:Writeln('INDIRECT_BUFFER_CNST');
-     $c0023f00:Writeln('COND_INDIRECT_BUFFER');
+     $c0023300:parse_gfx_buffer(buff);
+     $c0023f00:parse_gfx_buffer(buff);
      $c0008b00:Writeln('SWITCH_BUFFER');
      else;
     end;
