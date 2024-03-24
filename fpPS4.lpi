@@ -890,6 +890,10 @@
         <Filename Value="rtl\g23tree.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="chip\pm4_ring.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -901,7 +905,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);sys"/>
       <Libraries Value="gui"/>
-      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan"/>
+      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
