@@ -24,6 +24,7 @@ uses
  vm_pager,
  vm_map,
  vm_mmap,
+ kern_dmem,
  kern_rwlock,
  kern_proc,
  kern_thr,
@@ -145,7 +146,15 @@ begin
  while (i<>0) do
  begin
   token:=PDWORD(addr)^;
-  len:=PM4_LENGTH(token);
+
+  if (PM4_TYPE(token)=2) then
+  begin
+   len:=sizeof(DWORD);
+  end else
+  begin
+   len:=PM4_LENGTH(token);
+  end;
+
   if (len>i) then Exit;
 
   case PM4_TYPE(token) of
@@ -158,7 +167,6 @@ begin
       //onPm42(PM4_TYPE_2_HEADER(token));
 
       //no body
-      len:=sizeof(DWORD);
      end;
    3:begin //PM4_TYPE_3
       case PM4_TYPE_3_HEADER(token).opcode of

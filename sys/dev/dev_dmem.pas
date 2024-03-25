@@ -116,7 +116,7 @@ begin
                Exit(EPERM);
               end;
 
-              Result:=dmem_map_query(dmap^.dmem,offset,flags,id,info,size);
+              Result:=dmem_map_query(dmem_maps[d_pool_id].dmem,offset,flags,id,info,size);
              end;
             end;
 

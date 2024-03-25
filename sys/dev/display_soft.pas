@@ -96,7 +96,7 @@ uses
  LCLIntf,
  }
  sys_bootparam,
- vm_mmap,
+ kern_dmem,
  kern_thread,
  dev_dce;
 

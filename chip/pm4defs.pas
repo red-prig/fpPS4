@@ -639,6 +639,7 @@ function PM4_HEADER_BUILD(lenDw:WORD;op,priv:Byte):DWORD; inline;
 function PM4_PRIV(token:DWORD):Byte; inline;
 function PM4_TYPE(token:DWORD):Byte; inline;
 function PM4_LENGTH_DW(token:DWORD):WORD; inline;
+function PM4_LENGTH(token:DWORD):DWORD; inline;
 
 implementation
 
@@ -662,6 +663,11 @@ end;
 function PM4_LENGTH_DW(token:DWORD):WORD; inline;
 begin
  Result:=((token shr 16) and $3FFF) + 2;
+end;
+
+function PM4_LENGTH(token:DWORD):DWORD; inline;
+begin
+ Result:=((token shr 14) and $FFFC) + 8;
 end;
 
 end.

@@ -93,6 +93,9 @@ function  sys_virtual_query(addr:Pointer;
                             info:Pointer;
                             infoSize:QWORD):Integer;
 
+function  get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
+function  get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
+
 implementation
 
 uses
@@ -811,6 +814,91 @@ begin
  Result:=copyout(@qinfo,info,size);
 end;
 
+function get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
+var
+ map:vm_map_t;
+ entry:vm_map_entry_t;
+ obj:vm_object_t;
+ offset,size:QWORD;
+
+ dmem:p_dmem_map;
+ curr,next:p_dmem_map_entry;
+begin
+ Result:=False;
+ map:=p_proc.p_vmspace;
+
+ vm_map_lock(map);
+
+ if vm_map_lookup_entry(map,addr,@entry) then
+ begin
+  obj:=entry^.vm_obj;
+
+  if (obj<>nil) then
+  begin
+   Result:=(obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0;
+  end;
+
+  if Result then
+  begin
+   offset:=entry^.offset+(addr-entry^.start);
+
+   if (p_offset<>nil) then
+   begin
+    p_offset^:=offset;
+   end;
+
+   if (p_size<>nil) then
+   begin
+    size:=entry^.__end-addr;
+
+    dmem:=dmem_maps[default_pool_id].dmem;
+    dmem_map_lock(dmem);
+
+     if dmem_map_lookup_entry(dmem,OFF_TO_IDX(offset),@curr) then
+     begin
+      while True do
+      begin
+       next:=curr^.next;
+
+       if (next=@dmem^.header) then
+       begin
+        Break;
+       end;
+
+       if (curr^.__end<>next^.start) then
+       begin
+        Break;
+       end;
+
+       curr:=next;
+      end;
+
+      size:=IDX_TO_OFF(curr^.__end)-offset;
+     end;
+    dmem_map_unlock(dmem);
+
+    p_size^:=size;
+   end;
+  end;
+ end;
+
+ vm_map_unlock(map);
+end;
+
+function get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
+var
+ offset:QWORD;
+begin
+ offset:=0;
+
+ Result:=get_dmem_offset(QWORD(addr),@offset,p_size);
+
+ if Result then
+ if (p_ptr<>nil) then
+ begin
+  p_ptr^:=Pointer(VM_MIN_GPU_ADDRESS+offset);
+ end;
+end;
 
 
 
