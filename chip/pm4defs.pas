@@ -36,7 +36,6 @@ const
  IT_DRAW_INDEX_MULTI_AUTO              = $00000030;
  IT_INDIRECT_BUFFER_PRIV               = $00000032;
  IT_INDIRECT_BUFFER_CNST               = $00000033;
- IT_COND_INDIRECT_BUFFER_CNST          = $00000033;
  IT_STRMOUT_BUFFER_UPDATE              = $00000034;
  IT_DRAW_INDEX_OFFSET_2                = $00000035;
  IT_DRAW_PREAMBLE                      = $00000036;
@@ -47,7 +46,6 @@ const
  IT_COPY_DW                            = $0000003b;
  IT_WAIT_REG_MEM                       = $0000003c;
  IT_INDIRECT_BUFFER                    = $0000003f;
- IT_COND_INDIRECT_BUFFER               = $0000003f;
  IT_COPY_DATA                          = $00000040;
  IT_CP_DMA                             = $00000041;
  IT_PFP_SYNC_ME                        = $00000042;
@@ -234,29 +232,44 @@ const
  OP_HINT_SET_PERF_COUNTER_CONTROL_PA              =$00001808;
  OP_HINT_SET_PRIMITIVE_TYPE_NEO                   =$10000242;
 
+ //per ring
+ SH_REG_BASE = $2C00;
+ SH_REG_END  = $3000;
+
+ //8 context
+ CONTEXT_REG_BASE = $A000;
+ CONTEXT_REG_END  = $A400;
+
+ //1 context
+ CONFIG_SPACE_START=$2000;
+ CONFIG_SPACE_END  =$BFFF;
+
+ //1 context
+ USERCONFIG_REG_BASE = $C000;
+ USERCONFIG_REG_END  = $FFFF;
 
 type
  PPM4_TYPE_0_HEADER=^PM4_TYPE_0_HEADER;
  PM4_TYPE_0_HEADER=bitpacked record
-  baseIndex:Word; //16
-  count:bit14;    //14
-  _type:bit2;     //2
+  baseIndex:Word;  //16
+  count    :bit14; //14
+  _type    :bit2;  //2
  end;
 
  PPM4_TYPE_2_HEADER=^PM4_TYPE_2_HEADER;
  PM4_TYPE_2_HEADER=bitpacked record
   reserved:bit30; //30
-  _type:bit2;     //2
+  _type   :bit2;  //2
  end;
 
  PPM4_TYPE_3_HEADER=^PM4_TYPE_3_HEADER;
  PM4_TYPE_3_HEADER=bitpacked record
-  predicate:bit1;  //1
-  shaderType:bit1; //1
-  reserved:bit6;   //6
-  opcode:Byte;     //8
-  count:bit14;     //14
-  _type:bit2;      //2
+  predicate :bit1;  //1
+  shaderType:bit1;  //1
+  reserved  :bit6;  //6
+  opcode    :Byte;  //8
+  count     :bit14; //14
+  _type     :bit2;  //2
  end;
 
  PPM4PrepareFlip=^TPM4PrepareFlip;
@@ -273,6 +286,37 @@ type
   DATA:DWORD;
   eventType:DWORD;
   cacheAction:DWORD;
+ end;
+
+ PPM4CMDCONSTRAMLOAD=^PM4CMDCONSTRAMLOAD;
+ PM4CMDCONSTRAMLOAD=bitpacked record
+  header   :PM4_TYPE_3_HEADER;
+  addr     :QWORD;
+  numDwords:bit15; // < number of DWords to load (bits 2-0 must be 0)
+  reserved1:bit17;
+  offset   :bit16; // < Byte offset in the RAM, must be 32 byte aligned
+  reserved2:bit16;
+ end;
+
+const
+ // Valid values for PM4CMDDRAWSETBASE::baseIndex
+ BASE_INDEX_DISPLAY_LIST     =$0000;
+ BASE_INDEX_DRAW_INDIRECT    =$0001;
+ BASE_INDEX_DISPATCH_INDIRECT=$0001;
+ BASE_INDEX_LOAD_REG         =$0004; // Used by LOAD_SH/CONTEXT_REG_INDEX
+ BASE_INDEX_INDIRECT_DATA    =$0005; // Used by SET_SH_REG_OFFSET index = 1
+
+ // Valid values for PM4CMDDRAWSETBASE::baseIndex constant engine packet
+ BASE_INDEX_CE_DST_BASE_ADDR =$0002;
+
+type
+ PPM4CMDDRAWSETBASE=^PM4CMDDRAWSETBASE;
+ PM4CMDDRAWSETBASE=bitpacked record
+  header   :PM4_TYPE_3_HEADER;
+  baseIndex:bit4;  // < base index selector
+  reserved1:bit28;
+  addressLo:bit32; // < base address Lo of buffer, must be 8 byte aligned
+  addressHi:bit16; // < base address Hi of buffer
  end;
 
  // WRITE_DATA DST_SEL and ENGINE definitions
@@ -578,6 +622,7 @@ type
 
  PPM4CMDCONTEXTCONTROL=^TPM4CMDCONTEXTCONTROL;
  TPM4CMDCONTEXTCONTROL=bitpacked record
+  header      :PM4_TYPE_3_HEADER;
   loadControl :TCONTEXTCONTROLENABLE; ///< enable bits for loading
   shadowEnable:TCONTEXTCONTROLENABLE; ///< enable bits for shadowing
  end;
@@ -586,9 +631,10 @@ type
 
  PPM4CMDSETDATA=^TPM4CMDSETDATA;
  TPM4CMDSETDATA=packed record
+  header    :PM4_TYPE_3_HEADER;
   REG_OFFSET:WORD;
-  RESERVED:WORD;
-  REG_DATA:packed record end;
+  RESERVED  :WORD;
+  REG_DATA  :packed record end;
  end;
 
  PPM4CMDDRAWINDEXBUFFERSIZE=^TPM4CMDDRAWINDEXBUFFERSIZE;
@@ -635,6 +681,8 @@ type
   dispatchInitiator:TCOMPUTE_DISPATCH_INITIATOR; ///< Dispatch Initiator Register
  end;
 
+function get_op_name(op:Byte):RawByteString;
+
 function PM4_HEADER_BUILD(lenDw:WORD;op,priv:Byte):DWORD; inline;
 function PM4_PRIV(token:DWORD):Byte; inline;
 function PM4_TYPE(token:DWORD):Byte; inline;
@@ -642,6 +690,126 @@ function PM4_LENGTH_DW(token:DWORD):WORD; inline;
 function PM4_LENGTH(token:DWORD):DWORD; inline;
 
 implementation
+
+function get_op_name(op:Byte):RawByteString;
+begin
+ case op of
+  IT_NOP                            :Result:='NOP';
+  IT_SET_BASE                       :Result:='SET_BASE';
+  IT_CLEAR_STATE                    :Result:='CLEAR_STATE';
+  IT_INDEX_BUFFER_SIZE              :Result:='INDEX_BUFFER_SIZE';
+  IT_DISPATCH_DIRECT                :Result:='DISPATCH_DIRECT';
+  IT_DISPATCH_INDIRECT              :Result:='DISPATCH_INDIRECT';
+  IT_INDIRECT_BUFFER_END            :Result:='INDIRECT_BUFFER_END';
+  IT_INDIRECT_BUFFER_CNST_END       :Result:='INDIRECT_BUFFER_CNST_END';
+  IT_ATOMIC_GDS                     :Result:='ATOMIC_GDS';
+  IT_ATOMIC_MEM                     :Result:='ATOMIC_MEM';
+  IT_OCCLUSION_QUERY                :Result:='OCCLUSION_QUERY';
+  IT_SET_PREDICATION                :Result:='SET_PREDICATION';
+  IT_REG_RMW                        :Result:='REG_RMW';
+  IT_COND_EXEC                      :Result:='COND_EXEC';
+  IT_PRED_EXEC                      :Result:='PRED_EXEC';
+  IT_DRAW_INDIRECT                  :Result:='DRAW_INDIRECT';
+  IT_DRAW_INDEX_INDIRECT            :Result:='DRAW_INDEX_INDIRECT';
+  IT_INDEX_BASE                     :Result:='INDEX_BASE';
+  IT_DRAW_INDEX_2                   :Result:='DRAW_INDEX_2';
+  IT_CONTEXT_CONTROL                :Result:='CONTEXT_CONTROL';
+  IT_INDEX_TYPE                     :Result:='INDEX_TYPE';
+  IT_DRAW_INDIRECT_MULTI            :Result:='DRAW_INDIRECT_MULTI';
+  IT_DRAW_INDEX_AUTO                :Result:='DRAW_INDEX_AUTO';
+  IT_NUM_INSTANCES                  :Result:='NUM_INSTANCES';
+  IT_DRAW_INDEX_MULTI_AUTO          :Result:='DRAW_INDEX_MULTI_AUTO';
+  IT_INDIRECT_BUFFER_PRIV           :Result:='INDIRECT_BUFFER_PRIV';
+  IT_INDIRECT_BUFFER_CNST           :Result:='INDIRECT_BUFFER_CNST';
+  IT_STRMOUT_BUFFER_UPDATE          :Result:='STRMOUT_BUFFER_UPDATE';
+  IT_DRAW_INDEX_OFFSET_2            :Result:='DRAW_INDEX_OFFSET_2';
+  IT_DRAW_PREAMBLE                  :Result:='DRAW_PREAMBLE';
+  IT_WRITE_DATA                     :Result:='WRITE_DATA';
+  IT_DRAW_INDEX_INDIRECT_MULTI      :Result:='DRAW_INDEX_INDIRECT_MULTI';
+  IT_MEM_SEMAPHORE                  :Result:='MEM_SEMAPHORE';
+  IT_DRAW_INDEX_MULTI_INST          :Result:='DRAW_INDEX_MULTI_INST';
+  IT_COPY_DW                        :Result:='COPY_DW';
+  IT_WAIT_REG_MEM                   :Result:='WAIT_REG_MEM';
+  IT_INDIRECT_BUFFER                :Result:='INDIRECT_BUFFER';
+  IT_COPY_DATA                      :Result:='COPY_DATA';
+  IT_CP_DMA                         :Result:='CP_DMA';
+  IT_PFP_SYNC_ME                    :Result:='PFP_SYNC_ME';
+  IT_SURFACE_SYNC                   :Result:='SURFACE_SYNC';
+  IT_ME_INITIALIZE                  :Result:='ME_INITIALIZE';
+  IT_COND_WRITE                     :Result:='COND_WRITE';
+  IT_EVENT_WRITE                    :Result:='EVENT_WRITE';
+  IT_EVENT_WRITE_EOP                :Result:='EVENT_WRITE_EOP';
+  IT_EVENT_WRITE_EOS                :Result:='EVENT_WRITE_EOS';
+  IT_RELEASE_MEM                    :Result:='RELEASE_MEM';
+  IT_PREAMBLE_CNTL                  :Result:='PREAMBLE_CNTL';
+  IT_DRAW_RESERVED0                 :Result:='DRAW_RESERVED0';
+  IT_DRAW_RESERVED1                 :Result:='DRAW_RESERVED1';
+  IT_DRAW_RESERVED2                 :Result:='DRAW_RESERVED2';
+  IT_DRAW_RESERVED3                 :Result:='DRAW_RESERVED3';
+  IT_DMA_DATA                       :Result:='DMA_DATA';
+  IT_CONTEXT_REG_RMW                :Result:='CONTEXT_REG_RMW';
+  IT_GFX_CNTX_UPDATE                :Result:='GFX_CNTX_UPDATE';
+  IT_BLK_CNTX_UPDATE                :Result:='BLK_CNTX_UPDATE';
+  IT_INCR_UPDT_STATE                :Result:='INCR_UPDT_STATE';
+  IT_ACQUIRE_MEM                    :Result:='ACQUIRE_MEM';
+  IT_REWIND                         :Result:='REWIND';
+  IT_INTERRUPT                      :Result:='INTERRUPT';
+  IT_GEN_PDEPTE                     :Result:='GEN_PDEPTE';
+  IT_INDIRECT_BUFFER_PASID          :Result:='INDIRECT_BUFFER_PASID';
+  IT_PRIME_UTCL2                    :Result:='PRIME_UTCL2';
+  IT_LOAD_UCONFIG_REG               :Result:='LOAD_UCONFIG_REG';
+  IT_LOAD_SH_REG                    :Result:='LOAD_SH_REG';
+  IT_LOAD_CONFIG_REG                :Result:='LOAD_CONFIG_REG';
+  IT_LOAD_CONTEXT_REG               :Result:='LOAD_CONTEXT_REG';
+  IT_LOAD_COMPUTE_STATE             :Result:='LOAD_COMPUTE_STATE';
+  IT_LOAD_SH_REG_INDEX              :Result:='LOAD_SH_REG_INDEX';
+  IT_SET_CONFIG_REG                 :Result:='SET_CONFIG_REG';
+  IT_SET_CONTEXT_REG                :Result:='SET_CONTEXT_REG';
+  IT_SET_CONTEXT_REG_INDEX          :Result:='SET_CONTEXT_REG_INDEX';
+  IT_SET_VGPR_REG_DI_MULTI          :Result:='SET_VGPR_REG_DI_MULTI';
+  IT_SET_SH_REG_DI                  :Result:='SET_SH_REG_DI';
+  IT_SET_CONTEXT_REG_INDIRECT       :Result:='SET_CONTEXT_REG_INDIRECT';
+  IT_SET_SH_REG_DI_MULTI            :Result:='SET_SH_REG_DI_MULTI';
+  IT_GFX_PIPE_LOCK                  :Result:='GFX_PIPE_LOCK';
+  IT_SET_SH_REG                     :Result:='SET_SH_REG';
+  IT_SET_SH_REG_OFFSET              :Result:='SET_SH_REG_OFFSET';
+  IT_SET_QUEUE_REG                  :Result:='SET_QUEUE_REG';
+  IT_SET_UCONFIG_REG                :Result:='SET_UCONFIG_REG';
+  IT_SET_UCONFIG_REG_INDEX          :Result:='SET_UCONFIG_REG_INDEX';
+  IT_FORWARD_HEADER                 :Result:='FORWARD_HEADER';
+  IT_SCRATCH_RAM_WRITE              :Result:='SCRATCH_RAM_WRITE';
+  IT_SCRATCH_RAM_READ               :Result:='SCRATCH_RAM_READ';
+  IT_LOAD_CONST_RAM                 :Result:='LOAD_CONST_RAM';
+  IT_WRITE_CONST_RAM                :Result:='WRITE_CONST_RAM';
+  IT_DUMP_CONST_RAM                 :Result:='DUMP_CONST_RAM';
+  IT_INCREMENT_CE_COUNTER           :Result:='INCREMENT_CE_COUNTER';
+  IT_INCREMENT_DE_COUNTER           :Result:='INCREMENT_DE_COUNTER';
+  IT_WAIT_ON_CE_COUNTER             :Result:='WAIT_ON_CE_COUNTER';
+  IT_WAIT_ON_DE_COUNTER_DIFF        :Result:='WAIT_ON_DE_COUNTER_DIFF';
+  IT_SWITCH_BUFFER                  :Result:='SWITCH_BUFFER';
+  IT_FRAME_CONTROL                  :Result:='FRAME_CONTROL';
+  IT_INDEX_ATTRIBUTES_INDIRECT      :Result:='INDEX_ATTRIBUTES_INDIRECT';
+  IT_WAIT_REG_MEM64                 :Result:='WAIT_REG_MEM64';
+  IT_COND_PREEMPT                   :Result:='COND_PREEMPT';
+  IT_HDP_FLUSH                      :Result:='HDP_FLUSH';
+  IT_INVALIDATE_TLBS                :Result:='INVALIDATE_TLBS';
+  IT_DMA_DATA_FILL_MULTI            :Result:='DMA_DATA_FILL_MULTI';
+  IT_SET_SH_REG_INDEX               :Result:='SET_SH_REG_INDEX';
+  IT_DRAW_INDIRECT_COUNT_MULTI      :Result:='DRAW_INDIRECT_COUNT_MULTI';
+  IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:Result:='DRAW_INDEX_INDIRECT_COUNT_MULTI';
+  IT_DUMP_CONST_RAM_OFFSET          :Result:='DUMP_CONST_RAM_OFFSET';
+  IT_LOAD_CONTEXT_REG_INDEX         :Result:='LOAD_CONTEXT_REG_INDEX';
+  IT_SET_RESOURCES                  :Result:='SET_RESOURCES';
+  IT_MAP_PROCESS                    :Result:='MAP_PROCESS';
+  IT_MAP_QUEUES                     :Result:='MAP_QUEUES';
+  IT_UNMAP_QUEUES                   :Result:='UNMAP_QUEUES';
+  IT_QUERY_STATUS                   :Result:='QUERY_STATUS';
+  IT_RUN_LIST                       :Result:='RUN_LIST';
+  IT_MAP_PROCESS_VM                 :Result:='MAP_PROCESS_VM';
+  else
+   Result:='0x'+HexStr(op,2);
+ end;
+end;
 
 function PM4_HEADER_BUILD(lenDw:WORD;op,priv:Byte):DWORD; inline;
 begin

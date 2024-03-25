@@ -31,6 +31,7 @@ uses
  kern_thread,
  md_sleep,
  pm4_ring,
+ pm4_pfp,
  pm4defs,
  subr_backtrace;
 
@@ -108,111 +109,188 @@ var
 
  parse_gfx_td:p_kthread;
 
-function PM4_LENGTH(token:DWORD):DWORD; inline;
-begin
- Result:=((token shr 14) and $FFFC) + 8;
-end;
-
-procedure parse_gfx_buffer(buf:PPM4CMDINDIRECTBUFFER);
+procedure onLoadConstRam(Body:PPM4CMDCONSTRAMLOAD);
 var
+ buf:PDWORD;
+ i:integer;
+
  addr:Pointer;
  size:QWORD;
-
- i,token,len:DWORD;
 begin
- case buf^.header of
-  $c0023300:Writeln('INDIRECT_BUFFER_CNST');
-  $c0023f00:Writeln('COND_INDIRECT_BUFFER');
-  else;
- end;
+ Writeln(' adr=0x',HexStr(Body^.addr,16));
+ Writeln(' len=0x',HexStr(Body^.numDwords*4,4));
+ Writeln(' ofs=0x',HexStr(Body^.offset,4));
 
- i:=buf^.ibSize*sizeof(DWORD);
-
+ {
  addr:=nil;
  size:=0;
- if get_dmem_ptr(Pointer(buf^.ibBase),@addr,@size) then
- begin
-  if (i>size) then
-  begin
-   Assert(false,'addr:0x'+HexStr(buf^.ibBase+size,16)+' not in dmem!');
-  end;
+ get_dmem_ptr(Pointer(Body^.addr),@addr,@size);
 
-  Writeln(' addr:0x'+HexStr(buf^.ibBase,16)+' '+HexStr(i,16));
- end else
+ buf:=addr;
+ for i:=0 to Body^.numDwords-1 do
  begin
-  Assert(false,'addr:0x'+HexStr(buf^.ibBase,16)+' not in dmem!');
+  Writeln('  0x',HexStr(buf[i],8));
+ end;
+ }
+end;
+
+function pm4_parse_ccb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+begin
+ Result:=0;
+
+ case PM4_TYPE(token) of
+  0:begin //PM4_TYPE_0
+     Writeln('PM4_TYPE_0');
+    end;
+  2:begin //PM4_TYPE_2
+     Writeln('PM4_TYPE_2');
+     //no body
+    end;
+  3:begin //PM4_TYPE_3
+     Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
+
+     case PM4_TYPE_3_HEADER(token).opcode of
+      IT_LOAD_CONST_RAM:onLoadConstRam(buff);
+
+      else;
+     end;
+
+    end;
+  else
+   begin
+    Writeln('PM4_TYPE_',PM4_TYPE(token));
+    Assert(False);
+   end;
  end;
 
- while (i<>0) do
- begin
-  token:=PDWORD(addr)^;
+end;
 
-  if (PM4_TYPE(token)=2) then
-  begin
-   len:=sizeof(DWORD);
-  end else
-  begin
-   len:=PM4_LENGTH(token);
-  end;
+procedure onContextControl(Body:PPM4CMDCONTEXTCONTROL);
+begin
+ Writeln(' loadControl =b',BinStr(DWORD(Body^.loadControl ),32));
+ Writeln(' shadowEnable=b',BinStr(DWORD(Body^.shadowEnable),32));
+end;
 
-  if (len>i) then Exit;
+procedure onSetBase(Body:PPM4CMDDRAWSETBASE);
+var
+ addr:QWORD;
+begin
+ addr:=Body^.addressLo or Body^.addressHi;
 
-  case PM4_TYPE(token) of
-   0:begin //PM4_TYPE_0
-      Writeln('PM4_TYPE_0');
-      //onPm40(PM4_TYPE_0_HEADER(token),@PDWORD(P)[1]);
-     end;
-   2:begin //PM4_TYPE_2
-      Writeln('PM4_TYPE_2');
-      //onPm42(PM4_TYPE_2_HEADER(token));
+ Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
+ Writeln(' address  =0x',HexStr(addr,16));
+end;
 
-      //no body
-     end;
-   3:begin //PM4_TYPE_3
-      case PM4_TYPE_3_HEADER(token).opcode of
-       IT_NOP                :Writeln('IT_NOP                ');
-       IT_EVENT_WRITE_EOP    :Writeln('IT_EVENT_WRITE_EOP    ');
-       IT_EVENT_WRITE_EOS    :Writeln('IT_EVENT_WRITE_EOS    ');
-       IT_DMA_DATA           :Writeln('IT_DMA_DATA           ');
-       IT_ACQUIRE_MEM        :Writeln('IT_ACQUIRE_MEM        ');
-       IT_CONTEXT_CONTROL    :Writeln('IT_CONTEXT_CONTROL    ');
-       IT_CLEAR_STATE        :Writeln('IT_CLEAR_STATE        ');
-       IT_SET_CONTEXT_REG    :Writeln('IT_SET_CONTEXT_REG    ');
-       IT_SET_SH_REG         :Writeln('IT_SET_SH_REG         ');
-       IT_SET_UCONFIG_REG    :Writeln('IT_SET_UCONFIG_REG    ');
-       IT_SET_CONFIG_REG     :Writeln('IT_SET_CONFIG_REG     ');
-       IT_INDEX_BUFFER_SIZE  :Writeln('IT_INDEX_BUFFER_SIZE  ');
-       IT_INDEX_TYPE         :Writeln('IT_INDEX_TYPE         ');
-       IT_DRAW_INDEX_2       :Writeln('IT_DRAW_INDEX_2       ');
-       IT_DRAW_INDEX_AUTO    :Writeln('IT_DRAW_INDEX_AUTO    ');
-       IT_INDEX_BASE         :Writeln('IT_INDEX_BASE         ');
-       IT_DRAW_INDEX_OFFSET_2:Writeln('IT_DRAW_INDEX_OFFSET_2');
-       IT_DISPATCH_DIRECT    :Writeln('IT_DISPATCH_DIRECT    ');
-       IT_NUM_INSTANCES      :Writeln('IT_NUM_INSTANCES      ');
-       IT_WAIT_REG_MEM       :Writeln('IT_WAIT_REG_MEM       ');
-       IT_WRITE_DATA         :Writeln('IT_WRITE_DATA         ');
-       IT_EVENT_WRITE        :Writeln('IT_EVENT_WRITE        ');
-       IT_PFP_SYNC_ME        :Writeln('IT_PFP_SYNC_ME        ');
+procedure onSetShReg(Body:PPM4CMDSETDATA);
+begin
+ Writeln(' 0x',HexStr(SH_REG_BASE+Body^.REG_OFFSET,4),'..',
+          '0x',HexStr(SH_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
+end;
 
-       IT_SET_BASE           :Writeln('IT_SET_BASE           ');
-       IT_DRAW_PREAMBLE      :Writeln('IT_DRAW_PREAMBLE      ');
-       IT_SET_PREDICATION    :Writeln('IT_SET_PREDICATION    ');
+procedure onSetUConfigReg(Body:PPM4CMDSETDATA);
+begin
+ Writeln(' 0x',HexStr(USERCONFIG_REG_BASE+Body^.REG_OFFSET,4),'..',
+          '0x',HexStr(USERCONFIG_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
+end;
 
-       IT_LOAD_CONST_RAM     :Writeln('IT_LOAD_CONST_RAM     ');
+procedure onSetContextReg(Body:PPM4CMDSETDATA);
+begin
+ Writeln(' 0x',HexStr(CONTEXT_REG_BASE+Body^.REG_OFFSET,4),'..',
+          '0x',HexStr(CONTEXT_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
+end;
 
-       else
-                              Writeln('PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
-      end;
-     end;
-   else
-    begin
-     Writeln('PM4_TYPE_',PM4_TYPE(token));
-     Assert(False);
+function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+begin
+ Result:=0;
+
+ case PM4_TYPE(token) of
+  0:begin //PM4_TYPE_0
+     Writeln('PM4_TYPE_0');
     end;
-  end;
+  2:begin //PM4_TYPE_2
+     Writeln('PM4_TYPE_2');
+     //no body
+    end;
+  3:begin //PM4_TYPE_3
+     Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
 
-  Inc(addr,len);
-  Dec(i,len);
+     case PM4_TYPE_3_HEADER(token).opcode of
+      IT_NOP                :;
+      IT_EVENT_WRITE_EOP    :;
+      IT_EVENT_WRITE_EOS    :;
+      IT_DMA_DATA           :;
+      IT_ACQUIRE_MEM        :;
+      IT_CONTEXT_CONTROL    :onContextControl(buff);
+      IT_CLEAR_STATE        :;
+      IT_SET_CONTEXT_REG    :onSetContextReg(buff);
+      IT_SET_SH_REG         :onSetShReg(buff);
+      IT_SET_UCONFIG_REG    :onSetUConfigReg(buff);
+      IT_SET_CONFIG_REG     :;
+      IT_INDEX_BUFFER_SIZE  :;
+      IT_INDEX_TYPE         :;
+      IT_DRAW_INDEX_2       :;
+      IT_DRAW_INDEX_AUTO    :;
+      IT_INDEX_BASE         :;
+      IT_DRAW_INDEX_OFFSET_2:;
+      IT_DISPATCH_DIRECT    :;
+      IT_NUM_INSTANCES      :;
+      IT_WAIT_REG_MEM       :;
+      IT_WRITE_DATA         :;
+      IT_EVENT_WRITE        :;
+      IT_PFP_SYNC_ME        :;
+
+      IT_SET_BASE           :onSetBase(buff);
+      IT_DRAW_PREAMBLE      :;
+      IT_SET_PREDICATION    :;
+
+      else;
+     end;
+
+
+    end;
+  else
+   begin
+    Writeln('PM4_TYPE_',PM4_TYPE(token));
+    Assert(False);
+   end;
+ end;
+
+end;
+
+function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+var
+ ibuf:t_pm4_ibuffer;
+ i:Integer;
+begin
+ Result:=0;
+
+ case token of
+  $c0023300:
+   begin
+    Writeln('INDIRECT_BUFFER_CNST (ccb)');
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb) then
+    begin
+     i:=pm4_ibuf_parse(pctx,@ibuf);
+     if (i<>0) then
+     begin
+      pctx^.add_stall(@ibuf);
+     end;
+    end;
+   end;
+  $c0023f00:
+   begin
+    Writeln('INDIRECT_BUFFER (dcb)');
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb) then
+    begin
+     i:=pm4_ibuf_parse(pctx,@ibuf);
+     if (i<>0) then
+     begin
+      pctx^.add_stall(@ibuf);
+     end;
+    end;
+   end;
+  $c0008b00:Writeln('SWITCH_BUFFER');
+  else;
  end;
 
 end;
@@ -220,8 +298,12 @@ end;
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
  buff:Pointer;
- i,size,op,len:DWORD;
+ i,size:DWORD;
+
+ pfp_ctx:t_pfp_ctx;
+ ibuf:t_pm4_ibuffer;
 begin
+ pfp_ctx:=Default(t_pfp_ctx);
 
  repeat
 
@@ -229,28 +311,16 @@ begin
   begin
    Writeln('packet:0x',HexStr(buff),':',size);
 
-   i:=size;
-   while (i<>0) do
+   if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_ring) then
    begin
-    op:=PDWORD(buff)^;
-    len:=PM4_LENGTH(op);
-    if (len>i) then Exit;
+    i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
 
-    case op of
-     $c0023300:parse_gfx_buffer(buff);
-     $c0023f00:parse_gfx_buffer(buff);
-     $c0008b00:Writeln('SWITCH_BUFFER');
-     else;
+    if (i<>0) then
+    begin
+     pfp_ctx.add_stall(@ibuf);
     end;
 
-    Inc(buff,len);
-    Dec(i,len);
    end;
-
-   //buf:PPM4CMDINDIRECTBUFFER;
-   //Writeln('opcode =0x',HexStr(buf[i].header,8));
-   //Writeln('ib_base=0x',HexStr(buf[i].ibBase,16));
-   //Writeln('ib_size=0x',HexStr(buf[i].ibSize,3));
 
    gc_ring_pm4_drain(@ring_gfx,size-i);
   end;
