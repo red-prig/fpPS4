@@ -295,7 +295,7 @@ begin
   i:=0;
  end else
  begin
-  if (i > len - origidx) then
+  if (i > (len - origidx)) then
   begin
    i:=len - origidx;
   end;

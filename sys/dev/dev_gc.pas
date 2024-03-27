@@ -187,7 +187,7 @@ procedure onSetBase(Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
 begin
- addr:=Body^.addressLo or (Body^.addressHi shl 32);
+ addr:=QWORD(Body^.addressLo) or (QWORD(Body^.addressHi) shl 32);
 
  Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
  Writeln(' address  =0x',HexStr(addr,16));
@@ -197,7 +197,7 @@ procedure onSetPredication(Body:PPM4CMDSETPREDICATION);
 var
  addr:QWORD;
 begin
- addr:=Body^.startAddressLo or (Body^.startAddrHi shl 32);
+ addr:=QWORD(Body^.startAddressLo) or (QWORD(Body^.startAddrHi) shl 32);
 
  Writeln(' startAddress=0x',HexStr(addr,16));
  Writeln(' pred        =',Body^.predicationBoolean);

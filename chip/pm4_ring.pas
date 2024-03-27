@@ -18,12 +18,14 @@ type
  PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
  PM4CMDINDIRECTBUFFER=bitpacked record
   header   :DWORD; // PM4_TYPE_3_HEADER
-  ibBase   :QWORD; // Indirect buffer base address, must be 4 byte aligned
+  ibBaseLo :DWORD; // Indirect buffer base address, must be 4 byte aligned
+  ibBaseHi :bit8;
+  reserved0:bit24;
   //
   ibSize   :bit20; // Indirect buffer size
-  reserved0:bit4;
-  vmid     :bit4;  // Virtual memory domain ID for command buffer
   reserved1:bit4;
+  vmid     :bit4;  // Virtual memory domain ID for command buffer
+  reserved2:bit4;
  end;
 
  PPM4CMDSWITCHBUFFER=^PM4CMDSWITCHBUFFER;

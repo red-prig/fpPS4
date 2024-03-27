@@ -64,24 +64,26 @@ end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buf:PPM4CMDINDIRECTBUFFER;icb:t_pm4_parse_cb):Boolean;
 var
- addr:Pointer;
+ ib_base:QWORD;
  ib_size:QWORD;
+ addr:Pointer;
  size:QWORD;
 begin
  Result:=False;
 
- ib_size:=buf^.ibSize*sizeof(DWORD);
+ ib_base:=QWORD(buf^.ibBaseLo) or (QWORD(buf^.ibBaseHi) shl 32);
+ ib_size:=QWORD(buf^.ibSize)*sizeof(DWORD);
 
  addr:=nil;
  size:=0;
- if get_dmem_ptr(Pointer(buf^.ibBase),@addr,@size) then
+ if get_dmem_ptr(Pointer(ib_base),@addr,@size) then
  begin
   if (ib_size>size) then
   begin
-   Assert(false,'addr:0x'+HexStr(buf^.ibBase+size,16)+' not in dmem!');
+   Assert(false,'addr:0x'+HexStr(ib_base+ib_size,16)+' not in dmem!');
   end else
   begin
-   Writeln(' addr:0x'+HexStr(buf^.ibBase,16)+' '+HexStr(ib_size,16));
+   Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
 
    ibuf^.next:=Default(TAILQ_ENTRY);
    ibuf^.buff:=addr;
@@ -93,7 +95,7 @@ begin
   end;
  end else
  begin
-  Assert(false,'addr:0x'+HexStr(buf^.ibBase,16)+' not in dmem!');
+  Assert(false,'addr:0x'+HexStr(ib_base,16)+' not in dmem!');
  end;
 
 end;
