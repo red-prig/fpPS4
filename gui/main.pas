@@ -635,7 +635,7 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=False;
+ cfg.fork_proc:=True;
 
  if Item.FLock then Exit;
 

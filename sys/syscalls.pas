@@ -45,6 +45,7 @@ function  readlink(path,buf:PChar;count:QWORD):Integer;
 function  _execve(fname:pchar;argv,envv:ppchar):Integer;
 function  umask(newmask:Integer):Integer;
 function  chroot(path:PChar):Integer;
+function  msync(addr:Pointer;len:QWORD;flags:Integer):Integer;
 function  munmap(addr:Pointer;len:QWORD):Integer;
 function  mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function  madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
@@ -521,6 +522,13 @@ end;
 function chroot(path:PChar):Integer; assembler; nostackframe;
 asm
  movq  $61,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function msync(addr:Pointer;len:QWORD;flags:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $65,%rax
  call  fast_syscall
  jmp   cerror
 end;

@@ -165,20 +165,50 @@ begin
 
 end;
 
+function revbinstr(val:int64;cnt:byte):shortstring;
+var
+ i:Integer;
+begin
+ Result[0]:=AnsiChar(cnt);
+ for i:=1 to cnt do
+ begin
+  Result[i]:=AnsiChar(48+val and 1);
+  val:=val shr 1;
+ end;
+end;
+
 procedure onContextControl(Body:PPM4CMDCONTEXTCONTROL);
 begin
- Writeln(' loadControl =b',BinStr(DWORD(Body^.loadControl ),32));
- Writeln(' shadowEnable=b',BinStr(DWORD(Body^.shadowEnable),32));
+ Writeln(' loadControl =b',revbinstr(DWORD(Body^.loadControl ),32));
+ Writeln(' shadowEnable=b',revbinstr(DWORD(Body^.shadowEnable),32));
 end;
 
 procedure onSetBase(Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
 begin
- addr:=Body^.addressLo or Body^.addressHi;
+ addr:=Body^.addressLo or (Body^.addressHi shl 32);
 
  Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
  Writeln(' address  =0x',HexStr(addr,16));
+end;
+
+procedure onSetPredication(Body:PPM4CMDSETPREDICATION);
+var
+ addr:QWORD;
+begin
+ addr:=Body^.startAddressLo or (Body^.startAddrHi shl 32);
+
+ Writeln(' startAddress=0x',HexStr(addr,16));
+ Writeln(' pred        =',Body^.predicationBoolean);
+ Writeln(' hint        =',Body^.hint);
+ Writeln(' predOp      =',Body^.predOp);
+ Writeln(' continueBit =',Body^.continueBit);
+end;
+
+procedure onDrawPreamble(Body:PPM4CMDDRAWPREAMBLE);
+begin
+ //Writeln;
 end;
 
 procedure onSetShReg(Body:PPM4CMDSETDATA);
@@ -240,8 +270,8 @@ begin
       IT_PFP_SYNC_ME        :;
 
       IT_SET_BASE           :onSetBase(buff);
-      IT_DRAW_PREAMBLE      :;
-      IT_SET_PREDICATION    :;
+      IT_DRAW_PREAMBLE      :onDrawPreamble(buff);
+      IT_SET_PREDICATION    :onSetPredication(buff);
 
       else;
      end;

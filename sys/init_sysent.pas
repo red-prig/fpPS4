@@ -383,7 +383,7 @@ var
   ),
   (//[65]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_msync;
      sy_name:'sys_msync'
   ),
   (//[66]
@@ -1443,7 +1443,7 @@ var
   ),
   (//[277]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_msync;
      sy_name:'sys_msync'
   ),
   (//[278]

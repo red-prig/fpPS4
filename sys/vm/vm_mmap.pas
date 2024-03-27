@@ -28,6 +28,7 @@ type
                    pos  :QWORD):Pointer;
 
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
+function sys_msync(addr:Pointer;len:QWORD;flags:Integer):Integer;
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
@@ -840,6 +841,50 @@ begin
 
  // vm_map_remove returns nothing but KERN_SUCCESS anyway
  Exit(0);
+end;
+
+function sys_msync(addr:Pointer;len:QWORD;flags:Integer):Integer;
+var
+ map:vm_map_t;
+ _addr:vm_offset_t;
+ pageoff:vm_size_t;
+begin
+ _addr:=vm_offset_t(addr);
+
+ pageoff:=(_addr and PAGE_MASK);
+ _addr:=_addr-pageoff;
+ len:=len+pageoff;
+
+ len:=round_page(len);
+
+ if ((_addr + len) < _addr) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if ((flags and (MS_ASYNC or MS_INVALIDATE))=(MS_ASYNC or MS_INVALIDATE)) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ map:=p_proc.p_vmspace;
+
+ // Clean the pages and interpret the Exit value.
+ Result:=vm_map_sync(map,
+                     _addr,
+                     _addr + len,
+                     (flags and MS_ASYNC)=0,
+                     (flags and MS_INVALIDATE)<>0);
+
+ case Result of
+  KERN_SUCCESS         :Result:=0;
+  KERN_INVALID_ADDRESS :Result:=ENOMEM;
+  KERN_INVALID_ARGUMENT:Result:=EBUSY;
+  KERN_FAILURE         :Result:=EIO;
+  else
+                        Result:=EINVAL;
+ end;
+
 end;
 
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;

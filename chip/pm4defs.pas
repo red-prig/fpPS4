@@ -319,6 +319,36 @@ type
   addressHi:bit16; // < base address Hi of buffer
  end;
 
+const
+ SET_PRED_CLEAR    =0;
+ SET_PRED_ZPASS    =1;
+ SET_PRED_PRIMCOUNT=2;
+ SET_PRED_MEM      =3;
+
+type
+ PPM4CMDSETPREDICATION=^PM4CMDSETPREDICATION;
+ PM4CMDSETPREDICATION=bitpacked record
+  header            :PM4_TYPE_3_HEADER;
+  startAddressLo    :bit32; // < start address low
+  startAddrHi       :bit8;  // < start address hi
+  predicationBoolean:bit1;  // < predication boolean
+  reserved1         :bit3;
+  hint              :bit1;  // < hint
+                            // < (only valid for Zpass/Occlusion Predicate)
+  reserved2         :bit3;
+  predOp            :bit3;  // < predicate operation
+  reserved3         :bit12;
+  continueBit       :bit1;  // < continue set predication
+ end;
+
+ PPM4CMDDRAWPREAMBLE=^PM4CMDDRAWPREAMBLE;
+ PM4CMDDRAWPREAMBLE=bitpacked record
+  header   :PM4_TYPE_3_HEADER;
+  control1 :TVGT_PRIMITIVE_TYPE; //< writes to VGT_PRIMITIVE_TYPE reg
+  control2 :TIA_MULTI_VGT_PARAM; //< writes to IA_MULTI_VGT_PARAM reg
+  control3 :TVGT_LS_HS_CONFIG;   //< writes to VGT_LS_HS_CONFIG   reg
+ end;
+
  // WRITE_DATA DST_SEL and ENGINE definitions
 const
  WRITE_DATA_DST_SEL_REGISTER    =0;

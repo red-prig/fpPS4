@@ -39,6 +39,12 @@ procedure vm_object_madvise(pmap  :Pointer;
                             __end :vm_offset_t;
                             advise:Integer);
 
+function  vm_object_sync(obj       :vm_object_t;
+                         offset    :vm_ooffset_t;
+                         size      :vm_size_t;
+                         syncio    :Boolean;
+                         invalidate:Boolean):Boolean;
+
 implementation
 
 uses
@@ -504,6 +510,114 @@ begin
   VM_OBJECT_UNLOCK(obj);
 end;
 
+{
+ * Note that there is absolutely no sense in writing out
+ * anonymous objects, so we track down the vnode object
+ * to write out.
+ * We invalidate (remove) all pages from the address space
+ * for semantic correctness.
+ *
+ * If the backing object is a device object with unmanaged pages, then any
+ * mappings to the specified range of pages must be removed before this
+ * function is called.
+ *
+ * Note: certain anonymous maps, such as MAP_NOSYNC maps,
+ * may start out with a nil object.
+}
+function vm_object_sync(obj       :vm_object_t;
+                        offset    :vm_ooffset_t;
+                        size      :vm_size_t;
+                        syncio    :Boolean;
+                        invalidate:Boolean):Boolean;
+var
+ vp:p_vnode;
+ mp:p_mount;
+ error,flags:Integer;
+ vfslocked:Integer;
+ fsync_after:Boolean;
+ res:Boolean;
+begin
+ if (obj=nil) then Exit(TRUE);
+
+ res:=TRUE;
+ error:=0;
+ VM_OBJECT_LOCK(obj);
+
+ {
+  * Flush pages if writing is allowed, invalidate them
+  * if invalidation requested.  Pages undergoing I/O
+  * will be ignored by vm_object_page_remove().
+  *
+  * We cannot lock the vnode and then wait for paging
+  * to complete without deadlocking against vm_fault.
+  * Instead we simply call vm_object_page_remove() and
+  * allow it to block internally on a page-by-page
+  * basis when it encounters pages undergoing async
+  * I/O.
+ }
+ if (obj^.otype=OBJT_VNODE) and
+    ((obj^.flags and OBJ_MIGHTBEDIRTY)<>0) then
+ begin
+  vp:=obj^.handle;
+  VM_OBJECT_UNLOCK(obj);
+  vn_start_write(vp, @mp, V_WAIT);
+  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+  vn_lock(vp, LK_EXCLUSIVE or LK_RETRY);
+
+  if (syncio) and
+     (not invalidate) and
+     (offset=0) and
+     (OFF_TO_IDX(size)=obj^.size) then
+  begin
+   {
+    * If syncing the whole mapping of the file,
+    * it is faster to schedule all the writes in
+    * async mode, also allowing the clustering,
+    * and then wait for i/o to complete.
+   }
+   flags:=0;
+   fsync_after:=TRUE;
+  end else
+  begin
+   flags:=0;
+
+   if (syncio or invalidate) then
+   begin
+    flags:=flags or OBJPC_SYNC;
+   end;
+
+   if (invalidate) then
+   begin
+    flags:=flags or (OBJPC_SYNC or OBJPC_INVAL);
+   end;
+
+   fsync_after:=FALSE;
+  end;
+
+  VM_OBJECT_LOCK(obj);
+  res:=vm_object_page_clean(obj, offset, offset + size, flags);
+  VM_OBJECT_UNLOCK(obj);
+
+  if (fsync_after) then
+  begin
+   error:=VOP_FSYNC(vp, MNT_WAIT);
+  end;
+
+  VOP_UNLOCK(vp, 0);
+  VFS_UNLOCK_GIANT(vfslocked);
+  vn_finished_write(mp);
+
+  if (error<>0) then
+  begin
+   res:=FALSE;
+  end;
+
+  VM_OBJECT_LOCK(obj);
+ end;
+
+ VM_OBJECT_UNLOCK(obj);
+ Exit(res);
+end;
 
 
 

@@ -225,6 +225,12 @@ function  vm_map_madvise(map  :vm_map_t;
                          __end:vm_offset_t;
                          behav:Integer):Integer;
 
+function  vm_map_sync(map       :vm_map_t;
+                      start     :vm_offset_t;
+                      __end     :vm_offset_t;
+                      syncio    :Boolean;
+                      invalidate:Boolean):Integer;
+
 function  vm_map_find(map       :vm_map_t;
                       vm_obj    :vm_object_t;
                       offset    :vm_ooffset_t;
@@ -257,7 +263,7 @@ function  vm_map_stack(map      :vm_map_t;
 function  vm_map_growstack(map:vm_map_t;addr:vm_offset_t):Integer;
 function  vmspace_exec(minuser,maxuser:vm_offset_t):Integer;
 
-procedure vm_map_lock(map:vm_map_t);
+procedure vm_map_lock(map:vm_map_t;tm:Boolean=True);
 function  vm_map_trylock(map:vm_map_t):Boolean;
 procedure vm_map_unlock(map:vm_map_t);
 
@@ -277,6 +283,7 @@ procedure vminit; //SYSINIT
 implementation
 
 uses
+ md_map,
  kern_proc,
  rmem_map,
  kern_budget;
@@ -398,10 +405,13 @@ begin
  Result:=vm;
 end;
 
-procedure vm_map_lock(map:vm_map_t);
+procedure vm_map_lock(map:vm_map_t;tm:Boolean=True);
 begin
  mtx_lock(map^.lock);
- Inc(map^.timestamp);
+ if tm then
+ begin
+  Inc(map^.timestamp);
+ end;
 end;
 
 function vm_map_trylock(map:vm_map_t):Boolean;
@@ -2088,9 +2098,9 @@ end;
  *
  * Returns an error if any part of the specified range is not mapped.
  }
-function vm_map_sync(map  :vm_map_t;
-                     start:vm_offset_t;
-                     __end:vm_offset_t;
+function vm_map_sync(map       :vm_map_t;
+                     start     :vm_offset_t;
+                     __end     :vm_offset_t;
                      syncio    :Boolean;
                      invalidate:Boolean):Integer;
 var
@@ -2118,12 +2128,20 @@ begin
   start:=entry^.start;
   __end:=entry^.__end;
  end;
+
  {
   * Make a first pass to check for user-wired memory and holes.
   }
  current:=entry;
  while (current<>@map^.header) and (current^.start<__end) do
  begin
+  if invalidate and
+     ((current^.eflags and MAP_ENTRY_USER_WIRED)<>0) then
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
   if (__end>current^.__end) and
      ((current^.next=@map^.header) or
       (current^.__end<>current^.next^.start)) then
@@ -2137,8 +2155,10 @@ begin
 
  if invalidate then
  begin
-  //
+  md_cacheflush(Pointer(start),__end-start,ICACHE or DCACHE);
+  //pmap_remove(map^.pmap, start, end);
  end;
+
  failed:=FALSE;
 
  {
@@ -2183,11 +2203,16 @@ begin
   vm_object_reference(obj);
   last_timestamp:=map^.timestamp;
   vm_map_unlock(map);
-  //if (not vm_object_sync(_object, offset, size, syncio, invalidate)) then
-  // failed:=TRUE;
+
+  if (not vm_object_sync(obj, offset, size, syncio, invalidate)) then
+  begin
+   failed:=TRUE;
+  end;
+
   start:=start+size;
   vm_object_deallocate(obj);
-  vm_map_lock(map);
+
+  vm_map_lock(map,False);
   if (last_timestamp=map^.timestamp) or
      (not vm_map_lookup_entry(map, start, @current)) then
   begin
