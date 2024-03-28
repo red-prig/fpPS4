@@ -315,8 +315,7 @@ type
   header   :PM4_TYPE_3_HEADER;
   baseIndex:bit4;  // < base index selector
   reserved1:bit28;
-  addressLo:bit32; // < base address Lo of buffer, must be 8 byte aligned
-  addressHi:bit16; // < base address Hi of buffer
+  address  :bit48; // < base address of buffer, must be 8 byte aligned
  end;
 
 const
@@ -329,8 +328,7 @@ type
  PPM4CMDSETPREDICATION=^PM4CMDSETPREDICATION;
  PM4CMDSETPREDICATION=bitpacked record
   header            :PM4_TYPE_3_HEADER;
-  startAddressLo    :bit32; // < start address low
-  startAddrHi       :bit8;  // < start address hi
+  startAddress      :bit40; // < start address
   predicationBoolean:bit1;  // < predication boolean
   reserved1         :bit3;
   hint              :bit1;  // < hint

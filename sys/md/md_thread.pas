@@ -310,9 +310,30 @@ begin
 end;
 
 function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+var
+ info:SYSTEM_INFO;
+ i,m,t,n:Integer;
 begin
  if (td=nil) then Exit;
  if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
+
+ new:=new and $FF;
+
+ info.dwNumberOfProcessors:=1;
+ GetSystemInfo(info);
+
+ if (info.dwNumberOfProcessors<8) then
+ begin
+  //remap
+  m:=0;
+  for i:=0 to 7 do
+  begin
+   t:=(new shr i) and 1;
+   n:=(i mod info.dwNumberOfProcessors);
+   m:=m or (t shl n);
+  end;
+  new:=m;
+ end;
 
  td^.td_cpuset:=new;
  Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@new,SizeOf(Ptruint));

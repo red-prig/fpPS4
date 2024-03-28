@@ -71,7 +71,7 @@ var
 begin
  Result:=False;
 
- ib_base:=QWORD(buf^.ibBaseLo) or (QWORD(buf^.ibBaseHi) shl 32);
+ ib_base:=QWORD(buf^.ibBase);
  ib_size:=QWORD(buf^.ibSize)*sizeof(DWORD);
 
  addr:=nil;

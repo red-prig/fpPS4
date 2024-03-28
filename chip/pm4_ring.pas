@@ -18,8 +18,7 @@ type
  PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
  PM4CMDINDIRECTBUFFER=bitpacked record
   header   :DWORD; // PM4_TYPE_3_HEADER
-  ibBaseLo :DWORD; // Indirect buffer base address, must be 4 byte aligned
-  ibBaseHi :bit8;
+  ibBase   :bit40; // Indirect buffer base address, must be 4 byte aligned
   reserved0:bit24;
   //
   ibSize   :bit20; // Indirect buffer size

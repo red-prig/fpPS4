@@ -23,7 +23,28 @@ uses
  kern_proc;
 
 function cpuset_setproc(new:Ptruint):Integer;
+var
+ info:SYSTEM_INFO;
+ i,m,t,n:Integer;
 begin
+ new:=new and $FF;
+
+ info.dwNumberOfProcessors:=1;
+ GetSystemInfo(info);
+
+ if (info.dwNumberOfProcessors<8) then
+ begin
+  //remap
+  m:=0;
+  for i:=0 to 7 do
+  begin
+   t:=(new shr i) and 1;
+   n:=(i mod info.dwNumberOfProcessors);
+   m:=m or (t shl n);
+  end;
+  new:=m;
+ end;
+
  Result:=NtSetInformationProcess(NtCurrentProcess,
                                  ProcessAffinityMask,
                                  @new,
