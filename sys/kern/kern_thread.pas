@@ -25,7 +25,7 @@ procedure thread_free(td:p_kthread);
 function  sys_thr_new     (_param:Pointer;_size:Integer):Integer;
 function  sys_thr_create  (ctx:Pointer;id:PDWORD;flags:Integer):Integer;
 function  sys_thr_self    (id:PDWORD):Integer;
-procedure sys_thr_exit    (state:PQWORD);
+procedure sys_thr_exit    (state:PDWORD);
 function  sys_thr_kill    (id,sig:Integer):Integer;
 function  sys_thr_kill2   (pid,id,sig:Integer):Integer;
 function  sys_thr_suspend (timeout:Pointer):Integer;
@@ -799,7 +799,7 @@ begin
  Result:=0;
 end;
 
-procedure sys_thr_exit(state:PQWORD);
+procedure sys_thr_exit(state:PDWORD);
 var
  td:p_kthread;
 begin
@@ -808,6 +808,8 @@ begin
 
  if (state<>nil) then
  begin
+  //join wakeup
+  suword32(state^, 1);
   kern_umtx_wake(td,Pointer(state),High(Integer),0);
  end;
 
