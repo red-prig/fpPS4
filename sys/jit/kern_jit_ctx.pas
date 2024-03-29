@@ -241,6 +241,7 @@ procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 procedure print_disassemble(addr:Pointer;vsize:Integer);
 
 var
+ jit_relative_analize:Boolean=True;
  jit_memory_guard:Boolean=False;
 
 implementation
@@ -648,6 +649,11 @@ begin
  Result:=r.RegValue[0].AType=regGeneralH;
 end;
 
+function is_high(const r:TRegValue):Boolean; inline;
+begin
+ Result:=r.AType=regGeneralH;
+end;
+
 function cmp_reg(const r1,r2:TRegValue):Boolean; inline;
 begin
  Result:=(r1.AType =r2.AType) and
@@ -713,6 +719,7 @@ begin
  case Result.ASize of
   os8 :Result.ASize:=os16;
   os32:Result.ASize:=os64;
+  else;
  end;
 end;
 
@@ -848,7 +855,7 @@ end;
 
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 begin
- //exit;
+ if not jit_relative_analize then Exit;
 
  if (code_ref in hint) then
  begin
@@ -1794,7 +1801,10 @@ begin
               Result:=[ax_id,dx_id];
     end;
 
+  OPmul:      Result:=[ax_id,dx_id];
   OPimul:     Result:=[ax_id,dx_id];
+  OPdiv:      Result:=[ax_id,dx_id];
+  OPidiv:     Result:=[ax_id,dx_id];
 
   OPpcmpestri:Result:=[cx_id];
   OPpcmpistri:Result:=[cx_id];
@@ -1806,6 +1816,14 @@ begin
   OPshl:      Result:=[cx_id];
   OPshr:      Result:=[cx_id];
   OPsar:      Result:=[cx_id];
+
+  OPcbw :     Result:=[ax_id];
+  OPcwde:     Result:=[ax_id];
+  OPcdqe:     Result:=[ax_id];
+
+  OPcwd:      Result:=[ax_id,dx_id];
+  OPcdq:      Result:=[ax_id,dx_id];
+  OPcqo:      Result:=[ax_id,dx_id];
 
   else;
  end;
@@ -1857,6 +1875,147 @@ begin
  Result:=alloc_tmp_lo(ctx,ctx.din.Operand[i].RegValue[0].ASize);
 end;
 
+type
+ t_override_ctx=record
+  original:TRegValue;
+  enable  :Boolean;
+  xchg    :Boolean;
+ end;
+
+procedure override_mem_in_beg(var ctx:t_jit_context2;
+                              var ovr:t_override_ctx;
+                              hint:t_op_hint;
+                              var reg:TRegValue);
+begin
+ with ctx.builder do
+ begin
+  ovr.enable:=is_high(reg);
+
+  if ovr.enable then
+  begin
+   ovr.original:=reg;
+
+   //get override reg
+   reg:=alloc_tmp_lo(ctx,1);
+
+   ovr.xchg:=True;
+
+   if ovr.xchg then
+   begin
+    //xchg hack
+    xchgq(reg,ovr.original);
+   end else
+   begin
+    //save reg
+    push(fix_size8(reg));
+    //
+    if (not (his_wo in hint)) or
+       (his_ro in hint) then
+    begin
+     movq(reg,ovr.original);
+    end;
+   end;
+
+  end;
+
+ end;
+end;
+
+procedure override_mem_in_fin(var ctx:t_jit_context2;
+                              var ovr:t_override_ctx;
+                              hint:t_op_hint;
+                              var reg:TRegValue);
+begin
+ with ctx.builder do
+ begin
+
+  if (ovr.enable) then
+  begin
+
+   if ovr.xchg then
+   begin
+    //xchg hack
+    xchgq(ovr.original,reg);
+   end else
+   begin
+    if not (his_ro in hint) then
+    begin
+     movq(ovr.original,reg);
+    end;
+    //restore reg
+    pop(fix_size8(reg));
+   end;
+
+  end;
+
+ end;
+end;
+
+procedure override_mem_out_beg(var ctx:t_jit_context2;
+                               var ovr:t_override_ctx;
+                               hint:t_op_hint;
+                               var reg:TRegValue);
+begin
+ with ctx.builder do
+ begin
+  ovr.enable:=is_high(reg);
+
+  if ovr.enable then
+  begin
+   ovr.original:=reg;
+
+   //get override reg
+   reg:=alloc_tmp_lo(ctx,2);
+
+   ovr.xchg:=True;
+
+   if ovr.xchg then
+   begin
+    //xchg hack
+    xchgq(reg,ovr.original);
+   end else
+   begin
+    //save reg
+    push(fix_size8(reg));
+    //
+    movq(reg,ovr.original);
+   end;
+
+  end;
+
+ end;
+end;
+
+procedure override_mem_out_fin(var ctx:t_jit_context2;
+                               var ovr:t_override_ctx;
+                               hint:t_op_hint;
+                               var reg:TRegValue);
+begin
+ with ctx.builder do
+ begin
+
+  if ovr.enable then
+  begin
+
+   if ovr.xchg then
+   begin
+    //xchg hack
+    xchgq(ovr.original,reg);
+   end else
+   begin
+    if (his_xchg in hint) then
+    begin
+     movq(ovr.original,reg);
+    end;
+    //restore reg
+    pop(fix_size8(reg));
+   end;
+
+  end;
+
+ end;
+end;
+
 procedure op_emit2(var ctx:t_jit_context2;const desc:t_op_desc);
 var
  i:Integer;
@@ -1869,114 +2028,9 @@ var
 
  new1,new2:TRegValue;
 
- tmp1,tmp2:TRegValue;
-
  new1_load:Boolean;
 
- rbp_hack:Boolean;
-
- procedure override_beg1;
- begin
-  with ctx.builder do
-  begin
-   tmp1:=Default(TRegValue);
-
-   if is_high(ctx.din.Operand[1]) then
-   begin
-    tmp1:=new1;
-
-    new1:=alloc_tmp_lo(ctx,1);
-
-    if (new1.AIndex=bx_id) then
-    begin
-     rbp_hack:=True;
-    end else
-    begin
-     rbp_hack:=False;
-     push(fix_size8(new1));
-    end;
-
-    if (not (his_wo in desc.hint)) or
-       (his_ro in desc.hint) then
-    begin
-     movq(new1,tmp1);
-    end;
-   end;
-  end;
- end;
-
- procedure override_fin1;
- begin
-  with ctx.builder do
-  begin
-   if (tmp1.AType<>regNone) then
-   begin
-    if not (his_ro in desc.hint) then
-    begin
-     movq(tmp1,new1);
-    end;
-
-    if rbp_hack then
-    begin
-     //restore rbp
-     movq(rbp,rsp);
-    end else
-    begin
-     pop(fix_size8(new1));
-    end;
-
-   end;
-  end;
- end;
-
- procedure override_beg2;
- begin
-  with ctx.builder do
-  begin
-   tmp2:=Default(TRegValue);
-
-   if is_high(ctx.din.Operand[2]) then
-   begin
-    tmp2:=new2;
-    new2:=alloc_tmp_lo(ctx,2);
-
-    if (new2.AIndex=bx_id) then
-    begin
-     rbp_hack:=True;
-    end else
-    begin
-     rbp_hack:=False;
-     push(fix_size8(new2));
-    end;
-
-    movq(new2,tmp2);
-   end;
-  end;
- end;
-
- procedure override_fin2;
- begin
-  with ctx.builder do
-  begin
-   if (tmp2.AType<>regNone) then
-   begin
-    if (his_xchg in desc.hint) then
-    begin
-     movq(tmp2,new2);
-    end;
-
-    if rbp_hack then
-    begin
-     //restore rbp
-     movq(rbp,rsp);
-    end else
-    begin
-     pop(fix_size8(new2));
-    end;
-
-   end;
-  end;
- end;
+ ovr:t_override_ctx;
 
  procedure mem_out;
  begin
@@ -1988,11 +2042,11 @@ var
 
        new2:=new_reg(ctx.din.Operand[2]);
 
-       override_beg2;
+       override_mem_out_beg(ctx,ovr,desc.hint,new2);
 
        _RM(desc.mem_reg,new2,[flags(ctx)+r_tmp0]);
 
-       override_fin2;
+       override_mem_out_fin(ctx,ovr,desc.hint,new2);
 
       end;
     mo_mem_imm:
@@ -2040,7 +2094,7 @@ var
 
        new1:=new_reg(ctx.din.Operand[1]);
 
-       override_beg1;
+       override_mem_in_beg(ctx,ovr,desc.hint,new1);
 
        imm:=0;
        if GetTargetOfs(ctx.din,ctx.code,3,imm) then
@@ -2056,7 +2110,7 @@ var
         _RM(desc.reg_mem,new1,[flags(ctx)+r_tmp0]);
        end;
 
-       override_fin1;
+       override_mem_in_fin(ctx,ovr,desc.hint,new1);
 
       end;
     mo_ctx_mem:
@@ -2101,7 +2155,7 @@ var
 
       new2:=new_reg(ctx.din.Operand[2]);
 
-      override_beg2;
+      override_mem_out_beg(ctx,ovr,desc.hint,new2);
 
       imm:=0;
       if GetTargetOfs(ctx.din,ctx.code,3,imm) then
@@ -2116,7 +2170,7 @@ var
        _RM(desc.mem_reg,new2,[flags(ctx)+r_tmp0]);
       end;
 
-      override_fin2;
+      override_mem_out_fin(ctx,ovr,desc.hint,new2);
 
      end;
 
@@ -2176,6 +2230,7 @@ begin
    mo_ctx_mem:
      begin
       build_lea(ctx,get_lea_id(memop),r_tmp0);
+
       mem_size:=ctx.din.Operand[get_lea_id(memop)].Size;
      end;
    else;
@@ -2241,7 +2296,7 @@ begin
      begin
       new2:=new_reg(ctx.din.Operand[2]);
 
-      override_beg2;
+      override_mem_out_beg(ctx,ovr,desc.hint,new2);
 
       imm:=0;
       if GetTargetOfs(ctx.din,ctx.code,3,imm) then
@@ -2288,14 +2343,14 @@ begin
 
       end;
 
-      override_fin2;
+      override_mem_out_fin(ctx,ovr,desc.hint,new2);
 
      end;
    mo_reg_ctx:
      begin
       new1:=new_reg(ctx.din.Operand[1]);
 
-      override_beg1;
+      override_mem_in_beg(ctx,ovr,desc.hint,new1);
 
       imm:=0;
       if GetTargetOfs(ctx.din,ctx.code,3,imm) then
@@ -2329,7 +2384,7 @@ begin
 
       end;
 
-      override_fin1;
+      override_mem_in_fin(ctx,ovr,desc.hint,new1);
 
      end;
    mo_ctx_ctx:
@@ -2635,102 +2690,6 @@ var
 
  new1,new2:TRegValue;
 
- tmp1,tmp2:TRegValue;
-
- rbp_hack:Boolean;
-
- procedure override_beg1;
- begin
-  with ctx.builder do
-  begin
-   tmp1:=Default(TRegValue);
-
-   if is_high(ctx.din.Operand[1]) then
-   begin
-    tmp1:=new1;
-    new1:=alloc_tmp_lo(ctx,1);
-
-    if (new1.AIndex=bx_id) then
-    begin
-     rbp_hack:=True;
-    end else
-    begin
-     rbp_hack:=False;
-     push(fix_size8(new1));
-    end;
-
-    movq(new1,tmp1);
-   end;
-  end;
- end;
-
- procedure override_fin1;
- begin
-  with ctx.builder do
-  begin
-   if (tmp1.AType<>regNone) then
-   begin
-    movq(tmp1,new1);
-
-    if rbp_hack then
-    begin
-     //restore rbp
-     movq(rbp,rsp);
-    end else
-    begin
-     pop(fix_size8(new1));
-    end;
-
-   end;
-  end;
- end;
-
- procedure override_beg2;
- begin
-  with ctx.builder do
-  begin
-   tmp2:=Default(TRegValue);
-
-   if is_high(ctx.din.Operand[2]) then
-   begin
-    tmp2:=new2;
-    new2:=alloc_tmp_lo(ctx,2);
-
-    if (new2.AIndex=bx_id) then
-    begin
-     rbp_hack:=True;
-    end else
-    begin
-     rbp_hack:=False;
-     push(fix_size8(new2));
-    end;
-
-    movq(new2,tmp2);
-   end;
-  end;
- end;
-
- procedure override_fin2;
- begin
-  with ctx.builder do
-  begin
-   if (tmp2.AType<>regNone) then
-   begin
-    movq(tmp2,new2);
-
-    if rbp_hack then
-    begin
-     //restore rbp
-     movq(rbp,rsp);
-    end else
-    begin
-     pop(fix_size8(new2));
-    end;
-
-   end;
-  end;
- end;
-
  procedure mem_out;
  begin
   with ctx.builder do
@@ -2759,11 +2718,9 @@ var
         new2:=new_reg(ctx.din.Operand[2]);
        end;
 
-       override_beg2;
+       Assert(not is_high(new2));
 
        _RMI8(desc.reg_im8,new2,[flags(ctx)+r_tmp0],imm);
-
-       override_fin2;
       end;
     mo_mem_cl:
       begin
@@ -2781,11 +2738,9 @@ var
         new2:=new_reg(ctx.din.Operand[2]);
        end;
 
-       override_beg2;
+       Assert(not is_high(new2));
 
        _RM(desc.mem__cl,new2,[flags(ctx)+r_tmp0]);
-
-       override_fin2;
       end;
 
     else
@@ -2867,11 +2822,10 @@ begin
        op_load(ctx,new1,1);
       end;
 
-      override_beg2;
+      Assert(not is_high(new1));
+      Assert(not is_high(new2));
 
       _RRI8(desc.reg_im8,new1,new2,imm,mem_size);
-
-      override_fin2;
 
       op_save(ctx,1,fix_size(new1));
      end;
@@ -2907,11 +2861,10 @@ begin
        op_load(ctx,new1,1);
       end;
 
-      override_beg2;
+      Assert(not is_high(new1));
+      Assert(not is_high(new2));
 
       _RR(desc.mem__cl,new1,new2,mem_size);
-
-      override_fin2;
 
       op_save(ctx,1,fix_size(new1));
      end;
@@ -2934,11 +2887,10 @@ begin
 
       op_load(ctx,new2,2);
 
-      override_beg1;
+      Assert(not is_high(new1));
+      Assert(not is_high(new2));
 
       _RRI8(desc.reg_im8,new1,new2,imm,mem_size);
-
-      override_fin1;
      end;
 
     mo_reg_cl:
@@ -2953,11 +2905,10 @@ begin
 
       op_load(ctx,new2,2);
 
-      override_beg1;
+      Assert(not is_high(new1));
+      Assert(not is_high(new2));
 
       _RR(desc.mem__cl,new1,new2,mem_size);
-
-      override_fin1;
      end
 
    else
