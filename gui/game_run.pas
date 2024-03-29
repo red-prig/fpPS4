@@ -239,7 +239,8 @@ begin
  kipc:=THostIpcPipeKERN.Create;
  kipc.set_pipe(pipefd);
 
- p_host_ipc:=kipc;
+ p_host_ipc   :=kipc;
+ p_host_ipc_td:=kipc.Ftd;
 
  td:=nil;
  r:=kthread_add(@prepare,Item,@td,0,'[main]');
@@ -323,7 +324,8 @@ begin
 
    g_ipc:=s_mgui_ipc;
 
-   p_host_ipc:=s_kern_ipc;
+   p_host_ipc   :=s_kern_ipc;
+   p_host_ipc_td:=s_kern_ipc.Ftd;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,Item,@Ftd,0,'[main]');

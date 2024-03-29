@@ -230,7 +230,7 @@ var
  count:integer;
  str:shortstring;
 begin
- thread_suspend_all(p_host_ipc.Ftd);
+ thread_suspend_all(p_host_ipc_td);
 
  count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
  Assert(count<=6);

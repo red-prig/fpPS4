@@ -335,7 +335,7 @@ end;
 
 procedure print_error_td(const str:shortstring);
 begin
- thread_suspend_all(p_host_ipc.Ftd);
+ thread_suspend_all(p_host_ipc_td);
 
  Writeln(StdErr,str);
  p_host_ipc.error(str);
