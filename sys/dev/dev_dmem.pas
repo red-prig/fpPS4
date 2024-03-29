@@ -219,12 +219,19 @@ begin
 
  if (Result<>0) then Exit;
 
+ maxprotp^:=maxprotp^ or VM_PROT_GPU_ALL;
+
+ obj^:=dmap^.vobj;
+
  if ((maxprotp^ and nprot)=nprot) then
+ begin
+  Assert(obj^<>nil);
+  vm_object_reference(obj^);
+ end else
  begin
   Exit(EACCES);
  end;
 
- obj^:=dmap^.vobj;
 end;
 
 Function dmem_open(dev:p_cdev;oflags,devtype:Integer):Integer;
