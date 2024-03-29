@@ -761,7 +761,12 @@ begin
  end;
 
  imgp^.entry_addr:=Pointer(addr + hdr^.e_entry);
- imgp^.reloc_base:=Pointer(addr);
+
+ //Do not update if the ET_SCE_EXEC hack is used
+ if (imgp^.hdr_e_type=hdr^.e_type) then
+ begin
+  imgp^.reloc_base:=Pointer(addr);
+ end;
 
  auxargs:=AllocMem(SizeOf(t_elf64_auxargs));
 
@@ -1100,24 +1105,44 @@ begin
 
  rtld_load_auth(imgp);
 
- if (hdr^.e_type=ET_SCE_REPLAY_EXEC) then
- begin
-  p_proc.p_sce_replay_exec:=1;
- end;
+ case hdr^.e_type of
+  ET_EXEC:
+    begin
+     Exit(ENOEXEC);
+    end;
 
- if (hdr^.e_type=ET_SCE_DYNEXEC) then
- begin
-  reloc_base:=Pointer(PROC_IMAGE_AREA_START);
-  imgp^.reloc_base       :=reloc_base;
-  imgp^.dyn_vaddr        :=reloc_base+QWORD(imgp^.dyn_vaddr        );
-  imgp^.tls_init_addr    :=reloc_base+QWORD(imgp^.tls_init_addr    );
-  imgp^.eh_frame_hdr_addr:=reloc_base+QWORD(imgp^.eh_frame_hdr_addr);
-  imgp^.proc_param_addr  :=reloc_base+QWORD(imgp^.proc_param_addr  );
- end;
+  ET_SCE_REPLAY_EXEC:
+    begin
+     p_proc.p_sce_replay_exec:=1;
+    end;
 
- if (hdr^.e_type=ET_EXEC) then
- begin
-  Exit(ENOEXEC);
+  ET_SCE_DYNEXEC:
+    begin
+     reloc_base:=Pointer(PROC_IMAGE_AREA_START);
+     //
+     imgp^.reloc_base       :=reloc_base;
+     imgp^.dyn_vaddr        :=reloc_base+QWORD(imgp^.dyn_vaddr        );
+     imgp^.tls_init_addr    :=reloc_base+QWORD(imgp^.tls_init_addr    );
+     imgp^.eh_frame_hdr_addr:=reloc_base+QWORD(imgp^.eh_frame_hdr_addr);
+     imgp^.proc_param_addr  :=reloc_base+QWORD(imgp^.proc_param_addr  );
+    end;
+
+  ET_SCE_EXEC:
+    if (PROC_IMAGE_AREA_START=_PROC_AREA_START_1) then
+    begin
+     //hack
+     hdr^.e_type:=ET_SCE_DYNEXEC;
+     //
+     reloc_base:=Pointer(_PROC_AREA_START_1-_PROC_AREA_START_0);
+     //
+     imgp^.reloc_base       :=reloc_base;
+     imgp^.dyn_vaddr        :=reloc_base+QWORD(imgp^.dyn_vaddr        );
+     imgp^.tls_init_addr    :=reloc_base+QWORD(imgp^.tls_init_addr    );
+     imgp^.eh_frame_hdr_addr:=reloc_base+QWORD(imgp^.eh_frame_hdr_addr);
+     imgp^.proc_param_addr  :=reloc_base+QWORD(imgp^.proc_param_addr  );
+    end;
+
+  else;
  end;
 
  if (imgp^.dyn_exist=0) then
@@ -1251,6 +1276,7 @@ begin
  kern_openat(STDIN_FILENO ,'/dev/deci_stdin' ,UIO_SYSSPACE,O_RDWR,0);
  kern_openat(STDOUT_FILENO,'/dev/deci_stdout',UIO_SYSSPACE,O_RDWR,0);
  kern_openat(STDERR_FILENO,'/dev/deci_stderr',UIO_SYSSPACE,O_RDWR,0);
+ kern_openat(3            ,'/dev/null'       ,UIO_SYSSPACE,O_RDWR,0); //sys_rdup(pid,fd)
 end;
 
 const
