@@ -181,6 +181,24 @@ type
   reserved3:DWORD;
  end;
 
+ pSceCameraAttribute=^SceCameraAttribute;
+ SceCameraAttribute=packed record
+  sizeThis:DWORD;
+  channel:Integer;
+  framePosition:pSceCameraFramePosition;
+  exposureGain:pSceCameraExposureGain;
+  whiteBalance:pSceCameraWhiteBalance;
+  gamma:pSceCameraGamma;
+  saturation:DWORD;
+  contrast:DWORD;
+  sharpness:DWORD;
+  hue:Integer;
+  reserved1:DWORD;
+  reserved2:DWORD;
+  reserved3:DWORD;
+  reserved4:DWORD;
+ end;
+
 implementation
 
 function ps4_sceCameraIsAttached(index:Integer):Integer; SysV_ABI_CDecl;
@@ -218,6 +236,11 @@ begin
  Result:=333;
 end;
 
+function ps4_sceCameraSetAttribute(handle:Integer;pAttribute:pSceCameraAttribute):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceCamera(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -232,6 +255,7 @@ begin
  lib^.set_proc($F44A5160CCBBAC75,@ps4_sceCameraStart);
  lib^.set_proc($9B180C991FB52ABD,@ps4_sceCameraGetFrameData);
  lib^.set_proc($0479FCDF1AC5F761,@ps4_sceCameraOpen);
+ lib^.set_proc($7683E57F7DDA6FF5,@ps4_sceCameraSetAttribute);
 end;
 
 initialization

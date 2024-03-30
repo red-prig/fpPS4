@@ -25,6 +25,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceDepthEnableExtendedMode():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 function Load_libSceDepth(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -36,6 +41,7 @@ begin
 
  lib^.set_proc($E4CC31224DFF80BA,@ps4_sceDepthQueryMemory);
  lib^.set_proc($3DA6BD7601E71E94,@ps4_sceDepthInitialize);
+ lib^.set_proc($CF9493F422201DAD,@ps4_sceDepthEnableExtendedMode);
 end;
 
 initialization
