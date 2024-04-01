@@ -587,10 +587,12 @@ var
  hdr:p_elf64_hdr;
 
  total_size:QWORD;
- data_size :QWORD;
- data_addr :QWORD;
  text_addr :QWORD;
  text_size :QWORD;
+ data_addr :QWORD;
+ data_size :QWORD;
+ relro_addr:QWORD;
+ relro_size:QWORD;
 
  p_memsz   :QWORD;
  p_vaddr   :QWORD;
@@ -614,10 +616,12 @@ begin
  Result:=0;
 
  total_size:=0;
- data_size :=0;
- data_addr :=0;
  text_addr :=0;
  text_size :=0;
+ data_addr :=0;
+ data_size :=0;
+ relro_addr:=0;
+ relro_size:=0;
 
  hdr:=imgp^.image_header;
 
@@ -713,8 +717,8 @@ begin
 
    if (p_type=PT_SCE_RELRO) then
    begin
-    imgp^.relro_addr:=Pointer(addr);
-    imgp^.relro_size:=size;
+    relro_addr:=addr;
+    relro_size:=size;
    end else
    if ((phdr^.p_flags and PF_X)<>0) and (text_size < size) then
    begin
@@ -747,6 +751,10 @@ begin
   Exit(ENOMEM);
  end;
 
+ Writeln('  text addr=0x',HexStr(text_addr ,16),'..',HexStr(text_addr +text_size ,16));
+ Writeln('  data addr=0x',HexStr(data_addr ,16),'..',HexStr(data_addr +data_size ,16));
+ Writeln(' relro addr=0x',HexStr(relro_addr,16),'..',HexStr(relro_addr+relro_size,16));
+
  vms:=p_proc.p_vmspace;
 
  vms^.vm_tsize:=text_size shr PAGE_SHIFT;
@@ -754,13 +762,23 @@ begin
  vms^.vm_dsize:=data_size shr PAGE_SHIFT;
  vms^.vm_daddr:=Pointer(data_addr);
 
+ imgp^.relro_addr:=Pointer(relro_addr);
+ imgp^.relro_size:=relro_size;
+
  addr:=0;
+ if (imgp^.hdr_e_type<>hdr^.e_type) then
+ begin
+  //ET_SCE_EXEC hack
+  addr:=QWORD(imgp^.reloc_base);
+ end else
  if (hdr^.e_type=ET_SCE_DYNEXEC) then
  begin
   addr:=text_addr;
  end;
 
  imgp^.entry_addr:=Pointer(addr + hdr^.e_entry);
+
+ Writeln(' entry_addr=0x',HexStr(imgp^.entry_addr));
 
  //Do not update if the ET_SCE_EXEC hack is used
  if (imgp^.hdr_e_type=hdr^.e_type) then
@@ -785,9 +803,9 @@ begin
 
  MoveChar0(imgp^.execpath^,p_proc.p_prog_name,1024);
 
- if (imgp^.relro_addr<>nil) and (imgp^.relro_size<>0) then
+ if (relro_addr<>0) and (relro_size<>0) then
  begin
-  Result:=vm_map_protect(@vms^.vm_map,QWORD(imgp^.relro_addr),QWORD(imgp^.relro_addr)+imgp^.relro_size,VM_PROT_READ,False);
+  Result:=vm_map_protect(@vms^.vm_map,relro_addr,relro_addr+relro_size,VM_PROT_READ,False);
   Result:=vm_mmap_to_errno(Result);
  end;
 
@@ -1133,7 +1151,7 @@ begin
      //hack
      hdr^.e_type:=ET_SCE_DYNEXEC;
      //
-     reloc_base:=Pointer(_PROC_AREA_START_1-_PROC_AREA_START_0);
+     reloc_base:=Pointer(_PROC_AREA_START_1);
      //
      imgp^.reloc_base       :=reloc_base;
      imgp^.dyn_vaddr        :=reloc_base+QWORD(imgp^.dyn_vaddr        );
