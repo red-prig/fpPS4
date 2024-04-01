@@ -53,6 +53,11 @@ begin
  Result:=0;
 end;
 
+function is_valid_def(def:p_elf64_sym):Boolean; inline;
+begin
+ Result:=(def<>@dynlibs_info.sym_nops);
+end;
+
 function reloc_non_plt(obj:p_lib_info;flags:DWORD):Integer;
 label
  _next,
@@ -176,7 +181,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -200,7 +205,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -223,7 +228,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -258,12 +263,15 @@ begin
             begin
              data:=Pointer(QWORD(data32));
              //dont check with special callbacks
-             //Result:=check_addr(defobj,data,SizeOf(Integer));
-             //if (Result<>0) then
-             //begin
-             // Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
-             // Exit;
-             //end;
+             if is_valid_def(def) then
+             begin
+              Result:=check_addr(defobj,data,SizeOf(Integer));
+              if (Result<>0) then
+              begin
+               Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+               Exit;
+              end;
+             end;
             end;
 
             Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
@@ -273,7 +281,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -297,7 +305,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -321,7 +329,7 @@ begin
              Exit(ENOEXEC);
             end;
 
-            if (def<>@dynlibs_info.sym_nops) then
+            if is_valid_def(def) then
             begin
              set_relo_bits(obj,i);
             end;
@@ -348,12 +356,16 @@ begin
  Exit(0);
  _move64:
 
-  //Result:=check_addr(defobj,data,SizeOf(Pointer));
-  //if (Result<>0) then
-  //begin
-  // Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
-  // Exit;
-  //end;
+  //dont check with special callbacks
+  if is_valid_def(def) then
+  begin
+   Result:=check_addr(defobj,data,SizeOf(Pointer));
+   if (Result<>0) then
+   begin
+    Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+    Exit;
+   end;
+  end;
 
   Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
   if (Result<>0) then
@@ -362,7 +374,7 @@ begin
    Exit(ENOEXEC);
   end;
 
-  if (def<>@dynlibs_info.sym_nops) then
+  if is_valid_def(def) then
   begin
    set_relo_bits(obj,i);
   end;
@@ -432,7 +444,7 @@ begin
   Exit(4);
  end;
 
- if (def<>@dynlibs_info.sym_nops) then
+ if is_valid_def(def) then
  begin
   set_relo_bits(obj,idofs+i);
  end;

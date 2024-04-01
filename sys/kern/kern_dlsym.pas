@@ -572,26 +572,28 @@ begin
    def   :=@dynlibs_info.sym_zero;
    defobj:=dynlibs_info.libprogram;
   end else
-  if (where<>nil) and
-     (ELF64_ST_TYPE(ref^.st_info)<>STT_OBJECT) then
+  if (where<>nil) then
   begin
-   stub:=vm_get_patch_link(refobj^.rel_data^.obj,where);
+   if (ELF64_ST_TYPE(ref^.st_info)<>STT_OBJECT) then
+   begin
+    stub:=vm_get_patch_link(refobj^.rel_data^.obj,where);
 
-   if (stub<>nil) then
-   begin
-    ptr:=@stub^.body;
-    p_dec_ref(stub);
-   end else
-   begin
-    ptr:=get_unresolve_ptr(refobj,where,req.nid,req.libname);
+    if (stub<>nil) then
+    begin
+     ptr:=@stub^.body;
+     p_dec_ref(stub);
+    end else
+    begin
+     ptr:=get_unresolve_ptr(refobj,where,req.nid,req.libname);
+    end;
+
+    dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
+    dynlibs_info.sym_nops.st_shndx:=SHN_UNDEF;
+    dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(ptr);
+
+    def   :=@dynlibs_info.sym_nops;
+    defobj:=dynlibs_info.libprogram;
    end;
-
-   dynlibs_info.sym_nops.st_info :=(STB_GLOBAL shl 4) or STT_NOTYPE;
-   dynlibs_info.sym_nops.st_shndx:=SHN_UNDEF;
-   dynlibs_info.sym_nops.st_value:=-Int64(dynlibs_info.libprogram^.relocbase)+Int64(ptr);
-
-   def   :=@dynlibs_info.sym_nops;
-   defobj:=dynlibs_info.libprogram;
   end;
  end else
  begin
