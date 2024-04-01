@@ -25,7 +25,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceDepthEnableExtendedMode():Integer; SysV_ABI_CDecl;
+function ps4_sceDepthEnableExtendedMode(param1:DWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;

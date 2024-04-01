@@ -183,20 +183,20 @@ type
 
  pSceCameraAttribute=^SceCameraAttribute;
  SceCameraAttribute=packed record
-  sizeThis:DWORD;
-  channel:Integer;
-  framePosition:pSceCameraFramePosition;
-  exposureGain:pSceCameraExposureGain;
-  whiteBalance:pSceCameraWhiteBalance;
-  gamma:pSceCameraGamma;
-  saturation:DWORD;
-  contrast:DWORD;
-  sharpness:DWORD;
-  hue:Integer;
-  reserved1:DWORD;
-  reserved2:DWORD;
-  reserved3:DWORD;
-  reserved4:DWORD;
+  sizeThis     :DWORD;
+  channel      :Integer;
+  framePosition:SceCameraFramePosition;
+  exposureGain :SceCameraExposureGain;
+  whiteBalance :SceCameraWhiteBalance;
+  gamma        :SceCameraGamma;
+  saturation   :DWORD;
+  contrast     :DWORD;
+  sharpness    :DWORD;
+  hue          :Integer;
+  reserved1    :DWORD;
+  reserved2    :DWORD;
+  reserved3    :DWORD;
+  reserved4    :DWORD;
  end;
 
 implementation
