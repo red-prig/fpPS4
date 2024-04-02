@@ -680,6 +680,43 @@ type
   param:SceImeEventParam;
  end;
 
+ pSceImeType=^SceImeType;
+ SceImeType=Integer;
+
+ pSceImeEnterLabel=^SceImeEnterLabel;
+ SceImeEnterLabel=Integer;
+
+ pSceImeInputMethod=^SceImeInputMethod;
+ SceImeInputMethod=Integer;
+
+ pSceImeTextFilter=^SceImeTextFilter;
+ SceImeTextFilter=packed record
+  outText:PWideChar;
+  outTextLength:PDWORD;
+  srcText:PWideChar;
+  srcTextLength:DWORD;
+ end;
+
+ pSceImeHorizontalAlignment=^SceImeHorizontalAlignment;
+ SceImeHorizontalAlignment=Integer;
+
+ pSceImeVerticalAlignment=^SceImeVerticalAlignment;
+ SceImeVerticalAlignment=Integer;
+
+ pSceImePanelPriority=^SceImePanelPriority;
+ SceImePanelPriority=Integer;
+
+ pSceImeKeyboardType=^SceImeKeyboardType;
+ SceImeKeyboardType=Integer;
+
+ pSceImeExtKeyboardFilter=^SceImeExtKeyboardFilter;
+ SceImeExtKeyboardFilter=packed record
+  srcKeycode:SceImeKeycode;
+  outKeycode:Word;
+  outStatus:PDWORD;
+  reserved:Pointer;
+ end; 
+
  SceImeEventHandler=procedure(arg:Pointer;e:pSceImeEvent); SysV_ABI_CDecl;
 
  pSceImeKeyboardParam=^SceImeKeyboardParam;

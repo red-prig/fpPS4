@@ -8,6 +8,7 @@ uses
   ps4_program,
   Classes,
   SysUtils,
+  ps4_libSceIme,
   ps4_libSceSaveData;
 
 implementation
@@ -508,14 +509,54 @@ const
  SCE_IME_DIALOG_STATUS_RUNNING =1;
  SCE_IME_DIALOG_STATUS_FINISHED=2;
 
+type
+ pSceImeDialogParam=^SceImeDialogParam;
+ SceImeDialogParam=packed record
+  userId,_type       :SceImeType;
+  supportedLanguages :QWORD;
+  enterLabel         :SceImeEnterLabel;
+  inputMethod        :SceImeInputMethod;
+  filter             :SceImeTextFilter;
+  option             :DWORD;
+  maxTextLength      :DWORD;
+  inputTextBuffer    :PWideChar;
+  posx               :Single;
+  posy               :Single;
+  horizontalAlignment:SceImeHorizontalAlignment;
+  verticalAlignment  :SceImeVerticalAlignment;
+  placeholder        :PWideChar;
+  title              :PWideChar;
+  reserved           :array[0..15] of ShortInt;
+ end;
+
+ pSceImeParamExtended=^SceImeParamExtended;
+ SceImeParamExtended=packed record
+  option                  :DWORD;
+  colorBase               :SceImeColor;
+  colorLine               :SceImeColor;
+  colorTextField          :SceImeColor;
+  colorPreedit            :SceImeColor;
+  colorButtonDefault      :SceImeColor;
+  colorButtonFunction     :SceImeColor;
+  colorButtonSymbol       :SceImeColor;
+  colorText               :SceImeColor;
+  colorSpecial            :SceImeColor;
+  priority                :SceImePanelPriority;
+  additionalDictionaryPath:PChar;
+  extKeyboardFilter       :SceImeExtKeyboardFilter;
+  disableDevice           :DWORD;
+  extKeyboardMode         :DWORD;
+  reserved                :array[0..59] of ShortInt;
+ end;
+
 var
  status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
 
-//function ps4_sceImeDialogInit(param:pSceImeDialogParam;
-//                              extended:pSceImeParamExtended
-//                              ):Integer; SysV_ABI_CDecl;
-//
-//nop nid:libSceImeDialog:354781ACDEE1CDFD:sceImeDialogInit
+function ps4_sceImeDialogInit(const param:pSceImeDialogParam;
+                              const extended:pSceImeParamExtended):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceImeDialogGetStatus:Integer; SysV_ABI_CDecl;
 begin
@@ -696,6 +737,7 @@ begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceImeDialog');
+ lib^.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit); 
  lib^.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
 end;
 
