@@ -469,7 +469,7 @@ type
 
  pSceSigninDialogResult=^SceSigninDialogResult;
  SceSigninDialogResult=packed record
-  result:SceSigninDialogResultType;
+  _result :SceSigninDialogResultType;
   reserved:array[0..2] of Integer;
  end; 
 

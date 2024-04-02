@@ -36,14 +36,14 @@ begin
 end;
 
 function ps4_sceSslGetCaCerts(libsslCtxId:Integer;
-                              caCerts:SceSslCaCerts):Integer; SysV_ABI_CDecl;
+                              caCerts:pSceSslCaCerts):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSslGetCaCerts:',libsslCtxId);
  Result:=0;
 end;  
 
 function ps4_sceSslFreeCaCerts(libsslCtxId:Integer;
-                              caCerts:SceSslCaCerts):Integer; SysV_ABI_CDecl;
+                               caCerts:pSceSslCaCerts):Integer; SysV_ABI_CDecl;
 begin
  Writeln('sceSslFreeCaCerts:',libsslCtxId);
  Result:=0;
