@@ -2188,23 +2188,11 @@ begin
  if (P<>nil) then
  begin
   node:=P^;
+  _free_kevent_node(node);
  end else
  begin
-  node:=_alloc_kevent_node(eq,SizeOf(TKEventNode));
-  if (node=Pointer(1)) then
-  begin
-   pEvents^.Unlock;
-   Exit(SCE_KERNEL_ERROR_EBADF);
-  end;
-  if (node=nil) then
-  begin
-   pEvents^.Unlock;
-   Exit(SCE_KERNEL_ERROR_ENOMEM);
-  end;
-  node^.ev.filter:=SCE_KERNEL_EVFILT_GNM;
-  node^.ev.flags :=EV_CLEAR;
-  node^.ev.data  :=id;
-  HAMT_insert64(@pEvents^.hamt,QWORD(eq),node);
+  pEvents^.Unlock;
+  Exit(SCE_KERNEL_ERROR_ENOENT);
  end;
  pEvents^.Unlock;
 
