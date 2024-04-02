@@ -757,6 +757,65 @@ begin
 
 end;
 
+function _sceVideoOutAddDriver(hVideo:Integer;
+                               driverConfig:PDWORD;
+                               index:PInteger;
+                               driverCallback:Pointer):Integer; SysV_ABI_CDecl;
+var
+ H:PInteger;
+begin
+ if (((((((driverConfig <> nil) and (driverCallback = nil)) and (driverConfig^ <> 0)) and
+      ((driverConfig[1] <> 0) and (driverConfig[2] <> 0)))) and
+     ((driverConfig[3] <> 0) and ((driverConfig[4] <> 0) and (driverConfig[5] <> 0))))) and
+    ((driverConfig[7] <> 0) and (driverConfig[8] <> 0)) then
+   H:=nil;
+ begin
+  if (H=nil) then
+  Move(driverConfig^, (H + $E)^, $108);
+   if (index <> nil) then
+   begin
+    H[2] :=index[0];
+    H[3] :=index[1];
+    H[4] :=index[2];
+    H[5] :=index[3];
+    H[6] :=index[4];
+    H[7] :=index[5];
+    H[8] :=index[6];
+    H[9] :=index[7];
+    H[10]:=index[8];
+    H[$B]:=index[9];
+    H[$C]:=index[$A];
+    H[$D]:=index[$B];
+   end;
+  end;
+ begin
+  if (((((driverConfig[$18] = 0) and (driverConfig[$19] = 0)) and (driverConfig[$1A] = 0)) and
+      (((driverConfig[$1B] = 0) and (driverConfig[$1C] = 0)) and
+      ((driverConfig[$1D] = 0) and ((driverConfig[$1E] = 0) and (driverConfig[$1F] = 0)))))) then
+  begin
+   if (driverConfig[$20] <> 0) then
+    Result:=Integer(0);
+   end;
+  Result:=Integer(0);
+ end;
+end;
+
+function ps4_sceVideoOutAddDriver(hVideo:Integer;
+                                  driverConfig:PDWORD;
+                                  index:PInteger;
+                                  driverCallback:Pointer):Integer; SysV_ABI_CDecl;
+var
+ H:Integer;
+begin
+ if (hVideo<>0) then
+ begin
+  _sig_lock;
+  H:=_sceVideoOutAddDriver(hVideo,driverConfig,index,driverCallback);
+  _sig_unlock;
+  Result:=Integer(H);
+ end;
+end;
+
 function ps4_sceVideoOutAddFlipEvent(eq:SceKernelEqueue;hVideo:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
@@ -2038,6 +2097,7 @@ begin
  lib^.set_proc($32DE101C793190E7,@ps4_sceVideoOutGetEventCount);
  lib^.set_proc($AD651370A7645334,@ps4_sceVideoOutGetEventData);
  lib^.set_proc($536249B52A8D2992,@ps4_sceVideoOutGetEventId);
+ lib^.set_proc($1EDC127781F64F0B,@ps4_sceVideoOutAddDriver); 
  lib^.set_proc($1D7CE32BDC88DF49,@ps4_sceVideoOutAddFlipEvent);
  lib^.set_proc($5EBBBDDB01C94668,@ps4_sceVideoOutAddVblankEvent);
  lib^.set_proc($8BAFEC47DD56B7FE,@ps4_sceVideoOutSetBufferAttribute);
