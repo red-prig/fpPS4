@@ -595,10 +595,10 @@ type
  end;
 
  SceImeEditText=packed record
-  str:pWideChar;
+  str       :pWideChar;
   caretIndex:DWORD;
-  areaNum:DWORD;
-  textArea:array[0..SCE_IME_MAX_TEXT_AREA-1] of SceImeTextAreaProperty;
+  areaNum   :DWORD;
+  textArea  :array[0..SCE_IME_MAX_TEXT_AREA-1] of SceImeTextAreaProperty;
  end;
 
  SceImePositionAndForm=packed record
@@ -631,30 +631,30 @@ type
 
  pSceImeKeyboardInfo=^SceImeKeyboardInfo;
  SceImeKeyboardInfo=packed record
-  userId:Integer;
-  device:Integer; //SceImeKeyboardDeviceType
-  _type:Integer; //SceImeKeyboardType
+  userId     :Integer;
+  device     :Integer; //SceImeKeyboardDeviceType
+  _type      :Integer; //SceImeKeyboardType
   repeatDelay:DWORD;
   repeatRate :DWORD;
-  status:Integer; //SceImeKeyboardStatus
-  reserved:array[0..11] of Byte;
+  status     :Integer; //SceImeKeyboardStatus
+  reserved   :array[0..11] of Byte;
  end;
 
  pSceImeKeyboardResourceIdArray=^SceImeKeyboardResourceIdArray;
  SceImeKeyboardResourceIdArray=packed record
-  userId:Integer;
+  userId    :Integer;
   resourceId:array[0..SCE_IME_KEYBOARD_MAX_NUMBER-1] of DWORD;
  end;
 
  SceImeKeycode=packed record
-  keycode:Word;
-  character:WideChar;
-  status:DWORD;
-  _type:Integer; //SceImeKeyboardType
-  userId:Integer;
+  keycode   :Word;
+  character :WideChar;
+  status    :DWORD;
+  _type     :Integer; //SceImeKeyboardType
+  userId    :Integer;
   resourceId:DWORD;
-  _align:Integer;
-  timestamp:QWORD; //SceRtcTick
+  _align    :Integer;
+  timestamp :QWORD; //SceRtcTick
  end;
 
  pSceImeEventParam=^SceImeEventParam;
@@ -691,9 +691,9 @@ type
 
  pSceImeTextFilter=^SceImeTextFilter;
  SceImeTextFilter=packed record
-  outText:PWideChar;
+  outText      :PWideChar;
   outTextLength:PDWORD;
-  srcText:PWideChar;
+  srcText      :PWideChar;
   srcTextLength:DWORD;
  end;
 
@@ -713,18 +713,18 @@ type
  SceImeExtKeyboardFilter=packed record
   srcKeycode:SceImeKeycode;
   outKeycode:Word;
-  outStatus:PDWORD;
-  reserved:Pointer;
+  outStatus :PDWORD;
+  reserved  :Pointer;
  end; 
 
  SceImeEventHandler=procedure(arg:Pointer;e:pSceImeEvent); SysV_ABI_CDecl;
 
  pSceImeKeyboardParam=^SceImeKeyboardParam;
  SceImeKeyboardParam=packed record
-  option:DWORD;
+  option   :DWORD;
   reserved1:DWORD;
-  arg:Pointer;
-  handler:SceImeEventHandler;
+  arg      :Pointer;
+  handler  :SceImeEventHandler;
   reserved2:QWORD;
  end;
 

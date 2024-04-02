@@ -531,7 +531,8 @@ const
 type
  pSceImeDialogParam=^SceImeDialogParam;
  SceImeDialogParam=packed record
-  userId,_type       :SceImeType;
+  userId             :Integer;
+  _type              :SceImeType;
   supportedLanguages :QWORD;
   enterLabel         :SceImeEnterLabel;
   inputMethod        :SceImeInputMethod;
