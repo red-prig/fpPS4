@@ -391,6 +391,36 @@ begin
 
 end;
 
+procedure FixDataInput(pBatchPosition:Pointer;pDataInput:Pointer;szDataInputSize:QWORD);
+begin
+ if PQWORD(pBatchPosition)^ and (SCE_AJM_FLAG_SIDEBAND_STREAM)<>0 then
+ begin
+  pSceAjmSidebandStreamResult(pDataInput)^.sStream.iSizeConsumed:=1;
+  pSceAjmSidebandStreamResult(pDataInput)^.sStream.iSizeProduced:=1;
+  pSceAjmSidebandStreamResult(pDataInput)^.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
+ end;
+end;
+
+function ps4_sceAjmBatchJobInlineBuffer(
+          const pBatchPosition:Pointer;
+          const pDataInput: Pointer;
+          const szDataInputSize:QWORD;
+          const pBatchAddress:PPointer):Pointer; SysV_ABI_CDecl;
+begin
+ Result:=nil;
+ if (pDataInput<>nil) then
+ begin
+  FillChar(pDataInput^,szDataInputSize,0);
+  FixDataInput(pBatchPosition,pDataInput,szDataInputSize);
+ end;
+  begin
+   PQWORD(pBatchPosition)^ := PQWORD(pBatchPosition)^ and $ffffffe0 or 7;
+   PQWORD(pBatchPosition + 1)^ := (szDataInputSize + 7) and $fffffff8;
+   Move(pDataInput^, Pointer(PQWORD(pBatchPosition) + SizeOf(Pointer) * 2)^, szDataInputSize);
+   pBatchAddress^:=pBatchPosition + 2;
+ end;
+end;
+
 function ps4_sceAjmBatchJobRunBufferRa(
           pBatchPosition:Pointer;
           uiInstance:SceAjmInstanceId;
@@ -480,6 +510,7 @@ begin
  lib^.set_proc($031A03AC8369E09F,@ps4_sceAjmInstanceCreate);
  lib^.set_proc($45B2DBB8ABFCCE1A,@ps4_sceAjmInstanceDestroy);
  lib^.set_proc($7660F26CDFFF167F,@ps4_sceAjmBatchJobControlBufferRa);
+ lib^.set_proc($B2D96086789CDC97,@ps4_sceAjmBatchJobInlineBuffer);
  lib^.set_proc($125B25382A4E227B,@ps4_sceAjmBatchJobRunBufferRa);
  lib^.set_proc($EE37405CAFB67CCA,@ps4_sceAjmBatchJobRunSplitBufferRa);
  lib^.set_proc($7C5164934C5F196B,@ps4_sceAjmBatchStartBuffer);
