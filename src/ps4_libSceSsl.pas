@@ -7,6 +7,20 @@ interface
 uses
  ps4_program;
 
+type
+ pSceSslData=^SceSslData;
+ SceSslData=packed record
+  ptr :PChar;
+  size:QWORD;
+ end;
+
+ pSceSslCaCerts=^SceSslCaCerts;
+ SceSslCaCerts=packed record
+  certData   :pSceSslData;
+  certDataNum:QWORD;
+  pool       :Pointer;
+ end;  
+
 implementation
 
 function ps4_sceSslInit(poolSize:size_t):Integer; SysV_ABI_CDecl;
@@ -21,6 +35,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSslFreeCaCerts(libsslCtxId:Integer;
+                              caCerts:SceSslCaCerts):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceSslFreeCaCerts:',libsslCtxId);
+ Result:=0;
+end;   
+
 function Load_libSceSsl(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -32,6 +53,7 @@ begin
 
  lib^.set_proc($85DA551140C55B7B,@ps4_sceSslInit);
  lib^.set_proc($D0AD7243A2EFFD87,@ps4_sceSslTerm);
+ lib^.set_proc($A88BCBB34818C62D,@ps4_sceSslFreeCaCerts);
 end;
 
 initialization
