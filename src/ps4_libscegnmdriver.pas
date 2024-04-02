@@ -23,6 +23,7 @@ uses
  sys_kernel,
  ps4_queue,
  ps4_libkernel,
+ ps4_kernel_file,
  ps4_libSceVideoOut{, ps4_pssl};
 
 const
