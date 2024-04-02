@@ -24,7 +24,6 @@ uses
  vm_pager,
  vm_map,
  vm_mmap,
- kern_dmem,
  kern_rwlock,
  kern_proc,
  kern_thr,
@@ -32,7 +31,6 @@ uses
  md_sleep,
  pm4_ring,
  pm4_pfp,
- pm4defs,
  subr_backtrace;
 
 var
@@ -109,183 +107,7 @@ var
 
  parse_gfx_td:p_kthread;
 
-procedure onLoadConstRam(Body:PPM4CMDCONSTRAMLOAD);
-var
- buf:PDWORD;
- i:integer;
-
- addr:Pointer;
- size:QWORD;
-begin
- Writeln(' adr=0x',HexStr(Body^.addr,16));
- Writeln(' len=0x',HexStr(Body^.numDwords*4,4));
- Writeln(' ofs=0x',HexStr(Body^.offset,4));
-
- {
- addr:=nil;
- size:=0;
- get_dmem_ptr(Pointer(Body^.addr),@addr,@size);
-
- buf:=addr;
- for i:=0 to Body^.numDwords-1 do
- begin
-  Writeln('  0x',HexStr(buf[i],8));
- end;
- }
-end;
-
-function pm4_parse_ccb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
-begin
- Result:=0;
-
- case PM4_TYPE(token) of
-  0:begin //PM4_TYPE_0
-     Writeln('PM4_TYPE_0');
-    end;
-  2:begin //PM4_TYPE_2
-     Writeln('PM4_TYPE_2');
-     //no body
-    end;
-  3:begin //PM4_TYPE_3
-     Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
-
-     case PM4_TYPE_3_HEADER(token).opcode of
-      IT_LOAD_CONST_RAM:onLoadConstRam(buff);
-
-      else;
-     end;
-
-    end;
-  else
-   begin
-    Writeln('PM4_TYPE_',PM4_TYPE(token));
-    Assert(False);
-   end;
- end;
-
-end;
-
-function revbinstr(val:int64;cnt:byte):shortstring;
-var
- i:Integer;
-begin
- Result[0]:=AnsiChar(cnt);
- for i:=1 to cnt do
- begin
-  Result[i]:=AnsiChar(48+val and 1);
-  val:=val shr 1;
- end;
-end;
-
-procedure onContextControl(Body:PPM4CMDCONTEXTCONTROL);
-begin
- Writeln(' loadControl =b',revbinstr(DWORD(Body^.loadControl ),32));
- Writeln(' shadowEnable=b',revbinstr(DWORD(Body^.shadowEnable),32));
-end;
-
-procedure onSetBase(Body:PPM4CMDDRAWSETBASE);
-var
- addr:QWORD;
-begin
- addr:=QWORD(Body^.address);
-
- Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
- Writeln(' address  =0x',HexStr(addr,16));
-end;
-
-procedure onSetPredication(Body:PPM4CMDSETPREDICATION);
-var
- addr:QWORD;
-begin
- addr:=QWORD(Body^.startAddress);
-
- Writeln(' startAddress=0x',HexStr(addr,16));
- Writeln(' pred        =',Body^.predicationBoolean);
- Writeln(' hint        =',Body^.hint);
- Writeln(' predOp      =',Body^.predOp);
- Writeln(' continueBit =',Body^.continueBit);
-end;
-
-procedure onDrawPreamble(Body:PPM4CMDDRAWPREAMBLE);
-begin
- //Writeln;
-end;
-
-procedure onSetShReg(Body:PPM4CMDSETDATA);
-begin
- Writeln(' 0x',HexStr(SH_REG_BASE+Body^.REG_OFFSET,4),'..',
-          '0x',HexStr(SH_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
-end;
-
-procedure onSetUConfigReg(Body:PPM4CMDSETDATA);
-begin
- Writeln(' 0x',HexStr(USERCONFIG_REG_BASE+Body^.REG_OFFSET,4),'..',
-          '0x',HexStr(USERCONFIG_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
-end;
-
-procedure onSetContextReg(Body:PPM4CMDSETDATA);
-begin
- Writeln(' 0x',HexStr(CONTEXT_REG_BASE+Body^.REG_OFFSET,4),'..',
-          '0x',HexStr(CONTEXT_REG_BASE+Body^.REG_OFFSET+Body^.header.count-1,4));
-end;
-
-function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
-begin
- Result:=0;
-
- case PM4_TYPE(token) of
-  0:begin //PM4_TYPE_0
-     Writeln('PM4_TYPE_0');
-    end;
-  2:begin //PM4_TYPE_2
-     Writeln('PM4_TYPE_2');
-     //no body
-    end;
-  3:begin //PM4_TYPE_3
-     Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
-
-     case PM4_TYPE_3_HEADER(token).opcode of
-      IT_NOP                :;
-      IT_EVENT_WRITE_EOP    :;
-      IT_EVENT_WRITE_EOS    :;
-      IT_DMA_DATA           :;
-      IT_ACQUIRE_MEM        :;
-      IT_CONTEXT_CONTROL    :onContextControl(buff);
-      IT_CLEAR_STATE        :;
-      IT_SET_CONTEXT_REG    :onSetContextReg(buff);
-      IT_SET_SH_REG         :onSetShReg(buff);
-      IT_SET_UCONFIG_REG    :onSetUConfigReg(buff);
-      IT_SET_CONFIG_REG     :;
-      IT_INDEX_BUFFER_SIZE  :;
-      IT_INDEX_TYPE         :;
-      IT_DRAW_INDEX_2       :;
-      IT_DRAW_INDEX_AUTO    :;
-      IT_INDEX_BASE         :;
-      IT_DRAW_INDEX_OFFSET_2:;
-      IT_DISPATCH_DIRECT    :;
-      IT_NUM_INSTANCES      :;
-      IT_WAIT_REG_MEM       :;
-      IT_WRITE_DATA         :;
-      IT_EVENT_WRITE        :;
-      IT_PFP_SYNC_ME        :;
-
-      IT_SET_BASE           :onSetBase(buff);
-      IT_DRAW_PREAMBLE      :onDrawPreamble(buff);
-      IT_SET_PREDICATION    :onSetPredication(buff);
-
-      else;
-     end;
-
-
-    end;
-  else
-   begin
-    Writeln('PM4_TYPE_',PM4_TYPE(token));
-    Assert(False);
-   end;
- end;
-
-end;
+ pfp_ctx:t_pfp_ctx;
 
 function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 var
@@ -297,7 +119,10 @@ begin
  case token of
   $c0023300:
    begin
-    Writeln('INDIRECT_BUFFER_CNST (ccb)');
+    if pctx^.print_ops then
+    begin
+     Writeln('INDIRECT_BUFFER_CNST (ccb)');
+    end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
@@ -309,7 +134,10 @@ begin
    end;
   $c0023f00:
    begin
-    Writeln('INDIRECT_BUFFER (dcb)');
+    if pctx^.print_ops then
+    begin
+     Writeln('INDIRECT_BUFFER (dcb)');
+    end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
@@ -319,7 +147,13 @@ begin
      end;
     end;
    end;
-  $c0008b00:Writeln('SWITCH_BUFFER');
+  $c0008b00:
+   begin
+    if pctx^.print_ops then
+    begin
+     Writeln('SWITCH_BUFFER');
+    end;
+   end;
   else;
  end;
 
@@ -330,16 +164,14 @@ var
  buff:Pointer;
  i,size:DWORD;
 
- pfp_ctx:t_pfp_ctx;
  ibuf:t_pm4_ibuffer;
 begin
- pfp_ctx:=Default(t_pfp_ctx);
 
  repeat
 
   if gc_ring_pm4_peek(@ring_gfx,@size,@buff) then
   begin
-   Writeln('packet:0x',HexStr(buff),':',size);
+   //Writeln('packet:0x',HexStr(buff),':',size);
 
    if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_ring) then
    begin
@@ -384,6 +216,8 @@ begin
             begin
              Writeln('SetGsRingSizes(0x',HexStr(p_SetGsRingSizes(data)^.esgsRingSize,8),',0x'
                                         ,HexStr(p_SetGsRingSizes(data)^.gsvsRingSize,8),')');
+             pfp_ctx.set_esgs_gsvs_ring_size(p_SetGsRingSizes(data)^.esgsRingSize,
+                                             p_SetGsRingSizes(data)^.gsvsRingSize);
             end;
 
   $C0848119: //*MipStatsReport
@@ -661,7 +495,11 @@ begin
  kqueue_add_filteropts(EVFILT_GRAPHICS_CORE,@filterops_graphics_core);
 
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
- kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,0,'[GFX]');
+
+ pfp_ctx.print_hint:=true;
+ pfp_ctx.print_ops :=true;
+
+ kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,0,'[GFX_PFP]');
 end;
 
 

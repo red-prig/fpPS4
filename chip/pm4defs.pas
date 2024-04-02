@@ -124,16 +124,16 @@ const
 
  //OP_HINT_NOP=0;
 
- OP_HINT_UPDATE_PS_DB_CONTROL                     = $c01e008f;
- OP_HINT_UPDATE_VS_OUT_CNTL                       = $c01e01b1;
- OP_HINT_UPDATE_PS_FORMAT                         = $c01e01b3;
- OP_HINT_UPDATE_PS_INPUT                          = $c01e01b6;
- OP_HINT_UPDATE_PS_IN_CONTROL                     = $c01e01b8;
- OP_HINT_UPDATE_VS_OUT_CONFIG                     = $c01e01c3;
- OP_HINT_UPDATE_PS_RSRC                           = $c01e01c4;
- OP_HINT_UPDATE_PS_BARY_CNTL                      = $c01e0203;
- OP_HINT_UPDATE_VS_RSRC                           = $c01e0207;
- OP_HINT_UPDATE_VS_POS_FORMAT                     = $c00a1000;
+ OP_HINT_UPDATE_PS_DB_CONTROL                     =$c01e008f;
+ OP_HINT_UPDATE_VS_OUT_CNTL                       =$c01e01b1;
+ OP_HINT_UPDATE_PS_FORMAT                         =$c01e01b3;
+ OP_HINT_UPDATE_PS_INPUT                          =$c01e01b6;
+ OP_HINT_UPDATE_PS_IN_CONTROL                     =$c01e01b8;
+ OP_HINT_UPDATE_VS_OUT_CONFIG                     =$c01e01c3;
+ OP_HINT_UPDATE_PS_RSRC                           =$c01e01c4;
+ OP_HINT_UPDATE_PS_BARY_CNTL                      =$c01e0203;
+ OP_HINT_UPDATE_VS_RSRC                           =$c01e0207;
+ OP_HINT_UPDATE_VS_POS_FORMAT                     =$c00a1000;
 
  OP_HINT_WRITE_GPU_PREFETCH_INTO_L2               =$60000000;
  OP_HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER        =$68750000;
@@ -274,17 +274,15 @@ type
 
  PPM4PrepareFlip=^TPM4PrepareFlip;
  TPM4PrepareFlip=packed record
-  ADDRES_LO:DWORD;
-  ADDRES_HI:DWORD;
-  DATA:DWORD;
+  ADDRES:QWORD;
+  DATA  :DWORD;
  end;
 
  PPM4PrepareFlipWithEopInterrupt=^TPM4PrepareFlipWithEopInterrupt;
  TPM4PrepareFlipWithEopInterrupt=packed record
-  ADDRES_LO:DWORD;
-  ADDRES_HI:DWORD;
-  DATA:DWORD;
-  eventType:DWORD;
+  ADDRES     :QWORD;
+  DATA       :DWORD;
+  eventType  :DWORD;
   cacheAction:DWORD;
  end;
 
@@ -310,8 +308,8 @@ const
  BASE_INDEX_CE_DST_BASE_ADDR =$0002;
 
 type
- PPM4CMDDRAWSETBASE=^PM4CMDDRAWSETBASE;
- PM4CMDDRAWSETBASE=bitpacked record
+ PPM4CMDDRAWSETBASE=^TPM4CMDDRAWSETBASE;
+ TPM4CMDDRAWSETBASE=bitpacked record
   header   :PM4_TYPE_3_HEADER;
   baseIndex:bit4;  // < base index selector
   reserved1:bit28;
@@ -325,8 +323,8 @@ const
  SET_PRED_MEM      =3;
 
 type
- PPM4CMDSETPREDICATION=^PM4CMDSETPREDICATION;
- PM4CMDSETPREDICATION=bitpacked record
+ PPM4CMDSETPREDICATION=^TPM4CMDSETPREDICATION;
+ TPM4CMDSETPREDICATION=bitpacked record
   header            :PM4_TYPE_3_HEADER;
   startAddress      :bit40; // < start address
   predicationBoolean:bit1;  // < predication boolean
@@ -339,8 +337,8 @@ type
   continueBit       :bit1;  // < continue set predication
  end;
 
- PPM4CMDDRAWPREAMBLE=^PM4CMDDRAWPREAMBLE;
- PM4CMDDRAWPREAMBLE=bitpacked record
+ PPM4CMDDRAWPREAMBLE=^TPM4CMDDRAWPREAMBLE;
+ TPM4CMDDRAWPREAMBLE=bitpacked record
   header   :PM4_TYPE_3_HEADER;
   control1 :TVGT_PRIMITIVE_TYPE; //< writes to VGT_PRIMITIVE_TYPE reg
   control2 :TIA_MULTI_VGT_PARAM; //< writes to IA_MULTI_VGT_PARAM reg
@@ -366,6 +364,7 @@ const
 type
  PTPM4CMDWRITEDATA=^TPM4CMDWRITEDATA;
  TPM4CMDWRITEDATA=packed record
+  header :PM4_TYPE_3_HEADER;
   CONTROL:bitpacked record
    reserved1  :bit8;
    dstSel     :bit4;  ///< destination select
@@ -411,6 +410,7 @@ const
 type
  PEVENTWRITEEOP=^TEVENTWRITEEOP;
  TEVENTWRITEEOP=packed record
+  header    :PM4_TYPE_3_HEADER;
   EVENT_CNTL:bitpacked record
    EVENT_TYPE:bit6;           //6  ///< event type written to VGT_EVENT_INITIATOR
    Reserved1:bit2;            //2
@@ -454,11 +454,12 @@ const
 type
  PTPM4CMDEVENTWRITEEOS=^TPM4CMDEVENTWRITEEOS;
  TPM4CMDEVENTWRITEEOS=bitpacked record
+  header     :PM4_TYPE_3_HEADER;
   eventType  :bit6;    ///< event type written to VGT_EVENT_INITIATOR
   reserved1  :bit2;    ///< reserved
   eventIndex :bit4;    ///< event index
   reserved2  :bit20;   ///< reserved
-  addressLo:DWORD;     ///< low bits of address, must be 4 byte aligned
+  addressLo  :DWORD;   ///< low bits of address, must be 4 byte aligned
   addressHi  :bit29;   ///< high bits of address
   command    :bit3;    ///< command
   Case byte of
@@ -484,6 +485,7 @@ const
 type
  PTPM4CMDEVENTWRITE=^TPM4CMDEVENTWRITE;
  TPM4CMDEVENTWRITE=bitpacked record
+  header           :PM4_TYPE_3_HEADER;
   eventType        :bit6;    ///< event type written to VGT_EVENT_INITIATOR
   reserved1        :bit2;    ///< reserved
   eventIndex       :bit4;    ///< event index
@@ -527,6 +529,8 @@ const
 type
  PTPM4DMADATA=^TPM4DMADATA;
  TPM4DMADATA=packed record
+  header:PM4_TYPE_3_HEADER;
+
 
   Flags1:bitpacked record
    engine         :bit1;
@@ -567,9 +571,10 @@ type
 
  PPM4ACQUIREMEM=^TPM4ACQUIREMEM;
  TPM4ACQUIREMEM=bitpacked record
+  header         :PM4_TYPE_3_HEADER;
   coherCntl      :bit31;
   engine         :bit1;
-  coherSize      :DWORD;
+  coherSizeLo    :DWORD;
   coherSizeHi    :bit8;
   coherSizeHiRsvd:bit16;
   reserved1      :bit8;
@@ -610,6 +615,7 @@ const
 type
  PPM4CMDWAITREGMEM=^TPM4CMDWAITREGMEM;
  TPM4CMDWAITREGMEM=bitpacked record
+  header          :PM4_TYPE_3_HEADER;
   compareFunc     :bit3;  ///< function. WAIT_REG_MEM_FUNC_XXXX
   reserved1       :bit1;  ///< reserved
   memSpace        :bit2;  ///< memory space (0 = register, 1 = memory, 2=TC/L2, 3 = reserved)
@@ -667,11 +673,20 @@ type
 
  PPM4CMDDRAWINDEXBUFFERSIZE=^TPM4CMDDRAWINDEXBUFFERSIZE;
  TPM4CMDDRAWINDEXBUFFERSIZE=packed record
+  header    :PM4_TYPE_3_HEADER;
   numIndices:DWORD;
+ end;
+
+ PPM4CMDDRAWINDEXTYPE=^TPM4CMDDRAWINDEXTYPE;
+ TPM4CMDDRAWINDEXTYPE=packed record
+  header   :PM4_TYPE_3_HEADER;
+  indexType:bit2; // < select 16 Vs 32bit index
+  swapMode :bit2; // < DMA swap mode
  end;
 
  PPM4CMDDRAWINDEX2=^TPM4CMDDRAWINDEX2;
  TPM4CMDDRAWINDEX2=packed record
+  header       :PM4_TYPE_3_HEADER;
   maxSize      :DWORD;  // VGT_DMA_MAX_SIZE
   indexBaseLo  :DWORD;  // VGT_DMA_BASE
   indexBaseHi  :DWORD;  // VGT_DMA_BASE_HI
@@ -681,20 +696,29 @@ type
 
  PPM4CMDDRAWINDEXAUTO=^TPM4CMDDRAWINDEXAUTO;
  TPM4CMDDRAWINDEXAUTO=packed record
+  header       :PM4_TYPE_3_HEADER;
   indexCount   :DWORD;  ///< max index count
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
  PPM4CMDDRAWINDEXBASE=^TPM4CMDDRAWINDEXBASE;
  TPM4CMDDRAWINDEXBASE=bitpacked record
+  header     :PM4_TYPE_3_HEADER;
   indexBaseLo:DWORD; ///< Base Address Lo of index buffer, must be 2 byte aligned
   indexBaseHi:Word;  ///< Base Address Hi of index buffer
   reserved1  :bit14;
   baseSelect :bit2;  ///< Base Address select mode
  end;
 
+ PPM4CMDDRAWNUMINSTANCES=^TPM4CMDDRAWNUMINSTANCES;
+ TPM4CMDDRAWNUMINSTANCES=packed record
+  header      :PM4_TYPE_3_HEADER;
+  numInstances:DWORD;
+ end;
+
  PPM4CMDDRAWINDEXOFFSET2=^TPM4CMDDRAWINDEXOFFSET2;
  TPM4CMDDRAWINDEXOFFSET2=packed record
+  header       :PM4_TYPE_3_HEADER;
   maxSize      :DWORD; ///< maximum number of indices
   indexOffset  :DWORD; ///< zero based starting index number
   indexCount   :DWORD; ///< number of indices in the Index Buffer
@@ -703,6 +727,7 @@ type
 
  PPM4CMDDISPATCHDIRECT=^TPM4CMDDISPATCHDIRECT;
  TPM4CMDDISPATCHDIRECT=packed record
+  header           :PM4_TYPE_3_HEADER;
   dimX             :DWORD;                       ///< X dimensions of the array of thread groups to be dispatched
   dimY             :DWORD;                       ///< Y dimensions of the array of thread groups to be dispatched
   dimZ             :DWORD;                       ///< Z dimensions of the array of thread groups to be dispatched
@@ -710,6 +735,7 @@ type
  end;
 
 function get_op_name(op:Byte):RawByteString;
+function get_hint_name(op:DWORD):RawByteString;
 
 function PM4_HEADER_BUILD(lenDw:WORD;op,priv:Byte):DWORD; inline;
 function PM4_PRIV(token:DWORD):Byte; inline;
@@ -836,6 +862,113 @@ begin
   IT_MAP_PROCESS_VM                 :Result:='MAP_PROCESS_VM';
   else
    Result:='0x'+HexStr(op,2);
+ end;
+end;
+
+
+function get_hint_name(op:DWORD):RawByteString;
+begin
+ case op of
+  OP_HINT_UPDATE_PS_DB_CONTROL                     :Result:='UPDATE_PS_DB_CONTROL';
+  OP_HINT_UPDATE_VS_OUT_CNTL                       :Result:='UPDATE_VS_OUT_CNTL';
+  OP_HINT_UPDATE_PS_FORMAT                         :Result:='UPDATE_PS_FORMAT';
+  OP_HINT_UPDATE_PS_INPUT                          :Result:='UPDATE_PS_INPUT';
+  OP_HINT_UPDATE_PS_IN_CONTROL                     :Result:='UPDATE_PS_IN_CONTROL';
+  OP_HINT_UPDATE_VS_OUT_CONFIG                     :Result:='UPDATE_VS_OUT_CONFIG';
+  OP_HINT_UPDATE_PS_RSRC                           :Result:='UPDATE_PS_RSRC';
+  OP_HINT_UPDATE_PS_BARY_CNTL                      :Result:='UPDATE_PS_BARY_CNTL';
+  OP_HINT_UPDATE_VS_RSRC                           :Result:='UPDATE_VS_RSRC';
+  OP_HINT_UPDATE_VS_POS_FORMAT                     :Result:='UPDATE_VS_POS_FORMAT';
+  OP_HINT_WRITE_GPU_PREFETCH_INTO_L2               :Result:='WRITE_GPU_PREFETCH_INTO_L2';
+  OP_HINT_BASE_ALLOCATE_FROM_COMMAND_BUFFER        :Result:='BASE_ALLOCATE_FROM_COMMAND_BUFFER';
+  OP_HINT_PUSH_MARKER                              :Result:='PUSH_MARKER';
+  OP_HINT_POP_MARKER                               :Result:='POP_MARKER';
+  OP_HINT_SET_MARKER                               :Result:='SET_MARKER';
+  OP_HINT_SET_VSHARP_IN_USER_DATA                  :Result:='SET_VSHARP_IN_USER_DATA';
+  OP_HINT_SET_TSHARP_IN_USER_DATA                  :Result:='SET_TSHARP_IN_USER_DATA';
+  OP_HINT_SET_SSHARP_IN_USER_DATA                  :Result:='SET_SSHARP_IN_USER_DATA';
+  OP_HINT_SET_USER_DATA_REGION                     :Result:='SET_USER_DATA_REGION';
+  OP_HINT_BASE_MARK_DISPATCH_DRAW_ACB_ADDRESS      :Result:='BASE_MARK_DISPATCH_DRAW_ACB_ADDRESS';
+  OP_HINT_PREPARE_FLIP_VOID                        :Result:='PREPARE_FLIP_VOID';
+  OP_HINT_PREPARE_FLIP_LABEL                       :Result:='PREPARE_FLIP_LABEL';
+  OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_VOID     :Result:='PREPARE_FLIP_WITH_EOP_INTERRUPT_VOID';
+  OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL    :Result:='PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL';
+  OP_HINT_INLINE_DATA1                             :Result:='INLINE_DATA1';
+  OP_HINT_INLINE_DATA2                             :Result:='INLINE_DATA2';
+  OP_HINT_SET_DB_RENDER_CONTROL                    :Result:='SET_DB_RENDER_CONTROL';
+  OP_HINT_SET_DB_COUNT_CONTROL                     :Result:='SET_DB_COUNT_CONTROL';
+  OP_HINT_SET_RENDER_OVERRIDE_CONTROL              :Result:='SET_RENDER_OVERRIDE_CONTROL';
+  OP_HINT_SET_RENDER_OVERRIDE2CONTROL              :Result:='SET_RENDER_OVERRIDE2CONTROL';
+  OP_HINT_SET_PS_SHADER_SAMPLE_EXCLUSION_MASK      :Result:='SET_PS_SHADER_SAMPLE_EXCLUSION_MASK';
+  OP_HINT_SET_DEPTH_BOUNDS_RANGE                   :Result:='SET_DEPTH_BOUNDS_RANGE';
+  OP_HINT_SET_STENCIL_CLEAR_VALUE                  :Result:='SET_STENCIL_CLEAR_VALUE';
+  OP_HINT_SET_DEPTH_CLEAR_VALUE                    :Result:='SET_DEPTH_CLEAR_VALUE';
+  OP_HINT_SET_SCREEN_SCISSOR                       :Result:='SET_SCREEN_SCISSOR';
+  OP_HINT_SET_DEPTH_RENDER_TARGET                  :Result:='SET_DEPTH_RENDER_TARGET';
+  OP_HINT_SET_BORDER_COLOR_TABLE_ADDR              :Result:='SET_BORDER_COLOR_TABLE_ADDR';
+  OP_HINT_SET_WINDOW_OFFSET                        :Result:='SET_WINDOW_OFFSET';
+  OP_HINT_SET_WINDOW_SCISSOR                       :Result:='SET_WINDOW_SCISSOR';
+  OP_HINT_SET_CLIP_RECTANGLE_RULE                  :Result:='SET_CLIP_RECTANGLE_RULE';
+  OP_HINT_SET_HARDWARE_SCREEN_OFFSET               :Result:='SET_HARDWARE_SCREEN_OFFSET';
+  OP_HINT_SET_RENDER_TARGET_MASK                   :Result:='SET_RENDER_TARGET_MASK';
+  OP_HINT_SET_GENERIC_SCISSOR                      :Result:='SET_GENERIC_SCISSOR';
+  OP_HINT_SET_PERFMON_ENABLE                       :Result:='SET_PERFMON_ENABLE';
+  OP_HINT_SET_SCALED_RESOLUTION_GRID               :Result:='SET_SCALED_RESOLUTION_GRID';
+  OP_HINT_SET_FOVEATED_WINDOW                      :Result:='SET_FOVEATED_WINDOW';
+  OP_HINT_SET_INDEX_OFFSET                         :Result:='SET_INDEX_OFFSET';
+  OP_HINT_SET_PRIMITIVE_RESET_INDEX                :Result:='SET_PRIMITIVE_RESET_INDEX';
+  OP_HINT_SET_STENCIL_OP_CONTROL                   :Result:='SET_STENCIL_OP_CONTROL';
+  OP_HINT_SET_STENCIL                              :Result:='SET_STENCIL';
+  OP_HINT_SET_PS_SHADER_USAGE                      :Result:='SET_PS_SHADER_USAGE';
+  OP_HINT_SET_GRAPHICS_SCRATCH_SIZE                :Result:='SET_GRAPHICS_SCRATCH_SIZE';
+  OP_HINT_SET_DEPTH_STENCIL_CONTROL                :Result:='SET_DEPTH_STENCIL_CONTROL';
+  OP_HINT_SET_DEPTH_EQAA_CONTROL                   :Result:='SET_DEPTH_EQAA_CONTROL';
+  OP_HINT_SET_CB_CONTROL                           :Result:='SET_CB_CONTROL';
+  OP_HINT_SET_CLIP_CONTROL                         :Result:='SET_CLIP_CONTROL';
+  OP_HINT_SET_PRIMITIVE_SETUP                      :Result:='SET_PRIMITIVE_SETUP';
+  OP_HINT_SET_VIEWPORT_TRANSFORM_CONTROL           :Result:='SET_VIEWPORT_TRANSFORM_CONTROL';
+  OP_HINT_SET_OBJECT_ID_MODE                       :Result:='SET_OBJECT_ID_MODE';
+  OP_HINT_SET_COMPUTE_SHADER_CONTROL               :Result:='SET_COMPUTE_SHADER_CONTROL';
+  OP_HINT_SET_COMPUTE_SCRATCH_SIZE                 :Result:='SET_COMPUTE_SCRATCH_SIZE';
+  OP_HINT_SET_PRIMITIVE_TYPE_BASE                  :Result:='SET_PRIMITIVE_TYPE_BASE';
+  OP_HINT_SET_POINT_SIZE                           :Result:='SET_POINT_SIZE';
+  OP_HINT_SET_POINT_MIN_MAX                        :Result:='SET_POINT_MIN_MAX';
+  OP_HINT_SET_LINE_WIDTH                           :Result:='SET_LINE_WIDTH';
+  OP_HINT_SET_GS_MODE                              :Result:='SET_GS_MODE';
+  OP_HINT_SET_GS_ON_CHIP_CONTROL                   :Result:='SET_GS_ON_CHIP_CONTROL';
+  OP_HINT_SET_SCAN_MODE_CONTROL                    :Result:='SET_SCAN_MODE_CONTROL';
+  OP_HINT_SET_PS_SHADER_RATE                       :Result:='SET_PS_SHADER_RATE';
+  OP_HINT_SET_PRIMITIVE_ID_ENABLE                  :Result:='SET_PRIMITIVE_ID_ENABLE';
+  OP_HINT_SET_PRIMITIVE_RESET_INDEX_ENABLE         :Result:='SET_PRIMITIVE_RESET_INDEX_ENABLE';
+  OP_HINT_SET_DRAW_PAYLOAD_CONTROL                 :Result:='SET_DRAW_PAYLOAD_CONTROL';
+  OP_HINT_SET_INSTANCE_STEP_RATE                   :Result:='SET_INSTANCE_STEP_RATE';
+  OP_HINT_SETUP_ES_GS_RING_REGISTERS               :Result:='SETUP_ES_GS_RING_REGISTERS';
+  OP_HINT_SET_VERTEX_REUSE_ENABLE                  :Result:='SET_VERTEX_REUSE_ENABLE';
+  OP_HINT_SET_HTILE_STENCIL0                       :Result:='SET_HTILE_STENCIL0';
+  OP_HINT_SET_HTILE_STENCIL1                       :Result:='SET_HTILE_STENCIL1';
+  OP_HINT_SETUP_DRAW_OPAQUE_PARAMETERS_1           :Result:='SETUP_DRAW_OPAQUE_PARAMETERS_1';
+  OP_HINT_SETUP_DRAW_OPAQUE_PARAMETERS_0           :Result:='SETUP_DRAW_OPAQUE_PARAMETERS_0';
+  OP_HINT_SET_TESSELLATION_DISTRIBUTION_THRESHOLDS :Result:='SET_TESSELLATION_DISTRIBUTION_THRESHOLDS';
+  OP_HINT_SET_ACTIVE_SHADER_STAGES                 :Result:='SET_ACTIVE_SHADER_STAGES';
+  OP_HINT_SETUP_GS_VS_RING_REGISTERS               :Result:='SETUP_GS_VS_RING_REGISTERS';
+  OP_HINT_SET_ALPHA_TO_MASK_CONTROL                :Result:='SET_ALPHA_TO_MASK_CONTROL';
+  OP_HINT_SET_DISPATCH_DRAW_INDEX_DEALLOCATION_MASK:Result:='SET_DISPATCH_DRAW_INDEX_DEALLOCATION_MASK';
+  OP_HINT_SET_POLYGON_OFFSET_Z_FORMAT              :Result:='SET_POLYGON_OFFSET_Z_FORMAT';
+  OP_HINT_SET_POLYGON_OFFSET_CLAMP                 :Result:='SET_POLYGON_OFFSET_CLAMP';
+  OP_HINT_SET_POLYGON_OFFSET_FRONT                 :Result:='SET_POLYGON_OFFSET_FRONT';
+  OP_HINT_SET_POLYGON_OFFSET_BACK                  :Result:='SET_POLYGON_OFFSET_BACK';
+  OP_HINT_SET_GS_MODE_DISABLE                      :Result:='SET_GS_MODE_DISABLE';
+  OP_HINT_SET_STREAMOUT_MAPPING                    :Result:='SET_STREAMOUT_MAPPING';
+  OP_HINT_SET_AA_SAMPLE_COUNT                      :Result:='SET_AA_SAMPLE_COUNT';
+  OP_HINT_SET_VERTEX_QUANTIZATION                  :Result:='SET_VERTEX_QUANTIZATION';
+  OP_HINT_SET_GUARD_BANDS                          :Result:='SET_GUARD_BANDS';
+  OP_HINT_SET_AA_SAMPLE_MASK1                      :Result:='SET_AA_SAMPLE_MASK1';
+  OP_HINT_SET_AA_SAMPLE_MASK2                      :Result:='SET_AA_SAMPLE_MASK2';
+  OP_HINT_SET_TEXTURE_GRADIENT_FACTORS             :Result:='SET_TEXTURE_GRADIENT_FACTORS';
+  OP_HINT_SET_PERF_COUNTER_CONTROL_PA              :Result:='SET_PERF_COUNTER_CONTROL_PA';
+  OP_HINT_SET_PRIMITIVE_TYPE_NEO                   :Result:='SET_PRIMITIVE_TYPE_NEO';
+  else
+   Result:='0x'+HexStr(op,8);
  end;
 end;
 
