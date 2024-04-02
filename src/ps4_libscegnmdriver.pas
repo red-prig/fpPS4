@@ -2106,8 +2106,8 @@ var
 
  ComputeEvents:array[0..6] of Thamt64locked;
 
+//HardwareStatus
 type
- //HardwareStatus
  pHardwareStatus=^HardwareStatus;
  HardwareStatus=Integer;
 
