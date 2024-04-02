@@ -1972,6 +1972,8 @@ begin
  lib^.set_proc($B19BB06833C04CAB,@ps4_getdtablesize);
  lib^.set_proc($2467D330139D509A,@ps4_sceKernelGetFsSandboxRandomWord);
 
+ lib^.set_proc($9EEE1AD3F6AB422B,@ps4_sceKernelAioInitializeParam);
+
  //file
 
  //socket
