@@ -467,16 +467,7 @@ begin
  Result:=0;
 end;
 
-type
- pSceNetBandwidthControlParam=^SceNetBandwidthControlParam;
- SceNetBandwidthControlParam=packed record
-  cbFuncArg:Pointer;
-  timeout:DWORD;
-  appReqId:Word;
-  padding:array[0..1] of char;
- end;
-
-function ps4_sceNetBandwidthControlSetDefaultParam(s:Integer;param:SceNetBandwidthControlParam):Integer; SysV_ABI_CDecl;
+function ps4_sceNetBandwidthControlSetDefaultParam(param1:Pointer;param2:Integer):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end; 
