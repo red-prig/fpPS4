@@ -279,8 +279,8 @@ type
 
  pSceNpWebApi2PushEventFilterParameter=^SceNpWebApi2PushEventFilterParameter;
  SceNpWebApi2PushEventFilterParameter=packed record
-  dataType:pSceNpWebApi2ExtdPushEventExtdDataKey;
-  pExtdDataKey:Pointer;
+  dataType      :SceNpWebApi2ExtdPushEventExtdDataKey;
+  pExtdDataKey  :Pointer;
   extdDataKeyNum:QWORD;
  end;    
 
@@ -350,7 +350,7 @@ function ps4_sceNpWebApi2PushEventCreateFilter(libCtxId:Integer;
                                                filterParamNum:QWORD):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
-end;  
+end;
 
 function ps4_sceNpWebApi2PushEventRegisterCallback(libCtxId:Integer;
                                                    cbFunc:Pointer;
