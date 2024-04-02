@@ -75,6 +75,7 @@ uses
  ps4_libSceContentExport,
  ps4_libSceConvertKeycode,
  ps4_libSceUsbd,
+ ps4_libSceUsbStorage,
  ps4_libSceAudiodecCpu,
  ps4_libSceDepth,
  ps4_libSceNpTus,
