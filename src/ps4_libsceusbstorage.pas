@@ -7,11 +7,12 @@ interface
 uses
  ps4_program,
  Classes,
- SysUtils;
+ SysUtils,
+ sys_pthread;
 
 implementation
 
-function ps4_sceUsbStorageInit():Integer; SysV_ABI_CDecl;
+function ps4_sceUsbStorageInit(pAttr:p_pthread_attr_t):Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
