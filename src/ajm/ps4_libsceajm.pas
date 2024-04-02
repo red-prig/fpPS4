@@ -396,7 +396,9 @@ begin
 
 end;
 
-procedure FixDataInput(pBatchPosition:Pointer;pDataInput:Pointer;szDataInputSize:QWORD);
+procedure FixDataInput(const pBatchPosition:Pointer;
+                       const pDataInput:Pointer;
+                       const szDataInputSize:QWORD); 
 begin
  if PQWORD(pBatchPosition)^ and (SCE_AJM_FLAG_SIDEBAND_STREAM)<>0 then
  begin
