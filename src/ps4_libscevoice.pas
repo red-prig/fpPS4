@@ -176,6 +176,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVoiceResumePortAll():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 function Load_libSceVoice(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -194,6 +199,7 @@ begin
  lib^.set_proc($710E831AC4048D5E,@ps4_sceVoiceReadFromOPort);
  lib^.set_proc($4011680088C9A174,@ps4_sceVoiceSetVolume);
  lib^.set_proc($8305329E41203456,@ps4_sceVoiceSetMuteFlag);
+ lib^.set_proc($8DB909166399F54D,@ps4_sceVoiceResumePortAll); 
 end;
 
 function Load_libSceVoiceQoS(Const name:RawByteString):TElf_node;
