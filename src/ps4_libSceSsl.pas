@@ -35,6 +35,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSslGetCaCerts(libsslCtxId:Integer;
+                              caCerts:SceSslCaCerts):Integer; SysV_ABI_CDecl;
+begin
+ Writeln('sceSslGetCaCerts:',libsslCtxId);
+ Result:=0;
+end;  
+
 function ps4_sceSslFreeCaCerts(libsslCtxId:Integer;
                               caCerts:SceSslCaCerts):Integer; SysV_ABI_CDecl;
 begin
@@ -53,6 +60,7 @@ begin
 
  lib^.set_proc($85DA551140C55B7B,@ps4_sceSslInit);
  lib^.set_proc($D0AD7243A2EFFD87,@ps4_sceSslTerm);
+ lib^.set_proc($4C37D0A8EFE031B6,@ps4_sceSslGetCaCerts);  
  lib^.set_proc($A88BCBB34818C62D,@ps4_sceSslFreeCaCerts);
 end;
 
