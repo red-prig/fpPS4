@@ -305,6 +305,11 @@ begin
  if not FAjmMap.Delete(uiContext) then Result:=SCE_AJM_ERROR_INVALID_CONTEXT;
 end;
 
+function ps4_sceAjmInstanceCodecType(uiCodec:SceAjmCodecType):Integer; SysV_ABI_CDecl;
+begin
+ Result:=uiCodec>>$E;
+end; 
+
 function ps4_sceAjmInstanceCreate(uiContext:SceAjmContextId;
                                   uiCodec:SceAjmCodecType;
                                   uiFlags:QWORD;
@@ -507,6 +512,7 @@ begin
  lib^.set_proc($43777216EC069FAE,@ps4_sceAjmModuleRegister);
  lib^.set_proc($5A2EC3B652D5F8A2,@ps4_sceAjmModuleUnregister);
  lib^.set_proc($307BABEAA0AC52EB,@ps4_sceAjmFinalize);
+ lib^.set_proc($7625E340D88CBBFB,@ps4_sceAjmInstanceCodecType);
  lib^.set_proc($031A03AC8369E09F,@ps4_sceAjmInstanceCreate);
  lib^.set_proc($45B2DBB8ABFCCE1A,@ps4_sceAjmInstanceDestroy);
  lib^.set_proc($7660F26CDFFF167F,@ps4_sceAjmBatchJobControlBufferRa);
