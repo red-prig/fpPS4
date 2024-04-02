@@ -2210,6 +2210,58 @@ begin
  _sig_unlock;
 end;
 
+function _sceGnmDeleteEqEvent(eq:SceKernelEqueue;id:Integer):Integer;
+var
+ pEvents:Phamt64locked;
+ P:PPointer;
+ node:PKEventNode;
+begin
+ Writeln('sceGnmDeleteEqEvent:',id);
+
+ Case id of
+  kEqEventCompute0RelMem..kEqEventCompute6RelMem
+
+                        :pEvents:=@ComputeEvents[id];
+  kEqEventGfxEop        :pEvents:=@EopEvents;
+  else
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ pEvents^.LockWr;
+ P:=HAMT_search64(@pEvents^.hamt,QWORD(eq));
+ if (P<>nil) then
+ begin
+  node:=P^;
+ end else
+ begin
+  node:=_alloc_kevent_node(eq,SizeOf(TKEventNode));
+  if (node=Pointer(1)) then
+  begin
+   pEvents^.Unlock;
+   Exit(SCE_KERNEL_ERROR_EBADF);
+  end;
+  if (node=nil) then
+  begin
+   pEvents^.Unlock;
+   Exit(SCE_KERNEL_ERROR_ENOMEM);
+  end;
+  node^.ev.filter:=SCE_KERNEL_EVFILT_GNM;
+  node^.ev.flags :=EV_CLEAR;
+  node^.ev.data  :=id;
+  HAMT_insert64(@pEvents^.hamt,QWORD(eq),node);
+ end;
+ pEvents^.Unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceGnmDeleteEqEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+  Result:=_sceGnmDeleteEqEvent(eq,id);
+ _sig_unlock;
+end; 
+
 procedure _on_trigger_eop(data,userdata:Pointer);
 var
  node:PKEventNode;
@@ -2323,6 +2375,7 @@ begin
  lib^.set_proc($AA91884F33C4F997,@ps4_sceGnmDebugHardwareStatus); 
 
  lib^.set_proc($6F4C729659D563F2,@ps4_sceGnmAddEqEvent);
+ lib^.set_proc($3D54FE7EEA12F605,@ps4_sceGnmDeleteEqEvent);
 
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 
