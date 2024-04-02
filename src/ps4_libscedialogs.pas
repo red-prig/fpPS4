@@ -570,6 +570,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceLoginDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
 //
 
 function ps4_sceHmdSetupDialogInitialize():Integer; SysV_ABI_CDecl;
@@ -749,6 +754,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceLoginDialog');
  lib^.set_proc($A8FFC4BD0465D877,@ps4_sceLoginDialogInitialize);
+ lib^.set_proc($DAB73E7A049F6F90,@ps4_sceLoginDialogUpdateStatus); 
 end;
 
 function Load_libSceHmdSetupDialog(Const name:RawByteString):TElf_node;
