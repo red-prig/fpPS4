@@ -337,6 +337,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpWebApi2PushEventCreateHandle(libCtxId:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 function ps4_sceNpWebApi2PushEventCreateFilter(libCtxId:Integer;
                                                handleId:Integer;
                                                pNpServiceName:PChar;
@@ -397,6 +402,7 @@ begin
  lib^.set_proc($B24E786E2E85B583,@ps4_sceNpWebApi2CreateUserContext);
  lib^.set_proc($41A7F179933758AE,@ps4_sceNpWebApi2PushEventDeletePushContext);
  lib^.set_proc($7A038EBEB9C5EA62,@ps4_sceNpWebApi2AddHttpRequestHeader);
+ lib^.set_proc($595D46C0CDF63606,@ps4_sceNpWebApi2PushEventCreateHandle); 
  lib^.set_proc($32C685851FA53C4E,@ps4_sceNpWebApi2PushEventCreateFilter); 
 end;
 
