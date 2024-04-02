@@ -2106,55 +2106,10 @@ var
 
  ComputeEvents:array[0..6] of Thamt64locked;
 
-//HardwareStatus
-type
- pHardwareStatus=^HardwareStatus;
- HardwareStatus=Integer;
-
-const
- kHardwareStatusDump = $01;
-
-Var
- DebugHardwareStatus:array[0..1] of Thamt64locked;
-
-function _sceGnmDebugHardwareStatus(flag:HardwareStatus;
-                                    reserved:QWORD;
-                                    udata:Pointer):Integer; SysV_ABI_CDecl;
-var
- H:HardwareStatus;
- R:QWORD;
- P:PPointer;
- pStatus:Phamt64locked;
+procedure ps4_sceGnmDebugHardwareStatus(flag:DWORD); SysV_ABI_CDecl;
 begin
- Case reserved of
-  kHardwareStatusDump:pStatus:=@DebugHardwareStatus[reserved];
-  else
-  Exit(SCE_KERNEL_ERROR_EINVAL);
- end;
-
- pStatus^.LockWr;
- P:=HAMT_search64(@pStatus^.hamt,QWORD(flag));
- if (P<>nil) then
- R:=reserved;
- P:=udata;
- H:=ps4_ioctl(flag,$C0088111,R);
- begin
-  Exit(SCE_KERNEL_ERROR_ENOMEM);
- end;
- pStatus^.Unlock;
- HAMT_insert64(@pStatus^.hamt,QWORD(flag),udata);
-
- Result:=0;
-end;
-
-function ps4_sceGnmDebugHardwareStatus(flag:HardwareStatus;
-                                       reserved:QWORD;
-                                       udata:Pointer):Integer; SysV_ABI_CDecl;
-begin
- if (flag<>0) then
- Exit;
- _sceGnmDebugHardwareStatus(flag,reserved,udata);
- Result:=0;
+ if (flag<>0) then Exit;
+ //kmd_dump_status(g_gcHandle,0,0);
 end;
 
 function _sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
