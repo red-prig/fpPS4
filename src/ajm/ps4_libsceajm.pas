@@ -307,7 +307,7 @@ end;
 
 function ps4_sceAjmInstanceCodecType(uiCodec:SceAjmCodecType):Integer; SysV_ABI_CDecl;
 begin
- Result:=uiCodec>>$E;
+ Result:=uiCodec shr $E;
 end; 
 
 function ps4_sceAjmInstanceCreate(uiContext:SceAjmContextId;
@@ -396,36 +396,17 @@ begin
 
 end;
 
-procedure FixDataInput(const pBatchPosition:Pointer;
-                       const pDataInput:Pointer;
-                       const szDataInputSize:QWORD); 
-begin
- if PQWORD(pBatchPosition)^ and (SCE_AJM_FLAG_SIDEBAND_STREAM)<>0 then
- begin
-  pSceAjmSidebandStreamResult(pDataInput)^.sStream.iSizeConsumed:=1;
-  pSceAjmSidebandStreamResult(pDataInput)^.sStream.iSizeProduced:=1;
-  pSceAjmSidebandStreamResult(pDataInput)^.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
- end;
-end;
-
 function ps4_sceAjmBatchJobInlineBuffer(
-          const pBatchPosition:Pointer;
-          const pDataInput: Pointer;
+          const pBatchPosition :Pointer;
+          const pDataInput     :Pointer;
           const szDataInputSize:QWORD;
-          const pBatchAddress:PPointer):Pointer; SysV_ABI_CDecl;
+          const pBatchAddress  :PPointer):Pointer; SysV_ABI_CDecl;
 begin
- Result:=nil;
- if (pDataInput<>nil) then
- begin
-  FillChar(pDataInput^,szDataInputSize,0);
-  FixDataInput(pBatchPosition,pDataInput,szDataInputSize);
- end;
-  begin
-   PQWORD(pBatchPosition)^ := PQWORD(pBatchPosition)^ and $ffffffe0 or 7;
-   PQWORD(pBatchPosition + 1)^ := (szDataInputSize + 7) and $fffffff8;
-   Move(pDataInput^, Pointer(PQWORD(pBatchPosition) + SizeOf(Pointer) * 2)^, szDataInputSize);
-   pBatchAddress^:=pBatchPosition + 2;
- end;
+ PDWORD(pBatchPosition)^    :=PDWORD(pBatchPosition)^ and $ffffffe0 or 7;
+ PDWORD(pBatchPosition + 4)^:=(szDataInputSize + 7) and $fffffff8;
+ Move(pDataInput^, Pointer(pBatchPosition + 8)^, szDataInputSize);
+ pBatchAddress^:=(pBatchPosition + 8);
+ Result:=pBatchPosition + 8 + ((szDataInputSize + 7) and $fffffffffffffff8);
 end;
 
 function ps4_sceAjmBatchJobRunBufferRa(
