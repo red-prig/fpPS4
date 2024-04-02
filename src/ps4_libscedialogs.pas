@@ -459,6 +459,20 @@ const
  SCE_SIGNIN_DIALOG_STATUS_RUNNING    =2;
  SCE_SIGNIN_DIALOG_STATUS_FINISHED   =3;
 
+ //SceSigninDialogResultType
+ SCE_SIGNIN_DIALOG_RESULT_OK           =0;
+ SCE_SIGNIN_DIALOG_RESULT_USER_CANCELED=1;
+
+type
+ pSceSigninDialogResultType=^SceSigninDialogResultType;
+ SceSigninDialogResultType=Integer;
+
+ pSceSigninDialogResult=^SceSigninDialogResult;
+ SceSigninDialogResult=packed record
+  result:SceSigninDialogResultType;
+  reserved:array[0..2] of Integer;
+ end; 
+
 var
  status_signin_dialog:Integer=SCE_SIGNIN_DIALOG_STATUS_NONE;
 
@@ -468,6 +482,11 @@ begin
  status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
+
+function ps4_sceSigninDialogGetResult(_result:pSceSigninDialogResult):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceSigninDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
@@ -722,6 +741,7 @@ begin
  lib^.set_proc($9A56067E6A84DDF4,@ps4_sceSigninDialogInitialize);
  lib^.set_proc($265A49568456BFB5,@ps4_sceSigninDialogOpen);
  lib^.set_proc($070DF59624C54F70,@ps4_sceSigninDialogUpdateStatus);
+ lib^.set_proc($9EA1BBAEA9D8C355,@ps4_sceSigninDialogGetResult); 
  lib^.set_proc($2D79664BA3EF25D5,@ps4_sceSigninDialogTerminate);
 end;
 
