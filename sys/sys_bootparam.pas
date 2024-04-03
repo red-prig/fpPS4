@@ -22,10 +22,20 @@ var
  p_print_pmap         :DWORD=0;
  p_print_jit_preload  :DWORD=0;
 
- p_host_ipc   :THostIpcInterface;
- p_host_ipc_td:Pointer;
+ p_host_ipc           :THostIpcInterface=nil;
+
+function p_host_ipc_td:Pointer;
 
 implementation
+
+function p_host_ipc_td:Pointer;
+begin
+ Result:=nil;
+ if (p_host_ipc<>nil) then
+ begin
+  Result:=p_host_ipc.Ftd;
+ end;
+end;
 
 end.
 
