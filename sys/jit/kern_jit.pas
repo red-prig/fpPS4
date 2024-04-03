@@ -1075,6 +1075,9 @@ begin
 
  jit_cbs[OPPnone,OPrdmsr,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPwrmsr,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPsldt,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlldt,OPSnone]:=@op_invalid;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
