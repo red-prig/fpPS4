@@ -622,6 +622,10 @@ begin
 
  jit_cbs[OPPnone,OPpalignr,OPSnone]:=@op_reg_mem_rw;
 
+ jit_cbs[OPPnone,OPpsign,OPSx_b]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPpsign,OPSx_w]:=@op_reg_mem_rw;
+ jit_cbs[OPPnone,OPpsign,OPSx_d]:=@op_reg_mem_rw;
+
  jit_cbs[OPPnone,OPldmxcsr,OPSnone]:=@op_ldmxcsr;
  jit_cbs[OPPnone,OPstmxcsr,OPSnone]:=@op_stmxcsr;
 

@@ -1946,6 +1946,7 @@ begin
     pop(fix_size8(reg));
    end;
 
+   reg:=ovr.original;
   end;
 
  end;
@@ -2011,6 +2012,7 @@ begin
     pop(fix_size8(reg));
    end;
 
+   reg:=ovr.original;
   end;
 
  end;

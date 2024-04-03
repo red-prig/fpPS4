@@ -2036,37 +2036,64 @@ begin
 end;
 
 procedure t_modrm_info.emit_gop(var ji:t_jit_instruction;rexW:Boolean;op:DWORD);
+var
+ b_op:array[0..3] of Byte;
 begin
+ DWORD(b_op):=op;
+ //
  case op of
   $00..$FF:
    begin
     emit_rex(ji,rexW);
-    ji.EmitByte(Byte(op));
+    ji.EmitByte(b_op[0]);
    end;
   $100..$FFFF:
    begin
     emit_rex(ji,rexW);
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
+    ji.EmitByte(b_op[1]);
+    ji.EmitByte(b_op[0]);
    end;
-  else
+  $10000..$FFFFFF:
    begin
-    case Lo(Hi(op)) of
+    case b_op[2] of
      $66,
      $F2,
      $F3:
       begin
-       ji.EmitByte(Lo(Hi(op)));
+       ji.EmitByte(b_op[2]);
        emit_rex(ji,rexW);
-       ji.EmitByte(Hi(Lo(op)));
-       ji.EmitByte(Lo(Lo(op)));
+       ji.EmitByte(b_op[1]);
+       ji.EmitByte(b_op[0]);
       end;
      else
       begin
        emit_rex(ji,rexW);
-       ji.EmitByte(Lo(Hi(op)));
-       ji.EmitByte(Hi(Lo(op)));
-       ji.EmitByte(Lo(Lo(op)));
+       ji.EmitByte(b_op[2]);
+       ji.EmitByte(b_op[1]);
+       ji.EmitByte(b_op[0]);
+      end;
+    end;
+   end;
+  else
+   begin
+    case b_op[3] of
+     $66,
+     $F2,
+     $F3:
+      begin
+       ji.EmitByte(b_op[3]);
+       emit_rex(ji,rexW);
+       ji.EmitByte(b_op[2]);
+       ji.EmitByte(b_op[1]);
+       ji.EmitByte(b_op[0]);
+      end;
+     else
+      begin
+       emit_rex(ji,rexW);
+       ji.EmitByte(b_op[3]);
+       ji.EmitByte(b_op[2]);
+       ji.EmitByte(b_op[1]);
+       ji.EmitByte(b_op[0]);
       end;
     end;
    end;
@@ -2131,7 +2158,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  mreg:=Sums(mem);
@@ -2212,7 +2239,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  mreg:=Sums(mem);
@@ -2301,7 +2328,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  mreg:=Sums(mem);
@@ -2385,8 +2412,8 @@ begin
  Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
  Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
 
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
 
  Assert(reg0.AScale<=1);
  Assert(reg1.AScale<=1);
@@ -2455,8 +2482,8 @@ begin
  Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
  Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
 
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
 
  Assert(reg0.AScale<=1);
  Assert(reg1.AScale<=1);
@@ -2531,8 +2558,8 @@ begin
  Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
  Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
 
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
 
  Assert(reg0.AScale<=1);
  Assert(reg1.AScale<=1);
@@ -2598,7 +2625,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  ji:=default_jit_instruction;
@@ -2889,7 +2916,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  ji:=default_jit_instruction;
@@ -3036,7 +3063,7 @@ var
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regXmm]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
  Assert(reg.AScale<=1);
 
  ji:=default_jit_instruction;

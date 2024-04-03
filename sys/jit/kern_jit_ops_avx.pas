@@ -1180,6 +1180,10 @@ begin
 
  jit_cbs[OPPv,OPpalignr,OPSnone]:=@op_avx3_gen;
 
+ jit_cbs[OPPv,OPpsign,OPSx_b]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsign,OPSx_w]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPpsign,OPSx_d]:=@op_avx3_gen;
+
  jit_cbs[OPPv,OPldmxcsr,OPSnone]:=@op_vldmxcsr;
  jit_cbs[OPPv,OPstmxcsr,OPSnone]:=@op_vstmxcsr;
 
