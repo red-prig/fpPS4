@@ -22,7 +22,8 @@ var
  p_print_pmap         :DWORD=0;
  p_print_jit_preload  :DWORD=0;
 
- p_host_ipc:THostIpcInterface;
+ p_host_ipc   :THostIpcInterface;
+ p_host_ipc_td:Pointer;
 
 implementation
 
