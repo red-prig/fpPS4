@@ -385,16 +385,12 @@ type
  end;
 
 const
- kEventWriteSource32BitsImmediate     =$1; ///< Source is a 32-bit constant value provided as a separate function argument.
- kEventWriteSource64BitsImmediate     =$2; ///< Source is a 64-bit constant value provided as a separate function argument.
- kEventWriteSourceGlobalClockCounter  =$3; ///< Source is a 64-bit timestamp from the system’s 100Mhz global clock.
- kEventWriteSourceGpuCoreClockCounter =$4; ///< Source is a 64-bit timestamp from the GPU’s 800Mhz clock.
-
  // EVENT_WRITE_EOP packet definitions
  EVENTWRITEEOP_DATA_SEL_DISCARD            =0;
  EVENTWRITEEOP_DATA_SEL_SEND_DATA32        =1;
  EVENTWRITEEOP_DATA_SEL_SEND_DATA64        =2;
- EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     =3;
+ EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     =3; //system 100Mhz global clock.
+ EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER=4; //GPU 800Mhz clock.
 
  EVENTWRITEEOP_INT_SEL_NONE                =0;
  EVENTWRITEEOP_INT_SEL_SEND_INT            =1;
@@ -408,40 +404,41 @@ const
  kEopCsDone                       = $00000028;  //wait cs shader, label .....EOP
 
 type
- PEVENTWRITEEOP=^TEVENTWRITEEOP;
- TEVENTWRITEEOP=packed record
-  header    :PM4_TYPE_3_HEADER;
-  EVENT_CNTL:bitpacked record
-   EVENT_TYPE:bit6;           //6  ///< event type written to VGT_EVENT_INITIATOR
-   Reserved1:bit2;            //2
-   EVENT_INDEX:bit4;          //4  ///< event index
+ PPM4CMDEVENTWRITEEOP=^TPM4CMDEVENTWRITEEOP;
+ TPM4CMDEVENTWRITEEOP=bitpacked record
+  header          :PM4_TYPE_3_HEADER;
 
-   tcl1VolActionEna__CI:bit1; //1  //cacheAction
-   tcVolActionEna__CI  :bit1; //1  //cacheAction
-   reserved2:bit1;            //1  //cacheAction
-   tcWbActionEna__CI:bit1;    //1  //cacheAction
-   tcl1ActionEna__CI:bit1;    //1  //cacheAction
-   tcActionEna__CI:bit1;      //1  //cacheAction
+  EVENT_TYPE      :bit6;  //00 // < event type written to VGT_EVENT_INITIATOR
+  Reserved1       :bit2;  //06
+  EVENT_INDEX     :bit4;  //08 // < event index [0x5]
 
-   reserved3:bit2;            //2
-   invalidateL2__SI:bit1;     //1
-   reserved4:bit3;            //3
-   atc__CI:bit1;              //1
-   cachePolicy__CI:bit2;      //2 ///< Cache Policy setting used for writing fences and timestamps to the TCL2
-   volatile__CI:bit1;         //1 ///< Volatile setting used for writing fences and timestamps to the TCL2.
-   reserved5:bit4;            //4
-  end;
-  ADDRESS_LO:DWORD;  ///< low bits of address
-  DATA_CNTL:bitpacked record
-   addressHi:bit16; //16  ///< high bits of address
-   destTcL2:bit1;   //1   ///< (dstSelector & 1)
-   reserved6:bit7;  //24  ///< reserved
-   intSel:bit2;     //26  ///< selects interrupt action for end-of-pipe (25 bit is eop)
-   reserved7:bit3;  //29  ///< reserved
-   dataSel:bit3;    //32  ///< selects source of data (srcSelector)
-  end;
-  DATA_LO:DWORD;   ///< value that will be written to memory when event occurs
-  DATA_HI:DWORD;   ///< value that will be written to memory when event occurs
+  tcL1VolActionEna:bit1;  //12 //(cacheAction & 0x3f) [0x00,0x10,0x33,0x38,0x3B]
+  tcVolActionEna  :bit1;  //13 //(cacheAction & 0x3f)
+  reserved2       :bit1;  //14 //(cacheAction & 0x3f)
+  tcWbActionEna   :bit1;  //15 //(cacheAction & 0x3f)
+  tcL1ActionEna   :bit1;  //16 //(cacheAction & 0x3f)
+  tcActionEna     :bit1;  //17 //(cacheAction & 0x3f)
+
+  reserved3       :bit2;  //18
+  invalidateL2    :bit1;  //20
+  reserved4       :bit3;  //21
+  atc             :bit1;  //24
+
+  cachePolicy     :bit2;  //25 // < Cache Policy setting used for writing fences and timestamps to the TCL2
+                               //   (cachePolicy & 3)
+  volatile        :bit1;  //27 // < Volatile setting used for writing fences and timestamps to the TCL2.
+                               //   (dstSelector & 0x10) [kEventWriteDestTcL2Volatile]
+  reserved5       :bit4;  //28
+
+  address         :bit48; // < bits of address
+
+  destTcL2        :bit1;  //16  // < (dstSelector & 1) [kEventWriteDestTcL2,kEventWriteDestTcL2Volatile]
+  reserved6       :bit7;  //17  // < reserved
+  intSel          :bit2;  //24  // < selects interrupt action for end-of-pipe (25 bit is eop) [INT_SEL_SEND_INT_ON_CONFIRM]
+  reserved7       :bit3;  //26  // < reserved
+  dataSel         :bit3;  //29  // < selects source of data (srcSelector)
+
+  DATA            :QWORD; // < value that will be written to memory when event occurs
  end;
 
 const
@@ -680,8 +677,9 @@ type
  PPM4CMDDRAWINDEXTYPE=^TPM4CMDDRAWINDEXTYPE;
  TPM4CMDDRAWINDEXTYPE=packed record
   header   :PM4_TYPE_3_HEADER;
-  indexType:bit2; // < select 16 Vs 32bit index
-  swapMode :bit2; // < DMA swap mode
+  indexType:bit2;  // < select 16 Vs 32bit index
+  swapMode :bit2;  // < DMA swap mode
+  reserved :bit28;
  end;
 
  PPM4CMDDRAWINDEX2=^TPM4CMDDRAWINDEX2;

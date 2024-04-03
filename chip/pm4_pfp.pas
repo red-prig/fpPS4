@@ -856,7 +856,8 @@ begin
     end;
   3:begin //PM4_TYPE_3
      if pctx^.print_ops then
-     if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) then
+     if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
+        (not pctx^.print_hint) then
      begin
       Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
      end;
@@ -875,6 +876,30 @@ begin
     Writeln(stderr,'PM4_TYPE_',PM4_TYPE(token));
     Assert(False);
    end;
+ end;
+
+end;
+
+procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
+begin
+ Assert(Body^.EVENT_INDEX=EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP);
+
+ Writeln(' eventType  =0x',HexStr(Body^.EVENT_TYPE,2));
+ Writeln(' interrupt  =0x',HexStr(Body^.intSel shr 1,2));
+ Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
+ Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
+ Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
+
+ if (Body^.destTcL2<>0) then Exit; //write to L2
+
+ Case Body^.dataSel of
+  //
+  EVENTWRITEEOP_DATA_SEL_DISCARD            :;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA32        :PDWORD(Body^.address)^:=Body^.DATA;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA64        :PQWORD(Body^.address)^:=Body^.DATA;
+  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     :; //system 100Mhz global clock.
+  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:; //GPU 800Mhz clock.
+  else;
  end;
 
 end;
@@ -1089,6 +1114,21 @@ begin
  pctx^.USERCONFIG_REG.VGT_NUM_INSTANCES :=Body^.numInstances;
 end;
 
+procedure onDrawIndex2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEX2);
+begin
+ if (DWORD(Body^.drawInitiator)<>0) then
+ begin
+  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ pctx^.CONTEXT_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
+ pctx^.CONTEXT_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
+ pctx^.CONTEXT_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
+ pctx^.CONTEXT_REG.VGT_DMA_SIZE             :=Body^.indexCount;
+ pctx^.USERCONFIG_REG.VGT_NUM_INDICES       :=Body^.indexCount;
+ pctx^.CONTEXT_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
+end;
+
 procedure onPushMarker(Body:PChar);
 begin
  Writeln('\HINT_PUSH_MARKER:',Body);
@@ -1209,14 +1249,15 @@ begin
     end;
   3:begin //PM4_TYPE_3
      if pctx^.print_ops then
-     if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) then
+     if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
+        (not pctx^.print_hint) then
      begin
       Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
      end;
 
      case PM4_TYPE_3_HEADER(token).opcode of
       IT_NOP                :onNop(pctx,buff);
-      IT_EVENT_WRITE_EOP    :;
+      IT_EVENT_WRITE_EOP    :onEventWriteEop  (pctx,buff);
       IT_EVENT_WRITE_EOS    :;
       IT_DMA_DATA           :;
       IT_ACQUIRE_MEM        :onAcquireMem     (pctx,buff);
@@ -1231,7 +1272,7 @@ begin
       IT_INDEX_TYPE         :onIndexType      (pctx,buff);
       IT_INDEX_BASE         :onIndexBase      (pctx,buff);
       IT_NUM_INSTANCES      :onNumInstances   (pctx,buff);
-      IT_DRAW_INDEX_2       :writeln;
+      IT_DRAW_INDEX_2       :onDrawIndex2     (pctx,buff);
       IT_DRAW_INDEX_AUTO    :;
       IT_DRAW_INDEX_OFFSET_2:;
       IT_DISPATCH_DIRECT    :;
