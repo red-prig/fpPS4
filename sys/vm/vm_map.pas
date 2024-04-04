@@ -930,25 +930,37 @@ function vm_map_insert_internal(
            start :vm_offset_t;
            __end :vm_offset_t;
            prot  :vm_prot_t;
+           max   :vm_prot_t;
            cow   :Integer;
            alias :Boolean):Integer;
 begin
  Result:=KERN_SUCCESS;
 
- if (cow<>-1) then
+ if (cow=-1) then Exit;
+
+ budget_reserve(obj,__end-start);
+
+ if (obj<>nil) then
  begin
-  budget_reserve(obj,__end-start);
-
-  if (obj<>nil) then
+  if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
+     (obj^.otype=OBJT_PHYSHM) then
   begin
-   if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
-      (obj^.otype=OBJT_PHYSHM) then
-   begin
-    Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
-   end;
+   Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
   end;
+ end;
 
-  if (Result=KERN_SUCCESS) then
+ if (Result=KERN_SUCCESS) then
+ begin
+
+  if (obj=nil) and (max=0) and (prot=0) then
+  begin
+   //reserved only
+
+   pmap_remove(map^.pmap,
+               obj,
+               start,
+               __end);
+  end else
   begin
 
    //force copy
@@ -963,9 +975,11 @@ begin
                      start,
                      __end,
                      prot);
+
   end;
 
  end;
+
 end;
 
 {
@@ -1129,6 +1143,7 @@ charged:
               start ,
               __end ,
               prot  ,
+              max   ,
               cow   ,
               alias);
 
@@ -1205,6 +1220,7 @@ charged:
             start ,
             __end ,
             prot  ,
+            max   ,
             cow   ,
             alias);
 

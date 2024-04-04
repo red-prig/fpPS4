@@ -144,6 +144,7 @@ begin
    Writeln('failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
    Assert(false,'vm_nt_file_obj_destroy');
   end;
+  obj^.hfile:=0;
  end;
 
  if ((obj^.flags and NT_MOBJ_FREE)<>0) then
@@ -1083,6 +1084,7 @@ procedure vm_nt_map_madvise(map:p_vm_nt_map;
 var
  entry:p_vm_nt_entry;
  base,size:vm_size_t;
+ mirror:Pointer;
 begin
  if (start=__end) then Exit;
 
@@ -1112,9 +1114,24 @@ begin
   size:=size-base;
 
   case advise of
-   MADV_WILLNEED:md_dontneed(Pointer(base),size);
-   MADV_DONTNEED,
-   MADV_FREE    :md_activate(Pointer(base),size);
+   MADV_WILLNEED:md_activate(Pointer(base),size);
+   //
+   MADV_DONTNEED:md_dontneed(Pointer(base),size);
+   MADV_FREE    :md_dontneed(Pointer(base),size);
+   //
+   MADV_NORMAL: //internal only
+    if (md_activate(Pointer(base),size)=0) then
+    begin
+     //page is restored, zero it
+
+     mirror:=vm_nt_map_mirror(map,base,base+size);
+     if (mirror<>nil) then
+     begin
+      FillChar(mirror^,size,0);
+      md_unmap_ex(mirror,size);
+     end;
+
+    end;
    else;
   end;
 

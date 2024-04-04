@@ -16,14 +16,16 @@ uses
  vm_nt_map;
 
 const
- PMAPP_1GB_SHIFT =30;
- PMAPP_1GB_SIZE  =QWORD(QWORD(1) shl PMAPP_1GB_SHIFT);
- PMAPP_1GB_MASK  =PMAPP_1GB_SIZE-1;
+ PMAPP_BLK_SHIFT =29;
+ PMAPP_BLK_SIZE  =QWORD(QWORD(1) shl PMAPP_BLK_SHIFT);
+ PMAPP_BLK_MASK  =PMAPP_BLK_SIZE-1;
 
- PMAPP_1GB_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_1GB_SHIFT;
+ PMAPP_BLK_PRIV_BLOCKS=QWORD(VM_MAXUSER_ADDRESS                   ) shr PMAPP_BLK_SHIFT;
+ PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_BLK_SHIFT;
 
 var
- DMEM_FD:array[0..PMAPP_1GB_DMEM_BLOCKS-1] of vm_nt_file_obj;
+ PRIV_FD:array[0..PMAPP_BLK_PRIV_BLOCKS-1] of vm_nt_file_obj;
+ DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
 
  DEV_INFO:record
   DEV_FD  :vm_nt_file_obj;
@@ -123,13 +125,13 @@ var
  base:Pointer;
  i,r:Integer;
 begin
- for i:=0 to PMAPP_1GB_DMEM_BLOCKS-2 do
+ for i:=0 to PMAPP_BLK_DMEM_BLOCKS-2 do
  begin
-  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_1GB_SIZE);
-  r:=md_split(base,PMAPP_1GB_SIZE);
+  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
+  r:=md_split(base,PMAPP_BLK_SIZE);
   if (r<>0) then
   begin
-   Writeln('failed md_split(',HexStr(base),',',HexStr(base+PMAPP_1GB_SIZE),'):0x',HexStr(r,8));
+   Writeln('failed md_split(',HexStr(base),',',HexStr(base+PMAPP_BLK_SIZE),'):0x',HexStr(r,8));
    Assert(false,'dmem_init');
   end;
  end;
@@ -280,39 +282,68 @@ type
   offset:QWORD;
  end;
 
-procedure get_private_fd(var info:t_fd_info);
+function get_priv_block_count:Integer;
 var
- hfile:THandle;
- i:QWORD;
- s:QWORD;
+ i:Integer;
+begin
+ Result:=0;
+ For i:=0 to High(PRIV_FD) do
+ begin
+  if (PRIV_FD[i].hfile<>0) then
+  begin
+   Inc(Result);
+  end;
+ end;
+end;
+
+procedure get_priv_fd(var info:t_fd_info);
+var
+ o:QWORD;
  e:QWORD;
+ d:QWORD;
+ i:DWORD;
  r:DWORD;
 begin
- s:=info.start;
- e:=info.__end;
+ o:=info.start;
 
- i:=(e-s);
+ //current block id
+ i:=o shr PMAPP_BLK_SHIFT;
 
- if (i>PMAPP_1GB_SIZE) then
+ if (PRIV_FD[i].hfile=0) then
  begin
-  i:=PMAPP_1GB_SIZE;
-  info.__end:=(s+i);
+  R:=md_memfd_create(PRIV_FD[i].hfile,PMAPP_BLK_SIZE);
+
+  PRIV_FD[i].flags:=NT_FILE_FREE;
+  PRIV_FD[i].maxp :=VM_PROT_READ or VM_PROT_WRITE;
+
+  if (r<>0) then
+  begin
+   Writeln('failed md_memfd_create(',HexStr(PMAPP_BLK_SIZE,11),'):0x',HexStr(r,8));
+   Writeln(' priv_block_count=',get_priv_block_count);
+   Assert(false,'get_priv_fd');
+  end;
  end;
 
- hfile:=0;
- r:=md_memfd_create(hfile,i);
+ info.obj:=@PRIV_FD[i];
 
- if (r<>0) then
+ vm_nt_file_obj_reference(info.obj);
+
+ //current block offset
+ o:=o and PMAPP_BLK_MASK;
+
+ //mem size
+ d:=info.__end-info.start;
+
+ //max offset
+ e:=o+d;
+
+ // |start         end|
+ // |offset  |max
+ if (e>PMAPP_BLK_SIZE) then
  begin
-  Writeln('failed md_memfd_create(',HexStr(i,11),'):0x',HexStr(r,8));
-  Assert(false,'get_private_fd');
- end;
-
- info.obj:=vm_nt_file_obj_allocate(hfile,VM_PROT_READ or VM_PROT_WRITE);
-
- with info.obj^ do
- begin
-  flags:=flags and (not NT_UNION_OBJ);
+  e:=PMAPP_BLK_SIZE-o;
+  e:=e+info.start;
+  info.__end:=e;
  end;
 end;
 
@@ -328,26 +359,26 @@ begin
  o:=info.offset;
 
  //current block id
- i:=o shr PMAPP_1GB_SHIFT;
+ i:=o shr PMAPP_BLK_SHIFT;
 
  if (DMEM_FD[i].hfile=0) then
  begin
-  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_1GB_SIZE);
+  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_BLK_SIZE);
 
   DMEM_FD[i].maxp:=VM_PROT_READ or VM_PROT_WRITE;
 
   if (r<>0) then
   begin
-   Writeln('failed md_memfd_create(',HexStr(PMAPP_1GB_SIZE,11),'):0x',HexStr(r,8));
+   Writeln('failed md_memfd_create(',HexStr(PMAPP_BLK_SIZE,11),'):0x',HexStr(r,8));
    Assert(false,'get_dmem_fd');
   end;
 
   //dmem mirror
-  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_1GB_SIZE);
-  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_1GB_SIZE,MD_PROT_RW);
+  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
+  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_BLK_SIZE,MD_PROT_RW);
   if (r<>0) then
   begin
-   Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+PMAPP_1GB_SIZE),'):0x',HexStr(r,8));
+   Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+PMAPP_BLK_SIZE),'):0x',HexStr(r,8));
    Assert(false,'get_dmem_fd');
   end;
  end;
@@ -357,7 +388,7 @@ begin
  vm_nt_file_obj_reference(info.obj);
 
  //current block offset
- o:=o and PMAPP_1GB_MASK;
+ o:=o and PMAPP_BLK_MASK;
 
  //mem size
  d:=info.__end-info.start;
@@ -367,9 +398,9 @@ begin
 
  // |start         end|
  // |offset  |max
- if (e>PMAPP_1GB_SIZE) then
+ if (e>PMAPP_BLK_SIZE) then
  begin
-  e:=PMAPP_1GB_SIZE-o;
+  e:=PMAPP_BLK_SIZE-o;
   e:=e+info.start;
   info.__end:=e;
  end;
@@ -463,27 +494,26 @@ begin
  end;
 end;
 
-procedure pmap_copy(pmap   :pmap_t;
-                    src_obj:p_vm_nt_file_obj;
-                    src_ofs:vm_ooffset_t;
-                    dst_obj:p_vm_nt_file_obj;
-                    delta  :vm_ooffset_t;
-                    size   :vm_ooffset_t);
+procedure pmap_copy(src_obj :p_vm_nt_file_obj;
+                    src_ofs :vm_ooffset_t;
+                    dst_obj :p_vm_nt_file_obj;
+                    dst_ofs :vm_ooffset_t;
+                    size    :vm_ooffset_t;
+                    max_size:vm_ooffset_t);
 var
  start :vm_ooffset_t;
  __end :vm_ooffset_t;
- offset:vm_ooffset_t;
  src,dst:Pointer;
  r:Integer;
 begin
- if (size>delta) then
+ if (size>max_size) then
  begin
-  size:=delta;
+  size:=max_size;
  end;
 
- start :=src_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
- __end :=src_ofs+size; //up
- offset:=src_ofs and (MD_ALLOC_GRANULARITY-1);
+ start  :=src_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
+ __end  :=src_ofs+size; //up
+ src_ofs:=src_ofs and (MD_ALLOC_GRANULARITY-1);
 
  src:=nil;
  r:=md_file_mmap(src_obj^.hfile,src,start,__end-start,MD_PROT_R);
@@ -494,8 +524,12 @@ begin
   Assert(false,'pmap_copy');
  end;
 
+ start  :=dst_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
+ __end  :=dst_ofs+size; //up
+ dst_ofs:=dst_ofs and (MD_ALLOC_GRANULARITY-1);
+
  dst:=nil;
- r:=md_file_mmap(dst_obj^.hfile,dst,0,delta,MD_PROT_RW);
+ r:=md_file_mmap(dst_obj^.hfile,dst,start,__end-start,MD_PROT_RW);
 
  if (r<>0) then
  begin
@@ -503,11 +537,11 @@ begin
   Assert(false,'pmap_copy');
  end;
 
- Move((src+offset)^,dst^,size);
+ Move((src+src_ofs)^,(dst+dst_ofs)^,size);
 
  md_cacheflush(dst,size,DCACHE);
 
- r:=md_file_unmap(dst,delta);
+ r:=md_file_unmap(dst,0);
 
  if (r<>0) then
  begin
@@ -515,7 +549,7 @@ begin
   Assert(false,'pmap_copy');
  end;
 
- r:=md_file_unmap(src,size);
+ r:=md_file_unmap(src,0);
 
  if (r<>0) then
  begin
@@ -579,14 +613,14 @@ begin
 
       while (info.start<>info.__end) do
       begin
-       get_private_fd(info);
+       get_priv_fd(info);
 
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           0, //private always from the start
+                           info.start and PMAPP_BLK_MASK, //block local offset
                            info.start,
                            info.__end,
                            delta,
@@ -597,6 +631,12 @@ begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
        end;
+
+       //fill zero if needed
+       vm_nt_map_madvise(@pmap^.nt_map,
+                         info.start,
+                         info.__end,
+                         MADV_NORMAL);
 
        info.start :=info.start+delta;
        info.__end :=__end;
@@ -637,7 +677,7 @@ begin
 
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           info.offset and PMAPP_1GB_MASK, //block local offset
+                           info.offset and PMAPP_BLK_MASK, //block local offset
                            info.start,
                            info.__end,
                            delta,
@@ -749,21 +789,14 @@ begin
 
       while (info.start<>info.__end) do
       begin
-       get_private_fd(info);
+       get_priv_fd(info);
 
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
-       pmap_copy(pmap,
-                 cow,
-                 info.offset,
-                 info.obj,
-                 delta,
-                 size);
-
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
-                           0, //private always from the start
+                           info.start and PMAPP_BLK_MASK, //block local offset
                            info.start,
                            info.__end,
                            delta,
@@ -774,6 +807,20 @@ begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
        end;
+
+       //restore
+       vm_nt_map_madvise(@pmap^.nt_map,
+                         info.start,
+                         info.__end,
+                         MADV_WILLNEED);
+
+       //copy
+       pmap_copy(cow,
+                 info.offset,
+                 info.obj,
+                 info.start and PMAPP_BLK_MASK, //block local offset
+                 delta,
+                 size);
 
        info.start :=info.start +delta;
        info.__end :=start+paddi;
@@ -901,7 +948,6 @@ procedure pmap_madvise(pmap  :pmap_t;
 label
  _default;
 var
- size:QWORD;
  r:Integer;
 begin
  if (p_print_pmap<>0) then
@@ -917,9 +963,10 @@ begin
     begin
      _default:
 
-     size:=(__end-start);
-
-     r:=md_dontneed(Pointer(start),size);
+     vm_nt_map_madvise(@pmap^.nt_map,
+                       start,
+                       __end,
+                       advise);
     end;
   OBJT_DEVICE:
     begin
@@ -974,12 +1021,16 @@ begin
 
   OBJT_DEFAULT:
     begin
+     vm_nt_map_madvise(@pmap^.nt_map,
+                       start,
+                       __end,
+                       MADV_FREE);
+
      _default:
 
      r:=vm_nt_map_delete(@pmap^.nt_map,
                          start,
                          __end);
-
     end;
   OBJT_DEVICE:
     begin
