@@ -41,6 +41,7 @@ type
   protection    :vm_prot_t;            // protection code
   max_protection:vm_prot_t;            // maximum protection
   inheritance   :vm_inherit_t;         // inheritance
+  budget_id     :shortint;             // budget/ptype id
   name          :array[0..31] of Char; // entry name
   anon_addr     :Pointer;              // source code address
   entry_id      :QWORD;                // order id
@@ -112,7 +113,8 @@ const
                       //0x20000
                       //0x40000
                       //0x80000
-                      //0x200000 budget?
+
+ MAP_ENTRY_IN_BUDGET    =$200000;
 
  MAP_ENTRY_NO_COALESCE  =$400000;
 
@@ -938,8 +940,6 @@ begin
 
  if (cow=-1) then Exit;
 
- budget_reserve(obj,__end-start);
-
  if (obj<>nil) then
  begin
   if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
@@ -1005,6 +1005,7 @@ function vm_map_insert(
            cow   :Integer;
            alias :Boolean):Integer;
 label
+ _budget,
  charged;
 var
  new_entry  :vm_map_entry_t;
@@ -1098,6 +1099,32 @@ begin
 
 charged:
 
+ //budget
+ if (max=0) or
+    ((cow and MAP_COW_UNK)<>0) or
+    (p_proc.p_budget_ptype=-1) then
+ begin
+   //
+ end else
+ if (obj=nil) then
+ begin
+  _budget:
+
+  protoeflags:=protoeflags or MAP_ENTRY_IN_BUDGET;
+
+  if (vm_budget_reserve(p_proc.p_budget_ptype,field_malloc,__end-start)<>0) then
+  begin
+   Exit(KERN_RESOURCE_SHORTAGE);
+  end;
+
+ end else
+ if (obj^.otype in [OBJT_DEFAULT,OBJT_SWAP,OBJT_VNODE,OBJT_SELF]) and
+    ((obj^.flags and OBJ_DMEM_EXT2)=0) then
+ begin
+  goto _budget;
+ end;
+ //
+
  if (obj<>nil) then
  begin
   {
@@ -1118,6 +1145,7 @@ charged:
    (prev_entry^.eflags=protoeflags) and
    ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP or MAP_COW_NO_COALESCE))=0) and
    (prev_entry^.__end=start) and
+   (prev_entry^.budget_id=p_proc.p_budget_ptype) and
      vm_object_coalesce(prev_entry^.vm_obj,
          prev_entry^.offset,
          vm_size_t(prev_entry^.__end - prev_entry^.start),
@@ -1193,6 +1221,9 @@ charged:
  new_entry^.inheritance:=inheritance;
  new_entry^.protection:=prot;
  new_entry^.max_protection:=max;
+
+ //new_entry^.wired_count = 0;
+ new_entry^.budget_id:=p_proc.p_budget_ptype;
 
  new_entry^.entry_id:=map^.entry_id;
  Inc(map^.entry_id);
@@ -1507,6 +1538,7 @@ begin
      (prev^.protection=entry^.protection) and
      (prev^.max_protection=entry^.max_protection) and
      (prev^.inheritance=entry^.inheritance) and
+     (prev^.budget_id=entry^.budget_id) and
      (sdk_5 or (prev^.anon_addr=entry^.anon_addr)) and
      (((prev^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
      then
@@ -1553,6 +1585,7 @@ begin
      (next^.protection=entry^.protection) and
      (next^.max_protection=entry^.max_protection) and
      (next^.inheritance=entry^.inheritance) and
+     (next^.budget_id=entry^.budget_id) and
      (sdk_5 or (next^.anon_addr=entry^.anon_addr)) and
      (((entry^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
      then
@@ -2263,16 +2296,23 @@ var
  obj:vm_object_t;
  offidxstart,offidx_end,count:vm_pindex_t;
  size:vm_ooffset_t;
+ budget_id:shortint;
 begin
- if (entry^.inheritance=VM_INHERIT_HOLE) then
- begin
-  Exit();
- end;
 
  vm_map_entry_unlink(map, entry);
  obj:=entry^.vm_obj;
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
+
+ //budget
+ budget_id:=entry^.budget_id;
+ if (budget_id<>-1) and
+    ((entry^.eflags and (MAP_ENTRY_IN_BUDGET or $40000))=MAP_ENTRY_IN_BUDGET) then
+ begin
+  entry^.eflags:=entry^.eflags and $ffdfffff;
+  vm_budget_release(budget_id,field_malloc,size);
+ end;
+ //
 
  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
     (obj<>nil) then
@@ -2431,9 +2471,6 @@ begin
 
   next:=entry^.next;
 
-  budget_release(entry^.vm_obj,
-                 entry^.__end-entry^.start);
-
   p_rem:=True;
   if (obj<>nil) then
   begin
@@ -2460,6 +2497,11 @@ begin
   end;
 
   unmap_jit_cache(entry^.start,entry^.__end);
+
+  //if (entry^.wired_count<>0) then
+  //begin
+  // vm_map_entry_unwire(map,entry);
+  //end;
 
   {
    * Delete the entry only after removing all pmap

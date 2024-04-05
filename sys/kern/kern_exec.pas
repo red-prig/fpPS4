@@ -240,6 +240,8 @@ var
  sv_maxuser:QWORD;
  stack_addr:QWORD;
  ssiz:QWORD;
+ limit:QWORD;
+ is_diag:Boolean;
 begin
  vmspace:=p_proc.p_vmspace;
 
@@ -267,6 +269,42 @@ begin
   error:=vmspace_exec(sv_minuser, sv_maxuser);
   if (error<>0) then Exit(error);
  end;
+
+ if (DWORD(p_proc.p_budget_ptype) < 2) then
+ begin
+  //(vmspace->vm_map).needs_wakeup:=1;
+  //dmem_start_app_process(proc);
+ end else
+ begin
+  //cred = __crget();
+
+  //copy authinfo
+  g_authinfo:=imgp^.authinfo;
+
+  is_diag:=sceSblACMgrIsDiagProcess(@g_authinfo);
+  //crfree(cred);
+  //(vmspace->vm_map).needs_wakeup:=is_diag<>0;
+  if (is_diag) then
+  begin
+   //dmem_start_app_process(proc);
+  end;
+ end;
+
+ //budget
+ ssiz:=MAXSSIZ;
+
+ if (p_proc.p_self_fixed<>0) and
+    (p_proc.p_budget_ptype=PTYPE_BIG_APP) and
+    ((g_appinfo.mmap_flags and 1)<>0) then
+ begin
+  limit:=EXE_FILE_SIZE + ssiz;
+  if (bigapp_max_exe_size < limit) then
+  begin
+   limit:=bigapp_max_exe_size;
+  end;
+  set_bigapp_limits(limit,0);
+ end;
+ //
 
  //calc shared page addres
  vmspace^.sv_usrstack:=Pointer(USRSTACK {- (aslr_offset and $ffc000)});
@@ -580,6 +618,73 @@ begin
  Exit(error);
 end;
 
+procedure scan_max_size(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer;
+                        var max_size1,max_size2:QWORD);
+var
+ i:Integer;
+
+ hdr:p_elf64_hdr;
+
+ p_memsz:QWORD;
+ p_vaddr:QWORD;
+
+ size:QWORD;
+ base:QWORD;
+
+ p_type:Elf64_Word;
+
+ used_mode_2m:Boolean;
+begin
+ max_size1:=0;
+ max_size2:=0;
+
+ hdr:=imgp^.image_header;
+
+ if (count<>0) then
+ begin
+  For i:=0 to count-1 do
+  begin
+   p_type :=phdr^.p_type;
+   p_memsz:=phdr^.p_memsz;
+
+   if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
+   begin
+
+    p_vaddr:=phdr^.p_vaddr;
+
+    if (hdr^.e_type=ET_SCE_DYNEXEC) then
+    begin
+     p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
+    end;
+
+    p_memsz:=p_vaddr and $ffffffffffffc000;
+
+    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + $3fff) and $ffffffffffffc000;
+
+    max_size1:=max_size1+p_vaddr;
+
+    used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
+
+    if (used_mode_2m) then
+    begin
+     size   :=(p_vaddr + p_memsz) and $ffffffffffe00000;
+     p_vaddr:=(p_memsz + $1fffff) and $ffffffffffe00000;
+     base:=0;
+     if (p_vaddr<=size) then
+     begin
+      base:=size-p_vaddr;
+     end;
+     max_size2:=max_size2+base;
+    end;
+
+   end;
+
+   Inc(phdr);
+  end;
+ end;
+
+end;
+
 function scan_load_sections(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
 var
  i:Integer;
@@ -593,6 +698,8 @@ var
  data_size :QWORD;
  relro_addr:QWORD;
  relro_size:QWORD;
+ max_size1 :QWORD;
+ max_size2 :QWORD;
 
  p_memsz   :QWORD;
  p_vaddr   :QWORD;
@@ -638,102 +745,178 @@ begin
  cache:=nil;
 
  if (count<>0) then
- For i:=0 to count-1 do
  begin
-  p_type :=phdr^.p_type;
-  p_memsz:=phdr^.p_memsz;
+  max_size1:=0;
+  max_size2:=0;
 
-  if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
+  scan_max_size(imgp,phdr,count,max_size1,max_size2);
+
+  if ((g_appinfo.mmap_flags and 1)<>0) and
+     (p_proc.p_self_fixed<>0) then
   begin
-
-   p_flags:=VM_PROT_READ or VM_PROT_WRITE;
-   if (p_type<>PT_SCE_RELRO) then
+   size:=p_proc.p_mode_2mb_size;
+   if (max_size2 < p_proc.p_mode_2mb_size) then
    begin
-    p_flags:=convert_prot(phdr^.p_flags);
+    size:=max_size2;
    end;
 
-   p_vaddr:=phdr^.p_vaddr;
-
-   if (hdr^.e_type=ET_SCE_DYNEXEC) then
+   p_offset:=0;
+   if ((p_proc.p_mode_2mb or 1)=3) then
    begin
-    p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
+    p_offset:=size;
    end;
 
-   p_filesz:=phdr^.p_filesz;
-   p_offset:=phdr^.p_offset;
+   p_memsz:=EXE_FILE_SIZE + max_size1;
 
-   if (p_type=PT_SCE_RELRO) and (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
+   if (bigapp_max_exe_size < (p_memsz - p_offset)) then
    begin
+    Writeln(stderr,'vm_budget ENOMEM');
+    Exit(ENOMEM);
+   end;
 
-    if (_2mb_mode=false) then
+   if ((DWORD(p_proc.p_mode_2mb) - 2) < 2) then
+   begin
+    p_memsz:=p_memsz - size;
+    size:=0;
+   end else
+   begin
+    if (p_proc.p_mode_2mb=M2MB_DISABLE) then
     begin
-     used_mode_2m:=false;
+     size:=0;
     end else
     begin
-     used_mode_2m:=is_used_mode_2mb(phdr,0,0);
+     size:=max_size2;
+     if (p_proc.p_mode_2mb<>M2MB_NOTDYN_FIXED) then
+     begin
+      Writeln(stderr,'unknown 2mb mode');
+      Assert(false,'unknown 2mb mode');
+     end;
     end;
-
-    Result:=self_load_section(imgp,
-                              i,
-                              p_vaddr,
-                              p_offset,
-                              p_memsz,
-                              p_filesz,
-                              p_flags,
-                              used_mode_2m,
-                              'executable',
-                              cache);
-
-   end else
-   begin
-
-    if (_2mb_mode=false) then
-    begin
-     used_mode_2m:=false;
-    end else
-    begin
-     used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
-    end;
-
-    Result:=self_load_section(imgp,
-                              i,
-                              p_vaddr,
-                              p_offset,
-                              p_memsz,
-                              p_filesz,
-                              p_flags,
-                              used_mode_2m,
-                              'executable',
-                              cache);
-   end;
-   if (Result<>0) then
-   begin
-    FreeMem(cache);
-    Exit;
    end;
 
-   addr:=(p_vaddr and QWORD($ffffffffffffc000));
-   size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
-
-   if (p_type=PT_SCE_RELRO) then
+   if (bigapp_max_exe_size < p_memsz) then
    begin
-    relro_addr:=addr;
-    relro_size:=size;
-   end else
-   if ((phdr^.p_flags and PF_X)<>0) and (text_size < size) then
-   begin
-    text_size:=size;
-    text_addr:=addr;
-   end else
-   begin
-    data_size:=size;
-    data_addr:=addr;
+    p_memsz:=bigapp_max_exe_size;
    end;
 
-   total_size:=total_size+size;
+   set_bigapp_limits(p_memsz,size);
   end;
 
-  Inc(phdr);
+  if ((p_proc.p_mode_2mb and $fffffffe)=M2MB_READONLY) then
+  begin
+   size:=p_proc.p_mode_2mb_rsrv;
+   if (size<=max_size2) then
+   begin
+    max_size2:=p_proc.p_mode_2mb_rsrv;
+   end;
+
+   p_vaddr :=vm_budget_used (PTYPE_BIG_APP,field_mlock);
+   p_offset:=vm_budget_limit(PTYPE_BIG_APP,field_mlock);
+
+   if (p_offset < (p_vaddr + (max_size1 - max_size2))) then
+   begin
+    Writeln(stderr,'vm_budget ENOMEM');
+    Exit(ENOMEM);
+   end;
+  end;
+
+  For i:=0 to count-1 do
+  begin
+   p_type :=phdr^.p_type;
+   p_memsz:=phdr^.p_memsz;
+
+   if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
+   begin
+
+    p_flags:=VM_PROT_READ or VM_PROT_WRITE;
+    if (p_type<>PT_SCE_RELRO) then
+    begin
+     p_flags:=convert_prot(phdr^.p_flags);
+    end;
+
+    p_vaddr:=phdr^.p_vaddr;
+
+    if (hdr^.e_type=ET_SCE_DYNEXEC) then
+    begin
+     p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
+    end;
+
+    p_filesz:=phdr^.p_filesz;
+    p_offset:=phdr^.p_offset;
+
+    if (p_type=PT_SCE_RELRO) and (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
+    begin
+
+     if (_2mb_mode=false) then
+     begin
+      used_mode_2m:=false;
+     end else
+     begin
+      used_mode_2m:=is_used_mode_2mb(phdr,0,0);
+     end;
+
+     Result:=self_load_section(imgp,
+                               i,
+                               p_vaddr,
+                               p_offset,
+                               p_memsz,
+                               p_filesz,
+                               p_flags,
+                               used_mode_2m,
+                               'executable',
+                               cache);
+
+    end else
+    begin
+
+     if (_2mb_mode=false) then
+     begin
+      used_mode_2m:=false;
+     end else
+     begin
+      used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
+     end;
+
+     Result:=self_load_section(imgp,
+                               i,
+                               p_vaddr,
+                               p_offset,
+                               p_memsz,
+                               p_filesz,
+                               p_flags,
+                               used_mode_2m,
+                               'executable',
+                               cache);
+    end;
+    if (Result<>0) then
+    begin
+     FreeMem(cache);
+     Exit;
+    end;
+
+    addr:=(p_vaddr and QWORD($ffffffffffffc000));
+    size:=((p_vaddr and $3fff) + $3fff + p_memsz) and QWORD($ffffffffffffc000);
+
+    if (p_type=PT_SCE_RELRO) then
+    begin
+     relro_addr:=addr;
+     relro_size:=size;
+    end else
+    if ((phdr^.p_flags and PF_X)<>0) and (text_size < size) then
+    begin
+     text_size:=size;
+     text_addr:=addr;
+    end else
+    begin
+     data_size:=size;
+     data_addr:=addr;
+    end;
+
+    total_size:=total_size+size;
+   end;
+
+   Inc(phdr);
+  end;
  end;
 
  FreeMem(cache);
@@ -1546,7 +1729,11 @@ begin
   g_appinfo.mmap_flags:=g_appinfo.mmap_flags or 2; //is_system ???
  end;
 
- //TODO load CUSANAME
+ if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
+ if ((g_appinfo.mmap_flags and 1)<>0) then
+ begin
+  set_bigapp_cred_limits;
+ end;
 
  //init std tty (TODO before execve)
  init_tty;

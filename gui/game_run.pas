@@ -64,6 +64,8 @@ uses
  ps4_libSceAvSetting,
  //internal libs
 
+ kern_rtld,
+ kern_budget,
  kern_authinfo,
  sys_bootparam,
  subr_backtrace;
@@ -133,9 +135,16 @@ begin
 
  dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
 
+ g_appinfo.mmap_flags:=1; //is_big_app ???
  g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
  //g_appinfo.hasParamSfo
  //g_appinfo.debug_level:=1;
+
+ //budget init
+ p_proc.p_budget_ptype:=PTYPE_BIG_APP;
+ p_proc.p_self_fixed  :=1;
+ p_proc.p_mode_2mb    :=M2MB_DISABLE;
+ ///
 
  Writeln(Item.FGameInfo.Exec);
  Writeln(Item.FMountList.app0);

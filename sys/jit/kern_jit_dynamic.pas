@@ -932,7 +932,7 @@ function t_jit_dynamic_blob.find_guest_by_host(addr:QWORD):QWORD;
 var
  node:p_jcode_chunk;
 begin
- Writeln('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
+ //Writeln('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
 
  Result:=0;
  node:=chunk_list;
@@ -1126,7 +1126,7 @@ var
  _table:p_jinstr_len;
 begin
  Result:=0;
- Writeln('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
+ //Writeln('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
  if (addr>=dest) and (addr<=d_end) then
  if (count<>0) then
  begin

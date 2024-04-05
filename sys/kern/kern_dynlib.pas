@@ -175,6 +175,11 @@ begin
   Result:=dynlib_load_relocate();
  end;
 
+ if (Result=0) then
+ begin
+  Result:=dmem_process_relocated();
+ end;
+
  dynlibs_unlock;
 end;
 

@@ -194,7 +194,9 @@ function sceSblACMgrIsSystemUcred(info:p_authinfo):Boolean;
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
 function sceSblACMgrIsDebuggableProcess(info:p_authinfo):Boolean;
 function sceSblACMgrIsAllowedToMmapSelf(icurr,ifile:p_authinfo):Boolean;
+function sceSblACMgrIsDiagProcess(info:p_authinfo):Boolean;
 function is_sce_prog_attr_20_800000(info:p_authinfo):Boolean;
+function is_sce_prog_attr_20_400000(info:p_authinfo):Boolean;
 function is_sce_prog_attr_40_800000(info:p_authinfo):Boolean;
 function is_sce_prog_attr_40_400000(info:p_authinfo):Boolean;
 
@@ -210,7 +212,7 @@ uses
 
 function sceSblACMgrHasMmapSelfCapability(info:p_authinfo):Boolean;
 begin
- Result:=(info^.app_caps[1] and $400000000000000)<>0;
+ Result:=(info^.app_caps[1] and QWORD($400000000000000))<>0;
 end;
 
 function sceSblACMgrHasUseHp3dPipeCapability(info:p_authinfo):Boolean;
@@ -232,22 +234,22 @@ end;
 
 function sceSblACMgrHasUseVideoServiceCapability(info:p_authinfo):Boolean;
 begin
- Result:=(info^.app_caps[1] and $200000000000000)<>0;
+ Result:=(info^.app_caps[1] and QWORD($200000000000000))<>0;
 end;
 
 function sceSblACMgrIsNongameUcred(info:p_authinfo):Boolean;
 begin
- Result:=(info^.app_caps[0] and $1000000000000000)<>0;
+ Result:=(info^.app_caps[0] and QWORD($1000000000000000))<>0;
 end;
 
 function sceSblACMgrIsSystemUcred(info:p_authinfo):Boolean;
 begin
- Result:=(info^.app_caps[0] and $4000000000000000)<>0;
+ Result:=(info^.app_caps[0] and QWORD($4000000000000000))<>0;
 end;
 
 function sceSblACMgrHasSceProgramAttribute(info:p_authinfo):Boolean;
 begin
- Result:=(info^.app_attrs[0] and $80000000)<>0;
+ Result:=(info^.app_attrs[0] and QWORD($80000000))<>0;
 end;
 
 function sceSblACMgrIsDebuggableProcess(info:p_authinfo):Boolean;
@@ -255,9 +257,9 @@ var
  attr:QWORD;
 begin
  attr:=info^.app_attrs[0];
- if ((attr and $1000000)=0) then
+ if ((attr and QWORD($1000000))=0) then
  begin
-  if ((attr and $2000000)<>0) then
+  if ((attr and QWORD($2000000))<>0) then
   begin
    Exit(true);
   end;
@@ -270,8 +272,20 @@ end;
 function sceSblACMgrIsAllowedToMmapSelf(icurr,ifile:p_authinfo):Boolean;
 begin
  Result:=True;
- if ((icurr^.app_caps[1] and $400000000000000)=0) or
-    ((ifile^.app_attrs[0] and $8000000)=0) then
+ if ((icurr^.app_caps[1] and QWORD($400000000000000))=0) or
+    ((ifile^.app_attrs[0] and QWORD($8000000))=0) then
+ begin
+  Result:=False;
+ end;
+end;
+
+function sceSblACMgrIsDiagProcess(info:p_authinfo):Boolean;
+var
+ attr:QWORD;
+begin
+ Result:=True;
+ attr:=info^.app_type and QWORD($ff0f000000000000);
+ if (attr<>QWORD($3801000000000000)) and (attr<>QWORD($3802000000000000)) then
  begin
   Result:=False;
  end;
@@ -280,8 +294,18 @@ end;
 function is_sce_prog_attr_20_800000(info:p_authinfo):Boolean;
 begin
  Result:=True;
- if ((info^.app_caps[1] and $2000000000000000)=0) or
-    ((info^.app_attrs[0] and $800000)=0) then
+ if ((info^.app_caps[1] and QWORD($2000000000000000))=0) or
+    ((info^.app_attrs[0] and QWORD($800000))=0) then
+ begin
+  Result:=False;
+ end;
+end;
+
+function is_sce_prog_attr_20_400000(info:p_authinfo):Boolean;
+begin
+ Result:=True;
+ if ((info^.app_caps[1] and QWORD($2000000000000000))=0) or
+    ((info^.app_attrs[0] and QWORD($400000))=0) then
  begin
   Result:=False;
  end;
@@ -290,8 +314,8 @@ end;
 function is_sce_prog_attr_40_800000(info:p_authinfo):Boolean;
 begin
  Result:=True;
- if ((info^.app_caps[1] and $4000000000000000)=0) or
-    ((info^.app_attrs[0] and $800000)=0) then
+ if ((info^.app_caps[1] and QWORD($4000000000000000))=0) or
+    ((info^.app_attrs[0] and QWORD($800000))=0) then
  begin
   Result:=False;
  end;
@@ -300,8 +324,8 @@ end;
 function is_sce_prog_attr_40_400000(info:p_authinfo):Boolean;
 begin
  Result:=True;
- if ((info^.app_caps[1] and $4000000000000000)=0) or
-    ((info^.app_attrs[0] and $400000)=0) then
+ if ((info^.app_caps[1] and QWORD($4000000000000000))=0) or
+    ((info^.app_attrs[0] and QWORD($400000))=0) then
  begin
   Result:=False;
  end;

@@ -6,6 +6,7 @@ unit vm_pmap;
 interface
 
 uses
+ subr_backtrace,
  vm,
  vmparam,
  sys_vm_object,
@@ -320,6 +321,9 @@ begin
   begin
    Writeln('failed md_memfd_create(',HexStr(PMAPP_BLK_SIZE,11),'):0x',HexStr(r,8));
    Writeln(' priv_block_count=',get_priv_block_count);
+
+   print_backtrace_td(stderr);
+
    Assert(false,'get_priv_fd');
   end;
  end;
