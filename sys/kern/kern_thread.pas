@@ -40,6 +40,7 @@ function  sys_amd64_get_gsbase(base:PPointer):Integer;
 
 procedure thread_inc_ref(td:p_kthread);
 procedure thread_dec_ref(td:p_kthread);
+procedure thread_lock_assert(td:p_kthread);
 procedure thread_lock   (td:p_kthread);
 procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
@@ -184,6 +185,9 @@ begin
 
  Result:=cpu_thread_alloc(pages);
 
+ mtx_init(Result^.tdq_lock,'tdq_lock');
+ Result^.td_lock:=@Result^.tdq_lock;
+
  Result^.td_state:=TDS_INACTIVE;
  Result^.td_lend_user_pri:=PRI_MAX;
 
@@ -193,6 +197,7 @@ end;
 
 procedure thread_free(td:p_kthread);
 begin
+ mtx_destroy(td^.tdq_lock);
  sleepq_free(td^.td_sleepqueue);
  umtx_thread_fini(td);
  cpu_thread_free(td);
@@ -211,14 +216,19 @@ begin
  end;
 end;
 
+procedure thread_lock_assert(td:p_kthread); public;
+begin
+ mtx_assert(td^.td_lock^);
+end;
+
 procedure thread_lock(td:p_kthread); public;
 begin
- rw_wlock(td^.td_lock);
+ mtx_lock(td^.td_lock^);
 end;
 
 procedure thread_unlock(td:p_kthread); public;
 begin
- rw_wunlock(td^.td_lock);
+ mtx_unlock(td^.td_lock^);
 end;
 
 procedure thread_link(td:p_kthread);

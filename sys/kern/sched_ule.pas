@@ -33,12 +33,14 @@ begin
  if (td<>nil) then
  begin
   cpuset_setaffinity(childtd,td^.td_cpuset);
-  sched_priority(td,td^.td_base_pri);
+  sched_priority    (childtd,td^.td_base_pri);
  end;
 end;
 
-procedure sched_class(td:p_kthread;_class:Integer); inline;
+procedure sched_class(td:p_kthread;_class:Integer);
 begin
+ thread_lock_assert(td);
+
  td^.td_pri_class:=_class;
 end;
 
@@ -53,8 +55,10 @@ begin
  sched_priority(td, prio);
 end;
 
-procedure sched_user_prio(td:p_kthread;prio:Integer); inline;
+procedure sched_user_prio(td:p_kthread;prio:Integer);
 begin
+ thread_lock_assert(td);
+
  td^.td_base_user_pri:=prio;
  if (td^.td_lend_user_pri<=prio) then Exit;
  td^.td_user_pri:=prio;
@@ -67,6 +71,8 @@ end;
 
 procedure sched_lend_user_prio(td:p_kthread;prio:Integer);
 begin
+ thread_lock_assert(td);
+
  td^.td_lend_user_pri:=prio;
  td^.td_user_pri:=min(prio,td^.td_base_user_pri);
  if (td^.td_priority>td^.td_user_pri) then
@@ -79,6 +85,8 @@ procedure sched_sleep(td:p_kthread;prio:Integer);
 const
  PSOCK=87;
 begin
+ thread_lock_assert(td);
+
  if TD_IS_SUSPENDED(td) or (prio>=PSOCK) then
  begin
   td^.td_flags:=td^.td_flags or TDF_CANSWAP;
@@ -91,6 +99,8 @@ end;
 
 procedure sched_wakeup(td:p_kthread);
 begin
+ thread_lock_assert(td);
+
  td^.td_flags:=td^.td_flags and (not TDF_CANSWAP);
  TD_SET_RUNNING(td);
 
@@ -102,14 +112,23 @@ function sched_switch(td:p_kthread):Integer;
 var
  slptick:Int64;
 begin
+ thread_lock_assert(td);
+
  atomic_clear_int(@td^.td_flags,TDF_NEEDRESCHED or TDF_SLICEEND);
 
  slptick:=System.InterlockedExchange64(td^.td_slptick,0);
+
+ thread_unlock(td);
+
  Result:=msleep_td(slptick);
+
+ thread_lock(td);
 end;
 
 function setrunnable(td:p_kthread):Integer;
 begin
+ thread_lock_assert(td);
+
  Case td^.td_state of
   TDS_RUNNING,
   TDS_RUNQ   :Exit(0);

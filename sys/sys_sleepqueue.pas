@@ -17,7 +17,6 @@ const
  SLEEPQ_LK           =$04;  // Used by a lockmgr.
  SLEEPQ_INTERRUPTIBLE=$100; // Sleep is interruptible.
  SLEEPQ_STOP_ON_BDRY =$200; // Stop sleeping thread
- SLEEPQ_HAMT         =$400;
 
 function  sleepq_alloc:Pointer; external;
 procedure sleepq_free(sq:Pointer); external;

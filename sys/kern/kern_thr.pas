@@ -9,7 +9,8 @@ uses
  mqueue,
  ucontext,
  signal,
- signalvar;
+ signalvar,
+ kern_mtx;
 
 const
  TDS_INACTIVE =0;
@@ -181,7 +182,7 @@ type
   td_umtxq        :Pointer; //p_umtx_q
   td_handle       :THandle; //nt thread
   td_teb          :p_teb;
-  td_lock         :Pointer;
+  td_lock         :p_mtx;
   td_tid          :QWORD;
   td_sigstk       :stack_t;
   td_state        :Integer;
@@ -213,6 +214,7 @@ type
   td_sleepqueue   :Pointer;
   td_slpq         :TAILQ_ENTRY;
   td_wchan        :Pointer;
+  td_wmesg        :PChar;
   td_sqqueue      :Integer;
   td_intrval      :Integer;
   td_inhibitors   :Integer;
@@ -224,7 +226,10 @@ type
    ru_nvcsw       :Int64;
    ru_nivcsw      :Int64;
   end;
+  //
   td_slptick      :Int64;
+  td_slpcallout   :Pointer;
+  tdq_lock        :mtx;
   //
   td_fpop         :Pointer;
   td_map_def_user :Pointer;
@@ -320,6 +325,7 @@ function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
 
+procedure thread_lock_assert(td:p_kthread); external;
 procedure thread_lock(td:p_kthread);   external;
 procedure thread_unlock(td:p_kthread); external;
 

@@ -1803,9 +1803,11 @@ begin
  if ((flags and TDF_NEEDRESCHED)<>0) then
  begin
   thread_lock(td);
+
   sched_prio(td,td^.td_user_pri);
-  thread_unlock(td);
   mi_switch(SW_INVOL or SWT_NEEDRESCHED);
+
+  thread_unlock(td);
  end;
 
  if ((flags and TDF_NEEDSIGCHK)<>0) or
@@ -1849,9 +1851,10 @@ begin
    td^.td_flags:=td^.td_flags and (not TDF_SUSP_CTX);
    td^.td_state:=TDS_INHIBITED;
    td^.td_inhibitors:=td^.td_inhibitors or TDI_SUSP_CTX;
-   thread_unlock(td);
 
    mi_switch(SW_VOL or SWT_SUSPEND);
+
+   thread_unlock(td);
   end else
   begin
    thread_unlock(td);

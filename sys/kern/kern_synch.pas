@@ -159,7 +159,9 @@ var
  td:p_kthread;
 begin
  Result:=0;
+
  td:=curkthread;
+ thread_lock_assert(td);
 
  if (td<>nil) then
  begin
@@ -178,7 +180,17 @@ begin
   SWT_RELINQUISH,
   SWT_NEEDRESCHED:
    begin
+    if (td<>nil) then
+    begin
+     thread_unlock(td);
+    end;
+
     md_yield;
+
+    if (td<>nil) then
+    begin
+     thread_lock(td);
+    end;
    end;
   SWT_SLEEPQ,
   SWT_SLEEPQTIMO:
@@ -210,12 +222,21 @@ begin
  begin
   thread_lock(td);
   if (prio=PRI_USER) then
+  begin
    prio:=td^.td_user_pri;
+  end;
   if (prio>=0) then
+  begin
    sched_prio(td, prio);
+  end;
+ end;
+
+ mi_switch(SW_VOL or SWT_RELINQUISH);
+
+ if (td<>nil) then
+ begin
   thread_unlock(td);
  end;
- mi_switch(SW_VOL or SWT_RELINQUISH);
 end;
 
 function sys_yield():Integer;
@@ -223,15 +244,24 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
+
  if (td<>nil) then
  begin
   thread_lock(td);
   if (PRI_BASE(td^.td_pri_class)=PRI_TIMESHARE) then
+  begin
    sched_prio(td, PRI_MAX_TIMESHARE);
-  thread_unlock(td);
+  end;
   td^.td_retval[0]:=0;
  end;
+
  mi_switch(SW_VOL or SWT_RELINQUISH);
+
+ if (td<>nil) then
+ begin
+  thread_unlock(td);
+ end;
+
  Exit(0);
 end;
 
