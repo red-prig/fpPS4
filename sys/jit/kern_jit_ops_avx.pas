@@ -1095,10 +1095,10 @@ begin
  jit_cbs[OPPv,OPinsert ,OPSx_ps  ]:=@op_avx3_gen;
  jit_cbs[OPPv,OPinsert ,OPSx_f128]:=@op_avx3_not_vex_len;
 
- jit_cbs[OPPv,OPround,OPSx_ps]:=@op_avx3_gen;
- jit_cbs[OPPv,OPround,OPSx_pd]:=@op_avx3_gen;
- jit_cbs[OPPv,OPround,OPSx_ss]:=@op_avx3_gen;
- jit_cbs[OPPv,OPround,OPSx_sd]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPround,OPSx_ps]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPround,OPSx_pd]:=@op_avx3_rmi;
+ jit_cbs[OPPv,OPround,OPSx_ss]:=@op_avx3_gen; //rrmi
+ jit_cbs[OPPv,OPround,OPSx_sd]:=@op_avx3_gen; //rrmi
 
  jit_cbs[OPPv,OPsqrt ,OPSx_ps]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPsqrt ,OPSx_pd]:=@op_avx2_reg_mem_wo;
