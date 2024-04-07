@@ -72,7 +72,6 @@ uses
  errno,
  systm,
  kern_mtx,
- md_sleep,
  md_context,
  machdep,
  md_thread,
@@ -98,6 +97,8 @@ function  msleep(ident   :Pointer;
                  priority:Integer;
                  wmesg   :PChar;
                  timo    :Int64):Integer; external;
+
+procedure wakeup(ident:Pointer); external;
 
 //
 
@@ -1063,7 +1064,7 @@ begin
  td^.td_flags:=td^.td_flags or TDF_THRWAKEUP;
  thread_unlock(td);
 
- wakeup_td(td); //broadcast
+ wakeup(td); //broadcast
 
  thread_dec_ref(td);
 end;
@@ -1078,7 +1079,7 @@ begin
  thread_reap();
 
  name:=Default(t_td_name);
- if (name<>nil) then
+ if (pname<>nil) then
  begin
   Result:=copyinstr(pname,@name,32,nil);
   if (Result<>0) then Exit;
@@ -1099,7 +1100,6 @@ begin
  KernSetThreadDebugName(td,'ps4:');
 
  thread_unlock(td);
-
  thread_dec_ref(td);
 end;
 
@@ -1126,18 +1126,21 @@ begin
  thread_reap();
 
  td:=tdfind(DWORD(id));
- if (td=nil) then Exit(ESRCH);
+ if (td=nil) then
+ begin
+  //sceSblACMgrIsSystemUcred
+  Exit(ESRCH);
+ end;
 
  thread_lock(td);
 
  name:=td^.td_name;
 
  thread_unlock(td);
+ thread_dec_ref(td);
 
  len:=strnlen(name,31);
  Result:=copyout(@name,pname,len+1);
-
- thread_dec_ref(td);
 end;
 
 function sys_amd64_set_fsbase(base:Pointer):Integer;
