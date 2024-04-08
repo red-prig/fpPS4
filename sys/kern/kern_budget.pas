@@ -5,10 +5,6 @@ unit kern_budget;
 
 interface
 
-uses
- vm,
- sys_vm_object;
-
 type
  p_budget_resource=^t_budget_resource;
  t_budget_resource=packed record
@@ -34,9 +30,9 @@ const
  SCE_KERNEL_BUDGET_FD_IPCSOCKET=11;
 
 //budget proc_type
- PTYPE_BIG_APP          = 0;
- PTYPE_MINI_APP         = 1;
- PTYPE_SYSTEM           = 2;
+ PTYPE_BIG_APP          = 0;  //SCE_APPLICATION_TYPE_GAME
+ PTYPE_MINI_APP         = 1;  //SCE_APPLICATION_TYPE_MINI
+ PTYPE_SYSTEM           = 2;  //SCE_APPLICATION_TYPE_DAEMON
  PTYPE_NONGAME_MINI_APP = 3;
 
 function  sys_budget_create(name:pchar;ptype:DWORD;new:Pointer;count:DWORD;prev:Pointer):Integer;
@@ -62,25 +58,39 @@ const
  field_malloc    =3;
 
 const
- FMEM_BASE          =$4000000;
- bigapp_size        =$4000000;
- bigapp_max_exe_size=$20000000;
+ FMEM_BASE           =$4000000;
+ bigapp_size         =$4000000;
+ bigapp_max_fmem_size=$20000000;
 
 var
- FMEM_LIMIT   :QWORD=0;
- DMEM_LIMIT   :QWORD=$180000000;
- EXE_FILE_SIZE:QWORD=FMEM_BASE+0;
- ExtendedSize :QWORD=0;
+ FMEM_LIMIT    :QWORD=0;
+ DMEM_LIMIT    :QWORD=$180000000;
+ game_fmem_size:QWORD=FMEM_BASE+0;
+ ExtendedSize  :QWORD=0;
 
- ext_game_fmem_addr:Integer=0;
+ BigAppMemory  :QWORD=$170000000; //148000000,170000000,124000000
+
+ g_self_loading:Integer=0;
+ ext_game_fmem :Integer=0;
  IGNORE_EXTENDED_DMEM_BASE:Integer=0;
 
-procedure set_budget_limit (ptype,field:Integer;value:QWORD);
+const
+ M2MB_DEFAULT =0; //Default    =0     (ATTRIBUTE2:0x00000)
+ M2MB_DISABLE =1; //NotUsed    =32768 (ATTRIBUTE2:0x08000)
+ M2MB_READONLY=2; //Text_rodata=65536 (ATTRIBUTE2:0x10000)
+ M2MB_ENABLE  =3; //All_section=98304 (ATTRIBUTE2:0x18000)
+
+var
+ g_mode_2mb     :Integer=M2MB_DEFAULT;
+ g_mode_2mb_size:Integer=0;
+ g_mode_2mb_rsrv:Integer=0;
+
 function  vm_budget_limit  (ptype,field:Integer):QWORD;
 function  vm_budget_used   (ptype,field:Integer):QWORD;
 function  vm_budget_reserve(ptype,field:Integer;len:QWORD):Integer;
 procedure vm_budget_release(ptype,field:Integer;len:QWORD);
 
+procedure init_bigapp_limits;
 procedure set_bigapp_cred_limits;
 procedure set_bigapp_limits(size,unknow:QWORD);
 
@@ -88,6 +98,20 @@ function  dmem_process_relocated():Integer;
 
 function  get_mlock_avail():QWORD;
 function  get_mlock_total():QWORD;
+
+const
+ //app_state
+ as_start                =1;
+ as_stop                 =2;
+ as_begin_game_app_mount =3;
+ as___end_game_app_mount =4;
+ as_begin_mini_app_mount =5;
+ as___end_mini_app_mount =6;
+ as__enable_ext_game_fmem=7;
+ as_disable_ext_game_fmem=8;
+
+function kern_app_state_change(state:Integer):Integer;
+function sys_app_state_change(state:Integer):Integer;
 
 implementation
 
@@ -108,7 +132,7 @@ var
 
  budget_lock   :Pointer;
 
-procedure set_budget_limit(ptype,field:Integer;value:QWORD);
+procedure vm_set_budget_limit(ptype,field:Integer;value:QWORD);
 begin
  rw_wlock(budget_lock);
 
@@ -199,6 +223,37 @@ begin
  end;
 end;
 
+procedure init_bigapp_limits;
+var
+ size :QWORD;
+ value:QWORD;
+ m_256:QWORD;
+begin
+ if (p_neomode<>0) then
+ begin
+  BigAppMemory:=$170000000;
+ end else
+ begin
+  BigAppMemory:=$148000000;
+ end;
+
+ size:=BigAppMemory - game_fmem_size;
+
+ m_256:=QWORD(ext_game_fmem<>0) * $10000000;
+
+ value:=size;
+ if (FMEM_LIMIT <= size) then
+ begin
+  value:=FMEM_LIMIT;
+ end;
+
+ DMEM_LIMIT:=size;
+
+ vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
+end;
+
 procedure set_bigapp_cred_limits;
 var
  size :QWORD;
@@ -224,7 +279,7 @@ begin
 
  end;
 
- m_256:=QWORD(ext_game_fmem_addr<>0) * $10000000;
+ m_256:=QWORD(ext_game_fmem<>0) * $10000000;
 
  value:=size;
  if (DMEM_LIMIT < size) then
@@ -234,9 +289,9 @@ begin
 
  FMEM_LIMIT:=size;
 
- set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
- set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(EXE_FILE_SIZE + m_256) - FMEM_BASE);
- set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + EXE_FILE_SIZE);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
 end;
 
 procedure set_bigapp_limits(size,unknow:QWORD);
@@ -244,12 +299,28 @@ var
  m_256:QWORD;
  value:QWORD;
 begin
- if (EXE_FILE_SIZE<>size) then
+ if (game_fmem_size<>size) then
  begin
-  //reserve dmem
-  EXE_FILE_SIZE:=size;
 
-  m_256:=QWORD(ext_game_fmem_addr<>0) * $10000000;
+  if (size < game_fmem_size) then
+  begin
+   value:=BigAppMemory - size;
+   game_fmem_size:=size;
+   DMEM_LIMIT   :=value;
+  end else
+  begin
+   if (unknow<>0) and
+      ((game_fmem_size and $1fffff)<>0) then
+   begin
+    Writeln(stderr,'game_fmem_size is not multiple of 2MB: 0x',HexStr(game_fmem_size,8));
+   end;
+
+   value:=BigAppMemory - size;
+   game_fmem_size:=size;
+   DMEM_LIMIT   :=value;
+  end;
+
+  m_256:=QWORD(ext_game_fmem<>0) * $10000000;
 
   value:=FMEM_LIMIT;
   if (DMEM_LIMIT < FMEM_LIMIT) then
@@ -257,19 +328,19 @@ begin
    value:=DMEM_LIMIT;
   end;
 
-  set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
-  set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(EXE_FILE_SIZE + m_256) - FMEM_BASE);
-  set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + EXE_FILE_SIZE);
+  vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
+  vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+  vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
  end;
 end;
 
 function expand_and_reserve_game_fmem(size:QWORD):QWORD;
 begin
- if (size <= QWORD(bigapp_max_exe_size - EXE_FILE_SIZE)) then
+ if (size <= QWORD(bigapp_max_fmem_size - game_fmem_size)) then
  begin
-  EXE_FILE_SIZE:=EXE_FILE_SIZE + size;
-  DMEM_LIMIT   :=DMEM_LIMIT    - size;
-  Exit(DMEM_LIMIT + size);
+  DMEM_LIMIT   :=BigAppMemory - (game_fmem_size + size);
+  game_fmem_size:=game_fmem_size + size;
+  Exit(BigAppMemory - game_fmem_size);
  end;
 
  Writeln(stderr,'expand_and_reserve_game_fmem=',size);
@@ -283,7 +354,7 @@ var
 begin
  Result:=expand_and_reserve_game_fmem(size);
 
- m_256:=QWORD(ext_game_fmem_addr<>0) * $10000000;
+ m_256:=QWORD(ext_game_fmem<>0) * $10000000;
 
  value:=FMEM_LIMIT;
  if (DMEM_LIMIT < FMEM_LIMIT) then
@@ -291,9 +362,9 @@ begin
   value:=DMEM_LIMIT;
  end;
 
- set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
- set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(EXE_FILE_SIZE + m_256) - FMEM_BASE);
- set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + EXE_FILE_SIZE);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,value);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+ vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
 
  if (vm_budget_reserve(PTYPE_BIG_APP,field_mlock,size)<>0) then
  begin
@@ -319,14 +390,16 @@ begin
 
  if ((GpuPagesSize or CpuPages)<> 0) then
  begin
+  size:=0;
+
   if (param_3=0) then
   begin
    size:=(QWORD(ord(p_neomode=0)) * $800000) + GpuPagesSize + (CpuPages * $1000);
 
-   if (QWORD(bigapp_max_exe_size - EXE_FILE_SIZE) < size) then
+   if (QWORD(bigapp_max_fmem_size - game_fmem_size) < size) then
    begin
     Writeln('[KERNEL] WARNING: Failed to allocate extended page table pool.  shortage = '
-           ,(EXE_FILE_SIZE - bigapp_max_exe_size) + $fffff + (size shr 20),
+           ,(game_fmem_size - bigapp_max_fmem_size) + $fffff + (size shr 20),
            'MiB');
     Exit(ENOMEM);
    end;
@@ -335,6 +408,8 @@ begin
   end;
 
   //reserved physical pages
+
+  ExtendedSize:=size;
  end;
 
 end;
@@ -412,9 +487,9 @@ begin
 
  _next:
 
- if (Byte((mmap_flags xor 1) or ord(p_proc.p_self_fixed=0))=0) then
+ if (Byte((mmap_flags xor 1) or ord(g_self_loading=0))=0) then
  begin
-  p_proc.p_self_fixed:=0;
+  g_self_loading:=0;
 
   ExtendedMemory1:=true;
   if (p_proc.p_sdk_version < $5000000) then
@@ -422,12 +497,14 @@ begin
    ExtendedMemory1:=fubyte(mem_param.sceKernelExtendedMemory1^)=1;
   end;
 
-  m_256:=QWORD(ext_game_fmem_addr<>0) * $10000000;
+  m_256:=QWORD(ext_game_fmem<>0) * $10000000;
 
   if (p_neomode<>0) and
      ((not ExtendedMemory1) or (IGNORE_EXTENDED_DMEM_BASE<>0)) then
   begin
-   FMEM_SIZE:=$10000000 - EXE_FILE_SIZE;
+   BigAppMemory:=BigAppMemory + (-$10000000) {+ ((ret or $10)=$19) * (-0x10000000)};
+
+   FMEM_SIZE:=BigAppMemory - game_fmem_size;
 
    size:=FMEM_SIZE;
    if (FMEM_LIMIT <= FMEM_SIZE) then
@@ -437,9 +514,9 @@ begin
 
    DMEM_LIMIT:=FMEM_SIZE;
 
-   set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,size);
-   set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(EXE_FILE_SIZE + m_256) - FMEM_BASE);
-   set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + EXE_FILE_SIZE);
+   vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,size);
+   vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+   vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
   end;
 
   ExtendedMemory2:=true;
@@ -456,10 +533,11 @@ begin
     Writeln('[System] : SCE_KERNEL_EXTENDED_DMEM_BASE_128 was ignored');
    end else
    begin
-    FMEM_SIZE:=$8000000 - EXE_FILE_SIZE;
+    BigAppMemory:=BigAppMemory + (-$8000000) {+ ((ret and $ffffffe7)=1) * (-$8000000)};
+
+    FMEM_SIZE:=BigAppMemory - game_fmem_size;
 
     size:=FMEM_SIZE;
-
     if (FMEM_LIMIT <= FMEM_SIZE) then
     begin
      size:=FMEM_LIMIT;
@@ -467,9 +545,9 @@ begin
 
     DMEM_LIMIT:=FMEM_SIZE;
 
-    set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,size);
-    set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(EXE_FILE_SIZE + m_256) - FMEM_BASE);
-    set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + EXE_FILE_SIZE);
+    vm_set_budget_limit(PTYPE_BIG_APP,field_dmem_alloc,size);
+    vm_set_budget_limit(PTYPE_BIG_APP,field_mlock     ,(game_fmem_size + m_256) - FMEM_BASE);
+    vm_set_budget_limit(PTYPE_BIG_APP,field_malloc    ,m_256 + game_fmem_size);
    end;
   end;
 
@@ -497,13 +575,13 @@ begin
   if (ExtendedGpuPageTable < $1000000001) then
   begin
    ExtendedSize:=0;
-   FMEM_SIZE:=bigapp_max_exe_size;
+   FMEM_SIZE:=bigapp_max_fmem_size;
 
    if (Result=0) then
    begin
     Result:=allocate_extended_page_table_pool(ExtendedCpuPageTable,ExtendedGpuPageTable,0);
 
-    FMEM_SIZE:=bigapp_max_exe_size;
+    FMEM_SIZE:=bigapp_max_fmem_size;
 
     if (Result=0) then
     begin
@@ -515,19 +593,19 @@ begin
       FlexibleMemorySize:=fuword64(mem_param.sceKernelFlexibleMemorySize^);
 
       Result:=0;
-      FMEM_SIZE:=bigapp_max_exe_size;
+      FMEM_SIZE:=bigapp_max_fmem_size;
 
       if (FlexibleMemorySize<>QWORD($ffffffffffffffff)) then
       begin
        FMEM_SIZE:=FMEM_BASE + FlexibleMemorySize;
 
-       if (bigapp_max_exe_size < FMEM_SIZE) or
+       if (bigapp_max_fmem_size < FMEM_SIZE) or
           (FMEM_SIZE < bigapp_size) or
           ((FMEM_SIZE and QWORD($ffffffffffffc000))<>FMEM_SIZE) then
        begin
         Writeln(stderr,'[KERNEL] ERROR: invalid FMEM size (0x',HexStr(FlexibleMemorySize,16),') is specified.');
         Result:=EINVAL;
-        FMEM_SIZE:=bigapp_max_exe_size;
+        FMEM_SIZE:=bigapp_max_fmem_size;
        end;
       end;
      end;
@@ -539,12 +617,12 @@ begin
    Writeln('[KERNEL] ERROR: The extended GPU page table pool must be smaller than 64GiB');
    Result:=ENOMEM;
    ExtendedSize:=0;
-   FMEM_SIZE:=bigapp_max_exe_size;
+   FMEM_SIZE:=bigapp_max_fmem_size;
   end;
 
-  if (FMEM_SIZE < EXE_FILE_SIZE) then
+  if (FMEM_SIZE < game_fmem_size) then
   begin
-   Writeln(stderr,'[KERNEL] ERROR: The executable file size (= 0x',HexStr(EXE_FILE_SIZE,16),
+   Writeln(stderr,'[KERNEL] ERROR: The executable file size (= 0x',HexStr(game_fmem_size,16),
                   ') < specified FMEM size (=0x',HexStr(FMEM_SIZE,16),')');
    if (Result=0) then
    begin
@@ -662,6 +740,77 @@ begin
  Exit(ENOSYS); //sceSblACMgrIsSystemUcred
 end;
 
+//
+
+function kern_app_state_change(state:Integer):Integer;
+var
+ used:QWORD;
+begin
+ Result:=0;
+
+ case state of
+  as_start:
+   begin
+    g_self_loading:=1;
+    //app_state_counter+1
+   end;
+  as_stop:
+   begin
+    g_self_loading:=0;
+    //app_state_counter-1
+   end;
+  as_begin_game_app_mount:
+   begin
+    used:=vm_budget_used(PTYPE_BIG_APP,field_mlock);
+    if (used<>0) then
+    begin
+     Writeln(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
+     Assert(false,'BUDGET_MEMORY_MLOCK');
+    end;
+   end;
+  as___end_game_app_mount:
+   begin
+    //game_mounts_exist
+    //reset_2mb_mode
+
+    vm_budget_release(PTYPE_BIG_APP,field_mlock,ExtendedSize);
+    ExtendedSize:=0;
+
+    used:=vm_budget_used(PTYPE_BIG_APP,field_mlock);
+    if (used<>0) then
+    begin
+     Writeln(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
+     Assert(false,'BUDGET_MEMORY_MLOCK');
+    end;
+
+    set_bigapp_limits(bigapp_size,0);
+   end;
+  as_begin_mini_app_mount:; //nothing
+  as___end_mini_app_mount:; //nothing
+  as__enable_ext_game_fmem:
+   begin
+    if (ext_game_fmem<>0) then
+    begin
+     Writeln(stderr,'ext_game_fmem is already enabled');
+     Assert(false,'ext_game_fmem is already enabled');
+    end;
+
+    ext_game_fmem:=1;
+   end;
+  as_disable_ext_game_fmem:
+   begin
+    ext_game_fmem:=0;
+   end;
+  else;
+ end;
+end;
+
+//sceKernelNotifyAppStateChanged
+function sys_app_state_change(state:Integer):Integer;
+begin
+ //sceSblACMgrIsSyscoreProcess
+ Exit(EPERM);
+end;
 
 end.
 

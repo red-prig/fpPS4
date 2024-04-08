@@ -3298,7 +3298,7 @@ var
   ),
   (//[648]
      sy_narg:1;
-     sy_call:nil;
+     sy_call:@sys_app_state_change;
      sy_name:'sys_app_state_change'
   ),
   (//[649]

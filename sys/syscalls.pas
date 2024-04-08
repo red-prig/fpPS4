@@ -146,7 +146,7 @@ function  setcontext(ucp:Pointer):Integer;
 function  swapcontext(oucp,ucp:Pointer):Integer;
 Function  sigwait(oset:Pointer;sig:PInteger):Integer;
 function  thr_create(ctx:Pointer;id:PDWORD;flags:Integer):Integer;
-procedure thr_exit(state:PQWORD);
+procedure thr_exit(state:PDWORD);
 function  thr_self(id:PDWORD):Integer;
 function  thr_kill(id,sig:Integer):Integer;
 function  _umtx_lock(mtx:Pointer):Integer;
@@ -243,6 +243,7 @@ function  set_timezone_info(data_ptr:Pointer;data_count_dw:Integer):Integer;
 function  utc_to_localtime(time:QWORD;local_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  localtime_to_utc(time:QWORD;tz_type:Integer;utc_time,tsec:Pointer;dstsec:PInteger):Integer;
 function  set_chicken_switches(flags:Integer):Integer;
+function  app_state_change(state:Integer):Integer;
 function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
 function  budget_get_ptype_of_budget(key:Integer):Integer;
 function  blockpool_open(flags:Integer):Integer;
@@ -1233,7 +1234,7 @@ asm
  jmp   cerror
 end;
 
-procedure thr_exit(state:PQWORD); assembler; nostackframe;
+procedure thr_exit(state:PDWORD); assembler; nostackframe;
 asm
  movq  $431,%rax
  call  fast_syscall
@@ -1908,6 +1909,13 @@ end;
 function set_chicken_switches(flags:Integer):Integer; assembler; nostackframe;
 asm
  movq  $643,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function app_state_change(state:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $648,%rax
  call  fast_syscall
  jmp   cerror
 end;

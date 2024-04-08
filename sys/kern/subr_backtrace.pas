@@ -275,14 +275,14 @@ begin
    offset1:=QWORD(frame)-QWORD(info.base_addr);
    offset2:=QWORD(frame)-QWORD(info.func_addr);
 
-   Writeln(f,'  offset $',HexStr(offset1 shr 48,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
+   Writeln(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
   end else
   begin
    if (info.base_addr<>0) then
    begin
     offset1:=QWORD(frame)-QWORD(info.base_addr);
 
-    Writeln(f,'  offset $',HexStr(offset1 shr 48,5),'|',HexStr(offset1,6),'  ',info.source);
+    Writeln(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source);
    end else
    begin
     Writeln(f,'  $',HexStr(frame),'  ',info.source);

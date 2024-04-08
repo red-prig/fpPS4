@@ -59,13 +59,8 @@ var
 
   p_vmspace:Pointer;
 
-  p_self_fixed   :Integer;
   p_budget_ptype :Integer;
   p_dmem_aliasing:Integer;
-
-  p_mode_2mb     :Integer;
-  p_mode_2mb_size:Integer;
-  p_mode_2mb_rsrv:Integer;
  end;
 
 function  pargs_alloc(len:Integer):p_pargs;

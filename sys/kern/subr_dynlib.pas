@@ -302,6 +302,10 @@ function  check_relo_bits(obj:p_lib_info;i:Integer):Boolean;
 procedure set_relo_bits  (obj:p_lib_info;i:Integer);
 procedure reset_relo_bits(obj:p_lib_info;i:Integer);
 
+procedure scan_max_size(imgp:p_image_params;
+                        phdr:p_elf64_phdr;count:Integer;
+                        var max_size1,max_size2:QWORD);
+
 procedure donelist_init(var dlp:t_DoneList);
 function  donelist_check(var dlp:t_DoneList;obj:p_lib_info):Boolean;
 
@@ -1716,7 +1720,7 @@ begin
  p^:=p^ and (not (1 shl (i and 7)));
 end;
 
-function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD):Integer;
+function dynlib_load_sections(imgp:p_image_params;new:p_lib_info;phdr:p_elf64_phdr;count:Integer;delta:QWORD;wire:Integer):Integer;
 var
  i:Integer;
 
@@ -1757,7 +1761,7 @@ begin
 
  if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  begin
-  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3);
+  _2mb_mode:=((g_mode_2mb or 1)=3); //M2MB_READONLY,M2MB_ENABLE
  end else
  begin
   _2mb_mode:=False;
@@ -1803,6 +1807,7 @@ begin
                               p_memsz,
                               p_filesz,
                               p_flags,
+                              wire,
                               used_mode_2m,
                               fname,
                               cache);
@@ -1825,6 +1830,7 @@ begin
                               p_memsz,
                               p_filesz,
                               p_flags,
+                              wire,
                               used_mode_2m,
                               fname,
                               cache);
@@ -1915,6 +1921,74 @@ begin
  new^.relro_size  :=imgp^.relro_size;
 end;
 
+procedure scan_max_size(imgp:p_image_params;
+                        phdr:p_elf64_phdr;count:Integer;
+                        var max_size1,max_size2:QWORD);
+var
+ i:Integer;
+
+ hdr:p_elf64_hdr;
+
+ p_memsz:QWORD;
+ p_vaddr:QWORD;
+
+ size:QWORD;
+ base:QWORD;
+
+ p_type:Elf64_Word;
+
+ used_mode_2m:Boolean;
+begin
+ max_size1:=0;
+ max_size2:=0;
+
+ hdr:=imgp^.image_header;
+
+ if (count<>0) then
+ begin
+  For i:=0 to count-1 do
+  begin
+   p_type :=phdr^.p_type;
+   p_memsz:=phdr^.p_memsz;
+
+   if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
+   begin
+
+    p_vaddr:=phdr^.p_vaddr;
+
+    if (hdr^.e_type=ET_SCE_DYNEXEC) then
+    begin
+     p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
+    end;
+
+    p_memsz:=p_vaddr and QWORD($ffffffffffffc000);
+
+    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + $3fff) and QWORD($ffffffffffffc000);
+
+    max_size1:=max_size1+p_vaddr;
+
+    used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
+
+    if (used_mode_2m) then
+    begin
+     size   :=(p_vaddr + p_memsz) and QWORD($ffffffffffe00000);
+     p_vaddr:=(p_memsz + $1fffff) and QWORD($ffffffffffe00000);
+     base:=0;
+     if (p_vaddr<=size) then
+     begin
+      base:=size-p_vaddr;
+     end;
+     max_size2:=max_size2+base;
+    end;
+
+   end;
+
+   Inc(phdr);
+  end;
+ end;
+
+end;
+
 function self_load_shared_object(path:pchar;new:p_lib_info;wire:Integer):Integer;
 label
  _fail_dealloc;
@@ -1932,6 +2006,11 @@ var
  phdr:p_elf64_phdr;
 
  addr,delta:QWORD;
+
+ max_size1:QWORD;
+ max_size2:QWORD;
+ used     :QWORD;
+ limit    :QWORD;
 begin
  Result:=-1;
  if (path=nil) then Exit;
@@ -2075,6 +2154,27 @@ begin
   addr:=ET_DYN_LOAD_ADDR_SYS;
  end;
 
+ if ((g_mode_2mb and DWORD($fffffffe))=2) then //M2MB_READONLY,M2MB_ENABLE
+ begin
+  max_size1:=0;
+  max_size2:=0;
+  scan_max_size(imgp,phdr,hdr^.e_phnum,max_size1,max_size2);
+
+  if (max_size2 > g_mode_2mb_rsrv) then
+  begin
+   max_size2:=g_mode_2mb_rsrv;
+  end;
+
+  used :=vm_budget_used (PTYPE_BIG_APP,field_mlock);
+  limit:=vm_budget_limit(PTYPE_BIG_APP,field_mlock);
+
+  if ((used + (max_size1 - max_size2)) > limit) then
+  begin
+   error:=ENOMEM;
+   goto _fail_dealloc;
+  end;
+ end;
+
  error:=rtld_mmap(@addr,imgp^.max_addr-imgp^.min_addr);
  if (error<>0) then
  begin
@@ -2097,7 +2197,7 @@ begin
                               1,
                               0);
 
- error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta);
+ error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta,wire);
  if (error<>0) then
  begin
   goto _fail_dealloc;

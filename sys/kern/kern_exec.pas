@@ -293,14 +293,14 @@ begin
  //budget
  ssiz:=MAXSSIZ;
 
- if (p_proc.p_self_fixed<>0) and
+ if (g_self_loading<>0) and
     (p_proc.p_budget_ptype=PTYPE_BIG_APP) and
     ((g_appinfo.mmap_flags and 1)<>0) then
  begin
-  limit:=EXE_FILE_SIZE + ssiz;
-  if (bigapp_max_exe_size < limit) then
+  limit:=game_fmem_size + ssiz;
+  if (bigapp_max_fmem_size < limit) then
   begin
-   limit:=bigapp_max_exe_size;
+   limit:=bigapp_max_fmem_size;
   end;
   set_bigapp_limits(limit,0);
  end;
@@ -372,6 +372,11 @@ begin
  begin
   Exit(error);
  end;
+
+ //if (params->proc->vm_container == 1) {
+ //  ret1 = vm_map_wire(vmspace,stack_addr,QWORD(vmspace^.sv_usrstack),9);
+ //  if (ret1 != 0) goto __exit;
+ //}
 
  vm_map_set_name(map,stack_addr,QWORD(vmspace^.sv_usrstack),'main stack');
 
@@ -618,73 +623,6 @@ begin
  Exit(error);
 end;
 
-procedure scan_max_size(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer;
-                        var max_size1,max_size2:QWORD);
-var
- i:Integer;
-
- hdr:p_elf64_hdr;
-
- p_memsz:QWORD;
- p_vaddr:QWORD;
-
- size:QWORD;
- base:QWORD;
-
- p_type:Elf64_Word;
-
- used_mode_2m:Boolean;
-begin
- max_size1:=0;
- max_size2:=0;
-
- hdr:=imgp^.image_header;
-
- if (count<>0) then
- begin
-  For i:=0 to count-1 do
-  begin
-   p_type :=phdr^.p_type;
-   p_memsz:=phdr^.p_memsz;
-
-   if ((p_type=PT_SCE_RELRO) or (p_type=PT_LOAD)) and (p_memsz<>0) then
-   begin
-
-    p_vaddr:=phdr^.p_vaddr;
-
-    if (hdr^.e_type=ET_SCE_DYNEXEC) then
-    begin
-     p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
-    end;
-
-    p_memsz:=p_vaddr and $ffffffffffffc000;
-
-    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + $3fff) and $ffffffffffffc000;
-
-    max_size1:=max_size1+p_vaddr;
-
-    used_mode_2m:=is_used_mode_2mb(phdr,0,p_proc.p_budget_ptype);
-
-    if (used_mode_2m) then
-    begin
-     size   :=(p_vaddr + p_memsz) and $ffffffffffe00000;
-     p_vaddr:=(p_memsz + $1fffff) and $ffffffffffe00000;
-     base:=0;
-     if (p_vaddr<=size) then
-     begin
-      base:=size-p_vaddr;
-     end;
-     max_size2:=max_size2+base;
-    end;
-
-   end;
-
-   Inc(phdr);
-  end;
- end;
-
-end;
-
 function scan_load_sections(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
 var
  i:Integer;
@@ -708,6 +646,9 @@ var
 
  addr:QWORD;
  size:QWORD;
+
+ used :QWORD;
+ limit:QWORD;
 
  p_type   :Elf64_Word;
  p_flags  :Byte;
@@ -734,9 +675,9 @@ begin
 
  if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  begin
-             //M2MB_READONLY,M2MB_ENABLE
-  _2mb_mode:=((p_proc.p_mode_2mb or 1)=3) or
-             ((p_proc.p_self_fixed<>0) and (p_proc.p_mode_2mb=M2MB_NOTDYN_FIXED));
+
+  _2mb_mode:=((g_mode_2mb or 1)=3) or //M2MB_READONLY,M2MB_ENABLE
+             ((g_self_loading<>0) and (g_mode_2mb=M2MB_DEFAULT));
  end else
  begin
   _2mb_mode:=False;
@@ -752,41 +693,41 @@ begin
   scan_max_size(imgp,phdr,count,max_size1,max_size2);
 
   if ((g_appinfo.mmap_flags and 1)<>0) and
-     (p_proc.p_self_fixed<>0) then
+     (g_self_loading<>0) then
   begin
-   size:=p_proc.p_mode_2mb_size;
-   if (max_size2 < p_proc.p_mode_2mb_size) then
+   size:=g_mode_2mb_size;
+   if (max_size2 < g_mode_2mb_size) then
    begin
     size:=max_size2;
    end;
 
    p_offset:=0;
-   if ((p_proc.p_mode_2mb or 1)=3) then
+   if ((g_mode_2mb or 1)=3) then //M2MB_READONLY,M2MB_ENABLE
    begin
     p_offset:=size;
    end;
 
-   p_memsz:=EXE_FILE_SIZE + max_size1;
+   p_memsz:=game_fmem_size + max_size1;
 
-   if (bigapp_max_exe_size < (p_memsz - p_offset)) then
+   if (bigapp_max_fmem_size < (p_memsz - p_offset)) then
    begin
     Writeln(stderr,'vm_budget ENOMEM');
     Exit(ENOMEM);
    end;
 
-   if ((DWORD(p_proc.p_mode_2mb) - 2) < 2) then
+   if ((DWORD(g_mode_2mb) - 2) < 2) then
    begin
     p_memsz:=p_memsz - size;
     size:=0;
    end else
    begin
-    if (p_proc.p_mode_2mb=M2MB_DISABLE) then
+    if (g_mode_2mb=M2MB_DISABLE) then
     begin
      size:=0;
     end else
     begin
      size:=max_size2;
-     if (p_proc.p_mode_2mb<>M2MB_NOTDYN_FIXED) then
+     if (g_mode_2mb<>M2MB_DEFAULT) then
      begin
       Writeln(stderr,'unknown 2mb mode');
       Assert(false,'unknown 2mb mode');
@@ -794,26 +735,26 @@ begin
     end;
    end;
 
-   if (bigapp_max_exe_size < p_memsz) then
+   if (bigapp_max_fmem_size < p_memsz) then
    begin
-    p_memsz:=bigapp_max_exe_size;
+    p_memsz:=bigapp_max_fmem_size;
    end;
 
    set_bigapp_limits(p_memsz,size);
   end;
 
-  if ((p_proc.p_mode_2mb and $fffffffe)=M2MB_READONLY) then
+  if ((g_mode_2mb and $fffffffe)=2) then //M2MB_READONLY,M2MB_ENABLE
   begin
-   size:=p_proc.p_mode_2mb_rsrv;
+   size:=g_mode_2mb_rsrv;
    if (size<=max_size2) then
    begin
-    max_size2:=p_proc.p_mode_2mb_rsrv;
+    max_size2:=g_mode_2mb_rsrv;
    end;
 
-   p_vaddr :=vm_budget_used (PTYPE_BIG_APP,field_mlock);
-   p_offset:=vm_budget_limit(PTYPE_BIG_APP,field_mlock);
+   used :=vm_budget_used (PTYPE_BIG_APP,field_mlock);
+   limit:=vm_budget_limit(PTYPE_BIG_APP,field_mlock);
 
-   if (p_offset < (p_vaddr + (max_size1 - max_size2))) then
+   if (limit < (used + (max_size1 - max_size2))) then
    begin
     Writeln(stderr,'vm_budget ENOMEM');
     Exit(ENOMEM);
@@ -862,6 +803,7 @@ begin
                                p_memsz,
                                p_filesz,
                                p_flags,
+                               0,
                                used_mode_2m,
                                'executable',
                                cache);
@@ -884,6 +826,7 @@ begin
                                p_memsz,
                                p_filesz,
                                p_flags,
+                               0,
                                used_mode_2m,
                                'executable',
                                cache);
@@ -1513,6 +1456,15 @@ begin
  vfslocked:=0;
  imgp:=@image_params;
  image_params:=Default(t_image_params);
+
+ if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
+ if ((g_appinfo.mmap_flags and 1)<>0) then
+ begin
+  if (g_self_loading<>0) then
+  begin
+   init_bigapp_limits;
+  end;
+ end;
 
  p_proc.p_flag:=p_proc.p_flag or P_INEXEC;
 

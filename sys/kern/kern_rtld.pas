@@ -148,16 +148,10 @@ type
   hdr_e_type:Integer;
  end;
 
-const
- M2MB_NOTDYN_FIXED=0; //Default    =0     (ATTRIBUTE2:0x00000)
- M2MB_DISABLE     =1; //NotUsed    =32768 (ATTRIBUTE2:0x08000)
- M2MB_READONLY    =2; //Text_rodata=65536 (ATTRIBUTE2:0x10000)
- M2MB_ENABLE      =3; //All_section=98304 (ATTRIBUTE2:0x18000)
-
 function  maxInt64(a,b:Int64):Int64; inline;
 function  minInt64(a,b:Int64):Int64; inline;
 
-function  get_elf_phdr(elf_hdr:p_elf64_hdr):p_elf64_phdr; inline;
+function  get_elf_phdr(elf_hdr:p_elf64_hdr):p_elf64_phdr;
 
 procedure rtld_free_self(imgp:p_image_params);
 function  rtld_load_self(imgp:p_image_params):Integer;
@@ -188,6 +182,7 @@ function  scan_dyn_offset(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):I
 function  self_load_section(imgp:p_image_params;
                             id,vaddr,offset,memsz,filesz:QWORD;
                             prot:Byte;
+                            wire:Byte;
                             use_mode_2mb:Boolean;
                             name:pchar;
                             var cache:Pointer):Integer;
@@ -511,10 +506,10 @@ begin
    flag_write:=phdr^.p_flags and 2;
   end;
 
-  case p_proc.p_mode_2mb of
-   M2MB_NOTDYN_FIXED:Result:=(is_dynlib=0) and (p_proc.p_self_fixed<>0);
-   M2MB_READONLY    :Result:=(flag_write=0);
-   M2MB_ENABLE      :Result:=True;
+  case g_mode_2mb of
+   M2MB_DEFAULT :Result:=(is_dynlib=0) and (g_self_loading<>0);
+   M2MB_READONLY:Result:=(flag_write=0);
+   M2MB_ENABLE  :Result:=True;
    else;
   end;
 
@@ -1044,6 +1039,7 @@ end;
 function self_load_section(imgp:p_image_params;
                            id,vaddr,offset,memsz,filesz:QWORD;
                            prot:Byte;
+                           wire:Byte;
                            use_mode_2mb:Boolean;
                            name:pchar;
                            var cache:Pointer):Integer;
@@ -1051,6 +1047,7 @@ var
  map:vm_map_t;
  vaddr_lo:QWORD;
  vaddr_hi:QWORD;
+ size    :QWORD;
  base    :Pointer;
 begin
  Result:=0;
@@ -1073,14 +1070,28 @@ begin
   Exit(ENOEXEC);
  end;
 
- vaddr_lo:=vaddr and $ffffffffffffc000;
- vaddr_hi:=(memsz + vaddr + $3fff) and $ffffffffffffc000;
-
- if (use_mode_2mb) then
+ if (filesz < memsz) then
  begin
-  vaddr_lo:=(vaddr + $1fffff) and $ffffffffffe00000;
-  vaddr_hi:=(vaddr + memsz + $3fff) and $ffffffffffe00000;
+  if (use_mode_2mb) then
+  begin
+   size:=QWORD($ffffffffffe00000);
+  end else
+  begin
+   size:=QWORD($ffffffffffffc000);
+  end;
+  size:=size and filesz;
+ end else
+ begin
+  size:=(filesz + $3fff) and QWORD($ffffffffffffc000);
  end;
+
+ if (size>memsz) then
+ begin
+  memsz:=size;
+ end;
+
+ vaddr_lo:=vaddr and QWORD($ffffffffffffc000);
+ vaddr_hi:=(vaddr + memsz + $3fff) and QWORD($ffffffffffffc000);
 
  base:=Pointer(imgp^.image_header)+offset;
 
@@ -1100,22 +1111,19 @@ begin
   //
   vm_object_deallocate(imgp^.obj);
   //
+  Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
   Exit(vm_mmap_to_errno(Result));
  end;
 
  vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
+ //wire
+
  memsz:=vaddr_hi-vaddr_lo;
  cache:=ReAllocMem(cache,memsz);
 
- if ((prot and VM_PROT_EXECUTE)<>0) then
- begin
-  FillChar(cache^,memsz,$90);
- end else
- begin
-  FillChar(cache^,memsz,0);
- end;
+ FillChar(cache^,memsz,0);
 
  Move(base^,cache^,filesz);
 
