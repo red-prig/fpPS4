@@ -652,6 +652,7 @@ var
 
  p_type   :Elf64_Word;
  p_flags  :Byte;
+ wire     :Byte;
  _2mb_mode:Boolean;
  used_mode_2m:Boolean;
 
@@ -761,6 +762,8 @@ begin
    end;
   end;
 
+  wire:=ord(p_proc.p_budget_ptype=PTYPE_BIG_APP);
+
   For i:=0 to count-1 do
   begin
    p_type :=phdr^.p_type;
@@ -803,7 +806,7 @@ begin
                                p_memsz,
                                p_filesz,
                                p_flags,
-                               0,
+                               wire,
                                used_mode_2m,
                                'executable',
                                cache);
@@ -826,7 +829,7 @@ begin
                                p_memsz,
                                p_filesz,
                                p_flags,
-                               0,
+                               wire,
                                used_mode_2m,
                                'executable',
                                cache);

@@ -253,6 +253,7 @@ function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWOR
 function  __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer;
 function  get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 function  __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
+function  reserve_2mb_page(size:QWORD;mode:Integer):Integer;
 function  cpumode_yield():Integer;
 
 implementation
@@ -1979,6 +1980,13 @@ end;
 function __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer; assembler; nostackframe;
 asm
  movq  $672,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function reserve_2mb_page(size:QWORD;mode:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $675,%rax
  call  fast_syscall
  jmp   cerror
 end;

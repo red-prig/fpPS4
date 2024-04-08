@@ -141,12 +141,12 @@ begin
  //g_appinfo.debug_level:=1;
 
  //budget init
+ p_proc.p_budget_ptype:=PTYPE_BIG_APP;
+
  kern_app_state_change(as_start);
  kern_app_state_change(as_begin_game_app_mount);
 
- p_proc.p_budget_ptype:=PTYPE_BIG_APP;
-
- g_mode_2mb:=M2MB_DEFAULT;
+ kern_reserve_2mb_page(0,M2MB_DEFAULT);
  ///
 
  Writeln(Item.FGameInfo.Exec);

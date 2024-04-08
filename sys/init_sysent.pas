@@ -3433,7 +3433,7 @@ var
   ),
   (//[675]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_reserve_2mb_page;
      sy_name:'sys_reserve_2mb_page'
   ),
   (//[676]

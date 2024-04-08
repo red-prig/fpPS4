@@ -65,7 +65,7 @@ const
 var
  FMEM_LIMIT    :QWORD=0;
  DMEM_LIMIT    :QWORD=$180000000;
- game_fmem_size:QWORD=FMEM_BASE+0;
+ game_fmem_size:QWORD=bigapp_size;
  ExtendedSize  :QWORD=0;
 
  BigAppMemory  :QWORD=$170000000; //148000000,170000000,124000000
@@ -81,7 +81,7 @@ const
  M2MB_ENABLE  =3; //All_section=98304 (ATTRIBUTE2:0x18000)
 
 var
- g_mode_2mb     :Integer=M2MB_DEFAULT;
+ g_mode_2mb     :Integer=M2MB_DISABLE;
  g_mode_2mb_size:Integer=0;
  g_mode_2mb_rsrv:Integer=0;
 
@@ -110,8 +110,12 @@ const
  as__enable_ext_game_fmem=7;
  as_disable_ext_game_fmem=8;
 
-function kern_app_state_change(state:Integer):Integer;
-function sys_app_state_change(state:Integer):Integer;
+function  kern_app_state_change(state:Integer):Integer;
+function  sys_app_state_change (state:Integer):Integer;
+
+procedure reset_2mb_mode;
+function  kern_reserve_2mb_page(size:QWORD;mode:Integer):Integer;
+function  sys_reserve_2mb_page (size:QWORD;mode:Integer):Integer;
 
 implementation
 
@@ -137,9 +141,9 @@ begin
  rw_wlock(budget_lock);
 
   case field of
-   field_dmem_alloc:Writeln('set_budget_limit(field_dmem_alloc,0x',HexStr(value,16),')');
-   field_mlock     :Writeln('set_budget_limit(field_mlock     ,0x',HexStr(value,16),')');
-   field_malloc    :Writeln('set_budget_limit(field_malloc    ,0x',HexStr(value,16),')');
+   field_dmem_alloc:Writeln('vm_set_budget_limit(field_dmem_alloc,0x',HexStr(value,16),')');
+   field_mlock     :Writeln('vm_set_budget_limit(field_mlock     ,0x',HexStr(value,16),')');
+   field_malloc    :Writeln('vm_set_budget_limit(field_malloc    ,0x',HexStr(value,16),')');
    else;
   end;
 
@@ -771,7 +775,8 @@ begin
   as___end_game_app_mount:
    begin
     //game_mounts_exist
-    //reset_2mb_mode
+
+    reset_2mb_mode;
 
     vm_budget_release(PTYPE_BIG_APP,field_mlock,ExtendedSize);
     ExtendedSize:=0;
@@ -812,7 +817,126 @@ begin
  Exit(EPERM);
 end;
 
+procedure reset_2mb_mode;
+var
+ size:QWORD;
+begin
+ if (Int64(g_mode_2mb_size) < 1) then
+ begin
+  g_mode_2mb_size:=0;
+  g_mode_2mb_rsrv:=0;
+ end else
+ if (g_mode_2mb_size<>g_mode_2mb_rsrv) then
+ begin
+  Writeln(stderr,'2mpage budget');
+  Assert(false,'2mpage budget');
+ end else
+ begin
+  size:=g_mode_2mb_size;
+
+  g_mode_2mb_rsrv:=0;
+  g_mode_2mb_size:=0;
+
+  vm_budget_release(PTYPE_BIG_APP,field_mlock,size);
+ end;
+
+ g_mode_2mb:=M2MB_DISABLE;
+end;
+
+function kern_reserve_2mb_page(size:QWORD;mode:Integer):Integer;
+var
+ save_game_fmem_size:QWORD;
+ size2:QWORD;
+ mode2:Integer;
+begin
+ Result:=0;
+
+ save_game_fmem_size:=game_fmem_size;
+
+ if not ((g_mode_2mb=M2MB_DISABLE) and (g_mode_2mb_size=0)) then
+ begin
+  Exit(EPERM);
+ end;
+
+ if (game_fmem_size<>bigapp_size) then
+ begin
+  Writeln(stderr,'[KERNEL] WARNING: The last bigapp termination handling was incomplete.');
+  Exit(EPERM);
+ end;
+
+ mode2:=M2MB_DISABLE;
+
+ if (Int64(size) > $1fffff) then
+ begin
+  mode2:=mode;
+ end;
+
+ if ((mode or 1)<>3) then
+ begin
+  mode2:=mode;
+ end;
+
+ if (mode2=M2MB_DEFAULT) then
+ begin
+  g_mode_2mb     :=M2MB_DEFAULT;
+  g_mode_2mb_size:=0;
+ end else
+ if (mode2=M2MB_DISABLE) then
+ begin
+  g_mode_2mb     :=M2MB_DISABLE;
+  g_mode_2mb_size:=-1;
+ end else
+ begin
+
+  if (Int64(size) > $1bffffff) then
+  begin
+   Exit(EINVAL);
+  end;
+
+  if ((mode2 or 1)<>3) then
+  begin
+   Exit(EINVAL);
+  end;
+
+  size2:=size + $1fffff;
+
+  if (Int64(size) > -1) then
+  begin
+   size2:=size;
+  end;
+
+  size2:=size2 and QWORD($ffffffffffe00000);
+
+  size:=game_fmem_size + size2;
+
+  if (bigapp_max_fmem_size < (game_fmem_size + size2)) then
+  begin
+   size:=bigapp_max_fmem_size;
+  end;
+
+  set_bigapp_limits(size,0);
+
+  if (vm_budget_reserve(PTYPE_BIG_APP,field_mlock,size2)<>0) then
+  begin
+   set_bigapp_limits(save_game_fmem_size,0);
+   Exit(ENOMEM);
+  end;
+
+  g_mode_2mb     :=mode2;
+  g_mode_2mb_size:=size2;
+  g_mode_2mb_rsrv:=size2;
+ end;
+
+end;
+
+function sys_reserve_2mb_page(size:QWORD;mode:Integer):Integer;
+begin
+ //sceSblACMgrIsSyscoreProcess
+ Exit(EPERM);
+end;
+
 end.
+
 
 
 
