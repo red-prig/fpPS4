@@ -2030,6 +2030,8 @@ var
 
  new1,new2:TRegValue;
 
+ cmp_opr:Boolean;
+
  new1_load:Boolean;
 
  ovr:t_override_ctx;
@@ -2410,9 +2412,11 @@ begin
       end else
       begin
 
+       cmp_opr:=cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]);
+
        if ((his_ro in desc.hint) or (mem_size<>os32)) and
           (not (not_impl in desc.mem_reg.opt)) and
-          (not cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2])) then
+          (not cmp_opr) then
        begin
         new2:=new_reg_size(r_tmp1,ctx.din.Operand[2]);
 
@@ -2427,6 +2431,11 @@ begin
 
         new1_load:=False;
 
+        if ((his_xor in desc.hint) and cmp_opr) then
+        begin
+         //fake load
+         new1_load:=True;
+        end else
         if (not (his_wo in desc.hint)) or
            (his_ro in desc.hint) then
         begin
@@ -2434,7 +2443,7 @@ begin
          new1_load:=True;
         end;
 
-        if cmp_reg(ctx.din.Operand[1],ctx.din.Operand[2]) then
+        if cmp_opr then
         begin
          new2:=new1;
 
