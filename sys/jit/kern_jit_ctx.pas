@@ -976,8 +976,15 @@ begin
     ofs:=0;
     GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
-    movq(adr,[GS+get_segment(ctx.din)]);
-    leaq(reg,[adr+ofs]); //endpoint
+    if (ofs=0) then
+    begin
+     movq(reg,[GS+get_segment(ctx.din)]); //endpoint
+    end else
+    begin
+     movq(adr,[GS+get_segment(ctx.din)]);
+     leaq(reg,[adr+ofs]); //endpoint
+    end;
+
    end else
    begin
     Assert(false,'TODO');
