@@ -498,7 +498,13 @@ begin
   ExtendedMemory1:=true;
   if (p_proc.p_sdk_version < $5000000) then
   begin
-   ExtendedMemory1:=fubyte(mem_param.sceKernelExtendedMemory1^)=1;
+   if (mem_param.sceKernelExtendedMemory1=nil) then
+   begin
+    ExtendedMemory1:=False;
+   end else
+   begin
+    ExtendedMemory1:=fubyte(mem_param.sceKernelExtendedMemory1^)=1;
+   end;
   end;
 
   m_256:=QWORD(ext_game_fmem<>0) * $10000000;
@@ -526,7 +532,13 @@ begin
   ExtendedMemory2:=true;
   if (p_proc.p_sdk_version < $5000000) then
   begin
-   ExtendedMemory2:=fubyte(mem_param.sceKernelExtendedMemory2^)=1;
+   if (mem_param.sceKernelExtendedMemory2<>nil) then
+   begin
+    ExtendedMemory2:=False;
+   end else
+   begin
+    ExtendedMemory2:=fubyte(mem_param.sceKernelExtendedMemory2^)=1;
+   end;
   end;
 
   if (IGNORE_EXTENDED_DMEM_BASE=0) and
@@ -555,8 +567,21 @@ begin
    end;
   end;
 
-  ExtendedCpuPageTable:=fuword64(mem_param.sceKernelExtendedCpuPageTable^);
-  ExtendedPageTable   :=fuword64(mem_param.sceKernelExtendedPageTable^);
+  if (mem_param.sceKernelExtendedCpuPageTable=nil) then
+  begin
+   ExtendedCpuPageTable:=QWORD(Int64(-1));
+  end else
+  begin
+   ExtendedCpuPageTable:=fuword64(mem_param.sceKernelExtendedCpuPageTable^);
+  end;
+
+  if (mem_param.sceKernelExtendedPageTable=nil) then
+  begin
+   ExtendedPageTable:=QWORD(Int64(-1));
+  end else
+  begin
+   ExtendedPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+  end;
 
 
   if (int64(ExtendedCpuPageTable) < 0) and
@@ -571,7 +596,13 @@ begin
    Result:=ENOMEM;
   end;
 
-  ExtendedGpuPageTable:=fuword64(mem_param.sceKernelExtendedGpuPageTable^);
+  if (mem_param.sceKernelExtendedGpuPageTable=nil) then
+  begin
+   ExtendedGpuPageTable:=QWORD(Int64(-1));
+  end else
+  begin
+   ExtendedGpuPageTable:=fuword64(mem_param.sceKernelExtendedGpuPageTable^);
+  end;
 
   ExtendedGpuPageTable:=(not SarInt64(ExtendedGpuPageTable,63)) and ExtendedGpuPageTable;
 
@@ -643,7 +674,13 @@ begin
  if (ExtendedSize=0) and
     (mmap_flags<>0) then
  begin
-  ExtendedPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+  if (mem_param.sceKernelExtendedPageTable=nil) then
+  begin
+   ExtendedPageTable:=QWORD(Int64(-1));
+  end else
+  begin
+   ExtendedPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+  end;
 
   if (Int64(ExtendedPageTable) < 1) or
      (ExtendedPageTable=$100000000) then
