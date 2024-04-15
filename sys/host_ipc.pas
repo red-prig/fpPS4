@@ -11,7 +11,6 @@ uses
  LFQueue,
  host_ipc_interface,
  kern_thr,
- kern_thread,
  sys_event,
  kern_mtx;
 

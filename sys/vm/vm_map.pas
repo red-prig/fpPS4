@@ -895,8 +895,7 @@ function vm_object_rmap_release(map   :vm_map_t;
                                 start :vm_offset_t;
                                 __end :vm_offset_t;
                                 offset:vm_ooffset_t;
-                                p_free:Boolean;
-                                p_rem :PBoolean):Integer;
+                                p_free:Boolean):Integer;
 var
  rmap:p_rmem_map;
  length:vm_offset_t;
@@ -915,10 +914,20 @@ begin
    Result:=0;
   end;
 
+  {
   if (Result=0) then
   begin
-   p_rem^:=not rmem_map_lookup_entry_any(rmap,OFF_TO_IDX(offset),@entry)
+   p_rem^:=not rmem_map_lookup_entry_any(rmap, OFF_TO_IDX(offset), @entry)
   end;
+
+  if p_rem then
+  begin
+   //unmap vulkan
+  end else
+  begin
+   //ext unmap vulkan
+  end;
+  }
 
  rmem_map_unlock(rmap);
 end;
@@ -2482,19 +2491,14 @@ begin
                                    entry^.start,
                                    entry^.__end,
                                    entry^.offset,
-                                   rmap_free,
-                                   @p_rem);
+                                   rmap_free);
    end;
   end;
 
-  if p_rem then
-  begin
-   pmap_remove(map^.pmap,
-               entry^.vm_obj,
-               entry^.start,
-               entry^.__end);
-
-  end;
+  pmap_remove(map^.pmap,
+              entry^.vm_obj,
+              entry^.start,
+              entry^.__end);
 
   unmap_jit_cache(entry^.start,entry^.__end);
 

@@ -209,6 +209,7 @@ var
  FlipQueue:TvQueue;
  RenderQueue:TvQueue;
 
+function  LoadVulkan:Boolean;
 Procedure InitVulkan;
 function  IsInitVulkan:Boolean;
 
@@ -232,6 +233,8 @@ var
 
   VK_KHR_swapchain               :Boolean;
   VK_EXT_external_memory_host    :Boolean;
+
+  VK_KHR_imageless_framebuffer   :Boolean;
 
   VK_KHR_shader_float16_int8     :Boolean;
   VK_KHR_16bit_storage           :Boolean;
@@ -404,6 +407,9 @@ begin
    Case String(pProperties[i].extensionName) of
     VK_KHR_SWAPCHAIN_EXTENSION_NAME               :limits.VK_KHR_swapchain               :=True;
     VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME    :limits.VK_EXT_external_memory_host    :=True;
+
+    VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME   :limits.VK_KHR_imageless_framebuffer   :=True;
+
     VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME     :limits.VK_KHR_shader_float16_int8     :=True;
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME           :limits.VK_KHR_16bit_storage           :=True;
     VK_KHR_8BIT_STORAGE_EXTENSION_NAME            :limits.VK_KHR_8bit_storage            :=True;
@@ -667,6 +673,7 @@ begin
   Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
  end;
  if (Result=VK_NULL_HANDLE) then
+ if (count>0) then
  begin
   Result:=pPhysicalDevices[0];
  end;
@@ -687,7 +694,7 @@ const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
  vkApp:TVkApplicationInfo;
- vkExtList:array[0..3] of PChar;
+ vkExtList:array[0..4] of PChar;
  vkLayer:array[0..0] of PChar;
  vkCInfo:TVkInstanceCreateInfo;
  vkPrintf:TVkValidationFeaturesEXT;
@@ -707,6 +714,10 @@ begin
  vkExtList[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
  vkExtList[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
  vkExtList[3]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+
+ //
+ vkExtList[4]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
+ //
 
  vkCInfo:=Default(TVkInstanceCreateInfo);
  vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1517,7 +1528,7 @@ var
 
 function IsInitVulkan:Boolean;
 begin
- Result:=(load_acq_rel(_lazy_init)<>0);
+ Result:=(load_acq_rel(_lazy_init)=2);
 end;
 
 Function TestFFF(F:TVkFormatFeatureFlags):RawByteString;
@@ -1541,10 +1552,33 @@ begin
  if (ord(F) and ord(VK_FORMAT_FEATURE_TRANSFER_DST_BIT                  ))<>0 then Result:=Result+'|TRANSFER_DST';
 end;
 
+function LoadVulkan:Boolean;
+begin
+ rw_wlock(_lazy_wait);
+
+ if (load_acq_rel(_lazy_init)<>0) then
+ begin
+  rw_wunlock(_lazy_wait);
+  Exit(True);
+ end;
+
+ Result:=LoadVulkanLibrary;
+ if Result then
+ begin
+  Result:=LoadVulkanGlobalCommands;
+ end;
+
+ XCHG(_lazy_init,1);
+
+ rw_wunlock(_lazy_wait);
+end;
+
 Procedure InitVulkan;
 var
  DeviceInfo:TvDeviceCreateInfo;
  //ImgProp:TVkFormatProperties;
+
+ FILFB:TVkPhysicalDeviceImagelessFramebufferFeatures;
 
  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8:TVkPhysicalDevice8BitStorageFeatures;
@@ -1557,7 +1591,7 @@ var
 begin
  rw_wlock(_lazy_wait);
 
- if (load_acq_rel(_lazy_init)<>0) then
+ if (load_acq_rel(_lazy_init)<>1) then
  begin
   rw_wunlock(_lazy_wait);
   Exit;
@@ -1608,6 +1642,17 @@ begin
   FCoherent.deviceCoherentMemory:=VK_TRUE;
 
   DeviceInfo.add_feature(@FCoherent);
+ end;
+
+ if limits.VK_KHR_imageless_framebuffer then
+ begin
+  DeviceInfo.add_ext(VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME);
+
+  FILFB:=Default(TVkPhysicalDeviceImagelessFramebufferFeatures);
+  FILFB.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES;
+  FILFB.imagelessFramebuffer:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FILFB);
  end;
 
  //if limits.VK_KHR_push_descriptor then
@@ -1688,7 +1733,7 @@ begin
 
  MemManager:=TvMemManager.Create;
 
- XCHG(_lazy_init,1);
+ XCHG(_lazy_init,2);
 
  //ImgProp:=Default(TVkFormatProperties);
  //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_R8G8B8A8_UNORM,@ImgProp);
@@ -1717,8 +1762,6 @@ begin
 end;
 
 initialization
- if not LoadVulkanLibrary        then raise Exception.Create('LoadVulkanLibrary');
- if not LoadVulkanGlobalCommands then raise Exception.Create('LoadVulkanGlobalCommands');
  SetExceptionMask([exInvalidOp, exDenormalized, exPrecision, exUnderflow]);
 
 end.

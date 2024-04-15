@@ -291,8 +291,9 @@ begin
  case clock_id of
   CLOCK_REALTIME,
   CLOCK_REALTIME_PRECISE,
-  CLOCK_REALTIME_FAST:
+  CLOCK_REALTIME_FAST: //getnanotime
    begin
+    //nanotime
     unittime(@user);
     user:=user-DELTA_EPOCH_IN_UNIT;
     time^:=user;
@@ -321,6 +322,7 @@ begin
   CLOCK_EXT_AD_NETWORK,
   CLOCK_EXT_RAW_NETWORK:
    begin
+    //nanouptime + time
     time^:=get_unit_uptime;
    end;
 
@@ -334,6 +336,7 @@ begin
 
   CLOCK_PROCTIME:
    begin
+    //nanouptime - resume_time
     get_process_cputime(time);
    end;
 

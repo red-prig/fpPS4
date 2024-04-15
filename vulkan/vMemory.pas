@@ -6,18 +6,50 @@ interface
 
 uses
  sysutils,
+ mqueue,
  g23tree,
  Vulkan,
- vDevice;
+ vDevice,
+ vDependence;
 
 type
- TvPointer=packed record
-  FHandle:TVkDeviceMemory;
+ TvMemInfo=packed record
+  heap_index     :Byte;
+  mem_type       :Byte;
+  device_local   :Boolean;
+  device_coherent:Boolean;
+  host_visible   :Boolean;
+  host_coherent  :Boolean;
+ end;
+
+ TvDeviceMemory=class(TvDependenciesObject)
+  FHandle :TVkDeviceMemory;
+  FSize   :TVkDeviceSize;
+  FRefs   :Ptruint;
+  FMemInfo:TvMemInfo;
+  //
+  Procedure   Acquire;
+  procedure   Release;
+  Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
+  Destructor  Destroy; override;
+ end;
+
+ TvHostMemory=class(TvDeviceMemory)
+  entry:TAILQ_ENTRY;
+  //
+  FStart:QWORD;
+  F__End:QWORD;
+ end;
+
+ TvPointer=packed object
+  FMemory:TvDeviceMemory;
   FOffset:TVkDeviceSize;
+  procedure Release;
  end;
 
 Const
  GRANULAR_DEV_BLOCK_SIZE=128*1024*1024;
+ GRANULAR_MAP_BLOCK_SIZE= 16*1024*1024;
 
 type
  TDevNode=packed record
@@ -26,12 +58,6 @@ type
   FBlockId:Word;
   FmType  :Byte;
   Fisfree :Boolean;
- end;
-
- TDevBlock=object
-  FHandle:TVkDeviceMemory;
-  nSize  :TVkDeviceSize;
-  mType  :Byte;
  end;
 
  //free:  [FmType]|[FSize]|[FBlockId]
@@ -48,6 +74,17 @@ type
  TFreeDevNodeSet=specialize T23treeSet<TDevNode,TFreeCompare>;
  TAllcDevNodeSet=specialize T23treeSet<TDevNode,TAllcCompare>;
 
+ PvHeap=^TvHeap;
+ TvHeap=packed record
+  heap_size      :TVkDeviceSize;
+  heap_index     :Byte;
+  def_mem_type   :Byte;
+  device_local   :Boolean;
+  device_coherent:Boolean;
+  host_visible   :Boolean;
+  host_coherent  :Boolean;
+ end;
+
  TvMemManager=class
   FProperties:TVkPhysicalDeviceMemoryProperties;
   FHostVisibMt:TVkUInt32;
@@ -55,22 +92,27 @@ type
 
   FSparceMemoryTypes:TVkUInt32;
 
+  FHeaps:array of TvHeap;
+
   lock:Pointer;
 
-  FDevBlocks:array of TDevBlock;
+  FDevBlocks:array of TvDeviceMemory;
   FFreeSet:TFreeDevNodeSet;
   FAllcSet:TAllcDevNodeSet;
+
+  FHosts:TAILQ_HEAD; //TvHostMemory
 
   Constructor Create;
 
   function    SparceSupportHost:Boolean;
   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
+  procedure   LoadMemoryHeaps;
   procedure   PrintMemoryHeaps;
   procedure   PrintMemoryType(typeFilter:TVkUInt32);
 
   Function    _AllcDevBlock(Size:TVkDeviceSize;mtindex:Byte;Var R:Word):Boolean;
   Function    _FreeDevBlock(i:Word):Boolean;
-  Function    _FindDevBlock(FHandle:TVkDeviceMemory;Var R:Word):Boolean;
+  Function    _FindDevBlock(Memory:TvDeviceMemory;Var R:Word):Boolean;
   Function    _FetchFree_a(Size,Align:TVkDeviceSize;mtindex:Byte;var R:TDevNode):Boolean;
   Function    _FetchFree_l(key:TDevNode;var R:TDevNode):Boolean;
   Function    _FetchFree_b(key:TDevNode;var R:TDevNode):Boolean;
@@ -80,13 +122,17 @@ type
   Function    Alloc(Size,Align:TVkDeviceSize;mtindex:Byte):TvPointer;
   Function    Free(P:TvPointer):Boolean;
 
+  Function    _shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
+  Function    _shrink_host_map(max:TVkDeviceSize):TVkDeviceSize;
+  procedure   unmap_host(start,__end:QWORD);
+  Function    AllocHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
  end;
 
 var
  MemManager:TvMemManager;
 
 function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
-function vkAllocHostPointer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
+function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
 function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
@@ -102,6 +148,64 @@ implementation
 
 uses
  kern_rwlock;
+
+Procedure TvDeviceMemory.Acquire;
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
+procedure TvDeviceMemory.Release;
+begin
+ if (System.InterlockedDecrement(Pointer(FRefs))=nil) then
+ begin
+  Free
+ end;
+end;
+
+procedure ReleaseAndNil(var obj:TvDeviceMemory); inline;
+begin
+ obj.Release;
+ obj:=nil;
+end;
+
+Constructor TvDeviceMemory.Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
+begin
+ FHandle:=Handle;
+ FSize  :=Size;
+ //
+ FMemInfo.heap_index     :=mem_info^.heapIndex;
+ FMemInfo.mem_type       :=mem_type;
+ FMemInfo.device_local   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ))<>0;
+ FMemInfo.device_coherent:=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0;
+ FMemInfo.host_visible   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ))<>0;
+ FMemInfo.host_coherent  :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ))<>0;
+ //
+end;
+
+Destructor TvDeviceMemory.Destroy;
+begin
+ ReleaseAllDependencies(Self);
+ //
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkFreeMemory(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+ //
+ inherited;
+end;
+
+//
+
+procedure TvPointer.Release;
+begin
+ if (FMemory<>nil) then
+ begin
+  FMemory.Release;
+ end;
+end;
+
+//
 
 //free:  [FmType]|[FSize]|[FBlockId]
 function TFreeCompare.c(const a,b:TDevNode):Integer;
@@ -138,13 +242,14 @@ var
  cinfo:TVkBufferCreateInfo;
  r:TVkResult;
  FHandle:TVkBuffer;
+
 begin
  Result:=Default(TVkMemoryRequirements);
 
  cinfo:=Default(TVkBufferCreateInfo);
  cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
  cinfo.size       :=64*1024;
- cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+ cinfo.usage      :=ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
  cinfo.pNext      :=@buf_ext;
 
@@ -172,7 +277,7 @@ begin
  cinfo.sType      :=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
  cinfo.flags      :=ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT);
  cinfo.size       :=64*1024;
- cinfo.usage      :=ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+ cinfo.usage      :=ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
  cinfo.pNext      :=@buf_ext;
 
@@ -214,6 +319,8 @@ begin
 
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);
+
+ LoadMemoryHeaps;
 
  PrintMemoryHeaps;
 
@@ -267,6 +374,97 @@ begin
  end;
 end;
 
+procedure TvMemManager.LoadMemoryHeaps;
+var
+ i:TVkUInt32;
+ mtype:Integer;
+
+ function get_host_visible(heapIndex:TVkUInt32):Boolean; inline;
+ var
+  i:TVkUInt32;
+ begin
+  Result:=False;
+  For i:=0 to FProperties.memoryTypeCount-1 do
+  if (FProperties.memoryTypes[i].heapIndex=heapIndex) then
+  if ((FProperties.memoryTypes[i].propertyFlags and
+       ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))<>0) then
+
+  begin
+   Exit(True);
+  end;
+ end;
+
+ function get_mem_type(heapIndex:TVkUInt32;
+                       device_local,
+                       host_visible,
+                       device_coherent,
+                       host_coherent:Boolean):Integer; inline;
+ var
+  i,mask:TVkUInt32;
+ begin
+  Result:=-1;
+
+  mask:=(ord(device_local   )*ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) or
+        (ord(host_visible   )*ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) or
+        (ord(device_coherent)*ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD)) or
+        (ord(host_coherent  )*ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+
+  For i:=0 to FProperties.memoryTypeCount-1 do
+  if (FProperties.memoryTypes[i].heapIndex=heapIndex) then
+  if ((FProperties.memoryTypes[i].propertyFlags and mask)=mask) then
+  begin
+   Exit(i);
+  end;
+ end;
+
+begin
+ SetLength(FHeaps,FProperties.memoryHeapCount);
+
+ if (FProperties.memoryHeapCount<>0) then
+ For i:=0 to FProperties.memoryHeapCount-1 do
+ begin
+  FHeaps[i].heap_index  :=i;
+  FHeaps[i].heap_size   :=FProperties.memoryHeaps[i].size;
+  FHeaps[i].device_local:=(FProperties.memoryHeaps[i].flags and
+                           ord(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT))<>0;
+  FHeaps[i].host_visible:=get_host_visible(i);
+
+  FHeaps[i].device_coherent:=FHeaps[i].device_local;
+  FHeaps[i].host_coherent  :=FHeaps[i].host_visible;
+
+  repeat
+   mtype:=get_mem_type(i,
+                       FHeaps[i].device_local,
+                       FHeaps[i].host_visible,
+                       FHeaps[i].device_coherent,
+                       FHeaps[i].host_coherent);
+
+   if (mtype=-1) then
+   begin
+    if FHeaps[i].device_coherent then
+    begin
+     FHeaps[i].device_coherent:=False;
+    end else
+    if FHeaps[i].host_coherent then
+    begin
+     FHeaps[i].host_coherent:=False;
+    end else
+    begin
+     Assert(false,'load memory type');
+    end;
+
+   end else
+   begin
+    Break;
+   end;
+
+  until false;
+
+  FHeaps[i].def_mem_type:=mtype;
+ end;
+
+end;
+
 procedure TvMemManager.PrintMemoryHeaps;
 var
  i:TVkUInt32;
@@ -314,6 +512,21 @@ begin
   Writeln(' flags=',get_flags_str(FProperties.memoryHeaps[i].flags));
   Writeln(' types=',get_types_str(i));
 
+ end;
+
+ //
+
+ if Length(FHeaps)<>0 then
+ For i:=0 to High(FHeaps) do
+ begin
+  Writeln('[Heap]:',i);
+  Writeln(' heap_size      =0x',HexStr(FHeaps[i].heap_size,16));
+  Writeln(' heap_id        =',FHeaps[i].heap_index);
+  Writeln(' def_mem_type   =',FHeaps[i].def_mem_type);
+  Writeln(' device_local   =',FHeaps[i].device_local);
+  Writeln(' device_coherent=',FHeaps[i].device_coherent);
+  Writeln(' host_visible   =',FHeaps[i].host_visible);
+  Writeln(' host_coherent  =',FHeaps[i].host_coherent);
  end;
 end;
 
@@ -371,28 +584,36 @@ begin
 end;
 
 Function TvMemManager._AllcDevBlock(Size:TVkDeviceSize;mtindex:Byte;Var R:Word):Boolean;
+label
+ _set;
 var
  FHandle:TVkDeviceMemory;
+ FDeviceMemory:TvDeviceMemory;
  i:Word;
 begin
  Result:=False;
  FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
  if (FHandle=VK_NULL_HANDLE) then Exit;
+ //
+ FDeviceMemory:=TvDeviceMemory.Create(FHandle,Size,mtindex,@FProperties.memoryTypes[mtindex]);
+ //
  if Length(FDevBlocks)<>0 then
  For i:=0 to High(FDevBlocks) do
-  if (FDevBlocks[i].FHandle=VK_NULL_HANDLE) then
+ begin
+  if (FDevBlocks[i]=nil) then
   begin
-   FDevBlocks[i].FHandle:=FHandle;
-   FDevBlocks[i].nSize  :=Size;
-   FDevBlocks[i].mType  :=mtindex;
-   R:=i;
-   Exit(True);
+   goto _set;
   end;
+ end;
+ //
  i:=Length(FDevBlocks);
  SetLength(FDevBlocks,i+1);
- FDevBlocks[i].FHandle:=FHandle;
- FDevBlocks[i].nSize  :=Size;
- FDevBlocks[i].mType  :=mtindex;
+ //
+ _set:
+ //
+ FDeviceMemory.Acquire;
+ FDevBlocks[i]:=FDeviceMemory;
+ //
  R:=i;
  Result:=True;
 end;
@@ -403,17 +624,16 @@ var
 begin
  Result:=False;
  if (i>=Length(FDevBlocks)) then Exit;
- if (FDevBlocks[i].FHandle=VK_NULL_HANDLE) then Exit;
- vkFreeMemory(Device.FHandle,FDevBlocks[i].FHandle,nil);
- FDevBlocks[i].FHandle:=VK_NULL_HANDLE;
- FDevBlocks[i].nSize  :=0;
- FDevBlocks[i].mType  :=0;
+ if (FDevBlocks[i]=nil) then Exit;
+ //
+ ReleaseAndNil(FDevBlocks[i]);
+ //
  Result:=True;
  //shrink
  c:=Length(FDevBlocks);
  While (c<>0) do
  begin
-  if (FDevBlocks[c-1].FHandle=VK_NULL_HANDLE) then
+  if (FDevBlocks[c-1]=nil) then
    Dec(c)
   else
    Break;
@@ -421,14 +641,14 @@ begin
  SetLength(FDevBlocks,c);
 end;
 
-Function TvMemManager._FindDevBlock(FHandle:TVkDeviceMemory;Var R:Word):Boolean;
+Function TvMemManager._FindDevBlock(Memory:TvDeviceMemory;Var R:Word):Boolean;
 var
  i:Word;
 begin
  Result:=False;
  if Length(FDevBlocks)<>0 then
  For i:=0 to High(FDevBlocks) do
-  if (FDevBlocks[i].FHandle=FHandle) then
+  if (FDevBlocks[i]=Memory) then
   begin
    R:=i;
    Exit(True);
@@ -543,6 +763,7 @@ begin
  Size:=System.Align(Size,8);
  if (Align>GRANULAR_DEV_BLOCK_SIZE) then Align:=GRANULAR_DEV_BLOCK_SIZE;
  rw_wlock(lock);
+ //
  if _FetchFree_a(Size,Align,mtindex,key) then
  begin
   Offset:=System.Align(key.FOffset,Align);
@@ -567,7 +788,7 @@ begin
   key.FOffset:=Offset;
   key.FSize  :=Size;
   FAllcSet.Insert(key);
-  Result.FHandle:=FDevBlocks[key.FBlockId].FHandle;
+  Result.FMemory:=FDevBlocks[key.FBlockId];
   Result.FOffset:=key.FOffset;
  end else
  if _AllcDevBlock(System.Align(Size,GRANULAR_DEV_BLOCK_SIZE),mtindex,key.FBlockId) then
@@ -578,10 +799,10 @@ begin
   key.FOffset:=0;
   key.FmType :=mtindex;
   FAllcSet.Insert(key);
-  Result.FHandle:=FDevBlocks[key.FBlockId].FHandle;
+  Result.FMemory:=FDevBlocks[key.FBlockId];
   Result.FOffset:=0;
   //next free save
-  FSize:=FDevBlocks[key.FBlockId].nSize;
+  FSize:=FDevBlocks[key.FBlockId].FSize;
   if (Size<>FSize) then
   begin
    key.Fisfree:=True;
@@ -591,6 +812,12 @@ begin
    FAllcSet.Insert(key);
   end;
  end;
+ //
+ if (Result.FMemory<>nil) then
+ begin
+  Result.FMemory.Acquire;
+ end;
+ //
  rw_wunlock(lock);
 end;
 
@@ -598,10 +825,11 @@ Function TvMemManager.Free(P:TvPointer):Boolean;
 var
  key,key2:TDevNode;
 begin
- if (P.FHandle=VK_NULL_HANDLE) then Exit;
+ if (P.FMemory=nil) then Exit;
  key:=Default(TDevNode);
  rw_wlock(lock);
- if _FindDevBlock(P.FHandle,key.FBlockId) then
+ //
+ if _FindDevBlock(P.FMemory,key.FBlockId) then
  if _FetchAllc(P.FOffset,key.FBlockId,key) then
  begin
   //prev union
@@ -623,7 +851,7 @@ begin
    key.FSize  :=key.FSize+key2.FSize;
   until false;
   //
-  if (key.FOffset=0) and (key.FSize>=FDevBlocks[key.FBlockId].nSize) then
+  if (key.FOffset=0) and (key.FSize>=FDevBlocks[key.FBlockId].FSize) then
   begin
    //free block
    _FreeDevBlock(key.FBlockId);
@@ -636,8 +864,232 @@ begin
   end;
   Result:=True;
  end;
+ //
  rw_wunlock(lock);
 end;
+
+Function TvMemManager._shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
+var
+ i,c:Word;
+begin
+ Result:=0;
+
+ if (Length(FDevBlocks)<>0) then
+ For i:=High(FDevBlocks) to 0 do
+ begin
+
+  if (FDevBlocks[i]<>nil) then
+  if (FDevBlocks[i].FMemInfo.heap_index=heap_index) then
+  if (FDevBlocks[i].FRefs<=1) then
+  begin
+   Result:=Result+FDevBlocks[i].FSize;
+   FreeAndNil(FDevBlocks[i]);
+   if (Result>=max) then Break;
+  end;
+
+ end;
+
+ //shrink
+ c:=Length(FDevBlocks);
+ While (c<>0) do
+ begin
+  if (FDevBlocks[c-1]=nil) then
+   Dec(c)
+  else
+   Break;
+ end;
+ SetLength(FDevBlocks,c);
+end;
+
+Function TvMemManager._shrink_host_map(max:TVkDeviceSize):TVkDeviceSize;
+var
+ node,prev:TvHostMemory;
+begin
+ Result:=0;
+
+ node:=TvHostMemory(TAILQ_LAST(@FHosts));
+ while (node<>nil) do
+ begin
+  prev:=TvHostMemory(TAILQ_PREV(node,@node.entry));
+
+  if (node.FRefs<=1) then
+  begin
+   TAILQ_REMOVE(@FHosts,node,@node.entry);
+   Result:=Result+node.FSize;
+   FreeAndNil(node);
+   if (Result>=max) then Break;
+  end;
+
+  node:=prev;
+ end;
+
+end;
+
+procedure TvMemManager.unmap_host(start,__end:QWORD);
+var
+ node,next:TvHostMemory;
+begin
+ if (start=__end) then Exit;
+
+ //
+ rw_wlock(lock);
+ //
+
+ node:=TvHostMemory(TAILQ_FIRST(@FHosts));
+ while (node<>nil) do
+ begin
+  next:=TvHostMemory(TAILQ_NEXT(node,@node.entry));
+
+  if (__end>node.FStart) and (start<node.F__End) then
+  begin
+
+   //full in
+   if (start<=node.FStart) and (__end>=node.F__End) then
+   begin
+    TAILQ_REMOVE(@FHosts,node,@node.entry);
+    node.Release;
+    node:=nil;
+   end else
+   if (node.FRefs<=1) then
+   begin
+    TAILQ_REMOVE(@FHosts,node,@node.entry);
+    FreeAndNil(node);
+   end;
+
+  end;
+
+  node:=next;
+ end;
+
+ //
+ rw_wunlock(lock);
+ //
+end;
+
+function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+var
+ tmp:PtrUInt;
+begin
+ tmp:=addr+PtrUInt(alignment-1);
+ Result:=tmp-(tmp mod alignment)
+end;
+
+function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+begin
+ Result:=addr-(addr mod alignment);
+end;
+
+Function TvMemManager.AllocHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
+label
+ _retry,
+ _fail;
+var
+ FStart:QWORD;
+ F__End:QWORD;
+ FStart_align:QWORD;
+ F__End_align:QWORD;
+ tmp,tmp2:QWORD;
+ node:TvHostMemory;
+ FHandle:TVkDeviceMemory;
+begin
+ Result:=Default(TvPointer);
+ if (Addr=0) or (Size=0) then Exit;
+ //
+ FStart:=QWORD(Addr);
+ F__End:=FStart+Size;
+ //
+ rw_wlock(lock);
+ //
+
+ node:=TvHostMemory(TAILQ_FIRST(@FHosts));
+ while (node<>nil) do
+ begin
+
+  if (F__End>node.FStart) and (FStart<node.F__End) then
+  begin
+   Break;
+  end;
+
+  node:=TvHostMemory(TAILQ_NEXT(node,@node.entry));
+ end;
+
+ if (node=nil) then
+ begin
+  FStart_align:=AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE);
+  F__End_align:=AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE);
+
+  _retry:
+
+  tmp:=F__End_align-FStart_align;
+
+  FHandle:=vkAllocHostMemory(Device.FHandle,tmp,mtindex,Pointer(FStart_align));
+
+  if (FHandle=VK_NULL_HANDLE) then
+  begin
+   //try shrink
+   tmp:=size;
+
+   tmp2:=_shrink_host_map(tmp);
+
+   if (tmp2<tmp) then
+   begin
+    tmp:=tmp-tmp2;
+   end else
+   begin
+    tmp:=0;
+   end;
+
+   if (tmp>0) then
+   begin
+    tmp:=tmp-tmp2;
+    //try shrink 2
+    tmp2:=_shrink_dev_block(tmp,FProperties.memoryTypes[mtindex].heapIndex);
+
+    if (tmp2<tmp) then
+    begin
+     tmp:=tmp-tmp2;
+    end else
+    begin
+     tmp:=0;
+    end;
+   end;
+
+   if (tmp>0) then
+   begin
+    node:=nil;
+    goto _fail;
+   end else
+   begin
+    goto _retry;
+   end;
+
+  end;
+
+  node:=TvHostMemory.Create(FHandle,tmp,mtindex,@FProperties.memoryTypes[mtindex]);
+
+  node.FStart:=FStart;
+  node.F__End:=F__End;
+
+  node.Acquire;
+  TAILQ_INSERT_HEAD(@FHosts,node,@node.entry);
+ end;
+
+ node.Acquire;
+
+ _fail:
+
+ //
+ rw_wunlock(lock);
+ //
+
+ if (node<>nil) then
+ begin
+  Result.FMemory:=TvDeviceMemory(node);
+  Result.FOffset:=Addr-node.FStart;
+ end;
+end;
+
+//
 
 function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
 var
@@ -656,7 +1108,7 @@ begin
  end;
 end;
 
-function vkAllocHostPointer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
+function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
  import:TVkImportMemoryHostPointerInfoEXT;
@@ -694,7 +1146,7 @@ begin
  dinfo.sType:=VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
  dinfo.image:=FHandle;
  Result:=VK_NULL_HANDLE;
-  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkAllocateMemory:',r);
@@ -716,7 +1168,7 @@ begin
  dinfo.sType:=VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
  dinfo.buffer:=FHandle;
  Result:=VK_NULL_HANDLE;
-  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
+ r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkAllocateMemory:',r);

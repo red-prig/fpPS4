@@ -432,14 +432,23 @@ begin
 
    dst^.id:=obj^.id;
 
-   tls_index:=obj^.tls_index;
+   tls_index:=WORD(obj^.tls_index);
    dst^.tls_index:=tls_index;
 
    if ((flags and 1)<>0) then
    begin
-    tls_index:=((ord(obj^.rtld_flags.is_system<>0) + ord(obj^.rtld_flags.mainprog<>0)*2) * $10000) or tls_index;
+    tls_index:=((ord(obj^.rtld_flags.is_system<>0) +
+                 ord(obj^.rtld_flags.mainprog <>0)*2) * $10000) or tls_index;
     dst^.tls_index:=tls_index;
    end;
+
+   Writeln(' get_info_ex  :',obj^.lib_path);
+   Writeln(' tls_index    :0x',HexStr(WORD(obj^.tls_index),4),':0x',HexStr(tls_index,8));
+   Writeln(' tls_init_addr:0x',HexStr(obj^.tls_init_addr));
+   Writeln(' tls_init_size:0x',HexStr(obj^.tls_init_size,8));
+   Writeln(' tls_size     :0x',HexStr(obj^.tls_size     ,8));
+   Writeln(' tls_offset   :0x',HexStr(obj^.tls_offset   ,8));
+   Writeln(' tls_align    :0x',HexStr(obj^.tls_align    ,8));
 
    if ((flags and 2)<>0) then
    begin
@@ -450,16 +459,16 @@ begin
    end;
 
    dst^.tls_init_addr    :=obj^.tls_init_addr;
-   dst^.tls_init_size    :=obj^.tls_init_size;
-   dst^.tls_size         :=obj^.tls_size;
-   dst^.tls_offset       :=obj^.tls_offset;
-   dst^.tls_align        :=obj^.tls_align;
+   dst^.tls_init_size    :=DWORD(obj^.tls_init_size);
+   dst^.tls_size         :=DWORD(obj^.tls_size);
+   dst^.tls_offset       :=DWORD(obj^.tls_offset);
+   dst^.tls_align        :=DWORD(obj^.tls_align);
    dst^.reserved1        :=0;
    dst^.reserved2        :=0;
    dst^.eh_frame_hdr_addr:=obj^.eh_frame_hdr_addr;
    dst^.eh_frame_addr    :=obj^.eh_frame_addr;
-   dst^.eh_frame_hdr_size:=obj^.eh_frame_hdr_size;
-   dst^.eh_frame_size    :=obj^.eh_frame_size;
+   dst^.eh_frame_hdr_size:=DWORD(obj^.eh_frame_hdr_size);
+   dst^.eh_frame_size    :=DWORD(obj^.eh_frame_size);
    dst^.ref_count        :=obj^.ref_count;
 
    //if not webkit then

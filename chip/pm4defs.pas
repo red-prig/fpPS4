@@ -408,7 +408,7 @@ type
  TPM4CMDEVENTWRITEEOP=bitpacked record
   header          :PM4_TYPE_3_HEADER;
 
-  EVENT_TYPE      :bit6;  //00 // < event type written to VGT_EVENT_INITIATOR
+  eventType       :bit6;  //00 // < event type written to VGT_EVENT_INITIATOR
   Reserved1       :bit2;  //06
   EVENT_INDEX     :bit4;  //08 // < event index [0x5]
 

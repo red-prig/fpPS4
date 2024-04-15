@@ -7,12 +7,13 @@ interface
 uses
   Classes,
   SysUtils,
-  RWLock,
+  //RWLock,
   //ps4_types,
   g23tree,
   //ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
   Vulkan,
+  vDependence,
   vDevice,
   vMemory,
   //vShader,
@@ -25,32 +26,6 @@ uses
 type
  TvCmdBuffer=class;
 
- TvReleaseCb=procedure(Sender:TObject) of object;
-
- TvReleaseCompare=object
-  function c(a,b:TvReleaseCb):Integer; static;
- end;
-
- TvRelease=specialize T23treeSet<TvReleaseCb,TvReleaseCompare>;
-
- TObjectCompare=object
-  function c(a,b:TObject):Integer; static;
- end;
-
- TObjectSet=specialize T23treeSet<TObject,TObjectCompare>;
-
- TObjectSetLock=object(TObjectSet)
-  lock:TRWLock;
-  Procedure Init;
-  Procedure Lock_rd;
-  Procedure Lock_wr;
-  Procedure Unlock;
-  function  Insert(Const K:TObject):Boolean;
-  Function  Contains(Const K:TObject):Boolean;
-  Function  delete(Const R:TObject):Boolean;
-  Function  Release(Const R:TObject):Boolean;
- end;
-
  TvSemaphoreWait=record
   FSemaphore:TvSemaphore;
   FWaitStage:TVkPipelineStageFlags;
@@ -62,7 +37,7 @@ type
 
  TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
 
- TvCustomCmdBuffer=class
+ TvCustomCmdBuffer=class(TvDependenciesObject)
   parent:TvCmdPool;
   FQueue:TvQueue;
   cmdbuf:TVkCommandBuffer;
@@ -145,11 +120,11 @@ type
 
   Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 
-  Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
-  Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
-  Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
+  //Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+  //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+  //Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
 
-  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+  //Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndexAuto(INDICES:DWORD);
  end;
@@ -157,73 +132,12 @@ type
 implementation
 
 uses
- vBuffer,
- vHostBufferManager;
-
-function TvReleaseCompare.c(a,b:TvReleaseCb):Integer;
-begin
- Result:=Integer(TMethod(a).Code>TMethod(b).Code)-Integer(TMethod(a).Code<TMethod(b).Code);
- if (Result<>0) then Exit;
- Result:=Integer(TMethod(a).Data>TMethod(b).Data)-Integer(TMethod(a).Data<TMethod(b).Data);
-end;
-
-function TObjectCompare.c(a,b:TObject):Integer;
-begin
- Result:=Integer(Pointer(a)>Pointer(b))-Integer(Pointer(a)<Pointer(b));
-end;
+ vBuffer{,
+ vHostBufferManager};
 
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
  Result:=Integer(Pointer(a.FSemaphore)>Pointer(b.FSemaphore))-Integer(Pointer(a.FSemaphore)<Pointer(b.FSemaphore));
-end;
-
-Procedure TObjectSetLock.Init;
-begin
- rwlock_init(lock);
-end;
-
-Procedure TObjectSetLock.Lock_rd;
-begin
- rwlock_rdlock(lock);
-end;
-
-Procedure TObjectSetLock.Lock_wr;
-begin
- rwlock_wrlock(lock);
-end;
-
-Procedure TObjectSetLock.Unlock;
-begin
- rwlock_unlock(lock);
-end;
-
-function TObjectSetLock.Insert(Const K:TObject):Boolean;
-begin
- Lock_wr;
- Result:=inherited;
- Unlock;
-end;
-
-Function TObjectSetLock.Contains(Const K:TObject):Boolean;
-begin
- Lock_rd;
- Result:=inherited;
- Unlock;
-end;
-
-Function TObjectSetLock.delete(Const R:TObject):Boolean;
-begin
- Lock_wr;
- Result:=inherited;
- Unlock;
-end;
-
-Function TObjectSetLock.Release(Const R:TObject):Boolean;
-begin
- Lock_wr;
- inherited;
- Result:=(Size=0);
- Unlock;
 end;
 
 Constructor TvCustomCmdBuffer.Create(pool:TvCmdPool;Queue:TvQueue);
@@ -326,7 +240,7 @@ begin
  if (RT.FPipeline=nil) then Exit;
  if (RT.FFramebuffer=nil) then Exit;
 
- if (not RT.FRenderPass.Compile) then Exit;
+ //if (not RT.FRenderPass.Compile) then Exit;
  if (not RT.FPipeline.Compile) then Exit;
  if (not RT.FFramebuffer.Compile) then Exit;
 
@@ -464,24 +378,10 @@ begin
 end;
 
 Procedure TvCustomCmdBuffer.ReleaseResource;
-var
- It:TvRelease.Iterator;
 begin
  if (Self=nil) then Exit;
 
- It:=FDependence.cbegin;
- if (It.Item<>nil) then
- repeat
-  TvReleaseCb(It.Item^)(Self);
- until not It.Next;
-
- //repeat
- // It:=FDependence.cbegin;
- // if (It.Item=nil) then Break;
- // FDependence.erase(It);
- //until false;
-
- FDependence.Free;
+ ReleaseAllDependencies(Self);
 
  FWaitSemaphores.Free;
 
@@ -702,6 +602,7 @@ Const
   ord(VK_ACCESS_MEMORY_READ_BIT                   ) or
   ord(VK_ACCESS_MEMORY_WRITE_BIT                  );
 
+{
 Procedure TvCmdBuffer.dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
 var
  srcb,dstb:TvHostBuffer;
@@ -857,6 +758,7 @@ begin
    Assert(False);
  end;
 end;
+}
 
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
 begin
@@ -868,6 +770,7 @@ begin
  end;
 end;
 
+{
 Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 var
  rb:TvHostBuffer;
@@ -929,10 +832,11 @@ begin
  end;
 
 end;
+}
 
 Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 begin
- DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
+ //DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
 end;
 
 Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD);

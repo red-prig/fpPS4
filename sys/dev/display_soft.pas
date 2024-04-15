@@ -97,7 +97,6 @@ uses
  }
  sys_bootparam,
  kern_dmem,
- kern_thread,
  dev_dce;
 
 Procedure TSubmitQueue.Init;

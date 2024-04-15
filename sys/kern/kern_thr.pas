@@ -325,12 +325,20 @@ function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
 
+procedure thread_inc_ref(td:p_kthread); external;
+procedure thread_dec_ref(td:p_kthread); external;
+
 procedure thread_lock_assert(td:p_kthread); external;
 procedure thread_lock(td:p_kthread);   external;
 procedure thread_unlock(td:p_kthread); external;
 
+function  tdfind(tid:DWORD):p_kthread; external;
+
 procedure thread_suspend_all(exclude:p_kthread); external;
 procedure thread_resume_all (exclude:p_kthread); external;
+
+function  kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer; external;
+procedure kthread_exit(); external;
 
 implementation
 

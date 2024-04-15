@@ -525,6 +525,8 @@ begin
   end;
 
   vm_object_deallocate(obj);
+
+  addr^:=0;
  end;
 
  Exit(vm_mmap_to_errno(rv));
@@ -798,6 +800,8 @@ _map:
  td^.td_fpop:=nil;
 
  td^.td_retval[0]:=(addr+pageoff);
+
+ Writeln(' sys_mmap=0x',HexStr(td^.td_retval[0],16),'..0x',HexStr(td^.td_retval[0]+size,16));
 
 _done:
  if (fp<>nil) then

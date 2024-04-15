@@ -26,10 +26,12 @@ begin
   $40445301: //_get_genuine_random
             begin
              arc4rand(data+4,64,0);
+             PInteger(data)^:=0;
             end;
   $40445302: //Fips186Prng
             begin
              arc4rand(data+4,64,0);
+             PInteger(data)^:=0;
             end;
   else
    Result:=ENOIOCTL;

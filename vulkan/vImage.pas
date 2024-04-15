@@ -18,8 +18,8 @@ type
   //range:TVkImageSubresourceRange;
   //
   AccessMask:TVkAccessFlags;
-  ImgLayout:TVkImageLayout;
-  StageMask:TVkPipelineStageFlags;
+  ImgLayout :TVkImageLayout;
+  StageMask :TVkPipelineStageFlags;
   Procedure Init({_image:TVkImage;_sub:TVkImageSubresourceRange});
   function  Push(cmd:TVkCommandBuffer;
                  image:TVkImage;
@@ -42,16 +42,16 @@ type
 
  TvSwapChain=class
   FSurface:TvSurface;
-  FSize:TVkExtent2D;
-  FHandle:TVkSwapchainKHR;
-  FImages:array of TvSwapChainImage;
+  FSize   :TVkExtent2D;
+  FHandle :TVkSwapchainKHR;
+  FImages :array of TvSwapChainImage;
   Constructor Create(Surface:TvSurface;mode:Integer;imageUsage:TVkImageUsageFlags);
   Destructor  Destroy; override;
  end;
 
  TvImageView=class
   FHandle:TVkImageView;
-  FRefs:ptruint;
+  FRefs  :ptruint;
   Procedure   Acquire;
   Procedure   Release;
   Destructor  Destroy; override;
@@ -59,11 +59,13 @@ type
 
  TvCustomImage=class
   FHandle:TVkImage;
+  FBind  :TvPointer;
   Destructor  Destroy; override;
   function    GetImageInfo:TVkImageCreateInfo; virtual; abstract;
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
+  procedure   OnReleaseMem(Sender:TObject);
   function    Compile(ext:Pointer):Boolean;
  end;
 
@@ -75,9 +77,9 @@ const
 
 type
  TvExtent3D=packed record
-  width:Word;  //(0..16383)
+  width :Word; //(0..16383)
   height:Word; //(0..16383)
-  depth:Word;  //(0..8192)
+  depth :Word; //(0..8192)
  end;
 
  TvDstSel=bitpacked record
@@ -86,34 +88,34 @@ type
 
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
-  Addr:Pointer;
+  Addr   :Pointer;
   cformat:TVkFormat;
-  params:packed record
-   itype:Byte;         //TVkImageType 0..2
-   tiling_idx:Byte;    //0..31
-   extend:TvExtent3D;
-   samples:Byte;       //TVkSampleCountFlagBits 1..4
-   mipLevels:Byte;     //(0..15)
-   arrayLayers:Word;   //(0..16383)
+  params :packed record
+   itype      :Byte;       //TVkImageType 0..2
+   tiling_idx :Byte;       //0..31
+   extend     :TvExtent3D;
+   samples    :Byte;       //TVkSampleCountFlagBits 1..4
+   mipLevels  :Byte;       //(0..15)
+   arrayLayers:Word;       //(0..16383)
   end;
  end;
 
  PvImageViewKey=^TvImageViewKey;
  TvImageViewKey=packed record
-  cformat:TVkFormat;
-  vtype:Word;       //TVkImageViewType 0..6
-  dstSel:TvDstSel;
-  base_level:Byte;  //first mip level (0..15)
-  last_level:Byte;  //last mip level (0..15)
-  base_array:Word;  //first array index (0..16383)
-  last_array:Word;  //texture height (0..16383)
+  cformat   :TVkFormat;
+  vtype     :Word;      //TVkImageViewType 0..6
+  dstSel    :TvDstSel;
+  base_level:Byte;      //first mip level (0..15)
+  last_level:Byte;      //last mip level (0..15)
+  base_array:Word;      //first array index (0..16383)
+  last_array:Word;      //texture height (0..16383)
  end;
 
  TvImage=class(TvCustomImage)
   FFormat:TVkFormat;
   FExtent:TVkExtent3D;
-  FUsage:TVkFlags;
-  Fflags:TVkImageCreateFlags;
+  FUsage :TVkFlags;
+  Fflags :TVkImageCreateFlags;
   Barrier:TvImageBarrier;
   Constructor Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;flags:TVkImageCreateFlags;ext:Pointer=nil);
   function    GetImageInfo:TVkImageCreateInfo;    override;
@@ -502,17 +504,23 @@ begin
  For i:=0 to High(FImages) do
  begin
   if (FImages[i].FView<>VK_NULL_HANDLE) then
+  begin
    vkDestroyImageView(Device.FHandle,FImages[i].FView,nil);
+  end;
   FImages[i].Free;
  end;
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroySwapchainKHR(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 Destructor TvCustomImage.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
+ end;
  inherited;
 end;
 
@@ -545,7 +553,17 @@ end;
 
 function TvCustomImage.BindMem(P:TvPointer):TVkResult;
 begin
- Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FHandle,P.FOffset);
+ Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
+ if (Result=VK_SUCCESS) then
+ begin
+  FBind:=P;
+  P.FMemory.AddDependence(@Self.OnReleaseMem);
+ end;
+end;
+
+procedure TvCustomImage.OnReleaseMem(Sender:TObject);
+begin
+ //
 end;
 
 procedure _test_and_set_to(var new:TVkFlags;

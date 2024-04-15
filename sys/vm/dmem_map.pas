@@ -947,7 +947,10 @@ begin
   rmem_map_process_deferred; //flush
 
   rmem_map_lock(rmap);
+
    Result:=rmem_map_delete_any(rmap,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
+
+  //dont call this rmem_map_process_deferred
   mtx_unlock(rmap^.lock);
 
   if (Result=0) then
@@ -957,6 +960,8 @@ begin
    if (td^.td_rmap_def_user<>nil) then
    begin
     vmap:=map^.vmap;
+
+    //iterate rmem_map_process_deferred
 
     entry:=td^.td_rmap_def_user;
     td^.td_rmap_def_user:=nil;

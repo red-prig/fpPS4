@@ -33,7 +33,6 @@ uses
  errno,
  systm,
  kern_thr,
- kern_thread,
  kern_proc,
  md_thread,
  md_proc;

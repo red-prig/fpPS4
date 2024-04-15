@@ -8,7 +8,7 @@ uses
   Classes,
   SysUtils,
   ps4_shader,
-  ps4_gpu_regs,
+  vRegs2Vulkan,
   Vulkan,
   vDevice,
   vPipeline,

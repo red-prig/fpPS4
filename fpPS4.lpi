@@ -898,6 +898,22 @@
         <Filename Value="chip\pm4_pfp.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="chip\pm4_stream.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chip\pm4_me.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="vulkan\vDependence.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="vulkan\vRegs2Vulkan.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -909,7 +925,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);sys"/>
       <Libraries Value="gui"/>
-      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip"/>
+      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

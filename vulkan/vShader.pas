@@ -52,7 +52,9 @@ implementation
 Destructor TvShader.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyShaderModule(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 procedure TvShader.ClearInfo;
@@ -68,7 +70,9 @@ var
  r:TVkResult;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyShaderModule(Device.FHandle,FHandle,nil);
+ end;
  FHandle:=VK_NULL_HANDLE;
  ClearInfo;
  Parse(data,size);

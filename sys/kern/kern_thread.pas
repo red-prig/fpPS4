@@ -204,12 +204,12 @@ begin
  cpu_thread_free(td);
 end;
 
-procedure thread_inc_ref(td:p_kthread);
+procedure thread_inc_ref(td:p_kthread); public;
 begin
  System.InterlockedIncrement(td^.td_ref);
 end;
 
-procedure thread_dec_ref(td:p_kthread);
+procedure thread_dec_ref(td:p_kthread); public;
 begin
  if (System.InterlockedDecrement(td^.td_ref)=0) then
  begin
@@ -247,7 +247,7 @@ begin
  System.InterlockedDecrement(p_numthreads)
 end;
 
-function tdfind(tid:DWORD):p_kthread;
+function tdfind(tid:DWORD):p_kthread; public;
 Var
  data:PPointer;
 begin
@@ -598,7 +598,7 @@ begin
  end;
 end;
 
-function kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer;
+function kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer; public;
 var
  td:p_kthread;
  newtd:p_kthread;
@@ -831,7 +831,7 @@ begin
  // NOTREACHED
 end;
 
-procedure kthread_exit();
+procedure kthread_exit(); public;
 begin
  thread_reap();
  thread_exit();

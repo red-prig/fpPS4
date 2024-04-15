@@ -8,9 +8,9 @@ uses
   Classes,
   SysUtils,
   RWLock,
-  sys_types,
+  //sys_types,
   g23tree,
-  ps4_libSceVideoOut,
+  //ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
   Vulkan,
   vDevice,
@@ -28,6 +28,7 @@ type
   Procedure  Release(Sender:TOBject);
  end;
 
+ {
  TvRenderPass=class(vPipeline.TvRenderPass)
 
   AtCount:TVkUInt32;
@@ -48,6 +49,7 @@ type
   Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
   Function   Compile:Boolean;
  end;
+ }
 
  TvGraphicsPipeline=class(TvPipeline)
   FRenderPass:TvRenderPass;
@@ -123,6 +125,7 @@ const
  );
 }
 
+{
 Procedure TvRenderPass.Clear;
 begin
 
@@ -253,6 +256,7 @@ begin
 
  Inc(AtCount);
 end;
+}
 
 Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 begin
@@ -277,6 +281,7 @@ begin
          (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord(IMAGE_USAGE and (TM_WRITE or TM_CLEAR)<>0) );
 end;
 
+{
 Procedure TvRenderPass.AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
 begin
  if (AtCount>8) then Exit;
@@ -374,6 +379,7 @@ begin
 
  Result:=True;
 end;
+}
 
 //
 
@@ -549,7 +555,7 @@ begin
  if (info.stageCount=0) then Exit;
 
  if (not FShaderGroup.Compile) then Exit;
- if (not FRenderPass.Compile) then Exit;
+ //if (not FRenderPass.Compile) then Exit;
 
  info.sType              :=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
  info.pStages            :=@Stages;

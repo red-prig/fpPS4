@@ -10,9 +10,11 @@ uses
  g23tree,
  Vulkan,
  vDevice,
+ vDependence,
+ vPipeline{,
  vImage,
  vPipeline,
- vCmdBuffer;
+ vCmdBuffer};
 
 type
  PvRenderPassKey=^TvRenderPassKey;
@@ -42,7 +44,15 @@ type
   procedure Release(Sender:TObject);
  end;
 
-function FetchRenderPass(cmd:TvCustomCmdBuffer;P:PvRenderPassKey):TvRenderPass2;
+function FetchRenderPass(cmd:TvDependenciesObject;P:PvRenderPassKey):TvRenderPass2;
+
+////////////////
+const
+ //useage image
+ TM_READ =1;
+ TM_WRITE=2;
+ TM_CLEAR=4;
+////////////////
 
 implementation
 
@@ -250,7 +260,7 @@ end;
 Function TvRenderPass2.Compile:Boolean;
 var
  r:TVkResult;
- sub:TVkSubpassDescription;
+ subpass:TVkSubpassDescription;
  info:TVkRenderPassCreateInfo;
 begin
  Result:=False;
@@ -258,31 +268,31 @@ begin
 
  if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 
- sub:=Default(TVkSubpassDescription);
- sub.pipelineBindPoint:=VK_PIPELINE_BIND_POINT_GRAPHICS;
+ subpass:=Default(TVkSubpassDescription);
+ subpass.pipelineBindPoint:=VK_PIPELINE_BIND_POINT_GRAPHICS;
 
- sub.inputAttachmentCount   :=0;
- sub.pInputAttachments      :=nil;
+ subpass.inputAttachmentCount   :=0;
+ subpass.pInputAttachments      :=nil;
 
- sub.colorAttachmentCount   :=Key.RefCount;
- sub.pColorAttachments      :=@Key.ColorRef;
+ subpass.colorAttachmentCount   :=Key.RefCount;
+ subpass.pColorAttachments      :=@Key.ColorRef;
 
- sub.pResolveAttachments    :=nil; //colorAttachmentCount VK_ATTACHMENT_UNUSED
+ subpass.pResolveAttachments    :=nil; //colorAttachmentCount VK_ATTACHMENT_UNUSED
 
  if (Key.DepCount<>0) then
  begin
-  sub.pDepthStencilAttachment:=@Key.DepthRef; //1
+  subpass.pDepthStencilAttachment:=@Key.DepthRef; //1
  end;
 
- sub.preserveAttachmentCount:=0;
- sub.pPreserveAttachments   :=nil;
+ subpass.preserveAttachmentCount:=0;
+ subpass.pPreserveAttachments   :=nil;
 
  info:=Default(TVkRenderPassCreateInfo);
  info.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
  info.attachmentCount:=Key.AtdCount;
  info.pAttachments   :=@Key.ColorAtd;
  info.subpassCount   :=1;
- info.pSubpasses     :=@sub;
+ info.pSubpasses     :=@subpass;
  info.dependencyCount:=1;
  info.pDependencies  :=@Key.Dependency;
 
@@ -368,7 +378,7 @@ begin
  Result:=t;
 end;
 
-function FetchRenderPass(cmd:TvCustomCmdBuffer;P:PvRenderPassKey):TvRenderPass2;
+function FetchRenderPass(cmd:TvDependenciesObject;P:PvRenderPassKey):TvRenderPass2;
 begin
  Result:=nil;
  if (P=nil) then Exit;

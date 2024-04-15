@@ -987,9 +987,12 @@ begin
   dev_relthread(dev, ref);
   Exit(error);
  end;
+
  error:=dsw^.d_ioctl(dev, com, data, fp^.f_flag);
+
  td^.td_fpop:=nil;
  dev_relthread(dev, ref);
+
  if (error=ENOIOCTL) then
  begin
   error:=ENOTTY;
@@ -1022,6 +1025,7 @@ begin
    vrele(vpold);
   end;
  end;
+
  Exit(error);
 end;
 

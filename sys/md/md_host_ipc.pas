@@ -7,7 +7,6 @@ interface
 uses
  Classes,
  kern_thr,
- kern_thread,
  evbuffer,
  evpoll,
  host_ipc;

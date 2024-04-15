@@ -27,10 +27,13 @@ uses
  kern_rwlock,
  kern_proc,
  kern_thr,
- kern_thread,
  md_sleep,
  pm4_ring,
  pm4_pfp,
+ pm4_me,
+
+ vDevice,
+
  subr_backtrace;
 
 var
@@ -105,9 +108,12 @@ var
  ring_gfx:t_pm4_ring;
  ring_gfx_lock:Pointer=nil;
 
+ parse_gfx_started:Pointer=nil;
  parse_gfx_td:p_kthread;
 
  pfp_ctx:t_pfp_ctx;
+
+ pm4_me_gfx:t_pm4_me;
 
 function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 var
@@ -167,6 +173,11 @@ var
  ibuf:t_pm4_ibuffer;
 begin
 
+ if LoadVulkan then
+ begin
+  InitVulkan;
+ end;
+
  repeat
 
   if gc_ring_pm4_peek(@ring_gfx,@size,@buff) then
@@ -179,10 +190,16 @@ begin
 
     if (i<>0) then
     begin
+     pm4_me_gfx.Push(pfp_ctx.stream_dcb);
+     pm4_me_gfx.Push(pfp_ctx.stream_ccb);
+
      pfp_ctx.add_stall(@ibuf);
     end;
 
    end;
+
+   pm4_me_gfx.Push(pfp_ctx.stream_dcb);
+   pm4_me_gfx.Push(pfp_ctx.stream_ccb);
 
    gc_ring_pm4_drain(@ring_gfx,size-i);
   end;
@@ -191,6 +208,17 @@ begin
  until false;
 
 
+end;
+
+procedure start_gfx_ring;
+begin
+ if (System.InterlockedExchange(parse_gfx_started,Pointer(1))=nil) then
+ begin
+  pfp_ctx.print_hint:=true;
+  pfp_ctx.print_ops :=true;
+
+  kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,(8*1024*1024) div (16*1024),'[GFX_PFP]');
+ end;
 end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
@@ -280,9 +308,11 @@ begin
             begin
              rw_wlock(ring_gfx_lock);
 
-             Result:=gc_submit_internal(@ring_gfx,
-                                        p_submit_args(data)^.count,
-                                        p_submit_args(data)^.cmds);
+              start_gfx_ring;
+
+              Result:=gc_submit_internal(@ring_gfx,
+                                         p_submit_args(data)^.count,
+                                         p_submit_args(data)^.cmds);
 
              rw_wunlock(ring_gfx_lock);
             end;
@@ -291,7 +321,9 @@ begin
             begin
              rw_wlock(ring_gfx_lock);
 
-             Result:=gc_switch_buffer_internal(@ring_gfx);
+              start_gfx_ring;
+
+              Result:=gc_switch_buffer_internal(@ring_gfx);
 
              rw_wunlock(ring_gfx_lock);
             end;
@@ -496,10 +528,7 @@ begin
 
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
- pfp_ctx.print_hint:=true;
- pfp_ctx.print_ops :=true;
-
- kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,0,'[GFX_PFP]');
+ pm4_me_gfx.Init;
 end;
 
 

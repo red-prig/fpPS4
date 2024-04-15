@@ -38,7 +38,6 @@ implementation
 
 uses
  kern_proc,
- kern_thread,
  sched_ule,
  md_sleep,
  rtprio;

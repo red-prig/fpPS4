@@ -38,7 +38,6 @@ implementation
 uses
  sys_sysinit,
  kern_param,
- kern_thread,
  kern_exec,
  vfs_mountroot,
  sys_crt, //<- init writeln redirect

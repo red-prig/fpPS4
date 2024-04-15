@@ -23,7 +23,6 @@ procedure md_callout_done(c:p_callout);
 implementation
 
 uses
- kern_thread,
  kern_timeout;
 
 var

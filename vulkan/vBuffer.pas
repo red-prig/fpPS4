@@ -12,14 +12,16 @@ uses
 type
  TvBuffer=class
   FHandle:TVkBuffer;
-  FSize:TVkDeviceSize;
-  FUsage:TVkFlags;
+  FSize  :TVkDeviceSize;
+  FUsage :TVkFlags;
+  FBind  :TvPointer;
   Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Constructor CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Destructor  Destroy; override;
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
+  procedure   OnReleaseMem(Sender:TObject);
  end;
 
 function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
@@ -132,7 +134,10 @@ end;
 Destructor TvBuffer.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
+ end;
+ inherited;
 end;
 
 function TvBuffer.GetRequirements:TVkMemoryRequirements;
@@ -164,7 +169,17 @@ end;
 
 function TvBuffer.BindMem(P:TvPointer):TVkResult;
 begin
- Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FHandle,P.FOffset);
+ Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
+ if (Result=VK_SUCCESS) then
+ begin
+  FBind:=P;
+  P.FMemory.AddDependence(@Self.OnReleaseMem);
+ end;
+end;
+
+procedure TvBuffer.OnReleaseMem(Sender:TObject);
+begin
+ //
 end;
 
 end.

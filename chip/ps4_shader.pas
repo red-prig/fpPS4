@@ -722,24 +722,33 @@ end;
 
 function _get_aniso_bias_str(b:byte):RawByteString;
 begin
- Result:=IntToStr(Taniso_bias_bits(b).int)+'.('+IntToStr(Taniso_bias_bits(b).frac)+'/32)';
+ with Taniso_bias_bits(b) do
+ begin
+  Result:=IntToStr(int)+'.('+IntToStr(frac)+'/32)';
+ end;
 end;
 
 function _get_lod_bias_str(w:word):RawByteString;
 begin
- Result:=IntToStr(Tlod_bias_bits(w).int)+'.('+IntToStr(Tlod_bias_bits(w).frac)+'/256)';
- if (Tlod_bias_bits(w).sign<>0) then
+ with Tlod_bias_bits(w) do
  begin
-  Result:='-'+Result;
+  Result:=IntToStr(int)+'.('+IntToStr(frac)+'/256)';
+  if (sign<>0) then
+  begin
+   Result:='-'+Result;
+  end;
  end;
 end;
 
 function _get_lod_bias_sec_str(b:byte):RawByteString;
 begin
- Result:=IntToStr(Tlod_bias_sec_bits(b).int)+'.('+IntToStr(Tlod_bias_sec_bits(b).frac)+'/16)';
- if (Tlod_bias_sec_bits(b).sign<>0) then
+ with Tlod_bias_sec_bits(b) do
  begin
-  Result:='-'+Result;
+  Result:=IntToStr(int)+'.('+IntToStr(frac)+'/16)';
+  if (sign<>0) then
+  begin
+   Result:='-'+Result;
+  end;
  end;
 end;
 

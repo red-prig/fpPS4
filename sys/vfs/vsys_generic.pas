@@ -112,10 +112,8 @@ uses
  errno,
  kern_descrip,
  subr_uio,
- kern_thread,
  kern_proc,
  md_time,
- subr_backtrace,
  sys_capability;
 
 var

@@ -160,7 +160,6 @@ uses
  kern_proc,
  kern_synch,
  kern_param,
- kern_thread,
  sched_ule,
  vm,
  vm_map,
