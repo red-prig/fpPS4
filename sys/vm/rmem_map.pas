@@ -614,10 +614,65 @@ begin
  curkthread^.td_rmap_def_user:=entry;
 end;
 
-function  rmem_map_delete(map  :p_rmem_map;
-                          vaddr:DWORD;
-                          start:DWORD;
-                          __end:DWORD):Integer;
+procedure unmap_dmem_gc(start,__end:DWORD); external;
+
+procedure rmem_map_unmap_check(map  :p_rmem_map;
+                               start:DWORD;
+                               __end:DWORD);
+var
+ entry      :p_rmem_map_entry;
+ first_entry:p_rmem_map_entry;
+ s,e:DWORD;
+begin
+
+ if (not rmem_map_lookup_entry_any(map,start,@first_entry)) then
+ begin
+  entry:=first_entry^.next;
+ end else
+ begin
+  entry:=first_entry;
+ end;
+
+ repeat
+
+  if (entry^.start>start) then
+  begin
+   s:=start;
+
+   if (entry^.start>__end) then
+   begin
+    e:=__end;
+   end else
+   begin
+    e:=entry^.start;
+   end;
+
+   if (s<>e) then
+   begin
+    unmap_dmem_gc(IDX_TO_OFF(s),IDX_TO_OFF(e));
+   end;
+
+   start:=e;
+  end else
+  if (entry^.__end>start) then
+  begin
+   start:=entry^.__end;
+  end;
+
+  if (start>=__end) or (entry=@map^.header) or (entry^.start>=__end) then
+  begin
+   Break;
+  end;
+
+  entry:=entry^.next;
+
+ until false;
+end;
+
+function rmem_map_delete(map  :p_rmem_map;
+                         vaddr:DWORD;
+                         start:DWORD;
+                         __end:DWORD):Integer;
 var
  entry      :p_rmem_map_entry;
  first_entry:p_rmem_map_entry;
@@ -669,6 +724,9 @@ begin
 
   entry:=next;
  end;
+
+ rmem_map_unmap_check(map,start,__end);
+
  Result:=(0);
 end;
 
@@ -715,6 +773,9 @@ begin
 
   entry:=next;
  end;
+
+ unmap_dmem_gc(IDX_TO_OFF(start),IDX_TO_OFF(__end));
+
  Result:=(0);
 end;
 

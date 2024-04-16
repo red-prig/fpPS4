@@ -22,6 +22,9 @@ type
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   OnReleaseMem(Sender:TObject);
+  //
+  function    Acquire:Boolean;
+  procedure   Release;
  end;
 
 function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
@@ -169,18 +172,46 @@ end;
 
 function TvBuffer.BindMem(P:TvPointer):TVkResult;
 begin
- Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
- if (Result=VK_SUCCESS) then
+ if P.Acquire then
  begin
-  FBind:=P;
-  P.FMemory.AddDependence(@Self.OnReleaseMem);
+  Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
+  //
+  if (Result=VK_SUCCESS) then
+  begin
+   FBind:=P;
+   P.FMemory.AddDependence(@Self.OnReleaseMem);
+  end else
+  begin
+   P.Release;
+  end;
+  //
+ end else
+ begin
+  Result:=VK_ERROR_UNKNOWN;
  end;
 end;
 
 procedure TvBuffer.OnReleaseMem(Sender:TObject);
 begin
+ FBind.FMemory:=nil;
  //
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyBuffer(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
 end;
+
+function TvBuffer.Acquire:Boolean;
+begin
+ Result:=FBind.Acquire;
+end;
+
+procedure TvBuffer.Release;
+begin
+ FBind.Release;
+end;
+
 
 end.
 

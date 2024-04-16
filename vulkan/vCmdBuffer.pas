@@ -7,7 +7,6 @@ interface
 uses
   Classes,
   SysUtils,
-  //RWLock,
   //ps4_types,
   g23tree,
   //ps4_libSceVideoOut,

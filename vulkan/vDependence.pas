@@ -17,6 +17,7 @@ type
  TvRelease=specialize T23treeSet<TvReleaseCb,TvReleaseCompare>;
 
  TvDependenciesObject=class
+  FDep_lock    :Pointer;
   FDependencies:TvRelease;
   //
   function   AddDependence(cb:TvReleaseCb):Boolean;
@@ -57,32 +58,55 @@ end;
 
 //
 
-
 function TvDependenciesObject.AddDependence(cb:TvReleaseCb):Boolean;
 begin
  Result:=False;
  if (cb=nil) then Exit;
+
+ rw_wlock(FDep_lock);
+
  Result:=FDependencies.Insert(cb);
+
+ rw_wunlock(FDep_lock);
 end;
 
 function TvDependenciesObject.DelDependence(cb:TvReleaseCb):Boolean;
 begin
  Result:=False;
  if (cb=nil) then Exit;
+
+ rw_wlock(FDep_lock);
+
  Result:=FDependencies.delete(cb);
+
+ rw_wunlock(FDep_lock);
 end;
 
 Procedure TvDependenciesObject.ReleaseAllDependencies(Sender:TObject);
 var
  It:TvRelease.Iterator;
+ cb:TvReleaseCb;
 begin
+ rw_wlock(FDep_lock);
+
  while (FDependencies.size<>0) do
  begin
   It:=FDependencies.cbegin;
   if (It.Item=nil) then Break;
+  cb:=It.Item^;
   FDependencies.erase(It);
-  TvReleaseCb(It.Item^)(Sender);
+
+  if (cb<>nil) then
+  begin
+   rw_wunlock(FDep_lock);
+
+   cb(Sender);
+
+   rw_wlock(FDep_lock);
+  end;
  end;
+
+ rw_wunlock(FDep_lock);
 end;
 
 Destructor TvDependenciesObject.Destroy;

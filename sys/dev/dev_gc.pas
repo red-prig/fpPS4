@@ -33,6 +33,7 @@ uses
  pm4_me,
 
  vDevice,
+ vMemory,
 
  subr_backtrace;
 
@@ -44,6 +45,14 @@ var
 
  gc_knl_lock:mtx;
  gc_knlist:t_knlist;
+
+procedure unmap_dmem_gc(start,__end:DWORD); public;
+begin
+ if (MemManager<>nil) then
+ begin
+  MemManager.unmap_host(start,__end);
+ end;
+end;
 
 function mmap_addr(paddr,psize:QWORD;
                    prot:Integer;

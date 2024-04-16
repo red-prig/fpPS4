@@ -10,9 +10,15 @@ uses
  LFQueue,
 
  vBuffer,
+ vHostBufferManager,
  vImage,
  vImageManager,
  vRenderPassManager,
+ vShaderExt,
+ vShaderManager,
+ vRegs2Vulkan,
+
+ shader_dump,
 
  kern_thr,
  md_sleep,
@@ -52,7 +58,7 @@ procedure t_pm4_me.start;
 begin
  if (XCHG(started,Pointer(1))=nil) then
  begin
-  kthread_add(@pm4_me_thread,@self,@td,0,'[GFX_ME]');
+  kthread_add(@pm4_me_thread,@self,@td,(8*1024*1024) div (16*1024),'[GFX_ME]');
  end;
 end;
 
@@ -83,6 +89,29 @@ end;
 
 //
 
+procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
+var
+ GPU_REGS:TGPU_REGS;
+
+ FVSShader:TvShaderExt;
+ FPSShader:TvShaderExt;
+
+ FShadersKey:TvShadersKey;
+ FShaderGroup:TvShaderGroup;
+begin
+ GPU_REGS:=Default(TGPU_REGS);
+ GPU_REGS.SH_REG:=@node^.SH_REG;
+ GPU_REGS.CX_REG:=@node^.CX_REG;
+
+ {fdump_ps:=}DumpPS(GPU_REGS);
+ {fdump_vs:=}DumpVS(GPU_REGS);
+
+ FPSShader:=FetchShader(vShaderStagePs,0,GPU_REGS,nil{@pa});
+ FVSShader:=FetchShader(vShaderStageVs,1,GPU_REGS,nil{@pa});
+
+
+end;
+
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
 var
  stream:p_pm4_stream;
@@ -99,6 +128,12 @@ begin
    while (node<>nil) do
    begin
     Writeln('+',node^.ntype);
+
+    case node^.ntype of
+     ntDrawIndex2:pm4_DrawIndex2(Pointer(node));
+     else
+    end;
+
     //
     node:=stream^.Next(node);
    end;

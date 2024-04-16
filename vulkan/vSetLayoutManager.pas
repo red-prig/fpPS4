@@ -6,7 +6,6 @@ interface
 
 uses
  SysUtils,
- RWLock,
  g23tree,
  Vulkan,
  vPipeline;
@@ -17,6 +16,9 @@ Function FetchSetLayout(FStage:TVkShaderStageFlags;
 
 implementation
 
+uses
+ kern_rwlock;
+
 type
  TvSetLayoutCompare=class
   class function c(a,b:PvSetLayoutKey):Integer; static;
@@ -24,28 +26,22 @@ type
 
  _TvSetLayoutsPool=specialize T23treeSet<PvSetLayoutKey,TvSetLayoutCompare>;
  TvSetLayoutsPool=object(_TvSetLayoutsPool)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FSetLayoutsPool:TvSetLayoutsPool;
 
-Procedure TvSetLayoutsPool.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvSetLayoutsPool.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvSetLayoutsPool.Unlock;
+Procedure TvSetLayoutsPool.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function CompareBind(var a,b:TVkDescriptorSetLayoutBinding):Integer; forward;
@@ -111,7 +107,7 @@ begin
   Result:=t;
  end;
 
- FSetLayoutsPool.Unlock;
+ FSetLayoutsPool.Unlock_wr;
 
  t.Compile;
 end;
@@ -163,8 +159,6 @@ begin
  Result:=CompareBinds(a^.FBinds,b^.FBinds,Length(a^.FBinds));
 end;
 
-initialization
- FSetLayoutsPool.Init;
 
 end.
 

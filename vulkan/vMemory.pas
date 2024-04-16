@@ -44,6 +44,7 @@ type
  TvPointer=packed object
   FMemory:TvDeviceMemory;
   FOffset:TVkDeviceSize;
+  function  Acquire:Boolean;
   procedure Release;
  end;
 
@@ -94,8 +95,6 @@ type
 
   FHeaps:array of TvHeap;
 
-  lock:Pointer;
-
   FDevBlocks:array of TvDeviceMemory;
   FFreeSet:TFreeDevNodeSet;
   FAllcSet:TAllcDevNodeSet;
@@ -125,11 +124,19 @@ type
   Function    _shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
   Function    _shrink_host_map(max:TVkDeviceSize):TVkDeviceSize;
   procedure   unmap_host(start,__end:QWORD);
-  Function    AllocHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
+  Function    FetchHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
+  Function    FetchHostMap(Addr,Size:TVkDeviceSize;device_local:Boolean):TvPointer;
  end;
 
 var
  MemManager:TvMemManager;
+
+const
+ buf_ext:TVkExternalMemoryBufferCreateInfo=(
+  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
+  pNext:nil;
+  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
+ );
 
 function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
 function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
@@ -148,6 +155,9 @@ implementation
 
 uses
  kern_rwlock;
+
+var
+ global_mem_lock:Pointer=nil;
 
 Procedure TvDeviceMemory.Acquire;
 begin
@@ -197,6 +207,25 @@ end;
 
 //
 
+function TvPointer.Acquire:Boolean;
+begin
+ Result:=False;
+ if (FMemory=nil) then Exit;
+
+ //
+ rw_rlock(global_mem_lock);
+ //
+
+ if (FMemory<>nil) then
+ begin
+  FMemory.Acquire;
+  Result:=True;
+ end;
+
+ //
+ rw_runlock(global_mem_lock);
+end;
+
 procedure TvPointer.Release;
 begin
  if (FMemory<>nil) then
@@ -229,13 +258,6 @@ begin
  //2 FOffset
  Result:=Integer(a.FOffset>b.FOffset)-Integer(a.FOffset<b.FOffset);
 end;
-
-const
- buf_ext:TVkExternalMemoryBufferCreateInfo=(
-  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
-  pNext:nil;
-  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
- );
 
 function GetHostMappedRequirements:TVkMemoryRequirements;
 var
@@ -762,7 +784,8 @@ begin
  key:=Default(TDevNode);
  Size:=System.Align(Size,8);
  if (Align>GRANULAR_DEV_BLOCK_SIZE) then Align:=GRANULAR_DEV_BLOCK_SIZE;
- rw_wlock(lock);
+ //
+ rw_wlock(global_mem_lock);
  //
  if _FetchFree_a(Size,Align,mtindex,key) then
  begin
@@ -818,7 +841,7 @@ begin
   Result.FMemory.Acquire;
  end;
  //
- rw_wunlock(lock);
+ rw_wunlock(global_mem_lock);
 end;
 
 Function TvMemManager.Free(P:TvPointer):Boolean;
@@ -827,7 +850,8 @@ var
 begin
  if (P.FMemory=nil) then Exit;
  key:=Default(TDevNode);
- rw_wlock(lock);
+ //
+ rw_wlock(global_mem_lock);
  //
  if _FindDevBlock(P.FMemory,key.FBlockId) then
  if _FetchAllc(P.FOffset,key.FBlockId,key) then
@@ -865,7 +889,7 @@ begin
   Result:=True;
  end;
  //
- rw_wunlock(lock);
+ rw_wunlock(global_mem_lock);
 end;
 
 Function TvMemManager._shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
@@ -932,7 +956,7 @@ begin
  if (start=__end) then Exit;
 
  //
- rw_wlock(lock);
+ rw_wlock(global_mem_lock);
  //
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
@@ -962,8 +986,7 @@ begin
  end;
 
  //
- rw_wunlock(lock);
- //
+ rw_wunlock(global_mem_lock);
 end;
 
 function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
@@ -979,7 +1002,7 @@ begin
  Result:=addr-(addr mod alignment);
 end;
 
-Function TvMemManager.AllocHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
+Function TvMemManager.FetchHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
 label
  _retry,
  _fail;
@@ -998,7 +1021,7 @@ begin
  FStart:=QWORD(Addr);
  F__End:=FStart+Size;
  //
- rw_wlock(lock);
+ rw_wlock(global_mem_lock);
  //
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
@@ -1079,7 +1102,7 @@ begin
  _fail:
 
  //
- rw_wunlock(lock);
+ rw_wunlock(global_mem_lock);
  //
 
  if (node<>nil) then
@@ -1087,6 +1110,23 @@ begin
   Result.FMemory:=TvDeviceMemory(node);
   Result.FOffset:=Addr-node.FStart;
  end;
+end;
+
+Function TvMemManager.FetchHostMap(Addr,Size:TVkDeviceSize;device_local:Boolean):TvPointer;
+var
+ i:Byte;
+begin
+ Result:=Default(TvPointer);
+
+ Assert(Length(FHeaps)<>0);
+
+ For i:=0 to High(FHeaps) do
+ if (FHeaps[i].host_visible) then
+ if (FHeaps[i].device_local=device_local) then
+ begin
+  Exit(FetchHostMap(Addr,Size,FHeaps[i].def_mem_type));
+ end;
+
 end;
 
 //

@@ -64,9 +64,9 @@ type
   function    GetImageInfo:TVkImageCreateInfo; virtual; abstract;
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
+  function    Compile(ext:Pointer):Boolean;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   OnReleaseMem(Sender:TObject);
-  function    Compile(ext:Pointer):Boolean;
  end;
 
 const
@@ -551,19 +551,63 @@ begin
          (rded.prefersDedicatedAllocation <>VK_FALSE);
 end;
 
+function TvCustomImage.Compile(ext:Pointer):Boolean;
+var
+ cinfo:TVkImageCreateInfo;
+ r:TVkResult;
+begin
+ Result:=False;
+
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyImage(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
+
+ cinfo:=GetImageInfo;
+ cinfo.pNext:=ext;
+
+ cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
+
+ r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateImage:',r);
+  Exit;
+ end;
+ Result:=True;
+end;
+
 function TvCustomImage.BindMem(P:TvPointer):TVkResult;
 begin
- Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
- if (Result=VK_SUCCESS) then
+ if P.Acquire then
  begin
-  FBind:=P;
-  P.FMemory.AddDependence(@Self.OnReleaseMem);
+  Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
+  //
+  if (Result=VK_SUCCESS) then
+  begin
+   FBind:=P;
+   P.FMemory.AddDependence(@Self.OnReleaseMem);
+  end else
+  begin
+   P.Release;
+  end;
+  //
+ end else
+ begin
+  Result:=VK_ERROR_UNKNOWN;
  end;
 end;
 
 procedure TvCustomImage.OnReleaseMem(Sender:TObject);
 begin
+ FBind.FMemory:=nil;
  //
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyImage(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
+ end;
 end;
 
 procedure _test_and_set_to(var new:TVkFlags;
@@ -649,33 +693,6 @@ begin
 
  until false;
 
-end;
-
-function TvCustomImage.Compile(ext:Pointer):Boolean;
-var
- cinfo:TVkImageCreateInfo;
- r:TVkResult;
-begin
- Result:=False;
-
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  vkDestroyImage(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
-
- cinfo:=GetImageInfo;
- cinfo.pNext:=ext;
-
- cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
-
- r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln(StdErr,'vkCreateImage:',r);
-  Exit;
- end;
- Result:=True;
 end;
 
 Constructor TvImage.Create(format:TVkFormat;extent:TVkExtent3D;usage:TVkFlags;flags:TVkImageCreateFlags;ext:Pointer=nil);

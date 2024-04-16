@@ -6,14 +6,12 @@ interface
 
 uses
  SysUtils,
- RWLock,
  g23tree,
  Vulkan,
  vDevice,
  vDependence,
- vPipeline{,
- vImage,
  vPipeline,
+ vImage{,
  vCmdBuffer};
 
 type
@@ -46,15 +44,10 @@ type
 
 function FetchRenderPass(cmd:TvDependenciesObject;P:PvRenderPassKey):TvRenderPass2;
 
-////////////////
-const
- //useage image
- TM_READ =1;
- TM_WRITE=2;
- TM_CLEAR=4;
-////////////////
-
 implementation
+
+uses
+ kern_rwlock;
 
 type
  TvRenderPassKey2Compare=object
@@ -63,10 +56,9 @@ type
 
  _TvRenderPass2Set=specialize T23treeSet<PvRenderPassKey,TvRenderPassKey2Compare>;
  TvRenderPass2Set=object(_TvRenderPass2Set)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
@@ -306,19 +298,14 @@ begin
  Result:=True;
 end;
 
-Procedure TvRenderPass2Set.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvRenderPass2Set.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvRenderPass2Set.Unlock;
+Procedure TvRenderPass2Set.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 Procedure TvRenderPass2.Acquire;
@@ -395,12 +382,10 @@ begin
   end;
  end;
 
- FRenderPass2Set.Unlock;
+ FRenderPass2Set.Unlock_wr;
 end;
 
 
-initialization
- FRenderPass2Set.Init;
 
 end.
 

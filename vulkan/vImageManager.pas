@@ -6,7 +6,6 @@ interface
 
 uses
  SysUtils,
- RWLock,
  g23tree,
  //sys_types,
  Vulkan,
@@ -62,7 +61,7 @@ type
   key:TvImageKey;
   FUsage:TVkFlags;
   //
-  lock:TRWLock;
+  lock:Pointer;
   FViews:TvImageView2Set;
   //
   Barrier:TvImageBarrier;
@@ -110,6 +109,9 @@ var
 
 implementation
 
+uses
+ kern_rwlock;
+
 type
  TvImageKeyCompare=object
   function c(a,b:PvImageKey):Integer; static;
@@ -117,28 +119,22 @@ type
 
  _TvImage2Set=specialize T23treeSet<PvImageKey,TvImageKeyCompare>;
  TvImage2Set=object(_TvImage2Set)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FImage2Set:TvImage2Set;
 
-Procedure TvImage2Set.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvImage2Set.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvImage2Set.Unlock;
+Procedure TvImage2Set.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function TvImageKeyCompare.c(a,b:PvImageKey):Integer;
@@ -216,7 +212,6 @@ end;
 Constructor TvImage2.Create;
 begin
  inherited;
- rwlock_init(lock);
  Barrier.Init;
 end;
 
@@ -320,7 +315,7 @@ begin
  if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
 
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 
  t:=nil;
  i:=FViews.find(@F);
@@ -351,7 +346,7 @@ begin
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
-   rwlock_unlock(lock);
+   rw_wunlock(lock);
    Writeln(StdErr,'vkCreateImageView:',r);
    Exit;
   end;
@@ -373,7 +368,7 @@ begin
   end;
  end;
 
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 
  Result:=t;
 end;
@@ -476,7 +471,7 @@ begin
  if (cmd=nil) then Exit;
  if (not cmd.BeginCmdBuffer) then Exit;
 
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 
  if Barrier.Push(cmd.cmdbuf,
                  FHandle,
@@ -488,7 +483,7 @@ begin
   Inc(cmd.cmd_count);
  end;
 
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 {
@@ -679,7 +674,7 @@ begin
 
  end;
 
- FImage2Set.Unlock;
+ FImage2Set.Unlock_wr;
 end;
 
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
@@ -696,11 +691,9 @@ begin
   end;
  end;
 
- FImage2Set.Unlock;
+ FImage2Set.Unlock_wr;
 end;
 
-initialization
- FImage2Set.Init;
 
 end.
 

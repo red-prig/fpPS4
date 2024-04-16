@@ -7,14 +7,15 @@ interface
 uses
   SysUtils,
   Classes,
-  RWLock,
+  murmurhash,
   g23tree,
   ps4_pssl,
   ps4_shader,
-  ps4_gpu_regs,
+
+  vRegs2Vulkan,
   shader_dump,
 
-  ps4_program,
+  //ps4_program,
 
   vDevice,
 
@@ -61,6 +62,10 @@ function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
 
 implementation
 
+uses
+ kern_rwlock,
+ kern_dmem;
+
 type
  TShaderCacheCompare=object
   function c(a,b:PShaderDataKey):Integer; static;
@@ -72,54 +77,42 @@ type
 
  _TShaderCacheSet=specialize T23treeSet<PShaderDataKey,TShaderCacheCompare>;
  TShaderCacheSet=object(_TShaderCacheSet)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
  _TShaderGroupSet=specialize T23treeSet<PvShadersKey,TShadersKeyCompare>;
  TShaderGroupSet=object(_TShaderGroupSet)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FShaderCacheSet:TShaderCacheSet;
  FShaderGroupSet:TShaderGroupSet;
 
-Procedure TShaderCacheSet.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TShaderCacheSet.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TShaderCacheSet.Unlock;
+Procedure TShaderCacheSet.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 //
 
-Procedure TShaderGroupSet.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TShaderGroupSet.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TShaderGroupSet.Unlock;
+Procedure TShaderGroupSet.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function Max(a,b:PtrInt):PtrInt; inline;
@@ -180,7 +173,7 @@ var
  F:THandle;
  fname:RawByteString;
 begin
- hash:=FastHash(M.Memory,M.Size);
+ hash:=MurmurHash64A(M.Memory,M.Size,0);
 
  case FStage of
   vShaderStagePs:fname:='_ps_';
@@ -231,18 +224,29 @@ begin
  case FStage of
   vShaderStagePs  :
   begin
-   SprvEmit.InitPs(GPU_REGS.SPI.PS.RSRC1,GPU_REGS.SPI.PS.RSRC2,GPU_REGS.SPI.PS.INPUT_ENA);
-   SprvEmit.SetUserData(@GPU_REGS.SPI.PS.USER_DATA);
+   SprvEmit.InitPs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_PS,
+                   GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_PS,
+                   GPU_REGS.CX_REG^.SPI_PS_INPUT_ENA);
+
+   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_PS);
   end;
   vShaderStageVs:
   begin
-   SprvEmit.InitVs(GPU_REGS.SPI.VS.RSRC1,GPU_REGS.SPI.VS.RSRC2,GPU_REGS.VGT_NUM_INSTANCES);
-   SprvEmit.SetUserData(@GPU_REGS.SPI.VS.USER_DATA);
+   SprvEmit.InitVs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS,
+                   GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_VS,
+                   GPU_REGS.CX_REG^.VGT_DMA_NUM_INSTANCES);
+
+   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_VS);
   end;
   vShaderStageCs:
   begin
-   SprvEmit.InitCs(GPU_REGS.SPI.CS.RSRC1,GPU_REGS.SPI.CS.RSRC2,GPU_REGS.SPI.CS.NUM_THREAD_X,GPU_REGS.SPI.CS.NUM_THREAD_Y,GPU_REGS.SPI.CS.NUM_THREAD_Z);
-   SprvEmit.SetUserData(@GPU_REGS.SPI.CS.USER_DATA);
+   SprvEmit.InitCs(GPU_REGS.SH_REG^.COMPUTE_PGM_RSRC1,
+                   GPU_REGS.SH_REG^.COMPUTE_PGM_RSRC2,
+                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_X,
+                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Y,
+                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Z);
+
+   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.COMPUTE_USER_DATA);
   end;
 
   else
@@ -313,12 +317,13 @@ begin
  begin
 
   Case FStage of
-   vShaderStageVs:pUserData:=@GPU_REGS.SPI.VS.USER_DATA;
-   vShaderStagePs:pUserData:=@GPU_REGS.SPI.PS.USER_DATA;
-   vShaderStageCs:pUserData:=@GPU_REGS.SPI.CS.USER_DATA;
+   vShaderStageVs:pUserData:=@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_VS;
+   vShaderStagePs:pUserData:=@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_PS;
+   vShaderStageCs:pUserData:=@GPU_REGS.SH_REG^.COMPUTE_USER_DATA;
    else
      Assert(false);
   end;
+
 
   FShader:=nil;
   if Length(t.FShaders)<>0 then
@@ -445,25 +450,32 @@ end;
 
 function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 var
- pData:PDWORD;
+ pData0:PDWORD;
+ pData1:PDWORD;
 begin
 
  Case FStage of
-  vShaderStageVs:pData:=getCodeAddress(GPU_REGS.SPI.VS.LO,GPU_REGS.SPI.VS.HI);
-  vShaderStagePs:pData:=getCodeAddress(GPU_REGS.SPI.PS.LO,GPU_REGS.SPI.PS.HI);
-  vShaderStageCs:pData:=getCodeAddress(GPU_REGS.SPI.CS.LO,GPU_REGS.SPI.CS.HI);
+  vShaderStageVs:pData0:=GPU_REGS.get_vs_addr;
+  vShaderStagePs:pData0:=GPU_REGS.get_ps_addr;
+  vShaderStageCs:pData0:=GPU_REGS.get_cs_addr;
   else
     Assert(false);
  end;
 
- if (pData=nil) then Exit(nil);
+ if (pData0=nil) then Exit(nil);
  //Assert(pData<>nil);
+
+ pData1:=nil;
+ if not get_dmem_ptr(pData0,@pData1,nil) then
+ begin
+  Assert(false,'get_dmem_ptr');
+ end;
 
  FShaderCacheSet.Lock_wr;
 
- Result:=_FetchShader(FStage,pData,FDescSetId,GPU_REGS,pc);
+ Result:=_FetchShader(FStage,pData1,FDescSetId,GPU_REGS,pc);
 
- FShaderCacheSet.Unlock;
+ FShaderCacheSet.Unlock_wr;
 end;
 
 //
@@ -515,12 +527,9 @@ begin
 
  Result:=_FetchShaderGroup(F);
 
- FShaderGroupSet.Unlock;
+ FShaderGroupSet.Unlock_wr;
 end;
 
-initialization
- FShaderCacheSet.Init;
- FShaderGroupSet.Init;
 
 end.
 

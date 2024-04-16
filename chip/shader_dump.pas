@@ -7,76 +7,27 @@ interface
 uses
  Classes,
  SysUtils,
- ps4_program,
+ kern_authinfo,
+ kern_proc,
+ murmurhash,
  si_ci_vi_merged_offset,
  ps4_shader,
- ps4_gpu_regs;
+ vRegs2Vulkan;
 
 type
  TDUMP_WORD=packed record
   REG,COUNT:WORD;
  end;
 
-Function  FastHash(data:PByte;len:DWORD):DWORD;
 Procedure DUMP_BLOCK(F:THandle;REG:WORD;P:Pointer;Size:DWORD);
+
+Function  get_dev_progname:RawByteString;
+
 function  DumpCS(var GPU_REGS:TGPU_REGS):RawByteString;
 function  DumpPS(var GPU_REGS:TGPU_REGS):RawByteString;
 function  DumpVS(var GPU_REGS:TGPU_REGS):RawByteString;
 
 implementation
-
-Function FastHash(data:PByte;len:DWORD):DWORD;
-var
- hash,tmp,rem:DWORD;
-begin
- if (len=0) or (data=nil) then Exit(0);
- hash:=len;
-
- rem:=len and 3;
- len:=len shr 2;
-
- While (len>0) do
- begin
-  tmp :=PDWORD(data)[0];
-  hash:=hash+PWORD(@tmp)[0];
-  tmp :=(PWORD(@tmp)[1] shl 11) xor hash;
-  hash:=(hash shl 16) xor tmp;
-  data:=@PWORD(data)[2];
-  hash:=hash+(hash shr 11);
-  Dec(len);
- end;
-
- Case rem of
-  3:
-   begin
-    hash:=hash+PWORD(data)[0];
-    hash:=hash xor (hash shl 16);
-    hash:=hash xor (PShortint(data)[2] shl 18);
-    hash:=hash+(hash shr 11);
-   end;
-  2:
-   begin
-    hash:=hash+PWORD(data)[0];
-    hash:=hash xor (hash shl 11);
-    hash:=hash+(hash shr 17);
-   end;
-  1:
-   begin
-    hash:=hash+PShortint(data)[0];
-    hash:=hash xor (hash shl 10);
-    hash:=hash+(hash shr 1);
-   end;
- end;
-
- hash:=hash xor (hash shl 3);
- hash:=hash+(hash shr 5);
- hash:=hash xor (hash shl 4);
- hash:=hash+(hash shr 17);
- hash:=hash xor (hash shl 25);
- hash:=hash+(hash shr 6);
-
- Result:=hash;
-end;
 
 Procedure DUMP_BLOCK(F:THandle;REG:WORD;P:Pointer;Size:DWORD);
 const
@@ -91,6 +42,14 @@ begin
  W.COUNT:=((Size+3) div 4)-1;
  FileWrite(F,W,SizeOf(W));
  FileWrite(F,P^,System.Align(Size,4));
+end;
+
+Procedure DUMP_REG(F:THandle;REG:WORD;var GPU_REGS:TGPU_REGS);
+var
+ DATA:DWORD;
+begin
+ DATA:=GPU_REGS.get_reg(REG);
+ DUMP_BLOCK(F,REG,@DATA,SizeOf(DWORD));
 end;
 
 type
@@ -178,6 +137,28 @@ begin
  end;
 end;
 
+function Trim(const S: RawByteString): RawByteString;
+var
+  Ofs, Len: sizeint;
+begin
+  len := Length(S);
+  while (Len>0) and ((S[Len]<=' ') or (S[Len]='?')) do
+   dec(Len);
+  Ofs := 1;
+  while (Ofs<=Len) and ((S[Ofs]<=' ') or (S[Ofs]='?')) do
+    Inc(Ofs);
+  result := Copy(S, Ofs, 1 + Len - Ofs);
+end;
+
+Function get_dev_progname:RawByteString;
+begin
+ Result:=Trim(g_appinfo.CUSANAME);
+ if (Result='') then
+ begin
+  Result:=Trim(p_proc.p_comm);
+ end;
+end;
+
 function DumpCS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
  size,hash:DWORD;
@@ -186,12 +167,13 @@ var
  fname:RawByteString;
 begin
  Result:='';
- base:=getCodeAddress(GPU_REGS.SPI.CS.LO,GPU_REGS.SPI.CS.HI);
+
+ base:=GPU_REGS.get_cs_addr;
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  hash:=FastHash(base,size);
+  hash:=MurmurHash64A(base,size,0);
   fname:='shader_dump\'+get_dev_progname+'_cs_'+HexStr(hash,8)+'.dump';
   Result:=fname;
 
@@ -201,18 +183,18 @@ begin
   F:=FileCreate(fname);
   DUMP_BLOCK(F,mmCOMPUTE_PGM_LO,base,size);
 
-  DUMP_BLOCK(F,mmCOMPUTE_PGM_RSRC1   ,@GPU_REGS.SPI.CS.RSRC1       ,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCOMPUTE_PGM_RSRC2   ,@GPU_REGS.SPI.CS.RSRC2       ,SizeOf(DWORD));
+  DUMP_REG(F,mmCOMPUTE_PGM_RSRC1   ,GPU_REGS);
+  DUMP_REG(F,mmCOMPUTE_PGM_RSRC2   ,GPU_REGS);
 
-  DUMP_BLOCK(F,mmCOMPUTE_NUM_THREAD_X,@GPU_REGS.SPI.CS.NUM_THREAD_X,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCOMPUTE_NUM_THREAD_Y,@GPU_REGS.SPI.CS.NUM_THREAD_Y,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCOMPUTE_NUM_THREAD_Z,@GPU_REGS.SPI.CS.NUM_THREAD_Z,SizeOf(DWORD));
+  DUMP_REG(F,mmCOMPUTE_NUM_THREAD_X,GPU_REGS);
+  DUMP_REG(F,mmCOMPUTE_NUM_THREAD_Y,GPU_REGS);
+  DUMP_REG(F,mmCOMPUTE_NUM_THREAD_Z,GPU_REGS);
 
-  DUMP_USER_DATA(F,base,mmCOMPUTE_USER_DATA_0,@GPU_REGS.SPI.CS.USER_DATA);
+  DUMP_USER_DATA(F,base,mmCOMPUTE_USER_DATA_0,@GPU_REGS.SH_REG^.COMPUTE_USER_DATA);
 
-  DUMP_BLOCK(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE0,@GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE0,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE1,@GPU_REGS.SPI.CS.STATIC_THREAD_MGMT_SE1,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCOMPUTE_RESOURCE_LIMITS       ,@GPU_REGS.SPI.CS.RESOURCE_LIMITS       ,SizeOf(DWORD));
+  DUMP_REG(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE0,GPU_REGS);
+  DUMP_REG(F,mmCOMPUTE_STATIC_THREAD_MGMT_SE1,GPU_REGS);
+  DUMP_REG(F,mmCOMPUTE_RESOURCE_LIMITS       ,GPU_REGS);
 
   FileClose(F);
 
@@ -228,12 +210,12 @@ var
  fname:RawByteString;
 begin
  Result:='';
- base:=getCodeAddress(GPU_REGS.SPI.PS.LO,GPU_REGS.SPI.PS.HI);
+ base:=GPU_REGS.get_ps_addr;
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  hash:=FastHash(base,size);
+  hash:=MurmurHash64A(base,size,0);
   fname:='shader_dump\'+get_dev_progname+'_ps_'+HexStr(hash,8)+'.dump';
   Result:=fname;
 
@@ -243,27 +225,27 @@ begin
   F:=FileCreate(fname);
   DUMP_BLOCK(F,mmSPI_SHADER_PGM_LO_PS,base,size);
 
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC1_PS,@GPU_REGS.SPI.PS.RSRC1,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC2_PS,@GPU_REGS.SPI.PS.RSRC2,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC3_PS,@GPU_REGS.SPI.PS.RSRC3,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC1_PS,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC2_PS,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC3_PS,GPU_REGS);
 
-  DUMP_BLOCK(F,mmSPI_SHADER_Z_FORMAT    ,@GPU_REGS.SPI.PS.Z_FORMAT  ,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_COL_FORMAT  ,@GPU_REGS.SPI.PS.COL_FORMAT,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_SHADER_Z_FORMAT    ,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_COL_FORMAT  ,GPU_REGS);
 
-  DUMP_BLOCK(F,mmSPI_PS_INPUT_ENA       ,@GPU_REGS.SPI.PS.INPUT_ENA ,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_PS_INPUT_ADDR      ,@GPU_REGS.SPI.PS.INPUT_ADDR,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_PS_IN_CONTROL      ,@GPU_REGS.SPI.PS.IN_CONTROL,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_PS_INPUT_ENA       ,GPU_REGS);
+  DUMP_REG(F,mmSPI_PS_INPUT_ADDR      ,GPU_REGS);
+  DUMP_REG(F,mmSPI_PS_IN_CONTROL      ,GPU_REGS);
 
-  DUMP_BLOCK(F,mmSPI_BARYC_CNTL         ,@GPU_REGS.SPI.PS.BARYC_CNTL,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_BARYC_CNTL         ,GPU_REGS);
 
-  DUMP_BLOCK(F,mmDB_SHADER_CONTROL      ,@GPU_REGS.SPI.PS.SHADER_CONTROL,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmCB_SHADER_MASK         ,@GPU_REGS.SPI.PS.SHADER_MASK   ,SizeOf(DWORD));
+  DUMP_REG(F,mmDB_SHADER_CONTROL      ,GPU_REGS);
+  DUMP_REG(F,mmCB_SHADER_MASK         ,GPU_REGS);
 
-  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_PS_0,@GPU_REGS.SPI.PS.USER_DATA);
+  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_PS_0,@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_PS);
 
   For i:=0 to 31 do
   begin
-   DUMP_BLOCK(F,mmSPI_PS_INPUT_CNTL_0+i,@GPU_REGS.SPI.PS.INPUT_CNTL[i],SizeOf(DWORD));
+   DUMP_REG(F,mmSPI_PS_INPUT_CNTL_0+i,GPU_REGS);
   end;
 
   FileClose(F);
@@ -279,12 +261,12 @@ var
  fname:RawByteString;
 begin
  Result:='';
- base:=getCodeAddress(GPU_REGS.SPI.VS.LO,GPU_REGS.SPI.VS.HI);
+ base:=GPU_REGS.get_vs_addr;
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
 
-  hash:=FastHash(base,size);
+  hash:=MurmurHash64A(base,size,0);
   fname:='shader_dump\'+get_dev_progname+'_vs_'+HexStr(hash,8)+'.dump';
   Result:=fname;
 
@@ -294,17 +276,20 @@ begin
   F:=FileCreate(fname);
   DUMP_BLOCK(F,mmSPI_SHADER_PGM_LO_VS,base,size);
 
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC1_VS,@GPU_REGS.SPI.VS.RSRC1,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC2_VS,@GPU_REGS.SPI.VS.RSRC2,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_PGM_RSRC3_VS,@GPU_REGS.SPI.VS.RSRC3,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC1_VS,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC2_VS,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_PGM_RSRC3_VS,GPU_REGS);
 
-  DUMP_BLOCK(F,mmSPI_VS_OUT_CONFIG    ,@GPU_REGS.SPI.VS.OUT_CONFIG,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmSPI_SHADER_POS_FORMAT,@GPU_REGS.SPI.VS.POS_FORMAT,SizeOf(DWORD));
-  DUMP_BLOCK(F,mmPA_CL_VS_OUT_CNTL    ,@GPU_REGS.SPI.VS.OUT_CNTL  ,SizeOf(DWORD));
+  DUMP_REG(F,mmSPI_VS_OUT_CONFIG    ,GPU_REGS);
+  DUMP_REG(F,mmSPI_SHADER_POS_FORMAT,GPU_REGS);
+  DUMP_REG(F,mmPA_CL_VS_OUT_CNTL    ,GPU_REGS);
 
-  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_VS_0,@GPU_REGS.SPI.VS.USER_DATA);
+  DUMP_USER_DATA(F,base,mmSPI_SHADER_USER_DATA_VS_0,@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_VS);
 
-  DUMP_BLOCK(F,mmVGT_NUM_INSTANCES    ,@GPU_REGS.VGT_NUM_INSTANCES,SizeOf(DWORD));
+  DUMP_REG(F,mmVGT_DMA_NUM_INSTANCES,GPU_REGS);
+
+  //DUMP_REG(F,mmVGT_NUM_INSTANCES,@GPU_REGS.VGT_NUM_INSTANCES,SizeOf(DWORD));
+
 
   FileClose(F);
 

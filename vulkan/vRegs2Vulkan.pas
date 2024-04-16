@@ -86,6 +86,7 @@ type
 
  PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
+  SH_REG:PSH_REG_GROUP;
   CX_REG:PCONTEXT_REG_GROUP; // 0xA000
 
   Function  _SHADER_MASK(i:Byte):Byte; inline;  //0..7
@@ -103,6 +104,15 @@ type
   Function  DB_ENABLE:Boolean;
   Function  GET_DB_INFO:TDB_INFO;
 
+  function  get_reg(i:word):DWORD;
+
+  Function  get_cs_addr:Pointer;
+  Function  get_ps_addr:Pointer;
+  Function  get_vs_addr:Pointer;
+  Function  get_gs_addr:Pointer;
+  Function  get_es_addr:Pointer;
+  Function  get_hs_addr:Pointer;
+  Function  get_ls_addr:Pointer;
  end;
 
 function GET_PRIM_TYPE      (const VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE):TVkPrimitiveTopology;
@@ -1157,6 +1167,53 @@ begin
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
 end;
+
+function TGPU_REGS.get_reg(i:word):DWORD;
+begin
+ case i of
+  $2C00..$2E7F:Result:=PDWORD(SH_REG)[i-$2C00];
+  $A000..$A38F:Result:=PDWORD(CX_REG)[i-$A000];
+  else
+        Result:=0;
+ end;
+end;
+
+Function TGPU_REGS.get_cs_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.COMPUTE_PGM_LO,SH_REG^.COMPUTE_PGM_HI.DATA);
+end;
+
+Function TGPU_REGS.get_ps_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_PS,SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
+end;
+
+Function TGPU_REGS.get_vs_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_VS,SH_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
+end;
+
+Function TGPU_REGS.get_gs_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_GS,SH_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
+end;
+
+Function TGPU_REGS.get_es_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_ES,SH_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
+end;
+
+Function TGPU_REGS.get_hs_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_HS,SH_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
+end;
+
+Function TGPU_REGS.get_ls_addr:Pointer;
+begin
+ Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_LS,SH_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
+end;
+
+///
 
 function GET_PRIM_TYPE(const VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE):TVkPrimitiveTopology;
 begin

@@ -894,40 +894,17 @@ function vm_object_rmap_release(map   :vm_map_t;
                                 obj   :vm_object_t;
                                 start :vm_offset_t;
                                 __end :vm_offset_t;
-                                offset:vm_ooffset_t;
-                                p_free:Boolean):Integer;
+                                offset:vm_ooffset_t):Integer;
 var
  rmap:p_rmem_map;
  length:vm_offset_t;
- entry:p_rmem_map_entry;
 begin
  rmap:=map^.rmap;
  length:=__end-start;
 
  rmem_map_lock(rmap);
 
-  if p_free then
-  begin
-   Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
-  end else
-  begin
-   Result:=0;
-  end;
-
-  {
-  if (Result=0) then
-  begin
-   p_rem^:=not rmem_map_lookup_entry_any(rmap, OFF_TO_IDX(offset), @entry)
-  end;
-
-  if p_rem then
-  begin
-   //unmap vulkan
-  end else
-  begin
-   //ext unmap vulkan
-  end;
-  }
+  Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
 
  rmem_map_unlock(rmap);
 end;
@@ -2402,7 +2379,6 @@ var
  first_entry:vm_map_entry_t;
  next       :vm_map_entry_t;
  obj        :vm_object_t;
- p_rem      :Boolean;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -2480,8 +2456,7 @@ begin
 
   next:=entry^.next;
 
-  p_rem:=True;
-  if (obj<>nil) then
+  if rmap_free and (obj<>nil) then
   begin
    if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or
       (obj^.otype=OBJT_PHYSHM) then
@@ -2490,8 +2465,7 @@ begin
                                    obj,
                                    entry^.start,
                                    entry^.__end,
-                                   entry^.offset,
-                                   rmap_free);
+                                   entry^.offset);
    end;
   end;
 
@@ -2514,6 +2488,7 @@ begin
    * will be set in the wrong object!)
    }
   vm_map_entry_delete(map, entry);
+
   entry:=next;
  end;
  Result:=(KERN_SUCCESS);

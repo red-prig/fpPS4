@@ -6,300 +6,249 @@ interface
 
 uses
  SysUtils,
- RWLock,
- sys_types,
  g23tree,
  Vulkan,
  vDevice,
  vMemory,
  vBuffer,
- vCmdBuffer;
+ vDependence;
 
 type
- AVkSparseMemoryBind=array of TVkSparseMemoryBind;
-
  TvHostBuffer=class(TvBuffer)
-  FAddr:Pointer;
-  Fhost:TvPointer;
-  Foffset:TVkDeviceSize; //offset inside buffer
+  FAddr:QWORD;
   //
-  FSparse:AVkSparseMemoryBind;
-  //
-  FRefs:ptruint;
-  Procedure Acquire(Sender:TObject);
-  procedure Release(Sender:TObject);
+  procedure OnReleaseCmd(Sender:TObject);
  end;
 
-function FetchHostBuffer(cmd:TvCustomCmdBuffer;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+function FetchHostBuffer(cmd:TvDependenciesObject;
+                         Addr:QWORD;
+                         Size:TVkDeviceSize;
+                         usage:TVkFlags;
+                         device_local:Boolean=False):TvHostBuffer;
 
 implementation
 
-const
- buf_ext:TVkExternalMemoryBufferCreateInfo=(
-  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
-  pNext:nil;
-  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
- );
+uses
+ kern_rwlock;
 
 type
- TvAddrCompare=object
-  function c(a,b:PPointer):Integer; static;
+ TvHostBufferKey=packed record
+  FAddr  :QWORD;
+  FUsage :TVkFlags;
+  FBuffer:TvHostBuffer;
  end;
 
- _TvHostBufferSet=specialize T23treeSet<PPointer,TvAddrCompare>;
- TvHostBufferSet=object(_TvHostBufferSet)
-  lock:TRWLock;
-  Procedure Init;
-  Procedure Lock_wr;
-  Procedure Unlock;
+ TvAddrCompare=object
+  function c(const a,b:TvHostBufferKey):Integer; static;
  end;
+
+ _TvHostBufferSet=specialize T23treeSet<TvHostBufferKey,TvAddrCompare>;
+ TvHostBufferSet=object(_TvHostBufferSet)
+  lock:Pointer;
+  Procedure Lock_wr;
+  Procedure Unlock_wr;
+ end;
+
+procedure TvHostBuffer.OnReleaseCmd(Sender:TObject);
+begin
+ Release;
+end;
 
 var
  FHostBufferSet:TvHostBufferSet;
 
-Procedure TvHostBufferSet.Init;
-begin
- rwlock_init(lock);
-end;
 
 Procedure TvHostBufferSet.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvHostBufferSet.Unlock;
+Procedure TvHostBufferSet.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
-function TvAddrCompare.c(a,b:PPointer):Integer;
+function TvAddrCompare.c(const a,b:TvHostBufferKey):Integer;
 begin
- Result:=Integer(a^>b^)-Integer(a^<b^);
+ //1 FAddr
+ Result:=Integer(a.FAddr>b.FAddr)-Integer(a.FAddr<b.FAddr);
+ if (Result<>0) then Exit;
+ //2 FUsage
+ Result:=Integer(a.FUsage>b.FUsage)-Integer(a.FUsage<b.FUsage);
 end;
 
-function _Find(Addr:Pointer):TvHostBuffer;
-var
- i:TvHostBufferSet.Iterator;
-begin
- Result:=nil;
- i:=FHostBufferSet.find(@Addr);
- if (i.Item<>nil) then
- begin
-  Result:=TvHostBuffer(ptruint(i.Item^)-ptruint(@TvHostBuffer(nil).FAddr));
- end;
-end;
-
-function Max(a,b:QWORD):QWORD; inline;
-begin
- if (a>b) then Result:=a else Result:=b;
-end;
-
-function Min(a,b:QWORD):QWORD; inline;
-begin
- if (a<b) then Result:=a else Result:=b;
-end;
-
-function _fix_buf_size(sparce:Boolean;var Addr:Pointer;var Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
+function _fix_buf_size(var Addr:QWORD;var Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
 var
  mr:TVkMemoryRequirements;
 begin
- mr:=GetRequirements(sparce,Size,usage,@buf_ext);
+ mr:=GetRequirements(false,Size,usage,@buf_ext);
 
- Result:=(ptruint(Addr) mod mr.alignment);
+ Result:=(Addr mod mr.alignment);
 
- Addr:=Pointer(ptruint(Addr)-Result);
+ Addr:=Addr-Result;
  Size:=Size+Result;
 end;
 
-function _is_sparce(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):Integer;
-var
- host:TvPointer;
- hsize:qword;
-begin
- _fix_buf_size(False,Addr,Size,usage);
-
- host:=Default(TvPointer);
- if not TryGetHostPointerByAddr(addr,host,@hsize) then
- begin
-  Exit(-1);
- end;
-
- if (hsize>=Size) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=1;
- end;
-end;
-
-function _New_simple(Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
-var
- host:TvPointer;
-
- t:TvHostBuffer;
- delta:TVkDeviceSize;
-begin
- Result:=nil;
-
- delta:=_fix_buf_size(False,Addr,Size,usage);
-
- host:=Default(TvPointer);
- if not TryGetHostPointerByAddr(addr,host) then Exit;
-
- t:=TvHostBuffer.Create(Size,usage,@buf_ext);
-
- t.Fhost  :=host;
- t.Foffset:=delta;
- t.BindMem(host);
-
- Result:=t;
-end;
-
-function _New_sparce(queue:TVkQueue;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
-var
- host:TvPointer;
-
- asize:qword;
- hsize:qword;
- msize:qword;
-
- Offset,delta:TVkDeviceSize;
-
- bind:TVkSparseMemoryBind;
- Binds:AVkSparseMemoryBind;
- i:Integer;
-
- t:TvHostBuffer;
-begin
- Result:=nil;
-
- //hack; alignment is the same in virtual memory
- delta:=_fix_buf_size(True,Addr,Size,usage);
-
- Binds:=Default(AVkSparseMemoryBind);
- host :=Default(TvPointer);
- hsize:=0;
-
- Offset:=0;
- asize:=Size;
- While (asize<>0) do
- begin
-  if not TryGetHostPointerByAddr(addr,host,@hsize) then Exit;
-
-  msize:=Min(hsize,asize);
-
-  bind:=Default(TVkSparseMemoryBind);
-  bind.resourceOffset:=Offset;
-  bind.size          :=msize;
-  bind.memory        :=host.FHandle;
-  bind.memoryOffset  :=host.FOffset;
-
-  i:=Length(Binds);
-  SetLength(Binds,i+1);
-  Binds[i]:=bind;
-
-  //next
-  Offset:=Offset+msize;
-  addr  :=addr  +msize;
-  asize :=asize -msize;
- end;
-
- t:=TvHostBuffer.CreateSparce(Size,usage,@buf_ext);
-
- t.Foffset:=delta;
- t.FSparse:=Binds;
-
- if (VkBindSparseBufferMemory(queue,t.FHandle,Length(Binds),@Binds[0])<>VK_SUCCESS) then
- begin
-  t.Free;
-  Exit;
- end;
-
- Result:=t;
-end;
-
-function FetchHostBuffer(cmd:TvCustomCmdBuffer;Addr:Pointer;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
-var
- t:TvHostBuffer;
-
+function _FindHostBuffer(Addr:QWORD;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
 label
- _exit;
+ _repeat;
+var
+ It:TvHostBufferSet.Iterator;
+ key:TvHostBufferKey;
+ buf:TvHostBuffer;
+ __end:QWORD;
+begin
+ __end:=Addr+Size;
 
+ key:=Default(TvHostBufferKey);
+ key.FAddr :=Addr;
+ key.FUsage:=0;
+
+ _repeat:
+
+ It:=FHostBufferSet.find(key);
+
+ while (It.Item<>nil) do
+ begin
+  buf:=It.Item^.FBuffer;
+
+  if buf.Acquire then
+  begin
+
+   if (__end>buf.FAddr) and
+      (Addr<(buf.FAddr+buf.FSize)) and
+      ((buf.FUsage and usage)=usage) then
+   begin
+    Exit(buf);
+   end;
+
+   buf.Release;
+  end else
+  begin
+   //mem is deleted, free buf
+   FHostBufferSet.erase(It);
+   FreeAndNil(buf);
+   goto _repeat;
+  end;
+
+  It.Next;
+ end;
+
+end;
+
+function FetchHostBuffer(cmd:TvDependenciesObject;
+                         Addr:QWORD;
+                         Size:TVkDeviceSize;
+                         usage:TVkFlags;
+                         device_local:Boolean=False):TvHostBuffer;
+label
+ _repeat;
+var
+ key:TvHostBufferKey;
+ mem:TvPointer;
 begin
  Result:=nil;
  Assert(Size<>0);
 
+ _fix_buf_size(Addr,Size,usage);
+
+ key:=Default(TvHostBufferKey);
+ key.FAddr :=Addr;
+ key.FUsage:=usage;
+
+ //
  FHostBufferSet.Lock_wr;
+ //
 
- t:=_Find(Addr); //find by key
+ _repeat:
 
- if (t<>nil) then
+ key.FBuffer:=_FindHostBuffer(Addr,Size,usage);
+
+ //
+ FHostBufferSet.Unlock_wr;
+ //
+
+ if (key.FBuffer<>nil) then
  begin
-  if (t.FSize<(t.Foffset+Size)) or
-     ((t.FUsage and usage)<>usage) then
+  //
+ end else
+ begin
+  //create new
+
+  mem:=MemManager.FetchHostMap(Addr,Size,device_local);
+
+  if (mem.FMemory=nil) then
   begin
-   usage:=usage or t.FUsage;
-   FHostBufferSet.delete(@t.FAddr);
-   t.Release(nil);
-   t:=nil;
-  end;
- end;
 
- if (t=nil) then
- begin
-  //Writeln('NewBuf:',HexStr(Addr));
+   if device_local then
+   begin
+    mem:=MemManager.FetchHostMap(Addr,Size,False);
 
-  t:=nil;
-  Case _is_sparce(Addr,Size,usage) of
-   0:begin
-      t:=_New_simple(Addr,Size,usage);
-      Assert(t<>nil,'create simple buffer fail');
-     end;
-   1:begin  //is Sparse buffers
-      Assert(vDevice.sparseBinding,'sparseBinding not support');
-      Assert(MemManager.SparceSupportHost,'sparse not support for host');
-      t:=_New_sparce(cmd.FQueue.FHandle,Addr,Size,usage);
-      Assert(t<>nil,'create sparse buffer fail');
-     end;
-   else
-    Assert(false,'Is not GPU Addr:'+HexStr(Addr));
+    if (mem.FMemory=nil) then
+    begin
+     //ENOMEM
+     Exit(nil);
+    end;
+
+   end else
+   begin
+    //ENOMEM
+    Exit(nil);
+   end;
+
   end;
 
-  t.FAddr:=addr; //save key
+  key.FBuffer:=TvHostBuffer.Create(Size,usage,@buf_ext);
+  key.FBuffer.FAddr:=Addr;
 
-  FHostBufferSet.Insert(@t.FAddr);
-  t.Acquire(nil);
- end;
-
- if (cmd<>nil) and (t<>nil) then
- begin
-  if cmd.AddDependence(@t.Release) then
+  if (key.FBuffer.BindMem(mem)<>VK_SUCCESS) then
   begin
-   t.Acquire(cmd);
+   //unknow error
+   FreeAndNil(key.FBuffer);
+   mem.Release; //release [FetchHostMap]
+   //
+   Exit(nil);
+  end;
+
+  mem.Release; //release [FetchHostMap]
+
+  //
+  FHostBufferSet.Lock_wr;
+  //
+
+  if not FHostBufferSet.Insert(key) then
+  begin
+   //collision?
+
+   key.FBuffer.Release; //release [BindMem]
+   FreeAndNil(key.FBuffer);
+
+   //
+   goto _repeat;
+  end;
+
+  //
+  FHostBufferSet.Unlock_wr;
+  //
+
+  //create new
+ end;
+
+ //add dep
+ if (cmd<>nil) then
+ begin
+  if cmd.AddDependence(@key.FBuffer.OnReleaseCmd) then
+  begin
+   //
+  end else
+  begin
+   key.FBuffer.Release; //release [BindMem]/[_FindHostBuffer]
   end;
  end;
 
- _exit:
- FHostBufferSet.Unlock;
- Result:=t;
+ Result:=key.FBuffer;
 end;
 
-Procedure TvHostBuffer.Acquire(Sender:TObject);
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvHostBuffer.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
-initialization
- FHostBufferSet.Init;
 
 end.
 
