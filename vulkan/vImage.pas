@@ -151,12 +151,20 @@ type
  AvImageViews=array[0..8] of TVkImageView;
 
  TvFramebuffer=class
-  FHandle:TVkFramebuffer;
-  FEdit,FCompile:ptruint;
-  FRenderPass:TvRenderPass;
-  FSize:TVkExtent2D;
-  FImages:AvFramebufferImages;
+  FHandle     :TVkFramebuffer;
+  FRenderPass :TvRenderPass;
+  FSize       :TVkExtent2D;
   FImagesCount:ptruint;
+  Destructor Destroy; override;
+ end;
+
+ TvFramebufferIL=class(TvFramebuffer)
+  function   Compile:Boolean;
+ end;
+
+ TvFramebufferIV=class(TvFramebuffer)
+  FEdit,FCompile:ptruint;
+  FImages:AvFramebufferImages;
   Procedure  SetRenderPass(r:TvRenderPass);
   Procedure  SetSize(Size:TVkExtent2D);
   Procedure  AddImageView(v:TvImageView);
@@ -276,21 +284,34 @@ begin
  end;
 end;
 
-Procedure TvFramebuffer.SetRenderPass(r:TvRenderPass);
+//
+
+Destructor TvFramebuffer.Destroy;
+begin
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyFramebuffer(Device.FHandle,FHandle,nil);
+ end;
+ inherited;
+end;
+
+//
+
+Procedure TvFramebufferIV.SetRenderPass(r:TvRenderPass);
 begin
  if (r=FRenderPass) then Exit;
  FRenderPass:=r;
  Inc(FEdit);
 end;
 
-Procedure TvFramebuffer.SetSize(Size:TVkExtent2D);
+Procedure TvFramebufferIV.SetSize(Size:TVkExtent2D);
 begin
  if CompareByte(Size,FSize,SizeOf(TVkExtent2D))=0 then Exit;
  FSize:=Size;
  Inc(FEdit);
 end;
 
-Procedure TvFramebuffer.AddImageView(v:TvImageView);
+Procedure TvFramebufferIV.AddImageView(v:TvImageView);
 begin
  if (v=nil) then Exit;
  if (FImagesCount>=Length(AvFramebufferImages)) then Exit;
@@ -300,7 +321,7 @@ begin
  Inc(FEdit);
 end;
 
-Procedure TvFramebuffer.FreeImageViews;
+Procedure TvFramebufferIV.FreeImageViews;
 var
  i:Integer;
 begin
@@ -322,12 +343,48 @@ begin
  Inc(FEdit);
 end;
 
-function TvFramebuffer.IsEdit:Boolean;
+function TvFramebufferIV.IsEdit:Boolean;
 begin
  Result:=(FEdit<>FCompile);
 end;
 
-function TvFramebuffer.Compile:Boolean;
+///
+
+function TvFramebufferIL.Compile:Boolean;
+var
+ r:TVkResult;
+ info:TVkFramebufferCreateInfo;
+begin
+ Result:=False;
+  if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
+ if (FRenderPass=nil) then Exit;
+ if (FRenderPass.FHandle=VK_NULL_HANDLE) then Exit;
+ if (FImagesCount=0) then Exit;
+ if (FSize.width=0) or (FSize.height=0) then Exit;
+
+ info:=Default(TVkFramebufferCreateInfo);
+ info.sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+ info.renderPass     :=FRenderPass.FHandle;
+ info.attachmentCount:=FImagesCount;
+ info.width          :=FSize.width;
+ info.height         :=FSize.height;
+ info.layers         :=1;
+ info.flags          :=ord(VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT);
+ info.pAttachments   :=nil;
+
+ r:=vkCreateFramebuffer(Device.FHandle,@info,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateFramebuffer');
+ end;
+
+ Result:=(r=VK_SUCCESS);
+end;
+
+///
+
+function TvFramebufferIV.Compile:Boolean;
 var
  i:TVkUInt32;
  r:TVkResult;
@@ -338,6 +395,7 @@ begin
  if (not IsEdit) then Exit(true);
  if (FRenderPass=nil) then Exit;
  if (FRenderPass.FHandle=VK_NULL_HANDLE) then Exit;
+ if (FImagesCount=0) then Exit;
  if (FSize.width=0) or (FSize.height=0) then Exit;
 
  if (FHandle<>VK_NULL_HANDLE) then
@@ -350,30 +408,19 @@ begin
  info.sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
  info.renderPass     :=FRenderPass.FHandle;
  info.attachmentCount:=FImagesCount;
- info.width :=FSize.width;
- info.height:=FSize.height;
- info.layers:=1;
+ info.width          :=FSize.width;
+ info.height         :=FSize.height;
+ info.layers         :=1;
 
- if (info.attachmentCount<>0) then
+ FImageViews:=Default(AvImageViews);
+
+ For i:=0 to FImagesCount-1 do
+ if (FImages[i]<>nil) then
  begin
-  FImageViews:=Default(AvImageViews);
-
-  For i:=0 to FImagesCount-1 do
-  if (FImages[i]<>nil) then
-  begin
-   FImageViews[i]:=FImages[i].FHandle;
-  end;
-
-  info.pAttachments:=@FImageViews;
+  FImageViews[i]:=FImages[i].FHandle;
  end;
 
- if (info.attachmentCount=0) then
- begin
-  if (info.pAttachments<>nil) then
-   FreeMem(info.pAttachments);
-  info.flags:=ord(VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT);
-  info.pAttachments:=nil;
- end;
+ info.pAttachments:=@FImageViews;
 
  r:=vkCreateFramebuffer(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
@@ -384,11 +431,9 @@ begin
  Result:=(r=VK_SUCCESS);
 end;
 
-Destructor TvFramebuffer.Destroy;
+Destructor TvFramebufferIV.Destroy;
 begin
  FreeImageViews;
- if (FHandle<>VK_NULL_HANDLE) then
-  vkDestroyFramebuffer(Device.FHandle,FHandle,nil);
  inherited;
 end;
 
@@ -788,7 +833,9 @@ end;
 Destructor TvImageView.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyImageView(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 function TvHostImage1D.GetImageInfo:TVkImageCreateInfo;

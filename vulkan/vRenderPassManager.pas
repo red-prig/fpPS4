@@ -29,7 +29,7 @@ type
   Procedure  SetZorderStage(s:TVkPipelineStageFlags);
   Procedure  AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
   Procedure  SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
-  Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
+  Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:Byte);
   Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
  end;
 
@@ -132,13 +132,13 @@ begin
  Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
 end;
 
-Procedure TvRenderPassKey.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
+Procedure TvRenderPassKey.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:Byte);
 begin
  if (AtdCount>8) then Exit;
 
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
  ColorAtd[AtdCount].format        :=format;
- ColorAtd[AtdCount].samples       :=samples;
+ ColorAtd[AtdCount].samples       :=TVkSampleCountFlagBits(samples);
 
  With ColorAtd[AtdCount] do
   if (IMAGE_USAGE and TM_CLEAR<>0) then

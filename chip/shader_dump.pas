@@ -12,6 +12,7 @@ uses
  murmurhash,
  si_ci_vi_merged_offset,
  ps4_shader,
+ vShader,
  vRegs2Vulkan;
 
 type
@@ -168,7 +169,7 @@ var
 begin
  Result:='';
 
- base:=GPU_REGS.get_cs_addr;
+ base:=GPU_REGS.get_code_addr(vShaderStageCs);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
@@ -210,7 +211,7 @@ var
  fname:RawByteString;
 begin
  Result:='';
- base:=GPU_REGS.get_ps_addr;
+ base:=GPU_REGS.get_code_addr(vShaderStagePs);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);
@@ -261,7 +262,7 @@ var
  fname:RawByteString;
 begin
  Result:='';
- base:=GPU_REGS.get_vs_addr;
+ base:=GPU_REGS.get_code_addr(vShaderStageVs);
  if (base<>nil) then
  begin
   size:=_calc_shader_size(base);

@@ -12,6 +12,16 @@ uses
   vDevice;
 
 type
+ TvShaderStage=(
+  vShaderStageLs,
+  vShaderStageHs,
+  vShaderStageEs,
+  vShaderStageGs,
+  vShaderStageVs,
+  vShaderStagePs,
+  vShaderStageCs
+ );
+
  TvSupportDescriptorType=array[0..1] of TVkDescriptorType;
 
  {PvShaderBind=^TvShaderBind;

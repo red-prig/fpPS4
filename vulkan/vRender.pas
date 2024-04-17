@@ -85,7 +85,7 @@ type
  TvRenderTargets=class
   FRenderPass:TvRenderPass;
   FPipeline:TvGraphicsPipeline;
-  FFramebuffer:TvFramebuffer;
+  FFramebuffer:TvFramebufferIV;
   FRenderArea:TVkRect2D;
   FClearValuesCount:TVkUInt32;
   FClearValues:array[0..8] of TVkClearValue;

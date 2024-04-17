@@ -10,6 +10,7 @@ uses
  half16,
  Vulkan,
  vImage,
+ vShader,
  ps4_shader,
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
@@ -44,7 +45,7 @@ type
   Z_READ_ADDR :Pointer;
   Z_WRITE_ADDR:Pointer;
 
-  STENCIL_READ_ADDR:Pointer;
+  STENCIL_READ_ADDR :Pointer;
   STENCIL_WRITE_ADDR:Pointer;
 
   //extend:TVkExtent2D;
@@ -58,17 +59,7 @@ type
 
   CLEAR_VALUE:TVkClearValue;
 
-  depthTestEnable      :TVkBool32;
-  depthWriteEnable     :TVkBool32;
-  depthCompareOp       :TVkCompareOp;
-  depthBoundsTestEnable:TVkBool32;
-  stencilTestEnable    :TVkBool32;
-
-  front:TVkStencilOpState;
-  back:TVkStencilOpState;
-
-  minDepthBounds:TVkFloat;
-  maxDepthBounds:TVkFloat;
+  ds_state:TVkPipelineDepthStencilStateCreateInfo;
 
   DEPTH_USAGE:Byte;
   STENCIL_USAGE:Byte;
@@ -104,15 +95,14 @@ type
   Function  DB_ENABLE:Boolean;
   Function  GET_DB_INFO:TDB_INFO;
 
+  Function  GET_RASTERIZATION:TVkPipelineRasterizationStateCreateInfo;
+  Function  GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+  Function  GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
+
   function  get_reg(i:word):DWORD;
 
-  Function  get_cs_addr:Pointer;
-  Function  get_ps_addr:Pointer;
-  Function  get_vs_addr:Pointer;
-  Function  get_gs_addr:Pointer;
-  Function  get_es_addr:Pointer;
-  Function  get_hs_addr:Pointer;
-  Function  get_ls_addr:Pointer;
+  Function  get_code_addr(FStage:TvShaderStage):Pointer;
+  Function  get_user_data(FStage:TvShaderStage):Pointer;
  end;
 
 function GET_PRIM_TYPE      (const VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE):TVkPrimitiveTopology;
@@ -1057,28 +1047,29 @@ begin
  Result.CLEAR_VALUE.depthStencil.stencil:=CX_REG^.DB_STENCIL_CLEAR.CLEAR;
 
  /////
+ Result.ds_state.sType:=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 
- Result.depthTestEnable      :=DEPTH_CONTROL.Z_ENABLE;            //1:1
- Result.depthWriteEnable     :=DEPTH_CONTROL.Z_WRITE_ENABLE;      //1:1
- Result.depthBoundsTestEnable:=DEPTH_CONTROL.DEPTH_BOUNDS_ENABLE; //1:1
- Result.stencilTestEnable    :=DEPTH_CONTROL.STENCIL_ENABLE;      //1:1
+ Result.ds_state.depthTestEnable      :=DEPTH_CONTROL.Z_ENABLE;            //1:1
+ Result.ds_state.depthWriteEnable     :=DEPTH_CONTROL.Z_WRITE_ENABLE;      //1:1
+ Result.ds_state.depthBoundsTestEnable:=DEPTH_CONTROL.DEPTH_BOUNDS_ENABLE; //1:1
+ Result.ds_state.stencilTestEnable    :=DEPTH_CONTROL.STENCIL_ENABLE;      //1:1
 
- Result.depthCompareOp:=TVkCompareOp(DEPTH_CONTROL.ZFUNC); //1:1
+ Result.ds_state.depthCompareOp:=TVkCompareOp(DEPTH_CONTROL.ZFUNC); //1:1
 
- Result.minDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MIN)^;
- Result.maxDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MAX)^;
+ Result.ds_state.minDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MIN)^;
+ Result.ds_state.maxDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MAX)^;
 
  Assert(DEPTH_CONTROL.DISABLE_COLOR_WRITES_ON_DEPTH_PASS=0);
 
  //if (DEPTH.DEPTH_CONTROL.DISABLE_COLOR_WRITES_ON_DEPTH_PASS<>0) then
  begin
-  Result.front.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL);
-  Result.front.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS);
-  Result.front.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL);
-  Result.front.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC);   //1:1
-  Result.front.compareMask:=CX_REG^.DB_STENCILREFMASK.STENCILMASK;
-  Result.front.writeMask  :=CX_REG^.DB_STENCILREFMASK.STENCILWRITEMASK;
-  Result.front.reference  :=GetStencilRef_FF(STENCIL_CONTROL,CX_REG^.DB_STENCILREFMASK);
+  Result.ds_state.front.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL);
+  Result.ds_state.front.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS);
+  Result.ds_state.front.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL);
+  Result.ds_state.front.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC);   //1:1
+  Result.ds_state.front.compareMask:=CX_REG^.DB_STENCILREFMASK.STENCILMASK;
+  Result.ds_state.front.writeMask  :=CX_REG^.DB_STENCILREFMASK.STENCILWRITEMASK;
+  Result.ds_state.front.reference  :=GetStencilRef_FF(STENCIL_CONTROL,CX_REG^.DB_STENCILREFMASK);
  end;
 
  Assert(DEPTH_CONTROL.ENABLE_COLOR_WRITES_ON_DEPTH_FAIL=0);
@@ -1088,16 +1079,16 @@ begin
 
  if (DEPTH_CONTROL.BACKFACE_ENABLE<>0) then
  begin
-  Result.back:=Result.front;
+  Result.ds_state.back:=Result.ds_state.front;
  end else
  begin
-  Result.back.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL_BF);
-  Result.back.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS_BF);
-  Result.back.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL_BF);
-  Result.back.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC_BF);   //1:1
-  Result.back.compareMask:=CX_REG^.DB_STENCILREFMASK_BF.STENCILMASK_BF;
-  Result.back.writeMask  :=CX_REG^.DB_STENCILREFMASK_BF.STENCILWRITEMASK_BF;
-  Result.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,TDB_STENCILREFMASK(CX_REG^.DB_STENCILREFMASK_BF));
+  Result.ds_state.back.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL_BF);
+  Result.ds_state.back.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS_BF);
+  Result.ds_state.back.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL_BF);
+  Result.ds_state.back.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC_BF);   //1:1
+  Result.ds_state.back.compareMask:=CX_REG^.DB_STENCILREFMASK_BF.STENCILMASK_BF;
+  Result.ds_state.back.writeMask  :=CX_REG^.DB_STENCILREFMASK_BF.STENCILWRITEMASK_BF;
+  Result.ds_state.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,TDB_STENCILREFMASK(CX_REG^.DB_STENCILREFMASK_BF));
  end;
 
  ////
@@ -1168,6 +1159,96 @@ begin
  Result.FImageInfo.params.arrayLayers:=1;
 end;
 
+function get_polygon_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkPolygonMode;
+var
+ f,b:Byte;
+begin
+ f:=0;
+ b:=0;
+
+ if (SU_SC_MODE_CNTL.CULL_FRONT<>0) then
+ begin
+  f:=SU_SC_MODE_CNTL.POLYMODE_FRONT_PTYPE;
+  if (f>2) then f:=2;
+ end;
+
+ if (SU_SC_MODE_CNTL.CULL_BACK<>0) then
+ begin
+  b:=SU_SC_MODE_CNTL.POLYMODE_BACK_PTYPE;
+  if (b>2) then b:=2;
+ end;
+
+ if (b>f) then f:=b;
+
+ Result:=TVkPolygonMode(f);
+end;
+
+function get_cull_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkCullModeFlags;
+begin
+ Result:=TVkCullModeFlags(SU_SC_MODE_CNTL.CULL_FRONT or (SU_SC_MODE_CNTL.CULL_BACK shl 1));
+end;
+
+Function TGPU_REGS.GET_RASTERIZATION:TVkPipelineRasterizationStateCreateInfo;
+var
+ SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL;
+begin
+ SU_SC_MODE_CNTL:=CX_REG^.PA_SU_SC_MODE_CNTL;
+
+ Result:=Default(TVkPipelineRasterizationStateCreateInfo);
+ Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+
+ //VkPhysicalDeviceDepthClampZeroOneFeaturesEXT::depthClampZeroOne
+ Result.depthClampEnable       :=CX_REG^.PA_CL_CLIP_CNTL.DX_CLIP_SPACE_DEF;
+ Result.rasterizerDiscardEnable:=CX_REG^.DB_SHADER_CONTROL.KILL_ENABLE;
+ Result.polygonMode            :=get_polygon_mode(SU_SC_MODE_CNTL);
+ Result.cullMode               :=get_cull_mode   (SU_SC_MODE_CNTL);
+ Result.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE);
+ Result.lineWidth              :=(CX_REG^.PA_SU_LINE_CNTL.WIDTH/8);
+
+ if (DWORD(CX_REG^.PA_SU_POLY_OFFSET_DB_FMT_CNTL)<>0) then
+ begin
+  Result.depthBiasEnable:=VK_TRUE;
+  Result.depthBiasClamp:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_CLAMP)^;
+
+  if (SU_SC_MODE_CNTL.CULL_FRONT<>0) then
+  begin
+   Result.depthBiasConstantFactor:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_FRONT_OFFSET)^;
+   Result.depthBiasSlopeFactor   :=(PSingle(@CX_REG^.PA_SU_POLY_OFFSET_FRONT_SCALE)^/16);
+  end else
+  begin
+   Result.depthBiasConstantFactor:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_BACK_OFFSET)^;
+   Result.depthBiasSlopeFactor   :=(PSingle(@CX_REG^.PA_SU_POLY_OFFSET_BACK_SCALE)^/16);
+  end;
+
+ end;
+
+end;
+
+Function TGPU_REGS.GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+begin
+ Result:=Default(TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT);
+ Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
+
+ Result.provokingVertexMode:=TVkProvokingVertexModeEXT(CX_REG^.PA_SU_SC_MODE_CNTL.PROVOKING_VTX_LAST);
+end;
+
+Function TGPU_REGS.GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
+begin
+ Result:=Default(TVkPipelineMultisampleStateCreateInfo);
+ Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+
+ if (CX_REG^.PA_SC_MODE_CNTL_1.PS_ITER_SAMPLE<>0) then
+ begin
+  Result.sampleShadingEnable  :=VK_TRUE;
+  Result.rasterizationSamples :=TVkSampleCountFlagBits(1 shl CX_REG^.PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES);
+  Result.minSampleShading     :=0.5;
+  Result.pSampleMask          :=nil;
+  Result.alphaToCoverageEnable:=CX_REG^.DB_ALPHA_TO_MASK.ALPHA_TO_MASK_ENABLE;
+  Result.alphaToOneEnable     :=VK_FALSE;
+ end;
+
+end;
+
 function TGPU_REGS.get_reg(i:word):DWORD;
 begin
  case i of
@@ -1178,39 +1259,32 @@ begin
  end;
 end;
 
-Function TGPU_REGS.get_cs_addr:Pointer;
+Function TGPU_REGS.get_code_addr(FStage:TvShaderStage):Pointer;
 begin
- Result:=getCodeAddress(SH_REG^.COMPUTE_PGM_LO,SH_REG^.COMPUTE_PGM_HI.DATA);
+ Result:=nil;
+ case FStage of
+  vShaderStageLs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_LS,SH_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
+  vShaderStageHs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_HS,SH_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
+  vShaderStageEs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_ES,SH_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
+  vShaderStageGs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_GS,SH_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
+  vShaderStageVs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_VS,SH_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
+  vShaderStagePs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_PS,SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
+  vShaderStageCs:Result:=getCodeAddress(SH_REG^.COMPUTE_PGM_LO      ,SH_REG^.COMPUTE_PGM_HI.DATA);
+ end;
 end;
 
-Function TGPU_REGS.get_ps_addr:Pointer;
+Function TGPU_REGS.get_user_data(FStage:TvShaderStage):Pointer;
 begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_PS,SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
-end;
-
-Function TGPU_REGS.get_vs_addr:Pointer;
-begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_VS,SH_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
-end;
-
-Function TGPU_REGS.get_gs_addr:Pointer;
-begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_GS,SH_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
-end;
-
-Function TGPU_REGS.get_es_addr:Pointer;
-begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_ES,SH_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
-end;
-
-Function TGPU_REGS.get_hs_addr:Pointer;
-begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_HS,SH_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
-end;
-
-Function TGPU_REGS.get_ls_addr:Pointer;
-begin
- Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_LS,SH_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
+ Result:=nil;
+ case FStage of
+  vShaderStageLs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_LS;
+  vShaderStageHs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_HS;
+  vShaderStageEs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_ES;
+  vShaderStageGs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_GS;
+  vShaderStageVs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_VS;
+  vShaderStagePs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_PS;
+  vShaderStageCs:Result:=@SH_REG^.COMPUTE_USER_DATA;
+ end;
 end;
 
 ///
@@ -1565,7 +1639,7 @@ begin
  end;
 
  //Assert(Result.params.mipLevels=1,'TODO');
- Result.params.mipLevels:=1; /////
+ //Result.params.mipLevels:=1; /////
 
  Result.params.arrayLayers:=1;
 end;
@@ -1667,8 +1741,8 @@ begin
   Result.last_level:=PT^.last_level;
  end;
 
- Result.base_level:=0; /////
- Result.last_level:=0; /////
+ //Result.base_level:=0; /////
+ //Result.last_level:=0; /////
 end;
 
 function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;

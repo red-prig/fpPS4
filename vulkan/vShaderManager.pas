@@ -19,6 +19,7 @@ uses
 
   vDevice,
 
+  vShader,
   vShaderExt,
 
   SprvEmit,
@@ -228,7 +229,7 @@ begin
                    GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_PS,
                    GPU_REGS.CX_REG^.SPI_PS_INPUT_ENA);
 
-   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_PS);
+   SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
   end;
   vShaderStageVs:
   begin
@@ -236,7 +237,7 @@ begin
                    GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_VS,
                    GPU_REGS.CX_REG^.VGT_DMA_NUM_INSTANCES);
 
-   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_VS);
+   SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
   end;
   vShaderStageCs:
   begin
@@ -246,7 +247,7 @@ begin
                    GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Y,
                    GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Z);
 
-   SprvEmit.SetUserData(@GPU_REGS.SH_REG^.COMPUTE_USER_DATA);
+   SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
   end;
 
   else
@@ -316,14 +317,7 @@ begin
  if (t<>nil) then
  begin
 
-  Case FStage of
-   vShaderStageVs:pUserData:=@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_VS;
-   vShaderStagePs:pUserData:=@GPU_REGS.SH_REG^.SPI_SHADER_USER_DATA_PS;
-   vShaderStageCs:pUserData:=@GPU_REGS.SH_REG^.COMPUTE_USER_DATA;
-   else
-     Assert(false);
-  end;
-
+  pUserData:=GPU_REGS.get_user_data(FStage);
 
   FShader:=nil;
   if Length(t.FShaders)<>0 then
@@ -454,13 +448,7 @@ var
  pData1:PDWORD;
 begin
 
- Case FStage of
-  vShaderStageVs:pData0:=GPU_REGS.get_vs_addr;
-  vShaderStagePs:pData0:=GPU_REGS.get_ps_addr;
-  vShaderStageCs:pData0:=GPU_REGS.get_cs_addr;
-  else
-    Assert(false);
- end;
+ pData0:=GPU_REGS.get_code_addr(FStage);
 
  if (pData0=nil) then Exit(nil);
  //Assert(pData<>nil);

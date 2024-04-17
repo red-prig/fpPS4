@@ -31,7 +31,7 @@ type
  );
 
  TvDataLayout=packed record
-  rtype:TvResourceType;
+  rtype :TvResourceType;
   parent:DWORD;
   offset:DWORD;
  end;
@@ -41,11 +41,11 @@ type
  TvFuncCb=procedure(addr:ADataLayout) of object;
 
  TvCustomLayout=packed record
-  dtype:DWORD;
-  bind:DWORD;
-  size:DWORD;
+  dtype :DWORD;
+  bind  :DWORD;
+  size  :DWORD;
   offset:DWORD;
-  addr:ADataLayout;
+  addr  :ADataLayout;
  end;
 
  ACustomLayout=array of TvCustomLayout;
@@ -84,16 +84,6 @@ type
   Procedure  EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
  end;
 
- TvShaderStage=(
-  vShaderStageLs,
-  vShaderStageHs,
-  vShaderStageEs,
-  vShaderStageGs,
-  vShaderStageVs,
-  vShaderStagePs,
-  vShaderStageCs
- );
-
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
 
  PvShadersKey=^TvShadersKey;
@@ -111,7 +101,7 @@ type
  end;
 
  TvShaderGroup=class
-  FKey:TvShadersKey;
+  FKey   :TvShadersKey;
   FLayout:TvPipelineLayout;
   Procedure Clear;
   Function  Compile:Boolean;
@@ -119,16 +109,16 @@ type
 
  TAttrBindExt=packed object
   min_addr:Pointer;
-  binding:TVkUInt32;
-  stride:TVkUInt32;
-  count:TVkUInt32;
+  binding :TVkUInt32;
+  stride  :TVkUInt32;
+  count   :TVkUInt32;
   Function GetSize:TVkUInt32;
  end;
 
  TvAttrBuilder=object
   FBindDescs:array of TVkVertexInputBindingDescription;
   FAttrDescs:array of TVkVertexInputAttributeDescription;
-  FBindExt:array of TAttrBindExt;
+  FBindExt  :array of TAttrBindExt;
   function  NewBindDesc(binding,stride:TVkUInt32):TVkUInt32;
   procedure NewAttrDesc(location,binding,offset:TVkUInt32;format:TVkFormat);
   procedure PatchAttr(binding,offset:TVkUInt32);
@@ -137,12 +127,12 @@ type
  end;
 
  TBufBindExt=packed record
-  fset:TVkUInt32;
-  bind:TVkUInt32;
+  fset  :TVkUInt32;
+  bind  :TVkUInt32;
   offset:TVkUInt32;
 
-  addr:Pointer;
-  size:TVkUInt32;
+  addr  :Pointer;
+  size  :TVkUInt32;
  end;
 
  TImageBindExt=packed record
@@ -150,7 +140,7 @@ type
   bind:TVkUInt32;
 
   FImage:TvImageKey;
-  FView:TvImageViewKey;
+  FView :TvImageViewKey;
  end;
 
  TSamplerBindExt=packed record

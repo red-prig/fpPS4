@@ -235,6 +235,7 @@ var
   VK_EXT_external_memory_host    :Boolean;
 
   VK_KHR_imageless_framebuffer   :Boolean;
+  VK_EXT_provoking_vertex        :Boolean;
 
   VK_KHR_shader_float16_int8     :Boolean;
   VK_KHR_16bit_storage           :Boolean;
@@ -409,6 +410,7 @@ begin
     VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME    :limits.VK_EXT_external_memory_host    :=True;
 
     VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME   :limits.VK_KHR_imageless_framebuffer   :=True;
+    VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME        :limits.VK_EXT_provoking_vertex        :=True;
 
     VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME     :limits.VK_KHR_shader_float16_int8     :=True;
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME           :limits.VK_KHR_16bit_storage           :=True;
@@ -1580,6 +1582,8 @@ var
 
  FILFB:TVkPhysicalDeviceImagelessFramebufferFeatures;
 
+ FDPVP:TVkPhysicalDeviceProvokingVertexPropertiesEXT;
+
  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8:TVkPhysicalDevice8BitStorageFeatures;
  FSF16:TVkPhysicalDevice16BitStorageFeatures;
@@ -1653,6 +1657,18 @@ begin
   FILFB.imagelessFramebuffer:=VK_TRUE;
 
   DeviceInfo.add_feature(@FILFB);
+ end;
+
+ if limits.VK_EXT_provoking_vertex then
+ begin
+  DeviceInfo.add_ext(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
+
+  FDPVP:=Default(TVkPhysicalDeviceProvokingVertexPropertiesEXT);
+  FDPVP.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_PROPERTIES_EXT;
+
+  FDPVP.provokingVertexModePerPipeline:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FDPVP);
  end;
 
  //if limits.VK_KHR_push_descriptor then

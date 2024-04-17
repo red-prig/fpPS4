@@ -14,6 +14,7 @@ uses
  vImage,
  vImageManager,
  vRenderPassManager,
+ vShader,
  vShaderExt,
  vShaderManager,
  vRegs2Vulkan,
@@ -91,13 +92,22 @@ end;
 
 procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
 var
+ i:Integer;
+
  GPU_REGS:TGPU_REGS;
+
+ RT_COUNT:Byte;
+ RT_INFO:array[0..7] of TRT_INFO;
+ DB_INFO:TDB_INFO;
 
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
 
  FShadersKey:TvShadersKey;
  FShaderGroup:TvShaderGroup;
+
+ RP_KEY:TvRenderPassKey;
+ RP:TvRenderPass2;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=@node^.SH_REG;
@@ -108,6 +118,50 @@ begin
 
  FPSShader:=FetchShader(vShaderStagePs,0,GPU_REGS,nil{@pa});
  FVSShader:=FetchShader(vShaderStageVs,1,GPU_REGS,nil{@pa});
+
+ FShadersKey:=Default(TvShadersKey);
+ FShadersKey.SetVSShader(FVSShader);
+ FShadersKey.SetPSShader(FPSShader);
+
+ FShaderGroup:=FetchShaderGroup(@FShadersKey);
+ Assert(FShaderGroup<>nil);
+
+ RP_KEY.Clear;
+
+ RT_COUNT:=0;
+
+ if GPU_REGS.COMP_ENABLE then
+ For i:=0 to 7 do
+ if GPU_REGS.RT_ENABLE(i) then
+  begin
+   RT_INFO[RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
+
+   RP_KEY.AddColorRef(RT_COUNT,RT_INFO[RT_COUNT].IMAGE_USAGE);
+
+   RP_KEY.AddColorAt(RT_INFO[RT_COUNT].FImageInfo.cformat,
+                     RT_INFO[RT_COUNT].IMAGE_USAGE,
+                     RT_INFO[RT_COUNT].FImageInfo.params.samples);
+
+   Inc(RT_COUNT);
+  end;
+
+ if GPU_REGS.DB_ENABLE then
+ begin
+  DB_INFO:=GPU_REGS.GET_DB_INFO;
+
+  RP_KEY.SetDepthRef(RT_COUNT,
+                     DB_INFO.DEPTH_USAGE,
+                     DB_INFO.STENCIL_USAGE);
+
+  RP_KEY.AddDepthAt(DB_INFO.FImageInfo.cformat,
+                    DB_INFO.DEPTH_USAGE,
+                    DB_INFO.STENCIL_USAGE);
+
+  RP_KEY.SetZorderStage(DB_INFO.zorder_stage);
+
+ end;
+
+ RP:=FetchRenderPass(nil,@RP_KEY);
 
 
 end;
