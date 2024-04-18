@@ -12,6 +12,7 @@ uses
  vImage,
  vShader,
  ps4_shader,
+ pm4defs,
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
@@ -72,13 +73,20 @@ type
 
  end;
 
- PSH_REG_GROUP     =^TSH_REG_GROUP;
- PCONTEXT_REG_GROUP=^TCONTEXT_REG_GROUP;
+ TBLEND_INFO=packed record
+  logicOp       :TVkLogicOp;
+  blendConstants:array[0..3] of TVkFloat;
+ end;
+
+ PSH_REG_GROUP        =^TSH_REG_GROUP;
+ PCONTEXT_REG_GROUP   =^TCONTEXT_REG_GROUP;
+ PUSERCONFIG_REG_SHORT=^TUSERCONFIG_REG_SHORT;
 
  PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
-  SH_REG:PSH_REG_GROUP;
-  CX_REG:PCONTEXT_REG_GROUP; // 0xA000
+  SH_REG:PSH_REG_GROUP;         // 0x2C00
+  CX_REG:PCONTEXT_REG_GROUP;    // 0xA000
+  UC_REG:PUSERCONFIG_REG_SHORT; // 0xC000
 
   Function  _SHADER_MASK(i:Byte):Byte; inline;  //0..7
   Function  _TARGET_MASK(i:Byte):Byte; inline;  //0..7
@@ -91,6 +99,7 @@ type
   Function  GET_SCREEN:TVkRect2D;
   Function  GET_SCREEN_SIZE:TVkExtent2D;
   Function  GET_RT_BLEND(i:Byte):TVkPipelineColorBlendAttachmentState; //0..7
+  Function  GET_BLEND_INFO:TBLEND_INFO;
   Function  GET_RT_INFO(i:Byte):TRT_INFO; //0..7
   Function  DB_ENABLE:Boolean;
   Function  GET_DB_INFO:TDB_INFO;
@@ -99,15 +108,17 @@ type
   Function  GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
   Function  GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
 
+  function  GET_PRIM_RESET:TVkBool32;
+  function  GET_PRIM_TYPE :TVkPrimitiveTopology;
+  function  GET_INDEX_TYPE:TVkIndexType;
+
   function  get_reg(i:word):DWORD;
 
   Function  get_code_addr(FStage:TvShaderStage):Pointer;
   Function  get_user_data(FStage:TvShaderStage):Pointer;
  end;
 
-function GET_PRIM_TYPE      (const VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE):TVkPrimitiveTopology;
-function GET_INDEX_TYPE     (const VGT_INDEX_TYPE:TVGT_INDEX_TYPE):TVkIndexType;
-function GET_INDEX_TYPE_SIZE(const VGT_INDEX_TYPE:TVGT_INDEX_TYPE):Byte;
+function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
 
 //
 
@@ -469,54 +480,45 @@ begin
    Result.alphaBlendOp       :=GetBlendOp    (BLEND_CONTROL.ALPHA_COMB_FCN);
   end;
 
-
-  Assert(BLEND_CONTROL.DISABLE_ROP3=0);
  end;
 
- //Result.blendEnable:=VK_TRUE;
- //Result.SRCCOLORBLENDFACTOR:=VK_BLEND_FACTOR_SRC_ALPHA;
- //Result.DSTCOLORBLENDFACTOR:=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
- //Result.COLORBLENDOP       :=VK_BLEND_OP_ADD;
- //Result.SRCALPHABLENDFACTOR:=VK_BLEND_FACTOR_SRC_ALPHA;
- //Result.DSTALPHABLENDFACTOR:=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
- //Result.ALPHABLENDOP       :=VK_BLEND_OP_ADD;
- //Result.COLORWRITEMASK     :=15;
+end;
 
- //CB_COLOR_CONTROL.MODE   //CB_DISABLE
- //Assert(CB_COLOR_CONTROL.ROP3 = 204); //CB_DISABLE
+function get_logic_op(ROP3:Byte):TVkLogicOp;
+begin
+ Result:=VK_LOGIC_OP_COPY;
+ case ROP3 of
+  $00:Result:=VK_LOGIC_OP_CLEAR;
+  $88:Result:=VK_LOGIC_OP_AND;
+  $44:Result:=VK_LOGIC_OP_AND_REVERSE;
+  $CC:Result:=VK_LOGIC_OP_COPY;
+  $22:Result:=VK_LOGIC_OP_AND_INVERTED;
+  $AA:Result:=VK_LOGIC_OP_NO_OP;
+  $66:Result:=VK_LOGIC_OP_XOR;
+  $EE:Result:=VK_LOGIC_OP_OR;
+  $11:Result:=VK_LOGIC_OP_NOR;
+  $99:Result:=VK_LOGIC_OP_EQUIVALENT;
+  $55:Result:=VK_LOGIC_OP_INVERT;
+  $DD:Result:=VK_LOGIC_OP_OR_REVERSE;
+  $33:Result:=VK_LOGIC_OP_COPY_INVERTED;
+  $BB:Result:=VK_LOGIC_OP_OR_INVERTED;
+  $77:Result:=VK_LOGIC_OP_NAND;
+  $FF:Result:=VK_LOGIC_OP_SET;
+  else
+      begin
+       Writeln(stderr,'unknow logic op:0x',HexStr(ROP3,2));
+      end;
+ end;
+end;
 
-{
- POSSIBLE VALUES:
-00 - 0x00: BLACKNESS
-05 - 0x05
-10 - 0x0A
-15 - 0x0F
-17 - 0x11: NOTSRCERASE
-34 - 0x22
-51 - 0x33: NOTSRCCOPY
-68 - 0x44: SRCERASE
-80 - 0x50
-85 - 0x55: DSTINVERT
-90 - 0x5A: PATINVERT
-95 - 0x5F
-102 - 0x66: SRCINVERT
-119 - 0x77
-136 - 0x88: SRCAND
-153 - 0x99
-160 - 0xA0
-165 - 0xA5
-170 - 0xAA
-175 - 0xAF
-187 - 0xBB: MERGEPAINT
-204 - 0xCC: SRCCOPY
-221 - 0xDD
-238 - 0xEE: SRCPAINT
-240 - 0xF0: PATCOPY
-245 - 0xF5
-250 - 0xFA
-255 - 0xFF: WHITENESS
-}
+Function TGPU_REGS.GET_BLEND_INFO:TBLEND_INFO;
+begin
+ Result.logicOp:=get_logic_op(CX_REG^.CB_COLOR_CONTROL.ROP3);
 
+ Result.blendConstants[0]:=CX_REG^.CB_BLEND_RGBA[0];
+ Result.blendConstants[1]:=CX_REG^.CB_BLEND_RGBA[1];
+ Result.blendConstants[2]:=CX_REG^.CB_BLEND_RGBA[2];
+ Result.blendConstants[3]:=CX_REG^.CB_BLEND_RGBA[3];
 end;
 
 const
@@ -1161,26 +1163,32 @@ end;
 
 function get_polygon_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkPolygonMode;
 var
- f,b:Byte;
+ t:Byte;
 begin
- f:=0;
- b:=0;
-
- if (SU_SC_MODE_CNTL.CULL_FRONT<>0) then
+ if (SU_SC_MODE_CNTL.POLY_MODE=0) then
  begin
-  f:=SU_SC_MODE_CNTL.POLYMODE_FRONT_PTYPE;
-  if (f>2) then f:=2;
+  Exit(VK_POLYGON_MODE_FILL);
  end;
 
- if (SU_SC_MODE_CNTL.CULL_BACK<>0) then
+ if (SU_SC_MODE_CNTL.CULL_FRONT=0) then
  begin
-  b:=SU_SC_MODE_CNTL.POLYMODE_BACK_PTYPE;
-  if (b>2) then b:=2;
+  t:=SU_SC_MODE_CNTL.POLYMODE_FRONT_PTYPE;
+ end else
+ if (SU_SC_MODE_CNTL.CULL_BACK=0) then
+ begin
+  t:=SU_SC_MODE_CNTL.POLYMODE_BACK_PTYPE;
+ end else
+ begin
+  t:=2;
  end;
 
- if (b>f) then f:=b;
-
- Result:=TVkPolygonMode(f);
+ case t of
+  0:Result:=VK_POLYGON_MODE_POINT;
+  1:Result:=VK_POLYGON_MODE_LINE;
+  2:Result:=VK_POLYGON_MODE_FILL;
+  else
+    Result:=VK_POLYGON_MODE_FILL;
+ end;
 end;
 
 function get_cull_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkCullModeFlags;
@@ -1207,15 +1215,17 @@ begin
 
  if (DWORD(CX_REG^.PA_SU_POLY_OFFSET_DB_FMT_CNTL)<>0) then
  begin
-  Result.depthBiasEnable:=VK_TRUE;
   Result.depthBiasClamp:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_CLAMP)^;
 
-  if (SU_SC_MODE_CNTL.CULL_FRONT<>0) then
+  if (SU_SC_MODE_CNTL.CULL_FRONT=0) then
   begin
+   Result.depthBiasEnable        :=SU_SC_MODE_CNTL.POLY_OFFSET_FRONT_ENABLE;
    Result.depthBiasConstantFactor:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_FRONT_OFFSET)^;
    Result.depthBiasSlopeFactor   :=(PSingle(@CX_REG^.PA_SU_POLY_OFFSET_FRONT_SCALE)^/16);
   end else
+  if (SU_SC_MODE_CNTL.CULL_BACK=0) then
   begin
+   Result.depthBiasEnable        :=SU_SC_MODE_CNTL.POLY_OFFSET_BACK_ENABLE;
    Result.depthBiasConstantFactor:=PSingle(@CX_REG^.PA_SU_POLY_OFFSET_BACK_OFFSET)^;
    Result.depthBiasSlopeFactor   :=(PSingle(@CX_REG^.PA_SU_POLY_OFFSET_BACK_SCALE)^/16);
   end;
@@ -1245,8 +1255,92 @@ begin
   Result.pSampleMask          :=nil;
   Result.alphaToCoverageEnable:=CX_REG^.DB_ALPHA_TO_MASK.ALPHA_TO_MASK_ENABLE;
   Result.alphaToOneEnable     :=VK_FALSE;
+ end else
+ begin
+  Result.rasterizationSamples:=VK_SAMPLE_COUNT_1_BIT;
  end;
 
+end;
+
+function TGPU_REGS.GET_PRIM_RESET:TVkBool32;
+begin
+ Result:=CX_REG^.VGT_MULTI_PRIM_IB_RESET_EN.RESET_EN;
+
+ if (Result<>0) then
+ begin
+  Case UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE of
+   VGT_INDEX_16:Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$0000FFFF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
+   VGT_INDEX_32:Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$FFFFFFFF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
+   VGT_INDEX_8 :Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$000000FF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
+   else;
+  end;
+
+ end;
+end;
+
+function TGPU_REGS.GET_PRIM_TYPE:TVkPrimitiveTopology;
+begin
+ case UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE of
+  DI_PT_POINTLIST    :Result:=VK_PRIMITIVE_TOPOLOGY_POINT_LIST                   ;
+  DI_PT_LINELIST     :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST                    ;
+  DI_PT_LINESTRIP    :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP                   ;
+  DI_PT_TRILIST      :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST                ;
+  DI_PT_TRIFAN       :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN                 ;
+  DI_PT_TRISTRIP     :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP               ;
+  DI_PT_PATCH        :Result:=VK_PRIMITIVE_TOPOLOGY_PATCH_LIST                   ;
+  DI_PT_LINELIST_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY     ;
+  DI_PT_LINESTRIP_ADJ:Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY    ;
+  DI_PT_TRILIST_ADJ  :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY ;
+  DI_PT_TRISTRIP_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+
+  DI_PT_RECTLIST     ,
+  DI_PT_LINELOOP     ,
+  DI_PT_QUADLIST     ,
+  DI_PT_QUADSTRIP    ,
+  DI_PT_POLYGON      :Result:=TVkPrimitiveTopology(UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE); //need to emulate
+
+  else
+   Assert(False,'unknow prim type:0x'+HexStr(UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE,1));
+ end;
+end;
+
+// VGT_DI_PRIM_TYPE
+//DI_PT_NONE          | kPrimitiveTypeNone               |
+//DI_PT_POINTLIST     | kPrimitiveTypePointList          | VK_PRIMITIVE_TOPOLOGY_POINT_LIST
+//DI_PT_LINELIST      | kPrimitiveTypeLineList           | VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+//DI_PT_LINESTRIP     | kPrimitiveTypeLineStrip          | VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+//DI_PT_TRILIST       | kPrimitiveTypeTriList            | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+//DI_PT_TRIFAN        | kPrimitiveTypeTriFan             | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN
+//DI_PT_TRISTRIP      | kPrimitiveTypeTriStrip           | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+//DI_PT_PATCH         | kPrimitiveTypePatch              | VK_PRIMITIVE_TOPOLOGY_PATCH_LIST
+//DI_PT_LINELIST_ADJ  | kPrimitiveTypeLineListAdjacency  | VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY
+//DI_PT_LINESTRIP_ADJ | kPrimitiveTypeLineStripAdjacency | VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY
+//DI_PT_TRILIST_ADJ   | kPrimitiveTypeTriListAdjacency   | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY
+//DI_PT_TRISTRIP_ADJ  | kPrimitiveTypeTriStripAdjacency  | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY
+//DI_PT_RECTLIST      | kPrimitiveTypeRectList           |
+//DI_PT_LINELOOP      | kPrimitiveTypeLineLoop           |
+//DI_PT_QUADLIST      | kPrimitiveTypeQuadList           |
+//DI_PT_QUADSTRIP     | kPrimitiveTypeQuadStrip          |
+//DI_PT_POLYGON       | kPrimitiveTypePolygon            |
+
+function TGPU_REGS.GET_INDEX_TYPE:TVkIndexType;
+begin
+ Case UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE of
+  VGT_INDEX_16:Result:=VK_INDEX_TYPE_UINT16;
+  VGT_INDEX_32:Result:=VK_INDEX_TYPE_UINT32;
+  VGT_INDEX_8 :Result:=VK_INDEX_TYPE_UINT8_EXT;
+  else         Result:=VK_INDEX_TYPE_NONE_KHR;
+ end;
+end;
+
+function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
+begin
+ Case i of
+  VK_INDEX_TYPE_UINT16   :Result:=16;
+  VK_INDEX_TYPE_UINT32   :Result:=32;
+  VK_INDEX_TYPE_UINT8_EXT:Result:=8;
+  else                    Result:=0;
+ end;
 end;
 
 function TGPU_REGS.get_reg(i:word):DWORD;
@@ -1254,6 +1348,18 @@ begin
  case i of
   $2C00..$2E7F:Result:=PDWORD(SH_REG)[i-$2C00];
   $A000..$A38F:Result:=PDWORD(CX_REG)[i-$A000];
+  $C079:Result:=PDWORD(@UC_REG^.CP_COHER_BASE_HI  )^;
+  $C07C:Result:=PDWORD(@UC_REG^.CP_COHER_CNTL     )^;
+  $C07D:Result:=PDWORD(@UC_REG^.CP_COHER_SIZE     )^;
+  $C07E:Result:=PDWORD(@UC_REG^.CP_COHER_BASE     )^;
+  $C08C:Result:=PDWORD(@UC_REG^.CP_COHER_SIZE_HI  )^;
+  $C200:Result:=PDWORD(@UC_REG^.GRBM_GFX_INDEX    )^;
+  $C240:Result:=PDWORD(@UC_REG^.VGT_ESGS_RING_SIZE)^;
+  $C241:Result:=PDWORD(@UC_REG^.VGT_GSVS_RING_SIZE)^;
+  $C242:Result:=PDWORD(@UC_REG^.VGT_PRIMITIVE_TYPE)^;
+  $C243:Result:=PDWORD(@UC_REG^.VGT_INDEX_TYPE    )^;
+  $C24C:Result:=PDWORD(@UC_REG^.VGT_NUM_INDICES   )^;
+  $C24D:Result:=PDWORD(@UC_REG^.VGT_NUM_INSTANCES )^;
   else
         Result:=0;
  end;
@@ -1288,73 +1394,6 @@ begin
 end;
 
 ///
-
-function GET_PRIM_TYPE(const VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE):TVkPrimitiveTopology;
-begin
- case VGT_PRIMITIVE_TYPE.PRIM_TYPE of
-  DI_PT_POINTLIST    :Result:=VK_PRIMITIVE_TOPOLOGY_POINT_LIST                   ;
-  DI_PT_LINELIST     :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST                    ;
-  DI_PT_LINESTRIP    :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP                   ;
-  DI_PT_TRILIST      :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST                ;
-  DI_PT_TRIFAN       :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN                 ;
-  DI_PT_TRISTRIP     :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP               ;
-  DI_PT_PATCH        :Result:=VK_PRIMITIVE_TOPOLOGY_PATCH_LIST                   ;
-  DI_PT_LINELIST_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY     ;
-  DI_PT_LINESTRIP_ADJ:Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY    ;
-  DI_PT_TRILIST_ADJ  :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY ;
-  DI_PT_TRISTRIP_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-
-  DI_PT_RECTLIST     ,
-  DI_PT_LINELOOP     ,
-  DI_PT_QUADLIST     ,
-  DI_PT_QUADSTRIP    ,
-  DI_PT_POLYGON      :Result:=TVkPrimitiveTopology(VGT_PRIMITIVE_TYPE.PRIM_TYPE); //need to emulate
-
-  else
-   Assert(False);
- end;
-end;
-
-// VGT_DI_PRIM_TYPE
-//DI_PT_NONE          | kPrimitiveTypeNone               |
-//DI_PT_POINTLIST     | kPrimitiveTypePointList          | VK_PRIMITIVE_TOPOLOGY_POINT_LIST
-//DI_PT_LINELIST      | kPrimitiveTypeLineList           | VK_PRIMITIVE_TOPOLOGY_LINE_LIST
-//DI_PT_LINESTRIP     | kPrimitiveTypeLineStrip          | VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
-//DI_PT_TRILIST       | kPrimitiveTypeTriList            | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-//DI_PT_TRIFAN        | kPrimitiveTypeTriFan             | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN
-//DI_PT_TRISTRIP      | kPrimitiveTypeTriStrip           | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
-//DI_PT_PATCH         | kPrimitiveTypePatch              | VK_PRIMITIVE_TOPOLOGY_PATCH_LIST
-//DI_PT_LINELIST_ADJ  | kPrimitiveTypeLineListAdjacency  | VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY
-//DI_PT_LINESTRIP_ADJ | kPrimitiveTypeLineStripAdjacency | VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY
-//DI_PT_TRILIST_ADJ   | kPrimitiveTypeTriListAdjacency   | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY
-//DI_PT_TRISTRIP_ADJ  | kPrimitiveTypeTriStripAdjacency  | VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY
-//DI_PT_RECTLIST      | kPrimitiveTypeRectList           |
-//DI_PT_LINELOOP      | kPrimitiveTypeLineLoop           |
-//DI_PT_QUADLIST      | kPrimitiveTypeQuadList           |
-//DI_PT_QUADSTRIP     | kPrimitiveTypeQuadStrip          |
-//DI_PT_POLYGON       | kPrimitiveTypePolygon            |
-
-function GET_INDEX_TYPE(const VGT_INDEX_TYPE:TVGT_INDEX_TYPE):TVkIndexType;
-begin
- Case VGT_INDEX_TYPE.INDEX_TYPE of
-  VGT_INDEX_16:Result:=VK_INDEX_TYPE_UINT16;
-  VGT_INDEX_32:Result:=VK_INDEX_TYPE_UINT32;
-  VGT_INDEX_8 :Result:=VK_INDEX_TYPE_UINT8_EXT;
-  else         Result:=VK_INDEX_TYPE_NONE_KHR;
- end;
-end;
-
-function GET_INDEX_TYPE_SIZE(const VGT_INDEX_TYPE:TVGT_INDEX_TYPE):Byte;
-begin
- Case VGT_INDEX_TYPE.INDEX_TYPE of
-  VGT_INDEX_16:Result:=16;
-  VGT_INDEX_32:Result:=32;
-  VGT_INDEX_8 :Result:=8;
-  else         Result:=0;
- end;
-end;
-
-//
 
 function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
 begin

@@ -64,6 +64,23 @@ type
 var
  FRenderPass2Set:TvRenderPass2Set;
 
+function TvRenderPassKey2Compare.c(a,b:PvRenderPassKey):Integer;
+begin
+ Result:=CompareByte(a^,b^,SizeOf(TvRenderPassKey));
+end;
+
+Procedure TvRenderPass2Set.Lock_wr;
+begin
+ rw_wlock(lock);
+end;
+
+Procedure TvRenderPass2Set.Unlock_wr;
+begin
+ rw_wunlock(lock);
+end;
+
+//
+
 Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 begin
  if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
@@ -298,16 +315,6 @@ begin
  Result:=True;
 end;
 
-Procedure TvRenderPass2Set.Lock_wr;
-begin
- rw_wlock(lock);
-end;
-
-Procedure TvRenderPass2Set.Unlock_wr;
-begin
- rw_wunlock(lock);
-end;
-
 Procedure TvRenderPass2.Acquire;
 begin
  System.InterlockedIncrement(Pointer(FRefs));
@@ -319,11 +326,6 @@ begin
  begin
   Free;
  end;
-end;
-
-function TvRenderPassKey2Compare.c(a,b:PvRenderPassKey):Integer;
-begin
- Result:=CompareByte(a^,b^,SizeOf(TvRenderPassKey));
 end;
 
 function _Find(P:PvRenderPassKey):TvRenderPass2;

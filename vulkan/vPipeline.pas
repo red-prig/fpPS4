@@ -60,9 +60,15 @@ type
   function    IsEdit:Boolean;
  end;
 
+ TvPipelineCache=class
+  FHandle:TVkPipelineCache;
+  Constructor Create(data:Pointer;size:TVkSize);
+  Destructor  Destroy; override;
+ end;
+
  TvPipeline=class
   FHandle:TVkPipeline;
-  FEdit,FCompile:ptruint;
+  FPCache:TvPipelineCache;
   Destructor  Destroy; override;
  end;
 
@@ -72,6 +78,7 @@ type
  end;
 
  TvComputePipeline=class(TvPipeline)
+  FEdit,FCompile:ptruint;
   FLayout:TvPipelineLayout;
   FComputeShader:TvShader;
   procedure   SetLayout(Layout:TvPipelineLayout);
@@ -247,7 +254,9 @@ end;
 Destructor TvSetLayout.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyDescriptorSetLayout(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 function TvSetLayout.IsEdit:Boolean;
@@ -281,7 +290,9 @@ end;
 Destructor TvPipelineLayout.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyPipelineLayout(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 Procedure TvPipelineLayout.AddLayout(F:TvSetLayout);
@@ -391,16 +402,46 @@ begin
     if key.FLayouts[i].IsEdit then Exit(true);
 end;
 
+Constructor TvPipelineCache.Create(data:Pointer;size:TVkSize);
+var
+ info:TVkPipelineCacheCreateInfo;
+ r:TVkResult;
+begin
+ info:=Default(TVkPipelineCacheCreateInfo);
+ info.sType:=VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+ info.initialDataSize:=size;
+ info.pInitialData   :=data;
+
+ r:=vkCreatePipelineCache(Device.FHandle,@info,nil,@FHandle);
+
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreatePipelineCache:',r);
+ end;
+end;
+
+Destructor TvPipelineCache.Destroy;
+begin
+ if (FHandle<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyPipelineCache(Device.FHandle,FHandle,nil);
+ end;
+end;
+
 Destructor TvPipeline.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyPipeline(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 Destructor TvRenderPass.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyRenderPass(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 procedure TvComputePipeline.SetLayout(Layout:TvPipelineLayout);
@@ -432,7 +473,9 @@ end;
 
 function TvComputePipeline.Compile:Boolean;
 var
- cinfo:TVkComputePipelineCreateInfo;
+ FCache:TVkPipelineCache;
+
+ info:TVkComputePipelineCreateInfo;
  r:TVkResult;
 begin
  Result:=False;
@@ -444,14 +487,22 @@ begin
   FHandle:=VK_NULL_HANDLE;
  end;
  if not FLayout.Compile then Exit;
- cinfo:=Default(TVkComputePipelineCreateInfo);
- cinfo.sType:=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
- cinfo.stage.sType:=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
- cinfo.stage.stage:=VK_SHADER_STAGE_COMPUTE_BIT;
- cinfo.stage.module:=FComputeShader.FHandle;
- cinfo.stage.pName:=PChar(FComputeShader.FEntry);
- cinfo.layout:=FLayout.FHandle;
- r:=vkCreateComputePipelines(Device.FHandle,VK_NULL_HANDLE,1,@cinfo,nil,@FHandle);
+
+ info:=Default(TVkComputePipelineCreateInfo);
+ info.sType:=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+ info.stage.sType:=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+ info.stage.stage:=VK_SHADER_STAGE_COMPUTE_BIT;
+ info.stage.module:=FComputeShader.FHandle;
+ info.stage.pName:=PChar(FComputeShader.FEntry);
+ info.layout:=FLayout.FHandle;
+
+ FCache:=VK_NULL_HANDLE;
+ if (FPCache<>nil) then
+ begin
+  FCache:=FPCache.FHandle;
+ end;
+
+ r:=vkCreateComputePipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkCreateComputePipelines:',r);
@@ -478,7 +529,9 @@ begin
   It.Item^.FHandle:=VK_NULL_HANDLE;
  until not It.Next;
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyDescriptorPool(Device.FHandle,FHandle,nil);
+ end;
  FSets.Free;
  FLayouts.Free;
 end;
@@ -903,7 +956,9 @@ end;
 Destructor TvSetsPool2.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroyDescriptorPool(Device.FHandle,FHandle,nil);
+ end;
 end;
 
 function TvSetsPool2.Compile:Boolean;

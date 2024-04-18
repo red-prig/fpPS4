@@ -14,6 +14,7 @@ uses
  vImage,
  vImageManager,
  vRenderPassManager,
+ vGraphicsPipelineManager,
  vShader,
  vShaderExt,
  vShaderManager,
@@ -108,10 +109,16 @@ var
 
  RP_KEY:TvRenderPassKey;
  RP:TvRenderPass2;
+
+ BI:TBLEND_INFO;
+
+ GP_KEY:TvGraphicsPipelineKey;
+ GP:TvGraphicsPipeline2;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=@node^.SH_REG;
  GPU_REGS.CX_REG:=@node^.CX_REG;
+ GPU_REGS.UC_REG:=@node^.UC_REG;
 
  {fdump_ps:=}DumpPS(GPU_REGS);
  {fdump_vs:=}DumpVS(GPU_REGS);
@@ -163,6 +170,43 @@ begin
 
  RP:=FetchRenderPass(nil,@RP_KEY);
 
+ BI:=GPU_REGS.GET_BLEND_INFO;
+
+ GP_KEY.Clear;
+
+ GP_KEY.FRenderPass :=RP;
+ GP_KEY.FShaderGroup:=FShaderGroup;
+
+ GP_KEY.SetBlendInfo(BI.logicOp,@BI.blendConstants);
+
+ GP_KEY.SetPrimType (GPU_REGS.GET_PRIM_TYPE);
+ GP_KEY.SetPrimReset(GPU_REGS.GET_PRIM_RESET);
+
+ For i:=0 to 15 do
+  if GPU_REGS.VP_ENABLE(i) then
+  begin
+   GP_KEY.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
+  end;
+
+ if (RT_COUNT<>0) then
+ For i:=0 to RT_COUNT-1 do
+  begin
+   GP_KEY.AddBlend(RT_INFO[i].blend);
+  end;
+
+ //GP_KEY.vertexInputInfo -> FAttrBuilder
+
+ GP_KEY.rasterizer     :=GPU_REGS.GET_RASTERIZATION;
+ //GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+
+ GP_KEY.multisampling  :=GPU_REGS.GET_MULTISAMPLE;
+
+ if GPU_REGS.DB_ENABLE then
+ begin
+  GP_KEY.DepthStencil:=DB_INFO.ds_state;
+ end;
+
+ GP:=FetchGraphicsPipeline(nil,@GP_KEY);
 
 end;
 

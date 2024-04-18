@@ -30,11 +30,6 @@ type
   picb:t_pm4_parse_cb;
  end;
 
- TonLoadConstRam =function(pctx:p_pfp_ctx;addr:Pointer;num_dw,offset:Word):Integer;
- TonEventWrite   =function(pctx:p_pfp_ctx;eventType:Byte):Integer;
- TonEventWriteEop=function(pctx:p_pfp_ctx;addr:Pointer;data:QWORD;sel:Byte):Integer;
- TonDrawIndex2   =function(pctx:p_pfp_ctx):Integer;
-
  t_pfp_ctx=object
   lastn:TAILQ_HEAD;
   stall:TAILQ_HEAD;
@@ -42,28 +37,9 @@ type
   stream_dcb:t_pm4_stream;
   stream_ccb:t_pm4_stream;
   //
-  //onLoadConstRam :TonLoadConstRam;
-  //onEventWrite   :TonEventWrite;
-  //onEventWriteEop:TonEventWriteEop;
-  //onDrawIndex2   :TonDrawIndex2;
-  //
-  SH_REG:TSH_REG_GROUP;                    // 0x2C00
-  CX_REG:TCONTEXT_REG_GROUP;               // 0xA000
-  //
-  USERCONFIG_REG:packed record
-   CP_COHER_BASE_HI  :TCP_COHER_BASE_HI;   // 0xC079
-   CP_COHER_CNTL     :TCP_COHER_CNTL;      // 0xC07C
-   CP_COHER_SIZE     :TCP_COHER_SIZE;      // 0xC07D
-   CP_COHER_BASE     :TCP_COHER_BASE;      // 0xC07E
-   CP_COHER_SIZE_HI  :TCP_COHER_SIZE_HI;   // 0xC08C
-   GRBM_GFX_INDEX    :TGRBM_GFX_INDEX;     // 0xC200
-   VGT_ESGS_RING_SIZE:TVGT_ESGS_RING_SIZE; // 0xC240
-   VGT_GSVS_RING_SIZE:TVGT_GSVS_RING_SIZE; // 0xC241
-   VGT_PRIMITIVE_TYPE:TVGT_PRIMITIVE_TYPE; // 0xC242
-   VGT_INDEX_TYPE    :TVGT_INDEX_TYPE;     // 0xC243
-   VGT_NUM_INDICES   :TVGT_NUM_INDICES;    // 0xC24C
-   VGT_NUM_INSTANCES :TVGT_NUM_INSTANCES;  // 0xC24D
-  end;
+  SH_REG:TSH_REG_GROUP;         // 0x2C00
+  CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
+  UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
   //
   print_ops :Boolean;
   print_hint:Boolean;
@@ -241,8 +217,8 @@ end;
 
 procedure t_pfp_ctx.set_esgs_gsvs_ring_size(esgsRingSize,gsvsRingSize:DWORD);
 begin
- USERCONFIG_REG.VGT_ESGS_RING_SIZE:=esgsRingSize;
- USERCONFIG_REG.VGT_GSVS_RING_SIZE:=gsvsRingSize;
+ UC_REG.VGT_ESGS_RING_SIZE:=esgsRingSize;
+ UC_REG.VGT_GSVS_RING_SIZE:=gsvsRingSize;
 end;
 
 procedure t_pfp_ctx.set_reg(i:word;data:DWORD);
@@ -250,18 +226,18 @@ begin
  case i of
   $2C00..$2E7F:PDWORD(@SH_REG)[i-$2C00]:=data;
   $A000..$A38F:PDWORD(@CX_REG)[i-$A000]:=data;
-  $C079:PDWORD(@USERCONFIG_REG.CP_COHER_BASE_HI  )^:=data;
-  $C07C:PDWORD(@USERCONFIG_REG.CP_COHER_CNTL     )^:=data;
-  $C07D:PDWORD(@USERCONFIG_REG.CP_COHER_SIZE     )^:=data;
-  $C07E:PDWORD(@USERCONFIG_REG.CP_COHER_BASE     )^:=data;
-  $C08C:PDWORD(@USERCONFIG_REG.CP_COHER_SIZE_HI  )^:=data;
-  $C200:PDWORD(@USERCONFIG_REG.GRBM_GFX_INDEX    )^:=data;
-  $C240:PDWORD(@USERCONFIG_REG.VGT_ESGS_RING_SIZE)^:=data;
-  $C241:PDWORD(@USERCONFIG_REG.VGT_GSVS_RING_SIZE)^:=data;
-  $C242:PDWORD(@USERCONFIG_REG.VGT_PRIMITIVE_TYPE)^:=data;
-  $C243:PDWORD(@USERCONFIG_REG.VGT_INDEX_TYPE    )^:=data;
-  $C24C:PDWORD(@USERCONFIG_REG.VGT_NUM_INDICES   )^:=data;
-  $C24D:PDWORD(@USERCONFIG_REG.VGT_NUM_INSTANCES )^:=data;
+  $C079:PDWORD(@UC_REG.CP_COHER_BASE_HI  )^:=data;
+  $C07C:PDWORD(@UC_REG.CP_COHER_CNTL     )^:=data;
+  $C07D:PDWORD(@UC_REG.CP_COHER_SIZE     )^:=data;
+  $C07E:PDWORD(@UC_REG.CP_COHER_BASE     )^:=data;
+  $C08C:PDWORD(@UC_REG.CP_COHER_SIZE_HI  )^:=data;
+  $C200:PDWORD(@UC_REG.GRBM_GFX_INDEX    )^:=data;
+  $C240:PDWORD(@UC_REG.VGT_ESGS_RING_SIZE)^:=data;
+  $C241:PDWORD(@UC_REG.VGT_GSVS_RING_SIZE)^:=data;
+  $C242:PDWORD(@UC_REG.VGT_PRIMITIVE_TYPE)^:=data;
+  $C243:PDWORD(@UC_REG.VGT_INDEX_TYPE    )^:=data;
+  $C24C:PDWORD(@UC_REG.VGT_NUM_INDICES   )^:=data;
+  $C24D:PDWORD(@UC_REG.VGT_NUM_INSTANCES )^:=data;
   else
    begin
     Writeln(stderr,getRegName(i),':=0x',HexStr(data,8));
@@ -296,18 +272,18 @@ begin
  case i of
   $2C00..$2E7F:Result:=PDWORD(@SH_REG)[i-$2C00];
   $A000..$A38F:Result:=PDWORD(@CX_REG)[i-$A000];
-  $C079:Result:=PDWORD(@USERCONFIG_REG.CP_COHER_BASE_HI  )^;
-  $C07C:Result:=PDWORD(@USERCONFIG_REG.CP_COHER_CNTL     )^;
-  $C07D:Result:=PDWORD(@USERCONFIG_REG.CP_COHER_SIZE     )^;
-  $C07E:Result:=PDWORD(@USERCONFIG_REG.CP_COHER_BASE     )^;
-  $C08C:Result:=PDWORD(@USERCONFIG_REG.CP_COHER_SIZE_HI  )^;
-  $C200:Result:=PDWORD(@USERCONFIG_REG.GRBM_GFX_INDEX    )^;
-  $C240:Result:=PDWORD(@USERCONFIG_REG.VGT_ESGS_RING_SIZE)^;
-  $C241:Result:=PDWORD(@USERCONFIG_REG.VGT_GSVS_RING_SIZE)^;
-  $C242:Result:=PDWORD(@USERCONFIG_REG.VGT_PRIMITIVE_TYPE)^;
-  $C243:Result:=PDWORD(@USERCONFIG_REG.VGT_INDEX_TYPE    )^;
-  $C24C:Result:=PDWORD(@USERCONFIG_REG.VGT_NUM_INDICES   )^;
-  $C24D:Result:=PDWORD(@USERCONFIG_REG.VGT_NUM_INSTANCES )^;
+  $C079:Result:=PDWORD(@UC_REG.CP_COHER_BASE_HI  )^;
+  $C07C:Result:=PDWORD(@UC_REG.CP_COHER_CNTL     )^;
+  $C07D:Result:=PDWORD(@UC_REG.CP_COHER_SIZE     )^;
+  $C07E:Result:=PDWORD(@UC_REG.CP_COHER_BASE     )^;
+  $C08C:Result:=PDWORD(@UC_REG.CP_COHER_SIZE_HI  )^;
+  $C200:Result:=PDWORD(@UC_REG.GRBM_GFX_INDEX    )^;
+  $C240:Result:=PDWORD(@UC_REG.VGT_ESGS_RING_SIZE)^;
+  $C241:Result:=PDWORD(@UC_REG.VGT_GSVS_RING_SIZE)^;
+  $C242:Result:=PDWORD(@UC_REG.VGT_PRIMITIVE_TYPE)^;
+  $C243:Result:=PDWORD(@UC_REG.VGT_INDEX_TYPE    )^;
+  $C24C:Result:=PDWORD(@UC_REG.VGT_NUM_INDICES   )^;
+  $C24D:Result:=PDWORD(@UC_REG.VGT_NUM_INSTANCES )^;
   else
         Result:=0;
  end;
@@ -839,19 +815,15 @@ begin
  Writeln(' ofs=0x',HexStr(Body^.offset,4));
  }
 
- //if (pctx^.onLoadConstRam<>nil) then
- begin
-  addr:=nil;
-  size:=0;
+ addr:=nil;
+ size:=0;
 
-  if get_dmem_ptr(Pointer(Body^.addr),@addr,@size) then
-  begin
-   pctx^.stream_ccb.LoadConstRam(addr,Body^.numDwords,Body^.offset);
-   //pctx^.onLoadConstRam(pctx,addr,Body^.numDwords,Body^.offset);
-  end else
-  begin
-   Assert(false,'addr:0x'+HexStr(Body^.addr,16)+' not in dmem!');
-  end;
+ if get_dmem_ptr(Pointer(Body^.addr),@addr,@size) then
+ begin
+  pctx^.stream_ccb.LoadConstRam(addr,Body^.numDwords,Body^.offset);
+ end else
+ begin
+  Assert(false,'addr:0x'+HexStr(Body^.addr,16)+' not in dmem!');
  end;
 end;
 
@@ -911,11 +883,6 @@ begin
  end;
 
  pctx^.stream_dcb.EventWrite(Body^.eventType);
-
- //if (pctx^.onEventWrite<>nil) then
- //begin
- // pctx^.onEventWrite(pctx,Body^.eventType);
- //end;
 end;
 
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
@@ -945,26 +912,21 @@ begin
   else;
  end;
 
- //if (pctx^.onEventWriteEop<>nil) then
+ addr:=nil;
+ size:=0;
+
+ if (Body^.dataSel in [1..4]) then
  begin
-  addr:=nil;
-  size:=0;
-
-  if (Body^.dataSel in [1..4]) then
+  if get_dmem_ptr(Pointer(Body^.address),@addr,@size) then
   begin
-   if get_dmem_ptr(Pointer(Body^.address),@addr,@size) then
-   begin
-    //
-   end else
-   begin
-    Assert(false,'addr:0x'+HexStr(Body^.address,16)+' not in dmem!');
-   end;
+   //
+  end else
+  begin
+   Assert(false,'addr:0x'+HexStr(Body^.address,16)+' not in dmem!');
   end;
-
-  pctx^.stream_dcb.EventWriteEop(addr,Body^.DATA,Body^.dataSel,(Body^.intSel shr 1));
-
-  //pctx^.onEventWriteEop(pctx,addr,Body^.DATA,Body^.dataSel or ((Body^.intSel shr 1) shl 3));
  end;
+
+ pctx^.stream_dcb.EventWriteEop(addr,Body^.DATA,Body^.dataSel,(Body^.intSel shr 1));
 
 end;
 
@@ -972,11 +934,11 @@ procedure onAcquireMem(pctx:p_pfp_ctx;Body:PPM4ACQUIREMEM);
 {var
  addr,size:QWORD;}
 begin
- pctx^.USERCONFIG_REG.CP_COHER_BASE_HI.COHER_BASE_HI_256B:=Body^.coherBaseHi;
- DWORD(pctx^.USERCONFIG_REG.CP_COHER_CNTL)               :=Body^.coherCntl;
- pctx^.USERCONFIG_REG.CP_COHER_SIZE                      :=Body^.coherSizeLo;
- pctx^.USERCONFIG_REG.CP_COHER_BASE                      :=Body^.coherBaseLo;
- pctx^.USERCONFIG_REG.CP_COHER_SIZE_HI.COHER_SIZE_HI_256B:=Body^.coherSizeHi;
+ pctx^.UC_REG.CP_COHER_BASE_HI.COHER_BASE_HI_256B:=Body^.coherBaseHi;
+ DWORD(pctx^.UC_REG.CP_COHER_CNTL)               :=Body^.coherCntl;
+ pctx^.UC_REG.CP_COHER_SIZE                      :=Body^.coherSizeLo;
+ pctx^.UC_REG.CP_COHER_BASE                      :=Body^.coherBaseLo;
+ pctx^.UC_REG.CP_COHER_SIZE_HI.COHER_SIZE_HI_256B:=Body^.coherSizeHi;
 
  {
  addr:=(QWORD(Body^.coherBaseLo) shl 8) or (QWORD(Body^.coherBaseHi) shl 40);
@@ -1039,9 +1001,9 @@ end;
 
 procedure onDrawPreamble(pctx:p_pfp_ctx;Body:PPM4CMDDRAWPREAMBLE);
 begin
- pctx^.USERCONFIG_REG.VGT_PRIMITIVE_TYPE:=Body^.control1;
- pctx^.CX_REG.IA_MULTI_VGT_PARAM        :=Body^.control2;
- pctx^.CX_REG.VGT_LS_HS_CONFIG          :=Body^.control3;
+ pctx^.UC_REG.VGT_PRIMITIVE_TYPE:=Body^.control1;
+ pctx^.CX_REG.IA_MULTI_VGT_PARAM:=Body^.control2;
+ pctx^.CX_REG.VGT_LS_HS_CONFIG  :=Body^.control3;
 end;
 
 procedure onClearState(pctx:p_pfp_ctx;Body:Pointer);
@@ -1154,15 +1116,15 @@ end;
 
 procedure onIndexBufferSize(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
 begin
- pctx^.CX_REG.VGT_DMA_SIZE           :=Body^.numIndices;
- pctx^.USERCONFIG_REG.VGT_NUM_INDICES:=Body^.numIndices;
+ pctx^.CX_REG.VGT_DMA_SIZE   :=Body^.numIndices;
+ pctx^.UC_REG.VGT_NUM_INDICES:=Body^.numIndices;
 end;
 
 procedure onIndexType(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXTYPE);
 begin
  Assert(Body^.swapMode=0);
- pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE    :=Body^.indexType;
- pctx^.USERCONFIG_REG.VGT_INDEX_TYPE.INDEX_TYPE:=Body^.indexType;
+ pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE:=Body^.indexType;
+ pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE    :=Body^.indexType;
 end;
 
 procedure onIndexBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBASE);
@@ -1174,8 +1136,8 @@ end;
 
 procedure onNumInstances(pctx:p_pfp_ctx;Body:PPM4CMDDRAWNUMINSTANCES);
 begin
- pctx^.CX_REG.VGT_DMA_NUM_INSTANCES    :=Body^.numInstances;
- pctx^.USERCONFIG_REG.VGT_NUM_INSTANCES:=Body^.numInstances;
+ pctx^.CX_REG.VGT_DMA_NUM_INSTANCES:=Body^.numInstances;
+ pctx^.UC_REG.VGT_NUM_INSTANCES    :=Body^.numInstances;
 end;
 
 procedure onDrawIndex2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEX2);
@@ -1192,7 +1154,7 @@ begin
  pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
  pctx^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
  pctx^.CX_REG.VGT_DMA_SIZE             :=Body^.indexCount;
- pctx^.USERCONFIG_REG.VGT_NUM_INDICES  :=Body^.indexCount;
+ pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
 
  addr:=nil;
@@ -1206,12 +1168,10 @@ begin
   Assert(false,'addr:0x'+HexStr(PPointer(@Body^.indexBaseLo)^)+' not in dmem!');
  end;
 
- pctx^.stream_dcb.DrawIndex2(addr,pctx^.SH_REG,pctx^.CX_REG);
-
- //if (pctx^.onDrawIndex2<>nil) then
- //begin
- // pctx^.onDrawIndex2(pctx);
- //end;
+ pctx^.stream_dcb.DrawIndex2(addr,
+                             pctx^.SH_REG,
+                             pctx^.CX_REG,
+                             pctx^.UC_REG);
 end;
 
 procedure onPushMarker(Body:PChar);

@@ -532,7 +532,10 @@ end;
 function TvGraphicsPipeline.Compile:Boolean;
 type
  AVkPipelineShaderStageCreateInfo=array[0..6] of TVkPipelineShaderStageCreateInfo;
+
 var
+ FCache:TVkPipelineCache;
+
  r:TVkResult;
  Stages:AVkPipelineShaderStageCreateInfo; // info.stageCount
  info:TVkGraphicsPipelineCreateInfo;
@@ -571,7 +574,13 @@ begin
  info.basePipelineHandle :=VK_NULL_HANDLE;
  info.basePipelineIndex  :=-1;
 
- r:=vkCreateGraphicsPipelines(Device.FHandle,VK_NULL_HANDLE,1,@info,nil,@FHandle);
+ FCache:=VK_NULL_HANDLE;
+ if (FPCache<>nil) then
+ begin
+  FCache:=FPCache.FHandle;
+ end;
+
+ r:=vkCreateGraphicsPipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkCreateGraphicsPipelines:',r);
