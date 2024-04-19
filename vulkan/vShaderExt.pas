@@ -107,19 +107,31 @@ type
   Function  Compile:Boolean;
  end;
 
- TAttrBindExt=packed object
+ TvBindVertexBuffer=packed object
   min_addr:Pointer;
-  binding :TVkUInt32;
-  stride  :TVkUInt32;
+  binding :Word;
+  stride  :Word;
   count   :TVkUInt32;
   Function GetSize:TVkUInt32;
  end;
 
+ AvVertexInputBindingDescription  =array[0..31] of TVkVertexInputBindingDescription;
+ AvBindVertexBuffer               =array[0..31] of TvBindVertexBuffer;
+ AvVertexInputAttributeDescription=array[0..31] of TVkVertexInputAttributeDescription;
+
  TvAttrBuilder=object
-  FBindDescs:array of TVkVertexInputBindingDescription;
-  FAttrDescs:array of TVkVertexInputAttributeDescription;
-  FBindExt  :array of TAttrBindExt;
-  function  NewBindDesc(binding,stride:TVkUInt32):TVkUInt32;
+  const
+   maxVertexInputBindingStride=16383;
+   maxVertexInputBindings     =32;
+   maxVertexInputAttributes   =32;
+  var
+   FBindDescsCount:Byte;
+   FAttrDescsCount:Byte;
+   FBindDescs:AvVertexInputBindingDescription;
+   FBindVBufs:AvBindVertexBuffer;
+   FAttrDescs:AvVertexInputAttributeDescription;
+  //
+  function  NewBindDesc(binding,stride,count:TVkUInt32;base:Pointer):TVkUInt32;
   procedure NewAttrDesc(location,binding,offset:TVkUInt32;format:TVkFormat);
   procedure PatchAttr(binding,offset:TVkUInt32);
   Procedure AddVSharp(PV:PVSharpResource4;location:DWord);
@@ -171,14 +183,17 @@ type
 
  TvFuncLayout=object
   FList:array of ADataLayout;
-  Procedure Add(addr:ADataLayout);
+  Procedure Add(const addr:ADataLayout);
  end;
 
-function GetSharpByPatch(pData:Pointer;addr:ADataLayout):Pointer;
+function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
 
 implementation
 
-Function TAttrBindExt.GetSize:TVkUInt32;
+uses
+ kern_dmem;
+
+Function TvBindVertexBuffer.GetSize:TVkUInt32;
 begin
  if (stride=0) then
  begin
@@ -468,7 +483,7 @@ end;
 
 ///
 
-function GetSharpByPatch(pData:Pointer;addr:ADataLayout):Pointer;
+function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
 var
  i:Integer;
  pSharp:Pointer;
@@ -490,12 +505,24 @@ begin
    vtBufPtr2:
      begin
       pData:=Pointer(PPtrUint(pData)^ and (not 3));
+
+      if not get_dmem_ptr(pData,@pData,nil) then
+      begin
+       Assert(false,'vtBufPtr2:get_dmem_ptr');
+      end;
+
       pSharp:=pData;
      end;
    vtVSharp4:
      begin
       pSharp:=pData;
       pData:=Pointer(PVSharpResource4(pData)^.base);
+
+      if not get_dmem_ptr(pData,@pData,nil) then
+      begin
+       Assert(false,'vtVSharp4:get_dmem_ptr');
+      end;
+
      end;
    vtSSharp4:
      begin
@@ -507,6 +534,12 @@ begin
      begin
       pSharp:=pData;
       pData:=Pointer(PTSharpResource4(pData)^.base shl 8);
+
+      if not get_dmem_ptr(pData,@pData,nil) then
+      begin
+       Assert(false,'vtTSharp:get_dmem_ptr');
+      end;
+
      end;
    else
     Assert(false);
@@ -519,16 +552,27 @@ end;
 
 //
 
-function TvAttrBuilder.NewBindDesc(binding,stride:TVkUInt32):TVkUInt32;
+function TvAttrBuilder.NewBindDesc(binding,stride,count:TVkUInt32;base:Pointer):TVkUInt32;
 var
- i:Integer;
+ i:Byte;
 begin
- i:=Length(FBindDescs);
- SetLength(FBindDescs,i+1);
- FBindDescs[i]:=Default(TVkVertexInputBindingDescription);
+ if (FBindDescsCount>=maxVertexInputBindings) then
+ begin
+  Assert(false,'maxVertexInputBindings');
+ end;
+
+ i:=FBindDescsCount;
+ FBindDescsCount:=FBindDescsCount+1;
+
+ FBindVBufs[i].min_addr:=base;
+ FBindVBufs[i].binding :=binding;
+ FBindVBufs[i].stride  :=stride;
+ FBindVBufs[i].count   :=count;
+
  FBindDescs[i].binding  :=binding;
  FBindDescs[i].stride   :=stride;
  FBindDescs[i].inputRate:=VK_VERTEX_INPUT_RATE_VERTEX;
+
  Result:=i;
 end;
 
@@ -536,8 +580,14 @@ procedure TvAttrBuilder.NewAttrDesc(location,binding,offset:TVkUInt32;format:TVk
 var
  i:Integer;
 begin
- i:=Length(FAttrDescs);
- SetLength(FAttrDescs,i+1);
+ if (FAttrDescsCount>=maxVertexInputAttributes) then
+ begin
+  Assert(false,'maxVertexInputAttributes');
+ end;
+
+ i:=FAttrDescsCount;
+ FAttrDescsCount:=FAttrDescsCount+1;
+
  FAttrDescs[i].location:=location;
  FAttrDescs[i].binding :=binding ;
  FAttrDescs[i].format  :=format  ;
@@ -548,15 +598,15 @@ procedure TvAttrBuilder.PatchAttr(binding,offset:TVkUInt32);
 var
  i:Integer;
 begin
- if Length(FAttrDescs)<>0 then
-  For i:=0 to High(FAttrDescs) do
+ if (FAttrDescsCount<>0) then
+  For i:=0 to FAttrDescsCount-1 do
   if (FAttrDescs[i].binding=binding) then
   begin
    FAttrDescs[i].offset:=FAttrDescs[i].offset+offset;
   end;
 end;
 
-function _ptr_diff(p1,p2:Pointer):TVkUInt32;
+function _ptr_diff(p1,p2:Pointer):TVkUInt32; inline;
 begin
  if (p1>p2) then
   Result:=p1-p2
@@ -566,39 +616,45 @@ end;
 
 Procedure TvAttrBuilder.AddVSharp(PV:PVSharpResource4;location:DWord);
 var
+ pv_base  :Pointer;
+ pv_stride:TVkUInt32;
+ pv_count :TVkUInt32;
+ offset   :TVkUInt32;
  i:Integer;
 begin
  if (PV=nil) then Exit;
 
- if Length(FBindExt)<>0 then
-  For i:=0 to High(FBindExt) do
-   With FBindExt[i] do
-    if (stride=PV^.stride) then
-    if (_ptr_diff(min_addr,Pointer(PV^.base))<=stride-1) then
+ pv_base  :=Pointer(PV^.base);
+ pv_stride:=PV^.stride;
+ pv_count :=PV^.num_records;
+
+ if (FBindDescsCount<>0) then
+  For i:=0 to FBindDescsCount-1 do
+  begin
+   With FBindVBufs[i] do
+   begin
+    if (stride=pv_stride) then
     begin
-     if (min_addr>Pointer(PV^.base)) then
+     offset:=_ptr_diff(min_addr,pv_base);
+     if (offset<=stride-1) then
      begin
-      PatchAttr(binding,min_addr-Pointer(PV^.base));
-      min_addr:=Pointer(PV^.base);
+      if (min_addr>pv_base) then
+      begin
+       PatchAttr(binding,offset);
+       min_addr:=pv_base;
+      end;
+      if (count<pv_count) then
+      begin
+       count:=pv_count;
+      end;
+      NewAttrDesc(location,binding,offset,_get_vsharp_cformat(PV));
+      Exit;
      end;
-     if (count<PV^.num_records) then
-     begin
-      count:=PV^.num_records;
-     end;
-     NewAttrDesc(location,binding,Pointer(PV^.base)-min_addr,_get_vsharp_cformat(PV));
-     Exit;
     end;
+   end;
+  end;
 
- i:=Length(FBindExt);
- SetLength(FBindExt,i+1);
- FBindExt[i]:=Default(TAttrBindExt);
-
- FBindExt[i].min_addr:=Pointer(PV^.base);
- FBindExt[i].binding :=i;
- FBindExt[i].stride  :=PV^.stride;
- FBindExt[i].count   :=PV^.num_records;
-
- NewBindDesc(i,PV^.stride);
+ NewBindDesc(i,pv_stride,pv_count,pv_base);
 
  NewAttrDesc(location,i,0,_get_vsharp_cformat(PV));
 
@@ -942,7 +998,7 @@ begin
  end;
 end;
 
-Procedure TvFuncLayout.Add(addr:ADataLayout);
+Procedure TvFuncLayout.Add(const addr:ADataLayout);
 var
  i:Integer;
 begin

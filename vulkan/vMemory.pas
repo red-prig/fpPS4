@@ -87,45 +87,57 @@ type
  end;
 
  TvMemManager=class
-  FProperties:TVkPhysicalDeviceMemoryProperties;
-  FHostVisibMt:TVkUInt32;
-  //FHostCacheMt:TVkUInt32;
+  public
+   FProperties:TVkPhysicalDeviceMemoryProperties;
 
-  FSparceMemoryTypes:TVkUInt32;
+   FSparceMemoryTypes:TVkUInt32;
 
-  FHeaps:array of TvHeap;
+   FHeaps:array of TvHeap;
 
-  FDevBlocks:array of TvDeviceMemory;
-  FFreeSet:TFreeDevNodeSet;
-  FAllcSet:TAllcDevNodeSet;
+   FDevBlocks:array of TvDeviceMemory;
 
-  FHosts:TAILQ_HEAD; //TvHostMemory
+  private
+   FFreeSet:TFreeDevNodeSet;
+   FAllcSet:TAllcDevNodeSet;
 
-  Constructor Create;
+   FHosts:TAILQ_HEAD; //TvHostMemory
 
-  function    SparceSupportHost:Boolean;
-  function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
-  procedure   LoadMemoryHeaps;
-  procedure   PrintMemoryHeaps;
-  procedure   PrintMemoryType(typeFilter:TVkUInt32);
+  public
 
-  Function    _AllcDevBlock(Size:TVkDeviceSize;mtindex:Byte;Var R:Word):Boolean;
-  Function    _FreeDevBlock(i:Word):Boolean;
-  Function    _FindDevBlock(Memory:TvDeviceMemory;Var R:Word):Boolean;
-  Function    _FetchFree_a(Size,Align:TVkDeviceSize;mtindex:Byte;var R:TDevNode):Boolean;
-  Function    _FetchFree_l(key:TDevNode;var R:TDevNode):Boolean;
-  Function    _FetchFree_b(key:TDevNode;var R:TDevNode):Boolean;
-  Function    _FetchAllc(FOffset:TVkDeviceSize;FBlockId:Word;var R:TDevNode):Boolean;
+   Constructor Create;
 
-  Function    Alloc(const mr:TVkMemoryRequirements;pr:TVkMemoryPropertyFlags):TvPointer;
-  Function    Alloc(Size,Align:TVkDeviceSize;mtindex:Byte):TvPointer;
-  Function    Free(P:TvPointer):Boolean;
+   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
+   procedure   LoadMemoryHeaps;
+   procedure   PrintMemoryHeaps;
+   procedure   PrintMemoryType(typeFilter:TVkUInt32);
 
-  Function    _shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
-  Function    _shrink_host_map(max:TVkDeviceSize):TVkDeviceSize;
-  procedure   unmap_host(start,__end:QWORD);
-  Function    FetchHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
-  Function    FetchHostMap(Addr,Size:TVkDeviceSize;device_local:Boolean):TvPointer;
+  private
+
+   Function    _AllcDevBlock(Size:TVkDeviceSize;mtindex:Byte;Var R:Word):Boolean;
+   Function    _FreeDevBlock(i:Word):Boolean;
+   Function    _FindDevBlock(Memory:TvDeviceMemory;Var R:Word):Boolean;
+   Function    _FetchFree_a(Size,Align:TVkDeviceSize;mtindex:Byte;var R:TDevNode):Boolean;
+   Function    _FetchFree_l(key:TDevNode;var R:TDevNode):Boolean;
+   Function    _FetchFree_b(key:TDevNode;var R:TDevNode):Boolean;
+   Function    _FetchAllc(FOffset:TVkDeviceSize;FBlockId:Word;var R:TDevNode):Boolean;
+
+  public
+
+   Function    Alloc(const mr:TVkMemoryRequirements;pr:TVkMemoryPropertyFlags):TvPointer;
+   Function    Alloc(Size,Align:TVkDeviceSize;mtindex:Byte):TvPointer;
+   Function    Free(P:TvPointer):Boolean;
+
+  private
+
+   Function    _shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
+   Function    _shrink_host_map(max:TVkDeviceSize):TVkDeviceSize;
+
+  public
+
+   procedure   unmap_host(start,__end:QWORD);
+
+   Function    FetchHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
+   Function    FetchHostMap(Addr,Size:TVkDeviceSize;device_local:Boolean):TvPointer;
  end;
 
 var
@@ -143,18 +155,14 @@ function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32
 function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
-//Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
-
 function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
-
-var
- MEMORY_BOUND_HACK:Boolean=False;
 
 implementation
 
 uses
- kern_rwlock;
+ kern_rwlock,
+ kern_dmem;
 
 var
  global_mem_lock:Pointer=nil;
@@ -345,41 +353,6 @@ begin
  LoadMemoryHeaps;
 
  PrintMemoryHeaps;
-
- FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
-                              ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                              ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) or
-                              ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
-                             );
-
- if (FHostVisibMt=DWORD(-1)) then
- begin
-  FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
-                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                               ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-                              );
- end;
-
-
- if (FHostVisibMt=DWORD(-1)) then
- begin
-  FHostVisibMt:=findMemoryType(mr.memoryTypeBits,
-                               ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-                              );
- end;
-
- //We'll try it, but the driver still sucks
- if (FHostVisibMt=DWORD(-1)) then
- begin
-  FHostVisibMt:=0;
- end;
-
- Writeln('  SelectHost=',FHostVisibMt);
-end;
-
-function TvMemManager.SparceSupportHost:Boolean;
-begin
- Result:=((1 shl FHostVisibMt) and FSparceMemoryTypes)<>0;
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
@@ -950,6 +923,8 @@ begin
 end;
 
 procedure TvMemManager.unmap_host(start,__end:QWORD);
+label
+ _full;
 var
  node,next:TvHostMemory;
 begin
@@ -967,15 +942,21 @@ begin
   if (__end>node.FStart) and (start<node.F__End) then
   begin
 
-   //full in
    if (start<=node.FStart) and (__end>=node.F__End) then
    begin
+    //full in
+    _full:
     TAILQ_REMOVE(@FHosts,node,@node.entry);
     node.Release;
     node:=nil;
    end else
+   if rmem_map_test_lock(node.FStart,node.F__End) then
+   begin
+    goto _full;
+   end else
    if (node.FRefs<=1) then
    begin
+    //partial
     TAILQ_REMOVE(@FHosts,node,@node.entry);
     FreeAndNil(node);
    end;
@@ -1214,52 +1195,6 @@ begin
   Writeln(StdErr,'vkAllocateMemory:',r);
  end;
 end;
-
-{
-function OnGpuMemAlloc(addr:Pointer;len:size_t):TVkDeviceMemory;
-begin
- InitVulkan;
-
- //Some games request too much video memory, relevant for built-in iGPU
- if MEMORY_BOUND_HACK then
- begin
-  if (len>1024*1024*1024) then len:=1024*1024*1024;
- end;
-
- Result:=vkAllocHostPointer(Device.FHandle,len,MemManager.FHostVisibMt{FHostCacheMt},addr);
- Assert(Result<>VK_NULL_HANDLE);
-end;
-
-procedure OnGpuMemFree(h:TVkDeviceMemory);
-begin
- if (h=VK_NULL_HANDLE) then Exit;
- if not IsInitVulkan then Exit;
- vkFreeMemory(Device.FHandle,h,nil);
-end;
-
-Function TryGetHostPointerByAddr(addr:Pointer;var P:TvPointer;SizeOut:PQWORD=nil):Boolean;
-var
- block:TGpuMemBlock;
-begin
- Result:=False;
- if TryGetGpuMemBlockByAddr(addr,block) then
- begin
-  P.FHandle:=TVkDeviceMemory(block.Handle);
-  P.FOffset:=addr-block.pAddr;
-
-  if (SizeOut<>nil) then
-  begin
-   SizeOut^:=block.nSize-P.FOffset;
-  end;
-
-  Result:=True;
- end;
-end;
-
-initialization
- GpuMemCb.Alloc:=TGpuMemAlloc(@OnGpuMemAlloc);
- GpuMemCb.Free :=TGpuMemFree (@OnGpuMemFree);
-}
 
 end.
 

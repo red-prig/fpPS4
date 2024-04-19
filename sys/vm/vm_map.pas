@@ -866,8 +866,6 @@ function vm_object_rmap_insert(map   :vm_map_t;
                                offset:vm_ooffset_t;
                                alias :Boolean):Integer;
 var
- tmp:p_rmem_map_entry;
-var
  rmap:p_rmem_map;
  length:vm_offset_t;
 begin
@@ -878,7 +876,7 @@ begin
 
  if not alias then
  begin
-  if rmem_map_lookup_entry_any(rmap,OFF_TO_IDX(offset),@tmp) then
+  if rmem_map_test(rmap,OFF_TO_IDX(offset),OFF_TO_IDX(offset+length)) then
   begin
    rmem_map_unlock(rmap);
    Exit(KERN_NO_SPACE);

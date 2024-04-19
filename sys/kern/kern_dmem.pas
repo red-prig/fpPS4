@@ -93,6 +93,8 @@ function  sys_virtual_query(addr:Pointer;
                             info:Pointer;
                             infoSize:QWORD):Integer;
 
+function  rmem_map_test_lock(start,__end:QWORD):Boolean;
+
 function  get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
 function  get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
 
@@ -196,6 +198,13 @@ begin
  end;
 end;
 
+function rmem_map_test_lock(start,__end:QWORD):Boolean;
+begin
+ rmem_map_lock(@rmap);
+  Result:=rmem_map_test(@rmap,OFF_TO_IDX(start),OFF_TO_IDX(__end));
+ rmem_map_unlock(@rmap);
+end;
+
 function kern_mmap_dmem(map   :vm_map_t;
                         addr  :p_vm_offset_t;
                         phaddr:QWORD;
@@ -213,12 +222,13 @@ var
 
  v_end:QWORD;
  faddr:QWORD;
- entry,next:vm_map_entry_t;
 
- rentry:p_rmem_map_entry;
+ entry,next:vm_map_entry_t;
 
  cow:Integer;
  err:Integer;
+
+ found:Boolean;
 begin
  Result:=0;
  addr^:=0;
@@ -245,15 +255,13 @@ begin
   if (v_end <= map^.max_offset) and
      ( ((flags and MAP_SANITIZER)<>0) or
        ((vaddr shr 47) <> 0) or
-       (v_end < $fc00000001) or
+       (v_end < QWORD($fc00000001)) or
        (sdk_version_big_20()=false) ) then
   begin
-   rmem_map_lock(@rmap);
-    err:=Integer(rmem_map_lookup_entry_any(@rmap,OFF_TO_IDX(phaddr),@rentry));
-   rmem_map_unlock(@rmap);
+   found:=rmem_map_test_lock(phaddr,phaddr+length);
 
    //
-   if (not boolean(err)) or //not found
+   if (not found) or //not found
       (is_sce_prog_attr_20_800000(@g_authinfo)) or
       ((p_proc.p_dmem_aliasing and 1)<>0) then //aliasing
    begin

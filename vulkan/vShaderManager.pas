@@ -31,27 +31,30 @@ uses
 
 type
  TShaderFunc=packed object
-  FLen:Ptruint;
+  FLen :Ptruint;
   pData:PDWORD;
   function c(var a,b:TShaderFunc):Integer;
  end;
 
  PShaderDataKey=^TShaderDataKey;
- TShaderDataKey=packed record
+ TShaderDataKey=packed object
   FStage:TvShaderStage;
-  FLen:Ptruint;
-  pData:PDWORD;
+  FLen  :Ptruint;
+  pData :PDWORD;
+  function  c(a,b:PShaderDataKey):Integer; static;
+  Procedure Free;
  end;
 
- TShaderCache=class
+ TShaderCodeCache=class
   key:TShaderDataKey;
   FShaders:array of TvShaderExt;
+  function   AddShader(FDescSetId:Integer;Stream:TStream):TvShaderExt;
   Destructor Destroy; override;
  end;
 
  PPushConstAllocator=^TPushConstAllocator;
  TPushConstAllocator=object
-  size:DWORD;
+  size  :DWORD;
   offset:DWORD;
   Procedure Init;
   function  GetAvailable:DWORD;
@@ -68,15 +71,11 @@ uses
  kern_dmem;
 
 type
- TShaderCacheCompare=object
-  function c(a,b:PShaderDataKey):Integer; static;
- end;
-
  TShadersKeyCompare=object
   function c(a,b:PvShadersKey):Integer; static;
  end;
 
- _TShaderCacheSet=specialize T23treeSet<PShaderDataKey,TShaderCacheCompare>;
+ _TShaderCacheSet=specialize T23treeSet<PShaderDataKey,TShaderDataKey>;
  TShaderCacheSet=object(_TShaderCacheSet)
   lock:Pointer;
   Procedure Lock_wr;
@@ -121,7 +120,7 @@ begin
  if (a>b) then Result:=a else Result:=b;
 end;
 
-function TShaderCacheCompare.c(a,b:PShaderDataKey):Integer;
+function TShaderDataKey.c(a,b:PShaderDataKey):Integer;
 begin
  //1 FStage
  Result:=Integer(a^.FStage>b^.FStage)-Integer(a^.FStage<b^.FStage);
@@ -140,9 +139,22 @@ begin
  Result:=CompareByte(a^.FShaders,b^.FShaders,SizeOf(AvShaderStage));
 end;
 
-Destructor TShaderCache.Destroy;
+function TShaderCodeCache.AddShader(FDescSetId:Integer;Stream:TStream):TvShaderExt;
+var
+ i:Integer;
 begin
- if (Key.pData<>nil) then FreeMem(Key.pData);
+ Result:=TvShaderExt.Create;
+ Result.FDescSetId:=FDescSetId;
+ Result.LoadFromStream(Stream);
+
+ i:=Length(FShaders);
+ SetLength(FShaders,i+1);
+ FShaders[i]:=Result;
+end;
+
+Destructor TShaderCodeCache.Destroy;
+begin
+ Key.Free;
  inherited;
 end;
 
@@ -156,21 +168,52 @@ begin
  Result:=CompareDWord(a.pData^,b.pData^,Max(a.FLen,b.FLen) div 4);
 end;
 
-function _FindShaderCache(var F:TShaderDataKey):TShaderCache;
+Procedure TShaderDataKey.Free;
+begin
+ if (FLen<>0) and (pData<>nil) then
+ begin
+  FreeMem(pData);
+ end;
+end;
+
+function _FindShaderCodeCache(const key:TShaderDataKey):TShaderCodeCache;
 var
  i:TShaderCacheSet.Iterator;
 begin
  Result:=nil;
- i:=FShaderCacheSet.find(@F);
+ i:=FShaderCacheSet.find(@key);
  if (i.Item<>nil) then
  begin
-  Result:=TShaderCache(ptruint(i.Item^)-ptruint(@TShaderCache(nil).key));
+  Result:=TShaderCodeCache(ptruint(i.Item^)-ptruint(@TShaderCodeCache(nil).key));
  end;
+end;
+
+function _FetchShaderCodeCache(const key:TShaderDataKey):TShaderCodeCache;
+var
+ t:TShaderCodeCache;
+begin
+ t:=_FindShaderCodeCache(key);
+
+ if (t=nil) then
+ begin
+  t:=TShaderCodeCache.Create;
+  t.key:=key;
+
+  t.key.FStage:=key.FStage;
+  t.key.FLen  :=_calc_shader_size(key.pData);
+  t.key.pData :=AllocMem(t.key.FLen);
+
+  Move(key.pData^,t.key.pData^,t.key.FLen);
+
+  FShaderCacheSet.Insert(@t.key);
+ end;
+
+ Result:=t;
 end;
 
 Procedure DumpSpv(FStage:TvShaderStage;M:TMemoryStream);
 var
- hash:DWORD;
+ hash:QWORD;
  F:THandle;
  fname:RawByteString;
 begin
@@ -184,7 +227,7 @@ begin
     Exit;
  end;
 
- fname:='shader_dump\'+get_dev_progname+fname+HexStr(hash,8)+'.spv';
+ fname:='shader_dump\'+get_dev_progname+fname+HexStr(hash,16)+'.spv';
 
  if FileExists(fname) then Exit;
 
@@ -297,9 +340,7 @@ var
 
  i:Integer;
  FShader:TvShaderExt;
- t:TShaderCache;
-
- fdump:RawByteString;
+ t:TShaderCodeCache;
 
  M:TMemoryStream;
 
@@ -312,15 +353,14 @@ begin
  F.FStage:=FStage;
  F.pData :=pData;
 
- t:=_FindShaderCache(F);
+ t:=_FetchShaderCodeCache(F);
 
- if (t<>nil) then
+ if (Length(t.FShaders)<>0) then
  begin
 
   pUserData:=GPU_REGS.get_user_data(FStage);
 
   FShader:=nil;
-  if Length(t.FShaders)<>0 then
   For i:=0 to High(t.FShaders) do
   begin
    FShader:=t.FShaders[i];
@@ -368,9 +408,9 @@ begin
    M:=ParseShader(FStage,pData,GPU_REGS,pc);
    Assert(M<>nil);
 
-   FShader:=TvShaderExt.Create;
-   FShader.FDescSetId:=FDescSetId;
-   FShader.LoadFromStream(M);
+   FShader:=t.AddShader(FDescSetId,M);
+
+   M.Free;
 
    if (FShader.FPushConst.size<>0) and (pc<>nil) then //push const used?
    begin
@@ -379,50 +419,17 @@ begin
     pc^.Apply(FShader.FPushConst.size);      //apply with allocator
    end;
 
-   M.Free;
-
-   i:=Length(t.FShaders);
-   SetLength(t.FShaders,i+1);
-   t.FShaders[i]:=FShader;
   end;
 
  end else
  begin
-  F.FLen:=_calc_shader_size(pData);
-  F.pData:=AllocMem(F.FLen);
-
-  Move(pData^,F.pData^,F.FLen);
-
-  t:=TShaderCache.Create;
-  t.key:=F;
-
- {
-  Case FStage of
-   vShaderStageVs:fdump:=DumpVS(GPU_REGS);
-   vShaderStagePs:fdump:=DumpPS(GPU_REGS);
-   vShaderStageCs:fdump:=DumpCS(GPU_REGS);
-   else
-     Assert(false);
-  end;
-
-  if FileExists(ChangeFileExt(fdump,'.spv')) then
-  begin
-   FShader:=TvShaderExt.Create;
-   FShader.FDescSetId:=FDescSetId;
-   FShader.LoadFromFile(ChangeFileExt(fdump,'.spv'));
-   Result:=FShader;
-   Exit;
-  end;
- }
 
   //first parse
 
   M:=ParseShader(FStage,pData,GPU_REGS,pc);
   Assert(M<>nil);
 
-  FShader:=TvShaderExt.Create;
-  FShader.FDescSetId:=FDescSetId;
-  FShader.LoadFromStream(M);
+  FShader:=t.AddShader(FDescSetId,M);
 
   M.Free;
 
@@ -433,10 +440,6 @@ begin
    pc^.Apply(FShader.FPushConst.size);      //apply with allocator
   end;
 
-  SetLength(t.FShaders,1);
-  t.FShaders[0]:=FShader;
-
-  FShaderCacheSet.Insert(@t.key);
  end;
 
  Result:=FShader;

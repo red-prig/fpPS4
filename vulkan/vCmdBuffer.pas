@@ -252,8 +252,8 @@ begin
  info:=RT.GetInfo;
 
  FCurrPipeline[0]:=RT.FPipeline.FHandle;
- FCurrLayout  [0]:=RT.FPipeline.FShaderGroup.FLayout.FHandle;
- emulate_primtype:=RT.FPipeline.emulate_primtype;
+ FCurrLayout  [0]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
+ emulate_primtype:=RT.FPipeline.Key.emulate_primtype;
 
  Inc(cmd_count);
 

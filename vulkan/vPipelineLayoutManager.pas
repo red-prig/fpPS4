@@ -6,7 +6,6 @@ interface
 
 uses
  SysUtils,
- RWLock,
  g23tree,
  Vulkan,
  vPipeline;
@@ -16,6 +15,9 @@ Function FetchPipelineLayout(const A:AvSetLayout;
 
 implementation
 
+uses
+ kern_rwlock;
+
 type
  TvPipelineLayoutCompare=class
   class function c(a,b:PvPipelineLayoutKey):Integer; static;
@@ -23,28 +25,22 @@ type
 
  _TvPipelineLayoutSet=specialize T23treeSet<PvPipelineLayoutKey,TvPipelineLayoutCompare>;
  TvPipelineLayoutSet=object(_TvPipelineLayoutSet)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FPipelineLayoutSet:TvPipelineLayoutSet;
 
-Procedure TvPipelineLayoutSet.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvPipelineLayoutSet.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvPipelineLayoutSet.Unlock;
+Procedure TvPipelineLayoutSet.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function _Find(F:PvPipelineLayoutKey):TvPipelineLayout;
@@ -96,7 +92,7 @@ begin
 
  Result:=_Fetch(@key);
 
- FPipelineLayoutSet.Unlock;
+ FPipelineLayoutSet.Unlock_wr;
 end;
 
 function ComparePtruint(buf1,buf2:PPtruint;count:PtrUint):Integer;
@@ -151,9 +147,6 @@ begin
  //4 FPushConsts
  Result:=ComparePushRanges(a^.FPushConsts,b^.FPushConsts,Length(a^.FPushConsts));
 end;
-
-initialization
- FPipelineLayoutSet.Init;
 
 end.
 

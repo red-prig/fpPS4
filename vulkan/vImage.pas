@@ -105,10 +105,10 @@ type
   cformat   :TVkFormat;
   vtype     :Word;      //TVkImageViewType 0..6
   dstSel    :TvDstSel;
-  base_level:Byte;      //first mip level (0..15)
-  last_level:Byte;      //last mip level (0..15)
+  base_level:Byte;      //first mip level   (0..15)
+  last_level:Byte;      //last  mip level   (0..15)
   base_array:Word;      //first array index (0..16383)
-  last_array:Word;      //texture height (0..16383)
+  last_array:Word;      //texture height    (0..16383)
  end;
 
  TvImage=class(TvCustomImage)

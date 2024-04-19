@@ -1,4 +1,4 @@
-unit vGraphicsPipelineManager;
+unit vPipelineManager;
 
 {$mode ObjFPC}{$H+}
 
@@ -26,6 +26,13 @@ type
   blendConstants :array[0..3] of TVkFloat;
  end;
 
+ TvVertexInput=packed record
+  vertexBindingDescriptionCount  :Byte;
+  vertexAttributeDescriptionCount:Byte;
+  VertexBindingDescriptions      :AvVertexInputBindingDescription;
+  VertexAttributeDescriptions    :AvVertexInputAttributeDescription;
+ end;
+
  PvGraphicsPipelineKey=^TvGraphicsPipelineKey;
  TvGraphicsPipelineKey=packed object
   FRenderPass :TvRenderPass;
@@ -36,7 +43,7 @@ type
 
   ColorBlends:array[0..7] of TVkPipelineColorBlendAttachmentState; //colorBlending.attachmentCount
 
-  vertexInputInfo:TVkPipelineVertexInputStateCreateInfo;
+  vertexInputInfo:TvVertexInput;
   inputAssembly  :TVkPipelineInputAssemblyStateCreateInfo;
   viewportState  :TvViewportState;
   rasterizer     :TVkPipelineRasterizationStateCreateInfo;
@@ -44,9 +51,15 @@ type
   colorBlending  :TvColorBlendState;
   DepthStencil   :TVkPipelineDepthStencilStateCreateInfo;
 
+  provokingVertexMode:TVkProvokingVertexModeEXT;
+
+  emulate_primtype:Integer;
+
   Procedure Clear;
+  Procedure SetVertexInput(var FAttrBuilder:TvAttrBuilder);
   Procedure SetPrimType(t:TVkPrimitiveTopology);
   Procedure SetPrimReset(enable:TVkBool32);
+  Procedure SetProvoking(t:TVkProvokingVertexModeEXT);
   Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
   Procedure AddBlend(const b:TVkPipelineColorBlendAttachmentState);
   procedure SetBlendInfo(logicOp:TVkLogicOp;P:PSingle);
@@ -75,30 +88,29 @@ type
   function c(a,b:PvGraphicsPipelineKey):Integer; static;
  end;
 
- _TvGraphicsPipeline2Set=specialize T23treeSet<PvGraphicsPipelineKey,TvGraphicsPipelineKey2Compare>;
- TvGraphicsPipeline2Set=object(_TvGraphicsPipeline2Set)
-  lock:Pointer;
-  FPCache:TvPipelineCache;
-  Procedure Lock_wr;
-  Procedure Unlock_wr;
- end;
+ TvGraphicsPipeline2Set=specialize T23treeSet<PvGraphicsPipelineKey,TvGraphicsPipelineKey2Compare>;
 
 var
+ global_lock:Pointer=nil;
+
+ FGlobalCache:TvPipelineCache;
+
  FGraphicsPipeline2Set:TvGraphicsPipeline2Set;
+
 
 function TvGraphicsPipelineKey2Compare.c(a,b:PvGraphicsPipelineKey):Integer;
 begin
  Result:=CompareByte(a^,b^,SizeOf(TvGraphicsPipelineKey));
 end;
 
-Procedure TvGraphicsPipeline2Set.Lock_wr;
+Procedure Global_Lock_wr;
 begin
- rw_wlock(lock);
+ rw_wlock(global_lock);
 end;
 
-Procedure TvGraphicsPipeline2Set.Unlock_wr;
+Procedure Global_Unlock_wr;
 begin
- rw_wunlock(lock);
+ rw_wunlock(global_lock);
 end;
 
 //
@@ -106,8 +118,6 @@ end;
 Procedure TvGraphicsPipelineKey.Clear;
 begin
  Self:=Default(TvGraphicsPipelineKey);
-
- vertexInputInfo.sType:=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
  inputAssembly.sType                 :=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
  inputAssembly.topology              :=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -132,17 +142,27 @@ begin
  DepthStencil.depthCompareOp:=VK_COMPARE_OP_LESS;
 end;
 
+Procedure TvGraphicsPipelineKey.SetVertexInput(var FAttrBuilder:TvAttrBuilder);
+begin
+ vertexInputInfo.vertexBindingDescriptionCount  :=FAttrBuilder.FBindDescsCount;
+ vertexInputInfo.vertexAttributeDescriptionCount:=FAttrBuilder.FAttrDescsCount;
+ vertexInputInfo.VertexBindingDescriptions      :=FAttrBuilder.FBindDescs;
+ vertexInputInfo.VertexAttributeDescriptions    :=FAttrBuilder.FAttrDescs;
+end;
+
 Procedure TvGraphicsPipelineKey.SetPrimType(t:TVkPrimitiveTopology);
 begin
  Case ord(t) of
   ord(VK_PRIMITIVE_TOPOLOGY_POINT_LIST)..ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY):
   begin
    inputAssembly.topology:=t;
+   emulate_primtype:=0;
   end;
 
   DI_PT_RECTLIST:
    begin
     inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    emulate_primtype:=Integer(t);
    end;
   DI_PT_LINELOOP ,
   DI_PT_QUADLIST ,
@@ -150,6 +170,7 @@ begin
   DI_PT_POLYGON  :
   begin
    inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+   emulate_primtype:=Integer(t);
   end;
 
  end;
@@ -158,6 +179,11 @@ end;
 Procedure TvGraphicsPipelineKey.SetPrimReset(enable:TVkBool32);
 begin
  inputAssembly.primitiveRestartEnable:=enable;
+end;
+
+Procedure TvGraphicsPipelineKey.SetProvoking(t:TVkProvokingVertexModeEXT);
+begin
+ provokingVertexMode:=t;
 end;
 
 Procedure TvGraphicsPipelineKey.AddVPort(const V:TVkViewport;const S:TVkRect2D);
@@ -201,10 +227,13 @@ var
 
  r:TVkResult;
  Stages:AVkPipelineShaderStageCreateInfo; // info.stageCount
- info:TVkGraphicsPipelineCreateInfo;
+ info  :TVkGraphicsPipelineCreateInfo;
 
- viewportState:TVkPipelineViewportStateCreateInfo;
- colorBlending:TVkPipelineColorBlendStateCreateInfo;
+ vertexInputInfo:TVkPipelineVertexInputStateCreateInfo;
+ viewportState  :TVkPipelineViewportStateCreateInfo;
+ colorBlending  :TVkPipelineColorBlendStateCreateInfo;
+ rasterizer     :TVkPipelineRasterizationStateCreateInfo;
+ ProvokingVertex:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
 begin
  Result:=False;
 
@@ -222,6 +251,13 @@ begin
 
  //
 
+ vertexInputInfo:=Default(TVkPipelineVertexInputStateCreateInfo);
+ vertexInputInfo.sType                          :=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+ vertexInputInfo.vertexBindingDescriptionCount  :=Key.vertexInputInfo.vertexBindingDescriptionCount;
+ vertexInputInfo.vertexAttributeDescriptionCount:=Key.vertexInputInfo.vertexAttributeDescriptionCount;
+ vertexInputInfo.pVertexBindingDescriptions     :=@Key.vertexInputInfo.VertexBindingDescriptions;
+ vertexInputInfo.pVertexAttributeDescriptions   :=@Key.vertexInputInfo.VertexAttributeDescriptions;
+
  viewportState:=Default(TVkPipelineViewportStateCreateInfo);
  viewportState.sType        :=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
  viewportState.viewportCount:=Key.viewportState.viewportCount;
@@ -236,14 +272,25 @@ begin
  colorBlending.attachmentCount:=Key.colorBlending.attachmentCount;
  colorBlending.pAttachments   :=@Key.ColorBlends;
 
+ rasterizer:=Key.rasterizer;
+
+ if limits.VK_EXT_provoking_vertex then
+ begin
+  rasterizer.pNext:=@ProvokingVertex;
+  //
+  ProvokingVertex:=Default(TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT);
+  ProvokingVertex.sType              :=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
+  ProvokingVertex.provokingVertexMode:=Key.provokingVertexMode;
+ end;
+
  //
 
  info.sType              :=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
  info.pStages            :=@Stages;
- info.pVertexInputState  :=@Key.vertexInputInfo;
+ info.pVertexInputState  :=@vertexInputInfo;
  info.pInputAssemblyState:=@Key.inputAssembly;
  info.pViewportState     :=@viewportState;
- info.pRasterizationState:=@Key.rasterizer;
+ info.pRasterizationState:=@rasterizer;
  info.pMultisampleState  :=@Key.multisampling;
  info.pDepthStencilState :=@Key.DepthStencil;
  info.pColorBlendState   :=@colorBlending;
@@ -308,13 +355,13 @@ begin
  if (t=nil) then
  begin
 
-  if (FGraphicsPipeline2Set.FPCache=nil) then
+  if (FGlobalCache=nil) then
   begin
-   FGraphicsPipeline2Set.FPCache:=TvPipelineCache.Create(nil,0);
+   FGlobalCache:=TvPipelineCache.Create(nil,0);
   end;
 
   t:=TvGraphicsPipeline2.Create;
-  t.FPCache:=FGraphicsPipeline2Set.FPCache;
+  t.FPCache:=FGlobalCache;
 
   t.key:=P^;
 
@@ -336,19 +383,19 @@ begin
  Result:=nil;
  if (P=nil) then Exit;
 
- FGraphicsPipeline2Set.Lock_wr;
+ Global_Lock_wr;
 
  Result:=_FetchGraphicsPipeline(P);
 
  if (cmd<>nil) and (Result<>nil) then
  begin
-  if cmd.AddDependence(@TvGraphicsPipeline2(Result).Release) then
+  if cmd.AddDependence(@Result.Release) then
   begin
-   TvGraphicsPipeline2(Result).Acquire;
+   Result.Acquire;
   end;
  end;
 
- FGraphicsPipeline2Set.Unlock_wr;
+ Global_Unlock_wr;
 end;
 
 

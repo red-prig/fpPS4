@@ -112,6 +112,8 @@ begin
  begin
   buf:=It.Item^.FBuffer;
 
+  if (buf.FAddr>=__end) then Exit;
+
   if buf.Acquire then
   begin
 
@@ -235,7 +237,7 @@ begin
  end;
 
  //add dep
- if (cmd<>nil) then
+ if (cmd<>nil) and (key.FBuffer<>nil) then
  begin
   if cmd.AddDependence(@key.FBuffer.OnReleaseCmd) then
   begin

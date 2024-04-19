@@ -14,7 +14,7 @@ uses
  vImage,
  vImageManager,
  vRenderPassManager,
- vGraphicsPipelineManager,
+ vPipelineManager,
  vShader,
  vShaderExt,
  vShaderManager,
@@ -107,6 +107,8 @@ var
  FShadersKey:TvShadersKey;
  FShaderGroup:TvShaderGroup;
 
+ FAttrBuilder:TvAttrBuilder;
+
  RP_KEY:TvRenderPassKey;
  RP:TvRenderPass2;
 
@@ -194,12 +196,19 @@ begin
    GP_KEY.AddBlend(RT_INFO[i].blend);
   end;
 
- //GP_KEY.vertexInputInfo -> FAttrBuilder
+ FAttrBuilder:=Default(TvAttrBuilder);
 
- GP_KEY.rasterizer     :=GPU_REGS.GET_RASTERIZATION;
- //GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+ if (FVSShader<>nil) then
+ begin
+  FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,GPU_REGS.get_user_data(vShaderStageVs));
+ end;
 
- GP_KEY.multisampling  :=GPU_REGS.GET_MULTISAMPLE;
+ GP_KEY.SetVertexInput(FAttrBuilder);
+
+ GP_KEY.rasterizer   :=GPU_REGS.GET_RASTERIZATION;
+ GP_KEY.multisampling:=GPU_REGS.GET_MULTISAMPLE;
+
+ GP_KEY.SetProvoking(GPU_REGS.GET_PROVOKING);
 
  if GPU_REGS.DB_ENABLE then
  begin

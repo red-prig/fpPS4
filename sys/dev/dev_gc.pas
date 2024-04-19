@@ -66,7 +66,7 @@ begin
 
   if (paddr=0) and ((g_appinfo.mmap_flags and 2)<>0) then
   begin
-   paddr:=$fc0000000;
+   paddr:=QWORD($fc0000000);
   end;
 
   Result:=vm_mmap2(map,

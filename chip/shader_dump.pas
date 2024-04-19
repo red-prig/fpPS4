@@ -162,7 +162,8 @@ end;
 
 function DumpCS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
- size,hash:DWORD;
+ size:DWORD;
+ hash:QWORD;
  base:Pointer;
  F:THandle;
  fname:RawByteString;
@@ -175,7 +176,7 @@ begin
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);
-  fname:='shader_dump\'+get_dev_progname+'_cs_'+HexStr(hash,8)+'.dump';
+  fname:='shader_dump\'+get_dev_progname+'_cs_'+HexStr(hash,16)+'.dump';
   Result:=fname;
 
   if FileExists(fname) then Exit;
@@ -205,7 +206,8 @@ end;
 function DumpPS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
  i:Integer;
- size,hash:DWORD;
+ size:DWORD;
+ hash:QWORD;
  base:Pointer;
  F:THandle;
  fname:RawByteString;
@@ -217,7 +219,7 @@ begin
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);
-  fname:='shader_dump\'+get_dev_progname+'_ps_'+HexStr(hash,8)+'.dump';
+  fname:='shader_dump\'+get_dev_progname+'_ps_'+HexStr(hash,16)+'.dump';
   Result:=fname;
 
   if FileExists(fname) then Exit;
@@ -256,7 +258,8 @@ end;
 
 function DumpVS(var GPU_REGS:TGPU_REGS):RawByteString;
 var
- size,hash:DWORD;
+ size:DWORD;
+ hash:QWORD;
  base:Pointer;
  F:THandle;
  fname:RawByteString;
@@ -268,7 +271,7 @@ begin
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);
-  fname:='shader_dump\'+get_dev_progname+'_vs_'+HexStr(hash,8)+'.dump';
+  fname:='shader_dump\'+get_dev_progname+'_vs_'+HexStr(hash,16)+'.dump';
   Result:=fname;
 
   if FileExists(fname) then Exit;
@@ -289,8 +292,7 @@ begin
 
   DUMP_REG(F,mmVGT_DMA_NUM_INSTANCES,GPU_REGS);
 
-  //DUMP_REG(F,mmVGT_NUM_INSTANCES,@GPU_REGS.VGT_NUM_INSTANCES,SizeOf(DWORD));
-
+  DUMP_REG(F,mmVGT_NUM_INSTANCES,GPU_REGS);
 
   FileClose(F);
 

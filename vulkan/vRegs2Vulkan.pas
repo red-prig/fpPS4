@@ -105,7 +105,7 @@ type
   Function  GET_DB_INFO:TDB_INFO;
 
   Function  GET_RASTERIZATION:TVkPipelineRasterizationStateCreateInfo;
-  Function  GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+  Function  GET_PROVOKING:TVkProvokingVertexModeEXT;
   Function  GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
 
   function  GET_PRIM_RESET:TVkBool32;
@@ -1170,6 +1170,8 @@ begin
   Exit(VK_POLYGON_MODE_FILL);
  end;
 
+ //fillModeNonSolid
+
  if (SU_SC_MODE_CNTL.CULL_FRONT=0) then
  begin
   t:=SU_SC_MODE_CNTL.POLYMODE_FRONT_PTYPE;
@@ -1234,12 +1236,9 @@ begin
 
 end;
 
-Function TGPU_REGS.GET_PROVOKING:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+Function TGPU_REGS.GET_PROVOKING:TVkProvokingVertexModeEXT;
 begin
- Result:=Default(TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT);
- Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
-
- Result.provokingVertexMode:=TVkProvokingVertexModeEXT(CX_REG^.PA_SU_SC_MODE_CNTL.PROVOKING_VTX_LAST);
+ Result:=TVkProvokingVertexModeEXT(CX_REG^.PA_SU_SC_MODE_CNTL.PROVOKING_VTX_LAST);
 end;
 
 Function TGPU_REGS.GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;

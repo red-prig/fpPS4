@@ -16,6 +16,11 @@ uses
  vCmdBuffer{,
  vImageTiling};
 
+{
+ image_type -> attachment,texture,texel
+ write_back -> not_need,keep,started,finished
+}
+
 type
  TvImageView2Compare=object
   function c(a,b:PvImageViewKey):Integer; static;

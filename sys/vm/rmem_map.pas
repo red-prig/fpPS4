@@ -14,13 +14,13 @@ type
  pp_rmem_map_entry=^p_rmem_map_entry;
  p_rmem_map_entry=^t_rmem_map_entry;
  t_rmem_map_entry=packed record
-  prev          :p_rmem_map_entry; // previous entry
-  next          :p_rmem_map_entry; // next entry
-  left          :p_rmem_map_entry; // left child in binary search tree
-  right         :p_rmem_map_entry; // right child in binary search tree
-  start         :DWORD;            // start address
-  __end         :DWORD;            // end address
-  vaddr         :DWORD;            // virtual addr mapping
+  prev :p_rmem_map_entry; // previous entry
+  next :p_rmem_map_entry; // next entry
+  left :p_rmem_map_entry; // left child in binary search tree
+  right:p_rmem_map_entry; // right child in binary search tree
+  start:DWORD;            // start address
+  __end:DWORD;            // end address
+  vaddr:DWORD;            // virtual addr mapping
  end;
 
  p_rmem_map=^t_rmem_map;
@@ -57,6 +57,10 @@ function  rmem_map_lookup_entry_any(
             map  :p_rmem_map;
             start:DWORD;
             entry:pp_rmem_map_entry):Boolean;
+
+function  rmem_map_test(map  :p_rmem_map;
+                        start:DWORD;
+                        __end:DWORD):Boolean;
 
 function  rmem_map_insert(
             map  :p_rmem_map;
@@ -493,6 +497,31 @@ begin
  Result:=(FALSE);
 end;
 
+function rmem_map_test(map  :p_rmem_map;
+                       start:DWORD;
+                       __end:DWORD):Boolean;
+var
+ entry:p_rmem_map_entry;
+begin
+ Result:=True;
+
+ if not rmem_map_lookup_entry_any(map,start,@entry) then
+ begin
+  Exit(False);
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  if (__end>entry^.start) and (start<entry^.__end) then
+  begin
+   Exit(False);
+  end;
+
+  entry:=entry^.next;
+ end;
+end;
+
 function rmem_map_insert(
            map  :p_rmem_map;
            vaddr:DWORD;
@@ -620,17 +649,13 @@ procedure rmem_map_unmap_check(map  :p_rmem_map;
                                start:DWORD;
                                __end:DWORD);
 var
- entry      :p_rmem_map_entry;
- first_entry:p_rmem_map_entry;
+ entry:p_rmem_map_entry;
  s,e:DWORD;
 begin
 
- if (not rmem_map_lookup_entry_any(map,start,@first_entry)) then
+ if not rmem_map_lookup_entry_any(map,start,@entry) then
  begin
-  entry:=first_entry^.next;
- end else
- begin
-  entry:=first_entry;
+  Exit;
  end;
 
  repeat

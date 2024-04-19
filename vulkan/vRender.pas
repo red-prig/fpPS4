@@ -16,6 +16,7 @@ uses
   vShader,
   vShaderExt,
   vPipeline,
+  vPipelineManager,
   //vSetsPools,
   vImage;
 
@@ -49,6 +50,7 @@ type
  end;
  }
 
+ {
  TvGraphicsPipeline=class(TvPipeline)
   FRenderPass:TvRenderPass;
 
@@ -81,10 +83,11 @@ type
   procedure SetRenderPass(RenderPass:TvRenderPass);
   function  Compile:Boolean;
  end;
+ }
 
  TvRenderTargets=class
   FRenderPass:TvRenderPass;
-  FPipeline:TvGraphicsPipeline;
+  FPipeline:TvGraphicsPipeline2;
   FFramebuffer:TvFramebufferIV;
   FRenderArea:TVkRect2D;
   FClearValuesCount:TVkUInt32;
@@ -381,6 +384,7 @@ end;
 
 //
 
+{
 Procedure TvGraphicsPipeline.SetPrimType(t:TVkPrimitiveTopology);
 begin
  Case ord(t) of
@@ -589,6 +593,7 @@ begin
 
  Result:=True;
 end;
+}
 
 /////////
 

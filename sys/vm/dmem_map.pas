@@ -913,7 +913,7 @@ begin
   Exit(0);
  end;
 
- offset:=$5000000000 - start;
+ offset:=QWORD($5000000000) - start;
 
  if (Int64(len) < Int64(offset)) then
  begin
