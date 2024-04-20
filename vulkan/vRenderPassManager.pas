@@ -125,13 +125,16 @@ begin
  ColorRef[RefCount].layout    :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL{VK_IMAGE_LAYOUT_GENERAL};
  Inc(RefCount);
 
- Dependency.srcStageMask :=Dependency.srcStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
- Dependency.dstStageMask :=Dependency.dstStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+ if (id<>VK_ATTACHMENT_UNUSED) then
+ begin
+  Dependency.srcStageMask :=Dependency.srcStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+  Dependency.dstStageMask :=Dependency.dstStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
- am:=GetColorAccessMask(IMAGE_USAGE);
+  am:=GetColorAccessMask(IMAGE_USAGE);
 
- Dependency.srcAccessMask:=Dependency.srcAccessMask or am;
- Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
+  Dependency.srcAccessMask:=Dependency.srcAccessMask or am;
+  Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
+ end;
 end;
 
 Procedure TvRenderPassKey.SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);

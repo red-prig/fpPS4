@@ -67,6 +67,9 @@ type
   function    Compile(ext:Pointer):Boolean;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   OnReleaseMem(Sender:TObject);
+  //
+  function    Acquire:Boolean;
+  procedure   Release;
  end;
 
 const
@@ -653,6 +656,16 @@ begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
   FHandle:=VK_NULL_HANDLE;
  end;
+end;
+
+function TvCustomImage.Acquire:Boolean;
+begin
+ Result:=FBind.Acquire;
+end;
+
+procedure TvCustomImage.Release;
+begin
+ FBind.Release;
 end;
 
 procedure _test_and_set_to(var new:TVkFlags;

@@ -231,21 +231,22 @@ function  sparseResidencyAliased:Boolean;
 var
  limits:record
 
-  VK_KHR_swapchain               :Boolean;
-  VK_EXT_external_memory_host    :Boolean;
+  VK_KHR_swapchain                 :Boolean;
+  VK_EXT_external_memory_host      :Boolean;
 
-  VK_KHR_imageless_framebuffer   :Boolean;
-  VK_EXT_provoking_vertex        :Boolean;
+  VK_EXT_vertex_input_dynamic_state:Boolean;
+  VK_KHR_imageless_framebuffer     :Boolean;
+  VK_EXT_provoking_vertex          :Boolean;
 
-  VK_KHR_shader_float16_int8     :Boolean;
-  VK_KHR_16bit_storage           :Boolean;
-  VK_KHR_8bit_storage            :Boolean;
-  VK_KHR_push_descriptor         :Boolean;
-  VK_KHR_shader_non_semantic_info:Boolean;
-  VK_EXT_index_type_uint8        :Boolean;
-  VK_EXT_scalar_block_layout     :Boolean;
+  VK_KHR_shader_float16_int8       :Boolean;
+  VK_KHR_16bit_storage             :Boolean;
+  VK_KHR_8bit_storage              :Boolean;
+  VK_KHR_push_descriptor           :Boolean;
+  VK_KHR_shader_non_semantic_info  :Boolean;
+  VK_EXT_index_type_uint8          :Boolean;
+  VK_EXT_scalar_block_layout       :Boolean;
 
-  VK_AMD_device_coherent_memory  :Boolean;
+  VK_AMD_device_coherent_memory    :Boolean;
 
   maxUniformBufferRange:TVkUInt32;
   maxStorageBufferRange:TVkUInt32;
@@ -406,21 +407,22 @@ begin
   For i:=0 to count-1 do
   begin
    Case String(pProperties[i].extensionName) of
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME               :limits.VK_KHR_swapchain               :=True;
-    VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME    :limits.VK_EXT_external_memory_host    :=True;
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME                 :limits.VK_KHR_swapchain                 :=True;
+    VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME      :limits.VK_EXT_external_memory_host      :=True;
 
-    VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME   :limits.VK_KHR_imageless_framebuffer   :=True;
-    VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME        :limits.VK_EXT_provoking_vertex        :=True;
+    VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME:limits.VK_EXT_vertex_input_dynamic_state:=True;
+    VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME     :limits.VK_KHR_imageless_framebuffer     :=True;
+    VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME          :limits.VK_EXT_provoking_vertex          :=True;
 
-    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME     :limits.VK_KHR_shader_float16_int8     :=True;
-    VK_KHR_16BIT_STORAGE_EXTENSION_NAME           :limits.VK_KHR_16bit_storage           :=True;
-    VK_KHR_8BIT_STORAGE_EXTENSION_NAME            :limits.VK_KHR_8bit_storage            :=True;
-    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME         :limits.VK_KHR_push_descriptor         :=True;
-    VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME:limits.VK_KHR_shader_non_semantic_info:=True;
-    VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME        :limits.VK_EXT_index_type_uint8        :=True;
-    VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME     :limits.VK_EXT_scalar_block_layout     :=True;
+    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME       :limits.VK_KHR_shader_float16_int8       :=True;
+    VK_KHR_16BIT_STORAGE_EXTENSION_NAME             :limits.VK_KHR_16bit_storage             :=True;
+    VK_KHR_8BIT_STORAGE_EXTENSION_NAME              :limits.VK_KHR_8bit_storage              :=True;
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME           :limits.VK_KHR_push_descriptor           :=True;
+    VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME  :limits.VK_KHR_shader_non_semantic_info  :=True;
+    VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME          :limits.VK_EXT_index_type_uint8          :=True;
+    VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME       :limits.VK_EXT_scalar_block_layout       :=True;
 
-    VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME  :limits.VK_AMD_device_coherent_memory  :=True;
+    VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME    :limits.VK_AMD_device_coherent_memory    :=True;
    end;
   end;
   FreeMem(pProperties);
@@ -1580,9 +1582,9 @@ var
  DeviceInfo:TvDeviceCreateInfo;
  //ImgProp:TVkFormatProperties;
 
+ FVIDS:TVkPhysicalDeviceVertexInputDynamicStateFeaturesEXT;
  FILFB:TVkPhysicalDeviceImagelessFramebufferFeatures;
-
- FDPVP:TVkPhysicalDeviceProvokingVertexPropertiesEXT;
+ FDPVF:TVkPhysicalDeviceProvokingVertexFeaturesEXT;
 
  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8:TVkPhysicalDevice8BitStorageFeatures;
@@ -1648,6 +1650,17 @@ begin
   DeviceInfo.add_feature(@FCoherent);
  end;
 
+ if limits.VK_EXT_vertex_input_dynamic_state then
+ begin
+  DeviceInfo.add_ext(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
+
+  FVIDS:=Default(TVkPhysicalDeviceVertexInputDynamicStateFeaturesEXT);
+  FVIDS.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+  FVIDS.vertexInputDynamicState:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FVIDS);
+ end;
+
  if limits.VK_KHR_imageless_framebuffer then
  begin
   DeviceInfo.add_ext(VK_KHR_IMAGELESS_FRAMEBUFFER_EXTENSION_NAME);
@@ -1663,12 +1676,11 @@ begin
  begin
   DeviceInfo.add_ext(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
 
-  FDPVP:=Default(TVkPhysicalDeviceProvokingVertexPropertiesEXT);
-  FDPVP.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_PROPERTIES_EXT;
+  FDPVF:=Default(TVkPhysicalDeviceProvokingVertexFeaturesEXT);
+  FDPVF.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROVOKING_VERTEX_FEATURES_EXT;
+  FDPVF.provokingVertexLast:=VK_TRUE;
 
-  FDPVP.provokingVertexModePerPipeline:=VK_TRUE;
-
-  DeviceInfo.add_feature(@FDPVP);
+  DeviceInfo.add_feature(@FDPVF);
  end;
 
  //if limits.VK_KHR_push_descriptor then
