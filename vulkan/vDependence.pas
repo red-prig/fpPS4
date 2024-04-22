@@ -38,10 +38,10 @@ type
   Procedure Lock_wr;
   Procedure Unlock_rd;
   Procedure Unlock_wr;
-  function  Insert(Const K:TObject):Boolean;
+  function  Insert  (Const K:TObject):Boolean;
   Function  Contains(Const K:TObject):Boolean;
-  Function  delete(Const R:TObject):Boolean;
-  Function  Release(Const R:TObject):Boolean;
+  Function  delete  (Const R:TObject):Boolean;
+  Function  Release (Const R:TObject):Boolean;
  end;
 
 implementation

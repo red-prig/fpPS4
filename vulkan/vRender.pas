@@ -86,10 +86,11 @@ type
  }
 
  TvRenderTargets=class
-  FRenderPass:TvRenderPass;
-  FPipeline:TvGraphicsPipeline2;
-  FFramebuffer:TvFramebufferIV;
-  FRenderArea:TVkRect2D;
+  FRenderPass :TvRenderPass;
+  FPipeline   :TvGraphicsPipeline2;
+  FFramebuffer:TvFramebuffer;
+  FRenderArea :TVkRect2D;
+
   FClearValuesCount:TVkUInt32;
   FClearValues:array[0..8] of TVkClearValue;
   //
@@ -622,8 +623,8 @@ end;
 
 Destructor TvRenderTargets.Destroy;
 begin
- FreeAndNil(FRenderPass);
- FreeAndNil(FPipeline);
+ /////FreeAndNil(FRenderPass);
+ /////FreeAndNil(FPipeline);
  FreeAndNil(FFramebuffer);
  inherited;
 end;

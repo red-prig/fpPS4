@@ -21,7 +21,7 @@ type
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
-  procedure   OnReleaseMem(Sender:TObject);
+  procedure   OnReleaseMem(Sender:TObject); virtual;
   //
   function    Acquire:Boolean;
   procedure   Release;

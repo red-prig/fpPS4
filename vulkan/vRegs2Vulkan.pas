@@ -20,13 +20,8 @@ uses
 
 type
  TRT_INFO=record
-  //Addr:Pointer;
 
-  //extend:TVkExtent2D;
   padded:TVkExtent2D;
-
-  //cformat:TVkFormat;
-  //TILE_MODE_INDEX:DWORD;
 
   FImageInfo:TvImageKey;
   FImageView:TvImageViewKey;
@@ -49,7 +44,6 @@ type
   STENCIL_READ_ADDR :Pointer;
   STENCIL_WRITE_ADDR:Pointer;
 
-  //extend:TVkExtent2D;
   padded:TVkExtent2D;
 
   //DEPTH_CLEAR   :Boolean;
@@ -66,8 +60,6 @@ type
   STENCIL_USAGE:Byte;
 
   FImageInfo:TvImageKey;
-
-  //dformat:TVkFormat;
 
   zorder_stage:TVkPipelineStageFlags;
 
@@ -283,7 +275,7 @@ begin
   BLEND_CONSTANT_ALPHA          :Result:=VK_BLEND_FACTOR_CONSTANT_ALPHA;
   BLEND_ONE_MINUS_CONSTANT_ALPHA:Result:=VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
   else
-   Assert(false);
+   Assert(false,'Unknow blend factor:0x'+HexStr(i,1));
  end;
 end;
 
@@ -296,7 +288,7 @@ begin
   COMB_MAX_DST_SRC  :Result:=VK_BLEND_OP_MAX;
   COMB_DST_MINUS_SRC:Result:=VK_BLEND_OP_REVERSE_SUBTRACT;
   else
-   Assert(false);
+   Assert(false,'Unknow blend op:0x'+HexStr(i,1));
  end;
 end;
 
@@ -938,7 +930,9 @@ begin
   STENCIL_XOR         ,                                           //    STENCILOPVAL
   STENCIL_NAND        ,                                           //    STENCILOPVAL
   STENCIL_NOR         ,                                           //    STENCILOPVAL
-  STENCIL_XNOR        :Assert(false,'GetStencilOp');              //    STENCILOPVAL
+  STENCIL_XNOR        :Assert(false,'Unknow stencil op:STENCIL_XNOR'); //    STENCILOPVAL
+  else
+                       Assert(false,'Unknow stencil op:0x'+HexStr(b,1));
  end;
 end;
 
@@ -1658,7 +1652,7 @@ begin
   SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   else;
-   Assert(false);
+   Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
  end;
 
  Result.params.tiling_idx   :=PT^.tiling_idx;
@@ -1754,7 +1748,7 @@ begin
   SQ_RSRC_IMG_2D_MSAA      :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
   SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
   else;
-   Assert(false);
+   Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
  end;
 
  Result.dstSel.r:=_get_dst_sel_swizzle(PT^.dst_sel_x);

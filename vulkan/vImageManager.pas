@@ -18,7 +18,15 @@ uses
 
 {
  image_type -> attachment,texture,texel
+ read_mode  -> not_need,started,keep,changed
  write_back -> not_need,keep,started,finished
+
+ cmd R/W -> cmd RO
+  |
+  v
+ cmd R/W -> cmd RO
+  |
+  v
 }
 
 type
@@ -32,7 +40,7 @@ type
   Parent:TvImage2;
   key:TvImageViewKey;
   //
-  //Barrier:TvImageBarrier;
+  Barrier:TvImageBarrier;
   //
   //Constructor Create;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
@@ -71,15 +79,13 @@ type
   //
   Barrier:TvImageBarrier;
   //
-  //FHostImage:TvHostImage2;
-  //
-  Fdevc:TvPointer;
   //
   FRefs:ptruint;
+  FLastCmd:TvCustomCmdBuffer;
   FDeps:TObjectSetLock;
   //
   submit_id:ptruint;
-  hash:dword;
+  hash:qword;
   //
   data_usage:Byte;
   Constructor Create;
@@ -98,7 +104,7 @@ type
   procedure   Release(Sender:TObject);
  end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;var F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 const
@@ -174,11 +180,11 @@ procedure TvImageView2.PushBarrier(cmd:TvCustomCmdBuffer;
 begin
  if (Parent=nil) then Exit;
  Parent.PushBarrier(cmd,dstAccessMask,newImageLayout,dstStageMask);
- {
+
  if (cmd=nil) then Exit;
  if (not cmd.BeginCmdBuffer) then Exit;
 
- if Barrier.Push(cmd.cmdbuf,
+ if Barrier.Push(cmd.FCmdbuf,
                  Parent.FHandle,
                  GetSubresRange,
                  dstAccessMask,
@@ -187,7 +193,7 @@ begin
  begin
   Inc(cmd.cmd_count);
  end;
- }
+
 end;
 
 procedure TvImageView2.Release(Sender:TObject);
@@ -224,6 +230,7 @@ Destructor TvImage2.Destroy;
 var
  i:TvImageView2Set.Iterator;
  t:TvImageView2;
+ Fdevc:TvPointer;
 begin
 
  i:=FViews.cbegin;
@@ -234,6 +241,9 @@ begin
   i.Next;
  end;
  FViews.Free;
+
+ Fdevc:=FBind;
+ FBind:=Default(TvPointer);
 
  MemManager.Free(Fdevc);
 
@@ -478,7 +488,7 @@ begin
 
  rw_wlock(lock);
 
- if Barrier.Push(cmd.cmdbuf,
+ if Barrier.Push(cmd.FCmdbuf,
                  FHandle,
                  GetSubresRange,
                  dstAccessMask,
@@ -517,7 +527,13 @@ begin
  System.InterlockedIncrement(Pointer(FRefs));
  if (Sender<>nil) then
  begin
-  FDeps.Insert(Sender);
+  if FDeps.Insert(Sender) then
+  begin
+   if Sender.InheritsFrom(TvCustomCmdBuffer) then
+   begin
+    FLastCmd:=TvCustomCmdBuffer(Sender);
+   end;
+  end;
  end;
 end;
 
@@ -526,6 +542,10 @@ begin
  if (Sender<>nil) then
  begin
   FDeps.delete(Sender);
+  if (FLastCmd=Sender) then
+  begin
+   FLastCmd:=nil;
+  end;
  end;
  if System.InterlockedDecrement(Pointer(FRefs))=nil then
  begin
@@ -533,7 +553,7 @@ begin
  end;
 end;
 
-function _Find(var F:TvImageKey):TvImage2;
+function _Find(const F:TvImageKey):TvImage2;
 var
  i:TvImage2Set.Iterator;
 begin
@@ -557,9 +577,10 @@ begin
  if (usage and ord(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ))<>0 then Write(' INPUT_ATTACHMENT');
 end;
 
-function _FetchImage(var F:TvImageKey;usage:TVkFlags):TvImage2;
+function _FetchImage(const F:TvImageKey;usage:TVkFlags):TvImage2;
 var
  t:TvImage2;
+ Fdevc:TvPointer;
 begin
  Result:=nil;
 
@@ -593,13 +614,13 @@ begin
   end else
   begin
 
-   t.Fdevc:=MemManager.Alloc(
+   Fdevc:=MemManager.Alloc(
      t.GetRequirements,
      ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
    );
-   t.BindMem(t.Fdevc);
+   t.BindMem(Fdevc);
 
-   t.Acquire(nil);
+   t.Acquire(nil); //self depend
    FImage2Set.Insert(@t.key);
   end;
 
@@ -630,7 +651,7 @@ begin
  Result:=t;
 end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;var F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
 begin
  FImage2Set.Lock_wr;
 

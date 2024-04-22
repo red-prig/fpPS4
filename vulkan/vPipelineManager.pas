@@ -15,14 +15,9 @@ uses
  si_ci_vi_merged_enum;
 
 type
- TvViewportState=packed record
-  viewportCount:TVkUInt32;
-  scissorCount :TVkUInt32;
- end;
-
  TvColorBlendState=packed record
-  logicOp        :TVkLogicOp;
-  attachmentCount:TVkUInt32;
+  logicOp        :Byte;
+  attachmentCount:Byte;
   blendConstants :array[0..3] of TVkFloat;
  end;
 
@@ -43,17 +38,17 @@ type
 
   ColorBlends:array[0..7] of TVkPipelineColorBlendAttachmentState; //colorBlending.attachmentCount
 
-  vertexInputInfo:TvVertexInput;
   inputAssembly  :TVkPipelineInputAssemblyStateCreateInfo;
-  viewportState  :TvViewportState;
   rasterizer     :TVkPipelineRasterizationStateCreateInfo;
   multisampling  :TVkPipelineMultisampleStateCreateInfo;
-  colorBlending  :TvColorBlendState;
   DepthStencil   :TVkPipelineDepthStencilStateCreateInfo;
 
-  provokingVertexMode:TVkProvokingVertexModeEXT;
+  vertexInputInfo:TvVertexInput;
+  colorBlending  :TvColorBlendState;
 
-  emulate_primtype:Integer;
+  viewportCount   :Byte;
+  provokingVertex :Byte;
+  emulate_primtype:Byte;
 
   Procedure Clear;
   Procedure SetVertexInput(var FAttrBuilder:TvAttrBuilder);
@@ -136,7 +131,7 @@ begin
  multisampling.rasterizationSamples:=VK_SAMPLE_COUNT_1_BIT;
  multisampling.minSampleShading    :=1;
 
- colorBlending.logicOp:=VK_LOGIC_OP_COPY;
+ colorBlending.logicOp:=ord(VK_LOGIC_OP_COPY);
 
  DepthStencil.sType         :=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
  DepthStencil.depthCompareOp:=VK_COMPARE_OP_LESS;
@@ -162,7 +157,7 @@ begin
   DI_PT_RECTLIST:
    begin
     inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-    emulate_primtype:=Integer(t);
+    emulate_primtype:=ord(t);
    end;
   DI_PT_LINELOOP ,
   DI_PT_QUADLIST ,
@@ -170,7 +165,7 @@ begin
   DI_PT_POLYGON  :
   begin
    inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-   emulate_primtype:=Integer(t);
+   emulate_primtype:=ord(t);
   end;
 
  end;
@@ -183,24 +178,27 @@ end;
 
 Procedure TvGraphicsPipelineKey.SetProvoking(t:TVkProvokingVertexModeEXT);
 begin
- provokingVertexMode:=t;
+ provokingVertex:=ord(t);
 end;
 
 Procedure TvGraphicsPipelineKey.AddVPort(const V:TVkViewport;const S:TVkRect2D);
 begin
  if (s.extent.width=0) or (s.extent.height=0) then Assert(false);
 
- if (viewportState.viewportCount>15) then Exit;
- Viewports[viewportState.viewportCount]:=V;
- Scissors [viewportState.viewportCount]:=S;
- Inc(viewportState.viewportCount);
- viewportState.scissorCount:=viewportState.viewportCount;
+ if (viewportCount>15) then Exit;
+
+ Viewports[viewportCount]:=V;
+ Scissors [viewportCount]:=S;
+
+ Inc(viewportCount);
 end;
 
 Procedure TvGraphicsPipelineKey.AddBlend(const b:TVkPipelineColorBlendAttachmentState);
 begin
  if (colorBlending.attachmentCount>7) then Exit;
+
  ColorBlends[colorBlending.attachmentCount]:=b;
+
  Inc(colorBlending.attachmentCount);
 end;
 
@@ -210,7 +208,7 @@ type
 
 procedure TvGraphicsPipelineKey.SetBlendInfo(logicOp:TVkLogicOp;P:PSingle);
 begin
- colorBlending.logicOp:=logicOp;
+ colorBlending.logicOp:=ord(logicOp);
 
  if (P=nil) then Exit;
  colorBlending.blendConstants:=PVec4f(P)^;
@@ -239,8 +237,7 @@ begin
 
  if (Key.FRenderPass =nil) then Exit;
  if (Key.FShaderGroup=nil) then Exit;
- if (Key.viewportState.viewportCount=0) then Exit;
- if (Key.viewportState.scissorCount =0) then Exit;
+ if (Key.viewportCount=0) then Exit;
 
  info:=Default(TVkGraphicsPipelineCreateInfo);
 
@@ -267,15 +264,15 @@ begin
 
  viewportState:=Default(TVkPipelineViewportStateCreateInfo);
  viewportState.sType        :=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
- viewportState.viewportCount:=Key.viewportState.viewportCount;
+ viewportState.viewportCount:=Key.viewportCount;
  viewportState.pViewports   :=@Key.Viewports;
- viewportState.scissorCount :=Key.viewportState.scissorCount;
+ viewportState.scissorCount :=Key.viewportCount;
  viewportState.pScissors    :=@Key.Scissors;
 
  colorBlending:=Default(TVkPipelineColorBlendStateCreateInfo);
  colorBlending.sType          :=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
- colorBlending.logicOpEnable  :=ord(Key.colorBlending.logicOp<>VK_LOGIC_OP_COPY);
- colorBlending.logicOp        :=Key.colorBlending.logicOp;
+ colorBlending.logicOpEnable  :=ord(Key.colorBlending.logicOp<>ord(VK_LOGIC_OP_COPY));
+ colorBlending.logicOp        :=TVkLogicOp(Key.colorBlending.logicOp);
  colorBlending.attachmentCount:=Key.colorBlending.attachmentCount;
  colorBlending.pAttachments   :=@Key.ColorBlends;
 
@@ -287,7 +284,7 @@ begin
   //
   ProvokingVertex:=Default(TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT);
   ProvokingVertex.sType              :=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
-  ProvokingVertex.provokingVertexMode:=Key.provokingVertexMode;
+  ProvokingVertex.provokingVertexMode:=TVkProvokingVertexModeEXT(Key.provokingVertex);
  end;
 
  //

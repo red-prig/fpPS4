@@ -37,9 +37,11 @@ type
  TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
 
  TvCustomCmdBuffer=class(TvDependenciesObject)
-  parent:TvCmdPool;
-  FQueue:TvQueue;
-  cmdbuf:TVkCommandBuffer;
+  FRefs  :ptruint;
+
+  FParent:TvCmdPool;
+  FQueue :TvQueue;
+  FCmdbuf:TVkCommandBuffer;
 
   cmd_count:qword;
   ret:Integer;
@@ -47,21 +49,24 @@ type
   submit_id:ptruint;
 
   FCurrPipeline:array[0..1] of TVkPipeline;
-  FCurrLayout:array[0..1] of TVkPipelineLayout;
+  FCurrLayout  :array[0..1] of TVkPipelineLayout;
 
   FRenderPass:TVkRenderPass;
 
-  FDependence:TvRelease;
-
   FWaitSemaphores:TvSemaphoreWaitSet;
 
-  SignalSemaphore:TvSemaphore;
-  Fence:TvFence;
+  FSignalSemaphore:TvSemaphore;
+
+  FFence:TvFence;
 
   FCBState:Boolean;
 
   Constructor Create(pool:TvCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
+
+  Procedure   Acquire;
+  procedure   Release;
+  procedure   OnReleaseCmd(Sender:TObject);
 
   function    BeginCmdBuffer:Boolean;
   Procedure   EndCmdBuffer;
@@ -72,8 +77,8 @@ type
   function    QueueSubmit:Boolean;
 
   Procedure   ReleaseResource;
-  function    AddDependence(cb:TvReleaseCb):Boolean;
   Procedure   AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
+  function    GetSignaledSemaphore:TvSemaphore;
 
   Procedure   BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -123,7 +128,7 @@ type
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
 
-  //Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
   Procedure   DrawIndexAuto(INDICES:DWORD);
  end;
@@ -131,8 +136,8 @@ type
 implementation
 
 uses
- vBuffer{,
- vHostBufferManager};
+ vBuffer,
+ vHostBufferManager;
 
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
@@ -141,24 +146,46 @@ end;
 
 Constructor TvCustomCmdBuffer.Create(pool:TvCmdPool;Queue:TvQueue);
 begin
- parent:=pool;
+ FParent:=pool;
  FQueue:=Queue;
- cmdbuf:=pool.Alloc;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
- Fence:=TvFence.Create(true);
+ FCmdbuf:=pool.Alloc;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
+
+ FFence:=TvFence.Create(true);
+
+ FSignalSemaphore:=TvSemaphore.Create;
 
  FCBState:=False;
 end;
 
-Destructor  TvCustomCmdBuffer.Destroy;
+Destructor TvCustomCmdBuffer.Destroy;
 begin
  ReleaseResource;
- FreeAndNil(Fence);
- if (parent<>nil) and (cmdbuf<>VK_NULL_HANDLE) then
+ FreeAndNil(FFence);
+ FreeAndNil(FSignalSemaphore);
+ if (FParent<>nil) and (FCmdbuf<>VK_NULL_HANDLE) then
  begin
-  parent.Free(cmdbuf);
+  FParent.Free(FCmdbuf);
  end;
  inherited;
+end;
+
+Procedure TvCustomCmdBuffer.Acquire;
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
+procedure TvCustomCmdBuffer.Release;
+begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
+end;
+
+procedure TvCustomCmdBuffer.OnReleaseCmd(Sender:TObject);
+begin
+ Release;
 end;
 
 function TvCustomCmdBuffer.BeginCmdBuffer:Boolean;
@@ -169,12 +196,12 @@ begin
  Result:=False;
  if (Self=nil) then Exit;
  if FCBState then Exit(True);
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  Info:=Default(TVkCommandBufferBeginInfo);
  Info.sType:=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
  Info.flags:=ord(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
  Info.pInheritanceInfo:=nil;
- r:=vkBeginCommandBuffer(cmdbuf,@Info);
+ r:=vkBeginCommandBuffer(FCmdbuf,@Info);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkBeginCommandBuffer:',r);
@@ -199,7 +226,7 @@ begin
   FCurrPipeline[0]:=VK_NULL_HANDLE;
   FCurrPipeline[1]:=VK_NULL_HANDLE;
 
-  r:=vkEndCommandBuffer(cmdbuf);
+  r:=vkEndCommandBuffer(FCmdbuf);
   if (r<>VK_SUCCESS) then
   begin
    Writeln(StdErr,'vkEndCommandBuffer:',r);
@@ -217,7 +244,7 @@ begin
 
  Inc(cmd_count);
 
- vkCmdBindPipeline(cmdbuf,BindPoint,F);
+ vkCmdBindPipeline(FCmdbuf,BindPoint,F);
  FCurrPipeline[ord(BindPoint)]:=F;
 end;
 
@@ -241,7 +268,7 @@ begin
 
  //if (not RT.FRenderPass.Compile) then Exit;
  if (not RT.FPipeline.Compile) then Exit;
- if (not RT.FFramebuffer.Compile) then Exit;
+ //if (not RT.FFramebuffer.Compile) then Exit;
 
  if (RT.FRenderPass.FHandle=FRenderPass) then Exit(True);
 
@@ -257,8 +284,8 @@ begin
 
  Inc(cmd_count);
 
- vkCmdBeginRenderPass(cmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
- vkCmdBindPipeline   (cmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
+ vkCmdBeginRenderPass(FCmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
+ vkCmdBindPipeline   (FCmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
 
  if AddDependence(@RT.Release) then
  begin
@@ -280,11 +307,11 @@ end;
 Procedure TvCustomCmdBuffer.EndRenderPass;
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass<>VK_NULL_HANDLE) then
  begin
   Inc(cmd_count);
-  vkCmdEndRenderPass(cmdbuf);
+  vkCmdEndRenderPass(FCmdbuf);
   FRenderPass:=VK_NULL_HANDLE;
  end;
 end;
@@ -311,28 +338,29 @@ var
  r:TVkResult;
  info:TVkSubmitInfo;
 
- FFence:TVkFence;
+ FFenceHandle:TVkFence;
 
  FHandles:array of TVkSemaphore;
- FStages:array of TVkPipelineStageFlags;
+ FStages :array of TVkPipelineStageFlags;
 
  i:Integer;
  t:TvSemaphoreWaitSet.Iterator;
 begin
  Result:=False;
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
  EndCmdBuffer;
 
  info:=Default(TVkSubmitInfo);
  info.sType              :=VK_STRUCTURE_TYPE_SUBMIT_INFO;
  info.commandBufferCount :=1;
- info.pCommandBuffers    :=@cmdbuf;
+ info.pCommandBuffers    :=@FCmdbuf;
 
  if (FWaitSemaphores.Size<>0) then
  begin
   FHandles:=nil;
+  FStages :=nil;
   SetLength(FHandles,FWaitSemaphores.Size);
   SetLength(FStages ,FWaitSemaphores.Size);
 
@@ -352,19 +380,19 @@ begin
 
  end;
 
- if (SignalSemaphore<>nil) then
+ if (FSignalSemaphore<>nil) then
  begin
   info.signalSemaphoreCount:=1;
-  info.pSignalSemaphores   :=@SignalSemaphore.FHandle;
+  info.pSignalSemaphores   :=@FSignalSemaphore.FHandle;
  end;
 
- FFence:=VK_NULL_HANDLE;
- if (Fence<>nil) then
+ FFenceHandle:=VK_NULL_HANDLE;
+ if (FFence<>nil) then
  begin
-  FFence:=Fence.FHandle;
+  FFenceHandle:=FFence.FHandle;
  end;
 
- r:=FQueue.Submit(1,@info,FFence);
+ r:=FQueue.Submit(1,@info,FFenceHandle);
 
  ret:=Integer(r);
  if (r<>VK_SUCCESS) then
@@ -388,13 +416,6 @@ begin
  ret:=0;
 end;
 
-function TvCustomCmdBuffer.AddDependence(cb:TvReleaseCb):Boolean;
-begin
- Result:=False;
- if (cb=nil) then Exit;
- Result:=FDependence.Insert(cb);
-end;
-
 Procedure TvCustomCmdBuffer.AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
 Var
  I:TvSemaphoreWaitSet.Iterator;
@@ -415,6 +436,11 @@ begin
  end;
 end;
 
+function TvCustomCmdBuffer.GetSignaledSemaphore:TvSemaphore;
+begin
+ Result:=FSignalSemaphore;
+end;
+
 Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
 begin
  if (Self=nil) then Exit;
@@ -426,12 +452,12 @@ Procedure TvCustomCmdBuffer.BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt3
 begin
  if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
 
  Inc(cmd_count);
 
- vkCmdBindDescriptorSets(cmdbuf,
+ vkCmdBindDescriptorSets(FCmdbuf,
                          BindPoint,
                          FCurrLayout[ord(BindPoint)],
                          fset,1,
@@ -450,7 +476,7 @@ begin
 
  Inc(cmd_count);
 
- vkCmdPushConstants(cmdbuf,
+ vkCmdPushConstants(FCmdbuf,
                     FCurrLayout[ord(BindPoint)],
                     stageFlags,
                     offset,size,
@@ -467,7 +493,7 @@ begin
 
  Inc(cmd_count);
 
- vkCmdDispatch(cmdbuf,X,Y,Z);
+ vkCmdDispatch(FCmdbuf,X,Y,Z);
 end;
 
 Procedure TvCustomCmdBuffer.BindVertexBuffer(Binding:TVkUInt32;
@@ -478,7 +504,7 @@ begin
 
  if (not BeginCmdBuffer) then Exit;
 
- vkCmdBindVertexBuffer(cmdbuf,
+ vkCmdBindVertexBuffer(FCmdbuf,
                        binding,
                        Buffer,
                        Offset);
@@ -499,7 +525,7 @@ begin
  Inc(cmd_count);
 
  vkCmdClearDepthStencilImage(
-   cmdbuf,
+   FCmdbuf,
    image,
    imageLayout,
    pDepthStencil,
@@ -523,7 +549,7 @@ begin
  Inc(cmd_count);
 
  vkCmdClearColorImage(
-  cmdbuf,
+  FCmdbuf,
   image,
   imageLayout,
   pColor,
@@ -548,7 +574,7 @@ begin
 
 
  vkCmdResolveImage(
-  cmdbuf,
+  FCmdbuf,
   srcImage,
   srcImageLayout,
   dstImage,
@@ -563,7 +589,7 @@ var
 begin
  if (F=nil) then Exit;
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
  if (Length(F.FSets)=0) then Exit;
  For i:=0 to High(F.FSets) do
@@ -572,7 +598,7 @@ begin
 
    Inc(cmd_count);
 
-   vkCmdBindDescriptorSets(cmdbuf,
+   vkCmdBindDescriptorSets(FCmdbuf,
                            BindPoint,
                            FCurrLayout[ord(BindPoint)],
                            i,1,
@@ -769,15 +795,15 @@ begin
  end;
 end;
 
-{
 Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 var
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
+ BufOffset:TVkDeviceSize;
  i,h:DWORD;
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
@@ -785,15 +811,17 @@ begin
 
  Size:=(OFFSET+INDICES)*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
 
- rb:=FetchHostBuffer(Self,Addr,Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+ rb:=FetchHostBuffer(Self,QWORD(Addr),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);
 
  Inc(cmd_count);
 
+ BufOffset:=QWORD(Addr)-rb.FAddr;
+
  vkCmdBindIndexBuffer(
-     cmdbuf,
+     Fcmdbuf,
      rb.FHandle,
-     rb.Foffset,
+     BufOffset,
      INDEX_TYPE);
 
  Inc(cmd_count);
@@ -802,7 +830,7 @@ begin
   0:
     begin
      vkCmdDrawIndexed(
-         cmdbuf,
+         Fcmdbuf,
          INDICES,       //indexCount
          instanceCount, //instanceCount
          OFFSET,        //firstIndex
@@ -818,7 +846,7 @@ begin
      For i:=0 to h do
      begin
       vkCmdDrawIndexed(
-       cmdbuf,
+       Fcmdbuf,
        4,      //indexCount
        1,      //instanceCount
        i*4,    //firstIndex
@@ -831,11 +859,10 @@ begin
  end;
 
 end;
-}
 
 Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
 begin
- //DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
+ DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
 end;
 
 Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD);
@@ -843,7 +870,7 @@ var
  i,h:DWORD;
 begin
  if (Self=nil) then Exit;
- if (cmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
@@ -853,7 +880,7 @@ begin
   0:
     begin
      vkCmdDraw(
-      cmdbuf,
+      FCmdbuf,
       INDICES,       //vertexCount
       instanceCount, //instanceCount
       0,             //firstVertex
@@ -876,7 +903,7 @@ begin
      begin
       Inc(cmd_count);
       vkCmdDraw(
-          cmdbuf,
+          FCmdbuf,
           4,       //vertexCount
           1,       //instanceCount
           0,       //firstVertex
@@ -894,7 +921,7 @@ begin
      begin
       Inc(cmd_count);
       vkCmdDraw(
-          cmdbuf,
+          FCmdbuf,
           4,       //vertexCount
           1,       //instanceCount
           i*4,     //firstVertex

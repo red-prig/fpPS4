@@ -13,6 +13,7 @@ uses
  vHostBufferManager,
  vImage,
  vImageManager,
+ vRender,
  vRenderPassManager,
  vPipelineManager,
  vShader,
@@ -104,7 +105,7 @@ var
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
 
- FShadersKey:TvShadersKey;
+ FShadersKey :TvShadersKey;
  FShaderGroup:TvShaderGroup;
 
  FAttrBuilder:TvAttrBuilder;
@@ -116,6 +117,10 @@ var
 
  GP_KEY:TvGraphicsPipelineKey;
  GP:TvGraphicsPipeline2;
+
+ FFramebuffer:TvFramebufferIL;
+
+ FRenderCmd:TvRenderTargets;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=@node^.SH_REG;
@@ -216,6 +221,33 @@ begin
  end;
 
  GP:=FetchGraphicsPipeline(nil,@GP_KEY);
+
+ FFramebuffer:=TvFramebufferIL.Create;
+ FFramebuffer.Key.FRenderPass :=RP;
+ FFramebuffer.Key.FSize       :=GPU_REGS.GET_SCREEN_SIZE;
+
+ if (RT_COUNT<>0) then
+ For i:=0 to RT_COUNT-1 do
+  begin
+   FFramebuffer.Key.AddImageAt(RT_INFO[i].FImageInfo);
+  end;
+
+ if GPU_REGS.DB_ENABLE then
+ begin
+  FFramebuffer.Key.AddImageAt(DB_INFO.FImageInfo);
+ end;
+
+ FFramebuffer.Compile;
+
+ FRenderCmd:=TvRenderTargets.Create;
+
+ FRenderCmd.FRenderPass:=RP;
+ FRenderCmd.FPipeline  :=GP;
+
+ FRenderCmd.FFramebuffer:=FFramebuffer;
+
+ FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+
 
 end;
 
