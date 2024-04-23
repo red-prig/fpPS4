@@ -17,9 +17,9 @@ uses
  vImageTiling};
 
 {
- image_type -> attachment,texture,texel
- read_mode  -> not_need,started,keep,changed
- write_back -> not_need,keep,started,finished
+ image_usage -> attachment,sampled,storage
+ read_mode   -> not_need,started,keep,changed
+ write_back  -> not_need,keep,started,finished
 
  cmd R/W -> cmd RO
   |
@@ -30,6 +30,9 @@ uses
 }
 
 type
+ t_image_usage=(iu_attachment,iu_sampled,iu_storage);
+ s_image_usage=set of t_image_usage;
+
  TvImageView2Compare=object
   function c(a,b:PvImageViewKey):Integer; static;
  end;
@@ -57,7 +60,7 @@ type
  {
  TvHostImage2=class(TvCustomImage)
   Parent:TvImage2;
-  FUsage:TVkFlags;
+
   //
   Barrier:TvImageBarrier;
   //
@@ -72,15 +75,14 @@ type
 
  TvImage2=class(TvCustomImage)
   key:TvImageKey;
-  FUsage:TVkFlags;
+  //
+  FUsage:s_image_usage;
   //
   lock:Pointer;
   FViews:TvImageView2Set;
   //
   Barrier:TvImageBarrier;
   //
-  //
-  FRefs:ptruint;
   FLastCmd:TvCustomCmdBuffer;
   FDeps:TObjectSetLock;
   //
@@ -93,18 +95,19 @@ type
   function    GetImageInfo:TVkImageCreateInfo; override;
   Function    GetSubresRange:TVkImageSubresourceRange;
   Function    GetSubresLayer:TVkImageSubresourceLayers;
-  function    FetchView(cmd:TvCustomCmdBuffer;var F:TvImageViewKey):TvImageView2;
-  function    FetchView(cmd:TvCustomCmdBuffer):TvImageView2;
+  function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
+  function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
+  function    FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
   //function    FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
-  Procedure   Acquire(Sender:TObject);
+  function    Acquire(Sender:TObject):Boolean;
   procedure   Release(Sender:TObject);
  end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage;data_usage:Byte):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 const
@@ -254,14 +257,15 @@ function TvImage2.GetImageInfo:TVkImageCreateInfo;
 begin
  Result:=Default(TVkImageCreateInfo);
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+ Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat);
  Result.imageType    :=TVkImageType(key.params.itype);
  Result.format       :=key.cformat;
- Result.extent.Create(key.params.extend.width,key.params.extend.height,key.params.extend.depth);
+ Result.extent.Create(key.params.width,key.params.height,key.params.depth);
  Result.mipLevels    :=key.params.mipLevels;
  Result.arrayLayers  :=key.params.arrayLayers;
  Result.samples      :=TVkSampleCountFlagBits(key.params.samples);
  Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
- Result.usage        :=FUsage;
+ Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 end;
 
@@ -317,12 +321,16 @@ begin
  Result.layerCount    :=key.params.arrayLayers;
 end;
 
-function TvImage2.FetchView(cmd:TvCustomCmdBuffer;var F:TvImageViewKey):TvImageView2;
+function TvImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
 var
+ key2:TvImageViewKey;
+
  i:TvImageView2Set.Iterator;
  t:TvImageView2;
 
  cinfo:TVkImageViewCreateInfo;
+ uinfo:TVkImageViewUsageCreateInfo;
+
  FView:TVkImageView;
  r:TVkResult;
 begin
@@ -330,10 +338,18 @@ begin
  if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
 
+ if (usage=0) then
+ begin
+  usage:=GET_VK_IMAGE_USAGE_DEFAULT(F.cformat);
+ end;
+
+ key2:=F;
+ key2.fusage:=usage;
+
  rw_wlock(lock);
 
  t:=nil;
- i:=FViews.find(@F);
+ i:=FViews.find(@key2);
  if (i.Item<>nil) then
  begin
   t:=TvImageView2(ptruint(i.Item^)-ptruint(@TvImageView2(nil).key));
@@ -343,7 +359,7 @@ begin
   cinfo.sType       :=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   cinfo.image       :=FHandle;
   cinfo.viewType    :=TVkImageViewType(F.vtype);
-  cinfo.format      :=key.cformat;
+  cinfo.format      :=F.cformat;
   cinfo.components.r:=TVkComponentSwizzle(F.dstSel.r);
   cinfo.components.g:=TVkComponentSwizzle(F.dstSel.g);
   cinfo.components.b:=TVkComponentSwizzle(F.dstSel.b);
@@ -355,7 +371,13 @@ begin
   cinfo.subresourceRange.baseArrayLayer:=F.base_array;
   cinfo.subresourceRange.layerCount    :=F.last_array-F.base_array+1;
 
-  cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,FUsage);
+  cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,usage);
+
+  uinfo:=Default(TVkImageViewUsageCreateInfo);
+  uinfo.sType:=VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+  uinfo.usage:=usage;
+
+  cinfo.pNext:=@uinfo;
 
   FView:=VK_NULL_HANDLE;
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);
@@ -369,7 +391,7 @@ begin
   t:=TvImageView2.Create;
   t.FHandle:=FView;
   t.Parent :=Self;
-  t.key    :=F;
+  t.key    :=key2;
 
   t.Acquire;
   FViews.Insert(@t.key);
@@ -388,7 +410,23 @@ begin
  Result:=t;
 end;
 
-function TvImage2.FetchView(cmd:TvCustomCmdBuffer):TvImageView2;
+function TvImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
+var
+ tmp:TvImageViewKey;
+begin
+ case usage of
+  iu_storage:
+   begin
+    tmp:=F;
+    tmp.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
+    Result:=FetchView(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+   end;
+  else
+   Result:=FetchView(cmd,F,0);
+ end;
+end;
+
+function TvImage2.FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
 var
  F:TvImageViewKey;
 begin
@@ -417,10 +455,19 @@ begin
   VK_IMAGE_TYPE_3D:F.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
  end;
 
- F.last_level:=key.params.mipLevels-1;
+ F.last_level:=key.params.mipLevels  -1;
  F.last_array:=key.params.arrayLayers-1;
 
- Result:=FetchView(cmd,F);
+ case usage of
+  iu_storage:
+   begin
+    F.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
+    Result:=FetchView(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+   end;
+  else
+   Result:=FetchView(cmd,F,0);
+ end;
+
 end;
 
 {
@@ -522,10 +569,10 @@ begin
 end;
 }
 
-Procedure TvImage2.Acquire(Sender:TObject);
+function TvImage2.Acquire(Sender:TObject):Boolean;
 begin
- System.InterlockedIncrement(Pointer(FRefs));
- if (Sender<>nil) then
+ Result:=inherited Acquire;
+ if Result and (Sender<>nil) then
  begin
   if FDeps.Insert(Sender) then
   begin
@@ -547,10 +594,7 @@ begin
    FLastCmd:=nil;
   end;
  end;
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
+ inherited Release;
 end;
 
 function _Find(const F:TvImageKey):TvImage2;
@@ -577,36 +621,36 @@ begin
  if (usage and ord(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ))<>0 then Write(' INPUT_ATTACHMENT');
 end;
 
-function _FetchImage(const F:TvImageKey;usage:TVkFlags):TvImage2;
+function _FetchImage(const F:TvImageKey;usage:t_image_usage):TvImage2;
+label
+ _repeat;
 var
  t:TvImage2;
  Fdevc:TvPointer;
 begin
  Result:=nil;
 
+ _repeat:
+
  t:=_Find(F);
 
  if (t<>nil) then
  begin
-
-  if ((t.FUsage and usage)<>usage) then
+  if t.Acquire(nil) then
   begin
-   Write('Current usage:');
-   print_img_usage(t.FUsage);
-   Writeln;
-
-   Write('Need    usage:');
-   print_img_usage(usage);
-   Writeln;
-
-   Assert(false,'TODO');
+   t.FUsage:=t.FUsage+[usage];
+  end else
+  begin
+   //mem is deleted, free img
+   FImage2Set.delete(@t.key);
+   FreeAndNil(t);
+   goto _repeat;
   end;
-
  end else
  begin
   t:=TvImage2.Create;
   t.key   :=F;
-  t.FUsage:=Usage;
+  t.FUsage:=[usage];
 
   if not t.Compile(nil) then
   begin
@@ -618,9 +662,8 @@ begin
      t.GetRequirements,
      ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
    );
-   t.BindMem(Fdevc);
+   t.BindMem(Fdevc); // <-Acquire
 
-   t.Acquire(nil); //self depend
    FImage2Set.Insert(@t.key);
   end;
 
@@ -651,17 +694,18 @@ begin
  Result:=t;
 end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:TVkFlags;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage;data_usage:Byte):TvImage2;
 begin
  FImage2Set.Lock_wr;
 
- Result:=_FetchImage(F,usage);
+ Result:=_FetchImage(F,usage); // <-Acquire
 
  if (cmd<>nil) and (Result<>nil) then
  begin
   if cmd.AddDependence(@Result.Release) then
   begin
    Result.Acquire(cmd);
+   Result.Release(nil); // <-_FetchImage
   end;
 
   if not cmd.IsRenderPass then

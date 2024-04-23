@@ -485,14 +485,14 @@ begin
   kTileModeDepth_2dThin_1K : //depth tiling todo
    _Load_Linear(cmd,TvImage2(image));
 
-  kTileModeThin_1dThin: //texture
+  kTileModeDepth_1dThin,
+  kTileModeDisplay_1dThin,
+  kTileModeThin_1dThin,  //texture
+  $1B:
    _Load_Thin_1dThin(cmd,TvImage2(image));
 
   kTileModeThin_2dThin:
    _Load_Linear(cmd,TvImage2(image)); //TODO
-
-  kTileModeDepth_1dThin:
-   _Load_Thin_1dThin(cmd,TvImage2(image));
 
   else
    if not SKIP_UNKNOW_TILING then
@@ -622,14 +622,14 @@ begin
   kTileModeDepth_2dThin_1K : //depth tiling todo
    Result:=false;
 
-  kTileModeThin_1dThin: //texture
+  kTileModeDepth_1dThin,
+  kTileModeDisplay_1dThin,
+  kTileModeThin_1dThin,  //texture
+  $1B:
    Result:=_Check_Thin_1dThin(TvImage2(image));
 
   kTileModeThin_2dThin:
    Result:=_Check_Linear(TvImage2(image)); //TODO
-
-  kTileModeDepth_1dThin:
-   Result:=_Check_Thin_1dThin(TvImage2(image));
 
   else
    if not SKIP_UNKNOW_TILING then

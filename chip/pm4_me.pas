@@ -9,6 +9,7 @@ uses
  mqueue,
  LFQueue,
 
+ Vulkan,
  vBuffer,
  vHostBufferManager,
  vImage,
@@ -121,6 +122,9 @@ var
  FFramebuffer:TvFramebufferIL;
 
  FRenderCmd:TvRenderTargets;
+
+ ri:TvImage2;
+ iv:TvImageView2;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=@node^.SH_REG;
@@ -150,9 +154,8 @@ begin
   begin
    RT_INFO[RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
 
-   RP_KEY.AddColorRef(RT_COUNT,RT_INFO[RT_COUNT].IMAGE_USAGE);
-
-   RP_KEY.AddColorAt(RT_INFO[RT_COUNT].FImageInfo.cformat,
+   RP_KEY.AddColorAt(RT_COUNT,
+                     RT_INFO[RT_COUNT].FImageInfo.cformat,
                      RT_INFO[RT_COUNT].IMAGE_USAGE,
                      RT_INFO[RT_COUNT].FImageInfo.params.samples);
 
@@ -163,11 +166,8 @@ begin
  begin
   DB_INFO:=GPU_REGS.GET_DB_INFO;
 
-  RP_KEY.SetDepthRef(RT_COUNT,
-                     DB_INFO.DEPTH_USAGE,
-                     DB_INFO.STENCIL_USAGE);
-
-  RP_KEY.AddDepthAt(DB_INFO.FImageInfo.cformat,
+  RP_KEY.AddDepthAt(RT_COUNT,
+                    DB_INFO.FImageInfo.cformat,
                     DB_INFO.DEPTH_USAGE,
                     DB_INFO.STENCIL_USAGE);
 
@@ -247,6 +247,21 @@ begin
  FRenderCmd.FFramebuffer:=FFramebuffer;
 
  FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+
+ if (RT_COUNT<>0) then
+ For i:=0 to RT_COUNT-1 do
+  begin
+   FRenderCmd.AddClearColor(TVkClearValue(RT_INFO[i].CLEAR_COLOR));
+
+   ri:=FetchImage(nil,
+                  RT_INFO[i].FImageInfo,
+                  iu_attachment,
+                  RT_INFO[i].IMAGE_USAGE
+                  );
+
+   iv:=ri.FetchView(nil,RT_INFO[i].FImageView,iu_attachment);
+
+  end;
 
 
 end;

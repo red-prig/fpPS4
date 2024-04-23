@@ -89,25 +89,35 @@ type
   r,g,b,a:0..15; //(0..6)
  end;
 
+ TvImageMemoryKey=packed object
+  start:QWORD;
+  __end:QWORD;
+ end;
+
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
   Addr   :Pointer;
   cformat:TVkFormat;
   params :packed record
-   itype      :Byte;       //TVkImageType 0..2
-   tiling_idx :Byte;       //0..31
-   extend     :TvExtent3D;
-   samples    :Byte;       //TVkSampleCountFlagBits 1..4
-   mipLevels  :Byte;       //(0..15)
-   arrayLayers:Word;       //(0..16383)
+   itype      :Byte; //TVkImageType 0..2 (2)
+   tiling_idx :Byte; //0..31 (5)
+   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
+   mipLevels  :Byte; //(0..15) (4)
+   width      :Word; //(0..16383)
+   height     :Word; //(0..16383)
+   depth      :Word; //(0..8192)
+   arrayLayers:Word; //(0..16383)
+   pad_width  :Word;
+   pad_height :Word;
   end;
  end;
 
  PvImageViewKey=^TvImageViewKey;
- TvImageViewKey=packed record
+ TvImageViewKey=packed object
   cformat   :TVkFormat;
-  vtype     :Word;      //TVkImageViewType 0..6
-  dstSel    :TvDstSel;
+  vtype     :Byte;      //TVkImageViewType 0..6
+  fusage    :Byte;
+  dstSel    :TvDstSel;  //word
   base_level:Byte;      //first mip level   (0..15)
   last_level:Byte;      //last  mip level   (0..15)
   base_array:Word;      //first array index (0..16383)
@@ -189,11 +199,23 @@ type
 
 Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
 
+Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
+
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
 
 function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
 function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
+
+function GET_FORMATS_LEN(buf:PVkFormat):Byte;
+function GET_VK_IMAGE_MUTABLE(cformat:TVkFormat):PVkFormat;
+
+function GET_VK_FORMAT_STORAGE(cformat:TVkFormat):TVkFormat;
+
+function GET_VK_IMAGE_USAGE_DEFAULT (cformat:TVkFormat):TVkFlags;
+function GET_VK_IMAGE_CREATE_DEFAULT(cformat:TVkFormat):TVkFlags;
 
 implementation
 
@@ -396,24 +418,6 @@ const
   VK_FORMAT_R16_UINT,
   VK_FORMAT_R16_SINT,
   VK_FORMAT_R16_SFLOAT,
-  VK_FORMAT_UNDEFINED
- );
-
- MUTABLE_88:array[0..14] of TVkFormat=(
-  VK_FORMAT_R8G8B8_UNORM,
-  VK_FORMAT_R8G8B8_SNORM,
-  VK_FORMAT_R8G8B8_USCALED,
-  VK_FORMAT_R8G8B8_SSCALED,
-  VK_FORMAT_R8G8B8_UINT,
-  VK_FORMAT_R8G8B8_SINT,
-  VK_FORMAT_R8G8B8_SRGB,
-  VK_FORMAT_B8G8R8_UNORM,
-  VK_FORMAT_B8G8R8_SNORM,
-  VK_FORMAT_B8G8R8_USCALED,
-  VK_FORMAT_B8G8R8_SSCALED,
-  VK_FORMAT_B8G8R8_UINT,
-  VK_FORMAT_B8G8R8_SINT,
-  VK_FORMAT_B8G8R8_SRGB,
   VK_FORMAT_UNDEFINED
  );
 
@@ -622,21 +626,6 @@ begin
   VK_FORMAT_R16_SINT                 :Result:=@MUTABLE_16;
   VK_FORMAT_R16_SFLOAT               :Result:=@MUTABLE_16;
 
-  VK_FORMAT_R8G8B8_UNORM  :Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_SNORM  :Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_USCALED:Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_SSCALED:Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_UINT   :Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_SINT   :Result:=@MUTABLE_88;
-  VK_FORMAT_R8G8B8_SRGB   :Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_UNORM  :Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_SNORM  :Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_USCALED:Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_SSCALED:Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_UINT   :Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_SINT   :Result:=@MUTABLE_88;
-  VK_FORMAT_B8G8R8_SRGB   :Result:=@MUTABLE_88;
-
   VK_FORMAT_R8G8B8A8_UNORM            :Result:=@MUTABLE_8888;
   VK_FORMAT_R8G8B8A8_SNORM            :Result:=@MUTABLE_8888;
   VK_FORMAT_R8G8B8A8_USCALED          :Result:=@MUTABLE_8888;
@@ -744,19 +733,119 @@ begin
 
 end;
 
+function GET_VK_FORMAT_STORAGE(cformat:TVkFormat):TVkFormat;
+begin
+ Result:=cformat;
+
+ case cformat of
+
+  VK_FORMAT_R8_SNORM,
+  VK_FORMAT_R8_USCALED,
+  VK_FORMAT_R8_SSCALED,
+  VK_FORMAT_R8_SINT:Result:=VK_FORMAT_R8_UINT;
+
+  VK_FORMAT_R8_SRGB:Result:=VK_FORMAT_R8_UNORM;
+
+  VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT,
+  VK_FORMAT_A4B4G4R4_UNORM_PACK16_EXT,
+  VK_FORMAT_R4G4B4A4_UNORM_PACK16,
+  VK_FORMAT_B4G4R4A4_UNORM_PACK16,
+  VK_FORMAT_R5G6B5_UNORM_PACK16,
+  VK_FORMAT_B5G6R5_UNORM_PACK16,
+  VK_FORMAT_R8G8_SNORM,
+  VK_FORMAT_R8G8_USCALED,
+  VK_FORMAT_R8G8_SSCALED,
+  VK_FORMAT_R8G8_SINT:Result:=VK_FORMAT_R8G8_UINT;
+
+  VK_FORMAT_R8G8_SRGB:Result:=VK_FORMAT_R8G8_UNORM;
+
+  VK_FORMAT_R16_SNORM,
+  VK_FORMAT_R16_USCALED,
+  VK_FORMAT_R16_SSCALED,
+  VK_FORMAT_R16_SINT,
+  VK_FORMAT_R16_SFLOAT:Result:=VK_FORMAT_R16_UINT;
+
+  VK_FORMAT_R8G8B8A8_SNORM,
+  VK_FORMAT_R8G8B8A8_USCALED,
+  VK_FORMAT_R8G8B8A8_SSCALED,
+  VK_FORMAT_R8G8B8A8_SINT:Result:=VK_FORMAT_R8G8B8A8_UINT;
+
+  VK_FORMAT_R8G8B8A8_SRGB:Result:=VK_FORMAT_R8G8B8A8_UNORM;
+
+  VK_FORMAT_B8G8R8A8_SNORM,
+  VK_FORMAT_B8G8R8A8_USCALED,
+  VK_FORMAT_B8G8R8A8_SSCALED,
+  VK_FORMAT_B8G8R8A8_UINT,
+  VK_FORMAT_B8G8R8A8_SINT:Result:=VK_FORMAT_R8G8B8A8_UINT;
+
+  VK_FORMAT_B8G8R8A8_SRGB:Result:=VK_FORMAT_B8G8R8A8_UNORM;
+
+  VK_FORMAT_A8B8G8R8_SNORM_PACK32,
+  VK_FORMAT_A8B8G8R8_USCALED_PACK32,
+  VK_FORMAT_A8B8G8R8_SSCALED_PACK32,
+  VK_FORMAT_A8B8G8R8_SINT_PACK32:Result:=VK_FORMAT_A8B8G8R8_UINT_PACK32;
+
+  VK_FORMAT_A8B8G8R8_SRGB_PACK32:Result:=VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+
+  VK_FORMAT_A2R10G10B10_SNORM_PACK32,
+  VK_FORMAT_A2R10G10B10_USCALED_PACK32,
+  VK_FORMAT_A2R10G10B10_SSCALED_PACK32,
+  VK_FORMAT_A2R10G10B10_UINT_PACK32,
+  VK_FORMAT_A2R10G10B10_SINT_PACK32:Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+
+  VK_FORMAT_A2B10G10R10_SNORM_PACK32,
+  VK_FORMAT_A2B10G10R10_USCALED_PACK32,
+  VK_FORMAT_A2B10G10R10_SSCALED_PACK32,
+  VK_FORMAT_A2B10G10R10_UINT_PACK32,
+  VK_FORMAT_A2B10G10R10_SINT_PACK32:Result:=VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+
+  VK_FORMAT_R16G16_SNORM,
+  VK_FORMAT_R16G16_USCALED,
+  VK_FORMAT_R16G16_SSCALED,
+  VK_FORMAT_R16G16_UINT,
+  VK_FORMAT_R16G16_SINT,
+  VK_FORMAT_R16G16_SFLOAT:Result:=VK_FORMAT_R16G16_UNORM;
+
+  VK_FORMAT_R32_SINT,
+  VK_FORMAT_R32_SFLOAT,
+  VK_FORMAT_B10G11R11_UFLOAT_PACK32:Result:=VK_FORMAT_R32_UINT;
+
+  VK_FORMAT_R16G16B16A16_SNORM,
+  VK_FORMAT_R16G16B16A16_USCALED,
+  VK_FORMAT_R16G16B16A16_SSCALED,
+  VK_FORMAT_R16G16B16A16_SINT,
+  VK_FORMAT_R16G16B16A16_SFLOAT:Result:=VK_FORMAT_R16G16B16A16_UINT;
+
+  VK_FORMAT_R32G32_SINT,
+  VK_FORMAT_R32G32_SFLOAT:Result:=VK_FORMAT_R32G32_UINT;
+
+  VK_FORMAT_R32G32B32_SINT,
+  VK_FORMAT_R32G32B32_SFLOAT:Result:=VK_FORMAT_R32G32B32_UINT;
+
+  VK_FORMAT_R32G32B32A32_SINT,
+  VK_FORMAT_R32G32B32A32_SFLOAT:Result:=VK_FORMAT_R32G32B32A32_UINT;
+
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
+  VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
+  VK_FORMAT_BC4_UNORM_BLOCK..
+  VK_FORMAT_BC4_SNORM_BLOCK:Result:=VK_FORMAT_R32G32_UINT;
+
+  VK_FORMAT_BC2_UNORM_BLOCK..
+  VK_FORMAT_BC3_SRGB_BLOCK,
+  VK_FORMAT_BC5_UNORM_BLOCK..
+  VK_FORMAT_BC7_SRGB_BLOCK:Result:=VK_FORMAT_R32G32B32A32_UINT;
+
+  else;
+ end;
+end;
+
 //VK_IMAGE_USAGE_STORAGE_BIT
 
 const
  VK_IMAGE_USAGE_DEFAULT=
    ord(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT) or
-   ord(VK_IMAGE_USAGE_SAMPLED_BIT) or
-   ord(VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) or
-   ord(VK_IMAGE_CREATE_EXTENDED_USAGE_BIT);
-
- VK_IMAGE_USAGE_DEFAULT_BLOCK=
-   VK_IMAGE_USAGE_DEFAULT or
-   ord(VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT);
+   ord(VK_IMAGE_USAGE_SAMPLED_BIT);
 
  VK_IMAGE_USAGE_DEFAULT_DEPTH=
    (VK_IMAGE_USAGE_DEFAULT and (not ord(VK_IMAGE_USAGE_SAMPLED_BIT))) or
@@ -781,7 +870,7 @@ begin
 
   VK_FORMAT_BC1_RGB_UNORM_BLOCK..
   VK_FORMAT_BC7_SRGB_BLOCK:
-   Result:=VK_IMAGE_USAGE_DEFAULT_BLOCK;
+   Result:=VK_IMAGE_USAGE_DEFAULT;
 
   else
    Result:=VK_IMAGE_USAGE_DEFAULT or
@@ -789,13 +878,20 @@ begin
  end;
 end;
 
-{
-TvFramebufferImagelessKey=packed object
- FRenderPass :TvRenderPass;
- FSize       :TVkExtent2D;
- FImagesCount:ptruint;
- FImages     :AvFramebufferAttach;
-}
+function GET_VK_IMAGE_CREATE_DEFAULT(cformat:TVkFormat):TVkFlags;
+begin
+ Case cformat of
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
+  VK_FORMAT_BC7_SRGB_BLOCK:
+   Result:=ord(VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) or
+           ord(VK_IMAGE_CREATE_EXTENDED_USAGE_BIT) or
+           ord(VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT);
+
+  else
+   Result:=ord(VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) or
+           ord(VK_IMAGE_CREATE_EXTENDED_USAGE_BIT);
+ end;
+end;
 
 Procedure TvFramebufferImagelessKey.AddImageAt(Key:TvImageKey);
 var
@@ -811,8 +907,8 @@ begin
   pNext          :=nil;
   flags          :=0;
   usage          :=GET_VK_IMAGE_USAGE_DEFAULT(Key.cformat);
-  width          :=Key.params.extend.width;
-  height         :=Key.params.extend.height;
+  width          :=Key.params.width;
+  height         :=Key.params.height;
   layerCount     :=key.params.arrayLayers;
   viewFormatCount:=GET_FORMATS_LEN(MUTABLE);
   pViewFormats   :=MUTABLE;
@@ -1080,6 +1176,8 @@ end;
 function TvCustomImage.Compile(ext:Pointer):Boolean;
 var
  cinfo:TVkImageCreateInfo;
+ clist:TVkImageFormatListCreateInfo;
+ MUTABLE:PVkFormat;
  r:TVkResult;
 begin
  Result:=False;
@@ -1091,9 +1189,17 @@ begin
  end;
 
  cinfo:=GetImageInfo;
- cinfo.pNext:=ext;
-
  cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
+
+ MUTABLE:=GET_VK_IMAGE_MUTABLE(cinfo.format);
+
+ clist:=Default(TVkImageFormatListCreateInfo);
+ clist.sType:=VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO;
+
+ clist.viewFormatCount:=GET_FORMATS_LEN(MUTABLE);
+ clist.pViewFormats   :=MUTABLE;
+
+ clist.pNext:=ext;
 
  r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
@@ -1453,6 +1559,29 @@ begin
   else
    Result  :=ord(VK_IMAGE_ASPECT_COLOR_BIT);
  end;
+end;
+
+Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+begin
+ if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+ end else
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+ end;
+end;
+
+Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+begin
+ Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord((DEPTH_USAGE or STENCIL_USAGE) and TM_READ <>0) ) or
+         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) );
+end;
+
+Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
+begin
+ Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord(IMAGE_USAGE and TM_READ<>0) ) or
+         (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord(IMAGE_USAGE and (TM_WRITE or TM_CLEAR)<>0) );
 end;
 
 Procedure TvImageBarrier.Init({_image:TVkImage;_sub:TVkImageSubresourceRange});

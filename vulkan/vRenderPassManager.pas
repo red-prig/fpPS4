@@ -27,10 +27,10 @@ type
   Dependency:TVkSubpassDependency;
   Procedure  Clear;
   Procedure  SetZorderStage(s:TVkPipelineStageFlags);
-  Procedure  AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
-  Procedure  SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
-  Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:Byte);
-  Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
+  Procedure  _AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
+  Procedure  _SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
+  Procedure  AddColorAt(id:TVkUInt32;format:TVkFormat;IMAGE_USAGE,samples:Byte);
+  Procedure  AddDepthAt(id:TVkUInt32;format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
  end;
 
  TvRenderPass2=class(TvRenderPass)
@@ -81,29 +81,6 @@ end;
 
 //
 
-Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
-begin
- if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
- begin
-  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
- end else
- begin
-  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
- end;
-end;
-
-Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
-begin
- Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord((DEPTH_USAGE or STENCIL_USAGE) and TM_READ <>0) ) or
-         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) );
-end;
-
-Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
-begin
- Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord(IMAGE_USAGE and TM_READ<>0) ) or
-         (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord(IMAGE_USAGE and (TM_WRITE or TM_CLEAR)<>0) );
-end;
-
 Procedure TvRenderPassKey.Clear;
 begin
  Self:=Default(TvRenderPassKey);
@@ -116,7 +93,7 @@ begin
  Dependency.dstStageMask:=Dependency.dstStageMask or s;
 end;
 
-Procedure TvRenderPassKey.AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
+Procedure TvRenderPassKey._AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
 var
  am:TVkAccessFlags;
 begin
@@ -137,14 +114,14 @@ begin
  end;
 end;
 
-Procedure TvRenderPassKey.SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
+Procedure TvRenderPassKey._SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
 var
  am:TVkAccessFlags;
 begin
  DepCount:=1;
 
- DepthRef.attachment :=id;
- DepthRef.layout     :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+ DepthRef.attachment:=id;
+ DepthRef.layout    :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
 
  am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
 
@@ -152,13 +129,13 @@ begin
  Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
 end;
 
-Procedure TvRenderPassKey.AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:Byte);
+Procedure TvRenderPassKey.AddColorAt(id:TVkUInt32;format:TVkFormat;IMAGE_USAGE,samples:Byte);
 begin
  if (AtdCount>8) then Exit;
 
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
- ColorAtd[AtdCount].format        :=format;
- ColorAtd[AtdCount].samples       :=TVkSampleCountFlagBits(samples);
+ ColorAtd[AtdCount].format :=format;
+ ColorAtd[AtdCount].samples:=TVkSampleCountFlagBits(samples);
 
  With ColorAtd[AtdCount] do
   if (IMAGE_USAGE and TM_CLEAR<>0) then
@@ -188,25 +165,29 @@ begin
  With ColorAtd[AtdCount] do
   if (IMAGE_USAGE and TM_READ<>0) then
   begin
-   initialLayout :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+   initialLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   end else
   begin
-   initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+   initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
   end;
 
  With ColorAtd[AtdCount] do
+ begin
   finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+ end;
 
  Inc(AtdCount);
+
+ _AddColorRef(id,IMAGE_USAGE);
 end;
 
-Procedure TvRenderPassKey.AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
+Procedure TvRenderPassKey.AddDepthAt(id:TVkUInt32;format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
 begin
  if (AtdCount>8) then Exit;
 
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
- ColorAtd[AtdCount].format        :=format;
- ColorAtd[AtdCount].samples       :=VK_SAMPLE_COUNT_1_BIT;
+ ColorAtd[AtdCount].format :=format;
+ ColorAtd[AtdCount].samples:=VK_SAMPLE_COUNT_1_BIT;
 
  With ColorAtd[AtdCount] do
   if (DEPTH_USAGE and TM_CLEAR<>0) then
@@ -255,16 +236,20 @@ begin
  With ColorAtd[AtdCount] do
   if ((DEPTH_USAGE or STENCIL_USAGE) and TM_READ<>0) then
   begin
-   initialLayout :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+   initialLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
   end else
   begin
-   initialLayout :=VK_IMAGE_LAYOUT_UNDEFINED;
+   initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
   end;
 
  With ColorAtd[AtdCount] do
+ begin
   finalLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+ end;
 
  Inc(AtdCount);
+
+ _SetDepthRef(id,DEPTH_USAGE,STENCIL_USAGE);
 end;
 
 ///

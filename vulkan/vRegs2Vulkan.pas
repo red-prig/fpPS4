@@ -21,7 +21,7 @@ uses
 type
  TRT_INFO=record
 
-  padded:TVkExtent2D;
+  //padded:TVkExtent2D;
 
   FImageInfo:TvImageKey;
   FImageView:TvImageViewKey;
@@ -44,7 +44,7 @@ type
   STENCIL_READ_ADDR :Pointer;
   STENCIL_WRITE_ADDR:Pointer;
 
-  padded:TVkExtent2D;
+  //padded:TVkExtent2D;
 
   //DEPTH_CLEAR   :Boolean;
   //STENCIL_CLEAR :Boolean;
@@ -735,7 +735,7 @@ begin
 
   COLOR_11_11_10: //R:10 G:11 B:11
    Case NUMBER_TYPE of
-    NUMBER_FLOAT  :Result:=VK_FORMAT_UNDEFINED; //Not directly handled to a vulkan
+    NUMBER_FLOAT  :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32; //Not directly handled to a vulkan
     else;
    end;
 
@@ -760,6 +760,7 @@ var
  W:QWORD;
  FORMAT:Byte;
  NUMBER_TYPE:Byte;
+ tmp:Word;
 begin
  Result:=Default(TRT_INFO);
 
@@ -771,12 +772,13 @@ begin
   Result.FImageInfo.Addr:=Pointer(QWORD(Result.FImageInfo.Addr) or Byte(RENDER_TARGET.VIEW.SLICE_START));
  end;
 
- Result.FImageInfo.params.extend.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
- Result.FImageInfo.params.extend.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
- Result.FImageInfo.params.extend.depth :=1;
+ Result.FImageInfo.params.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
+ Result.FImageInfo.params.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
+ Result.FImageInfo.params.depth :=1;
 
- Result.padded.Width :=(RENDER_TARGET.PITCH.TILE_MAX+1)*8;
- Result.padded.Height:=(RENDER_TARGET.SLICE.TILE_MAX+1)*8 div (RENDER_TARGET.PITCH.TILE_MAX+1);
+ tmp:=(RENDER_TARGET.PITCH.TILE_MAX+1);
+ Result.FImageInfo.params.pad_width :=tmp*8;
+ Result.FImageInfo.params.pad_height:=(RENDER_TARGET.SLICE.TILE_MAX+1)*8 div tmp;
 
  Assert(RENDER_TARGET.INFO.ENDIAN=ENDIAN_NONE,'ENDIAN:'+IntToStr(RENDER_TARGET.INFO.ENDIAN));
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
@@ -1007,8 +1009,8 @@ begin
  //DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE  :=1;
  //DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE:=1;
 
- Result.padded.width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
- Result.padded.height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
+ Result.FImageInfo.params.pad_width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
+ Result.FImageInfo.params.pad_height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
 
  Result.DEPTH_USAGE  :=((TM_WRITE or TM_CLEAR)*CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE);
  Result.STENCIL_USAGE:=((TM_WRITE or TM_CLEAR)*CX_REG^.DB_RENDER_CONTROL.STENCIL_CLEAR_ENABLE);
@@ -1143,9 +1145,9 @@ begin
 
  Result.FImageInfo.Addr:=Result.Z_READ_ADDR;
 
- Result.FImageInfo.params.extend.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
- Result.FImageInfo.params.extend.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
- Result.FImageInfo.params.extend.depth :=1;
+ Result.FImageInfo.params.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
+ Result.FImageInfo.params.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
+ Result.FImageInfo.params.depth :=1;
 
  Result.FImageInfo.params.tiling_idx:=CX_REG^.DB_Z_INFO.TILE_MODE_INDEX;
 
@@ -1655,10 +1657,10 @@ begin
    Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
  end;
 
- Result.params.tiling_idx   :=PT^.tiling_idx;
- Result.params.extend.width :=PT^.width+1;
- Result.params.extend.height:=PT^.height+1;
- Result.params.extend.depth :=1;
+ Result.params.tiling_idx:=PT^.tiling_idx;
+ Result.params.width     :=PT^.width +1;
+ Result.params.height    :=PT^.height+1;
+ Result.params.depth     :=1;
 
  if _img_is_msaa(PT^._type) then
  begin
@@ -1674,6 +1676,10 @@ begin
  //Result.params.mipLevels:=1; /////
 
  Result.params.arrayLayers:=1;
+
+ //TODO: Calculate padding by tilling mode
+ Result.params.pad_width :=Result.params.width;
+ Result.params.pad_height:=Result.params.height;
 end;
 
 function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
@@ -1683,7 +1689,7 @@ begin
  Case PT^._type of
   SQ_RSRC_IMG_3D:
    begin
-    Result.params.extend.depth:=PT^.depth+1;
+    Result.params.depth:=PT^.depth+1;
    end;
   else;
  end;
