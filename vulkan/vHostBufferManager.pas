@@ -106,7 +106,7 @@ begin
 
  _repeat:
 
- It:=FHostBufferSet.find(key);
+ It:=FHostBufferSet.find_be(key);
 
  while (It.Item<>nil) do
  begin

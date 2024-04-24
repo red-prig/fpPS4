@@ -281,7 +281,11 @@ begin
  cinfo.size       :=64*1024;
  cinfo.usage      :=ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
  cinfo.sharingMode:=VK_SHARING_MODE_EXCLUSIVE;
- cinfo.pNext      :=@buf_ext;
+
+ if limits.VK_EXT_external_memory_host then
+ begin
+  cinfo.pNext:=@buf_ext;
+ end;
 
  r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
  if (r=VK_SUCCESS) then
@@ -353,6 +357,8 @@ begin
  LoadMemoryHeaps;
 
  PrintMemoryHeaps;
+
+ TAILQ_INIT(@FHosts);
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
@@ -1071,8 +1077,8 @@ begin
 
   node:=TvHostMemory.Create(FHandle,tmp,mtindex,@FProperties.memoryTypes[mtindex]);
 
-  node.FStart:=FStart;
-  node.F__End:=F__End;
+  node.FStart:=FStart_align;
+  node.F__End:=F__End_align;
 
   node.Acquire;
   TAILQ_INSERT_HEAD(@FHosts,node,@node.entry);
@@ -1121,6 +1127,7 @@ begin
  ainfo.sType          :=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
  ainfo.allocationSize :=Size;
  ainfo.memoryTypeIndex:=mtindex;
+ //
  Result:=VK_NULL_HANDLE;
  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then
@@ -1140,10 +1147,12 @@ begin
  ainfo.allocationSize :=Size;
  ainfo.memoryTypeIndex:=mtindex;
  ainfo.pNext:=@import;
+ //
  import:=Default(TVkImportMemoryHostPointerInfoEXT);
- import.sType:=VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT;
- import.handleType:=VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
+ import.sType       :=VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT;
+ import.handleType  :=VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
  import.pHostPointer:=adr;
+ //
  Result:=VK_NULL_HANDLE;
  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then

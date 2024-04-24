@@ -10,6 +10,7 @@ uses
  LFQueue,
 
  Vulkan,
+ vDevice,
  vBuffer,
  vHostBufferManager,
  vImage,
@@ -21,6 +22,7 @@ uses
  vShaderExt,
  vShaderManager,
  vRegs2Vulkan,
+ vCmdBuffer,
 
  shader_dump,
 
@@ -50,6 +52,9 @@ type
  end;
 
 implementation
+
+uses
+ kern_dmem;
 
 procedure t_pm4_me.Init;
 begin
@@ -93,6 +98,46 @@ end;
 
 //
 
+Function GetAlignWidth(format:TVkFormat;width:DWORD):DWORD;
+var
+ bpp,size,align_m:Ptruint;
+begin
+ size:=width;
+ bpp:=getFormatSize(format);
+ align_m:=(128 div bpp)-1;
+ size:=(size+align_m) and (not align_m);
+ Result:=size;
+end;
+
+Function GetLinearSize(image:TvImage2;align:Boolean):Ptruint;
+var
+ extend:TvExtent3D;
+begin
+ extend.width :=image.key.params.width;
+ extend.height:=image.key.params.height;
+ extend.depth :=image.key.params.depth;
+
+ if align then
+ begin
+  extend.width:=GetAlignWidth(image.key.cformat,extend.width);
+ end;
+
+ if IsTexelFormat(image.key.cformat) then
+ begin
+  extend.width  :=(extend.width  +3) div 4;
+  extend.height :=(extend.height +3) div 4;
+ end;
+
+ Result:=extend.width*
+         extend.height*
+         extend.depth*
+         image.key.params.arrayLayers*
+         getFormatSize(image.key.cformat);
+end;
+
+var
+ FCmdPool:TvCmdPool;
+
 procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
 var
  i:Integer;
@@ -125,6 +170,14 @@ var
 
  ri:TvImage2;
  iv:TvImageView2;
+
+ CmdBuffer:TvCmdBuffer;
+ r:TVkResult;
+
+ buf:TvHostBuffer;
+ addr,size,offset:Ptruint;
+
+ BufferImageCopy:TVkBufferImageCopy;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=@node^.SH_REG;
@@ -154,6 +207,10 @@ begin
   begin
    RT_INFO[RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
 
+   //hack
+   //RT_INFO[RT_COUNT].IMAGE_USAGE:=TM_CLEAR or TM_WRITE;
+   //
+
    RP_KEY.AddColorAt(RT_COUNT,
                      RT_INFO[RT_COUNT].FImageInfo.cformat,
                      RT_INFO[RT_COUNT].IMAGE_USAGE,
@@ -175,7 +232,19 @@ begin
 
  end;
 
- RP:=FetchRenderPass(nil,@RP_KEY);
+ //
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+
+ CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ //CmdBuffer.submit_id:=submit_id;
+
+ //
+
+
+ RP:=FetchRenderPass(CmdBuffer,@RP_KEY);
 
  BI:=GPU_REGS.GET_BLEND_INFO;
 
@@ -208,7 +277,10 @@ begin
   FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,GPU_REGS.get_user_data(vShaderStageVs));
  end;
 
- GP_KEY.SetVertexInput(FAttrBuilder);
+ if not limits.VK_EXT_vertex_input_dynamic_state then
+ begin
+  GP_KEY.SetVertexInput(FAttrBuilder);
+ end;
 
  GP_KEY.rasterizer   :=GPU_REGS.GET_RASTERIZATION;
  GP_KEY.multisampling:=GPU_REGS.GET_MULTISAMPLE;
@@ -220,7 +292,7 @@ begin
   GP_KEY.DepthStencil:=DB_INFO.ds_state;
  end;
 
- GP:=FetchGraphicsPipeline(nil,@GP_KEY);
+ GP:=FetchGraphicsPipeline(CmdBuffer,@GP_KEY);
 
  FFramebuffer:=TvFramebufferIL.Create;
  FFramebuffer.Key.FRenderPass :=RP;
@@ -251,19 +323,152 @@ begin
  if (RT_COUNT<>0) then
  For i:=0 to RT_COUNT-1 do
   begin
-   FRenderCmd.AddClearColor(TVkClearValue(RT_INFO[i].CLEAR_COLOR));
+   //RT_INFO[i].CLEAR_COLOR.float32[2]:=1;
 
-   ri:=FetchImage(nil,
+   FRenderCmd.AddClearColor(RT_INFO[i].CLEAR_COLOR);
+
+   ri:=FetchImage(CmdBuffer,
                   RT_INFO[i].FImageInfo,
                   iu_attachment,
                   RT_INFO[i].IMAGE_USAGE
                   );
 
-   iv:=ri.FetchView(nil,RT_INFO[i].FImageView,iu_attachment);
+   iv:=ri.FetchView(CmdBuffer,RT_INFO[i].FImageView,iu_attachment);
+
+   FRenderCmd.AddImageView(iv);
+
+   ri.PushBarrier(CmdBuffer,
+                  ord(VK_ACCESS_TRANSFER_READ_BIT),
+                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+   ri.PushBarrier(CmdBuffer,
+                  GetColorAccessMask(RT_INFO[i].IMAGE_USAGE),
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL {VK_IMAGE_LAYOUT_GENERAL},
+                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                  ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
   end;
 
+ if GPU_REGS.DB_ENABLE then
+ begin
+  FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
+ end;
 
+ if not CmdBuffer.BeginRenderPass(FRenderCmd) then
+ begin
+  Assert(false,'BeginRenderPass(FRenderCmd)');
+ end;
+
+ CmdBuffer.SetVertexInput(FAttrBuilder);
+
+ /////////
+ CmdBuffer.instanceCount:=GPU_REGS.UC_REG^.VGT_NUM_INSTANCES;
+ CmdBuffer.DrawIndex2(node^.addr,
+                      GPU_REGS.UC_REG^.VGT_NUM_INDICES,
+                      GPU_REGS.GET_INDEX_TYPE);
+ /////////
+
+ CmdBuffer.EndRenderPass;
+
+ //write back
+
+ if (RT_COUNT<>0) then
+ For i:=0 to RT_COUNT-1 do
+  begin
+
+   ri:=FetchImage(CmdBuffer,
+                  RT_INFO[i].FImageInfo,
+                  iu_attachment,
+                  RT_INFO[i].IMAGE_USAGE
+                  );
+
+   ri.PushBarrier(CmdBuffer,
+                  ord(VK_ACCESS_TRANSFER_READ_BIT),
+                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+   if not get_dmem_ptr(ri.key.Addr,@addr,nil) then
+   begin
+    Assert(false,'addr:0x'+HexStr(ri.key.Addr)+' not in dmem!');
+   end;
+
+   //Writeln('0x',HexStr(ri.key.Addr),'->0x',HexStr(addr,16));
+
+   size:=GetLinearSize(ri,true);
+
+   buf:=FetchHostBuffer(CmdBuffer,
+                        addr,
+                        size,
+                        ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+
+   offset:=buf.FAddr-addr;
+
+   vkBufferMemoryBarrier(CmdBuffer.FCmdbuf,
+                         buf.FHandle,
+                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                         offset,
+                         size,
+                         ord(VK_PIPELINE_STAGE_HOST_BIT),
+                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                         );
+
+   BufferImageCopy:=Default(TVkBufferImageCopy);
+
+   BufferImageCopy.bufferOffset     :=offset;
+   BufferImageCopy.bufferRowLength  :=0;
+   BufferImageCopy.bufferImageHeight:=0;
+   BufferImageCopy.imageSubresource :=ri.GetSubresLayer;
+   BufferImageCopy.imageExtent.Create(ri.key.params.width,
+                                      ri.key.params.height,
+                                      ri.key.params.depth);
+
+   if true {align} then
+   begin
+    BufferImageCopy.bufferRowLength:=GetAlignWidth(ri.key.cformat,ri.key.params.width);
+   end;
+
+   vkCmdCopyImageToBuffer(CmdBuffer.FCmdbuf,
+                          ri.FHandle,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          buf.FHandle,
+                          1,
+                          @BufferImageCopy);
+
+  end;
+
+ //write back
+
+ if (CmdBuffer.QueueSubmit<>VK_SUCCESS) then
+ begin
+  Assert(false,'QueueSubmit');
+ end;
+
+ r:=CmdBuffer.Wait(QWORD(-1));
+
+ Writeln('CmdBuffer:',r);
+ writeln;
+
+ CmdBuffer.ReleaseResource;
+
+ CmdBuffer.Free;
+end;
+
+procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop);
+begin
+
+ Case node^.dataSel of
+  //
+  EVENTWRITEEOP_DATA_SEL_DISCARD            :;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA32        :PDWORD(node^.addr)^:=node^.data;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA64        :PQWORD(node^.addr)^:=node^.data;
+  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     :; //system 100Mhz global clock.
+  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:; //GPU 800Mhz clock.
+  else;
+ end;
+
+ //node^.intSel
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
@@ -284,7 +489,8 @@ begin
     Writeln('+',node^.ntype);
 
     case node^.ntype of
-     ntDrawIndex2:pm4_DrawIndex2(Pointer(node));
+     ntDrawIndex2   :pm4_DrawIndex2   (Pointer(node));
+     ntEventWriteEop:pm4_EventWriteEop(Pointer(node));
      else
     end;
 

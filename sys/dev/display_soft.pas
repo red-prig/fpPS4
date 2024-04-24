@@ -25,6 +25,8 @@ type
   attr :QWORD;
   left :Pointer; //buffer ptr
   right:Pointer; //Stereo ptr
+  left_dmem :Pointer; //buffer ptr
+  right_dmem:Pointer; //Stereo ptr
  end;
 
  PQNode=^TQNode;
@@ -202,6 +204,8 @@ var
 
  left :Pointer;
  right:Pointer;
+ left_dmem :Pointer;
+ right_dmem:Pointer;
 begin
  i:=buf^.index;
  a:=buf^.attrid;
@@ -214,8 +218,11 @@ begin
 
  if (left=nil) then Exit(EINVAL);
 
+left_dmem :=nil;
+right_dmem:=nil;
+
  //TODO: check size!
- if not get_dmem_ptr(left,@left,nil) then
+ if not get_dmem_ptr(left,@left_dmem,nil) then
  begin
   Exit(EINVAL);
  end;
@@ -223,7 +230,7 @@ begin
  if (right<>nil) then
  begin
   //TODO: check size!
-  if not get_dmem_ptr(right,@right,nil) then
+  if not get_dmem_ptr(right,@right_dmem,nil) then
   begin
    Exit(EINVAL);
   end;
@@ -233,6 +240,9 @@ begin
  m_bufs[i].attr :=a;
  m_bufs[i].left :=left;
  m_bufs[i].right:=right;
+ m_bufs[i].left_dmem :=left_dmem;
+ m_bufs[i].right_dmem:=right_dmem;
+
 
  Result:=0;
 end;
@@ -506,13 +516,13 @@ begin
 
   dst:=p_dst^;
 
-  //detile32bppBuf_slow(attr,bi.bmiHeader.biWidth,buf^.left,dst);
-  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.left,dst);
+  //detile32bppBuf_slow(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
+  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
  end else
  begin
   bi.bmiHeader.biWidth:=(bi.bmiHeader.biWidth+63) and (not 63);
 
-  dst:=buf^.left;
+  dst:=buf^.left_dmem;
  end;
 
  //flip
@@ -539,7 +549,7 @@ begin
                   attr^.attr.width, attr^.attr.height,
                   0, 0,
                   0, attr^.attr.height,
-                  buf^.left, bi, DIB_RGB_COLORS);
+                  buf^.left_dmem, bi, DIB_RGB_COLORS);
  }
 
  ReleaseDC(hWindow, hdc);

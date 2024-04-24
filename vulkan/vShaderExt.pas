@@ -115,9 +115,19 @@ type
   Function GetSize:TVkUInt32;
  end;
 
- AvVertexInputBindingDescription  =array[0..31] of TVkVertexInputBindingDescription;
- AvBindVertexBuffer               =array[0..31] of TvBindVertexBuffer;
- AvVertexInputAttributeDescription=array[0..31] of TVkVertexInputAttributeDescription;
+ AvVertexInputBindingDescription   =array[0..31] of TVkVertexInputBindingDescription;
+ AvBindVertexBuffer                =array[0..31] of TvBindVertexBuffer;
+ AvVertexInputAttributeDescription =array[0..31] of TVkVertexInputAttributeDescription;
+
+ AvVertexInputBindingDescription2  =array[0..31] of TVkVertexInputBindingDescription2EXT;
+ AvVertexInputAttributeDescription2=array[0..31] of TVkVertexInputAttributeDescription2EXT;
+
+ TvVertexInputEXT=record
+  vertexBindingDescriptionCount  :TVkUInt32;
+  vertexAttributeDescriptionCount:TVkUInt32;
+  VertexBindingDescriptions      :AvVertexInputBindingDescription2;
+  VertexAttributeDescriptions    :AvVertexInputAttributeDescription2;
+ end;
 
  TvAttrBuilder=object
   const
@@ -136,6 +146,7 @@ type
   procedure PatchAttr(binding,offset:TVkUInt32);
   Procedure AddVSharp(PV:PVSharpResource4;location:DWord);
   procedure AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+  Procedure Export2(var input:TvVertexInputEXT);
  end;
 
  TBufBindExt=packed record
@@ -667,6 +678,51 @@ begin
  PV:=GetSharpByPatch(FData,v.addr);
  //print_vsharp(PV);
  AddVSharp(PV,v.bind);
+end;
+
+{
+TvAttrBuilder=object
+ const
+  maxVertexInputBindingStride=16383;
+  maxVertexInputBindings     =32;
+  maxVertexInputAttributes   =32;
+ var
+  FBindDescsCount:Byte;
+  FAttrDescsCount:Byte;
+  FBindDescs:AvVertexInputBindingDescription;
+  FBindVBufs:AvBindVertexBuffer;
+  FAttrDescs:AvVertexInputAttributeDescription;
+}
+
+Procedure TvAttrBuilder.Export2(var input:TvVertexInputEXT);
+var
+ i:Byte;
+begin
+ input:=Default(TvVertexInputEXT);
+
+ input.vertexBindingDescriptionCount  :=FBindDescsCount;
+ input.vertexAttributeDescriptionCount:=FAttrDescsCount;
+
+ if (FBindDescsCount<>0) then
+ For i:=0 to FBindDescsCount-1 do
+ begin
+  input.VertexBindingDescriptions[i].sType    :=VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT;
+  input.VertexBindingDescriptions[i].binding  :=FBindDescs[i].binding;
+  input.VertexBindingDescriptions[i].stride   :=FBindDescs[i].stride;
+  input.VertexBindingDescriptions[i].inputRate:=FBindDescs[i].inputRate;
+  input.VertexBindingDescriptions[i].divisor  :=1;
+ end;
+
+ if (FAttrDescsCount<>0) then
+ For i:=0 to FAttrDescsCount-1 do
+ begin
+  input.VertexAttributeDescriptions[i].sType   :=VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT;
+  input.VertexAttributeDescriptions[i].location:=FAttrDescs[i].location;
+  input.VertexAttributeDescriptions[i].binding :=FAttrDescs[i].binding;
+  input.VertexAttributeDescriptions[i].format  :=FAttrDescs[i].format;
+  input.VertexAttributeDescriptions[i].offset  :=FAttrDescs[i].offset;
+ end;
+
 end;
 
 //

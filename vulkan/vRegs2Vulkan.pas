@@ -1208,7 +1208,7 @@ begin
  Result.rasterizerDiscardEnable:=CX_REG^.DB_SHADER_CONTROL.KILL_ENABLE;
  Result.polygonMode            :=get_polygon_mode(SU_SC_MODE_CNTL);
  Result.cullMode               :=get_cull_mode   (SU_SC_MODE_CNTL);
- Result.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE);
+ Result.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE); //1:1
  Result.lineWidth              :=(CX_REG^.PA_SU_LINE_CNTL.WIDTH/8);
 
  if (DWORD(CX_REG^.PA_SU_POLY_OFFSET_DB_FMT_CNTL)<>0) then

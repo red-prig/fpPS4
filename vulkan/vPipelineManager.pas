@@ -51,7 +51,7 @@ type
   emulate_primtype:Byte;
 
   Procedure Clear;
-  Procedure SetVertexInput(var FAttrBuilder:TvAttrBuilder);
+  Procedure SetVertexInput(const FAttrBuilder:TvAttrBuilder);
   Procedure SetPrimType(t:TVkPrimitiveTopology);
   Procedure SetPrimReset(enable:TVkBool32);
   Procedure SetProvoking(t:TVkProvokingVertexModeEXT);
@@ -137,7 +137,7 @@ begin
  DepthStencil.depthCompareOp:=VK_COMPARE_OP_LESS;
 end;
 
-Procedure TvGraphicsPipelineKey.SetVertexInput(var FAttrBuilder:TvAttrBuilder);
+Procedure TvGraphicsPipelineKey.SetVertexInput(const FAttrBuilder:TvAttrBuilder);
 begin
  vertexInputInfo.vertexBindingDescriptionCount  :=FAttrBuilder.FBindDescsCount;
  vertexInputInfo.vertexAttributeDescriptionCount:=FAttrBuilder.FAttrDescsCount;
@@ -230,8 +230,11 @@ var
  vertexInputInfo:TVkPipelineVertexInputStateCreateInfo;
  viewportState  :TVkPipelineViewportStateCreateInfo;
  colorBlending  :TVkPipelineColorBlendStateCreateInfo;
+ dynamicState   :TVkPipelineDynamicStateCreateInfo;
  rasterizer     :TVkPipelineRasterizationStateCreateInfo;
  ProvokingVertex:TVkPipelineRasterizationProvokingVertexStateCreateInfoEXT;
+
+ dynamicStates  :array[0..0] of TVkDynamicState; //dynamicState.dynamicStateCount
 begin
  Result:=False;
 
@@ -259,8 +262,8 @@ begin
  vertexInputInfo.sType                          :=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
  vertexInputInfo.vertexBindingDescriptionCount  :=Key.vertexInputInfo.vertexBindingDescriptionCount;
  vertexInputInfo.vertexAttributeDescriptionCount:=Key.vertexInputInfo.vertexAttributeDescriptionCount;
- vertexInputInfo.pVertexBindingDescriptions     :=@Key.vertexInputInfo.VertexBindingDescriptions;
- vertexInputInfo.pVertexAttributeDescriptions   :=@Key.vertexInputInfo.VertexAttributeDescriptions;
+ vertexInputInfo.pVertexBindingDescriptions     :=@Key.vertexInputInfo.VertexBindingDescriptions[0];
+ vertexInputInfo.pVertexAttributeDescriptions   :=@Key.vertexInputInfo.VertexAttributeDescriptions[0];
 
  viewportState:=Default(TVkPipelineViewportStateCreateInfo);
  viewportState.sType        :=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -275,6 +278,17 @@ begin
  colorBlending.logicOp        :=TVkLogicOp(Key.colorBlending.logicOp);
  colorBlending.attachmentCount:=Key.colorBlending.attachmentCount;
  colorBlending.pAttachments   :=@Key.ColorBlends;
+
+ dynamicState:=Default(TVkPipelineDynamicStateCreateInfo);
+ dynamicState.sType:=VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+
+ if limits.VK_EXT_vertex_input_dynamic_state then
+ begin
+  dynamicStates[0]:=VK_DYNAMIC_STATE_VERTEX_INPUT_EXT;
+  //
+  dynamicState.dynamicStateCount:=1;
+  dynamicState.pDynamicStates   :=@dynamicStates[0];
+ end;
 
  rasterizer:=Key.rasterizer;
 
@@ -298,7 +312,7 @@ begin
  info.pMultisampleState  :=@Key.multisampling;
  info.pDepthStencilState :=@Key.DepthStencil;
  info.pColorBlendState   :=@colorBlending;
- info.pDynamicState      :=nil;
+ info.pDynamicState      :=@dynamicState;
  info.layout             :=Key.FShaderGroup.FLayout.FHandle;
  info.renderPass         :=Key.FRenderPass.FHandle;
  info.subpass            :=0;

@@ -92,6 +92,7 @@ end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buf:PPM4CMDINDIRECTBUFFER;icb:t_pm4_parse_cb):Boolean;
 var
+ op:DWORD;
  ib_base:QWORD;
  ib_size:QWORD;
  addr:Pointer;
@@ -99,8 +100,21 @@ var
 begin
  Result:=False;
 
+ op:=buf^.header;
+
+ if ((op<>$c0023300) and (op<>$c0023f00)) then
+ begin
+  Assert(false,'init not indirect buffer');
+ end;
+
  ib_base:=QWORD(buf^.ibBase);
  ib_size:=QWORD(buf^.ibSize)*sizeof(DWORD);
+
+ case op of
+  $c0023300:Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(ib_base,10));
+  $c0023f00:Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(ib_base,10));
+  else;
+ end;
 
  addr:=nil;
  size:=0;
@@ -902,6 +916,7 @@ begin
 
  if (Body^.destTcL2<>0) then Exit; //write to L2
 
+ {
  Case Body^.dataSel of
   //
   EVENTWRITEEOP_DATA_SEL_DISCARD            :;
@@ -911,6 +926,7 @@ begin
   EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:; //GPU 800Mhz clock.
   else;
  end;
+ }
 
  addr:=nil;
  size:=0;

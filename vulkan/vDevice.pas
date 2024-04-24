@@ -1569,6 +1569,7 @@ begin
  end;
 
  Result:=LoadVulkanLibrary;
+
  if Result then
  begin
   Result:=LoadVulkanGlobalCommands;
@@ -1611,16 +1612,6 @@ begin
  FillDeviceExtension(VulkanApp.FPhysicalDevice);
  FillDeviceProperties(VulkanApp.FPhysicalDevice);
 
- if not limits.VK_KHR_swapchain then
- begin
-  raise Exception.Create('VK_KHR_swapchain not support!');
- end;
-
- if not limits.VK_EXT_external_memory_host then
- begin
-  raise Exception.Create('VK_EXT_external_memory_host not support!');
- end;
-
  DeviceInfo:=TvDeviceCreateInfo.Create;
 
  if (VulkanApp.FGFamilyCount>1) then
@@ -1636,10 +1627,24 @@ begin
   DeviceInfo.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
  end;
 
- DeviceInfo.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+ if limits.VK_KHR_swapchain then
+ begin
+  DeviceInfo.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+ end else
+ begin
+  Writeln(stderr,'VK_KHR_swapchain not support!');
+  //raise Exception.Create('VK_KHR_swapchain not support!');
+ end;
 
- DeviceInfo.add_ext(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
- DeviceInfo.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+ if limits.VK_EXT_external_memory_host then
+ begin
+  DeviceInfo.add_ext(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+  DeviceInfo.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+ end else
+ begin
+  Writeln(stderr,'VK_EXT_external_memory_host not support!');
+  //raise Exception.Create('VK_EXT_external_memory_host not support!');
+ end;
 
  if limits.VK_AMD_device_coherent_memory then
  begin

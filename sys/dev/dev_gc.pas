@@ -207,10 +207,10 @@ begin
 
    end;
 
-   pm4_me_gfx.Push(pfp_ctx.stream_dcb);
    pm4_me_gfx.Push(pfp_ctx.stream_ccb);
+   pm4_me_gfx.Push(pfp_ctx.stream_dcb);
 
-   gc_ring_pm4_drain(@ring_gfx,size-i);
+   gc_ring_pm4_drain(@ring_gfx,size);
   end;
 
   msleep_td(100);

@@ -16,7 +16,7 @@ uses
   vDevice,
   vMemory,
   //vShader,
-  //vShaderExt,
+  vShaderExt,
   vImage,
   vPipeline,
   //vSetsPools,
@@ -74,7 +74,8 @@ type
   Function    IsRenderPass:Boolean;
   Procedure   EndRenderPass;
 
-  function    QueueSubmit:Boolean;
+  function    QueueSubmit:TVkResult;
+  function    Wait(timeout:TVkUInt64):TVkResult;
 
   Procedure   ReleaseResource;
   Procedure   AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
@@ -84,6 +85,8 @@ type
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
   Procedure   PushConstant(BindPoint:TVkPipelineBindPoint;stageFlags:TVkShaderStageFlags;offset,size:TVkUInt32;const pValues:PVkVoid);
   Procedure   DispatchDirect(X,Y,Z:TVkUInt32);
+
+  Procedure   SetVertexInput(const FAttrBuilder:TvAttrBuilder);
 
   Procedure   BindVertexBuffer(Binding:TVkUInt32;
                                Buffer:TVkBuffer;
@@ -152,6 +155,7 @@ begin
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
  FFence:=TvFence.Create(true);
+ FFence.Reset;
 
  FSignalSemaphore:=TvSemaphore.Create;
 
@@ -251,6 +255,7 @@ end;
 function TvCmdBuffer.BeginRenderPass(RT:TvRenderTargets):Boolean;
 var
  info:TVkRenderPassBeginInfo;
+ info2:TVkRenderPassAttachmentBeginInfo;
 begin
  Result:=False;
 
@@ -267,7 +272,7 @@ begin
  if (RT.FFramebuffer=nil) then Exit;
 
  //if (not RT.FRenderPass.Compile) then Exit;
- if (not RT.FPipeline.Compile) then Exit;
+ //if (not RT.FPipeline.Compile) then Exit;
  //if (not RT.FFramebuffer.Compile) then Exit;
 
  if (RT.FRenderPass.FHandle=FRenderPass) then Exit(True);
@@ -277,6 +282,9 @@ begin
  EndRenderPass;
 
  info:=RT.GetInfo;
+ info2:=RT.GetInfo2;
+
+ info.pNext:=@info2;
 
  FCurrPipeline[0]:=RT.FPipeline.FHandle;
  FCurrLayout  [0]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
@@ -333,9 +341,8 @@ begin
  Result:=True;
 end;
 
-function TvCustomCmdBuffer.QueueSubmit:Boolean;
+function TvCustomCmdBuffer.QueueSubmit:TVkResult;
 var
- r:TVkResult;
  info:TVkSubmitInfo;
 
  FFenceHandle:TVkFence;
@@ -346,7 +353,8 @@ var
  i:Integer;
  t:TvSemaphoreWaitSet.Iterator;
 begin
- Result:=False;
+ Result:=VK_ERROR_UNKNOWN;
+
  if (Self=nil) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
@@ -392,16 +400,24 @@ begin
   FFenceHandle:=FFence.FHandle;
  end;
 
- r:=FQueue.Submit(1,@info,FFenceHandle);
+ Result:=FQueue.Submit(1,@info,FFenceHandle);
 
- ret:=Integer(r);
- if (r<>VK_SUCCESS) then
+ ret:=Integer(Result);
+ if (Result<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkQueueSubmit:',r);
-  exit;
+  Writeln(StdErr,'vkQueueSubmit:',Result);
  end;
 
- Result:=True;
+end;
+
+function TvCustomCmdBuffer.Wait(timeout:TVkUInt64):TVkResult;
+begin
+ Result:=VK_ERROR_UNKNOWN;
+
+ if (Self=nil) then Exit;
+ if (FFence=nil) then Exit;
+
+ Result:=FFence.Wait(timeout);
 end;
 
 Procedure TvCustomCmdBuffer.ReleaseResource;
@@ -494,6 +510,30 @@ begin
  Inc(cmd_count);
 
  vkCmdDispatch(FCmdbuf,X,Y,Z);
+end;
+
+Procedure TvCustomCmdBuffer.SetVertexInput(const FAttrBuilder:TvAttrBuilder);
+var
+ input:TvVertexInputEXT;
+begin
+ if (Self=nil) then Exit;
+
+ if not limits.VK_EXT_vertex_input_dynamic_state then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ FAttrBuilder.Export2(input);
+
+ if (vkCmdSetVertexInputEXT=nil) then
+ begin
+  TPFN_vkVoidFunction(vkCmdSetVertexInputEXT):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdSetVertexInputEXT');
+ end;
+
+ vkCmdSetVertexInputEXT(FCmdbuf,
+                        input.vertexBindingDescriptionCount,
+                        @input.VertexBindingDescriptions[0],
+                        input.vertexAttributeDescriptionCount,
+                        @input.VertexAttributeDescriptions[0]);
 end;
 
 Procedure TvCustomCmdBuffer.BindVertexBuffer(Binding:TVkUInt32;

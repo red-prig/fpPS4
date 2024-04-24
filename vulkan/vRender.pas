@@ -90,14 +90,20 @@ type
   FPipeline   :TvGraphicsPipeline2;
   FFramebuffer:TvFramebuffer;
   FRenderArea :TVkRect2D;
-
+  //
   FClearValuesCount:TVkUInt32;
   FClearValues:array[0..8] of TVkClearValue;
+  //
+  FImagesCount:TVkUInt32;
+  FImageViews :AvImageViews;
   //
   FRefs:ptruint;
   //
   Procedure  AddClearColor(clr:TVkClearValue);
+  Procedure  AddClearColor(clr:TVkClearColorValue);
+  Procedure  AddImageView(v:TvImageView);
   Function   GetInfo:TVkRenderPassBeginInfo;
+  Function   GetInfo2:TVkRenderPassAttachmentBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
   Destructor Destroy; override;
   Procedure  Acquire(Sender:TObject);
@@ -605,6 +611,19 @@ begin
  Inc(FClearValuesCount);
 end;
 
+Procedure TvRenderTargets.AddClearColor(clr:TVkClearColorValue);
+begin
+ AddClearColor(TVkClearValue(clr));
+end;
+
+Procedure TvRenderTargets.AddImageView(v:TvImageView);
+begin
+ if (v=nil) then Exit;
+ if (FImagesCount>=Length(AvImageViews)) then Exit;
+ FImageViews[FImagesCount]:=v.FHandle;
+ Inc(FImagesCount);
+end;
+
 Function TvRenderTargets.GetInfo:TVkRenderPassBeginInfo;
 begin
  Result:=Default(TVkRenderPassBeginInfo);
@@ -612,8 +631,16 @@ begin
  Result.renderPass     :=FRenderPass.FHandle;
  Result.renderArea     :=FRenderArea;
  Result.clearValueCount:=FClearValuesCount;
- Result.pClearValues   :=FClearValues;
+ Result.pClearValues   :=@FClearValues[0];
  Result.framebuffer    :=FFramebuffer.FHandle;
+end;
+
+Function TvRenderTargets.GetInfo2:TVkRenderPassAttachmentBeginInfo;
+begin
+ Result:=Default(TVkRenderPassAttachmentBeginInfo);
+ Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO;
+ Result.attachmentCount:=FImagesCount;
+ Result.pAttachments   :=@FImageViews[0];
 end;
 
 class function TvRenderTargets.c(const a,b:TvRenderTargets):Integer;

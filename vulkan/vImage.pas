@@ -905,8 +905,8 @@ begin
  begin
   sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO;
   pNext          :=nil;
-  flags          :=0;
-  usage          :=GET_VK_IMAGE_USAGE_DEFAULT(Key.cformat);
+  flags          :=GET_VK_IMAGE_CREATE_DEFAULT(Key.cformat);
+  usage          :=GET_VK_IMAGE_USAGE_DEFAULT (Key.cformat);
   width          :=Key.params.width;
   height         :=Key.params.height;
   layerCount     :=key.params.arrayLayers;
@@ -926,7 +926,7 @@ var
  imgs:TVkFramebufferAttachmentsCreateInfo;
 begin
  Result:=False;
-  if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 
  if (Key.FRenderPass=nil) then Exit;
  if (Key.FRenderPass.FHandle=VK_NULL_HANDLE) then Exit;
@@ -1190,6 +1190,8 @@ begin
 
  cinfo:=GetImageInfo;
  cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
+
+ cinfo.pNext:=@clist;
 
  MUTABLE:=GET_VK_IMAGE_MUTABLE(cinfo.format);
 
