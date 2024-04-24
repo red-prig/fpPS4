@@ -95,7 +95,7 @@ begin
   Exit;
  end;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff+size,size,GC_RING_PADD,MD_PROT_RW);
+ Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,GC_RING_PADD,MD_PROT_RW);
 
  md_memfd_close(hMem);
 end;
@@ -110,23 +110,40 @@ begin
  Result:=md_unmap_ex(ring^.buff,ring^.size+GC_RING_PADD);
 end;
 
+function block_id(val,size:DWORD):DWORD; inline;
+begin
+ Result:=val and (not (size-1));
+end;
+
+function block_ofs(val,size:DWORD):DWORD; inline;
+begin
+ Result:=val and (size-1);
+end;
+
 //need lock
 function gc_ring_pm4_alloc(ring:p_pm4_ring;size:DWORD;buff:PPointer):Boolean;
 var
+ rsiz:DWORD;
+ rptr:DWORD;
  next:DWORD;
 begin
  Result:=False;
- if (size>ring^.size) then Exit;
 
+ rsiz:=ring^.size;
+ if (size>rsiz) then Exit;
+
+ rptr:=ring^.rptr;
  next:=ring^.aptr+size;
 
- if (next>=ring^.size) then
+ if (block_id(next,rsiz)=block_id(rptr,rsiz)) then
  begin
-  next:=next and (ring^.size-1);
-  if (next>ring^.rptr) then Exit;
+  if (block_ofs(next,rsiz)<block_ofs(rptr,rsiz)) then Exit;
+ end else
+ begin
+  if (block_ofs(next,rsiz)>block_ofs(rptr,rsiz)) then Exit;
  end;
 
- buff^:=ring^.buff+ring^.aptr;
+ buff^:=ring^.buff+block_ofs(ring^.aptr,rsiz);
  ring^.aptr:=next;
  Result:=True;
 end;
@@ -144,28 +161,31 @@ end;
 //single consumer
 function gc_ring_pm4_peek(ring:p_pm4_ring;size:PDWORD;buff:PPointer):Boolean;
 var
+ rsiz:DWORD;
  rptr:DWORD;
  wptr:DWORD;
  s   :DWORD;
 begin
  Result:=False;
 
+ rsiz:=ring^.size;
  rptr:=ring^.rptr;
  wptr:=ring^.wptr;
 
- if (rptr>wptr) then
+ if (block_id(rptr,rsiz)=block_id(wptr,rsiz)) then
  begin
-  if (wptr>GC_RING_PADD) then wptr:=GC_RING_PADD;
-  s:=(ring^.size-rptr)+wptr;
+  s:=block_ofs(wptr,rsiz)-block_ofs(rptr,rsiz);
  end else
  begin
-  s:=wptr-rptr;
+  s:=block_ofs(wptr,rsiz);
+  if (s>GC_RING_PADD) then s:=GC_RING_PADD;
+  s:=(rsiz-block_ofs(rptr,rsiz))+s;
  end;
 
  if (s<>0) then
  begin
   size^:=s;
-  buff^:=ring^.buff+rptr;
+  buff^:=ring^.buff+block_ofs(rptr,rsiz);
   Result:=True;
  end;
 end;
@@ -173,27 +193,28 @@ end;
 //single consumer
 function gc_ring_pm4_drain(ring:p_pm4_ring;size:DWORD):Boolean;
 var
+ rsiz:DWORD;
  rptr:DWORD;
  wptr:DWORD;
  s   :DWORD;
 begin
  Result:=False;
 
+ rsiz:=ring^.size;
  rptr:=ring^.rptr;
  wptr:=ring^.wptr;
 
- if (rptr>wptr) then
+ if (block_id(rptr,rsiz)=block_id(wptr,rsiz)) then
  begin
-  s:=(ring^.size-rptr)+wptr;
+  s:=block_ofs(wptr,rsiz)-block_ofs(rptr,rsiz);
  end else
  begin
-  s:=wptr-rptr;
+  s:=(rsiz-block_ofs(rptr,rsiz))+block_ofs(wptr,rsiz);
  end;
 
  if (size>s) then Exit;
 
  rptr:=rptr+size;
- rptr:=rptr and (ring^.size-1);
 
  System.InterlockedExchange(ring^.rptr,rptr);
 

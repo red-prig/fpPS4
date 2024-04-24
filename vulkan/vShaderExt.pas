@@ -680,20 +680,6 @@ begin
  AddVSharp(PV,v.bind);
 end;
 
-{
-TvAttrBuilder=object
- const
-  maxVertexInputBindingStride=16383;
-  maxVertexInputBindings     =32;
-  maxVertexInputAttributes   =32;
- var
-  FBindDescsCount:Byte;
-  FAttrDescsCount:Byte;
-  FBindDescs:AvVertexInputBindingDescription;
-  FBindVBufs:AvBindVertexBuffer;
-  FAttrDescs:AvVertexInputAttributeDescription;
-}
-
 Procedure TvAttrBuilder.Export2(var input:TvVertexInputEXT);
 var
  i:Byte;
