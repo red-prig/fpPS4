@@ -393,7 +393,7 @@ begin
   t.Parent :=Self;
   t.key    :=key2;
 
-  t.Acquire;
+  t.Acquire; //map ref
   FViews.Insert(@t.key);
  end;
 

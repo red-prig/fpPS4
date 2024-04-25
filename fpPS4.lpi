@@ -994,6 +994,10 @@
         <Filename Value="vulkan\vPipelineManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="vulkan\vFramebufferManager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

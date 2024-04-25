@@ -251,13 +251,6 @@ begin
 
  //
 
- //VK_EXT_vertex_input_dynamic_state
- //VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME
- // VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT
- // VK_DYNAMIC_STATE_VERTEX_INPUT_EXT
- // VkVertexInputBindingDescription2EXT
- // VkVertexInputAttributeDescription2EXT
-
  vertexInputInfo:=Default(TVkPipelineVertexInputStateCreateInfo);
  vertexInputInfo.sType                          :=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
  vertexInputInfo.vertexBindingDescriptionCount  :=Key.vertexInputInfo.vertexBindingDescriptionCount;
@@ -388,7 +381,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire;
+   t.Acquire; //map ref
    FGraphicsPipeline2Set.Insert(@t.key);
   end;
  end;

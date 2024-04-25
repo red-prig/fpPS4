@@ -254,8 +254,8 @@ end;
 
 function TvCmdBuffer.BeginRenderPass(RT:TvRenderTargets):Boolean;
 var
- info:TVkRenderPassBeginInfo;
- info2:TVkRenderPassAttachmentBeginInfo;
+ rinfo:TVkRenderPassBeginInfo;
+ ainfo:TVkRenderPassAttachmentBeginInfo;
 begin
  Result:=False;
 
@@ -281,10 +281,13 @@ begin
 
  EndRenderPass;
 
- info:=RT.GetInfo;
- info2:=RT.GetInfo2;
+ rinfo:=RT.GetRInfo;
 
- info.pNext:=@info2;
+ if RT.FFramebuffer.IsImageless then
+ begin
+  ainfo:=RT.GetAInfo;
+  rinfo.pNext:=@ainfo;
+ end;
 
  FCurrPipeline[0]:=RT.FPipeline.FHandle;
  FCurrLayout  [0]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
@@ -292,7 +295,7 @@ begin
 
  Inc(cmd_count);
 
- vkCmdBeginRenderPass(FCmdbuf,@info,VK_SUBPASS_CONTENTS_INLINE);
+ vkCmdBeginRenderPass(FCmdbuf,@rinfo,VK_SUBPASS_CONTENTS_INLINE);
  vkCmdBindPipeline   (FCmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
 
  if AddDependence(@RT.Release) then
@@ -300,7 +303,7 @@ begin
   RT.Acquire(Self);
  end;
 
- FRenderPass:=info.renderPass;
+ FRenderPass:=rinfo.renderPass;
 
  Result:=True;
 end;

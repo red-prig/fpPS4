@@ -347,7 +347,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire;
+   t.Acquire; //map ref
    FRenderPass2Set.Insert(@t.key);
   end;
  end;

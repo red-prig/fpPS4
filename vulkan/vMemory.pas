@@ -150,9 +150,9 @@ const
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
 
-function vkAllocMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
-function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
-function vkAllocDedicatedImage(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage):TVkDeviceMemory;
+function vkAllocMemory         (device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32):TVkDeviceMemory;
+function vkAllocHostMemory     (device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;addr:Pointer     ):TVkDeviceMemory;
+function vkAllocDedicatedImage (device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkImage ):TVkDeviceMemory;
 function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;FHandle:TVkBuffer):TVkDeviceMemory;
 
 function GetHostMappedRequirements:TVkMemoryRequirements;
@@ -1136,7 +1136,7 @@ begin
  end;
 end;
 
-function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;adr:Pointer):TVkDeviceMemory;
+function vkAllocHostMemory(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkUInt32;addr:Pointer):TVkDeviceMemory;
 var
  ainfo:TVkMemoryAllocateInfo;
  import:TVkImportMemoryHostPointerInfoEXT;
@@ -1151,7 +1151,7 @@ begin
  import:=Default(TVkImportMemoryHostPointerInfoEXT);
  import.sType       :=VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT;
  import.handleType  :=VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
- import.pHostPointer:=adr;
+ import.pHostPointer:=addr;
  //
  Result:=VK_NULL_HANDLE;
  r:=vkAllocateMemory(device,@ainfo,nil,@Result);

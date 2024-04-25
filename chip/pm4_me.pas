@@ -18,6 +18,7 @@ uses
  vRender,
  vRenderPassManager,
  vPipelineManager,
+ vFramebufferManager,
  vShader,
  vShaderExt,
  vShaderManager,
@@ -164,7 +165,9 @@ var
  GP_KEY:TvGraphicsPipelineKey;
  GP:TvGraphicsPipeline2;
 
- FFramebuffer:TvFramebufferIL;
+ FB_KEY:TvFramebufferImagelessKey;
+ FB_KEY2:TvFramebufferBindedKey;
+ FFramebuffer:TvFramebuffer;
 
  FRenderCmd:TvRenderTargets;
 
@@ -294,36 +297,47 @@ begin
 
  GP:=FetchGraphicsPipeline(CmdBuffer,@GP_KEY);
 
- FFramebuffer:=TvFramebufferIL.Create;
- FFramebuffer.Key.FRenderPass :=RP;
- FFramebuffer.Key.FSize       :=GPU_REGS.GET_SCREEN_SIZE;
-
- if (RT_COUNT<>0) then
- For i:=0 to RT_COUNT-1 do
-  begin
-   FFramebuffer.Key.AddImageAt(RT_INFO[i].FImageInfo);
-  end;
-
- if GPU_REGS.DB_ENABLE then
+ if limits.VK_KHR_imageless_framebuffer then
  begin
-  FFramebuffer.Key.AddImageAt(DB_INFO.FImageInfo);
- end;
+  FB_KEY:=Default(TvFramebufferImagelessKey);
 
- FFramebuffer.Compile;
+  FB_KEY.SetRenderPass(RP);
+  FB_KEY.SetSize(GPU_REGS.GET_SCREEN_SIZE);
+
+  if (RT_COUNT<>0) then
+  For i:=0 to RT_COUNT-1 do
+   begin
+    FB_KEY.AddImageAt(RT_INFO[i].FImageInfo);
+   end;
+
+  if GPU_REGS.DB_ENABLE then
+  begin
+   FB_KEY.AddImageAt(DB_INFO.FImageInfo);
+  end;
+ end else
+ begin
+  FB_KEY2:=Default(TvFramebufferBindedKey);
+
+  FB_KEY2.SetRenderPass(RP);
+  FB_KEY2.SetSize(GPU_REGS.GET_SCREEN_SIZE);
+ end;
 
  FRenderCmd:=TvRenderTargets.Create;
 
  FRenderCmd.FRenderPass:=RP;
  FRenderCmd.FPipeline  :=GP;
 
- FRenderCmd.FFramebuffer:=FFramebuffer;
-
  FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+
+ if limits.VK_KHR_imageless_framebuffer then
+ begin
+  FFramebuffer:=FetchFramebufferImageless(CmdBuffer,@FB_KEY);
+  FRenderCmd.FFramebuffer:=FFramebuffer;
+ end;
 
  if (RT_COUNT<>0) then
  For i:=0 to RT_COUNT-1 do
   begin
-   //RT_INFO[i].CLEAR_COLOR.float32[2]:=1;
 
    FRenderCmd.AddClearColor(RT_INFO[i].CLEAR_COLOR);
 
@@ -335,7 +349,10 @@ begin
 
    iv:=ri.FetchView(CmdBuffer,RT_INFO[i].FImageView,iu_attachment);
 
-   FRenderCmd.AddImageView(iv);
+   if limits.VK_KHR_imageless_framebuffer then
+   begin
+    FRenderCmd.AddImageView(iv);
+   end;
 
    ri.PushBarrier(CmdBuffer,
                   ord(VK_ACCESS_TRANSFER_READ_BIT),
@@ -348,7 +365,18 @@ begin
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
+   if not limits.VK_KHR_imageless_framebuffer then
+   begin
+    FB_KEY2.AddImageView(iv);
+   end;
+
   end;
+
+ if not limits.VK_KHR_imageless_framebuffer then
+ begin
+  FFramebuffer:=FetchFramebufferBinded(CmdBuffer,@FB_KEY2);
+  FRenderCmd.FFramebuffer:=FFramebuffer;
+ end;
 
  if GPU_REGS.DB_ENABLE then
  begin

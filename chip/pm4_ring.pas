@@ -78,7 +78,7 @@ begin
  ring^.wptr:=0;
  ring^.aptr:=0;
 
- Result:=md_reserve_ex(ring^.buff,size+GC_RING_PADD);
+ Result:=md_reserve_ex(ring^.buff,size shl 1);
  if (Result<>0) then Exit;
 
  Result:=md_split(ring^.buff,size);
@@ -95,7 +95,7 @@ begin
   Exit;
  end;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,GC_RING_PADD,MD_PROT_RW);
+ Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,size,MD_PROT_RW);
 
  md_memfd_close(hMem);
 end;
@@ -107,7 +107,7 @@ begin
  if (ring^.buff=nil) then Exit;
  if (ring^.size=0) then Exit;
 
- Result:=md_unmap_ex(ring^.buff,ring^.size+GC_RING_PADD);
+ Result:=md_unmap_ex(ring^.buff,ring^.size shl 1);
 end;
 
 function block_id(val,size:DWORD):DWORD; inline;
@@ -177,9 +177,7 @@ begin
   s:=block_ofs(wptr,rsiz)-block_ofs(rptr,rsiz);
  end else
  begin
-  s:=block_ofs(wptr,rsiz);
-  if (s>GC_RING_PADD) then s:=GC_RING_PADD;
-  s:=(rsiz-block_ofs(rptr,rsiz))+s;
+  s:=(rsiz-block_ofs(rptr,rsiz))+block_ofs(wptr,rsiz);
  end;
 
  if (s<>0) then

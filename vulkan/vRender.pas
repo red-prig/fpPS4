@@ -102,8 +102,8 @@ type
   Procedure  AddClearColor(clr:TVkClearValue);
   Procedure  AddClearColor(clr:TVkClearColorValue);
   Procedure  AddImageView(v:TvImageView);
-  Function   GetInfo:TVkRenderPassBeginInfo;
-  Function   GetInfo2:TVkRenderPassAttachmentBeginInfo;
+  Function   GetRInfo:TVkRenderPassBeginInfo;
+  Function   GetAInfo:TVkRenderPassAttachmentBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
   Destructor Destroy; override;
   Procedure  Acquire(Sender:TObject);
@@ -624,7 +624,7 @@ begin
  Inc(FImagesCount);
 end;
 
-Function TvRenderTargets.GetInfo:TVkRenderPassBeginInfo;
+Function TvRenderTargets.GetRInfo:TVkRenderPassBeginInfo;
 begin
  Result:=Default(TVkRenderPassBeginInfo);
  Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -635,7 +635,7 @@ begin
  Result.framebuffer    :=FFramebuffer.FHandle;
 end;
 
-Function TvRenderTargets.GetInfo2:TVkRenderPassAttachmentBeginInfo;
+Function TvRenderTargets.GetAInfo:TVkRenderPassAttachmentBeginInfo;
 begin
  Result:=Default(TVkRenderPassAttachmentBeginInfo);
  Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO;
@@ -652,7 +652,7 @@ Destructor TvRenderTargets.Destroy;
 begin
  /////FreeAndNil(FRenderPass);
  /////FreeAndNil(FPipeline);
- FreeAndNil(FFramebuffer);
+ //FreeAndNil(FFramebuffer);
  inherited;
 end;
 
