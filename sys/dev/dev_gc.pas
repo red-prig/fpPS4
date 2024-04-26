@@ -136,7 +136,7 @@ begin
    begin
     if pctx^.print_ops then
     begin
-     Writeln('INDIRECT_BUFFER_CNST (ccb)');
+     Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb) then
     begin
@@ -151,7 +151,7 @@ begin
    begin
     if pctx^.print_ops then
     begin
-     Writeln('INDIRECT_BUFFER (dcb)');
+     Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb) then
     begin

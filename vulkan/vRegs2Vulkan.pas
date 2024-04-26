@@ -407,19 +407,64 @@ begin
 
  end;
 
+ {
+  Match the physical representation of the final pixel (RGBA)
+   to the output component number in shader export     (0123)
+ }
+
  //SWAP_STD      (R=>0)
  //SWAP_ALT      (G=>0)
  //SWAP_STD_REV  (B=>0)
  //SWAP_ALT_REV  (A=>0)
 
+ //SWAP_STD      (R=>0, G=>1)
  //SWAP_ALT      (R=>0, A=>1)
+ //SWAP_STD_REV  (G=>0, R=>1)
+ //SWAP_ALT_REV  (A=>0, R=>1)
+
+ //SWAP_STD      (R=>0, G=>1, B=>2)
  //SWAP_ALT      (R=>0, G=>1, A=>2)
+ //SWAP_STD_REV  (B=>0, G=>1, R=>2)
+ //SWAP_ALT_REV  (A=>0, G=>1, R=>2)
 
  //SWAP_STD      (R=>0, G=>1, B=>2, A=>3)
- //SWAP_ALT      (B=>0, G=>1, R=>2, A=>3).
+ //SWAP_ALT      (B=>0, G=>1, R=>2, A=>3)
  //SWAP_STD_REV  (A=>0, B=>1, G=>2, R=>3)
  //SWAP_ALT_REV  (A=>0, R=>1, G=>2, B=>3)
 end;
+
+const
+ VK_SWIZZLE_I=ord(VK_COMPONENT_SWIZZLE_IDENTITY);
+ VK_SWIZZLE_Z=ord(VK_COMPONENT_SWIZZLE_ZERO    );
+ VK_SWIZZLE_O=ord(VK_COMPONENT_SWIZZLE_ONE     );
+ VK_SWIZZLE_R=ord(VK_COMPONENT_SWIZZLE_R       );
+ VK_SWIZZLE_G=ord(VK_COMPONENT_SWIZZLE_G       );
+ VK_SWIZZLE_B=ord(VK_COMPONENT_SWIZZLE_B       );
+ VK_SWIZZLE_A=ord(VK_COMPONENT_SWIZZLE_A       );
+
+ shader_swizzle_map:array[1..4,SWAP_STD..SWAP_ALT_REV] of TvDstSel=(
+  (
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_O;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_G;g:VK_SWIZZLE_O;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_B;g:VK_SWIZZLE_O;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_A;g:VK_SWIZZLE_O;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O)
+  ),(
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_G;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_A;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_G;g:VK_SWIZZLE_R;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_A;g:VK_SWIZZLE_R;b:VK_SWIZZLE_O;a:VK_SWIZZLE_O)
+  ),(
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_G;b:VK_SWIZZLE_B;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_G;b:VK_SWIZZLE_A;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_B;g:VK_SWIZZLE_G;b:VK_SWIZZLE_R;a:VK_SWIZZLE_O),
+   (r:VK_SWIZZLE_A;g:VK_SWIZZLE_G;b:VK_SWIZZLE_R;a:VK_SWIZZLE_O)
+  ),(
+   (r:VK_SWIZZLE_R;g:VK_SWIZZLE_G;b:VK_SWIZZLE_B;a:VK_SWIZZLE_A),
+   (r:VK_SWIZZLE_B;g:VK_SWIZZLE_G;b:VK_SWIZZLE_R;a:VK_SWIZZLE_A),
+   (r:VK_SWIZZLE_A;g:VK_SWIZZLE_B;b:VK_SWIZZLE_G;a:VK_SWIZZLE_R),
+   (r:VK_SWIZZLE_A;g:VK_SWIZZLE_R;b:VK_SWIZZLE_G;a:VK_SWIZZLE_B)
+  )
+ );
 
 Function TGPU_REGS.GET_RT_BLEND(i:Byte):TVkPipelineColorBlendAttachmentState; //0..7
 var
@@ -748,10 +793,6 @@ begin
  end;
 
 end;
-
-//
-//FORMAT     :=RENDER_TARGET[i].INFO.FORMAT;
-//NUMBER_TYPE:=RENDER_TARGET[i].INFO.NUMBER_TYPE;
 
 Function TGPU_REGS.GET_RT_INFO(i:Byte):TRT_INFO; //0..7
 var
@@ -1708,14 +1749,14 @@ end;
 function _get_dst_sel_swizzle(b:Byte):Byte;
 begin
  Case b of
-  0:Result:=ord(VK_COMPONENT_SWIZZLE_ZERO);
-  1:Result:=ord(VK_COMPONENT_SWIZZLE_ONE);
-  4:Result:=ord(VK_COMPONENT_SWIZZLE_R);
-  5:Result:=ord(VK_COMPONENT_SWIZZLE_G);
-  6:Result:=ord(VK_COMPONENT_SWIZZLE_B);
-  7:Result:=ord(VK_COMPONENT_SWIZZLE_A);
+  0:Result:=VK_SWIZZLE_Z;
+  1:Result:=VK_SWIZZLE_O;
+  4:Result:=VK_SWIZZLE_R;
+  5:Result:=VK_SWIZZLE_G;
+  6:Result:=VK_SWIZZLE_B;
+  7:Result:=VK_SWIZZLE_A;
   else
-    Result:=ord(VK_COMPONENT_SWIZZLE_IDENTITY);
+    Result:=VK_SWIZZLE_I;
  end;
 end;
 

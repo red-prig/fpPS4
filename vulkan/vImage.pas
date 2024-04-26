@@ -266,6 +266,12 @@ begin
   VK_FORMAT_R8G8B8A8_UINT        :Result:=4;
   VK_FORMAT_R8G8B8A8_SINT        :Result:=4;
 
+  VK_FORMAT_B8G8R8A8_UNORM       :Result:=4;
+  VK_FORMAT_B8G8R8A8_SRGB        :Result:=4;
+  VK_FORMAT_B8G8R8A8_SNORM       :Result:=4;
+  VK_FORMAT_B8G8R8A8_UINT        :Result:=4;
+  VK_FORMAT_B8G8R8A8_SINT        :Result:=4;
+
   VK_FORMAT_R16_UNORM            :Result:=2;
   VK_FORMAT_R16_SNORM            :Result:=2;
   VK_FORMAT_R16_UINT             :Result:=2;

@@ -110,12 +110,6 @@ begin
  ib_base:=QWORD(buf^.ibBase);
  ib_size:=QWORD(buf^.ibSize)*sizeof(DWORD);
 
- case op of
-  $c0023300:Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(ib_base,10));
-  $c0023f00:Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(ib_base,10));
-  else;
- end;
-
  addr:=nil;
  size:=0;
 
@@ -149,6 +143,8 @@ var
  i,token,len:DWORD;
 begin
  Result:=0;
+
+ pctx^.LastSetReg:=0;
 
  i:=ibuf^.bpos;
  buff:=ibuf^.buff+i;
@@ -841,6 +837,9 @@ begin
  end;
 end;
 
+const
+ ShdrType:array[0..1] of Pchar=('(GX)','(CS)');
+
 function pm4_parse_ccb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 begin
  Result:=0;
@@ -858,7 +857,9 @@ begin
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
         (not pctx^.print_hint) then
      begin
-      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
+      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+                ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
+              ' len:',PM4_LENGTH(token));
      end;
 
      case PM4_TYPE_3_HEADER(token).opcode of
@@ -902,11 +903,21 @@ end;
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 var
  addr:Pointer;
- size:QWORD;
 begin
- DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
+ Case Body^.eventType of
+  kEopFlushCbDbCaches:;
+  kEopFlushAndInvalidateCbDbCaches:;
+  kEopCbDbReadsDone:;
+  else
+   Assert(False,'EventWriteEop: eventType=0x'+HexStr(Body^.eventType,1));
+ end;
 
- Assert(Body^.EVENT_INDEX=EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP);
+ if (Body^.eventIndex<>EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP) then
+ begin
+  Assert(False,'EventWriteEop: eventIndex=0x'+HexStr(Body^.eventIndex,1));
+ end;
+
+ DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
  Writeln(' eventType  =0x',HexStr(Body^.eventType,2));
  Writeln(' interrupt  =0x',HexStr(Body^.intSel shr 1,2));
@@ -929,11 +940,10 @@ begin
  }
 
  addr:=nil;
- size:=0;
 
  if (Body^.dataSel in [1..4]) then
  begin
-  if get_dmem_ptr(Pointer(Body^.address),@addr,@size) then
+  if get_dmem_ptr(Pointer(Body^.address),@addr,nil) then
   begin
    //
   end else
@@ -942,7 +952,162 @@ begin
   end;
  end;
 
- pctx^.stream_dcb.EventWriteEop(addr,Body^.DATA,Body^.dataSel,(Body^.intSel shr 1));
+ pctx^.stream_dcb.EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,(Body^.intSel shr 1));
+
+end;
+
+procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
+var
+ addr:Pointer;
+begin
+ Case Body^.eventType of
+  CS_DONE:;
+  PS_DONE:;
+  else
+   Assert(False,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
+ end;
+
+ if (Body^.eventIndex<>EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP) then
+ begin
+  Assert(False,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
+ end;
+
+ DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
+
+ if get_dmem_ptr(Pointer(Body^.address),@addr,nil) then
+ begin
+  //
+ end else
+ begin
+  Assert(false,'addr:0x'+HexStr(Body^.address,16)+' not in dmem!');
+ end;
+
+ pctx^.stream_dcb.EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
+
+end;
+
+procedure onDmaData(pctx:p_pfp_ctx;Body:PPM4DMADATA);
+var
+ adrSrc,adrDst:QWORD;
+ byteCount:DWORD;
+ srcSel,dstSel:Byte;
+begin
+ srcSel:=((PDWORD(Body)[1] shr $1d) and 3) or ((PDWORD(Body)[6] shr $19) and 8) or ((PDWORD(Body)[6] shr $18) and 4);
+ dstSel:=((PDWORD(Body)[1] shr $14) and 1) or ((PDWORD(Body)[6] shr $1a) and 8) or ((PDWORD(Body)[6] shr $19) and 4);
+
+ adrSrc:=Body^.srcAddr;
+ adrDst:=Body^.dstAddr;
+ byteCount:=Body^.Flags2.byteCount;
+
+ case dstSel of
+  kDmaDataDstRegister,
+  kDmaDataDstRegisterNoIncrement:
+    if (DWORD(adrDst)=$3022C) then
+    begin
+     //prefetchIntoL2
+     Exit;
+    end;
+  else;
+ end;
+
+ Case Body^.Flags1.engine of
+  CP_DMA_ENGINE_ME:
+   begin
+    pctx^.stream_dcb.DmaData(dstSel,adrDst,srcSel,adrSrc,byteCount,Body^.Flags1.cpSync);
+   end;
+  CP_DMA_ENGINE_PFP:
+   begin
+    //Execute on the parser side
+
+    case (srcSel or (dstSel shl 4)) of
+     (kDmaDataSrcMemory        or (kDmaDataDstMemory        shl 4)),
+     (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemory        shl 4)),
+     (kDmaDataSrcMemory        or (kDmaDataDstMemoryUsingL2 shl 4)),
+     (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemoryUsingL2 shl 4)):
+       begin
+        Move(Pointer(adrSrc)^,Pointer(adrDst)^,byteCount);
+       end;
+     (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
+     (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
+       begin
+        FillDWORD(Pointer(adrDst)^,(byteCount div 4),DWORD(adrSrc));
+       end;
+    else
+       Assert(false,'DmaData: srcSel=0x'+HexStr(srcSel,1)+' dstSel=0x'+HexStr(dstSel,1));
+    end;
+
+   end;
+  else
+   Assert(false,'DmaData: engine=0x'+HexStr(Body^.Flags1.engine,1));
+ end;
+
+end;
+
+procedure onWriteData(pctx:p_pfp_ctx;Body:PPM4CMDWRITEDATA);
+var
+ addr:PDWORD;
+ count:Word;
+ engineSel:Byte;
+ dstSel:Byte;
+begin
+
+ Assert(Body^.CONTROL.wrOneAddr=0,'WriteData: wrOneAddr<>0');
+
+ count:=Body^.header.count;
+ if (count<3) then Exit;
+
+ engineSel:=Body^.CONTROL.engineSel;
+ dstSel:=Body^.CONTROL.dstSel;
+
+ Case engineSel of
+  WRITE_DATA_ENGINE_ME:
+    begin
+     pctx^.stream_dcb.WriteData(dstSel,QWORD(addr),QWORD(@Body^.DATA),count);
+    end;
+  WRITE_DATA_ENGINE_PFP:
+    begin
+
+     case dstSel of
+      WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
+      WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
+      WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+        begin
+         count:=count-2;
+         addr:=Pointer(Body^.dstAddr);
+         Move(Body^.DATA,addr^,count*SizeOf(DWORD));
+        end;
+      else
+        Assert(false,'WriteData: dstSel=0x'+HexStr(dstSel,1));
+     end;
+
+    end;
+  else
+    Assert(false,'WriteData: engineSel=0x'+HexStr(engineSel,1));
+ end;
+
+end;
+
+procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
+begin
+
+ Case Body^.memSpace of
+  WAIT_REG_MEM_SPACE_MEMORY:;
+  else
+   Assert(False,'WaitRegMem: memSpace=0x'+HexStr(Body^.memSpace,1));
+ end;
+
+ Case Body^.engine of
+  WAIT_REG_MEM_ENGINE_ME:
+    begin
+     pctx^.stream_dcb.WaitRegMem(Body^.pollAddress,Body^.reference,Body^.mask,Body^.compareFunc);
+    end;
+  WAIT_REG_MEM_ENGINE_PFP:
+    begin
+     Assert(false,'WaitRegMem: engine=0x'+HexStr(Body^.engine,1));
+    end;
+  else
+    Assert(false,'WaitRegMem: engine=0x'+HexStr(Body^.engine,1));
+ end;
 
 end;
 
@@ -1260,13 +1425,13 @@ begin
   OP_HINT_PUSH_MARKER:
    if pctx^.print_hint then
    begin
-    onPushMarker(@Body[1]);
+    onPushMarker(@Body[2]);
    end;
 
   OP_HINT_SET_MARKER:
    if pctx^.print_hint then
    begin
-    onSetMarker(@Body[1]);
+    onSetMarker(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_LABEL:
@@ -1313,15 +1478,19 @@ begin
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
         (not pctx^.print_hint) then
      begin
-      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),' len:',PM4_LENGTH(token));
+      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+                ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
+              ' len:',PM4_LENGTH(token));
      end;
 
      case PM4_TYPE_3_HEADER(token).opcode of
       IT_NOP                :onNop(pctx,buff);
+      IT_WRITE_DATA         :onWriteData      (pctx,buff);
       IT_EVENT_WRITE        :onEventWrite     (pctx,buff);
       IT_EVENT_WRITE_EOP    :onEventWriteEop  (pctx,buff);
-      IT_EVENT_WRITE_EOS    :Assert(false);
-      IT_DMA_DATA           :Assert(false);
+      IT_EVENT_WRITE_EOS    :onEventWriteEos  (pctx,buff);
+      IT_DMA_DATA           :onDmaData        (pctx,buff);
+      IT_WAIT_REG_MEM       :onWaitRegMem     (pctx,buff);
       IT_ACQUIRE_MEM        :onAcquireMem     (pctx,buff);
       IT_CONTEXT_CONTROL    :onContextControl (buff);
       IT_DRAW_PREAMBLE      :onDrawPreamble   (pctx,buff);
@@ -1335,12 +1504,10 @@ begin
       IT_INDEX_BASE         :onIndexBase      (pctx,buff);
       IT_NUM_INSTANCES      :onNumInstances   (pctx,buff);
       IT_DRAW_INDEX_2       :onDrawIndex2     (pctx,buff);
-      IT_DRAW_INDEX_AUTO    :Assert(false);
-      IT_DRAW_INDEX_OFFSET_2:Assert(false);
-      IT_DISPATCH_DIRECT    :Assert(false);
-      IT_WAIT_REG_MEM       :Assert(false);
-      IT_WRITE_DATA         :Assert(false);
-      IT_PFP_SYNC_ME        :Assert(false);
+      IT_DRAW_INDEX_AUTO    :Assert(false,'IT_DRAW_INDEX_AUTO');
+      IT_DRAW_INDEX_OFFSET_2:Assert(false,'IT_DRAW_INDEX_OFFSET_2');
+      IT_DISPATCH_DIRECT    :Assert(false,'IT_DISPATCH_DIRECT');
+      IT_PFP_SYNC_ME        :Assert(false,'IT_PFP_SYNC_ME');
 
       IT_SET_BASE           :onSetBase(buff);
       IT_SET_PREDICATION    :onSetPredication(buff);

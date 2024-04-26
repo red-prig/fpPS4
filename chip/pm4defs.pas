@@ -265,7 +265,7 @@ type
  PPM4_TYPE_3_HEADER=^PM4_TYPE_3_HEADER;
  PM4_TYPE_3_HEADER=bitpacked record
   predicate :bit1;  //1
-  shaderType:bit1;  //1
+  shaderType:bit1;  //1 < 0: Graphics, 1: Compute Shader
   reserved  :bit6;  //6
   opcode    :Byte;  //8
   count     :bit14; //14
@@ -339,10 +339,10 @@ type
 
  PPM4CMDDRAWPREAMBLE=^TPM4CMDDRAWPREAMBLE;
  TPM4CMDDRAWPREAMBLE=bitpacked record
-  header   :PM4_TYPE_3_HEADER;
-  control1 :TVGT_PRIMITIVE_TYPE; //< writes to VGT_PRIMITIVE_TYPE reg
-  control2 :TIA_MULTI_VGT_PARAM; //< writes to IA_MULTI_VGT_PARAM reg
-  control3 :TVGT_LS_HS_CONFIG;   //< writes to VGT_LS_HS_CONFIG   reg
+  header  :PM4_TYPE_3_HEADER;
+  control1:TVGT_PRIMITIVE_TYPE; //< writes to VGT_PRIMITIVE_TYPE reg
+  control2:TIA_MULTI_VGT_PARAM; //< writes to IA_MULTI_VGT_PARAM reg
+  control3:TVGT_LS_HS_CONFIG;   //< writes to VGT_LS_HS_CONFIG   reg
  end;
 
  // WRITE_DATA DST_SEL and ENGINE definitions
@@ -362,8 +362,8 @@ const
  WRITE_DATA_ENGINE_CE           =2;
 
 type
- PTPM4CMDWRITEDATA=^TPM4CMDWRITEDATA;
- TPM4CMDWRITEDATA=packed record
+ PPM4CMDWRITEDATA=^PM4CMDWRITEDATA;
+ PM4CMDWRITEDATA=packed record
   header :PM4_TYPE_3_HEADER;
   CONTROL:bitpacked record
    reserved1  :bit8;
@@ -379,8 +379,7 @@ type
    reserved5  :bit2;
    engineSel  :bit2;  ///< engine select
   end;
-  dstAddrLo:DWORD;
-  dstAddrHi:DWORD;
+  dstAddr:QWORD;
   data:packed record end;
  end;
 
@@ -410,7 +409,7 @@ type
 
   eventType       :bit6;  //00 // < event type written to VGT_EVENT_INITIATOR
   Reserved1       :bit2;  //06
-  EVENT_INDEX     :bit4;  //08 // < event index [0x5]
+  eventIndex      :bit4;  //08 // < event index [0x5]
 
   tcL1VolActionEna:bit1;  //12 //(cacheAction & 0x3f) [0x00,0x10,0x33,0x38,0x3B]
   tcVolActionEna  :bit1;  //13 //(cacheAction & 0x3f)
@@ -442,23 +441,20 @@ type
  end;
 
 const
- EVENT_WRITE_EOS_INDEX_CSDONE_PSDONE=6;
-
  EVENT_WRITE_EOS_CMD_STORE_APPEND_COUNT_TO_MEMORY=0;
  EVENT_WRITE_EOS_CMD_STORE_GDS_DATA_TO_MEMORY    =1;
  EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY  =2;
 
 type
- PTPM4CMDEVENTWRITEEOS=^TPM4CMDEVENTWRITEEOS;
- TPM4CMDEVENTWRITEEOS=bitpacked record
+ PPM4CMDEVENTWRITEEOS=^PM4CMDEVENTWRITEEOS;
+ PM4CMDEVENTWRITEEOS=bitpacked record
   header     :PM4_TYPE_3_HEADER;
-  eventType  :bit6;    ///< event type written to VGT_EVENT_INITIATOR
+  eventType  :bit6;    ///< event type written to VGT_EVENT_INITIATOR (CS_DONE, PS_DONE)
   reserved1  :bit2;    ///< reserved
-  eventIndex :bit4;    ///< event index
+  eventIndex :bit4;    ///< event index (EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP)
   reserved2  :bit20;   ///< reserved
-  addressLo  :DWORD;   ///< low bits of address, must be 4 byte aligned
-  addressHi  :bit29;   ///< high bits of address
-  command    :bit3;    ///< command
+  address    :bit61;   ///< bits of address, must be 4 byte aligned
+  command    :bit3;    ///< command (EVENT_WRITE_EOS_CMD_*)
   Case byte of
    0:(
       gdsIndex:Word;   ///< indexed offset into GDS partition
@@ -516,6 +512,7 @@ const
 //DmaDataDst
  kDmaDataDstMemory	        = $0; ///< Destination is a GPU-visible memory address.
  kDmaDataDstGds	                = $1; ///< Destination is an offset into Global Data Store (GDS).
+ kDmaDataDstMemoryUsingL2       = $3;
  kDmaDataDstRegister	        = $4; ///< Destination is a GPU register offset (auto-increment enabled for multi-register DMAs).
  kDmaDataDstRegisterNoIncrement = $C; ///< Destination is a GPU register offset (auto-increment disabled for multi-register DMAs).
 
@@ -523,14 +520,27 @@ const
  CP_DMA_ENGINE_ME  = 0;
  CP_DMA_ENGINE_PFP = 1;
 
+ CPDMA_ADDR_SPACE_MEM = 0;
+ CPDMA_ADDR_SPACE_REG = 1;
+
+ //CPDMA_SRC_SEL
+ CPDMA_SRC_SEL_SRC_ADDR          = 0;
+ CPDMA_SRC_SEL_GDS               = 1;
+ CPDMA_SRC_SEL_DATA              = 2;
+ CPDMA_SRC_SEL_SRC_ADDR_USING_L2 = 3;
+
+ //CPDMA_DST_SEL
+ CPDMA_DST_SEL_DST_ADDR          = 0;
+ CPDMA_DST_SEL_GDS               = 1;
+ CPDMA_DST_SEL_DST_ADDR_USING_L2 = 3;
+
 type
- PTPM4DMADATA=^TPM4DMADATA;
- TPM4DMADATA=packed record
+ PPM4DMADATA=^PM4DMADATA;
+ PM4DMADATA=packed record
   header:PM4_TYPE_3_HEADER;
 
-
   Flags1:bitpacked record
-   engine         :bit1;
+   engine         :bit1;   //CP_DMA_ENGINE_PFP, CP_DMA_ENGINE_ME
    reserved1      :bit11;
    srcATC         :bit1;
    srcCachePolicy :bit2;
@@ -543,21 +553,19 @@ type
    dstVolatile    :bit1;
    reserved4      :bit1;
    srcSel         :bit2;
-   cpSync         :bit1;
+   cpSync         :bit1;   //Synchronize the transfer (isBlocking)
   end;
 
-  srcAddrLo:DWORD;
-  srcAddrHi:DWORD;
-  dstAddrLo:DWORD;
-  dstAddrHi:DWORD;
+  srcAddr:QWORD;
+  dstAddr:QWORD;
 
   Flags2:bitpacked record
-   byteCount :bit21;
-   disWC     :bit1;
+   byteCount :bit21;      //Number of bytes to copy
+   disWC     :bit1;       //disable write-confirm
    srcSwap   :bit2;
    dstSwap   :bit2;
-   sas       :bit1;
-   das       :bit1;
+   sas       :bit1;       //CPDMA_ADDR_SPACE_MEM, CPDMA_ADDR_SPACE_REG
+   das       :bit1;       //CPDMA_ADDR_SPACE_MEM, CPDMA_ADDR_SPACE_REG
    saic      :bit1;
    daic      :bit1;
    rawWait   :bit1;
@@ -610,30 +618,29 @@ const
 }
 
 type
- PPM4CMDWAITREGMEM=^TPM4CMDWAITREGMEM;
- TPM4CMDWAITREGMEM=bitpacked record
+ PPM4CMDWAITREGMEM=^PM4CMDWAITREGMEM;
+ PM4CMDWAITREGMEM=bitpacked record
   header          :PM4_TYPE_3_HEADER;
   compareFunc     :bit3;  ///< function. WAIT_REG_MEM_FUNC_XXXX
   reserved1       :bit1;  ///< reserved
   memSpace        :bit2;  ///< memory space (0 = register, 1 = memory, 2=TC/L2, 3 = reserved)
-  operation__CI   :bit2;  ///< operation:
+  operation       :bit2;  ///< operation:
                           ///<    00: WAIT_REG_MEM - Wait on Masked Register/Memory value to equal reference value.
                           ///<    01: WR_WAIT_WR_REG (PFP only)
                           ///<            Writes REFERENCE value to POLL_ADDRESS_LO
                           ///<            Waits for REFERENCE = POLL_ADDRESS_HI
                           ///<            Write REFERENCE to POLL_ADDRESS_HI.
   engine          :bit2;  ///< 0 = ME, 1 = PFP, 2 = CE
-  uncached__VI    :bit1;  ///< When set the memory read will always use MTYPE 3 (uncached)
+  uncached        :bit1;  ///< When set the memory read will always use MTYPE 3 (uncached)
                           ///  Only applies when executed on MEC (ACE).
                           ///  WAIT_REG_MEM on PFP or ME are always uncached.
   reserved2       :bit13; ///< reserved
-  atc__CI         :bit1;  ///< ATC steting for MC read transactions
-  cachePolicy__CI :bit2;  ///< Reserved for future use of CACHE_POLICY
-  volatile__CI    :bit1;  ///< Reserved for future use of VOLATILE
+  atc             :bit1;  ///< ATC steting for MC read transactions
+  cachePolicy     :bit2;  ///< Reserved for future use of CACHE_POLICY
+  volatile        :bit1;  ///< Reserved for future use of VOLATILE
   reserved3       :bit4;  ///< reserved
 
-  pollAddressLo   :DWORD; ///< lower portion of Address to poll or register offset
-  pollAddressHi   :DWORD; ///< high portion of Address to poll, dont care for regs
+  pollAddress     :QWORD; ///< Address to poll or register offset
   reference       :DWORD; ///< reference value
   mask            :DWORD; ///< mask for comparison
   pollInterval    :DWORD; ///< interval to wait when issuing new poll requests

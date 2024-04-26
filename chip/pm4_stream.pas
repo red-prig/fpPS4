@@ -54,6 +54,10 @@ type
   ntLoadConstRam,
   ntEventWrite,
   ntEventWriteEop,
+  ntEventWriteEos,
+  ntDmaData,
+  ntWriteData,
+  ntWaitRegMem,
   ntFastClear,
   ntResolve,
   ntDrawIndex2
@@ -66,23 +70,58 @@ type
  end;
 
  p_pm4_node_LoadConstRam=^t_pm4_node_LoadConstRam;
- t_pm4_node_LoadConstRam=object(t_pm4_node)
+ t_pm4_node_LoadConstRam=packed object(t_pm4_node)
   addr  :Pointer;
   num_dw:Word;
   offset:Word;
  end;
 
  p_pm4_node_EventWrite=^t_pm4_node_EventWrite;
- t_pm4_node_EventWrite=object(t_pm4_node)
+ t_pm4_node_EventWrite=packed object(t_pm4_node)
   eventType:Byte;
  end;
 
  p_pm4_node_EventWriteEop=^t_pm4_node_EventWriteEop;
- t_pm4_node_EventWriteEop=object(t_pm4_node)
-  addr   :Pointer;
-  data   :QWORD;
-  dataSel:Byte;
-  intSel :Byte;
+ t_pm4_node_EventWriteEop=packed object(t_pm4_node)
+  addr     :Pointer;
+  data     :QWORD;
+  eventType:Byte;
+  dataSel  :Byte;
+  intSel   :Byte;
+ end;
+
+ p_pm4_node_EventWriteEos=^t_pm4_node_EventWriteEos;
+ t_pm4_node_EventWriteEos=packed object(t_pm4_node)
+  addr     :Pointer;
+  data     :DWORD;
+  eventType:Byte;
+  command  :Byte;
+ end;
+
+ p_pm4_node_DmaData=^t_pm4_node_DmaData;
+ t_pm4_node_DmaData=packed object(t_pm4_node)
+  dst     :QWORD;
+  src     :QWORD;
+  numBytes:DWORD;
+  srcSel  :Byte;
+  dstSel  :Byte;
+  cpSync  :Byte;
+ end;
+
+ p_pm4_node_WriteData=^t_pm4_node_WriteData;
+ t_pm4_node_WriteData=packed object(t_pm4_node)
+  dst   :QWORD;
+  src   :QWORD;
+  num_dw:Word;
+  dstSel:Byte;
+ end;
+
+ p_pm4_node_WaitRegMem=^t_pm4_node_WaitRegMem;
+ t_pm4_node_WaitRegMem=packed object(t_pm4_node)
+  pollAddr    :QWORD;
+  refValue    :DWORD;
+  mask        :DWORD;
+  compareFunc :Byte;
  end;
 
  p_pm4_node_FastClear=^t_pm4_node_FastClear;
@@ -119,7 +158,11 @@ type
   //
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
-  procedure EventWriteEop(addr:Pointer;data:QWORD;dataSel,intSel:Byte);
+  procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
+  procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
+  procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
+  procedure WriteData    (dstSel:Byte;dst,src:QWORD;num_dw:Word);
+  procedure WaitRegMem   (pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
@@ -181,23 +224,86 @@ var
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWrite));
 
- node^.ntype :=ntEventWrite;
+ node^.ntype    :=ntEventWrite;
  node^.eventType:=eventType;
 
  add_node(node);
 end;
 
-procedure t_pm4_stream.EventWriteEop(addr:Pointer;data:QWORD;dataSel,intSel:Byte);
+procedure t_pm4_stream.EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
 var
  node:p_pm4_node_EventWriteEop;
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEop));
 
- node^.ntype  :=ntEventWriteEop;
- node^.addr   :=addr;
- node^.data   :=data;
- node^.dataSel:=dataSel;
- node^.intSel :=intSel;
+ node^.ntype    :=ntEventWriteEop;
+ node^.addr     :=addr;
+ node^.data     :=data;
+ node^.eventType:=eventType;
+ node^.dataSel  :=dataSel;
+ node^.intSel   :=intSel;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
+var
+ node:p_pm4_node_EventWriteEos;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEos));
+
+ node^.ntype    :=ntEventWriteEos;
+ node^.addr     :=addr;
+ node^.data     :=data;
+ node^.eventType:=eventType;
+ node^.command  :=command;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.DmaData(dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
+var
+ node:p_pm4_node_DmaData;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_DmaData));
+
+ node^.ntype   :=ntDmaData;
+ node^.dst     :=dst;
+ node^.src     :=srcOrData;
+ node^.numBytes:=numBytes;
+ node^.srcSel  :=srcSel;
+ node^.dstSel  :=dstSel;
+ node^.cpSync  :=isBlocking;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.WriteData(dstSel:Byte;dst,src:QWORD;num_dw:Word);
+var
+ node:p_pm4_node_WriteData;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData));
+
+ node^.ntype :=ntWriteData;
+ node^.dst   :=dst;
+ node^.src   :=src;
+ node^.num_dw:=num_dw;
+ node^.dstSel:=dstSel;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.WaitRegMem(pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
+var
+ node:p_pm4_node_WaitRegMem;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_WaitRegMem));
+
+ node^.ntype      :=ntWaitRegMem;
+ node^.pollAddr   :=pollAddr;
+ node^.refValue   :=refValue;
+ node^.mask       :=mask;
+ node^.compareFunc:=compareFunc;
 
  add_node(node);
 end;
