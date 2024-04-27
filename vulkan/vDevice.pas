@@ -699,11 +699,12 @@ Constructor TVulkanApp.Create(debug,printf,validate:Boolean);
 const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
- vkApp:TVkApplicationInfo;
+ vkApp    :TVkApplicationInfo;
  vkExtList:array[0..4] of PChar;
- vkLayer:array[0..0] of PChar;
- vkCInfo:TVkInstanceCreateInfo;
- vkPrintf:TVkValidationFeaturesEXT;
+ vkExtLen :Ptruint;
+ vkLayer  :array[0..0] of PChar;
+ vkCInfo  :TVkInstanceCreateInfo;
+ vkPrintf :TVkValidationFeaturesEXT;
  vkFeature:TVkValidationFeatureEnableEXT;
  Features2:TVkPhysicalDeviceFeatures2;
  r:TVkResult;
@@ -712,35 +713,37 @@ begin
  vkApp.sType             :=VK_STRUCTURE_TYPE_APPLICATION_INFO;
  vkApp.pApplicationName  :='fpPS4';
  vkApp.applicationVersion:=VK_MAKE_VERSION(0, 0, 1);
- vkApp.pEngineName       :=nil;
+ vkApp.pEngineName       :='fpPS4';
  vkApp.engineVersion     :=VK_MAKE_VERSION(0, 0, 1);
  vkApp.apiVersion        :=VK_MAKE_API_VERSION(0, 1, 1, 0); //VK_API_VERSION_1_1
 
  vkExtList[0]:=VK_KHR_SURFACE_EXTENSION_NAME;
  vkExtList[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
  vkExtList[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
- vkExtList[3]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+ vkExtList[3]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
 
- //
- vkExtList[4]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
- //
+ //VK_EXT_debug_utils
+
+ vkExtLen:=4;
 
  vkCInfo:=Default(TVkInstanceCreateInfo);
  vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
  vkCInfo.pApplicationInfo:=@vkApp;
+
  if debug then
  begin
-  vkCInfo.enabledExtensionCount:=Length(vkExtList);
+  vkExtList[vkExtLen]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+  Inc(vkExtLen);
+
   if validate and InstanceLayersIsExist(dlayer) then
   begin
    vkLayer[0]:=dlayer;
-   vkCInfo.enabledLayerCount:=1;
+   vkCInfo.enabledLayerCount  :=1;
    vkCInfo.ppEnabledLayerNames:=@vkLayer;
   end;
- end else
- begin
-  vkCInfo.enabledExtensionCount:=Length(vkExtList)-1;
  end;
+
+ vkCInfo.enabledExtensionCount  :=vkExtLen;
  vkCInfo.ppEnabledExtensionNames:=@vkExtList;
 
  if debug and printf then
@@ -750,17 +753,19 @@ begin
   vkPrintf:=Default(TVkValidationFeaturesEXT);
   vkPrintf.sType:=VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
   vkPrintf.enabledValidationFeatureCount:=1;
-  vkPrintf.pEnabledValidationFeatures:=@vkFeature;
+  vkPrintf.pEnabledValidationFeatures   :=@vkFeature;
 
   vkCInfo.pNext:=@vkPrintf;;
  end;
 
+ Writeln('vkCreateInstance->');
  r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
  if (r<>VK_SUCCESS) then
  begin
   Writeln(StdErr,'vkCreateInstance:',r);
   Exit;
  end;
+ Writeln('<-vkCreateInstance');
 
  FPhysicalDevice:=vkGetPhysicalDevice(FInstance);
  if (FPhysicalDevice=VK_NULL_HANDLE) then
@@ -1607,6 +1612,7 @@ begin
  end;
 
  VulkanApp:=TVulkanApp.Create(true,true,true);
+
  DebugReport:=TVDebugReport.Create;
 
  FillDeviceExtension(VulkanApp.FPhysicalDevice);

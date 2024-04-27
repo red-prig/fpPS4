@@ -1815,6 +1815,7 @@ begin
  begin
   jit_prepare(0);
   ipi_sigreturn;
+  Writeln(stderr,'I''m a teapot!');
  end;
 end;
 

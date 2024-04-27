@@ -24,7 +24,9 @@ uses
   kern_jit_dynamic;
 
 const
- EXCEPTION_SET_THREADNAME = $406D1388;
+ EXCEPTION_SET_THREADNAME  = $406D1388;
+ DBG_PRINTEXCEPTION_C      = $40010006;
+ DBG_PRINTEXCEPTION_WIDE_C = $4001000A;
 
 type
  LPTOP_LEVEL_EXCEPTION_FILTER=function(excep:PEXCEPTION_POINTERS):longint; stdcall;
@@ -127,6 +129,13 @@ begin
  tf_addr:=0;
  is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@tf_addr);
 
+ Writeln('cr_rip:0x',HexStr(p^.ContextRecord^.Rip,16));
+ Writeln('cr_rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
+ Writeln('cr_rbp:0x',HexStr(p^.ContextRecord^.Rbp,16));
+
+ Writeln('jitcall:0x',HexStr(td^.td_teb^.jitcall));
+ print_frame(stderr,td^.td_teb^.jitcall);
+
  Writeln('tf_rip:0x',HexStr(tf_addr,16));
 
  _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil,is_jit);
@@ -137,8 +146,8 @@ begin
   td^.td_frame.tf_rip:=tf_addr;
  end;
 
- Writeln('tf_tsp:0x',HexStr(td^.td_frame.tf_rsp,16));
- Writeln('tf_tbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+ Writeln('tf_rsp:0x',HexStr(td^.td_frame.tf_rsp,16));
+ Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
 
  print_backtrace_td(stderr);
 
@@ -198,15 +207,55 @@ begin
  Result:=(rsp<=QWORD(td^.td_kstack.stack)) and (rsp>(QWORD(td^.td_kstack.sttop)));
 end;
 
+function IsDefaultExceptions(ExceptionCode:DWORD):Boolean; inline;
+begin
+ case ExceptionCode of
+  EXCEPTION_ACCESS_VIOLATION,
+  EXCEPTION_BREAKPOINT,
+  EXCEPTION_DATATYPE_MISALIGNMENT,
+  EXCEPTION_SINGLE_STEP,
+  EXCEPTION_ARRAY_BOUNDS_EXCEEDED,
+  EXCEPTION_FLT_DENORMAL_OPERAND,
+  EXCEPTION_FLT_DIVIDE_BY_ZERO,
+  EXCEPTION_FLT_INEXACT_RESULT,
+  EXCEPTION_FLT_INVALID_OPERATION,
+  EXCEPTION_FLT_OVERFLOW,
+  EXCEPTION_FLT_STACK_CHECK,
+  EXCEPTION_FLT_UNDERFLOW,
+  EXCEPTION_INT_DIVIDE_BY_ZERO,
+  EXCEPTION_INT_OVERFLOW,
+  EXCEPTION_INVALID_HANDLE,
+  EXCEPTION_PRIV_INSTRUCTION,
+  EXCEPTION_NONCONTINUABLE_EXCEPTION,
+  EXCEPTION_STACK_OVERFLOW,
+  EXCEPTION_INVALID_DISPOSITION,
+  EXCEPTION_IN_PAGE_ERROR,
+  EXCEPTION_ILLEGAL_INSTRUCTION,
+  EXCEPTION_POSSIBLE_DEADLOCK:
+    Result:=True;
+  else
+    Result:=False;
+ end;
+end;
+
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
 
  case p^.ExceptionRecord^.ExceptionCode of
-  FPC_EXCEPTION_CODE      :Exit;
-  FPC_SET_EH_HANDLER      :Exit(EXCEPTION_CONTINUE_EXECUTION);
-  EXCEPTION_BREAKPOINT    :Exit;
-  EXCEPTION_SET_THREADNAME:Exit;
+  FPC_EXCEPTION_CODE       :Exit;
+  FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
+  EXCEPTION_BREAKPOINT     :Exit;
+  EXCEPTION_SINGLE_STEP    :Exit;
+  EXCEPTION_SET_THREADNAME :Exit;
+  DBG_PRINTEXCEPTION_C     :Exit(EXCEPTION_CONTINUE_EXECUTION);
+  DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
+  else
+   if not IsDefaultExceptions(p^.ExceptionRecord^.ExceptionCode) then
+   begin
+    Writeln(stderr,'Unknow ExceptionCode:0x',HexStr(p^.ExceptionRecord^.ExceptionCode,8));
+    Exit;
+   end;
  end;
 
  Result:=ProcessException3(curkthread,p);
@@ -216,6 +265,7 @@ begin
   Result:=EXCEPTION_CONTINUE_EXECUTION;
  end else
  begin
+  Writeln(stderr,'ExceptionCode:0x',HexStr(p^.ExceptionRecord^.ExceptionCode,8));
   Result:=EXCEPTION_CONTINUE_SEARCH;
  end;
 end;

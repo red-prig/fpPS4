@@ -62,7 +62,7 @@ type
    //
    function    SendSync(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; override;
    procedure   SendAsyn(mtype:t_mtype;mlen:DWORD;buf:Pointer);         override;
-   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);        virtual;
+   procedure   Send    (mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);    virtual;
    procedure   Update  (Handler:THostIpcHandler);                      override;
    //
    Constructor Create;
@@ -233,12 +233,13 @@ var
  value:Ptruint;
 begin
  node:=Recv;
+
  while (node<>nil) do
  begin
   //
 
   case t_mtype(node^.header.mtype) of
-   iRESULT    :RecvSync(node);
+   iRESULT    :RecvSync  (node);
    iKEV_CHANGE:RecvKevent(node);
 
    else
@@ -256,7 +257,7 @@ begin
   end;
 
   //
-  FreeMem(node);
+  FreeMem(node); //RenderDoc -> ExceptionCode:0xC0000005
   //
   node:=Recv;
  end;
@@ -363,6 +364,8 @@ procedure simple_kern_thread(parameter:pointer); SysV_ABI_CDecl;
 var
  ipc:THostIpcSimpleKERN;
 begin
+ Writeln('[simple_kern_thread]');
+
  ipc:=THostIpcSimpleKERN(parameter);
 
  repeat

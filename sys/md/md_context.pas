@@ -566,9 +566,14 @@ var
  td:p_kthread;
  Context:PCONTEXT;
  regs:p_trapframe;
+ R:DWORD;
 begin
  td:=curkthread;
- if (td=nil) then Exit;
+ if (td=nil) then
+ begin
+  Writeln(stderr,'ipi_sigreturn with zero thread');
+  Exit;
+ end;
 
  //teb stack
  teb_set_kernel(td);
@@ -631,7 +636,9 @@ begin
  teb_set_user(td);
  //teb stack
 
- NtContinue(Context,False);
+ R:=NtContinue(Context,False);
+
+ Writeln(stderr,'NtContinue:0x',HexStr(R,8));
 end;
 
 procedure host_sigipi; external;

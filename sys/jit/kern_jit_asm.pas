@@ -494,11 +494,12 @@ end;
 procedure stack_set_user; assembler; nostackframe;
 asm
  //switch stack
- movq %rsp,%gs:teb.jit_rsp
- movq %rbp,%gs:teb.jit_rbp
+ movqq %rsp, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13)
+ movqq %rbp, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
 
  movq jit_frame.tf_rsp(%r13),%rsp
  movq jit_frame.tf_rbp(%r13),%rbp
+ //switch stack
 
  //teb
  movq - kthread.td_frame.tf_r13 + kthread.td_kstack.sttop(%r13) ,%r14
@@ -512,8 +513,9 @@ end;
 procedure stack_set_jit; assembler; nostackframe;
 asm
  //switch stack
- movq %gs:teb.jit_rsp,%rsp
- movq %gs:teb.jit_rbp,%rbp
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13), %rsp
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13), %rbp
+ //switch stack
 
  //teb
  movq - kthread.td_frame.tf_r13 + kthread.td_ustack.sttop(%r13) ,%r14

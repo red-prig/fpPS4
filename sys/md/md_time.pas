@@ -97,7 +97,10 @@ begin
   qpc_end:=get_proc_time;
   tsc_end:=rdtsc;
 
-  tsc_freq:=tsc_freq + (tsc_end - tsc_begin) * qpc_freq div (qpc_end - qpc_begin);
+  if (qpc_end<>qpc_begin) then
+  begin
+   tsc_freq:=tsc_freq + (tsc_end - tsc_begin) * qpc_freq div (qpc_end - qpc_begin);
+  end;
  end;
 
  tsc_freq:=tsc_freq div samples;

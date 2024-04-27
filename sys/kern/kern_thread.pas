@@ -364,6 +364,7 @@ begin
 
   //switch
  ipi_sigreturn;
+ Writeln(stderr,'I''m a teapot!');
 end;
 
 procedure before_start_kern(td:p_kthread);
