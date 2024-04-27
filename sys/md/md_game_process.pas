@@ -13,6 +13,7 @@ type
  TGameProcessPipe=class(TGameProcess)
   FChildpip:THandle;
   function   is_terminated:Boolean; override;
+  function   exit_code:DWORD; override;
   procedure  suspend; override;
   procedure  resume;  override;
   procedure  stop;    override;
@@ -30,6 +31,21 @@ begin
  R:=NtWaitForSingleObject(g_proc,False,@T);
 
  Result:=(R=STATUS_WAIT_0);
+end;
+
+function TGameProcessPipe.exit_code:DWORD;
+var
+ info:PROCESS_BASIC_INFORMATION;
+begin
+ info:=Default(PROCESS_BASIC_INFORMATION);
+
+ NtQueryInformationProcess(g_proc,
+                           ProcessBasicInformation,
+                           @info,
+                           SizeOf(info),
+                           nil);
+
+ Result:=info.ExitStatus;
 end;
 
 procedure TGameProcessPipe.suspend;

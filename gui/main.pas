@@ -685,9 +685,19 @@ begin
 end;
 
 procedure TfrmMain.TBStopClick(Sender: TObject);
+var
+ exit_code:DWORD;
+ r:RawByteString;
 begin
  if GameProcessForked then //only forked
  begin
+  exit_code:=0;
+
+  if FGameProcess.is_terminated then
+  begin
+   exit_code:=FGameProcess.exit_code;
+  end;
+
   //terminate
   FGameProcess.stop;
   SetButtonsState(mbsStopped);
@@ -702,6 +712,15 @@ begin
   CloseMainWindows;
   //
   Pages.ActivePage:=TabList;
+
+  if (exit_code<>0) then
+  begin
+   r:='Game process stopped with exit code:0x'+HexStr(exit_code,8);
+   FileWrite(FAddHandle,PChar(r)^,Length(r));
+
+   MessageDlgEx(r,mtError,[mbOK],Self);
+  end;
+
  end else
  begin
   TBPauseClick(Sender);

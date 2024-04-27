@@ -78,6 +78,7 @@ type
   g_p_pid:Integer;
   g_fork :Boolean;
   function   is_terminated:Boolean; virtual;
+  function   exit_code:DWORD; virtual;
   procedure  suspend; virtual;
   procedure  resume;  virtual;
   procedure  stop;    virtual;
@@ -89,6 +90,11 @@ implementation
 function TGameProcess.is_terminated:Boolean;
 begin
  Result:=False;
+end;
+
+function TGameProcess.exit_code:DWORD;
+begin
+ Result:=0;
 end;
 
 procedure TGameProcess.suspend;
