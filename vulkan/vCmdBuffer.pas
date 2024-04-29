@@ -154,8 +154,7 @@ begin
  FCmdbuf:=pool.Alloc;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
- FFence:=TvFence.Create(true);
- FFence.Reset;
+ FFence:=TvFence.Create(False);
 
  FSignalSemaphore:=TvSemaphore.Create;
 
@@ -165,8 +164,10 @@ end;
 Destructor TvCustomCmdBuffer.Destroy;
 begin
  ReleaseResource;
+
  FreeAndNil(FFence);
  FreeAndNil(FSignalSemaphore);
+
  if (FParent<>nil) and (FCmdbuf<>VK_NULL_HANDLE) then
  begin
   FParent.Free(FCmdbuf);

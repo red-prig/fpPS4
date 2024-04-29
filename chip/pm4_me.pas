@@ -468,15 +468,21 @@ begin
 
  //write back
 
- if (CmdBuffer.QueueSubmit<>VK_SUCCESS) then
+ r:=CmdBuffer.QueueSubmit;
+
+ if (r<>VK_SUCCESS) then
  begin
   Assert(false,'QueueSubmit');
  end;
 
+ Writeln('QueueSubmit:',r);
+
  r:=CmdBuffer.Wait(QWORD(-1));
 
  Writeln('CmdBuffer:',r);
- writeln;
+
+ r:=RenderQueue.WaitIdle;
+ Writeln('WaitIdle:',r);
 
  CmdBuffer.ReleaseResource;
 

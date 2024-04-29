@@ -24,6 +24,7 @@ const
  MD_PROT_RWX =PAGE_EXECUTE_READWRITE;
 
 const
+ VM_RW =VM_PROT_READ or VM_PROT_WRITE;
  VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
 
  wprots:array[0..7] of Byte=(
@@ -48,6 +49,17 @@ const
   MD_PROT_RWX  //XWR
  );
 
+ waccess:array[0..7] of Byte=(
+  SECTION_QUERY,                                                                //___
+  SECTION_QUERY or SECTION_MAP_READ,                                            //__R
+  SECTION_QUERY or SECTION_MAP_WRITE,                                           //_W_
+  SECTION_QUERY or SECTION_MAP_WRITE   or SECTION_MAP_READ,                     //_WR
+  SECTION_QUERY or SECTION_MAP_EXECUTE,                                         //X__
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_READ,                     //X_R
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE,                    //XW_
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE or SECTION_MAP_READ //XWR
+ );
+
 function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
 
@@ -56,7 +68,7 @@ function md_unmap_ex(base:Pointer;size:QWORD):Integer;
 function md_split  (base:Pointer;size:QWORD):Integer;
 function md_union  (base:Pointer;size:QWORD):Integer;
 
-function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
+function md_memfd_create(var hMem:THandle;size:QWORD;maxprot:Byte):Integer;
 function md_memfd_open  (var hMem:THandle;hFile:THandle;maxprot:Byte):Integer;
 function md_memfd_close (hMem:THandle):Integer;
 
@@ -241,18 +253,25 @@ begin
          );
 end;
 
-function md_memfd_create(var hMem:THandle;size:QWORD):Integer;
+function md_memfd_create(var hMem:THandle;size:QWORD;maxprot:Byte):Integer;
+var
+ Access:DWORD;
+ prot:DWORD;
 begin
+ Access:=waccess [maxprot and VM_RWX];
+ prot  :=wprots_e[maxprot and VM_RWX];
+
  hMem:=0;
- Result:=NtCreateSection(
+ Result:=NtCreateSectionEx(
           @hMem,
-          SECTION_ALL_ACCESS,
-          //SECTION_MAP_WRITE or SECTION_MAP_READ or SECTION_MAP_EXECUTE,
+          Access,
           nil,
           @size,
-          PAGE_READWRITE,
+          prot,
           SEC_COMMIT,
-          THandle(0)
+          THandle(0),
+          nil,
+          0
          );
 end;
 
@@ -262,35 +281,21 @@ var
  prot:DWORD;
  size:QWORD;
 begin
- Access:=SECTION_QUERY;
-
- if ((maxprot and VM_PROT_READ)<>0) then
- begin
-  Access:=Access or SECTION_MAP_READ;
- end;
-
- if ((maxprot and VM_PROT_WRITE)<>0) then
- begin
-  Access:=Access or SECTION_MAP_WRITE;
- end;
-
- if ((maxprot and VM_PROT_EXECUTE)<>0) then
- begin
-  Access:=Access or SECTION_MAP_EXECUTE;
- end;
-
- prot:=wprots_e[maxprot and VM_RWX];
+ Access:=waccess [maxprot and VM_RWX];
+ prot  :=wprots_e[maxprot and VM_RWX];
 
  size:=0;
  hMem:=0;
- Result:=NtCreateSection(
+ Result:=NtCreateSectionEx(
           @hMem,
           Access,
           nil,
           @size,
           prot,
           SEC_COMMIT,
-          hFile
+          hFile,
+          nil,
+          0
          );
 end;
 

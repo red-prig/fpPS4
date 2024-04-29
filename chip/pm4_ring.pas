@@ -85,7 +85,7 @@ begin
  if (Result<>0) then Exit;
 
  hMem:=0;
- Result:=md_memfd_create(hMem,size);
+ Result:=md_memfd_create(hMem,size,VM_RW);
  if (Result<>0) then Exit;
 
  Result:=md_file_mmap_ex(hMem,ring^.buff,0,size,MD_PROT_RW);

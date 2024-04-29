@@ -986,6 +986,18 @@ function NtCreateSection(
           FileHandle           :THandle
          ):DWORD; stdcall; external 'ntdll';
 
+function NtCreateSectionEx(
+          SectionHandle         :PHandle;
+          DesiredAccess         :ACCESS_MASK;
+          ObjectAttributes      :POBJECT_ATTRIBUTES;
+          MaximumSize           :PLARGE_INTEGER;
+          SectionPageProtection :ULONG;
+          AllocationAttributes  :ULONG;
+          FileHandle            :THandle;
+          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
+          ExtendedParameterCount:ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
 function NtExtendSection(
           SectionHandle        :THandle;
           NewSectionSize       :PLARGE_INTEGER
@@ -1012,7 +1024,7 @@ function NtMapViewOfSectionEx(
           ViewSize              :PULONG_PTR;
           AllocationType        :ULONG;
           Protect               :ULONG;
-          ExtendedParameters    :Pointer;
+          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
           ExtendedParameterCount:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
@@ -1042,7 +1054,7 @@ function NtAllocateVirtualMemoryEx(
           RegionSize            :PULONG_PTR;
           AllocationType        :ULONG;
           Protect               :ULONG;
-          ExtendedParameters    :Pointer;
+          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
           ExtendedParameterCount:ULONG
          ):DWORD; stdcall; external 'ntdll';
 

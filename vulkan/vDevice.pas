@@ -1228,7 +1228,8 @@ begin
  cinfo:=Default(TVkCommandPoolCreateInfo);
  cinfo.sType           :=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
  cinfo.queueFamilyIndex:=FFamily;
- cinfo.flags:=ord(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+ cinfo.flags:=ord(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT) or
+              ord(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
  r:=vkCreateCommandPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
@@ -1263,6 +1264,11 @@ end;
 
 procedure TvCmdPool.Free(cmd:TVkCommandBuffer);
 begin
+ {
+  It is recommended to use vkQueueWaitIdle,
+   it seems that vkWaitForFences does not always ensure
+   the safety of free the cmd buffer
+ }
  vkFreeCommandBuffers(Device.FHandle,FHandle,1,@cmd);
 end;
 

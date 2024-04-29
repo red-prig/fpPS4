@@ -144,14 +144,14 @@ var
 begin
  DEV_INFO.DEV_SIZE:=pages*PAGE_SIZE;
 
- R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE);
+ R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
  begin
   Writeln('failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert(false,'dev_mem_init');
  end;
 
- DEV_INFO.DEV_FD.maxp:=VM_PROT_READ or VM_PROT_WRITE;
+ DEV_INFO.DEV_FD.maxp:=VM_RW;
 
  DEV_INFO.DEV_PTR:=nil;
  r:=md_reserve_ex(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
@@ -312,10 +312,10 @@ begin
 
  if (PRIV_FD[i].hfile=0) then
  begin
-  R:=md_memfd_create(PRIV_FD[i].hfile,PMAPP_BLK_SIZE);
+  R:=md_memfd_create(PRIV_FD[i].hfile,PMAPP_BLK_SIZE,VM_RW);
 
   PRIV_FD[i].flags:=NT_FILE_FREE;
-  PRIV_FD[i].maxp :=VM_PROT_READ or VM_PROT_WRITE;
+  PRIV_FD[i].maxp :=VM_RW;
 
   if (r<>0) then
   begin
@@ -367,9 +367,9 @@ begin
 
  if (DMEM_FD[i].hfile=0) then
  begin
-  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_BLK_SIZE);
+  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_BLK_SIZE,VM_RW);
 
-  DMEM_FD[i].maxp:=VM_PROT_READ or VM_PROT_WRITE;
+  DMEM_FD[i].maxp:=VM_RW;
 
   if (r<>0) then
   begin
@@ -751,7 +751,7 @@ begin
         end;
         size:=size-offset;
 
-        max:=VM_PROT_READ or VM_PROT_WRITE;
+        max:=VM_PROT_RW;
         r:=md_memfd_open(md,fd,max);
 
         if (DWORD(r)=STATUS_ACCESS_DENIED) then
