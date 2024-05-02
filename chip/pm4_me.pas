@@ -205,8 +205,7 @@ begin
  RT_COUNT:=0;
 
  if GPU_REGS.COMP_ENABLE then
- For i:=0 to 7 do
- if GPU_REGS.RT_ENABLE(i) then
+ For i:=0 to GPU_REGS.GET_HI_RT do
   begin
    RT_INFO[RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
 
@@ -214,7 +213,7 @@ begin
    //RT_INFO[RT_COUNT].IMAGE_USAGE:=TM_CLEAR or TM_WRITE;
    //
 
-   RP_KEY.AddColorAt(RT_COUNT,
+   RP_KEY.AddColorAt(RT_INFO[RT_COUNT].attachment,
                      RT_INFO[RT_COUNT].FImageInfo.cformat,
                      RT_INFO[RT_COUNT].IMAGE_USAGE,
                      RT_INFO[RT_COUNT].FImageInfo.params.samples);
@@ -226,7 +225,7 @@ begin
  begin
   DB_INFO:=GPU_REGS.GET_DB_INFO;
 
-  RP_KEY.AddDepthAt(RT_COUNT,
+  RP_KEY.AddDepthAt(RT_COUNT, //add to last attachment id
                     DB_INFO.FImageInfo.cformat,
                     DB_INFO.DEPTH_USAGE,
                     DB_INFO.STENCIL_USAGE);
@@ -365,6 +364,7 @@ begin
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
+
    if not limits.VK_KHR_imageless_framebuffer then
    begin
     FB_KEY2.AddImageView(iv);
@@ -381,6 +381,7 @@ begin
  if GPU_REGS.DB_ENABLE then
  begin
   FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
+  //FRenderCmd.AddImageView(iv);
  end;
 
  if not CmdBuffer.BeginRenderPass(FRenderCmd) then
@@ -403,6 +404,7 @@ begin
 
  if (RT_COUNT<>0) then
  For i:=0 to RT_COUNT-1 do
+  if (RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
 
    ri:=FetchImage(CmdBuffer,

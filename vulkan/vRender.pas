@@ -618,7 +618,7 @@ end;
 
 Procedure TvRenderTargets.AddImageView(v:TvImageView);
 begin
- if (v=nil) then Exit;
+ Assert(v<>nil,'AddImageView');
  if (FImagesCount>=Length(AvImageViews)) then Exit;
  FImageViews[FImagesCount]:=v.FHandle;
  Inc(FImagesCount);

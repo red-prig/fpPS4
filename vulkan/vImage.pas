@@ -381,7 +381,7 @@ end;
 
 Procedure TvFramebufferBindedKey.AddImageView(v:TvImageView);
 begin
- if (v=nil) then Exit;
+ Assert(v<>nil,'AddImageView');
  if (FImagesCount>=Length(AvFramebufferImages)) then Exit;
  FImages[FImagesCount]:=v;
  Inc(FImagesCount);
@@ -1073,12 +1073,12 @@ begin
  info.height         :=Key.FHeight;
  info.layers         :=Key.FLayers;
 
- FImageViews:=Default(AvImageViews);
-
  For i:=0 to Key.FImagesCount-1 do
- if (Key.FImages[i]<>nil) then
  begin
-  FImageViews[i]:=Key.FImages[i].FHandle;
+  if (Key.FImages[i]<>nil) then
+  begin
+   FImageViews[i]:=Key.FImages[i].FHandle;
+  end;
  end;
 
  info.pAttachments:=@FImageViews;

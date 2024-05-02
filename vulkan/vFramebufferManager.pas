@@ -20,7 +20,7 @@ type
 
  TvFramebufferBinded2=class(TvFramebufferBinded)
   FEntry:TAILQ_ENTRY;
-  FRefs:ptruint;
+  FRefs :ptruint;
   Procedure Acquire;
   procedure Release(Sender:TObject);
  end;

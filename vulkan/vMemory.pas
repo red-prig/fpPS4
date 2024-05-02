@@ -485,11 +485,6 @@ var
    if (Result<>'') then Result:=Result+',';
    Result:=Result+'MULTI_INSTANCE';
   end;
-  if (flags and ord(VK_MEMORY_HEAP_RESERVED_2_BIT_KHR))<>0 then
-  begin
-   if (Result<>'') then Result:=Result+',';
-   Result:=Result+'RESERVED_2';
-  end;
  end;
 
  function get_types_str(heapIndex:TVkUInt32):RawByteString; inline;

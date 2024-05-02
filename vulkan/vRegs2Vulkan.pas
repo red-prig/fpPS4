@@ -21,6 +21,8 @@ uses
 type
  TRT_INFO=record
 
+  attachment:TVkUInt32;
+
   //padded:TVkExtent2D;
 
   FImageInfo:TvImageKey;
@@ -85,6 +87,7 @@ type
   Function  _COMP_MASK(i:Byte):Byte;   inline;  //0..7
   Function  COMP_ENABLE:Boolean; inline;
   Function  RT_ENABLE(i:Byte):Boolean; //0..7
+  Function  GET_HI_RT:Byte;            //0..7
   Function  VP_ENABLE(i:Byte):Boolean; //0..15
   Function  GET_VPORT(i:Byte):TVkViewport; //0..15
   Function  GET_SCISSOR(i:Byte):TVkRect2D; //0..15
@@ -166,6 +169,20 @@ begin
  Result:=(CX_REG^.RENDER_TARGET[i].BASE<>0) and
          (CX_REG^.RENDER_TARGET[i].INFO.FORMAT<>0) and
          (_COMP_MASK(i)<>0);
+end;
+
+Function TGPU_REGS.GET_HI_RT:Byte; //0..7
+var
+ i:Byte;
+begin
+ Result:=0;
+ For i:=0 to 7 do
+ begin
+  if RT_ENABLE(i) then
+  begin
+   Result:=i;
+  end;
+ end;
 end;
 
 Function TGPU_REGS.VP_ENABLE(i:Byte):Boolean; //0..15
@@ -805,6 +822,27 @@ var
 begin
  Result:=Default(TRT_INFO);
 
+ if not RT_ENABLE(i) then
+ begin
+  Result.attachment:=VK_ATTACHMENT_UNUSED;
+
+  Result.FImageInfo.cformat           :=VK_FORMAT_R8G8B8A8_UNORM;
+  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
+  Result.FImageInfo.params.width      :=1;
+  Result.FImageInfo.params.height     :=1;
+  Result.FImageInfo.params.depth      :=1;
+  Result.FImageInfo.params.samples    :=1;
+  Result.FImageInfo.params.mipLevels  :=1;
+  Result.FImageInfo.params.arrayLayers:=1;
+
+  Result.FImageView.cformat:=VK_FORMAT_R8G8B8A8_UNORM;
+  Result.FImageView.vtype  :=ord(VK_IMAGE_VIEW_TYPE_2D);
+
+  Exit;
+ end;
+
+ Result.attachment:=i;
+
  RENDER_TARGET:=CX_REG^.RENDER_TARGET[i];
 
  Result.FImageInfo.Addr:=Pointer(QWORD(RENDER_TARGET.BASE) shl 8);
@@ -864,7 +902,8 @@ begin
  end else
  begin
   Result.IMAGE_USAGE:=TM_READ  or TM_WRITE;
- end;
+ end;                                   Result.FImageView.cformat   :=Result.FImageInfo.cformat;
+ Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
 
  //if (Result.blend.blendEnable<>0) then
  //begin
