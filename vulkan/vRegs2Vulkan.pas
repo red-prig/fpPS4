@@ -176,7 +176,7 @@ var
  i:Byte;
 begin
  Result:=0;
- For i:=0 to 7 do
+ For i:=1 to 7 do
  begin
   if RT_ENABLE(i) then
   begin
@@ -902,8 +902,7 @@ begin
  end else
  begin
   Result.IMAGE_USAGE:=TM_READ  or TM_WRITE;
- end;                                   Result.FImageView.cformat   :=Result.FImageInfo.cformat;
- Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
+ end;
 
  //if (Result.blend.blendEnable<>0) then
  //begin

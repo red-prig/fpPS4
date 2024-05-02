@@ -3736,6 +3736,7 @@ begin
  end;
 
  Vex.rexW:=False;
+ if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
@@ -3818,6 +3819,7 @@ begin
  end;
 
  Vex.rexW:=False;
+ if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin
   Vex.rexW:=True;
@@ -3886,20 +3888,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (size=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
@@ -3963,20 +3964,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (mreg.AMemSize=os0) then
  begin
   mreg.AMemSize:=reg.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin
@@ -4039,20 +4039,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (size=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
@@ -4110,20 +4109,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (mreg.AMemSize=os0) then
  begin
   mreg.AMemSize:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin
@@ -4204,20 +4202,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (mreg.AMemSize=os0) then
  begin
   mreg.AMemSize:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin
@@ -4301,20 +4298,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (size=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
@@ -4379,20 +4375,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (size=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
@@ -4453,20 +4448,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (size=os0) then
  begin
   size:=reg0.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (size=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (size=os64) then
  begin
@@ -4518,20 +4512,19 @@ begin
 
  ji:=default_jit_instruction;
 
- Vex.Length:=0;
- Vex.rexW:=False;
-
  if (mreg.AMemSize=os0) then
  begin
   mreg.AMemSize:=reg.ASize;
  end;
 
+ Vex.Length:=0;
  if not (not_vex_len in desc.opt) then
  if (mreg.AMemSize=os256) then
  begin
   Vex.Length:=1;
  end;
 
+ Vex.rexW:=False;
  if not (not_prefix in desc.opt) then
  if (mreg.AMemSize=os64) then
  begin

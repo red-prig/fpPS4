@@ -787,7 +787,7 @@ end;
 const
  vbroadcastsd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$19;simdop:1;mm:2;opt:[not_vex_len]);
+  reg_mem:(op:$19;simdop:1;mm:2;opt:[not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -807,7 +807,7 @@ end;
 const
  vbroadcastf128_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$1A;simdop:1;mm:2;opt:[not_vex_len]);
+  reg_mem:(op:$1A;simdop:1;mm:2);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
@@ -817,6 +817,8 @@ procedure op_vbroadcastf128(var ctx:t_jit_context2);
 begin
  if is_memory(ctx.din) then
  begin
+  //Vex.VectorLength = os256
+  ctx.din.Operand[2].Size:=os256;
   op_emit_avx2(ctx,vbroadcastf128_desc);
  end else
  begin
