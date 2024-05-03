@@ -362,6 +362,7 @@ type
     end;
     Vex: record
       Index: Byte;
+      Length: Byte;
       VectorLength: TOperandSize;
       MaskIndex: Byte;
     end;
@@ -4053,6 +4054,7 @@ begin
       // Rvvv vLpp
       if Code[idx] and $80 = 0 then Include(Flags, rexR);
       Vex.Index := ((Code[idx] shr 3) and $0F) xor $0F;
+      Vex.Length       :=        (Code[idx] shr 2) and $01;
       Vex.VectorLength := LENMAP[(Code[idx] shr 2) and $01];
       SimdOpcode := SIMDMAP[Code[idx] and $03];
       mm := 1;
@@ -4068,6 +4070,7 @@ begin
       Inc(idx);
       if Code[idx] and $80 <> 0 then Include(Flags, rexW);
       Vex.Index := ((Code[idx] shr 3) and $0F) xor $0F;
+      Vex.Length       :=        (Code[idx] shr 2) and $01;
       Vex.VectorLength := LENMAP[(Code[idx] shr 2) and $01];
       SimdOpcode := SIMDMAP[Code[idx] and $03];
     end;
@@ -4091,6 +4094,7 @@ begin
 
       Inc(idx);
       if Code[idx] and $80 <> 0 then Include(Flags, evexZ);
+      Vex.Length       :=        (Code[idx] shr 5) and $03;
       Vex.VectorLength := LENMAP[(Code[idx] shr 5) and $03];
       if Code[idx] and $10 <> 0 then Include(Flags, evexB);
       if Code[idx] and $08 = 0 then Include(Flags, evexV);

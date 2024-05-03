@@ -352,15 +352,9 @@ begin
  print_backtrace(stderr,Get_pc_addr,get_frame,2);
 
  if IsDebuggerPresent then
-  Raise EAssertionFailed.
-         Createfmt('%s (%s, line %d).',
-         [_get_msg(Msg),FName,LineNo])
-         at get_caller_addr (ErrorAddr),
-            get_caller_frame(ErrorAddr);
-
- //asm
- // int3
- //end;
+ asm
+  int3
+ end;
 
  kern_exit.exit1(217);
 end;
@@ -386,7 +380,7 @@ var
  eh:EH_HANDLER_INFO;
 begin
  AssertErrorProc:=@_Assert;
- UEHandler:=SetUnhandledExceptionFilter(@UnhandledException);
+ //UEHandler:=SetUnhandledExceptionFilter(@UnhandledException);
  VEHandler:=AddVectoredExceptionHandler(1,@ProcessException);
  V2Handler:=AddVectoredExceptionHandler(0,@UnhandledException);
  eh.ptr:=@ExceptionDispatcher;
@@ -395,7 +389,7 @@ end;
 
 procedure UninstallExceptionHandler;
 begin
- SetUnhandledExceptionFilter(UEHandler);
+ //SetUnhandledExceptionFilter(UEHandler);
  RemoveVectoredExceptionHandler(VEHandler);
  RemoveVectoredExceptionHandler(V2Handler);
 end;
