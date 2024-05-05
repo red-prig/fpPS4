@@ -1150,9 +1150,6 @@ var
  _print_stat:Integer=0;
 
 procedure pick_locked(var ctx:t_jit_context2);
-const
- SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
- MCODES:array[0..3] of RawByteString=('','0F','0F38','0F3A');
 label
  _next,
  _build,
@@ -1283,6 +1280,14 @@ begin
    else;
   end;
 
+  {
+  if (qword(ctx.ptr_curr) and $FFFFF) = $427F5 then
+  begin
+   print_asm:=true;
+   ctx.builder.int3;
+  end;
+  }
+
   if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
      (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
@@ -1293,14 +1298,6 @@ begin
    end;
    goto _invalid;
   end;
-
-  {
-  if (qword(ctx.ptr_curr) and $FFFFF) = $427F5 then
-  begin
-   print_asm:=true;
-   ctx.builder.int3;
-  end;
-  }
 
   if print_asm then
   begin
@@ -1372,6 +1369,12 @@ begin
   link_curr:=ctx.builder.get_curr_label.after;
   node_curr:=link_curr._node;
 
+  {
+  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+  with ctx.builder do
+   movq([GS+Integer(teb_jitcall)],r14);
+  }
+
   cb(ctx);
 
   link_next:=ctx.builder.get_curr_label.after;
@@ -1398,6 +1401,15 @@ begin
   end;
   }
 
+  {
+  if print_asm then
+  begin
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+   print_disassemble(ctx.code,dis.CodeIdx);
+   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+  end;
+  }
+
   //debug print
   if print_asm then
   if (node_curr<>node_next) and
@@ -1417,61 +1429,8 @@ begin
    Writeln('recompiled----------------------':32,' ','');
   end;
 
-  {
-  if (qword(ptr) and $FFFFF) = $1a710 then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
+  //print_asm:=False;
 
-  if (qword(ptr) and $FFFFF) = $1a6bd then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-  }
-
-  {
-  if (qword(ptr) and $FFFFF) = $29e53 then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-
-  if (qword(ptr) and $FFFFF) = $29e42 then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-
-  if (qword(ptr) and $FFFFF) = $29e45 then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-
-  if (qword(ptr) and $FFFFF) = $2b8a0 then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-  }
-
-  {
-  if (qword(ctx.ptr_curr) and $FFFFF) = $2849d then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-  }
-
-  {
-  if (qword(ctx.ptr_curr) and $FFFFF) = $2f59f then
-  begin
-   //print_asm:=true;
-   ctx.builder.int3;
-  end;
-  }
 
   {
   if (qword(ctx.ptr_curr) and $FFFFF) = $2f1f6 then

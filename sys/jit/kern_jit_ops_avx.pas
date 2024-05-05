@@ -21,8 +21,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx1(ctx,tmp,hint);
 end;
@@ -33,8 +34,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx2_rr(ctx,tmp);
 end;
@@ -45,17 +47,21 @@ var
 begin
  tmp:=desc;
 
- tmp.mem_reg.opt   :=tmp.mem_reg.opt+[verif_vex_len];
+ tmp.mem_reg.opt   :=tmp.mem_reg.opt+[verif_vex_len,verif_rexw];
  tmp.mem_reg.vx_len:=ctx.dis.Vex.Length;
+ tmp.mem_reg.rexw  :=rexW in ctx.dis.Flags;
 
- tmp.reg_mem.opt   :=tmp.reg_mem.opt+[verif_vex_len];
+ tmp.reg_mem.opt   :=tmp.reg_mem.opt+[verif_vex_len,verif_rexw];
  tmp.reg_mem.vx_len:=ctx.dis.Vex.Length;
+ tmp.reg_mem.rexw  :=rexW in ctx.dis.Flags;
 
- tmp.reg_imm.opt   :=tmp.reg_imm.opt+[verif_vex_len];
+ tmp.reg_imm.opt   :=tmp.reg_imm.opt+[verif_vex_len,verif_rexw];
  tmp.reg_imm.vx_len:=ctx.dis.Vex.Length;
+ tmp.reg_imm.rexw  :=rexW in ctx.dis.Flags;
 
- tmp.reg_im8.opt   :=tmp.reg_im8.opt+[verif_vex_len];
+ tmp.reg_im8.opt   :=tmp.reg_im8.opt+[verif_vex_len,verif_rexw];
  tmp.reg_im8.vx_len:=ctx.dis.Vex.Length;
+ tmp.reg_im8.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx2(ctx,tmp);
 end;
@@ -66,8 +72,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx3(ctx,tmp);
 end;
@@ -78,11 +85,13 @@ var
 begin
  tmp:=desc;
 
- tmp.rmi.opt   :=tmp.rmi.opt+[verif_vex_len];
+ tmp.rmi.opt   :=tmp.rmi.opt+[verif_vex_len,verif_rexw];
  tmp.rmi.vx_len:=ctx.dis.Vex.Length;
+ tmp.rmi.rexw  :=rexW in ctx.dis.Flags;
 
- tmp.mri.opt   :=tmp.mri.opt+[verif_vex_len];
+ tmp.mri.opt   :=tmp.mri.opt+[verif_vex_len,verif_rexw];
  tmp.mri.vx_len:=ctx.dis.Vex.Length;
+ tmp.mri.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx3_imm8(ctx,tmp);
 end;
@@ -93,8 +102,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx_F3(ctx,tmp);
 end;
@@ -105,8 +115,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_avx4(ctx,tmp);
 end;
@@ -117,8 +128,9 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_bmi_rmr(ctx,tmp);
 end;
@@ -129,21 +141,88 @@ var
 begin
  tmp:=desc;
 
- tmp.opt   :=tmp.opt+[verif_vex_len];
+ tmp.opt   :=tmp.opt+[verif_vex_len,verif_rexw];
  tmp.vx_len:=ctx.dis.Vex.Length;
+ tmp.rexw  :=rexW in ctx.dis.Flags;
 
  kern_jit_ctx.op_emit_bmi_rrm(ctx,tmp);
 end;
 
 ///verif
 
-const
- SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
+function get_vw_mode(var ctx:t_jit_context2):t_vw_mode;
+begin
+ Result:=vwZero;
+ case ctx.din.OpCode.Opcode of
+
+  OPcvtsi2:Result:=vwM64;
+
+  OPcvtss2:
+   case ctx.din.OpCode.Suffix of
+    OPSx_si:Result:=vwR64;
+    else;
+   end;
+
+  OPcvtsd2:
+   case ctx.din.OpCode.Suffix of
+    OPSx_si:Result:=vwR64;
+    else;
+   end;
+
+  OPcvttss2:Result:=vwR64;
+  OPcvttsd2:Result:=vwR64;
+
+  OPpextr:
+    case ctx.din.OpCode.Suffix of
+     OPSx_q:Result:=vwOne;
+     else;
+    end;
+
+  OPpinsr:
+    case ctx.din.OpCode.Suffix of
+     OPSx_q:Result:=vwOne;
+     else;
+    end;
+
+  OPvperm:
+    case ctx.din.OpCode.Suffix of
+     OPSx_q :Result:=vwOne;
+     OPSx_pd:Result:=vwOne;
+     else;
+    end;
+
+  else;
+ end;
+end;
+
+function get_vl_mode(var ctx:t_jit_context2):t_vl_mode;
+begin
+ Result:=vl256;
+ case ctx.din.OpCode.Opcode of
+
+  OPvperm2:Result:=vlOne;
+  OPvperm :Result:=vlOne;
+
+  OPinsert:
+    case ctx.din.OpCode.Suffix of
+     OPSx_f128:Result:=vlOne;
+     else;
+    end;
+
+  OPextract:
+    case ctx.din.OpCode.Suffix of
+     OPSx_f128:Result:=vlOne;
+     else;
+    end;
+
+  else;
+ end;
+end;
 
 procedure op_emit_avx2_mem_reg(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
-  mem_reg:(op:0;index:0;simdop:0;mm:0);
+  mem_reg:();
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
@@ -153,9 +232,10 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.mem_reg.op    :=ctx.dis.opcode and $FF;
- tmp.mem_reg.simdop:=SCODES[ctx.dis.SimdOpcode];
- tmp.mem_reg.mm    :=ctx.dis.mm;
+ tmp.mem_reg.op     :=ctx.dis.opcode and $FF;
+ tmp.mem_reg.simdop :=SCODES[ctx.dis.SimdOpcode];
+ tmp.mem_reg.mm     :=ctx.dis.mm;
+ tmp.mem_reg.vw_mode:=get_vw_mode(ctx);
  tmp.hint:=hint;
  //
  op_emit_avx2(ctx,tmp);
@@ -165,7 +245,7 @@ procedure op_emit_avx2_reg_mem(var ctx:t_jit_context2;hint:t_op_hint);
 const
  desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:0;index:0;simdop:0;mm:0);
+  reg_mem:();
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -174,9 +254,10 @@ var
  tmp:t_op_desc;
 begin
  tmp:=desc;
- tmp.reg_mem.op    :=ctx.dis.opcode and $FF;
- tmp.reg_mem.simdop:=SCODES[ctx.dis.SimdOpcode];
- tmp.reg_mem.mm    :=ctx.dis.mm;
+ tmp.reg_mem.op     :=ctx.dis.opcode and $FF;
+ tmp.reg_mem.simdop :=SCODES[ctx.dis.SimdOpcode];
+ tmp.reg_mem.mm     :=ctx.dis.mm;
+ tmp.reg_mem.vw_mode:=get_vw_mode(ctx);
  tmp.hint:=hint;
  //
  op_emit_avx2(ctx,tmp);
@@ -229,17 +310,16 @@ end;
 //
 
 procedure op_avx2_rr(var ctx:t_jit_context2);
-const
- desc:t_op_type=(op:0;simdop:0;mm:0);
 var
  tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  tmp:=desc;
-  tmp.op    :=ctx.dis.opcode and $FF;
-  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm    :=ctx.dis.mm;
+  tmp:=Default(t_op_type);
+  tmp.op     :=ctx.dis.opcode and $FF;
+  tmp.simdop :=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm     :=ctx.dis.mm;
+  tmp.vw_mode:=get_vw_mode(ctx);
   //
   op_emit_avx2_rr(ctx,tmp);
  end else
@@ -251,19 +331,17 @@ end;
 //
 
 procedure op_avx3_gen(var ctx:t_jit_context2);
-const
- desc:t_op_type=(
-  op:0;index:0;simdop:0;mm:0
- );
 var
  tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  tmp:=desc;
-  tmp.op    :=ctx.dis.opcode and $FF;
-  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm    :=ctx.dis.mm;
+  tmp:=Default(t_op_type);
+  tmp.op     :=ctx.dis.opcode and $FF;
+  tmp.simdop :=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm     :=ctx.dis.mm;
+  tmp.vw_mode:=get_vw_mode(ctx);
+  tmp.vl_mode:=get_vl_mode(ctx);
   //
   op_emit_avx3(ctx,tmp);
  end else
@@ -273,41 +351,17 @@ begin
 end;
 
 procedure op_avx3_vx_zero(var ctx:t_jit_context2);
-const
- desc:t_op_type=(
-  op:0;index:0;simdop:0;mm:0;vl_mode:vlZero;
- );
 var
  tmp:t_op_type;
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  tmp:=desc;
-  tmp.op    :=ctx.dis.opcode and $FF;
-  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm    :=ctx.dis.mm;
-  //
-  op_emit_avx3(ctx,tmp);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-procedure op_avx3_vx_one(var ctx:t_jit_context2);
-const
- desc:t_op_type=(
-  op:0;index:0;simdop:0;mm:0;vl_mode:vlOne;
- );
-var
- tmp:t_op_type;
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  tmp:=desc;
-  tmp.op    :=ctx.dis.opcode and $FF;
-  tmp.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mm    :=ctx.dis.mm;
+  tmp:=Default(t_op_type);
+  tmp.op     :=ctx.dis.opcode and $FF;
+  tmp.simdop :=SCODES[ctx.dis.SimdOpcode];
+  tmp.mm     :=ctx.dis.mm;
+  tmp.vw_mode:=get_vw_mode(ctx);
+  tmp.vl_mode:=vlZero;
   //
   op_emit_avx3(ctx,tmp);
  end else
@@ -321,7 +375,7 @@ end;
 procedure op_avx3_rmi(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
-  rmi:(op:0;index:0;simdop:0;mm:0);
+  rmi:();
   mri:(opt:[not_impl]);
  );
 var
@@ -330,9 +384,11 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.rmi.op    :=ctx.dis.opcode and $FF;
-  tmp.rmi.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.rmi.mm    :=ctx.dis.mm;
+  tmp.rmi.op     :=ctx.dis.opcode and $FF;
+  tmp.rmi.simdop :=SCODES[ctx.dis.SimdOpcode];
+  tmp.rmi.mm     :=ctx.dis.mm;
+  tmp.rmi.vw_mode:=get_vw_mode(ctx);
+  tmp.rmi.vl_mode:=get_vl_mode(ctx);
   //
   op_emit_avx3_imm8(ctx,tmp);
  end else
@@ -345,7 +401,7 @@ procedure op_avx3_mri(var ctx:t_jit_context2);
 const
  desc:t_op_avx3_imm=(
   rmi:(opt:[not_impl]);
-  mri:(op:0;index:0;simdop:0;mm:0);
+  mri:();
  );
 var
  tmp:t_op_avx3_imm;
@@ -353,55 +409,11 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   tmp:=desc;
-  tmp.mri.op    :=ctx.dis.opcode and $FF;
-  tmp.mri.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mri.mm    :=ctx.dis.mm;
-  //
-  op_emit_avx3_imm8(ctx,tmp);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-procedure op_avx3_mri_vx_zero(var ctx:t_jit_context2);
-const
- desc:t_op_avx3_imm=(
-  rmi:(opt:[not_impl]);
-  mri:(op:0;index:0;simdop:0;mm:0;vl_mode:vlZero);
- );
-var
- tmp:t_op_avx3_imm;
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  tmp:=desc;
-  tmp.mri.op    :=ctx.dis.opcode and $FF;
-  tmp.mri.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mri.mm    :=ctx.dis.mm;
-  //
-  op_emit_avx3_imm8(ctx,tmp);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-procedure op_avx3_mri_vx_one(var ctx:t_jit_context2);
-const
- desc:t_op_avx3_imm=(
-  rmi:(opt:[not_impl]);
-  mri:(op:0;index:0;simdop:0;mm:0;vl_mode:vlOne);
- );
-var
- tmp:t_op_avx3_imm;
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  tmp:=desc;
-  tmp.mri.op    :=ctx.dis.opcode and $FF;
-  tmp.mri.simdop:=SCODES[ctx.dis.SimdOpcode];
-  tmp.mri.mm    :=ctx.dis.mm;
+  tmp.mri.op     :=ctx.dis.opcode and $FF;
+  tmp.mri.simdop :=SCODES[ctx.dis.SimdOpcode];
+  tmp.mri.mm     :=ctx.dis.mm;
+  tmp.mri.vw_mode:=get_vw_mode(ctx);
+  tmp.mri.vl_mode:=get_vl_mode(ctx);
   //
   op_emit_avx3_imm8(ctx,tmp);
  end else
@@ -544,9 +556,9 @@ begin
 end;
 
 const
- vmov_dq_desc:t_op_desc=(
-  mem_reg:(op:$7E;simdop:1;mm:1);
-  reg_mem:(op:$6E;simdop:1;mm:1);
+ vmov_d_desc:t_op_desc=(
+  mem_reg:(op:$7E;simdop:1;mm:1;vw_mode:vwZero);
+  reg_mem:(op:$6E;simdop:1;mm:1;vw_mode:vwZero);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -556,7 +568,7 @@ procedure op_vmovd(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit_avx2(ctx,vmov_dq_desc);
+  op_emit_avx2(ctx,vmov_d_desc);
  end else
  begin
   add_orig(ctx);
@@ -564,9 +576,17 @@ begin
 end;
 
 const
+ vmov_q_desc:t_op_desc=(
+  mem_reg:(op:$7E;simdop:1;mm:1;vw_mode:vwOne);
+  reg_mem:(op:$6E;simdop:1;mm:1;vw_mode:vwOne);
+  reg_imm:(opt:[not_impl]);
+  reg_im8:(opt:[not_impl]);
+  hint:[his_mov,his_wo];
+ );
+
  vmovq_desc:t_op_desc=(
-  mem_reg:(op:$D6;simdop:1;mm:1);
-  reg_mem:(op:$7E;simdop:2;mm:1);
+  mem_reg:(op:$D6;simdop:1;mm:1;vw_mode:vwZero);
+  reg_mem:(op:$7E;simdop:2;mm:1;vw_mode:vwZero);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
@@ -579,7 +599,7 @@ begin
   if (ctx.dis.SimdOpcode=so66) and
      ((ctx.dis.opcode and $FF) in [$6E,$7E]) then
   begin
-   op_emit_avx2(ctx,vmov_dq_desc);
+   op_emit_avx2(ctx,vmov_q_desc);
   end else
   begin
    op_emit_avx2(ctx,vmovq_desc);
@@ -627,7 +647,7 @@ end;
 
 const
  vmovlps_desc2:t_op_desc=(
-  mem_reg:(op:$13;simdop:0;mm:1);
+  mem_reg:(op:$13;simdop:0;mm:1;vl_mode:vlZero);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
@@ -656,14 +676,14 @@ end;
 
 const
  vmovlpd_desc2:t_op_desc=(
-  mem_reg:(op:$13;simdop:1;mm:1);
+  mem_reg:(op:$13;simdop:1;mm:1;vl_mode:vlZero);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovlpd_rrm_desc:t_op_type=(op:$12;simdop:1;mm:1);
+ vmovlpd_rrm_desc:t_op_type=(op:$12;simdop:1;mm:1;vl_mode:vlZero);
 
 procedure op_vmovlpd(var ctx:t_jit_context2);
 begin
@@ -685,14 +705,14 @@ end;
 
 const
  vmovhps_desc2:t_op_desc=(
-  mem_reg:(op:$17;simdop:0;mm:1);
+  mem_reg:(op:$17;simdop:0;mm:1;vl_mode:vlZero);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovhps_rrm_desc:t_op_type=(op:$16;simdop:0;mm:1);
+ vmovhps_rrm_desc:t_op_type=(op:$16;simdop:0;mm:1;vl_mode:vlZero);
 
 procedure op_vmovhps(var ctx:t_jit_context2);
 begin
@@ -714,14 +734,14 @@ end;
 
 const
  vmovhpd_desc2:t_op_desc=(
-  mem_reg:(op:$17;simdop:1;mm:1);
+  mem_reg:(op:$17;simdop:1;mm:1;vl_mode:vlZero);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
- vmovhpd_rrm_desc:t_op_type=(op:$16;simdop:1;mm:1);
+ vmovhpd_rrm_desc:t_op_type=(op:$16;simdop:1;mm:1;vl_mode:vlZero);
 
 procedure op_vmovhpd(var ctx:t_jit_context2);
 begin
@@ -744,7 +764,7 @@ end;
 const
  vptest_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$17;simdop:1;mm:2);
+  reg_mem:(op:$17;simdop:1;mm:2;vl_mode:vlZero);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_ro];
@@ -764,7 +784,7 @@ end;
 procedure op_bmi_gen(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
-  op:$F3;index:0;mm:0
+  op:$F3;index:0;mm:0;vw_mode:vwR64;vl_mode:vlZero
  );
 var
  tmp:t_op_type;
@@ -902,7 +922,7 @@ end;
 
 const
  bextr_desc:t_op_type=(
-  op:$F7;simdop:0;mm:2;
+  op:$F7;simdop:0;mm:2;vw_mode:vwR64;
  );
 
 procedure op_bextr(var ctx:t_jit_context2);
@@ -918,7 +938,7 @@ end;
 
 const
  andn_desc:t_op_type=(
-  op:$F2;simdop:0;mm:2;
+  op:$F2;simdop:0;mm:2;vw_mode:vwR64;
  );
 
 procedure op_andn(var ctx:t_jit_context2);
@@ -957,7 +977,7 @@ end;
 const
  vbroadcastsd_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$19;simdop:1;mm:2;opt:[not_prefix]);
+  reg_mem:(op:$19;simdop:1;mm:2;vw_mode:vwZero);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[];
@@ -1187,13 +1207,13 @@ begin
  jit_cbs[OPPnone,OPvpermil,OPSx_ps]:=@op_vpermilps;
  jit_cbs[OPPnone,OPvpermil,OPSx_pd]:=@op_vpermilpd;
 
- jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_avx3_vx_one;
- jit_cbs[OPPnone,OPvperm2,OPSx_i128]:=@op_avx3_vx_one;
+ jit_cbs[OPPnone,OPvperm2,OPSx_f128]:=@op_avx3_gen;
+ jit_cbs[OPPnone,OPvperm2,OPSx_i128]:=@op_avx3_gen;
 
- jit_cbs[OPPnone,OPvperm,OPSx_d]:=@op_avx3_vx_one;
+ jit_cbs[OPPnone,OPvperm,OPSx_d]:=@op_avx3_gen;
  jit_cbs[OPPnone,OPvperm,OPSx_q]:=@op_avx3_rmi;
 
- jit_cbs[OPPnone,OPvperm,OPSx_ps]:=@op_avx3_vx_one;
+ jit_cbs[OPPnone,OPvperm,OPSx_ps]:=@op_avx3_gen;
  jit_cbs[OPPnone,OPvperm,OPSx_pd]:=@op_avx3_rmi;
 
  jit_cbs[OPPv,OPxor    ,OPSx_ps]:=@op_avx3_gen;
@@ -1260,10 +1280,10 @@ begin
  jit_cbs[OPPv,OPpextr,OPSx_w]:=@op_avx3_mri;
 
  jit_cbs[OPPv,OPextract,OPSx_ps  ]:=@op_avx3_mri;
- jit_cbs[OPPv,OPextract,OPSx_f128]:=@op_avx3_mri_vx_one;
+ jit_cbs[OPPv,OPextract,OPSx_f128]:=@op_avx3_mri;
 
  jit_cbs[OPPv,OPinsert ,OPSx_ps  ]:=@op_avx3_gen;
- jit_cbs[OPPv,OPinsert ,OPSx_f128]:=@op_avx3_vx_one;
+ jit_cbs[OPPv,OPinsert ,OPSx_f128]:=@op_avx3_gen;
 
  jit_cbs[OPPv,OPround,OPSx_ps]:=@op_avx3_rmi;
  jit_cbs[OPPv,OPround,OPSx_pd]:=@op_avx3_rmi;

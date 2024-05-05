@@ -104,6 +104,9 @@ const
 
  OPERAND_BYTES:array[TOperandSize] of Word=(0,1,2,4,8,6,10,16,32,64,512);
 
+ SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
+ MCODES:array[0..3] of PChar=('','0F','0F38','0F3A');
+
 function GetFrameOffset(const RegValue:TRegValue):Integer;
 function GetFrameOffset(const r:TOperand):Integer;
 function GetTargetOfs(var din:TInstruction;Code:PByte;id:Byte;var ofs:Int64):Boolean;
@@ -3798,7 +3801,7 @@ begin
    new3:=new_reg(ctx.din.Operand[3]);
   end;
 
-  _VVV(desc,new1,new2,new3,new3.ASize); //1 2 3
+  _VVV(desc,new1,new2,new3,new1.ASize); //1 2 3
 
   if is_preserved(ctx.din.Operand[1]) then
   begin
