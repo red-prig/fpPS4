@@ -1449,7 +1449,7 @@ begin
  Exit(0);
 end;
 
-procedure umtx_pi_adjust(td:p_kthread;oldpri:Integer);
+procedure umtx_pi_adjust(td:p_kthread;oldpri:Integer); public;
 var
  uq:p_umtx_q;
  pi:p_umtx_pi;

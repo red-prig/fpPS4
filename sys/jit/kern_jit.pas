@@ -54,9 +54,22 @@ asm
  jmp  jit_assert
 end;
 
-procedure jit_system_error;
+procedure jit_system_error(tf_rip:QWORD);
+var
+ td:p_kthread;
 begin
- Assert(False,'jit_system_error');
+ td:=curkthread;
+ jit_save_to_sys_save(td);
+ td^.td_frame.tf_rip:=tf_rip;
+ print_error_td('System error in guest code!');
+ Assert(false);
+end;
+
+procedure _jit_system_error; assembler; nostackframe;
+asm
+ call jit_save_ctx
+ mov  %r14,%rdi
+ jmp  jit_system_error
 end;
 
 procedure jit_unknow_int;
@@ -507,9 +520,38 @@ begin
  trim_flow(ctx);
 end;
 
+function invert_cond(s:TOpCodeSuffix):TOpCodeSuffix;
+begin
+ case s of
+  OPSc_o  :Result:=OPSc_no;
+  OPSc_no :Result:=OPSc_o;
+  OPSc_b  :Result:=OPSc_nb;
+  OPSc_nb :Result:=OPSc_b;
+  OPSc_z  :Result:=OPSc_nz;
+  OPSc_nz :Result:=OPSc_z;
+  OPSc_be :Result:=OPSc_nbe;
+  OPSc_nbe:Result:=OPSc_be;
+  OPSc_s  :Result:=OPSc_ns;
+  OPSc_ns :Result:=OPSc_s;
+  OPSc_p  :Result:=OPSc_np;
+  OPSc_np :Result:=OPSc_p;
+  OPSc_l  :Result:=OPSc_nl;
+  OPSc_nl :Result:=OPSc_l;
+  OPSc_le :Result:=OPSc_nle;
+  OPSc_nle:Result:=OPSc_le;
+  OPSc_e  :Result:=OPSc_ne;
+  OPSc_ne :Result:=OPSc_e;
+  OPSc_u  :Result:=OPSc_nu;
+  OPSc_nu :Result:=OPSc_u;
+  else;
+   Assert(false,'invert_cond');
+ end;
+end;
+
 procedure op_jcc(var ctx:t_jit_context2);
 var
- id1,id2:t_jit_i_link;
+ id1:t_jit_i_link;
+ //id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
  link:t_jit_i_link;
@@ -537,6 +579,15 @@ begin
   end;
  end else
  begin
+  //far
+
+  //invert cond jump
+  id1:=ctx.builder.jcc(invert_cond(ctx.din.OpCode.Suffix),nil_link,os8);
+   op_set_r14_imm(ctx,Int64(dst));
+   op_jmp_dispatcher(ctx);
+  id1._label:=ctx.builder.get_curr_label.after;
+
+  {
   id1:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link,os8);
 
   id2:=ctx.builder.jmp(nil_link,os8);
@@ -544,6 +595,7 @@ begin
    op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx);
   id2._label:=ctx.builder.get_curr_label.after;
+  }
  end;
 end;
 
@@ -892,14 +944,15 @@ begin
    begin
     //
     op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
-    ctx.builder.call_far(@_jit_assert); //TODO error dispatcher
+    ctx.builder.call_far(@_jit_assert);
+    trim_flow(ctx);
    end;
 
   $44: //system error?
    begin
     //
     op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
-    ctx.builder.call_far(@jit_system_error); //TODO error dispatcher
+    ctx.builder.call_far(@_jit_system_error);
     trim_flow(ctx);
    end;
 
@@ -990,6 +1043,111 @@ begin
   link_jmp._label:=ctx.builder.get_curr_label.after;
  end;
  //debug
+end;
+
+//rsp,rbp,r14,r15,r13
+procedure lazy_jit2native; assembler; nostackframe;
+asm
+ movqq (%rsp),%r14
+ movqq %r14,%gs:teb.jitcall
+
+ movqq jit_frame.tf_rsp(%r13),%rsp
+ movqq jit_frame.tf_rbp(%r13),%rbp
+ movqq jit_frame.tf_r14(%r13),%r14
+ movqq jit_frame.tf_r15(%r13),%r15
+ movqq jit_frame.tf_r13(%r13),%r13
+
+ jmp %gs:teb.jitcall
+end;
+
+function op_lazy_jit(var ctx:t_jit_context2):Boolean;
+begin
+ Result:=False;
+
+ if (jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix]=@op_invalid) then
+ begin
+  Exit;
+ end;
+
+ case ctx.din.OpCode.Opcode of
+  OPcall,
+  OPjmp,
+  OPret,
+  OPretf,
+  OPj__,
+  OPloop,
+  OPjcxz,
+  OPjecxz,
+  OPjrcxz,
+  OPpush,
+  OPpop,
+  OPpushf,
+  OPenter,
+  OPleave,
+  OPpopf,
+  OPsyscall,
+  OPint,
+  OPint1,
+  OPint3,
+  OPud1,
+  OPud2,
+  OPiret,
+  OPhlt,
+  OPcpuid,
+  OPrdtsc,
+  OPnop  :Exit;
+  else;
+ end;
+
+ if is_rep_prefix(ctx.din) then
+ begin
+  Exit;
+ end;
+
+ if is_segment(ctx.din) then
+ begin
+  Exit;
+ end;
+
+ if is_preserved(ctx.din) then
+ begin
+  if is_rip(ctx.din) then
+  begin
+   Exit;
+  end;
+ end else
+ begin
+  add_orig(ctx);
+  Exit(True);
+
+  //Exit;
+ end;
+
+ ctx.builder.call_far(@lazy_jit2native);
+
+ add_orig(ctx);
+
+ with ctx.builder do
+ begin
+  ctx.builder.movq([GS+Integer(teb_jit_rsp)],r13);
+
+  ctx.builder.movq(r13,[GS+Integer(teb_thread)]);
+  ctx.builder.leaq(r13,[r13+Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+
+  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r14)],r14);
+  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r15)],r15);
+
+  ctx.builder.movq(r14,[GS+Integer(teb_jit_rsp)]);
+  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r13)],r14);
+
+  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
+  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
+
+  ctx.builder.movq(rsp,[r13+Integer(@p_kthread(nil)^.td_kstack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  ctx.builder.movq(rbp,rsp);
+ end;
+
+ Result:=True;
 end;
 
 procedure init_cbs;
@@ -1373,6 +1531,16 @@ begin
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
   with ctx.builder do
    movq([GS+Integer(teb_jitcall)],r14);
+  }
+
+  {
+  if op_lazy_jit(ctx) then
+  begin
+   //
+  end else
+  begin
+   cb(ctx);
+  end;
   }
 
   cb(ctx);

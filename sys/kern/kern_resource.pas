@@ -71,7 +71,9 @@ var
  rlim:t_rlimit;
 begin
  if (which >= RLIM_NLIMITS) then
+ begin
   Exit(EINVAL);
+ end;
 
  lim_rlimit(which, @rlim);
 
@@ -151,7 +153,9 @@ begin
  end;
 
  if (low=PRIO_MAX+1) and (error=0) then
+ begin
   error:=ESRCH;
+ end;
 
  td^.td_retval[0]:=low;
  Exit(error);
@@ -204,7 +208,9 @@ begin
  end;
 
  if (found=0) and (error=0) then
+ begin
   error:=ESRCH;
+ end;
 
  Exit(error);
 end;

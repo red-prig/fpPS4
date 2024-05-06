@@ -119,6 +119,7 @@ begin
   AMD64_SET_FSBASE:
     begin
      Result:=sys_amd64_set_fsbase(Pointer(a64base));
+     Writeln('set_fsbase=0x',HexStr(a64base,16));
     end;
   AMD64_GET_GSBASE:
     begin

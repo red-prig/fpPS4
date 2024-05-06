@@ -11,7 +11,7 @@ uses
 
 procedure sched_fork_thread(td,childtd:p_kthread);
 procedure sched_class(td:p_kthread;_class:Integer);
-function  sched_priority(td:p_kthread;prio:Integer):Integer;
+function  sched_thread_priority(td:p_kthread;prio:Integer):Integer;
 procedure sched_prio(td:p_kthread;prio:Integer);
 procedure sched_user_prio(td:p_kthread;prio:Integer);
 procedure sched_lend_user_prio(td:p_kthread;prio:Integer);
@@ -32,8 +32,8 @@ procedure sched_fork_thread(td,childtd:p_kthread);
 begin
  if (td<>nil) then
  begin
-  cpuset_setaffinity(childtd,td^.td_cpuset);
-  sched_priority    (childtd,td^.td_base_pri);
+  cpuset_setaffinity   (childtd,td^.td_cpuset);
+  sched_thread_priority(childtd,td^.td_base_pri);
  end;
 end;
 
@@ -44,7 +44,7 @@ begin
  td^.td_pri_class:=_class;
 end;
 
-function sched_priority(td:p_kthread;prio:Integer):Integer; inline;
+function sched_thread_priority(td:p_kthread;prio:Integer):Integer; inline;
 begin
  Result:=cpu_set_priority(td,prio);
 end;
@@ -52,7 +52,11 @@ end;
 procedure sched_prio(td:p_kthread;prio:Integer);
 begin
  td^.td_base_pri:=prio;
- sched_priority(td, prio);
+
+ if ((td^.td_flags and TDF_BORROWING)<>0) and
+    (td^.td_priority < prio) then Exit;
+
+ sched_thread_priority(td, prio);
 end;
 
 procedure sched_user_prio(td:p_kthread;prio:Integer);
@@ -78,6 +82,10 @@ begin
  if (td^.td_priority>td^.td_user_pri) then
  begin
   sched_prio(td,td^.td_user_pri);
+ end else
+ if (td^.td_priority<>td^.td_user_pri) then
+ begin
+  td^.td_flags:=td^.td_flags or TDF_NEEDRESCHED;
  end;
 end;
 

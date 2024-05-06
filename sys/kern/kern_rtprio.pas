@@ -26,9 +26,13 @@ uses
  sched_ule,
  md_proc;
 
+//
+procedure umtx_pi_adjust(td:p_kthread;oldpri:Integer); external;
+//
+
 function rtp_to_pri(rtp:p_rtprio;td:p_kthread):Integer; public;
 var
- newpri:Integer;
+ oldpri,newpri:Integer;
 begin
  Result:=0;
 
@@ -54,11 +58,17 @@ begin
 
  thread_lock(td);
  sched_class(td,rtp^._type);
+ oldpri:=td^.td_user_pri;
  sched_user_prio(td, newpri);
 
- if (td=curkthread) then
+ if (td^.td_user_pri<>oldpri) then
  begin
   sched_prio(td,td^.td_user_pri);
+
+  if TD_ON_UPILOCK(td) then
+  begin
+   umtx_pi_adjust(td,oldpri)
+  end;
  end;
 
  thread_unlock(td);

@@ -548,6 +548,7 @@ begin
   cpu_set_upcall_kse(newtd,start_func,arg,@stack);
   // Setup user TLS address and TLS pointer register.
   cpu_set_fsbase(newtd,tls_base);
+  Writeln('set_fsbase=0x',HexStr(tls_base));
  end;
 
  //jit wrapper

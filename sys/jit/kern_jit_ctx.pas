@@ -113,6 +113,10 @@ function GetTargetOfs(var din:TInstruction;Code:PByte;id:Byte;var ofs:Int64):Boo
 function is_preserved(const r:TRegValue):Boolean;
 function is_preserved(const r:TOperand):Boolean;
 function is_preserved(const r:TInstruction):Boolean;
+function is_rip(const r:TRegValue):Boolean;
+function is_rip(const r:TRegValues):Boolean;
+function is_rip(const r:TOperand):Boolean;
+function is_rip(const r:TInstruction):Boolean;
 function is_memory(const r:TOperand):Boolean;
 function is_memory(const r:TInstruction):Boolean;
 function is_xmm(const r:TOperand):Boolean;
@@ -204,7 +208,8 @@ function  new_reg_size(const r:TRegValue;const RegValue:TRegValues):TRegValue;
 function  new_reg_size(const r:TRegValue;const Operand:TOperand):TRegValue;
 function  fix_size(const r:TRegValue):TRegValue;
 function  is_rep_prefix(const i:TInstruction):Boolean;
-function  is_segment(const r:TOperand):Boolean; inline;
+function  is_segment(const r:TOperand):Boolean;
+function  is_segment(const i:TInstruction):Boolean;
 function  get_segment_value(const Operand:TOperand):Byte;
 function  flags(const i:TInstruction):t_jit_lea;
 function  flags(const ctx:t_jit_context2):t_jit_lea;
@@ -567,6 +572,29 @@ begin
  case r.AType of
   regRip:Result:=True;
   else;
+ end;
+end;
+
+function is_rip(const r:TRegValues):Boolean; inline;
+begin
+ Result:=is_rip(r[0]) or is_rip(r[1]);
+end;
+
+function is_rip(const r:TOperand):Boolean; inline;
+begin
+ Result:=is_rip(r.RegValue);
+end;
+
+function is_rip(const r:TInstruction):Boolean;
+var
+ i:Integer;
+begin
+ Result:=False;
+ if (r.OperCnt<>0) then
+ For i:=1 to r.OperCnt do
+ begin
+  Result:=is_rip(r.Operand[i]);
+  if Result then Exit;
  end;
 end;
 

@@ -595,6 +595,7 @@ function obj_new_int(mod_name:pchar):p_lib_info;
 begin
  Result:=obj_new();
  Result^.rtld_flags.internal:=1;
+ Result^.tls_align:=1;
  Result^.add_mod(mod_name);
 end;
 
@@ -989,13 +990,13 @@ begin
 
  if (obj^.tls_index=1) then
  begin
-  off:=off + -1;
+  //
  end else
  begin
-  off:=off + -1 + dynlibs_info.tls_last_offset;
+  off:=off + dynlibs_info.tls_last_offset;
  end;
 
- off:=(off + obj^.tls_align) and (-obj^.tls_align);
+ off:=(off + obj^.tls_align - 1) and (-obj^.tls_align);
 
  if ((dynlibs_info.tls_static_space<>0) and (dynlibs_info.tls_static_space < off)) then
  begin
@@ -1004,8 +1005,12 @@ begin
 
  obj^.tls_offset:=off;
 
+ Writeln('allocate_tls_offset: tls_index=',obj^.tls_index,' tls_size=',obj^.tls_size,' tls_align=',obj^.tls_align,' tls_offset=',obj^.tls_offset);
+
  dynlibs_info.tls_last_offset:=off;
  dynlibs_info.tls_last_size  :=obj^.tls_size;
+
+ obj^.rtld_flags.tls_done:=1;
 
  Result:=True;
 end;
@@ -2615,34 +2620,14 @@ begin
 
 end;
 
-function do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
+procedure alloc_tls(new:p_lib_info);
 label
- _inc_max,
- _error;
+ _inc_max;
 var
- fname:pchar;
- new:p_lib_info;
  obj:p_lib_info;
  i:Integer;
  tls_max:Integer;
 begin
- Result:=nil;
-
- Writeln(' do_load_object:',dynlib_basename(path));
-
- new:=obj_new();
-
- err:=self_load_shared_object(path,new,ord((flags and $20)<>0));
- if (err<>0) then
- begin
-  goto _error;
- end;
-
- fname:=dynlib_basename(path);
- object_add_name(new,fname);
-
- obj_set_lib_path(new,path);
-
  if (new^.tls_size=0) then
  begin
   i:=0;
@@ -2677,6 +2662,33 @@ begin
  end;
 
  new^.tls_index:=i;
+end;
+
+function do_load_object(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
+label
+ _error;
+var
+ fname:pchar;
+ new:p_lib_info;
+begin
+ Result:=nil;
+
+ Writeln(' do_load_object:',dynlib_basename(path));
+
+ new:=obj_new();
+
+ err:=self_load_shared_object(path,new,ord((flags and $20)<>0));
+ if (err<>0) then
+ begin
+  goto _error;
+ end;
+
+ fname:=dynlib_basename(path);
+ object_add_name(new,fname);
+
+ obj_set_lib_path(new,path);
+
+ alloc_tls(new);
 
  err:=digest_dynamic(new);
  if (err<>0) then
@@ -2819,6 +2831,8 @@ begin
     object_add_name(Result,dynlib_basename(Result^.lib_path));
 
     ///Result^.lib_dirname neded???
+
+    alloc_tls(Result);
 
     //reg lib
     dynlibs_add_obj(Result);
