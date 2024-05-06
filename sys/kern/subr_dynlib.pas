@@ -3219,6 +3219,14 @@ var
  key:Integer;
 begin
  Result:=False;
+
+ if (obj=dynlibs_info.libprogram) then
+ begin
+  //eboot.bin should always be zero
+  obj^.id:=0;
+  Exit(True);
+ end;
+
  if (obj^.id>0) then Exit(True);
 
  obj^.desc.free:=nil;
@@ -3248,6 +3256,11 @@ function find_obj_id(id:Integer):p_lib_info;
 var
  key:Integer;
 begin
+ if (id=0) then
+ begin
+  Exit(dynlibs_info.libprogram);
+ end;
+
  key:=id-1;
 
  Result:=id_name_get(@named_table,key,NAMED_DYNL);

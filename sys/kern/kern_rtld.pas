@@ -1127,10 +1127,10 @@ begin
 
  Move(base^,cache^,filesz);
 
- if ((prot and VM_PROT_EXECUTE)<>0) then
+ //if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
   Writeln('P_X:vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
-  patcher_process_section(imgp^.obj,cache,Pointer(vaddr_lo),filesz);
+  patcher_process_section(imgp,cache,Pointer(vaddr_lo),filesz,memsz,prot);
  end;
 
  Result:=copyout(cache,Pointer(vaddr_lo),memsz);

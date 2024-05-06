@@ -437,13 +437,15 @@ begin
 
    if ((flags and 1)<>0) then
    begin
-    tls_index:=((ord(obj^.rtld_flags.is_system<>0) +
-                 ord(obj^.rtld_flags.mainprog <>0)*2) * $10000) or tls_index;
+    tls_index:=(
+                (obj^.rtld_flags.is_system or (obj^.rtld_flags.mainprog shl 1)) shl 16
+               ) or tls_index;
     dst^.tls_index:=tls_index;
    end;
 
    Writeln(' get_info_ex  :',obj^.lib_path);
-   Writeln(' tls_index    :0x',HexStr(WORD(obj^.tls_index),4),':0x',HexStr(tls_index,8));
+   Writeln(' obj.id       :',obj^.id);
+   Writeln(' tls_index    :0x',HexStr(tls_index shr 16,4),':',HexStr(tls_index,4));
    Writeln(' tls_init_addr:0x',HexStr(obj^.tls_init_addr));
    Writeln(' tls_init_size:0x',HexStr(obj^.tls_init_size,8));
    Writeln(' tls_size     :0x',HexStr(obj^.tls_size     ,8));

@@ -8,7 +8,7 @@ interface
 uses
  kern_stub;
 
-procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
+procedure patcher_process_section(_imgp,data,vaddr:Pointer;filesz,memsz:QWORD;prot:Byte);
 
 implementation
 
@@ -17,7 +17,8 @@ uses
  md_map,
  vm_patch_link,
  trap,
- x86_index_instr;
+ x86_index_instr,
+ kern_rtld;
 
 {
 64 48 A1 [0000000000000000] mov rax,fs:[$0000000000000000] -> 65 48 A1 [0807000000000000] mov rax,gs:[$0000000000000708]
@@ -470,7 +471,7 @@ begin
  end;
 end;
 
-procedure patcher_process_section(_obj,data,vaddr:Pointer;filesz:QWORD);
+procedure patcher_process_section(_imgp,data,vaddr:Pointer;filesz,memsz:QWORD;prot:Byte);
 var
  addr:Pointer;
  pend:Pointer;
@@ -483,6 +484,8 @@ var
  gs_count:Integer;
  sv_count:Integer;
 
+ imgp:p_image_params;
+
  {
  procedure do_patch_base_zero(addr:PByte;i:Integer;ptype:t_patch_type);
  var
@@ -491,7 +494,7 @@ var
   Move(patch_table[i].C[1],addr^,patch_table[i].C[0]);
 
   v:=vaddr+(Int64(addr)-Int64(data));
-  vm_add_patch_link(_obj,v,ptype,nil);
+  vm_add_patch_link(imgp^.obj,v,ptype,nil);
  end;
 
  procedure do_patch_syscall(addr:PByte);
@@ -500,7 +503,7 @@ var
  begin
   v:=vaddr+(Int64(addr)-Int64(data));
 
-  vm_add_syscall_patch(_obj,v,addr);
+  vm_add_syscall_patch(imgp^.obj,v,addr);
  end;
  }
 
@@ -510,11 +513,27 @@ var
   begin
    v:=vaddr+(Int64(addr)-Int64(data));
 
-   vm_add_patch(info,_obj,v,addr);
+   vm_add_patch(info,imgp^.obj,v,addr);
   end;
 
 begin
- Assert(_obj<>nil,'patcher_process_section');
+ Assert(_imgp<>nil,'patcher_process_section');
+
+ imgp:=_imgp;
+
+ {
+ if Pos('libkernel',imgp^.execpath)<>0 then
+ begin
+  //103040
+  if (prot=3) then
+  begin
+   if (memsz>103040) then
+   begin
+    PInteger(data+103040)^:=-1;
+   end;
+  end;
+ end;
+ }
 
  Exit;
 
