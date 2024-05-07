@@ -305,6 +305,11 @@ begin
  if not FAjmMap.Delete(uiContext) then Result:=SCE_AJM_ERROR_INVALID_CONTEXT;
 end;
 
+function ps4_sceAjmInstanceCodecType(uiCodec:SceAjmCodecType):Integer; SysV_ABI_CDecl;
+begin
+ Result:=uiCodec shr $E;
+end; 
+
 function ps4_sceAjmInstanceCreate(uiContext:SceAjmContextId;
                                   uiCodec:SceAjmCodecType;
                                   uiFlags:QWORD;
@@ -389,6 +394,19 @@ begin
   FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
+end;
+
+function ps4_sceAjmBatchJobInlineBuffer(
+          const pBatchPosition :Pointer;
+          const pDataInput     :Pointer;
+          const szDataInputSize:QWORD;
+          const pBatchAddress  :PPointer):Pointer; SysV_ABI_CDecl;
+begin
+ PDWORD(pBatchPosition)^    :=PDWORD(pBatchPosition)^ and $ffffffe0 or 7;
+ PDWORD(pBatchPosition + 4)^:=(szDataInputSize + 7) and $fffffff8;
+ Move(pDataInput^, Pointer(pBatchPosition + 8)^, szDataInputSize);
+ pBatchAddress^:=(pBatchPosition + 8);
+ Result:=pBatchPosition + 8 + ((szDataInputSize + 7) and $fffffffffffffff8);
 end;
 
 function ps4_sceAjmBatchJobRunBufferRa(
@@ -477,9 +495,11 @@ begin
  lib^.set_proc($43777216EC069FAE,@ps4_sceAjmModuleRegister);
  lib^.set_proc($5A2EC3B652D5F8A2,@ps4_sceAjmModuleUnregister);
  lib^.set_proc($307BABEAA0AC52EB,@ps4_sceAjmFinalize);
+ lib^.set_proc($7625E340D88CBBFB,@ps4_sceAjmInstanceCodecType);
  lib^.set_proc($031A03AC8369E09F,@ps4_sceAjmInstanceCreate);
  lib^.set_proc($45B2DBB8ABFCCE1A,@ps4_sceAjmInstanceDestroy);
  lib^.set_proc($7660F26CDFFF167F,@ps4_sceAjmBatchJobControlBufferRa);
+ lib^.set_proc($B2D96086789CDC97,@ps4_sceAjmBatchJobInlineBuffer);
  lib^.set_proc($125B25382A4E227B,@ps4_sceAjmBatchJobRunBufferRa);
  lib^.set_proc($EE37405CAFB67CCA,@ps4_sceAjmBatchJobRunSplitBufferRa);
  lib^.set_proc($7C5164934C5F196B,@ps4_sceAjmBatchStartBuffer);

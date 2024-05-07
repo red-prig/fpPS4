@@ -14,6 +14,37 @@ uses
   Classes,
   SysUtils;
 
+const
+ SCE_KERNEL_AIO_DISABLE_SPLIT=0;
+ SCE_KERNEL_AIO_ENABLE_SPLIT =1;
+
+ SCE_KERNEL_AIO_SCHED_WINDOW_MAX    =128;
+ SCE_KERNEL_AIO_DELAYED_COUNT_MAX   =128;
+ SCE_KERNEL_AIO_SPLIT_SIZE_MAX      =$1000000;
+ SCE_KERNEL_AIO_SPLIT_CHUNK_SIZE_MAX=$1000000;
+
+ SCE_KERNEL_AIO_SCHED_WINDOW_DEFAULT    =32;
+ SCE_KERNEL_AIO_DELAYED_COUNT_DEFAULT   =32;
+ SCE_KERNEL_AIO_SPLIT_SIZE_DEFAULT      =$100000;
+ SCE_KERNEL_AIO_SPLIT_CHUNK_SIZE_DEFAULT=$100000;
+
+type
+ pSceKernelAioSchedulingParam=^SceKernelAioSchedulingParam;
+ SceKernelAioSchedulingParam=packed record
+  schedulingWindowSize:Integer;
+  delayedCountLimit   :Integer;
+  enableSplit         :DWORD;
+  splitSize           :DWORD;
+  splitChunkSize      :DWORD;
+ end;
+
+ pSceKernelAioParam=^SceKernelAioParam;
+ SceKernelAioParam=packed record
+  low :SceKernelAioSchedulingParam;
+  mid :SceKernelAioSchedulingParam;
+  high:SceKernelAioSchedulingParam;
+ end;
+
 function ps4_open(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 function ps4_sceKernelOpen(path:PChar;flags,mode:Integer):Integer; SysV_ABI_CDecl;
 
@@ -90,6 +121,8 @@ function ps4_access(path:PChar;mode:Integer):Integer; SysV_ABI_CDecl;
 
 function ps4_getdtablesize:Integer; SysV_ABI_CDecl;
 function ps4_sceKernelGetFsSandboxRandomWord:PChar; SysV_ABI_CDecl;
+
+procedure ps4_sceKernelAioInitializeParam(param:pSceKernelAioParam); SysV_ABI_CDecl;   
 
 implementation
 
@@ -1266,6 +1299,25 @@ begin
  //__sys_randomized_path
  Result:=fs_word;
 end;
+
+procedure ps4_sceKernelAioInitializeParam(param:pSceKernelAioParam); SysV_ABI_CDecl;
+begin
+ param^.low.schedulingWindowSize :=$20;
+ param^.low.delayedCountLimit    :=$20;
+ param^.low.enableSplit          :=1;
+ param^.low.splitSize            :=$100000;
+ param^.low.splitChunkSize       :=$100000;
+ param^.mid.schedulingWindowSize :=$20;
+ param^.mid.delayedCountLimit    :=$20;
+ param^.mid.enableSplit          :=1;
+ param^.mid.splitSize            :=$100000;
+ param^.mid.splitChunkSize       :=$100000;
+ param^.high.schedulingWindowSize:=$20;
+ param^.high.delayedCountLimit   :=$20;
+ param^.high.enableSplit         :=0;
+ param^.high.splitSize           :=0;
+ param^.high.splitChunkSize      :=0;
+end;   
 
 end.
 

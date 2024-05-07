@@ -757,6 +757,15 @@ begin
 
 end;
 
+function ps4_sceVideoOutAddDriver(driver_id:Integer; //driver id
+                                  cbs      :Pointer; //cbs table
+                                  param_3  :PDWORD;
+                                  param_4  :QWORD):Pointer; SysV_ABI_CDecl;
+begin
+ Assert(false,'TODO:abstract driver structure');
+ Result:=nil; //need link to *t_driver structure
+end;
+
 function ps4_sceVideoOutAddFlipEvent(eq:SceKernelEqueue;hVideo:Integer;udata:Pointer):Integer; SysV_ABI_CDecl;
 var
  H:TVideoOut;
@@ -2038,6 +2047,7 @@ begin
  lib^.set_proc($32DE101C793190E7,@ps4_sceVideoOutGetEventCount);
  lib^.set_proc($AD651370A7645334,@ps4_sceVideoOutGetEventData);
  lib^.set_proc($536249B52A8D2992,@ps4_sceVideoOutGetEventId);
+ lib^.set_proc($1EDC127781F64F0B,@ps4_sceVideoOutAddDriver); 
  lib^.set_proc($1D7CE32BDC88DF49,@ps4_sceVideoOutAddFlipEvent);
  lib^.set_proc($5EBBBDDB01C94668,@ps4_sceVideoOutAddVblankEvent);
  lib^.set_proc($8BAFEC47DD56B7FE,@ps4_sceVideoOutSetBufferAttribute);

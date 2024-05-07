@@ -23,6 +23,7 @@ uses
  sys_kernel,
  ps4_queue,
  ps4_libkernel,
+ ps4_kernel_file,
  ps4_libSceVideoOut{, ps4_pssl};
 
 const
@@ -2105,6 +2106,12 @@ var
 
  ComputeEvents:array[0..6] of Thamt64locked;
 
+procedure ps4_sceGnmDebugHardwareStatus(flag:DWORD); SysV_ABI_CDecl;
+begin
+ if (flag<>0) then Exit;
+ //kmd_dump_status(g_gcHandle,0,0);
+end;
+
 function _sceGnmAddEqEvent(eq:SceKernelEqueue;id:Integer;udata:Pointer):Integer;
 var
  pEvents:Phamt64locked;
@@ -2158,6 +2165,46 @@ begin
   Result:=_sceGnmAddEqEvent(eq,id,udata);
  _sig_unlock;
 end;
+
+function _sceGnmDeleteEqEvent(eq:SceKernelEqueue;id:Integer):Integer;
+var
+ pEvents:Phamt64locked;
+ P:PPointer;
+ node:PKEventNode;
+begin
+ Writeln('sceGnmDeleteEqEvent:',id);
+
+ Case id of
+  kEqEventCompute0RelMem..kEqEventCompute6RelMem
+
+                        :pEvents:=@ComputeEvents[id];
+  kEqEventGfxEop        :pEvents:=@EopEvents;
+  else
+   Exit(SCE_KERNEL_ERROR_EINVAL);
+ end;
+
+ pEvents^.LockWr;
+ P:=HAMT_search64(@pEvents^.hamt,QWORD(eq));
+ if (P<>nil) then
+ begin
+  node:=P^;
+  _free_kevent_node(node);
+ end else
+ begin
+  pEvents^.Unlock;
+  Exit(SCE_KERNEL_ERROR_ENOENT);
+ end;
+ pEvents^.Unlock;
+
+ Result:=0;
+end;
+
+function ps4_sceGnmDeleteEqEvent(eq:SceKernelEqueue;id:Integer):Integer; SysV_ABI_CDecl;
+begin
+ _sig_lock;
+  Result:=_sceGnmDeleteEqEvent(eq,id);
+ _sig_unlock;
+end; 
 
 procedure _on_trigger_eop(data,userdata:Pointer);
 var
@@ -2269,7 +2316,10 @@ begin
 
  lib^.set_proc($4CB5789ACC226780,@ps4_sceGnmDriverCaptureInProgress);
 
+ lib^.set_proc($AA91884F33C4F997,@ps4_sceGnmDebugHardwareStatus); 
+
  lib^.set_proc($6F4C729659D563F2,@ps4_sceGnmAddEqEvent);
+ lib^.set_proc($3D54FE7EEA12F605,@ps4_sceGnmDeleteEqEvent);
 
  lib^.set_proc($6F4F0082D3E51CF8,@ps4_sceGnmAreSubmitsAllowed);
 

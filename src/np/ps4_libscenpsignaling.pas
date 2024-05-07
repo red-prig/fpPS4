@@ -61,6 +61,13 @@ begin
  Result:=0;
 end; 
 
+function ps4_sceNpSignalingSetContextOption(ctxId:DWORD;
+                                            optname:Integer;
+                                            optval:Integer):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
+
 function Load_libSceNpSignaling(Const name:RawByteString):TElf_node;
 var
  lib:PLIBRARY;
@@ -73,6 +80,7 @@ begin
  lib^.set_proc($E7262311D778B7C6,@ps4_sceNpSignalingCreateContext);
  lib^.set_proc($7432CD15D63C770B,@ps4_sceNpSignalingCreateContextA);
  lib^.set_proc($53C01032538505CF,@ps4_sceNpSignalingGetLocalNetInfo);
+ lib^.set_proc($207443BD9A1D3D86,@ps4_sceNpSignalingSetContextOption); 
 end;
 
 initialization

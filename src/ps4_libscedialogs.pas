@@ -8,6 +8,7 @@ uses
   ps4_program,
   Classes,
   SysUtils,
+  ps4_libSceIme,
   ps4_libSceSaveData;
 
 implementation
@@ -458,6 +459,20 @@ const
  SCE_SIGNIN_DIALOG_STATUS_RUNNING    =2;
  SCE_SIGNIN_DIALOG_STATUS_FINISHED   =3;
 
+ //SceSigninDialogResultType
+ SCE_SIGNIN_DIALOG_RESULT_OK           =0;
+ SCE_SIGNIN_DIALOG_RESULT_USER_CANCELED=1;
+
+type
+ pSceSigninDialogResultType=^SceSigninDialogResultType;
+ SceSigninDialogResultType=Integer;
+
+ pSceSigninDialogResult=^SceSigninDialogResult;
+ SceSigninDialogResult=packed record
+  _result :SceSigninDialogResultType;
+  reserved:array[0..2] of Integer;
+ end; 
+
 var
  status_signin_dialog:Integer=SCE_SIGNIN_DIALOG_STATUS_NONE;
 
@@ -467,6 +482,11 @@ begin
  status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
+
+function ps4_sceSigninDialogGetResult(_result:pSceSigninDialogResult):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceSigninDialogTerminate():Integer; SysV_ABI_CDecl;
 begin
@@ -508,14 +528,55 @@ const
  SCE_IME_DIALOG_STATUS_RUNNING =1;
  SCE_IME_DIALOG_STATUS_FINISHED=2;
 
+type
+ pSceImeDialogParam=^SceImeDialogParam;
+ SceImeDialogParam=packed record
+  userId             :Integer;
+  _type              :SceImeType;
+  supportedLanguages :QWORD;
+  enterLabel         :SceImeEnterLabel;
+  inputMethod        :SceImeInputMethod;
+  filter             :SceImeTextFilter;
+  option             :DWORD;
+  maxTextLength      :DWORD;
+  inputTextBuffer    :PWideChar;
+  posx               :Single;
+  posy               :Single;
+  horizontalAlignment:SceImeHorizontalAlignment;
+  verticalAlignment  :SceImeVerticalAlignment;
+  placeholder        :PWideChar;
+  title              :PWideChar;
+  reserved           :array[0..15] of ShortInt;
+ end;
+
+ pSceImeParamExtended=^SceImeParamExtended;
+ SceImeParamExtended=packed record
+  option                  :DWORD;
+  colorBase               :SceImeColor;
+  colorLine               :SceImeColor;
+  colorTextField          :SceImeColor;
+  colorPreedit            :SceImeColor;
+  colorButtonDefault      :SceImeColor;
+  colorButtonFunction     :SceImeColor;
+  colorButtonSymbol       :SceImeColor;
+  colorText               :SceImeColor;
+  colorSpecial            :SceImeColor;
+  priority                :SceImePanelPriority;
+  additionalDictionaryPath:PChar;
+  extKeyboardFilter       :SceImeExtKeyboardFilter;
+  disableDevice           :DWORD;
+  extKeyboardMode         :DWORD;
+  reserved                :array[0..59] of ShortInt;
+ end;
+
 var
  status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
 
-//function ps4_sceImeDialogInit(param:pSceImeDialogParam;
-//                              extended:pSceImeParamExtended
-//                              ):Integer; SysV_ABI_CDecl;
-//
-//nop nid:libSceImeDialog:354781ACDEE1CDFD:sceImeDialogInit
+function ps4_sceImeDialogInit(const param:pSceImeDialogParam;
+                              const extended:pSceImeParamExtended):Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end; 
 
 function ps4_sceImeDialogGetStatus:Integer; SysV_ABI_CDecl;
 begin
@@ -525,6 +586,11 @@ end;
 //
 
 function ps4_sceLoginDialogInitialize():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceLoginDialogUpdateStatus():Integer; SysV_ABI_CDecl;
 begin
  Result:=0;
 end;
@@ -571,6 +637,23 @@ begin
 end;
 
 //
+
+function ps4_sceWebBrowserDialogUpdateStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceWebBrowserDialogGetStatus():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+function ps4_sceWebBrowserDialogTerminate():Integer; SysV_ABI_CDecl;
+begin
+ Result:=0;
+end;
+
+// 
 
 function Load_libSceCommonDialog(Const name:RawByteString):TElf_node;
 var
@@ -676,6 +759,7 @@ begin
  lib^.set_proc($9A56067E6A84DDF4,@ps4_sceSigninDialogInitialize);
  lib^.set_proc($265A49568456BFB5,@ps4_sceSigninDialogOpen);
  lib^.set_proc($070DF59624C54F70,@ps4_sceSigninDialogUpdateStatus);
+ lib^.set_proc($9EA1BBAEA9D8C355,@ps4_sceSigninDialogGetResult); 
  lib^.set_proc($2D79664BA3EF25D5,@ps4_sceSigninDialogTerminate);
 end;
 
@@ -696,6 +780,7 @@ begin
  Result:=TElf_node.Create;
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceImeDialog');
+ lib^.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit); 
  lib^.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
 end;
 
@@ -707,6 +792,7 @@ begin
  Result.pFileName:=name;
  lib:=Result._add_lib('libSceLoginDialog');
  lib^.set_proc($A8FFC4BD0465D877,@ps4_sceLoginDialogInitialize);
+ lib^.set_proc($DAB73E7A049F6F90,@ps4_sceLoginDialogUpdateStatus); 
 end;
 
 function Load_libSceHmdSetupDialog(Const name:RawByteString):TElf_node;
@@ -744,6 +830,19 @@ begin
  lib^.set_proc($F7E83D88EABEEE48,@ps4_sceInvitationDialogUpdateStatus);
 end;
 
+function Load_libSceWebBrowserDialog(Const name:RawByteString):TElf_node;
+var
+ lib:PLIBRARY;
+begin
+ Result:=TElf_node.Create;
+ Result.pFileName:=name;
+
+ lib:=Result._add_lib('libSceWebBrowserDialog');
+ lib^.set_proc($875751FEDE484A08,@ps4_sceWebBrowserDialogUpdateStatus);
+ lib^.set_proc($0854C6E9AF138CE5,@ps4_sceWebBrowserDialogGetStatus);
+ lib^.set_proc($A1C1EDC81C077F2B,@ps4_sceWebBrowserDialogTerminate);
+end;  
+
 initialization
  ps4_app.RegistredPreLoad('libSceCommonDialog.prx'          ,@Load_libSceCommonDialog);
  ps4_app.RegistredPreLoad('libSceErrorDialog.prx'           ,@Load_libSceErrorDialog);
@@ -757,7 +856,8 @@ initialization
  ps4_app.RegistredPreLoad('libSceLoginDialog.prx'           ,@Load_libSceLoginDialog);
  ps4_app.RegistredPreLoad('libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog);
  ps4_app.RegistredPreLoad('libSceNpFriendListDialog.prx'    ,@Load_libSceNpFriendListDialog); 
- ps4_app.RegistredPreLoad('libSceInvitationDialog.prx'      ,@Load_libSceInvitationDialog); 
+ ps4_app.RegistredPreLoad('libSceInvitationDialog.prx'      ,@Load_libSceInvitationDialog);
+ ps4_app.RegistredPreLoad('libSceWebBrowserDialog.prx'      ,@Load_libSceWebBrowserDialog); 
 
 end.
 
