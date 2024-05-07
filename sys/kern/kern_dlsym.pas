@@ -442,7 +442,7 @@ begin
  Assert(false);
 end;
 
-procedure _unresolve_symbol; assembler; nostackframe;
+procedure _unresolve_symbol; assembler; nostackframe; public;
 asm
  push %rbp
  movq %rsp,%rbp

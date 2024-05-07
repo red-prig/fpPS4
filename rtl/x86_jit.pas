@@ -47,17 +47,18 @@ type
  t_jit_link_type=(lnkNone,lnkData,lnkPlt,lnkLabelBefore,lnkLabelAfter);
 
  p_jit_instruction=^t_jit_instruction;
- t_jit_instruction=object
-  link :TAILQ_ENTRY;
+ t_jit_instruction=packed object
+  entry:TAILQ_ENTRY;
   AData:array[0..15] of Byte;
-  ASize:Byte;
   AInstructionOffset:Integer;
-  ALink:record
+  ASize:Byte;
+  ALink:packed record
    AType  :t_jit_link_type;
    ASize  :Byte;
    AOffset:Byte;
    ALink  :Pointer;
   end;
+  function  AInstructionEnd:Integer; inline;
   procedure EmitByte(b:byte); inline;
   procedure EmitWord(w:Word); inline;
   procedure EmitInt32(i:Integer); inline;
@@ -78,8 +79,8 @@ const
 
 type
  p_jit_data=^t_jit_data;
- t_jit_data=object
-  link  :TAILQ_ENTRY;
+ t_jit_data=packed object
+  entry :TAILQ_ENTRY;
   pLeft :p_jit_data;
   pRight:p_jit_data;
   pData :Pointer;
@@ -96,7 +97,7 @@ type
 
  p_jit_code_chunk=^t_jit_code_chunk;
  t_jit_code_chunk=object
-  link  :TAILQ_ENTRY;
+  entry :TAILQ_ENTRY;
   pLeft :p_jit_code_chunk;
   pRight:p_jit_code_chunk;
   start:QWORD;
@@ -111,7 +112,7 @@ type
  t_jit_i_link=object
   //private
    AType:t_jit_link_type;
-   ALink:p_jit_instruction;
+   ALink:Pointer; //variable
    procedure set_label(link:t_jit_i_link);
    function  get_label():t_jit_i_link;
   public
@@ -121,7 +122,7 @@ type
    function  after :t_jit_i_link;
    function  prev  :t_jit_i_link;
    function  next  :t_jit_i_link;
-   property  _node:p_jit_instruction read ALink;
+   function  _node :p_jit_instruction;
    property  _label:t_jit_i_link read get_label write set_label;
  end;
 
@@ -149,6 +150,12 @@ type
    full_size:ptruint; //full alloc size
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
+ end;
+
+ t_jit_copy_ptr=packed record
+  ptr :PByte;
+  size:Integer;
+  pos :Integer;
  end;
 
  p_jit_builder=^t_jit_builder;
@@ -284,7 +291,6 @@ type
    ymm14:TRegValue=(AType:regXmm;ASize:os256;AIndex: 14);
    ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
-   //AInstructions   :TAILQ_HEAD;
    ACodeChunkSet   :t_jit_code_chunk_set;
    ACodeChunkList  :TAILQ_HEAD;
    ACodeChunkCurr  :p_jit_code_chunk;
@@ -306,8 +312,7 @@ type
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _add_plt:Integer;
-  Function  _get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
-  Function  _get_plt_offset (ALink:Pointer;AInstructionEnd:Integer):Integer;
+  function  _get_base_offset(AType:t_jit_link_type):Integer;
   //
   Function  last_instruction:p_jit_instruction;
   //
@@ -334,6 +339,9 @@ type
   Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
   Procedure LinkData;
+  Function  CopyChunks(var rec:t_jit_copy_ptr):Boolean;
+  Function  CopyData  (var rec:t_jit_copy_ptr):Boolean;
+  Function  CopyPlt   (var rec:t_jit_copy_ptr):Boolean;
   Function  SaveTo(ptr:PByte;size:Integer):Integer;
   //
   procedure _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
@@ -782,8 +790,8 @@ Procedure LinkLabel(node:p_jit_instruction); forward;
 procedure t_jit_i_link.set_label(link:t_jit_i_link);
 begin
  if (ALink=nil) then Exit;
- ALink^.ALink.ALink:=link.ALink;
- ALink^.ALink.AType:=link.AType;
+ p_jit_instruction(ALink)^.ALink.ALink:=link.ALink;
+ p_jit_instruction(ALink)^.ALink.AType:=link.AType;
  LinkLabel(ALink);
 end;
 
@@ -791,8 +799,8 @@ function t_jit_i_link.get_label():t_jit_i_link;
 begin
  Result:=Default(t_jit_i_link);
  if (ALink=nil) then Exit;
- Result.ALink:=ALink^.ALink.ALink;
- Result.AType:=ALink^.ALink.AType;
+ Result.ALink:=p_jit_instruction(ALink)^.ALink.ALink;
+ Result.AType:=p_jit_instruction(ALink)^.ALink.AType;
 end;
 
 function t_jit_i_link.is_valid:Boolean;
@@ -800,7 +808,7 @@ begin
  Result:=(ALink<>nil);
 end;
 
-function t_jit_i_link.offset:Integer;
+function _get_link_offset(AType:t_jit_link_type;ALink:Pointer):Integer;
 begin
  Result:=0;
  if (ALink<>nil) then
@@ -816,15 +824,20 @@ begin
     end;
    lnkLabelBefore:
     begin
-     Result:=ALink^.AInstructionOffset;
+     Result:=p_jit_instruction(ALink)^.AInstructionOffset;
     end;
    lnkLabelAfter:
     begin
-     Result:=ALink^.AInstructionOffset+ALink^.ASize;
+     Result:=p_jit_instruction(ALink)^.AInstructionEnd;
     end;
    else;
   end;
  end;
+end;
+
+function t_jit_i_link.offset:Integer;
+begin
+ Result:=_get_link_offset(AType,ALink);
 end;
 
 function t_jit_i_link.before:t_jit_i_link;
@@ -860,7 +873,7 @@ begin
   lnkData:
    begin
     Result.AType:=lnkData;
-    Result.ALink:=TAILQ_PREV(ALink,@p_jit_data(ALink)^.link);
+    Result.ALink:=TAILQ_PREV(ALink,@p_jit_data(ALink)^.entry);
    end;
   lnkPlt:
    begin
@@ -873,7 +886,7 @@ begin
   lnkLabelAfter:
    begin
     Result.AType:=lnkLabelBefore;
-    Result.ALink:=TAILQ_PREV(ALink,@ALink^.link);
+    Result.ALink:=TAILQ_PREV(ALink,@p_jit_instruction(ALink)^.entry);
    end;
   else;
  end;
@@ -890,7 +903,7 @@ begin
   lnkData:
    begin
     Result.AType:=lnkData;
-    Result.ALink:=TAILQ_NEXT(ALink,@p_jit_data(ALink)^.link);
+    Result.ALink:=TAILQ_NEXT(ALink,@p_jit_data(ALink)^.entry);
    end;
   lnkPlt:
    begin
@@ -903,7 +916,7 @@ begin
   lnkLabelAfter:
    begin
     Result.AType:=lnkLabelBefore;
-    Result.ALink:=TAILQ_NEXT(ALink,@ALink^.link);
+    Result.ALink:=TAILQ_NEXT(ALink,@p_jit_instruction(ALink)^.entry);
    end;
   else;
  end;
@@ -913,12 +926,33 @@ begin
  end;
 end;
 
+function t_jit_i_link._node:p_jit_instruction;
+begin
+ Result:=nil;
+ if (ALink<>nil) then
+ begin
+  case AType of
+   lnkLabelBefore,
+   lnkLabelAfter:
+    begin
+     Result:=ALink;
+    end;
+   else;
+  end;
+ end;
+end;
+
 operator = (A,B:t_jit_i_link):Boolean;
 begin
  Result:=(A.ALink=B.ALink) and (A.AType=B.AType);
 end;
 
 ////
+
+function t_jit_instruction.AInstructionEnd:Integer; inline;
+begin
+ Result:=AInstructionOffset+ASize;
+end;
 
 procedure t_jit_instruction.EmitByte(b:byte); inline;
 begin
@@ -1140,7 +1174,7 @@ begin
  node^:=ji;
  node^.AInstructionOffset:=AInstructionSize;
 
- TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.link);
+ TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.entry);
  Inc(AInstructionSize,ji.ASize);
 end;
 
@@ -1184,7 +1218,7 @@ begin
   begin
    TAILQ_INIT(@ADataList);
   end;
-  TAILQ_INSERT_TAIL(@ADataList,Result,@Result^.link);
+  TAILQ_INSERT_TAIL(@ADataList,Result,@Result^.entry);
   Inc(ADataCount);
  end;
 end;
@@ -1195,27 +1229,14 @@ begin
  Inc(APltCount);
 end;
 
-Function t_jit_builder._get_data_offset(ALink:p_jit_data;AInstructionEnd:Integer):Integer;
+function t_jit_builder._get_base_offset(AType:t_jit_link_type):Integer;
 begin
- Assert(ALink<>nil);
- Result:=(AInstructionSize-AInstructionEnd)+(ALink^.pId*SizeOf(Pointer));
-end;
-
-Function t_jit_builder._get_plt_offset(ALink:Pointer;AInstructionEnd:Integer):Integer;
-begin
- Result:=(AInstructionSize-AInstructionEnd)+GetDataSize+(QWORD(ALink)*SizeOf(t_jit_plt));
-end;
-
-Function _get_label_before_offset(ALink:p_jit_instruction;AInstructionEnd:Integer):Integer;
-begin
- Assert(ALink<>nil);
- Result:=(ALink^.AInstructionOffset-AInstructionEnd);
-end;
-
-Function _get_label_after_offset(ALink:p_jit_instruction;AInstructionEnd:Integer):Integer;
-begin
- Assert(ALink<>nil);
- Result:=((ALink^.AInstructionOffset+ALink^.ASize)-AInstructionEnd);
+ Result:=0;
+ case AType of
+  lnkData:Result:=AInstructionSize;
+  lnkPlt :Result:=AInstructionSize+GetDataSize;
+  else;
+ end;
 end;
 
 Function t_jit_builder.last_instruction:p_jit_instruction;
@@ -1448,8 +1469,8 @@ begin
 
  Result.ALink:=last_instruction;
 
- Result.ALink^.ALink.AType:=_label_id.AType;
- Result.ALink^.ALink.ALink:=_label_id.ALink;
+ p_jit_instruction(Result.ALink)^.ALink.AType:=_label_id.AType;
+ p_jit_instruction(Result.ALink)^.ALink.ALink:=_label_id.ALink;
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1461,8 +1482,8 @@ begin
 
  Result.ALink:=last_instruction;
 
- Result.ALink^.ALink.AType:=_label_id.AType;
- Result.ALink^.ALink.ALink:=_label_id.ALink;
+ p_jit_instruction(Result.ALink)^.ALink.AType:=_label_id.AType;
+ p_jit_instruction(Result.ALink)^.ALink.ALink:=_label_id.ALink;
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1474,8 +1495,8 @@ begin
 
  Result.ALink:=last_instruction;
 
- Result.ALink^.ALink.AType:=lnkPlt;
- Result.ALink^.ALink.ALink:=Pointer(_add_plt);
+ p_jit_instruction(Result.ALink)^.ALink.AType:=lnkPlt;
+ p_jit_instruction(Result.ALink)^.ALink.ALink:=Pointer(_add_plt);
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
@@ -1528,7 +1549,7 @@ begin
 
  while (chunk<>nil) do
  begin
-  TAILQ_INSERT_TAIL(@ACodeChunkList,chunk,@chunk^.link);
+  TAILQ_INSERT_TAIL(@ACodeChunkList,chunk,@chunk^.entry);
 
   chunk:=ACodeChunkSet.Next(chunk);
  end;
@@ -1552,10 +1573,10 @@ begin
    node^.AInstructionOffset:=AInstructionSize;
    Inc(AInstructionSize,node^.ASize);
    //
-   node:=TAILQ_NEXT(node,@node^.link);
+   node:=TAILQ_NEXT(node,@node^.entry);
   end;
   //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
+  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
  end;
 end;
 
@@ -1574,33 +1595,27 @@ begin
  if (node=nil) then Exit;
  if (node^.ALink.ALink=nil) and
     (node^.ALink.AType<>lnkPlt) then Exit;
- case node^.ALink.AType of
-  lnkData:
-   With node^ do
-   begin
-    d:=(p_jit_data(ALink.ALink)^.pId*SizeOf(Pointer));
-    _set_data(node,d);
-   end;
-  lnkPlt:
-   With node^ do
-   begin
-    d:=QWORD(ALink.ALink);
-    _set_data(node,d);
-   end;
-  lnkLabelBefore:
-   With node^ do
-   begin
-    d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
-    _set_data(node,d);
-   end;
-  lnkLabelAfter:
-   With node^ do
-   begin
-    d:=_get_label_after_offset(ALink.ALink,AInstructionOffset+ASize);
-    _set_data(node,d);
-   end;
-  else;
- end;
+ With node^ do
+  case ALink.AType of
+   lnkData:
+     begin
+      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      _set_data(node,d);
+     end;
+   lnkPlt:
+     begin
+      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      _set_data(node,d);
+     end;
+   lnkLabelBefore,
+   lnkLabelAfter:
+     begin
+      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      d:=d-AInstructionEnd;
+      _set_data(node,d);
+     end;
+   else;
+  end;
 end;
 
 function is_8bit_offset(d:Integer):Boolean; inline;
@@ -1654,25 +1669,21 @@ begin
   begin
    With node^ do
     case ALink.AType of
-     lnkData:
+     lnkData,
+     lnkPlt :
        if not is_change then
        begin
-        d:=_get_data_offset(ALink.ALink,AInstructionOffset+ASize);
-        _set_data(node,d);
-       end;
-     lnkPlt:
-       begin
-        d:=_get_plt_offset(ALink.ALink,AInstructionOffset+ASize);
+        d:=_get_link_offset(ALink.AType,ALink.ALink);
+        d:=d+_get_base_offset(ALink.AType);
+        d:=d-AInstructionEnd;
         _set_data(node,d);
        end;
      lnkLabelBefore,
      lnkLabelAfter:
       begin
-
-       case ALink.AType of
-        lnkLabelBefore:d:=_get_label_before_offset(ALink.ALink,AInstructionOffset+ASize);
-        lnkLabelAfter :d:=_get_label_after_offset (ALink.ALink,AInstructionOffset+ASize);
-       end;
+       d:=_get_link_offset(ALink.AType,ALink.ALink);
+       d:=d+_get_base_offset(ALink.AType);
+       d:=d-AInstructionEnd;
 
        t:=classif_instr(node);
 
@@ -1726,10 +1737,10 @@ begin
      else;
     end;
    //
-   node:=TAILQ_NEXT(node,@node^.link);
+   node:=TAILQ_NEXT(node,@node^.entry);
   end;
   //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
+  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
  end;
 
  if is_change then
@@ -1740,18 +1751,13 @@ begin
 
 end;
 
-Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
+Function t_jit_builder.CopyChunks(var rec:t_jit_copy_ptr):Boolean;
 var
  chunk:p_jit_code_chunk;
  node_code:p_jit_instruction;
- node_data:p_jit_data;
  s:Integer;
 begin
- RebuldChunkList;
- RebuldInstructionOffset;
- LinkData;
-
- Result:=0;
+ Result:=True;
 
  chunk:=TAILQ_FIRST(@ACodeChunkList);
 
@@ -1762,50 +1768,91 @@ begin
   while (node_code<>nil) do
   begin
    s:=node_code^.ASize;
-   if ((Result+s)>size) then
+   if ((rec.pos+s)>rec.size) then
    begin
-    Exit;
+    Exit(False);
    end;
-   Move(node_code^.AData,ptr^,s);
-   Inc(Result,s);
-   Inc(ptr   ,s);
+   Move(node_code^.AData,rec.ptr^,s);
+   Inc(rec.pos,s);
+   Inc(rec.ptr,s);
    //
-   node_code:=TAILQ_NEXT(node_code,@node_code^.link);
+   node_code:=TAILQ_NEXT(node_code,@node_code^.entry);
   end;
   //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
+  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
  end;
+end;
 
- //data
+Function t_jit_builder.CopyData(var rec:t_jit_copy_ptr):Boolean;
+var
+ node_data:p_jit_data;
+ s:Integer;
+begin
+ Result:=True;
 
  node_data:=TAILQ_FIRST(@ADataList);
 
  while (node_data<>nil) do
  begin
   s:=SizeOf(Pointer);
-  if ((Result+s)>size) then
+  if ((rec.pos+s)>rec.size) then
   begin
-   Exit;
+   Exit(False);
   end;
-  Move(node_data^.pData,ptr^,s);
-  Inc(Result,s);
-  Inc(ptr   ,s);
+  Move(node_data^.pData,rec.ptr^,s);
+  Inc(rec.pos,s);
+  Inc(rec.ptr,s);
   //
-  node_data:=TAILQ_NEXT(node_data,@node_data^.link);
+  node_data:=TAILQ_NEXT(node_data,@node_data^.entry);
  end;
 
- //plt
+end;
+
+Function t_jit_builder.CopyPlt(var rec:t_jit_copy_ptr):Boolean;
+var
+ s:Integer;
+begin
+ Result:=True;
 
  s:=GetPltSize;
  if (s<>0) then
  begin
-  if (s>size) then s:=size;
+  if (s>rec.size) then s:=rec.size;
 
-  FillChar(ptr^,s,0);
+  FillChar(rec.ptr^,s,0);
 
-  Inc(Result,s);
-  Inc(ptr   ,s);
+  Inc(rec.pos,s);
+  Inc(rec.ptr,s);
  end;
+end;
+
+Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
+var
+ rec:t_jit_copy_ptr;
+begin
+ RebuldChunkList;
+ RebuldInstructionOffset;
+ LinkData;
+
+ Result:=0;
+
+ rec.ptr :=ptr;
+ rec.size:=size;
+ rec.pos :=0;
+
+ if not CopyChunks(rec) then
+ begin
+  Exit(rec.pos);
+ end;
+
+ if not CopyData(rec) then
+ begin
+  Exit(rec.pos);
+ end;
+
+ CopyPlt(rec);
+
+ Exit(rec.pos);
 end;
 
 type

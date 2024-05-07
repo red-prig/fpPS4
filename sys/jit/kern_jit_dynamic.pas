@@ -224,7 +224,8 @@ begin
   ctx.text_start:=scan_dw_exc(QWORD(addr));
   ctx.text___end:=scan_up_exc(QWORD(addr));
   ctx.map____end:=ctx.text___end;
-  ctx.max       :=QWORD(-1); //dont scan rip relative
+
+  ctx.modes     :=[cmDontScanRipRel]; //dont scan rip relative
 
   ctx.add_forward_point(fpCall,addr);
 
@@ -492,6 +493,8 @@ begin
  end;
 end;
 
+procedure _unresolve_symbol; external;
+
 function jmp_dispatcher(addr:Pointer;plt:p_jit_plt):Pointer; public;
 label
  _start;
@@ -510,6 +513,12 @@ begin
  if not is_guest_addr(QWORD(addr)) then
  begin
   //switch to internal
+
+  if (addr<>Pointer(@_unresolve_symbol)) then
+  begin
+   writeln('not guest addr:0x',HexStr(addr));
+   Assert(False,'TODO');
+  end;
 
   td^.td_teb^.jitcall:=addr;
   Exit(@jit_jmp_internal);
@@ -822,7 +831,7 @@ begin
    end;
   end;
   //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.link);
+  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
  end;
 
  if (start<>0) then
@@ -1076,6 +1085,7 @@ end;
 
 procedure t_jit_dynamic_blob.alloc_base(_size:ptruint);
 begin
+ //small chunk allocator TODO
  base:=nil;
  size:=_size;
  md_mmap(base,size,MD_PROT_RWX);

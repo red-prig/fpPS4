@@ -13,6 +13,8 @@ uses
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
+ t_ctx_modes=Set of (cmDontScanRipRel,cmInternal);
+
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object
   type
@@ -57,16 +59,28 @@ type
     label_id:t_jit_i_link;
    end;
 
+   p_export_point=^t_export_point;
+   t_export_point=object
+    next  :p_export_point;
+    native:Pointer;
+    dst   :PPointer;
+   end;
+
   var
    forward_set:t_forward_set;
    label_set  :t_label_set;
    entry_list :p_entry_point;
+   export_list:p_export_point;
+
+   obj:Pointer;
 
    text_start:QWORD;
    text___end:QWORD;
    map____end:QWORD;
 
-   max:QWORD;
+   max_rel:QWORD;
+
+   modes:t_ctx_modes;
 
    Code    :Pointer;
    ptr_curr:Pointer;
@@ -81,6 +95,7 @@ type
 
   function  is_text_addr(addr:QWORD):Boolean;
   function  is_map_addr (addr:QWORD):Boolean;
+  procedure add_export_point (native:Pointer;dst:PPointer);
   procedure add_forward_link (node:p_forward_point;label_id:t_jit_i_link);
   function  add_forward_point(ptype:t_point_type;label_id:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
@@ -303,6 +318,18 @@ end;
 function t_jit_context2.is_map_addr(addr:QWORD):Boolean;
 begin
  Result:=(addr>=text_start) and (addr<map____end);
+end;
+
+procedure t_jit_context2.add_export_point(native:Pointer;dst:PPointer);
+var
+ node:p_export_point;
+begin
+ if (native=nil) or (dst=nil) then Exit;
+ node:=builder.Alloc(Sizeof(t_export_point));
+ node^.native:=native;
+ node^.dst   :=dst;
+ node^.next  :=export_list;
+ export_list :=node;
 end;
 
 procedure t_jit_context2.add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
@@ -893,6 +920,7 @@ begin
   //call [addr]
   //jmp  [addr]
 
+  if not (cmDontScanRipRel in ctx.modes) then
   if ctx.is_map_addr(ofs) then
   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
@@ -901,7 +929,7 @@ begin
    if (copyin(Pointer(ofs),@ofs,SizeOf(Pointer))=0) then
    begin
     if ctx.is_text_addr(ofs) then
-    if (ctx.max=0) or (ofs<=ctx.max) then
+    if (ofs<=ctx.max_rel) then
     if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
     begin
      ctx.add_forward_point(fpCall,Pointer(ofs));
@@ -914,10 +942,10 @@ begin
  begin
   //lea
 
-  if (ctx.max<>0) then
+  if not (cmDontScanRipRel in ctx.modes) then
   if ctx.is_text_addr(ofs) then
   begin
-   if (ofs<=ctx.max) then
+   if (ofs<=ctx.max_rel) then
    if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
     ctx.add_forward_point(fpData,Pointer(ofs));

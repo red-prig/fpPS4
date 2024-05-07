@@ -16,6 +16,7 @@ var
  debug_info:Boolean=False;
 
 procedure pick(var ctx:t_jit_context2;preload:Pointer);
+procedure pick_locked_internal(var ctx:t_jit_context2);
 procedure pick_locked(var ctx:t_jit_context2);
 
 implementation
@@ -1045,19 +1046,65 @@ begin
  //debug
 end;
 
-//rsp,rbp,r14,r15,r13
-procedure lazy_jit2native; assembler; nostackframe;
-asm
- movqq (%rsp),%r14
- movqq %r14,%gs:teb.jitcall
+procedure op_jit2native(var ctx:t_jit_context2);
+begin
+ with ctx.builder do
+ begin
+  //load guest stack
+  movq(r14,[r13+Integer(@p_kthread(nil)^.td_ustack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  movq(r15,[r13+Integer(@p_kthread(nil)^.td_ustack.sttop)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
 
- movqq jit_frame.tf_rsp(%r13),%rsp
- movqq jit_frame.tf_rbp(%r13),%rbp
- movqq jit_frame.tf_r14(%r13),%r14
- movqq jit_frame.tf_r15(%r13),%r15
- movqq jit_frame.tf_r13(%r13),%r13
+  //set teb
+  movq([GS+Integer(@teb(nil^).stack)],r14);
+  movq([GS+Integer(@teb(nil^).sttop)],r15);
 
- jmp %gs:teb.jitcall
+  //load rsp,rbp,r14,r15,r13
+  movq(rsp,[r13+Integer(@p_jit_frame(nil)^.tf_rsp)]);
+  movq(rbp,[r13+Integer(@p_jit_frame(nil)^.tf_rbp)]);
+  movq(r14,[r13+Integer(@p_jit_frame(nil)^.tf_r14)]);
+  movq(r15,[r13+Integer(@p_jit_frame(nil)^.tf_r15)]);
+  movq(r13,[r13+Integer(@p_jit_frame(nil)^.tf_r13)]);
+ end;
+end;
+
+procedure op_native2jit(var ctx:t_jit_context2;is_stack_restore:Boolean=True);
+begin
+ with ctx.builder do
+ begin
+  //save r13
+  movq([GS+Integer(teb_jitcall)],r13);
+
+  //load curkthread,jit ctx
+  movq(r13,[GS+Integer(teb_thread)]);
+  leaq(r13,[r13+Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+
+  //load r14,r15
+  movq([r13+Integer(@p_jit_frame(nil)^.tf_r14)],r14);
+  movq([r13+Integer(@p_jit_frame(nil)^.tf_r15)],r15);
+
+  //load r13
+  movq(r14,[GS+Integer(teb_jitcall)]);
+  movq([r13+Integer(@p_jit_frame(nil)^.tf_r13)],r14);
+
+  //load rsp,rbp
+  if not is_stack_restore then
+  begin
+   movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
+   movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
+  end;
+
+  //load internal stack
+  movq(r14,[r13+Integer(@p_kthread(nil)^.td_kstack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  movq(r15,[r13+Integer(@p_kthread(nil)^.td_kstack.sttop)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+
+  //set teb
+  movq([GS+Integer(@teb(nil^).stack)],r14);
+  movq([GS+Integer(@teb(nil^).sttop)],r15);
+
+  //load stack
+  movq(rsp,r14);
+  movq(rbp,r14);
+ end;
 end;
 
 function op_lazy_jit(var ctx:t_jit_context2):Boolean;
@@ -1119,33 +1166,13 @@ begin
  begin
   add_orig(ctx);
   Exit(True);
-
-  //Exit;
  end;
 
- ctx.builder.call_far(@lazy_jit2native);
+ op_jit2native(ctx);
 
  add_orig(ctx);
 
- with ctx.builder do
- begin
-  ctx.builder.movq([GS+Integer(teb_jit_rsp)],r13);
-
-  ctx.builder.movq(r13,[GS+Integer(teb_thread)]);
-  ctx.builder.leaq(r13,[r13+Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
-
-  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r14)],r14);
-  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r15)],r15);
-
-  ctx.builder.movq(r14,[GS+Integer(teb_jit_rsp)]);
-  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_r13)],r14);
-
-  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
-  ctx.builder.movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
-
-  ctx.builder.movq(rsp,[r13+Integer(@p_kthread(nil)^.td_kstack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
-  ctx.builder.movq(rbp,rsp);
- end;
+ op_native2jit(ctx);
 
  Result:=True;
 end;
@@ -1299,9 +1326,76 @@ begin
    end;
   end;
 
-  pick_locked(ctx);
+  if (cmInternal in ctx.modes) then
+  begin
+   pick_locked_internal(ctx);
+  end else
+  begin
+   pick_locked(ctx);
+  end;
 
  vm_map_unlock(map);
+end;
+
+procedure pick_locked_internal(var ctx:t_jit_context2);
+var
+ node:t_jit_context2.p_export_point;
+
+ link_curr,link_next:t_jit_i_link;
+begin
+ node:=ctx.export_list;
+
+ if (node=nil) then
+ begin
+  ctx.Free;
+  Exit;
+ end;
+
+ ctx.ptr_curr:=Pointer(ctx.text_start);
+ ctx.ptr_next:=ctx.ptr_curr;
+
+ ctx.new_chunk(fpCall,ctx.ptr_curr);
+
+ while (node<>nil) do
+ begin
+  ctx.ptr_curr:=ctx.ptr_next;
+  ctx.ptr_next:=ctx.ptr_curr+16;
+
+  if (ctx.ptr_curr>=Pointer(ctx.text___end)) then
+  begin
+   Assert(false,'pick_locked_internal');
+  end;
+
+  link_curr:=ctx.builder.get_curr_label.after;
+  //
+  op_jit2native(ctx);
+  ctx.builder.call_far(node^.native);
+  op_native2jit(ctx,False);
+  //
+  op_pop_rip(ctx,0); //out:r14
+  op_jmp_dispatcher(ctx);
+  //
+  if (node^.dst<>nil) then
+  begin
+   node^.dst^:=ctx.ptr_curr;
+  end;
+  //
+  link_next:=ctx.builder.get_curr_label.after;
+
+  ctx.add_label(ctx.ptr_curr,
+                ctx.ptr_next,
+                link_curr,
+                link_next);
+  //
+  ctx.add_entry_point(ctx.ptr_curr,link_curr);
+  //
+  node:=node^.next;
+ end;
+
+ ctx.end_chunk(ctx.ptr_next);
+
+ build(ctx);
+ ctx.Free;
 end;
 
 var
@@ -1330,19 +1424,19 @@ var
 
  node,node_curr,node_next:p_jit_instruction;
 begin
- if (ctx.max=QWORD(-1)) then
+ if (cmDontScanRipRel in ctx.modes) then
  begin
   //dont scan rip relative
-  ctx.max:=0;
+  ctx.max_rel:=0;
  end else
  begin
-  ctx.max:=QWORD(ctx.max_forward_point);
+  ctx.max_rel:=QWORD(ctx.max_forward_point);
  end;
 
  if (p_print_jit_preload<>0) then
  begin
   Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
-  Writeln(' ctx.max       :0x',HexStr(ctx.max,16));
+  Writeln(' ctx.max_rel   :0x',HexStr(ctx.max_rel,16));
   Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
   Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
  end;
@@ -1583,7 +1677,7 @@ begin
   if (node_curr<>node_next) and
      (node_curr<>nil) then
   begin
-   node:=TAILQ_NEXT(node_curr,@node_curr^.link);
+   node:=TAILQ_NEXT(node_curr,@node_curr^.entry);
 
    Writeln('recompiled----------------------':32,' ','');
    while (node<>nil) do
@@ -1592,7 +1686,7 @@ begin
     print_disassemble(@node^.AData,node^.ASize);
 
 
-    node:=TAILQ_NEXT(node,@node^.link);
+    node:=TAILQ_NEXT(node,@node^.entry);
    end;
    Writeln('recompiled----------------------':32,' ','');
   end;

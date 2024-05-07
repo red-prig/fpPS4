@@ -144,8 +144,8 @@ type
 
   procedure init_rel_data;
   function  add_str(str:pchar):QWORD;
-  function  add_lib(lib_name:pchar):TLIBRARY;
-  procedure add_mod(mod_name:pchar);
+  function  add_lib(lib_name:pchar;import:Word=0):TLIBRARY;
+  procedure add_mod(mod_name:pchar;import:Word=0);
  end;
 
  p_Objlist_Entry=^Objlist_Entry;
@@ -174,15 +174,17 @@ type
   nid   :QWORD;
   mod_id:WORD;
   lib_id:WORD;
+  native:Pointer;
   sym   :elf64_sym;
  end;
 
  p_Lib_Entry=^Lib_Entry;
- Lib_Entry=record
+ Lib_Entry=packed record
   link  :TAILQ_ENTRY;
   dval  :TLibraryValue;
   attr  :WORD;
   import:WORD;
+  count :Integer;
   hamt  :THAMT;
   syms  :TAILQ_HEAD;
  end;
@@ -444,7 +446,7 @@ begin
  rel_data^.strtab_size:=size+len;
 end;
 
-function t_lib_info.add_lib(lib_name:pchar):TLIBRARY;
+function t_lib_info.add_lib(lib_name:pchar;import:Word=0):TLIBRARY;
 label
  rep;
 var
@@ -467,7 +469,7 @@ begin
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
 
- lib_entry:=Lib_Entry_new(QWORD(v),0);
+ lib_entry:=Lib_Entry_new(QWORD(v),import);
  lib_entry^.dval.name_offset:=add_str(lib_name);
 
  TAILQ_INSERT_TAIL(@lib_table,lib_entry,@lib_entry^.link);
@@ -475,7 +477,7 @@ begin
  Result.lib:=lib_entry;
 end;
 
-procedure t_lib_info.add_mod(mod_name:pchar);
+procedure t_lib_info.add_mod(mod_name:pchar;import:Word=0);
 label
  rep;
 var
@@ -496,7 +498,7 @@ begin
   mod_entry:=TAILQ_NEXT(mod_entry,@mod_entry^.link)
  end;
 
- mod_entry:=Lib_Entry_new(QWORD(v),0);
+ mod_entry:=Lib_Entry_new(QWORD(v),import);
  mod_entry^.dval.name_offset:=add_str(mod_name);
 
  TAILQ_INSERT_TAIL(@mod_table,mod_entry,@mod_entry^.link);
@@ -517,7 +519,9 @@ begin
  h_entry^.lib_id:=lib_entry^.dval.id;
  //
  h_entry^.sym.st_info :=info;
- h_entry^.sym.st_value:=Elf64_Addr(value);
+ h_entry^.sym.st_value:=0; //jit build
+ //
+ h_entry^.native:=value;
 
  //
  if (Lib_Entry^.hamt=nil) then
@@ -538,6 +542,7 @@ begin
  begin
   //new
   TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
+  Inc(Lib_Entry^.count);
   Result:=True;
  end;
 end;
@@ -570,7 +575,7 @@ begin
  if (data=nil) then Exit(nil);
  h_entry:=data^;
  if (h_entry=nil) then Exit(nil);
- Result:=Pointer(h_entry^.sym.st_value);
+ Result:=h_entry^.native;
 end;
 
 function obj_new():p_lib_info;
@@ -2226,7 +2231,7 @@ begin
   VOP_CLOSE(vp, FREAD);
   vput(vp);
 
-  vm_object_deallocate(imgp^.obj);
+  vm_object_deallocate(imgp^.obj); //<-vm_pager_allocate deref
 
  Exit(error);
 end;
@@ -2610,6 +2615,7 @@ begin
     begin
      //new
      TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
+     Inc(Lib_Entry^.count);
     end;
     //
    end;
@@ -2788,6 +2794,103 @@ begin
 
 end;
 
+function map_prx_internal(name:pchar;obj:p_lib_info):Integer;
+var
+ Lib_Entry:p_Lib_Entry;
+ map:vm_map_t;
+ vaddr_lo:QWORD;
+ vaddr_hi:QWORD;
+ data :Pointer;
+ count:Integer;
+ error:Integer;
+begin
+ count:=0;
+
+ //get sym count
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (Lib_Entry^.import=0) then //export
+  begin
+   count:=count+Lib_Entry^.count;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+ //jit addr space = count*16
+ obj^.text_size:=AlignUp(count*16,PAGE_SIZE);
+ obj^.data_size:=PAGE_SIZE;
+ obj^.map_size :=obj^.text_size+obj^.data_size;
+
+ //alloc addr
+ error:=rtld_mmap(@vaddr_lo,obj^.map_size);
+ if (error<>0) then
+ begin
+  Writeln(StdErr,'preload_prx_internal:','failed to allocate VA for ',obj^.lib_path);
+  Exit(error);
+ end;
+
+ vaddr_hi:=vaddr_lo+obj^.map_size;
+ data:=Pointer(vaddr_lo+obj^.text_size);
+
+ map:=p_proc.p_vmspace;
+
+ //map RW
+ vm_map_lock(map);
+
+  vm_map_delete(map,vaddr_lo,vaddr_hi,True);
+
+  error:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,VM_PROT_RWX,0,false);
+  if (error<>0) then
+  begin
+   vm_map_unlock(map);
+   //
+   Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_insert failed ',HexStr(vaddr_lo,8));
+   error:=vm_mmap_to_errno(error);
+   Exit(error);
+  end;
+
+  vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
+
+ vm_map_unlock(map);
+
+ //copy module_param
+ pSceModuleParam(data)^:=obj^.module_param^;
+ obj^.module_param:=data;
+
+ //protect text,data
+ vm_map_lock(map);
+
+  //text
+  error:=vm_map_protect(map,vaddr_lo,QWORD(data),VM_PROT_RX,False);
+  if (error<>0) then
+  begin
+   vm_map_unlock(map);
+   //
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(vaddr_lo,8));
+   error:=vm_mmap_to_errno(error);
+   Exit(error);
+  end;
+
+  //data
+  error:=vm_map_protect(map,QWORD(data),vaddr_hi,VM_PROT_RW,False);
+  if (error<>0) then
+  begin
+   vm_map_unlock(map);
+   //
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(QWORD(data),8));
+   error:=vm_mmap_to_errno(error);
+   Exit(error);
+  end;
+
+ vm_map_unlock(map);
+
+ //
+ obj^.map_base :=Pointer(vaddr_lo);
+ obj^.data_addr:=data;
+end;
+
 const
  internal_module_param:TsceModuleParam=(
   Size       :SizeOf(TsceModuleParam);
@@ -2799,6 +2902,7 @@ function preload_prx_internal(name:pchar;flag:ptruint):p_lib_info;
 var
  entry:p_int_file;
  path:pchar;
+ error:Integer;
 begin
  Result:=nil;
 
@@ -2834,6 +2938,16 @@ begin
 
     alloc_tls(Result);
 
+    error:=map_prx_internal(name,Result);
+    if (error<>0) then
+    begin
+     obj_free(Result);
+     Exit(nil);
+    end;
+
+
+    //
+
     //reg lib
     dynlibs_add_obj(Result);
     //
@@ -2852,6 +2966,56 @@ begin
 
 end;
 
+procedure pick_obj_internal(obj:p_lib_info);
+var
+ ctx:t_jit_context2;
+
+ Lib_Entry:p_Lib_Entry;
+ h_entry:p_sym_hash_entry;
+ symp:p_elf64_sym;
+ ST_TYPE:Integer;
+begin
+ Writeln('pick_obj_internal:',obj^.lib_path);
+
+ ctx:=Default(t_jit_context2);
+ ctx.obj:=obj;
+ ctx.text_start:=QWORD(obj^.map_base);
+ ctx.text___end:=ctx.text_start+obj^.text_size;
+ ctx.map____end:=ctx.text_start+obj^.map_size;
+ ctx.modes:=[cmInternal];
+
+ lib_entry:=TAILQ_FIRST(@obj^.lib_table);
+ while (lib_entry<>nil) do
+ begin
+  if (Lib_Entry^.import=0) then //export
+  begin
+   h_entry:=TAILQ_FIRST(@Lib_Entry^.syms);
+   while (h_entry<>nil) do
+   begin
+
+    symp:=@h_entry^.sym;
+
+    ST_TYPE:=ELF64_ST_TYPE(symp^.st_info);
+
+    Case ST_TYPE of
+     STT_NOTYPE,
+     STT_FUN,
+     STT_SCE:
+        begin
+         ctx.add_export_point(h_entry^.native,@symp^.st_value);
+        end;
+     else;
+    end; //case
+
+    h_entry:=TAILQ_NEXT(h_entry,@h_entry^.link)
+   end;
+  end;
+  lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
+ end;
+
+ kern_jit.pick(ctx,nil);
+end;
+
 procedure pick_obj(obj:p_lib_info);
 var
  ctx:t_jit_context2;
@@ -2864,8 +3028,9 @@ var
 begin
  if (obj=nil) then Exit;
 
- if (obj^.rtld_flags.internal=1) then
+ if (obj^.rtld_flags.internal<>0) then
  begin
+  pick_obj_internal(obj);
   Exit;
  end;
 
@@ -2874,7 +3039,7 @@ begin
  Writeln('pick_obj:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
-
+ ctx.obj:=obj;
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
@@ -2926,7 +3091,8 @@ end;
 
 function preload_prx_modules(path:pchar;flags:DWORD;var err:Integer):p_lib_info;
 label
- _do_load;
+ _do_load,
+ _do_pick;
 var
  obj:p_lib_info;
  pbase:pchar;
@@ -2952,7 +3118,7 @@ begin
  fname:=ChangeFileExt(fname,'.prx');
 
  Result:=preload_prx_internal(pchar(fname),IF_PRELOAD);
- if (Result<>nil) then Exit;
+ if (Result<>nil) then goto _do_pick;
 
  //try original
  fname:=path;
@@ -3008,7 +3174,7 @@ begin
  fname:=ChangeFileExt(fname,'.prx');
 
  Result:=preload_prx_internal(pchar(fname),IF_POSTLOAD);
- if (Result<>nil) then Exit;
+ if (Result<>nil) then goto _do_pick;
 
  Writeln(StdErr,' prx_module_not_found:',dynlib_basename(path));
  print_backtrace_td(stderr);
@@ -3019,6 +3185,8 @@ begin
  _do_load:
 
  Result:=do_load_object(pchar(fname),flags,err);
+
+ _do_pick:
 
  pick_obj(Result);
 end;
