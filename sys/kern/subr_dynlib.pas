@@ -348,6 +348,8 @@ function  find_obj_id (id:Integer):p_lib_info;
 function  find_obj_by_handle(id:Integer):p_lib_info;
 function  find_obj_by_name  (name:pchar):p_lib_info;
 
+function  find_obj_by_addr_safe(addr:Pointer):p_lib_info;
+
 function  dynlib_load_needed_shared_objects():Integer;
 
 function  copy_proc_param(pout:pSceProcParam):Integer;
@@ -3472,6 +3474,26 @@ begin
   end;
   //
   obj:=TAILQ_NEXT(obj,@obj^.link);
+ end;
+end;
+
+function find_obj_by_addr_safe(addr:Pointer):p_lib_info;
+var
+ obj:p_lib_info;
+begin
+ Result:=nil;
+
+ obj:=fuptr(dynlibs_info.obj_list.tqh_first);
+ while (obj<>nil) do
+ begin
+  if (addr>=obj^.map_base) and
+     (addr<(obj^.map_base+obj^.map_size)) then
+  begin
+   Exit(obj);
+  end;
+
+  //
+  obj:=fuptr(obj^.link.tqe_next);
  end;
 end;
 

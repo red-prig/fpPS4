@@ -147,7 +147,7 @@ function  preload_entry(addr:Pointer):p_jit_entry_point;
 
 procedure jit_ctx_free(td:p_kthread);
 procedure switch_to_jit(td:p_kthread);
-function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt):Pointer;
+function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt;from:Pointer):Pointer;
 
 procedure build(var ctx:t_jit_context2);
 
@@ -161,7 +161,8 @@ uses
  sys_bootparam,
  vm_pmap_prot,
  vm_pmap,
- md_map;
+ md_map,
+ kern_dlsym;
 
 //
 
@@ -493,9 +494,7 @@ begin
  end;
 end;
 
-procedure _unresolve_symbol; external;
-
-function jmp_dispatcher(addr:Pointer;plt:p_jit_plt):Pointer; public;
+function jmp_dispatcher(addr:Pointer;plt:p_jit_plt;from:Pointer):Pointer; public;
 label
  _start;
 var
@@ -514,14 +513,19 @@ begin
  begin
   //switch to internal
 
-  if (addr<>Pointer(@_unresolve_symbol)) then
+  if ((QWORD(addr) shr 32)=$EFFFFFFE) then
   begin
-   writeln('not guest addr:0x',HexStr(addr));
-   Assert(False,'TODO');
+   if exist_jit_host(from,@td^.td_frame.tf_rip) then
+   begin
+    test_unresolve_symbol(td,addr,from);
+   end;
   end;
 
-  td^.td_teb^.jitcall:=addr;
-  Exit(@jit_jmp_internal);
+  writeln('not guest addr:0x',HexStr(addr));
+  Assert(False,'TODO');
+
+  //td^.td_teb^.jitcall:=addr;
+  //Exit(@jit_jmp_internal);
  end;
 
  _start:

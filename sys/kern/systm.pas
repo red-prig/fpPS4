@@ -21,6 +21,9 @@ function suword32(var base:DWORD;word:DWORD):DWORD;
 function suword64(var base:QWORD;word:QWORD):QWORD;
 function suword(var base:Pointer;word:Pointer):Pointer;
 
+function fuptr(var base:Pointer):Pointer;
+function fuptr(var base:QWORD):QWORD;
+
 implementation
 
 uses
@@ -617,6 +620,17 @@ begin
  end;
 end;
 
+function fuptr(var base:Pointer):Pointer;
+begin
+ Result:=nil;
+ md_copyin(@base,@Result,SizeOf(Pointer),nil);
+end;
+
+function fuptr(var base:QWORD):QWORD;
+begin
+ Result:=0;
+ md_copyin(@base,@Result,SizeOf(QWORD),nil);
+end;
 
 end.
 

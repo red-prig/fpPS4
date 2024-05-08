@@ -19,7 +19,7 @@ implementation
 
 uses
  vmparam,
- md_systm,
+ systm,
  sys_bootparam,
  kern_named_id,
  subr_dynlib,
@@ -28,18 +28,6 @@ uses
 
 function IS_TRAP_FUNC(rip:qword):Boolean; external;
 function IS_JIT_FUNC (rip:qword):Boolean; external;
-
-function fuptr(var base:Pointer):Pointer;
-begin
- Result:=nil;
- md_copyin(@base,@Result,SizeOf(Pointer),nil);
-end;
-
-function fuptr(var base:QWORD):QWORD;
-begin
- Result:=0;
- md_copyin(@base,@Result,SizeOf(QWORD),nil);
-end;
 
 function CaptureBacktrace(td:p_kthread;rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
 label
@@ -166,74 +154,68 @@ begin
   lock:=True;
  end;
 
- obj:=fuptr(dynlibs_info.obj_list.tqh_first);
- while (obj<>nil) do
+ obj:=find_obj_by_addr_safe(Pointer(addr));
+
+ if (obj<>nil) then
  begin
-  if (Pointer(addr)>=obj^.map_base) and
-     (Pointer(addr)<(obj^.map_base+obj^.map_size)) then
+  r.LastAdr:=nil;
+  r.LastNid:=0;
+
+  r.Addr:=Pointer(addr);
+  r.Base:=fuptr(obj^.map_base);
+
+  info.base_addr:=QWORD(r.Base);
+
+  info.source:=Default(t_id_name);
+  copyin_nofault(@obj^.name,@info.source,SizeOf(t_id_name));
+
+  if (info.source='') then
   begin
-   r.LastAdr:=nil;
-   r.LastNid:=0;
-
-   r.Addr:=Pointer(addr);
-   r.Base:=fuptr(obj^.map_base);
-
-   info.base_addr:=QWORD(r.Base);
-
-   info.source:=Default(t_id_name);
-   md_copyin(@obj^.name,@info.source,SizeOf(t_id_name),nil);
-
-   if (info.source='') then
-   begin
-    md_copyin(obj^.lib_path,@info.source,SizeOf(t_id_name),nil);
-   end;
-
-   if (find_proc_obj(obj,r)<>0) then
-   begin
-    info.func:=ps4libdoc.GetFunctName(r.LastNid);
-    if (info.func='Unknow') then
-    begin
-     info.func:=EncodeValue64(r.LastNid);
-    end;
-    info.func_addr:=QWORD(r.LastAdr);
-    Result:=True;
-   end else
-   begin
-    info.func_addr:=0;
-
-    adr:=QWORD(obj^.init_proc_addr);
-    if (adr<=QWORD(r.Addr)) then
-    if (adr>info.func_addr) then
-    begin
-     info.func:='dtInit';
-     info.func_addr:=adr;
-     Result:=True;
-    end;
-
-    adr:=QWORD(obj^.fini_proc_addr);
-    if (adr<=QWORD(r.Addr)) then
-    if (adr>info.func_addr) then
-    begin
-     info.func:='dtFini';
-     info.func_addr:=adr;
-     Result:=True;
-    end;
-
-    adr:=QWORD(obj^.entry_addr);
-    if (adr<=QWORD(r.Addr)) then
-    if (adr>info.func_addr) then
-    begin
-     info.func:='Entry';
-     info.func_addr:=adr;
-     Result:=True;
-    end;
-
-   end;
-
-   Break;
+   copyin_nofault(obj^.lib_path,@info.source,SizeOf(t_id_name));
   end;
-  //
-  obj:=fuptr(obj^.link.tqe_next);
+
+  if (find_proc_obj(obj,r)<>0) then
+  begin
+   info.func:=ps4libdoc.GetFunctName(r.LastNid);
+   if (info.func='Unknow') then
+   begin
+    info.func:=EncodeValue64(r.LastNid);
+   end;
+   info.func_addr:=QWORD(r.LastAdr);
+   Result:=True;
+  end else
+  begin
+   info.func_addr:=0;
+
+   adr:=QWORD(obj^.init_proc_addr);
+   if (adr<=QWORD(r.Addr)) then
+   if (adr>info.func_addr) then
+   begin
+    info.func:='dtInit';
+    info.func_addr:=adr;
+    Result:=True;
+   end;
+
+   adr:=QWORD(obj^.fini_proc_addr);
+   if (adr<=QWORD(r.Addr)) then
+   if (adr>info.func_addr) then
+   begin
+    info.func:='dtFini';
+    info.func_addr:=adr;
+    Result:=True;
+   end;
+
+   adr:=QWORD(obj^.entry_addr);
+   if (adr<=QWORD(r.Addr)) then
+   if (adr>info.func_addr) then
+   begin
+    info.func:='Entry';
+    info.func_addr:=adr;
+    Result:=True;
+   end;
+
+  end;
+
  end;
 
  if lock then

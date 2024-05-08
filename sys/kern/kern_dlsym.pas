@@ -9,6 +9,7 @@ uses
  sysutils,
  mqueue,
  elf64,
+ kern_thr,
  subr_dynlib;
 
 const
@@ -31,6 +32,8 @@ type
   sym_out   :p_elf64_sym;
  end;
 
+function test_unresolve_symbol(td:p_kthread;addr,from:Pointer):Boolean;
+
 function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
 function name_dlsym(name,symbol:pchar;addrp:ppointer):Integer;
 function find_symdef(symnum:QWORD;
@@ -50,7 +53,6 @@ uses
  elf_nid_utils,
  kern_stub,
  vm_patch_link,
- kern_thr,
  subr_backtrace,
  ps4libdoc;
 
@@ -422,6 +424,20 @@ const
                                           libname :nil;
                                           libfrom :nil);
 
+procedure unresolve_symbol_print(nid:QWORD;libname,libfrom:PChar);
+var
+ str:shortstring;
+begin
+ str:=ps4libdoc.GetFunctName(nid);
+ if (str='Unknow') then
+ begin
+  str:=EncodeValue64(nid);
+ end;
+
+ print_error_td('unresolve_symbol:0x'+HexStr(nid,16)+':'+str+':'+libname+' from '+libfrom);
+ Assert(false);
+end;
+
 procedure unresolve_symbol(data:p_jmpq64_trampoline);
 var
  td:p_kthread;
@@ -432,14 +448,7 @@ begin
 
  td^.td_frame.tf_rip:=PQWORD(td^.td_frame.tf_rsp)^;
 
- str:=ps4libdoc.GetFunctName(data^.nid);
- if (str='Unknow') then
- begin
-  str:=EncodeValue64(data^.nid);
- end;
-
- print_error_td('unresolve_symbol:0x'+HexStr(data^.nid,16)+':'+str+':'+data^.libname+' from '+data^.libfrom);
- Assert(false);
+ unresolve_symbol_print(data^.nid,data^.libname,data^.libfrom);
 end;
 
 procedure _unresolve_symbol; assembler; nostackframe; public;
@@ -459,14 +468,122 @@ begin
  stub:=p_alloc(nil,SizeOf(t_jmpq64_trampoline));
 
  p_jmpq64_trampoline(@stub^.body)^:=c_jmpq64_trampoline;
- p_jmpq64_trampoline(@stub^.body)^.addr:=QWORD(@_unresolve_symbol);
- p_jmpq64_trampoline(@stub^.body)^.nid:=nid;
+ p_jmpq64_trampoline(@stub^.body)^.addr   :=QWORD(@_unresolve_symbol);
+ p_jmpq64_trampoline(@stub^.body)^.nid    :=nid;
  p_jmpq64_trampoline(@stub^.body)^.libname:=libname;
  p_jmpq64_trampoline(@stub^.body)^.libfrom:=dynlib_basename(refobj^.lib_path);
 
  Result:=@stub^.body;
 
  vm_add_patch_link(refobj^.rel_data^.obj,where,SizeOf(Pointer),pt_unresolve,stub);
+end;
+
+{
+function get_rip_jmp(td:p_kthread;addr:Pointer):Pointer;
+var
+ data:array[0..5] of Byte;
+ err:Integer;
+begin
+ Result:=nil;
+ err:=copyin_nofault(addr,@data,6);
+ if (err<>0) then Exit;
+ if (data[0]=$FF) and (data[1]=$25) then
+ begin
+  Result:=addr + 6 + PInteger(@data[2])^;
+ end;
+end;
+}
+
+function test_unresolve_symbol(td:p_kthread;addr,from:Pointer):Boolean;
+label
+ _exit;
+var
+ sym_rip :QWORD;
+ sym_addr:QWORD;
+
+ obj:p_lib_info;
+
+ pltrela_addr:p_elf64_rela;
+ symtab_addr :p_elf64_sym;
+
+ ref:p_elf64_sym;
+
+ pltrela_count:Integer;
+ symtab_count:Integer;
+
+ symnum:Integer;
+
+ lock:Boolean;
+
+ mod_id,lib_id:WORD;
+
+ req:t_SymLook;
+begin
+ Result:=False;
+
+ sym_rip:=td^.td_frame.tf_rip;
+ if (sym_rip=0) then Exit;
+
+ sym_addr:=QWORD(addr);
+ if (sym_addr=0) then Exit;
+
+ if ((sym_addr shr 32)<>$EFFFFFFE) then Exit;
+
+ req:=Default(t_SymLook);
+
+ lock:=False;
+ if not dynlibs_locked then
+ begin
+  dynlibs_lock;
+  lock:=True;
+ end;
+
+ obj:=find_obj_by_addr_safe(Pointer(sym_rip));
+ if (obj=nil) then goto _exit;
+
+ pltrela_addr :=obj^.rel_data^.pltrela_addr;
+ pltrela_count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
+
+ if (pltrela_addr=nil) or (pltrela_count<=Integer(sym_addr)) then goto _exit;
+
+ symnum:=ELF64_R_SYM(pltrela_addr[Integer(sym_addr)].r_info);
+
+ symtab_addr :=obj^.rel_data^.symtab_addr;
+ symtab_count:=obj^.rel_data^.symtab_size div SizeOf(elf64_sym);
+
+ if (symtab_addr=nil) or (symtab_count<=symnum) then goto _exit;
+
+ ref:=@symtab_addr[symnum];
+
+ req.symbol:=obj_get_str(obj,ref^.st_name);
+ req.obj   :=obj;
+
+ mod_id:=0;
+ lib_id:=0;
+
+ if DecodeSym(obj,
+              req.symbol,
+              ELF64_ST_TYPE(ref^.st_info),
+              mod_id,
+              lib_id,
+              req.nid) then
+ begin
+  req.modname:=get_mod_name_by_id(obj,mod_id);
+  req.libname:=get_lib_name_by_id(obj,lib_id);
+ end;
+
+ Result:=True;
+
+ _exit:
+ if lock then
+ begin
+  dynlibs_unlock;
+ end;
+
+ if Result then
+ begin
+  unresolve_symbol_print(req.nid,req.libname,dynlib_basename(obj^.lib_path));
+ end;
 end;
 
 function find_symdef(symnum:QWORD;
@@ -565,6 +682,7 @@ begin
   Exit(nil);
  end;
 
+ {
  if (def=nil) then
  begin
   if (ELF64_ST_BIND(ref^.st_info)=STB_WEAK) then
@@ -599,6 +717,7 @@ begin
  begin
   vm_rem_patch_link(refobj^.rel_data^.obj,where);
  end;
+ }
 
  if (def<>nil) then
  begin

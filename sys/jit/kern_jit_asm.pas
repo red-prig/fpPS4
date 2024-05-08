@@ -73,7 +73,7 @@ uses
 
 //
 
-function jmp_dispatcher(addr,plt:Pointer):Pointer; external;
+function jmp_dispatcher(addr,plt,from:Pointer):Pointer; external;
 
 //
 
@@ -472,9 +472,10 @@ asm
 
  call jit_save_ctx
 
- //rdi, rsi
- mov  %r14,%rdi
- mov  %r15,%rsi
+ //rdi,rsi,rdx
+ mov    %r14,%rdi
+ mov    %r15,%rsi
+ mov 8(%rbp),%rdx
 
  call jmp_dispatcher
 
