@@ -1067,7 +1067,7 @@ begin
  end;
 end;
 
-procedure op_native2jit(var ctx:t_jit_context2;is_stack_restore:Boolean=True);
+procedure op_native2jit(var ctx:t_jit_context2);
 begin
  with ctx.builder do
  begin
@@ -1087,11 +1087,8 @@ begin
   movq([r13+Integer(@p_jit_frame(nil)^.tf_r13)],r14);
 
   //load rsp,rbp
-  if not is_stack_restore then
-  begin
-   movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
-   movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
-  end;
+  movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
+  movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
 
   //load internal stack
   movq(r14,[r13+Integer(@p_kthread(nil)^.td_kstack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
@@ -1370,7 +1367,7 @@ begin
   //
   op_jit2native(ctx);
   ctx.builder.call_far(node^.native);
-  op_native2jit(ctx,False);
+  op_native2jit(ctx);
   //
   op_pop_rip(ctx,0); //out:r14
   op_jmp_dispatcher(ctx);

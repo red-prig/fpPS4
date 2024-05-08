@@ -13,9 +13,10 @@ uses
  murmurhash,
  x86_jit,
  kern_jit_ctx,
+ kern_jit_asm,
  kern_rwlock,
  kern_thr,
- kern_jit_asm;
+ kern_stub;
 
 {
   entry_point -> +----------+    +---------+
@@ -85,6 +86,8 @@ type
    entry_list:p_jit_entry_point;
    chunk_list:p_jcode_chunk;
    jpltc_list:t_jplt_cache_set;
+
+   mchunk:p_stub_chunk;
 
    base:Pointer;
    size:ptruint;
@@ -517,7 +520,7 @@ begin
   begin
    if exist_jit_host(from,@td^.td_frame.tf_rip) then
    begin
-    test_unresolve_symbol(td,addr,from);
+    test_unresolve_symbol(td,addr);
    end;
   end;
 
@@ -690,9 +693,9 @@ begin
  //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
 end;
 
-procedure _build(var ctx:t_jit_context2;
-                 blob:p_jit_dynamic_blob;
-                 start,__end:QWORD);
+procedure build_blob(var ctx:t_jit_context2;
+                     blob:p_jit_dynamic_blob;
+                     start,__end:QWORD);
 var
  count:QWORD;
 
@@ -827,7 +830,7 @@ begin
     if (start<>0) then
     begin
      //build prev saved
-     _build(ctx,blob,start,__end);
+     build_blob(ctx,blob,start,__end);
     end;
     //new
     start:=chunk^.start;
@@ -841,7 +844,7 @@ begin
  if (start<>0) then
  begin
   //build prev saved
-  _build(ctx,blob,start,__end);
+  build_blob(ctx,blob,start,__end);
  end;
 
  blob^.attach;
@@ -1089,15 +1092,21 @@ end;
 
 procedure t_jit_dynamic_blob.alloc_base(_size:ptruint);
 begin
- //small chunk allocator TODO
  base:=nil;
  size:=_size;
- md_mmap(base,size,MD_PROT_RWX);
+
+ ///md_mmap(base,size,MD_PROT_RWX);
+
+ mchunk:=p_alloc(nil,_size,False);
+ base:=@mchunk^.body;
 end;
 
 procedure t_jit_dynamic_blob.free_base;
 begin
- md_unmap(base,size);
+ p_free(mchunk);
+
+ ////md_unmap(base,size);
+
  base:=nil;
  size:=0;
 end;

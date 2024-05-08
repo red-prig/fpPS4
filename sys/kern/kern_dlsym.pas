@@ -32,7 +32,7 @@ type
   sym_out   :p_elf64_sym;
  end;
 
-function test_unresolve_symbol(td:p_kthread;addr,from:Pointer):Boolean;
+function test_unresolve_symbol(td:p_kthread;addr:Pointer):Boolean;
 
 function do_dlsym(obj:p_lib_info;symbol,libname:pchar;flags:DWORD):Pointer;
 function name_dlsym(name,symbol:pchar;addrp:ppointer):Integer;
@@ -441,7 +441,6 @@ end;
 procedure unresolve_symbol(data:p_jmpq64_trampoline);
 var
  td:p_kthread;
- str:shortstring;
 begin
  td:=curkthread;
  jit_save_to_sys_save(td);
@@ -465,7 +464,7 @@ function get_unresolve_ptr(refobj:p_lib_info;where:Pointer;nid:QWORD;libname:PCh
 var
  stub:p_stub_chunk;
 begin
- stub:=p_alloc(nil,SizeOf(t_jmpq64_trampoline));
+ stub:=p_alloc(nil,SizeOf(t_jmpq64_trampoline),False);
 
  p_jmpq64_trampoline(@stub^.body)^:=c_jmpq64_trampoline;
  p_jmpq64_trampoline(@stub^.body)^.addr   :=QWORD(@_unresolve_symbol);
@@ -494,7 +493,7 @@ begin
 end;
 }
 
-function test_unresolve_symbol(td:p_kthread;addr,from:Pointer):Boolean;
+function test_unresolve_symbol(td:p_kthread;addr:Pointer):Boolean;
 label
  _exit;
 var
