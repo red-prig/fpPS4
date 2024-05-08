@@ -750,7 +750,13 @@ begin
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
 
-  op_uplift(ctx,new.ASize); //in/out:r14
+  if (new.AIndex=r_tmp1.AIndex) then
+  begin
+   op_uplift(ctx,new.ASize,[not_use_r_tmp1]); //in/out:r14
+  end else
+  begin
+   op_uplift(ctx,new.ASize); //in/out:r14
+  end;
 
   movq([stack],new);
 
@@ -780,13 +786,14 @@ begin
 
   mem_size:=ctx.din.Operand[1].Size;
 
-  pushfq(mem_size);
-  pop(new);
-
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
 
   op_uplift(ctx,mem_size); //in/out:r14
+
+  //get all flags
+  pushfq(mem_size);
+  pop(new);
 
   movq([stack],new);
 
@@ -889,7 +896,7 @@ begin
 
    build_lea(ctx,1,r_tmp0);
 
-   op_uplift(ctx,os64); //in/out:r14
+   op_uplift(ctx,os64,[not_use_r_tmp1]); //in/out:r14
 
    movq([r_tmp0],new);
   end else

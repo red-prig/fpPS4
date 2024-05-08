@@ -244,7 +244,7 @@ procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
 
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize);
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize;hint:t_lea_hint=[]);
 
 procedure add_orig(var ctx:t_jit_context2);
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
@@ -1579,26 +1579,43 @@ end;
 // $10000000000 = 1 shl 40
 // 64-40 = 24
 
-procedure uplift_jit; assembler; nostackframe;
-asm
- //zero bits
- movq $24,%rbp
-
- //clear hi
- shlx %rbp,%r14,%r14
- shrx %rbp,%r14,%r14
-
- //restore rbp
- movq %rsp,%rbp
- leaq 8(%rbp),%rbp
-end;
-
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize);
+procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize;hint:t_lea_hint=[]);
+const
+ shlx_desc:t_op_type=(
+  op:$F7;simdop:1;mm:2;vw_mode:vwR64;
+ );
+ shrx_desc:t_op_type=(
+  op:$F7;simdop:3;mm:2;vw_mode:vwR64;
+ );
+var
+ rbits:TRegValue;
 begin
  if jit_memory_guard then
+ with ctx.builder do
  begin
-  ctx.builder.call_far(@uplift_jit); //in/out:r14
+  if (not_use_r_tmp1 in hint) then
+  begin
+   rbits:=rbp;
+  end else
+  begin
+   rbits:=r_tmp1;
+  end;
+
+  //zero bits
+  movi(new_reg_size(rbits,os32),24); //mov  $24,%ebp
+
+  //clear hi
+  _VVV(shlx_desc,r14,rbits,r14,os64); //1 3 2 | shlx %rbp,%r14,%r14
+  _VVV(shrx_desc,r14,rbits,r14,os64); //1 3 2 | shrx %rbp,%r14,%r14
+
+  if (not_use_r_tmp1 in hint) then
+  begin
+   //restore rbp
+   movq(rbp,rsp);
+  end;
  end;
+
+ //ctx.builder.call_far(@uplift_jit2); //in/out:r14
 end;
 
 procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
@@ -1621,6 +1638,8 @@ end;
 
 procedure op_copyout_after(var ctx:t_jit_context2;var link_next:t_jit_i_link;mem_size:TOperandSize); inline;
 begin
+ //ctx.builder.call_far(@uplift_jit2); //in/out:r14
+
  with ctx.builder do
  begin
   ////reta;
@@ -1867,9 +1886,21 @@ begin
               Result:=[ax_id,dx_id];
     end;
 
-  OPmul:      Result:=[ax_id,dx_id];
+  OPmul:
+    case ctx.din.OpCode.Suffix of
+     OPSnone: Result:=[ax_id,dx_id];
+     OPSx_x : Result:=[dx_id];
+     else;
+    end;
+
   OPimul:     Result:=[ax_id,dx_id];
-  OPdiv:      Result:=[ax_id,dx_id];
+
+  OPdiv:
+    case ctx.din.OpCode.Suffix of
+     OPSnone: Result:=[ax_id,dx_id];
+     else;
+    end;
+
   OPidiv:     Result:=[ax_id,dx_id];
 
   OPpcmpestri:Result:=[cx_id];
@@ -3793,7 +3824,7 @@ begin
    new3:=new_reg(ctx.din.Operand[3]);
   end;
 
-  _VVV(desc,new1,new3,new2,new3.ASize); //1 3 2
+  _VVV(desc,new1,new3,new2,new1.ASize); //1 3 2
 
   if is_preserved(ctx.din.Operand[1]) then
   begin

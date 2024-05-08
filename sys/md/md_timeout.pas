@@ -10,6 +10,7 @@ uses
  //
  LFQueue,
  md_sleep,
+ sched_ule,
  kern_synch,
  kern_thr,
  kern_callout;
@@ -111,6 +112,7 @@ var
  c:p_callout;
  cc:p_callout_cpu;
 begin
+ sched_prio(curkthread,64);
  repeat
   cc:=nil;
   c:=nil;

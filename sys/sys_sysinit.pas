@@ -46,6 +46,7 @@ uses
  kern_descrip,
  vfs_mountroot,
  sys_conf,
+ sched_ule,
  dev_null,
  dev_tty,
  dev_dmem,
@@ -61,6 +62,7 @@ var
 //Daemon for a separate thread
 procedure sys_daemon(arg:Pointer);
 begin
+ sched_prio(curkthread,1000);
  repeat
   vnlru_proc;
   pause('sys_daemon',hz);
