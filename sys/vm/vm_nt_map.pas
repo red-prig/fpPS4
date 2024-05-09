@@ -194,11 +194,9 @@ begin
 
   prot:=pmap_get_prot(start);
 
-  prot:=wprots[prot and VM_RWX];
-
-  if (prot<>max) then
+  if ((prot and VM_RW)<>(max and VM_RW)) then
   begin
-   r:=md_protect(Pointer(base),size,prot);
+   r:=md_protect(Pointer(base),size,(prot and VM_RW));
    if (r<>0) then
    begin
     Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
@@ -273,7 +271,7 @@ begin
    end;
   end;
 
-  max:=wprots[entry^.obj^.maxp and VM_RWX];
+  max:=entry^.obj^.maxp;
 
   if (entry^.obj^.hfile<>0) then
   begin
@@ -281,7 +279,7 @@ begin
                       Pointer(entry^.start),
                       entry^.offset,
                       entry^.size, //unaligned size
-                      max);
+                      (max and VM_RW));
    if (r<>0) then
    begin
     Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
@@ -289,9 +287,9 @@ begin
    end;
   end;
 
-  if (prot<>max) then
+  if ((prot and VM_RW)<>(max and VM_RW)) then
   begin
-   r:=md_protect(Pointer(entry^.start),size,prot);
+   r:=md_protect(Pointer(entry^.start),size,(prot and VM_RW));
    if (r<>0) then
    begin
     Writeln('failed md_protect(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
@@ -436,7 +434,7 @@ begin
   end;
  end;
 
- max:=wprots[stat.obj^.maxp and VM_RWX];
+ max:=stat.obj^.maxp;
 
  //map new parts
  For i:=Low(ets) to High(ets) do
@@ -451,7 +449,7 @@ begin
                        Pointer(ets[i]^.start),
                        ets[i]^.offset,
                        ets[i]^.size, //unaligned size
-                       max);
+                       (max and VM_RW));
     if (r<>0) then
     begin
      Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
@@ -1066,7 +1064,7 @@ begin
 
   size:=size-base;
 
-  r:=md_protect(Pointer(base),size,prot);
+  r:=md_protect(Pointer(base),size,(prot and VM_RW));
   if (r<>0) then
   begin
    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
@@ -1215,13 +1213,13 @@ begin
 
    prev:=b_end;
 
-   max:=wprots[obj^.maxp and VM_RWX];
+   max:=obj^.maxp;
 
    r:=md_file_mmap_ex(obj^.hfile,
                       curr,
                       offset,
                       size,
-                      max);
+                      (max and VM_RW));
    if (r<>0) then
    begin
     Writeln('failed md_file_mmap_ex(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));

@@ -14,51 +14,9 @@ const
  MD_PAGE_SIZE        = 4*1024;
  MD_ALLOC_GRANULARITY=64*1024;
 
- MD_PROT_NONE=PAGE_NOACCESS;
- MD_PROT_R   =PAGE_READONLY;
- MD_PROT_W   =PAGE_READWRITE;
- MD_PROT_RW  =PAGE_READWRITE;
- MD_PROT_X   =PAGE_EXECUTE;
- MD_PROT_RX  =PAGE_EXECUTE_READ;
- MD_PROT_WX  =PAGE_EXECUTE_READWRITE;
- MD_PROT_RWX =PAGE_EXECUTE_READWRITE;
-
 const
  VM_RW =VM_PROT_READ or VM_PROT_WRITE;
  VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
-
- wprots:array[0..7] of Byte=(
-  MD_PROT_NONE,//___
-  MD_PROT_R   ,//__R
-  MD_PROT_W   ,//_W_
-  MD_PROT_RW  ,//_WR
-  MD_PROT_R   ,//X__
-  MD_PROT_R   ,//X_R
-  MD_PROT_RW  ,//XW_
-  MD_PROT_RW   //XWR
- );
-
- wprots_e:array[0..7] of Byte=(
-  MD_PROT_NONE,//___
-  MD_PROT_R   ,//__R
-  MD_PROT_W   ,//_W_
-  MD_PROT_RW  ,//_WR
-  MD_PROT_X   ,//X__
-  MD_PROT_RX  ,//X_R
-  MD_PROT_WX  ,//XW_
-  MD_PROT_RWX  //XWR
- );
-
- waccess:array[0..7] of Byte=(
-  SECTION_QUERY,                                                                //___
-  SECTION_QUERY or SECTION_MAP_READ,                                            //__R
-  SECTION_QUERY or SECTION_MAP_WRITE,                                           //_W_
-  SECTION_QUERY or SECTION_MAP_WRITE   or SECTION_MAP_READ,                     //_WR
-  SECTION_QUERY or SECTION_MAP_EXECUTE,                                         //X__
-  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_READ,                     //X_R
-  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE,                    //XW_
-  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE or SECTION_MAP_READ //XWR
- );
 
 function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
 function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
@@ -98,6 +56,38 @@ const
 procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 
 implementation
+
+const
+ MD_PROT_NONE=PAGE_NOACCESS;
+ MD_PROT_R   =PAGE_READONLY;
+ MD_PROT_W   =PAGE_READWRITE;
+ MD_PROT_RW  =PAGE_READWRITE;
+ MD_PROT_X   =PAGE_EXECUTE;
+ MD_PROT_RX  =PAGE_EXECUTE_READ;
+ MD_PROT_WX  =PAGE_EXECUTE_READWRITE;
+ MD_PROT_RWX =PAGE_EXECUTE_READWRITE;
+
+ wprots:array[0..7] of Byte=(
+  MD_PROT_NONE,//___
+  MD_PROT_R   ,//__R
+  MD_PROT_W   ,//_W_
+  MD_PROT_RW  ,//_WR
+  MD_PROT_X   ,//X__
+  MD_PROT_RX  ,//X_R
+  MD_PROT_WX  ,//XW_
+  MD_PROT_RWX  //XWR
+ );
+
+ waccess:array[0..7] of Byte=(
+  SECTION_QUERY,                                                                //___
+  SECTION_QUERY or SECTION_MAP_READ,                                            //__R
+  SECTION_QUERY or SECTION_MAP_WRITE,                                           //_W_
+  SECTION_QUERY or SECTION_MAP_WRITE   or SECTION_MAP_READ,                     //_WR
+  SECTION_QUERY or SECTION_MAP_EXECUTE,                                         //X__
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_READ,                     //X_R
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE,                    //XW_
+  SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE or SECTION_MAP_READ //XWR
+ );
 
 function md_alloc_page(x:Pointer):Pointer; inline;
 begin
@@ -258,8 +248,8 @@ var
  Access:DWORD;
  prot:DWORD;
 begin
- Access:=waccess [maxprot and VM_RWX];
- prot  :=wprots_e[maxprot and VM_RWX];
+ Access:=waccess[maxprot and VM_RWX];
+ prot  :=wprots [maxprot and VM_RWX];
 
  hMem:=0;
  Result:=NtCreateSectionEx(
@@ -281,8 +271,8 @@ var
  prot:DWORD;
  size:QWORD;
 begin
- Access:=waccess [maxprot and VM_RWX];
- prot  :=wprots_e[maxprot and VM_RWX];
+ Access:=waccess[maxprot and VM_RWX];
+ prot  :=wprots [maxprot and VM_RWX];
 
  size:=0;
  hMem:=0;
@@ -308,6 +298,8 @@ function md_protect(hProcess:THandle;base:Pointer;size:QWORD;prot:Integer):Integ
 var
  old:Integer;
 begin
+ prot:=wprots[prot and VM_RWX];
+
  old:=0;
  Result:=NtProtectVirtualMemory(
           hProcess,
@@ -349,6 +341,8 @@ end;
 
 function md_mmap(hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Integer;
 begin
+ prot:=wprots[prot and VM_RWX];
+
  base:=md_alloc_page(base);
  size:=md_up_page(size);
 
@@ -390,6 +384,8 @@ var
  CommitSize:ULONG_PTR;
  SectionOffset:ULONG_PTR;
 begin
+ prot:=wprots[prot and VM_RWX];
+
  base:=md_alloc_page(base);
 
  CommitSize:=size;
@@ -419,6 +415,8 @@ end;
 
 function md_file_mmap_ex(handle:THandle;base:Pointer;offset,size:QWORD;prot:Integer):Integer;
 begin
+ prot:=wprots[prot and VM_RWX];
+
  Result:=NtMapViewOfSectionEx(
           handle,
           NtCurrentProcess,

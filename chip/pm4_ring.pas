@@ -88,14 +88,14 @@ begin
  Result:=md_memfd_create(hMem,size,VM_RW);
  if (Result<>0) then Exit;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff,0,size,MD_PROT_RW);
+ Result:=md_file_mmap_ex(hMem,ring^.buff,0,size,VM_RW);
  if (Result<>0) then
  begin
   md_memfd_close(hMem);
   Exit;
  end;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,size,MD_PROT_RW);
+ Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,size,VM_RW);
 
  md_memfd_close(hMem);
 end;

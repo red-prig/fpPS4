@@ -1614,8 +1614,6 @@ begin
    movq(rbp,rsp);
   end;
  end;
-
- //ctx.builder.call_far(@uplift_jit2); //in/out:r14
 end;
 
 procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
@@ -1638,8 +1636,6 @@ end;
 
 procedure op_copyout_after(var ctx:t_jit_context2;var link_next:t_jit_i_link;mem_size:TOperandSize); inline;
 begin
- //ctx.builder.call_far(@uplift_jit2); //in/out:r14
-
  with ctx.builder do
  begin
   ////reta;

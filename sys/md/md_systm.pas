@@ -461,7 +461,7 @@ begin
  full:=SizeOf(shared_info)+info.size;
  full:=(info.size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
- Result:=md_mmap(hProcess,base,full,MD_PROT_RW);
+ Result:=md_mmap(hProcess,base,full,VM_RW);
  if (Result<>0) then Exit;
 
  shared_info:=Default(t_shared_info);

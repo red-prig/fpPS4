@@ -161,7 +161,7 @@ begin
   Assert(false,'dev_mem_init');
  end;
 
- r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,MD_PROT_RW);
+ r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
  begin
   Writeln('failed md_file_mmap_ex(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
@@ -249,7 +249,7 @@ begin
 
  PAGE_PROT:=nil;
 
- r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,MD_PROT_RW);
+ r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,VM_RW);
 
  if (r<>0) then
  begin
@@ -269,7 +269,7 @@ begin
                     pmap_mem[  i].__end,
                     pmap_mem[i+1].start,
                     pmap_mem[i+1].start-pmap_mem[i].__end,
-                    MD_PROT_NONE);
+                    0);
   end;
  end;
 
@@ -379,7 +379,7 @@ begin
 
   //dmem mirror
   base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
-  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_BLK_SIZE,MD_PROT_RW);
+  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_BLK_SIZE,VM_RW);
   if (r<>0) then
   begin
    Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+PMAPP_BLK_SIZE),'):0x',HexStr(r,8));
@@ -520,7 +520,7 @@ begin
  src_ofs:=src_ofs and (MD_ALLOC_GRANULARITY-1);
 
  src:=nil;
- r:=md_file_mmap(src_obj^.hfile,src,start,__end-start,MD_PROT_R);
+ r:=md_file_mmap(src_obj^.hfile,src,start,__end-start,VM_PROT_READ);
 
  if (r<>0) then
  begin
@@ -533,7 +533,7 @@ begin
  dst_ofs:=dst_ofs and (MD_ALLOC_GRANULARITY-1);
 
  dst:=nil;
- r:=md_file_mmap(dst_obj^.hfile,dst,start,__end-start,MD_PROT_RW);
+ r:=md_file_mmap(dst_obj^.hfile,dst,start,__end-start,VM_RW);
 
  if (r<>0) then
  begin
@@ -628,7 +628,7 @@ begin
                            info.start,
                            info.__end,
                            delta,
-                           wprots[prot and VM_RWX]);
+                           (prot and VM_RW));
 
        if (r<>0) then
        begin
@@ -685,7 +685,7 @@ begin
                            info.start,
                            info.__end,
                            delta,
-                           wprots[prot and VM_RWX]);
+                           (prot and VM_RW));
 
        if (r<>0) then
        begin
@@ -719,7 +719,7 @@ begin
                           info.start,
                           info.__end,
                           delta,
-                          wprots[prot and VM_RWX]);
+                          (prot and VM_RW));
 
       if (r<>0) then
       begin
@@ -804,7 +804,7 @@ begin
                            info.start,
                            info.__end,
                            delta,
-                           wprots[prot and VM_RWX]);
+                           (prot and VM_RW));
 
        if (r<>0) then
        begin
@@ -848,7 +848,7 @@ begin
                           info.start,
                           info.__end,
                           size,
-                          wprots[prot and VM_RWX]);
+                          (prot and VM_RW));
 
       if (r<>0) then
       begin
@@ -906,7 +906,7 @@ begin
      vm_nt_map_protect(@pmap^.nt_map,
                        start,
                        __end,
-                       wprots[prot and VM_RWX]);
+                       (prot and VM_RW));
 
     end;
   OBJT_DEVICE:

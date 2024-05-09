@@ -404,7 +404,7 @@ begin
   XCHG(xlock,nil);
  end;
  //
- md_mmap(Result,mem_size,MD_PROT_RW);
+ md_mmap(Result,mem_size,VM_RW);
 end;
 
 Procedure t_cache_block_allocator.Free(node:Pointer);
@@ -442,7 +442,7 @@ begin
    mem_size:=Align(Size+SizeOf(TAllocNode),64*1024);
    //
    node:=nil;
-   md_mmap(node,mem_size,MD_PROT_RW);
+   md_mmap(node,mem_size,VM_RW);
   end else
   begin
    mem_size:=cache_block_allocator.mem_size;
