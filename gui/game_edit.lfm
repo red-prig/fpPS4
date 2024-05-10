@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 411
+  Left = 778
   Height = 319
-  Top = 206
+  Top = 146
   Width = 397
   Caption = 'Game editor'
   ClientHeight = 319
@@ -15,11 +15,11 @@ object frmGameEditor: TfrmGameEditor
     Height = 274
     Top = 0
     Width = 397
-    ActivePage = TabMounts
+    ActivePage = TabMain
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 1
+    TabIndex = 0
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
@@ -34,6 +34,8 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
+        FocusColor = clRed
+        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -59,6 +61,8 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
+        FocusColor = clRed
+        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -67,7 +71,7 @@ object frmGameEditor: TfrmGameEditor
         OnSelectEditor = GridSelectEditor
         ColWidths = (
           64
-          321
+          304
         )
       end
     end
@@ -84,6 +88,8 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
+        FocusColor = clRed
+        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -92,7 +98,7 @@ object frmGameEditor: TfrmGameEditor
         OnSelectEditor = GridSelectEditor
         ColWidths = (
           64
-          321
+          304
         )
       end
     end

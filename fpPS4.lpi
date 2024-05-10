@@ -998,6 +998,13 @@
         <Filename Value="vulkan\vFramebufferManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="gui\cfg_edit.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="frmCfgEditor"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

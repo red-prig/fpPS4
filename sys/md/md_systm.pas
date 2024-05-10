@@ -296,7 +296,7 @@ begin
   size:=(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK);
  end;
 
- err:=md_mmap(hProcess,addr,size,PAGE_READWRITE);
+ err:=md_mmap(hProcess,addr,size,VM_RW);
  if (err<>0) then Exit(err);
 
  kstack.sttop:=addr;

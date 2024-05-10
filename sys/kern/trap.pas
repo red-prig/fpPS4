@@ -285,7 +285,7 @@ begin
   error:=ENOSYS;
  end else
  begin
-  if (p_print_guest_syscall<>0) then
+  if (p_print_guest_syscall) then
    if (td_frame^.tf_rax<p_proc.p_sysent^.sv_size) then
     if is_guest_addr(td_frame^.tf_rip) then
     begin

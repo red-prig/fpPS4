@@ -1,7 +1,7 @@
 object frmMain: TfrmMain
-  Left = 396
+  Left = 342
   Height = 343
-  Top = 211
+  Top = 294
   Width = 623
   Caption = 'fpPS4'
   ClientHeight = 343
@@ -17,7 +17,7 @@ object frmMain: TfrmMain
     ActivePage = TabList
     Align = alClient
     TabIndex = 0
-    TabOrder = 0
+    TabOrder = 1
     object TabList: TTabSheet
       Caption = 'Games'
       ClientHeight = 247
@@ -47,6 +47,8 @@ object frmMain: TfrmMain
             Width = 205
           end>
         FixedCols = 0
+        FocusColor = clRed
+        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goRowSelect, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -73,7 +75,7 @@ object frmMain: TfrmMain
     EdgeBorders = [ebLeft, ebTop, ebRight, ebBottom]
     Images = MainImageList
     ImagesWidth = 64
-    TabOrder = 1
+    TabOrder = 0
     object TBPlay: TToolButton
       Left = 3
       Top = 2
@@ -98,6 +100,7 @@ object frmMain: TfrmMain
       Top = 2
       Caption = 'TBConfig'
       ImageIndex = 6
+      OnClick = TBConfigClick
     end
   end
   object MenuList: TPopupMenu

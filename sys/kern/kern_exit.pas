@@ -133,7 +133,7 @@ begin
  //Notify interested parties of our demise.
  KNOTE_UNLOCKED(@p_proc.p_klist, NOTE_EXIT);
  //
- if (p_halt_on_exit<>0) then
+ if (p_halt_on_exit) then
  begin
   md_halt(rv);
  end else

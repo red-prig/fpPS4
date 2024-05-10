@@ -346,7 +346,7 @@ begin
 
  if (r<>0) then
  begin
-  ShowMessage('error run process code='+IntToStr(r));
+  ShowMessage('error run process code=0x'+HexStr(r,8));
   FreeAndNil(Result);
   Exit;
  end;

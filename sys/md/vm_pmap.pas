@@ -597,7 +597,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap<>0) then
+ if (p_print_pmap) then
  begin
   Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
@@ -658,7 +658,7 @@ begin
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      if (p_print_pmap<>0) then
+      if (p_print_pmap) then
       begin
        Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
       end;
@@ -674,7 +674,7 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
-       if (p_print_pmap<>0) then
+       if (p_print_pmap) then
        begin
         Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
        end;
@@ -700,7 +700,7 @@ begin
 
      end else
      begin
-      if (p_print_pmap<>0) then
+      if (p_print_pmap) then
       begin
        Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
       end;
@@ -780,7 +780,7 @@ begin
 
      if ((prot and VM_PROT_COPY)<>0) then
      begin
-      if (p_print_pmap<>0) then
+      if (p_print_pmap) then
       begin
        Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
       end;
@@ -891,7 +891,7 @@ procedure pmap_protect(pmap  :pmap_t;
 label
  _default;
 begin
- if (p_print_pmap<>0) then
+ if (p_print_pmap) then
  begin
   Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
@@ -916,7 +916,7 @@ begin
       goto _default;
      end;
 
-     if (p_print_pmap<>0) then
+     if (p_print_pmap) then
      begin
       if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
       begin
@@ -954,7 +954,7 @@ label
 var
  r:Integer;
 begin
- if (p_print_pmap<>0) then
+ if (p_print_pmap) then
  begin
   Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
  end;
@@ -1012,7 +1012,7 @@ label
 var
  r:Integer;
 begin
- if (p_print_pmap<>0) then
+ if (p_print_pmap) then
  begin
   Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
  end;
@@ -1043,7 +1043,7 @@ begin
       goto _default;
      end;
 
-     if (p_print_pmap<>0) then
+     if (p_print_pmap) then
      begin
       if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
       begin

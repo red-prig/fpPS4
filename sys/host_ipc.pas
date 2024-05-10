@@ -6,6 +6,7 @@ interface
 
 uses
  Classes,
+ SysUtils,
  time,
  mqueue,
  LFQueue,
@@ -89,6 +90,21 @@ type
   procedure   thread_free; override;
   procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
   procedure   WakeupKevent(); override;
+ end;
+
+//
+
+ TGameProcess=class
+  g_ipc  :THostIpcConnect;
+  g_proc :THandle;
+  g_p_pid:Integer;
+  g_fork :Boolean;
+  function   is_terminated:Boolean; virtual;
+  function   exit_code:DWORD; virtual;
+  procedure  suspend; virtual;
+  procedure  resume;  virtual;
+  procedure  stop;    virtual;
+  Destructor Destroy; override;
  end;
 
 implementation
@@ -429,6 +445,40 @@ procedure THostIpcSimpleKERN.WakeupKevent();
 begin
  UpdateKevent();
 end;
+
+//
+
+function TGameProcess.is_terminated:Boolean;
+begin
+ Result:=False;
+end;
+
+function TGameProcess.exit_code:DWORD;
+begin
+ Result:=0;
+end;
+
+procedure TGameProcess.suspend;
+begin
+ //
+end;
+
+procedure TGameProcess.resume;
+begin
+ //
+end;
+
+procedure TGameProcess.stop;
+begin
+ //
+end;
+
+Destructor TGameProcess.Destroy;
+begin
+ FreeAndNil(g_ipc);
+ inherited;
+end;
+
 
 end.
 

@@ -17,16 +17,36 @@ var
  p_base_ps4_mode      :DWORD=1; //[0..1]
  p_neomode            :DWORD=0; //[0..1]
 
- p_halt_on_exit       :DWORD=0;
- p_print_guest_syscall:DWORD=0;
- p_print_pmap         :DWORD=0;
- p_print_jit_preload  :DWORD=0;
+ p_halt_on_exit       :Boolean=False;
+ p_print_guest_syscall:Boolean=False;
+ p_print_pmap         :Boolean=False;
+ p_print_jit_preload  :Boolean=False;
 
  p_host_ipc           :THostIpcInterface=nil;
 
 function p_host_ipc_td:Pointer;
 
+procedure set_neo_mode(neo:Boolean);
+
 implementation
+
+procedure set_neo_mode(neo:Boolean);
+begin
+ case neo of
+  False:
+   begin
+    p_cpuid        :=CPUID_BASE_MODE;
+    p_base_ps4_mode:=1;
+    p_neomode      :=0;
+   end;
+  True:
+   begin
+    p_cpuid        :=CPUID_NEO_MODE;
+    p_base_ps4_mode:=0;
+    p_neomode      :=1;
+   end;
+ end;
+end;
 
 function p_host_ipc_td:Pointer;
 begin

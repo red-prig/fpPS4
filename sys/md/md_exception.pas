@@ -344,8 +344,17 @@ begin
  end;
 end;
 
+var
+ prev_assert:TAssertErrorProc;
+
 Procedure _Assert(Const Msg,FName:Shortstring;LineNo:Longint;ErrorAddr:Pointer);
 begin
+ if (curkthread=nil) then
+ begin
+  prev_assert(Msg,FName,LineNo,ErrorAddr);
+  Exit;
+ end;
+
  Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
  p_host_ipc.error(_get_msg(Msg)+' ('+FName+', line '+IntToStr(LineNo)+').');
 
@@ -379,6 +388,7 @@ procedure InstallExceptionHandler;
 var
  eh:EH_HANDLER_INFO;
 begin
+ prev_assert:=AssertErrorProc;
  AssertErrorProc:=@_Assert;
  //UEHandler:=SetUnhandledExceptionFilter(@UnhandledException);
  VEHandler:=AddVectoredExceptionHandler(1,@ProcessException);

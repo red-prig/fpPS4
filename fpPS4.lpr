@@ -10,6 +10,7 @@ uses
   Forms,
   main,
   game_edit,
+  cfg_edit,
   sys_crt_gui,
   md_systm,
   vm_pmap;
@@ -24,6 +25,7 @@ begin
   Application.Scaled:=True;
   Application.Initialize;
   Application.CreateForm(TfrmMain, frmMain);
+  //Application.CreateForm(TfrmCfgEditor, frmCfgEditor);
   //Application.CreateForm(TfrmGameEditor, frmGameEditor);
   Application.Run;
 end.

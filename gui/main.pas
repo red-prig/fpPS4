@@ -20,8 +20,10 @@ uses
 
   IniFiles,
 
+  host_ipc,
   game_info,
   game_edit,
+  cfg_edit,
   game_run,
 
   host_ipc_interface;
@@ -38,6 +40,8 @@ type
     procedure SetCaptionFPS(Ffps:QWORD);
     procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
   end;
+
+  { TfrmMain }
 
   TfrmMain = class(TForm)
     MainImageList: TImageList;
@@ -66,6 +70,7 @@ type
     procedure MIAddFolderClick(Sender: TObject);
     procedure MIDelClick(Sender: TObject);
     procedure MIEditClick(Sender: TObject);
+    procedure TBConfigClick(Sender: TObject);
     procedure MIRunClick(Sender: TObject);
     procedure TBPauseClick(Sender: TObject);
     procedure TBPlayClick(Sender: TObject);
@@ -78,7 +83,7 @@ type
 
     FIniFile:TIniFile;
 
-    FMainInfo:TMainInfo;
+    FMainConfigInfo:TMainConfigInfo;
 
     FAddHandle:THandle;
     FGetHandle:THandle;
@@ -262,7 +267,7 @@ begin
  IpcHandler.Form:=Self;
 
  //main
- FMainInfo.ReadIni(FIniFile,'main');
+ FMainConfigInfo.MainInfo.ReadIni(FIniFile,'main');
  //main
 
  //games
@@ -382,13 +387,13 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
- FMainInfo:=TMainInfo.Create;
+ FMainConfigInfo:=TMainConfigInfo.Create;
 
  FIniFile:=TIniFile.Create('fpps4.ini');
 
  ReadIniFile;
 
- OpenLog(FMainInfo.LogFile);
+ OpenLog(FMainConfigInfo.MainInfo.LogFile);
 
  if (Application.Tag<>0) then
  begin
@@ -599,6 +604,17 @@ begin
  form.FormInit(False);
 end;
 
+procedure TfrmMain.TBConfigClick(Sender: TObject);
+begin
+ if (frmCfgEditor=nil) then
+ begin
+  frmCfgEditor:=TfrmCfgEditor.Create(Self);
+  frmCfgEditor.FMainConfigInfo:=FMainConfigInfo;
+ end;
+
+ frmCfgEditor.FormInit;
+end;
+
 procedure TfrmMain.LogEnd;
 begin
  Fmlog.TopLine:=Fmlog.Lines.Count;
@@ -635,7 +651,7 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=True;
+ cfg.fork_proc:=FMainConfigInfo.MainInfo.fork_proc;
 
  if Item.FLock then Exit;
 

@@ -1,0 +1,197 @@
+object frmCfgEditor: TfrmCfgEditor
+  Left = 298
+  Height = 323
+  Top = 125
+  Width = 400
+  Caption = 'Config Editor'
+  ClientHeight = 323
+  ClientWidth = 400
+  Position = poMainFormCenter
+  LCLVersion = '3.99.0.0'
+  object EditPages: TPageControl
+    Left = 0
+    Height = 274
+    Top = 0
+    Width = 397
+    ActivePage = Tab_MainInfo
+    Align = alCustom
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    BorderSpacing.Bottom = 10
+    TabIndex = 0
+    TabOrder = 0
+    object Tab_MainInfo: TTabSheet
+      Caption = 'Main'
+      ClientHeight = 246
+      ClientWidth = 389
+      object Label1: TLabel
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Tab_MainInfo
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Log File:'
+      end
+      object Edt_MainInfo_LogFile: TEdit
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Label1
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 35
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 0
+      end
+      object Edt_MainInfo_fork_proc: TCheckBox
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 68
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Run in a separate process'
+        TabOrder = 1
+      end
+    end
+    object Tab_BootparamInfo: TTabSheet
+      Caption = 'Bootparam'
+      ClientHeight = 246
+      ClientWidth = 389
+      object Edt_BootparamInfo_neo: TCheckBox
+        AnchorSideLeft.Control = Tab_BootparamInfo
+        AnchorSideTop.Control = Tab_BootparamInfo
+        AnchorSideRight.Control = Tab_BootparamInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 10
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'ps4 pro mode'
+        TabOrder = 0
+      end
+      object Edt_BootparamInfo_halt_on_exit: TCheckBox
+        AnchorSideLeft.Control = Tab_BootparamInfo
+        AnchorSideTop.Control = Edt_BootparamInfo_neo
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_BootparamInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 39
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'halt on exit'
+        TabOrder = 1
+      end
+      object Edt_BootparamInfo_print_guest_syscall: TCheckBox
+        AnchorSideLeft.Control = Tab_BootparamInfo
+        AnchorSideTop.Control = Edt_BootparamInfo_halt_on_exit
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_BootparamInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 68
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'print guest syscall'
+        TabOrder = 2
+      end
+      object Edt_BootparamInfo_print_pmap: TCheckBox
+        AnchorSideLeft.Control = Tab_BootparamInfo
+        AnchorSideTop.Control = Edt_BootparamInfo_print_guest_syscall
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_BootparamInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 97
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'print pmap'
+        TabOrder = 3
+      end
+      object Edt_BootparamInfo_print_jit_preload: TCheckBox
+        AnchorSideLeft.Control = Tab_BootparamInfo
+        AnchorSideTop.Control = Edt_BootparamInfo_print_pmap
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_BootparamInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 126
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'print jit preload'
+        TabOrder = 4
+      end
+    end
+  end
+  object BtnCancel: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 315
+    Height = 25
+    Top = 288
+    Width = 75
+    Anchors = [akRight, akBottom]
+    BorderSpacing.Right = 10
+    BorderSpacing.Bottom = 10
+    Caption = 'cancel'
+    TabOrder = 2
+    OnClick = BtnCancelClick
+  end
+  object BtnOk: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 10
+    Height = 25
+    Top = 288
+    Width = 75
+    Anchors = [akLeft, akBottom]
+    BorderSpacing.Left = 10
+    BorderSpacing.Bottom = 10
+    Caption = 'ok'
+    TabOrder = 1
+    OnClick = BtnOkClick
+  end
+end

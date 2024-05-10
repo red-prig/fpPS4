@@ -214,7 +214,7 @@ var
  node:p_jit_entry_point;
  ctx:t_jit_context2;
 begin
- if (p_print_jit_preload<>0) then
+ if (p_print_jit_preload) then
  begin
   Writeln('unk addr:0x',HexStr(addr));
  end;
@@ -470,7 +470,7 @@ begin
 
   if (dest<>0) then
   begin
-   if (p_print_jit_preload<>0) then
+   if (p_print_jit_preload) then
    begin
     Writeln('cache:',HexStr(addr),'->',HexStr(dest,16));
    end;
@@ -685,7 +685,7 @@ begin
  end;
  jcode^.d_end:=QWORD(jcode^.dest)+recompil;
 
- if (p_print_jit_preload<>0) then
+ if (p_print_jit_preload) then
  begin
   Writeln('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
  end;
@@ -782,7 +782,7 @@ begin
 
  blob^.init_plt;
 
- if (p_print_jit_preload<>0) then
+ if (p_print_jit_preload) then
  begin
   Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
  end;
@@ -1095,7 +1095,7 @@ begin
  base:=nil;
  size:=_size;
 
- ///md_mmap(base,size,MD_PROT_RWX);
+ ///md_mmap(base,size,VM_RWX);
 
  mchunk:=p_alloc(nil,_size,False);
  base:=@mchunk^.body;

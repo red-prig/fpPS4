@@ -25,8 +25,8 @@ type
     TabMain: TTabSheet;
     TabMounts: TTabSheet;
     TabParamSfo: TTabSheet;
-    procedure BtnCancelClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
+    procedure BtnCancelClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormInit(UpdateTitle:Boolean);
     procedure FormSave;
@@ -203,11 +203,8 @@ procedure TfrmGameEditor.FormInit(UpdateTitle:Boolean);
 var
  fip:TFieldInfoPath;
 
- i,c:Integer;
-
- Ctx:TRTTIContext;
- RT :TRTTIType;
- A  :specialize TArray<TRttiProperty>;
+ i:TRttiPropertyIterator;
+ p:TRttiProperty;
 begin
  EditPages.ActivePageIndex:=0;
 
@@ -222,45 +219,45 @@ begin
  fip:=TFieldInfoPath.Create(Self);
  //
 
- Ctx:=TRTTIContext.Create;
+ i:=Item.FGameInfo.GetPropertyIterator;
  try
-  ///
-  RT:=Ctx.GetType(Item.FGameInfo.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
+  while (i.GetProperty<>nil) do
   begin
-   For i:=0 to c-1 do
-   begin
-    case A[i].Name of
-     'Name'   :FName_row   :=GridMain.RowCount;
-     'TitleId':FTitleId_row:=GridMain.RowCount;
-     'Version':FVersion_row:=GridMain.RowCount;
-     else;
-    end;
 
-    AddRow(GridMain,A[i].Name+':',A[i].GetValue(Item.FGameInfo).AsString,nil);
+   p:=i.GetProperty;
+   case p.Name of
+    'Name'   :FName_row   :=GridMain.RowCount;
+    'TitleId':FTitleId_row:=GridMain.RowCount;
+    'Version':FVersion_row:=GridMain.RowCount;
+    else;
    end;
-  end;
-  ///
-  RT:=Ctx.GetType(Item.FMountList.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    case A[i].Name of
-     'app0':Fapp0_row:=GridMounts.RowCount;
-     else;
-    end;
 
-    AddRow(GridMounts,'/'+A[i].Name,A[i].GetValue(Item.FMountList).AsString,fip);
-   end;
+   AddRow(GridMain,p.Name+':',p.GetValue(Item.FGameInfo).AsString,nil);
+
+   i.Next;
   end;
-  ///
  finally
-  Ctx.free;
+  i.free;
+ end;
+
+ i:=Item.FMountList.GetPropertyIterator;
+ try
+  while (i.GetProperty<>nil) do
+  begin
+
+   p:=i.GetProperty;
+
+   case p.Name of
+    'app0':Fapp0_row:=GridMounts.RowCount;
+    else;
+   end;
+
+   AddRow(GridMounts,'/'+p.Name,p.GetValue(Item.FMountList).AsString,fip);
+
+   i.Next;
+  end;
+ finally
+  i.free;
  end;
 
  LoadParamSfo(UpdateTitle);
@@ -270,41 +267,37 @@ end;
 
 procedure TfrmGameEditor.FormSave;
 var
- i,c:Integer;
-
- Ctx:TRTTIContext;
- RT :TRTTIType;
- A  :specialize TArray<TRttiProperty>;
+ i:TRttiPropertyIterator;
+ p:TRttiProperty;
 begin
-
- Ctx:=TRTTIContext.Create;
+ i:=Item.FGameInfo.GetPropertyIterator;
  try
-  ///
-  RT:=Ctx.GetType(Item.FGameInfo.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
+  while (i.GetProperty<>nil) do
   begin
-   For i:=0 to c-1 do
-   begin
-    A[i].SetValue(Item.FGameInfo,GridMain.Cells[1,i]);
-   end;
+
+   p:=i.GetProperty;
+   p.SetValue(Item.FGameInfo,GridMain.Cells[1,i.i]);
+
+   i.Next;
   end;
-  ///
-  RT:=Ctx.GetType(Item.FMountList.ClassInfo);
-  A:=rt.GetProperties;
-  c:=Length(A);
-  if (c<>0) then
-  begin
-   For i:=0 to c-1 do
-   begin
-    A[i].SetValue(Item.FMountList,GridMounts.Cells[1,i]);
-   end;
-  end;
-  ///
  finally
-  Ctx.free;
+  i.free;
  end;
+
+ i:=Item.FMountList.GetPropertyIterator;
+ try
+  while (i.GetProperty<>nil) do
+  begin
+
+   p:=i.GetProperty;
+   p.SetValue(Item.FMountList,GridMounts.Cells[1,i.i]);
+
+   i.Next;
+  end;
+ finally
+  i.free;
+ end;
+
 end;
 
 function GetGridVal(Grid:TStringGrid;ARow:Integer):RawByteString;
@@ -396,11 +389,6 @@ begin
  LoadParamSfo(True);
 end;
 
-procedure TfrmGameEditor.BtnCancelClick(Sender: TObject);
-begin
- Close;
-end;
-
 procedure TfrmGameEditor.BtnOkClick(Sender: TObject);
 begin
  FormSave;
@@ -409,6 +397,11 @@ begin
  begin
   OnSave(Self);
  end;
+ Close;
+end;
+
+procedure TfrmGameEditor.BtnCancelClick(Sender: TObject);
+begin
  Close;
 end;
 

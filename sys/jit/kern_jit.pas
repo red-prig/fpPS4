@@ -1437,7 +1437,7 @@ begin
   ctx.max_rel:=QWORD(ctx.max_forward_point);
  end;
 
- if (p_print_jit_preload<>0) then
+ if (p_print_jit_preload) then
  begin
   Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
   Writeln(' ctx.max_rel   :0x',HexStr(ctx.max_rel,16));
@@ -1475,7 +1475,7 @@ begin
 
   if not ctx.is_text_addr(QWORD(ptr)) then
   begin
-   if (p_print_jit_preload<>0) then
+   if (p_print_jit_preload) then
    begin
     writeln('not excec:0x',HexStr(ptr));
    end;
@@ -1484,7 +1484,7 @@ begin
 
   if ((pmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
-   if (p_print_jit_preload<>0) then
+   if (p_print_jit_preload) then
    begin
     writeln('not excec:0x',HexStr(ptr));
    end;
@@ -1505,14 +1505,14 @@ begin
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     if (p_print_jit_preload<>0) then
+     if (p_print_jit_preload) then
      begin
       writeln('invalid1:0x',HexStr(ctx.ptr_curr));
      end;
 
      _invalid:
 
-     if (p_print_jit_preload<>0) then
+     if (p_print_jit_preload) then
      begin
       print_frame(stdout,ctx.ptr_curr);
       Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
@@ -1548,7 +1548,7 @@ begin
      (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
   begin
-   if (p_print_jit_preload<>0) then
+   if (p_print_jit_preload) then
    begin
     writeln('invalid2:0x',HexStr(ctx.ptr_curr));
    end;
