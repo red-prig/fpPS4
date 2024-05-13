@@ -110,7 +110,7 @@ const
 
  MAP_ENTRY_VN_WRITECNT  =$10000; // writeable vnode mapping
 
-                      //0x20000
+                      //0x20000 not simplify ???
                       //0x40000
                       //0x80000
 
@@ -138,7 +138,7 @@ const
  MAP_ACC_NO_CHARGE   =$8000;
 
  MAP_COW_SYSTEM      =$10000;
- MAP_COW_UNK         =$20000;
+ MAP_COW_NO_BUDGET   =$20000;
  MAP_COW_KERNEL      =$40000;
 
  MAP_COW_NO_COALESCE =$400000;
@@ -1033,7 +1033,7 @@ begin
  protoeflags:=0;
  charge_prev_obj:=FALSE;
 
- protoeflags:=protoeflags or (cow and (MAP_COW_NO_COALESCE or MAP_COW_UNK));
+ protoeflags:=protoeflags or (cow and (MAP_COW_NO_COALESCE or MAP_COW_NO_BUDGET));
 
  if ((cow and MAP_COPY_ON_WRITE)<>0) then
  begin
@@ -1085,7 +1085,7 @@ charged:
 
  //budget
  if (max=0) or
-    ((cow and MAP_COW_UNK)<>0) or
+    ((cow and MAP_COW_NO_BUDGET)<>0) or
     (p_proc.p_budget_ptype=-1) then
  begin
    //
@@ -1488,7 +1488,7 @@ var
  obj:vm_map_object;
  sdk_5:Boolean;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or MAP_COW_UNK or MAP_ENTRY_IN_TRANSITION))<>0) or
+ if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or $20000 or MAP_ENTRY_IN_TRANSITION))<>0) or
     (entry^.inheritance=VM_INHERIT_HOLE) then
  begin
   Exit;

@@ -52,6 +52,21 @@ type
   property print_jit_preload  :Boolean read Fprint_jit_preload   write Fprint_jit_preload  ;
  end;
 
+ TJITInfo=class(TAbstractInfo)
+ private
+  Fprint_asm       :Boolean;
+  Fdebug_info      :Boolean;
+  Frelative_analize:Boolean;
+  Fmemory_guard    :Boolean;
+ published
+  property print_asm       :Boolean read Fprint_asm        write Fprint_asm       ;
+  property debug_info      :Boolean read Fdebug_info       write Fdebug_info      ;
+  property relative_analize:Boolean read Frelative_analize write Frelative_analize;
+  property memory_guard    :Boolean read Fmemory_guard     write Fmemory_guard    ;
+ public
+  Constructor Create; override;
+ end;
+
  TMainInfo=class(TAbstractInfo)
  private
   FLogFile  :RawByteString;
@@ -63,13 +78,15 @@ type
   Constructor Create; override;
  end;
 
- TMainConfigInfo=class(TAbstractInfo)
+ TConfigInfo=class(TAbstractInfo)
   private
    FMainInfo     :TMainInfo;
    FBootParamInfo:TBootParamInfo;
+   FJITInfo      :TJITInfo;
   published
-   property MainInfo     :TMainInfo      read FMainInfo write FMainInfo;
+   property MainInfo     :TMainInfo      read FMainInfo      write FMainInfo;
    property BootParamInfo:TBootParamInfo read FBootParamInfo write FBootParamInfo;
+   property JITInfo      :TJITInfo       read FJITInfo       write FJITInfo;
  end;
 
  TGameInfo=class(TAbstractInfo)
@@ -109,9 +126,22 @@ type
    FMountList:TMountList;
    FLock     :Boolean;
   public
-   Constructor Create; override;
+   Constructor Create;  override;
    Destructor  Destroy; override;
-   Procedure   Serialize(Stream:TStream); override;
+   Procedure   Serialize  (Stream:TStream); override;
+   Procedure   Deserialize(Stream:TStream); override;
+ end;
+
+ TGameStartupInfo=class(TAbstractInfo)
+  public
+   FReader  :Boolean;
+   FPipe    :THandle;
+   FConfInfo:TConfigInfo;
+   FGameItem:TGameItem;
+  public
+   Constructor Create(Reader:Boolean); reintroduce;
+   Destructor  Destroy; override;
+   Procedure   Serialize  (Stream:TStream); override;
    Procedure   Deserialize(Stream:TStream); override;
  end;
 
@@ -349,7 +379,6 @@ begin
      obj.Free;
     end;
 
-    p.SetValue(Self,TObject(nil));
    end;
 
    i.Next;
@@ -455,6 +484,12 @@ begin
  end;
 end;
 
+Constructor TJITInfo.Create;
+begin
+ inherited;
+ Frelative_analize:=True;
+end;
+
 Constructor TMainInfo.Create;
 begin
  inherited;
@@ -483,7 +518,6 @@ begin
  inherited;
  FGameInfo :=TGameInfo .Create;
  FMountList:=TMountList.Create;
- inherited;
 end;
 
 Destructor TGameItem.Destroy;
@@ -492,6 +526,8 @@ begin
  FreeAndNil(FMountList);
  inherited;
 end;
+
+//
 
 Procedure TGameItem.Serialize(Stream:TStream);
 begin
@@ -503,6 +539,44 @@ Procedure TGameItem.Deserialize(Stream:TStream);
 begin
  FGameInfo .Deserialize(Stream);
  FMountList.Deserialize(Stream);
+end;
+
+//
+
+Constructor TGameStartupInfo.Create(Reader:Boolean);
+begin
+ inherited Create;
+ FReader:=Reader;
+ if FReader then
+ begin
+  FConfInfo:=TConfigInfo.Create;
+  FGameItem:=TGameItem.Create;
+ end;
+end;
+
+Destructor TGameStartupInfo.Destroy;
+begin
+ if FReader then
+ begin
+  FreeAndNil(FConfInfo);
+  FreeAndNil(FGameItem);
+ end;
+ inherited;
+end;
+
+Procedure TGameStartupInfo.Serialize(Stream:TStream);
+begin
+ Stream.Write(FPipe,SizeOf(THandle));
+ FConfInfo.Serialize(Stream);
+ FGameItem.Serialize(Stream);
+end;
+
+Procedure TGameStartupInfo.Deserialize(Stream:TStream);
+begin
+ FPipe:=0;
+ Stream.Read(FPipe,SizeOf(THandle));
+ FConfInfo.Deserialize(Stream);
+ FGameItem.Deserialize(Stream);
 end;
 
 end.

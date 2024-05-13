@@ -83,7 +83,7 @@ type
 
     FIniFile:TIniFile;
 
-    FMainConfigInfo:TMainConfigInfo;
+    FConfigInfo:TConfigInfo;
 
     FAddHandle:THandle;
     FGetHandle:THandle;
@@ -267,7 +267,7 @@ begin
  IpcHandler.Form:=Self;
 
  //main
- FMainConfigInfo.MainInfo.ReadIni(FIniFile,'main');
+ FConfigInfo.MainInfo.ReadIni(FIniFile,'main');
  //main
 
  //games
@@ -387,13 +387,13 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
- FMainConfigInfo:=TMainConfigInfo.Create;
+ FConfigInfo:=TConfigInfo.Create;
 
  FIniFile:=TIniFile.Create('fpps4.ini');
 
  ReadIniFile;
 
- OpenLog(FMainConfigInfo.MainInfo.LogFile);
+ OpenLog(FConfigInfo.MainInfo.LogFile);
 
  if (Application.Tag<>0) then
  begin
@@ -609,7 +609,7 @@ begin
  if (frmCfgEditor=nil) then
  begin
   frmCfgEditor:=TfrmCfgEditor.Create(Self);
-  frmCfgEditor.FMainConfigInfo:=FMainConfigInfo;
+  frmCfgEditor.FConfigInfo:=FConfigInfo;
  end;
 
  frmCfgEditor.FormInit;
@@ -651,11 +651,12 @@ begin
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
 
- cfg.fork_proc:=FMainConfigInfo.MainInfo.fork_proc;
+ cfg.FConfInfo:=FConfigInfo;
+ cfg.FGameItem:=Item;
 
  if Item.FLock then Exit;
 
- FGameProcess:=run_item(cfg,Item);
+ FGameProcess:=run_item(cfg);
 
  if (FGameProcess<>nil) then
  begin

@@ -240,8 +240,12 @@ begin
 
  dmap:=dmem_maps[default_pool_id];
 
- //eflags = flags & MAP_NO_COALESCE | 0x20000 | 0x80000
- cow:=(flags and MAP_NO_COALESCE) or MAP_COW_UNK;
+ //entry->eflags = flags & 0x400000 | 0x20000 | 0x80000
+ //0x400000 -> MAP_ENTRY_NO_COALESCE -> MAP_NO_COALESCE
+ //0x20000  -> not simplify ???
+ //0x80000  -> ???
+
+ cow:=(flags and MAP_NO_COALESCE);
 
  vm_map_lock(map);
 

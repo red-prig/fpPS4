@@ -1,7 +1,7 @@
 object frmMain: TfrmMain
-  Left = 342
+  Left = 305
   Height = 343
-  Top = 294
+  Top = 335
   Width = 623
   Caption = 'fpPS4'
   ClientHeight = 343

@@ -21,7 +21,8 @@ type
   hOutput:THandle;
   hError :THandle;
 
-  fork_proc:Boolean;
+  FConfInfo:TConfigInfo;
+  FGameItem:TGameItem;
  end;
 
  TGameProcessSimple=class(TGameProcess)
@@ -31,7 +32,7 @@ type
   Destructor Destroy; override;
  end;
 
-function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
+function run_item(const cfg:TGameRunConfig):TGameProcess;
 
 implementation
 
@@ -51,6 +52,9 @@ uses
 
  md_game_process,
 
+ kern_jit,
+ kern_jit_ctx,
+
  dev_dce,
  display_soft,
 
@@ -61,6 +65,8 @@ uses
  ps4_libSceMbus,
  ps4_libSceDialogs,
  ps4_libSceAvSetting,
+ //ps4_libSceDiscMap,
+ //ps4_libSceNpManager,
  //internal libs
 
  kern_rtld,
@@ -109,19 +115,43 @@ begin
  //debug_tty.t_update   :=@WakeMainThread;
 end;
 
-procedure prepare(Item:TGameItem); SysV_ABI_CDecl;
+procedure load_config(ConfInfo:TConfigInfo);
+begin
+ sys_bootparam.set_neo_mode(ConfInfo.BootParamInfo.Neo);
+
+ sys_bootparam.p_halt_on_exit       :=ConfInfo.BootParamInfo.halt_on_exit;
+ sys_bootparam.p_print_guest_syscall:=ConfInfo.BootParamInfo.print_guest_syscall;
+ sys_bootparam.p_print_pmap         :=ConfInfo.BootParamInfo.print_pmap;
+ sys_bootparam.p_print_jit_preload  :=ConfInfo.BootParamInfo.print_jit_preload;
+
+ //
+
+ kern_jit.print_asm :=ConfInfo.JITInfo.print_asm;
+ kern_jit.debug_info:=ConfInfo.JITInfo.debug_info;
+
+ kern_jit_ctx.jit_relative_analize:=ConfInfo.JITInfo.relative_analize;
+ kern_jit_ctx.jit_memory_guard    :=ConfInfo.JITInfo.memory_guard;
+
+ //
+
+end;
+
+procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
  td:p_kthread;
  err:Integer;
  len:Integer;
  exec:array[0..PATH_MAX] of Char;
  argv:array[0..1] of PChar;
+ Item:TGameItem;
 begin
  //re_init_tty;
  //init_tty:=@re_init_tty;
 
  //init all
  sys_init;
+
+ load_config(GameStartupInfo.FConfInfo);
 
  if (p_host_ipc<>nil) then
  begin
@@ -133,6 +163,8 @@ begin
  //p_neomode      :=1;
 
  dev_dce.dce_interface:=display_soft.TDisplayHandleSoft;
+
+ Item:=GameStartupInfo.FGameItem;
 
  g_appinfo.mmap_flags:=1; //is_big_app ???
  g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
@@ -190,10 +222,14 @@ begin
  td:=curkthread;
  td^.td_pflags:=td^.td_pflags and (not TDP_KTHREAD);
 
+ //
+ FreeAndNil(GameStartupInfo);
+ //
+
  err:=main_execve(argv[0],@argv[0],nil);
  if (err<>0) then
  begin
-  print_error_td('error execve "'+Item.FGameInfo.Exec+'" code='+IntToStr(err));
+  print_error_td('error execve "'+exec+'" code='+IntToStr(err));
  end;
  //
 
@@ -229,14 +265,14 @@ var
  kipc:THostIpcPipeKERN;
 
  mem:TPCharStream;
- Item:TGameItem;
+ GameStartupInfo:TGameStartupInfo;
 begin
+ //while not IsDebuggerPresent do sleep(100);
+
  mem:=TPCharStream.Create(data,size);
 
- mem.Read(pipefd,SizeOf(THandle));
-
- Item:=TGameItem.Create;
- Item.Deserialize(mem);
+ GameStartupInfo:=TGameStartupInfo.Create(True);
+ GameStartupInfo.Deserialize(mem);
 
  mem.Free;
 
@@ -245,6 +281,7 @@ begin
 
  parent:=md_pidfd_open(md_getppid);
 
+ pipefd:=GameStartupInfo.FPipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
  kipc:=THostIpcPipeKERN.Create;
@@ -253,13 +290,13 @@ begin
  p_host_ipc:=kipc;
 
  td:=nil;
- r:=kthread_add(@prepare,Item,@td,0,'[main]');
+ r:=kthread_add(@prepare,GameStartupInfo,@td,0,'[main]');
  Assert(r=0);
 
  msleep_td(0);
 end;
 
-function run_item(const cfg:TGameRunConfig;Item:TGameItem):TGameProcess;
+function run_item(const cfg:TGameRunConfig):TGameProcess;
 var
  r:Integer;
 
@@ -274,19 +311,24 @@ var
  s_kern_ipc:THostIpcSimpleKERN;
  s_mgui_ipc:THostIpcSimpleMGUI;
 
+ GameStartupInfo:TGameStartupInfo;
  mem:TMemoryStream;
 begin
  Result:=nil;
+
+ GameStartupInfo:=TGameStartupInfo.Create(False);
+ GameStartupInfo.FConfInfo:=cfg.FConfInfo;
+ GameStartupInfo.FGameItem:=cfg.FGameItem;
 
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
 
  fork_info:=Default(t_fork_proc);
 
- if cfg.fork_proc then
+ if cfg.FConfInfo.MainInfo.fork_proc then
  begin
   Result:=TGameProcessPipe.Create;
-  Result.g_fork:=cfg.fork_proc;
+  Result.g_fork:=True;
 
   with TGameProcessPipe(Result) do
   begin
@@ -303,9 +345,9 @@ begin
 
   mem:=TMemoryStream.Create;
 
-  mem.Write(kern2mgui[1],SizeOf(THandle));
-
-  Item.Serialize(mem);
+  GameStartupInfo.FPipe:=kern2mgui[1];
+  GameStartupInfo.Serialize(mem);
+  FreeAndNil(GameStartupInfo);
 
   fork_info.hInput :=GetStdHandle(STD_INPUT_HANDLE);
   fork_info.hOutput:=cfg.hOutput;
@@ -321,7 +363,7 @@ begin
  end else
  begin
   Result:=TGameProcessSimple.Create;
-  Result.g_fork:=cfg.fork_proc;
+  Result.g_fork:=False;
 
   with TGameProcessSimple(Result) do
   begin
@@ -337,7 +379,7 @@ begin
    p_host_ipc:=s_kern_ipc;
 
    Ftd:=nil;
-   r:=kthread_add(@prepare,Item,@Ftd,0,'[main]');
+   r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');
 
    fork_info.fork_pid:=GetProcessID;
   end;

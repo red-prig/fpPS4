@@ -18,14 +18,19 @@ type
     BtnCancel: TButton;
     BtnOk: TButton;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
+    Edt_JITInfo_debug_info: TCheckBox;
+    Edt_JITInfo_relative_analize: TCheckBox;
+    Edt_JITInfo_print_asm: TCheckBox;
     Edt_BootparamInfo_print_guest_syscall: TCheckBox;
     Edt_BootparamInfo_print_pmap: TCheckBox;
     Edt_BootparamInfo_print_jit_preload: TCheckBox;
+    Edt_JITInfo_memory_guard: TCheckBox;
     Edt_MainInfo_fork_proc: TCheckBox;
     Edt_MainInfo_LogFile: TEdit;
     Edt_BootparamInfo_neo: TCheckBox;
     EditPages: TPageControl;
     Label1: TLabel;
+    Tab_JIT: TTabSheet;
     Tab_MainInfo: TTabSheet;
     Tab_BootparamInfo: TTabSheet;
     procedure BtnCancelClick(Sender: TObject);
@@ -37,7 +42,7 @@ type
   private
 
   public
-   FMainConfigInfo:TMainConfigInfo;
+   FConfigInfo:TConfigInfo;
   end;
 
 var
@@ -206,7 +211,7 @@ var
 begin
  EditPages.ActivePageIndex:=0;
 
- i:=FMainConfigInfo.GetPropertyIterator;
+ i:=FConfigInfo.GetPropertyIterator;
  try
   while (i.GetProperty<>nil) do
   begin
@@ -217,7 +222,7 @@ begin
 
     tkClass:
      begin
-      obj:=p.GetValue(FMainConfigInfo).AsObject;
+      obj:=p.GetValue(FConfigInfo).AsObject;
 
       if (obj<>nil) then
       if obj.InheritsFrom(TAbstractInfo) then
@@ -244,7 +249,7 @@ var
  p:TRttiProperty;
  obj:TObject;
 begin
- i:=FMainConfigInfo.GetPropertyIterator;
+ i:=FConfigInfo.GetPropertyIterator;
  try
   while (i.GetProperty<>nil) do
   begin
@@ -255,7 +260,7 @@ begin
 
     tkClass:
      begin
-      obj:=p.GetValue(FMainConfigInfo).AsObject;
+      obj:=p.GetValue(FConfigInfo).AsObject;
 
       if (obj<>nil) then
       if obj.InheritsFrom(TAbstractInfo) then

@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 778
+  Left = 693
   Height = 319
-  Top = 146
+  Top = 166
   Width = 397
   Caption = 'Game editor'
   ClientHeight = 319

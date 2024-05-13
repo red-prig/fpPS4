@@ -484,7 +484,7 @@ begin
 
  if (handle_type=OBJT_BLOCKPOOL) then
  begin
-  docow:=docow or (MAP_COW_UNK or MAP_COW_NO_COALESCE);
+  docow:=docow or (MAP_COW_NO_BUDGET or MAP_COW_NO_COALESCE);
  end else
  begin
   docow:=docow or (flags and MAP_NO_COALESCE);
