@@ -9,8 +9,8 @@ uses
   SysUtils,
   TypInfo,
   Rtti,
-  IniFiles,
-  host_ipc;
+  jsonreader,
+  fpjson;
 
 type
  TRttiPropertyIterator=object
@@ -22,22 +22,84 @@ type
   function  Next:Boolean;
  end;
 
- TAbstractInfo=class
+ TJSONStreamWriter=class
+  FLevel :Byte;
+  FState :(swInit,swFirst,swNext);
+  FStream:TStream;
+  constructor Create(Stream:TStream);
+  function    GetStateStr:RawByteString;
+  Procedure   WriteStartObject(const name:RawByteString);
+  Procedure   WriteStopObject;
+  Procedure   WriteStartArray(const name:RawByteString);
+  Procedure   WriteStopArray;
+  Procedure   WriteValue(const name:RawByteString;Value:TValue);
+ end;
+
+ TAbstractObject=class
   Function    GetPropertyIterator:TRttiPropertyIterator;
-  Procedure   Serialize  (Stream:TStream);    virtual;
-  Procedure   Deserialize(Stream:TStream);    virtual;
-  Procedure   CopyTo     (dst:TAbstractInfo); virtual;
-  Procedure   CreateSub;                      virtual;
-  Procedure   DestroySub;                     virtual;
-  procedure   ReadIni    (INI:TIniFile;const Section:RawByteString);
-  procedure   WriteIni   (INI:TIniFile;const Section:RawByteString);
+  Procedure   Serialize  (Stream:TStream);      virtual;
+  Procedure   Deserialize(Stream:TStream);      virtual;
+  Procedure   CopyTo     (dst:TAbstractObject); virtual;
+  Procedure   CreateSub;                        virtual;
+  Procedure   DestroySub;                       virtual;
+  Procedure   WriteJSON  (const name:RawByteString;Stream:TJSONStreamWriter); virtual;
   Constructor Create;  virtual;
   Destructor  Destroy; override;
  end;
 
- TAbstractInfoClass=class of TAbstractInfo;
+ TAbstractObjectClass=class of TAbstractObject;
 
- TBootParamInfo=class(TAbstractInfo)
+ TAbstractArray=class(TAbstractObject)
+  Function  GetArrayCount:SizeInt;            virtual; abstract;
+  Function  GetArrayItem(i:SizeInt):TValue;   virtual; abstract;
+  Function  AddObject:TAbstractObject;        virtual; abstract;
+  Function  AddArray :TAbstractArray;         virtual; abstract;
+  procedure AddValue (Value:TValue);          virtual; abstract;
+  //
+  Procedure Serialize  (Stream:TStream);      override;
+  Procedure Deserialize(Stream:TStream);      override;
+  Procedure CopyTo     (dst:TAbstractObject); override;
+  Procedure WriteJSON  (const name:RawByteString;Stream:TJSONStreamWriter); override;
+ end;
+
+ TJSONStreamReader=class(TBaseJSONReader)
+   type
+    PJNode=^TJNode;
+    TJNode=record
+     FObject:TAbstractObject;
+     FRType :TRTTIType;
+    end;
+   Var
+    FCtx  :TRTTIContext;
+    FStack:array of TJNode;
+    FCount:SizeUInt;
+    FItem :TRttiProperty;
+    FRoot :TJNode;
+
+   Procedure  Execute(obj:TAbstractObject);
+
+   Procedure  Push;
+   Procedure  Pop;
+   Function   Top:PJNode;
+
+   Procedure  KeyValue    (Const AKey:TJSONStringType);   override;
+   Procedure  SetValue    (Value:TValue);
+   Procedure  StringValue (Const AValue:TJSONStringType); override;
+   Procedure  NumberValue (Const AValue:TJSONStringType); override;
+   Procedure  NullValue;   override;
+   Procedure  FloatValue  (Const AValue:Double);  override;
+   Procedure  BooleanValue(Const AValue:Boolean); override;
+   Procedure  IntegerValue(Const AValue:integer); override;
+   Procedure  Int64Value  (Const AValue:int64);   override;
+   Procedure  QWordValue  (Const AValue:QWord);   override;
+   Procedure  StartArray;  override;
+   Procedure  StartObject; override;
+   Procedure  EndArray;    override;
+   Procedure  EndObject;   override;
+   Destructor Destroy();   override;
+ end;
+
+ TBootParamInfo=class(TAbstractObject)
  private
   FNeo                :Boolean;
   Fhalt_on_exit       :Boolean;
@@ -52,7 +114,7 @@ type
   property print_jit_preload  :Boolean read Fprint_jit_preload   write Fprint_jit_preload  ;
  end;
 
- TJITInfo=class(TAbstractInfo)
+ TJITInfo=class(TAbstractObject)
  private
   Fprint_asm       :Boolean;
   Fdebug_info      :Boolean;
@@ -67,18 +129,22 @@ type
   Constructor Create; override;
  end;
 
- TMainInfo=class(TAbstractInfo)
+ TMainInfo=class(TAbstractObject)
  private
   FLogFile  :RawByteString;
+  Fsystem   :RawByteString;
+  Fdata     :RawByteString;
   Ffork_proc:Boolean;
  published
   property LogFile  :RawByteString read FLogFile   write FLogFile;
+  property system   :RawByteString read Fsystem    write Fsystem;
+  property data     :RawByteString read Fdata      write Fdata;
   property fork_proc:Boolean       read Ffork_proc write Ffork_proc;
  public
   Constructor Create; override;
  end;
 
- TConfigInfo=class(TAbstractInfo)
+ TConfigInfo=class(TAbstractObject)
   private
    FMainInfo     :TMainInfo;
    FBootParamInfo:TBootParamInfo;
@@ -89,7 +155,7 @@ type
    property JITInfo      :TJITInfo       read FJITInfo       write FJITInfo;
  end;
 
- TGameInfo=class(TAbstractInfo)
+ TGameInfo=class(TAbstractObject)
  private
   FName   :RawByteString;
   FTitleId:RawByteString;
@@ -106,7 +172,7 @@ type
   Constructor Create; override;
  end;
 
- TMountList=class(TAbstractInfo)
+ TMountList=class(TAbstractObject)
   private
    Fapp0  :RawByteString;
    Fsystem:RawByteString;
@@ -119,20 +185,17 @@ type
    Constructor Create; override;
  end;
 
- TGameItem=class(TAbstractInfo)
+ TGameItem=class(TAbstractObject)
   public
-   FSecton   :RawByteString;
-   FGameInfo :TGameInfo ;
+   FGameInfo :TGameInfo;
    FMountList:TMountList;
    FLock     :Boolean;
-  public
-   Constructor Create;  override;
-   Destructor  Destroy; override;
-   Procedure   Serialize  (Stream:TStream); override;
-   Procedure   Deserialize(Stream:TStream); override;
+  published
+   property GameInfo :TGameInfo  read FGameInfo  write FGameInfo;
+   property MountList:TMountList read FMountList write FMountList;
  end;
 
- TGameStartupInfo=class(TAbstractInfo)
+ TGameStartupInfo=class(TAbstractObject)
   public
    FReader  :Boolean;
    FPipe    :THandle;
@@ -175,7 +238,7 @@ end;
 
 //
 
-Function TAbstractInfo.GetPropertyIterator:TRttiPropertyIterator;
+Function TAbstractObject.GetPropertyIterator:TRttiPropertyIterator;
 var
  RT:TRTTIType;
 begin
@@ -190,7 +253,337 @@ begin
  end;
 end;
 
-Procedure TAbstractInfo.Serialize(Stream:TStream);
+//
+
+constructor TJSONStreamWriter.Create(Stream:TStream);
+begin
+ FState :=swInit;
+ FStream:=Stream;
+end;
+
+function TJSONStreamWriter.GetStateStr:RawByteString;
+begin
+ case FState of
+  swInit :Result:='';
+  swFirst:Result:=#13#10;
+  swNext :Result:=','#13#10;
+ end;
+end;
+
+Procedure TJSONStreamWriter.WriteStartObject(const name:RawByteString);
+var
+ S:RawByteString;
+begin
+ S:=GetStateStr;
+
+ if (name='') then
+ begin
+  S:=S+Space(FLevel)+'{';
+ end else
+ begin
+  S:=S+Space(FLevel)+'"'+StringToJSONString(name,False)+'": {';
+ end;
+
+ Inc(FLevel);
+ FState:=swFirst;
+ FStream.Write(PChar(S)^,Length(S));
+end;
+
+Procedure TJSONStreamWriter.WriteStopObject;
+var
+ S:RawByteString;
+begin
+ Assert(FLevel>0,'WriteStopObject');
+
+ Dec(FLevel);
+ FState:=swNext;
+
+ S:=#13#10+Space(FLevel)+'}';
+
+ FStream.Write(PChar(S)^,Length(S));
+end;
+
+Procedure TJSONStreamWriter.WriteStartArray(const name:RawByteString);
+var
+ S:RawByteString;
+begin
+ S:=GetStateStr;
+
+ if (name='') then
+ begin
+  S:=S+Space(FLevel)+'[';
+ end else
+ begin
+  S:=S+Space(FLevel)+'"'+StringToJSONString(name,False)+'": [';
+ end;
+
+ Inc(FLevel);
+ FState:=swFirst;
+ FStream.Write(PChar(S)^,Length(S));
+end;
+
+Procedure TJSONStreamWriter.WriteStopArray;
+var
+ S:RawByteString;
+begin
+ Assert(FLevel>1,'WriteStopArray');
+
+ Dec(FLevel);
+ FState:=swNext;
+
+ S:=#13#10+Space(FLevel)+']';
+
+ FStream.Write(PChar(S)^,Length(S));
+end;
+
+Procedure TJSONStreamWriter.WriteValue(const name:RawByteString;Value:TValue);
+var
+ S:RawByteString;
+begin
+ S:=GetStateStr;
+
+ if (name='') then
+ begin
+  S:=S+Space(FLevel);
+ end else
+ begin
+  S:=S+Space(FLevel)+'"'+StringToJSONString(name,False)+'": ';
+ end;
+
+ case Value.Kind of
+
+  tkSString,
+  tkLString,
+  tkAString:S:=S+'"'+StringToJSONString(value.AsString,False)+'"';
+
+  tkBool:S:=S+BoolToStr(value.AsBoolean,'true','false');
+
+  else
+   Assert(False);
+ end;
+
+ FState:=swNext;
+ FStream.Write(PChar(S)^,Length(S));
+end;
+
+//
+
+Procedure TJSONStreamReader.Execute(obj:TAbstractObject);
+begin
+ FRoot.FObject:=obj;
+ DoExecute;
+end;
+
+Procedure TJSONStreamReader.Push;
+begin
+ Inc(FCount);
+ if (FCount>Length(FStack)) then
+ begin
+  SetLength(FStack,FCount);
+ end;
+ FStack[FCount-1]:=Default(TJNode);
+end;
+
+Procedure TJSONStreamReader.Pop;
+begin
+ if FCount<>0 then
+ begin
+  Dec(FCount);
+  FStack[FCount]:=Default(TJNode);
+ end;
+end;
+
+Function TJSONStreamReader.Top:PJNode;
+begin
+ Result:=@FRoot;
+ if (FCount>0) then
+ begin
+  Result:=@FStack[FCount-1];
+ end;
+end;
+
+Procedure TJSONStreamReader.KeyValue(Const AKey:TJSONStringType);
+Var
+ P:PJNode;
+begin
+ P:=Top;
+ if (P^.FObject<>nil) then
+ begin
+  //
+  if (P^.FRType=nil) then
+  begin
+   if (Pointer(FCtx)=nil) then
+   begin
+    FCtx:=TRTTIContext.Create;
+   end;
+   //
+   P^.FRType:=FCtx.GetType(P^.FObject.ClassType);
+  end;
+  //
+  FItem:=P^.FRType.GetProperty(AKey);
+ end else
+ begin
+  FItem:=nil;
+ end;
+end;
+
+Procedure TJSONStreamReader.SetValue(Value:TValue);
+Var
+ P:PJNode;
+begin
+ P:=Top;
+ if (P^.FObject<>nil) then
+ begin
+  if (FItem<>nil) then
+  begin
+   FItem.SetValue(P^.FObject,Value);
+  end else
+  if P^.FObject.InheritsFrom(TAbstractArray) then
+  begin
+   TAbstractArray(P^.FObject).AddValue(Value);
+  end;
+ end;
+end;
+
+Procedure TJSONStreamReader.StringValue(Const AValue:TJSONStringType);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.NumberValue(Const AValue:TJSONStringType);
+begin
+end;
+
+Procedure TJSONStreamReader.NullValue;
+begin
+ SetValue(TValue.FromVariant(Null));
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.FloatValue(Const AValue:Double);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.BooleanValue(Const AValue:Boolean);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.IntegerValue(Const AValue:integer);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.Int64Value(Const AValue:int64);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.QWordValue(Const AValue:QWord);
+begin
+ SetValue(AValue);
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.StartArray;
+Var
+ P:PJNode;
+ obj:TAbstractObject;
+begin
+ obj:=nil;
+ P:=Top;
+ if (P=@FRoot) then
+ begin
+  obj:=FRoot.FObject;
+ end else
+ if (P^.FObject<>nil) then
+ begin
+  if (FItem<>nil) then
+  begin
+   if (FItem.PropertyType.TypeKind=tkClass) then
+   begin
+    obj:=TAbstractObject(FItem.GetValue(P^.FObject).AsObject);
+   end;
+  end else
+  if P^.FObject.InheritsFrom(TAbstractArray) then
+  begin
+   obj:=TAbstractArray(P^.FObject).AddArray;
+  end;
+ end;
+
+ if (obj<>nil) then
+ if (not obj.InheritsFrom(TAbstractArray)) then
+ begin
+  obj:=nil;
+ end;
+
+ Push;
+ Top^.FObject:=obj;
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.StartObject;
+Var
+ P:PJNode;
+ obj:TAbstractObject;
+begin
+ obj:=nil;
+ P:=Top;
+ if (P=@FRoot) then
+ begin
+  obj:=FRoot.FObject;
+ end else
+ if (P^.FObject<>nil) then
+ begin
+  if (FItem<>nil) then
+  begin
+   if (FItem.PropertyType.TypeKind=tkClass) then
+   begin
+    obj:=TAbstractObject(FItem.GetValue(P^.FObject).AsObject);
+   end;
+  end else
+  if P^.FObject.InheritsFrom(TAbstractArray) then
+  begin
+   obj:=TAbstractArray(P^.FObject).AddObject;
+  end;
+ end;
+
+ if (obj<>nil) then
+ if (not obj.InheritsFrom(TAbstractObject)) then
+ begin
+  obj:=nil;
+ end;
+
+ Push;
+ Top^.FObject:=obj;
+ FItem:=nil;
+end;
+
+Procedure TJSONStreamReader.EndArray;
+begin
+ Pop;
+end;
+
+Procedure TJSONStreamReader.EndObject;
+begin
+ Pop;
+end;
+
+Destructor TJSONStreamReader.Destroy();
+begin
+ FCtx.Free;
+ inherited;
+end;
+
+//
+
+Procedure TAbstractObject.Serialize(Stream:TStream);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -216,9 +609,9 @@ begin
        obj:=p.GetValue(Self).AsObject;
 
        if (obj<>nil) then
-       if obj.InheritsFrom(TAbstractInfo) then
+       if obj.InheritsFrom(TAbstractObject) then
        begin
-        TAbstractInfo(obj).Serialize(Stream);
+        TAbstractObject(obj).Serialize(Stream);
        end;
       end;
 
@@ -233,7 +626,7 @@ begin
  end;
 end;
 
-Procedure TAbstractInfo.Deserialize(Stream:TStream);
+Procedure TAbstractObject.Deserialize(Stream:TStream);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -257,9 +650,9 @@ begin
        obj:=p.GetValue(Self).AsObject;
 
        if (obj<>nil) then
-       if obj.InheritsFrom(TAbstractInfo) then
+       if obj.InheritsFrom(TAbstractObject) then
        begin
-        TAbstractInfo(obj).Deserialize(Stream);
+        TAbstractObject(obj).Deserialize(Stream);
        end;
       end;
 
@@ -274,7 +667,7 @@ begin
  end;
 end;
 
-Procedure TAbstractInfo.CopyTo(dst:TAbstractInfo);
+Procedure TAbstractObject.CopyTo(dst:TAbstractObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -303,10 +696,10 @@ begin
        obj_dst:=p.GetValue(dst ).AsObject;
 
        if (obj_src<>nil) and (obj_dst<>nil) then
-       if obj_src.InheritsFrom(TAbstractInfo) then
+       if obj_src.InheritsFrom(TAbstractObject) then
        if obj_dst.InheritsFrom(obj_src.ClassType) then
        begin
-        TAbstractInfo(obj_src).CopyTo(TAbstractInfo(obj_dst));
+        TAbstractObject(obj_src).CopyTo(TAbstractObject(obj_dst));
        end;
       end;
 
@@ -321,7 +714,7 @@ begin
  end;
 end;
 
-Procedure TAbstractInfo.CreateSub;
+Procedure TAbstractObject.CreateSub;
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -339,9 +732,9 @@ begin
    begin
     _class:=p.PropertyType.AsInstance.MetaClassType;
 
-    if _class.InheritsFrom(TAbstractInfo.ClassType) then
+    if _class.InheritsFrom(TAbstractObject.ClassType) then
     begin
-     obj:=TAbstractInfoClass(_class).Create;
+     obj:=TAbstractObjectClass(_class).Create;
     end else
     begin
      obj:=_class.Create;
@@ -357,7 +750,7 @@ begin
  end;
 end;
 
-Procedure TAbstractInfo.DestroySub;
+Procedure TAbstractObject.DestroySub;
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -388,25 +781,26 @@ begin
  end;
 end;
 
-Constructor TAbstractInfo.Create;
+Constructor TAbstractObject.Create;
 begin
  inherited;
  CreateSub;
 end;
 
-Destructor TAbstractInfo.Destroy;
+Destructor TAbstractObject.Destroy;
 begin
  DestroySub;
  inherited;
 end;
 
-procedure TAbstractInfo.ReadIni(INI:TIniFile;const Section:RawByteString);
+procedure TAbstractObject.WriteJSON(const name:RawByteString;Stream:TJSONStreamWriter);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
- V:RawByteString;
- B:Boolean;
+ obj:TObject;
 begin
+ Stream.WriteStartObject(Name);
+ //
  i:=GetPropertyIterator;
  try
   while (i.GetProperty<>nil) do
@@ -418,18 +812,18 @@ begin
 
     tkSString,
     tkLString,
-    tkAString:
-      begin
-       V:=Trim(p.GetValue(Self).AsString);
-       V:=Trim(INI.ReadString(Section,p.Name,V));
-       p.SetValue(Self,V);
-      end;
+    tkAString,
+    tkBool   :Stream.WriteValue(p.Name,p.GetValue(Self));
 
-    tkBool:
+    tkClass:
       begin
-       B:=p.GetValue(Self).AsBoolean;
-       B:=INI.ReadBool(Section,p.Name,B);
-       p.SetValue(Self,B);
+       obj:=p.GetValue(Self).AsObject;
+
+       if (obj<>nil) then
+       if obj.InheritsFrom(TAbstractObject) then
+       begin
+        TAbstractObject(obj).WriteJSON(p.Name,Stream);
+       end;
       end;
 
     else
@@ -441,47 +835,64 @@ begin
  finally
   i.free;
  end;
+ //
+ Stream.WriteStopObject;
 end;
 
-procedure TAbstractInfo.WriteIni(INI:TIniFile;const Section:RawByteString);
-var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
- V:RawByteString;
- B:Boolean;
+Procedure TAbstractArray.Serialize(Stream:TStream);
 begin
- i:=GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
+ Assert(false);
+end;
 
-   p:=i.GetProperty;
+Procedure TAbstractArray.Deserialize(Stream:TStream);
+begin
+ Assert(false);
+end;
 
-   case p.PropertyType.TypeKind of
+Procedure TAbstractArray.CopyTo(dst:TAbstractObject);
+begin
+ Assert(false);
+end;
 
-    tkSString,
-    tkLString,
-    tkAString:
+Procedure TAbstractArray.WriteJSON(const name:RawByteString;Stream:TJSONStreamWriter);
+var
+ i,c:SizeInt;
+ V:TValue;
+ obj:TObject;
+begin
+ Stream.WriteStartArray(name);
+ //
+ c:=GetArrayCount;
+ if (c<>0) then
+ For i:=0 to c-1 do
+ begin
+  V:=GetArrayItem(i);
+
+  case V.Kind of
+
+   tkSString,
+   tkLString,
+   tkAString,
+   tkBool   :Stream.WriteValue('',V);
+
+   tkClass:
+     begin
+      obj:=V.AsObject;
+
+      if (obj<>nil) then
+      if obj.InheritsFrom(TAbstractObject) then
       begin
-       V:=Trim(p.GetValue(Self).AsString);
-       INI.WriteString(Section,p.Name,V);
+       TAbstractObject(obj).WriteJSON('',Stream);
       end;
+     end;
 
-    tkBool:
-      begin
-       B:=p.GetValue(Self).AsBoolean;
-       INI.WriteBool(Section,p.Name,B);
-      end;
-
-    else
-     Assert(false);
-   end;
-
-   i.Next;
+   else
+    Assert(false);
   end;
- finally
-  i.free;
+
  end;
+ //
+ Stream.WriteStopArray;
 end;
 
 Constructor TJITInfo.Create;
@@ -494,6 +905,8 @@ Constructor TMainInfo.Create;
 begin
  inherited;
  FLogFile:='log.txt';
+ Fsystem :=DirectorySeparator+'system';
+ Fdata   :=DirectorySeparator+'data';
  Ffork_proc:=True;
 end;
 
@@ -511,34 +924,6 @@ begin
  Fapp0  :=DirectorySeparator;
  Fsystem:=DirectorySeparator+'system';
  Fdata  :=DirectorySeparator+'data';
-end;
-
-Constructor TGameItem.Create;
-begin
- inherited;
- FGameInfo :=TGameInfo .Create;
- FMountList:=TMountList.Create;
-end;
-
-Destructor TGameItem.Destroy;
-begin
- FreeAndNil(FGameInfo );
- FreeAndNil(FMountList);
- inherited;
-end;
-
-//
-
-Procedure TGameItem.Serialize(Stream:TStream);
-begin
- FGameInfo .Serialize(Stream);
- FMountList.Serialize(Stream);
-end;
-
-Procedure TGameItem.Deserialize(Stream:TStream);
-begin
- FGameInfo .Deserialize(Stream);
- FMountList.Deserialize(Stream);
 end;
 
 //

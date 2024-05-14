@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 407
+  Left = 348
   Height = 323
-  Top = 214
+  Top = 237
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 323
@@ -13,11 +13,11 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 274
     Top = 0
     Width = 397
-    ActivePage = Tab_JIT
+    ActivePage = Tab_MainInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 2
+    TabIndex = 0
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
@@ -56,20 +56,103 @@ object frmCfgEditor: TfrmCfgEditor
       end
       object Edt_MainInfo_fork_proc: TCheckBox
         AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Control = Edt_MainInfo_data
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
-        Top = 68
+        Top = 184
         Width = 369
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Run in a separate process'
+        TabOrder = 4
+      end
+      object Label2: TLabel
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 68
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'System Firmware folder:'
+      end
+      object Edt_MainInfo_system: TEdit
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Label2
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 93
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 2
+      end
+      object Label3: TLabel
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Edt_MainInfo_system
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 126
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'System data folder:'
+      end
+      object Edt_MainInfo_data: TEdit
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Label3
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 151
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 3
+      end
+      object BtnLogOpen: TButton
+        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideRight.Control = Edt_MainInfo_LogFile
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_LogFile
+        AnchorSideBottom.Side = asrBottom
+        Left = 343
+        Height = 21
+        Top = 36
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
         TabOrder = 1
+        OnClick = BtnLogOpenClick
       end
     end
     object Tab_BootparamInfo: TTabSheet

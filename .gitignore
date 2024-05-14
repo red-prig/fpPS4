@@ -26,6 +26,7 @@
 *.bsf
 *.aac
 *.nv12
+/*.json
 link.res
 log.txt
 lib/

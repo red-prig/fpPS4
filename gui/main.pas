@@ -18,7 +18,9 @@ uses
   LazSynEditText,
   SynEditMarkupBracket,
 
-  IniFiles,
+  TypInfo,
+  Rtti,
+  jsonscanner,
 
   host_ipc,
   game_info,
@@ -39,6 +41,33 @@ type
     caption_format:RawByteString;
     procedure SetCaptionFPS(Ffps:QWORD);
     procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
+  end;
+
+  TGameList=class(TAbstractArray)
+   FGrid: TStringGrid;
+   //
+   function  GetItem(i:SizeInt):TGameItem;
+   function  GetItemRow(i:SizeInt):TGameItem;
+   procedure AddItem(Item:TGameItem);
+   procedure UpdateItem(i:SizeInt);
+   procedure UpdateItem(Item:TGameItem);
+   procedure DelItem(Item:TGameItem);
+   //
+   Function  GetArrayCount:SizeInt;          override;
+   Function  GetArrayItem(i:SizeInt):TValue; override;
+   Function  AddObject:TAbstractObject;      override;
+   Function  AddArray :TAbstractArray;       override;
+   procedure AddValue(Value:TValue);         override;
+  end;
+
+  TGameListObject=class(TAbstractObject)
+   private
+    FGameList:TGameList;
+   published
+    property GameList:TGameList read FGameList write FGameList;
+   public
+    Procedure CreateSub;  override;
+    Procedure DestroySub; override;
   end;
 
   { TfrmMain }
@@ -63,8 +92,19 @@ type
     TBPause: TToolButton;
     TBStop: TToolButton;
     TBConfig: TToolButton;
+    TBSep1: TToolButton;
+    TBAddFolder: TToolButton;
+    TBSep2: TToolButton;
+    TBDown: TToolButton;
+    TBUp: TToolButton;
+    TBSep3: TToolButton;
 
     procedure FormCreate(Sender: TObject);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure ListGridDblClick(Sender: TObject);
+    procedure ListGridDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
+    procedure ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);
+    procedure ListGridMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
     procedure MIAddClick(Sender: TObject);
     procedure MIAddFolderClick(Sender: TObject);
@@ -75,13 +115,14 @@ type
     procedure TBPauseClick(Sender: TObject);
     procedure TBPlayClick(Sender: TObject);
     procedure TBStopClick(Sender: TObject);
+    procedure TBDownClick(Sender: TObject);
+    procedure TBUpClick(Sender: TObject);
   private
-
+    FDblClickRow:Integer;
   public
+    FGameList   :TGameList;
     FGameProcess:TGameProcess;
     FGameItem   :TGameItem;
-
-    FIniFile:TIniFile;
 
     FConfigInfo:TConfigInfo;
 
@@ -107,16 +148,11 @@ type
     procedure SetCaptionFPS(Ffps:QWORD);
 
     procedure OpenLog(Const LogFile:RawByteString);
-    procedure ReadIniFile;
-    procedure LoadItemIni(Item:TGameItem);
-    procedure SaveItemIni(Item:TGameItem);
-    function  gen_section:RawByteString;
-    function  GetItemRow(aRow:Integer):TGameItem;
-    procedure AddItemRow(Item:TGameItem);
-    procedure EditItemRow(Item:TGameItem);
-    procedure DelItemRow(Item:TGameItem);
+    procedure ReadConfigFile;
+    procedure SaveGameList;
     procedure DoAdd(Sender: TObject);
     procedure DoEdit(Sender: TObject);
+    procedure DoConfigSave(Sender: TObject);
     procedure LogEnd;
     procedure ClearLog;
     function  GameProcessForked:Boolean;
@@ -133,9 +169,6 @@ uses
 
  md_arc4random,
 
- TypInfo,
- Rtti,
-
  vDevice,
 
  sys_event;
@@ -143,6 +176,10 @@ uses
 //
 
 {$R *.lfm}
+
+Const
+ fpps4File   ='fpps4.json';
+ GameListFile='GameList.json';
 
 procedure TGameMainForm.SetCaptionFPS(Ffps:QWORD);
 begin
@@ -255,104 +292,210 @@ end;
 var
  IpcHandler:TGuiIpcHandler;
 
-procedure TfrmMain.ReadIniFile;
+//
+
+function TGameList.GetItem(i:SizeInt):TGameItem;
+begin
+ i:=i+1;
+ if (i<=0) or (i>=FGrid.RowCount) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  Result:=TGameItem(FGrid.Objects[0,i]);
+ end;
+end;
+
+function TGameList.GetItemRow(i:SizeInt):TGameItem;
+begin
+ if (i<0) or (i>FGrid.RowCount) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  Result:=TGameItem(FGrid.Objects[0,i]);
+ end;
+end;
+
+procedure TGameList.AddItem(Item:TGameItem);
 var
- i,c:Integer;
- V:RawByteString;
+ i:SizeInt;
+begin
+ i:=FGrid.RowCount;
+ FGrid.RowCount:=i+1;
  //
- List:TStringList;
+ FGrid.Cells[0,i]:=Item.FGameInfo.Name;
+ FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
+ FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ //
+ FGrid.Objects[0,i]:=Item;
+end;
+
+procedure TGameList.UpdateItem(i:SizeInt);
+var
  Item:TGameItem;
 begin
- IpcHandler:=TGuiIpcHandler.Create;
- IpcHandler.Form:=Self;
+ i:=i+1;
+ if (i<=0) or (i>=FGrid.RowCount) then Exit;
+ //
+ Item:=TGameItem(FGrid.Objects[0,i]);
+ //
+ FGrid.Cells[0,i]:=Item.FGameInfo.Name;
+ FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
+ FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+end;
 
- //main
- FConfigInfo.MainInfo.ReadIni(FIniFile,'main');
- //main
+procedure TGameList.UpdateItem(Item:TGameItem);
+var
+ i:SizeInt;
+begin
+ i:=FGrid.Cols[0].IndexOfObject(Item);
+ if (i=-1) then Exit;
+ //
+ FGrid.Cells[0,i]:=Item.FGameInfo.Name;
+ FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
+ FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+end;
 
- //games
- List:=TStringList.Create;
- FIniFile.ReadSections(List);
+procedure TGameList.DelItem(Item:TGameItem);
+var
+ i:SizeInt;
+begin
+ i:=FGrid.Cols[0].IndexOfObject(Item);
+ if (i=-1) then Exit;
+ //
+ FGrid.DeleteRow(i);
+ //
+ Item.Free;
+end;
 
- c:=List.Count;
+Function TGameList.GetArrayCount:SizeInt;
+begin
+ Result:=FGrid.RowCount;
+ if (Result<>0) then Dec(Result);
+end;
+
+Function TGameList.GetArrayItem(i:SizeInt):TValue;
+begin
+ i:=i+1;
+ if (i>=FGrid.RowCount) then
+ begin
+  Result:=TValue.FromVariant(Null);
+ end else
+ begin
+  Result:=TGameItem(FGrid.Objects[0,i]);
+ end;
+end;
+
+Function TGameList.AddObject:TAbstractObject;
+begin
+ Result:=TGameItem.Create;
+ //
+ AddItem(TGameItem(Result));
+end;
+
+Function TGameList.AddArray:TAbstractArray;
+begin
+ Result:=nil;
+end;
+
+procedure TGameList.AddValue(Value:TValue);
+begin
+ //
+end;
+
+//
+
+Procedure TGameListObject.CreateSub;
+begin
+ //
+end;
+
+Procedure TGameListObject.DestroySub;
+begin
+ //
+end;
+
+//
+
+procedure TfrmMain.ReadConfigFile;
+var
+ m:TMemoryStream;
+ JReader:TJSONStreamReader;
+ obj:TGameListObject;
+
+ i,c:Integer;
+begin
+ FConfigInfo:=TConfigInfo.Create;
+
+ FGameList:=TGameList.Create;
+ FGameList.FGrid:=ListGrid;
+
+ //load config
+ m:=nil;
+ JReader:=nil;
+ try
+  m:=TMemoryStream.Create;
+  m.LoadFromFile(fpps4File);
+  JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
+  JReader.Execute(FConfigInfo);
+ except
+  on E: Exception do
+    MessageDlgEx(E.Message,mtError,[mbOK],Self);
+ end;
+ FreeAndNil(JReader);
+
+ obj:=TGameListObject.Create;
+ obj.GameList:=FGameList;
+
+ //load game list
+ m.Clear;
+ try
+  m:=TMemoryStream.Create;
+  m.LoadFromFile(GameListFile);
+  JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
+  JReader.Execute(obj);
+ except
+  on E: Exception do
+    MessageDlgEx(E.Message,mtError,[mbOK],Self);
+ end;
+ FreeAndNil(JReader);
+
+ FreeAndNil(obj);
+
+ //update grid
+ C:=FGameList.GetArrayCount;
  if (c<>0) then
  begin
   For i:=0 to c-1 do
   begin
-   V:=Trim(List.Strings[i]);
-
-   if (lowercase(copy(v,1,Length(section_prefix)))=section_prefix) then
-   begin
-    Item:=TGameItem.Create;
-    Item.FSecton:=V;
-
-    LoadItemIni(Item);
-    //
-    AddItemRow(Item);
-   end;
-
-  end;
- end;
-
- List.Free;
- //games
-end;
-
-procedure TfrmMain.LoadItemIni(Item:TGameItem);
-begin
- Item.FGameInfo .ReadIni(FIniFile,Item.FSecton);
- Item.FMountList.ReadIni(FIniFile,Item.FSecton);
-end;
-
-procedure TfrmMain.SaveItemIni(Item:TGameItem);
-begin
- if (Item.FSecton='') then
- begin
-  Item.FSecton:=gen_section;
- end;
-
- Item.FGameInfo .WriteIni(FIniFile,Item.FSecton);
- Item.FMountList.WriteIni(FIniFile,Item.FSecton);
-end;
-
-function EncodeValue32(nVal:DWORD):RawByteString;
-const
- nEncLenMax=5;
-var
- i,nIdx:Integer;
-begin
- SetLength(Result,nEncLenMax);
- For i:=nEncLenMax downto 1 do
- begin
-  nIdx:=nVal and 63;
-  nVal:=nVal shr 6;
-  case nIdx of
-    0..25:Result[i]:=Char(nIdx+Byte('A')-0);
-   26..51:Result[i]:=Char(nIdx+Byte('a')-26);
-   52..61:Result[i]:=Char(nIdx+Byte('0')-52);
-       62:Result[i]:='+';
-       63:Result[i]:='-';
+   FGameList.UpdateItem(i);
   end;
  end;
 end;
 
-function TfrmMain.gen_section:RawByteString;
+//
+
+procedure TfrmMain.SaveGameList;
 var
- nVal:DWORD;
- sVal:RawByteString;
+ list:TGameList;
+ m:TMemoryStream;
+ jstream:TJSONStreamWriter;
 begin
- nVal:=0;
- arc4rand(@nVal,SizeOf(nVal),0);
+ list:=TGameList.Create;
+ list.FGrid:=ListGrid;
 
- sVal:=section_prefix+EncodeValue32(nVal);
+ m:=TMemoryStream.Create;
+ jstream:=TJSONStreamWriter.Create(m);
 
- while FIniFile.SectionExists(sVal) do
- begin
-  Inc(nVal);
-  sVal:=section_prefix+EncodeValue32(nVal);
- end;
+ jstream.WriteStartObject('');
+ list.WriteJSON('GameList',jstream);
+ jstream.WriteStopObject;
+ FreeAndNil(jstream);
+ FreeAndNil(list);
 
- Result:=sVal;
+ M.SaveToFile(GameListFile);
+ FreeAndNil(M);
 end;
 
 procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
@@ -387,11 +530,10 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
- FConfigInfo:=TConfigInfo.Create;
+ IpcHandler:=TGuiIpcHandler.Create;
+ IpcHandler.Form:=Self;
 
- FIniFile:=TIniFile.Create('fpps4.ini');
-
- ReadIniFile;
+ ReadConfigFile;
 
  OpenLog(FConfigInfo.MainInfo.LogFile);
 
@@ -423,6 +565,89 @@ begin
  SetButtonsState(mbsStopped);
 
  //InitVulkan;
+end;
+
+procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+var
+ aRow:Integer;
+begin
+ if (Shift=[ssAlt]) then
+ begin
+  case Key of
+   VK_R   :TBPlayClick (Sender);
+   VK_S   :TBStopClick (Sender);
+   VK_P   :TBPauseClick(Sender);
+   VK_DOWN:
+     begin
+      aRow:=ListGrid.Row;
+      TBDownClick(Sender);
+      ListGrid.Row:=aRow;
+     end;
+   VK_UP:
+     begin
+      aRow:=ListGrid.Row;
+      TBUpClick(Sender);
+      ListGrid.Row:=aRow;
+     end
+   else;
+  end;
+ end else
+ if (Shift=[]) then
+ begin
+  case Key of
+   VK_RETURN:MIEditClick     (Sender);
+   VK_INSERT:MIAddFolderClick(Sender);
+   VK_DELETE:MIDelClick      (Sender);
+   else;
+  end;
+ end;
+end;
+
+procedure TfrmMain.ListGridDblClick(Sender: TObject);
+begin
+ if (FDblClickRow=ListGrid.Row) then
+ begin
+  MIEditClick(Sender);
+ end;
+end;
+
+procedure TfrmMain.ListGridMouseDown(Sender: TObject; Button: TMouseButton;Shift: TShiftState; X, Y: Integer);
+begin
+ if (ssDouble in Shift) then
+ begin
+  FDblClickRow:=ListGrid.MouseToCell(TPoint.Create(X,Y)).Y;
+ end;
+end;
+
+procedure TfrmMain.ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);
+begin
+ SaveGameList;
+end;
+
+procedure TfrmMain.ListGridDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
+var
+ aRow:Integer;
+ RowTo:Integer;
+begin
+ if (Sender=Source) then
+ begin
+  aRow:=ListGrid.Row;
+  RowTo:=ListGrid.MouseToCell(TPoint.Create(X,Y)).Y;
+  //
+  if (RowTo>0) and
+     (RowTo<ListGrid.RowCount) then
+  begin
+   Accept:=True;
+   if (RowTo<>aRow) then
+   begin
+    ListGrid.ExchangeColRow(False,aRow,RowTo);
+    ListGrid.Row:=RowTo;
+   end;
+  end else
+  begin
+   Accept:=False;
+  end;
+ end;
 end;
 
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
@@ -546,6 +771,9 @@ begin
 
  form.Item:=TGameItem.Create;
 
+ form.Item.FMountList.system:=FConfigInfo.MainInfo.system;
+ form.Item.FMountList.data  :=FConfigInfo.MainInfo.data;
+
  form.OnSave:=@Self.DoAdd;
 
  form.FormInit(False);
@@ -589,7 +817,7 @@ begin
  if (aRow=0) then Exit;
  if (aRow>ListGrid.RowCount) then Exit;
 
- Item:=GetItemRow(aRow);
+ Item:=FGameList.GetItemRow(aRow);
 
  if Item.FLock then Exit;
 
@@ -609,10 +837,26 @@ begin
  if (frmCfgEditor=nil) then
  begin
   frmCfgEditor:=TfrmCfgEditor.Create(Self);
+  frmCfgEditor.OnSave:=@DoConfigSave;
   frmCfgEditor.FConfigInfo:=FConfigInfo;
  end;
 
  frmCfgEditor.FormInit;
+end;
+
+procedure TfrmMain.DoConfigSave(Sender: TObject);
+var
+ m:TMemoryStream;
+ jstream:TJSONStreamWriter;
+begin
+ m:=TMemoryStream.Create;
+ jstream:=TJSONStreamWriter.Create(m);
+
+ FConfigInfo.WriteJSON('',jstream);
+ FreeAndNil(jstream);
+
+ M.SaveToFile(fpps4File);
+ FreeAndNil(M);
 end;
 
 procedure TfrmMain.LogEnd;
@@ -641,7 +885,7 @@ begin
  if (aRow=0) then Exit;
  if (aRow>ListGrid.RowCount) then Exit;
 
- Item:=GetItemRow(aRow);
+ Item:=FGameList.GetItemRow(aRow);
 
  LogEnd;
  ClearLog;
@@ -744,6 +988,44 @@ begin
  end;
 end;
 
+procedure TfrmMain.TBDownClick(Sender: TObject);
+var
+ aRow:Integer;
+begin
+ aRow:=ListGrid.Row;
+
+ if (aRow<=0) then Exit;
+ if ((aRow+1)>=ListGrid.RowCount) then Exit;
+
+ ListGrid.ExchangeColRow(False,aRow,aRow+1);
+
+ if (aRow+2)>(ListGrid.TopRow + ListGrid.VisibleRowCount) then
+ begin
+  ListGrid.TopRow:=ListGrid.TopRow+1;
+ end;
+
+ SaveGameList;
+end;
+
+procedure TfrmMain.TBUpClick(Sender: TObject);
+var
+ aRow:Integer;
+begin
+ aRow:=ListGrid.Row;
+
+ if (aRow<=1) then Exit;
+ if (aRow>ListGrid.RowCount) then Exit;
+
+ ListGrid.ExchangeColRow(False,aRow,aRow-1);
+
+ if (aRow-1)<(ListGrid.TopRow) then
+ begin
+  ListGrid.TopRow:=ListGrid.TopRow-1;
+ end;
+
+ SaveGameList;
+end;
+
 procedure TfrmMain.MIDelClick(Sender: TObject);
 var
  Item:TGameItem;
@@ -754,7 +1036,7 @@ begin
  if (aRow=0) then Exit;
  if (aRow>ListGrid.RowCount) then Exit;
 
- Item:=GetItemRow(aRow);
+ Item:=FGameList.GetItemRow(aRow);
 
  if (Item.FLock) then Exit;
 
@@ -764,57 +1046,10 @@ begin
                 [mbYes, mbNo],
                 0)=mrYes) then
  begin
-  FIniFile.EraseSection(Item.FSecton);
+  FGameList.DelItem(Item);
   //
-  DelItemRow(Item);
+  SaveGameList;
  end;
-end;
-
-function TfrmMain.GetItemRow(aRow:Integer):TGameItem;
-begin
- Result:=nil;
- //
- if (aRow=0) then Exit;
- if (aRow>ListGrid.RowCount) then Exit;
- //
- Result:=TGameItem(ListGrid.Objects[0,aRow]);
-end;
-
-procedure TfrmMain.AddItemRow(Item:TGameItem);
-var
- i:Integer;
-begin
- i:=ListGrid.RowCount;
- ListGrid.RowCount:=i+1;
- ListGrid.Cells[0,i]:=Item.FGameInfo.Name;
- ListGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- ListGrid.Cells[2,i]:=Item.FGameInfo.Version;
- //
- ListGrid.Objects[0,i]:=Item;
-end;
-
-procedure TfrmMain.EditItemRow(Item:TGameItem);
-var
- i:Integer;
-begin
- i:=ListGrid.Cols[0].IndexOfObject(Item);
- if (i=-1) then Exit;
- //
- ListGrid.Cells[0,i]:=Item.FGameInfo.Name;
- ListGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- ListGrid.Cells[2,i]:=Item.FGameInfo.Version;
-end;
-
-procedure TfrmMain.DelItemRow(Item:TGameItem);
-var
- i:Integer;
-begin
- i:=ListGrid.Cols[0].IndexOfObject(Item);
- if (i=-1) then Exit;
- //
- ListGrid.DeleteRow(i);
- //
- Item.Free;
 end;
 
 procedure TfrmMain.DoAdd(Sender: TObject);
@@ -828,8 +1063,9 @@ begin
 
  form.Item:=nil;
 
- AddItemRow(Item);
- SaveItemIni(Item);
+ FGameList.AddItem(Item);
+ //
+ SaveGameList;
 end;
 
 procedure TfrmMain.DoEdit(Sender: TObject);
@@ -845,8 +1081,9 @@ begin
 
  form.Item:=nil;
 
- EditItemRow(Item);
- SaveItemIni(Item);
+ FGameList.UpdateItem(Item);
+ //
+ SaveGameList;
 end;
 
 procedure TfrmMain.SetButtonsState(s:TMainButtonsState);

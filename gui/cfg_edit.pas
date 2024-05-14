@@ -17,6 +17,7 @@ type
   TfrmCfgEditor = class(TForm)
     BtnCancel: TButton;
     BtnOk: TButton;
+    BtnLogOpen: TButton;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
     Edt_JITInfo_debug_info: TCheckBox;
     Edt_JITInfo_relative_analize: TCheckBox;
@@ -29,19 +30,25 @@ type
     Edt_MainInfo_LogFile: TEdit;
     Edt_BootparamInfo_neo: TCheckBox;
     EditPages: TPageControl;
+    Edt_MainInfo_system: TEdit;
+    Edt_MainInfo_data: TEdit;
     Label1: TLabel;
+    Label2: TLabel;
+    Label3: TLabel;
     Tab_JIT: TTabSheet;
     Tab_MainInfo: TTabSheet;
     Tab_BootparamInfo: TTabSheet;
     procedure BtnCancelClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
-    procedure PageInit(const TabName:RawByteString;obj:TAbstractInfo);
-    procedure PageSave(const TabName:RawByteString;obj:TAbstractInfo);
+    procedure BtnLogOpenClick(Sender: TObject);
+    procedure PageInit(const TabName:RawByteString;obj:TAbstractObject);
+    procedure PageSave(const TabName:RawByteString;obj:TAbstractObject);
     procedure FormInit;
     procedure FormSave;
   private
 
   public
+   OnSave     :TNotifyEvent;
    FConfigInfo:TConfigInfo;
   end;
 
@@ -65,12 +72,31 @@ procedure TfrmCfgEditor.BtnOkClick(Sender: TObject);
 begin
  FormSave;
  Hide;
- //if Assigned(OnSave) then
- //begin
- // OnSave(Self);
- //end;
+ if Assigned(OnSave) then
+ begin
+  OnSave(Self);
+ end;
  Close;
 end;
+
+procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
+var
+ d:TOpenDialog;
+begin
+ d:=TOpenDialog.Create(nil);
+
+ d.InitialDir:=Edt_MainInfo_LogFile.Text;
+
+ d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+
+ if d.Execute then
+ begin
+  Edt_MainInfo_LogFile.Text:=d.FileName;
+ end;
+
+ d.Free;
+end;
+
 
 type
  TMyControl=class(TControl)
@@ -117,7 +143,7 @@ begin
  end;
 end;
 
-procedure TfrmCfgEditor.PageInit(const TabName:RawByteString;obj:TAbstractInfo);
+procedure TfrmCfgEditor.PageInit(const TabName:RawByteString;obj:TAbstractObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -160,7 +186,7 @@ begin
  end;
 end;
 
-procedure TfrmCfgEditor.PageSave(const TabName:RawByteString;obj:TAbstractInfo);
+procedure TfrmCfgEditor.PageSave(const TabName:RawByteString;obj:TAbstractObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -225,9 +251,9 @@ begin
       obj:=p.GetValue(FConfigInfo).AsObject;
 
       if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractInfo) then
+      if obj.InheritsFrom(TAbstractObject) then
       begin
-       PageInit(p.Name,TAbstractInfo(obj));
+       PageInit(p.Name,TAbstractObject(obj));
       end;
      end;
 
@@ -263,9 +289,9 @@ begin
       obj:=p.GetValue(FConfigInfo).AsObject;
 
       if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractInfo) then
+      if obj.InheritsFrom(TAbstractObject) then
       begin
-       PageSave(p.Name,TAbstractInfo(obj));
+       PageSave(p.Name,TAbstractObject(obj));
       end;
      end;
 
