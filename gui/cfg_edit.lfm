@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 348
+  Left = 382
   Height = 323
-  Top = 237
+  Top = 105
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 323
@@ -153,6 +153,44 @@ object frmCfgEditor: TfrmCfgEditor
         Caption = '...'
         TabOrder = 1
         OnClick = BtnLogOpenClick
+      end
+      object BtnSysOpen: TButton
+        AnchorSideTop.Control = Edt_MainInfo_system
+        AnchorSideRight.Control = Edt_MainInfo_system
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_system
+        AnchorSideBottom.Side = asrBottom
+        Left = 343
+        Height = 21
+        Top = 94
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
+        TabOrder = 5
+        OnClick = BtnSysOpenClick
+      end
+      object BtnDataOpen: TButton
+        AnchorSideTop.Control = Edt_MainInfo_data
+        AnchorSideRight.Control = Edt_MainInfo_data
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_data
+        AnchorSideBottom.Side = asrBottom
+        Left = 343
+        Height = 21
+        Top = 152
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
+        TabOrder = 6
+        OnClick = BtnDataOpenClick
       end
     end
     object Tab_BootparamInfo: TTabSheet

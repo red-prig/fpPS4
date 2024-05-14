@@ -16,8 +16,10 @@ type
 
   TfrmCfgEditor = class(TForm)
     BtnCancel: TButton;
+    BtnSysOpen: TButton;
     BtnOk: TButton;
     BtnLogOpen: TButton;
+    BtnDataOpen: TButton;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
     Edt_JITInfo_debug_info: TCheckBox;
     Edt_JITInfo_relative_analize: TCheckBox;
@@ -39,8 +41,10 @@ type
     Tab_MainInfo: TTabSheet;
     Tab_BootparamInfo: TTabSheet;
     procedure BtnCancelClick(Sender: TObject);
+    procedure BtnDataOpenClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
     procedure BtnLogOpenClick(Sender: TObject);
+    procedure BtnSysOpenClick(Sender: TObject);
     procedure PageInit(const TabName:RawByteString;obj:TAbstractObject);
     procedure PageSave(const TabName:RawByteString;obj:TAbstractObject);
     procedure FormInit;
@@ -79,24 +83,56 @@ begin
  Close;
 end;
 
-procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
+procedure DoOpenFile(Edit:TEdit);
 var
  d:TOpenDialog;
 begin
  d:=TOpenDialog.Create(nil);
 
- d.InitialDir:=Edt_MainInfo_LogFile.Text;
+ d.InitialDir:=Edit.Text;
 
  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
 
  if d.Execute then
  begin
-  Edt_MainInfo_LogFile.Text:=d.FileName;
+  Edit.Text:=d.FileName;
  end;
 
  d.Free;
 end;
 
+procedure DoOpenDir(Edit:TEdit);
+var
+ d:TSelectDirectoryDialog;
+begin
+ d:=TSelectDirectoryDialog.Create(nil);
+
+ d.InitialDir:=Edit.Text;
+
+ d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+
+ if d.Execute then
+ begin
+  Edit.Text:=d.FileName;
+ end;
+
+ d.Free;
+end;
+
+procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
+begin
+ DoOpenFile(Edt_MainInfo_LogFile);
+end;
+
+procedure TfrmCfgEditor.BtnSysOpenClick(Sender: TObject);
+begin
+ DoOpenDir(Edt_MainInfo_system);
+end;
+
+procedure TfrmCfgEditor.BtnDataOpenClick(Sender: TObject);
+begin
+ DoOpenDir(Edt_MainInfo_data);
+end;
 
 type
  TMyControl=class(TControl)
