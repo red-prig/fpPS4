@@ -1075,6 +1075,29 @@ begin
  end;
 end;
 
+//rdi, rsi
+procedure ZeroPages(addr:Pointer;size:Ptruint); assembler nostackframe SysV_ABI_CDecl;
+label
+ _exit,
+ _rep;
+asm
+ shr $5, %rsi // div 32
+ jz _exit
+
+  vpxor %ymm0, %ymm0, %ymm0 //zero
+
+  _rep:
+
+   vmovaps %ymm0, (%rdi)
+
+   lea 32(%rdi),%rdi
+   dec %rsi
+
+  jnz _rep
+
+ _exit:
+end;
+
 procedure vm_nt_map_madvise(map:p_vm_nt_map;
                             start:vm_offset_t;
                             __end:vm_offset_t;
@@ -1125,7 +1148,7 @@ begin
      mirror:=vm_nt_map_mirror(map,base,base+size);
      if (mirror<>nil) then
      begin
-      FillChar(mirror^,size,0);
+      ZeroPages(mirror,size);
       md_unmap_ex(mirror,size);
      end;
 
