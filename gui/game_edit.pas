@@ -97,22 +97,28 @@ procedure TButtonPath.OpenDir(Sender:TObject);
 var
  d:TSelectDirectoryDialog;
 begin
- d:=TSelectDirectoryDialog.Create(nil);
+ d:=nil;
 
- with TMyStringGrid(Editor.Parent) do
- begin
-  d.InitialDir:=Cells[1,aRow];
+ try
+  d:=TSelectDirectoryDialog.Create(nil);
+
+  with TMyStringGrid(Editor.Parent) do
+  begin
+   d.InitialDir:=Cells[1,aRow];
+  end;
+
+  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+
+  if d.Execute then
+  with TMyStringGrid(Editor.Parent) do
+  begin
+   Cells[1,aRow]:=d.FileName;
+  end;
+
+ except
+  //
  end;
-
- d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-
- if d.Execute then
- with TMyStringGrid(Editor.Parent) do
- begin
-  Cells[1,aRow]:=d.FileName;
- end;
-
- d.Free;
+ FreeAndNil(d);
 
  TfrmGameEditor(Self.Form).LoadParamSfo(True);
 

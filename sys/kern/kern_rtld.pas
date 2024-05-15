@@ -1112,7 +1112,7 @@ begin
   vm_object_deallocate(imgp^.obj);
   //
   Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8));
+  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
   Exit(vm_mmap_to_errno(Result));
  end;
 
@@ -1139,7 +1139,7 @@ begin
   vm_map_unlock(map);
   //
   Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
-    id,', ',HexStr(base),'->',HexStr(vaddr_lo,8),':',HexStr(memsz,8));
+    id,', ',HexStr(base),'->',HexStr(vaddr_lo,8),':',HexStr(memsz,8),' (',Result,')');
   Assert(false,'self_load_section');
   Exit;
  end;
@@ -1149,7 +1149,7 @@ begin
  begin
   vm_map_unlock(map);
   //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8));
+  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
   Exit(vm_mmap_to_errno(Result));
  end;
 

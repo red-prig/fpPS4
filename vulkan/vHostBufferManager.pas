@@ -98,6 +98,7 @@ var
  buf:TvHostBuffer;
  __end:QWORD;
 begin
+ Result:=nil;
  __end:=Addr+Size;
 
  key:=Default(TvHostBufferKey);

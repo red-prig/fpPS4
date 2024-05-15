@@ -87,36 +87,38 @@ procedure DoOpenFile(Edit:TEdit);
 var
  d:TOpenDialog;
 begin
- d:=TOpenDialog.Create(nil);
-
- d.InitialDir:=Edit.Text;
-
- d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-
- if d.Execute then
- begin
-  Edit.Text:=d.FileName;
+ d:=nil;
+ try
+  d:=TOpenDialog.Create(nil);
+  d.InitialDir:=Edit.Text;
+  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+  if d.Execute then
+  begin
+   Edit.Text:=d.FileName;
+  end;
+ except
+  //
  end;
-
- d.Free;
+ FreeAndNil(d);
 end;
 
 procedure DoOpenDir(Edit:TEdit);
 var
  d:TSelectDirectoryDialog;
 begin
- d:=TSelectDirectoryDialog.Create(nil);
-
- d.InitialDir:=Edit.Text;
-
- d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-
- if d.Execute then
- begin
-  Edit.Text:=d.FileName;
+ d:=nil;
+ try
+  d:=TSelectDirectoryDialog.Create(nil);
+  d.InitialDir:=Edit.Text;
+  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+  if d.Execute then
+  begin
+   Edit.Text:=d.FileName;
+  end;
+ except
+  //
  end;
-
- d.Free;
+ FreeAndNil(d);
 end;
 
 procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);

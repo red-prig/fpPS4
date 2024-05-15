@@ -2828,7 +2828,7 @@ begin
  error:=rtld_mmap(@vaddr_lo,obj^.map_size);
  if (error<>0) then
  begin
-  Writeln(StdErr,'preload_prx_internal:','failed to allocate VA for ',obj^.lib_path);
+  Writeln(StdErr,'[KERNEL] preload_prx_internal:','failed to allocate VA for ',obj^.lib_path,' (',error,')');
   Exit(error);
  end;
 
@@ -2848,7 +2848,7 @@ begin
    vm_map_unlock(map);
    //
    Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_insert failed ',HexStr(vaddr_lo,8));
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_insert failed ',HexStr(vaddr_lo,8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
@@ -2870,7 +2870,7 @@ begin
   begin
    vm_map_unlock(map);
    //
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(vaddr_lo,8));
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(vaddr_lo,8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
@@ -2881,7 +2881,7 @@ begin
   begin
    vm_map_unlock(map);
    //
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(QWORD(data),8));
+   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(QWORD(data),8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
