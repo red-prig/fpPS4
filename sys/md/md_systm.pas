@@ -321,16 +321,20 @@ var
  addr,prev:Pointer;
  info:TMemoryBasicInformation;
  len:ULONG_PTR;
+
+ guest_pmap_mem:array[0..2] of t_addr_range;
 begin
- if Length(pmap_mem)<>0 then
+ guest_pmap_mem:=pmap_mem;
+ //
+ if Length(guest_pmap_mem)<>0 then
  begin
   //fixup
-  pmap_mem[0].start:=_PROC_AREA_START_0;
+  guest_pmap_mem[0].start:=_PROC_AREA_START_0;
   //
-  For i:=0 to High(pmap_mem) do
+  For i:=0 to High(guest_pmap_mem) do
   begin
-   base:=Pointer(pmap_mem[i].start);
-   size:=pmap_mem[i].__end-pmap_mem[i].start;
+   base:=Pointer(guest_pmap_mem[i].start);
+   size:=guest_pmap_mem[i].__end-guest_pmap_mem[i].start;
 
    r:=md_reserve_ex(hProcess,base,size);
    if (r<>0) then Exit(r);
@@ -344,7 +348,7 @@ begin
  r:=md_reserve_ex(hProcess,base,size);
  if (r<>0) then Exit(r);
 
- addr:=Pointer(pmap_mem[0].start);
+ addr:=Pointer(guest_pmap_mem[0].start);
 
  repeat
 

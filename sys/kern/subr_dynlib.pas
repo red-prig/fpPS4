@@ -2188,13 +2188,14 @@ begin
  end;
 
  error:=rtld_mmap(@addr,imgp^.max_addr-imgp^.min_addr);
+
+ Writeln(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+(imgp^.max_addr-imgp^.min_addr),12),':',imgp^.execpath);
+
  if (error<>0) then
  begin
   Writeln(StdErr,'self_load_shared_object:','failed to allocate VA for ',imgp^.execpath);
   goto _fail_dealloc;
  end;
-
- Writeln(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+(imgp^.max_addr-imgp^.min_addr),12),':',imgp^.execpath);
 
  delta:=addr-imgp^.min_addr;
  imgp^.min_addr:=addr;
@@ -2806,6 +2807,7 @@ var
  count:Integer;
  error:Integer;
 begin
+ Result:=0;
  count:=0;
 
  //get sym count
@@ -2825,7 +2827,11 @@ begin
  obj^.map_size :=obj^.text_size+obj^.data_size;
 
  //alloc addr
+ vaddr_lo:=0;
  error:=rtld_mmap(@vaddr_lo,obj^.map_size);
+
+ Writeln(' rtld_mmap:0x',HexStr(vaddr_lo,12),'..0x',HexStr(vaddr_lo+obj^.map_size,12),':',obj^.lib_path);
+
  if (error<>0) then
  begin
   Writeln(StdErr,'[KERNEL] preload_prx_internal:','failed to allocate VA for ',obj^.lib_path,' (',error,')');

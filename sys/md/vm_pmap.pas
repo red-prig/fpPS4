@@ -192,6 +192,7 @@ var
  size:QWORD;
  i:Integer;
 begin
+ Result:=0;
  if Length(pmap_mem)<>0 then
  begin
   For i:=0 to High(pmap_mem) do

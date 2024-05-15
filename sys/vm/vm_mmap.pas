@@ -378,7 +378,8 @@ var
  fitit:Boolean;
  writecounted:Boolean;
 begin
- if (size=0) then Exit(0);
+ Result:=0;
+ if (size=0) then Exit;
 
  obj:=nil;
 
