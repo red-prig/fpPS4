@@ -380,7 +380,7 @@ begin
  i:=i+1;
  if (i>=FGrid.RowCount) then
  begin
-  Result:=TValue.FromVariant(Null);
+  Result:=TValue.Empty;
  end else
  begin
   Result:=TGameItem(FGrid.Objects[0,i]);

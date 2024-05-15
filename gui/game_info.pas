@@ -457,7 +457,7 @@ end;
 
 Procedure TJSONStreamReader.NullValue;
 begin
- SetValue(TValue.FromVariant(Null));
+ SetValue(TValue.Empty);
  FItem:=nil;
 end;
 
