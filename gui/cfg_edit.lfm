@@ -1,13 +1,13 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 382
+  Left = 341
   Height = 323
-  Top = 105
+  Top = 119
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 323
   ClientWidth = 400
   Position = poMainFormCenter
-  LCLVersion = '3.99.0.0'
+  LCLVersion = '3.2.0.0'
   object EditPages: TPageControl
     Left = 0
     Height = 274
@@ -85,7 +85,7 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'System Firmware folder:'
+        Caption = 'Default System Firmware folder:'
       end
       object Edt_MainInfo_system: TEdit
         AnchorSideLeft.Control = Tab_MainInfo
@@ -117,7 +117,7 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'System data folder:'
+        Caption = 'Default System data folder:'
       end
       object Edt_MainInfo_data: TEdit
         AnchorSideLeft.Control = Tab_MainInfo

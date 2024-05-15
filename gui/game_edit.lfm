@@ -1,14 +1,14 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 693
+  Left = 710
   Height = 319
-  Top = 166
+  Top = 188
   Width = 397
   Caption = 'Game editor'
   ClientHeight = 319
   ClientWidth = 397
-  Position = poMainFormCenter
-  LCLVersion = '3.99.0.0'
   OnClose = FormClose
+  Position = poMainFormCenter
+  LCLVersion = '3.2.0.0'
   object EditPages: TPageControl
     AnchorSideBottom.Control = BtnOk
     Left = 0
@@ -34,8 +34,6 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
-        FocusColor = clRed
-        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -61,8 +59,6 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
-        FocusColor = clRed
-        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
@@ -88,8 +84,6 @@ object frmGameEditor: TfrmGameEditor
         AutoFillColumns = True
         ColCount = 2
         FixedRows = 0
-        FocusColor = clRed
-        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0

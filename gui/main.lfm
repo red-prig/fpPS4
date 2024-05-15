@@ -49,8 +49,6 @@ object frmMain: TfrmMain
           end>
         DragMode = dmAutomatic
         FixedCols = 0
-        FocusColor = clRed
-        FocusRectVisible = True
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goRowSelect, goThumbTracking, goSmoothScroll]
         RowCount = 1
         TabOrder = 0
