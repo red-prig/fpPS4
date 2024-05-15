@@ -60,7 +60,8 @@ type
   ntWaitRegMem,
   ntFastClear,
   ntResolve,
-  ntDrawIndex2
+  ntDrawIndex2,
+  ntDrawIndexAuto
  );
 
  p_pm4_node=^t_pm4_node;
@@ -143,6 +144,13 @@ type
   UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
  end;
 
+ p_pm4_node_DrawIndexAuto=^t_pm4_node_DrawIndexAuto;
+ t_pm4_node_DrawIndexAuto=object(t_pm4_node)
+  SH_REG:TSH_REG_GROUP;         // 0x2C00
+  CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
+  UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
+ end;
+
  p_pm4_stream=^t_pm4_stream;
  t_pm4_stream=object
   next_:Pointer;
@@ -168,6 +176,9 @@ type
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
   procedure DrawIndex2   (addr:Pointer;
                           var SH_REG:TSH_REG_GROUP;
+                          var CX_REG:TCONTEXT_REG_GROUP;
+                          var UC_REG:TUSERCONFIG_REG_SHORT);
+  procedure DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
  end;
@@ -373,6 +384,24 @@ begin
 
  node^.ntype :=ntDrawIndex2;
  node^.addr  :=addr;
+ node^.SH_REG:=SH_REG;
+ node^.CX_REG:=CX_REG;
+ node^.UC_REG:=UC_REG;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
+                                     var CX_REG:TCONTEXT_REG_GROUP;
+                                     var UC_REG:TUSERCONFIG_REG_SHORT);
+var
+ node:p_pm4_node_DrawIndexAuto;
+begin
+ if ColorControl(CX_REG) then Exit;
+
+ node:=allocator.Alloc(SizeOf(t_pm4_node_DrawIndexAuto));
+
+ node^.ntype :=ntDrawIndexAuto;
  node^.SH_REG:=SH_REG;
  node^.CX_REG:=CX_REG;
  node^.UC_REG:=UC_REG;

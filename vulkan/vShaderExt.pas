@@ -665,6 +665,8 @@ begin
    end;
   end;
 
+ i:=FBindDescsCount;
+
  NewBindDesc(i,pv_stride,pv_count,pv_base);
 
  NewAttrDesc(location,i,0,_get_vsharp_cformat(PV));

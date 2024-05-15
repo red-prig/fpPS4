@@ -248,6 +248,7 @@ begin
   $C243:PDWORD(@UC_REG.VGT_INDEX_TYPE    )^:=data;
   $C24C:PDWORD(@UC_REG.VGT_NUM_INDICES   )^:=data;
   $C24D:PDWORD(@UC_REG.VGT_NUM_INSTANCES )^:=data;
+  $C258:PDWORD(@CX_REG.IA_MULTI_VGT_PARAM)^:=data;
   else
    begin
     Writeln(stderr,getRegName(i),':=0x',HexStr(data,8));
@@ -294,6 +295,7 @@ begin
   $C243:Result:=PDWORD(@UC_REG.VGT_INDEX_TYPE    )^;
   $C24C:Result:=PDWORD(@UC_REG.VGT_NUM_INDICES   )^;
   $C24D:Result:=PDWORD(@UC_REG.VGT_NUM_INSTANCES )^;
+  $C258:Result:=PDWORD(@CX_REG.IA_MULTI_VGT_PARAM)^;
   else
         Result:=0;
  end;
@@ -1355,6 +1357,22 @@ begin
                              pctx^.UC_REG);
 end;
 
+procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
+begin
+ if (DWORD(Body^.drawInitiator)<>2) then
+ begin
+  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ pctx^.CX_REG.VGT_DMA_SIZE      :=Body^.indexCount;
+ pctx^.UC_REG.VGT_NUM_INDICES   :=Body^.indexCount;
+ pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
+
+ pctx^.stream_dcb.DrawIndexAuto(pctx^.SH_REG,
+                                pctx^.CX_REG,
+                                pctx^.UC_REG);
+end;
+
 procedure onPushMarker(Body:PChar);
 begin
  Writeln('\HINT_PUSH_MARKER:',Body);
@@ -1504,8 +1522,8 @@ begin
       IT_INDEX_BASE         :onIndexBase      (pctx,buff);
       IT_NUM_INSTANCES      :onNumInstances   (pctx,buff);
       IT_DRAW_INDEX_2       :onDrawIndex2     (pctx,buff);
-      IT_DRAW_INDEX_AUTO    :Assert(false,'IT_DRAW_INDEX_AUTO');
       IT_DRAW_INDEX_OFFSET_2:Assert(false,'IT_DRAW_INDEX_OFFSET_2');
+      IT_DRAW_INDEX_AUTO    :onDrawIndexAuto  (pctx,buff);
       IT_DISPATCH_DIRECT    :Assert(false,'IT_DISPATCH_DIRECT');
       IT_PFP_SYNC_ME        :Assert(false,'IT_PFP_SYNC_ME');
 

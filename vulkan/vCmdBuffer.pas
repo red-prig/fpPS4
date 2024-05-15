@@ -86,11 +86,8 @@ type
   Procedure   PushConstant(BindPoint:TVkPipelineBindPoint;stageFlags:TVkShaderStageFlags;offset,size:TVkUInt32;const pValues:PVkVoid);
   Procedure   DispatchDirect(X,Y,Z:TVkUInt32);
 
+  Procedure   BindVertexBuffers(const FAttrBuilder:TvAttrBuilder);
   Procedure   SetVertexInput(const FAttrBuilder:TvAttrBuilder);
-
-  Procedure   BindVertexBuffer(Binding:TVkUInt32;
-                               Buffer:TVkBuffer;
-                               Offset:TVkDeviceSize);
 
   Procedure   ClearDepthStencilImage(
                          image:TVkImage;
@@ -118,8 +115,9 @@ type
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
 
-  emulate_primtype:Integer;
-  instanceCount:DWORD;
+  Femulate_primtype:Integer;
+  FinstanceCount:DWORD;
+  FINDEX_TYPE:TVkIndexType;
 
   function    BeginRenderPass(RT:TvRenderTargets):Boolean;
 
@@ -131,8 +129,8 @@ type
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
 
-  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
-  Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD);
+  Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD);
   Procedure   DrawIndexAuto(INDICES:DWORD);
  end;
 
@@ -140,7 +138,8 @@ implementation
 
 uses
  vBuffer,
- vHostBufferManager;
+ vHostBufferManager,
+ kern_dmem;
 
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
@@ -292,7 +291,7 @@ begin
 
  FCurrPipeline[0]:=RT.FPipeline.FHandle;
  FCurrLayout  [0]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
- emulate_primtype:=RT.FPipeline.Key.emulate_primtype;
+ Femulate_primtype:=RT.FPipeline.Key.emulate_primtype;
 
  Inc(cmd_count);
 
@@ -516,6 +515,65 @@ begin
  vkCmdDispatch(FCmdbuf,X,Y,Z);
 end;
 
+Procedure TvCustomCmdBuffer.BindVertexBuffers(const FAttrBuilder:TvAttrBuilder);
+var
+ i,c:Integer;
+
+ rb:TvHostBuffer;
+
+ Buffers:array[0..31] of TVkBuffer;
+ Offsets:array[0..31] of TVkDeviceSize;
+
+ last_binding:TVkUInt32;
+ last_size   :TVkUInt32;
+
+ addr:QWORD;
+begin
+ c:=FAttrBuilder.FBindDescsCount;
+ if (c=0) then Exit;
+
+ if (Self=nil) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ last_binding:=0;
+ last_size   :=0;
+ For i:=0 to c-1 do
+ With FAttrBuilder.FBindVBufs[i] do
+ begin
+
+  if not get_dmem_ptr(min_addr,@addr,nil) then
+  begin
+   Assert(false,'addr:0x'+HexStr(min_addr)+' not in dmem!');
+  end;
+
+  rb:=FetchHostBuffer(Self,addr,GetSize,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+
+  if (last_binding<>binding) then
+  begin
+   //flush
+   if (last_size<>0) then
+   begin
+    vkCmdBindVertexBuffers(FCmdbuf,last_binding,last_size,@Buffers,@Offsets);
+    last_size:=0;
+   end;
+   //
+   last_binding:=binding;
+  end;
+
+  Buffers[last_size]:=rb.FHandle;
+  Offsets[last_size]:=QWORD(addr)-rb.FAddr;
+
+  last_size:=last_size+1;
+ end;
+
+ //flush
+ if (last_size<>0) then
+ begin
+  vkCmdBindVertexBuffers(FCmdbuf,last_binding,last_size,@Buffers,@Offsets);
+ end;
+end;
+
 Procedure TvCustomCmdBuffer.SetVertexInput(const FAttrBuilder:TvAttrBuilder);
 var
  input:TvVertexInputEXT;
@@ -538,20 +596,6 @@ begin
                         @input.VertexBindingDescriptions[0],
                         input.vertexAttributeDescriptionCount,
                         @input.VertexAttributeDescriptions[0]);
-end;
-
-Procedure TvCustomCmdBuffer.BindVertexBuffer(Binding:TVkUInt32;
-                                             Buffer:TVkBuffer;
-                                             Offset:TVkDeviceSize);
-begin
- if (Self=nil) then Exit;
-
- if (not BeginCmdBuffer) then Exit;
-
- vkCmdBindVertexBuffer(FCmdbuf,
-                       binding,
-                       Buffer,
-                       Offset);
 end;
 
 Procedure TvCustomCmdBuffer.ClearDepthStencilImage(
@@ -839,7 +883,7 @@ begin
  end;
 end;
 
-Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD);
 var
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
@@ -851,9 +895,9 @@ begin
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
- if (instanceCount=0) then instanceCount:=1;
+ if (FinstanceCount=0) then FinstanceCount:=1;
 
- Size:=(OFFSET+INDICES)*GET_INDEX_TYPE_SIZE(INDEX_TYPE);
+ Size:=(OFFSET+INDICES)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
 
  rb:=FetchHostBuffer(Self,QWORD(Addr),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);
@@ -866,24 +910,24 @@ begin
      Fcmdbuf,
      rb.FHandle,
      BufOffset,
-     INDEX_TYPE);
+     FINDEX_TYPE);
 
  Inc(cmd_count);
 
- Case emulate_primtype of
+ Case Femulate_primtype of
   0:
     begin
      vkCmdDrawIndexed(
          Fcmdbuf,
-         INDICES,       //indexCount
-         instanceCount, //instanceCount
-         OFFSET,        //firstIndex
-         0,             //vertexOffset
-         0);            //firstInstance
+         INDICES,        //indexCount
+         FinstanceCount, //instanceCount
+         OFFSET,         //firstIndex
+         0,              //vertexOffset
+         0);             //firstInstance
     end;
   DI_PT_QUADLIST:
     begin
-     Assert(instanceCount<=1,'instance DI_PT_QUADLIST');
+     Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
      Assert(OFFSET=0,'OFFSET DI_PT_QUADLIST');
      h:=INDICES div 4;
      if (h>0) then h:=h-1;
@@ -904,9 +948,9 @@ begin
 
 end;
 
-Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD;INDEX_TYPE:TVkIndexType);
+Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD);
 begin
- DrawIndexOffset2(Addr,0,INDICES,INDEX_TYPE);
+ DrawIndexOffset2(Addr,0,INDICES);
 end;
 
 Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD);
@@ -918,23 +962,25 @@ begin
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
 
- if (instanceCount=0) then instanceCount:=1;
+ if (FinstanceCount=0) then FinstanceCount:=1;
 
- Case emulate_primtype of
+ Case Femulate_primtype of
   0:
     begin
      vkCmdDraw(
       FCmdbuf,
-      INDICES,       //vertexCount
-      instanceCount, //instanceCount
-      0,             //firstVertex
-      0);            //firstInstance
+      INDICES,        //vertexCount
+      FinstanceCount, //instanceCount
+      0,              //firstVertex
+      0);             //firstInstance
     end;
 
   DI_PT_RECTLIST :
     begin
-     Assert(instanceCount<=1,'instance DI_PT_RECTLIST');
+     Assert(FinstanceCount<=1,'instance DI_PT_RECTLIST');
      {
+     VK_EXT_primitive_topology_list_restart ???
+
      0   3
      1   2
      }
@@ -956,9 +1002,9 @@ begin
 
     end;
   //DI_PT_LINELOOP :;
-  DI_PT_QUADLIST :
+  DI_PT_QUADLIST:
     begin
-     Assert(instanceCount<=1,'instance DI_PT_QUADLIST');
+     Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
      h:=INDICES div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do

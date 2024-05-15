@@ -10,6 +10,7 @@ uses
   g23tree,
   //ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
+  vRegs2Vulkan,
   Vulkan,
   vDevice,
   vMemory,
@@ -27,65 +28,11 @@ type
   Procedure  Release(Sender:TOBject);
  end;
 
- {
- TvRenderPass=class(vPipeline.TvRenderPass)
-
-  AtCount:TVkUInt32;
-  ColorAt:array[0..8] of TVkAttachmentDescription;
-
-  ColorRef:array[0..7] of TVkAttachmentReference; //subpass.colorAttachmentCount
-
-  pDepthStencilRef:TVkAttachmentReference;
-
-  subpass:TVkSubpassDescription;
-  dependency:TVkSubpassDependency;
-
-  Procedure  Clear;
-  Procedure  SetZorderStage(s:TVkPipelineStageFlags);
-  Procedure  AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
-  Procedure  SetDepthStencilRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
-  Procedure  AddColorAt(format:TVkFormat;IMAGE_USAGE:Byte;samples:TVkSampleCountFlagBits);
-  Procedure  AddDepthAt(format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
-  Function   Compile:Boolean;
- end;
- }
-
- {
- TvGraphicsPipeline=class(TvPipeline)
-  FRenderPass:TvRenderPass;
-
-  Viewports:array[0..15] of TVkViewport; //viewportState.viewportCount
-  Scissors :array[0..15] of TVkRect2D;   //viewportState.scissorCount
-
-  ColorBlends:array[0..7] of TVkPipelineColorBlendAttachmentState; //colorBlending.attachmentCount
-
-  FShaderGroup:TvShaderGroup;
-
-  dynamicStates:array[0..1] of TVkDynamicState; //dynamicState.dynamicStateCount
-
-  vertexInputInfo:TVkPipelineVertexInputStateCreateInfo;
-  inputAssembly:TVkPipelineInputAssemblyStateCreateInfo;
-  viewportState:TVkPipelineViewportStateCreateInfo;
-  rasterizer:TVkPipelineRasterizationStateCreateInfo;
-  multisampling:TVkPipelineMultisampleStateCreateInfo;
-  colorBlending:TVkPipelineColorBlendStateCreateInfo;
-  DepthStencil:TVkPipelineDepthStencilStateCreateInfo;
-  dynamicState:TVkPipelineDynamicStateCreateInfo;
-
-  emulate_primtype:Integer;
-
-  Procedure SetPrimType(t:TVkPrimitiveTopology);
-  Procedure SetPrimReset(enable:TVkBool32);
-  Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
-  Procedure AddBlend(const b:TVkPipelineColorBlendAttachmentState);
-  Procedure Clear;
-  procedure SetBlendColors(P:PSingle);
-  procedure SetRenderPass(RenderPass:TvRenderPass);
-  function  Compile:Boolean;
- end;
- }
-
  TvRenderTargets=class
+  RT_COUNT:Byte;
+  RT_INFO:array[0..7] of TRT_INFO;
+  DB_INFO:TDB_INFO;
+  //
   FRenderPass :TvRenderPass;
   FPipeline   :TvGraphicsPipeline2;
   FFramebuffer:TvFramebuffer;
@@ -105,7 +52,6 @@ type
   Function   GetRInfo:TVkRenderPassBeginInfo;
   Function   GetAInfo:TVkRenderPassAttachmentBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
-  Destructor Destroy; override;
   Procedure  Acquire(Sender:TObject);
   Procedure  Release(Sender:TOBject);
  end;
@@ -646,14 +592,6 @@ end;
 class function TvRenderTargets.c(const a,b:TvRenderTargets):Integer;
 begin
  Result:=CompareByte(a,b,SizeOf(Pointer));
-end;
-
-Destructor TvRenderTargets.Destroy;
-begin
- /////FreeAndNil(FRenderPass);
- /////FreeAndNil(FPipeline);
- //FreeAndNil(FFramebuffer);
- inherited;
 end;
 
 Procedure TvRenderTargets.Acquire(Sender:TObject);

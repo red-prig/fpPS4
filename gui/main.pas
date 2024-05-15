@@ -796,6 +796,9 @@ begin
 
   form.Item:=TGameItem.Create;
 
+  form.Item.FMountList.system:=FConfigInfo.MainInfo.system;
+  form.Item.FMountList.data  :=FConfigInfo.MainInfo.data;
+
   form.Item.FMountList.app0:=d.FileName;
 
   form.OnSave:=@Self.DoAdd;

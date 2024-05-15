@@ -27,6 +27,8 @@ uses
 
  shader_dump,
 
+ renderdoc,
+
  kern_thr,
  md_sleep,
  bittype,
@@ -51,6 +53,9 @@ type
   procedure Push(var stream:t_pm4_stream);
   procedure free_stream(node:p_pm4_stream); static;
  end;
+
+var
+ use_renderdoc:Boolean=True;
 
 implementation
 
@@ -139,15 +144,15 @@ end;
 var
  FCmdPool:TvCmdPool;
 
-procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
+procedure pm4_DrawPrepare(SH_REG:PSH_REG_GROUP;
+                          CX_REG:PCONTEXT_REG_GROUP;
+                          UC_REG:PUSERCONFIG_REG_SHORT;
+                          CmdBuffer:TvCmdBuffer;
+                          RenderCmd:TvRenderTargets);
 var
  i:Integer;
 
  GPU_REGS:TGPU_REGS;
-
- RT_COUNT:Byte;
- RT_INFO:array[0..7] of TRT_INFO;
- DB_INFO:TDB_INFO;
 
  FVSShader:TvShaderExt;
  FPSShader:TvShaderExt;
@@ -169,23 +174,13 @@ var
  FB_KEY2:TvFramebufferBindedKey;
  FFramebuffer:TvFramebuffer;
 
- FRenderCmd:TvRenderTargets;
-
  ri:TvImage2;
  iv:TvImageView2;
-
- CmdBuffer:TvCmdBuffer;
- r:TVkResult;
-
- buf:TvHostBuffer;
- addr,size,offset:Ptruint;
-
- BufferImageCopy:TVkBufferImageCopy;
 begin
  GPU_REGS:=Default(TGPU_REGS);
- GPU_REGS.SH_REG:=@node^.SH_REG;
- GPU_REGS.CX_REG:=@node^.CX_REG;
- GPU_REGS.UC_REG:=@node^.UC_REG;
+ GPU_REGS.SH_REG:=SH_REG;
+ GPU_REGS.CX_REG:=CX_REG;
+ GPU_REGS.UC_REG:=UC_REG;
 
  {fdump_ps:=}DumpPS(GPU_REGS);
  {fdump_vs:=}DumpVS(GPU_REGS);
@@ -202,49 +197,37 @@ begin
 
  RP_KEY.Clear;
 
- RT_COUNT:=0;
+ RenderCmd.RT_COUNT:=0;
 
  if GPU_REGS.COMP_ENABLE then
  For i:=0 to GPU_REGS.GET_HI_RT do
   begin
-   RT_INFO[RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
+   RenderCmd.RT_INFO[RenderCmd.RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
 
    //hack
    //RT_INFO[RT_COUNT].IMAGE_USAGE:=TM_CLEAR or TM_WRITE;
    //
 
-   RP_KEY.AddColorAt(RT_INFO[RT_COUNT].attachment,
-                     RT_INFO[RT_COUNT].FImageInfo.cformat,
-                     RT_INFO[RT_COUNT].IMAGE_USAGE,
-                     RT_INFO[RT_COUNT].FImageInfo.params.samples);
+   RP_KEY.AddColorAt(RenderCmd.RT_INFO[RenderCmd.RT_COUNT].attachment,
+                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].FImageInfo.cformat,
+                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].IMAGE_USAGE,
+                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].FImageInfo.params.samples);
 
-   Inc(RT_COUNT);
+   Inc(RenderCmd.RT_COUNT);
   end;
 
  if GPU_REGS.DB_ENABLE then
  begin
-  DB_INFO:=GPU_REGS.GET_DB_INFO;
+  RenderCmd.DB_INFO:=GPU_REGS.GET_DB_INFO;
 
-  RP_KEY.AddDepthAt(RT_COUNT, //add to last attachment id
-                    DB_INFO.FImageInfo.cformat,
-                    DB_INFO.DEPTH_USAGE,
-                    DB_INFO.STENCIL_USAGE);
+  RP_KEY.AddDepthAt(RenderCmd.RT_COUNT, //add to last attachment id
+                    RenderCmd.DB_INFO.FImageInfo.cformat,
+                    RenderCmd.DB_INFO.DEPTH_USAGE,
+                    RenderCmd.DB_INFO.STENCIL_USAGE);
 
-  RP_KEY.SetZorderStage(DB_INFO.zorder_stage);
+  RP_KEY.SetZorderStage(RenderCmd.DB_INFO.zorder_stage);
 
  end;
-
- //
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- //CmdBuffer.submit_id:=submit_id;
-
- //
-
 
  RP:=FetchRenderPass(CmdBuffer,@RP_KEY);
 
@@ -266,10 +249,10 @@ begin
    GP_KEY.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
   end;
 
- if (RT_COUNT<>0) then
- For i:=0 to RT_COUNT-1 do
+ if (RenderCmd.RT_COUNT<>0) then
+ For i:=0 to RenderCmd.RT_COUNT-1 do
   begin
-   GP_KEY.AddBlend(RT_INFO[i].blend);
+   GP_KEY.AddBlend(RenderCmd.RT_INFO[i].blend);
   end;
 
  FAttrBuilder:=Default(TvAttrBuilder);
@@ -291,7 +274,7 @@ begin
 
  if GPU_REGS.DB_ENABLE then
  begin
-  GP_KEY.DepthStencil:=DB_INFO.ds_state;
+  GP_KEY.DepthStencil:=RenderCmd.DB_INFO.ds_state;
  end;
 
  GP:=FetchGraphicsPipeline(CmdBuffer,@GP_KEY);
@@ -303,15 +286,15 @@ begin
   FB_KEY.SetRenderPass(RP);
   FB_KEY.SetSize(GPU_REGS.GET_SCREEN_SIZE);
 
-  if (RT_COUNT<>0) then
-  For i:=0 to RT_COUNT-1 do
+  if (RenderCmd.RT_COUNT<>0) then
+  For i:=0 to RenderCmd.RT_COUNT-1 do
    begin
-    FB_KEY.AddImageAt(RT_INFO[i].FImageInfo);
+    FB_KEY.AddImageAt(RenderCmd.RT_INFO[i].FImageInfo);
    end;
 
   if GPU_REGS.DB_ENABLE then
   begin
-   FB_KEY.AddImageAt(DB_INFO.FImageInfo);
+   FB_KEY.AddImageAt(RenderCmd.DB_INFO.FImageInfo);
   end;
  end else
  begin
@@ -321,36 +304,34 @@ begin
   FB_KEY2.SetSize(GPU_REGS.GET_SCREEN_SIZE);
  end;
 
- FRenderCmd:=TvRenderTargets.Create;
+ RenderCmd.FRenderPass:=RP;
+ RenderCmd.FPipeline  :=GP;
 
- FRenderCmd.FRenderPass:=RP;
- FRenderCmd.FPipeline  :=GP;
-
- FRenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+ RenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
 
  if limits.VK_KHR_imageless_framebuffer then
  begin
   FFramebuffer:=FetchFramebufferImageless(CmdBuffer,@FB_KEY);
-  FRenderCmd.FFramebuffer:=FFramebuffer;
+  RenderCmd.FFramebuffer:=FFramebuffer;
  end;
 
- if (RT_COUNT<>0) then
- For i:=0 to RT_COUNT-1 do
+ if (RenderCmd.RT_COUNT<>0) then
+ For i:=0 to RenderCmd.RT_COUNT-1 do
   begin
 
-   FRenderCmd.AddClearColor(RT_INFO[i].CLEAR_COLOR);
+   RenderCmd.AddClearColor(RenderCmd.RT_INFO[i].CLEAR_COLOR);
 
    ri:=FetchImage(CmdBuffer,
-                  RT_INFO[i].FImageInfo,
+                  RenderCmd.RT_INFO[i].FImageInfo,
                   iu_attachment,
-                  RT_INFO[i].IMAGE_USAGE
+                  RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   iv:=ri.FetchView(CmdBuffer,RT_INFO[i].FImageView,iu_attachment);
+   iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
 
    if limits.VK_KHR_imageless_framebuffer then
    begin
-    FRenderCmd.AddImageView(iv);
+    RenderCmd.AddImageView(iv);
    end;
 
    ri.PushBarrier(CmdBuffer,
@@ -359,7 +340,7 @@ begin
                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
    ri.PushBarrier(CmdBuffer,
-                  GetColorAccessMask(RT_INFO[i].IMAGE_USAGE),
+                  GetColorAccessMask(RenderCmd.RT_INFO[i].IMAGE_USAGE),
                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL {VK_IMAGE_LAYOUT_GENERAL},
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
@@ -375,42 +356,50 @@ begin
  if not limits.VK_KHR_imageless_framebuffer then
  begin
   FFramebuffer:=FetchFramebufferBinded(CmdBuffer,@FB_KEY2);
-  FRenderCmd.FFramebuffer:=FFramebuffer;
+  RenderCmd.FFramebuffer:=FFramebuffer;
  end;
 
  if GPU_REGS.DB_ENABLE then
  begin
-  FRenderCmd.AddClearColor(DB_INFO.CLEAR_VALUE);
-  //FRenderCmd.AddImageView(iv);
+  RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
+  //RenderCmd.AddImageView(iv);
  end;
 
- if not CmdBuffer.BeginRenderPass(FRenderCmd) then
+ if not CmdBuffer.BeginRenderPass(RenderCmd) then
  begin
   Assert(false,'BeginRenderPass(FRenderCmd)');
  end;
 
- CmdBuffer.SetVertexInput(FAttrBuilder);
+ CmdBuffer.SetVertexInput   (FAttrBuilder);
+ CmdBuffer.BindVertexBuffers(FAttrBuilder);
 
- /////////
- CmdBuffer.instanceCount:=GPU_REGS.UC_REG^.VGT_NUM_INSTANCES;
- CmdBuffer.DrawIndex2(node^.addr,
-                      GPU_REGS.UC_REG^.VGT_NUM_INDICES,
-                      GPU_REGS.GET_INDEX_TYPE);
- /////////
+ CmdBuffer.FinstanceCount:=GPU_REGS.UC_REG^.VGT_NUM_INSTANCES;
+ CmdBuffer.FINDEX_TYPE   :=GPU_REGS.GET_INDEX_TYPE;
+end;
 
- CmdBuffer.EndRenderPass;
+procedure pm4_Writeback(CmdBuffer:TvCmdBuffer;
+                        RenderCmd:TvRenderTargets);
+var
+ i:Integer;
 
+ ri:TvImage2;
+
+ buf:TvHostBuffer;
+ addr,size,offset:Ptruint;
+
+ BufferImageCopy:TVkBufferImageCopy;
+begin
  //write back
 
- if (RT_COUNT<>0) then
- For i:=0 to RT_COUNT-1 do
-  if (RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
+ if (RenderCmd.RT_COUNT<>0) then
+ For i:=0 to RenderCmd.RT_COUNT-1 do
+  if (RenderCmd.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
 
    ri:=FetchImage(CmdBuffer,
-                  RT_INFO[i].FImageInfo,
+                  RenderCmd.RT_INFO[i].FImageInfo,
                   iu_attachment,
-                  RT_INFO[i].IMAGE_USAGE
+                  RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
    ri.PushBarrier(CmdBuffer,
@@ -469,6 +458,54 @@ begin
   end;
 
  //write back
+end;
+
+procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
+var
+ RenderCmd:TvRenderTargets;
+
+ CmdBuffer:TvCmdBuffer;
+
+ r:TVkResult;
+begin
+
+ if use_renderdoc then
+ begin
+  renderdoc.LoadRenderDoc;
+  renderdoc.UnloadCrashHandler;
+
+  if (renderdoc.IsTargetControlConnected<>0) then
+  begin
+   renderdoc.StartFrameCapture(0,0);
+  end;
+ end;
+
+ //
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+
+ CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ //CmdBuffer.submit_id:=submit_id;
+
+ //
+
+ RenderCmd:=TvRenderTargets.Create;
+
+ pm4_DrawPrepare(@node^.SH_REG,
+                 @node^.CX_REG,
+                 @node^.UC_REG,
+                 CmdBuffer,
+                 RenderCmd);
+
+ CmdBuffer.DrawIndex2(node^.addr,
+                      node^.UC_REG.VGT_NUM_INDICES);
+ /////////
+
+ CmdBuffer.EndRenderPass;
+
+ pm4_Writeback(CmdBuffer,RenderCmd);
 
  r:=CmdBuffer.QueueSubmit;
 
@@ -489,6 +526,83 @@ begin
  CmdBuffer.ReleaseResource;
 
  CmdBuffer.Free;
+
+ if use_renderdoc then
+ begin
+  renderdoc.EndFrameCapture(0,0);
+ end;
+end;
+
+procedure pm4_DrawIndexAuto(node:p_pm4_node_DrawIndexAuto);
+var
+ RenderCmd:TvRenderTargets;
+
+ CmdBuffer:TvCmdBuffer;
+
+ r:TVkResult;
+begin
+
+ if use_renderdoc then
+ begin
+  renderdoc.LoadRenderDoc;
+  renderdoc.UnloadCrashHandler;
+
+  if (renderdoc.IsTargetControlConnected<>0) then
+  begin
+   renderdoc.StartFrameCapture(0,0);
+  end;
+ end;
+
+ //
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+
+ CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ //CmdBuffer.submit_id:=submit_id;
+
+ //
+
+ RenderCmd:=TvRenderTargets.Create;
+
+ pm4_DrawPrepare(@node^.SH_REG,
+                 @node^.CX_REG,
+                 @node^.UC_REG,
+                 CmdBuffer,
+                 RenderCmd);
+
+ CmdBuffer.DrawIndexAuto(node^.UC_REG.VGT_NUM_INDICES);
+ /////////
+
+ CmdBuffer.EndRenderPass;
+
+ pm4_Writeback(CmdBuffer,RenderCmd);
+
+ r:=CmdBuffer.QueueSubmit;
+
+ if (r<>VK_SUCCESS) then
+ begin
+  Assert(false,'QueueSubmit');
+ end;
+
+ Writeln('QueueSubmit:',r);
+
+ r:=CmdBuffer.Wait(QWORD(-1));
+
+ Writeln('CmdBuffer:',r);
+
+ r:=RenderQueue.WaitIdle;
+ Writeln('WaitIdle:',r);
+
+ CmdBuffer.ReleaseResource;
+
+ CmdBuffer.Free;
+
+ if use_renderdoc then
+ begin
+  renderdoc.EndFrameCapture(0,0);
+ end;
 end;
 
 procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop);
@@ -526,6 +640,7 @@ begin
 
     case node^.ntype of
      ntDrawIndex2   :pm4_DrawIndex2   (Pointer(node));
+     ntDrawIndexAuto:pm4_DrawIndexAuto(Pointer(node));
      ntEventWriteEop:pm4_EventWriteEop(Pointer(node));
      else
     end;
