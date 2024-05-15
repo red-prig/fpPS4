@@ -6,6 +6,7 @@ unit pm4_me;
 interface
 
 uses
+ sysutils,
  mqueue,
  LFQueue,
 
@@ -181,6 +182,13 @@ begin
  GPU_REGS.SH_REG:=SH_REG;
  GPU_REGS.CX_REG:=CX_REG;
  GPU_REGS.UC_REG:=UC_REG;
+
+ for i:=0 to 31 do
+ begin
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET     ));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE ));
+ end;
 
  {fdump_ps:=}DumpPS(GPU_REGS);
  {fdump_vs:=}DumpVS(GPU_REGS);

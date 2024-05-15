@@ -432,36 +432,45 @@ begin
  FGameList.FGrid:=ListGrid;
 
  //load config
- m:=nil;
- JReader:=nil;
- try
-  m:=TMemoryStream.Create;
-  m.LoadFromFile(fpps4File);
-  JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
-  JReader.Execute(FConfigInfo);
- except
-  on E: Exception do
-    MessageDlgEx(E.Message,mtError,[mbOK],Self);
+ if FileExists(fpps4File) then
+ begin
+  m:=nil;
+  JReader:=nil;
+  try
+   m:=TMemoryStream.Create;
+   m.LoadFromFile(fpps4File);
+   JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
+   JReader.Execute(FConfigInfo);
+  except
+   on E: Exception do
+     MessageDlgEx(E.Message,mtError,[mbOK],Self);
+  end;
+  FreeAndNil(JReader);
+  FreeAndNil(m);
  end;
- FreeAndNil(JReader);
-
- obj:=TGameListObject.Create;
- obj.GameList:=FGameList;
 
  //load game list
- m.Clear;
- try
-  m:=TMemoryStream.Create;
-  m.LoadFromFile(GameListFile);
-  JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
-  JReader.Execute(obj);
- except
-  on E: Exception do
-    MessageDlgEx(E.Message,mtError,[mbOK],Self);
- end;
- FreeAndNil(JReader);
+ if FileExists(GameListFile) then
+ begin
+  obj:=TGameListObject.Create;
+  obj.GameList:=FGameList;
 
- FreeAndNil(obj);
+  m:=nil;
+  JReader:=nil;
+  try
+   m:=TMemoryStream.Create;
+   m.LoadFromFile(GameListFile);
+   JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
+   JReader.Execute(obj);
+  except
+   on E: Exception do
+     MessageDlgEx(E.Message,mtError,[mbOK],Self);
+  end;
+  FreeAndNil(JReader);
+  FreeAndNil(m);
+
+  FreeAndNil(obj);
+ end;
 
  //update grid
  C:=FGameList.GetArrayCount;
@@ -494,7 +503,13 @@ begin
  FreeAndNil(jstream);
  FreeAndNil(list);
 
- M.SaveToFile(GameListFile);
+ try
+  M.SaveToFile(GameListFile);
+ except
+  on E: Exception do
+    MessageDlgEx(E.Message,mtError,[mbOK],Self);
+ end;
+
  FreeAndNil(M);
 end;
 
@@ -858,7 +873,13 @@ begin
  FConfigInfo.WriteJSON('',jstream);
  FreeAndNil(jstream);
 
- M.SaveToFile(fpps4File);
+ try
+  M.SaveToFile(fpps4File);
+ except
+  on E: Exception do
+    MessageDlgEx(E.Message,mtError,[mbOK],Self);
+ end;
+
  FreeAndNil(M);
 end;
 
