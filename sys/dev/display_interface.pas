@@ -7,7 +7,7 @@ interface
 uses
  sys_event,
  kern_mtx,
- md_time;
+ time;
 
 const
  //SceVideoOutPixelFormat
@@ -192,12 +192,12 @@ begin
  last_status.flipArg      :=submit^.flipArg;
  last_status.flipArg2     :=submit^.flipArg2;
  last_status.count        :=last_status.count+1;
- last_status.submitTsc    :=rdtsc;
+ last_status.submitTsc    :=rdtsc();
  last_status.currentBuffer:=submit^.bufferIndex;
 
  knote_eventid(EVENTID_FLIP, submit^.flipArg);
 
- last_status.tsc        :=rdtsc;
+ last_status.tsc        :=rdtsc();
  last_status.processTime:=last_status.tsc;
 
  Result:=0;
@@ -208,12 +208,12 @@ begin
  last_status.flipArg      :=submit^.flipArg;
  last_status.flipArg2     :=submit^.flipArg2;
  last_status.count        :=last_status.count+1;
- last_status.submitTsc    :=rdtsc;
+ last_status.submitTsc    :=rdtsc();
  last_status.currentBuffer:=submit^.bufferIndex;
 
  knote_eventid(EVENTID_FLIP, submit^.flipArg);
 
- last_status.tsc        :=rdtsc;
+ last_status.tsc        :=rdtsc();
  last_status.processTime:=last_status.tsc;
 
  Result:=0;

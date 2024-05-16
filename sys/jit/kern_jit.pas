@@ -23,6 +23,7 @@ implementation
 
 uses
  sysutils,
+ time,
  vm_pmap_prot,
  vm_pmap,
  vm_map,
@@ -134,9 +135,13 @@ label
  _cpuid_7,
  _cpuid_80000000,
  _cpuid_80000001,
- _cpuid_80000008;
+ _cpuid_80000008,
+ _exit;
 asm
- pushf
+ movq %rax, %r14
+ seto %al
+ lahf
+ xchg %rax, %r14
 
  cmp $0,%eax
  je _cpuid_0
@@ -157,14 +162,18 @@ asm
  je _cpuid_80000008
 
  //unknow id
- popf
- mov  %rax,%r15
+
+ xchg %r14, %rax
+ addb $127, %al
+ sahf
+
+ mov  %r14, %r15
  call jit_save_ctx
- mov  %r14,%rdi
- mov  %r15,%rsi
+ mov  %r14, %rdi
+ mov  %r15, %rsi
  jmp  _jit_cpuid
 
-
+ //not reach
 
  _cpuid_0:
 
@@ -176,8 +185,7 @@ asm
  mov $0x69746E65,%edx
  mov $0x444D4163,%ecx
 
- popf
- ret
+ jmp _exit
 
  _cpuid_1:
 
@@ -204,8 +212,7 @@ asm
 
  or  $0x00080800,%ebx //cpu_procinfo
 
- popf
- ret
+ jmp _exit
 
  _cpuid_7:
 
@@ -214,8 +221,7 @@ asm
  mov $0x0,%edx
  mov $0x0,%ecx
 
- popf
- ret
+ jmp _exit
 
  _cpuid_80000000:
 
@@ -227,8 +233,7 @@ asm
  mov $0x69746e65,%edx
  mov $0x444d4163,%ecx
 
- popf
- ret
+ jmp _exit
 
  _cpuid_80000001:
 
@@ -237,8 +242,7 @@ asm
  mov $0x2fd3fbff,%edx //amd_feature
  mov $0x154837ff,%ecx //amd_feature2
 
- popf
- ret
+ jmp _exit
 
  _cpuid_80000008:
 
@@ -247,8 +251,12 @@ asm
  mov $0x00000000,%edx
  mov $0x00003007,%ecx //cpu_procinfo2
 
- popf
- ret
+ _exit:
+
+ xchg %r14, %rax
+ addb $127, %al
+ sahf
+ movq %r14, %rax
 
 end;
 
@@ -1006,7 +1014,13 @@ end;
 
 procedure op_rdtsc(var ctx:t_jit_context2);
 begin
- add_orig(ctx);
+ if time.strict_ps4_freq then
+ begin
+  ctx.builder.call_far(@strict_ps4_rdtsc_jit);
+ end else
+ begin
+  add_orig(ctx);
+ end;
 end;
 
 procedure op_nop(var ctx:t_jit_context2);

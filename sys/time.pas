@@ -132,6 +132,9 @@ function  itimerfix(tv:p_timeval):Integer;
 var
  boottime:timeval;
  tsc_freq:QWORD=0;
+ rdtsc   :function:QWORD; SysV_ABI_CDecl;
+
+ strict_ps4_freq:Boolean=False;
 
 implementation
 

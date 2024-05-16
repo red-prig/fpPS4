@@ -524,8 +524,7 @@ begin
 
  For i:=0 to count-1 do
  begin
-  Write(getstr_queueFlags(pFamily[i].queueFlags));
-  Writeln(':',pFamily[i].queueCount);
+  Writeln(getstr_queueFlags(pFamily[i].queueFlags),':',pFamily[i].queueCount);
  end;
 
  FreeMem(pFamily);

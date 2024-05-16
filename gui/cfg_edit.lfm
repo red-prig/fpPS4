@@ -13,11 +13,11 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 274
     Top = 0
     Width = 397
-    ActivePage = Tab_MainInfo
+    ActivePage = Tab_Misc
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 0
+    TabIndex = 3
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
@@ -352,6 +352,44 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Right = 10
         Caption = 'Guest memory guard'
         TabOrder = 3
+      end
+    end
+    object Tab_Misc: TTabSheet
+      Caption = 'Misc'
+      ClientHeight = 246
+      ClientWidth = 389
+      object Edt_MiscInfo_strict_ps4_freq: TCheckBox
+        AnchorSideLeft.Control = Tab_Misc
+        AnchorSideTop.Control = Tab_Misc
+        AnchorSideRight.Control = Tab_Misc
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 10
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Strict rdtsc timer frequency'
+        TabOrder = 0
+      end
+      object Edt_MiscInfo_renderdoc_capture: TCheckBox
+        AnchorSideLeft.Control = Tab_Misc
+        AnchorSideTop.Control = Edt_MiscInfo_strict_ps4_freq
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_Misc
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 39
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Use renderdoc capture'
+        TabOrder = 1
       end
     end
   end

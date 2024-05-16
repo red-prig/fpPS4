@@ -38,15 +38,25 @@ uses
 Procedure timeinit;
 begin
  md_timeinit;
+ //
+ if strict_ps4_freq then
+ begin
+  tsc_freq:=PS4_TSC_FREQ;
+  rdtsc   :=@md_rdtsc_freq;
+ end else
+ begin
+  tsc_freq:=md_tsc_freq;
+  rdtsc   :=@md_rdtsc;
+ end;
+ //
  getmicrouptime(@boottime);
- tsc_freq:=get_rdtsc_freq;
 end;
 
 procedure getmicrouptime(tvp:p_timeval);
 var
  time:Int64;
 begin
- time:=get_unit_uptime;
+ time:=md_rdtsc_unit();
  tvp^.tv_sec :=(time div UNIT_PER_SEC);
  tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
 end;

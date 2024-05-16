@@ -58,7 +58,6 @@ uses
  subr_backtrace,
  sys_vm_object,
  vm_pager,
- md_time,
  kern_proc,
  kern_timeout;
 
@@ -101,7 +100,7 @@ begin
 
   mtx_unlock(dce_mtx);
 
-  vblank_tsc:=rdtsc;
+  vblank_tsc:=rdtsc();
 
   i:=vblank_count;
   vblank_count:=vblank_count+1;

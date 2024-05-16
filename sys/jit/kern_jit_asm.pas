@@ -62,9 +62,13 @@ procedure jit_load_ctx;
 procedure jit_save_to_sys_save(td:p_kthread);
 procedure sys_save_to_jit_save(td:p_kthread);
 
+procedure strict_ps4_rdtsc_jit; assembler;
+
 implementation
 
 uses
+ time,
+ md_time,
  trap,
  ucontext,
  md_context,
@@ -76,12 +80,6 @@ uses
 function jmp_dispatcher(addr,plt,from:Pointer):Pointer; external;
 
 //
-
-procedure jit_sigsegv(addr:Pointer);
-begin
- print_error_td('jit_sigsegv:0x'+HexStr(addr));
- Assert(False);
-end;
 
 procedure jit_simple_save_ctx; assembler; nostackframe;
 asm
@@ -572,6 +570,31 @@ asm
  mov $0, %r15
 
  jmp  jit_jmp_dispatch
+end;
+
+procedure strict_ps4_rdtsc_jit; assembler; nostackframe;
+asm
+ seto %al
+ lahf
+ movq %rax, %r14
+ //
+ rdtsc
+ //
+ shl  $32, %rdx
+ or  %rdx, %rax
+ //
+ mulq    tsc_freq(%rip)
+ divq md_tsc_freq(%rip)
+ //
+ mov %rax, %rdx
+ shr  $32, %rdx
+ shl  $32, %rax
+ shr  $32, %rax
+ //
+ xchg %r14, %rax
+ addb $127, %al
+ sahf
+ movq %r14, %rax
 end;
 
 function IS_JIT_FUNC(rip:qword):Boolean; public;

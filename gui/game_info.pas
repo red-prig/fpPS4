@@ -144,15 +144,26 @@ type
   Constructor Create; override;
  end;
 
+ TMiscInfo=class(TAbstractObject)
+ private
+  Fstrict_ps4_freq :Boolean;
+  Frenderdoc_capture:Boolean;
+ published
+  property strict_ps4_freq  :Boolean read Fstrict_ps4_freq   write Fstrict_ps4_freq;
+  property renderdoc_capture:Boolean read Frenderdoc_capture write Frenderdoc_capture;
+ end;
+
  TConfigInfo=class(TAbstractObject)
   private
    FMainInfo     :TMainInfo;
    FBootParamInfo:TBootParamInfo;
    FJITInfo      :TJITInfo;
+   FMiscInfo     :TMiscInfo;
   published
    property MainInfo     :TMainInfo      read FMainInfo      write FMainInfo;
    property BootParamInfo:TBootParamInfo read FBootParamInfo write FBootParamInfo;
    property JITInfo      :TJITInfo       read FJITInfo       write FJITInfo;
+   property MiscInfo     :TMiscInfo      read FMiscInfo      write FMiscInfo;
  end;
 
  TGameInfo=class(TAbstractObject)

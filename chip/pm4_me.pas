@@ -56,12 +56,34 @@ type
  end;
 
 var
- use_renderdoc:Boolean=True;
+ use_renderdoc_capture:Boolean=False;
 
 implementation
 
 uses
  kern_dmem;
+
+procedure StartFrameCapture;
+begin
+ if use_renderdoc_capture then
+ begin
+  if (renderdoc.IsFrameCapturing()=0) then
+  begin
+   renderdoc.StartFrameCapture(0,0);
+  end;
+ end;
+end;
+
+procedure EndFrameCapture;
+begin
+ if use_renderdoc_capture then
+ begin
+  if (renderdoc.IsFrameCapturing()<>0) then
+  begin
+   renderdoc.EndFrameCapture(0,0);
+  end;
+ end;
+end;
 
 procedure t_pm4_me.Init;
 begin
@@ -477,16 +499,7 @@ var
  r:TVkResult;
 begin
 
- if use_renderdoc then
- begin
-  renderdoc.LoadRenderDoc;
-  renderdoc.UnloadCrashHandler;
-
-  if (renderdoc.IsTargetControlConnected<>0) then
-  begin
-   renderdoc.StartFrameCapture(0,0);
-  end;
- end;
+ StartFrameCapture;
 
  //
  if (FCmdPool=nil) then
@@ -534,11 +547,6 @@ begin
  CmdBuffer.ReleaseResource;
 
  CmdBuffer.Free;
-
- if use_renderdoc then
- begin
-  renderdoc.EndFrameCapture(0,0);
- end;
 end;
 
 procedure pm4_DrawIndexAuto(node:p_pm4_node_DrawIndexAuto);
@@ -550,16 +558,7 @@ var
  r:TVkResult;
 begin
 
- if use_renderdoc then
- begin
-  renderdoc.LoadRenderDoc;
-  renderdoc.UnloadCrashHandler;
-
-  if (renderdoc.IsTargetControlConnected<>0) then
-  begin
-   renderdoc.StartFrameCapture(0,0);
-  end;
- end;
+ StartFrameCapture;
 
  //
  if (FCmdPool=nil) then
@@ -606,15 +605,11 @@ begin
  CmdBuffer.ReleaseResource;
 
  CmdBuffer.Free;
-
- if use_renderdoc then
- begin
-  renderdoc.EndFrameCapture(0,0);
- end;
 end;
 
 procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop);
 begin
+ EndFrameCapture;
 
  Case node^.dataSel of
   //
@@ -634,6 +629,12 @@ var
  stream:p_pm4_stream;
  node:p_pm4_node;
 begin
+
+ if use_renderdoc_capture then
+ begin
+  renderdoc.LoadRenderDoc;
+  renderdoc.UnloadCrashHandler;
+ end;
 
  repeat
 

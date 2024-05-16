@@ -327,6 +327,7 @@ end;
 Constructor TvMemManager.Create;
 var
  mr:TVkMemoryRequirements;
+ s:RawByteString;
  i:Byte;
 begin
  mr:=GetHostMappedRequirements;
@@ -334,22 +335,35 @@ begin
  Writeln('[HostMappedRequirements]');
  Writeln('  Alignment=',mr.alignment);
 
- Write('  MemoryType=');
+ s:='';
  For i:=0 to 31 do
  if ((1 shl i) and (mr.memoryTypeBits))<>0 then
  begin
-  Write(i,',');
+  if (s='') then
+  begin
+   s:=IntToStr(i);
+  end else
+  begin
+   s:=s+','+IntToStr(i);
+  end;
  end;
- Writeln;
+ Writeln('  MemoryType=',S);
 
  FSparceMemoryTypes:=GetSparceMemoryTypes;
- Write('  SparceType=');
+
+ s:='';
  For i:=0 to 31 do
  if ((1 shl i) and (FSparceMemoryTypes))<>0 then
  begin
-  Write(i,',');
+  if (s='') then
+  begin
+   s:=IntToStr(i);
+  end else
+  begin
+   s:=s+','+IntToStr(i);
+  end;
  end;
- Writeln;
+ Writeln('  SparceType=',s);
 
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);
@@ -528,52 +542,42 @@ end;
 
 procedure TvMemManager.PrintMemoryType(typeFilter:TVkUInt32);
 var
+ s:RawByteString;
  i:TVkUInt32;
+
+ procedure append(TestFlag:TVkFlags;const name:RawByteString); inline;
+ begin
+  if ((FProperties.memoryTypes[i].propertyFlags and TestFlag)<>0) then
+  begin
+   if (s='') then
+   begin
+    s:=s+name;
+   end else
+   begin
+    s:=s+'|'+name;
+   end;
+  end;
+ end;
+
 begin
 
  For i:=0 to FProperties.memoryTypeCount-1 do
  begin
   if  ((typeFilter and (1 shl i))<>0) then
   begin
-   Write(i,':',HexStr(FProperties.memoryTypes[i].propertyFlags,8));
+   s:='';
 
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))<>0 then
-       Write(' DEVICE_LOCAL');
+   append(ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ),'DEVICE_LOCAL');
+   append(ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ),'HOST_VISIBLE');
+   append(ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ),'HOST_COHERENT');
+   append(ord(VK_MEMORY_PROPERTY_HOST_CACHED_BIT        ),'HOST_CACHED');
+   append(ord(VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT   ),'LAZILY_ALLOCATED');
+   append(ord(VK_MEMORY_PROPERTY_PROTECTED_BIT          ),'PROTECTED');
+   append(ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD),'DEVICE_COHERENT_AMD');
+   append(ord(VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD),'DEVICE_UNCACHED_AMD');
+   append(ord(VK_MEMORY_PROPERTY_RDMA_CAPABLE_BIT_NV    ),'RDMA_CAPABLE_NV');
 
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))<>0 then
-       Write(' HOST_VISIBLE');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))<>0 then
-       Write(' HOST_COHERENT');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_HOST_CACHED_BIT))<>0 then
-       Write(' HOST_CACHED');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT))<>0 then
-       Write(' LAZILY_ALLOCATED');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_PROTECTED_BIT))<>0 then
-       Write(' PROTECTED');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0 then
-       Write(' DEVICE_COHERENT_AMD');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD))<>0 then
-       Write(' DEVICE_UNCACHED_AMD');
-
-   if (FProperties.memoryTypes[i].propertyFlags and
-    TVkUInt32(VK_MEMORY_PROPERTY_RDMA_CAPABLE_BIT_NV))<>0 then
-       Write(' RDMA_CAPABLE_NV');
-
-   Writeln;
+   Write(i,':',HexStr(FProperties.memoryTypes[i].propertyFlags,8),':',s);
   end;
  end;
 

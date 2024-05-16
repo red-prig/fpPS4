@@ -58,6 +58,9 @@ uses
  dev_dce,
  display_soft,
 
+ time,
+ pm4_me,
+
  //internal libs
  ps4_libSceSystemService,
  ps4_libSceUserService,
@@ -134,6 +137,8 @@ begin
 
  //
 
+ time.strict_ps4_freq        :=ConfInfo.MiscInfo.strict_ps4_freq;
+ pm4_me.use_renderdoc_capture:=ConfInfo.MiscInfo.renderdoc_capture;
 end;
 
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
@@ -148,10 +153,10 @@ begin
  //re_init_tty;
  //init_tty:=@re_init_tty;
 
+ load_config(GameStartupInfo.FConfInfo);
+
  //init all
  sys_init;
-
- load_config(GameStartupInfo.FConfInfo);
 
  if (p_host_ipc<>nil) then
  begin

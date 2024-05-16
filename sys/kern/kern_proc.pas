@@ -77,7 +77,7 @@ implementation
 
 uses
  elf_machdep,
- md_time;
+ time;
 
 //
 
@@ -137,7 +137,7 @@ begin
 
  p_proc.p_randomized_path:='system';
 
- p_proc.p_ptc:=rdtsc;
+ p_proc.p_ptc:=rdtsc();
 end;
 
 end.

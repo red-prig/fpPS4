@@ -10,10 +10,16 @@ uses
  ntapi,
  time;
 
+var
+ md_tsc_freq :QWORD=0;
+ md_unit_freq:QWORD=UNIT_PER_SEC;
+
 Procedure md_timeinit;
 
-function  rdtsc:QWORD; assembler;
-function  get_rdtsc_freq:QWORD;
+function  md_rdtsc:QWORD;      assembler;
+function  md_rdtsc_unit:QWORD; assembler;
+function  md_rdtsc_freq:QWORD; assembler;
+function  md_get_rdtsc_freq:QWORD;
 
 function  get_proc_time:Int64;
 function  get_proc_time_freq:Int64;
@@ -42,15 +48,44 @@ var
 begin
  NtQueryTimerResolution(@min,@max,@cur);
  NtSetTimerResolution(max,True,@cur);
+ //
+ md_tsc_freq:=md_get_rdtsc_freq;
 end;
 
-function rdtsc:QWORD; assembler; nostackframe;
+function md_rdtsc:QWORD; assembler; nostackframe;
 asm
  lfence
  rdtsc
  lfence
+ //
  shl  $32,%rdx
  or  %rdx,%rax
+end;
+
+function md_rdtsc_unit:QWORD; assembler; nostackframe;
+asm
+ lfence
+ rdtsc
+ lfence
+ //
+ shl  $32,%rdx
+ or  %rdx,%rax
+ //
+ mulq md_unit_freq(%rip)
+ divq md_tsc_freq (%rip)
+end;
+
+function md_rdtsc_freq:QWORD; assembler; nostackframe;
+asm
+ lfence
+ rdtsc
+ lfence
+ //
+ shl  $32,%rdx
+ or  %rdx,%rax
+ //
+ mulq    tsc_freq(%rip)
+ divq md_tsc_freq(%rip)
 end;
 
 function _get_rdtsc_freq:QWORD;
@@ -90,12 +125,12 @@ begin
  begin
   qpc_freq :=get_proc_time_freq;
   qpc_begin:=get_proc_time;
-  tsc_begin:=rdtsc;
+  tsc_begin:=md_rdtsc;
 
   Sleep(2);
 
   qpc_end:=get_proc_time;
-  tsc_end:=rdtsc;
+  tsc_end:=md_rdtsc;
 
   if (qpc_end<>qpc_begin) then
   begin
@@ -108,7 +143,7 @@ begin
  Result:=tsc_freq;
 end;
 
-function get_rdtsc_freq:QWORD;
+function md_get_rdtsc_freq:QWORD;
 begin
  Result:=_get_rdtsc_freq;
 
@@ -326,7 +361,7 @@ begin
   CLOCK_EXT_RAW_NETWORK:
    begin
     //nanouptime + time
-    time^:=get_unit_uptime;
+    time^:=md_rdtsc_unit;
    end;
 
   CLOCK_SECOND:

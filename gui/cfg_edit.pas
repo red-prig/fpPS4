@@ -22,6 +22,7 @@ type
     BtnDataOpen: TButton;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
     Edt_JITInfo_debug_info: TCheckBox;
+    Edt_MiscInfo_strict_ps4_freq: TCheckBox;
     Edt_JITInfo_relative_analize: TCheckBox;
     Edt_JITInfo_print_asm: TCheckBox;
     Edt_BootparamInfo_print_guest_syscall: TCheckBox;
@@ -34,9 +35,11 @@ type
     EditPages: TPageControl;
     Edt_MainInfo_system: TEdit;
     Edt_MainInfo_data: TEdit;
+    Edt_MiscInfo_renderdoc_capture: TCheckBox;
     Label1: TLabel;
     Label2: TLabel;
     Label3: TLabel;
+    Tab_Misc: TTabSheet;
     Tab_JIT: TTabSheet;
     Tab_MainInfo: TTabSheet;
     Tab_BootparamInfo: TTabSheet;

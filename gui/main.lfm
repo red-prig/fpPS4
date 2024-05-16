@@ -6,10 +6,10 @@ object frmMain: TfrmMain
   Caption = 'fpPS4'
   ClientHeight = 343
   ClientWidth = 623
-  Position = poScreenCenter
-  LCLVersion = '3.99.0.0'
   OnCreate = FormCreate
   OnKeyDown = FormKeyDown
+  Position = poScreenCenter
+  LCLVersion = '3.2.0.0'
   object Pages: TPageControl
     Left = 0
     Height = 275
@@ -85,8 +85,8 @@ object frmMain: TfrmMain
       Left = 79
       Top = 2
       ImageIndex = 0
-      Style = tbsCheck
       OnClick = TBPlayClick
+      Style = tbsCheck
     end
     object TBPause: TToolButton
       Left = 147

@@ -8,7 +8,6 @@ uses
  LFQueue,
  display_interface,
  time,
- md_time,
  kern_thr,
  kern_mtx;
 
@@ -573,7 +572,7 @@ begin
  if (Node=nil) then Exit(EBUSY);
 
  Node^.submit:=submit^;
- Node^.tsc   :=rdtsc;
+ Node^.tsc   :=rdtsc();
 
  FQueue.FQueue.Push(Node);
 
@@ -652,7 +651,7 @@ begin
   last_status.count          :=last_status.count+1;
   last_status.submitTsc      :=Node^.tsc;
   last_status.currentBuffer  :=submit^.bufferIndex;
-  last_status.tsc            :=rdtsc;
+  last_status.tsc            :=rdtsc();
   last_status.processTime    :=last_status.tsc;
 
  mtx_unlock(mtx^);
