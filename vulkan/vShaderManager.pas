@@ -26,25 +26,20 @@ uses
   emit_bin;
 
 type
- TShaderFunc=packed object
-  FLen :Ptruint;
-  pData:PDWORD;
-  function c(var a,b:TShaderFunc):Integer;
- end;
-
  PShaderDataKey=^TShaderDataKey;
  TShaderDataKey=packed object
   FStage:TvShaderStage;
   FLen  :Ptruint;
   pData :PDWORD;
   function  c(a,b:PShaderDataKey):Integer; static;
+  Procedure SetData(Stage:TvShaderStage;Src:Pointer);
   Procedure Free;
  end;
 
  TShaderCodeCache=class
   key:TShaderDataKey;
   FShaderAliases:array of TvShaderExt;
-  function   AddShader(FDescSetId:Integer;Stream:TStream):TvShaderExt;
+  function   AddShader(FDescSetId:Integer;Stream:TStream;pUserData:Pointer):TvShaderExt;
   Destructor Destroy; override;
  end;
 
@@ -153,13 +148,14 @@ begin
  Result:=CompareByte(a^.FShaders,b^.FShaders,SizeOf(AvShaderStage));
 end;
 
-function TShaderCodeCache.AddShader(FDescSetId:Integer;Stream:TStream):TvShaderExt;
+function TShaderCodeCache.AddShader(FDescSetId:Integer;Stream:TStream;pUserData:Pointer):TvShaderExt;
 var
  i:Integer;
 begin
  Result:=TvShaderExt.Create;
  Result.FDescSetId:=FDescSetId;
  Result.LoadFromStream(Stream);
+ Result.PreloadShaderFuncs(pUserData);
 
  i:=Length(FShaderAliases);
  SetLength(FShaderAliases,i+1);
@@ -172,14 +168,15 @@ begin
  inherited;
 end;
 
-function TShaderFunc.c(var a,b:TShaderFunc):Integer;
+Procedure TShaderDataKey.SetData(Stage:TvShaderStage;Src:Pointer);
 begin
- //1 FLen
- Result:=Integer((a.FLen>b.FLen) and (b.FLen<>0))-Integer((a.FLen<b.FLen) and (a.FLen<>0));
- if (Result<>0) then Exit;
+ Free;
 
- //2 pData
- Result:=CompareDWord(a.pData^,b.pData^,Max(a.FLen,b.FLen) div 4);
+ FStage:=Stage;
+ FLen  :=_calc_shader_size(Src);
+ pData :=AllocMem(FLen);
+
+ Move(Src^,pData^,FLen);
 end;
 
 Procedure TShaderDataKey.Free;
@@ -213,11 +210,7 @@ begin
   t:=TShaderCodeCache.Create;
   t.key:=key;
 
-  t.key.FStage:=key.FStage;
-  t.key.FLen  :=_calc_shader_size(key.pData);
-  t.key.pData :=AllocMem(t.key.FLen);
-
-  Move(key.pData^,t.key.pData^,t.key.FLen);
+  t.key.SetData(key.FStage,key.pData);
 
   FShaderCacheSet.Insert(@t.key);
  end;
@@ -348,6 +341,38 @@ begin
  //DumpSpv(FStage,Result);
 end;
 
+function test_func(FShader:TvShaderExt;pUserData:Pointer):Boolean;
+var
+ key:TShaderFuncKey;
+
+ P:Pointer;
+ i:Integer;
+begin
+ Result:=True;
+ if (Length(FShader.FShaderFuncs)=0) then Exit;
+
+ key:=Default(TShaderFuncKey);
+
+ For i:=0 to High(FShader.FShaderFuncs) do
+ if (FShader.FShaderFuncs[i].pData<>nil) then
+ begin
+
+  P:=GetSharpByPatch(pUserData,FShader.FFuncLayouts[i].addr);
+
+  if (P<>nil) then
+  begin
+   key.pData:=P;
+
+   if (TShaderFuncKey.c(FShader.FShaderFuncs[i],key)<>0) then
+   begin
+    Exit(False);
+   end;
+
+  end;
+
+ end;
+end;
+
 function test_unif(FShader:TvShaderExt;FDescSetId:Integer;pUserData:Pointer):Boolean;
 var
  ch:TvBufOffsetChecker;
@@ -416,6 +441,7 @@ begin
   begin
    FShader:=t.FShaderAliases[i];
 
+   if test_func(FShader,pUserData) then
    if test_unif(FShader,FDescSetId,pUserData) then //Checking offsets within a shader
    if test_push_const(FShader,pc_offset,pc_size) then
    begin
@@ -433,7 +459,9 @@ begin
   M:=ParseShader(FStage,pData,GPU_REGS,pc);
   Assert(M<>nil);
 
-  FShader:=t.AddShader(FDescSetId,M);
+  pUserData:=GPU_REGS.get_user_data(FStage);
+
+  FShader:=t.AddShader(FDescSetId,M,pUserData);
 
   M.Free;
 
