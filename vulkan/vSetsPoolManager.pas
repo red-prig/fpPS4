@@ -6,7 +6,6 @@ interface
 
 uses
  SysUtils,
- RWLock,
  LFQueue,
  g23tree,
  Vulkan,
@@ -16,6 +15,9 @@ uses
 Function FetchDescriptorGroup(cmd:TvCustomCmdBuffer;Pipeline:TvPipelineLayout):TvDescriptorGroup;
 
 implementation
+
+uses
+ kern_rwlock;
 
 type
  TvSetsPoolUnbound=class;
@@ -52,28 +54,22 @@ type
 
  _TvSetsPoolUnbounds=specialize T23treeSet<PvPipelineLayout,TvSetsPoolUnboundCompare>;
  TvSetsPoolUnbounds=object(_TvSetsPoolUnbounds)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FSetsPoolUnbounds:TvSetsPoolUnbounds;
 
-Procedure TvSetsPoolUnbounds.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvSetsPoolUnbounds.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvSetsPoolUnbounds.Unlock;
+Procedure TvSetsPoolUnbounds.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 function TvSetsPool2Compare.c(a,b:TvSetsPool2):Integer;
@@ -194,12 +190,9 @@ begin
   cmd.AddDependence(@TvDescriptorGroupNode(Result).Release);
  end;
 
- FSetsPoolUnbounds.Unlock;
+ FSetsPoolUnbounds.Unlock_wr;
 end;
 
-
-initialization
- FSetsPoolUnbounds.Init;
 
 end.
 

@@ -33,7 +33,7 @@ begin
  r:=vkCreateSampler(Device.FHandle,pInfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateImage:',r);
+  Writeln(StdErr,'vkCreateSampler:',r);
   Exit;
  end;
  Result:=True;
@@ -42,7 +42,9 @@ end;
 Destructor TvSampler.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
+ begin
   vkDestroySampler(Device.FHandle,FHandle,nil);
+ end;
  inherited;
 end;
 

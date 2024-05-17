@@ -25,6 +25,10 @@ uses
  vShaderManager,
  vRegs2Vulkan,
  vCmdBuffer,
+ vPipeline,
+ vSetsPoolManager,
+ vSampler,
+ vSamplerManager,
 
  shader_dump,
 
@@ -164,6 +168,11 @@ begin
          getFormatSize(image.key.cformat);
 end;
 
+function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+begin
+ Result:=addr-(addr mod alignment);
+end;
+
 var
  FCmdPool:TvCmdPool;
 
@@ -185,6 +194,8 @@ var
 
  FAttrBuilder:TvAttrBuilder;
 
+ FUniformBuilder:TvUniformBuilder;
+
  RP_KEY:TvRenderPassKey;
  RP:TvRenderPass2;
 
@@ -199,6 +210,14 @@ var
 
  ri:TvImage2;
  iv:TvImageView2;
+ sm:TvSampler;
+
+ buf:TvHostBuffer;
+
+ diff  :TVkUInt32;
+ align :TVkUInt32;
+
+ FDescriptorGroup:TvDescriptorGroup;
 begin
  GPU_REGS:=Default(TGPU_REGS);
  GPU_REGS.SH_REG:=SH_REG;
@@ -207,9 +226,10 @@ begin
 
  for i:=0 to 31 do
  begin
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET     ));
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL));
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+']='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE ));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].DEFAULT_VAL='     +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     ));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FLAT_SHADE='      +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      ));
+  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
  end;
 
  {fdump_ps:=}DumpPS(GPU_REGS);
@@ -395,6 +415,37 @@ begin
   //RenderCmd.AddImageView(iv);
  end;
 
+ ////////
+ FUniformBuilder:=Default(TvUniformBuilder);
+ FShadersKey.ExportUnifLayout(FUniformBuilder,GPU_REGS);
+
+ if (Length(FUniformBuilder.FImages)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FImages) do
+  With FUniformBuilder.FImages[i] do
+  begin
+
+   ri:=FetchImage(CmdBuffer,
+                  FImage,
+                  iu_sampled,
+                  TM_READ
+                 );
+
+   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
+
+   begin
+
+    ri.PushBarrier(CmdBuffer,
+                   ord(VK_ACCESS_SHADER_READ_BIT),
+                   VK_IMAGE_LAYOUT_GENERAL,
+                   ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
+   end;
+
+  end;
+ end;
+ ////////
+
  if not CmdBuffer.BeginRenderPass(RenderCmd) then
  begin
   Assert(false,'BeginRenderPass(FRenderCmd)');
@@ -402,6 +453,102 @@ begin
 
  CmdBuffer.SetVertexInput   (FAttrBuilder);
  CmdBuffer.BindVertexBuffers(FAttrBuilder);
+
+ FDescriptorGroup:=nil;
+
+ //
+ if (Length(FUniformBuilder.FImages)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FImages) do
+  With FUniformBuilder.FImages[i] do
+  begin
+
+   ri:=FetchImage(CmdBuffer,
+                  FImage,
+                  iu_sampled,
+                  TM_READ
+                 );
+
+   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
+
+   if (FDescriptorGroup=nil) then
+   begin
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+   end;
+
+   FDescriptorGroup.FSets[fset].BindImg(bind,0,
+                                        iv.FHandle,
+                                        VK_IMAGE_LAYOUT_GENERAL);
+
+
+  end;
+ end;
+ //
+
+ //
+ if (Length(FUniformBuilder.FSamplers)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FSamplers) do
+  With FUniformBuilder.FSamplers[i] do
+  begin
+   sm:=FetchSampler(CmdBuffer,PS);
+
+   if (FDescriptorGroup=nil) then
+   begin
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+   end;
+
+   FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
+
+  end;
+ end;
+ //
+
+ //
+ if (Length(FUniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FBuffers) do
+  With FUniformBuilder.FBuffers[i] do
+  begin
+
+   if not get_dmem_ptr(addr,@addr,nil) then
+   begin
+    Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
+   end;
+
+   buf:=FetchHostBuffer(CmdBuffer,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+
+   diff:=QWORD(addr)-buf.FAddr;
+
+   align:=diff-AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+   if (align<>offset) then
+   begin
+    Assert(false,'wrong buffer align '+IntToStr(align)+'<>'+IntToStr(offset));
+   end;
+
+   diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+   if (FDescriptorGroup=nil) then
+   begin
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+   end;
+
+   FDescriptorGroup.FSets[fset].BindBuf(bind,0,
+                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                        buf.FHandle,
+                                        diff,
+                                        VK_WHOLE_SIZE);
+
+
+  end;
+ end;
+ //
+
+ if (FDescriptorGroup<>nil) then
+ begin
+  CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_GRAPHICS,FDescriptorGroup);
+ end;
 
  CmdBuffer.FinstanceCount:=GPU_REGS.UC_REG^.VGT_NUM_INSTANCES;
  CmdBuffer.FINDEX_TYPE   :=GPU_REGS.GET_INDEX_TYPE;

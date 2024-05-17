@@ -6,9 +6,8 @@ interface
 
 uses
  ps4_shader,
- ps4_gpu_regs,
+ vRegs2Vulkan,
  SysUtils,
- RWLock,
  g23tree,
  Vulkan,
  vDevice,
@@ -18,6 +17,9 @@ uses
 function FetchSampler(cmd:TvCustomCmdBuffer;PS:PSSharpResource4):TvSampler;
 
 implementation
+
+uses
+ kern_rwlock;
 
 type
  TvSampler2Compare=object
@@ -34,28 +36,22 @@ type
 
  _TvSampler2Set=specialize T23treeSet<PSSharpResource4,TvSampler2Compare>;
  TvSampler2Set=object(_TvSampler2Set)
-  lock:TRWLock;
-  Procedure Init;
+  lock:Pointer;
   Procedure Lock_wr;
-  Procedure Unlock;
+  Procedure Unlock_wr;
  end;
 
 var
  FSampler2Set:TvSampler2Set;
 
-Procedure TvSampler2Set.Init;
-begin
- rwlock_init(lock);
-end;
-
 Procedure TvSampler2Set.Lock_wr;
 begin
- rwlock_wrlock(lock);
+ rw_wlock(lock);
 end;
 
-Procedure TvSampler2Set.Unlock;
+Procedure TvSampler2Set.Unlock_wr;
 begin
- rwlock_unlock(lock);
+ rw_wunlock(lock);
 end;
 
 Procedure TvSampler2.Acquire;
@@ -134,12 +130,8 @@ begin
   end;
  end;
 
- FSampler2Set.Unlock;
+ FSampler2Set.Unlock_wr;
 end;
-
-
-initialization
- FSampler2Set.Init;
 
 end.
 

@@ -104,6 +104,44 @@ type
   Procedure  PreloadShaderFuncs(pUserData:Pointer);
  end;
 
+ TBufBindExt=packed record
+  fset  :TVkUInt32;
+  bind  :TVkUInt32;
+  offset:TVkUInt32;
+
+  addr  :Pointer;
+  size  :TVkUInt32;
+ end;
+
+ TImageBindExt=packed record
+  fset:TVkUInt32;
+  bind:TVkUInt32;
+
+  FImage:TvImageKey;
+  FView :TvImageViewKey;
+ end;
+
+ TSamplerBindExt=packed record
+  fset:TVkUInt32;
+  bind:TVkUInt32;
+
+  PS:PSSharpResource4;
+ end;
+
+ TvUniformBuilder=object
+  FBuffers :array of TBufBindExt;
+  FImages  :array of TImageBindExt;
+  FSamplers:array of TSamplerBindExt;
+
+  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord);
+  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord);
+
+  Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
+  Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
+  Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
+  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+ end;
+
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
 
  PvShadersKey=^TvShadersKey;
@@ -118,6 +156,7 @@ type
   Procedure SetCSShader(Shader:TvShaderExt);
   procedure ExportLayout(var A:AvSetLayout;var B:AvPushConstantRange);
   Procedure ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
+  Procedure ExportUnifLayout(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
  end;
 
  TvShaderGroup=class
@@ -167,44 +206,6 @@ type
   Procedure AddVSharp(PV:PVSharpResource4;location:DWord);
   procedure AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
   Procedure Export2(var input:TvVertexInputEXT);
- end;
-
- TBufBindExt=packed record
-  fset  :TVkUInt32;
-  bind  :TVkUInt32;
-  offset:TVkUInt32;
-
-  addr  :Pointer;
-  size  :TVkUInt32;
- end;
-
- TImageBindExt=packed record
-  fset:TVkUInt32;
-  bind:TVkUInt32;
-
-  FImage:TvImageKey;
-  FView :TvImageViewKey;
- end;
-
- TSamplerBindExt=packed record
-  fset:TVkUInt32;
-  bind:TVkUInt32;
-
-  PS:PSSharpResource4;
- end;
-
- TvUniformBuilder=object
-  FBuffers :array of TBufBindExt;
-  FImages  :array of TImageBindExt;
-  FSamplers:array of TSamplerBindExt;
-
-  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord);
-  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord);
-
-  Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
-  Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
-  Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
-  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
  end;
 
  TvBufOffsetChecker=object
@@ -272,7 +273,7 @@ procedure TvShaderExt.ClearInfo;
 begin
  inherited;
 
- FDescSetId:=0;
+ //dont clear FDescSetId
 
  FSetLayout:=nil;
 
@@ -1091,38 +1092,52 @@ Procedure TvShadersKey.SetCSShader(Shader:TvShaderExt);
 begin
  if (Shader=nil) then Exit;
  if (Shader.FStage=VK_SHADER_STAGE_COMPUTE_BIT) then
+ begin
   FShaders[vShaderStageCs]:=Shader;
+ end;
 end;
 
 procedure TvShadersKey.ExportLayout(var A:AvSetLayout;
                                     var B:AvPushConstantRange);
 var
  i:TvShaderStage;
- c,p:Integer;
+ Shader:TvShaderExt;
+ ia,p:Integer;
 begin
- c:=0;
  p:=0;
+
+ //need sorted by FDescSetId
 
  For i:=Low(TvShaderStage) to High(TvShaderStage) do
  begin
-  if (FShaders[i]<>nil) then
+  Shader:=FShaders[i];
+  if (Shader<>nil) then
   begin
-   FShaders[i].InitSetLayout;
+   Shader.InitSetLayout;
 
-   SetLength(A,c+1);
-   A[c]:=FShaders[i].FSetLayout;
-   Inc(c);
+   p:=Shader.FDescSetId;
 
-   if (FShaders[i].FPushConst.size<>0) then
+   ia:=Length(A);
+   if (p>ia) then
    begin
+    SetLength(A,p+1);
+    For ia:=ia to High(A) do
+    begin
+     A[ia]:=nil;
+    end;
+   end;
+
+   A[p]:=Shader.FSetLayout;
+
+   if (Shader.FPushConst.size<>0) then
+   begin
+    p:=Length(B);
     SetLength(B,p+1);
 
     B[p]:=Default(TVkPushConstantRange);
-    B[p].stageFlags:=ord(FShaders[i].FStage);
-    B[p].offset    :=FShaders[i].FPushConst.offset;
-    B[p].size      :=FShaders[i].FPushConst.size;
-
-    Inc(p);
+    B[p].stageFlags:=ord(Shader.FStage);
+    B[p].offset    :=Shader.FPushConst.offset;
+    B[p].size      :=Shader.FPushConst.size;
    end;
 
   end;
@@ -1145,6 +1160,17 @@ begin
    Inc(c);
   end;
  stageCount^:=c;
+end;
+
+Procedure TvShadersKey.ExportUnifLayout(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
+var
+ i:TvShaderStage;
+begin
+ For i:=Low(TvShaderStage) to High(TvShaderStage) do
+  if (FShaders[i]<>nil) then
+  begin
+   FShaders[i].EnumUnifLayout(@UniformBuilder.AddAttr,FShaders[i].FDescSetId,GPU_REGS.get_user_data(i));
+  end;
 end;
 
 Procedure TvShaderGroup.Clear;

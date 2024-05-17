@@ -2827,7 +2827,7 @@ begin
  obj^.map_size :=obj^.text_size+obj^.data_size;
 
  //alloc addr
- vaddr_lo:=0;
+ vaddr_lo:=ET_DYN_LOAD_ADDR_SYS;
  error:=rtld_mmap(@vaddr_lo,obj^.map_size);
 
  Writeln(' rtld_mmap:0x',HexStr(vaddr_lo,12),'..0x',HexStr(vaddr_lo+obj^.map_size,12),':',obj^.lib_path);

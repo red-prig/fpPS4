@@ -153,7 +153,7 @@ var
  i:Integer;
 begin
  Result:=TvShaderExt.Create;
- Result.FDescSetId:=FDescSetId;
+ Result.FDescSetId:=FDescSetId; //set before loading
  Result.LoadFromStream(Stream);
  Result.PreloadShaderFuncs(pUserData);
 
