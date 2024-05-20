@@ -271,10 +271,6 @@ begin
  if (RT.FPipeline=nil) then Exit;
  if (RT.FFramebuffer=nil) then Exit;
 
- //if (not RT.FRenderPass.Compile) then Exit;
- //if (not RT.FPipeline.Compile) then Exit;
- //if (not RT.FFramebuffer.Compile) then Exit;
-
  if (RT.FRenderPass.FHandle=FRenderPass) then Exit(True);
 
  if (not BeginCmdBuffer) then Exit;

@@ -1266,11 +1266,7 @@ var
 begin
  Result:=False;
 
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  vkDestroyImage(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 
  cinfo:=GetImageInfo;
  cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);

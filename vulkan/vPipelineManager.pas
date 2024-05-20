@@ -240,7 +240,9 @@ begin
 
  if (Key.FRenderPass =nil) then Exit;
  if (Key.FShaderGroup=nil) then Exit;
- if (Key.viewportCount=0) then Exit;
+ if (Key.viewportCount=0)  then Exit;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 
  info:=Default(TVkGraphicsPipelineCreateInfo);
 

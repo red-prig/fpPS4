@@ -98,8 +98,17 @@ begin
  begin
   t:=TvSetLayout.Create;
   t.key:=key;
-  FSetLayoutsPool.Insert(@t.key);
-  Result:=t;
+  //
+  if t.Compile then
+  begin
+   FSetLayoutsPool.Insert(@t.key);
+   Result:=t;
+  end else
+  begin
+   FreeAndNil(t);
+   Result:=nil;
+  end;
+  //
  end else
  begin
   t:=TvSetLayout(ptruint(i.Item^)-ptruint(@TvSetLayout(nil).key));
@@ -108,8 +117,6 @@ begin
  end;
 
  FSetLayoutsPool.Unlock_wr;
-
- t.Compile;
 end;
 
 

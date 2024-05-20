@@ -379,11 +379,6 @@ begin
 
    iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
 
-   if limits.VK_KHR_imageless_framebuffer then
-   begin
-    RenderCmd.AddImageView(iv);
-   end;
-
    ri.PushBarrier(CmdBuffer,
                   ord(VK_ACCESS_TRANSFER_READ_BIT),
                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -395,24 +390,51 @@ begin
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
-
-   if not limits.VK_KHR_imageless_framebuffer then
+   //
+   if limits.VK_KHR_imageless_framebuffer then
+   begin
+    RenderCmd.AddImageView(iv);
+   end else
    begin
     FB_KEY2.AddImageView(iv);
    end;
+   //
 
   end;
+
+ if GPU_REGS.DB_ENABLE then
+ begin
+  RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
+
+  ri:=FetchImage(CmdBuffer,
+                 RenderCmd.DB_INFO.FImageInfo,
+                 iu_depth,
+                 RenderCmd.DB_INFO.DEPTH_USAGE
+                 );
+
+  iv:=ri.FetchView(CmdBuffer,iu_depth);
+
+  ri.PushBarrier(CmdBuffer,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+  //
+  if limits.VK_KHR_imageless_framebuffer then
+  begin
+   RenderCmd.AddImageView(iv);
+  end else
+  begin
+   FB_KEY2.AddImageView(iv);
+  end;
+  //
+
+ end;
 
  if not limits.VK_KHR_imageless_framebuffer then
  begin
   FFramebuffer:=FetchFramebufferBinded(CmdBuffer,@FB_KEY2);
   RenderCmd.FFramebuffer:=FFramebuffer;
- end;
-
- if GPU_REGS.DB_ENABLE then
- begin
-  RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
-  //RenderCmd.AddImageView(iv);
  end;
 
  ////////

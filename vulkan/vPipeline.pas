@@ -22,17 +22,15 @@ type
 
  TvSetLayout=class
   FHandle:TVkDescriptorSetLayout;
-  FEdit,FCompile:ptruint;
   key:TvSetLayoutKey;
   Procedure   SetUsePushDescriptor(b:Boolean);
   function    GetUsePushDescriptor:Boolean;
-  Destructor  Destroy; override;
   Procedure   Add(aBind:TVkUInt32;dType:TVkDescriptorType;Flags:TVkShaderStageFlags;count:TVkUInt32=1);
   Procedure   SetBinds(const A:AVkDescriptorSetLayoutBinding);
-  Function    IsSpace:Boolean; inline;
   procedure   Clear;
   function    Compile:Boolean;
-  function    IsEdit:Boolean;
+  Function    IsSpace:Boolean; inline;
+  Destructor  Destroy; override;
  end;
 
  AvSetLayout=array of TvSetLayout;
@@ -46,18 +44,16 @@ type
 
  TvPipelineLayout=class
   FHandle:TVkPipelineLayout;
-  FEdit,FCompile:ptruint;
   FBinds:ptruint;
   key:TvPipelineLayoutKey;
-  Destructor  Destroy; override;
   Procedure   AddLayout(F:TvSetLayout);
   Procedure   SetLayouts(const A:AvSetLayout);
   Procedure   AddPushConst(offset,size:TVkUInt32;Flags:TVkShaderStageFlags);
   Procedure   SetPushConst(const A:AvPushConstantRange);
-  Function    isSpace:Boolean;
   procedure   Clear;
   function    Compile:Boolean;
-  function    IsEdit:Boolean;
+  Destructor  Destroy; override;
+  Function    isSpace:Boolean;
  end;
 
  TvPipelineCache=class
@@ -78,13 +74,11 @@ type
  end;
 
  TvComputePipeline=class(TvPipeline)
-  FEdit,FCompile:ptruint;
   FLayout:TvPipelineLayout;
   FComputeShader:TvShader;
   procedure   SetLayout(Layout:TvPipelineLayout);
   Procedure   SetShader(Shader:TvShader);
   function    Compile:Boolean;
-  function    IsEdit:Boolean;
  end;
 
  TvSetsPool=class;
@@ -119,7 +113,6 @@ type
 
  TvSetsPool=class
   FHandle:TVkDescriptorPool;
-  FEdit,FCompile:ptruint;
   FmaxSets:TVkUInt32;
   FLayouts:_TvSetLayoutSet;
   FSets:_TvDescriptorSetSet;
@@ -130,7 +123,6 @@ type
   Procedure   AddFormPipelineLayout(L:TvPipelineLayout;count:TVkUInt32=1);
   function    Alloc(L:TvSetLayout):TvDescriptorSet;
   function    Compile:Boolean;
-  function    IsEdit:Boolean;
  end;
 
 ///////
@@ -200,13 +192,11 @@ begin
  key.FBinds[i].descriptorType:=dType;
  key.FBinds[i].descriptorCount:=count;
  key.FBinds[i].stageFlags:=Flags;
- Inc(FEdit);
 end;
 
 Procedure TvSetLayout.SetBinds(const A:AVkDescriptorSetLayoutBinding);
 begin
  key.FBinds:=A;
- Inc(FEdit);
 end;
 
 Function TvSetLayout.IsSpace:Boolean; inline;
@@ -218,7 +208,6 @@ Procedure TvSetLayout.Clear;
 begin
  SetLength(key.FBinds,0);
  key.FFlags:=0;
- Inc(FEdit);
 end;
 
 function TvSetLayout.Compile:Boolean;
@@ -227,12 +216,9 @@ var
  r:TVkResult;
 begin
  Result:=False;
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  if (FEdit=FCompile) then Exit(true);
-  vkDestroyDescriptorSetLayout(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
  cinfo:=Default(TVkDescriptorSetLayoutCreateInfo);
  cinfo.sType:=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
  cinfo.flags:=key.FFlags;
@@ -247,7 +233,6 @@ begin
   Writeln(StdErr,'vkCreateDescriptorSetLayout:',r);
   Exit;
  end;
- FCompile:=FEdit;
  Result:=True;
 end;
 
@@ -259,11 +244,6 @@ begin
  end;
 end;
 
-function TvSetLayout.IsEdit:Boolean;
-begin
- Result:=FEdit<>FCompile;
-end;
-
 Procedure TvSetLayout.SetUsePushDescriptor(b:Boolean);
 begin
  Case b of
@@ -271,13 +251,11 @@ begin
    if (key.FFlags<>ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR)) then
    begin
     key.FFlags:=ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-    Inc(FEdit);
    end;
   False:
    if (key.FFlags=ord(VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR)) then
    begin
     key.FFlags:=0;
-    Inc(FEdit);
    end;
  end;
 end;
@@ -303,13 +281,11 @@ begin
  i:=Length(key.FLayouts);
  SetLength(key.FLayouts,i+1);
  key.FLayouts[i]:=F;
- Inc(FEdit);
 end;
 
 Procedure TvPipelineLayout.SetLayouts(const A:AvSetLayout);
 begin
  key.FLayouts:=A;
- Inc(FEdit);
 end;
 
 Procedure TvPipelineLayout.AddPushConst(offset,size:TVkUInt32;Flags:TVkShaderStageFlags);
@@ -321,13 +297,11 @@ begin
  key.FPushConsts[i].stageFlags:=Flags;
  key.FPushConsts[i].offset    :=offset;
  key.FPushConsts[i].size      :=size;
- Inc(FEdit);
 end;
 
 Procedure TvPipelineLayout.SetPushConst(const A:AvPushConstantRange);
 begin
  key.FPushConsts:=A;
- Inc(FEdit);
 end;
 
 Function TvPipelineLayout.isSpace:Boolean;
@@ -340,7 +314,6 @@ begin
  SetLength(key.FLayouts,0);
  SetLength(key.FPushConsts,0);
  FBinds:=0;
- Inc(FEdit);
 end;
 
 function TvPipelineLayout.Compile:Boolean;
@@ -351,12 +324,9 @@ var
  i:Integer;
 begin
  Result:=false;
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  if (not IsEdit) then Exit(true);
-  vkDestroyPipelineLayout(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
  FBinds:=0;
  if (Length(key.FLayouts)<>0) then
  begin
@@ -364,7 +334,7 @@ begin
   SetLength(_data_set,Length(key.FLayouts));
   For i:=0 to High(key.FLayouts) do
   begin
-   if not key.FLayouts[i].Compile then Exit;
+   Assert(key.FLayouts[i]<>nil,'key.FLayouts[i]=nil');
    _data_set[i]:=key.FLayouts[i].FHandle;
    FBinds:=FBinds+Length(key.FLayouts[i].key.FBinds);
   end;
@@ -387,19 +357,7 @@ begin
   Writeln(StdErr,'vkCreatePipelineLayout:',r);
   Exit;
  end;
- FCompile:=FEdit;
  Result:=True;
-end;
-
-function TvPipelineLayout.IsEdit:Boolean;
-var
- i:Integer;
-begin
- Result:=FEdit<>FCompile;
- if not Result then
-  if (Length(key.FLayouts)<>0) then
-   For i:=0 to High(key.FLayouts) do
-    if key.FLayouts[i].IsEdit then Exit(true);
 end;
 
 Constructor TvPipelineCache.Create(data:Pointer;size:TVkSize);
@@ -448,9 +406,7 @@ procedure TvComputePipeline.SetLayout(Layout:TvPipelineLayout);
 begin
  if (FLayout<>Layout) then
  begin
-  Inc(FEdit);
   FLayout:=Layout;
-  Compile;
  end;
 end;
 
@@ -458,7 +414,6 @@ Procedure TvComputePipeline.SetShader(Shader:TvShader);
 begin
  if (FComputeShader<>Shader) then
  begin
-  Inc(FEdit);
   if (Shader=nil) then
   begin
    FComputeShader:=nil;
@@ -466,7 +421,6 @@ begin
   if (Shader.FStage=VK_SHADER_STAGE_COMPUTE_BIT) then
   begin
    FComputeShader:=Shader;
-   Compile;
   end;
  end;
 end;
@@ -480,12 +434,9 @@ var
 begin
  Result:=False;
  if (FLayout=nil) or (FComputeShader=nil) then Exit;
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  if (not IsEdit) then Exit(true);
-  vkDestroyPipeline(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
  if not FLayout.Compile then Exit;
 
  info:=Default(TVkComputePipelineCreateInfo);
@@ -508,15 +459,7 @@ begin
   Writeln(StdErr,'vkCreateComputePipelines:',r);
   Exit;
  end;
- FCompile:=FEdit;
  Result:=True;
-end;
-
-function TvComputePipeline.IsEdit:Boolean;
-begin
- Result:=(FEdit<>FCompile);
- if (not Result) and (FLayout<>nil) then
-  Result:=Result or FLayout.IsEdit;
 end;
 
 Destructor TvSetsPool.Destroy;
@@ -594,7 +537,9 @@ var
  r:TVkResult;
 begin
  Result:=False;
- if (FHandle<>VK_NULL_HANDLE) and (not IsEdit) then Exit(true);
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(true);
+
  if (FLayouts.Size=0) then Exit;
  FSizes:=Default(AvDescriptorPoolSize);
 
@@ -632,12 +577,6 @@ begin
   Id.Item^.FHandle:=VK_NULL_HANDLE;
  until not Id.Next;
 
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  vkDestroyDescriptorPool(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
-
  It:=FLayouts.cbegin;
  repeat
   Ik:=It.Item^;
@@ -670,30 +609,12 @@ begin
   if (i>=FmaxSets) then Break;
  until not Id.Next;
 
- FCompile:=FEdit;
  Result:=True;
-end;
-
-function TvSetsPool.IsEdit:Boolean;
-var
- It:_TvSetLayoutSet.Iterator;
- Ik:_TvSetLayoutKey;
-begin
- Result:=False;
- if (FEdit<>FCompile) then Exit(True);
- It:=FLayouts.cbegin;
- if (It.Item=nil) then Exit;
- repeat
-  Ik:=It.Item^;
-  if (Ik.Layout<>nil) and (Ik.fcount<>0) then
-  if Ik.Layout.IsEdit then Exit(True);
- until not It.Next;
 end;
 
 procedure TvSetsPool.ClearLayouts;
 begin
  FLayouts.Free;
- Inc(FEdit);
 end;
 
 function TvSetsPool._FindLayout(L:TvSetLayout):Boolean;
@@ -722,7 +643,6 @@ begin
  begin
   FLayouts.Insert(Ik);
  end;
- Inc(FEdit);
 end;
 
 Procedure TvSetsPool.AddFormPipelineLayout(L:TvPipelineLayout;count:TVkUInt32);

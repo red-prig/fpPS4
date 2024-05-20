@@ -1103,6 +1103,7 @@ var
  i:TvShaderStage;
  Shader:TvShaderExt;
  ia,p:Integer;
+ CacheLayout:TvSetLayout;
 begin
  p:=0;
 
@@ -1141,6 +1142,22 @@ begin
    end;
 
   end;
+ end;
+
+ //fill zeros
+ if (Length(A)<>0) then
+ begin
+  CacheLayout:=nil;
+  For ia:=0 to High(A) do
+   if (A[ia]=nil) then
+   begin
+    if (CacheLayout=nil) then
+    begin
+     CacheLayout:=FetchSetLayout(0,0,[]);
+    end;
+
+    A[ia]:=CacheLayout;
+   end;
  end;
 end;
 

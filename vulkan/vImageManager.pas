@@ -30,7 +30,7 @@ uses
 }
 
 type
- t_image_usage=(iu_attachment,iu_sampled,iu_storage);
+ t_image_usage=(iu_attachment,iu_depth,iu_sampled,iu_storage);
  s_image_usage=set of t_image_usage;
 
  TvImageView2Compare=object

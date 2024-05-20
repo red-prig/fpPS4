@@ -1234,6 +1234,10 @@ begin
  Result.FImageInfo.params.samples    :=1 shl (CX_REG^.DB_Z_INFO.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
+
+ //TODO: Calculate padding by tilling mode
+ Result.FImageInfo.params.pad_width :=Result.FImageInfo.params.width;
+ Result.FImageInfo.params.pad_height:=Result.FImageInfo.params.height;
 end;
 
 function get_polygon_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkPolygonMode;
