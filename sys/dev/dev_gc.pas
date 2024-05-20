@@ -419,20 +419,41 @@ const
   d_mmap_single2:nil;
  );
 
+{
+ event_id
+  (SourceID == 0xb5)
+   0x00 -> Compute0
+   0x01 -> Compute1
+   0x02 -> Compute2
+   0x03 -> Compute3
+   0x04 -> Compute4
+   0x05 -> Compute5
+   0x06 -> Compute6
+   0x40 -> GfxEop
+   0x41 -> GfxEop (meid ????)
+
+  0x84 -> set timer hz
+
+  (SourceID == 0xef)
+   0x83,
+   0x85,
+   0x86 -> (dbggc)
+}
+
 function filterops_graphics_core_attach(kn:p_knote):Integer;
 var
  kn_sdata:QWORD;
  event_id:Byte;
  cap:Boolean;
- unk:Integer;
+ me_id:Byte;
 begin
  Result:=0;
 
- event_id:=Byte(kn^.kn_data);
+ event_id:=Byte(kn^.kn_sdata); //kev.ident = kev.data
 
  cap:=sceSblACMgrHasUseHp3dPipeCapability(@g_authinfo);
 
- unk:=0;
+ me_id:=0;
 
  case event_id of
   $00..$41,
@@ -449,15 +470,13 @@ begin
 
     kn_sdata:=kn^.kn_sdata;
 
-    kn^.kn_sdata:=(kn_sdata and QWORD($ffffffffffffff00)) or QWORD(event_id);
-
     case event_id of
      $82..$86:kn_sdata:=(kn_sdata and QWORD($ffffffffffff0000)) or
                         QWORD(event_id);
       else
               kn_sdata:=(kn_sdata and QWORD($ffffffffffff0000)) or
                         QWORD(event_id) or
-                        QWORD((unk and $ff) shl 8);
+                        QWORD((me_id and $ff) shl 8);
     end;
 
     kn^.kn_sdata:=kn_sdata;
@@ -479,27 +498,28 @@ end;
 
 function filterops_graphics_core_event(kn:p_knote;hint:QWORD):Integer;
 var
- event_id:Byte;
+ me_id:Byte;
 begin
+ //hint:[event_id:8|meid:8|timestamp:48]
  if (hint=0) then
  begin
   Result:=ord(kn^.kn_kevent.data<>0);
  end else
  begin
   Result:=0;
-  if (Byte(kn^.kn_sdata)=Byte(hint)) then
+  if (Byte(kn^.kn_sdata)=Byte(hint)) then //kn^.kn_sdata.event_id = hint.event_id
   begin
-   event_id:=(hint shr 8);
+   me_id:=(hint shr 8);
 
-   if (event_id=$80) or
-      (Byte(kn^.kn_sdata shr 8)=event_id) then
+   if (me_id=$80) or
+      (me_id=Byte(kn^.kn_sdata shr 8)) then
    begin
     Result:=1;
 
-    event_id:=Byte(kn^.kn_kevent.data shr 8);
+    me_id:=Byte(kn^.kn_kevent.data shr 8);
 
     kn^.kn_kevent.data:=(hint and QWORD($ffffffffffff00ff)) or
-                        (QWORD(event_id) shl 8);
+                        (QWORD(me_id) shl 8);
 
    end;
   end;
@@ -537,7 +557,7 @@ begin
 
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
- pm4_me_gfx.Init;
+ pm4_me_gfx.Init(@gc_knlist);
 end;
 
 

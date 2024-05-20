@@ -34,6 +34,8 @@ uses
 
  renderdoc,
 
+ sys_event,
+ time,
  kern_thr,
  md_sleep,
  bittype,
@@ -53,8 +55,11 @@ type
   started:Pointer;
   td:p_kthread;
   //
-  procedure Init;
+  gc_knlist:p_knlist;
+  //
+  procedure Init(knlist:p_knlist);
   procedure start;
+  procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
   procedure free_stream(node:p_pm4_stream); static;
  end;
@@ -89,9 +94,10 @@ begin
  end;
 end;
 
-procedure t_pm4_me.Init;
+procedure t_pm4_me.Init(knlist:p_knlist);
 begin
  queue.Create;
+ gc_knlist:=knlist;
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl; forward;
@@ -102,6 +108,11 @@ begin
  begin
   kthread_add(@pm4_me_thread,@self,@td,(8*1024*1024) div (16*1024),'[GFX_ME]');
  end;
+end;
+
+procedure t_pm4_me.knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
+begin
+ knote(gc_knlist, event_id or (me_id shl 8) or (timestamp shl 16), lockflags);
 end;
 
 procedure t_pm4_me.Push(var stream:t_pm4_stream);
@@ -776,7 +787,7 @@ begin
  CmdBuffer.Free;
 end;
 
-procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop);
+procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop;me:p_pm4_me);
 begin
  EndFrameCapture;
 
@@ -790,7 +801,11 @@ begin
   else;
  end;
 
- //node^.intSel
+ if (node^.intSel<>0) then
+ begin
+  //on submit eop
+  me^.knote_eventid($40,0,rdtsc(),0);
+ end;
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
@@ -819,7 +834,7 @@ begin
     case node^.ntype of
      ntDrawIndex2   :pm4_DrawIndex2   (Pointer(node));
      ntDrawIndexAuto:pm4_DrawIndexAuto(Pointer(node));
-     ntEventWriteEop:pm4_EventWriteEop(Pointer(node));
+     ntEventWriteEop:pm4_EventWriteEop(Pointer(node),me);
      else
     end;
 
