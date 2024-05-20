@@ -74,6 +74,16 @@ type
   _align:QWORD;
  end;
 
+const
+ _ucodesel=(8 shl 3) or 3;
+ _udatasel=(7 shl 3) or 3;
+ _ufssel  =(2 shl 3) or 3;
+ _ugssel  =(3 shl 3) or 3;
+
+ __INITIAL_FPUCW__     =$037F;
+ __INITIAL_MXCSR__     =$1F80;
+ __INITIAL_MXCSR_MASK__=$FFBF;
+
 procedure teb_set_kernel(td:p_kthread);
 procedure teb_set_user  (td:p_kthread);
 
@@ -84,6 +94,8 @@ function  _get_ctx_flags(src:p_ucontext_t):DWORD;
 
 procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
 procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
+
+procedure fpuinit(xstate:Pointer);
 
 procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
 procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
@@ -136,12 +148,6 @@ begin
  end;
  //teb stack
 end;
-
-const
- _ucodesel=(8 shl 3) or 3;
- _udatasel=(7 shl 3) or 3;
- _ufssel  =(2 shl 3) or 3;
- _ugssel  =(3 shl 3) or 3;
 
 function GetEnabledXStateFeatures:QWORD; stdcall external 'kernel32';
 
@@ -269,6 +275,25 @@ begin
 
  dst^.FltSave:=uc_xsave^;
           xs^:=uc_xstate^;
+end;
+
+procedure fpuinit(xstate:Pointer);
+var
+ uc_xsave :PXmmSaveArea;
+ uc_xstate:PXSTATE;
+begin
+ if (xstate=nil) then Exit;
+
+ uc_xsave :=PXmmSaveArea(xstate);
+ uc_xstate:=PXSTATE(uc_xsave+1);
+
+ //uc_xstate^.Mask:=
+ //uc_xstate^.CompactionMask:=
+
+ uc_xsave^.ControlWord:=__INITIAL_FPUCW__;
+ //uc_xsave^.StatusWord: WORD;
+ uc_xsave^.MxCsr      :=__INITIAL_MXCSR__;
+ uc_xsave^.MxCsr_Mask :=__INITIAL_MXCSR_MASK__;
 end;
 
 procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);

@@ -45,6 +45,7 @@ procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 implementation
 
 uses
+ md_context,
  vmparam;
 
 //
@@ -194,7 +195,12 @@ begin
 
  Context^.EFlags:=$3000 or EFLAGS_INTERRUPT_MASK;
 
- Context^.MxCsr:=INITIAL_MXCSR;
+ Context^.MxCsr:=__INITIAL_MXCSR__;
+
+ Context^.FltSave.ControlWord:=__INITIAL_FPUCW__;
+ //Context^.FltSave.StatusWord: WORD;
+ Context^.FltSave.MxCsr      :=__INITIAL_MXCSR__;
+ Context^.FltSave.MxCsr_Mask :=__INITIAL_MXCSR_MASK__;
 
  Context^.ContextFlags:=CONTEXT_THREAD;
 end;

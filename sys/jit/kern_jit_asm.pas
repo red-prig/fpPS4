@@ -49,7 +49,7 @@ type
  end;
 
 procedure jit_syscall;       assembler;
-procedure jit_plt_cache;     assembler;
+procedure jit_jmp_plt_cache; assembler;
 procedure jit_jmp_dispatch;  assembler;
 
 procedure jit_jmp_internal;  assembler;
@@ -416,8 +416,8 @@ asm
  //tf_r15=tf_r15
 end;
 
-//in:r14(addr) r15(plt)
-procedure jit_plt_cache; assembler; nostackframe;
+//in:r14(addr) r15(plt) out:r14(addr)
+procedure jit_jmp_plt_cache; assembler; nostackframe;
 label
  _exit;
 asm
@@ -440,13 +440,11 @@ asm
 
  popf
 
- //pop internal
- lea  8(%rsp),%rsp
-
  //restore rbp
  movq %rsp,%rbp
+ leaq 8(%rbp),%rbp
 
- jmp  %r14
+ ret
 
  _exit:
 
@@ -459,7 +457,7 @@ asm
  jmp jit_jmp_dispatch
 end;
 
-//in:r14(addr) r15(plt)
+//in:r14(addr) r15(plt) out:r14(addr)
 procedure jit_jmp_dispatch; assembler; nostackframe;
 asm
  //prolog (debugger)
@@ -484,10 +482,6 @@ asm
  //epilog
  movq %rbp,%rsp
  pop  %rbp
-
- //pop internal
- lea  8(%rsp),%rsp
- jmp  %r14
 end;
 
 procedure stack_set_user; assembler; nostackframe;
@@ -529,9 +523,6 @@ end;
 
 procedure jit_jmp_internal; assembler; nostackframe;
 asm
- //push internal call
- lea  -8(%rsp),%rsp
-
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
@@ -608,8 +599,8 @@ begin
           (rip<=(QWORD(@jit_jmp_dispatch)+$2C)) //jit_jmp_dispatch func size
          ) or
          (
-          (rip>=QWORD(@jit_plt_cache)) and
-          (rip<=(QWORD(@jit_plt_cache)+$33)) //jit_plt_cache func size
+          (rip>=QWORD(@jit_jmp_plt_cache)) and
+          (rip<=(QWORD(@jit_jmp_plt_cache)+$33)) //jit_jmp_plt_cache func size
          );
 end;
 

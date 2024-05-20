@@ -265,7 +265,8 @@ begin
  with ctx.builder do
  begin
   leap(r15);
-  call_far(@jit_plt_cache); //input:r14,r15
+  call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
+  jmp(r14);
  end;
 end;
 
@@ -274,7 +275,8 @@ begin
  with ctx.builder do
  begin
   leap(r15);
-  call_far(@jit_plt_cache); //input:r14,r15
+  call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
+  jmp(r14);
  end;
 end;
 
@@ -826,7 +828,7 @@ begin
  with ctx.builder do
  begin
   stack:=r_tmp0;
-  new  :=r_tmp0;
+  new  :=r_tmp1;
 
   op_load_rbp(ctx,stack);
 
@@ -860,7 +862,7 @@ begin
  begin
   stack:=r_tmp0;
 
-  new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+  new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
   mem_size:=ctx.din.Operand[1].Size;
 
@@ -884,6 +886,7 @@ end;
 procedure op_pop(var ctx:t_jit_context2);
 var
  new,stack:TRegValue;
+ reload_rsp:Boolean;
 begin
  //mov reg,[rsp]
  //lea rsp,[rsp+len]
@@ -896,21 +899,25 @@ begin
 
   op_uplift(ctx,os64); //in/out:r14
 
+  reload_rsp:=False;
+
   if is_memory(ctx.din) then
   begin
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
    movq(new,[stack]);
 
-   build_lea(ctx,1,r_tmp0);
+   build_lea(ctx,1,stack,[not_use_r_tmp1]);
 
    op_uplift(ctx,os64,[not_use_r_tmp1]); //in/out:r14
 
-   movq([r_tmp0],new);
+   movq([stack],new);
+
+   reload_rsp:=True;
   end else
   if is_preserved(ctx.din) then
   begin
-   new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
+   new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
    movq(new,[stack]);
 
@@ -925,7 +932,10 @@ begin
   //For transactionality,
   //first we move the memory,
   //then we update the register
-  op_load_rsp(ctx,stack);
+  if reload_rsp then
+  begin
+   op_load_rsp(ctx,stack);
+  end;
   leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
   op_save_rsp(ctx,stack);
  end;

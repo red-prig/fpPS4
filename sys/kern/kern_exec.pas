@@ -1813,7 +1813,7 @@ begin
 
  if (Result=0) then
  begin
-  jit_prepare(0);
+  jit_prepare(curkthread,0);
   ipi_sigreturn;
   Writeln(stderr,'I''m a teapot!');
  end;

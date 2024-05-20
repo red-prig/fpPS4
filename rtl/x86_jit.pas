@@ -328,6 +328,8 @@ type
   function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
   function  leap(reg:TRegValue):t_jit_i_link;
   //
+  Procedure jmp(reg:TRegValue);
+  Procedure call(reg:TRegValue);
   Procedure reta;
   Procedure ud2;
   //
@@ -1500,6 +1502,24 @@ begin
  Result.AType:=lnkLabelBefore;
 
  LinkLabel(Result.ALink);
+end;
+
+Procedure t_jit_builder.jmp(reg:TRegValue);
+const
+ desc:t_op_type=(op:$FF;index:4);
+begin
+ Assert(is_reg_size(reg,[os64]));
+
+ _R(desc,reg);
+end;
+
+Procedure t_jit_builder.call(reg:TRegValue);
+const
+ desc:t_op_type=(op:$FF;index:2);
+begin
+ Assert(is_reg_size(reg,[os64]));
+
+ _R(desc,reg);
 end;
 
 Procedure t_jit_builder.reta;

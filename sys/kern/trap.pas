@@ -97,7 +97,7 @@ procedure sig_unlock;
 procedure fast_syscall;
 procedure amd64_syscall;
 
-procedure jit_prepare(rip:QWORD);
+procedure jit_prepare(td:p_kthread;rip:QWORD);
 
 procedure host_sigcode;
 procedure host_sigipi;
@@ -324,15 +324,13 @@ begin
 
  cpu_set_syscall_retval(td,error);
 
- jit_prepare(rip);
+ jit_prepare(td,rip);
 end;
 
-procedure jit_prepare(rip:QWORD);
+procedure jit_prepare(td:p_kthread;rip:QWORD);
 var
- td:p_kthread;
  is_jit:Boolean;
 begin
- td:=curkthread;
  if (td=nil) then Exit;
 
  is_jit:=((td^.pcb_flags and PCB_IS_JIT)<>0);

@@ -252,17 +252,38 @@ var
  node:p_jit_entry_point;
  jctx:p_td_jctx;
  frame:p_jit_frame;
- //jit_state:Boolean;
 begin
  if (td=nil) then Exit;
 
- //jit_state:=((td^.pcb_flags and PCB_IS_JIT)<>0);
-
- if not is_guest_addr(td^.td_frame.tf_rip) then
+ if is_guest_addr(td^.td_frame.tf_rip) then
  begin
-  //clear jit flag
-  td^.pcb_flags:=td^.pcb_flags and (not PCB_IS_JIT);
-  Exit; //internal?
+  //host->jit
+  //jit->jit
+ end else
+ begin
+  if ((td^.pcb_flags and PCB_IS_JIT)<>0) then
+  begin
+   //jit->host
+
+   if ((td^.td_pflags and TDP_KTHREAD)<>0) then
+   begin
+    //clear jit flag
+    td^.pcb_flags:=td^.pcb_flags and (not PCB_IS_JIT);
+
+    Exit; //internal?
+   end else
+   begin
+    //forbidden
+
+    Assert(false,'forbidden jump to 0x'+HexStr(td^.td_frame.tf_rip,16));
+   end;
+
+  end else
+  begin
+   //host->host
+
+   Exit; //internal?
+  end;
  end;
 
  _start:
