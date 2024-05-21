@@ -17,6 +17,9 @@ type
   cv_waiters    :Integer;
  end;
 
+const
+ max_cv_waiters=$7fffffff;
+
 procedure cv_init(cvp:p_cv;desc:Pchar);
 procedure cv_destroy(cvp:p_cv);
 procedure _cv_wait(cvp:p_cv;lock:Pointer);
@@ -80,7 +83,10 @@ begin
 
  sleepq_lock(cvp);
 
- Inc(cvp^.cv_waiters);
+ if (cvp^.cv_waiters<>max_cv_waiters) then
+ begin
+  Inc(cvp^.cv_waiters);
+ end;
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR,0);
 
@@ -110,7 +116,10 @@ begin
 
  sleepq_lock(cvp);
 
- Inc(cvp^.cv_waiters);
+ if (cvp^.cv_waiters<>max_cv_waiters) then
+ begin
+  Inc(cvp^.cv_waiters);
+ end;
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR,0);
  if IS_SLEEPABLE(lock) then
@@ -135,7 +144,10 @@ begin
 
  sleepq_lock(cvp);
 
- Inc(cvp^.cv_waiters);
+ if (cvp^.cv_waiters<>max_cv_waiters) then
+ begin
+  Inc(cvp^.cv_waiters);
+ end;
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR or SLEEPQ_INTERRUPTIBLE,0);
 
@@ -165,7 +177,10 @@ begin
 
  sleepq_lock(cvp);
 
- Inc(cvp^.cv_waiters);
+ if (cvp^.cv_waiters<>max_cv_waiters) then
+ begin
+  Inc(cvp^.cv_waiters);
+ end;
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR,0);
  sleepq_set_timeout(cvp,timo);
@@ -196,7 +211,10 @@ begin
 
  sleepq_lock(cvp);
 
- Inc(cvp^.cv_waiters);
+ if (cvp^.cv_waiters<>max_cv_waiters) then
+ begin
+  Inc(cvp^.cv_waiters);
+ end;
 
  sleepq_add(cvp,lock,cvp^.cv_description,SLEEPQ_CONDVAR or SLEEPQ_INTERRUPTIBLE,0);
  sleepq_set_timeout(cvp,timo);
@@ -245,8 +263,24 @@ begin
  sleepq_lock(cvp);
  if (cvp^.cv_waiters>0) then
  begin
-  Dec(cvp^.cv_waiters);
-  sleepq_signal(cvp,SLEEPQ_CONDVAR,0,0);
+  if (cvp^.cv_waiters=max_cv_waiters) then
+  begin
+   if (sleepq_lookup(cvp)=nil) then
+   begin
+    cvp^.cv_waiters:=0;
+   end else
+   begin
+    if (cvp^.cv_waiters<>max_cv_waiters) then
+    begin
+     Dec(cvp^.cv_waiters);
+    end;
+    sleepq_signal(cvp,SLEEPQ_CONDVAR,0,0);
+   end;
+  end else
+  begin
+   Dec(cvp^.cv_waiters);
+   sleepq_signal(cvp,SLEEPQ_CONDVAR,0,0);
+  end;
  end;
  sleepq_release(cvp);
 end;
@@ -256,9 +290,23 @@ begin
  sleepq_lock(cvp);
  if (cvp^.cv_waiters>0) then
  begin
-  if (sleepq_signalto(cvp,SLEEPQ_CONDVAR,0,0,td)<>-1) then
+  if (cvp^.cv_waiters=max_cv_waiters) then
+  begin
+   if (sleepq_lookup(cvp)=nil) then
+   begin
+    cvp^.cv_waiters:=0;
+   end else
+   begin
+    if (cvp^.cv_waiters<>max_cv_waiters) then
+    begin
+     Dec(cvp^.cv_waiters);
+    end;
+    sleepq_signalto(cvp,SLEEPQ_CONDVAR,0,0,td);
+   end;
+  end else
   begin
    Dec(cvp^.cv_waiters);
+   sleepq_signalto(cvp,SLEEPQ_CONDVAR,0,0,td);
   end;
  end;
  sleepq_release(cvp);

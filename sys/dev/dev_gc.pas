@@ -114,8 +114,12 @@ type
  end;
 
 var
- ring_gfx:t_pm4_ring;
- ring_gfx_lock:Pointer=nil;
+ ring_gfx      :t_pm4_ring;
+ ring_gfx_lock :Pointer=nil;
+ ring_gfx_event:PRTLEvent=nil;
+
+ GC_SRI_event:PRTLEvent=nil;
+ GC_SRI_label:QWORD=0;
 
  parse_gfx_started:Pointer=nil;
  parse_gfx_td:p_kthread;
@@ -211,9 +215,11 @@ begin
    pm4_me_gfx.Push(pfp_ctx.stream_dcb);
 
    gc_ring_pm4_drain(@ring_gfx,size);
+   //
+   Continue;
   end;
 
-  msleep_td(100);
+  RTLEventWaitFor(ring_gfx_event);
  until false;
 
 
@@ -226,8 +232,61 @@ begin
   pfp_ctx.print_hint:=true;
   pfp_ctx.print_ops :=true;
 
+  ring_gfx_event:=RTLEventCreate;
+  GC_SRI_event  :=RTLEventCreate;
+
   kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,(8*1024*1024) div (16*1024),'[GFX_PFP]');
  end;
+end;
+
+procedure trigger_gfx_ring;
+begin
+ if (ring_gfx_event<>nil) then
+ begin
+  RTLEventSetEvent(ring_gfx_event);
+ end;
+end;
+
+procedure gc_wait_GC_SRI;
+begin
+ if (GC_SRI_label=0) then Exit;
+
+ if (GC_SRI_event<>nil) then
+ begin
+  RTLEventWaitFor(GC_SRI_event);
+ end;
+end;
+
+procedure gc_idle; register;
+begin
+ if (GC_SRI_event<>nil) then
+ begin
+  RTLEventSetEvent(GC_SRI_event);
+ end;
+ GC_SRI_label:=0;
+
+ if (gc_submits_allowed_vmirr<>nil) then
+ begin
+  gc_submits_allowed_vmirr^:=0; //true
+ end;
+end;
+
+procedure gc_imdone;
+begin
+ if (GC_SRI_event=nil)       then Exit;
+ if (pm4_me_gfx.started=nil) then Exit;
+
+ pm4_me_gfx.on_idle:=@gc_idle;
+
+ gc_wait_GC_SRI;
+ GC_SRI_label:=1;
+
+ if (gc_submits_allowed_vmirr<>nil) then
+ begin
+  gc_submits_allowed_vmirr^:=1; //false
+ end;
+
+ pm4_me_gfx.trigger;
 end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
@@ -292,7 +351,7 @@ begin
 
              PPointer(data)^:=gc_submits_allowed_vaddr;
 
-             gc_submits_allowed_vmirr^:=0; //init
+             gc_submits_allowed_vmirr^:=0; //init true
             end;
 
   $C010810B: //get cu mask
@@ -306,6 +365,15 @@ begin
   $C0048116: //sceGnmSubmitDone
             begin
              Writeln('sceGnmSubmitDone');
+
+             gc_imdone;
+            end;
+
+  $C0048117: //wait idle
+            begin
+             Writeln('gc_wait_idle');
+
+             gc_wait_GC_SRI;
             end;
 
   $C0048114: //sceGnmFlushGarlic
@@ -324,6 +392,8 @@ begin
                                          p_submit_args(data)^.cmds);
 
              rw_wunlock(ring_gfx_lock);
+
+             trigger_gfx_ring;
             end;
 
   $C0088101: //switch_buffer
@@ -335,6 +405,8 @@ begin
               Result:=gc_switch_buffer_internal(@ring_gfx);
 
              rw_wunlock(ring_gfx_lock);
+
+             trigger_gfx_ring;
             end;
 
 

@@ -202,7 +202,9 @@ var
  error:Integer;
 begin
  if (nbyte > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
  aiov.iov_base  :=buf;
  aiov.iov_len   :=nbyte;
  auio.uio_iov   :=@aiov;
@@ -223,7 +225,9 @@ var
  error:Integer;
 begin
  if (nbyte > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
  aiov.iov_base  :=buf;
  aiov.iov_len   :=nbyte;
  auio.uio_iov   :=@aiov;
@@ -313,7 +317,9 @@ var
  error:Integer;
 begin
  if (nbyte > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
  aiov.iov_base  :=buf;
  aiov.iov_len   :=nbyte;
  auio.uio_iov   :=@aiov;
@@ -334,7 +340,9 @@ var
  error:Integer;
 begin
  if (nbyte > IOSIZE_MAX) then
+ begin
   Exit(EINVAL);
+ end;
  aiov.iov_base  :=buf;
  aiov.iov_len   :=nbyte;
  auio.uio_iov   :=@aiov;
@@ -700,7 +708,9 @@ begin
   end;
   tvp:=@tv;
  end else
+ begin
   tvp:=nil;
+ end;
 
  Exit(kern_select(nd, uin, uou, uex, tvp, NFDBITS));
 end;
@@ -946,9 +956,13 @@ begin
  For msk:=0 to 2 do
  begin
   if (ibits[msk]=nil) then
+  begin
    continue;
+  end;
   if ((ibits[msk][idx] and bit)=0) then
+  begin
    continue;
+  end;
   flags:=flags or select_flags[msk];
  end;
  Exit(flags);
@@ -966,11 +980,17 @@ begin
  For msk:=0 to 2 do
  begin
   if ((events and select_flags[msk])=0) then
+  begin
    continue;
+  end;
   if (ibits[msk]=nil) then
+  begin
    continue;
+  end;
   if ((ibits[msk][idx] and bit)=0) then
+  begin
    continue;
+  end;
   {
    * XXX Check for a duplicate set.  This can occur because a
    * socket calls selrecord() twice for each poll() call
@@ -978,7 +998,9 @@ begin
    * call selsetbits twice as a result.
    }
   if ((obits[msk][idx] and bit)<>0) then
+  begin
    continue;
+  end;
   obits[msk][idx]:=obits[msk][idx] or bit;
   Inc(n);
  end;
@@ -1060,7 +1082,9 @@ begin
   ev:=fo_poll(fp, selflags(ibits, idx, bit));
   fdrop(fp);
   if (ev<>0) then
+  begin
    Inc(n,selsetbits(ibits, obits, idx, bit, ev));
+  end;
   //
   sfp:=sfn;
  end;
@@ -1094,15 +1118,21 @@ begin
    { Compute the list of events we're interested in. }
    flags:=selflags(ibits, idx, bit);
    if (flags=0) then
+   begin
     continue;
+   end;
    error:=getselfd_cap(fd, @fp);
    if (error<>0) then
+   begin
     Exit(error);
+   end;
    selfdalloc(td, Pointer(ptrint(fd)));
    ev:=fo_poll(fp, flags);
    fdrop(fp);
    if (ev<>0) then
+   begin
     Inc(n,selsetbits(ibits, obits, idx, bit, ev));
+   end;
    //
    bit:=bit shl 1;
    Inc(fd);
@@ -1159,12 +1189,16 @@ begin
  repeat
   error:=pollscan(td, bits, nfds);
   if (error<>0) or (td^.td_retval[0]<>0) then
+  begin
    break;
+  end;
   if (atv<>0) then
   begin
    rtv:=get_unit_uptime;
    if (rtv>=atv) then
+   begin
     break;
+   end;
    ttv:=atv-rtv;
 
    if (ttv>24*60*60*hz) then

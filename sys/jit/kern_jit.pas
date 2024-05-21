@@ -1078,6 +1078,8 @@ begin
 end;
 
 procedure op_jit2native(var ctx:t_jit_context2);
+const
+ and_desc:t_op_type=(op:$80;index:4);
 begin
  with ctx.builder do
  begin
@@ -1095,10 +1097,15 @@ begin
   movq(r14,[r13+Integer(@p_jit_frame(nil)^.tf_r14)]);
   movq(r15,[r13+Integer(@p_jit_frame(nil)^.tf_r15)]);
   movq(r13,[r13+Integer(@p_jit_frame(nil)^.tf_r13)]);
+
+  //reset PCB_IS_JIT
+  _MI8(and_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],not Byte(PCB_IS_JIT));
  end;
 end;
 
 procedure op_native2jit(var ctx:t_jit_context2);
+const
+ or_desc:t_op_type=(op:$80;index:1);
 begin
  with ctx.builder do
  begin
@@ -1132,6 +1139,9 @@ begin
   //load stack
   movq(rsp,r14);
   movq(rbp,r14);
+
+  //set PCB_IS_JIT
+  _MI8(or_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],Byte(PCB_IS_JIT));
  end;
 end;
 

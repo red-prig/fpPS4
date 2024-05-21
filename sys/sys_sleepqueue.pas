@@ -22,6 +22,7 @@ function  sleepq_alloc:Pointer; external;
 procedure sleepq_free(sq:Pointer); external;
 procedure sleepq_lock(wchan:Pointer); external;
 procedure sleepq_release(wchan:Pointer); external;
+function  sleepq_lookup(wchan:Pointer):Pointer; external;
 procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer); external;
 procedure sleepq_set_timeout(wchan:Pointer;time:Int64); external;
 function  sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD; external;

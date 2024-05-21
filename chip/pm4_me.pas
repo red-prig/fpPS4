@@ -51,6 +51,8 @@ type
  t_pm4_me=object
   //
   queue:TIntrusiveMPSCQueue; //p_pm4_stream
+  event:PRTLEvent;
+  on_idle:TProcedure;
   //
   started:Pointer;
   td:p_kthread;
@@ -59,6 +61,7 @@ type
   //
   procedure Init(knlist:p_knlist);
   procedure start;
+  procedure trigger;
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
   procedure free_stream(node:p_pm4_stream); static;
@@ -106,7 +109,17 @@ procedure t_pm4_me.start;
 begin
  if (XCHG(started,Pointer(1))=nil) then
  begin
+  event:=RTLEventCreate;
+  //
   kthread_add(@pm4_me_thread,@self,@td,(8*1024*1024) div (16*1024),'[GFX_ME]');
+ end;
+end;
+
+procedure t_pm4_me.trigger;
+begin
+ if (event<>nil) then
+ begin
+  RTLEventSetEvent(event);
  end;
 end;
 
@@ -130,6 +143,8 @@ begin
  queue.Push(node);
  //
  start;
+ //
+ trigger;
 end;
 
 procedure t_pm4_me.free_stream(node:p_pm4_stream);
@@ -843,11 +858,17 @@ begin
    end;
 
    me^.free_stream(stream);
+   //
+   Continue;
   end;
 
-   //
-
-  msleep_td(100);
+  //
+  if (me^.on_idle<>nil) then
+  begin
+   me^.on_idle();
+  end;
+  //
+  RTLEventWaitFor(me^.event);
  until false;
 
 end;

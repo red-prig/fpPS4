@@ -180,7 +180,7 @@ begin
  if ((sem^.attr and SEMA_ATTR_DELF)=0) then
  begin
   count:=sem^.count+signalCount;
-  if (sem^.max_count<count) then
+  if (count<0) or (sem^.max_count<count) then
   begin
    mtx_unlock(sem^.mtx);
    Exit(EINVAL);

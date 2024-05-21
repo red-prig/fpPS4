@@ -983,10 +983,10 @@ begin
 
  mtx_unlock(dce_mtx);
 
- Writeln('submit_flip:',data^.bufferIndex,' ',
-                        data^.flipMode,' ',
-                        '0x',HexStr(data^.flipArg,16),' ',
-                        '0x',HexStr(data^.eop_val));
+ Writeln('submit_flip: ','bufferIndex=',data^.bufferIndex,' ',
+                            'flipMode=',data^.flipMode,' ',
+                             'flipArg=','0x',HexStr(data^.flipArg,16),' ',
+                             'eop_val=','0x',HexStr(data^.eop_val));
 
  if (data^.eop_nz=1) then
  begin

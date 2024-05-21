@@ -41,6 +41,7 @@ function  sleepq_alloc:p_sleepqueue;
 procedure sleepq_free(sq:p_sleepqueue);
 procedure sleepq_lock(wchan:Pointer);
 procedure sleepq_release(wchan:Pointer);
+function  sleepq_lookup(wchan:Pointer):p_sleepqueue;
 procedure sleepq_add(wchan,lock,wmesg:Pointer;flags,queue:Integer);
 procedure sleepq_set_timeout(wchan:Pointer;time:Int64);
 function  sleepq_sleepcnt(wchan,lock:Pointer;flags,queue:Integer):DWORD;
@@ -144,7 +145,7 @@ end;
  * table locking the associated sleep queue chain.  If no queue is found in
  * the table, NULL is returned.
 }
-function sleepq_lookup(wchan:Pointer):p_sleepqueue;
+function sleepq_lookup(wchan:Pointer):p_sleepqueue; public;
 var
  sc:p_sleepqueue_chain;
  sq:p_sleepqueue;
