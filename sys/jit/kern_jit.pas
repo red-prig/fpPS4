@@ -1083,6 +1083,9 @@ const
 begin
  with ctx.builder do
  begin
+  //reset PCB_IS_JIT
+  _MI8(and_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],not Byte(PCB_IS_JIT));
+
   //load guest stack
   movq(r14,[r13+Integer(@p_kthread(nil)^.td_ustack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
   movq(r15,[r13+Integer(@p_kthread(nil)^.td_ustack.sttop)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
@@ -1097,9 +1100,6 @@ begin
   movq(r14,[r13+Integer(@p_jit_frame(nil)^.tf_r14)]);
   movq(r15,[r13+Integer(@p_jit_frame(nil)^.tf_r15)]);
   movq(r13,[r13+Integer(@p_jit_frame(nil)^.tf_r13)]);
-
-  //reset PCB_IS_JIT
-  _MI8(and_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],not Byte(PCB_IS_JIT));
  end;
 end;
 
