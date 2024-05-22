@@ -13,6 +13,7 @@ uses
  sys_event,
  time,
  kern_mtx,
+ sys_bootparam,
  display_interface;
 
 procedure dce_initialize();
@@ -79,18 +80,23 @@ begin
 end;
 
 var
- callout_lock  :mtx;
- callout_vblank:t_callout;
- callout_refs  :Int64=0;
+ vblank:record
+  lock   :mtx;
+  callout:t_callout;
+  refs   :Int64;
 
- vblank_count:QWORD=0;
- vblank_tsc  :QWORD=0;
+  count  :QWORD;
+  tsc    :QWORD;
+
+  fps_cnt:QWORD;
+  fps_tsc:QWORD;
+ end;
 
 procedure vblank_expire(arg:Pointer);
 var
  i:QWORD;
 begin
- if (callout_refs<>0) then
+ if (vblank.refs<>0) then
  begin
 
   mtx_lock(dce_mtx);
@@ -102,16 +108,32 @@ begin
 
   mtx_unlock(dce_mtx);
 
-  vblank_tsc:=rdtsc();
+  vblank.tsc:=rdtsc();
 
-  i:=vblank_count;
-  vblank_count:=vblank_count+1;
+  i:=vblank.count;
+  vblank.count:=vblank.count+1;
 
   knote_eventid(EVENTID_PREVBLANK, i, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
   //
-  callout_reset(@callout_vblank, callout_vblank.c_time, @vblank_expire, nil);
+  callout_reset(@vblank.callout, vblank.callout.c_time, @vblank_expire, nil);
   //
   knote_eventid(EVENTID_VBLANK   , i, 0); //SCE_VIDEO_OUT_EVENT_VBLANK
+
+  if (vblank.fps_tsc=0) then
+  begin
+   vblank.fps_tsc:=rdtsc();
+   vblank.fps_cnt:=0;
+  end else
+  begin
+   //Inc(fps_cnt);
+   if ((rdtsc()-vblank.fps_tsc) div tsc_freq)>=1 then
+   begin
+    p_host_ipc.SetCaptionFPS(vblank.fps_cnt);
+    vblank.fps_cnt:=0;
+    vblank.fps_tsc:=rdtsc();
+   end;
+  end;
+
  end;
 end;
 
@@ -119,16 +141,16 @@ procedure open_vblank;
 var
  time:Int64;
 begin
- if (System.InterlockedIncrement64(callout_refs)=1) then
+ if (System.InterlockedIncrement64(vblank.refs)=1) then
  begin
   time:=round(hz/59.94);
-  callout_reset(@callout_vblank, time, @vblank_expire, nil);
+  callout_reset(@vblank.callout, time, @vblank_expire, nil);
  end;
 end;
 
 procedure close_vblank;
 begin
- System.InterlockedDecrement64(callout_refs);
+ System.InterlockedDecrement64(vblank.refs);
 end;
 
 type
@@ -406,6 +428,7 @@ begin
         begin
          dce_handle.event_flip:=@g_video_out_event_flip;
          dce_handle.mtx       :=@dce_mtx;
+         dce_handle.p_fps_cnt :=@vblank.fps_cnt;
          Result:=dce_handle.Open();
         end;
 
@@ -673,9 +696,9 @@ begin
 
       u.v_vblank:=Default(t_vblank_args);
 
-      u.v_vblank.count      :=vblank_count;
-      u.v_vblank.processTime:=vblank_tsc;
-      u.v_vblank.tsc        :=vblank_tsc;
+      u.v_vblank.count      :=vblank.count;
+      u.v_vblank.processTime:=vblank.tsc;
+      u.v_vblank.tsc        :=vblank.tsc;
 
       Result:=copyout(@u.v_vblank,ptr,len);
 
@@ -1261,8 +1284,8 @@ begin
 
  knlist_init_mtx(@g_video_out_event_flip,@knlist_lock_flip);
 
- mtx_init(callout_lock,'vblank_lock');
- callout_init_mtx(@callout_vblank,callout_lock,0);
+ mtx_init(vblank.lock,'vblank.lock');
+ callout_init_mtx(@vblank.callout,vblank.lock,0);
 
  kqueue_add_filteropts(EVFILT_DISPLAY,@filterops_display);
 

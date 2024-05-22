@@ -87,9 +87,6 @@ type
 
   dst_cache:Pointer;
 
-  Ffps     :QWORD;
-  Ftsc_prev:QWORD;
-
   function   Open                     ():Integer; override;
   Destructor Destroy; override;
   //function  GetFlipStatus          (status:p_flip_status):Integer; virtual;
@@ -806,19 +803,9 @@ begin
 
  knote_eventid(EVENTID_FLIP, submit^.flipArg);
 
- if (Ftsc_prev=0) then
+ if (p_fps_cnt<>nil) then
  begin
-  Ftsc_prev:=last_status.tsc;
-  Ffps:=1;
- end else
- begin
-  Inc(Ffps);
-  if ((last_status.tsc-Ftsc_prev) div tsc_freq)>=1 then
-  begin
-   p_host_ipc.SetCaptionFPS(Ffps);
-   Ffps:=0;
-   Ftsc_prev:=last_status.tsc;
-  end;
+  System.InterlockedIncrement64(p_fps_cnt^);
  end;
 
 end;

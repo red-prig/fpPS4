@@ -104,6 +104,7 @@ type
   event_flip:p_knlist;
   mtx:p_mtx;
   last_status:t_flip_status;
+  p_fps_cnt:PQWORD;
   procedure knote_eventid            (event_id:WORD;flipArg:QWORD);
   function  Open                     ():Integer; virtual;
   function  GetFlipStatus            (status:p_flip_status):Integer; virtual;
