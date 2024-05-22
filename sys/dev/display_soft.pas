@@ -665,7 +665,11 @@ begin
  if (Node=nil) then Exit(EBUSY);
 
  Flip:=FFlipAlloc.Alloc;
- if (Flip=nil) then Exit(EBUSY);
+ if (Flip=nil) then
+ begin
+  FSubmitAlloc.Free(Node);
+  Exit(EBUSY);
+ end;
 
  Node^.submit:=submit^;
  Node^.tsc   :=rdtsc();
