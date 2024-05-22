@@ -549,7 +549,7 @@ begin
  bi.bmiHeader.biBitCount   :=32;
  bi.bmiHeader.biCompression:=BI_RGB;
 
- if {(attr^.attr.tilingMode<>0)} false then
+ if (attr^.attr.tilingMode<>0) then
  begin
   //alloc aligned 128x128
   bi.bmiHeader.biWidth :=(attr^.attr.pitchPixel+127) and (not 127);
@@ -672,7 +672,6 @@ begin
  end;
 
  Node^.submit:=submit^;
- Node^.tsc   :=rdtsc();
 
  Flip^.next_    :=nil;
  Flip^.submit   :=Node;
@@ -696,6 +695,8 @@ var
 begin
  Result:=0;
  //
+ mtx_lock(mtx^);
+
  For i:=0 to High(FFlipAlloc.FNodes) do
  begin
   Flip:=@FFlipAlloc.FNodes[i];
@@ -713,7 +714,11 @@ begin
    System.InterlockedDecrement(last_status.gcQueueNum);
 
    //
+   Node^.tsc:=rdtsc();
+
    System.InterlockedIncrement(last_status.flipPendingNum0);
+
+   mtx_unlock(mtx^);
 
    FSubmitQueue.Push(Node);
 
@@ -727,6 +732,8 @@ begin
   end;
 
  end;
+
+ mtx_unlock(mtx^);
  //
  Result:=1;
 end;
