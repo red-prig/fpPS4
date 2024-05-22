@@ -6,6 +6,7 @@ unit pm4_pfp;
 interface
 
 uses
+ sysutils,
  mqueue,
  bittype,
  pm4_ring,
@@ -1305,8 +1306,8 @@ end;
 
 procedure onIndexType(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXTYPE);
 begin
- Assert(Body^.swapMode=0);
  pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE:=Body^.indexType;
+ pctx^.CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE :=Body^.swapMode;
  pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE    :=Body^.indexType;
 end;
 
@@ -1371,6 +1372,17 @@ begin
  pctx^.stream_dcb.DrawIndexAuto(pctx^.SH_REG,
                                 pctx^.CX_REG,
                                 pctx^.UC_REG);
+end;
+
+procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
+begin
+
+ pctx^.SH_REG.COMPUTE_DIM_X:=Body^.dimX;
+ pctx^.SH_REG.COMPUTE_DIM_Y:=Body^.dimY;
+ pctx^.SH_REG.COMPUTE_DIM_Z:=Body^.dimZ;
+ pctx^.SH_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
+
+ pctx^.stream_dcb.DispatchDirect(pctx^.SH_REG);
 end;
 
 procedure onPushMarker(Body:PChar);
@@ -1524,7 +1536,7 @@ begin
       IT_DRAW_INDEX_2       :onDrawIndex2     (pctx,buff);
       IT_DRAW_INDEX_OFFSET_2:Assert(false,'IT_DRAW_INDEX_OFFSET_2');
       IT_DRAW_INDEX_AUTO    :onDrawIndexAuto  (pctx,buff);
-      IT_DISPATCH_DIRECT    :Assert(false,'IT_DISPATCH_DIRECT');
+      IT_DISPATCH_DIRECT    :onDispatchDirect (pctx,buff);
       IT_PFP_SYNC_ME        :Assert(false,'IT_PFP_SYNC_ME');
 
       IT_SET_BASE           :onSetBase(buff);

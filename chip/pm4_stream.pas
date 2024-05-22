@@ -55,13 +55,15 @@ type
   ntEventWrite,
   ntEventWriteEop,
   ntEventWriteEos,
+  ntSubmitFlipEop,
   ntDmaData,
   ntWriteData,
   ntWaitRegMem,
   ntFastClear,
   ntResolve,
   ntDrawIndex2,
-  ntDrawIndexAuto
+  ntDrawIndexAuto,
+  ntDispatchDirect
  );
 
  p_pm4_node=^t_pm4_node;
@@ -97,6 +99,12 @@ type
   data     :DWORD;
   eventType:Byte;
   command  :Byte;
+ end;
+
+ p_pm4_node_SubmitFlipEop=^t_pm4_node_SubmitFlipEop;
+ t_pm4_node_SubmitFlipEop=packed object(t_pm4_node)
+  eop_value:QWORD;
+  intSel   :Byte
  end;
 
  p_pm4_node_DmaData=^t_pm4_node_DmaData;
@@ -151,6 +159,11 @@ type
   UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
  end;
 
+ p_pm4_node_DispatchDirect=^t_pm4_node_DispatchDirect;
+ t_pm4_node_DispatchDirect=object(t_pm4_node)
+  SH_REG:TSH_REG_GROUP;         // 0x2C00
+ end;
+
  p_pm4_stream=^t_pm4_stream;
  t_pm4_stream=object
   next_:Pointer;
@@ -168,6 +181,7 @@ type
   procedure EventWrite   (eventType:Byte);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
+  procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
   procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
   procedure WriteData    (dstSel:Byte;dst,src:QWORD;num_dw:Word);
   procedure WaitRegMem   (pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
@@ -181,6 +195,7 @@ type
   procedure DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
+  procedure DispatchDirect(var SH_REG:TSH_REG_GROUP);
  end;
 
 implementation
@@ -268,6 +283,19 @@ begin
  node^.data     :=data;
  node^.eventType:=eventType;
  node^.command  :=command;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.SubmitFlipEop(eop_value:QWORD;intSel:Byte);
+var
+ node:p_pm4_node_SubmitFlipEop;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_SubmitFlipEop));
+
+ node^.ntype    :=ntSubmitFlipEop;
+ node^.eop_value:=eop_value;
+ node^.intSel   :=intSel;
 
  add_node(node);
 end;
@@ -405,6 +433,18 @@ begin
  node^.SH_REG:=SH_REG;
  node^.CX_REG:=CX_REG;
  node^.UC_REG:=UC_REG;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.DispatchDirect(var SH_REG:TSH_REG_GROUP);
+var
+ node:p_pm4_node_DispatchDirect;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchDirect));
+
+ node^.ntype :=ntDispatchDirect;
+ node^.SH_REG:=SH_REG;
 
  add_node(node);
 end;

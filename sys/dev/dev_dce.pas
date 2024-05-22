@@ -17,6 +17,8 @@ uses
 
 procedure dce_initialize();
 
+function  TriggerFlipEop(submit_id:QWORD):Integer;
+
 type
  p_dce_page=^t_dce_page;
  t_dce_page=packed record //0x170
@@ -935,6 +937,17 @@ type
   f_0x38     :QWORD;
   rout       :PQWORD; //extraout of result
  end;
+
+function TriggerFlipEop(submit_id:QWORD):Integer;
+begin
+ if (dce_handle=nil) then
+ begin
+  Result:=EINVAL;
+ end else
+ begin
+  Result:=dce_handle.TriggerFlipEop(submit_id);
+ end;
+end;
 
 Function dce_submit_flip(dev:p_cdev;data:p_submit_flip_args):Integer;
 var

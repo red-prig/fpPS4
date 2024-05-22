@@ -30,6 +30,9 @@ function  DumpVS(var GPU_REGS:TGPU_REGS):RawByteString;
 
 implementation
 
+uses
+ kern_dmem;
+
 Procedure DUMP_BLOCK(F:THandle;REG:WORD;P:Pointer;Size:DWORD);
 const
  MAX_SIZE=($FFFF+1)*4;
@@ -173,6 +176,12 @@ begin
  base:=GPU_REGS.get_code_addr(vShaderStageCs);
  if (base<>nil) then
  begin
+
+  if not get_dmem_ptr(base,@base,nil) then
+  begin
+   Assert(false,'DumpCS:get_dmem_ptr');
+  end;
+
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);
@@ -216,6 +225,12 @@ begin
  base:=GPU_REGS.get_code_addr(vShaderStagePs);
  if (base<>nil) then
  begin
+
+  if not get_dmem_ptr(base,@base,nil) then
+  begin
+   Assert(false,'DumpPS:get_dmem_ptr');
+  end;
+
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);
@@ -268,6 +283,12 @@ begin
  base:=GPU_REGS.get_code_addr(vShaderStageVs);
  if (base<>nil) then
  begin
+
+  if not get_dmem_ptr(base,@base,nil) then
+  begin
+   Assert(false,'DumpVS:get_dmem_ptr');
+  end;
+
   size:=_calc_shader_size(base);
 
   hash:=MurmurHash64A(base,size,0);

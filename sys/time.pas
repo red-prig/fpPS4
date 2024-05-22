@@ -308,9 +308,13 @@ end;
 function itimerfix(tv:p_timeval):Integer;
 begin
  if (tv^.tv_sec < 0) or (tv^.tv_usec < 0) or (tv^.tv_usec >= 1000000) then
+ begin
   Exit(EINVAL);
+ end;
  if (tv^.tv_sec=0) and (tv^.tv_usec<>0) and (tv^.tv_usec < tick) then
+ begin
   tv^.tv_usec:=tick;
+ end;
  Exit(0);
 end;
 

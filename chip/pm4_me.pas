@@ -36,6 +36,7 @@ uses
 
  sys_event,
  time,
+ md_time,
  kern_thr,
  md_sleep,
  bittype,
@@ -47,17 +48,22 @@ uses
  si_ci_vi_merged_groups;
 
 type
+ t_on_submit_flip_eop=function(submit_id:QWORD):Integer;
+
  p_pm4_me=^t_pm4_me;
  t_pm4_me=object
   //
   queue:TIntrusiveMPSCQueue; //p_pm4_stream
   event:PRTLEvent;
   on_idle:TProcedure;
+  on_submit_flip_eop:t_on_submit_flip_eop;
   //
   started:Pointer;
   td:p_kthread;
   //
   gc_knlist:p_knlist;
+  //
+  rel_time:QWORD;
   //
   procedure Init(knlist:p_knlist);
   procedure start;
@@ -252,7 +258,10 @@ begin
 
  for i:=0 to 31 do
  begin
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
+  if (CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>0) and (CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>i) then
+  begin
+   Assert(false,                                         'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
+  end;
   Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].DEFAULT_VAL='     +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     ));
   Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FLAT_SHADE='      +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      ));
   Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
@@ -802,24 +811,63 @@ begin
  CmdBuffer.Free;
 end;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
 procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop;me:p_pm4_me);
+var
+ curr,diff:QWORD;
 begin
  EndFrameCapture;
 
+ curr:=md_rdtsc_unit;
+ diff:=curr-me^.rel_time;
+
+ if (node^.addr<>nil) then
  Case node^.dataSel of
   //
-  EVENTWRITEEOP_DATA_SEL_DISCARD            :;
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA32        :PDWORD(node^.addr)^:=node^.data;
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA64        :PQWORD(node^.addr)^:=node^.data;
-  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     :; //system 100Mhz global clock.
-  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:; //GPU 800Mhz clock.
-  else;
+  EVENTWRITEEOP_DATA_SEL_DISCARD:;
+
+   //32bit data
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA32:PDWORD(node^.addr)^:=node^.data;
+
+   //64bit data
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA64:PQWORD(node^.addr)^:=node^.data;
+
+    //system 100Mhz global clock. (relative time)
+  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK:PQWORD(node^.addr)^:=mul_div_u64(100*1000000,UNIT_PER_SEC,diff);
+
+    //GPU 800Mhz clock.           (relative time)
+  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:PQWORD(node^.addr)^:=mul_div_u64(800*1000000,UNIT_PER_SEC,diff);
+
+  else
+   Assert(false,'pm4_EventWriteEop');
  end;
 
  if (node^.intSel<>0) then
  begin
-  //on submit eop
-  me^.knote_eventid($40,0,rdtsc(),0);
+  me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
+ end;
+end;
+
+procedure pm4_SubmitFlipEop(node:p_pm4_node_SubmitFlipEop;me:p_pm4_me);
+var
+ curr:QWORD;
+begin
+ if (me^.on_submit_flip_eop<>nil) then
+ begin
+  me^.on_submit_flip_eop(node^.eop_value);
+ end;
+
+ curr:=md_rdtsc_unit;
+
+ if (node^.intSel<>0) then
+ begin
+  me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 end;
 
@@ -837,6 +885,13 @@ begin
 
  repeat
 
+  //start relative timer
+  if (me^.rel_time=0) then
+  begin
+   me^.rel_time:=md_rdtsc_unit;
+  end;
+  //
+
   stream:=nil;
   if me^.queue.Pop(stream) then
   begin
@@ -850,6 +905,7 @@ begin
      ntDrawIndex2   :pm4_DrawIndex2   (Pointer(node));
      ntDrawIndexAuto:pm4_DrawIndexAuto(Pointer(node));
      ntEventWriteEop:pm4_EventWriteEop(Pointer(node),me);
+     ntSubmitFlipEop:pm4_SubmitFlipEop(Pointer(node),me);
      else
     end;
 
@@ -862,6 +918,7 @@ begin
    Continue;
   end;
 
+  me^.rel_time:=0; //reset time
   //
   if (me^.on_idle<>nil) then
   begin

@@ -9,29 +9,8 @@ uses
  errno,
  md_map,
  systm,
+ pm4defs,
  bittype;
-
-type
- //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb  0xc0023300
- //IT_INDIRECT_BUFFER      = $0000003f;  dcb  0xc0023f00
-
- PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
- PM4CMDINDIRECTBUFFER=bitpacked record
-  header   :DWORD; // PM4_TYPE_3_HEADER
-  ibBase   :bit40; // Indirect buffer base address, must be 4 byte aligned
-  reserved0:bit24;
-  //
-  ibSize   :bit20; // Indirect buffer size
-  reserved1:bit4;
-  vmid     :bit4;  // Virtual memory domain ID for command buffer
-  reserved2:bit4;
- end;
-
- PPM4CMDSWITCHBUFFER=^PM4CMDSWITCHBUFFER;
- PM4CMDSWITCHBUFFER=bitpacked record
-  header:DWORD;
-  data  :DWORD;
- end;
 
 const
  GC_RING_SIZE=$80000;
@@ -59,6 +38,7 @@ function  gc_ring_pm4_drain(ring:p_pm4_ring;size:DWORD):Boolean;
 
 function  gc_submit_internal       (ring:p_pm4_ring;count:DWORD;cmds:Pointer):Integer;
 function  gc_switch_buffer_internal(ring:p_pm4_ring):Integer;
+function  gc_pm4_event_write_eop   (ring:p_pm4_ring;addr:Pointer;data:QWORD;intSel,wait:Integer):Integer;
 
 implementation
 
@@ -293,5 +273,43 @@ begin
  gc_ring_pm4_submit(ring);
 end;
 
+function gc_pm4_event_write_eop(ring:p_pm4_ring;addr:Pointer;data:QWORD;intSel,wait:Integer):Integer;
+var
+ buf:PPM4CMDEVENTWRITEEOP;
+begin
+ Result:=0;
+
+ buf:=nil;
+ if not gc_ring_pm4_alloc(ring,sizeof(PM4CMDEVENTWRITEEOP),@buf) then
+ begin
+  Writeln(stderr,'### gc_pm4_event_write_eop : Cannot allocate a space in ring buffer.');
+  Exit(EBUSY);
+ end;
+
+ buf^:=Default(PM4CMDEVENTWRITEEOP);
+
+  // IT_EVENT_WRITE_EOP
+ DWORD(buf^.header):=$C0044700;
+
+ if (wait=0) then
+ begin
+  buf^.eventType:=kEopCbDbReadsDone;
+ end else
+ begin
+  buf^.eventType:=kEopFlushCbDbCaches;
+ end;
+
+ buf^.eventIndex  :=5;
+ buf^.invalidateL2:=1;
+ buf^.address     :=QWORD(addr);
+ buf^.intSel      :=ord(intSel<>0)*2;
+ buf^.dataSel     :=EVENTWRITEEOP_DATA_SEL_SEND_DATA64;
+ buf^.DATA        :=data;
+
+ gc_ring_pm4_submit(ring);
+end;
+
+
 end.
+
 

@@ -28,9 +28,12 @@ uses
  kern_proc,
  kern_thr,
  md_sleep,
+ pm4defs,
  pm4_ring,
  pm4_pfp,
  pm4_me,
+
+ dev_dce,
 
  vDevice,
  vMemory,
@@ -128,6 +131,17 @@ var
 
  pm4_me_gfx:t_pm4_me;
 
+procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
+var
+ submit_id:DWORD;
+begin
+ submit_id:=Body^.DATA;
+
+ Writeln('submit eop flip:',submit_id);
+
+ pctx^.stream_dcb.SubmitFlipEop(Body^.DATA,(Body^.intSel shr 1));
+end;
+
 function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 var
  ibuf:t_pm4_ibuffer;
@@ -173,6 +187,10 @@ begin
      Writeln('SWITCH_BUFFER');
     end;
    end;
+  $C0044700: //IT_EVENT_WRITE_EOP
+   begin
+    onEventWriteEop(pctx,buff);
+   end
   else;
  end;
 
@@ -275,8 +293,6 @@ procedure gc_imdone;
 begin
  if (GC_SRI_event=nil)       then Exit;
  if (pm4_me_gfx.started=nil) then Exit;
-
- pm4_me_gfx.on_idle:=@gc_idle;
 
  gc_wait_GC_SRI;
  GC_SRI_label:=1;
@@ -383,9 +399,9 @@ begin
 
   $C0108102: //submit
             begin
-             rw_wlock(ring_gfx_lock);
+             start_gfx_ring;
 
-              start_gfx_ring;
+             rw_wlock(ring_gfx_lock);
 
               Result:=gc_submit_internal(@ring_gfx,
                                          p_submit_args(data)^.count,
@@ -396,11 +412,41 @@ begin
              trigger_gfx_ring;
             end;
 
-  $C0088101: //switch_buffer
+  $C020810C: //submit eop
             begin
+             start_gfx_ring;
+
              rw_wlock(ring_gfx_lock);
 
-              start_gfx_ring;
+              Result:=gc_submit_internal(@ring_gfx,
+                                         p_submit_args(data)^.count,
+                                         p_submit_args(data)^.cmds);
+
+              if (Result=0) then
+              begin
+               {
+                The original data is an incremental "submit_id | (vmid << 32)",
+                now this is directly sended "eop_v"
+               }
+
+               Result:=gc_pm4_event_write_eop(@ring_gfx,
+                                              nil,
+                                              p_submit_args(data)^.eop_v,
+                                              1,
+                                              p_submit_args(data)^.wait
+                                              );
+              end;
+
+             rw_wunlock(ring_gfx_lock);
+
+             trigger_gfx_ring;
+            end;
+
+  $C0088101: //switch_buffer
+            begin
+             start_gfx_ring;
+
+             rw_wlock(ring_gfx_lock);
 
               Result:=gc_switch_buffer_internal(@ring_gfx);
 
@@ -630,6 +676,8 @@ begin
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
  pm4_me_gfx.Init(@gc_knlist);
+ pm4_me_gfx.on_idle:=@gc_idle;
+ pm4_me_gfx.on_submit_flip_eop:=@dev_dce.TriggerFlipEop;
 end;
 
 

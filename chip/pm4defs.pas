@@ -403,8 +403,8 @@ const
  kEopCsDone                       = $00000028;  //wait cs shader, label .....EOP
 
 type
- PPM4CMDEVENTWRITEEOP=^TPM4CMDEVENTWRITEEOP;
- TPM4CMDEVENTWRITEEOP=bitpacked record
+ PPM4CMDEVENTWRITEEOP=^PM4CMDEVENTWRITEEOP;
+ PM4CMDEVENTWRITEEOP=bitpacked record
   header          :PM4_TYPE_3_HEADER;
 
   eventType       :bit6;  //00 // < event type written to VGT_EVENT_INITIATOR
@@ -737,6 +737,27 @@ type
   dimY             :DWORD;                       ///< Y dimensions of the array of thread groups to be dispatched
   dimZ             :DWORD;                       ///< Z dimensions of the array of thread groups to be dispatched
   dispatchInitiator:TCOMPUTE_DISPATCH_INITIATOR; ///< Dispatch Initiator Register
+ end;
+
+ //IT_INDIRECT_BUFFER_CNST = $00000033;  ccb  0xc0023300
+ //IT_INDIRECT_BUFFER      = $0000003f;  dcb  0xc0023f00
+
+ PPM4CMDINDIRECTBUFFER=^PM4CMDINDIRECTBUFFER;
+ PM4CMDINDIRECTBUFFER=bitpacked record
+  header   :DWORD; // PM4_TYPE_3_HEADER
+  ibBase   :bit40; // Indirect buffer base address, must be 4 byte aligned
+  reserved0:bit24;
+  //
+  ibSize   :bit20; // Indirect buffer size
+  reserved1:bit4;
+  vmid     :bit4;  // Virtual memory domain ID for command buffer
+  reserved2:bit4;
+ end;
+
+ PPM4CMDSWITCHBUFFER=^PM4CMDSWITCHBUFFER;
+ PM4CMDSWITCHBUFFER=bitpacked record
+  header:DWORD;
+  data  :DWORD;
  end;
 
  TUSERCONFIG_REG_SHORT=packed record

@@ -241,6 +241,7 @@ end;
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
+ if (curkthread=nil) then Exit;
 
  case p^.ExceptionRecord^.ExceptionCode of
   FPC_EXCEPTION_CODE       :Exit;
@@ -272,7 +273,6 @@ end;
 
 function UnhandledException(p:PExceptionPointers):longint; stdcall;
 var
- td:p_kthread;
  rec:PExceptionRecord;
  code: Longint;
  ExObj:Exception;
@@ -280,14 +280,15 @@ begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
 
  case p^.ExceptionRecord^.ExceptionCode of
-  FPC_EXCEPTION_CODE      :Exit;
-  FPC_SET_EH_HANDLER      :Exit(EXCEPTION_CONTINUE_EXECUTION);
-  EXCEPTION_BREAKPOINT    :Exit;
-  EXCEPTION_SET_THREADNAME:Exit;
+  FPC_EXCEPTION_CODE       :Exit;
+  FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
+  EXCEPTION_BREAKPOINT     :Exit;
+  EXCEPTION_SET_THREADNAME :Exit;
+  DBG_PRINTEXCEPTION_C     :Exit(EXCEPTION_CONTINUE_EXECUTION);
+  DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
  end;
 
- td:=curkthread;
- if (td=nil) then Exit;
+ if (curkthread=nil) then Exit;
 
  rec:=p^.ExceptionRecord;
 
@@ -304,8 +305,10 @@ begin
   ExObj:=Exception(TExceptObjProc(ExceptObjProc)(abs(code),rec^));
  end;
 
- if curkthread<>nil then
+ if (curkthread<>nil) then
+ begin
   Writeln('curkthread^.td_name:',curkthread^.td_name);
+ end;
 
  if (ExObj=nil) then
  begin

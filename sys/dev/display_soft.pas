@@ -29,20 +29,36 @@ type
  end;
 
  PQNode=^TQNode;
- TOnParent=Procedure(node:PQNode) of object;
  TQNode=object
-  next_ :PQNode;
+  next_:PQNode;
+ end;
+
+ PQNodeSubmit=^TQNodeSubmit;
+ TQNodeSubmit=object(TQNode)
   submit:t_submit_flip;
   tsc   :QWORD;
  end;
 
- TSubmitQueue=object
-  FNodes:array[0..31] of TQNode;
+ TSubmitAlloc=object
+  FNodes:array[0..31] of TQNodeSubmit;
   FAlloc:TIntrusiveMPSCQueue;
-  FQueue:TIntrusiveMPSCQueue;
   Procedure Init;
-  function  Alloc:PQNode;
-  procedure Free(P:PQNode);
+  function  Alloc:PQNodeSubmit;
+  procedure Free(P:PQNodeSubmit);
+ end;
+
+ PQNodeFlip=^TQNodeFlip;
+ TQNodeFlip=object(TQNode)
+  submit   :PQNodeSubmit;
+  submit_id:QWORD;
+ end;
+
+ TFlipAlloc=object
+  FNodes:array[0..17] of TQNodeFlip;
+  FAlloc:TIntrusiveMPSCQueue;
+  Procedure Init;
+  function  Alloc:PQNodeFlip;
+  procedure Free(P:PQNodeFlip);
  end;
 
  TDisplayHandleSoft=class(TDisplayHandle)
@@ -51,7 +67,12 @@ type
 
   FEvent:PRTLEvent;
   Ftd:p_kthread;
-  FQueue:TSubmitQueue;
+
+  FSubmitAlloc:TSubmitAlloc;
+  FSubmitQueue:TIntrusiveMPSCQueue;
+
+  FFlipAlloc:TFlipAlloc;
+
   FTerminate:Boolean;
 
   flip_rate:Integer;
@@ -80,10 +101,11 @@ type
   function   RegisterBuffer           (buf:p_register_buffer):Integer; override;
   function   UnregisterBuffer         (index:Integer):Integer; override;
   function   SubmitFlip               (submit:p_submit_flip):Integer; override;
-  //function  SubmitFlipEop          (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
+  function   SubmitFlipEop            (submit:p_submit_flip;submit_id:QWORD):Integer; override;
+  function   TriggerFlipEop           (submit_id:QWORD):Integer; override;
   function   Vblank                   ():Integer; override;
   //
-  procedure  OnSubmit(Node:PQNode);
+  procedure  OnSubmit(Node:PQNodeSubmit);
  end;
 
 implementation
@@ -100,29 +122,57 @@ uses
  kern_dmem,
  dev_dce;
 
-Procedure TSubmitQueue.Init;
+//
+
+Procedure TSubmitAlloc.Init;
 var
  i:Integer;
 begin
  FAlloc.Create;
- FQueue.Create;
  For i:=0 to High(FNodes) do
  begin
   FAlloc.Push(@FNodes[i]);
  end;
 end;
 
-function TSubmitQueue.Alloc:PQNode;
+function TSubmitAlloc.Alloc:PQNodeSubmit;
 begin
  Result:=nil;
  FAlloc.Pop(Result);
 end;
 
-procedure TSubmitQueue.Free(P:PQNode);
+procedure TSubmitAlloc.Free(P:PQNodeSubmit);
 begin
  if (P=nil) then Exit;
  FAlloc.Push(P);
 end;
+
+//
+
+Procedure TFlipAlloc.Init;
+var
+ i:Integer;
+begin
+ FAlloc.Create;
+ For i:=0 to High(FNodes) do
+ begin
+  FAlloc.Push(@FNodes[i]);
+ end;
+end;
+
+function TFlipAlloc.Alloc:PQNodeFlip;
+begin
+ Result:=nil;
+ FAlloc.Pop(Result);
+end;
+
+procedure TFlipAlloc.Free(P:PQNodeFlip);
+begin
+ if (P=nil) then Exit;
+ FAlloc.Push(P);
+end;
+
+//
 
 procedure dce_thread(parameter:pointer); SysV_ABI_CDecl; forward;
 
@@ -138,7 +188,10 @@ begin
 
  FEvent:=RTLEventCreate;
 
- FQueue.Init;
+ FSubmitAlloc.Init;
+ FSubmitQueue.Create;
+
+ FFlipAlloc.Init;
 
  if (Ftd=nil) then
  begin
@@ -496,7 +549,7 @@ begin
  bi.bmiHeader.biBitCount   :=32;
  bi.bmiHeader.biCompression:=BI_RGB;
 
- if (attr^.attr.tilingMode<>0) then
+ if {(attr^.attr.tilingMode<>0)} false then
  begin
   //alloc aligned 128x128
   bi.bmiHeader.biWidth :=(attr^.attr.pitchPixel+127) and (not 127);
@@ -558,7 +611,7 @@ function TDisplayHandleSoft.SubmitFlip(submit:p_submit_flip):Integer;
 var
  buf :p_buffer;
  attr:p_attr;
- Node:PQNode;
+ Node:PQNodeSubmit;
 begin
  if (submit^.bufferIndex<>-1) then
  begin
@@ -568,27 +621,110 @@ begin
   if (attr^.init=0) then Exit(EINVAL);
  end;
 
- Node:=FQueue.Alloc;
+ Node:=FSubmitAlloc.Alloc;
  if (Node=nil) then Exit(EBUSY);
 
  Node^.submit:=submit^;
  Node^.tsc   :=rdtsc();
-
- FQueue.FQueue.Push(Node);
 
  if (submit^.bufferIndex<>-1) then
  begin
   dce_page^.labels[submit^.bufferIndex]:=1;
  end;
 
- last_status.flipPendingNum0:=last_status.flipPendingNum0+1;
+ //
+ System.InterlockedIncrement(last_status.flipPendingNum0);
 
- if (submit^.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+ FSubmitQueue.Push(Node);
+
+ if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
  begin
   RTLEventSetEvent(FEvent);
  end;
+ //
 
  Result:=0;
+end;
+
+function TDisplayHandleSoft.SubmitFlipEop(submit:p_submit_flip;submit_id:QWORD):Integer;
+var
+ buf :p_buffer;
+ attr:p_attr;
+ Node:PQNodeSubmit;
+ Flip:PQNodeFlip;
+begin
+ if (submit^.bufferIndex<>-1) then
+ begin
+  buf:=@m_bufs[submit^.bufferIndex];
+  if (buf^.init=0) then Exit(EINVAL);
+  attr:=@m_attr[buf^.attr];
+  if (attr^.init=0) then Exit(EINVAL);
+ end;
+
+ Node:=FSubmitAlloc.Alloc;
+ if (Node=nil) then Exit(EBUSY);
+
+ Flip:=FFlipAlloc.Alloc;
+ if (Flip=nil) then Exit(EBUSY);
+
+ Node^.submit:=submit^;
+ Node^.tsc   :=rdtsc();
+
+ Flip^.next_    :=nil;
+ Flip^.submit   :=Node;
+ Flip^.submit_id:=submit_id;
+
+ if (submit^.bufferIndex<>-1) then
+ begin
+  dce_page^.labels[submit^.bufferIndex]:=1;
+ end;
+
+ System.InterlockedIncrement(last_status.gcQueueNum);
+
+ Result:=0;
+end;
+
+function TDisplayHandleSoft.TriggerFlipEop(submit_id:QWORD):Integer;
+var
+ Node:PQNodeSubmit;
+ Flip:PQNodeFlip;
+ i:Integer;
+begin
+ Result:=0;
+ //
+ For i:=0 to High(FFlipAlloc.FNodes) do
+ begin
+  Flip:=@FFlipAlloc.FNodes[i];
+
+  if (Flip^.next_=nil) and
+     (Flip^.submit<>nil) and
+     (Flip^.submit_id=submit_id) then
+  begin
+   Node:=Flip^.submit;
+
+   Flip^.submit   :=nil;
+   Flip^.submit_id:=0;
+   FFlipAlloc.Free(Flip);
+
+   System.InterlockedDecrement(last_status.gcQueueNum);
+
+   //
+   System.InterlockedIncrement(last_status.flipPendingNum0);
+
+   FSubmitQueue.Push(Node);
+
+   if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+   begin
+    RTLEventSetEvent(FEvent);
+   end;
+   //
+
+   Exit;
+  end;
+
+ end;
+ //
+ Result:=1;
 end;
 
 function TDisplayHandleSoft.Vblank():Integer;
@@ -604,7 +740,7 @@ begin
  Result:=0;
 end;
 
-procedure TDisplayHandleSoft.OnSubmit(Node:PQNode);
+procedure TDisplayHandleSoft.OnSubmit(Node:PQNodeSubmit);
 var
  i:Integer;
  submit:p_submit_flip;
@@ -645,7 +781,8 @@ begin
   end;
   dce_page^.label_:=0;
 
-  last_status.flipPendingNum0:=last_status.flipPendingNum0-1;
+  System.InterlockedDecrement(last_status.flipPendingNum0);
+
   last_status.flipArg        :=submit^.flipArg;
   last_status.flipArg2       :=submit^.flipArg2;
   last_status.count          :=last_status.count+1;
@@ -678,7 +815,7 @@ end;
 procedure dce_thread(parameter:pointer); SysV_ABI_CDecl;
 var
  dce:TDisplayHandleSoft;
- Node:PQNode;
+ Node:PQNodeSubmit;
 begin
  dce:=TDisplayHandleSoft(parameter);
 
@@ -686,10 +823,10 @@ begin
   RTLEventWaitFor(dce.FEvent);
 
   Node:=nil;
-  if dce.FQueue.FQueue.Pop(Node) then
+  if dce.FSubmitQueue.Pop(Node) then
   begin
    dce.OnSubmit(Node);
-   dce.FQueue.Free(Node);
+   dce.FSubmitAlloc.Free(Node);
   end;
 
  until dce.FTerminate;

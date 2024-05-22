@@ -1403,6 +1403,11 @@ end;
 
 function TGPU_REGS.GET_INDEX_TYPE:TVkIndexType;
 begin
+ if (CX_REG^.VGT_DMA_INDEX_TYPE.SWAP_MODE<>0) then
+ begin
+  Assert(false,'swapMode:'+IntToStr(CX_REG^.VGT_DMA_INDEX_TYPE.SWAP_MODE));
+ end;
+
  Case UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE of
   VGT_INDEX_16:Result:=VK_INDEX_TYPE_UINT16;
   VGT_INDEX_32:Result:=VK_INDEX_TYPE_UINT32;

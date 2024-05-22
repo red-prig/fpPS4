@@ -116,6 +116,7 @@ type
   function  UnregisterBuffer         (index:Integer):Integer; virtual;
   function  SubmitFlip               (submit:p_submit_flip):Integer; virtual;
   function  SubmitFlipEop            (submit:p_submit_flip;submit_id:QWORD):Integer; virtual;
+  function  TriggerFlipEop           (submit_id:QWORD):Integer; virtual;
   function  Vblank                   ():Integer; virtual;
  end;
 
@@ -216,6 +217,11 @@ begin
  last_status.tsc        :=rdtsc();
  last_status.processTime:=last_status.tsc;
 
+ Result:=0;
+end;
+
+function TDisplayHandle.TriggerFlipEop(submit_id:QWORD):Integer;
+begin
  Result:=0;
 end;
 
