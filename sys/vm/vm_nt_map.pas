@@ -19,6 +19,9 @@ const
 
  MAX_UNION_SIZE=256*1024*1024;
 
+ TAKE_PROT_TRACK=1;
+ REMAP_PROT     =2;
+
 type
  t_danger_range=packed record
   start:DWORD;
@@ -216,7 +219,7 @@ begin
 
  while (start<__end) do
  begin
-  if ((mode and 1)=0) then
+  if ((mode and TAKE_PROT_TRACK)=0) then
   begin
    next:=pmap_scan_rwx(start,__end);
 
@@ -233,7 +236,7 @@ begin
   base:=start;
   size:=next-start;
 
-  if ((mode and 2)<>0) or (prot<>(max and VM_RW)) then
+  if ((mode and REMAP_PROT)=0) or (prot<>(max and VM_RW)) then
   begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
@@ -597,7 +600,7 @@ begin
                   ets[i]^.start,
                   ets[i]^.__end,
                   max,
-                  2
+                  TAKE_PROT_TRACK or REMAP_PROT //untrack trigger or restore track?
                  );
    end;
   end;

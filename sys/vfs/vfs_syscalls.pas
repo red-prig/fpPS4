@@ -255,6 +255,9 @@ var
  sf:t_statfs;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=kern_statfs(path, UIO_USERSPACE, @sf);
  if (error=0) then
  begin
@@ -348,6 +351,9 @@ var
  sf:t_statfs;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=kern_fstatfs(fd, @sf);
  if (error=0) then
  begin
@@ -498,6 +504,9 @@ end;
  }
 function sys_getfsstat(buf:Pointer;bufsize:QWORD;flags:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_getfsstat(@buf, bufsize, UIO_USERSPACE, flags));
 end;
 
@@ -515,6 +524,9 @@ var
  error:Integer;
  tvfslocked:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=getvnode(fd, CAP_FCHDIR, @fp);
  if (error<>0) then
  begin
@@ -607,6 +619,9 @@ end;
  }
 function sys_chdir(path:PChar):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_chdir(path, UIO_USERSPACE));
 end;
 
@@ -671,10 +686,13 @@ begin
  begin
   Exit(error);
  end;
+
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
+ begin
   goto _error;
+ end;
  vfslocked:=NDHASGIANT(@nd);
  error:=change_dir(nd.ni_vp);
  if (error<>0) then
@@ -1043,6 +1061,9 @@ end;
 
 function sys_openat(fd:Integer;path:PChar;flags,mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Result:=kern_openat(fd, path, UIO_USERSPACE, flags, mode);
  //
  if (curkthread<>nil) then
@@ -1255,16 +1276,25 @@ end;
  }
 function sys_mknod(path:PChar;mode,dev:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mknod(path, UIO_USERSPACE, mode, dev));
 end;
 
 function sys_mknodat(fd:Integer;path:PChar;mode,dev:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mknodat(fd, path, UIO_USERSPACE, mode, dev));
 end;
 
 function kern_mkfifo(path:PChar;pathseg:uio_seg;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mkfifoat(AT_FDCWD, path, pathseg, mode));
 end;
 
@@ -1273,11 +1303,17 @@ end;
  }
 function sys_mkfifo(path:PChar;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mkfifo(path, UIO_USERSPACE, mode));
 end;
 
 function sys_mkfifoat(fd:Integer;path:PChar;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mkfifoat(fd, path, UIO_USERSPACE, mode));
 end;
 
@@ -1372,11 +1408,17 @@ end;
  }
 function sys_link(name1,name2:PChar):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_link(name1,name2,UIO_USERSPACE));
 end;
 
 function sys_linkat(fd1:Integer;path1:PChar;fd2:Integer;path2:PChar;flag:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  if ((flag and (not AT_SYMLINK_FOLLOW))<>0) then
  begin
   Exit(EINVAL);
@@ -1482,11 +1524,17 @@ end;
  }
 function sys_symlink(path,link:PChar):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_symlink(path, link, UIO_USERSPACE));
 end;
 
 function sys_symlinkat(path1:PChar;fd:Integer;path2:PChar):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_symlinkat(path1, fd, path2, UIO_USERSPACE));
 end;
 
@@ -1595,6 +1643,9 @@ end;
 
 function sys_unlinkat(fd:Integer;path:PChar;flag:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  if ((flag and (not AT_REMOVEDIR))<>0) then
  begin
   Exit(EINVAL);
@@ -1805,6 +1856,9 @@ end;
  }
 function sys_access(path:PChar;flags:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_access(path, UIO_USERSPACE, flags));
 end;
 
@@ -1895,6 +1949,9 @@ var
  sb:p_stat;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=kern_statat(flag, fd, path, UIO_USERSPACE, @sb);
  if (error=0) then
  begin
@@ -1916,6 +1973,9 @@ var
  sb:t_stat;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=kern_lstat(path, UIO_USERSPACE, @sb);
  if (error=0) then
  begin
@@ -1958,6 +2018,9 @@ end;
  }
 function sys_pathconf(path:PChar;name:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_pathconf(path, UIO_USERSPACE, name, FOLLOW));
 end;
 
@@ -2032,6 +2095,9 @@ end;
  }
 function sys_readlink(path,buf:PChar;count:QWORD):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_readlink(path, UIO_USERSPACE, buf, UIO_USERSPACE, count));
 end;
 
@@ -2113,6 +2179,9 @@ var
  nd:t_nameidata;
  vfslocked:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  NDINIT(@nd, LOOKUP, NOFOLLOW or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
@@ -2217,11 +2286,17 @@ end;
  }
 function sys_chmod(path:PChar;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_chmod(path, UIO_USERSPACE, mode));
 end;
 
 function sys_fchmodat(fd:Integer;path:PChar;mode,flag:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  if ((flag and (not AT_SYMLINK_NOFOLLOW))<>0) then
  begin
   Exit(EINVAL);
@@ -2235,6 +2310,9 @@ end;
  }
 function sys_lchmod(path:PChar;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_fchmodat(AT_FDCWD, path, UIO_USERSPACE, mode, AT_SYMLINK_NOFOLLOW));
 end;
 
@@ -2246,6 +2324,9 @@ var
  fp:p_file;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=fget(fd, CAP_FCHMOD, @fp);
  if (error<>0) then
  begin
@@ -2324,11 +2405,17 @@ end;
  }
 function sys_chown(path:PChar;uid,gid:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_chown(path, UIO_USERSPACE, uid, gid));
 end;
 
 function sys_fchownat(fd:Integer;path:PChar;uid,gid,flag:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  if ((flag and (not AT_SYMLINK_NOFOLLOW))<>0) then
  begin
   Exit(EINVAL);
@@ -2347,6 +2434,9 @@ end;
  }
 function sys_lchown(path:PChar;uid,gid:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_lchown(path, UIO_USERSPACE, uid, gid));
 end;
 
@@ -2358,6 +2448,9 @@ var
  fp:p_file;
  error:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  error:=fget(fd, CAP_FCHOWN, @fp);
  if (error<>0) then
  begin
@@ -2500,6 +2593,9 @@ end;
 
 function sys_futimesat(fd:Integer;path:PChar;times:Pointer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_utimesat(fd, path, UIO_USERSPACE, times, UIO_USERSPACE));
 end;
 
@@ -2531,6 +2627,9 @@ end;
  }
 function sys_lutimes(path:PChar;tptr:Pointer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_lutimes(path, UIO_USERSPACE, tptr, UIO_USERSPACE));
 end;
 
@@ -2858,6 +2957,9 @@ end;
 
 function sys_renameat(oldfd:Integer;old:PChar;newfd:Integer;new:PChar):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_renameat(oldfd, old, newfd, new, UIO_USERSPACE));
 end;
 
@@ -2954,6 +3056,9 @@ end;
 
 function sys_mkdirat(fd:Integer;path:PChar;mode:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern_mkdirat(fd, path, UIO_USERSPACE, mode));
 end;
 
@@ -3184,6 +3289,9 @@ function sys_umask(newmask:Integer):Integer;
 var
  td:p_kthread;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
@@ -3208,6 +3316,9 @@ var
  nd:t_nameidata;
  vfslocked:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF or MPSAFE or AUDITVNODE1,
      UIO_USERSPACE, path, curkthread);
 

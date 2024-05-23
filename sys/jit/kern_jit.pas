@@ -1345,22 +1345,26 @@ begin
 end;
 
 procedure pick(var ctx:t_jit_context2;preload:Pointer); [public, alias:'kern_jit_pick'];
+label
+ _exit;
 var
  map:vm_map_t;
+ lock:Pointer;
  node:p_jit_entry_point;
 begin
  map:=p_proc.p_vmspace;
 
- vm_map_lock(map);
+ //vm_map_lock(map);
+ lock:=pmap_wlock(map^.pmap,ctx.text_start,ctx.text___end);
 
   if (preload<>nil) then
   begin
+   //recheck
    node:=preload_entry(preload);
    if (node<>nil) then
    begin
     node^.dec_ref;
-    vm_map_unlock(map);
-    Exit;
+    goto _exit;
    end;
   end;
 
@@ -1372,7 +1376,9 @@ begin
    pick_locked(ctx);
   end;
 
- vm_map_unlock(map);
+ _exit:
+ pmap_unlock(map^.pmap,lock);
+ //vm_map_unlock(map);
 end;
 
 procedure pick_locked_internal(var ctx:t_jit_context2);

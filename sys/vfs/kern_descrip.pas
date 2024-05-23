@@ -207,6 +207,9 @@ end;
  }
 function sys_getdtablesize():Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  curkthread^.td_retval[0]:=lim_cur(RLIMIT_NOFILE);
  Exit(0);
 end;
@@ -227,6 +230,9 @@ function do_dup(flags,old,new:Integer;retval:PQWORD):Integer; forward;
  }
 function sys_dup2(from,_to:Integer):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(do_dup(DUP_FIXED, from, _to,  @curkthread^.td_retval));
 end;
 
@@ -235,6 +241,9 @@ end;
  }
 function sys_dup(u_fd:Integer):Integer;
 begin
+ //priv_check(td,688);
+ Exit(EPERM);
+
  Exit(do_dup(0, u_fd, 0, @curkthread^.td_retval));
 end;
 
@@ -249,6 +258,13 @@ var
  ofl:__oflock;
  error:Integer;
 begin
+
+ //if (priv_check(td,683) <> 0) then
+ if (cmd > 13) or (($3818 shr (cmd and $1f) and 1)=0) then
+ begin
+  Exit(EINVAL);
+ end;
+
  error:=0;
  case cmd of
   F_OGETLK,
@@ -285,10 +301,14 @@ begin
   else;
  end;
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  error:=kern_fcntl(fd, cmd, arg);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
  if (cmd=F_OGETLK) then
  begin
   ofl.l_start :=fl.l_start;
@@ -313,7 +333,9 @@ begin
 
  fpp^:=fget_unlocked(fd);
  if (fpp^=nil) then
+ begin
   Exit(EBADF);
+ end;
 
  if (fpp^^.f_type=DTYPE_CAPABILITY) then
  begin
@@ -968,11 +990,16 @@ var
  error:Integer;
  vfslocked:Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  td:=curkthread;
 
  error:=fget(fd, CAP_FPATHCONF, @fp);
  if (error<>0) then
+ begin
   Exit(error);
+ end;
 
  { If asynchronous I/O is available, it works for all descriptors. }
  if (name=_PC_ASYNC_IO) then

@@ -266,7 +266,7 @@ begin
   STATUS_ACCESS_VIOLATION:
     begin
 
-     if pmap_danger_zone(@vm_map_t(p_proc.p_vmspace)^.pmap,
+     if pmap_danger_zone(vm_map_t(p_proc.p_vmspace)^.pmap,
                          get_pageflt_addr(p),
                          256) then
      begin

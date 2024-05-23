@@ -1044,7 +1044,11 @@ var
 begin
  map:=p_proc.p_vmspace;
 
+ vm_map_lock(map);
+
  Result:=pmap_mirror_map(map^.pmap,paddr,paddr+psize);
+
+ vm_map_unlock(map);
 end;
 
 procedure mirror_unmap(base:Pointer;size:QWORD);

@@ -166,7 +166,7 @@ begin
 
  if (d_pool_id<>-1) then
  begin
-  //Result:=priv_check(td,0x2ad);
+  //Result:=priv_check(td,685);
   //(param < 3)
   Exit(EPERM);
  end;

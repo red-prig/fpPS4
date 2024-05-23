@@ -369,6 +369,9 @@ end;
 { Implementation of the getcwd syscall. }
 function sys___getcwd(buf:PChar;buflen:DWORD):Integer;
 begin
+ //priv_check(td,683);
+ Exit(EPERM);
+
  Exit(kern___getcwd(buf, UIO_USERSPACE, buflen));
 end;
 

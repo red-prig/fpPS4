@@ -1897,7 +1897,8 @@ var
  auio:p_uio;
  error:Integer;
 begin
- //priv_check(param_1,683);
+ //priv_check(td,683);
+ Exit(EPERM);
 
  {
   * Filter out MNT_ROOTFS.  We do not want clients of nmount() in
@@ -1939,8 +1940,8 @@ var
  ma:p_mntarg;
  error:Integer;
 begin
-
- //priv_check(param_1,683);
+ //priv_check(td,683);
+ Exit(EPERM);
 
  vfsp:=nil;
  ma:=nil;
@@ -2004,7 +2005,8 @@ var
  pathbuf:t_mname;
  error,id0,id1,vfslocked:Integer;
 begin
- //priv_check(param_1,683);
+ //priv_check(td,683);
+ Exit(EPERM);
 
  //if (jailed(td^.td_ucred)) or (usermount=0) then
  //begin

@@ -33,13 +33,13 @@ type
   rl_currdep:p_rl_q_entry;
  end;
 
-procedure rangelock_init(lock:p_rangelock);
-procedure rangelock_destroy(lock:p_rangelock);
-procedure rangelock_unlock(lock:p_rangelock;cookie:Pointer;ilk:p_mtx);
+procedure rangelock_init        (lock:p_rangelock);
+procedure rangelock_destroy     (lock:p_rangelock);
+procedure rangelock_unlock      (lock:p_rangelock;cookie:Pointer;ilk:p_mtx);
 function  rangelock_unlock_range(lock:p_rangelock;cookie:Pointer;start,__end:off_t;ilk:p_mtx):Pointer;
-function  rangelock_rlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
-function  rangelock_wlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
-procedure rlqentry_free(rleq:p_rl_q_entry);
+function  rangelock_rlock       (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+function  rangelock_wlock       (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+procedure rlqentry_free         (rleq:p_rl_q_entry);
 
 implementation
 
@@ -197,7 +197,7 @@ begin
  entry:=cookie;
 
  Assert((entry^.rl_q_flags and RL_LOCK_GRANTED)<>0,'Unlocking non-granted lock');
- Assert(entry^.rl_q_start=start, 'wrong start');
+ Assert(entry^.rl_q_start=start , 'wrong start');
  Assert(entry^.rl_q_end >= __end, 'wrong end');
 
  mtx_lock(ilk^);

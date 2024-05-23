@@ -12,6 +12,8 @@ uses
  sys_vm_object,
  vnode,
  vuio,
+ kern_mtx,
+ kern_rangelock,
  md_map,
  vm_pmap_prot,
  vm_nt_map;
@@ -41,6 +43,8 @@ procedure iov_uplift(iov:p_iovec);
 type
  p_pmap=^_pmap;
  _pmap=packed object
+  rmlock:rangelock;
+  rm_mtx:mtx;
   nt_map:_vm_nt_map;
  end;
 
@@ -62,6 +66,16 @@ procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
                                addr  :p_vm_offset_t;
                                size  :vm_size_t);
+
+function  pmap_wlock(pmap :pmap_t;
+                     start:vm_offset_t;
+                     __end:vm_offset_t):Pointer;
+
+function  pmap_rlock(pmap :pmap_t;
+                     start:vm_offset_t;
+                     __end:vm_offset_t):Pointer;
+
+procedure pmap_unlock(pmap:pmap_t;cookie:Pointer);
 
 procedure pmap_enter_object(pmap   :pmap_t;
                             obj    :vm_object_t;
@@ -252,15 +266,19 @@ begin
  dmem_init;
  dev_mem_init(4);
 
- PAGE_PROT:=nil;
-
- r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,VM_RW);
-
- if (r<>0) then
+ if (PAGE_PROT=nil) then
  begin
-  Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT,11),'):0x',HexStr(r,8));
-  Assert(false,'pmap_pinit');
+  r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,VM_RW);
+
+  if (r<>0) then
+  begin
+   Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT,11),'):0x',HexStr(r,8));
+   Assert(false,'pmap_pinit');
+  end;
  end;
+
+ rangelock_init(@pmap^.rmlock);
+ mtx_init(pmap^.rm_mtx,'pmap');
 
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
@@ -503,6 +521,25 @@ begin
  end;
 end;
 
+function pmap_wlock(pmap :pmap_t;
+                    start:vm_offset_t;
+                    __end:vm_offset_t):Pointer;
+begin
+ Result:=rangelock_wlock(@pmap^.rmlock,start,__end,@pmap^.rm_mtx);
+end;
+
+function pmap_rlock(pmap :pmap_t;
+                    start:vm_offset_t;
+                    __end:vm_offset_t):Pointer;
+begin
+ Result:=rangelock_rlock(@pmap^.rmlock,start,__end,@pmap^.rm_mtx);
+end;
+
+procedure pmap_unlock(pmap:pmap_t;cookie:Pointer);
+begin
+ rangelock_unlock(@pmap^.rmlock,cookie,@pmap^.rm_mtx);
+end;
+
 procedure pmap_copy(src_obj :p_vm_nt_file_obj;
                     src_ofs :vm_ooffset_t;
                     dst_obj :p_vm_nt_file_obj;
@@ -598,6 +635,8 @@ var
  info:t_fd_info;
  cow :p_vm_nt_file_obj;
 
+ lock:Pointer;
+
  max:Integer;
 
  r:Integer;
@@ -606,6 +645,10 @@ begin
  begin
   Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ pmap_mark_rwx(start,__end,prot);
 
  r:=0;
  case vm_object_type(obj) of
@@ -875,17 +918,15 @@ begin
       goto _default;
      end;
 
-     Exit;
     end;
   else
     begin
      Writeln('TODO:',vm_object_type(obj));
      Assert(False);
-     Exit;
     end;
  end;
 
- pmap_mark_rwx(start,__end,prot);
+ pmap_unlock(pmap,lock);
 end;
 
 procedure pmap_protect(pmap  :pmap_t;
@@ -893,6 +934,8 @@ procedure pmap_protect(pmap  :pmap_t;
                        start :vm_offset_t;
                        __end :vm_offset_t;
                        prot  :vm_prot_t);
+var
+ lock:Pointer;
 label
  _default;
 begin
@@ -901,6 +944,10 @@ begin
   Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
 
+ lock:=pmap_wlock(pmap,start,__end);
+
+ pmap_mark_rwx(start,__end,prot);
+
  case vm_object_type(obj) of
   OBJT_SELF  , // same?
 
@@ -908,10 +955,15 @@ begin
     begin
      _default:
 
-     vm_nt_map_protect(@pmap^.nt_map,
-                       start,
-                       __end,
-                       (prot and VM_RW));
+     vm_nt_map_prot_fix(@pmap^.nt_map,
+                        start,
+                        __end,
+                        TAKE_PROT_TRACK);
+
+     //vm_nt_map_protect(@pmap^.nt_map,
+     //                  start,
+     //                  __end,
+     //                  (prot and VM_RW));
 
     end;
   OBJT_DEVICE:
@@ -942,11 +994,10 @@ begin
     begin
      Writeln('TODO:',vm_object_type(obj));
      Assert(False);
-     Exit;
     end;
  end;
 
- pmap_mark_rwx(start,__end,prot);
+ pmap_unlock(pmap,lock);
 end;
 
 procedure pmap_madvise(pmap  :pmap_t;
@@ -957,12 +1008,16 @@ procedure pmap_madvise(pmap  :pmap_t;
 label
  _default;
 var
+ lock:Pointer;
+
  r:Integer;
 begin
  if (p_print_pmap) then
  begin
   Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
  end;
+
+ lock:=pmap_wlock(pmap,start,__end);
 
  r:=0;
  case vm_object_type(obj) of
@@ -997,7 +1052,6 @@ begin
     begin
      Writeln('TODO:',vm_object_type(obj));
      Assert(False);
-     Exit;
     end;
  end;
 
@@ -1006,6 +1060,8 @@ begin
   Writeln('failed md_reset:0x',HexStr(r,8));
   Assert(false,'pmap_madv_free');
  end;
+
+ pmap_unlock(pmap,lock);
 end;
 
 procedure pmap_remove(pmap  :pmap_t;
@@ -1015,6 +1071,8 @@ procedure pmap_remove(pmap  :pmap_t;
 label
  _default;
 var
+ lock:Pointer;
+
  r:Integer;
 begin
  if (p_print_pmap) then
@@ -1022,7 +1080,10 @@ begin
   Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
+ lock:=pmap_wlock(pmap,start,__end);
+
  pmap_unmark_rwx(start,__end);
+ //untrack?
 
  r:=0;
  case vm_object_type(obj) of
@@ -1069,7 +1130,6 @@ begin
     begin
      Writeln('TODO:',vm_object_type(obj));
      Assert(False);
-     Exit;
     end;
  end;
 
@@ -1078,6 +1138,8 @@ begin
   Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
   Assert(false,'pmap_remove');
  end;
+
+ pmap_unlock(pmap,lock);
 end;
 
 function pmap_mirror_map(pmap :pmap_t;
@@ -1103,9 +1165,9 @@ begin
  end;
 end;
 
-function  pmap_danger_zone(pmap:pmap_t;
-                           addr:vm_offset_t;
-                           size:vm_offset_t):Boolean;
+function pmap_danger_zone(pmap:pmap_t;
+                          addr:vm_offset_t;
+                          size:vm_offset_t):Boolean;
 begin
  Result:=False;
  while (pmap^.nt_map.danger_zone.in_range(addr,size)) do

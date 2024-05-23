@@ -391,7 +391,7 @@ begin
 
  data:=Default(t_authinfo);
 
- //if (priv_check(td,$2ae)=0) then
+ //if (priv_check(td,686)=0) then
  //begin
  // data:=g_authinfo;
  //end else
