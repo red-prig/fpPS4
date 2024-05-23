@@ -192,6 +192,7 @@ uses
  subr_uio,
  sys_vm_object,
  vsys_generic,
+ kern_rangelock,
  rtprio,
  sys_conf;
 
@@ -826,7 +827,7 @@ begin
    vp^.v_vflag:=vp^.v_vflag or VV_NOKNOTE;
   end;
  end;
- //rangelock_init(@vp^.v_rl);
+ rangelock_init(@vp^.v_rl);
 
  {
   * For the filesystems which do not use vfs_hash_insert(),
@@ -2279,7 +2280,7 @@ begin
  { XXX Elsewhere we detect an already freed vnode via nil v_op. }
  vp^.v_op:=nil;
 
- //rangelock_destroy(@vp^.v_rl);
+ rangelock_destroy(@vp^.v_rl);
  //lockdestroy(vp^.v_vnlock);
  mtx_destroy(vp^.v_vnlock^);
  mtx_destroy(vp^.v_interlock);

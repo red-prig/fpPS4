@@ -13,6 +13,7 @@ uses
  vfile,
  vstat,
  vuio,
+ vm,
  vmparam,
  vfilio,
  vnode;
@@ -980,27 +981,34 @@ unlock:
  Exit(error);
 end;
 
+const
+ vn_io_fault_enable:Boolean=False;
+
 function vn_io_fault(fp:p_file;uio:p_uio;flags:Integer):Integer;
 label
  out_last;
 var
- td:p_kthread;
+ //td:p_kthread;
  //vm_page_t ma[io_hold_cnt + 2];
- uio_clone:p_uio;
- short_uio:T_uio;
- short_iovec:array[0..0] of iovec;
+ //uio_clone:p_uio;
+ //short_uio:T_uio;
+ //short_iovec:array[0..0] of iovec;
  doio:fo_rdwr_t;
  vp:p_vnode;
  rl_cookie:Pointer;
  mp:p_mount;
  //vm_page_t *prev_td_ma;
- error,cnt,save,saveheld,prev_td_ma_cnt:Integer;
- addr,__end:QWORD;
- //vm_prot_t prot;
- len,resid:QWORD;
- adv:Int64;
+ error:Integer;
+ //cnt,save,saveheld,prev_td_ma_cnt:Integer;
+ //addr,__end:QWORD;
+ //prot:Integer;
+ //len,resid:QWORD;
+ //adv:Int64;
+ NO_IOPF:Boolean;
 begin
- td:=curkthread;
+ //td:=curkthread;
+
+ rl_cookie:=nil;
 
  if (uio^.uio_rw=UIO_READ) then
   doio:=@vn_read
@@ -1010,21 +1018,40 @@ begin
  vp:=fp^.f_vnode;
  foffset_lock_uio(fp, uio, flags);
 
+ NO_IOPF:=False;
  mp:=vp^.v_mount;
  if (mp<>nil) then
- if ((mp^.mnt_kern_flag and MNTK_NO_IOPF)=0) then
+ begin
+  NO_IOPF:=((mp^.mnt_kern_flag and MNTK_NO_IOPF)=0);
+ end;
+
+ if (uio^.uio_segflg<>UIO_USERSPACE) or
+    (vp^.v_type<>VREG) or
+    NO_IOPF or
+    (not vn_io_fault_enable) then
  begin
   error:=doio(fp, uio, flags or FOF_OFFSET);
   goto out_last;
  end;
 
- if (uio^.uio_segflg<>UIO_USERSPACE) or
-    (vp^.v_type<>VREG) or
-    {(not vn_io_fault_enable)} false then
+ if (uio^.uio_rw=UIO_READ) then
  begin
-  error:=doio(fp, uio, flags or FOF_OFFSET);
-  goto out_last;
+  //prot:=VM_PROT_WRITE;
+  rl_cookie:=vn_rangelock_rlock(vp, uio^.uio_offset, uio^.uio_offset + uio^.uio_resid);
+ end else
+ begin
+  //prot:=VM_PROT_READ;
+  if ((fp^.f_flag and O_APPEND)<>0) or ((flags and FOF_OFFSET)=0) then
+  begin
+   { For appenders, punt and lock the whole range. }
+   rl_cookie:=vn_rangelock_wlock(vp, 0, High(Int64))
+  end else
+  begin
+   rl_cookie:=vn_rangelock_wlock(vp, uio^.uio_offset, uio^.uio_offset + uio^.uio_resid);
+  end;
  end;
+
+ error:=doio(fp, uio, flags or FOF_OFFSET);
 
 {
  uio_clone:=cloneuio(uio);
@@ -1041,11 +1068,14 @@ begin
  end else
  begin
   prot:=VM_PROT_READ;
-  if ((fp^.f_flag and O_APPEND)<>0 or (flags and FOF_OFFSET)=0) then
+  if ((fp^.f_flag and O_APPEND)<>0) or ((flags and FOF_OFFSET)=0) then
+  begin
    { For appenders, punt and lock the whole range. }
    rl_cookie:=vn_rangelock_wlock(vp, 0, High(Int64))
-  else
+  end else
+  begin
    rl_cookie:=vn_rangelock_wlock(vp, uio^.uio_offset, uio^.uio_offset + uio^.uio_resid);
+  end;
  end;
 
  save:=vm_fault_disable_pagefaults();
@@ -1127,6 +1157,10 @@ _out:
 }
 
 out_last:
+ if (rl_cookie<>nil) then
+ begin
+  vn_rangelock_unlock(vp, rl_cookie);
+ end;
  foffset_unlock_uio(fp, uio, flags);
  Exit(error);
 end;

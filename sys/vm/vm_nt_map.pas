@@ -8,6 +8,8 @@ interface
 uses
  sysutils,
  vm,
+ vmparam,
+ kern_mtx,
  vm_pmap_prot;
 
 const
@@ -18,6 +20,24 @@ const
  MAX_UNION_SIZE=256*1024*1024;
 
 type
+ t_danger_range=packed record
+  start:DWORD;
+  __end:DWORD;
+ end;
+
+ t_danger_zone=object
+  Flock :mtx;
+  Frange:t_danger_range;
+  procedure Init;
+  procedure Done;
+  procedure set_range(start,__end:vm_offset_t);
+  function  in_range(addr,size:vm_offset_t):Boolean;
+  procedure d_wait(addr,size:vm_offset_t);
+  procedure d_wakeup;
+  procedure lock;
+  procedure unlock;
+ end;
+
  pp_vm_nt_file_obj=^p_vm_nt_file_obj;
  p_vm_nt_file_obj=^vm_nt_file_obj;
  vm_nt_file_obj=packed record
@@ -43,10 +63,11 @@ type
 
  p_vm_nt_map=^_vm_nt_map;
  _vm_nt_map=object
-  header   :vm_nt_entry;   // List of entries
-  size     :vm_size_t;     // virtual size
-  nentries :Integer;       // Number of entries
-  root     :p_vm_nt_entry; // Root of a binary search tree
+  header     :vm_nt_entry;   // List of entries
+  size       :vm_size_t;     // virtual size
+  nentries   :Integer;       // Number of entries
+  root       :p_vm_nt_entry; // Root of a binary search tree
+  danger_zone:t_danger_zone;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -82,6 +103,11 @@ procedure vm_nt_map_protect(map:p_vm_nt_map;
                             __end:vm_offset_t;
                             prot  :Integer);
 
+procedure vm_nt_map_prot_fix(map:p_vm_nt_map;
+                             start:vm_offset_t;
+                             __end:vm_offset_t;
+                             mode :Integer);
+
 procedure vm_nt_map_madvise(map:p_vm_nt_map;
                             start:vm_offset_t;
                             __end:vm_offset_t;
@@ -96,6 +122,8 @@ procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 implementation
 
 uses
+ time,
+ kern_param,
  md_map;
 
 type
@@ -175,7 +203,8 @@ end;
 procedure vm_prot_fixup(map:p_vm_nt_map;
                         start:vm_offset_t;
                         __end:vm_offset_t;
-                        max  :Integer);
+                        max  :Integer;
+                        mode :Integer);
 var
  next:vm_offset_t;
  base,size:vm_size_t;
@@ -187,16 +216,26 @@ begin
 
  while (start<__end) do
  begin
-  next:=pmap_scan_rwx(start,__end);
+  if ((mode and 1)=0) then
+  begin
+   next:=pmap_scan_rwx(start,__end);
+
+   prot:=pmap_get_prot(start);
+   prot:=(prot and VM_RW);
+  end else
+  begin
+   next:=pmap_scan(start,__end);
+
+   prot:=pmap_get_prot(start);
+   prot:=(prot and VM_RW) and (not (prot shr PAGE_TRACK_SHIFT));
+  end;
 
   base:=start;
   size:=next-start;
 
-  prot:=pmap_get_prot(start);
-
-  if ((prot and VM_RW)<>(max and VM_RW)) then
+  if ((mode and 2)<>0) or (prot<>(max and VM_RW)) then
   begin
-   r:=md_protect(Pointer(base),size,(prot and VM_RW));
+   r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
    begin
     Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
@@ -293,13 +332,93 @@ begin
    if (r<>0) then
    begin
     Writeln('failed md_protect(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
-    Assert(false,'vm_prot_fixup');
+    Assert(false,'vm_map');
    end;
   end;
 
   //Writeln('md_file_mmap(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
  end;
 end;
+
+//
+
+function IDX_TO_OFF(x:DWORD):QWORD; inline;
+begin
+ Result:=QWORD(x) shl PAGE_SHIFT;
+end;
+
+function OFF_TO_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=QWORD(x) shr PAGE_SHIFT;
+end;
+
+//
+
+procedure t_danger_zone.Init;
+begin
+ mtx_init(Flock,'danger_zone');
+end;
+
+procedure t_danger_zone.Done;
+begin
+ mtx_destroy(Flock);
+end;
+
+procedure t_danger_zone.set_range(start,__end:vm_offset_t);
+var
+ range:t_danger_range;
+begin
+ range.start:=OFF_TO_IDX(start);
+ range.__end:=OFF_TO_IDX(__end);
+
+ System.InterlockedExchange64(QWORD(Frange),QWORD(range));
+end;
+
+function t_danger_zone.in_range(addr,size:vm_offset_t):Boolean;
+var
+ range:t_danger_range;
+begin
+ QWORD(range):=System.InterlockedExchangeAdd64(QWORD(Frange),0);
+
+ Result:=(addr>=IDX_TO_OFF(range.start)) and ((addr+size)<IDX_TO_OFF(range.__end));
+end;
+
+function  msleep(ident   :Pointer;
+                 lock    :p_mtx;
+                 priority:Integer;
+                 wmesg   :PChar;
+                 timo    :Int64):Integer; external;
+
+procedure wakeup(ident:Pointer); external;
+
+procedure t_danger_zone.d_wait(addr,size:vm_offset_t);
+begin
+ mtx_lock(Flock);
+
+  if in_range(addr,size) then
+  begin
+   msleep(@Self,@Flock,PCATCH,'danger_zone',hz);
+  end;
+
+ mtx_unlock(Flock);
+end;
+
+procedure t_danger_zone.d_wakeup;
+begin
+ wakeup(@Self);
+end;
+
+procedure t_danger_zone.lock;
+begin
+ mtx_lock(Flock);
+end;
+
+procedure t_danger_zone.unlock;
+begin
+ mtx_unlock(Flock);
+end;
+
+//
 
 function vm_remap(map:p_vm_nt_map;
                   entry1:p_vm_nt_entry;
@@ -330,6 +449,7 @@ begin
  ets[1]:=entry2;
  ets[2]:=entry3;
 
+ //get first entry
  first:=nil;
  For i:=Low(ets) to High(ets) do
  begin
@@ -350,6 +470,7 @@ begin
  e_count:=0;
  r_count:=0;
 
+ //get range
  For i:=Low(ets) to High(ets) do
  begin
   if (ets[i]<>nil) then
@@ -372,6 +493,8 @@ begin
  size:=__end-start;
 
  //danger zone
+ map^.danger_zone.set_range(start,__end);
+ map^.danger_zone.lock;
 
  //unmap all
  For i:=Low(stat.range) to High(stat.range) do
@@ -473,13 +596,17 @@ begin
     vm_prot_fixup(map,
                   ets[i]^.start,
                   ets[i]^.__end,
-                  max
+                  max,
+                  2
                  );
    end;
   end;
  end;
 
  //danger zone
+ map^.danger_zone.set_range(0,0);
+ map^.danger_zone.unlock;
+ map^.danger_zone.d_wakeup;
 
  Result:=True;
 end;
@@ -555,6 +682,7 @@ begin
  map^.min_offset:=min;
  map^.max_offset:=max;
  map^.root:=nil;
+ map^.danger_zone.Init;
 end;
 
 procedure vm_nt_entry_dispose(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
@@ -1035,6 +1163,7 @@ procedure vm_nt_map_protect(map:p_vm_nt_map;
 var
  entry:p_vm_nt_entry;
  base,size:vm_size_t;
+ max:Integer;
  r:Integer;
 begin
  if (start=__end) then Exit;
@@ -1064,11 +1193,62 @@ begin
 
   size:=size-base;
 
-  r:=md_protect(Pointer(base),size,(prot and VM_RW));
+  if (entry^.obj<>nil) then
+  begin
+   max:=entry^.obj^.maxp;
+  end else
+  begin
+   max:=0;
+  end;
+
+  r:=md_protect(Pointer(base),size,(prot and max and VM_RW));
   if (r<>0) then
   begin
    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
    Assert(false,'vm_nt_map_protect');
+  end;
+
+  entry:=entry^.next;
+ end;
+end;
+
+procedure vm_nt_map_prot_fix(map:p_vm_nt_map;
+                             start:vm_offset_t;
+                             __end:vm_offset_t;
+                             mode :Integer);
+var
+ entry:p_vm_nt_entry;
+ e_start,e___end:vm_size_t;
+begin
+ if (start=__end) then Exit;
+
+ if (not vm_nt_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end else
+ begin
+  entry:=entry;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  if (entry^.obj<>nil) then
+  begin
+   e_start:=entry^.start;
+   e___end:=entry^.__end;
+
+   if (e_start<start) then
+   begin
+    e_start:=start;
+   end;
+
+   if (e___end>__end) then
+   begin
+    e___end:=__end;
+   end;
+
+   vm_prot_fixup(map,e_start,e___end,entry^.obj^.maxp,mode);
   end;
 
   entry:=entry^.next;

@@ -9,6 +9,7 @@ uses
  mqueue,
  kern_mtx,
  vselinfo,
+ kern_rangelock,
  time;
 
 const
@@ -253,6 +254,8 @@ type
 
   v_pollinfo:p_vpollinfo; // i Poll events, p for *v_pi
 
+  v_rl:rangelock;         //Byte-range lock
+
   property v_mountedhere:Pointer read v_un{.vu_mount   } write v_un; //mount
   property v_socket     :Pointer read v_un{.vu_socket  } write v_un; //socket
   property v_rdev       :Pointer read v_un{.vu_cdev    } write v_un; //cdev
@@ -445,24 +448,22 @@ end;
 
 procedure vn_rangelock_unlock(vp:p_vnode;cookie:Pointer);
 begin
- //rangelock_unlock(@vp^.v_rl, (cookie), VI_MTX(vp))
+ rangelock_unlock(@vp^.v_rl, (cookie), VI_MTX(vp))
 end;
 
 procedure vn_rangelock_unlock_range(vp:p_vnode;cookie:Pointer;start,__end:Int64);
 begin
- //rangelock_unlock_range(@vp^.v_rl, (cookie), start, __end, VI_MTX(vp))
+ rangelock_unlock_range(@vp^.v_rl, (cookie), start, __end, VI_MTX(vp))
 end;
 
 function vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
 begin
- Result:=nil;
- //Result:=rangelock_rlock(@vp^.v_rl, start, __end, VI_MTX(vp))
+ Result:=rangelock_rlock(@vp^.v_rl, start, __end, VI_MTX(vp))
 end;
 
 function vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
 begin
- Result:=nil;
- //Result:=rangelock_wlock(@vp^.v_rl, start, __end, VI_MTX(vp))
+ Result:=rangelock_wlock(@vp^.v_rl, start, __end, VI_MTX(vp))
 end;
 
 const

@@ -6,6 +6,7 @@ unit vm_pmap_prot;
 interface
 
 uses
+ atomic,
  vm,
  vmparam;
 
@@ -24,18 +25,23 @@ const
  PAGE_PROT_RW     =PAGE_PROT_READ or PAGE_PROT_WRITE;
  PAGE_PROT_RWX    =PAGE_PROT_READ or PAGE_PROT_WRITE or PAGE_PROT_EXECUTE;
 
- PAGE_PROT_LIFT   =$40;
-
- //PAGE_BUSY_FLAG   =DWORD($10000000);
- //PAGE_PATCH_FLAG  =DWORD($08000000);
+ PAGE_TRACK_R     =$08;
+ PAGE_TRACK_W     =$10;
+ PAGE_TRACK_X     =$20;
+ PAGE_TRACK_RWX   =PAGE_TRACK_R or PAGE_TRACK_W or PAGE_TRACK_X;
+ PAGE_TRACK_SHIFT =3;
 
 var
  PAGE_PROT:PBYTE=nil;
 
-procedure pmap_mark      (start,__end:vm_offset_t;prots:Byte);
-procedure pmap_unmark    (start,__end:vm_offset_t);
+procedure pmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
+procedure pmap_unmark_rwx(start,__end:vm_offset_t);
+procedure pmap_track     (start,__end:vm_offset_t;prots:Byte);
+procedure pmap_untrack   (start,__end:vm_offset_t;prots:Byte);
+function  pmap_scan      (start,__end:vm_offset_t):vm_offset_t;
 function  pmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
 function  pmap_get_prot  (addr:vm_offset_t):Byte;
+function  pmap_get_prot  (addr,size:vm_offset_t):Byte;
 
 implementation
 
@@ -59,21 +65,27 @@ begin
   Result:=x;
 end;
 
-procedure pmap_mark(start,__end:vm_offset_t;prots:Byte);
+procedure pmap_mark_rwx(start,__end:vm_offset_t;prots:Byte);
+var
+ clear:Byte;
 begin
+ prots:=prots and PAGE_PROT_RWX;
+ clear:=(not prots) and PAGE_PROT_RWX;
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  start:=MAX_IDX(start);
  __end:=MAX_IDX(__end);
  while (start<__end) do
  begin
-  PAGE_PROT[start]:=prots;
+  atomic_clear_byte(@PAGE_PROT[start],clear);
+  atomic_set_byte  (@PAGE_PROT[start],prots);
+  //PAGE_PROT[start]:=prots;
   Inc(start);
  end;
  WriteBarrier;
 end;
 
-procedure pmap_unmark(start,__end:vm_offset_t);
+procedure pmap_unmark_rwx(start,__end:vm_offset_t);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
@@ -81,10 +93,73 @@ begin
  __end:=MAX_IDX(__end);
  while (start<__end) do
  begin
-  PAGE_PROT[start]:=0;
+  atomic_clear_byte(@PAGE_PROT[start],PAGE_PROT_RWX);
+  //PAGE_PROT[start]:=0;
   Inc(start);
  end;
  WriteBarrier;
+end;
+
+procedure pmap_track(start,__end:vm_offset_t;prots:Byte);
+begin
+ prots:=prots and PAGE_TRACK_RWX;
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
+ while (start<__end) do
+ begin
+  atomic_set_byte(@PAGE_PROT[start],prots);
+  Inc(start);
+ end;
+ WriteBarrier;
+end;
+
+procedure pmap_untrack(start,__end:vm_offset_t;prots:Byte);
+begin
+ prots:=prots and PAGE_TRACK_RWX;
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
+ while (start<__end) do
+ begin
+  atomic_clear_byte(@PAGE_PROT[start],prots);
+  Inc(start);
+ end;
+ WriteBarrier;
+end;
+
+function pmap_scan(start,__end:vm_offset_t):vm_offset_t;
+var
+ b,v:Byte;
+begin
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
+
+ ReadBarrier;
+
+ b:=PAGE_PROT[start];
+ Inc(start);
+
+ while (start<__end) do
+ begin
+  v:=PAGE_PROT[start];
+
+  if (b<>v) then
+  begin
+   start:=IDX_TO_OFF(start);
+   Exit(start);
+  end;
+
+  Inc(start);
+ end;
+
+ __end:=IDX_TO_OFF(__end);
+
+ Result:=__end;
 end;
 
 function pmap_scan_rwx(start,__end:vm_offset_t):vm_offset_t;
@@ -122,10 +197,19 @@ end;
 function pmap_get_prot(addr:vm_offset_t):Byte;
 begin
  addr:=OFF_TO_IDX(addr);
- addr:=MAX_IDX(addr);
- Result:=PAGE_PROT[addr];
+ if (addr>PAGE_MAP_MASK) then
+ begin
+  Result:=0
+ end else
+ begin
+  Result:=PAGE_PROT[addr];
+ end;
 end;
 
+function pmap_get_prot(addr,size:vm_offset_t):Byte;
+begin
+ Result:=pmap_get_prot(addr) or pmap_get_prot(addr+size);
+end;
 
 
 end.

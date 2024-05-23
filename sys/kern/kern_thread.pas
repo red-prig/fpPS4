@@ -78,6 +78,7 @@ uses
  kern_rwlock,
  kern_sig,
  kern_proc,
+ kern_rangelock,
  sched_ule,
  sys_sleepqueue;
 
@@ -200,6 +201,7 @@ procedure thread_free(td:p_kthread);
 begin
  mtx_destroy(td^.tdq_lock);
  sleepq_free(td^.td_sleepqueue);
+ rlqentry_free(td^.td_rlqe);
  umtx_thread_fini(td);
  cpu_thread_free(td);
 end;

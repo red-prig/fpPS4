@@ -231,6 +231,7 @@ type
   td_slpcallout   :Pointer;
   tdq_lock        :mtx;
   //
+  td_rlqe         :Pointer;
   td_fpop         :Pointer;
   td_map_def_user :Pointer;
   td_dmap_def_user:Pointer;

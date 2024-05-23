@@ -99,8 +99,10 @@ function  bits1(P:Pointer):SizeUInt; inline;
 function  bits1(P:SizeUInt):SizeUInt; inline;
 procedure spin_pause;
 
-procedure atomic_set_int  (addr:PInteger;val:Integer); sysv_abi_default;
-procedure atomic_clear_int(addr:PInteger;val:Integer); sysv_abi_default;
+procedure atomic_set_byte  (addr:PByte;val:byte);       sysv_abi_default;
+procedure atomic_clear_byte(addr:PByte;val:byte);       sysv_abi_default;
+procedure atomic_set_int   (addr:PInteger;val:Integer); sysv_abi_default;
+procedure atomic_clear_int (addr:PInteger;val:Integer); sysv_abi_default;
 
 implementation
 
@@ -387,6 +389,18 @@ end;
 procedure spin_pause; assembler; nostackframe;
 asm
  pause
+end;
+
+
+procedure atomic_set_byte(addr:PByte;val:byte); assembler; nostackframe; sysv_abi_default;
+asm
+ lock orb %sil,(%rdi)
+end;
+
+procedure atomic_clear_byte(addr:PByte;val:byte); assembler; nostackframe; sysv_abi_default;
+asm
+ not %sil
+ lock andb %sil,(%rdi)
 end;
 
 procedure atomic_set_int(addr:PInteger;val:Integer); assembler; nostackframe; sysv_abi_default;

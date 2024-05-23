@@ -95,6 +95,10 @@ procedure pmap_mirror_unmap(pmap:pmap_t;
                             base:Pointer;
                             size:QWORD);
 
+function  pmap_danger_zone(pmap:pmap_t;
+                           addr:vm_offset_t;
+                           size:vm_offset_t):Boolean;
+
 implementation
 
 uses
@@ -858,7 +862,7 @@ begin
       end;
      end;
 
-     pmap_mark(info.start,info.__end,prot and VM_RWX);
+     pmap_mark_rwx(info.start,info.__end,prot);
 
      //upper pages
      delta:=(paddi and PAGE_MASK);
@@ -881,7 +885,7 @@ begin
     end;
  end;
 
- pmap_mark(start,__end,prot and VM_RWX);
+ pmap_mark_rwx(start,__end,prot);
 end;
 
 procedure pmap_protect(pmap  :pmap_t;
@@ -942,7 +946,7 @@ begin
     end;
  end;
 
- pmap_mark(start,__end,prot and VM_RWX);
+ pmap_mark_rwx(start,__end,prot);
 end;
 
 procedure pmap_madvise(pmap  :pmap_t;
@@ -1018,7 +1022,7 @@ begin
   Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
- pmap_unmark(start,__end);
+ pmap_unmark_rwx(start,__end);
 
  r:=0;
  case vm_object_type(obj) of
@@ -1096,6 +1100,18 @@ begin
  begin
   Writeln('failed md_unmap_ex:0x',HexStr(r,8));
   Assert(false,'pmap_mirror_unmap');
+ end;
+end;
+
+function  pmap_danger_zone(pmap:pmap_t;
+                           addr:vm_offset_t;
+                           size:vm_offset_t):Boolean;
+begin
+ Result:=False;
+ while (pmap^.nt_map.danger_zone.in_range(addr,size)) do
+ begin
+  Result:=True;
+  pmap^.nt_map.danger_zone.d_wait(addr,size);
  end;
 end;
 

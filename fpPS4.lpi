@@ -1025,6 +1025,10 @@
         <Filename Value="vulkan\vSetsPoolManager.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\kern\kern_rangelock.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

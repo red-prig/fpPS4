@@ -21,6 +21,10 @@ uses
   signal,
   ucontext,
   vm,
+  vm_map,
+  vm_pmap,
+  vm_pmap_prot,
+  kern_proc,
   kern_jit_dynamic;
 
 const
@@ -101,7 +105,7 @@ const
  FPC_EXCEPTION_CODE=$E0465043;
  FPC_SET_EH_HANDLER=$E0465044;
 
-function translate_pageflt_err(v:QWORD):QWORD; inline;
+function translate_pageflt_err(v:QWORD):Byte; inline;
 begin
  Result:=VM_PROT_NONE;
  case v of
@@ -111,12 +115,21 @@ begin
  end;
 end;
 
+function get_pageflt_err(p:PExceptionPointers):Byte; inline;
+begin
+ Result:=translate_pageflt_err(p^.ExceptionRecord^.ExceptionInformation[0]);
+end;
+
+function get_pageflt_addr(p:PExceptionPointers):QWORD; inline;
+begin
+ Result:=p^.ExceptionRecord^.ExceptionInformation[1];
+end;
+
 procedure jit_save_to_sys_save(td:p_kthread); external;
 procedure sys_save_to_jit_save(td:p_kthread); external;
 
 function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
- ExceptionCode:DWORD;
  tf_addr:QWORD;
  rv:Integer;
  is_jit:Boolean;
@@ -153,14 +166,12 @@ begin
 
  td^.td_frame.tf_trapno:=0;
 
- ExceptionCode:=p^.ExceptionRecord^.ExceptionCode;
-
  rv:=-1;
 
- case ExceptionCode of
+ case p^.ExceptionRecord^.ExceptionCode of
   STATUS_ACCESS_VIOLATION:
     begin
-     tf_addr:=p^.ExceptionRecord^.ExceptionInformation[1];
+     tf_addr:=get_pageflt_addr(p);
 
      Writeln('tf_addr:0x',HexStr(tf_addr,16));
 
@@ -170,7 +181,7 @@ begin
      //_get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
 
      td^.td_frame.tf_trapno:=T_PAGEFLT;
-     td^.td_frame.tf_err   :=translate_pageflt_err(p^.ExceptionRecord^.ExceptionInformation[0]);
+     td^.td_frame.tf_err   :=get_pageflt_err(p);
      td^.td_frame.tf_addr  :=tf_addr;
 
      rv:=trap.trap(@td^.td_frame,is_jit);
@@ -251,6 +262,37 @@ begin
   EXCEPTION_SET_THREADNAME :Exit;
   DBG_PRINTEXCEPTION_C     :Exit(EXCEPTION_CONTINUE_EXECUTION);
   DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
+
+  STATUS_ACCESS_VIOLATION:
+    begin
+
+     if pmap_danger_zone(@vm_map_t(p_proc.p_vmspace)^.pmap,
+                         get_pageflt_addr(p),
+                         256) then
+     begin
+      Exit(EXCEPTION_CONTINUE_EXECUTION);
+     end;
+
+     case get_pageflt_err(p) of
+      VM_PROT_READ:
+        begin
+         if ((pmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_READ)<>0) then
+         begin
+          Writeln(stderr,'Unhandled VM_PROT_READ');
+         end;
+        end;
+      VM_PROT_WRITE:
+        begin
+         if ((pmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
+         begin
+          Writeln(stderr,'Unhandled VM_PROT_WRITE');
+         end;
+        end;
+      else;
+     end;
+
+    end;
+
   else
    if not IsDefaultExceptions(p^.ExceptionRecord^.ExceptionCode) then
    begin
