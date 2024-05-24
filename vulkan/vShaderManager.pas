@@ -72,6 +72,7 @@ type
 
 function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
+function FetchShaderGroup(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
 
 implementation
 
@@ -265,6 +266,16 @@ begin
  offset:=offset+i;
 end;
 
+const
+ STAGE_NAME:array[TvShaderStage] of PChar=(
+  'Ls',
+  'Hs',
+  'Es',
+  'Gs',
+  'Vs',
+  'Ps',
+  'Cs');
+
 function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TMemoryStream;
 var
  SprvEmit:TSprvEmit;
@@ -273,7 +284,7 @@ begin
  SprvEmit:=TSprvEmit.Create;
 
  case FStage of
-  vShaderStagePs  :
+  vShaderStagePs:
   begin
    SprvEmit.InitPs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_PS,
                    GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_PS,
@@ -301,7 +312,7 @@ begin
   end;
 
   else
-    Exit;
+    Assert(false,'TODO PARSE:'+STAGE_NAME[FStage]);
  end;
 
  SprvEmit.Config.PrintAsm      :=False;
@@ -566,6 +577,27 @@ begin
  FShaderGroupSet.Unlock_wr;
 end;
 
+function FetchShaderGroup(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+var
+ FShadersKey:TvShadersKey;
+ i:TvShaderStage;
+ FDescSetId:Integer;
+begin
+ FShadersKey:=Default(TvShadersKey);
+
+ FDescSetId:=0;
+
+ For i:=High(TvShaderStage) downto Low(TvShaderStage) do
+ begin
+  if (GPU_REGS.get_code_addr(i)<>nil) then
+  begin
+   FShadersKey.FShaders[i]:=FetchShader(i,FDescSetId,GPU_REGS,pc);
+   Inc(FDescSetId);
+  end;
+ end;
+
+ Result:=FetchShaderGroup(@FShadersKey);
+end;
 
 end.
 

@@ -218,10 +218,6 @@ var
 
  GPU_REGS:TGPU_REGS;
 
- FVSShader:TvShaderExt;
- FPSShader:TvShaderExt;
-
- FShadersKey :TvShadersKey;
  FShaderGroup:TvShaderGroup;
 
  FAttrBuilder:TvAttrBuilder;
@@ -270,14 +266,7 @@ begin
  {fdump_ps:=}DumpPS(GPU_REGS);
  {fdump_vs:=}DumpVS(GPU_REGS);
 
- FPSShader:=FetchShader(vShaderStagePs,0,GPU_REGS,nil{@pa});
- FVSShader:=FetchShader(vShaderStageVs,1,GPU_REGS,nil{@pa});
-
- FShadersKey:=Default(TvShadersKey);
- FShadersKey.SetVSShader(FVSShader);
- FShadersKey.SetPSShader(FPSShader);
-
- FShaderGroup:=FetchShaderGroup(@FShadersKey);
+ FShaderGroup:=FetchShaderGroup(GPU_REGS,nil{@pa});
  Assert(FShaderGroup<>nil);
 
  RP_KEY.Clear;
@@ -341,11 +330,7 @@ begin
   end;
 
  FAttrBuilder:=Default(TvAttrBuilder);
-
- if (FVSShader<>nil) then
- begin
-  FVSShader.EnumVertLayout(@FAttrBuilder.AddAttr,FVSShader.FDescSetId,GPU_REGS.get_user_data(vShaderStageVs));
- end;
+ FShaderGroup.ExportAttrBuilder(FAttrBuilder,GPU_REGS);
 
  if not limits.VK_EXT_vertex_input_dynamic_state then
  begin
@@ -474,7 +459,7 @@ begin
 
  ////////
  FUniformBuilder:=Default(TvUniformBuilder);
- FShadersKey.ExportUnifLayout(FUniformBuilder,GPU_REGS);
+ FShaderGroup.ExportUnifBuilder(FUniformBuilder,GPU_REGS);
 
  if (Length(FUniformBuilder.FImages)<>0) then
  begin

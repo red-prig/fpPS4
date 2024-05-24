@@ -156,14 +156,6 @@ type
   Procedure SetCSShader(Shader:TvShaderExt);
   procedure ExportLayout(var A:AvSetLayout;var B:AvPushConstantRange);
   Procedure ExportStages(Stages:PVkPipelineShaderStageCreateInfo;stageCount:PVkUInt32);
-  Procedure ExportUnifLayout(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
- end;
-
- TvShaderGroup=class
-  FKey   :TvShadersKey;
-  FLayout:TvPipelineLayout;
-  Procedure Clear;
-  Function  Compile:Boolean;
  end;
 
  TvBindVertexBuffer=packed object
@@ -216,6 +208,15 @@ type
  TvFuncLayout=object
   FList:array of ADataLayout;
   Procedure Add(const addr:ADataLayout);
+ end;
+
+ TvShaderGroup=class
+  FKey   :TvShadersKey;
+  FLayout:TvPipelineLayout;
+  Procedure Clear;
+  Function  Compile:Boolean;
+  Procedure ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;var GPU_REGS:TGPU_REGS);
+  Procedure ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
  end;
 
 function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
@@ -1179,17 +1180,6 @@ begin
  stageCount^:=c;
 end;
 
-Procedure TvShadersKey.ExportUnifLayout(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
-var
- i:TvShaderStage;
-begin
- For i:=Low(TvShaderStage) to High(TvShaderStage) do
-  if (FShaders[i]<>nil) then
-  begin
-   FShaders[i].EnumUnifLayout(@UniformBuilder.AddAttr,FShaders[i].FDescSetId,GPU_REGS.get_user_data(i));
-  end;
-end;
-
 Procedure TvShaderGroup.Clear;
 begin
  FKey:=Default(TvShadersKey);
@@ -1211,6 +1201,32 @@ begin
 
  FLayout:=FetchPipelineLayout(A,B);
  Result:=(FLayout<>nil);
+end;
+
+Procedure TvShaderGroup.ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;var GPU_REGS:TGPU_REGS);
+var
+ Shader:TvShaderExt;
+begin
+ Shader:=FKey.FShaders[vShaderStageVs];
+ if (Shader<>nil) then
+ begin
+  Shader.EnumVertLayout(@AttrBuilder.AddAttr,Shader.FDescSetId,GPU_REGS.get_user_data(vShaderStageVs))
+ end;
+end;
+
+Procedure TvShaderGroup.ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
+var
+ Shader:TvShaderExt;
+ i:TvShaderStage;
+begin
+ For i:=Low(TvShaderStage) to High(TvShaderStage) do
+ begin
+  Shader:=FKey.FShaders[i];
+  if (Shader<>nil) then
+  begin
+   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,GPU_REGS.get_user_data(i));
+  end;
+ end;
 end;
 
 procedure TvBufOffsetChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
