@@ -1120,7 +1120,7 @@ begin
    p:=Shader.FDescSetId;
 
    ia:=Length(A);
-   if (p>ia) then
+   if ((p+1)>ia) then
    begin
     SetLength(A,p+1);
     For ia:=ia to High(A) do

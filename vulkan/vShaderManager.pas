@@ -589,6 +589,7 @@ begin
 
  For i:=High(TvShaderStage) downto Low(TvShaderStage) do
  begin
+  if (i<>vShaderStageCs) then
   if (GPU_REGS.get_code_addr(i)<>nil) then
   begin
    FShadersKey.FShaders[i]:=FetchShader(i,FDescSetId,GPU_REGS,pc);
