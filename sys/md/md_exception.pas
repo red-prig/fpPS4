@@ -125,6 +125,11 @@ begin
  Result:=p^.ExceptionRecord^.ExceptionInformation[1];
 end;
 
+function get_exception(p:PExceptionPointers):DWORD; inline;
+begin
+ Result:=p^.ExceptionRecord^.ExceptionCode;
+end;
+
 procedure jit_save_to_sys_save(td:p_kthread); external;
 procedure sys_save_to_jit_save(td:p_kthread); external;
 
@@ -168,7 +173,7 @@ begin
 
  rv:=-1;
 
- case p^.ExceptionRecord^.ExceptionCode of
+ case get_exception(p) of
   STATUS_ACCESS_VIOLATION:
     begin
      tf_addr:=get_pageflt_addr(p);
@@ -254,7 +259,7 @@ begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
  if (curkthread=nil) then Exit;
 
- case p^.ExceptionRecord^.ExceptionCode of
+ case get_exception(p) of
   FPC_EXCEPTION_CODE       :Exit;
   FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT     :Exit;
@@ -294,9 +299,9 @@ begin
     end;
 
   else
-   if not IsDefaultExceptions(p^.ExceptionRecord^.ExceptionCode) then
+   if not IsDefaultExceptions(get_exception(p)) then
    begin
-    Writeln(stderr,'Unknow ExceptionCode:0x',HexStr(p^.ExceptionRecord^.ExceptionCode,8));
+    Writeln(stderr,'Unknow ExceptionCode:0x',HexStr(get_exception(p),8));
     Exit;
    end;
  end;
@@ -308,7 +313,7 @@ begin
   Result:=EXCEPTION_CONTINUE_EXECUTION;
  end else
  begin
-  Writeln(stderr,'ExceptionCode:0x',HexStr(p^.ExceptionRecord^.ExceptionCode,8));
+  Writeln(stderr,'ExceptionCode:0x',HexStr(get_exception(p),8));
   Result:=EXCEPTION_CONTINUE_SEARCH;
  end;
 end;
@@ -321,7 +326,7 @@ var
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
 
- case p^.ExceptionRecord^.ExceptionCode of
+ case get_exception(p) of
   FPC_EXCEPTION_CODE       :Exit;
   FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT     :Exit;

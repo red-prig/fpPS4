@@ -439,6 +439,8 @@ operator + (const A:t_jit_lea;B:Integer):t_jit_lea;
 operator - (const A:t_jit_lea;B:Integer):t_jit_lea;
 operator + (const A:t_jit_lea;B:Int64):t_jit_lea;
 operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
+operator + (const A:t_jit_lea;B:QWORD):t_jit_lea;
+operator - (const A:t_jit_lea;B:QWORD):t_jit_lea;
 operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea;
 operator :=(const A:TOperandSize):t_jit_lea;
 operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
@@ -691,6 +693,20 @@ begin
 end;
 
 operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset-B;
+end;
+
+operator + (const A:t_jit_lea;B:QWORD):t_jit_lea;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset+B;
+end;
+
+operator - (const A:t_jit_lea;B:QWORD):t_jit_lea;
 begin
  Result:=A;
 

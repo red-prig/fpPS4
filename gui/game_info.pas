@@ -146,7 +146,7 @@ type
 
  TMiscInfo=class(TAbstractObject)
  private
-  Fstrict_ps4_freq :Boolean;
+  Fstrict_ps4_freq  :Boolean;
   Frenderdoc_capture:Boolean;
  published
   property strict_ps4_freq  :Boolean read Fstrict_ps4_freq   write Fstrict_ps4_freq;

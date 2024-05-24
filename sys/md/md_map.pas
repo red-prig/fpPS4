@@ -11,7 +11,9 @@ uses
  windows;
 
 const
+ MD_PAGE_SHIFT       = 12;
  MD_PAGE_SIZE        = 4*1024;
+ MD_PAGE_MASK        = MD_PAGE_SIZE-1;
  MD_ALLOC_GRANULARITY=64*1024;
 
 const

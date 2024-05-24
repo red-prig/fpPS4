@@ -24,6 +24,8 @@ implementation
 uses
  sysutils,
  time,
+ vm,
+ vmparam,
  vm_pmap_prot,
  vm_pmap,
  vm_map,
@@ -1084,15 +1086,19 @@ begin
  with ctx.builder do
  begin
   //reset PCB_IS_JIT
-  _MI8(and_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],not Byte(PCB_IS_JIT));
+  _MI8(and_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_JIT));
+
+  //save internal stack
+  movq([r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rsp)],rsp);
+  movq([r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rbp)],rbp);
 
   //load guest stack
-  movq(r14,[r13+Integer(@p_kthread(nil)^.td_ustack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
-  movq(r15,[r13+Integer(@p_kthread(nil)^.td_ustack.sttop)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  movq(r14,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_ustack.stack)]);
+  movq(r15,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_ustack.sttop)]);
 
   //set teb
-  movq([GS+Integer(@teb(nil^).stack)],r14);
-  movq([GS+Integer(@teb(nil^).sttop)],r15);
+  movq([GS+teb_stack],r14);
+  movq([GS+teb_sttop],r15);
 
   //load rsp,rbp,r14,r15,r13
   movq(rsp,[r13+Integer(@p_jit_frame(nil)^.tf_rsp)]);
@@ -1114,7 +1120,7 @@ begin
 
   //load curkthread,jit ctx
   movq(r13,[GS+Integer(teb_thread)]);
-  leaq(r13,[r13+Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  leaq(r13,[r13+jit_frame_offset]);
 
   //load r14,r15
   movq([r13+Integer(@p_jit_frame(nil)^.tf_r14)],r14);
@@ -1128,20 +1134,20 @@ begin
   movq([r13+Integer(@p_jit_frame(nil)^.tf_rsp)],rsp);
   movq([r13+Integer(@p_jit_frame(nil)^.tf_rbp)],rbp);
 
-  //load internal stack
-  movq(r14,[r13+Integer(@p_kthread(nil)^.td_kstack.stack)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
-  movq(r15,[r13+Integer(@p_kthread(nil)^.td_kstack.sttop)-Integer(@p_kthread(nil)^.td_frame.tf_r13)]);
+  //load host stack
+  movq(r14,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_kstack.stack)]);
+  movq(r15,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_kstack.sttop)]);
 
   //set teb
-  movq([GS+Integer(@teb(nil^).stack)],r14);
-  movq([GS+Integer(@teb(nil^).sttop)],r15);
+  movq([GS+teb_stack],r14);
+  movq([GS+teb_sttop],r15);
 
-  //load stack
-  movq(rsp,r14);
-  movq(rbp,r14);
+  //load internal stack
+  movq(rsp,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rsp)]);
+  movq(rbp,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rbp)]);
 
   //set PCB_IS_JIT
-  _MI8(or_desc,[r13+Integer(@p_kthread(nil)^.pcb_flags)-Integer(@p_kthread(nil)^.td_frame.tf_r13),os8],Byte(PCB_IS_JIT));
+  _MI8(or_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_JIT));
  end;
 end;
 
@@ -1368,6 +1374,9 @@ begin
    end;
   end;
 
+  //lock pageflt read-only
+  _pmap_prot_int(map^.pmap,ctx.text_start,ctx.text___end,PAGE_PROT_READ);
+
   if (cmInternal in ctx.modes) then
   begin
    pick_locked_internal(ctx);
@@ -1376,9 +1385,34 @@ begin
    pick_locked(ctx);
   end;
 
+  //restore non tracked
+  _pmap_prot_fix(map^.pmap,ctx.text_start,ctx.text___end,TRACK_PROT or REMAP_PROT);
+
  _exit:
  pmap_unlock(map^.pmap,lock);
  //vm_map_unlock(map);
+end;
+
+procedure pick_track(var ctx:t_jit_context2);
+var
+ chunk:p_jit_code_chunk;
+begin
+ chunk:=TAILQ_FIRST(@ctx.builder.ACodeChunkList);
+
+ while (chunk<>nil) do
+ begin
+  if (chunk^.start<>chunk^.__end) then
+  begin
+
+   pmap_track(chunk^.start,
+              chunk^.__end+PAGE_MASK,
+              PAGE_TRACK_W or PAGE_TRACK_X);
+
+  end;
+  //
+  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
+ end;
+
 end;
 
 procedure pick_locked_internal(var ctx:t_jit_context2);
@@ -1437,6 +1471,8 @@ begin
  end;
 
  ctx.end_chunk(ctx.ptr_next);
+
+ pick_track(ctx);
 
  build(ctx);
  ctx.Free;
@@ -1849,6 +1885,8 @@ begin
  ctx.builder.int3;
  ctx.builder.int3;
  ctx.builder.ud2;
+
+ pick_track(ctx);
 
  build(ctx);
  ctx.Free;

@@ -7,6 +7,7 @@ interface
 
 uses
  kern_thr,
+ ucontext,
  x86_fpdbgdisas;
 
 {$DEFINE USE_XSAVE}
@@ -22,6 +23,9 @@ frame:  r13
 
 temp:   r14,r15
 }
+
+const
+ jit_frame_offset:Integer=Integer(@kthread(nil^).td_frame)+Integer(@trapframe(nil^).tf_r13);
 
 type
  //kthread.td_frame.tf_r13
@@ -70,7 +74,6 @@ uses
  time,
  md_time,
  trap,
- ucontext,
  md_context,
  signal,
  subr_backtrace;

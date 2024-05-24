@@ -90,6 +90,16 @@ procedure pmap_protect(pmap  :pmap_t;
                        __end :vm_offset_t;
                        prot  :vm_prot_t);
 
+procedure _pmap_prot_fix(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         mode :Integer);
+
+procedure _pmap_prot_int(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         prot :vm_prot_t);
+
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -944,7 +954,7 @@ begin
   Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
 
- lock:=pmap_wlock(pmap,start,__end);
+ lock:=pmap_rlock(pmap,start,__end);
 
  pmap_mark_rwx(start,__end,prot);
 
@@ -958,7 +968,7 @@ begin
      vm_nt_map_prot_fix(@pmap^.nt_map,
                         start,
                         __end,
-                        TAKE_PROT_TRACK);
+                        TRACK_PROT);
 
      //vm_nt_map_protect(@pmap^.nt_map,
      //                  start,
@@ -998,6 +1008,34 @@ begin
  end;
 
  pmap_unlock(pmap,lock);
+end;
+
+procedure _pmap_prot_fix(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         mode :Integer);
+begin
+ start:=start             and (not PAGE_MASK);
+ __end:=(__end+PAGE_MASK) and (not PAGE_MASK);
+
+ vm_nt_map_prot_fix(@pmap^.nt_map,
+                    start,
+                    __end,
+                    mode);
+end;
+
+procedure _pmap_prot_int(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         prot :vm_prot_t);
+begin
+ start:=start                and (not MD_PAGE_MASK);
+ __end:=(__end+MD_PAGE_MASK) and (not MD_PAGE_MASK);
+
+ vm_nt_map_protect(@pmap^.nt_map,
+                   start,
+                   __end,
+                   (prot and VM_RW));
 end;
 
 procedure pmap_madvise(pmap  :pmap_t;
@@ -1083,6 +1121,7 @@ begin
  lock:=pmap_wlock(pmap,start,__end);
 
  pmap_unmark_rwx(start,__end);
+ pmap_untrack   (start,__end,PAGE_TRACK_RWX);
  //untrack?
 
  r:=0;
@@ -1145,10 +1184,16 @@ end;
 function pmap_mirror_map(pmap :pmap_t;
                          start:vm_offset_t;
                          __end:vm_offset_t):Pointer;
+var
+ lock:Pointer;
 begin
+ lock:=pmap_rlock(pmap,start,__end);
+
  Result:=vm_nt_map_mirror(@pmap^.nt_map,
                           start,
                           __end);
+
+ pmap_unlock(pmap,lock);
 end;
 
 procedure pmap_mirror_unmap(pmap:pmap_t;

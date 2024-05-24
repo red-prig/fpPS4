@@ -8,7 +8,6 @@ interface
 uses
  sysutils,
  vm,
- vmparam,
  kern_mtx,
  vm_pmap_prot;
 
@@ -18,9 +17,6 @@ const
  NT_UNION_OBJ=4;
 
  MAX_UNION_SIZE=256*1024*1024;
-
- TAKE_PROT_TRACK=1;
- REMAP_PROT     =2;
 
 type
  t_danger_range=packed record
@@ -33,11 +29,9 @@ type
   Frange:t_danger_range;
   procedure Init;
   procedure Done;
-  procedure set_range(start,__end:vm_offset_t);
   function  in_range(addr,size:vm_offset_t):Boolean;
   procedure d_wait(addr,size:vm_offset_t);
-  procedure d_wakeup;
-  procedure lock;
+  procedure lock(start,__end:vm_offset_t);
   procedure unlock;
  end;
 
@@ -219,7 +213,7 @@ begin
 
  while (start<__end) do
  begin
-  if ((mode and TAKE_PROT_TRACK)=0) then
+  if ((mode and TRACK_PROT)=0) then
   begin
    next:=pmap_scan_rwx(start,__end);
 
@@ -345,14 +339,14 @@ end;
 
 //
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function MD_IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
- Result:=QWORD(x) shl PAGE_SHIFT;
+ Result:=QWORD(x) shl MD_PAGE_SHIFT;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function MD_OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
- Result:=QWORD(x) shr PAGE_SHIFT;
+ Result:=QWORD(x) shr MD_PAGE_SHIFT;
 end;
 
 //
@@ -367,23 +361,13 @@ begin
  mtx_destroy(Flock);
 end;
 
-procedure t_danger_zone.set_range(start,__end:vm_offset_t);
-var
- range:t_danger_range;
-begin
- range.start:=OFF_TO_IDX(start);
- range.__end:=OFF_TO_IDX(__end);
-
- System.InterlockedExchange64(QWORD(Frange),QWORD(range));
-end;
-
 function t_danger_zone.in_range(addr,size:vm_offset_t):Boolean;
 var
  range:t_danger_range;
 begin
  QWORD(range):=System.InterlockedExchangeAdd64(QWORD(Frange),0);
 
- Result:=(addr>=IDX_TO_OFF(range.start)) and ((addr+size)<IDX_TO_OFF(range.__end));
+ Result:=(addr<MD_IDX_TO_OFF(range.__end)) and ((addr+size)>MD_IDX_TO_OFF(range.start));
 end;
 
 function  msleep(ident   :Pointer;
@@ -406,19 +390,25 @@ begin
  mtx_unlock(Flock);
 end;
 
-procedure t_danger_zone.d_wakeup;
+procedure t_danger_zone.lock(start,__end:vm_offset_t);
+var
+ range:t_danger_range;
 begin
- wakeup(@Self);
-end;
+ range.start:=MD_OFF_TO_IDX(start);
+ range.__end:=MD_OFF_TO_IDX(__end);
 
-procedure t_danger_zone.lock;
-begin
+ System.InterlockedExchange64(QWORD(Frange),QWORD(range));
+
  mtx_lock(Flock);
 end;
 
 procedure t_danger_zone.unlock;
 begin
+ System.InterlockedExchange64(QWORD(Frange),0);
+
  mtx_unlock(Flock);
+
+ wakeup(@Self);
 end;
 
 //
@@ -496,8 +486,7 @@ begin
  size:=__end-start;
 
  //danger zone
- map^.danger_zone.set_range(start,__end);
- map^.danger_zone.lock;
+ map^.danger_zone.lock(start,__end);
 
  //unmap all
  For i:=Low(stat.range) to High(stat.range) do
@@ -600,16 +589,14 @@ begin
                   ets[i]^.start,
                   ets[i]^.__end,
                   max,
-                  TAKE_PROT_TRACK or REMAP_PROT //untrack trigger or restore track?
+                  TRACK_PROT or REMAP_PROT //untrack trigger or restore track?
                  );
    end;
   end;
  end;
 
  //danger zone
- map^.danger_zone.set_range(0,0);
  map^.danger_zone.unlock;
- map^.danger_zone.d_wakeup;
 
  Result:=True;
 end;

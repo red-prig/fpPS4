@@ -302,6 +302,16 @@ begin
 
  jctx^.block:=node^.blob;
 
+ if (jctx^.rsp=nil) then
+ begin
+  jctx^.rsp:=td^.td_kstack.stack;
+ end;
+
+ if (jctx^.rbp=nil) then
+ begin
+  jctx^.rbp:=td^.td_kstack.stack;
+ end;
+
  //tf_r14 not need to move
  //tf_r15 not need to move
 

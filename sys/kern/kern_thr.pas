@@ -150,6 +150,8 @@ type
  end;
 
 const
+ teb_stack  =ptruint(@teb(nil^).stack  );
+ teb_sttop  =ptruint(@teb(nil^).sttop  );
  teb_jitcall=ptruint(@teb(nil^).jitcall);
  teb_thread =ptruint(@teb(nil^).thread );
  teb_fsbase =ptruint(@teb(nil^).fsbase );
@@ -173,6 +175,8 @@ type
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
   block:Pointer;
+  rsp:Pointer;
+  rbp:Pointer;
  end;
 
  pp_kthread=^p_kthread;
