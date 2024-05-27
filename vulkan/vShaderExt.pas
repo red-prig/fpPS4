@@ -215,8 +215,8 @@ type
   FLayout:TvPipelineLayout;
   Procedure Clear;
   Function  Compile:Boolean;
-  Procedure ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;var GPU_REGS:TGPU_REGS);
-  Procedure ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
+  Procedure ExportAttrBuilder(var AttrBuilder   :TvAttrBuilder   ;GPU_USERDATA:PGPU_USERDATA);
+  Procedure ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;GPU_USERDATA:PGPU_USERDATA);
  end;
 
 function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
@@ -1203,18 +1203,18 @@ begin
  Result:=(FLayout<>nil);
 end;
 
-Procedure TvShaderGroup.ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;var GPU_REGS:TGPU_REGS);
+Procedure TvShaderGroup.ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;GPU_USERDATA:PGPU_USERDATA);
 var
  Shader:TvShaderExt;
 begin
  Shader:=FKey.FShaders[vShaderStageVs];
  if (Shader<>nil) then
  begin
-  Shader.EnumVertLayout(@AttrBuilder.AddAttr,Shader.FDescSetId,GPU_REGS.get_user_data(vShaderStageVs))
+  Shader.EnumVertLayout(@AttrBuilder.AddAttr,Shader.FDescSetId,GPU_USERDATA^.get_user_data(vShaderStageVs))
  end;
 end;
 
-Procedure TvShaderGroup.ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;var GPU_REGS:TGPU_REGS);
+Procedure TvShaderGroup.ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;GPU_USERDATA:PGPU_USERDATA);
 var
  Shader:TvShaderExt;
  i:TvShaderStage;
@@ -1224,7 +1224,7 @@ begin
   Shader:=FKey.FShaders[i];
   if (Shader<>nil) then
   begin
-   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,GPU_REGS.get_user_data(i));
+   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,GPU_USERDATA^.get_user_data(i));
   end;
  end;
 end;

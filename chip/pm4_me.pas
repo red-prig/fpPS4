@@ -208,17 +208,11 @@ end;
 var
  FCmdPool:TvCmdPool;
 
-procedure pm4_DrawPrepare(SH_REG:PSH_REG_GROUP;
-                          CX_REG:PCONTEXT_REG_GROUP;
-                          UC_REG:PUSERCONFIG_REG_SHORT;
+procedure pm4_DrawPrepare(var rt_info:t_pm4_rt_info;
                           CmdBuffer:TvCmdBuffer;
                           RenderCmd:TvRenderTargets);
 var
  i:Integer;
-
- GPU_REGS:TGPU_REGS;
-
- FShaderGroup:TvShaderGroup;
 
  FAttrBuilder:TvAttrBuilder;
 
@@ -226,8 +220,6 @@ var
 
  RP_KEY:TvRenderPassKey;
  RP:TvRenderPass2;
-
- BI:TBLEND_INFO;
 
  GP_KEY:TvGraphicsPipelineKey;
  GP:TvGraphicsPipeline2;
@@ -247,52 +239,25 @@ var
 
  FDescriptorGroup:TvDescriptorGroup;
 begin
- GPU_REGS:=Default(TGPU_REGS);
- GPU_REGS.SH_REG:=SH_REG;
- GPU_REGS.CX_REG:=CX_REG;
- GPU_REGS.UC_REG:=UC_REG;
-
- for i:=0 to 31 do
- begin
-  if (CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>0) and (CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>i) then
-  begin
-   Assert(false,                                         'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
-  end;
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].DEFAULT_VAL='     +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     ));
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FLAT_SHADE='      +IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      ));
-  Assert(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
- end;
-
- {fdump_ps:=}DumpPS(GPU_REGS);
- {fdump_vs:=}DumpVS(GPU_REGS);
-
- FShaderGroup:=FetchShaderGroup(GPU_REGS,nil{@pa});
- Assert(FShaderGroup<>nil);
 
  RP_KEY.Clear;
 
- RenderCmd.RT_COUNT:=0;
+ RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
 
- if GPU_REGS.COMP_ENABLE then
- For i:=0 to GPU_REGS.GET_HI_RT do
+ if (rt_info.RT_COUNT<>0) then
+ For i:=0 to rt_info.RT_COUNT-1 do
   begin
-   RenderCmd.RT_INFO[RenderCmd.RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
+   RenderCmd.RT_INFO[i]:=rt_info.RT_INFO[i];
 
-   //hack
-   //RT_INFO[RT_COUNT].IMAGE_USAGE:=TM_CLEAR or TM_WRITE;
-   //
-
-   RP_KEY.AddColorAt(RenderCmd.RT_INFO[RenderCmd.RT_COUNT].attachment,
-                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].FImageInfo.cformat,
-                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].IMAGE_USAGE,
-                     RenderCmd.RT_INFO[RenderCmd.RT_COUNT].FImageInfo.params.samples);
-
-   Inc(RenderCmd.RT_COUNT);
+   RP_KEY.AddColorAt(RenderCmd.RT_INFO[i].attachment,
+                     RenderCmd.RT_INFO[i].FImageInfo.cformat,
+                     RenderCmd.RT_INFO[i].IMAGE_USAGE,
+                     RenderCmd.RT_INFO[i].FImageInfo.params.samples);
   end;
 
- if GPU_REGS.DB_ENABLE then
+ if rt_info.DB_ENABLE then
  begin
-  RenderCmd.DB_INFO:=GPU_REGS.GET_DB_INFO;
+  RenderCmd.DB_INFO:=rt_info.DB_INFO;
 
   RP_KEY.AddDepthAt(RenderCmd.RT_COUNT, //add to last attachment id
                     RenderCmd.DB_INFO.FImageInfo.cformat,
@@ -305,22 +270,20 @@ begin
 
  RP:=FetchRenderPass(CmdBuffer,@RP_KEY);
 
- BI:=GPU_REGS.GET_BLEND_INFO;
-
  GP_KEY.Clear;
 
  GP_KEY.FRenderPass :=RP;
- GP_KEY.FShaderGroup:=FShaderGroup;
+ GP_KEY.FShaderGroup:=rt_info.ShaderGroup;
 
- GP_KEY.SetBlendInfo(BI.logicOp,@BI.blendConstants);
+ GP_KEY.SetBlendInfo(rt_info.BLEND_INFO.logicOp,@rt_info.BLEND_INFO.blendConstants);
 
- GP_KEY.SetPrimType (GPU_REGS.GET_PRIM_TYPE);
- GP_KEY.SetPrimReset(GPU_REGS.GET_PRIM_RESET);
+ GP_KEY.SetPrimType (TVkPrimitiveTopology(rt_info.PRIM_TYPE));
+ GP_KEY.SetPrimReset(rt_info.PRIM_RESET);
 
- For i:=0 to 15 do
-  if GPU_REGS.VP_ENABLE(i) then
+ if (rt_info.VP_COUNT<>0) then
+ For i:=0 to rt_info.VP_COUNT-1 do
   begin
-   GP_KEY.AddVPort(GPU_REGS.GET_VPORT(i),GPU_REGS.GET_SCISSOR(i));
+   GP_KEY.AddVPort(rt_info.VPORT[i],rt_info.SCISSOR[i]);
   end;
 
  if (RenderCmd.RT_COUNT<>0) then
@@ -330,19 +293,19 @@ begin
   end;
 
  FAttrBuilder:=Default(TvAttrBuilder);
- FShaderGroup.ExportAttrBuilder(FAttrBuilder,GPU_REGS);
+ rt_info.ShaderGroup.ExportAttrBuilder(FAttrBuilder,@rt_info.USERDATA);
 
  if not limits.VK_EXT_vertex_input_dynamic_state then
  begin
   GP_KEY.SetVertexInput(FAttrBuilder);
  end;
 
- GP_KEY.rasterizer   :=GPU_REGS.GET_RASTERIZATION;
- GP_KEY.multisampling:=GPU_REGS.GET_MULTISAMPLE;
+ GP_KEY.rasterizer   :=rt_info.RASTERIZATION;
+ GP_KEY.multisampling:=rt_info.MULTISAMPLE;
 
- GP_KEY.SetProvoking(GPU_REGS.GET_PROVOKING);
+ GP_KEY.SetProvoking(TVkProvokingVertexModeEXT(rt_info.PROVOKING));
 
- if GPU_REGS.DB_ENABLE then
+ if rt_info.DB_ENABLE then
  begin
   GP_KEY.DepthStencil:=RenderCmd.DB_INFO.ds_state;
  end;
@@ -354,7 +317,7 @@ begin
   FB_KEY:=Default(TvFramebufferImagelessKey);
 
   FB_KEY.SetRenderPass(RP);
-  FB_KEY.SetSize(GPU_REGS.GET_SCREEN_SIZE);
+  FB_KEY.SetSize(rt_info.SCREEN_SIZE);
 
   if (RenderCmd.RT_COUNT<>0) then
   For i:=0 to RenderCmd.RT_COUNT-1 do
@@ -362,7 +325,7 @@ begin
     FB_KEY.AddImageAt(RenderCmd.RT_INFO[i].FImageInfo);
    end;
 
-  if GPU_REGS.DB_ENABLE then
+  if rt_info.DB_ENABLE then
   begin
    FB_KEY.AddImageAt(RenderCmd.DB_INFO.FImageInfo);
   end;
@@ -371,13 +334,13 @@ begin
   FB_KEY2:=Default(TvFramebufferBindedKey);
 
   FB_KEY2.SetRenderPass(RP);
-  FB_KEY2.SetSize(GPU_REGS.GET_SCREEN_SIZE);
+  FB_KEY2.SetSize(rt_info.SCREEN_SIZE);
  end;
 
  RenderCmd.FRenderPass:=RP;
  RenderCmd.FPipeline  :=GP;
 
- RenderCmd.FRenderArea:=GPU_REGS.GET_SCREEN;
+ RenderCmd.FRenderArea:=rt_info.SCREEN_RECT;
 
  if limits.VK_KHR_imageless_framebuffer then
  begin
@@ -422,7 +385,7 @@ begin
 
   end;
 
- if GPU_REGS.DB_ENABLE then
+ if rt_info.DB_ENABLE then
  begin
   RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
 
@@ -459,7 +422,7 @@ begin
 
  ////////
  FUniformBuilder:=Default(TvUniformBuilder);
- FShaderGroup.ExportUnifBuilder(FUniformBuilder,GPU_REGS);
+ rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
 
  if (Length(FUniformBuilder.FImages)<>0) then
  begin
@@ -515,7 +478,7 @@ begin
 
    if (FDescriptorGroup=nil) then
    begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
    end;
 
    FDescriptorGroup.FSets[fset].BindImg(bind,0,
@@ -537,7 +500,7 @@ begin
 
    if (FDescriptorGroup=nil) then
    begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
    end;
 
    FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
@@ -573,7 +536,7 @@ begin
 
    if (FDescriptorGroup=nil) then
    begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,FShaderGroup.FLayout);
+    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
    end;
 
    FDescriptorGroup.FSets[fset].BindBuf(bind,0,
@@ -592,8 +555,6 @@ begin
   CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_GRAPHICS,FDescriptorGroup);
  end;
 
- CmdBuffer.FinstanceCount:=GPU_REGS.UC_REG^.VGT_NUM_INSTANCES;
- CmdBuffer.FINDEX_TYPE   :=GPU_REGS.GET_INDEX_TYPE;
 end;
 
 procedure pm4_Writeback(CmdBuffer:TvCmdBuffer;
@@ -679,7 +640,7 @@ begin
  //write back
 end;
 
-procedure pm4_DrawIndex2(node:p_pm4_node_DrawIndex2);
+procedure pm4_Draw(node:p_pm4_node_draw);
 var
  RenderCmd:TvRenderTargets;
 
@@ -703,72 +664,26 @@ begin
 
  RenderCmd:=TvRenderTargets.Create;
 
- pm4_DrawPrepare(@node^.SH_REG,
-                 @node^.CX_REG,
-                 @node^.UC_REG,
+ pm4_DrawPrepare(node^.rt_info,
                  CmdBuffer,
                  RenderCmd);
 
- CmdBuffer.DrawIndex2(node^.addr,
-                      node^.UC_REG.VGT_NUM_INDICES);
- /////////
+ CmdBuffer.FinstanceCount:=node^.numInstances;
+ CmdBuffer.FINDEX_TYPE   :=TVkIndexType(node^.INDEX_TYPE);
 
- CmdBuffer.EndRenderPass;
-
- pm4_Writeback(CmdBuffer,RenderCmd);
-
- r:=CmdBuffer.QueueSubmit;
-
- if (r<>VK_SUCCESS) then
- begin
-  Assert(false,'QueueSubmit');
+ case node^.ntype of
+  ntDrawIndex2:
+   begin
+    CmdBuffer.DrawIndex2(Pointer(node^.indexBase),node^.indexCount);
+   end;
+  ntDrawIndexAuto:
+   begin
+    CmdBuffer.DrawIndexAuto(node^.indexCount);
+   end;
+  else;
+   Assert(false);
  end;
 
- Writeln('QueueSubmit:',r);
-
- r:=CmdBuffer.Wait(QWORD(-1));
-
- Writeln('CmdBuffer:',r);
-
- r:=RenderQueue.WaitIdle;
- Writeln('WaitIdle:',r);
-
- CmdBuffer.ReleaseResource;
-
- CmdBuffer.Free;
-end;
-
-procedure pm4_DrawIndexAuto(node:p_pm4_node_DrawIndexAuto);
-var
- RenderCmd:TvRenderTargets;
-
- CmdBuffer:TvCmdBuffer;
-
- r:TVkResult;
-begin
-
- StartFrameCapture;
-
- //
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- //CmdBuffer.submit_id:=submit_id;
-
- //
-
- RenderCmd:=TvRenderTargets.Create;
-
- pm4_DrawPrepare(@node^.SH_REG,
-                 @node^.CX_REG,
-                 @node^.UC_REG,
-                 CmdBuffer,
-                 RenderCmd);
-
- CmdBuffer.DrawIndexAuto(node^.UC_REG.VGT_NUM_INDICES);
  /////////
 
  CmdBuffer.EndRenderPass;
@@ -887,8 +802,8 @@ begin
     Writeln('+',node^.ntype);
 
     case node^.ntype of
-     ntDrawIndex2   :pm4_DrawIndex2   (Pointer(node));
-     ntDrawIndexAuto:pm4_DrawIndexAuto(Pointer(node));
+     ntDrawIndex2   :pm4_Draw         (Pointer(node));
+     ntDrawIndexAuto:pm4_Draw         (Pointer(node));
      ntEventWriteEop:pm4_EventWriteEop(Pointer(node),me);
      ntSubmitFlipEop:pm4_SubmitFlipEop(Pointer(node),me);
      else

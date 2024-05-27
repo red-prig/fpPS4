@@ -72,7 +72,8 @@ type
 
 function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
-function FetchShaderGroup(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+function FetchShaderGroupRT(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+function FetchShaderGroupCS(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
 
 implementation
 
@@ -577,7 +578,7 @@ begin
  FShaderGroupSet.Unlock_wr;
 end;
 
-function FetchShaderGroup(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+function FetchShaderGroupRT(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
 var
  FShadersKey:TvShadersKey;
  i:TvShaderStage;
@@ -596,6 +597,17 @@ begin
    Inc(FDescSetId);
   end;
  end;
+
+ Result:=FetchShaderGroup(@FShadersKey);
+end;
+
+function FetchShaderGroupCS(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+var
+ FShadersKey:TvShadersKey;
+begin
+ FShadersKey:=Default(TvShadersKey);
+
+ FShadersKey.FShaders[vShaderStageCs]:=FetchShader(vShaderStageCs,0,GPU_REGS,pc);
 
  Result:=FetchShaderGroup(@FShadersKey);
 end;

@@ -76,6 +76,8 @@ type
  PCONTEXT_REG_GROUP   =^TCONTEXT_REG_GROUP;
  PUSERCONFIG_REG_SHORT=^TUSERCONFIG_REG_SHORT;
 
+ PGPU_USERDATA=^TGPU_USERDATA;
+
  PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
   SH_REG:PSH_REG_GROUP;         // 0x2C00
@@ -111,6 +113,12 @@ type
 
   Function  get_code_addr(FStage:TvShaderStage):Pointer;
   Function  get_user_data(FStage:TvShaderStage):Pointer;
+  procedure export_user_data(dst:PGPU_USERDATA);
+ end;
+
+ TGPU_USERDATA=packed object
+  A:array[TvShaderStage] of TSPI_USER_DATA;
+  Function get_user_data(FStage:TvShaderStage):Pointer;
  end;
 
 function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
@@ -1474,6 +1482,22 @@ begin
   vShaderStagePs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_PS;
   vShaderStageCs:Result:=@SH_REG^.COMPUTE_USER_DATA;
  end;
+end;
+
+procedure TGPU_REGS.export_user_data(dst:PGPU_USERDATA);
+begin
+ dst^.A[vShaderStageLs]:=SH_REG^.SPI_SHADER_USER_DATA_LS;
+ dst^.A[vShaderStageHs]:=SH_REG^.SPI_SHADER_USER_DATA_HS;
+ dst^.A[vShaderStageEs]:=SH_REG^.SPI_SHADER_USER_DATA_ES;
+ dst^.A[vShaderStageGs]:=SH_REG^.SPI_SHADER_USER_DATA_GS;
+ dst^.A[vShaderStageVs]:=SH_REG^.SPI_SHADER_USER_DATA_VS;
+ dst^.A[vShaderStagePs]:=SH_REG^.SPI_SHADER_USER_DATA_PS;
+ dst^.A[vShaderStageCs]:=SH_REG^.COMPUTE_USER_DATA;
+end;
+
+Function TGPU_USERDATA.get_user_data(FStage:TvShaderStage):Pointer;
+begin
+ Result:=@A[FStage];
 end;
 
 ///

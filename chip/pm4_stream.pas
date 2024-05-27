@@ -6,6 +6,7 @@ unit pm4_stream;
 interface
 
 uses
+ sysutils,
  mqueue,
  LFQueue,
  md_map,
@@ -14,7 +15,30 @@ uses
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
- si_ci_vi_merged_groups;
+ si_ci_vi_merged_groups,
+
+ Vulkan,
+ vDevice,
+ vBuffer,
+ vHostBufferManager,
+ vImage,
+ vImageManager,
+ vRender,
+ vRenderPassManager,
+ vPipelineManager,
+ vFramebufferManager,
+ vShader,
+ vShaderExt,
+ vShaderManager,
+ vRegs2Vulkan,
+ vCmdBuffer,
+ vPipeline,
+ vSetsPoolManager,
+ vSampler,
+ vSamplerManager,
+
+ shader_dump
+ ;
 
 type
  t_cache_block_allocator=object
@@ -48,6 +72,34 @@ type
    full_size:ptruint; //full alloc size
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
+ end;
+
+ p_pm4_rt_info=^t_pm4_rt_info;
+ t_pm4_rt_info=object
+  USERDATA:TGPU_USERDATA;
+
+  ShaderGroup:TvShaderGroup;
+
+  RT_INFO:array[0..7] of TRT_INFO;
+  DB_INFO:TDB_INFO;
+
+  BLEND_INFO:TBLEND_INFO;
+
+  VPORT  :array[0..15] of TVkViewport;
+  SCISSOR:array[0..15] of TVkRect2D;
+
+  RASTERIZATION:TVkPipelineRasterizationStateCreateInfo;
+  MULTISAMPLE  :TVkPipelineMultisampleStateCreateInfo;
+
+  SCREEN_RECT:TVkRect2D;
+  SCREEN_SIZE:TVkExtent2D;
+
+  RT_COUNT  :Byte;
+  DB_ENABLE :Boolean;
+  PRIM_TYPE :Byte;
+  PRIM_RESET:Byte;
+  VP_COUNT  :Byte;
+  PROVOKING :Byte;
  end;
 
  t_pm4_node_type=(
@@ -143,20 +195,17 @@ type
   CX_REG:TCONTEXT_REG_GROUP; // 0xA000
  end;
 
- p_pm4_node_DrawIndex2=^t_pm4_node_DrawIndex2;
- t_pm4_node_DrawIndex2=object(t_pm4_node)
-  addr  :Pointer;
-  //
-  SH_REG:TSH_REG_GROUP;         // 0x2C00
-  CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
-  UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
- end;
+ p_pm4_node_draw=^t_pm4_node_draw;
+ t_pm4_node_draw=object(t_pm4_node)
+  rt_info:t_pm4_rt_info;
 
- p_pm4_node_DrawIndexAuto=^t_pm4_node_DrawIndexAuto;
- t_pm4_node_DrawIndexAuto=object(t_pm4_node)
-  SH_REG:TSH_REG_GROUP;         // 0x2C00
-  CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
-  UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
+  indexBase   :QWORD;
+  indexOffset :DWORD;
+  indexCount  :DWORD;
+  numInstances:DWORD;
+
+  INDEX_TYPE:Byte;
+  SWAP_MODE :Byte;
  end;
 
  p_pm4_node_DispatchDirect=^t_pm4_node_DispatchDirect;
@@ -188,8 +237,12 @@ type
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
-  procedure DrawIndex2   (addr:Pointer;
+  procedure Build_rt_info(var rt_info:t_pm4_rt_info;var GPU_REGS:TGPU_REGS);
+  procedure BuildDraw    (ntype:t_pm4_node_type;
                           var SH_REG:TSH_REG_GROUP;
+                          var CX_REG:TCONTEXT_REG_GROUP;
+                          var UC_REG:TUSERCONFIG_REG_SHORT);
+  procedure DrawIndex2   (var SH_REG:TSH_REG_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
   procedure DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
@@ -399,42 +452,120 @@ begin
 
 end;
 
-procedure t_pm4_stream.DrawIndex2(addr:Pointer;
-                                  var SH_REG:TSH_REG_GROUP;
+procedure t_pm4_stream.Build_rt_info(var rt_info:t_pm4_rt_info;var GPU_REGS:TGPU_REGS);
+var
+ i:Integer;
+begin
+ for i:=0 to 31 do
+ begin
+  if (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>0) and (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>i) then
+  begin
+   Assert(false,                                         'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
+  end;
+  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].DEFAULT_VAL='     +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     ));
+  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FLAT_SHADE='      +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      ));
+  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
+ end;
+
+ GPU_REGS.export_user_data(@rt_info.USERDATA);
+
+ {fdump_ps:=}DumpPS(GPU_REGS);
+ {fdump_vs:=}DumpVS(GPU_REGS);
+
+ rt_info.ShaderGroup:=FetchShaderGroupRT(GPU_REGS,nil{@pa});
+ Assert(rt_info.ShaderGroup<>nil);
+
+ rt_info.RT_COUNT:=0;
+
+ if GPU_REGS.COMP_ENABLE then
+ For i:=0 to GPU_REGS.GET_HI_RT do
+  begin
+   rt_info.RT_INFO[rt_info.RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
+
+   Inc(rt_info.RT_COUNT);
+  end;
+
+ rt_info.DB_ENABLE:=GPU_REGS.DB_ENABLE;
+
+ if rt_info.DB_ENABLE then
+ begin
+  rt_info.DB_INFO:=GPU_REGS.GET_DB_INFO;
+ end;
+
+ rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;
+
+ rt_info.PRIM_TYPE :=ord(GPU_REGS.GET_PRIM_TYPE);
+ rt_info.PRIM_RESET:=GPU_REGS.GET_PRIM_RESET;
+
+ rt_info.VP_COUNT:=0;
+
+ For i:=0 to 15 do
+  if GPU_REGS.VP_ENABLE(i) then
+  begin
+   rt_info.VPORT  [rt_info.VP_COUNT]:=GPU_REGS.GET_VPORT(i);
+   rt_info.SCISSOR[rt_info.VP_COUNT]:=GPU_REGS.GET_SCISSOR(i) ;
+
+   Inc(rt_info.VP_COUNT);
+  end;
+
+ rt_info.RASTERIZATION:=GPU_REGS.GET_RASTERIZATION;
+ rt_info.MULTISAMPLE  :=GPU_REGS.GET_MULTISAMPLE;
+
+ rt_info.PROVOKING:=ord(GPU_REGS.GET_PROVOKING);
+
+ rt_info.SCREEN_RECT:=GPU_REGS.GET_SCREEN;
+ rt_info.SCREEN_SIZE:=GPU_REGS.GET_SCREEN_SIZE;
+
+end;
+
+procedure t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
+                                 var SH_REG:TSH_REG_GROUP;
+                                 var CX_REG:TCONTEXT_REG_GROUP;
+                                 var UC_REG:TUSERCONFIG_REG_SHORT);
+var
+ GPU_REGS:TGPU_REGS;
+
+ node:p_pm4_node_draw;
+
+begin
+ GPU_REGS:=Default(TGPU_REGS);
+ GPU_REGS.SH_REG:=@SH_REG;
+ GPU_REGS.CX_REG:=@CX_REG;
+ GPU_REGS.UC_REG:=@UC_REG;
+
+ node:=allocator.Alloc(SizeOf(t_pm4_node_draw));
+
+ node^.ntype :=ntype;
+
+ Build_rt_info(node^.rt_info,GPU_REGS);
+
+ node^.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
+ node^.indexOffset :=CX_REG.VGT_INDX_OFFSET;
+ node^.indexCount  :=UC_REG.VGT_NUM_INDICES;
+ node^.numInstances:=UC_REG.VGT_NUM_INSTANCES;
+
+ node^.INDEX_TYPE:=ord(GPU_REGS.GET_INDEX_TYPE);
+ node^.SWAP_MODE :=CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.DrawIndex2(var SH_REG:TSH_REG_GROUP;
                                   var CX_REG:TCONTEXT_REG_GROUP;
                                   var UC_REG:TUSERCONFIG_REG_SHORT);
-var
- node:p_pm4_node_DrawIndex2;
 begin
  if ColorControl(CX_REG) then Exit;
 
- node:=allocator.Alloc(SizeOf(t_pm4_node_DrawIndex2));
-
- node^.ntype :=ntDrawIndex2;
- node^.addr  :=addr;
- node^.SH_REG:=SH_REG;
- node^.CX_REG:=CX_REG;
- node^.UC_REG:=UC_REG;
-
- add_node(node);
+ BuildDraw(ntDrawIndex2,SH_REG,CX_REG,UC_REG);
 end;
 
 procedure t_pm4_stream.DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
                                      var CX_REG:TCONTEXT_REG_GROUP;
                                      var UC_REG:TUSERCONFIG_REG_SHORT);
-var
- node:p_pm4_node_DrawIndexAuto;
 begin
  if ColorControl(CX_REG) then Exit;
 
- node:=allocator.Alloc(SizeOf(t_pm4_node_DrawIndexAuto));
-
- node^.ntype :=ntDrawIndexAuto;
- node^.SH_REG:=SH_REG;
- node^.CX_REG:=CX_REG;
- node^.UC_REG:=UC_REG;
-
- add_node(node);
+ BuildDraw(ntDrawIndexAuto,SH_REG,CX_REG,UC_REG);
 end;
 
 procedure t_pm4_stream.DispatchDirect(var SH_REG:TSH_REG_GROUP);

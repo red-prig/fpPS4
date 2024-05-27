@@ -1300,7 +1300,6 @@ end;
 
 procedure onIndexBufferSize(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
 begin
- pctx^.CX_REG.VGT_DMA_SIZE   :=Body^.numIndices;
  pctx^.UC_REG.VGT_NUM_INDICES:=Body^.numIndices;
 end;
 
@@ -1325,9 +1324,6 @@ begin
 end;
 
 procedure onDrawIndex2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEX2);
-var
- addr:Pointer;
- size:QWORD;
 begin
  if (DWORD(Body^.drawInitiator)<>0) then
  begin
@@ -1341,19 +1337,7 @@ begin
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
 
- addr:=nil;
- size:=0;
-
- if get_dmem_ptr(PPointer(@Body^.indexBaseLo)^,@addr,@size) then
- begin
-  //
- end else
- begin
-  Assert(false,'addr:0x'+HexStr(PPointer(@Body^.indexBaseLo)^)+' not in dmem!');
- end;
-
- pctx^.stream_dcb.DrawIndex2(addr,
-                             pctx^.SH_REG,
+ pctx^.stream_dcb.DrawIndex2(pctx^.SH_REG,
                              pctx^.CX_REG,
                              pctx^.UC_REG);
 end;
@@ -1438,6 +1422,9 @@ begin
   mmCB_COLOR5_DCC_BASE,
   mmCB_COLOR6_DCC_BASE,
   mmCB_COLOR7_DCC_BASE,
+
+  mmDB_STENCIL_CLEAR,
+  mmDB_RENDER_CONTROL,
 
   mmDB_HTILE_SURFACE:
    begin

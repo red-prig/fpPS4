@@ -129,9 +129,9 @@ type
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
 
-  Procedure   DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD);
-  Procedure   DrawIndex2(Addr:Pointer;INDICES:DWORD);
-  Procedure   DrawIndexAuto(INDICES:DWORD);
+  Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
+  Procedure   DrawIndex2(IndexBase:Pointer;indexCount:DWORD);
+  Procedure   DrawIndexAuto(indexCount:DWORD);
  end;
 
 implementation
@@ -879,8 +879,9 @@ begin
  end;
 end;
 
-Procedure TvCmdBuffer.DrawIndexOffset2(Addr:Pointer;OFFSET,INDICES:DWORD);
+Procedure TvCmdBuffer.DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
 var
+ Addr:Pointer;
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
  BufOffset:TVkDeviceSize;
@@ -893,7 +894,13 @@ begin
 
  if (FinstanceCount=0) then FinstanceCount:=1;
 
- Size:=(OFFSET+INDICES)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
+ Size:=(indexOffset+indexCount)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
+
+ Addr:=nil;
+ if not get_dmem_ptr(IndexBase,@Addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(IndexBase)+' not in dmem!');
+ end;
 
  rb:=FetchHostBuffer(Self,QWORD(Addr),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);
@@ -915,17 +922,17 @@ begin
     begin
      vkCmdDrawIndexed(
          Fcmdbuf,
-         INDICES,        //indexCount
+         indexCount,     //indexCount
          FinstanceCount, //instanceCount
-         OFFSET,         //firstIndex
+         indexOffset,    //firstIndex
          0,              //vertexOffset
          0);             //firstInstance
     end;
   DI_PT_QUADLIST:
     begin
      Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
-     Assert(OFFSET=0,'OFFSET DI_PT_QUADLIST');
-     h:=INDICES div 4;
+     Assert(indexOffset=0,'OFFSET DI_PT_QUADLIST');
+     h:=indexCount div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
@@ -944,12 +951,12 @@ begin
 
 end;
 
-Procedure TvCmdBuffer.DrawIndex2(Addr:Pointer;INDICES:DWORD);
+Procedure TvCmdBuffer.DrawIndex2(IndexBase:Pointer;indexCount:DWORD);
 begin
- DrawIndexOffset2(Addr,0,INDICES);
+ DrawIndexOffset2(IndexBase,0,indexCount);
 end;
 
-Procedure TvCmdBuffer.DrawIndexAuto(INDICES:DWORD);
+Procedure TvCmdBuffer.DrawIndexAuto(indexCount:DWORD);
 var
  i,h:DWORD;
 begin
@@ -965,7 +972,7 @@ begin
     begin
      vkCmdDraw(
       FCmdbuf,
-      INDICES,        //vertexCount
+      indexCount,     //vertexCount
       FinstanceCount, //instanceCount
       0,              //firstVertex
       0);             //firstInstance
@@ -983,7 +990,7 @@ begin
      //0 1 2
      //0 2 3
 
-     h:=INDICES div 3;
+     h:=indexCount div 3;
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
@@ -1001,7 +1008,7 @@ begin
   DI_PT_QUADLIST:
     begin
      Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
-     h:=INDICES div 4;
+     h:=indexCount div 4;
      if (h>0) then h:=h-1;
      For i:=0 to h do
      begin
