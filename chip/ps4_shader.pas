@@ -313,7 +313,13 @@ type
      min_lod_warn:bit12; //min mip level to trigger LWE (LOD warn enable); unsigned fixed point 4.8
   counter_bank_id:bit8;  //PRT counter ID
    LOD_hdw_cnt_en:bit1;  //PRT hardware counter enable
-        reserved4:bit43;
+        //NEO mode only
+  compression_en :bit1;  //Indicates whether the texture is bandwidth-compressed by using a metadata buffer to avoid reading redundant cache lines.
+  alpha_is_on_msb:bit1;  //Specifies that DCC compression is to consider the alpha channel to be in the most significant bits of each texel.
+  color_transform:bit1;  //This governs whether the red and blue channels are de-correlated from the green channel.
+  alt_tile_mode  :bit1;  //This indicates that the surface is tiled for NEO mode, and is incompatible with base mode.
+       //
+  reserved4:bit39;
  end;
 
  PSSharpResource4=^TSSharpResource4;

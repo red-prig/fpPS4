@@ -2124,7 +2124,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR0_VIEW=bitpacked record
@@ -2155,7 +2155,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR1_VIEW=bitpacked record
@@ -2186,7 +2186,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR2_VIEW=bitpacked record
@@ -2217,7 +2217,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR3_VIEW=bitpacked record
@@ -2248,7 +2248,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR4_VIEW=bitpacked record
@@ -2279,7 +2279,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR5_VIEW=bitpacked record
@@ -2310,7 +2310,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR6_VIEW=bitpacked record
@@ -2341,7 +2341,7 @@ type
   FMASK_COMPRESS_1FRAG_ONLY:bit1;
   DCC_ENABLE               :bit1;
   CMASK_ADDR_TYPE          :bit2;
-  RESERVED0                :bit1;
+  ALT_TILE_MODE            :bit1;
  end;
 
  TCB_COLOR7_VIEW=bitpacked record
